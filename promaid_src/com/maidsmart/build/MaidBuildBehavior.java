@@ -479,7 +479,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (placed == null) {
                 placed = block;
             }
-            if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt, prog.plannedPositions(plan))) {
+            if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt, prog.plannedPositions(plan), false)) {
                 // v1.5.45：支撑缺失（火把/按钮/拉杆等，支撑块未建）→ 延后，支撑建好后自动补建
                 prog.deferred.putIfAbsent(i, 0);
                 lookaheadLeft--;
@@ -641,11 +641,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 if (placed == null) {
                     placed = block;
                 }
-                if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt, prog.plannedPositions(plan))) {
+                // v1.5.252i：先计失败次数，第 3 次起用 force 模式——蓝图支撑步骤
+                // 是空气/水/永未建成时，强制补支撑再放（不再等永远等不到的支撑）
+                int fails = prog.deferred.merge(idx, 1, Integer::sum);
+                if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt,
+                        prog.plannedPositions(plan), fails >= 3)) {
                     // v1.5.46：支撑缺失——连续失败 ≥3 次视为"蓝图本身悬空"（作者画图
                     // 失误，永无支撑），永久跳过不阻塞完成；顺序问题（支撑后建）期间
                     // 1 分钟内会成功，计数随成功清零
-                    int fails = prog.deferred.merge(idx, 1, Integer::sum);
                     if (fails >= 3) {
                         it.remove();
                         prog.skipped++;
@@ -778,10 +781,15 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  蓝图有该格步骤（支撑后建）→ 维持延后等待支撑步骤先建。
      *  v1.5.77：修复支撑格判定坐标系——plannedPositions 用【蓝图相对坐标】编码，
      *  旧版把世界坐标塞进去查，原点非 (0,0,0) 时永远查不到 → 补石头无视蓝图步骤
-     *  乱放（石头覆盖房间方块/草方块 → 女仆覆盖回去 → 反复循环）。 */
+     *  乱放（石头覆盖房间方块/草方块 → 女仆覆盖回去 → 反复循环）。
+     *  v1.5.252i：force=true（延后重试 ≥3 次的强制模式）——支撑格是空气/流体时
+     *  【无视蓝图步骤直接补支撑】；放置后 canSurvive 失败时【无条件把支撑格换成
+     *  合法支撑】（甘蔗→沙子、植物→泥土、其他→石头）再重放——根治外部蓝图
+     *  "大量悬空放不上"（蓝图作者在创造模式画的悬空活板门/火把/甘蔗/横幅等，
+     *  支撑格是空气步骤/水/石头时旧版永远等不到支撑 → 3 次后永久跳过）。 */
     private static boolean doPlace(ServerLevel level, EntityMaid maid, BlockPos origin, BlockPos target,
                                    Block placed, String stateSnbt, String beSnbt,
-                                   java.util.Set<Long> plannedPos) {
+                                   java.util.Set<Long> plannedPos, boolean force) {
         BlockState placeState = placed.m_49966_();
         // 结构文件蓝图：恢复精确状态（台阶/楼梯朝向/门等）
         if (stateSnbt != null) {
@@ -806,7 +814,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // v1.5.51：补支撑——支撑格空/流体且蓝图里没有该格步骤 → 自动垫支撑
                 // v1.5.82：按类型选合法支撑（甘蔗→沙子、植物→泥土、其他→石头）——
                 // 补石头对甘蔗不合法（canSurvive 失败 → 邻居更新时被打掉 → 反复循环）
-                if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin))) {
+                // v1.5.252i：force 模式无视蓝图步骤直接补——蓝图有支撑步骤但该步骤
+                // 是空气/水（外部蓝图悬空设计）或永未建成时，旧版永远延后 → 3 次跳过
+                if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin)) || force) {
                     net.minecraft.world.level.block.Block support = supportBlockFor(placed);
                     if (support != null) {
                         level.m_7731_(supPos, support.m_49966_(), 3);
@@ -839,17 +849,38 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.82：加 canSurvive 验证（m_60796_）——支撑不合法（如甘蔗下方是补的
         // 石头）时静默放置看似成功，但邻居更新时会被破坏（"放置又被打掉"循环）；
         // 补【合法】支撑（甘蔗→沙子、植物→泥土）后重放，仍不合法才延后
+        // v1.5.252i：支撑格【无条件换成合法支撑】再重放——下方是石头/水/台阶等
+        // 不合法支撑（外部蓝图常见：甘蔗种石头上/水边、活板门下是台阶）时旧版
+        // 只补"空气/流体"格，其余直接失败 → 3 次跳过
         boolean bad = level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target);
         if (bad) {
-            BlockPos below = target.m_7918_(0, -1, 0);
-            BlockState belowState = level.m_8055_(below);
-            if (belowState.m_60795_() || belowState.m_60815_()) {
-                if (plannedPos == null || !plannedPos.contains(posKey(below, origin))) {
-                    net.minecraft.world.level.block.Block support = supportBlockFor(placed);
-                    if (support != null) {
-                        level.m_7731_(below, support.m_49966_(), 3);
-                        // 重放（复用上面的 flag：附着/红石类已按 flag 3 计算）
+            net.minecraft.world.level.block.Block support = supportBlockFor(placed);
+            if (support != null) {
+                if (sup != null) {
+                    // 附着类：把支撑方向格换成合法支撑（覆盖空气/流体/不合法方块）
+                    // v1.5.252m：保护树叶——树冠装饰（火把/按钮/红石线等）的支撑格
+                    // 是树叶时【不换】（树叶换成石头毁掉树冠外观，252i 副作用），
+                    // 保持失败 → 延后 → 跳过（蓝图缺陷本来就不该强建）
+                    BlockPos supPos = target.m_121945_(sup);
+                    if (!(level.m_8055_(supPos).m_60734_()
+                            instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                        level.m_7731_(supPos, support.m_49966_(), 3);
                         level.m_7731_(target, placeState, flag);
+                    }
+                } else {
+                    // 无支撑方向的漏网类型（雪层/重力等）：补/换下方格
+                    BlockPos below = target.m_7918_(0, -1, 0);
+                    BlockState belowState = level.m_8055_(below);
+                    if (belowState.m_60795_() || belowState.m_60815_() || force) {
+                        if (plannedPos == null || !plannedPos.contains(posKey(below, origin)) || force) {
+                            // v1.5.252m：树叶不换（同附着类，保护树冠）
+                            if (!(belowState.m_60734_()
+                                    instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                                level.m_7731_(below, support.m_49966_(), 3);
+                                // 重放（复用上面的 flag：附着/红石类已按 flag 3 计算）
+                                level.m_7731_(target, placeState, flag);
+                            }
+                        }
                     }
                 }
             }
