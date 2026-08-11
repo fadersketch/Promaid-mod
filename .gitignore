@@ -1,0 +1,27 @@
+# ---- 构建产物 ----
+out_promaid/
+out_addon/
+out_heartfelt/
+staging_promaid/
+staging_heartfelt/
+patched/
+*.class
+
+# ---- 机器相关的编译参数(含本地 .minecraft 路径,勿提交) ----
+compile_promaid.txt
+compile_heartfelt.txt
+compile_addon.txt
+
+# ---- Python ----
+__pycache__/
+*.pyc
+
+# ---- 本地 jar(前置与中间产物,不提交) ----
+*.jar
+
+# ---- 系统 / IDE ----
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.iml

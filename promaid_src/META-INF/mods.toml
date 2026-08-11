@@ -1,0 +1,19 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="MIT"
+
+[[mods]]
+modId="promaid"
+version="1.0.0"
+displayName="Promaid (更智能的车万女仆)"
+authors="Khragg"
+displayURL="https://github.com/fadersketch/Promaid-mod"
+issueTrackerURL="https://github.com/fadersketch/Promaid-mod/issues"
+description="更智能的车万女仆（原 maid_smart 改名重组 v1.0.0）：全部可独立运行功能，只依赖原版 TLM——建造系统（Promaid 手册/工头/全局进度）、LLM AI 工具、挖矿/整理/烹饪/酿造/建造任务、主动对话与情绪价值动作、自主决策、长期记忆、战斗自保、主人死亡传送。关系联动（心契誓约 × 爱憎分明）由独立的 Heartfelt-connection 补丁提供，本模组零依赖可单独运行。持久化标识（物品/TaskData/蓝图）保留 maid_smart 命名空间，旧存档兼容。"
+
+[[dependencies.promaid]]
+modId="touhou_little_maid"
+mandatory=true
+versionRange="[1.5.0,)"
+ordering="AFTER"
+side="BOTH"
