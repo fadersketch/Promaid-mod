@@ -55,6 +55,8 @@ public class ProMaidExtension implements ILittleMaid {
     private int purgeTimer = 0;
     /** v1.5.142：跨维度跟随扫描节流计数（每 100 tick = 5 秒一次） */
     private int dimFollowTimer = 0;
+    /** v1.5.252j：建造 HUD 广播节流计数（每 20 tick = 1 秒一次） */
+    private int hudTimer = 0;
 
     public ProMaidExtension() {
         MinecraftForge.EVENT_BUS.register(new ProactiveDialogueManager());
@@ -126,6 +128,11 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.dimFollowTimer >= 100) {
             this.dimFollowTimer = 0;
             com.maidsmart.follow.MaidDimensionFollow.tick(server);
+        }
+        // v1.5.252j：建造 HUD 广播（每秒一次）——客户端左上角显示速度/预计完成时间
+        if (++this.hudTimer >= 20) {
+            this.hudTimer = 0;
+            com.maidsmart.build.BuildHudTracker.broadcast(server);
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
     }

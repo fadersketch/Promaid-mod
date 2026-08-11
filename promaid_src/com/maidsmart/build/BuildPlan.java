@@ -176,6 +176,11 @@ public final class BuildPlan {
         return planId == null ? null : PLANS.get(planId);
     }
 
+    /** v1.5.252j：全部区块快照（建造 HUD 广播用） */
+    public static java.util.List<PlanState> allPlansSnapshot() {
+        return new java.util.ArrayList<>(PLANS.values());
+    }
+
     /** v1.5.180：女仆绑定的区块 id（无绑定/计划已删 → null） */
     public static String getBoundPlanId(EntityMaid maid) {
         String pid = MAID_PLAN.get(maid.m_20148_());
@@ -430,6 +435,11 @@ public final class BuildPlan {
     private static java.util.Map<String, Integer> realShortfall(
             net.minecraft.server.level.ServerLevel level, List<String> plan, BlockPos origin,
             net.minecraft.world.entity.player.Player owner) {
+        // v1.5.252p：创造模式材料视为齐——旧版 built + combinedHaveAll(MAX_VALUE)
+        // 溢出成负数 → 缺料报告出现 -21 亿/巨量缺料
+        if (BlueprintLib.isCreative(owner)) {
+            return new java.util.HashMap<>();
+        }
         java.util.Map<String, Integer> needed = BlueprintLib.countNeeds(plan);
         if (needed.isEmpty()) {
             return new java.util.HashMap<>();
@@ -448,14 +458,15 @@ public final class BuildPlan {
         return shortfall;
     }
 
-    /** v1.5.180：参与该区块的绑定女仆数（原点 ±128 格内） */
+    /** v1.5.180：参与该区块的绑定女仆数。
+     *  v1.5.252n：改为【绑定数】口径——旧版按"原点 ±128 格内"统计：建造是隔空的
+     *  （setBlock 不需要女仆在场），远处手动绑定的女仆照样在建造却不计数；
+     *  全员加入（玩家在区块内）计数正确、女仆管理手动绑定（女仆在远处）不增长——
+     *  用户实测的两入口计数不一致。绑定与区块同维度由各入口保证，跨维度存量安全。 */
     private static int countBuildersNear(net.minecraft.server.level.ServerLevel level, PlanState ps) {
-        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                ps.origin.m_123341_() - 128.0, ps.origin.m_123342_() - 64.0, ps.origin.m_123343_() - 128.0,
-                ps.origin.m_123341_() + 128.0, ps.origin.m_123342_() + 64.0, ps.origin.m_123343_() + 128.0);
         int n = 0;
-        for (EntityMaid m : level.m_45976_(EntityMaid.class, box)) {
-            if (BlueprintBuildExecutor.isBuildingTask(m) && ps.planId.equals(getBoundPlanId(m))) {
+        for (java.util.Map.Entry<java.util.UUID, String> e : MAID_PLAN.entrySet()) {
+            if (ps.planId.equals(e.getValue())) {
                 n++;
             }
         }

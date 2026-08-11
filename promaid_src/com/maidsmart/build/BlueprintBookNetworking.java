@@ -102,6 +102,10 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(17, MemoryStateQueryPacket.class,
                 MemoryStateQueryPacket::encode, MemoryStateQueryPacket::decode,
                 MemoryStateQueryPacket::handle);
+        // v1.5.252j：建造 HUD 快照（S2C）——服务端每秒广播进行中区块的速度/预计完成时间
+        CHANNEL.registerMessage(18, BuildHudPacket.class,
+                BuildHudPacket::encode, BuildHudPacket::decode,
+                BuildHudPacket::handle);
     }
 
     /** 蓝图目录条目（v1.5.18：含材料缺口 {物品id, 已有, 需要}；v1.5.159：含占地尺寸
@@ -695,6 +699,41 @@ public final class BlueprintBookNetworking {
                             pkt.allMaids, pkt.regions, pkt.planId);
                 }
             });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** v1.5.252j：建造 HUD 快照（S2C）——服务端每秒广播进行中区块的
+     *  进度/速度/预计完成时间，客户端 BuildHudRenderer 左上角显示。
+     *  每项 8 字段 {planId, 显示名, 已建, 总数, 跳过, 速度(块/秒), 预计秒(-1=未知), 暂停} */
+    public static class BuildHudPacket {
+        public final java.util.List<String[]> entries;
+
+        public BuildHudPacket(java.util.List<String[]> entries) {
+            this.entries = entries == null ? new java.util.ArrayList<>() : entries;
+        }
+
+        public static void encode(BuildHudPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(String.valueOf(pkt.entries.size()));
+            for (String[] e : pkt.entries) {
+                for (int i = 0; i < 8; i++) {
+                    buf.m_130070_(e.length > i ? e[i] : "");
+                }
+            }
+        }
+
+        public static BuildHudPacket decode(FriendlyByteBuf buf) {
+            int n = Integer.parseInt(buf.m_130277_());
+            java.util.List<String[]> list = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                list.add(new String[]{buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
+                        buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_()});
+            }
+            return new BuildHudPacket(list);
+        }
+
+        public static void handle(BuildHudPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> com.maidsmart.build.BuildHudRenderer.onSnapshot(pkt.entries));
             ctx.get().setPacketHandled(true);
         }
     }
