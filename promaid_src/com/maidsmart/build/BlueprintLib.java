@@ -141,21 +141,19 @@ public final class BlueprintLib {
     public static final Set<String> UNBREAKABLE = new HashSet<>();
 
     /**
-     * v1.5.80：地形方块（自然生成、非建筑结构）——底部"还原区"识别用。
-     * 外部蓝图（.schem/.litematic）导出时常包含原址地形：草地/泥土/石头/沙/
-     * 矿石（红石建筑甚至还原整个地下矿层）。这些不应作为建筑材料花费时间还原。
-     * 注意：stone/deepslate 等虽常用作建材，但"纯地形层"判定依赖占比与位置
-     * （见 trimTerrainLayers），不会误删建筑结构。
+     * v1.5.80：地形方块（自然生成、非建筑结构）——世界提取硬过滤（skipWorldBlock）
+     * 与"底部还原区"逐层占比判定（trimTerrainLayers）共用。
+     * v1.5.252l：剔除 stone/deepslate/sandstone 等【双用途建材】——天安门事件根因：
+     * 世界提取硬过滤把石头建筑主体当"地形"砍掉（天安门城楼只剩 32 块非石头方块）。
+     * 建材与山体无法简单区分，提取时保留（山体石头一并提取，建筑优先完整）；
+     * 纯地形（泥土/沙/草地/矿石/基岩/雪泥黏土等）才过滤与压缩。
      */
     public static final Set<String> TERRAIN_BLOCKS = Set.of(
             "minecraft:grass_block", "minecraft:dirt", "minecraft:coarse_dirt",
             "minecraft:rooted_dirt", "minecraft:podzol", "minecraft:mycelium",
-            "minecraft:stone", "minecraft:deepslate", "minecraft:andesite",
-            "minecraft:granite", "minecraft:diorite", "minecraft:tuff",
             "minecraft:sand", "minecraft:red_sand", "minecraft:gravel",
-            "minecraft:sandstone", "minecraft:red_sandstone", "minecraft:snow_block",
-            "minecraft:mud", "minecraft:clay", "minecraft:calcite",
-            "minecraft:dripstone_block", "minecraft:bedrock",
+            "minecraft:snow_block", "minecraft:mud", "minecraft:clay",
+            "minecraft:bedrock",
             "minecraft:coal_ore", "minecraft:iron_ore", "minecraft:gold_ore",
             "minecraft:redstone_ore", "minecraft:copper_ore", "minecraft:lapis_ore",
             "minecraft:diamond_ore", "minecraft:emerald_ore",
@@ -427,9 +425,8 @@ public final class BlueprintLib {
         EXT_CN_NAMES.put("survival_watchtower", "哨塔居");
         // v1.5.39：PM 下载的现代红石智能住宅（547686 块，上限提升后入库）
         EXT_CN_NAMES.put("modernredstonesmarthouse8649399", "现代红石智能住宅");
-        // v1.5.50：挖空版——原图底部 15 层纯实心（占 33%，造出来是"方块山"），
-        // 已挖空内部填充（保留地基/外墙/红石机械），外观正常、建造快一倍
-        EXT_CN_NAMES.put("modern_redstone_house_hollow", "现代红石智能住宅·挖空版");
+        // v1.5.252k：挖空版已删除——挖空设计导致内部大量附着物悬空，触发强制补支撑
+        // 垫的支撑块把下部红石设施卡死（用户实测），仅保留原版
     }
 
     /**
@@ -769,8 +766,16 @@ public final class BlueprintLib {
                     LOGGER.warn("loadExternalFile: zip {} 异常 -> {}", p.getFileName(), e.toString());
                 }
                 // v1.5.223：世界存档 zip → 提取完整建筑优先
+                // v1.5.252i：先递归定位世界根目录——网上下载的世界 zip 几乎都带
+                // 一层顶层目录（<zip名>/<世界名>/level.dat），直接扫只查直接子层
+                // 会"找不到锚点/没有 mca" → 误报导入失败
                 if (worldDir != null) {
-                    List<String> worldSteps = extractFromWorldZip(worldDir);
+                    java.nio.file.Path worldRoot = findWorldRoot(worldDir);
+                    if (worldRoot == null) {
+                        LOGGER.warn("loadExternalFile: {} 解压后未找到 level.dat", p.getFileName());
+                        worldRoot = worldDir;
+                    }
+                    List<String> worldSteps = extractFromWorldZip(worldRoot);
                     if (worldSteps != null && !worldSteps.isEmpty()) {
                         return worldSteps;
                     }
@@ -835,6 +840,41 @@ public final class BlueprintLib {
         return (long) (x & 0xFFFFF) << 42 | (long) (y & 0x1FFFFF) << 21 | (z & 0x1FFFFF);
     }
 
+    /** v1.5.252i：递归收集目录树内全部 .mca 文件（region 可能嵌套在顶层目录下） */
+    private static void collectMca(java.io.File dir, java.util.List<java.io.File> out) {
+        java.io.File[] subs = dir.listFiles();
+        if (subs == null) {
+            return;
+        }
+        for (java.io.File f : subs) {
+            if (f.isDirectory()) {
+                collectMca(f, out);
+            } else if (f.getName().endsWith(".mca")) {
+                out.add(f);
+            }
+        }
+    }
+
+    /** v1.5.252i：递归定位世界根目录（含 level.dat 的目录）；找不到返回 null */
+    private static java.nio.file.Path findWorldRoot(java.nio.file.Path dir) {
+        if (new java.io.File(dir.toFile(), "level.dat").isFile()) {
+            return dir;
+        }
+        java.io.File[] subs = dir.toFile().listFiles();
+        if (subs == null) {
+            return null;
+        }
+        for (java.io.File f : subs) {
+            if (f.isDirectory()) {
+                java.nio.file.Path r = findWorldRoot(f.toPath());
+                if (r != null) {
+                    return r;
+                }
+            }
+        }
+        return null;
+    }
+
     /** 从世界存档目录提取建筑（level.dat + region/*.mca + playerdata/*.dat）；
      *  成功返回 plan 步骤列表，失败返回 null */
     public static List<String> extractFromWorldZip(java.nio.file.Path dir) {
@@ -849,8 +889,12 @@ public final class BlueprintLib {
             java.util.Map<Long, int[]> blocks = new java.util.LinkedHashMap<>();   // key → {x,y,z,stateIdx}
             java.util.Map<String, Integer> stateIds = new java.util.HashMap<>();   // 状态串 → id
             java.util.List<String> stateList = new java.util.ArrayList<>();        // id → 状态串
-            java.io.File[] files = dir.toFile().listFiles((d, n) -> n.endsWith(".mca"));
-            if (files == null || files.length == 0) {
+            // v1.5.252i：递归收集 .mca（region 目录可能在世界根的直接子层，
+            // 也可能因顶层目录嵌套在更深处）
+            java.util.List<java.io.File> mcaList = new java.util.ArrayList<>();
+            collectMca(dir.toFile(), mcaList);
+            java.io.File[] files = mcaList.toArray(new java.io.File[0]);
+            if (files.length == 0) {
                 return null;
             }
             java.util.regex.Pattern pat = java.util.regex.Pattern.compile("r\\.(-?\\d+)\\.(-?\\d+)\\.mca");
@@ -2008,7 +2052,30 @@ public final class BlueprintLib {
                     || block instanceof net.minecraft.world.level.block.HopperBlock
                     || block instanceof net.minecraft.world.level.block.ObserverBlock
                     || block instanceof net.minecraft.world.level.block.RedstoneLampBlock
-                    || block instanceof net.minecraft.world.level.block.DiodeBlock) {
+                    || block instanceof net.minecraft.world.level.block.DiodeBlock
+                    // v1.5.252p：补常见装饰方块——灯笼/书架/蜡烛/陶罐/发光地衣/
+                    // 紫水晶簇/钟乳石/孢子花/大滴水叶/珊瑚/干草捆等原被归为结构
+                    // （prio 0）与墙一起先建，拟人化效果被稀释（wizard_tower 实证）
+                    || block instanceof net.minecraft.world.level.block.LanternBlock
+                    || block instanceof net.minecraft.world.level.block.ChiseledBookShelfBlock
+                    || block instanceof net.minecraft.world.level.block.CandleBlock
+                    || block instanceof net.minecraft.world.level.block.DecoratedPotBlock
+                    || block instanceof net.minecraft.world.level.block.GlowLichenBlock
+                    || block instanceof net.minecraft.world.level.block.AmethystClusterBlock
+                    || block instanceof net.minecraft.world.level.block.PointedDripstoneBlock
+                    || block instanceof net.minecraft.world.level.block.SporeBlossomBlock
+                    || block instanceof net.minecraft.world.level.block.BigDripleafBlock
+                    || block instanceof net.minecraft.world.level.block.CoralBlock
+                    || block instanceof net.minecraft.world.level.block.CoralFanBlock
+                    || block instanceof net.minecraft.world.level.block.CoralPlantBlock
+                    || block instanceof net.minecraft.world.level.block.HayBlock
+                    || block instanceof net.minecraft.world.level.block.CocoaBlock
+                    || block instanceof net.minecraft.world.level.block.SweetBerryBushBlock
+                    || block instanceof net.minecraft.world.level.block.CaveVinesBlock
+                    || block instanceof net.minecraft.world.level.block.CaveVinesPlantBlock
+                    || block instanceof net.minecraft.world.level.block.MangrovePropaguleBlock
+                    || block instanceof net.minecraft.world.level.block.EndRodBlock
+                    || block instanceof net.minecraft.world.level.block.ChainBlock) {
                 prio = 2;
             } else if (block instanceof net.minecraft.world.level.block.DoorBlock
                     || block instanceof net.minecraft.world.level.block.TrapDoorBlock
@@ -2550,7 +2617,11 @@ public final class BlueprintLib {
                 int built = builtMap.getOrDefault(entry.getKey(), 0);           // 已搭建
                 int maidHave = maidHaveMap.getOrDefault(entry.getKey(), 0);     // 绑定女仆背包
                 int remaining = Math.max(0, entry.getValue() - built);          // 剩余需求
-                int have = built + maidHave + countPlayerMaterial(player, entry.getKey()); // 已建+女仆+玩家
+                // v1.5.252p：创造模式"已有"直接=剩余需求（显示 X/X 齐）——旧版
+                // built + MAX_VALUE 溢出成 -2147483648（-21 亿,用户实测）
+                int have = isCreative(player)
+                        ? remaining
+                        : built + maidHave + countPlayerMaterial(player, entry.getKey()); // 已建+女仆+玩家
                 mats.put(entry.getKey(), new int[]{have, remaining});
             }
             out.put(e, mats);
