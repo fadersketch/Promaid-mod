@@ -111,9 +111,13 @@ public final class FishingChairService {
         tag.m_128359_(TAG_MAID, key);
         if (world.m_7967_(chair)) {
             boolean mounted = maid.m_7998_(chair, true);
-            LOGGER.info("auto-chair: 女仆 {} 在 ({}, {}, {}) 生成标记坐垫{}",
+            // v1.5.252v：诊断——坐垫下方位块注册名（确认贴地；用户实测"坐垫在水上"）
+            BlockPos under = stand.m_7918_(0, -1, 0);
+            net.minecraft.resources.ResourceLocation bid = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                    .getKey(world.m_8055_(under).m_60734_());
+            LOGGER.info("auto-chair: 女仆 {} 在 ({}, {}, {}) 生成标记坐垫{}（下方位块 {}）",
                     maid.m_5446_().getString(), stand.m_123341_(), stand.m_123342_(), stand.m_123343_(),
-                    mounted ? "并坐上" : "（上骑失败）");
+                    mounted ? "并坐上" : "（上骑失败）", bid == null ? "?" : bid);
             maid.getChatBubbleManager().addTextChatBubble("这里没有椅子，我自己带了个坐垫，找个水边坐下钓鱼～");
         }
     }
@@ -162,17 +166,21 @@ public final class FishingChairService {
     /** 水面格四周找可站岸边：找该方向岸边柱的【最上面实心方块】，坐垫放在它上面
      *  （贴地不悬浮）。旧版只查"水面+1/+2 层"——水面与地面同高（1 格深水塘）时
      *  正确的岸（水面层空气格）永远查不到 → 只能退回 +2 层 → 坐垫悬浮在
-     *  水塘上方（用户实测："把坐垫放进水里"） */
+     *  水塘上方（用户实测："把坐垫放进水里"）。
+     *  v1.5.252v：实心判定改用【碰撞箱】——花/草/火把等无碰撞箱的装饰方块
+     *  不再被误当"地面"（旧 isAir/isLiquid 判定会把它们当地面 → 坐垫"浮"在草上） */
     private static BlockPos findBank(ServerLevel level, BlockPos w) {
         int wx = w.m_123341_();
         int wz = w.m_123343_();
         for (int[] d : DIRS4) {
             int bx = wx + d[0];
             int bz = wz + d[1];
-            for (int y = w.m_123342_() + 1; y >= w.m_123342_() - 2; y--) {
-                BlockState st = level.m_8055_(new BlockPos(bx, y, bz));
-                if (st.m_60795_() || st.m_60815_()) {
-                    continue; // 空气/液体不算地面
+            for (int y = w.m_123342_() + 1; y >= w.m_123342_() - 3; y--) {
+                BlockPos solid = new BlockPos(bx, y, bz);
+                BlockState st = level.m_8055_(solid);
+                // 完整实心（isSolidRender）且非液体——花/草/火把/台阶等非完整方块不算地面
+                if (st.m_60815_() || !st.m_60804_(level, solid)) {
+                    continue;
                 }
                 BlockPos stand = new BlockPos(bx, y + 1, bz);
                 if (level.m_8055_(stand).m_60795_()

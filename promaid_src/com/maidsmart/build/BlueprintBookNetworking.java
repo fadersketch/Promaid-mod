@@ -21,6 +21,9 @@ import java.util.function.Supplier;
  */
 public final class BlueprintBookNetworking {
     private static final String PROTOCOL_VERSION = "2";
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    /** v1.5.252v：手册速度/ETA 诊断日志节流（每 5 秒一条，latest.log 搜 "hud book"） */
+    private static long lastBookLogMs = 0L;
 
     /** 目录包（73+ 蓝图 × 材料清单 + 200 女仆）可达数百 KB——连接层帧上限 2MB
      *  （Varint21FrameDecoder 2097151），SimpleChannel 默认即可承载，无需额外配置。 */
@@ -1032,6 +1035,13 @@ public final class BlueprintBookNetworking {
         double[] se = ps == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(ps.planId);
         int etaSec = se == null ? -1 : (int) Math.round(se[1]);
         String speedBps = se == null ? "" : String.format("%.1f", se[0]);
+        // v1.5.252v：限频诊断（每 5 秒一条）——验证手册收到的速度/ETA 值
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastBookLogMs > 5000L) {
+            lastBookLogMs = nowMs;
+            LOGGER.info("hud book: plan={} speedBps={} etaSec={}",
+                    ps == null ? "null" : ps.planId, speedBps.isEmpty() ? "(空)" : speedBps, etaSec);
+        }
         // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ProgressUpdatePacket(
