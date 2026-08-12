@@ -114,8 +114,6 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return "unknown";
         }
     }
-    /** v1.5.215：诊断日志节流（latest.log 搜 "aid-owner diag"，每 5 秒一次状态快照） */
-    private long lastDiagTick = 0;
     /** v1.5.227：canUse 首调诊断标记（只打第一条） */
     private boolean canUseLogged = false;
 
@@ -182,18 +180,6 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
         if (!owner.m_6084_()) {
             return;
-        }
-        // v1.5.215：诊断日志——每 5 秒打一次当前状态快照，定位"自动投喂没实现"
-        // （主人距离/血量/饱食/着火/负面 + 女仆背包可用物品数）
-        long now = maid.m_9236_().m_46467_();
-        if (now - this.lastDiagTick > 100) {
-            this.lastDiagTick = now;
-            LOGGER.info("aid-owner diag: maid={} ownerDist={} hp={}% food={} fire={} neg={} healPot={} foodItems={}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    String.format("%.1f", maid.m_20238_(owner.m_20182_())),
-                    String.format("%.0f", owner.m_21223_() / Math.max(1.0f, owner.m_21233_()) * 100.0f),
-                    owner.m_36324_().m_38702_(), owner.m_6060_(), this.hasNegativeEffect(owner),
-                    this.countHealPotions(maid), this.countFoods(maid));
         }
         // 主人不在身边（> 16 格）不管——贴身辅助
         if (maid.m_20238_(owner.m_20182_()) > 16.0) {

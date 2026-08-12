@@ -312,17 +312,6 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.180：计划来源 = 女仆绑定的区块（多区块共存；无绑定 → 站桩等待绑定）
         BuildPlan.PlanState ps = BuildPlan.getBoundPlanState(maid);
         List<String> plan = ps == null ? new java.util.ArrayList<>() : ps.toPlan();
-        // v1.5.122：诊断日志（每 100 tick 一条）——建造行为每 tick 在跑但没放置时，
-        // 从这里看计划/原点/暂停/冷却状态，定位"下达后不建造"
-        if (gameTime % 100 == 0) {
-            BlockPos dbgOrigin = BuildPlan.getOrigin(plan);
-            LOGGER.info("build tick: maid={} plan={} origin={} paused={} maidPaused={} cooldown={}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    plan.size(),
-                    dbgOrigin == null ? "null"
-                            : dbgOrigin.m_123341_() + "," + dbgOrigin.m_123342_() + "," + dbgOrigin.m_123343_(),
-                    ps != null && ps.paused, BuildPlan.isMaidPaused(maid), this.placeCooldown);
-        }
         // v1.5.18：站桩等待——每 tick 清移动目标 + 停止导航，即使没有计划也站立不动
         maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
         maid.m_21573_().m_26569_();

@@ -29,6 +29,7 @@
     "MaidHoneyIgniteMixin",
     "MaidFeedAnimalCapMixin",
     "FishingAutoChairMixin",
+    "ChairNoDropMixin",
     "MaidShieldTimingMixin",
     "MaidSweepMixin",
     "MaidBaubleTotemMixin",

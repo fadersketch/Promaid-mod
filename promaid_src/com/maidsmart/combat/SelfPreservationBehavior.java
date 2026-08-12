@@ -654,21 +654,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
-        // v1.5.225 临时诊断：每 30 秒打印一次该女仆 Brain 正在运行的行为——
-        // 定位"辅助行为（投喂/火把/盾牌）没 tick"（latest.log 搜 "brain-run"）
-        long gt = level.m_46467_();
-        if (gt % 600 == 0 && this.diagTick != gt) {
-            this.diagTick = gt;
-            StringBuilder sb = new StringBuilder("brain-run: ");
-            try {
-                for (net.minecraft.world.entity.ai.behavior.BehaviorControl<? super EntityMaid> bc
-                        : maid.m_6274_().m_21956_()) {
-                    sb.append(bc.getClass().getSimpleName()).append(' ');
-                }
-            } catch (Exception ignored) {
-            }
-            LOGGER.info("{} {}", maid.m_5446_() != null ? maid.m_5446_().getString() : "?", sb);
-        }
         // v1.5.204：临时放水到点回收【必须在会话提前 return 之前】——放水救完人
         // 会话往往立即结束（危险消失），旧位置在会话 return 之后 → 水永远留在
         // 地图上（"放下的水一直不消失"的根因）
