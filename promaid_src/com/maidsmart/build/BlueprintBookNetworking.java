@@ -583,13 +583,16 @@ public final class BlueprintBookNetworking {
         public final List<String[]> regions;
         /** v1.5.180：玩家所在区块 planId（无 = 区块外；客户端当前区块上下文） */
         public final String planId;
+        /** v1.5.252s：进度条旁显示——预计完成秒（-1 = 未知）+ 实时速度（块/秒） */
+        public final int etaSec;
+        public final String speedBps;
 
         public ProgressUpdatePacket(String progressText, List<String[]> maids,
                                     boolean paused, String speed, int progress,
                                     int regionX, int regionY, int regionZ,
                                     int regionW, int regionH, int regionD,
                                     List<String[]> allMaids, List<String[]> regions,
-                                    String planId) {
+                                    String planId, int etaSec, String speedBps) {
             this.progressText = progressText;
             this.maids = maids;
             this.paused = paused;
@@ -604,6 +607,8 @@ public final class BlueprintBookNetworking {
             this.allMaids = allMaids == null ? new ArrayList<>() : allMaids;
             this.regions = regions == null ? new ArrayList<>() : regions;
             this.planId = planId;
+            this.etaSec = etaSec;
+            this.speedBps = speedBps == null ? "" : speedBps;
         }
 
         public static void encode(ProgressUpdatePacket pkt, FriendlyByteBuf buf) {
@@ -646,6 +651,9 @@ public final class BlueprintBookNetworking {
                 }
             }
             buf.m_130070_(pkt.planId == null ? "" : pkt.planId);
+            // v1.5.252s：进度条旁显示（追加在末尾，解码按序读）
+            buf.m_130070_(String.valueOf(pkt.etaSec));
+            buf.m_130070_(pkt.speedBps);
         }
 
         public static ProgressUpdatePacket decode(FriendlyByteBuf buf) {
@@ -683,9 +691,12 @@ public final class BlueprintBookNetworking {
                 regions.add(rr);
             }
             String planId = buf.m_130277_();
+            // v1.5.252s：进度条旁显示（与 encode 末尾顺序一致）
+            int etaSec = Integer.parseInt(buf.m_130277_());
+            String speedBps = buf.m_130277_();
             return new ProgressUpdatePacket(progressText, maids, paused, speed, progress,
                     regionX, regionY, regionZ, regionW, regionH, regionD,
-                    allMaids, regions, planId);
+                    allMaids, regions, planId, etaSec, speedBps);
         }
 
         public static void handle(ProgressUpdatePacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -696,7 +707,7 @@ public final class BlueprintBookNetworking {
                 if (cur instanceof BlueprintBookScreen s) {
                     s.updateStatus(pkt.progressText, pkt.maids, pkt.paused, pkt.speed, pkt.progress,
                             pkt.regionX, pkt.regionY, pkt.regionZ, pkt.regionW, pkt.regionH, pkt.regionD,
-                            pkt.allMaids, pkt.regions, pkt.planId);
+                            pkt.allMaids, pkt.regions, pkt.planId, pkt.etaSec, pkt.speedBps);
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -1017,6 +1028,10 @@ public final class BlueprintBookNetworking {
         int[] r = collectRegion(level);
         // v1.5.180：按玩家所在区块发状态（区块外 → 空进度文本 + planId=null）
         BuildPlan.PlanState ps = findPlayerPlan(level, player);
+        // v1.5.252s：进度条旁显示 块/秒 + 预计完成时间（复用 HUD 统计）
+        double[] se = ps == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(ps.planId);
+        int etaSec = se == null ? -1 : (int) Math.round(se[1]);
+        String speedBps = se == null ? "" : String.format("%.1f", se[0]);
         // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ProgressUpdatePacket(
@@ -1026,7 +1041,7 @@ public final class BlueprintBookNetworking {
                         ps == null ? -1 : BuildPlan.progressPct(ps),
                         r[0], r[1], r[2], r[3], r[4], r[5],
                         collectAllMaids(level), collectBuildRegions(level.m_7654_()),
-                        ps == null ? null : ps.planId));
+                        ps == null ? null : ps.planId, etaSec, speedBps));
     }
 
     /** v1.5.94：重发完整目录包（删除蓝图后刷新手册目录用，构建逻辑与手册右键一致） */
