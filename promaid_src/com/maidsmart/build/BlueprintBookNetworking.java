@@ -339,13 +339,16 @@ public final class BlueprintBookNetworking {
         public final String currentPlanId;
         /** v1.5.178：所有有效建造区块 {显示名, 维度名, 状态, 坐标}（女仆管理页区块列表） */
         public final List<String[]> regions;
+        /** v1.5.252z：打开手册立即显示——预计完成秒（-1=未知）+ 实时速度（块/秒） */
+        public final int etaSec;
+        public final String speedBps;
 
         public OpenBlueprintBookPacket(List<Entry> entries, List<String[]> maids, List<String[]> allMaids,
                                        boolean paused, String speed, String progressText, int progress,
                                        int regionX, int regionY, int regionZ,
                                        int regionW, int regionH, int regionD,
                                        boolean inPlanRegion, String currentPlanId,
-                                       List<String[]> regions) {
+                                       List<String[]> regions, int etaSec, String speedBps) {
             this.entries = entries;
             this.maids = maids;
             this.allMaids = allMaids;
@@ -362,6 +365,8 @@ public final class BlueprintBookNetworking {
             this.inPlanRegion = inPlanRegion;
             this.currentPlanId = currentPlanId;
             this.regions = regions == null ? new ArrayList<>() : regions;
+            this.etaSec = etaSec;
+            this.speedBps = speedBps == null ? "" : speedBps;
         }
 
         public static void encode(OpenBlueprintBookPacket pkt, FriendlyByteBuf buf) {
@@ -423,6 +428,9 @@ public final class BlueprintBookNetworking {
                     }
                 }
             }
+            // v1.5.252z：打开手册立即显示速度/ETA（追加在末尾，解码按序读）
+            buf.m_130070_(String.valueOf(pkt.etaSec));
+            buf.m_130070_(pkt.speedBps);
         }
 
         public static OpenBlueprintBookPacket decode(FriendlyByteBuf buf) {
@@ -479,9 +487,12 @@ public final class BlueprintBookNetworking {
                 }
                 regions.add(rr);
             }
+            // v1.5.252z：速度/ETA（与 encode 末尾顺序一致）
+            int etaSec = Integer.parseInt(buf.m_130277_());
+            String speedBps = buf.m_130277_();
             return new OpenBlueprintBookPacket(entries, maids, allMaids, paused, speed, progressText, progress,
                     regionX, regionY, regionZ, regionW, regionH, regionD,
-                    inPlanRegion, currentPlanId, regions);
+                    inPlanRegion, currentPlanId, regions, etaSec, speedBps);
         }
 
         public static void handle(OpenBlueprintBookPacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -491,7 +502,8 @@ public final class BlueprintBookNetworking {
                 BlueprintBookScreen.open(pkt.entries, pkt.maids, pkt.allMaids, pkt.paused, pkt.speed,
                         pkt.progressText, pkt.progress, pkt.regionX, pkt.regionY, pkt.regionZ,
                         pkt.regionW, pkt.regionH, pkt.regionD,
-                        pkt.inPlanRegion, pkt.currentPlanId, pkt.regions);
+                        pkt.inPlanRegion, pkt.currentPlanId, pkt.regions,
+                        pkt.etaSec, pkt.speedBps);
             });
             ctx.get().setPacketHandled(true);
         }
@@ -1077,6 +1089,10 @@ public final class BlueprintBookNetworking {
         int[] region = collectRegion(sl);
         // v1.5.180：玩家所在区块（区块内右击 → 详情页；区块外 → 目录）
         BuildPlan.PlanState here = sl == null ? null : findPlayerPlan(sl, player);
+        // v1.5.252z：打开手册立即显示速度/ETA（不等 2 秒轮询）
+        double[] se = here == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(here.planId);
+        int openEta = se == null ? -1 : (int) Math.round(se[1]);
+        String openBps = se == null ? "" : String.format("%.1f", se[0]);
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new OpenBlueprintBookPacket(entries, collectMaidStatus(player),
                         sl == null ? new ArrayList<>() : collectAllMaids(sl),
@@ -1085,7 +1101,8 @@ public final class BlueprintBookNetworking {
                         sl == null ? -1 : buildProgressPct(sl, player),
                         region[0], region[1], region[2], region[3], region[4], region[5],
                         here != null, here == null ? null : here.blueprintId,
-                        sl == null ? new ArrayList<>() : collectBuildRegions(sl.m_7654_())));
+                        sl == null ? new ArrayList<>() : collectBuildRegions(sl.m_7654_()),
+                        openEta, openBps));
     }
 
     /**
