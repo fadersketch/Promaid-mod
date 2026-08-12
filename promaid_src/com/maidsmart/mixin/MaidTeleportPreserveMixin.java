@@ -31,7 +31,9 @@ public abstract class MaidTeleportPreserveMixin {
         // 距离主人 > 7 格 → teleportToOwner 把女仆瞬移回主人身边（主人没动、女仆被传）。
         // 这里从 TLM 源头一网打尽：建造女仆永不瞬移（站桩定位由建造行为自己负责）。
         try {
-            if (maid.getTask() != null && "maid_smart:build".equals(maid.getTask().getUid().m_135815_())) {
+            // v1.5.252q：m_135815_ = getPath（javap 实证）——旧版写 "maid_smart:build"
+            // 恒为 false，建造女仆瞬移拦截从未生效，此处修正
+            if (maid.getTask() != null && "build".equals(maid.getTask().getUid().m_135815_())) {
                 cir.setReturnValue(false);
                 return;
             }

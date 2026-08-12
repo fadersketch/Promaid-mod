@@ -59,7 +59,7 @@ public final class BuildHudTracker {
                 int eta = st.ema > 0.01 ? (int) Math.ceil(remaining / st.ema) : -1;
                 entries.add(new String[]{ps.planId, ps.name, String.valueOf(p.placedCount),
                         String.valueOf(total), String.valueOf(p.skipped),
-                        String.valueOf((int) Math.round(st.ema)), String.valueOf(eta),
+                        String.format("%.1f", st.ema), String.valueOf(eta),
                         String.valueOf(ps.paused)});
             }
             // 清理已清除区块的统计
@@ -75,11 +75,18 @@ public final class BuildHudTracker {
         }
     }
 
-    /** 总块数（steps 直接取数，避免反复组装 toPlan） */
+    /** 总块数（可解析步骤数——steps 可能含头部行，直接 size() 会 +1 让 ETA 偏长；
+     *  懒构建只算一次，后续走缓存） */
     private static int totalBlocks(BuildPlan.PlanState ps) {
         Integer t = TOTAL.get(ps.planId);
         if (t == null) {
-            t = ps.steps.size();
+            int n = 0;
+            for (String s : ps.steps) {
+                if (BlueprintLib.parseStep(s) != null) {
+                    n++;
+                }
+            }
+            t = Math.max(1, n);
             TOTAL.put(ps.planId, t);
         }
         return t;

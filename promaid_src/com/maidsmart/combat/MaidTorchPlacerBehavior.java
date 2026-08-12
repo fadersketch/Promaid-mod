@@ -19,8 +19,6 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     private int torchCooldown = 0;
-    /** v1.5.215：诊断日志节流（latest.log 搜 "torch-placer diag"，每 5 秒一次状态快照） */
-    private long lastDiagTick = 0;
     /** v1.5.227：canUse 首调诊断标记（只打第一条） */
     private boolean canUseLogged = false;
 
@@ -62,17 +60,6 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         }
         if (!owner.m_6084_()) {
             return;
-        }
-        // v1.5.215：诊断日志——每 5 秒打一次状态快照，定位"自动插火把没实现"
-        // （主人距离/周围最暗方块亮度/背包火把槽位）
-        long now = level.m_46467_();
-        if (now - this.lastDiagTick > 100) {
-            this.lastDiagTick = now;
-            int dark = this.darkestAround(level, owner.m_20183_());
-            LOGGER.info("torch-placer diag: maid={} ownerDist={} darkest={} torchSlot={}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    String.format("%.1f", maid.m_20238_(owner.m_20182_())), dark,
-                    findTorch(maid));
         }
         if (maid.m_20238_(owner.m_20182_()) > 8.0) {
             return; // 主人不在身边（> 8 格）不管
