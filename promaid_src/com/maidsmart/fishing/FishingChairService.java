@@ -159,33 +159,30 @@ public final class FishingChairService {
 
     private static final int[][] DIRS4 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
 
-    /** 水面格四周找可站岸边：先试"岸与水面差 1 格"，再试"岸比水面高 2 格"
-     *  （1 格深水塘/岸边台阶时，差 1 格的那层是水下的泥土/沙子） */
+    /** 水面格四周找可站岸边：找该方向岸边柱的【最上面实心方块】，坐垫放在它上面
+     *  （贴地不悬浮）。旧版只查"水面+1/+2 层"——水面与地面同高（1 格深水塘）时
+     *  正确的岸（水面层空气格）永远查不到 → 只能退回 +2 层 → 坐垫悬浮在
+     *  水塘上方（用户实测："把坐垫放进水里"） */
     private static BlockPos findBank(ServerLevel level, BlockPos w) {
+        int wx = w.m_123341_();
+        int wz = w.m_123343_();
         for (int[] d : DIRS4) {
-            BlockPos s1 = w.m_7918_(d[0], 1, d[1]);
-            if (isBank(level, s1)) {
-                return s1;
-            }
-            BlockPos s2 = w.m_7918_(d[0], 2, d[1]);
-            if (isBank(level, s2)) {
-                return s2;
+            int bx = wx + d[0];
+            int bz = wz + d[1];
+            for (int y = w.m_123342_() + 1; y >= w.m_123342_() - 2; y--) {
+                BlockState st = level.m_8055_(new BlockPos(bx, y, bz));
+                if (st.m_60795_() || st.m_60815_()) {
+                    continue; // 空气/液体不算地面
+                }
+                BlockPos stand = new BlockPos(bx, y + 1, bz);
+                if (level.m_8055_(stand).m_60795_()
+                        && level.m_8055_(stand.m_7918_(0, 1, 0)).m_60795_()) {
+                    return stand; // 站格空气 + 头顶空气 → 坐垫贴地
+                }
+                break; // 该列已到最上面实心但站格被占 → 换方向
             }
         }
         return null;
-    }
-
-    /** 可站岸边：站格空气 + 脚下实心（非空气非液体）+ 头顶空气 */
-    private static boolean isBank(ServerLevel level, BlockPos s) {
-        if (!level.m_8055_(s).m_60795_()) {
-            return false;
-        }
-        BlockPos under = s.m_7918_(0, -1, 0);
-        BlockState us = level.m_8055_(under);
-        if (us.m_60795_() || us.m_60815_()) {
-            return false;
-        }
-        return level.m_8055_(s.m_7918_(0, 1, 0)).m_60795_();
     }
 
     /** 删除该女仆名下所有旧标记坐垫（生成新坐垫前调用，防堆积） */
