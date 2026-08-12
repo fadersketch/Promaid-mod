@@ -642,6 +642,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         it.remove();
                         prog.skipped++;
                         prog.skippedIdx.add(idx); // v1.5.66：缺口检查不再重复尝试
+                        // v1.5.252w：跳过实锤日志（方块 + 坐标 + 失败次数）
+                        LOGGER.info("build skip: {}@({},{},{}) 原因=悬空放不上（doPlace 失败 {} 次）",
+                                blockId, x, y, z, fails);
                         // v1.5.48：跳过提示限频（同一女仆最多 3 次气泡，避免刷屏）
                         int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
                         if (n <= 3) {
@@ -813,9 +816,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         if (!supState.m_60795_() && !supState.m_60815_()) {
                             // 补支撑成功 → 继续放置（物品不会掉落 = 时间静止）
                         } else {
+                            logPlaceFail(level, target, placed, "补支撑后支撑格仍空/流体");
                             return false; // 支撑没放上（异常）→ 延后兜底
                         }
                     } else {
+                        logPlaceFail(level, target, placed, "无合法支撑方块类型");
                         return false;
                     }
                 } else {
@@ -874,6 +879,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
             }
             if (level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target)) {
+                logPlaceFail(level, target, placed, "放置后目标仍空气或 canSurvive 失败");
                 net.minecraft.world.phys.AABB dropBox = new net.minecraft.world.phys.AABB(target).m_82400_(1.5);
                 for (net.minecraft.world.entity.item.ItemEntity e
                         : level.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, dropBox)) {
@@ -918,6 +924,23 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         return (long) ((p.m_123341_() - origin.m_123341_()) & 0xFFFFF) << 42
                 | (long) ((p.m_123342_() - origin.m_123342_()) & 0x1FFFFF) << 21
                 | (long) ((p.m_123343_() - origin.m_123343_()) & 0x1FFFFF);
+    }
+
+    /** v1.5.252w：doPlace 失败诊断（同一位置 10 秒限频）——latest.log 搜 "build place-fail" */
+    private static final java.util.Map<String, Long> FAIL_LOG = new java.util.HashMap<>();
+
+    private static void logPlaceFail(ServerLevel level, BlockPos target, Block placed, String reason) {
+        long now = level.m_46467_();
+        String key = target.m_123341_() + "," + target.m_123342_() + "," + target.m_123343_();
+        Long last = FAIL_LOG.get(key);
+        if (last != null && now - last < 200) {
+            return;
+        }
+        FAIL_LOG.put(key, now);
+        net.minecraft.resources.ResourceLocation bid = ForgeRegistries.BLOCKS.getKey(placed);
+        net.minecraft.resources.ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(level.m_8055_(target).m_60734_());
+        LOGGER.info("build place-fail: {}@({},{},{}) 原因={} 目标现={}",
+                bid, target.m_123341_(), target.m_123342_(), target.m_123343_(), reason, cur);
     }
 
     /** v1.5.82：按放置方块类型选【合法支撑】——甘蔗→沙子、植物（BushBlock）→泥土、
