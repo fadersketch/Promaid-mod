@@ -860,8 +860,12 @@ public final class BlueprintBookNetworking {
                 // v1.5.183：UNBIND 解绑不针对具体区块（planId 允许为空），不要求 target
                 BuildPlan.PlanState target = BuildPlan.getPlanById(pkt.planId);
                 if (pkt.action != SHOW_PROGRESS && pkt.action != UNBIND_MAID && target == null) {
+                    // v1.5.252ae：planId 为空（客户端未定位到区块）提示更准确——
+                    // 旧版一律"区块不存在"（用户实测：区块明明存在却提示不存在）
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c区块不存在（可能已被取消/完成）。"));
+                            (pkt.planId == null || pkt.planId.isEmpty())
+                                    ? "\u00a7c请先站在建造区块内再操作（区块外无法定位区块）。"
+                                    : "\u00a7c区块不存在（可能已被取消/完成）。"));
                     return;
                 }
                 // v1.5.178：区块内控制限制——暂停/继续/取消/速度/全员加入/逐只暂停/设工头
