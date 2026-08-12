@@ -71,7 +71,8 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.102b：进度显示底部安全间距（文本行距底 40px，进度条在其下 22px——
      *  旧版 home 用 h-28（条画在 h-6）、maids 无翻页用 h-34：百分比文字字号 8px
      *  会画出屏幕底边被裁掉（"进度条/文本突出屏幕"）。统一提到安全距离，条/文字完整可见） */
-    private static final int PROGRESS_BOTTOM_GAP = 40;
+    /** v1.5.252u：大目录页进度区离底边距离（3 行字段 + 进度条 + 标签） */
+    private static final int PROGRESS_BOTTOM_GAP = 60;
 
     private List<BlueprintBookNetworking.Entry> entries;
     /** v1.5.43：周围建造女仆状态列表 {uuid, 名字, 状态[, 工头标记]} */
@@ -399,15 +400,17 @@ public class BlueprintBookScreen extends Screen {
         }
         // v1.5.84：超过 100% = 超料 → 文本/百分比红色警示
         boolean over = this.progressPct > 100;
+        int usedLines = 0;
         if (hasText) {
             // v1.5.102c：进度文字整体右对齐（用户要求"向右移一大步"——结尾的
             // 【全局暂停中】/速度 等字样从中间跳到最右侧）；进度条仍居中
-            this.drawWrapped(graphics, (over ? "\u00a7c" : "\u00a7b") + this.progressText,
+            // v1.5.252u：分行显示（\n 分隔），返回实际行数，进度条随之自适应下移
+            usedLines = this.drawWrapped(graphics, (over ? "\u00a7c" : "\u00a7b") + this.progressText,
                     this.f_96543_ - 10, textY, this.f_96543_ - 20,
-                    over ? 0xFF5555 : 0xAAAAAA, 2, false, true);
+                    over ? 0xFF5555 : 0xAAAAAA, 4, false, true);
         }
         if (hasBar) {
-            int barY = textY + 22;
+            int barY = textY + Math.max(usedLines, 1) * 10 + 10;
             int barW = 182;
             int barX = (this.f_96543_ - barW) / 2;
             // MC 经验条纹理：暗底 + 亮绿进度（v=69 底 / v=64 进度，182×5）
@@ -457,46 +460,57 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.82：按宽度自动换行的文本绘制（最多 maxLines 行；center=true 每行居中，
      *  right=true 每行右对齐到 x（优先于居中））。v1.5.102c：进度文字走右对齐。
      *  v1.5.252t：右对齐改为 drawString 左锚点（旧版以 x-lw 为圆心 → 右缘在 x-lw/2，
-     *  长文本偏左悬空）；换行截断处补"…"（不再无声丢内容） */
-    private void drawWrapped(net.minecraft.client.gui.GuiGraphics graphics, String text,
-                             int x, int y, int maxWidth, int color, int maxLines,
-                             boolean center, boolean right) {
+     *  长文本偏左悬空）；换行截断处补"…"（不再无声丢内容）。
+     *  v1.5.252u：支持 \n 分段（每段独立右对齐/换行，分行显示）；返回实际绘制行数 */
+    private int drawWrapped(net.minecraft.client.gui.GuiGraphics graphics, String text,
+                            int x, int y, int maxWidth, int color, int maxLines,
+                            boolean center, boolean right) {
         net.minecraft.client.gui.Font font = this.f_96547_;
-        String remaining = text;
         int line = 0;
-        while (!remaining.isEmpty() && line < maxLines) {
-            if (font.m_92895_(remaining) <= maxWidth) {
-                int lw = font.m_92895_(remaining);
+        for (String seg : text.split("\n", -1)) {
+            if (seg.isEmpty()) {
+                continue;
+            }
+            String remaining = seg;
+            while (!remaining.isEmpty() && line < maxLines) {
+                if (font.m_92895_(remaining) <= maxWidth) {
+                    int lw = font.m_92895_(remaining);
+                    if (right) {
+                        graphics.m_280137_(font, remaining, Math.max(2, x - lw),
+                                y + line * 10, color); // 左锚点：右缘恰好在 x
+                    } else {
+                        int lineX = center ? this.f_96543_ / 2 : x;
+                        graphics.m_280653_(font, Component.m_237113_(remaining), lineX,
+                                y + line * 10, color);
+                    }
+                    line++;
+                    break;
+                }
+                int ell = font.m_92895_("\u2026");
+                int cut = remaining.length();
+                while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth - ell) {
+                    cut--;
+                }
+                if (cut <= 0) {
+                    break;
+                }
+                String lineText = remaining.substring(0, cut) + "\u2026"; // 截断补省略号
+                int lw = font.m_92895_(lineText);
                 if (right) {
-                    graphics.m_280137_(font, remaining, Math.max(2, x - lw),
-                            y + line * 10, color); // 左锚点：右缘恰好在 x
+                    graphics.m_280137_(font, lineText, Math.max(2, x - lw), y + line * 10, color);
                 } else {
                     int lineX = center ? this.f_96543_ / 2 : x;
-                    graphics.m_280653_(font, Component.m_237113_(remaining), lineX,
+                    graphics.m_280653_(font, Component.m_237113_(lineText), lineX,
                             y + line * 10, color);
                 }
-                return;
+                remaining = remaining.substring(cut).trim();
+                line++;
             }
-            int ell = font.m_92895_("\u2026");
-            int cut = remaining.length();
-            while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth - ell) {
-                cut--;
-            }
-            if (cut <= 0) {
+            if (line >= maxLines) {
                 break;
             }
-            String lineText = remaining.substring(0, cut) + "\u2026"; // 截断补省略号
-            int lw = font.m_92895_(lineText);
-            if (right) {
-                graphics.m_280137_(font, lineText, Math.max(2, x - lw), y + line * 10, color);
-            } else {
-                int lineX = center ? this.f_96543_ / 2 : x;
-                graphics.m_280653_(font, Component.m_237113_(lineText), lineX,
-                        y + line * 10, color);
-            }
-            remaining = remaining.substring(cut).trim();
-            line++;
         }
+        return line;
     }
 
     private void rebuildButtons() {
@@ -1597,7 +1611,7 @@ public class BlueprintBookScreen extends Screen {
             // v1.5.84：描述行（含"共多少块"）居中
             this.drawCentered(graphics, "\u00a77" + (desc == null ? "" : desc), 24, 0xAAAAAA);
             // v1.5.82：进度显示放在内容区底部（翻页/底部控制按钮之上）
-            this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 8);
+            this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
             // 材料区：2 列 × 8 行，小字体（行高 9）；v1.5.71 列宽自适应不溢出
             // v1.5.84：网格整体居中 + 每行文本在格内居中（不再偏左）
             int cellW = Math.max(120, (this.f_96543_ - 80) / MAT_COLS);
@@ -1620,7 +1634,7 @@ public class BlueprintBookScreen extends Screen {
         // 建造总目录
         this.drawCentered(graphics, "\u00a7e建造 · 总目录（" + this.entries.size()
                 + " 个建筑 · 点击名称查看材料）", PANEL_TITLE_Y, 0xFFFFFF);
-        this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 8);
+        this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
     }
 
     /** 女仆管理面板渲染 */
@@ -1657,7 +1671,7 @@ public class BlueprintBookScreen extends Screen {
             }
         }
         int total = Math.max(1, (builders.size() + rows - 1) / rows);
-        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 8
+        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 18
                 : this.f_96544_ - PROGRESS_BOTTOM_GAP);
     }
 
