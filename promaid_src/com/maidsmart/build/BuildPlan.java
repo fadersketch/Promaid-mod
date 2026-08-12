@@ -395,7 +395,12 @@ public final class BuildPlan {
             return "当前没有进行中的建造计划。";
         }
         List<String> plan = ps.toPlan();
-        StringBuilder sb = new StringBuilder("建造进度：「").append(ps.name).append("」");
+        // v1.5.252t：蓝图名截断（超长名撑爆进度条上方的字段显示）
+        String nm = ps.name == null ? "" : ps.name;
+        if (nm.length() > 18) {
+            nm = nm.substring(0, 18) + "\u2026";
+        }
+        StringBuilder sb = new StringBuilder("建造进度：「").append(nm).append("」");
         if (plan.size() > 1) {
             Progress prog = progress(ps);
             int done = Math.max(0, prog.placedCount);
