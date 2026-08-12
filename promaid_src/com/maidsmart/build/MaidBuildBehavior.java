@@ -644,6 +644,41 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     // 失误，永无支撑），永久跳过不阻塞完成；顺序问题（支撑后建）期间
                     // 1 分钟内会成功，计数随成功清零
                     if (fails >= 3) {
+                        // v1.5.252af：支撑格在蓝图计划内 → 不跳过，延后等蓝图支撑建好。
+                        // 甘蔗种泥巴上（泥巴缺料延后）→ force 补支撑 setBlock 失败 → 旧版
+                        // 跳过 124 个（用户实测"甘蔗农场跳过 172 个"）；支撑是蓝图真实
+                        // 步骤时应等待（补料后泥巴建好，甘蔗自然能放），而非永久跳过。
+                        boolean waitPlanSupport = false;
+                        try {
+                            net.minecraft.world.level.block.state.BlockState ps2 = placed.m_49966_();
+                            if (stateSnbt != null) {
+                                net.minecraft.nbt.CompoundTag stTag =
+                                        net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
+                                net.minecraft.world.level.block.state.BlockState parsed2 =
+                                        net.minecraft.nbt.NbtUtils.m_247651_(
+                                                level.m_246945_(net.minecraft.core.registries.Registries.f_256747_),
+                                                stTag);
+                                if (parsed2 != null && !parsed2.m_60795_()) {
+                                    ps2 = parsed2;
+                                }
+                            }
+                            net.minecraft.core.Direction sup = BlueprintLib.supportDirection(ps2);
+                            if (sup != null) {
+                                net.minecraft.core.BlockPos supPos = target.m_121945_(sup);
+                                net.minecraft.world.level.block.state.BlockState supState =
+                                        level.m_8055_(supPos);
+                                // 仅"支撑格在蓝图内且尚未建（空/流体）"才等蓝图支撑——
+                                // 已建但类型不合法（红石线下方玻璃）→ 走 force 补支撑换合法支撑
+                                waitPlanSupport = (supState.m_60795_() || supState.m_60815_())
+                                        && prog.plannedPositions(plan)
+                                                .contains(posKey(supPos, origin));
+                            }
+                        } catch (Exception ignored) {
+                        }
+                        if (waitPlanSupport) {
+                            reorder.add(idx); // 支撑在蓝图内 → 延后等蓝图支撑（不跳过）
+                            continue;
+                        }
                         it.remove();
                         prog.skipped++;
                         prog.skippedIdx.add(idx); // v1.5.66：缺口检查不再重复尝试
@@ -821,6 +856,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin)) || force) {
                     net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
                     if (support != null) {
+                        // v1.5.252af：支撑格区块未加载 → 直接延后（setBlock 会静默
+                        // 失败——"补支撑后支撑格仍空/流体"的根因，用户实测甘蔗 124 个跳过）
+                        if (!level.m_46749_(supPos)) {
+                            logPlaceFail(level, target, placed, "支撑格区块未加载");
+                            return false;
+                        }
                         level.m_7731_(supPos, support.m_49966_(), 3);
                         supState = level.m_8055_(supPos);
                         if (!supState.m_60795_() && !supState.m_60815_()) {
