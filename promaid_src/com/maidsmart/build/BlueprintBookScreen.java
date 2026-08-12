@@ -1588,8 +1588,8 @@ public class BlueprintBookScreen extends Screen {
         // v1.5.64：固定布局（按钮在 70/130，文字不重叠）
         // v1.5.100b：改名（Promaid 手册 → Promaid 功能手册）；v1.5.192：统一为 Promaid 手册
         this.drawCentered(graphics, "\u00a7ePromaid 手册", 20, 0xFFFFFF);
-        // v1.5.82：进度显示贴底（home 无底部控件）；v1.5.102b：提到安全距离防底边裁切
-        this.renderProgress(graphics, this.f_96544_ - PROGRESS_BOTTOM_GAP);
+        // v1.5.252w：大目录不再显示建造进度/进度条（用户要求——目录页保持干净，
+        // 进度显示保留在建造面板/女仆管理等具体页面）
         this.drawCentered(graphics, "\u00a77点击下方入口进入对应面板", 46, 0x888888);
     }
 
