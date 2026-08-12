@@ -455,7 +455,9 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /** v1.5.82：按宽度自动换行的文本绘制（最多 maxLines 行；center=true 每行居中，
-     *  right=true 每行右对齐到 x（优先于居中））。v1.5.102c：进度文字走右对齐 */
+     *  right=true 每行右对齐到 x（优先于居中））。v1.5.102c：进度文字走右对齐。
+     *  v1.5.252t：右对齐改为 drawString 左锚点（旧版以 x-lw 为圆心 → 右缘在 x-lw/2，
+     *  长文本偏左悬空）；换行截断处补"…"（不再无声丢内容） */
     private void drawWrapped(net.minecraft.client.gui.GuiGraphics graphics, String text,
                              int x, int y, int maxWidth, int color, int maxLines,
                              boolean center, boolean right) {
@@ -465,23 +467,33 @@ public class BlueprintBookScreen extends Screen {
         while (!remaining.isEmpty() && line < maxLines) {
             if (font.m_92895_(remaining) <= maxWidth) {
                 int lw = font.m_92895_(remaining);
-                // v1.5.111：居中 = 以 W/2 为圆心（drawCenteredString 圆心），
-                // 旧版 (W-lw)/2 圆心 → 每行又左移 lw/2 → 整段偏左
-                int lineX = right ? x - lw : (center ? this.f_96543_ / 2 : x);
-                graphics.m_280653_(font, Component.m_237113_(remaining), lineX, y + line * 10, color);
+                if (right) {
+                    graphics.m_280137_(font, remaining, Math.max(2, x - lw),
+                            y + line * 10, color); // 左锚点：右缘恰好在 x
+                } else {
+                    int lineX = center ? this.f_96543_ / 2 : x;
+                    graphics.m_280653_(font, Component.m_237113_(remaining), lineX,
+                            y + line * 10, color);
+                }
                 return;
             }
+            int ell = font.m_92895_("\u2026");
             int cut = remaining.length();
-            while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth) {
+            while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth - ell) {
                 cut--;
             }
             if (cut <= 0) {
                 break;
             }
-            String lineText = remaining.substring(0, cut);
+            String lineText = remaining.substring(0, cut) + "\u2026"; // 截断补省略号
             int lw = font.m_92895_(lineText);
-            int lineX = right ? x - lw : (center ? this.f_96543_ / 2 : x);
-            graphics.m_280653_(font, Component.m_237113_(lineText), lineX, y + line * 10, color);
+            if (right) {
+                graphics.m_280137_(font, lineText, Math.max(2, x - lw), y + line * 10, color);
+            } else {
+                int lineX = center ? this.f_96543_ / 2 : x;
+                graphics.m_280653_(font, Component.m_237113_(lineText), lineX,
+                        y + line * 10, color);
+            }
             remaining = remaining.substring(cut).trim();
             line++;
         }
