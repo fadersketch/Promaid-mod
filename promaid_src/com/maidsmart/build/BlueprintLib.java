@@ -2023,6 +2023,18 @@ public final class BlueprintLib {
      * 同优先级内仍按 y 升序（从下到上）。prioCache 按 blockId 缓存（蓝图同种
      * 方块大量重复，避免每次比较都查注册表）。
      */
+    /** v1.5.252x：是否骨架方块——x 或 z 位于蓝图水平轮廓边界（四面墙圈/四角柱/
+     *  屋顶边缘 = 骨架，内部 = 填充）。skel = {minX, maxX, minZ, maxZ} */
+    private static boolean isSkeleton(String[] parts, int[] skel) {
+        try {
+            int x = Integer.parseInt(parts[0]);
+            int z = Integer.parseInt(parts[2]);
+            return x == skel[0] || x == skel[1] || z == skel[2] || z == skel[3];
+        } catch (NumberFormatException e) {
+            return false;
+        }
+    }
+
     private static int buildPriority(String blockId, java.util.Map<String, Integer> prioCache) {
         Integer cached = prioCache.get(blockId);
         if (cached != null) {
@@ -3579,7 +3591,29 @@ public final class BlueprintLib {
         // 装饰与红石机械（花/火把/按钮/活塞）最后。视觉上"骨架先成型再填充"；
         // 装饰的支撑（结构方块）先建好 → 支撑缺失延后大幅减少 → 不钻牛角尖；
         // 中途取消/中断时主体已完整，损失最小。
+        // v1.5.252x：结构类内部再分【骨架优先】——水平外轮廓（x/z 在蓝图边界）的
+        // 方块先建，内部填充后建（排序键 = prio → 骨架 → y → x → z）。
+        // 效果：四面墙圈/四角柱/屋顶边缘先立起来（建筑"轮廓"从底到顶成型），
+        // 再逐层填充墙面与内部——更接近真人"先搭骨架再填墙"的建造习惯。
         java.util.Map<String, Integer> prioCache = new java.util.HashMap<>();
+        // 骨架判定用的水平范围（非空气步骤的 x/z 边界）
+        final int[] skel = new int[]{Integer.MAX_VALUE, Integer.MIN_VALUE,
+                Integer.MAX_VALUE, Integer.MIN_VALUE};
+        for (String s : body) {
+            String[] pp = parseStep(s);
+            if (pp == null) {
+                continue;
+            }
+            try {
+                int px = Integer.parseInt(pp[0]);
+                int pz = Integer.parseInt(pp[2]);
+                skel[0] = Math.min(skel[0], px);
+                skel[1] = Math.max(skel[1], px);
+                skel[2] = Math.min(skel[2], pz);
+                skel[3] = Math.max(skel[3], pz);
+            } catch (NumberFormatException ignored) {
+            }
+        }
         body.sort((a, b) -> {
             String[] pa = parseStep(a);
             String[] pb = parseStep(b);
@@ -3590,6 +3624,14 @@ public final class BlueprintLib {
             int prb = buildPriority(pb[3], prioCache);
             if (pra != prb) {
                 return pra - prb;
+            }
+            // v1.5.252x：结构类（prio 0）内部——骨架（水平外轮廓）优先于填充
+            if (pra == 0 && skel[0] != Integer.MAX_VALUE) {
+                boolean sa = isSkeleton(pa, skel);
+                boolean sb = isSkeleton(pb, skel);
+                if (sa != sb) {
+                    return sa ? -1 : 1;
+                }
             }
             try {
                 int ya = Integer.parseInt(pa[1]);
