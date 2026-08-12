@@ -9,8 +9,8 @@ package com.maidsmart.build;
  *
  * 防错位/防出屏（逐项约束）：
  * - 行高固定 10px，行与行严格步进，绝不重叠；
- * - 每行按字体宽度截断到屏幕右缘内（§ 颜色码完整保留，不出现乱码半截色）；
- * - 超过屏幕可用高度（h-12）的行直接不画；
+ * - 每行按字体宽度折行成多行（§ 颜色码完整保留，不出现乱码半截色），
+ *   超出屏幕可用宽度自动换行、超出可用高度的行直接不画——永不顶出屏幕；
  * - 打开任何界面（含手册）时不渲染——手册详情页已有进度显示，避免双份；
  * - F3 调试屏打开时不渲染（不与 F3 文字重叠）；
  * - 最多显示 3 个区块，超出折叠为"…还有 N 个区块"一行。
@@ -111,32 +111,61 @@ public final class BuildHudRenderer {
         }
     }
 
-    /** 画一行：宽度超限截断（§ 颜色码完整保留），高度超限返回 -1 */
+    /** 画一段文本：按宽度折行成多行逐行绘制（不截断不省略），高度超限返回 -1 */
     private static int line(net.minecraft.client.gui.GuiGraphics gg, net.minecraft.client.gui.Font font,
                             String text, int x, int y, int w, int h) {
         if (y > h - LINE_H - 2) {
             return -1;
         }
-        String t = fit(font, text, w - x - 4);
-        gg.m_280137_(font, t, x, y, 0xFFFFFF); // drawString(字体, 文本, x, y, 颜色)
-        return y + LINE_H;
+        int maxW = Math.min(w - x - 4, (int) (w * 0.7)); // 右缘留 4px + 单行最长占屏 70%
+        for (String seg : wrap(font, text, maxW)) {
+            if (y > h - LINE_H - 2) {
+                return -1; // 折行后超出屏幕高度 → 停画（不顶出屏幕）
+            }
+            gg.m_280137_(font, seg, x, y, 0xFFFFFF); // drawString(字体, 文本, x, y, 颜色)
+            y += LINE_H;
+        }
+        return y;
     }
 
-    /** 按字体宽度从尾部截断；若截到 § 颜色码则连 § 一起删（保留前面的颜色状态） */
-    private static String fit(net.minecraft.client.gui.Font font, String s, int maxW) {
+    /** 按字体宽度折行（多行显示，不截断）：§ 颜色码完整保留（占 2 字符、宽度 0）；
+     *  优先在最近空格处断行（英文单词不拆），无空格则按字符硬断 */
+    private static java.util.List<String> wrap(net.minecraft.client.gui.Font font, String s, int maxW) {
+        java.util.List<String> out = new java.util.ArrayList<>();
         if (font.m_92895_(s) <= maxW) {
-            return s;
+            out.add(s);
+            return out;
         }
-        StringBuilder sb = new StringBuilder(s);
-        while (sb.length() > 0 && font.m_92895_(sb.toString()) > maxW) {
-            int len = sb.length();
-            if (len >= 2 && sb.charAt(len - 1) == '\u00a7') {
-                sb.setLength(len - 2); // 删掉 §x 颜色码
-            } else {
-                sb.setLength(len - 1);
+        StringBuilder cur = new StringBuilder();
+        int i = 0;
+        int n = s.length();
+        while (i < n) {
+            char c = s.charAt(i);
+            if (c == '\u00a7' && i + 1 < n) {
+                cur.append(c).append(s.charAt(i + 1)); // 颜色码整体带走
+                i += 2;
+                continue;
             }
+            if (font.m_92895_(cur.toString() + c) > maxW && cur.length() > 0) {
+                int sp = cur.lastIndexOf(" ");
+                if (sp > 0) {
+                    String tail = cur.substring(sp + 1);
+                    cur.setLength(sp);
+                    out.add(cur.toString().trim());
+                    cur = new StringBuilder(tail);
+                } else {
+                    out.add(cur.toString());
+                    cur = new StringBuilder();
+                }
+                continue; // 不吞掉当前字符，下一轮处理
+            }
+            cur.append(c);
+            i++;
         }
-        return sb.toString();
+        if (cur.length() > 0) {
+            out.add(cur.toString());
+        }
+        return out;
     }
 
     private static String fmtNum(int n) {
@@ -146,6 +175,9 @@ public final class BuildHudRenderer {
     private static String fmtSpeed(double s) {
         if (s <= 0) {
             return "--";
+        }
+        if (s < 10) {
+            return String.format("%.1f", s) + " 块/秒"; // 慢速建造显示小数，不再吞成 0/1
         }
         return String.format("%.0f", s) + " 块/秒";
     }

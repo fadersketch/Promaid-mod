@@ -22,8 +22,6 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     private int shareCooldown = 0;
-    /** v1.5.217：诊断日志节流（latest.log 搜 "shield-share diag"，每 5 秒一次状态快照） */
-    private long lastDiagTick = 0;
     /** v1.5.227：canUse 首调诊断标记（只打第一条） */
     private boolean canUseLogged = false;
 
@@ -65,22 +63,6 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
         }
         if (!owner.m_6084_()) {
             return;
-        }
-        // v1.5.217：诊断日志——每 5 秒打一次状态快照，定位"盾牌替换失效"
-        // （主人距离/主人手里盾耐久%/女仆背包盾数）
-        long now = level.m_46467_();
-        if (now - this.lastDiagTick > 100) {
-            this.lastDiagTick = now;
-            ItemStack main = owner.m_21205_();
-            ItemStack off = owner.m_21206_();
-            ItemStack shield = main.m_41720_() instanceof net.minecraft.world.item.ShieldItem ? main
-                    : (off.m_41720_() instanceof net.minecraft.world.item.ShieldItem ? off : ItemStack.f_41583_);
-            float ownerDura = shield.m_41619_() ? -1f
-                    : (float) (shield.m_41776_() - shield.m_41773_()) / Math.max(1, shield.m_41776_());
-            LOGGER.info("shield-share diag: maid={} ownerDist={} ownerShieldDura={}% maidShields={}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    String.format("%.1f", maid.m_20238_(owner.m_20182_())),
-                    String.format("%.0f", ownerDura * 100.0f), countShields(maid));
         }
         if (maid.m_20238_(owner.m_20182_()) > 8.0) {
             return; // 主人不在身边不管
