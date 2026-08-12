@@ -10,13 +10,17 @@ package com.maidsmart.build;
  * 统计随区块清除自动清理；广播异常不影响建造。
  */
 public final class BuildHudTracker {
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
     private static final java.util.Map<String, Stat> STATS = new java.util.HashMap<>();
     private static final java.util.Map<String, Integer> TOTAL = new java.util.HashMap<>();
+    /** v1.5.252s：HUD 广播验证日志节流（每 5 秒一条，latest.log 搜 "hud broadcast"） */
+    private static long lastHudLogNanos = 0L;
 
     private static final class Stat {
         long lastNanos = -1;
         int lastPlaced = -1;
         double ema = -1.0; // 块/秒（指数移动平均）
+        int lastEta = -1;  // 最近一次广播算出的预计秒（-1 = 未知）
     }
 
     private BuildHudTracker() {
@@ -57,10 +61,18 @@ public final class BuildHudTracker {
                 st.lastPlaced = p.placedCount;
                 int remaining = Math.max(0, total - p.placedCount);
                 int eta = st.ema > 0.01 ? (int) Math.ceil(remaining / st.ema) : -1;
+                st.lastEta = eta;
                 entries.add(new String[]{ps.planId, ps.name, String.valueOf(p.placedCount),
                         String.valueOf(total), String.valueOf(p.skipped),
                         String.format("%.1f", st.ema), String.valueOf(eta),
                         String.valueOf(ps.paused)});
+            }
+            // v1.5.252s：限频验证日志（每 5 秒一条）——确认 HUD 服务端广播在跑、数值正确
+            if (now - lastHudLogNanos > 5_000_000_000L && !entries.isEmpty()) {
+                lastHudLogNanos = now;
+                String[] e0 = entries.get(0);
+                LOGGER.info("hud broadcast: plan={} name={} placed={} total={} speed={} eta={}",
+                        e0[0], e0[1], e0[2], e0[3], e0[5], e0[6]);
             }
             // 清理已清除区块的统计
             STATS.keySet().removeIf(k -> !alive.contains(k));
@@ -90,5 +102,14 @@ public final class BuildHudTracker {
             TOTAL.put(ps.planId, t);
         }
         return t;
+    }
+
+    /** v1.5.252s：手册进度条旁显示用——{块/秒, 预计秒}；null = 尚无统计（未广播/无计划） */
+    public static double[] speedEtaOf(String planId) {
+        Stat st = STATS.get(planId);
+        if (st == null || st.ema < 0.0) {
+            return null;
+        }
+        return new double[]{st.ema, st.lastEta};
     }
 }

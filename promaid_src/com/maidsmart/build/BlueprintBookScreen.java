@@ -94,6 +94,9 @@ public class BlueprintBookScreen extends Screen {
     private String progressText = "";
     /** v1.5.65：进度百分比（-1 = 无计划）——进度条绘制 */
     private int progressPct = -1;
+    /** v1.5.252s：进度条旁显示——预计完成秒（-1=未知）+ 实时速度（块/秒） */
+    private int etaSec = -1;
+    private String speedBps = "";
     /**
      * v1.5.162：进行中计划的区块标记（中心点 + 尺寸）——客户端判定"玩家是否处于
      * 建造区块内"（regionX = Integer.MIN_VALUE 表示无计划）；续建/暂停等控制按钮
@@ -205,7 +208,8 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.62：服务端状态刷新（进度/速度/暂停/女仆状态即时更新，不重开面板） */
     public void updateStatus(String progressText, List<String[]> maids, boolean paused, String speed, int progressPct,
                              int regionX, int regionY, int regionZ, int regionW, int regionH, int regionD,
-                             List<String[]> allMaids, List<String[]> regions, String planId) {
+                             List<String[]> allMaids, List<String[]> regions, String planId,
+                             int etaSec, String speedBps) {
         if (progressText != null) {
             this.progressText = progressText;
         }
@@ -224,6 +228,9 @@ public class BlueprintBookScreen extends Screen {
         this.regionW = regionW;
         this.regionH = regionH;
         this.regionD = regionD;
+        // v1.5.252s：进度条旁显示 块/秒 + 预计完成时间
+        this.etaSec = etaSec;
+        this.speedBps = speedBps == null ? "" : speedBps;
         this.rebuildButtons();
     }
 
@@ -409,10 +416,42 @@ public class BlueprintBookScreen extends Screen {
             if (fillW > 0) {
                 graphics.m_280218_(BARS, barX, barY, 0, 64, fillW, 5);
             }
-            graphics.m_280653_(this.f_96547_,
-                    Component.m_237113_((over ? "\u00a7c" : "\u00a7a") + this.progressPct + "%"),
-                    barX + barW + 4, barY - 1, over ? 0xFF5555 : 0xFFFFFF);
+            // v1.5.252s：进度条右侧 = 百分比 · 速度(块/秒) · 预计完成时间——
+            // 超宽时左移钳制（绝不顶出屏幕右缘）
+            String label = (over ? "\u00a7c" : "\u00a7a") + this.progressPct + "%";
+            double bps = 0;
+            try {
+                bps = this.speedBps.isEmpty() ? 0 : Double.parseDouble(this.speedBps);
+            } catch (NumberFormatException ignored) {
+            }
+            if (bps > 0.01) {
+                label += " \u00a77\u00b7 " + fmtBps(bps) + " \u00b7 \u9884\u8ba1" + fmtEta(this.etaSec);
+            }
+            net.minecraft.client.gui.Font font = this.f_96547_;
+            int labelW = font.m_92895_(label);
+            int lx = Math.min(barX + barW + 4, this.f_96543_ - labelW - 4);
+            graphics.m_280137_(font, label, lx, barY - 1, over ? 0xFF5555 : 0xFFFFFF);
         }
+    }
+
+    /** v1.5.252s：块/秒（慢速显示一位小数） */
+    private static String fmtBps(double bps) {
+        return bps < 10 ? String.format("%.1f", bps) + "\u5757/\u79d2"
+                : String.format("%.0f", bps) + "\u5757/\u79d2";
+    }
+
+    /** v1.5.252s：预计完成时间（秒 → 小时/分/秒；-1 = 未知） */
+    private static String fmtEta(int eta) {
+        if (eta < 0) {
+            return "--";
+        }
+        if (eta >= 3600) {
+            return (eta / 3600) + "\u5c0f\u65f6" + ((eta % 3600) / 60) + "\u5206";
+        }
+        if (eta >= 60) {
+            return (eta / 60) + "\u5206" + (eta % 60) + "\u79d2";
+        }
+        return eta + "\u79d2";
     }
 
     /** v1.5.82：按宽度自动换行的文本绘制（最多 maxLines 行；center=true 每行居中，
