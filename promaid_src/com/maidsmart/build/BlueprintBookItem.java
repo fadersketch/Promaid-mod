@@ -69,6 +69,8 @@ public class BlueprintBookItem extends Item {
             double[] se = here == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(here.planId);
             int openEta = se == null ? -1 : (int) Math.round(se[1]);
             String openBps = se == null ? "" : String.format("%.1f", se[0]);
+            // v1.5.252ad：打开手册诊断（latest.log 搜 "hud book"）——确认打开瞬间速度值
+            com.maidsmart.build.BlueprintBookNetworking.logBookSpeed("open", here == null ? null : here.planId, openBps, openEta);
             BlueprintBookNetworking.sendToPlayer(serverPlayer,
                     new BlueprintBookNetworking.OpenBlueprintBookPacket(
                             entries, BlueprintBookNetworking.collectMaidStatus(serverPlayer),

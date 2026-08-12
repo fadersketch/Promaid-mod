@@ -1389,6 +1389,10 @@ public final class BlueprintLib {
     public static boolean deleteBlueprint(String id) {
         try {
             java.nio.file.Path path = EXTERNAL_PATHS.get(id);
+            // v1.5.252ad：删除诊断（latest.log 搜 "deleteBlueprint"）——用户实测
+            // RRR/SSS 删不掉、重登又出现，需确认 id 与路径
+            LOGGER.info("deleteBlueprint: 请求删除 id={} path={}", id,
+                    path == null ? "(无注册路径!)" : path.toString());
             if (path == null) {
                 return false; // 内置蓝图或未注册
             }
