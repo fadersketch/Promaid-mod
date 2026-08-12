@@ -142,7 +142,7 @@ public class BlueprintBookScreen extends Screen {
                                   int progressPct, int regionX, int regionY, int regionZ,
                                   int regionW, int regionH, int regionD,
                                   boolean inPlanRegion, String currentPlanId,
-                                  List<String[]> regions) {
+                                  List<String[]> regions, int etaSec, String speedBps) {
         super(Component.m_237113_("Promaid 手册"));
         this.entries = entries;
         this.maids = maids == null ? new ArrayList<>() : maids;
@@ -162,6 +162,9 @@ public class BlueprintBookScreen extends Screen {
         this.regionW = regionW;
         this.regionH = regionH;
         this.regionD = regionD;
+        // v1.5.252z：打开手册立即显示速度/ETA（不等 2 秒轮询）
+        this.etaSec = etaSec;
+        this.speedBps = speedBps == null ? "" : speedBps;
         // v2.0：区块内右击手册 = 玩家明确意图 → 直接进入当前计划的建造详情页
         //（覆盖上次视图恢复）；区块外右击 = 正常目录
         boolean jumped = false;
@@ -199,11 +202,12 @@ public class BlueprintBookScreen extends Screen {
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
                             int progressPct, int regionX, int regionY, int regionZ,
                             int regionW, int regionH, int regionD,
-                            boolean inPlanRegion, String currentPlanId, List<String[]> regions) {
+                            boolean inPlanRegion, String currentPlanId, List<String[]> regions,
+                            int etaSec, String speedBps) {
         com.maidsmart.build.BlueprintAreaPreview.clear();
         Minecraft.m_91087_().m_91152_(new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
                 progressText, progressPct, regionX, regionY, regionZ, regionW, regionH, regionD,
-                inPlanRegion, currentPlanId, regions));
+                inPlanRegion, currentPlanId, regions, etaSec, speedBps));
     }
 
     /** v1.5.62：服务端状态刷新（进度/速度/暂停/女仆状态即时更新，不重开面板） */
@@ -326,8 +330,15 @@ public class BlueprintBookScreen extends Screen {
             for (String[] m : entry.materials()) {
                 int have = Integer.parseInt(m[1]);
                 int need = Integer.parseInt(m[2]);
+                // v1.5.252y：剩余需求 ≤ 0（已建完）→ 不显示——不再出现"0/0"诡异数据
+                if (need <= 0) {
+                    continue;
+                }
                 String color = have >= need ? "\u00a7a" : "\u00a7e";
                 items.add(color + itemName(m[0]) + " " + haveText(have) + "/" + need);
+            }
+            if (items.isEmpty()) {
+                items.add("\u00a7a材料充足");
             }
         }
         return items;
@@ -433,7 +444,9 @@ public class BlueprintBookScreen extends Screen {
             net.minecraft.client.gui.Font font = this.f_96547_;
             int labelW = font.m_92895_(label);
             int lx = Math.min(barX + barW + 4, this.f_96543_ - labelW - 4);
-            graphics.m_280137_(font, label, lx, barY - 1, over ? 0xFF5555 : 0xFFFFFF);
+            // v1.5.252y：label 上移到进度条上方 9px（旧版 barY-1 起点 → 文字底部
+            // 压进度条 6px，截图实证"字样跟进度条重叠"）
+            graphics.m_280137_(font, label, lx, barY - 9, over ? 0xFF5555 : 0xFFFFFF);
         }
     }
 
