@@ -468,7 +468,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (placed == null) {
                 placed = block;
             }
-            if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt, prog.plannedPositions(plan), false)) {
+            if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt,
+                    prog.plannedPositions(plan), false, planMainBlock(ps, plan))) {
                 // v1.5.45：支撑缺失（火把/按钮/拉杆等，支撑块未建）→ 延后，支撑建好后自动补建
                 prog.deferred.putIfAbsent(i, 0);
                 lookaheadLeft--;
@@ -477,7 +478,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (i == prog.cursor) {
                 prog.cursor = i + 1;
             }
-            this.placeCooldown = currentInterval();
+            // v1.5.252aa：极速模式放置冷却归零（连续摆放）——旧版放置后仍设 2 tick
+            // 冷却 → 每只女仆每 3 tick 只放 1 块（6.7 块/秒/只），13 只合计被压到
+            // ~25 块/秒（用户实测"13 个女仆速度只有五格"）——TURBO 本意是吃满
+            // 服务器能力上限（批量由 batchLeft 配额控制，TPS 反馈兜底）
+            this.placeCooldown = TURBO ? 0 : currentInterval();
             this.missingNotified = null;
             clearMissing(maid);
             BuildPlan.persistCursor(level, ps, prog.cursor);
@@ -634,7 +639,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // 是空气/水/永未建成时，强制补支撑再放（不再等永远等不到的支撑）
                 int fails = prog.deferred.merge(idx, 1, Integer::sum);
                 if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt,
-                        prog.plannedPositions(plan), fails >= 3)) {
+                        prog.plannedPositions(plan), fails >= 3, planMainBlock(ps, plan))) {
                     // v1.5.46：支撑缺失——连续失败 ≥3 次视为"蓝图本身悬空"（作者画图
                     // 失误，永无支撑），永久跳过不阻塞完成；顺序问题（支撑后建）期间
                     // 1 分钟内会成功，计数随成功清零
@@ -781,7 +786,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  支撑格是空气步骤/水/石头时旧版永远等不到支撑 → 3 次后永久跳过）。 */
     private static boolean doPlace(ServerLevel level, EntityMaid maid, BlockPos origin, BlockPos target,
                                    Block placed, String stateSnbt, String beSnbt,
-                                   java.util.Set<Long> plannedPos, boolean force) {
+                                   java.util.Set<Long> plannedPos, boolean force, Block fallbackBlock) {
         BlockState placeState = placed.m_49966_();
         // 结构文件蓝图：恢复精确状态（台阶/楼梯朝向/门等）
         if (stateSnbt != null) {
@@ -809,7 +814,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // v1.5.252i：force 模式无视蓝图步骤直接补——蓝图有支撑步骤但该步骤
                 // 是空气/水（外部蓝图悬空设计）或永未建成时，旧版永远延后 → 3 次跳过
                 if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin)) || force) {
-                    net.minecraft.world.level.block.Block support = supportBlockFor(placed);
+                    net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
                     if (support != null) {
                         level.m_7731_(supPos, support.m_49966_(), 3);
                         supState = level.m_8055_(supPos);
@@ -848,7 +853,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // 只补"空气/流体"格，其余直接失败 → 3 次跳过
         boolean bad = level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target);
         if (bad) {
-            net.minecraft.world.level.block.Block support = supportBlockFor(placed);
+            net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
             if (support != null) {
                 if (sup != null) {
                     // 附着类：把支撑方向格换成合法支撑（覆盖空气/流体/不合法方块）
@@ -944,10 +949,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.82：按放置方块类型选【合法支撑】——甘蔗→沙子、植物（BushBlock）→泥土、
-     *  其他附着→石头。旧版一律补石头：甘蔗下方是石头时 canSurvive 失败（MC 甘蔗
-     *  只认沙子/泥土/甘蔗），静默放置看似成功，但邻居更新（flag 3）触发检查时
-     *  被打掉 → 反复"放置又被打掉"循环。 */
-    private static net.minecraft.world.level.block.Block supportBlockFor(Block placed) {
+     *  其他→fallback（蓝图主要建材，无则石头）。旧版一律补石头：甘蔗下方是石头时
+     *  canSurvive 失败（MC 甘蔗只认沙子/泥土/甘蔗），静默放置看似成功，但邻居更新
+     *  （flag 3）触发检查时被打掉 → 反复"放置又被打掉"循环。
+     *  v1.5.252aa：fallback 用蓝图主要建材——旧版无中生有补石头 → 建筑里出现
+     *  材料表没有的石头（用户实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致 */
+    private static net.minecraft.world.level.block.Block supportBlockFor(Block placed, Block fallback) {
         if (placed instanceof net.minecraft.world.level.block.SugarCaneBlock) {
             return ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:sand"));
@@ -956,8 +963,74 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             return ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:dirt"));
         }
-        return ForgeRegistries.BLOCKS.getValue(
+        return fallback != null ? fallback : ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:stone"));
+    }
+
+    /** v1.5.252aa：计划主要建材缓存（planId → 出现最多的完整方块）——补支撑默认方块 */
+    private static final java.util.Map<String, Block> PLAN_MAIN = new java.util.HashMap<>();
+
+    private static Block planMainBlock(BuildPlan.PlanState ps, List<String> plan) {
+        Block cached = PLAN_MAIN.get(ps.planId);
+        if (cached != null) {
+            return cached;
+        }
+        java.util.Map<String, Integer> cnt = new java.util.HashMap<>();
+        for (int i = 1; i < plan.size(); i++) {
+            String[] parts = BlueprintLib.parseStep(plan.get(i));
+            if (parts == null) {
+                continue;
+            }
+            cnt.merge(parts[3], 1, Integer::sum);
+        }
+        String best = null;
+        int bestN = 0;
+        for (java.util.Map.Entry<String, Integer> e : cnt.entrySet()) {
+            if (BlueprintLib.FORBIDDEN.contains(e.getKey())) {
+                continue;
+            }
+            Block b = ForgeRegistries.BLOCKS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse(e.getKey()));
+            if (b == null || !isFullBuildBlock(b)) {
+                continue;
+            }
+            if (e.getValue() > bestN) {
+                bestN = e.getValue();
+                best = e.getKey();
+            }
+        }
+        Block main = best == null ? null : ForgeRegistries.BLOCKS.getValue(
+                net.minecraft.resources.ResourceLocation.parse(best));
+        PLAN_MAIN.put(ps.planId, main);
+        return main;
+    }
+
+    /** 完整建材（排除空气/液体/台阶/楼梯/栅栏/玻璃/树叶/附着/装饰等非完整方块） */
+    private static boolean isFullBuildBlock(Block b) {
+        net.minecraft.world.level.block.state.BlockState st = b.m_49966_();
+        if (st.m_60795_() || st.m_60815_()) {
+            return false;
+        }
+        return !(b instanceof net.minecraft.world.level.block.SlabBlock
+                || b instanceof net.minecraft.world.level.block.StairBlock
+                || b instanceof net.minecraft.world.level.block.FenceBlock
+                || b instanceof net.minecraft.world.level.block.FenceGateBlock
+                || b instanceof net.minecraft.world.level.block.WallBlock
+                || b instanceof net.minecraft.world.level.block.GlassBlock
+                || b instanceof net.minecraft.world.level.block.StainedGlassBlock
+                || b instanceof net.minecraft.world.level.block.LeavesBlock
+                || b instanceof net.minecraft.world.level.block.BushBlock
+                || b instanceof net.minecraft.world.level.block.CarpetBlock
+                || b instanceof net.minecraft.world.level.block.TorchBlock
+                || b instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || b instanceof net.minecraft.world.level.block.DiodeBlock
+                || b instanceof net.minecraft.world.level.block.DoorBlock
+                || b instanceof net.minecraft.world.level.block.TrapDoorBlock
+                || b instanceof net.minecraft.world.level.block.LadderBlock
+                || b instanceof net.minecraft.world.level.block.ChainBlock
+                || b instanceof net.minecraft.world.level.block.LanternBlock
+                || b instanceof net.minecraft.world.level.block.FlowerPotBlock
+                || b instanceof net.minecraft.world.level.block.BannerBlock);
     }
 
     /** v1.5.82：放置成功计数——placedSet 按相对坐标去重，补建/覆盖重复放置
