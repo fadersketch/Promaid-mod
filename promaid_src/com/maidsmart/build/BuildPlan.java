@@ -388,6 +388,8 @@ public final class BuildPlan {
     /**
      * v1.5.43：区块建造状态文本。
      * v1.5.179：缺料实时计算 = 总需求 − 已建（区块内匹配方块）− 背包（绑定女仆 + 主人）。
+     * v1.5.252u：多行分行显示（\n 分隔）——每行一个信息块、短小独立，
+     * 客户端逐行右对齐绘制，不再挤成一长串被截断（根治"字段突出屏幕"）。
      */
     public static String statusText(net.minecraft.server.level.ServerLevel level, PlanState ps,
                                     net.minecraft.world.entity.player.Player owner) {
@@ -395,43 +397,55 @@ public final class BuildPlan {
             return "当前没有进行中的建造计划。";
         }
         List<String> plan = ps.toPlan();
-        // v1.5.252t：蓝图名截断（超长名撑爆进度条上方的字段显示）
+        // v1.5.252t：蓝图名截断（超长名撑爆字段显示）
         String nm = ps.name == null ? "" : ps.name;
         if (nm.length() > 18) {
             nm = nm.substring(0, 18) + "\u2026";
         }
-        StringBuilder sb = new StringBuilder("建造进度：「").append(nm).append("」");
+        StringBuilder line1 = new StringBuilder("\u5efa\u9020\u8fdb\u5ea6\uff1a\u300c").append(nm).append("\u300d");
+        StringBuilder line2 = new StringBuilder();
+        StringBuilder line3 = new StringBuilder();
         if (plan.size() > 1) {
             Progress prog = progress(ps);
             int done = Math.max(0, prog.placedCount);
             int total = plan.size() - 1;
-            sb.append(" 已建 ").append(done).append("/").append(total).append(" 块（")
-                    .append(total == 0 ? 0 : done * 100 / total).append("%）");
+            line1.append(" \u5df2\u5efa ").append(done).append("/").append(total)
+                    .append(" \u5757\uff08").append(total == 0 ? 0 : done * 100 / total).append("%\uff09");
+            // 第二行：等待补建 / 缺料
             if (!prog.deferred.isEmpty()) {
-                sb.append("，等待补建 ").append(prog.deferred.size()).append(" 块");
+                line2.append("\u7b49\u5f85\u8865\u5efa ").append(prog.deferred.size()).append(" \u5757");
             }
             // v1.5.179：实时缺料 = 总需求 − 已建 − 背包
             java.util.Map<String, Integer> shortfall = realShortfall(level, plan, ps.origin, owner);
             if (!shortfall.isEmpty()) {
-                sb.append("，缺料：");
+                if (line2.length() > 0) {
+                    line2.append("\uff0c");
+                }
+                line2.append("\u7f3a\u6599\uff1a");
                 int shown = 0;
                 for (java.util.Map.Entry<String, Integer> e : shortfall.entrySet()) {
                     if (shown++ >= 3) {
-                        sb.append("…");
+                        line2.append("\u2026");
                         break;
                     }
                     if (shown > 1) {
-                        sb.append("、");
+                        line2.append("\u3001");
                     }
-                    sb.append(BlueprintLib.cnName(e.getKey())).append("×").append(e.getValue());
+                    line2.append(BlueprintLib.cnName(e.getKey())).append("\u00d7").append(e.getValue());
                 }
             }
         } else {
-            sb.append("（蓝图解析失败）");
+            line1.append("\uff08\u84dd\u56fe\u89e3\u6790\u5931\u8d25\uff09");
         }
-        sb.append("。参与女仆：").append(countBuildersNear(level, ps)).append(" 只");
-        sb.append("。").append(ps.paused ? "【暂停中】" : "建造中");
-        sb.append("。速度：").append(MaidBuildBehavior.speedLabel());
+        // 第三行：参与女仆 / 状态 / 档位
+        line3.append("\u53c2\u4e0e\u5973\u4ec6\uff1a").append(countBuildersNear(level, ps)).append(" \u53ea");
+        line3.append(" \u00b7 ").append(ps.paused ? "\u3010\u6682\u505c\u4e2d\u3011" : "\u5efa\u9020\u4e2d");
+        line3.append(" \u00b7 \u901f\u5ea6\uff1a").append(MaidBuildBehavior.speedLabel());
+        StringBuilder sb = new StringBuilder(line1);
+        if (line2.length() > 0) {
+            sb.append('\n').append(line2);
+        }
+        sb.append('\n').append(line3);
         return sb.toString();
     }
 
