@@ -134,7 +134,8 @@ public class ProMaidExtension implements ILittleMaid {
             this.hudTimer = 0;
             com.maidsmart.build.BuildHudTracker.broadcast(server);
             // v1.5.252q：清扫自动生成的钓鱼坐垫（任务解除/脱离坐垫超 2 秒 → 删除）
-            com.maidsmart.mixin.FishingAutoChairMixin.sweep(server);
+            // v1.5.252r：逻辑在普通类 FishingChairService（mixin 类不可被普通代码直接引用）
+            com.maidsmart.fishing.FishingChairService.sweep(server);
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
     }

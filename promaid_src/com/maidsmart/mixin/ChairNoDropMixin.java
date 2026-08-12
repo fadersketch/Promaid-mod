@@ -20,7 +20,7 @@ public abstract class ChairNoDropMixin {
     @Inject(method = "killEntity", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noDropOnKill(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
-        if (FishingAutoChairMixin.isAutoChair(self)) {
+        if (com.maidsmart.fishing.FishingChairService.isAutoChair(self)) {
             self.m_146870_(); // 直接移除实体，无掉落
             ci.cancel();
         }
