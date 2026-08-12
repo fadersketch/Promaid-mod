@@ -65,6 +65,10 @@ public class BlueprintBookItem extends Item {
             // 区块外右击 → 正常目录（全新蓝图）
             BuildPlan.PlanState here = sl == null ? null
                     : BlueprintBookNetworking.findPlayerPlan(sl, serverPlayer);
+            // v1.5.252z：打开手册立即显示速度/ETA（不等 2 秒轮询）
+            double[] se = here == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(here.planId);
+            int openEta = se == null ? -1 : (int) Math.round(se[1]);
+            String openBps = se == null ? "" : String.format("%.1f", se[0]);
             BlueprintBookNetworking.sendToPlayer(serverPlayer,
                     new BlueprintBookNetworking.OpenBlueprintBookPacket(
                             entries, BlueprintBookNetworking.collectMaidStatus(serverPlayer),
@@ -75,7 +79,8 @@ public class BlueprintBookItem extends Item {
                             sl == null ? -1 : BlueprintBookNetworking.buildProgressPct(sl, serverPlayer),
                             region[0], region[1], region[2], region[3], region[4], region[5],
                             here != null, here == null ? null : here.blueprintId,
-                            sl == null ? new ArrayList<>() : BlueprintBookNetworking.collectBuildRegions(sl.m_7654_())));
+                            sl == null ? new ArrayList<>() : BlueprintBookNetworking.collectBuildRegions(sl.m_7654_()),
+                            openEta, openBps));
         }
         return new net.minecraft.world.InteractionResultHolder<>(
                 level.m_5776_() ? net.minecraft.world.InteractionResult.SUCCESS : net.minecraft.world.InteractionResult.CONSUME,
