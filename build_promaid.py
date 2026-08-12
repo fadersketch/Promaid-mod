@@ -59,6 +59,17 @@ with zipfile.ZipFile(JAR_OUT) as z:
                 'assets/maid_smart/models/item/blueprint_book.json',
                 'assets/maid_smart/lang/zh_cn.json']
     missing = [r for r in required if r not in names]
-    print('MISSING:', missing if missing else 'none')
+    if missing:
+        raise SystemExit('FATAL: jar 缺少必需条目: %s' % missing)
+    # v1.5.252q 热修复：mixins.promaid.json 注册的每个 mixin 必须能在 jar 里找到对应
+    # class——否则启动即 MixinApplyError 崩溃（ChairNoDropMixin 漏编译事故的教训）
+    import json
+    mc = json.loads(z.read('mixins.promaid.json'))
+    allm = mc['mixins'] + mc.get('client', [])
+    no_class = [m for m in allm if ('com/maidsmart/mixin/' + m + '.class') not in names]
+    if no_class:
+        raise SystemExit('FATAL: jar 缺少 mixin class: %s（先跑 gen_compile.py 再编译）' % no_class)
+    print('MISSING: none')
     print('TOTAL entries:', len(names))
 print('BUILT:', JAR_OUT, os.path.getsize(JAR_OUT), 'bytes')
+
