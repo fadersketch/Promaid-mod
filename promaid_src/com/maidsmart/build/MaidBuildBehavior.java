@@ -856,7 +856,16 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.252i：支撑格【无条件换成合法支撑】再重放——下方是石头/水/台阶等
         // 不合法支撑（外部蓝图常见：甘蔗种石头上/水边、活板门下是台阶）时旧版
         // 只补"空气/流体"格，其余直接失败 → 3 次跳过
-        boolean bad = level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target);
+        // v1.5.252ad：bad 判定放宽——目标已是目标方块（placed 或解析状态同方块）
+        // → 成功。旧版 !canSurvive 对已放置的玻璃/树叶/活塞/观察者/漏斗等误判失败
+        // （日志实证：484 玻璃、96 树叶…"目标现=目标方块"却 place-fail）→ 全方块
+        // 延后 3 次 → 大量跳过（用户实测"甘蔗农场跳过 130 个"）。canSurvive 对
+        // 解析出的状态（stateSnbt）在部分方块上返回 false 的原因待查，但目标方块
+        // 已在 = 放置成功，不应判失败。
+        BlockState targetState = level.m_8055_(target);
+        boolean bad = targetState.m_60795_()
+                || (targetState.m_60734_() != placeState.m_60734_()
+                    && targetState.m_60734_() != placed);
         if (bad) {
             net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
             if (support != null) {
