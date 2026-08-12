@@ -1552,6 +1552,12 @@ public class BlueprintBookScreen extends Screen {
      *  本面板只在玩家处于建造区块内时显示。
      *  v1.5.180：操作目标 = 玩家所在区块（currentPlanId）——仅针对本区块 */
     private void addControlButtons() {
+        // v1.5.252ae：控制按钮只在玩家处于建造区块内时显示——注释承诺但旧版未实现，
+        // 区块外也显示按钮 → 点击后 currentPlanId 为空 → 服务端误报"区块不存在"
+        // （用户实测：区块明明存在却提示不存在）
+        if (this.currentPlanId == null || this.currentPlanId.isEmpty()) {
+            return;
+        }
         int cx = this.f_96543_ / 2;
         int h = this.f_96544_;
         final String cid = this.currentPlanId;
