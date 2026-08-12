@@ -2897,13 +2897,20 @@ public final class BlueprintLib {
         return null;
     }
 
-    /** 统计蓝图步骤的总需求（blockId → 数量；等价族合并到"主方块"上） */
+    /** 统计蓝图步骤的总需求（blockId → 数量；等价族合并到"主方块"上）。
+     *  v1.5.252w：排除 FORBIDDEN 黑名单（空气/基岩/屏障等生存不可获取方块）——
+     *  不再出现在材料表（用户实测：材料表出现"空气 0/0"），缺料计算也默认
+     *  玩家持有（空气步骤本就无限，主循环单独处理，不影响搭建）。 */
     public static Map<String, Integer> countNeeds(List<String> steps) {
         Map<String, Integer> needed = new HashMap<>();
         for (String step : steps) {
             String[] parts = parseStep(step);
             if (parts != null) {
-                needed.merge(parts[3], 1, Integer::sum);
+                String id = parts[3];
+                if (FORBIDDEN.contains(id)) {
+                    continue;
+                }
+                needed.merge(id, 1, Integer::sum);
             }
         }
         return needed;
