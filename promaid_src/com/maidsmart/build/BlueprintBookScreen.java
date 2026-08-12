@@ -528,6 +528,10 @@ public class BlueprintBookScreen extends Screen {
 
     private void rebuildButtons() {
         this.m_169413_(); // clearWidgets
+        // v1.5.252ad：每次重建按钮清空空状态提示——旧版 graphicsHint 只设置不清空，
+        // 女仆加入/条件满足后残留提示仍显示（截图实证：名单页有女仆仍显示
+        // "该区块没有女仆"）；各视图按钮构建时按条件重新设置
+        this.maidEmptyText = null;
         if (this.entries == null || this.entries.isEmpty()) {
             this.m_142416_(Button.m_253074_(Component.m_237113_("没有可用蓝图——把 .nbt/.litematic/.schem 图纸放进 config/maid_smart/blueprints/ 或存档 schematics/"),
                             b -> this.m_7379_()).m_252987_(this.f_96543_ / 2 - 120, 60, 240, 20).m_253136_());

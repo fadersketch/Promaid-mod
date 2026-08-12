@@ -1034,9 +1034,15 @@ public final class BlueprintBookNetworking {
         return ps == null ? -1 : BuildPlan.progressPct(ps);
     }
 
+    /** v1.5.252ad：打开手册速度诊断日志（latest.log 搜 "hud book"，BlueprintBookItem 调用） */
+    public static void logBookSpeed(String tag, String planId, String speedBps, int etaSec) {
+        LOGGER.info("hud book: {} plan={} speedBps={} etaSec={}",
+                tag, planId == null ? "null" : planId,
+                speedBps == null || speedBps.isEmpty() ? "(空)" : speedBps, etaSec);
+    }
+
     /** v1.5.62：控制操作后回发状态快照（客户端面板即时刷新） */
-    public static void sendProgressUpdate(ServerPlayer player) {
-        if (player == null || !(player.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
+    public static void sendProgressUpdate(ServerPlayer player) {        if (player == null || !(player.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
             return;
         }
         // v1.5.162：计划区块标记（中心点 + 尺寸，兼容字段）
@@ -1053,8 +1059,7 @@ public final class BlueprintBookNetworking {
             lastBookLogMs = nowMs;
             LOGGER.info("hud book: plan={} speedBps={} etaSec={}",
                     ps == null ? "null" : ps.planId, speedBps.isEmpty() ? "(空)" : speedBps, etaSec);
-        }
-        // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
+        }        // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ProgressUpdatePacket(
                         ps == null ? "" : BuildPlan.statusText(level, ps, player),
