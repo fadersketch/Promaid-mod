@@ -702,6 +702,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // 成功放置）直接进入收尾，省去 55 万步蓝图完成瞬间的 O(N) parseStep +
             // 世界状态检查 tick 尖峰（放置成功的方块已完成 canSurvive+掉落双重验证
             // 不会自行消失；外力破坏的洞重新下达蓝图即可补建）
+            // v1.5.252ab：红石激活提前到缺口检查【之前】——旧版在 scanGaps 之后，
+            // scanGaps 发现缺口（哪怕 1 个）就 return → recalcRedstone 永不执行 →
+            // 红石机器建好不运行（用户实测：甘蔗农场红石机器无法运行）
+            BlueprintLib.recalcRedstone(level, origin, plan);
             if (prog.skipped > 0 || prog.placedCount < size - 1) {
                 if (scanGaps(level, origin, plan, prog)) {
                     return;
@@ -711,6 +715,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             BlueprintLib.carveEntrance(level, origin, plan, maid);
             // v1.5.57：红石统一激活——建造期间机械冻结（活塞不推墙），
             // 完成后重放红石组件触发邻居更新 → 线重算 → 机械正常启动
+            //（此处保留——补建完成的最终路径再次激活，幂等）
             BlueprintLib.recalcRedstone(level, origin, plan);
             // v1.5.46：清理建造区掉落物（悬空方块历史掉落的物品堆积，实体区块曾达 3.36MB）
             // v1.5.75：范围限制到蓝图包围盒 + 4 格边距（不误清建筑外掉落物）
