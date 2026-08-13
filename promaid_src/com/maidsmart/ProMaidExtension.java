@@ -55,6 +55,10 @@ public class ProMaidExtension implements ILittleMaid {
     private int purgeTimer = 0;
     /** v1.5.142：跨维度跟随扫描节流计数（每 100 tick = 5 秒一次） */
     private int dimFollowTimer = 0;
+    /** v1.5.252j：建造 HUD 广播节流计数（每 20 tick = 1 秒一次） */
+    private int hudTimer = 0;
+    /** v1.5.275：钓鱼女仆走位高频维持节流计数（每 3 tick 一次） */
+    private int seatWalkTimer = 0;
 
     public ProMaidExtension() {
         MinecraftForge.EVENT_BUS.register(new ProactiveDialogueManager());
@@ -74,6 +78,8 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(new AiMemoryManager());
         MinecraftForge.EVENT_BUS.register(new WorkStatusReporter());
         MinecraftForge.EVENT_BUS.register(new MasterDeathTeleportHandler());
+        // v1.5.257：玩家水行为日志（latest.log 搜 "player water"——挖/放水定位钓鱼问题）
+        MinecraftForge.EVENT_BUS.register(new com.maidsmart.fishing.PlayerWaterLog());
         MinecraftForge.EVENT_BUS.register(this);
     }
 
@@ -126,6 +132,30 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.dimFollowTimer >= 100) {
             this.dimFollowTimer = 0;
             com.maidsmart.follow.MaidDimensionFollow.tick(server);
+        }
+        // v1.5.252j：建造 HUD 广播（每秒一次）——客户端左上角显示速度/预计完成时间
+        if (++this.hudTimer >= 20) {
+            this.hudTimer = 0;
+            com.maidsmart.build.BuildHudTracker.broadcast(server);
+            // v1.5.252q：清扫自动生成的钓鱼坐垫（任务解除/脱离坐垫超 2 秒 → 删除）
+            // v1.5.252r：逻辑在普通类 FishingChairService（mixin 类不可被普通代码直接引用）
+            com.maidsmart.fishing.FishingChairService.sweep(server);
+        }
+        // v1.5.275：每 3 tick 高频维持钓鱼女仆走位（FindSit 12 tick 间隙 + 站立行为
+        // 清 WALK_TARGET → 一步一停；3 tick 内补回 → 连续走）
+        if (++this.seatWalkTimer >= 3) {
+            this.seatWalkTimer = 0;
+            try {
+                for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
+                    for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+                        if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                                && m.m_6084_()) {
+                            com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
     }
@@ -243,6 +273,8 @@ public class ProMaidExtension implements ILittleMaid {
         }
         // v1.5.196：工作清单工具（query_todo/build_need——任务计划与材料缺口查询闭环）
         register.register(new com.maidsmart.dialogue.WorkListTool());
+        // v1.5.287：查看主人物品栏工具（确认/获得主人背包里有什么——只读查询）
+        register.register(new com.maidsmart.tool.OwnerInventoryTool());
     }
 
     @Override

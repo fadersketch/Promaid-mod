@@ -62,6 +62,11 @@ public final class BuildPlan {
         /** 存档游标（persistCursor 写入；重启恢复进度用） */
         public int savedCursor = 1;
 
+        /** v1.5.287：toPlan 惰性缓存——steps/origin/name/planId 建后不可变 → 拼一次
+         *  复用。旧版每次 toPlan 都 new ArrayList + 拷贝全部步骤（tick 热路径每 tick
+         *  调用：55 万步 × 多女仆 = 每 tick 上千万次引用拷贝 + GC 压力） */
+        private List<String> cachedPlan = null;
+
         PlanState(String planId, ResourceKey<Level> dim, BlockPos origin, String name,
                   String blueprintId, List<String> steps) {
             this.planId = planId;
@@ -74,11 +79,14 @@ public final class BuildPlan {
 
         /** 组装传统计划格式（原点行 + 步骤）——兼容现有解析 API（getOrigin/planName/planId） */
         public List<String> toPlan() {
-            List<String> plan = new ArrayList<>(steps.size() + 1);
-            plan.add("O," + origin.m_123341_() + "," + origin.m_123342_() + "," + origin.m_123343_()
-                    + "," + name + "," + planId);
-            plan.addAll(steps);
-            return plan;
+            if (this.cachedPlan == null) {
+                List<String> plan = new ArrayList<>(steps.size() + 1);
+                plan.add("O," + origin.m_123341_() + "," + origin.m_123342_() + "," + origin.m_123343_()
+                        + "," + name + "," + planId);
+                plan.addAll(steps);
+                this.cachedPlan = plan;
+            }
+            return this.cachedPlan;
         }
     }
 
@@ -104,6 +112,15 @@ public final class BuildPlan {
         /** v1.5.66：已判定永久跳过的步骤下标（悬空/障碍/无物品/区块未加载）——
          *  完成时缺口检查不再重复尝试（防补建死循环） */
         public final java.util.Set<Integer> skippedIdx = new java.util.HashSet<>();
+        /** v1.5.276：替代品验收表 {步骤下标 → 实际放置的替代方块注册名}——缺料替换
+         *  放置成功后记录；主循环/延后轮询/缺口扫描据此把"目标格=该替代品"视为已建，
+         *  不再拆掉重放（拆→掉→捡回→再放→再拆 = 背包材料"翻倍"观感，回收掉落物
+         *  只治标）。仅内存态（重启后首次扫描重建一次替代品，一次性成本可接受）。 */
+        public final java.util.Map<Integer, String> altUsed = new java.util.HashMap<>();
+        /** v1.5.287：延后条目退避表 {步骤下标 → 下次允许重试的 gameTime}——缺料/
+         *  未加载/放置失败时记录，轮询在退避期内跳过该条目（旧版缺料时每 tick 反复
+         *  扫空背包；补料/障碍移除后最多 2 秒内续建，不影响节奏） */
+        public transient java.util.Map<Integer, Long> deferredRetryAt = new java.util.HashMap<>();
 
         /** v1.5.51：蓝图步骤位置集合（懒构建，O(N) 一次性；用于补支撑时判断
          *  "支撑格是否蓝图内位置"——蓝图有步骤的支撑格不补，等支撑步骤先建） */
@@ -174,6 +191,11 @@ public final class BuildPlan {
     /** v1.5.180：按 planId 取计划（全局；不存在返回 null） */
     public static PlanState getPlanById(String planId) {
         return planId == null ? null : PLANS.get(planId);
+    }
+
+    /** v1.5.252j：全部区块快照（建造 HUD 广播用） */
+    public static java.util.List<PlanState> allPlansSnapshot() {
+        return new java.util.ArrayList<>(PLANS.values());
     }
 
     /** v1.5.180：女仆绑定的区块 id（无绑定/计划已删 → null） */
@@ -383,6 +405,8 @@ public final class BuildPlan {
     /**
      * v1.5.43：区块建造状态文本。
      * v1.5.179：缺料实时计算 = 总需求 − 已建（区块内匹配方块）− 背包（绑定女仆 + 主人）。
+     * v1.5.252u：多行分行显示（\n 分隔）——每行一个信息块、短小独立，
+     * 客户端逐行右对齐绘制，不再挤成一长串被截断（根治"字段突出屏幕"）。
      */
     public static String statusText(net.minecraft.server.level.ServerLevel level, PlanState ps,
                                     net.minecraft.world.entity.player.Player owner) {
@@ -390,47 +414,72 @@ public final class BuildPlan {
             return "当前没有进行中的建造计划。";
         }
         List<String> plan = ps.toPlan();
-        StringBuilder sb = new StringBuilder("建造进度：「").append(ps.name).append("」");
+        // v1.5.252t：蓝图名截断（超长名撑爆字段显示）
+        String nm = ps.name == null ? "" : ps.name;
+        if (nm.length() > 18) {
+            nm = nm.substring(0, 18) + "\u2026";
+        }
+        StringBuilder line1 = new StringBuilder("\u5efa\u9020\u8fdb\u5ea6\uff1a\u300c").append(nm).append("\u300d");
+        StringBuilder line2 = new StringBuilder();
+        StringBuilder line3 = new StringBuilder();
         if (plan.size() > 1) {
             Progress prog = progress(ps);
             int done = Math.max(0, prog.placedCount);
             int total = plan.size() - 1;
-            sb.append(" 已建 ").append(done).append("/").append(total).append(" 块（")
-                    .append(total == 0 ? 0 : done * 100 / total).append("%）");
+            line1.append(" \u5df2\u5efa ").append(done).append("/").append(total)
+                    .append(" \u5757\uff08").append(total == 0 ? 0 : done * 100 / total).append("%\uff09");
+            // 第二行：等待补建 / 缺料
             if (!prog.deferred.isEmpty()) {
-                sb.append("，等待补建 ").append(prog.deferred.size()).append(" 块");
+                line2.append("\u7b49\u5f85\u8865\u5efa ").append(prog.deferred.size()).append(" \u5757");
             }
             // v1.5.179：实时缺料 = 总需求 − 已建 − 背包
-            java.util.Map<String, Integer> shortfall = realShortfall(level, plan, ps.origin, owner);
+            java.util.Map<String, Integer> shortfall = realShortfall(level, ps.blueprintId, plan, ps.origin, owner);
             if (!shortfall.isEmpty()) {
-                sb.append("，缺料：");
+                if (line2.length() > 0) {
+                    line2.append("\uff0c");
+                }
+                line2.append("\u7f3a\u6599\uff1a");
                 int shown = 0;
                 for (java.util.Map.Entry<String, Integer> e : shortfall.entrySet()) {
                     if (shown++ >= 3) {
-                        sb.append("…");
+                        line2.append("\u2026");
                         break;
                     }
                     if (shown > 1) {
-                        sb.append("、");
+                        line2.append("\u3001");
                     }
-                    sb.append(BlueprintLib.cnName(e.getKey())).append("×").append(e.getValue());
+                    line2.append(BlueprintLib.cnName(e.getKey())).append("\u00d7").append(e.getValue());
                 }
             }
         } else {
-            sb.append("（蓝图解析失败）");
+            line1.append("\uff08\u84dd\u56fe\u89e3\u6790\u5931\u8d25\uff09");
         }
-        sb.append("。参与女仆：").append(countBuildersNear(level, ps)).append(" 只");
-        sb.append("。").append(ps.paused ? "【暂停中】" : "建造中");
-        sb.append("。速度：").append(MaidBuildBehavior.speedLabel());
+        // 第三行：参与女仆 / 状态 / 档位
+        line3.append("\u53c2\u4e0e\u5973\u4ec6\uff1a").append(countBuildersNear(level, ps)).append(" \u53ea");
+        line3.append(" \u00b7 ").append(ps.paused ? "\u3010\u6682\u505c\u4e2d\u3011" : "\u5efa\u9020\u4e2d");
+        line3.append(" \u00b7 \u901f\u5ea6\uff1a").append(MaidBuildBehavior.speedLabel());
+        StringBuilder sb = new StringBuilder(line1);
+        if (line2.length() > 0) {
+            sb.append('\n').append(line2);
+        }
+        sb.append('\n').append(line3);
         return sb.toString();
     }
 
     /** v1.5.179：实时材料缺口 = 总需求 − 已建（区块内与蓝图匹配的方块）− 背包
      *  （该维度绑定女仆 + 主人）；材料充足返回空 Map */
     private static java.util.Map<String, Integer> realShortfall(
-            net.minecraft.server.level.ServerLevel level, List<String> plan, BlockPos origin,
-            net.minecraft.world.entity.player.Player owner) {
-        java.util.Map<String, Integer> needed = BlueprintLib.countNeeds(plan);
+            net.minecraft.server.level.ServerLevel level, String blueprintId, List<String> plan,
+            BlockPos origin, net.minecraft.world.entity.player.Player owner) {
+        // v1.5.252p：创造模式材料视为齐——旧版 built + combinedHaveAll(MAX_VALUE)
+        // 溢出成负数 → 缺料报告出现 -21 亿/巨量缺料
+        if (BlueprintLib.isCreative(owner)) {
+            return new java.util.HashMap<>();
+        }
+        // v1.5.287：走 countNeedsCached（内置蓝图材料需求已缓存——旧版每 2 秒
+        // UI 刷新都白遍历全表；blueprintId 为空的外部导入蓝图退回 countNeeds）
+        java.util.Map<String, Integer> needed = (blueprintId == null || blueprintId.isEmpty())
+                ? BlueprintLib.countNeeds(plan) : BlueprintLib.countNeedsCached(blueprintId, plan);
         if (needed.isEmpty()) {
             return new java.util.HashMap<>();
         }
@@ -448,14 +497,15 @@ public final class BuildPlan {
         return shortfall;
     }
 
-    /** v1.5.180：参与该区块的绑定女仆数（原点 ±128 格内） */
+    /** v1.5.180：参与该区块的绑定女仆数。
+     *  v1.5.252n：改为【绑定数】口径——旧版按"原点 ±128 格内"统计：建造是隔空的
+     *  （setBlock 不需要女仆在场），远处手动绑定的女仆照样在建造却不计数；
+     *  全员加入（玩家在区块内）计数正确、女仆管理手动绑定（女仆在远处）不增长——
+     *  用户实测的两入口计数不一致。绑定与区块同维度由各入口保证，跨维度存量安全。 */
     private static int countBuildersNear(net.minecraft.server.level.ServerLevel level, PlanState ps) {
-        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                ps.origin.m_123341_() - 128.0, ps.origin.m_123342_() - 64.0, ps.origin.m_123343_() - 128.0,
-                ps.origin.m_123341_() + 128.0, ps.origin.m_123342_() + 64.0, ps.origin.m_123343_() + 128.0);
         int n = 0;
-        for (EntityMaid m : level.m_45976_(EntityMaid.class, box)) {
-            if (BlueprintBuildExecutor.isBuildingTask(m) && ps.planId.equals(getBoundPlanId(m))) {
+        for (java.util.Map.Entry<java.util.UUID, String> e : MAID_PLAN.entrySet()) {
+            if (ps.planId.equals(e.getValue())) {
                 n++;
             }
         }
@@ -496,6 +546,11 @@ public final class BuildPlan {
     /**
      * v1.5.69：该女仆是否为当前工头（按其绑定区块判断）。
      * v1.5.72/74 语义修正：无工头/工头失效/工头被暂停 → 放行（防全员静默）。
+     * v1.5.266：无工头/工头失效 → 【当场随机挑一只顶上并持久化】（用户："不是说
+     * 没设置的时候会随机设置一个吗"——v1.5.182 的补选在 start 时机经常失败：
+     * 创建区块时女仆还没绑定、远程绑定 scanAreaMaids 扫不到 → foremanUuid 恒空
+     * → 全员放行 = "所有人都在发"的根因）。服务端单线程顺序执行无竞态：
+     * 第一只调用即设好，后续女仆走正常判断。随机失败（真没人）→ 放行兜底防静默。
      * 注意：这是【行为层放行判断】，UI 工头标记必须用 isExplicitForeman。
      */
     public static boolean isForeman(EntityMaid maid) {
@@ -503,16 +558,35 @@ public final class BuildPlan {
         if (ps == null) {
             return true; // 未绑定 → 放行
         }
+        net.minecraft.server.level.ServerLevel level = maid.m_9236_()
+                instanceof net.minecraft.server.level.ServerLevel sl ? sl : null;
         String f = ps.foremanUuid;
         if (f == null || f.isEmpty()) {
-            return true;
+            if (level != null) {
+                String nf = chooseForeman(level, ps);
+                if (!nf.isEmpty()) {
+                    setForeman(level, ps, nf);
+                    return nf.equals(maid.m_20148_().toString());
+                }
+            }
+            return true; // 随机失败（无人可当）→ 放行兜底
         }
         if (f.equals(maid.m_20148_().toString())) {
             return true;
         }
-        EntityMaid fm = findForemanMaid(maid.m_9236_(), f);
+        if (level == null) {
+            return false;
+        }
+        EntityMaid fm = findForemanMaid(level, f);
         if (fm == null) {
-            return true; // 工头失效（死亡/解散/离开）→ 视为无工头，放行所有
+            // v1.5.266：工头失效（死亡/解散/离开）→ 重新随机挑一只顶上
+            //（旧版放行所有 → 全员 isForeman=true → 全员播报）
+            String nf = chooseForeman(level, ps);
+            if (!nf.isEmpty()) {
+                setForeman(level, ps, nf);
+                return nf.equals(maid.m_20148_().toString());
+            }
+            return true; // 随机也失败（无人）→ 放行兜底
         }
         if (isMaidPaused(fm)) {
             return true; // v1.5.74：工头被暂停 → 放行所有（防全员静默）

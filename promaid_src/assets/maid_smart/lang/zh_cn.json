@@ -9,8 +9,6 @@
   "task.maid_smart.brew.desc": "给酿造台补充烈焰粉与材料，收取酿好的药水",
   "task.maid_smart.build": "建筑",
   "task.maid_smart.build.desc": "按照建造计划逐块搭建建筑（材料从背包消耗）",
-  "task.maid_smart.cook": "烹饪",
-  "task.maid_smart.brew": "酿造",
   "item.maid_smart.blueprint_book": "Promaid 手册",
   "config.promaid.title": "Promaid 模组详细配置",
   "config.promaid.build": "建造设置",

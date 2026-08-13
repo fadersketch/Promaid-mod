@@ -71,7 +71,8 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.102b：进度显示底部安全间距（文本行距底 40px，进度条在其下 22px——
      *  旧版 home 用 h-28（条画在 h-6）、maids 无翻页用 h-34：百分比文字字号 8px
      *  会画出屏幕底边被裁掉（"进度条/文本突出屏幕"）。统一提到安全距离，条/文字完整可见） */
-    private static final int PROGRESS_BOTTOM_GAP = 40;
+    /** v1.5.252u：大目录页进度区离底边距离（3 行字段 + 进度条 + 标签） */
+    private static final int PROGRESS_BOTTOM_GAP = 60;
 
     private List<BlueprintBookNetworking.Entry> entries;
     /** v1.5.43：周围建造女仆状态列表 {uuid, 名字, 状态[, 工头标记]} */
@@ -94,6 +95,9 @@ public class BlueprintBookScreen extends Screen {
     private String progressText = "";
     /** v1.5.65：进度百分比（-1 = 无计划）——进度条绘制 */
     private int progressPct = -1;
+    /** v1.5.252s：进度条旁显示——预计完成秒（-1=未知）+ 实时速度（块/秒） */
+    private int etaSec = -1;
+    private String speedBps = "";
     /**
      * v1.5.162：进行中计划的区块标记（中心点 + 尺寸）——客户端判定"玩家是否处于
      * 建造区块内"（regionX = Integer.MIN_VALUE 表示无计划）；续建/暂停等控制按钮
@@ -138,7 +142,7 @@ public class BlueprintBookScreen extends Screen {
                                   int progressPct, int regionX, int regionY, int regionZ,
                                   int regionW, int regionH, int regionD,
                                   boolean inPlanRegion, String currentPlanId,
-                                  List<String[]> regions) {
+                                  List<String[]> regions, int etaSec, String speedBps) {
         super(Component.m_237113_("Promaid 手册"));
         this.entries = entries;
         this.maids = maids == null ? new ArrayList<>() : maids;
@@ -158,6 +162,9 @@ public class BlueprintBookScreen extends Screen {
         this.regionW = regionW;
         this.regionH = regionH;
         this.regionD = regionD;
+        // v1.5.252z：打开手册立即显示速度/ETA（不等 2 秒轮询）
+        this.etaSec = etaSec;
+        this.speedBps = speedBps == null ? "" : speedBps;
         // v2.0：区块内右击手册 = 玩家明确意图 → 直接进入当前计划的建造详情页
         //（覆盖上次视图恢复）；区块外右击 = 正常目录
         boolean jumped = false;
@@ -190,22 +197,29 @@ public class BlueprintBookScreen extends Screen {
         this.maidPage = lastMaidPage;
     }
 
-    /** 收到目录包后打开界面（v1.5.159：同时关闭建造范围预览——再次打开手册 = 关闭预览） */
+    /** 收到目录包后打开界面（v1.5.159：同时关闭建造范围预览——再次打开手册 = 关闭预览）
+     *  v1.5.275：initialView 0=大目录 1=女仆管理（配置面板"跳转女仆管理"） */
     public static void open(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
                             int progressPct, int regionX, int regionY, int regionZ,
                             int regionW, int regionH, int regionD,
-                            boolean inPlanRegion, String currentPlanId, List<String[]> regions) {
+                            boolean inPlanRegion, String currentPlanId, List<String[]> regions,
+                            int etaSec, String speedBps, int initialView) {
         com.maidsmart.build.BlueprintAreaPreview.clear();
-        Minecraft.m_91087_().m_91152_(new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
+        BlueprintBookScreen screen = new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
                 progressText, progressPct, regionX, regionY, regionZ, regionW, regionH, regionD,
-                inPlanRegion, currentPlanId, regions));
+                inPlanRegion, currentPlanId, regions, etaSec, speedBps);
+        if (initialView == 2) {
+            screen.view = VIEW_MAIDS; // 直接进女仆管理页
+        }
+        Minecraft.m_91087_().m_91152_(screen);
     }
 
     /** v1.5.62：服务端状态刷新（进度/速度/暂停/女仆状态即时更新，不重开面板） */
     public void updateStatus(String progressText, List<String[]> maids, boolean paused, String speed, int progressPct,
                              int regionX, int regionY, int regionZ, int regionW, int regionH, int regionD,
-                             List<String[]> allMaids, List<String[]> regions, String planId) {
+                             List<String[]> allMaids, List<String[]> regions, String planId,
+                             int etaSec, String speedBps) {
         if (progressText != null) {
             this.progressText = progressText;
         }
@@ -224,6 +238,9 @@ public class BlueprintBookScreen extends Screen {
         this.regionW = regionW;
         this.regionH = regionH;
         this.regionD = regionD;
+        // v1.5.252s：进度条旁显示 块/秒 + 预计完成时间
+        this.etaSec = etaSec;
+        this.speedBps = speedBps == null ? "" : speedBps;
         this.rebuildButtons();
     }
 
@@ -318,8 +335,15 @@ public class BlueprintBookScreen extends Screen {
             for (String[] m : entry.materials()) {
                 int have = Integer.parseInt(m[1]);
                 int need = Integer.parseInt(m[2]);
+                // v1.5.252y：剩余需求 ≤ 0（已建完）→ 不显示——不再出现"0/0"诡异数据
+                if (need <= 0) {
+                    continue;
+                }
                 String color = have >= need ? "\u00a7a" : "\u00a7e";
                 items.add(color + itemName(m[0]) + " " + haveText(have) + "/" + need);
+            }
+            if (items.isEmpty()) {
+                items.add("\u00a7a材料充足");
             }
         }
         return items;
@@ -358,6 +382,20 @@ public class BlueprintBookScreen extends Screen {
         graphics.m_280653_(this.f_96547_, Component.m_237113_(t), this.f_96543_ / 2, y, color);
     }
 
+    /** v1.5.279：区块列表占用的行数（标题 1 行 + 每区块 2 行(名字/状态+创建坐标)
+     *  + 溢出省略行；上限 6 区块）——女仆管理页按钮据此下移，与 renderMaids 同步 */
+    private int regionListRows() {
+        if (this.buildRegions.isEmpty()) {
+            return 0;
+        }
+        int n = Math.min(this.buildRegions.size(), 6);
+        int rows = 1 + n * 2;
+        if (this.buildRegions.size() > n) {
+            rows++;
+        }
+        return rows;
+    }
+
     // ================= v1.5.71 自适应布局计算 =================
 
     /** 内容区可用高度（标题之下 ~ 底部控制区之上） */
@@ -392,15 +430,17 @@ public class BlueprintBookScreen extends Screen {
         }
         // v1.5.84：超过 100% = 超料 → 文本/百分比红色警示
         boolean over = this.progressPct > 100;
+        int usedLines = 0;
         if (hasText) {
             // v1.5.102c：进度文字整体右对齐（用户要求"向右移一大步"——结尾的
             // 【全局暂停中】/速度 等字样从中间跳到最右侧）；进度条仍居中
-            this.drawWrapped(graphics, (over ? "\u00a7c" : "\u00a7b") + this.progressText,
+            // v1.5.252u：分行显示（\n 分隔），返回实际行数，进度条随之自适应下移
+            usedLines = this.drawWrapped(graphics, (over ? "\u00a7c" : "\u00a7b") + this.progressText,
                     this.f_96543_ - 10, textY, this.f_96543_ - 20,
-                    over ? 0xFF5555 : 0xAAAAAA, 2, false, true);
+                    over ? 0xFF5555 : 0xAAAAAA, 4, false, true);
         }
         if (hasBar) {
-            int barY = textY + 22;
+            int barY = textY + Math.max(usedLines, 1) * 10 + 10;
             int barW = 182;
             int barX = (this.f_96543_ - barW) / 2;
             // MC 经验条纹理：暗底 + 亮绿进度（v=69 底 / v=64 进度，182×5）
@@ -409,47 +449,115 @@ public class BlueprintBookScreen extends Screen {
             if (fillW > 0) {
                 graphics.m_280218_(BARS, barX, barY, 0, 64, fillW, 5);
             }
-            graphics.m_280653_(this.f_96547_,
-                    Component.m_237113_((over ? "\u00a7c" : "\u00a7a") + this.progressPct + "%"),
-                    barX + barW + 4, barY - 1, over ? 0xFF5555 : 0xFFFFFF);
+            // v1.5.252s：进度条右侧 = 百分比 · 速度(块/秒) · 预计完成时间——
+            // 超宽时左移钳制（绝不顶出屏幕右缘）
+            String label = (over ? "\u00a7c" : "\u00a7a") + this.progressPct + "%";
+            double bps = 0;
+            try {
+                bps = this.speedBps.isEmpty() ? 0 : Double.parseDouble(this.speedBps);
+            } catch (NumberFormatException ignored) {
+            }
+            // v1.5.278：速度/预计【无条件显示】——旧版 bps≤0.01 整个不显示
+            // （缺料停滞时 ema→0 → 进度条旁只剩"56%"，用户："搭建速度和剩余
+            // 时间看不到"，截图实证 speed=0.0 eta=-1）。停滞时如实显示
+            // "0.0块/秒 · 预计--"（-- = 无法估计：缺料/刚启动统计窗口内），
+            // 有速度时正常显示实测值
+            if (bps > 0.01) {
+                label += " \u00a77\u00b7 " + fmtBps(bps) + " \u00b7 \u9884\u8ba1" + fmtEta(this.etaSec);
+            } else {
+                label += " \u00a77\u00b7 0.0\u5757/\u79d2 \u00b7 \u9884\u8ba1" + fmtEta(this.etaSec);
+            }
+            net.minecraft.client.gui.Font font = this.f_96547_;
+            int labelW = font.m_92895_(label);
+            int lx = Math.min(barX + barW + 4, this.f_96543_ - labelW - 4);
+            // v1.5.252y：label 上移到进度条上方 9px（旧版 barY-1 起点 → 文字底部
+            // 压进度条 6px，截图实证"字样跟进度条重叠"）
+            graphics.m_280137_(font, label, lx, barY - 9, over ? 0xFF5555 : 0xFFFFFF);
         }
     }
 
+    /** v1.5.252s：块/秒（慢速显示一位小数） */
+    private static String fmtBps(double bps) {
+        return bps < 10 ? String.format("%.1f", bps) + "\u5757/\u79d2"
+                : String.format("%.0f", bps) + "\u5757/\u79d2";
+    }
+
+    /** v1.5.252s：预计完成时间（秒 → 小时/分/秒；-1 = 未知） */
+    private static String fmtEta(int eta) {
+        if (eta < 0) {
+            return "--";
+        }
+        if (eta >= 3600) {
+            return (eta / 3600) + "\u5c0f\u65f6" + ((eta % 3600) / 60) + "\u5206";
+        }
+        if (eta >= 60) {
+            return (eta / 60) + "\u5206" + (eta % 60) + "\u79d2";
+        }
+        return eta + "\u79d2";
+    }
+
     /** v1.5.82：按宽度自动换行的文本绘制（最多 maxLines 行；center=true 每行居中，
-     *  right=true 每行右对齐到 x（优先于居中））。v1.5.102c：进度文字走右对齐 */
-    private void drawWrapped(net.minecraft.client.gui.GuiGraphics graphics, String text,
-                             int x, int y, int maxWidth, int color, int maxLines,
-                             boolean center, boolean right) {
+     *  right=true 每行右对齐到 x（优先于居中））。v1.5.102c：进度文字走右对齐。
+     *  v1.5.252t：右对齐改为 drawString 左锚点（旧版以 x-lw 为圆心 → 右缘在 x-lw/2，
+     *  长文本偏左悬空）；换行截断处补"…"（不再无声丢内容）。
+     *  v1.5.252u：支持 \n 分段（每段独立右对齐/换行，分行显示）；返回实际绘制行数 */
+    private int drawWrapped(net.minecraft.client.gui.GuiGraphics graphics, String text,
+                            int x, int y, int maxWidth, int color, int maxLines,
+                            boolean center, boolean right) {
         net.minecraft.client.gui.Font font = this.f_96547_;
-        String remaining = text;
         int line = 0;
-        while (!remaining.isEmpty() && line < maxLines) {
-            if (font.m_92895_(remaining) <= maxWidth) {
-                int lw = font.m_92895_(remaining);
-                // v1.5.111：居中 = 以 W/2 为圆心（drawCenteredString 圆心），
-                // 旧版 (W-lw)/2 圆心 → 每行又左移 lw/2 → 整段偏左
-                int lineX = right ? x - lw : (center ? this.f_96543_ / 2 : x);
-                graphics.m_280653_(font, Component.m_237113_(remaining), lineX, y + line * 10, color);
-                return;
+        for (String seg : text.split("\n", -1)) {
+            if (seg.isEmpty()) {
+                continue;
             }
-            int cut = remaining.length();
-            while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth) {
-                cut--;
+            String remaining = seg;
+            while (!remaining.isEmpty() && line < maxLines) {
+                if (font.m_92895_(remaining) <= maxWidth) {
+                    int lw = font.m_92895_(remaining);
+                    if (right) {
+                        graphics.m_280137_(font, remaining, Math.max(2, x - lw),
+                                y + line * 10, color); // 左锚点：右缘恰好在 x
+                    } else {
+                        int lineX = center ? this.f_96543_ / 2 : x;
+                        graphics.m_280653_(font, Component.m_237113_(remaining), lineX,
+                                y + line * 10, color);
+                    }
+                    line++;
+                    break;
+                }
+                int ell = font.m_92895_("\u2026");
+                int cut = remaining.length();
+                while (cut > 0 && font.m_92895_(remaining.substring(0, cut)) > maxWidth - ell) {
+                    cut--;
+                }
+                if (cut <= 0) {
+                    break;
+                }
+                String lineText = remaining.substring(0, cut) + "\u2026"; // 截断补省略号
+                int lw = font.m_92895_(lineText);
+                if (right) {
+                    graphics.m_280137_(font, lineText, Math.max(2, x - lw), y + line * 10, color);
+                } else {
+                    int lineX = center ? this.f_96543_ / 2 : x;
+                    graphics.m_280653_(font, Component.m_237113_(lineText), lineX,
+                            y + line * 10, color);
+                }
+                remaining = remaining.substring(cut).trim();
+                line++;
             }
-            if (cut <= 0) {
+            if (line >= maxLines) {
                 break;
             }
-            String lineText = remaining.substring(0, cut);
-            int lw = font.m_92895_(lineText);
-            int lineX = right ? x - lw : (center ? this.f_96543_ / 2 : x);
-            graphics.m_280653_(font, Component.m_237113_(lineText), lineX, y + line * 10, color);
-            remaining = remaining.substring(cut).trim();
-            line++;
         }
+        return line;
     }
 
     private void rebuildButtons() {
         this.m_169413_(); // clearWidgets
+        // v1.5.252ad：每次重建按钮清空空状态提示——旧版 graphicsHint 只设置不清空，
+        // 女仆加入/条件满足后残留提示仍显示（截图实证：名单页有女仆仍显示
+        // "该区块没有女仆"）；各视图按钮构建时按条件重新设置
+        this.maidEmptyText = null;
         if (this.entries == null || this.entries.isEmpty()) {
             this.m_142416_(Button.m_253074_(Component.m_237113_("没有可用蓝图——把 .nbt/.litematic/.schem 图纸放进 config/maid_smart/blueprints/ 或存档 schematics/"),
                             b -> this.m_7379_()).m_252987_(this.f_96543_ / 2 - 120, 60, 240, 20).m_253136_());
@@ -700,6 +808,14 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .m_252987_(8, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
+        // v1.5.290：建造名单页直达女仆管理（用户："名单内部仍然没有跳转按键"）
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2640 女仆管理"),
+                        b -> {
+                            this.view = VIEW_MAIDS;
+                            this.maidPage = 0;
+                            this.rebuildButtons();
+                        })
+                .m_252987_(94, TOP_BTN_Y, 90, TOP_BTN_H).m_253136_());
         // v1.5.220：导入建筑（右上角小按钮）——版本警告确认 → 文件选择器 → 服务端导入
         // v1.5.224：右上角并排两个导入按钮（导入建筑 / 导入世界地图）
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2b06 导入建筑"),
@@ -797,7 +913,8 @@ public class BlueprintBookScreen extends Screen {
         int end = Math.min(builders.size(), start + rows);
         int btnW = Math.max(180, w - 40);
         // v1.5.183：下移 10px 给上方区块列表文字行留空间（旧版 45 行文字与按钮重叠）
-        int y = CONTENT_TOP + 10;
+        // v1.5.279：区块列表竖排（每区块 2 行含创建坐标）→ 按钮按区块行数继续下移
+        int y = CONTENT_TOP + 10 + Math.max(0, this.regionListRows() - 1) * 10;
         for (int i = start; i < end; i++) {
             final String[] m = builders.get(i);
             final String uuid = m[0];
@@ -954,6 +1071,8 @@ public class BlueprintBookScreen extends Screen {
                                             BlueprintBookNetworking.BuildControlPacket.BIND_MAID, uuid, sid)))
                     .m_252987_(cx - 140, y, 280, 20).m_253136_());
         }
+        // v1.5.305：删除「⚙ 女仆配置」按钮（用户："有 bug 不想修，直接删了；
+        // 不走这个路径了"——打开 TLM 女仆配置请直接右键女仆）
         // 提示行：未绑定区块时的引导（render 绘制，避免与按钮重叠）
         if (!isBound && this.buildRegions.isEmpty()) {
             this.graphicsHint("当前没有可绑定的区块——先到建造目录创建区块。");
@@ -982,7 +1101,10 @@ public class BlueprintBookScreen extends Screen {
         int btnW = Math.max(180, w - 40);
         // v1.5.190 修复：旧版按绑定女仆数无上限排下去，列表一长"设为工头"和
         // 翻页按钮被推出屏幕（找不回 = 死锁）。改为分页（每页按可用高度算行数）。
-        int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 32) / (MAID_ROW_H + 1));
+        // v1.5.308：行数公式【预留进度条空间】——旧版只给翻页按钮留 32px，绑定
+        // 女仆多时（6 只 + 小窗口）底部进度条叠在最后几行女仆按钮上
+        //（用户："又一次出现了进度条重合在了一起"）；48px = 4 行状态文本 + 进度条
+        int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 32 - 48) / (MAID_ROW_H + 1));
         int total = Math.max(1, (bound.size() + maxRows - 1) / maxRows);
         this.regionMaidPage = Math.min(this.regionMaidPage, total - 1);
         int start = this.regionMaidPage * maxRows;
@@ -998,6 +1120,12 @@ public class BlueprintBookScreen extends Screen {
                     + (bState.isEmpty() ? "" : " \u00a77" + bState)
                     + (isFm ? " \u00a7e（工头）" : "");
             this.m_142416_(Button.m_253074_(Component.m_237113_(mainText), b -> {
+                        // v1.5.290：区块详情页名单点击 → 跳转女仆详情页（查看/绑定/解绑）
+                        //（旧版是空按钮，用户："右击区块详细页里面的名单，要有跳转功能"）
+                        this.detailMaidUuid = uuid;
+                        this.selectedPlanId = pid;
+                        this.view = VIEW_MAID_DETAIL;
+                        this.rebuildButtons();
                     })
                     .m_252987_(cx - btnW / 2, y, Math.max(120, btnW - 90), MAID_ROW_H).m_253136_());
             // 设为工头（一区块一工头；当前工头行不显示）
@@ -1011,8 +1139,18 @@ public class BlueprintBookScreen extends Screen {
             y += MAID_ROW_H + 1;
         }
         if (bound.isEmpty()) {
-            this.graphicsHint("该区块还没有绑定女仆——到女仆管理点女仆进详情页绑定。");
+            this.graphicsHint("该区块还没有绑定女仆——点右上「♀ 女仆管理」进女仆管理页，点女仆行进详情页绑定。");
         }
+        // v1.5.298：本页跳转女仆管理（用户："在此页面要的跳转界面仍然没有出现"——
+        // 旧版此页只有「← 返回详情」，提示却指向女仆管理——空名单页是死胡同；
+        // 加右上角直达按钮）
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2640 女仆管理"),
+                        b -> {
+                            this.view = VIEW_MAIDS;
+                            this.maidPage = 0;
+                            this.rebuildButtons();
+                        })
+                .m_252987_(w - 88, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
         // v1.5.190：绑定女仆翻页（页脚行）
         if (total > 1) {
             int py = h - 26;
@@ -1470,6 +1608,12 @@ public class BlueprintBookScreen extends Screen {
      *  本面板只在玩家处于建造区块内时显示。
      *  v1.5.180：操作目标 = 玩家所在区块（currentPlanId）——仅针对本区块 */
     private void addControlButtons() {
+        // v1.5.252ae：控制按钮只在玩家处于建造区块内时显示——注释承诺但旧版未实现，
+        // 区块外也显示按钮 → 点击后 currentPlanId 为空 → 服务端误报"区块不存在"
+        // （用户实测：区块明明存在却提示不存在）
+        if (this.currentPlanId == null || this.currentPlanId.isEmpty()) {
+            return;
+        }
         int cx = this.f_96543_ / 2;
         int h = this.f_96544_;
         final String cid = this.currentPlanId;
@@ -1523,8 +1667,8 @@ public class BlueprintBookScreen extends Screen {
         // v1.5.64：固定布局（按钮在 70/130，文字不重叠）
         // v1.5.100b：改名（Promaid 手册 → Promaid 功能手册）；v1.5.192：统一为 Promaid 手册
         this.drawCentered(graphics, "\u00a7ePromaid 手册", 20, 0xFFFFFF);
-        // v1.5.82：进度显示贴底（home 无底部控件）；v1.5.102b：提到安全距离防底边裁切
-        this.renderProgress(graphics, this.f_96544_ - PROGRESS_BOTTOM_GAP);
+        // v1.5.252w：大目录不再显示建造进度/进度条（用户要求——目录页保持干净，
+        // 进度显示保留在建造面板/女仆管理等具体页面）
         this.drawCentered(graphics, "\u00a77点击下方入口进入对应面板", 46, 0x888888);
     }
 
@@ -1546,7 +1690,7 @@ public class BlueprintBookScreen extends Screen {
             // v1.5.84：描述行（含"共多少块"）居中
             this.drawCentered(graphics, "\u00a77" + (desc == null ? "" : desc), 24, 0xAAAAAA);
             // v1.5.82：进度显示放在内容区底部（翻页/底部控制按钮之上）
-            this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 8);
+            this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
             // 材料区：2 列 × 8 行，小字体（行高 9）；v1.5.71 列宽自适应不溢出
             // v1.5.84：网格整体居中 + 每行文本在格内居中（不再偏左）
             int cellW = Math.max(120, (this.f_96543_ - 80) / MAT_COLS);
@@ -1569,7 +1713,7 @@ public class BlueprintBookScreen extends Screen {
         // 建造总目录
         this.drawCentered(graphics, "\u00a7e建造 · 总目录（" + this.entries.size()
                 + " 个建筑 · 点击名称查看材料）", PANEL_TITLE_Y, 0xFFFFFF);
-        this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 8);
+        this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
     }
 
     /** 女仆管理面板渲染 */
@@ -1577,37 +1721,40 @@ public class BlueprintBookScreen extends Screen {
         this.drawCentered(graphics, "\u00a7e女仆管理 · 建造状态女仆名单（点击女仆查看/绑定/解绑）",
                 PANEL_TITLE_Y, 0xFFFFFF);
         // v1.5.182：有效区块列表（信息显示；v1.5.183：fitText 像素级截断防突出屏幕）
+        // v1.5.279：区块【打标签】竖排——每区块两行：名字/状态行 + 创建坐标行
+        //（用户："区块上面只会显示某某建筑建造中，再隔一行显示玩家在哪个坐标创建的"）
         if (this.buildRegions.isEmpty()) {
             this.drawCentered(graphics, "\u00a78有效建造区块：0 —— 先到建造目录创建区块", PANEL_TITLE_Y + 9, 0x888888);
         } else {
-            StringBuilder sb = new StringBuilder("\u00a7e有效建造区块 ").append(this.buildRegions.size()).append("：");
-            for (String[] r : this.buildRegions) {
-                sb.append(" \u00a7b「").append(r[1]).append("」\u00a77(").append(r[2]).append("·")
-                        .append(r[3]).append(")");
+            int ry = PANEL_TITLE_Y + 9;
+            int shown = Math.min(this.buildRegions.size(), 6); // 上限 6 个，防撑爆女仆列表
+            this.drawCentered(graphics, "\u00a7e有效建造区块 " + this.buildRegions.size() + "：", ry, 0xAAAAAA);
+            ry += 10;
+            for (int ri = 0; ri < shown; ri++) {
+                String[] r = this.buildRegions.get(ri);
+                this.drawCentered(graphics, this.fitText("\u00a7b「" + r[1] + "」\u00a77("
+                                + r[2] + "\u00b7" + r[3] + ")", this.f_96543_ - 40), ry, 0xFFFFFF);
+                ry += 10;
+                // v1.5.279：创建坐标（r[11..13] = 玩家创建区块时的原点）
+                String ox = r.length > 11 ? r[11] : "?";
+                String oy = r.length > 12 ? r[12] : "?";
+                String oz = r.length > 13 ? r[13] : "?";
+                this.drawCentered(graphics, "\u00a78创建于 " + ox + ", " + oy + ", " + oz, ry, 0x888888);
+                ry += 10;
             }
-            this.drawCentered(graphics, this.fitText(sb.toString(), this.f_96543_ - 40),
-                    PANEL_TITLE_Y + 9, 0xAAAAAA);
+            if (this.buildRegions.size() > shown) {
+                this.drawCentered(graphics, "\u00a78\u2026 其余 " + (this.buildRegions.size() - shown)
+                        + " 个", ry, 0x888888);
+            }
         }
         if (this.maidEmptyText != null) {
             // v1.5.110：旧版 m_280653_ 以 x=10 为圆心 → 文本几乎全裁出屏幕；改左对齐
             graphics.m_280614_(this.f_96547_, Component.m_237113_(this.maidEmptyText),
                     10, CONTENT_TOP, 0x888888, false);
         }
-        // v1.5.100b：无翻页按钮时进度/状态文本移到页面底部（旧版 h-84 偏上，
-        // 下方一大片空白）；有翻页按钮（底行）时保持原位置不与按钮冲突
-        // v1.5.102b：无翻页也统一用 PROGRESS_BOTTOM_GAP（h-34 贴底太近）
-        // v1.5.190 修复：总页数按【建造状态女仆】算（与按钮分页一致）——旧版按
-        // allMaids 算，多页时进度文本画在第 6 行女仆按钮上（重叠）
-        int rows = this.maidRowsPerPage();
-        java.util.List<String[]> builders = new java.util.ArrayList<>();
-        for (String[] m : this.allMaids) {
-            if (m.length > 4 && "build".equals(m[4])) {
-                builders.add(m);
-            }
-        }
-        int total = Math.max(1, (builders.size() + rows - 1) / rows);
-        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 8
-                : this.f_96544_ - PROGRESS_BOTTOM_GAP);
+        // v1.5.302：女仆管理页【不再画进度条】——旧版底部进度条叠在女仆名单最后几行
+        // 上（用户："此页面字段重叠，进度条不应该在这个地方显示"）；进度条移到
+        // 区块详细页（renderRegionMaids），"只在对应区块的详细界面那边显示"
     }
 
     /** v1.5.182：女仆详情页渲染（绑定/解绑指定区块） */
@@ -1653,6 +1800,21 @@ public class BlueprintBookScreen extends Screen {
             graphics.m_280614_(this.f_96547_, Component.m_237113_(this.maidEmptyText),
                     10, CONTENT_TOP, 0x888888, false);
         }
+        // v1.5.302：区块详细页显示进度条（用户："进度条只在对应区块的详细界面那边
+        // 显示出来就可以了"——女仆管理页的进度条已移除，这里补上本区块的进度；
+        // 有翻页按钮时上移避开底行，无翻页贴底）
+        // v1.5.308：maxRows 公式与按钮区一致（预留进度条 48px，防行数口径不一致
+        // 导致进度条位置与翻页按钮错位）
+        int maxRows = Math.max(3, (this.f_96544_ - 30 - CONTENT_TOP - 32 - 48) / (MAID_ROW_H + 1));
+        int boundCount = 0;
+        for (String[] m : this.allMaids) {
+            if (this.currentPlanId != null && m.length > 8 && this.currentPlanId.equals(m[8])) {
+                boundCount++;
+            }
+        }
+        int total = Math.max(1, (boundCount + maxRows - 1) / maxRows);
+        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 18
+                : this.f_96544_ - PROGRESS_BOTTOM_GAP);
     }
 
     @Override

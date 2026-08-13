@@ -1,6 +1,6 @@
 @echo off
-rem 编译 promaid 模组:先运行 gen_compile.py 生成 compile_promaid.txt,再运行本脚本
-rem javac 查找顺序:JAVA_HOME -> Minecraft 运行时 -> PATH
+rem Compile promaid mod: run gen_compile.py first to generate compile_promaid.txt
+rem javac lookup order: JAVA_HOME -> Minecraft runtime -> PATH
 cd /d "%~dp0"
 if defined JAVA_HOME (
   if exist "%JAVA_HOME%\bin\javac.exe" set "JAVAC=%JAVA_HOME%\bin\javac.exe"

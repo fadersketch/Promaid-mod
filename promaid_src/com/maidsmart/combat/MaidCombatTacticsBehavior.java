@@ -52,6 +52,13 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private static final double MELEE_MELEE_RANGE = 2.6;
     /** 攻击完成后撤时长（tick）：打一刀退一步的"退"（v1.5.141：10→14 更明显） */
     private static final int RETREAT_TICKS = 14;
+    /** v1.5.280：近战贴脸后退触发距离（格）——敌人进入此距离内主动后退远离
+     *  （用户："周围两格内有自己识别的敌人时,会自己往后退远离"；2.0 恰为
+     *  僵尸/骷髅的近战攻击距离，贴进 2 格 = 在挨打范围内，必须拉开） */
+    private static final double KITE_MELEE_RANGE = 2.0;
+    /** v1.5.280：后退目标距离（格）——退到 3 格即停：女仆手长（攻击距离 3.1）
+     *  完全打得到（用户："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
+    private static final double KITE_BACK_DIST = 3.0;
     /** 跳劈冷却（tick） */
     private static final int JUMP_COOLDOWN = 40;
     /**
@@ -88,8 +95,14 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     /** v1.5.181：大跳（跳劈斩）冷却 10 秒——防止不间断连续大跳；正常跳劈
      *  （普通垂直跳）不受影响，仍走 JUMP_COOLDOWN（2 秒） */
     private static final int JUMP_DASH_CD = 200;
-    /** v1.5.174：单敌跳劈概率（主体是跳劈——穿插横扫补刀，平A 概念取消） */
-    private static final double SOLO_JUMP_CHANCE = 0.7;
+    /**
+     * v1.5.174：单敌跳劈概率（主体是跳劈——穿插横扫补刀）。
+     * v1.5.282：0.7 → 1.0【单敌必跳劈】——用户："剑面对单怪直接改为 100%，
+     * 因为本来就会在跳劈的中间穿插横扫"。跳劈冷却 2 秒空档由 TLM 攻击行为
+     * （MaidMeleeAttack）自动打普攻/横扫（我们只接管移动+跳劈，不碰攻击），
+     * 所以跳劈 100% 不会挤掉横扫——每次跳劈之间 TLM 照常挥砍补刀。
+     */
+    private static final double SOLO_JUMP_CHANCE = 1.0;
     /** v1.5.188c：群怪跳劈概率常量已删除——多敌【完全不跳劈】（尽可能横扫） */
     /** v1.5.174：人数分流判定半径（索敌/接战范围 8 格——逼近战斗的敌人才算数） */
     private static final double CROWD_RADIUS = 8.0;
@@ -307,6 +320,18 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             this.navigateAway(maid, target, 3.5, 1.3f);
             return;
         }
+        // v1.5.280：近战贴脸后退——敌人贴进 2 格内主动后退拉开（不再贴身互搏：
+        // 贴身白挨敌人近战刀，女仆手长退到 3 格照样挥砍）。触发条件天然满足
+        // "战斗 + 非自保"：本行为在自保移动类保命动作时已让位（m_6725_ 开头
+        // isMovingToSurvive），能走到这里就是正常战斗走位。
+        // 与打一刀退一步（retreatTicks，攻击瞬间 14 tick 后撤）互补：前者是
+        // 攻击节奏的短撤，这里是贴脸持续拉开；与跳劈互补：贴脸（<2 格）不跳劈，
+        // 后退拉开到 3 格后再蛇形接近/跳劈——斧的"跳劈→普攻→后退"节奏由此成立
+        if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.get()
+                && dist < KITE_MELEE_RANGE && !this.jumpAir) {
+            this.navigateAway(maid, target, KITE_BACK_DIST - dist, 1.15f);
+            return;
+        }
         if (dist > MELEE_MELEE_RANGE) {
             // v1.5.174：跳劈触发重构——【距离触发 + 人数分流】：
             // - 离得太远（> JUMP_DASH_DIST，跳劈近距上限之外）→ 冷却好就【大跳】
@@ -320,15 +345,26 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             // v1.5.181：大跳（跳劈斩）10 秒冷却——CD 期间远距不再必跳（先走近），
             // 近距的 30% 跳劈斩概率也被抑制（只做普通垂直跳）；正常跳劈不受影响
             boolean dashReady = this.jumpDashCooldown <= 0;
+            // v1.5.277：斧特殊战术——斧无横扫（ToolActions.SWORD_SWEEP 只有剑），
+            // 跳劈是它唯一的高伤手段：每一击都尝试跳劈（无视单/群怪分流——旧版
+            // 70% 概率 + 群怪全禁是剑的横扫节奏，不适用于斧）
+            boolean axeMode = maid.m_21205_().m_41720_()
+                    instanceof net.minecraft.world.item.AxeItem;
             // v1.5.188c：群怪抑制跳劈——多敌（索敌范围 ≥2）时【完全不跳劈】
             //（旧版 12% 概率仍会跳，用户反馈"面对群怪反而特别喜欢用跳劈"；
             // 群怪应尽最大可能横扫补伤害，跳劈单体收益低还破坏横扫节奏）
             if (this.jumpCooldown <= 0 && dist > 1.8) {
                 boolean tryJump;
-                if (dist > JUMP_DASH_DIST) {
+                if (axeMode) {
+                    // 斧：跳劈距离内 100% 尝试跳劈；更远需大跳 → 受 10 秒大跳 CD
+                    // 约束（CD 期间先走近再跳）
+                    tryJump = dist <= JUMP_DASH_DIST
+                            || (dist < JUMP_DASH_MAX && dashReady);
+                } else if (dist > JUMP_DASH_DIST) {
                     tryJump = dist < JUMP_DASH_MAX && dashReady && !crowd; // 远距大跳受 CD + 群怪抑制
                 } else {
-                    // 跳劈距离内：单敌主体跳劈（70%）/ 多敌完全不跳（v1.5.188c）
+                    // 跳劈距离内：单敌必跳劈（v1.5.282：100%——跳劈空档由 TLM
+                    // 攻击行为穿插横扫）/ 多敌完全不跳（v1.5.188c 群怪尽横扫）
                     tryJump = crowd ? false
                             : maid.m_217043_().m_188501_() < SOLO_JUMP_CHANCE;
                 }
@@ -386,9 +422,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     // 中间留给绕圈/普攻/横扫衔接
                     this.jumpCooldown = crowd ? JUMP_COOLDOWN : 40;
                     // v1.5.149：跳劈诊断日志（确认"有没有产生跳劈"用）
-                    LOGGER.info("jump attack trigger: maid={} dist={} dash={} crowd={}",
+                    LOGGER.info("jump attack trigger: maid={} dist={} dash={} crowd={} axe={}",
                             maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                            String.format("%.1f", dist), this.dashAttack, crowd);
+                            String.format("%.1f", dist), this.dashAttack, crowd, axeMode);
                 }
             }
             // v1.5.141：蛇形走位逼近（每 8 tick 换侧偏方向，左右摆动躲箭）——

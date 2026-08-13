@@ -26,6 +26,15 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.IntValue BUILD_STRUCTURE_MAX_BLOCKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_MAIDS;
     public static final ForgeConfigSpec.BooleanValue BUILD_ORIGIN_PLAYER;
+    // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
+    public static final ForgeConfigSpec.BooleanValue BUILD_ALT_ENABLED;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_SLABS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_BLOCKS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_TALLS;
+    /** v1.5.275：横两格（床）替代品表 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_WIDES;
+    /** v1.5.275：无碰撞方块替代品表 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_NOCLIPS;
     /** v1.5.102：以下把模组其余硬编码数值全部纳入面板（用户要求"所有数值都可调"） */
     public static final ForgeConfigSpec.IntValue BUILD_REGION_TELEPORT_CD;
     public static final ForgeConfigSpec.IntValue BUILD_RESTORE_CACHE_TTL;
@@ -159,6 +168,8 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.BooleanValue TOOL_PERCEPTION;
     // v1.5.196：工作清单注入（query_todo/build_need：任务计划与缺料查询闭环）
     public static final ForgeConfigSpec.BooleanValue TOOL_WORK_LIST;
+    // v1.5.287：查看主人物品栏工具（只读查询主人背包）
+    public static final ForgeConfigSpec.BooleanValue TOOL_OWNER_INVENTORY;
 
     // ================= 战斗与自保 =================
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE;
@@ -198,6 +209,8 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_SHIELD;
     public static final ForgeConfigSpec.DoubleValue COMBAT_TACTICS_ORBIT_RADIUS;
     public static final ForgeConfigSpec.DoubleValue COMBAT_TACTICS_KITE_RANGE;
+    // v1.5.280：近战贴脸后退（被敌人贴进 2 格内主动后退拉开，女仆手长 3 格仍能挥砍）
+    public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_MELEE_KITE;
     // v1.5.199：水桶垫水（岩浆逃生——放水 1 秒后收回，水桶不消耗；击退搭高垫水
     // v1.5.250 已删除）
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
@@ -243,9 +256,6 @@ public final class MaidSmartConfig {
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
-    // v1.5.189：畜牧数量控制（杀幼保成，默认关）
-    public static final ForgeConfigSpec.BooleanValue ANIMAL_CAP_CONTROL;
-    public static final ForgeConfigSpec.IntValue ANIMAL_CAP_LIMIT;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
 
@@ -288,6 +298,25 @@ public final class MaidSmartConfig {
                 .translation("config.promaid.build.maxMaids").defineInRange("maxMaids", 30, 8, 64);
         BUILD_ORIGIN_PLAYER = BUILDER.comment("建造地点基准：true=玩家脚下（默认），false=女仆脚下")
                 .translation("config.promaid.build.originPlayer").define("originPlayer", true);
+        // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
+        BUILD_ALT_ENABLED = BUILDER.comment("缺料自动替代开关：目标方块没有时，先找同族（木板/原木/石砖等等价族），再按高度分类（半格/一格/两格）用自定义替代表")
+                .translation("config.promaid.build.altEnabled").define("altEnabled", true);
+        BUILD_ALT_SLABS = BUILDER.comment("半格高替代品（台阶类方块缺料时按序使用，填完整注册名如 minecraft:oak_slab）")
+                .translation("config.promaid.build.altSlabs")
+                .defineList("altSlabs", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_BLOCKS = BUILDER.comment("一格高替代品（整方块缺料时按序使用，填完整注册名如 minecraft:stone_bricks）")
+                .translation("config.promaid.build.altBlocks")
+                .defineList("altBlocks", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_TALLS = BUILDER.comment("两格高替代品（门/双植物等缺料时按序使用，填完整注册名如 minecraft:oak_door）")
+                .translation("config.promaid.build.altTalls")
+                .defineList("altTalls", List.of(), o -> o instanceof String s && !s.isEmpty());
+        // v1.5.275：两格再分竖/横 + 无碰撞方块单独表（用户："横着高的两格和竖着的两格不一样；无碰撞方块单独画一个区"）
+        BUILD_ALT_WIDES = BUILDER.comment("横两格替代品（床等宽 2 格方块缺料时按序使用，填完整注册名如 minecraft:red_bed）")
+                .translation("config.promaid.build.altWides")
+                .defineList("altWides", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_NOCLIPS = BUILDER.comment("无碰撞替代品（花/火把/地毯等无碰撞箱方块缺料时按序使用，填完整注册名如 minecraft:oak_sapling）")
+                .translation("config.promaid.build.altNoClips")
+                .defineList("altNoClips", List.of(), o -> o instanceof String s && !s.isEmpty());
         BUILD_REGION_TELEPORT_CD = BUILDER.comment("防窒息传送冷却（秒，女仆卡进建造区后传送到区外的冷却）")
                 .translation("config.promaid.build.regionTeleportCd")
                 .defineInRange("regionTeleportCd", 10, 3, 60);
@@ -525,6 +554,9 @@ public final class MaidSmartConfig {
         // v1.5.196：工作清单注入——查询-行动闭环（任务计划 + 材料缺口）
         TOOL_WORK_LIST = BUILDER.comment("work_list 工具（query_todo/build_need——当前任务清单与建造材料缺口查询，杜绝'先生成清单再开工'的重复轮次）")
                 .translation("config.promaid.aitools.workList").define("workList", true);
+        // v1.5.287：查看主人物品栏工具（只读查询主人背包内容）
+        TOOL_OWNER_INVENTORY = BUILDER.comment("smart_owner_inventory 工具（查看主人背包里有什么——只读查询，不修改物品）")
+                .translation("config.promaid.aitools.ownerInventory").define("ownerInventory", true);
         BUILDER.pop();
 
         // ---- 对话与提示 ----
@@ -706,13 +738,21 @@ public final class MaidSmartConfig {
         COMBAT_TACTICS_KITE_RANGE = BUILDER.comment("远程理想射程倍率（0.6 = 保持在最大射程 60% 的距离放风筝）")
                 .translation("config.promaid.combat.tacticsKiteRange")
                 .defineInRange("tacticsKiteRange", 0.6, 0.3, 0.9);
+        // v1.5.280：近战贴脸后退——用户："战斗状态且非自保状态下,即使是近战武器也应该
+        // 尝试与敌人稍微拉开距离,而不是贴身搏斗……周围两格内有敌人时会自己往后退远离"
+        COMBAT_TACTICS_MELEE_KITE = BUILDER.comment("近战贴脸后退（敌人贴进 2 格内主动后退拉开距离，女仆手长 3 格仍能挥砍）")
+                .translation("config.promaid.combat.tacticsMeleeKite").define("tacticsMeleeKite", true);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
-        AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（0-20：主人饱食度低于此值自动喂食）")
-                .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 18);
-        AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0-1：主人血量低于此比例自动治疗）")
-                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 0.8);
+        // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
+        // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
+        // 饱食度 18~19 时永远不喂（用户："那个修改按键要真实有效"——测试调 20
+        // 只为确认"只要不满就喂"）
+        AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（4-20：主人饱食度低于此值自动喂食；20=只要不满就喂）")
+                .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 20);
+        AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
+                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 1.0);
         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
                 .translation("config.promaid.combat.torchPlacerEnable").define("torchPlacerEnable", true);
         TORCH_DARK_THRESHOLD = BUILDER.comment("插火把亮度阈值（0-15：主人脚下亮度低于此值自动插火把）")
@@ -773,11 +813,6 @@ public final class MaidSmartConfig {
             .translation("config.promaid.misc.batchPlant").define("batchPlant", true);
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
-    // v1.5.189：畜牧数量控制（杀幼保成）——默认关（激进操作，玩家手动开启）
-    ANIMAL_CAP_CONTROL = BUILDER.comment("畜牧数量控制（杀幼保成）：附近同种成年动物超过上限时击杀多余幼年动物（激进操作，默认关）")
-            .translation("config.promaid.misc.animalCapControl").define("animalCapControl", false);
-    ANIMAL_CAP_LIMIT = BUILDER.comment("畜牧数量上限（只，默认 50）：同种动物超过此数时执行杀幼保成")
-            .translation("config.promaid.misc.animalCapLimit").defineInRange("animalCapLimit", 50, 5, 200);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")

@@ -1,12 +1,9 @@
 package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFindSitTask;
-import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityChair;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.level.block.state.BlockState;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -14,101 +11,37 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.5.130：钓鱼专项——找不到椅子/船时主动找水域并自带坐垫。
+ * v1.5.252r：钓鱼自动坐垫【注入壳】——逻辑全部在普通类
+ * com.maidsmart.fishing.FishingChairService。
  *
- * 根因：TaskFishing 只有 MaidFindSitTask：找附近空 EntityChair/Boat 走过去坐下
- * 钓鱼；找不到就弹 no_sit 气泡原地空转（"钓鱼空转"缺陷）。
+ * v1.5.252q 崩溃实证：普通代码（ProMaidExtension）直接调用本 mixin 的静态方法时，
+ * JVM 判定 mixin 类 "is invalid" → NoClassDefFoundError → 进世界第一 tick 即崩。
+ * 因此本类只保留 @Inject 注入点，所有实现委托给普通类（mixin 可调用普通类，
+ * 普通类不可调用 mixin 类）。
  *
- * 修复：原逻辑没找到椅子/船时，扫描女仆附近开阔水域（3x3 水面 + 岸边可站立
- * 格），在岸边生成一个 TLM 坐垫椅子实体（EntityChair，与原版坐垫同款），
- * 女仆走过去坐下开钓——5 秒冷却防极端循环。找不到水域才保留原 no_sit 气泡。
- * 总开关：misc.produceTaskEnhance。
+ * 功能：
+ * 1. start TAIL：原逻辑没找到椅子/船时，自动在最近水域岸边生成带标记坐垫并
+ *    直接坐上（有现成坐垫/船则走过去坐，走原模组钓鱼流程）；
+ * 2. lambda$start$2 HEAD：马上要生成坐垫时压掉原 no_sit 气泡（防两句打架）。
  */
 @Mixin(MaidFindSitTask.class)
 public abstract class FishingAutoChairMixin {
     @Shadow
     private Entity sitEntity;
 
-    /** 生成坐垫冷却（tick）：防"生成→坐不上→再生成"循环 */
-    private long maidsmart$lastChairTick = -1L;
+    @Inject(method = "lambda$start$2", at = @At("HEAD"), cancellable = true)
+    private void maidsmart$suppressNoSitBubble(EntityMaid maid, CallbackInfo ci) {
+        if (com.maidsmart.fishing.FishingChairService.shouldSuppressNoSit(maid)) {
+            ci.cancel();
+        }
+    }
 
     @Inject(method = "start", at = @At("TAIL"))
     private void maidsmart$autoChair(ServerLevel world, EntityMaid maid, long gameTime, CallbackInfo ci) {
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
-            return;
+        com.maidsmart.fishing.FishingChairService.tryAutoChair(world, maid, this.sitEntity);
+        if (this.sitEntity != null && this.sitEntity.m_6084_()) {
+            // v1.5.275：记录原版椅子目标位置（高频维持走位——tickKeepSeatWalk 用）
+            com.maidsmart.fishing.FishingChairService.recordSeatTarget(maid, this.sitEntity.m_20183_());
         }
-        if (this.sitEntity != null) {
-            return; // 原逻辑已找到椅子/船
-        }
-        long now = world.m_46467_();
-        if (now - this.maidsmart$lastChairTick < 100L) {
-            return; // 5 秒冷却
-        }
-        BlockPos stand = findWaterSpot(world, maid);
-        if (stand == null) {
-            return; // 附近没有开阔水域，保留原 no_sit 气泡
-        }
-        this.maidsmart$lastChairTick = now;
-        EntityChair chair = new EntityChair(world,
-                stand.m_123341_() + 0.5, stand.m_123342_(), stand.m_123343_() + 0.5, 0.0f);
-        world.m_7967_(chair);
-        maid.getChatBubbleManager().addTextChatBubble("这里没有椅子，我自己带了个坐垫，找个水边坐下钓鱼～");
-    }
-
-    /** 找"开阔水域岸边可站格"：3x3 水面 + 站立格空气 + 脚下实心 + 头顶空气 */
-    private static BlockPos findWaterSpot(ServerLevel level, EntityMaid maid) {
-        BlockPos pos = maid.m_20183_();
-        int r = 16;
-        for (int dy = -4; dy <= 8; dy++) {
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dz = -r; dz <= r; dz++) {
-                    BlockPos p = pos.m_7918_(dx, dy, dz);
-                    if (!level.m_8055_(p).m_60815_()) {
-                        continue; // 水面格
-                    }
-                    if (!level.m_8055_(p.m_7918_(0, 1, 0)).m_60795_()) {
-                        continue; // 水上方需空气（鱼钩落点）
-                    }
-                    if (!openWater(level, p)) {
-                        continue; // 需 3x3 开阔水面
-                    }
-                    // 岸边 4 方向找可站立格
-                    for (int[] d : DIRS4) {
-                        BlockPos stand = p.m_7918_(d[0], 0, d[1]);
-                        if (!level.m_8055_(stand).m_60795_()) {
-                            continue;
-                        }
-                        BlockPos under = stand.m_7918_(0, -1, 0);
-                        BlockState us = level.m_8055_(under);
-                        if (us.m_60795_() || !us.m_60796_(level, under)) {
-                            continue; // 脚下需实心
-                        }
-                        if (!level.m_8055_(stand.m_7918_(0, 1, 0)).m_60795_()) {
-                            continue; // 头顶需空气
-                        }
-                        return stand;
-                    }
-                }
-            }
-        }
-        return null;
-    }
-
-    private static final int[][] DIRS4 = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
-
-    /** 以水面格为中心的 3x3 是否都是"水 + 上方空气"（开阔水域判定） */
-    private static boolean openWater(ServerLevel level, BlockPos water) {
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                BlockPos p = water.m_7918_(dx, 0, dz);
-                if (!level.m_8055_(p).m_60815_()) {
-                    return false;
-                }
-                if (!level.m_8055_(p.m_7918_(0, 1, 0)).m_60795_()) {
-                    return false;
-                }
-            }
-        }
-        return true;
     }
 }

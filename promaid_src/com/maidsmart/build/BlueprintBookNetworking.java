@@ -21,6 +21,9 @@ import java.util.function.Supplier;
  */
 public final class BlueprintBookNetworking {
     private static final String PROTOCOL_VERSION = "2";
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    /** v1.5.252v：手册速度/ETA 诊断日志节流（每 5 秒一条，latest.log 搜 "hud book"） */
+    private static long lastBookLogMs = 0L;
 
     /** 目录包（73+ 蓝图 × 材料清单 + 200 女仆）可达数百 KB——连接层帧上限 2MB
      *  （Varint21FrameDecoder 2097151），SimpleChannel 默认即可承载，无需额外配置。 */
@@ -102,6 +105,49 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(17, MemoryStateQueryPacket.class,
                 MemoryStateQueryPacket::encode, MemoryStateQueryPacket::decode,
                 MemoryStateQueryPacket::handle);
+        // v1.5.252j：建造 HUD 快照（S2C）——服务端每秒广播进行中区块的速度/预计完成时间
+        CHANNEL.registerMessage(18, BuildHudPacket.class,
+                BuildHudPacket::encode, BuildHudPacket::decode,
+                BuildHudPacket::handle);
+        // v1.5.275：请求重新打开手册（C2S 空包——配置面板"跳转女仆管理"用）
+        CHANNEL.registerMessage(19, OpenBookRequestPacket.class,
+                OpenBookRequestPacket::encode, OpenBookRequestPacket::decode,
+                OpenBookRequestPacket::handle);
+        // v1.5.305：删除索引 20 OpenMaidGuiPacket（手册「⚙ 女仆配置」按钮整体移除——
+        // 用户："有 bug 不想修，直接删了"；打开 TLM 女仆配置请直接右键女仆）
+    }
+
+    /** v1.5.275：请求重新打开手册（C2S——配置面板跳转女仆管理：关配置 → 服务端
+     *  重新下发手册包（initialView=2 女仆管理，与 BlueprintBookScreen.VIEW_MAIDS 一致）
+     *  → 客户端开手册并切到女仆管理页） */
+    public static class OpenBookRequestPacket {
+        /** 0 = 默认大目录；2 = 女仆管理页（BlueprintBookScreen.VIEW_MAIDS） */
+        public final int view;
+
+        public OpenBookRequestPacket(int view) {
+            this.view = view;
+        }
+
+        public static void encode(OpenBookRequestPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.view);
+        }
+
+        public static OpenBookRequestPacket decode(FriendlyByteBuf buf) {
+            return new OpenBookRequestPacket(buf.readInt());
+        }
+
+        public static void handle(OpenBookRequestPacket pkt,
+                                  Supplier<net.minecraftforge.network.NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                net.minecraft.server.level.ServerPlayer sp = ctx.get().getSender();
+                if (sp != null) {
+                    net.minecraft.world.item.ItemStack hand = sp.m_21205_();
+                    // 无论主手是什么都重新打开（openFor 不依赖物品）
+                    com.maidsmart.build.BlueprintBookItem.openFor(sp, pkt.view);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /** 蓝图目录条目（v1.5.18：含材料缺口 {物品id, 已有, 需要}；v1.5.159：含占地尺寸
@@ -219,10 +265,11 @@ public final class BlueprintBookNetworking {
 
     /**
      * v1.5.180：所有有效建造区块（跨维度展平，每区块一行）→
-     * {planId, 显示名, 维度名, 状态, x, y, z, 宽W, 高H, 深D, blueprintId}。
+     * {planId, 显示名, 维度名, 状态, x, y, z, 宽W, 高H, 深D, blueprintId, 创建X, 创建Y, 创建Z}。
      * 显示名按建筑名去重编号：同名区块 → 「小木屋」「小木屋2」「小木屋3」。
      * 尺寸为方块范围（客户端据此判定玩家在哪个区块内）。
-     */
+     * v1.5.279：追加【创建坐标】= 玩家创建区块时的原点（PlanState.origin，玩家
+     * 站的位置）——与 box min（r[0..2]，蓝图包围盒）不同，用于区块打标签显示。 */
     public static List<String[]> collectBuildRegions(net.minecraft.server.MinecraftServer server) {
         List<String[]> regions = new ArrayList<>();
         if (server == null) {
@@ -243,7 +290,10 @@ public final class BlueprintBookNetworking {
                 regions.add(new String[]{ps.planId, display, dimName(lv.m_46472_()), status,
                         String.valueOf(r[0]), String.valueOf(r[1]), String.valueOf(r[2]),
                         String.valueOf(r[3] - r[0]), String.valueOf(r[4] - r[1]), String.valueOf(r[5] - r[2]),
-                        ps.blueprintId});
+                        ps.blueprintId,
+                        String.valueOf(ps.origin.m_123341_()),
+                        String.valueOf(ps.origin.m_123342_()),
+                        String.valueOf(ps.origin.m_123343_())});
             }
         }
         return regions;
@@ -332,13 +382,19 @@ public final class BlueprintBookNetworking {
         public final String currentPlanId;
         /** v1.5.178：所有有效建造区块 {显示名, 维度名, 状态, 坐标}（女仆管理页区块列表） */
         public final List<String[]> regions;
+        /** v1.5.252z：打开手册立即显示——预计完成秒（-1=未知）+ 实时速度（块/秒） */
+        public final int etaSec;
+        public final String speedBps;
+        /** v1.5.275：初始视图（0=大目录 1=女仆管理——配置面板"跳转女仆管理"） */
+        public final int initialView;
 
         public OpenBlueprintBookPacket(List<Entry> entries, List<String[]> maids, List<String[]> allMaids,
                                        boolean paused, String speed, String progressText, int progress,
                                        int regionX, int regionY, int regionZ,
                                        int regionW, int regionH, int regionD,
                                        boolean inPlanRegion, String currentPlanId,
-                                       List<String[]> regions) {
+                                       List<String[]> regions, int etaSec, String speedBps,
+                                       int initialView) {
             this.entries = entries;
             this.maids = maids;
             this.allMaids = allMaids;
@@ -354,7 +410,10 @@ public final class BlueprintBookNetworking {
             this.regionD = regionD;
             this.inPlanRegion = inPlanRegion;
             this.currentPlanId = currentPlanId;
+            this.initialView = initialView;
             this.regions = regions == null ? new ArrayList<>() : regions;
+            this.etaSec = etaSec;
+            this.speedBps = speedBps == null ? "" : speedBps;
         }
 
         public static void encode(OpenBlueprintBookPacket pkt, FriendlyByteBuf buf) {
@@ -411,11 +470,19 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
             if (pkt.regions != null) {
                 for (String[] r : pkt.regions) {
-                    for (int i = 0; i < 11; i++) {
+                    // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
+                    // 旧版写死 11 → 坐标字段永远没发出去 → 客户端 r.length>11 恒 false，
+                    // 区块"创建于 x,y,z"从未显示——用户："显示坐标还是没有做好"）
+                    for (int i = 0; i < 14; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
             }
+            // v1.5.252z：打开手册立即显示速度/ETA（追加在末尾，解码按序读）
+            buf.m_130070_(String.valueOf(pkt.etaSec));
+            buf.m_130070_(pkt.speedBps);
+            // v1.5.275：初始视图（0=大目录 1=女仆管理——配置面板跳转用）
+            buf.m_130070_(String.valueOf(pkt.initialView));
         }
 
         public static OpenBlueprintBookPacket decode(FriendlyByteBuf buf) {
@@ -466,15 +533,25 @@ public final class BlueprintBookNetworking {
             int regionCount = Integer.parseInt(buf.m_130277_());
             List<String[]> regions = new ArrayList<>();
             for (int i = 0; i < regionCount; i++) {
-                String[] rr = new String[11];
-                for (int j = 0; j < 11; j++) {
+                // v1.5.296：14 字段——v1.5.290 只改了 encode（写 14），decode 漏改仍读 11：
+                // (a) 客户端区块永远只有 11 字段 → r[11..13] 创建坐标缺失 →"坐标显示没做出来"；
+                // (b) 每个区块剩 3 个坐标字符串错位到后续字段，≥2 个区块时 initialView 读到
+                // 蓝图 id（非数字）→ NumberFormatException → 连接损坏 →"连接已丢失"
+                //（日志实证 06:21:55 创建第二个区块后开手册即断连）
+                String[] rr = new String[14];
+                for (int j = 0; j < 14; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
             }
+            // v1.5.252z：速度/ETA（与 encode 末尾顺序一致）
+            int etaSec = Integer.parseInt(buf.m_130277_());
+            String speedBps = buf.m_130277_();
+            // v1.5.275：初始视图（0=大目录 2=女仆管理）
+            int initialView = Integer.parseInt(buf.m_130277_());
             return new OpenBlueprintBookPacket(entries, maids, allMaids, paused, speed, progressText, progress,
                     regionX, regionY, regionZ, regionW, regionH, regionD,
-                    inPlanRegion, currentPlanId, regions);
+                    inPlanRegion, currentPlanId, regions, etaSec, speedBps, initialView);
         }
 
         public static void handle(OpenBlueprintBookPacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -484,7 +561,8 @@ public final class BlueprintBookNetworking {
                 BlueprintBookScreen.open(pkt.entries, pkt.maids, pkt.allMaids, pkt.paused, pkt.speed,
                         pkt.progressText, pkt.progress, pkt.regionX, pkt.regionY, pkt.regionZ,
                         pkt.regionW, pkt.regionH, pkt.regionD,
-                        pkt.inPlanRegion, pkt.currentPlanId, pkt.regions);
+                        pkt.inPlanRegion, pkt.currentPlanId, pkt.regions,
+                        pkt.etaSec, pkt.speedBps, pkt.initialView);
             });
             ctx.get().setPacketHandled(true);
         }
@@ -579,13 +657,16 @@ public final class BlueprintBookNetworking {
         public final List<String[]> regions;
         /** v1.5.180：玩家所在区块 planId（无 = 区块外；客户端当前区块上下文） */
         public final String planId;
+        /** v1.5.252s：进度条旁显示——预计完成秒（-1 = 未知）+ 实时速度（块/秒） */
+        public final int etaSec;
+        public final String speedBps;
 
         public ProgressUpdatePacket(String progressText, List<String[]> maids,
                                     boolean paused, String speed, int progress,
                                     int regionX, int regionY, int regionZ,
                                     int regionW, int regionH, int regionD,
                                     List<String[]> allMaids, List<String[]> regions,
-                                    String planId) {
+                                    String planId, int etaSec, String speedBps) {
             this.progressText = progressText;
             this.maids = maids;
             this.paused = paused;
@@ -600,6 +681,8 @@ public final class BlueprintBookNetworking {
             this.allMaids = allMaids == null ? new ArrayList<>() : allMaids;
             this.regions = regions == null ? new ArrayList<>() : regions;
             this.planId = planId;
+            this.etaSec = etaSec;
+            this.speedBps = speedBps == null ? "" : speedBps;
         }
 
         public static void encode(ProgressUpdatePacket pkt, FriendlyByteBuf buf) {
@@ -635,13 +718,17 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
             if (pkt.regions != null) {
                 for (String[] r : pkt.regions) {
-                    // v1.5.180：11 字段 {planId, 显示名, 维度名, 状态, x,y,z, W,H,D, blueprintId}
-                    for (int i = 0; i < 11; i++) {
+                    // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
+                    // 旧版写死 11 → 坐标字段从未发出去）
+                    for (int i = 0; i < 14; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
             }
             buf.m_130070_(pkt.planId == null ? "" : pkt.planId);
+            // v1.5.252s：进度条旁显示（追加在末尾，解码按序读）
+            buf.m_130070_(String.valueOf(pkt.etaSec));
+            buf.m_130070_(pkt.speedBps);
         }
 
         public static ProgressUpdatePacket decode(FriendlyByteBuf buf) {
@@ -672,16 +759,21 @@ public final class BlueprintBookNetworking {
             int regionCount = Integer.parseInt(buf.m_130277_());
             List<String[]> regions = new ArrayList<>();
             for (int i = 0; i < regionCount; i++) {
-                String[] rr = new String[11];
-                for (int j = 0; j < 11; j++) {
+                // v1.5.296：14 字段（与 OpenBlueprintBookPacket 同修——v1.5.290 漏改
+                // decode：坐标字段缺失 + 多区块时后续字段错位致解析崩溃）
+                String[] rr = new String[14];
+                for (int j = 0; j < 14; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
             }
             String planId = buf.m_130277_();
+            // v1.5.252s：进度条旁显示（与 encode 末尾顺序一致）
+            int etaSec = Integer.parseInt(buf.m_130277_());
+            String speedBps = buf.m_130277_();
             return new ProgressUpdatePacket(progressText, maids, paused, speed, progress,
                     regionX, regionY, regionZ, regionW, regionH, regionD,
-                    allMaids, regions, planId);
+                    allMaids, regions, planId, etaSec, speedBps);
         }
 
         public static void handle(ProgressUpdatePacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -692,9 +784,44 @@ public final class BlueprintBookNetworking {
                 if (cur instanceof BlueprintBookScreen s) {
                     s.updateStatus(pkt.progressText, pkt.maids, pkt.paused, pkt.speed, pkt.progress,
                             pkt.regionX, pkt.regionY, pkt.regionZ, pkt.regionW, pkt.regionH, pkt.regionD,
-                            pkt.allMaids, pkt.regions, pkt.planId);
+                            pkt.allMaids, pkt.regions, pkt.planId, pkt.etaSec, pkt.speedBps);
                 }
             });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** v1.5.252j：建造 HUD 快照（S2C）——服务端每秒广播进行中区块的
+     *  进度/速度/预计完成时间，客户端 BuildHudRenderer 左上角显示。
+     *  每项 8 字段 {planId, 显示名, 已建, 总数, 跳过, 速度(块/秒), 预计秒(-1=未知), 暂停} */
+    public static class BuildHudPacket {
+        public final java.util.List<String[]> entries;
+
+        public BuildHudPacket(java.util.List<String[]> entries) {
+            this.entries = entries == null ? new java.util.ArrayList<>() : entries;
+        }
+
+        public static void encode(BuildHudPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(String.valueOf(pkt.entries.size()));
+            for (String[] e : pkt.entries) {
+                for (int i = 0; i < 8; i++) {
+                    buf.m_130070_(e.length > i ? e[i] : "");
+                }
+            }
+        }
+
+        public static BuildHudPacket decode(FriendlyByteBuf buf) {
+            int n = Integer.parseInt(buf.m_130277_());
+            java.util.List<String[]> list = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                list.add(new String[]{buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
+                        buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_()});
+            }
+            return new BuildHudPacket(list);
+        }
+
+        public static void handle(BuildHudPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> com.maidsmart.build.BuildHudRenderer.onSnapshot(pkt.entries));
             ctx.get().setPacketHandled(true);
         }
     }
@@ -795,8 +922,12 @@ public final class BlueprintBookNetworking {
                 // v1.5.183：UNBIND 解绑不针对具体区块（planId 允许为空），不要求 target
                 BuildPlan.PlanState target = BuildPlan.getPlanById(pkt.planId);
                 if (pkt.action != SHOW_PROGRESS && pkt.action != UNBIND_MAID && target == null) {
+                    // v1.5.252ae：planId 为空（客户端未定位到区块）提示更准确——
+                    // 旧版一律"区块不存在"（用户实测：区块明明存在却提示不存在）
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c区块不存在（可能已被取消/完成）。"));
+                            (pkt.planId == null || pkt.planId.isEmpty())
+                                    ? "\u00a7c请先站在建造区块内再操作（区块外无法定位区块）。"
+                                    : "\u00a7c区块不存在（可能已被取消/完成）。"));
                     return;
                 }
                 // v1.5.178：区块内控制限制——暂停/继续/取消/速度/全员加入/逐只暂停/设工头
@@ -969,16 +1100,32 @@ public final class BlueprintBookNetworking {
         return ps == null ? -1 : BuildPlan.progressPct(ps);
     }
 
+    /** v1.5.252ad：打开手册速度诊断日志（latest.log 搜 "hud book"，BlueprintBookItem 调用） */
+    public static void logBookSpeed(String tag, String planId, String speedBps, int etaSec) {
+        LOGGER.info("hud book: {} plan={} speedBps={} etaSec={}",
+                tag, planId == null ? "null" : planId,
+                speedBps == null || speedBps.isEmpty() ? "(空)" : speedBps, etaSec);
+    }
+
     /** v1.5.62：控制操作后回发状态快照（客户端面板即时刷新） */
-    public static void sendProgressUpdate(ServerPlayer player) {
-        if (player == null || !(player.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
+    public static void sendProgressUpdate(ServerPlayer player) {        if (player == null || !(player.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
             return;
         }
         // v1.5.162：计划区块标记（中心点 + 尺寸，兼容字段）
         int[] r = collectRegion(level);
         // v1.5.180：按玩家所在区块发状态（区块外 → 空进度文本 + planId=null）
         BuildPlan.PlanState ps = findPlayerPlan(level, player);
-        // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
+        // v1.5.252s：进度条旁显示 块/秒 + 预计完成时间（复用 HUD 统计）
+        double[] se = ps == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(ps.planId);
+        int etaSec = se == null ? -1 : (int) Math.round(se[1]);
+        String speedBps = se == null ? "" : String.format("%.1f", se[0]);
+        // v1.5.252v：限频诊断（每 5 秒一条）——验证手册收到的速度/ETA 值
+        long nowMs = System.currentTimeMillis();
+        if (nowMs - lastBookLogMs > 5000L) {
+            lastBookLogMs = nowMs;
+            LOGGER.info("hud book: plan={} speedBps={} etaSec={}",
+                    ps == null ? "null" : ps.planId, speedBps.isEmpty() ? "(空)" : speedBps, etaSec);
+        }        // v1.5.178：全部女仆 + 有效建造区块（女仆管理页轮询刷新）
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new ProgressUpdatePacket(
                         ps == null ? "" : BuildPlan.statusText(level, ps, player),
@@ -987,7 +1134,7 @@ public final class BlueprintBookNetworking {
                         ps == null ? -1 : BuildPlan.progressPct(ps),
                         r[0], r[1], r[2], r[3], r[4], r[5],
                         collectAllMaids(level), collectBuildRegions(level.m_7654_()),
-                        ps == null ? null : ps.planId));
+                        ps == null ? null : ps.planId, etaSec, speedBps));
     }
 
     /** v1.5.94：重发完整目录包（删除蓝图后刷新手册目录用，构建逻辑与手册右键一致） */
@@ -1013,6 +1160,10 @@ public final class BlueprintBookNetworking {
         int[] region = collectRegion(sl);
         // v1.5.180：玩家所在区块（区块内右击 → 详情页；区块外 → 目录）
         BuildPlan.PlanState here = sl == null ? null : findPlayerPlan(sl, player);
+        // v1.5.252z：打开手册立即显示速度/ETA（不等 2 秒轮询）
+        double[] se = here == null ? null : com.maidsmart.build.BuildHudTracker.speedEtaOf(here.planId);
+        int openEta = se == null ? -1 : (int) Math.round(se[1]);
+        String openBps = se == null ? "" : String.format("%.1f", se[0]);
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                 new OpenBlueprintBookPacket(entries, collectMaidStatus(player),
                         sl == null ? new ArrayList<>() : collectAllMaids(sl),
@@ -1021,7 +1172,8 @@ public final class BlueprintBookNetworking {
                         sl == null ? -1 : buildProgressPct(sl, player),
                         region[0], region[1], region[2], region[3], region[4], region[5],
                         here != null, here == null ? null : here.blueprintId,
-                        sl == null ? new ArrayList<>() : collectBuildRegions(sl.m_7654_())));
+                        sl == null ? new ArrayList<>() : collectBuildRegions(sl.m_7654_()),
+                        openEta, openBps, 0));
     }
 
     /**

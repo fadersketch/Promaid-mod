@@ -47,7 +47,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RelationshipMemoryAdapter {
     private static final String MM_ID = "maidmarriage";
     private static final String LL_ID = "callresponse";
-    private static final String EMOTION_CLS = "com.github.tartaricacid.callresponse.compat.emotion.EmotionData";
+    // v1.5.284：爱憎分明 2.0.2 迁移包名 com.github.tartaricacid → com.github.JumDa5he——
+    // 旧包名反射永远 ClassNotFoundException → 情绪投影静默失效。双包名：先试新后试旧
+    private static final String[] EMOTION_CLS_CANDIDATES = {
+            "com.github.JumDa5he.callresponse.compat.emotion.EmotionData",
+            "com.github.tartaricacid.callresponse.compat.emotion.EmotionData"};
 
     private int tick = 0;
     /** 女仆 UUID → 上次关系快照（检测变化用） */
@@ -503,10 +507,16 @@ public class RelationshipMemoryAdapter {
             return emotionCls;
         }
         llResolved = true;
-        try {
-            emotionCls = Class.forName(EMOTION_CLS);
-        } catch (Exception e) {
-            emotionCls = null;
+        // v1.5.284：双包名兼容——先试新包名（2.0.2+），失败回退旧包名（2.0.2 之前）
+        for (String candidate : EMOTION_CLS_CANDIDATES) {
+            try {
+                emotionCls = Class.forName(candidate);
+                if (emotionCls != null) {
+                    break;
+                }
+            } catch (Exception e) {
+                emotionCls = null;
+            }
         }
         return emotionCls;
     }

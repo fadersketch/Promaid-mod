@@ -13,6 +13,20 @@ for d in ['com', 'assets', 'data']:
     if os.path.isdir(p):
         shutil.rmtree(p)
 
+# 1a. v1.5.293：清除 out 中无源码的陈旧 class（删除/重命名源文件后 javac 不会清理
+# 旧产物——v1.5.291 删除 MaidFeedAnimalCapMixin 后其 .class 一直被打进 jar）。
+# 匹配按"去 $ 后缀"（内部类/匿名类源码名 = 外层类），防误删合法内部类产物。
+import re, pathlib
+src_bases = set()
+for p in pathlib.Path(SRC).rglob('*.java'):
+    src_bases.add(str(p.relative_to(SRC)).replace('\\', '/')[:-len('.java')])
+for p in pathlib.Path(OUT).rglob('*.class'):
+    rel = str(p.relative_to(OUT)).replace('\\', '/')
+    base = re.sub(r'\$.*$', '', rel[:-len('.class')])
+    if base not in src_bases:
+        p.unlink()
+        print('purged stale class:', rel)
+
 # 1b. (re)create META-INF with manifest + mods.toml (二进制 \r\n 防 v1.5.24 的 \r\r\n bug)
 meta = os.path.join(STAGING, 'META-INF')
 if os.path.isdir(meta):
@@ -59,6 +73,25 @@ with zipfile.ZipFile(JAR_OUT) as z:
                 'assets/maid_smart/models/item/blueprint_book.json',
                 'assets/maid_smart/lang/zh_cn.json']
     missing = [r for r in required if r not in names]
-    print('MISSING:', missing if missing else 'none')
+    if missing:
+        raise SystemExit('FATAL: jar 缺少必需条目: %s' % missing)
+    # v1.5.252q 热修复：mixins.promaid.json 注册的每个 mixin 必须能在 jar 里找到对应
+    # class——否则启动即 MixinApplyError 崩溃（ChairNoDropMixin 漏编译事故的教训）
+    import json
+    mc = json.loads(z.read('mixins.promaid.json'))
+    allm = mc['mixins'] + mc.get('client', [])
+    no_class = [m for m in allm if ('com/maidsmart/mixin/' + m + '.class') not in names]
+    if no_class:
+        raise SystemExit('FATAL: jar 缺少 mixin class: %s（先跑 gen_compile.py 再编译）' % no_class)
+    print('MISSING: none')
     print('TOTAL entries:', len(names))
 print('BUILT:', JAR_OUT, os.path.getsize(JAR_OUT), 'bytes')
+
+# v1.5.283：构建后自动【双向全量】验证 jar vs out（旧版 verify_jar_classes.py 只查
+# 6 个指定类 → SelfPreservationBehavior$BlockCheck 缺失从未被发现 → 运行时 findWater
+# 懒加载 ClassNotFoundException 崩溃；现在 out 全部 .class 必须存在且哈希一致）
+import subprocess, sys
+rc = subprocess.call([sys.executable, os.path.join(BASE, 'verify_jar_classes.py')])
+if rc != 0:
+    raise SystemExit('FATAL: jar 与 out 双向全量验证未通过')
+

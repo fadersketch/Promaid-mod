@@ -21,10 +21,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * onMaidEat 保留（吃饭 +1 信任 / -1 恐惧不受影响）；记忆适配层读 EmotionData
  * 与 HungerManager 独立，不受影响。
  *
+ * v1.5.252o：修复目标包名——爱憎分明 2.0.2 作者包从 tartaricacid 改为
+ * JumDa5he，旧 targets 找不到类 → @Pseudo 静默跳过 → 开关从未生效（用户实测）。
+ * 方法签名已用 javap 对账 2.0.2：onServerTick(TickEvent.ServerTickEvent) 与
+ * onMaidDeath(LivingDeathEvent) 均存在且签名匹配。
+ *
  * @Pseudo + 字符串类名：爱憎分明可选，未安装时静默跳过（heartfelt 同款模式）。
  */
 @Pseudo
-@Mixin(targets = "com.github.tartaricacid.callresponse.compat.hunger.HungerManager")
+@Mixin(targets = "com.github.JumDa5he.callresponse.compat.hunger.HungerManager")
 public abstract class LoveLoatheHungerGateMixin {
     private static boolean gated() {
         return com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_DISABLE_HUNGER.get();
