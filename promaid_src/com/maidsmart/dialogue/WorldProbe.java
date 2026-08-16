@@ -450,10 +450,13 @@ public final class WorldProbe {
         double oy = maid.m_20186_();
         double oz = maid.m_20189_();
         List<Object[]> found = new ArrayList<>();
-        for (int dx = -r; dx <= r; dx += 2) {
-            for (int dy = -r; dy <= r; dy += 2) {
-                for (int dz = -r; dz <= r; dz += 2) {
+        for (int dx = -r; dx <= r; dx++) {
+            for (int dy = -r; dy <= r; dy++) {
+                for (int dz = -r; dz <= r; dz++) {
                     BlockPos pos = origin.m_7918_(dx, dy, dz);
+                    if (!lv.m_46749_(pos)) {
+                        continue; // 未加载区块不触发加载，避免卡服
+                    }
                     if (lv.m_8055_(pos).m_60734_() != target) {
                         continue;
                     }

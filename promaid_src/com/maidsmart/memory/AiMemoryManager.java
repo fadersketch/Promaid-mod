@@ -140,8 +140,10 @@ public class AiMemoryManager {
 
     /** 加载/定位 toggles.json（惰性；首次调用才读盘） */
     private static java.nio.file.Path togglesFile(ServerLevel level) {
-        if (togglesFile == null) {
-            togglesFile = AiMemoryExtractor.memoryRoot(level.m_7654_()).resolve("toggles.json");
+        java.nio.file.Path current = AiMemoryExtractor.memoryRoot(level.m_7654_()).resolve("toggles.json");
+        if (!current.equals(togglesFile)) {
+            togglesFile = current;
+            DISK_TOGGLES.clear();
             try {
                 if (java.nio.file.Files.exists(togglesFile)) {
                     String json = java.nio.file.Files.readString(togglesFile,
@@ -321,6 +323,7 @@ public class AiMemoryManager {
         }
         com.maidsmart.dialogue.PerceptionManager.forget(maid.m_20148_());
         com.maidsmart.task.MaidMineBehavior.forget(maid.m_19879_());
+        com.maidsmart.task.MaidMineBehavior.forgetUuid(maid.m_20148_());
     }
 
     /**

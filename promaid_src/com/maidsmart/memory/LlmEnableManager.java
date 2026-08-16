@@ -84,8 +84,10 @@ public final class LlmEnableManager {
 
     /** 加载/定位 llm_toggles.json(惰性;首次调用才读盘) */
     private static Path togglesFile(ServerLevel level) {
-        if (togglesFile == null) {
-            togglesFile = AiMemoryExtractor.memoryRoot(level.m_7654_()).resolve("llm_toggles.json");
+        Path current = AiMemoryExtractor.memoryRoot(level.m_7654_()).resolve("llm_toggles.json");
+        if (!current.equals(togglesFile)) {
+            togglesFile = current;
+            DISK_TOGGLES.clear();
             try {
                 if (Files.exists(togglesFile)) {
                     String json = Files.readString(togglesFile, StandardCharsets.UTF_8);
