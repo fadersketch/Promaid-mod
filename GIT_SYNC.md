@@ -10,7 +10,7 @@
 
 | 项目 | 镜像仓库 | 分支 | 当前版本 |
 | --- | --- | --- | --- |
-| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `experimental/memory-port`（部署线） | v1.5.385 |
+| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `experimental/memory-port`（部署线；本地 `main` 是旧 252af 遗留，不作为部署线） | v1.5.385 |
 | Heartfelt-connection | `C:\Users\Sketch\.zcode\workspace\default\heartfelt-mod` | `main` | v1.5.116 |
 
 ## 同步流程（每次改完 maidmods 后执行）
