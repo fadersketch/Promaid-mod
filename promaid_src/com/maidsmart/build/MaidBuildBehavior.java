@@ -96,6 +96,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     /** v1.5.275：替代品播报 30 秒冷却（女仆 → 上次播报 tick）——"缺 X，我用 Y 替代" */
     private static final java.util.Map<java.util.UUID, Long> ALT_NOTIFIED = new java.util.HashMap<>();
 
+    /** 审计：女仆卸载/移除时清理建造提示/缺料冷却表 */
+    public static void forgetMaid(java.util.UUID maidUuid) {
+        SKIP_NOTIFIED.remove(maidUuid);
+        LAST_MISSING.remove(maidUuid);
+        MISSING_CD.remove(maidUuid);
+        ALT_NOTIFIED.remove(maidUuid);
+    }
+
     /** v1.5.142：建造强制坐下标记（persistentData）——进入建造任务即坐下，
      *  玩家无法让她站起（每 tick 重新按压坐下姿势）；切出建造任务自动站起 */
     public static final String BUILD_SIT_TAG = "maid_smart_build_sitting";

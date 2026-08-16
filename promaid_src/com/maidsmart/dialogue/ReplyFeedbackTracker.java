@@ -58,6 +58,18 @@ public class ReplyFeedbackTracker {
     /** 女仆 UUID → 修复模式（最近被纠正/否定，语气该克制） */
     private static final Map<UUID, Boolean> REPAIR_MODE = new ConcurrentHashMap<>();
 
+    /** 审计：女仆卸载/移除时清理全部反馈状态表 */
+    public static void forgetMaid(UUID maidUuid) {
+        WATERMARKS.remove(maidUuid);
+        OWNER_CHAT_TICKS.remove(maidUuid);
+        OWNER_GENERATION.remove(maidUuid);
+        QUESTION_PENDING.remove(maidUuid);
+        LAST_TOPIC.remove(maidUuid);
+        TOPIC_BLACKLIST.remove(maidUuid);
+        LAST_ERROR_MARK.remove(maidUuid);
+        REPAIR_MODE.remove(maidUuid);
+    }
+
     /** 负面模式串（主人嫌女仆话多/说错） */
     private static final String[] NEGATIVE_PATTERNS = {
             "别说了", "闭嘴", "好烦", "烦死", "不想听", "别烦", "少说", "闭嘴吧", "别说话",
