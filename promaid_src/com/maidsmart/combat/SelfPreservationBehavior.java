@@ -691,8 +691,19 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (sitting && !danger) {
             maid.m_6274_().m_21936_(MemoryModuleType.f_26370_); // 清 WALK_TARGET
             maid.m_21573_().m_26573_();                          // navigation.stop()
-            maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, 0.0, 0.0)); // 清速度
+            // v1.5.348：只清水平速度、保留垂直(y)——旧版整速度清零导致坐姿女仆
+            // 下落时重力每 tick 被抹掉、永远加不起速度 → "一直坐着缓慢下落"
+            // （还顺带免疫摔落伤害,坐姿被架空成缓降模式）。与 MaidStationaryMixin
+            // v1.5.98c 同款教训:保留 y 才能正常下落/上浮/落地(水中不溺水)。
+            net.minecraft.world.phys.Vec3 v = maid.m_20184_();
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, v.f_82480_, 0.0));
         }
+        // v1.5.281：负面效果自清——【会话外也生效】：旧版蜂蜜瓶检查在会话主流程
+        // 内（下方 sessionActive return 之后），满血中毒（血未低到触发自保、无
+        // 环境危险）时会话不激活 → 提前 return → 蜂蜜瓶永远不会喝（用户："女仆
+        // 面对中毒竟然不用蜂蜜瓶"）。蜂蜜解毒 + 牛奶清负面提升为常驻轻量逻辑
+        //（每 tick 只查效果状态，有负面效果才扫背包），与自保会话完全解耦
+        this.tickCureNegativeEffects(maid);
         if (!this.sessionActive) {
             if (danger || ratio < enterRatio()) {
                 this.sessionActive = true;
@@ -764,15 +775,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         if (this.pearlCooldown > 0) {
             this.pearlCooldown--;
-        }
-        // v1.5.252g7【按药水种类记 CD】：同种药水 CD = 药水时长，CD 内可以喝
-        // 其他药水但不能喝这种；瞬间治疗短 CD 可连喝。蜂蜜瓶固定短 CD（解中毒
-        // 是瞬间动作，可重复喝）。
-        long nowTick = maid.m_9236_().m_46467_();
-        if (this.potionReady("honey", nowTick)
-                && maid.m_21023_(net.minecraft.world.effect.MobEffects.f_19614_) // hasEffect(POISON)
-                && this.drinkHoneyForPoison(maid)) {
-            this.markPotionUsed("honey", nowTick, potionCooldown());
         }
         if (this.meleeCooldown > 0) {
             this.meleeCooldown--;
@@ -1191,10 +1193,23 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.231b：极端饥饿判定——反射读爱憎分明（Love Loathe）HungerData.get
-     *  （0-100，≤9 = 饥饿）；未装爱憎分明/异常返回 false（原版女仆无饥饿系统） */
+     *  （0-100，≤9 = 饥饿）；未装爱憎分明/异常返回 false（原版女仆无饥饿系统）。
+     *  v1.5.284：双包名兼容——2.0.2 迁移 com.github.tartaricacid →
+     *  com.github.JumDa5he（旧包名反射永远 ClassNotFoundException → 判定静默失效）；
+     *  先试新包名、失败回退旧包名 */
     private static boolean isExtremeHungry(EntityMaid maid) {
+        // v1.5.310：联动总开关 + 极端饥饿保命开关（配置面板「爱憎分明模组调试」页可调）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_MASTER.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.get()) {
+            return false;
+        }
         try {
-            Class<?> cls = Class.forName("com.github.tartaricacid.callresponse.compat.hunger.HungerData");
+            Class<?> cls = null;
+            try {
+                cls = Class.forName("com.github.JumDa5he.callresponse.compat.hunger.HungerData");
+            } catch (Exception ignored) {
+                cls = Class.forName("com.github.tartaricacid.callresponse.compat.hunger.HungerData");
+            }
             java.lang.reflect.Method get = cls.getMethod("get", EntityMaid.class);
             Object v = get.invoke(null, maid);
             return v instanceof Number n && n.floatValue() <= 9.0f;
@@ -1498,11 +1513,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  头顶被实心堵住的场景：上方 2 格放水，水流下来淋到身上灭火）。 */
     private boolean canPourWaterAt(net.minecraft.world.level.Level level, BlockPos pos) {
         BlockState st = level.m_8055_(pos);
-        if (st.m_60795_() || st.m_60815_()) {
-            return true; // 空气 / 可替换（植物、火把位等）
-        }
-        net.minecraft.world.level.block.Block b = st.m_60734_();
-        return isLavaBlock(b) || isWaterBlock(b); // 液体可被水替换
+        // v1.5.259：m_60815_（0 参）是 isSolid（有碰撞），不是 canBeReplaced！
+        // 旧版 `st.m_60795_() || st.m_60815_()` 把实心方块当"可替换"（植物/火把
+        // isSolid=false 反而判不可倒）→ 岩浆自救方向反了。非实心（空气/植物/
+        // 火把位/岩浆/水）都可被水替换，直接 !isSolid 覆盖全部。
+        return !st.m_60815_();
     }
 
     /** v1.5.249：放水成功日志节流（每女仆 10 秒一次，防每 tick 刷屏） */
@@ -1863,7 +1878,24 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 BlockPos water = this.findWater(maid);
                 if (water != null) {
                     this.resourceUsed = true; // v1.5.232：找到水源 = 自救资源
-                    maid.m_21573_().m_26519_(water.m_123341_() + 0.5, water.m_123342_(), water.m_123343_() + 0.5, 1.15f);
+                    double wx = water.m_123341_() + 0.5;
+                    double wz = water.m_123343_() + 0.5;
+                    double dx = wx - maid.m_20185_();
+                    double dz = wz - maid.m_20189_();
+                    double distSq = dx * dx + dz * dz;
+                    // v1.5.288：女仆是陆地生物，寻路器默认避水——导航到水面格只会
+                    // 走到水边就停（用户："着火了却在水边下不去，难道女仆对水有恐惧？
+                    // "——不是恐惧，是寻路不下水）。
+                    // v1.5.290：近水直接【传送入水】——旧版(288)给水平+垂直速度"冲进去"
+                    // 在岸沿高一格/悬空边缘时反复小跳悬空进不了水（用户："一直悬空在
+                    // 半空中，没有办法跳下去"）。传送到水源格内部直接泡水灭火
+                    if (distSq < 6.25) {
+                        maid.m_7678_(wx, water.m_123342_(), wz,
+                                maid.m_146908_(), maid.m_146909_());
+                        maid.f_19789_ = 0.0f; // 清摔落距离
+                    } else {
+                        maid.m_21573_().m_26519_(wx, water.m_123342_(), wz, 1.15f);
+                    }
                     return;
                 }
             }
@@ -3067,6 +3099,86 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         return false;
+    }
+
+    /**
+     * v1.5.281：负面效果自清（会话内外常驻，见 m_6725_ 调用点）——
+     * (1) 中毒 → 蜂蜜瓶（精准解毒 + 回血 + 留玻璃瓶；蜂蜜只清中毒，不误伤增益）；
+     * (2) 蜂蜜已喝/CD 中/无蜂蜜 → 若自身【无增益效果】且【有负面效果】→ 喝牛奶
+     * 清全部效果（牛奶清所有——有增益时喝会把增益也清掉，所以前提是"只有负面
+     * buff"）。蜂蜜与牛奶各自独立 CD（potionReady("honey"/"milk")）。
+     */
+    private void tickCureNegativeEffects(EntityMaid maid) {
+        long nowTick = maid.m_9236_().m_46467_();
+        if (this.potionReady("honey", nowTick)
+                && maid.m_21023_(net.minecraft.world.effect.MobEffects.f_19614_) // hasEffect(POISON)
+                && this.drinkHoneyForPoison(maid)) {
+            this.markPotionUsed("honey", nowTick, potionCooldown());
+            return;
+        }
+        if (this.potionReady("milk", nowTick)
+                && this.hasOnlyNegativeEffects(maid)
+                && this.drinkMilkBucket(maid)) {
+            this.markPotionUsed("milk", nowTick, potionCooldown());
+        }
+    }
+
+    /** v1.5.281：是否"无增益 + 有负面"——牛奶前提（牛奶清全部效果，
+     *  有增益时喝 = 把增益也清掉；中性效果如发光不参与判定） */
+    private static boolean hasOnlyNegativeEffects(EntityMaid maid) {
+        boolean hasHarmful = false;
+        for (net.minecraft.world.effect.MobEffectInstance ei : maid.m_21220_()) {
+            net.minecraft.world.effect.MobEffectCategory cat = ei.m_19544_().m_19483_();
+            if (cat == net.minecraft.world.effect.MobEffectCategory.BENEFICIAL) {
+                return false; // 有增益 → 不喝牛奶
+            }
+            if (cat == net.minecraft.world.effect.MobEffectCategory.HARMFUL) {
+                hasHarmful = true;
+            }
+        }
+        return hasHarmful;
+    }
+
+    /** v1.5.281：喝牛奶桶——消耗 1 桶、清全部效果、返还空桶（原版一致） */
+    private boolean drinkMilkBucket(EntityMaid maid) {
+        try {
+            IItemHandler inv = maid.getMaidInv();
+            net.minecraft.world.item.Item milk = ForgeRegistries.ITEMS
+                    .getValue(ResourceLocation.parse("minecraft:milk_bucket"));
+            if (milk == null) {
+                return false;
+            }
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || stack.m_41720_() != milk) {
+                    continue;
+                }
+                inv.extractItem(i, 1, false);
+                // 清全部效果（原版牛奶语义 removeAllEffects）
+                java.util.List<net.minecraft.world.effect.MobEffectInstance> effects =
+                        new java.util.ArrayList<>(maid.m_21220_());
+                for (net.minecraft.world.effect.MobEffectInstance ei : effects) {
+                    maid.m_21195_(ei.m_19544_());
+                }
+                this.giveBucket(maid); // 喝完返还空桶（原版一致）
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                this.resourceUsed = true;
+                LOGGER.info("self drink: milk_bucket hp={}% cleared={}",
+                        String.format("%.0f", this.hpRatio(maid) * 100.0f), effects.size());
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.5.281：返还空桶（喝牛奶桶后——原版喝完变空桶） */
+    private void giveBucket(EntityMaid maid) {
+        net.minecraft.world.item.Item bucket = ForgeRegistries.ITEMS
+                .getValue(ResourceLocation.parse("minecraft:bucket"));
+        if (bucket != null) {
+            ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), new ItemStack(bucket), false);
+        }
     }
 
     /**

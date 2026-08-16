@@ -61,6 +61,8 @@ public class BlueprintBookScreen extends Screen {
     private static final int TOP_BTN_Y = 8;
     /** v1.5.227：记忆开关防连点时间戳（600ms 内重复点击忽略） */
     private long lastMemoryToggleClick = 0;
+    /** v1.0.3：LLM 开关防连点时间戳（与记忆开关同 600ms 防连点） */
+    private long lastLlmToggleClick = 0;
     private static final int TOP_BTN_H = 16;
     /** 面板标题行（渲染用，36 = 标题） */
     private static final int PANEL_TITLE_Y = 36;
@@ -117,6 +119,10 @@ public class BlueprintBookScreen extends Screen {
     private int matPage = 0;
     /** 建造目录页 */
     private int buildPage = 0;
+    /** v1.5.374：建造目录搜索框 + 查询串（8000+ 建筑按名/ID 过滤，网格分页） */
+    private net.minecraft.client.gui.components.EditBox searchBox;
+    private String searchQuery = "";
+    private boolean searchFocusPending = false;
     /** 女仆列表页 */
     private int maidPage = 0;
     /** v1.5.63：实时轮询节流（每 40 tick ≈ 2 秒请求一次状态） */
@@ -197,17 +203,22 @@ public class BlueprintBookScreen extends Screen {
         this.maidPage = lastMaidPage;
     }
 
-    /** 收到目录包后打开界面（v1.5.159：同时关闭建造范围预览——再次打开手册 = 关闭预览） */
+    /** 收到目录包后打开界面（v1.5.159：同时关闭建造范围预览——再次打开手册 = 关闭预览）
+     *  v1.5.275：initialView 0=大目录 1=女仆管理（配置面板"跳转女仆管理"） */
     public static void open(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
                             int progressPct, int regionX, int regionY, int regionZ,
                             int regionW, int regionH, int regionD,
                             boolean inPlanRegion, String currentPlanId, List<String[]> regions,
-                            int etaSec, String speedBps) {
+                            int etaSec, String speedBps, int initialView) {
         com.maidsmart.build.BlueprintAreaPreview.clear();
-        Minecraft.m_91087_().m_91152_(new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
+        BlueprintBookScreen screen = new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
                 progressText, progressPct, regionX, regionY, regionZ, regionW, regionH, regionD,
-                inPlanRegion, currentPlanId, regions, etaSec, speedBps));
+                inPlanRegion, currentPlanId, regions, etaSec, speedBps);
+        if (initialView == 2) {
+            screen.view = VIEW_MAIDS; // 直接进女仆管理页
+        }
+        Minecraft.m_91087_().m_91152_(screen);
     }
 
     /** v1.5.62：服务端状态刷新（进度/速度/暂停/女仆状态即时更新，不重开面板） */
@@ -321,6 +332,22 @@ public class BlueprintBookScreen extends Screen {
         return have >= 1_000_000 ? "\u221e" : String.valueOf(have);
     }
 
+    /** v1.5.319：液体工具/周转行角标——水桶=工具（不消耗）、岩浆桶=周转（放置后
+     *  返还空桶）；v1.5.320：矿车=启动消耗（完工自动放置，需备齐）。灰色小字与
+     *  消耗材料区分（材料表里这几行不是普通消耗品）。 */
+    private static String materialRowTag(String itemId) {
+        if ("minecraft:water_bucket".equals(itemId)) {
+            return "\u00a77（工具）";
+        }
+        if ("minecraft:lava_bucket".equals(itemId)) {
+            return "\u00a77（返还）";
+        }
+        if ("minecraft:minecart".equals(itemId)) {
+            return "\u00a77（工具·消耗）";
+        }
+        return "";
+    }
+
     /** 材料文本（缺口黄色、充足绿色） */
     private List<String> materialItems(BlueprintBookNetworking.Entry entry) {
         List<String> items = new ArrayList<>();
@@ -335,7 +362,8 @@ public class BlueprintBookScreen extends Screen {
                     continue;
                 }
                 String color = have >= need ? "\u00a7a" : "\u00a7e";
-                items.add(color + itemName(m[0]) + " " + haveText(have) + "/" + need);
+                items.add(color + itemName(m[0]) + materialRowTag(m[0])
+                        + " " + haveText(have) + "/" + need);
             }
             if (items.isEmpty()) {
                 items.add("\u00a7a材料充足");
@@ -377,6 +405,20 @@ public class BlueprintBookScreen extends Screen {
         graphics.m_280653_(this.f_96547_, Component.m_237113_(t), this.f_96543_ / 2, y, color);
     }
 
+    /** v1.5.279：区块列表占用的行数（标题 1 行 + 每区块 2 行(名字/状态+创建坐标)
+     *  + 溢出省略行；上限 6 区块）——女仆管理页按钮据此下移，与 renderMaids 同步 */
+    private int regionListRows() {
+        if (this.buildRegions.isEmpty()) {
+            return 0;
+        }
+        int n = Math.min(this.buildRegions.size(), 6);
+        int rows = 1 + n * 2;
+        if (this.buildRegions.size() > n) {
+            rows++;
+        }
+        return rows;
+    }
+
     // ================= v1.5.71 自适应布局计算 =================
 
     /** 内容区可用高度（标题之下 ~ 底部控制区之上） */
@@ -387,6 +429,34 @@ public class BlueprintBookScreen extends Screen {
     /** 建造目录每页行数（按可用高度自适应，至少 3 行） */
     private int buildRowsPerPage() {
         return Math.max(3, this.contentH() / (NAME_BUTTON_H + 2));
+    }
+
+    /** v1.5.374：按搜索串过滤目录条目（名称 / 蓝图 id 包含匹配，大小写不敏感） */
+    private java.util.List<BlueprintBookNetworking.Entry> filteredEntries() {
+        String q = this.searchQuery == null ? "" : this.searchQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        if (q.isEmpty()) {
+            return this.entries;
+        }
+        java.util.List<BlueprintBookNetworking.Entry> out = new java.util.ArrayList<>();
+        for (BlueprintBookNetworking.Entry e : this.entries) {
+            if (e.name() != null && e.name().toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                out.add(e);
+            } else if (e.id() != null && e.id().toLowerCase(java.util.Locale.ROOT).contains(q)) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    /** v1.5.374：建造目录网格列数（宽窗口 3 列，窄窗口 2 列） */
+    private int buildGridCols() {
+        return this.f_96543_ >= 520 ? 3 : 2;
+    }
+
+    /** v1.5.374：建造目录网格每页行数（顶部搜索框占 24px，其余给条目按钮） */
+    private int buildGridRowsPerPage() {
+        int avail = this.f_96544_ - 30 - 72; // 底行按钮之上 - 搜索框之下
+        return Math.max(3, avail / (NAME_BUTTON_H + 2));
     }
 
     /** 女仆面板每页行数（按可用高度自适应，至少 3 行） */
@@ -438,8 +508,15 @@ public class BlueprintBookScreen extends Screen {
                 bps = this.speedBps.isEmpty() ? 0 : Double.parseDouble(this.speedBps);
             } catch (NumberFormatException ignored) {
             }
+            // v1.5.278：速度/预计【无条件显示】——旧版 bps≤0.01 整个不显示
+            // （缺料停滞时 ema→0 → 进度条旁只剩"56%"，用户："搭建速度和剩余
+            // 时间看不到"，截图实证 speed=0.0 eta=-1）。停滞时如实显示
+            // "0.0块/秒 · 预计--"（-- = 无法估计：缺料/刚启动统计窗口内），
+            // 有速度时正常显示实测值
             if (bps > 0.01) {
                 label += " \u00a77\u00b7 " + fmtBps(bps) + " \u00b7 \u9884\u8ba1" + fmtEta(this.etaSec);
+            } else {
+                label += " \u00a77\u00b7 0.0\u5757/\u79d2 \u00b7 \u9884\u8ba1" + fmtEta(this.etaSec);
             }
             net.minecraft.client.gui.Font font = this.f_96547_;
             int labelW = font.m_92895_(label);
@@ -545,6 +622,74 @@ public class BlueprintBookScreen extends Screen {
             case VIEW_MEMORY -> this.memoryViewButtons();
             default -> this.homeViewButtons();
         }
+    }
+
+    // ================= v1.5.374：搜索框输入转发 + 目录网格坐标点击 =================
+
+    /** 字符输入直接转发给搜索框（不依赖 getFocused() 焦点链，同 PromaidConfigScreen） */
+    @Override
+    public boolean m_5534_(char codePoint, int modifiers) {
+        if (this.view == VIEW_BUILD && this.viewingEntry == null
+                && this.searchBox != null && this.searchBox.m_5534_(codePoint, modifiers)) {
+            return true;
+        }
+        return super.m_5534_(codePoint, modifiers);
+    }
+
+    /** 按键转发给搜索框（退格/方向/回车等） */
+    @Override
+    public boolean m_7933_(int key, int scanCode, int modifiers) {
+        if (this.view == VIEW_BUILD && this.viewingEntry == null
+                && this.searchBox != null && this.searchBox.m_7933_(key, scanCode, modifiers)) {
+            return true;
+        }
+        return super.m_7933_(key, scanCode, modifiers);
+    }
+
+    /** 目录页点击：搜索框聚焦兜底 + 条目（打开详情）/删除（✖）坐标命中 */
+    @Override
+    public boolean m_6375_(double mouseX, double mouseY, int button) {
+        if (button == 0 && this.view == VIEW_BUILD && this.viewingEntry == null && this.searchBox != null) {
+            if (this.searchBox.m_5953_(mouseX, mouseY)) {
+                this.searchBox.m_93692_(true);
+            } else if (mouseY >= 72 && mouseY <= this.f_96544_ - 30) {
+                java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+                int cols = this.buildGridCols();
+                int rows = this.buildGridRowsPerPage();
+                int perPage = cols * rows;
+                int start = this.buildPage * perPage;
+                int margin = 10;
+                int gap = 4;
+                int cellW = (this.f_96543_ - margin * 2 - (cols - 1) * gap) / cols;
+                int colIdx = (int) ((mouseX - margin) / (cellW + gap));
+                int rowIdx = (int) ((mouseY - 72) / (NAME_BUTTON_H + 2));
+                if (colIdx >= 0 && colIdx < cols && rowIdx >= 0 && rowIdx < rows) {
+                    int idx = start + rowIdx * cols + colIdx;
+                    if (idx >= 0 && idx < list.size()) {
+                        BlueprintBookNetworking.Entry entry = list.get(idx);
+                        boolean ext = entry.id().startsWith("maid_smart_ext:");
+                        if (ext) {
+                            int delW = 14;
+                            double dx = mouseX - (margin + colIdx * (cellW + gap) + cellW - delW);
+                            if (dx >= 0 && dx < delW) {
+                                final String deleteId = entry.id();
+                                this.confirmAction("删除蓝图？",
+                                        "\u00a7e\u300c" + entry.name() + "\u300d将从手册中删除（文件也会被移除，无法恢复）",
+                                        "\u00a7c确认删除",
+                                        () -> BlueprintBookNetworking.CHANNEL.sendToServer(
+                                                new BlueprintBookNetworking.DeleteBlueprintPacket(deleteId)));
+                                return true;
+                            }
+                        }
+                        this.viewingEntry = entry;
+                        this.matPage = 0;
+                        this.rebuildButtons();
+                        return true;
+                    }
+                }
+            }
+        }
+        return super.m_6375_(mouseX, mouseY, button);
     }
 
     // ================= 大目录页 =================
@@ -726,37 +871,30 @@ public class BlueprintBookScreen extends Screen {
             }
             return;
         }
-        // v1.5.159：建造总目录（点击进入建筑详情页——此页只留目录 + 翻页 + 返回 + 退出）
-        int rows = this.buildRowsPerPage();
-        int totalPages = Math.max(1, (this.entries.size() + rows - 1) / rows);
+        // v1.5.159：建造总目录（点击进入建筑详情页）
+        // v1.5.374：加搜索框 + 网格多列显示——条目改为【渲染 + 坐标点击】（不再每键
+        // 重建按钮，避免中文输入法被打断 / 焦点丢失），搜索框只建一次
+        java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+        int cols = this.buildGridCols();
+        int rows = this.buildGridRowsPerPage();
+        int perPage = cols * rows;
+        int totalPages = Math.max(1, (list.size() + perPage - 1) / perPage);
         this.buildPage = Math.min(this.buildPage, totalPages - 1);
-        int start = this.buildPage * rows;
-        int end = Math.min(this.entries.size(), start + rows);
-        int btnW = Math.max(180, this.f_96543_ - 40);
-        int y = CONTENT_TOP;
-        for (int i = start; i < end; i++) {
-            final BlueprintBookNetworking.Entry entry = this.entries.get(i);
-            // v1.5.94：主按钮（看材料）+ 删除按钮（仅外部蓝图 maid_smart_ext: 可删）
-            this.m_142416_(Button.m_253074_(
-                            Component.m_237113_(this.fitText(entry.name(), btnW - 10 - (entry.id().startsWith("maid_smart_ext:") ? 52 : 0))),
-                            b -> {
-                                this.viewingEntry = entry;
-                                this.matPage = 0;
-                                this.rebuildButtons();
-                            })
-                    .m_252987_(this.f_96543_ / 2 - btnW / 2, y, btnW - (entry.id().startsWith("maid_smart_ext:") ? 52 : 0), NAME_BUTTON_H).m_253136_());
-            if (entry.id().startsWith("maid_smart_ext:")) {
-                final String deleteId = entry.id();
-                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7c\u2716"),
-                                b -> this.confirmAction("删除蓝图？",
-                                        "\u00a7e\u300c" + entry.name() + "\u300d将从手册中删除（文件也会被移除，无法恢复）",
-                                        "\u00a7c确认删除",
-                                        () -> BlueprintBookNetworking.CHANNEL.sendToServer(
-                                                new BlueprintBookNetworking.DeleteBlueprintPacket(deleteId))))
-                        .m_252987_(this.f_96543_ / 2 + btnW / 2 - 48, y, 48, NAME_BUTTON_H).m_253136_());
-            }
-            y += NAME_BUTTON_H + 2;
-        }
+        this.searchBox = new net.minecraft.client.gui.components.EditBox(this.f_96547_,
+                this.f_96543_ / 2 - 150, 50, Math.min(300, this.f_96543_ - 20), 16,
+                Component.m_237113_("搜索建筑名称…"));
+        this.searchBox.m_94199_(64);
+        // v1.5.376：套用原版物品搜索栏样式——无边框 + 白字（默认深色字在深色面板上
+        // 几乎看不清，输入看起来"没反应/延迟"；字节码实证 CreativeModeInventoryScreen
+        // 搜索框 = m_94182_(setBordered false) + m_94202_(setTextColor 白)）
+        this.searchBox.m_94182_(false);
+        this.searchBox.m_94202_(0xFFFFFF);
+        this.searchBox.m_94144_(this.searchQuery);
+        this.searchBox.m_94151_(s -> {
+            this.searchQuery = s;
+            this.buildPage = 0;
+        });
+        this.m_142416_(this.searchBox);
         // 翻页（底行）——v1.5.159：目录页只有 返回/上一页/下一页/退出
         if (totalPages > 1) {
             if (this.buildPage > 0) {
@@ -782,6 +920,14 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .m_252987_(8, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
+        // v1.5.290：建造名单页直达女仆管理（用户："名单内部仍然没有跳转按键"）
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2640 女仆管理"),
+                        b -> {
+                            this.view = VIEW_MAIDS;
+                            this.maidPage = 0;
+                            this.rebuildButtons();
+                        })
+                .m_252987_(94, TOP_BTN_Y, 90, TOP_BTN_H).m_253136_());
         // v1.5.220：导入建筑（右上角小按钮）——版本警告确认 → 文件选择器 → 服务端导入
         // v1.5.224：右上角并排两个导入按钮（导入建筑 / 导入世界地图）
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2b06 导入建筑"),
@@ -879,7 +1025,8 @@ public class BlueprintBookScreen extends Screen {
         int end = Math.min(builders.size(), start + rows);
         int btnW = Math.max(180, w - 40);
         // v1.5.183：下移 10px 给上方区块列表文字行留空间（旧版 45 行文字与按钮重叠）
-        int y = CONTENT_TOP + 10;
+        // v1.5.279：区块列表竖排（每区块 2 行含创建坐标）→ 按钮按区块行数继续下移
+        int y = CONTENT_TOP + 10 + Math.max(0, this.regionListRows() - 1) * 10;
         for (int i = start; i < end; i++) {
             final String[] m = builders.get(i);
             final String uuid = m[0];
@@ -1036,6 +1183,8 @@ public class BlueprintBookScreen extends Screen {
                                             BlueprintBookNetworking.BuildControlPacket.BIND_MAID, uuid, sid)))
                     .m_252987_(cx - 140, y, 280, 20).m_253136_());
         }
+        // v1.5.305：删除「⚙ 女仆配置」按钮（用户："有 bug 不想修，直接删了；
+        // 不走这个路径了"——打开 TLM 女仆配置请直接右键女仆）
         // 提示行：未绑定区块时的引导（render 绘制，避免与按钮重叠）
         if (!isBound && this.buildRegions.isEmpty()) {
             this.graphicsHint("当前没有可绑定的区块——先到建造目录创建区块。");
@@ -1064,7 +1213,10 @@ public class BlueprintBookScreen extends Screen {
         int btnW = Math.max(180, w - 40);
         // v1.5.190 修复：旧版按绑定女仆数无上限排下去，列表一长"设为工头"和
         // 翻页按钮被推出屏幕（找不回 = 死锁）。改为分页（每页按可用高度算行数）。
-        int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 32) / (MAID_ROW_H + 1));
+        // v1.5.308：行数公式【预留进度条空间】——旧版只给翻页按钮留 32px，绑定
+        // 女仆多时（6 只 + 小窗口）底部进度条叠在最后几行女仆按钮上
+        //（用户："又一次出现了进度条重合在了一起"）；48px = 4 行状态文本 + 进度条
+        int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 32 - 48) / (MAID_ROW_H + 1));
         int total = Math.max(1, (bound.size() + maxRows - 1) / maxRows);
         this.regionMaidPage = Math.min(this.regionMaidPage, total - 1);
         int start = this.regionMaidPage * maxRows;
@@ -1080,6 +1232,12 @@ public class BlueprintBookScreen extends Screen {
                     + (bState.isEmpty() ? "" : " \u00a77" + bState)
                     + (isFm ? " \u00a7e（工头）" : "");
             this.m_142416_(Button.m_253074_(Component.m_237113_(mainText), b -> {
+                        // v1.5.290：区块详情页名单点击 → 跳转女仆详情页（查看/绑定/解绑）
+                        //（旧版是空按钮，用户："右击区块详细页里面的名单，要有跳转功能"）
+                        this.detailMaidUuid = uuid;
+                        this.selectedPlanId = pid;
+                        this.view = VIEW_MAID_DETAIL;
+                        this.rebuildButtons();
                     })
                     .m_252987_(cx - btnW / 2, y, Math.max(120, btnW - 90), MAID_ROW_H).m_253136_());
             // 设为工头（一区块一工头；当前工头行不显示）
@@ -1093,8 +1251,18 @@ public class BlueprintBookScreen extends Screen {
             y += MAID_ROW_H + 1;
         }
         if (bound.isEmpty()) {
-            this.graphicsHint("该区块还没有绑定女仆——到女仆管理点女仆进详情页绑定。");
+            this.graphicsHint("该区块还没有绑定女仆——点右上「♀ 女仆管理」进女仆管理页，点女仆行进详情页绑定。");
         }
+        // v1.5.298：本页跳转女仆管理（用户："在此页面要的跳转界面仍然没有出现"——
+        // 旧版此页只有「← 返回详情」，提示却指向女仆管理——空名单页是死胡同；
+        // 加右上角直达按钮）
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7b\u2640 女仆管理"),
+                        b -> {
+                            this.view = VIEW_MAIDS;
+                            this.maidPage = 0;
+                            this.rebuildButtons();
+                        })
+                .m_252987_(w - 88, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
         // v1.5.190：绑定女仆翻页（页脚行）
         if (total > 1) {
             int py = h - 26;
@@ -1148,6 +1316,8 @@ public class BlueprintBookScreen extends Screen {
     private int debugSelected = -1;
     /** v1.5.192：调试对象行分页 */
     private int debugPage = 0;
+    /** v1.2.1：链路调试状态区分页（小窗口状态行超 maxStatus 时 ◀/▶ 翻页） */
+    private int debugStatusPage = 0;
 
     /** 服务端下发记忆行后更新显示 */
     public void showMemoryLines(String maidUuid, List<String> lines) {
@@ -1167,6 +1337,7 @@ public class BlueprintBookScreen extends Screen {
                 this.debugSelected = -1;
             }
             this.debugPage = 0;
+            this.debugStatusPage = 0;
             this.rebuildButtons();
         }
     }
@@ -1268,22 +1439,27 @@ public class BlueprintBookScreen extends Screen {
         return;
         }
         // 女仆列表（v1.5.100b：全部女仆，不限 128 格/不限任务；每行主按钮 + 记忆开关）
+        // v1.0.3：每行再加「LLM:开/关」开关——缩小并排按钮挤进去，行总宽恒 ≤ btnW ≤ w-40，
+        // 小窗口/高 guiScale 不再超出屏幕
         int rows = this.maidRowsPerPage();
         int total = Math.max(1, (this.allMaids.size() + rows - 1) / rows);
         this.maidPage = Math.min(this.maidPage, total - 1);
         int start = this.maidPage * rows;
         int end = Math.min(this.allMaids.size(), start + rows);
         int btnW = Math.max(180, w - 40);
+        final int toggleW = 52;                       // 开关按钮宽（"记忆:开"/"LLM:开" 4 字）
+        final int mainW = Math.max(68, btnW - 112);   // 主按钮 = 行宽 - 两个开关 - 间隙(8)
         int y = CONTENT_TOP;
         for (int i = start; i < end; i++) {
             final String[] m = this.allMaids.get(i);
             final String uuid = m[0];
             final boolean memOn = m.length > 2 && "1".equals(m[2]);
+            final boolean llmOn = m.length > 9 && "1".equals(m[9]);
             // v1.5.167：第 4 字段 = 段落数（记忆调试可视化——每只女仆的记忆量）
             final String paraCount = m.length > 3 ? m[3] : "?";
             // 主按钮：名字 + 记忆开关状态 + 段落数（点击查看记忆）
             this.m_142416_(Button.m_253074_(
-                            Component.m_237113_("\u00a7a\u2661 " + this.fitText(m[1], 120)
+                            Component.m_237113_("\u00a7a\u2661 " + this.fitText(m[1], 100)
                                     + "  \u00a77（" + (memOn ? "\u00a7a记忆开" : "\u00a77记忆关")
                                     + "\u00a77 · 段落" + paraCount + "\u00a77）"),
                             b -> {
@@ -1299,8 +1475,8 @@ public class BlueprintBookScreen extends Screen {
                                 BlueprintBookNetworking.CHANNEL.sendToServer(
                                         new BlueprintBookNetworking.MemoryViewRequestPacket(uuid));
                             })
-                    .m_252987_(cx - btnW / 2, y, Math.max(120, btnW - 64), MAID_ROW_H).m_253136_());
-            // 记忆开关（点击切换 per-maid 记忆，服务端写 TaskData）
+                    .m_252987_(cx - btnW / 2, y, mainW, MAID_ROW_H).m_253136_());
+            // 记忆开关（点击切换 per-maid 记忆，服务端写 persistentData + 磁盘备份）
             this.m_142416_(Button.m_253074_(
                             Component.m_237113_(memOn ? "\u00a7a记忆:开" : "\u00a77记忆:关"),
                             b -> {
@@ -1317,7 +1493,23 @@ public class BlueprintBookScreen extends Screen {
                                 m[2] = memOn ? "0" : "1";
                                 this.rebuildButtons();
                             })
-                    .m_252987_(cx + btnW / 2 - 60, y, 60, MAID_ROW_H).m_253136_());
+                    .m_252987_(cx - btnW / 2 + mainW + 4, y, toggleW, MAID_ROW_H).m_253136_());
+            // v1.0.3：LLM 开关（点击切换 per-maid 大语言模型，操作方式同记忆开关）
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_(llmOn ? "\u00a7aLLM:开" : "\u00a77LLM:关"),
+                            b -> {
+                                long now = System.currentTimeMillis();
+                                if (now - this.lastLlmToggleClick < 600) {
+                                    return;
+                                }
+                                this.lastLlmToggleClick = now;
+                                BlueprintBookNetworking.CHANNEL.sendToServer(
+                                        new BlueprintBookNetworking.AiLlmTogglePacket(uuid, !llmOn));
+                                // 本地立即翻转（服务端确认消息另发聊天框）
+                                m[9] = llmOn ? "0" : "1";
+                                this.rebuildButtons();
+                            })
+                    .m_252987_(cx - btnW / 2 + mainW + 4 + toggleW + 4, y, toggleW, MAID_ROW_H).m_253136_());
             y += MAID_ROW_H + 1;
         }
         if (this.allMaids.isEmpty()) {
@@ -1413,6 +1605,27 @@ public class BlueprintBookScreen extends Screen {
     /** 链路调试页按钮：状态行区（顶部）+ 可调试对象行（分页，点击选中）+ 动作按钮组 */
     private void debugViewButtons(int w, int h, int cx) {
         int maxStatus = Math.max(4, (h - 30 - CONTENT_TOP - 120) / 12);
+        // v1.2.1：状态区分页 ◀/▶（右上角，仅在状态行超 maxStatus 时出现——小窗口不丢行）
+        if (this.debugStatusLines != null && this.debugStatusLines.size() > maxStatus) {
+            int sPages = (this.debugStatusLines.size() + maxStatus - 1) / maxStatus;
+            this.debugStatusPage = Math.min(this.debugStatusPage, sPages - 1);
+            if (this.debugStatusPage > 0) {
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
+                                b -> {
+                                    this.debugStatusPage--;
+                                    this.rebuildButtons();
+                                })
+                        .m_252987_(w - 58, CONTENT_TOP + 2, 26, 14).m_253136_());
+            }
+            if (this.debugStatusPage < sPages - 1) {
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
+                                b -> {
+                                    this.debugStatusPage++;
+                                    this.rebuildButtons();
+                                })
+                        .m_252987_(w - 28, CONTENT_TOP + 2, 26, 14).m_253136_());
+            }
+        }
         // 状态行分页（statusLines 可能比一行高——单独页码）
         // 状态区 + 对象区共用 debugPage（对象区为主，状态区贴顶固定显示前几行）
         if (this.debugStatusLines == null) {
@@ -1521,12 +1734,19 @@ public class BlueprintBookScreen extends Screen {
         if (this.debugStatusLines == null) {
             return;
         }
-        // 状态区（前几行，随对象分页不变）
+        // 状态区（分页——小窗口状态行超 maxStatus 时 ◀/▶ 翻页；v1.2.1）
         int maxStatus = Math.max(4, (this.f_96544_ - 30 - CONTENT_TOP - 120) / 12);
+        int sPages = (this.debugStatusLines.size() + maxStatus - 1) / maxStatus;
+        if (sPages > 1) {
+            this.debugStatusPage = Math.min(this.debugStatusPage, sPages - 1);
+        }
         int y = CONTENT_TOP + 4;
-        int n = Math.min(this.debugStatusLines.size(), maxStatus);
+        int sStart = this.debugStatusPage * maxStatus;
+        int n = Math.min(this.debugStatusLines.size() - sStart, maxStatus);
+        // 状态翻页按钮在右侧时给文本留出右缘
+        int lineW = sPages > 1 ? this.f_96543_ - 130 : this.f_96543_ - 40;
         for (int i = 0; i < n; i++) {
-            String line = this.fitText(this.debugStatusLines.get(i), this.f_96543_ - 40);
+            String line = this.fitText(this.debugStatusLines.get(sStart + i), lineW);
             graphics.m_280614_(this.f_96547_, Component.m_237113_(line),
                     12, y, 0xDDDDDD, false);
             y += 12;
@@ -1654,9 +1874,44 @@ public class BlueprintBookScreen extends Screen {
             }
             return;
         }
-        // 建造总目录
-        this.drawCentered(graphics, "\u00a7e建造 · 总目录（" + this.entries.size()
-                + " 个建筑 · 点击名称查看材料）", PANEL_TITLE_Y, 0xFFFFFF);
+        // 建造总目录（v1.5.374：网格多列渲染 + 搜索）
+        java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+        int cols = this.buildGridCols();
+        int rows = this.buildGridRowsPerPage();
+        int perPage = cols * rows;
+        int totalPages = Math.max(1, (list.size() + perPage - 1) / perPage);
+        int start = Math.min(list.size(), this.buildPage * perPage);
+        int end = Math.min(list.size(), start + perPage);
+        int margin = 10;
+        int gap = 4;
+        int cellW = (this.f_96543_ - margin * 2 - (cols - 1) * gap) / cols;
+        String q = this.searchQuery == null ? "" : this.searchQuery.trim();
+        String title = q.isEmpty()
+                ? "\u00a7e建造 · 总目录（" + list.size() + " 个建筑 · 点击名称查看材料）"
+                : "\u00a7e搜索「" + q + "」· 共 " + list.size() + " 个结果 · 点击名称查看材料";
+        this.drawCentered(graphics, title, PANEL_TITLE_Y, 0xFFFFFF);
+        for (int i = start; i < end; i++) {
+            BlueprintBookNetworking.Entry entry = list.get(i);
+            int idx = i - start;
+            int col = idx % cols;
+            int row = idx / cols;
+            int x = margin + col * (cellW + gap);
+            int cy = 72 + row * (NAME_BUTTON_H + 2);
+            boolean ext = entry.id().startsWith("maid_smart_ext:");
+            int delW = ext ? 14 : 0;
+            int nameW = cellW - delW - 4;
+            String text = this.fitText(entry.name(), nameW - 2);
+            graphics.m_280614_(this.f_96547_, Component.m_237113_(text),
+                    x + 4, cy + (NAME_BUTTON_H - 8) / 2, 0xFFFFFF, false);
+            if (ext) {
+                graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c\u2716"),
+                        x + cellW - delW + 3, cy + (NAME_BUTTON_H - 8) / 2, 0xFF5555, false);
+            }
+        }
+        if (totalPages > 1) {
+            this.drawCentered(graphics, "\u00a77第 " + (this.buildPage + 1) + " / " + totalPages + " 页",
+                    this.f_96544_ - 24, 0x888888);
+        }
         this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
     }
 
@@ -1665,37 +1920,40 @@ public class BlueprintBookScreen extends Screen {
         this.drawCentered(graphics, "\u00a7e女仆管理 · 建造状态女仆名单（点击女仆查看/绑定/解绑）",
                 PANEL_TITLE_Y, 0xFFFFFF);
         // v1.5.182：有效区块列表（信息显示；v1.5.183：fitText 像素级截断防突出屏幕）
+        // v1.5.279：区块【打标签】竖排——每区块两行：名字/状态行 + 创建坐标行
+        //（用户："区块上面只会显示某某建筑建造中，再隔一行显示玩家在哪个坐标创建的"）
         if (this.buildRegions.isEmpty()) {
             this.drawCentered(graphics, "\u00a78有效建造区块：0 —— 先到建造目录创建区块", PANEL_TITLE_Y + 9, 0x888888);
         } else {
-            StringBuilder sb = new StringBuilder("\u00a7e有效建造区块 ").append(this.buildRegions.size()).append("：");
-            for (String[] r : this.buildRegions) {
-                sb.append(" \u00a7b「").append(r[1]).append("」\u00a77(").append(r[2]).append("·")
-                        .append(r[3]).append(")");
+            int ry = PANEL_TITLE_Y + 9;
+            int shown = Math.min(this.buildRegions.size(), 6); // 上限 6 个，防撑爆女仆列表
+            this.drawCentered(graphics, "\u00a7e有效建造区块 " + this.buildRegions.size() + "：", ry, 0xAAAAAA);
+            ry += 10;
+            for (int ri = 0; ri < shown; ri++) {
+                String[] r = this.buildRegions.get(ri);
+                this.drawCentered(graphics, this.fitText("\u00a7b「" + r[1] + "」\u00a77("
+                                + r[2] + "\u00b7" + r[3] + ")", this.f_96543_ - 40), ry, 0xFFFFFF);
+                ry += 10;
+                // v1.5.279：创建坐标（r[11..13] = 玩家创建区块时的原点）
+                String ox = r.length > 11 ? r[11] : "?";
+                String oy = r.length > 12 ? r[12] : "?";
+                String oz = r.length > 13 ? r[13] : "?";
+                this.drawCentered(graphics, "\u00a78创建于 " + ox + ", " + oy + ", " + oz, ry, 0x888888);
+                ry += 10;
             }
-            this.drawCentered(graphics, this.fitText(sb.toString(), this.f_96543_ - 40),
-                    PANEL_TITLE_Y + 9, 0xAAAAAA);
+            if (this.buildRegions.size() > shown) {
+                this.drawCentered(graphics, "\u00a78\u2026 其余 " + (this.buildRegions.size() - shown)
+                        + " 个", ry, 0x888888);
+            }
         }
         if (this.maidEmptyText != null) {
             // v1.5.110：旧版 m_280653_ 以 x=10 为圆心 → 文本几乎全裁出屏幕；改左对齐
             graphics.m_280614_(this.f_96547_, Component.m_237113_(this.maidEmptyText),
                     10, CONTENT_TOP, 0x888888, false);
         }
-        // v1.5.100b：无翻页按钮时进度/状态文本移到页面底部（旧版 h-84 偏上，
-        // 下方一大片空白）；有翻页按钮（底行）时保持原位置不与按钮冲突
-        // v1.5.102b：无翻页也统一用 PROGRESS_BOTTOM_GAP（h-34 贴底太近）
-        // v1.5.190 修复：总页数按【建造状态女仆】算（与按钮分页一致）——旧版按
-        // allMaids 算，多页时进度文本画在第 6 行女仆按钮上（重叠）
-        int rows = this.maidRowsPerPage();
-        java.util.List<String[]> builders = new java.util.ArrayList<>();
-        for (String[] m : this.allMaids) {
-            if (m.length > 4 && "build".equals(m[4])) {
-                builders.add(m);
-            }
-        }
-        int total = Math.max(1, (builders.size() + rows - 1) / rows);
-        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 18
-                : this.f_96544_ - PROGRESS_BOTTOM_GAP);
+        // v1.5.302：女仆管理页【不再画进度条】——旧版底部进度条叠在女仆名单最后几行
+        // 上（用户："此页面字段重叠，进度条不应该在这个地方显示"）；进度条移到
+        // 区块详细页（renderRegionMaids），"只在对应区块的详细界面那边显示"
     }
 
     /** v1.5.182：女仆详情页渲染（绑定/解绑指定区块） */
@@ -1741,6 +1999,21 @@ public class BlueprintBookScreen extends Screen {
             graphics.m_280614_(this.f_96547_, Component.m_237113_(this.maidEmptyText),
                     10, CONTENT_TOP, 0x888888, false);
         }
+        // v1.5.302：区块详细页显示进度条（用户："进度条只在对应区块的详细界面那边
+        // 显示出来就可以了"——女仆管理页的进度条已移除，这里补上本区块的进度；
+        // 有翻页按钮时上移避开底行，无翻页贴底）
+        // v1.5.308：maxRows 公式与按钮区一致（预留进度条 48px，防行数口径不一致
+        // 导致进度条位置与翻页按钮错位）
+        int maxRows = Math.max(3, (this.f_96544_ - 30 - CONTENT_TOP - 32 - 48) / (MAID_ROW_H + 1));
+        int boundCount = 0;
+        for (String[] m : this.allMaids) {
+            if (this.currentPlanId != null && m.length > 8 && this.currentPlanId.equals(m[8])) {
+                boundCount++;
+            }
+        }
+        int total = Math.max(1, (boundCount + maxRows - 1) / maxRows);
+        this.renderProgress(graphics, total > 1 ? this.f_96544_ - BOTTOM_ZONE - 18
+                : this.f_96544_ - PROGRESS_BOTTOM_GAP);
     }
 
     @Override

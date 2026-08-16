@@ -65,6 +65,14 @@ public class MasterDeathTeleportHandler {
         if (!(event.getEntity() instanceof EntityMaid maid)) {
             return;
         }
+        // v1.5.audit:实体【永久移除】(死亡/解雇/discard)→ 彻底删除追踪条目
+        // ——旧版只标记未加载,死亡女仆的条目永远残留,主人每次死亡都要
+        // 白白强制加载一次其"遗照坐标"的区块。区块卸载(isRemoved=false)
+        // 才走"保留最后坐标、标记未加载"路径。
+        if (maid.m_213877_()) {
+            MAID_TRACK.remove(maid.m_20148_());
+            return;
+        }
         MaidTrack t = MAID_TRACK.get(maid.m_20148_());
         if (t != null) {
             // 保留最后坐标，只标记未加载
@@ -109,10 +117,66 @@ public class MasterDeathTeleportHandler {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
             return;
         }
-        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
-        if (server == null) {
+        // v1.5.329【图腾救活不传】:不死图腾触发时,某些环境(如 charmofundying
+        // 不死图腾槽位/部分 mod 的顺序)会先触发 LivingDeathEvent 再图腾复活——
+        // 死亡传送若立即执行,会把女仆传到【重生点】(主人实际没死、离坠落现场
+        // 很远)→ "女仆凭空消失"(用户实测:触发手中图腾,聊天框"丈夫我赶紧赶到
+        // 你身边",女仆消失)。改为登记后校验:【下一服务端 tick 末】玩家若已被
+        // 图腾救活(活着)→ 跳过传送;真死(仍 dead/血量 0)→ 才执行。
+        // v1.5.audit:旧实现登记后在【同一 tick 的 END】就校验——死亡发生在
+        // tick T 的实体阶段,同 tick END 立刻查,modded 图腾若在 T+1 才复活
+        // (先 post 事件、后复活)仍会误传。现在记录登记 tick,严格等 ≥1 tick
+        // 后才校验执行(与 heartfelt 死亡调侃的真死核验同款时序)。
+        PENDING_DEATHS.put(player.m_20148_(), ServerLifecycleHooks.getCurrentServer() != null
+                ? ServerLifecycleHooks.getCurrentServer().m_129921_() : 0L);
+    }
+
+    /** v1.5.329:待校验的玩家死亡(uuid → 登记 tick)——下一 tick 末执行真传送 */
+    private static final java.util.Map<UUID, Long> PENDING_DEATHS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    @SubscribeEvent
+    public void onSettlePendingDeaths(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
             return;
         }
+        if (PENDING_DEATHS.isEmpty()) {
+            return;
+        }
+        MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+        if (server == null) {
+            PENDING_DEATHS.clear();
+            return;
+        }
+        long now = server.m_129921_();
+        for (java.util.Iterator<java.util.Map.Entry<UUID, Long>> it =
+                PENDING_DEATHS.entrySet().iterator(); it.hasNext(); ) {
+            java.util.Map.Entry<UUID, Long> entry = it.next();
+            UUID ownerId = entry.getKey();
+            if (now < entry.getValue() + 1L) {
+                continue; // 登记未满 1 tick:留到下一轮再校验(真·下一 tick)
+            }
+            it.remove();
+            ServerPlayer player = null;
+            for (ServerPlayer sp : server.m_6846_().m_11314_()) {
+                if (sp.m_20148_().equals(ownerId)) {
+                    player = sp;
+                    break;
+                }
+            }
+            if (player == null) {
+                continue; // 玩家已离线/已移除——不传送
+            }
+            // 图腾救活场景:玩家下一 tick 活着(hp > 0 且未 dead)→ 跳过传送,
+            // 女仆留在身边;真死 → 执行死亡传送
+            if (player.m_21224_() || player.m_21223_() <= 0.0f) {
+                doDeathTeleport(server, player);
+            }
+        }
+    }
+
+    /** 实际执行死亡传送(目标 = 玩家重生点,全女仆传送) */
+    private void doDeathTeleport(MinecraftServer server, ServerPlayer player) {
         UUID ownerId = player.m_20148_();
         // v1.5.112：解析传送目标 = 玩家重生点（床/重生锚）。m_219759_ = getRespawnPosition
         // （Optional<GlobalPos>，含维度）；无重生点/维度不存在 → 主世界出生点兜底。
@@ -196,6 +260,10 @@ public class MasterDeathTeleportHandler {
                         closest = maid;
                     }
                     teleportMaid(maid, maidLevel, dest, safe, player);
+                } else {
+                    // v1.5.audit:强制加载后实体仍不在=已死亡/被移除——清条目,
+                    // 防止之后每次主人都死都白加载这个区块
+                    MAID_TRACK.remove(e.getKey());
                 }
             } catch (Exception ignored) {
             }

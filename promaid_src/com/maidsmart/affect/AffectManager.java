@@ -134,6 +134,30 @@ public final class AffectManager {
         save(maid, p);
     }
 
+    /** v1.2.0：纪念日当天（heartfelt 里程碑联动）——正向大脉冲，一年一两次的稀有大事，
+     *  量级约为道歉（onOwnerApology）的 2 倍：intimacy 最高一次、消冲突/修复债 */
+    public static void onAnniversaryDay(EntityMaid maid) {
+        AffectProfile p = load(maid);
+        p.valence = clampSigned(p.valence + 0.12);
+        p.intimacy = clamp01(p.intimacy + 0.10);
+        p.conflict = clamp01(p.conflict - 0.18);
+        p.hurtDebt = clamp01(p.hurtDebt - 0.08);
+        p.repairDebt = clamp01(p.repairDebt - 0.10);
+        p.arousal = clamp01(p.arousal + 0.06);
+        p.longing = clamp01(p.longing + 0.05);
+        p.lastUpdate = System.currentTimeMillis();
+        save(maid, p);
+    }
+
+    /** v1.2.0：纪念日临近（3 天内将到里程碑）——期待感（arousal+ / longing+） */
+    public static void onAnniversaryApproaching(EntityMaid maid) {
+        AffectProfile p = load(maid);
+        p.arousal = clamp01(p.arousal + 0.03);
+        p.longing = clamp01(p.longing + 0.05);
+        p.lastUpdate = System.currentTimeMillis();
+        save(maid, p);
+    }
+
     /** 静默恢复（时间推移：情绪回落 / longing 微升 / repairDebt 缓降） */
     public static void tickRecover(EntityMaid maid) {
         AffectProfile p = load(maid);
@@ -166,7 +190,36 @@ public final class AffectManager {
                     .append(" 待修复").append(percent(p.repairDebt))
                     .append("），但已在慢慢释怀，不要装作无事发生");
         }
+        // v1.1.0：表达建议（规则式，借鉴 maidsoulcore replyStyleAdvice）——
+        // 情绪状态 → 具体"该怎么说话"，让 LLM 不只是看到数值
+        String advice = styleAdvice(p);
+        if (!advice.isEmpty()) {
+            sb.append("；表达建议：").append(advice);
+        }
         return sb.toString();
+    }
+
+    /**
+     * v1.1.0：情绪 → 回复风格建议（规则式，零 LLM）。
+     * 优先级：受伤/修复债 > 亲密+思念高 > 心情低落 > 疏离期。
+     */
+    public static String styleAdvice(AffectProfile p) {
+        if (p == null) {
+            return "";
+        }
+        if (p.hurtDebt > 0.3 || p.repairDebt > 0.3) {
+            return "先回应主人的当前话，再表达愿意慢慢和好，不要直接甜蜜重置";
+        }
+        if (p.intimacy > 0.6 && p.longing > 0.5 && p.conflict < 0.1) {
+            return "可以更温柔、更喜欢主人、更粘一点，但不要无视当前事实";
+        }
+        if (p.valence < 0.25) {
+            return "心情偏低，回复要短一些、软一些，避免跳到无关话题";
+        }
+        if (p.conflict < 0.1 && p.intimacy < 0.4) {
+            return "保持礼貌和适度距离，先建立熟悉感";
+        }
+        return "";
     }
 
     private static String percent(double v) {

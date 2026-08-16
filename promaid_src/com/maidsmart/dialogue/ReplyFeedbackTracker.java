@@ -5,7 +5,6 @@ import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMMessage;
 import com.github.tartaricacid.touhoulittlemaid.ai.service.llm.Role;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.affect.AffectManager;
-import com.maidsmart.memory.AiMemoryExtractor;
 import com.maidsmart.memory.AiMemoryModels;
 import com.maidsmart.memory.AiMemoryStore;
 import net.minecraft.server.MinecraftServer;
@@ -288,7 +287,8 @@ public class ReplyFeedbackTracker {
         LAST_ERROR_MARK.put(id, now);
         try {
             ServerLevel level = (ServerLevel) maid.m_9236_();
-            AiMemoryStore store = AiMemoryStore.of(id, AiMemoryExtractor.memoryRoot(level.m_7654_()));
+            // v1.1.0：统一走灵魂路由（与记忆读写一致）
+            AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             String topic = LAST_TOPIC.get(id);
             String content = "主人刚才明确表示不想听/觉得我说得不对（"
                     + (topic != null ? "话题：" + topic : "对话中") + "）。以后主动开口要更克制，不要重复提起这件事。";
@@ -307,7 +307,8 @@ public class ReplyFeedbackTracker {
         }
         try {
             ServerLevel level = (ServerLevel) maid.m_9236_();
-            AiMemoryStore store = AiMemoryStore.of(id, AiMemoryExtractor.memoryRoot(level.m_7654_()));
+            // v1.1.0：统一走灵魂路由（同 writeErrorMark）
+            AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
             store.reinforceByTopic(last);
         } catch (Exception ignored) {
         }

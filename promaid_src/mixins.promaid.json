@@ -24,10 +24,10 @@
     "StealEdibleGatingMixin",
     "PanicGatingMixin",
     "SchedulePullbackMixin",
+    "SchedulePosTickMixin",
     "FarmSweepMixin",
     "MaidShearDropMixin",
     "MaidHoneyIgniteMixin",
-    "MaidFeedAnimalCapMixin",
     "FishingAutoChairMixin",
     "ChairNoDropMixin",
     "MaidShieldTimingMixin",
@@ -39,10 +39,14 @@
     "MaidChatLanguageMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
-    "HomingPotionMixin"
+    "HomingPotionMixin",
+    "MaidChatLlmGateMixin",
+    "MixinTntBuildGuard",
+    "MixinInteractionSittingAllow"
   ],
   "client": [
-    "MaidTtsVolumeMixin"
+    "MaidTtsVolumeMixin",
+    "CallResponseChatSpamMixin"
   ],
   "injectors": {
     "defaultRequire": 1

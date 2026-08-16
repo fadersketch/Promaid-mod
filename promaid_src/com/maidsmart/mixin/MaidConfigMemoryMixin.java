@@ -263,6 +263,28 @@ public abstract class MaidConfigMemoryMixin {
                     root = AiMemoryExtractor.memoryRoot(mc.m_91092_());
                 }
                 AiMemoryStore store = AiMemoryStore.of(maid.m_20148_(), root);
+                // v1.1.0：人格种子状态（只读展示——文件在女仆记忆目录，可手改：
+                // persona.properties 人格 / traits.properties 参数 / core_memories.jsonl 核心记忆）
+                if (y + 10 < 52) {
+                    String pname = com.maidsmart.persona.PersonaPackage.personaName(store.dir());
+                    if (pname != null) {
+                        graphics.m_280653_(font, Component.m_237113_("\u00a7b人格：" + pname), x, y, 0xFF55FFFF);
+                        y += 11;
+                    }
+                }
+                // v1.2.1：TLM 人设统一状态（有→补充模式 / 无→完整模式；客户端取不到则跳过）
+                if (y + 10 < 52) {
+                    try {
+                        if (maid.getAiChatManager() != null) {
+                            boolean has = com.maidsmart.memory.AiMemoryContext.tlmHasPersona(maid);
+                            drawLine(font, graphics, x, y,
+                                    has ? "\u00a7bTLM 人设：有（补充模式）" : "\u00a77TLM 人设：无（完整模式）",
+                                    has ? 0xFF55FFFF : 0xFF888888);
+                            y += 11;
+                        }
+                    } catch (Exception ignored) {
+                    }
+                }
                 List<AiMemoryModels.Paragraph> top = new ArrayList<>(store.paragraphs());
                 top.sort(Comparator.comparingInt(AiMemoryModels.Paragraph::salience).reversed());
                 if (top.isEmpty()) {

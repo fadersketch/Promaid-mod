@@ -39,5 +39,9 @@ public abstract class FishingAutoChairMixin {
     @Inject(method = "start", at = @At("TAIL"))
     private void maidsmart$autoChair(ServerLevel world, EntityMaid maid, long gameTime, CallbackInfo ci) {
         com.maidsmart.fishing.FishingChairService.tryAutoChair(world, maid, this.sitEntity);
+        if (this.sitEntity != null && this.sitEntity.m_6084_()) {
+            // v1.5.275：记录原版椅子目标位置（高频维持走位——tickKeepSeatWalk 用）
+            com.maidsmart.fishing.FishingChairService.recordSeatTarget(maid, this.sitEntity.m_20183_());
+        }
     }
 }

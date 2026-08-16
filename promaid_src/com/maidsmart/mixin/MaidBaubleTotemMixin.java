@@ -47,6 +47,10 @@ public abstract class MaidBaubleTotemMixin {
                     continue;
                 }
                 revive(maid, stack);
+                // v1.5.277：图腾触发特效——原版同款 levelEvent 35（绿色粒子 +
+                // 音效）。旧版女仆饰品栏触发只有复活和气泡、无特效（主人分支
+                // 一直有播 35，女仆分支漏了——用户："女仆触发不死图腾没有明显特效"）
+                maid.m_9236_().m_7605_(maid, (byte) 35);
                 // v1.5.204：图腾必须真实消耗——旧版只 revive 不扣减 → 女仆无限
                 // 复活（"不死图腾不消耗直接无敌"）。BaubleItemHandler 继承
                 // ItemStackHandler，extractItem 直接扣存储
@@ -56,20 +60,34 @@ public abstract class MaidBaubleTotemMixin {
                 cir.setReturnValue(true);
                 return;
             }
-            return;
-        }
-        // v1.5.189：主人致命伤 → 女仆共享不死图腾（背包/饰品栏优先救主人）
-        if (!com.maidsmart.config.MaidSmartConfig.TOTEM_SHARE_ENABLE.get()) {
+            // v1.5.286：背包里的图腾也触发（用户："一击秒杀时背包内不死图腾不会
+            // 触发"）——旧版只认"手 + 饰品栏"：自保机制平时会把图腾提前放进饰品栏，
+            // 但饰品栏满/未转移时背包里的图腾被白白浪费 → 秒杀直接死。致死伤害
+            //（含秒杀）原版都会先走 checkTotemDeathProtection（m_21262_），这里补
+            // 背包查找即全覆盖
+            int invSlot = findTotemSlotInInv(maid);
+            if (invSlot >= 0) {
+                ItemStack invStack = maid.getMaidInv().getStackInSlot(invSlot);
+                revive(maid, invStack);
+                maid.m_9236_().m_7605_(maid, (byte) 35);
+                consumeTotem(maid.getMaidInv(), invSlot);
+                maid.getChatBubbleManager().addTextChatBubble("不死图腾救了我一命！");
+                cir.setReturnValue(true);
+            }
             return;
         }
         if (!(self instanceof net.minecraft.server.level.ServerPlayer owner)) {
             return;
         }
-        // 主人自己手里有图腾 → 原版处理（不抢）
+        // v1.5.189：主人自己手里有图腾 → 原版路径会触发图腾 → 原版处理（不抢）。
         for (InteractionHand hand : InteractionHand.values()) {
             if (owner.m_21120_(hand).m_150930_(Items.f_42747_)) {
                 return;
             }
+        }
+        // v1.5.189：主人致命伤 → 女仆共享不死图腾（背包/饰品栏优先救主人）
+        if (!com.maidsmart.config.MaidSmartConfig.TOTEM_SHARE_ENABLE.get()) {
+            return;
         }
         if (!(owner.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl)) {
             return;

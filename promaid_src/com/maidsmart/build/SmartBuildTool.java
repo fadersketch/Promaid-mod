@@ -51,6 +51,8 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
             + "- maid_smart:tower — 瞭望塔 (3x3 stone watchtower, stone_bricks + lantern)\n"
             + "- maid_smart:well — 水井 (3x3 cobble well, cobblestone + lantern)\n"
             + "or a custom JSON blueprint like {\"blocks\":[{\"x\":0,\"y\":0,\"z\":0,\"block\":\"minecraft:oak_planks\"}]}.\n"
+            + "Each JSON block may carry optional \"state\" (SNBT like {facing:\"north\"}) and \"nbt\" (block entity data).\n"
+            + "Redstone components are allowed now (redstone_wire/redstone_torch/repeater/comparator/piston/lever/observer/rail/hopper...).\n"
             + "or an external blueprint id (maid_smart_ext:xxx) listed by smart_build_list — these come\n"
             + "from structure files (.nbt structure-block export / .snbt text / .litematic Litematica\n"
             + "export / .schem WorldEdit export) placed in config/maid_smart/blueprints/ or the world's\n"
