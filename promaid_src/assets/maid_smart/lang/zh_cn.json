@@ -9,8 +9,6 @@
   "task.maid_smart.brew.desc": "给酿造台补充烈焰粉与材料，收取酿好的药水",
   "task.maid_smart.build": "建筑",
   "task.maid_smart.build.desc": "按照建造计划逐块搭建建筑（材料从背包消耗）",
-  "task.maid_smart.cook": "烹饪",
-  "task.maid_smart.brew": "酿造",
   "item.maid_smart.blueprint_book": "Promaid 手册",
   "config.promaid.title": "Promaid 模组详细配置",
   "config.promaid.build": "建造设置",
@@ -51,6 +49,12 @@
   "config.promaid.memory.coreFold": "摘要折叠",
   "config.promaid.memory.workingNote": "工作笔记注入",
   "config.promaid.memory.relationshipAdapter": "关系感知适配",
+  "config.promaid.memory.affectSnapshot": "情绪快照入记忆",
+  "config.promaid.memory.persona": "人格种子注入",
+  "config.promaid.memory.personaUnify": "人设统一",
+  "config.promaid.memory.carePoints": "每日关心点",
+  "config.promaid.memory.dualAgent": "双 agent 提取",
+  "config.promaid.memory.heartfeltAnniversary": "纪念日联动",
   "config.promaid.perception": "感知设置",
   "config.promaid.perception.enable": "感知总开关",
   "config.promaid.perception.hostile": "敌对检测",
@@ -90,5 +94,6 @@
   "config.promaid.misc.brewRadius": "酿造搜索范围",
   "config.promaid.misc.processCooldown": "处理间隔（tick）",
   "config.promaid.misc.bubbleLimitMs": "气泡限频（毫秒）",
-  "config.promaid.misc.pickupPriority": "挖矿中禁止拾取"
+  "config.promaid.misc.pickupPriority": "挖矿中禁止拾取",
+  "config.promaid.build.machineSmart": "红石机器专属搭建（专属顺序+活建造+自动启动）"
 }

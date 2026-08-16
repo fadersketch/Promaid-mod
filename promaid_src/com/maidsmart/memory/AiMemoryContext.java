@@ -37,17 +37,43 @@ public class AiMemoryContext extends AbstractMaidContext {
             return "";
         }
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+        StringBuilder sb = new StringBuilder();
+        // v1.1.0：人格种子 + 核心记忆（只读投影，优先级最高——放在最前，
+        // 尾部截断永不伤及；即使暂时没有对话记忆也注入人格，让女仆"有人设"）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_PERSONA.get()) {
+            com.maidsmart.persona.PersonaPackage.ensureDefault(store.dir());
+            // v1.2.1：人设统一——TLM 已有人设时人格块降级为补充（只补人格参数/核心记忆，
+            // 不重复身份），避免双人设并存冲突（TLM 模板 Data Overridden 规则让
+            // <context> 优先于 system，双人设行为不可预期）
+            boolean supplement = com.maidsmart.config.MaidSmartConfig.MEMORY_PERSONA_UNIFY.get()
+                    && tlmHasPersona(maid);
+            String persona = com.maidsmart.persona.PersonaPackage.renderPromptBlock(store.dir(), 2, 260, supplement);
+            if (!persona.isBlank()) {
+                sb.append(persona);
+            }
+        }
         List<AiMemoryModels.Paragraph> paragraphs = store.paragraphs();
-        if (paragraphs.isEmpty() && store.relations().isEmpty() && store.profiles().isEmpty()) {
+        if (paragraphs.isEmpty() && store.relations().isEmpty() && store.profiles().isEmpty() && sb.isEmpty()) {
             return "";
         }
-        StringBuilder sb = new StringBuilder();
         // 0. 关系感知标签（v1.5.98：maidmarriage 软感知——妻子/恋人/女儿，
         //    与记忆系统关系三元组联动；未装 maidmarriage 时静默）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.get()) {
             String label = RelationshipMemoryAdapter.relationshipLabel(maid);
             if (label != null) {
-                sb.append("关系状态：主人是我的").append(label);
+                if (sb.length() > 0) {
+                    sb.append("；");
+                }
+                if ("女儿".equals(label)) {
+                    // 女儿称呼铁律：对主人必须叫爸爸/父亲（用户要求，覆盖"主人"称呼）
+                    // v1.0.6：LLM 防乱伦铁律——对爸爸严禁恋爱/亲密/暧昧言行
+                    sb.append("关系状态：我是主人的女儿，主人就是我的爸爸/父亲。"
+                            + "对主人说话必须称呼他为爸爸或父亲，严禁叫主人、名字或亲爱的"
+                            + "；我是他的女儿，对他只有亲情——严禁任何恋爱、亲密、暧昧的言行与情感，"
+                            + "即使已经长大也永远是父女关系，遇到恋爱或亲密话题要困惑地拒绝");
+                } else {
+                    sb.append("关系状态：主人是我的").append(label);
+                }
             }
         }
         // 1. 关系三元组（v1.5.95：单独段，高置信度在前——主人的关系是对话最重要参考；
@@ -149,6 +175,36 @@ public class AiMemoryContext extends AbstractMaidContext {
             sb.append(tail);
         }
         return sb.toString();
+    }
+
+    /**
+     * v1.2.1：TLM 原版是否已有人设（人设统一判定）。
+     * 两层：per-maid customSetting（MaidAIChatManager public 字段，TLM 界面保存的
+     * "自定义设定"）优先；其次 per-model YAML（SettingReader.getSetting(modelId)，
+     * 反射兜底——失败返回 false 走完整模式，不崩）。客户端可能取不到 AI 数据，
+     * 返回 false（面板据此显示，无碍服务端判定）。
+     */
+    public static boolean tlmHasPersona(EntityMaid maid) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.ai.manager.entity.MaidAIChatManager cm = maid.getAiChatManager();
+            if (cm != null) {
+                String custom = cm.customSetting;
+                if (custom != null && !custom.isBlank()) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        try {
+            Class<?> sr = Class.forName("com.github.tartaricacid.touhoulittlemaid.ai.manager.setting.SettingReader");
+            java.lang.reflect.Method m = sr.getMethod("getSetting", String.class);
+            Object opt = m.invoke(null, maid.getModelId());
+            if (opt instanceof java.util.Optional<?> o) {
+                return o.isPresent();
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     private <T> void appendSection(StringBuilder sb, String title, List<T> items,

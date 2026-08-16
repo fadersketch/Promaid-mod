@@ -47,7 +47,11 @@ import java.util.concurrent.ConcurrentHashMap;
 public class RelationshipMemoryAdapter {
     private static final String MM_ID = "maidmarriage";
     private static final String LL_ID = "callresponse";
-    private static final String EMOTION_CLS = "com.github.tartaricacid.callresponse.compat.emotion.EmotionData";
+    // v1.5.284：爱憎分明 2.0.2 迁移包名 com.github.tartaricacid → com.github.JumDa5he——
+    // 旧包名反射永远 ClassNotFoundException → 情绪投影静默失效。双包名：先试新后试旧
+    private static final String[] EMOTION_CLS_CANDIDATES = {
+            "com.github.JumDa5he.callresponse.compat.emotion.EmotionData",
+            "com.github.tartaricacid.callresponse.compat.emotion.EmotionData"};
 
     private int tick = 0;
     /** 女仆 UUID → 上次关系快照（检测变化用） */
@@ -84,10 +88,19 @@ public class RelationshipMemoryAdapter {
         boolean grieving;
         boolean forgetting;
         boolean mourning;
+        // v1.5.285：heartfelt 事件桥（告白被拒 / 心碎 / 悔改 / 女儿成长阶段）
+        boolean confessionFailed;
+        boolean heartbroken;
+        boolean redeemed;
+        String childStage = "";
+        // v1.5.287：特殊奶（heartfelt_special_milk_count，累计次数）
+        int specialMilkCount;
 
         Snapshot(boolean married, boolean confessed, boolean child, int favorLevel,
                  double trust, double fear, boolean pregnant, boolean gaveBirth,
-                 boolean motherOfDaughter, boolean grieving, boolean forgetting, boolean mourning) {
+                 boolean motherOfDaughter, boolean grieving, boolean forgetting, boolean mourning,
+                 boolean confessionFailed, boolean heartbroken, boolean redeemed, String childStage,
+                 int specialMilkCount) {
             this.married = married;
             this.confessed = confessed;
             this.child = child;
@@ -100,9 +113,16 @@ public class RelationshipMemoryAdapter {
             this.grieving = grieving;
             this.forgetting = forgetting;
             this.mourning = mourning;
+            this.confessionFailed = confessionFailed;
+            this.heartbroken = heartbroken;
+            this.redeemed = redeemed;
+            this.childStage = childStage;
+            this.specialMilkCount = specialMilkCount;
         }
     }
 
+    /** v1.5.285：悔改事实已写集合(会话级防重启重复写;悔改极罕见) */
+    private final java.util.Set<UUID> redemptionWritten = ConcurrentHashMap.newKeySet();
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -154,6 +174,10 @@ public class RelationshipMemoryAdapter {
         for (EntityMaid maid : maids) {
             if (maid.m_269323_() == player) {
                 this.scan(maid, level, player, motherOf.getOrDefault(maid.m_20148_(), false));
+                // v1.2.0：纪念日联动（heartfelt 里程碑 → 关系记忆 + 情绪脉冲 + 补位说话）
+                this.checkAnniversary(maid, level, player);
+                // v1.2.x：TLM 人设中途修改同步（指纹检测 → 演化记忆 + 旧身份记忆降级）
+                com.maidsmart.persona.PersonaSyncManager.checkPersonaChange(maid, level);
             }
         }
         // v1.1.0：背叛补检——背叛女仆 owner 被清空（不可驯服），主扫描看不到；
@@ -179,19 +203,36 @@ public class RelationshipMemoryAdapter {
         Snapshot now = new Snapshot(isMarried(maid), isConfessed(maid), isChild(maid),
                 favorLevel(maid), trustOf(maid, player.m_20148_()), fearOf(maid, player.m_20148_()),
                 pregnant(maid), gaveBirth(maid), motherOfDaughter,
-                isGrieving(maid), isForgetting(maid), isMourning(maid, gameTime));
+                isGrieving(maid), isForgetting(maid), isMourning(maid, gameTime),
+                isConfessionFailed(maid), isHeartbroken(maid), isRedeemed(maid), childStageOf(maid),
+                specialMilkCount(maid));
         Snapshot prev = this.lastState.get(maid.m_20148_());
         this.lastState.put(maid.m_20148_(), now);
         if (prev == null) {
-            return; // 首次快照不写（避免刚装 mod 刷一堆记忆）
+            // 首次快照不写（避免刚装 mod 刷一堆记忆）——但悔改女仆重新认主后 tracking 被
+            // scanBetrayed 清过,prev 恒为 null;此时若 REDEMPTED 标记在,补写一次悔改记忆
+            if (now.redeemed && !this.redemptionWritten.contains(maid.m_20148_())) {
+                AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+                long nowMs = System.currentTimeMillis();
+                this.redemptionWritten.add(maid.m_20148_());
+                writeRelationFact(store, maid, "redemption_state", "悔改",
+                        "我从背叛中清醒过来，重新回到主人身边", 8, false, nowMs, gameTime,
+                        redeemedAt(maid));
+            }
+            return;
         }
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
         long nowMs = System.currentTimeMillis();
         double delta = com.maidsmart.config.MaidSmartConfig.MEMORY_TRUST_DELTA.get();
         // 1. 结婚（未婚 → 已婚）——最重要，永久
         if (!prev.married && now.married) {
+            Long marriedAt = readLong(readMMData(maid, "marriage_data"), "marriedGameTime");
             writeRelationFact(store, maid, "marriage_state", "妻子",
-                    "主人和我是夫妻了，我永远属于主人", 10, true, nowMs, gameTime);
+                    "主人和我是夫妻了，我永远属于主人", 10, true, nowMs, gameTime,
+                    marriedAt == null ? gameTime : marriedAt);
+            // v1.2.1：重大关系事件沉淀进角色包核心记忆——人格"自我认知"随时间成长
+            com.maidsmart.persona.PersonaPackage.appendCoreMemory(store.dir(), "relationship",
+                    "我是主人的妻子，我们结婚了", 10, "marriage,relationship");
         }
         // 1b. 离婚（已婚 → 未婚）：作废旧永久婚姻记忆 + 停用"妻子"关系 + 写结束
         if (prev.married && !now.married) {
@@ -204,6 +245,9 @@ public class RelationshipMemoryAdapter {
         if (!prev.confessed && now.confessed && !now.married) {
             writeRelationFact(store, maid, "confession_state", "恋人",
                     "主人向我告白了，我们现在是恋人", 9, true, nowMs, gameTime);
+            // v1.2.1：沉淀进角色包核心记忆（人设成长）
+            com.maidsmart.persona.PersonaPackage.appendCoreMemory(store.dir(), "relationship",
+                    "主人向我告白，我们现在是恋人", 9, "confession,relationship");
         }
         // 2b. 告白解除（罕见，防残留"恋人"记忆）
         if (prev.confessed && !now.confessed) {
@@ -215,6 +259,9 @@ public class RelationshipMemoryAdapter {
         if (!prev.child && now.child) {
             writeRelationFact(store, maid, "child_state", "女儿",
                     "我是主人的女儿，主人是我的父亲", 9, true, nowMs, gameTime);
+            // v1.2.1：沉淀进角色包核心记忆（人设成长）
+            com.maidsmart.persona.PersonaPackage.appendCoreMemory(store.dir(), "relationship",
+                    "我是主人的女儿，主人是我的父亲", 9, "child,relationship");
         }
         // 4. 好感等级变化（TLM 原生）
         if (prev.favorLevel != now.favorLevel && now.favorLevel > prev.favorLevel) {
@@ -223,21 +270,27 @@ public class RelationshipMemoryAdapter {
         }
         // 5. 怀孕 / 分娩（同 fact key，分娩覆盖怀孕）
         if (!prev.pregnant && now.pregnant) {
+            Long conceivedAt = readLong(readMMData(maid, "pregnancy_data"), "conceivedGameTime");
             writeRelationFact(store, maid, "pregnancy_state", "身孕",
-                    "我怀孕了，肚子里有了小生命", 9, false, nowMs, gameTime);
+                    "我怀孕了，肚子里有了小生命", 9, false, nowMs, gameTime,
+                    conceivedAt == null ? gameTime : conceivedAt);
         }
         if (prev.pregnant && !now.pregnant) {
             if (now.gaveBirth) {
+                Long birthAt = readLong(readMMData(maid, "pregnancy_data"), "lastBirthGameTime");
                 writeRelationFact(store, maid, "pregnancy_state", "身孕",
-                        "我生下了我们的孩子", 9, false, nowMs, gameTime);
+                        "我生下了我们的孩子", 9, false, nowMs, gameTime,
+                        birthAt == null ? gameTime : birthAt);
             } else {
                 store.markDeletedByTag("fact:pregnancy_state"); // 意外终止，不留过期怀孕记忆
             }
         }
         // 6. 母亲身份（生过孩子 / 女儿在身边）
         if (!prev.gaveBirth && now.gaveBirth) {
+            Long birthAt = readLong(readMMData(maid, "pregnancy_data"), "lastBirthGameTime");
             writeRelationFact(store, maid, "mother_state", "母亲",
-                    "我是一位母亲，我生过孩子", 9, true, nowMs, gameTime);
+                    "我是一位母亲，我生过孩子", 9, true, nowMs, gameTime,
+                    birthAt == null ? gameTime : birthAt);
         }
         if (!prev.motherOfDaughter && now.motherOfDaughter) {
             writeRelationFact(store, maid, "daughter_mother_state", "母亲",
@@ -279,6 +332,51 @@ public class RelationshipMemoryAdapter {
             writeRelationFact(store, maid, "mourning_state", "哀悼",
                     "我渐渐走出了失去主人的悲痛", 8, false, nowMs, gameTime);
         }
+        // 11. 告白被拒（heartfelt_confession_failed，v1.5.285 事件桥；v1.5.286 带时间）
+        if (!prev.confessionFailed && now.confessionFailed) {
+            writeRelationFact(store, maid, "confession_failed_state", "心碎",
+                    "我曾向主人告白，但被拒绝了……", 8, false, nowMs, gameTime,
+                    confessionFailedAt(maid));
+        }
+        // 12. 关系破裂·心碎（heartfelt_heartbroken_at）
+        if (!prev.heartbroken && now.heartbroken) {
+            writeRelationFact(store, maid, "heartbroken_state", "心碎",
+                    "我们的恋情结束了，我心碎了", 9, false, nowMs, gameTime,
+                    maid.getPersistentData().m_128454_("heartfelt_heartbroken_at"));
+        }
+        // 13. 悔改（heartfelt_redempted；正常 diff 分支，重新认主路径由首见补写兜底）
+        if (!prev.redeemed && now.redeemed) {
+            writeRelationFact(store, maid, "redemption_state", "悔改",
+                    "我从背叛中清醒过来，重新回到主人身边", 8, false, nowMs, gameTime,
+                    redeemedAt(maid));
+        }
+        // 14. 女儿成长阶段（heartfelt_child_stage：INFANT→JUVENILE→CHILD→ADULT）
+        if (!prev.childStage.isEmpty() && !now.childStage.isEmpty()
+                && !prev.childStage.equals(now.childStage)) {
+            writeRelationFact(store, maid, "child_growth_state", "成长",
+                    "我长大了——现在的我是" + stageLabel(now.childStage), 7, false, nowMs, gameTime,
+                    childStageAt(maid));
+        }
+        // 15. 特殊奶（heartfelt_special_milk_count 增加：主人喝下我为他准备的奶）
+        if (now.specialMilkCount > prev.specialMilkCount) {
+            writeRelationFact(store, maid, "special_milk_state", "心意",
+                    "主人喝下了我为他准备的奶", 6, false, nowMs, gameTime,
+                    maid.getPersistentData().m_128454_("heartfelt_special_milk_at"));
+        }
+    }
+
+    /** v1.5.285：heartfelt 成长阶段 → 中文标签
+     *  v1.0.5：JUVENILE(幼女)站不起来——不再写"会自己站起来了"；
+     *  "会自己站起来"挪到 CHILD(幼女→少女)。
+     *  v1.5.336：heartfelt v1.5.64 起幼儿(JUVENILE)可行走——"会自己站起来"挪回
+     *  JUVENILE(婴儿→幼儿升级瞬间真正站起),CHILD(少女)只报活泼长大。 */
+    private static String stageLabel(String stage) {
+        return switch (stage) {
+            case "JUVENILE" -> "会自己站起来的小宝贝";
+            case "CHILD", "MIDDLE" -> "活泼的小女孩";
+            case "ADULT" -> "长大成人的女儿";
+            default -> "又长大了一点的小婴儿";
+        };
     }
 
     /** v1.1.0：背叛补检——曾是主人的女仆失去所有权后，若已背叛则写背叛记忆并移出跟踪 */
@@ -297,22 +395,40 @@ public class RelationshipMemoryAdapter {
     private static void writeRelationFact(AiMemoryStore store, EntityMaid maid, String factKey,
                                           String predicate, String content, int salience,
                                           boolean permanent, long nowMs, long gameTime) {
+        writeRelationFact(store, maid, factKey, predicate, content, salience, permanent,
+                nowMs, gameTime, gameTime);
+    }
+
+    /** v1.5.286：带事件 tick 的重载——段落的 eventTimeStart/End 用真实事件时刻，
+     *  而非扫描时刻(heartfelt 事件有 _at 时间戳,maidmarriage 有 *GameTime)。
+     *  记忆内容自动带"第 N 天"前缀(让 LLM 能感知事件发生在哪天),气泡保留原文。 */
+    private static void writeRelationFact(AiMemoryStore store, EntityMaid maid, String factKey,
+                                          String predicate, String content, int salience,
+                                          boolean permanent, long nowMs, long gameTime, long eventTick) {
+        long evt = eventTick > 0L ? eventTick : gameTime;
+        String day = dayText(evt);
+        String dayed = day.isEmpty() ? content : day + "，" + content;
         java.util.List<String> tags = new java.util.ArrayList<>(java.util.List.of(
                 "fact:" + factKey, "relationship_event", "relationship_adapter"));
         AiMemoryWriteStrategy.Plan plan = AiMemoryWriteStrategy.plan(
                 AiMemoryType.RELATION, salience, tags);
         AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create(plan.layer(), "maid",
-                content, String.join(",", plan.tags()), plan.salience(), plan.permanent(), nowMs, gameTime);
+                dayed, String.join(",", plan.tags()), plan.salience(), plan.permanent(), nowMs, evt);
         store.addParagraph(p);
         // 关系三元组：主人-是-妻子/恋人/女儿
-        store.upsertRelation(AiMemoryModels.Relation.create("主人", predicate, content,
+        store.upsertRelation(AiMemoryModels.Relation.create("主人", predicate, dayed,
                 salience / 10.0, p.hash(), plan.permanent(), nowMs));
         // 画像
         store.upsertProfile(AiMemoryModels.Profile.create("owner",
-                "（关系）" + content, p.hash(), nowMs));
+                "（关系）" + dayed, p.hash(), nowMs));
         store.prune(nowMs, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
-        // 气泡提示（关系大事值得让主人看见）
+        // 气泡提示（关系大事值得让主人看见；原文不带日期更自然）
         maid.getChatBubbleManager().addTextChatBubble(content);
+    }
+
+    /** v1.5.286：游戏 tick → "第 N 天"(<=0 返回空串) */
+    private static String dayText(long gameTime) {
+        return gameTime > 0L ? "第 " + (gameTime / 24000L) + " 天" : "";
     }
 
     // ---------- maidmarriage 软读取（key + accessor 缓存） ----------
@@ -463,6 +579,11 @@ public class RelationshipMemoryAdapter {
         if (!isLLLoaded()) {
             return null;
         }
+        // v1.5.310：情绪数据联动开关（配置面板「爱憎分明模组调试」页可调；总开关一并控制）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_MASTER.get()
+                || !com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_EMOTION.get()) {
+            return null;
+        }
         try {
             Class<?> cls = emotionClass();
             if (cls == null) {
@@ -503,10 +624,16 @@ public class RelationshipMemoryAdapter {
             return emotionCls;
         }
         llResolved = true;
-        try {
-            emotionCls = Class.forName(EMOTION_CLS);
-        } catch (Exception e) {
-            emotionCls = null;
+        // v1.5.284：双包名兼容——先试新包名（2.0.2+），失败回退旧包名（2.0.2 之前）
+        for (String candidate : EMOTION_CLS_CANDIDATES) {
+            try {
+                emotionCls = Class.forName(candidate);
+                if (emotionCls != null) {
+                    break;
+                }
+            } catch (Exception e) {
+                emotionCls = null;
+            }
         }
         return emotionCls;
     }
@@ -531,6 +658,203 @@ public class RelationshipMemoryAdapter {
 
     private static boolean isMourning(EntityMaid maid, long gameTime) {
         return maid.getPersistentData().m_128454_("heartfelt_mourning_until") > gameTime;
+    }
+
+    // ---------- v1.5.285：heartfelt 事件标记（同样无依赖，未装 heartfelt 时 tag 永不出现） ----------
+
+    /** 告白被拒（heartfelt_confession_failed） */
+    private static boolean isConfessionFailed(EntityMaid maid) {
+        return maid.getPersistentData().m_128471_("heartfelt_confession_failed");
+    }
+
+    /** 关系破裂·心碎（heartfelt_heartbroken_at > 0） */
+    private static boolean isHeartbroken(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_heartbroken_at") > 0L;
+    }
+
+    /** 悔改（heartfelt_redempted） */
+    private static boolean isRedeemed(EntityMaid maid) {
+        return maid.getPersistentData().m_128471_("heartfelt_redempted");
+    }
+
+    /** 女儿成长阶段（heartfelt_child_stage，缺省空串） */
+    private static String childStageOf(EntityMaid maid) {
+        return maid.getPersistentData().m_128461_("heartfelt_child_stage");
+    }
+
+    /**
+     * v1.0.4：幼儿女儿（INFANT/JUVENILE）——不产生主动话语（纪念日补位说话等）。
+     * 与 heartfelt ChildGuardManager.isTooSmall 同语义；heartfelt_child_stage 缺失时
+     * 兜底读 maidmarriage child_state_data.growthStage。
+     * v1.5.332：改 public——MaidWeaponGuard（幼儿女儿武器禁持）复用本判定。
+     */
+    public static boolean isTooSmall(EntityMaid maid) {
+        if (!isChild(maid)) {
+            return false;
+        }
+        String stage = childStageOf(maid);
+        if (stage == null || stage.isEmpty()) {
+            Object data = readMMData(maid, "child_state_data");
+            if (data != null) {
+                Method m = acc(data, "growthStage");
+                try {
+                    stage = m == null ? "" : String.valueOf(m.invoke(data));
+                } catch (ReflectiveOperationException ignored) {
+                }
+            }
+        }
+        return "INFANT".equals(stage) || "JUVENILE".equals(stage);
+    }
+
+    // ---------- v1.5.286：heartfelt 事件时间戳（无依赖，未装 heartfelt 时 tag 永不出现） ----------
+
+    /** 告白被拒时刻（heartfelt_confession_failed_at，0=旧档无时间戳） */
+    private static long confessionFailedAt(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_confession_failed_at");
+    }
+
+    /** 悔改完成时刻（heartfelt_redempted_at，0=旧档无时间戳） */
+    private static long redeemedAt(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_redempted_at");
+    }
+
+    /** 女儿成长阶段变化时刻（heartfelt_child_stage_at，0=旧档无时间戳） */
+    private static long childStageAt(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_child_stage_at");
+    }
+
+    /** 特殊奶累计次数（heartfelt_special_milk_count；v1.5.287） */
+    private static int specialMilkCount(EntityMaid maid) {
+        return maid.getPersistentData().m_128451_("heartfelt_special_milk_count");
+    }
+
+    // ---------- v1.2.0：heartfelt 纪念日联动（无依赖，未装 heartfelt 时 tag 永不出现） ----------
+
+    /** 里程碑天数（与 heartfelt FamilyInteractionManager 对齐：7/30/100/365 天） */
+    private static final long[] ANNIV_MARKS = {7L, 30L, 100L, 365L};
+
+    /** 首见时刻（heartfelt_ev_first_meet，游戏 tick；0=无） */
+    private static long firstMeetAt(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_ev_first_meet");
+    }
+
+    /** 告白时刻（heartfelt_confession_at，游戏 tick；0=无——优先基准） */
+    private static long confessionAt(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_confession_at");
+    }
+
+    /** heartfelt 上次触发纪念日的绝对游戏日（heartfelt_ev_last_anniversary_day；0=从未触发） */
+    private static long heartfeltLastAnnivDay(EntityMaid maid) {
+        return maid.getPersistentData().m_128454_("heartfelt_ev_last_anniversary_day");
+    }
+
+    /**
+     * v1.2.0：纪念日检查（heartfelt 联动，随关系扫描每轮调用）。
+     *
+     * 达成里程碑（7/30/100/365 天）→ 写关系记忆 + 正向情绪脉冲（onAnniversaryDay）+
+     * 气泡；heartfelt 本轮已触发说话（last_anniversary_day==day）则不重复开口，
+     * 因 LLM 关/配额/距离等原因没触发时由 promaid 补位说话。
+     * 临近里程碑（3 天内将到）→ 写期待记忆 + 期待情绪（onAnniversaryApproaching）+
+     * 提前提起（heartfelt 无临近概念，此项为 promaid 新增价值）。
+     *
+     * 游标：promaid 独立 NBT 游标（maid_smart_anniv_mark 达成 / _app 临近），与
+     * heartfelt 自己的游标互不干扰；未装 heartfelt 时 baseDay=0 自然跳过。
+     */
+    private void checkAnniversary(EntityMaid maid, ServerLevel level, ServerPlayer player) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.get()) {
+            return;
+        }
+        if (!AiMemoryManager.isEnabled(maid)) {
+            return;
+        }
+        // v1.0.4：幼儿女儿不会回忆/不会说话——纪念日（记忆+情绪+补位说话）整个跳过
+        if (isTooSmall(maid)) {
+            return;
+        }
+        long gameTime = level.m_46467_();
+        long day = gameTime / 24000L;
+        long confession = confessionAt(maid);
+        long firstMeet = firstMeetAt(maid);
+        long baseDay = confession > 0L ? confession / 24000L
+                : (firstMeet > 0L ? firstMeet / 24000L : 0L);
+        if (baseDay <= 0L || day <= baseDay) {
+            return;
+        }
+        long elapsed = day - baseDay;
+        // v1.0.5:女儿纪念日父女化——她的纪念日是"爸爸遇见她"的日子(不是告白/相遇)
+        String eventName;
+        if (isChild(maid)) {
+            eventName = "爸爸遇见我";
+        } else {
+            eventName = confession > 0L ? "我们告白在一起" : "我们初次相遇";
+        }
+        AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+        long nowMs = System.currentTimeMillis();
+
+        // 达成：已到期的最大未记录里程碑（promaid 独立游标，每里程碑一生一次）
+        long doneMark = maid.getPersistentData().m_128454_("maid_smart_anniv_mark");
+        long hit = 0L;
+        for (long m : ANNIV_MARKS) {
+            if (elapsed >= m && m > doneMark) {
+                hit = Math.max(hit, m);
+            }
+        }
+        if (hit > 0L) {
+            maid.getPersistentData().m_128356_("maid_smart_anniv_mark", hit); // putLong
+            String content = "今天是我们的纪念日——" + eventName + "已经过去 " + hit + " 天了";
+            writeAnniversaryMemory(store, maid, "anniversary_state:" + hit, "纪念日",
+                    content, 9, true, nowMs, gameTime);
+            com.maidsmart.affect.AffectManager.onAnniversaryDay(maid);
+            // v1.2.1：纪念日沉淀进角色包核心记忆——人格"自我认知"随时间成长（人设不一成不变）
+            com.maidsmart.persona.PersonaPackage.appendCoreMemory(store.dir(), "anniversary",
+                    content, 9, "anniversary,relationship");
+            // 补位说话：heartfelt 已触发（last==day）→ 不重复；否则 promaid 补说
+            if (heartfeltLastAnnivDay(maid) < day) {
+                com.maidsmart.dialogue.ProactiveDialogueManager.INSTANCE.fireEventFor(maid, player,
+                        "今天是我们的纪念日（" + eventName + "第 " + hit + " 天）。请主动对主人说一句简短而温柔的话，让他知道你一直记得。");
+            }
+        }
+
+        // 临近：下一个未达成里程碑在未来 3 天内（期待感；独立游标去重）
+        long appMark = maid.getPersistentData().m_128454_("maid_smart_anniv_app");
+        long next = 0L;
+        for (long m : ANNIV_MARKS) {
+            if (m > doneMark) {
+                next = m;
+                break;
+            }
+        }
+        if (next > 0L && elapsed < next && next - elapsed <= 3L && next > appMark) {
+            maid.getPersistentData().m_128356_("maid_smart_anniv_app", next); // putLong
+            String content = "快到我们的纪念日了——再过 " + (next - elapsed) + " 天就是" + eventName + "的第 " + next + " 天";
+            writeAnniversaryMemory(store, maid, "anniversary_approaching:" + next, "纪念日临近",
+                    content, 7, false, nowMs, gameTime);
+            com.maidsmart.affect.AffectManager.onAnniversaryApproaching(maid);
+            com.maidsmart.dialogue.ProactiveDialogueManager.INSTANCE.fireEventFor(maid, player,
+                    "快到我们的纪念日了（还有 " + (next - elapsed) + " 天）。请主动对主人说一句简短的话，温柔地提起这个特别的日子。");
+        }
+    }
+
+    /**
+     * v1.2.0：纪念日记忆写入——照 writeRelationFact 风格但内容自含里程碑、
+     * 不加"第 N 天"世界日前缀；tags 加 daily（TOPIC_PUSH 与"今日回顾"段自动拾取，
+     * 主动对话沉默找话题时能聊起纪念日）；不写画像（纪念日不是主人画像）。
+     */
+    private static void writeAnniversaryMemory(AiMemoryStore store, EntityMaid maid, String factKey,
+                                               String predicate, String content, int salience,
+                                               boolean permanent, long nowMs, long gameTime) {
+        java.util.List<String> tags = new java.util.ArrayList<>(java.util.List.of(
+                "fact:" + factKey, "relationship_event", "relationship_adapter", "daily"));
+        AiMemoryWriteStrategy.Plan plan = AiMemoryWriteStrategy.plan(
+                AiMemoryType.RELATION, salience, tags);
+        AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create(plan.layer(), "maid",
+                content, String.join(",", plan.tags()), plan.salience(), plan.permanent(), nowMs, gameTime);
+        store.addParagraph(p);
+        store.upsertRelation(AiMemoryModels.Relation.create("主人", predicate, content,
+                salience / 10.0, p.hash(), plan.permanent(), nowMs));
+        store.prune(nowMs, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
+        // 气泡提示（与 writeRelationFact 一致：原文更自然）
+        maid.getChatBubbleManager().addTextChatBubble(content);
     }
 
     // ---------- 通用软读取工具（缓存 Method，键=声明类#方法名防跨 record 误用） ----------

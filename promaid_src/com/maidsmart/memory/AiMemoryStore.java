@@ -43,6 +43,11 @@ public final class AiMemoryStore {
     private static long LAST_WRITE_LOG = 0L;
 
     private final Path dir;
+    /** v1.1.0：情绪快照缓存（5 秒 TTL——每次 addParagraph 都读盘 affect.json 是
+     *  高频 IO 热点，缓存后批量写入只读一次盘；AffectManager 事件写入后最多 5 秒
+     *  内反映，可接受） */
+    private long affectCacheTime = 0L;
+    private String affectSnapshotJson = null;
     /** v1.5.251：来源世界（维度名，写入段落时自动加 world: 标签；非 final——
      *  首次 of() 未带世界名时后续可补充注入） */
     private volatile String worldId;
@@ -175,6 +180,17 @@ public final class AiMemoryStore {
         // v1.5.251：自动标注来源世界（world:xxx 进 tags；已标注的不重复）
         if (this.worldId != null && !this.worldId.isEmpty()) {
             p = p.withWorld(this.worldId);
+        }
+        // v1.1.0：情绪快照写入 metadata（{"affect":{...}}，仅新写入的空白 metadata；
+        // 旧记忆保持原样——向后兼容，merge 时保留旧快照）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_AFFECT_SNAPSHOT.get()
+                && (p.metadata() == null || p.metadata().isBlank())) {
+            String snap = currentAffectSnapshot();
+            if (snap != null) {
+                p = new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(), p.tags(),
+                        snap, p.createdAt(), p.updatedAt(), p.eventTimeStart(), p.eventTimeEnd(),
+                        p.salience(), p.accessCount(), p.lastAccessed(), p.permanent(), p.deleted(), p.protectedUntil());
+            }
         }
         // v1.5.231b：记忆写入诊断（10 秒节流）——"关了开关记忆还在涨"的排查：
         // 看关闭后段落数是否仍在增长（latest.log 搜 "memory write"）
@@ -790,6 +806,29 @@ public final class AiMemoryStore {
     }
 
     // ---------- 读取访问（供检索/注入） ----------
+
+    /** v1.1.0：存储目录（<root>/<女仆UUID>）——人格种子/情绪快照按此定位 */
+    public Path dir() {
+        return this.dir;
+    }
+
+    /** v1.1.0：当前情绪快照 JSON（5 秒 TTL 缓存；无 affect.json/异常返回 null） */
+    private String currentAffectSnapshot() {
+        long now = System.currentTimeMillis();
+        if (now - this.affectCacheTime < 5000L && this.affectSnapshotJson != null) {
+            return this.affectSnapshotJson;
+        }
+        this.affectCacheTime = now;
+        this.affectSnapshotJson = null;
+        try {
+            com.maidsmart.affect.AffectSnapshot snap = com.maidsmart.affect.AffectSnapshot.load(this.dir);
+            if (snap != null) {
+                this.affectSnapshotJson = snap.toJson();
+            }
+        } catch (Exception ignored) {
+        }
+        return this.affectSnapshotJson;
+    }
 
     public synchronized List<AiMemoryModels.Paragraph> paragraphs() {
         List<AiMemoryModels.Paragraph> out = new ArrayList<>();

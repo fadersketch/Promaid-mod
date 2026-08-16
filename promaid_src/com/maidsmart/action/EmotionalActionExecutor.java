@@ -39,6 +39,8 @@ public final class EmotionalActionExecutor {
      *  - 牛奶桶/蜂蜜瓶不在内——走"负面效果解除"药物路径（v1.5.252g10：蜂蜜
      *    只在中毒时喝，不当普通食物消耗）。 */
     public static final Set<ItemStack> FOODS = new HashSet<>();
+    /** v1.5.307：「缺吃的」播报限频（按女仆记，60 秒一次；服务端单线程访问） */
+    private static final java.util.Map<java.util.UUID, Long> NO_FOOD_ANNOUNCE = new java.util.HashMap<>();
 
     static {
         // 高饱熟食
@@ -65,13 +67,20 @@ public final class EmotionalActionExecutor {
         addFood("minecraft:glow_berries");     // 2 / 0.4
         addFood("minecraft:cookie");           // 2 / 0.4
         addFood("minecraft:dried_kelp");       // 1 / 0.6
-        // v1.5.252g10：蜂蜜瓶已移出食物清单——它既是食物也是药物，按药物对待
-        // （只在中毒时喝：drinkHoneyForPoison / 投喂负面解除），不当普通食物
-        // 消耗（否则主人低饱食时会被当食物喂掉，真正中毒时反而没得喝）
+        // v1.5.288：蜂蜜瓶恢复为投喂食物（用户："蜂蜜瓶竟然不作为投喂食物"）——
+        // 饱和 14.4 排在中等优先级：主人饿了会投喂、中毒时由负面解除分支优先
+        // 直接喂（解中毒+饱食）。女仆自己背包的蜂蜜仍走 drinkHoneyForPoison
+        //（女仆用 vs 主人投喂是两条独立链路，不冲突）
+        addFood("minecraft:honey_bottle");     // 6 / 1.2（直接喂食时额外解中毒）
     }
 
     private static void addFood(String id) {
-        ItemStack stack = new ItemStack(ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id)));
+        // v1.5.284：getValue 判空——物品不存在时跳过，防 new ItemStack(null) 类加载即崩
+        net.minecraft.world.item.Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id));
+        if (item == null) {
+            return;
+        }
+        ItemStack stack = new ItemStack(item);
         if (!stack.m_41619_()) {
             FOODS.add(stack);
         }
@@ -98,15 +107,52 @@ public final class EmotionalActionExecutor {
         NetworkHandler.sendToNearby(maid, new SpawnParticleMessage(maid.m_19879_(), SpawnParticleMessage.Type.HEART));
     }
 
-    /** 主人饥饿时递上一个熟食（v1.5.201：按"饱和度恢复量"选最优——
-     *  nutrition × saturationModifier × 2.0，不再按背包槽位顺序；主人背包满自动退回） */
+    /** 主人饥饿时直接喂上一个熟食（v1.5.201：按"饱和度恢复量"选最优——
+     *  nutrition × saturationModifier × 2.0，不再按背包槽位顺序；
+     *  v1.5.288：改为【直接喂食】——饱食度直接加到主人（原版 FoodData.eat 语义），
+     *  不再塞背包/手上（用户："投喂食物应该跟本来就有的喂食功能一样是直接喂给
+     *  主人饱食度，而不是塞在手上"）；
+     *  v1.5.299：硬编码 15 改读配置阈值（旧版写死 15——主人把投喂阈值调到 20 时
+     *  饱食度 15~19 直接被拦，用户："明明饱食度不满、阈值设了 20 却无法触发"）；
+     *  手持食物（主手/副手）纳入选优——旧版只扫 maidInv 背包，肉排拿在手上时
+     *  永远找不到（TLM 双手是独立 handsInvWrapper，getMaidInv 不含手部） */
     public static boolean giveFoodToOwner(EntityMaid maid, ServerPlayer owner) {
-        if (owner.m_36324_().m_38702_() >= 15) {
+        // v1.5.290：诊断日志——"饿了不喂"定位用（latest.log 搜 "aid feed"）
+        org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
+        int foodLevel = owner.m_36324_().m_38702_();
+        if (foodLevel >= com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get()) {
             return false;
         }
         IItemHandler maidInv = maid.getMaidInv();
         int bestSlot = -1;
         double bestSat = -1.0;
+        // v1.5.299：手持食物参与选优（h=0 主手 m_21205_，h=1 副手 m_21206_；
+        // 手部用 handSlot=-2/-1 表示，选优后从手上 shrink）
+        int handSlot = -1;
+        ItemStack handItem = null;
+        double handSat = -1.0;
+        for (int h = 0; h < 2; h++) {
+            ItemStack hs = h == 0 ? maid.m_21205_() : maid.m_21206_();
+            if (hs.m_41619_()) {
+                continue;
+            }
+            boolean isFood = false;
+            for (ItemStack food : FOODS) {
+                if (food.m_41720_() == hs.m_41720_()) {
+                    isFood = true;
+                    break;
+                }
+            }
+            if (!isFood) {
+                continue;
+            }
+            double sat = foodSaturation(hs, owner);
+            if (sat > handSat) {
+                handSat = sat;
+                handSlot = h == 0 ? -2 : -1;
+                handItem = hs;
+            }
+        }
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.m_41619_()) {
@@ -128,17 +174,83 @@ public final class EmotionalActionExecutor {
                 bestSlot = i;
             }
         }
-        if (bestSlot < 0) {
+        if (bestSlot < 0 && handSlot == -1) {
+            // v1.5.307：缺吃的播报（手册承诺的功能，此前从未实现——用户："没有食物
+            // 的时候会播报缺吃的，但实际并不会播报"）+ 日志限频（旧版每 tick 刷屏：
+            // 日志实证 08:03:44 起每 50ms 一条"背包与双手都无投喂食物"）
+            long now = System.currentTimeMillis();
+            Long last = NO_FOOD_ANNOUNCE.get(maid.m_20148_());
+            if (last == null || now - last >= 60_000L) {
+                NO_FOOD_ANNOUNCE.put(maid.m_20148_(), now);
+                String maidName = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
+                log.info("aid feed: maid={} owner={} foodLevel={} FOODS={} 背包与双手都无投喂食物（已播报，60 秒限频）",
+                        maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                        owner.m_5446_() != null ? owner.m_5446_().getString() : "?",
+                        foodLevel, FOODS.size());
+                maid.getChatBubbleManager().addTextChatBubble("主人，我背包里没有吃的了，给我备点食物吧～");
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7e[maid_smart] " + maidName + "：我背包里没有吃的了，给我备点食物吧～"));
+            }
             return false;
         }
-        ItemStack toGive = maidInv.extractItem(bestSlot, 1, false);
-        ItemStack remain = ItemHandlerHelper.insertItemStacked(
-                new net.minecraftforge.items.wrapper.InvWrapper(owner.m_150109_()), toGive, false);
-        if (!remain.m_41619_()) {
-            ItemHandlerHelper.insertItemStacked(maidInv, remain, false);
+        ItemStack toGive;
+        if (handSlot != -1 && handSat >= bestSat) {
+            // 手持食物最优（同饱食度优先用手上，不翻背包）
+            toGive = handItem.m_41777_(); // copy
+            handItem.m_41774_(1);         // shrink(1)
+        } else {
+            toGive = maidInv.extractItem(bestSlot, 1, false);
+        }
+        if (!feedFoodDirect(maid, owner, toGive)) {
+            ItemHandlerHelper.insertItemStacked(maidInv, toGive, false);
             return false;
         }
+        log.info("aid feed: maid={} owner={} foodLevel={} 阈值={} 喂了 {}",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                owner.m_5446_() != null ? owner.m_5446_().getString() : "?",
+                foodLevel, com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get(),
+                toGive.m_41786_().getString());
         return true;
+    }
+
+    /** v1.5.288：直接喂食（原版喂食语义）——饱食度直接加到主人（FoodData.eat），
+     *  特殊效果照原版食物属性生效：蜂蜜瓶额外解中毒 + 返还玻璃瓶；牛奶（无食物
+     *  属性）由 MaidAidOwnerBehavior 负面解除分支单独处理（清全部效果 + 空桶）。
+     *  喂食失败（无食物属性）返回 false，调用方退回物品。 */
+    public static boolean feedFoodDirect(EntityMaid maid, ServerPlayer owner, ItemStack food) {
+        try {
+            net.minecraft.world.food.FoodProperties fp = food.m_41720_().m_41473_();
+            if (fp == null) {
+                return false;
+            }
+            // v1.5.292：喂食动作——与投药水/金苹果同款摆臂动画（m_6674_=swing，
+            // 服务端调用自动广播给客户端显示），自动投喂/治疗食物/蜂蜜全走这里
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            owner.m_36324_().m_38707_(fp.m_38744_(), fp.m_38745_()); // eat(nutrition, satMod)
+            // v1.5.290：喂食音效（蜂蜜=喝、其他=吃）+ 系统提示喂了什么（m_41786_ = getHoverName）
+            String foodName = food.m_41786_().getString();
+            String sndId = food.m_41720_() == net.minecraft.world.item.Items.f_42787_
+                    ? "minecraft:entity.generic.drink" : "minecraft:entity.generic.eat";
+            net.minecraft.sounds.SoundEvent snd = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
+                    .getValue(net.minecraft.resources.ResourceLocation.parse(sndId));
+            if (snd != null) {
+                owner.m_9236_().m_5594_(null, owner.m_20183_(), snd,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            }
+            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
+            if (food.m_41720_() == net.minecraft.world.item.Items.f_42787_) { // honey_bottle
+                owner.m_21195_(net.minecraft.world.effect.MobEffects.f_19614_); // 解中毒
+                net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
+                if (bottle != null) {
+                    ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), new ItemStack(bottle), false);
+                }
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /** v1.5.201：食物饱和度恢复量（MC 公式：nutrition × saturationModifier × 2.0）——
