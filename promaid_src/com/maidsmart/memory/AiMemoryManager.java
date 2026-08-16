@@ -326,6 +326,34 @@ public class AiMemoryManager {
         }
     }
 
+    /**
+     * 会话收尾（v1.5.380：补齐 Sphantosis 睡眠语义的【真人用户】维度）。
+     * 原项目是面向真人用户的 AI 聊天记忆系统，wrap-up 同时覆盖"角色入睡"
+     * 与"真人用户结束一天下线睡觉"（用户状态机 active/sleeping/offline）。
+     * MC 里真人睡觉 = 退出游戏：玩家登出时对周围女仆做当日收尾归档——
+     * 边界先持久化进 pending 再尝试生成，单人关服竞态下异步响应丢失也不丢
+     * "待归档"事实，下次进游戏由周期 tick 自动补生成。
+     */
+    @SubscribeEvent
+    public void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!(player.m_9236_() instanceof ServerLevel level)) {
+            return;
+        }
+        level.m_45976_(EntityMaid.class, player.m_20191_().m_82400_(128.0)).forEach(maid -> {
+            if (!maid.m_21824_() || !isEnabled(maid)) {
+                return;
+            }
+            AiMemoryArchiver.sessionWrapUp(maid, level);
+        });
+    }
+
     // ---------- 每日巩固（纯规则零 LLM，对齐 DailyMemoryConsolidator） ----------
 
     /**
