@@ -80,9 +80,11 @@ public final class AiMemoryArchiver {
         }
         List<PendingIndex> rest = new ArrayList<>();
         for (PendingIndex item : state.pending()) {
-            if (!generateIndex(maid, level, item.level(), item.startTick(), item.endTick())) {
-                rest.add(item);
+            if (isArchivedOrEmpty(store, item)) {
+                continue; // 已归档（has 容差命中）或跨度无事件 → 出队
             }
+            generateIndex(maid, level, item.level(), item.startTick(), item.endTick());
+            rest.add(item); // 发出后仍留在队列——直到 has() 确认才出队（关服竞态可自愈）
         }
         if (!rest.equals(state.pending())) {
             saveState(store, new ArchiverState(state.lastDay(), state.lastWeek(),
@@ -90,7 +92,7 @@ public final class AiMemoryArchiver {
         }
     }
 
-    // ========== 睡眠收尾入口（唯一的生成触发点） ==========
+    // ========== 睡眠收尾入口（叙事日维度） ==========
 
     /**
      * 睡一觉自动处理（移植 Sphantosis 的 start_role_sleep → wrap-up →
@@ -144,13 +146,15 @@ public final class AiMemoryArchiver {
                     (monthStartDay - 30) * DAY_TICKS, monthStartDay * DAY_TICKS, pending);
         }
 
-        // 重试此前失败的索引边界
+        // 重试此前失败的索引边界（已确认归档/空跨度才出队）
         if (!pending.isEmpty()) {
             List<PendingIndex> rest = new ArrayList<>();
             for (PendingIndex item : pending) {
-                if (!generateIndex(maid, level, item.level(), item.startTick(), item.endTick())) {
-                    rest.add(item);
+                if (isArchivedOrEmpty(store, item)) {
+                    continue;
                 }
+                generateIndex(maid, level, item.level(), item.startTick(), item.endTick());
+                rest.add(item);
             }
             pending = rest;
         }
@@ -164,15 +168,53 @@ public final class AiMemoryArchiver {
         runTransfer(store, gameTime);
     }
 
-    /** 生成；失败挂入 pending 重试队列（对齐 _generate_or_retry） */
+    // ========== 会话收尾入口（真人日维度，v1.5.380） ==========
+
+    /**
+     * 会话收尾（玩家登出/退出游戏）——补齐 Sphantosis 睡眠语义中被漏掉的
+     * 【真人用户】维度：原项目的 wrap-up 不只覆盖角色入睡，也覆盖真人用户
+     * 结束一天的聊天下线（用户状态机 active/sleeping/offline）。MC 里真人
+     * 睡觉 = 退出游戏：登出时把当日（部分天）「日」级日记边界【先持久化进
+     * pending 再尝试生成】——单人模式关服后异步响应可能丢失，pending 已
+     * 落盘，下次进游戏由周期 tick 自动补生成（"女仆在你睡觉时整理好了
+     * 昨天的记忆"）。
+     */
+    public static void sessionWrapUp(EntityMaid maid, ServerLevel level) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get()) {
+            return;
+        }
+        AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+        long gameTime = level.m_46467_();
+        int day = (int) (gameTime / DAY_TICKS);
+        ArchiverState state = loadState(store);
+        PendingIndex item = new PendingIndex(AiMemoryIndexStore.LEVEL_DAY, day * DAY_TICKS, gameTime);
+        if (state.lastDay() >= 0 && !state.pending().contains(item)) {
+            List<PendingIndex> pending = new ArrayList<>(state.pending());
+            pending.add(item);
+            // 先落盘再尝试——关服竞态下响应丢失也不丢"待归档"事实
+            saveState(store, new ArchiverState(state.lastDay(), state.lastWeek(),
+                    state.lastMonth(), pending));
+        }
+        sleepWrapUp(maid, level); // 复用：边界检查 + pending 重试 + 短期→长期提升
+    }
+
+    /** pending 出队判定：已归档（has 容差命中）或跨度无事件（空跨度视为已处理） */
+    private static boolean isArchivedOrEmpty(AiMemoryStore store, PendingIndex item) {
+        if (store.index().has(item.level(), item.startTick(), item.endTick())) {
+            return true;
+        }
+        return collectEventBlock(store, item.startTick(), item.endTick(), item.level()).isBlank();
+    }
+
+    /** 边界先入队再尝试生成（在途丢失由 pending 自愈；对齐 _generate_or_retry 语义增强版） */
     private static void generateOrRetry(EntityMaid maid, ServerLevel level, String lv,
                                         long startTick, long endTick, List<PendingIndex> pending) {
-        if (!generateIndex(maid, level, lv, startTick, endTick)) {
-            PendingIndex item = new PendingIndex(lv, startTick, endTick);
-            if (!pending.contains(item)) {
-                pending.add(item);
-            }
+        PendingIndex item = new PendingIndex(lv, startTick, endTick);
+        if (!pending.contains(item)) {
+            pending.add(item);
         }
+        generateIndex(maid, level, lv, startTick, endTick);
     }
 
     // ========== 多级记忆索引生成（对齐 generate_index / _llm_summarize） ==========

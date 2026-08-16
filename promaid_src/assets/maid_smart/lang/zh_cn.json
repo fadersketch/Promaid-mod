@@ -51,6 +51,7 @@
   "config.promaid.memory.relationshipAdapter": "关系感知适配",
   "config.promaid.memory.indexEnable": "多级记忆索引（日/3日/周/月日记）",
   "config.promaid.memory.indexOnSleep": "睡一觉自动处理记忆",
+  "config.promaid.memory.indexOnLogout": "登出会话收尾归档",
   "config.promaid.memory.indexMonthTopN": "月索引保留事件数",
   "config.promaid.memory.indexMaxEvents": "单次索引事件上限",
   "config.promaid.memory.shortTermDays": "短期→长期转移阈值（游戏日）",
