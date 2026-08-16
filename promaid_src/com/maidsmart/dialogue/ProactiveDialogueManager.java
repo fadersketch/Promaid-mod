@@ -62,6 +62,13 @@ public class ProactiveDialogueManager {
     private static final Map<UUID, Integer> dailyCount = new ConcurrentHashMap<>();
     /** 紧急事件冷却（重伤/死亡，30 秒） */
     private static final Map<UUID, Long> lastEventTime = new ConcurrentHashMap<>();
+
+    /** 审计：女仆卸载/移除时清理主动对话状态 */
+    public static void forgetMaid(UUID maidUuid) {
+        states.remove(maidUuid);
+        dailyCount.remove(maidUuid);
+        lastEventTime.remove(maidUuid);
+    }
     private long lastDay = -1;
 
     /** v1.2.0：单例句柄——纪念日等外部联动经此调用 fireEventFor（ProMaidExtension
