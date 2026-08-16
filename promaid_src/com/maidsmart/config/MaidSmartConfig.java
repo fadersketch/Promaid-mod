@@ -111,6 +111,14 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_URL;
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_KEY;
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_MODEL;
+    /** 多级记忆索引（日/3日/周/月日记式摘要，移植自 Sphantosis MemoryArchiver） */
+    public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ENABLE;
+    /** 睡一觉自动处理：玩家睡醒后强制归档当日记忆（生成日级日记索引 + 短期→长期转移） */
+    public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ON_SLEEP;
+    /** 月级索引按重要度保留的最大事件数 */
+    public static final ForgeConfigSpec.IntValue MEMORY_INDEX_MONTH_TOP_N;
+    /** 短期→长期转移阈值（游戏日）：关联簇内全部段落超过该年龄才整簇转移 */
+    public static final ForgeConfigSpec.IntValue MEMORY_SHORT_TERM_DAYS;
     // v1.1.0：记忆升级（借鉴 maidsoulcore）——情绪快照 / 人格种子 / 每日关心点 / 双 agent 提取
     public static final ForgeConfigSpec.BooleanValue MEMORY_AFFECT_SNAPSHOT;
     public static final ForgeConfigSpec.BooleanValue MEMORY_PERSONA;
@@ -514,6 +522,19 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.memory.apiKey").define("apiKey", "");
         MEMORY_API_MODEL = BUILDER.comment("记忆 API 模型（留空 = 跟随 TLM 女仆当前模型）")
                 .translation("config.promaid.memory.apiModel").define("apiModel", "");
+        // 多级记忆索引（移植自 Sphantosis MemoryArchiver / memory_index_db）：
+        // 跨日/周/月边界与玩家睡醒时自动生成日/3日/周/月四级日记式摘要索引，
+        // 永久归档供对话检索（query_memory_index 工具 + 召回路 + 投影注入）
+        MEMORY_INDEX_ENABLE = BUILDER.comment("多级记忆索引（日/3日/周/月日记式摘要，跨边界与睡醒自动生成，移植自 Sphantosis）")
+                .translation("config.promaid.memory.indexEnable").define("indexEnable", true);
+        MEMORY_INDEX_ON_SLEEP = BUILDER.comment("睡一觉自动处理（玩家睡醒后生成当日记忆日记 + 短期记忆整簇转长期）")
+                .translation("config.promaid.memory.indexOnSleep").define("indexOnSleep", true);
+        MEMORY_INDEX_MONTH_TOP_N = BUILDER.comment("月级索引保留事件数（按重要度排序保留的最多事件数）")
+                .translation("config.promaid.memory.indexMonthTopN")
+                .defineInRange("indexMonthTopN", 20, 5, 100);
+        MEMORY_SHORT_TERM_DAYS = BUILDER.comment("短期→长期转移阈值（游戏日，关联簇全部段落超过该年龄才整簇转移）")
+                .translation("config.promaid.memory.shortTermDays")
+                .defineInRange("shortTermDays", 3, 1, 30);
         // v1.1.0：记忆升级（借鉴 maidsoulcore AffectEngine/CharacterPackage/DailyMemoryConsolidator）
         MEMORY_AFFECT_SNAPSHOT = BUILDER.comment("情绪快照写入记忆（每条新记忆附带当时 PAD 情绪，供回看/分析；旧记忆不受影响）")
                 .translation("config.promaid.memory.affectSnapshot").define("affectSnapshot", true);

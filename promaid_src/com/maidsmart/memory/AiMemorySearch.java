@@ -31,13 +31,14 @@ public final class AiMemorySearch {
     public record Hit(String type, String content, double score) {
     }
 
-    /** 检索（四路召回 + RRF 融合） */
+    /** 检索（五路召回 + RRF 融合） */
     public static List<Hit> search(AiMemoryStore store, String query, int limit) {
         Map<String, Hit> fused = new HashMap<>();
         addRrf(fused, searchParagraphs(store, query), "p");
         addRrf(fused, searchRecent(store), "r");
         addRrf(fused, searchProfiles(store, query), "f");
         addRrf(fused, searchRelations(store, query), "e"); // v1.5.95：关系路
+        addRrf(fused, searchIndex(store, query), "i"); // 多级记忆索引路（日/3日/周/月日记）
         List<Hit> out = new ArrayList<>(fused.values());
         out.sort(Comparator.comparingDouble(Hit::score).reversed());
         if (out.size() > limit) {
@@ -156,6 +157,39 @@ public final class AiMemorySearch {
     }
 
     // ---------- RRF 融合 ----------
+
+    /**
+     * 路 5：多级记忆索引（日/3日/周/月日记式摘要，移植自 Sphantosis query_memory_index
+     * 的检索语义）——query 命中日记内容 → 该跨度日记整体作为一条召回（日记是压缩
+     * 摘要，命中即覆盖整段时间线的记忆；详细原文由 query_memory_index 工具二次回查）。
+     */
+    private static List<Hit> searchIndex(AiMemoryStore store, String query) {
+        List<Hit> out = new ArrayList<>();
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
+            return out;
+        }
+        Set<String> qgrams = ngrams(query);
+        if (qgrams.isEmpty()) {
+            return out;
+        }
+        for (AiMemoryIndexStore.IndexRecord r : store.index().all()) {
+            Set<String> grams = ngrams(r.content());
+            int hit = 0;
+            for (String g : qgrams) {
+                if (grams.contains(g)) {
+                    hit++;
+                }
+            }
+            if (hit > 0) {
+                out.add(new Hit("index",
+                        "【" + r.level() + "记 第" + r.startDay() + "~" + r.endDay() + "天】"
+                                + AiMemoryModels.clip(r.content(), 120),
+                        hit * 2.0));
+            }
+        }
+        out.sort(Comparator.comparingDouble(Hit::score).reversed());
+        return out;
+    }
 
     private static void addRrf(Map<String, Hit> fused, List<Hit> ranked, String prefix) {
         int rank = 1;

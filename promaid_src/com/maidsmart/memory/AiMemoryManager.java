@@ -289,9 +289,38 @@ public class AiMemoryManager {
                     }
                     dailyConsolidate(maid, level, day, levelGameTime);
                     AiMemoryExtractor.maybeExtract(maid, server);
+                    // 记忆归档调度（跨日/周/月边界生成多级索引 + 短期→长期转移；
+                    // 移植自 Sphantosis MemoryArchiver.tick，边界未变时只做轻量比较）
+                    AiMemoryArchiver.tick(maid, level, false);
                 });
             }
         }
+    }
+
+    /**
+     * 睡一觉自动处理（移植自 Sphantosis 的 start_role_sleep → wrap-up →
+     * archiver.tick(force_day_index=True) 链路）：
+     * 玩家睡醒（新的一天开始）时，对周围女仆强制归档——生成刚结束这一天的
+     * 「日」级日记索引 + 执行短期→长期簇转移。女仆"睡一觉把记忆整理好"。
+     */
+    @SubscribeEvent
+    public void onPlayerWakeUp(net.minecraftforge.event.entity.player.PlayerWakeUpEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_SLEEP.get()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!(player.m_9236_() instanceof ServerLevel level)) {
+            return;
+        }
+        level.m_45976_(EntityMaid.class, player.m_20191_().m_82400_(128.0)).forEach(maid -> {
+            if (!maid.m_21824_() || !isEnabled(maid)) {
+                return;
+            }
+            AiMemoryArchiver.tick(maid, level, true);
+        });
     }
 
     // ---------- 每日巩固（纯规则零 LLM，对齐 DailyMemoryConsolidator） ----------
