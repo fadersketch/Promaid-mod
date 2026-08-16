@@ -617,7 +617,14 @@ public final class BlueprintLib {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             java.nio.file.Files.createDirectories(dir);
-            java.io.File dst = new java.io.File(dir.toFile(), src.getName());
+            // 审计1.5.384：文件名清洗——客户端可控文件名含路径分隔符/.. 可逃逸
+            // blueprints 目录（服务器端已 OP 门槛，此处纵深防御）
+            String fname = src.getName();
+            if (fname.contains("/") || fname.contains("\\") || fname.contains("..")
+                    || fname.equals(".")) {
+                return "导入失败: 文件名不合法（" + fname + "）";
+            }
+            java.io.File dst = new java.io.File(dir.toFile(), fname);
             if (dst.exists()) {
                 return "导入失败: 同名文件已存在（" + dst.getAbsolutePath()
                         + "，可直接使用，无需重复导入）";
@@ -631,7 +638,7 @@ public final class BlueprintLib {
                             + "MC 1.20.1 一致，否则建筑可能损毁；已删除无效副本）";
                 }
                 scanExternalBlueprints(true);
-                return "导入成功: " + src.getName() + "（" + steps.size() + " 块，"
+                return "导入成功: " + fname + "（" + steps.size() + " 块，"
                         + "已注册，可在手册建造目录找到）";
             } catch (Exception e) {
                 try {
@@ -662,7 +669,13 @@ public final class BlueprintLib {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             java.nio.file.Files.createDirectories(dir);
-            java.io.File dst = new java.io.File(dir.toFile(), src.getName());
+            // 审计1.5.384：文件名清洗（与 importBuildFile 一致）
+            String fname = src.getName();
+            if (fname.contains("/") || fname.contains("\\") || fname.contains("..")
+                    || fname.equals(".")) {
+                return "导入失败: 文件名不合法（" + fname + "）";
+            }
+            java.io.File dst = new java.io.File(dir.toFile(), fname);
             if (dst.exists()) {
                 return "导入失败: 同名文件已存在（" + dst.getAbsolutePath()
                         + "，可直接使用，无需重复导入）";
@@ -4312,9 +4325,22 @@ public final class BlueprintLib {
             ItemStack taken = whole.m_255036_(take);
             ItemStack left = ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), taken, false);
             moved += take - left.m_41613_();
-            int back = (n - take) + left.m_41613_();
+            // 审计1.5.385修复：旧版 back 公式把 left（女仆背包放不下的部分）计入，
+            // 但 whole.split(back) 最多只能分出 whole 剩余（n-take）——left 直接
+            // 凭空消失（注释声称"放不下的留在玩家原处"实际没有）。改为：
+            // 剩余放回原槽，放不下的还回玩家背包，背包也满则掉落身侧。
+            int back = n - take;
             if (back > 0) {
                 inv.m_6836_(i, whole.m_255036_(back));
+            }
+            if (!left.m_41619_()) {
+                ItemStack rest = ItemHandlerHelper.insertItemStacked(
+                        new net.minecraftforge.items.wrapper.PlayerMainInvWrapper(inv), left, false);
+                if (!rest.m_41619_()) {
+                    net.minecraft.world.entity.item.ItemEntity ent = new net.minecraft.world.entity.item.ItemEntity(
+                            player.m_9236_(), player.m_20185_(), player.m_20186_() + 0.5, player.m_20189_(), rest);
+                    player.m_9236_().m_7967_(ent);
+                }
             }
         }
     }

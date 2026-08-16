@@ -1436,6 +1436,10 @@ public final class BlueprintBookNetworking {
                 if (maid == null) {
                     return;
                 }
+                // 审计优化7修复：状态查询补主人/OP 校验（旧版任何人可查任意女仆开关+灵魂id）
+                if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                    return;
+                }
                 String soul = com.maidsmart.soul.SoulBindingService.getSoulId(maid);
                 CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
                         new MemoryStateSyncPacket(pkt.maidUuid,
@@ -1476,6 +1480,14 @@ public final class BlueprintBookNetworking {
                 if (id == null || id.isEmpty() || !id.startsWith("maid_smart_ext:")) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "\u00a7c\u5185\u7f6e\u84dd\u56fe\u4e0d\u80fd\u5220\u9664\u3002"));
+                    return;
+                }
+                // 审计M2修复：联机服务器上任意玩家可删外部蓝图（grief）——仅 OP；
+                // 单机/局域网主机不受影响（同机同人）
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上删除蓝图仅限管理员（OP）使用。"));
                     return;
                 }
                 if (BlueprintLib.deleteBlueprint(id)) {
@@ -1620,6 +1632,22 @@ public final class BlueprintBookNetworking {
             }
             lines.add(sb.toString());
         }
+        // v1.5.382：记忆日记（多级记忆索引——日/3日/周/月日记式摘要，最新 6 篇）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
+            List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx =
+                    new ArrayList<>(store.index().all());
+            if (idx.isEmpty()) {
+                lines.add("\u00a7d记忆日记\u00a77（暂无——睡一觉后自动整理生成）");
+            } else {
+                idx.sort((a, b) -> Long.compare(b.endTick(), a.endTick()));
+                lines.add("\u00a7d记忆日记\u00a77（共" + idx.size() + " 篇，最新：）");
+                for (int i = 0; i < idx.size() && i < 6; i++) {
+                    com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r = idx.get(i);
+                    lines.add("\u00a7d  [" + r.level() + "记 第" + r.startDay() + "~" + r.endDay()
+                            + "天]\u00a7f " + com.maidsmart.memory.AiMemoryModels.clip(r.content(), 70));
+                }
+            }
+        }
         // 关系（按置信度降序）
         rels.sort(java.util.Comparator.comparingDouble(
                 com.maidsmart.memory.AiMemoryModels.Relation::confidence).reversed());
@@ -1636,7 +1664,9 @@ public final class BlueprintBookNetworking {
         for (com.maidsmart.memory.AiMemoryModels.Paragraph p : paras) {
             String color = p.salience() >= 8 ? "\u00a7e"
                     : (p.salience() >= 5 ? "\u00a7a" : "\u00a77");
-            String tag = p.isPermanent() ? "\u00a7b\u3010\u6c38\u4e45\u3011" : "";
+            // v1.5.382：【长期】标记（long_term——年龄+重要度达标沉淀的长期记忆）
+            String tag = (p.isPermanent() ? "\u00a7b\u3010\u6c38\u4e45\u3011" : "")
+                    + (p.tags().contains("long_term") ? "\u00a7d\u3010\u957f\u671f\u3011" : "");
             String acc = p.accessCount() > 0
                     ? "\u00a78·\u8bbf\u95ee" + p.accessCount() + "\u6b21 " : "";
             lines.add(tag + color + "[\u91cd\u8981\u5ea6" + p.salience() + "] \u00a7f"
@@ -2132,6 +2162,14 @@ public final class BlueprintBookNetworking {
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
                     return;
                 }
+                // 审计S1修复：联机服务器上路径来自客户端、不可信（任意文件读取）——
+                // 仅 OP 可用（管理员凭服务端本地路径导入）；单机/局域网主机不受影响
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上语音包导入仅限管理员（OP）使用。"));
+                    return;
+                }
                 String result = com.maidsmart.voice.SystemVoicePack.importPack(pkt.path);
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         (result.startsWith("导入失败") ? "\u00a7c" : "\u00a7a") + result));
@@ -2163,6 +2201,13 @@ public final class BlueprintBookNetworking {
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
+                    return;
+                }
+                // 审计S1修复：同语音包导入——联机服务器仅 OP
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上世界地图导入仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importWorldFile(pkt.path);
@@ -2197,6 +2242,13 @@ public final class BlueprintBookNetworking {
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
+                    return;
+                }
+                // 审计S1修复：同语音包导入——联机服务器仅 OP
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上建筑导入仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importBuildFile(pkt.path);

@@ -1099,6 +1099,21 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MEMORY_MAINTENANCE_MIN, s), "记忆维护周期（分钟）：定期固化重要记忆、衰减陈旧记忆、降旧关系置信度、传播被否定的标记——之前只有写入时才维护，老记忆永远不衰减"));
         this.rows.add(new NumRow("关系置信度衰减（天）", String.valueOf(MaidSmartConfig.MEMORY_RELATION_DECAY_DAYS.get()),
                 s -> setInt(MaidSmartConfig.MEMORY_RELATION_DECAY_DAYS, s), "关系置信度衰减周期（天）：非永久关系 N 天未被强化则置信度×0.85，低到 0.15 变 inactive（不再注入/检索）"));
+        // 多级记忆索引（v1.5.378~381，移植自 Sphantosis）：日/3日/周/月四级日记式摘要，
+        // 睡一觉（或服务器登出）自动生成；对话可检索注入，LLM 可用 query_memory_index 翻日记
+        this.rows.add(new SectionRow("多级记忆索引（日记式摘要，睡一觉自动整理）", true));
+        this.rows.add(new BoolRow("多级记忆索引", MaidSmartConfig.MEMORY_INDEX_ENABLE.get(),
+                v -> MaidSmartConfig.MEMORY_INDEX_ENABLE.set(v), "日/3日/周/月四级日记式摘要索引：跨游戏日/周/月边界与收尾时自动生成，永久归档；关闭后不再生成/检索/注入"));
+        this.rows.add(new BoolRow("睡一觉自动处理", MaidSmartConfig.MEMORY_INDEX_ON_SLEEP.get(),
+                v -> MaidSmartConfig.MEMORY_INDEX_ON_SLEEP.set(v), "玩家真实睡过夜（全员睡眠跳到清晨）时收尾：生成刚结束一天的记忆日记 + 短期记忆沉淀为长期；熬夜过夜不触发"));
+        this.rows.add(new BoolRow("登出会话收尾", MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get(),
+                v -> MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.set(v), "仅服务器生效：玩家登出=真人结束一天，当日记忆收尾归档（下次进游戏自动补完成）；单机集成服无意义自动跳过"));
+        this.rows.add(new NumRow("月索引保留事件数", String.valueOf(MaidSmartConfig.MEMORY_INDEX_MONTH_TOP_N.get()),
+                s -> setInt(MaidSmartConfig.MEMORY_INDEX_MONTH_TOP_N, s), "月级索引按重要度保留的最大事件数（月日记只留最重要的事）"));
+        this.rows.add(new NumRow("单次索引事件上限", String.valueOf(MaidSmartConfig.MEMORY_INDEX_MAX_EVENTS.get()),
+                s -> setInt(MaidSmartConfig.MEMORY_INDEX_MAX_EVENTS, s), "单次生成日记时喂给 LLM 的事件数上限：超出按重要度裁剪——控制摘要上下文长度，忙日不撑爆"));
+        this.rows.add(new NumRow("短期→长期阈值（游戏日）", String.valueOf(MaidSmartConfig.MEMORY_SHORT_TERM_DAYS.get()),
+                s -> setInt(MaidSmartConfig.MEMORY_SHORT_TERM_DAYS, s), "短期记忆沉淀为长期的年龄阈值（游戏日）：年龄超过且重要度达标的记忆打 long_term 标记，豁免衰减遗忘"));
         // v1.5.198：记忆独立 API 绑定——填写格式同 TLM（OpenAI 兼容 地址/密钥/模型）；
         // 全留空 = 跟随 TLM 女仆当前 LLM 站点；清空某一栏即回退该项到 TLM
         this.rows.add(new SectionRow("记忆 API（留空 = 跟随 TLM）", true));
@@ -1302,8 +1317,8 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.250：文件选择对话框导入——玩家不用手填路径，点按钮选 .zip 即可
         this.rows.add(new BtnRow("导入语音包", "选择文件导入", () -> {
                     // FileDialog setVisible 会阻塞当前线程——放独立线程，避免卡死
-                    // 游戏渲染（MC 主线程就是 AWT EDT）
-                    new Thread(() -> {
+                    // 游戏渲染（MC 主线程就是 AWT EDT）；daemon=true 防对话框挂着阻 JVM 退出
+                    Thread fileDlg = new Thread(() -> {
                         try {
                             java.awt.FileDialog fd = new java.awt.FileDialog((java.awt.Frame) null,
                                     "\u9009\u62e9\u8bed\u97f3\u5305(\u300czip \u6216\u6587\u4ef6\u5939)",
@@ -1327,7 +1342,9 @@ public class PromaidConfigScreen extends Screen {
                                     new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(path));
                         } catch (Exception ignored) {
                         }
-                    }).start();
+                    });
+                    fileDlg.setDaemon(true);
+                    fileDlg.start();
                 },
                 "打开系统文件选择框选 .zip 语音包自动导入（导入文件夹仍可用上方路径填写）"));
         this.rows.add(new BtnRow("重新加载语音包", "重新加载", () -> {
