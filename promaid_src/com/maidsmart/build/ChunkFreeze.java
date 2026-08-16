@@ -93,6 +93,23 @@ public final class ChunkFreeze {
         }
     }
 
+    /** 审计：清除单个计划的树叶保护（计划完成/取消时调用，防永久豁免与集合泄漏） */
+    public static void unprotectLeaves(ServerLevel level, String planId) {
+        Map<String, Set<Long>> m = PROTECTED_LEAVES.get(level.m_46472_());
+        if (m != null) {
+            m.remove(planId);
+            if (m.isEmpty()) {
+                PROTECTED_LEAVES.remove(level.m_46472_());
+            }
+        }
+    }
+
+    /** 审计：服务器停止时清空全部冻结/树叶保护状态，防止跨世界残留 */
+    public static void clearAll() {
+        FROZEN.clear();
+        PROTECTED_LEAVES.clear();
+    }
+
     /** 该位置是否处于任一建造冻结区块内 */
     public static boolean isFrozen(ResourceKey<Level> dim, BlockPos pos) {
         return isFrozen(dim, pos.m_123341_() >> 4, pos.m_123343_() >> 4);

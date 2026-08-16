@@ -599,6 +599,9 @@ public final class BlueprintLib {
      *  返回中文结果文本（成功含方块数 / 失败原因），服务端回玩家聊天框。 */
     public static String importBuildFile(String path) {
         try {
+            if (path.contains("..")) {
+                return "导入失败: 路径不合法（包含 ..）";
+            }
             java.io.File src = new java.io.File(path);
             if (!src.isFile()) {
                 return "导入失败: 文件不存在（" + path + "）";
@@ -658,6 +661,9 @@ public final class BlueprintLib {
      *  返回详细中文结果（提取块数/尺寸 或 失败原因）。 */
     public static String importWorldFile(String path) {
         try {
+            if (path.contains("..")) {
+                return "导入失败: 路径不合法（包含 ..）";
+            }
             java.io.File src = new java.io.File(path);
             if (!src.isFile()) {
                 return "导入失败: 文件不存在（" + path + "）";
@@ -697,7 +703,7 @@ public final class BlueprintLib {
             }
             int[] size = blueprintSize(steps);
             scanExternalBlueprints(true);
-            return "导入成功: " + src.getName() + "（提取 " + steps.size() + " 块，"
+            return "导入成功: " + fname + "（提取 " + steps.size() + " 块，"
                     + "尺寸 " + size[0] + "×" + size[1] + "×" + size[2]
                     + "，已注册，可在手册建造目录找到）";
         } catch (Exception e) {

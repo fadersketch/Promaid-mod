@@ -135,6 +135,9 @@ public final class SystemVoicePack {
      */
     public static String importPack(String pathStr) {
         try {
+            if (pathStr.contains("..")) {
+                return "导入失败：路径不合法（包含 ..）";
+            }
             Path src = Path.of(pathStr.trim());
             if (!Files.exists(src)) {
                 return "导入失败：路径不存在（" + pathStr + "）";

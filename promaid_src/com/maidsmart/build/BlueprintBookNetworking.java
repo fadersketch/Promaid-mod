@@ -986,6 +986,12 @@ public final class BlueprintBookNetworking {
                                     "\u00a7c找不到这只女仆（可能已离开范围）。"));
                             return;
                         }
+                        // 审计 P-2：暂停/恢复他人女仆需主人或 OP
+                        if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7c只能操作自己的女仆（或 OP）。"));
+                            return;
+                        }
                         boolean nowPaused = !BuildPlan.isMaidPaused(maid);
                         BuildPlan.setMaidPaused(maid, nowPaused);
                         player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -994,10 +1000,21 @@ public final class BlueprintBookNetworking {
                     }
                     case SET_FOREMAN -> {
                         // v1.5.69：手动设定工头（建造反馈统一由其发出）
-                        BuildPlan.setForeman(level, target, pkt.maidUuid);
                         EntityMaid fm = findMaidByUuid(player, pkt.maidUuid);
+                        if (fm == null) {
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7c找不到这只女仆（可能已离开范围）。"));
+                            return;
+                        }
+                        // 审计 P-2：设他人女仆为工头需主人或 OP
+                        if (!fm.m_21830_(player) && !player.m_20310_(2)) {
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7c只能操作自己的女仆（或 OP）。"));
+                            return;
+                        }
+                        BuildPlan.setForeman(level, target, pkt.maidUuid);
                         player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                "\u00a7a已设定 " + (fm == null ? "未知" : fm.m_5446_().getString())
+                                "\u00a7a已设定 " + fm.m_5446_().getString()
                                         + " 为「" + target.name + "」工头，建造反馈将统一由它发出。"));
                     }
                     case BIND_MAID -> {
@@ -1013,6 +1030,12 @@ public final class BlueprintBookNetworking {
                                     "\u00a7c女仆与区块不在同一维度，无法绑定。"));
                             return;
                         }
+                        // 审计 P-2：绑定他人女仆需主人或 OP
+                        if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7c只能操作自己的女仆（或 OP）。"));
+                            return;
+                        }
                         switchTask(maid, "maid_smart:build");
                         BuildPlan.bindMaid(maid, target.planId);
                         BuildPlan.setMaidPaused(maid, false);
@@ -1026,6 +1049,12 @@ public final class BlueprintBookNetworking {
                         if (maid == null) {
                             player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                                     "\u00a7c找不到这只女仆（可能已离开）。"));
+                            return;
+                        }
+                        // 审计 P-2：解绑他人女仆需主人或 OP
+                        if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7c只能操作自己的女仆（或 OP）。"));
                             return;
                         }
                         switchTask(maid, "touhou_little_maid:idle");
@@ -1222,7 +1251,13 @@ public final class BlueprintBookNetworking {
                 }
                 if (maid == null) {
                     // v1.5.251b：女仆不在加载范围（远处/瞬移卸载）——仍记录开关
-                    // 到磁盘（isEnabled 磁盘优先），她加载后立即生效
+                    // 到磁盘（isEnabled 磁盘优先），她加载后立即生效。
+                    // 审计 P-1：离线/未加载女仆无法判断归属，只允许 OP 修改。
+                    if (!player.m_20310_(2)) {
+                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "\u00a7c只有 OP 可以修改未加载女仆的记忆开关。"));
+                        return;
+                    }
                     com.maidsmart.memory.AiMemoryManager.setEnabledDiskOnly(
                             pkt.maidUuid, pkt.enabled, level);
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -1344,7 +1379,13 @@ public final class BlueprintBookNetworking {
                 } catch (IllegalArgumentException ignored) {
                 }
                 if (maid == null) {
-                    // 女仆不在加载范围——仍记录到磁盘（isEnabled 磁盘优先），加载后生效
+                    // 女仆不在加载范围——仍记录到磁盘（isEnabled 磁盘优先），加载后生效。
+                    // 审计 P-1：离线/未加载女仆无法判断归属，只允许 OP 修改。
+                    if (!player.m_20310_(2)) {
+                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "\u00a7c只有 OP 可以修改未加载女仆的 LLM 开关。"));
+                        return;
+                    }
                     com.maidsmart.memory.LlmEnableManager.setEnabledDiskOnly(
                             pkt.maidUuid, pkt.enabled, level);
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -1484,10 +1525,9 @@ public final class BlueprintBookNetworking {
                 }
                 // 审计M2修复：联机服务器上任意玩家可删外部蓝图（grief）——仅 OP；
                 // 单机/局域网主机不受影响（同机同人）
-                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
-                        && !player.m_20310_(2)) {
+                if (!player.m_20310_(2)) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c联机服务器上删除蓝图仅限管理员（OP）使用。"));
+                            "\u00a7c该操作仅限管理员（OP）使用。"));
                     return;
                 }
                 if (BlueprintLib.deleteBlueprint(id)) {
@@ -2164,10 +2204,9 @@ public final class BlueprintBookNetworking {
                 }
                 // 审计S1修复：联机服务器上路径来自客户端、不可信（任意文件读取）——
                 // 仅 OP 可用（管理员凭服务端本地路径导入）；单机/局域网主机不受影响
-                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
-                        && !player.m_20310_(2)) {
+                if (!player.m_20310_(2)) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c联机服务器上语音包导入仅限管理员（OP）使用。"));
+                            "\u00a7c该操作仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.voice.SystemVoicePack.importPack(pkt.path);
@@ -2204,10 +2243,9 @@ public final class BlueprintBookNetworking {
                     return;
                 }
                 // 审计S1修复：同语音包导入——联机服务器仅 OP
-                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
-                        && !player.m_20310_(2)) {
+                if (!player.m_20310_(2)) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c联机服务器上世界地图导入仅限管理员（OP）使用。"));
+                            "\u00a7c该操作仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importWorldFile(pkt.path);
@@ -2245,10 +2283,9 @@ public final class BlueprintBookNetworking {
                     return;
                 }
                 // 审计S1修复：同语音包导入——联机服务器仅 OP
-                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
-                        && !player.m_20310_(2)) {
+                if (!player.m_20310_(2)) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "\u00a7c联机服务器上建筑导入仅限管理员（OP）使用。"));
+                            "\u00a7c该操作仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importBuildFile(pkt.path);

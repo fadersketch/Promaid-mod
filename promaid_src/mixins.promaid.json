@@ -8,13 +8,11 @@
     "MaidTeleportPreserveMixin",
     "MaidMoveSuppressMixin",
     "MaidStationaryMixin",
-    "MaidConfigMemoryMixin",
     "ChunkFreezeMixin",
     "LeavesBlockMixin",
     "ChatBubbleLimitMixin",
     "GravityFreezeMixin",
     "PromaidPromptMixin",
-    "MaidDebugPanelMixin",
     "MaidPickupPriorityMixin",
     "NativeTaskSmoothMixin",
     "MaidRunOneYieldMixin",
@@ -46,6 +44,8 @@
   ],
   "client": [
     "MaidTtsVolumeMixin",
+    "MaidConfigMemoryMixin",
+    "MaidDebugPanelMixin",
     "CallResponseChatSpamMixin"
   ],
   "injectors": {

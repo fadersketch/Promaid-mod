@@ -118,7 +118,20 @@ public final class AiMemoryStore {
         try {
             if (Files.isDirectory(this.dir)) {
                 for (String line : readLines(this.dir.resolve("paragraphs.jsonl"))) {
-                    this.paragraphs.add(AiMemoryModels.GSON.fromJson(line, AiMemoryModels.Paragraph.class));
+                    if (line.isBlank()) {
+                        continue;
+                    }
+                    AiMemoryModels.Paragraph p = AiMemoryModels.GSON.fromJson(line, AiMemoryModels.Paragraph.class);
+                    if (p == null) {
+                        continue; // 坏行跳过，不拖垮整个记忆库
+                    }
+                    if (p.tags() == null) {
+                        p = new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(),
+                                "", p.metadata(), p.createdAt(), p.updatedAt(),
+                                p.eventTimeStart(), p.eventTimeEnd(), p.salience(), p.accessCount(),
+                                p.lastAccessed(), p.permanent(), p.deleted(), p.protectedUntil());
+                    }
+                    this.paragraphs.add(p);
                 }
                 for (String line : readLines(this.dir.resolve("entities.jsonl"))) {
                     this.entities.add(AiMemoryModels.GSON.fromJson(line, AiMemoryModels.Entity.class));
@@ -155,7 +168,6 @@ public final class AiMemoryStore {
         if (!this.dirty) {
             return;
         }
-        this.dirty = false;
         try {
             Files.createDirectories(this.dir);
             writeLines(this.dir.resolve("paragraphs.jsonl"), this.paragraphs);
@@ -166,7 +178,10 @@ public final class AiMemoryStore {
             Files.writeString(this.dir.resolve("meta.json"),
                     AiMemoryModels.GSON.toJson(this.meta), StandardCharsets.UTF_8);
             this.indexStore.save();
-        } catch (Exception ignored) {
+            this.dirty = false; // 全部写盘成功后再清脏标记，失败保留重试
+        } catch (Exception e) {
+            org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
+            log.warn("AiMemoryStore: 保存记忆失败（保留脏标记待重试） dir={}", this.dir, e);
         }
     }
 
