@@ -115,6 +115,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ENABLE;
     /** 睡一觉自动处理：玩家睡醒后强制归档当日记忆（生成日级日记索引 + 短期→长期转移） */
     public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ON_SLEEP;
+    /** 会话收尾归档：玩家登出（真人睡觉/结束一天）时收尾当日记忆，下次进游戏补完成 */
+    public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ON_LOGOUT;
     /** 月级索引按重要度保留的最大事件数 */
     public static final ForgeConfigSpec.IntValue MEMORY_INDEX_MONTH_TOP_N;
     /** 单次索引喂给 LLM 的事件数上限（超出按重要度裁剪——上下文长度管理） */
@@ -531,6 +533,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.memory.indexEnable").define("indexEnable", true);
         MEMORY_INDEX_ON_SLEEP = BUILDER.comment("睡一觉自动处理（玩家睡醒后生成当日记忆日记 + 短期记忆整簇转长期）")
                 .translation("config.promaid.memory.indexOnSleep").define("indexOnSleep", true);
+        MEMORY_INDEX_ON_LOGOUT = BUILDER.comment("会话收尾归档（玩家登出=真人结束一天，收尾当日记忆；单人关服竞态由下次进游戏自动补完成）")
+                .translation("config.promaid.memory.indexOnLogout").define("indexOnLogout", true);
         MEMORY_INDEX_MONTH_TOP_N = BUILDER.comment("月级索引保留事件数（按重要度排序保留的最多事件数）")
                 .translation("config.promaid.memory.indexMonthTopN")
                 .defineInRange("indexMonthTopN", 20, 5, 100);

@@ -27,12 +27,16 @@
                        ┌─────────────────────────────────────────────────┐
                        │              自动归档侧(本次移植新增)              │
                        ├─────────────────────────────────────────────────┤
-  触发点A(唯一生成点): SleepFinishedTimeEvent(全员真实睡过夜、时间跳到
+  触发点A(叙事日): SleepFinishedTimeEvent(全员真实睡过夜、时间跳到
            清晨才触发,服务端事件;周围128格女仆)
            ──► AiMemoryArchiver.sleepWrapUp(maid, level)
-  触发点B(纯重试): AiMemoryManager.onServerTick(每 scanInterval 秒)
+  触发点B(真人日,v1.5.380): PlayerLoggedOutEvent(玩家登出=真人睡觉/结束一天)
+           ──► AiMemoryArchiver.sessionWrapUp(maid, level)
+           当日部分天日记边界【先持久化 pending 再尝试】——关服竞态丢失
+           由下次进游戏的周期 tick 自愈补生成
+  触发点C(纯重试): AiMemoryManager.onServerTick(每 scanInterval 秒)
            ──► AiMemoryArchiver.tick(maid, level)  仅重试 pending
-           (熬夜过夜不触发归档;白天躺床即起不误触发)
+           (熬夜过夜不触发归档;白天躺床即起不误触发;出队需 has() 确认)
                         │
                         ├─► 边界检测(archiver_state.json: 上次日/周/月)
                         │     跨日 → 刚结束一天「日」索引 + 滚动「3日」索引
@@ -114,7 +118,9 @@
 6. **状态落盘**:有变化才写
 7. **短期→长期提升** `runTransfer(store, gameTime)`
 
-**`tick(maid, level)`** —— 周期调度(每 scanInterval 秒),**仅重试 pending**,无 pending 时零开销。v1.5.378 的"周期跨日生成兜底"已移除(熬夜排除)。
+**`tick(maid, level)`** —— 周期调度(每 scanInterval 秒),**仅重试 pending**,无 pending 时零开销。v1.5.378 的"周期跨日生成兜底"已移除(熬夜排除)。**pending 出队语义(v1.5.380 加固)**:只有 `has()` 容差确认已归档、或跨度无事件(`collectEventBlock` 为空)才出队;异步请求发出后仍留在队列——在途丢失(如关服竞态)可自愈,不再静默丢边界。
+
+**`sessionWrapUp(maid, level)`** —— 会话收尾(真人日维度,v1.5.380 新增):Sphantosis 的 wrap-up 不只覆盖角色入睡,也覆盖**真人用户结束一天下线睡觉**(其 WorldManager 有用户状态机 active/sleeping/offline 与角色作息表)。MC 里真人睡觉 = 退出游戏:玩家登出时,当日(部分天)「日」级日记边界**先持久化进 pending 再尝试生成**——单人关服后异步响应可能丢失,pending 已落盘,下次进游戏由周期 tick 自动补生成(叙事上即"女仆在你睡觉时整理好了昨天的记忆")。随后复用 sleepWrapUp(边界检查 + 重试 + 转移)。
 
 #### 3.3.2 索引生成 `generateIndex(maid, level, lv, startTick, endTick)`
 
@@ -180,6 +186,8 @@ Promaid 对应:      SleepFinishedTimeEvent(全员真实睡过夜、时间被跳
 
 双开关 `memory.indexEnable` 且 `memory.indexOnSleep` 都开才触发。
 
+**会话收尾(真人日维度,v1.5.380)**:`AiMemoryManager.onPlayerLogout(PlayerLoggedOutEvent)`——玩家登出 = 真人结束一天,对周围女仆 `sessionWrapUp`:当日部分天「日」级日记 + 复用睡眠收尾逻辑。开关 `memory.indexOnLogout`。单人关服竞态由"先持久化 pending + has() 确认出队"自愈,下次进游戏约 20 秒内补完成。
+
 ### 3.5 检索侧接入
 
 #### 五路召回(AiMemorySearch)
@@ -226,7 +234,8 @@ Promaid 对应:      SleepFinishedTimeEvent(全员真实睡过夜、时间被跳
 | 键 | 默认 | 范围 | 说明 |
 |---|---|---|---|
 | `indexEnable` | true | bool | 多级记忆索引总开关(生成/检索路/工具/投影段全部联动) |
-| `indexOnSleep` | true | bool | 睡一觉自动处理(唯一生成触发点;关闭后索引只出不进) |
+| `indexOnSleep` | true | bool | 睡一觉自动处理(叙事日维度:游戏内睡过夜触发) |
+| `indexOnLogout` | true | bool | 会话收尾归档(真人日维度:登出=真人睡觉,当日收尾;下次进游戏补完成) |
 | `indexMonthTopN` | 20 | 5~100 | 月级索引按重要度保留的最大事件数 |
 | `indexMaxEvents` | 40 | 10~200 | 单次索引事件上限,超限按重要度裁剪(上下文长度管理) |
 | `shortTermDays` | 3 | 1~30 | 短期→长期转移阈值(游戏日) |
@@ -272,6 +281,7 @@ Promaid 对应:      SleepFinishedTimeEvent(全员真实睡过夜、时间被跳
 | 转移=移入 episodic_core | 转移=打 `long_term` 标签+衰减豁免 | promaid 单存储,用标签分层 |
 | `query_memory_index` workflow | `QueryMemoryIndexTool` | 中文时间格式→游戏日序号(对 LLM 更友好) |
 | `start_role_sleep→wrap-up(60s)→tick(force)` | `SleepFinishedTimeEvent→sleepWrapUp`(v1.5.379) | 真实睡过夜才触发,排除熬夜/未入睡;周期tick仅重试 |
+| 用户状态机(active/sleeping/offline)+真人下线睡觉 | `PlayerLoggedOutEvent→sessionWrapUp`(v1.5.380) | MC 里真人睡觉=退出游戏;先持久化 pending 防关服竞态,下次进游戏补完成 |
 | 角色后台线程每3秒 tick | `onServerTick` 每 scanInterval 秒(只扫玩家周围女仆) | 避免未加载/远离女仆空转 |
 | `memory_settings.py` 白名单+memory_config.json | Forge config `memory.*` 四键 | 对齐模组既有配置体系 |
 | `_pending_indexes` 内存队列 | `archiver_state.json` pending(持久化) | 重启后仍会补生成 |
