@@ -73,7 +73,11 @@ public class AutonomousTaskManager {
                     return;
                 }
                 // 仅空闲任务触发；白天才工作
-                if (maid.getTask() != TaskManager.getIdleTask()) {
+                // v1.5.287：idle 判定改 UID 比较——旧版对象同一性比较
+                //（maid.getTask() != TaskManager.getIdleTask()）：第三方任务/
+                // 数据驱动任务的对象不同 → 自主决策永远静默不触发（无日志可查）
+                if (maid.getTask() == null
+                        || !maid.getTask().getUid().equals(TaskManager.getIdleTask().getUid())) {
                     return;
                 }
                 long dayTime = player.m_9236_().m_46468_();

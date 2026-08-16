@@ -219,6 +219,17 @@ public final class BlueprintLib {
         add("grass_block"); add("dirt"); add("gravel"); add("sand");
         add("flower_pot"); add("poppy"); add("dandelion"); add("azure_bluet");
         add("oak_planks_sign");
+        // v1.5.311：红石族（配合 recalcRedstone v2 完成唤醒 + JSON state 支持——
+        // LLM 现场生成的简单红石机器现在可以真实运行；v1.5.300 删机器是唤醒失效
+        // 所致，根因已修复。全部有对应物品；redstone_wire 走特例→红石粉）
+        add("redstone_wire"); add("redstone_torch"); add("redstone_block"); add("redstone_lamp");
+        add("lever"); add("stone_button"); add("oak_button");
+        add("repeater"); add("comparator"); add("observer");
+        add("piston"); add("sticky_piston");
+        add("dispenser"); add("dropper"); add("hopper");
+        add("iron_door"); add("stone_pressure_plate"); add("oak_pressure_plate");
+        add("powered_rail"); add("detector_rail"); add("rail");
+        add("target"); add("note_block"); add("trapped_chest");
     }
 
     private static void add(String id) {
@@ -258,10 +269,50 @@ public final class BlueprintLib {
                 "minecraft:podzol", "minecraft:mycelium", "minecraft:rooted_dirt", "minecraft:mud",
                 "minecraft:moss_block");
         // v1.5.56：草方块反向等价——图纸要草皮、位置被草退化/传播变化后判定"已建"，
-        // 不再反复重放草方块（草被压变泥土/被遮挡退化是 MC 正常机制，重放也没用）
+        // 不再反复重放草方块（草被压变泥土/被传播覆盖是 MC 正常机制，重放也没用）
         addGroup("minecraft:grass_block", "minecraft:grass_block", "minecraft:dirt",
                 "minecraft:coarse_dirt", "minecraft:podzol", "minecraft:mycelium",
                 "minecraft:rooted_dirt", "minecraft:moss_block");
+        // v1.5.254：台阶/楼梯等价族（缺料替代"先同族"覆盖半格/一格类）
+        addGroup("minecraft:oak_slab", "minecraft:oak_slab", "minecraft:spruce_slab",
+                "minecraft:birch_slab", "minecraft:jungle_slab", "minecraft:acacia_slab",
+                "minecraft:dark_oak_slab", "minecraft:mangrove_slab", "minecraft:cherry_slab",
+                "minecraft:bamboo_slab", "minecraft:crimson_slab", "minecraft:warped_slab");
+        addGroup("minecraft:stone_slab", "minecraft:stone_slab", "minecraft:sandstone_slab",
+                "minecraft:cobblestone_slab", "minecraft:brick_slab", "minecraft:stone_brick_slab",
+                "minecraft:nether_brick_slab", "minecraft:quartz_slab", "minecraft:red_sandstone_slab",
+                "minecraft:purpur_slab", "minecraft:smooth_stone_slab", "minecraft:smooth_sandstone_slab",
+                "minecraft:smooth_quartz_slab", "minecraft:smooth_red_sandstone_slab",
+                "minecraft:deepslate_slab", "minecraft:deepslate_brick_slab",
+                "minecraft:deepslate_tile_slab", "minecraft:polished_deepslate_slab",
+                "minecraft:cut_sandstone_slab", "minecraft:cut_red_sandstone_slab",
+                "minecraft:cobbled_deepslate_slab", "minecraft:blackstone_slab",
+                "minecraft:polished_blackstone_slab", "minecraft:polished_blackstone_brick_slab",
+                "minecraft:end_stone_brick_slab", "minecraft:mossy_cobblestone_slab",
+                "minecraft:mossy_stone_brick_slab", "minecraft:prismarine_slab",
+                "minecraft:prismarine_brick_slab", "minecraft:dark_prismarine_slab",
+                "minecraft:purpur_slab", "minecraft:granite_slab", "minecraft:polished_granite_slab",
+                "minecraft:diorite_slab", "minecraft:polished_diorite_slab", "minecraft:andesite_slab",
+                "minecraft:polished_andesite_slab", "minecraft:oxidized_cut_copper_slab",
+                "minecraft:weathered_cut_copper_slab", "minecraft:exposed_cut_copper_slab",
+                "minecraft:cut_copper_slab");
+        addGroup("minecraft:oak_stairs", "minecraft:oak_stairs", "minecraft:spruce_stairs",
+                "minecraft:birch_stairs", "minecraft:jungle_stairs", "minecraft:acacia_stairs",
+                "minecraft:dark_oak_stairs", "minecraft:mangrove_stairs", "minecraft:cherry_stairs",
+                "minecraft:bamboo_stairs", "minecraft:crimson_stairs", "minecraft:warped_stairs");
+        addGroup("minecraft:stone_brick_stairs", "minecraft:stone_brick_stairs",
+                "minecraft:cobblestone_stairs", "minecraft:brick_stairs",
+                "minecraft:nether_brick_stairs", "minecraft:sandstone_stairs",
+                "minecraft:quartz_stairs", "minecraft:red_sandstone_stairs",
+                "minecraft:purpur_stairs", "minecraft:deepslate_brick_stairs",
+                "minecraft:deepslate_tile_stairs", "minecraft:polished_deepslate_stairs",
+                "minecraft:blackstone_stairs", "minecraft:polished_blackstone_brick_stairs",
+                "minecraft:end_stone_brick_stairs", "minecraft:mossy_cobblestone_stairs",
+                "minecraft:mossy_stone_brick_stairs", "minecraft:prismarine_stairs",
+                "minecraft:prismarine_brick_stairs", "minecraft:dark_prismarine_stairs",
+                "minecraft:granite_stairs", "minecraft:polished_granite_stairs",
+                "minecraft:diorite_stairs", "minecraft:polished_diorite_stairs",
+                "minecraft:andesite_stairs", "minecraft:polished_andesite_stairs");
     }
 
     private static void addGroup(String key, String... members) {
@@ -305,33 +356,24 @@ public final class BlueprintLib {
     private BlueprintLib() {
     }
 
-    /** 内置蓝图：id → 步骤列表 */
+    /** 内置蓝图：id → 步骤列表（v1.5.366：3 小屋 + 12 新结构建筑 + 3 别墅 + 1 熔炉 =
+     *  19 个，程序化生成——BuiltinHouses；方块 500~5000，材料生存易得） */
     public static List<String> getBuiltIn(String id) {
-        switch (id) {
-            case "maid_smart:hut":
-                return builtInHut();
-            case "maid_smart:gazebo":
-                return builtInGazebo();
-            case "maid_smart:fountain":
-                return builtInFountain();
-            case "maid_smart:tower":
-                return builtInTower();
-            case "maid_smart:well":
-                return builtInWell();
-            default:
-                return null;
-        }
+        return com.maidsmart.build.BuiltinHouses.get(id);
     }
 
-    /** 内置蓝图目录：id → 中文名/尺寸/材料（供 smart_build_list 与提示词使用） */
+    /** 内置蓝图目录（v1.5.366：19 个内置——3 小屋 + 12 新结构建筑 + 3 别墅 + 熔炉，
+     *  供 smart_build_list 与提示词使用） */
     public static String buildCatalog() {
         StringBuilder sb = new StringBuilder();
-        sb.append("内置蓝图：\n")
-                .append("maid_smart:hut — 小木屋（5x5 原木小屋，橡木木板+原木，约 100 块）\n")
-                .append("maid_smart:gazebo — 凉亭（4x4 石砖凉亭，约 60 块）\n")
-                .append("maid_smart:fountain — 喷泉（3x3 石砖喷泉，海晶灯装饰，约 25 块）\n")
-                .append("maid_smart:tower — 瞭望塔（3x3 石砖塔，约 35 块）\n")
-                .append("maid_smart:well — 水井（3x3 圆石水井，灯笼装饰，约 22 块）");
+        sb.append("内置蓝图：\n");
+        for (String id : BUILT_IN_NAMES.keySet()) {
+            List<String> steps = getBuiltIn(id);
+            if (steps != null && !steps.isEmpty()) {
+                sb.append(id).append(" — ").append(BUILT_IN_NAMES.get(id))
+                        .append("（").append(steps.size()).append(" 块）\n");
+            }
+        }
         scanExternalBlueprints();
         if (!EXTERNAL.isEmpty()) {
             sb.append("\n外部蓝图（config/maid_smart/blueprints 或 存档 schematics/，支持 .json/.nbt/.snbt/.litematic/.schem）：\n");
@@ -340,19 +382,40 @@ public final class BlueprintLib {
                         .append(EXTERNAL_NAMES.getOrDefault(entry.getKey(), entry.getKey()))
                         .append("（").append(describe(entry.getKey(), entry.getValue())).append("）\n");
             }
+        } else {
+            sb.append("\n（当前没有外部蓝图——把 .nbt/.snbt/.schem 等蓝图文件放进 config/maid_smart/blueprints 即可）");
         }
         return sb.toString();
     }
 
-    /** 内置蓝图中文名 */
+    /** 内置蓝图中文名（v1.5.271：15 生存小屋 + 10 别墅；v1.5.366：删雷同 → 3 小屋 +
+     *  12 新结构建筑 + 3 别墅 + 1 熔炉 = 19；v1.5.369：+ 6 座农场 = 25） */
     private static final Map<String, String> BUILT_IN_NAMES = new HashMap<>();
 
     static {
-        BUILT_IN_NAMES.put("maid_smart:hut", "小木屋");
-        BUILT_IN_NAMES.put("maid_smart:gazebo", "凉亭");
-        BUILT_IN_NAMES.put("maid_smart:fountain", "喷泉");
-        BUILT_IN_NAMES.put("maid_smart:tower", "瞭望塔");
-        BUILT_IN_NAMES.put("maid_smart:well", "水井");
+        for (String id : new String[]{
+                "maid_smart:house_oak_log", "maid_smart:house_sandstone",
+                "maid_smart:house_snowy",
+                // v1.5.366：新增 12 种不同结构建筑（500~5000 块）
+                "maid_smart:house_aframe", "maid_smart:house_watchtower",
+                "maid_smart:house_lighthouse", "maid_smart:house_courtyard",
+                "maid_smart:house_barn", "maid_smart:house_stilt",
+                "maid_smart:house_windmill", "maid_smart:house_bunker",
+                "maid_smart:house_tree", "maid_smart:house_hillside",
+                "maid_smart:house_dual", "maid_smart:house_gatehouse",
+                // v1.5.366：别墅保留 3 种风格（删 7 个同款盒）
+                "maid_smart:villa_stone", "maid_smart:villa_glass",
+                "maid_smart:villa_terracotta",
+                // v1.5.300：红石机器只留自动熔炉组（用户："红石机器基本都不能用，
+                // 先全都删了，只保留一个自动熔炉组"——甘蔗机/南瓜机/自动灯删除）
+                "maid_smart:machine_furnace_array",
+                // v1.5.369：6 座生存农场（仿 MCBlanky《10 个 1 分钟农场》）
+                "maid_smart:farm_cactus", "maid_smart:farm_superfurnace",
+                "maid_smart:farm_lavafountain", "maid_smart:farm_crop",
+                "maid_smart:farm_tree", "maid_smart:farm_chicken",
+        }) {
+            BUILT_IN_NAMES.put(id, com.maidsmart.build.BuiltinHouses.nameOf(id));
+        }
     }
 
     /** v1.5.28：外部 .snbt 文件名 → 中文显示名（手册/LLM 都用中文；未收录的文件名兜底用原名） */
@@ -442,6 +505,12 @@ public final class BlueprintLib {
     private static final Map<String, String> EXTERNAL_NAMES = new HashMap<>();
     /** 文件最后修改时间（增量重扫：mtime 变化才重新解析） */
     private static final Map<String, Long> EXTERNAL_MTIMES = new HashMap<>();
+    /** v1.5.312：外部目录扫描节流——手册打开时 getBlueprint/describe 会对每个目录条目
+     *  触发 scanExternalBlueprints，失败文件（损坏 zip / 世界 zip 提取）每次重扫都要
+     *  重新解析（世界 zip 提取 0.5s+），几十个条目叠加 → 服务端主线程卡死。
+     *  3 秒内只真正扫描一次，其余调用直接返回（读内存缓存）。 */
+    private static volatile long LAST_EXTERNAL_SCAN_MS = 0L;
+    private static final long EXTERNAL_SCAN_INTERVAL_MS = 3000L;
     /** id → 文件路径（旋转时需要重新读取解析） */
     private static final Map<String, java.nio.file.Path> EXTERNAL_PATHS = new HashMap<>();
     /** 存档根（schematics/ 目录扫描用；服务端启动时注入，停止时清空） */
@@ -456,6 +525,7 @@ public final class BlueprintLib {
         NEEDS_CACHE.clear();
         NEEDS_MTIME.clear();
         DESCRIBE_CACHE.clear();
+        SIZE_CACHE.clear();
         if (server != null) {
             installBuiltinBlueprints();
             // v1.5.25g：服务端启动时预热外部蓝图需求缓存——手册右击不再首次卡 5 秒
@@ -469,23 +539,32 @@ public final class BlueprintLib {
         scanExternalBlueprints();
         for (Map.Entry<String, List<String>> e : EXTERNAL.entrySet()) {
             countNeedsCached(e.getKey(), e.getValue());
+            // v1.5.375：一并预热摘要与占地尺寸——手册打开时 buildCatalogEntries 对
+            // 每个外部蓝图调 describe、openFor 对每个调 blueprintSize，旧版只在
+            // 首次打开时现算（8000+ 蓝图 × 遍历全部步骤 = 主线程卡死）；这里在
+            // 服务端启动（读世界阶段）预热完，打开手册纯读缓存
+            describe(e.getKey(), e.getValue());
+            blueprintSizeCached(e.getKey(), e.getValue());
+        }
+        // v1.5.375：内置预设同样预热（小屋/农场/别墅，量小但一并覆盖）
+        for (String id : BUILT_IN_NAMES.keySet()) {
+            List<String> steps = getBuiltIn(id);
+            if (steps != null && !steps.isEmpty()) {
+                countNeedsCached(id, steps);
+                describe(id, steps);
+                blueprintSizeCached(id, steps);
+            }
         }
     }
 
-    /** 内置预制建筑（v1.5.15，jar 内 assets/maid_smart/builtin_blueprints/*.snbt） */
+    /** 内置预制建筑（v1.5.15，jar 内 assets/maid_smart/builtin_blueprints/*.snbt）
+     *  v1.5.270：移除全部 <2000 块的（用户要求"删除所有方块数量小于2000的建筑"）
+     *  ——只剩 8 个大型预制（2 千 ~ 5 万块级） */
     private static final String[] BUILTIN_BLUEPRINT_FILES = {
-            // v1.5.38：删除旧生存小屋群（cottage/barn 等），替换为精心设计的生存房
-            // v1.5.30：预制大型蓝图（生成器程序化设计，已用 TagParser 验证）
-            "high_tech_villa.snbt", "seaside_villa.snbt", "grand_palace.snbt",
-            "skyscraper.snbt",
-            // v1.5.31：大型狸花猫雕像
+            "seaside_villa.snbt", "grand_palace.snbt", "skyscraper.snbt",
             "tabby_cat_statue.snbt",
-            // v1.5.34：超大规模预制（逼近上限：竞技场 51529 / 城堡 27199 / 金字塔 20194）
             "mega_castle.snbt", "mega_pyramid.snbt", "mega_colosseum.snbt",
-            // v1.5.35：巨型骑士雕像（30471 块——3 万级雕像）
-            "mega_knight_statue.snbt",
-            // v1.5.38：生存实用房（680/646/762 块，材料简单、建造快速）
-            "survival_woodcabin.snbt", "survival_bunker.snbt", "survival_watchtower.snbt"
+            "mega_knight_statue.snbt"
     };
 
     /**
@@ -551,7 +630,7 @@ public final class BlueprintLib {
                     return "导入失败: 文件无法解析（可能是版本不兼容——蓝图需与当前 "
                             + "MC 1.20.1 一致，否则建筑可能损毁；已删除无效副本）";
                 }
-                scanExternalBlueprints();
+                scanExternalBlueprints(true);
                 return "导入成功: " + src.getName() + "（" + steps.size() + " 块，"
                         + "已注册，可在手册建造目录找到）";
             } catch (Exception e) {
@@ -604,7 +683,7 @@ public final class BlueprintLib {
                         + "世界存档会以玩家最后位置为中心自动提取，已删除无效副本）";
             }
             int[] size = blueprintSize(steps);
-            scanExternalBlueprints();
+            scanExternalBlueprints(true);
             return "导入成功: " + src.getName() + "（提取 " + steps.size() + " 块，"
                     + "尺寸 " + size[0] + "×" + size[1] + "×" + size[2]
                     + "，已注册，可在手册建造目录找到）";
@@ -613,7 +692,18 @@ public final class BlueprintLib {
         }
     }
 
-    public static void scanExternalBlueprints() {        List<java.nio.file.Path> dirs = new ArrayList<>();
+    public static void scanExternalBlueprints() {
+        scanExternalBlueprints(false);
+    }
+
+    /** v1.5.312：force=true 用于导入流程（导入后必须立即刷新目录，不被节流吞掉） */
+    public static void scanExternalBlueprints(boolean force) {
+        long nowMs = System.currentTimeMillis();
+        if (!force && nowMs - LAST_EXTERNAL_SCAN_MS < EXTERNAL_SCAN_INTERVAL_MS) {
+            return;
+        }
+        LAST_EXTERNAL_SCAN_MS = nowMs;
+        List<java.nio.file.Path> dirs = new ArrayList<>();
         try {
             java.nio.file.Path cfg = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
@@ -670,14 +760,20 @@ public final class BlueprintLib {
                             NEEDS_CACHE.remove(id);
                             NEEDS_MTIME.remove(id);
                             DESCRIBE_CACHE.remove(id);
+                            SIZE_CACHE.remove(id);
                             registered[0]++;
                         } else {
                             EXTERNAL.remove(id);
                             EXTERNAL_NAMES.remove(id);
                             EXTERNAL_PATHS.remove(id);
-                            EXTERNAL_MTIMES.remove(id);
+                            // v1.5.312：失败也记 mtime → 本次会话不再反复重扫（损坏 zip /
+                            // 世界 zip 提取失败每次 0.5s+，目录循环重扫会卡死服务端主线程）；
+                            // 文件被替换后 mtime 变化才会重新尝试解析。
+                            EXTERNAL_MTIMES.put(id, mtime);
                             NEEDS_CACHE.remove(id);
                             NEEDS_MTIME.remove(id);
+                            DESCRIBE_CACHE.remove(id);
+                            SIZE_CACHE.remove(id);
                         }
                     } catch (Exception ignored) {
                     }
@@ -690,6 +786,7 @@ public final class BlueprintLib {
         EXTERNAL_NAMES.keySet().removeIf(id -> !seen.contains(id));
         EXTERNAL_PATHS.keySet().removeIf(id -> !seen.contains(id));
         EXTERNAL_MTIMES.keySet().removeIf(id -> !seen.contains(id));
+        SIZE_CACHE.keySet().removeIf(id -> !seen.contains(id));
         if (registered[0] > 0) {
             // v1.5.25 诊断日志（LogUtils → 进 latest.log）
             LOGGER.info("scanExternalBlueprints: 新注册 {} 个外部蓝图，共 {} 个", registered[0], EXTERNAL.size());
@@ -700,6 +797,9 @@ public final class BlueprintLib {
     private static List<String> loadExternalFile(java.nio.file.Path p, String ext) {
         try {
             if (".zip".equals(ext)) {
+                String zipName = p.getFileName() != null ? p.getFileName().toString() : p.toString();
+                // v1.5.312：zip 分支失败 WARN 同样只提示一次（与 .nbt 等一致），
+                // 损坏 zip 在目录里反复重扫（即使已节流到 3 秒一次）不再刷屏
                 // v1.5.222：ZIP 打包蓝图——解压 zip 内所有建筑文件
                 // （.schem/.litematic/.nbt/.snbt/.schematic/.json，跳过 .zip 防递归）
                 // 到蓝图目录，返回第一个建筑文件的解析结果；解出的子文件会被
@@ -712,7 +812,21 @@ public final class BlueprintLib {
                 String zipBase = p.getFileName().toString().replaceFirst("(?i)\\.zip$", "");
                 java.nio.file.Path worldDir = null;
                 List<String> first = null;
-                try (java.util.zip.ZipFile zf = new java.util.zip.ZipFile(p.toFile())) {
+                java.util.zip.ZipFile zf0 = null;
+                try {
+                    zf0 = new java.util.zip.ZipFile(p.toFile());
+                } catch (Exception utf8Fail) {
+                    // v1.5.313：中文 Windows 工具/百度网盘压缩的 zip 条目名是 GBK 编码，
+                    // Java 默认按 UTF-8 解码 → "invalid CEN header (bad entry name or
+                    // comment)" 打不开（豪华大别墅.zip 实测）；GBK 兜底重试。
+                    try {
+                        zf0 = new java.util.zip.ZipFile(p.toFile(),
+                                java.nio.charset.Charset.forName("GBK"));
+                    } catch (Exception gbkFail) {
+                        throw new java.io.IOException("zip open failed: " + p, gbkFail);
+                    }
+                }
+                try (java.util.zip.ZipFile zf = zf0) {
                     java.util.Enumeration<? extends java.util.zip.ZipEntry> en = zf.entries();
                     while (en.hasMoreElements()) {
                         java.util.zip.ZipEntry ze = en.nextElement();
@@ -763,7 +877,9 @@ public final class BlueprintLib {
                         }
                     }
                 } catch (Exception e) {
-                    LOGGER.warn("loadExternalFile: zip {} 异常 -> {}", p.getFileName(), e.toString());
+                    if (WARNED_PARSE_FAIL.add(zipName)) {
+                        LOGGER.warn("loadExternalFile: zip {} 异常 -> {}", p.getFileName(), e.toString());
+                    }
                 }
                 // v1.5.223：世界存档 zip → 提取完整建筑优先
                 // v1.5.252i：先递归定位世界根目录——网上下载的世界 zip 几乎都带
@@ -772,7 +888,9 @@ public final class BlueprintLib {
                 if (worldDir != null) {
                     java.nio.file.Path worldRoot = findWorldRoot(worldDir);
                     if (worldRoot == null) {
-                        LOGGER.warn("loadExternalFile: {} 解压后未找到 level.dat", p.getFileName());
+                        if (WARNED_PARSE_FAIL.add(zipName)) {
+                            LOGGER.warn("loadExternalFile: {} 解压后未找到 level.dat", p.getFileName());
+                        }
                         worldRoot = worldDir;
                     }
                     List<String> worldSteps = extractFromWorldZip(worldRoot);
@@ -781,7 +899,9 @@ public final class BlueprintLib {
                     }
                 }
                 if (first == null) {
-                    LOGGER.warn("loadExternalFile: {} zip 内没有可识别的建筑文件", p.getFileName());
+                    if (WARNED_PARSE_FAIL.add(zipName)) {
+                        LOGGER.warn("loadExternalFile: {} zip 内没有可识别的建筑文件", p.getFileName());
+                    }
                 }
                 return first;
             }
@@ -808,7 +928,17 @@ public final class BlueprintLib {
                 // v1.5.37：Planet Minecraft 标准格式（MCEdit 老格式：旧方块 ID + Data）
                 tag = fromSchematic(tag);
             }
-            List<String> steps = parseStructure(tag, 0, null);
+            // v1.5.317：机器蓝图（文件名匹配机器家族）保留水/岩浆步骤——机器水道/
+            // 气泡柱/岩浆焚烧口需要；普通建筑维持剥离（防洪水/岩浆事故）
+            boolean keepFluids = false;
+            if (p.getFileName() != null) {
+                String fname = p.getFileName().toString();
+                int dot = fname.lastIndexOf('.');
+                if (dot > 0) {
+                    keepFluids = machineFamily(fname.substring(0, dot)) != null;
+                }
+            }
+            List<String> steps = parseStructure(tag, 0, null, keepFluids);
             if (steps == null) {
                 // v1.5.25f 诊断：解析失败原因（LogUtils → 进 latest.log）
                 // v1.5.227：同一文件只 WARN 一次——目录每 2 秒重扫一次外部文件，
@@ -1093,10 +1223,13 @@ public final class BlueprintLib {
             for (int si = 0; si < sections.size(); si++) {
                 net.minecraft.nbt.CompoundTag sec = sections.m_128728_(si);
                 int sy = sec.m_128445_("Y");
-                // 1.8-1.11 旧格式：section 直接是 Blocks byte[] + Data（无 palette）
+                // 1.8-1.12 旧格式：section 直接是 Blocks byte[] + Data（无 palette；
+                // 1.8+ 可带 Add 高位扩展）
                 if (sec.m_128425_("Blocks", 7)) {
                     byte[] raw = sec.m_128463_("Blocks");
                     byte[] add = sec.m_128425_("Add", 7) ? sec.m_128463_("Add") : null;
+                    // v1.5.253：元数据 nibble（羊毛颜色/台阶类型/楼梯朝向等）
+                    byte[] data = sec.m_128425_("Data", 7) ? sec.m_128463_("Data") : null;
                     for (int i = 0; i < raw.length; i++) {
                         int id = raw[i] & 0xFF;
                         if (add != null) {
@@ -1106,7 +1239,12 @@ public final class BlueprintLib {
                         if (id == 0) {
                             continue;
                         }
-                        String state = legacyBlockId(id);
+                        int meta = 0;
+                        if (data != null) {
+                            int di = i >> 1;
+                            meta = (i & 1) == 0 ? (data[di] & 0x0F) : ((data[di] >> 4) & 0x0F);
+                        }
+                        String state = legacyBlockState(id, meta);
                         if (state == null) {
                             continue;
                         }
@@ -1202,7 +1340,10 @@ public final class BlueprintLib {
         }
     }
 
-    /** palette 状态 → "minecraft:xxx{prop=val,...}" 状态串 */
+    /** palette 状态 → "minecraft:xxx{prop:\"val\",...}"（v1.5.253：规范 SNBT——
+     *  键值用 ':' 分隔、值带引号，doPlace 的 NbtUtils.m_178024_ 保证可解析；
+     *  旧版 "{prop=val}" 无引号写法能否被 SNBT 解析器接受不确定，解析失败
+     *  时状态静默退化为默认（台阶/楼梯朝向全丢）） */
     private static String paletteStateString(net.minecraft.nbt.CompoundTag ps) {
         String name = ps.m_128461_("Name");
         if (name == null) {
@@ -1219,112 +1360,507 @@ public final class BlueprintLib {
                 sb.append(',');
             }
             first = false;
-            sb.append(k).append('=').append(props.m_128461_(k));
+            sb.append(k).append(":\"").append(props.m_128461_(k)).append('"');
         }
         return sb.append('}').toString();
     }
 
-    /** 旧版数字方块 id → 注册名（1.8-1.11 常用方块兜底；null = 跳过） */
-    private static String legacyBlockId(int id) {
+    // ================= v1.5.253：1.12.2 完整注册表映射（天安门镂空根因修复） =================
+    // 旧版 legacyBlockId 只有 1.8 常用子集：天安门 1.12 地图（DataVersion 1343）因此
+    // 丢失 125/126 木台阶 5470 块、96 活板门 511、82 黏土 1068、139 石墙 156、
+    // 136 丛林楼梯 312、235-250 釉陶瓦/混凝土 1900+；且 159 染色陶瓦 14930 块被映射成
+    // 1.20.1 不存在的 stained_hardened_clay → 解析为空气 → 当"清除步骤"不建 → 城楼
+    // 中间完全镂空。本表按 PrismarineJS minecraft-data pc/1.12 注册表核对，实测元数据
+    // 分布逐 id 验证（见 analysis/ 脚本）。
+    private static final String[] LEGACY_COLORS = {
+            "white", "orange", "magenta", "light_blue", "yellow", "lime", "pink",
+            "gray", "light_gray", "cyan", "purple", "blue", "brown", "green", "red", "black"};
+    private static final String[] LEGACY_WOODS = {"oak", "spruce", "birch", "jungle", "acacia", "dark_oak"};
+    private static final String[] LEGACY_STONE_VARIANTS = {"stone", "granite", "polished_granite",
+            "diorite", "polished_diorite", "andesite", "polished_andesite"};
+    private static final String[] LEGACY_SLAB_BLOCKS = {"stone_slab", "sandstone_slab", "oak_slab",
+            "cobblestone_slab", "brick_slab", "stone_brick_slab", "nether_brick_slab", "quartz_slab"};
+    private static final String[] LEGACY_SLAB2_BLOCKS = {"red_sandstone_slab", "purpur_slab"};
+    private static final String[] LEGACY_STONEBRICK = {"stone_bricks", "mossy_stone_bricks",
+            "cracked_stone_bricks", "chiseled_stone_bricks"};
+    private static final String[] LEGACY_MONSTER_EGG = {"stone", "cobblestone", "stone_bricks",
+            "mossy_stone_bricks", "cracked_stone_bricks", "chiseled_stone_bricks"};
+    private static final String[] LEGACY_FLOWERS = {"poppy", "blue_orchid", "allium", "azure_bluet",
+            "red_tulip", "orange_tulip", "white_tulip", "pink_tulip", "oxeye_daisy"};
+    private static final String[] LEGACY_DOUBLE_PLANT = {"sunflower", "lilac", "tall_grass",
+            "large_fern", "rose_bush", "peony"};
+    /** 楼梯/栅栏门/活板门/釉陶瓦 meta&3 → 朝向（EnumFacing.getHorizontal：0=south,1=west,2=north,3=east） */
+    private static final String[] LEGACY_FACINGS = {"south", "west", "north", "east"};
+    /** 火把 meta 1-4 → 朝向（1=east,2=west,3=south,4=north） */
+    private static final String[] LEGACY_TORCH_FACINGS = {"north", "east", "west", "south", "north"};
+    /** 梯子/告示牌/箱子/熔炉/骷髅头 meta 2-5 → 朝向（2=north,3=south,4=west,5=east） */
+    private static final String[] LEGACY_WALL_FACINGS = {"north", "north", "north", "south", "west", "east"};
+    /** 门 meta&3 → 朝向（getHorizontal(meta).rotateYCCW：0=east,1=north,2=west,3=south） */
+    private static final String[] LEGACY_DOOR_FACINGS = {"east", "north", "west", "south"};
+    private static final String[] LEGACY_AXIS = {"y", "x", "z"};
+    private static final String[] LEGACY_RAIL_SHAPES = {"north_south", "east_west", "ascending_east",
+            "ascending_west", "ascending_north", "ascending_south", "south_east", "south_west",
+            "north_west", "north_east"};
+    /** 活塞 meta 0-5 → 朝向（0=down,1=up,2=north,3=south,4=west,5=east） */
+    private static final String[] LEGACY_PISTON_FACINGS = {"down", "up", "north", "south", "west", "east"};
+
+    /** SNBT 字符串值（NbtUtils.m_178024_ 解析，带引号保证可解析） */
+    private static String legacySnbt(String v) {
+        return "\"" + v + "\"";
+    }
+
+    /** 楼梯状态串（meta&3 朝向，meta&4 上半；shape 用默认 straight） */
+    private static String legacyStairsState(String block, int meta) {
+        return block + "{facing:" + legacySnbt(LEGACY_FACINGS[meta & 3])
+                + ",half:" + legacySnbt((meta & 4) != 0 ? "top" : "bottom") + "}";
+    }
+
+    /** 台阶状态串（hasHalf 时 meta&8 上半；double 无半位） */
+    private static String legacySlabState(String block, int meta, boolean hasHalf) {
+        String type = hasHalf ? ((meta & 8) != 0 ? "top" : "bottom") : "double";
+        return block + "{type:" + legacySnbt(type) + "}";
+    }
+
+    /** 门状态串（meta&3 朝向，meta&4 开；上半由调用方跳过） */
+    private static String legacyDoorState(String block, int meta) {
+        return block + "{facing:" + legacySnbt(LEGACY_DOOR_FACINGS[meta & 3])
+                + ",open:" + legacySnbt((meta & 4) != 0 ? "true" : "false") + "}";
+    }
+
+    /** 活板门状态串（meta&3 朝向，meta&4 开，meta&8 上半） */
+    private static String legacyTrapdoorState(String block, int meta) {
+        return block + "{facing:" + legacySnbt(LEGACY_FACINGS[meta & 3])
+                + ",open:" + legacySnbt((meta & 4) != 0 ? "true" : "false")
+                + ",half:" + legacySnbt((meta & 8) != 0 ? "top" : "bottom") + "}";
+    }
+
+    /** 栅栏门状态串（meta&3 朝向，meta&4 开） */
+    private static String legacyGateState(String block, int meta) {
+        return block + "{facing:" + legacySnbt(LEGACY_FACINGS[meta & 3])
+                + ",open:" + legacySnbt((meta & 4) != 0 ? "true" : "false") + "}";
+    }
+
+    /** 16 色方块（羊毛/陶瓦/玻璃/地毯等），meta 0-15 与 1.20.1 颜色顺序一致 */
+    private static String legacyColoredBlock(String stem, int meta) {
+        return "minecraft:" + LEGACY_COLORS[meta & 15] + "_" + stem;
+    }
+
+    /** 拉杆/按钮状态串（meta&7：0 地板,1-4 墙,5-6 天花板） */
+    private static String legacyFaceState(String block, int meta) {
+        int i = meta & 7;
+        if (i >= 1 && i <= 4) {
+            return block + "{face:" + legacySnbt("wall")
+                    + ",facing:" + legacySnbt(LEGACY_FACINGS[i & 3]) + "}";
+        }
+        if (i == 5) {
+            return block + "{face:" + legacySnbt("ceiling") + ",facing:" + legacySnbt("north") + "}";
+        }
+        if (i == 6) {
+            return block + "{face:" + legacySnbt("ceiling") + ",facing:" + legacySnbt("south") + "}";
+        }
+        return block + "{face:" + legacySnbt("floor") + ",facing:" + legacySnbt("north") + "}";
+    }
+
+    /** 藤蔓状态串（meta 位：1=up,2=south,4=west,8=north,16=east） */
+    private static String legacyVineState(int meta) {
+        StringBuilder sb = new StringBuilder("minecraft:vine{");
+        boolean first = true;
+        String[] dirs = {"up", "south", "west", "north", "east"};
+        for (int b = 0; b < 5; b++) {
+            if ((meta & (1 << b)) != 0) {
+                if (!first) {
+                    sb.append(',');
+                }
+                first = false;
+                sb.append(dirs[b]).append(':').append(legacySnbt("true"));
+            }
+        }
+        return sb.append('}').toString();
+    }
+
+    /** 1.12.2 数字方块 id + 元数据 → 1.20.1 方块状态串（"minecraft:xxx" 或
+     *  "minecraft:xxx{prop:\"val\"}"，SNBT 兼容，doPlace 直接 NbtUtils 解析）。
+     *  返回 null = 跳过（瞬态/黑名单/无对应物/地形由调用方过滤器处理）。 */
+    private static String legacyBlockState(int id, int meta) {
+        int m = meta & 15;
         switch (id) {
             case 1:
-                return "minecraft:stone";
+                return "minecraft:" + LEGACY_STONE_VARIANTS[Math.min(m, 6)];
             case 2:
                 return "minecraft:grass_block";
             case 3:
-                return "minecraft:dirt";
+                return m == 1 ? "minecraft:coarse_dirt" : m == 2 ? "minecraft:podzol" : "minecraft:dirt";
             case 4:
                 return "minecraft:cobblestone";
             case 5:
-                return "minecraft:oak_planks";
+                return "minecraft:" + LEGACY_WOODS[Math.min(m, 5)] + "_planks";
+            case 6:
+                return "minecraft:" + LEGACY_WOODS[Math.min(m, 5)] + "_sapling";
+            case 7:
+                return "minecraft:bedrock";
             case 12:
-                return "minecraft:sand";
+                return m == 1 ? "minecraft:red_sand" : "minecraft:sand";
             case 13:
                 return "minecraft:gravel";
+            case 14:
+                return "minecraft:gold_ore";
+            case 15:
+                return "minecraft:iron_ore";
+            case 16:
+                return "minecraft:coal_ore";
             case 17:
-                return "minecraft:oak_log";
+                return "minecraft:" + LEGACY_WOODS[m & 3] + "_log{axis:"
+                        + legacySnbt(LEGACY_AXIS[(meta >> 2) & 3]) + "}";
             case 18:
-                return "minecraft:oak_leaves";
+                return "minecraft:" + LEGACY_WOODS[m & 3] + "_leaves";
+            case 19:
+                return m == 1 ? "minecraft:wet_sponge" : "minecraft:sponge";
             case 20:
                 return "minecraft:glass";
+            case 21:
+                return "minecraft:lapis_ore";
+            case 22:
+                return "minecraft:lapis_block";
+            case 23:
+                return "minecraft:dispenser";
             case 24:
-                return "minecraft:sandstone";
+                return m == 1 ? "minecraft:chiseled_sandstone"
+                        : m == 2 ? "minecraft:smooth_sandstone" : "minecraft:sandstone";
+            case 25:
+                return "minecraft:note_block";
+            case 26:
+                return (meta & 8) != 0 ? null : "minecraft:red_bed"; // 上半跳过（床自动补全）
+            case 27:
+                return "minecraft:powered_rail";
+            case 28:
+                return "minecraft:detector_rail";
+            case 29:
+                return "minecraft:sticky_piston{facing:"
+                        + legacySnbt(LEGACY_PISTON_FACINGS[Math.min(m, 5)]) + "}";
+            case 30:
+                return "minecraft:cobweb";
+            case 31:
+                return m == 1 ? "minecraft:short_grass" : m == 2 ? "minecraft:fern" : "minecraft:dead_bush";
+            case 32:
+                return "minecraft:dead_bush";
+            case 33:
+                return "minecraft:piston{facing:"
+                        + legacySnbt(LEGACY_PISTON_FACINGS[Math.min(m, 5)]) + "}";
+            case 34:
+            case 36:
+                return null; // 活塞头/活塞扩展（瞬态）
             case 35:
-                return "minecraft:white_wool";
+                return legacyColoredBlock("wool", m);
+            case 37:
+                return "minecraft:dandelion";
+            case 38:
+                return "minecraft:" + LEGACY_FLOWERS[Math.min(m, 8)];
+            case 39:
+                return "minecraft:brown_mushroom";
+            case 40:
+                return "minecraft:red_mushroom";
             case 41:
                 return "minecraft:gold_block";
             case 42:
                 return "minecraft:iron_block";
             case 43:
+                return legacySlabState("minecraft:" + LEGACY_SLAB_BLOCKS[Math.min(m, 7)], meta, false);
             case 44:
-                return "minecraft:stone_slab";
+                return legacySlabState("minecraft:" + LEGACY_SLAB_BLOCKS[Math.min(m, 7)], meta, true);
             case 45:
                 return "minecraft:bricks";
+            case 46:
+                return "minecraft:tnt";
+            case 47:
+                return "minecraft:bookshelf";
+            case 48:
+                return "minecraft:mossy_cobblestone";
             case 49:
                 return "minecraft:obsidian";
             case 50:
-                return "minecraft:torch";
+                return m >= 1 && m <= 4 ? "minecraft:wall_torch{facing:"
+                        + legacySnbt(LEGACY_TORCH_FACINGS[m]) + "}" : "minecraft:torch";
+            case 51:
+                return null; // 火
+            case 52:
+                return "minecraft:spawner";
             case 53:
-                return "minecraft:oak_stairs";
+                return legacyStairsState("minecraft:oak_stairs", meta);
+            case 54:
+                return "minecraft:chest{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
+            case 55:
+                return "minecraft:redstone_wire";
+            case 56:
+                return "minecraft:diamond_ore";
+            case 57:
+                return "minecraft:diamond_block";
+            case 58:
+                return "minecraft:crafting_table";
+            case 59:
+                return "minecraft:wheat";
+            case 60:
+                return "minecraft:farmland";
             case 61:
             case 62:
-                return "minecraft:furnace";
+                return "minecraft:furnace{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
+            case 63:
+                return "minecraft:oak_sign{rotation:" + legacySnbt(String.valueOf(m)) + "}";
             case 64:
-                return "minecraft:oak_door";
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:oak_door", meta);
             case 65:
-                return "minecraft:ladder";
+                return "minecraft:ladder{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
+            case 66:
+                return "minecraft:rail{shape:"
+                        + legacySnbt(LEGACY_RAIL_SHAPES[Math.min(m, 9)]) + "}";
             case 67:
-                return "minecraft:cobblestone_stairs";
+                return legacyStairsState("minecraft:cobblestone_stairs", meta);
+            case 68:
+                return "minecraft:oak_wall_sign{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
+            case 69:
+                return legacyFaceState("minecraft:lever", meta);
+            case 70:
+                return "minecraft:stone_pressure_plate";
             case 71:
-                return "minecraft:iron_door";
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:iron_door", meta);
+            case 72:
+                return "minecraft:oak_pressure_plate";
+            case 73:
+            case 74:
+                return "minecraft:redstone_ore";
+            case 75:
+            case 76:
+                return m >= 1 && m <= 4 ? "minecraft:redstone_wall_torch{facing:"
+                        + legacySnbt(LEGACY_TORCH_FACINGS[m]) + "}" : "minecraft:redstone_torch";
+            case 77:
+                return legacyFaceState("minecraft:stone_button", meta);
             case 78:
-                return "minecraft:snow_layer";
+                return null; // 雪层（地形）
             case 79:
                 return "minecraft:ice";
             case 80:
                 return "minecraft:snow_block";
+            case 81:
+                return "minecraft:cactus";
+            case 82:
+                return "minecraft:clay";
+            case 83:
+                return "minecraft:sugar_cane";
+            case 84:
+                return "minecraft:jukebox";
             case 85:
                 return "minecraft:oak_fence";
+            case 86:
+            case 91:
+                return "minecraft:pumpkin";
+            case 87:
+                return "minecraft:netherrack";
+            case 88:
+                return "minecraft:soul_sand";
             case 89:
                 return "minecraft:glowstone";
+            case 90:
+                return null; // 传送门
+            case 92:
+                return "minecraft:cake";
+            case 93:
+            case 94:
+                return "minecraft:repeater";
+            case 95:
+                return legacyColoredBlock("stained_glass", m);
+            case 96:
+                return legacyTrapdoorState("minecraft:oak_trapdoor", meta);
+            case 97:
+                return "minecraft:" + LEGACY_MONSTER_EGG[Math.min(m, 5)];
             case 98:
-                return "minecraft:stone_bricks";
+                return "minecraft:" + LEGACY_STONEBRICK[Math.min(m, 3)];
+            case 99:
+                return "minecraft:brown_mushroom_block";
+            case 100:
+                return "minecraft:red_mushroom_block";
+            case 101:
+                return "minecraft:iron_bars";
+            case 102:
+                return "minecraft:glass_pane";
+            case 103:
+                return "minecraft:melon";
+            case 104:
+            case 105:
+                return null; // 瓜茎（瞬态）
+            case 106:
+                return legacyVineState(meta);
             case 107:
-                return "minecraft:oak_fence_gate";
+                return legacyGateState("minecraft:oak_fence_gate", meta);
             case 108:
-                return "minecraft:brick_stairs";
+                return legacyStairsState("minecraft:brick_stairs", meta);
             case 109:
-                return "minecraft:stone_brick_stairs";
+                return legacyStairsState("minecraft:stone_brick_stairs", meta);
+            case 110:
+                return "minecraft:mycelium";
+            case 111:
+                return "minecraft:lily_pad";
             case 112:
                 return "minecraft:nether_bricks";
-            case 121:
+            case 113:
+                return "minecraft:nether_brick_fence";
+            case 114:
+                return legacyStairsState("minecraft:nether_brick_stairs", meta);
+            case 115:
+                return "minecraft:nether_wart";
+            case 116:
+                return "minecraft:enchanting_table";
+            case 117:
+                return "minecraft:brewing_stand";
+            case 118:
+                return "minecraft:cauldron";
+            case 119:
+                return "minecraft:end_portal_frame";
+            case 120:
                 return "minecraft:end_stone";
+            case 121:
+                return "minecraft:dragon_egg";
+            case 122:
+            case 123:
+                return "minecraft:redstone_lamp";
+            case 124:
+            case 125:
+                return legacySlabState("minecraft:" + LEGACY_WOODS[Math.min(m, 5)] + "_slab", meta, false);
+            case 126:
+                return legacySlabState("minecraft:" + LEGACY_WOODS[Math.min(m, 5)] + "_slab", meta, true);
+            case 127:
+                return null; // 可可豆（作物）
             case 128:
-                return "minecraft:sandstone_stairs";
+                return legacyStairsState("minecraft:sandstone_stairs", meta);
+            case 129:
+                return "minecraft:emerald_ore";
+            case 130:
+                return "minecraft:ender_chest{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
+            case 131:
+                return "minecraft:tripwire_hook{facing:" + legacySnbt(LEGACY_FACINGS[m & 3]) + "}";
+            case 132:
+                return "minecraft:tripwire";
+            case 133:
+                return "minecraft:emerald_block";
             case 134:
-                return "minecraft:spruce_stairs";
+                return legacyStairsState("minecraft:spruce_stairs", meta);
             case 135:
-                return "minecraft:birch_stairs";
+                return legacyStairsState("minecraft:birch_stairs", meta);
+            case 136:
+                return legacyStairsState("minecraft:jungle_stairs", meta);
+            case 137:
+                return null; // 命令方块
+            case 138:
+                return "minecraft:beacon";
+            case 139:
+                return m == 1 ? "minecraft:mossy_cobblestone_wall" : "minecraft:cobblestone_wall";
+            case 140:
+                return "minecraft:flower_pot";
+            case 141:
+                return "minecraft:carrots";
+            case 142:
+                return "minecraft:potatoes";
+            case 143:
+                return legacyFaceState("minecraft:oak_button", meta);
+            case 144:
+                return m >= 1 && m <= 4 ? "minecraft:skeleton_wall_skull{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[m]) + "}" : "minecraft:skeleton_skull";
+            case 145:
+                return "minecraft:anvil{facing:"
+                        + legacySnbt(new String[]{"north", "east", "south", "west"}[m & 3]) + "}";
+            case 146:
+                return "minecraft:trapped_chest";
+            case 147:
+                return "minecraft:light_weighted_pressure_plate";
+            case 148:
+                return "minecraft:heavy_weighted_pressure_plate";
+            case 149:
+            case 150:
+                return "minecraft:comparator";
+            case 151:
+            case 178:
+                return "minecraft:daylight_detector";
             case 152:
                 return "minecraft:redstone_block";
+            case 153:
+                return null; // 石英矿（不在地形过滤表，避免进蓝图）
+            case 154:
+                return "minecraft:hopper";
             case 155:
-                return "minecraft:quartz_block";
+                return m == 1 ? "minecraft:chiseled_quartz_block"
+                        : m == 2 ? "minecraft:quartz_pillar" : "minecraft:quartz_block";
             case 156:
-                return "minecraft:quartz_stairs";
+                return legacyStairsState("minecraft:quartz_stairs", meta);
+            case 157:
+                return "minecraft:activator_rail";
+            case 158:
+                return "minecraft:dropper";
             case 159:
-                return "minecraft:stained_hardened_clay";
+                // 染色陶瓦 14930 块（天安门红墙）——旧版映射成 1.20.1 不存在的
+                // stained_hardened_clay → 解析为空气 → 整面墙当"清除步骤"不建
+                return legacyColoredBlock("terracotta", m);
+            case 160:
+                return legacyColoredBlock("stained_glass_pane", m);
+            case 161:
+                return (m & 1) == 1 ? "minecraft:dark_oak_leaves" : "minecraft:acacia_leaves";
+            case 162:
+                return "minecraft:" + ((m & 1) == 1 ? "dark_oak" : "acacia") + "_log{axis:"
+                        + legacySnbt(LEGACY_AXIS[(meta >> 2) & 3]) + "}";
             case 163:
-                return "minecraft:acacia_stairs";
+                return legacyStairsState("minecraft:acacia_stairs", meta);
             case 164:
-                return "minecraft:dark_oak_stairs";
+                return legacyStairsState("minecraft:dark_oak_stairs", meta);
+            case 165:
+                return "minecraft:slime_block";
+            case 166:
+                return null; // 屏障
+            case 167:
+                return legacyTrapdoorState("minecraft:iron_trapdoor", meta);
+            case 168:
+                return m == 1 ? "minecraft:prismarine_bricks"
+                        : m == 2 ? "minecraft:dark_prismarine" : "minecraft:prismarine";
+            case 169:
+                return "minecraft:sea_lantern";
+            case 170:
+                return "minecraft:hay_block{axis:" + legacySnbt(LEGACY_AXIS[(meta >> 2) & 3]) + "}";
+            case 171:
+                return legacyColoredBlock("carpet", m);
             case 172:
-                return "minecraft:hardened_clay";
+                return "minecraft:terracotta"; // 硬化陶瓦 → 1.20.1 陶瓦（旧版同名 ID 在 1.20.1 不存在）
+            case 173:
+                return "minecraft:coal_block";
+            case 174:
+                return "minecraft:packed_ice";
+            case 175:
+                return (meta & 8) != 0 ? null : "minecraft:" + LEGACY_DOUBLE_PLANT[Math.min(m, 5)];
+            case 176:
+                return "minecraft:white_banner";
+            case 177:
+                return "minecraft:white_wall_banner{facing:"
+                        + legacySnbt(LEGACY_WALL_FACINGS[Math.min(m, 5)]) + "}";
             case 179:
-                return "minecraft:red_sandstone";
+                return m == 1 ? "minecraft:chiseled_red_sandstone"
+                        : m == 2 ? "minecraft:smooth_red_sandstone" : "minecraft:red_sandstone";
             case 180:
-                return "minecraft:red_sandstone_stairs";
+                return legacyStairsState("minecraft:red_sandstone_stairs", meta);
+            case 181:
+                return legacySlabState("minecraft:" + LEGACY_SLAB2_BLOCKS[Math.min(m, 1)], meta, false);
             case 182:
-                return "minecraft:stone_pressure_plate";
+                // 旧版误映射为 stone_pressure_plate（1.8 布局）——实为石台阶2
+                return legacySlabState("minecraft:" + LEGACY_SLAB2_BLOCKS[Math.min(m, 1)], meta, true);
+            case 183:
+                return legacyGateState("minecraft:spruce_fence_gate", meta);
+            case 184:
+                return legacyGateState("minecraft:birch_fence_gate", meta);
+            case 185:
+                return legacyGateState("minecraft:jungle_fence_gate", meta);
+            case 186:
+                return legacyGateState("minecraft:dark_oak_fence_gate", meta);
+            case 187:
+                return legacyGateState("minecraft:acacia_fence_gate", meta);
             case 188:
                 return "minecraft:spruce_fence";
             case 189:
@@ -1335,10 +1871,96 @@ public final class BlueprintLib {
                 return "minecraft:dark_oak_fence";
             case 192:
                 return "minecraft:acacia_fence";
+            case 193:
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:spruce_door", meta);
+            case 194:
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:birch_door", meta);
+            case 195:
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:jungle_door", meta);
+            case 196:
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:acacia_door", meta);
+            case 197:
+                return (meta & 8) != 0 ? null : legacyDoorState("minecraft:dark_oak_door", meta);
             case 198:
                 return "minecraft:end_rod";
+            case 199:
+                return "minecraft:chorus_plant";
+            case 200:
+                return "minecraft:chorus_flower";
+            case 201:
+                return "minecraft:purpur_block";
+            case 202:
+                return "minecraft:purpur_pillar{axis:" + legacySnbt(LEGACY_AXIS[(meta >> 2) & 3]) + "}";
             case 203:
-                return "minecraft:purpur_stairs";
+                return legacyStairsState("minecraft:purpur_stairs", meta);
+            case 204:
+                return legacySlabState("minecraft:purpur_slab", meta, false);
+            case 205:
+                return legacySlabState("minecraft:purpur_slab", meta, true);
+            case 206:
+                return "minecraft:end_stone_bricks";
+            case 207:
+                return "minecraft:beetroots";
+            case 208:
+                return "minecraft:dirt_path";
+            case 209:
+                return null; // 末地折跃门
+            case 210:
+            case 211:
+                return null; // 命令方块
+            case 212:
+                return "minecraft:ice"; // 霜冰
+            case 213:
+                return "minecraft:magma_block";
+            case 214:
+                return "minecraft:nether_wart_block";
+            case 215:
+                return "minecraft:red_nether_bricks";
+            case 216:
+                return "minecraft:bone_block{axis:" + legacySnbt(LEGACY_AXIS[(meta >> 2) & 3]) + "}";
+            case 217:
+                return null; // 结构空位
+            case 218:
+                return "minecraft:observer";
+            case 219:
+            case 220:
+            case 221:
+            case 222:
+            case 223:
+            case 224:
+            case 225:
+            case 226:
+            case 227:
+            case 228:
+            case 229:
+            case 230:
+            case 231:
+            case 232:
+            case 233:
+            case 234:
+                return "minecraft:" + LEGACY_COLORS[id - 219] + "_shulker_box";
+            case 235:
+            case 236:
+            case 237:
+            case 238:
+            case 239:
+            case 240:
+            case 241:
+            case 242:
+            case 243:
+            case 244:
+            case 245:
+            case 246:
+            case 247:
+            case 248:
+            case 249:
+            case 250:
+                return "minecraft:" + LEGACY_COLORS[id - 235] + "_glazed_terracotta{facing:"
+                        + legacySnbt(LEGACY_FACINGS[m & 3]) + "}";
+            case 251:
+                return "minecraft:white_concrete";
+            case 252:
+                return "minecraft:white_concrete_powder";
             default:
                 return null; // 未知旧 id → 跳过（旧存档兜底，不阻塞）
         }
@@ -1385,18 +2007,65 @@ public final class BlueprintLib {
      * 只能删【外部蓝图】（config/maid_smart/blueprints 或存档 schematics/ 下的文件，
      * 含 AI 生成的 .json）；内置蓝图（maid_smart:hut 等）无文件、不可删 → false。
      * 删除后清内存缓存 + 增量扫描移除注册；下次扫描自动同步（文件已不在）。
+     * v1.5.324：全扫描目录清除【同名文件】——旧版只删 EXTERNAL_PATHS 登记的那一份，
+     * 若同一蓝图文件同时存在于 config/maid_smart/blueprints 与 <cwd>/schematics（或
+     * 多实例/多存档残留），另一份会在下次扫描时重新注册 → "删了又出现"
+     * （RRR/SSS 删不掉、重登/跨存档又出现的根因）；现在按文件名（去扩展名、
+     * 大小写不敏感）在所有扫描目录里清掉全部副本。
      */
     public static boolean deleteBlueprint(String id) {
         try {
             java.nio.file.Path path = EXTERNAL_PATHS.get(id);
-            // v1.5.252ad：删除诊断（latest.log 搜 "deleteBlueprint"）——用户实测
-            // RRR/SSS 删不掉、重登又出现，需确认 id 与路径
+            String base = id.startsWith("maid_smart_ext:")
+                    ? id.substring("maid_smart_ext:".length()) : id;
+            // v1.5.252ad：删除诊断（latest.log 搜 "deleteBlueprint"）
             LOGGER.info("deleteBlueprint: 请求删除 id={} path={}", id,
                     path == null ? "(无注册路径!)" : path.toString());
-            if (path == null) {
-                return false; // 内置蓝图或未注册
+            boolean deletedAny = false;
+            if (path != null) {
+                java.nio.file.Files.deleteIfExists(path);
+                deletedAny = true;
             }
-            java.nio.file.Files.deleteIfExists(path);
+            // 收集全部扫描目录（与 scanExternalBlueprints 同一套：config + <cwd>/schematics）
+            java.util.List<java.nio.file.Path> dirs = new java.util.ArrayList<>();
+            try {
+                java.nio.file.Path cfg = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
+                        .resolve("maid_smart").resolve("blueprints");
+                if (java.nio.file.Files.isDirectory(cfg)) {
+                    dirs.add(cfg);
+                }
+            } catch (Exception ignored) {
+            }
+            try {
+                if (SERVER != null) {
+                    java.nio.file.Path sched = SERVER.m_6237_().toPath().resolve("schematics");
+                    if (java.nio.file.Files.isDirectory(sched)) {
+                        dirs.add(sched);
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+            // 在所有扫描目录里清除同名副本（去扩展名、大小写不敏感——RRR/rrr 都删）
+            for (java.nio.file.Path dir : dirs) {
+                try (java.util.stream.Stream<java.nio.file.Path> files = java.nio.file.Files.list(dir)) {
+                    for (java.nio.file.Path hit : files
+                            .filter(p -> {
+                                String n = p.getFileName().toString();
+                                int dot = n.lastIndexOf('.');
+                                String nb = dot > 0 ? n.substring(0, dot) : n;
+                                return nb.equalsIgnoreCase(base);
+                            })
+                            .toList()) {
+                        java.nio.file.Files.deleteIfExists(hit);
+                        deletedAny = true;
+                        LOGGER.info("deleteBlueprint: 清理副本 {}", hit);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (!deletedAny) {
+                return false; // 内置蓝图（无文件）或全部未找到
+            }
             EXTERNAL.remove(id);
             EXTERNAL_NAMES.remove(id);
             EXTERNAL_PATHS.remove(id);
@@ -1404,7 +2073,7 @@ public final class BlueprintLib {
             NEEDS_CACHE.remove(id);
             NEEDS_MTIME.remove(id);
             DESCRIBE_CACHE.remove(id);
-            LOGGER.info("deleteBlueprint: 已删除蓝图 {} ({})", id, path.getFileName());
+            LOGGER.info("deleteBlueprint: 已删除蓝图 {} ({})", id, base);
             return true;
         } catch (Exception e) {
             LOGGER.warn("deleteBlueprint: 删除 {} 失败 -> {}", id, e.toString());
@@ -1417,10 +2086,13 @@ public final class BlueprintLib {
      * 支持 rotation（顺时针 0/90/180/270，需 holder 才能旋转方块状态；holder 为 null 时忽略旋转）。
      * 规则（对齐 numen）：
      * - 黑名单方块 / 液体 / 无物品方块 / 二次半块（门上半、床头）→ 跳过
+     * - v1.5.317：keepFluids=true（红石机器蓝图）→ 水/岩浆保留为可建步骤
+     *   （机器水道/气泡柱/岩浆焚烧口需要）；普通建筑维持剥离（防洪水/岩浆事故）。
      * - 精确 BlockState 与方块实体数据随步骤携带（|stateSnbt|beSnbt）
      */
     public static List<String> parseStructure(net.minecraft.nbt.CompoundTag tag, int quarters,
-                                              net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
+                                              net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder,
+                                              boolean keepFluids) {
         try {
             net.minecraft.nbt.ListTag sizeTag = tag.m_128437_("size", 3);
             if (sizeTag.m_128763_(0) < 1) {
@@ -1485,7 +2157,10 @@ public final class BlueprintLib {
                 }
                 net.minecraft.nbt.CompoundTag stateTag = palette.get(stateIndex);
                 String blockName = stateTag.m_128461_("Name");
-                if (FORBIDDEN.contains(blockName)) {
+                // v1.5.317：机器蓝图（keepFluids）保留水/岩浆；其余黑名单照旧剥离
+                boolean fluidKept = keepFluids && ("minecraft:water".equals(blockName)
+                        || "minecraft:lava".equals(blockName));
+                if (FORBIDDEN.contains(blockName) && !fluidKept) {
                     continue;
                 }
                 // 二次半块（门上半/床头）跳过——放置主半块时 MC 自动补全
@@ -1494,7 +2169,7 @@ public final class BlueprintLib {
                 }
                 net.minecraft.world.level.block.Block block =
                         net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(blockName));
-                if (block == null || block.m_5456_() == net.minecraft.world.item.Items.f_41852_) {
+                if (block == null || (block.m_5456_() == net.minecraft.world.item.Items.f_41852_ && !fluidKept)) {
                     continue; // 无此方块或没有对应物品（对齐 numen：无物品方块跳过）
                 }
                 StringBuilder step = new StringBuilder();
@@ -1518,6 +2193,12 @@ public final class BlueprintLib {
             LOGGER.warn("parseStructure: 解析结构异常 -> {}", e.toString());
             return null;
         }
+    }
+
+    /** 兼容重载：非机器路径（普通建筑 .nbt/旋转）默认剥离水/岩浆 */
+    public static List<String> parseStructure(net.minecraft.nbt.CompoundTag tag, int quarters,
+                                              net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
+        return parseStructure(tag, quarters, holder, false);
     }
 
     /** 门上半/床床头等二次半块（放置主半块时 MC 自动补全，跳过避免重复消耗） */
@@ -1955,7 +2636,16 @@ public final class BlueprintLib {
                 || block instanceof net.minecraft.world.level.block.BannerBlock
                 || block instanceof net.minecraft.world.level.block.WallBannerBlock
                 // v1.5.82：甘蔗需要下方支撑（沙子/泥土/甘蔗），缺失会掉
-                || block instanceof net.minecraft.world.level.block.SugarCaneBlock;
+                || block instanceof net.minecraft.world.level.block.SugarCaneBlock
+                // v1.5.268：藤蔓/发光地衣——贴墙/贴面附着方块，缺墙会掉落。
+                // 旧版漏网：supportDirection 返回 null → 墙未建时直接放 → 掉落
+                // → 3 次失败永久跳过 → 墙建好后也不补（现代红石智能住宅大量
+                // 藤蔓 skip，完成时报"悬空放不上"）
+                || block instanceof net.minecraft.world.level.block.VineBlock
+                || block instanceof net.minecraft.world.level.block.GlowLichenBlock
+                // v1.5.268：可可豆贴丛林木、仙人掌需沙地——同样漏网（缺支撑掉落）
+                || block instanceof net.minecraft.world.level.block.CocoaBlock
+                || block instanceof net.minecraft.world.level.block.CactusBlock;
         if (!attach) {
             return null;
         }
@@ -1977,6 +2667,24 @@ public final class BlueprintLib {
         }
         if (block instanceof net.minecraft.world.level.block.DiodeBlock) {
             return net.minecraft.core.Direction.DOWN; // 中继器/比较器：支撑在下方
+        }
+        // v1.5.268：藤蔓/发光地衣——多方向布尔属性（north/east/south/west/up/down
+        // 任一为 true = 贴该面）→ 支撑方向取任意一个贴面方向（墙在建好前延后，
+        // 建好后补建；悬空无墙时补石头）
+        if (block instanceof net.minecraft.world.level.block.VineBlock
+                || block instanceof net.minecraft.world.level.block.GlowLichenBlock) {
+            for (net.minecraft.world.level.block.state.properties.Property<?> p : state.m_61147_()) {
+                String n = p.m_61708_();
+                if (("north".equals(n) || "east".equals(n) || "south".equals(n)
+                        || "west".equals(n) || "up".equals(n) || "down".equals(n))
+                        && Boolean.TRUE.equals(state.m_61143_(p))) {
+                    net.minecraft.core.Direction d = dirByName(n);
+                    if (d != null) {
+                        return d; // 支撑 = 贴面所在方向（墙）
+                    }
+                }
+            }
+            return net.minecraft.core.Direction.DOWN;
         }
         String facing = null;
         String face = null;
@@ -2018,6 +2726,36 @@ public final class BlueprintLib {
     }
 
     /**
+     * v1.5.349：蓝图指定世界坐标是否为【流体步骤】(水/岩浆)——识别"设计意图的
+     * 流体支撑"：村民机水闸活板门等，顶部活板门上方就是水（原版 canSurvive 放
+     * 不上，蓝图作者用工具强放；活板门 neighborChanged 只切开合不自毁，javap
+     * 实证）。补支撑逻辑识别后直接放置附着块，不替换流体、不无限延后——否则旧
+     * 版要么把水换成石头（水闸毁掉→机器不工作），要么永远延后缺失。
+     * 只在支撑格已是流体且计划含该格时调用（罕见），O(N) 扫描可接受。
+     */
+    public static boolean isFluidStepAt(List<String> plan, net.minecraft.core.BlockPos origin,
+                                        net.minecraft.core.BlockPos worldPos) {
+        int wx = worldPos.m_123341_();
+        int wy = worldPos.m_123342_();
+        int wz = worldPos.m_123343_();
+        for (int i = 1; i < plan.size(); i++) {
+            String[] parts = parseStep(plan.get(i));
+            if (parts == null) {
+                continue;
+            }
+            try {
+                if (origin.m_123341_() + Integer.parseInt(parts[0]) == wx
+                        && origin.m_123342_() + Integer.parseInt(parts[1]) == wy
+                        && origin.m_123343_() + Integer.parseInt(parts[2]) == wz) {
+                    return "minecraft:water".equals(parts[3]) || "minecraft:lava".equals(parts[3]);
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return false;
+    }
+
+    /**
      * v1.5.78：搭建优先级（拟人化建造顺序）：
      * - 0 = 结构主体（最先）：默认方块——墙/地板/屋顶/承重（石头、砖、木板、混凝土等）
      * - 1 = 功能/家具（次之）：门/活板门/栅栏门/楼梯/台阶/栅栏/墙（walls）/箱子/床
@@ -2047,7 +2785,13 @@ public final class BlueprintLib {
         int prio = 1;
         Block block = ForgeRegistries.BLOCKS.getValue(net.minecraft.resources.ResourceLocation.parse(blockId));
         if (block != null) {
-            if (block instanceof net.minecraft.world.level.block.BushBlock
+            if (block instanceof net.minecraft.world.level.block.TntBlock) {
+                // v1.5.314：TNT 最后放（优先级低于红石 prio 2）——先放的红石线/
+                // 中继器等激活信号会把已放置的 TNT 点燃（TNT 大炮蓝图实证：
+                // "红石信号最后放上去就炸"）；TNT 排最后时信号源已就位稳定，
+                // 放置 TNT 不再产生新的红石更新，不会炸。
+                prio = 3;
+            } else if (block instanceof net.minecraft.world.level.block.BushBlock
                     || block instanceof net.minecraft.world.level.block.CarpetBlock
                     || block instanceof net.minecraft.world.level.block.TorchBlock
                     || block instanceof net.minecraft.world.level.block.ButtonBlock
@@ -2134,7 +2878,9 @@ public final class BlueprintLib {
                 net.minecraft.core.BlockPos pos = origin.m_7918_(
                         Integer.parseInt(parts[0]), Integer.parseInt(parts[1]), Integer.parseInt(parts[2]));
                 net.minecraft.world.level.block.state.BlockState below = level.m_8055_(pos.m_7918_(0, -1, 0));
-                if (below.m_60795_() || below.m_60815_()) {
+                // v1.5.259：m_60815_ 是 isSolid——旧版当 isLiquid 用（下方空气或液体→计数）
+                if (below.m_60795_()
+                        || below.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
                     count++;
                 }
             } catch (NumberFormatException ignored) {
@@ -2452,6 +3198,26 @@ public final class BlueprintLib {
         return new int[]{maxX - minX + 1, maxY - minY + 1, maxZ - minZ + 1};
     }
 
+    /** v1.5.375：占地尺寸缓存（id → {宽,高,深}）——8000+ 外部蓝图下，openFor 对每个
+     *  蓝图调 blueprintSize 遍历全部步骤（一次 64M 次坐标解析）会卡死主线程；
+     *  启动预热后按 id 命中缓存，手册打开零遍历。 */
+    private static final Map<String, int[]> SIZE_CACHE = new HashMap<>();
+
+    /** 带缓存的占地尺寸（预热后按 id 命中；未命中时计算并缓存） */
+    public static int[] blueprintSizeCached(String id, List<String> steps) {
+        if (id != null) {
+            int[] c = SIZE_CACHE.get(id);
+            if (c != null) {
+                return c;
+            }
+        }
+        int[] sz = blueprintSize(steps);
+        if (id != null) {
+            SIZE_CACHE.put(id, sz);
+        }
+        return sz;
+    }
+
     /** 统一查找蓝图（旋转 0）：内置优先，其次外部（config/maid_smart/blueprints + 存档 schematics/） */
     public static List<String> getBlueprint(String id) {
         List<String> builtIn = getBuiltIn(id);
@@ -2516,21 +3282,16 @@ public final class BlueprintLib {
         return EXTERNAL_NAMES.getOrDefault(id, id);
     }
 
-    /** 全部蓝图目录条目（v1.5.16，Promaid 手册 GUI 用）：每项 {id, 显示名, 描述} */
+    /** 全部蓝图目录条目（v1.5.16，Promaid 手册 GUI 用）：每项 {id, 显示名, 描述}
+     *  v1.5.366：内置 19 个（3 小屋 + 12 新结构建筑 + 3 别墅 + 熔炉）+ 外部蓝图 */
     public static List<String[]> buildCatalogEntries() {
         List<String[]> out = new ArrayList<>();
-        int builtInCount = 0;
-        for (String id : BUILT_IN_NAMES.keySet()) {
-            List<String> steps = getBuiltIn(id);
-            if (steps != null && !steps.isEmpty()) {
-                out.add(new String[]{id, getBlueprintName(id), describe(id, steps)});
-                builtInCount++;
-            }
-        }
+        // v1.5.373：玩家导入的地图放【第 1 页】（尊重玩家感受——自己导入的内容优先展示，
+        // 旧版内置预设占前几页、导入的地图排在最后）
         scanExternalBlueprints();
+        int externalCount = 0;
         List<String> externalIds = new ArrayList<>(EXTERNAL.keySet());
         externalIds.sort(String::compareTo);
-        int extCount = 0;
         for (String id : externalIds) {
             List<String> steps = EXTERNAL.get(id);
             if (steps == null || steps.isEmpty()) {
@@ -2542,10 +3303,19 @@ public final class BlueprintLib {
                 continue;
             }
             out.add(new String[]{id, getBlueprintName(id), describe(id, steps)});
-            extCount++;
+            externalCount++;
+        }
+        int builtInCount = 0;
+        for (String id : BUILT_IN_NAMES.keySet()) {
+            List<String> steps = getBuiltIn(id);
+            if (steps != null && !steps.isEmpty()) {
+                out.add(new String[]{id, getBlueprintName(id), describe(id, steps)});
+                builtInCount++;
+            }
         }
         // v1.5.25 诊断：内置/外部各多少（LogUtils → 进 latest.log）
-        LOGGER.info("buildCatalogEntries: 内置 {} 个, 外部 {} 个, 合计 {} 个", builtInCount, extCount, out.size());
+        LOGGER.info("buildCatalogEntries: 外部 {} 个, 内置 {} 个, 合计 {} 个", externalCount,
+                builtInCount, out.size());
         return out;
     }
 
@@ -2572,7 +3342,11 @@ public final class BlueprintLib {
         Map<String[], Map<String, int[]>> out = new java.util.LinkedHashMap<>();
         List<String[]> entries = buildCatalogEntries();
         // v1.5.221：已建统计（活跃区块计划 placedSet）+ 绑定女仆背包统计
-        java.util.Map<String, Integer> builtMap = new java.util.HashMap<>();
+        // v1.5.278：已建按【蓝图 id 隔离】——旧版把所有计划的 placedSet 混在一个
+        // Map，不同蓝图共用材料时（石质山景别墅 + 现代红石智能住宅都用石头/木板/石砖），
+        // 其他计划的已建会把本蓝图"剩余需求"扣成 0 → 材料表只剩 3 种未污染的
+        //（用户截图实证：圆石墙/蓝色床/火把，其余全显示"已建完"）
+        java.util.Map<String, java.util.Map<String, Integer>> builtByBlueprint = new java.util.HashMap<>();
         java.util.Map<String, Integer> maidHaveMap = new java.util.HashMap<>();
         if (player.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
             for (BuildPlan.PlanState ps : BuildPlan.getPlans(sl)) {
@@ -2581,6 +3355,8 @@ public final class BlueprintLib {
                     continue;
                 }
                 List<String> plan = ps.steps;
+                java.util.Map<String, Integer> builtCur = builtByBlueprint.computeIfAbsent(
+                        ps.blueprintId, k -> new java.util.HashMap<>());
                 for (int i = 1; i < plan.size(); i++) {
                     String[] parts = parseStep(plan.get(i));
                     if (parts == null) {
@@ -2591,7 +3367,7 @@ public final class BlueprintLib {
                                 | (long) (Integer.parseInt(parts[1]) & 0x1FFFFF) << 21
                                 | (Integer.parseInt(parts[2]) & 0x1FFFFF);
                         if (prog.placedSet.contains(key)) {
-                            builtMap.merge(parts[3], 1, Integer::sum); // 已累计搭建
+                            builtCur.merge(parts[3], 1, Integer::sum); // 已累计搭建
                         }
                     } catch (NumberFormatException ignored) {
                     }
@@ -2629,6 +3405,8 @@ public final class BlueprintLib {
             // 手册都对 59 个蓝图重新遍历上万步骤 → 服务端主线程卡顿）
             Map<String, Integer> need = countNeedsCached(id, steps);
             Map<String, int[]> mats = new java.util.LinkedHashMap<>();
+            java.util.Map<String, Integer> builtMap = builtByBlueprint.getOrDefault(id,
+                    java.util.Collections.emptyMap());
             for (Map.Entry<String, Integer> entry : need.entrySet()) {
                 int built = builtMap.getOrDefault(entry.getKey(), 0);           // 已搭建
                 int maidHave = maidHaveMap.getOrDefault(entry.getKey(), 0);     // 绑定女仆背包
@@ -2639,6 +3417,18 @@ public final class BlueprintLib {
                         ? remaining
                         : built + maidHave + countPlayerMaterial(player, entry.getKey()); // 已建+女仆+玩家
                 mats.put(entry.getKey(), new int[]{have, remaining});
+            }
+            // v1.5.318：液体工具/材料需求（水桶/岩浆桶）补进材料表——水/岩浆被
+            // countNeeds 排除（FORBIDDEN），但玩家需要知道要备桶：水=1 水桶作工具、
+            // 岩浆=N 岩浆桶（放置后返还空桶）
+            Map<String, Integer> fluidNeed = fluidBucketNeeds(steps);
+            for (Map.Entry<String, Integer> fe : fluidNeed.entrySet()) {
+                int remaining = fe.getValue();
+                int have = isCreative(player)
+                        ? remaining
+                        : maidHaveMap.getOrDefault(fe.getKey(), 0)
+                                + countPlayerMaterial(player, fe.getKey());
+                mats.put(fe.getKey(), new int[]{have, remaining});
             }
             out.put(e, mats);
         }
@@ -2682,7 +3472,16 @@ public final class BlueprintLib {
         }
         if (minX <= maxX) {
             sb.append(maxX - minX + 1).append('x').append(maxY - minY + 1).append('x').append(maxZ - minZ + 1);
-            sb.append("，共 ").append(steps.size()).append(" 块");
+            // v1.5.278：块数用【去重后】计数——与下达建造的 plan 一致（旧版用原始
+            // steps.size()，生成器/转换器的同坐标重复步骤导致"共2138块" vs 进度
+            // "2024块"不一致，用户截图实证 114 块差额）
+            int n = 0;
+            for (String s : dedupeSteps(steps)) {
+                if (parseStep(s) != null) {
+                    n++;
+                }
+            }
+            sb.append("，共 ").append(n).append(" 块");
         } else {
             sb.append("共 ").append(steps.size()).append(" 块");
         }
@@ -2709,6 +3508,12 @@ public final class BlueprintLib {
             if (sorted.size() > shown) {
                 sb.append(" 等 ").append(sorted.size()).append(" 种");
             }
+        }
+        // v1.5.318：液体工具/材料需求（水桶/岩浆桶）单独提示——水/岩浆不在普通
+        // 材料统计（FORBIDDEN 排除），但玩家需要知道要备桶
+        String fluidText = fluidNeedText(steps);
+        if (!fluidText.isEmpty()) {
+            sb.append('，').append(fluidText);
         }
         String result = sb.toString();
         if (id != null) {
@@ -2840,6 +3645,19 @@ public final class BlueprintLib {
         return steps;
     }
 
+    /** v1.5.311：JSON 对象可选字符串字段（缺省/空串/null 返回 null） */
+    private static String getJsonString(JsonObject obj, String key) {
+        try {
+            JsonElement el = obj.get(key);
+            if (el != null && el.isJsonPrimitive() && el.getAsJsonPrimitive().isString()
+                    && !el.getAsString().isEmpty()) {
+                return el.getAsString();
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
     /** 解析 LLM 生成的 JSON 蓝图；失败返回 null */
     public static List<String> parseJson(String json) {
         try {
@@ -2865,7 +3683,22 @@ public final class BlueprintLib {
                 if (!WHITELIST.contains(block)) {
                     return null;
                 }
-                steps.add(x + "," + y + "," + z + "," + block);
+                // v1.5.311：JSON 蓝图支持可选 state / nbt（SNBT 字符串）——LLM 可以
+                // 指定门/楼梯/活塞等定向方块的真实朝向与方块实体数据（旧版只有 id，
+                // 一律默认态：门朝北开不了、中继器朝向固定、漏斗方向全错）。
+                // 步骤格式不变：x,y,z,blockid|stateSnbt|beSnbt（state 缺省留空段）。
+                String state = getJsonString(obj, "state");
+                String nbt = getJsonString(obj, "nbt");
+                StringBuilder step = new StringBuilder(x + "," + y + "," + z + "," + block);
+                if (state != null) {
+                    step.append('|').append(state);
+                    if (nbt != null) {
+                        step.append('|').append(nbt);
+                    }
+                } else if (nbt != null) {
+                    step.append("||").append(nbt);
+                }
+                steps.add(step.toString());
             }
             return steps;
         } catch (Exception e) {
@@ -2892,8 +3725,10 @@ public final class BlueprintLib {
             return "蓝图无效：块数必须为 1~200";
         }
         for (String step : steps) {
-            String[] parts = step.split(",");
-            if (parts.length != 4) {
+            // v1.5.311：走 parseStep——步骤可能带 |stateSnbt|beSnbt（SNBT 内含逗号），
+            // 旧版 step.split(",") 会把 state 里的逗号拆开误报"步骤格式错误"
+            String[] parts = parseStep(step);
+            if (parts == null || parts.length < 4) {
                 return "蓝图无效：步骤格式错误";
             }
             try {
@@ -2930,6 +3765,70 @@ public final class BlueprintLib {
             }
         }
         return needed;
+    }
+
+    /** v1.5.318：蓝图液体【工具/材料】需求——水需要 1 个水桶作工具（不消耗，无限放
+     *  水源）；岩浆需要 N 个岩浆桶（放置后返还空桶，需周转）。
+     *  v1.5.320：轰炸机类蓝图追加【矿车】需求（探测铁轨数）——完工自动放矿车需
+     *  消耗矿车（女仆/主人背包有才启动，不再凭空白给）。
+     *  返回 {桶/矿车物品id → 需求数}，无需求返回空 Map。材料提示/材料表据此告知
+     *  玩家要准备什么（countNeeds 排除 FORBIDDEN，水/岩浆/矿车不进普通材料统计，
+     *  否则玩家建造前完全不知道要备桶/矿车）。 */
+    public static Map<String, Integer> fluidBucketNeeds(List<String> steps) {
+        Map<String, Integer> out = new HashMap<>();
+        int water = 0;
+        int lava = 0;
+        int rails = 0;
+        for (String step : steps) {
+            String[] parts = parseStep(step);
+            if (parts == null) {
+                continue;
+            }
+            if ("minecraft:water".equals(parts[3])) {
+                water++;
+            } else if ("minecraft:lava".equals(parts[3])) {
+                lava++;
+            } else if ("minecraft:detector_rail".equals(parts[3])) {
+                rails++;
+            }
+        }
+        if (water > 0) {
+            out.put("minecraft:water_bucket", 1);
+        }
+        if (lava > 0) {
+            out.put("minecraft:lava_bucket", lava);
+        }
+        if (rails > 0) {
+            out.put("minecraft:minecart", rails);
+        }
+        return out;
+    }
+
+    /** v1.5.318：液体/工具需求中文提示——"另需水桶×1(作工具，不消耗)、岩浆桶×N
+     *  (放置后返还空桶)、矿车×N(完工自动放置，需备齐)"；蓝图无需求返回空串。 */
+    public static String fluidNeedText(List<String> steps) {
+        Map<String, Integer> needs = fluidBucketNeeds(steps);
+        if (needs.isEmpty()) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder("另需");
+        boolean first = true;
+        for (Map.Entry<String, Integer> e : needs.entrySet()) {
+            if (!first) {
+                sb.append('、');
+            }
+            first = false;
+            if ("minecraft:water_bucket".equals(e.getKey())) {
+                sb.append("水桶×1（作工具，不消耗）");
+            } else if ("minecraft:lava_bucket".equals(e.getKey())) {
+                sb.append("岩浆桶×").append(e.getValue()).append("（放置后返还空桶）");
+            } else if ("minecraft:minecart".equals(e.getKey())) {
+                sb.append("矿车×").append(e.getValue()).append("（完工自动放置，需备齐）");
+            } else {
+                sb.append(e.getKey()).append('x').append(e.getValue());
+            }
+        }
+        return sb.toString();
     }
 
     /** v1.5.25d：蓝图材料需求缓存（id → 需求 Map）——右击手册时避免对每个蓝图
@@ -3138,6 +4037,12 @@ public final class BlueprintLib {
         cn("minecraft:daylight_detector", "阳光探测器"); cn("minecraft:lever", "拉杆");
         cn("minecraft:redstone_lamp", "红石灯"); cn("minecraft:redstone_block", "红石块");
         cn("minecraft:redstone_torch", "红石火把"); cn("minecraft:redstone_repeater", "红石中继器");
+        // v1.5.287：红石机器蓝图用件补全中文名（缺省会显示英文 id）
+        cn("minecraft:redstone_wire", "红石粉"); cn("minecraft:repeater", "红石中继器");
+        cn("minecraft:comparator", "红石比较器"); cn("minecraft:observer", "观察者");
+        cn("minecraft:hopper", "漏斗"); cn("minecraft:sticky_piston", "粘性活塞");
+        cn("minecraft:dropper", "投掷器"); cn("minecraft:dispenser", "发射器");
+        cn("minecraft:note_block", "音符盒"); cn("minecraft:sugar_cane", "甘蔗");
         cn("minecraft:torch", "火把"); cn("minecraft:lantern", "灯笼");
         cn("minecraft:soul_lantern", "灵魂灯笼"); cn("minecraft:campfire", "营火");
         cn("minecraft:soul_campfire", "灵魂营火"); cn("minecraft:glowstone", "荧石");
@@ -3158,6 +4063,8 @@ public final class BlueprintLib {
         cn("minecraft:farmland", "耕地"); cn("minecraft:grass_path", "土径");
         cn("minecraft:water", "水"); cn("minecraft:lava", "岩浆");
         cn("minecraft:fire", "火"); cn("minecraft:water_bucket", "水桶");
+        cn("minecraft:lava_bucket", "岩浆桶"); // v1.5.318：材料表/缺料提示用
+        cn("minecraft:minecart", "矿车"); // v1.5.320：轰炸机启动工具（完工自动放置）
         cn("minecraft:kelp", "海带"); cn("minecraft:sugar_cane", "甘蔗");
         cn("minecraft:cactus", "仙人掌"); cn("minecraft:lily_pad", "睡莲");
         cn("minecraft:vine", "藤蔓"); cn("minecraft:fern", "蕨类");
@@ -3329,7 +4236,8 @@ public final class BlueprintLib {
             return Integer.MAX_VALUE; // 创造模式：任何材料视为备齐
         }
         Set<String> group = EQUIVALENT_GROUPS.get(blockId);
-        Item exact = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(blockId));
+        // v1.5.287：itemForBlock（redstone_wire → 红石粉）
+        Item exact = itemForBlock(blockId);
         int count = 0;
         net.minecraft.world.entity.player.Inventory inv = player.m_150109_();
         for (int i = 0; i < inv.m_6643_(); i++) {
@@ -3375,7 +4283,8 @@ public final class BlueprintLib {
             return;
         }
         Set<String> group = EQUIVALENT_GROUPS.get(blockId);
-        Item exact = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(blockId));
+        // v1.5.287：itemForBlock（redstone_wire → 红石粉）
+        Item exact = itemForBlock(blockId);
         net.minecraft.world.entity.player.Inventory inv = player.m_150109_();
         int moved = 0;
         for (int i = 0; i < inv.m_6643_() && moved < count; i++) {
@@ -3426,7 +4335,8 @@ public final class BlueprintLib {
                     count += stack.m_41613_();
                 }
             } else {
-                Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(blockId));
+                // v1.5.287：itemForBlock（redstone_wire → 红石粉）
+                Item item = itemForBlock(blockId);
                 if (item != null && stack.m_41720_() == item) {
                     count += stack.m_41613_();
                 }
@@ -3436,20 +4346,21 @@ public final class BlueprintLib {
     }
 
     /**
-     * 从背包取 1 个指定方块对应的物品（支持等价族）。
+     * 从背包取 1 个指定方块对应的物品（支持等价族 + v1.5.254 自定义替代）。
      * 返回实际消耗的物品（用于放置对应方块）；背包没有返回 null。
      */
     public static Item consumeBlock(EntityMaid maid, String blockId) {
         // v1.5.24：主人处于创造模式 → 材料视为无限，直接返回对应物品（不扣任何背包）
         if (maid.m_269323_() instanceof Player owner && isCreative(owner)) {
-            Item exact = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(blockId));
+            // v1.5.287：itemForBlock（redstone_wire → 红石粉——否则创造也建不出线）
+            Item exact = itemForBlock(blockId);
             if (exact != null) {
                 return exact;
             }
             Set<String> cg = EQUIVALENT_GROUPS.get(blockId);
             if (cg != null) {
                 for (String id : cg) {
-                    Item gi = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id));
+                    Item gi = itemForBlock(id);
                     if (gi != null) {
                         return gi;
                     }
@@ -3457,7 +4368,26 @@ public final class BlueprintLib {
             }
             return null;
         }
-        Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(blockId));
+        // v1.5.317：水/岩浆特殊材料（机器蓝图保留液体步骤后）——
+        // 水 = 无限材料：女仆或主人背包有 1 个水桶作【工具】即可放任意多水源
+        // （不消耗，与原版水源可再生一致）；岩浆 = 消耗 1 岩浆桶（放置后返还
+        // 空桶，见 returnEmptyBucket——岩浆不可再生，需玩家备 N 桶周转）。
+        if ("minecraft:water".equals(blockId)) {
+            return hasBucketTool(maid, "minecraft:water_bucket")
+                    ? net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                            net.minecraft.resources.ResourceLocation.parse("minecraft:water_bucket"))
+                    : null;
+        }
+        if ("minecraft:lava".equals(blockId)) {
+            Item lavaBucket = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:lava_bucket"));
+            ItemStack taken = extractExact(maid.getMaidInv(), lavaBucket, 1);
+            if (!taken.m_41619_()) {
+                return lavaBucket; // 已从女仆背包取走 1 岩浆桶
+            }
+            return null; // 调用方会尝试主人背包（tryTakeFromOwner）
+        }
+        Item item = itemForBlock(blockId);
         IItemHandler inv = maid.getMaidInv();
         // 1. 精确匹配优先
         if (item != null) {
@@ -3483,7 +4413,317 @@ public final class BlueprintLib {
                 }
             }
         }
+        // 3. v1.5.254：自定义替代（开关开启时）——按目标方块高度分类选表
+        //（半格=台阶类 / 两格=门/双植物/床/甘蔗/竹子 / 其余=一格），表内按序
+        // 取第一个背包里有的替代品（替代品必须有对应方块，防消耗物品却放不出方块）
+        // v1.5.261：替代品高度类别必须与目标【严格一致】——旧配置/误添加的
+        // 错配条目（半格表里的一格方块等）执行时跳过，防止半格位置被一格方块
+        // 顶坏建筑（用户需求："1 格只能用 1 格替换，半格两格同理"）
+        // v1.5.275：两格再分竖/横（门/高植物 ↔ 床），无碰撞方块单独表
+        if (com.maidsmart.config.MaidSmartConfig.BUILD_ALT_ENABLED.get()) {
+            Block targetBlock = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(blockId));
+            List<String> alts = targetBlock == null ? altBlocks()
+                    : isSlabHeight(targetBlock) ? altSlabs()
+                    : isTallVertical(targetBlock) ? altTalls()
+                    : isWideHeight(targetBlock) ? altWides()
+                    : isNoClip(targetBlock) ? altNoClips()
+                    : altBlocks();
+            // v1.5.279：同族优先——第一轮只扫与目标同材质族的替代品，第二轮才扫
+            // 其余（多维度划分的落地：高度/碰撞严格匹配之上，材质族作为优先序）
+            String fam = materialFamily(targetBlock);
+            for (int pass = 0; pass < 2; pass++) {
+                for (String alt : alts) {
+                    Item altItem = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(alt));
+                    if (altItem == null) {
+                        continue;
+                    }
+                    ResourceLocation altId = ForgeRegistries.ITEMS.getKey(altItem);
+                    Block altBlock = altId != null ? ForgeRegistries.BLOCKS.getValue(altId) : null;
+                    if (altBlock == null || altBlock == net.minecraft.world.level.block.Blocks.f_50016_) {
+                        continue; // 无对应方块（剑/工具等）→ 跳过，不能当替代品
+                    }
+                    // v1.5.261：类别严格匹配（半格↔半格、一格↔一格、两格↔两格）
+                    // v1.5.275：两格再分竖/横，无碰撞单独匹配
+                    if (targetBlock != null) {
+                        boolean match;
+                        if (isSlabHeight(targetBlock) || isSlabHeight(altBlock)) {
+                            match = isSlabHeight(targetBlock) && isSlabHeight(altBlock);
+                        } else if (isTallVertical(targetBlock) || isTallVertical(altBlock)) {
+                            match = isTallVertical(targetBlock) && isTallVertical(altBlock);
+                        } else if (isWideHeight(targetBlock) || isWideHeight(altBlock)) {
+                            match = isWideHeight(targetBlock) && isWideHeight(altBlock);
+                        } else if (isNoClip(targetBlock) || isNoClip(altBlock)) {
+                            match = isNoClip(targetBlock) && isNoClip(altBlock);
+                        } else {
+                            match = true;
+                        }
+                        if (!match) {
+                            continue;
+                        }
+                    }
+                    if (pass == 0 && (fam == null || !fam.equals(materialFamily(altBlock)))) {
+                        continue; // 第一轮只要同族（fam null = 目标无方块 → 直接过）
+                    }
+                    ItemStack taken = extractExact(inv, altItem, 1);
+                    if (!taken.m_41619_()) {
+                        return altItem;
+                    }
+                }
+            }
+        }
         return null;
+    }
+
+    // ================= v1.5.254：缺料自定义替代（高度分类） =================
+
+    /**
+     * v1.5.287：方块 id → 物品 id 特例——1.20.1 不存在 redstone_wire 物品
+     * （红石粉物品是 minecraft:redstone）→ 材料链（统计/转移/消耗）按红石粉结算；
+     * 放置层用方块注册名不受影响（放的是 redstone_wire 方块本身）。修复前
+     * 红石线步骤 consumeBlock 恒返回 null → 生存/创造都建不出线（红石机器
+     * 建不起来的根因）。
+     */
+    public static final Map<String, String> BLOCK_ITEM_OVERRIDES = Map.of(
+            "minecraft:redstone_wire", "minecraft:redstone",
+            // 红石机器蓝图用件：茎方块无物品形式（物品是种子）；耕地无物品（消耗泥土）
+            "minecraft:pumpkin_stem", "minecraft:pumpkin_seeds",
+            "minecraft:melon_stem", "minecraft:melon_seeds",
+            "minecraft:farmland", "minecraft:dirt",
+            // v1.5.317：水/岩浆——方块无物品（物品是桶）。机器蓝图保留水/岩浆步骤后，
+            // 材料链按桶结算：水=无限材料（1 水桶作工具，不消耗）；岩浆=消耗 1 岩浆桶
+            // （放置后返还空桶，见 returnEmptyBucket）。
+            "minecraft:water", "minecraft:water_bucket",
+            "minecraft:lava", "minecraft:lava_bucket");
+
+    /** 方块 id → 对应物品 id（含特例映射；无特例返回原 id） */
+    public static String itemIdForBlock(String blockId) {
+        return BLOCK_ITEM_OVERRIDES.getOrDefault(blockId, blockId);
+    }
+
+    /** 方块 id → 对应物品（含特例：redstone_wire → 红石粉）——材料链统一入口 */
+    public static Item itemForBlock(String blockId) {
+        return ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemIdForBlock(blockId)));
+    }
+
+    /** 半格高判定（台阶类——替换表按此分类） */
+    public static boolean isSlabHeight(Block block) {
+        return block instanceof net.minecraft.world.level.block.SlabBlock;
+    }
+
+    /** 两格高判定（门/双植物/甘蔗/竹子——替换表按此分类）
+     *  v1.5.275：拆分为"竖两格"（本方法）与"横两格"（isWideHeight——床）。
+     *  用户："横着高的两格方块和竖着的两格方块，这两类物品也是不一样的" */
+    public static boolean isTallHeight(Block block) {
+        return isTallVertical(block) || isWideHeight(block);
+    }
+
+    /** 竖两格（高 2 格：门/高植物/甘蔗/竹子） */
+    public static boolean isTallVertical(Block block) {
+        return block instanceof net.minecraft.world.level.block.DoorBlock
+                || block instanceof net.minecraft.world.level.block.DoublePlantBlock
+                || block instanceof net.minecraft.world.level.block.SugarCaneBlock
+                || block instanceof net.minecraft.world.level.block.BambooStalkBlock;
+    }
+
+    /** 横两格（宽 2 格：床） */
+    public static boolean isWideHeight(Block block) {
+        return block instanceof net.minecraft.world.level.block.BedBlock;
+    }
+
+    /** 无碰撞体积方块（花/草/蕨/火把/地毯/线/红石线/压力板/按钮/梯子/铁轨/花盆/
+     *  横幅/告示牌/雪层等——isSolid（有碰撞）为 false 的可放置方块）。
+     *  v1.5.275：面板单独一个区（用户："没有实体碰撞体积的方块单独画一个区"） */
+    public static boolean isNoClip(Block block) {
+        if (block == null || block == net.minecraft.world.level.block.Blocks.f_50016_) {
+            return false;
+        }
+        net.minecraft.world.level.block.state.BlockState st = block.m_49966_();
+        if (st.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
+            return false; // 液体不算
+        }
+        return !st.m_60815_(); // isSolid false = 无碰撞箱
+    }
+
+    /* ================= v1.5.279：替代方块多维度划分 =================
+     * 用户："自定义方块的种类需要根据多方面维度进行新的划分，仅仅根据一格高、
+     * 半格高这些不够"。新增两个自动判定维度（无需配置）：
+     * - 材质族：木/石/砖/矿/璃/陶/毛/他（匹配时同族优先）
+     * - 功能：红石/照明/存储/炉/装饰/结构（面板显示标记）
+     * 与既有形态（半格/一格/竖两格/横两格）+ 碰撞（无碰撞区）共同构成多维标签。 */
+
+    /** 材质族标记（替代品面板显示 + 同族优先匹配用） */
+    public static String materialFamily(Block block) {
+        if (block == null) {
+            return "\u4ed6"; // 他
+        }
+        // v1.5.284：getKey 判空——未注册方块（外部蓝图/未装 mod 的方块）不 NPE
+        net.minecraft.resources.ResourceLocation key0 = ForgeRegistries.BLOCKS.getKey(block);
+        if (key0 == null) {
+            return "\u4ed6"; // 他
+        }
+        String id = key0.toString();
+        if (id.contains("glass")) {
+            return "\u7483"; // 璃
+        }
+        if (id.contains("wool") || id.contains("_carpet")) {
+            return "\u6bdb"; // 毛
+        }
+        if (id.contains("terracotta")) {
+            return "\u9676"; // 陶
+        }
+        if (id.contains("_ore")
+                || id.contains("coal_block") || id.contains("iron_block") || id.contains("gold_block")
+                || id.contains("diamond_block") || id.contains("emerald_block") || id.contains("lapis_block")
+                || id.contains("copper_block") || id.contains("netherite_block") || id.contains("quartz_block")) {
+            return "\u77ff"; // 矿
+        }
+        if (block instanceof net.minecraft.world.level.block.RotatedPillarBlock
+                && (id.endsWith("_log") || id.endsWith("_wood") || id.endsWith("_stem") || id.endsWith("_hyphae"))
+                || id.contains("_planks") || id.endsWith("_log") || id.endsWith("_wood")
+                || id.contains("_wooden_") || id.contains("oak_") || id.contains("spruce_")
+                || id.contains("birch_") || id.contains("jungle_") || id.contains("acacia_")
+                || id.contains("dark_oak_") || id.contains("mangrove_") || id.contains("cherry_")
+                || id.contains("crimson_") || id.contains("warped_") || id.contains("bamboo_")) {
+            return "\u6728"; // 木
+        }
+        if (id.contains("stone") || id.contains("cobble") || id.contains("deepslate")
+                || id.contains("andesite") || id.contains("diorite") || id.contains("granite")
+                || id.contains("blackstone") || id.contains("basalt") || id.contains("calcite")
+                || id.contains("tuff") || id.contains("dripstone") || id.contains("obsidian")
+                || id.contains("purpur") || id.contains("prismarine")) {
+            return "\u77f3"; // 石
+        }
+        if (id.contains("_bricks") || id.contains("_brick_") || id.endsWith("_brick")) {
+            return "\u7816"; // 砖
+        }
+        return "\u4ed6"; // 他
+    }
+
+    /** 功能标记（替代品面板显示）——判定顺序：红石 > 照明 > 存储 > 炉 > 装饰 > 结构 */
+    public static String blockFunction(Block block) {
+        if (block == null) {
+            return "\u7ed3\u6784"; // 结构
+        }
+        if (block instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || block instanceof net.minecraft.world.level.block.DiodeBlock
+                || block instanceof net.minecraft.world.level.block.LeverBlock
+                || block instanceof net.minecraft.world.level.block.ButtonBlock
+                || block instanceof net.minecraft.world.level.block.PressurePlateBlock
+                || block instanceof net.minecraft.world.level.block.ObserverBlock
+                || block instanceof net.minecraft.world.level.block.piston.PistonBaseBlock
+                || block instanceof net.minecraft.world.level.block.DispenserBlock
+                || block instanceof net.minecraft.world.level.block.DropperBlock
+                || block instanceof net.minecraft.world.level.block.NoteBlock
+                || block instanceof net.minecraft.world.level.block.TargetBlock
+                || block instanceof net.minecraft.world.level.block.RedstoneTorchBlock
+                || block instanceof net.minecraft.world.level.block.DaylightDetectorBlock
+                || block instanceof net.minecraft.world.level.block.TripWireHookBlock
+                || block instanceof net.minecraft.world.level.block.RedstoneLampBlock) {
+            return "\u7ea2\u77f3"; // 红石
+        }
+        // 照明：火把/灯笼/蜡烛/末地烛 + 无独立类的发光方块（glowstone/海晶灯/
+        // 菌光体/南瓜灯——1.20.1 为纯 Block 实例，按注册名判定）
+        // v1.5.284：getKey 判空——未注册方块不 NPE
+        net.minecraft.resources.ResourceLocation key1 = ForgeRegistries.BLOCKS.getKey(block);
+        String bid = key1 == null ? "" : key1.toString();
+        if (block instanceof net.minecraft.world.level.block.TorchBlock
+                || block instanceof net.minecraft.world.level.block.LanternBlock
+                || block instanceof net.minecraft.world.level.block.CandleBlock
+                || block instanceof net.minecraft.world.level.block.EndRodBlock
+                || bid.contains("glowstone") || bid.contains("sea_lantern")
+                || bid.contains("shroomlight") || bid.contains("jack_o_lantern")) {
+            return "\u7167\u660e"; // 照明
+        }
+        if (block instanceof net.minecraft.world.level.block.ChestBlock
+                || block instanceof net.minecraft.world.level.block.BarrelBlock
+                || block instanceof net.minecraft.world.level.block.ShulkerBoxBlock
+                || block instanceof net.minecraft.world.level.block.HopperBlock
+                || block instanceof net.minecraft.world.level.block.EnderChestBlock) {
+            return "\u5b58\u50a8"; // 存储
+        }
+        if (block instanceof net.minecraft.world.level.block.FurnaceBlock
+                || block instanceof net.minecraft.world.level.block.BlastFurnaceBlock
+                || block instanceof net.minecraft.world.level.block.SmokerBlock) {
+            return "\u7089"; // 炉
+        }
+        if (block instanceof net.minecraft.world.level.block.CarpetBlock
+                || block instanceof net.minecraft.world.level.block.FlowerPotBlock
+                || block instanceof net.minecraft.world.level.block.SignBlock
+                || block instanceof net.minecraft.world.level.block.BannerBlock
+                || block instanceof net.minecraft.world.level.block.FenceBlock
+                || block instanceof net.minecraft.world.level.block.FenceGateBlock
+                || block instanceof net.minecraft.world.level.block.TrapDoorBlock
+                || block instanceof net.minecraft.world.level.block.DoorBlock) {
+            return "\u88c5\u9970"; // 装饰（花/地毯/栅栏/门/活板门/告示牌/花盆）
+        }
+        return "\u7ed3\u6784"; // 结构
+    }
+
+    public static List<String> altSlabs() {
+        return new ArrayList<>(com.maidsmart.config.MaidSmartConfig.BUILD_ALT_SLABS.get());
+    }
+
+    public static List<String> altBlocks() {
+        return new ArrayList<>(com.maidsmart.config.MaidSmartConfig.BUILD_ALT_BLOCKS.get());
+    }
+
+    public static List<String> altTalls() {
+        return new ArrayList<>(com.maidsmart.config.MaidSmartConfig.BUILD_ALT_TALLS.get());
+    }
+
+    /** v1.5.275：横两格替代品（床） */
+    public static List<String> altWides() {
+        return new ArrayList<>(com.maidsmart.config.MaidSmartConfig.BUILD_ALT_WIDES.get());
+    }
+
+    /** v1.5.275：无碰撞替代品（花/火把/地毯等） */
+    public static List<String> altNoClips() {
+        return new ArrayList<>(com.maidsmart.config.MaidSmartConfig.BUILD_ALT_NOCLIPS.get());
+    }
+
+    /**
+     * v1.5.254：解析步骤状态串为 BlockState。状态串只有 Properties 没有 Name
+     * （提取/palette 生成的 "{facing:...}" 格式）→ 补上实际放置方块的注册名——
+     * 旧版 NbtUtils.m_247651_ 对无 Name 的 tag 直接返回空气（字节码实证第 0-17
+     * 行）→ doPlace 里被 m_60795_() 过滤 → 台阶上下半/楼梯朝向/门开合从未生效。
+     * 解析失败或结果为空气返回 null（调用方用默认状态兜底）。
+     */
+    public static net.minecraft.world.level.block.state.BlockState parseStepState(
+            net.minecraft.server.level.ServerLevel level, Block placed, String stateSnbt) {
+        if (stateSnbt == null) {
+            return null;
+        }
+        try {
+            net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
+            if (!stateTag.m_128425_("Name", 8)) {
+                // v1.5.371：state-only SNBT（{facing:"south",lit:"false"}）→ 把 Name 之外
+                // 的属性【包进 Properties 子标签】——旧版只补 Name，facing/half/shape 等
+                // 全挂在顶层，readBlockState(m_247651_) 只读 Properties → 全部回落默认态
+                // （朝向全朝北/朝下）——机器/门/床/楼梯朝向全错的根因（"机器都用不了"）。
+                net.minecraft.nbt.CompoundTag props = new net.minecraft.nbt.CompoundTag();
+                for (String key : stateTag.m_128431_()) {
+                    if ("Name".equals(key)) {
+                        continue;
+                    }
+                    net.minecraft.nbt.Tag v = stateTag.m_128423_(key);
+                    if (v != null) {
+                        props.m_128365_(key, v);
+                    }
+                }
+                net.minecraft.nbt.CompoundTag wrapped = new net.minecraft.nbt.CompoundTag();
+                ResourceLocation rid = ForgeRegistries.BLOCKS.getKey(placed);
+                if (rid != null) {
+                    wrapped.m_128359_("Name", rid.toString());
+                }
+                wrapped.m_128365_("Properties", props);
+                stateTag = wrapped;
+            }
+            net.minecraft.world.level.block.state.BlockState parsed = net.minecraft.nbt.NbtUtils.m_247651_(
+                    level.m_246945_(net.minecraft.core.registries.Registries.f_256747_), stateTag);
+            return parsed != null && !parsed.m_60795_() ? parsed : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private static ItemStack extractExact(IItemHandler inv, Item item, int count) {
@@ -3494,6 +4734,73 @@ public final class BlueprintLib {
             }
         }
         return ItemStack.f_41583_;
+    }
+
+    /** v1.5.317：女仆或主人背包是否有指定物品（水桶工具检查——只查不取） */
+    private static boolean hasBucketTool(EntityMaid maid, String bucketItemId) {
+        Item bucket = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse(bucketItemId));
+        if (bucket == null) {
+            return false;
+        }
+        IItemHandler inv = maid.getMaidInv();
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack s = inv.getStackInSlot(i);
+            if (!s.m_41619_() && s.m_41720_() == bucket) {
+                return true;
+            }
+        }
+        if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player owner) {
+            net.minecraft.world.Container ci = owner.m_150109_();
+            for (int i = 0; i < ci.m_6643_(); i++) {
+                ItemStack s = ci.m_8020_(i);
+                if (!s.m_41619_() && s.m_41720_() == bucket) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** v1.5.317：岩浆放置后返还空桶（岩浆桶用后变空桶）——主人背包优先，其次女仆
+     *  背包，最后掉落在主人/女仆身边（不掉在建造区内，防被完工清理回收）。 */
+    public static void returnEmptyBucket(net.minecraft.server.level.ServerLevel level,
+                                         EntityMaid maid, net.minecraft.core.BlockPos target) {
+        if (maid == null || level == null) {
+            return;
+        }
+        Item bucket = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:bucket"));
+        if (bucket == null) {
+            return;
+        }
+        ItemStack bucketStack = new ItemStack(bucket);
+        if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player owner) {
+            if (owner.m_150109_().m_36054_(bucketStack)) {
+                return; // 放入主人背包
+            }
+        }
+        ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                maid.getMaidInv(), bucketStack, false);
+        if (left.m_41619_()) {
+            return; // 放入女仆背包
+        }
+        // 双背包都满 → 掉落在主人（无主人则女仆）身边
+        double x = target.m_123341_() + 0.5;
+        double y = target.m_123342_() + 1.0;
+        double z = target.m_123343_() + 0.5;
+        if (maid.m_269323_() != null) {
+            x = maid.m_269323_().m_20185_();
+            y = maid.m_269323_().m_20186_();
+            z = maid.m_269323_().m_20189_();
+        } else {
+            x = maid.m_20185_();
+            y = maid.m_20186_();
+            z = maid.m_20189_();
+        }
+        net.minecraft.world.entity.item.ItemEntity ent = new net.minecraft.world.entity.item.ItemEntity(
+                level, x, y, z, left);
+        level.m_7967_(ent);
     }
 
     /**
@@ -3732,8 +5039,25 @@ public final class BlueprintLib {
      * v1.5.57：建造完成 → 红石统一激活。建造期间全部静默放置（flag 2，机械冻结，
      * 活塞不会推掉刚建的墙），完成后对蓝图区域的红石组件重放一次（flag 3 触发
      * 邻居更新）→ 红石线重算 power → 活塞/灯/机械正常启动。
+     *
+     * v1.5.288：红石唤醒 v2（红石机器"建好不运行/状态冻结"根因修复）：
+     * - 1.20.1 setBlock（Level.m_6933_）对【同状态重放】直接走"状态相等"分支，
+     *   不会调用 onPlace（m_60705_）；updateNeighborsAt（m_46717_）又只广播
+     *   【水平】邻居 + 比较器穿透，不含上下方向——旧版 recalc 对线/火把/活塞
+     *   基本等于"什么都没做"：红石线保留图纸导出时的冻结 power、活塞保留冻结
+     *   伸缩态 → 机器建好不运行 / 状态错乱。
+     * - v2 每轮补齐：① 组件自身 neighborChanged（m_6861_ 直调——红石线重算
+     *   power、活塞 checkIfExtend 重新决定伸缩（含 BUD/准连接）、灯/铁轨/火把
+     *   重新检查供电）；② 垂直邻居手动补广播（m_46717_ 不含上下方向）；
+     *   ③ 水平邻居由 m_46717_ 自带（含比较器穿透）。
+     * - 白名单补全：活塞 / 铁轨 / 绊线 / 陷阱箱 / 门 / 音符盒 / 标靶（旧版缺失，
+     *   这些方块被冻结时永远不会被唤醒）。
+     * - 多轮收敛（3 轮）：组件重算依赖其他组件的最新 power，一轮内处理顺序有
+     *   先后 → 2~3 轮后全部稳定；幂等无害（状态已稳定时重放/重算均无副作用）。
+     * - 替代品兼容：目标格现状方块是红石组件就刷新（不要求与蓝图方块同名）。
      */
     public static void recalcRedstone(net.minecraft.server.level.ServerLevel level, BlockPos origin, List<String> plan) {
+        java.util.List<int[]> comps = new java.util.ArrayList<>();
         for (int i = 1; i < plan.size(); i++) {
             String[] parts = parseStep(plan.get(i));
             if (parts == null) {
@@ -3751,27 +5075,539 @@ public final class BlueprintLib {
             }
             net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse(parts[3]));
-            if (b == null) {
+            if (b == null || !isRedstoneRelevant(b)) {
                 continue;
             }
-            if (!(b instanceof net.minecraft.world.level.block.RedStoneWireBlock
-                    || b instanceof net.minecraft.world.level.block.DiodeBlock
-                    || b instanceof net.minecraft.world.level.block.TorchBlock
-                    || b instanceof net.minecraft.world.level.block.LeverBlock
-                    || b instanceof net.minecraft.world.level.block.ButtonBlock
-                    || b instanceof net.minecraft.world.level.block.PressurePlateBlock
-                    || b instanceof net.minecraft.world.level.block.PoweredBlock
-                    || b instanceof net.minecraft.world.level.block.RedstoneLampBlock
-                    || b instanceof net.minecraft.world.level.block.TripWireHookBlock
-                    || b instanceof net.minecraft.world.level.block.DaylightDetectorBlock
-                    || b instanceof net.minecraft.world.level.block.ObserverBlock)) {
+            comps.add(new int[]{x, y, z});
+        }
+        if (comps.isEmpty()) {
+            return;
+        }
+        for (int round = 0; round < 3; round++) {
+            for (int[] c : comps) {
+                BlockPos pos = origin.m_7918_(c[0], c[1], c[2]);
+                if (!level.m_46749_(pos)) {
+                    continue; // 区块未加载（完成时正常不会发生）
+                }
+                net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
+                net.minecraft.world.level.block.Block cur = st.m_60734_();
+                // 现状方块是红石组件就唤醒（替代品放置的位置同样刷新）
+                if (isRedstoneRelevant(cur)) {
+                    kickRedstone(level, pos, cur, st);
+                }
+            }
+        }
+    }
+
+    /** v1.5.288：红石组件判定（recalcRedstone 白名单——旧版缺活塞/铁轨/绊线等） */
+    private static boolean isRedstoneRelevant(net.minecraft.world.level.block.Block b) {
+        return b instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || b instanceof net.minecraft.world.level.block.DiodeBlock
+                || b instanceof net.minecraft.world.level.block.TorchBlock
+                || b instanceof net.minecraft.world.level.block.LeverBlock
+                || b instanceof net.minecraft.world.level.block.ButtonBlock
+                || b instanceof net.minecraft.world.level.block.PressurePlateBlock
+                || b instanceof net.minecraft.world.level.block.PoweredBlock
+                || b instanceof net.minecraft.world.level.block.RedstoneLampBlock
+                || b instanceof net.minecraft.world.level.block.TripWireHookBlock
+                || b instanceof net.minecraft.world.level.block.DaylightDetectorBlock
+                || b instanceof net.minecraft.world.level.block.ObserverBlock
+                || b instanceof net.minecraft.world.level.block.piston.PistonBaseBlock
+                || b instanceof net.minecraft.world.level.block.BaseRailBlock
+                || b instanceof net.minecraft.world.level.block.TripWireBlock
+                || b instanceof net.minecraft.world.level.block.TrappedChestBlock
+                || b instanceof net.minecraft.world.level.block.DoorBlock
+                || b instanceof net.minecraft.world.level.block.NoteBlock
+                || b instanceof net.minecraft.world.level.block.TargetBlock;
+    }
+
+    /**
+     * v1.5.288：单格红石唤醒——等价于"玩家在旁边重新放了一块"：
+     * ① 同状态重放 flag 3（信号源走 m_46717_ 广播水平邻居 + 比较器穿透）；
+     * ② 垂直邻居手动补广播（1.20.1 m_46717_ 只走水平）；
+     * ③ 组件自身 neighborChanged 直调——红石线重算 power（旧版冻结不动）、
+     *    活塞 checkIfExtend 重新决定伸缩（BUD/准连接也能唤醒）、灯/铁轨/火把
+     *    重新检查供电。canSurvive 失败时跳过自调（防止线被拆掉掉落）。
+     */
+    private static void kickRedstone(net.minecraft.server.level.ServerLevel level, BlockPos pos,
+                                     net.minecraft.world.level.block.Block block,
+                                     net.minecraft.world.level.block.state.BlockState st) {
+        level.m_7731_(pos, st, 3);
+        level.m_46717_(pos, block);
+        level.m_213960_(level.m_8055_(pos.m_7495_()), pos.m_7495_(), block, pos, false);
+        level.m_213960_(level.m_8055_(pos.m_7494_()), pos.m_7494_(), block, pos, false);
+        if (st.m_60796_(level, pos)) {
+            block.m_6861_(st, level, pos, block, pos, false); // Block.neighborChanged（6 参，state 在前）
+        }
+    }
+
+    /* ==================== v1.5.315+ 红石机器专属建造策略 ====================
+     * 逐个解析 blueprints 目录 21 台外部机器蓝图（litematic 方块构成+红石朝向）后归类：
+     * - 轰炸机类（三向/双向/2TNT/自返回/推土机）：活塞+粘液块弹头，红石块为移动
+     *   信号源，观察者检测弹头运动，探测铁轨（矿车压轨）触发 TNT 复制。
+     * - 打包机类（伪12倍速/六倍速/混杂/带分类/自适应）：灵魂沙气泡柱+冰道水流冲
+     *   物品→漏斗→投掷器/活塞打包入箱，观察者/音符盒时钟自转。
+     * - 潜影盒仓库类（单排/双排/大仓库）：观察者/音符盒 BUD 检测物品输入→活塞推
+     *   潜影盒→比较器/漏斗分类，冰道+气泡柱运输。
+     * - 其他：分类机（漏斗链+比较器）/铁砧机（观察者时钟）/村民机（压板触发）/
+     *   南瓜机（附生茎无法建造）/甘蔗机（纯水流半自动）。
+     * - Never4Get：巨型 TNT 大炮——手动装填触发。
+     *
+     * v1.5.316【红石机器改革：专属顺序 + 活建造（去禁锢）】：
+     * - 机器不再"静默放置（flag 2）+ 完工唤醒/不唤醒"（旧禁锢：机器建好冻结在
+     *   蓝图导出时的瞬态，线保留冻结 power、活塞保留冻结伸缩态 → 建好不运行）。
+     * - 机器改走【专属搭建顺序 sortMachinePlan】：按红石拓扑分层
+     *   结构 → 惰性机构 → 活动件 → 传感/信号 → 动力源 → TNT，动力源最后落位。
+     * - 机器【活放置】（doPlace flag 3）：红石/水流随放随算；机器在最后一格
+     *   动力源落下时自然进入运行态——"建好就能跑"，无需完工唤醒。
+     * - 轰炸机类完工自动在探测铁轨上生成矿车（spawnStartMinecarts）启动复制循环。
+     * - 关闭开关 MaidSmartConfig.BUILD_MACHINE_SMART = 完整回退旧行为。
+     */
+
+    /** v1.5.315：蓝图 id（内置 maid_smart:xxx 或外部 maid_smart_ext:<文件名>）→ 机器家族；
+     *  非机器返回 null。 */
+    public static String machineFamily(String id) {
+        if (id == null) {
+            return null;
+        }
+        String low = id.toLowerCase(java.util.Locale.ROOT);
+        // v1.5.369：内置农场（机械类蓝图）——走机器专属搭建顺序 + 完工使用说明
+        if (low.equals("maid_smart:farm_cactus")) {
+            return "farm_cactus";
+        }
+        if (low.equals("maid_smart:farm_superfurnace")) {
+            return "farm_superfurnace";
+        }
+        if (low.equals("maid_smart:farm_lavafountain")) {
+            return "farm_lavafountain";
+        }
+        if (low.equals("maid_smart:farm_crop")) {
+            return "farm_crop";
+        }
+        if (low.equals("maid_smart:farm_tree")) {
+            return "farm_tree";
+        }
+        if (low.equals("maid_smart:farm_chicken")) {
+            return "farm_chicken";
+        }
+        if (low.equals("maid_smart:machine_furnace_array")) {
+            return "furnace_array";
+        }
+        if (low.contains("never4get")) {
+            return "never4get";
+        }
+        if (low.contains("轰炸机") || low.contains("bomber") || low.contains("推土机")) {
+            return "bomber";
+        }
+        if (low.contains("打包机") || low.contains("packer") || low.contains("打包")) {
+            return "packer";
+        }
+        if (low.contains("潜影盒") || low.contains("shulker") || low.contains("仓库")) {
+            return "warehouse";
+        }
+        if (low.contains("分类机") || low.contains("sorter") || low.contains("分类")) {
+            return "sorter";
+        }
+        if (low.contains("南瓜") || low.contains("西瓜") || low.contains("melon")) {
+            return "farm_pumpkin";
+        }
+        if (low.contains("甘蔗") || low.contains("sugar_cane")) {
+            return "farm_sugar";
+        }
+        if (low.contains("铁砧") || low.contains("anvil")) {
+            return "anvil";
+        }
+        if (low.contains("村民") || low.contains("villager")) {
+            return "villager";
+        }
+        return null;
+    }
+
+    /** v1.5.315：TNT 类机器完成后【不唤醒红石】——旧禁锢遗留：唤醒瞬间活塞预伸缩/
+     *  观察者预脉冲会把弹头推飞、TNT 错位（轰炸机/Never4Get 巨型炮）。
+     *  v1.5.316 起机器改走活建造，不再需要"唤醒/不唤醒"区分；本方法保留兼容，
+     *  已无调用点。 */
+    public static boolean machineQuietFinish(String id) {
+        String fam = machineFamily(id);
+        return "bomber".equals(fam) || "never4get".equals(fam);
+    }
+
+    /** v1.5.316：是否红石机器蓝图（内置 machine_ 前缀 或 外部机器家族名匹配）——
+     *  是则走机器专属搭建顺序 + 活建造。 */
+    public static boolean isMachineBlueprint(String id) {
+        if (id == null) {
+            return false;
+        }
+        return id.startsWith("maid_smart:machine_") || machineFamily(id) != null;
+    }
+
+    /** v1.5.315：机器完成提示（中文）——告知玩家该机器如何启动/预期行为；非机器返回空串。 */
+    public static String machineFinishTip(String id) {
+        String fam = machineFamily(id);
+        if (fam == null) {
+            return "";
+        }
+        switch (fam) {
+            case "bomber":
+                // v1.5.320：动态提示由完工流程生成（已放置 X 辆 / 缺矿车未启动）
+                return "";
+            case "never4get":
+                return "\u00a7e【机器】巨型红石结构已就位,未自动激活——请手动触发标靶/总开关";
+            case "packer":
+                return "\u00a7e【机器】打包机时钟已就位——放入物品即自动收集打包（有拉杆的机器先拉杆启动）";
+            case "warehouse":
+                return "\u00a7e【机器】潜影盒仓库已就位——物品入漏斗后自动分类入盒";
+            case "sorter":
+                return "\u00a7e【机器】分类机已就位——漏斗设好过滤物品后自动分类";
+            case "farm_pumpkin":
+                return "\u00a7e【机器】注意:该南瓜机蓝图无自动触发时钟,长成后需玩家手动确认";
+            case "farm_sugar":
+                return "\u00a7e【机器】注意:该甘蔗机为纯水流半自动,无自动收割装置";
+            case "anvil":
+                return "\u00a7e【机器】铁砧机观察者时钟已就位——放入铁砧/原料自动运作";
+            case "villager":
+                return "\u00a7e【机器】村民机已就位——放入村民与床后自动运作";
+            // v1.5.369：内置农场使用说明（完工系统消息附带）
+            case "farm_cactus":
+                return "\u00a7e【使用】仙人掌长到 3 格会被断顶环碰碎，掉落物被四角水流冲进中央井，"
+                        + "下井梯取箱内仙人掌即可；两层塔自动同时产";
+            case "farm_superfurnace":
+                return "\u00a7e【使用】顶部一排箱放待烧物品、侧面(背面)一排箱放煤/岩浆桶，"
+                        + "成品自动流到底部输出箱——纯漏斗无红石，放料即烧";
+            case "farm_lavafountain":
+                return "\u00a7e【使用】滴水石锥会随时间把岩浆滴满炼药锅，满了用桶从锅里舀岩浆即可（无限岩浆）";
+            case "farm_crop":
+                return "\u00a7e【使用】3 个发射器里装满骨粉，站在前方台阶上拿种子对着耕地长按右键，"
+                        + "边拨拉杆边种——每次拨杆 3 台发射器齐喷骨粉催熟作物";
+            case "farm_tree":
+                return "\u00a7e【使用】发射器里装满骨粉，拨拉杆开启后骨粉催熟树苗，活塞塔把长高的树推倒，"
+                        + "原木落到前方漏斗进箱；砍完再种树苗重复即可";
+            case "farm_chicken":
+                return "\u00a7e【使用】在顶部 3×3 漏斗平台上放鸡，鸡下的蛋自动进发射器；拨拉杆向鸡舍投蛋，"
+                        + "小鸡长大后透过前排半砖缝隙用剑击杀取熟肉/经验，掉落自动进中央箱";
+            case "furnace_array":
+                return "\u00a7e【使用】顶部箱子放待烧物品、侧面燃料箱放煤，成品自动流到底部输出箱——"
+                        + "纯漏斗无红石";
+            default:
+                return "";
+        }
+    }
+
+    /** v1.5.316：机器专属搭建顺序——排序键 = 机器相位 → y → x → z（自下而上稳定）。
+     *  红石机器按红石拓扑分层放置：结构 → 惰性机构 → 活动件 → 传感/信号 →
+     *  动力源 → TNT。动力源最后落位，配合活放置（flag 3）机器在最后一格落下时
+     *  自然进入运行态。相位内 y 升序保证支撑/槽壁/灵魂沙/冰先于其上的附着物/水。 */
+    public static List<String> sortMachinePlan(List<String> steps, String family) {
+        if (steps == null || steps.isEmpty()) {
+            return steps;
+        }
+        List<String> head = new ArrayList<>();
+        List<String> body = new ArrayList<>();
+        for (String step : steps) {
+            if (parseStep(step) == null) {
+                head.add(step);
+            } else {
+                body.add(step);
+            }
+        }
+        Map<String, Integer> cache = new HashMap<>();
+        body.sort((a, b) -> {
+            String[] pa = parseStep(a);
+            String[] pb = parseStep(b);
+            if (pa == null || pb == null) {
+                return 0;
+            }
+            int pha = machinePhase(pa[3], family, cache);
+            int phb = machinePhase(pb[3], family, cache);
+            if (pha != phb) {
+                return pha - phb;
+            }
+            // 动力源相位内：红石线（导体）先于红石块/火把/拉杆等源——源最后放，
+            // 全网络在最后一格落下时一次性带电（避免中途半网通电误触）
+            if (pha == 5) {
+                boolean wa = "minecraft:redstone_wire".equals(pa[3]);
+                boolean wb = "minecraft:redstone_wire".equals(pb[3]);
+                if (wa != wb) {
+                    return wa ? -1 : 1;
+                }
+            }
+            try {
+                int ya = Integer.parseInt(pa[1]);
+                int yb = Integer.parseInt(pb[1]);
+                if (ya != yb) {
+                    return ya - yb;
+                }
+                int xa = Integer.parseInt(pa[0]);
+                int xb = Integer.parseInt(pb[0]);
+                if (xa != xb) {
+                    return xa - xb;
+                }
+                return Integer.parseInt(pa[2]) - Integer.parseInt(pb[2]);
+            } catch (NumberFormatException e) {
+                return 0;
+            }
+        });
+        List<String> out = new ArrayList<>(head.size() + body.size());
+        out.addAll(head);
+        out.addAll(body);
+        return out;
+    }
+
+    /** v1.5.316：机器搭建相位——1 结构/外壳 → 2 惰性机构 → 3 活动件 →
+     *  4 传感/信号 → 5 动力源 → 6 TNT。识别失败默认 1（结构，最安全）。 */
+    private static int machinePhase(String blockId, String family, Map<String, Integer> cache) {
+        Integer cached = cache.get(blockId);
+        if (cached != null) {
+            return cached;
+        }
+        int phase = 1;
+        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(blockId));
+        if (block != null) {
+            if (block instanceof net.minecraft.world.level.block.TntBlock) {
+                phase = 6;
+            } else if (block instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                    || block instanceof net.minecraft.world.level.block.RedstoneTorchBlock
+                    || block instanceof net.minecraft.world.level.block.RedstoneWallTorchBlock
+                    || block instanceof net.minecraft.world.level.block.PoweredBlock
+                    || block instanceof net.minecraft.world.level.block.LeverBlock
+                    || block instanceof net.minecraft.world.level.block.ButtonBlock
+                    || block instanceof net.minecraft.world.level.block.PressurePlateBlock) {
+                phase = 5;
+            } else if (block instanceof net.minecraft.world.level.block.ObserverBlock
+                    || block instanceof net.minecraft.world.level.block.DiodeBlock
+                    || block instanceof net.minecraft.world.level.block.TripWireHookBlock
+                    || block instanceof net.minecraft.world.level.block.TripWireBlock
+                    || block instanceof net.minecraft.world.level.block.TargetBlock
+                    || block instanceof net.minecraft.world.level.block.DaylightDetectorBlock
+                    || block instanceof net.minecraft.world.level.block.TrappedChestBlock) {
+                phase = 4;
+            } else if (block instanceof net.minecraft.world.level.block.piston.PistonBaseBlock
+                    || block instanceof net.minecraft.world.level.block.SlimeBlock
+                    || block instanceof net.minecraft.world.level.block.HoneyBlock
+                    || block instanceof net.minecraft.world.level.block.RedstoneLampBlock) {
+                phase = 3;
+            } else if (block instanceof net.minecraft.world.level.block.HopperBlock
+                    || block instanceof net.minecraft.world.level.block.ChestBlock
+                    || block instanceof net.minecraft.world.level.block.BarrelBlock
+                    || block instanceof net.minecraft.world.level.block.DispenserBlock
+                    || block instanceof net.minecraft.world.level.block.DropperBlock
+                    || block instanceof net.minecraft.world.level.block.ComposterBlock
+                    || block instanceof net.minecraft.world.level.block.NoteBlock
+                    || block instanceof net.minecraft.world.level.block.BaseRailBlock
+                    || block instanceof net.minecraft.world.level.block.IceBlock
+                    || block instanceof net.minecraft.world.level.block.SoulSandBlock
+                    || block instanceof net.minecraft.world.level.block.LiquidBlock
+                    || block instanceof net.minecraft.world.level.block.FarmBlock
+                    || block instanceof net.minecraft.world.level.block.SugarCaneBlock
+                    || block instanceof net.minecraft.world.level.block.DoorBlock
+                    || block instanceof net.minecraft.world.level.block.TrapDoorBlock
+                    || block instanceof net.minecraft.world.level.block.FenceGateBlock
+                    || block instanceof net.minecraft.world.level.block.BedBlock
+                    || block instanceof net.minecraft.world.level.block.ShulkerBoxBlock
+                    || block instanceof net.minecraft.world.level.block.AnvilBlock
+                    || block instanceof net.minecraft.world.level.block.AbstractFurnaceBlock
+                    || block instanceof net.minecraft.world.level.block.BubbleColumnBlock) {
+                phase = 2;
+            }
+        }
+        cache.put(blockId, phase);
+        return phase;
+    }
+
+    /** v1.5.316：机器模式状态归一化——丢弃蓝图导出时的冻结瞬态（伸出活塞/通电铁轨/
+     *  冻结 power/lit），让方块以自然初始态落地，由活放置（flag 3）收敛到设计态。
+     *  只处理红石相关方块；朝向/台阶/楼梯等设计属性原样保留。
+     *  状态串格式 "minecraft:xxx{key:\"value\",...}"（paletteStateString 规范 SNBT）。 */
+    public static String normalizeMachineState(String blockId, String stateSnbt) {
+        if (stateSnbt == null || stateSnbt.indexOf('{') < 0) {
+            return stateSnbt;
+        }
+        String keys;
+        if ("minecraft:redstone_wire".equals(blockId)) {
+            keys = "power|east|west|north|south|up|down";
+        } else if ("minecraft:water".equals(blockId) || "minecraft:lava".equals(blockId)) {
+            // v1.5.317：液体只放源块（level 归一为 0）——蓝图导出的流动态 level>0
+            // 不直接放置，流动由水源模拟产生（防串流/重复；气泡柱/冰道需要源块）
+            keys = "level";
+        } else if (blockId.contains("piston")) {
+            keys = "extended";
+        } else if (blockId.contains("rail")) {
+            keys = "powered";
+        } else if (blockId.contains("torch") || blockId.contains("lamp")) {
+            keys = "lit";
+        } else if (blockId.contains("lever") || blockId.contains("button")
+                || blockId.contains("pressure_plate") || blockId.contains("target")) {
+            keys = "powered";
+        } else if (blockId.contains("repeater") || blockId.contains("comparator")) {
+            keys = "powered|locked";
+        } else if (blockId.contains("observer") || blockId.contains("daylight_detector")) {
+            keys = "powered";
+        } else if (blockId.contains("tnt")) {
+            // v1.5.328：TNT 归一 unstable=false——蓝图若导出"已点燃"的 TNT
+            //（unstable=true，结构文件在点燃瞬间保存），活建造下任意邻居更新
+            // 都会点燃；建造期应放稳定 TNT，由机器运行时触发（neighborChanged）
+            keys = "unstable";
+        } else {
+            return stateSnbt;
+        }
+        String out = stateSnbt;
+        // ① 删 ",key:\"value\""（属性不在最前）
+        out = out.replaceAll(",(?:" + keys + "):\"[^\"]*\"", "");
+        // ② 删 "key:\"value\","（属性在最前）
+        out = out.replaceAll("(?<![A-Za-z])(?:" + keys + "):\"[^\"]*\",", "");
+        // ③ 删 "{key:\"value\"}"（唯一属性）→ "{}"
+        out = out.replaceAll("\\{(?:" + keys + "):\"[^\"]*\"\\}", "{}");
+        return out;
+    }
+
+    /** v1.5.316：轰炸机家族完工自动启动——在蓝图全部探测铁轨上生成矿车（探测铁轨被
+     *  矿车压住才带电，是 TNT 复制循环的触发条件）。无探测铁轨的轰炸机（2TNT/29方块/
+     *  推土机——纯观察者/活塞自启动）自动跳过；铁轨未建成（缺料/被替换）也跳过。
+     *  v1.5.320：矿车不再凭空白给——每条探测铁轨消耗 1 辆矿车（女仆背包优先、
+     *  主人背包兜底；主人创造模式无限）。背包矿车不足时只放够数的，返回实际放置数，
+     *  由调用方提示"还差 X 辆"。 */
+    public static int spawnStartMinecarts(net.minecraft.server.level.ServerLevel level,
+                                          net.minecraft.core.BlockPos origin,
+                                          List<String> plan, String family, EntityMaid maid) {
+        if (!"bomber".equals(family)) {
+            return 0;
+        }
+        int spawned = 0;
+        for (int i = 1; i < plan.size(); i++) {
+            String[] parts = parseStep(plan.get(i));
+            if (parts == null) {
                 continue;
             }
-            BlockPos pos = origin.m_7918_(x, y, z);
-            net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
-            if (st.m_60734_() == b) {
-                level.m_7731_(pos, st, 3); // 同状态重放 → 触发邻居更新 → 红石重算
+            if (!"minecraft:detector_rail".equals(parts[3])) {
+                continue;
             }
+            try {
+                int x = origin.m_123341_() + Integer.parseInt(parts[0]);
+                int y = origin.m_123342_() + Integer.parseInt(parts[1]);
+                int z = origin.m_123343_() + Integer.parseInt(parts[2]);
+                net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
+                if (!(level.m_8055_(pos).m_60734_() instanceof net.minecraft.world.level.block.DetectorRailBlock)) {
+                    continue; // 探测铁轨未建成 → 跳过
+                }
+                // v1.5.320：消耗 1 辆矿车（没有矿车 → 不自动生成，调用方提示缺矿车）
+                if (maid != null && !consumeMinecart(maid)) {
+                    break;
+                }
+                net.minecraft.world.entity.vehicle.Minecart cart = new net.minecraft.world.entity.vehicle.Minecart(
+                        net.minecraft.world.entity.EntityType.f_20469_, level);
+                cart.m_6034_(x + 0.5, y + 0.0625, z + 0.5);
+                level.m_7967_(cart);
+                spawned++;
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (spawned > 0) {
+            LOGGER.info("spawnStartMinecarts: 轰炸机启动矿车 {} 辆", spawned);
+        }
+        return spawned;
+    }
+
+    /** v1.5.320：消耗 1 辆矿车——女仆背包优先，主人背包兜底；主人创造模式无限。
+     *  成功返回 true，背包没有矿车返回 false。 */
+    private static boolean consumeMinecart(EntityMaid maid) {
+        Item minecart = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:minecart"));
+        if (minecart == null) {
+            return false;
+        }
+        if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player owner) {
+            if (com.maidsmart.build.BlueprintLib.isCreative(owner)) {
+                return true; // 创造模式无限
+            }
+            // 主人背包：取 1 辆矿车
+            net.minecraft.world.entity.player.Inventory inv = owner.m_150109_();
+            for (int i = 0; i < inv.m_6643_(); i++) {
+                net.minecraft.world.item.ItemStack s = inv.m_8020_(i);
+                if (!s.m_41619_() && s.m_41720_() == minecart) {
+                    s.m_41774_(1); // shrink(1)
+                    if (s.m_41619_()) {
+                        inv.m_6836_(i, net.minecraft.world.item.ItemStack.f_41583_);
+                    }
+                    return true;
+                }
+            }
+        }
+        // 女仆背包：取 1 辆矿车
+        net.minecraft.world.item.ItemStack taken = extractExact(maid.getMaidInv(), minecart, 1);
+        return !taken.m_41619_();
+    }
+
+    /** v1.5.315：重放蓝图内全部水方块（flag 3）→ 触发流动计算/灵魂沙气泡柱生成。
+     *  建造期水是静默放置（flag 2 无更新）不流动，气泡柱/冰道水道失效 → 打包机、
+     *  潜影盒仓库"建好不动"的根因。只碰水，不碰 lava。 */
+    public static void activateWater(net.minecraft.server.level.ServerLevel level,
+                                     net.minecraft.core.BlockPos origin, List<String> plan) {
+        int n = 0;
+        for (int i = 1; i < plan.size(); i++) {
+            String[] parts = parseStep(plan.get(i));
+            if (parts == null) {
+                continue;
+            }
+            if (!"minecraft:water".equals(parts[3])) {
+                continue;
+            }
+            try {
+                int x = origin.m_123341_() + Integer.parseInt(parts[0]);
+                int y = origin.m_123342_() + Integer.parseInt(parts[1]);
+                int z = origin.m_123343_() + Integer.parseInt(parts[2]);
+                net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
+                net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
+                if (st.m_60734_() instanceof net.minecraft.world.level.block.LiquidBlock) {
+                    level.m_7731_(pos, st, 3); // 同状态重放 → 流动计算/气泡柱生成
+                    n++;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (n > 0) {
+            LOGGER.info("activateWater: 重放 {} 个水方块激活水流/气泡柱", n);
+        }
+    }
+
+    /**
+     * v1.5.331：完工 TNT 点火结算——遍历蓝图 TNT 步骤，只点燃【当前邻接带电】的
+     * TNT（恢复正确终态）：轰炸机（矿车压轨带电）当场启动复制循环；天机屠龙炮等
+     * 观察者/活塞触发机器（TNT 静止时无带电邻居——探针实证 320 TNT 六邻无红石）
+     * 保持惰性，触发时才点火——不再"刚建好炸膛"。配合 BuildTntGuard 保护窗口
+     * （建造期/完工激活期压制一切 TNT 点火入口），本方法在窗口内直接调用
+     * primeTnt（m_57433_，不被 mixin 压制），只认"此刻静止带电"。
+     */
+    public static void settleTntIgnition(net.minecraft.server.level.ServerLevel level,
+                                         net.minecraft.core.BlockPos origin, List<String> plan) {
+        int n = 0;
+        for (int i = 1; i < plan.size(); i++) {
+            String step = plan.get(i);
+            if (step == null || !step.contains("tnt")) {
+                continue; // 廉价预筛（parseStep 的 split 更贵）
+            }
+            String[] parts = parseStep(step);
+            if (parts == null || !"minecraft:tnt".equals(parts[3])) {
+                continue;
+            }
+            try {
+                int x = origin.m_123341_() + Integer.parseInt(parts[0]);
+                int y = origin.m_123342_() + Integer.parseInt(parts[1]);
+                int z = origin.m_123343_() + Integer.parseInt(parts[2]);
+                net.minecraft.core.BlockPos pos = new net.minecraft.core.BlockPos(x, y, z);
+                net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
+                if (!(st.m_60734_() instanceof net.minecraft.world.level.block.TntBlock)) {
+                    continue;
+                }
+                // 只有"当前邻接带电"才点燃（等效于它此刻自然触发）
+                if (level.m_276867_(pos)) {
+                    net.minecraft.world.level.block.TntBlock.m_57433_(level, pos);
+                    n++;
+                }
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (n > 0) {
+            LOGGER.info("settleTntIgnition: 完工点燃 {} 个邻接带电的 TNT", n);
         }
     }
 
@@ -3878,7 +5714,9 @@ public final class BlueprintLib {
             // v1.5.28：可替换方块（草/花/雪层/藤蔓/水等 canBeReplaced=true）→ 可建。
             // 旧版只认 ALLOWED_GROUND 自然地形，玩家"清空"后的草地残留短草/花
             // 会被误判为障碍物 → 换再多空间也提示"区域内有障碍物"（中式庭院无法建造根因）
-            if (state.m_60815_()) {
+            // v1.5.259：m_60815_ 是 isSolid——旧版写成 `if (m_60815_()) continue` 把
+            // 实心方块全跳过（障碍检测失效）；意图"可替换（非实心）→ 跳过"
+            if (!state.m_60815_()) {
                 continue;
             }
             // v1.5.25：目标格已是蓝图要求方块（或地形等价族）→ 已建好，不算障碍
@@ -3922,6 +5760,13 @@ public final class BlueprintLib {
                 if (parts[3].contains("door")) {
                     return; // 蓝图自带门：已有入口
                 }
+                // v1.5.311：蓝图含红石组件 → 不开门洞（墙内红石布线不能被挖断；
+                // 旧版只豁免 machine_ 前缀的内置机器，外部红石蓝图仍会被开洞切断）
+                net.minecraft.world.level.block.Block pb = ForgeRegistries.BLOCKS.getValue(
+                        net.minecraft.resources.ResourceLocation.parse(parts[3]));
+                if (pb != null && isRedstoneRelevant(pb)) {
+                    return;
+                }
                 minX = Math.min(minX, x);
                 maxX = Math.max(maxX, x);
                 minY = Math.min(minY, y);
@@ -3959,7 +5804,9 @@ public final class BlueprintLib {
                             ? origin.m_7918_(positive ? maxX - d : minX + d, y, doorZ)
                             : origin.m_7918_(doorZ, y, positive ? maxZ - d : minZ + d);
                     net.minecraft.world.level.block.state.BlockState st = level.m_8055_(target);
-                    if (!st.m_60795_() && !st.m_60815_()) {
+                    // v1.5.259：m_60815_ 是 isSolid——旧版当 isLiquid（非空气非液体→清空）
+                    if (!st.m_60795_()
+                            && !st.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
                         level.m_7731_(target, air.m_49966_(), 3);
                     }
                 }
@@ -4007,7 +5854,9 @@ public final class BlueprintLib {
                     for (int dz = -48; dz <= 48; dz += 2) {
                         net.minecraft.world.level.block.state.BlockState st = level.m_8055_(
                                 new BlockPos(mx + dx, my + dy, mz + dz));
-                        if (st.m_60795_() || st.m_60815_()) {
+                        // v1.5.259：m_60815_ 是 isSolid——旧版当 isLiquid（"空气/液体跳过"）
+                        if (st.m_60795_()
+                                || st.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
                             continue; // 空气/液体跳过
                         }
                         net.minecraft.resources.ResourceLocation bid =

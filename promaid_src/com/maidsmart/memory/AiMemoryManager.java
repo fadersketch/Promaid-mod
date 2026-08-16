@@ -289,9 +289,38 @@ public class AiMemoryManager {
                     }
                     dailyConsolidate(maid, level, day, levelGameTime);
                     AiMemoryExtractor.maybeExtract(maid, server);
+                    // 记忆归档调度（跨日/周/月边界生成多级索引 + 短期→长期转移；
+                    // 移植自 Sphantosis MemoryArchiver.tick，边界未变时只做轻量比较）
+                    AiMemoryArchiver.tick(maid, level, false);
                 });
             }
         }
+    }
+
+    /**
+     * 睡一觉自动处理（移植自 Sphantosis 的 start_role_sleep → wrap-up →
+     * archiver.tick(force_day_index=True) 链路）：
+     * 玩家睡醒（新的一天开始）时，对周围女仆强制归档——生成刚结束这一天的
+     * 「日」级日记索引 + 执行短期→长期簇转移。女仆"睡一觉把记忆整理好"。
+     */
+    @SubscribeEvent
+    public void onPlayerWakeUp(net.minecraftforge.event.entity.player.PlayerWakeUpEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_SLEEP.get()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!(player.m_9236_() instanceof ServerLevel level)) {
+            return;
+        }
+        level.m_45976_(EntityMaid.class, player.m_20191_().m_82400_(128.0)).forEach(maid -> {
+            if (!maid.m_21824_() || !isEnabled(maid)) {
+                return;
+            }
+            AiMemoryArchiver.tick(maid, level, true);
+        });
     }
 
     // ---------- 每日巩固（纯规则零 LLM，对齐 DailyMemoryConsolidator） ----------
@@ -336,11 +365,13 @@ public class AiMemoryManager {
         for (int i = 0; i < top; i++) {
             sb.append("难忘的事：").append(AiMemoryModels.clip(today.get(i).content(), 60)).append("。");
         }
-        // 关注点：高重要度的情绪/关系残留
-        for (AiMemoryModels.Paragraph p : today) {
-            if (p.salience() >= 8 && (p.tags().contains("emotion") || p.tags().contains("relationship_event"))) {
-                sb.append("关系里还有重要的事，不要假装没发生。");
-                break;
+        // v1.1.0：每日关心点（规则推导"下次该怎么对主人"，随每日回顾注入；
+        // 主动会话 TOPIC_PUSH 读 daily 标签段落会自动复用——记忆↔主动对话联动）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_CARE_POINTS.get()) {
+            java.util.List<String> cares = CarePointGenerator.generate(store,
+                    com.maidsmart.affect.AffectManager.load(maid));
+            if (!cares.isEmpty()) {
+                sb.append("关心点：").append(String.join("；", cares)).append("。");
             }
         }
         writeParagraph(store, AiMemoryType.SUMMARY, sb.toString(), "daily,summary",

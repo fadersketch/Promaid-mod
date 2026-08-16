@@ -43,6 +43,11 @@ public final class AiMemoryStore {
     private static long LAST_WRITE_LOG = 0L;
 
     private final Path dir;
+    /** v1.1.0：情绪快照缓存（5 秒 TTL——每次 addParagraph 都读盘 affect.json 是
+     *  高频 IO 热点，缓存后批量写入只读一次盘；AffectManager 事件写入后最多 5 秒
+     *  内反映，可接受） */
+    private long affectCacheTime = 0L;
+    private String affectSnapshotJson = null;
     /** v1.5.251：来源世界（维度名，写入段落时自动加 world: 标签；非 final——
      *  首次 of() 未带世界名时后续可补充注入） */
     private volatile String worldId;
@@ -53,10 +58,15 @@ public final class AiMemoryStore {
     private final List<AiMemoryModels.Profile> profiles = new ArrayList<>();
     private AiMemoryModels.Meta meta = AiMemoryModels.Meta.empty();
     private boolean dirty = false;
+    /** 多级记忆索引库（日/3日/周/月日记式摘要，移植自 Sphantosis memory_index_db） */
+    private final AiMemoryIndexStore indexStore;
+    /** 跳表时间索引（游戏 tick → 段落 hash，O(log n) 范围查询；load 后重建） */
+    private final AiMemorySkipList timeIndex = new AiMemorySkipList();
 
     private AiMemoryStore(Path dir, String worldId) {
         this.dir = dir;
         this.worldId = worldId;
+        this.indexStore = new AiMemoryIndexStore(dir);
         this.load();
     }
 
@@ -129,6 +139,15 @@ public final class AiMemoryStore {
             }
         } catch (Exception ignored) {
         }
+        // 重建跳表时间索引（数据源为段落列表；被 prune 移除的段落留 stale 项，
+        // 查询侧经 paragraphByHash 判空过滤）
+        List<AiMemorySkipList.Entry> entries = new ArrayList<>();
+        for (AiMemoryModels.Paragraph p : this.paragraphs) {
+            if (!p.deleted()) {
+                entries.add(new AiMemorySkipList.Entry(p.eventTimeStart(), p.hash()));
+            }
+        }
+        this.timeIndex.rebuild(entries);
     }
 
     private void save() {
@@ -145,6 +164,7 @@ public final class AiMemoryStore {
             writeLines(this.dir.resolve("profiles.jsonl"), this.profiles);
             Files.writeString(this.dir.resolve("meta.json"),
                     AiMemoryModels.GSON.toJson(this.meta), StandardCharsets.UTF_8);
+            this.indexStore.save();
         } catch (Exception ignored) {
         }
     }
@@ -175,6 +195,17 @@ public final class AiMemoryStore {
         // v1.5.251：自动标注来源世界（world:xxx 进 tags；已标注的不重复）
         if (this.worldId != null && !this.worldId.isEmpty()) {
             p = p.withWorld(this.worldId);
+        }
+        // v1.1.0：情绪快照写入 metadata（{"affect":{...}}，仅新写入的空白 metadata；
+        // 旧记忆保持原样——向后兼容，merge 时保留旧快照）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_AFFECT_SNAPSHOT.get()
+                && (p.metadata() == null || p.metadata().isBlank())) {
+            String snap = currentAffectSnapshot();
+            if (snap != null) {
+                p = new AiMemoryModels.Paragraph(p.hash(), p.sourceType(), p.role(), p.content(), p.tags(),
+                        snap, p.createdAt(), p.updatedAt(), p.eventTimeStart(), p.eventTimeEnd(),
+                        p.salience(), p.accessCount(), p.lastAccessed(), p.permanent(), p.deleted(), p.protectedUntil());
+            }
         }
         // v1.5.231b：记忆写入诊断（10 秒节流）——"关了开关记忆还在涨"的排查：
         // 看关闭后段落数是否仍在增长（latest.log 搜 "memory write"）
@@ -216,6 +247,8 @@ public final class AiMemoryStore {
             }
         }
         this.paragraphs.add(p);
+        // 跳表时间索引同步插入（新段落；合并/覆盖路径 hash 不变无需处理）
+        this.timeIndex.insert(p.eventTimeStart(), p.hash());
         this.markDirty();
     }
 
@@ -458,10 +491,12 @@ public final class AiMemoryStore {
             }
         }
         // 2. 衰减遗忘：30 天未访问且低重要度的非永久段落
+        //    （long_term 段落豁免——已由归档器判定为长期记忆）
         Iterator<AiMemoryModels.Paragraph> it = this.paragraphs.iterator();
         while (it.hasNext()) {
             AiMemoryModels.Paragraph p = it.next();
             if (!p.isPermanent() && !p.deleted()
+                    && !p.tags().contains("long_term")
                     && p.salience() <= com.maidsmart.config.MaidSmartConfig.MEMORY_DECAY_SALIENCE.get()
                     && now - p.lastAccessed() > (long) com.maidsmart.config.MaidSmartConfig.MEMORY_DECAY_DAYS.get() * 86400000L) {
                 it.remove();
@@ -791,6 +826,60 @@ public final class AiMemoryStore {
 
     // ---------- 读取访问（供检索/注入） ----------
 
+    /** v1.1.0：存储目录（<root>/<女仆UUID>）——人格种子/情绪快照按此定位 */
+    public Path dir() {
+        return this.dir;
+    }
+
+    /** 多级记忆索引库（日/3日/周/月） */
+    public AiMemoryIndexStore index() {
+        return this.indexStore;
+    }
+
+    /** 跳表时间索引（游戏 tick → 段落 hash） */
+    public AiMemorySkipList timeIndex() {
+        return this.timeIndex;
+    }
+
+    /**
+     * 短期→长期转移：给段落打 long_term 标记（AiMemoryArchiver 整簇调用）。
+     * long_term 段落豁免衰减遗忘（对齐 Sphantosis 转移进长期库后不再随短期遗忘）。
+     */
+    public synchronized boolean markLongTermByHash(String hash) {
+        for (int i = 0; i < this.paragraphs.size(); i++) {
+            AiMemoryModels.Paragraph p = this.paragraphs.get(i);
+            if (p.hash().equals(hash) && !p.deleted()
+                    && !("," + p.tags() + ",").contains(",long_term,")) {
+                this.paragraphs.set(i, new AiMemoryModels.Paragraph(p.hash(), p.sourceType(),
+                        p.role(), p.content(), p.tags() + ",long_term", p.metadata(),
+                        p.createdAt(), p.updatedAt(), p.eventTimeStart(), p.eventTimeEnd(),
+                        p.salience(), p.accessCount(), p.lastAccessed(), p.permanent(),
+                        p.deleted(), p.protectedUntil()));
+                this.markDirty();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** v1.1.0：当前情绪快照 JSON（5 秒 TTL 缓存；无 affect.json/异常返回 null） */
+    private String currentAffectSnapshot() {
+        long now = System.currentTimeMillis();
+        if (now - this.affectCacheTime < 5000L && this.affectSnapshotJson != null) {
+            return this.affectSnapshotJson;
+        }
+        this.affectCacheTime = now;
+        this.affectSnapshotJson = null;
+        try {
+            com.maidsmart.affect.AffectSnapshot snap = com.maidsmart.affect.AffectSnapshot.load(this.dir);
+            if (snap != null) {
+                this.affectSnapshotJson = snap.toJson();
+            }
+        } catch (Exception ignored) {
+        }
+        return this.affectSnapshotJson;
+    }
+
     public synchronized List<AiMemoryModels.Paragraph> paragraphs() {
         List<AiMemoryModels.Paragraph> out = new ArrayList<>();
         for (AiMemoryModels.Paragraph p : this.paragraphs) {
@@ -833,10 +922,13 @@ public final class AiMemoryStore {
         this.episodes.clear();
         this.profiles.clear();
         this.meta = AiMemoryModels.Meta.empty();
+        this.indexStore.clear();
+        this.timeIndex.rebuild(List.of());
         this.dirty = true;
         this.save();
         try {
             java.nio.file.Files.deleteIfExists(this.dir.resolve("working_note.txt"));
+            java.nio.file.Files.deleteIfExists(this.dir.resolve("archiver_state.json"));
         } catch (Exception ignored) {
         }
     }

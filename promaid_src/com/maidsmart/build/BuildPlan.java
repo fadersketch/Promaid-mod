@@ -62,6 +62,11 @@ public final class BuildPlan {
         /** 存档游标（persistCursor 写入；重启恢复进度用） */
         public int savedCursor = 1;
 
+        /** v1.5.287：toPlan 惰性缓存——steps/origin/name/planId 建后不可变 → 拼一次
+         *  复用。旧版每次 toPlan 都 new ArrayList + 拷贝全部步骤（tick 热路径每 tick
+         *  调用：55 万步 × 多女仆 = 每 tick 上千万次引用拷贝 + GC 压力） */
+        private List<String> cachedPlan = null;
+
         PlanState(String planId, ResourceKey<Level> dim, BlockPos origin, String name,
                   String blueprintId, List<String> steps) {
             this.planId = planId;
@@ -74,11 +79,14 @@ public final class BuildPlan {
 
         /** 组装传统计划格式（原点行 + 步骤）——兼容现有解析 API（getOrigin/planName/planId） */
         public List<String> toPlan() {
-            List<String> plan = new ArrayList<>(steps.size() + 1);
-            plan.add("O," + origin.m_123341_() + "," + origin.m_123342_() + "," + origin.m_123343_()
-                    + "," + name + "," + planId);
-            plan.addAll(steps);
-            return plan;
+            if (this.cachedPlan == null) {
+                List<String> plan = new ArrayList<>(steps.size() + 1);
+                plan.add("O," + origin.m_123341_() + "," + origin.m_123342_() + "," + origin.m_123343_()
+                        + "," + name + "," + planId);
+                plan.addAll(steps);
+                this.cachedPlan = plan;
+            }
+            return this.cachedPlan;
         }
     }
 
@@ -104,6 +112,15 @@ public final class BuildPlan {
         /** v1.5.66：已判定永久跳过的步骤下标（悬空/障碍/无物品/区块未加载）——
          *  完成时缺口检查不再重复尝试（防补建死循环） */
         public final java.util.Set<Integer> skippedIdx = new java.util.HashSet<>();
+        /** v1.5.276：替代品验收表 {步骤下标 → 实际放置的替代方块注册名}——缺料替换
+         *  放置成功后记录；主循环/延后轮询/缺口扫描据此把"目标格=该替代品"视为已建，
+         *  不再拆掉重放（拆→掉→捡回→再放→再拆 = 背包材料"翻倍"观感，回收掉落物
+         *  只治标）。仅内存态（重启后首次扫描重建一次替代品，一次性成本可接受）。 */
+        public final java.util.Map<Integer, String> altUsed = new java.util.HashMap<>();
+        /** v1.5.287：延后条目退避表 {步骤下标 → 下次允许重试的 gameTime}——缺料/
+         *  未加载/放置失败时记录，轮询在退避期内跳过该条目（旧版缺料时每 tick 反复
+         *  扫空背包；补料/障碍移除后最多 2 秒内续建，不影响节奏） */
+        public transient java.util.Map<Integer, Long> deferredRetryAt = new java.util.HashMap<>();
 
         /** v1.5.51：蓝图步骤位置集合（懒构建，O(N) 一次性；用于补支撑时判断
          *  "支撑格是否蓝图内位置"——蓝图有步骤的支撑格不补，等支撑步骤先建） */
@@ -416,7 +433,7 @@ public final class BuildPlan {
                 line2.append("\u7b49\u5f85\u8865\u5efa ").append(prog.deferred.size()).append(" \u5757");
             }
             // v1.5.179：实时缺料 = 总需求 − 已建 − 背包
-            java.util.Map<String, Integer> shortfall = realShortfall(level, plan, ps.origin, owner);
+            java.util.Map<String, Integer> shortfall = realShortfall(level, ps.blueprintId, plan, ps.origin, owner);
             if (!shortfall.isEmpty()) {
                 if (line2.length() > 0) {
                     line2.append("\uff0c");
@@ -452,14 +469,17 @@ public final class BuildPlan {
     /** v1.5.179：实时材料缺口 = 总需求 − 已建（区块内与蓝图匹配的方块）− 背包
      *  （该维度绑定女仆 + 主人）；材料充足返回空 Map */
     private static java.util.Map<String, Integer> realShortfall(
-            net.minecraft.server.level.ServerLevel level, List<String> plan, BlockPos origin,
-            net.minecraft.world.entity.player.Player owner) {
+            net.minecraft.server.level.ServerLevel level, String blueprintId, List<String> plan,
+            BlockPos origin, net.minecraft.world.entity.player.Player owner) {
         // v1.5.252p：创造模式材料视为齐——旧版 built + combinedHaveAll(MAX_VALUE)
         // 溢出成负数 → 缺料报告出现 -21 亿/巨量缺料
         if (BlueprintLib.isCreative(owner)) {
             return new java.util.HashMap<>();
         }
-        java.util.Map<String, Integer> needed = BlueprintLib.countNeeds(plan);
+        // v1.5.287：走 countNeedsCached（内置蓝图材料需求已缓存——旧版每 2 秒
+        // UI 刷新都白遍历全表；blueprintId 为空的外部导入蓝图退回 countNeeds）
+        java.util.Map<String, Integer> needed = (blueprintId == null || blueprintId.isEmpty())
+                ? BlueprintLib.countNeeds(plan) : BlueprintLib.countNeedsCached(blueprintId, plan);
         if (needed.isEmpty()) {
             return new java.util.HashMap<>();
         }
@@ -526,6 +546,11 @@ public final class BuildPlan {
     /**
      * v1.5.69：该女仆是否为当前工头（按其绑定区块判断）。
      * v1.5.72/74 语义修正：无工头/工头失效/工头被暂停 → 放行（防全员静默）。
+     * v1.5.266：无工头/工头失效 → 【当场随机挑一只顶上并持久化】（用户："不是说
+     * 没设置的时候会随机设置一个吗"——v1.5.182 的补选在 start 时机经常失败：
+     * 创建区块时女仆还没绑定、远程绑定 scanAreaMaids 扫不到 → foremanUuid 恒空
+     * → 全员放行 = "所有人都在发"的根因）。服务端单线程顺序执行无竞态：
+     * 第一只调用即设好，后续女仆走正常判断。随机失败（真没人）→ 放行兜底防静默。
      * 注意：这是【行为层放行判断】，UI 工头标记必须用 isExplicitForeman。
      */
     public static boolean isForeman(EntityMaid maid) {
@@ -533,16 +558,35 @@ public final class BuildPlan {
         if (ps == null) {
             return true; // 未绑定 → 放行
         }
+        net.minecraft.server.level.ServerLevel level = maid.m_9236_()
+                instanceof net.minecraft.server.level.ServerLevel sl ? sl : null;
         String f = ps.foremanUuid;
         if (f == null || f.isEmpty()) {
-            return true;
+            if (level != null) {
+                String nf = chooseForeman(level, ps);
+                if (!nf.isEmpty()) {
+                    setForeman(level, ps, nf);
+                    return nf.equals(maid.m_20148_().toString());
+                }
+            }
+            return true; // 随机失败（无人可当）→ 放行兜底
         }
         if (f.equals(maid.m_20148_().toString())) {
             return true;
         }
-        EntityMaid fm = findForemanMaid(maid.m_9236_(), f);
+        if (level == null) {
+            return false;
+        }
+        EntityMaid fm = findForemanMaid(level, f);
         if (fm == null) {
-            return true; // 工头失效（死亡/解散/离开）→ 视为无工头，放行所有
+            // v1.5.266：工头失效（死亡/解散/离开）→ 重新随机挑一只顶上
+            //（旧版放行所有 → 全员 isForeman=true → 全员播报）
+            String nf = chooseForeman(level, ps);
+            if (!nf.isEmpty()) {
+                setForeman(level, ps, nf);
+                return nf.equals(maid.m_20148_().toString());
+            }
+            return true; // 随机也失败（无人）→ 放行兜底
         }
         if (isMaidPaused(fm)) {
             return true; // v1.5.74：工头被暂停 → 放行所有（防全员静默）

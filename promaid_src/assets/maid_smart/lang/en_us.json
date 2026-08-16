@@ -11,5 +11,12 @@
   "task.maid_smart.build.desc": "Build a structure block by block from the build plan (materials from backpack)",
   "item.maid_smart.blueprint_book": "Promaid Manual",
   "config.promaid.aitools.perception": "perception_query tool",
-  "config.promaid.aitools.workList": "work_list tool"
+  "config.promaid.aitools.workList": "work_list tool",
+  "config.promaid.memory.affectSnapshot": "Affect snapshot in memories",
+  "config.promaid.memory.persona": "Persona seed projection",
+  "config.promaid.memory.carePoints": "Daily care points",
+  "config.promaid.memory.dualAgent": "Dual-agent extraction",
+  "config.promaid.memory.heartfeltAnniversary": "Anniversary linkage",
+  "config.promaid.memory.personaUnify": "Persona unification",
+  "config.promaid.build.machineSmart": "Redstone machine smart build (machine order + live placement + auto-start)"
 }

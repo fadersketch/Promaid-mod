@@ -90,6 +90,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.43：最近缺料记录（手册女仆状态列表用：显示"缺料:xxx"） */
     private static final java.util.Map<java.util.UUID, String> LAST_MISSING = new java.util.HashMap<>();
+    /** v1.5.275：缺料播报 30 秒冷却（女仆 → 上次播报 tick）——blockId 轮流缺时旧版
+     *  每 5~11 秒刷屏（日志实证），冷却期内静默 */
+    private static final java.util.Map<java.util.UUID, Long> MISSING_CD = new java.util.HashMap<>();
+    /** v1.5.275：替代品播报 30 秒冷却（女仆 → 上次播报 tick）——"缺 X，我用 Y 替代" */
+    private static final java.util.Map<java.util.UUID, Long> ALT_NOTIFIED = new java.util.HashMap<>();
 
     /** v1.5.142：建造强制坐下标记（persistentData）——进入建造任务即坐下，
      *  玩家无法让她站起（每 tick 重新按压坐下姿势）；切出建造任务自动站起 */
@@ -108,6 +113,12 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     public static void tickBuildSit(EntityMaid maid) {
         boolean building = BlueprintBuildExecutor.isBuildingTask(maid);
         boolean wasSitting = maid.getPersistentData().m_128471_(BUILD_SIT_TAG);
+        // v1.5.333：心契誓约（MaidHugManager）交互中——交互会锁定女仆站立姿势并锁位
+        // （lockMaid：m_20124_(STANDING) + m_21837_(false) + 锁定坐标），此处若继续强制
+        // 坐下会与交互每 tick 互搏（坐下↔站起振荡）；跳过本轮，交互结束后自然恢复。
+        if (building && inMaidmarriageInteraction(maid)) {
+            return;
+        }
         if (building) {
             if (!maid.m_21825_()) { // isInSittingPose
                 maid.m_21837_(true); // setInSittingPose（TLM override，连坐姿+指令位一起设）
@@ -120,6 +131,32 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 maid.m_21837_(false);
             }
             maid.getPersistentData().m_128379_(BUILD_SIT_TAG, false);
+        }
+    }
+
+    /**
+     * v1.5.333：心契誓约（maidmarriage）交互中？——反射 MaidHugManager.
+     * getInteractionPlayer(maid)（MAID_TO_PLAYER 映射，交互中返回玩家、否则 null）。
+     * 全反射软联动：未装心契誓约/方法变动 → 返回 false（维持原行为）。
+     * v1.5.352：同时查儿童管理器 ChildInteractionManager——旧版只查成人，
+     * 建造中的女儿（儿童路径 Alt+J）交互时豁免不生效 → tickBuildSit 每 tick
+     * 强坐 → ChildInteractionManager.isValidInteractionPair 判坐姿失效 →
+     * 会话立刻终止 → 面板"进入一下就瞬间退出"。
+     */
+    private static boolean inMaidmarriageInteraction(EntityMaid maid) {
+        try {
+            Class<?> c = Class.forName("com.example.maidmarriage.compat.MaidHugManager");
+            java.lang.reflect.Method m = c.getDeclaredMethod("getInteractionPlayer",
+                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class);
+            if (m.invoke(null, maid) != null) {
+                return true;
+            }
+            Class<?> cc = Class.forName("com.example.maidmarriage.compat.ChildInteractionManager");
+            java.lang.reflect.Method cm = cc.getDeclaredMethod("getInteractionPlayer",
+                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class);
+            return cm.invoke(null, maid) != null;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -354,6 +391,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.54：本轮可放置数 = 配额余额取整（上限 64 防单 tick 尖峰）
         // v1.5.81：极速批量上限 512 → 768（暂停恢复后更快消化囤积配额）
         int batchLeft = (int) Math.min(this.placeQuota, TURBO ? 768 : 64);
+        // v1.5.322：本轮实际放置过的区块 → 记入静态待重发集（重发刷新客户端半透明
+        // 渲染层；v1.5.328：跨轮累积 + 修溢出，见 resendPlacedChunks）
         int i = cursor;
         for (; i < size && lookaheadLeft > 0; i++) {
             // v1.5.77：已在延后集的步骤由轮询补建——主循环直接滑过，防止"窗口内
@@ -399,7 +438,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // 脚下正是要建的位置时先放脚下把自己垫上去（不会"缺自己站的那块"）。
             // 若该格已建好（同方块/等价族）下面状态检查会跳过；被非地形占用也会跳过。
             BlockState state = level.m_8055_(target);
-            if (state.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, state.m_60734_())) {
+            // v1.5.276：+替代品验收——缺料替换放置后认可，不再拆掉重放（防掉落循环）
+            if (state.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, state.m_60734_())
+                    || isAltPlaced(prog, i, state)) {
                 // 已建好（同方块或等价族内替代品）——仅当它就是游标所在步骤时前进
                 if (i == prog.cursor) {
                     prog.cursor = i + 1;
@@ -412,6 +453,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 if (!state.m_60795_() && BlueprintLib.canBreak(state.m_60734_())) {
                     level.m_7731_(target, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
                 }
+        // v1.5.322：清除/放置都改了渲染 → 记入待重发区块（v1.5.328：静态累积集）
+        PENDING_RESEND_CHUNKS.add(chunkKeyOf(origin, x, z));
                 if (i == prog.cursor) {
                     prog.cursor = i + 1;
                 }
@@ -440,7 +483,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     prog.skipped++;
                     prog.skippedIdx.add(i);
                     int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
-                    if (n <= 3) {
+                    if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                         maid.getChatBubbleManager().addTextChatBubble(
                                 "有个" + BlueprintLib.cnName(blockId) + "被基岩之类的方块挡住了，我跳过它啦～");
                     }
@@ -458,8 +501,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
             if (used == null) {
                 // 缺料：延后，补料后轮询自动续建（每轮只提示一次）
+                // v1.5.317：水/岩浆缺的是桶（材料链按桶结算），提示报桶名
                 prog.deferred.putIfAbsent(i, 0);
-                this.notifyMissing(maid, blockId);
+                this.notifyMissing(maid, fluidBucketId(blockId));
                 lookaheadLeft--;
                 continue;
             }
@@ -468,12 +512,25 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (placed == null) {
                 placed = block;
             }
-            if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt,
-                    prog.plannedPositions(plan), false, planMainBlock(ps, plan))) {
+            // v1.5.316：机器活建造——机器模式 flag 3 活放置 + 状态归一化（丢弃蓝图
+            // 冻结瞬态：伸出活塞/通电铁轨/冻结 power），方块以自然初始态落地、
+            // 由活放置收敛到设计态；普通建筑保持 flag 2 静默 + 原状态。
+            boolean machineLive = BlueprintLib.isMachineBlueprint(ps.blueprintId)
+                    && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
+            String machineState = machineLive
+                    ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+            if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
+                    prog.plannedPositions(plan), false, planMainBlock(ps, plan), machineLive)) {
                 // v1.5.45：支撑缺失（火把/按钮/拉杆等，支撑块未建）→ 延后，支撑建好后自动补建
                 prog.deferred.putIfAbsent(i, 0);
                 lookaheadLeft--;
                 continue;
+            }
+            // v1.5.276：缺料替换放置成功 → 记录替代品（后续检查认可，不拆不重放）
+            recordAltUsed(prog, i, blockId, used, usedId);
+            // v1.5.317：岩浆放置后返还空桶（岩浆桶用后变空桶）
+            if ("minecraft:lava".equals(blockId)) {
+                BlueprintLib.returnEmptyBucket(level, maid, target);
             }
             if (i == prog.cursor) {
                 prog.cursor = i + 1;
@@ -487,6 +544,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             clearMissing(maid);
             BuildPlan.persistCursor(level, ps, prog.cursor);
             placedAny = true;
+            // v1.5.322：本轮放置过的区块记入待重发（刷新客户端半透明渲染层）
+            // v1.5.329：与延后补建方法(v1.5.328 已改)统一用静态累积集
+            // PENDING_RESEND_CHUNKS——旧局部变量 placedChunks 从未声明,
+            // 132 sources 全量编译时暴露("找不到符号")
+            PENDING_RESEND_CHUNKS.add(chunkKeyOf(origin, x, z));
             // v1.5.54：配额记账（窗口统计 + 余额递减）
             PLACED_IN_WINDOW++;
             this.placeQuota -= 1.0;
@@ -514,6 +576,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // v1.5.42：越界防护——计划可能已变化（重启/换蓝图），丢弃失效下标
                 if (idx < 1 || idx >= size) {
                     it.remove();
+                    continue;
+                }
+                // v1.5.287：缺料退避——失败条目在退避期内跳过（沉底轮换）：
+                // 旧版缺料时每 tick 反复扫空背包（DEFERRED_SCAN_CAP 个条目 ×
+                // consumeBlock 三轮全背包扫描）；补料/障碍移除后最多 2 秒续建
+                Long retryAt = prog.deferredRetryAt.get(idx);
+                if (retryAt != null && retryAt > level.m_46467_()) {
+                    reorder.add(idx);
                     continue;
                 }
                 // v1.5.48：游标走完后（cursor==size）主循环已结束——deferred 全部
@@ -553,7 +623,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
                 BlockPos target = origin.m_7918_(x, y, z);
                 BlockState state = level.m_8055_(target);
-                if (state.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, state.m_60734_())) {
+                // v1.5.276：+替代品验收（同主循环——替代品放置后不再拆掉重放）
+                if (state.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, state.m_60734_())
+                        || isAltPlaced(prog, idx, state)) {
                     it.remove(); // 已被其他女仆/主循环补建
                     continue;
                 }
@@ -577,7 +649,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         prog.skipped++;
                         prog.skippedIdx.add(idx); // v1.5.66：缺口检查不再重复尝试
                         int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
-                        if (n <= 3) {
+                        if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                             maid.getChatBubbleManager().addTextChatBubble(
                                     "有个" + BlueprintLib.cnName(blockId) + "的区块一直没加载，我跳过它啦～");
                         }
@@ -599,7 +671,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         prog.skipped++;
                         prog.skippedIdx.add(idx); // v1.5.66：缺口检查不再重复尝试
                         int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
-                        if (n <= 3) {
+                        if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                             maid.getChatBubbleManager().addTextChatBubble(
                                     "有个" + BlueprintLib.cnName(blockId) + "被基岩之类的方块挡住了，我跳过它啦～");
                         }
@@ -610,23 +682,48 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 if (used == null && tryTakeFromOwner(maid, blockId)) {
                     used = BlueprintLib.consumeBlock(maid, blockId);
                 }
+                if (used != null) {
+                    // v1.5.275：用了替代品 → 提示"用 X 替代 Y"（30 秒冷却）——
+                    // 有替换时不再报缺料（用户："既然有替换品了，应该换换系统提示，
+                    // 没有的时候才播报缺材料"）
+                    // v1.5.287：itemForBlock（redstone_wire → 红石粉）
+                    net.minecraft.world.item.Item exactItem = BlueprintLib.itemForBlock(blockId);
+                    if (exactItem != null && used != exactItem) {
+                        long nowTick2 = level.m_46467_();
+                        Long lastAlt = ALT_NOTIFIED.get(maid.m_20148_());
+                        if (lastAlt == null || nowTick2 - lastAlt >= 600L) {
+                            ALT_NOTIFIED.put(maid.m_20148_(), nowTick2);
+                            if (BuildPlan.isForeman(maid)) {
+                                maid.getChatBubbleManager().addTextChatBubble(
+                                        "缺 " + BlueprintLib.cnName(blockId) + "，我用 "
+                                                + BlueprintLib.cnName(ForgeRegistries.ITEMS.getKey(used).toString())
+                                                + " 替代一下～");
+                            }
+                        }
+                        this.missingNotified = null; // 用了替代 → 清缺料标记（下次真缺料才再报）
+                        clearMissing(maid);
+                    }
+                }
                 if (used == null) {
                     // v1.5.64：区分"无对应物品的方块"（数据缺陷，永远拿不到料 → 跳过）
                     // 与"真缺料"（沉底轮换等补料，不跳过）
-                    net.minecraft.world.item.Item exactItem = ForgeRegistries.ITEMS.getValue(
-                            net.minecraft.resources.ResourceLocation.parse(blockId));
+                    // v1.5.287：itemForBlock（redstone_wire → 红石粉）
+                    net.minecraft.world.item.Item exactItem = BlueprintLib.itemForBlock(blockId);
                     if (exactItem == null) {
                         it.remove();
                         prog.skipped++;
                         prog.skippedIdx.add(idx); // v1.5.66：缺口检查不再重复尝试
                         int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
-                        if (n <= 3) {
+                        if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                             maid.getChatBubbleManager().addTextChatBubble(
                                     "有个" + BlueprintLib.cnName(blockId) + "没有对应物品，我跳过它啦～");
                         }
                     } else {
                         reorder.add(idx); // 真缺料：沉底轮换，补料后自然排到前面补建
-                        this.notifyMissing(maid, blockId);
+                        // v1.5.287：缺料退避 40 tick（不再每 tick 反复扫空背包）
+                        prog.deferredRetryAt.put(idx, level.m_46467_() + 40);
+                        // v1.5.317：水/岩浆缺的是桶（材料链按桶结算），提示报桶名
+                        this.notifyMissing(maid, fluidBucketId(blockId));
                     }
                     continue;
                 }
@@ -638,8 +735,15 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 // v1.5.252i：先计失败次数，第 3 次起用 force 模式——蓝图支撑步骤
                 // 是空气/水/永未建成时，强制补支撑再放（不再等永远等不到的支撑）
                 int fails = prog.deferred.merge(idx, 1, Integer::sum);
-                if (!doPlace(level, maid, origin, target, placed, stateSnbt, beSnbt,
-                        prog.plannedPositions(plan), fails >= 3, planMainBlock(ps, plan))) {
+                // v1.5.287：放置失败退避 40 tick（防连续失败时每 tick 死磕）
+                prog.deferredRetryAt.put(idx, level.m_46467_() + 40);
+                // v1.5.316：机器活建造（同主循环——flag 3 活放置 + 状态归一化）
+                boolean machineLive = BlueprintLib.isMachineBlueprint(ps.blueprintId)
+                        && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
+                String machineState = machineLive
+                        ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+                if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
+                        prog.plannedPositions(plan), fails >= 3, planMainBlock(ps, plan), machineLive)) {
                     // v1.5.46：支撑缺失——连续失败 ≥3 次视为"蓝图本身悬空"（作者画图
                     // 失误，永无支撑），永久跳过不阻塞完成；顺序问题（支撑后建）期间
                     // 1 分钟内会成功，计数随成功清零
@@ -649,35 +753,46 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         // 跳过 124 个（用户实测"甘蔗农场跳过 172 个"）；支撑是蓝图真实
                         // 步骤时应等待（补料后泥巴建好，甘蔗自然能放），而非永久跳过。
                         boolean waitPlanSupport = false;
+                        net.minecraft.core.BlockPos supPos = null; // v1.5.264：提声明到 try 外（超时判定用）
                         try {
                             net.minecraft.world.level.block.state.BlockState ps2 = placed.m_49966_();
-                            if (stateSnbt != null) {
-                                net.minecraft.nbt.CompoundTag stTag =
-                                        net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
-                                net.minecraft.world.level.block.state.BlockState parsed2 =
-                                        net.minecraft.nbt.NbtUtils.m_247651_(
-                                                level.m_246945_(net.minecraft.core.registries.Registries.f_256747_),
-                                                stTag);
-                                if (parsed2 != null && !parsed2.m_60795_()) {
-                                    ps2 = parsed2;
-                                }
+                            // v1.5.254：parseStepState 补 Name（同 doPlace——无 Name 被 NbtUtils 当空气）
+                            net.minecraft.world.level.block.state.BlockState parsed2 =
+                                    BlueprintLib.parseStepState(level, placed, machineState);
+                            if (parsed2 != null) {
+                                ps2 = parsed2;
                             }
                             net.minecraft.core.Direction sup = BlueprintLib.supportDirection(ps2);
                             if (sup != null) {
-                                net.minecraft.core.BlockPos supPos = target.m_121945_(sup);
+                                supPos = target.m_121945_(sup);
                                 net.minecraft.world.level.block.state.BlockState supState =
                                         level.m_8055_(supPos);
                                 // 仅"支撑格在蓝图内且尚未建（空/流体）"才等蓝图支撑——
                                 // 已建但类型不合法（红石线下方玻璃）→ 走 force 补支撑换合法支撑
-                                waitPlanSupport = (supState.m_60795_() || supState.m_60815_())
+                                waitPlanSupport = (supState.m_60795_()
+                                        || supState.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_))
                                         && prog.plannedPositions(plan)
                                                 .contains(posKey(supPos, origin));
                             }
                         } catch (Exception ignored) {
                         }
                         if (waitPlanSupport) {
-                            reorder.add(idx); // 支撑在蓝图内 → 延后等蓝图支撑（不跳过）
-                            continue;
+                            // v1.5.264：支撑格区块未加载 → 延后等区块加载（252af
+                            // 甘蔗泥巴场景：加载后泥巴步骤建成，甘蔗自然能放）；
+                            // 区块已加载但重试 10 次仍未建（悬空依赖链：支撑步骤
+                            // 本身也放不上/需要特殊环境）→ 旧版无限延后 → 建造永不
+                            // 收敛（olymp-final 实测：延后 10324 永不减少、完成永远
+                            // 不触发）。超时走跳过兜底，缺口由重新下达蓝图补建。
+                            if (supPos != null && !level.m_46749_(supPos)) {
+                                reorder.add(idx); // 支撑格区块未加载 → 延后等区块
+                                continue;
+                            }
+                            if (fails < 10) {
+                                reorder.add(idx); // 支撑在蓝图内 → 延后等蓝图支撑（不跳过）
+                                continue;
+                            }
+                            LOGGER.info("build skip: {}@({},{},{}) 原因=蓝图支撑格已加载但 {} 次未建成（悬空依赖链）",
+                                    blockId, x, y, z, fails);
                         }
                         it.remove();
                         prog.skipped++;
@@ -687,7 +802,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                                 blockId, x, y, z, fails);
                         // v1.5.48：跳过提示限频（同一女仆最多 3 次气泡，避免刷屏）
                         int n = SKIP_NOTIFIED.merge(maid.m_20148_(), 1, Integer::sum);
-                        if (n <= 3) {
+                        if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                             maid.getChatBubbleManager().addTextChatBubble(
                                     "有个" + BlueprintLib.cnName(blockId) + "悬空放不上，我跳过它啦～");
                         }
@@ -697,11 +812,23 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 it.remove();
+                // v1.5.287：成功 → 清退避记录
+                prog.deferredRetryAt.remove(idx);
+                // v1.5.276：缺料替换放置成功 → 记录替代品（后续检查认可，不拆不重放）
+                recordAltUsed(prog, idx, blockId, used, usedId);
+                // v1.5.317：岩浆放置后返还空桶（岩浆桶用后变空桶）
+                if ("minecraft:lava".equals(blockId)) {
+                    BlueprintLib.returnEmptyBucket(level, maid, target);
+                }
                 this.placeCooldown = currentInterval();
                 this.missingNotified = null;
                 clearMissing(maid);
                 BuildPlan.persistCursor(level, ps, prog.cursor);
                 placedAny = true;
+                // v1.5.322：本轮放置过的区块记入待重发（刷新客户端半透明渲染层）
+                // v1.5.328：局部集改静态累积集（PENDING_RESEND_CHUNKS）——节流 2 秒
+                // 窗口内"非触发轮"的放置跨轮累积，重发时一次清空，不漏区块
+                PENDING_RESEND_CHUNKS.add(chunkKeyOf(origin, x, z));
                 // v1.5.54：配额记账（延后补建同样消耗预算，总量守恒）
                 PLACED_IN_WINDOW++;
                 this.placeQuota -= 1.0;
@@ -717,6 +844,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
         }
         if (placedAny) {
+            // v1.5.322/328：节流重发待重发区块 → 强制客户端整块重建（半透明渲染层
+            // 刷新——快速批量放置时玻璃/粘液块从区块外看不见的修复；v1.5.328 修
+            // 节流溢出使重发真正执行 + 跨轮累积不丢区块）
+            resendPlacedChunks(level);
             return;
         }
         // 未放置：游标到尽头且无延后 → 全部完成；否则停顿后重试（避免每 tick 空转扫描）
@@ -740,18 +871,53 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // v1.5.252ab：红石激活提前到缺口检查【之前】——旧版在 scanGaps 之后，
             // scanGaps 发现缺口（哪怕 1 个）就 return → recalcRedstone 永不执行 →
             // 红石机器建好不运行（用户实测：甘蔗农场红石机器无法运行）
-            BlueprintLib.recalcRedstone(level, origin, plan);
+            // v1.5.316：红石机器改革——机器走活建造（flag 3）+ 专属顺序，红石/水流
+            // 在放置时已自然就位；完工不再"唤醒/不唤醒"（recalcRedstone/activateWater
+            // 对机器均多余）。轰炸机类完工自动放矿车（spawnStartMinecarts）启动复制循环。
+            // 开关 BUILD_MACHINE_SMART 关闭时机器完整回退旧行为（静默+完工唤醒）。
+            boolean machineSmart = BlueprintLib.isMachineBlueprint(ps.blueprintId)
+                    && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
+            // v1.5.331：完工激活前延长 TNT 点火保护窗口——覆盖 recalcRedstone/
+            // activateWater/机器电路推进对已放置 TNT 的点火（天机屠龙炮"刚建好
+            // 炸膛"根因：观察者→活塞→推 TNT 链在完工瞬间触发）；窗口宽度 =
+            // BUILD_TNT_IGNITION_GRACE（秒），期满后机器按正常红石逻辑点火
+            com.maidsmart.build.BuildTntGuard.suppressTntFor(level,
+                    com.maidsmart.config.MaidSmartConfig.BUILD_TNT_IGNITION_GRACE.get() * 20);
+            if (!machineSmart) {
+                BlueprintLib.recalcRedstone(level, origin, plan);
+            }
             if (prog.skipped > 0 || prog.placedCount < size - 1) {
                 if (scanGaps(level, origin, plan, prog)) {
                     return;
                 }
             }
             // v1.5.28：自动开入口（蓝图无门时在主人方向外墙开门洞）
-            BlueprintLib.carveEntrance(level, origin, plan, maid);
-            // v1.5.57：红石统一激活——建造期间机械冻结（活塞不推墙），
-            // 完成后重放红石组件触发邻居更新 → 线重算 → 机械正常启动
-            //（此处保留——补建完成的最终路径再次激活，幂等）
-            BlueprintLib.recalcRedstone(level, origin, plan);
+            // v1.5.287：红石机器蓝图豁免——machine_ 前缀不开门洞（围壳可能被打穿，
+            // 机器内部结构（活塞/漏斗/红石）被破坏）
+            if (ps.blueprintId == null || !ps.blueprintId.startsWith("maid_smart:machine_")) {
+                BlueprintLib.carveEntrance(level, origin, plan, maid);
+            }
+            // v1.5.320：轰炸机完工矿车动态提示——已放置 X 辆 / 缺矿车未启动
+            int bomberSpawned = 0;
+            if (machineSmart) {
+                // 机器活建完成：红石已随放随算就位；轰炸机类消耗矿车补矿车启动
+                bomberSpawned = BlueprintLib.spawnStartMinecarts(level, origin, plan,
+                        BlueprintLib.machineFamily(ps.blueprintId), maid);
+            } else {
+                // v1.5.57：红石统一激活（普通建筑）——建造期间机械冻结（活塞不推墙），
+                // 完成后重放红石组件触发邻居更新 → 线重算 → 机械正常启动
+                //（此处保留——补建完成的最终路径再次激活，幂等）
+                BlueprintLib.recalcRedstone(level, origin, plan);
+            }
+            // v1.5.317：所有计划完工统一批激活水/岩浆源（水源静默放置为源块，重放
+            // flag 3 → 流动/气泡柱成形——机器水道/冰道与建筑水池都需要；旧版机器
+            // 计划无水、activateWater 空转的根因已在 v1.5.317 导入层修复）
+            BlueprintLib.activateWater(level, origin, plan);
+            // v1.5.331：完工 TNT 点火结算——保护窗口内压制了建造期/激活期点火，
+            // 这里只点燃【当前邻接带电】的 TNT，恢复正确终态：轰炸机（矿车压轨
+            // 带电）当场启动复制循环；天机屠龙炮等观察者/活塞触发机器（TNT 静止
+            // 时无带电邻居）保持惰性，触发时才点火——不再"刚建好炸膛"
+            BlueprintLib.settleTntIgnition(level, origin, plan);
             // v1.5.46：清理建造区掉落物（悬空方块历史掉落的物品堆积，实体区块曾达 3.36MB）
             // v1.5.75：范围限制到蓝图包围盒 + 4 格边距（不误清建筑外掉落物）
             BlueprintLib.cleanupDrops(level, origin, plan);
@@ -759,13 +925,25 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             String skipNote = prog.skipped > 0
                     ? "（跳过 " + prog.skipped + " 个蓝图里悬空放不上的方块）" : "";
             int susp = BlueprintLib.countSuspendedGravity(level, origin, plan);
+            // v1.5.320：轰炸机完工矿车动态提示——已放置 X 辆 / 缺矿车未启动
+            String machineTip = BlueprintLib.machineFinishTip(ps.blueprintId);
+            if (machineSmart && "bomber".equals(BlueprintLib.machineFamily(ps.blueprintId))) {
+                int need = BlueprintLib.fluidBucketNeeds(plan)
+                        .getOrDefault("minecraft:minecart", 0);
+                machineTip = bomberSpawned >= need && need > 0
+                        ? "\u00a7e【机器】已自动放置矿车 " + bomberSpawned
+                                + " 辆，即将启动轰炸循环——请撤离机器附近！"
+                        : "\u00a7e【机器】缺少矿车" + (need > 0 ? "（需 " + need + " 辆）" : "")
+                                + "，未自动启动——把矿车放进背包后，手动放到探测铁轨上即可启动轰炸循环";
+            }
             // v1.5.103：完成——配额归零（防陈旧配额泄洪到下一个计划）+ 通知主人
             this.placeQuota = 0.0;
             if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer owner) {
                 owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         "\u00a7a【建造完成】" + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
                                 + " 建好了「" + BuildPlan.planName(plan) + "」" + skipNote
-                                + (susp > 0 ? "（注意：" + susp + " 个悬空重力方块，下次方块更新时会落下）" : "")));
+                                + (susp > 0 ? "（注意：" + susp + " 个悬空重力方块，下次方块更新时会落下）" : "")
+                                + machineTip));
             }
             maid.getChatBubbleManager().addTextChatBubble(
                     "建好啦！来看看我搭的" + BuildPlan.planName(plan) + skipNote
@@ -811,6 +989,32 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         this.placeCooldown = com.maidsmart.config.MaidSmartConfig.BUILD_STALL_INTERVAL.get();
     }
 
+    /**
+     * v1.5.328：TNT 建造期防自燃放置——flag 2 静默挡不住 TntBlock.onPlace
+     * （LevelChunk.setBlockState 服务端无条件调 onPlace，字节码实证），活建造下
+     * TNT 挨着已带电红石线放置即自燃 → "放置后目标仍空气" → 320 个 TNT 全延后 →
+     * 机器游标走到底卡死（旧计划日志实证）。放置 TNT 时挂 BuildTntGuard 护栏
+     * （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地。
+     * v1.5.331：每次放置都【延长保护时间窗】——覆盖"观察者→活塞→推 TNT"这类
+     * 发生在 doPlace 之外的点火链（天机屠龙炮"刚建好炸膛"根因），窗口宽度 =
+     * BUILD_TNT_IGNITION_GRACE（秒）；完工结算见 BlueprintLib.settleTntIgnition，
+     * 宽限期满后机器按正常红石逻辑点火——"建好就能跑/手动触发"不受影响。
+     */
+    private static void placeTntSafe(ServerLevel level, BlockPos pos, BlockState state, int flag) {
+        com.maidsmart.build.BuildTntGuard.suppressTntFor(level,
+                com.maidsmart.config.MaidSmartConfig.BUILD_TNT_IGNITION_GRACE.get() * 20);
+        if (state.m_60734_() instanceof net.minecraft.world.level.block.TntBlock) {
+            com.maidsmart.build.BuildTntGuard.setSuppress(true);
+            try {
+                level.m_7731_(pos, state, flag);
+            } finally {
+                com.maidsmart.build.BuildTntGuard.setSuppress(false);
+            }
+        } else {
+            level.m_7731_(pos, state, flag);
+        }
+    }
+
     /** v1.5.40：放置方块 + 恢复精确状态/门上半/方块实体 + 挥臂音效（材料已由调用方消耗）。
      *  v1.5.45：返回 false = 支撑缺失未放置（调用方延后等支撑块建好，防悬空掉落）
      *  v1.5.51：补支撑（时间静止）——支撑格是空气且蓝图无该格步骤（挖空版/图纸缺陷
@@ -825,35 +1029,42 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  "大量悬空放不上"（蓝图作者在创造模式画的悬空活板门/火把/甘蔗/横幅等，
      *  支撑格是空气步骤/水/石头时旧版永远等不到支撑 → 3 次后永久跳过）。 */
     private static boolean doPlace(ServerLevel level, EntityMaid maid, BlockPos origin, BlockPos target,
-                                   Block placed, String stateSnbt, String beSnbt,
-                                   java.util.Set<Long> plannedPos, boolean force, Block fallbackBlock) {
+                                   java.util.List<String> plan, Block placed, String stateSnbt, String beSnbt,
+                                   java.util.Set<Long> plannedPos, boolean force, Block fallbackBlock,
+                                   boolean live) {
         BlockState placeState = placed.m_49966_();
         // 结构文件蓝图：恢复精确状态（台阶/楼梯朝向/门等）
+        // v1.5.254：parseStepState 补 Name——旧版内联解析无 Name 被 NbtUtils 当空气
         if (stateSnbt != null) {
-            try {
-                net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
-                BlockState parsed = net.minecraft.nbt.NbtUtils.m_247651_(
-                        level.m_246945_(net.minecraft.core.registries.Registries.f_256747_), stateTag);
-                if (parsed != null && !parsed.m_60795_()) {
-                    placeState = parsed;
-                }
-            } catch (Exception ignored) {
-                // SNBT 解析失败 → 用默认状态
+            BlockState parsed = BlueprintLib.parseStepState(level, placed, stateSnbt);
+            if (parsed != null) {
+                placeState = parsed;
             }
         }
         // v1.5.45：支撑检查——火把/按钮/拉杆/梯子/地毯/花等附着方块若支撑面缺失
         // （支撑块在计划中排在后面/未建），先延后，等支撑建好后自动补建（防悬空掉落）
         net.minecraft.core.Direction sup = BlueprintLib.supportDirection(placeState);
+        boolean fluidSupport = false;
         if (sup != null) {
             BlockPos supPos = target.m_121945_(sup); // relative(Direction)
             BlockState supState = level.m_8055_(supPos);
-            if (supState.m_60795_() || supState.m_60815_()) {
-                // v1.5.51：补支撑——支撑格空/流体且蓝图里没有该格步骤 → 自动垫支撑
-                // v1.5.82：按类型选合法支撑（甘蔗→沙子、植物→泥土、其他→石头）——
-                // 补石头对甘蔗不合法（canSurvive 失败 → 邻居更新时被打掉 → 反复循环）
-                // v1.5.252i：force 模式无视蓝图步骤直接补——蓝图有支撑步骤但该步骤
-                // 是空气/水（外部蓝图悬空设计）或永未建成时，旧版永远延后 → 3 次跳过
-                if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin)) || force) {
+            if (supState.m_60795_()
+                    || supState.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
+                // v1.5.349：支撑格已是【流体】且蓝图该格就是流体步骤（水/岩浆）——
+                // 设计意图的流体支撑（村民机水闸活板门：顶部活板门上方是水，原版
+                // canSurvive 放不上，蓝图作者用工具强放；活板门 neighborChanged 只
+                // 切开合不自毁，javap 实证）→ 直接放置附着块，不替换流体、不无限
+                // 延后（旧版延后到 3 次后 force 把水换成石头/缺失 → 机器"无法工作"）
+                if (supState.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)
+                        && plannedPos != null && plannedPos.contains(posKey(supPos, origin))
+                        && BlueprintLib.isFluidStepAt(plan, origin, supPos)) {
+                    fluidSupport = true;
+                } else if (plannedPos == null || !plannedPos.contains(posKey(supPos, origin)) || force) {
+                    // v1.5.51：补支撑——支撑格空/流体且蓝图里没有该格步骤 → 自动垫支撑
+                    // v1.5.82：按类型选合法支撑（甘蔗→沙子、植物→泥土、其他→石头）——
+                    // 补石头对甘蔗不合法（canSurvive 失败 → 邻居更新时被打掉 → 反复循环）
+                    // v1.5.252i：force 模式无视蓝图步骤直接补——蓝图有支撑步骤但该步骤
+                    // 是空气/水（外部蓝图悬空设计）或永未建成时，旧版永远延后 → 3 次跳过
                     net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
                     if (support != null) {
                         // v1.5.252af：支撑格区块未加载 → 直接延后（setBlock 会静默
@@ -864,7 +1075,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         }
                         level.m_7731_(supPos, support.m_49966_(), 3);
                         supState = level.m_8055_(supPos);
-                        if (!supState.m_60795_() && !supState.m_60815_()) {
+                        if (!supState.m_60795_()
+                                && !supState.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
                             // 补支撑成功 → 继续放置（物品不会掉落 = 时间静止）
                         } else {
                             logPlaceFail(level, target, placed, "补支撑后支撑格仍空/流体");
@@ -883,10 +1095,24 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // 红石块/拉杆放置时不激活邻居 → 活塞/机械冻结，不再"推掉刚建的墙"互搏
         // （红石住宅 282 个活塞，95 个有激活源：线一放好就通电推墙 → 女仆补建
         // → 再推 → 无限循环"石头跟石英块过不去"）。
-        // 建造完成时 recalcRedstone 统一重放激活（红石机械正常运转）。
+        // v1.5.316：机器活建造——live=true 时 flag 3（正常更新，红石/水流随放随算），
+        // 配合机器专属顺序（动力源最后落位）机器建好即自然运行，无需完工唤醒；
+        // 普通建筑保持 flag 2 静默（机械冻结）。
+        // v1.5.317：TNT 与液体（水/岩浆）始终 flag 2 静默——
+        // TNT 防放置时被已带电的信号点燃（TNT 大炮实证）；液体静默放置全部源块
+        // 后由完工 activateWater 批激活 → 统一流动/气泡柱成形（逐个活放会因相邻
+        // 水源先流过来而跳过后续源块 → 气泡柱/水道不完整）。
+        // v1.5.328：flag 2 挡不住 TntBlock.onPlace（LevelChunk.setBlockState 服务端
+        // 无条件调 onPlace，字节码实证）——TNT 放置改走 placeTntSafe 挂护栏
+        // （MixinTntBuildGuard 在 onPlace 头部 cancel），TNT 以稳定方块落地；
+        // 机器运行时红石翻转/触发走 neighborChanged 正常点燃。
         // 支撑由 v1.5.51 补支撑保证；掉落验证仍兜底。
         int flag = 2;
-        level.m_7731_(target, placeState, flag);
+        if (live && !(placed instanceof net.minecraft.world.level.block.TntBlock)
+                && !(placed instanceof net.minecraft.world.level.block.LiquidBlock)) {
+            flag = 3;
+        }
+        placeTntSafe(level, target, placeState, flag);
         // v1.5.48：放置后掉落验证——支撑检查覆盖不到的类型（雪层/甘蔗/花/藤蔓等
         // 漏网方块）放置后若立即掉落（悬空），回收掉落物并返回 false → 延后/跳过，
         // 杜绝"女仆挥臂成功（有动作有声音）但方块消失"的假进展
@@ -908,9 +1134,18 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 || (targetState.m_60734_() != placeState.m_60734_()
                     && targetState.m_60734_() != placed);
         if (bad) {
-            net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
-            if (support != null) {
-                if (sup != null) {
+            if (fluidSupport) {
+                // v1.5.349：流体支撑的附着块——setBlock 粘住即成功（活板门等不
+                // 自毁，跳过 canSurvive 判定，水保持原位）；没粘住（异常）→ 延后
+                // 不替换流体（水是机器水闸的一部分，换石头=毁机器）
+                if (level.m_8055_(target).m_60795_()) {
+                    logPlaceFail(level, target, placed, "流体支撑附着块放置失败");
+                    return false;
+                }
+            } else {
+                net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
+                if (support != null) {
+                    if (sup != null) {
                     // 附着类：把支撑方向格换成合法支撑（覆盖空气/流体/不合法方块）
                     // v1.5.252m：保护树叶——树冠装饰（火把/按钮/红石线等）的支撑格
                     // 是树叶时【不换】（树叶换成石头毁掉树冠外观，252i 副作用），
@@ -919,26 +1154,32 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     if (!(level.m_8055_(supPos).m_60734_()
                             instanceof net.minecraft.world.level.block.LeavesBlock)) {
                         level.m_7731_(supPos, support.m_49966_(), 3);
-                        level.m_7731_(target, placeState, flag);
+                        placeTntSafe(level, target, placeState, flag);
                     }
                 } else {
                     // 无支撑方向的漏网类型（雪层/重力等）：补/换下方格
                     BlockPos below = target.m_7918_(0, -1, 0);
                     BlockState belowState = level.m_8055_(below);
-                    if (belowState.m_60795_() || belowState.m_60815_() || force) {
+                    if (belowState.m_60795_()
+                            || belowState.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)
+                            || force) {
                         if (plannedPos == null || !plannedPos.contains(posKey(below, origin)) || force) {
                             // v1.5.252m：树叶不换（同附着类，保护树冠）
                             if (!(belowState.m_60734_()
                                     instanceof net.minecraft.world.level.block.LeavesBlock)) {
                                 level.m_7731_(below, support.m_49966_(), 3);
                                 // 重放（复用上面的 flag：附着/红石类已按 flag 3 计算）
-                                level.m_7731_(target, placeState, flag);
+                                placeTntSafe(level, target, placeState, flag);
                             }
                         }
                     }
                 }
             }
-            if (level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target)) {
+            // v1.5.263：空气步骤（清除）跳过 canSurvive 验证——air.canSurvive 对部分
+            // 状态返回 false，清除成功仍报"目标仍空气或 canSurvive 失败"（用户日志：
+            // air 清除红石线失败，目标现=redstone_wire）
+            if (placed != net.minecraft.world.level.block.Blocks.f_50016_
+                    && (level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target))) {
                 logPlaceFail(level, target, placed, "放置后目标仍空气或 canSurvive 失败");
                 net.minecraft.world.phys.AABB dropBox = new net.minecraft.world.phys.AABB(target).m_82400_(1.5);
                 for (net.minecraft.world.entity.item.ItemEntity e
@@ -947,9 +1188,26 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
                 return false;
             }
+            }
         }
         // v1.5.15：门下半放置后补全上半（setBlock 不会自动补，避免"半扇门"）
         ensureDoorUpper(level, target, placeState);
+        // v1.5.275/276：放置成功后回收目标格附近【同 id】掉落物——替代品"搭一个又掉
+        // 一个"的循环根源已由替代品验收（altUsed/isAltPlaced）根治：替代品放置后被
+        // 认可为已建，不再被拆掉重放（拆→掉→捡回背包→再放→再拆 = 材料数量翻倍观感）。
+        // 此处仅兜底清理拆障残留/悬空掉落的同 id 废料（只清同 id，不影响其他掉落物）。
+        try {
+            String placedId = ForgeRegistries.ITEMS.getKey(placed.m_5456_()).toString();
+            net.minecraft.world.phys.AABB dropBox2 = new net.minecraft.world.phys.AABB(target).m_82400_(1.5);
+            for (net.minecraft.world.entity.item.ItemEntity e
+                    : level.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, dropBox2)) {
+                net.minecraft.world.item.ItemStack stk = e.m_32055_();
+                if (!stk.m_41619_() && ForgeRegistries.ITEMS.getKey(stk.m_41720_()).toString().equals(placedId)) {
+                    e.m_142687_(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
+                }
+            }
+        } catch (Exception ignored) {
+        }
         // 方块实体数据（箱子内容/告示牌文字等）
         if (beSnbt != null) {
             try {
@@ -977,6 +1235,29 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         return true;
     }
 
+    /** v1.5.276：替代品验收——该步骤已用替代品放置且目标格就是它（缺料替换不再
+     *  被拆了重放：拆→掉→捡回→再放→再拆 = 背包材料"翻倍"观感；回收掉落物只治标） */
+    private static boolean isAltPlaced(BuildPlan.Progress prog, int idx, BlockState st) {
+        String altId = prog.altUsed.get(idx);
+        if (altId == null) {
+            return false;
+        }
+        // v1.5.284：getKey 判空——未注册方块不 NPE
+        net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(st.m_60734_());
+        return key != null && key.toString().equals(altId);
+    }
+
+    /** v1.5.276：放置成功路径记录替代品（替换时配套 isAltPlaced 验收） */
+    private static void recordAltUsed(BuildPlan.Progress prog, int idx,
+                                      String blockId, net.minecraft.world.item.Item used,
+                                      net.minecraft.resources.ResourceLocation usedId) {
+        // v1.5.287：itemForBlock（redstone_wire → 红石粉——红石线不会被误判为替代品）
+        net.minecraft.world.item.Item exactItem = BlueprintLib.itemForBlock(blockId);
+        if (exactItem != null && used != exactItem && usedId != null) {
+            prog.altUsed.put(idx, usedId.toString());
+        }
+    }
+
     /** v1.5.51：位置 → 64 位键（与 Progress.plannedPositions 编码一致）。
      *  v1.5.77：世界坐标先转【相对原点】坐标——plannedPositions 用蓝图相对坐标
      *  编码（plan 步骤坐标），旧版直接编码世界坐标导致 contains 永远不命中。 */
@@ -996,6 +1277,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         if (last != null && now - last < 200) {
             return;
         }
+        // v1.5.287：惰性防膨胀——超过 1024 条清一半（老记录已过期，防长期服务器慢漏）
+        if (FAIL_LOG.size() > 1024) {
+            java.util.List<String> keys = new java.util.ArrayList<>(FAIL_LOG.keySet());
+            int cut = keys.size() / 2;
+            for (int i = 0; i < cut; i++) {
+                FAIL_LOG.remove(keys.get(i));
+            }
+        }
         FAIL_LOG.put(key, now);
         net.minecraft.resources.ResourceLocation bid = ForgeRegistries.BLOCKS.getKey(placed);
         net.minecraft.resources.ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(level.m_8055_(target).m_60734_());
@@ -1008,22 +1297,122 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  canSurvive 失败（MC 甘蔗只认沙子/泥土/甘蔗），静默放置看似成功，但邻居更新
      *  （flag 3）触发检查时被打掉 → 反复"放置又被打掉"循环。
      *  v1.5.252aa：fallback 用蓝图主要建材——旧版无中生有补石头 → 建筑里出现
-     *  材料表没有的石头（用户实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致 */
+     *  材料表没有的石头（用户实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致
+     *  v1.5.263：红石科技件固定石头——fallback（蓝图主要建材）可能是甘蔗/水等
+     *  非 canSupportRigidBlock 方块 → 红石线/中继器补在甘蔗上 canSurvive 失败
+     *  → 3 次永久跳过（用户实测："悬浮的红石放不上"） */
     private static net.minecraft.world.level.block.Block supportBlockFor(Block placed, Block fallback) {
+        // v1.5.284：各分支判空兜底——查询结果缺失时落到下一分支/fallback，不返回 null
         if (placed instanceof net.minecraft.world.level.block.SugarCaneBlock) {
-            return ForgeRegistries.BLOCKS.getValue(
+            net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:sand"));
+            if (b != null) {
+                return b;
+            }
+        }
+        // v1.5.268：仙人掌同甘蔗——canSurvive 需要沙地（补石头也会掉）
+        if (placed instanceof net.minecraft.world.level.block.CactusBlock) {
+            net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:sand"));
+            if (b != null) {
+                return b;
+            }
         }
         if (placed instanceof net.minecraft.world.level.block.BushBlock) {
-            return ForgeRegistries.BLOCKS.getValue(
+            net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:dirt"));
+            if (b != null) {
+                return b;
+            }
         }
-        return fallback != null ? fallback : ForgeRegistries.BLOCKS.getValue(
+        // v1.5.263：需要 canSupportRigidBlock 支撑的科技件 → 石头（无视 fallback）
+        if (placed instanceof net.minecraft.world.level.block.RedStoneWireBlock
+                || placed instanceof net.minecraft.world.level.block.DiodeBlock
+                || placed instanceof net.minecraft.world.level.block.BaseRailBlock
+                || placed instanceof net.minecraft.world.level.block.PressurePlateBlock
+                || placed instanceof net.minecraft.world.level.block.DaylightDetectorBlock
+                || placed instanceof net.minecraft.world.level.block.TrapDoorBlock
+                || placed instanceof net.minecraft.world.level.block.TripWireHookBlock
+                || placed instanceof net.minecraft.world.level.block.LeverBlock
+                || placed instanceof net.minecraft.world.level.block.ButtonBlock
+                || placed instanceof net.minecraft.world.level.block.TorchBlock) {
+            net.minecraft.world.level.block.Block b = ForgeRegistries.BLOCKS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:stone"));
+            if (b != null) {
+                return b;
+            }
+        }
+        if (fallback != null) {
+            return fallback;
+        }
+        return ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:stone"));
     }
 
     /** v1.5.252aa：计划主要建材缓存（planId → 出现最多的完整方块）——补支撑默认方块 */
     private static final java.util.Map<String, Block> PLAN_MAIN = new java.util.HashMap<>();
+
+    /** v1.5.317：水/岩浆缺料提示按桶结算（材料链 itemIdForBlock 已映射到桶）——
+     *  缺"水"报"水桶"、缺"岩浆"报"岩浆桶"，其余原样 */
+    private static String fluidBucketId(String blockId) {
+        if ("minecraft:water".equals(blockId)) {
+            return "minecraft:water_bucket";
+        }
+        if ("minecraft:lava".equals(blockId)) {
+            return "minecraft:lava_bucket";
+        }
+        return blockId;
+    }
+
+    /** v1.5.322：相对坐标 → 世界区块键（重发区块用） */
+    private static long chunkKeyOf(BlockPos origin, int rx, int rz) {
+        int cx = (origin.m_123341_() + rx) >> 4;
+        int cz = (origin.m_123343_() + rz) >> 4;
+        return ((long) cx << 32) | (cz & 0xFFFFFFFFL);
+    }
+
+    /** v1.5.322：客户端半透明渲染刷新——建造过程中快速批量放置时，客户端区块重建
+     *  队列积压，玻璃/粘液块等【半透明渲染层】迟迟不重建，从区块外往里看"看不见"
+     *  （实心层先重建、半透明层滞后）。每 2 秒把放置过的区块【整块重发】给
+     *  同维度玩家（空光源掩码=只刷方块渲染不动光照）→ 强制客户端整块重建（含
+     *  半透明层），玻璃/粘液块即时可见。
+     *  v1.5.328【修复无效根因】：旧版 LAST_CHUNK_RESEND = Long.MIN_VALUE——首次调用
+     *  now - Long.MIN_VALUE 整数溢出为负 → 节流判定恒 <40 → return，重发【从不执行】
+     *  （"修复了但还是看不见"的确切原因）。改 0（游戏刻恒 ≥0，首次即生效）。
+     *  另：待重发集合改【静态跨轮累积】（PENDING_RESEND_CHUNKS）——旧版每轮新建
+     *  局部集，节流 2 秒窗口内"非触发轮"的放置会漏发；累积集在重发成功后一次清空。 */
+    private static final java.util.Set<Long> PENDING_RESEND_CHUNKS = new java.util.HashSet<>();
+
+    private static long LAST_CHUNK_RESEND = 0;
+
+    private static void resendPlacedChunks(net.minecraft.server.level.ServerLevel level) {
+        if (PENDING_RESEND_CHUNKS.isEmpty()) {
+            return;
+        }
+        long now = level.m_46467_();
+        if (now - LAST_CHUNK_RESEND < 40) {
+            return; // 节流：每 2 秒最多一次（批量建造下足够，避免每 tick 刷区块）
+        }
+        LAST_CHUNK_RESEND = now;
+        for (Long ck : PENDING_RESEND_CHUNKS) {
+            int cx = (int) (long) (ck >> 32);
+            int cz = (int) (long) ck;
+            net.minecraft.world.level.chunk.LevelChunk chunk = level.m_6325_(cx, cz);
+            if (chunk == null) {
+                continue;
+            }
+            net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket pkt =
+                    new net.minecraft.network.protocol.game.ClientboundLevelChunkWithLightPacket(
+                            chunk, level.m_7726_().m_7827_(),
+                            new java.util.BitSet(), new java.util.BitSet());
+            for (net.minecraft.server.level.ServerPlayer player : level.m_6907_()) {
+                if (player.m_9236_() == level) {
+                    player.f_8906_.m_9829_(pkt);
+                }
+            }
+        }
+        PENDING_RESEND_CHUNKS.clear(); // 已重发 → 清空待发集（跨轮累积防漏）
+    }
 
     private static Block planMainBlock(BuildPlan.PlanState ps, List<String> plan) {
         Block cached = PLAN_MAIN.get(ps.planId);
@@ -1056,6 +1445,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         }
         Block main = best == null ? null : ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse(best));
+        // v1.5.287：惰性防膨胀——超过 256 个计划条目清空重建（旧计划已 clear 的残留，
+        // 防长期服务器慢漏；重建成本 O(N) 一次可接受）
+        if (PLAN_MAIN.size() > 256) {
+            PLAN_MAIN.clear();
+        }
         PLAN_MAIN.put(ps.planId, main);
         return main;
     }
@@ -1063,7 +1457,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     /** 完整建材（排除空气/液体/台阶/楼梯/栅栏/玻璃/树叶/附着/装饰等非完整方块） */
     private static boolean isFullBuildBlock(Block b) {
         net.minecraft.world.level.block.state.BlockState st = b.m_49966_();
-        if (st.m_60795_() || st.m_60815_()) {
+        if (st.m_60795_()
+                || st.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_)) {
             return false;
         }
         return !(b instanceof net.minecraft.world.level.block.SlabBlock
@@ -1103,9 +1498,24 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  位置变空/变地形（苦力怕炸洞、方块消失）→ 重新加入延后补建；
      *  已判定跳过的步骤（skippedIdx）不重复尝试（防死循环）；
      *  位置是障碍 → 不算缺口（不破坏玩家建筑）。返回是否发现缺口。 */
+    /** v1.5.273：scanGaps 全表扫描限频（维度 → 上次扫描 tick）——55 万步蓝图每 20 秒
+     *  一次 O(N) parseStep 全表扫 = tick 尖峰；限频 60 秒（限频期内沿用"未完成"判定，
+     *  deferred 清空才放行完成） */
+    private static final java.util.Map<String, Long> LAST_GAP_SCAN = new java.util.HashMap<>();
+
     private static boolean scanGaps(ServerLevel level, BlockPos origin, List<String> plan,
                                     BuildPlan.Progress prog) {
+        // v1.5.287：限频键从维度改 planId——同维度多区块共存时互不挤占扫描窗口
+        String dimKey = prog.tag;
+        long now = level.m_46467_();
+        Long lastScan = LAST_GAP_SCAN.get(dimKey);
+        if (lastScan != null && now - lastScan < 1200L) {
+            // 限频期内：deferred 还有条目 → 未完成；空 → 放行完成
+            return !prog.deferred.isEmpty();
+        }
+        LAST_GAP_SCAN.put(dimKey, now);
         boolean found = false;
+        java.util.Map<String, Integer> gapStats = new java.util.HashMap<>();
         for (int i = 1; i < plan.size(); i++) {
             if (prog.skippedIdx.contains(i)) {
                 continue;
@@ -1125,7 +1535,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 continue;
             }
             String blockId = parts[3];
-            Block block = ForgeRegistries.BLOCKS.getValue(net.minecraft.resources.ResourceLocation.parse(blockId));
+            // v1.5.287：改用计划级 blockCache（旧版每步重查注册表，同主循环 394 行）
+            Block block = prog.blockCache.computeIfAbsent(blockId,
+                    id -> ForgeRegistries.BLOCKS.getValue(net.minecraft.resources.ResourceLocation.parse(id)));
             if (block == null) {
                 continue;
             }
@@ -1134,13 +1546,27 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 continue; // 区块未加载的留到强制加载就绪后再查
             }
             BlockState st = level.m_8055_(pos);
-            if (st.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, st.m_60734_())) {
+            // v1.5.276：+替代品验收（缺料替换不再被缺口扫描重放——拆→掉→捡→再放循环）
+            if (st.m_60734_() == block || BlueprintLib.isBuiltEquivalent(blockId, st.m_60734_())
+                    || isAltPlaced(prog, i, st)) {
                 continue; // 已建
             }
             if (st.m_60795_() || BlueprintLib.isAllowedGround(st)) {
                 prog.deferred.putIfAbsent(i, 0); // 缺口 → 重新补建
                 found = true;
+                gapStats.merge(blockId, 1, Integer::sum);
             }
+        }
+        if (found) {
+            // v1.5.273：缺口明细（前 8 种方块）——"建造永不完成"直接看日志定位
+            StringBuilder sb = new StringBuilder();
+            gapStats.entrySet().stream()
+                    .sorted((a, b) -> b.getValue() - a.getValue())
+                    .limit(8)
+                    .forEach(e -> sb.append('[').append(e.getKey().replace("minecraft:", ""))
+                            .append("×").append(e.getValue()).append(']'));
+            int total = gapStats.values().stream().mapToInt(Integer::intValue).sum();
+            LOGGER.info("scanGaps: 缺口 {} 个：{}", total, sb);
         }
         return found;
     }
@@ -1189,10 +1615,24 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     private void notifyMissing(EntityMaid maid, String blockId) {
+        // v1.5.265：缺料播报只由工头发（有有效工头时）——14 只建造女仆同时
+        // 缺料时旧版每只都报（各限一次也刷屏），工头汇报一次足够
+        if (!BuildPlan.isForeman(maid)) {
+            return;
+        }
+        // v1.5.275：缺料播报 30 秒冷却（按女仆）——旧版 blockId 轮流缺就轮流报
+        //（日志实证：石头 407→376→344…红色床×2…石砖 每 5~11 秒一条刷屏）。
+        // 冷却期内静默（女仆继续干，30 秒后仍缺才再提醒）
+        long nowTick = maid.m_9236_().m_46467_();
+        Long lastCd = MISSING_CD.get(maid.m_20148_());
+        if (lastCd != null && nowTick - lastCd < 600L) {
+            return;
+        }
         if (blockId.equals(this.missingNotified)) {
             return;
         }
         this.missingNotified = blockId;
+        MISSING_CD.put(maid.m_20148_(), nowTick);
         LAST_MISSING.put(maid.m_20148_(), blockId);
         // v1.5.31：明确续建操作——材料放进【主人自己的背包】即可，女仆每 tick 自动
         // 拿料继续建（不用再点手册/不用切任务；已建部分自动跳过）
