@@ -1334,12 +1334,16 @@ public class PromaidConfigScreen extends Screen {
                             }
                             String path = dir + file;
                             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-                            if (mc.f_91074_ != null) {
-                                mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                        "\u00a7e[maid_smart] \u6b63\u5728\u5bfc\u5165\u8bed\u97f3\u5305: " + path));
-                            }
-                            com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                                    new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(path));
+                            // 审计：AWT 文件对话框线程不能直接操作 MC 客户端对象/网络通道，
+                            // 选完后切回 MC 主线程再发消息与发包。
+                            mc.m_18707_(() -> {
+                                if (mc.f_91074_ != null) {
+                                    mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                            "\u00a7e[maid_smart] \u6b63\u5728\u5bfc\u5165\u8bed\u97f3\u5305: " + path));
+                                }
+                                com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
+                                        new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(path));
+                            });
                         } catch (Exception ignored) {
                         }
                     });
