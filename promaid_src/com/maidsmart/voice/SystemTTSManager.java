@@ -41,6 +41,11 @@ public final class SystemTTSManager {
     /** 每只女仆上次朗读时间（UUID → 时间戳） */
     private static final Map<UUID, Long> LAST_SPEAK = new ConcurrentHashMap<>();
 
+    /** 审计：女仆卸载/移除时清理 TTS 限频表 */
+    public static void forgetMaid(UUID maidUuid) {
+        LAST_SPEAK.remove(maidUuid);
+    }
+
     private SystemTTSManager() {
     }
 

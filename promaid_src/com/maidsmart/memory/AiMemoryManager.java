@@ -321,9 +321,17 @@ public class AiMemoryManager {
             com.maidsmart.soul.SoulBindingService.storeFor(maid, level).saveNow();
         } catch (Exception ignored) {
         }
-        com.maidsmart.dialogue.PerceptionManager.forget(maid.m_20148_());
+        java.util.UUID maidUuid = maid.m_20148_();
+        com.maidsmart.dialogue.PerceptionManager.forget(maidUuid);
+        com.maidsmart.dialogue.ReplyFeedbackTracker.forgetMaid(maidUuid);
+        com.maidsmart.dialogue.ProactiveDialogueManager.forgetMaid(maidUuid);
+        com.maidsmart.dialogue.AutonomousTaskManager.forgetMaid(maidUuid);
+        com.maidsmart.dialogue.MaidWorkList.forgetMaid(maidUuid);
+        com.maidsmart.voice.SystemTTSManager.forgetMaid(maidUuid);
+        com.maidsmart.build.MaidBuildBehavior.forgetMaid(maidUuid);
+        com.maidsmart.mixin.FarmSweepMixin.forgetMaid(maidUuid);
         com.maidsmart.task.MaidMineBehavior.forget(maid.m_19879_());
-        com.maidsmart.task.MaidMineBehavior.forgetUuid(maid.m_20148_());
+        com.maidsmart.task.MaidMineBehavior.forgetUuid(maidUuid);
     }
 
     /**
