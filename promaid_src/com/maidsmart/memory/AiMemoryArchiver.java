@@ -184,6 +184,14 @@ public final class AiMemoryArchiver {
                 || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get()) {
             return;
         }
+        // v1.5.381：服务器/单机区别——只有【服务器】(剧情时间持续推进,玩家登出后
+        // 世界照常运转)才需要登出收尾;【单机集成服】玩家退出即关服、剧情时间停滞,
+        // 登出处理无意义——记忆原地不动,下次游戏内睡眠收尾会以"完整一天"的日级
+        // 索引自然覆盖,无需在关服竞态里抢跑
+        MinecraftServer server = level.m_7654_();
+        if (!(server instanceof net.minecraft.server.dedicated.DedicatedServer)) {
+            return;
+        }
         AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
         long gameTime = level.m_46467_();
         int day = (int) (gameTime / DAY_TICKS);
