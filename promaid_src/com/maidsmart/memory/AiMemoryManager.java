@@ -289,9 +289,10 @@ public class AiMemoryManager {
                     }
                     dailyConsolidate(maid, level, day, levelGameTime);
                     AiMemoryExtractor.maybeExtract(maid, server);
-                    // 记忆归档调度（跨日/周/月边界生成多级索引 + 短期→长期转移；
-                    // 移植自 Sphantosis MemoryArchiver.tick，边界未变时只做轻量比较）
-                    AiMemoryArchiver.tick(maid, level, false);
+                    // 记忆归档——仅重试失败的索引边界（O(pending) 轻量）。
+                    // v1.5.379：索引生成收敛到真实睡眠收尾（onSleepFinished），
+                    // 熬夜过夜（时间自然跨日但没人睡觉）不再触发归档
+                    AiMemoryArchiver.tick(maid, level);
                 });
             }
         }
@@ -299,28 +300,30 @@ public class AiMemoryManager {
 
     /**
      * 睡一觉自动处理（移植自 Sphantosis 的 start_role_sleep → wrap-up →
-     * archiver.tick(force_day_index=True) 链路）：
-     * 玩家睡醒（新的一天开始）时，对周围女仆强制归档——生成刚结束这一天的
-     * 「日」级日记索引 + 执行短期→长期簇转移。女仆"睡一觉把记忆整理好"。
+     * archiver.tick(force_day_index=True) 链路）。
+     *
+     * v1.5.379：改用 SleepFinishedTimeEvent——只有全员真实睡过夜、时间被
+     * 跳到清晨才触发（服务端事件）；PlayerWakeUpEvent 会在白天躺床即起、
+     * 入睡失败等情况下误触发，且周期跨日兜底会让"熬夜"也归档，均已排除。
+     * 对周围女仆：生成刚结束这一天的「日」级日记 + 3日/周/月按边界 + 短期→长期提升。
      */
     @SubscribeEvent
-    public void onPlayerWakeUp(net.minecraftforge.event.entity.player.PlayerWakeUpEvent event) {
+    public void onSleepFinished(net.minecraftforge.event.level.SleepFinishedTimeEvent event) {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
                 || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_SLEEP.get()) {
             return;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        if (!(event.getLevel() instanceof ServerLevel level)) {
             return;
         }
-        if (!(player.m_9236_() instanceof ServerLevel level)) {
-            return;
+        for (ServerPlayer player : level.m_6907_()) {
+            level.m_45976_(EntityMaid.class, player.m_20191_().m_82400_(128.0)).forEach(maid -> {
+                if (!maid.m_21824_() || !isEnabled(maid)) {
+                    return;
+                }
+                AiMemoryArchiver.sleepWrapUp(maid, level);
+            });
         }
-        level.m_45976_(EntityMaid.class, player.m_20191_().m_82400_(128.0)).forEach(maid -> {
-            if (!maid.m_21824_() || !isEnabled(maid)) {
-                return;
-            }
-            AiMemoryArchiver.tick(maid, level, true);
-        });
     }
 
     // ---------- 每日巩固（纯规则零 LLM，对齐 DailyMemoryConsolidator） ----------
