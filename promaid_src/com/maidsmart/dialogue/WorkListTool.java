@@ -261,6 +261,28 @@ public class WorkListTool implements ITool<WorkListTool.Result> {
         return sb.toString();
     }
 
+
+    @Override
+    public java.util.concurrent.CompletableFuture<LLMCallback> onCallAsync(
+            String toolCallId, Result result, LLMCallback callback,
+            com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMClient client) {
+        EntityMaid maid = callback.getMaid();
+        if (maid.m_9236_().m_5776_()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(
+                    callback.addToolResult("Cannot run on client side", toolCallId));
+        }
+        net.minecraft.server.level.ServerLevel level = (net.minecraft.server.level.ServerLevel) maid.m_9236_();
+        java.util.concurrent.CompletableFuture<LLMCallback> future = new java.util.concurrent.CompletableFuture<>();
+        level.m_7654_().execute(() -> {
+            try {
+                future.complete(onCall(toolCallId, result, callback));
+            } catch (Throwable t) {
+                future.complete(callback.addToolResult("Tool execution failed: " + t, toolCallId));
+            }
+        });
+        return future;
+    }
+
     public record Result(String action, String json) {
     }
 }

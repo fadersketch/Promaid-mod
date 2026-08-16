@@ -377,6 +377,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         ORE_CACHE.remove(maidEntityId);
     }
 
+    /** 审计 P-9：按 UUID 清理 MINING 集合（int 表与 UUID 表分开清理） */
+    public static void forgetUuid(java.util.UUID maidUuid) {
+        MINING.remove(maidUuid);
+    }
+
     /** v1.5.113：找矿缓存条目——全量扫描得到的矿位置 + 各自挡路预算（供缓存轮复用） */
     private record OreCache(long builtAt, java.util.List<BlockPos> ores,
                             java.util.Map<BlockPos, Integer> blocking) {

@@ -300,9 +300,24 @@ public final class BuildPlan {
         clear(level, planId);
     }
 
+    /** 审计：服务器停止时清空全部计划与绑定状态，防止跨世界/重进存档残留 */
+    public static void clearAll() {
+        PLANS.clear();
+        GLOBAL_PROGRESS.clear();
+        FOREMAN.clear();
+        GLOBAL_BOX.clear();
+        GLOBAL_TICKETED.clear();
+        CURSOR_SAVE_TIME.clear();
+        MAID_PLAN.clear();
+        MAID_PAUSED.clear();
+        ORPHAN_SINCE.clear();
+        LAST_SWEEP.clear();
+    }
+
     /** 审计M1修复（v1.5.383）：孤儿计划时间戳（planId → 首次发现无绑定女仆的时刻） */
     private static final Map<String, Long> ORPHAN_SINCE = new HashMap<>();
-    private static long LAST_SWEEP = 0;
+    /** 审计 P-4：孤儿清扫节流改为按维度记录，避免只扫第一个维度 */
+    private static final Map<ResourceKey<Level>, Long> LAST_SWEEP = new HashMap<>();
 
     /**
      * 审计M1修复（v1.5.383）：孤儿计划清扫——无绑定女仆持续超过 10 分钟的建造计划
@@ -313,10 +328,11 @@ public final class BuildPlan {
      */
     public static void sweepOrphans(net.minecraft.server.level.ServerLevel level) {
         long now = System.currentTimeMillis();
-        if (now - LAST_SWEEP < 300_000) {
+        Long last = LAST_SWEEP.get(level.m_46472_());
+        if (last != null && now - last < 300_000) {
             return;
         }
-        LAST_SWEEP = now;
+        LAST_SWEEP.put(level.m_46472_(), now);
         for (PlanState ps : getPlans(level)) {
             if (MAID_PLAN.containsValue(ps.planId)) {
                 ORPHAN_SINCE.remove(ps.planId);
@@ -742,6 +758,8 @@ public final class BuildPlan {
         GLOBAL_TICKETED.remove(ps.planId);
         // v1.5.66：解冻（只解本区块；其他区块冻结由 ChunkFreeze 维护）
         com.maidsmart.build.ChunkFreeze.unfreeze(level, ps.planId);
+        // 审计：计划释放时同时清除树叶永久保护，避免已删除/完成计划的树叶永久豁免衰减
+        com.maidsmart.build.ChunkFreeze.unprotectLeaves(level, ps.planId);
         if (box == null || box[1] < box[0]) {
             return;
         }

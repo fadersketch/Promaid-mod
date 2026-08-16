@@ -1262,7 +1262,7 @@ public class PromaidConfigScreen extends Screen {
         // 强制该语言代码（zh_cn/en_us/ja_jp/ko_kr/ru_ru 等），不再有填错风险
         this.rows.add(new SectionRow("输出语言", true));
         String[][] langChoices = {
-                {"跟随游戏语言（默认）", ""},
+                {"强制中文（默认）", ""},
                 {"中文", "zh_cn"},
                 {"英文", "en_us"},
                 {"日文", "ja_jp"},

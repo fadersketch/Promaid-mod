@@ -127,6 +127,9 @@ public final class AiMemoryArchiver {
         List<PendingIndex> pending = new ArrayList<>(state.pending());
         if (day != state.lastDay()) {
             // 刚结束的一天（完整一天）
+            // 审计 P-5：先生成完整天前清掉登出 partial 生成的部分天索引，避免重复日级日记
+            store.index().removeCovered(AiMemoryIndexStore.LEVEL_DAY,
+                    (day - 1) * DAY_TICKS, day * DAY_TICKS);
             generateOrRetry(maid, level, AiMemoryIndexStore.LEVEL_DAY,
                     (day - 1) * DAY_TICKS, day * DAY_TICKS, pending);
             // 3日索引（滚动最近 3 个自然日，按日对齐保证幂等）
@@ -433,7 +436,11 @@ public final class AiMemoryArchiver {
                         }
                     }));
         } catch (Exception e) {
-            ARCHIVING.remove(maid.m_20148_());
+            // 审计 P-7：同步构造/发送失败不再静默，记录日志并挂入持久 pending 重试
+            UUID id = maid.m_20148_();
+            LOGGER.info("AiMemoryArchiver: 索引请求构造失败 {}（待重试）", id, e);
+            ARCHIVING.remove(id);
+            addPending(store, lv, startTick, endTick);
         }
     }
 
@@ -489,12 +496,23 @@ public final class AiMemoryArchiver {
     public static int runTransfer(AiMemoryStore store, long gameTime) {
         long threshold = (long) com.maidsmart.config.MaidSmartConfig.MEMORY_SHORT_TERM_DAYS.get() * DAY_TICKS;
         int salienceFloor = com.maidsmart.config.MaidSmartConfig.MEMORY_DECAY_SALIENCE.get();
+        // 审计 P-6：long_term 也要受总量约束，避免占满整段记忆预算后不再老化
+        int maxLongTerm = Math.max(16, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get() / 2);
+        int longTermCount = 0;
+        for (AiMemoryModels.Paragraph existing : store.paragraphs()) {
+            if (existing.tags().contains("long_term")) {
+                longTermCount++;
+            }
+        }
         int moved = 0;
         for (AiMemoryModels.Paragraph p : store.paragraphs()) {
             if (AiMemoryStore.hasErrorTag(p)) {
                 continue;
             }
             if (!"short_context".equals(p.sourceType()) || p.tags().contains("long_term")) {
+                continue;
+            }
+            if (longTermCount >= maxLongTerm) {
                 continue;
             }
             if (p.salience() < salienceFloor) {
@@ -505,6 +523,7 @@ public final class AiMemoryArchiver {
             }
             if (store.markLongTermByHash(p.hash())) {
                 moved++;
+                longTermCount++;
             }
         }
         if (moved > 0) {
