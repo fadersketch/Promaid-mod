@@ -285,6 +285,23 @@ public abstract class MaidConfigMemoryMixin {
                     } catch (Exception ignored) {
                     }
                 }
+                // v1.5.382：记忆日记状态（多级索引篇数 + 最新日记跨度；索引关闭时无此行）
+                if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get() && y + 10 < 52) {
+                    List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx = store.index().all();
+                    if (!idx.isEmpty()) {
+                        com.maidsmart.memory.AiMemoryIndexStore.IndexRecord last = null;
+                        for (com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r : idx) {
+                            if (last == null || r.endTick() > last.endTick()) {
+                                last = r;
+                            }
+                        }
+                        drawLine(font, graphics, x, y,
+                                "\u00a7d记忆日记：" + idx.size() + " 篇（最新" + last.level()
+                                        + "记 第" + last.startDay() + "~" + last.endDay() + "天）",
+                                0xFFBB77FF);
+                        y += 11;
+                    }
+                }
                 List<AiMemoryModels.Paragraph> top = new ArrayList<>(store.paragraphs());
                 top.sort(Comparator.comparingInt(AiMemoryModels.Paragraph::salience).reversed());
                 if (top.isEmpty()) {
@@ -297,9 +314,10 @@ public abstract class MaidConfigMemoryMixin {
                         if (shown >= 2 || y + 10 >= 52) {
                             break;
                         }
-                        // v1.5.251：显示来源世界 + 获得时间
+                        // v1.5.251：显示来源世界 + 获得时间；v1.5.382：长期沉淀标记
+                        String lt = p.tags().contains("long_term") ? "\u00a7d[长期]\u00a77" : "";
                         drawLine(font, graphics, x, y,
-                                "[" + p.salience() + "] " + p.content()
+                                "[" + p.salience() + "] " + lt + p.content()
                                         + com.maidsmart.memory.AiMemoryModels.memoryMeta(p), 0xFFAAAAAA);
                         y += 11;
                         shown++;

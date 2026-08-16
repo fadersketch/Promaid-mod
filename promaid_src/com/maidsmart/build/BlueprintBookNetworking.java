@@ -1620,6 +1620,22 @@ public final class BlueprintBookNetworking {
             }
             lines.add(sb.toString());
         }
+        // v1.5.382：记忆日记（多级记忆索引——日/3日/周/月日记式摘要，最新 6 篇）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
+            List<com.maidsmart.memory.AiMemoryIndexStore.IndexRecord> idx =
+                    new ArrayList<>(store.index().all());
+            if (idx.isEmpty()) {
+                lines.add("\u00a7d记忆日记\u00a77（暂无——睡一觉后自动整理生成）");
+            } else {
+                idx.sort((a, b) -> Long.compare(b.endTick(), a.endTick()));
+                lines.add("\u00a7d记忆日记\u00a77（共" + idx.size() + " 篇，最新：）");
+                for (int i = 0; i < idx.size() && i < 6; i++) {
+                    com.maidsmart.memory.AiMemoryIndexStore.IndexRecord r = idx.get(i);
+                    lines.add("\u00a7d  [" + r.level() + "记 第" + r.startDay() + "~" + r.endDay()
+                            + "天]\u00a7f " + com.maidsmart.memory.AiMemoryModels.clip(r.content(), 70));
+                }
+            }
+        }
         // 关系（按置信度降序）
         rels.sort(java.util.Comparator.comparingDouble(
                 com.maidsmart.memory.AiMemoryModels.Relation::confidence).reversed());
@@ -1636,7 +1652,9 @@ public final class BlueprintBookNetworking {
         for (com.maidsmart.memory.AiMemoryModels.Paragraph p : paras) {
             String color = p.salience() >= 8 ? "\u00a7e"
                     : (p.salience() >= 5 ? "\u00a7a" : "\u00a77");
-            String tag = p.isPermanent() ? "\u00a7b\u3010\u6c38\u4e45\u3011" : "";
+            // v1.5.382：【长期】标记（long_term——年龄+重要度达标沉淀的长期记忆）
+            String tag = (p.isPermanent() ? "\u00a7b\u3010\u6c38\u4e45\u3011" : "")
+                    + (p.tags().contains("long_term") ? "\u00a7d\u3010\u957f\u671f\u3011" : "");
             String acc = p.accessCount() > 0
                     ? "\u00a78·\u8bbf\u95ee" + p.accessCount() + "\u6b21 " : "";
             lines.add(tag + color + "[\u91cd\u8981\u5ea6" + p.salience() + "] \u00a7f"
