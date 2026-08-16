@@ -67,6 +67,7 @@ public final class AiMemoryStore {
         this.dir = dir;
         this.worldId = worldId;
         this.indexStore = new AiMemoryIndexStore(dir);
+        this.indexStore.setDirtyCallback(this::markDirty); // 审计优化5：add 即标脏
         this.load();
     }
 
@@ -926,6 +927,7 @@ public final class AiMemoryStore {
         this.timeIndex.rebuild(List.of());
         this.dirty = true;
         this.save();
+        AiMemoryArchiver.invalidateState(this); // 同步丢弃归档器状态缓存（文件已删）
         try {
             java.nio.file.Files.deleteIfExists(this.dir.resolve("working_note.txt"));
             java.nio.file.Files.deleteIfExists(this.dir.resolve("archiver_state.json"));

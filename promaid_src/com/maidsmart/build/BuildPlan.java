@@ -300,6 +300,43 @@ public final class BuildPlan {
         clear(level, planId);
     }
 
+    /** 审计M1修复（v1.5.383）：孤儿计划时间戳（planId → 首次发现无绑定女仆的时刻） */
+    private static final Map<String, Long> ORPHAN_SINCE = new HashMap<>();
+    private static long LAST_SWEEP = 0;
+
+    /**
+     * 审计M1修复（v1.5.383）：孤儿计划清扫——无绑定女仆持续超过 10 分钟的建造计划
+     * 自动取消（已建方块保留、重下达可续建，与手动 cancel 同语义）。防止全部女仆
+     * 中途消失（解雇/死亡/魂符收纳/传送走）后计划无人 tick 到不了终态，FORCED
+     * 区块票据与 ChunkFreeze 冻结永久驻留到重启。自限频：每 5 分钟扫一次。
+     * 由 AiMemoryManager 周期调度调用（跨包借点，避免再开一个 tick 订阅）。
+     */
+    public static void sweepOrphans(net.minecraft.server.level.ServerLevel level) {
+        long now = System.currentTimeMillis();
+        if (now - LAST_SWEEP < 300_000) {
+            return;
+        }
+        LAST_SWEEP = now;
+        for (PlanState ps : getPlans(level)) {
+            if (MAID_PLAN.containsValue(ps.planId)) {
+                ORPHAN_SINCE.remove(ps.planId);
+                continue;
+            }
+            Long since = ORPHAN_SINCE.get(ps.planId);
+            if (since == null) {
+                ORPHAN_SINCE.put(ps.planId, now); // 刚创建还没绑女仆的计划有 10 分钟宽限
+                continue;
+            }
+            if (now - since > 600_000) {
+                LOGGER.warn("build plan orphaned (no bound maids for 10min), auto-cancel: "
+                        + "planId={} name={}", ps.planId, ps.name);
+                clear(level, ps.planId);
+                ORPHAN_SINCE.remove(ps.planId);
+            }
+        }
+        ORPHAN_SINCE.keySet().retainAll(PLANS.keySet());
+    }
+
     // ==================== 暂停（按区块） ====================
 
     public static boolean isPaused(PlanState ps) {

@@ -36,10 +36,17 @@ public final class AiMemoryIndexStore {
 
     private final Path file;
     private final List<IndexRecord> records = new ArrayList<>();
+    /** 脏回调（宿主 store 注入，add 时触发防抖写盘链路——审计优化5：不再依赖调用方手动 saveNow） */
+    private Runnable onDirty;
 
     public AiMemoryIndexStore(Path storeDir) {
         this.file = storeDir.resolve("memory_index.jsonl");
         load();
+    }
+
+    /** 由 AiMemoryStore 构造时注入（this::markDirty） */
+    void setDirtyCallback(Runnable callback) {
+        this.onDirty = callback;
     }
 
     private void load() {
@@ -85,12 +92,30 @@ public final class AiMemoryIndexStore {
         return false;
     }
 
-    /** 新增一条（去重：同边界已存在则忽略） */
+    /**
+     * 是否已有"同级别、同起点、终点覆盖"的更长记录——登出的"当日部分天"日记
+     * 被后续"完整一天"覆盖时视为已归档（审计优化3：避免同一天两份近似日记）。
+     */
+    public synchronized boolean covers(String level, long startTick, long endTick) {
+        for (IndexRecord r : records) {
+            if (r.level().equals(level)
+                    && Math.abs(r.startTick() - startTick) < 1200
+                    && r.endTick() >= endTick - 1200) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 新增一条（去重：同边界已存在则忽略；触发宿主脏标记走防抖写盘） */
     public synchronized void add(IndexRecord record) {
         if (has(record.level(), record.startTick(), record.endTick())) {
             return;
         }
         this.records.add(record);
+        if (this.onDirty != null) {
+            this.onDirty.run();
+        }
     }
 
     /** 某级别全部记录（按开始时间升序） */

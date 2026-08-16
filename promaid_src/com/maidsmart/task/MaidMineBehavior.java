@@ -363,6 +363,20 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
     private static final long ORE_CACHE_TTL = 100L;
 
+    /** 审计M4修复（v1.5.383）：女仆实体卸载时清理其全部行为状态表（防长会话泄漏） */
+    public static void forget(int maidEntityId) {
+        ANCHORS.remove(maidEntityId);
+        OUT_SINCE.remove(maidEntityId);
+        LAST_RELOCATE.remove(maidEntityId);
+        SLIDE_SINCE.remove(maidEntityId);
+        TARGET_SINCE.remove(maidEntityId);
+        SKIP_REPORT_SINCE.remove(maidEntityId);
+        BLOCKED_REPORT_SINCE.remove(maidEntityId);
+        RECENT_DISCARD.remove(maidEntityId);
+        NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
+        ORE_CACHE.remove(maidEntityId);
+    }
+
     /** v1.5.113：找矿缓存条目——全量扫描得到的矿位置 + 各自挡路预算（供缓存轮复用） */
     private record OreCache(long builtAt, java.util.List<BlockPos> ores,
                             java.util.Map<BlockPos, Integer> blocking) {
