@@ -1,4 +1,4 @@
-# Promaid 记忆系统 —— Sphantosis 移植文档(v1.5.378)
+# Promaid 记忆系统 —— Sphantosis 移植文档(v1.5.378,经 v1.5.379 架构修订)
 
 > 分支:`experimental/memory-port`(基于 maidmods 工作树 v1.5.377)
 > 移植来源:Sphantosis `experimental/advanced-features-experiment` 分支
@@ -27,26 +27,29 @@
                        ┌─────────────────────────────────────────────────┐
                        │              自动归档侧(本次移植新增)              │
                        ├─────────────────────────────────────────────────┤
-  触发点A: AiMemoryManager.onServerTick(每 scanInterval 秒,扫描玩家
-           周围128格女仆) ──► AiMemoryArchiver.tick(maid, level, false)
-  触发点B: 玩家睡醒 PlayerWakeUpEvent(周围128格女仆)
-           ──► AiMemoryArchiver.tick(maid, level, forceDayIndex=true)
+  触发点A(唯一生成点): SleepFinishedTimeEvent(全员真实睡过夜、时间跳到
+           清晨才触发,服务端事件;周围128格女仆)
+           ──► AiMemoryArchiver.sleepWrapUp(maid, level)
+  触发点B(纯重试): AiMemoryManager.onServerTick(每 scanInterval 秒)
+           ──► AiMemoryArchiver.tick(maid, level)  仅重试 pending
+           (熬夜过夜不触发归档;白天躺床即起不误触发)
                         │
                         ├─► 边界检测(archiver_state.json: 上次日/周/月)
-                        │     跨日 → 昨日「日」索引 + 滚动「3日」索引
+                        │     跨日 → 刚结束一天「日」索引 + 滚动「3日」索引
                         │     跨周 → 上周「周」索引(7游戏日)
                         │     跨月 → 上月「月」索引(30游戏日)
-                        │     睡醒 → 当日「日」索引(部分天)
+                        │     多日未睡的空档不逐日回填——由粗粒度层级覆盖
                         │
-                        ├─► generateIndex: 跳表范围取事件段落 → 组 prompt
+                        ├─► generateIndex: 跳表范围取事件段落(超 indexMaxEvents
+                        │     按重要度裁剪) → 组 prompt
                         │     → 异步 LLM(sendAsync,60s超时,单飞守卫)
                         │     → 严格JSON{日记,事件节点} → memory_index.jsonl
-                        │     失败 ─► pending 队列(持久化,下个tick重试)
+                        │     失败 ─► pending 队列(持久化,周期tick重试)
                         │
-                        └─► runTransfer: short_context 层段落
-                              ngram-Jaccard≥0.42 并查集聚簇
-                              簇内全部段落年龄 ≥ shortTermDays 游戏日
-                              ──► 整簇打 long_term 标记(豁免衰减遗忘)
+                        └─► runTransfer(线性架构适配): short_context 段落
+                              年龄 ≥ shortTermDays 且 salience ≥ decaySalience
+                              ──► 打 long_term 标记(豁免衰减遗忘)
+                              (v1.5.379 移除了 Jaccard 伪图聚簇)
 
                        ┌─────────────────────────────────────────────────┐
                        │              读取侧(检索/注入/工具)                │
@@ -90,7 +93,7 @@
 
 `promaid_src/com/maidsmart/memory/AiMemoryArchiver.java`(移植 `memory_archiver.py`,全静态方法)
 
-#### 3.3.1 调度入口 `tick(maid, level, forceDayIndex)`
+#### 3.3.1 调度入口(v1.5.379 起:生成收敛到睡眠,周期只重试)
 
 时间基准 = `level.getGameTime()`(与既有每日巩固同源);`day = gameTime/24000`,`week = day/7`,`month = day/30`。
 
@@ -101,18 +104,17 @@
  "pending":[{"level":"日","startTick":4560000,"endTick":4584000}]}
 ```
 
-流程(全部在服务端线程执行,轻量比较常驻,重活异步):
+**`sleepWrapUp(maid, level)`** —— 唯一的生成触发点,由 `SleepFinishedTimeEvent` 调用(全部在服务端线程执行,重活异步):
 
-1. **首次对齐**:状态 `lastDay<0` 时只写入当前边界,不追溯历史跨度(对齐 Sphantosis 行为,防启动时批量补生成)
-2. **跨日**(`day != lastDay`):
-   - 昨日「日」索引:区间 `[(day-1)*24000, day*24000)`
-   - 滚动「3日」索引:区间 `[(day-2)*24000, (day+1)*24000)`(按日对齐保证幂等)
+1. **首次对齐**:状态 `lastDay<0` 时只写入当前边界,不追溯历史跨度(对齐 Sphantosis 行为),但仍执行转移
+2. **跨日**(`day != lastDay`):刚结束一天「日」索引 `[(day-1)*24000, day*24000)` + 滚动「3日」`[(day-2)*24000, (day+1)*24000)`;**多日未睡的中间空档不逐日回填**——由 3日/周/月 粗粒度层级自然覆盖(多级索引自愈)
 3. **跨周**:上一周「周」索引 `[(week*7-7)*24000, week*7*24000)`
 4. **跨月**:上一月「月」索引 `[(month*30-30)*24000, month*30*24000)`
-5. **睡醒强制**(`forceDayIndex=true`):当日「日」索引 `[day*24000, gameTime)`(部分天,收尾归档点)
-6. **重试**:遍历 pending,逐条再尝试;仍失败的留在队列
-7. **状态落盘**:有变化才写
-8. **短期→长期转移** `runTransfer(store, gameTime)`
+5. **重试**:遍历 pending,逐条再尝试;仍失败的留在队列
+6. **状态落盘**:有变化才写
+7. **短期→长期提升** `runTransfer(store, gameTime)`
+
+**`tick(maid, level)`** —— 周期调度(每 scanInterval 秒),**仅重试 pending**,无 pending 时零开销。v1.5.378 的"周期跨日生成兜底"已移除(熬夜排除)。
 
 #### 3.3.2 索引生成 `generateIndex(maid, level, lv, startTick, endTick)`
 
@@ -124,7 +126,9 @@
    - 排除 `sourceType=summary`(摘要段落本身是压缩产物,不二次索引)
    - 排除 tags 含 `daily`(旧版规则每日回顾)
    - 排除 deleted / error_mark(error_mark/error_affected 被主人否定的记忆)
-   - **月级**:按 salience 降序只保留 `memory.indexMonthTopN`(默认20)条,再恢复时间升序
+   - **月级**:按 salience 降序只保留 `memory.indexMonthTopN`(默认20)条
+   - **上下文长度管理**(v1.5.379):其余级别超过 `memory.indexMaxEvents`(默认40)条同样按 salience 裁剪——忙日不撑爆摘要 prompt;prompt 中已注明事件可能被截取
+   - 裁剪后恢复时间升序
    - 输出格式(喂给 LLM 的事件块,移植 Sphantosis 格式):
      `[第190天|event] 主人送了我一把铁剑(重要度k=7)【事件节点id:1a2b3c:42】`
    - 跨度内无事件 → **跳过视为成功**(不生成空索引,对齐原设计)
@@ -141,33 +145,40 @@
    `AiMemoryArchiver: 已归档日索引 第190天~第191天(关键事件3个)`
 9. **失败不静默**:请求失败/空响应/解析异常 → `addPending` 把该边界写入持久队列,日志记录状态码/异常;下个 tick 自动重试
 
-#### 3.3.3 短期→长期簇转移 `runTransfer(store, gameTime)`
+#### 3.3.3 短期→长期提升 `runTransfer(store, gameTime)`(v1.5.379 重写)
 
-promaid 段落之间没有图边,用**内容相似度聚类**近似 Sphantosis 的"连通分量":
+**设计变更说明**:v1.5.378 曾用 ngram-Jaccard≥0.42 并查集伪聚类去近似 Sphantosis 的图连通分量转移——这是架构错配:Sphantosis 的连通分量有意义,是因为事件图有 LLM 提取时建立的 belong/因果边,且短期/长期是两个物理存储,"整簇搬走"保住因果簇完整;promaid 段落是**扁平线性列表、单一存储**,转移只是打标签,伪图聚簇是 O(n²) 每 20 秒常驻的负优化,且字面 bigram Jaccard 测不出语义关联。已移除。
 
-1. 候选:`layer=short_context` 的段落(写入策略 `AiMemoryWriteStrategy` 的默认短期层),排除已打 `long_term`、排除 error 标记
-2. 聚簇:bigram 集合 Jaccard ≥ 0.42 连边,并查集求连通簇(阈值与既有 error_mark 传播一致)
-3. **整簇转移条件:簇内每一段的 `gameTime - eventTimeEnd` 都 ≥ `memory.shortTermDays`(默认3)游戏日** —— 任何一段还"新"就整簇等待,不拆散相互关联的事件簇(对齐原设计"存在任何节点少于该跨度则不转移")
-4. 转移动作 = 打 `long_term` 标签(`markLongTermByHash`,严格按 `,long_term,` 全词匹配避免误伤)+ `saveNow()`
-5. `long_term` 的实际效果:**prune 衰减遗忘豁免**(`AiMemoryStore.prune` 第2步增加 `!tags.contains("long_term")` 条件)——已判定为长期记忆的段落不再"30天未访问且低重要度"被删除;检索/注入行为不变(它们本来就在池子里)
-6. 日志:`AiMemoryArchiver: 转移 N 个关联簇(M 段落)到长期记忆`
+与线性架构匹配的 O(n) 单遍规则(仅睡眠收尾时执行):
+
+1. 候选:`layer=short_context` 的段落,排除已打 `long_term`、排除 error 标记
+2. 条件:**年龄 `gameTime - eventTimeEnd` ≥ `memory.shortTermDays`(默认3)游戏日,且 salience ≥ `memory.decaySalience`(即"本可躲过遗忘"的记忆)**
+3. 动作 = 打 `long_term` 标签(`markLongTermByHash`,严格 `,long_term,` 全词匹配)+ `saveNow()`
+4. `long_term` 的实际效果:**prune 衰减遗忘豁免**(`AiMemoryStore.prune` 第2步的 `!tags.contains("long_term")` 条件)——长期沉淀的段落不再"30天未访问且低重要度"被删除;检索/注入行为不变
+5. 日志:`AiMemoryArchiver: N 条短期记忆沉淀为长期(long_term)`
 
 ### 3.4 睡一觉自动处理(触发点)
 
-`AiMemoryManager.onPlayerWakeUp(PlayerWakeUpEvent)`:
+`AiMemoryManager.onSleepFinished(SleepFinishedTimeEvent)`(v1.5.379 从 PlayerWakeUpEvent 更换):
 
 ```
 Sphantosis 原链路:  start_role_sleep(≥阈值时长) → 60秒后 wrap-up 收尾
                     → deactivate + 调度记忆分析 + archiver.tick(force_day_index=True)
-Promaid 对应:      玩家睡醒(PlayerWakeUpEvent,睡过夜=新一天开始=天然收尾点)
-                    → 周围128格内、已驯服、记忆开启的女仆
-                    → AiMemoryArchiver.tick(maid, level, forceDayIndex=true)
-                    = 生成刚结束这一天的「日」级日记 + 短期→长期簇转移
+Promaid 对应:      SleepFinishedTimeEvent(全员真实睡过夜、时间被跳到清晨
+                    才触发的服务端事件——天然收尾点)
+                    → 该维度玩家周围128格内、已驯服、记忆开启的女仆
+                    → AiMemoryArchiver.sleepWrapUp(maid, level)
+                    = 生成刚结束一天的「日」级日记 + 3日/周/月按边界
+                      + pending 重试 + 短期→长期提升
 ```
 
-- 双开关:`memory.indexEnable` 且 `memory.indexOnSleep` 都开才触发
-- 事件在服务端判断(`event.getEntity() instanceof ServerPlayer`),天然只在服务端生效
-- 周期调度(触发点A)兜底:玩家不睡觉、用指令跳夜晚、挂机过夜——跨日边界同样会在下一个扫描周期(默认20秒)被检测到,只是少了"当日部分天"的强制归档(该索引会在次日跨日时以完整一天补上)
+**为什么换事件(熬夜排除)**:
+- `PlayerWakeUpEvent` 在白天躺床即起、入睡失败、多人中他人睡醒等情况下都会触发——是"离开床"不是"睡了一觉"
+- 时间自然跨日(没人睡觉,熬夜过夜)在 v1.5.378 的周期兜底下也会归档——已移除,归档**只**发生在真实睡眠收尾
+- 玩家永不睡觉 → 索引永不生成,这是设计意图(女仆没"睡一觉"就不整理记忆);此时 query_memory_index 返回"暂无索引",五路召回归位于原四路,投影无记忆日记段——无副作用
+- `SleepFinishedTimeEvent` 为 Forge 世界级服务端事件,`event.getLevel()` 判服务端维度后遍历玩家
+
+双开关 `memory.indexEnable` 且 `memory.indexOnSleep` 都开才触发。
 
 ### 3.5 检索侧接入
 
@@ -215,8 +226,9 @@ Promaid 对应:      玩家睡醒(PlayerWakeUpEvent,睡过夜=新一天开始=�
 | 键 | 默认 | 范围 | 说明 |
 |---|---|---|---|
 | `indexEnable` | true | bool | 多级记忆索引总开关(生成/检索路/工具/投影段全部联动) |
-| `indexOnSleep` | true | bool | 睡一觉自动处理(仅控制睡醒强制归档;周期边界归档不受此键影响) |
+| `indexOnSleep` | true | bool | 睡一觉自动处理(唯一生成触发点;关闭后索引只出不进) |
 | `indexMonthTopN` | 20 | 5~100 | 月级索引按重要度保留的最大事件数 |
+| `indexMaxEvents` | 40 | 10~200 | 单次索引事件上限,超限按重要度裁剪(上下文长度管理) |
 | `shortTermDays` | 3 | 1~30 | 短期→长期转移阈值(游戏日) |
 
 既有键的联动关系:
@@ -256,10 +268,10 @@ Promaid 对应:      玩家睡醒(PlayerWakeUpEvent,睡过夜=新一天开始=�
 | `MemoryArchiver.tick(now_story, force_day_index)` | `AiMemoryArchiver.tick(maid, level, forceDayIndex)` | 剧情时间→游戏时间;周=7游戏日、月=30游戏日 |
 | `_llm_summarize`(VllmBackend+模板) | `sendIndexRequest`(直连 HTTP,同提取器) | 不经 TLM 回调,无 token/历史/气泡副作用 |
 | `StoryClock.day_id/week_id/month_id` | `gameTime/24000`、`day/7`、`day/30` | — |
-| 图连通分量整簇转移 | ngram-Jaccard≥0.42 并查集聚簇 | promaid 段落无边,以内容相似度近似 |
+| 图连通分量整簇转移 | ~~Jaccard 伪聚簇~~ → **年龄+重要度单遍提升**(v1.5.379) | 线性列表无图边/单存储,伪聚簇为负优化,已移除 |
 | 转移=移入 episodic_core | 转移=打 `long_term` 标签+衰减豁免 | promaid 单存储,用标签分层 |
 | `query_memory_index` workflow | `QueryMemoryIndexTool` | 中文时间格式→游戏日序号(对 LLM 更友好) |
-| `start_role_sleep→wrap-up(60s)→tick(force)` | `PlayerWakeUpEvent→tick(force)` | MC 睡醒即收尾,无需延时 |
+| `start_role_sleep→wrap-up(60s)→tick(force)` | `SleepFinishedTimeEvent→sleepWrapUp`(v1.5.379) | 真实睡过夜才触发,排除熬夜/未入睡;周期tick仅重试 |
 | 角色后台线程每3秒 tick | `onServerTick` 每 scanInterval 秒(只扫玩家周围女仆) | 避免未加载/远离女仆空转 |
 | `memory_settings.py` 白名单+memory_config.json | Forge config `memory.*` 四键 | 对齐模组既有配置体系 |
 | `_pending_indexes` 内存队列 | `archiver_state.json` pending(持久化) | 重启后仍会补生成 |
@@ -305,7 +317,7 @@ copy /y "...\Promaid-1.0.12.jar.bak_v1377" "...\Promaid-1.0.12.jar"
 2. **数据落盘**:看 `<世界>/promaid_memory/<UUID>/memory_index.jsonl` 是否出现记录;`archiver_state.json` 的 lastDay 应等于当前游戏日
 3. **对话检索**:问女仆"你还记得前几天我们做了什么吗"——观察是否触发 `query_memory_index`(TLM 调试面板/日志),或回答中复述日记内容
 4. **投影注入**:有日记后,女仆对话上下文应含"记忆日记:【第X~Y天】…"(开 TLM 调试查看 system 注入)
-5. **长期转移**:游戏内过 3 天以上(`shortTermDays`),`paragraphs.jsonl` 中旧 short_context 段落 tags 出现 `,long_term`;日志 `转移 N 个关联簇`
+5. **长期提升**:睡过几觉后(段落年龄≥`shortTermDays` 游戏日),`paragraphs.jsonl` 中旧 short_context 且 salience≥decaySalience 的段落 tags 出现 `,long_term`;日志 `N 条短期记忆沉淀为长期(long_term)`(仅在睡觉收尾时执行,周期 tick 不再触发)
 6. **开关**:config 关 `indexOnSleep` → 睡觉不再强制归档;关 `indexEnable` → 工具返回未开启、检索无日记路、投影无记忆日记段
 
 ## 10. 相关提交
@@ -314,4 +326,5 @@ copy /y "...\Promaid-1.0.12.jar.bak_v1377" "...\Promaid-1.0.12.jar"
 |---|---|---|
 | promaid-mod `experimental/memory-port` | `7f891d6` | sync: 对齐 maidmods 工作树 v1.5.377(当前部署线) |
 | promaid-mod `experimental/memory-port` | `9090191` | feat(memory): 移植 Sphantosis 快速记忆索引与自动记忆归档(v1.5.378) |
-| changelog | `assets/promaid/guide/changelog.txt` | `promaid 1.5.378` 条目(游戏内手册可见) |
+| promaid-mod `experimental/memory-port` | (本次) | refactor(memory): v1.5.379 架构修订——SleepFinishedTimeEvent 熬夜排除 / 移除 Jaccard 伪聚簇改单遍提升 / indexMaxEvents 上下文长度管理 |
+| changelog | `assets/promaid/guide/changelog.txt` | `promaid 1.5.378`、`promaid 1.5.379` 条目(游戏内手册可见) |
