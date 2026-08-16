@@ -22,21 +22,23 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 记忆自动归档器（移植自 Sphantosis computing_engines/memory_archiver.py）。
+ * 记忆自动归档器（移植自 Sphantosis computing_engines/memory_archiver.py，
+ * v1.5.379 按 promaid 线性架构修订）。
  *
- * 记忆分层（对应关系）：
- * - Sphantosis：短期记忆图（short_term_memory）→ 长期记忆（episodic_core），
- *   连通子图整体转移
- * - promaid：段落 layer "short_context"（短期层）→ long_term 标记（长期层），
- *   以内容相似度（ngram-Jaccard）聚类近似"连通子图"——簇内全部段落年龄
- *   超过阈值才整簇转移，不拆散相互关联的事件簇
- *
- * 多级记忆索引（日/3日/周/月）：
- * - 跨游戏日边界：生成昨日「日」索引 + 滚动「3日」索引
- * - 跨周（7 游戏日）/跨月（30 游戏日）边界：生成上周/上月索引
- * - 玩家睡醒（"睡一觉自动处理"）或收尾场景：强制生成当日「日」索引
- * - LLM 日记式摘要（第一人称），跨度越大压缩越高；月级仅保留最重要 top N
- * - 生成失败不静默：记日志并挂入待重试队列，下个 tick 重试
+ * v1.5.379 修订（架构适配）：
+ * - 【触发】索引生成只发生在【真实睡眠收尾】（SleepFinishedTimeEvent——
+ *   全员睡过夜、时间被跳到清晨才触发），熬夜过夜/未入睡不再触发归档；
+ *   周期调度退化为纯 pending 重试（每 scanInterval 秒，O(pending) 轻量）
+ * - 【转移】移除 v1.5.378 的 ngram-Jaccard 伪图聚簇——promaid 段落是扁平
+ *   线性列表、单一存储，Sphantosis 的"图连通分量整簇转移"（保住 LLM 建立
+ *   的因果边簇 + 双存储迁移）在此没有对应物，伪图聚簇是 O(n²) 常驻开销的
+ *   负优化。改为与线性架构匹配的单遍规则：短期层段落年龄 ≥ shortTermDays
+ *   且重要度 ≥ 衰减保留线 → 打 long_term 标记（豁免衰减遗忘）
+ * - 【上下文长度】所有级别索引的事件块增加 indexMaxEvents 上限（超限按
+ *   重要度裁剪后再按时间排序；月级另受 indexMonthTopN 更紧约束）——
+ *   忙日不会撑爆摘要 prompt
+ * - 【跨度管理】多日未睡产生的日级空档不回填——由 3日/周/月 更粗粒度
+ *   层级自然覆盖（多级索引自愈），睡觉时只生成"刚结束这一天"+滚动3日
  */
 public final class AiMemoryArchiver {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
@@ -60,19 +62,49 @@ public final class AiMemoryArchiver {
     private AiMemoryArchiver() {
     }
 
-    // ========== 维护调度入口（对齐 MemoryArchiver.tick） ==========
+    // ========== 周期调度入口（仅重试，不生成） ==========
 
     /**
-     * 记忆维护调度入口（服务端线程调用；由 AiMemoryManager 周期调度与玩家睡醒触发）。
-     *
-     * - 首次调用对齐边界标记（不追溯历史跨度）
-     * - 跨日边界：生成昨日「日」索引 + 滚动「3日」索引
-     * - 跨周/跨月边界：生成上周/上月索引
-     * - forceDayIndex：玩家睡醒等收尾场景，强制生成当日「日」索引
-     * - 重试此前失败的索引边界
-     * - 执行短期→长期簇转移
+     * 周期调度入口（AiMemoryManager 每 scanInterval 秒调用）。
+     * v1.5.379 起只做失败索引的 pending 重试——索引生成收敛到真实睡眠收尾
+     * （sleepWrapUp），熬夜过夜不再触发归档。无 pending 时零 LLM、零遍历。
      */
-    public static void tick(EntityMaid maid, ServerLevel level, boolean forceDayIndex) {
+    public static void tick(EntityMaid maid, ServerLevel level) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
+            return;
+        }
+        AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
+        ArchiverState state = loadState(store);
+        if (state.pending().isEmpty()) {
+            return;
+        }
+        List<PendingIndex> rest = new ArrayList<>();
+        for (PendingIndex item : state.pending()) {
+            if (!generateIndex(maid, level, item.level(), item.startTick(), item.endTick())) {
+                rest.add(item);
+            }
+        }
+        if (!rest.equals(state.pending())) {
+            saveState(store, new ArchiverState(state.lastDay(), state.lastWeek(),
+                    state.lastMonth(), rest));
+        }
+    }
+
+    // ========== 睡眠收尾入口（唯一的生成触发点） ==========
+
+    /**
+     * 睡一觉自动处理（移植 Sphantosis 的 start_role_sleep → wrap-up →
+     * archiver.tick(force_day_index=True) 链路；由 SleepFinishedTimeEvent
+     * 调用——全员真实睡过夜、时间跳到清晨，排除熬夜/未入睡的假触发）。
+     *
+     * - 首次调用对齐边界标记（不追溯历史跨度，但仍执行转移）
+     * - 跨日：生成刚结束这一天的「日」索引 + 滚动「3日」索引
+     *   （多日未睡的中间空档不逐日回填——由 3日/周/月 粗粒度层级覆盖）
+     * - 跨周/跨月：生成上周/上月索引
+     * - 重试此前失败的索引边界
+     * - 执行短期→长期提升（年龄 + 重要度单遍规则）
+     */
+    public static void sleepWrapUp(EntityMaid maid, ServerLevel level) {
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
             return;
         }
@@ -85,13 +117,14 @@ public final class AiMemoryArchiver {
         ArchiverState state = loadState(store);
         if (state.lastDay() < 0) {
             // 首次：对齐边界，不批量回溯（对齐 Sphantosis 行为）
-            state = new ArchiverState(day, week, month, state.pending());
-            saveState(store, state);
+            saveState(store, new ArchiverState(day, week, month, state.pending()));
+            runTransfer(store, gameTime);
+            return;
         }
 
         List<PendingIndex> pending = new ArrayList<>(state.pending());
         if (day != state.lastDay()) {
-            // 昨日（完整一天）
+            // 刚结束的一天（完整一天）
             generateOrRetry(maid, level, AiMemoryIndexStore.LEVEL_DAY,
                     (day - 1) * DAY_TICKS, day * DAY_TICKS, pending);
             // 3日索引（滚动最近 3 个自然日，按日对齐保证幂等）
@@ -110,11 +143,6 @@ public final class AiMemoryArchiver {
             generateOrRetry(maid, level, AiMemoryIndexStore.LEVEL_MONTH,
                     (monthStartDay - 30) * DAY_TICKS, monthStartDay * DAY_TICKS, pending);
         }
-        if (forceDayIndex) {
-            // 当日（部分天，睡醒/收尾归档点）
-            generateOrRetry(maid, level, AiMemoryIndexStore.LEVEL_DAY,
-                    day * DAY_TICKS, gameTime, pending);
-        }
 
         // 重试此前失败的索引边界
         if (!pending.isEmpty()) {
@@ -132,7 +160,7 @@ public final class AiMemoryArchiver {
             saveState(store, next);
         }
 
-        // 短期→长期簇转移
+        // 短期→长期提升
         runTransfer(store, gameTime);
     }
 
@@ -189,13 +217,15 @@ public final class AiMemoryArchiver {
         String role = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
         String prompt = buildPrompt(role, lv, startTick, endTick, eventBlock);
         sendIndexRequest(maid, level, os, model, prompt, store, lv, startTick, endTick);
-        // 异步发出即视为本 tick 处理完（结果回调里落库；失败在回调里不推进，
-        // 下个跨日 tick 由 has() 判定仍缺失 → 重新进入 pending）
+        // 异步发出即视为本 tick 处理完（结果回调里落库；失败在回调里挂 pending）
         return true;
     }
 
-    /** 收集跨度内事件段落（跳表范围查询；排除摘要层/已删除/被否定），格式化为摘要输入。
-     *  月级仅保留按重要度排序的最重要事件（MEMORY_INDEX_MONTH_TOP_N）。 */
+    /**
+     * 收集跨度内事件段落（跳表范围查询；排除摘要层/已删除/被否定），格式化为摘要输入。
+     * 上下文长度管理：月级仅保留重要度 top indexMonthTopN；其余级别超 indexMaxEvents
+     * 时按重要度裁剪——忙日不会撑爆摘要 prompt。
+     */
     private static String collectEventBlock(AiMemoryStore store, long startTick, long endTick, String lv) {
         List<String> hashes = store.timeIndex().queryRange(startTick, endTick);
         List<AiMemoryModels.Paragraph> nodes = new ArrayList<>();
@@ -222,12 +252,15 @@ public final class AiMemoryArchiver {
         if (nodes.isEmpty()) {
             return "";
         }
+        int cap;
         if (AiMemoryIndexStore.LEVEL_MONTH.equals(lv)) {
+            cap = com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_MONTH_TOP_N.get();
+        } else {
+            cap = com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_MAX_EVENTS.get();
+        }
+        if (nodes.size() > cap) {
             nodes.sort((a, b) -> Integer.compare(b.salience(), a.salience()));
-            int topN = com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_MONTH_TOP_N.get();
-            if (nodes.size() > topN) {
-                nodes = new ArrayList<>(nodes.subList(0, topN));
-            }
+            nodes = new ArrayList<>(nodes.subList(0, cap));
         }
         nodes.sort((a, b) -> Long.compare(a.eventTimeStart(), b.eventTimeStart()));
 
@@ -249,7 +282,8 @@ public final class AiMemoryArchiver {
         return "你正在为角色「" + role + "」撰写记忆索引日记。\n\n"
                 + "索引级别：" + lv + "（可选：日 / 3日 / 周 / 月）\n"
                 + "时间跨度：第" + sd + "天 ~ 第" + ed + "天\n\n"
-                + "跨度内的关键事件节点（格式：[天|类型] 内容（重要性k=xx）【事件节点id：hash】，重要性越高越值得写进日记）：\n"
+                + "跨度内的关键事件节点（格式：[天|类型] 内容（重要性k=xx）【事件节点id：hash】，重要性越高越值得写进日记；"
+                + "若事件过多已被按重要性截取，日记侧重最重要的事件即可）：\n"
                 + eventBlock + "\n"
                 + "要求：\n"
                 + "1. 以日记形式组织摘要，使用「" + role + "」的第一人称视角。\n"
@@ -299,7 +333,7 @@ public final class AiMemoryArchiver {
                                         lv, id,
                                         err != null ? err.getClass().getSimpleName() : "null",
                                         resp == null ? "null" : resp.statusCode());
-                                addPending(store, lv, startTick, endTick); // 下个 tick 重试
+                                addPending(store, lv, startTick, endTick); // 下个周期重试
                                 return;
                             }
                             ChatCompletionResponse parsed = AiMemoryModels.GSON
@@ -310,8 +344,7 @@ public final class AiMemoryArchiver {
                                 addPending(store, lv, startTick, endTick);
                                 return;
                             }
-                            handleIndexResponse(store, content, lv, startTick, endTick,
-                                    level.m_46467_());
+                            handleIndexResponse(store, content, lv, startTick, endTick);
                         } catch (Exception e) {
                             LOGGER.info("AiMemoryArchiver: {}索引解析异常 {}", lv, id, e);
                         } finally {
@@ -325,7 +358,7 @@ public final class AiMemoryArchiver {
 
     /** 解析严格 JSON 响应并归档（容忍 ```json 围栏） */
     private static void handleIndexResponse(AiMemoryStore store, String content, String lv,
-                                            long startTick, long endTick, long gameTime) {
+                                            long startTick, long endTick) {
         String json = content.trim();
         if (json.startsWith("```")) {
             int s = json.indexOf('\n');
@@ -359,20 +392,23 @@ public final class AiMemoryArchiver {
                 lv, startTick / DAY_TICKS, endTick / DAY_TICKS, eventIds.size());
     }
 
-    // ========== 短期→长期簇转移（对齐 run_transfer） ==========
+    // ========== 短期→长期提升（线性架构适配版） ==========
 
     /**
-     * 将短期层（short_context）中满足条件的"关联簇"整体转移到长期层。
+     * 短期→长期提升（v1.5.379 重写）。
      *
-     * 条件：簇内所有段落的年龄（now - eventTimeEnd）均超过
-     * MEMORY_SHORT_TERM_DAYS 游戏日（存在任何节点少于该跨度则不转移）。
-     * 簇 = ngram-Jaccard ≥ 0.42 的连通分量（近似 Sphantosis 的图连通分量）。
-     * 转移 = 打 long_term 标记（豁免衰减遗忘，检索作为长期记忆加权）。
+     * promaid 段落是扁平线性列表（无图边、单一存储），Sphantosis 的
+     * "图连通分量整簇转移"没有对应物，也不再做内容相似度伪聚簇——
+     * 与线性架构匹配的单遍规则：
+     *   短期层（short_context）段落，年龄 ≥ shortTermDays 游戏日
+     *   且重要度 ≥ 衰减保留线（decaySalience，即"本可躲过遗忘"的记忆）
+     *   → 打 long_term 标记，豁免 prune 衰减遗忘（长期沉淀）。
+     * O(n) 单遍，只在睡眠收尾时执行。
      */
     public static int runTransfer(AiMemoryStore store, long gameTime) {
-        int thresholdDays = com.maidsmart.config.MaidSmartConfig.MEMORY_SHORT_TERM_DAYS.get();
-        long threshold = thresholdDays * DAY_TICKS;
-        List<AiMemoryModels.Paragraph> candidates = new ArrayList<>();
+        long threshold = (long) com.maidsmart.config.MaidSmartConfig.MEMORY_SHORT_TERM_DAYS.get() * DAY_TICKS;
+        int salienceFloor = com.maidsmart.config.MaidSmartConfig.MEMORY_DECAY_SALIENCE.get();
+        int moved = 0;
         for (AiMemoryModels.Paragraph p : store.paragraphs()) {
             if (AiMemoryStore.hasErrorTag(p)) {
                 continue;
@@ -380,65 +416,21 @@ public final class AiMemoryArchiver {
             if (!"short_context".equals(p.sourceType()) || p.tags().contains("long_term")) {
                 continue;
             }
-            candidates.add(p);
-        }
-        if (candidates.isEmpty()) {
-            return 0;
-        }
-        // 并查集聚类（jaccard ≥ 0.42 连边）
-        int n = candidates.size();
-        int[] parent = new int[n];
-        for (int i = 0; i < n; i++) {
-            parent[i] = i;
-        }
-        List<Set<String>> grams = new ArrayList<>(n);
-        for (AiMemoryModels.Paragraph p : candidates) {
-            grams.add(ngrams(p.content()));
-        }
-        for (int i = 0; i < n; i++) {
-            for (int j = i + 1; j < n; j++) {
-                if (jaccard(grams.get(i), grams.get(j)) >= 0.42) {
-                    parent[find(parent, i)] = find(parent, j);
-                }
+            if (p.salience() < salienceFloor) {
+                continue;
             }
-        }
-        // 分量分组
-        Map<Integer, List<Integer>> comps = new HashMap<>();
-        for (int i = 0; i < n; i++) {
-            comps.computeIfAbsent(find(parent, i), k -> new ArrayList<>()).add(i);
-        }
-        int moved = 0;
-        for (List<Integer> comp : comps.values()) {
-            boolean allOld = true;
-            for (int idx : comp) {
-                AiMemoryModels.Paragraph p = candidates.get(idx);
-                if (gameTime - p.eventTimeEnd() < threshold) {
-                    allOld = false;
-                    break;
-                }
+            if (gameTime - p.eventTimeEnd() < threshold) {
+                continue;
             }
-            if (!allOld) {
-                continue; // 簇内有新事件——不拆散，等下次
+            if (store.markLongTermByHash(p.hash())) {
+                moved++;
             }
-            for (int idx : comp) {
-                store.markLongTermByHash(candidates.get(idx).hash());
-            }
-            moved++;
         }
         if (moved > 0) {
             store.saveNow();
-            LOGGER.info("AiMemoryArchiver: 转移 {} 个关联簇（{} 段落）到长期记忆",
-                    moved, comps.values().size());
+            LOGGER.info("AiMemoryArchiver: {} 条短期记忆沉淀为长期（long_term）", moved);
         }
         return moved;
-    }
-
-    private static int find(int[] parent, int i) {
-        while (parent[i] != i) {
-            parent[i] = parent[parent[i]];
-            i = parent[i];
-        }
-        return i;
     }
 
     // ---------- 状态持久化（<store>/archiver_state.json） ----------
@@ -486,27 +478,5 @@ public final class AiMemoryArchiver {
 
     private static String pick(String tlmValue, String custom) {
         return custom != null && !custom.isBlank() ? custom.trim() : tlmValue;
-    }
-
-    // ---------- 局部 ngram 工具（AiMemoryStore 内同名实现为 private，此处对齐逻辑） ----------
-
-    private static double jaccard(Set<String> a, Set<String> b) {
-        if (a.isEmpty() || b.isEmpty()) {
-            return 0.0;
-        }
-        Set<String> inter = new HashSet<>(a);
-        inter.retainAll(b);
-        Set<String> union = new HashSet<>(a);
-        union.addAll(b);
-        return (double) inter.size() / union.size();
-    }
-
-    private static Set<String> ngrams(String s) {
-        Set<String> out = new HashSet<>();
-        String norm = AiMemoryModels.normalize(s).replaceAll("[\\p{Punct}。，、！？；：]", "");
-        for (int i = 0; i + 1 < norm.length(); i++) {
-            out.add(norm.substring(i, i + 2));
-        }
-        return out;
     }
 }

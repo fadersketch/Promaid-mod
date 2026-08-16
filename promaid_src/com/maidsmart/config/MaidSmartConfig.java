@@ -117,6 +117,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue MEMORY_INDEX_ON_SLEEP;
     /** 月级索引按重要度保留的最大事件数 */
     public static final ForgeConfigSpec.IntValue MEMORY_INDEX_MONTH_TOP_N;
+    /** 单次索引喂给 LLM 的事件数上限（超出按重要度裁剪——上下文长度管理） */
+    public static final ForgeConfigSpec.IntValue MEMORY_INDEX_MAX_EVENTS;
     /** 短期→长期转移阈值（游戏日）：关联簇内全部段落超过该年龄才整簇转移 */
     public static final ForgeConfigSpec.IntValue MEMORY_SHORT_TERM_DAYS;
     // v1.1.0：记忆升级（借鉴 maidsoulcore）——情绪快照 / 人格种子 / 每日关心点 / 双 agent 提取
@@ -532,6 +534,9 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         MEMORY_INDEX_MONTH_TOP_N = BUILDER.comment("月级索引保留事件数（按重要度排序保留的最多事件数）")
                 .translation("config.promaid.memory.indexMonthTopN")
                 .defineInRange("indexMonthTopN", 20, 5, 100);
+        MEMORY_INDEX_MAX_EVENTS = BUILDER.comment("单次索引事件上限（跨度内事件过多时按重要度裁剪再生成日记——控制摘要上下文长度）")
+                .translation("config.promaid.memory.indexMaxEvents")
+                .defineInRange("indexMaxEvents", 40, 10, 200);
         MEMORY_SHORT_TERM_DAYS = BUILDER.comment("短期→长期转移阈值（游戏日，关联簇全部段落超过该年龄才整簇转移）")
                 .translation("config.promaid.memory.shortTermDays")
                 .defineInRange("shortTermDays", 3, 1, 30);
