@@ -308,8 +308,9 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
                 return "蓝图无效：块数 " + steps.size() + " 超过上限 " + maxBlocks + "（可在配置面板 build.designMaxBlocks 调大）";
             }
             for (String step : steps) {
-                String[] parts = step.split(",");
-                if (parts.length != 4) {
+                // v1.5.311：走 parseStep——state SNBT 含逗号，旧版 split(",") 误报格式错误
+                String[] parts = BlueprintLib.parseStep(step);
+                if (parts == null || parts.length < 4) {
                     return "蓝图无效：步骤格式错误";
                 }
                 try {

@@ -59,6 +59,14 @@ public final class BlueprintBuildExecutor {
         }
         String name = BlueprintLib.getBlueprintName(blueprintId);
         List<String> centered = BlueprintLib.centerSteps(steps);
+        // v1.5.316：红石机器改革——机器走专属搭建顺序（红石拓扑分层：结构→机构→
+        // 活动件→传感→动力源→TNT，动力源最后落位），取代常规"结构→功能→装饰红石"
+        // 排序；配合活放置（flag 3）机器建好即自然运行，不再需要静默+完工唤醒的禁锢。
+        // 开关 BUILD_MACHINE_SMART 可一键回退旧行为。
+        String machineFam = BlueprintLib.machineFamily(blueprintId);
+        if (machineFam != null && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get()) {
+            centered = BlueprintLib.sortMachinePlan(centered, machineFam);
+        }
         int[] sz = BlueprintLib.blueprintSize(centered);
         // v1.5.180：续建识别——同蓝图同原点 = 续建（保留进度继续建，不重叠检查）
         boolean resuming = false;
@@ -107,10 +115,11 @@ public final class BlueprintBuildExecutor {
             }
             if (!anyMaterial) {
                 return new Outcome(TYPE_SHORTFALL, "背包里没有任何建造材料，无法创建。缺少："
-                        + formatShortfall(shortfall) + "。");
+                        + formatShortfall(shortfall) + "。" + fluidNote(pending));
             }
         } else if (shortfall != null) {
-            return new Outcome(TYPE_SHORTFALL, "材料不足，缺少：" + formatShortfall(shortfall) + "。");
+            return new Outcome(TYPE_SHORTFALL, "材料不足，缺少：" + formatShortfall(shortfall) + "。"
+                    + fluidNote(pending));
         }
         // v1.5.180：创建/续建区块计划（续建 = 解除暂停继续）
         if (resuming) {
@@ -153,6 +162,12 @@ public final class BlueprintBuildExecutor {
         }
         sb.append(needs.size() > 5 ? "…" : "").append("（共").append(total).append("块）。");
         sb.append("材料放进主人背包，女仆会自己拿～");
+        // v1.5.318：液体工具/材料需求（水桶/岩浆桶）单独提示——水/岩浆不在普通
+        // 材料统计（FORBIDDEN 排除），但玩家需要知道要备桶
+        String fluid = BlueprintLib.fluidNeedText(buildable);
+        if (!fluid.isEmpty()) {
+            sb.append(" ").append(fluid).append("。");
+        }
         return sb.toString();
     }
 
@@ -162,6 +177,12 @@ public final class BlueprintBuildExecutor {
             parts.add(BlueprintLib.cnName(entry.getKey()) + " x" + entry.getValue());
         }
         return String.join("、", parts);
+    }
+
+    /** v1.5.318：缺料消息附加液体需求提示（水桶/岩浆桶）；无液体需求返回空串 */
+    private static String fluidNote(List<String> steps) {
+        String fluid = BlueprintLib.fluidNeedText(steps);
+        return fluid.isEmpty() ? "" : " " + fluid + "。";
     }
 
     /** v1.5.24：组合材料预检（v1.5.179：主人背包 + 该维度所有绑定女仆背包总量），

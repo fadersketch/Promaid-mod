@@ -112,6 +112,11 @@ public class PromaidConfigScreen extends Screen {
     private EditBox activeBox = null;
     /** v1.5.111：当前编辑的名单——0=目标矿物，1=障碍物（共用创造面板交互） */
     private int mineTableMode = 0;
+    /** v1.5.254：替代品名单子页（建造板块）——0=半格高 1=一格高 2=两格高（共用创造面板交互） */
+    private boolean altTable = false;
+    private int altTableMode = 0;
+    private EditBox altInput;
+    private AltList altList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -164,8 +169,8 @@ public class PromaidConfigScreen extends Screen {
 
     private enum Section {
         BUILD("建造"), MINE("挖矿"), MEMORY("AI 记忆"), DIALOGUE("对话提示"),
-        COMBAT("战斗自保"), MISC("杂项"), PERCEPTION("感知"), AFFECT("情绪"), AITOOLS("AI 工具"),
-        VOICE("语音");
+        COMBAT("战斗自保"), PASSIVE("被动技能"), MISC("杂项"), PERCEPTION("感知"), AFFECT("情绪"), AITOOLS("AI 工具"),
+        VOICE("语音"), LOVELOATHE("爱憎分明模组调试"), HEARTFELT("heartfelt 联动");
         final String title;
 
         Section(String title) {
@@ -174,12 +179,16 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /** 行定义（延迟实例化——分页时只创建当前页的行控件） */
-    private sealed interface RowDef permits SectionRow, NumRow, BoolRow, BtnRow, CycleRow, TextRow {
+    private sealed interface RowDef permits SectionRow, NumRow, BoolRow, BtnRow, CycleRow, TextRow, InfoRow {
     }
 
     /** v1.5.127：字符串输入行（英文 id 列表等，无数字校验；保存时统一写入） */
     private record TextRow(String label, String value, Function<String, Boolean> onChange,
                            String comment) implements RowDef {
+    }
+
+    /** v1.5.310：只读信息行（调试状态显示，无输入控件——仅渲染阶段画文本） */
+    private record InfoRow(String label, String value, String comment) implements RowDef {
     }
 
     /** 板块小节标题（sub=true 用"—— 标题 ——"样式） */
@@ -232,6 +241,10 @@ public class PromaidConfigScreen extends Screen {
             this.mineTableButtons(w, h, cx);
             return;
         }
+        if (this.altTable) {
+            this.altTableButtons(w, h, cx);
+            return;
+        }
         this.sectionButtons(w, h, cx);
     }
 
@@ -249,12 +262,19 @@ public class PromaidConfigScreen extends Screen {
     private void homeButtons(int w, int h, int cx) {
         int bw = Math.min(170, (w - 56) / 2);
         // v1.5.190：行高按可用高度自适应（默认 26 间距，矮窗口压缩）
+        // v1.5.310：装了爱憎分明时左列多一个「爱憎分明模组调试」按钮（6 个），
+        // 行高统一压到 20——6 按钮底 = y0+5*20+17 ≤ h-34 恒成立，不压保存按钮
+        boolean ll = loveloatheLoaded();
+        boolean hf = heartfeltLoaded();
         int rowH = 26;
-        if (h < 216) {
+        if (h < 216 || ll || hf) {
             rowH = 21;
         }
         if (h < 190) {
             rowH = 19;
+        }
+        if (ll || hf) {
+            rowH = Math.min(rowH, 20);
         }
         int bh = 22;
         if (rowH < 22) {
@@ -264,8 +284,19 @@ public class PromaidConfigScreen extends Screen {
         int x1 = (w - bw * 2 - 16) / 2;
         int x2 = x1 + bw + 16;
         int y0 = Math.min(56, Math.max(34, h / 2 - rowH * 3));
-        Section[] left = {Section.BUILD, Section.MINE, Section.MEMORY, Section.DIALOGUE, Section.VOICE};
-        Section[] right = {Section.COMBAT, Section.MISC, Section.PERCEPTION, Section.AFFECT, Section.AITOOLS};
+        java.util.List<Section> leftList = new java.util.ArrayList<>(java.util.List.of(
+                Section.BUILD, Section.MINE, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
+        if (ll) {
+            leftList.add(Section.LOVELOATHE);
+        }
+        if (hf) {
+            leftList.add(Section.HEARTFELT);
+        }
+        Section[] left = leftList.toArray(new Section[0]);
+        // v1.5.294：被动技能独立成栏（用户："被动技能要单拉出来一栏放在 Promaid 模组
+        // 详细配置里面，而不是放在战斗自保里面"）——右列 COMBAT 正下方；右列 6 按钮
+        // 不压左下"保存并返回"（右列 x 范围与左下保存按钮无水平重叠）
+        Section[] right = {Section.COMBAT, Section.PASSIVE, Section.MISC, Section.PERCEPTION, Section.AFFECT, Section.AITOOLS};
         for (int i = 0; i < left.length; i++) {
             this.addSectionButton(x1, y0 + i * rowH, bw, bh, left[i]);
         }
@@ -282,6 +313,7 @@ public class PromaidConfigScreen extends Screen {
                             this.section = s;
                             this.pageIndex = 0;
                             this.mineTable = false;
+                            this.altTable = false; // v1.5.254：子页互斥复位
                             this.inHome = false;
                             this.m_7856_();
                         })
@@ -303,11 +335,14 @@ public class PromaidConfigScreen extends Screen {
             case MEMORY -> this.memoryRows();
             case DIALOGUE -> this.dialogueRows();
             case COMBAT -> this.combatRows();
+            case PASSIVE -> this.passiveRows();
             case MISC -> this.miscRows();
             case PERCEPTION -> this.perceptionRows();
             case AFFECT -> this.affectRows();
             case AITOOLS -> this.aiToolsRows();
             case VOICE -> this.voiceRows();
+            case LOVELOATHE -> this.loveloathRows();
+        case HEARTFELT -> this.heartfeltRows();
         }
         int perPage = Math.max(1, (contentBottom - CONTENT_TOP) / ROW_H);
         int totalPages = Math.max(1, (this.rows.size() + perPage - 1) / perPage);
@@ -513,6 +548,313 @@ public class PromaidConfigScreen extends Screen {
         this.bottomButtons(w, h, cx);
     }
 
+    /** v1.5.254：替代品名单子页（建造板块）——三张按高度分类的名单（半格/一格/两格），
+     *  交互与矿表子页同款（名单切换 + 创造面板搜索/网格点击 toggle + 输入添加 + 列表）。 */
+    private void altTableButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int tgY = 24;
+        // v1.5.275：五个分类（半格/一格/竖两格/横两格/无碰撞）
+        String[] modeNames = {"半格高", "一格高", "竖两格", "横两格", "无碰撞"};
+        for (int i = 0; i < modeNames.length; i++) {
+            final int mi = i;
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_((this.altTableMode == mi ? "\u00a7e\u25cf " : "\u00a77") + modeNames[i]),
+                            b -> {
+                                this.altTableMode = mi;
+                                this.m_7856_();
+                            })
+                    .m_252987_(left + i * 100, tgY, 96, 18).m_253136_());
+        }
+        // 搜索框（创造物品面板过滤，与矿表共用）
+        this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
+                Component.m_237113_("创造物品栏搜索"));
+        this.creativeInput.m_94199_(64);
+        this.creativeInput.m_94144_(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.m_94151_(s -> {
+            this.creativeQuery = s;
+            this.rebuildCreative();
+        });
+        this.m_142416_(this.creativeInput);
+        int gridTop = GRID_TOP;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildCreative();
+        int py = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+                            b -> {
+                                this.creativePage--;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx - 90, py, 80, 16).m_253136_());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+                            b -> {
+                                this.creativePage++;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx + 10, py, 80, 16).m_253136_());
+        }
+        // 输入添加（完整注册名，无 namespace 自动补 minecraft:）
+        int inputY = gridBottom + 24;
+        this.altInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116, 18,
+                Component.m_237113_("添加"));
+        this.altInput.m_94199_(64);
+        this.altInput.m_257771_(Component.m_237113_("minecraft:oak_slab"));
+        this.m_142416_(this.altInput);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("添加"), b -> this.addAlt())
+                .m_252987_(left + panelWidth - 96, inputY, 80, 18).m_253136_());
+        int listTop = inputY + 24;
+        int listH = Math.max(24, Math.min((h - 78) - listTop - 4, h - listTop - 36));
+        this.altList = new AltList(this.f_96547_, panelLeft + 10, listTop, panelWidth - 20, listH);
+        this.altList.m_93507_(panelLeft + 10);
+        this.m_142416_(this.altList);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("← 返回参数"),
+                        b -> {
+                            this.altTable = false;
+                            this.m_7856_();
+                        })
+                .m_252987_(12, h - 34, 100, 20).m_253136_());
+        // v1.5.275：跳转女仆管理（发请求包 → 服务端重新下发手册（女仆管理页））
+        this.m_142416_(Button.m_253074_(Component.m_237113_("📋 女仆管理"),
+                        b -> {
+                            com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
+                                    new com.maidsmart.build.BlueprintBookNetworking.OpenBookRequestPacket(2));
+                            this.m_7379_(); // 关配置面板（手册包到达后自动打开）
+                        })
+                .m_252987_(w - 148, h - 34, 132, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 当前替代品名单（按 altTableMode）
+     *  v1.5.275：0 半格 / 1 一格 / 2 竖两格 / 3 横两格 / 4 无碰撞 */
+    private List<String> altListFor(int mode) {
+        return switch (mode) {
+            case 0 -> new ArrayList<>(MaidSmartConfig.BUILD_ALT_SLABS.get());
+            case 1 -> new ArrayList<>(MaidSmartConfig.BUILD_ALT_BLOCKS.get());
+            case 2 -> new ArrayList<>(MaidSmartConfig.BUILD_ALT_TALLS.get());
+            case 3 -> new ArrayList<>(MaidSmartConfig.BUILD_ALT_WIDES.get());
+            default -> new ArrayList<>(MaidSmartConfig.BUILD_ALT_NOCLIPS.get());
+        };
+    }
+
+    /** 写回当前替代品名单 */
+    private void altListSet(int mode, List<String> list) {
+        switch (mode) {
+            case 0 -> MaidSmartConfig.BUILD_ALT_SLABS.set(list);
+            case 1 -> MaidSmartConfig.BUILD_ALT_BLOCKS.set(list);
+            case 2 -> MaidSmartConfig.BUILD_ALT_TALLS.set(list);
+            case 3 -> MaidSmartConfig.BUILD_ALT_WIDES.set(list);
+            default -> MaidSmartConfig.BUILD_ALT_NOCLIPS.set(list);
+        }
+    }
+
+    /** 规范化替代品 id（无 namespace 补 minecraft:）；无效（无对应方块）返回 null */
+    private String normAltId(String text) {
+        String t = text.trim();
+        if (t.isEmpty()) {
+            return null;
+        }
+        if (!t.contains(":")) {
+            t = "minecraft:" + t;
+        }
+        net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                .getValue(net.minecraft.resources.ResourceLocation.parse(t));
+        if (it == null) {
+            return null;
+        }
+        net.minecraft.resources.ResourceLocation iid = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(it);
+        net.minecraft.world.level.block.Block blk = iid != null
+                ? net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(iid) : null;
+        if (blk == null || blk == net.minecraft.world.level.block.Blocks.f_50016_) {
+            return null; // 物品无对应方块（剑/工具等）→ 拒绝
+        }
+        return iid.toString();
+    }
+
+    /** 该方块的高度类别是否与当前替代表匹配（v1.5.261：1 格只能用 1 格替换，
+     *  半格/两格同理——防止半格位置被一格方块顶坏建筑）
+     *  v1.5.275：两格再分竖/横（门/高植物 ↔ 床），无碰撞方块单独区 */
+    private static boolean altTypeMatches(int mode, net.minecraft.world.level.block.Block blk) {
+        return switch (mode) {
+            case 0 -> com.maidsmart.build.BlueprintLib.isSlabHeight(blk);        // 半格表
+            case 1 -> !com.maidsmart.build.BlueprintLib.isSlabHeight(blk)
+                    && !com.maidsmart.build.BlueprintLib.isTallHeight(blk)
+                    && !com.maidsmart.build.BlueprintLib.isNoClip(blk);           // 一格表（完整方块）
+            case 2 -> com.maidsmart.build.BlueprintLib.isTallVertical(blk);      // 竖两格表
+            case 3 -> com.maidsmart.build.BlueprintLib.isWideHeight(blk);        // 横两格表（床）
+            default -> com.maidsmart.build.BlueprintLib.isNoClip(blk);           // 无碰撞表
+        };
+    }
+
+    /** 类别不匹配的提示（客户端消息，玩家可见） */
+    private void warnAltType() {
+        String msg = switch (this.altTableMode) {
+            case 0 -> "\u00a7c半格表只能添加半格方块（台阶类）——1 格方块请加到一格表";
+            case 1 -> "\u00a7c一格表只能添加整方块（半格/两格高/无碰撞请加到对应表）";
+            case 2 -> "\u00a7c竖两格表只能添加两格高方块（门/高植物/甘蔗/竹子）";
+            case 3 -> "\u00a7c横两格表只能添加横向两格方块（床）";
+            default -> "\u00a7c无碰撞表只能添加无碰撞箱方块（花/火把/地毯等）";
+        };
+        if (this.f_96541_.f_91074_ != null) {
+            this.f_96541_.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(msg));
+        }
+    }
+
+    /** 输入框添加替代品（校验有效方块 + 高度类别匹配） */
+    private void addAlt() {
+        if (this.altInput == null) {
+            return;
+        }
+        String id = normAltId(this.altInput.m_94155_());
+        if (id == null) {
+            return;
+        }
+        net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+        // v1.5.261：类别严格匹配——不匹配拒绝添加并提示
+        if (blk == null || !altTypeMatches(this.altTableMode, blk)) {
+            this.warnAltType();
+            return;
+        }
+        List<String> cur = altListFor(this.altTableMode);
+        if (!cur.contains(id)) {
+            cur.add(id);
+            altListSet(this.altTableMode, cur);
+        }
+        this.altInput.m_94144_("");
+        if (this.altList != null) {
+            this.altList.rebuild();
+        }
+    }
+
+    /** 列表删除替代品 */
+    private void removeAlt(String id) {
+        List<String> cur = altListFor(this.altTableMode);
+        cur.remove(id);
+        altListSet(this.altTableMode, cur);
+        if (this.altList != null) {
+            this.altList.rebuild();
+        }
+    }
+
+    /** 该方块是否已在当前替代品名单 */
+    private boolean isInAlt(String id) {
+        return altListFor(this.altTableMode).contains(id);
+    }
+
+    /** 点击方块图标 → 加入/取消当前替代品名单（toggle；v1.5.261：类别匹配校验） */
+    private void toggleAltCreative(String id) {
+        String norm = normAltId(id);
+        if (norm == null) {
+            return;
+        }
+        List<String> cur = altListFor(this.altTableMode);
+        if (cur.contains(norm)) {
+            cur.remove(norm);
+        } else {
+            net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                    .getValue(net.minecraft.resources.ResourceLocation.parse(norm));
+            // v1.5.261：类别严格匹配——不匹配拒绝加入并提示
+            if (blk == null || !altTypeMatches(this.altTableMode, blk)) {
+                this.warnAltType();
+                return;
+            }
+            cur.add(norm);
+        }
+        altListSet(this.altTableMode, cur);
+        if (this.altList != null) {
+            this.altList.rebuild();
+        }
+    }
+
+    private class AltList extends ObjectSelectionList<AltList.AltEntry> {
+        private final List<String> entries = new ArrayList<>();
+
+        AltList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.m_91087_(), width, height, top, top + height, 22);
+            this.m_93507_(x);
+            this.m_93488_(false);
+            this.m_93496_(false);
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.m_93516_();
+            this.entries.clear();
+            this.entries.addAll(altListFor(PromaidConfigScreen.this.altTableMode));
+            for (String e : this.entries) {
+                this.m_7085_(new AltEntry(e));
+            }
+        }
+
+        @Override
+        public int m_5759_() {
+            return Math.max(this.f_93390_, 120); // rowWidth 最小宽度
+        }
+
+        private class AltEntry extends ObjectSelectionList.Entry<AltList.AltEntry> {
+            private final String id;
+
+            AltEntry(String id) {
+                this.id = id;
+            }
+
+            @Override
+            public void m_6311_(GuiGraphics g, int index, int top, int left, int width, int height,
+                                int mouseX, int mouseY, boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                if (it != null) {
+                    g.m_280480_(new net.minecraft.world.item.ItemStack(it), x, y - 2);
+                    x += 20;
+                }
+                // v1.5.279：多维标记前缀【材质族·功能】（如「木·结构」「石·装饰」）——
+                // 用户："自定义方块的种类需要根据多方面维度进行新的划分，仅仅一格高、
+                // 半格高不够"；形态/碰撞由所在分类标签体现，这里补族与功能两维
+                String tag = "";
+                try {
+                    net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                    if (blk != null && blk != net.minecraft.world.level.block.Blocks.f_50016_) {
+                        tag = "\u00a77[" + com.maidsmart.build.BlueprintLib.materialFamily(blk)
+                                + "\u00b7" + com.maidsmart.build.BlueprintLib.blockFunction(blk) + "] \u00a7f";
+                    }
+                } catch (Exception ignored) {
+                }
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_(tag + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                        x, y, LABEL_COLOR, false);
+                // 删除按钮文本（右侧）
+                int delX = left + AltList.this.m_5759_() - 52;
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_("\u00a7c[删除]"), delX, y, 0xFFFF5555, false);
+            }
+
+            @Override
+            public boolean m_6375_(double mouseX, double mouseY, int button) {
+                int left = AltList.this.f_93389_ + 4; // leftPos
+                int delX = left + AltList.this.m_5759_() - 52;
+                if (mouseX >= delX && mouseX <= delX + 52 && button == 0) {
+                    PromaidConfigScreen.this.removeAlt(this.id);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component m_142172_() {
+                return Component.m_237113_(this.id);
+            }
+        }
+    }
+
     /** 网格行数（按可用高度自适应） */
     private int gridRows = 4;
 
@@ -522,7 +864,9 @@ public class PromaidConfigScreen extends Screen {
         return Math.max(1, (this.creativeItems.size() + per - 1) / per);
     }
 
-    /** 按搜索词刷新创造物品列表（不重建 widget——搜索框焦点保持；v1.5.123 走缓存过滤） */
+    /** 按搜索词刷新创造物品列表（不重建 widget——搜索框焦点保持；v1.5.123 走缓存过滤）
+     *  v1.5.262：替代品面板按当前表类别过滤显示——半格表只显示台阶类、一格表只显示
+     *  整方块、两格表只显示两格高（类别不匹配的方块根本不出现，无需点击再拒绝） */
     private void rebuildCreative() {
         this.creativeItems.clear();
         ensureCreativeCache();
@@ -533,6 +877,15 @@ public class PromaidConfigScreen extends Screen {
             if (!q.isEmpty()) {
                 boolean hit = id.contains(q) || (cn != null && cn.contains(q));
                 if (!hit) {
+                    continue;
+                }
+            }
+            // v1.5.262：替代品面板类别过滤（矿表面板不过滤，保持全物品）
+            if (this.altTable) {
+                net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                if (blk == null || blk == net.minecraft.world.level.block.Blocks.f_50016_
+                        || !altTypeMatches(this.altTableMode, blk)) {
                     continue;
                 }
             }
@@ -564,6 +917,20 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.BUILD_SPEED_TIER.set(v), "建造速度档位：x1 / x1.5 / x3（点击循环切换）"));
         this.rows.add(new BoolRow("极速模式", MaidSmartConfig.BUILD_TURBO.get(),
                 v -> MaidSmartConfig.BUILD_TURBO.set(v), "极速模式（吃满服务器上限，性能风险）"));
+        // v1.5.254：缺料自动替代（开关 + 三张自定义替代品名单，同挖矿矿物/障碍物面板）
+        this.rows.add(new BoolRow("缺料自动替代", MaidSmartConfig.BUILD_ALT_ENABLED.get(),
+                v -> MaidSmartConfig.BUILD_ALT_ENABLED.set(v),
+                "缺料自动替代：目标方块没有时，先找同族（木板/原木/石砖/台阶/楼梯等等价族），再按高度分类用自定义替代表（半格/一格/两格）"));
+        int altSlab = MaidSmartConfig.BUILD_ALT_SLABS.get().size();
+        int altBlock = MaidSmartConfig.BUILD_ALT_BLOCKS.get().size();
+        int altTall = MaidSmartConfig.BUILD_ALT_TALLS.get().size();
+        this.rows.add(new BtnRow("替代品名单", "管理 →（半格 " + altSlab + " · 一格 " + altBlock + " · 两格 " + altTall + "）",
+                () -> {
+                    this.altTable = true;
+                    this.altTableMode = 0;
+                    this.m_7856_();
+                },
+                "管理三张替代品表（点击方块图标加入，再点取消）：半格高=台阶类、一格高=整方块、两格高=门/双植物等——缺料时按序使用"));
         this.rows.add(new NumRow("全局放置配额", String.valueOf(MaidSmartConfig.BUILD_GLOBAL_QUOTA.get()),
                 s -> setInt(MaidSmartConfig.BUILD_GLOBAL_QUOTA, s), "全局放置配额（每秒方块数上限，性能敏感）"));
         this.rows.add(new NumRow("强制加载区块上限", String.valueOf(MaidSmartConfig.BUILD_MAX_FORCE_CHUNKS.get()),
@@ -582,6 +949,12 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.BUILD_MAX_MAIDS, s), "女仆管理上限：128 格内参与建造的女仆超过此数时手册列表截断（只影响显示，不影响实际建造）"));
         this.rows.add(new BoolRow("建造地点=玩家脚下", MaidSmartConfig.BUILD_ORIGIN_PLAYER.get(),
                 v -> MaidSmartConfig.BUILD_ORIGIN_PLAYER.set(v), "建造地点基准：true=玩家脚下（默认），false=女仆脚下"));
+        // v1.5.316：红石机器改革开关（专属顺序+活建造+自动放矿车）
+        this.rows.add(new BoolRow("红石机器专属搭建", MaidSmartConfig.BUILD_MACHINE_SMART.get(),
+                v -> MaidSmartConfig.BUILD_MACHINE_SMART.set(v), "红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→机构→活动件→传感→动力源→TNT）+ 活建造，建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默+完工唤醒）"));
+        // v1.5.331：TNT 点火保护期——防"刚建好炸膛"（天机屠龙炮等观察者→活塞推 TNT 机器）
+        this.rows.add(new NumRow("TNT 点火保护期（秒）", String.valueOf(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE.get()),
+                s -> setInt(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE, s), "TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护"));
         this.rows.add(new SectionRow("建造引擎细节", true));
         this.rows.add(new NumRow("防窒息传送冷却（秒）", String.valueOf(MaidSmartConfig.BUILD_REGION_TELEPORT_CD.get()),
                 s -> setInt(MaidSmartConfig.BUILD_REGION_TELEPORT_CD, s), "防窒息传送冷却（秒）：女仆/玩家被施工区方块埋住后传送到区外的最短间隔，防反复拽"));
@@ -690,6 +1063,20 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.PROACTIVE_MEMORY_TOPIC.set(v), "沉默找话题时从长期记忆里挑一条值得聊的内容（偏好/关系/最近的事），主动会话更有'记得你'的感觉"));
         this.rows.add(new BoolRow("防抖写盘", MaidSmartConfig.MEMORY_LAZY_SAVE.get(),
                 v -> MaidSmartConfig.MEMORY_LAZY_SAVE.set(v), "记忆防抖写盘（内存累积后按扫描间隔批量落盘——减少磁盘 IO，多女仆时防止服务端卡顿；关闭=每次写入立即落盘，可靠性优先）"));
+        // v1.1.0：记忆升级（情绪快照 / 人格种子 / 每日关心点 / 双 agent 提取）
+        this.rows.add(new SectionRow("人格与情绪", true));
+        this.rows.add(new BoolRow("情绪快照入记忆", MaidSmartConfig.MEMORY_AFFECT_SNAPSHOT.get(),
+                v -> MaidSmartConfig.MEMORY_AFFECT_SNAPSHOT.set(v), "每条记忆写入时附带当时的情绪状态（PAD：愉悦/唤醒/支配/亲密/冲突/思念/受伤债/修复债）——旧记忆不受影响，仅新写入生效"));
+        this.rows.add(new BoolRow("人格种子注入", MaidSmartConfig.MEMORY_PERSONA.get(),
+                v -> MaidSmartConfig.MEMORY_PERSONA.set(v), "从女仆记忆目录的 persona.properties/traits.properties/core_memories.jsonl 只读投影人格——人设与聊天记忆分离，聊天不改写人格；首次自动生成默认模板（可手改）"));
+        this.rows.add(new BoolRow("人设统一", MaidSmartConfig.MEMORY_PERSONA_UNIFY.get(),
+                v -> MaidSmartConfig.MEMORY_PERSONA_UNIFY.set(v), "TLM 原版已有人设时，人格种子块降级为补充（只补 TLM 没有的人格参数/核心记忆，不再重复身份，冲突以 TLM 设定为准）；关=双人设并存旧行为"));
+        this.rows.add(new BoolRow("每日关心点", MaidSmartConfig.MEMORY_CARE_POINTS.get(),
+                v -> MaidSmartConfig.MEMORY_CARE_POINTS.set(v), "每日回顾附加'下次该怎么对主人'的行动建议（从情绪残留/边界/偏好/风格推导）——主动会话会自动复用当话题"));
+        this.rows.add(new BoolRow("双 agent 提取", MaidSmartConfig.MEMORY_DUAL_AGENT.get(),
+                v -> MaidSmartConfig.MEMORY_DUAL_AGENT.set(v), "摘要与事实/事件分两次独立 LLM 调用（更聚焦、互不阻塞；关=单次合并提取省 token）"));
+        this.rows.add(new BoolRow("纪念日联动", MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.get(),
+                v -> MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.set(v), "heartfelt 纪念日里程碑（7/30/100/365 天）达成/临近 → 写关系记忆 + 情绪脉冲（纪念日正向情绪、临近期待感）；heartfelt 没触发说话时 promaid 补位主动提起（不依赖，未装 heartfelt 则静默）"));
         this.rows.add(new SectionRow("调度与检索", true));
         this.rows.add(new NumRow("扫描间隔（秒）", String.valueOf(MaidSmartConfig.MEMORY_SCAN_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MEMORY_SCAN_INTERVAL, s), "扫描间隔（秒）：记忆调度器多久检查一次待提取对话/待衰减条目，调小记忆更新更及时"));
@@ -778,6 +1165,9 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.TOOL_PERCEPTION.set(v), "perception_query 工具（look_around/terrain/build_site/inspect/scanblock/scanentity——LLM 建造前先探查环境与地形，减少超时重试）"));
         this.rows.add(new BoolRow("work_list（任务清单/缺料查询）", MaidSmartConfig.TOOL_WORK_LIST.get(),
                 v -> MaidSmartConfig.TOOL_WORK_LIST.set(v), "work_list 工具（query_todo/build_need——当前任务清单与建造材料缺口查询，杜绝重复轮次与\"先生成清单再开工\"的超时）"));
+        // v1.5.287：查看主人物品栏工具（只读查询主人背包内容）
+        this.rows.add(new BoolRow("smart_owner_inventory（查看主人背包）", MaidSmartConfig.TOOL_OWNER_INVENTORY.get(),
+                v -> MaidSmartConfig.TOOL_OWNER_INVENTORY.set(v), "smart_owner_inventory 工具（只读查询主人背包里有什么——LLM 需要确认主人持有某材料/装备时调用，不修改任何物品）"));
         // v1.5.250：每日主动对话次数上限（复用 dialogue.proactiveDaily——主动对话
         // 区已有同配置，这里按用户要求放到 AI 工具设置，两处改同一个值）
         this.rows.add(new NumRow("每日主动对话上限（次/女仆）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY.get()),
@@ -785,13 +1175,25 @@ public class PromaidConfigScreen extends Screen {
     }
 
     private void dialogueRows() {
-        this.rows.add(new SectionRow("工作播报", false));
-        this.rows.add(new BoolRow("工作状态播报", MaidSmartConfig.DIALOGUE_STATUS_REPORTER.get(),
-                v -> MaidSmartConfig.DIALOGUE_STATUS_REPORTER.set(v), "工作状态播报（女仆卡住时气泡解释原因）"));
-        this.rows.add(new NumRow("播报间隔（秒）", String.valueOf(MaidSmartConfig.DIALOGUE_REPORT_INTERVAL.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_REPORT_INTERVAL, s), "播报间隔（秒）：女仆工作状态气泡的最短间隔，防一直刷屏"));
-        this.rows.add(new NumRow("播报范围", String.valueOf(MaidSmartConfig.DIALOGUE_REPORT_RADIUS.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_REPORT_RADIUS, s), "播报范围（格）：工作播报只发给这个半径内的主人（远处不打扰）"));
+        // v1.5.356：API 日配额提到对话提示区第一行——用户反馈"手册里 LLM 调用次数限制的
+        // 设置选项没了"：配置一直都在,但排在区第 5 行,窗口高度/GUI 缩放较小时被分页藏到
+        // 第 2+ 页(同 v1.5.293/295 的可见性修复模式)。任何窗口高度打开对话提示第一屏即可见。
+        this.rows.add(new NumRow("API 日配额", String.valueOf(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT.get()),
+                s -> setInt(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT, s), "所有女仆每日主动 LLM 调用总量上限（token 成本；默认 40，填 0 = 不限——旧版 0 是永远禁言的 bug）"));
+        // v1.5.293：自主决策提到对话页第一屏——旧版在「主动对话」之后（本页第 14 行），
+        // 窗口高度/GUI 缩放较小时被分页藏到第 2+ 页（用户反馈"详细设置里自主决策按键
+        // 没了"——分区一直都在，只是第一屏看不到）。现在本区块 5 行全在第 1 页，
+        // 任何窗口高度打开对话提示第一页即可见
+        this.rows.add(new SectionRow("自主决策", false));
+        this.rows.add(new BoolRow("自主决策", MaidSmartConfig.DIALOGUE_AUTONOMOUS.get(),
+                v -> MaidSmartConfig.DIALOGUE_AUTONOMOUS.set(v), "自主决策：开启后女仆会根据时间/材料/环境自己换任务干活（去种地/去挖矿），主人可口头干预"));
+        this.rows.add(new NumRow("决策冷却（分钟）", String.valueOf(MaidSmartConfig.DIALOGUE_AUTONOMOUS_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.DIALOGUE_AUTONOMOUS_COOLDOWN, s), "决策冷却（分钟）：两次自主换任务的最短间隔，防反复横跳"));
+        this.rows.add(new NumRow("日上限（次）", String.valueOf(MaidSmartConfig.DIALOGUE_AUTONOMOUS_DAILY.get()),
+                s -> setInt(MaidSmartConfig.DIALOGUE_AUTONOMOUS_DAILY, s), "日上限（次）：一天最多自主决策几次（控 token 成本）"));
+        // v1.5.295：主动对话提到工作播报之前——主动对话是高频开关（旧版在 293 调整后
+        // 仍落第 2 页；现在自主决策+主动对话两个主要开关都在第 1 页可见），
+        // 工作播报（次要功能）顺延到主动对话之后
         this.rows.add(new SectionRow("主动对话", true));
         this.rows.add(new BoolRow("主动对话", MaidSmartConfig.DIALOGUE_PROACTIVE.get(),
                 v -> MaidSmartConfig.DIALOGUE_PROACTIVE.set(v), "主动对话（关心/夜晚/好感等主动开口）"));
@@ -812,15 +1214,15 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.DIALOGUE_REPLY_FEEDBACK.set(v), "回复反馈学习：主人说\"别说了/好烦\"→ 记 error_mark、当天不再提该话题、语气转克制；说\"谢谢/说得对\"→ 强化记忆；真沉默计时（主人多久没说话）也靠它"));
         this.rows.add(new NumRow("话题冷却（分钟）", String.valueOf(MaidSmartConfig.DIALOGUE_TOPIC_BACKOFF_MIN.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_TOPIC_BACKOFF_MIN, s), "话题冷却（分钟）：被主人否定的主动话题 N 分钟内不再提起"));
-        this.rows.add(new SectionRow("自主决策", true));
-        this.rows.add(new BoolRow("自主决策", MaidSmartConfig.DIALOGUE_AUTONOMOUS.get(),
-                v -> MaidSmartConfig.DIALOGUE_AUTONOMOUS.set(v), "自主决策：开启后女仆会根据时间/材料/环境自己换任务干活（去种地/去挖矿），主人可口头干预"));
-        this.rows.add(new NumRow("决策冷却（分钟）", String.valueOf(MaidSmartConfig.DIALOGUE_AUTONOMOUS_COOLDOWN.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_AUTONOMOUS_COOLDOWN, s), "决策冷却（分钟）：两次自主换任务的最短间隔，防反复横跳"));
-        this.rows.add(new NumRow("日上限（次）", String.valueOf(MaidSmartConfig.DIALOGUE_AUTONOMOUS_DAILY.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_AUTONOMOUS_DAILY, s), "日上限（次）：一天最多自主决策几次（控 token 成本）"));
-        this.rows.add(new NumRow("API 日配额", String.valueOf(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT, s), "所有女仆每日主动 LLM 调用总量上限（token 成本；默认 40，填 0 = 不限——旧版 0 是永远禁言的 bug）"));
+        // v1.5.295：工作播报移到主动对话之后（次要功能；v1.5.293 自主决策已上移）
+        this.rows.add(new SectionRow("工作播报", true));
+        this.rows.add(new BoolRow("工作状态播报", MaidSmartConfig.DIALOGUE_STATUS_REPORTER.get(),
+                v -> MaidSmartConfig.DIALOGUE_STATUS_REPORTER.set(v), "工作状态播报（女仆卡住时气泡解释原因）"));
+        this.rows.add(new NumRow("播报间隔（秒）", String.valueOf(MaidSmartConfig.DIALOGUE_REPORT_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.DIALOGUE_REPORT_INTERVAL, s), "播报间隔（秒）：女仆工作状态气泡的最短间隔，防一直刷屏"));
+        this.rows.add(new NumRow("播报范围", String.valueOf(MaidSmartConfig.DIALOGUE_REPORT_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.DIALOGUE_REPORT_RADIUS, s), "播报范围（格）：工作播报只发给这个半径内的主人（远处不打扰）"));
+        // v1.5.293：自主决策区块已上移到本页第一屏（见 dialogueRows 头部）
         this.rows.add(new SectionRow("内部节奏", true));
         this.rows.add(new NumRow("播报检查间隔（tick）", String.valueOf(MaidSmartConfig.DIALOGUE_REPORT_CHECK.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_REPORT_CHECK, s), "播报检查间隔（tick）：工作状态检查/播报的轮询周期"));
@@ -840,13 +1242,38 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.DIALOGUE_AUTO_DAY_END, s), "自主决策工作结束时刻（游戏 tick）"));
         // v1.5.198：对话输出语言强制（"突然全是日语"修复——原版按客户端游戏语言
         // 要求 LLM 输出，每次对话写入女仆 ChatLanguage）
+        // v1.5.303：手填文本框改为【选项选择】（用户："设计成选择项目吧，让人对
+        // 着选项选——手填容易填错或无效"）——留空=跟随游戏/客户端语言，选语言=
+        // 强制该语言代码（zh_cn/en_us/ja_jp/ko_kr/ru_ru 等），不再有填错风险
         this.rows.add(new SectionRow("输出语言", true));
-        this.rows.add(new TextRow("对话输出语言", MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.get(),
-                s -> {
-                    MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.set(s.trim());
-                    return true;
+        String[][] langChoices = {
+                {"跟随游戏语言（默认）", ""},
+                {"中文", "zh_cn"},
+                {"英文", "en_us"},
+                {"日文", "ja_jp"},
+                {"韩文", "ko_kr"},
+                {"俄语", "ru_ru"},
+        };
+        String curLangVal = MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.get();
+        String langCurrent = langChoices[0][0];
+        for (String[] c : langChoices) {
+            if (c[1].equals(curLangVal)) {
+                langCurrent = c[0];
+                break;
+            }
+        }
+        this.rows.add(new CycleRow("对话输出语言",
+                java.util.Arrays.stream(langChoices).map(c -> c[0]).toArray(String[]::new),
+                langCurrent,
+                v -> {
+                    for (String[] c : langChoices) {
+                        if (c[0].equals(v)) {
+                            MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.set(c[1]);
+                            break;
+                        }
+                    }
                 },
-                "留空 = 跟随 TLM/客户端游戏语言；填 zh_cn 强制中文、en_us 强制英文、ja_jp 强制日文。若你的女仆突然说日语，多半是客户端语言被改过"));
+                "对话输出语言：控制 LLM 回复的语言（写入女仆 ChatLanguage）。跟随 = 用游戏客户端当前语言（客户端语言被改过时女仆会跟着变，如突然说日语）；选具体语言 = 强制该语言，无论客户端是什么"));
     }
 
     /** v1.5.198：语音页——TTS 音量倍率 / 系统消息朗读 / 系统语音包导入 / 语音缓存 */
@@ -873,7 +1300,7 @@ public class PromaidConfigScreen extends Screen {
             return true;
         }, "语音包 zip 或文件夹的绝对路径；填写后保存即自动导入并生效"));
         // v1.5.250：文件选择对话框导入——玩家不用手填路径，点按钮选 .zip 即可
-        this.rows.add(new BtnRow("语音包操作", "选择文件导入", () -> {
+        this.rows.add(new BtnRow("导入语音包", "选择文件导入", () -> {
                     // FileDialog setVisible 会阻塞当前线程——放独立线程，避免卡死
                     // 游戏渲染（MC 主线程就是 AWT EDT）
                     new Thread(() -> {
@@ -903,7 +1330,7 @@ public class PromaidConfigScreen extends Screen {
                     }).start();
                 },
                 "打开系统文件选择框选 .zip 语音包自动导入（导入文件夹仍可用上方路径填写）"));
-        this.rows.add(new BtnRow("语音包操作", "重新加载", () -> {
+        this.rows.add(new BtnRow("重新加载语音包", "重新加载", () -> {
                     // v1.5.217：点击即时反馈（服务端结果会回聊天框，这里先提示已请求）
                     net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
                     if (mc.f_91074_ != null) {
@@ -914,7 +1341,7 @@ public class PromaidConfigScreen extends Screen {
                             new com.maidsmart.build.BlueprintBookNetworking.VoicePackQueryPacket("reload"));
                 },
                 "从磁盘重新读取 manifest（手动改文件后点此生效）"));
-        this.rows.add(new BtnRow("语音包操作", "查看状态", () -> {
+        this.rows.add(new BtnRow("查看语音包状态", "查看状态", () -> {
                     net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
                     if (mc.f_91074_ != null) {
                         mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -929,12 +1356,88 @@ public class PromaidConfigScreen extends Screen {
                 "TTS 语音缓存上限（voice_cache/，训练一次保存后复用；超出删最旧）"));
     }
 
+    /** v1.5.294：被动技能独立栏（用户："被动技能要单拉出来一栏放在 Promaid 模组详细
+     *  配置里面，而不是放在战斗自保里面"）——落地水/岩浆逃生放水/主人死亡传送，
+     *  全是被动保命动作，与战斗自保页的主动行为（自保策略/贴身辅助/单兵战术）分离 */
+    private void passiveRows() {
+        this.rows.add(new SectionRow("被动技能", false));
+        this.rows.add(new BoolRow("落地水", MaidSmartConfig.COMBAT_WATER_CLUTCH.get(),
+                v -> MaidSmartConfig.COMBAT_WATER_CLUTCH.set(v), "落地水（有水桶+坠落自动放水缓冲）"));
+        this.rows.add(new NumRow("落地水触发高度", String.valueOf(MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE, s), "落地水触发高度（格）：坠落高度超过此值才放水缓冲"));
+        this.rows.add(new NumRow("落地水保持（tick）", String.valueOf(MaidSmartConfig.COMBAT_WATER_HOLD.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_WATER_HOLD, s), "落地水保持（tick）：放出的水保留多久后收回（防留一滩水）"));
+        this.rows.add(new NumRow("落地水下探格数", String.valueOf(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN, s), "落地水下探格数：提前向下探测几格判断要不要放水（防高空误放）"));
+        // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
+        // v1.5.250 已删除）
+        this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
+                v -> MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.set(v), "岩浆逃生放水：垫高后周围没有水源且包里有水桶 → 在自己垫的方块上放水灭火（1 秒后收回；接触的岩浆源可能变黑曜石）"));
+        this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
+                v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
+    }
+
     private void combatRows() {
-        // v1.5.202：自保轻量化（落地水格式的被动保命）——自保/搭高与逃跑/逃生
-        // 合并为一栏，与落地水并列（都是"瞬时保命动作"性质的被动技能）
+        // v1.5.202：自保轻量化（逃生/搭高/逃跑等主动保命行为）；
+        // v1.5.294：落地水/岩浆放水/主人死亡传送等【被动技能】已独立成栏（首页被动技能按钮）
+        // v1.5.295：本页重排——高频开关（自保行为/贴身辅助/单兵战术）排前面，逃生/
+        // 搭高/逃跑的数值参数集中到页尾"自保参数"（旧版 41 行：贴身辅助在第 3 页、
+        // 单兵战术在第 4 页——GUI 缩放 2 时"自动投喂/治疗主人"等关键开关被翻页藏住，
+        // 与"自主决策按键没了"同类问题；现在所有开关前 2 页内可见）
         this.rows.add(new SectionRow("逃生与自保（被动保命）", false));
         this.rows.add(new BoolRow("自保行为", MaidSmartConfig.COMBAT_SELF_PRESERVE.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE.set(v), "自保行为（轻量被动：环境危险/低血时插保命动作——喝药/垫高/逃跑/传送；平时零干预，与战斗/战术并行不冲突）"));
+        // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
+        this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
+        this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
+                v -> MaidSmartConfig.AID_OWNER_ENABLE.set(v), "自动投喂/治疗：主人饿/血低自动喂熟食或投掷治疗药水（被动技能，非工作状态）"));
+        this.rows.add(new NumRow("投喂触发饱食度", String.valueOf(MaidSmartConfig.AID_FOOD_THRESHOLD.get()),
+                s -> setInt(MaidSmartConfig.AID_FOOD_THRESHOLD, s), "投喂触发饱食度（4-20，20=只要不满就喂）：主人饱食度低于此值自动喂食（默认 12）——v1.5.301 起填 20 真实生效（旧版范围上限 18，填 20 被静默钳回 18）"));
+        this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
+                s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0.1-1，1=掉血就治）：主人血量低于此比例自动治疗（默认 0.30）"));
+        this.rows.add(new BoolRow("被动插火把", MaidSmartConfig.TORCH_PLACER_ENABLE.get(),
+                v -> MaidSmartConfig.TORCH_PLACER_ENABLE.set(v), "被动插火把：主人周围黑暗自动插火把照明（消耗背包火把）"));
+        this.rows.add(new NumRow("插火把亮度阈值", String.valueOf(MaidSmartConfig.TORCH_DARK_THRESHOLD.get()),
+                s -> setInt(MaidSmartConfig.TORCH_DARK_THRESHOLD, s), "插火把亮度阈值（0-15）：主人脚下方块亮度低于此值自动插火把（默认 7）"));
+        this.rows.add(new BoolRow("共享盾牌", MaidSmartConfig.SHIELD_SHARE_ENABLE.get(),
+                v -> MaidSmartConfig.SHIELD_SHARE_ENABLE.set(v), "共享盾牌：主人盾牌耐久低/空时从女仆背包取盾给主人（不动女仆自己副手）"));
+        this.rows.add(new BoolRow("共享不死图腾", MaidSmartConfig.TOTEM_SHARE_ENABLE.get(),
+                v -> MaidSmartConfig.TOTEM_SHARE_ENABLE.set(v), "共享不死图腾：主人致命伤时女仆背包/饰品栏的不死图腾优先救主人（特效同原版）"));
+        // v1.5.207：玩家对女仆伤害策略（TLM 原版 = 主人攻击 ÷5 封顶 2 点——原版剑
+        // 看起来打不到、高伤武器（更好的战斗等）能打出 2 点；这里给玩家自选）
+        // v1.5.252h：current 改用【选项文字】——旧版传数字 "0"~"4" 与文字选项永不
+        // 匹配（CycleButton 显示错位），onChange 按文字下标回写配置
+        String[] dmgModes = {"TLM原版(÷5封顶2)", "完全免疫", "无限制", "有上限(比例)", "仅一点伤害(上限1)"};
+        int dmgMode = Math.max(0, Math.min(dmgModes.length - 1, MaidSmartConfig.PLAYER_DAMAGE_MODE.get()));
+        this.rows.add(new CycleRow("玩家对女仆伤害", dmgModes,
+                dmgModes[dmgMode],
+                v -> {
+                    int idx = java.util.Arrays.asList(dmgModes).indexOf(v);
+                    MaidSmartConfig.PLAYER_DAMAGE_MODE.set(idx >= 0 ? idx : 0);
+                },
+                "玩家对女仆伤害模式：TLM原版 = 主人攻击 ÷5 封顶 2 点（原版剑基本打不掉血、高伤武器能打出 2 点）；完全免疫 = 任何玩家都打不到女仆（含弓弩）；无限制 = 像打普通生物一样；有上限 = 单次伤害不超过女仆最大生命 × 下方比例；仅一点伤害 = 单次伤害上限 1 点（被打有反馈但不疼）"));
+        this.rows.add(new NumRow("玩家伤害上限比例（0-1）", String.valueOf(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP.get()),
+                s -> setDouble(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP, s), "玩家伤害上限比例（0-1，模式=有上限时生效）：单次伤害 = 女仆最大生命 × 此比例（默认 0.1 = 10%，20 血女仆单次最多 2 点）"));
+        // v1.5.134：单兵作战战术（替代已删除的 v1.5.132 战斗协同）
+        this.rows.add(new SectionRow("单兵战术（v1.5.134）", true));
+        this.rows.add(new BoolRow("单兵作战战术", MaidSmartConfig.COMBAT_TACTICS.get(),
+                v -> MaidSmartConfig.COMBAT_TACTICS.set(v), "单兵作战战术总开关：绕圈走位/打退拉扯/距离控制/时机举盾（PVP 式战斗，战斗女仆单打独斗）"));
+        this.rows.add(new BoolRow("近战战术", MaidSmartConfig.COMBAT_TACTICS_MELEE.get(),
+                v -> MaidSmartConfig.COMBAT_TACTICS_MELEE.set(v), "近战战术：贴脸绕圈侧移（少正面挨刀）、打一刀退一步（hit&run 拉扯）、接近时跳劈"));
+        // v1.5.280：近战贴脸后退（默认开——女仆手长 3 格，拉开后照样砍得到）
+        this.rows.add(new BoolRow("近战贴脸后退", MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.get(),
+                v -> MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.set(v), "近战贴脸后退：敌人贴进 2 格内主动后退拉开距离（不再贴身互搏白挨刀；女仆手长 3 格退开后照样砍得到，与打一刀退一步/跳劈节奏互补）"));
+        this.rows.add(new BoolRow("远程战术", MaidSmartConfig.COMBAT_TACTICS_RANGED.get(),
+                v -> MaidSmartConfig.COMBAT_TACTICS_RANGED.set(v), "远程战术：保持理想射程（原版会走到怪脸上射）、横移绕圈放风筝"));
+        this.rows.add(new BoolRow("时机举盾", MaidSmartConfig.COMBAT_TACTICS_SHIELD.get(),
+                v -> MaidSmartConfig.COMBAT_TACTICS_SHIELD.set(v), "时机举盾：攻击冷却间隙举盾格挡、冷却满放盾攻击（攻防交替；替代原版 8 格内一直举盾）"));
+        this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
+        this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）"));
+        // v1.5.295：逃生/搭高/逃跑数值参数（旧版混在自保行为开关与贴身辅助之间，
+        // 把开关区挤到第 3-4 页——集中到页尾，调参才需要翻到这里）
+        this.rows.add(new SectionRow("自保参数", true));
         this.rows.add(new NumRow("触发血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_ENTER_RATIO.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_ENTER_RATIO, s), "触发血量（0-1，0.3=30%）：血量低于此值进入保命（逃跑/搭高/喝药）；30%~70% 期间边打边喝药，70% 以上恢复正常"));
         this.rows.add(new NumRow("解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_EXIT_RATIO.get()),
@@ -980,66 +1483,6 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_RATIO, s), "末影珍珠逃生触发血量（0-1，低于此值且威胁贴身才扔）"));
         this.rows.add(new NumRow("珍珠逃生威胁距离", String.valueOf(MaidSmartConfig.COMBAT_PEARL_DIST.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_DIST, s), "末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）"));
-        this.rows.add(new SectionRow("被动技能", true));
-        this.rows.add(new BoolRow("落地水", MaidSmartConfig.COMBAT_WATER_CLUTCH.get(),
-                v -> MaidSmartConfig.COMBAT_WATER_CLUTCH.set(v), "落地水（有水桶+坠落自动放水缓冲）"));
-        this.rows.add(new NumRow("落地水触发高度", String.valueOf(MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE, s), "落地水触发高度（格）：坠落高度超过此值才放水缓冲"));
-        this.rows.add(new NumRow("落地水保持（tick）", String.valueOf(MaidSmartConfig.COMBAT_WATER_HOLD.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_WATER_HOLD, s), "落地水保持（tick）：放出的水保留多久后收回（防留一滩水）"));
-        this.rows.add(new NumRow("落地水下探格数", String.valueOf(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN, s), "落地水下探格数：提前向下探测几格判断要不要放水（防高空误放）"));
-        // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
-        // v1.5.250 已删除）
-        this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
-                v -> MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.set(v), "岩浆逃生放水：垫高后周围没有水源且包里有水桶 → 在自己垫的方块上放水灭火（1 秒后收回；接触的岩浆源可能变黑曜石）"));
-        this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
-                v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
-        // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
-        this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
-        this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
-                v -> MaidSmartConfig.AID_OWNER_ENABLE.set(v), "自动投喂/治疗：主人饿/血低自动喂熟食或投掷治疗药水（被动技能，非工作状态）"));
-        this.rows.add(new NumRow("投喂触发饱食度", String.valueOf(MaidSmartConfig.AID_FOOD_THRESHOLD.get()),
-                s -> setInt(MaidSmartConfig.AID_FOOD_THRESHOLD, s), "投喂触发饱食度（0-20）：主人饱食度低于此值自动喂食（默认 12）"));
-        this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
-                s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0-1）：主人血量低于此比例自动治疗（默认 0.30）"));
-        this.rows.add(new BoolRow("被动插火把", MaidSmartConfig.TORCH_PLACER_ENABLE.get(),
-                v -> MaidSmartConfig.TORCH_PLACER_ENABLE.set(v), "被动插火把：主人周围黑暗自动插火把照明（消耗背包火把）"));
-        this.rows.add(new NumRow("插火把亮度阈值", String.valueOf(MaidSmartConfig.TORCH_DARK_THRESHOLD.get()),
-                s -> setInt(MaidSmartConfig.TORCH_DARK_THRESHOLD, s), "插火把亮度阈值（0-15）：主人脚下方块亮度低于此值自动插火把（默认 7）"));
-        this.rows.add(new BoolRow("共享盾牌", MaidSmartConfig.SHIELD_SHARE_ENABLE.get(),
-                v -> MaidSmartConfig.SHIELD_SHARE_ENABLE.set(v), "共享盾牌：主人盾牌耐久低/空时从女仆背包取盾给主人（不动女仆自己副手）"));
-        this.rows.add(new BoolRow("共享不死图腾", MaidSmartConfig.TOTEM_SHARE_ENABLE.get(),
-                v -> MaidSmartConfig.TOTEM_SHARE_ENABLE.set(v), "共享不死图腾：主人致命伤时女仆背包/饰品栏的不死图腾优先救主人（特效同原版）"));
-        // v1.5.207：玩家对女仆伤害策略（TLM 原版 = 主人攻击 ÷5 封顶 2 点——原版剑
-        // 看起来打不到、高伤武器（更好的战斗等）能打出 2 点；这里给玩家自选）
-        // v1.5.252h：current 改用【选项文字】——旧版传数字 "0"~"4" 与文字选项永不
-        // 匹配（CycleButton 显示错位），onChange 按文字下标回写配置
-        String[] dmgModes = {"TLM原版(÷5封顶2)", "完全免疫", "无限制", "有上限(比例)", "仅一点伤害(上限1)"};
-        int dmgMode = Math.max(0, Math.min(dmgModes.length - 1, MaidSmartConfig.PLAYER_DAMAGE_MODE.get()));
-        this.rows.add(new CycleRow("玩家对女仆伤害", dmgModes,
-                dmgModes[dmgMode],
-                v -> {
-                    int idx = java.util.Arrays.asList(dmgModes).indexOf(v);
-                    MaidSmartConfig.PLAYER_DAMAGE_MODE.set(idx >= 0 ? idx : 0);
-                },
-                "玩家对女仆伤害模式：TLM原版 = 主人攻击 ÷5 封顶 2 点（原版剑基本打不掉血、高伤武器能打出 2 点）；完全免疫 = 任何玩家都打不到女仆（含弓弩）；无限制 = 像打普通生物一样；有上限 = 单次伤害不超过女仆最大生命 × 下方比例；仅一点伤害 = 单次伤害上限 1 点（被打有反馈但不疼）"));
-        this.rows.add(new NumRow("玩家伤害上限比例（0-1）", String.valueOf(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP.get()),
-                s -> setDouble(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP, s), "玩家伤害上限比例（0-1，模式=有上限时生效）：单次伤害 = 女仆最大生命 × 此比例（默认 0.1 = 10%，20 血女仆单次最多 2 点）"));
-        // v1.5.134：单兵作战战术（替代已删除的 v1.5.132 战斗协同）
-        this.rows.add(new SectionRow("单兵战术（v1.5.134）", true));
-        this.rows.add(new BoolRow("单兵作战战术", MaidSmartConfig.COMBAT_TACTICS.get(),
-                v -> MaidSmartConfig.COMBAT_TACTICS.set(v), "单兵作战战术总开关：绕圈走位/打退拉扯/距离控制/时机举盾（PVP 式战斗，战斗女仆单打独斗）"));
-        this.rows.add(new BoolRow("近战战术", MaidSmartConfig.COMBAT_TACTICS_MELEE.get(),
-                v -> MaidSmartConfig.COMBAT_TACTICS_MELEE.set(v), "近战战术：贴脸绕圈侧移（少正面挨刀）、打一刀退一步（hit&run 拉扯）、接近时跳劈"));
-        this.rows.add(new BoolRow("远程战术", MaidSmartConfig.COMBAT_TACTICS_RANGED.get(),
-                v -> MaidSmartConfig.COMBAT_TACTICS_RANGED.set(v), "远程战术：保持理想射程（原版会走到怪脸上射）、横移绕圈放风筝"));
-        this.rows.add(new BoolRow("时机举盾", MaidSmartConfig.COMBAT_TACTICS_SHIELD.get(),
-                v -> MaidSmartConfig.COMBAT_TACTICS_SHIELD.set(v), "时机举盾：攻击冷却间隙举盾格挡、冷却满放盾攻击（攻防交替；替代原版 8 格内一直举盾）"));
-        this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
-        this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）"));
     }
 
     private void miscRows() {
@@ -1081,14 +1524,195 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_BATCH_PLANT.set(v), "农场批量种植：种植时以当前格为中心蔓延，把相连农田里的空耕地一次全种上（种子真实消耗）；默认开启"));
         this.rows.add(new NumRow("批量种植上限（格）", String.valueOf(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT, s), "农场批量种植上限（格）：一次批量种植的最大格数（4~96，默认 24）"));
-        // v1.5.189：畜牧数量控制（杀幼保成，默认关）
-        this.rows.add(new BoolRow("畜牧数量控制（杀幼保成）", MaidSmartConfig.ANIMAL_CAP_CONTROL.get(),
-                v -> MaidSmartConfig.ANIMAL_CAP_CONTROL.set(v), "畜牧数量控制：附近同种成年动物超过上限时击杀多余幼年动物（激进操作，默认关闭）"));
-        this.rows.add(new NumRow("畜牧数量上限（只）", String.valueOf(MaidSmartConfig.ANIMAL_CAP_LIMIT.get()),
-                s -> setInt(MaidSmartConfig.ANIMAL_CAP_LIMIT, s), "畜牧数量上限（只）：同种动物超过此数时执行杀幼保成（5~200，默认 50）"));
-        // v1.5.199：爱憎分明饥饿/撑死测试开关（默认关闭其饥饿系统）
+        // v1.5.310：爱憎分明相关开关已整体迁到「爱憎分明模组调试」板块页（见 loveloathRows）
+    }
+
+    // ---------- 爱憎分明（Love Loathe）联动调试页（v1.5.310） ----------
+
+    /** 是否安装了爱憎分明（modId=callresponse）——软联动：未装则首页不显示该按钮 */
+    private static boolean loveloatheLoaded() {
+        try {
+            return net.minecraftforge.fml.ModList.get().isLoaded("callresponse");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 爱憎分明版本号（未装/异常返回 "?"） */
+    private static String loveloatheVersion() {
+        try {
+            var mods = net.minecraftforge.fml.ModList.get().getModFileById("callresponse").getMods();
+            return mods.isEmpty() ? "?" : mods.get(0).getVersion().toString();
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
+    /** 反射探测：依次尝试候选类名，返回第一个可加载的（✓ 前缀）；全失败返回"未找到" */
+    private static String probeClass(String... candidates) {
+        for (String c : candidates) {
+            try {
+                Class.forName(c);
+                return "\u00a7a\u2713\u00a7r " + c;
+            } catch (Throwable ignored) {
+            }
+        }
+        return "\u00a7c未找到\u00a7r";
+    }
+
+    /** 爱憎分明联动调试页：状态探测（只读）+ 联动开关 */
+    private void loveloathRows() {
+        boolean ll = loveloatheLoaded();
+        this.rows.add(new SectionRow("联动状态（调试）", false));
+        this.rows.add(new InfoRow("爱憎分明模组", ll ? "\u00a7a已安装 v" + loveloatheVersion() + "\u00a7r（modId: callresponse）"
+                        : "\u00a7c未安装\u00a7r（本页仅在安装爱憎分明后显示）",
+                "爱憎分明（Love Loathe）是车万女仆的附属模组，提供女仆饥饿/撑死与情绪（信任/恐惧）系统；本模组与其为软联动，不装也不影响使用"));
+        this.rows.add(new InfoRow("饥饿数据接口 HungerData", probeClass(
+                "com.github.JumDa5he.callresponse.compat.hunger.HungerData",
+                "com.github.tartaricacid.callresponse.compat.hunger.HungerData"),
+                "极端饥饿判定（饥饿值 ≤9）的反射目标；2.0.2 起新包名，旧包名兼容（v1.5.284）"));
+        this.rows.add(new InfoRow("情绪数据接口 EmotionData", probeClass(
+                "com.github.JumDa5he.callresponse.compat.emotion.EmotionData",
+                "com.github.tartaricacid.callresponse.compat.emotion.EmotionData"),
+                "情绪投影（信任/恐惧）反射目标，记忆系统感知用（v1.5.284）"));
+        this.rows.add(new InfoRow("饥饿门控注入", "\u00a7aLoveLoatheHungerGateMixin\u00a7r（@Pseudo 软注入）",
+                "下方「禁用爱憎分明饥饿」开关生效时拦截其饥饿伤害/进食/速度惩罚逻辑"));
+        this.rows.add(new BtnRow("重新探测", "刷新 →", () -> this.m_7856_(),
+                "重新检测模组与反射接口（打开本页时已自动探测；此按钮仅调试用）"));
+        this.rows.add(new SectionRow("联动开关", false));
+        this.rows.add(new BoolRow("爱憎分明联动总开关", MaidSmartConfig.MISC_LOVELOATHE_MASTER.get(),
+                v -> MaidSmartConfig.MISC_LOVELOATHE_MASTER.set(v), "爱憎分明联动总开关（默认开）：关闭后不再反射读取爱憎分明数据（极端饥饿/情绪投影）；「禁用爱憎分明饥饿」开关独立生效"));
         this.rows.add(new BoolRow("禁用爱憎分明饥饿", MaidSmartConfig.MISC_LOVELOATHE_DISABLE_HUNGER.get(),
                 v -> MaidSmartConfig.MISC_LOVELOATHE_DISABLE_HUNGER.set(v), "禁用爱憎分明饥饿/撑死（默认开）：饿死伤害/撑死/自动进食（会吃腐肉→越吃越饿）/速度惩罚全禁；关闭本项恢复爱憎分明原版饥饿行为"));
+        this.rows.add(new BoolRow("极端饥饿保命联动", MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.get(),
+                v -> MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.set(v), "极端饥饿保命（默认开）：女仆极端饥饿（爱憎分明饥饿值 ≤9）且无其他治疗食物时，吃金苹果/附魔金苹果保命"));
+        this.rows.add(new BoolRow("情绪数据联动", MaidSmartConfig.MISC_LOVELOATHE_EMOTION.get(),
+                v -> MaidSmartConfig.MISC_LOVELOATHE_EMOTION.set(v), "情绪数据联动（默认开）：记忆系统感知爱憎分明情绪投影（信任/恐惧），影响关系记忆与 AI 上下文注入"));
+    }
+
+    // ==================== v1.5.367:heartfelt_connection 软联动(同爱憎分明模式) ====================
+
+    /** heartfelt_connection 是否安装(软联动:未安装本页不显示) */
+    private static boolean heartfeltLoaded() {
+        return net.minecraftforge.fml.ModList.get().isLoaded("heartfelt_connection");
+    }
+
+    /** heartfelt_connection 版本号(反射 ModList) */
+    private static String heartfeltVersion() {
+        try {
+            var mods = net.minecraftforge.fml.ModList.get().getModFileById("heartfelt_connection").getMods();
+            return mods.isEmpty() ? "?" : mods.get(0).getVersion().toString();
+        } catch (Exception e) {
+            return "?";
+        }
+    }
+
+    /** 反射读 HeartfeltConfig 静态字段(ForgeConfigSpec 值对象);类/字段不存在返回 null */
+    private static Object heartfeltField(String field) {
+        try {
+            Class<?> cls = Class.forName("com.heartfelt.connection.config.HeartfeltConfig");
+            return cls.getField(field).get(null);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 读 heartfelt 布尔配置;读取失败返回 false */
+    private static boolean heartfeltBoolGet(String field) {
+        Object o = heartfeltField(field);
+        return o instanceof net.minecraftforge.common.ForgeConfigSpec.BooleanValue b && b.get();
+    }
+
+    /** 读 heartfelt 数值配置;读取失败返回 "?" */
+    private static String heartfeltNumGet(String field) {
+        Object o = heartfeltField(field);
+        if (o instanceof net.minecraftforge.common.ForgeConfigSpec.ConfigValue<?> c) {
+            return String.valueOf(c.get());
+        }
+        return "?";
+    }
+
+    /** 写 heartfelt 布尔配置;失败返回 false(行不更新) */
+    private static boolean heartfeltBoolSet(String field, boolean v) {
+        Object o = heartfeltField(field);
+        if (o instanceof net.minecraftforge.common.ForgeConfigSpec.BooleanValue b) {
+            try {
+                b.set(v);
+                return true;
+            } catch (Exception ignored) {
+            }
+        }
+        return false;
+    }
+
+    /** 写 heartfelt 数值配置(isDouble:DoubleValue vs IntValue);失败返回 false */
+    private static boolean heartfeltNumSet(String field, String s, boolean isDouble) {
+        Object o = heartfeltField(field);
+        try {
+            if (isDouble && o instanceof net.minecraftforge.common.ForgeConfigSpec.DoubleValue d) {
+                d.set(Double.parseDouble(s.trim()));
+                return true;
+            }
+            if (!isDouble && o instanceof net.minecraftforge.common.ForgeConfigSpec.IntValue i) {
+                i.set(Integer.parseInt(s.trim()));
+                return true;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** heartfelt 联动调试页：状态(只读) + 告白/成长/前摇/伤心窗口参数(实时写入该模组配置) */
+    private void heartfeltRows() {
+        boolean hf = heartfeltLoaded();
+        this.rows.add(new SectionRow("联动状态（调试）", false));
+        this.rows.add(new InfoRow("heartfelt_connection 模组",
+                hf ? "\u00a7a已安装 v" + heartfeltVersion() + "\u00a7r（modId: heartfelt_connection）"
+                        : "\u00a7c未安装\u00a7r（本页仅在安装 heartfelt 后显示）",
+                "heartfelt_connection（心契×爱憎分明关系补丁：告白/成长/父女/伤心窗口/思慕）与 Promaid 软联动；下方参数实时写入该模组的配置文件，重启不丢"));
+        this.rows.add(new SectionRow("告白", false));
+        this.rows.add(new BoolRow("玩家告白（方向修正）", heartfeltBoolGet("PLAYER_CONFESSION_ENABLED"),
+                v -> heartfeltBoolSet("PLAYER_CONFESSION_ENABLED", v), "玩家主动告白走 heartfelt 告白屏（拦截 maidmarriage 女仆反告白剧本）；关掉回退 maidmarriage 原剧本"));
+        this.rows.add(new BoolRow("女仆告白前摇（走向主人）", heartfeltBoolGet("CONFESSION_APPROACH_ENABLED"),
+                v -> heartfeltBoolSet("CONFESSION_APPROACH_ENABLED", v), "女仆主动告白前先系统提示并走向玩家，走到身边才拉告白界面"));
+        this.rows.add(new NumRow("主动告白尝试间隔（tick）", heartfeltNumGet("CONFESSION_ATTEMPT_INTERVAL"),
+                s -> heartfeltNumSet("CONFESSION_ATTEMPT_INTERVAL", s, false), "女仆主动告白尝试的周期（tick）；0 = 不尝试"));
+        this.rows.add(new NumRow("告白所需好感", heartfeltNumGet("CONFESSION_REQUIRED_FAVOR"),
+                s -> heartfeltNumSet("CONFESSION_REQUIRED_FAVOR", s, false), "好感高于此线才可能主动告白"));
+        this.rows.add(new NumRow("告白基础概率", heartfeltNumGet("CONFESSION_BASE_CHANCE"),
+                s -> heartfeltNumSet("CONFESSION_BASE_CHANCE", s, true), "每次尝试的基础概率（0-1，随好感线性加成）"));
+        this.rows.add(new NumRow("告白失败心情惩罚", heartfeltNumGet("CONFESSION_FAIL_MOOD"),
+                s -> heartfeltNumSet("CONFESSION_FAIL_MOOD", s, false), "告白被拒（缓一缓）时的心情惩罚；0 = 不惩罚"));
+        this.rows.add(new NumRow("前摇最短等待（tick）", heartfeltNumGet("CONFESSION_APPROACH_MIN_TICKS"),
+                s -> heartfeltNumSet("CONFESSION_APPROACH_MIN_TICKS", s, false), "前摇提示后至少等多久才拉告白选项（防秒触发）"));
+        this.rows.add(new NumRow("前摇超时（tick）", heartfeltNumGet("CONFESSION_APPROACH_TIMEOUT"),
+                s -> heartfeltNumSet("CONFESSION_APPROACH_TIMEOUT", s, false), "女仆走向超时未到则取消本次告白"));
+        this.rows.add(new NumRow("前摇走向速度", heartfeltNumGet("CONFESSION_APPROACH_SPEED"),
+                s -> heartfeltNumSet("CONFESSION_APPROACH_SPEED", s, true), "告白前摇走向玩家的速度倍率"));
+        // v1.5.100:立即触发主动告白(调试/验证用)——跳过概率与冷却,直接对附近
+        // 好感最高的资格女仆启动告白前摇;结果由 heartfelt 系统消息反馈
+        this.rows.add(new BtnRow("立即触发主动告白", "触发 →", () -> {
+            try {
+                Class<?> netCls = Class.forName("com.heartfelt.connection.network.HeartfeltNetwork");
+                Object channel = netCls.getMethod("channel").invoke(null);
+                Class<?> packetCls = Class.forName(
+                        "com.heartfelt.connection.network.HeartfeltNetwork$ForceConfessionPacket");
+                Object packet = packetCls.getDeclaredConstructor().newInstance();
+                channel.getClass().getMethod("sendToServer", Object.class).invoke(channel, packet);
+            } catch (Exception ex) {
+                // 反射失败(heartfelt 未装/版本不匹配)静默——页签只在安装后显示
+            }
+        }, "跳过概率与冷却,立即让附近好感最高、符合告白条件的女仆走向你并告白（调试/验证用；结果以系统消息反馈）"));
+        this.rows.add(new SectionRow("女儿/成长", false));
+        this.rows.add(new BoolRow("成长事件", heartfeltBoolGet("GROWTH_EVENT_ENABLED"),
+                v -> heartfeltBoolSet("GROWTH_EVENT_ENABLED", v), "女儿阶段升级事件（消息+站起+旁白）"));
+        this.rows.add(new BoolRow("父女互动", heartfeltBoolGet("FATHER_DAUGHTER_ENABLED"),
+                v -> heartfeltBoolSet("FATHER_DAUGHTER_ENABLED", v), "父女日常互动（爸爸与女儿的对话）"));
+        this.rows.add(new SectionRow("伤心窗口", false));
+        this.rows.add(new NumRow("伤心窗口时长（tick）", heartfeltNumGet("HARM_FEELING_TICKS"),
+                s -> heartfeltNumSet("HARM_FEELING_TICKS", s, false), "被打伤后赌气坐着的时长；窗口内不播语音包"));
+        this.rows.add(new NumRow("伤心心情惩罚", heartfeltNumGet("HARM_MOOD_DROP"),
+                s -> heartfeltNumSet("HARM_MOOD_DROP", s, false), "触发伤心窗口时的心情惩罚"));
     }
 
     /** v1.5.127：逗号分隔的英文 id 列表 → List（去空、去空格） */
@@ -1382,8 +2006,8 @@ public class PromaidConfigScreen extends Screen {
         g.m_280509_(Math.max(8, cx - 290), 8, Math.min(w - 8, cx + 290),
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
-        // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠
-        if (!this.mineTable) {
+        // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
+        if (!this.mineTable && !this.altTable) {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
@@ -1456,6 +2080,62 @@ public class PromaidConfigScreen extends Screen {
             // 部分裁出屏幕（"注释太靠左"），改为中心居中且钳制到完整可见
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
+        } else if (this.altTable) {
+            // v1.5.254：替代品名单子页（建造板块）——交互与矿表同款
+            String[] modeNames = {"半格高（台阶类）", "一格高（整方块）", "竖两格（门/高植物等）",
+                    "横两格（床）", "无碰撞（花/火把/地毯等）"};
+            String title = "\u00a7e替代品——" + modeNames[Math.min(this.altTableMode, 4)]
+                    + "——点击方块图标加入（再点取消）";
+            g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
+            int panelLeft = Math.max(8, cx - 280);
+            int panelWidth = Math.min(560, w - 16);
+            int left = panelLeft + 10;
+            int gridTop = GRID_TOP;
+            int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+            int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+            g.m_280509_(panelLeft + 8, gridTop - 4, panelLeft + panelWidth - 8, gridBottom, 0x80101010);
+            int perPage = GRID_COLS * this.gridRows;
+            int start = this.creativePage * perPage;
+            int end = Math.min(this.creativeItems.size(), start + perPage);
+            int hoverIdx = -1;
+            for (int i = start; i < end; i++) {
+                int col = (i - start) % GRID_COLS;
+                int row = (i - start) / GRID_COLS;
+                int x = left + col * GRID_CELL;
+                int y = gridTop + row * GRID_CELL;
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                String id = key == null ? "" : key.toString();
+                if (this.isInAlt(id)) {
+                    // 已加入当前替代品表 → 蓝色框 + 角标 ✓
+                    g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022AADD);
+                    g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"),
+                            x + 12, y + 12, 0xFFFFFF);
+                }
+                g.m_280480_(stack, x, y); // 物品图标
+                if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                    hoverIdx = i;
+                }
+            }
+            if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                String hover = key == null ? "?" : key.toString();
+                g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                        this.clampCenterX("\u00a77" + hover, left), gridBottom - 12, 0xFFFFFF);
+            }
+            int pages = this.creativePages();
+            if (pages > 1) {
+                String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                g.m_280653_(this.f_96547_, Component.m_237113_(pg),
+                        this.clampCenterX(pg, cx), gridBottom - 12, 0x888888);
+            }
+            String chkHint = "\u00a77✓ = 已加入替代品表（" + modeNames[Math.min(this.altTableMode, 4)]
+                    + "），缺料时女仆按序使用，再点一次取消";
+            g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
+                    this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
         } else {
             g.m_280653_(this.f_96547_,
                     Component.m_237113_("\u00a7e" + this.section.title + " 设置"),
@@ -1486,6 +2166,13 @@ public class PromaidConfigScreen extends Screen {
                 } else if (def instanceof BtnRow btnr) {
                     g.m_280614_(this.f_96547_, Component.m_237113_(btnr.label()), 20, y + 5, LABEL_COLOR, false);
                     this.drawComment(g, btnr.comment(), y + 25);
+                } else if (def instanceof InfoRow ir) {
+                    // v1.5.310：只读信息行——"标签：值"（值用青色高亮），无输入控件
+                    String irLabel = ir.label() + "：";
+                    g.m_280614_(this.f_96547_, Component.m_237113_(irLabel), 20, y + 5, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(ir.value()),
+                            20 + this.f_96547_.m_92895_(irLabel) + 4, y + 5, 0x66CCFF, false);
+                    this.drawComment(g, ir.comment(), y + 25);
                 }
             }
             // 页码（翻页按钮上方，不与"下一页"重叠——v1.5.100b 上移）
@@ -1540,6 +2227,31 @@ public class PromaidConfigScreen extends Screen {
                             .getKey(this.creativeItems.get(idx).m_41720_());
                     if (key != null) {
                         this.toggleCreative(key.toString());
+                    }
+                    return true;
+                }
+            }
+        }
+        // v1.5.254：替代品子页网格点击 → 加入/取消当前替代品表
+        if (this.altTable && button == 0) {
+            int cx = this.f_96543_ / 2;
+            int panelLeft = Math.max(8, cx - 280);
+            int left = panelLeft + 10;
+            int gridTop = GRID_TOP;
+            int gridRowsNow = this.f_96544_ < 215 ? 2 : GRID_ROWS;
+            int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+            if (mouseX >= left && mouseX < left + GRID_COLS * GRID_CELL
+                    && mouseY >= gridTop && mouseY < gridBottom) {
+                int perPage = GRID_COLS * this.gridRows;
+                int start = this.creativePage * perPage;
+                int col = (int) ((mouseX - left) / GRID_CELL);
+                int row = (int) ((mouseY - gridTop) / GRID_CELL);
+                int idx = start + row * GRID_COLS + col;
+                if (idx >= 0 && idx < this.creativeItems.size()) {
+                    net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getKey(this.creativeItems.get(idx).m_41720_());
+                    if (key != null) {
+                        this.toggleAltCreative(key.toString());
                     }
                     return true;
                 }

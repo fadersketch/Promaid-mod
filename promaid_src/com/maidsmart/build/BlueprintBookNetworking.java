@@ -109,6 +109,53 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(18, BuildHudPacket.class,
                 BuildHudPacket::encode, BuildHudPacket::decode,
                 BuildHudPacket::handle);
+        // v1.5.275：请求重新打开手册（C2S 空包——配置面板"跳转女仆管理"用）
+        CHANNEL.registerMessage(19, OpenBookRequestPacket.class,
+                OpenBookRequestPacket::encode, OpenBookRequestPacket::decode,
+                OpenBookRequestPacket::handle);
+        // v1.5.305：删除索引 20 OpenMaidGuiPacket（手册「⚙ 女仆配置」按钮整体移除——
+        // 用户："有 bug 不想修，直接删了"；打开 TLM 女仆配置请直接右键女仆）
+        // v1.0.3：per-maid 大语言模型开关（手册女仆记忆页「LLM:开/关」）——
+        // C2S 切换 + S2C 状态同步（仿记忆开关 4/16 号包）
+        CHANNEL.registerMessage(20, AiLlmTogglePacket.class,
+                AiLlmTogglePacket::encode, AiLlmTogglePacket::decode,
+                AiLlmTogglePacket::handle);
+        CHANNEL.registerMessage(21, LlmStateSyncPacket.class,
+                LlmStateSyncPacket::encode, LlmStateSyncPacket::decode,
+                LlmStateSyncPacket::handle);
+    }
+
+    /** v1.5.275：请求重新打开手册（C2S——配置面板跳转女仆管理：关配置 → 服务端
+     *  重新下发手册包（initialView=2 女仆管理，与 BlueprintBookScreen.VIEW_MAIDS 一致）
+     *  → 客户端开手册并切到女仆管理页） */
+    public static class OpenBookRequestPacket {
+        /** 0 = 默认大目录；2 = 女仆管理页（BlueprintBookScreen.VIEW_MAIDS） */
+        public final int view;
+
+        public OpenBookRequestPacket(int view) {
+            this.view = view;
+        }
+
+        public static void encode(OpenBookRequestPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.view);
+        }
+
+        public static OpenBookRequestPacket decode(FriendlyByteBuf buf) {
+            return new OpenBookRequestPacket(buf.readInt());
+        }
+
+        public static void handle(OpenBookRequestPacket pkt,
+                                  Supplier<net.minecraftforge.network.NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                net.minecraft.server.level.ServerPlayer sp = ctx.get().getSender();
+                if (sp != null) {
+                    net.minecraft.world.item.ItemStack hand = sp.m_21205_();
+                    // 无论主手是什么都重新打开（openFor 不依赖物品）
+                    com.maidsmart.build.BlueprintBookItem.openFor(sp, pkt.view);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /** 蓝图目录条目（v1.5.18：含材料缺口 {物品id, 已有, 需要}；v1.5.159：含占地尺寸
@@ -162,7 +209,9 @@ public final class BlueprintBookNetworking {
                     com.maidsmart.memory.AiMemoryManager.isEnabled(m) ? "1" : "0", count,
                     taskUid, bindName, bState,
                     BuildPlan.isExplicitForeman(m) ? "1" : "0",
-                    BuildPlan.getBoundPlanId(m) == null ? "" : BuildPlan.getBoundPlanId(m)});
+                    BuildPlan.getBoundPlanId(m) == null ? "" : BuildPlan.getBoundPlanId(m),
+                    // v1.0.3：第 10 字段 = per-maid LLM 开关（女仆记忆页「LLM:开/关」）
+                    com.maidsmart.memory.LlmEnableManager.isEnabled(m) ? "1" : "0"});
             if (all.size() >= 200) {
                 break; // 极端数量保护
             }
@@ -226,10 +275,11 @@ public final class BlueprintBookNetworking {
 
     /**
      * v1.5.180：所有有效建造区块（跨维度展平，每区块一行）→
-     * {planId, 显示名, 维度名, 状态, x, y, z, 宽W, 高H, 深D, blueprintId}。
+     * {planId, 显示名, 维度名, 状态, x, y, z, 宽W, 高H, 深D, blueprintId, 创建X, 创建Y, 创建Z}。
      * 显示名按建筑名去重编号：同名区块 → 「小木屋」「小木屋2」「小木屋3」。
      * 尺寸为方块范围（客户端据此判定玩家在哪个区块内）。
-     */
+     * v1.5.279：追加【创建坐标】= 玩家创建区块时的原点（PlanState.origin，玩家
+     * 站的位置）——与 box min（r[0..2]，蓝图包围盒）不同，用于区块打标签显示。 */
     public static List<String[]> collectBuildRegions(net.minecraft.server.MinecraftServer server) {
         List<String[]> regions = new ArrayList<>();
         if (server == null) {
@@ -250,7 +300,10 @@ public final class BlueprintBookNetworking {
                 regions.add(new String[]{ps.planId, display, dimName(lv.m_46472_()), status,
                         String.valueOf(r[0]), String.valueOf(r[1]), String.valueOf(r[2]),
                         String.valueOf(r[3] - r[0]), String.valueOf(r[4] - r[1]), String.valueOf(r[5] - r[2]),
-                        ps.blueprintId});
+                        ps.blueprintId,
+                        String.valueOf(ps.origin.m_123341_()),
+                        String.valueOf(ps.origin.m_123342_()),
+                        String.valueOf(ps.origin.m_123343_())});
             }
         }
         return regions;
@@ -342,13 +395,16 @@ public final class BlueprintBookNetworking {
         /** v1.5.252z：打开手册立即显示——预计完成秒（-1=未知）+ 实时速度（块/秒） */
         public final int etaSec;
         public final String speedBps;
+        /** v1.5.275：初始视图（0=大目录 1=女仆管理——配置面板"跳转女仆管理"） */
+        public final int initialView;
 
         public OpenBlueprintBookPacket(List<Entry> entries, List<String[]> maids, List<String[]> allMaids,
                                        boolean paused, String speed, String progressText, int progress,
                                        int regionX, int regionY, int regionZ,
                                        int regionW, int regionH, int regionD,
                                        boolean inPlanRegion, String currentPlanId,
-                                       List<String[]> regions, int etaSec, String speedBps) {
+                                       List<String[]> regions, int etaSec, String speedBps,
+                                       int initialView) {
             this.entries = entries;
             this.maids = maids;
             this.allMaids = allMaids;
@@ -364,6 +420,7 @@ public final class BlueprintBookNetworking {
             this.regionD = regionD;
             this.inPlanRegion = inPlanRegion;
             this.currentPlanId = currentPlanId;
+            this.initialView = initialView;
             this.regions = regions == null ? new ArrayList<>() : regions;
             this.etaSec = etaSec;
             this.speedBps = speedBps == null ? "" : speedBps;
@@ -400,8 +457,8 @@ public final class BlueprintBookNetworking {
             if (pkt.allMaids != null) {
                 for (String[] m : pkt.allMaids) {
                     // v1.5.178：全字段（记忆开关/段落数/任务/绑定/状态/工头）
-                    // v1.5.182：第 9 字段 = 绑定 planId（区块女仆名单匹配用）
-                    for (int i = 0; i < 9; i++) {
+                    // v1.5.182：第 9 字段 = 绑定 planId；v1.0.3：第 10 字段 = LLM 开关
+                    for (int i = 0; i < 10; i++) {
                         buf.m_130070_(m.length > i ? m[i] : "");
                     }
                 }
@@ -423,7 +480,10 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
             if (pkt.regions != null) {
                 for (String[] r : pkt.regions) {
-                    for (int i = 0; i < 11; i++) {
+                    // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
+                    // 旧版写死 11 → 坐标字段永远没发出去 → 客户端 r.length>11 恒 false，
+                    // 区块"创建于 x,y,z"从未显示——用户："显示坐标还是没有做好"）
+                    for (int i = 0; i < 14; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
@@ -431,6 +491,8 @@ public final class BlueprintBookNetworking {
             // v1.5.252z：打开手册立即显示速度/ETA（追加在末尾，解码按序读）
             buf.m_130070_(String.valueOf(pkt.etaSec));
             buf.m_130070_(pkt.speedBps);
+            // v1.5.275：初始视图（0=大目录 1=女仆管理——配置面板跳转用）
+            buf.m_130070_(String.valueOf(pkt.initialView));
         }
 
         public static OpenBlueprintBookPacket decode(FriendlyByteBuf buf) {
@@ -459,10 +521,10 @@ public final class BlueprintBookNetworking {
             List<String[]> allMaids = new ArrayList<>();
             for (int i = 0; i < allCount; i++) {
                 // v1.5.178：全字段（记忆开关/段落数/任务/绑定/状态/工头）
-                // v1.5.182：第 9 字段 = 绑定 planId
+                // v1.5.182：第 9 字段 = 绑定 planId；v1.0.3：第 10 字段 = LLM 开关
                 allMaids.add(new String[]{buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
                         buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
-                        buf.m_130277_()});
+                        buf.m_130277_(), buf.m_130277_()});
             }
             boolean paused = Boolean.parseBoolean(buf.m_130277_());
             String speed = buf.m_130277_();
@@ -481,8 +543,13 @@ public final class BlueprintBookNetworking {
             int regionCount = Integer.parseInt(buf.m_130277_());
             List<String[]> regions = new ArrayList<>();
             for (int i = 0; i < regionCount; i++) {
-                String[] rr = new String[11];
-                for (int j = 0; j < 11; j++) {
+                // v1.5.296：14 字段——v1.5.290 只改了 encode（写 14），decode 漏改仍读 11：
+                // (a) 客户端区块永远只有 11 字段 → r[11..13] 创建坐标缺失 →"坐标显示没做出来"；
+                // (b) 每个区块剩 3 个坐标字符串错位到后续字段，≥2 个区块时 initialView 读到
+                // 蓝图 id（非数字）→ NumberFormatException → 连接损坏 →"连接已丢失"
+                //（日志实证 06:21:55 创建第二个区块后开手册即断连）
+                String[] rr = new String[14];
+                for (int j = 0; j < 14; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
@@ -490,9 +557,11 @@ public final class BlueprintBookNetworking {
             // v1.5.252z：速度/ETA（与 encode 末尾顺序一致）
             int etaSec = Integer.parseInt(buf.m_130277_());
             String speedBps = buf.m_130277_();
+            // v1.5.275：初始视图（0=大目录 2=女仆管理）
+            int initialView = Integer.parseInt(buf.m_130277_());
             return new OpenBlueprintBookPacket(entries, maids, allMaids, paused, speed, progressText, progress,
                     regionX, regionY, regionZ, regionW, regionH, regionD,
-                    inPlanRegion, currentPlanId, regions, etaSec, speedBps);
+                    inPlanRegion, currentPlanId, regions, etaSec, speedBps, initialView);
         }
 
         public static void handle(OpenBlueprintBookPacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -503,7 +572,7 @@ public final class BlueprintBookNetworking {
                         pkt.progressText, pkt.progress, pkt.regionX, pkt.regionY, pkt.regionZ,
                         pkt.regionW, pkt.regionH, pkt.regionD,
                         pkt.inPlanRegion, pkt.currentPlanId, pkt.regions,
-                        pkt.etaSec, pkt.speedBps);
+                        pkt.etaSec, pkt.speedBps, pkt.initialView);
             });
             ctx.get().setPacketHandled(true);
         }
@@ -650,8 +719,8 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.allMaids == null ? 0 : pkt.allMaids.size()));
             if (pkt.allMaids != null) {
                 for (String[] m : pkt.allMaids) {
-                    // v1.5.182：第 9 字段 = 绑定 planId
-                    for (int i = 0; i < 9; i++) {
+                    // v1.5.182：第 9 字段 = 绑定 planId；v1.0.3：第 10 字段 = LLM 开关
+                    for (int i = 0; i < 10; i++) {
                         buf.m_130070_(m.length > i ? m[i] : "");
                     }
                 }
@@ -659,8 +728,9 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
             if (pkt.regions != null) {
                 for (String[] r : pkt.regions) {
-                    // v1.5.180：11 字段 {planId, 显示名, 维度名, 状态, x,y,z, W,H,D, blueprintId}
-                    for (int i = 0; i < 11; i++) {
+                    // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
+                    // 旧版写死 11 → 坐标字段从未发出去）
+                    for (int i = 0; i < 14; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
@@ -691,16 +761,18 @@ public final class BlueprintBookNetworking {
             int allCount = Integer.parseInt(buf.m_130277_());
             List<String[]> allMaids = new ArrayList<>();
             for (int i = 0; i < allCount; i++) {
-                // v1.5.182：第 9 字段 = 绑定 planId
+                // v1.5.182：第 9 字段 = 绑定 planId；v1.0.3：第 10 字段 = LLM 开关
                 allMaids.add(new String[]{buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
                         buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_(),
-                        buf.m_130277_()});
+                        buf.m_130277_(), buf.m_130277_()});
             }
             int regionCount = Integer.parseInt(buf.m_130277_());
             List<String[]> regions = new ArrayList<>();
             for (int i = 0; i < regionCount; i++) {
-                String[] rr = new String[11];
-                for (int j = 0; j < 11; j++) {
+                // v1.5.296：14 字段（与 OpenBlueprintBookPacket 同修——v1.5.290 漏改
+                // decode：坐标字段缺失 + 多区块时后续字段错位致解析崩溃）
+                String[] rr = new String[14];
+                for (int j = 0; j < 14; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
@@ -1084,8 +1156,8 @@ public final class BlueprintBookNetworking {
         for (Map.Entry<String[], Map<String, int[]>> e
                 : BlueprintLib.buildCatalogEntriesWithMaterials(player).entrySet()) {
             String[] base = e.getKey();
-            // v1.5.159：占地尺寸（区块显示预览用）
-            int[] size = BlueprintLib.blueprintSize(BlueprintLib.getBlueprint(base[0]));
+            // v1.5.159：占地尺寸（区块显示预览用）——v1.5.375 走缓存（启动预热）
+            int[] size = BlueprintLib.blueprintSizeCached(base[0], BlueprintLib.getBlueprint(base[0]));
             entries.add(new Entry(base[0], base[1], base[2],
                     new ArrayList<>(e.getValue().entrySet().stream()
                             .map(m -> new String[]{m.getKey(), String.valueOf(m.getValue()[0]), String.valueOf(m.getValue()[1])})
@@ -1111,7 +1183,7 @@ public final class BlueprintBookNetworking {
                         region[0], region[1], region[2], region[3], region[4], region[5],
                         here != null, here == null ? null : here.blueprintId,
                         sl == null ? new ArrayList<>() : collectBuildRegions(sl.m_7654_()),
-                        openEta, openBps));
+                        openEta, openBps, 0));
     }
 
     /**
@@ -1229,6 +1301,102 @@ public final class BlueprintBookNetworking {
                 if (!pkt.soulId.isEmpty()) {
                     com.maidsmart.memory.AiMemoryManager.pushClientSoulId(pkt.maidUuid, pkt.soulId);
                 }
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    // ==================== v1.0.3:per-maid 大语言模型开关 ====================
+
+    /**
+     * C2S：手册女仆记忆页「LLM:开/关」按钮 → 服务端写 LlmEnableManager
+     * （persistentData + 磁盘备份），并广播 LlmStateSyncPacket（操作玩家必达 +
+     * 追踪玩家双发，防客户端显示回"开"）。
+     */
+    public static class AiLlmTogglePacket {
+        public final String maidUuid;
+        public final boolean enabled;
+
+        public AiLlmTogglePacket(String maidUuid, boolean enabled) {
+            this.maidUuid = maidUuid;
+            this.enabled = enabled;
+        }
+
+        public static void encode(AiLlmTogglePacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(pkt.maidUuid);
+            buf.m_130070_(String.valueOf(pkt.enabled));
+        }
+
+        public static AiLlmTogglePacket decode(FriendlyByteBuf buf) {
+            return new AiLlmTogglePacket(buf.m_130277_(),
+                    Boolean.parseBoolean(buf.m_130277_()));
+        }
+
+        public static void handle(AiLlmTogglePacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
+                    return;
+                }
+                EntityMaid maid = null;
+                try {
+                    maid = (EntityMaid) level.m_8791_(java.util.UUID.fromString(pkt.maidUuid));
+                } catch (IllegalArgumentException ignored) {
+                }
+                if (maid == null) {
+                    // 女仆不在加载范围——仍记录到磁盘（isEnabled 磁盘优先），加载后生效
+                    com.maidsmart.memory.LlmEnableManager.setEnabledDiskOnly(
+                            pkt.maidUuid, pkt.enabled, level);
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a77女仆不在附近（未加载），LLM 开关已记录，她加载后生效。"));
+                    return;
+                }
+                // 权限：女仆主人 或 OP
+                if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c只有女仆的主人或 OP 可以切换 LLM 开关。"));
+                    return;
+                }
+                com.maidsmart.memory.LlmEnableManager.setEnabled(maid, pkt.enabled);
+                // 广播开关状态（persistentData 不同步客户端——不广播则界面显示旧值）
+                final EntityMaid fMaid = maid;
+                LlmStateSyncPacket sync = new LlmStateSyncPacket(pkt.maidUuid, pkt.enabled);
+                CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player), sync);
+                CHANNEL.send(net.minecraftforge.network.PacketDistributor.TRACKING_ENTITY.with(() -> fMaid),
+                        sync);
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        (pkt.enabled ? "\u00a7a" : "\u00a77") + "\u3010大语言模型\u3011"
+                                + maid.m_5446_().getString() + "已"
+                                + (pkt.enabled ? "启用（对话由 LLM 驱动）"
+                                : "关闭（不发 LLM 请求，主动对话降级为固定文本）")));
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** S2C：LLM 开关状态同步（服务端 setEnabled 后广播，客户端缓存纠正显示） */
+    public static class LlmStateSyncPacket {
+        public final String maidUuid;
+        public final boolean enabled;
+
+        public LlmStateSyncPacket(String maidUuid, boolean enabled) {
+            this.maidUuid = maidUuid;
+            this.enabled = enabled;
+        }
+
+        public static void encode(LlmStateSyncPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(pkt.maidUuid);
+            buf.m_130070_(String.valueOf(pkt.enabled));
+        }
+
+        public static LlmStateSyncPacket decode(FriendlyByteBuf buf) {
+            return new LlmStateSyncPacket(buf.m_130277_(),
+                    Boolean.parseBoolean(buf.m_130277_()));
+        }
+
+        public static void handle(LlmStateSyncPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                com.maidsmart.memory.LlmEnableManager.pushClientState(pkt.maidUuid, pkt.enabled);
             });
             ctx.get().setPacketHandled(true);
         }
@@ -1642,6 +1810,62 @@ public final class BlueprintBookNetworking {
                     + " · 提取水位=" + meta.lastExtractedTime());
             // 主动对话阶段
             lines.add(com.maidsmart.dialogue.ProactiveDialogueManager.stageInfo(maid));
+            // v1.2.1：人格 / 人设统一（TLM 原版人设检测 → 补充/完整模式）
+            try {
+                boolean pOn = com.maidsmart.config.MaidSmartConfig.MEMORY_PERSONA.get();
+                String pname = com.maidsmart.persona.PersonaPackage.personaName(store.dir());
+                int pcore = com.maidsmart.persona.PersonaPackage.coreMemoryCount(store.dir());
+                StringBuilder pLine = new StringBuilder("人格: ");
+                if (!pOn) {
+                    pLine.append("关");
+                } else if (pname == null) {
+                    pLine.append("未生成");
+                } else {
+                    pLine.append(pname).append(" · 核心记忆").append(pcore).append("条");
+                    if (com.maidsmart.config.MaidSmartConfig.MEMORY_PERSONA_UNIFY.get()) {
+                        pLine.append(" · TLM人设=")
+                                .append(com.maidsmart.memory.AiMemoryContext.tlmHasPersona(maid) ? "补充" : "完整");
+                    }
+                }
+                lines.add(pLine.toString());
+            } catch (Exception ignored) {
+            }
+            // v1.2.0：纪念日联动（heartfelt 基准日 + promaid 达成/临近游标）
+            try {
+                if (!com.maidsmart.config.MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.get()) {
+                    lines.add("纪念日: 关");
+                } else {
+                    long day = level.m_46467_() / 24000L;
+                    long confession = maid.getPersistentData().m_128454_("heartfelt_confession_at");
+                    long firstMeet = maid.getPersistentData().m_128454_("heartfelt_ev_first_meet");
+                    long baseDay = confession > 0L ? confession / 24000L
+                            : (firstMeet > 0L ? firstMeet / 24000L : 0L);
+                    long doneMark = maid.getPersistentData().m_128454_("maid_smart_anniv_mark");
+                    long appMark = maid.getPersistentData().m_128454_("maid_smart_anniv_app");
+                    StringBuilder aLine = new StringBuilder("纪念日: ");
+                    if (baseDay <= 0L) {
+                        aLine.append("无基准（未告白/初遇）");
+                    } else {
+                        aLine.append("基准=告白/初遇·第").append(day - baseDay).append("天")
+                                .append(" · 已达成").append(doneMark > 0L ? doneMark + "天" : "无");
+                        if (appMark > 0L) {
+                            aLine.append(" · 临近").append(appMark).append("天");
+                        }
+                    }
+                    lines.add(aLine.toString());
+                }
+            } catch (Exception ignored) {
+            }
+            // v1.1.0：双 agent 提取 + 每日关心点
+            try {
+                boolean dual = com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get();
+                boolean extracting = com.maidsmart.memory.AiMemoryExtractor.isExtracting(maid.m_20148_());
+                int cares = com.maidsmart.memory.CarePointGenerator.generate(store,
+                        com.maidsmart.affect.AffectManager.load(maid)).size();
+                lines.add("双agent: " + (dual ? "开" : "关") + " · 提取中=" + (extracting ? "是" : "否")
+                        + " · 关心点" + cares + "条");
+            } catch (Exception ignored) {
+            }
             // 工作笔记
             String note = com.maidsmart.memory.WorkingNoteTool.readNote(maid);
             if (!note.isBlank()) {

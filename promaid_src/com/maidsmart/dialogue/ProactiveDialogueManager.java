@@ -5,7 +5,6 @@ import com.github.tartaricacid.touhoulittlemaid.api.event.MaidFavorabilityLevelC
 import com.github.tartaricacid.touhoulittlemaid.config.subconfig.AIConfig;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.action.EmotionalActionExecutor;
-import com.maidsmart.memory.AiMemoryExtractor;
 import com.maidsmart.memory.AiMemoryManager;
 import com.maidsmart.memory.AiMemoryModels;
 import com.maidsmart.memory.AiMemoryStore;
@@ -64,6 +63,15 @@ public class ProactiveDialogueManager {
     /** 紧急事件冷却（重伤/死亡，30 秒） */
     private static final Map<UUID, Long> lastEventTime = new ConcurrentHashMap<>();
     private long lastDay = -1;
+
+    /** v1.2.0：单例句柄——纪念日等外部联动经此调用 fireEventFor（ProMaidExtension
+     *  只构造一次本类，构造器赋值即可） */
+    public static ProactiveDialogueManager INSTANCE;
+
+    public ProactiveDialogueManager() {
+        INSTANCE = this;
+    }
+
     private static long proactiveCooldown() {
         return (long) com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROACTIVE_COOLDOWN.get() * 1200L;
     }
@@ -314,7 +322,9 @@ public class ProactiveDialogueManager {
         if (!(maid.m_9236_() instanceof ServerLevel level)) {
             return null;
         }
-        AiMemoryStore store = AiMemoryStore.of(maid.m_20148_(), AiMemoryExtractor.memoryRoot(level.m_7654_()));
+        // v1.1.0：统一走灵魂路由（旧版直接读世界目录——灵魂女仆会读错位置，
+        // 人格/情绪/关心点等新记忆也会路由不一致）
+        AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
         List<AiMemoryModels.Paragraph> paras = new ArrayList<>(store.paragraphs());
         paras.sort(java.util.Comparator
                 .comparingInt(AiMemoryModels.Paragraph::salience).reversed());
@@ -354,7 +364,8 @@ public class ProactiveDialogueManager {
         if (!(maid.m_9236_() instanceof ServerLevel level)) {
             return null;
         }
-        AiMemoryStore store = AiMemoryStore.of(maid.m_20148_(), AiMemoryExtractor.memoryRoot(level.m_7654_()));
+        // v1.1.0：统一走灵魂路由（同 memoryTopic）
+        AiMemoryStore store = com.maidsmart.soul.SoulBindingService.storeFor(maid, level);
         List<AiMemoryModels.Relation> rels = new ArrayList<>(store.relations());
         rels.sort(java.util.Comparator
                 .comparingDouble(AiMemoryModels.Relation::confidence).reversed());
@@ -449,6 +460,12 @@ public class ProactiveDialogueManager {
         this.playEmotionalActions(maid, player, trigger);
         // v1.5.198：语言强制（dialogue.outputLanguage；留空 = 跟随 TLM/客户端语言）
         maid.getAiChatManager().chat(trigger, ChatInfoUtil.fromMaid(maid), player);
+    }
+
+    /** v1.2.0：外部事件驱动入口（纪念日联动用）——委托 private fireEvent，
+     *  复用日上限/全局配额/敌袭冻结/反馈学习；与现有 4 个事件处理器同构 */
+    public void fireEventFor(EntityMaid maid, ServerPlayer player, String trigger) {
+        this.fireEvent(maid, player, trigger);
     }
 
     @SubscribeEvent

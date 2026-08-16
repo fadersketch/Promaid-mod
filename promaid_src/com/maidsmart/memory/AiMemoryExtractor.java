@@ -44,6 +44,11 @@ public final class AiMemoryExtractor {
     private AiMemoryExtractor() {
     }
 
+    /** v1.2.1：提取是否进行中（手册链路调试面板显示用） */
+    public static boolean isExtracting(UUID maidUuid) {
+        return EXTRACTING.containsKey(maidUuid);
+    }
+
     /** 记忆根目录：<世界目录>/promaid_memory
      *  v1.5.250【SRG 修复+迁移】：LevelResource.f_78174_ 是 "advancements" 不是
      *  ROOT——旧版记忆数据写到了 <世界>/advancements/promaid_memory（读写一致能
@@ -131,8 +136,14 @@ public final class AiMemoryExtractor {
         EXTRACTING.put(id, System.currentTimeMillis());
         long newestTime = batch.get(batch.size() - 1).gameTime();
         long gameTime = maid.m_9236_().m_46467_();
-        String prompt = buildPrompt(batch, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get());
-        sendExtraction(maid, server, os, model, prompt, store, newestTime, gameTime);
+        int maxChars = com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_MESSAGE_CHARS.get();
+        // v1.1.0：双 agent——摘要与事实/事件分两次独立 prompt（更聚焦、互不阻塞）；
+        // memory.dualAgent 关闭时回退单 agent 合并版（原行为）
+        String prompt = buildPrompt(batch, maxChars);
+        String summaryPrompt = buildSummaryPrompt(batch, maxChars);
+        String factsPrompt = buildFactsPrompt(batch, maxChars);
+        sendExtraction(maid, server, os, model, prompt, summaryPrompt, factsPrompt,
+                store, newestTime, gameTime);
     }
 
     /** v1.5.198：记忆 API 自定义回退——自定义值非空用自定义，否则跟随 TLM 站点 */
@@ -180,16 +191,36 @@ public final class AiMemoryExtractor {
 
     // ---------- 提取指令 ----------
 
+    /** 单 agent 合并版（memory.dualAgent=关 时用，原行为） */
     private static String buildPrompt(List<LLMMessage> batch, int maxChars) {
+        return buildPromptBase(batch, maxChars, true, true);
+    }
+
+    /** v1.1.0：双 agent·摘要 agent（SUMMARY/IMPORTANCE/TAGS） */
+    private static String buildSummaryPrompt(List<LLMMessage> batch, int maxChars) {
+        return buildPromptBase(batch, maxChars, true, false);
+    }
+
+    /** v1.1.0：双 agent·事实 agent（TAGS/FACT/EVENT） */
+    private static String buildFactsPrompt(List<LLMMessage> batch, int maxChars) {
+        return buildPromptBase(batch, maxChars, false, true);
+    }
+
+    private static String buildPromptBase(List<LLMMessage> batch, int maxChars,
+                                          boolean includeSummary, boolean includeFacts) {
         StringBuilder sb = new StringBuilder();
         sb.append("你是车万女仆的长期记忆提取器。以下是最近 ").append(batch.size())
                 .append(" 条与主人的对话记录。\n");
         sb.append("提取值得长期记住的信息，严格按以下格式逐行输出（没有就写 NONE，不要输出其他内容）：\n\n");
-        sb.append("SUMMARY: 一句话摘要（这段对话发生了什么）\n");
-        sb.append("IMPORTANCE: 1-5（这段对话整体重要度）\n");
+        if (includeSummary) {
+            sb.append("SUMMARY: 一句话摘要（这段对话发生了什么）\n");
+            sb.append("IMPORTANCE: 1-5（这段对话整体重要度）\n");
+        }
         sb.append("TAGS: tag1,tag2（英文小写，如 relationship,preference,world）\n");
-        sb.append("FACT: category|key|confidence|content（每行一条；category 只能是 preference,boundary,trait,relation,promise；key 简短英文；confidence 1-5；content 中文一句话，可直接进入用户画像）\n");
-        sb.append("EVENT: salience|content（每行一条；salience 1-10；只记值得长期记住的事件/决定/情绪线索）\n\n");
+        if (includeFacts) {
+            sb.append("FACT: category|key|confidence|content（每行一条；category 只能是 preference,boundary,trait,relation,promise；key 简短英文；confidence 1-5；content 中文一句话，可直接进入用户画像）\n");
+            sb.append("EVENT: salience|content（每行一条；salience 1-10；只记值得长期记住的事件/决定/情绪线索）\n\n");
+        }
         sb.append("规则：\n");
         sb.append("- 不要记录寒暄、临时语气词、模型自夸、无意义重复\n");
         // v1.5.231b：爱憎分明（Love Loathe）等模组会把"当前状态/信任值/恐惧值/心情"
@@ -208,44 +239,43 @@ public final class AiMemoryExtractor {
 
     // ---------- 后台请求 ----------
 
+    /**
+     * v1.1.0：双 agent 分发——memory.dualAgent 开启时，摘要与事实/事件各发一次
+     * 独立请求（任一失败不阻塞对方；水位线等两个都完成才推进，防重试风暴）；
+     * 关闭时回退单 agent 合并请求（原行为）。
+     */
     private static void sendExtraction(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
-                                       String model, String prompt, AiMemoryStore store,
+                                       String model, String singlePrompt, String summaryPrompt,
+                                       String factsPrompt, AiMemoryStore store,
                                        long newestTime, long gameTime) {
+        if (!com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get()) {
+            sendSingle(maid, server, site, model, singlePrompt, store, newestTime, gameTime);
+            return;
+        }
+        // 双 agent：两个请求共享完成计数（回调全部经 server.execute 切回服务器线程，
+        // 串行执行，计数安全）
+        int[] remaining = {2};
+        sendAgent(maid, server, site, model, summaryPrompt, store, newestTime, gameTime, remaining, true);
+        sendAgent(maid, server, site, model, factsPrompt, store, newestTime, gameTime, remaining, false);
+    }
+
+    /** 单 agent 合并请求（memory.dualAgent=关 的原行为） */
+    private static void sendSingle(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
+                                   String model, String prompt, AiMemoryStore store,
+                                   long newestTime, long gameTime) {
         try {
             ChatCompletion req = ChatCompletion.create().model(model).userChat(prompt);
             if (site.hasThinkingField()) {
                 req = req.disableThinking(); // 提取不需要思考，省钱
             }
-            HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(pick(site.url(),
-                    com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get())))
-                    .header("Authorization", "Bearer " + pick(site.secretKey(),
-                            com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()))
-                    .header("Content-Type", "application/json")
-                    .timeout(Duration.ofSeconds(60))
-                    .POST(HttpRequest.BodyPublishers.ofString(AiMemoryModels.GSON.toJson(req)));
-            if (site.headers() != null) {
-                site.headers().forEach(builder::header);
-            }
+            HttpRequest.Builder builder = buildRequest(site, req);
             LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
                     .whenComplete((resp, err) -> server.execute(() -> {
                         UUID id = maid.m_20148_();
                         try {
-                            if (err != null || resp == null || resp.statusCode() != 200
-                                    || resp.body() == null || resp.body().isBlank()) {
-                                // v1.5.131：失败写日志（旧版静默推进位置——"记忆不增长"
-                                // 无法诊断；此处日志能看到状态码/超时/401 等真实原因）
-                                LOGGER.info("AiMemoryExtractor: 提取失败 {}（err={}，status={}）",
-                                        maid.m_20148_(),
-                                        err != null ? err.getClass().getSimpleName() : "null",
-                                        resp == null ? "null" : resp.statusCode());
-                                fail(store, newestTime, id);
-                                return;
-                            }
-                            ChatCompletionResponse parsed = AiMemoryModels.GSON
-                                    .fromJson(resp.body(), ChatCompletionResponse.class);
-                            String content = parsed == null || parsed.getFirstChoice() == null
-                                    ? null : parsed.getFirstChoice().getContent();
-                            if (content == null || content.isBlank()) {
+                            String content = responseContent(resp, err);
+                            if (content == null) {
+                                logFail(maid, err, resp);
                                 fail(store, newestTime, id);
                                 return;
                             }
@@ -257,6 +287,98 @@ public final class AiMemoryExtractor {
         } catch (Exception e) {
             // 构造请求失败（URL 非法等）——同样推进位置，防卡死
             EXTRACTING.remove(maid.m_20148_());
+        }
+    }
+
+    /**
+     * v1.1.0：双 agent 单请求——完成回调里按 agent 类型写记忆，再结算计数。
+     * isSummaryAgent=true → 摘要；false → 事实/事件。
+     */
+    private static void sendAgent(EntityMaid maid, MinecraftServer server, LLMOpenAISite site,
+                                  String model, String prompt, AiMemoryStore store,
+                                  long newestTime, long gameTime, int[] remaining,
+                                  boolean isSummaryAgent) {
+        UUID id = maid.m_20148_();
+        try {
+            ChatCompletion req = ChatCompletion.create().model(model).userChat(prompt);
+            if (site.hasThinkingField()) {
+                req = req.disableThinking();
+            }
+            HttpRequest.Builder builder = buildRequest(site, req);
+            LLMSite.LLM_HTTP_CLIENT.sendAsync(builder.build(), HttpResponse.BodyHandlers.ofString())
+                    .whenComplete((resp, err) -> server.execute(() -> {
+                        try {
+                            String content = responseContent(resp, err);
+                            if (content == null) {
+                                logFail(maid, err, resp);
+                                done(store, newestTime, id, remaining);
+                                return;
+                            }
+                            if (isSummaryAgent) {
+                                handleSummary(store, content, gameTime);
+                            } else {
+                                handleFacts(store, content, gameTime);
+                            }
+                            done(store, newestTime, id, remaining);
+                        } catch (Exception e) {
+                            done(store, newestTime, id, remaining);
+                        }
+                    }));
+        } catch (Exception e) {
+            // 构造请求失败（URL 非法等）——同样计入完成计数
+            done(store, newestTime, id, remaining);
+        }
+    }
+
+    /** 构造 OpenAI 兼容请求（共享 URL/密钥/超时/额外头逻辑） */
+    private static HttpRequest.Builder buildRequest(LLMOpenAISite site, ChatCompletion req) {
+        HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(pick(site.url(),
+                com.maidsmart.config.MaidSmartConfig.MEMORY_API_URL.get())))
+                .header("Authorization", "Bearer " + pick(site.secretKey(),
+                        com.maidsmart.config.MaidSmartConfig.MEMORY_API_KEY.get()))
+                .header("Content-Type", "application/json")
+                .timeout(Duration.ofSeconds(60))
+                .POST(HttpRequest.BodyPublishers.ofString(AiMemoryModels.GSON.toJson(req)));
+        if (site.headers() != null) {
+            site.headers().forEach(builder::header);
+        }
+        return builder;
+    }
+
+    /** 成功响应正文；失败/非 200/空 body/解析异常返回 null */
+    private static String responseContent(HttpResponse<String> resp, Throwable err) {
+        if (err != null || resp == null || resp.statusCode() != 200
+                || resp.body() == null || resp.body().isBlank()) {
+            return null;
+        }
+        try {
+            ChatCompletionResponse parsed = AiMemoryModels.GSON
+                    .fromJson(resp.body(), ChatCompletionResponse.class);
+            String content = parsed == null || parsed.getFirstChoice() == null
+                    ? null : parsed.getFirstChoice().getContent();
+            return (content == null || content.isBlank()) ? null : content;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** 提取失败诊断日志（服务器日志可见真实原因：401/超时/站点禁用） */
+    private static void logFail(EntityMaid maid, Throwable err, HttpResponse<String> resp) {
+        LOGGER.info("AiMemoryExtractor: 提取失败 {}（err={}，status={}）",
+                maid.m_20148_(),
+                err != null ? err.getClass().getSimpleName() : "null",
+                resp == null ? "null" : resp.statusCode());
+    }
+
+    /** v1.1.0：双 agent 完成结算——两个 agent 都完成（无论成败）才推进水位线 + 移除进行中标记 */
+    private static void done(AiMemoryStore store, long newestTime, UUID id, int[] remaining) {
+        if (remaining[0] <= 0) {
+            return;
+        }
+        remaining[0]--;
+        if (remaining[0] == 0) {
+            store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
+            EXTRACTING.remove(id);
         }
     }
 
@@ -274,11 +396,19 @@ public final class AiMemoryExtractor {
     }
 
     private static Extraction parse(String content) {
+        SummaryParts s = parseSummaryParts(content);
+        FactParts f = parseFactParts(content);
+        return new Extraction(s.summary(), s.importance(), s.tags(), f.facts(), f.events());
+    }
+
+    /** v1.1.0：摘要部分（SUMMARY/IMPORTANCE/TAGS） */
+    private record SummaryParts(String summary, int importance, List<String> tags) {
+    }
+
+    private static SummaryParts parseSummaryParts(String content) {
         String summary = "";
         int importance = 3;
         List<String> tags = new ArrayList<>();
-        List<String> facts = new ArrayList<>();
-        List<String> events = new ArrayList<>();
         for (String raw : content.split("\n")) {
             String line = raw.trim();
             if (line.isEmpty()) {
@@ -298,13 +428,30 @@ public final class AiMemoryExtractor {
                         tags.add(t.trim().toLowerCase(java.util.Locale.ROOT));
                     }
                 }
-            } else if (line.startsWith("FACT:")) {
+            }
+        }
+        return new SummaryParts(summary, importance, tags);
+    }
+
+    /** v1.1.0：事实/事件部分（FACT/EVENT） */
+    private record FactParts(List<String> facts, List<String> events) {
+    }
+
+    private static FactParts parseFactParts(String content) {
+        List<String> facts = new ArrayList<>();
+        List<String> events = new ArrayList<>();
+        for (String raw : content.split("\n")) {
+            String line = raw.trim();
+            if (line.isEmpty()) {
+                continue;
+            }
+            if (line.startsWith("FACT:")) {
                 facts.add(line.substring("FACT:".length()).trim());
             } else if (line.startsWith("EVENT:")) {
                 events.add(line.substring("EVENT:".length()).trim());
             }
         }
-        return new Extraction(summary, importance, tags, facts, events);
+        return new FactParts(facts, events);
     }
 
     /** 解析结果写入存储（服务器线程内执行） */
@@ -326,6 +473,31 @@ public final class AiMemoryExtractor {
         store.prune(now, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
         store.setMeta(new AiMemoryModels.Meta(newestTime, store.meta().lastDailyDay()));
         EXTRACTING.remove(id);
+    }
+
+    /** v1.1.0：双 agent·摘要写入（SUMMARY/IMPORTANCE/TAGS） */
+    private static void handleSummary(AiMemoryStore store, String content, long gameTime) {
+        SummaryParts s = parseSummaryParts(content);
+        long now = System.currentTimeMillis();
+        if (!s.summary().isBlank() && !s.summary().equalsIgnoreCase("none")) {
+            writeParagraph(store, AiMemoryType.SUMMARY, s.summary(),
+                    mergeTags(s.tags(), "summary"), s.importance() * 2, now, gameTime);
+        }
+    }
+
+    /** v1.1.0：双 agent·事实/事件写入（FACT/EVENT + TAGS；upsert/prune 在此） */
+    private static void handleFacts(AiMemoryStore store, String content, long gameTime) {
+        FactParts f = parseFactParts(content);
+        SummaryParts s = parseSummaryParts(content); // 事实 prompt 也带 TAGS 行，供 EVENT 段打标
+        long now = System.currentTimeMillis();
+        for (String fact : f.facts()) {
+            writeFact(store, fact, now, gameTime);
+        }
+        for (String ev : f.events()) {
+            writeEvent(store, ev, s.tags(), now, gameTime);
+        }
+        store.upsertEntity("主人", "person", now);
+        store.prune(now, com.maidsmart.config.MaidSmartConfig.MEMORY_MAX_ENTRIES.get());
     }
 
     /** 统一段落写入（走写入策略分层） */

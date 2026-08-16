@@ -336,11 +336,13 @@ public class AiMemoryManager {
         for (int i = 0; i < top; i++) {
             sb.append("难忘的事：").append(AiMemoryModels.clip(today.get(i).content(), 60)).append("。");
         }
-        // 关注点：高重要度的情绪/关系残留
-        for (AiMemoryModels.Paragraph p : today) {
-            if (p.salience() >= 8 && (p.tags().contains("emotion") || p.tags().contains("relationship_event"))) {
-                sb.append("关系里还有重要的事，不要假装没发生。");
-                break;
+        // v1.1.0：每日关心点（规则推导"下次该怎么对主人"，随每日回顾注入；
+        // 主动会话 TOPIC_PUSH 读 daily 标签段落会自动复用——记忆↔主动对话联动）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_CARE_POINTS.get()) {
+            java.util.List<String> cares = CarePointGenerator.generate(store,
+                    com.maidsmart.affect.AffectManager.load(maid));
+            if (!cares.isEmpty()) {
+                sb.append("关心点：").append(String.join("；", cares)).append("。");
             }
         }
         writeParagraph(store, AiMemoryType.SUMMARY, sb.toString(), "daily,summary",

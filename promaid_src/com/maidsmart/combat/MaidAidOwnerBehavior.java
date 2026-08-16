@@ -208,7 +208,17 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 aided = true;
             }
         }
-        // 3. 血量低 → 治疗链（v1.5.206：形态/物品按效果强度排，不再单一药水）
+        // 3. 负面效果 → 牛奶（全解）/ 蜂蜜瓶（解中毒 + 回饱食）——v1.5.288：
+        //    改为【直接喂】（旧版塞主人背包/手上，用户："投喂应该直接喂给主人"）
+        //    v1.5.290：提前到治疗分支【之前】——旧版在治疗(3)之后：主人中毒+低血时
+        //    治疗先处理 → 负面解除被短路 → 蜂蜜/牛奶永远不喂（用户："还是不会喂蜂蜜"）。
+        //    先解毒再治疗更合理（中毒持续掉血，先断源头）
+        if (!aided && this.hasNegativeEffect(owner)) {
+            if (this.feedMilkOrHoneyDirect(maid, owner)) {
+                aided = true;
+            }
+        }
+        // 4. 血量低 → 治疗链（v1.5.206：形态/物品按效果强度排，不再单一药水）
         //    v1.5.252g15【治疗链只看血量】："环境优先"由分支顺序保证（g11：
         //    着火/溺水分支在本分支之前——环境处理成功则 aided 短路跳过治疗；
         //    环境没处理成功（没药水/CD）治疗兜底保命）。旧版 g13/g14 额外加
@@ -233,25 +243,18 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 aided = true; // 高饱食物 → 主人自然回血
             }
         }
-        // 4. 负面效果 → 牛奶（全解）/ 蜂蜜瓶（解中毒 + 回饱食）
-        if (!aided && this.hasNegativeEffect(owner)) {
-            if (this.giveItemToOwner(maid, owner, "minecraft:milk_bucket",
-                    "主人，牛奶给你，解一下负面状态！")) {
-                aided = true;
-            } else if (this.giveItemToOwner(maid, owner, "minecraft:honey_bottle",
-                    "主人，蜂蜜给你，解一下中毒！")) {
-                aided = true;
-            }
-        }
         // 5. 饱食度低 → 喂最优食物（全清单按饱和度排序，v1.5.201 起）
-        if (!aided && owner.m_36324_().m_38702_() < com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get()) {
+        //    v1.5.290：不再依赖 !aided——旧版：负面解除(3)喂牛奶成功（清效果但不加
+        //    饱食）→ aided=true → 饱食分支被短路 → 饿了女仆不喂（用户："饿了喂
+        //    蜂蜜而女仆没触发"）。饱食投喂独立判定：即使本轮已做其他动作，饱食仍低
+        //    就继续喂（蜂蜜/食物都能直接加饱食，连续动作合理）
+        if (owner.m_36324_().m_38702_() < com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get()) {
             if (com.maidsmart.action.EmotionalActionExecutor.giveFoodToOwner(maid, owner)) {
                 maid.getChatBubbleManager().addTextChatBubble("主人饿了吧，给你带了吃的～");
                 aided = true;
             }
         }
         // 6. 主人附近有威胁且没有力量/迅捷增益 → 增益药水助战（v1.5.252g7：
-        //    种类 CD 内化——投了力量 CD 内迅捷照投，效果还在就不重复给）
         if (!aided && this.ownerInDanger(level, owner)
                 && !owner.m_21023_(net.minecraft.world.effect.MobEffects.f_19600_) // strength
                 && !owner.m_21023_(net.minecraft.world.effect.MobEffects.f_19596_)) { // swiftness
@@ -600,6 +603,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 使用动画
             maid.getChatBubbleManager().addTextChatBubble(
                     enchanted ? "主人，附魔金苹果给你！" : "主人，金苹果给你！");
+            // v1.5.307：金苹果路径补系统提示——用户："喂了什么系统提示不生效"；
+            // 排查：食物喂食的系统消息一直在（feedFoodDirect），但金苹果路径只有
+            // 气泡没有系统消息（效果是直接加成的，玩家看不到"喂了什么"）
+            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a7a[maid_smart] 女仆给你吃了" + (enchanted ? "附魔金苹果" : "金苹果")
+                            + "（吸收/再生等效果已加成）"));
             return true;
         } catch (Exception ignored) {
             return false;
@@ -627,6 +636,33 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             int bestSlot = -1;
             double bestSat = -1.0;
+            // v1.5.299：手持食物参与选优（同 giveFoodToOwner——旧版只扫背包，
+            // 女仆手上拿着肉排时治疗/饱食喂食都找不到）
+            int handSlot = -1;
+            ItemStack handItem = null;
+            double handSat = -1.0;
+            for (int h = 0; h < 2; h++) {
+                ItemStack hs = h == 0 ? maid.m_21205_() : maid.m_21206_();
+                if (hs.m_41619_()) {
+                    continue;
+                }
+                boolean isFood = false;
+                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
+                    if (food.m_41720_() == hs.m_41720_()) {
+                        isFood = true;
+                        break;
+                    }
+                }
+                if (!isFood) {
+                    continue;
+                }
+                double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, owner);
+                if (sat > handSat) {
+                    handSat = sat;
+                    handSlot = h == 0 ? -2 : -1;
+                    handItem = hs;
+                }
+            }
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_()) {
@@ -648,18 +684,134 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     bestSlot = i;
                 }
             }
-            if (bestSlot < 0) {
+            if (bestSlot < 0 && handSlot == -1) {
                 return false;
             }
-                ItemStack toGive = inv.extractItem(bestSlot, 1, false);
-                ItemStack remain = this.giveToOwnerHotbarFirst(owner, toGive);
-                if (!remain.m_41619_()) {
-                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, remain, false);
+            ItemStack toGive;
+            if (handSlot != -1 && handSat >= bestSat) {
+                toGive = handItem.m_41777_(); // copy
+                handItem.m_41774_(1);         // shrink(1)
+            } else {
+                toGive = inv.extractItem(bestSlot, 1, false);
+            }
+            // v1.5.288：改为直接喂食（饱食度直接加到主人，不再塞背包/快捷栏）
+            if (!com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, toGive)) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, toGive, false);
                 return false;
             }
             maid.getChatBubbleManager().addTextChatBubble("主人快吃点东西补补！");
             return true;
         } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.5.288：负面效果【直接喂】——牛奶（清主人全部效果 + 空桶返还）优先，
+     *  其次蜂蜜瓶（解中毒 + 饱食 + 玻璃瓶返还）。旧版是塞主人背包/手上（用户：
+     *  "投喂应该跟本来就有的喂食功能一样是直接喂给主人"）。
+     *  v1.5.289：牛奶先查【正面状态】——主人身上有增益效果时不喂牛奶（牛奶清
+     *  全部效果会把力量/再生/抗火等增益一起清掉，与女仆自己喝牛奶同款前提）；
+     *  此时只喂蜂蜜（蜂蜜只解中毒+饱食，不清增益）。 */
+    private boolean feedMilkOrHoneyDirect(EntityMaid maid, ServerPlayer owner) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
+            net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.f_42787_;
+            // 牛奶优先（全解）——前提：主人身上没有增益效果
+            if (milk != null && !this.ownerHasBeneficialEffect(owner)) {
+                // v1.5.299：手持牛奶也认（主手→副手）——旧版只扫背包
+                ItemStack handMilk = maid.m_21205_();
+                boolean handIsMilk = !handMilk.m_41619_() && handMilk.m_41720_() == milk;
+                if (!handIsMilk) {
+                    handMilk = maid.m_21206_();
+                    handIsMilk = !handMilk.m_41619_() && handMilk.m_41720_() == milk;
+                }
+                if (handIsMilk) {
+                    handMilk.m_41774_(1); // 消耗手上的牛奶
+                    this.applyMilkEffect(maid, owner, inv);
+                    return true;
+                }
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (stack.m_41619_() || stack.m_41720_() != milk) {
+                        continue;
+                    }
+                    inv.extractItem(i, 1, false);
+                    this.applyMilkEffect(maid, owner, inv);
+                    return true;
+                }
+            }
+            // 蜂蜜（解中毒 + 饱食，不清增益——有增益时这是唯一安全选择）
+            // v1.5.299：手持蜂蜜也认（主手→副手）
+            ItemStack handHoney = maid.m_21205_();
+            boolean handIsHoney = !handHoney.m_41619_() && handHoney.m_41720_() == honey;
+            if (!handIsHoney) {
+                handHoney = maid.m_21206_();
+                handIsHoney = !handHoney.m_41619_() && handHoney.m_41720_() == honey;
+            }
+            if (handIsHoney) {
+                handHoney.m_41774_(1);
+                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, handHoney)) {
+                    maid.getChatBubbleManager().addTextChatBubble("主人，蜂蜜喝下，解一下中毒！");
+                    return true;
+                }
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, handHoney, false);
+                return false;
+            }
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || stack.m_41720_() != honey) {
+                    continue;
+                }
+                inv.extractItem(i, 1, false);
+                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, stack)) {
+                    maid.getChatBubbleManager().addTextChatBubble("主人，蜂蜜喝下，解一下中毒！");
+                    return true;
+                }
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, stack, false);
+                return false;
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.5.299：牛奶喂食共同动作（清全部效果 + 空桶返还 + 摆臂动画 + 音效 + 提示）——
+     *  背包牛奶与手持牛奶共用，防重复代码 */
+    private void applyMilkEffect(EntityMaid maid, ServerPlayer owner,
+                                 net.minecraftforge.items.IItemHandler inv) {
+        java.util.List<net.minecraft.world.effect.MobEffectInstance> effects =
+                new java.util.ArrayList<>(owner.m_21220_());
+        for (net.minecraft.world.effect.MobEffectInstance ei : effects) {
+            owner.m_21195_(ei.m_19544_());
+        }
+        net.minecraft.world.item.Item bucket = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:bucket"));
+        if (bucket != null) {
+            net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                    inv, new ItemStack(bucket), false);
+        }
+        // v1.5.292：喂食动作（与投药水/金苹果同款摆臂动画）
+        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+        // v1.5.290：喝牛奶音效 + 系统提示（喂了什么）
+        net.minecraft.sounds.SoundEvent snd = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
+                .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:entity.generic.drink"));
+        if (snd != null) {
+            owner.m_9236_().m_5594_(null, owner.m_20183_(), snd,
+                    net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+        }
+        owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                "\u00a7a[maid_smart] 女仆给你喝了牛奶，负面状态全解！"));
+        maid.getChatBubbleManager().addTextChatBubble("主人，牛奶喝下，负面状态全解！");
+    }
+
+    /** v1.5.289：主人身上是否有增益效果（牛奶全解的前提检查——有增益不喂牛奶） */
+    private static boolean ownerHasBeneficialEffect(ServerPlayer owner) {
+        for (net.minecraft.world.effect.MobEffectInstance ei : owner.m_21220_()) {
+            if (ei.m_19544_().m_19483_() == net.minecraft.world.effect.MobEffectCategory.BENEFICIAL) {
+                return true;
+            }
         }
         return false;
     }

@@ -26,6 +26,19 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.IntValue BUILD_STRUCTURE_MAX_BLOCKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_MAIDS;
     public static final ForgeConfigSpec.BooleanValue BUILD_ORIGIN_PLAYER;
+/** v1.5.316：红石机器专属搭建（专属顺序 + 活建造 + 自动放矿车），默认开 */
+public static final ForgeConfigSpec.BooleanValue BUILD_MACHINE_SMART;
+// v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期压制一切 TNT 点火
+public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
+    // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
+    public static final ForgeConfigSpec.BooleanValue BUILD_ALT_ENABLED;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_SLABS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_BLOCKS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_TALLS;
+    /** v1.5.275：横两格（床）替代品表 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_WIDES;
+    /** v1.5.275：无碰撞方块替代品表 */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_NOCLIPS;
     /** v1.5.102：以下把模组其余硬编码数值全部纳入面板（用户要求"所有数值都可调"） */
     public static final ForgeConfigSpec.IntValue BUILD_REGION_TELEPORT_CD;
     public static final ForgeConfigSpec.IntValue BUILD_RESTORE_CACHE_TTL;
@@ -98,6 +111,15 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_URL;
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_KEY;
     public static final ForgeConfigSpec.ConfigValue<String> MEMORY_API_MODEL;
+    // v1.1.0：记忆升级（借鉴 maidsoulcore）——情绪快照 / 人格种子 / 每日关心点 / 双 agent 提取
+    public static final ForgeConfigSpec.BooleanValue MEMORY_AFFECT_SNAPSHOT;
+    public static final ForgeConfigSpec.BooleanValue MEMORY_PERSONA;
+    public static final ForgeConfigSpec.BooleanValue MEMORY_CARE_POINTS;
+    public static final ForgeConfigSpec.BooleanValue MEMORY_DUAL_AGENT;
+    // v1.2.0：heartfelt 纪念日联动（软感知，未装 heartfelt 时 tag 永不出现）
+    public static final ForgeConfigSpec.BooleanValue MEMORY_HEARTFELT_ANNIVERSARY;
+    // v1.2.1：人设统一（TLM 已有人设时人格块降级为补充）
+    public static final ForgeConfigSpec.BooleanValue MEMORY_PERSONA_UNIFY;
 
     // ================= 对话与提示 =================
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_STATUS_REPORTER;
@@ -159,6 +181,8 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.BooleanValue TOOL_PERCEPTION;
     // v1.5.196：工作清单注入（query_todo/build_need：任务计划与缺料查询闭环）
     public static final ForgeConfigSpec.BooleanValue TOOL_WORK_LIST;
+    // v1.5.287：查看主人物品栏工具（只读查询主人背包）
+    public static final ForgeConfigSpec.BooleanValue TOOL_OWNER_INVENTORY;
 
     // ================= 战斗与自保 =================
     public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_PRESERVE;
@@ -198,6 +222,8 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_SHIELD;
     public static final ForgeConfigSpec.DoubleValue COMBAT_TACTICS_ORBIT_RADIUS;
     public static final ForgeConfigSpec.DoubleValue COMBAT_TACTICS_KITE_RANGE;
+    // v1.5.280：近战贴脸后退（被敌人贴进 2 格内主动后退拉开，女仆手长 3 格仍能挥砍）
+    public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_MELEE_KITE;
     // v1.5.199：水桶垫水（岩浆逃生——放水 1 秒后收回，水桶不消耗；击退搭高垫水
     // v1.5.250 已删除）
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
@@ -243,11 +269,12 @@ public final class MaidSmartConfig {
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
-    // v1.5.189：畜牧数量控制（杀幼保成，默认关）
-    public static final ForgeConfigSpec.BooleanValue ANIMAL_CAP_CONTROL;
-    public static final ForgeConfigSpec.IntValue ANIMAL_CAP_LIMIT;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
+    // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
+    public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_MASTER;
+    public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_EXTREME_HUNGER;
+    public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_EMOTION;
 
     // ================= 语音（v1.5.198） =================
     public static final ForgeConfigSpec.DoubleValue TTS_VOLUME_MULTIPLIER;
@@ -288,6 +315,34 @@ public final class MaidSmartConfig {
                 .translation("config.promaid.build.maxMaids").defineInRange("maxMaids", 30, 8, 64);
         BUILD_ORIGIN_PLAYER = BUILDER.comment("建造地点基准：true=玩家脚下（默认），false=女仆脚下")
                 .translation("config.promaid.build.originPlayer").define("originPlayer", true);
+        // v1.5.316：红石机器改革开关——机器专属搭建顺序 + 活建造（去禁锢）
+        BUILD_MACHINE_SMART = BUILDER.comment("红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→惰性机构→活动件→传感→动力源→TNT，动力源最后落位）+ 活建造（红石/水流随放随算），机器建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默放置+完工唤醒）")
+                .translation("config.promaid.build.machineSmart").define("machineSmart", true);
+        // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期内压制一切 TNT
+        // 点火（放置/活塞推动/邻居更新），防"刚建好炸膛"（天机屠龙炮：观察者→活塞
+        // 推 TNT 链在完工瞬间触发）；完工点火结算只点燃邻接带电的 TNT（轰炸机当场
+        // 启动），期满后机器按正常红石逻辑点火。0 = 关闭保护（回到 1.5.328 行为）
+        BUILD_TNT_IGNITION_GRACE = BUILDER.comment("TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'（天机屠龙炮等观察者→活塞推 TNT 的机器）；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护")
+                .translation("config.promaid.build.tntIgnitionGrace").defineInRange("tntIgnitionGrace", 120, 0, 3600);
+        // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
+        BUILD_ALT_ENABLED = BUILDER.comment("缺料自动替代开关：目标方块没有时，先找同族（木板/原木/石砖等等价族），再按高度分类（半格/一格/两格）用自定义替代表")
+                .translation("config.promaid.build.altEnabled").define("altEnabled", true);
+        BUILD_ALT_SLABS = BUILDER.comment("半格高替代品（台阶类方块缺料时按序使用，填完整注册名如 minecraft:oak_slab）")
+                .translation("config.promaid.build.altSlabs")
+                .defineList("altSlabs", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_BLOCKS = BUILDER.comment("一格高替代品（整方块缺料时按序使用，填完整注册名如 minecraft:stone_bricks）")
+                .translation("config.promaid.build.altBlocks")
+                .defineList("altBlocks", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_TALLS = BUILDER.comment("两格高替代品（门/双植物等缺料时按序使用，填完整注册名如 minecraft:oak_door）")
+                .translation("config.promaid.build.altTalls")
+                .defineList("altTalls", List.of(), o -> o instanceof String s && !s.isEmpty());
+        // v1.5.275：两格再分竖/横 + 无碰撞方块单独表（用户："横着高的两格和竖着的两格不一样；无碰撞方块单独画一个区"）
+        BUILD_ALT_WIDES = BUILDER.comment("横两格替代品（床等宽 2 格方块缺料时按序使用，填完整注册名如 minecraft:red_bed）")
+                .translation("config.promaid.build.altWides")
+                .defineList("altWides", List.of(), o -> o instanceof String s && !s.isEmpty());
+        BUILD_ALT_NOCLIPS = BUILDER.comment("无碰撞替代品（花/火把/地毯等无碰撞箱方块缺料时按序使用，填完整注册名如 minecraft:oak_sapling）")
+                .translation("config.promaid.build.altNoClips")
+                .defineList("altNoClips", List.of(), o -> o instanceof String s && !s.isEmpty());
         BUILD_REGION_TELEPORT_CD = BUILDER.comment("防窒息传送冷却（秒，女仆卡进建造区后传送到区外的冷却）")
                 .translation("config.promaid.build.regionTeleportCd")
                 .defineInRange("regionTeleportCd", 10, 3, 60);
@@ -459,6 +514,19 @@ public final class MaidSmartConfig {
                 .translation("config.promaid.memory.apiKey").define("apiKey", "");
         MEMORY_API_MODEL = BUILDER.comment("记忆 API 模型（留空 = 跟随 TLM 女仆当前模型）")
                 .translation("config.promaid.memory.apiModel").define("apiModel", "");
+        // v1.1.0：记忆升级（借鉴 maidsoulcore AffectEngine/CharacterPackage/DailyMemoryConsolidator）
+        MEMORY_AFFECT_SNAPSHOT = BUILDER.comment("情绪快照写入记忆（每条新记忆附带当时 PAD 情绪，供回看/分析；旧记忆不受影响）")
+                .translation("config.promaid.memory.affectSnapshot").define("affectSnapshot", true);
+        MEMORY_PERSONA = BUILDER.comment("人格种子注入（每女仆 persona.properties + traits.properties + core_memories.jsonl 只读投影——人设与聊天记忆分离，聊天不改写人格；首次自动生成默认模板）")
+                .translation("config.promaid.memory.persona").define("persona", true);
+        MEMORY_CARE_POINTS = BUILDER.comment("每日关心点（每日回顾附上'下次该怎么对主人'的行动建议——从情绪残留/边界/风格推导，主动会话自动复用）")
+                .translation("config.promaid.memory.carePoints").define("carePoints", true);
+        MEMORY_DUAL_AGENT = BUILDER.comment("双 agent 提取（摘要与事实/事件分两次独立 LLM 调用，更聚焦互不阻塞；关 = 单次合并提取省 token）")
+                .translation("config.promaid.memory.dualAgent").define("dualAgent", true);
+        MEMORY_HEARTFELT_ANNIVERSARY = BUILDER.comment("纪念日联动（heartfelt 纪念日里程碑达成/临近 → 写关系记忆 + 情绪脉冲；heartfelt 未触发时 promaid 补位说话；不依赖，未装则静默）")
+                .translation("config.promaid.memory.heartfeltAnniversary").define("heartfeltAnniversary", true);
+        MEMORY_PERSONA_UNIFY = BUILDER.comment("人设统一（TLM 原版已有人设时，人格种子块降级为补充——只补人格参数/核心记忆，不再重复身份，冲突以 TLM 设定为准；关 = 双人设并存旧行为）")
+                .translation("config.promaid.memory.personaUnify").define("personaUnify", true);
         BUILDER.pop();
 
         // ---- 感知（v1.5.95 新段：借鉴 maidsoulcore 感知变化检测）----
@@ -525,6 +593,9 @@ public final class MaidSmartConfig {
         // v1.5.196：工作清单注入——查询-行动闭环（任务计划 + 材料缺口）
         TOOL_WORK_LIST = BUILDER.comment("work_list 工具（query_todo/build_need——当前任务清单与建造材料缺口查询，杜绝'先生成清单再开工'的重复轮次）")
                 .translation("config.promaid.aitools.workList").define("workList", true);
+        // v1.5.287：查看主人物品栏工具（只读查询主人背包内容）
+        TOOL_OWNER_INVENTORY = BUILDER.comment("smart_owner_inventory 工具（查看主人背包里有什么——只读查询，不修改物品）")
+                .translation("config.promaid.aitools.ownerInventory").define("ownerInventory", true);
         BUILDER.pop();
 
         // ---- 对话与提示 ----
@@ -706,13 +777,21 @@ public final class MaidSmartConfig {
         COMBAT_TACTICS_KITE_RANGE = BUILDER.comment("远程理想射程倍率（0.6 = 保持在最大射程 60% 的距离放风筝）")
                 .translation("config.promaid.combat.tacticsKiteRange")
                 .defineInRange("tacticsKiteRange", 0.6, 0.3, 0.9);
+        // v1.5.280：近战贴脸后退——用户："战斗状态且非自保状态下,即使是近战武器也应该
+        // 尝试与敌人稍微拉开距离,而不是贴身搏斗……周围两格内有敌人时会自己往后退远离"
+        COMBAT_TACTICS_MELEE_KITE = BUILDER.comment("近战贴脸后退（敌人贴进 2 格内主动后退拉开距离，女仆手长 3 格仍能挥砍）")
+                .translation("config.promaid.combat.tacticsMeleeKite").define("tacticsMeleeKite", true);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
-        AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（0-20：主人饱食度低于此值自动喂食）")
-                .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 18);
-        AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0-1：主人血量低于此比例自动治疗）")
-                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 0.8);
+        // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
+        // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
+        // 饱食度 18~19 时永远不喂（用户："那个修改按键要真实有效"——测试调 20
+        // 只为确认"只要不满就喂"）
+        AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（4-20：主人饱食度低于此值自动喂食；20=只要不满就喂）")
+                .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 20);
+        AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
+                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 1.0);
         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
                 .translation("config.promaid.combat.torchPlacerEnable").define("torchPlacerEnable", true);
         TORCH_DARK_THRESHOLD = BUILDER.comment("插火把亮度阈值（0-15：主人脚下亮度低于此值自动插火把）")
@@ -773,15 +852,17 @@ public final class MaidSmartConfig {
             .translation("config.promaid.misc.batchPlant").define("batchPlant", true);
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
-    // v1.5.189：畜牧数量控制（杀幼保成）——默认关（激进操作，玩家手动开启）
-    ANIMAL_CAP_CONTROL = BUILDER.comment("畜牧数量控制（杀幼保成）：附近同种成年动物超过上限时击杀多余幼年动物（激进操作，默认关）")
-            .translation("config.promaid.misc.animalCapControl").define("animalCapControl", false);
-    ANIMAL_CAP_LIMIT = BUILDER.comment("畜牧数量上限（只，默认 50）：同种动物超过此数时执行杀幼保成")
-            .translation("config.promaid.misc.animalCapLimit").defineInRange("animalCapLimit", 50, 5, 200);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
             .translation("config.promaid.misc.loveLoatheHungerOff").define("loveLoatheHungerOff", true);
+    // v1.5.310：爱憎分明软联动开关组（仅在安装爱憎分明时由「爱憎分明模组调试」页可见可调）
+    MISC_LOVELOATHE_MASTER = BUILDER.comment("爱憎分明联动总开关（默认开：极端饥饿/情绪数据等反射联动；关闭后不再读取爱憎分明数据，仅「禁用饥饿」开关独立生效）")
+            .translation("config.promaid.misc.loveLoatheMaster").define("loveLoatheMaster", true);
+    MISC_LOVELOATHE_EXTREME_HUNGER = BUILDER.comment("极端饥饿保命联动（默认开：女仆极端饥饿——爱憎分明饥饿值 ≤9——且无其他治疗食物时，吃金苹果/附魔金苹果保命）")
+            .translation("config.promaid.misc.loveLoatheExtremeHunger").define("loveLoatheExtremeHunger", true);
+    MISC_LOVELOATHE_EMOTION = BUILDER.comment("情绪数据联动（默认开：记忆系统感知爱憎分明情绪投影——信任/恐惧值影响关系记忆与 AI 上下文注入）")
+            .translation("config.promaid.misc.loveLoatheEmotion").define("loveLoatheEmotion", true);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----

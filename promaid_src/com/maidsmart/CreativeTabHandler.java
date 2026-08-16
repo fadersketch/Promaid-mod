@@ -11,8 +11,10 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * 创造模式物品栏（v1.5.11）：把蓝图卷轴加入"建筑方块"与"工具与实用品"标签页，
  * 玩家可以直接从创造物品栏拿取，无需 /give。
+ * v1.5.284：modid 修复——旧版写 "maid_smart"（物品注册命名空间）≠ modId "promaid"
+ * （mods.toml）→ 事件订阅对不存在的 mod 注册，创造栏注入从未生效。
  */
-@Mod.EventBusSubscriber(modid = "maid_smart", bus = Mod.EventBusSubscriber.Bus.MOD)
+@Mod.EventBusSubscriber(modid = "promaid", bus = Mod.EventBusSubscriber.Bus.MOD)
 public class CreativeTabHandler {
     private static final ResourceKey<CreativeModeTab> TAB_BUILDING_BLOCKS =
             ResourceKey.m_135785_(Registries.f_279569_, new ResourceLocation("minecraft", "building_blocks"));

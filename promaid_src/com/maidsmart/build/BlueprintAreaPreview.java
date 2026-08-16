@@ -32,6 +32,10 @@ public final class BlueprintAreaPreview {
      *  框 = {x0,y0,z0,x1,y1,z1}；名称与框一一对应（顶部悬浮文字） */
     private static final java.util.List<double[]> REGION_BOXES = new java.util.ArrayList<>();
     private static final java.util.List<String> REGION_NAMES = new java.util.ArrayList<>();
+    /** v1.5.290：每个区块的创建坐标文本（"x, y, z"——玩家创建区块时的原点；
+     *  渲染在名字下方第二行。v1.5.279 起服务端下发 r[11..13]，v1.5.290 encode
+     *  修 14 字段后真正到达客户端） */
+    private static final java.util.List<String> REGION_ORIGINS = new java.util.ArrayList<>();
 
     private BlueprintAreaPreview() {
     }
@@ -79,6 +83,7 @@ public final class BlueprintAreaPreview {
     public static void setRegions(java.util.List<String[]> regions) {
         REGION_BOXES.clear();
         REGION_NAMES.clear();
+        REGION_ORIGINS.clear();
         if (regions == null) {
             return;
         }
@@ -100,6 +105,9 @@ public final class BlueprintAreaPreview {
                 double z0 = z;
                 REGION_BOXES.add(new double[]{x0, y, z0, x0 + w, y + h, z0 + d});
                 REGION_NAMES.add(r[1]);
+                // v1.5.290：创建坐标（r[11..13]，encode 14 字段后到达）
+                REGION_ORIGINS.add(r.length > 13
+                        ? r[11] + ", " + r[12] + ", " + r[13] : "");
             } catch (NumberFormatException ignored) {
             }
         }
@@ -150,10 +158,25 @@ public final class BlueprintAreaPreview {
                         mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
                 drawBoxEdges(pose, buf, camera, b[0], b[1], b[2], b[3], b[4], b[5], 1.0f, 0.25f, 0.2f);
                 String label = i < REGION_NAMES.size() ? REGION_NAMES.get(i) : "建造区域";
+                // v1.5.297：标签改 SEE_THROUGH 透显（末参 false→true，TLM 名字牌同款）——
+                // 旧版 NORMAL 深度测试：区块外/隔方块看会被遮挡，实际只有站在区块内部
+                // 才看得到（用户："只能在内部才能看到"）；现在任何角度、隔方块都可见
                 com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                         "\u00a7c「" + label + "」（建造中）",
-                        (b[0] + b[3]) / 2.0, b[4] + 0.6, (b[2] + b[5]) / 2.0,
-                        0xFF5544, 0.15f, true, -5.0f, false);
+                        (b[0] + b[3]) / 2.0, b[4] + 0.8, (b[2] + b[5]) / 2.0,
+                        0xFF5544, 0.15f, true, -5.0f, true);
+                // v1.5.290：创建坐标第二行（用户："坐标显示在苔藓神庙三建造中的下面"——
+                // 世界内区块标记下方显示玩家创建该区块时的坐标）
+                // v1.5.297：第二行下移——旧版与名字行锚点仅差 0.35 格 < 行高（0.15 字
+                // 高约 1.3 格）→ 两行叠在一起（截图实证「苔藓神庙-214，-60 建造中」）；
+                // 现在锚点差 1.4 格，净距约 0.45 格不再重叠
+                String origin = i < REGION_ORIGINS.size() ? REGION_ORIGINS.get(i) : "";
+                if (!origin.isEmpty()) {
+                    com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
+                            "\u00a78创建于 " + origin,
+                            (b[0] + b[3]) / 2.0, b[4] - 0.6, (b[2] + b[5]) / 2.0,
+                            0x888888, 0.12f, true, -5.0f, true);
+                }
             }
         }
         if (active) {

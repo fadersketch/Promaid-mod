@@ -59,7 +59,14 @@ public final class MaidWorkTags {
         if (maid.getTask() == null) {
             return false;
         }
-        return !COMBAT_UIDS.contains(maid.getTask().getUid().m_135815_());
+        String path = maid.getTask().getUid().m_135815_();
+        if (COMBAT_UIDS.contains(path)) {
+            return false;
+        }
+        // v1.5.287：idle 不算"干活"——旧版"非战斗即干活"把待机女仆一并门控
+        //（待机不吃工作餐/不偷吃/被攻击不恐慌，与 docstring "空闲照常"矛盾——
+        // 用户："干活不被打断"只应作用于真正干活时）
+        return !"idle".equals(path);
     }
 
     /** v1.5.142：是否处于战斗任务（攻击/弓/弩/三叉戟/弹幕）——副手盾牌自动装备判定用 */
