@@ -98,6 +98,8 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.5.28：挖矿搭的方块 10 秒清场的最终兜底——内存追踪器随进程消失，
         // 立即销毁全部残留方块变掉落物（重进存档不会看到永不消失的搭方块）
         com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
+        com.maidsmart.build.BuildPlan.clearAll();
+        com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
     }
 
@@ -154,10 +156,13 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.seatWalkTimer >= 3) {
             this.seatWalkTimer = 0;
             try {
+                net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
+                        Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
+                        Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
                 for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
-                        if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
-                                && m.m_6084_()) {
+                    for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m :
+                            level.m_45976_(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class, whole)) {
+                        if (m.m_6084_()) {
                             com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
                         }
                     }

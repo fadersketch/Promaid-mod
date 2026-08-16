@@ -20,6 +20,11 @@ import java.util.Map;
 public final class MaidWorkList {
     private static final Map<java.util.UUID, List<Item>> LISTS = new ConcurrentHashMap<>();
 
+    /** 审计：女仆卸载/移除时清理工作清单 */
+    public static void forgetMaid(java.util.UUID maidUuid) {
+        LISTS.remove(maidUuid);
+    }
+
     private MaidWorkList() {
     }
 

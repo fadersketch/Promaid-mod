@@ -150,7 +150,9 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
             BlockState cur = level.m_8055_(p);
             // 可放条件：空气/水（流体空=空气或水？用 isEmpty）或 replace=true 且方块本身可替换
             // （m_247087_ = canBeReplaced：水/草丛/雪/藤蔓等，replace=true 时覆盖它们）
-            boolean ok = cur.m_60795_() || cur.m_60819_().m_76178_()
+            boolean ok = cur.m_60795_()
+                    || (!cur.m_60819_().m_76178_()
+                        && cur.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_))
                     || (result.replace() && cur.m_247087_());
             if (!ok) {
                 fail++;
@@ -161,7 +163,8 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
             if (below.m_60795_()) {
                 fail++;
                 continue;
-            }            ItemStack taken = inv.extractItem(slot, 1, false);
+            }
+            ItemStack taken = inv.extractItem(slot, 1, false);
             if (taken.m_41619_()) {
                 break;
             }
@@ -178,6 +181,28 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
     }
 
     /** 工具参数 */
+
+    @Override
+    public java.util.concurrent.CompletableFuture<LLMCallback> onCallAsync(
+            String toolCallId, Result result, LLMCallback callback,
+            com.github.tartaricacid.touhoulittlemaid.ai.service.llm.LLMClient client) {
+        EntityMaid maid = callback.getMaid();
+        if (maid.m_9236_().m_5776_()) {
+            return java.util.concurrent.CompletableFuture.completedFuture(
+                    callback.addToolResult("Cannot run on client side", toolCallId));
+        }
+        net.minecraft.server.level.ServerLevel level = (net.minecraft.server.level.ServerLevel) maid.m_9236_();
+        java.util.concurrent.CompletableFuture<LLMCallback> future = new java.util.concurrent.CompletableFuture<>();
+        level.m_7654_().execute(() -> {
+            try {
+                future.complete(onCall(toolCallId, result, callback));
+            } catch (Throwable t) {
+                future.complete(callback.addToolResult("Tool execution failed: " + t, toolCallId));
+            }
+        });
+        return future;
+    }
+
     public record Result(String block, int x, int y, int z, boolean replace) {
     }
 }

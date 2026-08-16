@@ -107,6 +107,17 @@ public final class AiMemoryIndexStore {
         return false;
     }
 
+    /** 审计 P-5：移除同级别、同一天内被完整记录覆盖的部分天记录 */
+    public synchronized void removeCovered(String level, long startTick, long endTick) {
+        boolean removed = this.records.removeIf(r -> r.level().equals(level)
+                && r.startTick() >= startTick - 1200
+                && r.startTick() <= endTick
+                && r.endTick() <= endTick);
+        if (removed && this.onDirty != null) {
+            this.onDirty.run();
+        }
+    }
+
     /** 新增一条（去重：同边界已存在则忽略；触发宿主脏标记走防抖写盘） */
     public synchronized void add(IndexRecord record) {
         if (has(record.level(), record.startTick(), record.endTick())) {

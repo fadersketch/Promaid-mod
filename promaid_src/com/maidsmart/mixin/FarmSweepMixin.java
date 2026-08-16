@@ -179,6 +179,13 @@ public abstract class FarmSweepMixin {
     private static final java.util.Map<String, Long> PLANT_CD =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /** 审计：女仆卸载/移除时清理农场冷却表 */
+    public static void forgetMaid(java.util.UUID maidUuid) {
+        String key = maidUuid.toString();
+        HARVEST_CD.remove(key);
+        PLANT_CD.remove(key);
+    }
+
     private void batchPlantAround(ServerLevel world, EntityMaid maid, BlockPos base) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_BATCH_PLANT.get()) {
             return;

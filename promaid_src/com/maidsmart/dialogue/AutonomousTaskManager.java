@@ -28,8 +28,14 @@ import java.util.concurrent.ConcurrentHashMap;
 public class AutonomousTaskManager {
     /** v1.5.102：检查间隔 / 主人范围 / 工作时间段均从配置面板读取（dialogue 段） */
 
-    private final Map<UUID, Long> lastDecideTime = new ConcurrentHashMap<>();
-    private final Map<UUID, Integer> dailyCount = new ConcurrentHashMap<>();
+    private static final Map<UUID, Long> lastDecideTime = new ConcurrentHashMap<>();
+    private static final Map<UUID, Integer> dailyCount = new ConcurrentHashMap<>();
+
+    /** 审计：女仆卸载/移除时清理自主任务状态 */
+    public static void forgetMaid(UUID maidUuid) {
+        lastDecideTime.remove(maidUuid);
+        dailyCount.remove(maidUuid);
+    }
     private long lastDay = -1;
 
     /** v1.5.88：读配置面板（dialogue 段，分钟→tick） */
