@@ -263,6 +263,9 @@ public class ProMaidExtension implements ILittleMaid {
         register.register(new com.maidsmart.memory.RememberTool());
         // v1.5.95：工作笔记工具（跨对话任务状态，临时可覆盖）
         register.register(new com.maidsmart.memory.WorkingNoteTool());
+        // 多级记忆索引查询工具（移植自 Sphantosis query_memory_index：日/3日/周/月
+        // 日记式摘要，先列跨度再查内容，前缀和式逐步缩小时间范围）
+        register.register(new com.maidsmart.memory.QueryMemoryIndexTool());
         // v1.5.190：帮主人做事的"双手"工具——合成 / 放方块（让 AI 女仆有玩家能力）
         register.register(new com.maidsmart.tool.SmartCraftTool());
         register.register(new com.maidsmart.tool.SmartPlaceTool());

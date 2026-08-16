@@ -145,6 +145,18 @@ public class AiMemoryContext extends AbstractMaidContext {
         }
         daily.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::createdAt).reversed());
         appendSection(sb, "今日回顾", daily, 2, p -> p.content());
+        // 4b. 记忆日记（多级记忆索引的「日」级日记式摘要，最近 2 条；移植自
+        //     Sphantosis——LLM 第一人称日记，跨度压缩过的整段时间线记忆）
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()) {
+            List<AiMemoryIndexStore.IndexRecord> diaries =
+                    new ArrayList<>(store.index().byLevel(AiMemoryIndexStore.LEVEL_DAY));
+            if (!diaries.isEmpty()) {
+                diaries.sort(Comparator.comparingLong(AiMemoryIndexStore.IndexRecord::endTick).reversed());
+                appendSection(sb, "记忆日记", diaries, 2,
+                        r -> "【第" + r.startDay() + "~" + r.endDay() + "天】"
+                                + AiMemoryModels.clip(r.content(), 150));
+            }
+        }
         // 5. 工作笔记（v1.5.95：跨对话任务状态，注入让 LLM 记得"当前在做什么"；
         //    v1.5.96：可配置开关 memory.workingNote）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_WORKING_NOTE.get()) {
