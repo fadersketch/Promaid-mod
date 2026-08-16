@@ -1,0 +1,4 @@
+# Normalize line endings: text files stored as LF in git; CRLF working trees are accepted.
+* text=auto
+*.bat text eol=crlf
+*.ps1 text eol=crlf
