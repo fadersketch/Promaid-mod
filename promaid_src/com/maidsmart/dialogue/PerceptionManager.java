@@ -43,6 +43,11 @@ public class PerceptionManager {
     private static final Map<UUID, long[]> DANGER_CACHE = new HashMap<>();
     /** 敌袭判定缓存 TTL（tick，10 = 0.5 秒） */
     private static final int DANGER_TTL_TICKS = 10;
+
+    /** 审计M4修复（v1.5.383）：女仆实体卸载时清理其危险缓存（防长会话泄漏） */
+    public static void forget(UUID maidUuid) {
+        DANGER_CACHE.remove(maidUuid);
+    }
     /**
      * v1.5.99b：同类事件上次播报时间【全局限频】（事件名 → tick）——
      * 旧版按女仆各自计：17 只女仆同秒各报一次"天气变了"→ 刷屏 17 条。

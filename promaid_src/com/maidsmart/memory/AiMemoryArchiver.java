@@ -207,12 +207,40 @@ public final class AiMemoryArchiver {
         sleepWrapUp(maid, level); // 复用：边界检查 + pending 重试 + 短期→长期提升
     }
 
-    /** pending 出队判定：已归档（has 容差命中）或跨度无事件（空跨度视为已处理） */
+    /** pending 出队判定：已归档（has 容差命中 / 被更长记录覆盖）或跨度无事件（空跨度视为已处理） */
     private static boolean isArchivedOrEmpty(AiMemoryStore store, PendingIndex item) {
         if (store.index().has(item.level(), item.startTick(), item.endTick())) {
             return true;
         }
-        return collectEventBlock(store, item.startTick(), item.endTick(), item.level()).isBlank();
+        // 审计优化3：登出的"当日部分天"被后续"完整一天"覆盖时也算已归档——
+        // 避免同一天生成两份近似日记、花两次 LLM
+        if (store.index().covers(item.level(), item.startTick(), item.endTick())) {
+            return true;
+        }
+        return !hasEventsInRange(store, item.startTick(), item.endTick());
+    }
+
+    /** 跨度内是否存在可索引的事件段落（首个命中即返回——判空专用，不拼事件块字符串） */
+    private static boolean hasEventsInRange(AiMemoryStore store, long startTick, long endTick) {
+        java.util.Set<String> seen = new HashSet<>();
+        for (String hash : store.timeIndex().queryRange(startTick, endTick)) {
+            if (seen.contains(hash)) {
+                continue;
+            }
+            seen.add(hash);
+            AiMemoryModels.Paragraph p = store.paragraphByHash(hash);
+            if (p == null || p.deleted()) {
+                continue;
+            }
+            if (p.sourceType().equals("summary") || p.tags().contains("daily")) {
+                continue;
+            }
+            if (AiMemoryStore.hasErrorTag(p)) {
+                continue;
+            }
+            return true;
+        }
+        return false;
     }
 
     /** 边界先入队再尝试生成（在途丢失由 pending 自愈；对齐 _generate_or_retry 语义增强版） */
@@ -396,7 +424,10 @@ public final class AiMemoryArchiver {
                             }
                             handleIndexResponse(store, content, lv, startTick, endTick);
                         } catch (Exception e) {
-                            LOGGER.info("AiMemoryArchiver: {}索引解析异常 {}", lv, id, e);
+                            // 审计S2修复：解析异常（LLM偶发坏JSON）不再静默丢边界——
+                            // 挂入 pending 由周期 tick 重试（对齐 Sphantosis 重试语义）
+                            LOGGER.info("AiMemoryArchiver: {}索引解析异常 {}（待重试）", lv, id, e);
+                            addPending(store, lv, startTick, endTick);
                         } finally {
                             ARCHIVING.remove(id);
                         }
@@ -501,14 +532,28 @@ public final class AiMemoryArchiver {
         return store.dir().resolve("archiver_state.json");
     }
 
+    /** 状态内存缓存（写穿）——审计优化1：消除周期 tick 每 20 秒/女仆的磁盘读 */
+    private static final java.util.Map<java.nio.file.Path, ArchiverState> STATE_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 状态失效（记忆清空时调用——clearAll 删除 archiver_state.json 后同步丢缓存） */
+    static void invalidateState(AiMemoryStore store) {
+        STATE_CACHE.remove(stateFile(store));
+    }
+
     private static ArchiverState loadState(AiMemoryStore store) {
+        java.nio.file.Path f = stateFile(store);
+        ArchiverState cached = STATE_CACHE.get(f);
+        if (cached != null) {
+            return cached;
+        }
         try {
-            java.nio.file.Path f = stateFile(store);
             if (java.nio.file.Files.exists(f)) {
                 ArchiverState s = AiMemoryModels.GSON.fromJson(
                         java.nio.file.Files.readString(f, java.nio.charset.StandardCharsets.UTF_8),
                         ArchiverState.class);
                 if (s != null) {
+                    STATE_CACHE.put(f, s);
                     return s;
                 }
             }
@@ -518,6 +563,7 @@ public final class AiMemoryArchiver {
     }
 
     private static void saveState(AiMemoryStore store, ArchiverState state) {
+        STATE_CACHE.put(stateFile(store), state);
         try {
             java.nio.file.Files.createDirectories(store.dir());
             java.nio.file.Files.writeString(stateFile(store),

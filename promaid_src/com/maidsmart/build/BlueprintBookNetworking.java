@@ -1436,6 +1436,10 @@ public final class BlueprintBookNetworking {
                 if (maid == null) {
                     return;
                 }
+                // 审计优化7修复：状态查询补主人/OP 校验（旧版任何人可查任意女仆开关+灵魂id）
+                if (!maid.m_21830_(player) && !player.m_20310_(2)) {
+                    return;
+                }
                 String soul = com.maidsmart.soul.SoulBindingService.getSoulId(maid);
                 CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
                         new MemoryStateSyncPacket(pkt.maidUuid,
@@ -1476,6 +1480,14 @@ public final class BlueprintBookNetworking {
                 if (id == null || id.isEmpty() || !id.startsWith("maid_smart_ext:")) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "\u00a7c\u5185\u7f6e\u84dd\u56fe\u4e0d\u80fd\u5220\u9664\u3002"));
+                    return;
+                }
+                // 审计M2修复：联机服务器上任意玩家可删外部蓝图（grief）——仅 OP；
+                // 单机/局域网主机不受影响（同机同人）
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上删除蓝图仅限管理员（OP）使用。"));
                     return;
                 }
                 if (BlueprintLib.deleteBlueprint(id)) {
@@ -2150,6 +2162,14 @@ public final class BlueprintBookNetworking {
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
                     return;
                 }
+                // 审计S1修复：联机服务器上路径来自客户端、不可信（任意文件读取）——
+                // 仅 OP 可用（管理员凭服务端本地路径导入）；单机/局域网主机不受影响
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上语音包导入仅限管理员（OP）使用。"));
+                    return;
+                }
                 String result = com.maidsmart.voice.SystemVoicePack.importPack(pkt.path);
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         (result.startsWith("导入失败") ? "\u00a7c" : "\u00a7a") + result));
@@ -2181,6 +2201,13 @@ public final class BlueprintBookNetworking {
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
+                    return;
+                }
+                // 审计S1修复：同语音包导入——联机服务器仅 OP
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上世界地图导入仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importWorldFile(pkt.path);
@@ -2215,6 +2242,13 @@ public final class BlueprintBookNetworking {
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
                 if (player == null || pkt.path == null || pkt.path.isBlank()) {
+                    return;
+                }
+                // 审计S1修复：同语音包导入——联机服务器仅 OP
+                if (player.m_9236_().m_7654_() instanceof net.minecraft.server.dedicated.DedicatedServer
+                        && !player.m_20310_(2)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7c联机服务器上建筑导入仅限管理员（OP）使用。"));
                     return;
                 }
                 String result = com.maidsmart.build.BlueprintLib.importBuildFile(pkt.path);

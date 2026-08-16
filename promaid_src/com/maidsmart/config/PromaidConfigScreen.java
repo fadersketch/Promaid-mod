@@ -1317,8 +1317,8 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.250：文件选择对话框导入——玩家不用手填路径，点按钮选 .zip 即可
         this.rows.add(new BtnRow("导入语音包", "选择文件导入", () -> {
                     // FileDialog setVisible 会阻塞当前线程——放独立线程，避免卡死
-                    // 游戏渲染（MC 主线程就是 AWT EDT）
-                    new Thread(() -> {
+                    // 游戏渲染（MC 主线程就是 AWT EDT）；daemon=true 防对话框挂着阻 JVM 退出
+                    Thread fileDlg = new Thread(() -> {
                         try {
                             java.awt.FileDialog fd = new java.awt.FileDialog((java.awt.Frame) null,
                                     "\u9009\u62e9\u8bed\u97f3\u5305(\u300czip \u6216\u6587\u4ef6\u5939)",
@@ -1342,7 +1342,9 @@ public class PromaidConfigScreen extends Screen {
                                     new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(path));
                         } catch (Exception ignored) {
                         }
-                    }).start();
+                    });
+                    fileDlg.setDaemon(true);
+                    fileDlg.start();
                 },
                 "打开系统文件选择框选 .zip 语音包自动导入（导入文件夹仍可用上方路径填写）"));
         this.rows.add(new BtnRow("重新加载语音包", "重新加载", () -> {

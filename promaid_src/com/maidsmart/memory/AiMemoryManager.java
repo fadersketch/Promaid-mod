@@ -279,6 +279,9 @@ public class AiMemoryManager {
             AiMemoryStore.maintainAll(System.currentTimeMillis());
         }
         for (ServerLevel level : server.m_129785_()) {
+            // 审计M1修复（v1.5.383）：孤儿建造计划清扫（自限频 5 分钟/次，
+            // 无绑定女仆超 10 分钟的计划自动取消——释放 FORCED 票据与区块冻结）
+            com.maidsmart.build.BuildPlan.sweepOrphans(level);
             long levelGameTime = level.m_46467_();
             int day = (int) (levelGameTime / 24000);
             // 每日巩固 + 提取调度：只对玩家周围的女仆（聊天有距离限制，远离主人不会积累新对话）
@@ -296,6 +299,28 @@ public class AiMemoryManager {
                 });
             }
         }
+    }
+
+    /**
+     * 审计M3/M4修复（v1.5.383）：女仆实体离开关卡（卸载/换维度/移除）时：
+     * - M3：立即落盘其记忆存储——CACHE 是 WeakHashMap（键=UUID 弱可达），卸载后
+     *   store 被 GC 会丢失尚未 flush 的脏数据（最多 20 秒窗口内的写入）
+     * - M4：清理按实体键控的行为缓存（挖矿锚点/感知危险缓存——长会话泄漏）
+     */
+    @SubscribeEvent
+    public void onEntityLeaveLevel(net.minecraftforge.event.entity.EntityLeaveLevelEvent event) {
+        if (!(event.getEntity() instanceof EntityMaid maid)) {
+            return;
+        }
+        if (!(event.getLevel() instanceof ServerLevel level)) {
+            return;
+        }
+        try {
+            com.maidsmart.soul.SoulBindingService.storeFor(maid, level).saveNow();
+        } catch (Exception ignored) {
+        }
+        com.maidsmart.dialogue.PerceptionManager.forget(maid.m_20148_());
+        com.maidsmart.task.MaidMineBehavior.forget(maid.m_19879_());
     }
 
     /**

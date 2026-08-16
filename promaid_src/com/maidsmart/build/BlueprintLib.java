@@ -617,7 +617,14 @@ public final class BlueprintLib {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             java.nio.file.Files.createDirectories(dir);
-            java.io.File dst = new java.io.File(dir.toFile(), src.getName());
+            // 审计1.5.384：文件名清洗——客户端可控文件名含路径分隔符/.. 可逃逸
+            // blueprints 目录（服务器端已 OP 门槛，此处纵深防御）
+            String fname = src.getName();
+            if (fname.contains("/") || fname.contains("\\") || fname.contains("..")
+                    || fname.equals(".")) {
+                return "导入失败: 文件名不合法（" + fname + "）";
+            }
+            java.io.File dst = new java.io.File(dir.toFile(), fname);
             if (dst.exists()) {
                 return "导入失败: 同名文件已存在（" + dst.getAbsolutePath()
                         + "，可直接使用，无需重复导入）";
@@ -631,7 +638,7 @@ public final class BlueprintLib {
                             + "MC 1.20.1 一致，否则建筑可能损毁；已删除无效副本）";
                 }
                 scanExternalBlueprints(true);
-                return "导入成功: " + src.getName() + "（" + steps.size() + " 块，"
+                return "导入成功: " + fname + "（" + steps.size() + " 块，"
                         + "已注册，可在手册建造目录找到）";
             } catch (Exception e) {
                 try {
@@ -662,7 +669,13 @@ public final class BlueprintLib {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             java.nio.file.Files.createDirectories(dir);
-            java.io.File dst = new java.io.File(dir.toFile(), src.getName());
+            // 审计1.5.384：文件名清洗（与 importBuildFile 一致）
+            String fname = src.getName();
+            if (fname.contains("/") || fname.contains("\\") || fname.contains("..")
+                    || fname.equals(".")) {
+                return "导入失败: 文件名不合法（" + fname + "）";
+            }
+            java.io.File dst = new java.io.File(dir.toFile(), fname);
             if (dst.exists()) {
                 return "导入失败: 同名文件已存在（" + dst.getAbsolutePath()
                         + "，可直接使用，无需重复导入）";
