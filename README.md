@@ -7,7 +7,7 @@
 - **前置**:Touhou Little Maid ≥ 1.5.0(开发与测试基于 TLM 1.5.3)
 - **许可证**:MIT
 - **仓库**:github.com/fadersketch/Promaid-mod
-- **版本**:v1.0.0(对应内部开发版本 1.5.252g15)
+- **版本**:v1.5.385
 
 > 开发过程中使用了 AI 辅助编程工具;作者并非专业程序员,代码中可能存在缺陷,遇到问题欢迎反馈。
 
@@ -43,7 +43,7 @@
 ## 安装
 
 1. 安装 Minecraft 1.20.1 + Forge 47.4.21,以及 Touhou Little Maid 1.5.3;
-2. 下载 `promaid-1.0.0.jar` 放入 `mods` 文件夹;
+2. 下载 `promaid-1.5.385.jar` 放入 `mods` 文件夹;
 3. (可选)如需 AI 对话功能:游戏内打开 TLM 面板 → 模组详细配置 → 填写 API 地址与密钥。
 
 旧版 maid_smart 存档数据(物品、任务、蓝图、记忆)完全兼容。
@@ -55,7 +55,7 @@
 ```
 gen_compile.py        # 扫描 promaid_src 自动生成编译参数(需先准备 compile_addon.txt 类路径)
 compile_promaid.bat   # javac 编译,输出 out_promaid
-build_promaid.py      # 组装 jar(classes + 资源 + META-INF + LICENSE)→ patched/promaid-1.0.0.jar
+build_promaid.py      # 组装 jar(classes + 资源 + META-INF + LICENSE)→ patched/promaid-1.5.385.jar
 ```
 
 编译需要完整的 Forge 1.20.1 开发类路径(可直接使用 `.minecraft/libraries` 下的库 + 原版 TLM jar + MixinExtras),按 `compile_addon.txt` 的格式写入本地路径后运行。`promaid_src` 内全部为 SRG 名映射源码,与 TLM 1.5.3 官方映射一致。
