@@ -362,60 +362,33 @@ public final class BlueprintLib {
         return com.maidsmart.build.BuiltinHouses.get(id);
     }
 
-    /** 内置蓝图目录（v1.5.366：19 个内置——3 小屋 + 12 新结构建筑 + 3 别墅 + 熔炉，
+    /** 蓝图目录（v1.5.387：内置预设已全部移除——只列外部蓝图，
      *  供 smart_build_list 与提示词使用） */
     public static String buildCatalog() {
         StringBuilder sb = new StringBuilder();
-        sb.append("内置蓝图：\n");
-        for (String id : BUILT_IN_NAMES.keySet()) {
-            List<String> steps = getBuiltIn(id);
-            if (steps != null && !steps.isEmpty()) {
-                sb.append(id).append(" — ").append(BUILT_IN_NAMES.get(id))
-                        .append("（").append(steps.size()).append(" 块）\n");
-            }
-        }
         scanExternalBlueprints();
         if (!EXTERNAL.isEmpty()) {
-            sb.append("\n外部蓝图（config/maid_smart/blueprints 或 存档 schematics/，支持 .json/.nbt/.snbt/.litematic/.schem）：\n");
+            sb.append("外部蓝图（config/maid_smart/blueprints 或 存档 schematics/，支持 .json/.nbt/.snbt/.litematic/.schem）：\n");
             for (Map.Entry<String, List<String>> entry : EXTERNAL.entrySet()) {
                 sb.append(entry.getKey()).append(" — ")
                         .append(EXTERNAL_NAMES.getOrDefault(entry.getKey(), entry.getKey()))
                         .append("（").append(describe(entry.getKey(), entry.getValue())).append("）\n");
             }
         } else {
-            sb.append("\n（当前没有外部蓝图——把 .nbt/.snbt/.schem 等蓝图文件放进 config/maid_smart/blueprints 即可）");
+            sb.append("（当前没有蓝图——把 .nbt/.snbt/.schem 等蓝图文件放进 config/maid_smart/blueprints 即可）");
         }
         return sb.toString();
     }
 
-    /** 内置蓝图中文名（v1.5.271：15 生存小屋 + 10 别墅；v1.5.366：删雷同 → 3 小屋 +
-     *  12 新结构建筑 + 3 别墅 + 1 熔炉 = 19；v1.5.369：+ 6 座农场 = 25） */
+    /** v1.5.387：内置预设全部移除——用户要求"手册建造目录中原有的非蓝图导入的内容
+     *  全部都删掉"（只保留玩家自己导入/生成的外部蓝图）。此表保持为空；
+     *  BuiltinHouses 生成器保留（旧存档 id 兼容：已下达的建造任务仍可解析），
+     *  但不再向手册目录/目录列表/LLM 工具注册任何内置建筑。 */
     private static final Map<String, String> BUILT_IN_NAMES = new HashMap<>();
 
     static {
-        for (String id : new String[]{
-                "maid_smart:house_oak_log", "maid_smart:house_sandstone",
-                "maid_smart:house_snowy",
-                // v1.5.366：新增 12 种不同结构建筑（500~5000 块）
-                "maid_smart:house_aframe", "maid_smart:house_watchtower",
-                "maid_smart:house_lighthouse", "maid_smart:house_courtyard",
-                "maid_smart:house_barn", "maid_smart:house_stilt",
-                "maid_smart:house_windmill", "maid_smart:house_bunker",
-                "maid_smart:house_tree", "maid_smart:house_hillside",
-                "maid_smart:house_dual", "maid_smart:house_gatehouse",
-                // v1.5.366：别墅保留 3 种风格（删 7 个同款盒）
-                "maid_smart:villa_stone", "maid_smart:villa_glass",
-                "maid_smart:villa_terracotta",
-                // v1.5.300：红石机器只留自动熔炉组（用户："红石机器基本都不能用，
-                // 先全都删了，只保留一个自动熔炉组"——甘蔗机/南瓜机/自动灯删除）
-                "maid_smart:machine_furnace_array",
-                // v1.5.369：6 座生存农场（仿 MCBlanky《10 个 1 分钟农场》）
-                "maid_smart:farm_cactus", "maid_smart:farm_superfurnace",
-                "maid_smart:farm_lavafountain", "maid_smart:farm_crop",
-                "maid_smart:farm_tree", "maid_smart:farm_chicken",
-        }) {
-            BUILT_IN_NAMES.put(id, com.maidsmart.build.BuiltinHouses.nameOf(id));
-        }
+        // v1.5.387：清空——不再注册任何内置预设（原 25 个：3 小屋 + 12 结构 + 3 别墅 +
+        // 熔炉 + 6 农场）。手册"建造"目录只显示外部蓝图（玩家导入 + LLM/AI 生成）。
     }
 
     /** v1.5.28：外部 .snbt 文件名 → 中文显示名（手册/LLM 都用中文；未收录的文件名兜底用原名） */
@@ -527,7 +500,10 @@ public final class BlueprintLib {
         DESCRIBE_CACHE.clear();
         SIZE_CACHE.clear();
         if (server != null) {
-            installBuiltinBlueprints();
+            // v1.5.387：不再自动复制内置预制蓝图（原 8 个大 snbt）——用户要求手册
+            // 建造目录只保留玩家导入/生成的内容。已在 blueprints 目录的残留副本
+            // 由 cleanupLegacyBuiltinFiles() 删除（mod 自动生成的，非玩家内容）。
+            cleanupLegacyBuiltinFiles();
             // v1.5.25g：服务端启动时预热外部蓝图需求缓存——手册右击不再首次卡 5 秒
             // （countNeeds 对每个蓝图遍历上万步骤在启动时完成，右击只读缓存）
             warmupNeedsCache();
@@ -567,27 +543,49 @@ public final class BlueprintLib {
             "mega_knight_statue.snbt"
     };
 
-    /**
-     * 首次启动时把预制精美建筑复制到 config/maid_smart/blueprints/（已存在则跳过，
-     * 玩家可自由修改/删除）。复制后由增量扫描自动注册为外部蓝图。
-     */
-    private static void installBuiltinBlueprints() {
+    /** v1.5.387：清理 mod 自动复制的内置预制蓝图残留（config/maid_smart/blueprints/
+     *  下 8 个大 snbt 的旧副本）。这些文件是安装时自动生成的、非玩家内容——
+     *  用户要求手册建造目录只保留玩家导入/生成的蓝图,一并删除。
+     *  仅删【文件名精确匹配且与 jar 内置资源内容一致】的文件——若玩家已自行
+     *  替换/改写过同名文件则保留（内容校验失败 = 玩家内容,不碰）。 */
+    private static void cleanupLegacyBuiltinFiles() {
         try {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
-            java.nio.file.Files.createDirectories(dir);
+            if (!java.nio.file.Files.isDirectory(dir)) {
+                return;
+            }
             for (String file : BUILTIN_BLUEPRINT_FILES) {
                 java.nio.file.Path out = dir.resolve(file);
-                if (java.nio.file.Files.exists(out)) {
+                if (!java.nio.file.Files.exists(out)) {
                     continue;
                 }
-                try (java.io.InputStream in = BlueprintLib.class.getClassLoader()
-                        .getResourceAsStream("assets/maid_smart/builtin_blueprints/" + file)) {
-                    if (in != null) {
-                        java.nio.file.Files.copy(in, out);
+                try {
+                    byte[] onDisk = java.nio.file.Files.readAllBytes(out);
+                    byte[] embedded;
+                    try (java.io.InputStream in = BlueprintLib.class.getClassLoader()
+                            .getResourceAsStream("assets/maid_smart/builtin_blueprints/" + file)) {
+                        if (in == null) {
+                            continue; // jar 里已没有该资源：无法比对，不碰
+                        }
+                        embedded = in.readAllBytes();
                     }
+                    if (java.util.Arrays.equals(onDisk, embedded)) {
+                        java.nio.file.Files.deleteIfExists(out);
+                        LOGGER.info("cleanupLegacyBuiltinFiles: 已删除自动复制残留 {}", out);
+                    }
+                } catch (Exception ignored) {
                 }
             }
+            // 清理后同步内存注册（增量扫描会在下次触发时自然移除；此处主动清）
+            EXTERNAL.clear();
+            EXTERNAL_NAMES.clear();
+            EXTERNAL_MTIMES.clear();
+            EXTERNAL_PATHS.clear();
+            NEEDS_CACHE.clear();
+            NEEDS_MTIME.clear();
+            DESCRIBE_CACHE.clear();
+            SIZE_CACHE.clear();
         } catch (Exception ignored) {
         }
     }
