@@ -1,11 +1,11 @@
-# Build promaid-1.5.385.jar from compiled classes + assets + data
+# Build promaid-1.0.2.jar from compiled classes + assets + data
 import os, shutil, zipfile, re, pathlib, json
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.5.385.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.0.2.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
