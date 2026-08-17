@@ -106,18 +106,17 @@ public abstract class FarmSweepMixin {
      * BFS 展开上限 96 防大农场卡顿。
      * 与原逻辑同机制（canHarvest 检查 + 真实消耗种子），无作弊。
      */
-    /** v1.5.248：连锁收割冷却（10 tick）——旧版每次 start 都 BFS 96 格收割+
-     *  每格 plantBack 重扫背包，大农田 tick 卡顿（同批量种植的"走一步停一步"） */
-    private static final java.util.Map<String, Long> HARVEST_CD =
-            new java.util.concurrent.ConcurrentHashMap<>();
+    // v1.5.386：冷却表与 forgetMaid 已抽到 com.maidsmart.build.FarmSweepCache。
+    // Mixin 类不能被业务代码当作普通类引用，否则触发 NoClassDefFoundError。
+    // FarmSweepMixin 的静态字段通过 FarmSweepCache.HARVEST_CD / PLANT_CD 访问。
 
     private void sweepChain(ServerLevel world, EntityMaid maid, BlockPos base) {
         long now = world.m_46467_();
-        Long last = HARVEST_CD.get(maid.m_20148_().toString());
+        Long last = com.maidsmart.build.FarmSweepCache.HARVEST_CD.get(maid.m_20148_().toString());
         if (last != null && now - last < 10) {
             return;
         }
-        HARVEST_CD.put(maid.m_20148_().toString(), now);
+        com.maidsmart.build.FarmSweepCache.HARVEST_CD.put(maid.m_20148_().toString(), now);
         // v1.5.248：一次拿背包，循环内补种复用
         CombinedInvWrapper inv = maid.getAvailableInv(true);
         java.util.Set<BlockPos> visited = new java.util.HashSet<>();
@@ -168,34 +167,17 @@ public abstract class FarmSweepMixin {
         }
     }
 
-    /** v1.5.236：批量种植（misc.batchPlant，默认开启）——以当前处理格为中心 BFS
-     *  蔓延（水平 4 方向），把相连农田里的【空耕地】（上方空气、canPlant 通过）
-     *  全部种上（种子真实消耗），女仆到田里一次种一片。上限从配置面板读取
-     *  （misc.batchPlantLimit，默认 24），BFS 展开上限 96 防大农场卡顿。
-     *  与连锁收割同机制、同设置格式，无作弊。
-     *  v1.5.248：加 40 tick（2 秒）冷却 + 背包一次缓存复用——旧版每次 start 都
-     *  全量 BFS 且每格 plantBack 重扫背包（getAvailableInv + 全槽找种子），
-     *  大农田（limit 96）服务端 tick 卡顿 → 女仆"走一步停一步"。 */
-    private static final java.util.Map<String, Long> PLANT_CD =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** 审计：女仆卸载/移除时清理农场冷却表 */
-    public static void forgetMaid(java.util.UUID maidUuid) {
-        String key = maidUuid.toString();
-        HARVEST_CD.remove(key);
-        PLANT_CD.remove(key);
-    }
 
     private void batchPlantAround(ServerLevel world, EntityMaid maid, BlockPos base) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_BATCH_PLANT.get()) {
             return;
         }
         long now = world.m_46467_();
-        Long last = PLANT_CD.get(maid.m_20148_().toString());
+        Long last = com.maidsmart.build.FarmSweepCache.PLANT_CD.get(maid.m_20148_().toString());
         if (last != null && now - last < 40) {
             return; // v1.5.248：2 秒冷却，防每次 start 全量 BFS 卡顿
         }
-        PLANT_CD.put(maid.m_20148_().toString(), now);
+        com.maidsmart.build.FarmSweepCache.PLANT_CD.put(maid.m_20148_().toString(), now);
         int limit = com.maidsmart.config.MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get();
         // v1.5.248：一次拿背包，循环内复用（不再每格 plantBack 重扫背包找种子）
         CombinedInvWrapper inv = maid.getAvailableInv(true);
