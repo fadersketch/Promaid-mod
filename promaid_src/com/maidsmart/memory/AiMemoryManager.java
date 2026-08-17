@@ -329,7 +329,7 @@ public class AiMemoryManager {
         com.maidsmart.dialogue.MaidWorkList.forgetMaid(maidUuid);
         com.maidsmart.voice.SystemTTSManager.forgetMaid(maidUuid);
         com.maidsmart.build.MaidBuildBehavior.forgetMaid(maidUuid);
-        com.maidsmart.mixin.FarmSweepMixin.forgetMaid(maidUuid);
+        com.maidsmart.build.FarmSweepCache.forgetMaid(maidUuid);
         com.maidsmart.task.MaidMineBehavior.forget(maid.m_19879_());
         com.maidsmart.task.MaidMineBehavior.forgetUuid(maidUuid);
     }
