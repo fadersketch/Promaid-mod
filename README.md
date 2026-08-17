@@ -1,4 +1,4 @@
-# Promaid(更智能的车万女仆)
+﻿# Promaid(更智能的车万女仆)
 
 为《车万女仆》(Touhou Little Maid,TLM)制作的 Forge 扩展模组,让女仆真正"活"起来:自主建造、LLM AI 对话、长期记忆、战斗自保、自动装备武器与工具……**全部功能零依赖,只要求原版 TLM**。
 
@@ -7,14 +7,14 @@
 - **前置**:Touhou Little Maid ≥ 1.5.0(开发与测试基于 TLM 1.5.3)
 - **许可证**:MIT
 - **仓库**:github.com/fadersketch/Promaid-mod
-- **版本**:v1.5.385
+- **版本**:v1.0.2
 
 > 开发过程中使用了 AI 辅助编程工具;作者并非专业程序员,代码中可能存在缺陷,遇到问题欢迎反馈。
 
 ## 功能特性
 
 ### 🏗️ 建造系统
-- **Promaid 手册(蓝图书)**:书 + 纸即可合成,内置 40+ 大型蓝图(别墅、宫殿、城堡、雕像、飞船……),女仆自动施工;
+- **Promaid 手册(蓝图书)**:书 + 纸即可合成,内置蓝图已随 v1.0.2 全部移除(建筑授权);建造目录只显示你导入/生成的外部蓝图(config/maid_smart/blueprints 或存档 schematics/,支持 .schem/.litematic/.nbt/.snbt/.json),女仆自动施工;
 - **工头模式**:一条命令指挥多名女仆分工合作,全局建造进度一目了然;
 - **区块冻结**:大型建造期间冻结相关区块,防止放置方块过多导致崩溃;
 - 建造日志、材料统计、蓝图列表 / 设计工具(框选区域生成蓝图)。
@@ -55,7 +55,7 @@
 ```
 gen_compile.py        # 扫描 promaid_src 自动生成编译参数(需先准备 compile_addon.txt 类路径)
 compile_promaid.bat   # javac 编译,输出 out_promaid
-build_promaid.py      # 组装 jar(classes + 资源 + META-INF + LICENSE)→ patched/promaid-1.5.385.jar
+build_promaid.py      # 组装 jar(classes + 资源 + META-INF + LICENSE)→ patched/promaid-1.0.2.jar
 ```
 
 编译需要完整的 Forge 1.20.1 开发类路径(可直接使用 `.minecraft/libraries` 下的库 + 原版 TLM jar + MixinExtras),按 `compile_addon.txt` 的格式写入本地路径后运行。`promaid_src` 内全部为 SRG 名映射源码,与 TLM 1.5.3 官方映射一致。
