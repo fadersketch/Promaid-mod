@@ -11,6 +11,17 @@
 
 > 开发过程中使用了 AI 辅助编程工具;作者并非专业程序员,代码中可能存在缺陷,遇到问题欢迎反馈。
 
+## 测试版本声明
+
+本版本经测试者验证,在以下模组的具体版本下可以正常运行;其他版本(含更新/更旧的 TLM 与各软联动模组)**未必兼容**,请以实际测试为准:
+
+| 模组 | 关系 | 测试通过的具体版本(文件全名) |
+|---|---|---|
+| Touhou Little Maid(车万女仆) | 必装前置 | [车万女仆] touhoulittlemaid-1.5.3-forge+mc1.20.1.jar(1.5.3) |
+| maidmarriage(心契誓约) | 软联动 | [车万女仆：心契誓约] maidmarriage-2.3.0-forge+mc1.20.1.jar(2.3.0) |
+| callresponse(爱憎分明) | 软联动 | Touhou Little Maid-Love  Loathe-1.20.1-forge-2.0.4.jar(2.0.4) |
+| Heartfelt-connection(心契誓约×爱憎分明补丁) | 软联动 | heartfelt_connection-1.0.0.jar(1.0.0) |
+
 ## 功能特性
 
 ### 🏗️ 建造系统
