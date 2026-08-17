@@ -45,8 +45,7 @@
   "client": [
     "MaidTtsVolumeMixin",
     "MaidConfigMemoryMixin",
-    "MaidDebugPanelMixin",
-    "CallResponseChatSpamMixin"
+    "MaidDebugPanelMixin"
   ],
   "injectors": {
     "defaultRequire": 1

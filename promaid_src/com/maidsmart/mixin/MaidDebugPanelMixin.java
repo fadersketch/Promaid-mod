@@ -84,6 +84,19 @@ public abstract class MaidDebugPanelMixin {
                     .m_252987_(w / 2 - 80, y, 160, 20)
                     .m_253136_();
             addRenderable((Screen) (Object) this, btn);
+            // v1.5.387：红字免责声明——本面板是开发者调试工具，未经适配，
+            // 出问题不负责也不修（红字常驻面板底部，按钮下方一行）
+            try {
+                int warnY = Math.min(y + 24, h - 8);
+                net.minecraft.client.gui.components.StringWidget warn =
+                        new net.minecraft.client.gui.components.StringWidget(
+                                0, warnY, w, 20,
+                                Component.m_237113_("\u00a7c仅为开发者调试工具，没有做任何相关适配，出bug不负责，也不会去修。"),
+                                mc.f_91062_); // Minecraft.font（公开字段，避开 Screen 继承成员 @Shadow 定位风险）
+                warn.m_269033_(0xFFFF5555); // setColor 纯红
+                addRenderable((Screen) (Object) this, warn);
+            } catch (Exception ignored) {
+            }
         } catch (Exception ignored) {
             // maidmarriage 版本不兼容：静默（不干扰面板）
         }
