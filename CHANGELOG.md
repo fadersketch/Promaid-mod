@@ -12,6 +12,14 @@
 - maidmarriage 调试面板新增红字免责声明;
 - 内置蓝图目录全部移除后,手册建造目录仅显示外部蓝图。
 
+### 测试版本声明
+
+本版本经测试者验证,在以下模组的具体版本下可以正常运行;其他版本(含更新/更旧的 TLM 与各软联动模组)未必兼容:
+- Touhou Little Maid(车万女仆,必装前置) 1.5.3 —— `[车万女仆] touhoulittlemaid-1.5.3-forge+mc1.20.1.jar`;
+- maidmarriage(心契誓约,软联动) 2.3.0 —— `[车万女仆：心契誓约] maidmarriage-2.3.0-forge+mc1.20.1.jar`;
+- callresponse(爱憎分明,软联动) 2.0.4 —— `Touhou Little Maid-Love  Loathe-1.20.1-forge-2.0.4.jar`;
+- Heartfelt-connection(心契誓约×爱憎分明补丁,软联动) 1.0.0 —— `heartfelt_connection-1.0.0.jar`。
+
 当前基线版本:v1.0.2。完整最新逐版本日志见 promaid_src/assets/promaid/guide/changelog.txt。以下为旧版开发条目(时间倒序)。
 
 
