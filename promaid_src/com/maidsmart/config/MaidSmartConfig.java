@@ -302,10 +302,10 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         BUILDER.comment("建造系统设置").translation("config.promaid.build").push("build");
         BUILD_SPEED_TIER = BUILDER.comment("建造速度档位：x1 / x1.5 / x3")
                 .translation("config.promaid.build.speedTier")
-                .define("speedTier", "x1.5",
+                .define("speedTier", "x1",
                         o -> o instanceof String s && (s.equals("x1") || s.equals("x1.5") || s.equals("x3")));
         BUILD_TURBO = BUILDER.comment("极速模式（吃满服务器上限，性能风险）")
-                .translation("config.promaid.build.turbo").define("turbo", true);
+                .translation("config.promaid.build.turbo").define("turbo", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -313,7 +313,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.build.maxForceChunks")
                 .defineInRange("maxForceChunks", 1024, 64, 8192);
         BUILD_MAX_BLOCKS = BUILDER.comment("LLM 蓝图最大方块数（v1.5.222：上限放开到 50 万——构建链统一支持 50 万块级建筑）")
-                .translation("config.promaid.build.maxBlocks").defineInRange("maxBlocks", 200, 16, 500000);
+                .translation("config.promaid.build.maxBlocks").defineInRange("maxBlocks", 200000, 16, 500000);
         BUILD_MAX_RANGE = BUILDER.comment("LLM 蓝图平面范围（±）")
                 .translation("config.promaid.build.maxRange").defineInRange("maxRange", 12, 4, 64);
         BUILD_MAX_HEIGHT = BUILDER.comment("LLM 蓝图高度上限")
@@ -341,20 +341,20 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.build.altEnabled").define("altEnabled", true);
         BUILD_ALT_SLABS = BUILDER.comment("半格高替代品（台阶类方块缺料时按序使用，填完整注册名如 minecraft:oak_slab）")
                 .translation("config.promaid.build.altSlabs")
-                .defineList("altSlabs", List.of(), o -> o instanceof String s && !s.isEmpty());
+                .defineList("altSlabs", List.of("minecraft:oak_slab"), o -> o instanceof String s && !s.isEmpty());
         BUILD_ALT_BLOCKS = BUILDER.comment("一格高替代品（整方块缺料时按序使用，填完整注册名如 minecraft:stone_bricks）")
                 .translation("config.promaid.build.altBlocks")
-                .defineList("altBlocks", List.of(), o -> o instanceof String s && !s.isEmpty());
+                .defineList("altBlocks", List.of("minecraft:oak_planks"), o -> o instanceof String s && !s.isEmpty());
         BUILD_ALT_TALLS = BUILDER.comment("两格高替代品（门/双植物等缺料时按序使用，填完整注册名如 minecraft:oak_door）")
                 .translation("config.promaid.build.altTalls")
-                .defineList("altTalls", List.of(), o -> o instanceof String s && !s.isEmpty());
+                .defineList("altTalls", List.of("minecraft:oak_door"), o -> o instanceof String s && !s.isEmpty());
         // v1.5.275：两格再分竖/横 + 无碰撞方块单独表（用户："横着高的两格和竖着的两格不一样；无碰撞方块单独画一个区"）
         BUILD_ALT_WIDES = BUILDER.comment("横两格替代品（床等宽 2 格方块缺料时按序使用，填完整注册名如 minecraft:red_bed）")
                 .translation("config.promaid.build.altWides")
-                .defineList("altWides", List.of(), o -> o instanceof String s && !s.isEmpty());
+                .defineList("altWides", List.of("minecraft:white_bed"), o -> o instanceof String s && !s.isEmpty());
         BUILD_ALT_NOCLIPS = BUILDER.comment("无碰撞替代品（花/火把/地毯等无碰撞箱方块缺料时按序使用，填完整注册名如 minecraft:oak_sapling）")
                 .translation("config.promaid.build.altNoClips")
-                .defineList("altNoClips", List.of(), o -> o instanceof String s && !s.isEmpty());
+                .defineList("altNoClips", List.of("minecraft:torch"), o -> o instanceof String s && !s.isEmpty());
         BUILD_REGION_TELEPORT_CD = BUILDER.comment("防窒息传送冷却（秒，女仆卡进建造区后传送到区外的冷却）")
                 .translation("config.promaid.build.regionTeleportCd")
                 .defineInRange("regionTeleportCd", 10, 3, 60);
@@ -379,7 +379,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         BUILDER.comment("挖矿设置").translation("config.promaid.mine").push("mine");
         MINE_ORE_VALUES = BUILDER.comment("可挖掘方块表（自定义矿表）：每项 方块注册名=价值，如 minecraft:mod_ore=300；适配其他 mod 的矿石")
                 .translation("config.promaid.mine.oreValues")
-                .defineList("oreValues", List.of(),
+                .defineList("oreValues", List.of("minecraft:gold_ore=300", "minecraft:deepslate_gold_ore=300", "minecraft:coal_ore=300", "minecraft:deepslate_coal_ore=300", "minecraft:iron_ore=300", "minecraft:deepslate_iron_ore=300", "minecraft:copper_ore=300", "minecraft:deepslate_copper_ore=300", "minecraft:diamond_ore=300", "minecraft:deepslate_lapis_ore=300", "minecraft:deepslate_diamond_ore=300", "minecraft:lapis_ore=300", "minecraft:deepslate_emerald_ore=300", "minecraft:emerald_ore=300", "minecraft:deepslate_redstone_ore=300", "minecraft:redstone_ore=300", "minecraft:nether_gold_ore=300", "minecraft:nether_quartz_ore=300", "minecraft:ancient_debris=300"),
                         o -> o instanceof String s && s.contains("="));
         MINE_BREAKABLES = BUILDER.comment("额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置）")
                 .translation("config.promaid.mine.breakables")
@@ -413,7 +413,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         //（旧默认 true 时软方块开路不磨损，用户反馈"挖矿不消耗耐久"；
         //  已生成配置请在面板"软方块不耗耐久"关闭）
         MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认关——与伐木一致每次都扣）")
-                .translation("config.promaid.mine.softNoDurability").define("softNoDurability", false);
+                .translation("config.promaid.mine.softNoDurability").define("softNoDurability", true);
         MINE_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
                 .translation("config.promaid.mine.pillarGuard").define("pillarGuard", true);
         MINE_HARD_BLOCK_REPORT = BUILDER.comment("硬挡路（箱子/机器等）报点弃置该矿")
@@ -444,7 +444,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .defineInRange("skipReportInterval", 600, 100, 2400);
         // v1.5.161：进阶挖矿——连锁采集 / 自动收集（默认关闭，借鉴 FTB Ultimine 连锁破坏思路）
         MINE_CHAIN_MINING = BUILDER.comment("连锁采集（挖矿时自动连锁挖掘相连的同族矿石——矿脉一次挖完；v1.5.189 默认开启）")
-                .translation("config.promaid.mine.chainMining").define("chainMining", true);
+                .translation("config.promaid.mine.chainMining").define("chainMining", false);
         MINE_AUTO_COLLECT = BUILDER.comment("自动收集（挖掘掉落物直接进女仆背包，不进世界；背包放不下才落地）")
                 .translation("config.promaid.mine.autoCollect").define("autoCollect", false);
         // v1.5.163：连锁采集数量上限可自定义
@@ -584,10 +584,10 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .defineInRange("ownerLowHealth", 30, 10, 90);
         PERCEPTION_LOOK_TICKS = BUILDER.comment("主人持续注视判定时长（秒）")
                 .translation("config.promaid.perception.lookTicks")
-                .defineInRange("lookTicks", 3, 1, 30);
+                .defineInRange("lookTicks", 6, 1, 30);
         PERCEPTION_LOOK_ENTER_DEG = BUILDER.comment("看向进入角度（度）")
                 .translation("config.promaid.perception.lookEnterDeg")
-                .defineInRange("lookEnterDeg", 35.0, 10.0, 80.0);
+                .defineInRange("lookEnterDeg", 30.0, 10.0, 80.0);
         PERCEPTION_LOOK_EXIT_DEG = BUILDER.comment("看向退出角度（度）")
                 .translation("config.promaid.perception.lookExitDeg")
                 .defineInRange("lookExitDeg", 55.0, 20.0, 90.0);
@@ -635,7 +635,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         DIALOGUE_REPORT_INTERVAL = BUILDER.comment("工作播报间隔（秒）")
                 .translation("config.promaid.dialogue.reportInterval").defineInRange("reportInterval", 10, 3, 120);
         DIALOGUE_REPORT_RADIUS = BUILDER.comment("工作播报扫描范围")
-                .translation("config.promaid.dialogue.reportRadius").defineInRange("reportRadius", 32, 8, 128);
+                .translation("config.promaid.dialogue.reportRadius").defineInRange("reportRadius", 20, 8, 128);
         DIALOGUE_PROACTIVE = BUILDER.comment("主动对话（关心/夜晚/好感等主动开口）")
                 .translation("config.promaid.dialogue.proactive").define("proactive", true);
         DIALOGUE_PROACTIVE_COOLDOWN = BUILDER.comment("两次主动发言最小间隔（分钟）")
@@ -713,11 +713,11 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         COMBAT_EXIT_RATIO = BUILDER.comment("自保解除血量（0-1，v1.5.153 默认 0.7：血量恢复到 70% 及以上即取消自保；另一取消机制 = 成功传送回主人身边）")
                 .translation("config.promaid.combat.exitRatio").defineInRange("exitRatio", 0.70, 0.1, 1.0);
         COMBAT_THREAT_DISTANCE = BUILDER.comment("威胁感知距离")
-                .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 12, 4, 32);
+                .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 8, 4, 32);
         COMBAT_WATER_CLUTCH = BUILDER.comment("落地水（有水桶+坠落自动放水缓冲）")
                 .translation("config.promaid.combat.waterClutch").define("waterClutch", true);
         COMBAT_WATER_FALL_DISTANCE = BUILDER.comment("落地水触发高度（格）")
-                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 3.0, 2.0, 20.0);
+                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 4.0, 2.0, 20.0);
         // v1.5.199：水桶垫水——岩浆逃生时放水灭火（1 秒后收回）
         COMBAT_WATER_BUCKET_LAVA = BUILDER.comment("岩浆逃生放水（垫高后周围无水源且包里有水桶 → 在自己垫的方块上放水灭火，1 秒后收回；岩浆源可能变黑曜石）")
                 .translation("config.promaid.combat.waterBucketLava").define("waterBucketLava", true);
@@ -757,7 +757,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .defineInRange("threatScan", 5, 1, 40);
         COMBAT_FLEE_SPEED = BUILDER.comment("逃跑速度倍率")
                 .translation("config.promaid.combat.fleeSpeed")
-                .defineInRange("fleeSpeed", 1.4, 0.8, 3.0);
+                .defineInRange("fleeSpeed", 1.1, 0.8, 3.0);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);
@@ -785,13 +785,13 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .defineInRange("alertCooldown", 60, 10, 300);
         COMBAT_ANNOUNCE_COOLDOWN = BUILDER.comment("策略播报间隔（tick，防刷屏）")
                 .translation("config.promaid.combat.announceCooldown")
-                .defineInRange("announceCooldown", 200, 40, 600);
+                .defineInRange("announceCooldown", 500, 40, 600);
         COMBAT_WATER_HOLD = BUILDER.comment("落地水保持时长（tick）")
                 .translation("config.promaid.combat.waterHold")
                 .defineInRange("waterHold", 20, 5, 100);
         COMBAT_WATER_LANDING_SCAN = BUILDER.comment("落地水下探格数（提前放水检测）")
                 .translation("config.promaid.combat.waterLandingScan")
-                .defineInRange("waterLandingScan", 8, 2, 16);
+                .defineInRange("waterLandingScan", 3, 2, 16);
         // v1.5.134：单兵作战战术（v1.5.132 战斗协同已删除——协同不如单兵 PVP 操作感）
         COMBAT_TACTICS = BUILDER.comment("单兵作战战术（绕圈走位/打退拉扯/距离控制/时机举盾——PVP 式战斗）")
                 .translation("config.promaid.combat.tactics").define("tactics", true);
@@ -835,7 +835,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         // v1.5.252h：defineInRange 上限 3 → 4——旧版面板第 5 档"仅一点伤害"（值 4）
         // 超出范围保存不进去（货不对板：mixin 支持 0~4 但配置只收 0~3）
         PLAYER_DAMAGE_MODE = BUILDER.comment("玩家对女仆伤害模式（0=TLM原版压制÷5封顶2点、1=玩家伤害完全免疫、2=玩家伤害无限制、3=玩家伤害有上限（比例见 playerDamageMaidCap）、4=仅受到一点伤害（单次上限1点，被打有反馈但不疼））")
-                .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 0, 0, 4);
+                .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 4, 0, 4);
         PLAYER_DAMAGE_MAID_CAP = BUILDER.comment("玩家伤害上限比例（0-1：模式 3 时单次伤害 = 女仆最大生命 × 此比例；默认 0.1 = 10%）")
                 .translation("config.promaid.combat.playerDamageMaidCap").defineInRange("playerDamageMaidCap", 0.1, 0.01, 0.5);
         BUILDER.pop();
@@ -847,9 +847,9 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         MISC_BREW_RADIUS = BUILDER.comment("酿造任务酿造台搜索范围")
                 .translation("config.promaid.misc.brewRadius").defineInRange("brewRadius", 16, 4, 48);
         MISC_PROCESS_COOLDOWN = BUILDER.comment("烹饪/酿造处理间隔（tick）")
-                .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 40, 10, 200);
+                .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 10, 10, 200);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
-                .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
+                .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 10000, 500, 60000);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
                 .translation("config.promaid.misc.pickupPriority").define("pickupPriority", true);
         MISC_VERTICAL_RANGE = BUILDER.comment("烹饪/酿造垂直搜索范围")
@@ -871,7 +871,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
-            .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
+            .translation("config.promaid.misc.chainHarvest").define("chainHarvest", false);
     MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
             .translation("config.promaid.misc.autoCollect").define("autoCollect", false);
     // v1.5.163：农场连锁收获数量上限可自定义
