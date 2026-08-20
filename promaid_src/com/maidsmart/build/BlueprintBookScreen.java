@@ -609,11 +609,10 @@ public class BlueprintBookScreen extends Screen {
         // 女仆加入/条件满足后残留提示仍显示（截图实证：名单页有女仆仍显示
         // "该区块没有女仆"）；各视图按钮构建时按条件重新设置
         this.maidEmptyText = null;
-        if (this.entries == null || this.entries.isEmpty()) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("没有可用蓝图——把 .nbt/.litematic/.schem 图纸放进 config/maid_smart/blueprints/ 或存档 schematics/"),
-                            b -> this.m_7379_()).m_252987_(this.f_96543_ / 2 - 120, 60, 240, 20).m_253136_());
-            return;
-        }
+        // v1.5.390 修复：没有蓝图不再"挡死整本手册"——旧版 entries 为空时直接渲染
+        // 一个"没有可用蓝图"按钮并 return，导致首页五个入口（详细介绍/建造/女仆管理/
+        // 模组详细配置/女仆记忆）全部不可达，干净安装的玩家根本进不了手册其他功能。
+        // 现在无论有无蓝图都正常进各视图；空蓝图改由建造目录页内部提示。
         switch (this.view) {
             case VIEW_BUILD -> this.buildViewButtons();
             case VIEW_MAIDS -> this.maidsViewButtons();
@@ -875,6 +874,9 @@ public class BlueprintBookScreen extends Screen {
         // v1.5.374：加搜索框 + 网格多列显示——条目改为【渲染 + 坐标点击】（不再每键
         // 重建按钮，避免中文输入法被打断 / 焦点丢失），搜索框只建一次
         java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+        if (list.isEmpty()) {
+            this.maidEmptyText = "没有可用蓝图——把 .nbt/.litematic/.schem 图纸放进 config/maid_smart/blueprints/ 或存档 schematics/";
+        }
         int cols = this.buildGridCols();
         int rows = this.buildGridRowsPerPage();
         int perPage = cols * rows;
@@ -1907,6 +1909,10 @@ public class BlueprintBookScreen extends Screen {
                 graphics.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c\u2716"),
                         x + cellW - delW + 3, cy + (NAME_BUTTON_H - 8) / 2, 0xFF5555, false);
             }
+        }
+        if (this.maidEmptyText != null) {
+            graphics.m_280614_(this.f_96547_, Component.m_237113_(this.maidEmptyText),
+                    10, CONTENT_TOP + 40, 0x888888, false);
         }
         if (totalPages > 1) {
             this.drawCentered(graphics, "\u00a77第 " + (this.buildPage + 1) + " / " + totalPages + " 页",
