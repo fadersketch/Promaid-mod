@@ -504,6 +504,9 @@ public final class BlueprintLib {
             // 建造目录只保留玩家导入/生成的内容。已在 blueprints 目录的残留副本
             // 由 cleanupLegacyBuiltinFiles() 删除（mod 自动生成的，非玩家内容）。
             cleanupLegacyBuiltinFiles();
+            // v1.5.391：首次运行自动解压内置玩家蓝图包到 config/maid_smart/blueprints/，
+            // 让玩家开箱即见（干净安装也能在手册建造目录看到默认蓝图）。
+            ensureBundledBlueprints();
             // v1.5.25g：服务端启动时预热外部蓝图需求缓存——手册右击不再首次卡 5 秒
             // （countNeeds 对每个蓝图遍历上万步骤在启动时完成，右击只读缓存）
             warmupNeedsCache();
@@ -541,6 +544,92 @@ public final class BlueprintLib {
             "tabby_cat_statue.snbt",
             "mega_castle.snbt", "mega_pyramid.snbt", "mega_colosseum.snbt",
             "mega_knight_statue.snbt"
+    };
+
+    /** v1.5.391：内置玩家蓝图包（jar 内 assets/maid_smart/bundled_blueprints/*.litematic）。
+     *  首次运行自动解压到 config/maid_smart/blueprints/ 供玩家开箱即用。 */
+    private static final String[] BUNDLED_BLUEPRINT_FILES = {
+        "协议源石01（已授权）.litematic",
+        "地形__MC版 总统山.litematic",
+        "地形__加冕圣地.litematic",
+        "天空__倒金字塔.litematic",
+        "天空__哈尔的移动城堡.litematic",
+        "天空__天空之城.litematic",
+        "天空__月宫.litematic",
+        "天空__水晶塔.litematic",
+        "天空__热气球幻想屋.litematic",
+        "天空__空中花园.litematic",
+        "天空__罗莎琳娜彗星天文台.litematic",
+        "小蛋挞01（已授权）.litematic",
+        "房屋__bilibili小屋.litematic",
+        "房屋__《传说之下》金字塔(同人).litematic",
+        "房屋__《哥谭》韦恩塔.litematic",
+        "房屋__《魔兽争霸》市政厅.litematic",
+        "房屋__三层木制别墅.litematic",
+        "房屋__三角形现代别墅.litematic",
+        "房屋__上海中心大厦.litematic",
+        "房屋__上海环球金融中心.litematic",
+        "房屋__下午茶凉亭.litematic",
+        "房屋__下界砖顶中世纪房屋.litematic",
+        "房屋__丛林宅邸.litematic",
+        "房屋__丛林温泉馆.litematic",
+        "房屋__东方大堂.litematic",
+        "房屋__中世纪城堡堡垒.litematic",
+        "房屋__中世纪小巫师塔.litematic",
+        "房屋__中世纪庄园.litematic",
+        "房屋__中世纪异世界酒馆.litematic",
+        "房屋__中世纪旅馆.litematic",
+        "树木__巨型樱花树.litematic",
+        "树木__樱花树1.litematic",
+        "树木__用末地烛装饰的树.litematic",
+        "树木__神树.litematic",
+        "武器__F-16 战隼.litematic",
+        "武器__SR-71 黑鸟 .litematic",
+        "武器__北风之神级核潜艇.litematic",
+        "武器__星球大战AT-AT 步行机.litematic",
+        "武器__苏俄 天启坦克.litematic",
+        "武器__鹦鹉螺号.litematic",
+        "水__圆形水族箱.litematic",
+        "水__圣剑池.litematic",
+        "水__樱花木小码头.litematic",
+        "水__水立方.litematic",
+        "水__沙滩别墅.litematic",
+        "水__河滨度假别墅.litematic",
+        "甘蔗牧场（已失效）.schem",
+        "红石__中世纪刷石机.litematic",
+        "红石__优雅的村民交易所.litematic",
+        "红石__全树种树场（有红树）.litematic",
+        "红石__国风刷铁机——黑金楼2024.1.15.litematic",
+        "红石__彩虹信标.litematic",
+        "红石__心形下界传送门.litematic",
+        "节日__万圣节漂浮教堂.litematic",
+        "节日__中秋快乐.litematic",
+        "节日__南瓜屋.litematic",
+        "节日__圣诞教堂.litematic",
+        "节日__大圣诞树.litematic",
+        "节日__魔法圣诞城堡.litematic",
+        "装饰__中式灯笼路灯.litematic",
+        "装饰__太阳能路灯.litematic",
+        "装饰__布鲁克林大桥.litematic",
+        "装饰__现代路灯（大）.litematic",
+        "载具__A380.litematic",
+        "载具__BF7 星际航母.litematic",
+        "载具__《光环》UNSC M510猛犸象.litematic",
+        "载具__《海贼王》 岛屿之船.litematic",
+        "载具__《银翼杀手》飞行警车.litematic",
+        "载具__中式飞艇.litematic",
+        "载具__云梯消防车.litematic",
+        "载具__仙女座号.litematic",
+        "雕像__《东方Project》小型角色雕像合集.litematic",
+        "雕像__《艾尔登法环》黄金树 1.litematic",
+        "雕像__《进击的巨人》超大型巨人头部.litematic",
+        "雕像__侏罗纪世界苍龙.litematic",
+        "雕像__克拉肯.litematic",
+        "雕像__初音未来.litematic",
+        "雕像__地球和月球.litematic",
+        "雕像__巨型坦克.litematic",
+        "雕像__无限手套.litematic",
+        "雕像__暴虐霸王龙.litematic"
     };
 
     /** v1.5.387：清理 mod 自动复制的内置预制蓝图残留（config/maid_smart/blueprints/
@@ -586,6 +675,36 @@ public final class BlueprintLib {
             NEEDS_MTIME.clear();
             DESCRIBE_CACHE.clear();
             SIZE_CACHE.clear();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** v1.5.391：首次运行自动解压内置玩家蓝图包——把 jar 里
+     *  assets/maid_smart/bundled_blueprints/ 下的蓝图复制到 config/maid_smart/blueprints/。
+     *  仅当目标文件不存在时复制（已有 = 玩家内容，不覆盖）；幂等，重复启动安全。
+     *  复制后由 scanExternalBlueprints() 扫描注册进手册建造目录，开箱即见。 */
+    private static void ensureBundledBlueprints() {
+        try {
+            java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
+                    .resolve("maid_smart").resolve("blueprints");
+            java.nio.file.Files.createDirectories(dir);
+            for (String file : BUNDLED_BLUEPRINT_FILES) {
+                java.nio.file.Path out = dir.resolve(file);
+                if (java.nio.file.Files.exists(out)) {
+                    continue; // 已有则跳过，不覆盖玩家自己的内容
+                }
+                try (java.io.InputStream in = BlueprintLib.class.getClassLoader()
+                        .getResourceAsStream("assets/maid_smart/bundled_blueprints/" + file)) {
+                    if (in == null) {
+                        LOGGER.warn("ensureBundledBlueprints: 缺少内置蓝图资源 {}", file);
+                        continue;
+                    }
+                    java.nio.file.Files.copy(in, out);
+                    LOGGER.info("ensureBundledBlueprints: 已内置蓝图 {}", file);
+                } catch (Exception e) {
+                    LOGGER.warn("ensureBundledBlueprints: 复制失败 {}: {}", file, e.getMessage());
+                }
+            }
         } catch (Exception ignored) {
         }
     }
