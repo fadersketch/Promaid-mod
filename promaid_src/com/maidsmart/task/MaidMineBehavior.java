@@ -48,6 +48,20 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final Map<Block, Integer> ORE_VALUE = new HashMap<>();
 
     static {
+        reloadBuiltinOres(); // 初始默认矿表；首次 loadCustomOres() 后完全由配置接管
+    }
+
+    private static void setValue(String id, int value) {
+        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id));
+        if (block != null) {
+            ORE_VALUE.put(block, value);
+        }
+    }
+
+    /**
+     * 内置矿表（默认占位；一旦 loadCustomOres 从配置重建，仅配置为唯一事实源）。
+     */
+    private static void reloadBuiltinOres() {
         setValue("minecraft:diamond_ore", 500);
         setValue("minecraft:deepslate_diamond_ore", 500);
         setValue("minecraft:emerald_ore", 450);
@@ -68,13 +82,6 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         setValue("minecraft:nether_quartz_ore", 100);
     }
 
-    private static void setValue(String id, int value) {
-        Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id));
-        if (block != null) {
-            ORE_VALUE.put(block, value);
-        }
-    }
-
     /**
      * v1.5.89 遗留说明：旧 equipPickaxe 写错位置——getMaidInv() 是背包（36 格），
      * 不是主手；真正的主手是 getHandsInvWrapper() slot 0。换工具已统一收敛到
@@ -87,9 +94,15 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.88：从配置面板的"可挖掘方块表"（mine.oreValues：modid:block=价值）加载
      * 自定义矿表——适配其他 mod 的矿石。首次扫描/配置保存后调用。
+     * v1.0.3.1：先 clear 再按配置重建——旧版只 put 不 remove，界面取消勾选矿物后
+     * ORE_VALUE 残留该方块 → 女仆仍继续挖（"取消勾选不生效"根因）。
+     * 配置 oreValues 是唯一事实源：从配置删除的矿（含曾 add 的模组矿如银矿石、
+     * 以及从默认列表删掉的内置矿）立即从 ORE_VALUE 消失；删光矿 = 女仆不挖矿，
+     * 这是玩家主动选择，属正常响应。
      */
     public static void loadCustomOres() {
         try {
+            ORE_VALUE.clear(); // v1.0.3.1：先清空——保证移除/取消勾选生效
             for (String line : com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get()) {
                 String[] parts = line.split("=", 2);
                 if (parts.length != 2) {
@@ -1642,13 +1655,15 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.101b：是否可挖穿——内置 OPEN_BREAKABLE（自然生成方块）或 面板障碍物名单。
-     *  v1.5.102d：基岩/屏障等不可破坏方块永远返回 false（防面板误加后女仆傻挖） */
+     *  v1.5.102d：基岩/屏障等不可破坏方块永远返回 false（防面板误加后女仆傻挖）
+     *  v1.0.4：内置方块再扣除"已取消挖穿"的排除名单（MINE_DISABLED_BREAKABLES）——
+     *  界面取消内置障碍物打勾后，isBreakable 对其返回 false，女仆不再挖穿 */
     private static boolean isBreakable(String path) {
         if ("bedrock".equals(path) || "barrier".equals(path)) {
             return false;
         }
         if (OPEN_BREAKABLE.contains(path)) {
-            return true;
+            return !isDisabledBreakable(path);
         }
         try {
             for (String e : com.maidsmart.config.MaidSmartConfig.MINE_BREAKABLES.get()) {
@@ -1661,8 +1676,33 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         return false;
     }
 
-    /** v1.5.102d：是否内置自然方块（配置面板障碍物页据此预勾选"所有自然生成的方块"） */
+    /** v1.0.4：内置障碍物是否已被界面取消挖穿（加入 MINE_DISABLED_BREAKABLES 排除名单） */
+    private static boolean isDisabledBreakable(String path) {
+        try {
+            for (String e : com.maidsmart.config.MaidSmartConfig.MINE_DISABLED_BREAKABLES.get()) {
+                if (e != null && e.equals(path)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * v1.5.102d：是否内置自然方块（配置面板障碍物页据此预勾选"所有自然生成的方块"）。
+     * v1.0.4：被取消挖穿（在排除名单）的内置方块不再计入"已勾选"。
+     */
     public static boolean isBuiltInBreakable(String path) {
+        return !"bedrock".equals(path) && !"barrier".equals(path)
+                && OPEN_BREAKABLE.contains(path) && !isDisabledBreakable(path);
+    }
+
+    /**
+     * v1.0.4：是否为内置可挖穿方块（不关心是否已被取消挖穿）——供界面 toggle 判定
+     * 该方块走"内置排除名单"还是"额外正名单"，即使已取消勾选也仍是内置方块。
+     */
+    public static boolean isBuiltinBreakableBlock(String path) {
         return !"bedrock".equals(path) && !"barrier".equals(path) && OPEN_BREAKABLE.contains(path);
     }
 

@@ -1843,19 +1843,30 @@ public class PromaidConfigScreen extends Screen {
             com.maidsmart.task.MaidMineBehavior.loadCustomOres();
         } else {
             String path = normPath(id);
-            // v1.5.102d：基岩/屏障等不可破坏方块不允许加入（防止误加后女仆傻挖）；
-            // 内置自然方块已预勾选，无需（也不可）再操作
-            if ("bedrock".equals(path) || "barrier".equals(path)
-                    || com.maidsmart.task.MaidMineBehavior.isBuiltInBreakable(path)) {
+            // v1.5.102d：基岩/屏障等不可破坏方块不允许加入（防止误加后女仆傻挖）
+            if ("bedrock".equals(path) || "barrier".equals(path)) {
                 return;
             }
-            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_BREAKABLES.get());
-            if (cur.contains(path)) {
-                cur.remove(path);
+            boolean builtin = com.maidsmart.task.MaidMineBehavior.isBuiltinBreakableBlock(path);
+            // v1.0.4：内置自然方块 → toggle 排除名单（MINE_DISABLED_BREAKABLES），
+            // 取消打勾真正生效——不再被 toggleCreative 的 return 拦截
+            if (builtin) {
+                List<String> dis = new ArrayList<>(MaidSmartConfig.MINE_DISABLED_BREAKABLES.get());
+                if (dis.contains(path)) {
+                    dis.remove(path);      // 恢复挖穿
+                } else {
+                    dis.add(path);         // 取消挖穿
+                }
+                MaidSmartConfig.MINE_DISABLED_BREAKABLES.set(dis);
             } else {
-                cur.add(path);
+                List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_BREAKABLES.get());
+                if (cur.contains(path)) {
+                    cur.remove(path);
+                } else {
+                    cur.add(path);
+                }
+                MaidSmartConfig.MINE_BREAKABLES.set(cur);
             }
-            MaidSmartConfig.MINE_BREAKABLES.set(cur);
         }
         if (this.minableList != null) {
             this.minableList.rebuild();

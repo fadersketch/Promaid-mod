@@ -2024,17 +2024,24 @@ public class BlueprintBookScreen extends Screen {
      */
     private void confirmAction(String title, String message, String yesLabel, Runnable onYes) {
         BlueprintBookScreen self = this;
-        net.minecraft.client.Minecraft.m_91087_().m_91152_(new net.minecraft.client.gui.screens.ConfirmScreen(
+        net.minecraft.client.gui.screens.ConfirmScreen[] holder = new net.minecraft.client.gui.screens.ConfirmScreen[1];
+        holder[0] = new net.minecraft.client.gui.screens.ConfirmScreen(
                 ok -> {
                     if (ok) {
                         onYes.run();
                     }
-                    net.minecraft.client.Minecraft.m_91087_().m_91152_(self);
+                    // v1.0.4：onYes 可能已打开新界面（如游戏内文件选择器）——此时不再强制
+                    // 切回手册，否则刚打开的界面会被立刻顶掉（表现为"点击继续导入后没反应"）
+                    net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+                    if (mc.f_91080_ == holder[0]) {
+                        mc.m_91152_(self);
+                    }
                 },
                 Component.m_237113_("\u00a7c" + title),
                 Component.m_237113_(message),
                 Component.m_237113_(yesLabel),
-                Component.m_237113_("\u00a77\u53d6\u6d88")));
+                Component.m_237113_("\u00a77\u53d6\u6d88"));
+        net.minecraft.client.Minecraft.m_91087_().m_91152_(holder[0]);
     }
 
     /**
