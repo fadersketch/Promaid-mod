@@ -954,53 +954,33 @@ public class BlueprintBookScreen extends Screen {
                 .m_252987_(this.f_96543_ - 92, TOP_BTN_Y, 90, TOP_BTN_H).m_253136_());
     }
 
-    /** v1.5.224：选择世界地图 zip → 发送导入请求（结果回聊天框） */
+    /** v1.5.224：选择世界地图 zip → 发送导入请求（结果回聊天框）。
+     *  v1.0.4：改用游戏内文件浏览器（FilePickScreen）——旧版 java.awt.FileDialog 在
+     *  以 -Djava.awt.headless=true 运行的 JVM 里抛 HeadlessException，选择器打不开。 */
     private void pickAndImportWorld() {
-        try {
-            java.awt.FileDialog fd = new java.awt.FileDialog(
-                    (java.awt.Frame) null, "选择世界存档压缩包（.zip）",
-                    java.awt.FileDialog.LOAD);
-            fd.setFile("*.zip");
-            fd.setVisible(true);
-            String dir = fd.getDirectory();
-            String file = fd.getFile();
-            fd.dispose();
-            if (dir == null || file == null) {
-                this.chatHint("\u00a77已取消导入");
-                return;
-            }
-            String path = dir + file;
-            BlueprintBookNetworking.CHANNEL.sendToServer(
-                    new BlueprintBookNetworking.WorldImportPacket(path));
-            this.chatHint("\u00a77已发送世界地图导入请求，提取结果请看聊天框");
-        } catch (Exception e) {
-            this.chatHint("\u00a7c打开文件选择器失败: " + e.getMessage());
-        }
+        com.maidsmart.gui.FilePickScreen.open(this,
+                "选择世界存档压缩包（.zip）",
+                new String[]{"zip"},
+                path -> {
+                    BlueprintBookNetworking.CHANNEL.sendToServer(
+                            new BlueprintBookNetworking.WorldImportPacket(path));
+                    this.chatHint("\u00a77已发送世界地图导入请求，结果请看聊天框");
+                });
     }
 
-    /** v1.5.220：打开系统文件选择器选蓝图文件 → 发送导入请求（单机场景客户端与服务端
-     *  同机，绝对路径服务端可直接读取；结果回聊天框） */
+    /** v1.5.220：打开文件选择器选蓝图文件 → 发送导入请求（单机场景客户端与服务端
+     *  同机，绝对路径服务端可直接读取；结果回聊天框）。
+     *  v1.0.4：改用游戏内文件浏览器（FilePickScreen）——java.awt.FileDialog 在
+     *  headless JVM 下抛 HeadlessException 打不开。 */
     private void pickAndImportBuild() {
-        try {
-            java.awt.FileDialog fd = new java.awt.FileDialog(
-                    (java.awt.Frame) null, "选择建筑蓝图文件（.schem/.litematic/.nbt/.snbt/.schematic/.json/.zip）",
-                    java.awt.FileDialog.LOAD);
-            fd.setFile("*.schem;*.litematic;*.nbt;*.snbt;*.schematic;*.json;*.zip");
-            fd.setVisible(true);
-            String dir = fd.getDirectory();
-            String file = fd.getFile();
-            fd.dispose();
-            if (dir == null || file == null) {
-                this.chatHint("\u00a77已取消导入");
-                return;
-            }
-            String path = dir + file;
-            BlueprintBookNetworking.CHANNEL.sendToServer(
-                    new BlueprintBookNetworking.BuildImportPacket(path));
-            this.chatHint("\u00a77已发送导入请求，结果请看聊天框");
-        } catch (Exception e) {
-            this.chatHint("\u00a7c打开文件选择器失败: " + e.getMessage());
-        }
+        com.maidsmart.gui.FilePickScreen.open(this,
+                "选择建筑蓝图文件（.schem/.litematic/.nbt/.snbt/.schematic/.json/.zip）",
+                new String[]{"schem", "litematic", "nbt", "snbt", "schematic", "json", "zip"},
+                path -> {
+                    BlueprintBookNetworking.CHANNEL.sendToServer(
+                            new BlueprintBookNetworking.BuildImportPacket(path));
+                    this.chatHint("\u00a77已发送导入请求，结果请看聊天框");
+                });
     }
 
     // ================= 女仆管理面板 =================
