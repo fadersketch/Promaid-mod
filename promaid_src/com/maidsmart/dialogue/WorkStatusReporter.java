@@ -82,20 +82,22 @@ public class WorkStatusReporter {
             this.stuckSince.remove(maid);
             return;
         }
-        // v1.5.252f【播报降频】：脱离工作状态（卡住）持续满 20 秒（400 tick）
-        // 才播报一次；之后每 20 秒最多一次——旧版每 DIALOGUE_REPORT_INTERVAL 秒
-        // 就弹一次，"熔炉明明就在附近"刷屏。烹饪/酿造/挖矿同逻辑
+        // v1.5.252f【播报降频】：脱离工作状态（卡住）持续满 N 秒才播报一次；之后
+        // 每 N 秒最多一次——N = 配置面板 dialogue.reportInterval（秒），旧版硬编码
+        // 20 秒（400 tick）导致"熔炉明明就在附近"刷屏；v1.0.4 改为读配置（秒×20=tick），
+        // 玩家可在面板"对话提示→播报间隔（秒）"调整。烹饪/酿造/挖矿同逻辑
+        long reportTicks = (long) (com.maidsmart.config.MaidSmartConfig.DIALOGUE_REPORT_INTERVAL.get() * 20L);
         Long since = this.stuckSince.get(maid);
         if (since == null) {
-            this.stuckSince.put(maid, now); // 开始计时（静默等待 20 秒）
+            this.stuckSince.put(maid, now); // 开始计时（静默等待 N 秒）
             return;
         }
-        if (now - since < 400) {
-            return; // 卡住不足 20 秒，不打扰
+        if (now - since < reportTicks) {
+            return; // 卡住不足 N 秒，不打扰
         }
         Long last = this.lastReport.get(maid);
-        if (last != null && now - last < 400) {
-            return; // 距上次播报不足 20 秒（持续卡住时每 20 秒最多一句）
+        if (last != null && now - last < reportTicks) {
+            return; // 距上次播报不足 N 秒（持续卡住时每 N 秒最多一句）
         }
         maid.getChatBubbleManager().addTextChatBubble(reason);
         this.lastReport.put(maid, now);

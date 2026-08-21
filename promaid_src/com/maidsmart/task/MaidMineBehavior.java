@@ -867,6 +867,18 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 现在只要"挡路块"在伸手范围内就开挖，挖穿一层再评估下一层，逐层推进到矿。
         Blocker blocker = null;
         if (isOre(level, this.targetPos)) {
+            // v1.0.4：关闭透视时，已锁定目标也不隔墙挖——从当前眼睛位置看不到该矿
+            // 立即放弃。否则 findBlockingBlock 会把它当挡路块：墙在障碍物名单里就
+            // 挖穿（=女仆再次获得透视），不在名单里才报点弃置（"勾选障碍物后透视
+            // 失效"根因）。视线被挡的矿本就不该被发现/继续挖；正在挖的挡路块不在此
+            // 检查范围，当前块挖完后 targetPos 置空，下 tick 重选时自然被视线过滤。
+            if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
+                    && !this.hasClearSight(level, maid, this.targetPos)) {
+                this.targetPos = null;
+                this.destroyProgress = 0.0f;
+                this.saveProgress(maid);
+                return;
+            }
             blocker = this.findBlockingBlock(level, maid, this.targetPos);
         }
         if (blocker != null && blocker.openable()) {
@@ -1990,6 +2002,13 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     if (value == null) {
                         continue;
                     }
+                    // v1.0.4：透视感知开关（默认关）——关闭时女仆像玩家一样只发现视线无阻
+                    // 的矿物：被墙/实心方块挡住的矿不可见（不进候选，也就没有系统/气泡播报）；
+                    // 开启 = 旧版隔墙找矿逻辑，不检查视线
+                    if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
+                            && !this.hasClearSight(level, maid, p)) {
+                        continue;
+                    }
                     // v1.5.189：危险方块规避——目标矿自身或路径上有岩浆/火/岩浆块/
                     // 仙人掌/甜浆果/营火 → 不选（挖过去会烫伤/引燃；复用自保 DANGER 判定）
                     if (this.isDangerAt(level, p)) {
@@ -2044,6 +2063,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (!this.isOre(level, p)) {
                 continue; // 已被挖掉
             }
+            // v1.0.4：透视感知默认关——缓存轮同样只认视线无阻的矿（女仆移动/配置热更新后
+            // 与发现层判定一致；开启透视则跳过）
+            if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
+                    && !this.hasClearSight(level, maid, p)) {
+                continue;
+            }
             int dx = p.m_123341_() - anchor.m_123341_();
             int dz = p.m_123343_() - anchor.m_123343_();
             int dy = p.m_123342_() - anchor.m_123342_();
@@ -2074,6 +2099,47 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
         }
         return best;
+    }
+
+    /**
+     * v1.0.4：视线感知（透视感知开关默认关时启用）——女仆像玩家一样只能发现视线无阻的矿物。
+     * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
+     * 【非空气、非流体】方块即判定视线被挡 → 不可见。除水/岩浆外一律挡视线：
+     * - 泥土/石头/矿石/箱子等自不必说；
+     * - 玻璃/半砖/树叶等透明或半格方块也挡——它们不是矿洞天然生成物，玩家手动把矿
+     *   裹起来说明不想破坏里面的矿（半格高按一格高算）；
+     * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。
+     * 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见"
+     * （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。
+     */
+    private boolean hasClearSight(ServerLevel level, EntityMaid maid, BlockPos target) {
+        double sx = maid.m_20185_();
+        double sy = maid.m_20186_() + 1.2; // 眼睛高度（与 countBlocking 一致）
+        double sz = maid.m_20189_();
+        double tx = target.m_123341_() + 0.5;
+        double ty = target.m_123342_() + 0.5;
+        double tz = target.m_123343_() + 0.5;
+        double dist = Math.sqrt((tx - sx) * (tx - sx) + (ty - sy) * (ty - sy) + (tz - sz) * (tz - sz));
+        int steps = Math.max(1, (int) Math.ceil(dist * 2.0));
+        for (int i = 1; i < steps; i++) {
+            double t = (double) i / steps;
+            double x = sx + (tx - sx) * t;
+            double y = sy + (ty - sy) * t;
+            double z = sz + (tz - sz) * t;
+            BlockPos sample = new BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            if (sample.equals(target)) {
+                break; // 到矿本身，不再检查
+            }
+            BlockState st = level.m_8055_(sample);
+            if (st.m_60795_()) {
+                continue; // 空气不挡
+            }
+            if (!st.m_60819_().m_76178_()) {
+                continue; // 水/岩浆等流体不挡（m_76178_ = FluidState.isEmpty）
+            }
+            return false; // 任何其他方块（含玻璃/半砖/树叶/土/石）都挡视线
+        }
+        return true;
     }
 
     /**

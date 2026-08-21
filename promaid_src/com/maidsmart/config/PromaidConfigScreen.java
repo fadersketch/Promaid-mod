@@ -101,6 +101,11 @@ public class PromaidConfigScreen extends Screen {
     /** v1.5.101b：恢复输入添加框（矿物 "id=value"，障碍物 "id"） */
     private EditBox minableInput;
     /**
+     * v1.0.4：锁定的网格方块 id——点击图标后黄框固定在该方块上，输入框下方出现
+     * 闪烁红字「已锁定（名称），请为其赋予一个值」；输入数值点添加后解锁。
+     */
+    private String lockedOreId = null;
+    /**
      * v1.5.126：当前激活的输入框（照搬原版创造搜索框交互——CreativeModeInventoryScreen
      * 的 charTyped/keyPressed 直接转发给自己持有的 searchBox 字段，不依赖 getFocused()
      * 焦点链）。1.20.1 的键盘输入链是 KeyboardHandler → screen.m_5534_(char,int)
@@ -122,8 +127,9 @@ public class PromaidConfigScreen extends Screen {
     private String creativeQuery = "";
     private int creativePage = 0;
     private final List<net.minecraft.world.item.ItemStack> creativeItems = new ArrayList<>();
-    /** 网格列数/格距（格 18px 图标 + 2px 间距） */
-    private static final int GRID_COLS = 8;
+    /** 网格列数/格距（格 18px 图标 + 2px 间距）——v1.0.4：8→16，每页 24→48 个
+     *  （矿表 184 页减半到 92；右侧仍留 ~210px 给悬停提示） */
+    private static final int GRID_COLS = 16;
     private static final int GRID_CELL = 20;
     /** v1.5.101b：网格固定 3 行（24 格/页，分页；小窗口也不挤） */
     private static final int GRID_ROWS = 3;
@@ -485,6 +491,7 @@ public class PromaidConfigScreen extends Screen {
                             Component.m_237113_((this.mineTableMode == mi ? "\u00a7e\u25cf " : "\u00a77") + modeNames[i]),
                             b -> {
                                 this.mineTableMode = mi;
+                                this.lockedOreId = null; // v1.0.4：切名单清锁定
                                 this.m_7856_();
                             })
                     .m_252987_(left + i * 100, tgY, 96, 18).m_253136_());
@@ -523,15 +530,24 @@ public class PromaidConfigScreen extends Screen {
                     .m_252987_(cx + 10, py, 80, 16).m_253136_());
         }
         // 输入添加（v1.5.101b 恢复：矿物 "id=value"，障碍物 "id"）
+        // v1.0.4：目标矿物模式输入框只在锁定方块后出现（防误认为物品添加框）；
+        // 障碍物模式无输入框（网格搜索点击已完整覆盖添加/取消，手动输 id 冗余）
         int inputY = gridBottom + 24;
-        this.minableInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116, 18,
-                Component.m_237113_("添加"));
-        this.minableInput.m_94199_(64);
-        this.minableInput.m_257771_(Component.m_237113_(
-                this.mineTableMode == 0 ? "minecraft:mod_ore=300" : "minecraft:oak_log"));
-        this.m_142416_(this.minableInput);
-        this.m_142416_(Button.m_253074_(Component.m_237113_("添加"), b -> this.addMinable())
-                .m_252987_(left + panelWidth - 96, inputY, 80, 18).m_253136_());
+        if (this.mineTableMode == 0) {
+            if (this.lockedOreId == null) {
+                this.minableInput = null; // 未锁定：无输入框/添加按钮
+            } else {
+                this.minableInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116, 18,
+                        Component.m_237113_("添加"));
+                this.minableInput.m_94199_(64);
+                this.minableInput.m_257771_(Component.m_237113_("输入优先级数值（留空=默认价值）"));
+                this.m_142416_(this.minableInput);
+                this.m_142416_(Button.m_253074_(Component.m_237113_("添加"), b -> this.addMinable())
+                        .m_252987_(left + panelWidth - 96, inputY, 80, 18).m_253136_());
+            }
+        } else {
+            this.minableInput = null; // v1.0.4：障碍物模式无手动输入框
+        }
         // 当前名单列表（v1.5.190：矮窗口时压缩，防止盖住底部按钮）
         int listTop = inputY + 24;
         int listH = Math.max(24, Math.min((h - 78) - listTop - 4, h - listTop - 36));
@@ -780,6 +796,7 @@ public class PromaidConfigScreen extends Screen {
             this.m_93507_(x);
             this.m_93488_(false);
             this.m_93496_(false);
+            this.f_93390_ = width; // v1.0.4：行宽=列表宽（旧版默认 0，删除文本被条目盖住）
             this.rebuild();
         }
 
@@ -794,14 +811,36 @@ public class PromaidConfigScreen extends Screen {
 
         @Override
         public int m_5759_() {
-            return Math.max(this.f_93390_, 120); // rowWidth 最小宽度
+            return Math.max(this.f_93390_, 120); // rowWidth（构造时已设为列表宽）
+        }
+
+        /** v1.0.4：同 MinableList——默认滚动条覆盖为低调样式（见 MinableList.m_238964_） */
+        @Override
+        protected void m_238964_(GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
         }
 
         private class AltEntry extends ObjectSelectionList.Entry<AltList.AltEntry> {
             private final String id;
+            private final net.minecraft.client.gui.components.Button delButton;
 
             AltEntry(String id) {
                 this.id = id;
+                this.delButton = Button.m_253074_(
+                                Component.m_237113_("删除"),
+                                b -> PromaidConfigScreen.this.removeAlt(this.id))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
             }
 
             @Override
@@ -831,18 +870,16 @@ public class PromaidConfigScreen extends Screen {
                 g.m_280614_(PromaidConfigScreen.this.f_96547_,
                         Component.m_237113_(tag + com.maidsmart.build.BlueprintLib.cnName(this.id)),
                         x, y, LABEL_COLOR, false);
-                // 删除按钮文本（右侧）
-                int delX = left + AltList.this.m_5759_() - 52;
-                g.m_280614_(PromaidConfigScreen.this.f_96547_,
-                        Component.m_237113_("\u00a7c[删除]"), delX, y, 0xFFFF5555, false);
+                // v1.0.4：标准删除按钮贴右缘（m_252865_=setX、m_253211_=setY）
+                this.delButton.m_252865_(left + AltList.this.m_5759_() - 62);
+                this.delButton.m_253211_(top + 1);
+                this.delButton.m_88315_(g, mouseX, mouseY, partialTick);
             }
 
             @Override
             public boolean m_6375_(double mouseX, double mouseY, int button) {
-                int left = AltList.this.f_93389_ + 4; // leftPos
-                int delX = left + AltList.this.m_5759_() - 52;
-                if (mouseX >= delX && mouseX <= delX + 52 && button == 0) {
-                    PromaidConfigScreen.this.removeAlt(this.id);
+                if (button == 0 && this.delButton.m_5953_(mouseX, mouseY)) {
+                    this.delButton.m_6375_(mouseX, mouseY, 0);
                     return true;
                 }
                 return false;
@@ -956,10 +993,6 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("TNT 点火保护期（秒）", String.valueOf(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE.get()),
                 s -> setInt(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE, s), "TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护"));
         this.rows.add(new SectionRow("建造引擎细节", true));
-        this.rows.add(new NumRow("防窒息传送冷却（秒）", String.valueOf(MaidSmartConfig.BUILD_REGION_TELEPORT_CD.get()),
-                s -> setInt(MaidSmartConfig.BUILD_REGION_TELEPORT_CD, s), "防窒息传送冷却（秒）：女仆/玩家被施工区方块埋住后传送到区外的最短间隔，防反复拽"));
-        this.rows.add(new NumRow("恢复缓存保留（毫秒）", String.valueOf(MaidSmartConfig.BUILD_RESTORE_CACHE_TTL.get()),
-                s -> setInt(MaidSmartConfig.BUILD_RESTORE_CACHE_TTL, s), "恢复缓存保留（毫秒）：重启后从档案恢复建造状态的内存缓存时长，防频繁重复解析大蓝图"));
         this.rows.add(new NumRow("卡住重试间隔（tick）", String.valueOf(MaidSmartConfig.BUILD_STALL_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.BUILD_STALL_INTERVAL, s), "卡住重试间隔（tick，20=1 秒）：建造卡住（缺料/障碍/区块未加载）时多久重试一次"));
         this.rows.add(new NumRow("单轮扫描步数上限", String.valueOf(MaidSmartConfig.BUILD_LOOKAHEAD.get()),
@@ -980,6 +1013,9 @@ public class PromaidConfigScreen extends Screen {
                     this.mineTable = true;
                     this.m_7856_();
                 }, "管理挖矿两张表：目标矿物（女仆会挖）、障碍物（可挖穿开路）"));
+        // v1.0.4：透视感知开关——默认关（关闭=女仆像玩家一样只发现视线无阻的矿；开启=隔墙找矿旧逻辑）
+        this.rows.add(new BoolRow("透视感知（隔墙找矿）", MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get(),
+                v -> MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被方块挡住的矿物并挖通开路（隔墙找矿，等同旧版逻辑）；关闭（默认）则女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见也不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.MINE_SEARCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MINE_SEARCH_RADIUS, s), "矿物检索半径（水平格）：女仆以锚点为中心扫描正方形区域找矿——调大更早发现远处矿，扫描更耗时；调小专注身边"));
         this.rows.add(new NumRow("垂直向下范围", String.valueOf(MaidSmartConfig.MINE_DOWN_RANGE.get()),
@@ -1030,7 +1066,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("播报限频（tick）", String.valueOf(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL, s), "播报限频（tick）：'镐子挖不动/矿物被挡住'等提示的最短间隔，防刷屏"));
         this.rows.add(new NumRow("创造面板默认价值", String.valueOf(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get()),
-                s -> setInt(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE, s), "创造面板默认价值：矿表页点击方块图标加入目标矿物表时用的分数，之后可改"));
+                s -> setInt(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE, s), "创造面板默认价值：矿表页锁定方块后，输入框留空直接点「添加」时用的分数（快捷赋值）；想自定义就输数值再点添加，或输入框填 方块id=分数 更新"));
     }
 
     /** v1.5.140：伐木任务已删除（woodcutRows 移除） */
@@ -1058,9 +1094,7 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MEMORY_WORKING_NOTE.set(v), "工作笔记注入：女仆干活时的任务状态（在挖什么/缺什么料）以笔记形式跨对话注入，续上话题"));
         this.rows.add(new BoolRow("关系感知适配", MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.get(),
                 v -> MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.set(v), "关系感知适配（软感知 maidmarriage 结婚/告白/父女 + Love Loathe 信任/恐惧 → 写入记忆；不依赖，未装则静默）"));
-        // v1.5.190：新记忆开关（主动会话话题 / 防抖写盘）
-        this.rows.add(new BoolRow("主动会话记忆话题", MaidSmartConfig.PROACTIVE_MEMORY_TOPIC.get(),
-                v -> MaidSmartConfig.PROACTIVE_MEMORY_TOPIC.set(v), "沉默找话题时从长期记忆里挑一条值得聊的内容（偏好/关系/最近的事），主动会话更有'记得你'的感觉"));
+        // v1.5.190：新记忆开关（防抖写盘）
         this.rows.add(new BoolRow("防抖写盘", MaidSmartConfig.MEMORY_LAZY_SAVE.get(),
                 v -> MaidSmartConfig.MEMORY_LAZY_SAVE.set(v), "记忆防抖写盘（内存累积后按扫描间隔批量落盘——减少磁盘 IO，多女仆时防止服务端卡顿；关闭=每次写入立即落盘，可靠性优先）"));
         // v1.1.0：记忆升级（情绪快照 / 人格种子 / 每日关心点 / 双 agent 提取）
@@ -1216,8 +1250,6 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.DIALOGUE_PROACTIVE_COOLDOWN, s), "发言冷却（分钟）：两次主动开口的最短间隔，防话痨"));
         this.rows.add(new NumRow("日上限（次）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY, s), "主动对话日上限（次，控 token 成本；默认 12——7 阶段状态机需要更多发言额度）"));
-        this.rows.add(new NumRow("沉默阈值（分钟）", String.valueOf(MaidSmartConfig.DIALOGUE_SILENCE_THRESHOLD.get()),
-                s -> setInt(MaidSmartConfig.DIALOGUE_SILENCE_THRESHOLD, s), "沉默阈值（分钟）：主人 N 分钟没理女仆时她主动找话题（需主动对话开启）"));
         // v1.5.191：主动对话 7 阶段状态机配置
         this.rows.add(new NumRow("每轮发言上限（次）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_MAX_REPLIES.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_PROACTIVE_MAX_REPLIES, s), "每轮主动会话最多发言次数（1-7）：主人一次互动周期内女仆最多主动开口几次——7 阶段不会一次性全喷，默认 4 够用"));
@@ -1759,23 +1791,80 @@ public class PromaidConfigScreen extends Screen {
             return;
         }
         String text = this.minableInput.m_94155_().trim();
-        if (text.isEmpty()) {
-            return;
-        }
         if (this.mineTableMode == 0) {
-            if (!text.contains("=")) {
+            // v1.0.4：锁定状态下输入框留空点添加 = 用「创造面板默认价值」赋值（快捷路径）
+            if (text.isEmpty()) {
+                if (this.lockedOreId != null) {
+                    this.setOreValue(this.lockedOreId, MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get());
+                    this.lockedOreId = null;
+                    this.m_7856_(); // 解锁：隐藏赋值输入框
+                }
                 return;
             }
-            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
-            if (!cur.contains(text)) {
-                cur.add(text);
-                MaidSmartConfig.MINE_ORE_VALUES.set(cur);
+            if (!text.contains("=")) {
+                // v1.0.4：纯数字 = 给锁定的方块图标赋值优先级——在表里则更新，不在则
+                // 加入；赋值成功后解锁（黄框/红字消失）。没锁定则提示先点图标。
+                if (text.chars().allMatch(Character::isDigit) && !text.isEmpty()) {
+                    int v;
+                    try {
+                        v = Integer.parseInt(text);
+                    } catch (NumberFormatException ignored) {
+                        return;
+                    }
+                    if (this.lockedOreId == null) {
+                        net.minecraft.client.player.LocalPlayer lp = net.minecraft.client.Minecraft.m_91087_().f_91074_;
+                        if (lp != null) {
+                            lp.m_213846_(
+                                    net.minecraft.network.chat.Component.m_237113_(
+                                            "\u00a7e【Promaid】先点击一个方块图标锁定它（黄框固定），再输入数值点添加"));
+                        }
+                        return;
+                    }
+                    this.setOreValue(this.lockedOreId, v);
+                    this.lockedOreId = null; // 赋值完成，解锁
+                    this.minableInput.m_94144_("");
+                    this.m_7856_(); // 解锁：隐藏赋值输入框
+                    return;
+                }
+                return; // 非法输入（非数字、非 方块id=数值）
             }
+            String[] parts = text.split("=", 2);
+            String idPart = parts[0].trim();
+            int v;
+            try {
+                v = Integer.parseInt(parts[1].trim());
+            } catch (NumberFormatException ignored) {
+                return; // 价值必须数字
+            }
+            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+            // v1.0.4：同 id 已存在 → 替换价值（改优先级）；否则新增
+            int existing = -1;
+            for (int i = 0; i < cur.size(); i++) {
+                String e = cur.get(i);
+                int eq = e.indexOf('=');
+                if (eq > 0 && e.substring(0, eq).trim().equals(idPart)) {
+                    existing = i;
+                    break;
+                }
+            }
+            String entry = idPart + "=" + v;
+            if (existing >= 0) {
+                cur.set(existing, entry);
+            } else if (!cur.contains(entry)) {
+                cur.add(entry);
+            }
+            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
             com.maidsmart.task.MaidMineBehavior.loadCustomOres();
         } else {
             String path = normPath(text);
             if (path.isEmpty() || "bedrock".equals(path) || "barrier".equals(path)) {
                 return; // v1.5.102d：基岩/屏障不允许加入
+            }
+            // v1.0.4：校验方块真实存在（防随手敲的数字/乱码进表）
+            net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                    .getValue(net.minecraft.resources.ResourceLocation.parse(path));
+            if (blk == null || blk == net.minecraft.world.level.block.Blocks.f_50016_) {
+                return;
             }
             List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_BREAKABLES.get());
             if (!cur.contains(path)) {
@@ -1808,6 +1897,90 @@ public class PromaidConfigScreen extends Screen {
             MaidSmartConfig.MINE_BREAKABLES.set(cur);
         }
         if (this.minableList != null) {
+            this.minableList.rebuild();
+        }
+    }
+
+    /**
+     * v1.0.4：条目价值输入框实时写配置——同 id 替换 value（改优先级）后重建矿表。
+     * 非法/空串忽略（不写配置）；不 rebuild，避免打断输入焦点（列表文本只显示 id）。
+     */
+    private void updateOreValue(String id, String text) {
+        String t = text.trim();
+        if (t.isEmpty()) {
+            return;
+        }
+        int v;
+        try {
+            v = Integer.parseInt(t);
+        } catch (NumberFormatException ignored) {
+            return;
+        }
+        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        boolean found = false;
+        for (int i = 0; i < cur.size(); i++) {
+            String e = cur.get(i);
+            int eq = e.indexOf('=');
+            if (eq > 0 && e.substring(0, eq).trim().equals(id)) {
+                cur.set(i, id + "=" + v);
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
+            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        }
+    }
+
+    /** v1.0.4：目标矿物表里该方块的当前优先级（价值），不在表里返回 -1（悬停提示用） */
+    private static int getOreValue(String id) {
+        for (String e : MaidSmartConfig.MINE_ORE_VALUES.get()) {
+            int eq = e.indexOf('=');
+            if (eq > 0 && e.substring(0, eq).trim().equals(id)) {
+                try {
+                    return Integer.parseInt(e.substring(eq + 1).trim());
+                } catch (NumberFormatException ignored) {
+                    return -1;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** v1.0.4：给方块赋值优先级——在表里更新价值，不在表里以该价值加入；随后重建矿表 */
+    private void setOreValue(String id, int v) {
+        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        boolean found = false;
+        for (int i = 0; i < cur.size(); i++) {
+            String e = cur.get(i);
+            int eq = e.indexOf('=');
+            if (eq > 0 && e.substring(0, eq).trim().equals(id)) {
+                cur.set(i, id + "=" + v);
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            cur.add(id + "=" + v);
+        }
+        MaidSmartConfig.MINE_ORE_VALUES.set(cur);
+        com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+    }
+
+    /** v1.0.4：按 id 取消添加（移除目标矿物表条目）——网格右上角小叉 / 列表删除共用 */
+    private void removeOre(String id) {
+        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        cur.removeIf(e -> {
+            int eq = e.indexOf('=');
+            return eq > 0 && e.substring(0, eq).trim().equals(id);
+        });
+        MaidSmartConfig.MINE_ORE_VALUES.set(cur);
+        com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        if (this.lockedOreId != null && this.lockedOreId.equals(id)) {
+            this.lockedOreId = null; // 锁定的方块被移除 → 解锁（隐藏输入框）
+            this.m_7856_();
+        } else if (this.minableList != null) {
             this.minableList.rebuild();
         }
     }
@@ -1881,6 +2054,10 @@ public class PromaidConfigScreen extends Screen {
             this.m_93507_(x);
             this.m_93488_(false);
             this.m_93496_(false);
+            // v1.0.4：行宽 = 列表宽——旧版 f_93390_ 默认 0 → m_5759_() 只有 120，
+            // 「删除」文本画在 left+68 处，被条目文本（约 190px）盖住 → 改值/删除
+            // 重叠且点不中（渲染位置与点击命中区错位）
+            this.f_93390_ = width;
             this.rebuild();
         }
 
@@ -1899,36 +2076,110 @@ public class PromaidConfigScreen extends Screen {
 
         @Override
         public int m_5759_() {
-            return Math.max(this.f_93390_, 120); // rowWidth 最小宽度
+            return Math.max(this.f_93390_, 120); // rowWidth（构造时已设为列表宽）
         }
 
+        /**
+         * v1.0.4：默认滚动条（亮灰滑块 0x808080/0xC0C0C0）在深色面板上像一条突兀的竖线
+         * （用户反馈"保存并返回右侧一直有一条竖线"）——覆盖为低调样式：轨道融入面板，
+         * 滑块半透明深灰，滚动功能保留。
+         */
+        @Override
+        protected void m_238964_(GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        /**
+         * v1.0.4：列表条目重构——矿物条目 = id 文本 + 价值输入框（直接改优先级）+ 标准
+         * 「删除」按钮；障碍物条目 = path 文本 + 标准「删除」按钮。
+         * 标准组件不加入 screen children，由条目手动桥接：渲染时同步位置并调用
+         * m_88315_，点击时用 m_5953_ 命中后转发 m_6375_；输入框键盘经 activeBox 转发。
+         */
         private class MinableEntry extends ObjectSelectionList.Entry<MinableEntry> {
-            private final String entry;
+            private final String entry;    // 原始条目（矿物 "id=value" / 障碍物 path）
+            private final String idPart;   // 矿物 id / 障碍物 path（去 value）
+            private final net.minecraft.client.gui.components.EditBox valueBox; // 仅矿物模式
+            private final net.minecraft.client.gui.components.Button delButton;
 
             MinableEntry(String entry) {
                 this.entry = entry;
+                if (PromaidConfigScreen.this.mineTableMode == 0) {
+                    int eq = entry.indexOf('=');
+                    this.idPart = eq > 0 ? entry.substring(0, eq).trim() : entry.trim();
+                    String v = eq > 0 ? entry.substring(eq + 1).trim() : "";
+                    this.valueBox = new net.minecraft.client.gui.components.EditBox(
+                            PromaidConfigScreen.this.f_96547_, 0, 0, 64, 16,
+                            Component.m_237113_(this.idPart));
+                    this.valueBox.m_94199_(6);
+                    this.valueBox.m_94144_(v);
+                    // 仅数字可输入（空串允许清空）；改动实时写配置（非法/空串忽略）
+                    this.valueBox.m_94153_(s -> s.isEmpty() || s.chars().allMatch(Character::isDigit));
+                    this.valueBox.m_94151_(s -> PromaidConfigScreen.this.updateOreValue(this.idPart, s));
+                } else {
+                    this.idPart = entry.trim();
+                    this.valueBox = null;
+                }
+                this.delButton = Button.m_253074_(
+                                Component.m_237113_("删除"),
+                                b -> removeMinable(this.entry))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
             }
 
             @Override
             public void m_6311_(GuiGraphics g, int index, int top, int left, int width, int height,
                                 int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int x = left + 4;
-                int y = top + 4;
+                int y = top + 3;
+                // v1.0.4：中文名 + 灰色 id（未收录中文回退 id）
+                String cn = com.maidsmart.build.BlueprintLib.cnName(this.idPart);
+                String text = cn.equals(this.idPart)
+                        ? this.idPart
+                        : cn + " \u00a77(" + this.idPart + ")";
                 g.m_280614_(PromaidConfigScreen.this.f_96547_,
-                        Component.m_237113_(entry), x, y, LABEL_COLOR, false);
-                // 删除按钮文本（右侧）
-                int delX = left + MinableList.this.m_5759_() - 52;
-                g.m_280614_(PromaidConfigScreen.this.f_96547_,
-                        Component.m_237113_("\u00a7c[删除]"), delX, y, 0xFFFF5555, false);
+                        Component.m_237113_(text), x, y + 1, LABEL_COLOR, false);
+                if (this.valueBox != null) {
+                    // 价值输入框紧跟文本（按实际文本宽度定位，永不重叠；太长时钳制在删除按钮左侧）
+                    int boxX = left + 12 + PromaidConfigScreen.this.f_96547_.m_92895_(text);
+                    int delX = left + MinableList.this.m_5759_() - 62;
+                    if (boxX + 70 > delX) {
+                        boxX = delX - 74;
+                    }
+                    // v1.0.4：m_252865_ = setX、m_253211_ = setY（1.20.1 SRG 实测——
+                    // 旧版写反，输入框/按钮被画到列表区外）
+                    this.valueBox.m_252865_(boxX);
+                    this.valueBox.m_253211_(top + 2);
+                    this.valueBox.m_88315_(g, mouseX, mouseY, partialTick);
+                }
+                // 标准删除按钮贴右缘
+                this.delButton.m_252865_(left + MinableList.this.m_5759_() - 62);
+                this.delButton.m_253211_(top + 1);
+                this.delButton.m_88315_(g, mouseX, mouseY, partialTick);
             }
 
             @Override
             public boolean m_6375_(double mouseX, double mouseY, int button) {
-                int left = MinableList.this.f_93389_ + 4; // leftPos
-                int delX = left + MinableList.this.m_5759_() - 52;
-                if (mouseX >= delX && mouseX <= delX + 52 && button == 0) {
-                    removeMinable(this.entry);
-                    return true;
+                if (button == 0) {
+                    if (this.valueBox != null && this.valueBox.m_5953_(mouseX, mouseY)) {
+                        PromaidConfigScreen.this.activeBox = this.valueBox;
+                        this.valueBox.m_93692_(true);
+                        this.valueBox.m_6375_(mouseX, mouseY, 0); // 点击定位光标
+                        return true;
+                    }
+                    if (this.delButton.m_5953_(mouseX, mouseY)) {
+                        this.delButton.m_6375_(mouseX, mouseY, 0);
+                        return true;
+                    }
                 }
                 return false;
             }
@@ -2080,38 +2331,84 @@ public class PromaidConfigScreen extends Screen {
                     g.m_280509_(x - 1, y - 1, x + 17, y + 17, boxColor);
                     g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"),
                             x + 12, y + 12, 0xFFFFFF);
+                    // v1.0.4：右上角小叉——点击取消添加（仅矿物模式；锁定后点击图标改值）
+                    if (this.mineTableMode == 0) {
+                        g.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c×"),
+                                x + 12, y - 2, 0xFFFF5555, true);
+                    }
                 }
                 g.m_280480_(stack, x, y); // 物品图标
+                // v1.0.4：锁定黄框（实色）——点击后固定在该方块上，鼠标移开也不消失，等赋值
+                if (this.mineTableMode == 0 && this.lockedOreId != null
+                        && this.lockedOreId.equals(id)) {
+                    g.m_280509_(x - 2, y - 2, x + 18, y + 18, 0xFFFFD700);
+                }
                 if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
                     hoverIdx = i;
+                    // v1.0.4：悬停黄框（淡色）——提示当前指针所在；点击即锁定
+                    g.m_280509_(x - 2, y - 2, x + 18, y + 18, 0x80FFD700);
                 }
             }
-            // 悬停物品名（网格底部提示行上方）——v1.5.110：居中钳制防偏左裁切
+            // 悬停物品名 / 网格页码——画在网格右侧空白（网格只占左侧 8 格，右缘外
+            // 约 380px 空区）；v1.0.4 修复：旧版画在 gridBottom-12，正落在底部行
+            // 图标（y=106~126）上，文字与图标重叠
+            int infoX = left + GRID_COLS * GRID_CELL + 12;
+            int infoY = gridTop + 2;
+            int pages = this.creativePages();
             if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
                 net.minecraft.resources.ResourceLocation key =
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
                 String hover = key == null ? "?" : key.toString();
-                g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
-                        this.clampCenterX("\u00a77" + hover, left), gridBottom - 12, 0xFFFFFF);
-            }
-            // 网格页码（翻页按钮之间偏上，不与按钮重叠）
-            int pages = this.creativePages();
-            if (pages > 1) {
-                String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
-                g.m_280653_(this.f_96547_, Component.m_237113_(pg),
-                        this.clampCenterX(pg, cx), gridBottom - 12, 0x888888);
+                // v1.0.4：悬停三行——中文名 / 英文 id / 优先级（绿色，目标矿物模式）。
+                // 优先级直接从当前矿表读，玩家不必去下面列表的输入框里翻
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                        infoX, infoY, 0xFFFFFF, false);
+                g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                        infoX, infoY + 10, 0xAAAAAA, false);
+                if (this.mineTableMode == 0) {
+                    int ov = getOreValue(hover);
+                    if (ov >= 0) {
+                        g.m_280614_(this.f_96547_,
+                                Component.m_237113_("\u00a7a优先级：" + ov),
+                                infoX, infoY + 20, 0x55FF55, false);
+                    } else {
+                        g.m_280614_(this.f_96547_,
+                                Component.m_237113_("\u00a77未添加"),
+                                infoX, infoY + 20, 0x888888, false);
+                    }
+                }
+            } else {
+                if (pages > 1) {
+                    String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                    g.m_280614_(this.f_96547_, Component.m_237113_(pg),
+                            infoX, infoY, 0x888888, false);
+                }
             }
             // v1.5.102d：底部按钮（← 返回参数 / 保存并返回）上方一行注释——
             // 两张名单各一句，说明方块图标上的对勾 ✓ 是什么意思
             String chkHint = this.mineTableMode == 0
                     ? "\u00a77✓ = 已加入目标矿物表（价值 " + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get()
-                    + "），女仆会把它当矿物挖，再点一次取消"
+                    + "），女仆会把它当矿物挖；点一下图标锁定（黄框固定）后输入框出现，输数值点「添加」即赋值/加入（越大越优先）；右上角 × 取消添加"
                     : "\u00a77✓ = 已设为可挖穿（自然方块内置已预勾选），女仆遇到会挖穿开路，再点一次取消";
             // v1.5.110：居中 + 钳制——旧版以 left（cx-270）为圆心居中，窄屏时左半
             // 部分裁出屏幕（"注释太靠左"），改为中心居中且钳制到完整可见
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
+            // v1.0.4：锁定提示红字（若隐若现闪烁）——显示在优先级输入框下方，
+            // 直到输入数值点「添加」赋值后消失
+            if (this.mineTableMode == 0 && this.lockedOreId != null) {
+                String lockedCn = com.maidsmart.build.BlueprintLib.cnName(this.lockedOreId);
+                // v1.0.4：提醒玩家——直接点添加/回车 = 用默认价值（留空快捷赋值）
+                String lockTxt = "已锁定（" + lockedCn + "），请为其赋予一个值"
+                        + "（直接点添加/回车 = " + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get() + "）";
+                boolean blink = (System.currentTimeMillis() / 400) % 2 == 0;
+                int lockColor = blink ? 0xFFFF5555 : 0x40FF5555;
+                g.m_280614_(this.f_96547_, Component.m_237113_(lockTxt),
+                        left, gridBottom + 46, lockColor, false);
+            }
         } else if (this.altTable) {
             // v1.5.254：替代品名单子页（建造板块）——交互与矿表同款
             String[] modeNames = {"半格高（台阶类）", "一格高（整方块）", "竖两格（门/高植物等）",
@@ -2150,19 +2447,28 @@ public class PromaidConfigScreen extends Screen {
                     hoverIdx = i;
                 }
             }
+            // v1.0.4：悬停名/页码移到网格右侧空白，不再盖住底部行图标（同矿表）
+            int infoX = left + GRID_COLS * GRID_CELL + 12;
+            int infoY = gridTop + 2;
             if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
                 net.minecraft.resources.ResourceLocation key =
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
                 String hover = key == null ? "?" : key.toString();
-                g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
-                        this.clampCenterX("\u00a77" + hover, left), gridBottom - 12, 0xFFFFFF);
-            }
-            int pages = this.creativePages();
-            if (pages > 1) {
-                String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
-                g.m_280653_(this.f_96547_, Component.m_237113_(pg),
-                        this.clampCenterX(pg, cx), gridBottom - 12, 0x888888);
+                // v1.0.4：两行——中文名 / 英文 id（与矿表同款，无优先级行）
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                        infoX, infoY, 0xFFFFFF, false);
+                g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                        infoX, infoY + 10, 0xAAAAAA, false);
+            } else {
+                int pages = this.creativePages();
+                if (pages > 1) {
+                    String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                    g.m_280614_(this.f_96547_, Component.m_237113_(pg),
+                            infoX, infoY, 0x888888, false);
+                }
             }
             String chkHint = "\u00a77✓ = 已加入替代品表（" + modeNames[Math.min(this.altTableMode, 4)]
                     + "），缺料时女仆按序使用，再点一次取消";
@@ -2258,7 +2564,25 @@ public class PromaidConfigScreen extends Screen {
                     net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS
                             .getKey(this.creativeItems.get(idx).m_41720_());
                     if (key != null) {
-                        this.toggleCreative(key.toString());
+                        String id = key.toString();
+                        if (this.mineTableMode == 0 && this.isInList(id)) {
+                            // v1.0.4：已加入矿物的右上角小叉（渲染见网格循环）——点击取消添加
+                            int gx = left + col * GRID_CELL;
+                            int gy = gridTop + row * GRID_CELL;
+                            if (mouseX >= gx + 11 && mouseX <= gx + 21
+                                    && mouseY >= gy - 3 && mouseY <= gy + 7) {
+                                this.removeOre(id);
+                                return true;
+                            }
+                        }
+                        if (this.mineTableMode == 0) {
+                            // v1.0.4：目标矿物模式点击 = 锁定该方块（黄框固定 + 红字提示 +
+                            // 输入框/添加按钮出现），输入数值点「添加」即赋值；取消用右上角小叉
+                            this.lockedOreId = id;
+                            this.m_7856_(); // 重建显示赋值输入框
+                        } else {
+                            this.toggleCreative(id);
+                        }
                     }
                     return true;
                 }
@@ -2313,6 +2637,12 @@ public class PromaidConfigScreen extends Screen {
 
     @Override
     public boolean m_7933_(int key, int scanCode, int modifiers) {
+        // v1.0.4：赋值/添加输入框回车 = 点「添加」（Enter 257 / 小键盘回车 335）
+        if (this.minableInput != null && this.activeBox == this.minableInput
+                && (key == 257 || key == 335)) {
+            this.addMinable();
+            return true;
+        }
         if (this.activeBox != null && this.activeBox.m_7933_(key, scanCode, modifiers)) {
             return true;
         }
