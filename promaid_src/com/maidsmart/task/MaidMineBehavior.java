@@ -2101,6 +2101,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         return best;
     }
 
+    /** 女仆眼睛高度（脚下偏移，格）。原版公式 0.85×身高：默认女仆身高 1.5 → 约 1.27；
+     *  玩家使用的大正酒狐女仆模型实测头中心约 1.5 格，v1.0.5 起按模型取 1.5。 */
+    private static final double EYE_HEIGHT = 1.5;
+
     /**
      * v1.0.4：视线感知（透视感知开关默认关时启用）——女仆像玩家一样只能发现视线无阻的矿物。
      * 从眼睛到矿物中心采样（每 0.5 格，与 countBlocking 同一口径），到达矿物前碰到任何
@@ -2111,14 +2115,25 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * - 水/岩浆是矿洞常见液体，女仆要能挖水下/岩浆旁的矿（岩浆旁的目标另有危险规避）。
      * 注意与 countBlocking 的区别：那是"挖不挖得过去"（穿透预算），这里是"看不得看见"
      * （发现层过滤）——关闭透视后视线被挡的矿不进候选，也不产生任何播报。
+     * v1.0.5：眼睛高度改 1.5（按玩家的大正酒狐模型）；判定改多点——矿的中心/顶面/
+     * 底面任一可见即算可见（贴地矿顶面可见、悬空矿底面可见，玩家能看到矿的任何一个
+     * 面就算看见）。凹槽里的矿仍须视线从开口进入：开口顶面低于眼睛时三条线都撞墙，
+     * 依旧不可见（与玩家站在同一位置一致）。
      */
     private boolean hasClearSight(ServerLevel level, EntityMaid maid, BlockPos target) {
         double sx = maid.m_20185_();
-        double sy = maid.m_20186_() + 1.2; // 眼睛高度（与 countBlocking 一致）
+        double sy = maid.m_20186_() + EYE_HEIGHT; // 与 countBlocking/findBlockingBlock 同一眼睛高度
         double sz = maid.m_20189_();
-        double tx = target.m_123341_() + 0.5;
-        double ty = target.m_123342_() + 0.5;
-        double tz = target.m_123343_() + 0.5;
+        double cx = target.m_123341_() + 0.5;
+        double cz = target.m_123343_() + 0.5;
+        return hasClearRay(level, sx, sy, sz, cx, target.m_123342_() + 0.5, cz, target)
+                || hasClearRay(level, sx, sy, sz, cx, target.m_123342_() + 1.0, cz, target)
+                || hasClearRay(level, sx, sy, sz, cx, target.m_123342_(), cz, target);
+    }
+
+    /** 从眼睛位置到目标点每 0.5 格采样：到矿本身即停，路径上任何非空气/非流体方块都挡 */
+    private boolean hasClearRay(ServerLevel level, double sx, double sy, double sz,
+                                double tx, double ty, double tz, BlockPos target) {
         double dist = Math.sqrt((tx - sx) * (tx - sx) + (ty - sy) * (ty - sy) + (tz - sz) * (tz - sz));
         int steps = Math.max(1, (int) Math.ceil(dist * 2.0));
         for (int i = 1; i < steps; i++) {
@@ -2148,7 +2163,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      */
     private int countBlocking(ServerLevel level, EntityMaid maid, BlockPos target) {
         double sx = maid.m_20185_();
-        double sy = maid.m_20186_() + 1.2; // 眼睛高度
+        double sy = maid.m_20186_() + EYE_HEIGHT; // 眼睛高度
         double sz = maid.m_20189_();
         double tx = target.m_123341_() + 0.5;
         double ty = target.m_123342_() + 0.5;
@@ -2195,7 +2210,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      */
     private Blocker findBlockingBlock(ServerLevel level, EntityMaid maid, BlockPos target) {
         double sx = maid.m_20185_();
-        double sy = maid.m_20186_() + 1.2;
+        double sy = maid.m_20186_() + EYE_HEIGHT; // 眼睛高度
         double sz = maid.m_20189_();
         double tx = target.m_123341_() + 0.5;
         double ty = target.m_123342_() + 0.5;

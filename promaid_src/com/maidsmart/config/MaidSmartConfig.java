@@ -379,9 +379,22 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.mine.breakables")
                 .defineList("extraBreakables", List.of(),
                         o -> o instanceof String s && !s.isEmpty());
-        MINE_DISABLED_BREAKABLES = BUILDER.comment("已取消挖穿的障碍物（排除名单，path 名如 stone，默认空）：内置自然方块（石头/泥土/原木等）默认可挖穿，在此加入的会被取消打勾——女仆不再挖穿它们，被其挡住的矿会报点弃置而非硬挖。空 = 默认全开")
+        MINE_DISABLED_BREAKABLES = BUILDER.comment("已取消挖穿的障碍物（排除名单，path 名如 spruce_log）：v1.0.4 起内置自然软方块（原木/菌柄/竹/蘑菇/南瓜/西瓜/冰/珊瑚等）默认在此名单 → 女仆默认不挖穿树木植被，被其挡住的矿报点弃置而非硬挖；在面板「障碍物」页勾选它们可恢复挖穿。石头/泥土/沙等矿洞常见方块不在此列，默认可挖穿")
                 .translation("config.promaid.mine.disabledBreakables")
-                .defineList("disabledBreakables", List.of(),
+                .defineList("disabledBreakables", List.of(
+                        "oak_log", "spruce_log", "birch_log", "jungle_log", "acacia_log",
+                        "dark_oak_log", "mangrove_log", "cherry_log",
+                        "crimson_stem", "warped_stem", "bamboo_block",
+                        "stripped_oak_log", "stripped_spruce_log", "stripped_birch_log",
+                        "stripped_jungle_log", "stripped_acacia_log", "stripped_dark_oak_log",
+                        "stripped_mangrove_log", "stripped_cherry_log",
+                        "stripped_crimson_stem", "stripped_warped_stem",
+                        "brown_mushroom_block", "red_mushroom_block", "mushroom_stem",
+                        "pumpkin", "melon", "ice", "packed_ice",
+                        "tube_coral_block", "brain_coral_block", "bubble_coral_block",
+                        "fire_coral_block", "horn_coral_block",
+                        "dead_tube_coral_block", "dead_brain_coral_block",
+                        "dead_bubble_coral_block", "dead_fire_coral_block", "dead_horn_coral_block"),
                         o -> o instanceof String s && !s.isEmpty());
         MINE_SEARCH_RADIUS = BUILDER.comment("矿物检索半径（水平）")
                 .translation("config.promaid.mine.searchRadius").defineInRange("searchRadius", 24, 8, 64);
