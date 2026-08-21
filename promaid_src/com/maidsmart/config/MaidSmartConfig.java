@@ -51,6 +51,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MINE_ORE_VALUES;
     /** v1.5.101b：额外可挖穿方块（障碍物名单，path 名如 oak_log；面板挖矿-障碍物管理） */
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MINE_BREAKABLES;
+    /** v1.0.4：已取消挖穿的内置障碍物（排除名单，path 名如 stone；默认空=全开） */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MINE_DISABLED_BREAKABLES;
     public static final ForgeConfigSpec.IntValue MINE_SEARCH_RADIUS;
     public static final ForgeConfigSpec.IntValue MINE_DOWN_RANGE;
     public static final ForgeConfigSpec.IntValue MINE_UP_RANGE;
@@ -384,6 +386,10 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         MINE_BREAKABLES = BUILDER.comment("额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置）")
                 .translation("config.promaid.mine.breakables")
                 .defineList("extraBreakables", List.of(),
+                        o -> o instanceof String s && !s.isEmpty());
+        MINE_DISABLED_BREAKABLES = BUILDER.comment("已取消挖穿的障碍物（排除名单，path 名如 stone，默认空）：内置自然方块（石头/泥土/原木等）默认可挖穿，在此加入的会被取消打勾——女仆不再挖穿它们，被其挡住的矿会报点弃置而非硬挖。空 = 默认全开")
+                .translation("config.promaid.mine.disabledBreakables")
+                .defineList("disabledBreakables", List.of(),
                         o -> o instanceof String s && !s.isEmpty());
         MINE_SEARCH_RADIUS = BUILDER.comment("矿物检索半径（水平）")
                 .translation("config.promaid.mine.searchRadius").defineInRange("searchRadius", 24, 8, 64);
