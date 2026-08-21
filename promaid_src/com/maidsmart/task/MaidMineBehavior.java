@@ -1655,13 +1655,15 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.101b：是否可挖穿——内置 OPEN_BREAKABLE（自然生成方块）或 面板障碍物名单。
-     *  v1.5.102d：基岩/屏障等不可破坏方块永远返回 false（防面板误加后女仆傻挖） */
+     *  v1.5.102d：基岩/屏障等不可破坏方块永远返回 false（防面板误加后女仆傻挖）
+     *  v1.0.4：内置方块再扣除"已取消挖穿"的排除名单（MINE_DISABLED_BREAKABLES）——
+     *  界面取消内置障碍物打勾后，isBreakable 对其返回 false，女仆不再挖穿 */
     private static boolean isBreakable(String path) {
         if ("bedrock".equals(path) || "barrier".equals(path)) {
             return false;
         }
         if (OPEN_BREAKABLE.contains(path)) {
-            return true;
+            return !isDisabledBreakable(path);
         }
         try {
             for (String e : com.maidsmart.config.MaidSmartConfig.MINE_BREAKABLES.get()) {
@@ -1674,8 +1676,33 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         return false;
     }
 
-    /** v1.5.102d：是否内置自然方块（配置面板障碍物页据此预勾选"所有自然生成的方块"） */
+    /** v1.0.4：内置障碍物是否已被界面取消挖穿（加入 MINE_DISABLED_BREAKABLES 排除名单） */
+    private static boolean isDisabledBreakable(String path) {
+        try {
+            for (String e : com.maidsmart.config.MaidSmartConfig.MINE_DISABLED_BREAKABLES.get()) {
+                if (e != null && e.equals(path)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * v1.5.102d：是否内置自然方块（配置面板障碍物页据此预勾选"所有自然生成的方块"）。
+     * v1.0.4：被取消挖穿（在排除名单）的内置方块不再计入"已勾选"。
+     */
     public static boolean isBuiltInBreakable(String path) {
+        return !"bedrock".equals(path) && !"barrier".equals(path)
+                && OPEN_BREAKABLE.contains(path) && !isDisabledBreakable(path);
+    }
+
+    /**
+     * v1.0.4：是否为内置可挖穿方块（不关心是否已被取消挖穿）——供界面 toggle 判定
+     * 该方块走"内置排除名单"还是"额外正名单"，即使已取消勾选也仍是内置方块。
+     */
+    public static boolean isBuiltinBreakableBlock(String path) {
         return !"bedrock".equals(path) && !"barrier".equals(path) && OPEN_BREAKABLE.contains(path);
     }
 
