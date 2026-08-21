@@ -358,8 +358,10 @@ public final class BlueprintBookNetworking {
             }
             maids.add(new String[]{m.m_20148_().toString(), m.m_5446_().getString(), status,
                     BuildPlan.isExplicitForeman(m) ? "1" : "0"}); // v1.5.69：工头标记（v1.5.72 严格判断，无工头时无人标记）
-            // v1.5.63：女仆管理面板上限 30 只（超出省略）
-            if (maids.size() >= 30) {
+            // v1.5.63：女仆管理面板上限（配置面板建造页可调，v1.0.4 起服务端也读
+            // 配置——旧版服务端硬编码 30，调大 BUILD_MAX_MAIDS 无效）
+            int maxMaids = Math.max(1, com.maidsmart.config.MaidSmartConfig.BUILD_MAX_MAIDS.get());
+            if (maids.size() >= maxMaids) {
                 break;
             }
         }

@@ -536,16 +536,6 @@ public final class BlueprintLib {
         }
     }
 
-    /** 内置预制建筑（v1.5.15，jar 内 assets/maid_smart/builtin_blueprints/*.snbt）
-     *  v1.5.270：移除全部 <2000 块的（用户要求"删除所有方块数量小于2000的建筑"）
-     *  ——只剩 8 个大型预制（2 千 ~ 5 万块级） */
-    private static final String[] BUILTIN_BLUEPRINT_FILES = {
-            "seaside_villa.snbt", "grand_palace.snbt", "skyscraper.snbt",
-            "tabby_cat_statue.snbt",
-            "mega_castle.snbt", "mega_pyramid.snbt", "mega_colosseum.snbt",
-            "mega_knight_statue.snbt"
-    };
-
     /** v1.5.391：内置玩家蓝图包（jar 内 assets/maid_smart/bundled_blueprints/*.litematic）。
      *  首次运行自动解压到 config/maid_smart/blueprints/ 供玩家开箱即用。 */
     private static final String[] BUNDLED_BLUEPRINT_FILES = {
@@ -632,36 +622,30 @@ public final class BlueprintLib {
         "雕像__暴虐霸王龙.litematic"
     };
 
-    /** v1.5.387：清理 mod 自动复制的内置预制蓝图残留（config/maid_smart/blueprints/
-     *  下 8 个大 snbt 的旧副本）。这些文件是安装时自动生成的、非玩家内容——
-     *  用户要求手册建造目录只保留玩家导入/生成的蓝图,一并删除。
-     *  仅删【文件名精确匹配且与 jar 内置资源内容一致】的文件——若玩家已自行
-     *  替换/改写过同名文件则保留（内容校验失败 = 玩家内容,不碰）。 */
+    /**
+     * v1.5.387：清理 mod 自动复制的内置预制蓝图残留（config/maid_smart/blueprints/
+     * 下 8 个大 snbt 的旧副本）——这些文件是安装时自动生成的、非玩家内容。
+     * v1.0.4：内置预制已彻底移除（授权不明，jar 资源一并删除）——残留副本无法再
+     * 与 jar 资源比对，直接按已知文件名删除（这些文件名是预制建筑专用名，玩家
+     * 自行改写的同名文件同样清理——用户明确要求不再保留任何预制建筑）。 */
     private static void cleanupLegacyBuiltinFiles() {
+        String[] legacy = {
+                "seaside_villa.snbt", "grand_palace.snbt", "skyscraper.snbt",
+                "tabby_cat_statue.snbt",
+                "mega_castle.snbt", "mega_pyramid.snbt", "mega_colosseum.snbt",
+                "mega_knight_statue.snbt"
+        };
         try {
             java.nio.file.Path dir = net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get()
                     .resolve("maid_smart").resolve("blueprints");
             if (!java.nio.file.Files.isDirectory(dir)) {
                 return;
             }
-            for (String file : BUILTIN_BLUEPRINT_FILES) {
-                java.nio.file.Path out = dir.resolve(file);
-                if (!java.nio.file.Files.exists(out)) {
-                    continue;
-                }
+            for (String file : legacy) {
                 try {
-                    byte[] onDisk = java.nio.file.Files.readAllBytes(out);
-                    byte[] embedded;
-                    try (java.io.InputStream in = BlueprintLib.class.getClassLoader()
-                            .getResourceAsStream("assets/maid_smart/builtin_blueprints/" + file)) {
-                        if (in == null) {
-                            continue; // jar 里已没有该资源：无法比对，不碰
-                        }
-                        embedded = in.readAllBytes();
-                    }
-                    if (java.util.Arrays.equals(onDisk, embedded)) {
-                        java.nio.file.Files.deleteIfExists(out);
-                        LOGGER.info("cleanupLegacyBuiltinFiles: 已删除自动复制残留 {}", out);
+                    java.nio.file.Path out = dir.resolve(file);
+                    if (java.nio.file.Files.deleteIfExists(out)) {
+                        LOGGER.info("cleanupLegacyBuiltinFiles: 已删除内置预制残留 {}", out);
                     }
                 } catch (Exception ignored) {
                 }
