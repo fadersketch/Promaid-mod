@@ -40,8 +40,6 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     /** v1.5.275：无碰撞方块替代品表 */
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_NOCLIPS;
     /** v1.5.102：以下把模组其余硬编码数值全部纳入面板（用户要求"所有数值都可调"） */
-    public static final ForgeConfigSpec.IntValue BUILD_REGION_TELEPORT_CD;
-    public static final ForgeConfigSpec.IntValue BUILD_RESTORE_CACHE_TTL;
     public static final ForgeConfigSpec.IntValue BUILD_STALL_INTERVAL;
     public static final ForgeConfigSpec.IntValue BUILD_LOOKAHEAD;
     public static final ForgeConfigSpec.IntValue BUILD_DEFERRED_SCAN_CAP;
@@ -68,6 +66,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue MINE_HARD_BLOCK_REPORT;
     // v1.5.102：挖矿剩余数值（锚点/超时/距离/节奏/播报）
     public static final ForgeConfigSpec.IntValue MINE_CREATIVE_DEFAULT_VALUE;
+    // v1.0.4：透视感知开关（默认关——关闭后仅发现视线无阻的矿物，见 hasClearSight）
+    public static final ForgeConfigSpec.BooleanValue MINE_SEEK_THROUGH_WALLS;
     public static final ForgeConfigSpec.IntValue MINE_ANCHOR_TIMEOUT;
     public static final ForgeConfigSpec.IntValue MINE_RELOCATE_THROTTLE;
     public static final ForgeConfigSpec.IntValue MINE_TARGET_TIMEOUT;
@@ -103,9 +103,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.IntValue MEMORY_DECAY_SALIENCE;
     public static final ForgeConfigSpec.IntValue MEMORY_RELATION_SCAN;
     public static final ForgeConfigSpec.DoubleValue MEMORY_TRUST_DELTA;
-    // v1.5.190：记忆防抖写盘 / 主动会话记忆主题注入
+    // v1.5.190：记忆防抖写盘（主动会话记忆主题注入已废弃，见 v1.0.4）
     public static final ForgeConfigSpec.BooleanValue MEMORY_LAZY_SAVE;
-    public static final ForgeConfigSpec.BooleanValue PROACTIVE_MEMORY_TOPIC;
     // v1.5.191：记忆维护周期（定期固化/衰减/关系置信度衰减/error_mark 传播）
     public static final ForgeConfigSpec.IntValue MEMORY_MAINTENANCE_MIN;
     public static final ForgeConfigSpec.IntValue MEMORY_RELATION_DECAY_DAYS;
@@ -142,7 +141,6 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_PROACTIVE;
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_COOLDOWN;
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_DAILY;
-    public static final ForgeConfigSpec.IntValue DIALOGUE_SILENCE_THRESHOLD;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_AUTONOMOUS;
     public static final ForgeConfigSpec.IntValue DIALOGUE_AUTONOMOUS_COOLDOWN;
     public static final ForgeConfigSpec.IntValue DIALOGUE_AUTONOMOUS_DAILY;
@@ -357,12 +355,6 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         BUILD_ALT_NOCLIPS = BUILDER.comment("无碰撞替代品（花/火把/地毯等无碰撞箱方块缺料时按序使用，填完整注册名如 minecraft:oak_sapling）")
                 .translation("config.promaid.build.altNoClips")
                 .defineList("altNoClips", List.of("minecraft:torch"), o -> o instanceof String s && !s.isEmpty());
-        BUILD_REGION_TELEPORT_CD = BUILDER.comment("防窒息传送冷却（秒，女仆卡进建造区后传送到区外的冷却）")
-                .translation("config.promaid.build.regionTeleportCd")
-                .defineInRange("regionTeleportCd", 10, 3, 60);
-        BUILD_RESTORE_CACHE_TTL = BUILDER.comment("恢复缓存保留（毫秒，恢复建造状态的内存缓存）")
-                .translation("config.promaid.build.restoreCacheTtl")
-                .defineInRange("restoreCacheTtl", 5000, 500, 60000);
         BUILD_STALL_INTERVAL = BUILDER.comment("卡住/放置节流（tick，建不动时重试间隔）")
                 .translation("config.promaid.build.stallInterval")
                 .defineInRange("stallInterval", 20, 4, 100);
@@ -427,6 +419,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         MINE_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板添加矿物的默认价值")
                 .translation("config.promaid.mine.creativeDefaultValue")
                 .defineInRange("creativeDefaultValue", 300, 10, 1000);
+        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认关）：开启后女仆能发现视线被方块挡住的矿物并挖通开路（等同旧版逻辑）；关闭后女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
+                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", false);
         MINE_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick，出框超过此时长重埋锚点）")
                 .translation("config.promaid.mine.anchorTimeout")
                 .defineInRange("anchorTimeout", 200, 40, 1200);
@@ -512,10 +506,6 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         // 避免每次写入/检索都全量重写 6 个 jsonl（多女仆时是服务端 IO 热点）
         MEMORY_LAZY_SAVE = BUILDER.comment("防抖写盘（内存累积后按 scanInterval 批量落盘，减少磁盘 IO）")
                 .translation("config.promaid.memory.lazySave").define("lazySave", true);
-        // v1.5.190：主动会话参考记忆——沉默找话题时从记忆里挑一条值得聊的内容
-        // 作为话题（"上次我们一起做过的事/你记得的偏好"），让主动会话有记忆依据
-        PROACTIVE_MEMORY_TOPIC = BUILDER.comment("主动会话记忆话题（沉默时从长期记忆选话题，对话更有'记得你'的感觉）")
-                .translation("config.promaid.memory.proactiveTopic").define("proactiveTopic", true);
         // v1.5.191：记忆维护周期——之前 prune 只挂在写入路径上，老记忆永远不衰减；
         // 现在由调度器每 N 分钟跑一次 runMaintenance（固化/年龄衰减/访问半衰/关系置信度衰减/error_mark 传播）
         MEMORY_MAINTENANCE_MIN = BUILDER.comment("记忆维护周期（分钟，定期固化重要记忆、衰减陈旧记忆、降旧关系置信度）")
@@ -638,8 +628,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         BUILDER.comment("对话与提示设置").translation("config.promaid.dialogue").push("dialogue");
         DIALOGUE_STATUS_REPORTER = BUILDER.comment("工作状态播报（女仆卡住时气泡解释原因）")
                 .translation("config.promaid.dialogue.statusReporter").define("statusReporter", true);
-        DIALOGUE_REPORT_INTERVAL = BUILDER.comment("工作播报间隔（秒）")
-                .translation("config.promaid.dialogue.reportInterval").defineInRange("reportInterval", 10, 3, 120);
+        DIALOGUE_REPORT_INTERVAL = BUILDER.comment("工作播报间隔（秒，默认 20——与原硬编码一致）：女仆卡住时气泡播报的最短间隔，防刷屏")
+                .translation("config.promaid.dialogue.reportInterval").defineInRange("reportInterval", 20, 3, 120);
         DIALOGUE_REPORT_RADIUS = BUILDER.comment("工作播报扫描范围")
                 .translation("config.promaid.dialogue.reportRadius").defineInRange("reportRadius", 20, 8, 128);
         DIALOGUE_PROACTIVE = BUILDER.comment("主动对话（关心/夜晚/好感等主动开口）")
@@ -648,8 +638,6 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.dialogue.proactiveCooldown").defineInRange("proactiveCooldown", 4, 1, 60);
         DIALOGUE_PROACTIVE_DAILY = BUILDER.comment("主动对话日上限（次，控 token 成本；v1.5.191：4 → 12——7 阶段状态机需要更多发言额度）")
                 .translation("config.promaid.dialogue.proactiveDaily").defineInRange("proactiveDaily", 12, 0, 50);
-        DIALOGUE_SILENCE_THRESHOLD = BUILDER.comment("沉默多久触发找话题（分钟）")
-                .translation("config.promaid.dialogue.silenceThreshold").defineInRange("silenceThreshold", 20, 2, 240);
         DIALOGUE_AUTONOMOUS = BUILDER.comment("自主决策（女仆自己换任务干活）")
                 .translation("config.promaid.dialogue.autonomous").define("autonomous", true);
         DIALOGUE_AUTONOMOUS_COOLDOWN = BUILDER.comment("自主决策冷却（分钟）")
