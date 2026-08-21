@@ -131,6 +131,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             if (!maid.m_21825_()) { // isInSittingPose
                 maid.m_21837_(true); // setInSittingPose（TLM override，连坐姿+指令位一起设）
             }
+            // v1.0.4：锁移动加固——玩家"解除坐下"会清掉 TLM 指令位（DATA_SITTING），
+            // 到下一 tick 恢复前，TLM 跟随/自保的坐下判定失效 → 女仆会走动几步
+            // （视觉还坐着，很诡异）。建造中每 tick 直接清导航/行走目标/水平速度
+            // （与自保坐下锁同款，保留垂直速度正常下落/落地）。
+            maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
+            maid.m_21573_().m_26573_();
+            net.minecraft.world.phys.Vec3 v = maid.m_20184_();
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, v.f_82480_, 0.0));
             if (!wasSitting) {
                 maid.getPersistentData().m_128379_(BUILD_SIT_TAG, true);
             }
