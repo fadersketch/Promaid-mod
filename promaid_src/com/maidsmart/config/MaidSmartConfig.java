@@ -256,6 +256,8 @@ public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
 public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
+/** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
+public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
     public static final ForgeConfigSpec.DoubleValue COMBAT_SAFE_RETURN_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_CLOSE_DISTANCE;
@@ -1005,8 +1007,13 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
-        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
+        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
+        // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
+        // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
+        // 每块还有完整寿命缓冲，不会整塔瞬间塌）
+        COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 60）：自保行为（搭高/翻墙/搭桥/封头盖帽/岩浆垫高）搭的方块 N 秒后自动变掉落物回收；战斗节奏多变，比挖矿/搭路的 10 秒长——女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
+                .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 60, 3, 600);
         BUILDER.pop();
 
         // ---- 杂项 ----
