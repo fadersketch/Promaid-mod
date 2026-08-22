@@ -126,11 +126,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         return maid.m_20270_(target.get()) <= engageRange(maid);
     }
 
-    /** 接战范围：近战 8 格；远程 = 任务搜索半径 */
+    /** 接战范围：近战 8 格；远程（弓/弩/三叉戟/枪械 v1.1.0）= 任务搜索半径 */
     private static double engageRange(EntityMaid maid) {
         ItemStack main = maid.m_21205_();
         if (main.m_41720_() instanceof ProjectileWeaponItem
-                || main.m_41720_() instanceof TridentItem) {
+                || main.m_41720_() instanceof TridentItem
+                || GunCompat.isGun(main)) {
             return maid.searchRadius();
         }
         return MELEE_ENGAGE_RANGE;
@@ -152,7 +153,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             return false;
         }
         // 弓/弩任务：主手投射武器 → 自己放风筝，不举盾
-        if (maid.m_21205_().m_41720_() instanceof ProjectileWeaponItem) {
+        // v1.1.0：枪械任务同理——双手持枪射击，不举盾
+        if (maid.m_21205_().m_41720_() instanceof ProjectileWeaponItem
+                || GunCompat.isGun(maid.m_21205_())) {
             return false;
         }
         Optional<LivingEntity> target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_);
@@ -181,6 +184,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 target.m_21205_(), target.m_21206_()}) {
             net.minecraft.world.item.Item item = s.m_41720_();
             if (item instanceof ProjectileWeaponItem || item instanceof TridentItem
+                    || GunCompat.isGun(s)
                     || item instanceof net.minecraft.world.item.SnowballItem
                     || item instanceof net.minecraft.world.item.EggItem
                     || item instanceof net.minecraft.world.item.EnderpearlItem
@@ -285,7 +289,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         }
         ItemStack main = maid.m_21205_();
         if (main.m_41720_() instanceof ProjectileWeaponItem
-                || main.m_41720_() instanceof TridentItem) {
+                || main.m_41720_() instanceof TridentItem
+                || GunCompat.isGun(main)) {
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_RANGED.get()) {
                 this.rangedTick(maid, target);
             }
@@ -594,8 +599,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private void rangedTick(EntityMaid maid, LivingEntity target) {
         double dist = maid.m_20270_(target);
         ItemStack main = maid.m_21205_();
+        // v1.1.0：枪械走 TLM 枪械距离配置（与 gun_attack 任务同源）；三叉戟不是
+        // ProjectileWeaponItem → 任务搜索半径兜底；弓/弩用原版 getRange（弓 15 / 弩 8）
         int maxRange = main.m_41720_() instanceof ProjectileWeaponItem pw
-                ? pw.m_6615_() : (int) maid.searchRadius();
+                ? pw.m_6615_()
+                : GunCompat.isGun(main) ? (int) GunCompat.gunMaxRange()
+                : (int) maid.searchRadius();
         double ideal = maxRange * com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get();
         if (dist < ideal * 0.55) {
             // 太近（弓贴脸 = 废物）：后退拉开

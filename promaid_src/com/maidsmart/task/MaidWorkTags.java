@@ -40,9 +40,11 @@ public final class MaidWorkTags {
                 || uid.equals(ResourceLocation.parse("maid_smart:brew"));
     }
 
-    /** v1.5.129：战斗任务 UID（干活不被打断的豁免集合——战斗女仆保留吃饭/恐慌） */
+    /** v1.5.129：战斗任务 UID（干活不被打断的豁免集合——战斗女仆保留吃饭/恐慌）。
+     *  v1.1.0：加入 gun_attack（TLM 内置枪械任务，TACZ/卓越前线） */
     private static final java.util.Set<String> COMBAT_UIDS = java.util.Set.of(
-            "attack", "ranged_attack", "crossbow_attack", "trident_attack", "danmaku_attack");
+            "attack", "ranged_attack", "crossbow_attack", "trident_attack", "danmaku_attack",
+            "gun_attack");
 
     /**
      * v1.5.129：是否"非战斗干活中"——任务 UID 不属于战斗集合即视为干活

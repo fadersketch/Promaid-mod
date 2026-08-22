@@ -2002,6 +2002,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     if (value == null) {
                         continue;
                     }
+                    // v1.1.0：不把自己 10 秒内搭的方块当矿（搭路材料恰好在矿表里会循环拆了再搭）
+                    if (isMiningPlaced(level, p)) {
+                        continue;
+                    }
                     // v1.0.4：透视感知开关（默认关）——关闭时女仆像玩家一样只发现视线无阻
                     // 的矿物：被墙/实心方块挡住的矿不可见（不进候选，也就没有系统/气泡播报）；
                     // 开启 = 旧版隔墙找矿逻辑，不检查视线
@@ -2062,6 +2066,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
             if (!this.isOre(level, p)) {
                 continue; // 已被挖掉
+            }
+            // v1.1.0：缓存轮同样跳过自己 10 秒内搭的方块（不当矿挖，与全量扫描同口径）
+            if (isMiningPlaced(level, p)) {
+                continue;
             }
             // v1.0.4：透视感知默认关——缓存轮同样只认视线无阻的矿（女仆移动/配置热更新后
             // 与发现层判定一致；开启透视则跳过）
@@ -2187,6 +2195,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (ORE_VALUE.containsKey(st.m_60734_())) {
                 continue; // 矿石不挡
             }
+            if (isMiningPlaced(level, sample)) {
+                continue; // v1.1.0：自己 10 秒内搭的方块不算阻挡（到期自动销毁，不算预算）
+            }
             if (!st.m_60796_(level, sample)) {
                 continue; // 非满块（楼梯/台阶/花/草）不挡；水不算
             }
@@ -2228,6 +2239,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
             BlockState st = level.m_8055_(sample);
             if (st.m_60795_() || ORE_VALUE.containsKey(st.m_60734_()) || !st.m_60796_(level, sample)) {
+                continue;
+            }
+            // v1.1.0：自己 10 秒内搭的方块不当挡路块挖——搭高/搭桥的方块恰好挡住射线时，
+            // 旧版会把它当障碍物挖掉 → 掉下来 → 再搭 → 再挖 死循环；搭的方块到期自动销毁，
+            // 挖穿判断直接跳过它们（找后面的真实障碍）
+            if (isMiningPlaced(level, sample)) {
                 continue;
             }
             net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(st.m_60734_());

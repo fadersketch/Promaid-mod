@@ -91,6 +91,17 @@ public final class MaidToolAutoEquip {
                         need = com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei::isGohei;
                         scorer = MaidToolAutoEquip::weaponScore;
                     }
+                    case "gun_attack" -> {
+                        // v1.1.0：枪械任务（TACZ/卓越前线）自动装枪——主手不是枪就从
+                        // 背包掏一把（开枪/换弹由 TLM gun_attack 任务负责，这里只管装备）。
+                        // 评分 = 武器评分 + 背包有弹药的枪加成（同分时优先弹药充足的枪）
+                        final EntityMaid gunMaid = maid;
+                        need = com.maidsmart.combat.GunCompat::isGun;
+                        scorer = stack -> {
+                            long base = weaponScore(stack);
+                            return base + (gunHasAmmoInBackpack(gunMaid) ? 1_000_000L : 0L);
+                        };
+                    }
                     default -> {
                         return false; // 其他任务（待命/工作）不需要工具
                     }
@@ -239,6 +250,21 @@ public final class MaidToolAutoEquip {
     /** v1.1.0：是否为斧（伐木任务用） */
     private static boolean isAxe(ItemStack stack) {
         return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.AxeItem;
+    }
+
+    /** v1.1.0：女仆背包是否有任意枪械弹药（枪械评分加成用——弹药充足的枪优先装备） */
+    private static boolean gunHasAmmoInBackpack(EntityMaid maid) {
+        try {
+            IItemHandlerModifiable inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && com.maidsmart.combat.GunCompat.isAmmo(s)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /** v1.1.0：主手或背包中是否有能砍该木材的斧（findWood 过滤用——与镐判定同构） */
