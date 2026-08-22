@@ -1143,7 +1143,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 2) 斜上方矿：向前垫台阶（斜坡），水平+垂直同时逼近
         // v1.5.113：垫完【走一步到刚垫的台阶上】——旧版垫完只 walkToWoodBase
         // （目的地可能隔着未垫完的沟，导航找不到路 → 站着不动）；改走一步再评估
-        if (dy >= 1 && hDist > 2.5 && hDist <= 4.5) {
+        // v1.1.0 实测三（用户："伐木不像挖矿会四处走，喜欢站原地"）：斜坡/搭桥的
+        // 距离门槛从 4.5 格放宽到 8 格——树是竖直目标，树干下半部常在 4.5~8 格处，
+        // 旧版这个距离段"不垫也不走"（walkToWoodBase 的站立点在树底下、贴着就停）
+        // → 女仆在树旁站桩干等；放宽后中距离持续垫台阶/铺桥逼近（挖矿同款行为）
+        if (dy >= 1 && hDist > 2.5 && hDist <= 8.0) {
             if (this.slopeStep(level, maid, hx, hz, hDist)) {
                 this.walkToStep(level, maid, hx, hz, hDist);
                 return;
@@ -1222,12 +1226,17 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * "矿正上方空气格"，岩壁深处最近空气在矿上方 5+ 格 → 女仆走到够不着的地方空转；
      * 且接近速度两档（远快走近慢走，防搭高漂移）。
      */
-    private void walkToWoodBase(ServerLevel level, EntityMaid maid, BlockPos t) {
+    private BlockPos walkTargetFor(ServerLevel level, EntityMaid maid, BlockPos t) {
         BlockPos stand = findStandNearWood(level, maid, t);
+        return stand;
+    }
+
+    private void walkToWoodBase(ServerLevel level, EntityMaid maid, BlockPos t) {
+        BlockPos stand = walkTargetFor(level, maid, t);
         if (stand == null) {
-            // 矿被完全包住（6 方向都无立足点）→ 不设移动目标，挡路挖掘（blocker）
-            // 下一 tick 接管：够得着的可挖穿方块会被逐层挖开，直到矿暴露
-            return;
+            // v1.1.0 实测三：树被完全包住找不到站立点 → 直接朝树干坐标走
+            // （旧版"不设移动目标"= 站桩干等的另一来源；走过去后挡路挖掘/搭高接管）
+            stand = t;
         }
         this.setWalkTarget(maid, stand, approachSpeed(maid, t));
     }
@@ -1238,7 +1247,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * 找不到（矿被完全包住）返回 null（挡路挖掘接管）。
      */
     private BlockPos findStandNearWood(ServerLevel level, EntityMaid maid, BlockPos t) {
-        int[][] offsets = {{0, -1, 0}, {0, 1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -2, 0}};
+        // v1.1.0 实测三：偏移量扩到 2 格——树干是竖直列，1 格圈常整圈被树叶/枝干
+        // 占满找不到站立点（返回 null → 不设移动目标 → 站桩干等）；2 格圈在树冠
+        // 外围，总能找到可站格，女仆保持围着树转着砍的"四处走"观感
+        int[][] offsets = {{0, -1, 0}, {0, 1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}, {0, -2, 0},
+                {2, 0, 0}, {-2, 0, 0}, {0, 0, 2}, {0, 0, -2}, {2, -1, 0}, {-2, -1, 0}, {0, -1, 2}, {0, -1, -2}};
         BlockPos best = null;
         double bestD = Double.MAX_VALUE;
         for (int[] o : offsets) {
@@ -1260,7 +1273,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         if (best != null) {
             return best;
         }
-        // 兜底：矿正上方向上的最近空气（旧逻辑；仅当 6 方向都无立足点时）
+        // 兜底：矿正上方向上的最近空气（旧逻辑；仅当扩展圈都无立足点时）
         int sy = t.m_123342_();
         for (int y = sy + 1; y < sy + 5; y++) {
             BlockPos cand = new BlockPos(t.m_123341_(), y, t.m_123343_());
