@@ -1190,6 +1190,8 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.WOOD_AUTO_COLLECT.set(v), "自动收集：砍伐掉落物（原木/树苗/苹果）直接进女仆背包，不落地"));
         this.rows.add(new NumRow("连锁砍伐上限（块）", String.valueOf(MaidSmartConfig.WOOD_CHAIN_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.WOOD_CHAIN_LIMIT, s), "连锁砍伐上限（块）：一次连锁砍伐的最大方块数"));
+        this.rows.add(new BoolRow("树冠清理", MaidSmartConfig.WOOD_LEAVES_CLEAR.get(),
+                v -> MaidSmartConfig.WOOD_LEAVES_CLEAR.set(v), "树冠清理（默认开）：树干砍完后顺手清掉上方树冠的树叶（掉落物/树苗直接进背包）；关闭则只砍树干、树叶靠自然衰减"));
         this.rows.add(new SectionRow("目标与节奏", true));
         this.rows.add(new NumRow("砍伐距离（格）", String.valueOf(MaidSmartConfig.WOOD_REACH.get()),
                 s -> setDouble(MaidSmartConfig.WOOD_REACH, s), "砍伐距离（格）：女仆伸手够得到木材的距离，默认 4.5 接近玩家手长"));
@@ -1574,7 +1576,9 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("搭路", MaidSmartConfig.BRIDGE_ENABLED.get(),
                 v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：主人在你上方一定距离内、周围无威胁、女仆背包有方块时，她会走过去垫方块搭高靠近你（搭的方块 10 秒后自动回收）；默认关闭"));
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随——只在【地面】状态生效（平地上太远就该走路/传送，不铺桥）"));
+        this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 24）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),

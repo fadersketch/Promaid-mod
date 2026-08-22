@@ -1049,6 +1049,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
         this.chainBreakAll(level, maid, mainHand);
+        // v1.1.0 实测四（用户："砍树中的树叶也是个很麻烦的点"）：树冠清理——
+        // 树干（含连锁）砍完后顺手把上方树冠的树叶清掉。不清的话：树叶挂着挡
+        // 下一棵树的视线/挡路判定，还靠自然衰减慢慢掉东西满地。掉落物（含树苗、
+        // 苹果）直接进背包，树苗玩家想种可从背包取回。开关 wood.leavesClear。
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_LEAVES_CLEAR.get()) {
+            this.clearTreeTop(level, maid, mainHand);
+        }
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
@@ -1089,6 +1096,57 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         if (broken > 0) {
             LOGGER.info("wood chain burst: maid={} block={} broken={}",
                     maid.m_20148_(), ForgeRegistries.BLOCKS.getKey(this.chainBlock), broken);
+        }
+    }
+
+    /**
+     * v1.1.0 实测四：树冠清理——从刚砍的树干位置向上 BFS 清树叶。
+     * 半径 3 格（普通树冠直径 5~7；巨型树冠部分残留，靠衰减兜底）、上限 80 块
+     * （防失误圈到整片森林——BFS 只沿"相连的树叶"扩散，树冠之间不相连不会越界）。
+     * 掉落物走 getDrops（树苗/苹果/木棍按概率掉）直接进背包，放不下落地。
+     * 音效粒子静默（同连锁破坏，防刷屏）。
+     */
+    private void clearTreeTop(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
+        BlockPos base = this.targetPos;
+        if (base == null) {
+            return;
+        }
+        int cleared = 0;
+        int limit = 80;
+        java.util.Set<BlockPos> visited = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> bfs = new java.util.ArrayDeque<>();
+        // 从树干位置正上方开始（树干本身已挖掉，上方第一格通常是树叶/树冠中心）
+        BlockPos start = base.m_7918_(0, 1, 0);
+        bfs.add(start.m_7949_());
+        visited.add(start.m_7949_());
+        BlockPos c = base;
+        while (!bfs.isEmpty() && cleared < limit) {
+            BlockPos cur = bfs.poll();
+            BlockState st = level.m_8055_(cur);
+            boolean leaf = st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock;
+            if (!leaf) {
+                continue; // 非树叶不扩散（保留枝干方块如原木枝——树干连锁已处理）
+            }
+            // 距树干水平超 3 格不扩散（巨型树冠只清内圈，防无限蔓延）
+            if (Math.abs(cur.m_123341_() - c.m_123341_()) > 3
+                    || Math.abs(cur.m_123343_() - c.m_123343_()) > 3
+                    || cur.m_123342_() - c.m_123342_() > 24) {
+                continue;
+            }
+            BlockEntity be = level.m_7702_(cur);
+            java.util.List<ItemStack> drops = Block.m_49874_(st, level, cur, be, maid, mainHand);
+            insertIntoMaidInventory(maid, level, drops, cur);
+            level.m_7731_(cur, Blocks.f_50016_.m_49966_(), 3);
+            cleared++;
+            for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+                BlockPos nb = cur.m_7918_(d.m_122436_().m_123341_(), d.m_122436_().m_123342_(), d.m_122436_().m_123343_());
+                if (visited.add(nb.m_7949_())) {
+                    bfs.add(nb.m_7949_());
+                }
+            }
+        }
+        if (cleared > 0) {
+            LOGGER.info("wood leaves clear: maid={} base={} cleared={}", maid.m_20148_(), base, cleared);
         }
     }
 
