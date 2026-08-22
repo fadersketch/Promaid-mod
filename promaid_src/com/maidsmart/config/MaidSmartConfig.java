@@ -993,8 +993,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
                 .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
-        COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")
-                .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 400, 60, 3600);
+        COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，200=10 秒）：威胁消失后持续安全这么久才切回原任务")
+                .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 200, 60, 3600);
         COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST = BUILDER.comment("还原判定威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算\"威胁消失\"、开始还原计时——独立于响应半径（远处怪不该让女仆一直卡在战斗里回不了岗）；战斗中玩家手动换的任务不会被还原翻回去")
                 .translation("config.promaid.combat.autoSwitchRestoreThreatDist").defineInRange("autoSwitchRestoreThreatDist", 8, 2, 32);
         BUILDER.pop();
