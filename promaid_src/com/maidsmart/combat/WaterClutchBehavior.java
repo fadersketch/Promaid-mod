@@ -157,6 +157,15 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             return;
         }
         this.clutchedThisFall = true;
+        // v1.1.0 实测十三【诊断日志】：用户实测"细雪桶全没了且落地雪没生效"——
+        // 全日志无任何 clutch 触发记录。加触发日志（放桶/放水各一条）定位是
+        // "没触发"还是"触发了但没生效"。latest.log 搜 "clutch"。
+        com.mojang.logging.LogUtils.getLogger().info(
+                "clutch trigger: maid={} snow={} fallDist={} hasWater={} hasSnow={} land={}",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                snowKey && !waterKey,
+                String.format("%.1f", maid.f_19789_),
+                waterKey, snowKey, land);
         this.placeFluid(level, maid, land, !waterKey); // 有水钥匙用水；只有细雪钥匙 → 落地雪
     }
 
