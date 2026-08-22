@@ -30,7 +30,8 @@ import java.util.Map;
  * 伐木行为（v1.1.0）：找最近且最有价值的木材 → 走过去 → 手持斧渐进开采。
  * 架构完整克隆挖矿（MaidMineBehavior），木材特化差异：
  * - 目标表 = 木材表（原木/菌柄/竹/去皮变体；wood 段配置接管）
- * - 工具 = 斧（ensureAxeForTarget 按需换斧；无斧只寻路不破坏）
+ * - 工具 = 斧（空手/非斧才从背包装备——玩家手中放的斧不动；完全没斧也照样空手
+ *   慢速砍（v1.1.0 终审三：木材无挖掘等级，不因空手拒绝工作）
  * - **树叶不挡视线/不计阻挡**——树冠内的树干照常可见可挖（砍树核心场景）
  * - 深度惩罚默认 0（树在地表，不偏好浅层）
  * - 连锁采集天然适配整棵树（同 Block BFS 沿树干蔓延砍完）
@@ -846,7 +847,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 }
                 return;
             }
-            // v1.5.107：找到矿 → 按需换镐（手中够用不换；不够换背包能挖的；换不到播报）
+            // v1.5.107：找到矿 → 按需换镐（手中够用不换；不够换背包能挖的）
+            // v1.1.0 终审三：木材无挖掘等级——ensureAxeForTarget 只在"手+背包
+            // 都没有对应斧"时返回 false（模组带等级木材），不影响普通流程
             MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos));
             TARGET_SINCE.put(maid.m_19879_(), gameTime);
             // v1.5.140：有目标 = 挖矿进行中 → 登记标记（拾取任务让位，与 doStart 一致）
@@ -875,24 +878,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             this.destroyProgress = 0.0f;
             return;
         }
-        // v1.5.85：目标矿镐子挖不动（中途换镐/低等级镐/镐断）→ 先试着从背包装备
-        // 能挖的镐（v1.5.107 按需换镐），换不到才弃目标重选
-        // v1.5.113（C3）：换不到镐 → 立即记录并播报"需要更高镐"（不用等 15 秒目标超时）
-        if (isWood(level, this.targetPos) && !canHarvest(maid, level.m_8055_(this.targetPos))) {
-            boolean swapped = MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos));
-            if (!swapped || !canHarvest(maid, level.m_8055_(this.targetPos))) {
-                this.recordSkippedWood(maid, this.targetPos, level.m_8055_(this.targetPos));
-                this.reportSkippedWood(maid, gameTime);
-                // v1.5.161：队列里的矿是同类型——挖不动就全清，别反复试（等换到
-                // 更高阶镐后正常找矿流程自然会重新选中）
-                this.chainQueue.clear();
-                this.chainBlock = null;
-                this.targetPos = null;
-                this.destroyProgress = 0.0f;
-                this.saveProgressNow(maid);
-                return;
-            }
-        }
+        // v1.1.0 终审三：旧版此分支对木材做"主手斧挖不动→换斧→换不到弃目标"检查
+        // ——但木材没有挖掘等级（空手也能挖），canHarvest 对空手恒 false，空手时会
+        // 误弃目标。整段移除：木材目标的工具充分性交给扫描层（canHarvestWoodOrBareHand）
+        // 与挖掘入口（ensureAnyAxe + 慢速分支），这里不再拦。
         // v1.5.90：挡路块优先判定——不必等够到矿本身（"非矿物挡路只报不挖"根因）。
         // 旧版只有"矿在伸手范围内"才检查挡路：矿被厚土墙/岩壁隔着时女仆永远够不着
         // 矿 → 走到墙边站着不动（或 15 秒超时弃置），绝不挖开挡路方块。
@@ -945,24 +934,14 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         ItemStack mainHand = maid.m_21205_();
         if (mainHand.m_41619_() || !(mainHand.m_41720_() instanceof AxeItem)) {
-            // v1.5.113（C3）：主手镐没了（碎裂/被换走）且背包也没有能挖的镐 →
-            // 立即播报并弃目标（不用等 15 秒超时；有备用镐时 ensureForTarget 已换好）
-            if (!MaidToolAutoEquip.canHarvestWoodWithHandOrBackpack(maid, level.m_8055_(this.targetPos))) {
-                this.recordSkippedWood(maid, this.targetPos, level.m_8055_(this.targetPos));
-                this.reportSkippedWood(maid, gameTime);
-                // v1.5.161：主手镐没了且背包装备不上 → 连锁队列一并清空
-                this.chainQueue.clear();
-                this.chainBlock = null;
-                this.targetPos = null;
-                this.destroyProgress = 0.0f;
-                this.saveProgressNow(maid);
-                return;
-            }
-            // v1.1.0：主手不是斧但背包有——旧版直接 return（傻站根因之一：空手走到
-            // 树前够得着了却不换斧不走不挖，每 tick 空转）。这里主动补一次换斧，
-            // 换好下 tick 正常开挖；换不上（背包的斧也砍不动）→ 上面分支已播报弃目标
-            if (!MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos))) {
-                return; // 背包的斧也砍不动这一目标——等 ensureAxe 播报（recordSkipped 已拦）
+            // v1.1.0 终审三（用户：木材空手也能挖，不因空手拒绝工作）：
+            // 优先尝试从背包装备斧（背包有斧就换——与矿镐"空手才装备"同机制，
+            // 玩家手中放的斧在非空手分支永远不动）；背包也没斧 → 空手照样开挖
+            // （下 tick 走挖掘公式慢速分支，与玩家空手砍树一致），不再弃目标。
+            MaidToolAutoEquip.ensureAnyAxe(maid);
+            if (maid.m_21205_().m_41619_()
+                    || !(maid.m_21205_().m_41720_() instanceof AxeItem)) {
+                return; // 换不上斧（背包没斧）——空手开挖，走下面的挖掘公式
             }
             return; // 换斧成功：等下一 tick 用新斧开始挖
         }
@@ -1493,7 +1472,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 "背包里没有能搭的方块了（圆石/泥土等），够不着高处的木材……请给我一些方块～");
     }
 
-    /** v1.1.0：没有斧头播报（限频 30 秒）——空手不砍树，等玩家给斧 */
+    /** v1.1.0 终审三：没有斧头播报（限频 30 秒）——空手也能砍，只是慢；给把斧更快 */
     private void notifyNoAxe(EntityMaid maid) {
         long now = maid.m_9236_().m_46467_();
         Long last = NO_AXE_REPORT_SINCE.get(maid.m_19879_());
@@ -1502,7 +1481,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         NO_AXE_REPORT_SINCE.put(maid.m_19879_(), now);
         maid.getChatBubbleManager().addTextChatBubble(
-                "我没有斧头，砍不了树……请给我一把斧～");
+                "我没有斧头，只能用手慢慢掰了……要是给我一把斧就快多了～");
     }
 
     /**
@@ -1988,15 +1967,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
      */
     private BlockPos findWood(ServerLevel level, EntityMaid maid, BlockPos anchor) {
-        // v1.1.0：找树前先保证手上有斧——旧版空手扫描时全量扫描里 canHarvest 校验
-        // 的是"主手斧"，主手没斧时所有树都被 recordSkipped 吃掉 → 女仆原地傻站
-        // （扫描-弃置循环）。这里先从背包换一把斧再扫（有斧才谈得上砍树）。
+        // v1.1.0 终审三（用户：木材空手也能挖，不能因为空手就拒绝工作）：
+        // 找树前仍优先换斧（有斧砍得快），但没斧照样干活——空手慢挖。
+        // 换斧机制与矿镐一致：玩家手中放的斧不动，空手/非斧才从背包装备。
         if (maid.m_21205_().m_41619_()
                 || !(maid.m_21205_().m_41720_() instanceof AxeItem)) {
-            if (!MaidToolAutoEquip.ensureAnyAxe(maid)) {
-                // v1.1.0：完全没斧 → 限频播报（每 30 秒一次），等玩家给斧
-                this.notifyNoAxe(maid);
-            }
+            MaidToolAutoEquip.ensureAnyAxe(maid);
         }
         int id = maid.m_19879_();
         long now = level.m_46467_();
@@ -2081,7 +2057,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     }
                     // v1.5.85/107：手+背包都挖不动才算真挖不动（跳过+播报）
                     // v1.5.113（A3）：先查主手（零开销），主手不够才查背包最高级镐
-                    if (!MaidToolAutoEquip.canHarvestWoodWithHandOrBackpack(maid, woodState)) {
+                    // v1.1.0 终审三：木材没有挖掘等级——空手也能挖。此过滤只拦
+                    // "模组木材带挖掘等级 tag 且手+背包都没有对应斧"的极端情况
+                    //（原版全部木材永远通过）。
+                    if (!MaidToolAutoEquip.canHarvestWoodOrBareHand(maid, woodState)) {
                         this.recordSkippedWood(maid, p, woodState);
                         continue;
                     }
@@ -2146,7 +2125,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 continue; // 锚点滑动/重埋后出框
             }
             BlockState st = level.m_8055_(p);
-            if (!MaidToolAutoEquip.canHarvestWoodWithHandOrBackpack(maid, st)) {
+            // v1.1.0 终审三：空手也能挖（同全量扫描口径——只拦模组木材带挖掘等级的极端情况）
+            if (!MaidToolAutoEquip.canHarvestWoodOrBareHand(maid, st)) {
                 this.recordSkippedWood(maid, p, st);
                 continue;
             }
