@@ -308,16 +308,22 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
 
     /** 收回：按本次类型移除全部缓冲方块（水的双格/细雪的 3×3 雪垫；桶不消耗，无需还原） */
     private void recoverFluid(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测十六（审查 P1-3/P2）：维度感知回收——maid 当前所在维度可能已
+        // 不是放水时的维度（传送/跟随跨维度后 recover 被调），按旧坐标在新维度
+        // 查方块是 no-op、旧维度的水/雪永久残留。回收一律用【女仆当前维度】：
+        // 传送突变检测在跨维度 tick 的第一帧就触发（位置突变）且彼时 level 已是
+        // 新维度，旧维度残留同样收不到——所以另配 doStop/卸载兜底（见下）。
+        ServerLevel cur = (ServerLevel) maid.m_9236_();
         Block fluidBlock = ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse(this.placedSnow ? "minecraft:powder_snow" : "minecraft:water"));
         Block airBlock = ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:air"));
         for (BlockPos p : this.placedList) {
-            BlockState state = level.m_8055_(p);
+            BlockState state = cur.m_8055_(p);
             if (fluidBlock != null && state.m_60734_() == fluidBlock) {
                 // 移除缓冲方块：换成空气（用注册表取 air，避免猜 SRG 字段名；
                 // 中途被玩家替换成别方块的格子不动）
-                level.m_7731_(p,
+                cur.m_7731_(p,
                         airBlock != null ? airBlock.m_49966_() : net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(),
                         3);
             }
@@ -326,5 +332,19 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         // v1.5.25e：收水后允许再放一次——极高塔坠落时 1 秒水可能提前收，
         // 落地前最后一段若速度仍达标则再放一次接住
         this.clutchedThisFall = false;
+    }
+
+    /**
+     * v1.1.0 实测十六（审查 P1-3）：行为停止兜底回收。旧版没有 doStop——20 tick
+     * 保持期内女仆被魂符收回/死亡/任务切换导致行为停止时，placedList 连同 brain
+     * 一起丢弃 → 缓冲水（= 无限水）/细雪永久留在世界里。doStop 时把还没到期的
+     * 缓冲方块立即收回（与正常到期同路径）。
+     */
+    @Override
+    protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
+        if (!this.placedList.isEmpty()) {
+            this.recoverFluid(level, maid);
+        }
+        super.m_6732_(level, maid, gameTime);
     }
 }
