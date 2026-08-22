@@ -10,6 +10,7 @@
   "task.maid_smart.build": "建筑",
   "task.maid_smart.build.desc": "按照建造计划逐块搭建建筑（材料从背包消耗）",
   "item.maid_smart.blueprint_book": "Promaid 手册",
+  "item.maid_smart.schedule_book": "排班表",
   "config.promaid.title": "Promaid 模组详细配置",
   "config.promaid.build": "建造设置",
   "config.promaid.build.speedTier": "建造速度默认档位",

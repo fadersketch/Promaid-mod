@@ -31,9 +31,16 @@ public class ProMaidMod {
     public static final RegistryObject<Item> BLUEPRINT_BOOK = ITEMS.register("blueprint_book",
             () -> new com.maidsmart.build.BlueprintBookItem(new Item.Properties()));
 
+    /** 排班表（v1.1.0）：纸+墨囊合成，右键打开排班界面（快捷设置 + 按游戏内时间的日程编排） */
+    public static final RegistryObject<Item> SCHEDULE_BOOK = ITEMS.register("schedule_book",
+            () -> new com.maidsmart.schedule.ScheduleBookItem(new Item.Properties()));
+
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
+        // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
+        com.maidsmart.schedule.ScheduleNetworking.register();
+        com.maidsmart.schedule.ScheduleManager.register();
         // v1.5.88：全模组配置（COMMON——客户端/服务端都可读，配置面板可热更新）
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
