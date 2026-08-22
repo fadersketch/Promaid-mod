@@ -13,6 +13,9 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * 落地水（v1.5.25）：女仆的【被动生存技能】——与水桶是否在背包相关。
+ * 落地雪（v1.1.0）：细雪桶同款——落点放细雪缓冲；细雪【下界不蒸发】，补上
+ * 落地水在地狱维度失效的盲区。两者都有桶时优先用水；细雪接触 7 秒（140 tick）
+ * 才开始冻伤，保持时长上限 100 tick（5 秒），在安全线内。
  *
  * 与自保（SelfPreservationBehavior）不同：自保是"进入危险状态"的主动状态机；
  * 落地水不进任何状态、不触发逃跑/搭高，只是在【自由落体即将触地】的瞬间
@@ -20,7 +23,7 @@ import net.minecraftforge.registries.ForgeRegistries;
  * 自保逃跑/搭高时从高处掉落同样会被落地水接住。
  *
  * 触发条件（全部满足才放水）：
- * - 背包有【水桶】（water_bucket）——没水桶不触发
+ * - 背包有【水桶】或【细雪桶】（v1.1.0 落地雪；水桶在下界不作钥匙——水会蒸发）——都没有不触发
  * - 正在下落（垂直速度 < 0）
  * - 未落地（onGround == false）
  * - 下方即将触地（脚下 4 格内是实心地面）
@@ -39,6 +42,8 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     private BlockPos waterPos = null;
     /** v1.5.25h：第二格水（女仆所在格）——极端情况（速度太快穿过第一格）兜底 */
     private BlockPos waterPos2 = null;
+    /** v1.1.0：本次放的是细雪（true）还是水（false）——收回时按类型移除 */
+    private boolean placedSnow = false;
     /** 放水时的游戏 tick（用于 1 秒后收回） */
     private long placedTick = 0;
     /** v1.5.25e：本次坠落是否已用过落地水（落地后重置——防止高塔坠落途中反复放水） */
@@ -52,10 +57,11 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     }
 
     /** 始终可运行（被动检查）；具体动作由 m_6725_ 里的条件决定
-     *  v1.5.88：落地水开关（配置面板 combat.waterClutch） */
+     *  v1.5.88：落地水开关（combat.waterClutch）；v1.1.0：落地雪开关（combat.snowClutch） */
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
-        return com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get();
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
+                || com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get();
     }
 
     @Override
@@ -78,7 +84,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             int dy = this.lastTickPos.m_123342_() - now.m_123342_();
             int dz = this.lastTickPos.m_123343_() - now.m_123343_();
             if (dx * dx + dy * dy + dz * dz > 36.0) {
-                this.recoverWater(level, maid);
+                this.recoverFluid(level, maid);
                 this.clutchedThisFall = false;
                 maid.f_19789_ = 0.0f;
             }
@@ -93,15 +99,23 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             this.clutchedThisFall = false;
         }
 
-        // 1. 收水：放水后 HOLD_TICKS 到 → 把水收回（空桶→水桶 + 移除水方块）
+        // 1. 收回：放缓冲后 HOLD_TICKS 到 → 移除方块（水或细雪，桶始终不消耗）
         if (this.waterPos != null) {
+            // 保持时长对水/细雪共用（配置上限 100 tick = 5 秒 < 细雪冻伤线 140 tick——安全）
             if (gameTime - this.placedTick >= com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_HOLD.get()) {
-                this.recoverWater(level, maid);
+                this.recoverFluid(level, maid);
             }
-            return; // 放水等待期间不重复放
+            return; // 放缓冲等待期间不重复放
         }
-        // 2. 触发判定：有水桶 + 真实坠落 + 未落地 + 距地面足够高
-        if (!this.hasWaterBucket(maid)) {
+        // 2. 触发判定：有钥匙桶（水/细雪）+ 真实坠落 + 未落地 + 距地面足够高。
+        //    v1.1.0：水桶只在非下界作钥匙（下界放水瞬间蒸发）；细雪桶任何维度都可
+        //    （下界也能用）；两者都有时优先水（行为更直观）
+        boolean waterKey = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
+                && !this.isNether(level)
+                && this.hasItem(maid, "minecraft:water_bucket");
+        boolean snowKey = com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get()
+                && this.hasItem(maid, "minecraft:powder_snow_bucket");
+        if (!waterKey && !snowKey) {
             return;
         }
         // v1.5.25g：用【累计下落距离 fallDistance】判定（原版每 tick 下落累加、落地归零），
@@ -121,24 +135,29 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             return;
         }
         this.clutchedThisFall = true;
-        this.placeWater(level, maid, land);
+        this.placeFluid(level, maid, land, !waterKey); // 有水钥匙用水；只有细雪钥匙 → 落地雪
     }
 
-    /** 背包是否有水桶 */
-    private boolean hasWaterBucket(EntityMaid maid) {
-        Item waterBucket = ForgeRegistries.ITEMS.getValue(
-                net.minecraft.resources.ResourceLocation.parse("minecraft:water_bucket"));
-        if (waterBucket == null) {
+    /** 背包里是否有指定物品（v1.1.0：水桶/细雪桶通用——落地雪复用） */
+    private boolean hasItem(EntityMaid maid, String itemId) {
+        Item item = ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse(itemId));
+        if (item == null) {
             return false;
         }
         IItemHandler inv = maid.getMaidInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.m_41619_() && stack.m_41720_() == waterBucket) {
+            if (!stack.m_41619_() && stack.m_41720_() == item) {
                 return true;
             }
         }
         return false;
+    }
+
+    /** 下界判断（f_46429_ = the_nether——照 SelfPreservationBehavior 的实证写法，勿用 f_46428_） */
+    private static boolean isNether(ServerLevel level) {
+        return level.m_46472_() == net.minecraft.world.level.Level.f_46429_;
     }
 
     /**
@@ -160,8 +179,13 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             if (state.m_60795_()) {
                 continue; // 空气，继续向下
             }
-            // 已在水里：不需要落地水
+            // 已在水/细雪里：不需要缓冲（落进去本身就会重置摔落距离）
             if (waterBlock != null && state.m_60734_() == waterBlock) {
+                return null;
+            }
+            Block snowBlock = ForgeRegistries.BLOCKS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:powder_snow"));
+            if (snowBlock != null && state.m_60734_() == snowBlock) {
                 return null;
             }
             // 遇到实心方块：它上方一格就是落水点（需是空气；d=1 时该格即女仆脚格）
@@ -175,44 +199,45 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 放水（v1.5.25d）：水桶只是【触发钥匙】——不真正消耗、不变化背包。
-     * 玩家落地水也是"放下一瞬间并收回"；代码层面偷懒：检查背包有水桶即放水，
-     * 收回时直接移除水方块，水桶始终留在背包（数量不变）。
-     * v1.5.25h：双格水——第一格在落水点（原有），第二格在女仆所在格——
-     * 极端情况（速度太快穿过第一格 / 落点偏移）时兜底接住。
+     * 放缓冲方块（v1.1.0：落地水/落地雪同一实现——snow=true 放细雪）。
+     * 桶只是【触发钥匙】——不真正消耗、不变化背包；玩家落地水/落地雪也是
+     * "放下一瞬间并收回"，收回时直接移除方块。
+     * v1.5.25h：双格——第一格在落点，第二格在女仆所在格（速度太快穿过第一格/
+     * 落点偏移时兜底接住）。
      */
-    private void placeWater(ServerLevel level, EntityMaid maid, BlockPos pos) {
-        Block waterBlock = ForgeRegistries.BLOCKS.getValue(
-                net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
-        if (waterBlock == null) {
+    private void placeFluid(ServerLevel level, EntityMaid maid, BlockPos pos, boolean snow) {
+        Block fluidBlock = ForgeRegistries.BLOCKS.getValue(
+                net.minecraft.resources.ResourceLocation.parse(snow ? "minecraft:powder_snow" : "minecraft:water"));
+        if (fluidBlock == null) {
             return;
         }
-        // 第一格：落水点
-        level.m_7731_(pos, waterBlock.m_49966_(), 3);
+        // 第一格：落点
+        level.m_7731_(pos, fluidBlock.m_49966_(), 3);
         this.waterPos = pos;
-        // 第二格：女仆所在格（若与落水点不同且是空气才放——避免覆盖地面）
+        // 第二格：女仆所在格（若与落点不同且是空气才放——避免覆盖地面）
         BlockPos feetPos = maid.m_20183_();
         if (!feetPos.equals(pos) && level.m_8055_(feetPos).m_60795_()) {
-            level.m_7731_(feetPos, waterBlock.m_49966_(), 3);
+            level.m_7731_(feetPos, fluidBlock.m_49966_(), 3);
             this.waterPos2 = feetPos;
         } else {
             this.waterPos2 = null;
         }
+        this.placedSnow = snow;
         this.placedTick = level.m_46467_();
-        // 落地水播报（让主人看见"用了一瓶落地水"）
-        maid.getChatBubbleManager().addTextChatBubble("落地水！");
+        // 播报（让主人看见"用了一次缓冲"）
+        maid.getChatBubbleManager().addTextChatBubble(snow ? "落地雪！" : "落地水！");
     }
 
-    /** 收回：移除两格水方块（水桶不消耗，无需还原） */
-    private void recoverWater(ServerLevel level, EntityMaid maid) {
-        Block waterBlock = ForgeRegistries.BLOCKS.getValue(
-                net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
+    /** 收回：按本次类型移除两格缓冲方块（水/细雪；桶不消耗，无需还原） */
+    private void recoverFluid(ServerLevel level, EntityMaid maid) {
+        Block fluidBlock = ForgeRegistries.BLOCKS.getValue(
+                net.minecraft.resources.ResourceLocation.parse(this.placedSnow ? "minecraft:powder_snow" : "minecraft:water"));
         Block airBlock = ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:air"));
         if (this.waterPos != null) {
             BlockState state = level.m_8055_(this.waterPos);
-            if (waterBlock != null && state.m_60734_() == waterBlock) {
-                // 移除水：换成空气（用注册表取 air，避免猜 SRG 字段名）
+            if (fluidBlock != null && state.m_60734_() == fluidBlock) {
+                // 移除缓冲方块：换成空气（用注册表取 air，避免猜 SRG 字段名）
                 level.m_7731_(this.waterPos,
                         airBlock != null ? airBlock.m_49966_() : net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(),
                         3);
@@ -222,7 +247,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         // 第二格（女仆所在格）同样收回
         if (this.waterPos2 != null) {
             BlockState state2 = level.m_8055_(this.waterPos2);
-            if (waterBlock != null && state2.m_60734_() == waterBlock) {
+            if (fluidBlock != null && state2.m_60734_() == fluidBlock) {
                 level.m_7731_(this.waterPos2,
                         airBlock != null ? airBlock.m_49966_() : net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(),
                         3);
