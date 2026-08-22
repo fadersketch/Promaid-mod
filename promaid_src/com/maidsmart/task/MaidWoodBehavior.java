@@ -46,6 +46,34 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         reloadBuiltinWoods(); // 初始默认木材表；首次 loadCustomWoods() 后完全由配置接管
     }
 
+    /** v1.1.0：模组原木自动识别——原版 tag 键（与手册木材网格过滤同一套，TagKey 按注册名等值） */
+    private static final net.minecraft.tags.TagKey<Block> LOGS_TAG = net.minecraft.tags.BlockTags.create(
+            ResourceLocation.parse("minecraft:logs"));
+    private static final net.minecraft.tags.TagKey<Block> BAMBOO_TAG = net.minecraft.tags.BlockTags.create(
+            ResourceLocation.parse("minecraft:bamboo_blocks"));
+
+    /** 可砍判定：名单内；或 wood.tagAuto 开时带原版 logs/bamboo_blocks 标签（模组原木照砍） */
+    private static boolean isWoodState(BlockState state) {
+        if (WOOD_VALUE.containsKey(state.m_60734_())) {
+            return true;
+        }
+        return com.maidsmart.config.MaidSmartConfig.WOOD_TAG_AUTO.get()
+                && (state.m_204336_(LOGS_TAG) || state.m_204336_(BAMBOO_TAG));
+    }
+
+    /** 木材价值：名单值优先；tag 自动识别（不在名单）= 300（与内置原木同价） */
+    private static Integer woodValueOf(BlockState state) {
+        Integer v = WOOD_VALUE.get(state.m_60734_());
+        if (v != null) {
+            return v;
+        }
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_TAG_AUTO.get()
+                && (state.m_204336_(LOGS_TAG) || state.m_204336_(BAMBOO_TAG))) {
+            return Integer.valueOf(300);
+        }
+        return null;
+    }
+
     private static void setValue(String id, int value) {
         Block block = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(id));
         if (block != null) {
@@ -1624,7 +1652,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     private boolean isWood(ServerLevel level, BlockPos pos) {
-        return WOOD_VALUE.containsKey(level.m_8055_(pos).m_60734_());
+        return isWoodState(level.m_8055_(pos));
     }
 
     /**
@@ -1828,7 +1856,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.85：记录本次扫描中镐子挖不动的矿（只保留价值最高的一个，用于播报） */
     private void recordSkippedWood(EntityMaid maid, BlockPos pos, BlockState state) {
-        Integer value = WOOD_VALUE.get(state.m_60734_());
+        Integer value = woodValueOf(state);
         if (value == null || (this.skippedWoodPos != null && value <= this.skippedWoodValue)) {
             return;
         }
@@ -1996,7 +2024,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                         continue; // v1.5.47：刚弃置跳过；v1.5.87：硬挡路持续排除；v1.5.113：短时排除
                     }
                     BlockState woodState = level.m_8055_(p);
-                    Integer value = WOOD_VALUE.get(woodState.m_60734_());
+                    Integer value = woodValueOf(woodState);
                     if (value == null) {
                         continue;
                     }
@@ -2092,7 +2120,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (this.isDangerAt(level, p)) {
                 continue;
             }
-            Integer value = WOOD_VALUE.get(st.m_60734_());
+            Integer value = woodValueOf(st);
             int blocking = cache.blocking.getOrDefault(p, budget + 1);
             if (value == null || blocking > budget) {
                 continue;
@@ -2194,8 +2222,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (st.m_60795_()) {
                 continue; // 空气
             }
-            if (WOOD_VALUE.containsKey(st.m_60734_())) {
-                continue; // 木材不挡（连着的目标树干不算阻挡）
+            if (isWoodState(st)) {
+                continue; // 木材不挡（连着的目标树干不算阻挡；模组原木同口径）
             }
             if (st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock) {
                 continue; // v1.1.0：树叶不计阻挡——树冠包着的树干不算被挡
@@ -2243,7 +2271,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 return null; // 无挡路
             }
             BlockState st = level.m_8055_(sample);
-            if (st.m_60795_() || WOOD_VALUE.containsKey(st.m_60734_())
+            if (st.m_60795_() || isWoodState(st)
                     || st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock
                     || !st.m_60796_(level, sample)) {
                 continue; // 空气/目标木材/树叶（v1.1.0 放行）/非满块不算挡路

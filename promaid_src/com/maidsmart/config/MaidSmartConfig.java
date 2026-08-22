@@ -83,6 +83,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 
     // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
+    /** v1.1.0：自动识别带原版 logs 标签的模组原木（默认开） */
+    public static final ForgeConfigSpec.BooleanValue WOOD_TAG_AUTO;
     public static final ForgeConfigSpec.IntValue WOOD_SEARCH_RADIUS;
     public static final ForgeConfigSpec.IntValue WOOD_DOWN_RANGE;
     public static final ForgeConfigSpec.IntValue WOOD_UP_RANGE;
@@ -242,6 +244,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_GUN_PREFER;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -511,7 +514,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 
         // ---- 伐木（v1.1.0：克隆挖矿架构；障碍物名单与挖矿共享 extraBreakables/disabledBreakables） ----
         BUILDER.comment("伐木设置").translation("config.promaid.wood").push("wood");
-        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300；模组木材在此加入（创造面板已按木质 tag 过滤显示）")
+        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300；带原版 logs 标签的模组原木默认自动识别（见 tagAuto，无需加入）；未打标签的模组木材在此加入（创造面板已按木质 tag 过滤显示）")
                 .translation("config.promaid.wood.values")
                 .defineList("woodValues", List.of(
                                 "minecraft:oak_log=300", "minecraft:spruce_log=300", "minecraft:birch_log=300",
@@ -525,6 +528,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                                 "minecraft:stripped_mangrove_log=300", "minecraft:stripped_cherry_log=300",
                                 "minecraft:stripped_crimson_stem=300", "minecraft:stripped_warped_stem=300"),
                         o -> o instanceof String s && s.contains("="));
+        WOOD_TAG_AUTO = BUILDER.comment("自动识别模组原木（默认开）：凡带原版 #minecraft:logs / #minecraft:bamboo_blocks 标签的方块（模组原木）都自动视为可砍木材（价值 300，无需进名单）；关闭则只认名单")
+                .translation("config.promaid.wood.tagAuto").define("tagAuto", true);
         WOOD_SEARCH_RADIUS = BUILDER.comment("木材检索半径（水平）")
                 .translation("config.promaid.wood.searchRadius").defineInRange("searchRadius", 24, 8, 64);
         WOOD_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围（格）——树在地表，默认只往下看 4 格")
@@ -969,6 +974,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
         COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")
                 .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 400, 60, 3600);
+        COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST = BUILDER.comment("还原判定威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算\"威胁消失\"、开始还原计时——独立于响应半径（远处怪不该让女仆一直卡在战斗里回不了岗）；战斗中玩家手动换的任务不会被还原翻回去")
+                .translation("config.promaid.combat.autoSwitchRestoreThreatDist").defineInRange("autoSwitchRestoreThreatDist", 8, 2, 32);
         BUILDER.pop();
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
@@ -979,8 +986,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
-        BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 12）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）")
-                .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 12, 4, 32);
+        BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
+                .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 8）：每垫一块方块的最短间隔——调大搭得更从容")
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
