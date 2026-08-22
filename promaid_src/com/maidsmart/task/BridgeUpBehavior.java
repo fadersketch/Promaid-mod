@@ -115,7 +115,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         return false;
     }
 
-    /** 销毁一个追踪方块：已被玩家换掉的不误破坏；掉落物走女仆拾取 */
+    /** 销毁一个追踪方块：已被玩家换掉的不误破坏；掉落物走女仆拾取
+     *  v1.1.0：bridge.reclaimToMaid 开启时掉落物直接塞回附近女仆背包，不落地 */
     private static void destroyMarked(ServerLevel level, BlockPos pos, PlacedMark mark) {
         var state = level.m_8055_(pos);
         if (state.m_60795_()) {
@@ -126,8 +127,54 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return; // 玩家已替换，尊重改动
         }
         level.m_46796_(2001, pos, Block.m_49956_(state));
-        Block.m_49892_(state, level, pos, level.m_7702_(pos));
+        if (MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
+            // 掉落物直接进附近女仆背包（最近者优先；满背包/找不到女仆才落地）
+            java.util.List<ItemStack> drops = Block.m_49869_(state, level, pos, null);
+            EntityMaid nearest = findNearestMaid(level, pos);
+            boolean handed = false;
+            if (nearest != null && !drops.isEmpty()) {
+                try {
+                    net.minecraftforge.items.wrapper.CombinedInvWrapper inv = nearest.getAvailableInv(true);
+                    for (ItemStack stack : drops) {
+                        if (stack.m_41619_()) {
+                            continue;
+                        }
+                        ItemStack remain = net.minecraftforge.items.ItemHandlerHelper
+                                .insertItemStacked(inv, stack, false);
+                        if (!remain.m_41619_()) {
+                            Block.m_49840_(level, pos, remain); // 背包满：落地（原版 popResource）
+                        }
+                    }
+                    handed = true;
+                } catch (Exception ignored) {
+                }
+            }
+            if (!handed && !drops.isEmpty()) {
+                for (ItemStack stack : drops) {
+                    Block.m_49840_(level, pos, stack);
+                }
+            }
+        } else {
+            Block.m_49892_(state, level, pos, level.m_7702_(pos));
+        }
         level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
+    }
+
+    /** 距该位置最近的女仆（回收目标；8 格内没有 → null） */
+    private static EntityMaid findNearestMaid(ServerLevel level, BlockPos pos) {
+        EntityMaid best = null;
+        double bestSq = 64.0; // 8 格
+        for (EntityMaid m : level.m_45976_(EntityMaid.class, new AABB(pos).m_82400_(8.0))) {
+            if (!m.m_6084_()) {
+                continue;
+            }
+            double dSq = m.m_20275_(pos.m_123341_() + 0.5, pos.m_123342_() + 0.5, pos.m_123343_() + 0.5);
+            if (dSq < bestSq) {
+                bestSq = dSq;
+                best = m;
+            }
+        }
+        return best;
     }
 
     /* ==================== 行为本体 ==================== */

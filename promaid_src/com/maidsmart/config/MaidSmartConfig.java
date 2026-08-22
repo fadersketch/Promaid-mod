@@ -253,6 +253,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
+public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
     public static final ForgeConfigSpec.DoubleValue COMBAT_SAFE_RETURN_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_CLOSE_DISTANCE;
@@ -998,6 +999,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认关）：开启后到期/被摧毁的搭路垫脚方块不落地成掉落物，直接塞回附近女仆的背包（找不到女仆才落地）")
+                .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", false);
         BUILDER.pop();
 
         // ---- 杂项 ----
