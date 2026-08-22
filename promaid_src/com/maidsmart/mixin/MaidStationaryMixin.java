@@ -28,8 +28,10 @@ public abstract class MaidStationaryMixin {
     @Inject(method = "m_7023_", at = @At("HEAD"))
     private void maidsmart$lockWhenStationary(Vec3 travelVector, CallbackInfo ci) {
         EntityMaid maid = (EntityMaid) (Object) this;
-        if (MaidWorkTags.isStill(maid)) {
+        if (MaidWorkTags.isStill(maid) || MaidWorkTags.isBuildSitting(maid)) {
             // v1.5.98c：只清水平速度（x/z 归零），保留垂直（y）——防溺水/保下落
+            // v1.1.0：建造强制坐下同锁——玩家"解除坐下"后 MaidMoveControl 直施
+            // 速度矢量/直连导航等通道全部绕过事后清理，必须在实体移动层掐断
             Vec3 v = maid.m_20184_();
             if (v.f_82479_ != 0.0 || v.f_82481_ != 0.0) {
                 maid.m_20256_(new Vec3(0.0, v.f_82480_, 0.0));
