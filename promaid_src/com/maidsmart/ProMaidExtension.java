@@ -21,6 +21,7 @@ import com.maidsmart.protect.MasterDeathTeleportHandler;
 import com.maidsmart.task.MaidBrewTask;
 import com.maidsmart.task.MaidCookTask;
 import com.maidsmart.task.MaidMineTask;
+import com.maidsmart.task.MaidWoodTask;
 import com.maidsmart.tool.SmartGiveItemTool;
 import com.maidsmart.tool.SmartMoveToTool;
 import com.maidsmart.tool.SmartPickupTool;
@@ -98,6 +99,7 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.5.28：挖矿搭的方块 10 秒清场的最终兜底——内存追踪器随进程消失，
         // 立即销毁全部残留方块变掉落物（重进存档不会看到永不消失的搭方块）
         com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
+        com.maidsmart.task.MaidWoodBehavior.clearAll(event.getServer());
         com.maidsmart.build.BuildPlan.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
@@ -126,11 +128,13 @@ public class ProMaidExtension implements ILittleMaid {
         }
         for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
             com.maidsmart.task.MaidMineBehavior.expirePlaced(level, level.m_46467_());
+            com.maidsmart.task.MaidWoodBehavior.expirePlaced(level, level.m_46467_());
         }
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
         if (++this.purgeTimer >= 600) {
             this.purgeTimer = 0;
             com.maidsmart.task.MaidMineBehavior.purgeStaleMaids(server);
+            com.maidsmart.task.MaidWoodBehavior.purgeStaleMaids(server);
         }
         // v1.5.142：每 5 秒扫描跟随女仆是否与主人跨维度 → 传送到主人身边
         if (++this.dimFollowTimer >= 100) {
@@ -301,6 +305,8 @@ public class ProMaidExtension implements ILittleMaid {
         manager.add(new MaidCookTask());
         manager.add(new MaidBrewTask());
         manager.add(new MaidBuildTask());
+        // v1.1.0：伐木任务（克隆挖矿架构——木材表/斧判定/树叶放行视线/连锁砍整棵树）
+        manager.add(new MaidWoodTask());
     }
 
     @Override
