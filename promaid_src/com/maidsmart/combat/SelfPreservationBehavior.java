@@ -58,6 +58,129 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     /**
+     * v1.1.0 实测十七：战斗搭方块追踪表（维度 → 位置 → 放置信息）。
+     *
+     * 旧设计：自保（搭高/翻墙/搭桥/封头盖帽/岩浆垫高）搭的方块【永久留下】——
+     * 用户当初选择不清理。现改为与挖矿/伐木/搭路同款的打标签机制：
+     * - 60 秒后自然消失（战斗方块战斗用，打完仗战场该清干净——比挖矿的 10 秒长，
+     *   因为战斗节奏多变，女仆可能还要在塔上待一阵）
+     * - 女仆可以直接破坏自己搭的战斗方块（挡路就拆——实际战斗多变，防止女仆
+     *   自己搭了个死路还逃不出去）
+     * - bridge.reclaimToMaid 开关（垫脚方块回收进背包）同样覆盖这里的回收
+     * - 玩家替换过的方块不误破坏（blockId 比对，与挖矿/搭路同口径）
+     */
+    public record CombatPlacedMark(long tick, String blockId) {
+    }
+
+    private static final java.util.Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>,
+            java.util.Map<BlockPos, CombatPlacedMark>> COMBAT_PLACED = new java.util.HashMap<>();
+
+    /** 战斗方块登记（放置点统一调用） */
+    private static void trackCombatPlaced(EntityMaid maid, BlockPos pos, Block block) {
+        if (!(maid.m_9236_() instanceof ServerLevel sl)) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
+        COMBAT_PLACED.computeIfAbsent(sl.m_46472_(), k -> new java.util.HashMap<>())
+                .put(pos.m_7949_(), new CombatPlacedMark(sl.m_46467_(),
+                        key != null ? key.toString() : ""));
+    }
+
+    /** 该位置是否是女仆搭的战斗方块（挡路破坏判定用） */
+    public static boolean isCombatPlaced(net.minecraft.world.level.Level level, BlockPos pos) {
+        if (!(level instanceof ServerLevel sl)) {
+            return false;
+        }
+        java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(sl.m_46472_());
+        return marks != null && marks.containsKey(pos.m_7949_());
+    }
+
+    /**
+     * 战斗方块到期销毁（ProMaidExtension 每 tick 调；60 秒）。
+     * 女仆还站在上面的（搭高塔）延后一轮——supportsBridger 同款保护。
+     * bridge.reclaimToMaid 开启时掉落直接进附近女仆背包（复用搭路的回收链路）。
+     */
+    public static void expireCombatPlaced(ServerLevel level, long gameTime) {
+        java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(level.m_46472_());
+        if (marks == null || marks.isEmpty()) {
+            return;
+        }
+        long lifetime = 60L * 20L; // 60 秒（战斗节奏多变，比挖矿 10 秒长）
+        java.util.Iterator<java.util.Map.Entry<BlockPos, CombatPlacedMark>> it =
+                marks.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<BlockPos, CombatPlacedMark> e = it.next();
+            if (gameTime - e.getValue().tick < lifetime) {
+                continue;
+            }
+            BlockPos pos = e.getKey();
+            if (com.maidsmart.task.BridgeUpBehavior.supportsBridgerPublic(level, pos)) {
+                continue; // 女仆站在上面（搭高塔上打持久战）→ 延后，走开即清
+            }
+            it.remove();
+            destroyCombatMarked(level, pos, e.getValue());
+        }
+    }
+
+    /** 服务器停止清场（残留战斗方块立即回收） */
+    public static void clearCombatPlaced(net.minecraft.server.MinecraftServer server) {
+        for (ServerLevel level : server.m_129785_()) {
+            java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.remove(level.m_46472_());
+            if (marks == null) {
+                continue;
+            }
+            for (java.util.Map.Entry<BlockPos, CombatPlacedMark> e : marks.entrySet()) {
+                destroyCombatMarked(level, e.getKey(), e.getValue());
+            }
+        }
+        COMBAT_PLACED.clear();
+    }
+
+    /** 销毁一个战斗方块：玩家换过的不误破坏；reclaimToMaid 开启进背包（同搭路口径） */
+    private static void destroyCombatMarked(ServerLevel level, BlockPos pos, CombatPlacedMark mark) {
+        var state = level.m_8055_(pos);
+        if (state.m_60795_()) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(state.m_60734_());
+        if (!mark.blockId.isEmpty() && cur != null && !mark.blockId.equals(cur.toString())) {
+            return; // 玩家已替换，尊重改动
+        }
+        level.m_46796_(2001, pos, net.minecraft.world.level.block.Block.m_49956_(state));
+        if (com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
+            java.util.List<net.minecraft.world.item.ItemStack> drops =
+                    net.minecraft.world.level.block.Block.m_49869_(state, level, pos, null);
+            EntityMaid nearest = com.maidsmart.task.BridgeUpBehavior.findNearestMaidPublic(level, pos);
+            boolean handed = false;
+            if (nearest != null && !drops.isEmpty()) {
+                try {
+                    net.minecraftforge.items.wrapper.CombinedInvWrapper inv = nearest.getAvailableInv(true);
+                    for (net.minecraft.world.item.ItemStack stack : drops) {
+                        if (stack.m_41619_()) {
+                            continue;
+                        }
+                        net.minecraft.world.item.ItemStack remain = net.minecraftforge.items.ItemHandlerHelper
+                                .insertItemStacked(inv, stack, false);
+                        if (!remain.m_41619_()) {
+                            net.minecraft.world.level.block.Block.m_49840_(level, pos, remain);
+                        }
+                    }
+                    handed = true;
+                } catch (Exception ignored) {
+                }
+            }
+            if (!handed && !drops.isEmpty()) {
+                for (net.minecraft.world.item.ItemStack stack : drops) {
+                    net.minecraft.world.level.block.Block.m_49840_(level, pos, stack);
+                }
+            }
+        } else {
+            net.minecraft.world.level.block.Block.m_49892_(state, level, pos, level.m_7702_(pos));
+        }
+        level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
+    }
+
+    /**
      * v1.5.135：最近攻击者记录（女仆 UUID → 攻击者）。
      *
      * 背景：findThreat 原版只认"当前攻击目标 + 原版 Monster 类"——其他 mod 的
@@ -1083,7 +1206,80 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.fleeDirCooldown = 20; // 1 秒内保持方向
         this.fleeTargetX = tx;
         this.fleeTargetZ = tz;
+        // v1.1.0 实测十七：逃跑方向被【自己搭的战斗方块】挡住 → 直接拆掉它。
+        // 实际战斗多变——翻墙台阶/封头块可能恰好堵死逃跑路线，女仆不能被自己
+        // 搭的方块困死。先拆脚下面前 1~2 格的战斗方块再导航。
+        this.breakBlockingCombatBlocks(maid, bestDx, bestDz);
         maid.m_21573_().m_26519_(tx, maid.m_20183_().m_123342_(), tz, fleeSpeed());
+    }
+
+    /**
+     * v1.1.0 实测十七：拆掉逃跑方向上挡路的【自己搭的战斗方块】（身体+头部高度，
+     * 前方 1~2 格）。只拆 COMBAT_PLACED 表里登记过的（自然地形/玩家建筑绝不碰）；
+     * 拆除掉落走 reclaimToMaid 口径（开着进背包，否则落地）。返回 true = 拆了东西。
+     */
+    private boolean breakBlockingCombatBlocks(EntityMaid maid, int dx, int dz) {
+        boolean broke = false;
+        try {
+            if (!(maid.m_9236_() instanceof ServerLevel sl)) {
+                return false;
+            }
+            int y = maid.m_20183_().m_123342_();
+            for (int s = 1; s <= 2; s++) {
+                int bx = (int) Math.floor(maid.m_20185_()) + dx * s;
+                int bz = (int) Math.floor(maid.m_20189_()) + dz * s;
+                for (int dy = 0; dy <= 1; dy++) { // 脚部+头部
+                    BlockPos p = new BlockPos(bx, y + dy, bz);
+                    if (!isCombatPlaced(sl, p)) {
+                        continue;
+                    }
+                    var state = sl.m_8055_(p);
+                    if (state.m_60795_()) {
+                        continue;
+                    }
+                    sl.m_46796_(2001, p, net.minecraft.world.level.block.Block.m_49956_(state));
+                    if (com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
+                        java.util.List<net.minecraft.world.item.ItemStack> drops =
+                                net.minecraft.world.level.block.Block.m_49869_(state, sl, p, null);
+                        EntityMaid nearest = com.maidsmart.task.BridgeUpBehavior.findNearestMaidPublic(sl, p);
+                        boolean handed = false;
+                        if (nearest != null && !drops.isEmpty()) {
+                            try {
+                                net.minecraftforge.items.wrapper.CombinedInvWrapper inv = nearest.getAvailableInv(true);
+                                for (net.minecraft.world.item.ItemStack stack : drops) {
+                                    if (stack.m_41619_()) {
+                                        continue;
+                                    }
+                                    net.minecraft.world.item.ItemStack remain =
+                                            net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, stack, false);
+                                    if (!remain.m_41619_()) {
+                                        net.minecraft.world.level.block.Block.m_49840_(sl, p, remain);
+                                    }
+                                }
+                                handed = true;
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        if (!handed && !drops.isEmpty()) {
+                            for (net.minecraft.world.item.ItemStack stack : drops) {
+                                net.minecraft.world.level.block.Block.m_49840_(sl, p, stack);
+                            }
+                        }
+                    } else {
+                        net.minecraft.world.level.block.Block.m_49892_(state, sl, p, sl.m_7702_(p));
+                    }
+                    sl.m_7731_(p, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
+                    // 从追踪表移除（已物理拆除）
+                    java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(sl.m_46472_());
+                    if (marks != null) {
+                        marks.remove(p.m_7949_());
+                    }
+                    broke = true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return broke;
     }
 
     /**
@@ -2361,6 +2557,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return false;
         }
         maid.m_9236_().m_7731_(pos, block.m_49966_(), 3);
+        trackCombatPlaced(maid, pos, block); // v1.1.0 实测十七：战斗方块登记（60 秒自清）
         this.resourceUsed = true; // v1.5.232：垫块成功 = 自救资源
         return true;
     }
@@ -2639,6 +2836,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return false;
         }
         maid.m_9236_().m_7731_(place, block.m_49966_(), 3);
+        trackCombatPlaced(maid, place, block); // v1.1.0 实测十七：战斗方块登记（60 秒自清）
         return true;
     }
 
@@ -2741,6 +2939,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return false;
         }
         maid.m_9236_().m_7731_(pos, block.m_49966_(), 3);
+        trackCombatPlaced(maid, pos, block); // v1.1.0 实测十七：战斗方块登记（60 秒自清）
         return true;
     }
 
@@ -2782,6 +2981,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             this.suffocateBudget--;
             maid.m_9236_().m_7731_(eyeCap, block.m_49966_(), 3); // 头封块（窒息判定格）
+            trackCombatPlaced(maid, eyeCap, block); // v1.1.0 实测十七：战斗方块登记（60 秒自清）
             // 盖帽块：脚底 + ceil(身高)（如僵尸 +2），空气才放；取不到跳过（头封块已挡视线）
             int headH = (int) Math.ceil(threat.m_20206_());
             BlockPos cap = foot.m_7918_(0, headH, 0);
@@ -2789,6 +2989,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 Block capBlock = this.takeBuildBlock(maid);
                 if (capBlock != null) {
                     maid.m_9236_().m_7731_(cap, capBlock.m_49966_(), 3);
+                    trackCombatPlaced(maid, cap, capBlock); // v1.1.0 实测十七：战斗方块登记
                 }
             }
             // 与搭高共享冷却：本次调用不重置（buildUp 成功后已置 buildCd），

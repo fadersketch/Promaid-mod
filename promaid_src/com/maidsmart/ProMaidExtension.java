@@ -103,6 +103,7 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
         com.maidsmart.task.MaidWoodBehavior.clearAll(event.getServer());
         com.maidsmart.task.BridgeUpBehavior.clearAll(event.getServer());
+        com.maidsmart.combat.SelfPreservationBehavior.clearCombatPlaced(event.getServer());
         com.maidsmart.build.BuildPlan.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
@@ -133,6 +134,8 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.task.MaidMineBehavior.expirePlaced(level, level.m_46467_());
             com.maidsmart.task.MaidWoodBehavior.expirePlaced(level, level.m_46467_());
             com.maidsmart.task.BridgeUpBehavior.expirePlaced(level, level.m_46467_());
+            // v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）60 秒到期清理
+            com.maidsmart.combat.SelfPreservationBehavior.expireCombatPlaced(level, level.m_46467_());
         }
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
         if (++this.purgeTimer >= 600) {
