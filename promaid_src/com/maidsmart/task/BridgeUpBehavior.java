@@ -95,10 +95,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         PLACED.clear();
     }
 
-    /** 该搭方块上是否正有搭路女仆站着（脚下格或所在格） */
+    /**
+     * 该搭方块上是否正有女仆站着（脚下格或所在格）。
+     * v1.1.0 审查：不再要求 bridging 标记——行为中止（威胁出现/卡死放弃）的瞬间标记
+     * 就清了，旧判定会把她脚下的塔立刻回收，人从半空掉进威胁堆里；现在只要还站着
+     * 就延后回收，走开才清。
+     */
     private static boolean supportsBridger(ServerLevel level, BlockPos pos) {
         for (EntityMaid m : level.m_45976_(EntityMaid.class, new AABB(pos).m_82400_(2.0))) {
-            if (!m.m_6084_() || !m.getPersistentData().m_128471_(BRIDGING_TAG)) {
+            if (!m.m_6084_()) {
                 continue;
             }
             BlockPos feet = m.m_20183_();
@@ -130,6 +135,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     private int stepCooldown = 0;
     /** 搭块防掉落窗口（刚垫完 12 tick 内钳制在方块中心） */
     private int guardTicks = 0;
+    /** 上次成功垫出方块的 gameTime（卡死检测：太久没垫出 = 头顶被挡/没料，放弃） */
+    private long lastPlacedGameTime = 0;
     /** 材料耗尽播报限频 */
     private static final Map<Integer, Long> NO_BLOCK_SINCE = new HashMap<>();
 
@@ -160,7 +167,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (hasThreatNearby(level, maid)) {
             return false; // 有威胁不搭（塔会被拆/搭到一半挨打）
         }
-        return takeBuildBlock(maid) != null; // 有料才启动
+        return hasBuildBlock(maid); // 有料才启动（只看不拿——takeBuildBlock 会真消耗背包方块）
     }
 
     @Override
@@ -168,6 +175,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         maid.getPersistentData().m_128379_(BRIDGING_TAG, true);
         this.stepCooldown = 0;
         this.guardTicks = 0;
+        this.lastPlacedGameTime = level.m_46467_();
     }
 
     @Override
@@ -227,6 +235,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保触发——让位
         }
+        // v1.1.0 审查：卡死退出——头顶被挡/材料耗尽导致 20 秒没垫出任何方块 → 放弃并
+        // 打个招呼，不再原地僵站干等条件变化
+        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
+        if (dyNow >= 1 && gameTime - this.lastPlacedGameTime > 400L) {
+            maid.getChatBubbleManager().addTextChatBubble(
+                    "搭不上去了（头顶被挡住/方块用完），我先下来……");
+            return false;
+        }
         return true;
     }
 
@@ -266,6 +282,28 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         level.m_7731_(place, block.m_49966_(), 3);
         track(level, place, block);
         this.guardTicks = 12;
+        this.lastPlacedGameTime = level.m_46467_();
+    }
+
+    /**
+     * 背包里是否有可搭方块（只看不拿——canUse 探测专用，无副作用）。
+     * v1.1.0 审查：旧版 canUse 直接调 takeBuildBlock，每轮启动尝试都会凭空
+     * 消耗一枚方块（brain 每 tick 轮询 canUse，行为反复启停时背包悄悄漏方块）。
+     */
+    private static boolean hasBuildBlock(EntityMaid maid) {
+        IItemHandler inv = maid.getMaidInv();
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
+                continue;
+            }
+            Block block = bi.m_40614_();
+            if (block == null || block instanceof FallingBlock) {
+                continue; // 下落方块（沙/砾石）不用
+            }
+            return true;
+        }
+        return false;
     }
 
     /** 背包数量最多的可搭方块（BlockItem + 非下落；照挖矿 takeBuildBlock） */

@@ -1154,6 +1154,8 @@ public class PromaidConfigScreen extends Screen {
                     this.mineTableMode = 0;
                     this.m_7856_();
                 }, "管理伐木两张表：木材（女仆会砍，网格只列木质类产品——含模组）、障碍物（可挖穿开路，与挖矿共享同一名单）"));
+        this.rows.add(new BoolRow("自动识别模组原木（标签）", MaidSmartConfig.WOOD_TAG_AUTO.get(),
+                v -> MaidSmartConfig.WOOD_TAG_AUTO.set(v), "自动识别模组原木：开启（默认）时凡带原版 #logs / #bamboo_blocks 标签的方块（模组原木）都自动视为可砍木材（价值 300，无需进名单）；关闭则只认木材名单里的方块（名单可精确控制砍什么/价值权重）"));
         this.rows.add(new BoolRow("透视感知（隔墙找木材）", MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.get(),
                 v -> MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被挡住的木材并挖通开路；关闭（默认）则像玩家一样只发现视线无阻的木材——树叶不挡视线，水/岩浆外任何方块都挡"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.WOOD_SEARCH_RADIUS.get()),
@@ -1573,7 +1575,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格）：周围此范围内有敌对生物时不搭路（搭一半挨打）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（搭一半挨打）；刷怪频繁的包里可再调小，过大会导致搭路几乎永不触发"));
         this.rows.add(new NumRow("搭路节奏（tick/块）", String.valueOf(MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_STEP_COOLDOWN, s), "搭路节奏（tick/块）：每垫一块方块的最短间隔，调大更从容"));
         this.rows.add(new NumRow("搭路方块清理（秒）", String.valueOf(MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get()),
@@ -1650,6 +1652,8 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.set(v), "战斗结束自动还原：威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换"));
         this.rows.add(new NumRow("还原延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY, s), "还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务"));
+        this.rows.add(new NumRow("还原威胁半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST, s), "还原威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算威胁消失、开始还原计时——比响应半径小（远处怪不该让她一直卡在战斗里回不了岗）；战斗中玩家手动给她换的任务不会被还原翻回去"));
         // v1.5.295：逃生/搭高/逃跑数值参数（旧版混在自保行为开关与贴身辅助之间，
         // 把开关区挤到第 3-4 页——集中到页尾，调参才需要翻到这里）
         this.rows.add(new SectionRow("自保参数", true));
