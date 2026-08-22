@@ -17,6 +17,10 @@ public final class MaidWorkTags {
     /** persistentData 键：女仆处于工作站桩（建筑/烹饪/酿造/整理，站立不动） */
     public static final String WORK_STILL_TAG = "maid_smart_work_still";
 
+    /** 建造强制坐下标记键（与 MaidBuildBehavior.BUILD_SIT_TAG 同值——字符串复制
+     *  避免包循环 import；任务级标记：切建造任务即坐下，切出自动站起） */
+    public static final String BUILD_SIT_TAG = "maid_smart_build_sitting";
+
     private MaidWorkTags() {
     }
 
@@ -40,9 +44,11 @@ public final class MaidWorkTags {
                 || uid.equals(ResourceLocation.parse("maid_smart:brew"));
     }
 
-    /** v1.5.129：战斗任务 UID（干活不被打断的豁免集合——战斗女仆保留吃饭/恐慌） */
+    /** v1.5.129：战斗任务 UID（干活不被打断的豁免集合——战斗女仆保留吃饭/恐慌）。
+     *  v1.1.0：加入 gun_attack（TLM 内置枪械任务，TACZ/卓越前线） */
     private static final java.util.Set<String> COMBAT_UIDS = java.util.Set.of(
-            "attack", "ranged_attack", "crossbow_attack", "trident_attack", "danmaku_attack");
+            "attack", "ranged_attack", "crossbow_attack", "trident_attack", "danmaku_attack",
+            "gun_attack");
 
     /**
      * v1.5.129：是否"非战斗干活中"——任务 UID 不属于战斗集合即视为干活
@@ -79,5 +85,27 @@ public final class MaidWorkTags {
 
     public static void setStill(EntityMaid maid, boolean still) {
         maid.getPersistentData().m_128379_(WORK_STILL_TAG, still);
+    }
+
+    /**
+     * v1.1.0：是否处于建造强制坐下状态（标记 + 当前任务确为建造，双保险防残留冻结）。
+     *
+     * 与 WORK_STILL 的区别：WORK_STILL 由建造/烹饪/酿造【行为】在激活期间设置，
+     * 行为未激活的间隙（缺料等待/找区块/暂停）会被清掉；BUILD_SIT 是【任务级】
+     * 标记（tickBuildSit 每 tick 维护），覆盖建造任务的全程。玩家在建造中"解除
+     * 坐下"后，TLM MaidMoveControl 会用 setDeltaMovement 直接施加速度矢量、
+     * 多行为也能直连导航 moveTo——这些通道绕过 tickBuildSit 的事后清理
+     * （清 WALK_TARGET/停导航/清水平速度），出现"坐着走动"。MaidMoveSuppressMixin
+     * 与 MaidStationaryMixin 对本状态启用与 WORK_STILL 同款的移动源头锁。
+     */
+    public static boolean isBuildSitting(EntityMaid maid) {
+        if (!maid.getPersistentData().m_128471_(BUILD_SIT_TAG)) {
+            return false;
+        }
+        if (maid.getTask() == null) {
+            return false;
+        }
+        return "build".equals(maid.getTask().getUid().m_135815_())
+                && "maid_smart".equals(maid.getTask().getUid().m_135827_());
     }
 }

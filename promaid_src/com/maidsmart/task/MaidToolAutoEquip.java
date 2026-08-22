@@ -91,6 +91,29 @@ public final class MaidToolAutoEquip {
                         need = com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei::isGohei;
                         scorer = MaidToolAutoEquip::weaponScore;
                     }
+                    case "fishing" -> {
+                        // v1.1.0 终审二（用户：钓鱼也不会自己换钓鱼竿，优先级应与武器一致）：
+                        // TLM TaskFishing 的条件就是主手 FISHING_ROD_CAST（javap 实证）——
+                        // 主手不是钓鱼竿时任务根本不开始。词条匹配与武器同款：符合不换、
+                        // 不符合从背包装一把（评分按武器评分：耐久>附魔）。
+                        need = s -> s.m_41720_() instanceof net.minecraft.world.item.FishingRodItem;
+                        scorer = MaidToolAutoEquip::weaponScore;
+                    }
+                    case "gun_attack" -> {
+                        // v1.1.0：枪械任务（TACZ/卓越前线）自动装枪——主手不是枪就从
+                        // 背包掏一把（开枪/换弹由 TLM gun_attack 任务负责，这里只管装备）。
+                        // 评分 = 武器评分 + 背包有弹药的枪加成（同分时优先弹药充足的枪）；
+                        // v1.1.0 终审二：能量枪（二次灾变等）自带充能不吃弹药——加分判定
+                        // 对能量枪恒真，否则评分垫底永远装不上（"二次灾变用不了"的一环）
+                        final EntityMaid gunMaid = maid;
+                        need = com.maidsmart.combat.GunCompat::isGun;
+                        scorer = stack -> {
+                            long base = weaponScore(stack);
+                            boolean ready = com.maidsmart.combat.GunCompat.isEnergyGun(stack)
+                                    || gunHasAmmoInBackpack(gunMaid);
+                            return base + (ready ? 1_000_000L : 0L);
+                        };
+                    }
                     default -> {
                         return false; // 其他任务（待命/工作）不需要工具
                     }
@@ -234,6 +257,144 @@ public final class MaidToolAutoEquip {
             return false;
         }
         return digger.m_8096_(state);
+    }
+
+    /** v1.1.0：是否为斧（伐木任务用） */
+    private static boolean isAxe(ItemStack stack) {
+        return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.AxeItem;
+    }
+
+    /** v1.1.0：女仆背包是否有任意枪械弹药（枪械评分加成用——弹药充足的枪优先装备） */
+    private static boolean gunHasAmmoInBackpack(EntityMaid maid) {
+        try {
+            IItemHandlerModifiable inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && com.maidsmart.combat.GunCompat.isAmmo(s)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.1.0：主手或背包中是否有能砍该木材的斧（findWood 过滤用——与镐判定同构） */
+    public static boolean canHarvestWoodWithHandOrBackpack(EntityMaid maid, BlockState target) {
+        try {
+            IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            ItemStack cur = hands.getStackInSlot(0);
+            if (isAxe(cur) && canHarvest(cur, target)) {
+                return true;
+            }
+            IItemHandlerModifiable inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && isAxe(s) && canHarvest(s, target)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * v1.1.0 终审三：该木材女仆到底能不能挖——空手也能挖（木材无挖掘等级）。
+     * 保守起见对"模组木材带挖掘等级 tag（mineable/axe 之外还挂了 needs_X_tool）"
+     * 的极端情况仍要求手/背包有斧；原版全部木材/竹永远 true（空手慢挖）。
+     * 注：BlockState.requiresCorrectToolForDrops 的 SRG 名在编译环境不可考
+     * （m_60847_ 实测不是），这里改用行为等价判定：原版木材硬度都远低于
+     * 需要工具的门槛，直接按"木材恒可挖"处理——只在斧判定异常时从宽放行。
+     */
+    public static boolean canHarvestWoodOrBareHand(EntityMaid maid, BlockState target) {
+        // v1.1.0 终审三：空手也能挖——木材（logs/bamboo 标签 + 名单）不设工具门槛。
+        // 本方法保留为扫描层的"极端情况闸门"：日后遇到确实需要斧的模组木材，
+        // 在这里补挖掘等级判定即可；当前一律放行（与玩家空手砍原木一致）。
+        return true;
+    }
+
+    /**
+     * v1.1.0：主手任意换一把斧（不看目标——伐木找树前用：树无挖掘等级，
+     * 任何斧都能砍任何树）。主手已是斧且未快坏 → 不换；背包有斧（评分最高、
+     * 跳过快坏的）→ 装备。返回是否现在"手上有斧"。
+     * v1.1.0 终审三（用户：空手也能挖，不因空手拒绝工作）——本方法只负责
+     * "有斧就用斧"的提速决策，调用方对 false（没斧）继续空手干活即可。
+     */
+    public static boolean ensureAnyAxe(EntityMaid maid) {
+        IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+        ItemStack cur = hands.getStackInSlot(0);
+        if (isAxe(cur) && !isNearlyBroken(cur)) {
+            return true;
+        }
+        IItemHandlerModifiable inv = maid.getMaidInv();
+        int bestSlot = -1;
+        long bestScore = Long.MIN_VALUE;
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !isAxe(stack) || isNearlyBroken(stack)) {
+                continue;
+            }
+            long score = targetAxeScore(stack);
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = i;
+            }
+        }
+        if (bestSlot < 0) {
+            return isAxe(cur); // 背包没斧：手上有（可能快坏）也算有
+        }
+        hands.setStackInSlot(0, inv.getStackInSlot(bestSlot));
+        inv.setStackInSlot(bestSlot, cur);
+        return true;
+    }
+
+    /**
+     * v1.1.0：伐木【按需换斧】——手持斧能砍目标木材且未即将用坏 → 零开销不换
+     * （玩家亲手放的斧只要能砍就绝不触发切换，与挖矿换镐同规则）；
+     * 空手/非斧/砍不动 → 从背包装备一把能砍的斧。
+     */
+    public static boolean ensureAxeForTarget(EntityMaid maid, BlockState target) {
+        IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+        ItemStack cur = hands.getStackInSlot(0);
+        if (isAxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
+            return true; // 手中够用且未即将用坏，不换
+        }
+        IItemHandlerModifiable inv = maid.getMaidInv();
+        int bestSlot = -1;
+        long bestScore = Long.MIN_VALUE;
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !isAxe(stack) || !canHarvest(stack, target)) {
+                continue;
+            }
+            if (isNearlyBroken(stack)) {
+                continue; // 黑名单保护——即将用坏的斧不切
+            }
+            long score = targetAxeScore(stack);
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = i;
+            }
+        }
+        if (bestSlot < 0) {
+            return isAxe(cur) && canHarvest(cur, target); // 没得换：保持现状
+        }
+        hands.setStackInSlot(0, inv.getStackInSlot(bestSlot));
+        inv.setStackInSlot(bestSlot, cur);
+        return true;
+    }
+
+    /** v1.1.0：斧评分（伐木场景）——附魔词条数 > 剩余耐久（斧对木材无挖掘等级差异） */
+    private static long targetAxeScore(ItemStack stack) {
+        if (stack.m_41619_()) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return enchantCount(stack) * 10_000L + durabilityScore(stack);
+        } catch (Exception e) {
+            return Long.MIN_VALUE;
+        }
     }
 
     /**

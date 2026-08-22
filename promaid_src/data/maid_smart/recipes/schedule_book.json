@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:paper" },
+    { "item": "minecraft:ink_sac" }
+  ],
+  "result": { "item": "maid_smart:schedule_book", "count": 1 }
+}

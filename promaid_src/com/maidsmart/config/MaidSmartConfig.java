@@ -81,6 +81,36 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     // v1.5.163：连锁采集数量上限
     public static final ForgeConfigSpec.IntValue MINE_CHAIN_LIMIT;
 
+    // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
+    /** v1.1.0：自动识别带原版 logs 标签的模组原木（默认开） */
+    public static final ForgeConfigSpec.BooleanValue WOOD_TAG_AUTO;
+    public static final ForgeConfigSpec.IntValue WOOD_SEARCH_RADIUS;
+    public static final ForgeConfigSpec.IntValue WOOD_DOWN_RANGE;
+    public static final ForgeConfigSpec.IntValue WOOD_UP_RANGE;
+    public static final ForgeConfigSpec.IntValue WOOD_BREAK_BUDGET;
+    public static final ForgeConfigSpec.DoubleValue WOOD_VALUE_WEIGHT;
+    public static final ForgeConfigSpec.DoubleValue WOOD_DEPTH_PENALTY;
+    public static final ForgeConfigSpec.DoubleValue WOOD_SPEED_FACTOR;
+    public static final ForgeConfigSpec.DoubleValue WOOD_MOVE_SPEED;
+    public static final ForgeConfigSpec.IntValue WOOD_JUNK_KEEP;
+    public static final ForgeConfigSpec.IntValue WOOD_PLACED_LIFETIME;
+    public static final ForgeConfigSpec.BooleanValue WOOD_SOFT_NO_DURABILITY;
+    public static final ForgeConfigSpec.BooleanValue WOOD_PILLAR_GUARD;
+    public static final ForgeConfigSpec.BooleanValue WOOD_HARD_BLOCK_REPORT;
+    public static final ForgeConfigSpec.IntValue WOOD_CREATIVE_DEFAULT_VALUE;
+    public static final ForgeConfigSpec.BooleanValue WOOD_SEEK_THROUGH_WALLS;
+    public static final ForgeConfigSpec.IntValue WOOD_ANCHOR_TIMEOUT;
+    public static final ForgeConfigSpec.IntValue WOOD_RELOCATE_THROTTLE;
+    public static final ForgeConfigSpec.IntValue WOOD_TARGET_TIMEOUT;
+    public static final ForgeConfigSpec.DoubleValue WOOD_REACH;
+    public static final ForgeConfigSpec.IntValue WOOD_PILLAR_COOLDOWN;
+    public static final ForgeConfigSpec.IntValue WOOD_JUNK_CHECK_INTERVAL;
+    public static final ForgeConfigSpec.IntValue WOOD_SKIP_REPORT_INTERVAL;
+    public static final ForgeConfigSpec.BooleanValue WOOD_CHAIN_MINING;
+    public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
+    public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
+
     // ================= AI 记忆 =================
     public static final ForgeConfigSpec.BooleanValue MEMORY_ENABLE;
     public static final ForgeConfigSpec.IntValue MEMORY_EXTRACT_THRESHOLD;
@@ -208,6 +238,22 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.IntValue COMBAT_PEARL_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_PEARL_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_PEARL_DIST;
+    // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆立即切战斗，威胁消失还原）
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_GUN_PREFER;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
+
+    // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
+    public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
+    public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
+    public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
+    public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
+public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
     public static final ForgeConfigSpec.DoubleValue COMBAT_SAFE_RETURN_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_CLOSE_DISTANCE;
@@ -227,6 +273,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.IntValue COMBAT_ANNOUNCE_COOLDOWN;
     public static final ForgeConfigSpec.IntValue COMBAT_WATER_HOLD;
     public static final ForgeConfigSpec.IntValue COMBAT_WATER_LANDING_SCAN;
+    /** v1.1.0：落地雪（细雪桶版落地水——下界也能用） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SNOW_CLUTCH;
     // v1.5.134：单兵作战战术（替代已删除的 v1.5.132 战斗协同——PVP 式走位/拉扯/时机格挡）
     public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS;
     public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_MELEE;
@@ -281,6 +329,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
+    // v1.1.0：排班表系统全局开关（关闭后排班调度器停摆——已保存的日程保留，重开恢复）
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_ENABLED;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -463,6 +513,76 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         // v1.5.163：连锁采集数量上限可自定义
         MINE_CHAIN_LIMIT = BUILDER.comment("连锁采集上限（块）：一次连锁挖掘的最大方块数（默认 16）")
                 .translation("config.promaid.mine.chainLimit").defineInRange("chainLimit", 16, 4, 64);
+        BUILDER.pop();
+
+        // ---- 伐木（v1.1.0：克隆挖矿架构；障碍物名单与挖矿共享 extraBreakables/disabledBreakables） ----
+        BUILDER.comment("伐木设置").translation("config.promaid.wood").push("wood");
+        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300；带原版 logs 标签的模组原木默认自动识别（见 tagAuto，无需加入）；未打标签的模组木材在此加入（创造面板已按木质 tag 过滤显示）")
+                .translation("config.promaid.wood.values")
+                .defineList("woodValues", List.of(
+                                "minecraft:oak_log=300", "minecraft:spruce_log=300", "minecraft:birch_log=300",
+                                "minecraft:jungle_log=300", "minecraft:acacia_log=300", "minecraft:dark_oak_log=300",
+                                "minecraft:mangrove_log=300", "minecraft:cherry_log=300",
+                                "minecraft:crimson_stem=300", "minecraft:warped_stem=300",
+                                "minecraft:bamboo_block=300",
+                                "minecraft:stripped_oak_log=300", "minecraft:stripped_spruce_log=300",
+                                "minecraft:stripped_birch_log=300", "minecraft:stripped_jungle_log=300",
+                                "minecraft:stripped_acacia_log=300", "minecraft:stripped_dark_oak_log=300",
+                                "minecraft:stripped_mangrove_log=300", "minecraft:stripped_cherry_log=300",
+                                "minecraft:stripped_crimson_stem=300", "minecraft:stripped_warped_stem=300"),
+                        o -> o instanceof String s && s.contains("="));
+        WOOD_TAG_AUTO = BUILDER.comment("自动识别模组原木（默认开）：凡带原版 #minecraft:logs / #minecraft:bamboo_blocks 标签的方块（模组原木）都自动视为可砍木材（价值 300，无需进名单）；关闭则只认名单")
+                .translation("config.promaid.wood.tagAuto").define("tagAuto", true);
+        WOOD_SEARCH_RADIUS = BUILDER.comment("木材检索半径（水平）")
+                .translation("config.promaid.wood.searchRadius").defineInRange("searchRadius", 24, 8, 64);
+        WOOD_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围（格）——树在地表，默认只往下看 4 格")
+                .translation("config.promaid.wood.downRange").defineInRange("downRange", 4, 1, 32);
+        WOOD_UP_RANGE = BUILDER.comment("垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24")
+                .translation("config.promaid.wood.upRange").defineInRange("upRange", 24, 4, 64);
+        WOOD_BREAK_BUDGET = BUILDER.comment("穿透预算（允许挖开多少层不可开路挡路方块）——与挖矿共享障碍物名单")
+                .translation("config.promaid.wood.breakBudget").defineInRange("breakBudget", 22, 0, 64);
+        WOOD_VALUE_WEIGHT = BUILDER.comment("价值权重：木材价值对选材的加成")
+                .translation("config.promaid.wood.valueWeight").defineInRange("valueWeight", 2.0, 0.5, 5.0);
+        WOOD_DEPTH_PENALTY = BUILDER.comment("深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层）")
+                .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
+        WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
+                .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
+        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率")
+                .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.6, 0.2, 1.5);
+        WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
+                .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
+        WOOD_PLACED_LIFETIME = BUILDER.comment("搭方块清理时间（秒）")
+                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+        WOOD_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗斧耐久")
+                .translation("config.promaid.wood.softNoDurability").define("softNoDurability", true);
+        WOOD_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
+                .translation("config.promaid.wood.pillarGuard").define("pillarGuard", true);
+        WOOD_HARD_BLOCK_REPORT = BUILDER.comment("硬挡路（箱子/机器等）报点弃置该木材")
+                .translation("config.promaid.wood.hardBlockReport").define("hardBlockReport", true);
+        WOOD_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数")
+                .translation("config.promaid.wood.creativeDefaultValue").defineInRange("creativeDefaultValue", 300, 10, 1000);
+        WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材）——关闭则女仆像玩家一样只发现视线无阻的木材（树叶不挡视线）")
+                .translation("config.promaid.wood.seekThroughWalls").define("seekThroughWalls", false);
+        WOOD_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick）")
+                .translation("config.promaid.wood.anchorTimeout").defineInRange("anchorTimeout", 200, 40, 1200);
+        WOOD_RELOCATE_THROTTLE = BUILDER.comment("重定位节流（tick，防边界抖动）")
+                .translation("config.promaid.wood.relocateThrottle").defineInRange("relocateThrottle", 20, 4, 200);
+        WOOD_TARGET_TIMEOUT = BUILDER.comment("目标超时（tick，够不到木材超时放弃）")
+                .translation("config.promaid.wood.targetTimeout").defineInRange("targetTimeout", 300, 60, 1200);
+        WOOD_REACH = BUILDER.comment("砍伐距离（格）")
+                .translation("config.promaid.wood.reach").defineInRange("reach", 4.5, 2.0, 8.0);
+        WOOD_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
+                .translation("config.promaid.wood.pillarCooldown").defineInRange("pillarCooldown", 4, 1, 20);
+        WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
+                .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
+        WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
+                .translation("config.promaid.wood.skipReportInterval").defineInRange("skipReportInterval", 600, 100, 2400);
+        WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
+                .translation("config.promaid.wood.chainMining").define("chainMining", true);
+        WOOD_AUTO_COLLECT = BUILDER.comment("自动收集（砍伐掉落物直接进女仆背包，不进世界）")
+                .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
+        WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
+                .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
         BUILDER.pop();
 
         // ---- AI 记忆 ----
@@ -799,6 +919,10 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         COMBAT_WATER_LANDING_SCAN = BUILDER.comment("落地水下探格数（提前放水检测）")
                 .translation("config.promaid.combat.waterLandingScan")
                 .defineInRange("waterLandingScan", 3, 2, 16);
+        // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
+        // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
+        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 3×3 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪，故铺 3×3 容错且坠落途中逐 tick 跟着落点补垫；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
+                .translation("config.promaid.combat.snowClutch").define("snowClutch", true);
         // v1.5.134：单兵作战战术（v1.5.132 战斗协同已删除——协同不如单兵 PVP 操作感）
         COMBAT_TACTICS = BUILDER.comment("单兵作战战术（绕圈走位/打退拉扯/距离控制/时机举盾——PVP 式战斗）")
                 .translation("config.promaid.combat.tactics").define("tactics", true);
@@ -845,6 +969,38 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 4, 0, 4);
         PLAYER_DAMAGE_MAID_CAP = BUILDER.comment("玩家伤害上限比例（0-1：模式 3 时单次伤害 = 女仆最大生命 × 此比例；默认 0.1 = 10%）")
                 .translation("config.promaid.combat.playerDamageMaidCap").defineInRange("playerDamageMaidCap", 0.1, 0.01, 0.5);
+        // v1.1.0：主动切换战斗模式——主人被敌对生物攻击时，附近非自保女仆无论什么任务
+        // 都立即切战斗（枪械优先，其余按背包武器随机），威胁消失后自动还原原任务
+        COMBAT_AUTO_SWITCH = BUILDER.comment("主动切换战斗模式（主人被敌对生物攻击时，附近女仆无论什么任务都立即切战斗保护主人；默认开启）")
+                .translation("config.promaid.combat.autoSwitch").define("autoSwitch", true);
+        COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤时，此半径内的女仆才会响应切换")
+                .translation("config.promaid.combat.autoSwitchRadius").defineInRange("autoSwitchRadius", 16, 4, 64);
+        COMBAT_AUTO_SWITCH_GUN_PREFER = BUILDER.comment("枪械优先（装了 TACZ/卓越前线且女仆背包有枪+弹药时，优先切枪械模式；关闭则与其他模式一起随机）")
+                .translation("config.promaid.combat.autoSwitchGunPrefer").define("autoSwitchGunPrefer", true);
+        COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
+                .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
+        COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")
+                .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 400, 60, 3600);
+        COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST = BUILDER.comment("还原判定威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算\"威胁消失\"、开始还原计时——独立于响应半径（远处怪不该让女仆一直卡在战斗里回不了岗）；战斗中玩家手动换的任务不会被还原翻回去")
+                .translation("config.promaid.combat.autoSwitchRestoreThreatDist").defineInRange("autoSwitchRestoreThreatDist", 8, 2, 32);
+        BUILDER.pop();
+
+        // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
+        BUILDER.comment("搭路设置").translation("config.promaid.bridge").push("bridge");
+        BRIDGE_ENABLED = BUILDER.comment("搭路（默认关）：主人在女仆上方一定距离内、周围无威胁、背包有方块时，女仆走过去垫方块搭高靠近主人（借鉴僵尸搭方块追人；搭的方块 N 秒后自动回收）")
+                .translation("config.promaid.bridge.enabled").define("enabled", false);
+        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
+                .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
+        BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
+                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
+        BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
+                .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
+        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 8）：每垫一块方块的最短间隔——调大搭得更从容")
+                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
+        BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
+                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认关）：开启后到期/被摧毁的搭路垫脚方块不落地成掉落物，直接塞回附近女仆的背包（找不到女仆才落地）")
+                .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", false);
         BUILDER.pop();
 
         // ---- 杂项 ----
@@ -889,6 +1045,9 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
             .translation("config.promaid.misc.batchPlant").define("batchPlant", true);
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
+    // v1.1.0：排班表总开关（用户"玩家可操作"原则——新功能都要有手册内开关）
+    MISC_SCHEDULE_ENABLED = BUILDER.comment("排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（已保存的日程不丢，重新打开恢复生效），女仆保持当前任务")
+            .translation("config.promaid.misc.scheduleEnabled").define("scheduleEnabled", true);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
