@@ -61,11 +61,18 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
         return false;
     }
-    /** v1.5.252g7【投喂药水 CD】——按【药水种类】记冷却（key = 药水注册名，
-     *  如 minecraft:long_swiftness）：CD = 该药水最长效果时长，期间同种不再投，
-     *  **其他种照投**（投了力量、迅捷还能投）；瞬间治疗短 CD（60 tick）。
-     *  aidCooldown（3 秒）只是【投掷间隔】，与种类 CD 相互独立。 */
+    /** v1.5.252g7【投喂药水 CD】——按【女仆 + 药水种类】记冷却（key = maidUUID +
+     *  "|" + potionKey，如 uuid|minecraft:long_swiftness）：CD = 该药水最长效果时长，
+     *  期间同种不再投，**其他种照投**（投了力量、迅捷还能投）；瞬间治疗短 CD（60 tick）。
+     *  aidCooldown（3 秒）只是【投掷间隔】，与种类 CD 相互独立。
+     *  v1.1.0 实测十六（审查 P2）：旧版 key 只有 potionKey（按效果种类），被多个女仆
+     *  共享 tick 时跨女仆互占——A 女仆给主人投了治疗，B 女仆的治疗链跟着进 CD；投给
+     *  姐妹的治疗也占用主人的 CD。改为 (maidUUID, potionKey) 二元 key，每个女仆独立。 */
     private final java.util.Map<String, Long> potionCds = new java.util.HashMap<>();
+
+    private static String potionCdKey(java.util.UUID maidId, String pkey) {
+        return maidId.toString() + "|" + pkey;
+    }
 
     private boolean potionReady(String key, long now) {
         Long t2 = this.potionCds.get(key);
@@ -532,7 +539,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!this.isPotionOf(stack, potionNames)) {
                     continue;
                 }
-                if (useCd && !this.potionReady(potionKey(stack), level.m_46467_())) {
+                if (useCd && !this.potionReady(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)), level.m_46467_())) {
                     continue;
                 }
                 int score = potionStrength(stack);
@@ -565,7 +573,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 maxDur = Math.max(maxDur, e.m_19557_());
             }
             if (useCd) {
-                this.markPotionUsed(potionKey(stack), level.m_46467_(), maxDur > 0 ? maxDur : 60);
+                this.markPotionUsed(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)),
+                        level.m_46467_(), maxDur > 0 ? maxDur : 60);
             }
             LOGGER.info("aid-maid throw: label={} potion={} target={}",
                     label, potionKey(stack), target.m_20148_());
@@ -629,7 +639,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 // v1.5.252g13：useCd=false（着火/溺水情境）不走 CD——情境药水的
                 // 正门是"主人身上效果判定"（调用处 hasEffectOn），效果没了立即
                 // 重投；CD 只用于治疗/再生/增益（无"身上效果"概念的场景）
-                if (useCd && !this.potionReady(potionKey(stack), level.m_46467_())) {
+                if (useCd && !this.potionReady(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)), level.m_46467_())) {
                     continue;
                 }
                 int score = potionStrength(stack);
@@ -666,7 +677,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 maxDur = Math.max(maxDur, e.m_19557_());
             }
             if (useCd) {
-                this.markPotionUsed(potionKey(stack), level.m_46467_(), maxDur > 0 ? maxDur : 60);
+                this.markPotionUsed(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)),
+                        level.m_46467_(), maxDur > 0 ? maxDur : 60);
             }
             maid.getChatBubbleManager().addTextChatBubble("主人别怕，" + label + "药水来了！");
             // v1.5.252g9：投掷日志（latest.log 搜 "aid-owner throw"，排查浪费）
@@ -743,7 +756,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 // v1.5.252g13：同种药水 CD 内跳过（仅 useCd=true 场景）
-                if (useCd && !this.potionReady(potionKey(stack), maid.m_9236_().m_46467_())) {
+                if (useCd && !this.potionReady(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)),
+                        maid.m_9236_().m_46467_())) {
                     continue;
                 }
                 ItemStack toGive = inv.extractItem(i, 1, false);
@@ -763,7 +778,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     maxDur2 = Math.max(maxDur2, e.m_19557_());
                 }
                 if (useCd) {
-                    this.markPotionUsed(potionKey(stack), maid.m_9236_().m_46467_(), maxDur2 > 0 ? maxDur2 : 60);
+                    this.markPotionUsed(
+                            potionCdKey(maid.m_20148_(), potionKey(stack)),
+                            maid.m_9236_().m_46467_(), maxDur2 > 0 ? maxDur2 : 60);
                 }
                 maid.getChatBubbleManager().addTextChatBubble("主人，" + label + "药水放你背包了，快喝！");
                 // v1.5.252g9：塞背包日志（latest.log 搜 "aid-owner give"）
