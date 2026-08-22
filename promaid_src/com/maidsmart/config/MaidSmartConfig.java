@@ -242,6 +242,8 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆立即切战斗，威胁消失还原）
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
+    public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_VANILLA_WEIGHT;
+    public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -980,6 +982,13 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.autoSwitch").define("autoSwitch", true);
         COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换")
                 .translation("config.promaid.combat.autoSwitchRadius").defineInRange("autoSwitchRadius", 16, 4, 64);
+        // v1.1.0 实测二十一：武器权重可配置（原版/模组各一条）——选战斗任务时
+        // 加权随机：模组任务默认 2.0（优先）、原版五件套默认 1.0（降半但不排除）。
+        // 例：背包有法书+铁剑 → 法术:近战 = 2:1 ≈ 67%:33%；想五五开就把两条都设 1。
+        COMBAT_AUTO_SWITCH_MOD_WEIGHT = BUILDER.comment("模组武器权重（选战斗任务时的加权随机权重，默认 2.0）：模组攻击任务（万法皆通/史诗战斗/真正的力量/枪械等）普遍更强故默认优先；与原版权重成比例决定被选概率")
+                .translation("config.promaid.combat.autoSwitchModWeight").defineInRange("autoSwitchModWeight", 2.0, 0.1, 10.0);
+        COMBAT_AUTO_SWITCH_VANILLA_WEIGHT = BUILDER.comment("原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐")
+                .translation("config.promaid.combat.autoSwitchVanillaWeight").defineInRange("autoSwitchVanillaWeight", 1.0, 0.1, 10.0);
         // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
         // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")

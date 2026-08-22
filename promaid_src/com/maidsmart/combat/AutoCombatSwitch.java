@@ -248,10 +248,12 @@ public class AutoCombatSwitch {
      * - 全都匹配不上 → 近战（空手也上）
      */
     private static IMaidTask pickCombatTask(EntityMaid maid) {
-        // 候选收集：任务 → 权重（原版 1.0，模组 2.0）
+        // 候选收集：任务 → 权重（原版/模组各自读配置）
         List<IMaidTask> pool = new ArrayList<>();
         List<Double> weights = new ArrayList<>();
         String vanillaNs = "touhou_little_maid";
+        double vanillaW = MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get();
+        double modW = MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get();
         for (IMaidTask task : TaskManager.getTaskIndex()) {
             if (!(task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask attack)) {
                 continue; // 只认攻击类任务
@@ -267,9 +269,11 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
-            double w = vanillaNs.equals(task.getUid().m_135827_()) ? 1.0 : 2.0; // 原版降半权
+            // v1.1.0 实测二十一：权重可配置（原版/模组各一条）——模组默认 2.0 优先、
+            // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
+            double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
             pool.add(task);
-            weights.add(w);
+            weights.add(Math.max(0.01, w));
         }
         if (pool.isEmpty()) {
             // 全都匹配不上 → 近战兜底（空手也上）
