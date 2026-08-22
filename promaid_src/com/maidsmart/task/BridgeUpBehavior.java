@@ -33,6 +33,7 @@ import java.util.Map;
  *
  * 触发条件（全部满足）：
  * - 开关开启；主人存在、活着、同维度
+ * - 女仆非 home 模式（在家模式 = 守家不出门，不搭路追主人）
  * - 主人高于女仆 ≥ bridge.minDy 格；欧氏距离 < bridge.maxDist 格
  * - 周围 bridge.threatDist 格内无敌对生物；女仆非自保状态
  * - 背包有可放置方块（BlockItem、非下落方块）
@@ -155,6 +156,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保优先
+        }
+        // v1.1.0：home 模式（在家模式）的女仆不搭路——home 模式语义是"守在家不出门"，
+        // 搭路追主人与留家矛盾（跨维度跟随同样豁免，见 MaidDimensionFollow）
+        if (maid.isHomeModeEnable()) {
+            return false;
         }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         if (dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
