@@ -235,12 +235,17 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保触发——让位
         }
-        // v1.1.0 审查：卡死退出——头顶被挡/材料耗尽导致 20 秒没垫出任何方块 → 放弃并
-        // 打个招呼，不再原地僵站干等条件变化
+        // v1.1.0 终审：方块耗尽 → 立即中止（搭不了就是搭不了，说一声就撤，不等 20 秒；
+        // 选材始终是"背包数量最多的可放置方块"，takeBuildBlock 不变）
         int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
+        if (dyNow >= 1 && !hasBuildBlock(maid)) {
+            this.notifyNoBlock(maid);
+            return false;
+        }
+        // 头顶被挡 → 20 秒垫不出任何方块再放弃（可能是站位问题，给她一点腾挪时间）
         if (dyNow >= 1 && gameTime - this.lastPlacedGameTime > 400L) {
             maid.getChatBubbleManager().addTextChatBubble(
-                    "搭不上去了（头顶被挡住/方块用完），我先下来……");
+                    "搭不上去了（头顶被挡住），我先下来……");
             return false;
         }
         return true;
