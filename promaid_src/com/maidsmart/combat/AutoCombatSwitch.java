@@ -96,7 +96,8 @@ public class AutoCombatSwitch {
                 }
                 clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
             }
-            // 已是战斗任务（玩家手动安排）→ 尊重玩家安排，不记录不切换
+            // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
+            // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
             if (MaidWorkTags.isCombatTask(maid)) {
                 continue;
             }
