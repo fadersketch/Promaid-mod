@@ -486,6 +486,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private int pillarCooldown = 0;
     /** v1.5.47：废石检查节流 */
     private int junkCooldown = 0;
+    /** v1.1.0 实测九：身边树叶冲破节流（20 tick 一轮） */
+    private int leafBurstCooldown = 0;
     /** v1.5.105：走过去重设 WalkTarget 节流——每 tick 重设会让 TLM 每 tick 重寻路 → 移动顿挫 */
     private int walkRetargetCooldown = 0;
     /** v1.5.116：上次设置的移动目标站立点——目标没变且导航行进中不重设
@@ -796,6 +798,17 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.28：搭方块 10 秒后统一销毁（全局表——行为停止后由 ServerTickEvent 兜底，
         // 此处保留双保险；不做任何即时破坏）
         expirePlaced(level, gameTime);
+        // v1.1.0 实测九（用户："伐木状态下直接冲破自己周围的树叶"）：每 20 tick
+        // 把身边 3×3×3 立方体内的树叶直接摧毁（产生掉落物落地/自动收集）——
+        // 走路被树冠卡住时不再绕路或站桩等，直接穿过去；掉落物与树冠清理同款
+        // 进背包口径。原版女仆在树冠里会被树叶挤压减速绕圈，这是"砍树不痛快"
+        // 的观感来源之一。开关跟随树冠清理（wood.leavesClear）——不想让她清叶
+        // 就一起关。
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_LEAVES_CLEAR.get()
+                && --this.leafBurstCooldown <= 0) {
+            this.leafBurstCooldown = 20;
+            this.burstNearbyLeaves(level, maid);
+        }
         // v1.5.47：废石丢弃（每 100 tick 一次；保留 JUNK_KEEP 份，超出销毁）
         if (--this.junkCooldown <= 0) {
             this.junkCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_JUNK_CHECK_INTERVAL.get();
@@ -1224,6 +1237,47 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         saplingStack.m_41774_(1);
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         SAPLING_PLANT_SINCE.put(maid.m_19879_(), now);
+    }
+
+    /**
+     * v1.1.0 实测九：冲破身边树叶——以女仆为中心的 3×3×3 立方体内所有树叶
+     * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着
+     * 直接进背包，否则落地（走原版掉落，拾取任务后续处理）。只清树叶——
+     * 立方体内的原木不碰（那是正常挖掘目标，走挖掘流程有工具加成）。
+     */
+    private void burstNearbyLeaves(ServerLevel level, EntityMaid maid) {
+        try {
+            BlockPos center = maid.m_20183_();
+            int broken = 0;
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dy = -1; dy <= 1; dy++) {
+                    for (int dz = -1; dz <= 1; dz++) {
+                        BlockPos p = center.m_7918_(dx, dy, dz);
+                        BlockState st = level.m_8055_(p);
+                        if (!(st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                            continue;
+                        }
+                        BlockEntity be = level.m_7702_(p);
+                        java.util.List<ItemStack> drops = Block.m_49874_(st, level, p, be, maid, ItemStack.f_41583_);
+                        if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
+                            insertIntoMaidInventory(maid, level, drops, p);
+                        } else {
+                            for (ItemStack s : drops) {
+                                Block.m_49840_(level, p, s);
+                            }
+                        }
+                        level.m_7731_(p, Blocks.f_50016_.m_49966_(), 3);
+                        broken++;
+                    }
+                }
+            }
+            if (broken > 0) {
+                // 破坏音效/粒子只在冲破了一片时播一次（不逐块刷屏）
+                level.m_46796_(2001, center.m_7918_(0, 1, 0),
+                        Block.m_49956_(Blocks.f_50126_.m_49966_()));
+            }
+        } catch (Exception ignored) {
+        }
     }
 
     /** v1.5.102e：向周围玩家广播挖掘裂纹（ClientboundBlockDestructionPacket）——
