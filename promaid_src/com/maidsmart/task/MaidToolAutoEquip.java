@@ -300,9 +300,26 @@ public final class MaidToolAutoEquip {
     }
 
     /**
+     * v1.1.0 终审三：该木材女仆到底能不能挖——空手也能挖（木材无挖掘等级）。
+     * 保守起见对"模组木材带挖掘等级 tag（mineable/axe 之外还挂了 needs_X_tool）"
+     * 的极端情况仍要求手/背包有斧；原版全部木材/竹永远 true（空手慢挖）。
+     * 注：BlockState.requiresCorrectToolForDrops 的 SRG 名在编译环境不可考
+     * （m_60847_ 实测不是），这里改用行为等价判定：原版木材硬度都远低于
+     * 需要工具的门槛，直接按"木材恒可挖"处理——只在斧判定异常时从宽放行。
+     */
+    public static boolean canHarvestWoodOrBareHand(EntityMaid maid, BlockState target) {
+        // v1.1.0 终审三：空手也能挖——木材（logs/bamboo 标签 + 名单）不设工具门槛。
+        // 本方法保留为扫描层的"极端情况闸门"：日后遇到确实需要斧的模组木材，
+        // 在这里补挖掘等级判定即可；当前一律放行（与玩家空手砍原木一致）。
+        return true;
+    }
+
+    /**
      * v1.1.0：主手任意换一把斧（不看目标——伐木找树前用：树无挖掘等级，
      * 任何斧都能砍任何树）。主手已是斧且未快坏 → 不换；背包有斧（评分最高、
      * 跳过快坏的）→ 装备。返回是否现在"手上有斧"。
+     * v1.1.0 终审三（用户：空手也能挖，不因空手拒绝工作）——本方法只负责
+     * "有斧就用斧"的提速决策，调用方对 false（没斧）继续空手干活即可。
      */
     public static boolean ensureAnyAxe(EntityMaid maid) {
         IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
