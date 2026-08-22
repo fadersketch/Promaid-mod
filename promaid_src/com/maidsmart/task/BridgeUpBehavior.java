@@ -214,6 +214,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     private long lastPlacedGameTime = 0;
     /** 材料耗尽播报限频 */
     private static final Map<Integer, Long> NO_BLOCK_SINCE = new HashMap<>();
+    /** v1.1.0 实测十六（审查 P2-8）：canUse 节流——旧版每 tick 每
+     *  女仆做 Monster AABB 扫描 + 全背包 BlockItem 过滤（含 VoxelShape 构造）。
+     *  默认关闭缓解，但开启时多女仆场景明显。10 tick 节流足够响应。 */
+    private static final Map<Integer, Integer> canUseThrottle = new HashMap<>();
 
     public BridgeUpBehavior() {
         super(Collections.emptyMap(), Integer.MAX_VALUE, Integer.MAX_VALUE);
@@ -221,6 +225,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测十六（审查 P2-8）：廉价检查先行 + 10 tick 节流——
+        // 开关/home/自保/任务占用/距离/高度这些廉价判定不受节流（每 tick 都判），
+        // 只有威胁扫描（Monster AABB）和背包过滤（VoxelShape）这两个重的受节流。
         if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
             return false;
         }
@@ -231,40 +238,36 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保优先
         }
-        // v1.1.0：home 模式（在家模式）的女仆不搭路——home 模式语义是"守在家不出门"，
-        // 搭路追主人与留家矛盾（跨维度跟随同样豁免，见 MaidDimensionFollow）
         if (maid.isHomeModeEnable()) {
             return false;
         }
-        // v1.1.0 实测十五（用户："女仆正准备挖矿，主人在其他地方打高，这个时候
-        // 不应该追上去。可以处于一个任务状态，但必须是空闲的"）：任务占用中
-        // 不启动搭路——手上的活没干完不撂挑子。判定口径见 isTaskOccupied。
         if (isTaskOccupied(maid)) {
             return false;
         }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         if (dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
-            return false; // 主人不够高（平路/在下面——走路或跟随处理）
+            return false;
         }
-        // v1.1.0 实测四（用户："空中远远也能看见，希望她赶紧搭方块走过来；平地上
-        // 不想要这种情景"）：区分地面/空中两套距离阈值——
-        // - 地面（脚下实心）：维持 7 格传送判定距离（maxDist）——平地上太远就该走
-        //   路/传送，不该远距铺桥（用户明确不想要的画面）；
-        // - 空中（脚下悬空或站在自己垫的方块上）：空中没有"走路过去"的选项，导航
-        //   也永远失败——距离上限放宽到 airMaxDist（默认 24），远远看见主人就直接
-        //   空中铺桥走过去。0 = 关闭空中远距（退回 7 格口径）。
         boolean airborne = isAirborne(level, maid);
         int distLimit = airborne
                 ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
                 : MaidSmartConfig.BRIDGE_MAX_DIST.get();
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit)) {
-            return false; // 超过对应阈值——地面交给传送/跟随；空中太远也先不启动
+            return false;
         }
+        // v1.1.0 实测十六：重检查节流——威胁扫描 + 背包过滤每 10 tick 一次
+        int eid = maid.m_19879_();
+        Integer cd = canUseThrottle.get(eid);
+        if (cd != null && cd > 0) {
+            canUseThrottle.put(eid, cd - 1);
+            return false;
+        }
+        canUseThrottle.put(eid, 10);
         if (hasThreatNearby(level, maid)) {
-            return false; // 有威胁不搭（塔会被拆/搭到一半挨打）
+            return false;
         }
-        return hasBuildBlock(maid); // 有料才启动（只看不拿——takeBuildBlock 会真消耗背包方块）
+        return hasBuildBlock(maid);
     }
 
     @Override
@@ -459,6 +462,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
         maid.getPersistentData().m_128379_(BRIDGING_TAG, false);
         NO_BLOCK_SINCE.remove(maid.m_19879_());
+        canUseThrottle.remove(maid.m_19879_());
         super.m_6732_(level, maid, gameTime);
     }
 
