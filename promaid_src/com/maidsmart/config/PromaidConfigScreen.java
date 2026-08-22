@@ -1657,6 +1657,11 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被攻击（任意来源）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；默认开启"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
+        // v1.1.0 实测二十一：武器权重可配置（选任务时加权随机——模组/原版各一条）
+        this.rows.add(new NumRow("模组武器权重", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT, s), "模组武器权重（默认 2.0）：万法皆通/史诗战斗/真正的力量/枪械等模组攻击任务的加权随机权重——模组武器普遍更强故默认优先（2:1 约被选 67%）"));
+        this.rows.add(new NumRow("原版武器权重", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT, s), "原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐"));
         // v1.1.0 实测二十：枪械优先开关已删除（原版武器降半权、模组攻击任务等权
         // 随机的新选法不需要开关——附属生态的攻击任务与枪械强度等价）
         this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
