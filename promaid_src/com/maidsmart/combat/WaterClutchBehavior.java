@@ -13,9 +13,13 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * 落地水（v1.5.25）：女仆的【被动生存技能】——与水桶是否在背包相关。
- * 落地雪（v1.1.0）：细雪桶同款——落点放细雪缓冲；细雪【下界不蒸发】，补上
- * 落地水在地狱维度失效的盲区。两者都有桶时优先用水；细雪接触 7 秒（140 tick）
- * 才开始冻伤，保持时长上限 100 tick（5 秒），在安全线内。
+ * 落地雪（v1.1.0）：细雪桶版——与水的关键差异是【细雪不流动】：水可以提前放在
+ * 稍高的位置自己流淌铺开接人（碰到的任何水都重置摔落），细雪只认实体真正
+ * 落进去的那一格。因此雪不照抄水的双格逻辑——只在【落点平面】铺 3×3 雪垫让她
+ * 全速落进去（绝不在高处拦她减速——出雪后剩下的路还是自由落体，照样摔），
+ * 坠落途中每 tick 把雪垫补到她正下方（防击退/横移漂移错过落点）。
+ * 细雪【下界不蒸发】补上落地水的盲区；两者都有桶时优先用水；细雪接触 7 秒
+ * （140 tick）才开始冻伤，保持时长上限 100 tick（5 秒），在安全线内。
  *
  * 与自保（SelfPreservationBehavior）不同：自保是"进入危险状态"的主动状态机；
  * 落地水不进任何状态、不触发逃跑/搭高，只是在【自由落体即将触地】的瞬间
@@ -38,10 +42,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 public class WaterClutchBehavior extends Behavior<EntityMaid> {
     /** v1.5.102：数值改从配置面板读取（combat 段）——保持时长 / 下探格数 */
 
-    /** 已放水的坐标（null = 当前没在放水） */
-    private BlockPos waterPos = null;
-    /** v1.5.25h：第二格水（女仆所在格）——极端情况（速度太快穿过第一格）兜底 */
-    private BlockPos waterPos2 = null;
+    /** 已放的缓冲方块（水=落点+所在格 2 处；细雪=落点平面 3×3 雪垫，追踪漂移会补块） */
+    private final java.util.ArrayList<BlockPos> placedList = new java.util.ArrayList<>();
     /** v1.1.0：本次放的是细雪（true）还是水（false）——收回时按类型移除 */
     private boolean placedSnow = false;
     /** 放水时的游戏 tick（用于 1 秒后收回） */
@@ -99,13 +101,26 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             this.clutchedThisFall = false;
         }
 
-        // 1. 收回：放缓冲后 HOLD_TICKS 到 → 移除方块（水或细雪，桶始终不消耗）
-        if (this.waterPos != null) {
+        // 1. 缓冲维护期（v1.1.0 落地雪特有）：还在坠落且尚未进雪 → 每 tick 把雪垫
+        //    补到她【当前预测落点】正下方。细雪不流动：被击退/横移漂移后落点会
+        //    离开旧雪垫，不跟着补就是空摔。已进雪（脚下是细雪）/已落地/是水（会
+        //    流动自己铺开）→ 不维护。补了新块则重置保持计时（防垫子刚铺就被收）。
+        if (!this.placedList.isEmpty()) {
+            if (this.placedSnow
+                    && !maid.m_20096_()
+                    && maid.m_20184_().f_82480_ < 0
+                    && !this.touchingPlacedSnow(level, maid)) {
+                BlockPos land = this.findLandingPos(level, maid);
+                if (land != null && this.ensureSnowPad(level, land)) {
+                    this.placedTick = level.m_46467_();
+                }
+            }
+            // 收回：HOLD_TICKS 到 → 移除全部缓冲方块（水或细雪，桶始终不消耗）；
             // 保持时长对水/细雪共用（配置上限 100 tick = 5 秒 < 细雪冻伤线 140 tick——安全）
             if (gameTime - this.placedTick >= com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_HOLD.get()) {
                 this.recoverFluid(level, maid);
             }
-            return; // 放缓冲等待期间不重复放
+            return; // 缓冲等待期间不重新触发
         }
         // 2. 触发判定：有钥匙桶（水/细雪）+ 真实坠落 + 未落地 + 距地面足够高。
         //    v1.1.0：水桶只在非下界作钥匙（下界放水瞬间蒸发）；细雪桶任何维度都可
@@ -199,61 +214,97 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 放缓冲方块（v1.1.0：落地水/落地雪同一实现——snow=true 放细雪）。
-     * 桶只是【触发钥匙】——不真正消耗、不变化背包；玩家落地水/落地雪也是
-     * "放下一瞬间并收回"，收回时直接移除方块。
-     * v1.5.25h：双格——第一格在落点，第二格在女仆所在格（速度太快穿过第一格/
-     * 落点偏移时兜底接住）。
+     * 放缓冲（v1.1.0：水/雪分开处理——细雪不流动，不能照抄水的逻辑）。
+     * - 水：v1.5.25h 双格——落点 + 女仆所在格（水会流动铺开，提前放稍高处也接得住；
+     *   双格兜底速度太快穿过第一格的情况）。
+     * - 细雪：只在【落点平面】铺 3×3 雪垫（空气格才铺）——她全速落进雪垫里重置
+     *   摔落距离。绝不在高处放雪拦她：细雪把她减速，出雪后剩下的路又是自由落体，
+     *   摔落距离照样累积 → 反而摔死。落点精度靠 3×3 容差 + 坠落途中逐 tick 追补。
+     * 桶只是【触发钥匙】——不真正消耗、不变化背包；收回时直接移除方块。
      */
     private void placeFluid(ServerLevel level, EntityMaid maid, BlockPos pos, boolean snow) {
-        Block fluidBlock = ForgeRegistries.BLOCKS.getValue(
-                net.minecraft.resources.ResourceLocation.parse(snow ? "minecraft:powder_snow" : "minecraft:water"));
-        if (fluidBlock == null) {
-            return;
-        }
-        // 第一格：落点
-        level.m_7731_(pos, fluidBlock.m_49966_(), 3);
-        this.waterPos = pos;
-        // 第二格：女仆所在格（若与落点不同且是空气才放——避免覆盖地面）
-        BlockPos feetPos = maid.m_20183_();
-        if (!feetPos.equals(pos) && level.m_8055_(feetPos).m_60795_()) {
-            level.m_7731_(feetPos, fluidBlock.m_49966_(), 3);
-            this.waterPos2 = feetPos;
+        if (snow) {
+            this.placedSnow = true;
+            this.ensureSnowPad(level, pos);
+            maid.getChatBubbleManager().addTextChatBubble("落地雪！");
         } else {
-            this.waterPos2 = null;
+            this.placedSnow = false;
+            Block waterBlock = ForgeRegistries.BLOCKS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
+            if (waterBlock == null) {
+                return;
+            }
+            // 第一格：落点
+            level.m_7731_(pos, waterBlock.m_49966_(), 3);
+            this.placedList.add(pos.m_7949_());
+            // 第二格：女仆所在格（若与落点不同且是空气才放——避免覆盖地面）
+            BlockPos feetPos = maid.m_20183_();
+            if (!feetPos.equals(pos) && level.m_8055_(feetPos).m_60795_()) {
+                level.m_7731_(feetPos, waterBlock.m_49966_(), 3);
+                this.placedList.add(feetPos.m_7949_());
+            }
+            maid.getChatBubbleManager().addTextChatBubble("落地水！");
         }
-        this.placedSnow = snow;
         this.placedTick = level.m_46467_();
-        // 播报（让主人看见"用了一次缓冲"）
-        maid.getChatBubbleManager().addTextChatBubble(snow ? "落地雪！" : "落地水！");
     }
 
-    /** 收回：按本次类型移除两格缓冲方块（水/细雪；桶不消耗，无需还原） */
+    /**
+     * 落点平面 3×3 雪垫（只铺空气格）。幂等：本轮已铺过的格跳过——坠落途中的
+     * 追补调用只会补上新漂进来的格子。返回是否真的铺了新块（铺了则调用方重置保持计时）。
+     */
+    private boolean ensureSnowPad(ServerLevel level, BlockPos center) {
+        Block snowBlock = ForgeRegistries.BLOCKS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:powder_snow"));
+        if (snowBlock == null) {
+            return false;
+        }
+        boolean added = false;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                BlockPos p = center.m_7918_(dx, 0, dz);
+                if (!level.m_8055_(p).m_60795_()) {
+                    continue; // 非空气不铺（地面/花草/已有方块都跳过）
+                }
+                if (this.placedList.contains(p)) {
+                    continue; // 这一轮已铺过
+                }
+                level.m_7731_(p, snowBlock.m_49966_(), 3);
+                this.placedList.add(p.m_7949_());
+                added = true;
+            }
+        }
+        return added;
+    }
+
+    /** 女仆是否已在细雪里（所在格或脚下格是细雪——进了雪就不用再追补雪垫） */
+    private boolean touchingPlacedSnow(ServerLevel level, EntityMaid maid) {
+        Block snowBlock = ForgeRegistries.BLOCKS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:powder_snow"));
+        if (snowBlock == null) {
+            return true; // 取不到方块按"已在雪"处理（不追补）
+        }
+        BlockPos feet = maid.m_20183_();
+        return level.m_8055_(feet).m_60734_() == snowBlock
+                || level.m_8055_(feet.m_7918_(0, -1, 0)).m_60734_() == snowBlock;
+    }
+
+    /** 收回：按本次类型移除全部缓冲方块（水的双格/细雪的 3×3 雪垫；桶不消耗，无需还原） */
     private void recoverFluid(ServerLevel level, EntityMaid maid) {
         Block fluidBlock = ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse(this.placedSnow ? "minecraft:powder_snow" : "minecraft:water"));
         Block airBlock = ForgeRegistries.BLOCKS.getValue(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:air"));
-        if (this.waterPos != null) {
-            BlockState state = level.m_8055_(this.waterPos);
+        for (BlockPos p : this.placedList) {
+            BlockState state = level.m_8055_(p);
             if (fluidBlock != null && state.m_60734_() == fluidBlock) {
-                // 移除缓冲方块：换成空气（用注册表取 air，避免猜 SRG 字段名）
-                level.m_7731_(this.waterPos,
+                // 移除缓冲方块：换成空气（用注册表取 air，避免猜 SRG 字段名；
+                // 中途被玩家替换成别方块的格子不动）
+                level.m_7731_(p,
                         airBlock != null ? airBlock.m_49966_() : net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(),
                         3);
             }
-            this.waterPos = null;
         }
-        // 第二格（女仆所在格）同样收回
-        if (this.waterPos2 != null) {
-            BlockState state2 = level.m_8055_(this.waterPos2);
-            if (fluidBlock != null && state2.m_60734_() == fluidBlock) {
-                level.m_7731_(this.waterPos2,
-                        airBlock != null ? airBlock.m_49966_() : net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(),
-                        3);
-            }
-            this.waterPos2 = null;
-        }
+        this.placedList.clear();
         // v1.5.25e：收水后允许再放一次——极高塔坠落时 1 秒水可能提前收，
         // 落地前最后一段若速度仍达标则再放一次接住
         this.clutchedThisFall = false;
