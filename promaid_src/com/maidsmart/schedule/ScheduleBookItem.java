@@ -20,6 +20,14 @@ public class ScheduleBookItem extends Item {
         super(props);
     }
 
+    /** v1.1.0 实测十一（用户："排班表要有附魔书那种特效"）：常驻附魔光效
+     *  （m_7807_ = Item.isFoil，无参版——附魔书的紫色流光就是这个开关；
+     *  EnchantedBookItem 的实现即 override 它返回 true） */
+    @Override
+    public boolean m_7807_() {
+        return true;
+    }
+
     @Override
     public InteractionResultHolder<ItemStack> m_7203_(Level level, Player player, InteractionHand hand) {
         if (!level.m_5776_() && player instanceof ServerPlayer sp) {
