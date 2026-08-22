@@ -41,6 +41,10 @@ public final class ScheduleManager {
             return; // 每秒一次
         }
         throttle = 0;
+        // v1.1.0：排班系统总开关（手册杂项页；关闭=调度停摆，已保存的日程保留）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()) {
+            return;
+        }
         net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
                 Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
                 Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
