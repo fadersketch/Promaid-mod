@@ -160,8 +160,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
     }
 
-    /** 距该位置最近的女仆（回收目标；8 格内没有 → null） */
-    private static EntityMaid findNearestMaid(ServerLevel level, BlockPos pos) {
+    /** 距该位置最近的女仆（回收目标；8 格内没有 → null）。
+     *  v1.1.0 实测十：改 public（findNearestMaidPublic）——挖矿/伐木的搭方块
+     *  回收（BRIDGE_RECLAIM_TO_MAID 升级为全局开关后）共用这一个查找。 */
+    public static EntityMaid findNearestMaidPublic(ServerLevel level, BlockPos pos) {
         EntityMaid best = null;
         double bestSq = 64.0; // 8 格
         for (EntityMaid m : level.m_45976_(EntityMaid.class, new AABB(pos).m_82400_(8.0))) {
@@ -175,6 +177,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
         }
         return best;
+    }
+
+    @Deprecated
+    private static EntityMaid findNearestMaid(ServerLevel level, BlockPos pos) {
+        return findNearestMaidPublic(level, pos);
     }
 
     /**
