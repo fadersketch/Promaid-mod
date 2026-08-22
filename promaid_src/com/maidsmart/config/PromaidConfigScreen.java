@@ -1623,7 +1623,19 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
         this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）"));
+                s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）；适用弓（射程15）/弩（射程8）/三叉戟（搜索半径）/枪械（TLM 枪械中距离配置）"));
+        // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
+        this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
+        this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被敌对生物攻击时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；默认开启"));
+        this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤时，此半径内的女仆才会响应切换"));
+        this.rows.add(new BoolRow("枪械优先", MaidSmartConfig.COMBAT_AUTO_SWITCH_GUN_PREFER.get(),
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_GUN_PREFER.set(v), "枪械优先：装了 TACZ/卓越前线且女仆背包有枪+弹药时优先切枪械模式（TLM 内置枪械任务负责开枪换弹，走位战术照常生效）；关闭则与近战/弓/弩/三叉戟/弹幕一起按背包随机选"));
+        this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.set(v), "战斗结束自动还原：威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换"));
+        this.rows.add(new NumRow("还原延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY, s), "还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务"));
         // v1.5.295：逃生/搭高/逃跑数值参数（旧版混在自保行为开关与贴身辅助之间，
         // 把开关区挤到第 3-4 页——集中到页尾，调参才需要翻到这里）
         this.rows.add(new SectionRow("自保参数", true));

@@ -236,6 +236,12 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.IntValue COMBAT_PEARL_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_PEARL_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_PEARL_DIST;
+    // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆立即切战斗，威胁消失还原）
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_GUN_PREFER;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
     public static final ForgeConfigSpec.DoubleValue COMBAT_SAFE_RETURN_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_CLOSE_DISTANCE;
@@ -941,6 +947,18 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 4, 0, 4);
         PLAYER_DAMAGE_MAID_CAP = BUILDER.comment("玩家伤害上限比例（0-1：模式 3 时单次伤害 = 女仆最大生命 × 此比例；默认 0.1 = 10%）")
                 .translation("config.promaid.combat.playerDamageMaidCap").defineInRange("playerDamageMaidCap", 0.1, 0.01, 0.5);
+        // v1.1.0：主动切换战斗模式——主人被敌对生物攻击时，附近非自保女仆无论什么任务
+        // 都立即切战斗（枪械优先，其余按背包武器随机），威胁消失后自动还原原任务
+        COMBAT_AUTO_SWITCH = BUILDER.comment("主动切换战斗模式（主人被敌对生物攻击时，附近女仆无论什么任务都立即切战斗保护主人；默认开启）")
+                .translation("config.promaid.combat.autoSwitch").define("autoSwitch", true);
+        COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤时，此半径内的女仆才会响应切换")
+                .translation("config.promaid.combat.autoSwitchRadius").defineInRange("autoSwitchRadius", 16, 4, 64);
+        COMBAT_AUTO_SWITCH_GUN_PREFER = BUILDER.comment("枪械优先（装了 TACZ/卓越前线且女仆背包有枪+弹药时，优先切枪械模式；关闭则与其他模式一起随机）")
+                .translation("config.promaid.combat.autoSwitchGunPrefer").define("autoSwitchGunPrefer", true);
+        COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
+                .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
+        COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")
+                .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 400, 60, 3600);
         BUILDER.pop();
 
         // ---- 杂项 ----

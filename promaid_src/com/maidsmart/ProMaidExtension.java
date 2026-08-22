@@ -77,6 +77,8 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.memory.RelationshipMemoryAdapter());
         // v1.5.135：自保的"最近攻击者"记录（被攻击事件 → 5 秒威胁窗口，覆盖非 Monster 生物）
         MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.SelfPreservationBehavior.class);
+        // v1.1.0：主动切换战斗模式（主人被敌对生物攻击 → 附近女仆切战斗保护，威胁消失还原）
+        MinecraftForge.EVENT_BUS.register(new com.maidsmart.combat.AutoCombatSwitch());
         // v1.5.86：AI 记忆系统（取代旧 4 键 MaidMemoryManager；旧数据不迁移重新积累）
         MinecraftForge.EVENT_BUS.register(new AiMemoryManager());
         MinecraftForge.EVENT_BUS.register(new WorkStatusReporter());

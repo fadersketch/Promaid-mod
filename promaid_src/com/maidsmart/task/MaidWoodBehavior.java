@@ -2000,6 +2000,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     if (value == null) {
                         continue;
                     }
+                    // v1.1.0：不把自己 10 秒内搭的方块当木材（搭路材料几乎必是原木——
+                    // 不跳过会把刚垫脚的原木砍掉，循环拆了再搭）
+                    if (isWoodingPlaced(level, p)) {
+                        continue;
+                    }
                     // v1.0.4：透视感知开关（默认关）——关闭时女仆像玩家一样只发现视线无阻
                     // 的矿物：被墙/实心方块挡住的矿不可见（不进候选，也就没有系统/气泡播报）；
                     // 开启 = 旧版隔墙找矿逻辑，不检查视线
@@ -2060,6 +2065,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             if (!this.isWood(level, p)) {
                 continue; // 已被挖掉
+            }
+            // v1.1.0：缓存轮同样跳过自己 10 秒内搭的方块（不当木材砍，与全量扫描同口径）
+            if (isWoodingPlaced(level, p)) {
+                continue;
             }
             // v1.0.4：透视感知默认关——缓存轮同样只认视线无阻的矿（女仆移动/配置热更新后
             // 与发现层判定一致；开启透视则跳过）
@@ -2191,6 +2200,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock) {
                 continue; // v1.1.0：树叶不计阻挡——树冠包着的树干不算被挡
             }
+            if (isWoodingPlaced(level, sample)) {
+                continue; // v1.1.0：自己 10 秒内搭的方块不算阻挡（到期自动销毁，不算预算）
+            }
             if (!st.m_60796_(level, sample)) {
                 continue; // 非满块（楼梯/台阶/花/草）不挡；水不算
             }
@@ -2235,6 +2247,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     || st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock
                     || !st.m_60796_(level, sample)) {
                 continue; // 空气/目标木材/树叶（v1.1.0 放行）/非满块不算挡路
+            }
+            // v1.1.0：自己 10 秒内搭的方块不当挡路块砍——伐木搭路材料常是原木（正好在
+            // 木材表里），旧版会把它当障碍物砍掉 → 掉下来 → 再搭 → 再砍 死循环；
+            // 搭的方块到期自动销毁，挖穿判断直接跳过（找后面的真实障碍）
+            if (isWoodingPlaced(level, sample)) {
+                continue;
             }
             net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(st.m_60734_());
             boolean openable = key != null && isBreakable(key.m_135815_());
