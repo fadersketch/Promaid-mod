@@ -170,8 +170,8 @@ public class AutoCombatSwitch {
                 if (stillOnCombat
                         && com.maidsmart.schedule.ScheduleData.isOn(maid)
                         && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
-                    maid.getPersistentData().m_128379_(
-                            com.maidsmart.schedule.ScheduleData.APPLIED_TAG, false);
+                    maid.getPersistentData().m_128359_(
+                            com.maidsmart.schedule.ScheduleData.APPLIED_TAG, "");
                     com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
                     stillOnCombat = maid.getTask() != null
                             && maid.getTask().getUid().toString().equals(assignedUid);
