@@ -38,19 +38,25 @@ import java.util.Random;
  * - 否则从 近战/弓/弩/三叉戟/弹幕 里按"背包有对应武器"过滤后随机选
  * - 全都没有 → 近战（空手也上）
  *
- * 还原：威胁（周围敌对生物）消失持续 N tick（默认 400 = 20 秒）→ 切回战斗前原任务。
+ * 还原：威胁（周围敌对生物，独立小半径）消失持续 N tick（默认 400 = 20 秒）→ 切回
+ * 战斗前原任务；有排班表的女仆还原时直接交给排班当前段（排班在主动战斗之上）。
+ * 玩家中途接管：战斗期间任务被玩家/排班/LLM 换过 → 还原只清标记退出，
+ * 绝不把玩家安排的任务翻回去（还原前先校验"仍在指派的战斗任务上"）。
  *
  * 优先级链（本功能在其中的位置）：自保 > 排班表 > 主动战斗（含还原）> 玩家手动/LLM。
  * 自保中的女仆不响应切换（自保优先），还原也等自保结束。
+ *
+ * v1.1.0 发布前审查修掉的坑：标记判定一律走 getBoolean——putBoolean(false) 不删键，
+ * contains 会永远为 true，旧判定会让女仆打完一仗后再也不响应主动参战、
+ * 排班调度器也会因为她"看似在战斗中"而永久让位。
  */
 public class AutoCombatSwitch {
     /** 战斗前原任务 UID（persistentData，切战斗时写入，还原时读取） */
     private static final String PREV_TASK_TAG = "maid_smart_combat_prev_task";
     /** 最近一次看到威胁的 gameTime（还原延迟计时基准） */
     private static final String LAST_THREAT_TAG = "maid_smart_combat_last_threat";
-    /** 已被本系统切到战斗的女仆（还原扫描只遍历这些，非全量女仆） */
-    private static final java.util.Set<java.util.UUID> SWITCHED =
-            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** 本系统指派的战斗任务 UID（还原时校验任务没被玩家换过——换过=玩家接管，只清标记退出） */
+    private static final String ASSIGNED_TAG = "maid_smart_combat_task";
     private static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
@@ -81,10 +87,14 @@ public class AutoCombatSwitch {
             if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
                 continue;
             }
-            // 已被本系统切过（战斗中再次受击只刷新威胁计时，不重复切换）
-            if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
-                maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-                continue;
+            // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
+            // 玩家/排班/LLM 换走 → 玩家接管，清标记后按"当前任务"重新评估参战
+            if (maid.getPersistentData().m_128441_(PREV_TASK_TAG)) {
+                if (isOnAssignedCombatTask(maid)) {
+                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                    continue;
+                }
+                clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
             }
             // 已是战斗任务（玩家手动安排）→ 尊重玩家安排，不记录不切换
             if (MaidWorkTags.isCombatTask(maid)) {
@@ -92,24 +102,24 @@ public class AutoCombatSwitch {
             }
             IMaidTask combat = pickCombatTask(maid);
             if (combat == null) {
-                return;
+                continue; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
             }
             String prevUid = maid.getTask() != null
                     ? maid.getTask().getUid().toString() : "touhou_little_maid:idle";
             maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
+            maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
             maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-            SWITCHED.add(maid.m_20148_());
             maid.setTask(combat);
         }
     }
 
-    /** 威胁消失持续够久 → 还原原任务 */
+    /**
+     * 威胁消失持续够久 → 还原原任务。扫描持久化标记（非内存集合）——
+     * 存档重读/魂符收放/换维度后仍能正确还原，不会卡死在战斗任务上。
+     */
     @SubscribeEvent
     public void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
-            return;
-        }
-        if (SWITCHED.isEmpty()) {
             return;
         }
         if (++this.restoreThrottle < 20) {
@@ -124,11 +134,16 @@ public class AutoCombatSwitch {
             for (EntityMaid maid : level.m_45976_(EntityMaid.class,
                     new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
                             Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
-                if (!maid.m_6084_() || !SWITCHED.contains(maid.m_20148_())) {
+                if (!maid.m_6084_() || !maid.getPersistentData().m_128441_(PREV_TASK_TAG)) {
                     continue;
                 }
                 // 自保中不还原（等自保结束；自保退出有自己的回主人逻辑）
                 if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
+                    continue;
+                }
+                // 战斗期间任务被玩家/排班/LLM 换过 → 玩家接管：只清标记退出，不动当前任务
+                if (!isOnAssignedCombatTask(maid)) {
+                    clearMarkers(maid);
                     continue;
                 }
                 long now = level.m_46467_();
@@ -140,32 +155,36 @@ public class AutoCombatSwitch {
                 if (now - lastThreat < MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()) {
                     continue; // 安全时长还不够
                 }
-                // 还原原任务
+                // 还原。战斗期间排班表可能已跨段——排班在主动战斗之上，还原时先清
+                // 排班去抖键并立即重应用当前段；没排班/重应用没换成 → 落回"战斗前任务"
                 String prevUid = maid.getPersistentData().m_128461_(PREV_TASK_TAG);
-                TaskManager.findTask(ResourceLocation.parse(prevUid)).ifPresent(maid::setTask);
-                maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
-                maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
-                SWITCHED.remove(maid.m_20148_());
-            }
-        }
-        // 清理已消失女仆的残留记录（卸载/魂符收起/死亡）
-        SWITCHED.removeIf(uuid -> {
-            for (ServerLevel level : event.getServer().m_129785_()) {
-                for (EntityMaid maid : level.m_45976_(EntityMaid.class,
-                        new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
-                    if (maid.m_20148_().equals(uuid) && maid.m_6084_()) {
-                        return false;
-                    }
+                String assignedUid = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+                clearMarkers(maid);
+                boolean stillOnCombat = maid.getTask() != null
+                        && maid.getTask().getUid().toString().equals(assignedUid);
+                if (stillOnCombat
+                        && com.maidsmart.schedule.ScheduleData.isOn(maid)
+                        && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
+                    maid.getPersistentData().m_128379_(
+                            com.maidsmart.schedule.ScheduleData.APPLIED_TAG, false);
+                    com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                    stillOnCombat = maid.getTask() != null
+                            && maid.getTask().getUid().toString().equals(assignedUid);
+                }
+                if (stillOnCombat) {
+                    TaskManager.findTask(ResourceLocation.parse(prevUid)).ifPresent(maid::setTask);
                 }
             }
-            return true;
-        });
+        }
     }
 
-    /** 女仆周围（响应半径内）是否有活的敌对生物（Monster 覆盖常规敌对） */
+    /**
+     * 女仆周围（还原威胁半径，默认 8——独立配置，不复用 16 格响应半径）是否有活的
+     * 敌对生物。v1.1.0 审查：旧版复用响应半径，刷怪频繁的整合包里远处怪一直"续杯"，
+     * 女仆永远等不满 20 秒安全期，卡在战斗任务回不了岗。
+     */
     private static boolean hasThreatNearby(EntityMaid maid) {
-        double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
+        double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
         for (net.minecraft.world.entity.monster.Monster e
                 : maid.m_9236_().m_45976_(net.minecraft.world.entity.monster.Monster.class,
                 maid.m_20191_().m_82400_(r))) {
@@ -253,13 +272,22 @@ public class AutoCombatSwitch {
         }
     }
 
-    /** 女仆实体卸载/消失时清理 SWITCHED 记录（AiMemoryManager.forgetMaid 调） */
-    public static void forgetMaid(java.util.UUID uuid) {
-        SWITCHED.remove(uuid);
-    }
-
     /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
     public static boolean isAutoCombatActive(EntityMaid maid) {
-        return maid.getPersistentData().m_128471_(PREV_TASK_TAG);
+        return maid.getPersistentData().m_128441_(PREV_TASK_TAG);
+    }
+
+    /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true） */
+    private static void clearMarkers(EntityMaid maid) {
+        maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
+        maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
+        maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
+    }
+
+    /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管） */
+    private static boolean isOnAssignedCombatTask(EntityMaid maid) {
+        String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+        return maid.getTask() != null && !assigned.isEmpty()
+                && assigned.equals(maid.getTask().getUid().toString());
     }
 }

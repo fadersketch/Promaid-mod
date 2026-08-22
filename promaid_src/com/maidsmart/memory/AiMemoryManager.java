@@ -334,7 +334,6 @@ public class AiMemoryManager {
         com.maidsmart.task.MaidMineBehavior.forgetUuid(maidUuid);
         com.maidsmart.task.MaidWoodBehavior.forget(maid.m_19879_());
         com.maidsmart.task.MaidWoodBehavior.forgetUuid(maidUuid);
-        com.maidsmart.combat.AutoCombatSwitch.forgetMaid(maidUuid);
     }
 
     /**
