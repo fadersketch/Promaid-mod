@@ -1588,7 +1588,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("搭路方块清理（秒）", String.valueOf(MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_PLACED_LIFETIME, s), "搭路方块清理时间（秒）：垫的方块 N 秒后自动变掉落物回收（女仆站在上面时延后）"));
         this.rows.add(new BoolRow("垫脚方块回收进背包", MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get(),
-                v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认关）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
+                v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认开，全局开关——搭路/挖矿/伐木一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
     }
 
     private void combatRows() {
