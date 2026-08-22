@@ -77,7 +77,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
             BlockPos pos = e.getKey();
             if (supportsBridger(level, pos)) {
-                continue; // 女仆站在上面 → 延后（走开即清）
+                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后（同挖矿/
+                // 伐木修复）——空中搭桥的女仆在桥上停留时脚下块重置寿命，走开
+                // 后还有完整 10 秒缓冲，不会整段桥瞬间全到期摔下去
+                e.setValue(new PlacedMark(gameTime, e.getValue().blockId));
+                continue;
             }
             it.remove();
             destroyMarked(level, pos, e.getValue());

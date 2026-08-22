@@ -496,7 +496,13 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             BlockPos pos = e.getKey();
             // v1.5.113：只对"到期的旧块"检查是否正被女仆踩着（最多 1-2 块/tick，开销可忽略）
             if (supportsAnyMiner(level, pos)) {
-                continue; // 有人站在上面 → 延后到下一轮
+                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后——旧版只
+                // continue（tick 不变）：挖矿女仆在高柱上连续作业几分钟，脚下块
+                // 早已"过期"但被一直延后；她一挖完走开，整根柱子瞬间全部到期
+                // （包括她正下落途中可能踩到的下段）→ 高空坠落。刷新计时后每块
+                // 都从"最后一次被踩"起算满寿，走开后还有完整 10 秒缓冲。
+                e.setValue(new PlacedMark(gameTime, e.getValue().blockId));
+                continue;
             }
             it.remove();
             destroyMarked(level, pos, e.getValue());
