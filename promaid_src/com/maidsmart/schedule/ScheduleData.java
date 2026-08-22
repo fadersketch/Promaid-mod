@@ -67,8 +67,9 @@ public final class ScheduleData {
     }
 
     public static boolean isOn(EntityMaid maid) {
-        return maid.getPersistentData().m_128471_(ON_TAG)
-                && maid.getPersistentData().m_128441_(ON_TAG); // contains + getBoolean
+        // v1.1.0 实测十六（审查 P3-11）：getBoolean 缺键本就返回 false，
+        // contains 检查冗余——单 getBoolean 即可
+        return maid.getPersistentData().m_128471_(ON_TAG);
     }
 
     public static void setOn(EntityMaid maid, boolean on) {
