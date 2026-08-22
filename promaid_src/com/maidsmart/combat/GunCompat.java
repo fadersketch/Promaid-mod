@@ -29,6 +29,11 @@ public final class GunCompat {
     /** 卓越前线 5 类弹药（path 名） */
     private static final java.util.Set<String> SBW_AMMO_PATHS = java.util.Set.of(
             "handgun_ammo", "rifle_ammo", "sniper_ammo", "shotgun_ammo", "heavy_ammo");
+    /** 卓越前线能量武器（二次灾变等——充能即用，不吃上面 5 类常规弹药；javap 实证
+     *  SecondaryCataclysmItem 的射击走 ForgeEnergy IEnergyStorage，TLM 的 doGunReload
+     *  对它只查 shouldStartReloading/startBolt（能量充能），弹药判定对它们恒空） */
+    private static final java.util.Set<String> SBW_ENERGY_GUN_PATHS = java.util.Set.of(
+            "secondary_cataclysm", "super_star_shooter");
 
     /** 是否装了任一枪械模组（主动切战斗的枪械优先分支用——没装就别浪费背包扫描） */
     public static boolean anyGunModLoaded() {
@@ -84,6 +89,9 @@ public final class GunCompat {
      * 女仆是否"有枪可用"——背包或主手有枪且背包有任意弹药（枪械优先切战斗的判定）。
      * 换弹由 TLM gun_attack 任务自动处理（TacInnerCompat 自动搜背包同型弹药装填），
      * 这里只确认"有枪 + 有子弹"。
+     * v1.1.0 终审二：卓越前线能量武器（二次灾变/超级星星炮）不消耗常规弹药
+     * （内部 ForgeEnergy 充能）——持有它们时跳过弹药检查直接算可用；此前要求
+     * "枪+弹药"导致女仆拿着二次灾变却判定"没子弹"不切枪械模式。
      */
     public static boolean hasGunAndAmmo(EntityMaid maid) {
         if (!anyGunModLoaded()) {
@@ -91,19 +99,22 @@ public final class GunCompat {
         }
         boolean hasGun = false;
         boolean hasAmmo = false;
+        boolean hasEnergyGun = false;
         try {
             ItemStack main = maid.m_21205_();
             if (isGun(main)) {
                 hasGun = true;
+                hasEnergyGun |= isEnergyGun(main);
             }
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots() && !(hasGun && hasAmmo); i++) {
+            for (int i = 0; i < inv.getSlots() && !(hasGun && (hasAmmo || hasEnergyGun)); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.m_41619_()) {
                     continue;
                 }
                 if (!hasGun && isGun(s)) {
                     hasGun = true;
+                    hasEnergyGun |= isEnergyGun(s);
                 }
                 if (!hasAmmo && isAmmo(s)) {
                     hasAmmo = true;
@@ -112,7 +123,14 @@ public final class GunCompat {
         } catch (Exception ignored) {
             return false;
         }
-        return hasGun && hasAmmo;
+        return hasGun && (hasAmmo || hasEnergyGun);
+    }
+
+    /** 卓越前线能量武器（不吃常规弹药——内部充能）：按注册名判定 */
+    public static boolean isEnergyGun(ItemStack stack) {
+        ResourceLocation key = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+        return key != null && SBW_NS.equals(key.m_135827_())
+                && SBW_ENERGY_GUN_PATHS.contains(key.m_135815_());
     }
 
     /**

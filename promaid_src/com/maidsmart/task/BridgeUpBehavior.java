@@ -196,21 +196,64 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (distSq <= 6.25) {
             return; // canContinue 会结束行为
         }
-        // 水平接近：导航到主人正下方（同柱不必精确，±1 容差由导航自己处理）
         double hx = owner.m_20185_() - maid.m_20185_();
         double hz = owner.m_20189_() - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
-        if (hDist > 1.2) {
+        // v1.1.0 终审二（用户："不喜欢朝着主人的方向向前搭"）：水平还没对齐时不再
+        // 死等导航走过去——导航绕路/被挡时她只会原地叠柱子够不着主人。脚下垫高
+        // 的同时朝主人方向【前方一格脚下】也垫一块（斜上台阶，照伐木 slopeStep），
+        // 垫完走上去——水平和垂直一起逼近，塔变成斜坡。
+        // 前方格净空不足时退回纯垂直（等站位变化），不会把自己憋死。
+        boolean diag = hDist > 1.2 && dy >= 1
+                && this.tryDiagStep(level, maid, hx, hz, hDist);
+        if (!diag && hDist > 1.2) {
             maid.m_21573_().m_26519_(owner.m_20185_(), maid.m_20186_(), owner.m_20189_(),
                     (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
-        } else {
+        } else if (!diag) {
             maid.m_21573_().m_26573_(); // 站桩搭高（垂直列干净成型）
         }
-        // 垂直接近：脚下垫方块（节奏冷却）
+        // 垂直接近：脚下垫方块（节奏冷却；diag 已垫过前方台阶时共用冷却）
         if (dy >= 1 && this.stepCooldown-- <= 0) {
             this.placeStep(level, maid);
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         }
+    }
+
+    /**
+     * v1.1.0 终审二：朝主人方向前方一格的脚下垫台阶（斜上逼近）。
+     * 冷却与垂直垫块共用（stepCooldown）；垫成功返回 true（本 tick 不再导航——
+     * 导航目标会把女仆往回拉，刚垫的台阶踩不上去）。
+     */
+    private boolean tryDiagStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (this.stepCooldown > 0) {
+            return false; // 垂直垫块的节奏冷却还在——不抢拍
+        }
+        int y = maid.m_20183_().m_123342_();
+        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
+        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
+        BlockPos ahead = new BlockPos(tx, y, tz);
+        BlockPos fill = ahead.m_7918_(0, -1, 0);
+        // 前方脚下悬空（垫了才有台阶效果）且前方两格净空（台阶+头部）
+        if (!level.m_8055_(fill).m_60795_() || !level.m_8055_(ahead).m_60795_()
+                || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
+            return false;
+        }
+        Item item = takeBuildBlock(maid);
+        if (item == null) {
+            return false;
+        }
+        Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
+        if (block == null) {
+            return false;
+        }
+        level.m_7731_(fill, block.m_49966_(), 3);
+        track(level, fill, block);
+        this.guardTicks = 12;
+        this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
+        // 走上刚垫的台阶（不走导航长路——就一格，直接朝目标格设移动目标）
+        maid.m_21573_().m_26519_(tx + 0.5, y, tz + 0.5,
+                (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
+        return true;
     }
 
     @Override
