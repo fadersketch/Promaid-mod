@@ -37,8 +37,9 @@ public abstract class MaidMoveSuppressMixin {
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
-        if (MaidWorkTags.isStill(maid)) {
-            // 工作站桩：完全静止
+        if (MaidWorkTags.isStill(maid) || MaidWorkTags.isBuildSitting(maid)) {
+            // 工作站桩 / 建造强制坐下（v1.1.0）：完全静止——玩家"解除坐下"后
+            // MaidMoveControl 直施速度等通道一并被源头锁住，坐着绝不走动
             maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
             maid.m_21573_().m_26569_();
             ci.cancel();
