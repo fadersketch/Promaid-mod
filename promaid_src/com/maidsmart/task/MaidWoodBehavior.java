@@ -535,7 +535,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             BlockPos pos = e.getKey();
             // v1.5.113：只对"到期的旧块"检查是否正被女仆踩着（最多 1-2 块/tick，开销可忽略）
             if (supportsAnyWooder(level, pos)) {
-                continue; // 有人站在上面 → 延后到下一轮
+                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后（同挖矿修复）——
+                // 走开后每块还有完整寿命缓冲，不会整根高柱瞬间全到期把下落中的女仆摔下去
+                e.setValue(new PlacedMark(gameTime, e.getValue().blockId));
+                continue;
             }
             it.remove();
             destroyMarked(level, pos, e.getValue());
