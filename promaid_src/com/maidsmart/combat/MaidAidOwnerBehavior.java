@@ -181,8 +181,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         if (!owner.m_6084_()) {
             return;
         }
-        // 主人不在身边（> 16 格）不管——贴身辅助
-        if (maid.m_20238_(owner.m_20182_()) > 16.0) {
+        // 主人不在身边（> 16 格）不管——贴身辅助。
+        // v1.1.0 实测六：主人不在身边时【女仆互助仍要运作】（两女仆外出战斗、
+        // 主人在家的情况）——互助检查挪到主人距离判定之前，主人链照旧只在 16 格内。
+        boolean ownerNear = !(maid.m_20238_(owner.m_20182_()) > 16.0);
+        if (!ownerNear) {
+            this.aidMaidSisters(level, maid, gameTime);
             return;
         }
         boolean aided = false;
@@ -255,6 +259,111 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
         }
         // 6. 主人附近有威胁且没有力量/迅捷增益 → 增益药水助战（v1.5.252g7：
+        this.ownerBuffChain(level, maid, owner, aided, maidId);
+
+        // ================= v1.1.0 实测六：女仆互助（战斗支援） =================
+        // 同主人、16 格内的其他女仆低血/着火时也投药水救她（与救主人同款追踪弹）。
+        // 每轮最多救一个（防一次检查全场连扔）；自己的保命药水不够时不勉强
+        //（治疗药水只剩 1 瓶且自己血也不健康时留着——简单起见不做复杂判断：
+        // 有富余就帮，实战中女仆背包通常由玩家统一配药）。
+        this.aidMaidSisters(level, maid, gameTime);
+    }
+
+    /** v1.1.0 实测六：给附近受伤/着火的姐妹女仆丢药水（治疗/再生；着火先抗火） */
+    private void aidMaidSisters(ServerLevel level, EntityMaid maid, long gameTime) {
+        try {
+            for (EntityMaid sister : level.m_45976_(EntityMaid.class,
+                    maid.m_20191_().m_82400_(16.0))) {
+                if (sister == maid || !sister.m_6084_() || sister.m_269323_() != maid.m_269323_()) {
+                    continue; // 自己/死了/不是同主人的女仆
+                }
+                double hpRatio2 = sister.m_21223_() / Math.max(1.0f, sister.m_21233_());
+                boolean did = false;
+                // 着火优先（与主人链同顺序）
+                if (sister.m_6060_() && !this.hasEffectOn(sister, "minecraft:fire_resistance")) {
+                    did = this.throwPotionTo(level, maid, sister, FIRE_RESIST_POTIONS, "抗火", false) >= 0;
+                }
+                // 低血 → 治疗/再生（useCd=true 同主人：同种药水 CD 共享记账）
+                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    did = this.throwPotionTo(level, maid, sister, HEAL_POTIONS, "治疗", true) >= 0;
+                }
+                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    did = this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0;
+                }
+                if (did) {
+                    maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，药水来了！");
+                    return; // 每轮最多救一个
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测六：投掷药水给【任意 LivingEntity 目标】（女仆互助用）——
+     * 与 throwPotionToOwner 同款择优+追踪弹，只是目标从主人换成姐妹女仆。
+     */
+    private int throwPotionTo(ServerLevel level, EntityMaid maid,
+                              net.minecraft.world.entity.LivingEntity target,
+                              java.util.Set<String> potionNames, String label, boolean useCd) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            int bestSlot = -1;
+            int bestScore = -1;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
+                        || stack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem)) {
+                    continue;
+                }
+                if (!this.isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                if (useCd && !this.potionReady(potionKey(stack), level.m_46467_())) {
+                    continue;
+                }
+                int score = potionStrength(stack);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return -1;
+            }
+            ItemStack stack = inv.getStackInSlot(bestSlot);
+            net.minecraft.world.entity.projectile.ThrownPotion potion =
+                    new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
+            potion.m_37446_(stack.m_41777_());
+            // 追踪标签（HomingPotionMixin 通用——目标 UUID）
+            potion.getPersistentData().m_128359_("maid_smart_homing",
+                    target.m_20148_().toString());
+            double dx = target.m_20185_() - maid.m_20185_();
+            double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
+            double dz = target.m_20189_() - maid.m_20189_();
+            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
+            potion.m_6686_(dx / len * 0.9, dy + 0.2, dz / len * 0.9, 1.4f, 1.0f);
+            level.m_7967_(potion);
+            inv.extractItem(bestSlot, 1, false);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            int maxDur = 0;
+            for (net.minecraft.world.effect.MobEffectInstance e :
+                    net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                maxDur = Math.max(maxDur, e.m_19557_());
+            }
+            if (useCd) {
+                this.markPotionUsed(potionKey(stack), level.m_46467_(), maxDur > 0 ? maxDur : 60);
+            }
+            LOGGER.info("aid-maid throw: label={} potion={} target={}",
+                    label, potionKey(stack), target.m_20148_());
+            return Math.max(60, Math.min(maxDur > 0 ? maxDur : 60, 12000));
+        } catch (Exception ignored) {
+        }
+        return -1;
+    }
+
+    private void ownerBuffChain(ServerLevel level, EntityMaid maid, ServerPlayer owner,
+                                boolean aided, java.util.UUID maidId) {
         if (!aided && this.ownerInDanger(level, owner)
                 && !owner.m_21023_(net.minecraft.world.effect.MobEffects.f_19600_) // strength
                 && !owner.m_21023_(net.minecraft.world.effect.MobEffects.f_19596_)) { // swiftness

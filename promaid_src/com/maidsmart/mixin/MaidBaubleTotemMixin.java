@@ -74,6 +74,44 @@ public abstract class MaidBaubleTotemMixin {
                 maid.getChatBubbleManager().addTextChatBubble("不死图腾救了我一命！");
                 cir.setReturnValue(true);
             }
+            // v1.1.0 实测六【女仆互相救】：她自己的图腾（手/饰品/背包）全用完仍是
+            // 致命伤 → 找附近【同一主人的其他女仆】共享图腾救她（与救主人同机制：
+            // 背包优先再饰品栏，真实消耗，特效+气泡）。找不到才真死。
+            if (cir.getReturnValue() == null || !cir.getReturnValue()) {
+                if (com.maidsmart.config.MaidSmartConfig.TOTEM_SHARE_ENABLE.get()
+                        && maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+                    for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m :
+                            sl.m_45976_(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class,
+                                    maid.m_20191_().m_82400_(16.0))) {
+                        if (m == maid || !m.m_6084_() || m.m_269323_() != maid.m_269323_()) {
+                            continue; // 自己/死了/不是同主人的女仆都不算
+                        }
+                        int invSlot2 = findTotemSlotInInv(m);
+                        int baubleSlot2 = -1;
+                        ItemStack totem = invSlot2 >= 0
+                                ? m.getMaidInv().getStackInSlot(invSlot2) : ItemStack.f_41583_;
+                        if (totem.m_41619_()) {
+                            baubleSlot2 = findTotemSlotInBauble(m);
+                            totem = baubleSlot2 >= 0
+                                    ? m.getMaidBauble().getStackInSlot(baubleSlot2) : ItemStack.f_41583_;
+                        }
+                        if (totem.m_41619_()) {
+                            continue;
+                        }
+                        if (invSlot2 >= 0) {
+                            consumeTotem(m.getMaidInv(), invSlot2);
+                        } else {
+                            consumeTotem(m.getMaidBauble(), baubleSlot2);
+                        }
+                        revive(maid, totem);
+                        maid.m_9236_().m_7605_(maid, (byte) 35);
+                        maid.getChatBubbleManager().addTextChatBubble("同伴的不死图腾救了我一命！");
+                        m.getChatBubbleManager().addTextChatBubble("别倒下！我的不死图腾给你用！");
+                        cir.setReturnValue(true);
+                        return;
+                    }
+                }
+            }
             return;
         }
         if (!(self instanceof net.minecraft.server.level.ServerPlayer owner)) {
