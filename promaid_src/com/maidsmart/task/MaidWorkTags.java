@@ -44,14 +44,40 @@ public final class MaidWorkTags {
                 || uid.equals(ResourceLocation.parse("maid_smart:brew"));
     }
 
-    /** v1.5.129：战斗任务 UID（干活不被打断的豁免集合——战斗女仆保留吃饭/恐慌）。
+    /** v1.5.129：战斗任务 UID（后备名单——接口判定不认识的再按 path 兜底）。
      *  v1.1.0：加入 gun_attack（TLM 内置枪械任务，TACZ/卓越前线） */
     private static final java.util.Set<String> COMBAT_UIDS = java.util.Set.of(
             "attack", "ranged_attack", "crossbow_attack", "trident_attack", "danmaku_attack",
             "gun_attack");
 
     /**
-     * v1.5.129：是否"非战斗干活中"——任务 UID 不属于战斗集合即视为干活
+     * v1.1.0：是否为攻击类任务——直接问任务对象【是不是 IAttackTask】。
+     *
+     * 为什么改接口判定：整合包生态（万法皆通 / 史诗战斗 / 真正的力量等）给女仆
+     * 注册的第三方攻击任务 UID 各不相同（maidspell:xxx、eftlm:xxx…），UID 名单
+     * 永远枚举不全。TLM 任务体系里"攻击任务"的官方契约就是实现 IAttackTask：
+     * 近战 TaskAttack 直实现；弓/弩/三叉戟/弹幕/枪械（TaskGunAttack）以及万法
+     * 皆通的两个法术战斗任务走子接口 IRangedAttackTask（字节码实证 extends
+     * IAttackTask）；史诗战斗 FightModeTask 也直实现 IAttackTask——一个
+     * instanceof 全覆盖。
+     *
+     * 兜底链：任务对象接口判定 → UID path 名单（防极个别没实现接口但语义上
+     * 是战斗的任务漏网；名单内任务在原版 TLM 都实现了接口，正常走不到）。
+     * 反编译实证：IAttackTask 默认 enablePanic()=false——战斗任务不吃恐慌，
+     * 与本判定口径天然一致。
+     */
+    public static boolean isAttackTask(EntityMaid maid) {
+        if (maid.getTask() == null) {
+            return false;
+        }
+        if (maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask) {
+            return true;
+        }
+        return COMBAT_UIDS.contains(maid.getTask().getUid().m_135815_());
+    }
+
+    /**
+     * v1.5.129：是否"非战斗干活中"——任务不属于战斗类即视为干活
      * （Promaid 挖矿/建筑/烹饪/酿造 + TLM 原生 farm/挤奶/钓鱼/剪毛/蜂蜜等
      * 全部命中；idle/跟随/战斗类不命中）。用于"干活不被打断"系列闸门
      * （吃饭/偷吃/恐慌/切班拉回），战斗女仆不受影响。
@@ -60,27 +86,27 @@ public final class MaidWorkTags {
      * 与 COMBAT_UIDS（path 名）永远不匹配 → isNonCombatWork 恒 true →
      * 战斗女仆也吃"干活不打断"闸门（战斗时不吃饭/不恐慌）。改为 m_135815_
      * （= getPath，返回 attack/ranged_attack 等）——MaidToolAutoEquip 注释实证。
+     * v1.1.0：战斗判定升级为 isAttackTask（接口 instanceof，第三方攻击任务一并豁免）。
      */
     public static boolean isNonCombatWork(EntityMaid maid) {
         if (maid.getTask() == null) {
             return false;
         }
-        String path = maid.getTask().getUid().m_135815_();
-        if (COMBAT_UIDS.contains(path)) {
+        if (isAttackTask(maid)) {
             return false;
         }
+        String path = maid.getTask().getUid().m_135815_();
         // v1.5.287：idle 不算"干活"——旧版"非战斗即干活"把待机女仆一并门控
         //（待机不吃工作餐/不偷吃/被攻击不恐慌，与 docstring "空闲照常"矛盾——
         // 用户："干活不被打断"只应作用于真正干活时）
         return !"idle".equals(path);
     }
 
-    /** v1.5.142：是否处于战斗任务（攻击/弓/弩/三叉戟/弹幕）——副手盾牌自动装备判定用 */
+    /** v1.5.142：是否处于战斗任务（攻击/弓/弩/三叉戟/弹幕）——副手盾牌自动装备判定用。
+     *  v1.1.0：升级为接口判定（isAttackTask）——万法皆通/史诗战斗等第三方攻击任务
+     *  一并算战斗（盾牌装备/干活豁免/主动切换让位全部正确覆盖）。 */
     public static boolean isCombatTask(EntityMaid maid) {
-        if (maid.getTask() == null) {
-            return false;
-        }
-        return COMBAT_UIDS.contains(maid.getTask().getUid().m_135815_());
+        return isAttackTask(maid);
     }
 
     public static void setStill(EntityMaid maid, boolean still) {
