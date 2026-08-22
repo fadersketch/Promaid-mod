@@ -1560,6 +1560,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_WATER_HOLD, s), "落地水保持（tick）：放出的水保留多久后收回（防留一滩水）"));
         this.rows.add(new NumRow("落地水下探格数", String.valueOf(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN, s), "落地水下探格数：提前向下探测几格判断要不要放水（防高空误放）"));
+        // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发、细雪不会）
+        this.rows.add(new BoolRow("落地雪", MaidSmartConfig.COMBAT_SNOW_CLUTCH.get(),
+                v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：背包有细雪桶+高空坠落自动在落点放细雪缓冲并收回（桶不消耗）——下界也能用（水会瞬间蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
         // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
         // v1.5.250 已删除）
         this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
