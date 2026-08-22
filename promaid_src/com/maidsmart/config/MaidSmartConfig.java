@@ -920,7 +920,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .defineInRange("waterLandingScan", 3, 2, 16);
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
         // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
-        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：背包有细雪桶+高空坠落自动在落点放细雪缓冲并收回（桶不消耗）——下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
+        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 3×3 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪，故铺 3×3 容错且坠落途中逐 tick 跟着落点补垫；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
                 .translation("config.promaid.combat.snowClutch").define("snowClutch", true);
         // v1.5.134：单兵作战战术（v1.5.132 战斗协同已删除——协同不如单兵 PVP 操作感）
         COMBAT_TACTICS = BUILDER.comment("单兵作战战术（绕圈走位/打退拉扯/距离控制/时机举盾——PVP 式战斗）")
