@@ -1005,8 +1005,8 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
-        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认关）：开启后到期/被摧毁的搭路垫脚方块不落地成掉落物，直接塞回附近女仆的背包（找不到女仆才落地）")
-                .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", false);
+        BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
+                .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
         BUILDER.pop();
 
         // ---- 杂项 ----

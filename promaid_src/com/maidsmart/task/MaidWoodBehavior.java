@@ -620,7 +620,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /** 破坏一个追踪方块：玩家同款破坏音效+粒子+掉落物（女仆拾取模式自动回收）。
      *  当前位置已是空气 → 跳过；被玩家换成别的方块 → 不破坏（尊重玩家改动）。
-     *  v1.5.161：自动收集开启且附近有挖矿女仆时，掉落物直接进她背包（不进世界）。 */
+     *  v1.5.161：自动收集开启且附近有挖矿女仆时，掉落物直接进她背包（不进世界）。
+     *  v1.1.0 实测十：bridge.reclaimToMaid 升级为【全局搭路方块回收开关】——
+     *  开启时无论 autoCollect，掉落物直接塞回附近女仆背包（同搭路/挖矿口径）。 */
     private static void destroyMarked(ServerLevel level, BlockPos pos, PlacedMark mark) {
         BlockState state = level.m_8055_(pos);
         if (state.m_60795_()) {
@@ -633,6 +635,19 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         level.m_46796_(2001, pos, Block.m_49956_(state));
         BlockEntity be = level.m_7702_(pos);
+        // v1.1.0 实测十：全局回收开关（默认开）——搭的方块到期/清场时不落地
+        if (com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
+            EntityMaid any = nearbyWooder(level, pos);
+            if (any == null) {
+                any = com.maidsmart.task.BridgeUpBehavior.findNearestMaidPublic(level, pos);
+            }
+            if (any != null) {
+                insertIntoMaidInventory(any, level,
+                        Block.m_49874_(state, level, pos, be, any, any.m_21205_()), pos);
+                level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
+                return;
+            }
+        }
         if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
             EntityMaid miner = nearbyWooder(level, pos);
             if (miner != null) {
