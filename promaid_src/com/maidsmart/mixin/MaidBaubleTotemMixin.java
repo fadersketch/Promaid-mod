@@ -32,6 +32,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MaidBaubleTotemMixin {
     @Inject(method = "m_21262_", at = @At("HEAD"), cancellable = true)
     private void maidsmart$baubleTotem(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
+        try {
+            maidsmart$baubleTotemInner(source, cir);
+        } catch (Throwable ignored) {
+            // v1.1.0 实测十六（审查 P2）：致命伤路径整体异常保护——本注入点跑在
+            // 原版 hurt/die 调用链里，handler 任一异常（聊天管理器/实体扫描等）
+            // 都会抛穿伤害结算最坏崩服。其他注入（HomingPotionMixin）同款标准：
+            // 出错时静默放行原版逻辑（不用图腾 = 正常死亡，不比原版差）。
+        }
+    }
+
+    private void maidsmart$baubleTotemInner(DamageSource source, CallbackInfoReturnable<Boolean> cir) {
         LivingEntity self = (LivingEntity) (Object) this;
         if (self instanceof EntityMaid maid) {
             // 女仆自己：手里已有图腾 → 原版路径处理，不双份触发
@@ -47,10 +58,12 @@ public abstract class MaidBaubleTotemMixin {
                     continue;
                 }
                 revive(maid, stack);
-                // v1.5.277：图腾触发特效——原版同款 levelEvent 35（绿色粒子 +
-                // 音效）。旧版女仆饰品栏触发只有复活和气泡、无特效（主人分支
-                // 一直有播 35，女仆分支漏了——用户："女仆触发不死图腾没有明显特效"）
-                maid.m_9236_().m_7605_(maid, (byte) 35);
+                // v1.5.277→v1.1.0 实测十六（审查 P2）：图腾触发特效。旧版播
+                // levelEvent 35——但客户端处理 35 要求实体【双手拿着图腾】，从
+                // 饰品栏/背包消耗时手上没有 → 什么都不渲染（"没有明显特效"的
+                // 真根因）。改播 levelEvent 2007（图腾激活粒子事件，按实体位置
+                // 广播，不检查手持）+ 补一声图腾使用音效，任何消耗路径都有反馈。
+                playTotemFeedback(maid);
                 // v1.5.204：图腾必须真实消耗——旧版只 revive 不扣减 → 女仆无限
                 // 复活（"不死图腾不消耗直接无敌"）。BaubleItemHandler 继承
                 // ItemStackHandler，extractItem 直接扣存储
@@ -69,7 +82,7 @@ public abstract class MaidBaubleTotemMixin {
             if (invSlot >= 0) {
                 ItemStack invStack = maid.getMaidInv().getStackInSlot(invSlot);
                 revive(maid, invStack);
-                maid.m_9236_().m_7605_(maid, (byte) 35);
+                playTotemFeedback(maid);
                 consumeTotem(maid.getMaidInv(), invSlot);
                 maid.getChatBubbleManager().addTextChatBubble("不死图腾救了我一命！");
                 cir.setReturnValue(true);
@@ -104,7 +117,7 @@ public abstract class MaidBaubleTotemMixin {
                             consumeTotem(m.getMaidBauble(), baubleSlot2);
                         }
                         revive(maid, totem);
-                        maid.m_9236_().m_7605_(maid, (byte) 35);
+                        playTotemFeedback(maid);
                         maid.getChatBubbleManager().addTextChatBubble("同伴的不死图腾救了我一命！");
                         m.getChatBubbleManager().addTextChatBubble("别倒下！我的不死图腾给你用！");
                         cir.setReturnValue(true);
@@ -156,7 +169,7 @@ public abstract class MaidBaubleTotemMixin {
                 consumeTotem(m.getMaidBauble(), baubleSlot);
             }
             revive(owner, totem);
-            owner.m_9236_().m_7605_(owner, (byte) 35);
+            playTotemFeedback(owner);
             // v1.5.217：共享图腾触发反馈——主人系统消息 + 女仆聊天气泡
             owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                     "\u00a7a[maid_smart] 女仆的不死图腾救了你一命！"));
@@ -196,6 +209,26 @@ public abstract class MaidBaubleTotemMixin {
         entity.m_7292_(new MobEffectInstance(MobEffects.f_19605_, 900, 1)); // 再生 II 45 秒
         entity.m_7292_(new MobEffectInstance(MobEffects.f_19617_, 100, 1)); // 吸收 II 5 秒
         entity.m_7292_(new MobEffectInstance(MobEffects.f_19607_, 800, 0)); // 抗火 40 秒
+    }
+
+    /**
+     * v1.1.0 实测十六（审查 P2）：图腾触发反馈。旧版只播 levelEvent 35——但客户端
+     * 处理 35 的粒子路径要求实体【双手拿着图腾】，从饰品栏/背包/同伴消耗时手上
+     * 没有 → 客户端什么都不渲染（"女仆触发不死图腾没有明显特效"的真根因，四个
+     * 分支全部中招）。现补 levelEvent 2007（图腾激活粒子事件，客户端在实体位置喷
+     * 绿色图腾粒子，不检查手持——原版玩家图腾特效即此事件）+ 图腾使用音效；
+     * 35 保留（手持路径仍能走到时客户端会播完整流程）。
+     */
+    private static void playTotemFeedback(LivingEntity entity) {
+        try {
+            entity.m_9236_().m_7605_(entity, (byte) 35);
+            // 2007 = 图腾激活粒子（客户端在实体位置喷绿色图腾粒子，不检查手持）；
+            // m_274561_ = BlockPos.containing(double,double,double)（javap 实证）
+            entity.m_9236_().m_46796_(2007,
+                    net.minecraft.core.BlockPos.m_274561_(
+                            entity.m_20185_(), entity.m_20186_(), entity.m_20189_()), 0);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** v1.5.204：女仆背包（getMaidInv）里第一个不死图腾的槽位；无则 -1 */
