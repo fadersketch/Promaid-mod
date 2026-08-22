@@ -2181,6 +2181,14 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (st.m_60795_()) {
                 continue; // 空气
             }
+            // v1.1.0 实测二十三：岩浆格视作硬阻挡——旧版流体不算阻挡，岩浆湖对岸
+            // 的矿预算为 0 照样入选 → 搭桥判空不含岩浆、findStandNearOre 找不到
+            // 立足点 → 女仆对着湖心矿原地站满 300 tick 目标超时才弃。选矿阶段
+            // 直接把射线上的岩浆计入阻挡，湖心矿大概率超预算、压根不选中
+            if (isLavaBlock(st.m_60734_())) {
+                blocking++;
+                continue;
+            }
             if (ORE_VALUE.containsKey(st.m_60734_())) {
                 continue; // 矿石不挡
             }
@@ -2230,6 +2238,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (st.m_60795_() || ORE_VALUE.containsKey(st.m_60734_()) || !st.m_60796_(level, sample)) {
                 continue;
             }
+            // v1.1.0 实测二十三：岩浆格视作硬阻挡——湖心矿若因缓存轮/预算恰好被
+            // 选中，走到这里把岩浆判为"不可开路"的挡路块 → 立即报点弃置
+            // （进 30 秒短时排除名单），不再原地空转等 300 tick 目标超时
+            if (isLavaBlock(st.m_60734_())) {
+                return new Blocker(sample.m_7949_(), false);
+            }
             // v1.1.0：自己 10 秒内搭的方块不当挡路块挖——搭高/搭桥的方块恰好挡住射线时，
             // 旧版会把它当障碍物挖掉 → 掉下来 → 再搭 → 再挖 死循环；搭的方块到期自动销毁，
             // 挖穿判断直接跳过它们（找后面的真实障碍）
@@ -2245,6 +2259,14 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.87：挡路块判定结果——openable=true 挖掉开路；false 报点弃置 */
     private record Blocker(BlockPos pos, boolean openable) {
+    }
+
+    /** v1.1.0 实测二十三：是否岩浆方块（静态/流动都是 minecraft:lava，与自保
+     *  SelfPreservationBehavior.isLavaBlock 同款判定） */
+    private static boolean isLavaBlock(net.minecraft.world.level.block.Block b) {
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(b);
+        return key != null && "minecraft:lava".equals(key.toString());
     }
 
     /** v1.5.47：废石丢弃——每种保留 JUNK_KEEP 份，超出直接销毁（不生成掉落物，防被捡回）
