@@ -398,6 +398,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, java.util.Map<BlockPos, Long>> RECENT_DISCARD = new HashMap<>();
     /** v1.5.113：搭方块材料耗尽播报限频（实体 ID → 上次播报 tick） */
     private static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
+    /** v1.1.0：没有斧头播报限频（实体 ID → 上次播报 tick） */
+    private static final Map<Integer, Long> NO_AXE_REPORT_SINCE = new HashMap<>();
     /** v1.5.113：找矿结果缓存——全量扫描每 5 秒一次，期间只做廉价校验（A1 性能优化） */
     private static final Map<Integer, WoodCache> WOOD_CACHE = new HashMap<>();
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
@@ -414,6 +416,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         BLOCKED_REPORT_SINCE.remove(maidEntityId);
         RECENT_DISCARD.remove(maidEntityId);
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
+        NO_AXE_REPORT_SINCE.remove(maidEntityId);
         WOOD_CACHE.remove(maidEntityId);
     }
 
@@ -578,6 +581,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             ids.addAll(BLOCKED_REPORT_SINCE.keySet());
             ids.addAll(RECENT_DISCARD.keySet());
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
+        ids.addAll(NO_AXE_REPORT_SINCE.keySet());
             ids.addAll(WOOD_CACHE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
@@ -598,6 +602,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             BLOCKED_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
             NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+            NO_AXE_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_CACHE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) {
         }
@@ -951,8 +956,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 this.targetPos = null;
                 this.destroyProgress = 0.0f;
                 this.saveProgressNow(maid);
+                return;
             }
-            return; // 镐被换走/碎裂，暂停挖掘
+            // v1.1.0：主手不是斧但背包有——旧版直接 return（傻站根因之一：空手走到
+            // 树前够得着了却不换斧不走不挖，每 tick 空转）。这里主动补一次换斧，
+            // 换好下 tick 正常开挖；换不上（背包的斧也砍不动）→ 上面分支已播报弃目标
+            if (!MaidToolAutoEquip.ensureAxeForTarget(maid, level.m_8055_(this.targetPos))) {
+                return; // 背包的斧也砍不动这一目标——等 ensureAxe 播报（recordSkipped 已拦）
+            }
+            return; // 换斧成功：等下一 tick 用新斧开始挖
         }
         // v1.5.19 渐进挖掘；v1.5.22 重写——直接公式，不依赖 FakePlayer
         // （旧版依赖 FakePlayer.getDestroyProgress，假玩家状态异常时 delta=0 → 永远挖不完）
@@ -1481,6 +1493,18 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 "背包里没有能搭的方块了（圆石/泥土等），够不着高处的木材……请给我一些方块～");
     }
 
+    /** v1.1.0：没有斧头播报（限频 30 秒）——空手不砍树，等玩家给斧 */
+    private void notifyNoAxe(EntityMaid maid) {
+        long now = maid.m_9236_().m_46467_();
+        Long last = NO_AXE_REPORT_SINCE.get(maid.m_19879_());
+        if (last != null && now - last < 600L) {
+            return;
+        }
+        NO_AXE_REPORT_SINCE.put(maid.m_19879_(), now);
+        maid.getChatBubbleManager().addTextChatBubble(
+                "我没有斧头，砍不了树……请给我一把斧～");
+    }
+
     /**
      * v1.5.25 斜坡逼近：目标在斜上方（水平 2.5~4.5、垂直差 ≥1）时，
      * 在朝目标方向的前方 1 格脚下垫方块形成台阶——女仆走上去后水平+垂直同时接近，
@@ -1964,6 +1988,16 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
      */
     private BlockPos findWood(ServerLevel level, EntityMaid maid, BlockPos anchor) {
+        // v1.1.0：找树前先保证手上有斧——旧版空手扫描时全量扫描里 canHarvest 校验
+        // 的是"主手斧"，主手没斧时所有树都被 recordSkipped 吃掉 → 女仆原地傻站
+        // （扫描-弃置循环）。这里先从背包换一把斧再扫（有斧才谈得上砍树）。
+        if (maid.m_21205_().m_41619_()
+                || !(maid.m_21205_().m_41720_() instanceof AxeItem)) {
+            if (!MaidToolAutoEquip.ensureAnyAxe(maid)) {
+                // v1.1.0：完全没斧 → 限频播报（每 30 秒一次），等玩家给斧
+                this.notifyNoAxe(maid);
+            }
+        }
         int id = maid.m_19879_();
         long now = level.m_46467_();
         // v1.5.85：每次扫描重置"镐子挖不动的矿"记录（记录本次扫描价值最高的，用于播报）

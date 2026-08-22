@@ -110,13 +110,21 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.5.142：建造模式强制坐下（每 tick 由 MaidToolAutoEquipBehavior 调用，
-     *  core 行为任何 activity 都跑——覆盖夜晚切休息班等行为停摆窗口）：
+     * core 行为任何 activity 都跑——覆盖夜晚切休息班等行为停摆窗口）：
      * - 处于建造任务 → 强制 m_21837_(true)（setInSittingPose，TLM 原生坐姿）。
      *   坐下后 TLM 跟随行为（MaidFollowOwnerTask 检查 canBrainMoving = !坐姿）
      *   不再启动 → 建造中不会再被"跟随传送"小范围瞬移拉走；
      *   建造本身是隔空放置（行为从不移动），坐下不影响搭方块。
      * - 玩家试图让她站起（GUI/交互）→ 下一 tick 被重新按回坐下。
      * - 切出建造任务 → 恢复站立并清标记（只恢复我们自己按下的坐姿）。
+     * v1.1.0 终审二（用户："强制坐下很怪，坐着还会小幅移动——玩家 shift+右键
+     * 坐下那种绝大部分情况不会动"）：根因是两种坐状态不一致——玩家 shift+右键
+     * 走的是 m_21839_（setOrderedToSit，指令位），TLM 脑内多处判定（含
+     * canBrainMoving 与 RandomStroll 挂载的 Await 行为）都认【指令位】，
+     * 只按姿势位（m_21837_ 顺带设了指令位，但玩家"解除坐下"只清指令位、
+     * 姿势位残留 → 脑子以为能动的边缘态）。改为与玩家操作完全同款：
+     * 每 tick 直接 setOrderedToSit(true)（TLM override 会同时按姿势位），
+     * 两个位始终一致——与 shift+右键坐下完全同状态，不再有边缘态小幅挪动。
      */
     public static void tickBuildSit(EntityMaid maid) {
         boolean building = BlueprintBuildExecutor.isBuildingTask(maid);
@@ -128,8 +136,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             return;
         }
         if (building) {
+            // v1.1.0 终审二：指令位（与玩家 shift+右键同款通道）——TLM override 里
+            // setOrderedToSit 会一并设坐姿位，两态永远一致
             if (!maid.m_21825_()) { // isInSittingPose
-                maid.m_21837_(true); // setInSittingPose（TLM override，连坐姿+指令位一起设）
+                maid.m_21839_(true); // setOrderedToSit（TLM override 连坐姿一起设）
             }
             // v1.0.4：锁移动加固——玩家"解除坐下"会清掉 TLM 指令位（DATA_SITTING），
             // 到下一 tick 恢复前，TLM 跟随/自保的坐下判定失效 → 女仆会走动几步
@@ -144,7 +154,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
         } else if (wasSitting) {
             if (maid.m_21825_()) {
-                maid.m_21837_(false);
+                maid.m_21839_(false);
             }
             maid.getPersistentData().m_128379_(BUILD_SIT_TAG, false);
         }

@@ -91,15 +91,27 @@ public final class MaidToolAutoEquip {
                         need = com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei::isGohei;
                         scorer = MaidToolAutoEquip::weaponScore;
                     }
+                    case "fishing" -> {
+                        // v1.1.0 终审二（用户：钓鱼也不会自己换钓鱼竿，优先级应与武器一致）：
+                        // TLM TaskFishing 的条件就是主手 FISHING_ROD_CAST（javap 实证）——
+                        // 主手不是钓鱼竿时任务根本不开始。词条匹配与武器同款：符合不换、
+                        // 不符合从背包装一把（评分按武器评分：耐久>附魔）。
+                        need = s -> s.m_41720_() instanceof net.minecraft.world.item.FishingRodItem;
+                        scorer = MaidToolAutoEquip::weaponScore;
+                    }
                     case "gun_attack" -> {
                         // v1.1.0：枪械任务（TACZ/卓越前线）自动装枪——主手不是枪就从
                         // 背包掏一把（开枪/换弹由 TLM gun_attack 任务负责，这里只管装备）。
-                        // 评分 = 武器评分 + 背包有弹药的枪加成（同分时优先弹药充足的枪）
+                        // 评分 = 武器评分 + 背包有弹药的枪加成（同分时优先弹药充足的枪）；
+                        // v1.1.0 终审二：能量枪（二次灾变等）自带充能不吃弹药——加分判定
+                        // 对能量枪恒真，否则评分垫底永远装不上（"二次灾变用不了"的一环）
                         final EntityMaid gunMaid = maid;
                         need = com.maidsmart.combat.GunCompat::isGun;
                         scorer = stack -> {
                             long base = weaponScore(stack);
-                            return base + (gunHasAmmoInBackpack(gunMaid) ? 1_000_000L : 0L);
+                            boolean ready = com.maidsmart.combat.GunCompat.isEnergyGun(stack)
+                                    || gunHasAmmoInBackpack(gunMaid);
+                            return base + (ready ? 1_000_000L : 0L);
                         };
                     }
                     default -> {
@@ -285,6 +297,39 @@ public final class MaidToolAutoEquip {
         } catch (Exception ignored) {
         }
         return false;
+    }
+
+    /**
+     * v1.1.0：主手任意换一把斧（不看目标——伐木找树前用：树无挖掘等级，
+     * 任何斧都能砍任何树）。主手已是斧且未快坏 → 不换；背包有斧（评分最高、
+     * 跳过快坏的）→ 装备。返回是否现在"手上有斧"。
+     */
+    public static boolean ensureAnyAxe(EntityMaid maid) {
+        IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+        ItemStack cur = hands.getStackInSlot(0);
+        if (isAxe(cur) && !isNearlyBroken(cur)) {
+            return true;
+        }
+        IItemHandlerModifiable inv = maid.getMaidInv();
+        int bestSlot = -1;
+        long bestScore = Long.MIN_VALUE;
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !isAxe(stack) || isNearlyBroken(stack)) {
+                continue;
+            }
+            long score = targetAxeScore(stack);
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = i;
+            }
+        }
+        if (bestSlot < 0) {
+            return isAxe(cur); // 背包没斧：手上有（可能快坏）也算有
+        }
+        hands.setStackInSlot(0, inv.getStackInSlot(bestSlot));
+        inv.setStackInSlot(bestSlot, cur);
+        return true;
     }
 
     /**
