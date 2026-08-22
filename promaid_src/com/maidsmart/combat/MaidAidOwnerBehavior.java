@@ -403,6 +403,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // m_5584_ = LivingEntity.eat(Level, ItemStack)——真实进食
                     //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
                     sister.m_5584_(sister.m_9236_(), taken);
+                    // v1.1.0 实测十六（审查 P3）：蜂蜜玻璃瓶返还喂食者背包——
+                    // 旧版吃完蜂蜜不返还瓶子（主人链 feedFoodDirect 有返还逻辑，
+                    // 姐妹链漏了），物品凭空消失
+                    net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
+                    if (bottle != null) {
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                                inv, new ItemStack(bottle), false);
+                    }
                     maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
                     return true;
                 }
