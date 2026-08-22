@@ -242,7 +242,6 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆立即切战斗，威胁消失还原）
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
-    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_GUN_PREFER;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -979,10 +978,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 都立即切战斗（枪械优先，其余按背包武器随机），威胁消失后自动还原原任务
         COMBAT_AUTO_SWITCH = BUILDER.comment("主动切换战斗模式（主人被敌对生物攻击时，附近女仆无论什么任务都立即切战斗保护主人；默认开启）")
                 .translation("config.promaid.combat.autoSwitch").define("autoSwitch", true);
-        COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤时，此半径内的女仆才会响应切换")
+        COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换")
                 .translation("config.promaid.combat.autoSwitchRadius").defineInRange("autoSwitchRadius", 16, 4, 64);
-        COMBAT_AUTO_SWITCH_GUN_PREFER = BUILDER.comment("枪械优先（装了 TACZ/卓越前线且女仆背包有枪+弹药时，优先切枪械模式；关闭则与其他模式一起随机）")
-                .translation("config.promaid.combat.autoSwitchGunPrefer").define("autoSwitchGunPrefer", true);
+        // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
+        // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
                 .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
         COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")

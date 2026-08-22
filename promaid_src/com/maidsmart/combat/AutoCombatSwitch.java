@@ -11,11 +11,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.minecraft.world.entity.monster.Enemy;
-import net.minecraft.world.item.BowItem;
-import net.minecraft.world.item.CrossbowItem;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.TridentItem;
 import net.minecraft.world.phys.AABB;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
@@ -29,14 +25,18 @@ import java.util.Random;
 /**
  * 主动切换战斗模式（v1.1.0）。
  *
- * 触发：主人（玩家）被敌对生物攻击 → 响应半径内所有自己的女仆（非自保、非战斗任务、
- * 非幼年）立即切换为战斗任务——无论她当前在干什么（挖矿/伐木/烹饪/建造/跟随…）。
+ * 触发（v1.1.0 实测二十扩展）：主人被攻击（任意来源——敌对生物/玩家/弹射物，
+ * 自伤除外）或主人攻击了别的生物（主动开火也算开战）→ 响应半径内所有自己的
+ * 女仆（非自保、非战斗任务、非幼年）立即切换为战斗任务——无论她当前在干什么
+ * （挖矿/伐木/烹饪/建造/跟随…）。
  *
- * 选模式：
- * - 枪械优先（配置开）：装了 TACZ/卓越前线且背包有枪+弹药 → touhou_little_maid:gun_attack
- *   （开枪/换弹/自动搜弹药由 TLM 内置枪械任务负责；promaid 战术照常接管走位）
- * - 否则从 近战/弓/弩/三叉戟/弹幕 里按"背包有对应武器"过滤后随机选
- * - 全都没有 → 近战（空手也上）
+ * 选模式（v1.1.0 实测二十重构）：
+ * - 扫描 TaskManager 全部实现 IAttackTask 的攻击类任务（含模组任务：
+ *   万法皆通法术/史诗战斗/真正的力量/TLM 枪械等）
+ * - 按任务自己的 isWeapon 匹配背包武器过滤出候选
+ * - 候选池加权随机：模组任务权重 2.0、原版五件套（近战/弓/弩/三叉戟/弹幕）
+ *   权重 1.0（模组武器普遍更强，降半权但不绝对排除）
+ * - 全都匹配不上 → 近战（空手也上）
  *
  * 还原：威胁（周围敌对生物，独立小半径）消失持续 N tick（默认 400 = 20 秒）→ 切回
  * 战斗前原任务；有排班表的女仆还原时直接交给排班当前段（排班在主动战斗之上）。
@@ -61,7 +61,10 @@ public class AutoCombatSwitch {
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
 
-    /** 主人被敌对生物攻击 → 附近女仆切战斗 */
+    /** 主人被攻击（任意来源）→ 附近女仆切战斗
+     *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
+     *  非标准敌对生物、环境伤害都不触发。现改为任意来源受伤即触发（自伤除外）。
+     */
     @SubscribeEvent
     public void onOwnerHurt(LivingHurtEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
@@ -70,10 +73,41 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
-        // 只响应敌对生物的攻击（玩家互打/自伤/环境伤害不触发）
-        if (!(event.getSource().m_7639_() instanceof Enemy)) {
+        // v1.1.0 实测二十：不再限定敌对生物来源——主人被【任何东西】攻击都算开战
+        //（PVP 玩家互打、模组自定义敌对生物、弹射物等都覆盖；自伤仍排除）
+        if (event.getSource() == null || event.getSource().m_7639_() == player) {
             return;
         }
+        switchNearbyMaids(player);
+    }
+
+    /**
+     * v1.1.0 实测二十：主人攻击了别的生物 → 也触发（护主不只被动挨打才算开战，
+     * 主人主动开火同样进入战斗）。监听主人对【非自己女仆】造成伤害的事件。
+     */
+    @SubscribeEvent
+    public void onOwnerAttack(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!(event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
+            return; // 只认玩家亲手造成的伤害（女仆打的不连锁触发）
+        }
+        if (attacker != player) {
+            return;
+        }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        // 打的是自己的女仆不算开战（误伤/管教场景）
+        if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
+            return;
+        }
+        switchNearbyMaids(attacker);
+    }
+
+    /** 响应半径内自己的女仆全体评估参战（被攻击/主动开火共用） */
+    private void switchNearbyMaids(ServerPlayer player) {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
         for (EntityMaid maid : player.m_9236_().m_45976_(EntityMaid.class,
                 player.m_20191_().m_82400_(r))) {
@@ -201,74 +235,89 @@ public class AutoCombatSwitch {
     }
 
     /**
-     * 选战斗任务：枪械优先（配置开且有枪+弹药）→ 否则按背包武器过滤 {近战/弓/弩/三叉戟/弹幕}
-     * 随机选一个 → 全无武器 → 近战（空手）。找不到任务定义返回 null（理论上不会）。
+     * v1.1.0 实测二十：选战斗任务——武器等权随机（原版武器降权重）。
+     *
+     * 旧版"枪械优先"是当时只考虑 TACZ 兼容的产物（枪械肯定比原版武器强）。
+     * 现在附属生态加入了大量模组（万法皆通/史诗战斗/真正的力量等），它们的
+     * 攻击任务与枪械强度等价——不再有谁绝对优先。新口径：
+     * - 扫描 TaskManager 全部任务，找出实现 IAttackTask 的攻击类任务
+     * - 对每个任务问 maid 背包"能不能打"（task.isWeapon 按背包匹配）
+     * - 能打的任务【等权重】随机选
+     * - 原版五件套（attack/ranged/crossbow/trident/danmaku）权重 ×0.5——
+     *   模组武器普遍更强，有模组选项时优先模组（但不是绝对排除原版）
+     * - 全都匹配不上 → 近战（空手也上）
      */
     private static IMaidTask pickCombatTask(EntityMaid maid) {
-        // 枪械优先
-        if (MaidSmartConfig.COMBAT_AUTO_SWITCH_GUN_PREFER.get()
-                && GunCompat.hasGunAndAmmo(maid)) {
-            IMaidTask gun = TaskManager.findTask(
-                    ResourceLocation.parse("touhou_little_maid:gun_attack")).orElse(null);
-            if (gun != null) {
-                return gun;
+        // 候选收集：任务 → 权重（原版 1.0，模组 2.0）
+        List<IMaidTask> pool = new ArrayList<>();
+        List<Double> weights = new ArrayList<>();
+        String vanillaNs = "touhou_little_maid";
+        for (IMaidTask task : TaskManager.getTaskIndex()) {
+            if (!(task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask attack)) {
+                continue; // 只认攻击类任务
             }
-        }
-        // 扫描背包 + 主手有什么武器
-        boolean melee = false;
-        boolean bow = false;
-        boolean crossbow = false;
-        boolean trident = false;
-        boolean gohei = false;
-        ItemStack main = maid.m_21205_();
-        if (!main.m_41619_()) {
-            melee |= hasAttackDamage(main);
-            bow |= main.m_41720_() instanceof BowItem;
-            crossbow |= main.m_41720_() instanceof CrossbowItem;
-            trident |= main.m_41720_() instanceof TridentItem;
-            gohei |= com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(main);
-        }
-        IItemHandler inv = maid.getMaidInv();
-        outer:
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack s = inv.getStackInSlot(i);
-            if (s.m_41619_()) {
+            try {
+                if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
+                    continue;
+                }
+            } catch (Throwable ignored) {
+            }
+            // 背包/主手有该任务认的武器才算候选（isWeapon 是 IAttackTask 的默认方法：
+            // 原版任务按武器类型判；模组任务自定义判定——法书/史诗武器等）
+            if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
-            melee |= hasAttackDamage(s);
-            bow |= s.m_41720_() instanceof BowItem;
-            crossbow |= s.m_41720_() instanceof CrossbowItem;
-            trident |= s.m_41720_() instanceof TridentItem;
-            gohei |= com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(s);
-            if (melee && bow && crossbow && trident && gohei) {
-                break outer; // 全都有，不用再扫
+            double w = vanillaNs.equals(task.getUid().m_135827_()) ? 1.0 : 2.0; // 原版降半权
+            pool.add(task);
+            weights.add(w);
+        }
+        if (pool.isEmpty()) {
+            // 全都匹配不上 → 近战兜底（空手也上）
+            return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+        }
+        // 加权随机
+        double total = 0;
+        for (double w : weights) {
+            total += w;
+        }
+        double roll = RNG.nextDouble() * total;
+        for (int i = 0; i < pool.size(); i++) {
+            roll -= weights.get(i);
+            if (roll <= 0) {
+                return pool.get(i);
             }
         }
-        // 有武器的模式候选 → 随机选（用户指定的"根据背包随机选择"）
-        List<String> uids = new ArrayList<>();
-        if (melee) {
-            uids.add("touhou_little_maid:attack");
+        return pool.get(pool.size() - 1);
+    }
+
+    /**
+     * v1.1.0 实测二十：女仆是否持有该攻击任务认可的武器。
+     * 优先走任务自己的 isWeapon（模组任务自定义判定），异常/全否时对
+     * 原版五件套做物品类型兜底（与旧版判定同口径）。
+     */
+    private static boolean hasWeaponForTask(EntityMaid maid,
+                                            com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask task) {
+        // 1. 任务自己的判定（IAttackTask.isWeapon）
+        try {
+            ItemStack main = maid.m_21205_();
+            if (!main.m_41619_() && task.isWeapon(maid, main)) {
+                return true;
+            }
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && task.isWeapon(maid, s)) {
+                    return true;
+                }
+            }
+            return true; // 任务对所有物品都返回 false = 不限武器（如部分模组任务）→ 视为可参战
+        } catch (Throwable ignored) {
         }
-        if (bow) {
-            uids.add("touhou_little_maid:ranged_attack");
-        }
-        if (crossbow) {
-            uids.add("touhou_little_maid:crossbow_attack");
-        }
-        if (trident) {
-            uids.add("touhou_little_maid:trident_attack");
-        }
-        if (gohei) {
-            uids.add("touhou_little_maid:danmaku_attack");
-        }
-        if (uids.isEmpty()) {
-            uids.add("touhou_little_maid:attack"); // 空手也上（近战）
-        }
-        String uid = uids.get(RNG.nextInt(uids.size()));
-        return TaskManager.findTask(ResourceLocation.parse(uid)).orElse(null);
+        return true; // 判定异常时保守放行（别让模组任务因此选不上）
     }
 
     /** 是否带攻击力属性的物品（剑/斧/镐等——对齐 TaskAttack.isWeapon 语义，简化版） */
+    @SuppressWarnings("unused")
     private static boolean hasAttackDamage(ItemStack stack) {
         try {
             return stack.m_41638_(EquipmentSlot.MAINHAND).containsKey(Attributes.f_22281_);
