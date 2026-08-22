@@ -1771,8 +1771,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         if (isFireResistPotion(s)) {
                             hasFirePot = true;
                         }
-                        if (this.isSafeBuildBlock(maid,
-                                net.minecraft.world.level.block.Block.m_49814_(s.m_41720_()))) { // Block.byItem
+                        if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildBlock(
+                                net.minecraft.world.level.block.Block.m_49814_(s.m_41720_()),
+                                maid.m_9236_(), maid.m_20183_())) { // v1.1.0 实测七：统一过滤
                             buildBlocks += s.m_41613_();
                         }
                     }
@@ -3378,65 +3379,26 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 都可用于搭高，数量最多的先取（不浪费稀有方块）。
      */
     private Block takeBuildBlock(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
-        Map<Item, Integer> counts = new java.util.HashMap<>();
-        Map<Item, Block> blockOf = new java.util.HashMap<>();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
-                continue;
-            }
-            Block block = bi.m_40614_();
-            if (block == null || !this.isSafeBuildBlock(maid, block)) {
-                continue;
-            }
-            counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
-            blockOf.putIfAbsent(stack.m_41720_(), block);
-        }
-        Item best = null;
-        int bestCount = 0;
-        for (Map.Entry<Item, Integer> e : counts.entrySet()) {
-            if (e.getValue() > bestCount) {
-                bestCount = e.getValue();
-                best = e.getKey();
-            }
-        }
-        if (best == null) {
+        // v1.1.0 实测七：选材统一走 MaidBuildBlockFilter——火把等无碰撞方块、
+        // 可替换方块（草/雪片）一律不再入选（旧 isSafeBuildBlock 的本地逻辑
+        // 并入工具类，本类保留壳调用）。返回 Block（自保内部用 Block 放置）。
+        net.minecraft.world.item.Item item = com.maidsmart.tool.MaidBuildBlockFilter
+                .takeBuildBlock(maid.getMaidInv(), maid.m_9236_(), maid.m_20183_());
+        if (item == null) {
             return null;
         }
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.m_41619_() && stack.m_41720_() == best) {
-                ItemStack taken = inv.extractItem(i, 1, false);
-                if (!taken.m_41619_()) {
-                    return blockOf.get(best);
-                }
-            }
-        }
-        return null;
+        return ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
     }
 
     /**
      * v1.5.24：该方块能否用于搭高——实心完整碰撞形状、非下落（沙/砾石/铁砧）、
      * 非 TNT、非会伤害女仆的方块（仙人掌/岩浆块/甜浆果/营火）。
+     * v1.1.0 实测七：此判定已并入公共工具类 MaidBuildBlockFilter（额外补了
+     * 【无碰撞形状】与【REPLACEABLE tag】两道闸，火把/花/草/雪片全拦）——
+     * 本方法保留委托调用（类内其他引用不改签名）。
      */
     private boolean isSafeBuildBlock(EntityMaid maid, Block block) {
-        try {
-            if (block instanceof net.minecraft.world.level.block.FallingBlock
-                    || block instanceof net.minecraft.world.level.block.TntBlock) {
-                return false;
-            }
-            net.minecraft.resources.ResourceLocation id = ForgeRegistries.BLOCKS.getKey(block);
-            String sid = id == null ? "" : id.toString();
-            if ("minecraft:cactus".equals(sid) || "minecraft:magma_block".equals(sid)
-                    || "minecraft:sweet_berry_bush".equals(sid) || "minecraft:campfire".equals(sid)
-                    || "minecraft:soul_campfire".equals(sid)) {
-                return false;
-            }
-            // 完整碰撞形状（台阶/栅栏/门/床等不完整，不作为垫高层）
-            return block.m_49966_().m_60796_(maid.m_9236_(), maid.m_20183_());
-        } catch (Exception e) {
-            return false;
-        }
+        return com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildBlock(
+                block, maid.m_9236_(), maid.m_20183_());
     }
 }

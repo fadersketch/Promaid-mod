@@ -1756,40 +1756,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿 */
     private Item takeBuildBlock(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
-        Map<Item, Integer> counts = new HashMap<>();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
-                continue;
-            }
-            Block block = bi.m_40614_();
-            if (block == null || block instanceof FallingBlock) {
-                continue; // 下落方块（沙/砾石/铁砧）不用
-            }
-            counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
-        }
-        Item best = null;
-        int bestCount = 0;
-        for (Map.Entry<Item, Integer> e : counts.entrySet()) {
-            if (e.getValue() > bestCount) {
-                bestCount = e.getValue();
-                best = e.getKey();
-            }
-        }
-        if (best == null) {
-            return null;
-        }
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.m_41619_() && stack.m_41720_() == best) {
-                ItemStack taken = inv.extractItem(i, 1, false);
-                if (!taken.m_41619_()) {
-                    return best;
-                }
-            }
-        }
-        return null;
+        // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
+        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(maid.getMaidInv(), null, null);
     }
 
     @Override

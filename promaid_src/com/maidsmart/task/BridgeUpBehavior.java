@@ -478,59 +478,22 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 背包里是否有可搭方块（只看不拿——canUse 探测专用，无副作用）。
      * v1.1.0 审查：旧版 canUse 直接调 takeBuildBlock，每轮启动尝试都会凭空
      * 消耗一枚方块（brain 每 tick 轮询 canUse，行为反复启停时背包悄悄漏方块）。
+     * v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选。
      */
     private static boolean hasBuildBlock(EntityMaid maid) {
         IItemHandler inv = maid.getMaidInv();
         for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
-                continue;
+            if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(
+                    inv.getStackInSlot(i), null, null)) {
+                return true;
             }
-            Block block = bi.m_40614_();
-            if (block == null || block instanceof FallingBlock) {
-                continue; // 下落方块（沙/砾石）不用
-            }
-            return true;
         }
         return false;
     }
 
-    /** 背包数量最多的可搭方块（BlockItem + 非下落；照挖矿 takeBuildBlock） */
+    /** 背包数量最多的可搭方块（v1.1.0 实测七：统一走 MaidBuildBlockFilter 过滤） */
     private static Item takeBuildBlock(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
-        Map<Item, Integer> counts = new HashMap<>();
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
-                continue;
-            }
-            Block block = bi.m_40614_();
-            if (block == null || block instanceof FallingBlock) {
-                continue; // 下落方块（沙/砾石）不用
-            }
-            counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
-        }
-        Item best = null;
-        int bestCount = 0;
-        for (Map.Entry<Item, Integer> e : counts.entrySet()) {
-            if (e.getValue() > bestCount) {
-                bestCount = e.getValue();
-                best = e.getKey();
-            }
-        }
-        if (best == null) {
-            return null;
-        }
-        for (int i = 0; i < inv.getSlots(); i++) {
-            ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.m_41619_() && stack.m_41720_() == best) {
-                ItemStack taken = inv.extractItem(i, 1, false);
-                if (!taken.m_41619_()) {
-                    return best;
-                }
-            }
-        }
-        return null;
+        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(maid.getMaidInv(), null, null);
     }
 
     /** 材料耗尽播报（限频 30 秒） */
