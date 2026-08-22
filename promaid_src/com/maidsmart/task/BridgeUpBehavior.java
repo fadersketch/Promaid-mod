@@ -103,7 +103,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * v1.1.0 审查：不再要求 bridging 标记——行为中止（威胁出现/卡死放弃）的瞬间标记
      * 就清了，旧判定会把她脚下的塔立刻回收，人从半空掉进威胁堆里；现在只要还站着
      * 就延后回收，走开才清。
+     * v1.1.0 实测十七：改 public（supportsBridgerPublic）——自保的战斗方块回收
+     * （60 秒到期）复用同一个"女仆站上面延后清理"保护。
      */
+    public static boolean supportsBridgerPublic(ServerLevel level, BlockPos pos) {
+        return supportsBridger(level, pos);
+    }
+
     private static boolean supportsBridger(ServerLevel level, BlockPos pos) {
         for (EntityMaid m : level.m_45976_(EntityMaid.class, new AABB(pos).m_82400_(2.0))) {
             if (!m.m_6084_()) {
