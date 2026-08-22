@@ -230,19 +230,23 @@ public class ScheduleBookScreen extends Screen {
                             }
                         }));
         // 任务循环（点一下换下一个；到头回绕）
-        this.m_142416_(Button.m_253074_(
-                        Component.m_237113_("任务：" + taskCn(curTask) + " \u00a78(点击切换)"),
-                        b -> {
-                            int next = (this.taskUids.indexOf(curTask) + 1) % Math.max(1, this.taskUids.size());
-                            String uid = this.taskUids.get(next);
-                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                    this.selUuid, -1, uid, -1));
-                            if (sel != null) {
-                                sel[2] = uid;
-                            }
-                            this.m_7856_();
-                        })
-                .m_252987_(qx, 104, Math.min(200, w - qx - 4), 20).m_253136_());
+        // v1.1.0 实测十六（审查 P2-5）：空任务列表守卫——openFor 的 getNotHiddenTaskList
+        // 整段被 try/catch 吞掉时 taskUids 可能为空，旧版 get(next) 直接 IOOBE 崩客户端
+        if (!this.taskUids.isEmpty()) {
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_("任务：" + taskCn(curTask) + " \u00a78(点击切换)"),
+                            b -> {
+                                int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
+                                String uid = this.taskUids.get(next);
+                                ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                        this.selUuid, -1, uid, -1));
+                                if (sel != null) {
+                                    sel[2] = uid;
+                                }
+                                this.m_7856_();
+                            })
+                    .m_252987_(qx, 104, Math.min(200, w - qx - 4), 20).m_253136_());
+        }
     }
 
     /**
@@ -353,16 +357,20 @@ public class ScheduleBookScreen extends Screen {
                             })
                     .m_252987_(left + timeW + 4, y, modeW, 18).m_253136_());
             // 任务循环
+            // v1.1.0 实测十六（审查 P2-5）：空任务列表守卫（同快捷页——空列表时
+            // 循环按钮 get(next) 会 IOOBE 崩客户端，这里干脆不建按钮）
             String uid = String.valueOf(row[2]);
-            this.m_142416_(Button.m_253074_(
-                            Component.m_237113_(taskCn(uid)),
-                            b -> {
-                                int next = (this.taskUids.indexOf(String.valueOf(this.rows.get(idx)[2])) + 1)
-                                        % Math.max(1, this.taskUids.size());
-                                this.rows.get(idx)[2] = this.taskUids.get(next);
-                                b.m_93666_(Component.m_237113_(taskCn(this.taskUids.get(next))));
-                            })
-                    .m_252987_(left + taskX, y, taskW, 18).m_253136_());
+            if (!this.taskUids.isEmpty()) {
+                this.m_142416_(Button.m_253074_(
+                                Component.m_237113_(taskCn(uid)),
+                                b -> {
+                                    int next = (this.taskUids.indexOf(String.valueOf(this.rows.get(idx)[2])) + 1)
+                                            % this.taskUids.size();
+                                    this.rows.get(idx)[2] = this.taskUids.get(next);
+                                    b.m_93666_(Component.m_237113_(taskCn(this.taskUids.get(next))));
+                                })
+                        .m_252987_(left + taskX, y, taskW, 18).m_253136_());
+            }
             // 删除
             this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7c×"), b -> {
                         this.rows.remove(idx);
