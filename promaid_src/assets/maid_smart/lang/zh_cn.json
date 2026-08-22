@@ -68,6 +68,8 @@
   "config.promaid.wood.chainLimit": "连锁砍伐上限（块）",
   "config.promaid.combat.autoSwitch": "主动切换战斗模式",
   "config.promaid.combat.autoSwitchRadius": "响应半径（格）",
+  "config.promaid.combat.autoSwitchModWeight": "模组武器权重",
+  "config.promaid.combat.autoSwitchVanillaWeight": "原版武器权重",
   "config.promaid.combat.autoSwitchGunPrefer": "枪械优先",
   "config.promaid.combat.autoSwitchRestore": "战斗结束自动还原",
   "config.promaid.combat.autoSwitchRestoreDelay": "还原延迟（tick）",
