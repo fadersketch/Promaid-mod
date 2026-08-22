@@ -1739,6 +1739,10 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_BATCH_PLANT.set(v), "农场批量种植：种植时以当前格为中心蔓延，把相连农田里的空耕地一次全种上（种子真实消耗）；默认开启"));
         this.rows.add(new NumRow("批量种植上限（格）", String.valueOf(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT, s), "农场批量种植上限（格）：一次批量种植的最大格数（4~96，默认 24）"));
+        // v1.1.0：排班表系统总开关（玩家可操作原则——排班物品 UI 之外也要有全局开关）
+        this.rows.add(new SectionRow("排班表（v1.1.0）", true));
+        this.rows.add(new BoolRow("排班表系统", MaidSmartConfig.MISC_SCHEDULE_ENABLED.get(),
+                v -> MaidSmartConfig.MISC_SCHEDULE_ENABLED.set(v), "排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（每只女仆已保存的日程不丢，重新打开即恢复），女仆保持当前任务——单只女仆的排班开关在排班表物品里（快捷设置）"));
         // v1.5.310：爱憎分明相关开关已整体迁到「爱憎分明模组调试」板块页（见 loveloathRows）
     }
 

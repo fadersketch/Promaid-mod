@@ -323,6 +323,8 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
+    // v1.1.0：排班表系统全局开关（关闭后排班调度器停摆——已保存的日程保留，重开恢复）
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_ENABLED;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -1027,6 +1029,9 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
             .translation("config.promaid.misc.batchPlant").define("batchPlant", true);
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
+    // v1.1.0：排班表总开关（用户"玩家可操作"原则——新功能都要有手册内开关）
+    MISC_SCHEDULE_ENABLED = BUILDER.comment("排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（已保存的日程不丢，重新打开恢复生效），女仆保持当前任务")
+            .translation("config.promaid.misc.scheduleEnabled").define("scheduleEnabled", true);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
