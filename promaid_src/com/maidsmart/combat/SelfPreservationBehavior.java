@@ -105,7 +105,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (marks == null || marks.isEmpty()) {
             return;
         }
-        long lifetime = 60L * 20L; // 60 秒（战斗节奏多变，比挖矿 10 秒长）
+        long lifetime = com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L;
         java.util.Iterator<java.util.Map.Entry<BlockPos, CombatPlacedMark>> it =
                 marks.entrySet().iterator();
         while (it.hasNext()) {
