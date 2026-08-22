@@ -34,6 +34,8 @@ import java.util.Map;
  * 触发条件（全部满足）：
  * - 开关开启；主人存在、活着、同维度
  * - 女仆非 home 模式（在家模式 = 守家不出门，不搭路追主人）
+ * - 任务空闲（v1.1.0 实测十五：挖矿/伐木已锁定目标、烹饪/酿造站桩中、建造
+ *   坐下中都不追——手上的活没干完不撂挑子；详见 isTaskOccupied）
  * - 主人高于女仆 ≥ bridge.minDy 格；欧氏距离 < bridge.maxDist 格
  * - 周围 bridge.threatDist 格内无敌对生物；女仆非自保状态
  * - 背包有可放置方块（BlockItem、非下落方块）
@@ -234,6 +236,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.isHomeModeEnable()) {
             return false;
         }
+        // v1.1.0 实测十五（用户："女仆正准备挖矿，主人在其他地方打高，这个时候
+        // 不应该追上去。可以处于一个任务状态，但必须是空闲的"）：任务占用中
+        // 不启动搭路——手上的活没干完不撂挑子。判定口径见 isTaskOccupied。
+        if (isTaskOccupied(maid)) {
+            return false;
+        }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         if (dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
             return false; // 主人不够高（平路/在下面——走路或跟随处理）
@@ -426,6 +434,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保触发——让位
         }
+        // v1.1.0 实测十五：搭路途中任务重新占用了她（排班切班/玩家改派/矿刷新
+        // 被重新锁定）→ 中止搭路让位（脚下方块 10 秒自回收，走开即清）
+        if (isTaskOccupied(maid)) {
+            return false;
+        }
         // v1.1.0 终审：方块耗尽 → 立即中止（搭不了就是搭不了，说一声就撤，不等 20 秒；
         // 选材始终是"背包数量最多的可放置方块"，takeBuildBlock 不变）
         int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
@@ -565,6 +578,48 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
         }
         return false;
+    }
+
+    /**
+     * v1.1.0 实测十五：女仆的任务是否正被【实质工作】占用（搭路追主人的门禁）。
+     *
+     * 用户口径："必须保证自己没有任务进程在占用——比如正准备挖矿时主人
+     * 在别处打高，不应该追上去；可以处于任务状态，但该状态必须是空闲的。"
+     *
+     * 占用判定（promaid 自有四工作任务的"有活"信号，全部是行为维护的实时状态）：
+     * - 挖矿：MINING 集合（找到矿才登记、框内无矿即摘除——空闲时已退出标记）
+     * - 伐木：WOODING 集合（同上口径，找到树才登记）
+     * - 建造：BINDING 建造计划在身（有蓝图待建 = 占用；v1.5.177 暂停时行为
+     *   canUse 为 false、坐下标记也由行为维护——暂停中的女仆视为空闲可追）
+     * - 站桩工作（烹饪/酿造）：WORK_STILL 标记（行为激活期才有，空闲即清）
+     *
+     * 不拦的情况：idle/跟随/战斗/喂食等 TLM 原生任务（搭路本来就为跟随服务，
+     * 这些任务上搭路是正常画面）；挖矿/伐木任务但【无目标空闲】（挖完了
+     * 在找下一个或守在原地——正是用户允许的"处于任务状态但空闲"）。
+     * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
+     */
+    private static boolean isTaskOccupied(EntityMaid maid) {
+        try {
+            if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (com.maidsmart.task.MaidWoodBehavior.isWooding(maid)) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)
+                    && !com.maidsmart.build.BuildPlan.isBoundPlanPaused(maid)
+                    && !com.maidsmart.build.BuildPlan.isMaidPaused(maid)) {
+                return true; // 建造任务且未暂停（暂停 = 玩家叫停，视为空闲可追）
+            }
+        } catch (Throwable ignored) {
+        }
+        return maid.getPersistentData().m_128471_(MaidWorkTags.WORK_STILL_TAG);
     }
 
     private static double sq(double v) {
