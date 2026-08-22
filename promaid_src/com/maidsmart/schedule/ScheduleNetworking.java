@@ -225,6 +225,11 @@ public final class ScheduleNetworking {
                 }
                 EntityMaid maid = findMaid(level, pkt.uuid);
                 if (maid == null || !allowed(player, maid)) {
+                    // v1.1.0 实测十六（审查 P2-9）：跨维度女仆在本维度找不到时，
+                    // 旧版静默 return → 客户端 waiting 永不清除，日程 tab 永远卡在
+                    // "请求中…"。回一个空数据包让客户端正常显示空表
+                    CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new SchedDataPacket(pkt.uuid, false, java.util.Collections.emptyList()));
                     return;
                 }
                 CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),

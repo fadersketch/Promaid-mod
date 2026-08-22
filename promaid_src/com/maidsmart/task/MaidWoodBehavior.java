@@ -1877,10 +1877,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         try {
             net.minecraft.world.level.block.state.BlockState state = level.m_8055_(pos);
             net.minecraft.world.level.block.state.BlockState below = level.m_8055_(pos.m_7918_(0, -1, 0));
-            for (String id : DANGER_BLOCK_IDS) {
-                net.minecraft.world.level.block.Block b =
-                        net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
-                                net.minecraft.resources.ResourceLocation.parse(id));
+            // v1.1.0 实测十六（审查 P2）：用 static 缓存的 Block[] 替代每次 parse+查注册表
+            for (net.minecraft.world.level.block.Block b : DANGER_BLOCKS) {
                 if (b != null && (state.m_60734_() == b || below.m_60734_() == b)) {
                     return true;
                 }
@@ -1895,6 +1893,23 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             "minecraft:lava", "minecraft:fire", "minecraft:magma_block",
             "minecraft:cactus", "minecraft:sweet_berry_bush", "minecraft:campfire"
     };
+    /** v1.1.0 实测十六：DANGER_BLOCK_IDS 解析后的 Block 缓存（类加载时一次，防每候选 6 次注册表查询） */
+    private static final net.minecraft.world.level.block.Block[] DANGER_BLOCKS = initDangerBlocks();
+    private static net.minecraft.world.level.block.Block[] initDangerBlocks() {
+        java.util.List<net.minecraft.world.level.block.Block> list = new java.util.ArrayList<>();
+        for (String id : DANGER_BLOCK_IDS) {
+            try {
+                net.minecraft.world.level.block.Block b =
+                        net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
+                                net.minecraft.resources.ResourceLocation.parse(id));
+                if (b != null) {
+                    list.add(b);
+                }
+            } catch (Exception ignored) {
+            }
+        }
+        return list.toArray(new net.minecraft.world.level.block.Block[0]);
+    }
 
     /** v1.5.47：是否可开路废石（穿透挖掘的临时目标；v1.5.87 含徒手可挖软方块）
      *  v1.5.99c：m_135827_ 是 getNamespace（SRG）返回 "minecraft"，永远匹配不上白名单
