@@ -74,6 +74,8 @@
   "config.promaid.bridge": "搭路设置",
   "config.promaid.bridge.enabled": "搭路",
   "config.promaid.bridge.maxDist": "搭路触发距离（格）",
+  "config.promaid.bridge.airMaxDist": "空中搭桥距离（格）",
+  "config.promaid.wood.leavesClear": "树冠清理",
   "config.promaid.bridge.minDy": "最小高差（格）",
   "config.promaid.bridge.threatDist": "威胁半径（格）",
   "config.promaid.bridge.stepCooldown": "搭路节奏（tick/块）",

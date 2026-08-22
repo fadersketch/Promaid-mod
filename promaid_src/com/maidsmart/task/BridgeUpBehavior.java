@@ -177,6 +177,24 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         return best;
     }
 
+    /**
+     * v1.1.0 实测四：女仆是否处于"空中"状态——脚下悬空（含下落中）或站在
+     * 自己 10 秒内垫的搭路方块上（PLACED 表里有记录）。
+     * 空中 = 导航不可用 → 搭路距离上限放宽到 airMaxDist。
+     */
+    private static boolean isAirborne(ServerLevel level, EntityMaid maid) {
+        BlockPos feet = maid.m_20183_();
+        if (!maid.m_20096_()) {
+            return true; // 悬空/下落中
+        }
+        BlockPos under = feet.m_7918_(0, -1, 0);
+        Map<BlockPos, PlacedMark> marks = PLACED.get(level.m_46472_());
+        if (marks != null && marks.containsKey(under)) {
+            return true; // 站在自己垫的方块上（塔/桥——地面导航够不着主人）
+        }
+        return false;
+    }
+
     /* ==================== 行为本体 ==================== */
 
     /** 垫块节奏冷却（tick 计数） */
@@ -213,9 +231,20 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
             return false; // 主人不够高（平路/在下面——走路或跟随处理）
         }
+        // v1.1.0 实测四（用户："空中远远也能看见，希望她赶紧搭方块走过来；平地上
+        // 不想要这种情景"）：区分地面/空中两套距离阈值——
+        // - 地面（脚下实心）：维持 7 格传送判定距离（maxDist）——平地上太远就该走
+        //   路/传送，不该远距铺桥（用户明确不想要的画面）；
+        // - 空中（脚下悬空或站在自己垫的方块上）：空中没有"走路过去"的选项，导航
+        //   也永远失败——距离上限放宽到 airMaxDist（默认 24），远远看见主人就直接
+        //   空中铺桥走过去。0 = 关闭空中远距（退回 7 格口径）。
+        boolean airborne = isAirborne(level, maid);
+        int distLimit = airborne
+                ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
+                : MaidSmartConfig.BRIDGE_MAX_DIST.get();
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
-                >= sq(MaidSmartConfig.BRIDGE_MAX_DIST.get())) {
-            return false; // 超过传送判定距离——交给 TLM 瞬移/跟随
+                >= sq(distLimit)) {
+            return false; // 超过对应阈值——地面交给传送/跟随；空中太远也先不启动
         }
         if (hasThreatNearby(level, maid)) {
             return false; // 有威胁不搭（塔会被拆/搭到一半挨打）
@@ -376,9 +405,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_()) <= 6.25) {
             return false; // 已贴到主人（≤2.5 格）——完成，跟随接管
         }
+        // v1.1.0 实测四：距离上限与 canUse 同口径——空中用 airMaxDist（+2 缓冲），
+        // 否则远距空中铺桥刚启动就被 canContinue 掐掉
+        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
-                >= sq(MaidSmartConfig.BRIDGE_MAX_DIST.get() + 2)) {
-            return false; // 主人走远了（超出传送判定+2 缓冲）——放弃
+                >= sq(distLimit + 2)) {
+            return false; // 主人走远了（超出阈值+2 缓冲）——放弃
         }
         if (hasThreatNearby(level, maid)) {
             return false; // 威胁出现——中止（战术/自保接管）
