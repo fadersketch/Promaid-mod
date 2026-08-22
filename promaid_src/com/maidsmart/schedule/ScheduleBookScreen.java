@@ -166,7 +166,15 @@ public class ScheduleBookScreen extends Screen {
                             Component.m_237113_((this.tab == ti ? "\u00a76\u25cf " : "\u00a77") + tabs[i]),
                             b -> {
                                 this.tab = ti;
-                                if (ti == 1 && this.waiting) {
+                                // v1.1.0 实测十二（用户："快捷设置打不开"）：切到日程 tab
+                                // 时【无条件】请求日程数据——旧版只在 waiting 时补发，
+                                // 而 waiting 早已被数据包清掉：切回快捷再切日程时 rows
+                                // 是旧数据不会刷新；切到日程后 waiting 已是 false，
+                                // schedTab 直接画旧 rows，丢"请求中"状态。现在每次进
+                                // 日程 tab 都重新拉最新数据。
+                                if (ti == 1) {
+                                    this.waiting = true;
+                                    this.rows.clear();
                                     ScheduleNetworking.CHANNEL.sendToServer(
                                             new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
                                 }
@@ -247,6 +255,20 @@ public class ScheduleBookScreen extends Screen {
         if (this.waiting) {
             return; // 渲染层显示"请求中…"
         }
+        // v1.1.0 实测十二（崩溃修复）：数据未到/行被删空时直接不建行——旧版
+        // maxRows = Math.max(1, ...) 强制至少跑一轮循环对空 rows 调 get(0) →
+        // IndexOutOfBoundsException 崩游戏（删除唯一一行时触发）
+        if (this.rows.isEmpty()) {
+            // 空表也要能"添加分段"（否则删光了卡死在空页）
+            int emptyLeft = Math.max(8, Math.min(cx - 210, w - 200));
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a+ 添加分段"), b -> {
+                        this.rows.add(new Object[]{"0:00~24:00", 2,
+                                this.taskUids.isEmpty() ? "" : this.taskUids.get(0)});
+                        this.m_7856_();
+                    })
+                    .m_252987_(emptyLeft, 64, 120, 18).m_253136_());
+            return;
+        }
         // 排班开关（与快捷页同款）
         boolean on = this.loadedOn;
         this.m_142416_(Button.m_253074_(
@@ -274,12 +296,12 @@ public class ScheduleBookScreen extends Screen {
         int left = Math.max(8, Math.min(cx - 210, w - delX - delW - 8));
         int y = 64;
         // 行数按高度收敛：行 + 添加/保存行必须完整落在「← 女仆列表」按钮（h-34）之上
+        // v1.1.0 实测十二：rows 非空保证在前（空表早 return）——不再 maxRows 强制 ≥1
         int maxRows = Math.max(1, Math.min(8, Math.min(this.rows.size(), (h - 118) / 22)));
         for (int i = 0; i < maxRows; i++) {
             final int idx = i;
             Object[] row = this.rows.get(i);
             int[] se = parseRange(String.valueOf(row[0]));
-            // 6 个数字框的初值：解析失败（空/半填）→ 全空（玩家从头填）；
             // 行数据先扩展到 9 槽（3..8 存数字框值——扩展要在数字框回调注册前完成）
             while (this.rows.get(idx).length < 9) {
                 Object[] old = this.rows.get(idx);
@@ -287,14 +309,23 @@ public class ScheduleBookScreen extends Screen {
                 System.arraycopy(old, 0, ext, 0, old.length);
                 this.rows.set(idx, ext);
             }
+            // v1.1.0 实测十二（用户："□□：□□～□□：□□ 方框内的内容可以填数字，
+            // 其他内容不要改变，形状都是这个样子"）：固定 6 框【全部常驻显示】——
+            // 旧版个位数小时只显示一个框（9:00 → □9:00），形状随数值变形；
+            // 现在十位框空着也显示（_9:00 的形态），每个框只填一个数字（0-9），
+            // 组合规则不变（空十位 = 个位直接做数值）。
             String[] digits = new String[6];
             if (se != null) {
-                digits[0] = se[0] / 60 >= 10 ? String.valueOf(se[0] / 60 / 10) : "";
-                digits[1] = se[0] / 60 >= 10 ? String.valueOf(se[0] / 60 % 10) : String.valueOf(se[0] / 60);
-                digits[2] = String.valueOf(se[0] % 60 / 10);
-                digits[3] = String.valueOf(se[0] % 60 % 10);
-                digits[4] = se[1] / 60 >= 10 ? String.valueOf(se[1] / 60 / 10) : "";
-                digits[5] = se[1] / 60 >= 10 ? String.valueOf(se[1] / 60 % 10) : String.valueOf(se[1] / 60);
+                int sh = se[0] / 60;
+                int sm = se[0] % 60;
+                int eh = se[1] / 60;
+                int em = se[1] % 60;
+                digits[0] = sh >= 10 ? String.valueOf(sh / 10) : "";
+                digits[1] = String.valueOf(sh % 10);
+                digits[2] = String.valueOf(sm / 10);
+                digits[3] = String.valueOf(sm % 10);
+                digits[4] = eh >= 10 ? String.valueOf(eh / 10) : "";
+                digits[5] = String.valueOf(eh % 10);
             }
             for (int d = 0; d < 6; d++) {
                 final int di = d;
@@ -495,7 +526,9 @@ public class ScheduleBookScreen extends Screen {
                     int delX = taskX + taskW + 4;
                     int left = Math.max(8, Math.min(cx - 210, w - delX - (narrowB ? 18 : 20) - 8));
                     int y = 64;
-                    int maxRows = Math.max(1, Math.min(8, Math.min(this.rows.size(), (this.f_96544_ - 118) / 22)));
+                    // v1.1.0 实测十二：冒号/波浪线渲染与 schedTab 同口径——空 rows 不画
+                    //（空表只有"+ 添加分段"按钮），不再 maxRows 强制 ≥1
+                    int maxRows = Math.min(8, Math.min(this.rows.size(), (this.f_96544_ - 118) / 22));
                     for (int i = 0; i < maxRows; i++) {
                         g.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c:"), left + 2 * (digitW + gap) - 3, y + 5, 0xFFFFFFFF, false);
                         g.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c~"), left + 4 * (digitW + gap) - 4, y + 5, 0xFFFFFFFF, false);
