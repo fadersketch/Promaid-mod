@@ -191,6 +191,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
         boolean aided = false;
         double hpRatio = owner.m_21223_() / Math.max(1.0f, owner.m_21233_());
+        // v1.1.0 实测十六（审查 P1-4）：本轮【任意实质动作】成功后统一收尾记
+        // 投喂 CD（60 tick = 3 秒）——旧版只有增益链一处 setAidCooldown，治疗链的
+        // 金苹果/喂食 fallback 完全不设防：主人低血 + 治疗药水在种类 CD 内时
+        // 每 tick fallback 金苹果 → 几十个金苹果几秒蒸发（喂食同理每 tick 喂一个）。
+        // try/finally 保证早退路径也记账。
         // v1.5.252g11【情境保命优先】：着火抗火、溺水水肺排到低血治疗前面——
         // 溺水掉血后 hp 跌到阈值 → 旧版治疗链先抢到（aided=true）→ 水肺分支
         // 被短路跳过，溺水的人只被扔治疗（救不了溺水，纯浪费）；着火同理。
@@ -261,11 +266,20 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         // 6. 主人附近有威胁且没有力量/迅捷增益 → 增益药水助战（v1.5.252g7：
         this.ownerBuffChain(level, maid, owner, aided, maidId);
 
+        // v1.1.0 实测十六（审查 P1-4）：本轮做过任何实质投喂 → 3 秒内不再进入
+        // 本 tick 主链（含金苹果/喂食 fallback——它们没有自己的种类 CD）
+        if (aided) {
+            this.setAidCooldown(maidId, 60);
+        }
+
         // ================= v1.1.0 实测六：女仆互助（战斗支援） =================
         // 同主人、16 格内的其他女仆低血/着火时也投药水救她（与救主人同款追踪弹）。
         // 每轮最多救一个（防一次检查全场连扔）；自己的保命药水不够时不勉强
         //（治疗药水只剩 1 瓶且自己血也不健康时留着——简单起见不做复杂判断：
         // 有富余就帮，实战中女仆背包通常由玩家统一配药）。
+        // v1.1.0 实测十六（审查 P1-4）：互助链加独立 CD 记账（sisterAidCds 按女仆）——
+        // 旧版互助链在 tick 里被调用两次（主人不在分支 + 主链尾部）且无任何节流，
+        // N 只女仆互邻时每 tick O(N²) 全量扫描 + 金苹果/喂食同样每 tick 连发。
         this.aidMaidSisters(level, maid, gameTime);
     }
 
@@ -276,6 +290,16 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  互助轮空。 */
     private void aidMaidSisters(ServerLevel level, EntityMaid maid, long gameTime) {
         try {
+            // v1.1.0 实测十六（审查 P1-4）：互助链独立 CD（3 秒）——旧版无任何节流：
+            // 本方法在 tick 里被调用两次（主人不在分支 + 主链尾部），每 tick 全量扫描
+            // 16 格内姐妹（N 只互邻时 O(N²)/tick），金苹果/喂食 fallback 同样每 tick
+            // 连发清空背包。CD 与主人链共用 setAidCooldown（同一个女仆同一份间隔）。
+            java.util.UUID maidId = maid.m_20148_();
+            Integer c = this.aidCds.get(maidId);
+            if (c != null && c > 0) {
+                return; // 主链已设的投喂间隔内互助也让位（本 tick 主链 return 时 aidCds
+                // 不递减——互助链不消耗间隔计数，纯让位判定）
+            }
             for (EntityMaid sister : level.m_45976_(EntityMaid.class,
                     maid.m_20191_().m_82400_(16.0))) {
                 if (sister == maid || !sister.m_6084_() || sister.m_269323_() != maid.m_269323_()) {
@@ -306,6 +330,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 if (did) {
                     maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，药水来了！");
+                    this.setAidCooldown(maidId, 60); // 互助成功同样 3 秒间隔
                     return; // 每轮最多救一个
                 }
             }
@@ -956,7 +981,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, owner);
                 if (sat > handSat) {
                     handSat = sat;
-                    handSlot = h == 0 ? -2 : -1;
+            // v1.1.0 实测十六（审查 P2-7）：副手哨兵值修复——旧版 h==0→-2 / h==1→-1，
+            // 而 -1 同时是"没找到手持食物"的哨兵 → 副手食物（handSlot=-1）与"没有"
+            // 无法区分：副手-only 时直接 return false（副手食物永远选不中）。改 -3
+            // 表示副手，-1 仍表示"没有"，哨兵不再冲突
+            handSlot = h == 0 ? -2 : -3;
                     handItem = hs;
                 }
             }
@@ -985,6 +1014,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             ItemStack toGive;
+            // v1.1.0 实测十六：副手哨兵修复后判定（handSlot != -1 即有手持食物）
             if (handSlot != -1 && handSat >= bestSat) {
                 toGive = handItem.m_41777_(); // copy
                 handItem.m_41774_(1);         // shrink(1)

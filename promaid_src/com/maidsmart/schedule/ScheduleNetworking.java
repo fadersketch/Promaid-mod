@@ -131,6 +131,13 @@ public final class ScheduleNetworking {
         }
 
         public static void handle(OpenSchedulePacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            // v1.1.0 实测十六（审查 P2-4）：S2C 包方向校验——恶意客户端把 S2C 包 ID
+            // 发往服务端时，handle 会加载 ScheduleBookScreen（引用客户端 Minecraft 类）
+            // → 专用服 NoClassDefFoundError。只接受 PLAY_TO_CLIENT 方向。
+            if (ctx.get().getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() ->
                     com.maidsmart.schedule.ScheduleBookScreen.open(pkt.maids, pkt.taskUids));
             ctx.get().setPacketHandled(true);
@@ -265,6 +272,11 @@ public final class ScheduleNetworking {
         }
 
         public static void handle(SchedDataPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            // v1.1.0 实测十六（审查 P2-4）：S2C 方向校验（同 OpenSchedulePacket）
+            if (ctx.get().getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() ->
                     com.maidsmart.schedule.ScheduleBookScreen.showSchedule(pkt.uuid, pkt.on, pkt.segments));
             ctx.get().setPacketHandled(true);

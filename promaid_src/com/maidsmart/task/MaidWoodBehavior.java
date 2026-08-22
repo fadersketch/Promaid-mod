@@ -590,7 +590,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             ids.addAll(BLOCKED_REPORT_SINCE.keySet());
             ids.addAll(RECENT_DISCARD.keySet());
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
-        ids.addAll(NO_AXE_REPORT_SINCE.keySet());
+            ids.addAll(NO_AXE_REPORT_SINCE.keySet());
+            ids.addAll(SAPLING_PLANT_SINCE.keySet()); // v1.1.0 实测十六（审查 P2）：
+            // 漏加本表 → 只在 SAPLING 表有条目的女仆不在 alive 集里，条目被
+            // 无条件误删 → 5 秒补种限频被 30 秒一次的 purge 反复重置（多耗树苗）
             ids.addAll(WOOD_CACHE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
@@ -967,19 +970,23 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             this.approachWood(level, maid);
             return;
         }
-        ItemStack mainHand = maid.m_21205_();
-        if (mainHand.m_41619_() || !(mainHand.m_41720_() instanceof AxeItem)) {
-            // v1.1.0 终审三（用户：木材空手也能挖，不因空手拒绝工作）：
-            // 优先尝试从背包装备斧（背包有斧就换——与矿镐"空手才装备"同机制，
-            // 玩家手中放的斧在非空手分支永远不动）；背包也没斧 → 空手照样开挖
-            // （下 tick 走挖掘公式慢速分支，与玩家空手砍树一致），不再弃目标。
-            MaidToolAutoEquip.ensureAnyAxe(maid);
-            if (maid.m_21205_().m_41619_()
-                    || !(maid.m_21205_().m_41720_() instanceof AxeItem)) {
-                return; // 换不上斧（背包没斧）——空手开挖，走下面的挖掘公式
-            }
-            return; // 换斧成功：等下一 tick 用新斧开始挖
-        }
+          ItemStack mainHand = maid.m_21205_();
+          if (mainHand.m_41619_() || !(mainHand.m_41720_() instanceof AxeItem)) {
+              // v1.1.0 终审三（用户：木材空手也能挖，不因空手拒绝工作）：
+              // 优先尝试从背包装备斧（背包有斧就换——与矿镐"空手才装备"同机制，
+              // 玩家手中放的斧在非空手分支永远不动）；背包也没斧 → 空手照样开挖
+              // （下 tick 走挖掘公式慢速分支，与玩家空手砍树一致），不再弃目标。
+              MaidToolAutoEquip.ensureAnyAxe(maid);
+              if (maid.m_21205_().m_41619_()
+                      || !(maid.m_21205_().m_41720_() instanceof AxeItem)) {
+                  this.notifyNoAxe(maid); // 没斧播报（限频）——然后继续空手开挖
+                  // v1.1.0 实测十六修复：旧版这里 return → 没斧的女仆每 tick 走到
+                  // 树前 return，永远到不了下面的挖掘公式，"空手照砍"承诺失效
+                  //（表现为锁树后站在树旁永久发呆；notifyNoAxe 也成了死代码）
+              } else {
+                  return; // 换斧成功：等下一 tick 用新斧开始挖
+              }
+          }
         // v1.5.19 渐进挖掘；v1.5.22 重写——直接公式，不依赖 FakePlayer
         // （旧版依赖 FakePlayer.getDestroyProgress，假玩家状态异常时 delta=0 → 永远挖不完）
         BlockState state = level.m_8055_(this.targetPos);
@@ -1145,6 +1152,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * （防失误圈到整片森林——BFS 只沿"相连的树叶"扩散，树冠之间不相连不会越界）。
      * 掉落物走 getDrops（树苗/苹果/木棍按概率掉）直接进背包，放不下落地。
      * 音效粒子静默（同连锁破坏，防刷屏）。
+     * v1.1.0 实测十六修复：BFS 起点从 base 正上方【一格】改为向上爬到第一片树叶
+     * （旧版起点非叶立即终止——连锁关时上方是下一节原木、连锁开时是空气，常规
+     * 自底向上砍树时树冠清理基本不触发；只有恰好砍到树顶那节才生效）。
      */
     private void clearTreeTop(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
         BlockPos base = this.targetPos;
@@ -1155,8 +1165,19 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         int limit = 80;
         java.util.Set<BlockPos> visited = new java.util.HashSet<>();
         java.util.ArrayDeque<BlockPos> bfs = new java.util.ArrayDeque<>();
-        // 从树干位置正上方开始（树干本身已挖掉，上方第一格通常是树叶/树冠中心）
-        BlockPos start = base.m_7918_(0, 1, 0);
+        // 起点：沿树干向上爬（最多 8 格），把途中遇到的【第一片树叶】作为 BFS 起点
+        // ——树干本身（剩余原木）/空气都可以穿过，只从真正的树叶开始扩散
+        BlockPos start = null;
+        for (int up = 1; up <= 8; up++) {
+            BlockPos p = base.m_7918_(0, up, 0);
+            if (level.m_8055_(p).m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock) {
+                start = p;
+                break;
+            }
+        }
+        if (start == null) {
+            return; // 正上方 8 格内没有任何树叶——不是常规树形，不清理
+        }
         bfs.add(start.m_7949_());
         visited.add(start.m_7949_());
         BlockPos c = base;
@@ -1249,7 +1270,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) saplingStack.m_41720_()).m_40614_();
         level.m_7731_(plantPos, saplingBlock.m_49966_(), 3);
-        saplingStack.m_41774_(1);
+        // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
+        // 返回栈，若 handler 返回副本则 m_41774_(1) 扣不掉背包（无限补种刷方块）；
+        // 与本工程其他消耗点（搭路/药水/图腾）统一口径
+        try {
+            maid.getMaidInv().extractItem(saplingSlot, 1, false);
+        } catch (Exception ignored) {
+        }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         SAPLING_PLANT_SINCE.put(maid.m_19879_(), now);
     }

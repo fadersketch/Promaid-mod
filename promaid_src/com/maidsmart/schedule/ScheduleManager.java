@@ -88,8 +88,20 @@ public final class ScheduleManager {
         }
         // 任务
         if (seg.taskUid() != null && !seg.taskUid().isEmpty()) {
-            TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(seg.taskUid()))
-                    .ifPresent(maid::setTask);
+            // v1.1.0 实测十六（审查 P1-5）：非法 taskUid 防护——taskUid 来自客户端包
+            // （SchedSavePacket/QuickApplyPacket），恶意包/损坏 NBT 的非法串（如 "###"）
+            // 会让 parse 抛 ResourceLocationException，且此处在主线程 enqueueWork 里
+            // 执行 = 服务端直接崩。1.20.1 SRG 名单里 ResourceLocation 没有 tryParse
+            //（那是 1.20.5+ 的方法），等效做法：m_135830_ = isValidResourceLocation
+            // 预检（parse 用的同一套校验，静态方法不抛异常）+ try/catch 兜底。
+            try {
+                if (net.minecraft.resources.ResourceLocation.m_135830_(seg.taskUid())) {
+                    TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(seg.taskUid()))
+                            .ifPresent(maid::setTask);
+                }
+            } catch (Exception ignored) {
+                // 双保险：isValid 万一漏过，parse 抛异常也不上行（跳过本段任务）
+            }
         }
     }
 }

@@ -106,7 +106,12 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
             return; // 保险：取不到方块（理论上 findTorch 已过滤）
         }
         level.m_7731_(target, placedBlock.m_49966_(), 3);
-        torch.m_41774_(1); // 消耗一个火把
+        // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
+        // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一
+        try {
+            inv.extractItem(slot, 1, false);
+        } catch (Exception ignored) {
+        }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         this.torchCooldown = 30; // 1.5 秒
     }
@@ -116,11 +121,13 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
      * （灵魂火把第二；含常见模组火把的注册名，找不到的自动跳过）。
      * 灵魂火把亮度 10 比普通火把 14 低，但在下界/驱猪场景有独特价值——
      * 有普通火把绝不用它（用户指定优先级）。
+     * v1.1.0 实测十六（审查 P2）：移出 redstone_torch——它亮度只有 7（临界）且
+     * 【会发射红石信号】：黑暗中自动"照明"会意外激活附近的红石灯/活塞/门/
+     * TNT 类机关，作为照明清单成员风险不对称，不配当自动放置的备选。
      */
     private static final String[] TORCH_IDS = {
             "minecraft:torch",
             "minecraft:soul_torch",
-            "minecraft:redstone_torch",
             "tacz:torch"
     };
 
