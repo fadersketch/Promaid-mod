@@ -252,6 +252,17 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double hx = owner.m_20185_() - maid.m_20185_();
         double hz = owner.m_20189_() - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
+        // v1.1.0 实测三（用户："僵尸在空中仍能左右搭方块继续追，女仆只会傻站着"）：
+        // 空中水平搭桥——参照 endofdays BlockBuildBridGeGoal 的做法：不依赖导航，
+        // 只要朝主人方向前方一格脚下是空的，就直接在【前方脚下】垫方块铺桥，
+        // 走过去再铺下一块（导航在半空永远返回失败 → 旧版只剩垂直叠柱/傻站）。
+        // 与 tryDiagStep 的区别：那格只垫"下方一格"做台阶上楼；这里女仆已在
+        // 主人高度附近（dy 已不足 minDy），铺的是平桥——空中横向逼近的主力。
+        if (hDist > 1.2 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
+            if (this.tryAirBridgeStep(level, maid, hx, hz, hDist)) {
+                return; // 铺了一块并走上去——本 tick 结束
+            }
+        }
         // v1.1.0 终审二（用户："不喜欢朝着主人的方向向前搭"）：水平还没对齐时不再
         // 死等导航走过去——导航绕路/被挡时她只会原地叠柱子够不着主人。脚下垫高
         // 的同时朝主人方向【前方一格脚下】也垫一块（斜上台阶，照伐木 slopeStep），
@@ -270,6 +281,50 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             this.placeStep(level, maid);
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         }
+    }
+
+    /**
+     * v1.1.0 实测三：空中水平铺桥（朝主人方向前方一格脚下垫块并走上去）。
+     * 适用：主人高度与女仆接近（dy < minDy，垂直搭高不触发/已到顶）但水平还远——
+     * 前方脚下悬空时导航永远走不过去，直接铺桥走过去（参照 endofdays 僵尸
+     * BlockBuildBridGeGoal：朝向一格的脚下是空就垫，不问导航）。
+     * 返回 true = 铺了一块（本 tick 不再做别的动作）。
+     */
+    private boolean tryAirBridgeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (this.stepCooldown > 0) {
+            return false; // 与垂直垫块共用节奏冷却
+        }
+        int y = maid.m_20183_().m_123342_();
+        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
+        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
+        BlockPos ahead = new BlockPos(tx, y, tz);
+        BlockPos fill = ahead.m_7918_(0, -1, 0);
+        // 前方脚下不是空气（有方块/被占）→ 有路，交给导航
+        if (!level.m_8055_(fill).m_60795_()) {
+            return false;
+        }
+        // 前方两格净空（身体+头）防把自己憋进去
+        if (!level.m_8055_(ahead).m_60795_()
+                || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
+            return false;
+        }
+        Item item = takeBuildBlock(maid);
+        if (item == null) {
+            return false;
+        }
+        Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
+        if (block == null) {
+            return false;
+        }
+        level.m_7731_(fill, block.m_49966_(), 3);
+        track(level, fill, block);
+        this.guardTicks = 12;
+        this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
+        this.lastPlacedGameTime = level.m_46467_();
+        // 走上刚铺的桥面（一格，直接移动目标；导航在半空没用）
+        maid.m_21573_().m_26519_(tx + 0.5, y, tz + 0.5,
+                (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
+        return true;
     }
 
     /**
