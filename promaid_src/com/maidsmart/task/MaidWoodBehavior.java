@@ -1196,7 +1196,17 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             BlockEntity be = level.m_7702_(cur);
             java.util.List<ItemStack> drops = Block.m_49874_(st, level, cur, be, maid, mainHand);
-            insertIntoMaidInventory(maid, level, drops, cur);
+            // v1.1.0 实测十六（审查 P3）：树冠清理掉落尊重 WOOD_AUTO_COLLECT 开关——
+            // 旧版无条件进背包，与 burstNearbyLeaves（尊重开关）口径不一致
+            if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
+                insertIntoMaidInventory(maid, level, drops, cur);
+            } else {
+                for (ItemStack s : drops) {
+                    if (!s.m_41619_()) {
+                        Block.m_49840_(level, cur, s);
+                    }
+                }
+            }
             level.m_7731_(cur, Blocks.f_50016_.m_49966_(), 3);
             cleared++;
             for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
@@ -1234,7 +1244,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             BlockPos p = base.m_7918_(0, y, 0);
             if (level.m_8055_(p).m_60795_()) {
                 BlockState under = level.m_8055_(p.m_7918_(0, -1, 0));
-                if (under.m_60713_(Blocks.f_50073_) || under.m_60713_(Blocks.f_50125_)) {
+                // v1.1.0 实测十六（审查 P3）：扩大可种地面判定——旧版只认 dirt/grass_block，
+                // 雨林/红树/繁茂洞穴等生态的树长在灰化土/苔藓/泥巴/缠根土上不补种。
+                // 改用 #minecraft:dirt 标签（涵盖上述全部变体 + 模组泥土）+ 原版 grass_block
+                if (under.m_204336_(net.minecraft.tags.BlockTags.f_144274_) /* #minecraft:dirt */
+                        || under.m_60713_(Blocks.f_50125_) /* grass_block */) {
                     plantPos = p;
                     break;
                 }
