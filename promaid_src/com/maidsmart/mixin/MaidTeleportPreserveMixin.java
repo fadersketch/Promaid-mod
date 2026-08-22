@@ -37,6 +37,12 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // v1.1.0：搭路中禁瞬移——正在垫方块靠近主人时被 teleportToOwner 拉走
+            // 会白搭（桥断了还浪费方块）；搭完自然恢复
+            if (maid.getPersistentData().m_128471_("maid_smart_bridging")) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区
