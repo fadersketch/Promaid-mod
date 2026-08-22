@@ -257,4 +257,9 @@ public class AutoCombatSwitch {
     public static void forgetMaid(java.util.UUID uuid) {
         SWITCHED.remove(uuid);
     }
+
+    /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
+    public static boolean isAutoCombatActive(EntityMaid maid) {
+        return maid.getPersistentData().m_128471_(PREV_TASK_TAG);
+    }
 }
