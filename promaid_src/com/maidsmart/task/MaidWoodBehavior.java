@@ -52,6 +52,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             ResourceLocation.parse("minecraft:logs"));
     private static final net.minecraft.tags.TagKey<Block> BAMBOO_TAG = net.minecraft.tags.BlockTags.create(
             ResourceLocation.parse("minecraft:bamboo_blocks"));
+    /** v1.1.0 实测五：树苗 tag（原版+模组树苗都带 #minecraft:saplings） */
+    private static final net.minecraft.tags.TagKey<Block> SAPLINGS_TAG = net.minecraft.tags.BlockTags.create(
+            ResourceLocation.parse("minecraft:saplings"));
 
     /** 可砍判定：名单内；或 wood.tagAuto 开时带原版 logs/bamboo_blocks 标签（模组原木照砍） */
     private static boolean isWoodState(BlockState state) {
@@ -401,6 +404,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
     /** v1.1.0：没有斧头播报限频（实体 ID → 上次播报 tick） */
     private static final Map<Integer, Long> NO_AXE_REPORT_SINCE = new HashMap<>();
+    /** v1.1.0 实测五：树苗补种限频（实体 ID → 上次种植 tick，5 秒一次防连种） */
+    private static final Map<Integer, Long> SAPLING_PLANT_SINCE = new HashMap<>();
     /** v1.5.113：找矿结果缓存——全量扫描每 5 秒一次，期间只做廉价校验（A1 性能优化） */
     private static final Map<Integer, WoodCache> WOOD_CACHE = new HashMap<>();
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
@@ -418,6 +423,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         RECENT_DISCARD.remove(maidEntityId);
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
         NO_AXE_REPORT_SINCE.remove(maidEntityId);
+        SAPLING_PLANT_SINCE.remove(maidEntityId);
         WOOD_CACHE.remove(maidEntityId);
     }
 
@@ -602,8 +608,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             SKIP_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             BLOCKED_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
-            NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
-            NO_AXE_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+        NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+        NO_AXE_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+        SAPLING_PLANT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_CACHE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) {
         }
@@ -1056,6 +1063,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.config.MaidSmartConfig.WOOD_LEAVES_CLEAR.get()) {
             this.clearTreeTop(level, maid, mainHand);
         }
+        // v1.1.0 实测五（用户："伐木状态下手中有树苗也尝试种下，运作逻辑与插火把类似"）：
+        // 树砍完后在树干原址补种树苗——可持续发展。限频 5 秒（与插火把同思路防连种）；
+        // 背包里找任意树苗（ItemNameBlockItem 且对应方块带 #minecraft:saplings tag），
+        // 种在泥土/草方块上（树干基座被挖后暴露的地面通常正是）。
+        this.tryPlantSapling(level, maid);
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
@@ -1148,6 +1160,70 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         if (cleared > 0) {
             LOGGER.info("wood leaves clear: maid={} base={} cleared={}", maid.m_20148_(), base, cleared);
         }
+    }
+
+    /**
+     * v1.1.0 实测五：树苗补种——树砍完后在树干原址（或其正下方第一格泥土/草）种树苗。
+     * 背包找任意树苗（ItemNameBlockItem 且方块带 #minecraft:saplings 标签——原版
+     * 全部树苗 + 模组树苗自动兼容）；种下消耗 1 个。限频 5 秒（防一棵大树连锁
+     * 砍伐触发多次补种）。找不到合适的地面（基座下方是石头/悬空）就跳过不硬种。
+     */
+    private void tryPlantSapling(ServerLevel level, EntityMaid maid) {
+        long now = level.m_46467_();
+        Long last = SAPLING_PLANT_SINCE.get(maid.m_19879_());
+        if (last != null && now - last < 100L) {
+            return; // 5 秒内种过
+        }
+        BlockPos base = this.targetPos;
+        if (base == null) {
+            return;
+        }
+        // 树干原址向下找第一个可种的地面（树干基座本身就是树苗位；树干下方
+        // 可能还有泥土——挖树挖穿的情况）
+        BlockPos plantPos = null;
+        for (int y = 0; y >= -2; y--) {
+            BlockPos p = base.m_7918_(0, y, 0);
+            if (level.m_8055_(p).m_60795_()) {
+                BlockState under = level.m_8055_(p.m_7918_(0, -1, 0));
+                if (under.m_60713_(Blocks.f_50073_) || under.m_60713_(Blocks.f_50125_)) {
+                    plantPos = p;
+                    break;
+                }
+            }
+            if (!level.m_8055_(p).m_60795_()) {
+                break; // 被实心方块挡住，再往下也不是树苗位
+            }
+        }
+        if (plantPos == null) {
+            return;
+        }
+        // 背包找树苗
+        int saplingSlot = -1;
+        ItemStack saplingStack = null;
+        try {
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
+                    continue;
+                }
+                Block b = ((net.minecraft.world.item.ItemNameBlockItem) stack.m_41720_()).m_40614_();
+                if (b != null && b.m_49966_().m_204336_(SAPLINGS_TAG)) {
+                    saplingSlot = i;
+                    saplingStack = stack;
+                    break;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        if (saplingSlot < 0 || saplingStack == null) {
+            return; // 背包没有树苗
+        }
+        Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) saplingStack.m_41720_()).m_40614_();
+        level.m_7731_(plantPos, saplingBlock.m_49966_(), 3);
+        saplingStack.m_41774_(1);
+        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+        SAPLING_PLANT_SINCE.put(maid.m_19879_(), now);
     }
 
     /** v1.5.102e：向周围玩家广播挖掘裂纹（ClientboundBlockDestructionPacket）——
