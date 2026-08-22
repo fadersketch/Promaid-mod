@@ -5,7 +5,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.0.3.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.1.0.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
