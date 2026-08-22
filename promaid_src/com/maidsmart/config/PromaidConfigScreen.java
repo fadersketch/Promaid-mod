@@ -1654,11 +1654,11 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
         this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
-                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被敌对生物攻击时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；默认开启"));
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被攻击（任意来源）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；默认开启"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤时，此半径内的女仆才会响应切换"));
-        this.rows.add(new BoolRow("枪械优先", MaidSmartConfig.COMBAT_AUTO_SWITCH_GUN_PREFER.get(),
-                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_GUN_PREFER.set(v), "枪械优先：装了 TACZ/卓越前线且女仆背包有枪+弹药时优先切枪械模式（TLM 内置枪械任务负责开枪换弹，走位战术照常生效）；关闭则与近战/弓/弩/三叉戟/弹幕一起按背包随机选"));
+                s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
+        // v1.1.0 实测二十：枪械优先开关已删除（原版武器降半权、模组攻击任务等权
+        // 随机的新选法不需要开关——附属生态的攻击任务与枪械强度等价）
         this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.set(v), "战斗结束自动还原：威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换"));
         this.rows.add(new NumRow("还原延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()),
