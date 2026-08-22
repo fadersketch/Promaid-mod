@@ -110,6 +110,7 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue WOOD_CHAIN_MINING;
     public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
     public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
+public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
 
     // ================= AI 记忆 =================
     public static final ForgeConfigSpec.BooleanValue MEMORY_ENABLE;
@@ -248,8 +249,9 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
-    public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
-    public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
+public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
+public static final ForgeConfigSpec.IntValue BRIDGE_AIR_MAX_DIST;
+public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
@@ -583,6 +585,8 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
                 .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
         WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
                 .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
+        WOOD_LEAVES_CLEAR = BUILDER.comment("树冠清理（默认开）：树干连锁砍完后，顺手把上方树冠的树叶也清掉（树叶 BFS 清到半径 3 格，掉落物/树苗直接进背包——树叶不清会挂着挡视线还慢慢掉东西；关闭则只砍树干、树叶靠自然衰减）")
+                .translation("config.promaid.wood.leavesClear").define("leavesClear", true);
         BUILDER.pop();
 
         // ---- AI 记忆 ----
@@ -991,6 +995,8 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
                 .translation("config.promaid.bridge.enabled").define("enabled", false);
         BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
+        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 24）：女仆已在空中（脚下悬空/站在垫的方块上）且够不着地面导航时，主人再远也直接空中铺桥走过去——空中没有'走路过去'的选项，7 格传送阈值不再适用；设为 0 关闭空中远距铺桥（只保留 7 格近距逻辑）")
+                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 24, 0, 64);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
