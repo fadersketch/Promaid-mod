@@ -356,14 +356,36 @@ public class PromaidConfigScreen extends Screen {
             case LOVELOATHE -> this.loveloathRows();
         case HEARTFELT -> this.heartfeltRows();
         }
-        int perPage = Math.max(1, (contentBottom - CONTENT_TOP) / ROW_H);
+        // v1.1.0 实测二十二：perPage 按动态行高累加计算——每行高度 = rowHeight(def)
+        // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
+        // contentBottom 停止；页面内行位置同样累加（不再 ×ROW_H 匀质假设），
+        // 任何分辨率/缩放下注释与下一行控件像素级不重叠。
+        int perPage = 0;
+        int used = 0;
+        int[] rowY = new int[this.rows.size()]; // 每行的 y 起点（页面内偏移）
+        int[] rowHArr = new int[this.rows.size()];
+        for (int i = 0; i < this.rows.size(); i++) {
+            rowHArr[i] = this.rowHeight(this.rows.get(i));
+        }
+        int cursorY = CONTENT_TOP;
+        for (int i = 0; i < this.rows.size(); i++) {
+            if (cursorY + rowHArr[i] > contentBottom && i > 0) {
+                break;
+            }
+            rowY[i] = cursorY;
+            cursorY += rowHArr[i];
+            perPage = i + 1;
+        }
+        if (perPage < 1) {
+            perPage = 1; // 极矮窗口兜底：至少渲染一行
+        }
         int totalPages = Math.max(1, (this.rows.size() + perPage - 1) / perPage);
         this.pageIndex = Math.min(this.pageIndex, totalPages - 1);
         int start = this.pageIndex * perPage;
         int end = Math.min(this.rows.size(), start + perPage);
         for (int i = start; i < end; i++) {
             RowDef def = this.rows.get(i);
-            int y = CONTENT_TOP + (i - start) * ROW_H;
+            int y = rowY[i];
             if (def instanceof NumRow nr) {
                 EditBox box = new EditBox(this.f_96547_, left + labelWidth + 8, y,
                         inputWidth - 60, 22, Component.m_237113_(nr.label()));
@@ -2428,24 +2450,22 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /**
-     * v1.5.110：配置项注释绘制——自动换行（面板宽度内）+ 右缘钳制，保证完整可见。
-     * 每行从 clampLeftX 起点画（面板内容左缘，比标签 20 更靠右，对齐控件区）。
-     * v1.5.112：注释用【浅蓝 + "» " 前缀】渲染，与白色数值/浅灰标签明显区分——
-     * 旧版灰 0x888888 与标签 0xAAAAAA 太接近，用户反馈"注释做了跟没做一样"。
-     * 首行带前缀，续行缩进对齐（前缀宽度计入折行/钳制，防右缘越界）。
+     * v1.1.0 实测二十二【像素级重叠防御】：对注释做像素切割——按【面板实际像素宽】
+     * 逐字符累积测量（m_92895_ = width），超宽即折行；返回折行后的行列表。
+     * 旧版 ROW_H 固定 44，注释折成 3+ 行时（长说明 + 窄窗口 + GUI 缩放大）
+     * 行高不够 → 注释尾部与下一行标签/输入框像素重叠。新版每行动态行高
+     * （见 rowHeight()），本方法是高度计算的统一口径（渲染与布局共用）。
      */
-    private void drawComment(GuiGraphics g, String comment, int y) {
+    private List<String> wrapComment(String comment) {
+        List<String> lines = new ArrayList<>();
         if (comment == null || comment.isEmpty()) {
-            return;
+            return lines;
         }
         int w = this.f_96543_;
         int cx = w / 2;
         int panelLeft = Math.max(8, cx - 280);
         int panelWidth = Math.min(560, w - 16);
         int maxWidth = panelWidth - 16;
-        int x = panelLeft + 12;
-        // 按字符换行（中文字符逐个累积，超宽折行；首行前缀计入宽度）
-        List<String> lines = new ArrayList<>();
         StringBuilder cur = new StringBuilder("\u00bb ");
         for (int i = 0; i < comment.length(); i++) {
             char ch = comment.charAt(i);
@@ -2460,6 +2480,55 @@ public class PromaidConfigScreen extends Screen {
         if (cur.length() > 0) {
             lines.add(cur.toString());
         }
+        return lines;
+    }
+
+    /**
+     * v1.1.0 实测二十二：单行动态行高（像素级防重叠）——
+     * 标签+控件 22px + 注释行数 × 10px + 上下留白。
+     * SectionRow 无注释取紧凑高度。最低 44（与旧版一致），注释长则自动加高，
+     * 分页 perPage 同步按此口径计算，任何行都不会与下一行重叠。
+     */
+    private int rowHeight(RowDef def) {
+        if (def instanceof SectionRow) {
+            return 18;
+        }
+        String comment = null;
+        if (def instanceof NumRow nr) {
+            comment = nr.comment();
+        } else if (def instanceof CycleRow cr) {
+            comment = cr.comment();
+        } else if (def instanceof BoolRow br) {
+            comment = br.comment();
+        } else if (def instanceof BtnRow btnr) {
+            comment = btnr.comment();
+        } else if (def instanceof InfoRow ir) {
+            comment = ir.comment();
+        } else if (def instanceof TextRow tr) {
+            comment = tr.comment();
+        }
+        int commentLines = wrapComment(comment).size();
+        // 22（控件）+ 3（间隔）+ 注释行数×10 + 9（行底留白）；最低 44 保旧版观感
+        return Math.max(44, 22 + 3 + commentLines * 10 + 9);
+    }
+
+    /**
+     * v1.5.110：配置项注释绘制——自动换行（面板宽度内）+ 右缘钳制，保证完整可见。
+     * 每行从 clampLeftX 起点画（面板内容左缘，比标签 20 更靠右，对齐控件区）。
+     * v1.5.112：注释用【浅蓝 + "» " 前缀】渲染，与白色数值/浅灰标签明显区分——
+     * 旧版灰 0x888888 与标签 0xAAAAAA 太接近，用户反馈"注释做了跟没做一样"。
+     * 首行带前缀，续行缩进对齐（前缀宽度计入折行/钳制，防右缘越界）。
+     * v1.1.0 实测二十二：折行改走 wrapComment（像素切割统一口径——布局侧
+     * rowHeight 用同一份行数计算行高，渲染与布局永不脱节）。
+     */
+    private void drawComment(GuiGraphics g, String comment, int y) {
+        if (comment == null || comment.isEmpty()) {
+            return;
+        }
+        int cx = this.f_96543_ / 2;
+        int panelLeft = Math.max(8, cx - 280);
+        int x = panelLeft + 12;
+        List<String> lines = this.wrapComment(comment);
         for (int i = 0; i < lines.size(); i++) {
             g.m_280614_(this.f_96547_, Component.m_237113_(lines.get(i)),
                     this.clampLeftX(lines.get(i), x), y + i * 10, 0xFF7FB2E5, false);
@@ -2670,13 +2739,29 @@ public class PromaidConfigScreen extends Screen {
                     Component.m_237113_("\u00a7e" + this.section.title + " 设置"),
                     cx, 32, 0xFFFFFF);
             // 行标签（按行实际位置画；行数受分页限制不会越界）
+            // v1.1.0 实测二十二：渲染侧行位置与布局侧同口径（动态行高累加）——
+            // 旧版渲染独立按 ROW_H 匀质计算，与布局侧脱节就是重叠的根源
             int contentBottom = h - 76;
-            int perPage = Math.max(1, (contentBottom - CONTENT_TOP) / ROW_H);
-            int start = this.pageIndex * perPage;
-            int end = Math.min(this.rows.size(), start + perPage);
+            int perPageR = 0;
+            int cursorYR = CONTENT_TOP;
+            int[] rowYR = new int[this.rows.size()];
+            for (int i = 0; i < this.rows.size(); i++) {
+                int rh = this.rowHeight(this.rows.get(i));
+                if (cursorYR + rh > contentBottom && i > 0) {
+                    break;
+                }
+                rowYR[i] = cursorYR;
+                cursorYR += rh;
+                perPageR = i + 1;
+            }
+            if (perPageR < 1) {
+                perPageR = 1;
+            }
+            int start = this.pageIndex * perPageR;
+            int end = Math.min(this.rows.size(), start + perPageR);
             for (int i = start; i < end; i++) {
                 RowDef def = this.rows.get(i);
-                int y = CONTENT_TOP + (i - start) * ROW_H;
+                int y = rowYR[i];
                 if (def instanceof SectionRow sr) {
                     String text = sr.sub()
                             ? "\u00a76—— " + sr.text() + " ——\u00a7r"
@@ -2705,7 +2790,7 @@ public class PromaidConfigScreen extends Screen {
                 }
             }
             // 页码（翻页按钮上方，不与"下一页"重叠——v1.5.100b 上移）
-            int totalPages = Math.max(1, (this.rows.size() + perPage - 1) / perPage);
+            int totalPages = Math.max(1, (this.rows.size() + perPageR - 1) / perPageR);
             if (totalPages > 1) {
                 g.m_280653_(this.f_96547_,
                         Component.m_237113_("第 " + (this.pageIndex + 1) + "/" + totalPages + " 页"),
