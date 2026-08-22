@@ -81,6 +81,34 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     // v1.5.163：连锁采集数量上限
     public static final ForgeConfigSpec.IntValue MINE_CHAIN_LIMIT;
 
+    // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
+    public static final ForgeConfigSpec.IntValue WOOD_SEARCH_RADIUS;
+    public static final ForgeConfigSpec.IntValue WOOD_DOWN_RANGE;
+    public static final ForgeConfigSpec.IntValue WOOD_UP_RANGE;
+    public static final ForgeConfigSpec.IntValue WOOD_BREAK_BUDGET;
+    public static final ForgeConfigSpec.DoubleValue WOOD_VALUE_WEIGHT;
+    public static final ForgeConfigSpec.DoubleValue WOOD_DEPTH_PENALTY;
+    public static final ForgeConfigSpec.DoubleValue WOOD_SPEED_FACTOR;
+    public static final ForgeConfigSpec.DoubleValue WOOD_MOVE_SPEED;
+    public static final ForgeConfigSpec.IntValue WOOD_JUNK_KEEP;
+    public static final ForgeConfigSpec.IntValue WOOD_PLACED_LIFETIME;
+    public static final ForgeConfigSpec.BooleanValue WOOD_SOFT_NO_DURABILITY;
+    public static final ForgeConfigSpec.BooleanValue WOOD_PILLAR_GUARD;
+    public static final ForgeConfigSpec.BooleanValue WOOD_HARD_BLOCK_REPORT;
+    public static final ForgeConfigSpec.IntValue WOOD_CREATIVE_DEFAULT_VALUE;
+    public static final ForgeConfigSpec.BooleanValue WOOD_SEEK_THROUGH_WALLS;
+    public static final ForgeConfigSpec.IntValue WOOD_ANCHOR_TIMEOUT;
+    public static final ForgeConfigSpec.IntValue WOOD_RELOCATE_THROTTLE;
+    public static final ForgeConfigSpec.IntValue WOOD_TARGET_TIMEOUT;
+    public static final ForgeConfigSpec.DoubleValue WOOD_REACH;
+    public static final ForgeConfigSpec.IntValue WOOD_PILLAR_COOLDOWN;
+    public static final ForgeConfigSpec.IntValue WOOD_JUNK_CHECK_INTERVAL;
+    public static final ForgeConfigSpec.IntValue WOOD_SKIP_REPORT_INTERVAL;
+    public static final ForgeConfigSpec.BooleanValue WOOD_CHAIN_MINING;
+    public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
+    public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
+
     // ================= AI 记忆 =================
     public static final ForgeConfigSpec.BooleanValue MEMORY_ENABLE;
     public static final ForgeConfigSpec.IntValue MEMORY_EXTRACT_THRESHOLD;
@@ -463,6 +491,74 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
         // v1.5.163：连锁采集数量上限可自定义
         MINE_CHAIN_LIMIT = BUILDER.comment("连锁采集上限（块）：一次连锁挖掘的最大方块数（默认 16）")
                 .translation("config.promaid.mine.chainLimit").defineInRange("chainLimit", 16, 4, 64);
+        BUILDER.pop();
+
+        // ---- 伐木（v1.1.0：克隆挖矿架构；障碍物名单与挖矿共享 extraBreakables/disabledBreakables） ----
+        BUILDER.comment("伐木设置").translation("config.promaid.wood").push("wood");
+        WOOD_VALUES = BUILDER.comment("可砍伐木材表：每项 方块注册名=价值，如 minecraft:oak_log=300；模组木材在此加入（创造面板已按木质 tag 过滤显示）")
+                .translation("config.promaid.wood.values")
+                .defineList("woodValues", List.of(
+                                "minecraft:oak_log=300", "minecraft:spruce_log=300", "minecraft:birch_log=300",
+                                "minecraft:jungle_log=300", "minecraft:acacia_log=300", "minecraft:dark_oak_log=300",
+                                "minecraft:mangrove_log=300", "minecraft:cherry_log=300",
+                                "minecraft:crimson_stem=300", "minecraft:warped_stem=300",
+                                "minecraft:bamboo_block=300",
+                                "minecraft:stripped_oak_log=300", "minecraft:stripped_spruce_log=300",
+                                "minecraft:stripped_birch_log=300", "minecraft:stripped_jungle_log=300",
+                                "minecraft:stripped_acacia_log=300", "minecraft:stripped_dark_oak_log=300",
+                                "minecraft:stripped_mangrove_log=300", "minecraft:stripped_cherry_log=300",
+                                "minecraft:stripped_crimson_stem=300", "minecraft:stripped_warped_stem=300"),
+                        o -> o instanceof String s && s.contains("="));
+        WOOD_SEARCH_RADIUS = BUILDER.comment("木材检索半径（水平）")
+                .translation("config.promaid.wood.searchRadius").defineInRange("searchRadius", 24, 8, 64);
+        WOOD_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围（格）——树在地表，默认只往下看 4 格")
+                .translation("config.promaid.wood.downRange").defineInRange("downRange", 4, 1, 32);
+        WOOD_UP_RANGE = BUILDER.comment("垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24")
+                .translation("config.promaid.wood.upRange").defineInRange("upRange", 24, 4, 64);
+        WOOD_BREAK_BUDGET = BUILDER.comment("穿透预算（允许挖开多少层不可开路挡路方块）——与挖矿共享障碍物名单")
+                .translation("config.promaid.wood.breakBudget").defineInRange("breakBudget", 22, 0, 64);
+        WOOD_VALUE_WEIGHT = BUILDER.comment("价值权重：木材价值对选材的加成")
+                .translation("config.promaid.wood.valueWeight").defineInRange("valueWeight", 2.0, 0.5, 5.0);
+        WOOD_DEPTH_PENALTY = BUILDER.comment("深度惩罚（每格扣分）——树在地表，默认 0（不偏好浅层）")
+                .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
+        WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
+                .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
+        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率")
+                .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.6, 0.2, 1.5);
+        WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
+                .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
+        WOOD_PLACED_LIFETIME = BUILDER.comment("搭方块清理时间（秒）")
+                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+        WOOD_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗斧耐久")
+                .translation("config.promaid.wood.softNoDurability").define("softNoDurability", true);
+        WOOD_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
+                .translation("config.promaid.wood.pillarGuard").define("pillarGuard", true);
+        WOOD_HARD_BLOCK_REPORT = BUILDER.comment("硬挡路（箱子/机器等）报点弃置该木材")
+                .translation("config.promaid.wood.hardBlockReport").define("hardBlockReport", true);
+        WOOD_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数")
+                .translation("config.promaid.wood.creativeDefaultValue").defineInRange("creativeDefaultValue", 300, 10, 1000);
+        WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材）——关闭则女仆像玩家一样只发现视线无阻的木材（树叶不挡视线）")
+                .translation("config.promaid.wood.seekThroughWalls").define("seekThroughWalls", false);
+        WOOD_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick）")
+                .translation("config.promaid.wood.anchorTimeout").defineInRange("anchorTimeout", 200, 40, 1200);
+        WOOD_RELOCATE_THROTTLE = BUILDER.comment("重定位节流（tick，防边界抖动）")
+                .translation("config.promaid.wood.relocateThrottle").defineInRange("relocateThrottle", 20, 4, 200);
+        WOOD_TARGET_TIMEOUT = BUILDER.comment("目标超时（tick，够不到木材超时放弃）")
+                .translation("config.promaid.wood.targetTimeout").defineInRange("targetTimeout", 300, 60, 1200);
+        WOOD_REACH = BUILDER.comment("砍伐距离（格）")
+                .translation("config.promaid.wood.reach").defineInRange("reach", 4.5, 2.0, 8.0);
+        WOOD_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
+                .translation("config.promaid.wood.pillarCooldown").defineInRange("pillarCooldown", 4, 1, 20);
+        WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
+                .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
+        WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
+                .translation("config.promaid.wood.skipReportInterval").defineInRange("skipReportInterval", 600, 100, 2400);
+        WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
+                .translation("config.promaid.wood.chainMining").define("chainMining", true);
+        WOOD_AUTO_COLLECT = BUILDER.comment("自动收集（砍伐掉落物直接进女仆背包，不进世界）")
+                .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
+        WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
+                .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
         BUILDER.pop();
 
         // ---- AI 记忆 ----

@@ -115,8 +115,10 @@ public class PromaidConfigScreen extends Screen {
      * 在真正被调用的 m_5534_/m_7933_ 里直接转发给它，与 MC 原版搜索框完全同构。
      */
     private EditBox activeBox = null;
-    /** v1.5.111：当前编辑的名单——0=目标矿物，1=障碍物（共用创造面板交互） */
+    /** v1.5.111：当前编辑的名单——0=目标矿物/木材，1=障碍物（共用创造面板交互） */
     private int mineTableMode = 0;
+    /** v1.1.0：伐木板块的名单子页（0=木材，1=障碍物共享挖矿同两名单）——与矿表子页互斥复用同一套交互 */
+    private boolean woodTable = false;
     /** v1.5.254：替代品名单子页（建造板块）——0=半格高 1=一格高 2=两格高（共用创造面板交互） */
     private boolean altTable = false;
     private int altTableMode = 0;
@@ -174,7 +176,7 @@ public class PromaidConfigScreen extends Screen {
     }
 
     private enum Section {
-        BUILD("建造"), MINE("挖矿"), MEMORY("AI 记忆"), DIALOGUE("对话提示"),
+        BUILD("建造"), MINE("挖矿"), WOOD("伐木"), MEMORY("AI 记忆"), DIALOGUE("对话提示"),
         COMBAT("战斗自保"), PASSIVE("被动技能"), MISC("杂项"), PERCEPTION("感知"), AFFECT("情绪"), AITOOLS("AI 工具"),
         VOICE("语音"), LOVELOATHE("爱憎分明模组调试"), HEARTFELT("heartfelt 联动");
         final String title;
@@ -243,7 +245,7 @@ public class PromaidConfigScreen extends Screen {
             this.homeButtons(w, h, cx);
             return;
         }
-        if (this.mineTable) {
+        if (this.mineTable || this.woodTable) {
             this.mineTableButtons(w, h, cx);
             return;
         }
@@ -272,9 +274,11 @@ public class PromaidConfigScreen extends Screen {
         // 行高统一压到 20——6 按钮底 = y0+5*20+17 ≤ h-34 恒成立，不压保存按钮
         boolean ll = loveloatheLoaded();
         boolean hf = heartfeltLoaded();
-        int rowH = 26;
-        if (h < 216 || ll || hf) {
-            rowH = 21;
+        // v1.1.0：左列常驻 6 个板块（加了伐木）→ 行高常态压缩到 21：
+        // 6 按钮底 = y0+5*21+18 ≈ 157，与"保存并返回"（h-34）永不相交
+        int rowH = 21;
+        if (h < 190) {
+            rowH = 19;
         }
         if (h < 190) {
             rowH = 19;
@@ -291,7 +295,7 @@ public class PromaidConfigScreen extends Screen {
         int x2 = x1 + bw + 16;
         int y0 = Math.min(56, Math.max(34, h / 2 - rowH * 3));
         java.util.List<Section> leftList = new java.util.ArrayList<>(java.util.List.of(
-                Section.BUILD, Section.MINE, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
+                Section.BUILD, Section.MINE, Section.WOOD, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
         if (ll) {
             leftList.add(Section.LOVELOATHE);
         }
@@ -319,6 +323,7 @@ public class PromaidConfigScreen extends Screen {
                             this.section = s;
                             this.pageIndex = 0;
                             this.mineTable = false;
+                            this.woodTable = false; // v1.1.0：子页互斥复位
                             this.altTable = false; // v1.5.254：子页互斥复位
                             this.inHome = false;
                             this.m_7856_();
@@ -338,6 +343,7 @@ public class PromaidConfigScreen extends Screen {
         switch (this.section) {
             case BUILD -> this.buildRows();
             case MINE -> this.mineRows();
+            case WOOD -> this.woodRows();
             case MEMORY -> this.memoryRows();
             case DIALOGUE -> this.dialogueRows();
             case COMBAT -> this.combatRows();
@@ -481,10 +487,10 @@ public class PromaidConfigScreen extends Screen {
         int left = panelLeft + 10;
         // v1.5.190：矮窗口压缩网格（默认 3 行，h<215 用 2 行）
         int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
-        // 名单切换（目标矿物 / 障碍物，共用一套创造面板交互）
+        // 名单切换（目标矿物/木材 / 障碍物，共用一套创造面板交互）
         // v1.5.111：珍稀标记矿物名单已移除（掉落物回收子系统整体删除，见 MaidMineBehavior）
         int tgY = 24;
-        String[] modeNames = {"目标矿物", "障碍物"};
+        String[] modeNames = this.woodTable ? new String[]{"木材", "障碍物"} : new String[]{"目标矿物", "障碍物"};
         for (int i = 0; i < modeNames.length; i++) {
             final int mi = i;
             this.m_142416_(Button.m_253074_(
@@ -558,6 +564,7 @@ public class PromaidConfigScreen extends Screen {
         this.m_142416_(Button.m_253074_(Component.m_237113_("← 返回参数"),
                         b -> {
                             this.mineTable = false;
+                            this.woodTable = false;
                             this.m_7856_();
                         })
                 .m_252987_(12, h - 34, 100, 20).m_253136_());
@@ -926,6 +933,15 @@ public class PromaidConfigScreen extends Screen {
                     continue;
                 }
             }
+            // v1.1.0：木材名单模式——网格只列木质类产品（原版木质 tag 并集，含模组木材）
+            if (this.woodTable && this.mineTableMode == 0) {
+                net.minecraft.world.level.block.Block blk = net.minecraftforge.registries.ForgeRegistries.BLOCKS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                if (blk == null || blk == net.minecraft.world.level.block.Blocks.f_50016_
+                        || !isWoodProduct(blk.m_49966_())) {
+                    continue;
+                }
+            }
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
                     .getValue(net.minecraft.resources.ResourceLocation.parse(id));
             if (item != null) {
@@ -1069,7 +1085,127 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE, s), "创造面板默认价值：矿表页锁定方块后，输入框留空直接点「添加」时用的分数（快捷赋值）；想自定义就输数值再点添加，或输入框填 方块id=分数 更新"));
     }
 
-    /** v1.5.140：伐木任务已删除（woodcutRows 移除） */
+    // ---------- v1.1.0：伐木板块（克隆挖矿；障碍物两名单与挖矿共享） ----------
+
+    /** 当前是否处于木材名单编辑（woodTable 子页模式 0）——矿表/木材表共用一套交互，
+     *  通过本开关决定读写 MINE_ORE_VALUES 还是 WOOD_VALUES */
+    private boolean woodListMode() {
+        return this.woodTable && this.mineTableMode == 0;
+    }
+
+    private List<String> valueListGet() {
+        return new ArrayList<>(this.woodListMode()
+                ? MaidSmartConfig.WOOD_VALUES.get() : MaidSmartConfig.MINE_ORE_VALUES.get());
+    }
+
+    private void valueListSet(List<String> list) {
+        if (this.woodListMode()) {
+            MaidSmartConfig.WOOD_VALUES.set(list);
+        } else {
+            MaidSmartConfig.MINE_ORE_VALUES.set(list);
+        }
+    }
+
+    private void valueListReload() {
+        if (this.woodListMode()) {
+            com.maidsmart.task.MaidWoodBehavior.loadCustomWoods();
+        } else {
+            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        }
+    }
+
+    private int creativeDefaultValue() {
+        return this.woodListMode()
+                ? MaidSmartConfig.WOOD_CREATIVE_DEFAULT_VALUE.get() : MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get();
+    }
+
+    /** v1.1.0：木质类产品判定（木材名单创造网格过滤）——原版木质 tag 并集；
+     *  模组通过 #minecraft:logs 等原版 tag 注册的木材自动包含 */
+    private static final java.util.List<net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block>> WOOD_PRODUCT_TAGS =
+            java.util.List.of(
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:logs")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:planks")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_fences")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_slabs")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_stairs")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_doors")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_trapdoors")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_buttons")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:wooden_pressure_plates")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:fence_gates")),
+                    net.minecraft.tags.BlockTags.create(net.minecraft.resources.ResourceLocation.parse("minecraft:bamboo_blocks")));
+
+    private static boolean isWoodProduct(net.minecraft.world.level.block.state.BlockState state) {
+        for (net.minecraft.tags.TagKey<net.minecraft.world.level.block.Block> tag : WOOD_PRODUCT_TAGS) {
+            if (state.m_204336_(tag)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** v1.1.0：伐木板块行（照 mineRows 克隆——名单入口 + 参数） */
+    private void woodRows() {
+        int woodCount = MaidSmartConfig.WOOD_VALUES.get().size();
+        int brkCount = MaidSmartConfig.MINE_BREAKABLES.get().size();
+        this.rows.add(new BtnRow("木材 / 障碍物名单", "管理 →（木 " + woodCount + " · 障 " + brkCount + "）",
+                () -> {
+                    this.woodTable = true;
+                    this.mineTableMode = 0;
+                    this.m_7856_();
+                }, "管理伐木两张表：木材（女仆会砍，网格只列木质类产品——含模组）、障碍物（可挖穿开路，与挖矿共享同一名单）"));
+        this.rows.add(new BoolRow("透视感知（隔墙找木材）", MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.get(),
+                v -> MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被挡住的木材并挖通开路；关闭（默认）则像玩家一样只发现视线无阻的木材——树叶不挡视线，水/岩浆外任何方块都挡"));
+        this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.WOOD_SEARCH_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.WOOD_SEARCH_RADIUS, s), "木材检索半径（水平格）：以锚点为中心扫描正方形区域找树"));
+        this.rows.add(new NumRow("垂直向下范围", String.valueOf(MaidSmartConfig.WOOD_DOWN_RANGE.get()),
+                s -> setInt(MaidSmartConfig.WOOD_DOWN_RANGE, s), "垂直向下搜索范围（格）——树在地表，默认 4"));
+        this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.WOOD_UP_RANGE.get()),
+                s -> setInt(MaidSmartConfig.WOOD_UP_RANGE, s), "垂直向上搜索范围（格）——树冠/巨型蘑菇很高，默认 24"));
+        this.rows.add(new NumRow("穿透预算", String.valueOf(MaidSmartConfig.WOOD_BREAK_BUDGET.get()),
+                s -> setInt(MaidSmartConfig.WOOD_BREAK_BUDGET, s), "穿透预算：选材时计算女仆到木材之间的实心挡路方块数，超过不选"));
+        this.rows.add(new NumRow("价值权重", String.valueOf(MaidSmartConfig.WOOD_VALUE_WEIGHT.get()),
+                s -> setDouble(MaidSmartConfig.WOOD_VALUE_WEIGHT, s), "价值权重：木材价值对选材的加成（默认各木材同价 300，改价后高价值优先）"));
+        this.rows.add(new NumRow("深度惩罚", String.valueOf(MaidSmartConfig.WOOD_DEPTH_PENALTY.get()),
+                s -> setDouble(MaidSmartConfig.WOOD_DEPTH_PENALTY, s), "深度惩罚（每格扣分）——树在地表，默认 0 不偏好浅层"));
+        this.rows.add(new NumRow("砍伐速度系数", String.valueOf(MaidSmartConfig.WOOD_SPEED_FACTOR.get()),
+                s -> setDouble(MaidSmartConfig.WOOD_SPEED_FACTOR, s), "砍伐速度系数（1.0=玩家速度，1.2=快20%）"));
+        this.rows.add(new NumRow("接近木材速度", String.valueOf(MaidSmartConfig.WOOD_MOVE_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.WOOD_MOVE_SPEED, s), "接近木材速度倍率（搭高采高处树冠时调小防冲过头）"));
+        this.rows.add(new NumRow("废石保留量", String.valueOf(MaidSmartConfig.WOOD_JUNK_KEEP.get()),
+                s -> setInt(MaidSmartConfig.WOOD_JUNK_KEEP, s), "废石保留量：砍树途中挖穿泥土/石头产生的废石每种最多保留几组，超出销毁"));
+        this.rows.add(new NumRow("搭方块清理（秒）", String.valueOf(MaidSmartConfig.WOOD_PLACED_LIFETIME.get()),
+                s -> setInt(MaidSmartConfig.WOOD_PLACED_LIFETIME, s), "搭方块清理时间（秒）：搭高/搭桥的方块放置 N 秒后自动变掉落物回收"));
+        this.rows.add(new BoolRow("软方块不耗耐久", MaidSmartConfig.WOOD_SOFT_NO_DURABILITY.get(),
+                v -> MaidSmartConfig.WOOD_SOFT_NO_DURABILITY.set(v), "软方块（徒手可挖）开路不消耗斧耐久（砍原木本体始终扣耐久）"));
+        this.rows.add(new BoolRow("搭方块防掉落", MaidSmartConfig.WOOD_PILLAR_GUARD.get(),
+                v -> MaidSmartConfig.WOOD_PILLAR_GUARD.set(v), "搭方块防掉落（潜行效果，速度不变）"));
+        this.rows.add(new BoolRow("硬挡路报点弃置", MaidSmartConfig.WOOD_HARD_BLOCK_REPORT.get(),
+                v -> MaidSmartConfig.WOOD_HARD_BLOCK_REPORT.set(v), "硬挡路（箱子/机器等）报点弃置该木材"));
+        this.rows.add(new BoolRow("连锁砍伐", MaidSmartConfig.WOOD_CHAIN_MINING.get(),
+                v -> MaidSmartConfig.WOOD_CHAIN_MINING.set(v), "连锁砍伐：砍一棵树的相连木材一次砍完（树干天然相连，默认开启）"));
+        this.rows.add(new BoolRow("自动收集", MaidSmartConfig.WOOD_AUTO_COLLECT.get(),
+                v -> MaidSmartConfig.WOOD_AUTO_COLLECT.set(v), "自动收集：砍伐掉落物（原木/树苗/苹果）直接进女仆背包，不落地"));
+        this.rows.add(new NumRow("连锁砍伐上限（块）", String.valueOf(MaidSmartConfig.WOOD_CHAIN_LIMIT.get()),
+                s -> setInt(MaidSmartConfig.WOOD_CHAIN_LIMIT, s), "连锁砍伐上限（块）：一次连锁砍伐的最大方块数"));
+        this.rows.add(new SectionRow("目标与节奏", true));
+        this.rows.add(new NumRow("砍伐距离（格）", String.valueOf(MaidSmartConfig.WOOD_REACH.get()),
+                s -> setDouble(MaidSmartConfig.WOOD_REACH, s), "砍伐距离（格）：女仆伸手够得到木材的距离，默认 4.5 接近玩家手长"));
+        this.rows.add(new NumRow("目标超时（tick）", String.valueOf(MaidSmartConfig.WOOD_TARGET_TIMEOUT.get()),
+                s -> setInt(MaidSmartConfig.WOOD_TARGET_TIMEOUT, s), "目标超时（tick，够不到木材超时放弃）"));
+        this.rows.add(new NumRow("锚点出框超时（tick）", String.valueOf(MaidSmartConfig.WOOD_ANCHOR_TIMEOUT.get()),
+                s -> setInt(MaidSmartConfig.WOOD_ANCHOR_TIMEOUT, s), "锚点出框超时（tick，出框超过此时长重埋锚点）"));
+        this.rows.add(new NumRow("重定位节流（tick）", String.valueOf(MaidSmartConfig.WOOD_RELOCATE_THROTTLE.get()),
+                s -> setInt(MaidSmartConfig.WOOD_RELOCATE_THROTTLE, s), "重定位节流（tick，防边界抖动）"));
+        this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.WOOD_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
+        this.rows.add(new NumRow("废石清理间隔（tick）", String.valueOf(MaidSmartConfig.WOOD_JUNK_CHECK_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.WOOD_JUNK_CHECK_INTERVAL, s), "废石清理间隔（tick，20=1 秒）"));
+        this.rows.add(new NumRow("播报限频（tick）", String.valueOf(MaidSmartConfig.WOOD_SKIP_REPORT_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.WOOD_SKIP_REPORT_INTERVAL, s), "播报限频（tick）：'斧子砍不动/木材被挡住'等提示的最短间隔"));
+        this.rows.add(new NumRow("创造面板默认价值", String.valueOf(MaidSmartConfig.WOOD_CREATIVE_DEFAULT_VALUE.get()),
+                s -> setInt(MaidSmartConfig.WOOD_CREATIVE_DEFAULT_VALUE, s), "创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数"));
+    }
 
     private void memoryRows() {
         this.rows.add(new SectionRow("AI 记忆", false));
@@ -1795,7 +1931,7 @@ public class PromaidConfigScreen extends Screen {
             // v1.0.4：锁定状态下输入框留空点添加 = 用「创造面板默认价值」赋值（快捷路径）
             if (text.isEmpty()) {
                 if (this.lockedOreId != null) {
-                    this.setOreValue(this.lockedOreId, MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get());
+                    this.setOreValue(this.lockedOreId, this.creativeDefaultValue());
                     this.lockedOreId = null;
                     this.m_7856_(); // 解锁：隐藏赋值输入框
                 }
@@ -1836,7 +1972,7 @@ public class PromaidConfigScreen extends Screen {
             } catch (NumberFormatException ignored) {
                 return; // 价值必须数字
             }
-            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+            List<String> cur = this.valueListGet();
             // v1.0.4：同 id 已存在 → 替换价值（改优先级）；否则新增
             int existing = -1;
             for (int i = 0; i < cur.size(); i++) {
@@ -1853,8 +1989,8 @@ public class PromaidConfigScreen extends Screen {
             } else if (!cur.contains(entry)) {
                 cur.add(entry);
             }
-            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+            this.valueListSet(cur);
+            this.valueListReload();
         } else {
             String path = normPath(text);
             if (path.isEmpty() || "bedrock".equals(path) || "barrier".equals(path)) {
@@ -1887,10 +2023,10 @@ public class PromaidConfigScreen extends Screen {
     /** 列表删除（按当前名单） */
     private void removeMinable(String entry) {
         if (this.mineTableMode == 0) {
-            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+            List<String> cur = this.valueListGet();
             cur.remove(entry);
-            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+            this.valueListSet(cur);
+            this.valueListReload();
         } else {
             List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_BREAKABLES.get());
             cur.remove(entry);
@@ -1916,7 +2052,7 @@ public class PromaidConfigScreen extends Screen {
         } catch (NumberFormatException ignored) {
             return;
         }
-        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        List<String> cur = this.valueListGet();
         boolean found = false;
         for (int i = 0; i < cur.size(); i++) {
             String e = cur.get(i);
@@ -1928,14 +2064,14 @@ public class PromaidConfigScreen extends Screen {
             }
         }
         if (found) {
-            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+            this.valueListSet(cur);
+            this.valueListReload();
         }
     }
 
-    /** v1.0.4：目标矿物表里该方块的当前优先级（价值），不在表里返回 -1（悬停提示用） */
-    private static int getOreValue(String id) {
-        for (String e : MaidSmartConfig.MINE_ORE_VALUES.get()) {
+    /** v1.0.4：目标矿物/木材表里该方块的当前优先级（价值），不在表里返回 -1（悬停提示用） */
+    private int getOreValue(String id) {
+        for (String e : this.valueListGet()) {
             int eq = e.indexOf('=');
             if (eq > 0 && e.substring(0, eq).trim().equals(id)) {
                 try {
@@ -1948,9 +2084,9 @@ public class PromaidConfigScreen extends Screen {
         return -1;
     }
 
-    /** v1.0.4：给方块赋值优先级——在表里更新价值，不在表里以该价值加入；随后重建矿表 */
+    /** v1.0.4：给方块赋值优先级——在表里更新价值，不在表里以该价值加入；随后重建表 */
     private void setOreValue(String id, int v) {
-        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        List<String> cur = this.valueListGet();
         boolean found = false;
         for (int i = 0; i < cur.size(); i++) {
             String e = cur.get(i);
@@ -1964,19 +2100,19 @@ public class PromaidConfigScreen extends Screen {
         if (!found) {
             cur.add(id + "=" + v);
         }
-        MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-        com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        this.valueListSet(cur);
+        this.valueListReload();
     }
 
-    /** v1.0.4：按 id 取消添加（移除目标矿物表条目）——网格右上角小叉 / 列表删除共用 */
+    /** v1.0.4：按 id 取消添加（移除目标矿物/木材表条目）——网格右上角小叉 / 列表删除共用 */
     private void removeOre(String id) {
-        List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
+        List<String> cur = this.valueListGet();
         cur.removeIf(e -> {
             int eq = e.indexOf('=');
             return eq > 0 && e.substring(0, eq).trim().equals(id);
         });
-        MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-        com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        this.valueListSet(cur);
+        this.valueListReload();
         if (this.lockedOreId != null && this.lockedOreId.equals(id)) {
             this.lockedOreId = null; // 锁定的方块被移除 → 解锁（隐藏输入框）
             this.m_7856_();
@@ -1985,10 +2121,10 @@ public class PromaidConfigScreen extends Screen {
         }
     }
 
-    /** 该方块 id 是否已在当前名单（矿物按 "id=" 前缀，障碍物按 path） */
+    /** 该方块 id 是否已在当前名单（矿物/木材按 "id=" 前缀，障碍物按 path） */
     private boolean isInList(String id) {
         if (this.mineTableMode == 0) {
-            for (String e : MaidSmartConfig.MINE_ORE_VALUES.get()) {
+            for (String e : this.valueListGet()) {
                 int eq = e.indexOf('=');
                 if (eq > 0 && e.substring(0, eq).trim().equals(id)) {
                     return true;
@@ -2005,15 +2141,15 @@ public class PromaidConfigScreen extends Screen {
     /** 点击方块图标 → 加入当前名单；已在名单 → 再点取消（toggle） */
     private void toggleCreative(String id) {
         if (this.mineTableMode == 0) {
-            List<String> cur = new ArrayList<>(MaidSmartConfig.MINE_ORE_VALUES.get());
-            String entry = id + "=" + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get();
+            List<String> cur = this.valueListGet();
+            String entry = id + "=" + this.creativeDefaultValue();
             if (cur.contains(entry)) {
                 cur.remove(entry);
             } else {
                 cur.add(entry);
             }
-            MaidSmartConfig.MINE_ORE_VALUES.set(cur);
-            com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+            this.valueListSet(cur);
+            this.valueListReload();
         } else {
             String path = normPath(id);
             // v1.5.102d：基岩/屏障等不可破坏方块不允许加入（防止误加后女仆傻挖）
@@ -2065,7 +2201,7 @@ public class PromaidConfigScreen extends Screen {
             this.m_93516_();
             this.entries.clear();
             if (PromaidConfigScreen.this.mineTableMode == 0) {
-                this.entries.addAll(MaidSmartConfig.MINE_ORE_VALUES.get());
+                this.entries.addAll(PromaidConfigScreen.this.valueListGet());
             } else {
                 this.entries.addAll(MaidSmartConfig.MINE_BREAKABLES.get());
             }
@@ -2290,16 +2426,18 @@ public class PromaidConfigScreen extends Screen {
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
         // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
-        if (!this.mineTable && !this.altTable) {
+        if (!this.mineTable && !this.woodTable && !this.altTable) {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
             g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77选择要调整的板块"),
                     cx, 36, 0x888888);
-        } else if (this.mineTable) {
-            // 双名单（目标矿物/障碍物），标题随当前名单
+        } else if (this.mineTable || this.woodTable) {
+            // 双名单（目标矿物/木材 + 障碍物），标题随当前名单
             String title = this.mineTableMode == 0
-                    ? "\u00a7e目标矿物——点击方块图标加入（价值 " + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get() + "，再点取消）"
+                    ? (this.woodTable
+                    ? "\u00a7e木材——点击方块图标加入（价值 " + this.creativeDefaultValue() + "，再点取消）"
+                    : "\u00a7e目标矿物——点击方块图标加入（价值 " + this.creativeDefaultValue() + "，再点取消）")
                     : "\u00a7e障碍物——点击方块图标设为可挖穿（再点取消）";
             g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
             // 创造物品网格（自绘；搜索框在 m_7856_ 创建）
@@ -2390,8 +2528,11 @@ public class PromaidConfigScreen extends Screen {
             // v1.5.102d：底部按钮（← 返回参数 / 保存并返回）上方一行注释——
             // 两张名单各一句，说明方块图标上的对勾 ✓ 是什么意思
             String chkHint = this.mineTableMode == 0
-                    ? "\u00a77✓ = 已加入目标矿物表（价值 " + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get()
-                    + "），女仆会把它当矿物挖；点一下图标锁定（黄框固定）后输入框出现，输数值点「添加」即赋值/加入（越大越优先）；右上角 × 取消添加"
+                    ? (this.woodTable
+                    ? "\u00a77✓ = 已加入木材表（价值 " + this.creativeDefaultValue()
+                    + "），女仆会把它当木材砍；点一下图标锁定（黄框固定）后输入框出现，输数值点「添加」即赋值/加入（越大越优先）；右上角 × 取消添加"
+                    : "\u00a77✓ = 已加入目标矿物表（价值 " + this.creativeDefaultValue()
+                    + "），女仆会把它当矿物挖；点一下图标锁定（黄框固定）后输入框出现，输数值点「添加」即赋值/加入（越大越优先）；右上角 × 取消添加")
                     : "\u00a77✓ = 已设为可挖穿（自然方块内置已预勾选），女仆遇到会挖穿开路，再点一次取消";
             // v1.5.110：居中 + 钳制——旧版以 left（cx-270）为圆心居中，窄屏时左半
             // 部分裁出屏幕（"注释太靠左"），改为中心居中且钳制到完整可见
@@ -2403,7 +2544,7 @@ public class PromaidConfigScreen extends Screen {
                 String lockedCn = com.maidsmart.build.BlueprintLib.cnName(this.lockedOreId);
                 // v1.0.4：提醒玩家——直接点添加/回车 = 用默认价值（留空快捷赋值）
                 String lockTxt = "已锁定（" + lockedCn + "），请为其赋予一个值"
-                        + "（直接点添加/回车 = " + MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get() + "）";
+                        + "（直接点添加/回车 = " + this.creativeDefaultValue() + "）";
                 boolean blink = (System.currentTimeMillis() / 400) % 2 == 0;
                 int lockColor = blink ? 0xFFFF5555 : 0x40FF5555;
                 g.m_280614_(this.f_96547_, Component.m_237113_(lockTxt),
@@ -2546,7 +2687,7 @@ public class PromaidConfigScreen extends Screen {
                         "config screen: 点击聚焦 EditBox @ ({},{})", mouseX, mouseY);
             }
         }
-        if (this.mineTable && button == 0) {
+        if ((this.mineTable || this.woodTable) && button == 0) {
             int cx = this.f_96543_ / 2;
             int panelLeft = Math.max(8, cx - 280);
             int left = panelLeft + 10;
@@ -2685,6 +2826,7 @@ public class PromaidConfigScreen extends Screen {
         }
         MaidSmartConfig.SPEC.save();
         com.maidsmart.task.MaidMineBehavior.loadCustomOres();
+        com.maidsmart.task.MaidWoodBehavior.loadCustomWoods();
         Minecraft.m_91087_().m_91152_(this.parent);
     }
 }
