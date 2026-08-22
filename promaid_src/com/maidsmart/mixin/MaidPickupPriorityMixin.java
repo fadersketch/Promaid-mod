@@ -49,7 +49,9 @@ public abstract class MaidPickupPriorityMixin {
             return;
         }
         // v1.5.87：工作中不捡——防止"挖矿中途跳下去捡掉落物 / 从柱子跳下又搭上"
-        if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
+        // v1.1.0：伐木同样让位（砍树中途不捡掉落物，由伐木流程即时回收）
+        if (com.maidsmart.task.MaidMineBehavior.isMining(maid)
+                || com.maidsmart.task.MaidWoodBehavior.isWooding(maid)) {
             cir.setReturnValue(false);
         }
     }

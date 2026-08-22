@@ -332,6 +332,8 @@ public class AiMemoryManager {
         com.maidsmart.build.FarmSweepCache.forgetMaid(maidUuid);
         com.maidsmart.task.MaidMineBehavior.forget(maid.m_19879_());
         com.maidsmart.task.MaidMineBehavior.forgetUuid(maidUuid);
+        com.maidsmart.task.MaidWoodBehavior.forget(maid.m_19879_());
+        com.maidsmart.task.MaidWoodBehavior.forgetUuid(maidUuid);
     }
 
     /**

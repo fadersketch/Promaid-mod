@@ -236,6 +236,79 @@ public final class MaidToolAutoEquip {
         return digger.m_8096_(state);
     }
 
+    /** v1.1.0：是否为斧（伐木任务用） */
+    private static boolean isAxe(ItemStack stack) {
+        return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.AxeItem;
+    }
+
+    /** v1.1.0：主手或背包中是否有能砍该木材的斧（findWood 过滤用——与镐判定同构） */
+    public static boolean canHarvestWoodWithHandOrBackpack(EntityMaid maid, BlockState target) {
+        try {
+            IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            ItemStack cur = hands.getStackInSlot(0);
+            if (isAxe(cur) && canHarvest(cur, target)) {
+                return true;
+            }
+            IItemHandlerModifiable inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && isAxe(s) && canHarvest(s, target)) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * v1.1.0：伐木【按需换斧】——手持斧能砍目标木材且未即将用坏 → 零开销不换
+     * （玩家亲手放的斧只要能砍就绝不触发切换，与挖矿换镐同规则）；
+     * 空手/非斧/砍不动 → 从背包装备一把能砍的斧。
+     */
+    public static boolean ensureAxeForTarget(EntityMaid maid, BlockState target) {
+        IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+        ItemStack cur = hands.getStackInSlot(0);
+        if (isAxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
+            return true; // 手中够用且未即将用坏，不换
+        }
+        IItemHandlerModifiable inv = maid.getMaidInv();
+        int bestSlot = -1;
+        long bestScore = Long.MIN_VALUE;
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !isAxe(stack) || !canHarvest(stack, target)) {
+                continue;
+            }
+            if (isNearlyBroken(stack)) {
+                continue; // 黑名单保护——即将用坏的斧不切
+            }
+            long score = targetAxeScore(stack);
+            if (score > bestScore) {
+                bestScore = score;
+                bestSlot = i;
+            }
+        }
+        if (bestSlot < 0) {
+            return isAxe(cur) && canHarvest(cur, target); // 没得换：保持现状
+        }
+        hands.setStackInSlot(0, inv.getStackInSlot(bestSlot));
+        inv.setStackInSlot(bestSlot, cur);
+        return true;
+    }
+
+    /** v1.1.0：斧评分（伐木场景）——附魔词条数 > 剩余耐久（斧对木材无挖掘等级差异） */
+    private static long targetAxeScore(ItemStack stack) {
+        if (stack.m_41619_()) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return enchantCount(stack) * 10_000L + durabilityScore(stack);
+        } catch (Exception e) {
+            return Long.MIN_VALUE;
+        }
+    }
+
     /**
      * v1.5.109：挖矿【只保证主手有镐】——手中已是镐则零开销不换（无论背包有没有
      * 更高级的）；空手/非镐才从背包装一把。按目标矿升级由 ensureForTarget 负责。
