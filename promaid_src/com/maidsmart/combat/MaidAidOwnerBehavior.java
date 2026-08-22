@@ -269,7 +269,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         this.aidMaidSisters(level, maid, gameTime);
     }
 
-    /** v1.1.0 实测六：给附近受伤/着火的姐妹女仆丢药水（治疗/再生；着火先抗火） */
+    /** v1.1.0 实测六：给附近受伤/着火的姐妹女仆丢药水（治疗/再生；着火先抗火）
+     *  v1.1.0 实测八（用户："把套给主人的支援方案全复刻一部分给女仆，主人更高优先级"）：
+     *  互助链对齐主人链——着火抗火 → 负面效果（牛奶/蜂蜜）→ 低血（治疗/金苹果/
+     *  再生/喂食）。主人链永远先跑完（tick 里顺序固定），同 tick 主人有需求时
+     *  互助轮空。 */
     private void aidMaidSisters(ServerLevel level, EntityMaid maid, long gameTime) {
         try {
             for (EntityMaid sister : level.m_45976_(EntityMaid.class,
@@ -279,16 +283,26 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 double hpRatio2 = sister.m_21223_() / Math.max(1.0f, sister.m_21233_());
                 boolean did = false;
-                // 着火优先（与主人链同顺序）
+                // 1. 着火 → 抗火药水（与主人链同顺序：情境保命最先）
                 if (sister.m_6060_() && !this.hasEffectOn(sister, "minecraft:fire_resistance")) {
                     did = this.throwPotionTo(level, maid, sister, FIRE_RESIST_POTIONS, "抗火", false) >= 0;
                 }
-                // 低血 → 治疗/再生（useCd=true 同主人：同种药水 CD 共享记账）
+                // 2. 负面效果 → 牛奶（全解；有增益时改蜂蜜，同主人链规则）
+                if (!did && this.hasNegativeEffectOn(sister)) {
+                    did = this.feedSisterMilkOrHoney(maid, sister);
+                }
+                // 3. 低血 → 治疗链（喷溅治疗 → 金苹果 → 再生 → 喂食），同主人链顺序
                 if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
                     did = this.throwPotionTo(level, maid, sister, HEAL_POTIONS, "治疗", true) >= 0;
                 }
                 if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    did = this.useGoldenAppleOn(maid, sister);
+                }
+                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
                     did = this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0;
+                }
+                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    did = this.feedSisterFood(maid, sister);
                 }
                 if (did) {
                     maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，药水来了！");
@@ -297,6 +311,180 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
         } catch (Exception ignored) {
         }
+    }
+
+    /** v1.1.0 实测八：姐妹身上是否有需要解除的负面效果（清单同主人链） */
+    private static boolean hasNegativeEffectOn(net.minecraft.world.entity.LivingEntity target) {
+        try {
+            for (net.minecraft.world.effect.MobEffectInstance eff : target.m_21220_()) {
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraftforge.registries.ForgeRegistries.MOB_EFFECTS.getKey(eff.m_19544_());
+                if (key != null && NEGATIVE_EFFECTS.contains(key.toString())) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * v1.1.0 实测八：喂姐妹牛奶/蜂蜜——牛奶直接 clearAllEffects（女仆没有
+     * "不想被清增益"的玩家心智，有增益也照喂——战场实用主义：负面掉血比增益
+     * 更致命），空桶返还；没有牛奶退蜂蜜（只解中毒，但蜂蜜走喂食回饱食）。
+     */
+    private boolean feedSisterMilkOrHoney(EntityMaid maid, EntityMaid sister) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
+            if (milk != null) {
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (stack.m_41619_() || stack.m_41720_() != milk) {
+                        continue;
+                    }
+                    inv.extractItem(i, 1, false);
+                    sister.m_21219_(); // removeAllEffects（全解）
+                    // 空桶返还喂食者背包
+                    net.minecraft.world.item.Item bucket = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:bucket"));
+                    if (bucket != null) {
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                                inv, new ItemStack(bucket), false);
+                    }
+                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    return true;
+                }
+            }
+                // 蜂蜜：解中毒（m_21195_ removeEffect）+ 真实进食回饱食
+                net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.f_42787_;
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (stack.m_41619_() || stack.m_41720_() != honey) {
+                        continue;
+                    }
+                    ItemStack taken = inv.extractItem(i, 1, false);
+                    if (taken.m_41619_()) {
+                        continue;
+                    }
+                    // m_5584_ = LivingEntity.eat(Level, ItemStack)——真实进食
+                    //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
+                    sister.m_5584_(sister.m_9236_(), taken);
+                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    return true;
+                }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.1.0 实测八：金苹果给姐妹（附魔优先；效果同 useGoldenApple，目标换人） */
+    private boolean useGoldenAppleOn(EntityMaid maid, EntityMaid sister) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            int bestSlot = -1;
+            boolean enchanted = false;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                net.minecraft.world.item.Item item = stack.m_41720_();
+                if (item == net.minecraft.world.item.Items.f_42437_) {
+                    bestSlot = i;
+                    enchanted = true;
+                    break;
+                }
+                if (item == net.minecraft.world.item.Items.f_42436_ && bestSlot < 0) {
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return false;
+            }
+            inv.extractItem(bestSlot, 1, false);
+            applyEffect(sister, "minecraft:absorption", 2400, enchanted ? 3 : 0);
+            applyEffect(sister, "minecraft:regeneration", enchanted ? 600 : 100, enchanted ? 4 : 1);
+            if (enchanted) {
+                applyEffect(sister, "minecraft:damage_resistance", 6000, 0);
+                applyEffect(sister, "minecraft:fire_resistance", 6000, 0);
+            }
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** v1.1.0 实测八：喂姐妹治疗食物（按饱和度择优，手持也认——同主人链） */
+    private boolean feedSisterFood(EntityMaid maid, EntityMaid sister) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            int bestSlot = -1;
+            double bestSat = -1.0;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                boolean isFood = false;
+                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
+                    if (food.m_41720_() == stack.m_41720_()) {
+                        isFood = true;
+                        break;
+                    }
+                }
+                if (!isFood) {
+                    continue;
+                }
+                double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(stack, sister);
+                if (sat > bestSat) {
+                    bestSat = sat;
+                    bestSlot = i;
+                }
+            }
+            // 手持食物（金苹果已在前面分支处理；这里拿普通食物）
+            ItemStack handItem = null;
+            double handSat = -1.0;
+            for (int h = 0; h < 2; h++) {
+                ItemStack hs = h == 0 ? maid.m_21205_() : maid.m_21206_();
+                if (hs.m_41619_()) {
+                    continue;
+                }
+                boolean isFood = false;
+                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
+                    if (food.m_41720_() == hs.m_41720_()) {
+                        isFood = true;
+                        break;
+                    }
+                }
+                if (!isFood) {
+                    continue;
+                }
+                double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, sister);
+                if (sat > handSat) {
+                    handSat = sat;
+                    handItem = hs;
+                }
+            }
+            if (bestSlot < 0 && handItem == null) {
+                return false;
+            }
+            ItemStack toGive;
+            if (handItem != null && handSat >= bestSat) {
+                toGive = handItem.m_41777_();
+                handItem.m_41774_(1);
+            } else {
+                toGive = inv.extractItem(bestSlot, 1, false);
+            }
+            // 真实进食（m_5584_ = eat(Level, ItemStack)）：食物效果/音效/粒子全生效
+            sister.m_5584_(sister.m_9236_(), toGive);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            return true;
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /**
