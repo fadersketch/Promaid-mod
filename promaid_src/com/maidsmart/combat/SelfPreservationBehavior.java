@@ -115,7 +115,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             BlockPos pos = e.getKey();
             if (com.maidsmart.task.BridgeUpBehavior.supportsBridgerPublic(level, pos)) {
-                continue; // 女仆站在上面（搭高塔上打持久战）→ 延后，走开即清
+                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后（同挖矿/伐木/
+                // 搭路修复）——塔上打持久战时脚下块重置寿命，走开后还有完整 60 秒
+                // 缓冲，不会整根塔瞬间全到期把她摔下去
+                e.setValue(new CombatPlacedMark(gameTime, e.getValue().blockId));
+                continue;
             }
             it.remove();
             destroyCombatMarked(level, pos, e.getValue());
