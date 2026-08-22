@@ -102,6 +102,7 @@ public class ProMaidExtension implements ILittleMaid {
         // 立即销毁全部残留方块变掉落物（重进存档不会看到永不消失的搭方块）
         com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
         com.maidsmart.task.MaidWoodBehavior.clearAll(event.getServer());
+        com.maidsmart.task.BridgeUpBehavior.clearAll(event.getServer());
         com.maidsmart.build.BuildPlan.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
@@ -131,6 +132,7 @@ public class ProMaidExtension implements ILittleMaid {
         for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
             com.maidsmart.task.MaidMineBehavior.expirePlaced(level, level.m_46467_());
             com.maidsmart.task.MaidWoodBehavior.expirePlaced(level, level.m_46467_());
+            com.maidsmart.task.BridgeUpBehavior.expirePlaced(level, level.m_46467_());
         }
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
         if (++this.purgeTimer >= 600) {
@@ -358,6 +360,9 @@ public class ProMaidExtension implements ILittleMaid {
                 // 换完即停、不占行为槽；优先级低于自保/落地水、高于施工区避让
                 return List.of(
                         Pair.of(250, new SelfPreservationBehavior()),
+                        // v1.1.0：搭路（主人在上方时垫方块靠近，默认关）——低于自保、
+                        // 高于落地水/战术：搭路条件本身排除威胁/自保，不与战斗抢移动
+                        Pair.of(245, new com.maidsmart.task.BridgeUpBehavior()),
                         Pair.of(240, new com.maidsmart.combat.WaterClutchBehavior()),
                         // v1.5.134：单兵作战战术（PVP 式走位/拉扯/距离控制）——低于自保/落地水，
                         // 高于自动装备/施工区避让；Brain 1.20.1 无高优先级阻断，不影响 WORK 战斗行为

@@ -1564,6 +1564,20 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.set(v), "岩浆逃生放水：垫高后周围没有水源且包里有水桶 → 在自己垫的方块上放水灭火（1 秒后收回；接触的岩浆源可能变黑曜石）"));
         this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
                 v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
+        // v1.1.0：搭路（主人在上方时垫方块靠近——借鉴僵尸搭方块追人）
+        this.rows.add(new SectionRow("搭路（v1.1.0，默认关）", true));
+        this.rows.add(new BoolRow("搭路", MaidSmartConfig.BRIDGE_ENABLED.get(),
+                v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：主人在你上方一定距离内、周围无威胁、女仆背包有方块时，她会走过去垫方块搭高靠近你（搭的方块 10 秒后自动回收）；默认关闭"));
+        this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随"));
+        this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
+        this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格）：周围此范围内有敌对生物时不搭路（搭一半挨打）"));
+        this.rows.add(new NumRow("搭路节奏（tick/块）", String.valueOf(MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_STEP_COOLDOWN, s), "搭路节奏（tick/块）：每垫一块方块的最短间隔，调大更从容"));
+        this.rows.add(new NumRow("搭路方块清理（秒）", String.valueOf(MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_PLACED_LIFETIME, s), "搭路方块清理时间（秒）：垫的方块 N 秒后自动变掉落物回收（女仆站在上面时延后）"));
     }
 
     private void combatRows() {

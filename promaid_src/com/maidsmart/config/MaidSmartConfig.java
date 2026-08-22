@@ -242,6 +242,14 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_GUN_PREFER;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
+
+    // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
+    public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
+    public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
+    public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
+    public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
     public static final ForgeConfigSpec.DoubleValue COMBAT_SAFE_RETURN_RATIO;
     public static final ForgeConfigSpec.DoubleValue COMBAT_CLOSE_DISTANCE;
@@ -959,6 +967,22 @@ public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
                 .translation("config.promaid.combat.autoSwitchRestore").define("autoSwitchRestore", true);
         COMBAT_AUTO_SWITCH_RESTORE_DELAY = BUILDER.comment("战斗结束还原延迟（tick，400=20 秒）：威胁消失后持续安全这么久才切回原任务")
                 .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 400, 60, 3600);
+        BUILDER.pop();
+
+        // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
+        BUILDER.comment("搭路设置").translation("config.promaid.bridge").push("bridge");
+        BRIDGE_ENABLED = BUILDER.comment("搭路（默认关）：主人在女仆上方一定距离内、周围无威胁、背包有方块时，女仆走过去垫方块搭高靠近主人（借鉴僵尸搭方块追人；搭的方块 N 秒后自动回收）")
+                .translation("config.promaid.bridge.enabled").define("enabled", false);
+        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
+                .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
+        BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
+                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
+        BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 12）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）")
+                .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 12, 4, 32);
+        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 8）：每垫一块方块的最短间隔——调大搭得更从容")
+                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
+        BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
+                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
         BUILDER.pop();
 
         // ---- 杂项 ----
