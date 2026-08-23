@@ -2735,6 +2735,11 @@ public class PromaidConfigScreen extends Screen {
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
         } else {
+            // v1.1.0 实测二十四修复：标签 x 从硬编码 20 改为 panelLeft+10——
+            // 旧版标签固定 x=20，面板和控件居中（panelLeft=Math.max(8,cx-280)），
+            // 宽屏（GUI 缩放小）时标签在最左、控件在中间，视觉严重偏移
+            int panelLeftR = Math.max(8, cx - 280);
+            int leftR = panelLeftR + 10;
             g.m_280653_(this.f_96547_,
                     Component.m_237113_("\u00a7e" + this.section.title + " 设置"),
                     cx, 32, 0xFFFFFF);
@@ -2766,26 +2771,26 @@ public class PromaidConfigScreen extends Screen {
                     String text = sr.sub()
                             ? "\u00a76—— " + sr.text() + " ——\u00a7r"
                             : "\u00a7e" + sr.text() + "\u00a7r";
-                    g.m_280614_(this.f_96547_, Component.m_237113_(text), 20, y, HELP_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(text), leftR, y, HELP_COLOR, false);
                 } else if (def instanceof NumRow nr) {
-                    g.m_280614_(this.f_96547_, Component.m_237113_(nr.label()), 20, y + 4, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(nr.label()), leftR, y + 4, LABEL_COLOR, false);
                     this.drawComment(g, nr.comment(), y + 25);
                 } else if (def instanceof CycleRow cr) {
                     // v1.5.122：循环按钮行（标签与注释同 NumRow 布局）
-                    g.m_280614_(this.f_96547_, Component.m_237113_(cr.label()), 20, y + 4, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(cr.label()), leftR, y + 4, LABEL_COLOR, false);
                     this.drawComment(g, cr.comment(), y + 25);
                 } else if (def instanceof BoolRow br) {
-                    g.m_280614_(this.f_96547_, Component.m_237113_(br.label()), 20, y + 5, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(br.label()), leftR, y + 5, LABEL_COLOR, false);
                     this.drawComment(g, br.comment(), y + 25);
                 } else if (def instanceof BtnRow btnr) {
-                    g.m_280614_(this.f_96547_, Component.m_237113_(btnr.label()), 20, y + 5, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(btnr.label()), leftR, y + 5, LABEL_COLOR, false);
                     this.drawComment(g, btnr.comment(), y + 25);
                 } else if (def instanceof InfoRow ir) {
                     // v1.5.310：只读信息行——"标签：值"（值用青色高亮），无输入控件
                     String irLabel = ir.label() + "：";
-                    g.m_280614_(this.f_96547_, Component.m_237113_(irLabel), 20, y + 5, LABEL_COLOR, false);
+                    g.m_280614_(this.f_96547_, Component.m_237113_(irLabel), leftR, y + 5, LABEL_COLOR, false);
                     g.m_280614_(this.f_96547_, Component.m_237113_(ir.value()),
-                            20 + this.f_96547_.m_92895_(irLabel) + 4, y + 5, 0x66CCFF, false);
+                            leftR + this.f_96547_.m_92895_(irLabel) + 4, y + 5, 0x66CCFF, false);
                     this.drawComment(g, ir.comment(), y + 25);
                 }
             }
