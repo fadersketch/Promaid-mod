@@ -218,4 +218,40 @@ public final class MaidChunkLoadManager {
         }
         return null;
     }
+
+    /**
+     * v1.1.0 实测六十：一键集合——把女仆传送到主人身边（跨维度/同维度通用）。
+     * 排班表列表页「一键集合」按钮调用；复用 followIfCrossDimension 的真传送链路
+     * （m_264318_ 原版 teleportTo + 摔落/导航/速度清理 + 末影人音效）。
+     *
+     * @return true = 传送成功；false = 无可站立点（主人高空/虚空）或女仆状态异常
+     */
+    public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
+        try {
+            if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()) {
+                return false; // 已移除/死亡/骑乘中
+            }
+            if (!(owner.m_9236_() instanceof ServerLevel dest)) {
+                return false;
+            }
+            BlockPos stand = findStand(dest,
+                    new BlockPos((int) Math.floor(owner.m_20185_()),
+                            (int) Math.floor(owner.m_20186_()),
+                            (int) Math.floor(owner.m_20189_())));
+            if (stand == null) {
+                return false; // 主人身边 16 格内无可站立点
+            }
+            maid.m_264318_(dest, stand.m_123341_() + 0.5, stand.m_123342_(),
+                    stand.m_123343_() + 0.5, java.util.Collections.emptySet(),
+                    owner.m_146908_(), owner.m_146909_());
+            maid.f_19789_ = 0.0f;
+            maid.m_21573_().m_26569_();
+            maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_);
+            dest.m_5594_(null, stand, net.minecraft.sounds.SoundEvents.f_11852_,
+                    net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
 }
