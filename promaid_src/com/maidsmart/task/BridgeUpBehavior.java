@@ -392,7 +392,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         track(level, fill, block, maid);
         // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
         this.guardTicks = 12;
         this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         this.lastPlacedGameTime = level.m_46467_();
@@ -433,7 +433,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         track(level, fill, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
         this.guardTicks = 12;
         this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         // 走上刚垫的台阶（不走导航长路——就一格，直接朝目标格设移动目标）
@@ -531,7 +531,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         track(level, place, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        level.m_46796_(3001, place, Block.m_49956_(block.m_49966_()));
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.guardTicks = 12;
         this.lastPlacedGameTime = level.m_46467_();
     }
