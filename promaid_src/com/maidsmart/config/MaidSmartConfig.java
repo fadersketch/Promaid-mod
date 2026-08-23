@@ -552,8 +552,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
         WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
-        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率")
-                .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.6, 0.2, 1.5);
+        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（v1.1.0 实测四十八：0.6→0.3——用户反馈伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
+                .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.3, 0.2, 1.5);
         WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
                 .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
         WOOD_PLACED_LIFETIME = BUILDER.comment("搭方块清理时间（秒）")

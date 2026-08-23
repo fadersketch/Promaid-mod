@@ -1470,7 +1470,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.5.113（C1）：两档接近速度——矿远（>8 格）1.5× 快走赶路，矿近（≤3 格）
-     * 0.8× 慢走（准备搭高/挖掘，防冲过头漂移）；中间距离用基础速度（mine.moveSpeed）。
+     * 0.8× 慢走（准备搭高/挖掘，防冲过头漂移）；中间距离用基础速度（wood.moveSpeed）。
+     * v1.1.0 实测四十八：基础速度 0.6→0.3（用户反馈伐木移速过快像狂奔）。
      */
     private float approachSpeed(EntityMaid maid, BlockPos t) {
         if (t == null) {
@@ -1479,7 +1480,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         double d = maid.m_20275_(t.m_123341_() + 0.5, t.m_123342_() + 0.5, t.m_123343_() + 0.5);
         float base = (float) (double) com.maidsmart.config.MaidSmartConfig.WOOD_MOVE_SPEED.get();
         if (d > 8.0) {
-            return base * 1.5f;
+            return base * 1.25f; // 远处赶路加成 1.5→1.25（随基础速度一起减）
         }
         if (d < 3.0) {
             return base * 0.8f;
@@ -2014,8 +2015,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         ANCHORS.put(id, na);
         OUT_SINCE.remove(id);
         WOOD_CACHE.remove(id); // 新框未扫描，强制重建
-        // 朝新框中心走（空框时也在赶路，不原地干等；0.6 = 伐木同款基础速度，v1.5.118）
-        this.setWalkTarget(maid, na, 0.6f);
+        // 朝新框中心走（空框时也在赶路，不原地干等；速度随 wood.moveSpeed 配置，
+        // 实测四十八起默认 0.3——旧版硬编码 0.6 正是"移速过快"的一处来源）
+        this.setWalkTarget(maid, na,
+                (float) (double) com.maidsmart.config.MaidSmartConfig.WOOD_MOVE_SPEED.get());
     }
 
     /**
