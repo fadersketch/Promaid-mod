@@ -244,6 +244,9 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_VANILLA_WEIGHT;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
+    // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
+    public static final ForgeConfigSpec.IntValue COMBAT_PREF_MELEE_WEIGHT;
+    public static final ForgeConfigSpec.IntValue COMBAT_PREF_RANGED_WEIGHT;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -994,6 +997,13 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.autoSwitchModWeight").defineInRange("autoSwitchModWeight", 2.0, 0.1, 10.0);
         COMBAT_AUTO_SWITCH_VANILLA_WEIGHT = BUILDER.comment("原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐")
                 .translation("config.promaid.combat.autoSwitchVanillaWeight").defineInRange("autoSwitchVanillaWeight", 1.0, 0.1, 10.0);
+        // v1.1.0 实测五十八：近战/远程偏好权重——两者皆可用（近战远程任务池都有候选）
+        // 且敌人在近身距离（≤5 格）时按权重随机选池；同时是战中换战术（实测五十七）
+        // 的开关量：某类权重 0 = 永不主动选/切向该类
+        COMBAT_PREF_MELEE_WEIGHT = BUILDER.comment("近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）")
+                .translation("config.promaid.combat.prefMeleeWeight").defineInRange("prefMeleeWeight", 3, 0, 10);
+        COMBAT_PREF_RANGED_WEIGHT = BUILDER.comment("远程偏好权重（默认 1）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——调大则近身也更倾向保持远程输出；设 0 = 永不主动选远程（战中也不会切远程）")
+                .translation("config.promaid.combat.prefRangedWeight").defineInRange("prefRangedWeight", 1, 0, 10);
         // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
         // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
