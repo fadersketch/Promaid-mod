@@ -1666,6 +1666,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         level.m_7731_(place, block.m_49966_(), 3);
         trackPlaced(level, place, block); // v1.5.28：全局登记（每块满 10 秒各自销毁）
+        // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
+        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+        level.m_46796_(3001, place, Block.m_49956_(block.m_49966_()));
         this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
         // v1.5.113（B6）：冷却只在【成功放置】后设置——旧版失败也消耗冷却，
         // 搭高被错误阻塞
@@ -1728,6 +1731,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             level.m_7731_(fill, block.m_49966_(), 3);
             trackPlaced(level, fill, block); // v1.5.28：全局登记（10 秒后统一销毁）
+            // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
             this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
             this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
             return true;
@@ -1767,6 +1773,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             level.m_7731_(fill, block.m_49966_(), 3);
             trackPlaced(level, fill, block); // v1.5.28：全局登记（10 秒后统一销毁）
+            // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
             this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
             this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
             return true;
