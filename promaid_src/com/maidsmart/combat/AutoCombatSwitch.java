@@ -259,10 +259,12 @@ public class AutoCombatSwitch {
             return; // 每秒检查一次
         }
         this.restoreThrottle = 0;
-        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()
-                || !MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get()) {
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
+        // v1.1.0 实测五十七：战中近远程换战术只依赖总开关——自动还原关掉时，
+        // 换战术仍然工作（还原关 = 用户要她打到底，但打得聪明依旧成立）
+        boolean restoreOn = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get();
         for (ServerLevel level : event.getServer().m_129785_()) {
             for (EntityMaid maid : level.m_45976_(EntityMaid.class,
                     new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
@@ -282,7 +284,12 @@ public class AutoCombatSwitch {
                 long now = level.m_46467_();
                 if (hasThreatNearby(maid)) {
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, now);
+                    // v1.1.0 实测五十七：威胁仍在 → 每秒评估一次近/远程是否该互换
+                    retuneCombatTactics(maid);
                     continue;
+                }
+                if (!restoreOn) {
+                    continue; // 自动还原关：只换战术不还原
                 }
                 long lastThreat = maid.getPersistentData().m_128454_(LAST_THREAT_TAG);
                 if (now - lastThreat < MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()) {
@@ -377,7 +384,38 @@ public class AutoCombatSwitch {
      * 找不到敌人（威胁已消失的边缘场景）→ 按远程优先（安全距离输出）。
      */
     private static IMaidTask pickCombatTask(EntityMaid maid) {
-        // 候选收集：任务 → 权重（原版/模组各自读配置）
+        TaskPools pools = buildPools(maid);
+        // 两类都有 → 按最近敌人距离选池；只有一类 → 直接用
+        if (!pools.meleePool().isEmpty() && !pools.rangedPool().isEmpty()) {
+            double dist = nearestThreatDist(maid);
+            // 没找到敌人（威胁消失边缘）→ 远程优先（安全输出）；近 → 近战
+            boolean useMelee = dist >= 0 && dist <= MELEE_RANGE;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat pick: maid={} both-pools dist={} -> {}",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    String.format("%.1f", dist), useMelee ? "melee" : "ranged");
+            return useMelee
+                    ? weightedPick(pools.meleePool(), pools.meleeWeights())
+                    : weightedPick(pools.rangedPool(), pools.rangedWeights());
+        }
+        if (!pools.meleePool().isEmpty()) {
+            return weightedPick(pools.meleePool(), pools.meleeWeights());
+        }
+        if (!pools.rangedPool().isEmpty()) {
+            return weightedPick(pools.rangedPool(), pools.rangedWeights());
+        }
+        // 全都匹配不上 → 近战兜底（空手也上）
+        return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+    }
+
+    /** v1.1.0 实测五十七：候选池结构（近战/远程两池 + 各自权重）——
+     *  入战选任务（pickCombatTask）与战中换战术（retuneCombatTactics）共用 */
+    private record TaskPools(List<IMaidTask> meleePool, List<Double> meleeWeights,
+                             List<IMaidTask> rangedPool, List<Double> rangedWeights) {
+    }
+
+    /** 扫描全部攻击类任务 → 按武器匹配 + 类型分池（入战/战中共用，逻辑同旧 pickCombatTask） */
+    private static TaskPools buildPools(EntityMaid maid) {
         List<IMaidTask> meleePool = new ArrayList<>();
         List<Double> meleeWeights = new ArrayList<>();
         List<IMaidTask> rangedPool = new ArrayList<>();
@@ -412,27 +450,70 @@ public class AutoCombatSwitch {
                 meleeWeights.add(w);
             }
         }
-        // 两类都有 → 按最近敌人距离选池；只有一类 → 直接用
-        if (!meleePool.isEmpty() && !rangedPool.isEmpty()) {
-            double dist = nearestThreatDist(maid);
-            // 没找到敌人（威胁消失边缘）→ 远程优先（安全输出）；近 → 近战
-            boolean useMelee = dist >= 0 && dist <= MELEE_RANGE;
-            com.mojang.logging.LogUtils.getLogger().info(
-                    "auto-combat pick: maid={} both-pools dist={} -> {}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    String.format("%.1f", dist), useMelee ? "melee" : "ranged");
-            return useMelee
-                    ? weightedPick(meleePool, meleeWeights)
-                    : weightedPick(rangedPool, rangedWeights);
+        return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
+    }
+
+    /** v1.1.0 实测五十七：近战"够不着"阈值（格）——女仆跳跃横距约 3~4 格，敌人比这
+     *  还远 = "大跳都跳不过去"，近战状态继续追只会被远程怪风筝 */
+    private static final double JUMP_UNREACHABLE_DIST = 6.0;
+    /** v1.1.0 实测五十七：索敌范围上限（格）——超过不切远程（超出弓/弩/枪械有效输出） */
+    private static final double TARGETING_RANGE = 16.0;
+
+    /**
+     * v1.1.0 实测五十七：战斗中近远程动态换战术（每秒评估一次——仅本系统指派的
+     * 战斗女仆、威胁仍在、任务没被玩家/排班接管时）。
+     *
+     * - 战术一（远程被近身 → 切近战）：当前是远程任务、最近敌人 ≤ MELEE_RANGE，
+     *   背包/主手有近战类武器（含模组——史诗战斗/拔刀剑等，走 isWeapon 匹配）→
+     *   切近战池（池内仍按原版/模组权重随机）。
+     * - 战术二（近战够不着 → 切远程）：当前是近战任务、最近敌人 > JUMP_UNREACHABLE_DIST
+     *   （大跳都跳不过去）且 ≤ TARGETING_RANGE（仍在索敌范围）→ 有远程武器切远程池。
+     * - 5~6 格滞回带防横跳：远程→近战门槛 5、近战→远程门槛 6，两门槛错开 1 格，
+     *   敌人在 5~6 格徘徊时不会每秒来回换任务（换任务 = 重建 brain，代价高）。
+     * - 池空不切：被近身但没近战武器 → 保持远程硬打（近身反击击退机制兜底）；
+     *   够不着但没远程武器 → 保持近战追击。
+     *
+     * 【兼容关键】切换后同步 ASSIGNED_TAG——还原链路用它判断"任务是否被玩家/排班
+     * 换过"（换过=接管，只清标记不还原）。不同步的话战中一换任务就被当成接管，
+     * 威胁消失后永不还原 = 卡死在战斗任务。PREV_TASK_TAG（战斗前原任务）不动，
+     * 还原流程零改动；LAST_THREAT_TAG 由外层照常刷新，威胁消失计时不受影响。
+     */
+    private static void retuneCombatTactics(EntityMaid maid) {
+        IMaidTask cur = maid.getTask();
+        if (cur == null) {
+            return;
         }
-        if (!meleePool.isEmpty()) {
-            return weightedPick(meleePool, meleeWeights);
+        boolean curRanged = isRangedTask(cur);
+        double dist = nearestThreatDist(maid);
+        if (dist < 0) {
+            return; // 扫不到敌人（威胁半径外的残余判定），不动
         }
-        if (!rangedPool.isEmpty()) {
-            return weightedPick(rangedPool, rangedWeights);
+        boolean wantMelee;
+        if (curRanged) {
+            if (dist > MELEE_RANGE) {
+                return; // 还没被近身，远程继续输出
+            }
+            wantMelee = true;
+        } else {
+            if (dist <= JUMP_UNREACHABLE_DIST || dist > TARGETING_RANGE) {
+                return; // 追得上（跳跃+贴身可达）或超出索敌范围，维持近战
+            }
+            wantMelee = false;
         }
-        // 全都匹配不上 → 近战兜底（空手也上）
-        return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+        TaskPools pools = buildPools(maid);
+        IMaidTask next = wantMelee
+                ? (pools.meleePool().isEmpty() ? null : weightedPick(pools.meleePool(), pools.meleeWeights()))
+                : (pools.rangedPool().isEmpty() ? null : weightedPick(pools.rangedPool(), pools.rangedWeights()));
+        if (next == null || next.getUid().equals(cur.getUid())) {
+            return; // 没有对应武器的任务可换 / 选中的就是当前任务
+        }
+        maid.setTask(next);
+        // 兼容关键：同步指派标记（见方法注释），否则还原链路误判"玩家接管"
+        maid.getPersistentData().m_128359_(ASSIGNED_TAG, next.getUid().toString());
+        com.mojang.logging.LogUtils.getLogger().info(
+                "auto-combat retune: maid={} {} -> {} (dist={})",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                cur.getUid(), next.getUid(), String.format("%.1f", dist));
     }
 
     /** v1.1.0 实测三十八：近战判定距离（格）——敌人 ≤ 此距离用近战 */
