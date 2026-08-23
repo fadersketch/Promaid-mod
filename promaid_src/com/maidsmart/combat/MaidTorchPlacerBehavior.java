@@ -17,6 +17,10 @@ import net.minecraftforge.registries.ForgeRegistries;
  * 背包有 torch（SRG f_42000_ = StandingAndWallBlockItem(torch)）且脚下有实心支撑
  * 时放置（消耗 1 个火把）。冷却 1.5 秒（防连插刷屏）。
  * 总开关：combat.torchPlacerEnable（默认开）+ 阈值可调。
+ *
+ * v1.1.0 实测五十二【亮度口径修复】："天光/方块光都算"旧版只兑现了方块光——
+ * 白天地表方块光恒 0，跟着主人走路一路狂插火把（严重浪费）。扫描亮度改为
+ * effective = max(方块光, 天光 - getSkyDarken)（原版合并亮度口径，详见 tick 内注释）。
  */
 public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
 
@@ -74,12 +78,22 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         //（主人脚下半径 2 格）——3×3 只有一格宽的跟随带，走路时边缘暗格根本轮不到
         // 检索；5×5 覆盖正常走路节奏的暗区。每轮仍只插【一根】（插最暗格），节奏
         // 由冷却控制，不会一次连插一片。
+        // v1.1.0 实测五十二（用户："明明亮度比较高，但仍然要插火把，严重的浪费"）：
+        // 旧版只读 LightLayer.BLOCK（方块光）——白天地表方块光恒 0，跟着女仆走路
+        // 一路狂插（0.5s 冷却 ≈ 每秒 2 根）。改为原版 getMaxLocalRawBrightness 同款
+        // 合并口径：effective = max(方块光, 天光 - 天空变暗度)。getSkyDarken
+        // （m_7445_，javap 反编译核实）= (1-雨)×(1-雷)×(1-昼曲线)×11：正午 0、
+        // 深夜 11、暴雨白天也升到 8+——白天/雨天不插，夜晚地表 15-11=4 照插，
+        // 地下天光 0 走方块光口径不变。阈值 7 的语义从此才真正成立。
+        int skyDarken = level.m_7445_();
         net.minecraft.core.BlockPos target = null;
         int darkest = threshold;
         for (int dx = -2; dx <= 2; dx++) {
             for (int dz = -2; dz <= 2; dz++) {
                 net.minecraft.core.BlockPos p = base.m_7918_(dx, 0, dz);
-                int light = level.m_45517_(net.minecraft.world.level.LightLayer.BLOCK, p);
+                int sky = level.m_45517_(net.minecraft.world.level.LightLayer.SKY, p);
+                int block = level.m_45517_(net.minecraft.world.level.LightLayer.BLOCK, p);
+                int light = Math.max(block, sky - skyDarken);
                 if (light < darkest) {
                     darkest = light;
                     target = p;
