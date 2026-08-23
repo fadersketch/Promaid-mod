@@ -43,6 +43,12 @@ public class PromaidConfigScreen extends Screen {
     private Section section = Section.BUILD;
     /** 板块页内页码（每页行数按可用高度自适应） */
     private int pageIndex = 0;
+    /** v1.1.0 实测四十五：布局结果字段——init 侧算好的【当前页】每行 y 坐标，
+     *  渲染侧直接用（旧版渲染侧用 start..end 下标去查【全表】rowY：rowY 是从
+     *  第 0 行开始累加的全表坐标，第二页的第一行拿到的是它在第一页时的 y，
+     *  行 y 起点整体错位 → 文本与控件/注释互相重叠 = "第 2 页起排版全错"根源） */
+    private int[] pageRowY = new int[0];
+    private int pagePerRow = 0;
     /** 挖矿板块：矿表子页 */
     private boolean mineTable = false;
     /** 当前板块的行定义（分页只实例化当前页的行） */
@@ -360,20 +366,18 @@ public class PromaidConfigScreen extends Screen {
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
         // contentBottom 停止；页面内行位置同样累加（不再 ×ROW_H 匀质假设），
         // 任何分辨率/缩放下注释与下一行控件像素级不重叠。
+        // v1.1.0 实测四十五：按【页】逐页累加——每页都从 CONTENT_TOP 重新起算，
+        // 只把当前页的行 y 存进 pageRowY 给渲染侧用。旧版算的是全表绝对 y、
+        // 渲染侧又只画 start..end 行，第二页第一行拿到全表坐标（比正确值大
+        // 一整页），且行高分布随 pageIndex 偏移错位 → "第 2 页起排版全错"
         int perPage = 0;
-        int used = 0;
-        int[] rowY = new int[this.rows.size()]; // 每行的 y 起点（页面内偏移）
-        int[] rowHArr = new int[this.rows.size()];
-        for (int i = 0; i < this.rows.size(); i++) {
-            rowHArr[i] = this.rowHeight(this.rows.get(i));
-        }
         int cursorY = CONTENT_TOP;
         for (int i = 0; i < this.rows.size(); i++) {
-            if (cursorY + rowHArr[i] > contentBottom && i > 0) {
+            int rh = this.rowHeight(this.rows.get(i));
+            if (cursorY + rh > contentBottom && i > 0) {
                 break;
             }
-            rowY[i] = cursorY;
-            cursorY += rowHArr[i];
+            cursorY += rh;
             perPage = i + 1;
         }
         if (perPage < 1) {
@@ -383,9 +387,17 @@ public class PromaidConfigScreen extends Screen {
         this.pageIndex = Math.min(this.pageIndex, totalPages - 1);
         int start = this.pageIndex * perPage;
         int end = Math.min(this.rows.size(), start + perPage);
+        // 当前页行 y：从 CONTENT_TOP 起累加（页面内相对布局，任何页都正确）
+        this.pageRowY = new int[this.rows.size()];
+        int yCursor = CONTENT_TOP;
+        for (int i = start; i < end; i++) {
+            this.pageRowY[i] = yCursor;
+            yCursor += this.rowHeight(this.rows.get(i));
+        }
+        this.pagePerRow = perPage;
         for (int i = start; i < end; i++) {
             RowDef def = this.rows.get(i);
-            int y = rowY[i];
+            int y = this.pageRowY[i];
             if (def instanceof NumRow nr) {
                 EditBox box = new EditBox(this.f_96547_, left + labelWidth + 8, y,
                         inputWidth - 60, 22, Component.m_237113_(nr.label()));
@@ -2748,27 +2760,15 @@ public class PromaidConfigScreen extends Screen {
             // 行标签（按行实际位置画；行数受分页限制不会越界）
             // v1.1.0 实测二十二：渲染侧行位置与布局侧同口径（动态行高累加）——
             // 旧版渲染独立按 ROW_H 匀质计算，与布局侧脱节就是重叠的根源
-            int contentBottom = h - 76;
-            int perPageR = 0;
-            int cursorYR = CONTENT_TOP;
-            int[] rowYR = new int[this.rows.size()];
-            for (int i = 0; i < this.rows.size(); i++) {
-                int rh = this.rowHeight(this.rows.get(i));
-                if (cursorYR + rh > contentBottom && i > 0) {
-                    break;
-                }
-                rowYR[i] = cursorYR;
-                cursorYR += rh;
-                perPageR = i + 1;
-            }
-            if (perPageR < 1) {
-                perPageR = 1;
-            }
+            // v1.1.0 实测四十五：直接用 init 侧算好的 pageRowY / pagePerRow——
+            // 渲染侧重算（旧实现）拿 start..end 行查【全表】累加坐标，第二页
+            // 起行 y 是第一页的绝对位置（起点偏低/错位）→ 文本重叠排版错乱
+            int perPageR = this.pagePerRow;
             int start = this.pageIndex * perPageR;
             int end = Math.min(this.rows.size(), start + perPageR);
             for (int i = start; i < end; i++) {
                 RowDef def = this.rows.get(i);
-                int y = rowYR[i];
+                int y = this.pageRowY[i];
                 if (def instanceof SectionRow sr) {
                     String text = sr.sub()
                             ? "\u00a76—— " + sr.text() + " ——\u00a7r"
