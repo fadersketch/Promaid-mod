@@ -579,7 +579,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         WOOD_REACH = BUILDER.comment("砍伐距离（格）")
                 .translation("config.promaid.wood.reach").defineInRange("reach", 4.5, 2.0, 8.0);
         WOOD_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
-                .translation("config.promaid.wood.pillarCooldown").defineInRange("pillarCooldown", 4, 1, 20);
+                .translation("config.promaid.wood.pillarCooldown")
+                // v1.1.0 实测五十四：4→2——垫块间隙的"停一下再挖"顿挫感减半（冷却期
+                // 女仆原地站桩等下一步，4 tick 的停顿在连续垫高砍树时肉眼可见）
+                .defineInRange("pillarCooldown", 2, 1, 20);
         WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
         WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
