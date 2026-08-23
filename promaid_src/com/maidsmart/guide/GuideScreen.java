@@ -142,14 +142,15 @@ public class GuideScreen extends Screen {
                 .m_252987_(8, 8, 90, 16).m_253136_());
     }
 
-    /** 底部翻页按钮（< 上一页 cx-90 / 下一页 cx+10，h-30；与手册一致） */
+    /** 底部翻页按钮（v1.1.0 实测二十五：80 宽"上一页/下一页"会盖住正文末行——
+     *  改 20 宽纯箭头 ◀ cx-40 / ▶ cx+20，h-30；页码画在两箭头之间不重叠） */
     private void pageButtons(int totalPages, int page, int cx, int h, boolean isRead) {
         if (totalPages <= 1) {
             return;
         }
         int py = h - 30;
         if (page > 0) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                             b -> {
                                 if (isRead) {
                                     this.readPage--;
@@ -158,10 +159,10 @@ public class GuideScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(cx - 90, py, 80, 18).m_253136_());
+                    .m_252987_(cx - 40, py, 20, 18).m_253136_());
         }
         if (page < totalPages - 1) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                             b -> {
                                 if (isRead) {
                                     this.readPage++;
@@ -170,7 +171,7 @@ public class GuideScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(cx + 10, py, 80, 18).m_253136_());
+                    .m_252987_(cx + 20, py, 20, 18).m_253136_());
         }
     }
 
@@ -308,12 +309,13 @@ public class GuideScreen extends Screen {
             this.drawCentered(graphics, "\u00a7ePromaid 详细介绍 · 章节目录", 36, 0xFFFFFF);
             // v1.5.252h：目录页不再显示章节总数说明（用户要求"不要再有字"）
         }
-        // 页码（翻页按钮 h-30 上方，不与按钮/正文重叠）
+        // 页码（v1.1.0 实测二十五：画在两箭头中间 h-26 行——箭头 20px 在两侧，
+        // 页码居中，任意文本长度不与按钮重叠）
         int totalPages = this.currentPages();
         if (totalPages > 1) {
             int page = this.view == VIEW_READ ? this.readPage : this.chapterPage;
             this.drawCentered(graphics, "\u00a77第 " + (page + 1) + "/" + totalPages + " 页",
-                    h - 48, 0x888888);
+                    h - 26, 0xAAAAAA);
         }
         super.m_88315_(graphics, mouseX, mouseY, partialTick);
     }

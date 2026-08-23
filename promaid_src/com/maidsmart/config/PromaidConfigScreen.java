@@ -469,24 +469,25 @@ public class PromaidConfigScreen extends Screen {
             }
             // SectionRow：纯标签，渲染阶段画
         }
-        // 翻页按钮（手册式：< 上一页 / 下一页 > 居中 + 页码）
+        // 翻页按钮（v1.1.0 实测二十五：80 宽"上一页/下一页"会盖住内容末行注释——
+        // 改 20 宽纯箭头 ◀/▶，页码画在两箭头之间（渲染层 h-62 行）零重叠）
         if (totalPages > 1) {
             int py = h - 68;
             if (this.pageIndex > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.pageIndex--;
                                     this.m_7856_();
                                 })
-                        .m_252987_(cx - 90, py, 80, 18).m_253136_());
+                        .m_252987_(cx - 40, py, 20, 18).m_253136_());
             }
             if (this.pageIndex < totalPages - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.pageIndex++;
                                     this.m_7856_();
                                 })
-                        .m_252987_(cx + 10, py, 80, 18).m_253136_());
+                        .m_252987_(cx + 20, py, 20, 18).m_253136_());
             }
         }
         // 返回目录（底部左侧，手册同款）
@@ -539,23 +540,24 @@ public class PromaidConfigScreen extends Screen {
         int gridBottom = gridTop + gridRowsNow * GRID_CELL;
         this.gridRows = gridRowsNow;
         this.rebuildCreative();
-        // 网格翻页（< 上一页 / 下一页 >，页脚行）
+        // 网格翻页（v1.1.0 实测二十五：80 宽按钮盖住网格底部图标——改 20 宽纯箭头，
+        // 页码本就画在网格右侧空白，不受影响）
         int py = gridBottom + 2;
         if (this.creativePage > 0) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                             b -> {
                                 this.creativePage--;
                                 this.m_7856_();
                             })
-                    .m_252987_(cx - 90, py, 80, 16).m_253136_());
+                    .m_252987_(cx - 40, py, 20, 16).m_253136_());
         }
         if (this.creativePage < this.creativePages() - 1) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                             b -> {
                                 this.creativePage++;
                                 this.m_7856_();
                             })
-                    .m_252987_(cx + 10, py, 80, 16).m_253136_());
+                    .m_252987_(cx + 20, py, 20, 16).m_253136_());
         }
         // 输入添加（v1.5.101b 恢复：矿物 "id=value"，障碍物 "id"）
         // v1.0.4：目标矿物模式输入框只在锁定方块后出现（防误认为物品添加框）；
@@ -629,20 +631,20 @@ public class PromaidConfigScreen extends Screen {
         this.rebuildCreative();
         int py = gridBottom + 2;
         if (this.creativePage > 0) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                             b -> {
                                 this.creativePage--;
                                 this.m_7856_();
                             })
-                    .m_252987_(cx - 90, py, 80, 16).m_253136_());
+                    .m_252987_(cx - 40, py, 20, 16).m_253136_());
         }
         if (this.creativePage < this.creativePages() - 1) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                             b -> {
                                 this.creativePage++;
                                 this.m_7856_();
                             })
-                    .m_252987_(cx + 10, py, 80, 16).m_253136_());
+                    .m_252987_(cx + 20, py, 20, 16).m_253136_());
         }
         // 输入添加（完整注册名，无 namespace 自动补 minecraft:）
         int inputY = gridBottom + 24;
@@ -2794,12 +2796,13 @@ public class PromaidConfigScreen extends Screen {
                     this.drawComment(g, ir.comment(), y + 25);
                 }
             }
-            // 页码（翻页按钮上方，不与"下一页"重叠——v1.5.100b 上移）
+            // 页码（v1.1.0 实测二十五：画在翻页箭头中间 h-62 行——箭头 20px 在
+            // 两侧 cx±(20..40)，页码居中 <60px 宽，任何分辨率下不重叠）
             int totalPages = Math.max(1, (this.rows.size() + perPageR - 1) / perPageR);
             if (totalPages > 1) {
                 g.m_280653_(this.f_96547_,
                         Component.m_237113_("第 " + (this.pageIndex + 1) + "/" + totalPages + " 页"),
-                        cx, h - 92, 0x888888);
+                        cx, h - 62, 0xAAAAAA);
             }
         }
         super.m_88315_(g, mouseX, mouseY, partialTick);

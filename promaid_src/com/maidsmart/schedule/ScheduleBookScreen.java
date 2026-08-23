@@ -134,20 +134,21 @@ public class ScheduleBookScreen extends Screen {
                     .m_252987_(cx - bw / 2, y, bw, 20).m_253136_());
             y += 23;
         }
-        // 翻页
+        // 翻页（v1.1.0 实测二十五：80 宽"上一页/下一页"按钮盖住女仆行文字——
+        // 改 20 宽纯箭头 ◀/▶，仅贴行区下缘，按钮区间距留给页码文字）
         if (this.page > 0) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"), b -> {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"), b -> {
                         this.page--;
                         this.m_7856_();
                     })
-                    .m_252987_(cx - 90, h - 60, 80, 18).m_253136_());
+                    .m_252987_(cx - 110, h - 60, 20, 18).m_253136_());
         }
         if (this.page < totalPages - 1) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"), b -> {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"), b -> {
                         this.page++;
                         this.m_7856_();
                     })
-                    .m_252987_(cx + 10, h - 60, 80, 18).m_253136_());
+                    .m_252987_(cx + 90, h - 60, 20, 18).m_253136_());
         }
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7c关闭"), b -> this.m_7379_())
                 .m_252987_(cx - 50, h - 34, 100, 20).m_253136_());
@@ -515,6 +516,14 @@ public class ScheduleBookScreen extends Screen {
             g.m_280653_(this.f_96547_, Component.m_237113_("\u00a7d\u00a7o排班表\u00a7r\u00a7c——选择女仆"), cx, 20, 0xFFFFFF);
             g.m_280653_(this.f_96547_, Component.m_237113_(
                             "\u00a77点女仆进入设置：快捷切换工作模式/任务，或按游戏内时间排一天班"), cx, 32, 0xAAAAAA);
+            // v1.1.0 实测二十五：页码画在翻页箭头中间（◀ x 页 ▶）——箭头只有
+            // 20px 宽，中间留 ~80px 恰好放"第n/m页"，任何情况下不与按钮重叠
+            int tp = Math.max(1, (this.maids.size() + ROWS_PER_PAGE - 1) / ROWS_PER_PAGE);
+            if (tp > 1) {
+                g.m_280653_(this.f_96547_,
+                        Component.m_237113_("\u00a77第 " + (this.page + 1) + "/" + tp + " 页"),
+                        cx, this.f_96544_ - 55, 0xAAAAAA);
+            }
         } else {
             g.m_280653_(this.f_96547_, Component.m_237113_(
                             "\u00a7d\u00a7o" + this.selName + "\u00a7r\u00a7c 的排班"), cx, 8, 0xFFFFFF);
