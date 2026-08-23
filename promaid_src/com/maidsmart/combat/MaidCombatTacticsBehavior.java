@@ -598,6 +598,19 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     private void rangedTick(EntityMaid maid, LivingEntity target) {
         double dist = maid.m_20270_(target);
+        // v1.1.0 实测四十（用户："远程被贴身时自动对周围敌人触发一次近战攻击及
+        // 击退——伤害取包内 DPH 最高的近战武器，无近战武器为 1，带近战特效动作"）：
+        // 敌人贴进 2 格内（近战威胁距离）且反击冷却好 → 一次 AOE 近战反击：
+        // 摆臂 + 横扫粒子音效（近战该有的特效）+ 目标伤害（DPH 最高的近战武器，
+        // 空手/无近战武器 1 点）+ 原版击退（knockback 同玩家攻击）。
+        // 冷却 40 tick（2 秒）防每 tick 连拍；反击后照常走下面的拉开走位。
+        if (this.counterCooldown > 0) {
+            this.counterCooldown--;
+        }
+        if (dist <= MELEE_COUNTER_RANGE && this.counterCooldown <= 0) {
+            this.meleeCounterAttack(maid, target);
+            this.counterCooldown = MELEE_COUNTER_COOLDOWN;
+        }
         ItemStack main = maid.m_21205_();
         // v1.1.0：枪械走 TLM 枪械距离配置（与 gun_attack 任务同源）；三叉戟不是
         // ProjectileWeaponItem → 任务搜索半径兜底；弓/弩用原版 getRange（弓 15 / 弩 8）
@@ -620,6 +633,111 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             }
             this.navigateOrbit(maid, target, Math.max(3.0, maxRange * 0.45), 1.0f);
         }
+    }
+
+    /* ============ 远程被贴身的近战反击（实测四十） ============ */
+
+    /** 反击触发距离（格）——敌人贴进此距离内触发一次近战反击（2.0 = 近战威胁距离） */
+    private static final double MELEE_COUNTER_RANGE = 2.0;
+    /** 反击冷却（tick，2 秒）——防贴身状态下每 tick 连拍 */
+    private static final int MELEE_COUNTER_COOLDOWN = 40;
+    /** 反击冷却计数 */
+    private int counterCooldown = 0;
+
+    /**
+     * v1.1.0 实测四十：近战反击——对贴身的当前目标（及 2 格内其他敌人）造成一次
+     * 近战打击 + 击退。伤害 = 背包 DPH（单发伤害）最高的近战武器，无近战武器 1 点。
+     * 特效动作：摆臂（swing）+ 横扫粒子（levelEvent 2004，玩家横扫同款）+ 打击音效
+     * （目标受击音）+ 原版击退（m_19970_ push，同 LivingEntity.knockback）。
+     * 不切换主手武器（远程武器保持在手——反击是瞬发动作不是换装）。
+     */
+    private void meleeCounterAttack(EntityMaid maid, LivingEntity target) {
+        try {
+            ServerLevel level = (ServerLevel) maid.m_9236_();
+            // 1. 背包 DPH 最高的近战武器（无 → 1 点空手伤害）
+            ItemStack bestWeapon = findBestMeleeWeapon(maid);
+            float damage = 1.0f;
+            if (!bestWeapon.m_41619_()) {
+                float atk = weaponAttack(bestWeapon);
+                if (atk > damage) {
+                    damage = atk;
+                }
+            }
+            // 2. 动作 + 特效：摆臂 + 横扫粒子（2004 = sweep attack，玩家横扫同款）
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            level.m_46796_(2004, target.m_20183_(), 0);
+            // 3. 对贴身的当前目标 + 2 格内其他敌人各打一下（小范围横扫语义）。
+            // 伤害源用女仆的伤害指示器（m_269291_）构造——附魔/药水等加成照常生效
+            for (LivingEntity victim : level.m_6443_(LivingEntity.class,
+                    target.m_20191_().m_82400_(MELEE_COUNTER_RANGE),
+                    e -> e != maid && e.m_6084_() && !maid.m_7307_(e))) {
+                victim.m_6469_(maid.m_269291_().m_269333_(maid), damage);
+                // 原版击退（m_147240_ = knockback，方向 = 女仆→受害者，强度 0.5 = 玩家普攻级）
+                double dx = victim.m_20185_() - maid.m_20185_();
+                double dz = victim.m_20189_() - maid.m_20189_();
+                double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
+                victim.m_147240_(0.5, dx / len, dz / len);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 物品攻击力属性值（ItemStack.m_41638_ 属性修饰表 → m_22182_ 基值+m_22183_？
+     *  简化：直接读修饰符表里攻击力的【基值+修饰和】——与原版 getAttackDamageAttribute
+     *  同口径；无该属性返回 -1——调用方判负跳过） */
+    private static float weaponAttack(ItemStack stack) {
+        try {
+            var mods = stack.m_41638_(net.minecraft.world.entity.EquipmentSlot.MAINHAND)
+                    .get(net.minecraft.world.entity.ai.attributes.Attributes.f_22281_);
+            if (mods == null) {
+                return -1.0f;
+            }
+            // Multimap：修饰符 amount 之和即武器基伤（原版武器只有一个基伤修饰符）
+            float total = 0;
+            for (net.minecraft.world.entity.ai.attributes.AttributeModifier mod : mods) {
+                total += (float) mod.m_22218_();
+            }
+            return total;
+        } catch (Exception e) {
+            return -1.0f;
+        }
+    }
+
+    /**
+     * v1.1.0 实测四十：背包里 DPH（单发伤害）最高的近战武器。
+     * 近战武器 = 攻击力属性 ≥1 且不是远程投射武器（弓/弩/三叉戟/枪械不算——
+     * 它们的攻击力属性是给近战形态用的，但用户口径"枪械算远程"）。
+     * 剑/斧/镐/拔刀剑/史诗武器等全部按攻击力属性自然参与评分。
+     * 找不到返回 EMPTY 栈（调用方按 1 点伤害处理）。
+     */
+    private static ItemStack findBestMeleeWeapon(EntityMaid maid) {
+        ItemStack best = ItemStack.f_41583_;
+        float bestDmg = 0;
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (s.m_41619_()) {
+                    continue;
+                }
+                net.minecraft.world.item.Item it = s.m_41720_();
+                // 远程武器排除（用户口径：枪械/弓/弩/三叉戟算远程）
+                if (it instanceof ProjectileWeaponItem || it instanceof TridentItem
+                        || GunCompat.isGun(s)) {
+                    continue;
+                }
+                float dmg = weaponAttack(s);
+                if (dmg <= 0) {
+                    continue; // 无攻击力属性 = 非武器
+                }
+                if (dmg > bestDmg) {
+                    bestDmg = dmg;
+                    best = s;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return best;
     }
 
     /* ============ 导航辅助（全部直连导航，绕开 MoveToTargetSink） ============ */
