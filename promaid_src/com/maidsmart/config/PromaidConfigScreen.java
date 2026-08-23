@@ -1690,7 +1690,7 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
         this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
-                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被攻击（任意来源）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；默认开启"));
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被攻击（任意来源）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；女仆自己被怪物攻击也会让她本人+周围姐妹立即参战（实测五十八）；默认开启"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
         // v1.1.0 实测二十一：武器权重可配置（选任务时加权随机——模组/原版各一条）
@@ -1698,6 +1698,11 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT, s), "模组武器权重（默认 2.0）：万法皆通/史诗战斗/真正的力量/枪械等模组攻击任务的加权随机权重——模组武器普遍更强故默认优先（2:1 约被选 67%）"));
         this.rows.add(new NumRow("原版武器权重", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT, s), "原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐"));
+        // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
+        this.rows.add(new NumRow("近战偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT, s), "近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）"));
+        this.rows.add(new NumRow("远程偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT, s), "远程偏好权重（默认 1）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——调大则近身也更倾向保持远程输出；设 0 = 永不主动选远程（战中也不会切远程，够不着就追）"));
         // v1.1.0 实测二十：枪械优先开关已删除（原版武器降半权、模组攻击任务等权
         // 随机的新选法不需要开关——附属生态的攻击任务与枪械强度等价）
         this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
