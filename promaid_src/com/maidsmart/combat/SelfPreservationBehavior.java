@@ -1,6 +1,7 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.task.PlacedBlockTracker;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -69,21 +70,18 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * - bridge.reclaimToMaid 开关（垫脚方块回收进背包）同样覆盖这里的回收
      * - 玩家替换过的方块不误破坏（blockId 比对，与挖矿/搭路同口径）
      */
-    public record CombatPlacedMark(long tick, String blockId) {
-    }
+    /**
+     * 战斗方块登记（放置点统一调用）
+     * v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆 + 魂符收回暂停计时
+     */
+    static final PlacedBlockTracker COMBAT_TRACKER = new PlacedBlockTracker(
+            () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L);
 
-    private static final java.util.Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>,
-            java.util.Map<BlockPos, CombatPlacedMark>> COMBAT_PLACED = new java.util.HashMap<>();
-
-    /** 战斗方块登记（放置点统一调用） */
     private static void trackCombatPlaced(EntityMaid maid, BlockPos pos, Block block) {
         if (!(maid.m_9236_() instanceof ServerLevel sl)) {
             return;
         }
-        net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
-        COMBAT_PLACED.computeIfAbsent(sl.m_46472_(), k -> new java.util.HashMap<>())
-                .put(pos.m_7949_(), new CombatPlacedMark(sl.m_46467_(),
-                        key != null ? key.toString() : ""));
+        COMBAT_TRACKER.track(sl, pos, block, maid);
     }
 
     /** 该位置是否是女仆搭的战斗方块（挡路破坏判定用） */
@@ -91,63 +89,43 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (!(level instanceof ServerLevel sl)) {
             return false;
         }
-        java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(sl.m_46472_());
-        return marks != null && marks.containsKey(pos.m_7949_());
+        return COMBAT_TRACKER.isPlaced(sl, pos);
     }
 
     /**
      * 战斗方块到期销毁（ProMaidExtension 每 tick 调；60 秒）。
-     * 女仆还站在上面的（搭高塔）延后一轮——supportsBridger 同款保护。
-     * bridge.reclaimToMaid 开启时掉落直接进附近女仆背包（复用搭路的回收链路）。
+     * v1.1.0 实测四十二：改走 PlacedBlockTracker（绑定搭建者/魂符暂停）。
      */
-    public static void expireCombatPlaced(ServerLevel level, long gameTime) {
-        java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(level.m_46472_());
-        if (marks == null || marks.isEmpty()) {
-            return;
-        }
-        long lifetime = com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L;
-        java.util.Iterator<java.util.Map.Entry<BlockPos, CombatPlacedMark>> it =
-                marks.entrySet().iterator();
-        while (it.hasNext()) {
-            java.util.Map.Entry<BlockPos, CombatPlacedMark> e = it.next();
-            if (gameTime - e.getValue().tick < lifetime) {
-                continue;
-            }
-            BlockPos pos = e.getKey();
-            if (com.maidsmart.task.BridgeUpBehavior.supportsBridgerPublic(level, pos)) {
-                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后（同挖矿/伐木/
-                // 搭路修复）——塔上打持久战时脚下块重置寿命，走开后还有完整 60 秒
-                // 缓冲，不会整根塔瞬间全到期把她摔下去
-                e.setValue(new CombatPlacedMark(gameTime, e.getValue().blockId));
-                continue;
-            }
-            it.remove();
-            destroyCombatMarked(level, pos, e.getValue());
-        }
+    public static void expireCombatPlaced(net.minecraft.server.MinecraftServer server, long gameTime) {
+        COMBAT_TRACKER.expirePlaced(server, gameTime,
+                pos -> anyMaidStanding(server, pos));
     }
 
-    /** 服务器停止清场（残留战斗方块立即回收） */
+    /** 任意维度的存活女仆站在该位置（跨维度判定；实测四十二） */
+    private static boolean anyMaidStanding(net.minecraft.server.MinecraftServer server, BlockPos pos) {
+        for (ServerLevel lvl : server.m_129785_()) {
+            if (PlacedBlockTracker.anyMaidStanding(lvl, pos, m -> true)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 服务器停止清场（残留战斗方块立即回收）
+     *  v1.1.0 实测四十二：改走 PlacedBlockTracker.clearAll */
     public static void clearCombatPlaced(net.minecraft.server.MinecraftServer server) {
-        for (ServerLevel level : server.m_129785_()) {
-            java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.remove(level.m_46472_());
-            if (marks == null) {
-                continue;
-            }
-            for (java.util.Map.Entry<BlockPos, CombatPlacedMark> e : marks.entrySet()) {
-                destroyCombatMarked(level, e.getKey(), e.getValue());
-            }
-        }
-        COMBAT_PLACED.clear();
+        COMBAT_TRACKER.clearAll(server);
     }
 
-    /** 销毁一个战斗方块：玩家换过的不误破坏；reclaimToMaid 开启进背包（同搭路口径） */
-    private static void destroyCombatMarked(ServerLevel level, BlockPos pos, CombatPlacedMark mark) {
+    /** 销毁一个战斗方块：v1.1.0 实测四十二后由 PlacedBlockTracker 内部处理（无调用者保留） */
+    @SuppressWarnings("unused")
+    private static void destroyCombatMarked(ServerLevel level, BlockPos pos, String blockId) {
         var state = level.m_8055_(pos);
         if (state.m_60795_()) {
             return;
         }
         net.minecraft.resources.ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(state.m_60734_());
-        if (!mark.blockId.isEmpty() && cur != null && !mark.blockId.equals(cur.toString())) {
+        if (!blockId.isEmpty() && cur != null && !blockId.equals(cur.toString())) {
             return; // 玩家已替换，尊重改动
         }
         level.m_46796_(2001, pos, net.minecraft.world.level.block.Block.m_49956_(state));
@@ -1273,11 +1251,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         net.minecraft.world.level.block.Block.m_49892_(state, sl, p, sl.m_7702_(p));
                     }
                     sl.m_7731_(p, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
-                    // 从追踪表移除（已物理拆除）
-                    java.util.Map<BlockPos, CombatPlacedMark> marks = COMBAT_PLACED.get(sl.m_46472_());
-                    if (marks != null) {
-                        marks.remove(p.m_7949_());
-                    }
+                    // 从追踪表移除（已物理拆除）——v1.1.0 实测四十二：PlacedBlockTracker
+                    // 无公开 remove；物理已拆除后到期扫描会因方块非空校验跳过（destroy
+                    // 前有 state.m_60795_ 检查），表内残留条目由 clearAll/到期流程自然清理
                     broke = true;
                 }
             }
