@@ -3,7 +3,6 @@ package com.maidsmart.schedule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
-import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -13,18 +12,16 @@ import java.util.List;
 /**
  * 排班表界面（v1.1.0）——纸+墨囊合成的「排班表」物品右键打开。
  *
- * v1.1.0 实测三十三【整体重写】（用户："排班表的 UI bug 还是一大堆，需要重做"）：
- * 旧版结构在多轮补丁后状态失控（tab 与排班开关重叠、日程行数字框焦点链脆弱、
- * 排版参数多处复制粘贴口径不一）。本次按以下原则重写：
- * - **单一布局函数**：所有控件的 x/y 只在一个方法里计算，渲染层的静态文字
- *   （冒号/波浪线/说明）复用同一组常量——彻底消灭"两处各算各的、改一处漏一处"。
- * - **固定栏式布局**：顶部标题(8..24) / tab(28..46) / 内容区(52..h-56) /
- *   底部按钮区(h-52..h-8)。任何分辨率下各区不重叠；内容行数按内容区高度收敛。
- * - **行内编辑改单框**：时间段一行只用【一个】输入框（"H:MM~H:MM" 自由输入，
- *   保存时校验），替代旧版 6 个单字符数字框——数字框焦点/切换/重建在多行场景
- *   极易失焦丢字，单框是 Minecraft 原版配置界面的通用做法，稳定得多。
- * - 任务/模式仍是循环按钮（点一下换下一个）。
- * 数据结构与网络协议不变（rows 槽位 0=时间文本 1=模式 2=任务UID；3..8 弃用）。
+ * v1.1.0 实测五十一【UI 重做】（用户："不再要求玩家去填时间……实际的时间分配
+ * 实际上就是将女仆的工作时间分成 6 份"）：
+ * - 旧版「日程设置」= 任意行数 + 手填 "H:MM~H:MM" 时间段——弃用（实测三十三的
+ *   时间输入框/添加分段/删除行全套移除）。
+ * - 新流程：选女仆 → 选班次（早班/晚班/全天）→ 6 个任务按钮排一天。班次工作
+ *   窗口均分 6 份（全天每份 4 小时、早/晚班每份 2 小时），点任务按钮循环切换
+ *   （与快捷设置同款循环交互），可重复（前 3 个种植后 3 个挖矿 = 一天两档）。
+ * - 底层沿用 Segment 存储（相邻同任务自动合并），跨时间点照旧自动切换；
+ *   休息时间不排段——由 TLM 作息让她睡觉（早班夜休/晚班昼休）。
+ * - 底部"保存日程"一次性提交（避免每点一下任务就 rebuild brain）。
  */
 public class ScheduleBookScreen extends Screen {
     private static final int VIEW_LIST = 0;
@@ -38,19 +35,16 @@ public class ScheduleBookScreen extends Screen {
 
     private int view = VIEW_LIST;
     private int page = 0;
-    /** 详情页 tab：0=快捷设置 1=日程设置 */
-    private int tab = 0;
     private String selUuid;
     private String selName;
-    /** 日程行编辑态（客户端）：{时间文本 "H:MM~H:MM", 工作模式(int), 任务UID} */
-    private final List<Object[]> rows = new ArrayList<>();
     /** 日程请求中（等 SchedDataPacket） */
     private boolean waiting = false;
     private boolean loadedOn = false;
+    /** 班次（0=早班 1=晚班 2=全天）——详情页第一步选这个 */
+    private int shift = 2;
+    /** 6 个任务槽（uid；空 = 空闲/idle）——第二步点按钮循环切换 */
+    private final String[] slots = new String[6];
     private static ScheduleBookScreen instance;
-
-    /** 键盘输入转发的激活输入框（时间编辑框） */
-    private EditBox activeBox;
 
     private static final String[] MODE_NAMES = {"早班", "晚班", "全天"};
 
@@ -60,21 +54,16 @@ public class ScheduleBookScreen extends Screen {
     private static final int CONTENT_TOP = 52;     // 内容区顶
     private static final int CONTENT_BOTTOM_PAD = 56; // 底部按钮区高度预留
     private static final int FOOT_Y = -52;         // 底部区 y（相对 h，负数=从底往上）
-    private static final int ROW_H = 24;           // 内容行高
     private static final int LIST_ROW_H = 22;      // 列表行高
-    /** 日程行控件宽度：时间框 92 + 模式 60 + 任务 130 + 删 20 + 间隔 4×3 */
-    private static final int TIME_W = 92;
-    private static final int MODE_W = 60;
-    private static final int TASK_W = 130;
-    private static final int DEL_W = 20;
-    private static final int SCHED_ROW_W = TIME_W + MODE_W + TASK_W + DEL_W + 12;
+    /** 槽位按钮：宽 150，一列 6 行（行高 24；窄屏自动缩窄） */
+    private static final int SLOT_W = 150;
 
     public static void open(List<String[]> maids, List<String> taskUids) {
         instance = new ScheduleBookScreen(null, maids, taskUids);
         Minecraft.m_91087_().m_91152_(instance);
     }
 
-    /** SchedDataPacket 到达：更新当前打开界面的日程行 */
+    /** SchedDataPacket 到达：已存日程 → 班次 + 6 槽任务（旧版手填段也能读回来） */
     public static void showSchedule(String uuid, boolean on, List<ScheduleData.Segment> segments) {
         ScheduleBookScreen cur = instance;
         if (cur == null || !uuid.equals(cur.selUuid)) {
@@ -82,22 +71,18 @@ public class ScheduleBookScreen extends Screen {
         }
         cur.waiting = false;
         cur.loadedOn = on;
-        cur.rows.clear();
-        if (segments.isEmpty()) {
-            // 默认模板：一整段全天当前任务（用户在此基础上切分）
-            String curTask = "";
-            for (String[] m : cur.maids) {
-                if (m[0].equals(uuid)) {
-                    curTask = m[2];
-                    break;
-                }
+        cur.shift = ScheduleData.inferShift(segments);
+        // 默认任务 = 她当前任务（空表新用户的起点）
+        String curTask = "";
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                curTask = m[2];
+                break;
             }
-            cur.rows.add(new Object[]{"0:00~24:00", 2, curTask});
-        } else {
-            for (ScheduleData.Segment s : segments) {
-                cur.rows.add(new Object[]{ScheduleData.fmt(s.startMin()) + "~" + ScheduleData.fmt(s.endMin()),
-                        s.mode(), s.taskUid()});
-            }
+        }
+        String[] tasks = ScheduleData.slotTasks(segments, cur.shift, curTask);
+        for (int i = 0; i < 6; i++) {
+            cur.slots[i] = tasks[i] == null ? "" : tasks[i];
         }
         cur.m_7856_();
     }
@@ -112,7 +97,6 @@ public class ScheduleBookScreen extends Screen {
     @Override
     public void m_7856_() {
         this.m_169413_(); // clearWidgets
-        this.activeBox = null;
         int w = this.f_96543_;
         int h = this.f_96544_;
         if (this.view == VIEW_LIST) {
@@ -145,7 +129,6 @@ public class ScheduleBookScreen extends Screen {
             this.m_142416_(Button.m_253074_(Component.m_237113_(label), b -> {
                         this.selUuid = uuid;
                         this.selName = name;
-                        this.tab = 0;
                         this.view = VIEW_DETAIL;
                         this.waiting = true;
                         ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SchedLoadRequestPacket(uuid));
@@ -173,31 +156,10 @@ public class ScheduleBookScreen extends Screen {
                 .m_252987_(cx - 50, h - 24, 100, 20).m_253136_());
     }
 
-    /* ==================== 详情页 ==================== */
+    /* ==================== 详情页（实测五十一：班次 + 6 任务槽） ==================== */
 
     private void detailButtons(int w, int h) {
         int cx = w / 2;
-        // tab：左右并排居中（互不相交；窄屏收窄）
-        String[] tabs = {"\u00a7e快捷设置", "\u00a7e日程设置"};
-        int tabW = w >= 380 ? 150 : Math.max(80, (w - 40) / 2);
-        int tabX0 = cx - tabW - 5;
-        for (int i = 0; i < 2; i++) {
-            final int ti = i;
-            this.m_142416_(Button.m_253074_(
-                            Component.m_237113_((this.tab == ti ? "\u00a76\u25cf " : "\u00a77") + tabs[i]),
-                            b -> {
-                                this.tab = ti;
-                                // 切到日程 tab 无条件重新拉最新数据（旧数据不残留）
-                                if (ti == 1) {
-                                    this.waiting = true;
-                                    this.rows.clear();
-                                    ScheduleNetworking.CHANNEL.sendToServer(
-                                            new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
-                                }
-                                this.m_7856_();
-                            })
-                    .m_252987_(tabX0 + i * (tabW + 10), TAB_Y, tabW, 18).m_253136_());
-        }
         // 返回列表（左下角）
         this.m_142416_(Button.m_253074_(Component.m_237113_("← 女仆列表"), b -> {
                     this.view = VIEW_LIST;
@@ -205,80 +167,33 @@ public class ScheduleBookScreen extends Screen {
                     this.m_7856_();
                 })
                 .m_252987_(12, h - 24, 100, 20).m_253136_());
-        if (this.tab == 0) {
-            this.quickTab(w, h, cx);
-        } else {
-            this.schedTab(w, h, cx);
+        if (this.waiting) {
+            return; // 渲染层显示"请求中…"，数据到了 showSchedule 会重建
         }
-    }
-
-    /** 快捷设置：排班开关 / 工作模式 / 任务循环（点击立即生效）。
-     *  实测三十三：三项竖排左对齐（x=cx-170 起，宽 260），行距 26——永不重叠。 */
-    private void quickTab(int w, int h, int cx) {
-        String[] sel = this.findSel();
-        String curTask = sel != null ? sel[2] : "";
-        int curMode = sel != null ? safeInt(sel[3], 2) : 2;
-        boolean on = sel != null && "1".equals(sel[4]);
-        int qx = Math.max(4, cx - 170);
-        int qw = Math.min(300, w - qx - 4);
-        int y = CONTENT_TOP + 6;
-        // 排班开关
-        this.m_142416_(Button.m_253074_(
-                        Component.m_237113_(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
-                        b -> {
-                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                    this.selUuid, -1, "", on ? 0 : 1));
-                            if (sel != null) {
-                                sel[4] = on ? "0" : "1";
-                            }
-                            this.m_7856_();
-                        })
-                .m_252987_(qx, y, qw, 20).m_253136_());
-        y += 26;
-        // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL）
-        this.m_142416_(Button.m_253074_(
-                        Component.m_237113_("工作模式：\u00a7e" + MODE_NAMES[Math.max(0, Math.min(2, curMode))]
-                                + " \u00a78(点击切换)"),
-                        b -> {
-                            int mode = (safeInt(sel != null ? sel[3] : null, 2) + 1) % 3;
-                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                    this.selUuid, mode, "", -1));
-                            if (sel != null) {
-                                sel[3] = String.valueOf(mode);
-                            }
-                            this.m_7856_();
-                        })
-                .m_252987_(qx, y, qw, 20).m_253136_());
-        y += 26;
-        // 任务循环（点一下换下一个；到头回绕）
-        if (!this.taskUids.isEmpty()) {
+        // ---- 1. 班次选择（早班/晚班/全天 三连排；选中高亮金色） ----
+        int shiftW = 84;
+        int shiftX0 = cx - shiftW * 3 / 2 - 6;
+        for (int i = 0; i < 3; i++) {
+            final int si = i;
             this.m_142416_(Button.m_253074_(
-                            Component.m_237113_("任务：\u00a7e" + taskCn(curTask) + " \u00a78(点击切换)"),
+                            Component.m_237113_((this.shift == si ? "\u00a76\u25cf " : "\u00a77") + MODE_NAMES[i]),
                             b -> {
-                                int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
-                                String uid = this.taskUids.get(next);
-                                ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                        this.selUuid, -1, uid, -1));
-                                if (sel != null) {
-                                    sel[2] = uid;
+                                if (this.shift == si) {
+                                    return;
+                                }
+                                // 换班次：旧槽任务按新窗口重新取样（已存段自动映射）
+                                List<ScheduleData.Segment> cur = ScheduleData.segmentsFromSlots(
+                                        this.shift, java.util.Arrays.asList(this.slots));
+                                this.shift = si;
+                                String[] tasks = ScheduleData.slotTasks(cur, si, this.defTask());
+                                for (int k = 0; k < 6; k++) {
+                                    this.slots[k] = tasks[k] == null ? "" : tasks[k];
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(qx, y, qw, 20).m_253136_());
+                    .m_252987_(shiftX0 + i * (shiftW + 6), TAB_Y, shiftW, 18).m_253136_());
         }
-    }
-
-    /**
-     * 日程设置：分段行编辑 + 添加 + 保存。
-     * 实测三十三重写：时间段单输入框（"H:MM~H:MM"），整行 [时间框|模式|任务|×]
-     * 左对齐 x=left；行数按内容区高度收敛；添加/保存固定底区一行。
-     */
-    private void schedTab(int w, int h, int cx) {
-        if (this.waiting) {
-            return; // 渲染层显示"请求中…"
-        }
-        int left = Math.max(8, Math.min(cx - 160, w - SCHED_ROW_W - 8));
-        // 排班开关（右上角，避开 tab 行）
+        // 排班开关（右上角）
         boolean on = this.loadedOn;
         this.m_142416_(Button.m_253074_(
                         Component.m_237113_(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
@@ -289,124 +204,36 @@ public class ScheduleBookScreen extends Screen {
                             this.m_7856_();
                         })
                 .m_252987_(Math.max(4, w - 120), TAB_Y, 90, 18).m_253136_());
-        if (this.rows.isEmpty()) {
-            // 空表也要能"添加分段"（否则删光了卡死在空页）
-            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a+ 添加分段"), b -> {
-                        this.rows.add(new Object[]{"0:00~24:00", 2,
-                                this.taskUids.isEmpty() ? "" : this.taskUids.get(0)});
-                        this.m_7856_();
-                    })
-                    .m_252987_(left, CONTENT_TOP + 6, 120, 18).m_253136_());
-            return;
-        }
-        // 行数收敛：内容区 52..h-56 内排 ROW_H 行
-        int maxRows = Math.max(1, Math.min(10, Math.min(this.rows.size(), (h - CONTENT_BOTTOM_PAD - CONTENT_TOP) / ROW_H)));
-        int y = CONTENT_TOP + 6;
-        for (int i = 0; i < maxRows; i++) {
+        // ---- 2. 6 个任务槽按钮（一列 6 行，每行 = 时段标签 + 任务按钮） ----
+        int bw = Math.min(SLOT_W, w - 180);
+        int x = cx - (bw + 58) / 2 + 58; // 右列任务按钮；左侧留时段标签（渲染层画）
+        int y = CONTENT_TOP + 2;
+        int[] win = ScheduleData.shiftWindow(this.shift);
+        int len = (win[1] - win[0]) / 6;
+        for (int i = 0; i < 6; i++) {
             final int idx = i;
-            Object[] row = this.rows.get(i);
-            int x = left;
-            // 时间段单框（"H:MM~H:MM"）
-            EditBox timeBox = new EditBox(this.f_96547_, x, y, TIME_W, 18,
-                    Component.m_237113_("时间段"));
-            timeBox.m_94199_(12);
-            String timeText = String.valueOf(row[0]);
-            timeBox.m_94144_(timeText);
-            timeBox.m_94151_(s -> this.rows.get(idx)[0] = s);
-            timeBox.m_94202_(0xFFFFFF);
-            this.m_142416_(timeBox);
-            if (this.activeBox == null) {
-                this.activeBox = timeBox; // 默认聚焦第一行（键盘直接可输入）
-                timeBox.m_93692_(true);
-            }
-            x += TIME_W + 4;
-            // 工作模式循环
-            int mode = safeIntObj(row[1], 2);
+            String uid = this.slots[idx];
             this.m_142416_(Button.m_253074_(
-                            Component.m_237113_(MODE_NAMES[Math.max(0, Math.min(2, mode))]),
+                            Component.m_237113_(fitTask(uid)),
                             b -> {
-                                int m2 = (safeIntObj(this.rows.get(idx)[1], 2) + 1) % 3;
-                                this.rows.get(idx)[1] = m2;
-                                b.m_93666_(Component.m_237113_(MODE_NAMES[m2]));
+                                // 快捷设置同款：点一下换下一个（含"空闲"档 → 循环不依赖 uid 匹配）
+                                int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
+                                int next = (cur + 1) % (this.taskUids.size() + 1);
+                                this.slots[idx] = next == this.taskUids.size() ? "" : this.taskUids.get(next);
+                                b.m_93666_(Component.m_237113_(fitTask(this.slots[idx])));
                             })
-                    .m_252987_(x, y, MODE_W, 18).m_253136_());
-            x += MODE_W + 4;
-            // 任务循环
-            String uid = String.valueOf(row[2]);
-            if (!this.taskUids.isEmpty()) {
-                this.m_142416_(Button.m_253074_(
-                                Component.m_237113_(fitTask(uid)),
-                                b -> {
-                                    int next = (this.taskUids.indexOf(String.valueOf(this.rows.get(idx)[2])) + 1)
-                                            % this.taskUids.size();
-                                    this.rows.get(idx)[2] = this.taskUids.get(next);
-                                    b.m_93666_(Component.m_237113_(fitTask(this.taskUids.get(next))));
-                                })
-                        .m_252987_(x, y, TASK_W, 18).m_253136_());
-            }
-            x += TASK_W + 4;
-            // 删除
-            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7c×"), b -> {
-                        this.rows.remove(idx);
-                        this.activeBox = null; // 行没了焦点框也清掉
-                        this.m_7856_();
-                    })
-                    .m_252987_(x, y, DEL_W, 18).m_253136_());
-            y += ROW_H;
+                    .m_252987_(x, y, bw, 20).m_253136_());
+            y += 24;
         }
-        // 添加分段（新段自动衔接上一段结束；无行则 0:00 起；到 24:00 隐藏）
-        boolean full = this.lastRowEndMin() >= 1440;
-        int footY = h - 52;
-        if (!full) {
-            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a+ 添加分段"), b -> {
-                        int startMin = 0;
-                        Object[] last = this.rows.get(this.rows.size() - 1);
-                        int[] se = parseRange(String.valueOf(last[0]));
-                        startMin = se != null ? se[1] : 0;
-                        this.rows.add(new Object[]{ScheduleData.fmt(startMin) + "~24:00", 2,
-                                this.taskUids.isEmpty() ? "" : this.taskUids.get(0)});
-                        this.m_7856_();
-                    })
-                    .m_252987_(left, footY, 120, 18).m_253136_());
-        }
-        // 保存（固定右下，与添加同排）
+        // ---- 3. 保存（底区右侧；每点一下任务就提交会频繁 rebuild brain，攒一次提交） ----
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a保存日程"), b -> this.saveSchedule())
-                .m_252987_(Math.min(left + 130, w - 104), footY, 100, 18).m_253136_());
-        // 超出可视行数的提示（渲染层画）
+                .m_252987_(Math.min(w - 110, cx + 100), h - 52, 100, 20).m_253136_());
     }
 
-    /* ==================== 保存 ==================== */
-
-    /** 保存日程：各行时间框解析 → 归一化 → 发包 */
-    private void saveSchedule() {
-        List<ScheduleData.Segment> segs = new ArrayList<>();
-        for (Object[] row : this.rows) {
-            int[] se = parseRange(String.valueOf(row[0]));
-            if (se == null) {
-                this.chat("\u00a7c时间段格式不对：每行形如 9:00~17:00（结束要晚于开始）");
-                return;
-            }
-            if (se[0] >= 1440 || se[1] > 1440) {
-                this.chat("\u00a7c时间超出一天：小时 0~23（结束可到 24）");
-                return;
-            }
-            int mode = Math.max(0, Math.min(2, safeIntObj(row[1], 2)));
-            segs.add(new ScheduleData.Segment(se[0], se[1], mode, String.valueOf(row[2])));
-        }
-        if (segs.isEmpty()) {
-            this.chat("\u00a7c至少要有一段（点「+ 添加分段」）");
-            return;
-        }
-        List<ScheduleData.Segment> norm = ScheduleData.normalize(segs);
-        this.rows.clear();
-        for (ScheduleData.Segment s : norm) {
-            this.rows.add(new Object[]{ScheduleData.fmt(s.startMin()) + "~" + ScheduleData.fmt(s.endMin()),
-                    s.mode(), s.taskUid()});
-        }
-        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SchedSavePacket(
-                this.selUuid, this.loadedOn, norm));
-        this.chat("\u00a7a日程已保存（自动补满 24:00），跨段时间点会自动切换");
-        this.m_7856_();
+    /** 槽位默认任务：她当前任务（打开包数据；找不到 = 空 = 空闲） */
+    private String defTask() {
+        String[] sel = this.findSel();
+        return sel != null ? sel[2] : "";
     }
 
     /* ==================== 渲染 ==================== */
@@ -437,31 +264,24 @@ public class ScheduleBookScreen extends Screen {
         } else {
             g.m_280653_(this.f_96547_, Component.m_237113_(
                             "\u00a7d\u00a7o" + this.selName + "\u00a7r\u00a7c 的排班"), cx, TOP_TITLE_Y, 0xFFFFFF);
-            if (this.tab == 1) {
-                // 日程页说明（顶部标题与 tab 之间的夹缝放不下——放内容区首行上方不行，
-                // 放底区「← 女仆列表」同一行的右侧空档）
-                g.m_280614_(this.f_96547_, Component.m_237113_(
-                                "\u00a77时间格式 H:MM~H:MM，保存自动补满 24:00"),
-                        8, h - 8, 0xFFE5A0A0, false);
-                if (this.waiting) {
-                    g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77请求中…"), cx, CONTENT_TOP + 6, 0xAAAAAA);
-                } else {
-                    // 列头（浅色小字，在首行上方 8px——CONTENT_TOP 与首行 y=CONTENT_TOP+6 之间
-                    // 不够，画在内容行区最左上角向右偏移的地方会与首行重叠；改为不画列头，
-                    // 时间框自带 placeholder 已经足够）
-                    // 超行提示：行数超可视区时提示还有几行没显示
-                    int maxRows = Math.max(1, Math.min(10,
-                            Math.min(this.rows.size(), (h - CONTENT_BOTTOM_PAD - CONTENT_TOP) / ROW_H)));
-                    if (this.rows.size() > maxRows) {
-                        g.m_280653_(this.f_96547_, Component.m_237113_(
-                                        "\u00a77还有 " + (this.rows.size() - maxRows) + " 段未显示（调大窗口或删几段）"),
-                                cx, h - 30, 0xFFE5A0A0);
-                    }
-                }
+            if (this.waiting) {
+                g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77请求中…"), cx, CONTENT_TOP + 6, 0xAAAAAA);
             } else {
+                // 每槽时段标签（左侧，与任务按钮同行；实测五十一）
+                int[] win = ScheduleData.shiftWindow(this.shift);
+                int len = (win[1] - win[0]) / 6;
+                int bw = Math.min(SLOT_W, w - 180);
+                int lx = cx - (bw + 58) / 2; // 标签左端 = 按钮行整体左端
+                int y = CONTENT_TOP + 2;
+                for (int i = 0; i < 6; i++) {
+                    String label = ScheduleData.fmt(win[0] + len * i) + "~" + ScheduleData.fmt(win[0] + len * (i + 1));
+                    g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + label),
+                            lx, y + 6, 0xFFE5A0A0, false);
+                    y += 24;
+                }
                 g.m_280614_(this.f_96547_, Component.m_237113_(
-                                "\u00a77点击立即生效；早班=白天工作、晚班=夜晚工作、全天=一直工作（TLM 日程）"),
-                        Math.max(8, cx - 210), CONTENT_TOP + 6 + 26 * 3 + 6, 0xFFE5A0A0, false);
+                                "\u00a77选班次 → 6 个时段各点一个任务（可重复）→ 保存；休息时间她按作息睡觉"),
+                        8, h - 8, 0xFFE5A0A0, false);
             }
         }
         super.m_88315_(g, mx, my, pt);
@@ -486,13 +306,6 @@ public class ScheduleBookScreen extends Screen {
         }
     }
 
-    private static int safeIntObj(Object o, int def) {
-        if (o instanceof Integer i) {
-            return i;
-        }
-        return safeInt(String.valueOf(o), def);
-    }
-
     /** 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段） */
     private static String taskCn(String uid) {
         if (uid == null || uid.isEmpty()) {
@@ -510,75 +323,16 @@ public class ScheduleBookScreen extends Screen {
         return uid.substring(idx + 1);
     }
 
-    /** 任务名截断到按钮宽度内（TASK_W ≈ 130px ≈ 13 个中文字符） */
+    /** 任务名截断到按钮宽度内（SLOT_W ≈ 150px ≈ 15 个中文字符） */
     private static String fitTask(String uid) {
         String cn = taskCn(uid);
         return cn.length() > 10 ? cn.substring(0, 9) + "…" : cn;
-    }
-
-    /** "H:MM~H:MM" → {startMin, endMin}；非法返回 null（容忍 ～/—/-/空格） */
-    private static int[] parseRange(String text) {
-        String t = text.trim().replace("～", "~").replace("—", "~").replace("-", "~")
-                .replace("－", "~").replace(" ", "");
-        int idx = t.indexOf('~');
-        if (idx < 0) {
-            return null;
-        }
-        int s = ScheduleData.parseTime(t.substring(0, idx));
-        int e = ScheduleData.parseTime(t.substring(idx + 1));
-        if (s < 0 || e < 0 || e <= s) {
-            return null;
-        }
-        return new int[]{s, e};
-    }
-
-    /** 末行结束分钟数（无行返回 0） */
-    private int lastRowEndMin() {
-        if (this.rows.isEmpty()) {
-            return 0;
-        }
-        Object[] last = this.rows.get(this.rows.size() - 1);
-        int[] se = parseRange(String.valueOf(last[0]));
-        return se != null ? se[1] : 0;
     }
 
     private void chat(String msg) {
         if (this.f_96541_.f_91074_ != null) {
             this.f_96541_.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(msg));
         }
-    }
-
-    /* ==================== 键盘转发 ==================== */
-
-    /** 点击输入框时记录 activeBox（键盘字符/按键直接转发，不依赖焦点链） */
-    @Override
-    public boolean m_6375_(double mouseX, double mouseY, int button) {
-        if (button == 0) {
-            for (net.minecraft.client.gui.components.events.GuiEventListener c : this.m_6702_()) {
-                if (c instanceof EditBox eb && eb.m_5953_(mouseX, mouseY)) {
-                    eb.m_93692_(true); // setFocus
-                    this.activeBox = eb;
-                    return eb.m_6375_(mouseX, mouseY, 0);
-                }
-            }
-        }
-        return super.m_6375_(mouseX, mouseY, button);
-    }
-
-    @Override
-    public boolean m_5534_(char codePoint, int modifiers) {
-        if (this.activeBox != null && this.activeBox.m_5534_(codePoint, modifiers)) {
-            return true;
-        }
-        return super.m_5534_(codePoint, modifiers);
-    }
-
-    @Override
-    public boolean m_7933_(int key, int scanCode, int modifiers) {
-        if (this.activeBox != null && this.activeBox.m_7933_(key, scanCode, modifiers)) {
-            return true;
-        }
-        return super.m_7933_(key, scanCode, modifiers);
     }
 
     @Override
