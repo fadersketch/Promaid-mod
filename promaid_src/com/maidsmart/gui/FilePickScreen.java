@@ -178,22 +178,22 @@ public class FilePickScreen extends Screen {
                             })
                     .m_252987_(cx - 150, y, 300, 18).m_253136_());
         }
-        // 翻页
+        // 翻页（v1.1.0 实测二十五：100 宽按钮盖底行文件名——改 20 宽纯箭头，页码画中间）
         if (totalPages > 1) {
             int py = h - 28;
             if (this.page > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.page--;
                                     this.m_7856_();
-                                }).m_252987_(cx - 160, py, 100, 18).m_253136_());
+                                }).m_252987_(cx - 40, py, 20, 18).m_253136_());
             }
             if (this.page < totalPages - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.page++;
                                     this.m_7856_();
-                                }).m_252987_(cx + 60, py, 100, 18).m_253136_());
+                                }).m_252987_(cx + 20, py, 20, 18).m_253136_());
             }
         }
     }
@@ -206,8 +206,9 @@ public class FilePickScreen extends Screen {
         this.drawCentered(graphics, "\u00a77" + this.fit(pathText, this.f_96543_ - 20), 42, 0x888888);
         int totalPages = Math.max(1, (this.entries.size() + ROWS - 1) / ROWS);
         if (totalPages > 1) {
+            // v1.1.0 实测二十五：页码画在两箭头中间（h-24 行），不与按钮/条目重叠
             this.drawCentered(graphics, "\u00a77第 " + (this.page + 1) + "/" + totalPages + " 页",
-                    this.f_96544_ - 44, 0x888888);
+                    this.f_96544_ - 24, 0xAAAAAA);
         }
         super.m_88315_(graphics, mouseX, mouseY, partialTick);
     }
