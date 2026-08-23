@@ -150,4 +150,71 @@ public final class ScheduleData {
             return -1;
         }
     }
+
+    /* ================= 班次 × 6 任务槽（v1.1.0 实测五十一） ================= */
+
+    /**
+     * v1.1.0 实测五十一：排班 UI 重做——玩家只选班次 + 6 个任务按钮，不再手填时间。
+     * 班次工作窗口（分钟）：早班 = 白天（0~720，黎明~黄昏），晚班 = 夜晚
+     * （720~1440，黄昏~黎明），全天 = 0~1440。mod 分钟约定 0:00 = dayTime 0 =
+     * 黎明，所以 0~720 恰是白昼、720~1440 恰是黑夜，与 TLM DAY/NIGHT 作息对齐；
+     * 【休息时间不排段】——segmentAt 返回 null → 调度器不切任务，由 TLM 作息
+     * 让她睡觉（早班夜休 / 晚班昼休）。
+     */
+    public static int[] shiftWindow(int shift) {
+        if (shift == 0) {
+            return new int[]{0, 720};
+        }
+        if (shift == 1) {
+            return new int[]{720, 1440};
+        }
+        return new int[]{0, 1440};
+    }
+
+    /**
+     * 班次 + 6 任务槽 → 段列表（相邻同任务自动合并——3+3 两档存成 2 段，避免
+     * 同任务边界重复触发 setTask 重建 brain）。只覆盖工作窗口，【不经 normalize】
+     * （normalize 会把末段延伸补满 24:00，把休息时间也吃掉）。
+     */
+    public static List<Segment> segmentsFromSlots(int shift, List<String> slots) {
+        int[] win = shiftWindow(shift);
+        int len = (win[1] - win[0]) / 6;
+        List<Segment> out = new ArrayList<>();
+        for (int i = 0; i < 6 && i < slots.size(); i++) {
+            String uid = slots.get(i) == null ? "" : slots.get(i);
+            int start = win[0] + len * i;
+            int end = win[0] + len * (i + 1);
+            if (!out.isEmpty()) {
+                Segment prev = out.get(out.size() - 1);
+                if (prev.taskUid().equals(uid) && prev.endMin() == start) {
+                    out.set(out.size() - 1, new Segment(prev.startMin(), end, prev.mode(), prev.taskUid()));
+                    continue;
+                }
+            }
+            out.add(new Segment(start, end, shift, uid));
+        }
+        return out;
+    }
+
+    /** 已存段 → 班次推断（首段 mode；空表 = 2 全天） */
+    public static int inferShift(List<Segment> segs) {
+        if (segs == null || segs.isEmpty()) {
+            return 2;
+        }
+        return Math.max(0, Math.min(2, segs.get(0).mode()));
+    }
+
+    /** 已存段 → 6 槽任务（各槽中点所在段的任务；没覆盖的槽用默认任务填） */
+    public static String[] slotTasks(List<Segment> segs, int shift, String defaultTask) {
+        int[] win = shiftWindow(shift);
+        int len = (win[1] - win[0]) / 6;
+        String[] out = new String[6];
+        for (int i = 0; i < 6; i++) {
+            int mid = win[0] + len * i + len / 2;
+            Segment s = segs == null ? null : segmentAt(segs, mid);
+            out[i] = s != null && s.taskUid() != null ? s.taskUid()
+                    : (defaultTask == null ? "" : defaultTask);
+        }
+        return out;
+    }
 }

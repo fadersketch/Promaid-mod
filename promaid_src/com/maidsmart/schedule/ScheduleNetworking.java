@@ -288,7 +288,8 @@ public final class ScheduleNetworking {
         }
     }
 
-    /** C2S 保存日程（服务端再归一化一次防御） */
+    /** C2S 保存日程（实测五十一：班次+6 槽在客户端已转段并合并；服务端只防御越界，
+     *  不再 normalize——normalize 会把末段延伸到 24:00，把休息时间也吃掉） */
     public static class SchedSavePacket {
         public final String uuid;
         public final boolean on;
@@ -334,8 +335,17 @@ public final class ScheduleNetworking {
                 if (maid == null || !allowed(player, maid)) {
                     return;
                 }
-                List<ScheduleData.Segment> norm = ScheduleData.normalize(pkt.segments);
-                ScheduleData.save(maid, norm, pkt.on);
+                // 防御：段范围/模式越界夹取（来自客户端的包不信任）
+                List<ScheduleData.Segment> safe = new ArrayList<>();
+                for (ScheduleData.Segment s : pkt.segments) {
+                    int st = Math.max(0, Math.min(1440, s.startMin()));
+                    int en = Math.max(st, Math.min(1440, s.endMin()));
+                    int md = Math.max(0, Math.min(2, s.mode()));
+                    if (en > st) {
+                        safe.add(new ScheduleData.Segment(st, en, md, s.taskUid()));
+                    }
+                }
+                ScheduleData.save(maid, safe, pkt.on);
                 // 保存后立即按当前时间应用一次（不用等下一个整分检查）
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
             });
