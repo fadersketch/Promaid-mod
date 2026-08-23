@@ -155,13 +155,14 @@ public class ProMaidExtension implements ILittleMaid {
             this.maidCountTimer = 0;
             com.maidsmart.build.MaidBuildBehavior.updateActiveBuilders(server);
         }
-        for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
-            com.maidsmart.task.MaidMineBehavior.expirePlaced(level, level.m_46467_());
-            com.maidsmart.task.MaidWoodBehavior.expirePlaced(level, level.m_46467_());
-            com.maidsmart.task.BridgeUpBehavior.expirePlaced(level, level.m_46467_());
-            // v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）60 秒到期清理
-            com.maidsmart.combat.SelfPreservationBehavior.expireCombatPlaced(level, level.m_46467_());
-        }
+        // v1.1.0 实测四十二：搭方块回收改 PlacedBlockTracker（绑定搭建女仆 +
+        // 魂符收回暂停计时）——expirePlaced 内部自遍历全维度，不再按维度循环
+        long gt = server.m_129785_().iterator().next().m_46467_();
+        com.maidsmart.task.MaidMineBehavior.expirePlaced(server, gt);
+        com.maidsmart.task.MaidWoodBehavior.expirePlaced(server, gt);
+        com.maidsmart.task.BridgeUpBehavior.expirePlaced(server, gt);
+        // v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）60 秒到期清理
+        com.maidsmart.combat.SelfPreservationBehavior.expireCombatPlaced(server, gt);
         // v1.5.103：每 30 秒清理挖矿静态 per-maid 数据（防长时运行内存泄漏）
         if (++this.purgeTimer >= 600) {
             this.purgeTimer = 0;

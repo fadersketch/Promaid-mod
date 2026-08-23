@@ -409,10 +409,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         return MINING.contains(maid.m_20148_());
     }
 
-    /** v1.5.87：该位置是否是挖矿搭的方块（GLOBAL_PLACED 追踪；搭方块防掉落用） */
+    /** v1.5.87：该位置是否是挖矿搭的方块（PlacedBlockTracker 追踪；搭方块防掉落用） */
     public static boolean isMiningPlaced(ServerLevel level, BlockPos pos) {
-        java.util.Map<BlockPos, PlacedMark> marks = GLOBAL_PLACED.get(level.m_46472_());
-        return marks != null && marks.containsKey(pos.m_7949_());
+        return PLACED_TRACKER.isPlaced(level, pos);
     }
 
     /** v1.5.87：搭方块防掉落窗口（搭块后 12 tick 内钳制，防刚搭完滑落） */
@@ -454,25 +453,28 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** v1.5.116：上次设置的移动目标站立点——目标没变且导航行进中不重设
      *  （旧版每 8 tick 无条件重设 WalkTarget → 导航每次重新寻路 → "一走一停"鬼畜） */
     private BlockPos lastWalkTarget = null;
+    /** v1.1.0 实测四十三：走路卡死检测——接近矿期间位置长期不变（导航有路径但
+     *  实体被地形卡住原地踏步）→ 模拟"收回重放"强制重寻路；多次仍卡 → 判不可达弃置 */
+    private BlockPos lastStuckPos = null;
+    private int stuckTicks = 0;
+    private int repathAttempts = 0;
+    /** 卡死检测针对的当前目标（换目标后计数重新开始） */
+    private BlockPos stuckTarget = null;
     /** v1.5.25：本次自己搭过的位置（搭高/斜坡/搭桥）——10 秒后自动销毁，绝不挖自然地形。
      *  v1.5.28：改为【全局静态追踪器】——旧版挂在行为实例上，行为停止（挖完矿
      *  canContinue=false）后 expirePlacedBlocks 不再运行 → 搭的方块永久残留。
      *  现在放置即登记到全局表，由 ServerTickEvent 每 tick 统一清理，与行为生命周期无关。
-     *  v1.5.102：清理时限从配置面板读取（mine.placedLifetime，秒→tick） */
+     *  v1.5.102：清理时限从配置面板读取（mine.placedLifetime，秒→tick）
+     *  v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆（到期强制进她背包，
+     *  不再 8 格附近查找）；女仆魂符收回暂停计时。 */
 
-    /** 全局追踪条目：放置 tick + 方块 id（清理时校验，玩家换掉的方块不误破坏） */
-    private record PlacedMark(long tick, String blockId) {
-    }
-
-    /** 维度 → 位置 → 放置标记（v1.5.28） */
-    private static final java.util.Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>,
-            java.util.Map<BlockPos, PlacedMark>> GLOBAL_PLACED = new java.util.HashMap<>();
+    /** 全局追踪器（绑定搭建者 + 魂符暂停计时；实测四十二） */
+    static final PlacedBlockTracker PLACED_TRACKER = new PlacedBlockTracker(
+            () -> com.maidsmart.config.MaidSmartConfig.MINE_PLACED_LIFETIME.get() * 20L);
 
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
-    private static void trackPlaced(ServerLevel level, BlockPos pos, Block block) {
-        net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
-        GLOBAL_PLACED.computeIfAbsent(level.m_46472_(), k -> new java.util.HashMap<>())
-                .put(pos.m_7949_(), new PlacedMark(level.m_46467_(), key != null ? key.toString() : ""));
+    private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
+        PLACED_TRACKER.track(level, pos, block, maid);
     }
 
     /** v1.5.28：销毁所有放置超过 10 秒的挖矿搭方块（玩家同款破坏音效+粒子+掉落物）。
@@ -480,64 +482,31 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      *  v1.5.88：清理时间从配置面板读取（mine.placedLifetime 秒）。
      *  v1.5.113（B3）：【女仆正站在上面的搭方块延后清理】——搭高挖垂直矿脉时
      *  底部柱子满 10 秒自动消失会把女仆摔下去；只对"即将销毁的旧块"检查附近
-     *  是否有挖矿女仆站着（脚下/所在格），有则下轮再清（走开即清，不残留）。 */
-    public static void expirePlaced(ServerLevel level, long gameTime) {
-        java.util.Map<BlockPos, PlacedMark> marks = GLOBAL_PLACED.get(level.m_46472_());
-        if (marks == null || marks.isEmpty()) {
-            return;
-        }
-        long lifetime = com.maidsmart.config.MaidSmartConfig.MINE_PLACED_LIFETIME.get() * 20L;
-        java.util.Iterator<java.util.Map.Entry<BlockPos, PlacedMark>> it = marks.entrySet().iterator();
-        while (it.hasNext()) {
-            java.util.Map.Entry<BlockPos, PlacedMark> e = it.next();
-            if (gameTime - e.getValue().tick < lifetime) {
-                continue;
-            }
-            BlockPos pos = e.getKey();
-            // v1.5.113：只对"到期的旧块"检查是否正被女仆踩着（最多 1-2 块/tick，开销可忽略）
-            if (supportsAnyMiner(level, pos)) {
-                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后——旧版只
-                // continue（tick 不变）：挖矿女仆在高柱上连续作业几分钟，脚下块
-                // 早已"过期"但被一直延后；她一挖完走开，整根柱子瞬间全部到期
-                // （包括她正下落途中可能踩到的下段）→ 高空坠落。刷新计时后每块
-                // 都从"最后一次被踩"起算满寿，走开后还有完整 10 秒缓冲。
-                e.setValue(new PlacedMark(gameTime, e.getValue().blockId));
-                continue;
-            }
-            it.remove();
-            destroyMarked(level, pos, e.getValue());
-        }
+     *  是否有挖矿女仆站着（脚下/所在格），有则下轮再清（走开即清，不残留）。
+     *  v1.1.0 实测四十二：改走 PlacedBlockTracker（绑定搭建者/魂符暂停）。 */
+    public static void expirePlaced(net.minecraft.server.MinecraftServer server, long gameTime) {
+        PLACED_TRACKER.expirePlaced(server, gameTime,
+                pos -> anyMaidStanding(server, pos, m -> MINING.contains(m.m_20148_())));
     }
 
-    /** v1.5.113：该搭方块是否正被某只挖矿女仆站在上面（脚下格或所在格） */
-    private static boolean supportsAnyMiner(ServerLevel level, BlockPos pos) {
-        for (EntityMaid m : level.m_45976_(EntityMaid.class,
-                new net.minecraft.world.phys.AABB(pos).m_82400_(2.0))) {
-            if (!m.m_6084_() || !MINING.contains(m.m_20148_())) {
-                continue;
-            }
-            BlockPos feet = m.m_20183_();
-            if (feet.m_7949_().equals(pos)
-                    || feet.m_7918_(0, -1, 0).m_7949_().equals(pos)) {
+    /** 任意维度的存活女仆站在该位置（跨维度判定；实测四十二） */
+    private static boolean anyMaidStanding(net.minecraft.server.MinecraftServer server,
+                                           BlockPos pos, java.util.function.Predicate<EntityMaid> filter) {
+        for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
+            if (PlacedBlockTracker.anyMaidStanding(lvl, pos, filter)) {
                 return true;
             }
         }
         return false;
     }
 
+    /** v1.1.0 实测四十二：supportsAnyMiner 已由 PlacedBlockTracker.anyMaidStanding 取代 */
+
     /** v1.5.28：服务器停止时清场——内存追踪器会随进程消失，残留方块立即销毁回收
-     *  （不等待 10 秒；重进存档不会看到"永不消失"的搭方块） */
+     *  （不等待 10 秒；重进存档不会看到"永不消失"的搭方块）
+     *  v1.1.0 实测四十二：改走 PlacedBlockTracker.clearAll */
     public static void clearAll(net.minecraft.server.MinecraftServer server) {
-        for (ServerLevel level : server.m_129785_()) {
-            java.util.Map<BlockPos, PlacedMark> marks = GLOBAL_PLACED.remove(level.m_46472_());
-            if (marks == null) {
-                continue;
-            }
-            for (java.util.Map.Entry<BlockPos, PlacedMark> e : marks.entrySet()) {
-                destroyMarked(level, e.getKey(), e.getValue());
-            }
-        }
-        GLOBAL_PLACED.clear();
+        PLACED_TRACKER.clearAll(server);
     }
 
     /** v1.5.103：清理已不在任何维度中的女仆的静态 per-maid 数据（防长时运行内存泄漏）。
@@ -582,36 +551,21 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 破坏一个追踪方块：玩家同款破坏音效+粒子+掉落物（女仆拾取模式自动回收）。
-     *  当前位置已是空气 → 跳过；被玩家换成别的方块 → 不破坏（尊重玩家改动）。
-     *  v1.5.161：自动收集开启且附近有挖矿女仆时，掉落物直接进她背包（不进世界）。
-     *  v1.1.0 实测十：bridge.reclaimToMaid 升级为【全局搭路方块回收开关】——
-     *  开启时无论 autoCollect，掉落物直接塞回附近女仆背包（同搭路口径）。 */
-    private static void destroyMarked(ServerLevel level, BlockPos pos, PlacedMark mark) {
+    /** 破坏一个追踪方块：v1.1.0 实测四十二后由 PlacedBlockTracker 内部处理，
+     *  本方法保留给 isOwnPlaced 相关的旧引用（实际已无调用者）。 */
+    @SuppressWarnings("unused")
+    private static void destroyMarked(ServerLevel level, BlockPos pos, String blockId) {
         BlockState state = level.m_8055_(pos);
         if (state.m_60795_()) {
             return;
         }
         net.minecraft.resources.ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(state.m_60734_());
         String curId = cur != null ? cur.toString() : "";
-        if (!mark.blockId.isEmpty() && !mark.blockId.equals(curId)) {
+        if (!blockId.isEmpty() && !blockId.equals(curId)) {
             return; // 方块已被替换，不误破坏
         }
         level.m_46796_(2001, pos, Block.m_49956_(state));
         BlockEntity be = level.m_7702_(pos);
-        // v1.1.0 实测十：全局回收开关（默认开）——搭的方块到期/清场时不落地
-        if (com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
-            EntityMaid any = nearbyMiner(level, pos);
-            if (any == null) {
-                any = com.maidsmart.task.BridgeUpBehavior.findNearestMaidPublic(level, pos);
-            }
-            if (any != null) {
-                insertIntoMaidInventory(any, level,
-                        Block.m_49874_(state, level, pos, be, any, any.m_21205_()), pos);
-                level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
-                return;
-            }
-        }
         if (com.maidsmart.config.MaidSmartConfig.MINE_AUTO_COLLECT.get()) {
             EntityMaid miner = nearbyMiner(level, pos);
             if (miner != null) {
@@ -776,7 +730,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.28：搭方块 10 秒后统一销毁（全局表——行为停止后由 ServerTickEvent 兜底，
         // 此处保留双保险；不做任何即时破坏）
-        expirePlaced(level, gameTime);
+        expirePlaced(level.m_7654_(), gameTime);
         // v1.5.47：废石丢弃（每 100 tick 一次；保留 JUNK_KEEP 份，超出销毁）
         if (--this.junkCooldown <= 0) {
             this.junkCooldown = com.maidsmart.config.MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL.get();
@@ -929,6 +883,36 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         if (distSq > reachSq()) {
             // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
             //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
+            // v1.1.0 实测四十三：走路卡死检测——够不着且 2 秒位置没挪过 = 导航被
+            // 地形卡住（有路径走不动）。用户实测"收回重放立刻恢复"正是因为重放
+            // 清空了导航状态强制重寻路；这里在 tick 内做同款软复位：清移动记忆
+            // → 下一次 setWalkTarget 必定重设（重寻路）。多次仍卡 = 真不可达，
+            // 走目标超时弃置流程，不再原地磨蹭
+            BlockPos feet = maid.m_20183_();
+            if (!feet.equals(this.lastStuckPos)
+                    || this.stuckTarget == null || !this.stuckTarget.equals(this.targetPos)) {
+                this.lastStuckPos = feet;
+                this.stuckTicks = 0;
+                this.repathAttempts = 0;
+                this.stuckTarget = this.targetPos;
+            } else {
+                this.stuckTicks++;
+            }
+            if (this.stuckTicks >= 40) {
+                this.stuckTicks = 0;
+                this.repathAttempts++;
+                this.lastWalkTarget = null; // 软复位：强制 setWalkTarget 重寻路
+                maid.m_21573_().m_26573_(); // 停导航（与"收回重放"清状态等效）
+                if (this.repathAttempts >= 3) {
+                    // 3 次重寻路仍原地不动 → 判不可达，弃置该矿（短时排除防反复选中）
+                    RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
+                            .put(this.targetPos.m_7949_(), gameTime);
+                    this.targetPos = null;
+                    this.destroyProgress = 0.0f;
+                    this.saveProgressNow(maid);
+                    return;
+                }
+            }
             this.approachOre(level, maid);
             return;
         }
@@ -1455,7 +1439,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             return false;
         }
         level.m_7731_(place, block.m_49966_(), 3);
-        trackPlaced(level, place, block); // v1.5.28：全局登记（每块满 10 秒各自销毁）
+        trackPlaced(level, place, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
         // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 +
         // 放置音效（blockEvent 3000/3001 = 放置方块音效+粒子，原版放置同款）
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -1509,7 +1493,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             level.m_7731_(fill, block.m_49966_(), 3);
-            trackPlaced(level, fill, block); // v1.5.28：全局登记（10 秒后统一销毁）
+            trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
             // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
@@ -1551,7 +1535,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             level.m_7731_(fill, block.m_49966_(), 3);
-            trackPlaced(level, fill, block); // v1.5.28：全局登记（10 秒后统一销毁）
+            trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
             // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
