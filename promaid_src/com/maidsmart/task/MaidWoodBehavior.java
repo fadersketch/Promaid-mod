@@ -1094,16 +1094,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
         this.chainBreakAll(level, maid, mainHand);
-        // v1.1.0 实测四（用户："砍树中的树叶也是个很麻烦的点"）：树冠清理——
-        // 树干（含连锁）砍完后顺手把上方树冠的树叶清掉。不清的话：树叶挂着挡
-        // 下一棵树的视线/挡路判定，还靠自然衰减慢慢掉东西满地。掉落物（含树苗、
-        // 苹果）直接进背包，树苗玩家想种可从背包取回。开关 wood.leavesClear。
-        if (com.maidsmart.config.MaidSmartConfig.WOOD_LEAVES_CLEAR.get()) {
-            this.clearTreeTop(level, maid, mainHand);
-        }
+        // v1.1.0 实测三十（用户："树冠清理不自然——直接整个树冠一下子清掉；
+        // 我要的只是以女仆为中心 3×3×3 范围内的树叶被破坏，带音效和特效"）：
+        // 删除 clearTreeTop 整冠 BFS 清除（一次性清掉整棵树的树叶不自然）。
+        // 树叶清理完全交给 burstNearbyLeaves——它本来就在行为激活期间每 20 tick
+        // 以女仆为中心清 3×3×3，女仆走过去自然会"经过"整片树冠逐层清完。
+        // （实测九已有的机制，本次让它成为唯一的树叶清理路径）
         // v1.1.0 实测五（用户："伐木状态下手中有树苗也尝试种下，运作逻辑与插火把类似"）：
         // 树砍完后在树干原址补种树苗——可持续发展。限频 5 秒（与插火把同思路防连种）；
-        // 背包里找任意树苗（ItemNameBlockItem 且对应方块带 #minecraft:saplings tag），
+        // 背包找任意树苗（ItemNameBlockItem 且方块带 #minecraft:saplings tag），
         // 种在泥土/草方块上（树干基座被挖后暴露的地面通常正是）。
         this.tryPlantSapling(level, maid);
         this.targetPos = null;
@@ -1151,77 +1150,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.1.0 实测四：树冠清理——从刚砍的树干位置向上 BFS 清树叶。
-     * 半径 3 格（普通树冠直径 5~7；巨型树冠部分残留，靠衰减兜底）、上限 80 块
-     * （防失误圈到整片森林——BFS 只沿"相连的树叶"扩散，树冠之间不相连不会越界）。
-     * 掉落物走 getDrops（树苗/苹果/木棍按概率掉）直接进背包，放不下落地。
-     * 音效粒子静默（同连锁破坏，防刷屏）。
-     * v1.1.0 实测十六修复：BFS 起点从 base 正上方【一格】改为向上爬到第一片树叶
-     * （旧版起点非叶立即终止——连锁关时上方是下一节原木、连锁开时是空气，常规
-     * 自底向上砍树时树冠清理基本不触发；只有恰好砍到树顶那节才生效）。
+     * v1.1.0 实测三十：【已删除】——用户反馈"整个树冠一下子清掉不自然"，要的只是
+     * 以女仆为中心 3×3×3 的树叶破坏（burstNearbyLeaves 已有）。方法保留为空壳
+     * 防外部调用残留（实际无外部调用者，纯保险）。
      */
+    @SuppressWarnings("unused")
     private void clearTreeTop(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
-        BlockPos base = this.targetPos;
-        if (base == null) {
-            return;
-        }
-        int cleared = 0;
-        int limit = 80;
-        java.util.Set<BlockPos> visited = new java.util.HashSet<>();
-        java.util.ArrayDeque<BlockPos> bfs = new java.util.ArrayDeque<>();
-        // 起点：沿树干向上爬（最多 8 格），把途中遇到的【第一片树叶】作为 BFS 起点
-        // ——树干本身（剩余原木）/空气都可以穿过，只从真正的树叶开始扩散
-        BlockPos start = null;
-        for (int up = 1; up <= 8; up++) {
-            BlockPos p = base.m_7918_(0, up, 0);
-            if (level.m_8055_(p).m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock) {
-                start = p;
-                break;
-            }
-        }
-        if (start == null) {
-            return; // 正上方 8 格内没有任何树叶——不是常规树形，不清理
-        }
-        bfs.add(start.m_7949_());
-        visited.add(start.m_7949_());
-        BlockPos c = base;
-        while (!bfs.isEmpty() && cleared < limit) {
-            BlockPos cur = bfs.poll();
-            BlockState st = level.m_8055_(cur);
-            boolean leaf = st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock;
-            if (!leaf) {
-                continue; // 非树叶不扩散（保留枝干方块如原木枝——树干连锁已处理）
-            }
-            // 距树干水平超 3 格不扩散（巨型树冠只清内圈，防无限蔓延）
-            if (Math.abs(cur.m_123341_() - c.m_123341_()) > 3
-                    || Math.abs(cur.m_123343_() - c.m_123343_()) > 3
-                    || cur.m_123342_() - c.m_123342_() > 24) {
-                continue;
-            }
-            BlockEntity be = level.m_7702_(cur);
-            java.util.List<ItemStack> drops = Block.m_49874_(st, level, cur, be, maid, mainHand);
-            // v1.1.0 实测十六（审查 P3）：树冠清理掉落尊重 WOOD_AUTO_COLLECT 开关——
-            // 旧版无条件进背包，与 burstNearbyLeaves（尊重开关）口径不一致
-            if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
-                insertIntoMaidInventory(maid, level, drops, cur);
-            } else {
-                for (ItemStack s : drops) {
-                    if (!s.m_41619_()) {
-                        Block.m_49840_(level, cur, s);
-                    }
-                }
-            }
-            level.m_7731_(cur, Blocks.f_50016_.m_49966_(), 3);
-            cleared++;
-            for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
-                BlockPos nb = cur.m_7918_(d.m_122436_().m_123341_(), d.m_122436_().m_123342_(), d.m_122436_().m_123343_());
-                if (visited.add(nb.m_7949_())) {
-                    bfs.add(nb.m_7949_());
-                }
-            }
-        }
-        if (cleared > 0) {
-            LOGGER.info("wood leaves clear: maid={} base={} cleared={}", maid.m_20148_(), base, cleared);
-        }
+        // v1.1.0 实测三十：整体树冠 BFS 清除已删除——见调用点注释
     }
 
     /**
@@ -1229,6 +1164,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * 背包找任意树苗（ItemNameBlockItem 且方块带 #minecraft:saplings 标签——原版
      * 全部树苗 + 模组树苗自动兼容）；种下消耗 1 个。限频 5 秒（防一棵大树连锁
      * 砍伐触发多次补种）。找不到合适的地面（基座下方是石头/悬空）就跳过不硬种。
+     * v1.1.0 实测三十（用户："随手种植树苗没做出来"）：补诊断日志（latest.log 搜
+     * "wood sapling"——记录跳过原因：没树苗/没地面/种下），排查"没生效"时可见。
+     * 树苗来源即树叶掉落——树叶破坏掉树苗（getDrops 概率掉落）进背包，砍下一棵
+     * 树时就有苗可种，形成"砍树→掉苗→补种"闭环。
      */
     private void tryPlantSapling(ServerLevel level, EntityMaid maid) {
         long now = level.m_46467_();
@@ -1261,6 +1200,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
         }
         if (plantPos == null) {
+            LOGGER.info("wood sapling skip: maid={} base={} reason=no-ground",
+                    maid.m_20148_(), base);
             return;
         }
         // 背包找树苗
@@ -1283,10 +1224,14 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         if (saplingSlot < 0 || saplingStack == null) {
+            LOGGER.info("wood sapling skip: maid={} base={} reason=no-sapling-in-inventory",
+                    maid.m_20148_(), base);
             return; // 背包没有树苗
         }
         Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) saplingStack.m_41720_()).m_40614_();
         level.m_7731_(plantPos, saplingBlock.m_49966_(), 3);
+        // 种下音效+粒子（levelEvent 2001——玩家种树苗同款反馈）
+        level.m_46796_(2001, plantPos, Block.m_49956_(saplingBlock.m_49966_()));
         // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
         // 返回栈，若 handler 返回副本则 m_41774_(1) 扣不掉背包（无限补种刷方块）；
         // 与本工程其他消耗点（搭路/药水/图腾）统一口径
@@ -1296,6 +1241,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         SAPLING_PLANT_SINCE.put(maid.m_19879_(), now);
+        LOGGER.info("wood sapling planted: maid={} pos={} sapling={}",
+                maid.m_20148_(), plantPos,
+                ForgeRegistries.BLOCKS.getKey(saplingBlock));
     }
 
     /**
@@ -1303,6 +1251,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着
      * 直接进背包，否则落地（走原版掉落，拾取任务后续处理）。只清树叶——
      * 立方体内的原木不碰（那是正常挖掘目标，走挖掘流程有工具加成）。
+     * v1.1.0 实测三十（用户："每块树叶要有破坏音效和破坏特效"）：每块树叶
+     * 破坏时各自播 levelEvent 2001（同玩家挖方块——音效+粒子一起），不再
+     * 只在中心播一次（旧版静默清除观感突兀）。树冠清理（clearTreeTop）删除后
+     * 本方法是唯一的树叶清理路径：女仆走动经过树冠就逐层清 3×3×3。
      */
     private void burstNearbyLeaves(ServerLevel level, EntityMaid maid) {
         try {
@@ -1316,6 +1268,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                         if (!(st.m_60734_() instanceof net.minecraft.world.level.block.LeavesBlock)) {
                             continue;
                         }
+                        // 玩家同款破坏音效+粒子（levelEvent 2001 逐块播）
+                        level.m_46796_(2001, p, Block.m_49956_(st));
                         BlockEntity be = level.m_7702_(p);
                         java.util.List<ItemStack> drops = Block.m_49874_(st, level, p, be, maid, ItemStack.f_41583_);
                         if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
@@ -1331,9 +1285,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 }
             }
             if (broken > 0) {
-                // 破坏音效/粒子只在冲破了一片时播一次（不逐块刷屏）
-                level.m_46796_(2001, center.m_7918_(0, 1, 0),
-                        Block.m_49956_(Blocks.f_50126_.m_49966_()));
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 摆臂动画
+                LOGGER.info("wood leaves burst: maid={} broken={}", maid.m_20148_(), broken);
             }
         } catch (Exception ignored) {
         }
