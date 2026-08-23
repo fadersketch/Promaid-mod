@@ -841,25 +841,26 @@ public class BlueprintBookScreen extends Screen {
                             })
                     .m_252987_(x, h - 30, bw5[4], 20).m_253136_());
             // 材料翻页（16 种/页；固定在材料区下方，不与底部控制区冲突）
+            // v1.1.0 实测二十五：80 宽按钮盖材料行——改 20 宽纯箭头 ◀/▶
             int pages = this.materialPages(this.viewingEntry);
             this.matPage = Math.min(this.matPage, pages - 1);
             if (pages > 1) {
                 int matY = CONTENT_TOP + MAT_ROWS_PER_PAGE * MAT_LINE_H + 8;
                 if (this.matPage > 0) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("< 上一页"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                     b -> {
                                         this.matPage--;
                                         this.rebuildButtons();
                                     })
-                            .m_252987_(cx - 90, matY, 80, 16).m_253136_());
+                            .m_252987_(cx - 40, matY, 20, 16).m_253136_());
                 }
                 if (this.matPage < pages - 1) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("下一页 >"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                     b -> {
                                         this.matPage++;
                                         this.rebuildButtons();
                                     })
-                            .m_252987_(cx + 10, matY, 80, 16).m_253136_());
+                            .m_252987_(cx + 20, matY, 20, 16).m_253136_());
                 }
             }
             // v1.5.160：行2 控制按钮——仅进行中的计划存在时显示；开始建造后自动出现
@@ -898,20 +899,21 @@ public class BlueprintBookScreen extends Screen {
         });
         this.m_142416_(this.searchBox);
         // 翻页（底行）——v1.5.159：目录页只有 返回/上一页/下一页/退出
+        // v1.1.0 实测二十五：100 宽按钮盖底部建筑名——改 20 宽纯箭头，页码画中间
         if (totalPages > 1) {
             if (this.buildPage > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.buildPage--;
                                     this.rebuildButtons();
-                                }).m_252987_(this.f_96543_ / 2 - 160, this.f_96544_ - 30, 100, 20).m_253136_());
+                                }).m_252987_(this.f_96543_ / 2 - 40, this.f_96544_ - 30, 20, 20).m_253136_());
             }
             if (this.buildPage < totalPages - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.buildPage++;
                                     this.rebuildButtons();
-                                }).m_252987_(this.f_96543_ / 2 + 60, this.f_96544_ - 30, 100, 20).m_253136_());
+                                }).m_252987_(this.f_96543_ / 2 + 20, this.f_96544_ - 30, 20, 20).m_253136_());
             }
         }
         // 返回大目录（左上角小按钮）
@@ -1049,21 +1051,21 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .m_252987_(8, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
-        // 女仆翻页（底行，独占一行不与其他按钮冲突）
+        // 女仆翻页（底行，独占一行不与其他按钮冲突；v1.1.0 实测二十五：改 20 宽箭头）
         if (total > 1) {
             if (this.maidPage > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.maidPage--;
                                     this.rebuildButtons();
-                                }).m_252987_(cx - 160, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx - 40, h - 26, 20, 20).m_253136_());
             }
             if (this.maidPage < total - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.maidPage++;
                                     this.rebuildButtons();
-                                }).m_252987_(cx + 60, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx + 20, h - 26, 20, 20).m_253136_());
             }
         }
     }
@@ -1129,22 +1131,22 @@ public class BlueprintBookScreen extends Screen {
                 ry += 15;
                 regionRow++;
             }
-            // 区块翻页（页脚行，独占一行不与绑定按钮冲突）
+            // 区块翻页（页脚行，独占一行不与绑定按钮冲突；v1.1.0 实测二十五：改 20 宽箭头）
             if (rTotal > 1) {
                 int py = h - 26;
                 if (this.detailRegionPage > 0) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                     b -> {
                                         this.detailRegionPage--;
                                         this.rebuildButtons();
-                                    }).m_252987_(cx - 160, py, 100, 20).m_253136_());
+                                    }).m_252987_(cx - 40, py, 20, 20).m_253136_());
                 }
                 if (this.detailRegionPage < rTotal - 1) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                     b -> {
                                         this.detailRegionPage++;
                                         this.rebuildButtons();
-                                    }).m_252987_(cx + 60, py, 100, 20).m_253136_());
+                                    }).m_252987_(cx + 20, py, 20, 20).m_253136_());
                 }
             }
         }
@@ -1245,22 +1247,22 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .m_252987_(w - 88, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
-        // v1.5.190：绑定女仆翻页（页脚行）
+        // v1.5.190：绑定女仆翻页（页脚行；v1.1.0 实测二十五：改 20 宽箭头）
         if (total > 1) {
             int py = h - 26;
             if (this.regionMaidPage > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.regionMaidPage--;
                                     this.rebuildButtons();
-                                }).m_252987_(cx - 160, py, 100, 20).m_253136_());
+                                }).m_252987_(cx - 40, py, 20, 20).m_253136_());
             }
             if (this.regionMaidPage < total - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.regionMaidPage++;
                                     this.rebuildButtons();
-                                }).m_252987_(cx + 60, py, 100, 20).m_253136_());
+                                }).m_252987_(cx + 20, py, 20, 20).m_253136_());
             }
         }
         // 返回详情页
@@ -1404,18 +1406,18 @@ public class BlueprintBookScreen extends Screen {
             int pages = (this.memoryLines.size() + maxLines - 1) / maxLines;
             this.memoryPage = Math.min(this.memoryPage, pages - 1);
             if (this.memoryPage > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.memoryPage--;
                                     this.rebuildButtons();
-                                }).m_252987_(cx - 160, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx - 40, h - 26, 20, 20).m_253136_());
             }
             if (this.memoryPage < pages - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.memoryPage++;
                                     this.rebuildButtons();
-                                }).m_252987_(cx + 60, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx + 20, h - 26, 20, 20).m_253136_());
             }
         }
         return;
@@ -1505,18 +1507,18 @@ public class BlueprintBookScreen extends Screen {
                 .m_252987_(8, TOP_BTN_Y, 80, TOP_BTN_H).m_253136_());
         if (total > 1) {
             if (this.maidPage > 0) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                 b -> {
                                     this.maidPage--;
                                     this.rebuildButtons();
-                                }).m_252987_(cx - 160, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx - 40, h - 26, 20, 20).m_253136_());
             }
             if (this.maidPage < total - 1) {
-                this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                 b -> {
                                     this.maidPage++;
                                     this.rebuildButtons();
-                                }).m_252987_(cx + 60, h - 26, 100, 20).m_253136_());
+                                }).m_252987_(cx + 20, h - 26, 20, 20).m_253136_());
             }
         }
     }
@@ -1549,9 +1551,10 @@ public class BlueprintBookScreen extends Screen {
                 y += 12;
             }
             if (this.memoryLines.size() > maxLines) {
+                // v1.1.0 实测二十五：页码画在两箭头中间行（h-22）
                 this.drawCentered(graphics, "\u00a77第" + (this.memoryPage + 1) + "/"
                         + ((this.memoryLines.size() + maxLines - 1) / maxLines) + " 页",
-                        this.f_96544_ - 44, 0x888888);
+                        this.f_96544_ - 22, 0xAAAAAA);
             }
             return;
         }
@@ -1640,21 +1643,21 @@ public class BlueprintBookScreen extends Screen {
                         .m_252987_(cx - btnW / 2, y, btnW, 14).m_253136_());
                 y += 15;
             }
-            // 翻页
+            // 翻页（v1.1.0 实测二十五：改 20 宽箭头，页码画在箭头中间行）
             if (pages > 1) {
                 if (this.debugPage > 0) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("上一页"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"),
                                     b -> {
                                         this.debugPage--;
                                         this.rebuildButtons();
-                                    }).m_252987_(cx - 160, h - 26, 100, 18).m_253136_());
+                                    }).m_252987_(cx - 40, h - 26, 20, 18).m_253136_());
                 }
                 if (this.debugPage < pages - 1) {
-                    this.m_142416_(Button.m_253074_(Component.m_237113_("下一页"),
+                    this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
                                     b -> {
                                         this.debugPage++;
                                         this.rebuildButtons();
-                                    }).m_252987_(cx + 60, h - 26, 100, 18).m_253136_());
+                                    }).m_252987_(cx + 20, h - 26, 20, 18).m_253136_());
                 }
             }
         }
@@ -1740,10 +1743,10 @@ public class BlueprintBookScreen extends Screen {
             int start = this.debugPage * maxRows;
             int end = Math.min(this.debugRows.size(), start + maxRows);
             if (pages > 1) {
-                // v1.5.219：页码移到翻页按钮行上方（y=h-28）——旧版画在 h-44
-                // 与底部动作按钮组（h-48~h-30）重叠（"第X页"压在标记删除/恢复上）
+                // v1.5.219 + v1.1.0 实测二十五：页码画在翻页箭头中间行（h-22）——
+                // 箭头 20px 在两侧，任何页码宽度不重叠
                 this.drawCentered(graphics, "\u00a77第" + (this.debugPage + 1) + "/" + pages + " 页",
-                        this.f_96544_ - 28, 0x888888);
+                        this.f_96544_ - 22, 0xAAAAAA);
             }
         }
     }
@@ -1895,8 +1898,9 @@ public class BlueprintBookScreen extends Screen {
                     10, CONTENT_TOP + 40, 0x888888, false);
         }
         if (totalPages > 1) {
+            // v1.1.0 实测二十五：页码画在两箭头中间（箭头 cx±(20..40) 仅 20px 宽）
             this.drawCentered(graphics, "\u00a77第 " + (this.buildPage + 1) + " / " + totalPages + " 页",
-                    this.f_96544_ - 24, 0x888888);
+                    this.f_96544_ - 24, 0xAAAAAA);
         }
         this.renderProgress(graphics, this.f_96544_ - BOTTOM_ZONE - 18);
     }
