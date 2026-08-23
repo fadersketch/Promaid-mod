@@ -70,11 +70,14 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         }
         int threshold = com.maidsmart.config.MaidSmartConfig.TORCH_DARK_THRESHOLD.get();
         net.minecraft.core.BlockPos base = owner.m_20183_();
-        // 主人脚下 3×3 找最暗格（方块亮度 = LightLayer.BLOCK 的 m_45517_，0-15）
+        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：扫描范围 3×3 → 5×5
+        //（主人脚下半径 2 格）——3×3 只有一格宽的跟随带，走路时边缘暗格根本轮不到
+        // 检索；5×5 覆盖正常走路节奏的暗区。每轮仍只插【一根】（插最暗格），节奏
+        // 由冷却控制，不会一次连插一片。
         net.minecraft.core.BlockPos target = null;
         int darkest = threshold;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
                 net.minecraft.core.BlockPos p = base.m_7918_(dx, 0, dz);
                 int light = level.m_45517_(net.minecraft.world.level.LightLayer.BLOCK, p);
                 if (light < darkest) {
@@ -113,9 +116,9 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        // v1.1.0 实测三十一（用户："插火把频率仍然不够，间隔减半"）：
-        // 30 tick（1.5 秒）→ 15 tick（0.75 秒）
-        this.torchCooldown = 15; // 0.75 秒
+        // v1.1.0 实测三十一：30 tick（1.5 秒）→ 15 tick（0.75 秒）
+        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：15 → 10 tick（0.5 秒）
+        this.torchCooldown = 10; // 0.5 秒
     }
 
     /**
