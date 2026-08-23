@@ -83,32 +83,37 @@ public class AutoCombatSwitch {
 
     /**
      * v1.1.0 实测二十：主人攻击了别的生物 → 也触发（护主不只被动挨打才算开战，
-     * 主人主动开火同样进入战斗）。监听主人对【非自己女仆】造成伤害的事件。
+     * 主人主动开火同样进入战斗）。
+     *
+     * v1.1.0 实测二十八修复（用户："主动战斗没有成功生效"）：旧版把
+     * event.getEntity()（=【受害者】）instanceof ServerPlayer 当判断——受害者
+     * 是玩家、来源又是玩家的组合只在"玩家打玩家"才成立；主人打怪时受害者是
+     * Monster，第一个 if 直接 return，主动开火触发从未生效。正确写法：
+     * 受害者任意、【来源】是玩家才算"主人开火"。
      */
     @SubscribeEvent
     public void onOwnerAttack(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-        if (!(event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
-            return; // 只认玩家亲手造成的伤害（女仆打的不连锁触发）
-        }
-        if (attacker != player) {
-            return;
-        }
-        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+        // 来源（m_7639_=getEntity）是玩家 = 主人亲手造成的伤害（女仆打的不连锁触发）
+        if (!(event.getSource() != null && event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
             return;
         }
         // 打的是自己的女仆不算开战（误伤/管教场景）
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
             return;
         }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
         switchNearbyMaids(attacker);
     }
 
-    /** 响应半径内自己的女仆全体评估参战（被攻击/主动开火共用） */
+    /** 响应半径内自己的女仆全体评估参战（被攻击/主动开火共用）
+     *  v1.1.0 实测二十八：加限频诊断日志（latest.log 搜 "auto-combat"）——
+     *  此前整个链路零日志，"没生效"无从排查；现在记录触发源/扫描结果/切换结果 */
     private void switchNearbyMaids(ServerPlayer player) {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
+        int switched = 0;
+        int skippedCombat = 0;
         for (EntityMaid maid : player.m_9236_().m_45976_(EntityMaid.class,
                 player.m_20191_().m_82400_(r))) {
             if (!maid.m_6084_() || maid.m_6162_()) {
@@ -137,6 +142,7 @@ public class AutoCombatSwitch {
             // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
             // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
             if (MaidWorkTags.isCombatTask(maid)) {
+                skippedCombat++;
                 continue;
             }
             IMaidTask combat = pickCombatTask(maid);
@@ -149,6 +155,18 @@ public class AutoCombatSwitch {
             maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
             maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
             maid.setTask(combat);
+            switched++;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat: maid={} {} -> {} (owner={})",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    prevUid, combat.getUid(), player.m_5446_().getString());
+        }
+        // v1.1.0 实测二十八：触发但一只都没切（全部让位/已是战斗/无匹配武器）也记一笔——
+        // 排查"没生效"时能区分"事件没触发"和"触发了但全被跳过"
+        if (switched == 0 && skippedCombat > 0) {
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat: triggered by owner={} but 0 switched ({} already combat)",
+                    player.m_5446_().getString(), skippedCombat);
         }
     }
 
