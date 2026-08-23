@@ -1114,8 +1114,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private void tryPlantSapling(ServerLevel level, EntityMaid maid) {
         long now = level.m_46467_();
         Long last = SAPLING_PLANT_SINCE.get(maid.m_19879_());
-        if (last != null && now - last < 100L) {
-            return; // 5 秒内种过
+        // v1.1.0 实测四十九：种树间隔 100 → 50 tick（5 秒→2.5 秒，用户要求减半）
+        if (last != null && now - last < 50L) {
+            return; // 2.5 秒内种过
         }
         BlockPos base = this.targetPos;
         if (base == null) {
