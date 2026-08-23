@@ -177,6 +177,24 @@ public final class PlacedBlockTracker {
         level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
     }
 
+    /**
+     * v1.1.0 实测四十六：女仆放方块的【玩家同款】放置音效。
+     * 旧实现用 levelEvent 3001 + Block.m_49956_(state)（Block id）——客户端
+     * LevelEvent handler 对 3001 的附加数据按【BlockState id】走的是原版注释/
+     * 事件路径，mod 环境下 id 与注册表错位会被解析成无关音效（用户听成"咆哮"）。
+     * 改为服务端直接 playSound：取方块自身 SoundType 的放置音效
+     * （m_56777_ = getPlaceSound），音量/音调按原版 BlockItem 放置公式
+     * （(volume+1)/2, pitch*0.8）——与玩家放方块完全一致。
+     */
+    public static void placeSound(net.minecraft.server.level.ServerLevel level,
+                                  net.minecraft.core.BlockPos pos,
+                                  net.minecraft.world.level.block.Block block) {
+        net.minecraft.world.level.block.state.BlockState state = block.m_49966_();
+        net.minecraft.world.level.block.SoundType st = state.m_60827_();
+        level.m_5594_(null, pos, st.m_56777_(), net.minecraft.sounds.SoundSource.BLOCKS,
+                (st.m_56773_() + 1.0f) / 2.0f, st.m_56774_() * 0.8f);
+    }
+
     /** 兼容旧调用：某位置附近是否有活的女仆（旧 supportsAnyMiner/supportsBridger 判定保留用） */
     public static boolean anyMaidStanding(ServerLevel level, BlockPos pos,
                                           Predicate<EntityMaid> filter) {

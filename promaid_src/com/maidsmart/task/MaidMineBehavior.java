@@ -1443,7 +1443,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 +
         // 放置音效（blockEvent 3000/3001 = 放置方块音效+粒子，原版放置同款）
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        level.m_46796_(3001, place, Block.m_49956_(block.m_49966_()));
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
         // v1.5.113（B6）：冷却只在【成功放置】后设置——旧版失败也消耗冷却，
         // 搭高被错误阻塞
@@ -1496,7 +1496,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
             // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
+            com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
             this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
             this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
             return true;
@@ -1538,7 +1538,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             trackPlaced(level, fill, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
             // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
+            com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
             this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
             this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_COOLDOWN.get(); // v1.5.113（B6）
             return true;
