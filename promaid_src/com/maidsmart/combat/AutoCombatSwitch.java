@@ -331,20 +331,20 @@ public class AutoCombatSwitch {
     /**
      * v1.1.0 实测二十：选战斗任务——武器等权随机（原版武器降权重）。
      *
-     * 旧版"枪械优先"是当时只考虑 TACZ 兼容的产物（枪械肯定比原版武器强）。
-     * 现在附属生态加入了大量模组（万法皆通/史诗战斗/真正的力量等），它们的
-     * 攻击任务与枪械强度等价——不再有谁绝对优先。新口径：
-     * - 扫描 TaskManager 全部任务，找出实现 IAttackTask 的攻击类任务
-     * - 对每个任务问 maid 背包"能不能打"（task.isWeapon 按背包匹配）
-     * - 能打的任务【等权重】随机选
-     * - 原版五件套（attack/ranged/crossbow/trident/danmaku）权重 ×0.5——
-     *   模组武器普遍更强，有模组选项时优先模组（但不是绝对排除原版）
-     * - 全都匹配不上 → 近战（空手也上）
+     * v1.1.0 实测三十八（用户："选武器不再单纯随机，加距离判定——史诗战斗/拔刀剑
+     * 算近战、枪械等算远程；近战远程都有时按距离选"）：改为【距离感知的两段选择】：
+     * ① 候选任务按武器类型分近战/远程两池（分类规则见 classifyTask）；
+     * ② 只有一类有候选 → 该类内按原加权随机；
+     * ③ 两类都有 → 看最近敌人距离：≤ meleeRange（默认 5 格）用近战池，
+     *    > meleeRange 用远程池（池内仍按原权重随机——同池内不退化成固定顺序）。
+     * 找不到敌人（威胁已消失的边缘场景）→ 按远程优先（安全距离输出）。
      */
     private static IMaidTask pickCombatTask(EntityMaid maid) {
         // 候选收集：任务 → 权重（原版/模组各自读配置）
-        List<IMaidTask> pool = new ArrayList<>();
-        List<Double> weights = new ArrayList<>();
+        List<IMaidTask> meleePool = new ArrayList<>();
+        List<Double> meleeWeights = new ArrayList<>();
+        List<IMaidTask> rangedPool = new ArrayList<>();
+        List<Double> rangedWeights = new ArrayList<>();
         String vanillaNs = "touhou_little_maid";
         double vanillaW = MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get();
         double modW = MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get();
@@ -366,14 +366,43 @@ public class AutoCombatSwitch {
             // v1.1.0 实测二十一：权重可配置（原版/模组各一条）——模组默认 2.0 优先、
             // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
             double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
-            pool.add(task);
-            weights.add(Math.max(0.01, w));
+            w = Math.max(0.01, w);
+            if (isRangedTask(task)) {
+                rangedPool.add(task);
+                rangedWeights.add(w);
+            } else {
+                meleePool.add(task);
+                meleeWeights.add(w);
+            }
         }
-        if (pool.isEmpty()) {
-            // 全都匹配不上 → 近战兜底（空手也上）
-            return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+        // 两类都有 → 按最近敌人距离选池；只有一类 → 直接用
+        if (!meleePool.isEmpty() && !rangedPool.isEmpty()) {
+            double dist = nearestThreatDist(maid);
+            // 没找到敌人（威胁消失边缘）→ 远程优先（安全输出）；近 → 近战
+            boolean useMelee = dist >= 0 && dist <= MELEE_RANGE;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat pick: maid={} both-pools dist={} -> {}",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    String.format("%.1f", dist), useMelee ? "melee" : "ranged");
+            return useMelee
+                    ? weightedPick(meleePool, meleeWeights)
+                    : weightedPick(rangedPool, rangedWeights);
         }
-        // 加权随机
+        if (!meleePool.isEmpty()) {
+            return weightedPick(meleePool, meleeWeights);
+        }
+        if (!rangedPool.isEmpty()) {
+            return weightedPick(rangedPool, rangedWeights);
+        }
+        // 全都匹配不上 → 近战兜底（空手也上）
+        return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+    }
+
+    /** v1.1.0 实测三十八：近战判定距离（格）——敌人 ≤ 此距离用近战 */
+    private static final double MELEE_RANGE = 5.0;
+
+    /** 加权随机（原逻辑抽出——同池内仍按原版/模组权重随机，不退化成固定顺序） */
+    private static IMaidTask weightedPick(List<IMaidTask> pool, List<Double> weights) {
         double total = 0;
         for (double w : weights) {
             total += w;
@@ -386,6 +415,58 @@ public class AutoCombatSwitch {
             }
         }
         return pool.get(pool.size() - 1);
+    }
+
+    /**
+     * v1.1.0 实测三十八：任务武器类型分类——true=远程，false=近战。
+     * 用户口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
+     * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
+     * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
+     * （未知模组任务按近战兜底——冲脸总比站桩安全）。
+     */
+    private static boolean isRangedTask(IMaidTask task) {
+        String uid = task.getUid().toString();
+        // 原版远程五件套（弓/弩/三叉戟/弹幕/枪械）——近战 attack 不在表里
+        if (uid.equals("touhou_little_maid:ranged_attack")
+                || uid.equals("touhou_little_maid:crossbow_attack")
+                || uid.equals("touhou_little_maid:trident_attack")
+                || uid.equals("touhou_little_maid:danmaku_attack")
+                || uid.equals("touhou_little_maid:gun_attack")) {
+            return true;
+        }
+        String ns = task.getUid().m_135827_();
+        // 史诗战斗（ef_tlm 的 FightModeTask）/拔刀剑系任务 = 近战
+        if (ns.equals("ef_tlm") || ns.equals("slashblade") || ns.equals("sbr_core")
+                || ns.equals("truepower")) {
+            return false;
+        }
+        // 万法皆通等法术系任务按远程处理（法术是投射输出）
+        if (ns.equals("maidspell") || ns.equals("spellbook")) {
+            return true;
+        }
+        // 未知模组任务默认近战（冲脸兜底）
+        return false;
+    }
+
+    /** v1.1.0 实测三十八：女仆周围最近敌对生物距离（格）；没有敌人返回 -1 */
+    private static double nearestThreatDist(EntityMaid maid) {
+        try {
+            double best = -1;
+            for (net.minecraft.world.entity.monster.Monster e : maid.m_9236_().m_45976_(
+                    net.minecraft.world.entity.monster.Monster.class,
+                    maid.m_20191_().m_82400_(24.0))) {
+                if (!e.m_6084_()) {
+                    continue;
+                }
+                double d = maid.m_20238_(e.m_20182_());
+                if (best < 0 || d < best) {
+                    best = d;
+                }
+            }
+            return best;
+        } catch (Exception e) {
+            return -1;
+        }
     }
 
     /**
