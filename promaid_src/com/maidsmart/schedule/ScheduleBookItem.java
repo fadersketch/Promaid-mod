@@ -1,7 +1,5 @@
 package com.maidsmart.schedule;
 
-import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.ListTag;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
@@ -17,19 +15,27 @@ import net.minecraft.world.level.Level;
  * （00:00～24:00 分段编排一天干什么，按游戏内时间自动切换）。
  * UI 结构仿 Promaid 手册（BlueprintBookScreen）。
  *
- * v1.1.0 实测十一（用户："排班表要有附魔书那种特效"）——附魔光效（v1.1.0 实测五十
- * 确认仍生效）。
- * 【实现教训】不能 override isFoil(m_7807_) 恒 true：原版 ServerPlayer.m_9240_
- * （每 tick 检查主手物品）对 isFoil()==true 的物品【无条件强转 ComplexItem】
- * （原版只有地图等 ComplexItem 会返回 true）——普通物品返回 true 直接
- * ClassCastException 崩服（实测十三：进世界 1 秒崩）。正确做法：初始化时给
- * 物品实例挂一个【真实但无害的附魔】（等级 0 的经验修补——不掉落、不参与
- * 任何计算、附魔台也不会再上它），原版渲染层的 isFoil 判定走
- * ItemStack.isEnchanted() → 光效与附魔书完全同源，零崩溃风险。
+ * v1.1.0 实测五十：图标 = 原版「旗帜图案」物品（flower_banner_pattern）贴图原样
+ * 复用（用户指定："原版有的一个物品替换成那个的贴图"）。
+ *
+ * v1.1.0 实测五十五【附魔光效改手册同款】（用户："打了经验修补零级没有用，不显示
+ * 附魔特效；逻辑应该跟 promaid 手册一样"）：重写 m_5812_（isFoil）恒 true——与
+ * BlueprintBookItem 完全同源（v1.5.285 起长期稳定运行，光效可见）。
+ * 【纠正实测十三的错误结论】旧注释称"isFoil 恒 true 会被 ServerPlayer.m_9240_
+ * 强转 ComplexItem 崩服"——该推断不成立：手册就是普通 Item + m_5812_=true，
+ * 长期实战无任何崩溃；当年实测十三的崩溃另有原因，0 级经验修补方案属于误诊
+ * 下的绕路（且实测五十五用户证实它根本不显示光效——0 级附魔在原版渲染层
+ * isEnchanted 判定/法线贴图流光路径上不生效）。withFoil/mending 方案整体移除。
  */
 public class ScheduleBookItem extends Item {
     public ScheduleBookItem(Properties props) {
         super(props);
+    }
+
+    /** v1.1.0 实测五十五：常驻附魔光效——手册（BlueprintBookItem.m_5812_）同款 */
+    @Override
+    public boolean m_5812_(ItemStack stack) {
+        return true;
     }
 
     @Override
@@ -42,30 +48,8 @@ public class ScheduleBookItem extends Item {
                 player.m_21120_(hand));
     }
 
-    /**
-     * v1.1.0 实测十三：常驻附魔光效——createItemStack 后立即挂 0 级附魔。
-     * 普通物品的附魔 NBT 键是 "Enchantments"（"StoredEnchantments" 是附魔书
-     * 专用结构——挂在普通物品上不会被 EnchantmentHelper 识别）。等级 0 的
-     * 附魔"存在但无效"：不改行为、不可被附魔台处理，只让 isEnchanted() 为
-     * true（该判定对非耐久物品恒真路径：!isDamageable()——附魔书同款原理）
-     * → 渲染层走附魔流光。零崩溃风险（不碰 isFoil/ComplexItem 链路）。
-     */
-    private static ItemStack withFoil(ItemStack stack) {
-        try {
-            CompoundTag tag = stack.m_41783_(); // getOrCreateTag
-            ListTag list = new ListTag();
-            CompoundTag e = new CompoundTag();
-            e.m_128359_("id", "minecraft:mending");
-            e.m_128359_("lvl", "0"); // short 型 NBT——存字符串由原版解析（附魔表同款写法）
-            list.add(e);
-            tag.m_128365_("Enchantments", list);
-        } catch (Exception ignored) {
-        }
-        return stack;
-    }
-
     @Override
     public ItemStack m_7968_() { // getDefaultInstance
-        return withFoil(new ItemStack(this));
+        return new ItemStack(this);
     }
 }

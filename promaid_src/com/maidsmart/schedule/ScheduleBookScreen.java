@@ -306,7 +306,16 @@ public class ScheduleBookScreen extends Screen {
         }
     }
 
-    /** 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段） */
+    /**
+     * 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段）。
+     * v1.1.0 实测五十三（用户："任务显示的是英文，很影响阅读"）：旧版用
+     * Component.m_237113_（= literal 字面量组件，javap 核实 LiteralContents）去
+     * "查翻译"——getString() 永远返回键本身 → 恒等比对永远成立 → 永远走英文兜底，
+     * TLM/本模组语言文件里的中文（task.touhou_little_maid.farm=农场、
+     * task.maid_smart.mine=挖矿…）从来没被用过。改 m_237115_ = translatable，
+     * getString() 走客户端合并语言表解析；键缺失时 TranslatableContents 原样返回
+     * 键 → 恒等比对依旧能正确判"无翻译"。
+     */
     private static String taskCn(String uid) {
         if (uid == null || uid.isEmpty()) {
             return "空闲";
@@ -316,7 +325,7 @@ public class ScheduleBookScreen extends Screen {
             return uid;
         }
         String key = "task." + uid.substring(0, idx) + "." + uid.substring(idx + 1);
-        String cn = Component.m_237113_(key).getString();
+        String cn = Component.m_237115_(key).getString();
         if (!cn.equals(key)) {
             return cn;
         }

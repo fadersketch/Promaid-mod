@@ -29,8 +29,8 @@ public class CreativeTabHandler {
             return;
         }
         event.accept(ProMaidMod.BLUEPRINT_BOOK);
-        // 排班表是管理道具不是建材，只进工具页（拿出来的即带附魔流光——
-        // getDefaultInstance 挂 0 级 mending，与附魔书同源光效）
+        // 排班表是管理道具不是建材，只进工具页（实测五十五：光效走 m_5812_，
+        // 与手册同源——创造栏拿出来的即带附魔流光）
         if (key.equals(TAB_TOOLS_AND_UTILITIES)) {
             event.accept(ProMaidMod.SCHEDULE_BOOK);
         }
