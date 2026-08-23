@@ -185,57 +185,23 @@ public class AutoCombatSwitch {
 
     /** 响应半径内自己的女仆全体评估参战（被攻击/主动开火共用）
      *  v1.1.0 实测二十八：加限频诊断日志（latest.log 搜 "auto-combat"）——
-     *  此前整个链路零日志，"没生效"无从排查；现在记录触发源/扫描结果/切换结果 */
+     *  此前整个链路零日志，"没生效"无从排查；现在记录触发源/扫描结果/切换结果
+     *  v1.1.0 实测五十八：单只评估逻辑抽到 tryEngageMaid（"女仆被怪打"触发共用） */
     private void switchNearbyMaids(ServerPlayer player) {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
         int switched = 0;
         int skippedCombat = 0;
         for (EntityMaid maid : player.m_9236_().m_45976_(EntityMaid.class,
                 player.m_20191_().m_82400_(r))) {
-            if (!maid.m_6084_() || maid.m_6162_()) {
-                continue; // 死亡/幼年不参战
-            }
             if (maid.m_269323_() != player) {
                 continue; // 只响应主人自己的女仆
             }
-            // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
-            if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
-                continue;
-            }
-            // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
-            // 玩家/排班/LLM 换走 → 玩家接管，清标记后按"当前任务"重新评估参战
-            // v1.1.0 终审修复落地（实测十六）：判定必须走 getBoolean（m_128471_）——
-            // 此前代码用 contains（m_128441_），而 clearMarkers 是 putBoolean(false)
-            // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
-            // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
-            if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
-                if (isOnAssignedCombatTask(maid)) {
-                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-                    continue;
-                }
-                clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
-            }
-            // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
-            // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
-            if (MaidWorkTags.isCombatTask(maid)) {
+            int result = tryEngageMaid(maid);
+            if (result == 1) {
+                switched++;
+            } else if (result == 2) {
                 skippedCombat++;
-                continue;
             }
-            IMaidTask combat = pickCombatTask(maid);
-            if (combat == null) {
-                continue; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
-            }
-            String prevUid = maid.getTask() != null
-                    ? maid.getTask().getUid().toString() : "touhou_little_maid:idle";
-            maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
-            maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
-            maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-            maid.setTask(combat);
-            switched++;
-            com.mojang.logging.LogUtils.getLogger().info(
-                    "auto-combat: maid={} {} -> {} (owner={})",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    prevUid, combat.getUid(), player.m_5446_().getString());
         }
         // v1.1.0 实测二十八：触发但一只都没切（全部让位/已是战斗/无匹配武器）也记一笔——
         // 排查"没生效"时能区分"事件没触发"和"触发了但全被跳过"
@@ -244,6 +210,120 @@ public class AutoCombatSwitch {
                     "auto-combat: triggered by owner={} but 0 switched ({} already combat)",
                     player.m_5446_().getString(), skippedCombat);
         }
+    }
+
+    /* ==================== v1.1.0 实测五十八：女仆被怪打 → 自主参战 ==================== */
+
+    /**
+     * 女仆被怪物攻击（近身拍打/远程弹射物——弹射物伤害来源=射击者）→ 她【本人】
+     * 立即参战（不受响应半径限制——她就在现场），同主人的姐妹在响应半径内一并
+     * 响应（与护主同款群体防御）。
+     * 来源只认 Monster（敌对生物）：玩家打女仆走 TLM 自己的仇恨/管教体系不在这里
+     * 反击；主人打女仆是管教不还手；女仆之间不打架（防不同主人的女仆互殴升级成
+     * 连环混战）。与护主触发同款三事件监听（枪械等模组可能取消中间层事件）。
+     */
+    @SubscribeEvent
+    public void onMaidHurt(LivingHurtEvent event) {
+        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            this.engageAttackedMaid((EntityMaid) event.getEntity());
+        }
+    }
+
+    @SubscribeEvent
+    public void onMaidAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            this.engageAttackedMaid((EntityMaid) event.getEntity());
+        }
+    }
+
+    @SubscribeEvent
+    public void onMaidDamaged(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            this.engageAttackedMaid((EntityMaid) event.getEntity());
+        }
+    }
+
+    /** 受害者是女仆、来源是怪物（与护主触发同款总开关门控） */
+    private static boolean maidVictimOfMonster(Entity victim, net.minecraft.world.damagesource.DamageSource source) {
+        if (!(victim instanceof EntityMaid)) {
+            return false;
+        }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return false;
+        }
+        return source != null && source.m_7639_() instanceof net.minecraft.world.entity.monster.Monster;
+    }
+
+    /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
+    private void engageAttackedMaid(EntityMaid victim) {
+        long now = victim.m_9236_().m_46467_();
+        Long last = this.triggerThrottle.get(victim.m_20148_());
+        if (last != null && now - last < 20L) {
+            return;
+        }
+        this.triggerThrottle.put(victim.m_20148_(), now);
+        this.tryEngageMaid(victim); // 挨打的本人在哪都响应
+        double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
+        for (EntityMaid maid : victim.m_9236_().m_45976_(EntityMaid.class,
+                victim.m_20191_().m_82400_(r))) {
+            if (maid == victim) {
+                continue;
+            }
+            if (maid.m_269323_() == null || maid.m_269323_() != victim.m_269323_()) {
+                continue; // 只带同主人的姐妹（无主野女仆不卷入）
+            }
+            this.tryEngageMaid(maid);
+        }
+        com.mojang.logging.LogUtils.getLogger().info(
+                "auto-combat: maid attacked -> engage self + sisters (victim={})",
+                victim.m_5446_() != null ? victim.m_5446_().getString() : victim.m_20148_());
+    }
+
+    /**
+     * 单只女仆参战评估（护主扫描 / 女仆被怪打 共用）。
+     * 返回：1=已切换战斗 0=不参战（自保中/已参战刷新威胁/无匹配任务）2=已是战斗任务跳过
+     */
+    private static int tryEngageMaid(EntityMaid maid) {
+        if (!maid.m_6084_() || maid.m_6162_()) {
+            return 0; // 死亡/幼年不参战
+        }
+        // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
+        if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
+            return 0;
+        }
+        // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
+        // 玩家/排班/LLM 换走 → 玩家接管，清标记后按"当前任务"重新评估参战
+        // v1.1.0 终审修复落地（实测十六）：判定必须走 getBoolean（m_128471_）——
+        // 此前代码用 contains（m_128441_），而 clearMarkers 是 putBoolean(false)
+        // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
+        // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
+        if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
+            if (isOnAssignedCombatTask(maid)) {
+                maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                return 0;
+            }
+            clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
+        }
+        // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
+        // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
+        if (MaidWorkTags.isCombatTask(maid)) {
+            return 2;
+        }
+        IMaidTask combat = pickCombatTask(maid);
+        if (combat == null) {
+            return 0; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
+        }
+        String prevUid = maid.getTask() != null
+                ? maid.getTask().getUid().toString() : "touhou_little_maid:idle";
+        maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
+        maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
+        maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+        maid.setTask(combat);
+        com.mojang.logging.LogUtils.getLogger().info(
+                "auto-combat: maid={} {} -> {} (engaged)",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                prevUid, combat.getUid());
+        return 1;
     }
 
     /**
@@ -385,11 +465,20 @@ public class AutoCombatSwitch {
      */
     private static IMaidTask pickCombatTask(EntityMaid maid) {
         TaskPools pools = buildPools(maid);
-        // 两类都有 → 按最近敌人距离选池；只有一类 → 直接用
+        // 两类都有 → 按最近敌人距离+偏好权重选池；只有一类 → 直接用
         if (!pools.meleePool().isEmpty() && !pools.rangedPool().isEmpty()) {
             double dist = nearestThreatDist(maid);
-            // 没找到敌人（威胁消失边缘）→ 远程优先（安全输出）；近 → 近战
-            boolean useMelee = dist >= 0 && dist <= MELEE_RANGE;
+            boolean useMelee;
+            if (dist >= 0 && dist <= MELEE_RANGE) {
+                // v1.1.0 实测五十八：近身两池皆可用 → 按 近战:远程 偏好权重随机选池
+                //（默认 3:1 ≈ 75% 近战；某类权重 0 = 永不主动选该类；双 0 → 远程兜底）
+                double mw = Math.max(0, MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get());
+                double rw = Math.max(0, MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get());
+                useMelee = mw + rw > 0 && RNG.nextDouble() * (mw + rw) < mw;
+            } else {
+                // 远距离（近战够不着）/ 找不到敌人（威胁消失边缘）→ 远程（实测三十八口径）
+                useMelee = false;
+            }
             com.mojang.logging.LogUtils.getLogger().info(
                     "auto-combat pick: maid={} both-pools dist={} -> {}",
                     maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
@@ -493,10 +582,19 @@ public class AutoCombatSwitch {
             if (dist > MELEE_RANGE) {
                 return; // 还没被近身，远程继续输出
             }
+            // v1.1.0 实测五十八：近战偏好权重 0 = 用户不要近战——被近身也不切，
+            // 保持远程硬打（近身反击击退机制兜底）
+            if (MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get() <= 0) {
+                return;
+            }
             wantMelee = true;
         } else {
             if (dist <= JUMP_UNREACHABLE_DIST || dist > TARGETING_RANGE) {
                 return; // 追得上（跳跃+贴身可达）或超出索敌范围，维持近战
+            }
+            // v1.1.0 实测五十八：远程偏好权重 0 = 用户不要远程——够不着也保持近战追击
+            if (MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get() <= 0) {
+                return;
             }
             wantMelee = false;
         }
