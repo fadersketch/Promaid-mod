@@ -286,6 +286,51 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         this.stepCooldown = 0;
         this.guardTicks = 0;
         this.lastPlacedGameTime = level.m_46467_();
+        // v1.1.0 实测二十九：启动/中止日志（latest.log 搜 "bridge-up"）——
+        // 间歇性失效排查用；中止原因在 doStop 记
+        com.mojang.logging.LogUtils.getLogger().info(
+                "bridge-up start: maid={} owner-dy={}",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                maid.m_269323_() != null
+                        ? maid.m_269323_().m_20183_().m_123342_() - maid.m_20183_().m_123342_() : -999);
+    }
+
+    /** v1.1.0 实测二十九：中止原因（诊断日志用——doStop 时 canContinue 已
+     *  复算过，这里重算一次拿结论；廉价判定开销可忽略） */
+    private String stopReason(ServerLevel level, EntityMaid maid, long gameTime) {
+        if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
+            return "disabled";
+        }
+        LivingEntity owner = maid.m_269323_();
+        if (owner == null || !owner.m_6084_() || owner.m_9236_() != level) {
+            return "owner-gone";
+        }
+        double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+        if (dSq <= 6.25) {
+            return "reached";
+        }
+        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
+        if (dSq >= sq(distLimit + 2)) {
+            return "owner-too-far";
+        }
+        if (hasThreatNearby(level, maid)) {
+            return "threat";
+        }
+        if (maid.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
+            return "self-preserve";
+        }
+        if (isTaskOccupied(maid)) {
+            return "task-occupied";
+        }
+        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
+        if (dyNow >= 1 && !hasBuildBlock(maid)) {
+            return "no-block";
+        }
+        if (dyNow >= 1 && gameTime - this.lastPlacedGameTime > 400L) {
+            return "head-blocked";
+        }
+        return "unknown";
     }
 
     @Override
@@ -470,6 +515,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
+        com.mojang.logging.LogUtils.getLogger().info(
+                "bridge-up stop: maid={} reason={}",
+                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                this.stopReason(level, maid, gameTime));
         maid.getPersistentData().m_128379_(BRIDGING_TAG, false);
         NO_BLOCK_SINCE.remove(maid.m_19879_());
         canUseThrottle.remove(maid.m_19879_());
