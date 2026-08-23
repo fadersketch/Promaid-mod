@@ -94,6 +94,31 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.BlueprintLib.setServer(event.getServer());
         // v1.5.88：应用配置面板的建造默认档位（build.speedTier / build.turbo）
         com.maidsmart.build.MaidBuildBehavior.applyConfigDefaults();
+        // v1.1.0 实测二十九：搭路/挖矿/伐木 PLACED 表跨会话兜底清理——
+        // ServerStopping 正常退出会清，但崩溃/任务管理器强杀进程时 clearAll
+        // 不执行 → 内存表残留进新会话：①搭路 isAirborne 误判（残留位置命中
+        // 脚下 → 空中距离上限被错误放宽）②回收失效（残留 tick 是旧会话的
+        // gameTime，新会话 gameTime 更小 → lifetime 判定永不过期，方块
+        // 永不回收——用户实测"搭路失效时方块回收也失效"的根因）。
+        // 兜底：每次服务端启动时把残留表全清（此时世界刚加载，摧毁的
+        // 最多是上个会话崩在地图上的几块垫脚方块——本来也该被回收）。
+        com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
+        com.maidsmart.task.MaidWoodBehavior.clearAll(event.getServer());
+        com.maidsmart.task.BridgeUpBehavior.clearAll(event.getServer());
+        com.maidsmart.combat.SelfPreservationBehavior.clearCombatPlaced(event.getServer());
+        // BRIDGING 标记（persistentData 存档持久化）同理：崩溃时没走到
+        // doStop 清标记 → 重进存档女仆永远背着 true → 禁瞬移 + 视觉挂桥。
+        // 启动时全量清除（任何女仆此刻都不可能在搭路——行为刚初始化）。
+        for (net.minecraft.server.level.ServerLevel level : event.getServer().m_129785_()) {
+            for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
+                    : level.m_45976_(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class,
+                    new net.minecraft.world.phys.AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
+                            Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
+                if (maid.getPersistentData().m_128471_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG)) {
+                    maid.getPersistentData().m_128379_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG, false);
+                }
+            }
+        }
     }
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
