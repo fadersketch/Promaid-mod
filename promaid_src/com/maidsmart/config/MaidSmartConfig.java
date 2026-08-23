@@ -565,8 +565,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.wood.hardBlockReport").define("hardBlockReport", true);
         WOOD_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数")
                 .translation("config.promaid.wood.creativeDefaultValue").defineInRange("creativeDefaultValue", 300, 10, 1000);
-        WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材）——关闭则女仆像玩家一样只发现视线无阻的木材（树叶不挡视线）")
-                .translation("config.promaid.wood.seekThroughWalls").define("seekThroughWalls", false);
+        // v1.1.0 实测四十一（用户："隔墙找木材视线感知默认打开——增加容错率"）：
+        // 树木天然被树冠/地形遮挡，关着容错率太低（玩家反感"找不到树"）
+        WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材，默认开）——开启后女仆能发现视线被方块挡住的木材并挖通开路；关闭则像玩家一样只发现视线无阻的木材（树叶不挡视线）")
+                .translation("config.promaid.wood.seekThroughWalls").define("seekThroughWalls", true);
         WOOD_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick）")
                 .translation("config.promaid.wood.anchorTimeout").defineInRange("anchorTimeout", 200, 40, 1200);
         WOOD_RELOCATE_THROTTLE = BUILDER.comment("重定位节流（tick，防边界抖动）")
