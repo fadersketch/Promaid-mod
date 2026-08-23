@@ -313,30 +313,49 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue; // 自己/死了/不是同主人的女仆
                 }
                 double hpRatio2 = sister.m_21223_() / Math.max(1.0f, sister.m_21233_());
-                boolean did = false;
+                String action = null; // v1.1.0 实测三十二：本轮支援的具体动作描述（系统字幕用）
                 // 1. 着火 → 抗火药水（与主人链同顺序：情境保命最先）
                 if (sister.m_6060_() && !this.hasEffectOn(sister, "minecraft:fire_resistance")) {
-                    did = this.throwPotionTo(level, maid, sister, FIRE_RESIST_POTIONS, "抗火", false) >= 0;
+                    if (this.throwPotionTo(level, maid, sister, FIRE_RESIST_POTIONS, "抗火", false) >= 0) {
+                        action = "扔了抗火药水";
+                    }
                 }
                 // 2. 负面效果 → 牛奶（全解；有增益时改蜂蜜，同主人链规则）
-                if (!did && this.hasNegativeEffectOn(sister)) {
-                    did = this.feedSisterMilkOrHoney(maid, sister);
+                if (action == null && this.hasNegativeEffectOn(sister)) {
+                    action = this.feedSisterMilkOrHoney(maid, sister);
                 }
                 // 3. 低血 → 治疗链（喷溅治疗 → 金苹果 → 再生 → 喂食），同主人链顺序
-                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    did = this.throwPotionTo(level, maid, sister, HEAL_POTIONS, "治疗", true) >= 0;
+                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    if (this.throwPotionTo(level, maid, sister, HEAL_POTIONS, "治疗", true) >= 0) {
+                        action = "扔了治疗药水";
+                    }
                 }
-                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    did = this.useGoldenAppleOn(maid, sister);
+                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.useGoldenAppleOn(maid, sister);
                 }
-                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    did = this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0;
+                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    if (this.throwPotionTo(level, maid, sister, REGEN_POTIONS, "再生", true) >= 0) {
+                        action = "扔了再生药水";
+                    }
                 }
-                if (!did && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
-                    did = this.feedSisterFood(maid, sister);
+                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.feedSisterFood(maid, sister);
                 }
-                if (did) {
-                    maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，药水来了！");
+                if (action != null) {
+                    // v1.1.0 实测三十二（用户：消息不再固定"药水来了"——牛奶/蜂蜜/食物
+                    // 也说药水不真实）：气泡改通用文案 + 绿色系统字幕记录具体支援
+                    // 内容（与喂主人 [maid_smart] 绿色字幕同款显示方式）
+                    maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，我来帮你！");
+                    String sisterName = sister.m_5446_() != null
+                            ? sister.m_5446_().getString() : "姐妹女仆";
+                    String maidName = maid.m_5446_() != null
+                            ? maid.m_5446_().getString() : "女仆";
+                    for (net.minecraft.server.level.ServerPlayer viewer :
+                            level.m_6907_()) {
+                        viewer.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "\u00a7a[maid_smart] " + maidName + " 支援了 " + sisterName
+                                        + "：" + action));
+                    }
                     this.setAidCooldown(maidId, 60); // 互助成功同样 3 秒间隔
                     return; // 每轮最多救一个
                 }
@@ -364,8 +383,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测八：喂姐妹牛奶/蜂蜜——牛奶直接 clearAllEffects（女仆没有
      * "不想被清增益"的玩家心智，有增益也照喂——战场实用主义：负面掉血比增益
      * 更致命），空桶返还；没有牛奶退蜂蜜（只解中毒，但蜂蜜走喂食回饱食）。
+     * v1.1.0 实测三十二：返回值从 boolean 改 String——null=没喂成，非 null=
+     * 具体动作描述（系统字幕"女仆支援了姐妹：喂了牛奶"用）。
      */
-    private boolean feedSisterMilkOrHoney(EntityMaid maid, EntityMaid sister) {
+    private String feedSisterMilkOrHoney(EntityMaid maid, EntityMaid sister) {
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
@@ -386,7 +407,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 inv, new ItemStack(bucket), false);
                     }
                     maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-                    return true;
+                    // v1.1.0 实测三十二：喝牛奶音效（旧版静默——手搓效果路径没有
+                    // 任何反馈，用户："没有音效这一点很难受"）
+                    playSoundAt(sister, "minecraft:entity.generic.drink");
+                    return "喂了牛奶（负面全解）";
                 }
             }
                 // 蜂蜜：解中毒（m_21195_ removeEffect）+ 真实进食回饱食
@@ -413,15 +437,30 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                                 inv, new ItemStack(bottle), false);
                     }
                     maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-                    return true;
+                    return "喂了蜂蜜瓶（解中毒+回饱食）";
                 }
         } catch (Exception ignored) {
         }
-        return false;
+        return null;
     }
 
-    /** v1.1.0 实测八：金苹果给姐妹（附魔优先；效果同 useGoldenApple，目标换人） */
-    private boolean useGoldenAppleOn(EntityMaid maid, EntityMaid sister) {
+    /** v1.1.0 实测三十二：在目标位置播通用音效（姐妹链喝牛奶/吃金苹果等手搓
+     *  效果路径的补声——只对服务端播，客户端按距离衰减正常听到） */
+    private static void playSoundAt(net.minecraft.world.entity.Entity at, String soundId) {
+        try {
+            net.minecraft.sounds.SoundEvent snd = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
+                    .getValue(net.minecraft.resources.ResourceLocation.parse(soundId));
+            if (snd != null) {
+                at.m_9236_().m_5594_(null, at.m_20183_(), snd,
+                        net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** v1.1.0 实测八：金苹果给姐妹（附魔优先；效果同 useGoldenApple，目标换人）
+     *  v1.1.0 实测三十二：返回值 boolean → String（动作描述），补吃苹果音效 */
+    private String useGoldenAppleOn(EntityMaid maid, EntityMaid sister) {
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             int bestSlot = -1;
@@ -442,7 +481,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
             }
             if (bestSlot < 0) {
-                return false;
+                return null;
             }
             inv.extractItem(bestSlot, 1, false);
             applyEffect(sister, "minecraft:absorption", 2400, enchanted ? 3 : 0);
@@ -452,14 +491,17 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(sister, "minecraft:fire_resistance", 6000, 0);
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            return true;
+            // v1.1.0 实测三十二：吃金苹果音效（旧版手搓效果路径无声）
+            playSoundAt(sister, "minecraft:entity.generic.eat");
+            return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
         } catch (Exception ignored) {
-            return false;
+            return null;
         }
     }
 
-    /** v1.1.0 实测八：喂姐妹治疗食物（按饱和度择优，手持也认——同主人链） */
-    private boolean feedSisterFood(EntityMaid maid, EntityMaid sister) {
+    /** v1.1.0 实测八：喂姐妹治疗食物（按饱和度择优，手持也认——同主人链）
+     *  v1.1.0 实测三十二：返回值 boolean → String（动作描述，系统字幕用） */
+    private String feedSisterFood(EntityMaid maid, EntityMaid sister) {
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             int bestSlot = -1;
@@ -510,7 +552,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
             }
             if (bestSlot < 0 && handItem == null) {
-                return false;
+                return null;
             }
             ItemStack toGive;
             if (handItem != null && handSat >= bestSat) {
@@ -522,10 +564,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 真实进食（m_5584_ = eat(Level, ItemStack)）：食物效果/音效/粒子全生效
             sister.m_5584_(sister.m_9236_(), toGive);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            return true;
+            return "喂了" + toGive.m_41786_().getString();
         } catch (Exception ignored) {
         }
-        return false;
+        return null;
     }
 
     /**
@@ -792,6 +834,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                             maid.m_9236_().m_46467_(), maxDur2 > 0 ? maxDur2 : 60);
                 }
                 maid.getChatBubbleManager().addTextChatBubble("主人，" + label + "药水放你背包了，快喝！");
+                // v1.1.0 实测三十二（用户："女仆不会传递直接可以饮用的药水"——传递
+                // 功能其实一直在，但只有气泡提示没有系统字幕，观感上像没给）：
+                // 塞背包成功发绿色系统字幕（与喂食 [maid_smart] 同款显示）
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7a[maid_smart] 女仆给了你一瓶" + label + "药水（在背包里，快喝）"));
                 // v1.5.252g9：塞背包日志（latest.log 搜 "aid-owner give"）
                 LOGGER.info("aid-owner give: label={} potion={}",
                         label, potionKey(stack));
@@ -949,6 +996,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(owner, "minecraft:fire_resistance", 6000, 0);
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 使用动画
+            // v1.1.0 实测三十二（用户："喂食金苹果的时候没有音效"）：吃苹果音效
+            playSoundAt(owner, "minecraft:entity.generic.eat");
             maid.getChatBubbleManager().addTextChatBubble(
                     enchanted ? "主人，附魔金苹果给你！" : "主人，金苹果给你！");
             // v1.5.307：金苹果路径补系统提示——用户："喂了什么系统提示不生效"；
@@ -1104,12 +1153,18 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 handIsHoney = !handHoney.m_41619_() && handHoney.m_41720_() == honey;
             }
             if (handIsHoney) {
-                handHoney.m_41774_(1);
-                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, handHoney)) {
+                // v1.1.0 实测三十二修复（用户："喂食蜂蜜瓶似乎没有效果"）：
+                // 旧版先 m_41774_(1) 消耗再把手上的【空瓶】传给 feedFoodDirect
+                // ——蜂蜜瓶没有 FoodProperties（空瓶），feedFoodDirect 返回 false
+                // → 把空瓶插回背包：蜂蜜凭空消失、无任何效果。
+                // 修复：先复制一份喂给主人（feedFoodDirect 内部自行处理
+                // 饱食/解中毒/返还玻璃瓶），成功后才消耗手上的蜂蜜。
+                ItemStack honeyCopy = handHoney.m_41777_();
+                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, honeyCopy)) {
+                    handHoney.m_41774_(1);
                     maid.getChatBubbleManager().addTextChatBubble("主人，蜂蜜喝下，解一下中毒！");
                     return true;
                 }
-                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, handHoney, false);
                 return false;
             }
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -1117,12 +1172,17 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.m_41619_() || stack.m_41720_() != honey) {
                     continue;
                 }
-                inv.extractItem(i, 1, false);
-                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, stack)) {
+                // v1.1.0 实测三十二修复：同手持分支——旧版先 extract 再把 extract 出来的
+                // （被消耗语义弄混的）栈传 feedFoodDirect；extract 返回的是完整的 1 个
+                // 蜂蜜瓶倒是没错，但失败路径 insertItemStacked(inv, stack) 插回的与
+                // extract 的等价，本分支实际正常。统一改为复制传参 + 成功才 extract，
+                // 与手持分支同口径（防未来 extract 语义变化再翻车）。
+                ItemStack honeyCopy2 = stack.m_41777_();
+                if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, honeyCopy2)) {
+                    inv.extractItem(i, 1, false);
                     maid.getChatBubbleManager().addTextChatBubble("主人，蜂蜜喝下，解一下中毒！");
                     return true;
                 }
-                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, stack, false);
                 return false;
             }
         } catch (Exception ignored) {
