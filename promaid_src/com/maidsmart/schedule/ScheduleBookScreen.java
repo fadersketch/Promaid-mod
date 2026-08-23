@@ -40,7 +40,9 @@ public class ScheduleBookScreen extends Screen {
     /** 日程请求中（等 SchedDataPacket） */
     private boolean waiting = false;
     private boolean loadedOn = false;
-    /** 班次（0=早班 1=晚班 2=全天）——详情页第一步选这个 */
+    /** 详情页页签（实测五十九）：0=第 1 页快捷设置（立即生效） 1=第 2 页排班（班次+6 槽） */
+    private int detailPage = 0;
+    /** 班次（0=早班 1=晚班 2=全天）——排班页第一步选这个 */
     private int shift = 2;
     /** 6 个任务槽（uid；空 = 空闲/idle）——第二步点按钮循环切换 */
     private final String[] slots = new String[6];
@@ -133,8 +135,9 @@ public class ScheduleBookScreen extends Screen {
                         this.selUuid = uuid;
                         this.selName = name;
                         this.view = VIEW_DETAIL;
-                        this.waiting = true;
-                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SchedLoadRequestPacket(uuid));
+                        // 实测五十九：进详情默认第 1 页（快捷设置，无需日程数据）；
+                        // 排班数据改在切到第 2 页时按需拉取（每次进都拉最新）
+                        this.detailPage = 0;
                         this.m_7856_();
                     })
                     .m_252987_(cx - bw / 2, y, bw, 20).m_253136_());
@@ -161,26 +164,119 @@ public class ScheduleBookScreen extends Screen {
                 .m_252987_(cx - 50, h - 24, 100, 20).m_253136_());
     }
 
-    /* ==================== 详情页（实测五十一：班次 + 6 任务槽） ==================== */
+    /* ==================== 详情页（实测五十九：第 1 页快捷设置 / 第 2 页排班） ==================== */
 
     private void detailButtons(int w, int h) {
         int cx = w / 2;
-        // 返回列表（左下角）
+        // 返回列表（左下角，两页共用）
         this.m_142416_(Button.m_253074_(Component.m_237113_("← 女仆列表"), b -> {
                     this.view = VIEW_LIST;
                     this.selUuid = null;
                     this.m_7856_();
                 })
                 .m_252987_(12, h - 24, 100, 20).m_253136_());
+        // ---- 页签（第 1 页快捷设置 / 第 2 页排班）——实测五十六同款自由区居中，避开右上开关 ----
+        boolean on = this.loadedOn;
+        int toggleLeft = Math.max(4, w - 120);
+        int freeL = 8;
+        int freeR = toggleLeft - 8;
+        String[] tabs = {"快捷设置", "排班"};
+        int tabW = Math.min(120, Math.max(60, (freeR - freeL - 10) / 2));
+        int tabX0 = freeL + Math.max(0, (freeR - freeL - (tabW * 2 + 10)) / 2);
+        for (int i = 0; i < 2; i++) {
+            final int ti = i;
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_((this.detailPage == ti ? "\u00a76\u25cf " : "\u00a77") + tabs[i]),
+                            b -> {
+                                if (this.detailPage == ti) {
+                                    return;
+                                }
+                                this.detailPage = ti;
+                                if (ti == 1) {
+                                    // 切到排班页：无条件重新拉最新日程（旧数据不残留）
+                                    this.waiting = true;
+                                    ScheduleNetworking.CHANNEL.sendToServer(
+                                            new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
+                                }
+                                this.m_7856_();
+                            })
+                    .m_252987_(tabX0 + i * (tabW + 10), TAB_Y, tabW, 18).m_253136_());
+        }
+        // 排班开关（右上角，两页共用；同步列表行状态防关界面后列表显示过期）
+        String[] sel = this.findSel();
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
+                        b -> {
+                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                    this.selUuid, -1, "", on ? 0 : 1));
+                            this.loadedOn = !on;
+                            if (sel != null) {
+                                sel[4] = this.loadedOn ? "1" : "0";
+                            }
+                            this.m_7856_();
+                        })
+                .m_252987_(toggleLeft, TAB_Y, 90, 18).m_253136_());
         if (this.waiting) {
             return; // 渲染层显示"请求中…"，数据到了 showSchedule 会重建
         }
-        // ---- 1. 班次选择（早班/晚班/全天 三连排；选中高亮金色） ----
-        // v1.1.0 实测五十六【像素级核查修复】：旧版 shiftX0 = cx-132 与右上角排班
-        // 开关（w-120 起）在默认 GUI 宽 427 下重叠 38px（第 3 个按钮右沿 cx+132=345
-        // > 开关左沿 307）、480 宽下仍重叠 12px。改为在【左边距 8 ~ 开关左沿-8】
-        // 的自由区内居中，窄屏自动缩窄按钮宽度——任何分辨率下零重叠
-        boolean on = this.loadedOn;
+        if (this.detailPage == 0) {
+            this.quickPage(w, h, cx, sel);
+        } else {
+            this.schedPage(w, h, cx);
+        }
+    }
+
+    /**
+     * 第 1 页快捷设置（实测五十九恢复）：工作模式 / 任务循环，点击立即生效——
+     * 遥控她"现在"干什么（排班页管的是"一天怎么过"，这页管"此刻"）。
+     * 排班开关在右上角（两页共用），本页不再重复放。
+     */
+    private void quickPage(int w, int h, int cx, String[] sel) {
+        String curTask = sel != null ? sel[2] : "";
+        int qx = Math.max(8, cx - 150);
+        int qw = Math.min(300, w - qx - 8);
+        int y = CONTENT_TOP + 6;
+        // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL，立即生效）
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_("工作模式：\u00a7e"
+                                + MODE_NAMES[Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)))]
+                                + " \u00a78(点击切换)"),
+                        b -> {
+                            int mode = (safeInt(sel != null ? sel[3] : null, 2) + 1) % 3;
+                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                    this.selUuid, mode, "", -1));
+                            if (sel != null) {
+                                sel[3] = String.valueOf(mode);
+                            }
+                            this.m_7856_();
+                        })
+                .m_252987_(qx, y, qw, 20).m_253136_());
+        y += 26;
+        // 任务循环（点一下换下一个；到头回绕；立即生效）
+        if (!this.taskUids.isEmpty()) {
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_("任务：\u00a7e" + taskCn(curTask) + " \u00a78(点击切换)"),
+                            b -> {
+                                int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
+                                String uid = this.taskUids.get(next);
+                                ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                        this.selUuid, -1, uid, -1));
+                                if (sel != null) {
+                                    sel[2] = uid;
+                                }
+                                this.m_7856_();
+                            })
+                    .m_252987_(qx, y, qw, 20).m_253136_());
+        }
+    }
+
+    /**
+     * 第 2 页排班（实测五十一的班次 + 6 任务槽）。实测五十九压缩纵向：
+     * 页签行(28..46)下方班次行(50..68)、6 槽行距 24→22（按钮 20→18，槽区
+     * 72..200），提示(h-38)与底行(h-24)不变——240 高最小窗口下全部放得下且零重叠。
+     */
+    private void schedPage(int w, int h, int cx) {
+        // ---- 班次选择：自由区内居中，窄屏自动缩窄（实测五十六口径） ----
         int toggleLeft = Math.max(4, w - 120);
         int freeL = 8;
         int freeR = toggleLeft - 8;
@@ -204,24 +300,12 @@ public class ScheduleBookScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(shiftX0 + i * (shiftW + 6), TAB_Y, shiftW, 18).m_253136_());
+                    .m_252987_(shiftX0 + i * (shiftW + 6), TAB_Y + 22, shiftW, 18).m_253136_());
         }
-        // 排班开关（右上角，y 与班次行同行 28..46——x 区间已隔离）
-        this.m_142416_(Button.m_253074_(
-                        Component.m_237113_(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
-                        b -> {
-                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                    this.selUuid, -1, "", on ? 0 : 1));
-                            this.loadedOn = !on;
-                            this.m_7856_();
-                        })
-                .m_252987_(toggleLeft, TAB_Y, 90, 18).m_253136_());
-        // ---- 2. 6 个任务槽按钮（一列 6 行，每行 = 时段标签 + 任务按钮） ----
-        // 实测五十六：标签/按钮间距 58→72——"22:00~24:00"实测 58px，旧间距下标签
-        // 右沿与按钮左沿 0px 贴边（字体渲染差异即重叠）；72 间距留 14px 净空
+        // ---- 6 个任务槽按钮（行距 22、按钮高 18——给页签行让出纵向空间） ----
         int bw = Math.min(SLOT_W, w - 180);
         int x = cx - (bw + LABEL_GAP) / 2 + LABEL_GAP;
-        int y = CONTENT_TOP + 2;
+        int y = CONTENT_TOP + 20;
         int[] win = ScheduleData.shiftWindow(this.shift);
         int len = (win[1] - win[0]) / 6;
         for (int i = 0; i < 6; i++) {
@@ -236,13 +320,10 @@ public class ScheduleBookScreen extends Screen {
                                 this.slots[idx] = next == this.taskUids.size() ? "" : this.taskUids.get(next);
                                 b.m_93666_(Component.m_237113_(fitTask(this.slots[idx])));
                             })
-                    .m_252987_(x, y, bw, 20).m_253136_());
-            y += 24;
+                    .m_252987_(x, y, bw, 18).m_253136_());
+            y += 22;
         }
-        // ---- 3. 保存（底区右侧，与"← 女仆列表"同一行） ----
-        // 实测五十六：旧位置 (cx+100, h-52) 与第 6 槽按钮（右沿 cx+104、下沿 194）
-        // 在所有宽度下角部重叠 4×6px（h-52=188 < 194）；h-24 行槽区早已结束（194
-        // < 216），且与左下返回按钮分列两端（中缝 ≥ 96px），零重叠
+        // ---- 保存（底区右侧，与"← 女仆列表"同一行；攒一次提交防频繁 rebuild brain） ----
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a保存日程"), b -> this.saveSchedule())
                 .m_252987_(w - 112, h - 24, 100, 20).m_253136_());
     }
@@ -268,9 +349,9 @@ public class ScheduleBookScreen extends Screen {
                 12, 0xFF8B1A1A);
         if (this.view == VIEW_LIST) {
             g.m_280653_(this.f_96547_, Component.m_237113_("\u00a7d\u00a7o排班表\u00a7r\u00a7c——选择女仆"), cx, TOP_TITLE_Y, 0xFFFFFF);
-            // 实测五十六：副标题同步实测五十一的新 UI（旧文案还在描述已移除的快捷设置 tab）
+            // 实测五十九：副标题同步两页结构（第 1 页快捷设置 / 第 2 页排班）
             g.m_280653_(this.f_96547_, Component.m_237113_(
-                            "\u00a77点女仆进入排班：选班次，6 个时段各安排一个任务"), cx, TOP_TITLE_Y + 12, 0xAAAAAA);
+                            "\u00a77点女仆进入：第 1 页快捷设置（立即生效），第 2 页排班表"), cx, TOP_TITLE_Y + 12, 0xAAAAAA);
             int rowsPerPage = Math.max(1, Math.min(8, (h - 56 - 44) / LIST_ROW_H));
             int tp = Math.max(1, (this.maids.size() + rowsPerPage - 1) / rowsPerPage);
             if (tp > 1) {
@@ -285,28 +366,30 @@ public class ScheduleBookScreen extends Screen {
                             "\u00a7d\u00a7o" + this.selName + "\u00a7r\u00a7c 的排班"), cx, TOP_TITLE_Y, 0xFFFFFF);
             if (this.waiting) {
                 g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77请求中…"), cx, CONTENT_TOP + 6, 0xAAAAAA);
-            } else {
-                // 每槽时段标签（左侧，与任务按钮同行；实测五十一）
-                // 实测五十六：lx 用与 detailButtons 相同的 LABEL_GAP 公式（旧 58 间距下
+            } else if (this.detailPage == 1) {
+                // 第 2 页排班：每槽时段标签（左侧，与任务按钮同行；实测五十一）
+                // 实测五十六：lx 用与 schedPage 相同的 LABEL_GAP 公式（旧 58 间距下
                 // "22:00~24:00"（58px）右沿与按钮左沿 0px 贴边）
+                // 实测五十九：纵向随 schedPage 压缩（行距 22、按钮高 18 → 标签 y+5 居中）
                 int[] win = ScheduleData.shiftWindow(this.shift);
                 int len = (win[1] - win[0]) / 6;
                 int bw = Math.min(SLOT_W, w - 180);
                 int lx = cx - (bw + LABEL_GAP) / 2;
-                int y = CONTENT_TOP + 2;
+                int y = CONTENT_TOP + 20;
                 for (int i = 0; i < 6; i++) {
                     String label = ScheduleData.fmt(win[0] + len * i) + "~" + ScheduleData.fmt(win[0] + len * (i + 1));
                     g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + label),
-                            lx, y + 6, 0xFFE5A0A0, false);
-                    y += 24;
+                            lx, y + 5, 0xFFE5A0A0, false);
+                    y += 22;
                 }
-                // 实测五十六：提示从 (8, h-8) 移到槽区与底行按钮之间的空档居中——旧位置
-                // 与"← 女仆列表"（y h-24..h-4，x 12..112）重叠，按钮后渲染把提示前
-                // 17 个字盖住（"字幕被遮挡"）。h-38 行：槽区下沿 194 之下、按钮行上沿
-                // h-24 之上，240 高最小窗口下两侧净空 8/5px；文案缩短到 ~237px，
-                // 320 最小宽度下左右仍各余 41px
+                // 提示在槽区（下沿 200）与底行（h-24）之间的空档居中（实测五十六口径）
                 g.m_280653_(this.f_96547_, Component.m_237113_(
                                 "\u00a77选班次 → 每段点一个任务（可重复）→ 保存；休息按作息睡觉"),
+                        cx, h - 38, 0xFFE5A0A0);
+            } else {
+                // 第 1 页快捷设置：提示放同一条空档线（h-38），与两行按钮零重叠
+                g.m_280653_(this.f_96547_, Component.m_237113_(
+                                "\u00a77点击立即生效：遥控她现在的作息与任务；排一天班去第 2 页"),
                         cx, h - 38, 0xFFE5A0A0);
             }
         }
