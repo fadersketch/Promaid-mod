@@ -807,6 +807,20 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 this.scanCooldown = 5;
                 this.targetPos = this.findWood(level, maid, anchor);
                 if (this.targetPos == null) {
+                // v1.1.0 实测五十四（用户："站到挖掉的树干位置发呆，对头顶较高的木头
+                // 视而不见"）：扫描框/排除表都给不出目标时，先【抬头看一眼】——脚下
+                // 正上方同柱还有木材就直接当目标（树洞场景最终兜底：挖掉树干下几节
+                // 站进洞里后，剩余树干就在头顶，不该对着它发呆）。刚弃置 30 秒内的
+                // 头顶木材仍跳过（没垫脚材料时让她照常迁移换树，不原地吊死）
+                BlockPos aboveIdle = this.firstWoodAbove(level, maid);
+                java.util.Map<BlockPos, Long> discIdle = RECENT_DISCARD.get(maid.m_19879_());
+                if (aboveIdle != null
+                        && (discIdle == null || !discIdle.containsKey(aboveIdle.m_7949_()))) {
+                    this.targetPos = aboveIdle;
+                    TARGET_SINCE.put(maid.m_19879_(), gameTime);
+                    WOODING.add(maid.m_20148_());
+                    return;
+                }
                 // v1.5.140：挖矿空闲（附近无矿）→ 退出"挖矿中"标记，拾取任务恢复正常
                 //（用户反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
                 WOODING.remove(maid.m_20148_());
@@ -1287,10 +1301,17 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // → 旧版就此卡死：不垫、不走、也不挖头顶的木头，"站树洞里发呆"根因）。
             // 修复：把目标改为头顶正上方第一块木材（下一 tick 走正常挖掘入口——
             // 伸手范围内直接挖掉，逐节往上啃完整棵树，不需要垫方块）
+            // v1.1.0 实测五十四：目标已经是头顶木材（above == t，垫块冷却中/没材料
+            // /防窒息暂不可垫）→ 原地等待重试，【不再跌进 walkToWoodBase】——头顶
+            // 目标的"站立点"全是导航去不了的空中格（findStandNearWood 兜底已删，
+            // 但 walkTargetFor 仍可能选出树冠里的悬空格），走到垃圾目标 = 发呆。
+            // 等待期间 15 秒目标超时照常生效（够不着且零进度 → 弃置换树）
             BlockPos above = this.firstWoodAbove(level, maid);
-            if (above != null && !above.equals(t)) {
-                this.targetPos = above;
-                TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+            if (above != null) {
+                if (!above.equals(t)) {
+                    this.targetPos = above;
+                    TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+                }
                 return;
             }
         }
@@ -1443,14 +1464,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         if (best != null) {
             return best;
         }
-        // 兜底：矿正上方向上的最近空气（旧逻辑；仅当扩展圈都无立足点时）
-        int sy = t.m_123342_();
-        for (int y = sy + 1; y < sy + 5; y++) {
-            BlockPos cand = new BlockPos(t.m_123341_(), y, t.m_123343_());
-            if (level.m_8055_(cand).m_60795_()) {
-                return cand;
-            }
-        }
+        // v1.1.0 实测五十四：删除"目标正上方向上找最近空气格"兜底——伐木目标是
+        // 竖直树干，扩展圈全部无立足点时，树干上方的空气格是【导航去不了的空中格】
+        // （悬空、无支撑），设为移动目标后寻路必失败 → 女仆站坑发呆（站树洞里
+        // 盯着头顶树干发呆的组成环节之一）。改返回 null：walkToWoodBase 对 null
+        // 的既有处理是直接朝树干坐标走——走到树跟前，够得着就挖、够不着搭高接管。
         return null;
     }
 
