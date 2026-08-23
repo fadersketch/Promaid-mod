@@ -1281,6 +1281,17 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 maid.m_21573_().m_26573_();
                 return;
             }
+            // v1.1.0 实测四十七：垫不上去（典型场景：女仆挖掉树干下 3 节后站进
+            // 树洞，头顶就是树干本体——pillarUpStep 的防窒息检查拒绝在树洞里垫块
+            // → 旧版就此卡死：不垫、不走、也不挖头顶的木头，"站树洞里发呆"根因）。
+            // 修复：把目标改为头顶正上方第一块木材（下一 tick 走正常挖掘入口——
+            // 伸手范围内直接挖掉，逐节往上啃完整棵树，不需要垫方块）
+            BlockPos above = this.firstWoodAbove(level, maid);
+            if (above != null && !above.equals(t)) {
+                this.targetPos = above;
+                TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+                return;
+            }
         }
         // 2) 斜上方矿：向前垫台阶（斜坡），水平+垂直同时逼近
         // v1.5.113：垫完【走一步到刚垫的台阶上】——旧版垫完只 walkToWoodBase
@@ -1318,6 +1329,22 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             this.walkRetargetCooldown = 10;
             this.walkToWoodBase(level, maid, t);
         }
+    }
+
+    /**
+     * v1.1.0 实测四十七：找女仆头顶正上方（同柱）最近的木材块（最多 8 格）。
+     * 用于"站树洞里头顶就是树干"场景——pillarUpStep 防窒息拒绝垫块时，
+     * 改挖头顶树干逐节往上啃，不再站桩发呆。
+     */
+    private BlockPos firstWoodAbove(ServerLevel level, EntityMaid maid) {
+        BlockPos feet = maid.m_20183_();
+        for (int dy = 2; dy <= 10; dy++) {
+            BlockPos p = feet.m_7918_(0, dy, 0);
+            if (this.isWood(level, p) && !isWoodingPlaced(level, p)) {
+                return p;
+            }
+        }
+        return null;
     }
 
     /**
