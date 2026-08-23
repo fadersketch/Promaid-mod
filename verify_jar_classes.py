@@ -5,7 +5,7 @@ import os, sys, glob, zipfile
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(BASE, "out_promaid")
-JAR = os.path.join(BASE, "patched", "promaid-1.0.2.jar")
+JAR = os.path.join(BASE, "patched", "promaid-1.1.0.jar")
 
 z = zipfile.ZipFile(JAR)
 names = set(z.namelist())
