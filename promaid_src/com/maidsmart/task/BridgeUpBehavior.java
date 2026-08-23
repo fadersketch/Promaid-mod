@@ -49,57 +49,36 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /** bridging 标记（persistentData——MaidTeleportPreserveMixin 拦传送用） */
     public static final String BRIDGING_TAG = "maid_smart_bridging";
 
-    /** 搭方块放置追踪：维度 → 位置 → 放置 tick（到期销毁变掉落物） */
-    private record PlacedMark(long tick, String blockId) {
+    /** v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆（到期强制进她背包，
+     *  不再 8 格附近查找）+ 魂符收回暂停计时。 */
+    static final PlacedBlockTracker PLACED_TRACKER = new PlacedBlockTracker(
+            () -> MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L);
+
+    private static void track(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
+        PLACED_TRACKER.track(level, pos, block, maid);
     }
 
-    private static final Map<net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>,
-            Map<BlockPos, PlacedMark>> PLACED = new HashMap<>();
-
-    private static void track(ServerLevel level, BlockPos pos, Block block) {
-        ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
-        PLACED.computeIfAbsent(level.m_46472_(), k -> new HashMap<>())
-                .put(pos.m_7949_(), new PlacedMark(level.m_46467_(), key != null ? key.toString() : ""));
+    /** 到期搭方块销毁（ProMaidExtension 每 tick 调）
+     *  v1.1.0 实测四十二：改走 PlacedBlockTracker（绑定搭建者/魂符暂停） */
+    public static void expirePlaced(net.minecraft.server.MinecraftServer server, long gameTime) {
+        PLACED_TRACKER.expirePlaced(server, gameTime,
+                pos -> anyMaidStanding(server, pos));
     }
 
-    /** 到期搭方块销毁（ProMaidExtension 每 tick 调；女仆站上面延后一轮） */
-    public static void expirePlaced(ServerLevel level, long gameTime) {
-        Map<BlockPos, PlacedMark> marks = PLACED.get(level.m_46472_());
-        if (marks == null || marks.isEmpty()) {
-            return;
-        }
-        long lifetime = MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L;
-        Iterator<Map.Entry<BlockPos, PlacedMark>> it = marks.entrySet().iterator();
-        while (it.hasNext()) {
-            Map.Entry<BlockPos, PlacedMark> e = it.next();
-            if (gameTime - e.getValue().tick < lifetime) {
-                continue;
+    /** 任意维度的存活女仆站在该位置（跨维度判定；实测四十二） */
+    private static boolean anyMaidStanding(net.minecraft.server.MinecraftServer server, BlockPos pos) {
+        for (ServerLevel lvl : server.m_129785_()) {
+            if (PlacedBlockTracker.anyMaidStanding(lvl, pos, m -> true)) {
+                return true;
             }
-            BlockPos pos = e.getKey();
-            if (supportsBridger(level, pos)) {
-                // v1.1.0 实测十八：站在上面【刷新计时】而不是无限延后（同挖矿/
-                // 伐木修复）——空中搭桥的女仆在桥上停留时脚下块重置寿命，走开
-                // 后还有完整 10 秒缓冲，不会整段桥瞬间全到期摔下去
-                e.setValue(new PlacedMark(gameTime, e.getValue().blockId));
-                continue;
-            }
-            it.remove();
-            destroyMarked(level, pos, e.getValue());
         }
+        return false;
     }
 
-    /** 服务器停止清场（残留方块立即回收） */
+    /** 服务器停止清场（残留方块立即回收）
+     *  v1.1.0 实测四十二：改走 PlacedBlockTracker.clearAll */
     public static void clearAll(net.minecraft.server.MinecraftServer server) {
-        for (ServerLevel level : server.m_129785_()) {
-            Map<BlockPos, PlacedMark> marks = PLACED.remove(level.m_46472_());
-            if (marks == null) {
-                continue;
-            }
-            for (Map.Entry<BlockPos, PlacedMark> e : marks.entrySet()) {
-                destroyMarked(level, e.getKey(), e.getValue());
-            }
-        }
-        PLACED.clear();
+        PLACED_TRACKER.clearAll(server);
     }
 
     /**
@@ -115,27 +94,19 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     private static boolean supportsBridger(ServerLevel level, BlockPos pos) {
-        for (EntityMaid m : level.m_45976_(EntityMaid.class, new AABB(pos).m_82400_(2.0))) {
-            if (!m.m_6084_()) {
-                continue;
-            }
-            BlockPos feet = m.m_20183_();
-            if (feet.m_7949_().equals(pos) || feet.m_7918_(0, -1, 0).m_7949_().equals(pos)) {
-                return true;
-            }
-        }
-        return false;
+        return PlacedBlockTracker.anyMaidStanding(level, pos, m -> true);
     }
 
-    /** 销毁一个追踪方块：已被玩家换掉的不误破坏；掉落物走女仆拾取
-     *  v1.1.0：bridge.reclaimToMaid 开启时掉落物直接塞回附近女仆背包，不落地 */
-    private static void destroyMarked(ServerLevel level, BlockPos pos, PlacedMark mark) {
+    /** 销毁一个追踪方块：v1.1.0 实测四十二后由 PlacedBlockTracker 内部处理，
+     *  本方法保留给 isOwnPlaced 相关旧引用（实际已无调用者）。 */
+    @SuppressWarnings("unused")
+    private static void destroyMarked(ServerLevel level, BlockPos pos, String blockId) {
         var state = level.m_8055_(pos);
         if (state.m_60795_()) {
             return;
         }
         ResourceLocation cur = ForgeRegistries.BLOCKS.getKey(state.m_60734_());
-        if (!mark.blockId.isEmpty() && cur != null && !mark.blockId.equals(cur.toString())) {
+        if (!blockId.isEmpty() && cur != null && !blockId.equals(cur.toString())) {
             return; // 玩家已替换，尊重改动
         }
         level.m_46796_(2001, pos, Block.m_49956_(state));
@@ -207,8 +178,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return true; // 悬空/下落中
         }
         BlockPos under = feet.m_7918_(0, -1, 0);
-        Map<BlockPos, PlacedMark> marks = PLACED.get(level.m_46472_());
-        if (marks != null && marks.containsKey(under)) {
+        if (PLACED_TRACKER.isPlaced(level, under)) {
             return true; // 站在自己垫的方块上（塔/桥——地面导航够不着主人）
         }
         return false;
@@ -419,7 +389,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false;
         }
         level.m_7731_(fill, block.m_49966_(), 3);
-        track(level, fill, block);
+        track(level, fill, block, maid);
         // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
@@ -460,7 +430,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false;
         }
         level.m_7731_(fill, block.m_49966_(), 3);
-        track(level, fill, block);
+        track(level, fill, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         level.m_46796_(3001, fill, Block.m_49956_(block.m_49966_()));
@@ -558,7 +528,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return;
         }
         level.m_7731_(place, block.m_49966_(), 3);
-        track(level, place, block);
+        track(level, place, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         level.m_46796_(3001, place, Block.m_49956_(block.m_49966_()));
@@ -638,8 +608,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     private static boolean isOwnPlaced(ServerLevel level, BlockPos pos) {
-        Map<BlockPos, PlacedMark> marks = PLACED.get(level.m_46472_());
-        return marks != null && marks.containsKey(pos.m_7949_());
+        return PLACED_TRACKER.isPlaced(level, pos);
     }
 
     private static boolean hasThreatNearby(ServerLevel level, EntityMaid maid) {
