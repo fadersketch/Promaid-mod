@@ -132,6 +132,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.BuildPlan.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
+        // v1.1.0 实测四十四：撤掉全部女仆区块强制加载票（防票残留锁区块）
+        com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
     }
 
     /**
@@ -170,9 +172,11 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.task.MaidWoodBehavior.purgeStaleMaids(server);
         }
         // v1.5.142：每 5 秒扫描跟随女仆是否与主人跨维度 → 传送到主人身边
+        // v1.1.0 实测四十四：并入 MaidChunkLoadManager——区块强制加载（真·随时
+        // 可传送）+ 原版 teleportTo 跨维度跟随
         if (++this.dimFollowTimer >= 100) {
             this.dimFollowTimer = 0;
-            com.maidsmart.follow.MaidDimensionFollow.tick(server);
+            com.maidsmart.follow.MaidChunkLoadManager.tick(server);
         }
         // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
         // → 移除并原地丢一个完全一样的到地上）
