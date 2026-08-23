@@ -325,7 +325,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.130：产出型任务专项增强（农场连收连种 / 钓鱼主动找水带坐垫）
     public static final ForgeConfigSpec.BooleanValue MISC_PRODUCE_TASK_ENHANCE;
     // v1.5.142：跟随女仆跨维度传送（主人换维度后 5 秒内传送到主人身边）
-    public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+     public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+     public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ForgeConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1053,6 +1054,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // v1.5.142：跨维度跟随
         MISC_DIMENSION_FOLLOW = BUILDER.comment("跟随女仆跨维度传送（主人换维度后，跟随模式女仆自动传送到主人身边；坐着的/在家模式的女仆不拉）")
                 .translation("config.promaid.misc.dimensionFollow").define("dimensionFollow", true);
+        // v1.1.0 实测四十四：女仆区块强制加载（"约等于玩家"）——与主人不同维度的
+        // 女仆所在区块挂强制加载票（实体正常 ticking），保证跨维度跟随/死亡传送
+        // 永远能找到她（旧版主人在远处的女仆区块卸载后传送静默失效）
+        MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（与主人不同维度的女仆所在区块保持加载，随时可跨维度传送；关闭后远处女仆所在区块卸载时无法传送）")
+                .translation("config.promaid.misc.maidChunkLoad").define("maidChunkLoad", true);
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
