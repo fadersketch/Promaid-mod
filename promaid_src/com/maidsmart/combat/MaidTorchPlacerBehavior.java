@@ -113,7 +113,9 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        this.torchCooldown = 30; // 1.5 秒
+        // v1.1.0 实测三十一（用户："插火把频率仍然不够，间隔减半"）：
+        // 30 tick（1.5 秒）→ 15 tick（0.75 秒）
+        this.torchCooldown = 15; // 0.75 秒
     }
 
     /**
