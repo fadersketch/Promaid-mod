@@ -475,10 +475,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.mine.junkKeep").defineInRange("junkKeep", 32, 4, 128);
         MINE_PLACED_LIFETIME = BUILDER.comment("搭方块自动清理时间（秒）")
                 .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
-        // v1.5.138：默认改为 false——与伐木一致，每次挖块都扣镐耐久
-        //（旧默认 true 时软方块开路不磨损，用户反馈"挖矿不消耗耐久"；
-        //  已生成配置请在面板"软方块不耗耐久"关闭）
-        MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认关——与伐木一致每次都扣）")
+        // v1.1.0 实测二十七：默认开启——软方块（徒手可挖）不磨损镐，与伐木一致。
+        // v1.5.138 曾改 false（用户反馈"挖矿不消耗耐久"），实测二十七按新需求改回。
+        MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致）")
                 .translation("config.promaid.mine.softNoDurability").define("softNoDurability", true);
         MINE_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
                 .translation("config.promaid.mine.pillarGuard").define("pillarGuard", true);
