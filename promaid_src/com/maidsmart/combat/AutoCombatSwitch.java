@@ -64,7 +64,14 @@ public class AutoCombatSwitch {
     /** 主人被攻击（任意来源）→ 附近女仆切战斗
      *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
      *  非标准敌对生物、环境伤害都不触发。现改为任意来源受伤即触发（自伤除外）。
-     */
+     *
+     *  v1.1.0 实测三十六（用户："主人满血受伤仍不触发，当时拿的是卓越前线充能手枪"）：
+     *  LivingHurtEvent 不是唯一的"主人受伤"信号——SBW（卓越前线）等枪械模组的
+     *  伤害走自定义管线（DamageHandler 自管伤害计算），受伤事件可能【不发】或
+     *  被其他订阅者【取消】（EF/SBW 都会 cancel LivingHurtEvent 改走自己的减伤）。
+     *  兑底方案：同时监听 LivingAttackEvent（受伤链最上游，cancel 之前必经）+
+     *  LivingDamageEvent（结算层）——三个事件任何一个先到就触发，后到的被节流
+     *  跳过（同一次攻击只切一次）。 */
     @SubscribeEvent
     public void onOwnerHurt(LivingHurtEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) {
@@ -78,6 +85,56 @@ public class AutoCombatSwitch {
         if (event.getSource() == null || event.getSource().m_7639_() == player) {
             return;
         }
+        this.tryTrigger(player);
+    }
+
+    /** v1.1.0 实测三十六：LivingAttackEvent 兑底——受伤链最上游（hurt() 开头就发，
+     *  在任何模组 cancel LivingHurtEvent 之前必然经过）。 */
+    @SubscribeEvent
+    public void onOwnerAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        if (event.getSource() == null || event.getSource().m_7639_() == player) {
+            return;
+        }
+        this.tryTrigger(player);
+    }
+
+    /** v1.1.0 实测三十六：LivingDamageEvent 兑底——结算层事件（LivingHurtEvent 之后；
+     *  枪械模组自定义管线常直接走到这层）。 */
+    @SubscribeEvent
+    public void onOwnerDamaged(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        if (event.getSource() == null || event.getSource().m_7639_() == player) {
+            return;
+        }
+        this.tryTrigger(player);
+    }
+
+    /** v1.1.0 实测三十六：三事件去重节流——同一玩家 20 tick（1 秒）内多个事件
+     *  只触发一次切换扫描（Attack/Hurt/Damage 三连发是同一次攻击的正常现象） */
+    private final java.util.Map<java.util.UUID, Long> triggerThrottle = new java.util.HashMap<>();
+
+    private void tryTrigger(ServerPlayer player) {
+        long now = player.m_9236_().m_46467_();
+        Long last = this.triggerThrottle.get(player.m_20148_());
+        if (last != null && now - last < 20L) {
+            return;
+        }
+        this.triggerThrottle.put(player.m_20148_(), now);
+        com.mojang.logging.LogUtils.getLogger().info(
+                "auto-combat trigger: owner={} hp={}/{}",
+                player.m_5446_().getString(),
+                String.format("%.0f", player.m_21223_()), String.format("%.0f", player.m_21233_()));
         switchNearbyMaids(player);
     }
 
@@ -90,6 +147,9 @@ public class AutoCombatSwitch {
      * 是玩家、来源又是玩家的组合只在"玩家打玩家"才成立；主人打怪时受害者是
      * Monster，第一个 if 直接 return，主动开火触发从未生效。正确写法：
      * 受害者任意、【来源】是玩家才算"主人开火"。
+     *
+     * v1.1.0 实测三十六：补 LivingDamageEvent 来源侧监听——SBW 枪械伤害走自定义
+     * 管线时 LivingHurtEvent 可能不发，结算层事件兜底。
      */
     @SubscribeEvent
     public void onOwnerAttack(net.minecraftforge.event.entity.living.LivingHurtEvent event) {
@@ -98,6 +158,22 @@ public class AutoCombatSwitch {
             return;
         }
         // 打的是自己的女仆不算开战（误伤/管教场景）
+        if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
+            return;
+        }
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        switchNearbyMaids(attacker);
+    }
+
+    /** v1.1.0 实测三十六：主人开火的 LivingDamageEvent 兜底（同 onOwnerAttack 的
+     *  来源侧判定，事件换结算层）。 */
+    @SubscribeEvent
+    public void onOwnerAttackDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        if (!(event.getSource() != null && event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
+            return;
+        }
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
             return;
         }
