@@ -427,6 +427,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // m_5584_ = LivingEntity.eat(Level, ItemStack)——真实进食
                     //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
                     sister.m_5584_(sister.m_9236_(), taken);
+                    // v1.1.0 实测三十四修复（用户："喂其他女仆蜂蜜没有效果，解不了
+                    // 中毒；对主人的路径仍然生效"）：eat() 只加饱食/食物效果——
+                    // 原版"喝蜂蜜解中毒"发生在 HoneyBottleItem.finishUsingItem
+                    //（玩家喝完才触发），eat() 不经过它 → 姐妹中毒不解。主人链
+                    // feedFoodDirect 里是手搓的 m_21195_(poison) 才生效的。这里
+                    // 补同款解中毒（m_21195_ = removeEffect）。
+                    sister.m_21195_(net.minecraft.world.effect.MobEffects.f_19614_);
+                    // v1.1.0 实测三十二：喝蜂蜜音效（eat() 对非玩家实体不出声）
+                    playSoundAt(sister, "minecraft:entity.generic.drink");
                     // v1.1.0 实测十六（审查 P3）：蜂蜜玻璃瓶返还喂食者背包——
                     // 旧版吃完蜂蜜不返还瓶子（主人链 feedFoodDirect 有返还逻辑，
                     // 姐妹链漏了），物品凭空消失
