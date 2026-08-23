@@ -17,7 +17,8 @@ import net.minecraft.world.level.Level;
  * （00:00～24:00 分段编排一天干什么，按游戏内时间自动切换）。
  * UI 结构仿 Promaid 手册（BlueprintBookScreen）。
  *
- * v1.1.0 实测十一（用户："排班表要有附魔书那种特效"）——附魔光效。
+ * v1.1.0 实测十一（用户："排班表要有附魔书那种特效"）——附魔光效（v1.1.0 实测五十
+ * 确认仍生效）。
  * 【实现教训】不能 override isFoil(m_7807_) 恒 true：原版 ServerPlayer.m_9240_
  * （每 tick 检查主手物品）对 isFoil()==true 的物品【无条件强转 ComplexItem】
  * （原版只有地图等 ComplexItem 会返回 true）——普通物品返回 true 直接
