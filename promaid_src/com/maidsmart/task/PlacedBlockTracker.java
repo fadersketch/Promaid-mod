@@ -83,12 +83,22 @@ public final class PlacedBlockTracker {
                 Map.Entry<BlockPos, Mark> e = it.next();
                 BlockPos pos = e.getKey();
                 Mark mark = e.getValue();
+                // 实测四十七：绑定女仆本人站上方块 → 恒刷新（她挖矿/伐木的"挖矿中"
+                // 标记在空闲扫描期会短暂移除，但脚下还是自己的垫块——不刷新就塌）。
+                // 谓词 stoodOnCheck 覆盖其他场景（同任务姐妹借踩/搭路任意踩）。
+                boolean ownerOn = false;
+                EntityMaid owner = findMaid(server, mark.maidUuid());
+                if (owner != null) {
+                    BlockPos feet = owner.m_20183_();
+                    if (feet.m_7949_().equals(pos) || feet.m_7918_(0, -1, 0).m_7949_().equals(pos)) {
+                        ownerOn = true;
+                    }
+                }
                 // 女仆站在上面 → 刷新寿命（防脚下塌陷；实测十八同款）
-                if (stoodOnCheck.test(pos)) {
+                if (ownerOn || stoodOnCheck.test(pos)) {
                     e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
-                EntityMaid owner = findMaid(server, mark.maidUuid());
                 if (owner == null) {
                     // 绑定女仆不在线（魂符收回/区块卸载）→ 暂停倒计时（remainTicks 不减）
                     continue;

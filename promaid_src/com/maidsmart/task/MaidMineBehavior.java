@@ -485,6 +485,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      *  是否有挖矿女仆站着（脚下/所在格），有则下轮再清（走开即清，不残留）。
      *  v1.1.0 实测四十二：改走 PlacedBlockTracker（绑定搭建者/魂符暂停）。 */
     public static void expirePlaced(net.minecraft.server.MinecraftServer server, long gameTime) {
+        // v1.1.0 实测四十七：站方块刷新寿命有两道判定（tracker 内实现）——
+        // ①绑定女仆本人站在方块上 → 恒刷新（挖矿标记 MINING 在"空闲无矿"时
+        // 会移除，但女仆仍站在垫脚方块上等扫描/迁移，旧版只查 MINING 成员
+        // → 方块在她脚下照常倒计时到期 = "挖矿/伐木没落实站上刷新"根因）；
+        // ②本谓词：任意【正在挖矿】的女仆踩上去也刷新（同任务姐妹借踩不塌）。
         PLACED_TRACKER.expirePlaced(server, gameTime,
                 pos -> anyMaidStanding(server, pos, m -> MINING.contains(m.m_20148_())));
     }
