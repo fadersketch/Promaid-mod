@@ -48,43 +48,69 @@ public final class ScheduleNetworking {
                 SchedDataPacket::encode, SchedDataPacket::decode, SchedDataPacket::handle);
         CHANNEL.registerMessage(4, SchedSavePacket.class,
                 SchedSavePacket::encode, SchedSavePacket::decode, SchedSavePacket::handle);
+        // v1.1.0 实测六十（借鉴 Maid_Roster 军队管理）：批量应用 / 一键集合 / 改名
+        CHANNEL.registerMessage(6, BatchApplyPacket.class,
+                BatchApplyPacket::encode, BatchApplyPacket::decode, BatchApplyPacket::handle);
+        CHANNEL.registerMessage(7, SummonPacket.class,
+                SummonPacket::encode, SummonPacket::decode, SummonPacket::handle);
+        CHANNEL.registerMessage(8, RenameMaidPacket.class,
+                RenameMaidPacket::encode, RenameMaidPacket::decode, RenameMaidPacket::handle);
     }
 
     /* ==================== 打开 UI ==================== */
 
-    /** 服务端：收集女仆列表 + 任务清单，给玩家发打开包（排班表物品右键调用） */
+    /** 服务端：收集女仆列表 + 任务清单，给玩家发打开包（排班表物品右键调用）
+     *  v1.1.0 实测六十：扫描【全部维度】（旧版只扫玩家所在维度——下界/末地的
+     *  女仆直接消失在列表里）；条目扩到 8 字段：+血量百分比 + 维度标签
+     *  （空串 = 与玩家同维度不显示），借鉴 Maid_Roster 的状态显示（在场/其他维度）*/
     public static void openFor(ServerPlayer player) {
         if (!(player.m_9236_() instanceof ServerLevel level)) {
             return;
         }
-        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数}
+        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数, 血量%, 维度标签}
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
-        for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
-            if (!(e instanceof EntityMaid m) || !m.m_6084_()) {
-                continue;
-            }
-            if (!m.m_21830_(player)) {
-                continue; // 只列自己的女仆
-            }
-            String taskUid = m.getTask() == null ? "touhou_little_maid:idle"
-                    : m.getTask().getUid().toString();
-            int mode = m.getSchedule() == null ? 2 : m.getSchedule().ordinal();
-            maids.add(new String[]{m.m_20148_().toString(), m.m_5446_().getString(),
-                    taskUid, String.valueOf(mode),
-                    ScheduleData.isOn(m) ? "1" : "0",
-                    String.valueOf(ScheduleData.load(m).size())});
-            // 任务清单：用第一只女仆生成（隐藏任务因女仆而异，取代表）
-            if (taskUids.isEmpty()) {
-                try {
-                    for (var task : TaskManager.getNotHiddenTaskList(m)) {
-                        taskUids.add(task.getUid().toString());
+        for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+            for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                if (!(e instanceof EntityMaid m) || !m.m_6084_()) {
+                    continue;
+                }
+                if (!m.m_21830_(player)) {
+                    continue; // 只列自己的女仆
+                }
+                String taskUid = m.getTask() == null ? "touhou_little_maid:idle"
+                        : m.getTask().getUid().toString();
+                int mode = m.getSchedule() == null ? 2 : m.getSchedule().ordinal();
+                int hp = (int) Math.round(m.m_21233_() / Math.max(1.0f, m.m_21223_()) * 100.0f);
+                String dimTag = "";
+                if (lvl != level) {
+                    dimTag = switch (lvl.m_46472_().m_135782_().m_135815_()) {
+                        case "overworld" -> "主世界";
+                        case "the_nether" -> "下界";
+                        case "the_end" -> "末地";
+                        default -> lvl.m_46472_().m_135782_().m_135815_();
+                    };
+                }
+                maids.add(new String[]{m.m_20148_().toString(), m.m_5446_().getString(),
+                        taskUid, String.valueOf(mode),
+                        ScheduleData.isOn(m) ? "1" : "0",
+                        String.valueOf(ScheduleData.load(m).size()),
+                        String.valueOf(hp), dimTag});
+                // 任务清单：用第一只女仆生成（隐藏任务因女仆而异，取代表）
+                if (taskUids.isEmpty()) {
+                    try {
+                        for (var task : TaskManager.getNotHiddenTaskList(m)) {
+                            taskUids.add(task.getUid().toString());
+                        }
+                    } catch (Exception ignored) {
                     }
-                } catch (Exception ignored) {
+                }
+                if (maids.size() >= 200) {
+                    break; // 极端数量保护（与手册一致）
                 }
             }
             if (maids.size() >= 200) {
-                break; // 极端数量保护（与手册一致）
+                break;
             }
         }
         maids.sort(java.util.Comparator.comparing(a -> a[1]));
@@ -105,7 +131,7 @@ public final class ScheduleNetworking {
         public static void encode(OpenSchedulePacket pkt, FriendlyByteBuf buf) {
             buf.writeInt(pkt.maids.size());
             for (String[] m : pkt.maids) {
-                for (int i = 0; i < 6; i++) {
+                for (int i = 0; i < 8; i++) {
                     buf.m_130072_(m[i], 256);
                 }
             }
@@ -120,7 +146,8 @@ public final class ScheduleNetworking {
             List<String[]> maids = new ArrayList<>();
             for (int i = 0; i < n; i++) {
                 maids.add(new String[]{buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256),
-                        buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256)});
+                        buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256),
+                        buf.m_130136_(256), buf.m_130136_(256)});
             }
             int tn = buf.readInt();
             List<String> tasks = new ArrayList<>();
@@ -348,6 +375,182 @@ public final class ScheduleNetworking {
                 ScheduleData.save(maid, safe, pkt.on);
                 // 保存后立即按当前时间应用一次（不用等下一个整分检查）
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /* ==================== 批量应用 / 一键集合 / 改名（实测六十，借鉴 Maid_Roster） ==================== */
+
+    /** C2S 批量应用：mode 0~2 应用工作模式（-1 = 跳过）；taskUid 非空应用任务。
+     *  作用于主人【全部已加载女仆】（跨维度扫描——与列表页全维度口径一致）。
+     *  未加载区块里的女仆不在线上找不到，天然跳过（Maid_Roster 靠点名册存位置
+     *  才能唤醒，我们不做绑定，这是唯一学不来的部分）。 */
+    public static class BatchApplyPacket {
+        public final int mode;
+        public final String taskUid;
+
+        public BatchApplyPacket(int mode, String taskUid) {
+            this.mode = mode;
+            this.taskUid = taskUid == null ? "" : taskUid;
+        }
+
+        public static void encode(BatchApplyPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.mode);
+            buf.m_130072_(pkt.taskUid, 256);
+        }
+
+        public static BatchApplyPacket decode(FriendlyByteBuf buf) {
+            return new BatchApplyPacket(buf.readInt(), buf.m_130136_(256));
+        }
+
+        public static void handle(BatchApplyPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                var modes = com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule.values();
+                boolean applyMode = pkt.mode >= 0 && pkt.mode < modes.length;
+                boolean applyTask = pkt.taskUid != null && !pkt.taskUid.isEmpty()
+                        && net.minecraft.resources.ResourceLocation.m_135830_(pkt.taskUid);
+                if (!applyMode && !applyTask) {
+                    return;
+                }
+                int applied = 0;
+                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                        if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
+                            continue;
+                        }
+                        boolean changed = false;
+                        if (applyMode) {
+                            m.setSchedule(modes[pkt.mode]);
+                            changed = true;
+                        }
+                        if (applyTask) {
+                            try {
+                                TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                                        .ifPresent(t -> {
+                                            m.setTask(t);
+                                            touchAppliedKey(m, lvl);
+                                        });
+                                changed = true;
+                            } catch (Exception ignored) {
+                            }
+                        }
+                        if (changed) {
+                            applied++;
+                        }
+                    }
+                }
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "§a已为 " + applied + " 名女仆更新设置"), false);
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** C2S 一键集合：把主人全部已加载女仆（跨维度）传送到身边。
+     *  传送复用实测四十四的真传送链路（teleportTo + 落点找站立格）。 */
+    public static class SummonPacket {
+
+        public SummonPacket() {
+        }
+
+        public static void encode(SummonPacket pkt, FriendlyByteBuf buf) {
+        }
+
+        public static SummonPacket decode(FriendlyByteBuf buf) {
+            return new SummonPacket();
+        }
+
+        public static void handle(SummonPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                int ok = 0;
+                int fail = 0;
+                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                        if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
+                            continue;
+                        }
+                        // 已在身边 5 格内的不折腾
+                        if (lvl == level && m.m_20238_(player.m_20182_()) < 25.0) {
+                            continue;
+                        }
+                        if (com.maidsmart.follow.MaidChunkLoadManager.summonMaidTo(m, player)) {
+                            ok++;
+                        } else {
+                            fail++;
+                        }
+                    }
+                }
+                if (ok == 0 && fail == 0) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "§7没有需要集合的女仆（都在身边或不在场上）"), false);
+                } else {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "§a已集合 " + ok + " 名女仆到身边"
+                                    + (fail > 0 ? "§7（" + fail + " 名未能到达——身边没有可站立点）" : "")), false);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** C2S 改名：设置女仆自定义名（等同命名牌；§ 色号剥除，超长截断 30） */
+    public static class RenameMaidPacket {
+        public final String uuid;
+        public final String name;
+
+        public RenameMaidPacket(String uuid, String name) {
+            this.uuid = uuid;
+            this.name = name;
+        }
+
+        public static void encode(RenameMaidPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130072_(pkt.uuid, 64);
+            buf.m_130072_(pkt.name == null ? "" : pkt.name, 64);
+        }
+
+        public static RenameMaidPacket decode(FriendlyByteBuf buf) {
+            return new RenameMaidPacket(buf.m_130136_(64), buf.m_130136_(64));
+        }
+
+        public static void handle(RenameMaidPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                // 跨维度找女仆（列表是全维度的，改名目标可能不在玩家维度）
+                EntityMaid maid = null;
+                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+                    EntityMaid m = findMaid(lvl, pkt.uuid);
+                    if (m != null && m.m_21830_(player)) {
+                        maid = m;
+                        break;
+                    }
+                }
+                if (maid == null || !allowed(player, maid)) {
+                    return;
+                }
+                String n = pkt.name == null ? "" : pkt.name.replace("§", "").trim();
+                if (n.isEmpty()) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "§c名字不能为空"), false);
+                    return;
+                }
+                if (n.length() > 30) {
+                    n = n.substring(0, 30);
+                }
+                maid.m_6593_(net.minecraft.network.chat.Component.m_237113_(n));
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "§a已改名为「" + n + "」"), false);
             });
             ctx.get().setPacketHandled(true);
         }

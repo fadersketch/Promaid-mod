@@ -3,6 +3,7 @@ package com.maidsmart.schedule;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -42,6 +43,13 @@ public class ScheduleBookScreen extends Screen {
     private boolean loadedOn = false;
     /** 详情页页签（实测五十九）：0=第 1 页快捷设置（立即生效） 1=第 2 页排班（班次+6 槽） */
     private int detailPage = 0;
+    /** 实测六十（借鉴 Maid_Roster）：列表搜索词 / 批量模式选择 / 批量任务选择 /
+     *  键盘焦点输入框 / 上次过滤后行数（空态提示用） */
+    private String searchQuery = "";
+    private int batchMode = 2;
+    private String batchTask = "";
+    private EditBox activeBox;
+    private int lastFiltered = 0;
     /** 班次（0=早班 1=晚班 2=全天）——排班页第一步选这个 */
     private int shift = 2;
     /** 6 个任务槽（uid；空 = 空闲/idle）——第二步点按钮循环切换 */
@@ -102,6 +110,7 @@ public class ScheduleBookScreen extends Screen {
     @Override
     public void m_7856_() {
         this.m_169413_(); // clearWidgets
+        this.activeBox = null; // 实测六十：重建后由各页第一个输入框认领焦点
         int w = this.f_96543_;
         int h = this.f_96544_;
         if (this.view == VIEW_LIST) {
@@ -113,22 +122,54 @@ public class ScheduleBookScreen extends Screen {
 
     /* ==================== 女仆列表页 ==================== */
 
+    /**
+     * v1.1.0 实测六十（借鉴 Maid_Roster 军队管理，不学"绑定点名册"——我们直接
+     * 列出全部女仆且跨维度）：搜索框按名字过滤 / 行内血量+维度状态 / 批量应用
+     * 工作模式与任务 / 一键集合（跨维度传送回身边）。
+     * 纵向：搜索框 32..50，行区 52 起（rowsPerPage = (h-124)/22），批量行 h-68，
+     * 翻页 h-46，集合+关闭 h-24——240 高最小窗口零重叠（实测五十六口径）。
+     */
     private void listButtons(int w, int h) {
         int cx = w / 2;
         int bw = Math.min(300, w - 16);
-        // 行数按内容区高度收敛（顶部 44 起排，底部 FOOT 区之上）
-        int avail = h - 56 - 44;
+        // 搜索框（按名字过滤，输入即刷）
+        EditBox search = new EditBox(this.f_96547_, cx - bw / 2, 32, bw, 18,
+                Component.m_237113_("搜索名字…"));
+        search.m_94199_(20);
+        search.m_94144_(this.searchQuery);
+        search.m_94151_(s -> {
+            this.searchQuery = s;
+            this.page = 0;
+            this.m_7856_();
+        });
+        search.m_94202_(0xFFFFFF);
+        this.m_142416_(search);
+        this.activeBox = search; // 默认聚焦：打开即打字过滤
+        search.m_93692_(true);
+        // 过滤（名字包含匹配，大小写不敏感）
+        String q = this.searchQuery == null ? "" : this.searchQuery.trim().toLowerCase();
+        java.util.List<String[]> shown = new ArrayList<>();
+        for (String[] m : this.maids) {
+            if (!q.isEmpty() && !m[1].toLowerCase().contains(q)) {
+                continue;
+            }
+            shown.add(m);
+        }
+        this.lastFiltered = shown.size();
+        int avail = h - 72 - 52;
         int rowsPerPage = Math.max(1, Math.min(8, avail / LIST_ROW_H));
-        int totalPages = Math.max(1, (this.maids.size() + rowsPerPage - 1) / rowsPerPage);
+        int totalPages = Math.max(1, (shown.size() + rowsPerPage - 1) / rowsPerPage);
         this.page = Math.min(this.page, totalPages - 1);
         int start = this.page * rowsPerPage;
-        int end = Math.min(this.maids.size(), start + rowsPerPage);
-        int y = 44;
+        int end = Math.min(shown.size(), start + rowsPerPage);
+        int y = 52;
         for (int i = start; i < end; i++) {
-            String[] m = this.maids.get(i);
+            String[] m = shown.get(i);
+            // 行标签：名字 + 血量% + 维度标签（跨维度才显示）+ 排班状态（实测六十）
             String sched = "1".equals(m[4])
                     ? "\u00a7a排班开\u00a77（" + m[5] + " 段）" : "\u00a77排班关";
-            String label = "\u00a7e" + m[1] + "\u00a7r  " + sched;
+            String label = "\u00a7e" + fitName(m[1]) + " \u00a7f" + m[6] + "% "
+                    + (m[7].isEmpty() ? "" : "\u00a79" + m[7] + " ") + sched;
             final String uuid = m[0];
             final String name = m[1];
             this.m_142416_(Button.m_253074_(Component.m_237113_(label), b -> {
@@ -143,6 +184,35 @@ public class ScheduleBookScreen extends Screen {
                     .m_252987_(cx - bw / 2, y, bw, 20).m_253136_());
             y += LIST_ROW_H;
         }
+        // 批量行（h-68）：全员模式（点选即应用）/ 任务选择（只选不应用）/ 应用任务
+        int bx0 = cx - 146;
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_("\u00a7e全员模式：" + MODE_NAMES[Math.max(0, Math.min(2, this.batchMode))]),
+                        b -> {
+                            this.batchMode = (this.batchMode + 1) % 3;
+                            ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                                    this.batchMode, ""));
+                            this.m_7856_();
+                        })
+                .m_252987_(bx0, h - 68, 100, 18).m_253136_());
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_("任务：\u00a7e" + fitTask(this.batchTask) + " \u00a77\u25b8"),
+                        b -> {
+                            if (this.taskUids.isEmpty()) {
+                                return;
+                            }
+                            int next = (this.taskUids.indexOf(this.batchTask) + 1) % this.taskUids.size();
+                            this.batchTask = this.taskUids.get(next);
+                            this.m_7856_();
+                        })
+                .m_252987_(bx0 + 106, h - 68, 100, 18).m_253136_());
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a\u2713应用任务"), b -> {
+                    if (!this.batchTask.isEmpty()) {
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                                -1, this.batchTask));
+                    }
+                })
+                .m_252987_(bx0 + 212, h - 68, 80, 18).m_253136_());
         // 翻页（◀ 页码 ▶ 居中一行，位于底区）
         // 实测五十六：◀ cx-70 / ▶ cx+40——旧位置（cx-40 / cx+20）与 ~60px 宽的
         // 页码文字（cx±30）两端各重叠 10px，按钮后渲染盖住"第 x/y 页"两端
@@ -160,6 +230,10 @@ public class ScheduleBookScreen extends Screen {
                     })
                     .m_252987_(cx + 40, h - 46, 20, 18).m_253136_());
         }
+        // 一键集合（跨维度传送全部在场女仆到身边；实测六十）+ 关闭
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7d\u2691 一键集合"), b ->
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SummonPacket()))
+                .m_252987_(Math.max(8, cx - 145), h - 24, 90, 20).m_253136_());
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7c关闭"), b -> this.m_7379_())
                 .m_252987_(cx - 50, h - 24, 100, 20).m_253136_());
     }
@@ -268,6 +342,18 @@ public class ScheduleBookScreen extends Screen {
                             })
                     .m_252987_(qx, y, qw, 20).m_253136_());
         }
+        // 改名行（实测六十，借鉴 Maid_Roster 的重命名——直接改女仆自定义名，等同命名牌）
+        y += 26;
+        EditBox nameBox = new EditBox(this.f_96547_, qx, y + 1, qw - 96, 18,
+                Component.m_237113_("新名字"));
+        nameBox.m_94199_(30);
+        nameBox.m_94144_(sel != null ? sel[1] : "");
+        nameBox.m_94202_(0xFFFFFF);
+        this.m_142416_(nameBox);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("改名"), b ->
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.RenameMaidPacket(
+                                this.selUuid, nameBox.getValue())))
+                .m_252987_(qx + qw - 92, y, 92, 20).m_253136_());
     }
 
     /**
@@ -349,11 +435,19 @@ public class ScheduleBookScreen extends Screen {
                 12, 0xFF8B1A1A);
         if (this.view == VIEW_LIST) {
             g.m_280653_(this.f_96547_, Component.m_237113_("\u00a7d\u00a7o排班表\u00a7r\u00a7c——选择女仆"), cx, TOP_TITLE_Y, 0xFFFFFF);
-            // 实测五十九：副标题同步两页结构（第 1 页快捷设置 / 第 2 页排班）
+            // 实测五十九/六十：副标题同步两页结构 + 列表页新能力（搜索/批量/集合）
             g.m_280653_(this.f_96547_, Component.m_237113_(
-                            "\u00a77点女仆进入：第 1 页快捷设置（立即生效），第 2 页排班表"), cx, TOP_TITLE_Y + 12, 0xAAAAAA);
-            int rowsPerPage = Math.max(1, Math.min(8, (h - 56 - 44) / LIST_ROW_H));
-            int tp = Math.max(1, (this.maids.size() + rowsPerPage - 1) / rowsPerPage);
+                            "\u00a77点女仆进详情（快捷/排班）；下方搜索·批量·集合"), cx, TOP_TITLE_Y + 12, 0xAAAAAA);
+            // 实测六十：空列表/无匹配提示（画在行区首行位置，不与任何控件重叠）
+            if (this.lastFiltered == 0) {
+                String q = this.searchQuery == null ? "" : this.searchQuery.trim();
+                g.m_280653_(this.f_96547_, Component.m_237113_(q.isEmpty()
+                                ? "\u00a77没有找到女仆（打开排班表时须有女仆在场）"
+                                : "\u00a77没有匹配「" + q + "」的女仆"),
+                        cx, 66, 0xAAAAAA);
+            }
+            int rowsPerPage = Math.max(1, Math.min(8, (h - 124) / LIST_ROW_H));
+            int tp = Math.max(1, (this.lastFiltered + rowsPerPage - 1) / rowsPerPage);
             if (tp > 1) {
                 // 页码在 ◀ ▶ 中间（实测五十六：按钮外移到 cx±40~60——旧位置 ◀ 右沿
                 // cx-20 / ▶ 左沿 cx+20 会压住 ~60px 宽页码文字的两端各 10px）
@@ -445,6 +539,46 @@ public class ScheduleBookScreen extends Screen {
     private static String fitTask(String uid) {
         String cn = taskCn(uid);
         return cn.length() > 10 ? cn.substring(0, 9) + "…" : cn;
+    }
+
+    /** 实测六十：女仆名截断（行内还要放血量/维度/排班状态，8 字符封顶） */
+    private static String fitName(String s) {
+        return s != null && s.length() > 8 ? s.substring(0, 7) + "…" : s;
+    }
+
+    /* ==================== 键盘转发（实测六十：搜索框/改名框） ==================== */
+
+    /** 点击输入框时记录 activeBox（键盘字符/按键直接转发，不依赖焦点链）；
+     *  点空白处失焦——按钮点击不受输入框焦点影响 */
+    @Override
+    public boolean m_6375_(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            this.activeBox = null;
+            for (net.minecraft.client.gui.components.events.GuiEventListener c : this.m_6702_()) {
+                if (c instanceof EditBox eb && eb.m_5953_(mouseX, mouseY)) {
+                    eb.m_93692_(true); // setFocus
+                    this.activeBox = eb;
+                    return eb.m_6375_(mouseX, mouseY, 0);
+                }
+            }
+        }
+        return super.m_6375_(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean m_5534_(char codePoint, int modifiers) {
+        if (this.activeBox != null && this.activeBox.m_5534_(codePoint, modifiers)) {
+            return true;
+        }
+        return super.m_5534_(codePoint, modifiers);
+    }
+
+    @Override
+    public boolean m_7933_(int key, int scanCode, int modifiers) {
+        if (this.activeBox != null && this.activeBox.m_7933_(key, scanCode, modifiers)) {
+            return true;
+        }
+        return super.m_7933_(key, scanCode, modifiers);
     }
 
     private void chat(String msg) {
