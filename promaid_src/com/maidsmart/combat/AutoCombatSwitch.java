@@ -290,22 +290,59 @@ public class AutoCombatSwitch {
                 }
                 // 还原。战斗期间排班表可能已跨段——排班在主动战斗之上，还原时先清
                 // 排班去抖键并立即重应用当前段；没排班/重应用没换成 → 落回"战斗前任务"
+                // v1.1.0 实测三十九修复（用户："消除威胁后无法转回原任务，女仆停在
+                // 切换的模式"）：旧版【先 clearMarkers 再还原】——还原链路任何一环
+                // 失败（findTask 找不到原任务/排班 applyNow 抛异常/任务 UID 非法），
+                // 标记已被清掉：下次触发时 isCombatTask 把她当"玩家手动安排"跳过、
+                // 还原扫描因无 PREV_TASK_TAG 也跳过 → 永久卡在战斗任务。
+                // 修复：先解析原任务（解析失败保留标记下轮重试 + 记日志），全部
+                // 就绪才清标记执行还原；全程加日志（latest.log 搜 "auto-combat restore"）。
                 String prevUid = maid.getPersistentData().m_128461_(PREV_TASK_TAG);
                 String assignedUid = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+                IMaidTask prevTask = null;
+                try {
+                    prevTask = TaskManager.findTask(ResourceLocation.parse(prevUid)).orElse(null);
+                } catch (Exception ignored) {
+                }
+                if (prevTask == null) {
+                    // 原任务已不存在（模组卸载等）→ 只能留在战斗任务，标记保留
+                    //（每秒重试无意义，但保留标记让玩家手动切换后能正常接管退出）
+                    String failName = maid.m_5446_() != null ? maid.m_5446_().getString() : String.valueOf(maid.m_20148_());
+                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore FAIL: maid={} prev task '{}' not found, keeping markers",
+                            failName, prevUid);
+                    continue;
+                }
                 clearMarkers(maid);
+                boolean restored = false;
                 boolean stillOnCombat = maid.getTask() != null
                         && maid.getTask().getUid().toString().equals(assignedUid);
                 if (stillOnCombat
                         && com.maidsmart.schedule.ScheduleData.isOn(maid)
                         && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
-                    maid.getPersistentData().m_128359_(
-                            com.maidsmart.schedule.ScheduleData.APPLIED_TAG, "");
-                    com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                    try {
+                        maid.getPersistentData().m_128359_(
+                                com.maidsmart.schedule.ScheduleData.APPLIED_TAG, "");
+                        com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                    } catch (Exception e) {
+                        com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: schedule applyNow threw: {}", e.toString());
+                    }
                     stillOnCombat = maid.getTask() != null
                             && maid.getTask().getUid().toString().equals(assignedUid);
                 }
                 if (stillOnCombat) {
-                    TaskManager.findTask(ResourceLocation.parse(prevUid)).ifPresent(maid::setTask);
+                    maid.setTask(prevTask);
+                    restored = true;
+                }
+                String maidName = maid.m_5446_() != null ? maid.m_5446_().getString() : String.valueOf(maid.m_20148_());
+                if (restored) {
+                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: maid={} {} -> {} (threat gone {}s)",
+                            maidName, assignedUid, prevUid,
+                            (now - lastThreat) / 20);
+                } else {
+                    // 任务在还原前被换（排班/玩家接管）——标记已清，正常退出
+                    String curTask = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
+                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: maid={} task changed during combat ({}), no restore",
+                            maidName, curTask);
                 }
             }
         }
