@@ -455,7 +455,7 @@ public final class ScheduleNetworking {
                     }
                 }
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "§a已为 " + applied + " 名女仆更新设置"), false);
+                        "§a已为 " + applied + " 名女仆更新设置"));
             });
             ctx.get().setPacketHandled(true);
         }
@@ -506,11 +506,11 @@ public final class ScheduleNetworking {
                 }
                 if (ok == 0 && fail == 0) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "§7没有需要集合的女仆（都在身边或不在场上）"), false);
+                            "§7没有需要集合的女仆（都在身边或不在场上）"));
                 } else {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "§a已集合 " + ok + " 名女仆到身边"
-                                    + (fail > 0 ? "§7（" + fail + " 名未能到达——身边没有可站立点）" : "")), false);
+                                    + (fail > 0 ? "§7（" + fail + " 名未能到达——身边没有可站立点）" : "")));
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -557,7 +557,7 @@ public final class ScheduleNetworking {
                 String n = pkt.name == null ? "" : pkt.name.replace("§", "").trim();
                 if (n.isEmpty()) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "§c名字不能为空"), false);
+                            "§c名字不能为空"));
                     return;
                 }
                 if (n.length() > 30) {
@@ -565,7 +565,7 @@ public final class ScheduleNetworking {
                 }
                 maid.m_6593_(net.minecraft.network.chat.Component.m_237113_(n));
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "§a已改名为「" + n + "」"), false);
+                        "§a已改名为「" + n + "」"));
             });
             ctx.get().setPacketHandled(true);
         }
