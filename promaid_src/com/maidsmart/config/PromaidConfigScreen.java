@@ -1070,6 +1070,9 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被方块挡住的矿物并挖通开路（隔墙找矿，等同旧版逻辑）；关闭（默认）则女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见也不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.MINE_SEARCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MINE_SEARCH_RADIUS, s), "矿物检索半径（水平格）：女仆以锚点为中心扫描正方形区域找矿——调大更早发现远处矿，扫描更耗时；调小专注身边"));
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
+        this.rows.add(new NumRow("扫描预算（格/tick）", String.valueOf(MaidSmartConfig.MINE_SCAN_BUDGET.get()),
+                s -> setInt(MaidSmartConfig.MINE_SCAN_BUDGET, s), "挖矿扫描预算（格/tick，默认 4096）：全量扫描矿框分帧执行——每 tick 最多检查这么多格，剩余下 tick 继续（扫完前女仆短暂无目标）；调小更不卡服但找矿变慢，调大找矿快但单 tick 尖峰高"));
         this.rows.add(new NumRow("垂直向下范围", String.valueOf(MaidSmartConfig.MINE_DOWN_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MINE_DOWN_RANGE, s), "垂直向下范围（格）：找脚下多深的矿；调大能发现深层矿脉，扫描开销上升"));
         this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.MINE_UP_RANGE.get()),
@@ -1196,6 +1199,9 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被挡住的木材并挖通开路；关闭（默认）则像玩家一样只发现视线无阻的木材——树叶不挡视线，水/岩浆外任何方块都挡"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.WOOD_SEARCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.WOOD_SEARCH_RADIUS, s), "木材检索半径（水平格）：以锚点为中心扫描正方形区域找树"));
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
+        this.rows.add(new NumRow("扫描预算（格/tick）", String.valueOf(MaidSmartConfig.WOOD_SCAN_BUDGET.get()),
+                s -> setInt(MaidSmartConfig.WOOD_SCAN_BUDGET, s), "伐木扫描预算（格/tick，默认 4096）：全量扫描木材框分帧执行——每 tick 最多检查这么多格，剩余下 tick 继续（扫完前女仆短暂无目标）；调小更不卡服但找树变慢，调大找树快但单 tick 尖峰高"));
         this.rows.add(new NumRow("垂直向下范围", String.valueOf(MaidSmartConfig.WOOD_DOWN_RANGE.get()),
                 s -> setInt(MaidSmartConfig.WOOD_DOWN_RANGE, s), "垂直向下搜索范围（格）——树在地表，默认 4"));
         this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.WOOD_UP_RANGE.get()),
@@ -1703,6 +1709,13 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT, s), "近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）"));
         this.rows.add(new NumRow("远程偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT, s), "远程偏好权重（默认 1）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——调大则近身也更倾向保持远程输出；设 0 = 永不主动选远程（战中也不会切远程，够不着就追）"));
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 防抖三件套）：战中换战术稳定机制
+        this.rows.add(new NumRow("换战术最短持有（tick）", String.valueOf(MaidSmartConfig.COMBAT_TACTIC_HOLD_TICKS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_TACTIC_HOLD_TICKS, s), "战中换战术最短持有（tick，默认 40=2 秒）：近远程切换后至少持有这么久才允许再次评估换战术——防敌人在门槛距离徘徊时频繁换任务重建 brain；0 = 不限制"));
+        this.rows.add(new NumRow("反向切换窗口（tick）", String.valueOf(MaidSmartConfig.COMBAT_REVERSE_WINDOW_TICKS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_REVERSE_WINDOW_TICKS, s), "反向切换窗口（tick，默认 100=5 秒）：换战术后在此窗口内又想换回上一个战术，视为来回横跳"));
+        this.rows.add(new NumRow("反向切换冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS, s), "反向切换冷却（tick，默认 200=10 秒）：横跳被判定后进入冷却，期间不再换战术（保持当前战术硬打）——0 = 关闭反向抑制"));
         // v1.1.0 实测二十：枪械优先开关已删除（原版武器降半权、模组攻击任务等权
         // 随机的新选法不需要开关——附属生态的攻击任务与枪械强度等价）
         this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
@@ -1804,6 +1817,9 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("排班表（v1.1.0）", true));
         this.rows.add(new BoolRow("排班表系统", MaidSmartConfig.MISC_SCHEDULE_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_SCHEDULE_ENABLED.set(v), "排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（每只女仆已保存的日程不丢，重新打开即恢复），女仆保持当前任务——单只女仆的排班开关在排班表物品里（快捷设置）"));
+        // v1.1.0 实测六十一：战斗还原后排班宽限
+        this.rows.add(new NumRow("战斗还原宽限（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE, s), "战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班"));
         // v1.5.310：爱憎分明相关开关已整体迁到「爱憎分明模组调试」板块页（见 loveloathRows）
     }
 

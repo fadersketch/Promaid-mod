@@ -58,8 +58,14 @@ public final class ScheduleManager {
         }
     }
 
-    /** 应用当前时间段的排班（去抖：段没变不重设）。保存/快捷设置后也调用。 */
+    /** 应用当前时间段的排班（去抖：段没变不重设）。保存/快捷设置后也调用。
+     *  v1.1.0 实测六十一：战斗还原宽限期内不接管（还原后先让她干原任务一段时间，
+     *  防威胁在还原威胁半径边缘闪烁时战斗/还原/排班反复拉扯；玩家手动保存日程会
+     *  清宽限立即生效）。 */
     public static void applyNow(EntityMaid maid, ServerLevel level) {
+        if (level.m_46467_() < maid.getPersistentData().m_128454_(ScheduleData.GRACE_TAG)) {
+            return; // 宽限期内
+        }
         // 自保中让位（自保优先——等血量恢复退出自保后排班照常）
         if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
             return;
