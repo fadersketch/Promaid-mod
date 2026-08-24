@@ -793,7 +793,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 // 已记录矿的位置，廉价），"原地愣几秒"减少一半
                 // v1.5.127：10 → 5 tick——缓存轮空时 findOre 已改为立即全量重建，
                 // 此节流只控制"挖完后重新评估"的频率，再减半让块间衔接更紧凑
-                if (this.scanCooldown-- > 0) {
+                if (!MINE_SCANS.containsKey(maid.m_19879_()) && this.scanCooldown-- > 0) {
                     return;
                 }
                 this.scanCooldown = 5;

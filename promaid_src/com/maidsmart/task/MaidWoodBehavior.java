@@ -830,7 +830,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 // 已记录矿的位置，廉价），"原地愣几秒"减少一半
                 // v1.5.127：10 → 5 tick——缓存轮空时 findWood 已改为立即全量重建，
                 // 此节流只控制"挖完后重新评估"的频率，再减半让块间衔接更紧凑
-                if (this.scanCooldown-- > 0) {
+                // v1.1.0 实测六十五（自查修复）：分帧扫描进行中【不受节流、每 tick 推进】
+                // ——节流在扫描期会把实际吞吐压到预算的 1/5（默认预算下扫完一框从
+                // 0.85 秒变成 20 秒，女仆干等）；节流只该管"发起新一轮扫描"
+                if (!WOOD_SCANS.containsKey(maid.m_19879_()) && this.scanCooldown-- > 0) {
                     return;
                 }
                 this.scanCooldown = 5;
