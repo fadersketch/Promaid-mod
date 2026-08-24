@@ -258,6 +258,11 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：伐木/挖矿全量扫描每 tick 预算
     public static final ForgeConfigSpec.IntValue WOOD_SCAN_BUDGET;
     public static final ForgeConfigSpec.IntValue MINE_SCAN_BUDGET;
+    /** v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态 */
+    public static final ForgeConfigSpec.BooleanValue WOOD_STUCK_WATCHDOG;
+    public static final ForgeConfigSpec.IntValue WOOD_STUCK_RESET_SECONDS;
+    public static final ForgeConfigSpec.BooleanValue MINE_STUCK_WATCHDOG;
+    public static final ForgeConfigSpec.IntValue MINE_STUCK_RESET_SECONDS;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -537,6 +542,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // v1.5.163：连锁采集数量上限可自定义
         MINE_CHAIN_LIMIT = BUILDER.comment("连锁采集上限（块）：一次连锁挖掘的最大方块数（默认 16）")
                 .translation("config.promaid.mine.chainLimit").defineInRange("chainLimit", 16, 4, 64);
+        // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
+        MINE_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：挖矿期间连续 N 秒既没挖掉任何方块、位置也没挪动（原地发呆/内部状态卡死）时，自动整体重置该女仆的挖矿状态——锚点/扫描缓存/排除表/目标全部清空重新开始，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭路都算进展，不会误触发")
+                .translation("config.promaid.mine.stuckWatchdog").define("stuckWatchdog", true);
+        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 45）：连续这么久零进展且原地不动才触发重置。调小救得更快但可能误伤原地啃超硬方块的正常耗时，调大更宽容")
+                .translation("config.promaid.mine.stuckResetSeconds").defineInRange("stuckResetSeconds", 45, 10, 300);
         BUILDER.pop();
 
         // ---- 伐木（v1.1.0：克隆挖矿架构；障碍物名单与挖矿共享 extraBreakables/disabledBreakables） ----
@@ -617,6 +627,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.wood.chainLimit").defineInRange("chainLimit", 16, 4, 64);
         WOOD_LEAVES_CLEAR = BUILDER.comment("树冠清理（默认开）：树干连锁砍完后，顺手把上方树冠的树叶也清掉（树叶 BFS 清到半径 3 格，掉落物/树苗直接进背包——树叶不清会挂着挡视线还慢慢掉东西；关闭则只砍树干、树叶靠自然衰减）")
                 .translation("config.promaid.wood.leavesClear").define("leavesClear", true);
+        // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
+        WOOD_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：伐木期间连续 N 秒既没砍掉任何方块、位置也没挪动（典型如站进挖掉的树洞里对着头顶树干发呆）时，自动整体重置该女仆的伐木状态——锚点/扫描缓存/排除表/目标全部清空重新找树，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭高都算进展，不会误触发")
+                .translation("config.promaid.wood.stuckWatchdog").define("stuckWatchdog", true);
+        WOOD_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 30）：连续这么久零进展且原地不动才触发重置。调小救得更快但可能误伤原地啃硬木头的正常耗时，调大更宽容")
+                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 30, 10, 300);
         BUILDER.pop();
 
         // ---- AI 记忆 ----

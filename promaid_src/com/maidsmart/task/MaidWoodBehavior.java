@@ -406,6 +406,19 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, Long> NO_AXE_REPORT_SINCE = new HashMap<>();
     /** v1.1.0 实测五：树苗补种限频（实体 ID → 上次种植 tick，5 秒一次防连种） */
     private static final Map<Integer, Long> SAPLING_PLANT_SINCE = new HashMap<>();
+    /** v1.1.0 实测六十九：发呆看门狗——最近一次"真实进展"时刻（挖掉/垫了方块）。长时间零进展
+     *  且原地不动 = 发呆/死循环，自动整体重置该女仆的全部行为状态（等效收回魂符再放下去——
+     *  收放正是靠换实体 ID 让这些以实体 ID 为键的表失效来治好卡死的）。 */
+    private static final Map<Integer, Long> LAST_PROGRESS = new HashMap<>();
+    /** 看门狗窗口采样（实体 ID → [窗口起点 tick, 起点 x/y/z 各自的 double 位模式]） */
+    private static final Map<Integer, long[]> WATCH_SAMPLE = new HashMap<>();
+    /** 看门狗重置播报限频（实体 ID → 上次播报 tick） */
+    private static final Map<Integer, Long> RESET_REPORT_SINCE = new HashMap<>();
+
+    /** v1.1.0 实测六十九：登记一次真实进展（挖掉/垫了方块）——给看门狗续命 */
+    private static void markProgress(EntityMaid maid, long gameTime) {
+        LAST_PROGRESS.put(maid.m_19879_(), gameTime);
+    }
     /** v1.5.113：找矿结果缓存——全量扫描每 5 秒一次，期间只做廉价校验（A1 性能优化） */
     private static final Map<Integer, WoodCache> WOOD_CACHE = new HashMap<>();
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
@@ -426,6 +439,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         SAPLING_PLANT_SINCE.remove(maidEntityId);
         WOOD_CACHE.remove(maidEntityId);
         WOOD_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
+        LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
+        WATCH_SAMPLE.remove(maidEntityId);
+        RESET_REPORT_SINCE.remove(maidEntityId);
     }
 
     /** 审计 P-9：按 UUID 清理 WOODING 集合（int 表与 UUID 表分开清理） */
@@ -534,6 +550,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
     private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
         PLACED_TRACKER.track(level, pos, block, maid);
+        markProgress(maid, level.m_46467_()); // 实测六十九：垫方块也是进展
     }
 
     /** v1.5.28：销毁所有放置超过 10 秒的挖矿搭方块。
@@ -583,6 +600,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // 漏加本表 → 只在 SAPLING 表有条目的女仆不在 alive 集里，条目被
             // 无条件误删 → 5 秒补种限频被 30 秒一次的 purge 反复重置（多耗树苗）
             ids.addAll(WOOD_CACHE.keySet());
+            ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
+            ids.addAll(WATCH_SAMPLE.keySet());
+            ids.addAll(RESET_REPORT_SINCE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
                 for (ServerLevel lvl : server.m_129785_()) {
@@ -606,6 +626,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         SAPLING_PLANT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_CACHE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
+            LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
+            WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
+            RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) {
         }
     }
@@ -775,6 +798,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 立即强制上移到方块顶面之上。搭高挖矿时实体位移滞后/放偏，头顶检查
         // 拦不住横向卡入，这是最后一道保险：宁可瞬移半步也不被自己搭的方块闷住
         this.antiSuffocate(maid);
+        // v1.1.0 实测六十九：发呆看门狗——长时间零进展且原地不动时整体重置状态。
+        // 用户反馈：站坑发呆要收回魂符重放才恢复（重放换实体 ID 清空全部静态表）；
+        // 现在行为自己周期性做同款复位，不再需要玩家手动救
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_WATCHDOG.get()
+                && this.stuckReset(level, maid, gameTime)) {
+            return; // 本 tick 已重置，下 tick 从头评估
+        }
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
         // 移动完全交给导航：目标够得着→挖；够不着→搭方块/走过去（approachWood）。
@@ -930,6 +960,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // 检查范围，当前块挖完后 targetPos 置空，下 tick 重选时自然被视线过滤。
             if (!com.maidsmart.config.MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.get()
                     && !this.hasClearSight(level, maid, this.targetPos)) {
+                // v1.1.0 实测六十九：视线被挡的目标进 30 秒短排——旧版只丢目标不记录，
+                // 扫描层几 tick 后又选中同一块，"选中→看不见→丢弃"无限循环站桩发呆
+                RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
+                        .put(this.targetPos.m_7949_(), level.m_46467_());
                 this.targetPos = null;
                 this.destroyProgress = 0.0f;
                 this.saveProgress(maid);
@@ -1088,6 +1122,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
         this.chainBreakAll(level, maid, mainHand);
+        markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
         // v1.1.0 实测三十（用户："树冠清理不自然——直接整个树冠一下子清掉；
         // 我要的只是以女仆为中心 3×3×3 范围内的树叶被破坏，带音效和特效"）：
         // 删除 clearTreeTop 整冠 BFS 清除（一次性清掉整棵树的树叶不自然）。
@@ -1282,6 +1317,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (broken > 0) {
                 maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 摆臂动画
                 LOGGER.info("wood leaves burst: maid={} broken={}", maid.m_20148_(), broken);
+                markProgress(maid, level.m_46467_()); // 实测六十九：清树叶也算活动
             }
         } catch (Exception ignored) {
         }
@@ -1310,6 +1346,86 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 }
             }
         } catch (Exception ignored) {
+        }
+    }
+
+    /** v1.1.0 实测六十九：窗口起点采样 */
+    private static long[] watchSample(long gameTime, EntityMaid maid) {
+        return new long[]{gameTime,
+                Double.doubleToLongBits(maid.m_20185_()),
+                Double.doubleToLongBits(maid.m_20186_()),
+                Double.doubleToLongBits(maid.m_20189_())};
+    }
+
+    /**
+     * v1.1.0 实测六十九：发呆看门狗判定。每 tick 廉价检查；窗口到期（默认 30 秒）结算：
+     * 期间【挪动过 ≥1.5 格】或【有过真实进展（挖掉/垫方块）】= 正常工作，续窗；否则判发呆，
+     * 整体重置该女仆在本行为里的全部状态并返回 true。走路赶路位置一直在变，不会误触发。
+     */
+    private boolean stuckReset(ServerLevel level, EntityMaid maid, long gameTime) {
+        int id = maid.m_19879_();
+        long window = com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() * 20L;
+        if (window <= 0) {
+            return false;
+        }
+        long[] sample = WATCH_SAMPLE.get(id);
+        if (sample == null) {
+            WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
+            LAST_PROGRESS.putIfAbsent(id, gameTime);
+            return false;
+        }
+        if (gameTime - sample[0] < window) {
+            return false; // 窗口未到期
+        }
+        double moved = Math.sqrt(
+                Math.pow(maid.m_20185_() - Double.longBitsToDouble(sample[1]), 2)
+                        + Math.pow(maid.m_20186_() - Double.longBitsToDouble(sample[2]), 2)
+                        + Math.pow(maid.m_20189_() - Double.longBitsToDouble(sample[3]), 2));
+        Long lastProg = LAST_PROGRESS.get(id);
+        if (moved >= 1.5 || (lastProg != null && lastProg >= sample[0])) {
+            WATCH_SAMPLE.put(id, watchSample(gameTime, maid)); // 有在干活：续窗
+            return false;
+        }
+        this.hardResetStuck(level, maid, gameTime);
+        return true;
+    }
+
+    /**
+     * v1.1.0 实测六十九：发呆整体重置——forget 清空本女仆的全部静态表（锚点/缓存/
+     * 扫描游标/弃置排除/各类限频），实例字段（目标/进度/连锁队列/挡路名单/走路记忆等）
+     * 一并归零，等效收回魂符再放下去；气泡播报一次（60 秒限频）。
+     */
+    private void hardResetStuck(ServerLevel level, EntityMaid maid, long gameTime) {
+        int id = maid.m_19879_();
+        long idleTicks = gameTime - LAST_PROGRESS.getOrDefault(id, gameTime);
+        forget(id);
+        this.targetPos = null;
+        this.destroyProgress = 0.0f;
+        this.saveProgressNow(maid);
+        this.abandonedPos = null;
+        this.blockedWoods.clear();
+        this.skippedWoodPos = null;
+        this.skippedWoodName = null;
+        this.skippedWoodTool = null;
+        this.skippedWoodValue = -1;
+        this.chainQueue.clear();
+        this.chainBlock = null;
+        this.lastWalkTarget = null;
+        this.scanCooldown = 0;
+        this.pillarCooldown = 0;
+        this.walkRetargetCooldown = 0;
+        if (this.lastCrackPos != null) {
+            this.broadcastCrack(level, maid, this.lastCrackPos, 10); // 清残留挖掘裂纹
+        }
+        this.lastCrackPos = null;
+        this.lastCrackStage = -1;
+        LAST_PROGRESS.put(id, gameTime);
+        WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
+        LOGGER.info("wood stuck-reset: maid={} idle={}t pos={}", id, idleTicks, maid.m_20183_());
+        Long lastReport = RESET_REPORT_SINCE.get(id);
+        if (lastReport == null || gameTime - lastReport >= 1200L) {
+            RESET_REPORT_SINCE.put(id, gameTime);
+            maid.getChatBubbleManager().addTextChatBubble("好像走神了……我重新理一下思路，继续干活！");
         }
     }
 
@@ -1400,7 +1516,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         BlockPos feet = maid.m_20183_();
         for (int dy = 2; dy <= 10; dy++) {
             BlockPos p = feet.m_7918_(0, dy, 0);
-            if (this.isWood(level, p) && !isWoodingPlaced(level, p)) {
+            // v1.1.0 实测六十九：被硬挡路弃置的不回选（否则「抬头选中→硬挡弃置→再抬头」
+            // 死循环，站在树洞里永远出不来）
+            if (this.isWood(level, p) && !isWoodingPlaced(level, p)
+                    && !this.blockedWoods.contains(p)) {
                 return p;
             }
         }
