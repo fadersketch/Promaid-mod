@@ -336,14 +336,36 @@ public class MasterDeathTeleportHandler {
     private static double[] findSafeLanding(ServerLevel level, double tx, double ty, double tz) {
         int x = net.minecraft.util.Mth.m_14107_(tx); // floor
         int z = net.minecraft.util.Mth.m_14107_(tz);
-        int startY = Math.max(level.m_141928_() + 1, net.minecraft.util.Mth.m_14107_(ty)); // getMinBuildHeight
-        int maxY = Math.min(level.m_141937_() - 3, startY + 24); // getMaxBuildHeight
+        // v1.1.0 实测八十（粉丝 bug："主人下界死亡后女仆被传到基岩层上面"）：下界
+        // y=127 是一整层基岩天花板——旧版从重生点向上扫第一处两格净空，若重生点
+        // 柱子上方被实体方块一路封到天花板（封闭基地/埋在地下的重生锚），第一处
+        // 露天空间就是基岩层上方；随后"向下贴地"又被基岩挡住 → 稳落基岩顶。
+        // 修复：①下界搜索上限压到 y≤124（天花板之下全部排除，重生锚本身在屋顶
+        // 上也照此办理）；②向上找不到时从重生点向【下】继续扫（地下空腔/基地
+        // 内部）；③都无果才退回原坐标上方一格。
+        boolean netherCeiling = "the_nether".equals(level.m_46472_().m_135782_().m_135815_());
+        int minY = level.m_141928_() + 1; // getMinBuildHeight
+        int limitUp = level.m_141937_() - 3; // getMaxBuildHeight
+        if (netherCeiling) {
+            limitUp = Math.min(limitUp, 124);
+        }
+        int startY = Math.max(minY, net.minecraft.util.Mth.m_14107_(ty));
         int airY = -1;
-        for (int y = startY; y <= maxY; y++) {
+        for (int y = startY; y <= limitUp; y++) {
             if (level.m_8055_(new net.minecraft.core.BlockPos(x, y, z)).m_60795_()   // 脚部空气
                     && level.m_8055_(new net.minecraft.core.BlockPos(x, y + 1, z)).m_60795_()) { // 头部空气
                 airY = y;
                 break;
+            }
+        }
+        if (airY < 0) {
+            // 向上无果 → 从重生点向【下】扫（实测八十：地下空腔/基地内部兜底）
+            for (int y = Math.min(startY - 1, limitUp); y >= minY; y--) {
+                if (level.m_8055_(new net.minecraft.core.BlockPos(x, y, z)).m_60795_()
+                        && level.m_8055_(new net.minecraft.core.BlockPos(x, y + 1, z)).m_60795_()) {
+                    airY = y;
+                    break;
+                }
             }
         }
         if (airY < 0) {
