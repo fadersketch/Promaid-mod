@@ -420,6 +420,14 @@ public class AutoCombatSwitch {
                     maid.setTask(prevTask);
                     restored = true;
                 }
+                // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
+                // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
+                // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查
+                int grace = MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get();
+                if (grace > 0) {
+                    maid.getPersistentData().m_128356_(com.maidsmart.schedule.ScheduleData.GRACE_TAG,
+                            level.m_46467_() + grace);
+                }
                 String maidName = maid.m_5446_() != null ? maid.m_5446_().getString() : String.valueOf(maid.m_20148_());
                 if (restored) {
                     com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: maid={} {} -> {} (threat gone {}s)",
@@ -549,6 +557,17 @@ public class AutoCombatSwitch {
     private static final double TARGETING_RANGE = 16.0;
 
     /**
+     * v1.1.0 实测六十一（借鉴 TLM-Sincerely 防抖三件套）：战中换战术稳定状态。
+     * lastSwitchTick=上次切换时刻；holdUntil=最短持有到期；cooldownUntil=反向横跳冷却到期；
+     * fromUid=上次切换来源任务（反向判定用）。内存态——女仆下线/参战标记清掉时一并清除，
+     * 最坏情况（重进后状态丢失）只是多做一次切换，无害。
+     */
+    private record TacticState(long lastSwitchTick, long holdUntil, long cooldownUntil, String fromUid) {
+    }
+
+    private static final java.util.Map<java.util.UUID, TacticState> TACTIC_STATE = new java.util.HashMap<>();
+
+    /**
      * v1.1.0 实测五十七：战斗中近远程动态换战术（每秒评估一次——仅本系统指派的
      * 战斗女仆、威胁仍在、任务没被玩家/排班接管时）。
      *
@@ -571,6 +590,17 @@ public class AutoCombatSwitch {
         IMaidTask cur = maid.getTask();
         if (cur == null) {
             return;
+        }
+        // v1.1.0 实测六十一：最短持有 / 反向横跳冷却（防抖三件套之二）
+        long now = maid.m_9236_().m_46467_();
+        TacticState st = TACTIC_STATE.get(maid.m_20148_());
+        if (st != null) {
+            if (now < st.holdUntil()) {
+                return; // 刚换过战术，持有期内不再评估
+            }
+            if (now < st.cooldownUntil()) {
+                return; // 横跳冷却中，保持当前战术硬打
+            }
         }
         boolean curRanged = isRangedTask(cur);
         double dist = nearestThreatDist(maid);
@@ -605,9 +635,26 @@ public class AutoCombatSwitch {
         if (next == null || next.getUid().equals(cur.getUid())) {
             return; // 没有对应武器的任务可换 / 选中的就是当前任务
         }
+        // v1.1.0 实测六十一：反向抑制——刚从 fromUid 换到当前任务，窗口内又想换回去
+        // = 来回横跳，拒绝本次切换并进入冷却期
+        if (st != null && !st.fromUid().isEmpty() && st.fromUid().equals(next.getUid().toString())
+                && now - st.lastSwitchTick() <= MaidSmartConfig.COMBAT_REVERSE_WINDOW_TICKS.get()) {
+            long cd = MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS.get();
+            if (cd > 0) {
+                TACTIC_STATE.put(maid.m_20148_(), new TacticState(st.lastSwitchTick(), 0, now + cd, ""));
+                com.mojang.logging.LogUtils.getLogger().info(
+                        "auto-combat retune: maid={} reverse {}->{} suppressed, cooldown {} ticks",
+                        maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                        cur.getUid(), next.getUid(), cd);
+            }
+            return;
+        }
         maid.setTask(next);
         // 兼容关键：同步指派标记（见方法注释），否则还原链路误判"玩家接管"
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, next.getUid().toString());
+        // 记录稳定状态：最短持有 + 来源任务（反向判定用）
+        TACTIC_STATE.put(maid.m_20148_(), new TacticState(now,
+                now + MaidSmartConfig.COMBAT_TACTIC_HOLD_TICKS.get(), 0, cur.getUid().toString()));
         com.mojang.logging.LogUtils.getLogger().info(
                 "auto-combat retune: maid={} {} -> {} (dist={})",
                 maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
@@ -726,11 +773,13 @@ public class AutoCombatSwitch {
         return maid.getPersistentData().m_128471_(PREV_TASK_TAG);
     }
 
-    /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true） */
+    /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true）
+     *  v1.1.0 实测六十一：一并清战中换战术的稳定状态（内存态） */
     private static void clearMarkers(EntityMaid maid) {
         maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
         maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
         maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
+        TACTIC_STATE.remove(maid.m_20148_());
     }
 
     /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管） */
