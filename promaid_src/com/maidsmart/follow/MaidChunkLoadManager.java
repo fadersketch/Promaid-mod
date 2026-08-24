@@ -39,6 +39,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * 女仆跨区块 → 撤旧票挂新票；女仆消失/同维度了 → 撤票。服务器停止清空。
  */
 public final class MaidChunkLoadManager {
+    private static final org.slf4j.Logger LOGGER =
+            com.mojang.logging.LogUtils.getLogger();
+
     private MaidChunkLoadManager() {
     }
 
@@ -85,6 +88,17 @@ public final class MaidChunkLoadManager {
                 if (ow != null) {
                     LAST_SEEN.put(maid.m_20148_(), new LastSeen(lvl.m_46472_(),
                             maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_()));
+                    // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
+                    // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
+                    if (com.maidsmart.config.MaidSmartConfig.MISC_MAID_RESCUE.get()
+                            && ow.m_6084_() && needsRescue(lvl, maid)
+                            && maid.m_20238_(ow.m_20182_()) >= 64.0) {
+                        double fromY = maid.m_20186_();
+                        if (teleportCore(maid, ow)) {
+                            LOGGER.info("maid rescue: id={} dim={} y={}->owner side",
+                                    maid.m_20148_(), lvl.m_46472_().m_135782_(), (int) fromY);
+                        }
+                    }
                 }
             }
         }
@@ -392,6 +406,20 @@ public final class MaidChunkLoadManager {
         }
     }
 
+    /**
+     * v1.1.0 实测七十九：受困判定——下界基岩顶层（可站表面 y≈127，取 ≥126 覆盖
+     * 半格滞留）或掉出世界底部（y<-60；1.20.1 最低 -64）。其他维度的"屋顶建筑"
+     * 不算——玩家自建的合法落脚点不动。
+     */
+    private static boolean needsRescue(ServerLevel level, EntityMaid maid) {
+        String dim = level.m_46472_().m_135782_().m_135815_();
+        double y = maid.m_20186_();
+        if ("the_nether".equals(dim) && y >= 126.0) {
+            return true;
+        }
+        return y < -60.0;
+    }
+
     /** 从主人所在格向下找第一个"站立格空气 + 脚下实心不悬空"的位置（最多 16 格） */
     private static BlockPos findStand(ServerLevel level, BlockPos from) {
         BlockPos cur = from;
@@ -416,15 +444,23 @@ public final class MaidChunkLoadManager {
      * @return true = 传送成功；false = 无可站立点（主人高空/虚空）或女仆状态异常
      */
     public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
+        // 咽喉点判定（实测七十八）：home（在家）模式不被任何传送打扰——守家钉死；
+        // 主人非存活不传（防传到死亡点/基岩顶）
+        if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()) {
+            return false; // 已移除/死亡/骑乘中
+        }
+        if (maid.isHomeModeEnable() || !owner.m_6084_()) {
+            return false;
+        }
+        return teleportCore(maid, owner);
+    }
+
+    /**
+     * v1.1.0 实测七十九：传送本体（不含豁免判定）——救援路径复用。受困女仆即使是
+     * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
+     */
+    private static boolean teleportCore(EntityMaid maid, LivingEntity owner) {
         try {
-            if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()) {
-                return false; // 已移除/死亡/骑乘中
-            }
-            // v1.1.0 实测七十八：home（在家）模式的女仆不被任何传送打扰——守家钉死；
-            // 主人已死亡也不传送（防传到死亡点/基岩顶）。本方法是所有传送的咽喉点
-            if (maid.isHomeModeEnable() || !owner.m_6084_()) {
-                return false;
-            }
             if (!(owner.m_9236_() instanceof ServerLevel dest)) {
                 return false;
             }
