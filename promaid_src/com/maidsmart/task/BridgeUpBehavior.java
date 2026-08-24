@@ -406,6 +406,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * v1.1.0 终审二：朝主人方向前方一格的脚下垫台阶（斜上逼近）。
      * 冷却与垂直垫块共用（stepCooldown）；垫成功返回 true（本 tick 不再导航——
      * 导航目标会把女仆往回拉，刚垫的台阶踩不上去）。
+     * v1.1.0 实测六十六（用户："搭方块的方向应该要更向着主人一些"）：旧版只在
+     * 前方脚下【悬空】时才垫（fill 为空气）——地形实心时直接放弃退回原地直上，
+     * 塔不朝主人长。改为两种都垫：悬空垫 fill（跨坑/铺桥台阶）；实心垫 ahead
+     * 本格（在地形上再垫一级台阶踩上来）——垂直垫高从此始终朝主人方向斜着长。
      */
     private boolean tryDiagStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
         if (this.stepCooldown > 0) {
@@ -416,10 +420,18 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
         BlockPos ahead = new BlockPos(tx, y, tz);
         BlockPos fill = ahead.m_7918_(0, -1, 0);
-        // 前方脚下悬空（垫了才有台阶效果）且前方两格净空（台阶+头部）
-        if (!level.m_8055_(fill).m_60795_() || !level.m_8055_(ahead).m_60795_()
+        // 前方两格净空（台阶+头部）防把自己憋进去
+        if (!level.m_8055_(ahead).m_60795_()
                 || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
             return false;
+        }
+        BlockPos place;
+        if (level.m_8055_(fill).m_60795_()) {
+            place = fill; // 悬空：垫脚下格成台阶（原逻辑）
+        } else if (level.m_8055_(fill).m_60796_(level, fill)) {
+            place = ahead; // 实心地形：在本格再垫一级台阶（踩上来高度+1）
+        } else {
+            return false; // 水/花草等非实心——垫了不可靠，交给导航绕
         }
         Item item = takeBuildBlock(maid);
         if (item == null) {
@@ -429,15 +441,17 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (block == null) {
             return false;
         }
-        level.m_7731_(fill, block.m_49966_(), 3);
-        track(level, fill, block, maid);
+        level.m_7731_(place, block.m_49966_(), 3);
+        track(level, place, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.guardTicks = 12;
         this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
-        // 走上刚垫的台阶（不走导航长路——就一格，直接朝目标格设移动目标）
-        maid.m_21573_().m_26519_(tx + 0.5, y, tz + 0.5,
+        // 走上刚垫的台阶（不走导航长路——就一格，直接朝目标格设移动目标；
+        // 实心地形垫的本格台阶比脚下一格高，移动目标也抬一格让她跳上来）
+        double walkY = place.equals(ahead) ? y + 1 : y;
+        maid.m_21573_().m_26519_(tx + 0.5, walkY, tz + 0.5,
                 (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
         return true;
     }
