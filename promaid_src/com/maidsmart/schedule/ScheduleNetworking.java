@@ -425,6 +425,14 @@ public final class ScheduleNetworking {
                         if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
                             continue;
                         }
+                        // v1.1.0 实测六十二（自查修复）：跳过自保中/主动战斗中的女仆——
+                        // 批量覆盖她们的任务会打断保命流程、污染战斗还原链（还原到被
+                        // 批量改过的"原任务"）。单女仆快捷设置同样不检查，但批量是
+                        // 一改一整队，必须兜住
+                        if (m.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)
+                                || com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(m)) {
+                            continue;
+                        }
                         boolean changed = false;
                         if (applyMode) {
                             m.setSchedule(modes[pkt.mode]);
@@ -478,6 +486,11 @@ public final class ScheduleNetworking {
                 for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
                     for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
                         if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
+                            continue;
+                        }
+                        // v1.1.0 实测六十二（自查修复）：坐着的女仆不集合——建造强制
+                        // 坐下 = 玩家明确要她留在原地（与跨维度跟随同口径），拽走会破坏工地
+                        if (m.isMaidInSittingPose() || m.m_20159_()) {
                             continue;
                         }
                         // 已在身边 5 格内的不折腾
