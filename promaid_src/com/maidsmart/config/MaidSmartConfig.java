@@ -251,6 +251,8 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.IntValue COMBAT_TACTIC_HOLD_TICKS;
     public static final ForgeConfigSpec.IntValue COMBAT_REVERSE_WINDOW_TICKS;
     public static final ForgeConfigSpec.IntValue COMBAT_REVERSE_COOLDOWN_TICKS;
+    // v1.1.0 实测六十七：空手（无任何攻击物品）不参战
+    public static final ForgeConfigSpec.BooleanValue COMBAT_UNARMED_SKIP;
     // v1.1.0 实测六十一：战斗还原后排班宽限（防威胁闪烁导致的反复切换）
     public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_RESTORE_GRACE;
     // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：伐木/挖矿全量扫描每 tick 预算
@@ -1031,6 +1033,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.reverseWindowTicks").defineInRange("reverseWindowTicks", 100, 20, 600);
         COMBAT_REVERSE_COOLDOWN_TICKS = BUILDER.comment("战中反向切换冷却（tick，默认 200=10 秒）：横跳被判定后进入冷却，期间不再换战术（保持当前战术硬打）——0 = 关闭反向抑制")
                 .translation("config.promaid.combat.reverseCooldownTicks").defineInRange("reverseCooldownTicks", 200, 0, 1200);
+        // v1.1.0 实测六十七（用户："手上完全没有攻击性物品的女仆，就不应该触发自主战斗"）
+        COMBAT_UNARMED_SKIP = BUILDER.comment("空手不参战（默认开）：背包和主手都没有任何攻击任务认可的武器（剑/弓/枪械/模组武器等）的女仆，不触发自主战斗、维持原任务继续干活；关闭恢复旧行为（没有武器也空手近战兜底）")
+                .translation("config.promaid.combat.unarmedSkip").define("unarmedSkip", true);
         // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
         // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")

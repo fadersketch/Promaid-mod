@@ -1719,6 +1719,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_REVERSE_WINDOW_TICKS, s), "反向切换窗口（tick，默认 100=5 秒）：换战术后在此窗口内又想换回上一个战术，视为来回横跳"));
         this.rows.add(new NumRow("反向切换冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS, s), "反向切换冷却（tick，默认 200=10 秒）：横跳被判定后进入冷却，期间不再换战术（保持当前战术硬打）——0 = 关闭反向抑制"));
+        // v1.1.0 实测六十七：空手不参战
+        this.rows.add(new BoolRow("空手不参战", MaidSmartConfig.COMBAT_UNARMED_SKIP.get(),
+                v -> MaidSmartConfig.COMBAT_UNARMED_SKIP.set(v), "空手不参战（默认开）：背包和主手都没有任何攻击任务认可的武器（剑/弓/枪械/模组武器等）的女仆，不触发自主战斗、维持原任务继续干活；关闭恢复旧行为（没有武器也空手近战兜底）"));
         // v1.1.0 实测二十：枪械优先开关已删除（原版武器降半权、模组攻击任务等权
         // 随机的新选法不需要开关——附属生态的攻击任务与枪械强度等价）
         this.rows.add(new BoolRow("战斗结束自动还原", MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get(),
