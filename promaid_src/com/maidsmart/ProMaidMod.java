@@ -66,7 +66,40 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
                 com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
             }
+            migrateOreTable();
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测七十三（粉丝反馈："女仆专门不挖铜矿石"）：铜矿 2026-08-21 才首次
+     * 进入默认矿表，且更早的默认是【空列表】；而配置文件是唯一事实源（加载时清空
+     * 内置表全以文件为准）→ 老玩家存档里的矿表没有铜，女仆永远不选铜矿、甚至把它
+     * 当硬挡路报点。两条迁移规则（只补缺，绝不动玩家已有条目）：
+     * ① 空表 = 从未配置过 → 播种当前默认全家桶；
+     * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
+     */
+    private void migrateOreTable() {
+        java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
+                com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
+        boolean changed = false;
+        if (ores.isEmpty()) {
+            ores.addAll(com.maidsmart.config.MaidSmartConfig.DEFAULT_ORE_VALUES);
+            changed = true;
+        } else {
+            boolean hasCopper = ores.stream()
+                    .anyMatch(s -> s.startsWith("minecraft:copper_ore="));
+            boolean hasVanillaOre = ores.stream()
+                    .anyMatch(s -> s.startsWith("minecraft:") && s.contains("_ore="));
+            if (!hasCopper && hasVanillaOre) {
+                ores.add("minecraft:copper_ore=300");
+                ores.add("minecraft:deepslate_copper_ore=300");
+                changed = true;
+            }
+        }
+        if (changed) {
+            com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.set(
+                    new java.util.ArrayList<>(ores));
         }
     }
 }

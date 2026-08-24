@@ -2041,7 +2041,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         maid.getChatBubbleManager().addTextChatBubble(
                 "前方有" + name + "（坐标 " + blockerPos.m_123341_() + ", " + blockerPos.m_123342_()
                         + ", " + blockerPos.m_123343_() + "）挡住了" + oreName + "（坐标 " + orePos.m_123341_()
-                        + ", " + orePos.m_123342_() + ", " + orePos.m_123343_() + "），我挖不过去，先换个目标啦～");
+                        + ", " + orePos.m_123342_() + ", " + orePos.m_123343_() + "），我挖不过去，先换个目标啦～"
+                        + "（提示：如果挡路的其实就是你想让我挖的矿，说明它还没进矿表——配置面板挖矿·矿表里加入即可）");
     }
 
     /**
