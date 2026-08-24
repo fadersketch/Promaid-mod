@@ -25,6 +25,22 @@ for p in pathlib.Path(OUT).rglob('*.class'):
         p.unlink()
         print('purged stale class:', rel)
 
+# v1.1.0 实测六十四：源文件比 class 新 = 上次 javac 失败/未覆盖 → 拒绝打包。
+# 【事故背景】实测五十一起 ScheduleBookScreen.java 缺方法导致 javac 每次失败，
+# 而 out 目录残留旧 class 被照常打包（verify 只对比 out↔jar 不对比 src）——
+# 五十一~六十三的界面改动静默失效了十几个版本。此检查彻底堵死该类事故。
+stale = []
+for p in pathlib.Path(SRC).rglob('*.java'):
+    rel = str(p.relative_to(SRC)).replace('\\', '/')
+    base = rel[:-len('.java')]
+    cls = pathlib.Path(OUT, base + '.class')
+    if not cls.exists():
+        stale.append(rel + ' (无编译产物)')
+    elif p.stat().st_mtime > cls.stat().st_mtime:
+        stale.append(rel + ' (源比 class 新)')
+if stale:
+    raise SystemExit('FATAL: 以下源文件未成功编译（javac 失败或未重跑），拒绝打包旧字节码:\n  ' + '\n  '.join(stale))
+
 # 1b. (re)create META-INF with manifest + mods.toml (娴滃矁绻橀崚?\r\n 闂?v1.5.24 閻?\r\r\n bug)
 meta = os.path.join(STAGING, 'META-INF')
 if os.path.isdir(meta):
