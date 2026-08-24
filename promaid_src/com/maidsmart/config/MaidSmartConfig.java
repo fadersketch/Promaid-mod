@@ -247,6 +247,15 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_MELEE_WEIGHT;
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_RANGED_WEIGHT;
+    // v1.1.0 实测六十一（借鉴 TLM-Sincerely 防抖三件套）：战中换战术最短持有/反向窗口/反向冷却
+    public static final ForgeConfigSpec.IntValue COMBAT_TACTIC_HOLD_TICKS;
+    public static final ForgeConfigSpec.IntValue COMBAT_REVERSE_WINDOW_TICKS;
+    public static final ForgeConfigSpec.IntValue COMBAT_REVERSE_COOLDOWN_TICKS;
+    // v1.1.0 实测六十一：战斗还原后排班宽限（防威胁闪烁导致的反复切换）
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_RESTORE_GRACE;
+    // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：伐木/挖矿全量扫描每 tick 预算
+    public static final ForgeConfigSpec.IntValue WOOD_SCAN_BUDGET;
+    public static final ForgeConfigSpec.IntValue MINE_SCAN_BUDGET;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -510,6 +519,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
                 .defineInRange("junkCheckInterval", 100, 20, 400);
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
+        MINE_SCAN_BUDGET = BUILDER.comment("挖矿扫描预算（格/tick，默认 4096）：全量扫描矿框改为分帧执行——每 tick 最多检查这么多格，剩余下 tick 继续（扫完前女仆短暂无目标）；调小更不卡服但找矿变慢，调大找矿快但单 tick 尖峰高")
+                .translation("config.promaid.mine.scanBudget").defineInRange("scanBudget", 4096, 256, 65536);
         MINE_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过矿/捡不到掉落播报间隔（tick，防刷屏）")
                 .translation("config.promaid.mine.skipReportInterval")
                 .defineInRange("skipReportInterval", 600, 100, 2400);
@@ -588,6 +600,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .defineInRange("pillarCooldown", 2, 1, 20);
         WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
+        WOOD_SCAN_BUDGET = BUILDER.comment("伐木扫描预算（格/tick，默认 4096）：全量扫描木材框改为分帧执行——每 tick 最多检查这么多格，剩余下 tick 继续（扫完前女仆短暂无目标）；调小更不卡服但找树变慢，调大找树快但单 tick 尖峰高")
+                .translation("config.promaid.wood.scanBudget").defineInRange("scanBudget", 4096, 256, 65536);
         WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
                 .translation("config.promaid.wood.skipReportInterval").defineInRange("skipReportInterval", 600, 100, 2400);
         WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
@@ -1004,6 +1019,13 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.prefMeleeWeight").defineInRange("prefMeleeWeight", 3, 0, 10);
         COMBAT_PREF_RANGED_WEIGHT = BUILDER.comment("远程偏好权重（默认 1）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——调大则近身也更倾向保持远程输出；设 0 = 永不主动选远程（战中也不会切远程）")
                 .translation("config.promaid.combat.prefRangedWeight").defineInRange("prefRangedWeight", 1, 0, 10);
+        // v1.1.0 实测六十一（借鉴 TLM-Sincerely 防抖三件套）：战中换战术稳定机制
+        COMBAT_TACTIC_HOLD_TICKS = BUILDER.comment("战中换战术最短持有（tick，默认 40=2 秒）：近远程切换后至少持有这么久才允许再次评估换战术——防敌人在门槛距离徘徊时频繁换任务重建 brain；0 = 不限制")
+                .translation("config.promaid.combat.tacticHoldTicks").defineInRange("tacticHoldTicks", 40, 0, 600);
+        COMBAT_REVERSE_WINDOW_TICKS = BUILDER.comment("战中反向切换窗口（tick，默认 100=5 秒）：换战术后在此窗口内又想换回上一个战术，视为来回横跳")
+                .translation("config.promaid.combat.reverseWindowTicks").defineInRange("reverseWindowTicks", 100, 20, 600);
+        COMBAT_REVERSE_COOLDOWN_TICKS = BUILDER.comment("战中反向切换冷却（tick，默认 200=10 秒）：横跳被判定后进入冷却，期间不再换战术（保持当前战术硬打）——0 = 关闭反向抑制")
+                .translation("config.promaid.combat.reverseCooldownTicks").defineInRange("reverseCooldownTicks", 200, 0, 1200);
         // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
         // 力量等）加入后模组攻击任务与枪械等价，改为任务池加权随机（原版武器降半权）
         COMBAT_AUTO_SWITCH_RESTORE = BUILDER.comment("战斗结束自动还原（威胁消失一段时间后切回战斗前的原任务；关闭则保持战斗模式直到玩家手动切换）")
@@ -1089,6 +1111,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.1.0：排班表总开关（用户"玩家可操作"原则——新功能都要有手册内开关）
     MISC_SCHEDULE_ENABLED = BUILDER.comment("排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（已保存的日程不丢，重新打开恢复生效），女仆保持当前任务")
             .translation("config.promaid.misc.scheduleEnabled").define("scheduleEnabled", true);
+    // v1.1.0 实测六十一：战斗还原后排班宽限——威胁在还原威胁半径边缘闪烁时，
+    // 战斗↔还原循环不再立刻把排班段任务压回去（还原后先干原任务一段时间）
+    MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
+            .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")

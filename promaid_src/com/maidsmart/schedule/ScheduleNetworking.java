@@ -372,6 +372,8 @@ public final class ScheduleNetworking {
                         safe.add(new ScheduleData.Segment(st, en, md, s.taskUid()));
                     }
                 }
+                // 玩家手动保存 = 明确意图，清战斗还原宽限立即生效（实测六十一）
+                maid.getPersistentData().m_128356_(ScheduleData.GRACE_TAG, 0L);
                 ScheduleData.save(maid, safe, pkt.on);
                 // 保存后立即按当前时间应用一次（不用等下一个整分检查）
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
