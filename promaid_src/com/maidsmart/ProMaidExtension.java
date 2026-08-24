@@ -180,6 +180,8 @@ public class ProMaidExtension implements ILittleMaid {
             this.dimFollowTimer = 0;
             com.maidsmart.follow.MaidChunkLoadManager.tick(server);
         }
+        // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
+        com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
         // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
         // → 移除并原地丢一个完全一样的到地上）
         if (++this.weaponGuardTimer >= 20) {

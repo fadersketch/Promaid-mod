@@ -55,8 +55,39 @@ public final class MaidChunkLoadManager {
     private record TicketKey(ResourceKey<net.minecraft.world.level.Level> dim, long chunk) {
     }
 
+    /** v1.1.0 实测七十：最后出现位置登记——一键集合对"未加载区块里的女仆"的
+     *  唯一线索（卸载后实体不在任何列表里，只能靠最后见到的位置去强载区块）。
+     *  每 5 秒覆盖写，天然最新；召回失败时丢弃该条（多半已被魂符收回/死亡）。 */
+    private record LastSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
+                            UUID ownerId, long seenAt) {
+    }
+
+    private static final Map<UUID, LastSeen> LAST_SEEN = new ConcurrentHashMap<>();
+
+    /** v1.1.0 实测七十：待召回队列（uuid → 状态）——持有强载票直到实体出现/超时 */
+    private record PendingSummon(ResourceKey<net.minecraft.world.level.Level> dim,
+                                 net.minecraft.world.level.ChunkPos chunk,
+                                 net.minecraft.server.level.ServerPlayer owner, long expireGameTime) {
+    }
+
+    private static final Map<UUID, PendingSummon> PENDING_SUMMON = new ConcurrentHashMap<>();
+
     /** 每 100 tick（5 秒）由 ProMaidExtension.onServerTick 调用 */
     public static void tick(MinecraftServer server) {
+        // v1.1.0 实测七十：登记全部在场有主女仆的最后出现位置（不受下方开关限制
+        // ——这是"一键集合召回未加载区块女仆"的唯一线索）
+        for (ServerLevel lvl : server.m_129785_()) {
+            for (Entity e : lvl.m_8583_()) {
+                if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
+                    continue;
+                }
+                LivingEntity ow = maid.m_269323_();
+                if (ow != null) {
+                    LAST_SEEN.put(maid.m_20148_(), new LastSeen(lvl.m_46472_(),
+                            maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_()));
+                }
+            }
+        }
         if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_CHUNK_LOAD.get()) {
             releaseAll(server);
             return;
@@ -126,6 +157,17 @@ public final class MaidChunkLoadManager {
 
     /** 服务器停止/开关关闭：撤掉全部票（ProMaidExtension ServerStoppingEvent 调用） */
     public static void releaseAll(MinecraftServer server) {
+        // v1.1.0 实测七十：待召回队列一并清场
+        for (PendingSummon p : PENDING_SUMMON.values()) {
+            ServerLevel lvl = server.m_129880_(p.dim());
+            if (lvl != null) {
+                try {
+                    lvl.m_7726_().m_8438_(MAID_TICKET, p.chunk(), TICKET_LEVEL, Unit.INSTANCE);
+                } catch (Exception ignored) {
+                }
+            }
+        }
+        PENDING_SUMMON.clear();
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             TicketKey key = e.getValue();
             ServerLevel level = server.m_129880_(key.dim());
@@ -200,6 +242,141 @@ public final class MaidChunkLoadManager {
             newLevel.m_5594_(null, stand, net.minecraft.sounds.SoundEvents.f_11852_,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测七十：一键集合入口（SummonPacket 调用）。
+     * ① 扫描全部维度的在场女仆：坐着/骑乘的保持原位（建造工地/载具豁免）；
+     * 已在身边的不折腾；其余走 summonMaidTo 真传送（跨维度通用）。在家模式的
+     * 女仆也照召——主人明确指令优先于守家豁免（排班女仆现在自动 home 模式，
+     * 不放开就永远叫不回来）。
+     * ② 不在场（未加载区块）的女仆：查 LAST_SEEN 最后出现位置，挂强载票 +
+     * 进待召回队列，由 tickPending 每 tick 推进——实体一出现就自动传回并回报。
+     */
+    public static SummonReport summonAll(net.minecraft.server.level.ServerPlayer player) {
+        int summoned = 0;
+        int kept = 0;
+        int failStand = 0;
+        java.util.Set<UUID> seen = new java.util.HashSet<>();
+        java.util.UUID pid = player.m_20148_();
+        for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+            for (Entity e : lvl.m_8583_()) {
+                if (!(e instanceof EntityMaid md) || !md.m_6084_() || !md.m_21830_(player)) {
+                    continue;
+                }
+                seen.add(md.m_20148_());
+                if (md.isMaidInSittingPose() || md.m_20159_()) {
+                    kept++; // 坐着/骑乘 = 玩家明确要她留在原地（建造工地/载具），不拽
+                    continue;
+                }
+                if (lvl == player.m_9236_() && md.m_20238_(player.m_20182_()) < 25.0) {
+                    continue; // 已在身边 5 格内
+                }
+                if (summonMaidTo(md, player)) {
+                    summoned++;
+                } else {
+                    failStand++;
+                }
+            }
+        }
+        // 未加载区块里的：按最后出现位置挂强载票 + 进待召回队列
+        int pending = 0;
+        MinecraftServer server = player.m_9236_().m_7654_();
+        long now = player.m_9236_().m_46467_();
+        for (Map.Entry<UUID, LastSeen> en : LAST_SEEN.entrySet()) {
+            LastSeen ls = en.getValue();
+            if (!ls.ownerId().equals(pid) || seen.contains(en.getKey())) {
+                continue;
+            }
+            if (PENDING_SUMMON.containsKey(en.getKey())) {
+                pending++; // 已在队列（重复点集合不叠票）
+                continue;
+            }
+            ServerLevel lvl = server.m_129880_(ls.dim());
+            if (lvl == null) {
+                continue;
+            }
+            net.minecraft.world.level.ChunkPos cp =
+                    new net.minecraft.world.level.ChunkPos(ls.pos());
+            lvl.m_7726_().m_8387_(MAID_TICKET, cp, TICKET_LEVEL, Unit.INSTANCE);
+            PENDING_SUMMON.put(en.getKey(),
+                    new PendingSummon(ls.dim(), cp, player, now + 300L));
+            pending++;
+        }
+        return new SummonReport(summoned, kept, failStand, pending);
+    }
+
+    /** 集合结果汇总（聊天栏播报用） */
+    public record SummonReport(int summoned, int kept, int failStand, int pending) {
+    }
+
+    /**
+     * v1.1.0 实测七十：每 tick 推进待召回队列（ProMaidExtension 每tick调用；
+     * 空队列零开销）。区块加载完成后女仆实体出现 → 自动传回主人身边并聊天栏
+     * 回报；300 tick（15 秒）还没等到（被收回/死亡/位置失效）→ 放弃、撤票、
+     * 丢弃该位置记录。
+     */
+    public static void tickPending(MinecraftServer server) {
+        if (PENDING_SUMMON.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<Map.Entry<UUID, PendingSummon>> it =
+                PENDING_SUMMON.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<UUID, PendingSummon> en = it.next();
+            PendingSummon p = en.getValue();
+            net.minecraft.server.level.ServerPlayer owner = p.owner();
+            boolean ownerGone = owner == null || owner.m_21224_()
+                    || !(owner.m_9236_() instanceof ServerLevel);
+            long now = ownerGone ? 0 : ((ServerLevel) owner.m_9236_()).m_46467_();
+            if (ownerGone || now > p.expireGameTime()) {
+                releasePendingTicket(server, p);
+                if (!ownerGone && now > p.expireGameTime()) {
+                    try {
+                        owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "§7【集合】有一名女仆没能等到（可能已被魂符收回或不在了）"));
+                    } catch (Exception ignored) {
+                    }
+                    LAST_SEEN.remove(en.getKey()); // 位置多半失效，别再拿它召回
+                }
+                it.remove();
+                continue;
+            }
+            // 只扫目标维度（区块刚被我们强载，实体出现就在那里）
+            ServerLevel lvl = server.m_129880_(p.dim());
+            if (lvl == null) {
+                releasePendingTicket(server, p);
+                it.remove();
+                continue;
+            }
+            for (Entity e : lvl.m_8583_()) {
+                if (e instanceof EntityMaid md && en.getKey().equals(md.m_20148_())
+                        && md.m_21830_(owner)) {
+                    boolean ok = summonMaidTo(md, owner);
+                    String name = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
+                    try {
+                        owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(ok
+                                ? "§a【集合】" + name + " 已从未加载的区块召回"
+                                : "§c【集合】" + name + " 召回了但身边没有可站立点"));
+                    } catch (Exception ignored) {
+                    }
+                    releasePendingTicket(server, p);
+                    it.remove();
+                    break;
+                }
+            }
+        }
+    }
+
+    /** 撤掉待召回条目持有的强载票 */
+    private static void releasePendingTicket(MinecraftServer server, PendingSummon p) {
+        ServerLevel lvl = server.m_129880_(p.dim());
+        if (lvl != null) {
+            try {
+                lvl.m_7726_().m_8438_(MAID_TICKET, p.chunk(), TICKET_LEVEL, Unit.INSTANCE);
+            } catch (Exception ignored) {
+            }
         }
     }
 

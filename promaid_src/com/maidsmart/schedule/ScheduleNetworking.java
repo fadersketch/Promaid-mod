@@ -212,14 +212,26 @@ public final class ScheduleNetworking {
                     maid.setSchedule(com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule
                             .values()[pkt.mode]);
                 }
-                if (pkt.taskUid != null && !pkt.taskUid.isEmpty()) {
-                    TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
-                            .ifPresent(maid::setTask);
-                    // 手动切任务 → 排班去抖键更新为"当前段"，避免下一秒排班又切回去
-                    touchAppliedKey(maid, level);
-                }
                 if (pkt.on == 0 || pkt.on == 1) {
                     ScheduleData.setOn(maid, pkt.on == 1);
+                    // v1.1.0 实测七十：排班中的女仆自动 home 模式（守家按日程干活，
+                    // 不跟着主人乱跑）；关掉排班即解除
+                    maid.setHomeModeEnable(pkt.on == 1);
+                }
+                if (pkt.taskUid != null && !pkt.taskUid.isEmpty()) {
+                    // v1.1.0 实测七十（用户反馈：日程表跟主人的主动切换任务冲突）：
+                    // 硬性规则——排班开着就不许手动切任务，先关排班。客户端按钮已锁，
+                    // 这里服务端兜底
+                    if (ScheduleData.isOn(maid)) {
+                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "§c【排班】「" + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
+                                        + "」的日程表开着，任务由日程表管理——请先关闭她的排班再切换任务"));
+                    } else {
+                        TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                                .ifPresent(maid::setTask);
+                        // 手动切任务 → 排班去抖键更新为"当前段"，避免下一秒排班又切回去
+                        touchAppliedKey(maid, level);
+                    }
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -375,6 +387,9 @@ public final class ScheduleNetworking {
                 // 玩家手动保存 = 明确意图，清战斗还原宽限立即生效（实测六十一）
                 maid.getPersistentData().m_128356_(ScheduleData.GRACE_TAG, 0L);
                 ScheduleData.save(maid, safe, pkt.on);
+                // v1.1.0 实测七十：保存日程开启排班的瞬间，她自动进入在家模式
+                // （守家按日程干活、不跨维度追人）；关闭排班即自动解除
+                maid.setHomeModeEnable(pkt.on);
                 // 保存后立即按当前时间应用一次（不用等下一个整分检查）
                 com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
             });
@@ -420,6 +435,7 @@ public final class ScheduleNetworking {
                     return;
                 }
                 int applied = 0;
+                int schedSkipped = 0; // v1.1.0 实测七十：排班中被跳过的数量
                 for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
                     for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
                         if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
@@ -433,20 +449,26 @@ public final class ScheduleNetworking {
                                 || com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(m)) {
                             continue;
                         }
+                        // v1.1.0 实测七十：排班中的女仆任务由日程表管理——批量应用跳过她们
+                        boolean schedOn = ScheduleData.isOn(m);
                         boolean changed = false;
                         if (applyMode) {
                             m.setSchedule(modes[pkt.mode]);
                             changed = true;
                         }
                         if (applyTask) {
-                            try {
-                                TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
-                                        .ifPresent(t -> {
-                                            m.setTask(t);
-                                            touchAppliedKey(m, lvl);
-                                        });
-                                changed = true;
-                            } catch (Exception ignored) {
+                            if (schedOn) {
+                                schedSkipped++;
+                            } else {
+                                try {
+                                    TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                                            .ifPresent(task -> {
+                                                m.setTask(task);
+                                                touchAppliedKey(m, lvl);
+                                            });
+                                    changed = true;
+                                } catch (Exception ignored) {
+                                }
                             }
                         }
                         if (changed) {
@@ -455,14 +477,17 @@ public final class ScheduleNetworking {
                     }
                 }
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "§a已为 " + applied + " 名女仆更新设置"));
+                        "§a已为 " + applied + " 名女仆更新设置"
+                                + (schedSkipped > 0 ? "§7（" + schedSkipped
+                                + " 名排班中，任务保持日程安排不动）" : "")));
             });
             ctx.get().setPacketHandled(true);
         }
     }
 
-    /** C2S 一键集合：把主人全部已加载女仆（跨维度）传送到身边。
-     *  传送复用实测四十四的真传送链路（teleportTo + 落点找站立格）。 */
+    /** C2S 一键集合：把主人全部在场女仆（跨维度）传送到身边；不在已加载区块里的
+     *  按「最后出现位置」强载区块并自动召回（实测七十）。传送复用实测四十四的
+     *  真传送链路（teleportTo + 落点找站立格）。 */
     public static class SummonPacket {
 
         public SummonPacket() {
@@ -481,38 +506,33 @@ public final class ScheduleNetworking {
                 if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
                     return;
                 }
-                int ok = 0;
-                int fail = 0;
-                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
-                        if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
-                            continue;
-                        }
-                        // v1.1.0 实测六十二（自查修复）：坐着的女仆不集合——建造强制
-                        // 坐下 = 玩家明确要她留在原地（与跨维度跟随同口径），拽走会破坏工地
-                        // v1.1.0 实测六十五：在家模式的女仆也不集合——跨维度集合后
-                        // 她困在错误维度回不了家（与跟随逻辑同口径）
-                        if (m.isMaidInSittingPose() || m.m_20159_() || m.isHomeModeEnable()) {
-                            continue;
-                        }
-                        // 已在身边 5 格内的不折腾
-                        if (lvl == level && m.m_20238_(player.m_20182_()) < 25.0) {
-                            continue;
-                        }
-                        if (com.maidsmart.follow.MaidChunkLoadManager.summonMaidTo(m, player)) {
-                            ok++;
-                        } else {
-                            fail++;
-                        }
-                    }
+                // v1.1.0 实测七十（用户反馈：一键集合跨维度做不到）：根因是未加载
+                // 区块里的女仆根本不在实体列表里（票务只救"还加载着"的）。改为：
+                // ① 在场女仆立即传回；② 不在场的按最后出现位置强载区块进待召回
+                // 队列，实体一出现自动传回并回报（约几秒）。在家模式的女仆也响应
+                // 集合——主人明确指令优先于守家豁免（排班女仆现在自动 home 模式，
+                // 不放开就永远叫不回来）；坐着/骑乘仍保持原位（建造工地/载具豁免）
+                var r = com.maidsmart.follow.MaidChunkLoadManager.summonAll(player);
+                java.util.List<String> parts = new ArrayList<>();
+                if (r.summoned() > 0) {
+                    parts.add("§a已集合 " + r.summoned() + " 名女仆到身边");
                 }
-                if (ok == 0 && fail == 0) {
+                if (r.pending() > 0) {
+                    parts.add("§e另有 " + r.pending()
+                            + " 名不在已加载区块——正在按最后出现位置强载区块并自动召回（稍候几秒，无需再点）");
+                }
+                if (r.failStand() > 0) {
+                    parts.add("§7" + r.failStand() + " 名因身边无可站立点未动");
+                }
+                if (r.kept() > 0) {
+                    parts.add("§7" + r.kept() + " 名坐着/骑乘中保持原位");
+                }
+                if (parts.isEmpty()) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "§7没有需要集合的女仆（都在身边或不在场上）"));
                 } else {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "§a已集合 " + ok + " 名女仆到身边"
-                                    + (fail > 0 ? "§7（" + fail + " 名未能到达——身边没有可站立点）" : "")));
+                            String.join("§r；", parts)));
                 }
             });
             ctx.get().setPacketHandled(true);
