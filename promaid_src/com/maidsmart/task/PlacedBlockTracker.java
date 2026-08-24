@@ -50,6 +50,7 @@ public final class PlacedBlockTracker {
 
     public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier) {
         this.lifetimeSupplier = lifetimeSupplier;
+        ALL_INSTANCES.add(this); // 实测七十一：自动登记进全局表（供跨系统查询）
     }
 
     /** 登记一个搭方块（绑定放置女仆） */
@@ -64,6 +65,23 @@ public final class PlacedBlockTracker {
     public boolean isPlaced(Level level, BlockPos pos) {
         Map<BlockPos, Mark> marks = placed.get(level.m_46472_());
         return marks != null && marks.containsKey(pos.m_7949_());
+    }
+
+    /** v1.1.0 实测七十一（用户反馈："伐木状态+搭路开着，女仆会砍自己搭路的方块"）：
+     *  全部实例登记表——「是否女仆搭的方块」必须【跨系统】查询。旧版四套表各自为政，
+     *  伐木只查伐木表 → 搭路垫的原木桥不在保护名单里；搭路选材又是"背包最多的
+     *  可放置方块"（= 刚砍下的原木）→ 女仆把脚下的桥当树砍掉、自己摔下去。 */
+    private static final java.util.List<PlacedBlockTracker> ALL_INSTANCES =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /** 该位置是否是【任何系统】（挖矿/伐木/搭路/自保）登记的女仆搭方块——防误挖统一口径 */
+    public static boolean isAnyPlaced(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            if (t.isPlaced(level, pos)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -490,9 +490,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         return WOODING.contains(maid.m_20148_());
     }
 
-    /** v1.5.87：该位置是否是挖矿搭的方块（PlacedBlockTracker 追踪；搭方块防掉落用） */
+    /** v1.5.87：该位置是否是女仆搭的方块（实测七十一改跨系统统一查询——伐木的
+     *  扫描/连锁/挡路判定不再把搭路/自保/挖矿垫的方块当成木材目标或开路块） */
     public static boolean isWoodingPlaced(ServerLevel level, BlockPos pos) {
-        return PLACED_TRACKER.isPlaced(level, pos);
+        return PlacedBlockTracker.isAnyPlaced(level, pos);
     }
 
     /** v1.5.87：搭方块防掉落窗口（搭块后 12 tick 内钳制，防刚搭完滑落） */
