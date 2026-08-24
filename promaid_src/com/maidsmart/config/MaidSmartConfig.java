@@ -263,6 +263,20 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.IntValue WOOD_STUCK_RESET_SECONDS;
     public static final ForgeConfigSpec.BooleanValue MINE_STUCK_WATCHDOG;
     public static final ForgeConfigSpec.IntValue MINE_STUCK_RESET_SECONDS;
+    /** v1.1.0 实测七十三：默认可挖矿表（原版全家桶，价值统一 300）——抽成常量供
+     *  配置迁移复用（旧档的空表/缺铜表在加载时按此补齐；见 ProMaidMod.onConfigLoad）。
+     *  必须声明在 static{} 块之前（块内的 defineList 要引用它） */
+    public static final java.util.List<String> DEFAULT_ORE_VALUES = java.util.List.of(
+            "minecraft:gold_ore=300", "minecraft:deepslate_gold_ore=300",
+            "minecraft:coal_ore=300", "minecraft:deepslate_coal_ore=300",
+            "minecraft:iron_ore=300", "minecraft:deepslate_iron_ore=300",
+            "minecraft:copper_ore=300", "minecraft:deepslate_copper_ore=300",
+            "minecraft:diamond_ore=300", "minecraft:deepslate_diamond_ore=300",
+            "minecraft:lapis_ore=300", "minecraft:deepslate_lapis_ore=300",
+            "minecraft:emerald_ore=300", "minecraft:deepslate_emerald_ore=300",
+            "minecraft:redstone_ore=300", "minecraft:deepslate_redstone_ore=300",
+            "minecraft:nether_gold_ore=300", "minecraft:nether_quartz_ore=300",
+            "minecraft:ancient_debris=300");
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
@@ -450,7 +464,7 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         BUILDER.comment("挖矿设置").translation("config.promaid.mine").push("mine");
         MINE_ORE_VALUES = BUILDER.comment("可挖掘方块表（自定义矿表）：每项 方块注册名=价值，如 minecraft:mod_ore=300；适配其他 mod 的矿石")
                 .translation("config.promaid.mine.oreValues")
-                .defineList("oreValues", List.of("minecraft:gold_ore=300", "minecraft:deepslate_gold_ore=300", "minecraft:coal_ore=300", "minecraft:deepslate_coal_ore=300", "minecraft:iron_ore=300", "minecraft:deepslate_iron_ore=300", "minecraft:copper_ore=300", "minecraft:deepslate_copper_ore=300", "minecraft:diamond_ore=300", "minecraft:deepslate_lapis_ore=300", "minecraft:deepslate_diamond_ore=300", "minecraft:lapis_ore=300", "minecraft:deepslate_emerald_ore=300", "minecraft:emerald_ore=300", "minecraft:deepslate_redstone_ore=300", "minecraft:redstone_ore=300", "minecraft:nether_gold_ore=300", "minecraft:nether_quartz_ore=300", "minecraft:ancient_debris=300"),
+                .defineList("oreValues", DEFAULT_ORE_VALUES,
                         o -> o instanceof String s && s.contains("="));
         MINE_BREAKABLES = BUILDER.comment("额外可挖穿方块（障碍物名单，path 名如 oak_log——女仆挖矿遇到会挖穿而非当硬挡路报点弃置）")
                 .translation("config.promaid.mine.breakables")
