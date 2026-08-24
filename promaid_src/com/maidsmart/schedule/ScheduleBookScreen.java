@@ -325,11 +325,15 @@ public class ScheduleBookScreen extends Screen {
         int qw = Math.min(300, w - qx - 8);
         int y = CONTENT_TOP + 6;
         // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL，立即生效）
+        // v1.1.0 实测七十六：排班中的女仆锁定（同任务按钮——服务端同样拦截兜底）
         this.m_142416_(Button.m_253074_(
                         Component.m_237113_("工作模式：\u00a7e"
                                 + MODE_NAMES[Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)))]
-                                + " \u00a78(点击切换)"),
+                                + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击切换)")),
                         b -> {
+                            if (this.loadedOn) {
+                                return; // 硬性锁定：先关右上角的排班
+                            }
                             int mode = (safeInt(sel != null ? sel[3] : null, 2) + 1) % 3;
                             ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
                                     this.selUuid, mode, "", -1));
@@ -531,7 +535,7 @@ public class ScheduleBookScreen extends Screen {
                 // 第 1 页快捷设置：提示放同一条空档线（h-38），与两行按钮零重叠
                 // v1.1.0 实测七十：排班中的女仆任务锁定——硬性提示替代普通说明
                 g.m_280653_(this.f_96547_, Component.m_237113_(this.loadedOn
-                                ? "\u00a7c⚠ 她有排班：任务由日程表自动管理——先在右上角关闭排班，才能在这里切任务"
+                                ? "\u00a7c⚠ 她有排班：任务与工作模式都由日程表自动管理——先在右上角关闭排班，才能在这里手动更改"
                                 : "\u00a77点击立即生效：遥控她现在的作息与任务；排一天班去第 2 页"),
                         cx, h - 38, 0xFFE5A0A0);
             }
