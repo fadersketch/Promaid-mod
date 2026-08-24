@@ -876,6 +876,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             this.abandonedPos = this.targetPos;
             RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                     .put(this.targetPos.m_7949_(), gameTime);
+            markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
             this.targetPos = null;
             this.destroyProgress = 0.0f;
             this.saveProgressNow(maid);
@@ -922,6 +923,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 // 扫描层几 tick 后又选中同一块，"选中→看不见→丢弃"无限循环站桩发呆
                 RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                         .put(this.targetPos.m_7949_(), level.m_46467_());
+                markProgress(maid, gameTime); // 实测七十四：弃置也是前进（防看门狗误伤长舞蹈）
                 this.targetPos = null;
                 this.destroyProgress = 0.0f;
                 this.saveProgress(maid);
@@ -980,6 +982,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                     // 3 次重寻路仍原地不动 → 判不可达，弃置该矿（短时排除防反复选中）
                     RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                             .put(this.targetPos.m_7949_(), gameTime);
+                    markProgress(maid, gameTime); // 实测七十四：弃置也是前进
                     this.targetPos = null;
                     this.destroyProgress = 0.0f;
                     this.saveProgressNow(maid);
@@ -1163,7 +1166,14 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private void hardResetStuck(ServerLevel level, EntityMaid maid, long gameTime) {
         int id = maid.m_19879_();
         long idleTicks = gameTime - LAST_PROGRESS.getOrDefault(id, gameTime);
+        // 实测七十四：保留 30 秒短排表——那是"学到的不可达知识"（600 tick 自过期）。
+        // 旧版连它一起清：够不着目标的长舞蹈（每个候选 15 秒超时）会被看门狗反复
+        // 打断归零，形成"每 30 秒重置一次"的新死循环
+        java.util.Map<BlockPos, Long> keptDiscard = RECENT_DISCARD.get(id);
         forget(id);
+        if (keptDiscard != null && !keptDiscard.isEmpty()) {
+            RECENT_DISCARD.put(id, keptDiscard);
+        }
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
