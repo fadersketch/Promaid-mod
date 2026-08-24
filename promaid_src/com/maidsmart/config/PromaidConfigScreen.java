@@ -1655,6 +1655,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0.1-1，1=掉血就治）：主人血量低于此比例自动治疗（默认 0.30）"));
         this.rows.add(new BoolRow("被动插火把", MaidSmartConfig.TORCH_PLACER_ENABLE.get(),
                 v -> MaidSmartConfig.TORCH_PLACER_ENABLE.set(v), "被动插火把：主人周围黑暗自动插火把照明（消耗背包火把）"));
+        // v1.1.0 实测六十二：女仆着火不传主人
+        this.rows.add(new BoolRow("女仆着火不传主人", MaidSmartConfig.MAID_FIRE_GUARD.get(),
+                v -> MaidSmartConfig.MAID_FIRE_GUARD.set(v), "女仆着火不传主人（默认开）：燃烧的女仆贴着主人时不会把火烧到主人身上——燃烧女仆对主人的伤害直接取消，接触传火每半秒检查一次自动给主人灭火；主人自己站火里/岩浆里则不干预"));
         this.rows.add(new NumRow("插火把亮度阈值", String.valueOf(MaidSmartConfig.TORCH_DARK_THRESHOLD.get()),
                 s -> setInt(MaidSmartConfig.TORCH_DARK_THRESHOLD, s), "插火把亮度阈值（0-15）：主人脚下方块亮度低于此值自动插火把（默认 7）"));
         this.rows.add(new BoolRow("共享盾牌", MaidSmartConfig.SHIELD_SHARE_ENABLE.get(),

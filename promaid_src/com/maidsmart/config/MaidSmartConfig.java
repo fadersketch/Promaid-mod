@@ -312,6 +312,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue AID_FOOD_THRESHOLD;
     public static final ForgeConfigSpec.DoubleValue AID_HEALTH_THRESHOLD;
     public static final ForgeConfigSpec.BooleanValue TORCH_PLACER_ENABLE;
+    // v1.1.0 实测六十二：女仆着火不传主人
+    public static final ForgeConfigSpec.BooleanValue MAID_FIRE_GUARD;
     public static final ForgeConfigSpec.IntValue TORCH_DARK_THRESHOLD;
     public static final ForgeConfigSpec.BooleanValue SHIELD_SHARE_ENABLE;
     public static final ForgeConfigSpec.BooleanValue TOTEM_SHARE_ENABLE;
@@ -985,6 +987,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 1.0);
         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
                 .translation("config.promaid.combat.torchPlacerEnable").define("torchPlacerEnable", true);
+        // v1.1.0 实测六十二：女仆着火不传主人（攻击路径取消 + 接触路径自动灭火）
+        MAID_FIRE_GUARD = BUILDER.comment("女仆着火不传主人（默认开）：燃烧的女仆贴着主人时不会把火烧到主人身上——她烧她的，主人不点火；主人自己站火里/岩浆里则不干预")
+                .translation("config.promaid.combat.maidFireGuard").define("maidFireGuard", true);
         TORCH_DARK_THRESHOLD = BUILDER.comment("插火把亮度阈值（0-15：主人脚下亮度低于此值自动插火把）")
                 .translation("config.promaid.combat.torchDarkThreshold").defineInRange("torchDarkThreshold", 7, 4, 12);
         SHIELD_SHARE_ENABLE = BUILDER.comment("共享盾牌（主人盾牌耐久低/空时，从自己背包取盾给主人——不动自己副手）")
