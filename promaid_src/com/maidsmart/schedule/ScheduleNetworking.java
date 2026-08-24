@@ -513,10 +513,9 @@ public final class ScheduleNetworking {
                 }
                 // v1.1.0 实测七十（用户反馈：一键集合跨维度做不到）：根因是未加载
                 // 区块里的女仆根本不在实体列表里（票务只救"还加载着"的）。改为：
-                // ① 在场女仆立即传回；② 不在场的按最后出现位置强载区块进待召回
-                // 队列，实体一出现自动传回并回报（约几秒）。在家模式的女仆也响应
-                // 集合——主人明确指令优先于守家豁免（排班女仆现在自动 home 模式，
-                // 不放开就永远叫不回来）；坐着/骑乘仍保持原位（建造工地/载具豁免）
+                // ① 在场女仆立即传回（坐着/骑乘/在家模式豁免——实测七十八起 home
+                //    女仆恢复不响应集合，想召回先解除她的排班/在家模式）；② 不在场的
+                // 按最后出现位置强载区块进待召回队列，实体一出现自动传回并回报
                 var r = com.maidsmart.follow.MaidChunkLoadManager.summonAll(player);
                 java.util.List<String> parts = new ArrayList<>();
                 if (r.summoned() > 0) {
@@ -530,7 +529,7 @@ public final class ScheduleNetworking {
                     parts.add("§7" + r.failStand() + " 名因身边无可站立点未动");
                 }
                 if (r.kept() > 0) {
-                    parts.add("§7" + r.kept() + " 名坐着/骑乘中保持原位");
+                    parts.add("§7" + r.kept() + " 名坐着/骑乘/在家模式保持原位");
                 }
                 if (parts.isEmpty()) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(

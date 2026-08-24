@@ -210,7 +210,11 @@ public final class MaidChunkLoadManager {
                 return; // 在家模式 = 不跟随
             }
             LivingEntity owner = maid.m_269323_();
-            if (owner == null || owner.m_21224_()) {
+            // v1.1.0 实测七十八（bug：主人下界死亡后看家女仆被传到下界基岩层上）——
+            // 主人死亡期间实体仍在原位置（血量 0 但未移除），跟随链路照常触发，
+            // 女仆被传到死亡点附近；死亡点在高位时向下找站立格，下界直接落在基岩
+            // 顶层上面。主人不在存活状态一律不追
+            if (owner == null || owner.m_21224_() || !owner.m_6084_()) {
                 return;
             }
             if (maid.m_9236_() == owner.m_9236_()) {
@@ -247,10 +251,9 @@ public final class MaidChunkLoadManager {
 
     /**
      * v1.1.0 实测七十：一键集合入口（SummonPacket 调用）。
-     * ① 扫描全部维度的在场女仆：坐着/骑乘的保持原位（建造工地/载具豁免）；
-     * 已在身边的不折腾；其余走 summonMaidTo 真传送（跨维度通用）。在家模式的
-     * 女仆也照召——主人明确指令优先于守家豁免（排班女仆现在自动 home 模式，
-     * 不放开就永远叫不回来）。
+     * ① 扫描全部维度的在场女仆：坐着/骑乘/在家模式（含排班自动 home）的保持
+     * 原位——实测七十八起 home 女仆恢复"不响应传送"，想召回先解除她的排班/
+     * 在家模式；已在身边的不折腾；其余走 summonMaidTo 真传送（跨维度通用）。
      * ② 不在场（未加载区块）的女仆：查 LAST_SEEN 最后出现位置，挂强载票 +
      * 进待召回队列，由 tickPending 每 tick 推进——实体一出现就自动传回并回报。
      */
@@ -266,8 +269,10 @@ public final class MaidChunkLoadManager {
                     continue;
                 }
                 seen.add(md.m_20148_());
-                if (md.isMaidInSittingPose() || md.m_20159_()) {
-                    kept++; // 坐着/骑乘 = 玩家明确要她留在原地（建造工地/载具），不拽
+                // v1.1.0 实测七十八：home（在家）模式恢复豁免——看家的不该被一键
+                // 集合拽走（排班自动 home 的同理：想召回先关排班）
+                if (md.isMaidInSittingPose() || md.m_20159_() || md.isHomeModeEnable()) {
+                    kept++;
                     continue;
                 }
                 if (lvl == player.m_9236_() && md.m_20238_(player.m_20182_()) < 25.0) {
@@ -327,7 +332,7 @@ public final class MaidChunkLoadManager {
             Map.Entry<UUID, PendingSummon> en = it.next();
             PendingSummon p = en.getValue();
             net.minecraft.server.level.ServerPlayer owner = p.owner();
-            boolean ownerGone = owner == null || owner.m_21224_()
+            boolean ownerGone = owner == null || owner.m_21224_() || !owner.m_6084_()
                     || !(owner.m_9236_() instanceof ServerLevel);
             long now = ownerGone ? 0 : ((ServerLevel) owner.m_9236_()).m_46467_();
             if (ownerGone || now > p.expireGameTime()) {
@@ -353,6 +358,13 @@ public final class MaidChunkLoadManager {
             for (Entity e : lvl.m_8583_()) {
                 if (e instanceof EntityMaid md && en.getKey().equals(md.m_20148_())
                         && md.m_21830_(owner)) {
+                    if (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.m_20159_()) {
+                        // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
+                        // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
+                        releasePendingTicket(server, p);
+                        it.remove();
+                        break;
+                    }
                     boolean ok = summonMaidTo(md, owner);
                     String name = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
                     try {
@@ -407,6 +419,11 @@ public final class MaidChunkLoadManager {
         try {
             if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()) {
                 return false; // 已移除/死亡/骑乘中
+            }
+            // v1.1.0 实测七十八：home（在家）模式的女仆不被任何传送打扰——守家钉死；
+            // 主人已死亡也不传送（防传到死亡点/基岩顶）。本方法是所有传送的咽喉点
+            if (maid.isHomeModeEnable() || !owner.m_6084_()) {
+                return false;
             }
             if (!(owner.m_9236_() instanceof ServerLevel dest)) {
                 return false;
