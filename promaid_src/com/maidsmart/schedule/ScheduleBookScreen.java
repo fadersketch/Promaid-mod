@@ -43,6 +43,8 @@ public class ScheduleBookScreen extends Screen {
     private boolean loadedOn = false;
     /** 详情页页签（实测五十九）：0=第 1 页快捷设置（立即生效） 1=第 2 页排班（班次+6 槽） */
     private int detailPage = 0;
+    /** v1.1.0 实测六十三（自查修复）：排班页有未保存编辑——切页不再重拉数据覆盖 */
+    private boolean schedDirty = false;
     /** 实测六十（借鉴 Maid_Roster）：列表搜索词 / 批量模式选择 / 批量任务选择 /
      *  键盘焦点输入框 / 上次过滤后行数（空态提示用） */
     private String searchQuery = "";
@@ -182,6 +184,10 @@ public class ScheduleBookScreen extends Screen {
                         // 实测五十九：进详情默认第 1 页（快捷设置，无需日程数据）；
                         // 排班数据改在切到第 2 页时按需拉取（每次进都拉最新）
                         this.detailPage = 0;
+                        // v1.1.0 实测六十三（自查修复）：开关状态从列表行初始化——旧逻辑
+                        // loadedOn 残留上一只女仆的值，详情页右上角开关显示错误、切换时
+                        // 还会把错误的开/关写给新女仆
+                        this.loadedOn = "1".equals(m[4]);
                         this.m_7856_();
                     })
                     .m_252987_(cx - bw / 2, y, bw, 20).m_253136_());
@@ -269,8 +275,10 @@ public class ScheduleBookScreen extends Screen {
                                     return;
                                 }
                                 this.detailPage = ti;
-                                if (ti == 1) {
-                                    // 切到排班页：无条件重新拉最新日程（旧数据不残留）
+                                // v1.1.0 实测六十三（自查修复）：有未保存编辑时不再重拉——
+                                // 旧逻辑每次进排班页都拉最新数据，翻个页未保存的班次/任务
+                                // 就被覆盖丢失；脏标记在保存/换女仆时清除
+                                if (ti == 1 && !this.schedDirty) {
                                     this.waiting = true;
                                     ScheduleNetworking.CHANNEL.sendToServer(
                                             new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
@@ -355,7 +363,7 @@ public class ScheduleBookScreen extends Screen {
         this.m_142416_(nameBox);
         this.m_142416_(Button.m_253074_(Component.m_237113_("改名"), b ->
                         ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.RenameMaidPacket(
-                                this.selUuid, nameBox.getValue())))
+                                this.selUuid, nameBox.m_94155_())))
                 .m_252987_(qx + qw - 92, y, 92, 20).m_253136_());
     }
 
@@ -383,6 +391,7 @@ public class ScheduleBookScreen extends Screen {
                                 List<ScheduleData.Segment> cur = ScheduleData.segmentsFromSlots(
                                         this.shift, java.util.Arrays.asList(this.slots));
                                 this.shift = si;
+                                this.schedDirty = true; // 实测六十三：未保存编辑标记
                                 String[] tasks = ScheduleData.slotTasks(cur, si, this.defTask());
                                 for (int k = 0; k < 6; k++) {
                                     this.slots[k] = tasks[k] == null ? "" : tasks[k];
@@ -407,6 +416,7 @@ public class ScheduleBookScreen extends Screen {
                                 int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
                                 int next = (cur + 1) % (this.taskUids.size() + 1);
                                 this.slots[idx] = next == this.taskUids.size() ? "" : this.taskUids.get(next);
+                                this.schedDirty = true; // 实测六十三：未保存编辑标记
                                 b.m_93666_(Component.m_237113_(fitTask(this.slots[idx])));
                             })
                     .m_252987_(x, y, bw, 18).m_253136_());
@@ -421,6 +431,31 @@ public class ScheduleBookScreen extends Screen {
     private String defTask() {
         String[] sel = this.findSel();
         return sel != null ? sel[2] : "";
+    }
+
+    /* ==================== 保存 ==================== */
+
+    /**
+     * 保存日程：班次 + 6 槽 → 段列表（相邻同任务自动合并）→ 发包。
+     * 服务端只做越界防御（不再 normalize 补满 24:00——休息时间不排段）。
+     * v1.1.0 实测六十三：保存后清脏标记（之后切页可安全重拉最新数据）。
+     * 【实测六十三事故记录】本方法在实测五十一重写 UI 时被整体遗漏，导致
+     * ScheduleBookScreen.java 从五十一起每次 javac 都失败、而构建管线打包的是
+     * out 目录里实测五十时代的旧 class（verify 只对比 out↔jar 不对比 src）——
+     * 五十一~六十三的全部界面改动一直没真正进过 jar。已补回本方法并加固
+     * 构建脚本（javac 退出码真实检查 + 源文件比 class 新则拒打包）。
+     */
+    private void saveSchedule() {
+        List<String> slotList = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            slotList.add(this.slots[i] == null ? "" : this.slots[i]);
+        }
+        List<ScheduleData.Segment> segs = ScheduleData.segmentsFromSlots(this.shift, slotList);
+        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SchedSavePacket(
+                this.selUuid, this.loadedOn, segs));
+        this.schedDirty = false;
+        this.chat("\u00a7a日程已保存：工作时间均分 6 份，跨时间段自动切换；休息时间由作息睡觉");
+        this.m_7856_();
     }
 
     /* ==================== 渲染 ==================== */
