@@ -456,10 +456,12 @@ public class AutoCombatSwitch {
      */
     private static boolean hasThreatNearby(EntityMaid maid) {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
-        for (net.minecraft.world.entity.monster.Monster e
-                : maid.m_9236_().m_45976_(net.minecraft.world.entity.monster.Monster.class,
-                maid.m_20191_().m_82400_(r))) {
-            if (e.m_6084_()) {
+        // v1.1.0 实测六十八：Monster -> Enemy（与参战判定同口径——史莱姆等
+        // 敌对生物也算威胁，否则还原后立刻被再次触发、反复横跳）。
+        // Enemy 是接口，getEntitiesOfClass 不收——按 Entity 扫描再过滤
+        for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
+                net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
+            if (e instanceof net.minecraft.world.entity.monster.Enemy && e.m_6084_()) {
                 return true;
             }
         }
@@ -727,10 +729,11 @@ public class AutoCombatSwitch {
     private static double nearestThreatDist(EntityMaid maid) {
         try {
             double best = -1;
-            for (net.minecraft.world.entity.monster.Monster e : maid.m_9236_().m_45976_(
-                    net.minecraft.world.entity.monster.Monster.class,
+            // v1.1.0 实测六十八：Monster -> Enemy（同 hasThreatNearby 口径）
+            for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
+                    net.minecraft.world.entity.Entity.class,
                     maid.m_20191_().m_82400_(24.0))) {
-                if (!e.m_6084_()) {
+                if (!(e instanceof net.minecraft.world.entity.monster.Enemy) || !e.m_6084_()) {
                     continue;
                 }
                 double d = maid.m_20238_(e.m_20182_());
@@ -751,25 +754,37 @@ public class AutoCombatSwitch {
      */
     private static boolean hasWeaponForTask(EntityMaid maid,
                                             com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask task) {
-        // 1. 任务自己的判定（IAttackTask.isWeapon）
+        // v1.1.0 实测六十八（用户："拿斧子的女仆被切到三叉戟模式无法攻击"）：
+        // 旧版异常兜底是【整个方法级】的——任何物品的 isWeapon 抛异常就让整个
+        // 方法 return true，该任务无凭无据进候选池（三叉戟任务就是这样混进去的，
+        // 没三叉戟的女仆切过去根本无法攻击，怪杀不掉威胁不消失也永远不还原）。
+        // 改为【逐物品】安全判定：单件物品判定异常只跳过该件，绝不放行整个任务。
         try {
             ItemStack main = maid.m_21205_();
-            if (!main.m_41619_() && task.isWeapon(maid, main)) {
+            if (!main.m_41619_() && isWeaponSafe(task, maid, main)) {
                 return true;
             }
             IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && task.isWeapon(maid, s)) {
+                if (!s.m_41619_() && isWeaponSafe(task, maid, s)) {
                     return true;
                 }
             }
-            // v1.1.0 实测六十七：移除"全 false = 不限武器 → 视为可参战"的保守放行——
-            // 它会让完全没有攻击物品的女仆也进战斗池，与「空手不参战」直接矛盾
             return false;
         } catch (Throwable ignored) {
+            return false; // 背包遍历本身异常 → 视为无武器（与「空手不参战」同口径）
         }
-        return true; // 判定异常时保守放行（别让模组任务因此选不上）
+    }
+
+    /** 单件物品的 isWeapon 安全判定——模组任务实现抛异常只算这件不匹配 */
+    private static boolean isWeaponSafe(com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask task,
+                                        EntityMaid maid, ItemStack s) {
+        try {
+            return task.isWeapon(maid, s);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 是否带攻击力属性的物品（剑/斧/镐等——对齐 TaskAttack.isWeapon 语义，简化版） */
