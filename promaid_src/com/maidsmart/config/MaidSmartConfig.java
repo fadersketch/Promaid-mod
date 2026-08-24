@@ -362,6 +362,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.142：跟随女仆跨维度传送（主人换维度后 5 秒内传送到主人身边）
      public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
      public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
+    /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ForgeConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1136,6 +1138,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 永远能找到她（旧版主人在远处的女仆区块卸载后传送静默失效）
         MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（与主人不同维度的女仆所在区块保持加载，随时可跨维度传送；关闭后远处女仆所在区块卸载时无法传送）")
                 .translation("config.promaid.misc.maidChunkLoad").define("maidChunkLoad", true);
+        // v1.1.0 实测七十九：受困救援——死亡瞬间的坏落点（下界基岩顶等）已被
+        // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
+        MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
+                .translation("config.promaid.misc.maidRescue").define("maidRescue", true);
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
