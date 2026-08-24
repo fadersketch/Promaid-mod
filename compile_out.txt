@@ -16,7 +16,7 @@ C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\P
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\ProMaidMod.java:45: 警告: [removal] ModLoadingContext 中的 get() 已过时, 且标记为待删除
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                                                 ^
-C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\ProMaidMod.java:49: 警告: [removal] ModLoadingContext 中的 get() 已过时, 且标记为待删除
+C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\ProMaidMod.java:53: 警告: [removal] ModLoadingContext 中的 get() 已过时, 且标记为待删除
             net.minecraftforge.fml.ModLoadingContext.get().registerExtensionPoint(
                                                     ^
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\build\BlueprintBookNetworking.java:31: 警告: [removal] ResourceLocation 中的 ResourceLocation(String,String) 已过时, 且标记为待删除

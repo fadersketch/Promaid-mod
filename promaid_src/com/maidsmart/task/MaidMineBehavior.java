@@ -2375,12 +2375,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (!st.m_60796_(level, sample)) {
                 continue; // 非满块（楼梯/台阶/花/草）不挡；水不算
             }
-            // v1.5.87：可开路方块（OPEN_BREAKABLE：石头类 + 徒手可挖软方块）不计阻挡——
-            // 与 findBlockingBlock 的开路判定同一标准。旧版只按硬度判软（安山岩 1.5 被算
-            // 阻挡），大量泥土/安山岩包围的矿被预算排除 → "发现矿但挖不了"根因
-            if (isSoft(maid.m_21205_(), st) || isOpenStone(level, sample)) {
-                continue;
-            }
+            // v1.1.0 实测七十二（用户反馈："穿透默认太高，矿洞里一直往下打洞"）：
+            // 实心可开路方块（石头/泥土/深板岩等）重新计入阻挡层数——旧版跳过它们，
+            // 地下到处是石头 = 0 阻挡，预算形同虚设，隔地板的矿全都入选 → 女仆对着
+            // 脚下连凿竖井。现在预算真正约束"穿几层实心方块"（默认 6），更远的矿
+            // 先走近再评估；箱子/机器等硬挡路照旧计数，熔岩照旧计数
             blocking++;
         }
         return blocking;

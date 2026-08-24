@@ -1078,7 +1078,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.MINE_UP_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MINE_UP_RANGE, s), "垂直向上范围（格）：找头顶多高的矿（悬崖/天花板矿脉）；调大能发现高处矿"));
         this.rows.add(new NumRow("穿透预算", String.valueOf(MaidSmartConfig.MINE_BREAK_BUDGET.get()),
-                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算：选矿时计算女仆到矿之间的实心挡路方块数，超过此预算的矿不选（挖不过去）"));
+                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算（默认 6）：选矿时统计到矿之间要穿过的实心方块层数（含石头/泥土），超过预算的矿不选、走近再看；调大=爱穿墙打隧道，调小=只挑暴露的矿"));
         this.rows.add(new NumRow("价值权重", String.valueOf(MaidSmartConfig.MINE_VALUE_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.MINE_VALUE_WEIGHT, s), "价值权重：矿石价值对选矿的加成——钻石/绿宝石 500 分、铁/金 250、煤 100；权重越高高价值矿越优先（哪怕更远）"));
         this.rows.add(new NumRow("深度惩罚", String.valueOf(MaidSmartConfig.MINE_DEPTH_PENALTY.get()),

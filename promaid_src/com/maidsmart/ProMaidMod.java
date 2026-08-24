@@ -44,12 +44,29 @@ public class ProMaidMod {
         // v1.5.88：全模组配置（COMMON——客户端/服务端都可读，配置面板可热更新）
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
+        // v1.1.0 实测七十二：穿透预算语义修正后默认 22→6——旧档配置文件里存的
+        // 还是旧默认 22，加载时自动迁到 6（玩家手动改过的值 ≠22 不动）
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                (net.minecraftforge.fml.event.config.ModConfigEvent e) -> onConfigLoad(e));
         // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）
         if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
             net.minecraftforge.fml.ModLoadingContext.get().registerExtensionPoint(
                     net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory.class,
                     () -> new net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory(
                             (mc, parent) -> new com.maidsmart.config.PromaidConfigScreen(parent)));
+        }
+    }
+
+    /** v1.1.0 实测七十二：穿透预算旧默认迁移（22 → 6；手动改过的值不动） */
+    private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent event) {
+        try {
+            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
+                return;
+            }
+            if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
+                com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
+            }
+        } catch (Exception ignored) {
         }
     }
 }
