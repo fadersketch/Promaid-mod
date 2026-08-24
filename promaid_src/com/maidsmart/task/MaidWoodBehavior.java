@@ -835,6 +835,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 }
                 this.scanCooldown = 5;
                 this.targetPos = this.findWood(level, maid, anchor);
+                if (this.targetPos == null && WOOD_SCANS.containsKey(maid.m_19879_())) {
+                    // v1.1.0 实测六十二（自查修复）：分帧扫描进行中——只等扫描，不做
+                    // 抬头兜底/迁移/播报（低扫描预算下单轮扫描超过 5 秒时，旧逻辑会把
+                    // 锚点滑走 → 游标状态因锚点变化作废 → 重扫再滑 → 永远扫不完）
+                    return;
+                }
                 if (this.targetPos == null) {
                 // v1.1.0 实测五十四（用户："站到挖掉的树干位置发呆，对头顶较高的木头
                 // 视而不见"）：扫描框/排除表都给不出目标时，先【抬头看一眼】——脚下
