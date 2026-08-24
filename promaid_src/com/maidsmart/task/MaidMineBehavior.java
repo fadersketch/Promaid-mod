@@ -371,6 +371,18 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, java.util.Map<BlockPos, Long>> RECENT_DISCARD = new HashMap<>();
     /** v1.5.113：搭方块材料耗尽播报限频（实体 ID → 上次播报 tick） */
     private static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
+    /** v1.1.0 实测六十九：发呆看门狗——最近一次"真实进展"时刻（挖掉/垫了方块）。长时间零进展
+     *  且原地不动 = 发呆/死循环，自动整体重置该女仆的全部行为状态（等效收回魂符再放下去）。 */
+    private static final Map<Integer, Long> LAST_PROGRESS = new HashMap<>();
+    /** 看门狗窗口采样（实体 ID → [窗口起点 tick, 起点 x/y/z 各自的 double 位模式]） */
+    private static final Map<Integer, long[]> WATCH_SAMPLE = new HashMap<>();
+    /** 看门狗重置播报限频（实体 ID → 上次播报 tick） */
+    private static final Map<Integer, Long> RESET_REPORT_SINCE = new HashMap<>();
+
+    /** v1.1.0 实测六十九：登记一次真实进展（挖掉/垫了方块）——给看门狗续命 */
+    private static void markProgress(EntityMaid maid, long gameTime) {
+        LAST_PROGRESS.put(maid.m_19879_(), gameTime);
+    }
     /** v1.5.113：找矿结果缓存——全量扫描每 5 秒一次，期间只做廉价校验（A1 性能优化） */
     private static final Map<Integer, OreCache> ORE_CACHE = new HashMap<>();
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
@@ -415,6 +427,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
         ORE_CACHE.remove(maidEntityId);
         MINE_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
+        LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
+        WATCH_SAMPLE.remove(maidEntityId);
+        RESET_REPORT_SINCE.remove(maidEntityId);
     }
 
     /** 审计 P-9：按 UUID 清理 MINING 集合（int 表与 UUID 表分开清理） */
@@ -502,6 +517,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
     private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
         PLACED_TRACKER.track(level, pos, block, maid);
+        markProgress(maid, level.m_46467_()); // 实测六十九：垫方块也是进展
     }
 
     /** v1.5.28：销毁所有放置超过 10 秒的挖矿搭方块（玩家同款破坏音效+粒子+掉落物）。
@@ -559,6 +575,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             ids.addAll(RECENT_DISCARD.keySet());
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
             ids.addAll(ORE_CACHE.keySet());
+            ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
+            ids.addAll(WATCH_SAMPLE.keySet());
+            ids.addAll(RESET_REPORT_SINCE.keySet());
             java.util.Set<Integer> alive = new java.util.HashSet<>();
             for (int id : ids) {
                 for (ServerLevel lvl : server.m_129785_()) {
@@ -580,6 +599,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             ORE_CACHE.keySet().removeIf(id -> !alive.contains(id));
             MINE_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
+            LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
+            WATCH_SAMPLE.keySet().removeIf(id -> !alive.contains(id));
+            RESET_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
         } catch (Exception ignored) {
         }
     }
@@ -749,6 +771,13 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 立即强制上移到方块顶面之上。搭高挖矿时实体位移滞后/放偏，头顶检查
         // 拦不住横向卡入，这是最后一道保险：宁可瞬移半步也不被自己搭的方块闷住
         this.antiSuffocate(maid);
+        // v1.1.0 实测六十九：发呆看门狗——长时间零进展且原地不动时整体重置状态。
+        // 与伐木同款（实测四十三的走路卡死检测只覆盖接近阶段，这里兜住挖掘/扫描/
+        // 迁移全流程的死循环），不再需要收回魂符重放来救
+        if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_WATCHDOG.get()
+                && this.stuckReset(level, maid, gameTime)) {
+            return; // 本 tick 已重置，下 tick 从头评估
+        }
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
         // 移动完全交给导航：目标够得着→挖；够不着→搭方块/走过去（approachOre）。
@@ -888,6 +917,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             // 检查范围，当前块挖完后 targetPos 置空，下 tick 重选时自然被视线过滤。
             if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
                     && !this.hasClearSight(level, maid, this.targetPos)) {
+                // v1.1.0 实测六十九：视线被挡的目标进 30 秒短排——旧版只丢目标不记录，
+                // 扫描层几 tick 后又选中同一块，"选中→看不见→丢弃"无限循环站桩发呆
+                RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
+                        .put(this.targetPos.m_7949_(), level.m_46467_());
                 this.targetPos = null;
                 this.destroyProgress = 0.0f;
                 this.saveProgress(maid);
@@ -1075,9 +1108,93 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
         // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
         this.chainBreakAll(level, maid, mainHand);
+        markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
+    }
+
+    /** v1.1.0 实测六十九：窗口起点采样 */
+    private static long[] watchSample(long gameTime, EntityMaid maid) {
+        return new long[]{gameTime,
+                Double.doubleToLongBits(maid.m_20185_()),
+                Double.doubleToLongBits(maid.m_20186_()),
+                Double.doubleToLongBits(maid.m_20189_())};
+    }
+
+    /**
+     * v1.1.0 实测六十九：发呆看门狗判定（与伐木同款）。窗口到期（默认 45 秒）结算：
+     * 期间【挪动过 ≥1.5 格】或【有过真实进展（挖掉/垫方块）】= 正常工作，续窗；否则判发呆，
+     * 整体重置该女仆在本行为里的全部状态并返回 true。深井走路赶路位置一直在变，不误触发。
+     */
+    private boolean stuckReset(ServerLevel level, EntityMaid maid, long gameTime) {
+        int id = maid.m_19879_();
+        long window = com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() * 20L;
+        if (window <= 0) {
+            return false;
+        }
+        long[] sample = WATCH_SAMPLE.get(id);
+        if (sample == null) {
+            WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
+            LAST_PROGRESS.putIfAbsent(id, gameTime);
+            return false;
+        }
+        if (gameTime - sample[0] < window) {
+            return false; // 窗口未到期
+        }
+        double moved = Math.sqrt(
+                Math.pow(maid.m_20185_() - Double.longBitsToDouble(sample[1]), 2)
+                        + Math.pow(maid.m_20186_() - Double.longBitsToDouble(sample[2]), 2)
+                        + Math.pow(maid.m_20189_() - Double.longBitsToDouble(sample[3]), 2));
+        Long lastProg = LAST_PROGRESS.get(id);
+        if (moved >= 1.5 || (lastProg != null && lastProg >= sample[0])) {
+            WATCH_SAMPLE.put(id, watchSample(gameTime, maid)); // 有在干活：续窗
+            return false;
+        }
+        this.hardResetStuck(level, maid, gameTime);
+        return true;
+    }
+
+    /**
+     * v1.1.0 实测六十九：发呆整体重置——forget 清空本女仆的全部静态表，实例字段
+     * （目标/进度/连锁队列/挡路名单/走路记忆/卡死计数等）一并归零，等效收回魂符再放下去。
+     */
+    private void hardResetStuck(ServerLevel level, EntityMaid maid, long gameTime) {
+        int id = maid.m_19879_();
+        long idleTicks = gameTime - LAST_PROGRESS.getOrDefault(id, gameTime);
+        forget(id);
+        this.targetPos = null;
+        this.destroyProgress = 0.0f;
+        this.saveProgressNow(maid);
+        this.abandonedPos = null;
+        this.blockedOres.clear();
+        this.skippedOrePos = null;
+        this.skippedOreName = null;
+        this.skippedOreTool = null;
+        this.skippedOreValue = -1;
+        this.chainQueue.clear();
+        this.chainBlock = null;
+        this.lastWalkTarget = null;
+        this.scanCooldown = 0;
+        this.pillarCooldown = 0;
+        this.walkRetargetCooldown = 0;
+        this.lastStuckPos = null;
+        this.stuckTicks = 0;
+        this.repathAttempts = 0;
+        this.stuckTarget = null;
+        if (this.lastCrackPos != null) {
+            this.broadcastCrack(level, maid, this.lastCrackPos, 10); // 清残留挖掘裂纹
+        }
+        this.lastCrackPos = null;
+        this.lastCrackStage = -1;
+        LAST_PROGRESS.put(id, gameTime);
+        WATCH_SAMPLE.put(id, watchSample(gameTime, maid));
+        LOGGER.info("mine stuck-reset: maid={} idle={}t pos={}", id, idleTicks, maid.m_20183_());
+        Long lastReport = RESET_REPORT_SINCE.get(id);
+        if (lastReport == null || gameTime - lastReport >= 1200L) {
+            RESET_REPORT_SINCE.put(id, gameTime);
+            maid.getChatBubbleManager().addTextChatBubble("好像走神了……我重新理一下思路，继续干活！");
+        }
     }
 
     /**
