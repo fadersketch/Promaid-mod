@@ -66,6 +66,14 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
                 com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
             }
+            // v1.1.0 实测七十五：看门狗判定时长默认 30/45 → 8 秒（发呆出现很快，
+            // 长窗口白等）；旧档存的旧默认自动迁移，手动改过的值不动
+            if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
+                com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
+            }
+            if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
+                com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
+            }
             migrateOreTable();
         } catch (Exception ignored) {
         }
