@@ -84,12 +84,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         COMBAT_TRACKER.track(sl, pos, block, maid);
     }
 
-    /** 该位置是否是女仆搭的战斗方块（挡路破坏判定用） */
+    /** 该位置是否是女仆搭的战斗方块（实测七十一起跨系统统一查询——战斗墙也不被
+     *  挖矿/伐木当矿石/开路块误拆） */
     public static boolean isCombatPlaced(net.minecraft.world.level.Level level, BlockPos pos) {
         if (!(level instanceof ServerLevel sl)) {
             return false;
         }
-        return COMBAT_TRACKER.isPlaced(sl, pos);
+        return PlacedBlockTracker.isAnyPlaced(sl, pos);
     }
 
     /**
