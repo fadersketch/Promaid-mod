@@ -2256,7 +2256,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         int down = com.maidsmart.config.MaidSmartConfig.WOOD_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.WOOD_UP_RANGE.get();
         WoodScanState st = WOOD_SCANS.get(id);
-        if (st == null || !st.anchor.equals(anchor) || now - st.startedAt > 200L
+        if (st == null || !st.anchor.equals(anchor) || now - st.startedAt > 1200L
                 || st.dy < -down || st.dy > up
                 || st.dx < -radius || st.dx > radius || st.dz < -radius || st.dz > radius) {
             st = new WoodScanState(anchor, now, radius, down);
