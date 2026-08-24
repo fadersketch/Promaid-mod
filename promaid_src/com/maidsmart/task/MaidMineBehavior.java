@@ -798,6 +798,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 }
                 this.scanCooldown = 5;
                 this.targetPos = this.findOre(level, maid, anchor);
+                if (this.targetPos == null && MINE_SCANS.containsKey(maid.m_19879_())) {
+                    // v1.1.0 实测六十二（自查修复）：分帧扫描进行中——只等扫描，不做
+                    // 迁移/播报（低扫描预算下单轮扫描超过 5 秒时，旧逻辑会把锚点滑走
+                    // → 游标状态因锚点变化作废 → 重扫再滑 → 永远扫不完）
+                    return;
+                }
                 if (this.targetPos == null) {
                 // v1.5.140：挖矿空闲（附近无矿）→ 退出"挖矿中"标记，拾取任务恢复正常
                 //（用户反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）

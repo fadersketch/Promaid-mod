@@ -137,6 +137,9 @@ public class ScheduleBookScreen extends Screen {
                 Component.m_237113_("搜索名字…"));
         search.m_94199_(20);
         search.m_94144_(this.searchQuery);
+        // 实测六十二（自查修复）：setValue 只把【旧框】的光标夹到新文本长度，而击键
+        // 重建出来的【新框】光标默认在 0——不手动移到末尾的话，输入会倒序乱掉
+        search.m_94208_(this.searchQuery.length());
         search.m_94151_(s -> {
             this.searchQuery = s;
             this.page = 0;
