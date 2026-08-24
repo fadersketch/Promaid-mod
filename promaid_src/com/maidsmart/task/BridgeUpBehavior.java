@@ -178,7 +178,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return true; // 悬空/下落中
         }
         BlockPos under = feet.m_7918_(0, -1, 0);
-        if (PLACED_TRACKER.isPlaced(level, under)) {
+        if (isOwnPlaced(level, under)) {
             return true; // 站在自己垫的方块上（塔/桥——地面导航够不着主人）
         }
         return false;
@@ -622,7 +622,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     }
 
     private static boolean isOwnPlaced(ServerLevel level, BlockPos pos) {
-        return PLACED_TRACKER.isPlaced(level, pos);
+        // 实测七十一：跨系统统一查询（搭路自身不挖掘，但 pillarGuard 等判定
+        // 站在"任何女仆垫的方块"上都应成立）
+        return PlacedBlockTracker.isAnyPlaced(level, pos);
     }
 
     private static boolean hasThreatNearby(ServerLevel level, EntityMaid maid) {
