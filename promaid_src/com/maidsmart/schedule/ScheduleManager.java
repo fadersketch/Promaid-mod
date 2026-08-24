@@ -63,6 +63,11 @@ public final class ScheduleManager {
      *  防威胁在还原威胁半径边缘闪烁时战斗/还原/排班反复拉扯；玩家手动保存日程会
      *  清宽限立即生效）。 */
     public static void applyNow(EntityMaid maid, ServerLevel level) {
+        // v1.1.0 实测七十：排班中的女仆自动 home 模式——旧档已开排班的女仆在这里
+        // 自动迁移；建造行为临时关过 home 的也会被重新扶正（有翻转才写，无存档压力）
+        if (!maid.isHomeModeEnable()) {
+            maid.setHomeModeEnable(true);
+        }
         if (level.m_46467_() < maid.getPersistentData().m_128454_(ScheduleData.GRACE_TAG)) {
             return; // 宽限期内
         }

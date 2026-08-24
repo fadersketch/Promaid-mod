@@ -341,10 +341,16 @@ public class ScheduleBookScreen extends Screen {
                 .m_252987_(qx, y, qw, 20).m_253136_());
         y += 26;
         // 任务循环（点一下换下一个；到头回绕；立即生效）
+        // v1.1.0 实测七十（用户反馈：日程表与主人主动切任务冲突）：排班中的女仆
+        // 【锁定任务】——按钮文案提示，点击不再发包（服务端同样拦截兜底）
         if (!this.taskUids.isEmpty()) {
             this.m_142416_(Button.m_253074_(
-                            Component.m_237113_("任务：\u00a7e" + taskCn(curTask) + " \u00a78(点击切换)"),
+                            Component.m_237113_("任务：\u00a7e" + taskCn(curTask)
+                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击切换)")),
                             b -> {
+                                if (this.loadedOn) {
+                                    return; // 硬性锁定：先关右上角的排班才能切任务
+                                }
                                 int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
                                 String uid = this.taskUids.get(next);
                                 ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
@@ -523,8 +529,10 @@ public class ScheduleBookScreen extends Screen {
                         cx, h - 38, 0xFFE5A0A0);
             } else {
                 // 第 1 页快捷设置：提示放同一条空档线（h-38），与两行按钮零重叠
-                g.m_280653_(this.f_96547_, Component.m_237113_(
-                                "\u00a77点击立即生效：遥控她现在的作息与任务；排一天班去第 2 页"),
+                // v1.1.0 实测七十：排班中的女仆任务锁定——硬性提示替代普通说明
+                g.m_280653_(this.f_96547_, Component.m_237113_(this.loadedOn
+                                ? "\u00a7c⚠ 她有排班：任务由日程表自动管理——先在右上角关闭排班，才能在这里切任务"
+                                : "\u00a77点击立即生效：遥控她现在的作息与任务；排一天班去第 2 页"),
                         cx, h - 38, 0xFFE5A0A0);
             }
         }
