@@ -1170,11 +1170,21 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 旧版连它一起清：够不着目标的长舞蹈（每个候选 15 秒超时）会被看门狗反复
         // 打断归零，形成"每 30 秒重置一次"的新死循环
         java.util.Map<BlockPos, Long> keptDiscard = RECENT_DISCARD.get(id);
+        BlockPos keptTarget = this.targetPos;
+        Long keptSince = TARGET_SINCE.get(id);
         forget(id);
         if (keptDiscard != null && !keptDiscard.isEmpty()) {
             RECENT_DISCARD.put(id, keptDiscard);
         }
-        this.targetPos = null;
+        // 实测七十五：当前目标与它的超时等待时钟一并保留——看门狗窗口（默认已降到
+        // 8 秒）小于目标超时（15 秒），若重置把计时清零，够不着的目标永远等不到弃置、
+        // 舞蹈永远走不完；恢复后失效检查照常逐 tick 复核该目标，坏了自然会被丢掉
+        if (keptTarget != null && keptSince != null) {
+            this.targetPos = keptTarget;
+            TARGET_SINCE.put(id, keptSince);
+        } else {
+            this.targetPos = null;
+        }
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
         this.abandonedPos = null;
