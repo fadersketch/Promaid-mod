@@ -26,6 +26,8 @@ public final class ScheduleData {
     public static final String ON_TAG = "maid_smart_schedule_on";
     /** 去抖：当前已应用段的标识（"dayIndex|startMin"），段没变不重设任务 */
     public static final String APPLIED_TAG = "maid_smart_schedule_applied";
+    /** v1.1.0 实测六十一：战斗还原后排班宽限到期时刻（gameTime）——宽限期内调度不接管 */
+    public static final String GRACE_TAG = "maid_smart_schedule_grace";
 
     /** 一段的排班：[startMin, endMin) 分钟 + 工作模式 + 要切的任务 */
     public record Segment(int startMin, int endMin, int mode, String taskUid) {

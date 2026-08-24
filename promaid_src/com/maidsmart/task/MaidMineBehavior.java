@@ -376,6 +376,32 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** 缓存 TTL（tick，5 秒）——矿石静态不变，5 秒内只校验存在性即可 */
     private static final long ORE_CACHE_TTL = 100L;
 
+    /**
+     * v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描的分帧游标状态
+     * （与伐木 WoodScanState 同款）——每 tick 最多扫 MINE_SCAN_BUDGET 格，跨 tick 续进。
+     */
+    private static final class OreScanState {
+        final BlockPos anchor;
+        final long startedAt;
+        int dy;
+        int dx;
+        int dz;
+        final java.util.List<BlockPos> found = new java.util.ArrayList<>();
+        final java.util.Map<BlockPos, Integer> blockingCache = new java.util.HashMap<>();
+        BlockPos best;
+        double bestScore = Double.MAX_VALUE;
+
+        OreScanState(BlockPos anchor, long startedAt, int radius, int down) {
+            this.anchor = anchor;
+            this.startedAt = startedAt;
+            this.dy = -down;
+            this.dx = -radius;
+            this.dz = -radius;
+        }
+    }
+
+    private static final Map<Integer, OreScanState> MINE_SCANS = new HashMap<>();
+
     /** 审计M4修复（v1.5.383）：女仆实体卸载时清理其全部行为状态表（防长会话泄漏） */
     public static void forget(int maidEntityId) {
         ANCHORS.remove(maidEntityId);
@@ -388,6 +414,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         RECENT_DISCARD.remove(maidEntityId);
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
         ORE_CACHE.remove(maidEntityId);
+        MINE_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
     }
 
     /** 审计 P-9：按 UUID 清理 MINING 集合（int 表与 UUID 表分开清理） */
@@ -552,6 +579,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
             NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
             ORE_CACHE.keySet().removeIf(id -> !alive.contains(id));
+            MINE_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
         } catch (Exception ignored) {
         }
     }
@@ -1962,75 +1990,101 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         return this.fullScanOres(level, maid, anchor, now);
     }
 
-    /** v1.5.113：全量重建扫描（每 5 秒一次）——扫满整个搜索框，记录候选矿 + 挡路预算 */
+    /**
+     * v1.5.113：全量重建扫描（每 5 秒一次）——扫满整个搜索框，记录候选矿 + 挡路预算。
+     * v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：旧版一帧内同步扫完
+     * （8.9 万格 = 单 tick 尖峰），改为【分帧游标续扫】——每 tick 最多检查
+     * MINE_SCAN_BUDGET 格，游标跨 tick 续进；扫完才写 ORE_CACHE 返回最优。
+     * 扫描期间返回 null（调用方按"本 tick 无目标"处理）；锚点变化/状态过期作废重扫。
+     */
     private BlockPos fullScanOres(ServerLevel level, EntityMaid maid, BlockPos anchor, long now) {
         int id = maid.m_19879_();
         int feetY = anchor.m_123342_();
-        BlockPos best = null;
-        double bestScore = Double.MAX_VALUE;
-        java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
         int radius = com.maidsmart.config.MaidSmartConfig.MINE_SEARCH_RADIUS.get();
         int down = com.maidsmart.config.MaidSmartConfig.MINE_DOWN_RANGE.get();
         int up = com.maidsmart.config.MaidSmartConfig.MINE_UP_RANGE.get();
-        int budget = com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get();
+        OreScanState st = MINE_SCANS.get(id);
+        if (st == null || !st.anchor.equals(anchor) || now - st.startedAt > 200L
+                || st.dy < -down || st.dy > up
+                || st.dx < -radius || st.dx > radius || st.dz < -radius || st.dz > radius) {
+            st = new OreScanState(anchor, now, radius, down);
+            MINE_SCANS.put(id, st);
+        }
+        int budget = com.maidsmart.config.MaidSmartConfig.MINE_SCAN_BUDGET.get();
+        int breakBudget = com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get();
         double valueWeight = com.maidsmart.config.MaidSmartConfig.MINE_VALUE_WEIGHT.get();
         double depthPenalty = com.maidsmart.config.MaidSmartConfig.MINE_DEPTH_PENALTY.get();
-        java.util.List<BlockPos> found = new java.util.ArrayList<>();
-        java.util.Map<BlockPos, Integer> blockingCache = new java.util.HashMap<>();
-        for (int dy = -down; dy <= up; dy++) {
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    BlockPos p = anchor.m_7918_(dx, dy, dz);
-                    if (p.equals(this.abandonedPos) || this.blockedOres.contains(p)
-                            || (disc != null && disc.containsKey(p.m_7949_()))) {
-                        continue; // v1.5.47：刚弃置跳过；v1.5.87：硬挡路持续排除；v1.5.113：短时排除
-                    }
-                    BlockState oreState = level.m_8055_(p);
-                    Integer value = ORE_VALUE.get(oreState.m_60734_());
-                    if (value == null) {
-                        continue;
-                    }
-                    // v1.1.0：不把自己 10 秒内搭的方块当矿（搭路材料恰好在矿表里会循环拆了再搭）
-                    if (isMiningPlaced(level, p)) {
-                        continue;
-                    }
-                    // v1.0.4：透视感知开关（默认关）——关闭时女仆像玩家一样只发现视线无阻
-                    // 的矿物：被墙/实心方块挡住的矿不可见（不进候选，也就没有系统/气泡播报）；
-                    // 开启 = 旧版隔墙找矿逻辑，不检查视线
-                    if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
-                            && !this.hasClearSight(level, maid, p)) {
-                        continue;
-                    }
-                    // v1.5.189：危险方块规避——目标矿自身或路径上有岩浆/火/岩浆块/
-                    // 仙人掌/甜浆果/营火 → 不选（挖过去会烫伤/引燃；复用自保 DANGER 判定）
-                    if (this.isDangerAt(level, p)) {
-                        continue;
-                    }
-                    // v1.5.85/107：手+背包都挖不动才算真挖不动（跳过+播报）
-                    // v1.5.113（A3）：先查主手（零开销），主手不够才查背包最高级镐
-                    if (!MaidToolAutoEquip.canHarvestWithHandOrBackpack(maid, oreState)) {
-                        this.recordSkippedOre(maid, p, oreState);
-                        continue;
-                    }
-                    // v1.5.47：穿透预算——挡路实心方块 >预算 的矿不选（挖不过去）
-                    int blocking = this.countBlocking(level, maid, p);
-                    if (blocking > budget) {
-                        continue;
-                    }
-                    blockingCache.put(p.m_7949_(), blocking); // v1.5.113（A3）：缓存轮复用
-                    found.add(p.m_7949_());
-                    double score = dx * dx + dz * dz + dy * dy
-                            + depthPenalty * Math.max(0, feetY - p.m_123342_())
-                            - value * valueWeight;
-                    if (score < bestScore) {
-                        bestScore = score;
-                        best = p.m_7949_();
-                    }
-                }
+        java.util.Map<BlockPos, Long> disc = RECENT_DISCARD.get(id);
+        int processed = 0;
+        while (st.dy <= up && processed < budget) {
+            BlockPos p = anchor.m_7918_(st.dx, st.dy, st.dz);
+            int dx = st.dx;
+            int dz = st.dz;
+            int dy = st.dy;
+            // 游标前进：dz → dx → dy（dz/dx 越界回绕进位）
+            st.dz++;
+            if (st.dz > radius) {
+                st.dz = -radius;
+                st.dx++;
+            }
+            if (st.dx > radius) {
+                st.dx = -radius;
+                st.dy++;
+            }
+            processed++;
+            if (p.equals(this.abandonedPos) || this.blockedOres.contains(p)
+                    || (disc != null && disc.containsKey(p.m_7949_()))) {
+                continue; // v1.5.47：刚弃置跳过；v1.5.87：硬挡路持续排除；v1.5.113：短时排除
+            }
+            BlockState oreState = level.m_8055_(p);
+            Integer value = ORE_VALUE.get(oreState.m_60734_());
+            if (value == null) {
+                continue;
+            }
+            // v1.1.0：不把自己 10 秒内搭的方块当矿（搭路材料恰好在矿表里会循环拆了再搭）
+            if (isMiningPlaced(level, p)) {
+                continue;
+            }
+            // v1.0.4：透视感知开关（默认关）——关闭时女仆像玩家一样只发现视线无阻
+            // 的矿物：被墙/实心方块挡住的矿不可见（不进候选，也就没有系统/气泡播报）；
+            // 开启 = 旧版隔墙找矿逻辑，不检查视线
+            if (!com.maidsmart.config.MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get()
+                    && !this.hasClearSight(level, maid, p)) {
+                continue;
+            }
+            // v1.5.189：危险方块规避——目标矿自身或路径上有岩浆/火/岩浆块/
+            // 仙人掌/甜浆果/营火 → 不选（挖过去会烫伤/引燃；复用自保 DANGER 判定）
+            if (this.isDangerAt(level, p)) {
+                continue;
+            }
+            // v1.5.85/107：手+背包都挖不动才算真挖不动（跳过+播报）
+            // v1.5.113（A3）：先查主手（零开销），主手不够才查背包最高级镐
+            if (!MaidToolAutoEquip.canHarvestWithHandOrBackpack(maid, oreState)) {
+                this.recordSkippedOre(maid, p, oreState);
+                continue;
+            }
+            // v1.5.47：穿透预算——挡路实心方块 >预算 的矿不选（挖不过去）
+            int blocking = this.countBlocking(level, maid, p);
+            if (blocking > breakBudget) {
+                continue;
+            }
+            st.blockingCache.put(p.m_7949_(), blocking); // v1.5.113（A3）：缓存轮复用
+            st.found.add(p.m_7949_());
+            double score = dx * dx + dz * dz + dy * dy
+                    + depthPenalty * Math.max(0, feetY - p.m_123342_())
+                    - value * valueWeight;
+            if (score < st.bestScore) {
+                st.bestScore = score;
+                st.best = p.m_7949_();
             }
         }
-        ORE_CACHE.put(id, new OreCache(now, found, blockingCache));
-        return best;
+        if (st.dy <= up) {
+            return null; // 预算用尽，下 tick 续扫
+        }
+        // 扫描完成：写缓存（与旧版同口径），清游标状态
+        MINE_SCANS.remove(id);
+        ORE_CACHE.put(id, new OreCache(now, st.found, st.blockingCache));
+        return st.best;
     }
 
     /** v1.5.113：缓存轮——只校验已记录的矿（存在性/框内/可挖/挡路预算），廉价 */
