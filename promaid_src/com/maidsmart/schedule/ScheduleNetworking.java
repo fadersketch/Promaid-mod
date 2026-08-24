@@ -208,24 +208,28 @@ public final class ScheduleNetworking {
                 if (maid == null || !allowed(player, maid)) {
                     return;
                 }
-                if (pkt.mode >= 0 && pkt.mode <= 2) {
-                    maid.setSchedule(com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule
-                            .values()[pkt.mode]);
-                }
+                // 先处理排班开关（实测七十：开排班同步进入 home 模式，关排班解除）
                 if (pkt.on == 0 || pkt.on == 1) {
                     ScheduleData.setOn(maid, pkt.on == 1);
-                    // v1.1.0 实测七十：排班中的女仆自动 home 模式（守家按日程干活，
-                    // 不跟着主人乱跑）；关掉排班即解除
                     maid.setHomeModeEnable(pkt.on == 1);
                 }
-                if (pkt.taskUid != null && !pkt.taskUid.isEmpty()) {
-                    // v1.1.0 实测七十（用户反馈：日程表跟主人的主动切换任务冲突）：
-                    // 硬性规则——排班开着就不许手动切任务，先关排班。客户端按钮已锁，
-                    // 这里服务端兜底
-                    if (ScheduleData.isOn(maid)) {
+                // v1.1.0 实测七十六：排班开着时，工作模式与任务【都】由日程表管理——
+                // 手动改哪一个都会在下个时段边界被日程翻回去，索性硬性拦下（先关排班）
+                boolean schedOn = ScheduleData.isOn(maid);
+                String maidName = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
+                if (pkt.mode >= 0 && pkt.mode <= 2) {
+                    if (schedOn) {
                         player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                "§c【排班】「" + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
-                                        + "」的日程表开着，任务由日程表管理——请先关闭她的排班再切换任务"));
+                                "§c【排班】「" + maidName + "」的日程表开着，工作模式由日程表管理——请先关闭她的排班再修改"));
+                    } else {
+                        maid.setSchedule(com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule
+                                .values()[pkt.mode]);
+                    }
+                }
+                if (pkt.taskUid != null && !pkt.taskUid.isEmpty()) {
+                    if (schedOn) {
+                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "§c【排班】「" + maidName + "」的日程表开着，任务由日程表管理——请先关闭她的排班再切换任务"));
                     } else {
                         TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
                                 .ifPresent(maid::setTask);
@@ -449,26 +453,27 @@ public final class ScheduleNetworking {
                                 || com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(m)) {
                             continue;
                         }
-                        // v1.1.0 实测七十：排班中的女仆任务由日程表管理——批量应用跳过她们
-                        boolean schedOn = ScheduleData.isOn(m);
+                        // v1.1.0 实测七十六（用户反馈：防一下一键更改工作状态）：排班中的
+                        // 女仆【整体】跳过——工作模式与任务都由她的日程表管理，一键改了
+                        // 下个时段边界也会被日程翻回去
+                        if (ScheduleData.isOn(m)) {
+                            schedSkipped++;
+                            continue;
+                        }
                         boolean changed = false;
                         if (applyMode) {
                             m.setSchedule(modes[pkt.mode]);
                             changed = true;
                         }
                         if (applyTask) {
-                            if (schedOn) {
-                                schedSkipped++;
-                            } else {
-                                try {
-                                    TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
-                                            .ifPresent(task -> {
-                                                m.setTask(task);
-                                                touchAppliedKey(m, lvl);
-                                            });
-                                    changed = true;
-                                } catch (Exception ignored) {
-                                }
+                            try {
+                                TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                                        .ifPresent(task -> {
+                                            m.setTask(task);
+                                            touchAppliedKey(m, lvl);
+                                        });
+                                changed = true;
+                            } catch (Exception ignored) {
                             }
                         }
                         if (changed) {
@@ -479,7 +484,7 @@ public final class ScheduleNetworking {
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         "§a已为 " + applied + " 名女仆更新设置"
                                 + (schedSkipped > 0 ? "§7（" + schedSkipped
-                                + " 名排班中，任务保持日程安排不动）" : "")));
+                                + " 名排班中保持原样——先关闭她们的排班才能一键更改）" : "")));
             });
             ctx.get().setPacketHandled(true);
         }
