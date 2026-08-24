@@ -36,7 +36,8 @@ import java.util.Random;
  * - 按任务自己的 isWeapon 匹配背包武器过滤出候选
  * - 候选池加权随机：模组任务权重 2.0、原版五件套（近战/弓/弩/三叉戟/弹幕）
  *   权重 1.0（模组武器普遍更强，降半权但不绝对排除）
- * - 全都匹配不上 → 近战（空手也上）
+ * - 全都匹配不上（无任何攻击物品）→ 不参战维持原任务（实测六十七；
+ *   「空手不参战」开关可关回旧的空手近战兜底）
  *
  * 还原：威胁（周围敌对生物，独立小半径）消失持续 N tick（默认 400 = 20 秒）→ 切回
  * 战斗前原任务；有排班表的女仆还原时直接交给排班当前段（排班在主动战斗之上）。
@@ -506,8 +507,14 @@ public class AutoCombatSwitch {
         if (!pools.rangedPool().isEmpty()) {
             return weightedPick(pools.rangedPool(), pools.rangedWeights());
         }
-        // 全都匹配不上 → 近战兜底（空手也上）
-        return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+        // v1.1.0 实测六十七（用户："手上完全没有攻击性物品的女仆，就不应该触发自主
+        // 战斗，应该维持原任务"）：两池全空 = 主手/背包没有任何攻击任务认的武器
+        // → 不参战（返回 null，tryEngageMaid 跳过、维持原任务）；
+        // 开关关闭时保留旧行为（空手近战兜底）
+        if (!MaidSmartConfig.COMBAT_UNARMED_SKIP.get()) {
+            return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
+        }
+        return null;
     }
 
     /** v1.1.0 实测五十七：候选池结构（近战/远程两池 + 各自权重）——
@@ -757,7 +764,9 @@ public class AutoCombatSwitch {
                     return true;
                 }
             }
-            return true; // 任务对所有物品都返回 false = 不限武器（如部分模组任务）→ 视为可参战
+            // v1.1.0 实测六十七：移除"全 false = 不限武器 → 视为可参战"的保守放行——
+            // 它会让完全没有攻击物品的女仆也进战斗池，与「空手不参战」直接矛盾
+            return false;
         } catch (Throwable ignored) {
         }
         return true; // 判定异常时保守放行（别让模组任务因此选不上）
