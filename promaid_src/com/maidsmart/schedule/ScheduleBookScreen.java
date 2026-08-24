@@ -188,6 +188,9 @@ public class ScheduleBookScreen extends Screen {
                         // loadedOn 残留上一只女仆的值，详情页右上角开关显示错误、切换时
                         // 还会把错误的开/关写给新女仆
                         this.loadedOn = "1".equals(m[4]);
+                        // v1.1.0 实测六十四（二次复查修复）：换女仆必须清排班页脏标记——
+                        // 残留 true 会让新女仆的排班页不拉数据、显示上一只的槽位
+                        this.schedDirty = false;
                         this.m_7856_();
                     })
                     .m_252987_(cx - bw / 2, y, bw, 20).m_253136_());
