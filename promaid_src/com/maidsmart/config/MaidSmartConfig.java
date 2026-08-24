@@ -479,8 +479,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.mine.downRange").defineInRange("downRange", 12, 4, 48);
         MINE_UP_RANGE = BUILDER.comment("垂直向上搜索范围")
                 .translation("config.promaid.mine.upRange").defineInRange("upRange", 24, 4, 64);
-        MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（允许挖开多少层不可开路挡路方块）")
-                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 22, 0, 64);
+        // v1.1.0 实测七十二（用户反馈："矿洞里一直往下打洞"）：预算重新计入实心
+        // 可开路方块（石头/泥土），22 的旧默认等于无限穿墙选矿 → 默认降为 6；
+        // 旧档里存的 22 由 ProMaidMod 的配置迁移自动改成 6
+        MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 6）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道（旧版行为约等于无限），调小=只挑眼前暴露的矿")
+                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 6, 0, 64);
         MINE_VALUE_WEIGHT = BUILDER.comment("价值权重（高价值矿优先程度）")
                 .translation("config.promaid.mine.valueWeight")
                 .defineInRange("valueWeight", 2.0, 0.5, 5.0);
