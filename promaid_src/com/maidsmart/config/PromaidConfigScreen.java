@@ -1699,7 +1699,7 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
         this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
-                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被攻击（任意来源）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；女仆自己被怪物攻击也会让她本人+周围姐妹立即参战（实测五十八）；默认开启"));
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被有来源的攻击（怪/玩家/弹射物；摔落岩浆等环境伤害不算）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；女仆自己被怪物攻击也会让她本人+周围姐妹立即参战（实测五十八）；默认开启"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
         // v1.1.0 实测二十一：武器权重可配置（选任务时加权随机——模组/原版各一条）
