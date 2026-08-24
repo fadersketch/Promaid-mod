@@ -490,7 +490,9 @@ public final class ScheduleNetworking {
                         }
                         // v1.1.0 实测六十二（自查修复）：坐着的女仆不集合——建造强制
                         // 坐下 = 玩家明确要她留在原地（与跨维度跟随同口径），拽走会破坏工地
-                        if (m.isMaidInSittingPose() || m.m_20159_()) {
+                        // v1.1.0 实测六十五：在家模式的女仆也不集合——跨维度集合后
+                        // 她困在错误维度回不了家（与跟随逻辑同口径）
+                        if (m.isMaidInSittingPose() || m.m_20159_() || m.isHomeModeEnable()) {
                             continue;
                         }
                         // 已在身边 5 格内的不折腾

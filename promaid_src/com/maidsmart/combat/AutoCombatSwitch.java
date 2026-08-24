@@ -82,7 +82,8 @@ public class AutoCombatSwitch {
         }
         // v1.1.0 实测二十：不再限定敌对生物来源——主人被【任何东西】攻击都算开战
         //（PVP 玩家互打、模组自定义敌对生物、弹射物等都覆盖；自伤仍排除）
-        if (event.getSource() == null || event.getSource().m_7639_() == player) {
+        if (event.getSource() == null || event.getSource().m_7639_() == null
+                || event.getSource().m_7639_() == player) {
             return;
         }
         this.tryTrigger(player);
@@ -98,7 +99,8 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
-        if (event.getSource() == null || event.getSource().m_7639_() == player) {
+        if (event.getSource() == null || event.getSource().m_7639_() == null
+                || event.getSource().m_7639_() == player) {
             return;
         }
         this.tryTrigger(player);
@@ -114,7 +116,8 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
-        if (event.getSource() == null || event.getSource().m_7639_() == player) {
+        if (event.getSource() == null || event.getSource().m_7639_() == null
+                || event.getSource().m_7639_() == player) {
             return;
         }
         this.tryTrigger(player);
@@ -251,7 +254,9 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return false;
         }
-        return source != null && source.m_7639_() instanceof net.minecraft.world.entity.monster.Monster;
+        // v1.1.0 实测六十五：Monster -> Enemy——史莱姆/岩浆怪等敌对生物不实现
+        // Monster 但实现 Enemy 接口，旧判定被它们打了不参战
+        return source != null && source.m_7639_() instanceof net.minecraft.world.entity.monster.Enemy;
     }
 
     /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
