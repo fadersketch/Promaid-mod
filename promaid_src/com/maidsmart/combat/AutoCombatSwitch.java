@@ -741,10 +741,20 @@ public class AutoCombatSwitch {
      * 换过"（换过=接管，只清标记不还原）。不同步的话战中一换任务就被当成接管，
      * 威胁消失后永不还原 = 卡死在战斗任务。PREV_TASK_TAG（战斗前原任务）不动，
      * 还原流程零改动；LAST_THREAT_TAG 由外层照常刷新，威胁消失计时不受影响。
+     *
+     * 【模组隔离】v1.1.0 实测八十六：战中互换仅限【原版任务】——原版任务可切入
+     * 模组池（保留火力），但模组任务永不被换出：模组武器普遍更强且常带专属机制
+     * （史诗战斗姿态/万法皆通施法循环），isRangedTask 的二分法对它们只是瞎猜，
+     * 切走反而坏事；被近身时信任模组武器自身的近身机制（近身反击击退兜底）。
+     * 本门是纯提前返回、不写任何状态——参战触发/还原/僵局阀/动态圈零影响。
      */
     private static void retuneCombatTactics(EntityMaid maid) {
         IMaidTask cur = maid.getTask();
         if (cur == null) {
+            return;
+        }
+        // v1.1.0 实测八十六：模组隔离门（见上）——m_135827_ = getNamespace
+        if (!"touhou_little_maid".equals(cur.getUid().m_135827_())) {
             return;
         }
         // v1.1.0 实测六十一：最短持有 / 反向横跳冷却（防抖三件套之二）
