@@ -374,6 +374,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
     /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_DANGER_BLOCKS;
+    /** v1.1.0 实测九十：险境脱离——已身处危险方块上时自动挪到最近安全格 */
+    public static final ForgeConfigSpec.BooleanValue MISC_DANGER_ESCAPE;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ForgeConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1172,6 +1174,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                         "minecraft:wither_rose",
                         "minecraft:powder_snow",
                         "minecraft:pointed_dripstone"), o -> o instanceof String s && !s.isEmpty());
+        // v1.1.0 实测九十：险境脱离——已身处险境的女仆自动挪到最近安全格
+        MISC_DANGER_ESCAPE = BUILDER.comment("险境脱离（默认开）：女仆已站在危险方块上（岩浆/火/岩浆块等）时，每 0.5 秒巡检并自动挪到最近的安全格+应急灭火——不等血量跌破自保线白挨伤害。坐姿/骑乘中的不处理（由椅子/载具系统负责），自保中让位（有专属珍珠/放水链路）；0.5 秒一轮、每女仆 1.5 秒冷却防振荡")
+                .translation("config.promaid.misc.dangerEscape").define("dangerEscape", true);
         // v1.1.0 实测七十九：受困救援——死亡瞬间的坏落点（下界基岩顶等）已被
         // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
         MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
