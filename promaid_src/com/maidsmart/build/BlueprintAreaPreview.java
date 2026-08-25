@@ -278,7 +278,7 @@ public final class BlueprintAreaPreview {
             // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
             String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
-                    if (!bp.isEmpty() && org != null) {
+            if (!bp.isEmpty() && org != null) {
                 drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
                         1.0f, 0.55f, 0.25f, 0.20f);
             }
