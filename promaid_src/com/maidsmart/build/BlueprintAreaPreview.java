@@ -4,23 +4,38 @@ package com.maidsmart.build;
  * 建造区块标记 + 蓝图投影（客户端渲染）。
  *
  * 历史：v1.5.159 区块显示（金色玩家中心预览）→ v1.5.164 红色固定框 →
- * v1.1.0 实测八十二 幽灵方块投影（金色青色 / 红框橙色双路径）。
+ * v1.1.0 实测八十二 幽灵方块投影（金/红双路径）→ 实测九十五 删「区块显示」
+ * 独立按钮 + 新增每秒区块同步 → 实测九十六 金色预览回归。
  *
- * v1.1.0 实测九十五【重构】：删除「区块显示」金色预览——选位价值已被
- * 「建造中投影」取代（用户："显示该区块这个功能已经没有什么用了，直接删掉"）。
- * 根因修复：此前携带区块行的包只在打开手册/创建计划时一次性下发，真正开始
- * 建造后玩家关掉手册走到工地，客户端没有任何区块数据 → 橙色幽灵方块从不显示
- *（"建造此建筑里面却仍然没有显示"的根因）。现在服务端每秒广播
- * RegionSyncPacket（BlueprintBookNetworking.broadcastRegionSync）驱动：
+ * v1.1.0 实测九十五【根因修复】：此前携带区块行的包只在打开手册/创建计划时
+ * 一次性下发，真正开始建造后玩家关掉手册走到工地，客户端没有任何区块数据 →
+ * 橙色幽灵方块从不显示。现在服务端每秒广播 RegionSyncPacket
+ *（BlueprintBookNetworking.broadcastRegionSync）驱动：
  * - 红色固定框：进行中/暂停中的建造计划（多区块各一框，顶部悬浮文字+创建坐标）
  * - 橙色幽灵方块：按计划原点落地（与实际搭建同一锚点），玩家走近即见建筑最终
  *   形态与朝向，随玩家移动自由观察（>96 格距离剔除省性能）
  * - 计划取消/完成后空列表推送自动清除所有框与投影
- * 点云仍由 ProjectionRequest/ProjectionData 包按蓝图 id 请求与缓存。
+ *
+ * v1.1.0 实测九十六【金色预览回归】：「建造此图纸」未确认阶段的玩家中心金色框
+ * （随移动）+ 青色幽灵方块——show()/wasShown()/resetSeen()/clear() 只服务该
+ * 流程；独立的「区块显示」按钮保持删除。点云由 ProjectionRequest/ProjectionData
+ * 包按蓝图 id 请求缓存，金/红两态共用。
  */
 @net.minecraftforge.api.distmarker.OnlyIn(net.minecraftforge.api.distmarker.Dist.CLIENT)
 public final class BlueprintAreaPreview {
     private static boolean registered = false;
+
+    /** v1.1.0 实测九十六：金色预览回归（用户："未确认时金色区域随着玩家移动这个
+     *  功能很重要"）——「建造此图纸」未确认阶段的玩家中心预览，叠加青色幽灵方块；
+     *  独立的「区块显示」按钮保持删除，金色预览只服务建造确认流程 */
+    private static boolean active = false;
+    private static int sizeX = 1;
+    private static int sizeY = 1;
+    private static int sizeZ = 1;
+    private static String previewId = null;
+    /** 是否已看过本次金色预览（建造确认流程第 1 步放行第 2 步）；重开手册不重置
+     *  ——clear 只关金色框渲染（v1.5.204"卡第一步死循环"教训），仅 resetSeen 显式重置 */
+    private static boolean previewSeen = false;
 
     /** v1.5.180：实际建造区块的红色固定框（多区块共存——每个区块一框）
      *  框 = {x0,y0,z0,x1,y1,z1}；名称与框一一对应（顶部悬浮文字） */
@@ -53,6 +68,37 @@ public final class BlueprintAreaPreview {
         if (!REGION_BOXES.isEmpty()) {
             ensureRegistered();
         }
+    }
+
+    /**
+     * 开启金色预览：以玩家为中心的 W×H×D 金色框，随玩家移动（每帧取玩家位置），
+     * 同时叠加青色幽灵方块投影（实测八十二/九十六：金色状态也能看形态朝向）。
+     * 由「建造此图纸」流程调用；再次打开手册即关闭（open → clear）。
+     */
+    public static void show(String blueprintId, int sx, int sy, int sz) {
+        sizeX = Math.max(1, sx);
+        sizeY = Math.max(1, sy);
+        sizeZ = Math.max(1, sz);
+        previewId = blueprintId;
+        active = true;
+        previewSeen = true; // 看过预览 → 建造确认流程放行第 2 步
+        ensureRegistered();
+        ensureProjection(blueprintId);
+    }
+
+    /** 是否已看过金色预览（建造确认流程第 1 步放行判断） */
+    public static boolean wasShown() {
+        return previewSeen;
+    }
+
+    /** 建造确认成功后重置——下一轮建造仍先看范围（防误操作） */
+    public static void resetSeen() {
+        previewSeen = false;
+    }
+
+    /** 关闭金色预览渲染（打开手册时调用；不重置 previewSeen——v1.5.204 教训） */
+    public static void clear() {
+        active = false;
     }
 
     /**
@@ -189,7 +235,7 @@ public final class BlueprintAreaPreview {
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onRender(net.minecraftforge.client.event.RenderLevelStageEvent event) {
-        if (REGION_BOXES.isEmpty()) {
+        if (!active && REGION_BOXES.isEmpty()) {
             return;
         }
         if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
@@ -232,10 +278,36 @@ public final class BlueprintAreaPreview {
             // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
             String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
-            if (!bp.isEmpty() && org != null) {
+                    if (!bp.isEmpty() && org != null) {
                 drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
                         1.0f, 0.55f, 0.25f, 0.20f);
             }
+        }
+        if (active) {
+            // 金色预览：以玩家所在格为中心（每帧取玩家位置 → 框随玩家移动）；
+            // v1.1.0 实测九十六：青色幽灵方块同步显示——未确认阶段即可看形态朝向
+            net.minecraft.core.BlockPos p = mc.f_91074_.m_20183_();
+            double x0 = p.m_123341_() - sizeX / 2.0;
+            double z0 = p.m_123343_() - sizeZ / 2.0;
+            double y0 = p.m_123342_();
+            double x1 = x0 + sizeX;
+            double z1 = z0 + sizeZ;
+            double y1 = y0 + sizeY;
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(x0, y0, z0, x1, y1, z1)
+                    .m_82383_(camera);
+            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
+                    pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.85f, 0.2f, 0.3f);
+            com.mojang.blaze3d.vertex.VertexConsumer buf =
+                    mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
+            drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
+            if (previewId != null) {
+                drawGhost(pose, mc, camera, previewId,
+                        p.m_123341_(), p.m_123342_(), p.m_123343_(),
+                        0.30f, 0.95f, 1.0f, 0.22f);
+            }
+            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
+                    "建造范围 " + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ + "（打开手册关闭）",
+                    x0 + sizeX / 2.0, y1 + 0.6, z0 + sizeZ / 2.0, 0xFFDD55, 0.15f, true, -5.0f, false);
         }
         pose.m_85849_(); // popPose
     }
