@@ -123,6 +123,14 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(21, LlmStateSyncPacket.class,
                 LlmStateSyncPacket::encode, LlmStateSyncPacket::decode,
                 LlmStateSyncPacket::handle);
+        // v1.1.0 实测八十二：蓝图投影——区块预览叠加幽灵方块轮廓（确认朝向/形状）。
+        // C2S 请求点云 → 服务端抽壳降采样后 S2C 下发（客户端按 id 缓存）
+        CHANNEL.registerMessage(22, ProjectionRequestPacket.class,
+                ProjectionRequestPacket::encode, ProjectionRequestPacket::decode,
+                ProjectionRequestPacket::handle);
+        CHANNEL.registerMessage(23, ProjectionDataPacket.class,
+                ProjectionDataPacket::encode, ProjectionDataPacket::decode,
+                ProjectionDataPacket::handle);
     }
 
     /** v1.5.275：请求重新打开手册（C2S——配置面板跳转女仆管理：关配置 → 服务端
@@ -2332,4 +2340,77 @@ public final class BlueprintBookNetworking {
         }
     }
 
+    // ==================== v1.1.0 实测八十二：蓝图投影 ====================
+
+    /** C2S：请求某蓝图的投影点云（区块显示按钮/红色区块标记首次出现时发送；
+     *  服务端抽壳降采样后回 ProjectionDataPacket） */
+    public static class ProjectionRequestPacket {
+        public final String blueprintId;
+
+        public ProjectionRequestPacket(String blueprintId) {
+            this.blueprintId = blueprintId;
+        }
+
+        public static void encode(ProjectionRequestPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
+        }
+
+        public static ProjectionRequestPacket decode(FriendlyByteBuf buf) {
+            return new ProjectionRequestPacket(buf.m_130277_());
+        }
+
+        public static void handle(ProjectionRequestPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null) {
+                    return;
+                }
+                String id = pkt.blueprintId == null ? "" : pkt.blueprintId;
+                List<String> centered = BlueprintProjectionSampler.centeredStepsOf(id);
+                if (centered == null || centered.isEmpty()) {
+                    // 蓝图不存在/已删除 → 回空云，客户端清掉对应缓存
+                    CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ProjectionDataPacket(id, "0,0,0", ""));
+                    return;
+                }
+                int[] sz = BlueprintLib.blueprintSizeCached(id, centered);
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new ProjectionDataPacket(id,
+                                sz[0] + "," + sz[1] + "," + sz[2],
+                                BlueprintProjectionSampler.sampleCloud(id)));
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
+
+    /** S2C：投影点云下发。cloud = "x,y,z;x,y,z;…"（相对居中坐标；空串 = 无投影，
+     *  客户端据此清缓存）。尺寸字段随包携带（客户端暂仅用于调试显示） */
+    public static class ProjectionDataPacket {
+        public final String blueprintId;
+        public final String size;
+        public final String cloud;
+
+        public ProjectionDataPacket(String blueprintId, String size, String cloud) {
+            this.blueprintId = blueprintId;
+            this.size = size;
+            this.cloud = cloud;
+        }
+
+        public static void encode(ProjectionDataPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
+            buf.m_130070_(pkt.size == null ? "0,0,0" : pkt.size);
+            buf.m_130070_(pkt.cloud == null ? "" : pkt.cloud);
+        }
+
+        public static ProjectionDataPacket decode(FriendlyByteBuf buf) {
+            return new ProjectionDataPacket(buf.m_130277_(), buf.m_130277_(), buf.m_130277_());
+        }
+
+        public static void handle(ProjectionDataPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() ->
+                    com.maidsmart.build.BlueprintAreaPreview.setProjection(
+                            pkt.blueprintId, pkt.size, pkt.cloud));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+}
