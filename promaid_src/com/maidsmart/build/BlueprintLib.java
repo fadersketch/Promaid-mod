@@ -3413,22 +3413,28 @@ public final class BlueprintLib {
                     rx = z;
                     rz = sx - 1 - x;
                 }
+                // v1.1.0 实测九十七：从原始串切分（而非 parseStep 的定长段）——
+                // 第一道 | 前是坐标+方块名，第二道 | 后（含 BE 与任何未知扩展段）
+                // 原样保留，绝不因重建截断
+                int i1 = s.indexOf('|');
+                String rest = i1 < 0 ? "" : s.substring(i1 + 1);
+                int i2 = rest.indexOf('|');
+                String statePart = i2 < 0 ? rest : rest.substring(0, i2);
+                String tailPart = i2 < 0 ? "" : rest.substring(i2);
                 StringBuilder step = new StringBuilder();
                 step.append(rx).append(',').append(y).append(',').append(rz).append(',').append(p[3]);
                 // 状态 SNBT 跟随旋转（holder 缺失时保持原样——放置端仍有默认状态兜底）
-                if (p[4] != null && holder != null) {
+                if (!statePart.isEmpty() && holder != null) {
                     try {
                         var st = net.minecraft.nbt.NbtUtils.m_247651_(holder,
-                                net.minecraft.nbt.TagParser.m_129359_(p[4])).m_60717_(rotationOf(q));
-                        step.append('|').append(net.minecraft.nbt.NbtUtils.m_178057_(
+                                net.minecraft.nbt.TagParser.m_129359_(statePart)).m_60717_(rotationOf(q));
+                        step.append(net.minecraft.nbt.NbtUtils.m_178057_(
                                 net.minecraft.nbt.NbtUtils.m_129202_(st)));
                     } catch (Exception ignored) {
-                        step.append('|').append(p[4]);
+                        step.append(statePart);
                     }
                 }
-                if (p[5] != null) {
-                    step.append('|').append(p[5]);
-                }
+                step.append(tailPart);
                 out.add(step.toString());
             } catch (NumberFormatException ignored) {
                 out.add(s); // 坐标异常的步骤原样保留，不静默丢块
@@ -3451,9 +3457,30 @@ public final class BlueprintLib {
                                                    net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
         // v1.1.0 实测九十七：统一走"先解析后旋转"——内置蓝图此前被直接跳过旋转，
         // 现在内置/外部/JSON 全格式经 rotateSteps 整体旋转（含 BlockState 转向）
+        int q = Math.floorMod(quarters, 4);
+        if (q == 0) {
+            return getBlueprint(id);
+        }
+        // v1.1.0 实测九十七：旋转结果缓存（id#q，按源列表引用同一性失效）——
+        // 大蓝图（数十万步）每次请求都重跑 SNBT 往返会在服务端线程卡顿
+        String key = id + "#" + q;
         List<String> base = getBlueprint(id);
-        return rotateSteps(base, quarters, holder);
+        if (base == null) {
+            return null;
+        }
+        RotCached c = ROTATE_CACHE.get(key);
+        if (c != null && c.src == base) {
+            return c.out;
+        }
+        List<String> out = rotateSteps(base, q, holder);
+        ROTATE_CACHE.put(key, new RotCached(base, out));
+        return out;
     }
+
+    private record RotCached(List<String> src, List<String> out) {
+    }
+
+    private static final Map<String, RotCached> ROTATE_CACHE = new HashMap<>();
 
     /** 蓝图显示名（内置中文名 / 外部文件名或 JSON name 字段） */
     public static String getBlueprintName(String id) {
