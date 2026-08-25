@@ -43,6 +43,9 @@ C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\m
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\memory\RelationshipMemoryAdapter.java:518: 警告: [removal] ResourceLocation 中的 ResourceLocation(String,String) 已过时, 且标记为待删除
             MM_MOOD_KEY = TaskDataRegister.getValue(new ResourceLocation(MM_ID, "mood_data"));
                                                     ^
+C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\mixin\MaidDangerPathMixin.java:122: 警告: [removal] ResourceLocation 中的 ResourceLocation(String) 已过时, 且标记为待删除
+                Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(s));
+                                                          ^
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\schedule\ScheduleNetworking.java:32: 警告: [removal] ResourceLocation 中的 ResourceLocation(String,String) 已过时, 且标记为待删除
             new net.minecraft.resources.ResourceLocation("maid_smart", "schedule_book"),
             ^
@@ -53,5 +56,5 @@ C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\t
 注: 有关详细信息, 请使用 -Xlint:deprecation 重新编译。
 注: C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\mixin\FarmSweepMixin.java使用了未经检查或不安全的操作。
 注: 有关详细信息, 请使用 -Xlint:unchecked 重新编译。
-20 个警告
+21 个警告
 EXITCODE=0
