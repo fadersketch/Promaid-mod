@@ -75,6 +75,12 @@ public final class MaidBuildBlockFilter {
             if (HARM_BLOCK_IDS.contains(sid)) {
                 return false;
             }
+            // v1.1.0 实测九十一：配置危险表（dangerBlocks）同样永不入搭块名单——
+            // 与寻路避让/险境脱离共享同一张表，且不受避让开关影响（无论如何都不会搭）；
+            // 粉丝往表里加模组危险方块即自动从垫脚选材中消失
+            if (DangerBlocks.isDanger(block)) {
+                return false;
+            }
             var state = block.m_49966_();
             // 可替换方块（火把/草/雪片/水——玩家右键能直接顶掉的那些）绝不能垫脚
             //（f_278394_ = BlockTags.REPLACEABLE，字节码实证）

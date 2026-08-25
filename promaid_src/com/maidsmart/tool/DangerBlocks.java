@@ -40,6 +40,22 @@ public final class DangerBlocks {
         }
     }
 
+    /**
+     * v1.1.0 实测九十一：该方块是否在危险表中（不受 dangerAvoid 开关影响）。
+     * 搭方块选材（MaidBuildBlockFilter）据此把危险方块无条件排除出垫脚名单。
+     */
+    public static boolean isDanger(Block b) {
+        if (b == null) {
+            return false;
+        }
+        try {
+            ResourceLocation rl = ForgeRegistries.BLOCKS.getKey(b);
+            return rl != null && set().contains(rl.toString());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** 该坐标方块注册名是否在危险表中 */
     public static boolean idIn(BlockGetter level, int x, int y, int z) {
         try {
