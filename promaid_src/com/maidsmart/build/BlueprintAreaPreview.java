@@ -53,6 +53,8 @@ public final class BlueprintAreaPreview {
     private static final java.util.Set<String> REQUESTED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
     private static String previewId = null;
+    /** v1.1.0 实测八十三b：投影链路诊断日志（latest.log 搜 "projection"） */
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     private BlueprintAreaPreview() {
     }
@@ -172,6 +174,7 @@ public final class BlueprintAreaPreview {
             return; // 已有在途请求
         }
         try {
+            LOGGER.info("projection: request {}", id);
             BlueprintBookNetworking.CHANNEL.sendToServer(
                     new BlueprintBookNetworking.ProjectionRequestPacket(id));
         } catch (Exception e) {
@@ -189,10 +192,12 @@ public final class BlueprintAreaPreview {
         }
         int[] pts = parseCloud(cloud);
         if (pts.length == 0) {
+            LOGGER.info("projection: id={} empty cloud (unavailable)", id);
             PROJECTIONS.remove(id);
             return;
         }
         PROJECTIONS.put(id, pts);
+        LOGGER.info("projection: id={} received {} points", id, pts.length / 3);
     }
 
     /** 解析点云文本 → 平铺 int[]；格式异常的段跳过（半包容错） */
@@ -339,11 +344,10 @@ public final class BlueprintAreaPreview {
         if (pts == null || pts.length < 3) {
             return; // 未到达/空云（请求在途或该蓝图无可渲染块）
         }
-        // 距离剔除：相机到锚点平方距离 >96² 不画（f_82479_/80/81 = Vec3.x/y/z）
-        double dx = camera.f_82479_ - ox;
-        double dy = camera.f_82480_ - oy;
-        double dz = camera.f_82481_ - oz;
-        if (dx * dx + dy * dy + dz * dz > 9216.0) {
+        // 距离剔除：玩家到锚点平方距离 >96² 不画（v1.1.0 实测八十三b：改用已验证
+        // 的 Entity.m_20238_ 组合，不再直接读 Vec3 字段）
+        net.minecraft.world.phys.Vec3 anchor = new net.minecraft.world.phys.Vec3(ox, oy, oz);
+        if (mc.f_91074_.m_20238_(anchor) > 9216.0) {
             return;
         }
         var source = mc.m_91269_().m_110104_();
