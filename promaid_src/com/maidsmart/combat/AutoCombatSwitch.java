@@ -26,7 +26,8 @@ import java.util.Random;
  * 主动切换战斗模式（v1.1.0）。
  *
  * 触发（v1.1.0 实测二十扩展）：主人被攻击（任意来源——敌对生物/玩家/弹射物，
- * 自伤除外）或主人攻击了别的生物（主动开火也算开战）→ 响应半径内所有自己的
+ * 自伤除外）或主人攻击了【敌对生物】（主动开火也算开战；实测八十四b 起打被动
+ * 生物不算——宰牲畜不参战，也根绝"无威胁战斗收不回去"）→ 响应半径内所有自己的
  * 女仆（非自保、非战斗任务、非幼年）立即切换为战斗任务——无论她当前在干什么
  * （挖矿/伐木/烹饪/建造/跟随…）。
  *
@@ -43,6 +44,8 @@ import java.util.Random;
  * 战斗前原任务；有排班表的女仆还原时直接交给排班当前段（排班在主动战斗之上）。
  * 玩家中途接管：战斗期间任务被玩家/排班/LLM 换过 → 还原只清标记退出，
  * 绝不把玩家安排的任务翻回去（还原前先校验"仍在指派的战斗任务上"）。
+ * v1.1.0 实测八十四【僵局逃逸】：威胁在半径内但双方久无伤害往来（怪卡墙后/
+ * 传送门里等够不着的死局）→ 超时后不再续杯安全计时，照常还原（autoSwitchStaleSeconds）。
  *
  * 优先级链（本功能在其中的位置）：自保 > 排班表 > 主动战斗（含还原）> 玩家手动/LLM。
  * 自保中的女仆不响应切换（自保优先），还原也等自保结束。
@@ -58,6 +61,12 @@ public class AutoCombatSwitch {
     private static final String LAST_THREAT_TAG = "maid_smart_combat_last_threat";
     /** 本系统指派的战斗任务 UID（还原时校验任务没被玩家换过——换过=玩家接管，只清标记退出） */
     private static final String ASSIGNED_TAG = "maid_smart_combat_task";
+    /** v1.1.0 实测八十四：最近一次与敌对生物有伤害往来的 gameTime（僵局逃逸阀计时——
+     *  威胁在半径内但双方久无接触 = 够不着的死局，不再无限续杯安全计时） */
+    private static final String LAST_CONTACT_TAG = "maid_smart_combat_last_contact";
+    /** 僵局日志节流（每女仆 30 秒一条，latest.log 搜 "auto-combat stale"） */
+    private static final java.util.Map<java.util.UUID, Long> STALE_LOG =
+            new java.util.HashMap<>();
     private static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
@@ -165,6 +174,12 @@ public class AutoCombatSwitch {
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
             return;
         }
+        // v1.1.0 实测八十四b：目标必须是【敌对生物】才算主动开战——宰牛杀鸡/剪羊毛
+        // 等被动生物交互不再让女仆全员拔刀。这类"无威胁战斗"还原扫描永远扫不到
+        // 威胁、安全计时只被主人的后续命中无限续杯，是"打完收不回去"的根源。
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+            return;
+        }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
@@ -172,13 +187,16 @@ public class AutoCombatSwitch {
     }
 
     /** v1.1.0 实测三十六：主人开火的 LivingDamageEvent 兜底（同 onOwnerAttack 的
-     *  来源侧判定，事件换结算层）。 */
+     *  来源侧判定，事件换结算层）。v1.1.0 实测八十四b：同样要求目标是敌对生物。 */
     @SubscribeEvent
     public void onOwnerAttackDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         if (!(event.getSource() != null && event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
             return;
         }
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
+            return;
+        }
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -229,6 +247,7 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidHurt(LivingHurtEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            touchContact((EntityMaid) event.getEntity());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -236,6 +255,7 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            touchContact((EntityMaid) event.getEntity());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -243,7 +263,36 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidDamaged(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            touchContact((EntityMaid) event.getEntity());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
+        }
+    }
+
+    /**
+     * v1.1.0 实测八十四：女仆【打到】敌对生物也算一次战斗接触——僵局逃逸阀的
+     * 另一个计时来源（只算"挨打"的话，远程女仆放风筝全程无伤会被误判成死局）。
+     * m_7638_ = DamageSource.getEntity（造成者；弓箭等弹射物的造成者是射手本体，
+     * 与 m_7639_ getDirectEntity=箭矢实体相对）。
+     */
+    @SubscribeEvent
+    public void onMaidStrikeEnemy(LivingHurtEvent event) {
+        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        if (!(event.getSource().m_7640_() instanceof EntityMaid maid)) {
+            return;
+        }
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+            return;
+        }
+        touchContact(maid);
+    }
+
+    /** v1.1.0 实测八十四：记录一次与敌对生物的真实接触（任意方向伤害） */
+    private static void touchContact(EntityMaid maid) {
+        try {
+            maid.getPersistentData().m_128356_(LAST_CONTACT_TAG, maid.m_9236_().m_46467_());
+        } catch (Exception ignored) {
         }
     }
 
@@ -305,7 +354,12 @@ public class AutoCombatSwitch {
         // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
         if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
             if (isOnAssignedCombatTask(maid)) {
-                maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
+                // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
+                // 无威胁战斗里还原时钟被反复推走 = 打完收不回去的第二道源头
+                if (hasThreatNearby(maid)) {
+                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                }
                 return 0;
             }
             clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
@@ -324,6 +378,8 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
         maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+        // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
+        touchContact(maid);
         maid.setTask(combat);
         com.mojang.logging.LogUtils.getLogger().info(
                 "auto-combat: maid={} {} -> {} (engaged)",
@@ -368,7 +424,29 @@ public class AutoCombatSwitch {
                     continue;
                 }
                 long now = level.m_46467_();
-                if (hasThreatNearby(maid)) {
+                // v1.1.0 实测八十四：僵局逃逸阀——威胁仍在还原半径内，但双方超过
+                // N 秒没有任何伤害往来（怪卡墙后/玻璃后/传送门里/飞行够不着等
+                // "杀不掉也够不着"的死局），不再无限续杯安全计时 → 正常走还原。
+                // 被动生物（动物）本就不算威胁（判定只认 Enemy 接口），与本次无关；
+                // 该阀门专治"敌对生物永久滞留半径内"的卡死。
+                boolean threatNearby = hasThreatNearby(maid);
+                if (threatNearby) {
+                    int staleSec = MaidSmartConfig.COMBAT_AUTO_SWITCH_STALE.get();
+                    long lastContact = maid.getPersistentData().m_128454_(LAST_CONTACT_TAG);
+                    if (staleSec > 0 && now - lastContact >= staleSec * 20L) {
+                        threatNearby = false;
+                        Long lastLog = STALE_LOG.get(maid.m_20148_());
+                        if (lastLog == null || now - lastLog >= 600L) {
+                            STALE_LOG.put(maid.m_20148_(), now);
+                            com.mojang.logging.LogUtils.getLogger().info(
+                                    "auto-combat stale: maid={} threat within {} blocks but no damage exchange for {}s -> restoring anyway",
+                                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                                    MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get(),
+                                    (now - lastContact) / 20);
+                        }
+                    }
+                }
+                if (threatNearby) {
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, now);
                     // v1.1.0 实测五十七：威胁仍在 → 每秒评估一次近/远程是否该互换
                     retuneCombatTactics(maid);
@@ -808,6 +886,8 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
         maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
         maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
+        // v1.1.0 实测八十四：接触标记一并清（判定走 getBoolean，putBoolean false 不删键）
+        maid.getPersistentData().m_128379_(LAST_CONTACT_TAG, false);
         TACTIC_STATE.remove(maid.m_20148_());
     }
 
