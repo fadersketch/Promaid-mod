@@ -282,6 +282,8 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_RESTORE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_DELAY;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
+    /** v1.1.0 实测八十四：战斗僵局逃逸——威胁够不着时不再无限续杯安全计时 */
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_STALE;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -1083,6 +1085,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.combat.autoSwitchRestoreDelay").defineInRange("autoSwitchRestoreDelay", 200, 60, 3600);
         COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST = BUILDER.comment("还原判定威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算\"威胁消失\"、开始还原计时——独立于响应半径（远处怪不该让女仆一直卡在战斗里回不了岗）；战斗中玩家手动换的任务不会被还原翻回去")
                 .translation("config.promaid.combat.autoSwitchRestoreThreatDist").defineInRange("autoSwitchRestoreThreatDist", 8, 2, 32);
+        // v1.1.0 实测八十四：僵局逃逸——够不着的敌对生物不再让女仆永远卡在战斗任务
+        COMBAT_AUTO_SWITCH_STALE = BUILDER.comment("战斗僵局逃逸（秒，默认 60）：威胁仍在还原半径内、但女仆与敌对生物超过这么久没有任何伤害往来（怪卡墙后/玻璃后/传送门里/飞行绕圈等杀不掉也够不着的死局）→ 不再无限等待，按正常安全计时切回原任务；latest.log 搜 auto-combat stale 可查是哪种怪卡住的。0 = 关闭（旧版行为，可能永远卡在战斗任务）")
+                .translation("config.promaid.combat.autoSwitchStaleSeconds").defineInRange("autoSwitchStaleSeconds", 60, 0, 3600);
         BUILDER.pop();
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
