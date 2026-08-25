@@ -46,7 +46,7 @@ C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\m
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\schedule\ScheduleNetworking.java:32: 警告: [removal] ResourceLocation 中的 ResourceLocation(String,String) 已过时, 且标记为待删除
             new net.minecraft.resources.ResourceLocation("maid_smart", "schedule_book"),
             ^
-C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\tool\DangerBlocks.java:87: 警告: [removal] ResourceLocation 中的 ResourceLocation(String) 已过时, 且标记为待删除
+C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\tool\DangerBlocks.java:103: 警告: [removal] ResourceLocation 中的 ResourceLocation(String) 已过时, 且标记为待删除
                 Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(s));
                                                           ^
 C:\Users\Sketch\.zcode\workspace\default\promaid-mod\promaid_src\com\maidsmart\tool\SmartAttackTool.java:98: 警告: [removal] ResourceLocation 中的 ResourceLocation(String,String) 已过时, 且标记为待删除
