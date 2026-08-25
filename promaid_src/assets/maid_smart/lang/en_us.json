@@ -18,5 +18,7 @@
   "config.promaid.memory.dualAgent": "Dual-agent extraction",
   "config.promaid.memory.heartfeltAnniversary": "Anniversary linkage",
   "config.promaid.memory.personaUnify": "Persona unification",
-  "config.promaid.build.machineSmart": "Redstone machine smart build (machine order + live placement + auto-start)"
+  "config.promaid.build.machineSmart": "Redstone machine smart build (machine order + live placement + auto-start)",
+  "key.categories.promaid": "Promaid Building",
+  "key.promaid.build_rotate": "Rotate Blueprint Orientation (90° per press)"
 }

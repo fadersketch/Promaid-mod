@@ -61,6 +61,9 @@ public final class BuildPlan {
         public String foremanUuid = "";
         /** 存档游标（persistCursor 写入；重启恢复进度用） */
         public int savedCursor = 1;
+        /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——创建时选定；随存档条目
+         *  持久化，重启 restoreAll 按 quarters 重解析旋转版步骤（橙影同口径） */
+        public int quarters = 0;
 
         /** v1.5.287：toPlan 惰性缓存——steps/origin/name/planId 建后不可变 → 拼一次
          *  复用。旧版每次 toPlan 都 new ArrayList + 拷贝全部步骤（tick 热路径每 tick
@@ -240,6 +243,12 @@ public final class BuildPlan {
      */
     public static String setPlan(net.minecraft.server.level.ServerLevel level, BlockPos origin,
                                  List<String> steps, String name, String blueprintId) {
+        return setPlan(level, origin, steps, name, blueprintId, 0);
+    }
+
+    /** v1.1.0 实测九十七：带朝向的创建（quarters = 0~3 × 90° 顺时针） */
+    public static String setPlan(net.minecraft.server.level.ServerLevel level, BlockPos origin,
+                                 List<String> steps, String name, String blueprintId, int quarters) {
         for (PlanState ex : getPlans(level)) {
             if (ex.blueprintId.equals(blueprintId) && ex.origin.equals(origin)) {
                 return ex.planId; // 续建：同一区块
@@ -248,6 +257,7 @@ public final class BuildPlan {
         String planId = java.util.UUID.randomUUID().toString();
         PlanState ps = new PlanState(planId, level.m_46472_(), origin, name, blueprintId,
                 new ArrayList<>(steps));
+        ps.quarters = Math.floorMod(quarters, 4);
         PLANS.put(planId, ps);
         GLOBAL_BOX.remove(planId); // 新计划重新计算包围盒
         // 写存档（多区块列表）
@@ -274,6 +284,7 @@ public final class BuildPlan {
         sp.cursor = ps.savedCursor;
         sp.paused = ps.paused;
         sp.foremanUuid = ps.foremanUuid;
+        sp.quarters = ps.quarters;
         return sp;
     }
 
@@ -886,7 +897,14 @@ public final class BuildPlan {
             if (PLANS.containsKey(sp.planId)) {
                 continue;
             }
-            List<String> steps = BlueprintLib.getBlueprint(sp.blueprintId);
+            List<String> steps;
+            if (sp.quarters != 0) {
+                // v1.1.0 实测九十七：旋转版计划按存档朝向重解析（与创建时同一变换）
+                steps = BlueprintLib.getBlueprintRotated(sp.blueprintId, sp.quarters,
+                        level.m_246945_(net.minecraft.core.registries.Registries.f_256747_));
+            } else {
+                steps = BlueprintLib.getBlueprint(sp.blueprintId);
+            }
             if (steps == null || steps.isEmpty()) {
                 continue;
             }
@@ -896,6 +914,7 @@ public final class BuildPlan {
             ps.paused = sp.paused;
             ps.foremanUuid = sp.foremanUuid == null ? "" : sp.foremanUuid;
             ps.savedCursor = Math.max(1, sp.cursor);
+            ps.quarters = sp.quarters;
             FOREMAN.put(ps.planId, ps.foremanUuid);
             PLANS.put(ps.planId, ps);
             restoreProgress(level, ps);

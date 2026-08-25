@@ -36,6 +36,9 @@ public final class BlueprintAreaPreview {
     /** 是否已看过本次金色预览（建造确认流程第 1 步放行第 2 步）；重开手册不重置
      *  ——clear 只关金色框渲染（v1.5.204"卡第一步死循环"教训），仅 resetSeen 显式重置 */
     private static boolean previewSeen = false;
+    /** v1.1.0 实测九十七：金色预览当前朝向（0~3 × 90° 顺时针）——按转向键 +1；
+     *  换蓝图时归零，同一蓝图取消后重新选位保留上次选择 */
+    private static int previewQuarters = 0;
 
     /** v1.5.180：实际建造区块的红色固定框（多区块共存——每个区块一框）
      *  框 = {x0,y0,z0,x1,y1,z1}；名称与框一一对应（顶部悬浮文字） */
@@ -50,12 +53,20 @@ public final class BlueprintAreaPreview {
     private static final java.util.List<String> REGION_BPS = new java.util.ArrayList<>();
     private static final java.util.List<int[]> REGION_ORIGINS_POS = new java.util.ArrayList<>();
 
-    /** v1.1.0 实测八十二：投影点云缓存（blueprintId → x,y,z 三元组平铺，相对居中
-     *  坐标）；REQUESTED 防重复请求 */
+    /** v1.1.0 实测八十二：投影点云缓存（key = "blueprintId#quarters"，值为 x,y,z
+     *  三元组平铺，相对居中坐标）；REQUESTED 防重复请求 */
     private static final java.util.Map<String, int[]> PROJECTIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Set<String> REQUESTED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** 投影缓存/请求的复合键（实测九十七：同蓝图不同朝向各自一份点云） */
+    private static String projKey(String blueprintId, int quarters) {
+        return blueprintId + "#" + Math.floorMod(quarters, 4);
+    }
+
+    /** v1.5.290：每个区块的橙影投影键（"bp#q"，r[10] 蓝图 id + r[14] 朝向） */
+    private static final java.util.List<String> REGION_PROJ_KEYS = new java.util.ArrayList<>();
     /** v1.1.0 实测八十三b：投影链路诊断日志（latest.log 搜 "projection"） */
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
@@ -79,16 +90,44 @@ public final class BlueprintAreaPreview {
         sizeX = Math.max(1, sx);
         sizeY = Math.max(1, sy);
         sizeZ = Math.max(1, sz);
+        // v1.1.0 实测九十七：换蓝图归零朝向；同一蓝图重新选位保留上次旋转选择
+        if (!blueprintId.equals(previewId)) {
+            previewQuarters = 0;
+        }
         previewId = blueprintId;
         active = true;
         previewSeen = true; // 看过预览 → 建造确认流程放行第 2 步
         ensureRegistered();
-        ensureProjection(blueprintId);
+        ensureProjection(blueprintId, previewQuarters);
+    }
+
+    /**
+     * v1.1.0 实测九十七：按转向键顺时针转 90°（整个建筑整体：占地 W/D 互换 +
+     * 方块状态转向 + 青色幽灵投影刷新）。仅金色预览态响应；确认建造时该朝向
+     * 随 SelectBlueprintPacket 落地。
+     */
+    public static void rotateClockwise() {
+        if (!active || previewId == null) {
+            return;
+        }
+        previewQuarters = (previewQuarters + 1) & 3;
+        ensureProjection(previewId, previewQuarters);
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+        if (mc.f_91074_ != null) {
+            mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a7b【建造转向】建筑已顺时针旋转至 " + (previewQuarters * 90)
+                            + "\u00a7b°——青色幽灵为当前朝向投影，确认建造后以此落地"));
+        }
     }
 
     /** 是否已看过金色预览（建造确认流程第 1 步放行判断） */
     public static boolean wasShown() {
         return previewSeen;
+    }
+
+    /** v1.1.0 实测九十七：当前选定的朝向（0~3 × 90° 顺时针）——确认建造时随包下发 */
+    public static int previewQuarters() {
+        return previewQuarters;
     }
 
     /** 建造确认成功后重置——下一轮建造仍先看范围（防误操作） */
@@ -112,6 +151,7 @@ public final class BlueprintAreaPreview {
         REGION_NAMES.clear();
         REGION_ORIGINS.clear();
         REGION_BPS.clear();
+        REGION_PROJ_KEYS.clear();
         REGION_ORIGINS_POS.clear();
         if (regions == null) {
             return;
@@ -150,37 +190,66 @@ public final class BlueprintAreaPreview {
                     }
                 }
                 REGION_ORIGINS_POS.add(org);
+                // v1.1.0 实测九十七：r[14] = 计划朝向——橙影按 id#quarters 取旋转版点云
                 if (!bp.isEmpty() && org != null) {
-                    needProj.add(bp);
+                    int rq = 0;
+                    if (r.length > 14) {
+                        try {
+                            rq = Integer.parseInt(r[14]);
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
+                    String key = projKey(bp, rq);
+                    REGION_PROJ_KEYS.add(key);
+                    needProj.add(key);
+                } else {
+                    REGION_PROJ_KEYS.add("");
                 }
             } catch (NumberFormatException ignored) {
             }
         }
-        for (String bp : needProj) {
-            ensureProjection(bp);
+        for (String key : needProj) {
+            ensureProjectionForKey(key);
         }
         if (!REGION_BOXES.isEmpty()) {
             ensureRegistered();
         }
     }
 
-    /** v1.1.0 实测八十二：确保某蓝图的投影点云已在手（无缓存则向服务端请求一次） */
-    private static void ensureProjection(String id) {
-        if (id == null || id.isEmpty() || PROJECTIONS.containsKey(id)) {
+    /** 从复合键拆出 id/quarters 并请求（红色区块路径用） */
+    private static void ensureProjectionForKey(String key) {
+        int idx = key.lastIndexOf('#');
+        if (idx <= 0) {
+            return;
+        }
+        try {
+            ensureProjection(key.substring(0, idx), Integer.parseInt(key.substring(idx + 1)));
+        } catch (NumberFormatException ignored) {
+        }
+    }
+
+    /** v1.1.0 实测八十二：确保某蓝图的投影点云已在手（无缓存则向服务端请求一次）。
+     *  v1.1.0 实测九十七：按 id#quarters 复合键缓存/请求（不同朝向各自一份点云） */
+    private static void ensureProjection(String id, int quarters) {
+        if (id == null || id.isEmpty()) {
+            return;
+        }
+        String key = projKey(id, quarters);
+        if (PROJECTIONS.containsKey(key)) {
             return;
         }
         if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
             return;
         }
-        if (!REQUESTED.add(id)) {
+        if (!REQUESTED.add(key)) {
             return; // 已有在途请求
         }
         try {
-            LOGGER.info("projection: request {}", id);
+            LOGGER.info("projection: request {} q={}", id, Math.floorMod(quarters, 4));
             BlueprintBookNetworking.CHANNEL.sendToServer(
-                    new BlueprintBookNetworking.ProjectionRequestPacket(id));
+                    new BlueprintBookNetworking.ProjectionRequestPacket(id, quarters));
         } catch (Exception e) {
-            REQUESTED.remove(id);
+            REQUESTED.remove(key);
         }
     }
 
@@ -188,18 +257,19 @@ public final class BlueprintAreaPreview {
      * v1.1.0 实测八十二：收到服务端点云（S2C ProjectionDataPacket）。
      * cloud = "x,y,z;x,y,z;…"；空串 = 该蓝图无可投影内容（已删除/解析失败）→ 清缓存。
      */
-    public static void setProjection(String id, String size, String cloud) {
+    public static void setProjection(String id, int quarters, String size, String cloud) {
         if (id == null || id.isEmpty()) {
             return;
         }
+        String key = projKey(id, quarters);
         int[] pts = parseCloud(cloud);
         if (pts.length == 0) {
-            LOGGER.info("projection: id={} empty cloud (unavailable)", id);
-            PROJECTIONS.remove(id);
+            LOGGER.info("projection: key={} empty cloud (unavailable)", key);
+            PROJECTIONS.remove(key);
             return;
         }
-        PROJECTIONS.put(id, pts);
-        LOGGER.info("projection: id={} received {} points", id, pts.length / 3);
+        PROJECTIONS.put(key, pts);
+        LOGGER.info("projection: key={} received {} points", key, pts.length / 3);
     }
 
     /** 解析点云文本 → 平铺 int[]；格式异常的段跳过（半包容错） */
@@ -275,23 +345,28 @@ public final class BlueprintAreaPreview {
             }
             // v1.1.0 实测八十二：橙色幽灵方块投影——按计划原点落地，与实际搭建
             // 同一坐标系（锚点 = PlanState.origin + 居中步骤相对坐标），位置零偏差；
-            // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
-            String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
+            // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向。
+            // v1.1.0 实测九十七：键含朝向（id#q），与计划实际旋转一致
+            String key = i < REGION_PROJ_KEYS.size() ? REGION_PROJ_KEYS.get(i) : "";
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
-            if (!bp.isEmpty() && org != null) {
-                drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
+            if (!key.isEmpty() && org != null) {
+                drawGhost(pose, mc, camera, key, org[0], org[1], org[2],
                         1.0f, 0.55f, 0.25f, 0.20f);
             }
         }
         if (active) {
             // 金色预览：以玩家所在格为中心（每帧取玩家位置 → 框随玩家移动）；
-            // v1.1.0 实测九十六：青色幽灵方块同步显示——未确认阶段即可看形态朝向
+            // v1.1.0 实测九十六：青色幽灵方块同步显示——未确认阶段即可看形态朝向；
+            // v1.1.0 实测九十七：奇数朝向（90°/270°）占地 W/D 互换，金色框整体换向
+            boolean swapped = (previewQuarters & 1) != 0;
+            int effX = swapped ? sizeZ : sizeX;
+            int effZ = swapped ? sizeX : sizeZ;
             net.minecraft.core.BlockPos p = mc.f_91074_.m_20183_();
-            double x0 = p.m_123341_() - sizeX / 2.0;
-            double z0 = p.m_123343_() - sizeZ / 2.0;
+            double x0 = p.m_123341_() - effX / 2.0;
+            double z0 = p.m_123343_() - effZ / 2.0;
             double y0 = p.m_123342_();
-            double x1 = x0 + sizeX;
-            double z1 = z0 + sizeZ;
+            double x1 = x0 + effX;
+            double z1 = z0 + effZ;
             double y1 = y0 + sizeY;
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(x0, y0, z0, x1, y1, z1)
                     .m_82383_(camera);
@@ -301,15 +376,31 @@ public final class BlueprintAreaPreview {
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
             if (previewId != null) {
-                drawGhost(pose, mc, camera, previewId,
+                drawGhost(pose, mc, camera, projKey(previewId, previewQuarters),
                         p.m_123341_(), p.m_123342_(), p.m_123343_(),
                         0.30f, 0.95f, 1.0f, 0.22f);
             }
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
-                    "建造范围 " + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ + "（打开手册关闭）",
-                    x0 + sizeX / 2.0, y1 + 0.6, z0 + sizeZ / 2.0, 0xFFDD55, 0.15f, true, -5.0f, false);
+                    "建造范围 " + effX + "\u00d7" + sizeY + "\u00d7" + effZ
+                            + "·朝向 " + (previewQuarters * 90) + "°（打开手册关闭）",
+                    x0 + effX / 2.0, y1 + 0.6, z0 + effZ / 2.0, 0xFFDD55, 0.15f, true, -5.0f, false);
         }
         pose.m_85849_(); // popPose
+    }
+
+    /**
+     * v1.1.0 实测九十七：金色预览态轮询转向键（默认 P，原版按键设置可改）——
+     * 每次点击顺时针转 90°。仅注册过渲染器后生效（ensureRegistered）。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || !active) {
+            return;
+        }
+        while (com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT != null
+                && com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT.m_90859_()) {
+            rotateClockwise();
+        }
     }
 
     /**

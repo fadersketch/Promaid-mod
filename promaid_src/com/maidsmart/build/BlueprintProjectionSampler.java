@@ -34,18 +34,22 @@ public final class BlueprintProjectionSampler {
     private BlueprintProjectionSampler() {
     }
 
-    /** 取蓝图的居中步骤（带缓存；与建造执行共用同一 centerSteps 变换） */
-    public static List<String> centeredStepsOf(String blueprintId) {
-        List<String> src = BlueprintLib.getBlueprint(blueprintId);
+    /** 取蓝图的居中步骤（带缓存；与建造执行共用同一 centerSteps 变换）。
+     *  v1.1.0 实测九十七：缓存键 = id#quarters——旋转版步骤是新列表（引用不同），
+     *  天然绕过同键命中；holder 由服务端调用方传入（旋转 BlockState 必需）。 */
+    public static List<String> centeredStepsOf(String blueprintId, int quarters,
+                                               net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
+        String key = blueprintId + "#" + Math.floorMod(quarters, 4);
+        List<String> src = BlueprintLib.getBlueprintRotated(blueprintId, quarters, holder);
         if (src == null || src.isEmpty()) {
             return null;
         }
-        Cached c = CACHE.get(blueprintId);
+        Cached c = CACHE.get(key);
         if (c != null && c.src == src) {
             return c.centered();
         }
         List<String> centered = BlueprintLib.centerSteps(src);
-        CACHE.put(blueprintId, new Cached(src, centered));
+        CACHE.put(key, new Cached(src, centered));
         return centered;
     }
 
@@ -53,8 +57,9 @@ public final class BlueprintProjectionSampler {
      * 生成投影点云文本："x,y,z;x,y,z;…"（相对居中坐标；空串 = 无可渲染块）。
      * 编码走 UTF 字符串——与本网络通道既有字段风格一致（避免新 SRG 依赖）。
      */
-    public static String sampleCloud(String blueprintId) {
-        List<String> steps = centeredStepsOf(blueprintId);
+    public static String sampleCloud(String blueprintId, int quarters,
+                                     net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
+        List<String> steps = centeredStepsOf(blueprintId, quarters, holder);
         if (steps == null || steps.isEmpty()) {
             return "";
         }

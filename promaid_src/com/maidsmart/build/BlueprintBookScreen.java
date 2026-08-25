@@ -785,8 +785,9 @@ public class BlueprintBookScreen extends Screen {
             // 都完整在屏内。
             // v1.1.0 实测九十五：「区块显示」按钮删除（金色预览功能整体下线）——
             // 建造投影改由红色区块框 + 幽灵方块在建造期间持续显示（服务端每秒同步）。
-            // 底部按钮：返回目录 + [全员加入 + 名单] + 建造此图纸（后两者仅区块内）
-            int btnCount = inRegion ? 4 : 2;
+            // v1.1.0 实测九十七：底部按钮 = 返回 + [全员加入 + 名单] + 建造此图纸
+            // + 转向键位（后三者中名单仅区块内）
+            int btnCount = inRegion ? 5 : 3;
             int avail = w - 16;
             int gap2 = 4;
             int[] bw = new int[btnCount];
@@ -834,6 +835,17 @@ public class BlueprintBookScreen extends Screen {
             this.m_142416_(Button.m_253074_(Component.m_237113_("建造此图纸"),
                             b -> this.startBuildFlow(vid))
                     .m_252987_(x, h - 30, bw[inRegion ? 3 : 1], 20).m_253136_());
+            x += bw[inRegion ? 3 : 1] + gap2;
+            // v1.1.0 实测九十七：转向键位——跳转【原版按键设置】界面（选项→按键绑定
+            // 的同一套 UI），玩家可把"建造预览·旋转朝向"（默认 P）改成任意按键，
+            // 操作方式与调整原版按键完全一致；完成后点"完成"返回本页
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a79\u8f6c\u5411\u952e\u4f4d"),
+                            b -> {
+                                net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+                                mc.m_91152_(new net.minecraft.client.gui.screens.controls.KeyBindsScreen(
+                                        this, mc.f_91066_));
+                            })
+                    .m_252987_(x, h - 30, bw[inRegion ? 4 : 2], 20).m_253136_());
             // 材料翻页（16 种/页；固定在材料区下方，不与底部控制区冲突）
             // v1.1.0 实测二十五：80 宽按钮盖材料行——改 20 宽纯箭头 ◀/▶
             int pages = this.materialPages(this.viewingEntry);
@@ -2063,8 +2075,9 @@ public class BlueprintBookScreen extends Screen {
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
             if (mc.f_91074_ != null) {
                 mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影），"
-                                + "移动选好位置后再次打开手册点击「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
+                        "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影）。"
+                                + "\u00a7b按 P 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
+                                + "「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
             }
             this.m_7379_();
             return;
@@ -2077,7 +2090,8 @@ public class BlueprintBookScreen extends Screen {
                 "\u00a7c确定，开始建造",
                 () -> {
                     BlueprintBookNetworking.CHANNEL.sendToServer(
-                            new BlueprintBookNetworking.SelectBlueprintPacket(vid));
+                            new BlueprintBookNetworking.SelectBlueprintPacket(vid,
+                                    com.maidsmart.build.BlueprintAreaPreview.previewQuarters()));
                     // 金色框关闭；红色区块框+橙色幽灵投影由服务端每秒同步接管
                     com.maidsmart.build.BlueprintAreaPreview.clear();
                     // 本轮确认完成 → 重置标记，下一轮建造重新先看范围

@@ -1,0 +1,33 @@
+package com.maidsmart.build;
+
+import net.minecraft.client.KeyMapping;
+import net.minecraftforge.api.distmarker.Dist;
+import net.minecraftforge.client.event.RegisterKeyMappingsEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.fml.common.Mod;
+import org.lwjgl.glfw.GLFW;
+
+/**
+ * v1.1.0 实测九十七：建造预览转向键——注册进【原版按键设置】
+ *（选项 → 按键绑定 → "Promaid 建造"分类），玩家可在原版界面里改键，
+ * 操作方式与调整原版按键完全一致。默认 P。
+ *
+ * 金色预览激活期间每 tick 轮询 consumeClick（BlueprintAreaPreview.onClientTick）：
+ * 按一次 = 整个建筑顺时针旋转 90°（占地轮廓 W/D 互换 + 方块状态转向 +
+ * 青色幽灵投影实时刷新），确认建造时以该朝向落地。
+ */
+@Mod.EventBusSubscriber(modid = "promaid", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
+public final class BuildKeysClient {
+    /** 建造预览·旋转朝向（默认 P；原版按键设置可改） */
+    public static KeyMapping ROTATE_BLUEPRINT = null;
+
+    private BuildKeysClient() {
+    }
+
+    @SubscribeEvent
+    public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
+        ROTATE_BLUEPRINT = new KeyMapping("key.promaid.build_rotate",
+                GLFW.GLFW_KEY_P, "key.categories.promaid");
+        event.register(ROTATE_BLUEPRINT);
+    }
+}

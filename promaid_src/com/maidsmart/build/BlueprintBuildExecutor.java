@@ -53,7 +53,19 @@ public final class BlueprintBuildExecutor {
     public static Outcome execute(net.minecraft.server.level.ServerLevel level, BlockPos origin,
                                   String blueprintId, boolean partialOnShortfall,
                                   net.minecraft.world.entity.player.Player player) {
-        List<String> steps = BlueprintLib.getBlueprint(blueprintId);
+        return execute(level, origin, blueprintId, partialOnShortfall, player, 0);
+    }
+
+    /**
+     * v1.1.0 实测九十七：带朝向的创建/续建（quarters = 0~3 × 90° 顺时针）——
+     * 步骤经 rotateSteps 整体旋转（坐标矩阵 + W/D 互换 + 方块状态转向）后再居中，
+     * 与投影点云同一变换，橙影与实建逐块重合。
+     */
+    public static Outcome execute(net.minecraft.server.level.ServerLevel level, BlockPos origin,
+                                  String blueprintId, boolean partialOnShortfall,
+                                  net.minecraft.world.entity.player.Player player, int quarters) {
+        List<String> steps = BlueprintLib.getBlueprintRotated(blueprintId, Math.floorMod(quarters, 4),
+                level.m_246945_(net.minecraft.core.registries.Registries.f_256747_));
         if (steps == null || steps.isEmpty()) {
             return new Outcome(TYPE_UNKNOWN, "蓝图打不开：" + blueprintId);
         }
@@ -128,7 +140,8 @@ public final class BlueprintBuildExecutor {
                 BuildPlan.togglePause(level, ex);
             }
         } else {
-            planId = BuildPlan.setPlan(level, origin, buildable, name, blueprintId);
+            planId = BuildPlan.setPlan(level, origin, buildable, name, blueprintId,
+                    Math.floorMod(quarters, 4));
         }
         String needText = needBubbleText(buildable);
         if (resuming) {
