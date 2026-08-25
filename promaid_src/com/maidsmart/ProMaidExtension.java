@@ -207,6 +207,10 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.hudTimer >= 20) {
             this.hudTimer = 0;
             com.maidsmart.build.BuildHudTracker.broadcast(server);
+            // v1.1.0 实测九十五：建造区块行每秒同步——红色区块框+幽灵方块投影的
+            // 持续驱动（此前只在开手册/创建计划时一次性下发，玩家关掉手册走到工地
+            // 后客户端无数据，"建造此建筑里面没有显示投影"的根因）
+            com.maidsmart.build.BlueprintBookNetworking.broadcastRegionSync(server);
             // v1.5.252q：清扫自动生成的钓鱼坐垫（任务解除/脱离坐垫超 2 秒 → 删除）
             // v1.5.252r：逻辑在普通类 FishingChairService（mixin 类不可被普通代码直接引用）
             com.maidsmart.fishing.FishingChairService.sweep(server);

@@ -131,6 +131,12 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(23, ProjectionDataPacket.class,
                 ProjectionDataPacket::encode, ProjectionDataPacket::decode,
                 ProjectionDataPacket::handle);
+        // v1.1.0 实测九十五：建造区块行每秒同步（S2C）——红色区块框 + 幽灵方块投影
+        // 的持续驱动；此前 regions 只在开手册/创建计划时一次性下发，玩家关掉手册
+        // 走到工地后客户端无数据，"建造此建筑里面没有显示投影"的根因
+        CHANNEL.registerMessage(24, RegionSyncPacket.class,
+                RegionSyncPacket::encode, RegionSyncPacket::decode,
+                RegionSyncPacket::handle);
     }
 
     /** v1.5.275：请求重新打开手册（C2S——配置面板跳转女仆管理：关配置 → 服务端
@@ -2444,6 +2450,68 @@ public final class BlueprintBookNetworking {
                     com.maidsmart.build.BlueprintAreaPreview.setProjection(
                             pkt.blueprintId, pkt.size, pkt.cloud));
             ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /**
+     * v1.1.0 实测九十五：建造区块行每秒同步（S2C）——行格式与
+     * collectBuildRegions 一致（14 字段：planId/显示名/维度/状态/box min xyz/
+     * WHD/blueprintId/创建原点 xyz）。客户端 BlueprintAreaPreview.setRegions
+     * 据此画红色区块框 + 橙色幽灵方块投影；空列表 = 计划取消/完成 → 客户端清空。
+     */
+    public static class RegionSyncPacket {
+        public final List<String[]> regions;
+
+        public RegionSyncPacket(List<String[]> regions) {
+            this.regions = regions;
+        }
+
+        public static void encode(RegionSyncPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
+            if (pkt.regions != null) {
+                for (String[] r : pkt.regions) {
+                    for (int i = 0; i < 14; i++) {
+                        buf.m_130070_(r.length > i ? r[i] : "");
+                    }
+                }
+            }
+        }
+
+        public static RegionSyncPacket decode(FriendlyByteBuf buf) {
+            int size = Integer.parseInt(buf.m_130277_());
+            List<String[]> regions = new ArrayList<>();
+            for (int i = 0; i < size; i++) {
+                String[] r = new String[14];
+                for (int j = 0; j < 14; j++) {
+                    r[j] = buf.m_130277_();
+                }
+                regions.add(r);
+            }
+            return new RegionSyncPacket(regions);
+        }
+
+        public static void handle(RegionSyncPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() ->
+                    com.maidsmart.build.BlueprintAreaPreview.setRegions(pkt.regions));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /**
+     * v1.1.0 实测九十五：向全体玩家广播当前建造区块行（ProMaidExtension 每秒
+     * HUD 广播块内调用）。计划数量通常个位数、每行 14 个短串，全量广播开销可忽略；
+     * 无计划时发空列表让客户端清掉残留的框与投影。
+     */
+    public static void broadcastRegionSync(net.minecraft.server.MinecraftServer server) {
+        if (server == null) {
+            return;
+        }
+        RegionSyncPacket pkt = new RegionSyncPacket(collectBuildRegions(server));
+        for (net.minecraft.server.level.ServerPlayer p : server.m_6846_().m_11314_()) {
+            try {
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> p), pkt);
+            } catch (Exception ignored) {
+            }
         }
     }
 }
