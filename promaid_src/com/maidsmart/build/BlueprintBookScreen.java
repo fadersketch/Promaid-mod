@@ -831,10 +831,12 @@ public class BlueprintBookScreen extends Screen {
                     .m_252987_(x, h - 30, bw5[3], 20).m_253136_());
             x += bw5[3] + gap2;
             // 区块显示（总是显示——预览占地范围；v1.5.188b：点击先关闭手册，保证
-            // 玩家在世界里看到金色框再决定位置）
+            // 玩家在世界里看到金色框再决定位置。v1.1.0 实测八十二：附带蓝图 id，
+            // 预览时叠加青色幽灵方块投影——确认建筑朝向/形状）
             this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7e区块显示"),
                             b -> {
                                 com.maidsmart.build.BlueprintAreaPreview.show(
+                                        vid,
                                         this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
                                         this.viewingEntry.sizeZ());
                                 this.m_7379_();
@@ -2064,7 +2066,9 @@ public class BlueprintBookScreen extends Screen {
         boolean previewed = com.maidsmart.build.BlueprintAreaPreview.wasShown();
         if (!previewed) {
             // 第 1 步：强制预览 + 系统提示，退出手册看框选位
+            // （v1.1.0 实测八十二：附带蓝图 id → 预览时叠加青色幽灵方块投影）
             com.maidsmart.build.BlueprintAreaPreview.show(
+                    vid,
                     this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
                     this.viewingEntry.sizeZ());
             net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
