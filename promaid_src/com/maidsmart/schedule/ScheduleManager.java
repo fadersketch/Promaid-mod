@@ -121,5 +121,10 @@ public final class ScheduleManager {
                 // 双保险：isValid 万一漏过，parse 抛异常也不上行（跳过本段任务）
             }
         }
+        // v1.1.0 实测九十四：运行日志——段应用落盘（去抖保证每段每天至多一条）
+        com.maidsmart.tool.PromaidLog.log("排班",
+                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 应用段 "
+                        + ScheduleData.fmt(seg.startMin()) + "~" + ScheduleData.fmt(seg.endMin())
+                        + " 模式=" + seg.mode() + " 任务=" + seg.taskUid());
     }
 }

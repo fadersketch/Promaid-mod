@@ -1858,6 +1858,12 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测六十一：战斗还原后排班宽限
         this.rows.add(new NumRow("战斗还原宽限（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get()),
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE, s), "战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班"));
+        // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
+        this.rows.add(new SectionRow("运行日志（实测九十四）", true));
+        this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),
+                v -> MaidSmartConfig.MISC_LOG_ENABLED.set(v), "运行日志（默认开）：排班应用、战斗参战与还原、险境脱离、跨维跟随、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old），并镜像到 latest.log——“XX 没生效”类反馈可直接按时间线对账；关闭后完全静默"));
+        this.rows.add(new InfoRow("日志文件位置", "\u00a7a<游戏目录>/logs/promaid.log\u00a7r",
+                "任意文本编辑器打开；每行格式 [真实时间] [分类] 内容（分类：排班/战斗/险境脱离/跨维/自保）。只记低频状态迁移，巡检空转不落盘"));
         // v1.5.310：爱憎分明相关开关已整体迁到「爱憎分明模组调试」板块页（见 loveloathRows）
     }
 

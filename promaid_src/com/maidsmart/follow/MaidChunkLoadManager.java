@@ -274,6 +274,10 @@ public final class MaidChunkLoadManager {
             // 末影人传送音效（提示玩家女仆跟过来了）
             newLevel.m_5594_(null, stand, net.minecraft.sounds.SoundEvents.f_11852_,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            // v1.1.0 实测九十四：运行日志——跨维跟随事件落盘
+            com.maidsmart.tool.PromaidLog.log("跨维", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 跟随主人跨维传送至 "
+                    + stand.m_123341_() + "," + stand.m_123342_() + "," + stand.m_123343_());
         } catch (Exception ignored) {
         }
     }

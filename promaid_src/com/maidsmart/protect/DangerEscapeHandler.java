@@ -111,12 +111,16 @@ public class DangerEscapeHandler {
                 maid.f_19789_ = 0.0f; // 脱离时不继承摔落距离
                 maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_);
                 // 应急灭火：身上还带着火就清掉（离开源头后 vanilla 会继续烧完剩余时间）
+                boolean doused = false;
                 if (maid.m_6060_()) {
                     maid.m_7311_(-1);
+                    doused = true;
                 }
-                LOGGER.info("danger escape: maid={} {} -> {}",
-                        name, feet.m_123341_() + "," + feet.m_123342_() + "," + feet.m_123343_(),
-                        safe.m_123341_() + "," + safe.m_123342_() + "," + safe.m_123343_());
+                // v1.1.0 实测九十四：运行日志（替代原 latest.log 直写）
+                com.maidsmart.tool.PromaidLog.log("险境脱离", name + " "
+                        + feet.m_123341_() + "," + feet.m_123342_() + "," + feet.m_123343_()
+                        + " -> " + safe.m_123341_() + "," + safe.m_123342_() + "," + safe.m_123343_()
+                        + (doused ? "（应急灭火）" : ""));
             }
         }
     }
