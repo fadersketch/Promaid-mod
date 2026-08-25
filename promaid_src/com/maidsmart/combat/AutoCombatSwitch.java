@@ -374,6 +374,18 @@ public class AutoCombatSwitch {
         }
     }
 
+    /**
+     * v1.1.0 实测八十七b：isAngry（m_21660_，剩余记仇时间>0）防御封装——
+     * 模组 NeutralMob 实现的 getter 抛异常只按"不记仇"处理，绝不炸 tick。
+     */
+    private static boolean neutralAngry(net.minecraft.world.entity.NeutralMob nm) {
+        try {
+            return nm.m_21660_();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
     private void engageAttackedMaid(EntityMaid victim) {
         long now = victim.m_9236_().m_46467_();
@@ -619,7 +631,9 @@ public class AutoCombatSwitch {
             if (e instanceof net.minecraft.world.entity.monster.Enemy) {
                 return true;
             }
-            if (e instanceof net.minecraft.world.entity.NeutralMob nm && nm.m_21660_()) {
+            // v1.1.0 实测八十七b：经防御封装调用——模组 NeutralMob 实现的记仇时间
+            // getter 若抛异常，不能顺着每秒一次的还原扫描炸穿服务端 tick
+            if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
                 return true; // isAngry：记仇时间未清零 = 现役威胁
             }
         }
@@ -647,7 +661,7 @@ public class AutoCombatSwitch {
             // v1.1.0 实测八十七：圈来源口径放宽——Enemy 或 记仇中的中立生物
             boolean ringSource = attacker instanceof net.minecraft.world.entity.monster.Enemy
                     || (attacker instanceof net.minecraft.world.entity.NeutralMob nm
-                    && nm.m_21660_());
+                    && neutralAngry(nm));
             if (!ringSource) {
                 return false;
             }
