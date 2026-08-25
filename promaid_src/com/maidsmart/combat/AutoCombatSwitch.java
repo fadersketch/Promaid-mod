@@ -26,7 +26,8 @@ import java.util.Random;
  * 主动切换战斗模式（v1.1.0）。
  *
  * 触发（v1.1.0 实测二十扩展）：主人被攻击（任意来源——敌对生物/玩家/弹射物，
- * 自伤除外）或主人攻击了别的生物（主动开火也算开战）→ 响应半径内所有自己的
+ * 自伤除外）或主人攻击了【敌对生物】（主动开火也算开战；实测八十四b 起打被动
+ * 生物不算——宰牲畜不参战，也根绝"无威胁战斗收不回去"）→ 响应半径内所有自己的
  * 女仆（非自保、非战斗任务、非幼年）立即切换为战斗任务——无论她当前在干什么
  * （挖矿/伐木/烹饪/建造/跟随…）。
  *
@@ -173,6 +174,12 @@ public class AutoCombatSwitch {
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
             return;
         }
+        // v1.1.0 实测八十四b：目标必须是【敌对生物】才算主动开战——宰牛杀鸡/剪羊毛
+        // 等被动生物交互不再让女仆全员拔刀。这类"无威胁战斗"还原扫描永远扫不到
+        // 威胁、安全计时只被主人的后续命中无限续杯，是"打完收不回去"的根源。
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+            return;
+        }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
@@ -180,13 +187,16 @@ public class AutoCombatSwitch {
     }
 
     /** v1.1.0 实测三十六：主人开火的 LivingDamageEvent 兜底（同 onOwnerAttack 的
-     *  来源侧判定，事件换结算层）。 */
+     *  来源侧判定，事件换结算层）。v1.1.0 实测八十四b：同样要求目标是敌对生物。 */
     @SubscribeEvent
     public void onOwnerAttackDamage(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         if (!(event.getSource() != null && event.getSource().m_7639_() instanceof ServerPlayer attacker)) {
             return;
         }
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
+            return;
+        }
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -344,7 +354,12 @@ public class AutoCombatSwitch {
         // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
         if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
             if (isOnAssignedCombatTask(maid)) {
-                maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
+                // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
+                // 无威胁战斗里还原时钟被反复推走 = 打完收不回去的第二道源头
+                if (hasThreatNearby(maid)) {
+                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+                }
                 return 0;
             }
             clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
