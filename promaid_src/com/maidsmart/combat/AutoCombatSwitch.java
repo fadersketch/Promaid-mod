@@ -181,7 +181,11 @@ public class AutoCombatSwitch {
         // v1.1.0 实测八十四b：目标必须是【敌对生物】才算主动开战——宰牛杀鸡/剪羊毛
         // 等被动生物交互不再让女仆全员拔刀。这类"无威胁战斗"还原扫描永远扫不到
         // 威胁、安全计时只被主人的后续命中无限续杯，是"打完收不回去"的根源。
-        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+        // v1.1.0 实测八十七：中立激怒口径——正在记仇主人的中立生物（追着主人咬的
+        // 狼/带崽北极熊）也算交战对象，帮打合理；平静态的照样不触发。
+        net.minecraft.world.entity.Entity victimEnt = event.getEntity();
+        if (!(victimEnt instanceof net.minecraft.world.entity.monster.Enemy)
+                && !isAngryNeutralAt(victimEnt, attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -200,7 +204,9 @@ public class AutoCombatSwitch {
         if (event.getEntity() instanceof EntityMaid m && m.m_269323_() == attacker) {
             return;
         }
-        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+        // v1.1.0 实测八十七：同 onOwnerAttack——敌对生物或记仇主人的中立生物
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
+                && !isAngryNeutralAt(event.getEntity(), attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -289,10 +295,13 @@ public class AutoCombatSwitch {
         touchContact(maid);
         try {
             net.minecraft.world.entity.Entity attacker = source != null ? source.m_7640_() : null;
-            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)) {
+            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
+                    && !isAngryNeutralAt(attacker, maid)) {
                 attacker = source != null ? source.m_7639_() : null;
             }
-            if (attacker instanceof net.minecraft.world.entity.monster.Enemy) {
+            // v1.1.0 实测八十七：登记口径 = Enemy 或 记仇女仆的中立生物
+            if (attacker instanceof net.minecraft.world.entity.monster.Enemy
+                    || isAngryNeutralAt(attacker, maid)) {
                 maid.getPersistentData().m_128359_(ATTACKER_UUID_TAG, attacker.m_20148_().toString());
                 maid.getPersistentData().m_128356_(ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
             }
@@ -325,7 +334,9 @@ public class AutoCombatSwitch {
      *  Monster 但实现 Enemy 接口，旧判定被它们打了不参战。
      *  v1.1.0 实测八十五：补弹射物口径——骷髅放箭时【直接实体】(m_7639_)是箭矢、
      *  【造成者】(m_7640_)才是骷髅，旧版只查直接实体 → 远程怪放风筝女仆永不参战；
-     *  现在两侧任一是 Enemy 即算。 */
+     *  现在两侧任一是 Enemy 即算。
+     *  v1.1.0 实测八十七：中立激怒口径——蜜蜂/北极熊/狼等 NeutralMob 平时不算
+     *  敌意来源，但【正在记仇女仆】的（isAngryAt 命中）按敌对处理。 */
     private static boolean maidVictimOfMonster(Entity victim, net.minecraft.world.damagesource.DamageSource source) {
         if (!(victim instanceof EntityMaid)) {
             return false;
@@ -336,8 +347,31 @@ public class AutoCombatSwitch {
         if (source == null) {
             return false;
         }
-        return source.m_7640_() instanceof net.minecraft.world.entity.monster.Enemy
-                || source.m_7639_() instanceof net.minecraft.world.entity.monster.Enemy;
+        net.minecraft.world.entity.Entity cause = source.m_7640_();
+        if (cause instanceof net.minecraft.world.entity.monster.Enemy) {
+            return true;
+        }
+        net.minecraft.world.entity.Entity direct = source.m_7639_();
+        if (direct instanceof net.minecraft.world.entity.monster.Enemy) {
+            return true;
+        }
+        // v1.1.0 实测八十七：中立生物激怒即通行证
+        return isAngryNeutralAt(cause, victim) || isAngryNeutralAt(direct, victim);
+    }
+
+    /**
+     * v1.1.0 实测八十七：该实体是否为【正在记仇 target 的中立生物】。
+     * m_21674_ = NeutralMob.isAngryAt(LivingEntity)（字节码实证默认实现：
+     * canAnger 门 → 玩家通用怒火规则 → 持久仇恨 UUID 匹配）。
+     */
+    private static boolean isAngryNeutralAt(net.minecraft.world.entity.Entity e,
+                                            net.minecraft.world.entity.Entity target) {
+        try {
+            return e instanceof net.minecraft.world.entity.NeutralMob nm
+                    && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
+        } catch (Exception ex) {
+            return false;
+        }
     }
 
     /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
@@ -574,11 +608,19 @@ public class AutoCombatSwitch {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
         // v1.1.0 实测六十八：Monster -> Enemy（与参战判定同口径——史莱姆等
         // 敌对生物也算威胁，否则还原后立刻被再次触发、反复横跳）。
-        // Enemy 是接口，getEntitiesOfClass 不收——按 Entity 扫描再过滤
+        // Enemy 是接口，getEntitiesOfClass 不收——按 Entity 扫描再过滤。
+        // v1.1.0 实测八十七：中立激怒口径——记仇状态（isAngry）的中立动物
+        // （蜜蜂/北极熊/狼等）也是真实威胁，还原不再被它们打断又拉回。
         for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
                 net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
-            if (e instanceof net.minecraft.world.entity.monster.Enemy && e.m_6084_()) {
+            if (!e.m_6084_()) {
+                continue;
+            }
+            if (e instanceof net.minecraft.world.entity.monster.Enemy) {
                 return true;
+            }
+            if (e instanceof net.minecraft.world.entity.NeutralMob nm && nm.m_21660_()) {
+                return true; // isAngry：记仇时间未清零 = 现役威胁
             }
         }
         // ---- 动态威胁圈 ----
@@ -599,9 +641,15 @@ public class AutoCombatSwitch {
             net.minecraft.world.entity.Entity attacker =
                     ((net.minecraft.server.level.ServerLevel) maid.m_9236_())
                             .m_8791_(java.util.UUID.fromString(uuidStr));
-            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
-                    || !attacker.m_6084_()) {
+            if (!attacker.m_6084_()) {
                 return false; // 来源已死/已移除
+            }
+            // v1.1.0 实测八十七：圈来源口径放宽——Enemy 或 记仇中的中立生物
+            boolean ringSource = attacker instanceof net.minecraft.world.entity.monster.Enemy
+                    || (attacker instanceof net.minecraft.world.entity.NeutralMob nm
+                    && nm.m_21660_());
+            if (!ringSource) {
+                return false;
             }
             // 硬上限 32 格：防跨基地区域的荒谬放大
             return maid.m_20238_(attacker.m_20182_()) <= 32.0 * 32.0;
