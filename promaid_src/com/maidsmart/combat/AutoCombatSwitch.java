@@ -64,6 +64,10 @@ public class AutoCombatSwitch {
     /** v1.1.0 实测八十四：最近一次与敌对生物有伤害往来的 gameTime（僵局逃逸阀计时——
      *  威胁在半径内但双方久无接触 = 够不着的死局，不再无限续杯安全计时） */
     private static final String LAST_CONTACT_TAG = "maid_smart_combat_last_contact";
+    /** v1.1.0 实测八十五：最近伤害来源（动态威胁圈）——uuid + 登记时刻。
+     *  还原扫描时该生物若仍存活且在扩展窗口内，威胁圈自动放大把它包含进来 */
+    private static final String ATTACKER_UUID_TAG = "maid_smart_combat_attacker";
+    private static final String ATTACKER_TIME_TAG = "maid_smart_combat_attacker_time";
     /** 僵局日志节流（每女仆 30 秒一条，latest.log 搜 "auto-combat stale"） */
     private static final java.util.Map<java.util.UUID, Long> STALE_LOG =
             new java.util.HashMap<>();
@@ -247,7 +251,7 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidHurt(LivingHurtEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContact((EntityMaid) event.getEntity());
+            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -255,7 +259,7 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContact((EntityMaid) event.getEntity());
+            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -263,15 +267,43 @@ public class AutoCombatSwitch {
     @SubscribeEvent
     public void onMaidDamaged(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContact((EntityMaid) event.getEntity());
+            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
+        }
+    }
+
+    /**
+     * v1.1.0 实测八十四：记录一次与敌对生物的真实接触（任意方向伤害）。
+     * v1.1.0 实测八十五：挨打侧同时登记【伤害来源生物】（uuid + 时刻）——
+     * 动态威胁圈的放大依据（hasThreatNearby 按需把半径扩到包含它）。
+     */
+    private static void touchContact(EntityMaid maid) {
+        try {
+            maid.getPersistentData().m_128356_(LAST_CONTACT_TAG, maid.m_9236_().m_46467_());
+        } catch (Exception ignored) {
+        }
+    }
+
+    private static void touchContactFromSource(EntityMaid maid,
+                                               net.minecraft.world.damagesource.DamageSource source) {
+        touchContact(maid);
+        try {
+            net.minecraft.world.entity.Entity attacker = source != null ? source.m_7640_() : null;
+            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)) {
+                attacker = source != null ? source.m_7639_() : null;
+            }
+            if (attacker instanceof net.minecraft.world.entity.monster.Enemy) {
+                maid.getPersistentData().m_128359_(ATTACKER_UUID_TAG, attacker.m_20148_().toString());
+                maid.getPersistentData().m_128356_(ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
+            }
+        } catch (Exception ignored) {
         }
     }
 
     /**
      * v1.1.0 实测八十四：女仆【打到】敌对生物也算一次战斗接触——僵局逃逸阀的
      * 另一个计时来源（只算"挨打"的话，远程女仆放风筝全程无伤会被误判成死局）。
-     * m_7638_ = DamageSource.getEntity（造成者；弓箭等弹射物的造成者是射手本体，
+     * m_7640_ = DamageSource.getEntity（造成者；弓箭等弹射物的造成者是射手本体，
      * 与 m_7639_ getDirectEntity=箭矢实体相对）。
      */
     @SubscribeEvent
@@ -288,15 +320,12 @@ public class AutoCombatSwitch {
         touchContact(maid);
     }
 
-    /** v1.1.0 实测八十四：记录一次与敌对生物的真实接触（任意方向伤害） */
-    private static void touchContact(EntityMaid maid) {
-        try {
-            maid.getPersistentData().m_128356_(LAST_CONTACT_TAG, maid.m_9236_().m_46467_());
-        } catch (Exception ignored) {
-        }
-    }
-
-    /** 受害者是女仆、来源是怪物（与护主触发同款总开关门控） */
+    /** 受害者是女仆、来源是怪物（与护主触发同款总开关门控）
+     *  v1.1.0 实测六十五：Monster -> Enemy——史莱姆/岩浆怪等敌对生物不实现
+     *  Monster 但实现 Enemy 接口，旧判定被它们打了不参战。
+     *  v1.1.0 实测八十五：补弹射物口径——骷髅放箭时【直接实体】(m_7639_)是箭矢、
+     *  【造成者】(m_7640_)才是骷髅，旧版只查直接实体 → 远程怪放风筝女仆永不参战；
+     *  现在两侧任一是 Enemy 即算。 */
     private static boolean maidVictimOfMonster(Entity victim, net.minecraft.world.damagesource.DamageSource source) {
         if (!(victim instanceof EntityMaid)) {
             return false;
@@ -304,9 +333,11 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return false;
         }
-        // v1.1.0 实测六十五：Monster -> Enemy——史莱姆/岩浆怪等敌对生物不实现
-        // Monster 但实现 Enemy 接口，旧判定被它们打了不参战
-        return source != null && source.m_7639_() instanceof net.minecraft.world.entity.monster.Enemy;
+        if (source == null) {
+            return false;
+        }
+        return source.m_7640_() instanceof net.minecraft.world.entity.monster.Enemy
+                || source.m_7639_() instanceof net.minecraft.world.entity.monster.Enemy;
     }
 
     /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
@@ -531,6 +562,13 @@ public class AutoCombatSwitch {
      * 女仆周围（还原威胁半径，默认 8——独立配置，不复用 16 格响应半径）是否有活的
      * 敌对生物。v1.1.0 审查：旧版复用响应半径，刷怪频繁的整合包里远处怪一直"续杯"，
      * 女仆永远等不满 20 秒安全期，卡在战斗任务回不了岗。
+     *
+     * v1.1.0 实测八十五【动态威胁圈】（用户设计："威胁圈会自然放大，直至包含检索到
+     * 伤害来源的那个生物"）：固定圆与参战触发的口径不对称——骷髅站在 10 多格外放
+     * 风筝时，固定 8 格扫不到它 → 还原计时照走 → 还原 10 秒后又中一箭再参战，反复
+     * 横跳。现在挨打时登记伤害来源生物（uuid + 时刻），还原扫描发现该生物仍存活、
+     * 距离不超过硬上限（32 格）、且还在扩展窗口（默认 10 秒）内 → 威胁圈自然放大把
+     * 它包进来：被压着打期间保持战斗态还击；怪死/走远/超窗后圈回落到固定半径。
      */
     private static boolean hasThreatNearby(EntityMaid maid) {
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
@@ -543,7 +581,33 @@ public class AutoCombatSwitch {
                 return true;
             }
         }
-        return false;
+        // ---- 动态威胁圈 ----
+        int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
+        if (sec <= 0) {
+            return false; // 关闭：只用固定半径
+        }
+        try {
+            long now = maid.m_9236_().m_46467_();
+            long marked = maid.getPersistentData().m_128454_(ATTACKER_TIME_TAG);
+            if (now - marked > sec * 20L) {
+                return false; // 扩展窗口已过
+            }
+            String uuidStr = maid.getPersistentData().m_128461_(ATTACKER_UUID_TAG);
+            if (uuidStr.isEmpty()) {
+                return false;
+            }
+            net.minecraft.world.entity.Entity attacker =
+                    ((net.minecraft.server.level.ServerLevel) maid.m_9236_())
+                            .m_8791_(java.util.UUID.fromString(uuidStr));
+            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
+                    || !attacker.m_6084_()) {
+                return false; // 来源已死/已移除
+            }
+            // 硬上限 32 格：防跨基地区域的荒谬放大
+            return maid.m_20238_(attacker.m_20182_()) <= 32.0 * 32.0;
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**
