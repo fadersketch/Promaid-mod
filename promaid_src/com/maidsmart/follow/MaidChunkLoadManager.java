@@ -424,9 +424,40 @@ public final class MaidChunkLoadManager {
         return y < level.m_141928_(); // 掉出本维度最低建筑高度以下 = 真虚空
     }
 
-    /** 从主人所在格向下找第一个"站立格空气 + 脚下实心不悬空"的位置（最多 16 格） */
+    /**
+     * 从主人所在格附近找"站立格空气 + 脚下实心不悬空"的位置。
+     * v1.1.0 实测八十三：旧版只从主人脚下一路【向下】扫 16 格——下界桥面/
+     * 熔岩海高架/悬崖地形正下方常无地面（悬空 100 格），直接判"无可站立点"
+     * → 一键集合报"N 名因身边无可站立点未动"、跨维度跟随也卡住。现在：
+     * ①原点柱向下 16（保留旧语义，落点贴主人脚下）；②再向上 12
+     * （主人站在屋檐下/洞口时旁边有台面）；③水平外环半径 1~3 逐列扫描
+     * （沿桥面/平台横走一格就能落脚）。
+     */
     private static BlockPos findStand(ServerLevel level, BlockPos from) {
-        BlockPos cur = from;
+        BlockPos hit = scanColumn(level, from);
+        if (hit != null) {
+            return hit;
+        }
+        for (int r = 1; r <= 3; r++) {
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    // 只扫外环（r=1 九宫格边圈 → r=2 → r=3，由近及远）
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) {
+                        continue;
+                    }
+                    BlockPos h = scanColumn(level, from.m_7918_(dx, 0, dz));
+                    if (h != null) {
+                        return h;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子 */
+    private static BlockPos scanColumn(ServerLevel level, BlockPos col) {
+        BlockPos cur = col;
         for (int i = 0; i < 16; i++) {
             BlockState st = level.m_8055_(cur);
             BlockPos belowPos = cur.m_7495_();
@@ -436,6 +467,17 @@ public final class MaidChunkLoadManager {
                 return cur;
             }
             cur = belowPos;
+        }
+        cur = col.m_7918_(0, 1, 0);
+        for (int i = 0; i < 12; i++) {
+            BlockState st = level.m_8055_(cur);
+            BlockPos belowPos = cur.m_7495_();
+            BlockState below = level.m_8055_(belowPos);
+            if (st.m_60795_() && !below.m_60795_() && !below.m_60815_()
+                    && below.m_60796_(level, belowPos)) {
+                return cur;
+            }
+            cur = cur.m_7918_(0, 1, 0);
         }
         return null;
     }
