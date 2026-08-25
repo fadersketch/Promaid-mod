@@ -27,6 +27,8 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
         public boolean paused = false;
         /** v1.5.69：工头女仆 UUID（建造反馈统一由工头发，其他女仆静默；空 = 未设） */
         public String foremanUuid = "";
+        /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——重启后按此重解析旋转步骤 */
+        public int quarters = 0;
     }
 
     /** v1.5.180：本维度所有区块计划存档（多区块共存） */
@@ -49,7 +51,9 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
             sb.append(p.planId).append('\u0001').append(p.ox).append('\u0001').append(p.oy)
                     .append('\u0001').append(p.oz).append('\u0001').append(p.blueprintId).append('\u0001')
                     .append(p.name).append('\u0001').append(p.cursor).append('\u0001').append(p.paused)
-                    .append('\u0001').append(p.foremanUuid);
+                    .append('\u0001').append(p.foremanUuid)
+                    // v1.1.0 实测九十七：第 10 字段 = 朝向（旧档无此字段，读侧默认 0）
+                    .append('\u0001').append(p.quarters);
         }
         return sb.toString();
     }
@@ -81,6 +85,13 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
             }
             p.paused = "true".equals(f[7]);
             p.foremanUuid = f[8];
+            // v1.1.0 实测九十七：第 10 字段朝向（旧档 9 字段 → 默认 0）
+            if (f.length > 9) {
+                try {
+                    p.quarters = Math.floorMod(Integer.parseInt(f[9]), 4);
+                } catch (NumberFormatException ignored) {
+                }
+            }
             if (!p.blueprintId.isEmpty()) {
                 plans.add(p);
             }

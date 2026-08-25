@@ -317,7 +317,9 @@ public final class BlueprintBookNetworking {
                         ps.blueprintId,
                         String.valueOf(ps.origin.m_123341_()),
                         String.valueOf(ps.origin.m_123342_()),
-                        String.valueOf(ps.origin.m_123343_())});
+                        String.valueOf(ps.origin.m_123343_()),
+                        // v1.1.0 实测九十七：r[14] 朝向（0~3 × 90°）——客户端橙影按 id#quarters 取点云
+                        String.valueOf(ps.quarters)});
             }
         }
         return regions;
@@ -499,7 +501,8 @@ public final class BlueprintBookNetworking {
                     // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
                     // 旧版写死 11 → 坐标字段永远没发出去 → 客户端 r.length>11 恒 false，
                     // 区块"创建于 x,y,z"从未显示——用户："显示坐标还是没有做好"）
-                    for (int i = 0; i < 14; i++) {
+                    // v1.1.0 实测九十七：15 字段（追加 r[14] 朝向 quarters）
+                    for (int i = 0; i < 15; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
@@ -564,8 +567,8 @@ public final class BlueprintBookNetworking {
                 // (b) 每个区块剩 3 个坐标字符串错位到后续字段，≥2 个区块时 initialView 读到
                 // 蓝图 id（非数字）→ NumberFormatException → 连接损坏 →"连接已丢失"
                 //（日志实证 06:21:55 创建第二个区块后开手册即断连）
-                String[] rr = new String[14];
-                for (int j = 0; j < 14; j++) {
+                String[] rr = new String[15];
+                for (int j = 0; j < 15; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
@@ -746,7 +749,8 @@ public final class BlueprintBookNetworking {
                 for (String[] r : pkt.regions) {
                     // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
                     // 旧版写死 11 → 坐标字段从未发出去）
-                    for (int i = 0; i < 14; i++) {
+                    // v1.1.0 实测九十七：15 字段（追加 r[14] 朝向 quarters）
+                    for (int i = 0; i < 15; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
@@ -787,8 +791,8 @@ public final class BlueprintBookNetworking {
             for (int i = 0; i < regionCount; i++) {
                 // v1.5.296：14 字段（与 OpenBlueprintBookPacket 同修——v1.5.290 漏改
                 // decode：坐标字段缺失 + 多区块时后续字段错位致解析崩溃）
-                String[] rr = new String[14];
-                for (int j = 0; j < 14; j++) {
+                String[] rr = new String[15];
+                for (int j = 0; j < 15; j++) {
                     rr[j] = buf.m_130277_();
                 }
                 regions.add(rr);
@@ -855,17 +859,27 @@ public final class BlueprintBookNetworking {
     /** 客户端：点击目录条目（蓝图 id） */
     public static class SelectBlueprintPacket {
         public final String blueprintId;
+        /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——金色预览按 P 选定后携带 */
+        public final int quarters;
 
-        public SelectBlueprintPacket(String blueprintId) {
+        public SelectBlueprintPacket(String blueprintId, int quarters) {
             this.blueprintId = blueprintId;
+            this.quarters = quarters;
         }
 
         public static void encode(SelectBlueprintPacket pkt, FriendlyByteBuf buf) {
             buf.m_130070_(pkt.blueprintId);
+            buf.m_130070_(String.valueOf(pkt.quarters));
         }
 
         public static SelectBlueprintPacket decode(FriendlyByteBuf buf) {
-            return new SelectBlueprintPacket(buf.m_130277_());
+            String id = buf.m_130277_();
+            int q = 0;
+            try {
+                q = Integer.parseInt(buf.m_130277_());
+            } catch (NumberFormatException ignored) {
+            }
+            return new SelectBlueprintPacket(id, q);
         }
 
         public static void handle(SelectBlueprintPacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -877,7 +891,8 @@ public final class BlueprintBookNetworking {
                 // v1.5.180：创建区块【不需要女仆在场】——以玩家脚下为原点创建
                 //（手册点击 = 明确意图：材料不足时直接先建材料够的部分）
                 BlueprintBuildExecutor.Outcome outcome = BlueprintBuildExecutor.execute(
-                        level, player.m_20183_(), pkt.blueprintId, true, player);
+                        level, player.m_20183_(), pkt.blueprintId, true, player,
+                        Math.floorMod(pkt.quarters, 4));
                 String bubble;
                 switch (outcome.type()) {
                     case BlueprintBuildExecutor.TYPE_OK -> bubble = outcome.message();
@@ -2348,21 +2363,31 @@ public final class BlueprintBookNetworking {
 
     // ==================== v1.1.0 实测八十二：蓝图投影 ====================
 
-    /** C2S：请求某蓝图的投影点云（区块显示按钮/红色区块标记首次出现时发送；
-     *  服务端抽壳降采样后回 ProjectionDataPacket） */
+    /** C2S：请求某蓝图的投影点云（金色预览/红色区块首次出现时发送；
+     *  服务端抽壳降采样后回 ProjectionDataPacket）。
+     *  v1.1.0 实测九十七：+quarters——按 P 旋转后客户端请求对应朝向的点云。 */
     public static class ProjectionRequestPacket {
         public final String blueprintId;
+        public final int quarters;
 
-        public ProjectionRequestPacket(String blueprintId) {
+        public ProjectionRequestPacket(String blueprintId, int quarters) {
             this.blueprintId = blueprintId;
+            this.quarters = quarters;
         }
 
         public static void encode(ProjectionRequestPacket pkt, FriendlyByteBuf buf) {
             buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
+            buf.m_130070_(String.valueOf(pkt.quarters));
         }
 
         public static ProjectionRequestPacket decode(FriendlyByteBuf buf) {
-            return new ProjectionRequestPacket(buf.m_130277_());
+            String id = buf.m_130277_();
+            int q = 0;
+            try {
+                q = Integer.parseInt(buf.m_130277_());
+            } catch (NumberFormatException ignored) {
+            }
+            return new ProjectionRequestPacket(id, q);
         }
 
         public static void handle(ProjectionRequestPacket pkt, Supplier<NetworkEvent.Context> ctx) {
@@ -2372,28 +2397,33 @@ public final class BlueprintBookNetworking {
                     return;
                 }
                 String id = pkt.blueprintId == null ? "" : pkt.blueprintId;
+                int q = Math.floorMod(pkt.quarters, 4);
                 // v1.1.0 实测八十三b：全程 try/catch + 日志——旧版异常静默（enqueueWork
                 // 吞掉堆栈），投影断链无从排查
                 try {
-                    List<String> centered = BlueprintProjectionSampler.centeredStepsOf(id);
+                    // v1.1.0 实测九十七：holder 从发送方所在维度取（旋转 BlockState 必需）
+                    var holder = player.m_9236_().m_246945_(net.minecraft.core.registries.Registries.f_256747_);
+                    List<String> centered = BlueprintProjectionSampler.centeredStepsOf(id, q, holder);
                     if (centered == null || centered.isEmpty()) {
-                        LOGGER.info("projection: id={} unavailable (missing/empty), reply empty", id);
+                        LOGGER.info("projection: id={} q={} unavailable (missing/empty), reply empty", id, q);
                         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                                new ProjectionDataPacket(id, "0,0,0", ""));
+                                new ProjectionDataPacket(id, q, "0,0,0", ""));
                         return;
                     }
-                    int[] sz = BlueprintLib.blueprintSizeCached(id, centered);
-                    String cloud = BlueprintProjectionSampler.sampleCloud(id);
+                    // v1.1.0 实测九十七：旋转版尺寸不进 SIZE_CACHE（该缓存按 id 存未旋转尺寸）
+                    int[] sz = q == 0 ? BlueprintLib.blueprintSizeCached(id, centered)
+                            : BlueprintLib.blueprintSize(centered);
+                    String cloud = BlueprintProjectionSampler.sampleCloud(id, q, holder);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new ProjectionDataPacket(id,
+                            new ProjectionDataPacket(id, q,
                                     sz[0] + "," + sz[1] + "," + sz[2],
                                     cloud));
-                    LOGGER.info("projection: id={} size={}x{}x{} chars={} (sent)",
-                            id, sz[0], sz[1], sz[2], cloud.length());
+                    LOGGER.info("projection: id={} q={} size={}x{}x{} chars={} (sent)",
+                            id, q, sz[0], sz[1], sz[2], cloud.length());
                 } catch (Exception e) {
-                    LOGGER.error("projection: generate failed id={}", id, e);
+                    LOGGER.error("projection: generate failed id={} q={}", id, q, e);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new ProjectionDataPacket(id, "0,0,0", ""));
+                            new ProjectionDataPacket(id, q, "0,0,0", ""));
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -2411,17 +2441,21 @@ public final class BlueprintBookNetworking {
 
     public static class ProjectionDataPacket {
         public final String blueprintId;
+        /** v1.1.0 实测九十七：朝向（0~3 × 90°）——客户端按 id#quarters 缓存 */
+        public final int quarters;
         public final String size;
         public final String cloud;
 
-        public ProjectionDataPacket(String blueprintId, String size, String cloud) {
+        public ProjectionDataPacket(String blueprintId, int quarters, String size, String cloud) {
             this.blueprintId = blueprintId;
+            this.quarters = quarters;
             this.size = size;
             this.cloud = cloud;
         }
 
         public static void encode(ProjectionDataPacket pkt, FriendlyByteBuf buf) {
             buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
+            buf.m_130070_(String.valueOf(pkt.quarters));
             buf.m_130070_(pkt.size == null ? "0,0,0" : pkt.size);
             String cloud = pkt.cloud == null ? "" : pkt.cloud;
             int chunks = Math.max(1, (cloud.length() + PROJECTION_CHUNK_CHARS - 1)
@@ -2436,28 +2470,34 @@ public final class BlueprintBookNetworking {
 
         public static ProjectionDataPacket decode(FriendlyByteBuf buf) {
             String id = buf.m_130277_();
+            int q = 0;
+            try {
+                q = Integer.parseInt(buf.m_130277_());
+            } catch (NumberFormatException ignored) {
+            }
             String size = buf.m_130277_();
             int chunks = Integer.parseInt(buf.m_130277_());
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < chunks && i < 64; i++) { // 上限防御：正常 ≤4 块
                 sb.append(buf.m_130277_());
             }
-            return new ProjectionDataPacket(id, size, sb.toString());
+            return new ProjectionDataPacket(id, q, size, sb.toString());
         }
 
         public static void handle(ProjectionDataPacket pkt, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() ->
                     com.maidsmart.build.BlueprintAreaPreview.setProjection(
-                            pkt.blueprintId, pkt.size, pkt.cloud));
+                            pkt.blueprintId, pkt.quarters, pkt.size, pkt.cloud));
             ctx.get().setPacketHandled(true);
         }
     }
 
     /**
      * v1.1.0 实测九十五：建造区块行每秒同步（S2C）——行格式与
-     * collectBuildRegions 一致（14 字段：planId/显示名/维度/状态/box min xyz/
-     * WHD/blueprintId/创建原点 xyz）。客户端 BlueprintAreaPreview.setRegions
-     * 据此画红色区块框 + 橙色幽灵方块投影；空列表 = 计划取消/完成 → 客户端清空。
+     * collectBuildRegions 一致（15 字段：planId/显示名/维度/状态/box min xyz/
+     * WHD/blueprintId/创建原点 xyz/朝向 quarters）。客户端
+     * BlueprintAreaPreview.setRegions 据此画红色区块框 + 橙色幽灵方块投影；
+     * 空列表 = 计划取消/完成 → 客户端清空。
      */
     public static class RegionSyncPacket {
         public final List<String[]> regions;
@@ -2470,7 +2510,8 @@ public final class BlueprintBookNetworking {
             buf.m_130070_(String.valueOf(pkt.regions == null ? 0 : pkt.regions.size()));
             if (pkt.regions != null) {
                 for (String[] r : pkt.regions) {
-                    for (int i = 0; i < 14; i++) {
+                    // v1.1.0 实测九十七：15 字段（追加 r[14] 朝向 quarters）
+                    for (int i = 0; i < 15; i++) {
                         buf.m_130070_(r.length > i ? r[i] : "");
                     }
                 }
@@ -2481,8 +2522,8 @@ public final class BlueprintBookNetworking {
             int size = Integer.parseInt(buf.m_130277_());
             List<String[]> regions = new ArrayList<>();
             for (int i = 0; i < size; i++) {
-                String[] r = new String[14];
-                for (int j = 0; j < 14; j++) {
+                String[] r = new String[15];
+                for (int j = 0; j < 15; j++) {
                     r[j] = buf.m_130277_();
                 }
                 regions.add(r);
