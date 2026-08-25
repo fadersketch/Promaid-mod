@@ -181,6 +181,19 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.dimFollowTimer >= 100) {
             this.dimFollowTimer = 0;
             com.maidsmart.follow.MaidChunkLoadManager.tick(server);
+            // v1.1.0 实测九十二：接线跨维度跟随——MISC_DIMENSION_FOLLOW 开关此前是
+            // 摆设（配置+面板都在，followIfCrossDimension 却从未被任何代码调用）。
+            // 开关开启时每 5 秒扫描全服女仆，异维度跟随者自动传送到主人身边；
+            // home/坐姿/骑乘/主人非存活/同维度等豁免在 followIfCrossDimension 内自判。
+            if (com.maidsmart.config.MaidSmartConfig.MISC_DIMENSION_FOLLOW.get()) {
+                for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
+                    for (net.minecraft.world.entity.Entity en : lvl.m_8583_()) {
+                        if (en instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid fm) {
+                            com.maidsmart.follow.MaidChunkLoadManager.followIfCrossDimension(fm);
+                        }
+                    }
+                }
+            }
         }
         // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
         com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
