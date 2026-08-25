@@ -370,6 +370,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
+    /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
+    public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
+    /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_DANGER_BLOCKS;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ForgeConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1151,8 +1155,23 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // v1.1.0 实测四十四：女仆区块强制加载（"约等于玩家"）——与主人不同维度的
         // 女仆所在区块挂强制加载票（实体正常 ticking），保证跨维度跟随/死亡传送
         // 永远能找到她（旧版主人在远处的女仆区块卸载后传送静默失效）
-        MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（与主人不同维度的女仆所在区块保持加载，随时可跨维度传送；关闭后远处女仆所在区块卸载时无法传送）")
+        MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（所有有主女仆所在区块持续保持实体 ticking，随时可传送/召回/救援；关闭后远处女仆所在区块卸载时会冻结失联）")
                 .translation("config.promaid.misc.maidChunkLoad").define("maidChunkLoad", true);
+        // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
+        MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
+                .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);
+        MISC_DANGER_BLOCKS = BUILDER.comment("危险方块表（完整注册名，一行一个；命中站立格或脚下方块即视为危险）")
+                .translation("config.promaid.misc.dangerBlocks")
+                .defineList("dangerBlocks", List.of(
+                        "minecraft:lava",
+                        "minecraft:fire",
+                        "minecraft:soul_fire",
+                        "minecraft:magma_block",
+                        "minecraft:cactus",
+                        "minecraft:sweet_berry_bush",
+                        "minecraft:wither_rose",
+                        "minecraft:powder_snow",
+                        "minecraft:pointed_dripstone"), o -> o instanceof String s && !s.isEmpty());
         // v1.1.0 实测七十九：受困救援——死亡瞬间的坏落点（下界基岩顶等）已被
         // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
         MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
