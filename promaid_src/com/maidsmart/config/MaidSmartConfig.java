@@ -376,6 +376,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_DANGER_BLOCKS;
     /** v1.1.0 实测九十：险境脱离——已身处危险方块上时自动挪到最近安全格 */
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_ESCAPE;
+    // v1.1.0 实测九十四：运行日志总开关（游戏目录/logs/promaid.log）
+    public static final ForgeConfigSpec.BooleanValue MISC_LOG_ENABLED;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ForgeConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
@@ -1181,6 +1183,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // "主人非存活不追"挡住，这里兜底捞回历史上已经受困的女仆
         MISC_MAID_RESCUE = BUILDER.comment("受困救援（默认开）：女仆被困在下界基岩顶层（高度≥126）或掉出世界底部时，自动安全传送到存活的主人身边（跨维度通用；在家模式的女仆也救——基岩顶不是家）；已在主人身边 8 格内不触发")
                 .translation("config.promaid.misc.maidRescue").define("maidRescue", true);
+        // v1.1.0 实测九十四：运行日志——状态迁移事件落盘 logs/promaid.log，方便事后验查
+        MISC_LOG_ENABLED = BUILDER.comment("运行日志（默认开）：把排班段应用、战斗参战/还原/僵局阀/任务被接管、险境脱离挪格与应急灭火、跨维跟随传送、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old，并镜像到 latest.log）——出问题后按时间线对账；关闭后完全静默")
+                .translation("config.promaid.misc.logEnabled").define("logEnabled", true);
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")

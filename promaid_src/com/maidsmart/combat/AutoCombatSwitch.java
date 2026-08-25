@@ -458,10 +458,9 @@ public class AutoCombatSwitch {
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
         touchContact(maid);
         maid.setTask(combat);
-        com.mojang.logging.LogUtils.getLogger().info(
-                "auto-combat: maid={} {} -> {} (engaged)",
-                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                prevUid, combat.getUid());
+        // v1.1.0 实测九十四：运行日志
+        com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                + " 参战：" + prevUid + " -> " + combat.getUid());
         return 1;
     }
 
@@ -498,6 +497,9 @@ public class AutoCombatSwitch {
                 // 战斗期间任务被玩家/排班/LLM 换过 → 玩家接管：只清标记退出，不动当前任务
                 if (!isOnAssignedCombatTask(maid)) {
                     clearMarkers(maid);
+                    // v1.1.0 实测九十四：运行日志
+                    com.maidsmart.tool.PromaidLog.log("战斗",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 战斗中任务被接管（玩家/排班/LLM），清标记退出");
                     continue;
                 }
                 long now = level.m_46467_();
@@ -515,11 +517,11 @@ public class AutoCombatSwitch {
                         Long lastLog = STALE_LOG.get(maid.m_20148_());
                         if (lastLog == null || now - lastLog >= 600L) {
                             STALE_LOG.put(maid.m_20148_(), now);
-                            com.mojang.logging.LogUtils.getLogger().info(
-                                    "auto-combat stale: maid={} threat within {} blocks but no damage exchange for {}s -> restoring anyway",
-                                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                                    MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get(),
-                                    (now - lastContact) / 20);
+                            // v1.1.0 实测九十四：运行日志（替代原 latest.log 直写）
+                            com.maidsmart.tool.PromaidLog.log("战斗",
+                                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 僵局逃逸阀触发：威胁仍在 "
+                                            + MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get()
+                                            + " 格内但已 " + ((now - lastContact) / 20) + " 秒无伤害往来 → 强制走还原");
                         }
                     }
                 }
@@ -555,9 +557,9 @@ public class AutoCombatSwitch {
                 if (prevTask == null) {
                     // 原任务已不存在（模组卸载等）→ 只能留在战斗任务，标记保留
                     //（每秒重试无意义，但保留标记让玩家手动切换后能正常接管退出）
-                    String failName = maid.m_5446_() != null ? maid.m_5446_().getString() : String.valueOf(maid.m_20148_());
-                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore FAIL: maid={} prev task '{}' not found, keeping markers",
-                            failName, prevUid);
+                    // v1.1.0 实测九十四：运行日志
+                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 还原失败：原任务 '" + prevUid + "' 已不存在，保留标记等待手动接管");
                     continue;
                 }
                 clearMarkers(maid);
@@ -589,16 +591,16 @@ public class AutoCombatSwitch {
                     maid.getPersistentData().m_128356_(com.maidsmart.schedule.ScheduleData.GRACE_TAG,
                             level.m_46467_() + grace);
                 }
-                String maidName = maid.m_5446_() != null ? maid.m_5446_().getString() : String.valueOf(maid.m_20148_());
+                // v1.1.0 实测九十四：运行日志（替代原 latest.log 直写）
                 if (restored) {
-                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: maid={} {} -> {} (threat gone {}s)",
-                            maidName, assignedUid, prevUid,
-                            (now - lastThreat) / 20);
+                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 战斗还原：" + assignedUid + " -> " + prevUid
+                            + "（威胁消失 " + ((now - lastThreat) / 20) + " 秒）");
                 } else {
                     // 任务在还原前被换（排班/玩家接管）——标记已清，正常退出
                     String curTask = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
-                    com.mojang.logging.LogUtils.getLogger().info("auto-combat restore: maid={} task changed during combat ({}), no restore",
-                            maidName, curTask);
+                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 无需还原：任务战中已被换为 " + curTask);
                 }
             }
         }
