@@ -826,6 +826,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (maid.getPersistentData().m_128471_(PRESERVE_TAG) && !danger && ratio >= exitRatio()) {
                 maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
                 MOVING_SURVIVE.remove(maid.m_20148_());
+                // v1.1.0 实测九十四：运行日志——自愈属罕见高价值事件，必记
+                com.maidsmart.tool.PromaidLog.log("自保",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 残留自保标记自愈（区块卸载/崩溃残留已清除）");
             }
             // v1.5.232：会话外岩浆避让——仅移动层修正（正走向岩浆才改道），
             // 零其他干预（不碰目标/移动/任何行为，战术/任务照常）
