@@ -12,7 +12,7 @@ import org.lwjgl.glfw.GLFW;
  *（选项 → 按键绑定 → "Promaid 建造"分类），玩家可在原版界面里改键，
  * 操作方式与调整原版按键完全一致。默认 P。
  *
- * 金色预览激活期间每 tick 轮询 consumeClick（BlueprintAreaPreview.onClientTick）：
+ * 金色预览激活期间每 tick 轮询 m_90859_（consumeClick，BlueprintAreaPreview.onClientTick）：
  * 按一次 = 整个建筑顺时针旋转 90°（占地轮廓 W/D 互换 + 方块状态转向 +
  * 青色幽灵投影实时刷新），确认建造时以该朝向落地。
  */
