@@ -37,7 +37,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * v1.1.0 实测八十八【持续加载】：票务范围从"仅异维度"扩大到全部有主活动女仆
  * （同维度跟随女仆落后主人超过模拟距离时区块会卸载、AI 冻结，TLM 的过远传送
- * 永远无法触发）。三态豁免：home/坐姿/骑乘 = 玩家明确停放，不保载。
+ * 永远无法触发）。
+ * v1.1.0 实测八十八b：home/坐姿/骑乘不豁免【加载】——三态只豁免传送；停放
+ * 女仆的区块同样保持 ticking（周边农场/熔炉照常运转，随时可被找到）。
  *
  * 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比——
  * 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。
@@ -133,11 +135,9 @@ public final class MaidChunkLoadManager {
                     if (owner == null) {
                         continue; // 无主野女仆不保载
                     }
-                    // 三态豁免：玩家明确停放的女仆不需要活动区块
-                    if (maid.isMaidInSittingPose() || maid.isHomeModeEnable()
-                            || maid.m_20159_()) {
-                        continue;
-                    }
+                    // v1.1.0 实测八十八b：home/坐姿/骑乘不豁免【区块加载】——三态豁免的
+                    // 是传送，不是加载。停放的女仆所在区块同样保持 ticking（她只是不走动，
+                    // 但周边农场/熔炉照常运转，也随时可被找到），与用户确认的口径一致。
                     long chunk = new ChunkPos(maid.m_20183_()).m_45588_();
                     wanted.put(maid.m_20148_(),
                             new TicketKey(level.m_46472_(), chunk));
