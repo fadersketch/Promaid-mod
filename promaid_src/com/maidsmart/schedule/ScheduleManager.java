@@ -63,6 +63,13 @@ public final class ScheduleManager {
      *  防威胁在还原威胁半径边缘闪烁时战斗/还原/排班反复拉扯；玩家手动保存日程会
      *  清宽限立即生效）。 */
     public static void applyNow(EntityMaid maid, ServerLevel level) {
+        // v1.1.0 实测九十三：总开关闸必须设在方法最前面——applyNow 有三个调用方
+        //（调度器扫描 / 保存包立即应用 / 战斗还原直通），此前只有调度器上游检查了
+        // 总开关：全局关闭排班系统后，战斗还原直通仍会强制 home 模式并按旧日程
+        // 应用段任务（跟随女仆打完一仗被留在在家模式、不再跟随主人）。统一在此闸住。
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()) {
+            return;
+        }
         // v1.1.0 实测七十：排班中的女仆自动 home 模式——旧档已开排班的女仆在这里
         // 自动迁移；建造行为临时关过 home 的也会被重新扶正（有翻转才写，无存档压力）
         if (!maid.isHomeModeEnable()) {
