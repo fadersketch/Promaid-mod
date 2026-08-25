@@ -1287,6 +1287,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (owner == null) {
                 return;
             }
+            // v1.1.0 实测八十三：主人已死亡（尸体停在死亡地点等待重生）不传——
+            // 旧版会把自保结束的女仆直接拽到主人尸体旁（粉丝实测"女仆传到了
+            // 死亡地点而不是重生点"的元凶）；home 看家钉死同样不传。
+            // 复活后由跟随/一键集合链路自然归队。
+            if (!owner.m_6084_() || maid.isHomeModeEnable()) {
+                return;
+            }
             double dx = maid.m_20185_() - owner.m_20185_();
             double dz = maid.m_20189_() - owner.m_20189_();
             if (dx * dx + dz * dz < 25.0) {
@@ -3000,6 +3007,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         LivingEntity owner = maid.m_269323_();
         if (owner == null) {
+            return;
+        }
+        // v1.1.0 实测八十三：主人已死亡（尸体停在死亡地点等待重生）不传——
+        // 旧版会把自保中的女仆直接拽到主人尸体旁（粉丝实测"女仆传到了死亡
+        // 地点而不是重生点"的元凶）；home 看家钉死同样不传。
+        if (!owner.m_6084_() || maid.isHomeModeEnable()) {
             return;
         }
         double dx = maid.m_20185_() - owner.m_20185_();
