@@ -3352,44 +3352,107 @@ public final class BlueprintLib {
      * 统一查找蓝图并应用旋转（仅外部结构蓝图支持；内置/JSON 不支持旋转时返回 0 度版本）。
      * holder 为 null 时忽略旋转。
      */
+    /**
+     * v1.1.0 实测九十七：通用步骤旋转器（内置/JSON/任意已解析步骤列表）——
+     * 用户需求："切换的应该是整个区块，而不仅仅是其中的方块"：整体旋转 =
+     * ①坐标矩阵变换（q1: rx=sz-1-z, rz=x …与 parseStructure 同款）；
+     * ②占地 W/D 随新坐标边界自然互换（centerSteps/planRegion 重算即得）；
+     * ③有朝向方块状态跟随旋转（楼梯/门/原木轴向等：SNBT → NbtUtils 解析 →
+     * m_60717_ 旋转 → 回写 SNBT）。方块实体数据不转（结构格式的 BE 数据本身
+     * 无朝向，与 parseStructure 口径一致）；首部 tag 行原样保序；单步解析失败
+     * 原样带过（半包容错，绝不丢步骤）。
+     */
+    public static List<String> rotateSteps(List<String> steps, int quarters,
+                                           net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
+        int q = Math.floorMod(quarters, 4);
+        if (q == 0 || steps == null || steps.isEmpty()) {
+            return steps;
+        }
+        int minX = Integer.MAX_VALUE, maxX = Integer.MIN_VALUE;
+        int minZ = Integer.MAX_VALUE, maxZ = Integer.MIN_VALUE;
+        for (String s : steps) {
+            String[] p = parseStep(s);
+            if (p == null) {
+                continue;
+            }
+            try {
+                int x = Integer.parseInt(p[0]);
+                int z = Integer.parseInt(p[2]);
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minZ = Math.min(minZ, z);
+                maxZ = Math.max(maxZ, z);
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        if (minX == Integer.MAX_VALUE) {
+            return steps;
+        }
+        int sx = maxX - minX + 1;
+        int sz = maxZ - minZ + 1;
+        List<String> out = new ArrayList<>(steps.size());
+        for (String s : steps) {
+            String[] p = parseStep(s);
+            if (p == null) {
+                out.add(s); // 首部 tag 行保序
+                continue;
+            }
+            try {
+                int x = Integer.parseInt(p[0]);
+                int y = Integer.parseInt(p[1]);
+                int z = Integer.parseInt(p[2]);
+                int rx;
+                int rz;
+                if (q == 1) {
+                    rx = sz - 1 - z;
+                    rz = x;
+                } else if (q == 2) {
+                    rx = sx - 1 - x;
+                    rz = sz - 1 - z;
+                } else {
+                    rx = z;
+                    rz = sx - 1 - x;
+                }
+                StringBuilder step = new StringBuilder();
+                step.append(rx).append(',').append(y).append(',').append(rz).append(',').append(p[3]);
+                // 状态 SNBT 跟随旋转（holder 缺失时保持原样——放置端仍有默认状态兜底）
+                if (p[4] != null && holder != null) {
+                    try {
+                        var st = net.minecraft.nbt.NbtUtils.m_247651_(holder,
+                                net.minecraft.nbt.TagParser.m_129359_(p[4])).m_60717_(rotationOf(q));
+                        step.append('|').append(net.minecraft.nbt.NbtUtils.m_178057_(
+                                net.minecraft.nbt.NbtUtils.m_129202_(st)));
+                    } catch (Exception ignored) {
+                        step.append('|').append(p[4]);
+                    }
+                }
+                if (p[5] != null) {
+                    step.append('|').append(p[5]);
+                }
+                out.add(step.toString());
+            } catch (NumberFormatException ignored) {
+                out.add(s); // 坐标异常的步骤原样保留，不静默丢块
+            }
+        }
+        return out;
+    }
+
+    /** quarters(0~3) → 原版旋转枚举 */
+    private static net.minecraft.world.level.block.Rotation rotationOf(int q) {
+        return switch (Math.floorMod(q, 4)) {
+            case 1 -> net.minecraft.world.level.block.Rotation.CLOCKWISE_90;
+            case 2 -> net.minecraft.world.level.block.Rotation.CLOCKWISE_180;
+            case 3 -> net.minecraft.world.level.block.Rotation.COUNTERCLOCKWISE_90;
+            default -> net.minecraft.world.level.block.Rotation.NONE;
+        };
+    }
+
     public static List<String> getBlueprintRotated(String id, int quarters,
                                                    net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
-        List<String> builtIn = getBuiltIn(id);
-        if (builtIn != null) {
-            return builtIn;
-        }
-        scanExternalBlueprints();
-        java.nio.file.Path p = EXTERNAL_PATHS.get(id);
-        if (p == null) {
-            return EXTERNAL.get(id);
-        }
-        String lower = p.getFileName().toString().toLowerCase(java.util.Locale.ROOT);
-        int q = Math.floorMod(quarters, 4);
-        boolean structural = lower.endsWith(".nbt") || lower.endsWith(".snbt")
-                || lower.endsWith(".litematic") || lower.endsWith(".schem") || lower.endsWith(".schematic");
-        if (q == 0 || !structural || holder == null) {
-            return EXTERNAL.get(id);
-        }
-        try {
-            net.minecraft.nbt.CompoundTag tag;
-            if (lower.endsWith(".snbt")) {
-                // v1.5.27：同 loadExternalFile——TagParser 纯解析（m_178024_ 会清空 palette）
-                tag = net.minecraft.nbt.TagParser.m_129359_(java.nio.file.Files.readString(p));
-            } else {
-                tag = net.minecraft.nbt.NbtIo.m_128937_(p.toFile());
-                if (lower.endsWith(".litematic")) {
-                    tag = fromLitematic(tag);
-                } else if (lower.endsWith(".schem")) {
-                    tag = fromSchem(tag);
-                } else if (lower.endsWith(".schematic")) {
-                    // v1.5.37：Planet Minecraft 标准 MCEdit 格式
-                    tag = fromSchematic(tag);
-                }
-            }
-            return parseStructure(tag, q, holder);
-        } catch (Exception e) {
-            return EXTERNAL.get(id);
-        }
+        // v1.1.0 实测九十七：统一走"先解析后旋转"——内置蓝图此前被直接跳过旋转，
+        // 现在内置/外部/JSON 全格式经 rotateSteps 整体旋转（含 BlockState 转向）
+        List<String> base = getBlueprint(id);
+        return rotateSteps(base, quarters, holder);
     }
 
     /** 蓝图显示名（内置中文名 / 外部文件名或 JSON name 字段） */
