@@ -30,6 +30,8 @@ public final class MaidSmartConfig {
 public static final ForgeConfigSpec.BooleanValue BUILD_MACHINE_SMART;
 // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期压制一切 TNT 点火
 public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
+/** v1.1.0 实测八十二：蓝图投影预览——区块显示时叠加半透明幽灵方块轮廓（确认朝向/形状） */
+public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
     public static final ForgeConfigSpec.BooleanValue BUILD_ALT_ENABLED;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_SLABS;
@@ -429,6 +431,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 启动），期满后机器按正常红石逻辑点火。0 = 关闭保护（回到 1.5.328 行为）
         BUILD_TNT_IGNITION_GRACE = BUILDER.comment("TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'（天机屠龙炮等观察者→活塞推 TNT 的机器）；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护")
                 .translation("config.promaid.build.tntIgnitionGrace").defineInRange("tntIgnitionGrace", 120, 0, 3600);
+        // v1.1.0 实测八十二：蓝图投影——只有区块框不好确认建筑朝向/形状
+        BUILD_PROJECTION = BUILDER.comment("蓝图投影预览：「区块显示」与建造中区块叠加半透明幽灵方块轮廓（外壳抽稀采样，确认建筑朝向/形状）；关闭则只显示区块框")
+                .translation("config.promaid.build.projection").define("projection", true);
         // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
         BUILD_ALT_ENABLED = BUILDER.comment("缺料自动替代开关：目标方块没有时，先找同族（木板/原木/石砖等等价族），再按高度分类（半格/一格/两格）用自定义替代表")
                 .translation("config.promaid.build.altEnabled").define("altEnabled", true);

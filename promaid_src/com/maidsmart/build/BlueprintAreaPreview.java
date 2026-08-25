@@ -13,6 +13,11 @@ package com.maidsmart.build;
  * - 渲染完全照抄 TLM MaidAreaRenderEvent 的坐标约定（camera + 世界坐标）与
  *   TLM RenderHelper（renderLine / renderFloatingText）+ 原版
  *   DebugRenderer.renderFilledBox（m_269311_）——均已验证可运行。
+ * - v1.1.0 实测八十二【蓝图投影】：只有区块框不好确认建筑朝向/形状——
+ *   金色预览时叠加【青色幽灵方块】随玩家移动（选位即可看形态），
+ *   红色区块标记时按计划原点叠加【橙色幽灵方块】（与实际搭建逐块重合）。
+ *   点云由服务端 BlueprintProjectionSampler 抽壳降采样后经
+ *   ProjectionRequest/ProjectionData 包下发，客户端按蓝图 id 缓存。
  */
 @net.minecraftforge.api.distmarker.OnlyIn(net.minecraftforge.api.distmarker.Dist.CLIENT)
 public final class BlueprintAreaPreview {
@@ -36,23 +41,41 @@ public final class BlueprintAreaPreview {
      *  渲染在名字下方第二行。v1.5.279 起服务端下发 r[11..13]，v1.5.290 encode
      *  修 14 字段后真正到达客户端） */
     private static final java.util.List<String> REGION_ORIGINS = new java.util.ArrayList<>();
+    /** v1.1.0 实测八十二：每个区块的蓝图 id（r[10]）+ 原点整数坐标（r[11..13]）——
+     *  幽灵方块投影按【计划原点】落地（与实际搭建同一锚点，位置零偏差） */
+    private static final java.util.List<String> REGION_BPS = new java.util.ArrayList<>();
+    private static final java.util.List<int[]> REGION_ORIGINS_POS = new java.util.ArrayList<>();
+
+    /** v1.1.0 实测八十二：投影点云缓存（blueprintId → x,y,z 三元组平铺，相对居中
+     *  坐标）；REQUESTED 防重复请求；previewId = 金色预览当前选中的蓝图 */
+    private static final java.util.Map<String, int[]> PROJECTIONS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Set<String> REQUESTED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
+    private static String previewId = null;
 
     private BlueprintAreaPreview() {
     }
 
-    /** 开启预览：以玩家为中心的 W×H×D 金色框（打开手册即关闭） */
-    public static void show(int sx, int sy, int sz) {
+    /**
+     * 开启预览：以玩家为中心的 W×H×D 金色框（打开手册即关闭）。
+     * v1.1.0 实测八十二：附带蓝图 id——首次请求该蓝图的投影点云，
+     * 世界内同时显示半透明幽灵方块轮廓（确认建筑朝向/形状）。
+     */
+    public static void show(String blueprintId, int sx, int sy, int sz) {
         sizeX = Math.max(1, sx);
         sizeY = Math.max(1, sy);
         sizeZ = Math.max(1, sz);
+        previewId = blueprintId;
         active = true;
         previewSeen = true; // v1.5.188b：看过预览 → 建造确认流程放行第 2 步
         ensureRegistered();
+        ensureProjection(blueprintId);
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
         if (mc.f_91074_ != null) {
             mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                     "\u00a7e【建造范围预览】" + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ
-                            + " 格——金色框以你为中心，移动可见范围；再次打开手册关闭预览"));
+                            + " 格——金色框以你为中心，青色幽灵方块为建筑投影；再次打开手册关闭预览"));
         }
     }
 
@@ -84,9 +107,12 @@ public final class BlueprintAreaPreview {
         REGION_BOXES.clear();
         REGION_NAMES.clear();
         REGION_ORIGINS.clear();
+        REGION_BPS.clear();
+        REGION_ORIGINS_POS.clear();
         if (regions == null) {
             return;
         }
+        java.util.Set<String> needProj = new java.util.LinkedHashSet<>();
         for (String[] r : regions) {
             if (r == null || r.length < 10) {
                 continue;
@@ -108,12 +134,89 @@ public final class BlueprintAreaPreview {
                 // v1.5.290：创建坐标（r[11..13]，encode 14 字段后到达）
                 REGION_ORIGINS.add(r.length > 13
                         ? r[11] + ", " + r[12] + ", " + r[13] : "");
+                // v1.1.0 实测八十二：蓝图 id（r[10]）+ 原点整数坐标——投影落地锚点
+                String bp = r.length > 10 ? r[10] : "";
+                REGION_BPS.add(bp);
+                int[] org = null;
+                if (r.length > 13) {
+                    try {
+                        org = new int[]{Integer.parseInt(r[11]),
+                                Integer.parseInt(r[12]), Integer.parseInt(r[13])};
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                REGION_ORIGINS_POS.add(org);
+                if (!bp.isEmpty() && org != null) {
+                    needProj.add(bp);
+                }
             } catch (NumberFormatException ignored) {
             }
+        }
+        for (String bp : needProj) {
+            ensureProjection(bp);
         }
         if (!REGION_BOXES.isEmpty()) {
             ensureRegistered();
         }
+    }
+
+    /** v1.1.0 实测八十二：确保某蓝图的投影点云已在手（无缓存则向服务端请求一次） */
+    private static void ensureProjection(String id) {
+        if (id == null || id.isEmpty() || PROJECTIONS.containsKey(id)) {
+            return;
+        }
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
+            return;
+        }
+        if (!REQUESTED.add(id)) {
+            return; // 已有在途请求
+        }
+        try {
+            BlueprintBookNetworking.CHANNEL.sendToServer(
+                    new BlueprintBookNetworking.ProjectionRequestPacket(id));
+        } catch (Exception e) {
+            REQUESTED.remove(id);
+        }
+    }
+
+    /**
+     * v1.1.0 实测八十二：收到服务端点云（S2C ProjectionDataPacket）。
+     * cloud = "x,y,z;x,y,z;…"；空串 = 该蓝图无可投影内容（已删除/解析失败）→ 清缓存。
+     */
+    public static void setProjection(String id, String size, String cloud) {
+        if (id == null || id.isEmpty()) {
+            return;
+        }
+        int[] pts = parseCloud(cloud);
+        if (pts.length == 0) {
+            PROJECTIONS.remove(id);
+            return;
+        }
+        PROJECTIONS.put(id, pts);
+    }
+
+    /** 解析点云文本 → 平铺 int[]；格式异常的段跳过（半包容错） */
+    private static int[] parseCloud(String cloud) {
+        if (cloud == null || cloud.isEmpty()) {
+            return new int[0];
+        }
+        String[] segs = cloud.split(";");
+        int[] out = new int[segs.length * 3];
+        int n = 0;
+        for (String s : segs) {
+            try {
+                int c1 = s.indexOf(',');
+                int c2 = s.indexOf(',', c1 + 1);
+                if (c1 < 0 || c2 < 0) {
+                    continue;
+                }
+                out[n++] = Integer.parseInt(s.substring(0, c1));
+                out[n++] = Integer.parseInt(s.substring(c1 + 1, c2));
+                out[n++] = Integer.parseInt(s.substring(c2 + 1));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return n == out.length ? out : java.util.Arrays.copyOf(out, n);
     }
 
     public static void clear() {
@@ -177,6 +280,15 @@ public final class BlueprintAreaPreview {
                             (b[0] + b[3]) / 2.0, b[4] - 0.6, (b[2] + b[5]) / 2.0,
                             0x888888, 0.12f, true, -5.0f, true);
                 }
+                // v1.1.0 实测八十二：橙色幽灵方块投影——按计划原点落地，与实际搭建
+                // 同一坐标系（锚点 = PlanState.origin + 居中步骤相对坐标），位置零偏差；
+                // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
+                String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
+                int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
+                if (!bp.isEmpty() && org != null) {
+                    drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
+                            1.0f, 0.55f, 0.25f, 0.20f);
+                }
             }
         }
         if (active) {
@@ -195,11 +307,55 @@ public final class BlueprintAreaPreview {
             com.mojang.blaze3d.vertex.VertexConsumer buf =
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
+            // v1.1.0 实测八十二：青色幽灵方块投影随玩家移动——选位时就能看到建筑
+            // 形状/朝向（建造确认后即按此姿态原位落地，因为 execute 同样以玩家脚下为原点）
+            if (previewId != null) {
+                drawGhost(pose, mc, camera, previewId,
+                        p.m_123341_(), p.m_123342_(), p.m_123343_(),
+                        0.30f, 0.95f, 1.0f, 0.22f);
+            }
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     "建造范围 " + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ + "（打开手册关闭）",
                     x0 + sizeX / 2.0, y1 + 0.6, z0 + sizeZ / 2.0, 0xFFDD55, 0.15f, true, -5.0f, false);
         }
         pose.m_85849_(); // popPose
+    }
+
+    /**
+     * v1.1.0 实测八十二：画蓝图投影——点云每个点在格内画一个 0.4 格的半透明小方块。
+     * 锚点 = (ox, oy, oz)：红色区块路径传计划原点、金色预览路径传玩家脚下格，
+     * 点坐标为居中后的相对值 → 与 BlueprintBuildExecutor 实际放置位置逐块重合。
+     * 距离剔除：锚点距相机 >96 格不画（远处区块只留框和文字，省性能）。
+     */
+    private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
+                                  net.minecraft.client.Minecraft mc,
+                                  net.minecraft.world.phys.Vec3 camera,
+                                  String id, double ox, double oy, double oz,
+                                  float r, float g, float b, float a) {
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
+            return;
+        }
+        int[] pts = PROJECTIONS.get(id);
+        if (pts == null || pts.length < 3) {
+            return; // 未到达/空云（请求在途或该蓝图无可渲染块）
+        }
+        // 距离剔除：相机到锚点平方距离 >96² 不画（f_82479_/80/81 = Vec3.x/y/z）
+        double dx = camera.f_82479_ - ox;
+        double dy = camera.f_82480_ - oy;
+        double dz = camera.f_82481_ - oz;
+        if (dx * dx + dy * dy + dz * dz > 9216.0) {
+            return;
+        }
+        var source = mc.m_91269_().m_110104_();
+        for (int i = 0; i + 2 < pts.length; i += 3) {
+            double wx = ox + pts[i];
+            double wy = oy + pts[i + 1];
+            double wz = oz + pts[i + 2];
+            net.minecraft.world.phys.AABB cube = new net.minecraft.world.phys.AABB(
+                    wx + 0.30, wy + 0.30, wz + 0.30, wx + 0.70, wy + 0.70, wz + 0.70)
+                    .m_82383_(camera);
+            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, source, cube, r, g, b, a);
+        }
     }
 
     /** 画一个方框的 12 条棱（TLM RenderHelper.renderLine） */
