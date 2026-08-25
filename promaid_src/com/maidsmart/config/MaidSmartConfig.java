@@ -284,6 +284,8 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST;
     /** v1.1.0 实测八十四：战斗僵局逃逸——威胁够不着时不再无限续杯安全计时 */
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_STALE;
+    /** v1.1.0 实测八十五：动态威胁圈——最近伤害来源在扩展窗口内则圈自动放大包含它 */
+    public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_EXPAND;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -1088,6 +1090,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // v1.1.0 实测八十四：僵局逃逸——够不着的敌对生物不再让女仆永远卡在战斗任务
         COMBAT_AUTO_SWITCH_STALE = BUILDER.comment("战斗僵局逃逸（秒，默认 60）：威胁仍在还原半径内、但女仆与敌对生物超过这么久没有任何伤害往来（怪卡墙后/玻璃后/传送门里/飞行绕圈等杀不掉也够不着的死局）→ 不再无限等待，按正常安全计时切回原任务；latest.log 搜 auto-combat stale 可查是哪种怪卡住的。0 = 关闭（旧版行为，可能永远卡在战斗任务）")
                 .translation("config.promaid.combat.autoSwitchStaleSeconds").defineInRange("autoSwitchStaleSeconds", 60, 0, 3600);
+        // v1.1.0 实测八十五：动态威胁圈——远程风筝怪不再引发"还原又中箭"反复横跳
+        COMBAT_AUTO_SWITCH_EXPAND = BUILDER.comment("动态威胁圈（秒，默认 10）：最近伤害过女仆的敌对生物即使站在还原半径（8 格）之外，只要它还活着、距离不超过 32 格、且这个时间内有过接触，还原判定的威胁圈就自动放大把它包含进来——被远程怪压着打期间保持战斗态还击，不再'刚还原又中箭反复横跳'；怪死/走远/超窗后圈回落。0 = 关闭（只用固定半径）")
+                .translation("config.promaid.combat.autoSwitchThreatExpandSeconds").defineInRange("autoSwitchThreatExpandSeconds", 10, 0, 120);
         BUILDER.pop();
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
