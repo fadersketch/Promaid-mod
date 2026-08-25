@@ -29,14 +29,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * ② 主人走远后女仆所在区块卸载 → 跨维度跟随扫描（遍历已加载实体）根本
  *   找不到她 → 永远不传送。
  *
- * 方案：每 5 秒对所有【有主且主人不在此维度】的女仆所在区块挂
- * "unknown" TicketType 强制加载票（2 级 = 实体 ticking，与玩家同等待遇），
+ * 方案：每 5 秒对所有【有主且处于活动状态】的女仆所在区块挂
+ * "unknown" TicketType 强制加载票（2 级 = 实体正常 ticking，与玩家同等待遇），
  * 实体离开（传送走/收回魂符/死亡）自动撤票。区块保持加载 ⇒
  * - 跨维度跟随扫描每轮都能找到她（问题②根治）；
  * - 传送改用原版 Entity.teleportTo(m_264318_)，走完整跨维度流程（问题①根治）。
  *
+ * v1.1.0 实测八十八【持续加载】：票务范围从"仅异维度"扩大到全部有主活动女仆
+ * （同维度跟随女仆落后主人超过模拟距离时区块会卸载、AI 冻结，TLM 的过远传送
+ * 永远无法触发）。三态豁免：home/坐姿/骑乘 = 玩家明确停放，不保载。
+ *
  * 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比——
- * 女仆跨区块 → 撤旧票挂新票；女仆消失/同维度了 → 撤票。服务器停止清空。
+ * 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。
  */
 public final class MaidChunkLoadManager {
     private static final org.slf4j.Logger LOGGER =
@@ -112,7 +116,12 @@ public final class MaidChunkLoadManager {
             releaseAll(server);
             return;
         }
-        // 1. 扫描所有维度已加载女仆，找需要挂票的（有主、主人在其他维度）
+        // 1. 扫描所有维度已加载女仆，找需要挂票的。
+        // v1.1.0 实测八十八【持续加载】：取消"仅异维度"限制——旧版只给跨维度女仆
+        // 挂票，同维度跟随的女仆一旦落后主人超过模拟距离，所在区块卸载、AI 冻结，
+        // TLM 的"离主人过远自动传送"永远无法触发（用户："无法再传送过来了；
+        // 女仆所在区块应该持续加载，参考区块加载器"）。现在除三态豁免
+        // （home/坐姿/骑乘 = 玩家明确停放，冻结无碍）外全部持续加载。
         Map<UUID, TicketKey> wanted = new java.util.HashMap<>();
         for (ServerLevel level : server.m_129785_()) {
             for (Entity e : level.m_8583_()) {
@@ -122,11 +131,11 @@ public final class MaidChunkLoadManager {
                 try {
                     LivingEntity owner = maid.m_269323_();
                     if (owner == null) {
-                        continue;
+                        continue; // 无主野女仆不保载
                     }
-                    // 只给"与主人不同维度"的女仆挂票——同维度时区块由玩家自然加载，
-                    // 不额外占内存（跟随在身边的挖矿/伐木女仆不吃票）
-                    if (maid.m_9236_() == owner.m_9236_()) {
+                    // 三态豁免：玩家明确停放的女仆不需要活动区块
+                    if (maid.isMaidInSittingPose() || maid.isHomeModeEnable()
+                            || maid.m_20159_()) {
                         continue;
                     }
                     long chunk = new ChunkPos(maid.m_20183_()).m_45588_();
