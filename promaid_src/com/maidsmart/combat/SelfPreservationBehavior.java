@@ -817,6 +817,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
         }
         if (!this.sessionActive) {
+            // v1.1.0 实测九十三：残留自保标记自愈——会话中区块卸载/服务器崩溃/
+            // 魂符收放会把 PRESERVE_TAG=true 写进存档，重载后 sessionActive（内存）
+            // 归零，健康安全的女仆不会再进会话，标记永远没人清 → 排班调度、主动
+            // 战斗参战、搭方块、险境脱离对这只女仆永久让位。会话外发现"带着标记
+            // 但血量健康且环境安全"即清掉（不满足条件时下方本就会重进会话并重新
+            // 置位，无竞态）
+            if (maid.getPersistentData().m_128471_(PRESERVE_TAG) && !danger && ratio >= exitRatio()) {
+                maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
+                MOVING_SURVIVE.remove(maid.m_20148_());
+            }
             // v1.5.232：会话外岩浆避让——仅移动层修正（正走向岩浆才改道），
             // 零其他干预（不碰目标/移动/任何行为，战术/任务照常）
             this.avoidLavaMovement(maid);
