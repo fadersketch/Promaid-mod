@@ -60,9 +60,12 @@ public final class MaidChunkLoadManager {
 
     /** v1.1.0 实测七十：最后出现位置登记——一键集合对"未加载区块里的女仆"的
      *  唯一线索（卸载后实体不在任何列表里，只能靠最后见到的位置去强载区块）。
-     *  每 5 秒覆盖写，天然最新；召回失败时丢弃该条（多半已被魂符收回/死亡）。 */
+     *  每 5 秒覆盖写，天然最新；召回失败时丢弃该条（多半已被魂符收回/死亡）。
+     *  v1.1.0 实测八十七c：快照 stayPut 三态豁免（home/坐姿/骑乘）——未加载区块里
+     *  读不到 persistentData，没有这份快照就无法在集合时跳过她们，导致白挂强载票 +
+     *  静默收队（用户视角="点了集合却石沉大海"）。 */
     private record LastSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
-                            UUID ownerId, long seenAt) {
+                            UUID ownerId, long seenAt, boolean stayPut) {
     }
 
     private static final Map<UUID, LastSeen> LAST_SEEN = new ConcurrentHashMap<>();
@@ -86,8 +89,11 @@ public final class MaidChunkLoadManager {
                 }
                 LivingEntity ow = maid.m_269323_();
                 if (ow != null) {
+                    // v1.1.0 实测八十七c：同步快照三态豁免（home/坐姿/骑乘）
+                    boolean stayPut = maid.isHomeModeEnable()
+                            || maid.isMaidInSittingPose() || maid.m_20159_();
                     LAST_SEEN.put(maid.m_20148_(), new LastSeen(lvl.m_46472_(),
-                            maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_()));
+                            maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_(), stayPut));
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
                     if (com.maidsmart.config.MaidSmartConfig.MISC_MAID_RESCUE.get()
@@ -308,6 +314,12 @@ public final class MaidChunkLoadManager {
             if (!ls.ownerId().equals(pid) || seen.contains(en.getKey())) {
                 continue;
             }
+            // v1.1.0 实测八十七c：快照为 home/坐/骑 → 不强载、不建队，计入保持原位
+            //（旧版会白挂强载票把区块载进来才发现要豁免，然后静默收队）
+            if (ls.stayPut()) {
+                kept++;
+                continue;
+            }
             if (PENDING_SUMMON.containsKey(en.getKey())) {
                 pending++; // 已在队列（重复点集合不叠票）
                 continue;
@@ -375,6 +387,13 @@ public final class MaidChunkLoadManager {
                     if (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.m_20159_()) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
+                        // v1.1.0 实测八十七c：补播报——旧版静默收队，玩家以为集合失败
+                        try {
+                            String name = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
+                            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "§7【集合】" + name + " 在家模式/坐姿中，保持原位（想召回先解除她的排班/在家模式）"));
+                        } catch (Exception ignored) {
+                        }
                         releasePendingTicket(server, p);
                         it.remove();
                         break;
