@@ -396,9 +396,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         this.guardTicks = 12;
         this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         this.lastPlacedGameTime = level.m_46467_();
-        // 走上刚铺的桥面（一格，直接移动目标；导航在半空没用）
-        maid.m_21573_().m_26519_(tx + 0.5, y, tz + 0.5,
-                (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
+        // v1.1.0 实测八十四：铺完立刻站上去（物理跳跃 + 导航双通道）
+        stepOnto(maid, tx + 0.5, y, tz + 0.5);
         return true;
     }
 
@@ -448,11 +447,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.guardTicks = 12;
         this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
-        // 走上刚垫的台阶（不走导航长路——就一格，直接朝目标格设移动目标；
-        // 实心地形垫的本格台阶比脚下一格高，移动目标也抬一格让她跳上来）
+        // v1.1.0 实测八十四：垫完台阶立刻站上去（实心地形垫的本格台阶高 1 格，
+        // 跳跃速度带上升量直接踩上来；旧版只挂导航目标，半空寻路失败 = 人不动）
         double walkY = place.equals(ahead) ? y + 1 : y;
-        maid.m_21573_().m_26519_(tx + 0.5, walkY, tz + 0.5,
-                (float) (double) MaidSmartConfig.MINE_MOVE_SPEED.get());
+        stepOnto(maid, tx + 0.5, walkY, tz + 0.5);
         return true;
     }
 
@@ -548,6 +546,33 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.guardTicks = 12;
         this.lastPlacedGameTime = level.m_46467_();
+        // v1.1.0 实测八十四：垫完立刻站上去——原地起跳一拍，落在刚垫的方块顶上
+        //（旧版靠方块卡身后 antiSuffocate 顶起，起跳更干脆、不再有半嵌瞬间）
+        stepOnto(maid, maid.m_20185_(), 0, maid.m_20189_());
+    }
+
+    /**
+     * v1.1.0 实测八十四：搭完方块立刻移动到方块上——物理跳跃 + 导航双通道。
+     * 用户需求："当女仆自己搭下一个方块以后，女仆会立刻移动到那个方块上。"
+     * 旧版三条路径里两条只挂导航目标（m_26519_ 寻路），半空中寻路永远失败 =
+     * 目标形同虚设，铺了桥/垫了台阶人却留在原地；垂直路径则等方块卡身后再被
+     * antiSuffocate 顶起（有半嵌瞬间）。现在放完块先给一拍朝目标格的跳跃速度
+     * （MaidMoveControl 直施速度的同款通道，半空也生效——TLM 想游泳时就是这么
+     * 驱动的），水平分量朝目标格、垂直分量一拍标准跳速 0.42；d≈0（垂直垫块）
+     * 时纯原地起跳。
+     */
+    private static void stepOnto(EntityMaid maid, double tx, double ty, double tz) {
+        double dx = tx - maid.m_20185_();
+        double dz = tz - maid.m_20189_();
+        double d = Math.sqrt(dx * dx + dz * dz);
+        net.minecraft.world.phys.Vec3 cur = maid.m_20184_();
+        double vy = Math.max(cur.f_82480_, 0.42); // 一拍标准跳速；上升中保持现值
+        if (d > 1e-3) {
+            double v = Math.min(0.35, 0.08 + 0.10 * d); // 距离越远给得越足，封顶防爆冲
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(dx / d * v, vy, dz / d * v));
+        } else {
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, vy, 0.0));
+        }
     }
 
     /**
