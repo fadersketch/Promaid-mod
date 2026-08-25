@@ -1819,6 +1819,38 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_BATCH_PLANT.set(v), "农场批量种植：种植时以当前格为中心蔓延，把相连农田里的空耕地一次全种上（种子真实消耗）；默认开启"));
         this.rows.add(new NumRow("批量种植上限（格）", String.valueOf(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT, s), "农场批量种植上限（格）：一次批量种植的最大格数（4~96，默认 24）"));
+        // v1.1.0 实测九十二：区块保载/受困救援/危险避让三件套入面板（此前只有 spec 键，
+        // 自绘面板没有条目 = 游戏内看不到也改不了）
+        this.rows.add(new SectionRow("女仆安全与区块保载", true));
+        this.rows.add(new BoolRow("女仆区块持续保载", MaidSmartConfig.MISC_MAID_CHUNK_LOAD.get(),
+                v -> MaidSmartConfig.MISC_MAID_CHUNK_LOAD.set(v),
+                "所有有主女仆（含在家/坐姿/骑乘）所在区块持续保持实体 ticking（与玩家同级）：跟随落后再远也不冻结失联，随时可传送/召回/救援；关闭后远处女仆所在区块卸载时会冻结失联"));
+        this.rows.add(new BoolRow("受困救援", MaidSmartConfig.MISC_MAID_RESCUE.get(),
+                v -> MaidSmartConfig.MISC_MAID_RESCUE.set(v),
+                "被困下界基岩顶层或掉出虚空的女仆自动传回存活主人身边（跨维度通用；home 女仆也救——基岩顶不是家）"));
+        this.rows.add(new BoolRow("寻路危险方块避让", MaidSmartConfig.MISC_DANGER_AVOID.get(),
+                v -> MaidSmartConfig.MISC_DANGER_AVOID.set(v),
+                "女仆规划路径时绕开危险表中方块（岩浆/火/仙人掌等），宁可停下等过远传送兜底；已身处险境时保留逃出路径"));
+        this.rows.add(new BoolRow("险境脱离", MaidSmartConfig.MISC_DANGER_ESCAPE.get(),
+                v -> MaidSmartConfig.MISC_DANGER_ESCAPE.set(v),
+                "已站在危险方块上的女仆每 0.5 秒巡检并自动挪到最近安全格+应急灭火，不等血量跌破自保线白挨伤害"));
+        this.rows.add(new TextRow("危险方块表", String.join(", ", MaidSmartConfig.MISC_DANGER_BLOCKS.get()),
+                s -> {
+                    java.util.List<String> out = new java.util.ArrayList<>();
+                    for (String part : s.split("[,，]")) {
+                        String id = part.trim();
+                        if (id.isEmpty()) {
+                            continue;
+                        }
+                        if (!id.contains(":")) {
+                            return false; // 缺命名空间：拒绝提交，保留旧值
+                        }
+                        out.add(id);
+                    }
+                    MaidSmartConfig.MISC_DANGER_BLOCKS.set(out);
+                    return true;
+                },
+                "完整注册名，逗号分隔（如 minecraft:lava, somemod:danger_rock）：命中站立格/脚下即视为危险——寻路绕行、险境脱离、搭块选材排除三系统共用此表"));
         // v1.1.0：排班表系统总开关（玩家可操作原则——排班物品 UI 之外也要有全局开关）
         this.rows.add(new SectionRow("排班表（v1.1.0）", true));
         this.rows.add(new BoolRow("排班表系统", MaidSmartConfig.MISC_SCHEDULE_ENABLED.get(),
