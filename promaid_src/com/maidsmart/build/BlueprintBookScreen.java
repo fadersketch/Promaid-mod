@@ -203,8 +203,9 @@ public class BlueprintBookScreen extends Screen {
         this.maidPage = lastMaidPage;
     }
 
-    /** 收到目录包后打开界面（v1.1.0 实测九十五：区块显示/金色预览已删除——打开
-     *  手册不再影响红色区块框与幽灵方块投影，它们由服务端每秒同步驱动）
+    /** 收到目录包后打开界面（v1.5.159：同时关闭金色预览——再次打开手册 = 关预览；
+     *  v1.5.204：clear 不重置"看过预览"标记，第 2 步确认可达；
+     *  红色区块框与幽灵投影由服务端每秒同步驱动，不受开关手册影响）
      *  v1.5.275：initialView 0=大目录 1=女仆管理（配置面板"跳转女仆管理"） */
     public static void open(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
@@ -212,6 +213,7 @@ public class BlueprintBookScreen extends Screen {
                             int regionW, int regionH, int regionD,
                             boolean inPlanRegion, String currentPlanId, List<String[]> regions,
                             int etaSec, String speedBps, int initialView) {
+        com.maidsmart.build.BlueprintAreaPreview.clear();
         BlueprintBookScreen screen = new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
                 progressText, progressPct, regionX, regionY, regionZ, regionW, regionH, regionD,
                 inPlanRegion, currentPlanId, regions, etaSec, speedBps);
@@ -2041,20 +2043,45 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /**
-     * 建造此图纸确认流程——
-     * v1.5.188b：两步（先强制区块预览选位 → 再弹确认框）；
-     * v1.1.0 实测九十五：简化为一步直接弹确认框（金色预览已删除；建造期间工地
-     * 有红色区块框 + 蓝图投影持续显示，位置不满意可取消后重站重摆）。
-     * 确认后才真正创建区块（SelectBlueprintPacket，以玩家脚下为中心），并提示
-     * 玩家去绑定女仆。
+     * 建造此图纸确认流程（v1.1.0 实测九十六：两步流程回归+金色态投影）——
+     * 1. 第一次点击：开启【金色预览】（以玩家为中心、随移动移动，叠加青色幽灵
+     *    方块投影）+ 系统提示 → 退出手册在世界里走位选点；
+     * 2. 再次点击（重开手册）：先把金色预览刷新到当前脚下（取消弹窗重新选位后
+     *    再点也一样），再弹确认框——明确告知会摧毁周边障碍物；确认才创建区块
+     *   （SelectBlueprintPacket），金色框关闭、红色区块框+橙色幽灵投影由每秒
+     *    同步接管，并重置"看过预览"标记（下一轮建造仍先看范围）。
      */
     private void startBuildFlow(String vid) {
+        boolean previewed = com.maidsmart.build.BlueprintAreaPreview.wasShown();
+        // 金色预览每次点击都刷新到当前脚下（青色幽灵方块随 show 内 ensureProjection 显示）
+        com.maidsmart.build.BlueprintAreaPreview.show(
+                vid,
+                this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
+                this.viewingEntry.sizeZ());
+        if (!previewed) {
+            // 第 1 步：系统提示选位 → 退出手册看金色框+幽灵投影
+            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+            if (mc.f_91074_ != null) {
+                mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影），"
+                                + "移动选好位置后再次打开手册点击「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
+            }
+            this.m_7379_();
+            return;
+        }
+        // 第 2 步：确认弹窗 → 确认才创建区块
         this.confirmAction("确定建造在这里？",
-                "\u00a7e区块范围 = 你脚下为中心。\n"
+                "\u00a7e区块范围 = 你脚下为中心（金色框当前位置，青色幽灵方块即建筑形态）。\n"
                         + "\u00a7c注意：女仆搭建会直接摧毁区块内的树、建筑等障碍物。\n"
-                        + "\u00a77确认后创建区块，工地会显示红色区域框与蓝图投影，到女仆管理绑定女仆开始建造。",
+                        + "\u00a77确认后创建区块，工地会显示红色区域框与橙色蓝图投影，到女仆管理绑定女仆开始建造。",
                 "\u00a7c确定，开始建造",
-                () -> BlueprintBookNetworking.CHANNEL.sendToServer(
-                        new BlueprintBookNetworking.SelectBlueprintPacket(vid)));
+                () -> {
+                    BlueprintBookNetworking.CHANNEL.sendToServer(
+                            new BlueprintBookNetworking.SelectBlueprintPacket(vid));
+                    // 金色框关闭；红色区块框+橙色幽灵投影由服务端每秒同步接管
+                    com.maidsmart.build.BlueprintAreaPreview.clear();
+                    // 本轮确认完成 → 重置标记，下一轮建造重新先看范围
+                    com.maidsmart.build.BlueprintAreaPreview.resetSeen();
+                });
     }
 }
