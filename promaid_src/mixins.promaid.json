@@ -6,6 +6,7 @@
   "mixins": [
     "FollowPreserveMixin",
     "MaidTeleportPreserveMixin",
+    "MaidDangerPathMixin",
     "MaidMoveSuppressMixin",
     "MaidStationaryMixin",
     "ChunkFreezeMixin",
