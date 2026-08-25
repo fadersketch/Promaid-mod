@@ -2366,25 +2366,43 @@ public final class BlueprintBookNetworking {
                     return;
                 }
                 String id = pkt.blueprintId == null ? "" : pkt.blueprintId;
-                List<String> centered = BlueprintProjectionSampler.centeredStepsOf(id);
-                if (centered == null || centered.isEmpty()) {
-                    // 蓝图不存在/已删除 → 回空云，客户端清掉对应缓存
+                // v1.1.0 实测八十三b：全程 try/catch + 日志——旧版异常静默（enqueueWork
+                // 吞掉堆栈），投影断链无从排查
+                try {
+                    List<String> centered = BlueprintProjectionSampler.centeredStepsOf(id);
+                    if (centered == null || centered.isEmpty()) {
+                        LOGGER.info("projection: id={} unavailable (missing/empty), reply empty", id);
+                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                                new ProjectionDataPacket(id, "0,0,0", ""));
+                        return;
+                    }
+                    int[] sz = BlueprintLib.blueprintSizeCached(id, centered);
+                    String cloud = BlueprintProjectionSampler.sampleCloud(id);
+                    CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ProjectionDataPacket(id,
+                                    sz[0] + "," + sz[1] + "," + sz[2],
+                                    cloud));
+                    LOGGER.info("projection: id={} size={}x{}x{} chars={} (sent)",
+                            id, sz[0], sz[1], sz[2], cloud.length());
+                } catch (Exception e) {
+                    LOGGER.error("projection: generate failed id={}", id, e);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
                             new ProjectionDataPacket(id, "0,0,0", ""));
-                    return;
                 }
-                int[] sz = BlueprintLib.blueprintSizeCached(id, centered);
-                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                        new ProjectionDataPacket(id,
-                                sz[0] + "," + sz[1] + "," + sz[2],
-                                BlueprintProjectionSampler.sampleCloud(id)));
             });
             ctx.get().setPacketHandled(true);
         }
     }
 
     /** S2C：投影点云下发。cloud = "x,y,z;x,y,z;…"（相对居中坐标；空串 = 无投影，
-     *  客户端据此清缓存）。尺寸字段随包携带（客户端暂仅用于调试显示） */
+     *  客户端据此清缓存）。尺寸字段随包携带（客户端暂仅用于调试显示）。
+     *  v1.1.0 实测八十三b【分块传输】：FriendlyByteBuf.writeUtf 单字符串上限
+     *  32767 字符——大蓝图点云（≤3000 点 × 每点 12~16 字符 ≈ 最高 4.8 万字符）
+     *  在服务端编码阶段就超限，netty 抛异常、包静默发不出，客户端永远等不到数据
+     * （"投影完全不显示"的根因）。改为每块 ≤16000 字符分多条写，客户端拼接还原，
+     *  尺寸上限彻底解除。 */
+    private static final int PROJECTION_CHUNK_CHARS = 16000;
+
     public static class ProjectionDataPacket {
         public final String blueprintId;
         public final String size;
@@ -2399,11 +2417,26 @@ public final class BlueprintBookNetworking {
         public static void encode(ProjectionDataPacket pkt, FriendlyByteBuf buf) {
             buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
             buf.m_130070_(pkt.size == null ? "0,0,0" : pkt.size);
-            buf.m_130070_(pkt.cloud == null ? "" : pkt.cloud);
+            String cloud = pkt.cloud == null ? "" : pkt.cloud;
+            int chunks = Math.max(1, (cloud.length() + PROJECTION_CHUNK_CHARS - 1)
+                    / PROJECTION_CHUNK_CHARS);
+            buf.m_130070_(String.valueOf(chunks));
+            for (int i = 0; i < chunks; i++) {
+                int from = i * PROJECTION_CHUNK_CHARS;
+                int to = Math.min(cloud.length(), from + PROJECTION_CHUNK_CHARS);
+                buf.m_130070_(cloud.substring(from, to));
+            }
         }
 
         public static ProjectionDataPacket decode(FriendlyByteBuf buf) {
-            return new ProjectionDataPacket(buf.m_130277_(), buf.m_130277_(), buf.m_130277_());
+            String id = buf.m_130277_();
+            String size = buf.m_130277_();
+            int chunks = Integer.parseInt(buf.m_130277_());
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < chunks && i < 64; i++) { // 上限防御：正常 ≤4 块
+                sb.append(buf.m_130277_());
+            }
+            return new ProjectionDataPacket(id, size, sb.toString());
         }
 
         public static void handle(ProjectionDataPacket pkt, Supplier<NetworkEvent.Context> ctx) {
