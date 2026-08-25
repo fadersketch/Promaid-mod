@@ -1,37 +1,26 @@
 package com.maidsmart.build;
 
 /**
- * v1.5.159：建造范围预览（"区块显示"）——手册建筑详情页点击后：
- * - 退出手册，世界内以【玩家为中心】显示该建筑占地大小的金色框
- *   （半透明填充 + 线框 + 顶部悬浮文字），随玩家位置移动而移动
- *   （方便选位置）；颜色用金色，区别于原版 F3+G 的白色区块边界
- * - 再次打开手册即关闭预览（BlueprintBookScreen.open 调用 clear）
- * - v1.5.164：建造区域【定下来】后自动显示【红色固定框】——一旦有进行中/暂停中的
- *   建造计划（服务端下发区块标记 regionX/Y/Z + 宽高深），世界内以【实际建造区域】
- *   显示红色框（不随玩家移动，固定在原地），直到计划取消/完成才消失；
- *   金色预览框（玩家选择位置用）与红色区域框互不影响、可同时显示。
- * - 渲染完全照抄 TLM MaidAreaRenderEvent 的坐标约定（camera + 世界坐标）与
- *   TLM RenderHelper（renderLine / renderFloatingText）+ 原版
- *   DebugRenderer.renderFilledBox（m_269311_）——均已验证可运行。
- * - v1.1.0 实测八十二【蓝图投影】：只有区块框不好确认建筑朝向/形状——
- *   金色预览时叠加【青色幽灵方块】随玩家移动（选位即可看形态），
- *   红色区块标记时按计划原点叠加【橙色幽灵方块】（与实际搭建逐块重合）。
- *   点云由服务端 BlueprintProjectionSampler 抽壳降采样后经
- *   ProjectionRequest/ProjectionData 包下发，客户端按蓝图 id 缓存。
+ * 建造区块标记 + 蓝图投影（客户端渲染）。
+ *
+ * 历史：v1.5.159 区块显示（金色玩家中心预览）→ v1.5.164 红色固定框 →
+ * v1.1.0 实测八十二 幽灵方块投影（金色青色 / 红框橙色双路径）。
+ *
+ * v1.1.0 实测九十五【重构】：删除「区块显示」金色预览——选位价值已被
+ * 「建造中投影」取代（用户："显示该区块这个功能已经没有什么用了，直接删掉"）。
+ * 根因修复：此前携带区块行的包只在打开手册/创建计划时一次性下发，真正开始
+ * 建造后玩家关掉手册走到工地，客户端没有任何区块数据 → 橙色幽灵方块从不显示
+ *（"建造此建筑里面却仍然没有显示"的根因）。现在服务端每秒广播
+ * RegionSyncPacket（BlueprintBookNetworking.broadcastRegionSync）驱动：
+ * - 红色固定框：进行中/暂停中的建造计划（多区块各一框，顶部悬浮文字+创建坐标）
+ * - 橙色幽灵方块：按计划原点落地（与实际搭建同一锚点），玩家走近即见建筑最终
+ *   形态与朝向，随玩家移动自由观察（>96 格距离剔除省性能）
+ * - 计划取消/完成后空列表推送自动清除所有框与投影
+ * 点云仍由 ProjectionRequest/ProjectionData 包按蓝图 id 请求与缓存。
  */
 @net.minecraftforge.api.distmarker.OnlyIn(net.minecraftforge.api.distmarker.Dist.CLIENT)
 public final class BlueprintAreaPreview {
-    private static boolean active = false;
-    private static int sizeX = 1;
-    private static int sizeY = 1;
-    private static int sizeZ = 1;
     private static boolean registered = false;
-    /** v1.5.188b：玩家是否已看过本次区块预览（建造确认流程第 1 步——看过才放行
-     *  第 2 步确认弹窗；区块显示按钮主动打开也算）。
-     *  v1.5.204：重开手册【不再重置】——旧版 clear() 把标记清掉，第 1 步提示
-     *  "再次打开手册点击确认建造"，但重开后点击又走第 1 步 → 永远进不了第 2 步
-     *  （"卡在第一步一直循环"的根因）。标记只在区块真正创建成功后 resetSeen() 重置。 */
-    private static boolean previewSeen = false;
 
     /** v1.5.180：实际建造区块的红色固定框（多区块共存——每个区块一框）
      *  框 = {x0,y0,z0,x1,y1,z1}；名称与框一一对应（顶部悬浮文字） */
@@ -47,53 +36,19 @@ public final class BlueprintAreaPreview {
     private static final java.util.List<int[]> REGION_ORIGINS_POS = new java.util.ArrayList<>();
 
     /** v1.1.0 实测八十二：投影点云缓存（blueprintId → x,y,z 三元组平铺，相对居中
-     *  坐标）；REQUESTED 防重复请求；previewId = 金色预览当前选中的蓝图 */
+     *  坐标）；REQUESTED 防重复请求 */
     private static final java.util.Map<String, int[]> PROJECTIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Set<String> REQUESTED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
-    private static String previewId = null;
     /** v1.1.0 实测八十三b：投影链路诊断日志（latest.log 搜 "projection"） */
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
     private BlueprintAreaPreview() {
     }
 
-    /**
-     * 开启预览：以玩家为中心的 W×H×D 金色框（打开手册即关闭）。
-     * v1.1.0 实测八十二：附带蓝图 id——首次请求该蓝图的投影点云，
-     * 世界内同时显示半透明幽灵方块轮廓（确认建筑朝向/形状）。
-     */
-    public static void show(String blueprintId, int sx, int sy, int sz) {
-        sizeX = Math.max(1, sx);
-        sizeY = Math.max(1, sy);
-        sizeZ = Math.max(1, sz);
-        previewId = blueprintId;
-        active = true;
-        previewSeen = true; // v1.5.188b：看过预览 → 建造确认流程放行第 2 步
-        ensureRegistered();
-        ensureProjection(blueprintId);
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-        if (mc.f_91074_ != null) {
-            mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7e【建造范围预览】" + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ
-                            + " 格——金色框以你为中心，青色幽灵方块为建筑投影；再次打开手册关闭预览"));
-        }
-    }
-
-    /** v1.5.188b：是否已看过区块预览（建造确认流程第 1 步放行判断） */
-    public static boolean wasShown() {
-        return previewSeen;
-    }
-
-    /** v1.5.204：建造确认流程标记重置——区块【真正创建成功后】调用（下一轮建造
-     *  仍需先看范围，防误操作）；与 clear() 分离：clear 只关金色框渲染 */
-    public static void resetSeen() {
-        previewSeen = false;
-    }
-
-    /** v1.5.188b：区块内控制一体化——自动重新打开红色区块框（不重置"看过预览"标记，
-     *  不改变金色框状态；只要服务端推送过区块范围就保持显示） */
+    /** v1.5.188b：区块内控制一体化——自动重新打开红色区块框（只要服务端推送过
+     *  区块范围就保持显示） */
     public static void ensureShown() {
         if (!REGION_BOXES.isEmpty()) {
             ensureRegistered();
@@ -101,9 +56,10 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.5.180：设置实际建造区块（红色固定框，多框）——服务端每次推送进度状态时同步；
-     * 行格式 {planId, 显示名, 维度名, 状态, x, y, z, W, H, D, blueprintId}；
-     * 无区块时清空（取消/完成建造后自动消失）。
+     * v1.5.180：设置实际建造区块（红色固定框，多框）——v1.1.0 实测九十五起由
+     * 服务端每秒 RegionSyncPacket 驱动；行格式
+     * {planId, 显示名, 维度名, 状态, x, y, z, W, H, D, blueprintId, 创建X, 创建Y, 创建Z}；
+     * 空列表 = 无进行中计划（取消/完成）→ 清空所有框与投影。
      */
     public static void setRegions(java.util.List<String[]> regions) {
         REGION_BOXES.clear();
@@ -224,13 +180,6 @@ public final class BlueprintAreaPreview {
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
     }
 
-    public static void clear() {
-        active = false;
-        // v1.5.204：不再重置 previewSeen——重开手册只关金色框渲染；"看过预览"
-        // 标记跨手册会话保留（第 1 步提示"再次打开手册点击确认"后能真正走到
-        // 第 2 步确认弹窗），由 resetSeen()（区块创建成功后）显式重置
-    }
-
     private static void ensureRegistered() {
         if (!registered) {
             registered = true;
@@ -240,7 +189,7 @@ public final class BlueprintAreaPreview {
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onRender(net.minecraftforge.client.event.RenderLevelStageEvent event) {
-        if (!active && REGION_BOXES.isEmpty()) {
+        if (REGION_BOXES.isEmpty()) {
             return;
         }
         if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
@@ -253,83 +202,48 @@ public final class BlueprintAreaPreview {
         net.minecraft.world.phys.Vec3 camera = event.getCamera().m_90583_().m_82548_();
         com.mojang.blaze3d.vertex.PoseStack pose = event.getPoseStack();
         pose.m_85836_(); // pushPose
-        if (!REGION_BOXES.isEmpty()) {
-            // v1.5.164：红色固定框——实际建造区块（v1.5.180：多区块各画一框）
-            for (int i = 0; i < REGION_BOXES.size(); i++) {
-                double[] b = REGION_BOXES.get(i);
-                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                        b[0], b[1], b[2], b[3], b[4], b[5])
-                        .m_82383_(camera);
-                net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                        pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.25f, 0.2f, 0.28f);
-                com.mojang.blaze3d.vertex.VertexConsumer buf =
-                        mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
-                drawBoxEdges(pose, buf, camera, b[0], b[1], b[2], b[3], b[4], b[5], 1.0f, 0.25f, 0.2f);
-                String label = i < REGION_NAMES.size() ? REGION_NAMES.get(i) : "建造区域";
-                // v1.5.297：标签改 SEE_THROUGH 透显（末参 false→true，TLM 名字牌同款）——
-                // 旧版 NORMAL 深度测试：区块外/隔方块看会被遮挡，实际只有站在区块内部
-                // 才看得到（用户："只能在内部才能看到"）；现在任何角度、隔方块都可见
-                com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
-                        "\u00a7c「" + label + "」（建造中）",
-                        (b[0] + b[3]) / 2.0, b[4] + 0.8, (b[2] + b[5]) / 2.0,
-                        0xFF5544, 0.15f, true, -5.0f, true);
-                // v1.5.290：创建坐标第二行（用户："坐标显示在苔藓神庙三建造中的下面"——
-                // 世界内区块标记下方显示玩家创建该区块时的坐标）
-                // v1.5.297：第二行下移——旧版与名字行锚点仅差 0.35 格 < 行高（0.15 字
-                // 高约 1.3 格）→ 两行叠在一起（截图实证「苔藓神庙-214，-60 建造中」）；
-                // 现在锚点差 1.4 格，净距约 0.45 格不再重叠
-                String origin = i < REGION_ORIGINS.size() ? REGION_ORIGINS.get(i) : "";
-                if (!origin.isEmpty()) {
-                    com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
-                            "\u00a78创建于 " + origin,
-                            (b[0] + b[3]) / 2.0, b[4] - 0.6, (b[2] + b[5]) / 2.0,
-                            0x888888, 0.12f, true, -5.0f, true);
-                }
-                // v1.1.0 实测八十二：橙色幽灵方块投影——按计划原点落地，与实际搭建
-                // 同一坐标系（锚点 = PlanState.origin + 居中步骤相对坐标），位置零偏差；
-                // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
-                String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
-                int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
-                if (!bp.isEmpty() && org != null) {
-                    drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
-                            1.0f, 0.55f, 0.25f, 0.20f);
-                }
-            }
-        }
-        if (active) {
-            // 金色预览框：以玩家所在格为中心（每帧取玩家位置 → 框随玩家移动）
-            net.minecraft.core.BlockPos p = mc.f_91074_.m_20183_();
-            double x0 = p.m_123341_() - sizeX / 2.0;
-            double z0 = p.m_123343_() - sizeZ / 2.0;
-            double y0 = p.m_123342_();
-            double x1 = x0 + sizeX;
-            double z1 = z0 + sizeZ;
-            double y1 = y0 + sizeY;
-            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(x0, y0, z0, x1, y1, z1)
+        for (int i = 0; i < REGION_BOXES.size(); i++) {
+            double[] b = REGION_BOXES.get(i);
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    b[0], b[1], b[2], b[3], b[4], b[5])
                     .m_82383_(camera);
             net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.85f, 0.2f, 0.3f);
+                    pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.25f, 0.2f, 0.28f);
             com.mojang.blaze3d.vertex.VertexConsumer buf =
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
-            drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
-            // v1.1.0 实测八十二：青色幽灵方块投影随玩家移动——选位时就能看到建筑
-            // 形状/朝向（建造确认后即按此姿态原位落地，因为 execute 同样以玩家脚下为原点）
-            if (previewId != null) {
-                drawGhost(pose, mc, camera, previewId,
-                        p.m_123341_(), p.m_123342_(), p.m_123343_(),
-                        0.30f, 0.95f, 1.0f, 0.22f);
-            }
+            drawBoxEdges(pose, buf, camera, b[0], b[1], b[2], b[3], b[4], b[5], 1.0f, 0.25f, 0.2f);
+            String label = i < REGION_NAMES.size() ? REGION_NAMES.get(i) : "建造区域";
+            // v1.5.297：标签改 SEE_THROUGH 透显（末参 false→true，TLM 名字牌同款）——
+            // 任何角度、隔方块都可见
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
-                    "建造范围 " + sizeX + "\u00d7" + sizeY + "\u00d7" + sizeZ + "（打开手册关闭）",
-                    x0 + sizeX / 2.0, y1 + 0.6, z0 + sizeZ / 2.0, 0xFFDD55, 0.15f, true, -5.0f, false);
+                    "\u00a7c「" + label + "」（建造中）",
+                    (b[0] + b[3]) / 2.0, b[4] + 0.8, (b[2] + b[5]) / 2.0,
+                    0xFF5544, 0.15f, true, -5.0f, true);
+            // v1.5.290：创建坐标第二行（锚点差 1.4 格，净距约 0.45 格不再重叠）
+            String origin = i < REGION_ORIGINS.size() ? REGION_ORIGINS.get(i) : "";
+            if (!origin.isEmpty()) {
+                com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
+                        "\u00a78创建于 " + origin,
+                        (b[0] + b[3]) / 2.0, b[4] - 0.6, (b[2] + b[5]) / 2.0,
+                        0x888888, 0.12f, true, -5.0f, true);
+            }
+            // v1.1.0 实测八十二：橙色幽灵方块投影——按计划原点落地，与实际搭建
+            // 同一坐标系（锚点 = PlanState.origin + 居中步骤相对坐标），位置零偏差；
+            // 建造中/暂停中的区块都能直接看到建筑最终形态与朝向
+            String bp = i < REGION_BPS.size() ? REGION_BPS.get(i) : "";
+            int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
+            if (!bp.isEmpty() && org != null) {
+                drawGhost(pose, mc, camera, bp, org[0], org[1], org[2],
+                        1.0f, 0.55f, 0.25f, 0.20f);
+            }
         }
         pose.m_85849_(); // popPose
     }
 
     /**
      * v1.1.0 实测八十二：画蓝图投影——点云每个点在格内画一个 0.4 格的半透明小方块。
-     * 锚点 = (ox, oy, oz)：红色区块路径传计划原点、金色预览路径传玩家脚下格，
-     * 点坐标为居中后的相对值 → 与 BlueprintBuildExecutor 实际放置位置逐块重合。
+     * 锚点 = (ox, oy, oz) = 计划原点，点坐标为居中后的相对值 → 与
+     * BlueprintBuildExecutor 实际放置位置逐块重合。
      * 距离剔除：锚点距相机 >96 格不画（远处区块只留框和文字，省性能）。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
@@ -366,7 +280,8 @@ public final class BlueprintAreaPreview {
     private static void drawBoxEdges(com.mojang.blaze3d.vertex.PoseStack pose,
                                      com.mojang.blaze3d.vertex.VertexConsumer buf,
                                      net.minecraft.world.phys.Vec3 camera,
-                                     double x0, double y0, double z0, double x1, double y1, double z1,
+                                     double x0, double y0, double z0,
+                                     double x1, double y1, double z1,
                                      float r, float g, float b) {
         net.minecraft.world.phys.Vec3 c0 = camera.m_82520_(x0, y0, z0);
         net.minecraft.world.phys.Vec3 c1 = camera.m_82520_(x1, y0, z0);

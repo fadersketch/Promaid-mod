@@ -203,7 +203,8 @@ public class BlueprintBookScreen extends Screen {
         this.maidPage = lastMaidPage;
     }
 
-    /** 收到目录包后打开界面（v1.5.159：同时关闭建造范围预览——再次打开手册 = 关闭预览）
+    /** 收到目录包后打开界面（v1.1.0 实测九十五：区块显示/金色预览已删除——打开
+     *  手册不再影响红色区块框与幽灵方块投影，它们由服务端每秒同步驱动）
      *  v1.5.275：initialView 0=大目录 1=女仆管理（配置面板"跳转女仆管理"） */
     public static void open(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
@@ -211,7 +212,6 @@ public class BlueprintBookScreen extends Screen {
                             int regionW, int regionH, int regionD,
                             boolean inPlanRegion, String currentPlanId, List<String[]> regions,
                             int etaSec, String speedBps, int initialView) {
-        com.maidsmart.build.BlueprintAreaPreview.clear();
         BlueprintBookScreen screen = new BlueprintBookScreen(entries, maids, allMaids, paused, speed,
                 progressText, progressPct, regionX, regionY, regionZ, regionW, regionH, regionD,
                 inPlanRegion, currentPlanId, regions, etaSec, speedBps);
@@ -779,18 +779,20 @@ public class BlueprintBookScreen extends Screen {
             if (inRegion) {
                 com.maidsmart.build.BlueprintAreaPreview.ensureShown();
             }
-            // v1.5.190 修复：旧版 inRegion 时 x 从 cx-190 起、按钮总宽拉到 cx+260
-            //（w=427 时"区块显示"右缘 473 > 427 出屏 46px，右半边点不到）。
-            // 改为按可用宽度自适应：5 个按钮均分（最小 54px），总宽不超过 w-16，
-            // 任意窗口宽度都完整在屏内。
+            // v1.5.190 修复：按钮按可用宽度自适应均分（最小 54px），任意窗口宽度
+            // 都完整在屏内。
+            // v1.1.0 实测九十五：「区块显示」按钮删除（金色预览功能整体下线）——
+            // 建造投影改由红色区块框 + 幽灵方块在建造期间持续显示（服务端每秒同步）。
+            // 底部按钮：返回目录 + [全员加入 + 名单] + 建造此图纸（后两者仅区块内）
+            int btnCount = inRegion ? 4 : 2;
             int avail = w - 16;
             int gap2 = 4;
-            int[] bw5 = new int[5];
-            int need = (5 - 1) * gap2;
-            for (int i = 0; i < 5; i++) {
-                bw5[i] = Math.max(54, (avail - need) / 5);
+            int[] bw = new int[btnCount];
+            int need = (btnCount - 1) * gap2;
+            for (int i = 0; i < btnCount; i++) {
+                bw[i] = Math.max(54, (avail - need) / btnCount);
             }
-            int total5 = need + bw5[0] * 5;
+            int total5 = need + bw[0] * btnCount;
             int start5 = Math.max(8, cx - total5 / 2);
             if (start5 + total5 > w - 8) {
                 start5 = w - 8 - total5; // 兜底：右缘对齐，绝不超出屏幕
@@ -802,8 +804,8 @@ public class BlueprintBookScreen extends Screen {
                                 this.viewingEntry = null;
                                 this.rebuildButtons();
                             })
-                    .m_252987_(x, h - 30, bw5[0], 20).m_253136_());
-            x += bw5[0] + gap2;
+                    .m_252987_(x, h - 30, bw[0], 20).m_253136_());
+            x += bw[0] + gap2;
             // 全员加入 + 名单（v1.5.178 区块内限制；v1.5.188b：区块内自动先显示区块框）
             if (inRegion) {
                 final String cid = this.currentPlanId;
@@ -811,8 +813,8 @@ public class BlueprintBookScreen extends Screen {
                                 b -> BlueprintBookNetworking.CHANNEL.sendToServer(
                                         new BlueprintBookNetworking.BuildControlPacket(
                                                 BlueprintBookNetworking.BuildControlPacket.JOIN_ALL, null, cid)))
-                        .m_252987_(x, h - 30, bw5[1], 20).m_253136_());
-                x += bw5[1] + gap2;
+                        .m_252987_(x, h - 30, bw[1], 20).m_253136_());
+                x += bw[1] + gap2;
                 // v1.5.182：名单——区块内右击手册时额外多出的按钮：查看绑定该区块的
                 // 女仆名单 + 设置工头（一区块一工头）
                 this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7e名单"),
@@ -821,27 +823,15 @@ public class BlueprintBookScreen extends Screen {
                                     this.regionMaidPage = 0;
                                     this.rebuildButtons();
                                 })
-                        .m_252987_(x, h - 30, bw5[2], 20).m_253136_());
-                x += bw5[2] + gap2;
+                        .m_252987_(x, h - 30, bw[2], 20).m_253136_());
+                x += bw[2] + gap2;
             }
-            // 建造此图纸（v1.5.188b：首次点击强制打开区块预览 + 系统提示确认范围；
-            // 再次点击弹确认框——明确告知会摧毁周边障碍物，确认后才真正创建区块）
+            // 建造此图纸（v1.1.0 实测九十五：两步确认流程简化——直接弹确认框；
+            // 明确告知会摧毁周边障碍物、以玩家脚下为中心，确认后才真正创建区块。
+            // 创建后红色区块框 + 蓝图投影在工地持续显示，位置不满意可取消重摆）
             this.m_142416_(Button.m_253074_(Component.m_237113_("建造此图纸"),
                             b -> this.startBuildFlow(vid))
-                    .m_252987_(x, h - 30, bw5[3], 20).m_253136_());
-            x += bw5[3] + gap2;
-            // 区块显示（总是显示——预览占地范围；v1.5.188b：点击先关闭手册，保证
-            // 玩家在世界里看到金色框再决定位置。v1.1.0 实测八十二：附带蓝图 id，
-            // 预览时叠加青色幽灵方块投影——确认建筑朝向/形状）
-            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7e区块显示"),
-                            b -> {
-                                com.maidsmart.build.BlueprintAreaPreview.show(
-                                        vid,
-                                        this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
-                                        this.viewingEntry.sizeZ());
-                                this.m_7379_();
-                            })
-                    .m_252987_(x, h - 30, bw5[4], 20).m_253136_());
+                    .m_252987_(x, h - 30, bw[inRegion ? 3 : 1], 20).m_253136_());
             // 材料翻页（16 种/页；固定在材料区下方，不与底部控制区冲突）
             // v1.1.0 实测二十五：80 宽按钮盖材料行——改 20 宽纯箭头 ◀/▶
             int pages = this.materialPages(this.viewingEntry);
@@ -2051,47 +2041,20 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /**
-     * v1.5.188b：建造此图纸固定确认流程——
-     * 1. 第一次点击：强制打开区块显示（金色框以玩家为中心预览占地范围）+ 系统提示
-     *    告知"确定范围后再次打开手册点击建造"→ 直接退出手册（玩家在世界里看框选位）；
-     * 2. 再次打开手册再次点击：弹确认框【建造在这里？】——明确告知女仆搭建会直接
-     *    摧毁区块内的树/建筑等障碍物；点确认才真正创建区块（SelectBlueprintPacket），
-     *    并提示玩家去绑定女仆。
-     * v1.5.204：修复"卡在第一步死循环"——旧版重开手册（open → clear）会重置
-     *  "看过预览"标记，第 1 步提示"再次打开手册点击确认"后重开点击仍走第 1 步。
-     *  现在标记跨手册会话保留（clear 只关金色框），只有【确认创建成功后】
-     *  resetSeen() 重置 → 下一轮建造仍需先看范围（防误操作保留）。
+     * 建造此图纸确认流程——
+     * v1.5.188b：两步（先强制区块预览选位 → 再弹确认框）；
+     * v1.1.0 实测九十五：简化为一步直接弹确认框（金色预览已删除；建造期间工地
+     * 有红色区块框 + 蓝图投影持续显示，位置不满意可取消后重站重摆）。
+     * 确认后才真正创建区块（SelectBlueprintPacket，以玩家脚下为中心），并提示
+     * 玩家去绑定女仆。
      */
     private void startBuildFlow(String vid) {
-        boolean previewed = com.maidsmart.build.BlueprintAreaPreview.wasShown();
-        if (!previewed) {
-            // 第 1 步：强制预览 + 系统提示，退出手册看框选位
-            // （v1.1.0 实测八十二：附带蓝图 id → 预览时叠加青色幽灵方块投影）
-            com.maidsmart.build.BlueprintAreaPreview.show(
-                    vid,
-                    this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
-                    this.viewingEntry.sizeZ());
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-            if (mc.f_91074_ != null) {
-                mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围，移动选好位置后"
-                                + " 再次打开手册点击「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
-            }
-            this.m_7379_();
-            return;
-        }
-        // 第 2 步：确认弹窗（再次打开手册点击才会走到这里）→ 确认才创建区块
         this.confirmAction("确定建造在这里？",
-                "\u00a7e区块范围 = 你脚下为中心（金色框显示过的那片区域）。\n"
+                "\u00a7e区块范围 = 你脚下为中心。\n"
                         + "\u00a7c注意：女仆搭建会直接摧毁区块内的树、建筑等障碍物。\n"
-                        + "\u00a77确认后创建区块，之后到女仆管理里绑定女仆开始建造。",
+                        + "\u00a77确认后创建区块，工地会显示红色区域框与蓝图投影，到女仆管理绑定女仆开始建造。",
                 "\u00a7c确定，开始建造",
-                () -> {
-                    BlueprintBookNetworking.CHANNEL.sendToServer(
-                            new BlueprintBookNetworking.SelectBlueprintPacket(vid));
-                    com.maidsmart.build.BlueprintAreaPreview.clear();
-                    // v1.5.204：本轮确认完成 → 重置预览标记，下一轮建造重新先看范围
-                    com.maidsmart.build.BlueprintAreaPreview.resetSeen();
-                });
+                () -> BlueprintBookNetworking.CHANNEL.sendToServer(
+                        new BlueprintBookNetworking.SelectBlueprintPacket(vid)));
     }
 }
