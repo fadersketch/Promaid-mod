@@ -28,8 +28,13 @@ import java.util.UUID;
  * - 已加载女仆 → 直接传送；
  * - 未加载女仆 → 【强制加载其所在区块】→ 传送 → 解除强制加载。
  * 与自保的 teleportHome 不同——那是"威胁消失后、检查周围无怪才传"的安全传送；
- * 本处理器【不受任何判定影响】：不走冷却、不检查威胁/距离/范围、不依赖 LLM
- * 开关、不依赖女仆状态。主人死亡是最高优先级事件，女仆必须立刻赶到主人身边。
+ * 本处理器【不受战斗判定影响】：不走冷却、不检查威胁/距离/范围、不依赖 LLM 开关。
+ * 主人死亡是最高优先级事件，女仆必须立刻赶到重生点。
+ *
+ * v1.1.0 实测八十三【保持原位三态豁免】：home 看家钉死 / 坐姿停放 / 骑乘中的
+ * 女仆不参与死亡传送与复活保险拉取（实测七十八确立的"看家的女仆不响应任何
+ * 传送"语义此前漏盖了本处理器——粉丝复测 home 女仆仍被拽走）。战斗类女仆
+ * （跟随/护卫）照常无条件赶往重生点。
  */
 public class MasterDeathTeleportHandler {
 
@@ -225,6 +230,10 @@ public class MasterDeathTeleportHandler {
                 if (maidOwner == null || !maidOwner.equals(ownerId)) {
                     continue;
                 }
+                // v1.1.0 实测八十三：保持原位三态（home/坐姿/骑乘）不传也不参与播报
+                if (shouldStayPut(maid)) {
+                    continue;
+                }
                 // 记录最近者（用【传送前】距离，避免全传后坐标相同分不出）
                 double d = maid.m_20238_(player.m_20182_());
                 if (d < closestDist) {
@@ -254,6 +263,10 @@ public class MasterDeathTeleportHandler {
                     // 更新追踪为已加载（位置以实体为准）
                     MAID_TRACK.put(e.getKey(), new MaidTrack(t.ownerUuid(), t.dim(),
                             maid.m_20185_(), maid.m_20186_(), maid.m_20189_(), true));
+                    // v1.1.0 实测八十三：保持原位三态（home/坐姿/骑乘）不传
+                    if (shouldStayPut(maid)) {
+                        continue;
+                    }
                     double d = maid.m_20238_(player.m_20182_());
                     if (d < closestDist) {
                         closestDist = d;
@@ -271,6 +284,15 @@ public class MasterDeathTeleportHandler {
         if (closest != null) {
             closest.getChatBubbleManager().addTextChatBubble("主人……我马上赶到你身边！");
         }
+    }
+
+    /**
+     * v1.1.0 实测八十三：保持原位三态豁免（与一键集合/跨维度跟随的口径统一）——
+     * home 看家钉死（看家的女仆不响应任何传送）、坐姿 = 玩家明确停放、骑乘中
+     * 强拽会脱离载具状态。死亡传送与复活保险拉取均遵守。
+     */
+    private static boolean shouldStayPut(EntityMaid maid) {
+        return maid.isHomeModeEnable() || maid.isMaidInSittingPose() || maid.m_20159_();
     }
 
     /** 传送单只女仆（同维度 m_6034_ / 跨维度 m_264318_ + 清摔落/速度） */
@@ -313,6 +335,10 @@ public class MasterDeathTeleportHandler {
             }
             UUID maidOwner = maid.m_269323_() != null ? maid.m_269323_().m_20148_() : null;
             if (maidOwner == null || !maidOwner.equals(ownerId)) {
+                continue;
+            }
+            // v1.1.0 实测八十三：保持原位三态（home/坐姿/骑乘）保险拉取同样豁免
+            if (shouldStayPut(maid)) {
                 continue;
             }
             if (maid.m_20238_(player.m_20182_()) <= 64.0) {
