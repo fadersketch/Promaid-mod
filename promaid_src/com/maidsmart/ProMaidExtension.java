@@ -81,6 +81,9 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.combat.AutoCombatSwitch());
         // v1.1.0 实测九十：险境脱离（已身处危险方块上的女仆自动挪到最近安全格+应急灭火）
         com.maidsmart.protect.DangerEscapeHandler.register();
+        // v1.1.0 实测一百一十七：危险方块避让改原版寻路 malus 机制（DAMAGE_FIRE 等
+        // 覆盖为 -1 不可通行——与 LAVA 同款原版语义，不依赖注入点，全移动链路生效）
+        com.maidsmart.protect.MaidDangerMalusHandler.register();
         // v1.1.0 实测六十二：女仆着火不传主人（攻击路径取消 + 接触传火自动灭火）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.combat.MaidFireGuard());
         // v1.5.86：AI 记忆系统（取代旧 4 键 MaidMemoryManager；旧数据不迁移重新积累）
