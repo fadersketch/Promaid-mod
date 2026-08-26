@@ -209,6 +209,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 旧版 canUse 要求 dy >= minDy（主人必须高2格）才启动搭路行为——
         // 主人与女仆高度相同但水平距离远时搭路行为完全不触发。修复：
         // 增加水平距离远（>3格）且主人与女仆至少差1格高度时也允许启动。
+        // v1.1.0 实测一百二十一（用户："两人一起向上搭高，离了很远女仆也不会
+        // 自己搭过来接近主人"）：一百零六的水平放宽当时只写在注释里、代码没落地
+        // ——门槛仍是纯 dy >= minDy。两人各自向上搭时 dy 长期只有 0~1（主人未达
+        // 门槛高差），水平距离却越拉越大 → 搭路行为永远不启动，tick 里为
+        // dy<minDy 准备的平桥分支（tryAirBridgeStep）形同虚设。落地放宽：
+        // 水平距离 >3 格且主人【不低于】女仆（dy >= 0）即允许启动——铺平桥朝
+        // 主人横向逼近（空中时 24 格内有效）；高度门槛只在近距离垂直搭高场景
+        // 严格生效。
         // v1.1.0 实测十六（审查 P2-8）：廉价检查先行 + 10 tick 节流——
         // 开关/home/自保/任务占用/距离/高度这些廉价判定不受节流（每 tick 都判），
         // 只有威胁扫描（Monster AABB）和背包过滤（VoxelShape）这两个重的受节流。
@@ -231,8 +239,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         // v1.1.0 实测一百零六：放宽启动门槛——主人至少高4格即可启动搭路
         int minDy = MaidSmartConfig.BRIDGE_MIN_DY.get();
-        if (dy < Math.min(minDy, 4)) {
-            return false; // 主人至少要比女仆高4格
+        // v1.1.0 实测一百二十一：水平远距放宽（见方法头注释）——dy 不满足高度
+        // 门槛但水平已拉开（>3 格）且主人不低于女仆时照常启动，平桥横向逼近
+        double hx = owner.m_20185_() - maid.m_20185_();
+        double hz = owner.m_20189_() - maid.m_20189_();
+        boolean farHorizontal = Math.sqrt(hx * hx + hz * hz) > 3.0;
+        if (dy < Math.min(minDy, 4) && !(farHorizontal && dy >= 0)) {
+            return false; // 高度不足且水平不远的近距离场景才拦（垂直搭高才需要门槛）
         }
         boolean airborne = isAirborne(level, maid);
         int distLimit = airborne
