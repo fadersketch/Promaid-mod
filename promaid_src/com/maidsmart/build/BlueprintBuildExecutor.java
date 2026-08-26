@@ -81,14 +81,25 @@ public final class BlueprintBuildExecutor {
         }
         int[] sz = BlueprintLib.blueprintSize(centered);
         // v1.5.180：续建识别——同蓝图同原点 = 续建（保留进度继续建，不重叠检查）
+        // v1.1.0 实测九十七复查：朝向必须一致才算续建——同点位换朝向重建时旧计划
+        // 会被取消后按新建走（已建方块由 filterBuilt 已建感知自然跳过，进度不白费）；
+        // 否则续建分支沿用旧步骤，玩家按 P 选的旋转完全不起作用
         boolean resuming = false;
         String planId = null;
+        BuildPlan.PlanState staleSameSpot = null;
         for (BuildPlan.PlanState ex : BuildPlan.getPlans(level)) {
             if (ex.blueprintId.equals(blueprintId) && ex.origin.equals(origin)) {
-                planId = ex.planId;
-                resuming = true;
+                if (ex.quarters == Math.floorMod(quarters, 4)) {
+                    planId = ex.planId;
+                    resuming = true;
+                } else {
+                    staleSameSpot = ex;
+                }
                 break;
             }
+        }
+        if (staleSameSpot != null) {
+            BuildPlan.cancel(level, staleSameSpot.planId, player);
         }
         if (!resuming) {
             // v1.5.180：重叠检查——创建区块唯一硬性要求：不能与其他区块重叠
