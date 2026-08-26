@@ -1110,7 +1110,7 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
         BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 24）：女仆已在空中（脚下悬空/站在垫的方块上）且够不着地面导航时，主人再远也直接空中铺桥走过去——空中没有'走路过去'的选项，7 格传送阈值不再适用；设为 0 关闭空中远距铺桥（只保留 7 格近距逻辑）")
-                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 24, 0, 64);
+                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 24, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
