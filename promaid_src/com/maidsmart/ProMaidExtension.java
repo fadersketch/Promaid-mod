@@ -89,6 +89,9 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(new MasterDeathTeleportHandler());
         // v1.5.257：玩家水行为日志（latest.log 搜 "player water"——挖/放水定位钓鱼问题）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.fishing.PlayerWaterLog());
+        // v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治——非干活 home 女仆
+        // 每 4 秒在 home 锚点附近随机走位，不再原地呆站）
+        com.maidsmart.follow.HomePatrolHandler.register();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
