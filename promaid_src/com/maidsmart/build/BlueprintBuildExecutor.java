@@ -86,20 +86,23 @@ public final class BlueprintBuildExecutor {
         // 否则续建分支沿用旧步骤，玩家按 P 选的旋转完全不起作用
         boolean resuming = false;
         String planId = null;
-        BuildPlan.PlanState staleSameSpot = null;
         for (BuildPlan.PlanState ex : BuildPlan.getPlans(level)) {
             if (ex.blueprintId.equals(blueprintId) && ex.origin.equals(origin)) {
                 if (ex.quarters == Math.floorMod(quarters, 4)) {
                     planId = ex.planId;
                     resuming = true;
                 } else {
-                    staleSameSpot = ex;
+                    // v1.5.180 续建语义 × 实测九十七朝向：同点位换朝向 = 原位替换步骤
+                    // 但【保留 planId】——女仆绑定持久化引用 planId，取消重建会让全部
+                    // 绑定失效被迫手动重绑。进度清零重来，已建方块由下方 filterBuilt
+                    // 已建感知自然跳过（不白费材料也不重复搭）
+                    BuildPlan.replacePlanSteps(level, ex.planId, centered,
+                            Math.floorMod(quarters, 4));
+                    planId = ex.planId;
+                    resuming = true;
                 }
                 break;
             }
-        }
-        if (staleSameSpot != null) {
-            BuildPlan.cancel(level, staleSameSpot.planId, player);
         }
         if (!resuming) {
             // v1.5.180：重叠检查——创建区块唯一硬性要求：不能与其他区块重叠
