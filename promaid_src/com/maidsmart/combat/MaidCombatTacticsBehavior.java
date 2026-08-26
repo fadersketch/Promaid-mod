@@ -131,10 +131,27 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         ItemStack main = maid.m_21205_();
         if (main.m_41720_() instanceof ProjectileWeaponItem
                 || main.m_41720_() instanceof TridentItem
-                || GunCompat.isGun(main)) {
+                || GunCompat.isGun(main)
+                || isRangedTaskActive(maid)) {
             return maid.searchRadius();
         }
         return MELEE_ENGAGE_RANGE;
+    }
+
+    /**
+     * v1.1.0 实测一百二十②：当前任务是否为【远程分类】的攻击任务（法术书/法杖/
+     * 弹幕等非投射类远程武器——切换层 isRangedTask 判远程，但主手不是弓/弩/枪，
+     * 旧版接战范围/举盾/走位全按近战处理，切换层认她远程、走位层当她近战）。
+     * 走位分支据此统一按远程处理（拉开距离风筝），与距离切换分类保持一致。
+     */
+    private static boolean isRangedTaskActive(EntityMaid maid) {
+        try {
+            return maid.getTask() != null
+                    && maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
+                    && AutoCombatSwitch.isRangedTask(maid.getTask());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /**
@@ -154,8 +171,10 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         }
         // 弓/弩任务：主手投射武器 → 自己放风筝，不举盾
         // v1.1.0：枪械任务同理——双手持枪射击，不举盾
+        // v1.1.0 实测一百二十②：远程分类任务（法术书等）同理——自己拉距离风筝，不举盾
         if (maid.m_21205_().m_41720_() instanceof ProjectileWeaponItem
-                || GunCompat.isGun(maid.m_21205_())) {
+                || GunCompat.isGun(maid.m_21205_())
+                || isRangedTaskActive(maid)) {
             return false;
         }
         Optional<LivingEntity> target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_);
@@ -288,9 +307,13 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             return;
         }
         ItemStack main = maid.m_21205_();
+        // v1.1.0 实测一百二十②：远程分类任务（法术书/法杖等非投射远程武器）同样
+        // 进 rangedTick 拉开距离风筝——旧版主手不是弓/弩/枪就落进 meleeTick
+        //（跳劈/贴脸绕圈），与距离切换的远程分类矛盾
         if (main.m_41720_() instanceof ProjectileWeaponItem
                 || main.m_41720_() instanceof TridentItem
-                || GunCompat.isGun(main)) {
+                || GunCompat.isGun(main)
+                || isRangedTaskActive(maid)) {
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_RANGED.get()) {
                 this.rangedTick(maid, target);
             }
