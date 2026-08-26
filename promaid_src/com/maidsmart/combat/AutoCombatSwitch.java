@@ -539,6 +539,31 @@ public class AutoCombatSwitch {
                     retuneCombatTactics(maid);
                     continue;
                 }
+                // v1.1.0 实测一百一十五【距离切换武器落实】：威胁圈（8 格）外但仍在
+                // 近战够不着、远程够得着的范围（6~16 格）——旧版直接走还原退出战斗：
+                // 远处敌人女仆不切弓而是直接退出（"不会根据距离远近切换武器"的设计
+                // 在 8~16 格出现空洞）。现在远处敌人先尝试按距离切远程：切成功
+                // （近战→远程）或已是远程 → 维持战斗继续射；切不动（背包没有远程
+                // 武器）→ 落回正常还原（10 秒安全期后退出）。
+                double farDist = nearestThreatDist(maid);
+                if (farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
+                    String beforeTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
+                    retuneCombatTactics(maid);
+                    String afterTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
+                    boolean canRanged = !afterTask.equals(beforeTask)
+                            || (maid.getTask() != null && isRangedTask(maid.getTask()));
+                    if (canRanged) {
+                        if (!afterTask.equals(beforeTask)) {
+                            com.maidsmart.tool.PromaidLog.log("战斗",
+                                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                            + " 距离切换：" + beforeTask + " -> " + afterTask
+                                            + "（远处威胁 " + String.format("%.0f", farDist) + " 格）");
+                        }
+                        maid.getPersistentData().m_128356_(LAST_THREAT_TAG, now);
+                        continue;
+                    }
+                    // 无远程手段 → 落回正常还原（安全期后退出）
+                }
                 if (!restoreOn) {
                     continue; // 自动还原关：只换战术不还原
                 }
