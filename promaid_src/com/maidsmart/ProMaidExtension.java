@@ -95,6 +95,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治——非干活 home 女仆
         // 每 4 秒在 home 锚点附近随机走位，不再原地呆站）
         com.maidsmart.follow.HomePatrolHandler.register();
+        // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
+        // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
+        MinecraftForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
         MinecraftForge.EVENT_BUS.register(this);
     }
 
