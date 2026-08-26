@@ -847,8 +847,11 @@ public class AutoCombatSwitch {
         if (cur == null) {
             return;
         }
-        // v1.1.0 实测八十六：模组隔离门（见上）——m_135827_ = getNamespace
-        if (!"touhou_little_maid".equals(cur.getUid().m_135827_())) {
+        // v1.1.0 实测一百零七（用户："女仆不会自己的近远战切换"）：旧版只允许
+        // touhou_little_maid 命名空间任务参与近远程切换，模组任务（拔刀剑/弹幕/御币等）
+        // 永远被排除——即使女仆拿着弓站在远处也只会傻站着近战。修复：改为
+        // IAttackTask 实例即可参与切换（与 pickCombatTask/buildPools 同口径）。
+        if (!(cur instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask)) {
             return;
         }
         // v1.1.0 实测六十一：最短持有 / 反向横跳冷却（防抖三件套之二）
@@ -958,14 +961,22 @@ public class AutoCombatSwitch {
             return true;
         }
         String ns = task.getUid().m_135827_();
-        // 史诗战斗（ef_tlm 的 FightModeTask）/拔刀剑系任务 = 近战
+        // v1.1.0 实测一百零七：模组远程任务识别——法术系/投射系按远程处理
+        if (ns.equals("maidspell") || ns.equals("spellbook")) {
+            return true;
+        }
+        // v1.1.0 实测一百零七：模组远程任务——UID 包含 ranged/gun/danmaku/spell 关键词
+        String uidLower = uid.toLowerCase();
+        if (uidLower.contains("ranged") || uidLower.contains("gun")
+                || uidLower.contains("danmaku") || uidLower.contains("spell")
+                || uidLower.contains("crossbow") || uidLower.contains("trident")
+                || uidLower.contains("bow")) {
+            return true;
+        }
+        // 明确的近战模组
         if (ns.equals("ef_tlm") || ns.equals("slashblade") || ns.equals("sbr_core")
                 || ns.equals("truepower")) {
             return false;
-        }
-        // 万法皆通等法术系任务按远程处理（法术是投射输出）
-        if (ns.equals("maidspell") || ns.equals("spellbook")) {
-            return true;
         }
         // 未知模组任务默认近战（冲脸兜底）
         return false;
