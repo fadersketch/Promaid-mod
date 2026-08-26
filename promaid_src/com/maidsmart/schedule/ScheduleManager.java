@@ -75,6 +75,19 @@ public final class ScheduleManager {
         if (!maid.isHomeModeEnable()) {
             maid.setHomeModeEnable(true);
         }
+        // v1.1.0 实测一百一十二【呆立根因】：home 模式必须同时给女仆一个 home 锚点。
+        // TLM setHomeModeEnable(boolean) 只置 DATA_HOME_MODE 标志、不设坐标（MaidConfigManager
+        // 字节码实证 = entityData.set 单行）；SchedulePos.tick（每 2 秒）的 restrictTo 拿
+        // null workPos 调 setRestriction → hasRestriction=false → isWithinRestriction 恒 true
+        // → tick 早退：无回家走位、无越界拉回，整个 home 机制空转 → 无任务女仆原地呆站。
+        // TLM GUI 的 home 走 SchedulePos.setHomeModeEnable(maid, pos)（workPos=idlePos=
+        // sleepPos=当前位置），排班路径补上这一环：未配置过的女仆以当前坐标作锚点
+        // （玩家在 TLM GUI 配过 home 的保留原锚点不动；锚定后走位/越界拉回全部激活）。
+        var maidSchedulePos = maid.getSchedulePos();
+        if (maidSchedulePos != null && !maidSchedulePos.isConfigured()) {
+            maidSchedulePos.setHomeModeEnable(maid, maid.m_20183_());
+            maidSchedulePos.setConfigured(true);
+        }
         if (level.m_46467_() < maid.getPersistentData().m_128454_(ScheduleData.GRACE_TAG)) {
             return; // 宽限期内
         }
