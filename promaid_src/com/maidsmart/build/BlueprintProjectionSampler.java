@@ -54,7 +54,9 @@ public final class BlueprintProjectionSampler {
     }
 
     /**
-     * 生成投影点云文本："x,y,z;x,y,z;…"（相对居中坐标；空串 = 无可渲染块）。
+     * 生成投影点云文本："x,y,z,id|state;x,y,z,id|state;…"（相对居中坐标 + 方块注册名
+     * + 状态 SNBT；空串 = 无可渲染块）。客户端据此用 renderSingleBlock 渲染真实方块
+     * 模型（Litematica 风格），而非均匀色块。
      * 编码走 UTF 字符串——与本网络通道既有字段风格一致（避免新 SRG 依赖）。
      */
     public static String sampleCloud(String blueprintId, int quarters,
@@ -63,12 +65,15 @@ public final class BlueprintProjectionSampler {
         if (steps == null || steps.isEmpty()) {
             return "";
         }
-        // 收集非禁置块位置（保序）；FORBIDDEN 含 air/structure_void/水岩浆等女仆不放的块
+        // 收集非禁置块位置（保序）+ 方块信息；FORBIDDEN 含 air/structure_void/水岩浆等
+        // value = [x, y, z, blockIdIdx]，blockIdIdx 指向 blockIds 列表
         LinkedHashMap<Long, int[]> pos = new LinkedHashMap<>(steps.size());
+        java.util.List<String> blockIds = new java.util.ArrayList<>();
+        java.util.List<String> stateSnbts = new java.util.ArrayList<>();
         for (String step : steps) {
             String[] p = BlueprintLib.parseStep(step);
             if (p == null) {
-                continue; // 首部 tag 行
+                continue;
             }
             try {
                 int x = Integer.parseInt(p[0]);
@@ -77,7 +82,13 @@ public final class BlueprintProjectionSampler {
                 if (BlueprintLib.FORBIDDEN.contains(p[3])) {
                     continue;
                 }
-                pos.putIfAbsent(pack(x, y, z), new int[]{x, y, z});
+                long key = pack(x, y, z);
+                if (!pos.containsKey(key)) {
+                    int idx = blockIds.size();
+                    blockIds.add(p[3]);               // blockId (e.g. "minecraft:oak_planks")
+                    stateSnbts.add(p[4] != null ? p[4] : ""); // stateSnbt (may be "")
+                    pos.put(key, new int[]{x, y, z, idx});
+                }
             } catch (NumberFormatException ignored) {
             }
         }
@@ -96,7 +107,7 @@ public final class BlueprintProjectionSampler {
         }
         // 降采样封顶（等距抽稀，保持遍历顺序 = 剪影均匀变疏）
         int stride = shell.size() > MAX_POINTS ? (shell.size() + MAX_POINTS - 1) / MAX_POINTS : 1;
-        StringBuilder sb = new StringBuilder(shell.size() * 12 / stride + 16);
+        StringBuilder sb = new StringBuilder(shell.size() * 20 / stride + 16);
         int kept = 0;
         for (int i = 0; i < shell.size(); i += stride) {
             int[] a = shell.get(i);
@@ -104,6 +115,13 @@ public final class BlueprintProjectionSampler {
                 sb.append(';');
             }
             sb.append(a[0]).append(',').append(a[1]).append(',').append(a[2]);
+            // 附加 blockId|stateSnbt（stateSnbt 为空时省略 | 段）
+            int idx = a[3];
+            sb.append(',').append(blockIds.get(idx));
+            String snbt = stateSnbts.get(idx);
+            if (!snbt.isEmpty()) {
+                sb.append('|').append(snbt);
+            }
             kept++;
         }
         return sb.toString();
