@@ -194,7 +194,15 @@ public class MasterDeathTeleportHandler {
         double ty = 0;
         double tz = 0;
         net.minecraft.core.BlockPos respawnPos = player.m_8961_(); // 重生点方块坐标
-        if (targetLevel != null && respawnPos != null) {
+        // v1.1.0 实测一百一十八【重生点方块校验】：respawnPosition 字段在床被拆/
+        // 被占/重生锚空充能时仍存旧坐标（原版只在复活流程才清空）——直接传送会把
+        // 女仆送到"床原来的位置"，而玩家实际复活在世界出生点，两处分离（此前仅靠
+        // 复活保险纠偏，且旧床位置离实际复活点 64 格内时保险还会跳过）。加原版
+        // 同款校验（镜像 Player.findRespawnPositionAndUseSpawnBlock，m_36130_
+        // javap 实证）：重生点方块必须是【床】（维度允许睡觉 + 床边能站起）或
+        // 【充能重生锚】（charges>0 + 维度允许重生锚，下界 true）；不是 → 直接
+        // 主世界出生点兜底，第一次传送就瞄准正确位置，不依赖保险纠偏。
+        if (targetLevel != null && respawnPos != null && isRespawnPointValid(targetLevel, respawnPos)) {
             tx = respawnPos.m_123341_() + 0.5;
             ty = respawnPos.m_123342_();
             tz = respawnPos.m_123343_() + 0.5;
@@ -387,6 +395,38 @@ public class MasterDeathTeleportHandler {
                 }
             } catch (Exception ignored) {
             }
+        }
+    }
+
+    /**
+     * v1.1.0 实测一百一十八：重生点方块有效性校验（镜像原版 Player.
+     * findRespawnPositionAndUseSpawnBlock，m_36130_ javap 实证）：
+     * - 床：维度允许睡觉（BedBlock.m_49488_ = canSetSpawn → dimensionType.bedWorks）
+     *   且床边能站起（BedBlock.m_260958_ = findStandUpPosition 返回非空）；
+     * - 重生锚：充能 > 0（RespawnAnchorBlock.f_55833_ = CHARGES）且维度允许重生锚
+     *   （RespawnAnchorBlock.m_55850_ → dimensionType.respawnAnchorWorks，下界 true）。
+     * 两者都不是（/spawnpoint 空地、床被拆、锚空电、维度不允许）→ false，
+     * 调用方走主世界出生点兜底——与玩家实际复活点一致，女仆传过去就能汇合。
+     */
+    private static boolean isRespawnPointValid(ServerLevel level, net.minecraft.core.BlockPos pos) {
+        try {
+            net.minecraft.world.level.block.state.BlockState st = level.m_8055_(pos);
+            net.minecraft.world.level.block.Block b = st.m_60734_();
+            if (b instanceof net.minecraft.world.level.block.RespawnAnchorBlock) {
+                return st.m_61143_(net.minecraft.world.level.block.RespawnAnchorBlock.f_55833_) > 0
+                        && net.minecraft.world.level.block.RespawnAnchorBlock.m_55850_(level);
+            }
+            if (b instanceof net.minecraft.world.level.block.BedBlock) {
+                if (!net.minecraft.world.level.block.BedBlock.m_49488_(level)) {
+                    return false; // 维度不允许睡觉（下界/末地床无效）
+                }
+                return net.minecraft.world.level.block.BedBlock.m_260958_(
+                        net.minecraft.world.entity.EntityType.f_20532_, level, pos,
+                        st.m_61143_(net.minecraft.world.level.block.BedBlock.f_54117_), 0.0f).isPresent();
+            }
+            return false;
+        } catch (Exception ignored) {
+            return false;
         }
     }
 
