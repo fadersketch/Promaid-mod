@@ -1115,10 +1115,15 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
-        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 8）：每垫一块方块的最短间隔——调大搭得更从容")
-                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 8, 2, 40);
-        BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 10）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）")
-                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
+        // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
+        // 稍微快一点，然后改方块滞留时间"）：原版无放置冷却，玩家持续搭约 4~6 块/秒
+        //（人手点击上限）。默认 8→5 tick/块（≈4 块/秒，玩家区间中值）——配合
+        // placedLifetime 默认 2 秒 = 稳态最多 8 块同时存在（2s × 4块/s，实测一百二十一
+        // 的"≤8 块"目标，纯数学不做额外机制）
+        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 5）：每垫一块方块的最短间隔——≈4 块/秒与玩家持续搭块速度基本持平；调大更慢更从容")
+                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 5, 2, 40);
+        BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 2）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）——与搭块速度联动：2 秒 × ≈4 块/秒 ≈ 8 块同时存在的稳态峰值，不会堆积成片")
+                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 2, 1, 60);
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
