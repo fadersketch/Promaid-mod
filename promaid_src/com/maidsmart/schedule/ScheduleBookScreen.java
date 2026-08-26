@@ -464,6 +464,24 @@ public class ScheduleBookScreen extends Screen {
             slotList.add(this.slots[i] == null ? "" : this.slots[i]);
         }
         List<ScheduleData.Segment> segs = ScheduleData.segmentsFromSlots(this.shift, slotList);
+        // v1.1.0 实测一百零二【排班失效根因修复】：用户首次设置排班保存时 loadedOn
+        // 默认 false → ON_TAG 写 false → 调度器每秒扫描跳过该女仆 → 排班完全失效。
+        // 修复：有非空任务槽时自动开启排班。
+        boolean hasTask = false;
+        for (String s : slotList) {
+            if (s != null && !s.isEmpty()) {
+                hasTask = true;
+                break;
+            }
+        }
+        if (hasTask && !this.loadedOn) {
+            this.loadedOn = true;
+            // 同步列表行状态
+            String[] sel = this.findSel();
+            if (sel != null) {
+                sel[4] = "1";
+            }
+        }
         ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.SchedSavePacket(
                 this.selUuid, this.loadedOn, segs));
         this.schedDirty = false;
