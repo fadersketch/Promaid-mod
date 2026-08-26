@@ -183,22 +183,22 @@ public class MasterDeathTeleportHandler {
     /** 实际执行死亡传送(目标 = 玩家重生点,全女仆传送) */
     private void doDeathTeleport(MinecraftServer server, ServerPlayer player) {
         UUID ownerId = player.m_20148_();
-        // v1.5.112：解析传送目标 = 玩家重生点（床/重生锚）。m_219759_ = getRespawnPosition
-        // （Optional<GlobalPos>，含维度）；无重生点/维度不存在 → 主世界出生点兜底。
-        ServerLevel targetLevel = null;
+        // v1.1.0 实测一百一十【根因修复】：旧版用 player.m_219759_() 解析目标，
+        // javap 反编译证实该 SRG 名 = getLastDeathLocation()（getfield f_238176_，
+        // 死亡位置字段），根本不是重生点 → 女仆全被传到主人【上一次死亡地点】！
+        // 重生点字段在 1.20.1 位于 ServerPlayer：m_8961_()=getRespawnPosition(BlockPos)、
+        // m_8963_()=getRespawnDimension(ResourceKey<Level>)（均 javap 字节码验证）。
+        // 无重生点（从未睡过床/维度失效）→ 主世界出生点兜底。
+        ServerLevel targetLevel = server.m_129880_(player.m_8963_()); // 重生维度
         double tx = 0;
         double ty = 0;
         double tz = 0;
-        java.util.Optional<net.minecraft.core.GlobalPos> respawn = player.m_219759_();
-        if (respawn.isPresent()) {
-            net.minecraft.core.GlobalPos gp = respawn.get();
-            targetLevel = server.m_129880_(gp.m_122640_()); // getLevel(respawnDimension)
-            net.minecraft.core.BlockPos pos = gp.m_122646_(); // pos()
-            tx = pos.m_123341_() + 0.5;
-            ty = pos.m_123342_();
-            tz = pos.m_123343_() + 0.5;
-        }
-        if (targetLevel == null) {
+        net.minecraft.core.BlockPos respawnPos = player.m_8961_(); // 重生点方块坐标
+        if (targetLevel != null && respawnPos != null) {
+            tx = respawnPos.m_123341_() + 0.5;
+            ty = respawnPos.m_123342_();
+            tz = respawnPos.m_123343_() + 0.5;
+        } else {
             targetLevel = server.m_129880_(Level.f_46428_); // OVERWORLD
             net.minecraft.core.BlockPos spawn = targetLevel.m_220360_(); // getSharedSpawnPos
             tx = spawn.m_123341_() + 0.5;
@@ -335,7 +335,18 @@ public class MasterDeathTeleportHandler {
             return;
         }
         UUID ownerId = player.m_20148_();
-        double[] spot = findSafeLanding(level, player.m_20185_(), player.m_20186_(), player.m_20189_());
+        // v1.1.0 实测一百一十：保险路径同样改用 ServerPlayer 重生点访问器
+        // （m_8961_=getRespawnPosition / m_8963_=getRespawnDimension），不依赖
+        // 重生事件触发时玩家当前坐标（时机不可靠）；无重生点 → 玩家当前位置兜底。
+        ServerLevel targetLevel = server.m_129880_(player.m_8963_());
+        double[] spot;
+        net.minecraft.core.BlockPos rp = player.m_8961_();
+        if (targetLevel != null && rp != null) {
+            spot = findSafeLanding(targetLevel, rp.m_123341_() + 0.5, rp.m_123342_(), rp.m_123343_() + 0.5);
+        } else {
+            targetLevel = level;
+            spot = findSafeLanding(level, player.m_20185_(), player.m_20186_(), player.m_20189_());
+        }
         // v1.1.0 实测一百零八：用 MAID_TRACK 遍历所有维度——与 doDeathTeleport 同口径
         for (java.util.Map.Entry<UUID, MaidTrack> e : MAID_TRACK.entrySet()) {
             MaidTrack t = e.getValue();
@@ -356,7 +367,7 @@ public class MasterDeathTeleportHandler {
                     if (maid.m_20238_(player.m_20182_()) <= 64.0) {
                         continue; // 已在身边
                     }
-                    teleportMaid(maid, maidLevel, level, spot, player);
+                    teleportMaid(maid, maidLevel, targetLevel, spot, player);
                 } else if (maid == null) {
                     // 未加载女仆：强制加载后传送
                     int cx = net.minecraft.util.Mth.m_14107_(t.x()) >> 4;
@@ -369,7 +380,7 @@ public class MasterDeathTeleportHandler {
                         }
                         MAID_TRACK.put(e.getKey(), new MaidTrack(t.ownerUuid(), t.dim(),
                                 maid.m_20185_(), maid.m_20186_(), maid.m_20189_(), true));
-                        teleportMaid(maid, maidLevel, level, spot, player);
+                        teleportMaid(maid, maidLevel, targetLevel, spot, player);
                     } else {
                         MAID_TRACK.remove(e.getKey());
                     }
