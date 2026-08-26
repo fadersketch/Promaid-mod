@@ -444,6 +444,9 @@ public class AutoCombatSwitch {
                 return 0;
             }
             clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
+            com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 战斗中任务被接管（当前 " + (maid.getTask() != null ? maid.getTask().getUid() : "null")
+                    + " 非攻击任务），清标记退出");
         }
         // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
         // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
@@ -594,8 +597,13 @@ public class AutoCombatSwitch {
                 }
                 clearMarkers(maid);
                 boolean restored = false;
+                // v1.1.0 实测一百一十四：仍在任意攻击任务（含 retune 换战术/同步抖动后
+                // 与 ASSIGNED 不一致的战斗任务）都算"本系统战斗"，还原到战斗前任务——
+                // 旧版只认 ASSIGNED 完全一致，换过战术/任务被第三方改过的战斗女仆
+                // 永不还原（"威胁解除后回不了原任务"）。
                 boolean stillOnCombat = maid.getTask() != null
-                        && maid.getTask().getUid().toString().equals(assignedUid);
+                        && (maid.getTask().getUid().toString().equals(assignedUid)
+                        || MaidWorkTags.isCombatTask(maid));
                 if (stillOnCombat
                         && com.maidsmart.schedule.ScheduleData.isOn(maid)
                         && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
@@ -1071,10 +1079,25 @@ public class AutoCombatSwitch {
         TACTIC_STATE.remove(maid.m_20148_());
     }
 
-    /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管） */
+    /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管）
+     *  v1.1.0 实测一百一十四【还原失效根因】：TLM getTask() 读同步数据 DATA_TASK，
+     *  javap 实证 findTask(uid).orElse(getIdleTask())——uid 解析失败/同步抖动时
+     *  直接回落成 idle 任务；加上战中 retune 换战术、第三方模组换任务，getTask()
+     *  与 ASSIGNED 比对极易不一致 → 旧版一律判"玩家接管"→ 静默清标记 → 战斗任务
+     *  永不还原（日志实证：15 次参战零还原，每次 prev 都显示 idle）。
+     *  修复：只要当前任务仍是【攻击类任务】（IAttackTask，与 buildPools 同口径），
+     *  一律视为"本系统的战斗"继续推进还原；只有任务真被换成非攻击任务才按接管处理。 */
     private static boolean isOnAssignedCombatTask(EntityMaid maid) {
         String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-        return maid.getTask() != null && !assigned.isEmpty()
-                && assigned.equals(maid.getTask().getUid().toString());
+        if (assigned.isEmpty()) {
+            return false;
+        }
+        if (maid.getTask() == null) {
+            return false;
+        }
+        if (assigned.equals(maid.getTask().getUid().toString())) {
+            return true;
+        }
+        return MaidWorkTags.isCombatTask(maid);
     }
 }
