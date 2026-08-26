@@ -96,10 +96,15 @@ public final class MaidWorkTags {
             return false;
         }
         String path = maid.getTask().getUid().m_135815_();
+        // v1.1.0 实测一百一十三：排除跟随——与文档契约一致（"idle/跟随/战斗类不命中"）。
+        // 旧版只排除 idle/攻击，跟随任务误命中"干活不打断"闸门 → SchedulePosTickMixin
+        // 把 home 模式女仆每 2 秒的回家走位 tick 整段 cancel（home 下 TLM 跟随本就空转，
+        // 唯一移动驱动被掐）→ home 女仆原地呆站。补排 follow 后跟随状态女仆恢复被
+        // 日程管理（回家走位/巡逻驱动照常）。
         // v1.5.287：idle 不算"干活"——旧版"非战斗即干活"把待机女仆一并门控
         //（待机不吃工作餐/不偷吃/被攻击不恐慌，与 docstring "空闲照常"矛盾——
         // 用户："干活不被打断"只应作用于真正干活时）
-        return !"idle".equals(path);
+        return !"idle".equals(path) && !"follow".equals(path);
     }
 
     /** v1.5.142：是否处于战斗任务（攻击/弓/弩/三叉戟/弹幕）——副手盾牌自动装备判定用。
