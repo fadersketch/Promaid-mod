@@ -30,4 +30,14 @@ public final class BuildKeysClient {
                 GLFW.GLFW_KEY_P, "key.categories.promaid");
         event.register(ROTATE_BLUEPRINT);
     }
+
+    /**
+     * v1.1.0 实测九十七复查：客户端启动即把 BlueprintAreaPreview 挂到 FORGE 总线
+     * ——它的转向键轮询必须从开机就在跑才能持续排空按键计数器（否则首次预览
+     * 前误按的 P 会攒到开启瞬间爆转）；渲染入口自带空态短路，常驻零开销。
+     */
+    @SubscribeEvent
+    public static void onClientSetup(net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent event) {
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(BlueprintAreaPreview.class);
+    }
 }
