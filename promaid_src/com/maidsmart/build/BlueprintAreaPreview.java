@@ -390,16 +390,21 @@ public final class BlueprintAreaPreview {
 
     /**
      * v1.1.0 实测九十七：金色预览态轮询转向键（默认 P，原版按键设置可改）——
-     * 每次点击顺时针转 90°。仅注册过渲染器后生效（ensureRegistered）。
+     * 每次点击顺时针转 90°。
+     * v1.1.0 实测九十七复查：计数器【无条件清空】——consumeClick 的内部计数
+     * 只减不增地被本处消费，若非预览态提前 return 不排空，玩家平时误按的 P 会
+     * 攒在计数里，下次开启预览瞬间一次性爆转；现在始终排空、仅预览态生效。
      */
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
-        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END || !active) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
             return;
         }
         while (com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT != null
                 && com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT.m_90859_()) {
-            rotateClockwise();
+            if (active) {
+                rotateClockwise();
+            }
         }
     }
 
