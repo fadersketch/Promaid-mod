@@ -248,7 +248,17 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false; // 高度不足且水平不远的近距离场景才拦（垂直搭高才需要门槛）
         }
         boolean airborne = isAirborne(level, maid);
-        int distLimit = airborne
+        // v1.1.0 实测一百二十三（用户："创造模式飞行、周围无落脚方块、主人在前上方
+        // 50 格——把检索范围开大后女仆会不会一块块搭过来"）：旧版距离上限只在女仆
+        // 【自己已空中】时用 airMaxDist，落地女仆恒用 maxDist（7 格）——主人悬空/
+        // 飞高时她走不到（导航无路）、传送可能找不到落点（无落脚方块），搭方块是
+        // 唯一通路，却被 7 格门槛挡在门外原地干站。修复：主人【空中】（创造飞行/
+        // 下落，onGround=false）或主人【高于女仆】时，落地女仆的启动距离上限同样
+        // 放宽到 airMaxDist——落地平地上她照常走路（平桥只在脚下悬空时才垫块，
+        // 实心地面走导航零副作用），跨空/爬高才真正搭方块。
+        boolean ownerAirborne = !owner.m_20096_();
+        boolean ownerAbove = dy >= 1;
+        int distLimit = (airborne || ownerAirborne || ownerAbove)
                 ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
                 : MaidSmartConfig.BRIDGE_MAX_DIST.get();
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
