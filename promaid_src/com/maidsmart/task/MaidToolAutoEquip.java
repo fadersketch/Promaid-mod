@@ -119,7 +119,16 @@ public final class MaidToolAutoEquip {
                     }
                 }
             } else {
-                return false;
+                // v1.1.0 实测一百零三：模组战斗任务（拔刀剑/slashblade/ef_tlm/truepower
+                // 等）自动装备武器——旧版只处理 touhou_little_maid 命名空间，模组任务
+                // 全部 return false → 拔刀剑模式不会自动装到主手。修复：检测任务是否
+                // 实现 IAttackTask，若是则用任务自带的 isWeapon 方法匹配武器。
+                if (maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask atk) {
+                    need = s -> !s.m_41619_() && atk.isWeapon(maid, s);
+                    scorer = MaidToolAutoEquip::weaponScore;
+                } else {
+                    return false;
+                }
             }
             // v1.5.140：按任务词条匹配——符合不换，不符合才换（挑最高分）
             return equipIfMismatched(maid, need, scorer);
