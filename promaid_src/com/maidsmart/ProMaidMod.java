@@ -74,6 +74,16 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
                 com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
             }
+            // v1.1.0 实测一百二十二：搭路速度/滞留时间旧默认迁移——节奏 8→5 tick/块
+            //（≈4 块/秒与玩家持平）、滞留 10→2 秒（2s×4块/s≈8 块稳态峰值）；旧档存的
+            // 旧默认（8/10）与用户此前手调的激进值（2）一并迁到新值
+            if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
+                    || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
+                com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
+            }
+            if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
+                com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
+            }
             migrateOreTable();
         } catch (Exception ignored) {
         }
