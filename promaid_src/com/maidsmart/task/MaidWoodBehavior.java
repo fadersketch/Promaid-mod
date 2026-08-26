@@ -172,6 +172,26 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         double r = com.maidsmart.config.MaidSmartConfig.WOOD_REACH.get();
         return r * r;
     }
+
+    /**
+     * v1.1.0 实测一百一十九：目标方块 AABB 上离女仆最近点的距离平方。
+     * 玩家手长的正确语义：方块【任一点】够得着就能挖。旧版取方块中心距离——
+     * 垂直边界场景（站进砍空的树洞/树基处挖正上方的木头）下一根木头的中心
+     * 恰好压在 4.5 格伸手边界上，女仆实体水平偏移 0.1 格（走进树洞/寻路抖动）
+     * 就 distSq > reachSq → 永远进搭路分支 → 搭方块被防窒息/没材料挡住 →
+     * 原地发呆（看门狗重置后几何不变照样冻死，"砍树发呆修不好"的根因）。
+     * 最近点判定后：正上方的木头底面对女仆只有 4.0 格（dy=4）甚至更近，
+     * 稳定够得着，逐节往上啃；够不着的（dy≥5）才走搭方块爬树。
+     */
+    private static double distSqToBlock(EntityMaid maid, BlockPos pos) {
+        double x = Math.max(pos.m_123341_(), Math.min(maid.m_20185_(), pos.m_123341_() + 1));
+        double y = Math.max(pos.m_123342_(), Math.min(maid.m_20186_(), pos.m_123342_() + 1));
+        double z = Math.max(pos.m_123343_(), Math.min(maid.m_20189_(), pos.m_123343_() + 1));
+        double dx = maid.m_20185_() - x;
+        double dy = maid.m_20186_() - y;
+        double dz = maid.m_20189_() - z;
+        return dx * dx + dy * dy + dz * dz;
+    }
     /** v1.5.47：废石白名单（丢弃判定用；注册名 path） */
     private static final java.util.Set<String> JUNK_STONES = java.util.Set.of(
             "stone", "cobblestone", "deepslate", "cobbled_deepslate", "granite", "diorite",
@@ -928,8 +948,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         Long since = TARGET_SINCE.get(maid.m_19879_());
         if (since != null && gameTime - since >= com.maidsmart.config.MaidSmartConfig.WOOD_TARGET_TIMEOUT.get()
                 && this.destroyProgress <= 0.0f
-                && maid.m_20275_(this.targetPos.m_123341_() + 0.5,
-                this.targetPos.m_123342_() + 0.5, this.targetPos.m_123343_() + 0.5) > reachSq()) {
+                && distSqToBlock(maid, this.targetPos) > reachSq()) {
             this.abandonedPos = this.targetPos;
             RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                     .put(this.targetPos.m_7949_(), gameTime);
@@ -997,7 +1016,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             this.saveProgress(maid);
             return;
         }
-        double distSq = maid.m_20275_(this.targetPos.m_123341_() + 0.5, this.targetPos.m_123342_() + 0.5, this.targetPos.m_123343_() + 0.5);
+        double distSq = distSqToBlock(maid, this.targetPos);
         if (distSq > reachSq()) {
             // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
             //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
@@ -1531,10 +1550,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测四十七：找女仆头顶正上方（同柱）最近的木材块（最多 8 格）。
      * 用于"站树洞里头顶就是树干"场景——pillarUpStep 防窒息拒绝垫块时，
      * 改挖头顶树干逐节往上啃，不再站桩发呆。
+     * v1.1.0 实测一百一十九：起始 dy 2 → 1——树基的木头被砍掉后女仆站进树洞，
+     * 下一根木头就在她【头平齐】的 dy=1 处（不是 2），旧版从 dy=2 起跳会漏掉
+     * 它：扫描/链式都给不出目标时对着近在咫尺的头顶木头发呆。
      */
     private BlockPos firstWoodAbove(ServerLevel level, EntityMaid maid) {
         BlockPos feet = maid.m_20183_();
-        for (int dy = 2; dy <= 10; dy++) {
+        for (int dy = 1; dy <= 10; dy++) {
             BlockPos p = feet.m_7918_(0, dy, 0);
             // v1.1.0 实测六十九：被硬挡路弃置的不回选（否则「抬头选中→硬挡弃置→再抬头」
             // 死循环，站在树洞里永远出不来）

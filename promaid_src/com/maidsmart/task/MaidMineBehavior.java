@@ -141,6 +141,19 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         double r = com.maidsmart.config.MaidSmartConfig.MINE_REACH.get();
         return r * r;
     }
+    /** v1.1.0 实测一百一十九：目标方块 AABB 上离女仆最近点的距离平方（与伐木同款）。
+     *  旧版取方块中心距离——垂直边界场景（站坑里挖正上方矿石/头顶矿）中心恰好压
+     *  在伸手边界上，水平偏移 0.1 格就够不着 → 永远进搭路分支 → 冻结点。最近点
+     *  判定后正上方矿底面稳定够得着。 */
+    private static double distSqToBlock(EntityMaid maid, BlockPos pos) {
+        double x = Math.max(pos.m_123341_(), Math.min(maid.m_20185_(), pos.m_123341_() + 1));
+        double y = Math.max(pos.m_123342_(), Math.min(maid.m_20186_(), pos.m_123342_() + 1));
+        double z = Math.max(pos.m_123343_(), Math.min(maid.m_20189_(), pos.m_123343_() + 1));
+        double dx = maid.m_20185_() - x;
+        double dy = maid.m_20186_() - y;
+        double dz = maid.m_20189_() - z;
+        return dx * dx + dy * dy + dz * dz;
+    }
     /** v1.5.47：废石白名单（丢弃判定用；注册名 path） */
     private static final java.util.Set<String> JUNK_STONES = java.util.Set.of(
             "stone", "cobblestone", "deepslate", "cobbled_deepslate", "granite", "diorite",
@@ -871,8 +884,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         Long since = TARGET_SINCE.get(maid.m_19879_());
         if (since != null && gameTime - since >= com.maidsmart.config.MaidSmartConfig.MINE_TARGET_TIMEOUT.get()
                 && this.destroyProgress <= 0.0f
-                && maid.m_20275_(this.targetPos.m_123341_() + 0.5,
-                this.targetPos.m_123342_() + 0.5, this.targetPos.m_123343_() + 0.5) > reachSq()) {
+                && distSqToBlock(maid, this.targetPos) > reachSq()) {
             this.abandonedPos = this.targetPos;
             RECENT_DISCARD.computeIfAbsent(maid.m_19879_(), k -> new java.util.HashMap<>())
                     .put(this.targetPos.m_7949_(), gameTime);
@@ -954,7 +966,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             this.saveProgress(maid);
             return;
         }
-        double distSq = maid.m_20275_(this.targetPos.m_123341_() + 0.5, this.targetPos.m_123342_() + 0.5, this.targetPos.m_123343_() + 0.5);
+        double distSq = distSqToBlock(maid, this.targetPos);
         if (distSq > reachSq()) {
             // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
             //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
