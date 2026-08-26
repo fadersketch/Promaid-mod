@@ -619,19 +619,27 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 : GunCompat.isGun(main) ? (int) GunCompat.gunMaxRange()
                 : (int) maid.searchRadius();
         double ideal = maxRange * com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get();
-        if (dist < ideal * 0.55) {
-            // 太近（弓贴脸 = 废物）：后退拉开
-            this.navigateAway(maid, target, Math.max(4.0, ideal - dist + 2.0), 1.15f);
-        } else if (dist > ideal * 1.4) {
+        // v1.1.0 实测一百一十六【远程风筝不明显】：旧版只在敌人贴进 ideal×0.55
+        // （弓≈4.95 格）才后退、退到 ideal-dist+2（≈6 格）就开始绕圈（半径
+        // 0.45×射程≈6.75）——怪物几乎全程贴在 5~7 格内，弓手看不出在放风筝
+        // （用户："拿着弓箭仍然没有与怪物拉开明显的距离"）。修复：
+        // ①后退阈值提前到 ideal×0.75（弓≈6.75 格——怪物刚进近战威胁区就拉开）；
+        // ②后退目标 = ideal+2（弓≈11 格——干净拉出一整段射程差）；
+        // ③后退速度 1.15 → 1.3（肉眼可见地甩开追兵）；
+        // ④绕圈半径 = ideal（弓≈9 格）——在理想射程圆周上横移放风筝，保持清晰距离。
+        if (dist < ideal * 0.75) {
+            // 太近（弓贴脸 = 废物）：后退拉开到理想射程外 2 格
+            this.navigateAway(maid, target, ideal + 2.0, 1.3f);
+        } else if (dist > ideal * 1.5) {
             // 太远：前进逼近
             this.navigateTo(maid, target, 1.05f);
         } else {
-            // 理想距离：横移绕圈放风筝（大半径，15~25 tick 换向）
+            // 理想距离：横移绕圈放风筝（半径 = 理想射程，15~25 tick 换向）
             if (this.orbitSwapTick-- <= 0) {
                 this.orbitSwapTick = 15 + maid.m_217043_().m_188503_(11);
                 this.orbitSide = -this.orbitSide;
             }
-            this.navigateOrbit(maid, target, Math.max(3.0, maxRange * 0.45), 1.0f);
+            this.navigateOrbit(maid, target, ideal, 1.0f);
         }
     }
 
