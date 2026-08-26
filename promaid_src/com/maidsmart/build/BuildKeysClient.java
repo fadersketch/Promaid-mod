@@ -10,7 +10,7 @@ import org.lwjgl.glfw.GLFW;
 /**
  * v1.1.0 实测九十七：建造预览转向键——注册进【原版按键设置】
  *（选项 → 按键绑定 → "Promaid 建造"分类），玩家可在原版界面里改键，
- * 操作方式与调整原版按键完全一致。默认 P。
+ * 操作方式与调整原版按键完全一致。默认 Z（实测一百由 P 改来，避开原版社交互动）。
  *
  * 金色预览激活期间每 tick 轮询 m_90859_（consumeClick，BlueprintAreaPreview.onClientTick）：
  * 按一次 = 整个建筑顺时针旋转 90°（占地轮廓 W/D 互换 + 方块状态转向 +
@@ -18,7 +18,7 @@ import org.lwjgl.glfw.GLFW;
  */
 @Mod.EventBusSubscriber(modid = "promaid", value = Dist.CLIENT, bus = Mod.EventBusSubscriber.Bus.MOD)
 public final class BuildKeysClient {
-    /** 建造预览·旋转朝向（默认 P；原版按键设置可改） */
+    /** 建造预览·旋转朝向（默认 Z；原版按键设置可改） */
     public static KeyMapping ROTATE_BLUEPRINT = null;
 
     private BuildKeysClient() {
@@ -26,8 +26,11 @@ public final class BuildKeysClient {
 
     @SubscribeEvent
     public static void onRegisterKeys(RegisterKeyMappingsEvent event) {
+        // v1.1.0 实测一百：默认键 P→Z——字节码实证原版「社交互动」默认同为 P，
+        // 按 P 转向会同时弹出社交界面；Z 原版零占用且不与 JEI(R)/OptiFine(C)/
+        // 背包(B)/语音(V)/地图(M) 等主流模组默认键相撞
         ROTATE_BLUEPRINT = new KeyMapping("key.promaid.build_rotate",
-                GLFW.GLFW_KEY_P, "key.categories.promaid");
+                GLFW.GLFW_KEY_Z, "key.categories.promaid");
         event.register(ROTATE_BLUEPRINT);
     }
 

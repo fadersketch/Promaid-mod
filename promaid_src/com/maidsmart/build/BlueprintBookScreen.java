@@ -2076,7 +2076,7 @@ public class BlueprintBookScreen extends Screen {
             if (mc.f_91074_ != null) {
                 mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影）。"
-                                + "\u00a7b按 P 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
+                                + "\u00a7b按 Z 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
                                 + "「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
             }
             this.m_7379_();
