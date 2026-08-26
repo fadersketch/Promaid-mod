@@ -3426,12 +3426,46 @@ public final class BlueprintLib {
                 // 状态 SNBT 跟随旋转（holder 缺失时保持原样——放置端仍有默认状态兜底）
                 if (!statePart.isEmpty() && holder != null) {
                     try {
-                        var st = net.minecraft.nbt.NbtUtils.m_247651_(holder,
-                                net.minecraft.nbt.TagParser.m_129359_(statePart)).m_60717_(rotationOf(q));
-                        step.append(net.minecraft.nbt.NbtUtils.m_178057_(
+                        net.minecraft.nbt.CompoundTag stateTag =
+                                net.minecraft.nbt.TagParser.m_129359_(statePart);
+                        // v1.1.0 实测一百一十一：统一重建为 {Name,Properties} 全格式。
+                        // ①内置/JSON 蓝图是 state-only SNBT（{facing:"south"} 无 Name）——
+                        // m_247651_（readBlockState）对无 Name 标签直接返回空气（字节码实证），
+                        // 旧版旋转后写回 {Name:"minecraft:air"}，状态全毁；
+                        // ②外部结构文件是全格式——旧版重建步骤漏加 '|' 分隔符，状态串
+                        // 紧跟方块名且含逗号，parseStep 按逗号切分长度不对 → 带状态步骤
+                        // 整块被丢弃（Python 字符串级模拟实证）。两处一并修复。
+                        net.minecraft.nbt.CompoundTag props;
+                        String name = null;
+                        if (stateTag.m_128425_("Name", 8)) {
+                            name = stateTag.m_128461_("Name");
+                        }
+                        if (stateTag.m_128425_("Properties", 10)) {
+                            props = stateTag.m_128469_("Properties");
+                        } else {
+                            props = new net.minecraft.nbt.CompoundTag();
+                            for (String key : stateTag.m_128431_()) {
+                                if ("Name".equals(key)) {
+                                    continue;
+                                }
+                                net.minecraft.nbt.Tag v = stateTag.m_128423_(key);
+                                if (v != null) {
+                                    props.m_128365_(key, v);
+                                }
+                            }
+                        }
+                        if (name == null) {
+                            name = p[3]; // state-only 蓝图：方块名取自步骤头
+                        }
+                        net.minecraft.nbt.CompoundTag full = new net.minecraft.nbt.CompoundTag();
+                        full.m_128359_("Name", name);
+                        full.m_128365_("Properties", props);
+                        net.minecraft.world.level.block.state.BlockState st =
+                                net.minecraft.nbt.NbtUtils.m_247651_(holder, full).m_60717_(rotationOf(q));
+                        step.append('|').append(net.minecraft.nbt.NbtUtils.m_178057_(
                                 net.minecraft.nbt.NbtUtils.m_129202_(st)));
                     } catch (Exception ignored) {
-                        step.append(statePart);
+                        step.append('|').append(statePart);
                     }
                 }
                 step.append(tailPart);
