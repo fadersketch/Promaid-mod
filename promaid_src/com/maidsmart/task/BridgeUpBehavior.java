@@ -553,24 +553,24 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.1.0 实测八十四：搭完方块立刻移动到方块上——物理跳跃 + 导航双通道。
-     * 用户需求："当女仆自己搭下一个方块以后，女仆会立刻移动到那个方块上。"
-     * 旧版三条路径里两条只挂导航目标（m_26519_ 寻路），半空中寻路永远失败 =
-     * 目标形同虚设，铺了桥/垫了台阶人却留在原地；垂直路径则等方块卡身后再被
-     * antiSuffocate 顶起（有半嵌瞬间）。现在放完块先给一拍朝目标格的跳跃速度
-     * （MaidMoveControl 直施速度的同款通道，半空也生效——TLM 想游泳时就是这么
-     * 驱动的），水平分量朝目标格、垂直分量一拍标准跳速 0.42；d≈0（垂直垫块）
-     * 时纯原地起跳。
+     * v1.1.0 实测一百零二（用户："搭路状态下往上跳看着不自然，能不能维持老版本
+     * 的样子"）：水平搭路（d>0）去掉垂直跳速，只给水平速度走向目标格——老版本
+     * 用导航走过去不跳，但半空寻路失败=人不动；现在改用施速度但不跳，水平分量
+     * 驱动走向目标格，视觉上是"走过去"而非"跳过去"。垂直垫块（d≈0）保持原地
+     * 起跳——垫脚必须有垂直速度才能站上新方块。
      */
     private static void stepOnto(EntityMaid maid, double tx, double ty, double tz) {
         double dx = tx - maid.m_20185_();
         double dz = tz - maid.m_20189_();
         double d = Math.sqrt(dx * dx + dz * dz);
-        net.minecraft.world.phys.Vec3 cur = maid.m_20184_();
-        double vy = Math.max(cur.f_82480_, 0.42); // 一拍标准跳速；上升中保持现值
         if (d > 1e-3) {
-            double v = Math.min(0.35, 0.08 + 0.10 * d); // 距离越远给得越足，封顶防爆冲
-            maid.m_20256_(new net.minecraft.world.phys.Vec3(dx / d * v, vy, dz / d * v));
+            // 水平搭路/斜向垫块：只给水平速度，不跳——视觉自然（走过去）
+            double v = Math.min(0.35, 0.08 + 0.10 * d);
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(dx / d * v, 0.0, dz / d * v));
         } else {
+            // 垂直垫块（d≈0）：原地起跳站上新方块
+            net.minecraft.world.phys.Vec3 cur = maid.m_20184_();
+            double vy = Math.max(cur.f_82480_, 0.42);
             maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, vy, 0.0));
         }
     }
