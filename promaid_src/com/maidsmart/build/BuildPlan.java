@@ -272,6 +272,33 @@ public final class BuildPlan {
         return planId;
     }
 
+    /**
+     * v1.1.0 实测九十七复查：同点位换朝向的原位替换——保留 planId（女仆绑定持久化
+     * 引用它，取消重建会让全部绑定失效）与工头/绑定关系，仅替换步骤与朝向并重置
+     * 进度（已建方块由执行器的 filterBuilt 已建感知自然跳过，不白费也不重搭）。
+     */
+    public static void replacePlanSteps(net.minecraft.server.level.ServerLevel level, String planId,
+                                        List<String> centeredSteps, int quarters) {
+        PlanState old = PLANS.get(planId);
+        if (old == null) {
+            return;
+        }
+        PlanState ps = new PlanState(planId, old.dim, old.origin, old.name, old.blueprintId,
+                new ArrayList<>(centeredSteps));
+        ps.paused = false;
+        ps.foremanUuid = old.foremanUuid;
+        ps.savedCursor = 1;
+        ps.quarters = Math.floorMod(quarters, 4);
+        PLANS.put(planId, ps);
+        GLOBAL_BOX.remove(planId);      // 包围盒按新步骤重算（W/D 互换）
+        // 进度整体作废（游标/已建集/延后集/替代品表对应旧朝向顺序，不可复用）
+        GLOBAL_PROGRESS.remove(planId);
+        CURSOR_SAVE_TIME.remove(planId);
+        BuildArchive.get(level).upsert(toSavedPlan(ps));
+        LOGGER.info("build plan rotated in place: planId={} name={} quarters={} steps={}",
+                planId, ps.name, ps.quarters, centeredSteps.size());
+    }
+
     /** v1.5.180：PlanState → 存档条目 */
     private static BuildArchive.SavedPlan toSavedPlan(PlanState ps) {
         BuildArchive.SavedPlan sp = new BuildArchive.SavedPlan();
