@@ -53,9 +53,10 @@ public final class BlueprintAreaPreview {
     private static final java.util.List<String> REGION_BPS = new java.util.ArrayList<>();
     private static final java.util.List<int[]> REGION_ORIGINS_POS = new java.util.ArrayList<>();
 
-    /** v1.1.0 实测八十二：投影点云缓存（key = "blueprintId#quarters"，值为 x,y,z
-     *  三元组平铺，相对居中坐标）；REQUESTED 防重复请求 */
-    private static final java.util.Map<String, int[]> PROJECTIONS =
+    /** v1.1.0 实测八十二：投影点云缓存（key = "blueprintId#quarters"，值为 Object[]
+     *  平铺 [x,y,z,BlockState, x,y,z,BlockState, …]；REQUESTED 防重复请求。
+     *  v1.1.0 实测一百零一：改存 BlockState——渲染真实方块模型（Litematica 风格） */
+    private static final java.util.Map<String, Object[]> PROJECTIONS =
             new java.util.concurrent.ConcurrentHashMap<>();
     private static final java.util.Set<String> REQUESTED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
@@ -255,45 +256,130 @@ public final class BlueprintAreaPreview {
 
     /**
      * v1.1.0 实测八十二：收到服务端点云（S2C ProjectionDataPacket）。
-     * cloud = "x,y,z;x,y,z;…"；空串 = 该蓝图无可投影内容（已删除/解析失败）→ 清缓存。
+     * v1.1.0 实测一百零一：cloud 格式改为 "x,y,z,id|state;…"（含方块注册名+状态 SNBT），
+     * 客户端据此用 renderSingleBlock 渲染真实方块模型。空串 = 无投影 → 清缓存。
      */
     public static void setProjection(String id, int quarters, String size, String cloud) {
         if (id == null || id.isEmpty()) {
             return;
         }
         String key = projKey(id, quarters);
-        int[] pts = parseCloud(cloud);
+        Object[] pts = parseCloudWithState(cloud);
         if (pts.length == 0) {
             LOGGER.info("projection: key={} empty cloud (unavailable)", key);
             PROJECTIONS.remove(key);
             return;
         }
         PROJECTIONS.put(key, pts);
-        LOGGER.info("projection: key={} received {} points", key, pts.length / 3);
+        LOGGER.info("projection: key={} received {} blocks", key, pts.length / 4);
     }
 
-    /** 解析点云文本 → 平铺 int[]；格式异常的段跳过（半包容错） */
-    private static int[] parseCloud(String cloud) {
+    /**
+     * 解析含方块状态的点云文本 → 平铺 Object[]{x,y,z,BlockState, x,y,z,BlockState, …}。
+     * 格式 "x,y,z,id|state;x,y,z,id|state;…"——兼容旧版纯坐标格式（无逗号第四段时
+     * 用灰色羊毛兜底）。state SNBT 为空或解析失败时用方块默认态。
+     */
+    private static Object[] parseCloudWithState(String cloud) {
         if (cloud == null || cloud.isEmpty()) {
-            return new int[0];
+            return new Object[0];
         }
+        // 客户端 HolderGetter（BlockState 重建必需）
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+        net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder = null;
+        if (mc.f_91073_ != null) {
+            try {
+                holder = mc.f_91073_.m_246945_(net.minecraft.core.registries.Registries.f_256747_);
+            } catch (Exception ignored) {
+            }
+        }
+        net.minecraft.world.level.block.Block fallbackBlock =
+                net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
+                        new net.minecraft.resources.ResourceLocation("minecraft", "gray_wool"));
+        net.minecraft.world.level.block.state.BlockState fallbackState =
+                fallbackBlock != null ? fallbackBlock.m_49966_() : null;
+
         String[] segs = cloud.split(";");
-        int[] out = new int[segs.length * 3];
+        Object[] out = new Object[segs.length * 4];
         int n = 0;
         for (String s : segs) {
             try {
                 int c1 = s.indexOf(',');
                 int c2 = s.indexOf(',', c1 + 1);
+                int c3 = s.indexOf(',', c2 + 1);
                 if (c1 < 0 || c2 < 0) {
                     continue;
                 }
-                out[n++] = Integer.parseInt(s.substring(0, c1));
-                out[n++] = Integer.parseInt(s.substring(c1 + 1, c2));
-                out[n++] = Integer.parseInt(s.substring(c2 + 1));
-            } catch (NumberFormatException ignored) {
+                int x = Integer.parseInt(s.substring(0, c1));
+                int y = Integer.parseInt(s.substring(c1 + 1, c2));
+                int z;
+                String blockId;
+                String stateSnbt = "";
+                if (c3 > 0) {
+                    z = Integer.parseInt(s.substring(c2 + 1, c3));
+                    String idPart = s.substring(c3 + 1);
+                    int pipe = idPart.indexOf('|');
+                    if (pipe >= 0) {
+                        blockId = idPart.substring(0, pipe);
+                        stateSnbt = idPart.substring(pipe + 1);
+                    } else {
+                        blockId = idPart;
+                    }
+                } else {
+                    z = Integer.parseInt(s.substring(c2 + 1));
+                    blockId = "minecraft:gray_wool";
+                }
+                net.minecraft.world.level.block.state.BlockState state =
+                        resolveBlockState(blockId, stateSnbt, holder, fallbackState);
+                out[n++] = x;
+                out[n++] = y;
+                out[n++] = z;
+                out[n++] = state;
+            } catch (Exception ignored) {
             }
         }
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
+    }
+
+    /** 客户端 BlockState 重建：blockId + stateSnbt → BlockState（失败返回 fallback） */
+    private static net.minecraft.world.level.block.state.BlockState resolveBlockState(
+            String blockId, String stateSnbt,
+            net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder,
+            net.minecraft.world.level.block.state.BlockState fallback) {
+        try {
+            net.minecraft.world.level.block.Block block =
+                    net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
+                            new net.minecraft.resources.ResourceLocation(blockId));
+            if (block == null) {
+                return fallback;
+            }
+            if (stateSnbt == null || stateSnbt.isEmpty()) {
+                return block.m_49966_();
+            }
+            net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
+            if (stateTag == null) {
+                return block.m_49966_();
+            }
+            // 补全 Name 键（蓝图 stateSnbt 只含属性不含 Name）
+            if (!stateTag.m_128425_("Name", 8)) {
+                net.minecraft.nbt.CompoundTag props = new net.minecraft.nbt.CompoundTag();
+                for (String key : stateTag.m_128431_()) {
+                    props.m_128359_(key, stateTag.m_128423_(key).m_7916_());
+                }
+                net.minecraft.nbt.CompoundTag wrapper = new net.minecraft.nbt.CompoundTag();
+                wrapper.m_128359_("Name", blockId);
+                wrapper.m_128365_("Properties", props);
+                stateTag = wrapper;
+            }
+            if (holder != null) {
+                net.minecraft.world.level.block.state.BlockState resolved =
+                        net.minecraft.nbt.NbtUtils.m_247651_(holder, stateTag);
+                if (resolved != null) {
+                    return resolved;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return fallback;
     }
 
     private static void ensureRegistered() {
@@ -409,9 +495,12 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测八十二：画蓝图投影——点云每个点在格内画一个 0.4 格的半透明小方块。
-     * 锚点 = (ox, oy, oz) = 计划原点，点坐标为居中后的相对值 → 与
-     * BlueprintBuildExecutor 实际放置位置逐块重合。
+     * v1.1.0 实测一百零一【Litematica 风格】：用 renderSingleBlock 渲染真实方块模型——
+     * 每个投影点是 Object[]{x, y, z, BlockState}，客户端按蓝图步骤里的方块注册名
+     * + 状态 SNBT 重建 BlockState，通过 BlockRenderDispatcher 渲染带纹理的实际模型，
+     * 取代此前的 0.4 格均匀色块（用户反馈"看不清建筑形态"）。
+     * 半透明效果：自定义 TransparentBufferSource 将所有顶点重定向到 RenderType
+     * 的 translucent 管线，配合顶点颜色 alpha 缩减实现半透明幽灵。
      * 距离剔除：锚点距相机 >96 格不画（远处区块只留框和文字，省性能）。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
@@ -422,25 +511,128 @@ public final class BlueprintAreaPreview {
         if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
             return;
         }
-        int[] pts = PROJECTIONS.get(id);
-        if (pts == null || pts.length < 3) {
-            return; // 未到达/空云（请求在途或该蓝图无可渲染块）
+        Object[] pts = PROJECTIONS.get(id);
+        if (pts == null || pts.length < 4) {
+            return;
         }
-        // 距离剔除：玩家到锚点平方距离 >96² 不画（v1.1.0 实测八十三b：改用已验证
-        // 的 Entity.m_20238_ 组合，不再直接读 Vec3 字段）
+        // 距离剔除
         net.minecraft.world.phys.Vec3 anchor = new net.minecraft.world.phys.Vec3(ox, oy, oz);
         if (mc.f_91074_.m_20238_(anchor) > 9216.0) {
             return;
         }
-        var source = mc.m_91269_().m_110104_();
-        for (int i = 0; i + 2 < pts.length; i += 3) {
-            double wx = ox + pts[i];
-            double wy = oy + pts[i + 1];
-            double wz = oz + pts[i + 2];
-            net.minecraft.world.phys.AABB cube = new net.minecraft.world.phys.AABB(
-                    wx + 0.30, wy + 0.30, wz + 0.30, wx + 0.70, wy + 0.70, wz + 0.70)
-                    .m_82383_(camera);
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, source, cube, r, g, b, a);
+        net.minecraft.client.renderer.block.BlockRenderDispatcher blockRenderer = mc.m_91289_();
+        var realSource = mc.m_91269_().m_110104_();
+        TransparentBufferSource ghostSource = new TransparentBufferSource(realSource, a);
+        // 0xF000F0 = 全亮（不受光照影响），OverlayTexture.f_118083_ = 无覆盖
+        int fullBright = 0xF000F0;
+        for (int i = 0; i + 3 < pts.length; i += 4) {
+            int bx = (int) pts[i];
+            int by = (int) pts[i + 1];
+            int bz = (int) pts[i + 2];
+            net.minecraft.world.level.block.state.BlockState state =
+                    (net.minecraft.world.level.block.state.BlockState) pts[i + 3];
+            if (state == null) {
+                continue;
+            }
+            double wx = ox + bx;
+            double wy = oy + by;
+            double wz = oz + bz;
+            pose.m_85836_(); // pushPose
+            pose.m_85837_(wx - camera.f_82479_, wy - camera.f_82480_, wz - camera.f_82481_);
+            try {
+                blockRenderer.renderSingleBlock(state, pose, ghostSource,
+                        fullBright, net.minecraft.client.renderer.texture.OverlayTexture.f_118083_,
+                        net.minecraftforge.client.model.data.ModelData.EMPTY, null);
+            } catch (Exception ignored) {
+            }
+            pose.m_85849_(); // popPose
+        }
+    }
+
+    /**
+     * v1.1.0 实测一百零一：半透明 MultiBufferSource 包装器——委托给真实 BufferSource，
+     * 但每个 VertexConsumer 被 TransparentVertexConsumer 包装，缩减顶点颜色 alpha
+     * 值，实现方块模型的半透明幽灵效果。renderType 不变（保留原方块的
+     * solid/cutout/translucent 管线），alpha 仅作用于颜色通道。
+     */
+    private static final class TransparentBufferSource implements net.minecraft.client.renderer.MultiBufferSource {
+        private final net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate;
+        private final int alphaMul; // 0~255
+
+        TransparentBufferSource(net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate, float alpha) {
+            this.delegate = delegate;
+            this.alphaMul = Math.max(0, Math.min(255, (int)(alpha * 255)));
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_6299_(net.minecraft.client.renderer.RenderType renderType) {
+            return new TransparentVertexConsumer(delegate.m_6299_(renderType), alphaMul);
+        }
+
+        /** 建造完成后释放——防止 BufferSource 内部 chunk 泄漏 */
+        public void endBatch() {
+            delegate.m_109911_();
+        }
+    }
+
+    /**
+     * v1.1.0 实测一百零一：顶点颜色 alpha 缩减包装器——拦截 m_6122_（RGBA 颜色写入）
+     * 将 alpha 分量乘以缩放因子后转发，其余方法原样委托。配合 TransparentBufferSource
+     * 使 renderSingleBlock 渲染的方块模型呈现半透明幽灵效果。
+     * SRG 来源：javap com.mojang.blaze3d.vertex.VertexConsumer 实测一百零一验证。
+     */
+    private static final class TransparentVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
+        private final com.mojang.blaze3d.vertex.VertexConsumer delegate;
+        private final int alphaMul;
+
+        TransparentVertexConsumer(com.mojang.blaze3d.vertex.VertexConsumer delegate, int alphaMul) {
+            this.delegate = delegate;
+            this.alphaMul = alphaMul;
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_5483_(double x, double y, double z) {
+            return delegate.m_5483_(x, y, z);
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_6122_(int red, int green, int blue, int alpha) {
+            return delegate.m_6122_(red, green, blue, (alpha * alphaMul) >> 8);
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_7421_(float u, float v) {
+            return delegate.m_7421_(u, v);
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_7122_(int u, int v) {
+            return delegate.m_7122_(u, v);
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_7120_(int u, int v) {
+            return delegate.m_7120_(u, v);
+        }
+
+        @Override
+        public com.mojang.blaze3d.vertex.VertexConsumer m_5601_(float x, float y, float z) {
+            return delegate.m_5601_(x, y, z);
+        }
+
+        @Override
+        public void m_5752_() {
+            delegate.m_5752_();
+        }
+
+        @Override
+        public void m_7404_(int red, int green, int blue, int alpha) {
+            delegate.m_7404_(red, green, blue, (alpha * alphaMul) >> 8);
+        }
+
+        @Override
+        public void m_141991_() {
+            delegate.m_141991_();
         }
     }
 
