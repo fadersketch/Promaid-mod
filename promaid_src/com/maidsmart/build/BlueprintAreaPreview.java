@@ -495,13 +495,13 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测一百零一【Litematica 风格】：用 renderSingleBlock 渲染真实方块模型——
-     * 每个投影点是 Object[]{x, y, z, BlockState}，客户端按蓝图步骤里的方块注册名
-     * + 状态 SNBT 重建 BlockState，通过 BlockRenderDispatcher 渲染带纹理的实际模型，
-     * 取代此前的 0.4 格均匀色块（用户反馈"看不清建筑形态"）。
-     * 半透明效果：自定义 TransparentBufferSource 将所有顶点重定向到 RenderType
-     * 的 translucent 管线，配合顶点颜色 alpha 缩减实现半透明幽灵。
+     * v1.1.0 实测八十二：画蓝图投影——点云每个点在格内画一个 0.4 格的半透明小方块。
+     * 锚点 = (ox, oy, oz) = 计划原点，点坐标为居中后的相对值 → 与
+     * BlueprintBuildExecutor 实际放置位置逐块重合。
      * 距离剔除：锚点距相机 >96 格不画（远处区块只留框和文字，省性能）。
+     * v1.1.0 实测一百零一：曾尝试 renderSingleBlock 半透明渲染，但
+     * TransparentVertexConsumer 与 VertexConsumer 接口的调用路径不匹配导致
+     * 顶点数据全部丢失→方块完全不可见。回退到 DebugRenderer 色块方案。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -520,119 +520,15 @@ public final class BlueprintAreaPreview {
         if (mc.f_91074_.m_20238_(anchor) > 9216.0) {
             return;
         }
-        net.minecraft.client.renderer.block.BlockRenderDispatcher blockRenderer = mc.m_91289_();
-        var realSource = mc.m_91269_().m_110104_();
-        TransparentBufferSource ghostSource = new TransparentBufferSource(realSource, a);
-        // 0xF000F0 = 全亮（不受光照影响），OverlayTexture.f_118083_ = 无覆盖
-        int fullBright = 0xF000F0;
+        var source = mc.m_91269_().m_110104_();
         for (int i = 0; i + 3 < pts.length; i += 4) {
-            int bx = (int) pts[i];
-            int by = (int) pts[i + 1];
-            int bz = (int) pts[i + 2];
-            net.minecraft.world.level.block.state.BlockState state =
-                    (net.minecraft.world.level.block.state.BlockState) pts[i + 3];
-            if (state == null) {
-                continue;
-            }
-            double wx = ox + bx;
-            double wy = oy + by;
-            double wz = oz + bz;
-            pose.m_85836_(); // pushPose
-            pose.m_85837_(wx - camera.f_82479_, wy - camera.f_82480_, wz - camera.f_82481_);
-            try {
-                blockRenderer.renderSingleBlock(state, pose, ghostSource,
-                        fullBright, net.minecraft.client.renderer.texture.OverlayTexture.f_118083_,
-                        net.minecraftforge.client.model.data.ModelData.EMPTY, null);
-            } catch (Exception ignored) {
-            }
-            pose.m_85849_(); // popPose
-        }
-    }
-
-    /**
-     * v1.1.0 实测一百零一：半透明 MultiBufferSource 包装器——委托给真实 BufferSource，
-     * 但每个 VertexConsumer 被 TransparentVertexConsumer 包装，缩减顶点颜色 alpha
-     * 值，实现方块模型的半透明幽灵效果。renderType 不变（保留原方块的
-     * solid/cutout/translucent 管线），alpha 仅作用于颜色通道。
-     */
-    private static final class TransparentBufferSource implements net.minecraft.client.renderer.MultiBufferSource {
-        private final net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate;
-        private final int alphaMul; // 0~255
-
-        TransparentBufferSource(net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate, float alpha) {
-            this.delegate = delegate;
-            this.alphaMul = Math.max(0, Math.min(255, (int)(alpha * 255)));
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_6299_(net.minecraft.client.renderer.RenderType renderType) {
-            return new TransparentVertexConsumer(delegate.m_6299_(renderType), alphaMul);
-        }
-
-        /** 建造完成后释放——防止 BufferSource 内部 chunk 泄漏 */
-        public void endBatch() {
-            delegate.m_109911_();
-        }
-    }
-
-    /**
-     * v1.1.0 实测一百零一：顶点颜色 alpha 缩减包装器——拦截 m_6122_（RGBA 颜色写入）
-     * 将 alpha 分量乘以缩放因子后转发，其余方法原样委托。配合 TransparentBufferSource
-     * 使 renderSingleBlock 渲染的方块模型呈现半透明幽灵效果。
-     * SRG 来源：javap com.mojang.blaze3d.vertex.VertexConsumer 实测一百零一验证。
-     */
-    private static final class TransparentVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
-        private final com.mojang.blaze3d.vertex.VertexConsumer delegate;
-        private final int alphaMul;
-
-        TransparentVertexConsumer(com.mojang.blaze3d.vertex.VertexConsumer delegate, int alphaMul) {
-            this.delegate = delegate;
-            this.alphaMul = alphaMul;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5483_(double x, double y, double z) {
-            return delegate.m_5483_(x, y, z);
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_6122_(int red, int green, int blue, int alpha) {
-            return delegate.m_6122_(red, green, blue, (alpha * alphaMul) >> 8);
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7421_(float u, float v) {
-            return delegate.m_7421_(u, v);
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7122_(int u, int v) {
-            return delegate.m_7122_(u, v);
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7120_(int u, int v) {
-            return delegate.m_7120_(u, v);
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5601_(float x, float y, float z) {
-            return delegate.m_5601_(x, y, z);
-        }
-
-        @Override
-        public void m_5752_() {
-            delegate.m_5752_();
-        }
-
-        @Override
-        public void m_7404_(int red, int green, int blue, int alpha) {
-            delegate.m_7404_(red, green, blue, (alpha * alphaMul) >> 8);
-        }
-
-        @Override
-        public void m_141991_() {
-            delegate.m_141991_();
+            double wx = ox + (int) pts[i];
+            double wy = oy + (int) pts[i + 1];
+            double wz = oz + (int) pts[i + 2];
+            net.minecraft.world.phys.AABB cube = new net.minecraft.world.phys.AABB(
+                    wx + 0.30, wy + 0.30, wz + 0.30, wx + 0.70, wy + 0.70, wz + 0.70)
+                    .m_82383_(camera);
+            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, source, cube, r, g, b, a);
         }
     }
 
