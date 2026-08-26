@@ -33,6 +33,7 @@
     "MaidSweepMixin",
     "MaidBaubleTotemMixin",
     "MaidCakeEdibleMixin",
+    "MaidCakeFavorMixin",
     "BuildActivityForceMixin",
     "LoveLoatheHungerGateMixin",
     "MaidChatLanguageMixin",
