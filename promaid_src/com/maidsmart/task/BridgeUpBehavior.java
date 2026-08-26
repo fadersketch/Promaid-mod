@@ -205,6 +205,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean m_6114_(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测一百零六（用户："搭路向主人方向搭方块的欲望太低了"）：
+        // 旧版 canUse 要求 dy >= minDy（主人必须高2格）才启动搭路行为——
+        // 主人与女仆高度相同但水平距离远时搭路行为完全不触发。修复：
+        // 增加水平距离远（>3格）且主人与女仆至少差1格高度时也允许启动。
         // v1.1.0 实测十六（审查 P2-8）：廉价检查先行 + 10 tick 节流——
         // 开关/home/自保/任务占用/距离/高度这些廉价判定不受节流（每 tick 都判），
         // 只有威胁扫描（Monster AABB）和背包过滤（VoxelShape）这两个重的受节流。
@@ -225,8 +229,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false;
         }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
-        if (dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
-            return false;
+        // v1.1.0 实测一百零六：放宽启动门槛——主人至少高1格即可；或主人与女仆水平
+        // 距离远（>3格）且主人更高（哪怕只高1格）也允许启动搭路
+        int minDy = MaidSmartConfig.BRIDGE_MIN_DY.get();
+        if (dy < Math.min(minDy, 1)) {
+            return false; // 主人至少要比女仆高1格
         }
         boolean airborne = isAirborne(level, maid);
         int distLimit = airborne
@@ -364,41 +371,50 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      */
     private boolean tryAirBridgeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
         if (this.stepCooldown > 0) {
-            return false; // 与垂直垫块共用节奏冷却
+            return false;
         }
         int y = maid.m_20183_().m_123342_();
-        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
-        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
-        BlockPos ahead = new BlockPos(tx, y, tz);
-        BlockPos fill = ahead.m_7918_(0, -1, 0);
-        // 前方脚下不是空气（有方块/被占）→ 有路，交给导航
-        if (!level.m_8055_(fill).m_60795_()) {
-            return false;
+        // v1.1.0 实测一百零六：主方向被挡时尝试左右偏移——向主人方向倾斜的搭路
+        double ux = hx / hDist;
+        double uz = hz / hDist;
+        double inv = 0.70710678; // 1/√2
+        // 三方向尝试：正前方 → 左前45° → 右前45°
+        double[][] dirs = {
+                {ux, uz},
+                {(ux - uz) * inv, (ux + uz) * inv},
+                {(ux + uz) * inv, (-ux + uz) * inv}
+        };
+        for (double[] d : dirs) {
+            int tx = (int) Math.floor(maid.m_20185_() + d[0]);
+            int tz = (int) Math.floor(maid.m_20189_() + d[1]);
+            BlockPos ahead = new BlockPos(tx, y, tz);
+            BlockPos fill = ahead.m_7918_(0, -1, 0);
+            if (!level.m_8055_(fill).m_60795_()) {
+                continue;
+            }
+            if (!level.m_8055_(ahead).m_60795_()
+                    || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
+                continue;
+            }
+            Item item = takeBuildBlock(maid);
+            if (item == null) {
+                return false;
+            }
+            Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
+            if (block == null) {
+                return false;
+            }
+            level.m_7731_(fill, block.m_49966_(), 3);
+            track(level, fill, block, maid);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
+            this.guardTicks = 12;
+            this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
+            this.lastPlacedGameTime = level.m_46467_();
+            stepOnto(maid, tx + 0.5, y, tz + 0.5);
+            return true;
         }
-        // 前方两格净空（身体+头）防把自己憋进去
-        if (!level.m_8055_(ahead).m_60795_()
-                || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
-            return false;
-        }
-        Item item = takeBuildBlock(maid);
-        if (item == null) {
-            return false;
-        }
-        Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
-        if (block == null) {
-            return false;
-        }
-        level.m_7731_(fill, block.m_49966_(), 3);
-        track(level, fill, block, maid);
-        // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
-        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
-        this.guardTicks = 12;
-        this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
-        this.lastPlacedGameTime = level.m_46467_();
-        // v1.1.0 实测八十四：铺完立刻站上去（物理跳跃 + 导航双通道）
-        stepOnto(maid, tx + 0.5, y, tz + 0.5);
-        return true;
+        return false;
     }
 
     /**
@@ -412,46 +428,54 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      */
     private boolean tryDiagStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
         if (this.stepCooldown > 0) {
-            return false; // 垂直垫块的节奏冷却还在——不抢拍
+            return false;
         }
         int y = maid.m_20183_().m_123342_();
-        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
-        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
-        BlockPos ahead = new BlockPos(tx, y, tz);
-        BlockPos fill = ahead.m_7918_(0, -1, 0);
-        // 前方两格净空（台阶+头部）防把自己憋进去
-        if (!level.m_8055_(ahead).m_60795_()
-                || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
-            return false;
+        // v1.1.0 实测一百零六：与 tryAirBridgeStep 同款三方向尝试
+        double ux = hx / hDist;
+        double uz = hz / hDist;
+        double inv = 0.70710678;
+        double[][] dirs = {
+                {ux, uz},
+                {(ux - uz) * inv, (ux + uz) * inv},
+                {(ux + uz) * inv, (-ux + uz) * inv}
+        };
+        for (double[] d : dirs) {
+            int tx = (int) Math.floor(maid.m_20185_() + d[0]);
+            int tz = (int) Math.floor(maid.m_20189_() + d[1]);
+            BlockPos ahead = new BlockPos(tx, y, tz);
+            BlockPos fill = ahead.m_7918_(0, -1, 0);
+            if (!level.m_8055_(ahead).m_60795_()
+                    || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
+                continue;
+            }
+            BlockPos place;
+            if (level.m_8055_(fill).m_60795_()) {
+                place = fill;
+            } else if (level.m_8055_(fill).m_60796_(level, fill)) {
+                place = ahead;
+            } else {
+                continue;
+            }
+            Item item = takeBuildBlock(maid);
+            if (item == null) {
+                return false;
+            }
+            Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
+            if (block == null) {
+                return false;
+            }
+            level.m_7731_(place, block.m_49966_(), 3);
+            track(level, place, block, maid);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
+            this.guardTicks = 12;
+            this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
+            double walkY = place.equals(ahead) ? y + 1 : y;
+            stepOnto(maid, tx + 0.5, walkY, tz + 0.5);
+            return true;
         }
-        BlockPos place;
-        if (level.m_8055_(fill).m_60795_()) {
-            place = fill; // 悬空：垫脚下格成台阶（原逻辑）
-        } else if (level.m_8055_(fill).m_60796_(level, fill)) {
-            place = ahead; // 实心地形：在本格再垫一级台阶（踩上来高度+1）
-        } else {
-            return false; // 水/花草等非实心——垫了不可靠，交给导航绕
-        }
-        Item item = takeBuildBlock(maid);
-        if (item == null) {
-            return false;
-        }
-        Block block = ForgeRegistries.BLOCKS.getValue(ForgeRegistries.ITEMS.getKey(item));
-        if (block == null) {
-            return false;
-        }
-        level.m_7731_(place, block.m_49966_(), 3);
-        track(level, place, block, maid);
-        // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
-        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
-        this.guardTicks = 12;
-        this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
-        // v1.1.0 实测八十四：垫完台阶立刻站上去（实心地形垫的本格台阶高 1 格，
-        // 跳跃速度带上升量直接踩上来；旧版只挂导航目标，半空寻路失败 = 人不动）
-        double walkY = place.equals(ahead) ? y + 1 : y;
-        stepOnto(maid, tx + 0.5, walkY, tz + 0.5);
-        return true;
+        return false;
     }
 
     @Override
