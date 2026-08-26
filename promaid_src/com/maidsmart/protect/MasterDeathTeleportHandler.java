@@ -312,9 +312,12 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.5.228：重生后保险传送——死亡传送万一漏传（异常/未加载等极端情况），
-     * 主人重生时把仍在远处的女仆拉到身边（>64 格才拉，正常情况女仆已在重生点
-     * 附近，不会误拉）。
+     * v1.5.228：重生后保险传送——死亡传送万一漏传（异常/未加载/玩家秒点重生等极端情况），
+     * 主人重生时把仍在远处的女仆拉到身边。
+     * v1.1.0 实测一百零八【根因修复】：旧版 onPlayerRespawn 只搜索同一维度
+     * （level.m_45976_），跨维度女仆永远不会被拉——"死亡传送不生效"的真正根因。
+     * 修复：改用 MAID_TRACK 遍历所有维度的女仆（与 doDeathTeleport 同口径），
+     * 已加载的直接传送，未加载的强制加载后传送。
      */
     @SubscribeEvent
     public void onPlayerRespawn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerRespawnEvent event) {
@@ -327,27 +330,52 @@ public class MasterDeathTeleportHandler {
         if (!(player.m_9236_() instanceof ServerLevel level)) {
             return;
         }
+        MinecraftServer server = level.m_7654_();
+        if (server == null) {
+            return;
+        }
         UUID ownerId = player.m_20148_();
-        for (EntityMaid maid : level.m_45976_(EntityMaid.class,
-                player.m_20191_().m_82400_(256.0))) {
-            if (!maid.m_21824_() || !maid.m_6084_()) {
+        double[] spot = findSafeLanding(level, player.m_20185_(), player.m_20186_(), player.m_20189_());
+        // v1.1.0 实测一百零八：用 MAID_TRACK 遍历所有维度——与 doDeathTeleport 同口径
+        for (java.util.Map.Entry<UUID, MaidTrack> e : MAID_TRACK.entrySet()) {
+            MaidTrack t = e.getValue();
+            if (t == null || !t.ownerUuid().equals(ownerId)) {
                 continue;
             }
-            UUID maidOwner = maid.m_269323_() != null ? maid.m_269323_().m_20148_() : null;
-            if (maidOwner == null || !maidOwner.equals(ownerId)) {
+            ServerLevel maidLevel = server.m_129880_(t.dim());
+            if (maidLevel == null) {
                 continue;
             }
-            // v1.1.0 实测八十三：保持原位三态（home/坐姿/骑乘）保险拉取同样豁免
-            if (shouldStayPut(maid)) {
-                continue;
+            try {
+                // 已加载女仆：直接传送
+                EntityMaid maid = (EntityMaid) maidLevel.m_8791_(e.getKey());
+                if (maid != null && maid.m_21824_() && maid.m_6084_()) {
+                    if (shouldStayPut(maid)) {
+                        continue;
+                    }
+                    if (maid.m_20238_(player.m_20182_()) <= 64.0) {
+                        continue; // 已在身边
+                    }
+                    teleportMaid(maid, maidLevel, level, spot, player);
+                } else if (maid == null) {
+                    // 未加载女仆：强制加载后传送
+                    int cx = net.minecraft.util.Mth.m_14107_(t.x()) >> 4;
+                    int cz = net.minecraft.util.Mth.m_14107_(t.z()) >> 4;
+                    maidLevel.m_6325_(cx, cz);
+                    maid = (EntityMaid) maidLevel.m_8791_(e.getKey());
+                    if (maid != null && maid.m_21824_() && maid.m_6084_()) {
+                        if (shouldStayPut(maid)) {
+                            continue;
+                        }
+                        MAID_TRACK.put(e.getKey(), new MaidTrack(t.ownerUuid(), t.dim(),
+                                maid.m_20185_(), maid.m_20186_(), maid.m_20189_(), true));
+                        teleportMaid(maid, maidLevel, level, spot, player);
+                    } else {
+                        MAID_TRACK.remove(e.getKey());
+                    }
+                }
+            } catch (Exception ignored) {
             }
-            if (maid.m_20238_(player.m_20182_()) <= 64.0) {
-                continue; // 已在身边，不拉
-            }
-            double[] spot = findSafeLanding(level, player.m_20185_(), player.m_20186_(), player.m_20189_());
-            maid.m_6034_(spot[0], spot[1], spot[2]);
-            maid.f_19789_ = 0.0f;
-            maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_);
         }
     }
 
