@@ -818,6 +818,15 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
+            // v1.1.0 实测一百二十①【枪械弹药闸】：枪械任务进池必须弹药可用——
+            // TLM TaskGunAttack.isWeapon 只查 isGun（javap 实证），有枪没子弹也会
+            // 进池被切到 gun_attack → TLM 换弹失败原地干等。hasGunAndAmmo 判定
+            // （背包有枪+任意弹药；卓越前线能量武器免弹药），不满足 → 枪械任务
+            // 不进任何池（参战选任务/距离切换都不会把她切到打不出伤害的模式）。
+            if ("touhou_little_maid:gun_attack".equals(task.getUid().toString())
+                    && !com.maidsmart.combat.GunCompat.hasGunAndAmmo(maid)) {
+                continue;
+            }
             // v1.1.0 实测二十一：权重可配置（原版/模组各一条）——模组默认 2.0 优先、
             // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
             double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
@@ -869,11 +878,13 @@ public class AutoCombatSwitch {
      * 威胁消失后永不还原 = 卡死在战斗任务。PREV_TASK_TAG（战斗前原任务）不动，
      * 还原流程零改动；LAST_THREAT_TAG 由外层照常刷新，威胁消失计时不受影响。
      *
-     * 【模组隔离】v1.1.0 实测八十六：战中互换仅限【原版任务】——原版任务可切入
-     * 模组池（保留火力），但模组任务永不被换出：模组武器普遍更强且常带专属机制
-     * （史诗战斗姿态/万法皆通施法循环），isRangedTask 的二分法对它们只是瞎猜，
-     * 切走反而坏事；被近身时信任模组武器自身的近身机制（近身反击击退兜底）。
-     * 本门是纯提前返回、不写任何状态——参战触发/还原/僵局阀/动态圈零影响。
+     * 【模组参与】v1.1.0 实测八十六的"模组隔离（模组任务永不被换出）"在实测
+     * 一百零七已作废：旧版只允许 touhou_little_maid 命名空间任务参与近远程切换，
+     * 模组任务（拔刀剑/弹幕/御币等）永远被排除；一百零七改为任意 IAttackTask
+     * 均可参与——模组任务现在【双向参与】：可被切入（池内含模组候选，火力保留）
+     * 也可被换出（当前是模组任务时按距离分类照常评估）。与 pickCombatTask/
+     * buildPools 同口径；本门是纯提前返回、不写任何状态——参战触发/还原/僵局阀/
+     * 动态圈零影响。
      */
     private static void retuneCombatTactics(EntityMaid maid) {
         IMaidTask cur = maid.getTask();
@@ -982,8 +993,10 @@ public class AutoCombatSwitch {
      * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
      * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
      * （未知模组任务按近战兜底——冲脸总比站桩安全）。
+     * public（实测一百二十②）：MaidCombatTacticsBehavior 的走位分支据此把
+     * 法术书/法杖等非投射远程任务也当远程处理。
      */
-    private static boolean isRangedTask(IMaidTask task) {
+    public static boolean isRangedTask(IMaidTask task) {
         String uid = task.getUid().toString();
         // 原版远程五件套（弓/弩/三叉戟/弹幕/枪械）——近战 attack 不在表里
         if (uid.equals("touhou_little_maid:ranged_attack")
