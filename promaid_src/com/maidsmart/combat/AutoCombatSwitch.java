@@ -55,6 +55,10 @@ import java.util.Random;
  * 排班调度器也会因为她"看似在战斗中"而永久让位。
  */
 public class AutoCombatSwitch {
+    /** v1.1.0 实测一百零四：战斗激活布尔标记——PREV_TASK_TAG 存的是字符串（前任务
+     *  UID），getBoolean 对字符串标签永远返回 false → 恢复逻辑永远不触发。新增独立
+     *  布尔标记解决此问题。 */
+    private static final String COMBAT_ACTIVE_TAG = "maid_smart_combat_active";
     /** 战斗前原任务 UID（persistentData，切战斗时写入，还原时读取） */
     private static final String PREV_TASK_TAG = "maid_smart_combat_prev_task";
     /** 最近一次看到威胁的 gameTime（还原延迟计时基准） */
@@ -429,7 +433,7 @@ public class AutoCombatSwitch {
         // 此前代码用 contains（m_128441_），而 clearMarkers 是 putBoolean(false)
         // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
         // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
-        if (maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
+        if (maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
             if (isOnAssignedCombatTask(maid)) {
                 // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
                 // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
@@ -455,6 +459,7 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
         maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
+        maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
         touchContact(maid);
         maid.setTask(combat);
@@ -487,7 +492,7 @@ public class AutoCombatSwitch {
             for (EntityMaid maid : level.m_45976_(EntityMaid.class,
                     new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
                             Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
-                if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(PREV_TASK_TAG)) {
+                if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }
                 // 自保中不还原（等自保结束；自保退出有自己的回主人逻辑）
@@ -1040,12 +1045,13 @@ public class AutoCombatSwitch {
 
     /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
     public static boolean isAutoCombatActive(EntityMaid maid) {
-        return maid.getPersistentData().m_128471_(PREV_TASK_TAG);
+        return maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG);
     }
 
     /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true）
      *  v1.1.0 实测六十一：一并清战中换战术的稳定状态（内存态） */
     private static void clearMarkers(EntityMaid maid) {
+        maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, false);
         maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
         maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
         maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
