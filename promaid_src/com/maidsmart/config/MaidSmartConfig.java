@@ -666,8 +666,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
         WOOD_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：伐木期间连续 N 秒既没砍掉任何方块、位置也没挪动（典型如站进挖掉的树洞里对着头顶树干发呆）时，自动整体重置该女仆的伐木状态——锚点/扫描缓存/排除表/目标全部清空重新找树，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭高都算进展，不会误触发")
                 .translation("config.promaid.wood.stuckWatchdog").define("stuckWatchdog", true);
-        WOOD_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，用户实测发呆出现很快）：连续这么久既没砍掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
-                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 4, 300);
+        WOOD_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 5）：连续这么久既没砍掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
+                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 5, 3, 300);
         BUILDER.pop();
 
         // ---- AI 记忆 ----

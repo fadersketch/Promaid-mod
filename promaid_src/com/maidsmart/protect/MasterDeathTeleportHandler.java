@@ -287,12 +287,12 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
-     * v1.1.0 实测八十三：保持原位三态豁免（与一键集合/跨维度跟随的口径统一）——
-     * home 看家钉死（看家的女仆不响应任何传送）、坐姿 = 玩家明确停放、骑乘中
-     * 强拽会脱离载具状态。死亡传送与复活保险拉取均遵守。
+     * v1.1.0 实测一百零二：死亡传送豁免——主人死亡时所有女仆（含排班 Home 模式）
+     * 均应传送至重生点；仅坐姿（玩家明确停放）和骑乘中（强拽脱离载具）豁免。
+     * 旧版将 Home 模式纳入豁免导致排班女仆死亡传送完全失效。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
-        return maid.isHomeModeEnable() || maid.isMaidInSittingPose() || maid.m_20159_();
+        return maid.isMaidInSittingPose() || maid.m_20159_();
     }
 
     /** 传送单只女仆（同维度 m_6034_ / 跨维度 m_264318_ + 清摔落/速度） */

@@ -555,11 +555,36 @@ public class AutoCombatSwitch {
                 } catch (Exception ignored) {
                 }
                 if (prevTask == null) {
-                    // 原任务已不存在（模组卸载等）→ 只能留在战斗任务，标记保留
-                    //（每秒重试无意义，但保留标记让玩家手动切换后能正常接管退出）
-                    // v1.1.0 实测九十四：运行日志
+                    // v1.1.0 实测一百零二：原任务不存在时不再永久卡在战斗任务——
+                    // 兜底还原到 idle（空闲），清标记释放女仆。
                     com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 还原失败：原任务 '" + prevUid + "' 已不存在，保留标记等待手动接管");
+                            + " 原任务 '" + prevUid + "' 已不存在，兜底还原到空闲");
+                    clearMarkers(maid);
+                    // 尝试还原到排班当前段；无排班则直接 idle
+                    boolean fallbackDone = false;
+                    if (com.maidsmart.schedule.ScheduleData.isOn(maid)
+                            && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
+                        try {
+                            maid.getPersistentData().m_128359_(
+                                    com.maidsmart.schedule.ScheduleData.APPLIED_TAG, "");
+                            com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                            fallbackDone = maid.getTask() != null
+                                    && !maid.getTask().getUid().toString().equals(assignedUid);
+                        } catch (Exception ignored) {
+                        }
+                    }
+                    if (!fallbackDone) {
+                        // 无排班或排班未生效 → 找 TLM 内置 idle 任务
+                        try {
+                            var idleTask = TaskManager.findTask(
+                                    new net.minecraft.resources.ResourceLocation("touhou_little_maid", "idle"))
+                                    .orElse(null);
+                            if (idleTask != null) {
+                                maid.setTask(idleTask);
+                            }
+                        } catch (Exception ignored) {
+                        }
+                    }
                     continue;
                 }
                 clearMarkers(maid);
