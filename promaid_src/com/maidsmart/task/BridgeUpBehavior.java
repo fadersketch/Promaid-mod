@@ -229,11 +229,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false;
         }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
-        // v1.1.0 实测一百零六：放宽启动门槛——主人至少高1格即可；或主人与女仆水平
-        // 距离远（>3格）且主人更高（哪怕只高1格）也允许启动搭路
+        // v1.1.0 实测一百零六：放宽启动门槛——主人至少高4格即可启动搭路
         int minDy = MaidSmartConfig.BRIDGE_MIN_DY.get();
-        if (dy < Math.min(minDy, 1)) {
-            return false; // 主人至少要比女仆高1格
+        if (dy < Math.min(minDy, 4)) {
+            return false; // 主人至少要比女仆高4格
         }
         boolean airborne = isAirborne(level, maid);
         int distLimit = airborne
