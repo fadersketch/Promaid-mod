@@ -43,6 +43,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比——
  * 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。
+ *
+ * v1.1.0 实测一百三十一：跨维度跟随 "home 不拦"——home 只拦同维度跟随 (TLM
+ * MaidFollowOwnerTask 照旧)，跨维度（玩家过 portal/传到他维度）一直传。
+ * 根源：实测七十给排班启用女仆自动 home，home 挡调 = 排班女仆不永远在
+ * 下界/任何地方。语义：玩家要她守家，在 TLM GUI 主动点 home（SummonPacket
+ * 一键召集保留 home 拦停）。
  */
 public final class MaidChunkLoadManager {
     private static final org.slf4j.Logger LOGGER =
@@ -234,9 +240,6 @@ public final class MaidChunkLoadManager {
             }
             if (maid.isMaidInSittingPose()) {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
-            }
-            if (maid.isHomeModeEnable()) {
-                return; // 在家模式 = 不跟随
             }
             LivingEntity owner = maid.m_269323_();
             // v1.1.0 实测七十八（bug：主人下界死亡后看家女仆被传到下界基岩层上）——
