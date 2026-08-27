@@ -319,6 +319,10 @@ public class SmartBuildTool implements ITool<SmartBuildTool.Result> {
         if (level == null) {
             return callback.addToolResult("内部错误：无法确定建造维度。", toolId);
         }
+        // v1.1.0 实测一百三十六：排班中的女仆任务由日程表管理，禁止外部指派建造
+        if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+            return callback.addToolResult("该女仆正在排班中，任务由日程表管理——请先关闭她的排班再下达建造", toolId);
+        }
         // v1.5.180：已绑定区块 → 拒绝（女仆一次只绑一个区块；先解绑/取消）
         if (BuildPlan.getBoundPlanId(maid) != null) {
             return callback.addToolResult("女仆已绑定区块。请先在手册女仆管理里解绑，或取消该区块后再下达。", toolId);
