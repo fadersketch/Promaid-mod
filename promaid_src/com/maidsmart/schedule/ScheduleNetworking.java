@@ -391,6 +391,16 @@ public final class ScheduleNetworking {
                 // 玩家手动保存 = 明确意图，清战斗还原宽限立即生效（实测六十一）
                 maid.getPersistentData().m_128356_(ScheduleData.GRACE_TAG, 0L);
                 ScheduleData.save(maid, safe, pkt.on);
+                // v1.1.0 实测一百二十九：保存审计日志——对账"客户端以为开了/存了，
+                // 服务端实际状态"（排班失效排查的入口证据）
+                com.maidsmart.tool.PromaidLog.log("排班",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " 保存日程：" + (pkt.on ? "开启" : "关闭")
+                                + " 段=" + safe.size() + " 首段="
+                                + (safe.isEmpty() ? "无" : ScheduleData.fmt(safe.get(0).startMin())
+                                + "~" + ScheduleData.fmt(safe.get(0).endMin())
+                                + " 模式=" + safe.get(0).mode()
+                                + " 任务=" + safe.get(0).taskUid()));
                 // v1.1.0 实测七十：保存日程开启排班的瞬间，她自动进入在家模式
                 // （守家按日程干活、不跨维度追人）；关闭排班即自动解除
                 maid.setHomeModeEnable(pkt.on);
