@@ -49,8 +49,10 @@ public class DangerEscapeHandler {
     /** 冷却间隔（tick）：30 = 1.5 秒 */
     private static final long RETRY_INTERVAL = 30L;
 
-    /** 搜索半径（格）：最近安全格查找范围 */
-    private static final int SEARCH_RADIUS = 4;
+    /** 搜索半径（格）：最近安全格查找范围（v1.1.0 实测一百二十七：4 → 8——
+     *  闭环岩浆测试里女仆距安全地面只有 2~3 格，4 格内全是岩浆+玩家中心格，
+     *  容易在可救范围内找不到安全格而走上静默放弃路径） */
+    private static final int SEARCH_RADIUS = 8;
 
     public static void register() {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new DangerEscapeHandler());
@@ -103,7 +105,11 @@ public class DangerEscapeHandler {
                 String name = maid.m_5446_() != null ? maid.m_5446_().getString()
                         : maid.m_20148_().toString();
                 if (safe == null) {
-                    // 四面皆险：交给自保的珍珠/放水/垫高资源链路
+                    // v1.1.0 实测一百二十七：四面皆险的静默放弃路径补日志——
+                    // 旧版直接 continue 且不落盘，故障时完全不可见（只能猜）
+                    com.maidsmart.tool.PromaidLog.log("险境脱离",
+                            name + " 危险中但 8 格内无可落足安全格（四面皆险），"
+                                    + "交由自保资源链路");
                     continue;
                 }
                 maid.m_6034_(safe.m_123341_() + 0.5, safe.m_123342_(),
@@ -127,8 +133,12 @@ public class DangerEscapeHandler {
 
     /**
      * 找最近的安全格：环形半径 0~SEARCH_RADIUS，每列纵向 -2~+2 窗口。
-     * 安全 = 站立格与头顶均为空气且不在危险表、脚下方块实心且不在危险表。
+     * 安全 = 站立格与头顶均为空气且不在危险表、脚下方块实心且不在危险表、
+     * 且【没有被实体占用】。
      * （空气判定天然排除火/岩浆本身——它们不是空气。）
+     * v1.1.0 实测一百二十七：实体占用排除——旧版不查，闭环岩浆测试里唯一的
+     * 近距"安全格"是主人脚下那格，脱离会把女仆传进玩家身体，碰撞再把女仆
+     * 挤回岩浆（反复循环掉血、永远站不上安全格）。
      */
     private static BlockPos findNearestSafe(ServerLevel level, BlockPos from) {
         for (int r = 0; r <= SEARCH_RADIUS; r++) {
@@ -139,7 +149,7 @@ public class DangerEscapeHandler {
                     }
                     for (int dy = -2; dy <= 2; dy++) {
                         BlockPos c = from.m_7918_(dx, dy, dz);
-                        if (isSafeCell(level, c)) {
+                        if (isSafeCell(level, c) && !cellOccupied(level, c)) {
                             return c;
                         }
                     }
@@ -149,6 +159,17 @@ public class DangerEscapeHandler {
         return null;
     }
 
+    /** 该格是否被存活实体占用（主人站在中心洞里时中心格不可作为脱离目标——
+     *  传送进去会被碰撞挤回危险区） */
+    private static boolean cellOccupied(ServerLevel level, BlockPos c) {
+        try {
+            net.minecraft.world.phys.AABB box = new AABB(c).m_82400_(-0.05);
+            return !level.m_45976_(net.minecraft.world.entity.LivingEntity.class, box).isEmpty();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private static boolean isSafeCell(ServerLevel level, BlockPos c) {
         Level lvl = level;
         // 站立格 + 头顶必须都是空气（顺带排除火/岩浆等非空气危险体）
@@ -156,8 +177,8 @@ public class DangerEscapeHandler {
             return false;
         }
         // 站立格本体/头顶不得在危险表（细雪是完整方块但可列入表内拦截）
-        if (DangerBlocks.idIn(lvl, c.m_123341_(), c.m_123342_(), c.m_123343_()
-        ) || DangerBlocks.idIn(lvl, c.m_123341_(), c.m_123342_() + 1, c.m_123343_())) {
+        if (DangerBlocks.idIn(lvl, c.m_123341_(), c.m_123342_(), c.m_123343_())
+                || DangerBlocks.idIn(lvl, c.m_123341_(), c.m_123342_() + 1, c.m_123343_())) {
             return false;
         }
         BlockPos below = c.m_7495_();
