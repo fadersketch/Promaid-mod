@@ -770,7 +770,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 在找下一个或守在原地——正是用户允许的"处于任务状态但空闲"）。
      * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
      */
-    private static boolean isTaskOccupied(EntityMaid maid) {
+    public static boolean isTaskOccupied(EntityMaid maid) {
         try {
             if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
                 return true;
