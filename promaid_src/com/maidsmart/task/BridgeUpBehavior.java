@@ -418,6 +418,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
                 continue;
             }
+            // v1.1.0 实测一百二十七：落足格/脚下垫格命中危险表（岩浆/火等）——
+            // 无导航的铺桥腿不绕行，必须显式拦（寻路 mixin 管不到这条直连施速腿）
+            if (com.maidsmart.tool.DangerBlocks.enabled()
+                    && (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            fill.m_123341_(), fill.m_123342_(), fill.m_123343_())
+                            || com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            tx, y, tz))) {
+                continue;
+            }
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -477,6 +486,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             } else if (level.m_8055_(fill).m_60796_(level, fill)) {
                 place = ahead;
             } else {
+                continue;
+            }
+            // v1.1.0 实测一百二十七：垫格/落足格危险拦截（无导航斜上腿——
+            // 旧版会把台阶垫在岩浆/火上或踩上去）
+            if (com.maidsmart.tool.DangerBlocks.enabled()
+                    && (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            place.m_123341_(), place.m_123342_(), place.m_123343_())
+                            || com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            tx, y, tz))) {
                 continue;
             }
             Item item = takeBuildBlock(maid);
