@@ -39,15 +39,22 @@ public class MaidCakeEatHandler {
         return key != null && "minecraft:cake".equals(key.toString());
     }
 
+    /** 吃完一整块蛋糕回血量（= 蛋糕营养 14，与 MaidCakeEdibleMixin 的 CAKE_FOOD
+     *  同口径）——女仆不是 Player 没有 FoodData，喂蛋糕要走 m_5634_（heal）直接回血，
+     *  否则右键喂食只加好感不回复生命（实测一百二十八用户反馈） */
+    private static final float CAKE_HEAL = 14.0F;
+
     /**
      * 女仆吃完蛋糕（TLM 语义：onMaidEat 进食动画开始瞬间即生效——与 TLM 原版好感
      * apply 时机一致）。notify=true 时（玩家投喂）额外弹蓝色气泡 + 主人系统消息；
-     * 女仆自吃静默，只有 FavorabilityManager.add 自带的心形粒子反馈。
+     * 女仆自吃静默，只有回血粒子 + FavorabilityManager.add 的心形粒子反馈。
      */
     public static void onCakeEaten(EntityMaid maid, boolean notify) {
         if (maid.m_9236_().m_5776_()) {
             return; // 仅服务端改数值/发消息
         }
+        // 回血：像喂驯养动物一样按营养回复生命（m_5634_ = heal，满血自动无效）
+        maid.m_5634_(CAKE_HEAL);
         maid.getFavorabilityManager().add(CAKE_FAVOR_POINTS); // 自带升阶/心形粒子/事件
         if (notify) {
             showCakeMessage(maid);
