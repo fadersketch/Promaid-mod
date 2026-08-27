@@ -138,7 +138,11 @@ public final class BlueprintAreaPreview {
 
     /** 关闭金色预览渲染（打开手册时调用；不重置 previewSeen——v1.5.204 教训） */
     public static void clear() {
-        active = false;
+        if (active) {
+            // v1.1.0 实测一百三十二：金色轮廓消失链路——正常关闭记录日志排查用
+            //（"又"字眼：玩家感受到反复消失/重建——实测一百二十九同样的问题）
+            com.maidsmart.tool.PromaidLog.log("投影", "clear（金色预览关闭）");
+        }
     }
 
     /**
@@ -148,6 +152,18 @@ public final class BlueprintAreaPreview {
      * 空列表 = 无进行中计划（取消/完成）→ 清空所有框与投影。
      */
     public static void setRegions(java.util.List<String[]> regions) {
+        // v1.1.0 实测一百三十二（用户："建筑投影的大致建筑轮廓又没有了"）：轮廓链路
+        // 的关键路径日志——帮助排查红色框/橙色幽灵何时被清。
+        // 仅记录状态变化（非心跳静默——每 1 秒 RegionSyncPacket 到来，日志不会刷屏）
+        int before = REGION_BOXES.size();
+        int after = regions == null ? 0 : regions.size();
+        if (before != after) {
+            com.maidsmart.tool.PromaidLog.log("投影", "setRegions "
+                    + before + " -> " + after
+                    + " 行（null=" + (regions == null) + "）"
+                    + (after == 0 ? " ——全部框/投影清空（计划取消/完成）"
+                            : " ——" + after + " 个区块"));
+        }
         REGION_BOXES.clear();
         REGION_NAMES.clear();
         REGION_ORIGINS.clear();
@@ -390,11 +406,22 @@ public final class BlueprintAreaPreview {
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onRender(net.minecraftforge.client.event.RenderLevelStageEvent event) {
-        if (!active && REGION_BOXES.isEmpty()) {
+        // v1.1.0 实测一百三十二（轮廓消失所）——渲染层空档记录日志：
+        // REGION_BOXES = 红色框集合（有计划就有）、active = 金色预览开启状态。
+        // 门不开=every~秒一次性记"有心但不可见"的精确原因（哪一种没开）。
+        if (!registered || (!active && REGION_BOXES.isEmpty())) {
             return;
         }
         if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
             return;
+        }
+        // 画质：遥控到此时的值——红框渲染不检查这个开关，只橙影/金影检查
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
+            com.maidsmart.tool.PromaidLog.log("投影",
+                    "render: 画面里 已注册=" + registered
+                    + " 红框数=" + REGION_BOXES.size()
+                    + " 金色预览=" + active
+                    + " BUILD_PROJECTION=false——点选投影总开关，框与幽灵都不渲染");
         }
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
         if (mc.f_91074_ == null || mc.f_91073_ == null) {
