@@ -367,8 +367,12 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.130：产出型任务专项增强（农场连收连种 / 钓鱼主动找水带坐垫）
     public static final ForgeConfigSpec.BooleanValue MISC_PRODUCE_TASK_ENHANCE;
     // v1.5.142：跟随女仆跨维度传送（主人换维度后 5 秒内传送到主人身边）
-     public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
-     public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
+public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
+    // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送的补丁——TLM 只拉"非home
+    // 非工作"的跟随女仆且传送可能静默失败，这里补统一兜底）
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_SAME_DIM_PULL;
+    public static final ForgeConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
@@ -1174,6 +1178,14 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 永远能找到她（旧版主人在远处的女仆区块卸载后传送静默失效）
         MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（所有有主女仆所在区块持续保持实体 ticking，随时可传送/召回/救援；关闭后远处女仆所在区块卸载时会冻结失联）")
                 .translation("config.promaid.misc.maidChunkLoad").define("maidChunkLoad", true);
+        // v1.1.0 实测一百三十四：同维度远距拉回——TLM 自带的"过远自动传送"只在
+        // 非 home、非工作、主人同维度时触发，且 teleportToOwner 偶发静默失败
+        //（±3 格随机试探找不到落点）；这里补一道统一兜底：同维度、不守家、没在
+        // 干重活、且距离超过阈值 → 直接按跨维度同款 findStand+teleportTo 拉回
+        MISC_MAID_SAME_DIM_PULL = BUILDER.comment("同维度远距拉回（默认开）：女仆与主人在同一维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 只拉非home非工作的跟随女仆且可能静默失败）。守家/坐姿/骑乘/干活中的女仆不拉")
+                .translation("config.promaid.misc.maidSameDimPull").define("maidSameDimPull", true);
+        MISC_MAID_SAME_DIM_DIST = BUILDER.comment("同维度拉回距离阈值（格，默认 48）：女仆与主人同维度且水平/垂直距离超过此值才拉回——低于此值靠走路/跟随，不打扰她")
+                .translation("config.promaid.misc.maidSameDimDist").defineInRange("maidSameDimDist", 48, 16, 256);
         // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
         MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
                 .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);

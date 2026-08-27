@@ -1807,7 +1807,12 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.set(v), "农场：一次收割/补种目标周围 3x3 整片作物（来回跑减少到约 1/8）；钓鱼：附近没椅子/船时主动找开阔水域，自带坐垫生成在岸边"));
         // v1.5.142：跨维度跟随
         this.rows.add(new BoolRow("跨维度跟随", MaidSmartConfig.MISC_DIMENSION_FOLLOW.get(),
-                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，跟随模式的女仆自动传送到主人身边（约 5 秒内）；坐着的（含建造强制坐下）和在家模式的女仆不拉"));
+                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，女仆自动传送到主人身边（约 5 秒扫描一轮）；坐着的/骑乘的/主人身边无可站立点时不拉。v1.1.0 实测一百三十一起守家（home）模式也照常跟随跨维度——排班自动 home 的女仆主人过门照样跟过来"));
+        // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送兜底）
+        this.rows.add(new BoolRow("同维度远距拉回", MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get(),
+                v -> MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.set(v), "女仆与主人同维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 自带过远传送只对非home非工作的跟随女仆生效且可能静默失败）。守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉，原因会写进 logs/promaid.log（60 秒限频）"));
+        this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
+                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
         // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启）
         this.rows.add(new BoolRow("农场连锁收获", MaidSmartConfig.MISC_CHAIN_HARVEST.get(),
                 v -> MaidSmartConfig.MISC_CHAIN_HARVEST.set(v), "农场连锁收获：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物（大农田多轮清完）；默认开启"));

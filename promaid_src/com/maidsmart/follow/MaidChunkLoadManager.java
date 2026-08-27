@@ -252,19 +252,27 @@ public final class MaidChunkLoadManager {
             if (owner == null || owner.m_21224_() || !owner.m_6084_()) {
                 return;
             }
-            if (maid.m_9236_() == owner.m_9236_()) {
-                return; // 同一维度（f_19853_ 是 private，用 m_9236_() 取 Level）
-            }
+if (maid.m_9236_() == owner.m_9236_()) {
+            // v1.1.0 实测一百三十四：同一维度 → 远距拉回兜底（TLM 自带"过远自动
+            // 传送"只对 非home+非工作+同维度 的跟随女仆触发，且 teleportToOwner 的
+            // ±3 格随机试探可能静默失败；这里统一补一道可靠的同维度远距拉回）
+            trySameDimPull(maid, owner);
+            return;
+        }
             if (!(owner.m_9236_() instanceof ServerLevel newLevel)
                     || !(maid.m_9236_() instanceof ServerLevel oldLevel)) {
                 return;
             }
-            BlockPos stand = findStand(newLevel,
+BlockPos stand = findStand(newLevel,
                     new BlockPos((int) Math.floor(owner.m_20185_()),
                             (int) Math.floor(owner.m_20186_()),
                             (int) Math.floor(owner.m_20189_())));
             if (stand == null) {
-                return; // 主人身边 16 格内无可站立点（高空飞行/虚空）→ 等落地再跟
+                // v1.1.0 实测一百三十四：失败路径落日志（旧版静默 return——"为什么不
+                // 传"完全不可见；主人在高空/虚空时先等落地，落地点出现后自动再试）
+                throttledSkipLog(maid, "nostand", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 跨维度跟随：主人身边 16 格内无可站立点（高空/虚空）——等落地后再传");
+                return;
             }
             // 实测四十四：原版跨维度传送（m_264318_ = teleportTo）——内部走完整的
             // changeDimension 流程（Forge 事件链 + 实体重新注册 + 客户端维度同步），
@@ -566,6 +574,76 @@ public final class MaidChunkLoadManager {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /** v1.1.0 实测一百三十四：跳过/失败原因落日志限频（女仆|原因 → 上次记录 gameTime，
+     *  60 秒一条防刷屏——只对"本该拉但没拉"的场景留痕，正常近距离全静默） */
+    private static final Map<String, Long> SKIP_LOG_SINCE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void throttledSkipLog(EntityMaid maid, String reason, String msg) {
+        try {
+            String key = maid.m_20148_() + "|" + reason;
+            long now = maid.m_9236_().m_46467_();
+            Long last = SKIP_LOG_SINCE.get(key);
+            if (last != null && now - last < 1200L) {
+                return;
+            }
+            if (SKIP_LOG_SINCE.size() > 4096) {
+                SKIP_LOG_SINCE.clear();
+            }
+            SKIP_LOG_SINCE.put(key, now);
+            com.maidsmart.tool.PromaidLog.log("跨维", msg);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送的真正补丁）。
+     *
+     * 背景：跨区块（同维度距离过远）的自动传送此前【完全依赖 TLM 自带机制】——
+     * MaidFollowOwnerTask 的 teleportToOwner 只对 非 home + 可脑动 + 主人同维度 的
+     * 跟随女仆触发，且 10 次 ±3 随机试探可能全部落空（悬崖/窄道/主人飞行）而静默
+     * 失败；排班自动 home 的女仆同维度更是永远不被 TLM 拉。这就是"修了五六次
+     * 修不好"的实质：每次修的都是跨维度或区块保载，同维度远距拉回要么不存在、
+     * 要么是 TLM 的随机静默失败。
+     *
+     * 本方法用与跨维度同款的可靠链路（findStand + teleportTo 真传送）补同维度兜底：
+     * 距离超过阈值、非守家、非坐/骑、没在干重活（挖矿/伐木/建造未暂停/烹饪酿造站桩）
+     * 就拉回主人身边。守家/干活中不拉，但会落日志说明原因（60 秒限频）——"为什么不
+     * 传"从此可见。
+     */
+    private static void trySameDimPull(EntityMaid maid, LivingEntity owner) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get()) {
+                return;
+            }
+            int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
+            double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+            if (dSq < (double) dist * dist) {
+                return; // 不太远——走路/跟随正常处理，不打扰
+            }
+            int blocks = (int) Math.sqrt(dSq);
+            String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+            // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
+            if (maid.isHomeModeEnable()) {
+                throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
+                        + " 格但守家中，不拉（想召回先解除排班/在家模式）");
+                return;
+            }
+            if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
+                throttledSkipLog(maid, "sam-dim-work", name + " 同维度距离 " + blocks
+                        + " 格但干活中（挖矿/伐木/建造/站桩），不打断——任务结束或空闲后再拉");
+                return;
+            }
+            if (teleportCore(maid, owner)) {
+                com.maidsmart.tool.PromaidLog.log("跨维", name
+                        + " 同维度远距拉回至主人身边（原距 " + blocks + " 格）");
+            } else {
+                throttledSkipLog(maid, "sam-dim-nostand", name + " 同维度距离 " + blocks
+                        + " 格需拉回，但主人身边 16 格内无可站立点（高空/虚空）——等落地后再拉");
+            }
+        } catch (Exception ignored) {
         }
     }
 }
