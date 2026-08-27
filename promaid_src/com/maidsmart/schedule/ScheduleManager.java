@@ -58,6 +58,9 @@ public final class ScheduleManager {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
+        // v1.1.0 实测一百三十三 ③：tick 开头防御性清理残留的内部 setTask 标记
+        //（异常逃逸时 ThreadLocal 可能残留，防跨调用点污染）
+        ScheduleSwitchGuard.clearIfStale("ScheduleManager#onServerTick");
         if (++throttle < 20) {
             return; // 每秒一次
         }
@@ -160,6 +163,9 @@ public final class ScheduleManager {
         }
         // —— 真正应用（去抖键在末尾写：失败不标记，下秒重试可见）——
         String fail = null;
+        // v1.1.0 实测一百三十三：soft=true 表示"不是失败，是主动暂不切换"（没活/反向
+        // 抑制），日志措辞与硬失败分开——但同样不写去抖键、同样限频 10 秒重试
+        boolean soft = false;
         try {
             // 工作模式（0=DAY 早班 / 1=NIGHT 晚班 / 2=ALL 全天）
             var modes = com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule.values();
@@ -183,14 +189,41 @@ public final class ScheduleManager {
                         var found = TaskManager.findTask(
                                 net.minecraft.resources.ResourceLocation.parse(seg.taskUid()));
                         if (found.isPresent()) {
-                            maid.setTask(found.get());
-                            // v1.1.0 实测一百二十九：应用后读回校验——TLM setTask 有守卫
-                            // （睡眠/活动/不可换任务状态）时会静默拒绝，读回对比当场暴露
-                            String cur = (maid.getTask() != null && maid.getTask().getUid() != null)
+                            var target = found.get();
+                            String fromUid = (maid.getTask() != null && maid.getTask().getUid() != null)
                                     ? maid.getTask().getUid().toString() : "null";
-                            if (!seg.taskUid().equals(cur)) {
-                                fail = "【任务未生效】目标 '" + seg.taskUid() + "' 应用后任务仍 = "
-                                        + cur + "（被 TLM 守卫/睡眠/活动拒绝？）";
+                            String toUid = target.getUid() == null ? "null" : target.getUid().toString();
+                            if (fromUid.equals(toUid)) {
+                                // 已经在该任务上：无需重设（避免无意义 refreshBrain 重建 AI）
+                            } else if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()
+                                    && !ScheduleTaskAvailability.isAvailable(maid, target)) {
+                                // v1.1.0 实测一百三十三 ①：切换前可用性检测——没活不切
+                                soft = true;
+                                fail = "目标任务 '" + seg.taskUid() + "' 当前无可用工作（没活不切，约 10 秒后重试）";
+                            } else if (ScheduleSwitchState.shouldSuppressReverseSwitch(maid.m_20148_(),
+                                    fromUid, toUid, nowTick,
+                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get(),
+                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD.get(),
+                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS.get())) {
+                                // v1.1.0 实测一百三十三 ②：反向切换抑制——A→B→A 横跳冷却
+                                soft = true;
+                                fail = "反向切换抑制：'" + fromUid + "' ↔ '" + toUid + "' 短窗口内反复横跳";
+                            } else {
+                                // v1.1.0 实测一百三十三 ③：内部 setTask 标记——排班的自动切换
+                                // 与其它系统（战斗/蓝图/一键应用/LLM）的 setTask 区分开，防互相覆盖
+                                ScheduleSwitchGuard.runInternal(maid.m_20148_(), target.getUid(),
+                                        () -> maid.setTask(target));
+                                // v1.1.0 实测一百二十九：应用后读回校验——TLM setTask 有守卫
+                                // （睡眠/活动/不可换任务状态）时会静默拒绝，读回对比当场暴露
+                                String cur = (maid.getTask() != null && maid.getTask().getUid() != null)
+                                        ? maid.getTask().getUid().toString() : "null";
+                                if (!seg.taskUid().equals(cur)) {
+                                    fail = "【任务未生效】目标 '" + seg.taskUid() + "' 应用后任务仍 = "
+                                            + cur + "（被 TLM 守卫/睡眠/活动拒绝？）";
+                                } else {
+                                    ScheduleSwitchState.recordSwitch(maid.m_20148_(), fromUid, toUid,
+                                            nowTick, com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get());
+                                }
                             }
                         } else {
                             fail = "段任务 '" + seg.taskUid() + "' 不存在（模组任务未装/任务被删）";
@@ -210,11 +243,12 @@ public final class ScheduleManager {
             com.maidsmart.tool.PromaidLog.log("排班", who + " 应用段 " + segLabel
                     + " 模式=" + seg.mode() + " 任务=" + seg.taskUid());
         } else {
-            // 失败：不写去抖键 + 10 秒重试节流——任务非法/不存在/守卫拒绝类持续
-            // 失败每段最多记 ~6 条（10 秒限频，防刷屏也防每秒 refreshBrain 重建 AI）；
-            // 守卫拒绝类（睡眠/活动中）条件一旦解除，最多 10 秒后自动恢复
+            // 未生效：不写去抖键 + 10 秒重试节流——任务非法/不存在/守卫拒绝/没活/反向
+            // 抑制各类每段最多记 ~6 条（10 秒限频，防刷屏也防每秒 refreshBrain 重建 AI）；
+            // 条件是暂时性的（睡眠解除/地里长出作物/矿被清出空位）最多 10 秒后自动恢复
             RETRY_AFTER.put(maid.m_20148_(), nowTick + 200L);
-            com.maidsmart.tool.PromaidLog.log("排班", who + " 段 " + segLabel + " 应用失败：" + fail
+            com.maidsmart.tool.PromaidLog.log("排班", who + " 段 " + segLabel
+                    + (soft ? " 暂不切换：" : " 应用失败：") + fail
                     + "（去抖键未写，10 秒后重试）");
         }
     }
