@@ -1860,6 +1860,15 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测六十一：战斗还原后排班宽限
         this.rows.add(new NumRow("战斗还原宽限（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get()),
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE, s), "战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班"));
+        // v1.1.0 实测一百三十三：排班切换三件套
+        this.rows.add(new BoolRow("切换前可用性检测", MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get(),
+                v -> MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(v), "段任务应用前先检测目标任务当前是否有活可干（isEnable + 挖矿有无矿/伐木有无树/烹饪有无熔炉/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务并约 10 秒后重试；战斗/待机/跟随/第三方任务不扫描、只查 isEnable"));
+        this.rows.add(new NumRow("反向切换窗口（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS, s), "两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳（默认 200=10 秒）；正常时段切换相隔约 2000 tick，不会被误判"));
+        this.rows.add(new NumRow("反向切换阈值", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD, s), "窗口内累计反向次数达到该值即压制本次切换（默认 2）"));
+        this.rows.add(new NumRow("反向切换冷却（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS, s), "压制反向切换后保持多久不再反向切（默认 200=10 秒）"));
         // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
         this.rows.add(new SectionRow("运行日志（实测九十四）", true));
         this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),
