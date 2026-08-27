@@ -33,6 +33,12 @@ public final class ScheduleManager {
      *  重建 AI（比不排班更扰民）；限频 10 秒一轮，条件解除后最多 10 秒恢复 */
     private static final java.util.Map<java.util.UUID, Long> RETRY_AFTER = new java.util.HashMap<>();
 
+    /** v1.1.0 实测一百三十五：本段是否已尝试应用 + 尝试那一刻的任务（maidId → "段键|任务UID"）。
+     *  用于识别"排班尝试过本段之后任务被外部（玩家/命令/TLM GUI）改走"：尊重手动选择，
+     *  写去抖键结束本段，不再死磕重试把玩家改的任务顶回去/无限重试（用户反馈：改排班
+     *  女仆任务 → 排班会卡死）。只记尝试时刻的任务，任务没变=正常"没活不切"重试不误伤。 */
+    private static final java.util.Map<java.util.UUID, String> ATTEMPTED = new java.util.HashMap<>();
+
     private ScheduleManager() {
     }
 
@@ -91,6 +97,10 @@ public final class ScheduleManager {
      *  setTask 有守卫（睡眠/活动中等）时会静默拒绝，旧版去抖键已写过 → 本段
      *  永不重试 = 排班"应用了但没生效"的静默失效；读回对比能当场暴露。 */
     public static void applyNow(EntityMaid maid, ServerLevel level) {
+        // v1.1.0 实测一百三十五：整体隔离——任何异常都不许击穿 applyNow（否则每
+        // tick 抛一次 = 排班系统整体瘫痪，即用户反馈的"排班会卡死"形态之一），
+        // 统一落日志 + 10 秒重试节流，下一轮继续
+        try {
         String who = com.maidsmart.tool.PromaidLog.nameOf(maid);
         // v1.1.0 实测九十三：总开关闸必须设在方法最前面——applyNow 有三个调用方
         //（调度器扫描 / 保存包立即应用 / 战斗还原直通），此前只有调度器上游检查了
@@ -161,6 +171,27 @@ public final class ScheduleManager {
             diag(maid, "retry-cool", who + " 段应用失败后的 10 秒重试冷却中（" + segLabel + "）", level);
             return;
         }
+        // v1.1.0 实测一百三十五【手动改动死磕根治】：排班尝试过本段（记录里是本次段的
+        // 键）之后，当前任务 ≠ 尝试那一刻的任务 = 外部把任务改走了（玩家 TLM GUI/
+        // 命令/LLM）。不跟它抢——写去抖键"本段按外部选择过了"+ 清重试，下个时段边界
+        // 再接管；否则每 10 秒重试会把玩家刚改的任务顶回，或无限重试变成"排班卡死"。
+        // 尝试时刻任务没变 = 正常"没活不切"重试循环，不误伤。
+        String curNow = (maid.getTask() != null && maid.getTask().getUid() != null)
+                ? maid.getTask().getUid().toString() : "null";
+        String attempted = ATTEMPTED.get(maid.m_20148_());
+        if (attempted != null && attempted.startsWith(key + "|")) {
+            String taskAtAttempt = attempted.substring(key.length() + 1);
+            if (!taskAtAttempt.equals(curNow)) {
+                maid.getPersistentData().m_128359_(ScheduleData.APPLIED_TAG, key);
+                RETRY_AFTER.remove(maid.m_20148_());
+                ATTEMPTED.remove(maid.m_20148_());
+                com.maidsmart.tool.PromaidLog.log("排班", who + " 排班尝试本段后任务被外部改为 "
+                        + curNow + "（段任务 " + seg.taskUid() + "）——尊重手动选择，本段不再"
+                        + "重试，下个时段边界接管");
+                return;
+            }
+        }
+        ATTEMPTED.put(maid.m_20148_(), key + "|" + curNow);
         // —— 真正应用（去抖键在末尾写：失败不标记，下秒重试可见）——
         String fail = null;
         // v1.1.0 实测一百三十三：soft=true 表示"不是失败，是主动暂不切换"（没活/反向
@@ -238,6 +269,7 @@ public final class ScheduleManager {
         }
         if (fail == null) {
             RETRY_AFTER.remove(maid.m_20148_());
+            ATTEMPTED.remove(maid.m_20148_());
             maid.getPersistentData().m_128359_(ScheduleData.APPLIED_TAG, key);
             // v1.1.0 实测九十四：运行日志——段应用落盘（去抖保证每段每天至多一条）
             com.maidsmart.tool.PromaidLog.log("排班", who + " 应用段 " + segLabel
@@ -250,6 +282,28 @@ public final class ScheduleManager {
             com.maidsmart.tool.PromaidLog.log("排班", who + " 段 " + segLabel
                     + (soft ? " 暂不切换：" : " 应用失败：") + fail
                     + "（去抖键未写，10 秒后重试）");
+        }
+        } catch (Throwable t) {
+            // v1.1.0 实测一百三十五：隔离层——任一异常落日志 + 10 秒重试节流，
+            // 不让它击穿 ServerTickEvent 每 tick 重演（排班系统瘫痪）
+            try {
+                RETRY_AFTER.put(maid.m_20148_(), level.m_46467_() + 200L);
+                com.maidsmart.tool.PromaidLog.log("排班",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " applyNow 异常（已隔离，10 秒后重试）：" + t);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** v1.1.0 实测一百三十五：保存排班 = 明确意图——清掉本段去抖键/尝试记录/重试冷却，
+     *  让保存后的立即应用真正落一次（修"改当前时段任务保存不生效"的观感） */
+    public static void clearAppliedForSave(EntityMaid maid) {
+        try {
+            maid.getPersistentData().m_128359_(ScheduleData.APPLIED_TAG, "");
+            ATTEMPTED.remove(maid.m_20148_());
+            RETRY_AFTER.remove(maid.m_20148_());
+        } catch (Throwable ignored) {
         }
     }
 }
