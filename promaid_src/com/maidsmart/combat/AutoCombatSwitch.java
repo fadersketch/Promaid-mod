@@ -465,7 +465,10 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
         touchContact(maid);
-        maid.setTask(combat);
+        // v1.1.0 实测一百三十六：主动战斗是【自动系统】——setTask 打内部标记，
+        // 排班守卫 mixin 据此放行（否则排班中的女仆会连战斗切换都被拦）
+        com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(),
+                combat.getUid(), () -> maid.setTask(combat));
         // v1.1.0 实测九十四：运行日志
         com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 参战：" + prevUid + " -> " + combat.getUid());
@@ -613,7 +616,8 @@ public class AutoCombatSwitch {
                                     new net.minecraft.resources.ResourceLocation("touhou_little_maid", "idle"))
                                     .orElse(null);
                             if (idleTask != null) {
-                                maid.setTask(idleTask);
+                                com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
+                                        maid.m_20148_(), idleTask.getUid(), () -> maid.setTask(idleTask));
                             }
                         } catch (Exception ignored) {
                         }
@@ -643,7 +647,10 @@ public class AutoCombatSwitch {
                             && maid.getTask().getUid().toString().equals(assignedUid);
                 }
                 if (stillOnCombat) {
-                    maid.setTask(prevTask);
+                    // v1.1.0 实测一百三十六：战斗还原也是自动系统——打内部标记放行
+                    IMaidTask restoreTask = prevTask; // 快照：prevTask 非最终变量，lambda 需捕获
+                    com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
+                            maid.m_20148_(), restoreTask.getUid(), () -> maid.setTask(restoreTask));
                     restored = true;
                 }
                 // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
@@ -956,7 +963,9 @@ public class AutoCombatSwitch {
             }
             return;
         }
-        maid.setTask(next);
+        // v1.1.0 实测一百三十六：战斗换战术是自动系统——打内部标记放行
+        com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(),
+                next.getUid(), () -> maid.setTask(next));
         // 兼容关键：同步指派标记（见方法注释），否则还原链路误判"玩家接管"
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, next.getUid().toString());
         // 记录稳定状态：最短持有 + 来源任务（反向判定用）
