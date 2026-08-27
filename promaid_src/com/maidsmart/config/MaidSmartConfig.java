@@ -389,6 +389,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
     // v1.1.0：排班表系统全局开关（关闭后排班调度器停摆——已保存的日程保留，重开恢复）
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_ENABLED;
+    // v1.1.0 实测一百三十三：排班切换三件套（可用性检测 / 反向抑制）
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_AVAILABILITY_CHECK;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_WINDOW_TICKS;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_THRESHOLD;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -1215,6 +1220,15 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // 战斗↔还原循环不再立刻把排班段任务压回去（还原后先干原任务一段时间）
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
+    // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前可用性检测（默认开）：段任务应用前先检测目标任务当前是否有活可干（isEnable 硬闸 + 挖矿有无矿/伐木有无树/烹饪有无熔炉/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务并约 10 秒后重试；战斗/待机/跟随/第三方附属任务不扫描、只查 isEnable；关闭则回到旧行为（时间到无条件切）")
+            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
+    MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
+            .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
+    MISC_SCHEDULE_REVERSE_THRESHOLD = BUILDER.comment("排班反向切换阈值（默认 2）：窗口内累计反向次数达到该值即压制本次切换")
+            .translation("config.promaid.misc.scheduleReverseThreshold").defineInRange("scheduleReverseThreshold", 2, 1, 20);
+    MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS = BUILDER.comment("排班反向切换冷却（tick，默认 200=10 秒）：压制反向切换后保持多久不再反向切")
+            .translation("config.promaid.misc.scheduleReverseCooldownTicks").defineInRange("scheduleReverseCooldownTicks", 200, 20, 1200);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
