@@ -401,6 +401,11 @@ public final class ScheduleNetworking {
                                 + "~" + ScheduleData.fmt(safe.get(0).endMin())
                                 + " 模式=" + safe.get(0).mode()
                                 + " 任务=" + safe.get(0).taskUid()));
+                // v1.1.0 实测一百三十五：保存 = 明确意图——清掉"本段已应用"的去抖键/尝试记录/
+                // 重试冷却，让 applyNow 立即按新日程落一次（旧版去抖键只记段起点不记
+                // 任务内容：改当前时段任务保存后被去抖挡掉，要等下个时段边界才生效，
+                // 观感 = "排班卡死/改了不生效"）
+                com.maidsmart.schedule.ScheduleManager.clearAppliedForSave(maid);
                 // v1.1.0 实测七十：保存日程开启排班的瞬间，她自动进入在家模式
                 // （守家按日程干活、不跨维度追人）；关闭排班即自动解除
                 maid.setHomeModeEnable(pkt.on);
