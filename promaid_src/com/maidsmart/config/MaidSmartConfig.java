@@ -292,6 +292,7 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
 public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_AIR_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MIN_RADIUS;
     public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
@@ -1113,6 +1114,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 24, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
+        BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 2）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
+                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 2, 1, 8);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以

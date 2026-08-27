@@ -242,10 +242,24 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百二十一：水平远距放宽（见方法头注释）——dy 不满足高度
         // 门槛但水平已拉开（>3 格）且主人不低于女仆时照常启动，平桥横向逼近
         double hx = owner.m_20185_() - maid.m_20185_();
+        double hy = owner.m_20186_() - maid.m_20186_();
         double hz = owner.m_20189_() - maid.m_20189_();
-        boolean farHorizontal = Math.sqrt(hx * hx + hz * hz) > 3.0;
-        if (dy < Math.min(minDy, 4) && !(farHorizontal && dy >= 0)) {
-            return false; // 高度不足且水平不远的近距离场景才拦（垂直搭高才需要门槛）
+        double hDist = Math.sqrt(hx * hx + hz * hz);
+        double dist3 = Math.sqrt(hx * hx + hy * hy + hz * hz); // 3D 球面欧氏距离
+        // v1.1.0 实测一百三十（用户："应该是竖直和水平半径都要判定，总体是类似以
+        // 女仆为圆心的一个球形"）：启动门槛统一改为【最小球面半径】（3D 欧氏距离）——
+        // 主人在女仆周围球面【内部】不启桥（纯跟随走路）；球面【外部】再分两种：
+        // ① 高差达标（dy >= minDy）→ 垂直搭高（旧语义再现）；② 竖直差不多但水平
+        // 已拉开 + 前方脚下悬空（低头没路可走）→ 平铺搭桥（实心地面平地不启桥，
+        // 根治 dy=0 平地上一秒一轮 start/stop/reached 的空转抖动）。
+        if (dist3 <= MaidSmartConfig.BRIDGE_MIN_RADIUS.get()) {
+            return false; // 球面之内——跟随走路即可
+        }
+        if (dy < Math.min(minDy, 4)) {
+            // 高差不足 = 平地场景——“前方脚下悬空”才桥；实心地面纯走导航
+            if (dy < 0 || !hasGapAhead(level, maid, hx, hz, hDist)) {
+                return false;
+            }
         }
         boolean airborne = isAirborne(level, maid);
         // v1.1.0 实测一百二十三（用户："创造模式飞行、周围无落脚方块、主人在前上方
@@ -766,6 +780,35 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         } catch (Throwable ignored) {
         }
         return maid.getPersistentData().m_128471_(MaidWorkTags.WORK_STILL_TAG);
+    }
+
+    /**
+     * v1.1.0 实测一百三十：主人方向前方是否"低头没路"（平铺搭桥的判定条件）——
+     * 朝主人方向 1~2 格内任一格：站立格空气 + 头顶空气 + 脚下空气（悬空）→
+     * 脚下没支撑 → 需要搭桥；前方是实心地面/上坡/一阶台阶（可走上去）→ 走路即可。
+     */
+    private static boolean hasGapAhead(ServerLevel level, EntityMaid maid,
+                                       double hx, double hz, double hDist) {
+        if (hDist < 1e-3) {
+            return false;
+        }
+        double ux = hx / hDist;
+        double uz = hz / hDist;
+        int y = maid.m_20183_().m_123342_();
+        for (int step = 1; step <= 2; step++) {
+            int tx = (int) Math.floor(maid.m_20185_() + ux * step);
+            int tz = (int) Math.floor(maid.m_20189_() + uz * step);
+            if (!level.m_8055_(new BlockPos(tx, y, tz)).m_60795_()) {
+                continue; // 前方有实体方块挡（小丘/台阶——导航会绕/跳上，不算悬空）
+            }
+            if (!level.m_8055_(new BlockPos(tx, y + 1, tz)).m_60795_()) {
+                continue; // 顶头——绕，不算悬空
+            }
+            if (level.m_8055_(new BlockPos(tx, y - 1, tz)).m_60795_()) {
+                return true; // 脚下悬空——平铺搭桥
+            }
+        }
+        return false;
     }
 
     private static double sq(double v) {
