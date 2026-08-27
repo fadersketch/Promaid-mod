@@ -26,24 +26,36 @@ import java.util.Map;
 /**
  * 搭路行为（v1.1.0，core 优先级 245——低于自保 250、高于落地水 240）。
  *
- * 主人在女仆上方一定距离内（默认 ≥2 格且总距离 <7 格 = 传送判定距离）时，
- * 女仆朝主人脚下走过去并逐格搭高靠近（借鉴 Zombie Invade 100 Days 的僵尸
- * MobBuildUpGoal：朝目标方向逐块垫高——女仆版用真实背包方块 + 物理上升，
- * 不像僵尸那样 setPos 瞬移）。默认关闭（bridge.enabled）。
+ * 女仆朝主人逐格搭方块靠近（借鉴 Zombie Invade 100 Days 的 MobBuildUpGoal：
+ * 真实背包方块 + 物理位移，不像僵尸 setPos 瞬移）。默认关闭（bridge.enabled）。
  *
- * 触发条件（全部满足）：
- * - 开关开启；主人存在、活着、同维度
- * - 女仆非 home 模式（在家模式 = 守家不出门，不搭路追主人）
- * - 任务空闲（v1.1.0 实测十五：挖矿/伐木已锁定目标、烹饪/酿造站桩中、建造
- *   坐下中都不追——手上的活没干完不撂挑子；详见 isTaskOccupied）
- * - 主人高于女仆 ≥ bridge.minDy 格；欧氏距离 < bridge.maxDist 格
- * - 周围 bridge.threatDist 格内无敌对生物；女仆非自保状态
- * - 背包有可放置方块（BlockItem、非下落方块）
+ * 触发条件（全部满足，见 canUse）：
+ * - 开关开启；主人存在、活着、同维度；女仆非 home 模式、非自保状态
+ * - 任务未被实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩中、建造未暂停不追人；
+ *   详见 isTaskOccupied）
+ * - 球面门槛（实测一百三十）：女仆→主人 3D 欧氏距离 > bridge.minRadius（默认 2）
+ * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，需 dy >= 0 且朝主人
+ *   方向 1~2 格内脚下悬空（hasGapAhead）才启——实心地面平地不启桥（纯走导航）
+ * - 距离上限：女仆/主人空中、或主人高于女仆时取 max(maxDist, airMaxDist)，
+ *   否则 maxDist（默认 7；airMaxDist 默认 24、上限 128）
+ * - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter）
+ * - 威胁扫描 + 背包过滤每 10 tick 节流一次（廉价判定每 tick 进行）
  *
- * 执行：置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）→
- * 水平导航到主人正下方 → 每步冷却在脚下垫方块（真实消耗背包方块）→
- * 距主人 ≤2.5 格停止（跟随接管）。搭的方块登记自清理（默认 10 秒变掉落物）。
- * 中止：威胁出现 / 方块耗尽 / 主人离开范围或换维度 / 主人不再高于女仆。
+ * 执行（每 tick，tick 方法）：
+ * - 空中平桥 tryAirBridgeStep：dy < minDy 且水平 >1.2 格时，朝主人方向三向试探
+ *   （正前/±45°），前方脚下悬空则在【前方脚下】垫块走过去——不依赖导航；
+ * - 斜上台阶 tryDiagStep：dy >= 1 且水平 >1.2 格时，朝主人方向前方脚下垫台阶，
+ *   塔朝主人斜着长；
+ * - 垂直柱 placeStep：dy >= 1 时原地垫脚下把自己顶高（放置格 + 头顶 2 格净空）；
+ * - 三条腿共用 bridge.stepCooldown（默认 5 tick/块）；垫块/落足格命中危险表
+ *   （岩浆/火等）一律跳过（实测一百二十七）；
+ * - 置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）；垫的方块
+ *   登记 PlacedBlockTracker 自清理（默认 bridge.placedLifetime 秒；reclaimToMaid
+ *   开则进最近女仆背包，有女仆站上面延后回收）。
+ *
+ * 中止（见 canContinue / doStop）：贴到主人 ≤2.5 格（跟随接管）/ 威胁出现 /
+ * 自保触发 / 任务重新占用 / 主人换维度或走远（≥ 上限+2 缓冲）/ 方块耗尽 /
+ * 20 秒垫不出方块（头顶被挡）。
  */
 public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /** bridging 标记（persistentData——MaidTeleportPreserveMixin 拦传送用） */

@@ -220,15 +220,18 @@ public final class MaidChunkLoadManager {
     /**
      * v1.5.142：女仆跟随主人跨维度传送（实测四十四重做传送本体）。
      *
-     * 每 5 秒扫描一次全服女仆——跟随模式（非在家模式、未坐下、未骑乘、存活）
-     * 且与主人不在同一维度 → teleportTo(m_264318_) 原版跨维度传送
+     * 每 5 秒扫描一次全服女仆——存活、未坐下、未骑乘、与主人不在同一维度 →
+     * teleportTo(m_264318_) 原版跨维度传送
      * （替代旧版 setRemoved+addFreshEntity 手动搬家：不走 Forge 维度事件链、
      * 实体不重新注册，属于"假传送"）。
      * 落点取主人身边第一个"脚下实心、站立格空气"的位置（向下最多 16 格）；
      * 找不到可站格（主人在高空/虚空飞行）→ 本次不传，等主人落地后再跟。
      *
      * 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见
-     * MaidBuildBehavior.tickBuildSit）；在家模式 = 不跟随，同样不拉。
+     * MaidBuildBehavior.tickBuildSit）。
+     * v1.1.0 实测一百三十一：在家模式【不拦】跨维度跟随——排班自动 home/守家
+     * 模式的女仆，主人过门/换维度照样传送跟过来（home 只影响同维度行为，由
+     * TLM 原生跟随任务处理；想召回先解除她的排班/在家模式，见 summonAll）。
      */
     public static void followIfCrossDimension(EntityMaid maid) {
         try {
