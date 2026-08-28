@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "FollowPreserveMixin",
+    "MaidFollowOwnerTickMixin",
     "MaidTeleportPreserveMixin",
     "MaidDangerPathMixin",
     "MaidMoveSuppressMixin",

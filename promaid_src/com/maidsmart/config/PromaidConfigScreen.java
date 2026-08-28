@@ -1811,6 +1811,9 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送兜底）
         this.rows.add(new BoolRow("同维度远距拉回", MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get(),
                 v -> MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.set(v), "女仆与主人同维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 自带过远传送只对非home非工作的跟随女仆生效且可能静默失败）。守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉，原因会写进 logs/promaid.log（60 秒限频）"));
+        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
+                v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
         this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
         // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启）
