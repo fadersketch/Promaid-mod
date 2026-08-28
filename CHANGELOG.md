@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百六十
+
+- 修复跟随收紧 mixin 二次崩溃（崩溃日志实证：`InvalidInjectionException: Invalid descriptor ... CallbackInfoReturnable is required!`）：
+  - 【根因】实测一百五十九把注入点换到 `m_6114_`（canUse）方向正确，但 **canUse 返回 boolean**——Mixin 规定注入带返回值的方法必须用 `CallbackInfoReturnable` 作回调参数，用 `CallbackInfo` 直接报 Invalid descriptor
+  - 【修复】处理器签名改为 `CallbackInfoReturnable<Boolean>`（不调用 setReturnValue，原 canUse 判定结果完全不受影响）；注入目标仍是本类声明的 `m_6114_`（canUse，大脑每 tick 调用），4 格内不拉/守家/脑冻结/无主/跨维度/干活中不拉守卫与 `misc.followTighten` 开关不变
+  - 已从部署 jar 验证：处理器签名 `(ServerLevel, LivingEntity, CallbackInfoReturnable)` + 目标 `m_6114_` 均正确
+
 ## 实测一百五十九
 
 - 修复跟随收紧 mixin 导致游戏加载崩溃（崩溃日志实证：`InvalidInjectionException: Critical injection failure: @Inject ... could not find any targets matching 'm_6725_' in MaidFollowOwnerTask`——打开创造栏渲染女仆时 EntityMaid 加载触发 mixin 应用，直接崩）：
