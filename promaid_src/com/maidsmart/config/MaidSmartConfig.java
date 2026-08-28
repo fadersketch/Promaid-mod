@@ -375,6 +375,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
+    // v1.1.0 实测一百五十一：跟随收紧（每 tick 重断言跟随目标，平常跟随在 4 格内）
+    public static final ForgeConfigSpec.BooleanValue MISC_FOLLOW_TIGHTEN;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
     /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
@@ -1186,6 +1188,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.maidSameDimPull").define("maidSameDimPull", true);
         MISC_MAID_SAME_DIM_DIST = BUILDER.comment("同维度拉回距离阈值（格，默认 48）：女仆与主人同维度且水平/垂直距离超过此值才拉回——低于此值靠走路/跟随，不打扰她")
                 .translation("config.promaid.misc.maidSameDimDist").defineInRange("maidSameDimDist", 48, 16, 256);
+        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
+                .translation("config.promaid.misc.followTighten").define("followTighten", true);
         // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
         MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
                 .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);
