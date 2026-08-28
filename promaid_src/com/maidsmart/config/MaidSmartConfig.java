@@ -82,6 +82,8 @@ public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ForgeConfigSpec.BooleanValue MINE_AUTO_COLLECT;
     // v1.5.163：连锁采集数量上限
     public static final ForgeConfigSpec.IntValue MINE_CHAIN_LIMIT;
+    // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
+    public static final ForgeConfigSpec.BooleanValue MINE_RIDE_NO_PILLAR;
 
     // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
@@ -334,6 +336,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
     // v1.5.203：搭高安全高度（补完目标，与落地水触发高度配合）
     public static final ForgeConfigSpec.IntValue COMBAT_PILLAR_SAFE_HEIGHT;
+    // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）——佩戴时对应环境危险不再惊慌
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FIRE_PROTECT_BAUBLE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_DROWN_PROTECT_BAUBLE;
+    // v1.1.0 实测一百五十五：保命物品（绀珠之药/不死图腾）下是否保留逃跑
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLEE_WITH_SAVE_ITEM;
 
     // v1.5.189：被动技能（玩家贴身辅助）阈值——喂食/治疗/插火把/共享盾牌/图腾
     public static final ForgeConfigSpec.BooleanValue AID_OWNER_ENABLE;
@@ -377,6 +384,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
     // v1.1.0 实测一百五十一：跟随收紧（每 tick 重断言跟随目标，平常跟随在 4 格内）
     public static final ForgeConfigSpec.BooleanValue MISC_FOLLOW_TIGHTEN;
+    // v1.1.0 实测一百五十二：有增益也喂牛奶（很多装备/饰品带永久增益，旧版"无增益才喝"导致中毒/凋零也不解）
+    public static final ForgeConfigSpec.BooleanValue MISC_MILK_FEED_WITH_BUFF;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
     /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
@@ -573,6 +582,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
                 .translation("config.promaid.mine.pillarCooldown")
                 .defineInRange("pillarCooldown", 4, 1, 20);
+        // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
+        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘中禁止搭方块（默认开）：女仆骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘也照常搭）")
+                .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
                 .defineInRange("junkCheckInterval", 100, 20, 400);
@@ -982,6 +994,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLEE_SPEED = BUILDER.comment("逃跑速度倍率")
                 .translation("config.promaid.combat.fleeSpeed")
                 .defineInRange("fleeSpeed", 1.1, 0.8, 3.0);
+        // v1.1.0 实测一百五十三：TLM 火焰保护饰品识别
+        COMBAT_FIRE_PROTECT_BAUBLE = BUILDER.comment("火焰保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为（着火照常走灭火链路）")
+                .translation("config.promaid.combat.fireProtectBauble").define("fireProtectBauble", true);
+        // v1.1.0 实测一百五十四：TLM 溺水保护饰品识别
+        COMBAT_DROWN_PROTECT_BAUBLE = BUILDER.comment("溺水保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺——饰品每 tick 自己补空气；关闭 = 旧行为（照常上浮）")
+                .translation("config.promaid.combat.drownProtectBauble").define("drownProtectBauble", true);
+        // v1.1.0 实测一百五十五：保命物品下保留逃跑
+        COMBAT_FLEE_WITH_SAVE_ITEM = BUILDER.comment("保命物品下保留逃跑（默认关）：女仆携带保命物品（TLM 绀珠之药=ExtraLifeBauble 死亡复活 / 不死图腾）时是否还逃跑——默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑")
+                .translation("config.promaid.combat.fleeWithSaveItem").define("fleeWithSaveItem", false);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);
@@ -1191,6 +1212,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
         MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
+        // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）
+        MISC_MILK_FEED_WITH_BUFF = BUILDER.comment("有增益也喂牛奶（默认开）：女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）")
+                .translation("config.promaid.misc.milkFeedWithBuff").define("milkFeedWithBuff", true);
         // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
         MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
                 .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);
