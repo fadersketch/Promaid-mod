@@ -13,8 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * maid_smart:cook —— 烹饪任务。
- * 女仆给附近的熔炉补充燃料与生食，并把烧好的成品收进背包。
+ * maid_smart:cook —— 烧制任务（v1.1.0 实测一百六十一：由「烹饪」改名——已兼容
+ * 熔炉烧矿物/高炉/烟熏炉，任务不再只是做饭）。
+ * 女仆给附近的熔炉/高炉/烟熏炉补充燃料与可烧制物（食材/矿物），并把烧好的成品收进背包。
  */
 public class MaidCookTask implements IMaidTask {
     public static final ResourceLocation UID = ResourceLocation.parse("maid_smart:cook");
@@ -59,6 +60,6 @@ public class MaidCookTask implements IMaidTask {
 
     @Override
     public String getMaidActionSummary() {
-        return "\u70f9\u7096"; // 烹饪（v1.5.252e 去掉冶炼，回归纯烹饪）
+        return "\u70e7\u5236"; // 烧制（v1.1.0 实测一百六十一：烹饪改名——兼容矿石/高炉/烟熏炉）
     }
 }

@@ -1,10 +1,10 @@
-{
+﻿{
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",
   "task.maid_smart.organize": "Organize Chests",
   "task.maid_smart.organize.desc": "Store backpack items into nearby chests",
-  "task.maid_smart.cook": "Cooking",
-  "task.maid_smart.cook.desc": "Feed furnaces with fuel and raw food, collect cooked food",
+  "task.maid_smart.cook": "Smelting",
+  "task.maid_smart.cook.desc": "Feed furnaces/smokers/blast furnaces with fuel and smeltable items (food or ores), collect the results",
   "task.maid_smart.brew": "Brewing",
   "task.maid_smart.brew.desc": "Feed brewing stands with blaze powder and ingredients, collect potions",
   "task.maid_smart.build": "Building",
