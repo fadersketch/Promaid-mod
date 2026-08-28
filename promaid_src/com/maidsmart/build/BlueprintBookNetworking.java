@@ -263,7 +263,7 @@ public final class BlueprintBookNetworking {
             case "mine":
                 return "挖矿";
             case "cook":
-                return "烹饪";
+                return "烧制"; // v1.1.0 实测一百六十一：烹饪改名
             case "brew":
                 return "酿造";
             case "attack":
