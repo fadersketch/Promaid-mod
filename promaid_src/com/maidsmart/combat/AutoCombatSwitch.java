@@ -79,6 +79,11 @@ public class AutoCombatSwitch {
     private static final String COMBAT_PREV_HOME_TAG = "maid_smart_combat_prev_home";
     /** 战斗前的作息（MaidSchedule.name；空 = 未记录） */
     private static final String COMBAT_PREV_SCHEDULE_TAG = "maid_smart_combat_prev_schedule";
+    /** v1.1.0 实测一百六十二：战斗会话开始时间（tick）——硬性超时还原兜底的计时基准 */
+    private static final String COMBAT_START_TAG = "maid_smart_combat_start";
+    /** v1.1.0 实测一百六十二：战斗会话硬性超时（tick，90 秒）——超过仍未还原就强制
+     *  切回，杜绝任何门（威胁判定/安全计时/僵局阀失效）把女仆永久卡在战斗态。 */
+    private static final long COMBAT_HARD_DEADLINE_TICKS = 1800L;
     /** 僵局日志节流（每女仆 30 秒一条，latest.log 搜 "auto-combat stale"） */
     private static final java.util.Map<java.util.UUID, Long> STALE_LOG =
             new java.util.HashMap<>();
@@ -441,31 +446,31 @@ public class AutoCombatSwitch {
         // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
         // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
         if (maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
-            // v1.1.0 实测一百三十九（参考 tlm_beyond_space 会话快照机制）：getTask()
-            // 读同步数据 DATA_TASK，uid 解析抖动时回落成 idle——idle 读数不再判"玩家
-            // 接管"清标记（那会把还原链丢掉 = "切不回原来模式"的根因之一）；只有当前
-            // 是【真实的其他任务】（非 idle、非战斗、非指派）才算接管。
-            // v1.1.0 实测一百四十九：判定用【单次任务读取】——同一 tick 多次读
-            // getTask() 会因 DATA_TASK 同步抖动自相矛盾（日志实证"接管"打印 idle
-            // 但判定时读的是别的任务），单次读取后所有判定共用同一读数。
             IMaidTask curTask = maid.getTask();
-            if (isAssignedOrCombatTask(maid, curTask) || isIdleReadingTask(curTask)) {
-                // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
-                // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
-                // 无威胁战斗里还原时钟被反复推走 = 打完收不回去的第二道源头
+            // v1.1.0 实测一百六十二【主动攻击被吞根治】：旧版把 idle 读数（战斗早已
+            // 结束、任务已回落 idle）也当"已在战斗"直接 return 0——老女仆身上残留的
+            // COMBAT_ACTIVE 永远清不掉，参战被永久吞掉（新女仆没残留所以正常触发）。
+            // 现在只有【真实还在战斗任务】（指派或任意攻击任务）才吞；idle 读数
+            // = 残留标记 → 清掉后继续走参战评估；被外部换走的任务同样清标记后重评。
+            if (isAssignedOrCombatTask(maid, curTask)) {
+                // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行
                 if (hasThreatNearby(maid)) {
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
                 }
-                return 0;
+                return 0; // 真在战斗：只续威胁计时，不重复参战
             }
-            clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
-            // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
-            // 任务被外部接管 → 尊重新任务不动它，但 home/作息还原到战斗前（"切回
-            // 之前的模式"兜底，不再只有"清标记"半途而废）
+            clearMarkers(maid);
+            // v1.1.0 实测一百四十九：任务被外部接管 → 尊重新任务不动它，但 home/作息还原
             restorePrevMode(maid);
-            com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 战斗中任务被接管（当前 " + (curTask != null ? curTask.getUid() : "null")
-                    + " 非攻击任务），清标记退出");
+            if (isIdleReadingTask(curTask)) {
+                com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 残留战斗标记自愈（当前 idle），重新评估参战");
+            } else {
+                com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 战斗中任务被接管（当前 " + (curTask != null ? curTask.getUid() : "null")
+                        + " 非攻击任务），清标记退出");
+            }
+            // 不 return——清完标记继续走下面的参战评估
         }
         // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
         // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
@@ -501,6 +506,8 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
         maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
         maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
+        // v1.1.0 实测一百六十二：记录战斗开始时间（硬性超时还原兜底）
+        maid.getPersistentData().m_128356_(COMBAT_START_TAG, maid.m_9236_().m_46467_());
         // v1.1.0 实测一百四十九（参考 tlm_beyond_space RegularRescueSupport）：参战瞬间
         // 快照 home 模式与作息——还原时一并恢复（"切回之前的模式"的完整状态闭环）
         maid.getPersistentData().m_128379_(COMBAT_PREV_HOME_TAG, maid.isHomeModeEnable());
@@ -578,12 +585,21 @@ public class AutoCombatSwitch {
                 boolean weaponless = curTask != null
                         && curTask instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
                         && !hasWeaponForTask(maid, curTask);
-                boolean threatNearby = weaponless ? false : hasThreatNearby(maid);
-                if (weaponless) {
+                // v1.1.0 实测一百六十二【硬性兜底】：战斗会话超过 90 秒仍未还原——
+                // 无论威胁是否仍在、安全计时是否被续杯、僵局阀是否失效，都强制切回。
+                // 保证任何门都卡不死女仆（用户："怎么都没法还原"）。
+                long combatStart = maid.getPersistentData().m_128454_(COMBAT_START_TAG);
+                boolean hardDeadline = combatStart > 0 && now - combatStart > COMBAT_HARD_DEADLINE_TICKS;
+                boolean forceRestore = weaponless || hardDeadline;
+                boolean threatNearby = forceRestore ? false : hasThreatNearby(maid);
+                if (forceRestore) {
                     com.maidsmart.tool.PromaidLog.log("战斗",
                             com.maidsmart.tool.PromaidLog.nameOf(maid)
-                                    + " 战斗任务 " + maid.getTask().getUid()
-                                    + " 无可用武器（模组武器被拿走？），强制还原");
+                                    + (hardDeadline
+                                            ? " 战斗会话超时 " + (COMBAT_HARD_DEADLINE_TICKS / 20)
+                                            + " 秒仍未还原，强制还原"
+                                            : " 战斗任务 " + curTask.getUid()
+                                            + " 无可用武器（模组武器被拿走？），强制还原"));
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, 0L);
                 }
                 // v1.1.0 实测八十四：僵局逃逸阀——威胁仍在还原半径内，但双方超过
@@ -623,7 +639,7 @@ public class AutoCombatSwitch {
                 // v1.1.0 实测一百四十八：武器已被拿走时跳过"远处切远程"分支——
                 // 该分支切成功会续杯 LAST_THREAT 并 continue（继续战斗），与上面的
                 // 强制还原冲突（武器没了还留在战斗里 = 卡死）
-                if (!weaponless && farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
+                if (!forceRestore && farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
                     String beforeTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
                     retuneCombatTactics(maid);
                     String afterTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
@@ -641,8 +657,8 @@ public class AutoCombatSwitch {
                     }
                     // 无远程手段 → 落回正常还原（安全期后退出）
                 }
-                if (!restoreOn && !weaponless) {
-                    continue; // 自动还原关：只换战术不还原（武器被拿走时例外——强制还原）
+                if (!restoreOn && !forceRestore) {
+                    continue; // 自动还原关：只换战术不还原（强制还原时例外——照常还原）
                 }
                 long lastThreat = maid.getPersistentData().m_128454_(LAST_THREAT_TAG);
                 if (now - lastThreat < MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()) {
@@ -1240,6 +1256,8 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
         // v1.1.0 实测八十四：接触标记一并清（判定走 getBoolean，putBoolean false 不删键）
         maid.getPersistentData().m_128379_(LAST_CONTACT_TAG, false);
+        // v1.1.0 实测一百六十二：战斗开始时间一并清
+        maid.getPersistentData().m_128379_(COMBAT_START_TAG, false);
         TACTIC_STATE.remove(maid.m_20148_());
     }
 
