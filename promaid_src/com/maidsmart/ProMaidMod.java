@@ -84,6 +84,12 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
             }
+            // v1.1.0 实测一百七十：排班切换可用性检测默认翻转 true→false——旧默认的
+            // "没活不切"把排班女仆钉死在原地、任务不随段切换（用户反馈设计失败）；
+            // 旧档存的 true 一律迁到 false，想用完整检测可在面板重新打开
+            if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
+                com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
+            }
             migrateOreTable();
         } catch (Exception ignored) {
         }
