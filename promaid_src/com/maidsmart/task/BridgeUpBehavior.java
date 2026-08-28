@@ -33,10 +33,11 @@ import java.util.Map;
  * - 开关开启；主人存在、活着、同维度；女仆非 home 模式、非自保状态
  * - 任务未被实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩中、建造未暂停不追人；
  *   详见 isTaskOccupied）
- * - 球面门槛（实测一百三十）：女仆→主人 3D 欧氏距离 > bridge.minRadius（默认 2）
- * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，主人【不在下方】且水平
- *   拉开 >4 格即启动追逐（v1.1.0 实测一百四十一，参考 endofdays 僵尸：启动后每步
- *   冷却在前方脚下悬空处铺桥、实心地面走路，持续尝试逼近——不再要求"前方悬空才启动"）
+ * - 启动/收尾区错开（实测一百四十三）：与 canContinue 的 2.5 格"reached"收尾不相交——
+ *   启动须离开收尾区（> max(bridge.minRadius, 2.5)），消除 2~2.5 格 start/stop 抖动
+ * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，主人【不在下方】即启动
+ *   追逐（v1.1.0 实测一百四十一，参考 endofdays 僵尸：启动后每步冷却在前方脚下悬空
+ *   处铺桥、实心地面走路，持续尝试逼近——不再要求"前方悬空/水平 >4 格"才启动）
  * - 距离上限：女仆【自己半空】时上限放开（v1.1.0 实测一百四十三，僵尸索敌式——搭
  *   方块是唯一通路，主人飞多远都持续搭，方块耗尽自然停）；地面/非空中：主人空中或
  *   高于女仆时取 max(maxDist, airMaxDist)，否则 maxDist（默认 7；airMaxDist 默认 128）
@@ -266,17 +267,21 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // ① 高差达标（dy >= minDy）→ 垂直搭高（旧语义再现）；② 竖直差不多但水平
         // 已拉开 + 前方脚下悬空（低头没路可走）→ 平铺搭桥（实心地面平地不启桥，
         // 根治 dy=0 平地上一秒一轮 start/stop/reached 的空转抖动）。
-        if (dist3 <= MaidSmartConfig.BRIDGE_MIN_RADIUS.get()) {
-            return false; // 球面之内——跟随走路即可
+        // v1.1.0 实测一百四十三【启动/收尾区错开，修 2~2.5 格抖动】：旧版启动区
+        //（dist3 > minRadius=2）与 canContinue 收尾（dSq<=6.25=2.5 格"reached"）重叠在
+        // 2~2.5 格 band——行为每秒 start→reached→stop（日志实证 bridge-up start/stop
+        // reason=reached 刷屏），tick 根本没机会铺桥，主人 5 格也不搭。现在启动须离开
+        // 收尾区（>max(minRadius, 2.5)），与收尾区不相交 → 无抖动，主人 5 格照常启动。
+        double minStart = Math.max(MaidSmartConfig.BRIDGE_MIN_RADIUS.get(), 2.5);
+        if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
+                <= minStart * minStart) {
+            return false; // 未离开"已到达"区——跟随走路即可
         }
         if (dy < Math.min(minDy, 4)) {
-            // 高差不足 = 平地/低高差场景（v1.1.0 实测一百四十一，参考 endofdays
-            // BlockBuildBridGeGoal 的追逐式搭桥）：不再要求"前方脚下悬空"才启动——
-            // 主人不在下方且水平拉开 >4 格就启动追逐；每步冷却在前方有悬空时铺桥、
-            // 实心地面走路（tryAirBridgeStep 逐 tick 判前方），像僵尸一样持续尝试
-            // 逼近主人。hDist<=4 不启动（太近走路即可，也避免 2~2.5 格处启动/停止
-            // 边界抖动——实测一百三十的球面半径 + 此距离下限双保险）
-            if (dy < 0 || hDist <= 4.0) {
+            // 高差不足 = 平地/低高差（v1.1.0 实测一百四十一追逐式）：主人不在下方即
+            // 启动追逐（每步冷却前方悬空铺桥、实心走路，像僵尸持续逼近主人）；主人
+            // 低于女仆不启桥（走下坡不需要搭）
+            if (dy < 0) {
                 return false;
             }
         }
