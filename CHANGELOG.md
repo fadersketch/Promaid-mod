@@ -1,5 +1,16 @@
 ﻿# 更新日志
 
+## 实测一百七十二
+
+- 还原扫描心跳诊断（用户："过了 10 秒钟战斗任务不会还原"——游戏重启后 restore-scan 门级诊断仍零条，无法确定还原扫描是否在跑）：
+  - 【问题】所有会话 restore-scan（一百六十四）零条 + 无还原日志 + 无异常——卡点可能是：扫描没跑 / 女仆被排班门清理 / 还原动作静默失败，静态无法区分
+  - 【本次】还原扫描新增**心跳 + 门统计**（每 10 秒一条，latest.log 搜 `auto-combat scan`）：`active=扫描看到的战斗态女仆数 / schedCleared=被排班门清理的`——一次测试定案：
+    - 心跳完全不出现 → onServerTick 没跑（注册/事件问题）
+    - active>0 且 schedCleared>0 → 女仆被排班门清理（排班优先设计使然，非 bug）
+    - active>0 且 schedCleared=0 但无 restore-scan → 卡在威胁/安全计时门
+    - active>0 且 restore-scan 出现 → 直接看威胁明细定位
+  - 测试路径：重启 → 确认女仆排班**已关闭**（书里关掉，且手动改任务不再被拦截）→ 打怪 → 杀怪切和平 → 等 1~2 分钟 → latest.log 搜 `auto-combat scan` 和 `restore-scan` 发我
+
 ## 实测一百七十一
 
 - 模组武器"选到又换走"根治（游戏重启后日志实证：00:59:19 候选池 `melee=[attack, feed_animal, true_power_of_maid:slashblade_attack, ef_tlm:fight_mode_task]`——拔刀剑/史诗战斗任务都在池里、第一次参战确实选了 slashblade_attack，但 10 毫秒后"自愈"触发重选、随机落回原版 attack = "不会拿出拔刀剑"的直接原因）：
