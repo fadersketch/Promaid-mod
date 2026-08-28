@@ -235,10 +235,16 @@ public final class ScheduleManager {
                             if (fromUid.equals(toUid)) {
                                 // 已经在该任务上：无需重设（避免无意义 refreshBrain 重建 AI）
                             } else if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()
-                                    && !ScheduleTaskAvailability.isAvailable(maid, target)) {
+                                    ? !ScheduleTaskAvailability.isAvailable(maid, target)
+                                    : !ScheduleTaskAvailability.isEnabled(maid, target)) {
                                 // v1.1.0 实测一百三十三 ①：切换前可用性检测——没活不切
+                                // v1.1.0 实测一百七十（用户："选择排班后任务不变化、时间
+                                // 流逝任务也不随段切换——没活不切设计失败"）：默认只查
+                                // isEnable 硬闸，不再做"附近有没有矿/树/炉子/作物"软探测——
+                                // 任务状态必须跟着时间段落真实切换（软探测开着时仍走
+                                // 完整可用性判定，可在面板调回）
                                 soft = true;
-                                fail = "目标任务 '" + seg.taskUid() + "' 当前无可用工作（没活不切，约 10 秒后重试）";
+                                fail = "目标任务 '" + seg.taskUid() + "' 当前不可用（任务被禁用/无法切换，约 10 秒后重试）";
                             } else if (ScheduleSwitchState.shouldSuppressReverseSwitch(maid.m_20148_(),
                                     fromUid, toUid, nowTick,
                                     com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get(),
