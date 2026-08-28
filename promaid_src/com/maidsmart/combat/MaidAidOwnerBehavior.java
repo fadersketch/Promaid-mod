@@ -1213,15 +1213,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  "投喂应该跟本来就有的喂食功能一样是直接喂给主人"）。
      *  v1.5.289：牛奶先查【正面状态】——主人身上有增益效果时不喂牛奶（牛奶清
      *  全部效果会把力量/再生/抗火等增益一起清掉，与女仆自己喝牛奶同款前提）；
-     *  此时只喂蜂蜜（蜂蜜只解中毒+饱食，不清增益）。 */
+     *  此时只喂蜂蜜（蜂蜜只解中毒+饱食，不清增益）。
+     *  v1.1.0 实测一百五十二：MISC_MILK_FEED_WITH_BUFF 开启时无视增益照喂——
+     *  主人装备/饰品带永久增益时旧版永远不满足"无增益"，中毒/凋零也不解。 */
     private boolean feedMilkOrHoneyDirect(EntityMaid maid, ServerPlayer owner) {
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
             net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.f_42787_;
-            // 牛奶优先（全解）——前提：主人身上没有增益效果
-            if (milk != null && !this.ownerHasBeneficialEffect(owner)) {
+            // 牛奶优先（全解）——前提：主人身上没有增益效果（开关开启时无视增益）
+            boolean ownerHasBuff = this.ownerHasBeneficialEffect(owner);
+            if (milk != null && (!ownerHasBuff
+                    || com.maidsmart.config.MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get())) {
                 // v1.5.299：手持牛奶也认（主手→副手）——旧版只扫背包
                 ItemStack handMilk = maid.m_21205_();
                 boolean handIsMilk = !handMilk.m_41619_() && handMilk.m_41720_() == milk;
