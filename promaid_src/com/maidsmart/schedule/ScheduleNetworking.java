@@ -212,6 +212,14 @@ public final class ScheduleNetworking {
                 if (pkt.on == 0 || pkt.on == 1) {
                     ScheduleData.setOn(maid, pkt.on == 1);
                     maid.setHomeModeEnable(pkt.on == 1);
+                    // v1.1.0 实测一百三十七【切换至排班 = 强制接管】：开启的瞬间清掉可能
+                    // 残留的本段去抖键/尝试记录/重试冷却，立即按当前时段应用（手头任务
+                    // 强制改为该时段排班的任务）。旧版只等 1 秒扫描，且残留去抖键会直接
+                    // 跳过——手头任务要拖到下个时段边界才切，观感"开了排班没生效"
+                    if (pkt.on == 1) {
+                        com.maidsmart.schedule.ScheduleManager.clearAppliedForSave(maid);
+                        com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                    }
                 }
                 // v1.1.0 实测七十六：排班开着时，工作模式与任务【都】由日程表管理——
                 // 手动改哪一个都会在下个时段边界被日程翻回去，索性硬性拦下（先关排班）
@@ -401,16 +409,21 @@ public final class ScheduleNetworking {
                                 + "~" + ScheduleData.fmt(safe.get(0).endMin())
                                 + " 模式=" + safe.get(0).mode()
                                 + " 任务=" + safe.get(0).taskUid()));
-                // v1.1.0 实测一百三十五：保存 = 明确意图——清掉"本段已应用"的去抖键/尝试记录/
-                // 重试冷却，让 applyNow 立即按新日程落一次（旧版去抖键只记段起点不记
-                // 任务内容：改当前时段任务保存后被去抖挡掉，要等下个时段边界才生效，
-                // 观感 = "排班卡死/改了不生效"）
+                // v1.1.0 实测一百三十五/一百三十七：仅【开启】排班的保存才"清残留 + 立即应用"——
+                // 切换至排班 = 手头任务强制改为当前时段任务（去抖键只记段起点不记内容，
+                // 旧版改当前段保存后被去抖挡掉，要等段边界；一百三十七补齐 QuickApply 开启
+                // 路径）。【关闭】排班保存时不再调用 applyNow——旧版无条件调用，applyNow 会
+                // 反向强制 home 模式并按日程应用段任务，等于"关了排班却还在执行排班"。
+                // 关闭时也清掉残留记录/冷却，避免下次再开排班被旧状态干扰。
                 com.maidsmart.schedule.ScheduleManager.clearAppliedForSave(maid);
-                // v1.1.0 实测七十：保存日程开启排班的瞬间，她自动进入在家模式
-                // （守家按日程干活、不跨维度追人）；关闭排班即自动解除
-                maid.setHomeModeEnable(pkt.on);
-                // 保存后立即按当前时间应用一次（不用等下一个整分检查）
-                com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                if (pkt.on) {
+                    // v1.1.0 实测七十：开启的瞬间她自动进入在家模式（守家按日程干活）
+                    maid.setHomeModeEnable(true);
+                    // 保存后立即按当前时间应用一次（不用等下一个整分检查）
+                    com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                } else {
+                    maid.setHomeModeEnable(false);
+                }
             });
             ctx.get().setPacketHandled(true);
         }
