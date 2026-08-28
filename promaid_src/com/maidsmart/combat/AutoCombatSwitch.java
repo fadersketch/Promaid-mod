@@ -90,6 +90,10 @@ public class AutoCombatSwitch {
     private static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
+    /** v1.1.0 实测一百六十四：还原扫描诊断节流（maidId → 上次诊断 tick）——定位
+     *  "还原扫描卡在哪个门"（用户追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
+     *  一条 latest.log（搜 "restore-scan"）。 */
+    private static final java.util.Map<java.util.UUID, Long> RESTORE_DIAG_SINCE = new java.util.HashMap<>();
 
     /** 主人被攻击（任意来源）→ 附近女仆切战斗
      *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
@@ -580,6 +584,25 @@ public class AutoCombatSwitch {
                 // 防自相矛盾，同 tryEngageMaid）——"接管"误判（日志实证判定读非 idle、
                 // 打印却变 idle）会让还原链被丢 = 切不回原来模式
                 IMaidTask curTask = maid.getTask();
+                // v1.1.0 实测一百六十四：还原扫描诊断（每 10 秒/女仆一条，latest.log 搜
+                // "restore-scan"）——定位"还原扫描卡在哪个门"（用户追问：为什么卡住，
+                // 不能只加超时兜底）：task=当前任务 / assigned=指派战斗任务 /
+                // lastThreatAge=距上次威胁刷新秒数 / threatDetail=威胁来源明细 /
+                // preserve=自保 / isOnSched=排班开启
+                Long diagLast = RESTORE_DIAG_SINCE.get(maid.m_20148_());
+                long diagNow = level.m_46467_();
+                if (diagLast == null || diagNow - diagLast >= 200L) {
+                    RESTORE_DIAG_SINCE.put(maid.m_20148_(), diagNow);
+                    com.mojang.logging.LogUtils.getLogger().info(
+                            "auto-combat restore-scan: maid={} task={} assigned={} lastThreatAge={}s threatDetail={} preserve={} isOnSched={}",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid),
+                            curTask != null && curTask.getUid() != null ? curTask.getUid() : "null",
+                            maid.getPersistentData().m_128461_(ASSIGNED_TAG),
+                            (diagNow - maid.getPersistentData().m_128454_(LAST_THREAT_TAG)) / 20,
+                            threatDetail(maid),
+                            maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG),
+                            com.maidsmart.schedule.ScheduleData.isOn(maid));
+                }
                 if (!isAssignedOrCombatTask(maid, curTask) && !isIdleReadingTask(curTask)) {
                     clearMarkers(maid);
                     // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
@@ -1292,7 +1315,52 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128379_(LAST_CONTACT_TAG, false);
         // v1.1.0 实测一百六十二：战斗开始时间一并清
         maid.getPersistentData().m_128379_(COMBAT_START_TAG, false);
+        RESTORE_DIAG_SINCE.remove(maid.m_20148_());
         TACTIC_STATE.remove(maid.m_20148_());
+    }
+
+    /** v1.1.0 实测一百六十四：威胁判定详情（诊断用）——fixed=固定半径内敌对生物距离；
+     *  ring=动态圈来源（存活/已死）；none=无威胁；err=异常。定位 hasThreatNearby 为何
+     *  一直 true（固定扫描 vs 动态圈哪个在挡还原）。 */
+    private static String threatDetail(EntityMaid maid) {
+        try {
+            double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
+            for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
+                    net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
+                if (!e.m_6084_()) {
+                    continue;
+                }
+                if (e instanceof net.minecraft.world.entity.monster.Enemy) {
+                    return "fixed:" + String.format("%.1f",
+                            Math.sqrt(maid.m_20238_(e.m_20182_())));
+                }
+                if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
+                    return "fixed-neutral:" + String.format("%.1f",
+                            Math.sqrt(maid.m_20238_(e.m_20182_())));
+                }
+            }
+            int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
+            if (sec > 0) {
+                long nowT = maid.m_9236_().m_46467_();
+                long marked = maid.getPersistentData().m_128454_(ATTACKER_TIME_TAG);
+                if (nowT - marked <= sec * 20L) {
+                    String uuidStr = maid.getPersistentData().m_128461_(ATTACKER_UUID_TAG);
+                    if (!uuidStr.isEmpty()) {
+                        net.minecraft.world.entity.Entity attacker =
+                                ((net.minecraft.server.level.ServerLevel) maid.m_9236_())
+                                        .m_8791_(java.util.UUID.fromString(uuidStr));
+                        if (attacker != null && attacker.m_6084_()) {
+                            return "ring:alive@" + String.format("%.1f",
+                                    Math.sqrt(maid.m_20238_(attacker.m_20182_())));
+                        }
+                        return "ring:dead";
+                    }
+                }
+            }
+            return "none";
+        } catch (Exception e) {
+            return "err:" + e.getClass().getSimpleName();
+        }
     }
 
     /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管）
