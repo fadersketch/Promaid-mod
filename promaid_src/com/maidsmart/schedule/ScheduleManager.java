@@ -143,8 +143,11 @@ public final class ScheduleManager {
             diag(maid, "preserve", who + " 自保中——排班让位（自保优先）", level);
             return;
         }
-        // 主动战斗中让位（战斗还原原任务后再由排班接管下一段）
-        if (AutoCombatSwitch.isAutoCombatActive(maid)) {
+        // 主动战斗中让位（战斗还原原任务后再由排班接管下一段）——v1.1.0 实测一百六十三：
+        // 只有【真实在战斗任务】才算战斗中；COMBAT_ACTIVE 残留 true 但任务已不是攻击
+        // 任务（老版本残留标记）→ 不拦截，排班照常应用（否则排班被残留标记挡死 =
+        // "排班不切换、女仆一直跟随主人"，8月28日起日志实证排班永不应用段）
+        if (AutoCombatSwitch.isReallyCombatActive(maid)) {
             diag(maid, "combat", who + " 主动战斗中——排班让位（战斗还原后由排班接管）", level);
             return;
         }
