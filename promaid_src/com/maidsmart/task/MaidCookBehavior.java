@@ -87,6 +87,33 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     private int cooldown = 0;
     /** 目标扫描节流：找不到熔炉时每 20 tick 才扫一次 */
     private int scanCooldown = 0;
+    /** v1.1.0 实测一百六十八：炉子占用表（维度|坐标 → 占用女仆 UUID）——多个女仆同时
+     *  在场时各自绑定不同炉子，避免全挤到第一个炉子上（用户："两个女仆三个炉子，
+     *  只有一个炉子工作"）。占用者死亡/换维/停行为时释放（m_6732_ + 扫描时懒清理）。 */
+    private static final java.util.Map<String, java.util.UUID> FURNACE_USERS = new java.util.HashMap<>();
+    /** 本行为实例当前占用的炉子 key（行为停止/炉子丢失时释放） */
+    private String myFurnaceKey = null;
+
+    /** 炉子占用键：维度 + 坐标（防跨维度同坐标冲突） */
+    private static String furnaceKey(ServerLevel level, BlockPos pos) {
+        return level.m_46472_().m_135782_() + "|"
+                + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_();
+    }
+
+    /** 占用当前绑定的炉子（替换旧占用） */
+    private void claimFurnace(ServerLevel level, EntityMaid maid, BlockPos pos) {
+        this.releaseFurnace();
+        this.myFurnaceKey = furnaceKey(level, pos);
+        FURNACE_USERS.put(this.myFurnaceKey, maid.m_20148_());
+    }
+
+    /** 释放本实例占用的炉子（仅当占用者是自己） */
+    private void releaseFurnace() {
+        if (this.myFurnaceKey != null) {
+            FURNACE_USERS.remove(this.myFurnaceKey);
+            this.myFurnaceKey = null;
+        }
+    }
 
     public MaidCookBehavior() {
         // v1.5.124：无限运行时长（旧版默认 60 tick 上限导致行为每 3 秒重启）
@@ -130,10 +157,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             if (this.furnacePos == null) {
                 return;
             }
+            // v1.1.0 实测一百六十八：绑定成功 → 登记炉子占用（多女仆分散）
+            this.claimFurnace(level, maid, this.furnacePos);
         }
         BlockState state = level.m_8055_(this.furnacePos);
         if (!(state.m_60734_() instanceof AbstractFurnaceBlock)) {
             this.furnacePos = null;
+            this.releaseFurnace(); // v1.1.0 实测一百六十八：炉子没了 → 释放占用
             this.standUp(maid);
             MaidWorkTags.setStill(maid, true); // 熔炉没了：继续站桩等扫描
             return;
@@ -193,6 +223,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // v1.5.24：行为真正停止时解除站桩标记（双保险）+ 恢复站立
         MaidWorkTags.setStill(maid, false);
         this.standUp(maid);
+        // v1.1.0 实测一百六十八：行为停止 → 释放炉子占用（其他女仆可接手）
+        this.releaseFurnace();
     }
 
     /** v1.5.252：恢复站立（若当前是坐姿） */
@@ -386,6 +418,19 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 for (int dz = -cookRadius(); dz <= cookRadius(); dz++) {
                     BlockPos p = pos.m_7918_(dx, dy, dz);
                     if (level.m_8055_(p).m_60734_() instanceof AbstractFurnaceBlock) {
+                        // v1.1.0 实测一百六十八：跳过被【其他女仆】占用的炉子（自己
+                        // 占的不跳）——多个女仆分散到不同炉子，不挤同一个；占用者
+                        // 已死/已移除 → 懒清理该占用
+                        String k = furnaceKey(level, p);
+                        java.util.UUID owner = FURNACE_USERS.get(k);
+                        if (owner != null && !owner.equals(maid.m_20148_())) {
+                            net.minecraft.world.entity.Entity o = level.m_8791_(owner);
+                            if (o == null || !o.m_6084_()) {
+                                FURNACE_USERS.remove(k); // 占用者没了 → 释放
+                            } else {
+                                continue; // 别的女仆在用 → 换下一个炉子
+                            }
+                        }
                         return p;
                     }
                 }
