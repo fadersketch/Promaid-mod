@@ -139,9 +139,9 @@ public class WorkStatusReporter {
             // 诊断（v1.5.7）：真实扫描一次熔炉，区分"搜索逻辑 bug"和"行为没运行"
             int found = countBlocks(maid, net.minecraft.world.level.block.AbstractFurnaceBlock.class);
             if (found > 0) {
-                return "熔炉明明就在附近（" + found + "个），但我没能开始工作——请把这句话反馈给主人";
+                return "炉子明明就在附近（" + found + "个），但我没能开始烧制——请把这句话反馈给主人";
             }
-            return "附近没有熔炉可以做饭";
+            return "附近没有炉子可以烧制";
         }
         if (uid.equals(BREW)) {
             // 诊断（v1.5.7）：真实扫描一次酿造台
