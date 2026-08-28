@@ -34,8 +34,9 @@ import java.util.Map;
  * - 任务未被实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩中、建造未暂停不追人；
  *   详见 isTaskOccupied）
  * - 球面门槛（实测一百三十）：女仆→主人 3D 欧氏距离 > bridge.minRadius（默认 2）
- * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，需 dy >= 0 且朝主人
- *   方向 1~2 格内脚下悬空（hasGapAhead）才启——实心地面平地不启桥（纯走导航）
+ * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，主人【不在下方】且水平
+ *   拉开 >4 格即启动追逐（v1.1.0 实测一百四十一，参考 endofdays 僵尸：启动后每步
+ *   冷却在前方脚下悬空处铺桥、实心地面走路，持续尝试逼近——不再要求"前方悬空才启动"）
  * - 距离上限：女仆/主人空中、或主人高于女仆时取 max(maxDist, airMaxDist)，
  *   否则 maxDist（默认 7；airMaxDist 默认 24、上限 128）
  * - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter）
@@ -268,8 +269,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false; // 球面之内——跟随走路即可
         }
         if (dy < Math.min(minDy, 4)) {
-            // 高差不足 = 平地场景——“前方脚下悬空”才桥；实心地面纯走导航
-            if (dy < 0 || !hasGapAhead(level, maid, hx, hz, hDist)) {
+            // 高差不足 = 平地/低高差场景（v1.1.0 实测一百四十一，参考 endofdays
+            // BlockBuildBridGeGoal 的追逐式搭桥）：不再要求"前方脚下悬空"才启动——
+            // 主人不在下方且水平拉开 >4 格就启动追逐；每步冷却在前方有悬空时铺桥、
+            // 实心地面走路（tryAirBridgeStep 逐 tick 判前方），像僵尸一样持续尝试
+            // 逼近主人。hDist<=4 不启动（太近走路即可，也避免 2~2.5 格处启动/停止
+            // 边界抖动——实测一百三十的球面半径 + 此距离下限双保险）
+            if (dy < 0 || hDist <= 4.0) {
                 return false;
             }
         }
