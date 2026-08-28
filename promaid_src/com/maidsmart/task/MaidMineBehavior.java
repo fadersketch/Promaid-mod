@@ -1585,6 +1585,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 目标矿在正上方也不误判为"障碍"（旧版把要挖的矿当障碍直接放弃 → 成功率低）。
      */
     private boolean pillarUpStep(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测一百五十六：骑乘中（扫帚等载具）不搭方块——移动由载具控制，
+        // 垫方块只会留一堆残渣（用户："和女仆在扫帚上挖矿时女仆会搭方块"）
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false;
+        }
         if (this.pillarCooldown > 0) {
             this.pillarCooldown--;
             return true; // 冷却中：下 tick 再垫（v1.5.113 B6：成功放置才设冷却）
@@ -1658,6 +1663,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 反复垫直到够得着。前方脚下是平地（不悬空）→ 不需要垫，直接走过去即可。
      */
     private boolean slopeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        }
         if (this.pillarCooldown > 0) {
             this.pillarCooldown--;
             return true; // v1.5.113（B6）：冷却中——等一步走完再垫（不重复消耗）
@@ -1698,6 +1706,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 只垫"该垫"的位置，不破坏任何方块；垫一块后重算（下 tick 再评估/走）。
      */
     private boolean bridgeToOre(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        }
         if (hDist < 1.0) {
             return false;
         }

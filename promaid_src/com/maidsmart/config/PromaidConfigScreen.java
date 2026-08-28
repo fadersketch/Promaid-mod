@@ -1116,6 +1116,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MINE_RELOCATE_THROTTLE, s), "重定位节流（tick，防边界抖动）"));
         this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.MINE_PILLAR_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.MINE_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
+        // v1.1.0 实测一百五十六：骑乘中禁止搭方块
+        this.rows.add(new BoolRow("骑乘中禁止搭方块", MaidSmartConfig.MINE_RIDE_NO_PILLAR.get(),
+                v -> MaidSmartConfig.MINE_RIDE_NO_PILLAR.set(v), "骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留残渣；关闭 = 旧行为（骑乘也照常搭）"));
         this.rows.add(new NumRow("废石清理间隔（tick）", String.valueOf(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL, s), "废石清理间隔（tick，20=1 秒）：多久检查一次背包废石是否超量，调小清理更及时、略耗性能"));
         this.rows.add(new NumRow("播报限频（tick）", String.valueOf(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL.get()),
@@ -1647,6 +1650,17 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("逃生与自保（被动保命）", false));
         this.rows.add(new BoolRow("自保行为", MaidSmartConfig.COMBAT_SELF_PRESERVE.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE.set(v), "自保行为（轻量被动：环境危险/低血时插保命动作——喝药/垫高/逃跑/传送；平时零干预，与战斗/战术并行不冲突）"));
+        // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）
+        this.rows.add(new BoolRow("火焰保护饰品识别", MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get(),
+                v -> MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.set(v), "佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为"));
+        this.rows.add(new BoolRow("溺水保护饰品识别", MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get(),
+                v -> MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.set(v), "佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺；关闭 = 旧行为"));
+        // v1.1.0 实测一百五十二：有增益也喂牛奶（女仆自己喝 + 给主人喂两处共用）
+        this.rows.add(new BoolRow("有增益也喂牛奶", MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get(),
+                v -> MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.set(v), "女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）"));
+        // v1.1.0 实测一百五十五：保命物品下保留逃跑
+        this.rows.add(new BoolRow("保命物品下保留逃跑", MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get(),
+                v -> MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.set(v), "携带保命物品（TLM 绀珠之药 / 不死图腾）时是否还逃跑：默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑"));
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
         this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
         this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
