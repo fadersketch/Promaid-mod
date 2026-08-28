@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百五十一
+
+- 跟随模式乱跑修复（用户："跟随模式时女仆有时候会乱跑，参照桌面改版 TLM jar 的设计，平常的时候女仆会跟随在 4 格以内"）：
+  - 【实证分析】反编译对比改版 jar（touhoulittlemaid-1.5.3-modified-all.jar）与官方 1.5.3 的 `MaidFollowOwnerTask`：距离逻辑（start 里的 teleport/walk 分支，`getRestrictRadius` 双带）**字节码完全一致**；唯一区别是改版把逻辑提取成 `tryFollowOwner` 并加了 **tick 覆写——每 tick 驱动**。官方版只在行为【启动时】设一次寻路目标：被其他行为覆盖、或 MoveToTargetSink 的 150~250 tick 刹车（走路满 7.5~12.5 秒清 WALK_TARGET + 停导航，实测一百二十九修过的同源问题）清掉后，女仆失去跟随目标 → 走走停停/乱跑
+  - 【修复】新增 `MaidFollowOwnerTickMixin`：注入跟随任务的 tick（`m_6725_`，继承自 Behavior），每 tick 重断言——**4 格内不动（跟随已达成）；超过 4 格重新 setWalkAndLookTarget 指向主人**（speedModifier/stopDistance 与官方任务字段一致，跟随自然收敛在 4 格内）；守家/脑冻结/无主/跨维度不拉（与官方 maidStateConditions 同口径）；**干活中不拉**（防跟随目标覆盖工作寻路）
+  - 总开关 `misc.followTighten`（默认开）+ 配置面板「跟随收紧」行；关闭 = 官方 1.5.3 原版行为
+
 ## 实测一百五十
 
 - 和平模式（怪全清）后女仆仍不还原的兜底根治（用户复现路径：简单难度 → 玩家攻击怪 → 女仆参战 → 女仆杀怪 → 切和平 → 女仆仍不切回原模式；参考 tlm_beyond_space 的 restoreTemporaryState：**先还原、后清会话——失败不清标记、下轮重试**）：
