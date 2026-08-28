@@ -311,4 +311,16 @@ public final class ScheduleManager {
         } catch (Throwable ignored) {
         }
     }
+
+    /** v1.1.0 实测一百四十四：实体重新入世界（魂符收放/区块重载/跨维度）时清【持久化的
+     *  本段去抖键】。魂符收进再放出：persistentData（含 APPLIED_TAG）随魂符保存 → 去抖键
+     *  与本段一致 → 调度器"本段已应用"跳过 = 排班不重放（任务/模式保持放出时的原样）。
+     *  只清 APPLIED_TAG：ATTEMPTED（尊重手动选择）/RETRY_AFTER（重试冷却）是内存态，
+     *  保留使区块重载场景下"任务被外部改过"的保护继续生效，不会误伤手动选择。 */
+    public static void clearAppliedForJoin(EntityMaid maid) {
+        try {
+            maid.getPersistentData().m_128359_(ScheduleData.APPLIED_TAG, "");
+        } catch (Throwable ignored) {
+        }
+    }
 }

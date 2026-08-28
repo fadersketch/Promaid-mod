@@ -113,8 +113,11 @@ public final class MaidChunkLoadManager {
                             && maid.m_20238_(ow.m_20182_()) >= 64.0) {
                         double fromY = maid.m_20186_();
                         if (teleportCore(maid, ow)) {
-                            LOGGER.info("maid rescue: id={} dim={} y={}->owner side",
-                                    maid.m_20148_(), lvl.m_46472_().m_135782_(), (int) fromY);
+                            // v1.1.0 实测一百四十四：日志带上维度最低建筑高度（min=）——
+                            // 救援触发即"真虚空"的现场证据，映射再错一眼可见
+                            LOGGER.info("maid rescue: id={} dim={} y={} min={}->owner side",
+                                    maid.m_20148_(), lvl.m_46472_().m_135782_(), (int) fromY,
+                                    lvl.m_141937_());
                         }
                     }
                 }
@@ -467,7 +470,14 @@ BlockPos stand = findStand(newLevel,
         if ("the_nether".equals(dim) && y >= 126.0) {
             return true; // 下界基岩顶层上方滞留（顶层方块占 y=127）
         }
-        return y < level.m_141928_(); // 掉出本维度最低建筑高度以下 = 真虚空
+        // v1.1.0 实测一百四十四【排班女仆不断瞬移根治】：旧版误用 m_141928_ =
+        // getHeight（主世界 384）当最低建筑高度——"y < 384"对所有站立女仆恒真，
+        // 受困救援把每只距主人 >8 格的女仆（含守家/排班女仆）每 5 秒拽回主人身边
+        // 一次（日志实证：排班锚点 (91,-60,139) 的女仆被当成"掉出世界"循环救援）。
+        // 正确映射 m_141937_ = getMinBuildHeight（主世界 -64 / 下界与末地 0，
+        // javap Level.getHeight 实证：未加载兜底返回 m_141937_ = getMinBuildHeight），
+        // 只有真正掉出维度最低建筑高度以下才触发救援。
+        return y < level.m_141937_(); // 掉出本维度最低建筑高度以下 = 真虚空
     }
 
     /**
