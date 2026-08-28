@@ -1,5 +1,15 @@
 ﻿# 更新日志
 
+## 实测一百四十九
+
+- 主动战斗"切回之前模式"根治（用户："主动攻击模式切换为之前的模式这个bug一直修不好"，参考 tlm_beyond_space 的会话快照机制——RegularRescueSupport 捕获 / TaskSwitchService.restore 还原 / restoreAfterExternalTaskChange 接管兜底）：
+  - 【历史教训】日志实证整份 promaid.log 里【从来没有一条"战斗还原"日志】——还原从未跑成，反复出现的是"战斗中任务被接管…清标记退出"→ 重新参战的循环；且参战快照多为 idle
+  - 【根因①·状态只存一半】参战只存了前任务 UID，没存 home 模式与作息（MaidSchedule）——"之前的模式"缺了一半。参考项目参战瞬间快照 任务+home+作息 三件套，结束时全量还原。修复：新增 `COMBAT_PREV_HOME_TAG`/`COMBAT_PREV_SCHEDULE_TAG`，参战捕获、还原时（排班关闭才生效，排班开启由日程表管理不覆盖）恢复 home+作息——"切回之前的模式"完整闭环
+  - 【根因②·"接管"只清标记不还原】任务被外部改走时旧版只清标记退出——参考项目 `restoreAfterExternalTaskChange` 是【尊重新任务、但把 home/作息还原回战斗前】。修复：两处接管路径（参战入口/还原扫描）清标记的同时调用 `restorePrevMode` 兜底
+  - 【根因③·同一 tick 多次读 getTask() 自相矛盾】TLM getTask() 读同步数据 DATA_TASK，uid 解析抖动会回落 idle（实测一百一十四）——日志实证"接管"判定时读的是非 idle、打印却变 idle，还原链被误判丢掉。修复：判定改【单次任务读取】（`isAssignedOrCombatTask`/`isIdleReadingTask` 传任务参数），参战入口与还原扫描共用同一读数
+  - 【根因④·还原前不装备】参考项目还原前 `prepareSwitch`（把原任务武器/工具装回主手）——修复：还原 setTask 前调用 `CombatTaskCompat.prepareSwitch`（结果忽略，MISSING 也照常还原任务本身）
+  - 还原链路现状：威胁消失（或武器被拿走强制还原/僵局逃逸）→ 先解析原任务（失败兜底 idle+排班）→ 清标记 → 排班开启交排班当前段，否则还原前任务 + home/作息 + 武器装备 → 全程日志
+
 ## 实测一百四十八
 
 - 战斗武器两连修（用户："女仆切换武器的时候还是不会使用模组武器；塞入模组武器后即使再拿出来，主动战斗就再也不触发了"，参考 tlm_beyond_space 的 CombatTaskCompatibility/TaskSwitchService）：

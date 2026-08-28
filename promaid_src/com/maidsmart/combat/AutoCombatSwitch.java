@@ -2,6 +2,7 @@ package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.api.task.FunctionCallSwitchResult;
 import com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask;
+import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import com.maidsmart.config.MaidSmartConfig;
@@ -73,6 +74,11 @@ public class AutoCombatSwitch {
      *  还原扫描时该生物若仍存活且在扩展窗口内，威胁圈自动放大把它包含进来 */
     private static final String ATTACKER_UUID_TAG = "maid_smart_combat_attacker";
     private static final String ATTACKER_TIME_TAG = "maid_smart_combat_attacker_time";
+    /** v1.1.0 实测一百四十九（参考 tlm_beyond_space 会话快照 RegularRescueSupport）：
+     *  战斗前的 home 模式——还原时一并恢复（"切回之前的模式"闭环：任务+home+作息） */
+    private static final String COMBAT_PREV_HOME_TAG = "maid_smart_combat_prev_home";
+    /** 战斗前的作息（MaidSchedule.name；空 = 未记录） */
+    private static final String COMBAT_PREV_SCHEDULE_TAG = "maid_smart_combat_prev_schedule";
     /** 僵局日志节流（每女仆 30 秒一条，latest.log 搜 "auto-combat stale"） */
     private static final java.util.Map<java.util.UUID, Long> STALE_LOG =
             new java.util.HashMap<>();
@@ -439,7 +445,11 @@ public class AutoCombatSwitch {
             // 读同步数据 DATA_TASK，uid 解析抖动时回落成 idle——idle 读数不再判"玩家
             // 接管"清标记（那会把还原链丢掉 = "切不回原来模式"的根因之一）；只有当前
             // 是【真实的其他任务】（非 idle、非战斗、非指派）才算接管。
-            if (isOnAssignedCombatTask(maid) || isIdleReading(maid)) {
+            // v1.1.0 实测一百四十九：判定用【单次任务读取】——同一 tick 多次读
+            // getTask() 会因 DATA_TASK 同步抖动自相矛盾（日志实证"接管"打印 idle
+            // 但判定时读的是别的任务），单次读取后所有判定共用同一读数。
+            IMaidTask curTask = maid.getTask();
+            if (isAssignedOrCombatTask(maid, curTask) || isIdleReadingTask(curTask)) {
                 // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
                 // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
                 // 无威胁战斗里还原时钟被反复推走 = 打完收不回去的第二道源头
@@ -449,8 +459,12 @@ public class AutoCombatSwitch {
                 return 0;
             }
             clearMarkers(maid); // 接管退出——不还原、不再背着旧标记
+            // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
+            // 任务被外部接管 → 尊重新任务不动它，但 home/作息还原到战斗前（"切回
+            // 之前的模式"兜底，不再只有"清标记"半途而废）
+            restorePrevMode(maid);
             com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 战斗中任务被接管（当前 " + (maid.getTask() != null ? maid.getTask().getUid() : "null")
+                    + " 战斗中任务被接管（当前 " + (curTask != null ? curTask.getUid() : "null")
                     + " 非攻击任务），清标记退出");
         }
         // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
@@ -487,6 +501,14 @@ public class AutoCombatSwitch {
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
         maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
         maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
+        // v1.1.0 实测一百四十九（参考 tlm_beyond_space RegularRescueSupport）：参战瞬间
+        // 快照 home 模式与作息——还原时一并恢复（"切回之前的模式"的完整状态闭环）
+        maid.getPersistentData().m_128379_(COMBAT_PREV_HOME_TAG, maid.isHomeModeEnable());
+        try {
+            maid.getPersistentData().m_128359_(COMBAT_PREV_SCHEDULE_TAG,
+                    maid.getSchedule() == null ? "" : maid.getSchedule().name());
+        } catch (Throwable ignored) {
+        }
         // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
         touchContact(maid);
         // v1.1.0 实测一百三十六：主动战斗是【自动系统】——setTask 打内部标记，
@@ -532,8 +554,16 @@ public class AutoCombatSwitch {
                 // 战斗期间任务被玩家/排班/LLM 换过（真实的其他任务）→ 玩家接管：只清标记退出，
                 // 不动当前任务。v1.1.0 实测一百三十九：getTask() 抖动回落 idle 不算接管
                 //（idle 读数继续走还原，否则清标记丢还原链 = "切不回原来模式"）
-                if (!isOnAssignedCombatTask(maid) && !isIdleReading(maid)) {
+                // v1.1.0 实测一百四十九：判定用【单次任务读取】（DATA_TASK 同步抖动
+                // 防自相矛盾，同 tryEngageMaid）——"接管"误判（日志实证判定读非 idle、
+                // 打印却变 idle）会让还原链被丢 = 切不回原来模式
+                IMaidTask curTask = maid.getTask();
+                if (!isAssignedOrCombatTask(maid, curTask) && !isIdleReadingTask(curTask)) {
                     clearMarkers(maid);
+                    // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
+                    // 任务被外部接管 → 尊重新任务不动它，但 home/作息还原到战斗前
+                    //（"切回之前的模式"兜底，不再只有"清标记"半途而废）
+                    restorePrevMode(maid);
                     // v1.1.0 实测九十四：运行日志
                     com.maidsmart.tool.PromaidLog.log("战斗",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 战斗中任务被接管（玩家/排班/LLM），清标记退出");
@@ -545,9 +575,9 @@ public class AutoCombatSwitch {
                 // 还原等待永久卡住 = 女仆永远"战斗中"，之后的参战触发全被 COMBAT_ACTIVE
                 // 分支跳过 = 主动战斗再也不触发。检测到武器不可用 → 强制走还原
                 // （跳过威胁刷新与安全时长等待），还原后她有武器时再正常参战。
-                boolean weaponless = maid.getTask() != null
-                        && maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
-                        && !hasWeaponForTask(maid, maid.getTask());
+                boolean weaponless = curTask != null
+                        && curTask instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
+                        && !hasWeaponForTask(maid, curTask);
                 boolean threatNearby = weaponless ? false : hasThreatNearby(maid);
                 if (weaponless) {
                     com.maidsmart.tool.PromaidLog.log("战斗",
@@ -666,6 +696,8 @@ public class AutoCombatSwitch {
                         } catch (Exception ignored) {
                         }
                     }
+                    // v1.1.0 实测一百四十九：兜底还原同样恢复 home/作息（排班关闭时）
+                    restorePrevMode(maid);
                     continue;
                 }
                 clearMarkers(maid);
@@ -693,10 +725,21 @@ public class AutoCombatSwitch {
                 if (stillOnCombat) {
                     // v1.1.0 实测一百三十六：战斗还原也是自动系统——打内部标记放行
                     IMaidTask restoreTask = prevTask; // 快照：prevTask 非最终变量，lambda 需捕获
+                    // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
+                    // 还原前先 prepareSwitch——把原任务需要的武器/工具装回主手（战斗中
+                    // 可能被换走）；结果忽略（MISSING 也照常还原任务本身）
+                    try {
+                        com.maidsmart.combat.CombatTaskCompat.prepareSwitch(maid, restoreTask);
+                    } catch (Throwable ignored) {
+                    }
                     com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
                             maid.m_20148_(), restoreTask.getUid(), () -> maid.setTask(restoreTask));
                     restored = true;
                 }
+                // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
+                // 还原 home 模式与作息（排班关闭时）——"切回之前的模式"完整闭环；
+                // 排班开启时作息由日程表管理（调度器每秒重断言），此处不覆盖
+                restorePrevMode(maid);
                 // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
                 // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
                 // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查
@@ -712,9 +755,9 @@ public class AutoCombatSwitch {
                             + "（威胁消失 " + ((now - lastThreat) / 20) + " 秒）");
                 } else {
                     // 任务在还原前被换（排班/玩家接管）——标记已清，正常退出
-                    String curTask = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
+                    String curTaskUid = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
                     com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 无需还原：任务战中已被换为 " + curTask);
+                            + " 无需还原：任务战中已被换为 " + curTaskUid);
                 }
             }
         }
@@ -1179,27 +1222,50 @@ public class AutoCombatSwitch {
      *  与 ASSIGNED 比对极易不一致 → 旧版一律判"玩家接管"→ 静默清标记 → 战斗任务
      *  永不还原（日志实证：15 次参战零还原，每次 prev 都显示 idle）。
      *  修复：只要当前任务仍是【攻击类任务】（IAttackTask，与 buildPools 同口径），
-     *  一律视为"本系统的战斗"继续推进还原；只有任务真被换成非攻击任务才按接管处理。 */
-    private static boolean isOnAssignedCombatTask(EntityMaid maid) {
+     *  一律视为"本系统的战斗"继续推进还原；只有任务真被换成非攻击任务才按接管处理。
+     *  v1.1.0 实测一百四十九：改为【传入任务】的判定——同一 tick 只读一次 getTask()，
+     *  所有判定共用同一读数（DATA_TASK 同步抖动时多次读取会自相矛盾）。 */
+    private static boolean isAssignedOrCombatTask(EntityMaid maid, IMaidTask task) {
         String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-        if (assigned.isEmpty()) {
+        if (assigned.isEmpty() || task == null) {
             return false;
         }
-        if (maid.getTask() == null) {
-            return false;
-        }
-        if (assigned.equals(maid.getTask().getUid().toString())) {
+        if (assigned.equals(task.getUid().toString())) {
             return true;
         }
-        return MaidWorkTags.isCombatTask(maid);
+        return task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
     }
 
     /** v1.1.0 实测一百三十九：当前任务读数是否为"假 idle"——TLM getTask() 读同步
      *  数据 DATA_TASK，uid 解析失败/同步抖动时回落成 idle 任务（实测一百一十四的
-     *  javap 实证）。idle 读数不代表"玩家接管"，还原链不能被它清掉。 */
-    private static boolean isIdleReading(EntityMaid maid) {
-        return maid.getTask() == null || maid.getTask().getUid() == null
-                || "touhou_little_maid:idle".equals(maid.getTask().getUid().toString());
+     *  javap 实证）。idle 读数不代表"玩家接管"，还原链不能被它清掉。
+     *  v1.1.0 实测一百四十九：传入任务判定（单次读取，防抖动自相矛盾）。 */
+    private static boolean isIdleReadingTask(IMaidTask task) {
+        return task == null || task.getUid() == null
+                || "touhou_little_maid:idle".equals(task.getUid().toString());
+    }
+
+    /** v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore / 
+     *  restoreAfterExternalTaskChange）：还原战斗前的 home 模式与作息（MaidSchedule）
+     *  ——"切回之前的模式"完整闭环（任务 + home + 作息）。只在【排班关闭】时生效：
+     *  排班开启时作息/守家由日程表管理（调度器每秒重断言），此处覆盖会与排班打架；
+     *  且 setSchedule 在排班开启时会被守卫 mixin 拦（此处仅排班关闭时调用，天然放行）。 */
+    private static void restorePrevMode(EntityMaid maid) {
+        try {
+            if (!com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+                maid.setHomeModeEnable(maid.getPersistentData().m_128471_(COMBAT_PREV_HOME_TAG));
+                String sched = maid.getPersistentData().m_128461_(COMBAT_PREV_SCHEDULE_TAG);
+                if (!sched.isEmpty()) {
+                    for (MaidSchedule ms : MaidSchedule.values()) {
+                        if (ms.name().equals(sched)) {
+                            maid.setSchedule(ms);
+                            break;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
