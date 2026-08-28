@@ -447,10 +447,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  水桶不消耗） */
     private net.minecraft.core.BlockPos waterPos = null;
     private long waterPlacedTick = 0;
-    /** v1.5.250：下界倒水节流 tick——下界水会瞬间蒸发，放水灭火无效，但用户明确
-     *  要求女仆"喜欢用水桶"：每隔 40 tick（2 秒）尝试倒一次水（动作/蒸汽可见），
-     *  其余时间流转珍珠/抗火/逃跑，防止每 tick 傻倒水刷屏 */
-    private long netherPourTick = 0;
     /** v1.5.204：附近岩浆感知（bug 3）——每 10 tick 扫一次半径 3（含流动岩浆），
      *  提前绕开而非踩进去才反应；cachedFleeSpot = 避让目标（离岩浆 ≥4 格安全点） */
     private int lavaScanCooldown = 0;
@@ -587,7 +583,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.exitStableTicks = 0;
         this.waterPos = null;
         this.waterPlacedTick = 0;
-        this.netherPourTick = 0;
         this.lavaScanCooldown = 0;
         this.cachedNearLava = null;
         this.cachedFleeSpot = null;
@@ -1734,35 +1729,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.240：原版静态引用（不依赖 Forge 注册表 getValue）
             net.minecraft.world.level.block.Block water = net.minecraft.world.level.block.Blocks.f_49990_;
             BlockPos pos = maid.m_20183_();
-            // v1.5.250【下界放水】：下界水会瞬间蒸发（灭火无效），但用户明确要求
-            // 女仆"喜欢用水桶"——每 40 tick（2 秒）尝试倒一次水（放置动作/蒸汽
-            // 粒子可见），【不设 waterPos】（蒸发后无需回收），调用侧流转珍珠/
-            // 抗火/逃跑；冷却内直接 return，防止每 tick 傻倒水刷屏
+            // v1.1.0 实测一百四十六：下界彻底不用水（玩家反馈"女仆在下界还会使用
+            // 落地水"）——v1.5.250 的"喜欢用水桶"下界倒水（每 2 秒一次，蒸汽可见）
+            // 在下界只是看起来在乱放水：水瞬间蒸发、灭火无效。恢复 v1.5.210 设计：
+            // 下界跳过水桶，流转抗火/末影珍珠/逃跑。此守卫是双保险——调用侧
+            // （fireBucketStep）已加 !isNether，这里再拦一道防未来调用点遗漏。
             if (isNether(maid)) {
-                long gt = level.m_46467_();
-                if (gt - this.netherPourTick < 40) {
-                    return;
-                }
-                this.netherPourTick = gt;
-                for (int up : new int[]{1, 0, 2}) {
-                    BlockPos cand = pos.m_7918_(0, up, 0);
-                    if (this.canPourWaterAt(level, cand)) {
-                        level.m_7731_(cand, water.m_49966_(), 3);
-                        Long lastLog = WATER_LOG_CD.get(maid.m_20148_().toString());
-                        if (lastLog == null || gt - lastLog > 200) {
-                            WATER_LOG_CD.put(maid.m_20148_().toString(), gt);
-                            LOGGER.info("placeClutchWater ok(nether): maid={} waterAt={}",
-                                    maid.m_5446_() != null ? maid.m_5446_().getString() : "?", cand);
-                        }
-                        return;
-                    }
-                }
-                LOGGER.info("placeClutchWater fail(nether): maid={} y={} up1={} self={} up2={}",
-                        maid.m_5446_() != null ? maid.m_5446_().getString() : "?",
-                        pos.m_123342_(),
-                        this.canPourWaterAt(level, pos.m_7918_(0, 1, 0)),
-                        this.canPourWaterAt(level, pos),
-                        this.canPourWaterAt(level, pos.m_7918_(0, 2, 0)));
                 return;
             }
             // v1.5.230：位置候选链——自身 → 上方 1 → 上方 2（屋檐下头顶被堵的
@@ -2048,10 +2020,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return;
             }
             // 水桶优先（非地狱）：头顶放水灭火，不用跑去找河
-            // v1.5.250：水桶步不再按维度跳过——下界也尝试倒水（v1.5.210 旧设计
-            // "地狱放水瞬间蒸发 → 跳过"让下界女仆明明有水桶却全程不用，用户实测
-            // 不满；现在下界每 2 秒倒一次（动作可见），蒸发后流转珍珠/抗火）
-            boolean fireBucketStep = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
+            // v1.1.0 实测一百四十六：下界跳过水桶步（水瞬间蒸发，灭火无效；玩家
+            // 反馈"女仆在下界还会使用落地水"）——流转抗火/末影珍珠/逃跑
+            boolean fireBucketStep = !isNether(maid)
+                    && com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
                     && this.hasWaterBucket(maid);
             if (fireBucketStep) {
                 this.placeClutchWater(maid);
@@ -2252,13 +2224,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.209：岩浆逃生——水桶放在【最近的岩浆格上方一格】，水流下渗冷却
      *  脚下岩浆（源变黑曜石/玄武岩），深陷时比垫自己脚下更直接。3 秒后由
-     *  tickRecoverWater 收回，水桶不消耗（与落地水一致）。地狱跳过（瞬间蒸发）。
+     *  tickRecoverWater 收回，水桶不消耗（与落地水一致）。
+     *  v1.1.0 实测一百四十六：地狱跳过（水瞬间蒸发；v1.5.250 曾放开下界尝试，
+     *  玩家反馈"女仆在下界还会使用落地水"——恢复 v1.5.210 的地狱跳过，
+     * 岩浆链流转抗火/末影珍珠/垫方块）。
      *  返回 false = 没放成（没桶/已有一摊水/地狱/找不到岩浆） */
     private boolean placeWaterOnLava(EntityMaid maid) {
         try {
             if (this.waterPos != null
                     || !com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
-                    || !this.hasWaterBucket(maid)) {
+                    || !this.hasWaterBucket(maid)
+                    || isNether(maid)) {
                 return false;
             }
             BlockPos lava = this.findNearbyLava(maid);
@@ -2267,16 +2243,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             net.minecraft.server.level.ServerLevel level =
                     (net.minecraft.server.level.ServerLevel) maid.m_9236_();
-            // v1.5.250：下界放水节流（v1.5.210 旧设计下界直接跳过——下界水蒸发
-            // 灭火无效，但用户要求女仆尝试用水桶；每 40 tick 倒一次，其余流转珍珠/
-            // 抗火）
-            if (isNether(maid)) {
-                long gt = level.m_46467_();
-                if (gt - this.netherPourTick < 40) {
-                    return false;
-                }
-                this.netherPourTick = gt;
-            }
             BlockPos target = lava.m_7918_(0, 1, 0); // 最近岩浆格上方一格
             // v1.5.230：上方放不了（岩浆在封闭空间/脚下隔了垫块）→ 直接替换
             // 岩浆自身格（液体可被水替换）——水流替换岩浆源 = 冷却为黑曜石，更直接
