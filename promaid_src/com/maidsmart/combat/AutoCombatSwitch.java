@@ -476,6 +476,19 @@ public class AutoCombatSwitch {
                 }
                 return 0; // 真在战斗：只续威胁计时，不重复参战
             }
+            // v1.1.0 实测一百七十一【参战重选抖动根治】：刚参战 3 秒内读到 idle =
+            // DATA_TASK 同步抖动（setTask 还没同步到 getTask），不是真残留——不清
+            // 标记、不重选。否则每次触发都走"自愈+重选"，随机数落回原版武器（日志
+            // 实证 00:59:19 先选 true_power_of_maid:slashblade_attack、10 毫秒后重选
+            // 成原版 attack = "不会拿出拔刀剑"的直接原因）。
+            long combatStart = maid.getPersistentData().m_128454_(COMBAT_START_TAG);
+            long nowT = maid.m_9236_().m_46467_();
+            if (isIdleReadingTask(curTask) && combatStart > 0 && nowT - combatStart < 60L) {
+                if (hasThreatNearby(maid)) {
+                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, nowT);
+                }
+                return 0; // 刚参战，抖动读数——保持当前切换，不重选
+            }
             clearMarkers(maid);
             // v1.1.0 实测一百四十九：任务被外部接管 → 尊重新任务不动它，但 home/作息还原
             restorePrevMode(maid);
@@ -993,6 +1006,17 @@ public class AutoCombatSwitch {
         for (IMaidTask task : TaskManager.getTaskIndex()) {
             if (!(task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask attack)) {
                 continue; // 只认攻击类任务
+            }
+            // v1.1.0 实测一百七十一：排除【非战斗】的 IAttackTask——TLM 喂动物任务
+            // （touhou_little_maid:feed_animal）也实现了 IAttackTask，但喂动物不是
+            // 战斗：混进候选池会让女仆战斗中随机切去喂动物（打怪变喂鸡）、还稀释
+            // 模组武器权重（"不会拿出拔刀剑"的间接因素）
+            try {
+                if (task.getUid() != null
+                        && "touhou_little_maid:feed_animal".equals(task.getUid().toString())) {
+                    continue;
+                }
+            } catch (Throwable ignored) {
             }
             try {
                 if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
