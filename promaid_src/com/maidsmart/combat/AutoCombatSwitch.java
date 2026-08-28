@@ -90,6 +90,10 @@ public class AutoCombatSwitch {
     private static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
+    /** v1.1.0 实测一百七十二：还原扫描心跳（每 10 秒一条，latest.log 搜 "auto-combat
+     *  scan"）——确认 onServerTick 在跑 + 战斗态女仆数 + 被排班清理数，定位"还原
+     *  永不触发"是扫描没跑 / 女仆被门拦 / 还是还原动作本身失败 */
+    private long lastScanHeartbeat = 0;
     /** v1.1.0 实测一百六十四：还原扫描诊断节流（maidId → 上次诊断 tick）——定位
      *  "还原扫描卡在哪个门"（用户追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
      *  一条 latest.log（搜 "restore-scan"）。 */
@@ -280,6 +284,13 @@ public class AutoCombatSwitch {
      */
     @SubscribeEvent
     public void onMaidHurt(LivingHurtEvent event) {
+        // v1.1.0 实测一百七十三：LivingHurt 等实体事件客户端也会触发（日志实证
+        // 14:15:11 Render thread 跑了整套 engage）——客户端实体与服务器实体是两份
+        // 独立 persistentData，客户端上写标记/切任务不落服务端，还会污染 promaid.log
+        // 的"参战"记录。客户端一律跳过，只服务端处理。
+        if (event.getEntity().m_9236_().m_5776_()) {
+            return;
+        }
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
             touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
@@ -288,6 +299,9 @@ public class AutoCombatSwitch {
 
     @SubscribeEvent
     public void onMaidAttacked(net.minecraftforge.event.entity.living.LivingAttackEvent event) {
+        if (event.getEntity().m_9236_().m_5776_()) {
+            return;
+        }
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
             touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
@@ -296,6 +310,9 @@ public class AutoCombatSwitch {
 
     @SubscribeEvent
     public void onMaidDamaged(net.minecraftforge.event.entity.living.LivingDamageEvent event) {
+        if (event.getEntity().m_9236_().m_5776_()) {
+            return;
+        }
         if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
             touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
@@ -345,6 +362,10 @@ public class AutoCombatSwitch {
             return;
         }
         if (!(event.getSource().m_7640_() instanceof EntityMaid maid)) {
+            return;
+        }
+        // 客户端同款事件跳过（见 onMaidHurt 注释）
+        if (maid.m_9236_().m_5776_()) {
             return;
         }
         if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
@@ -577,17 +598,28 @@ public class AutoCombatSwitch {
         // v1.1.0 实测五十七：战中近远程换战术只依赖总开关——自动还原关掉时，
         // 换战术仍然工作（还原关 = 用户要她打到底，但打得聪明依旧成立）
         boolean restoreOn = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get();
+        int activeCount = 0;
+        int schedCleared = 0;
         for (ServerLevel level : event.getServer().m_129785_()) {
+            // v1.1.0 实测一百七十三【还原永不触发的总根因】：无限 AABB 经
+            // SectionPos.blockToSection 换算后 ±∞ 都溢出收敛到同一个值
+            // 134217727（floor 溢出回绕 + >>4）——section 循环只执行一次、且落在
+            // 世界外的列上 → getEntitiesOfClass 永远返回空列表 → 还原扫描自 v1.1.0
+            // 起从未扫到过任何战斗女仆（日志实证：心跳在跑、active 恒 0、restore-scan
+            // 零输出、还原动作从未执行）。改为覆盖整个可玩范围的有限 AABB
+            // （x/z ±131072 = ±128km，y ±4096 覆盖全部建筑高度）：blockToSection
+            // 对有限值正常换算，循环覆盖所有已加载区块。
             for (EntityMaid maid : level.m_45976_(EntityMaid.class,
-                    new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                            Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
+                    new AABB(-131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0))) {
                 if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }
+                activeCount++;
                 // v1.1.0 实测一百六十三：排班开启的女仆不参与自主战斗——残留的战斗
                 // 标记直接清掉（她的任务/模式由日程表管理，战斗还原链不再适用）
                 if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
                     clearMarkers(maid);
+                    schedCleared++;
                     continue;
                 }
                 // 自保中不还原（等自保结束；自保退出有自己的回主人逻辑）
@@ -866,6 +898,16 @@ public class AutoCombatSwitch {
                     }
                 }
             }
+        }
+        // v1.1.0 实测一百七十二：心跳诊断（每 10 秒一条，latest.log 搜 "auto-combat scan"）
+        // ——确认还原扫描 onServerTick 在跑：active=战斗态女仆数（扫描看到几只）、
+        // schedCleared=被排班门清理的（这些不还原是排班优先设计的正常行为）
+        long hbTick = event.getServer().m_129783_().m_46467_();
+        if (hbTick - this.lastScanHeartbeat >= 200L) {
+            this.lastScanHeartbeat = hbTick;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat scan: running tick={} active={} schedCleared={}",
+                    hbTick, activeCount, schedCleared);
         }
     }
 
@@ -1354,17 +1396,25 @@ public class AutoCombatSwitch {
         return isAssignedOrCombatTask(maid, task);
     }
 
-    /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true）
-     *  v1.1.0 实测六十一：一并清战中换战术的稳定状态（内存态） */
+    /** 清全部标记：一律 remove（m_128473_）——按【正确类型】清键，不留类型污染。
+     *  v1.1.0 实测一百七十三【类型污染修复】：旧版全用 putBoolean(false) 清键，
+     *  LONG 槽（LAST_THREAT/LAST_CONTACT/COMBAT_START/ATTACKER_TIME）与 STRING 槽
+     *  （PREV_TASK/ASSIGNED/ATTACKER_UUID）被塞进 Boolean 值——getLong 读 Boolean
+     *  恒 0、getString 读 Boolean 恒 ""（抖动守卫 combatStart>0 失效、超时判定
+     *  失真）。当前判定已全部走 getXxx（无 contains），remove 后读缺省值同样安全；
+     *  已加载的老残留（存档里 BYTE/STRING 混存）也会在下一轮扫描被正常处理。 */
     private static void clearMarkers(EntityMaid maid) {
-        maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, false);
-        maid.getPersistentData().m_128379_(PREV_TASK_TAG, false);
-        maid.getPersistentData().m_128379_(LAST_THREAT_TAG, false);
-        maid.getPersistentData().m_128379_(ASSIGNED_TAG, false);
-        // v1.1.0 实测八十四：接触标记一并清（判定走 getBoolean，putBoolean false 不删键）
-        maid.getPersistentData().m_128379_(LAST_CONTACT_TAG, false);
-        // v1.1.0 实测一百六十二：战斗开始时间一并清
-        maid.getPersistentData().m_128379_(COMBAT_START_TAG, false);
+        net.minecraft.nbt.CompoundTag nbt = maid.getPersistentData();
+        nbt.m_128473_(COMBAT_ACTIVE_TAG);
+        nbt.m_128473_(PREV_TASK_TAG);
+        nbt.m_128473_(LAST_THREAT_TAG);
+        nbt.m_128473_(ASSIGNED_TAG);
+        nbt.m_128473_(LAST_CONTACT_TAG);
+        nbt.m_128473_(COMBAT_START_TAG);
+        nbt.m_128473_(ATTACKER_UUID_TAG);
+        nbt.m_128473_(ATTACKER_TIME_TAG);
+        nbt.m_128473_(COMBAT_PREV_HOME_TAG);
+        nbt.m_128473_(COMBAT_PREV_SCHEDULE_TAG);
         RESTORE_DIAG_SINCE.remove(maid.m_20148_());
         TACTIC_STATE.remove(maid.m_20148_());
     }
