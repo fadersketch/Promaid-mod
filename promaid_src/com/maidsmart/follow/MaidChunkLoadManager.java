@@ -498,34 +498,100 @@ BlockPos stand = findStand(newLevel,
                 }
             }
         }
+        // v1.1.0 实测一百四十：全失败落日志（60 秒限频）——脚格/下格/头顶方块 ID
+        // 直接暴露是哪个判据误杀（下界的火/火把/台阶/窄道等）
+        long now = level.m_46467_();
+        if (LAST_STAND_FAIL_LOG == Long.MIN_VALUE || now - LAST_STAND_FAIL_LOG >= 1200L) {
+            LAST_STAND_FAIL_LOG = now;
+            com.maidsmart.tool.PromaidLog.log("跨维",
+                    "findStand 全失败 @(" + from.m_123341_() + "," + from.m_123342_() + ","
+                            + from.m_123343_() + ") 脚格=" + idAt(level, from)
+                            + " 下格=" + idAt(level, from.m_7495_())
+                            + " 头顶=" + idAt(level, from.m_7918_(0, 1, 0))
+                            + "（加载=" + level.m_46749_(from) + "）");
+        }
         return null;
     }
 
-    /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子 */
+    /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子。
+     *  v1.1.0 实测一百四十（参考 tlm_beyond_space SafeTeleportService.canStandAt）：
+     *  判定从"站立格 isAir + 脚下 isSolid 满方块"放宽为"站立格/头顶碰撞箱为空 +
+     *  脚下有碰撞面 + 无流体"——旧判定在下界（脚下火/火把/台阶/栅栏/1 格窄道）几乎
+     *  必挂，是"一传送到下界就提示无落脚点"的根因 */
     private static BlockPos scanColumn(ServerLevel level, BlockPos col) {
         BlockPos cur = col;
         for (int i = 0; i < 16; i++) {
-            BlockState st = level.m_8055_(cur);
-            BlockPos belowPos = cur.m_7495_();
-            BlockState below = level.m_8055_(belowPos);
-            if (st.m_60795_() && !below.m_60795_() && !below.m_60815_()
-                    && below.m_60796_(level, belowPos)) {
+            if (standableCell(level, cur)) {
                 return cur;
             }
-            cur = belowPos;
+            cur = cur.m_7495_();
         }
         cur = col.m_7918_(0, 1, 0);
         for (int i = 0; i < 12; i++) {
-            BlockState st = level.m_8055_(cur);
-            BlockPos belowPos = cur.m_7495_();
-            BlockState below = level.m_8055_(belowPos);
-            if (st.m_60795_() && !below.m_60795_() && !below.m_60815_()
-                    && below.m_60796_(level, belowPos)) {
+            if (standableCell(level, cur)) {
                 return cur;
             }
             cur = cur.m_7918_(0, 1, 0);
         }
         return null;
+    }
+
+    /**
+     * v1.1.0 实测一百四十：站立格可靠判定（参考 tlm_beyond_space 的 canStandAt）——
+     * ① 区块已加载（不触发加载）；② 脚下有碰撞面（不限满方块——台阶/栅栏可站）；
+     * ③ 站立格与头顶碰撞箱为空（火/火把/草丛等无碰撞方块不挡）；④ 站立格与头顶无
+     * 流体；⑤ 命中危险表（岩浆/火）不落；⑥ 目标格无存活实体占用（防传进玩家身体
+     * 被碰撞挤走，与 DangerEscapeHandler 同口径）。
+     */
+    private static boolean standableCell(ServerLevel level, BlockPos c) {
+        try {
+            if (!level.m_46749_(c)) {
+                return false;
+            }
+            BlockPos belowPos = c.m_7495_();
+            if (level.m_8055_(belowPos).m_60742_(level, belowPos,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 脚下无碰撞面
+            }
+            if (!level.m_8055_(c).m_60742_(level, c,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 站立格有碰撞方块
+            }
+            BlockPos headPos = c.m_7918_(0, 1, 0);
+            if (!level.m_8055_(headPos).m_60742_(level, headPos,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 头顶有碰撞方块
+            }
+            if (!level.m_8055_(c).m_60819_().m_76178_()
+                    || !level.m_8055_(headPos).m_60819_().m_76178_()) {
+                return false; // 站立格/头顶有流体
+            }
+            if (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                    c.m_123341_(), c.m_123342_(), c.m_123343_())) {
+                return false; // 危险格不落（岩浆/火等）
+            }
+            net.minecraft.world.phys.AABB box =
+                    new net.minecraft.world.phys.AABB(c).m_82400_(-0.05);
+            if (!level.m_45976_(net.minecraft.world.entity.LivingEntity.class, box).isEmpty()) {
+                return false; // 格被实体占用
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** findStand 全失败诊断日志限频（gameTime） */
+    private static long LAST_STAND_FAIL_LOG = Long.MIN_VALUE;
+
+    private static String idAt(ServerLevel level, BlockPos p) {
+        try {
+            net.minecraft.resources.ResourceLocation rl =
+                    net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(p).m_60734_());
+            return rl == null ? "?" : rl.toString();
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     /**
