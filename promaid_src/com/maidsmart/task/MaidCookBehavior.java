@@ -32,6 +32,9 @@ import java.util.Set;
  * 平衡设计：
  * - 只操作熔炉类方块（烟熏炉/高炉/熔炉通用），每次处理 1 轮（收成品 > 补食材 > 补燃料）
  * - 食材由女仆背包携带（内置白名单：生肉/鱼/土豆等）
+ * - v1.1.0 实测一百五十七：背包没有食材时兼容【矿物类可烧制物】——带矿物/原料标签
+ *   （forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的
+ *   物品（铁矿石/粗铁/金矿石/远古残骸等）照常放进熔炉烧（开关 misc.cookSmeltOres）
  * - v1.5.252 燃料修正：**不限于煤炭——凡是可燃烧物品（原版 isFuel）都可用，
  *   优先选背包中数量最多的那个**
  * - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动）
@@ -150,7 +153,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         this.cooldown = processCooldown();
         BlockEntity be = level.m_7702_(this.furnacePos);
         if (be instanceof FurnaceBlockEntity) {
-            this.processFurnace(maid, (Container) be);
+            this.processFurnace(level, maid, (Container) be);
         }
     }
 
@@ -182,7 +185,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    private void processFurnace(EntityMaid maid, Container furnace) {
+    private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace) {
         IItemHandler maidInv = maid.getMaidInv();
         // 1. 收取成品
         ItemStack result = furnace.m_8020_(2);
@@ -196,6 +199,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // 2. 补食材（槽 0 空）
         if (furnace.m_8020_(0).m_41619_()) {
             ItemStack food = this.extractFromMaid(maidInv, FOODS, 1);
+            if (food.m_41619_()) {
+                // v1.1.0 实测一百五十七：没有食材时兼容矿物类可烧制物
+                //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
+                food = this.extractOreFromMaid(level, maidInv);
+            }
             if (!food.m_41619_()) {
                 furnace.m_6836_(0, food);
             }
@@ -214,6 +222,50 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (!stack.m_41619_() && whitelist.contains(stack.m_41720_())) {
                 return maidInv.extractItem(i, count, false);
+            }
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** v1.1.0 实测一百五十七：物品是否带矿物/原料标签——标签路径含 ores 或
+     *  raw_materials（forge:ores、forge:ores/*、minecraft:*_ores、forge:raw_materials 等）。 */
+    private static boolean hasOreTag(Item item) {
+        try {
+            return item.m_204114_().m_203616_().anyMatch(t -> {
+                String path = t.f_203868_().m_135827_();
+                return path.contains("ores") || path.contains("raw_materials");
+            });
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** v1.1.0 实测一百五十七：当前世界是否有该物品的熔炉配方（可烧制判定——
+     *  用配方管理器查 SMELTING 配方，模组自定义烧制配方同样生效）。 */
+    private static boolean isSmeltable(ServerLevel level, ItemStack stack) {
+        try {
+            net.minecraft.world.SimpleContainer probe = new net.minecraft.world.SimpleContainer(1);
+            probe.m_6836_(0, stack);
+            return level.m_7465_().m_44015_(
+                    net.minecraft.world.item.crafting.RecipeType.f_44108_, probe, level).isPresent();
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** v1.1.0 实测一百五十七：从女仆背包取 1 个矿物类可烧制物（带矿物标签且
+     *  有熔炉配方）。食材优先顺序由调用侧保证（先 FOODS 后本方法）。 */
+    private ItemStack extractOreFromMaid(ServerLevel level, IItemHandler maidInv) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()) {
+            return ItemStack.f_41583_;
+        }
+        for (int i = 0; i < maidInv.getSlots(); i++) {
+            ItemStack stack = maidInv.getStackInSlot(i);
+            if (stack.m_41619_() || FOODS.contains(stack.m_41720_())) {
+                continue;
+            }
+            if (hasOreTag(stack.m_41720_()) && isSmeltable(level, stack)) {
+                return maidInv.extractItem(i, 1, false);
             }
         }
         return ItemStack.f_41583_;
