@@ -124,7 +124,11 @@ public final class MaidToolAutoEquip {
                 // 全部 return false → 拔刀剑模式不会自动装到主手。修复：检测任务是否
                 // 实现 IAttackTask，若是则用任务自带的 isWeapon 方法匹配武器。
                 if (maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask atk) {
-                    need = s -> !s.m_41619_() && atk.isWeapon(maid, s);
+                    // v1.1.0 实测一百四十八：走兼容判定（CombatTaskCompat.isWeapon）——
+                    // ef_tlm:fight_mode_task 未覆写 isWeapon（默认恒 false），必须用
+                    // isWeaponCap 反射，否则史诗战斗武器永远不会被自动装备
+                    need = s -> !s.m_41619_()
+                            && com.maidsmart.combat.CombatTaskCompat.isWeapon(maid, atk, s);
                     scorer = MaidToolAutoEquip::weaponScore;
                 } else {
                     return false;

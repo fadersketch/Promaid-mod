@@ -43,6 +43,12 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * 票生命周期：以女仆 UUID 为 key 维护 当前持有的票，每轮刷新时对比——
  * 女仆跨区块 → 撤旧票挂新票；女仆消失/转入停放态 → 撤票。服务器停止清空。
+ *
+ * v1.1.0 实测一百三十一：跨维度跟随 "home 不拦"——home 只拦同维度跟随 (TLM
+ * MaidFollowOwnerTask 照旧)，跨维度（玩家过 portal/传到他维度）一直传。
+ * 根源：实测七十给排班启用女仆自动 home，home 挡调 = 排班女仆不永远在
+ * 下界/任何地方。语义：玩家要她守家，在 TLM GUI 主动点 home（SummonPacket
+ * 一键召集保留 home 拦停）。
  */
 public final class MaidChunkLoadManager {
     private static final org.slf4j.Logger LOGGER =
@@ -107,8 +113,11 @@ public final class MaidChunkLoadManager {
                             && maid.m_20238_(ow.m_20182_()) >= 64.0) {
                         double fromY = maid.m_20186_();
                         if (teleportCore(maid, ow)) {
-                            LOGGER.info("maid rescue: id={} dim={} y={}->owner side",
-                                    maid.m_20148_(), lvl.m_46472_().m_135782_(), (int) fromY);
+                            // v1.1.0 实测一百四十四：日志带上维度最低建筑高度（min=）——
+                            // 救援触发即"真虚空"的现场证据，映射再错一眼可见
+                            LOGGER.info("maid rescue: id={} dim={} y={} min={}->owner side",
+                                    maid.m_20148_(), lvl.m_46472_().m_135782_(), (int) fromY,
+                                    lvl.m_141937_());
                         }
                     }
                 }
@@ -214,15 +223,18 @@ public final class MaidChunkLoadManager {
     /**
      * v1.5.142：女仆跟随主人跨维度传送（实测四十四重做传送本体）。
      *
-     * 每 5 秒扫描一次全服女仆——跟随模式（非在家模式、未坐下、未骑乘、存活）
-     * 且与主人不在同一维度 → teleportTo(m_264318_) 原版跨维度传送
+     * 每 5 秒扫描一次全服女仆——存活、未坐下、未骑乘、与主人不在同一维度 →
+     * teleportTo(m_264318_) 原版跨维度传送
      * （替代旧版 setRemoved+addFreshEntity 手动搬家：不走 Forge 维度事件链、
      * 实体不重新注册，属于"假传送"）。
      * 落点取主人身边第一个"脚下实心、站立格空气"的位置（向下最多 16 格）；
      * 找不到可站格（主人在高空/虚空飞行）→ 本次不传，等主人落地后再跟。
      *
      * 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见
-     * MaidBuildBehavior.tickBuildSit）；在家模式 = 不跟随，同样不拉。
+     * MaidBuildBehavior.tickBuildSit）。
+     * v1.1.0 实测一百三十一：在家模式【不拦】跨维度跟随——排班自动 home/守家
+     * 模式的女仆，主人过门/换维度照样传送跟过来（home 只影响同维度行为，由
+     * TLM 原生跟随任务处理；想召回先解除她的排班/在家模式，见 summonAll）。
      */
     public static void followIfCrossDimension(EntityMaid maid) {
         try {
@@ -235,9 +247,6 @@ public final class MaidChunkLoadManager {
             if (maid.isMaidInSittingPose()) {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
             }
-            if (maid.isHomeModeEnable()) {
-                return; // 在家模式 = 不跟随
-            }
             LivingEntity owner = maid.m_269323_();
             // v1.1.0 实测七十八（bug：主人下界死亡后看家女仆被传到下界基岩层上）——
             // 主人死亡期间实体仍在原位置（血量 0 但未移除），跟随链路照常触发，
@@ -246,19 +255,27 @@ public final class MaidChunkLoadManager {
             if (owner == null || owner.m_21224_() || !owner.m_6084_()) {
                 return;
             }
-            if (maid.m_9236_() == owner.m_9236_()) {
-                return; // 同一维度（f_19853_ 是 private，用 m_9236_() 取 Level）
-            }
+if (maid.m_9236_() == owner.m_9236_()) {
+            // v1.1.0 实测一百三十四：同一维度 → 远距拉回兜底（TLM 自带"过远自动
+            // 传送"只对 非home+非工作+同维度 的跟随女仆触发，且 teleportToOwner 的
+            // ±3 格随机试探可能静默失败；这里统一补一道可靠的同维度远距拉回）
+            trySameDimPull(maid, owner);
+            return;
+        }
             if (!(owner.m_9236_() instanceof ServerLevel newLevel)
                     || !(maid.m_9236_() instanceof ServerLevel oldLevel)) {
                 return;
             }
-            BlockPos stand = findStand(newLevel,
+BlockPos stand = findStand(newLevel,
                     new BlockPos((int) Math.floor(owner.m_20185_()),
                             (int) Math.floor(owner.m_20186_()),
                             (int) Math.floor(owner.m_20189_())));
             if (stand == null) {
-                return; // 主人身边 16 格内无可站立点（高空飞行/虚空）→ 等落地再跟
+                // v1.1.0 实测一百三十四：失败路径落日志（旧版静默 return——"为什么不
+                // 传"完全不可见；主人在高空/虚空时先等落地，落地点出现后自动再试）
+                throttledSkipLog(maid, "nostand", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 跨维度跟随：主人身边 16 格内无可站立点（高空/虚空）——等落地后再传");
+                return;
             }
             // 实测四十四：原版跨维度传送（m_264318_ = teleportTo）——内部走完整的
             // changeDimension 流程（Forge 事件链 + 实体重新注册 + 客户端维度同步），
@@ -453,7 +470,14 @@ public final class MaidChunkLoadManager {
         if ("the_nether".equals(dim) && y >= 126.0) {
             return true; // 下界基岩顶层上方滞留（顶层方块占 y=127）
         }
-        return y < level.m_141928_(); // 掉出本维度最低建筑高度以下 = 真虚空
+        // v1.1.0 实测一百四十四【排班女仆不断瞬移根治】：旧版误用 m_141928_ =
+        // getHeight（主世界 384）当最低建筑高度——"y < 384"对所有站立女仆恒真，
+        // 受困救援把每只距主人 >8 格的女仆（含守家/排班女仆）每 5 秒拽回主人身边
+        // 一次（日志实证：排班锚点 (91,-60,139) 的女仆被当成"掉出世界"循环救援）。
+        // 正确映射 m_141937_ = getMinBuildHeight（主世界 -64 / 下界与末地 0，
+        // javap Level.getHeight 实证：未加载兜底返回 m_141937_ = getMinBuildHeight），
+        // 只有真正掉出维度最低建筑高度以下才触发救援。
+        return y < level.m_141937_(); // 掉出本维度最低建筑高度以下 = 真虚空
     }
 
     /**
@@ -484,34 +508,100 @@ public final class MaidChunkLoadManager {
                 }
             }
         }
+        // v1.1.0 实测一百四十：全失败落日志（60 秒限频）——脚格/下格/头顶方块 ID
+        // 直接暴露是哪个判据误杀（下界的火/火把/台阶/窄道等）
+        long now = level.m_46467_();
+        if (LAST_STAND_FAIL_LOG == Long.MIN_VALUE || now - LAST_STAND_FAIL_LOG >= 1200L) {
+            LAST_STAND_FAIL_LOG = now;
+            com.maidsmart.tool.PromaidLog.log("跨维",
+                    "findStand 全失败 @(" + from.m_123341_() + "," + from.m_123342_() + ","
+                            + from.m_123343_() + ") 脚格=" + idAt(level, from)
+                            + " 下格=" + idAt(level, from.m_7495_())
+                            + " 头顶=" + idAt(level, from.m_7918_(0, 1, 0))
+                            + "（加载=" + level.m_46749_(from) + "）");
+        }
         return null;
     }
 
-    /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子 */
+    /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子。
+     *  v1.1.0 实测一百四十（参考 tlm_beyond_space SafeTeleportService.canStandAt）：
+     *  判定从"站立格 isAir + 脚下 isSolid 满方块"放宽为"站立格/头顶碰撞箱为空 +
+     *  脚下有碰撞面 + 无流体"——旧判定在下界（脚下火/火把/台阶/栅栏/1 格窄道）几乎
+     *  必挂，是"一传送到下界就提示无落脚点"的根因 */
     private static BlockPos scanColumn(ServerLevel level, BlockPos col) {
         BlockPos cur = col;
         for (int i = 0; i < 16; i++) {
-            BlockState st = level.m_8055_(cur);
-            BlockPos belowPos = cur.m_7495_();
-            BlockState below = level.m_8055_(belowPos);
-            if (st.m_60795_() && !below.m_60795_() && !below.m_60815_()
-                    && below.m_60796_(level, belowPos)) {
+            if (standableCell(level, cur)) {
                 return cur;
             }
-            cur = belowPos;
+            cur = cur.m_7495_();
         }
         cur = col.m_7918_(0, 1, 0);
         for (int i = 0; i < 12; i++) {
-            BlockState st = level.m_8055_(cur);
-            BlockPos belowPos = cur.m_7495_();
-            BlockState below = level.m_8055_(belowPos);
-            if (st.m_60795_() && !below.m_60795_() && !below.m_60815_()
-                    && below.m_60796_(level, belowPos)) {
+            if (standableCell(level, cur)) {
                 return cur;
             }
             cur = cur.m_7918_(0, 1, 0);
         }
         return null;
+    }
+
+    /**
+     * v1.1.0 实测一百四十：站立格可靠判定（参考 tlm_beyond_space 的 canStandAt）——
+     * ① 区块已加载（不触发加载）；② 脚下有碰撞面（不限满方块——台阶/栅栏可站）；
+     * ③ 站立格与头顶碰撞箱为空（火/火把/草丛等无碰撞方块不挡）；④ 站立格与头顶无
+     * 流体；⑤ 命中危险表（岩浆/火）不落；⑥ 目标格无存活实体占用（防传进玩家身体
+     * 被碰撞挤走，与 DangerEscapeHandler 同口径）。
+     */
+    private static boolean standableCell(ServerLevel level, BlockPos c) {
+        try {
+            if (!level.m_46749_(c)) {
+                return false;
+            }
+            BlockPos belowPos = c.m_7495_();
+            if (level.m_8055_(belowPos).m_60742_(level, belowPos,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 脚下无碰撞面
+            }
+            if (!level.m_8055_(c).m_60742_(level, c,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 站立格有碰撞方块
+            }
+            BlockPos headPos = c.m_7918_(0, 1, 0);
+            if (!level.m_8055_(headPos).m_60742_(level, headPos,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()) {
+                return false; // 头顶有碰撞方块
+            }
+            if (!level.m_8055_(c).m_60819_().m_76178_()
+                    || !level.m_8055_(headPos).m_60819_().m_76178_()) {
+                return false; // 站立格/头顶有流体
+            }
+            if (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                    c.m_123341_(), c.m_123342_(), c.m_123343_())) {
+                return false; // 危险格不落（岩浆/火等）
+            }
+            net.minecraft.world.phys.AABB box =
+                    new net.minecraft.world.phys.AABB(c).m_82400_(-0.05);
+            if (!level.m_45976_(net.minecraft.world.entity.LivingEntity.class, box).isEmpty()) {
+                return false; // 格被实体占用
+            }
+            return true;
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** findStand 全失败诊断日志限频（gameTime） */
+    private static long LAST_STAND_FAIL_LOG = Long.MIN_VALUE;
+
+    private static String idAt(ServerLevel level, BlockPos p) {
+        try {
+            net.minecraft.resources.ResourceLocation rl =
+                    net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(level.m_8055_(p).m_60734_());
+            return rl == null ? "?" : rl.toString();
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     /**
@@ -560,6 +650,76 @@ public final class MaidChunkLoadManager {
             return true;
         } catch (Exception e) {
             return false;
+        }
+    }
+
+    /** v1.1.0 实测一百三十四：跳过/失败原因落日志限频（女仆|原因 → 上次记录 gameTime，
+     *  60 秒一条防刷屏——只对"本该拉但没拉"的场景留痕，正常近距离全静默） */
+    private static final Map<String, Long> SKIP_LOG_SINCE = new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void throttledSkipLog(EntityMaid maid, String reason, String msg) {
+        try {
+            String key = maid.m_20148_() + "|" + reason;
+            long now = maid.m_9236_().m_46467_();
+            Long last = SKIP_LOG_SINCE.get(key);
+            if (last != null && now - last < 1200L) {
+                return;
+            }
+            if (SKIP_LOG_SINCE.size() > 4096) {
+                SKIP_LOG_SINCE.clear();
+            }
+            SKIP_LOG_SINCE.put(key, now);
+            com.maidsmart.tool.PromaidLog.log("跨维", msg);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送的真正补丁）。
+     *
+     * 背景：跨区块（同维度距离过远）的自动传送此前【完全依赖 TLM 自带机制】——
+     * MaidFollowOwnerTask 的 teleportToOwner 只对 非 home + 可脑动 + 主人同维度 的
+     * 跟随女仆触发，且 10 次 ±3 随机试探可能全部落空（悬崖/窄道/主人飞行）而静默
+     * 失败；排班自动 home 的女仆同维度更是永远不被 TLM 拉。这就是"修了五六次
+     * 修不好"的实质：每次修的都是跨维度或区块保载，同维度远距拉回要么不存在、
+     * 要么是 TLM 的随机静默失败。
+     *
+     * 本方法用与跨维度同款的可靠链路（findStand + teleportTo 真传送）补同维度兜底：
+     * 距离超过阈值、非守家、非坐/骑、没在干重活（挖矿/伐木/建造未暂停/烹饪酿造站桩）
+     * 就拉回主人身边。守家/干活中不拉，但会落日志说明原因（60 秒限频）——"为什么不
+     * 传"从此可见。
+     */
+    private static void trySameDimPull(EntityMaid maid, LivingEntity owner) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get()) {
+                return;
+            }
+            int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
+            double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+            if (dSq < (double) dist * dist) {
+                return; // 不太远——走路/跟随正常处理，不打扰
+            }
+            int blocks = (int) Math.sqrt(dSq);
+            String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+            // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
+            if (maid.isHomeModeEnable()) {
+                throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
+                        + " 格但守家中，不拉（想召回先解除排班/在家模式）");
+                return;
+            }
+            if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
+                throttledSkipLog(maid, "sam-dim-work", name + " 同维度距离 " + blocks
+                        + " 格但干活中（挖矿/伐木/建造/站桩），不打断——任务结束或空闲后再拉");
+                return;
+            }
+            if (teleportCore(maid, owner)) {
+                com.maidsmart.tool.PromaidLog.log("跨维", name
+                        + " 同维度远距拉回至主人身边（原距 " + blocks + " 格）");
+            } else {
+                throttledSkipLog(maid, "sam-dim-nostand", name + " 同维度距离 " + blocks
+                        + " 格需拉回，但主人身边 16 格内无可站立点（高空/虚空）——等落地后再拉");
+            }
+        } catch (Exception ignored) {
         }
     }
 }

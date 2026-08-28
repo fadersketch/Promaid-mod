@@ -136,8 +136,17 @@ public final class BlueprintAreaPreview {
         previewSeen = false;
     }
 
-    /** 关闭金色预览渲染（打开手册时调用；不重置 previewSeen——v1.5.204 教训） */
+    /** 关闭金色预览渲染（打开手册时调用；不重置 previewSeen——v1.5.204 教训）
+     *  v1.1.0 实测一百四十七【金色框去不掉根治】：实测一百三十二加诊断日志时把
+     *  `active = false` 误删（日志替换了状态复位）——金色预览开启后打开手册/确认
+     *  建造都关不掉，框永远跟着玩家移动。恢复复位；调用点 BlueprintBookScreen.open
+     *  = "再次打开手册 = 关预览"（见 render 标签"（打开手册关闭）"） */
     public static void clear() {
+        if (active) {
+            // v1.1.0 实测一百三十二：金色轮廓消失链路——正常关闭记录日志排查用
+            //（"又"字眼：玩家感受到反复消失/重建——实测一百二十九同样的问题）
+            com.maidsmart.tool.PromaidLog.log("投影", "clear（金色预览关闭）");
+        }
         active = false;
     }
 
@@ -148,6 +157,18 @@ public final class BlueprintAreaPreview {
      * 空列表 = 无进行中计划（取消/完成）→ 清空所有框与投影。
      */
     public static void setRegions(java.util.List<String[]> regions) {
+        // v1.1.0 实测一百三十二（用户："建筑投影的大致建筑轮廓又没有了"）：轮廓链路
+        // 的关键路径日志——帮助排查红色框/橙色幽灵何时被清。
+        // 仅记录状态变化（非心跳静默——每 1 秒 RegionSyncPacket 到来，日志不会刷屏）
+        int before = REGION_BOXES.size();
+        int after = regions == null ? 0 : regions.size();
+        if (before != after) {
+            com.maidsmart.tool.PromaidLog.log("投影", "setRegions "
+                    + before + " -> " + after
+                    + " 行（null=" + (regions == null) + "）"
+                    + (after == 0 ? " ——全部框/投影清空（计划取消/完成）"
+                            : " ——" + after + " 个区块"));
+        }
         REGION_BOXES.clear();
         REGION_NAMES.clear();
         REGION_ORIGINS.clear();
@@ -256,8 +277,9 @@ public final class BlueprintAreaPreview {
 
     /**
      * v1.1.0 实测八十二：收到服务端点云（S2C ProjectionDataPacket）。
-     * v1.1.0 实测一百零九：cloud 格式为 "x,y,z,id|state;…"（含方块注册名+状态 SNBT），
-     * 客户端据此用 renderSingleBlock 渲染真实方块模型。空串 = 无投影 → 清缓存。
+     * v1.1.0 实测一百零九：cloud 格式为 "x,y,z,id|state;…"（含方块注册名+状态 SNBT，
+     * 状态解析仅作格式校验/备用——实测一百四十七起渲染走 DebugRenderer 填充盒，
+     * 不再用 renderSingleBlock，BlockState 不参与绘制）。空串 = 无投影 → 清缓存。
      */
     public static void setProjection(String id, int quarters, String size, String cloud) {
         if (id == null || id.isEmpty()) {
@@ -390,11 +412,22 @@ public final class BlueprintAreaPreview {
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onRender(net.minecraftforge.client.event.RenderLevelStageEvent event) {
-        if (!active && REGION_BOXES.isEmpty()) {
+        // v1.1.0 实测一百三十二（轮廓消失所）——渲染层空档记录日志：
+        // REGION_BOXES = 红色框集合（有计划就有）、active = 金色预览开启状态。
+        // 门不开=every~秒一次性记"有心但不可见"的精确原因（哪一种没开）。
+        if (!registered || (!active && REGION_BOXES.isEmpty())) {
             return;
         }
         if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
             return;
+        }
+        // 画质：遥控到此时的值——红框渲染不检查这个开关，只橙影/金影检查
+        if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
+            com.maidsmart.tool.PromaidLog.log("投影",
+                    "render: 画面里 已注册=" + registered
+                    + " 红框数=" + REGION_BOXES.size()
+                    + " 金色预览=" + active
+                    + " BUILD_PROJECTION=false——点选投影总开关，框与幽灵都不渲染");
         }
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
         if (mc.f_91074_ == null || mc.f_91073_ == null) {
@@ -494,20 +527,17 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测八十二：画蓝图投影——点云每个点在格内画一个 0.4 格的半透明小方块。
-     * 锚点 = (ox, oy, oz) = 计划原点，点坐标为居中后的相对值 → 与
-     * BlueprintBuildExecutor 实际放置位置逐块重合。
-     * 距离剔除：锚点距相机 >96 格不画（远处区块只留框和文字，省性能）。
-     */
-    /**
-     * v1.1.0 实测一百零九【Litematica 风格】：用 renderSingleBlock 渲染真实方块模型。
-     * 每个投影点是 Object[]{x, y, z, BlockState}，通过 BlockRenderDispatcher 渲染带
-     * 纹理的实际模型。半透明：TransparentVertexConsumer 包装真实 VertexConsumer，
-     * 拦截 m_6122_（RGBA 颜色写入）缩减 alpha——关键修复：所有 builder 方法返回 this
-     * 而非 delegate，保证链式调用 (vertex→color→uv→…) 始终走包装器，alpha 缩减生效。
-     * renderType 用 RenderType.m_110466_()（= translucent，字节码实证 f_110375_）——
-     * translucent 管线开启 alpha 混合。
-     * 距离剔除：锚点距相机 >96 格不画。
+     * v1.1.0 实测一百四十七【幽灵方块消失根治】：渲染改回与【区块框同款】的即时
+     * 渲染——每点画一个 DebugRenderer.renderFilledBox 半透明填充盒（锚点 = (ox,oy,oz)
+     * 计划原点 + 居中相对坐标，与实际搭建逐块重合；>96 格剔除）。
+     *
+     * 为什么弃用 renderSingleBlock（实测一百零九方案）：Forge 版 7 参 renderSingleBlock
+     * 的字节码实证——它遍历 BakedModel.getRenderTypes 按【模型自身图层】渲染、写进
+     * 各图层自己的 buffer，【完全忽略传入的 translucent renderType】。幽灵顶点落入
+     * 早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见
+     * （实测一百二十九/一百三十二"轮廓又没了"反复复发，一百零一初次引入时同样
+     * 不可见被一百零五/一百零六回退——同一根因）。区块框用的 DebugRenderer 管线
+     * 一直在正常显示：框能显示，幽灵必能显示。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -525,118 +555,18 @@ public final class BlueprintAreaPreview {
         if (mc.f_91074_.m_20238_(anchor) > 9216.0) {
             return;
         }
-        net.minecraft.client.renderer.block.BlockRenderDispatcher blockRenderer = mc.m_91289_();
-        var realSource = mc.m_91269_().m_110104_();
-        GhostBufferSource ghostSource = new GhostBufferSource(realSource, a);
-        int fullBright = 0xF000F0;
+        var bufferSource = mc.m_91269_().m_110104_();
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
             int by = (int) pts[i + 1];
             int bz = (int) pts[i + 2];
-            net.minecraft.world.level.block.state.BlockState state =
-                    (net.minecraft.world.level.block.state.BlockState) pts[i + 3];
-            if (state == null) {
-                continue;
-            }
             double wx = ox + bx;
             double wy = oy + by;
             double wz = oz + bz;
-            pose.m_85836_(); // pushPose
-            pose.m_85837_(wx - camera.f_82479_, wy - camera.f_82480_, wz - camera.f_82481_);
-            try {
-                blockRenderer.renderSingleBlock(state, pose, ghostSource,
-                        fullBright, net.minecraft.client.renderer.texture.OverlayTexture.f_118083_,
-                        net.minecraftforge.client.model.data.ModelData.EMPTY,
-                        net.minecraft.client.renderer.RenderType.m_110466_()); // translucent
-            } catch (Exception ignored) {
-            }
-            pose.m_85849_(); // popPose
-        }
-    }
-
-    /**
-     * v1.1.0 实测一百零九：半透明 MultiBufferSource 包装器——委托给真实 BufferSource，
-     * 但每个 VertexConsumer 被 GhostVertexConsumer 包装，缩减顶点颜色 alpha 值。
-     */
-    private static final class GhostBufferSource implements net.minecraft.client.renderer.MultiBufferSource {
-        private final net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate;
-        private final int alphaMul; // 0~255
-
-        GhostBufferSource(net.minecraft.client.renderer.MultiBufferSource.BufferSource delegate, float alpha) {
-            this.delegate = delegate;
-            this.alphaMul = Math.max(0, Math.min(255, (int) (alpha * 255)));
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_6299_(net.minecraft.client.renderer.RenderType renderType) {
-            return new GhostVertexConsumer(delegate.m_6299_(renderType), alphaMul);
-        }
-    }
-
-    /**
-     * v1.1.0 实测一百零九：顶点颜色 alpha 缩减包装器——拦截 m_6122_（RGBA 颜色写入）
-     * 将 alpha 分量乘以缩放因子后转发。关键修复：所有 builder 方法【返回 this】而非
-     * delegate——旧版返回 delegate.m_5483_(...) 导致后续 .color()/.uv() 链式调用直接
-     * 在底层 consumer 上执行，绕过 alpha 缩减且渲染链中断（方块完全不可见）。
-     */
-    private static final class GhostVertexConsumer implements com.mojang.blaze3d.vertex.VertexConsumer {
-        private final com.mojang.blaze3d.vertex.VertexConsumer delegate;
-        private final int alphaMul;
-
-        GhostVertexConsumer(com.mojang.blaze3d.vertex.VertexConsumer delegate, int alphaMul) {
-            this.delegate = delegate;
-            this.alphaMul = alphaMul;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5483_(double x, double y, double z) {
-            delegate.m_5483_(x, y, z);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_6122_(int red, int green, int blue, int alpha) {
-            delegate.m_6122_(red, green, blue, (alpha * alphaMul) >> 8);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7421_(float u, float v) {
-            delegate.m_7421_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7122_(int u, int v) {
-            delegate.m_7122_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7120_(int u, int v) {
-            delegate.m_7120_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5601_(float x, float y, float z) {
-            delegate.m_5601_(x, y, z);
-            return this;
-        }
-
-        @Override
-        public void m_5752_() {
-            delegate.m_5752_();
-        }
-
-        @Override
-        public void m_7404_(int red, int green, int blue, int alpha) {
-            delegate.m_7404_(red, green, blue, (alpha * alphaMul) >> 8);
-        }
-
-        @Override
-        public void m_141991_() {
-            delegate.m_141991_();
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
+            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
+                    pose, bufferSource, box, r, g, b, a);
         }
     }
 

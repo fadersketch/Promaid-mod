@@ -5,6 +5,7 @@
   "compatibilityLevel": "JAVA_17",
   "mixins": [
     "FollowPreserveMixin",
+    "MaidFollowOwnerTickMixin",
     "MaidTeleportPreserveMixin",
     "MaidDangerPathMixin",
     "MaidMoveSuppressMixin",
@@ -33,6 +34,8 @@
     "MaidSweepMixin",
     "MaidBaubleTotemMixin",
     "MaidCakeEdibleMixin",
+    "MaidCakeFavorMixin",
+    "MaidTaskScheduleGuardMixin",
     "BuildActivityForceMixin",
     "LoveLoatheHungerGateMixin",
     "MaidChatLanguageMixin",

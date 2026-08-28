@@ -95,6 +95,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治——非干活 home 女仆
         // 每 4 秒在 home 锚点附近随机走位，不再原地呆站）
         com.maidsmart.follow.HomePatrolHandler.register();
+        // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
+        // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
+        MinecraftForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
         MinecraftForge.EVENT_BUS.register(this);
     }
 
@@ -281,6 +284,30 @@ public class ProMaidExtension implements ILittleMaid {
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public void onRegisterCommands(net.minecraftforge.event.RegisterCommandsEvent event) {
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
+    }
+
+    /**
+     * v1.1.0 实测一百四十四：女仆重新入世界（魂符收放/区块重载/跨维度传送）→ 排班
+     * 重放。根因：魂符收进再放出，persistentData（含"本段已应用"去抖键）随魂符保存，
+     * 同段内放出后去抖命中 → 调度器跳过 = "魂符收放后排班没切换"。入世界即清去抖键
+     * 并立即按当前时段应用一次（模式/任务/在家锚点全部重放——SchedulePos 锚点随
+     * 实体 NBT 保存，不会在放出位置错误重锚）。未开排班/总开关关闭零成本。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onMaidJoin(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+        if (event.getLevel().m_5776_()
+                || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+            return; // 只服务端处理女仆
+        }
+        try {
+            if (com.maidsmart.schedule.ScheduleData.isOn(maid)
+                    && com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()
+                    && maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+                com.maidsmart.schedule.ScheduleManager.clearAppliedForJoin(maid);
+                com.maidsmart.schedule.ScheduleManager.applyNow(maid, sl);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**

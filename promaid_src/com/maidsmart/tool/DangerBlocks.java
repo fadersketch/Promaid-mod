@@ -25,7 +25,12 @@ import java.util.Set;
  */
 public final class DangerBlocks {
 
-    private static volatile Set<Block> cache = null;
+    /** v1.1.0 实测一百二十七：缓存类型 Set<Block> → Set<String>（注册名）。
+     *  致命错配：旧版缓存存 Block 对象但 isDanger/idIn 用 rl.toString() 字符串
+     *  查询——HashSet<Block>.contains(String) 恒 false → 危险表永远匹配不上，
+     *  寻路 mixin 与险境脱离（cellDangerous）全是死代码（实测：女仆站岩浆上
+     *  掉血到 25% 自保，脱离处理器一次都没触发、零日志）。 */
+    private static volatile Set<String> cache = null;
     private static volatile List<? extends String> cacheKey = null;
 
     private DangerBlocks() {
@@ -89,20 +94,21 @@ public final class DangerBlocks {
         return rl == null ? "" : rl.toString();
     }
 
-    /** 危险集合（懒构建；配置列表实例变化即重建） */
-    private static Set<Block> set() {
+    /** 危险集合（懒构建；配置列表实例变化即重建）——缓存【注册名字符串】，
+     *  与 isDanger/idIn 的 contains(rl.toString()) 查询口径一致 */
+    private static Set<String> set() {
         List<? extends String> list = MaidSmartConfig.MISC_DANGER_BLOCKS.get();
-        Set<Block> local = cache;
+        Set<String> local = cache;
         if (local != null && cacheKey == list) {
             return local;
         }
-        Set<Block> out = new HashSet<>();
+        Set<String> out = new HashSet<>();
         for (String s : list) {
             try {
                 // 1.20.1 无 ResourceLocation.parse（1.20.5+ 才有），用构造器
                 Block b = ForgeRegistries.BLOCKS.getValue(new ResourceLocation(s));
                 if (b != null) {
-                    out.add(b);
+                    out.add(s); // 存配置里的注册名字符串（原样）
                 }
             } catch (Exception ignored) {
             }
