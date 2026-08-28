@@ -82,6 +82,8 @@ public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ForgeConfigSpec.BooleanValue MINE_AUTO_COLLECT;
     // v1.5.163：连锁采集数量上限
     public static final ForgeConfigSpec.IntValue MINE_CHAIN_LIMIT;
+    // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
+    public static final ForgeConfigSpec.BooleanValue MINE_RIDE_NO_PILLAR;
 
     // ================= 伐木（v1.1.0，克隆挖矿；障碍物两名单与挖矿共享） =================
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> WOOD_VALUES;
@@ -292,6 +294,7 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
 public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_AIR_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
+    public static final ForgeConfigSpec.IntValue BRIDGE_MIN_RADIUS;
     public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
@@ -333,6 +336,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
     // v1.5.203：搭高安全高度（补完目标，与落地水触发高度配合）
     public static final ForgeConfigSpec.IntValue COMBAT_PILLAR_SAFE_HEIGHT;
+    // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）——佩戴时对应环境危险不再惊慌
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FIRE_PROTECT_BAUBLE;
+    public static final ForgeConfigSpec.BooleanValue COMBAT_DROWN_PROTECT_BAUBLE;
+    // v1.1.0 实测一百五十五：保命物品（绀珠之药/不死图腾）下是否保留逃跑
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLEE_WITH_SAVE_ITEM;
 
     // v1.5.189：被动技能（玩家贴身辅助）阈值——喂食/治疗/插火把/共享盾牌/图腾
     public static final ForgeConfigSpec.BooleanValue AID_OWNER_ENABLE;
@@ -366,10 +374,18 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.130：产出型任务专项增强（农场连收连种 / 钓鱼主动找水带坐垫）
     public static final ForgeConfigSpec.BooleanValue MISC_PRODUCE_TASK_ENHANCE;
     // v1.5.142：跟随女仆跨维度传送（主人换维度后 5 秒内传送到主人身边）
-     public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
-     public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
+public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_CHUNK_LOAD;
+    // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送的补丁——TLM 只拉"非home
+    // 非工作"的跟随女仆且传送可能静默失败，这里补统一兜底）
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_SAME_DIM_PULL;
+    public static final ForgeConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
+    // v1.1.0 实测一百五十一：跟随收紧（每 tick 重断言跟随目标，平常跟随在 4 格内）
+    public static final ForgeConfigSpec.BooleanValue MISC_FOLLOW_TIGHTEN;
+    // v1.1.0 实测一百五十二：有增益也喂牛奶（很多装备/饰品带永久增益，旧版"无增益才喝"导致中毒/凋零也不解）
+    public static final ForgeConfigSpec.BooleanValue MISC_MILK_FEED_WITH_BUFF;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
     /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
@@ -388,6 +404,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
     // v1.1.0：排班表系统全局开关（关闭后排班调度器停摆——已保存的日程保留，重开恢复）
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_ENABLED;
+    // v1.1.0 实测一百三十三：排班切换三件套（可用性检测 / 反向抑制）
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_AVAILABILITY_CHECK;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_WINDOW_TICKS;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_THRESHOLD;
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -561,6 +582,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         MINE_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
                 .translation("config.promaid.mine.pillarCooldown")
                 .defineInRange("pillarCooldown", 4, 1, 20);
+        // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
+        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘中禁止搭方块（默认开）：女仆骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘也照常搭）")
+                .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
                 .defineInRange("junkCheckInterval", 100, 20, 400);
@@ -970,6 +994,15 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         COMBAT_FLEE_SPEED = BUILDER.comment("逃跑速度倍率")
                 .translation("config.promaid.combat.fleeSpeed")
                 .defineInRange("fleeSpeed", 1.1, 0.8, 3.0);
+        // v1.1.0 实测一百五十三：TLM 火焰保护饰品识别
+        COMBAT_FIRE_PROTECT_BAUBLE = BUILDER.comment("火焰保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为（着火照常走灭火链路）")
+                .translation("config.promaid.combat.fireProtectBauble").define("fireProtectBauble", true);
+        // v1.1.0 实测一百五十四：TLM 溺水保护饰品识别
+        COMBAT_DROWN_PROTECT_BAUBLE = BUILDER.comment("溺水保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺——饰品每 tick 自己补空气；关闭 = 旧行为（照常上浮）")
+                .translation("config.promaid.combat.drownProtectBauble").define("drownProtectBauble", true);
+        // v1.1.0 实测一百五十五：保命物品下保留逃跑
+        COMBAT_FLEE_WITH_SAVE_ITEM = BUILDER.comment("保命物品下保留逃跑（默认关）：女仆携带保命物品（TLM 绀珠之药=ExtraLifeBauble 死亡复活 / 不死图腾）时是否还逃跑——默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑")
+                .translation("config.promaid.combat.fleeWithSaveItem").define("fleeWithSaveItem", false);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);
@@ -1006,7 +1039,7 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .defineInRange("waterLandingScan", 3, 2, 16);
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
         // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
-        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 3×3 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪，故铺 3×3 容错且坠落途中逐 tick 跟着落点补垫；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
+        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
                 .translation("config.promaid.combat.snowClutch").define("snowClutch", true);
         // v1.5.134：单兵作战战术（v1.5.132 战斗协同已删除——协同不如单兵 PVP 操作感）
         COMBAT_TACTICS = BUILDER.comment("单兵作战战术（绕圈走位/打退拉扯/距离控制/时机举盾——PVP 式战斗）")
@@ -1109,10 +1142,12 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
                 .translation("config.promaid.bridge.enabled").define("enabled", false);
         BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
-        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 24）：女仆已在空中（脚下悬空/站在垫的方块上）且够不着地面导航时，主人再远也直接空中铺桥走过去——空中没有'走路过去'的选项，7 格传送阈值不再适用；设为 0 关闭空中远距铺桥（只保留 7 格近距逻辑）")
-                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 24, 0, 64);
+        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 128）：女仆已在空中（脚下悬空/站在垫的方块上）且够不着地面导航时，主人再远也直接空中铺桥走过去——空中没有'走路过去'的选项，7 格传送阈值不再适用；设为 0 关闭空中远距铺桥（只保留 7 格近距逻辑）。v1.1.0 实测一百四十三：女仆自己半空时距离上限已放开（方块耗尽自然停），本值用于地面女仆追空中/更高主人的启动上限")
+                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 128, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
+        BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 2）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
+                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 2, 1, 8);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
@@ -1166,6 +1201,20 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
         // 永远能找到她（旧版主人在远处的女仆区块卸载后传送静默失效）
         MISC_MAID_CHUNK_LOAD = BUILDER.comment("女仆区块强制加载（所有有主女仆所在区块持续保持实体 ticking，随时可传送/召回/救援；关闭后远处女仆所在区块卸载时会冻结失联）")
                 .translation("config.promaid.misc.maidChunkLoad").define("maidChunkLoad", true);
+        // v1.1.0 实测一百三十四：同维度远距拉回——TLM 自带的"过远自动传送"只在
+        // 非 home、非工作、主人同维度时触发，且 teleportToOwner 偶发静默失败
+        //（±3 格随机试探找不到落点）；这里补一道统一兜底：同维度、不守家、没在
+        // 干重活、且距离超过阈值 → 直接按跨维度同款 findStand+teleportTo 拉回
+        MISC_MAID_SAME_DIM_PULL = BUILDER.comment("同维度远距拉回（默认开）：女仆与主人在同一维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 只拉非home非工作的跟随女仆且可能静默失败）。守家/坐姿/骑乘/干活中的女仆不拉")
+                .translation("config.promaid.misc.maidSameDimPull").define("maidSameDimPull", true);
+        MISC_MAID_SAME_DIM_DIST = BUILDER.comment("同维度拉回距离阈值（格，默认 48）：女仆与主人同维度且水平/垂直距离超过此值才拉回——低于此值靠走路/跟随，不打扰她")
+                .translation("config.promaid.misc.maidSameDimDist").defineInRange("maidSameDimDist", 48, 16, 256);
+        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
+                .translation("config.promaid.misc.followTighten").define("followTighten", true);
+        // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）
+        MISC_MILK_FEED_WITH_BUFF = BUILDER.comment("有增益也喂牛奶（默认开）：女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）")
+                .translation("config.promaid.misc.milkFeedWithBuff").define("milkFeedWithBuff", true);
         // v1.1.0 实测八十九：寻路危险方块避让——女仆绕开岩浆/火/仙人掌等
         MISC_DANGER_AVOID = BUILDER.comment("寻路危险方块避让（默认开）：女仆规划路径时自动绕开危险表中的方块（岩浆/火/仙人掌/甜浆果丛/细雪等），宁可停下等过远传送兜底也不往里走；已身处险境时仍保留逃出路径")
                 .translation("config.promaid.misc.dangerAvoid").define("dangerAvoid", true);
@@ -1212,6 +1261,15 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // 战斗↔还原循环不再立刻把排班段任务压回去（还原后先干原任务一段时间）
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
+    // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前可用性检测（默认开）：段任务应用前先检测目标任务当前是否有活可干（isEnable 硬闸 + 挖矿有无矿/伐木有无树/烹饪有无熔炉/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务并约 10 秒后重试；战斗/待机/跟随/第三方附属任务不扫描、只查 isEnable；关闭则回到旧行为（时间到无条件切）")
+            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
+    MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
+            .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
+    MISC_SCHEDULE_REVERSE_THRESHOLD = BUILDER.comment("排班反向切换阈值（默认 2）：窗口内累计反向次数达到该值即压制本次切换")
+            .translation("config.promaid.misc.scheduleReverseThreshold").defineInRange("scheduleReverseThreshold", 2, 1, 20);
+    MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS = BUILDER.comment("排班反向切换冷却（tick，默认 200=10 秒）：压制反向切换后保持多久不再反向切")
+            .translation("config.promaid.misc.scheduleReverseCooldownTicks").defineInRange("scheduleReverseCooldownTicks", 200, 20, 1200);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")

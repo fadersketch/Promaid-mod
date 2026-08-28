@@ -1585,6 +1585,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 目标矿在正上方也不误判为"障碍"（旧版把要挖的矿当障碍直接放弃 → 成功率低）。
      */
     private boolean pillarUpStep(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测一百五十六：骑乘中（扫帚等载具）不搭方块——移动由载具控制，
+        // 垫方块只会留一堆残渣（用户："和女仆在扫帚上挖矿时女仆会搭方块"）
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false;
+        }
         if (this.pillarCooldown > 0) {
             this.pillarCooldown--;
             return true; // 冷却中：下 tick 再垫（v1.5.113 B6：成功放置才设冷却）
@@ -1658,6 +1663,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 反复垫直到够得着。前方脚下是平地（不悬空）→ 不需要垫，直接走过去即可。
      */
     private boolean slopeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        }
         if (this.pillarCooldown > 0) {
             this.pillarCooldown--;
             return true; // v1.5.113（B6）：冷却中——等一步走完再垫（不重复消耗）
@@ -1698,6 +1706,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 只垫"该垫"的位置，不破坏任何方块；垫一块后重算（下 tick 再评估/走）。
      */
     private boolean bridgeToOre(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        }
         if (hDist < 1.0) {
             return false;
         }
@@ -2129,8 +2140,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // v1.5.88：懒加载自定义矿表（config 文件加载完成后首次扫描才真正读到值）
         ensureCustomOres();
         OreCache cache = ORE_CACHE.get(id);
-        if (cache != null && now - cache.builtAt < ORE_CACHE_TTL) {
-            // 缓存轮（每 10 tick）：只校验已记录的矿
+        if (cache != null) {
+            // v1.1.0 实测一百四十二：去掉 5 秒 TTL 到期强制重建——缓存轮每次都会逐格
+            // 校验矿是否还在（存在性/框内/可挖/挡路/弃置，pickFromCache 内），到期重建
+            // 只会造成"每 5 秒停一下重扫/换目标"（用户：挖矿伐木每 5 秒重置一次状态，
+            // 等效收放魂符）。缓存一直用到轮空才全量重建（锚点变化/迁框另有强制重建
+            // 路径）；框内新露头的矿在缓存轮空后的下一次全量扫描里自然被找到
             this.lastScanWasFull = false;
             BlockPos fromCache = this.pickFromCache(level, maid, anchor, cache);
             if (fromCache != null) {
