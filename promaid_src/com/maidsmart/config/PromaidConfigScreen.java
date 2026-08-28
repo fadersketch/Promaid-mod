@@ -1116,6 +1116,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MINE_RELOCATE_THROTTLE, s), "重定位节流（tick，防边界抖动）"));
         this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.MINE_PILLAR_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.MINE_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
+        // v1.1.0 实测一百五十六：骑乘中禁止搭方块
+        this.rows.add(new BoolRow("骑乘中禁止搭方块", MaidSmartConfig.MINE_RIDE_NO_PILLAR.get(),
+                v -> MaidSmartConfig.MINE_RIDE_NO_PILLAR.set(v), "骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留残渣；关闭 = 旧行为（骑乘也照常搭）"));
         this.rows.add(new NumRow("废石清理间隔（tick）", String.valueOf(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL, s), "废石清理间隔（tick，20=1 秒）：多久检查一次背包废石是否超量，调小清理更及时、略耗性能"));
         this.rows.add(new NumRow("播报限频（tick）", String.valueOf(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL.get()),
@@ -1606,7 +1609,7 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN, s), "落地水下探格数：提前向下探测几格判断要不要放水（防高空误放）"));
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发、细雪不会）
         this.rows.add(new BoolRow("落地雪", MaidSmartConfig.COMBAT_SNOW_CLUTCH.get(),
-                v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：高空坠落时在落点平面铺 3×3 细雪垫接住她并收回（桶不消耗）——细雪不流动，落点必须正好是雪：所以铺 3×3 容错 + 坠落途中逐 tick 跟着落点补垫，且绝不在高处拦她（细雪减速后剩下的路照样摔）；下界也能用（水会蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
+                v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：高空坠落时在落点平面铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动，落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（偏一格即空摔，追求稳请用水桶），且绝不在高处拦她（细雪减速后剩下的路照样摔）；下界也能用（水会蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
         // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
         // v1.5.250 已删除）
         this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
@@ -1620,9 +1623,11 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随——只在【地面】状态生效（平地上太远就该走路/传送，不铺桥）"));
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 24）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 128）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）。v1.1.0 实测一百四十三：女仆自己半空时距离上限已放开（方块耗尽自然停），本值用于地面女仆追空中/更高主人的启动上限"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
+        this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 2）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（搭一半挨打）；刷怪频繁的包里可再调小，过大会导致搭路几乎永不触发"));
         this.rows.add(new NumRow("搭路节奏（tick/块）", String.valueOf(MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get()),
@@ -1645,6 +1650,17 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("逃生与自保（被动保命）", false));
         this.rows.add(new BoolRow("自保行为", MaidSmartConfig.COMBAT_SELF_PRESERVE.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE.set(v), "自保行为（轻量被动：环境危险/低血时插保命动作——喝药/垫高/逃跑/传送；平时零干预，与战斗/战术并行不冲突）"));
+        // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）
+        this.rows.add(new BoolRow("火焰保护饰品识别", MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get(),
+                v -> MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.set(v), "佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为"));
+        this.rows.add(new BoolRow("溺水保护饰品识别", MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get(),
+                v -> MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.set(v), "佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺；关闭 = 旧行为"));
+        // v1.1.0 实测一百五十二：有增益也喂牛奶（女仆自己喝 + 给主人喂两处共用）
+        this.rows.add(new BoolRow("有增益也喂牛奶", MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get(),
+                v -> MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.set(v), "女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）"));
+        // v1.1.0 实测一百五十五：保命物品下保留逃跑
+        this.rows.add(new BoolRow("保命物品下保留逃跑", MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get(),
+                v -> MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.set(v), "携带保命物品（TLM 绀珠之药 / 不死图腾）时是否还逃跑：默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑"));
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
         this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
         this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
@@ -1805,7 +1821,15 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.set(v), "农场：一次收割/补种目标周围 3x3 整片作物（来回跑减少到约 1/8）；钓鱼：附近没椅子/船时主动找开阔水域，自带坐垫生成在岸边"));
         // v1.5.142：跨维度跟随
         this.rows.add(new BoolRow("跨维度跟随", MaidSmartConfig.MISC_DIMENSION_FOLLOW.get(),
-                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，跟随模式的女仆自动传送到主人身边（约 5 秒内）；坐着的（含建造强制坐下）和在家模式的女仆不拉"));
+                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，女仆自动传送到主人身边（约 5 秒扫描一轮）；坐着的/骑乘的/主人身边无可站立点时不拉。v1.1.0 实测一百三十一起守家（home）模式也照常跟随跨维度——排班自动 home 的女仆主人过门照样跟过来"));
+        // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送兜底）
+        this.rows.add(new BoolRow("同维度远距拉回", MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get(),
+                v -> MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.set(v), "女仆与主人同维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 自带过远传送只对非home非工作的跟随女仆生效且可能静默失败）。守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉，原因会写进 logs/promaid.log（60 秒限频）"));
+        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
+                v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
+        this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
+                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
         // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启）
         this.rows.add(new BoolRow("农场连锁收获", MaidSmartConfig.MISC_CHAIN_HARVEST.get(),
                 v -> MaidSmartConfig.MISC_CHAIN_HARVEST.set(v), "农场连锁收获：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物（大农田多轮清完）；默认开启"));
@@ -1858,6 +1882,15 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测六十一：战斗还原后排班宽限
         this.rows.add(new NumRow("战斗还原宽限（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get()),
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE, s), "战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班"));
+        // v1.1.0 实测一百三十三：排班切换三件套
+        this.rows.add(new BoolRow("切换前可用性检测", MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get(),
+                v -> MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(v), "段任务应用前先检测目标任务当前是否有活可干（isEnable + 挖矿有无矿/伐木有无树/烹饪有无熔炉/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务并约 10 秒后重试；战斗/待机/跟随/第三方任务不扫描、只查 isEnable"));
+        this.rows.add(new NumRow("反向切换窗口（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS, s), "两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳（默认 200=10 秒）；正常时段切换相隔约 2000 tick，不会被误判"));
+        this.rows.add(new NumRow("反向切换阈值", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD, s), "窗口内累计反向次数达到该值即压制本次切换（默认 2）"));
+        this.rows.add(new NumRow("反向切换冷却（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS, s), "压制反向切换后保持多久不再反向切（默认 200=10 秒）"));
         // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
         this.rows.add(new SectionRow("运行日志（实测九十四）", true));
         this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),

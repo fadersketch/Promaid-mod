@@ -127,7 +127,7 @@ public final class EmotionalActionExecutor {
         int bestSlot = -1;
         double bestSat = -1.0;
         // v1.5.299：手持食物参与选优（h=0 主手 m_21205_，h=1 副手 m_21206_；
-        // 手部用 handSlot=-2/-1 表示，选优后从手上 shrink）
+        // 手部用 handSlot=-2/-3 表示（副手 -3 与"无手持"哨兵 -1 区分），选优后从手上 shrink）
         int handSlot = -1;
         ItemStack handItem = null;
         double handSat = -1.0;
@@ -149,8 +149,11 @@ public final class EmotionalActionExecutor {
             double sat = foodSaturation(hs, owner);
             if (sat > handSat) {
                 handSat = sat;
-                handSlot = h == 0 ? -2 : -1;
-                handItem = hs;
+                // v1.1.0 实测一百二十六：副手哨兵 -3（旧版 -1 与"无手持食物"哨兵同值
+                // → 只有副手食物时被判成"没有"，误报"我背包里没有吃的了"）；handItem
+                // 存【快照】而非活引用（同 tick 隐藏槽/换手会清空活引用 → 喂空气）
+                handSlot = h == 0 ? -2 : -3;
+                handItem = hs.m_41777_();
             }
         }
         for (int i = 0; i < maidInv.getSlots(); i++) {
@@ -195,9 +198,18 @@ public final class EmotionalActionExecutor {
         }
         ItemStack toGive;
         if (handSlot != -1 && handSat >= bestSat) {
-            // 手持食物最优（同饱食度优先用手上，不翻背包）
-            toGive = handItem.m_41777_(); // copy
-            handItem.m_41774_(1);         // shrink(1)
+            // 手持食物最优（同饱食度优先用手上，不翻背包）——v1.1.0 实测一百二十六：
+            // handItem 是扫描时刻的【快照】；消耗前核对当前手上仍是同种食物才 shrink
+            //（防同 tick 手被隐藏槽/换手系统清空或替换）
+            toGive = handItem;
+            if (toGive.m_41619_()) {
+                return false;
+            }
+            ItemStack liveHand = handSlot == -2 ? maid.m_21205_() : maid.m_21206_();
+            if (liveHand.m_41619_() || !liveHand.m_150930_(toGive.m_41720_())) {
+                return false;
+            }
+            liveHand.m_41774_(1);
         } else {
             toGive = maidInv.extractItem(bestSlot, 1, false);
         }

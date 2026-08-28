@@ -307,6 +307,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return; // 主链已设的投喂间隔内互助也让位（本 tick 主链 return 时 aidCds
                 // 不递减——互助链不消耗间隔计数，纯让位判定）
             }
+            // v1.1.0 实测一百二十六（用户："女仆没有可支援道具却会说话，系统提示喂了
+            // 空气"）：白名单预检——背包+双手连一样能用的支援物品（药水/金苹果/牛奶/
+            // 蜂蜜/FOODS 食物）都没有就整轮跳过：不说话、不扫描、不消耗。旧版依赖各
+            // 分支返回 null，但手上的【活引用】会被同 tick 其他系统（隐藏物品槽/任务
+            // 换手）清空或替换，feedSisterFood 会把空栈当"喂了空气"播报。预检是硬门槛：
+            // 没道具 = 不支援 = 静默。
+            if (!this.hasAidItemAtAll(maid)) {
+                return;
+            }
             for (EntityMaid sister : level.m_45976_(EntityMaid.class,
                     maid.m_20191_().m_82400_(16.0))) {
                 if (sister == maid || !sister.m_6084_() || sister.m_269323_() != maid.m_269323_()) {
@@ -539,6 +548,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 手持食物（金苹果已在前面分支处理；这里拿普通食物）
             ItemStack handItem = null;
             double handSat = -1.0;
+            int handIdx = -1;
             for (int h = 0; h < 2; h++) {
                 ItemStack hs = h == 0 ? maid.m_21205_() : maid.m_21206_();
                 if (hs.m_41619_()) {
@@ -557,23 +567,44 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, sister);
                 if (sat > handSat) {
                     handSat = sat;
-                    handItem = hs;
+                    // v1.1.0 实测一百二十六：存【快照】而非活引用——m_21205_/m_21206_
+                    // 返回的是手上真实栈对象，同 tick 其他系统（隐藏物品槽/任务换手）
+                    // 会原地清空它；活引用到消耗时已空 → 空栈当食物喂 → 系统播报
+                    // "喂了空气"。快照在扫描时刻固定内容，消耗时再核对当前手。
+                    handItem = hs.m_41777_();
+                    handIdx = h;
                 }
             }
             if (bestSlot < 0 && handItem == null) {
                 return null;
             }
             ItemStack toGive;
+            String foodName;
             if (handItem != null && handSat >= bestSat) {
-                toGive = handItem.m_41777_();
-                handItem.m_41774_(1);
+                toGive = handItem;
+                if (toGive.m_41619_()) {
+                    return null; // 扫描后手上已被清空——不支援、不播报、不消耗
+                }
+                // 名字在进食前读（m_5584_ = eat 会 shrink 掉栈内数量，读晚了拿不到）
+                foodName = toGive.m_41786_().getString();
+                // 消耗前核对：当前手上还是同种食物才 shrink（防同 tick 手被换走，
+                // 误把新物品当成旧食物吃掉）
+                ItemStack liveNow = handIdx == 0 ? maid.m_21205_() : maid.m_21206_();
+                if (liveNow.m_41619_() || !liveNow.m_150930_(toGive.m_41720_())) {
+                    return null;
+                }
+                liveNow.m_41774_(1);
             } else {
                 toGive = inv.extractItem(bestSlot, 1, false);
+                if (toGive.m_41619_()) {
+                    return null;
+                }
+                foodName = toGive.m_41786_().getString();
             }
             // 真实进食（m_5584_ = eat(Level, ItemStack)）：食物效果/音效/粒子全生效
             sister.m_5584_(sister.m_9236_(), toGive);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            return "喂了" + toGive.m_41786_().getString();
+            return "喂了" + foodName;
         } catch (Exception ignored) {
         }
         return null;
@@ -967,6 +998,55 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         return n;
     }
 
+    /** v1.1.0 实测一百二十六：女仆身上是否有任何可用于支援的物品（背包+双手）——
+     *  药水/金苹果/牛奶/蜂蜜/FOODS 食物任一即可。没有就整轮静默——防"没道具还说话/
+     *  喂空气"（预检硬门槛，与各分支的"摸到才播报"构成双保险）。 */
+    private static boolean hasAidItemAtAll(EntityMaid maid) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (isAidItem(inv.getStackInSlot(i))) {
+                    return true;
+                }
+            }
+            return isAidItem(maid.m_21205_()) || isAidItem(maid.m_21206_());
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isAidItem(ItemStack s) {
+        if (s == null || s.m_41619_()) {
+            return false;
+        }
+        net.minecraft.world.item.Item it = s.m_41720_();
+        if (it instanceof net.minecraft.world.item.PotionItem
+                || it instanceof net.minecraft.world.item.SplashPotionItem
+                || it instanceof net.minecraft.world.item.LingeringPotionItem) {
+            return true;
+        }
+        // 附魔/普通金苹果
+        if (it == net.minecraft.world.item.Items.f_42437_ || it == net.minecraft.world.item.Items.f_42436_) {
+            return true;
+        }
+        // 牛奶桶
+        net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
+        if (milk != null && it == milk) {
+            return true;
+        }
+        // 蜂蜜瓶
+        if (it == net.minecraft.world.item.Items.f_42787_) {
+            return true;
+        }
+        for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
+            if (food.m_41720_() == it) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /**
      * v1.5.201：金苹果/附魔金苹果——【不作为常规食物】处理（不进喂食/治疗食物队列，
      * 不进主人背包），而是像喷溅药水一样对主人【即时使用】：消耗 1 个，直接给主人
@@ -1070,7 +1150,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 无法区分：副手-only 时直接 return false（副手食物永远选不中）。改 -3
             // 表示副手，-1 仍表示"没有"，哨兵不再冲突
             handSlot = h == 0 ? -2 : -3;
-                    handItem = hs;
+                    // v1.1.0 实测一百二十六：存快照而非活引用（同 tick 隐藏槽/换手
+                    // 清空活引用 → 后续喂空栈）
+                    handItem = hs.m_41777_();
                 }
             }
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -1099,9 +1181,18 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             ItemStack toGive;
             // v1.1.0 实测十六：副手哨兵修复后判定（handSlot != -1 即有手持食物）
+            // v1.1.0 实测一百二十六：handItem 已是扫描时刻快照，消耗前核对当前手
+            // 仍是同种食物才 shrink（防同 tick 手被换走/清空）
             if (handSlot != -1 && handSat >= bestSat) {
-                toGive = handItem.m_41777_(); // copy
-                handItem.m_41774_(1);         // shrink(1)
+                toGive = handItem;
+                if (toGive.m_41619_()) {
+                    return false;
+                }
+                ItemStack liveHand = handSlot == -2 ? maid.m_21205_() : maid.m_21206_();
+                if (liveHand.m_41619_() || !liveHand.m_150930_(toGive.m_41720_())) {
+                    return false;
+                }
+                liveHand.m_41774_(1);
             } else {
                 toGive = inv.extractItem(bestSlot, 1, false);
             }
@@ -1122,15 +1213,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  "投喂应该跟本来就有的喂食功能一样是直接喂给主人"）。
      *  v1.5.289：牛奶先查【正面状态】——主人身上有增益效果时不喂牛奶（牛奶清
      *  全部效果会把力量/再生/抗火等增益一起清掉，与女仆自己喝牛奶同款前提）；
-     *  此时只喂蜂蜜（蜂蜜只解中毒+饱食，不清增益）。 */
+     *  此时只喂蜂蜜（蜂蜜只解中毒+饱食，不清增益）。
+     *  v1.1.0 实测一百五十二：MISC_MILK_FEED_WITH_BUFF 开启时无视增益照喂——
+     *  主人装备/饰品带永久增益时旧版永远不满足"无增益"，中毒/凋零也不解。 */
     private boolean feedMilkOrHoneyDirect(EntityMaid maid, ServerPlayer owner) {
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
             net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.f_42787_;
-            // 牛奶优先（全解）——前提：主人身上没有增益效果
-            if (milk != null && !this.ownerHasBeneficialEffect(owner)) {
+            // 牛奶优先（全解）——前提：主人身上没有增益效果（开关开启时无视增益）
+            boolean ownerHasBuff = this.ownerHasBeneficialEffect(owner);
+            if (milk != null && (!ownerHasBuff
+                    || com.maidsmart.config.MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get())) {
                 // v1.5.299：手持牛奶也认（主手→副手）——旧版只扫背包
                 ItemStack handMilk = maid.m_21205_();
                 boolean handIsMilk = !handMilk.m_41619_() && handMilk.m_41720_() == milk;
