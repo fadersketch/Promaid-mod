@@ -669,8 +669,8 @@ public class AutoCombatSwitch {
                     // 兜底还原到 idle（空闲），清标记释放女仆。
                     com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 原任务 '" + prevUid + "' 已不存在，兜底还原到空闲");
-                    clearMarkers(maid);
-                    // 尝试还原到排班当前段；无排班则直接 idle
+                    // v1.1.0 实测一百五十（参考 tlm_beyond_space restoreTemporaryState：
+                    // 先还原、后清会话——失败不清标记下轮重试）：兜底切换【成功后】才清标记
                     boolean fallbackDone = false;
                     if (com.maidsmart.schedule.ScheduleData.isOn(maid)
                             && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
@@ -692,15 +692,24 @@ public class AutoCombatSwitch {
                             if (idleTask != null) {
                                 com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
                                         maid.m_20148_(), idleTask.getUid(), () -> maid.setTask(idleTask));
+                                fallbackDone = maid.getTask() != null
+                                        && maid.getTask().getUid() != null
+                                        && idleTask.getUid().equals(maid.getTask().getUid());
                             }
                         } catch (Exception ignored) {
                         }
                     }
-                    // v1.1.0 实测一百四十九：兜底还原同样恢复 home/作息（排班关闭时）
-                    restorePrevMode(maid);
+                    if (fallbackDone) {
+                        clearMarkers(maid);
+                        // v1.1.0 实测一百四十九：兜底还原同样恢复 home/作息（排班关闭时）
+                        restorePrevMode(maid);
+                    } else {
+                        com.maidsmart.tool.PromaidLog.log("战斗",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                        + " 兜底还原未生效（TLM setTask 守卫拒绝？），保留标记下轮重试");
+                    }
                     continue;
                 }
-                clearMarkers(maid);
                 boolean restored = false;
                 // v1.1.0 实测一百一十四：仍在任意攻击任务（含 retune 换战术/同步抖动后
                 // 与 ASSIGNED 不一致的战斗任务）都算"本系统战斗"，还原到战斗前任务——
@@ -734,30 +743,49 @@ public class AutoCombatSwitch {
                     }
                     com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(
                             maid.m_20148_(), restoreTask.getUid(), () -> maid.setTask(restoreTask));
-                    restored = true;
+                    // v1.1.0 实测一百五十（参考 tlm_beyond_space restoreTemporaryState：先还原、
+                    // 后清会话——失败不清标记下轮重试）：TLM setTask 有守卫（睡眠/活动等）
+                    // 会静默拒绝（实测一百二十九的读回校验同源）——旧版无条件清标记，
+                    // setTask 一旦被拒 = 任务没切走、标记也没了 = 永久卡在战斗任务
+                    // （"切不回原来的模式"的兜底漏洞）。读回校验：切走了才算还原成功；
+                    // 没切走保留 COMBAT_ACTIVE，下轮扫描继续重试。
+                    restored = maid.getTask() != null
+                            && maid.getTask().getUid() != null
+                            && restoreTask.getUid().equals(maid.getTask().getUid());
+                    if (!restored) {
+                        com.maidsmart.tool.PromaidLog.log("战斗",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                        + " 还原未生效：setTask 未切到 " + restoreTask.getUid()
+                                        + "（TLM 守卫拒绝？），保留标记下轮重试");
+                    }
                 }
-                // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
-                // 还原 home 模式与作息（排班关闭时）——"切回之前的模式"完整闭环；
-                // 排班开启时作息由日程表管理（调度器每秒重断言），此处不覆盖
-                restorePrevMode(maid);
-                // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
-                // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
-                // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查
-                int grace = MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get();
-                if (grace > 0) {
-                    maid.getPersistentData().m_128356_(com.maidsmart.schedule.ScheduleData.GRACE_TAG,
-                            level.m_46467_() + grace);
-                }
-                // v1.1.0 实测九十四：运行日志（替代原 latest.log 直写）
-                if (restored) {
-                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 战斗还原：" + assignedUid + " -> " + prevUid
-                            + "（威胁消失 " + ((now - lastThreat) / 20) + " 秒）");
-                } else {
-                    // 任务在还原前被换（排班/玩家接管）——标记已清，正常退出
-                    String curTaskUid = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
-                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 无需还原：任务战中已被换为 " + curTaskUid);
+                // v1.1.0 实测一百五十：还原成功（或排班接管成功）才清标记——参考项目
+                // "先还原后清会话"；还原失败保留标记，下轮扫描继续重试（不会丢还原链）
+                if (restored || !stillOnCombat) {
+                    clearMarkers(maid);
+                    // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
+                    // 还原 home 模式与作息（排班关闭时）——"切回之前的模式"完整闭环；
+                    // 排班开启时作息由日程表管理（调度器每秒重断言），此处不覆盖
+                    restorePrevMode(maid);
+                    // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
+                    // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
+                    // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查
+                    int grace = MaidSmartConfig.MISC_SCHEDULE_RESTORE_GRACE.get();
+                    if (grace > 0) {
+                        maid.getPersistentData().m_128356_(com.maidsmart.schedule.ScheduleData.GRACE_TAG,
+                                level.m_46467_() + grace);
+                    }
+                    // v1.1.0 实测九十四：运行日志（替代原 latest.log 直写）
+                    if (restored) {
+                        com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " 战斗还原：" + assignedUid + " -> " + prevUid
+                                + "（威胁消失 " + ((now - lastThreat) / 20) + " 秒）");
+                    } else {
+                        // 任务在还原前被换（排班/玩家接管）——标记已清，正常退出
+                        String curTaskUid = maid.getTask() == null ? "null" : maid.getTask().getUid().toString();
+                        com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " 无需还原：任务战中已被换为 " + curTaskUid);
+                    }
                 }
             }
         }
