@@ -1606,7 +1606,7 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_WATER_LANDING_SCAN, s), "落地水下探格数：提前向下探测几格判断要不要放水（防高空误放）"));
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发、细雪不会）
         this.rows.add(new BoolRow("落地雪", MaidSmartConfig.COMBAT_SNOW_CLUTCH.get(),
-                v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：高空坠落时在落点平面铺 3×3 细雪垫接住她并收回（桶不消耗）——细雪不流动，落点必须正好是雪：所以铺 3×3 容错 + 坠落途中逐 tick 跟着落点补垫，且绝不在高处拦她（细雪减速后剩下的路照样摔）；下界也能用（水会蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
+                v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：高空坠落时在落点平面铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动，落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（偏一格即空摔，追求稳请用水桶），且绝不在高处拦她（细雪减速后剩下的路照样摔）；下界也能用（水会蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
         // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
         // v1.5.250 已删除）
         this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
