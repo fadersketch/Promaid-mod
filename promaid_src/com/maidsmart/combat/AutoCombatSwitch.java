@@ -94,6 +94,10 @@ public class AutoCombatSwitch {
      *  "还原扫描卡在哪个门"（用户追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
      *  一条 latest.log（搜 "restore-scan"）。 */
     private static final java.util.Map<java.util.UUID, Long> RESTORE_DIAG_SINCE = new java.util.HashMap<>();
+    /** v1.1.0 实测一百六十九：候选池诊断节流（maidId → 上次诊断 tick）——确认模组
+     *  武器任务有没有进战斗候选池（用户："女仆仍然不会使用模组的武器"）。每 5 秒/
+     *  女仆一条 latest.log（搜 "combat pools"）。 */
+    private static final java.util.Map<java.util.UUID, Long> POOL_DIAG_SINCE = new java.util.HashMap<>();
 
     /** 主人被攻击（任意来源）→ 附近女仆切战斗
      *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
@@ -1021,6 +1025,28 @@ public class AutoCombatSwitch {
                 meleePool.add(task);
                 meleeWeights.add(w);
             }
+        }
+        // v1.1.0 实测一百六十九：候选池内容诊断（每 5 秒/女仆一条，latest.log 搜
+        // "combat pools"）——确认模组武器任务（ef_tlm/拔刀剑/truepower 等）有没有进池；
+        // 池里只有原版任务 = 模组武器没被 isWeapon 认到；池里有模组任务 = 权重随机问题
+        try {
+            long nowT = maid.m_9236_().m_46467_();
+            Long poolLast = POOL_DIAG_SINCE.get(maid.m_20148_());
+            if (poolLast == null || nowT - poolLast >= 100L) {
+                POOL_DIAG_SINCE.put(maid.m_20148_(), nowT);
+                StringBuilder mp = new StringBuilder();
+                for (IMaidTask t : meleePool) {
+                    mp.append(t.getUid()).append(',');
+                }
+                StringBuilder rp = new StringBuilder();
+                for (IMaidTask t : rangedPool) {
+                    rp.append(t.getUid()).append(',');
+                }
+                com.mojang.logging.LogUtils.getLogger().info(
+                        "combat pools: maid={} melee=[{}] ranged=[{}]",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp);
+            }
+        } catch (Throwable ignored) {
         }
         return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
     }
