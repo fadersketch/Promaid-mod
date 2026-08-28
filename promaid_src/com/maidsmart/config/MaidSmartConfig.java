@@ -1174,17 +1174,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- 杂项 ----
         BUILDER.comment("杂项设置").translation("config.promaid.misc").push("misc");
-        MISC_COOK_RADIUS = BUILDER.comment("烹饪任务熔炉搜索范围")
+        MISC_COOK_RADIUS = BUILDER.comment("烧制任务熔炉搜索范围")
                 .translation("config.promaid.misc.cookRadius").defineInRange("cookRadius", 16, 4, 48);
         MISC_BREW_RADIUS = BUILDER.comment("酿造任务酿造台搜索范围")
                 .translation("config.promaid.misc.brewRadius").defineInRange("brewRadius", 16, 4, 48);
-        MISC_PROCESS_COOLDOWN = BUILDER.comment("烹饪/酿造处理间隔（tick）")
+        MISC_PROCESS_COOLDOWN = BUILDER.comment("烧制/酿造处理间隔（tick）")
                 .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 10, 10, 200);
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
-        MISC_COOK_SMELT_ORES = BUILDER.comment("熔炉烧矿物（默认开）：烹饪任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单")
+        MISC_COOK_SMELT_ORES = BUILDER.comment("熔炉烧矿物（默认开）：烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单")
                 .translation("config.promaid.misc.cookSmeltOres").define("cookSmeltOres", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
-        MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烹饪任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
+        MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 10000, 500, 60000);
