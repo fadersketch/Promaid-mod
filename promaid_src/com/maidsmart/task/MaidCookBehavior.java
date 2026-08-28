@@ -31,6 +31,9 @@ import java.util.Set;
  * 炉子槽位：0=待烧食材，1=燃料，2=成品。
  * 平衡设计：
  * - 只操作熔炉类方块（烟熏炉/高炉/熔炉通用），每次处理 1 轮（收成品 > 补食材 > 补燃料）
+ * - v1.1.0 实测一百五十八：兼容高炉与烟熏炉（开关 misc.cookSmokerBlast）——烟熏炉按
+ *   烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属（受「熔炉烧矿物」开关约束，高炉只烧
+ *   矿物）、熔炉保持食材→矿物顺序；成品收取/燃料逻辑三种炉子通用
  * - 食材由女仆背包携带（内置白名单：生肉/鱼/土豆等）
  * - v1.1.0 实测一百五十七：背包没有食材时兼容【矿物类可烧制物】——带矿物/原料标签
  *   （forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的
@@ -152,8 +155,12 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
         this.cooldown = processCooldown();
         BlockEntity be = level.m_7702_(this.furnacePos);
-        if (be instanceof FurnaceBlockEntity) {
-            this.processFurnace(level, maid, (Container) be);
+        // v1.1.0 实测一百五十八：兼容高炉/烟熏炉——开关开启时三种炉子都操作；
+        // 关闭 = 旧行为（只处理熔炉，烟熏炉/高炉前干坐）
+        if (be instanceof net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+                && (be instanceof FurnaceBlockEntity
+                        || com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get())) {
+            this.processFurnace(level, maid, (Container) be, be);
         }
     }
 
@@ -185,7 +192,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace) {
+    private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
         IItemHandler maidInv = maid.getMaidInv();
         // 1. 收取成品
         ItemStack result = furnace.m_8020_(2);
@@ -198,14 +205,20 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
         // 2. 补食材（槽 0 空）
         if (furnace.m_8020_(0).m_41619_()) {
-            ItemStack food = this.extractFromMaid(maidInv, FOODS, 1);
-            if (food.m_41619_()) {
-                // v1.1.0 实测一百五十七：没有食材时兼容矿物类可烧制物
-                //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
-                food = this.extractOreFromMaid(level, maidInv);
+            ItemStack input = ItemStack.f_41583_;
+            if (be instanceof FurnaceBlockEntity) {
+                input = this.extractFromMaid(maidInv, FOODS, 1);
+                if (input.m_41619_()) {
+                    // v1.1.0 实测一百五十七：没有食材时兼容矿物类可烧制物
+                    //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
+                    input = this.extractOreFromMaid(level, maidInv);
+                }
+            } else {
+                // v1.1.0 实测一百五十八：烟熏炉/高炉——按各自配方类型取可烧制物
+                input = this.extractForFurnaceType(level, maidInv, be);
             }
-            if (!food.m_41619_()) {
-                furnace.m_6836_(0, food);
+            if (!input.m_41619_()) {
+                furnace.m_6836_(0, input);
             }
         }
         // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
@@ -240,17 +253,58 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.1.0 实测一百五十七：当前世界是否有该物品的熔炉配方（可烧制判定——
-     *  用配方管理器查 SMELTING 配方，模组自定义烧制配方同样生效）。 */
-    private static boolean isSmeltable(ServerLevel level, ItemStack stack) {
+    /** v1.1.0 实测一百五十七：当前世界是否有该物品的指定类型炉子配方（熔炉/高炉/
+     *  烟熏炉，用配方管理器查询，模组自定义配方同样生效）。probe 声明为 Container
+     *  类型——getRecipeFor 的泛型 C 按实参静态类型推断，SimpleContainer 推不出
+     *  Recipe<Container> 的约束。 */
+    private static <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
+    boolean hasRecipe(ServerLevel level, ItemStack stack,
+                      net.minecraft.world.item.crafting.RecipeType<T> type) {
         try {
-            net.minecraft.world.SimpleContainer probe = new net.minecraft.world.SimpleContainer(1);
+            net.minecraft.world.Container probe = new net.minecraft.world.SimpleContainer(1);
             probe.m_6836_(0, stack);
-            return level.m_7465_().m_44015_(
-                    net.minecraft.world.item.crafting.RecipeType.f_44108_, probe, level).isPresent();
+            return level.m_7465_().m_44015_(type, probe, level).isPresent();
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    private static boolean isSmeltable(ServerLevel level, ItemStack stack) {
+        return hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44108_);
+    }
+
+    /** v1.1.0 实测一百五十八：烟熏炉/高炉按各自配方类型取料——
+     *  烟熏炉 = 有烟熏配方的物品（生食）；高炉 = 有高炉配方的物品（矿石/粗金属，
+     *  受「熔炉烧矿物」开关约束——高炉只烧矿物，开关关掉时高炉只收成品/补燃料）。 */
+    private ItemStack extractForFurnaceType(ServerLevel level, IItemHandler maidInv, BlockEntity be) {
+        if (be instanceof net.minecraft.world.level.block.entity.SmokerBlockEntity) {
+            return this.extractByRecipe(level, maidInv,
+                    net.minecraft.world.item.crafting.RecipeType.f_44110_);
+        }
+        if (be instanceof net.minecraft.world.level.block.entity.BlastFurnaceBlockEntity) {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()) {
+                return ItemStack.f_41583_;
+            }
+            return this.extractByRecipe(level, maidInv,
+                    net.minecraft.world.item.crafting.RecipeType.f_44109_);
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** v1.1.0 实测一百五十八：从女仆背包取 1 个有指定炉子配方的物品。 */
+    private <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
+    ItemStack extractByRecipe(ServerLevel level, IItemHandler maidInv,
+                              net.minecraft.world.item.crafting.RecipeType<T> type) {
+        for (int i = 0; i < maidInv.getSlots(); i++) {
+            ItemStack stack = maidInv.getStackInSlot(i);
+            if (stack.m_41619_()) {
+                continue;
+            }
+            if (hasRecipe(level, stack, type)) {
+                return maidInv.extractItem(i, 1, false);
+            }
+        }
+        return ItemStack.f_41583_;
     }
 
     /** v1.1.0 实测一百五十七：从女仆背包取 1 个矿物类可烧制物（带矿物标签且
