@@ -90,6 +90,10 @@ public class AutoCombatSwitch {
     private static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
+    /** v1.1.0 实测一百七十二：还原扫描心跳（每 10 秒一条，latest.log 搜 "auto-combat
+     *  scan"）——确认 onServerTick 在跑 + 战斗态女仆数 + 被排班清理数，定位"还原
+     *  永不触发"是扫描没跑 / 女仆被门拦 / 还是还原动作本身失败 */
+    private long lastScanHeartbeat = 0;
     /** v1.1.0 实测一百六十四：还原扫描诊断节流（maidId → 上次诊断 tick）——定位
      *  "还原扫描卡在哪个门"（用户追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
      *  一条 latest.log（搜 "restore-scan"）。 */
@@ -577,6 +581,8 @@ public class AutoCombatSwitch {
         // v1.1.0 实测五十七：战中近远程换战术只依赖总开关——自动还原关掉时，
         // 换战术仍然工作（还原关 = 用户要她打到底，但打得聪明依旧成立）
         boolean restoreOn = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get();
+        int activeCount = 0;
+        int schedCleared = 0;
         for (ServerLevel level : event.getServer().m_129785_()) {
             for (EntityMaid maid : level.m_45976_(EntityMaid.class,
                     new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
@@ -584,10 +590,12 @@ public class AutoCombatSwitch {
                 if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }
+                activeCount++;
                 // v1.1.0 实测一百六十三：排班开启的女仆不参与自主战斗——残留的战斗
                 // 标记直接清掉（她的任务/模式由日程表管理，战斗还原链不再适用）
                 if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
                     clearMarkers(maid);
+                    schedCleared++;
                     continue;
                 }
                 // 自保中不还原（等自保结束；自保退出有自己的回主人逻辑）
@@ -866,6 +874,16 @@ public class AutoCombatSwitch {
                     }
                 }
             }
+        }
+        // v1.1.0 实测一百七十二：心跳诊断（每 10 秒一条，latest.log 搜 "auto-combat scan"）
+        // ——确认还原扫描 onServerTick 在跑：active=战斗态女仆数（扫描看到几只）、
+        // schedCleared=被排班门清理的（这些不还原是排班优先设计的正常行为）
+        long hbTick = event.getServer().m_129783_().m_46467_();
+        if (hbTick - this.lastScanHeartbeat >= 200L) {
+            this.lastScanHeartbeat = hbTick;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "auto-combat scan: running tick={} active={} schedCleared={}",
+                    hbTick, activeCount, schedCleared);
         }
     }
 
