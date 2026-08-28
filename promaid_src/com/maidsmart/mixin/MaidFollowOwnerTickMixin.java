@@ -23,8 +23,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 走路满 7.5~12.5 秒清 WALK_TARGET + 停导航）清掉后，女仆失去跟随目标，
  * 走走停停/漫无目的乱跑。
  *
- * 本 mixin 注入 tick（m_6725_，继承自 Behavior——Mixin 对继承方法生成合成覆写）：
- * 每 tick 重断言——4 格内不动（跟随已达成）；超过 4 格重新 setWalkAndLookTarget
+ * 【注入点（实测一百五十九修正）】初版注入 m_6725_（tick）导致游戏加载崩溃——
+ * tick 是继承自父类 Behavior 的方法，Mixin 的 @Inject 只匹配目标类【自己声明】的
+ * 方法，继承方法匹配不到（InvalidInjectionException: could not find any targets
+ * matching 'm_6725_' in MaidFollowOwnerTask）。MaidFollowOwnerTask 自己声明的方法
+ * 只有 m_6114_（canUse）与 m_6735_（start）。本任务未覆写 canStillUse（父类默认
+ * false），大脑每 tick：STILL 状态 → tryStart → canUse（m_6114_ 每 tick 调用）；
+ * RUNNING 只持续 1 tick 就 doStop 回到 STILL——注入 m_6114_ 入口即等价每 tick 驱动。
+ *
+ * 每 tick 重断言：4 格内不动（跟随已达成）；超过 4 格重新 setWalkAndLookTarget
  * 指向主人（speedModifier/stopDistance 与官方任务字段一致）；守家/脑冻结/无主/
  * 跨维度/干活中不拉（干活判定防跟随目标覆盖工作寻路）。总开关 misc.followTighten。
  */
@@ -38,8 +45,8 @@ public abstract class MaidFollowOwnerTickMixin {
     @Final
     private int stopDistance;
 
-    @Inject(method = "m_6725_", at = @At("HEAD"))
-    private void maidsmart$perTickFollow(ServerLevel level, LivingEntity entity, long gameTime, CallbackInfo ci) {
+    @Inject(method = "m_6114_", at = @At("HEAD"))
+    private void maidsmart$perTickFollow(ServerLevel level, LivingEntity entity, CallbackInfo ci) {
         if (!(entity instanceof EntityMaid maid)) {
             return;
         }

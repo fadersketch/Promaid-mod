@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百五十九
+
+- 修复跟随收紧 mixin 导致游戏加载崩溃（崩溃日志实证：`InvalidInjectionException: Critical injection failure: @Inject ... could not find any targets matching 'm_6725_' in MaidFollowOwnerTask`——打开创造栏渲染女仆时 EntityMaid 加载触发 mixin 应用，直接崩）：
+  - 【根因】实测一百五十一的 `MaidFollowOwnerTickMixin` 注入 `m_6725_`（tick）——tick 是**继承自父类 Behavior 的方法**，Mixin 的 `@Inject` 只匹配目标类【自己声明】的方法，继承方法匹配不到 → 注入目标校验失败（`"required": true` 配置下即致命错误）
+  - 【修复】注入点改到 `MaidFollowOwnerTask` 自己声明的 `m_6114_`（canUse）：javap 实证本类只声明 `m_6114_`（canUse）与 `m_6735_`（start），且未覆写 `canStillUse`（父类默认 false）——大脑每 tick 对 STILL 状态行为调 tryStart → canUse（每 tick 调用），RUNNING 仅持续 1 tick 就 doStop 回 STILL，注入 canUse 入口即等价改版 jar 的每 tick 驱动。守卫逻辑（4 格内不拉/守家/脑冻结/无主/跨维度/干活中不拉）不变，总开关 `misc.followTighten` 不变
+  - 若仍出现 mixin 应用报错，回退方案 = 外部每 tick 扫描器（HomePatrolHandler 同款）实现跟随重断言，不再依赖 mixin
+
 ## 实测一百五十八
 
 - 烹饪任务兼容高炉与烟熏炉（用户："能不能让它也兼容高炉和烟熏炉呢？"）：
