@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
  * v1.1.0 实测一百五十一（参考改版 TLM jar "touhoulittlemaid-1.5.3-modified-all.jar"）：
@@ -31,6 +31,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * false），大脑每 tick：STILL 状态 → tryStart → canUse（m_6114_ 每 tick 调用）；
  * RUNNING 只持续 1 tick 就 doStop 回到 STILL——注入 m_6114_ 入口即等价每 tick 驱动。
  *
+ * 【处理器签名（实测一百六十修正）】m_6114_ 返回 boolean——Mixin 要求带返回值的
+ * 方法用 CallbackInfoReturnable<Boolean>（用 CallbackInfo 会报 Invalid descriptor:
+ * CallbackInfoReturnable is required）。本注入不 setReturnValue，原 canUse 判定不受影响。
+ *
  * 每 tick 重断言：4 格内不动（跟随已达成）；超过 4 格重新 setWalkAndLookTarget
  * 指向主人（speedModifier/stopDistance 与官方任务字段一致）；守家/脑冻结/无主/
  * 跨维度/干活中不拉（干活判定防跟随目标覆盖工作寻路）。总开关 misc.followTighten。
@@ -46,7 +50,7 @@ public abstract class MaidFollowOwnerTickMixin {
     private int stopDistance;
 
     @Inject(method = "m_6114_", at = @At("HEAD"))
-    private void maidsmart$perTickFollow(ServerLevel level, LivingEntity entity, CallbackInfo ci) {
+    private void maidsmart$perTickFollow(ServerLevel level, LivingEntity entity, CallbackInfoReturnable<Boolean> cir) {
         if (!(entity instanceof EntityMaid maid)) {
             return;
         }
