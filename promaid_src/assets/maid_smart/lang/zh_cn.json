@@ -1,10 +1,10 @@
-{
+﻿{
   "task.maid_smart.mine": "挖矿",
   "task.maid_smart.mine.desc": "在附近寻找矿石，手持镐开采",
   "task.maid_smart.woodcut": "伐木",
   "task.maid_smart.woodcut.desc": "自动找树，手持斧渐进砍伐，连锁砍完相连的树干；树叶不挡视线",
-  "task.maid_smart.cook": "烹饪",
-  "task.maid_smart.cook.desc": "给熔炉补充燃料与生食，收取烧好的成品",
+  "task.maid_smart.cook": "烧制",
+  "task.maid_smart.cook.desc": "给熔炉/高炉/烟熏炉补充燃料与可烧制物（食材/矿石），收取烧好的成品",
   "task.maid_smart.brew": "酿造",
   "task.maid_smart.brew.desc": "给酿造台补充烈焰粉与材料，收取酿好的药水",
   "task.maid_smart.build": "建筑",
@@ -142,7 +142,7 @@
   "config.promaid.combat.buildAreaAvoid": "施工区避让",
   "config.promaid.combat.masterDeathTeleport": "主人死亡传送",
   "config.promaid.misc": "杂项设置",
-  "config.promaid.misc.cookRadius": "烹饪搜索范围",
+  "config.promaid.misc.cookRadius": "烧制搜索范围",
   "config.promaid.misc.brewRadius": "酿造搜索范围",
   "config.promaid.misc.processCooldown": "处理间隔（tick）",
   "config.promaid.misc.bubbleLimitMs": "气泡限频（毫秒）",
