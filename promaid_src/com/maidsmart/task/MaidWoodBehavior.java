@@ -2387,8 +2387,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.88：懒加载自定义矿表（config 文件加载完成后首次扫描才真正读到值）
         ensureCustomWoods();
         WoodCache cache = WOOD_CACHE.get(id);
-        if (cache != null && now - cache.builtAt < WOOD_CACHE_TTL) {
-            // 缓存轮（每 10 tick）：只校验已记录的矿
+        if (cache != null) {
+            // v1.1.0 实测一百四十二：去掉 5 秒 TTL 到期强制重建（与挖矿同款）——
+            // 缓存轮逐格校验木材是否还在，到期重建只会造成"每 5 秒停一下重扫/换目标"；
+            // 缓存一直用到轮空才全量重建（锚点变化/迁框另有强制重建路径）
             this.lastScanWasFull = false;
             BlockPos fromCache = this.pickFromCache(level, maid, anchor, cache);
             if (fromCache != null) {

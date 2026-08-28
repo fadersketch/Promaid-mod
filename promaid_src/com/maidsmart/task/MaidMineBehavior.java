@@ -2129,8 +2129,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // v1.5.88：懒加载自定义矿表（config 文件加载完成后首次扫描才真正读到值）
         ensureCustomOres();
         OreCache cache = ORE_CACHE.get(id);
-        if (cache != null && now - cache.builtAt < ORE_CACHE_TTL) {
-            // 缓存轮（每 10 tick）：只校验已记录的矿
+        if (cache != null) {
+            // v1.1.0 实测一百四十二：去掉 5 秒 TTL 到期强制重建——缓存轮每次都会逐格
+            // 校验矿是否还在（存在性/框内/可挖/挡路/弃置，pickFromCache 内），到期重建
+            // 只会造成"每 5 秒停一下重扫/换目标"（用户：挖矿伐木每 5 秒重置一次状态，
+            // 等效收放魂符）。缓存一直用到轮空才全量重建（锚点变化/迁框另有强制重建
+            // 路径）；框内新露头的矿在缓存轮空后的下一次全量扫描里自然被找到
             this.lastScanWasFull = false;
             BlockPos fromCache = this.pickFromCache(level, maid, anchor, cache);
             if (fromCache != null) {
