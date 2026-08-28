@@ -1807,6 +1807,9 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
         this.rows.add(new BoolRow("熔炉烧矿物", MaidSmartConfig.MISC_COOK_SMELT_ORES.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMELT_ORES.set(v), "烹饪任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单"));
+        // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
+        this.rows.add(new BoolRow("兼容高炉/烟熏炉", MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get(),
+                v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烹饪任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
         this.rows.add(new SectionRow("通用", true));
         this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
                 s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
