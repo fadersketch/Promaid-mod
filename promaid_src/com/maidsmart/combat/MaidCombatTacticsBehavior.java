@@ -59,6 +59,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     /** v1.5.280：后退目标距离（格）——退到 3 格即停：女仆手长（攻击距离 3.1）
      *  完全打得到（用户："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
     private static final double KITE_BACK_DIST = 3.0;
+    /** v1.1.0 实测一百六十六（用户："远程战术似乎失效了——三叉戟/弓弩还是会近身"）：
+     *  最小风筝距离（格）。三叉戟（TLM TRIDENT_RANGE≈8~10）与弩（原版
+     *  getDefaultProjectileRange=8）的 maxRange 小 → ideal=maxRange×0.6 只有 4.8~6
+     *  格 = 贴脸放风筝（近战怪 3 格够得着，看起来就是"远程还近身"）。强制下限：
+     *  任何远程武器都保持 ≥7 格清晰射程，近战怪完全摸不到 */
+    private static final double MIN_KITE_DIST = 7.0;
     /** 跳劈冷却（tick） */
     private static final int JUMP_COOLDOWN = 40;
     /**
@@ -641,7 +647,24 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                 ? pw.m_6615_()
                 : GunCompat.isGun(main) ? (int) GunCompat.gunMaxRange()
                 : (int) maid.searchRadius();
-        double ideal = maxRange * com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get();
+        // v1.1.0 实测一百六十六：理想射程强制下限 MIN_KITE_DIST（7 格）——三叉戟/
+        // 弩的 maxRange 小（8~10），旧版 ideal 只有 4.8~6 格 = 贴脸放风筝（"远程还
+        // 近身"的直接原因）；任何远程武器都保持 ≥7 格清晰射程
+        double ideal = Math.max(maxRange
+                        * com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get(),
+                MIN_KITE_DIST);
+        // v1.1.0 实测一百六十六：远程走位诊断（每 2 秒一条，latest.log 搜 "ranged kite"）
+        // ——确认远程走位在跑、理想射程算得对不对
+        if (++this.rangedDiagTick >= 40) {
+            this.rangedDiagTick = 0;
+            LOGGER.info("ranged kite: maid={} task={} main={} dist={} ideal={}",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    maid.getTask() != null && maid.getTask().getUid() != null
+                            ? maid.getTask().getUid() : "null",
+                    main.m_41619_() ? "empty"
+                            : net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(main.m_41720_()),
+                    String.format("%.1f", dist), String.format("%.1f", ideal));
+        }
         // v1.1.0 实测一百一十六【远程风筝不明显】：旧版只在敌人贴进 ideal×0.55
         // （弓≈4.95 格）才后退、退到 ideal-dist+2（≈6 格）就开始绕圈（半径
         // 0.45×射程≈6.75）——怪物几乎全程贴在 5~7 格内，弓手看不出在放风筝
@@ -674,6 +697,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private static final int MELEE_COUNTER_COOLDOWN = 40;
     /** 反击冷却计数 */
     private int counterCooldown = 0;
+    /** v1.1.0 实测一百六十六：远程走位诊断节流（每 2 秒一条，latest.log 搜 "ranged kite"） */
+    private int rangedDiagTick = 0;
 
     /**
      * v1.1.0 实测四十：近战反击——对贴身的当前目标（及 2 格内其他敌人）造成一次
