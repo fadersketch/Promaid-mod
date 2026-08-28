@@ -56,6 +56,20 @@ public final class ScheduleTaskAvailability {
     private ScheduleTaskAvailability() {
     }
 
+    /** v1.1.0 实测一百七十：仅硬闸（isEnable）判定——排班切任务时只查任务自己是否
+     *  可用，不做"附近有没有活"的软探测（用户："选择排班后任务不变化、时间流逝任务
+     *  也不随段切换——没活不切设计失败"）。任务状态必须跟着时间段落真实切换。 */
+    public static boolean isEnabled(EntityMaid maid, IMaidTask task) {
+        if (task == null) {
+            return false;
+        }
+        try {
+            return task.isEnable(maid);
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /**
      * 目标任务当前是否有活可干。任何无法确定的场景一律返回 true（保守放行——
      * 宁可切过去让女仆自己兜着，也不误伤第三方/探测失败的任务）。
