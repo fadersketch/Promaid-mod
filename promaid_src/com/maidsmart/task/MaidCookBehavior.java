@@ -44,6 +44,10 @@ import java.util.Set;
  * - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立
  */
 public class MaidCookBehavior extends Behavior<EntityMaid> {
+    /** v1.1.0 实测一百六十一：诊断日志（latest.log 搜 "cook "）——定位"炉子就在
+     *  附近却烧不起来"：行为是否在跑 / 绑定哪个炉子 / 门控是否通过 / 喂了什么 */
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
     private static int cookRadius() {
         return com.maidsmart.config.MaidSmartConfig.MISC_COOK_RADIUS.get();
     }
@@ -108,6 +112,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             this.furnacePos = this.findFurnace(level, maid);
         }
         this.cooldown = 0;
+        LOGGER.info("cook start: maid={} furnace={}",
+                com.maidsmart.tool.PromaidLog.nameOf(maid), this.furnacePos);
     }
 
     @Override
@@ -161,6 +167,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 && (be instanceof FurnaceBlockEntity
                         || com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get())) {
             this.processFurnace(level, maid, (Container) be, be);
+        } else {
+            // v1.1.0 实测一百六十一：诊断——门控未过（BE 类型不对/开关关），不该发生
+            LOGGER.info("cook gate-blocked: maid={} be={} switch={} furnace={} distSq={}",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid),
+                    be == null ? "null" : be.getClass().getSimpleName(),
+                    com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get(),
+                    this.furnacePos, distSq);
         }
     }
 
@@ -194,6 +207,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
 
     private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
         IItemHandler maidInv = maid.getMaidInv();
+        String maidName = com.maidsmart.tool.PromaidLog.nameOf(maid);
+        String beName = be == null ? "null" : be.getClass().getSimpleName();
         // 1. 收取成品
         ItemStack result = furnace.m_8020_(2);
         if (!result.m_41619_()) {
@@ -202,6 +217,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             if (!left.m_41619_()) {
                 furnace.m_6836_(2, left);
             }
+            LOGGER.info("cook round: maid={} be={} tookOutput={}",
+                    maidName, beName, taken);
         }
         // 2. 补食材（槽 0 空）
         if (furnace.m_8020_(0).m_41619_()) {
@@ -219,6 +236,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
             if (!input.m_41619_()) {
                 furnace.m_6836_(0, input);
+                LOGGER.info("cook round: maid={} be={} fedSlot0={}",
+                        maidName, beName, input);
+            } else {
+                LOGGER.info("cook round: maid={} be={} slot0Empty但无料可喂（背包无食材/矿物或配方不匹配）",
+                        maidName, beName);
             }
         }
         // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
