@@ -1272,8 +1272,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
     // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
-    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前可用性检测（默认开）：段任务应用前先检测目标任务当前是否有活可干（isEnable 硬闸 + 挖矿有无矿/伐木有无树/烹饪有无熔炉/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务并约 10 秒后重试；战斗/待机/跟随/第三方附属任务不扫描、只查 isEnable；关闭则回到旧行为（时间到无条件切）")
-            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认关）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭（默认）= 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（v1.1.0 实测一百七十：用户反馈\"排班后任务不变化、时间流逝任务不随段切换\"——旧默认的没活不切把女仆钉死在原地）")
+            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", false);
     MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
             .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
     MISC_SCHEDULE_REVERSE_THRESHOLD = BUILDER.comment("排班反向切换阈值（默认 2）：窗口内累计反向次数达到该值即压制本次切换")
