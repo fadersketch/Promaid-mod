@@ -360,6 +360,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue MISC_COOK_RADIUS;
     public static final ForgeConfigSpec.IntValue MISC_BREW_RADIUS;
     public static final ForgeConfigSpec.IntValue MISC_PROCESS_COOLDOWN;
+    // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物（带矿物/原料标签且有熔炉配方）
+    public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMELT_ORES;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
     // v1.5.102：烹饪/酿造垂直搜索范围（v1.5.134 整理任务已删除，仅烹饪/酿造使用）
@@ -1176,6 +1178,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.brewRadius").defineInRange("brewRadius", 16, 4, 48);
         MISC_PROCESS_COOLDOWN = BUILDER.comment("烹饪/酿造处理间隔（tick）")
                 .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 10, 10, 200);
+        // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
+        MISC_COOK_SMELT_ORES = BUILDER.comment("熔炉烧矿物（默认开）：烹饪任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单")
+                .translation("config.promaid.misc.cookSmeltOres").define("cookSmeltOres", true);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 10000, 500, 60000);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
