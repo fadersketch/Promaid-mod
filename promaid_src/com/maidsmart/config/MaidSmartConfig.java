@@ -1144,9 +1144,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("搭路设置").translation("config.promaid.bridge").push("bridge");
         BRIDGE_ENABLED = BUILDER.comment("搭路（默认关）：主人在女仆上方一定距离内、周围无威胁、背包有方块时，女仆走过去垫方块搭高靠近主人（借鉴僵尸搭方块追人；搭的方块 N 秒后自动回收）")
                 .translation("config.promaid.bridge.enabled").define("enabled", false);
-        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7=传送判定距离）：主人距女仆小于此值才搭路；超过则交给传送/跟随")
+        BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五，参考僵尸搭桥追人）")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
-        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 128）：女仆已在空中（脚下悬空/站在垫的方块上）且够不着地面导航时，主人再远也直接空中铺桥走过去——空中没有'走路过去'的选项，7 格传送阈值不再适用；设为 0 关闭空中远距铺桥（只保留 7 格近距逻辑）。v1.1.0 实测一百四十三：女仆自己半空时距离上限已放开（方块耗尽自然停），本值用于地面女仆追空中/更高主人的启动上限")
+        BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 128）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
                 .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 128, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);

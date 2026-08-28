@@ -1619,11 +1619,11 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0：搭路（主人在上方时垫方块靠近——借鉴僵尸搭方块追人）
         this.rows.add(new SectionRow("搭路（v1.1.0，默认关）", true));
         this.rows.add(new BoolRow("搭路", MaidSmartConfig.BRIDGE_ENABLED.get(),
-                v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：主人在你上方一定距离内、周围无威胁、女仆背包有方块时，她会走过去垫方块搭高靠近你（搭的方块 10 秒后自动回收）；默认关闭"));
+                v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：周围无威胁、女仆背包有方块时，她走过去垫方块靠近主人——主人【不低于女仆】时水平多远都启动平桥追逐（前方悬空铺桥、实心地面走路，参考僵尸搭桥追人，v1.1.0 实测一百六十五）；主人【更高】时垂直搭高靠近（搭的方块 N 秒后自动回收）；默认关闭"));
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随——只在【地面】状态生效（平地上太远就该走路/传送，不铺桥）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 128）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）。v1.1.0 实测一百四十三：女仆自己半空时距离上限已放开（方块耗尽自然停），本值用于地面女仆追空中/更高主人的启动上限"));
+                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 128）：主人【高于女仆】需爬高/或女仆已在空中时，你离得再远她也直接铺桥走过来——空中没有'走路过去'的选项；设 0 关闭远距（只保留近距逻辑）。平路/低高差追逐已不受任何距离上限约束（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
         this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),
