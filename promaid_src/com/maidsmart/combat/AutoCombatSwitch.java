@@ -434,7 +434,11 @@ public class AutoCombatSwitch {
         // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
         // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
         if (maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
-            if (isOnAssignedCombatTask(maid)) {
+            // v1.1.0 实测一百三十九（参考 tlm_beyond_space 会话快照机制）：getTask()
+            // 读同步数据 DATA_TASK，uid 解析抖动时回落成 idle——idle 读数不再判"玩家
+            // 接管"清标记（那会把还原链丢掉 = "切不回原来模式"的根因之一）；只有当前
+            // 是【真实的其他任务】（非 idle、非战斗、非指派）才算接管。
+            if (isOnAssignedCombatTask(maid) || isIdleReading(maid)) {
                 // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行——
                 // 旧版任何触发（含主人打被动生物的连锁评估）都无条件刷新 LAST_THREAT，
                 // 无威胁战斗里还原时钟被反复推走 = 打完收不回去的第二道源头
@@ -457,8 +461,7 @@ public class AutoCombatSwitch {
         if (combat == null) {
             return 0; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
         }
-        String prevUid = maid.getTask() != null
-                ? maid.getTask().getUid().toString() : "touhou_little_maid:idle";
+        String prevUid = resolvePrevTaskUid(maid);
         maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
         maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
         maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
@@ -505,8 +508,10 @@ public class AutoCombatSwitch {
                 if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
                     continue;
                 }
-                // 战斗期间任务被玩家/排班/LLM 换过 → 玩家接管：只清标记退出，不动当前任务
-                if (!isOnAssignedCombatTask(maid)) {
+                // 战斗期间任务被玩家/排班/LLM 换过（真实的其他任务）→ 玩家接管：只清标记退出，
+                // 不动当前任务。v1.1.0 实测一百三十九：getTask() 抖动回落 idle 不算接管
+                //（idle 读数继续走还原，否则清标记丢还原链 = "切不回原来模式"）
+                if (!isOnAssignedCombatTask(maid) && !isIdleReading(maid)) {
                     clearMarkers(maid);
                     // v1.1.0 实测九十四：运行日志
                     com.maidsmart.tool.PromaidLog.log("战斗",
@@ -1146,5 +1151,43 @@ public class AutoCombatSwitch {
             return true;
         }
         return MaidWorkTags.isCombatTask(maid);
+    }
+
+    /** v1.1.0 实测一百三十九：当前任务读数是否为"假 idle"——TLM getTask() 读同步
+     *  数据 DATA_TASK，uid 解析失败/同步抖动时回落成 idle 任务（实测一百一十四的
+     *  javap 实证）。idle 读数不代表"玩家接管"，还原链不能被它清掉。 */
+    private static boolean isIdleReading(EntityMaid maid) {
+        return maid.getTask() == null || maid.getTask().getUid() == null
+                || "touhou_little_maid:idle".equals(maid.getTask().getUid().toString());
+    }
+
+    /**
+     * v1.1.0 实测一百三十九（参考 tlm_beyond_space 的会话快照机制）：参战前原任务 UID
+     * 的【可靠】取值——日志实证旧版每次参战都录成 idle（getTask 抖动回落），还原回
+     * idle = "切不回原来模式"。取值顺序：① getTask() 真实任务（非 idle）→ 用它
+     *（玩家手动安排的任务优先）；② 排班开启且有段 → 用当前时段排班任务（排班是
+     * 权威，还原就该回排班）；③ 兜底 idle。
+     */
+    private static String resolvePrevTaskUid(EntityMaid maid) {
+        if (maid.getTask() != null && maid.getTask().getUid() != null
+                && !"touhou_little_maid:idle".equals(maid.getTask().getUid().toString())) {
+            return maid.getTask().getUid().toString();
+        }
+        try {
+            if (com.maidsmart.schedule.ScheduleData.isOn(maid)
+                    && maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+                var segs = com.maidsmart.schedule.ScheduleData.load(maid);
+                if (!segs.isEmpty()) {
+                    var seg = com.maidsmart.schedule.ScheduleData.segmentAt(segs,
+                            com.maidsmart.schedule.ScheduleData.currentMinute(sl));
+                    if (seg != null && seg.taskUid() != null && !seg.taskUid().isEmpty()
+                            && !"touhou_little_maid:idle".equals(seg.taskUid())) {
+                        return seg.taskUid();
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return "touhou_little_maid:idle";
     }
 }
