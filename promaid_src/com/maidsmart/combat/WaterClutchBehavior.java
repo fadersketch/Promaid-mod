@@ -15,15 +15,17 @@ import net.minecraftforge.registries.ForgeRegistries;
  * 落地水（v1.5.25）：女仆的【被动生存技能】——与水桶是否在背包相关。
  * 落地雪（v1.1.0）：细雪桶版——与水的关键差异是【细雪不流动】：水可以提前放在
  * 稍高的位置自己流淌铺开接人（碰到的任何水都重置摔落），细雪只认实体真正
- * 落进去的那一格。因此雪不照抄水的双格逻辑——只在【落点平面】铺 3×3 雪垫让她
+ * 落进去的那一格。因此雪不照抄水的双格逻辑——只在【落点平面】铺 1×1 雪垫让她
  * 全速落进去（绝不在高处拦她减速——出雪后剩下的路还是自由落体，照样摔），
  * 坠落途中每 tick 把雪垫补到她正下方（防击退/横移漂移错过落点）。
+ * v1.1.0 实测一百四十五：雪垫 3×3 → 1×1（用户需求）——只铺落点中心一格。
  *
  * 【难度须知】：落地雪天生比落地水难、有小概率失败——细雪不流动、只认实体
- * 真正落进去的那一格，落点预测与实际落点之间只要差出雪垫覆盖范围（击退、
- * 横移、判定与放置同 tick 的竞态、落点格非空气铺不进雪等）就是空摔。这是
- * 机制本身的固有上限，不做进一步优化（玩家徒手铺细雪也有同样的容错问题）。
- * 追求稳就给水桶（水会流动自己铺开，可靠性高一档）。
+ * 真正落进去的那一格，1×1 雪垫无容错，落点预测与实际落点之间只要差出一格
+ * （击退、横移、判定与放置同 tick 的竞态、落点格非空气铺不进雪等）就是空摔；
+ * 能否接住完全依赖坠落途中逐 tick 的落点追补。这是机制本身的固有上限，不做
+ * 进一步优化（玩家徒手铺细雪也有同样的容错问题）。追求稳就给水桶（水会流动
+ * 自己铺开，可靠性高一档）。
  *
  * 细雪【下界不蒸发】补上落地水的盲区；两者都有桶时优先用水；细雪接触 7 秒
  * （140 tick）才开始冻伤，保持时长上限 100 tick（5 秒），在安全线内。
@@ -49,7 +51,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 public class WaterClutchBehavior extends Behavior<EntityMaid> {
     /** v1.5.102：数值改从配置面板读取（combat 段）——保持时长 / 下探格数 */
 
-    /** 已放的缓冲方块（水=落点+所在格 2 处；细雪=落点平面 3×3 雪垫，追踪漂移会补块） */
+    /** 已放的缓冲方块（水=落点+所在格 2 处；细雪=落点平面 1×1 雪垫，追踪漂移会补块） */
     private final java.util.ArrayList<BlockPos> placedList = new java.util.ArrayList<>();
     /** v1.1.0：本次放的是细雪（true）还是水（false）——收回时按类型移除 */
     private boolean placedSnow = false;
@@ -233,9 +235,10 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      * 放缓冲（v1.1.0：水/雪分开处理——细雪不流动，不能照抄水的逻辑）。
      * - 水：v1.5.25h 双格——落点 + 女仆所在格（水会流动铺开，提前放稍高处也接得住；
      *   双格兜底速度太快穿过第一格的情况）。
-     * - 细雪：只在【落点平面】铺 3×3 雪垫（空气格才铺）——她全速落进雪垫里重置
-     *   摔落距离。绝不在高处放雪拦她：细雪把她减速，出雪后剩下的路又是自由落体，
-     *   摔落距离照样累积 → 反而摔死。落点精度靠 3×3 容差 + 坠落途中逐 tick 追补。
+     * - 细雪：只在【落点平面】铺 1×1 雪垫（v1.1.0 实测一百四十五：3×3 → 1×1，
+     *   落点格为空气才铺）——她全速落进雪垫里重置摔落距离。绝不在高处放雪拦她：
+     *   细雪把她减速，出雪后剩下的路又是自由落体，摔落距离照样累积 → 反而摔死。
+     *   落点精度靠 1×1 精准（无容差）+ 坠落途中逐 tick 追补。
      * 桶只是【触发钥匙】——不真正消耗、不变化背包；收回时直接移除方块。
      */
     private void placeFluid(ServerLevel level, EntityMaid maid, BlockPos pos, boolean snow) {
@@ -265,10 +268,12 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 落点平面 3×3 雪垫（只铺空气格）。幂等：本轮已铺过的格跳过——坠落途中的
-     * 追补调用只会补上新漂进来的格子。返回是否真的铺了新块（铺了则调用方重置保持计时）。
-     * 注意：落点格本身不是空气（地面凸起/花草上沿等）时这格铺不进雪——落地雪
-     * 固有的小概率失败场景之一，见类头的【难度须知】。
+     * 落点平面 1×1 雪垫（v1.1.0 实测一百四十五：3×3 → 1×1，只铺落点中心一格，
+     * 用户需求）。幂等：本轮已铺过则返回 false——坠落途中的追补调用在中心格已铺
+     * 时不再重置保持计时。返回是否真的铺了新块（铺了则调用方重置保持计时）。
+     * 注意：落点格本身不是空气（地面凸起/花草上沿等）时这格铺不进雪——1×1 下
+     * 无容错，本次坠落就是空摔（比 3×3 更容易失败，是机制固有代价，见类头
+     * 【难度须知】；能接住完全靠坠落途中逐 tick 的落点追补）。
      */
     private boolean ensureSnowPad(ServerLevel level, BlockPos center) {
         Block snowBlock = ForgeRegistries.BLOCKS.getValue(
@@ -276,22 +281,15 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         if (snowBlock == null) {
             return false;
         }
-        boolean added = false;
-        for (int dx = -1; dx <= 1; dx++) {
-            for (int dz = -1; dz <= 1; dz++) {
-                BlockPos p = center.m_7918_(dx, 0, dz);
-                if (!level.m_8055_(p).m_60795_()) {
-                    continue; // 非空气不铺（地面/花草/已有方块都跳过）
-                }
-                if (this.placedList.contains(p)) {
-                    continue; // 这一轮已铺过
-                }
-                level.m_7731_(p, snowBlock.m_49966_(), 3);
-                this.placedList.add(p.m_7949_());
-                added = true;
-            }
+        if (!level.m_8055_(center).m_60795_()) {
+            return false; // 落点格非空气铺不进雪
         }
-        return added;
+        if (this.placedList.contains(center)) {
+            return false; // 这一轮已铺过
+        }
+        level.m_7731_(center, snowBlock.m_49966_(), 3);
+        this.placedList.add(center.m_7949_());
+        return true;
     }
 
     /** 女仆是否已在细雪里（所在格或脚下格是细雪——进了雪就不用再追补雪垫） */
@@ -306,7 +304,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
                 || level.m_8055_(feet.m_7918_(0, -1, 0)).m_60734_() == snowBlock;
     }
 
-    /** 收回：按本次类型移除全部缓冲方块（水的双格/细雪的 3×3 雪垫；桶不消耗，无需还原） */
+    /** 收回：按本次类型移除全部缓冲方块（水的双格/细雪的 1×1 雪垫；桶不消耗，无需还原） */
     private void recoverFluid(ServerLevel level, EntityMaid maid) {
         // v1.1.0 实测十六（审查 P1-3/P2）：维度感知回收——maid 当前所在维度可能已
         // 不是放水时的维度（传送/跟随跨维度后 recover 被调），按旧坐标在新维度
