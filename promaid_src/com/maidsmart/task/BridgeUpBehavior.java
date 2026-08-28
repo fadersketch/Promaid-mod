@@ -766,8 +766,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     private static boolean hasThreatNearby(ServerLevel level, EntityMaid maid) {
         double r = MaidSmartConfig.BRIDGE_THREAT_DIST.get();
-        for (Monster e : level.m_45976_(Monster.class, maid.m_20191_().m_82400_(r))) {
-            if (e.m_6084_()) {
+        // v1.1.0 实测一百六十七：Monster → Enemy 接口（与参战/还原同口径）——史莱姆/
+        // 岩浆怪等敌对生物不实现 Monster 但实现 Enemy 接口，旧版不算威胁
+        for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
+            if (e.m_6084_() && e instanceof net.minecraft.world.entity.monster.Enemy) {
                 return true;
             }
         }
@@ -787,12 +790,34 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      *   canUse 为 false、坐下标记也由行为维护——暂停中的女仆视为空闲可追）
      * - 站桩工作（烹饪/酿造）：WORK_STILL 标记（行为激活期才有，空闲即清）
      *
-     * 不拦的情况：idle/跟随/战斗/喂食等 TLM 原生任务（搭路本来就为跟随服务，
+     * 不拦的情况：idle/跟随/喂食等 TLM 原生任务（搭路本来就为跟随服务，
      * 这些任务上搭路是正常画面）；挖矿/伐木任务但【无目标空闲】（挖完了
      * 在找下一个或守在原地——正是用户允许的"处于任务状态但空闲"）。
+     * v1.1.0 实测一百六十七：战斗任务/正在接战【拦截】（旧版把战斗归为不拦，
+     * 战斗中搭路 = 边打边往主人方向跑，用户反馈）。
      * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
      */
     public static boolean isTaskOccupied(EntityMaid maid) {
+        // v1.1.0 实测一百六十七（用户："即使周围存在威胁，但正处于战斗状态下的女仆
+        // 仍然会选择搭路"）：战斗任务 / 正在接战 = 占用——战斗中绝不搭路追主人
+        //（旧版注释把战斗归为"不拦"，战斗中的女仆会边打边往主人方向搭路跑）。
+        // 判定：当前任务为攻击任务（IAttackTask），或脑内有存活 ATTACK_TARGET
+        //（正在接战）——两者任一即占用。
+        try {
+            var task = maid.getTask();
+            if (task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            var target = maid.m_6274_().m_21952_(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
+            if (target.isPresent() && target.get().m_6084_()) {
+                return true; // 脑内有存活攻击目标 = 正在接战
+            }
+        } catch (Throwable ignored) {
+        }
         try {
             if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
                 return true;
