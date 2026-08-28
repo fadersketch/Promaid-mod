@@ -287,6 +287,30 @@ public class ProMaidExtension implements ILittleMaid {
     }
 
     /**
+     * v1.1.0 实测一百四十四：女仆重新入世界（魂符收放/区块重载/跨维度传送）→ 排班
+     * 重放。根因：魂符收进再放出，persistentData（含"本段已应用"去抖键）随魂符保存，
+     * 同段内放出后去抖命中 → 调度器跳过 = "魂符收放后排班没切换"。入世界即清去抖键
+     * 并立即按当前时段应用一次（模式/任务/在家锚点全部重放——SchedulePos 锚点随
+     * 实体 NBT 保存，不会在放出位置错误重锚）。未开排班/总开关关闭零成本。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onMaidJoin(net.minecraftforge.event.entity.EntityJoinLevelEvent event) {
+        if (event.getLevel().m_5776_()
+                || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+            return; // 只服务端处理女仆
+        }
+        try {
+            if (com.maidsmart.schedule.ScheduleData.isOn(maid)
+                    && com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()
+                    && maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+                com.maidsmart.schedule.ScheduleManager.clearAppliedForJoin(maid);
+                com.maidsmart.schedule.ScheduleManager.applyNow(maid, sl);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * v1.5.47：经验球归属（借鉴 maidmining）——8 格内有玩家 → 让原版（玩家优先）；
      * 否则 24 格内最近挖矿女仆直接吸收经验并取消生成（治"女仆挖矿 + 玩家同区双倍经验"）。
      */

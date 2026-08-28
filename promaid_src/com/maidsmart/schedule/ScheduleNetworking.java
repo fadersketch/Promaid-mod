@@ -219,6 +219,12 @@ public final class ScheduleNetworking {
                     if (pkt.on == 1) {
                         com.maidsmart.schedule.ScheduleManager.clearAppliedForSave(maid);
                         com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                        // v1.1.0 实测一百四十四：同保存路径——战斗中开启明确告知
+                        if (com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(maid)) {
+                            String nm = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
+                            player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "§e【排班】「" + nm + "」正在战斗中——战斗结束自动切换当前时段（模式/任务）"));
+                        }
                     }
                 }
                 // v1.1.0 实测七十六：排班开着时，工作模式与任务【都】由日程表管理——
@@ -421,6 +427,14 @@ public final class ScheduleNetworking {
                     maid.setHomeModeEnable(true);
                     // 保存后立即按当前时间应用一次（不用等下一个整分检查）
                     com.maidsmart.schedule.ScheduleManager.applyNow(maid, level);
+                    // v1.1.0 实测一百四十四：战斗中开启排班 → 明确告知（排班让位于
+                    // 战斗，战斗结束自动按当前时段切换模式/任务——此前静默等待，
+                    // 观感"开了排班没生效"）
+                    if (com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(maid)) {
+                        String nm = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
+                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                "§e【排班】「" + nm + "」正在战斗中——战斗结束自动切换当前时段（模式/任务）"));
+                    }
                 } else {
                     maid.setHomeModeEnable(false);
                 }
