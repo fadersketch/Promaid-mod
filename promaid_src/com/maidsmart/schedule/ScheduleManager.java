@@ -198,10 +198,15 @@ public final class ScheduleManager {
         // 抑制），日志措辞与硬失败分开——但同样不写去抖键、同样限频 10 秒重试
         boolean soft = false;
         try {
-            // 工作模式（0=DAY 早班 / 1=NIGHT 晚班 / 2=ALL 全天）
+            // 工作模式（0=DAY 早班 / 1=NIGHT 晚班 / 2=ALL 全天）——v1.1.0 实测一百三十八：
+            // setSchedule 也打内部标记（排班守卫 mixin 拦 TLM GUI 手动切作息，但不许
+            // 误伤排班自己设置工作时间）
             var modes = com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule.values();
             if (seg.mode() >= 0 && seg.mode() < modes.length) {
-                maid.setSchedule(modes[seg.mode()]);
+                com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule chosen =
+                        modes[seg.mode()];
+                com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(), null,
+                        () -> maid.setSchedule(chosen));
             } else {
                 fail = "段模式越界 mode=" + seg.mode();
             }
