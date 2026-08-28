@@ -1620,7 +1620,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7=传送判定距离）：你距女仆小于此值才搭路，超过交给传送/跟随——只在【地面】状态生效（平地上太远就该走路/传送，不铺桥）"));
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 24）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 128）：女仆已在空中（悬空/站在垫的方块上）时，你离得再远她也直接空中铺桥走过来——空中没有'走路过去'的选项；设 0 关闭空中远距（退回 7 格口径）。v1.1.0 实测一百四十三：女仆自己半空时距离上限已放开（方块耗尽自然停），本值用于地面女仆追空中/更高主人的启动上限"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
         this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),

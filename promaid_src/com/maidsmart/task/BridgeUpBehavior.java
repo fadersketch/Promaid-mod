@@ -37,8 +37,9 @@ import java.util.Map;
  * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，主人【不在下方】且水平
  *   拉开 >4 格即启动追逐（v1.1.0 实测一百四十一，参考 endofdays 僵尸：启动后每步
  *   冷却在前方脚下悬空处铺桥、实心地面走路，持续尝试逼近——不再要求"前方悬空才启动"）
- * - 距离上限：女仆/主人空中、或主人高于女仆时取 max(maxDist, airMaxDist)，
- *   否则 maxDist（默认 7；airMaxDist 默认 24、上限 128）
+ * - 距离上限：女仆【自己半空】时上限放开（v1.1.0 实测一百四十三，僵尸索敌式——搭
+ *   方块是唯一通路，主人飞多远都持续搭，方块耗尽自然停）；地面/非空中：主人空中或
+ *   高于女仆时取 max(maxDist, airMaxDist)，否则 maxDist（默认 7；airMaxDist 默认 128）
  * - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter）
  * - 威胁扫描 + 背包过滤每 10 tick 节流一次（廉价判定每 tick 进行）
  *
@@ -290,9 +291,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 实心地面走导航零副作用），跨空/爬高才真正搭方块。
         boolean ownerAirborne = !owner.m_20096_();
         boolean ownerAbove = dy >= 1;
-        int distLimit = (airborne || ownerAirborne || ownerAbove)
-                ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
-                : MaidSmartConfig.BRIDGE_MAX_DIST.get();
+        // v1.1.0 实测一百四十三（参考 endofdays 僵尸索敌机制）：女仆【自己半空中】
+        // （脚下是自己搭的塔/桥，四周无落地可走）时，搭方块是唯一通路——距离上限
+        // 放开（sq(MAX_VALUE)≈4.6e18 恒不触发），主人飞多远都持续向他的方向搭，方块
+        // 耗尽（hasBuildBlock 前置 + canContinue 无料中止）自然停，不再因"主人飞远"
+        // 而放弃。地面/非空中仍按配置上限（maxDist / airMaxDist）。
+        int distLimit = airborne ? Integer.MAX_VALUE
+                : (ownerAirborne || ownerAbove)
+                        ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
+                        : MaidSmartConfig.BRIDGE_MAX_DIST.get();
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit)) {
             return false;
@@ -340,9 +347,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (dSq <= 6.25) {
             return "reached";
         }
-        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
-                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
-        if (dSq >= sq(distLimit + 2)) {
+        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+                : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                        MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
+        if (distLimit != Integer.MAX_VALUE && dSq >= sq(distLimit + 2)) {
             return "owner-too-far";
         }
         if (hasThreatNearby(level, maid)) {
@@ -563,10 +571,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false; // 已贴到主人（≤2.5 格）——完成，跟随接管
         }
         // v1.1.0 实测四：距离上限与 canUse 同口径——空中用 airMaxDist（+2 缓冲），
-        // 否则远距空中铺桥刚启动就被 canContinue 掐掉
-        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
-                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
-        if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
+        // 否则远距空中铺桥刚启动就被 canContinue 掐掉。
+        // v1.1.0 实测一百四十三：自己半空中时与 canUse 一致放开上限（主人飞远不放弃，
+        // 持续搭桥逼近；方块耗尽由下方"无料中止"兜底）
+        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+                : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                        MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
+        if (distLimit != Integer.MAX_VALUE
+                && maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit + 2)) {
             return false; // 主人走远了（超出阈值+2 缓冲）——放弃
         }
