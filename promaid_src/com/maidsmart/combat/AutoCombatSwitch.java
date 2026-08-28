@@ -435,6 +435,15 @@ public class AutoCombatSwitch {
         if (!maid.m_6084_() || maid.m_6162_()) {
             return 0; // 死亡/幼年不参战
         }
+        // v1.1.0 实测一百六十三（用户："退而求其次——让排班拥有更高的优先级。排班
+        // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
+        // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
+        // "排班不切换、女仆一直跟随主人"的根因就是战斗 COMBAT_ACTIVE 残留把排班
+        // 让位挡死）。想让她打 → 排班段任务直接配攻击任务（日程表驱动战斗），或
+        // 关闭该女仆排班。
+        if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+            return 0;
+        }
         // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
         if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
             return 0;
@@ -554,6 +563,12 @@ public class AutoCombatSwitch {
                 if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }
+                // v1.1.0 实测一百六十三：排班开启的女仆不参与自主战斗——残留的战斗
+                // 标记直接清掉（她的任务/模式由日程表管理，战斗还原链不再适用）
+                if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+                    clearMarkers(maid);
+                    continue;
+                }
                 // 自保中不还原（等自保结束；自保退出有自己的回主人逻辑）
                 if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
                     continue;
@@ -590,7 +605,12 @@ public class AutoCombatSwitch {
                 // 保证任何门都卡不死女仆（用户："怎么都没法还原"）。
                 long combatStart = maid.getPersistentData().m_128454_(COMBAT_START_TAG);
                 boolean hardDeadline = combatStart > 0 && now - combatStart > COMBAT_HARD_DEADLINE_TICKS;
-                boolean forceRestore = weaponless || hardDeadline;
+                // v1.1.0 实测一百六十三【残留标记自愈】：老版本（无 COMBAT_START 时间戳）
+                // 留下的 COMBAT_ACTIVE=true + 当前任务已不是攻击任务 = 残留 → 强制还原
+                //（排班被它挡死、参战被它吞掉的双重根因，见 isReallyCombatActive）
+                boolean staleMarker = combatStart <= 0
+                        && !(curTask instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask);
+                boolean forceRestore = weaponless || hardDeadline || staleMarker;
                 boolean threatNearby = forceRestore ? false : hasThreatNearby(maid);
                 if (forceRestore) {
                     com.maidsmart.tool.PromaidLog.log("战斗",
@@ -598,8 +618,10 @@ public class AutoCombatSwitch {
                                     + (hardDeadline
                                             ? " 战斗会话超时 " + (COMBAT_HARD_DEADLINE_TICKS / 20)
                                             + " 秒仍未还原，强制还原"
-                                            : " 战斗任务 " + curTask.getUid()
-                                            + " 无可用武器（模组武器被拿走？），强制还原"));
+                                            : staleMarker
+                                                    ? " 残留战斗标记自愈（无开始时间戳且当前任务非攻击）——强制还原"
+                                                    : " 战斗任务 " + curTask.getUid()
+                                                    + " 无可用武器（模组武器被拿走？），强制还原"));
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, 0L);
                 }
                 // v1.1.0 实测八十四：僵局逃逸阀——威胁仍在还原半径内，但双方超过
@@ -1245,6 +1267,18 @@ public class AutoCombatSwitch {
     /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
     public static boolean isAutoCombatActive(EntityMaid maid) {
         return maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG);
+    }
+
+    /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务
+     *  （或仍在本系统指派的战斗任务上）。仅标记残留 true、任务已不是攻击任务
+     *  （老版本残留/战斗早已结束）→ 返回 false：排班不再被残留标记挡死（用户：
+     *  "排班不切换、女仆一直跟随主人"——根因就是残留 COMBAT_ACTIVE 让排班永久让位）。 */
+    public static boolean isReallyCombatActive(EntityMaid maid) {
+        if (!maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
+            return false;
+        }
+        IMaidTask task = maid.getTask();
+        return isAssignedOrCombatTask(maid, task);
     }
 
     /** 清全部标记（putBoolean false 不删键——判定一律走 getBoolean，contains 会永远为 true）
