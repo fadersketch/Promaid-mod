@@ -286,25 +286,19 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
         }
         boolean airborne = isAirborne(level, maid);
-        // v1.1.0 实测一百二十三（用户："创造模式飞行、周围无落脚方块、主人在前上方
-        // 50 格——把检索范围开大后女仆会不会一块块搭过来"）：旧版距离上限只在女仆
-        // 【自己已空中】时用 airMaxDist，落地女仆恒用 maxDist（7 格）——主人悬空/
-        // 飞高时她走不到（导航无路）、传送可能找不到落点（无落脚方块），搭方块是
-        // 唯一通路，却被 7 格门槛挡在门外原地干站。修复：主人【空中】（创造飞行/
-        // 下落，onGround=false）或主人【高于女仆】时，落地女仆的启动距离上限同样
-        // 放宽到 airMaxDist——落地平地上她照常走路（平桥只在脚下悬空时才垫块，
-        // 实心地面走导航零副作用），跨空/爬高才真正搭方块。
-        boolean ownerAirborne = !owner.m_20096_();
         boolean ownerAbove = dy >= 1;
+        // v1.1.0 实测一百六十五（用户："即使水平离得距离太远，仍然会启用平桥搭建路
+        // 接近主人"——参考 Zombie Invade 100 Days 僵尸搭桥追人）：平路/低高差追逐
+        //（主人不低于女仆、无需爬高）距离上限【放开】——水平方向多远都启动平桥追逐
+        //（前方悬空铺桥、实心地面走路，像僵尸持续逼近主人，方块耗尽自然停）；
+        // 只有主人【高于女仆】需垂直搭高时才受 airMaxDist 上限约束（防搭到天上去）。
         // v1.1.0 实测一百四十三（参考 endofdays 僵尸索敌机制）：女仆【自己半空中】
-        // （脚下是自己搭的塔/桥，四周无落地可走）时，搭方块是唯一通路——距离上限
-        // 放开（sq(MAX_VALUE)≈4.6e18 恒不触发），主人飞多远都持续向他的方向搭，方块
-        // 耗尽（hasBuildBlock 前置 + canContinue 无料中止）自然停，不再因"主人飞远"
-        // 而放弃。地面/非空中仍按配置上限（maxDist / airMaxDist）。
-        int distLimit = airborne ? Integer.MAX_VALUE
-                : (ownerAirborne || ownerAbove)
-                        ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
-                        : MaidSmartConfig.BRIDGE_MAX_DIST.get();
+        // 时同样放开（脚下是塔/桥，搭方块是唯一通路）。
+        // v1.1.0 实测一百二十三：主人高于女仆/悬空时落地女仆的启动上限放宽到
+        // airMaxDist（跨空/爬高才真正搭方块）。
+        int distLimit = (airborne || !ownerAbove)
+                ? Integer.MAX_VALUE
+                : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit)) {
             return false;
@@ -352,7 +346,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (dSq <= 6.25) {
             return "reached";
         }
-        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+        // v1.1.0 实测一百六十五：平路/低高差追逐放开距离上限（同 canUse/canContinue）
+        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
+        int distLimit = (isAirborne(level, maid) || dyNow < 1)
+                ? Integer.MAX_VALUE
                 : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
                         MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
         if (distLimit != Integer.MAX_VALUE && dSq >= sq(distLimit + 2)) {
@@ -367,7 +364,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (isTaskOccupied(maid)) {
             return "task-occupied";
         }
-        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         if (dyNow >= 1 && !hasBuildBlock(maid)) {
             return "no-block";
         }
@@ -579,7 +575,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 否则远距空中铺桥刚启动就被 canContinue 掐掉。
         // v1.1.0 实测一百四十三：自己半空中时与 canUse 一致放开上限（主人飞远不放弃，
         // 持续搭桥逼近；方块耗尽由下方"无料中止"兜底）
-        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+        // v1.1.0 实测一百六十五：平路/低高差追逐同 canUse 放开距离上限——水平多远
+        // 都追（铺平桥逼近主人）；只有主人更高（需垂直搭高）才受 airMaxDist 约束
+        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
+        int distLimit = (isAirborne(level, maid) || dyNow < 1)
+                ? Integer.MAX_VALUE
                 : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
                         MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
         if (distLimit != Integer.MAX_VALUE
@@ -600,7 +600,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         // v1.1.0 终审：方块耗尽 → 立即中止（搭不了就是搭不了，说一声就撤，不等 20 秒；
         // 选材始终是"背包数量最多的可放置方块"，takeBuildBlock 不变）
-        int dyNow = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
         if (dyNow >= 1 && !hasBuildBlock(maid)) {
             this.notifyNoBlock(maid);
             return false;
