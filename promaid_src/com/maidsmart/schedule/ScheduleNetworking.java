@@ -491,8 +491,9 @@ public final class ScheduleNetworking {
                         // 批量覆盖她们的任务会打断保命流程、污染战斗还原链（还原到被
                         // 批量改过的"原任务"）。单女仆快捷设置同样不检查，但批量是
                         // 一改一整队，必须兜住
+                        // v1.1.0 实测一百六十三：真实战斗判定（残留标记不再挡批量应用）
                         if (m.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)
-                                || com.maidsmart.combat.AutoCombatSwitch.isAutoCombatActive(m)) {
+                                || com.maidsmart.combat.AutoCombatSwitch.isReallyCombatActive(m)) {
                             continue;
                         }
                         // v1.1.0 实测七十六（用户反馈：防一下一键更改工作状态）：排班中的
