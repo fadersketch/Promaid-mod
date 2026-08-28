@@ -1,5 +1,6 @@
 package com.maidsmart.combat;
 
+import com.github.tartaricacid.touhoulittlemaid.api.task.FunctionCallSwitchResult;
 import com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
@@ -455,11 +456,31 @@ public class AutoCombatSwitch {
         // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
         // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
         if (MaidWorkTags.isCombatTask(maid)) {
-            return 2;
+            // v1.1.0 实测一百四十八：当前战斗任务【已无可用武器】（模组武器被
+            // 玩家拿走）→ 不视为"已在战斗"，继续走重选——否则永远 return 2，
+            // 主动战斗再也不触发（"塞入模组武器后即使再拿出来也不触发"的根因之一）
+            if (hasWeaponForTask(maid, maid.getTask())) {
+                return 2;
+            }
+            com.maidsmart.tool.PromaidLog.log("战斗",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 当前战斗任务 " + maid.getTask().getUid()
+                            + " 无可用武器（模组武器被拿走？），重新选择参战任务");
         }
         IMaidTask combat = pickCombatTask(maid);
         if (combat == null) {
             return 0; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
+        }
+        // v1.1.0 实测一百四十八（参考 tlm_beyond_space TaskSwitchService）：切任务前
+        // 预检 + 自动装备——onFunctionCallSwitch 默认实现 = 主手无武器则从背包装备，
+        // 装不上返回 MISSING_REQUIRED_ITEM。预检失败就不切入：不会把女仆卡在打不出
+        // 伤害的战斗任务上（武器被拿走/任务要求特殊物品）
+        if (CombatTaskCompat.prepareSwitch(maid, combat)
+                == FunctionCallSwitchResult.MISSING_REQUIRED_ITEM) {
+            com.maidsmart.tool.PromaidLog.log("战斗",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 参战预检失败：" + combat.getUid() + " 无可装备武器，不参战");
+            return 0;
         }
         String prevUid = resolvePrevTaskUid(maid);
         maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
@@ -519,12 +540,27 @@ public class AutoCombatSwitch {
                     continue;
                 }
                 long now = level.m_46467_();
+                // v1.1.0 实测一百四十八【主动战斗再也不触发根治】：当前战斗任务已无
+                // 可用武器（玩家把模组武器拿走等）——武器没了打不死怪，威胁永不消失、
+                // 还原等待永久卡住 = 女仆永远"战斗中"，之后的参战触发全被 COMBAT_ACTIVE
+                // 分支跳过 = 主动战斗再也不触发。检测到武器不可用 → 强制走还原
+                // （跳过威胁刷新与安全时长等待），还原后她有武器时再正常参战。
+                boolean weaponless = maid.getTask() != null
+                        && maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
+                        && !hasWeaponForTask(maid, maid.getTask());
+                boolean threatNearby = weaponless ? false : hasThreatNearby(maid);
+                if (weaponless) {
+                    com.maidsmart.tool.PromaidLog.log("战斗",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                    + " 战斗任务 " + maid.getTask().getUid()
+                                    + " 无可用武器（模组武器被拿走？），强制还原");
+                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, 0L);
+                }
                 // v1.1.0 实测八十四：僵局逃逸阀——威胁仍在还原半径内，但双方超过
                 // N 秒没有任何伤害往来（怪卡墙后/玻璃后/传送门里/飞行够不着等
                 // "杀不掉也够不着"的死局），不再无限续杯安全计时 → 正常走还原。
                 // 被动生物（动物）本就不算威胁（判定只认 Enemy 接口），与本次无关；
                 // 该阀门专治"敌对生物永久滞留半径内"的卡死。
-                boolean threatNearby = hasThreatNearby(maid);
                 if (threatNearby) {
                     int staleSec = MaidSmartConfig.COMBAT_AUTO_SWITCH_STALE.get();
                     long lastContact = maid.getPersistentData().m_128454_(LAST_CONTACT_TAG);
@@ -554,7 +590,10 @@ public class AutoCombatSwitch {
                 // （近战→远程）或已是远程 → 维持战斗继续射；切不动（背包没有远程
                 // 武器）→ 落回正常还原（10 秒安全期后退出）。
                 double farDist = nearestThreatDist(maid);
-                if (farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
+                // v1.1.0 实测一百四十八：武器已被拿走时跳过"远处切远程"分支——
+                // 该分支切成功会续杯 LAST_THREAT 并 continue（继续战斗），与上面的
+                // 强制还原冲突（武器没了还留在战斗里 = 卡死）
+                if (!weaponless && farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
                     String beforeTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
                     retuneCombatTactics(maid);
                     String afterTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
@@ -572,8 +611,8 @@ public class AutoCombatSwitch {
                     }
                     // 无远程手段 → 落回正常还原（安全期后退出）
                 }
-                if (!restoreOn) {
-                    continue; // 自动还原关：只换战术不还原
+                if (!restoreOn && !weaponless) {
+                    continue; // 自动还原关：只换战术不还原（武器被拿走时例外——强制还原）
                 }
                 long lastThreat = maid.getPersistentData().m_128454_(LAST_THREAT_TAG);
                 if (now - lastThreat < MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY.get()) {
@@ -954,6 +993,12 @@ public class AutoCombatSwitch {
         if (next == null || next.getUid().equals(cur.getUid())) {
             return; // 没有对应武器的任务可换 / 选中的就是当前任务
         }
+        // v1.1.0 实测一百四十八：换战术前预检 + 自动装备（同参战入口）——装不上
+        // （MISSING_REQUIRED_ITEM）就不切，保持现状（模组武器判定走 isWeaponCap 兼容）
+        if (CombatTaskCompat.prepareSwitch(maid, next)
+                == FunctionCallSwitchResult.MISSING_REQUIRED_ITEM) {
+            return;
+        }
         // v1.1.0 实测六十一：反向抑制——刚从 fromUid 换到当前任务，窗口内又想换回去
         // = 来回横跳，拒绝本次切换并进入冷却期
         if (st != null && !st.fromUid().isEmpty() && st.fromUid().equals(next.getUid().toString())
@@ -1066,11 +1111,12 @@ public class AutoCombatSwitch {
 
     /**
      * v1.1.0 实测二十：女仆是否持有该攻击任务认可的武器。
-     * 优先走任务自己的 isWeapon（模组任务自定义判定），异常/全否时对
-     * 原版五件套做物品类型兜底（与旧版判定同口径）。
+     * v1.1.0 实测一百四十八：判定统一走 CombatTaskCompat.isWeapon——ef_tlm 的
+     * isWeapon 恒 false（未覆写，javap 实证），必须用 isWeaponCap 反射补上，
+     * 否则史诗战斗的武器永远进不了候选池/永远不被自动装备（"切换武器时不用
+     * 模组武器"）。
      */
-    private static boolean hasWeaponForTask(EntityMaid maid,
-                                            com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask task) {
+    private static boolean hasWeaponForTask(EntityMaid maid, IMaidTask task) {
         // v1.1.0 实测六十八（用户："拿斧子的女仆被切到三叉戟模式无法攻击"）：
         // 旧版异常兜底是【整个方法级】的——任何物品的 isWeapon 抛异常就让整个
         // 方法 return true，该任务无凭无据进候选池（三叉戟任务就是这样混进去的，
@@ -1094,14 +1140,9 @@ public class AutoCombatSwitch {
         }
     }
 
-    /** 单件物品的 isWeapon 安全判定——模组任务实现抛异常只算这件不匹配 */
-    private static boolean isWeaponSafe(com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask task,
-                                        EntityMaid maid, ItemStack s) {
-        try {
-            return task.isWeapon(maid, s);
-        } catch (Throwable ignored) {
-            return false;
-        }
+    /** 单件物品的兼容 isWeapon 判定——模组任务实现抛异常只算这件不匹配 */
+    private static boolean isWeaponSafe(IMaidTask task, EntityMaid maid, ItemStack s) {
+        return com.maidsmart.combat.CombatTaskCompat.isWeapon(maid, task, s);
     }
 
     /** 是否带攻击力属性的物品（剑/斧/镐等——对齐 TaskAttack.isWeapon 语义，简化版） */

@@ -1,5 +1,15 @@
 ﻿# 更新日志
 
+## 实测一百四十八
+
+- 战斗武器两连修（用户："女仆切换武器的时候还是不会使用模组武器；塞入模组武器后即使再拿出来，主动战斗就再也不触发了"，参考 tlm_beyond_space 的 CombatTaskCompatibility/TaskSwitchService）：
+  - 【根因①·模组武器不用】`ef_tlm:fight_mode_task`（史诗战斗联动）**没有覆写 `isWeapon(maid, stack)`**——`IAttackTask` 默认实现恒 false（javap 实证）→ 该任务的武器永远进不了战斗候选池、也永远不被自动装备 = "切换武器时不用模组武器"。该任务只暴露 `isWeaponCap(ItemStack)`/`hasCapWeapon(maid)`——新建 `CombatTaskCompat`，用反射调用 `isWeaponCap` 补上判定（照搬参考项目的兼容层），接入战斗池判定（`hasWeaponForTask`）与模组任务自动装备（`MaidToolAutoEquip`）
+  - 【根因②·再也不触发】切任务前从不【预检+自动装备】。TLM 官方 `onFunctionCallSwitch` 默认实现（javap 实证）= 主手有武器 → NO_CHANGE；没有 → `TaskEquipUtil.tryEquipFromBackpack` 自动装备 → OK；装不上 → `MISSING_REQUIRED_ITEM`。参考项目正是用它做切换前预检。修复三处：
+    - 参战入口：`pickCombatTask` 后先 `prepareSwitch`，`MISSING_REQUIRED_ITEM`（武器被拿走/任务要求特殊物品）→ 不切入，绝不把女仆卡在打不出伤害的战斗任务上
+    - 换战术（近远程切换）：同样先 `prepareSwitch`，装不上就不切保持现状
+    - 还原扫描：当前战斗任务【已无可用武器】→ 强制还原（跳过威胁消失/安全时长等待）——武器没了打不死怪、威胁永不消失、还原永久卡住 = 女仆永远"战斗中"、之后一切参战触发全被跳过（"再也不触发"的根因）；同时"当前已是战斗任务"判定在无武器时不再视为已在战斗，允许重选
+  - 附带收益：切任务瞬间武器自动装到主手（不再等下一 tick 的自动装备）；主世界/其他模组战斗任务行为不变
+
 ## 实测一百四十七
 
 - 建造预览两连修（玩家反馈："玩家周边的黄色区块框怎么都去不掉，原本要求显示的幽灵方块也没有了，整个建造链路出现了bug"）：
