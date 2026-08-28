@@ -447,10 +447,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  水桶不消耗） */
     private net.minecraft.core.BlockPos waterPos = null;
     private long waterPlacedTick = 0;
-    /** v1.5.250：下界倒水节流 tick——下界水会瞬间蒸发，放水灭火无效，但用户明确
-     *  要求女仆"喜欢用水桶"：每隔 40 tick（2 秒）尝试倒一次水（动作/蒸汽可见），
-     *  其余时间流转珍珠/抗火/逃跑，防止每 tick 傻倒水刷屏 */
-    private long netherPourTick = 0;
     /** v1.5.204：附近岩浆感知（bug 3）——每 10 tick 扫一次半径 3（含流动岩浆），
      *  提前绕开而非踩进去才反应；cachedFleeSpot = 避让目标（离岩浆 ≥4 格安全点） */
     private int lavaScanCooldown = 0;
@@ -514,9 +510,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.135：致命环境危险（岩浆）——任何血量立即逃生
      *  v1.5.225：抗火豁免——喝了抗火药水后泡岩浆不掉血也不点燃，不算致命；
-     *  （"身上有抗火效果还是惊慌失措逃跑"的根因：岩浆分支不受豁免） */
+     *  （"身上有抗火效果还是惊慌失措逃跑"的根因：岩浆分支不受豁免）
+     *  v1.1.0 实测一百五十三：TLM 火焰保护饰品同豁免——饰品在受伤时给抗火+灭火剂，
+     *  泡岩浆不该惊慌 */
     private boolean envDangerCritical(EntityMaid maid) {
-        return maid.m_20077_() && !hasFireResist(maid); // isInLava 且无抗火
+        return maid.m_20077_() && !hasFireResist(maid)
+                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                        && hasFireProtectBauble(maid)); // isInLava 且无抗火且无火焰保护饰品
     }
 
     /** v1.5.135：软环境危险（着火 / 溺水 / 卡墙窒息）——85% 血量以下才逃。
@@ -526,10 +526,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  刚放 1-2 块就被打断的根因之一）。
      *  v1.5.216：着火加抗火豁免——喝了抗火药水后即使身上还在烧（m_6060_ 仍
      *  true）也不掉血，不该再惊慌失措/疯狂逃窜（用户实测："服用抗火药水后
-     *  仍然处于惊慌失措状态"）；等火自然灭即可。 */
+     *  仍然处于惊慌失措状态"）；等火自然灭即可。
+     *  v1.1.0 实测一百五十三/一百五十四：TLM 火焰/溺水保护饰品同豁免——饰品
+     *  自己免疫对应伤害（火焰=受伤给抗火+灭火剂；溺水=空气自动补满），
+     *  佩戴时对应情境不再算软危险。 */
     private boolean envDangerSoft(EntityMaid maid) {
-        return (maid.m_6060_() && !hasFireResist(maid))                // isOnFire 且无抗火
-                || (maid.m_20069_() && maid.m_20146_() < 60)           // isInWater 且氧气不足 1/5
+        boolean fireProtected = com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                && hasFireProtectBauble(maid);
+        boolean drownProtected = com.maidsmart.config.MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get()
+                && hasDrownProtectBauble(maid);
+        return (maid.m_6060_() && !hasFireResist(maid) && !fireProtected)   // isOnFire 且无抗火且无火焰保护饰品
+                || (maid.m_20069_() && maid.m_20146_() < 60 && !drownProtected) // isInWater 且氧气不足 1/5 且无溺水保护饰品
                 || this.headInSolid(maid);                             // 头部卡进实心方块（真窒息）
     }
 
@@ -587,7 +594,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.exitStableTicks = 0;
         this.waterPos = null;
         this.waterPlacedTick = 0;
-        this.netherPourTick = 0;
         this.lavaScanCooldown = 0;
         this.cachedNearLava = null;
         this.cachedFleeSpot = null;
@@ -904,7 +910,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.158：扫到第一个威胁才播报"情况不妙"（每场自保一次）——
         // 无威胁的低血自保安静回血/回家，不喊话
-        if (!this.announcedThreat && this.cachedThreat != null) {
+        // v1.1.0 实测一百五十五：有保命物品且开关关闭时不逃跑 → 也不喊"我先撤了"
+        if (!this.announcedThreat && this.cachedThreat != null && canFlee(maid)) {
             this.announcedThreat = true;
             maid.getChatBubbleManager().addTextChatBubble("情况不妙，我先撤了！");
         }
@@ -1081,7 +1088,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         this.trySuffocateDuringBuild(maid, threat);
                     } else if (this.bridgeStep(maid, threat)) {
                         this.buildCooldown = buildCd;
-                    } else {
+                    } else if (canFlee(maid)) {
                         // v1.5.23 兜底：没有搭方块材料 → 播报 + 朝怪物最少的方向突围
                         this.announceNoMaterial(maid);
                         this.fleeEscaping(maid, threat);
@@ -1097,10 +1104,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.252g7：CD 按药水种类内部自管（= 药水时长）——CD 内同种不喝、
             // 其他种照喝；瞬间效果短 CD
             this.useBeneficialPotion(maid);
-            if (this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
-                this.buildCooldown = buildCd;
+            // v1.1.0 实测一百五十五：有保命物品且开关关闭 → 不逃跑（增益药水照喝，
+            // 垫台阶/逃跑跳过——她死不了，继续撑住等反击/搭高/传送）
+            if (canFlee(maid)) {
+                if (this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
+                    this.buildCooldown = buildCd;
+                }
+                this.flee(maid, threat);
             }
-            this.flee(maid, threat);
             // 6. 威胁在 8 格外（相对安全）：顺带回血（贴身时不"一直吃"）
             if (dist > 8.0) {
                 // v1.5.234：相对安全距离 → 完整回血阶梯（增益→治疗→金苹果→食物）
@@ -1734,35 +1745,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // v1.5.240：原版静态引用（不依赖 Forge 注册表 getValue）
             net.minecraft.world.level.block.Block water = net.minecraft.world.level.block.Blocks.f_49990_;
             BlockPos pos = maid.m_20183_();
-            // v1.5.250【下界放水】：下界水会瞬间蒸发（灭火无效），但用户明确要求
-            // 女仆"喜欢用水桶"——每 40 tick（2 秒）尝试倒一次水（放置动作/蒸汽
-            // 粒子可见），【不设 waterPos】（蒸发后无需回收），调用侧流转珍珠/
-            // 抗火/逃跑；冷却内直接 return，防止每 tick 傻倒水刷屏
+            // v1.1.0 实测一百四十六：下界彻底不用水（玩家反馈"女仆在下界还会使用
+            // 落地水"）——v1.5.250 的"喜欢用水桶"下界倒水（每 2 秒一次，蒸汽可见）
+            // 在下界只是看起来在乱放水：水瞬间蒸发、灭火无效。恢复 v1.5.210 设计：
+            // 下界跳过水桶，流转抗火/末影珍珠/逃跑。此守卫是双保险——调用侧
+            // （fireBucketStep）已加 !isNether，这里再拦一道防未来调用点遗漏。
             if (isNether(maid)) {
-                long gt = level.m_46467_();
-                if (gt - this.netherPourTick < 40) {
-                    return;
-                }
-                this.netherPourTick = gt;
-                for (int up : new int[]{1, 0, 2}) {
-                    BlockPos cand = pos.m_7918_(0, up, 0);
-                    if (this.canPourWaterAt(level, cand)) {
-                        level.m_7731_(cand, water.m_49966_(), 3);
-                        Long lastLog = WATER_LOG_CD.get(maid.m_20148_().toString());
-                        if (lastLog == null || gt - lastLog > 200) {
-                            WATER_LOG_CD.put(maid.m_20148_().toString(), gt);
-                            LOGGER.info("placeClutchWater ok(nether): maid={} waterAt={}",
-                                    maid.m_5446_() != null ? maid.m_5446_().getString() : "?", cand);
-                        }
-                        return;
-                    }
-                }
-                LOGGER.info("placeClutchWater fail(nether): maid={} y={} up1={} self={} up2={}",
-                        maid.m_5446_() != null ? maid.m_5446_().getString() : "?",
-                        pos.m_123342_(),
-                        this.canPourWaterAt(level, pos.m_7918_(0, 1, 0)),
-                        this.canPourWaterAt(level, pos),
-                        this.canPourWaterAt(level, pos.m_7918_(0, 2, 0)));
                 return;
             }
             // v1.5.230：位置候选链——自身 → 上方 1 → 上方 2（屋檐下头顶被堵的
@@ -1875,7 +1863,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  顶出）——"全失败恢复正常状态"后仍保留最低限度的保命移动。
      *  只改移动方向，不做任何物品判定（自救判断已交给其他链路）。 */
     private void giveUpMovement(EntityMaid maid) {
-        if (maid.m_20077_() && !hasFireResist(maid)) {
+        if (maid.m_20077_() && !hasFireResist(maid)
+                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                        && hasFireProtectBauble(maid))) {
             BlockPos edge = this.findLavaEdge(maid);
             if (edge != null) {
                 maid.m_21573_().m_26519_(edge.m_123341_() + 0.5,
@@ -1883,7 +1873,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             return;
         }
-        if (maid.m_6060_() && !hasFireResist(maid)) {
+        if (maid.m_6060_() && !hasFireResist(maid)
+                && !(com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                        && hasFireProtectBauble(maid))) {
             LivingEntity owner = maid.m_269323_();
             if (owner != null && owner.m_6084_()) {
                 double odx = owner.m_20185_() - maid.m_20185_();
@@ -2044,14 +2036,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (hasFireResist(maid)) {
                 return;
             }
+            // v1.1.0 实测一百五十三：火焰保护饰品——火焰伤害由饰品扛（受伤时给
+            // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑（用户：
+            // "女仆装备火焰保护时仍然会表示自己着火"）
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                    && hasFireProtectBauble(maid)) {
+                return;
+            }
             if (this.extinguishSelf(maid)) {
                 return;
             }
             // 水桶优先（非地狱）：头顶放水灭火，不用跑去找河
-            // v1.5.250：水桶步不再按维度跳过——下界也尝试倒水（v1.5.210 旧设计
-            // "地狱放水瞬间蒸发 → 跳过"让下界女仆明明有水桶却全程不用，用户实测
-            // 不满；现在下界每 2 秒倒一次（动作可见），蒸发后流转珍珠/抗火）
-            boolean fireBucketStep = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
+            // v1.1.0 实测一百四十六：下界跳过水桶步（水瞬间蒸发，灭火无效；玩家
+            // 反馈"女仆在下界还会使用落地水"）——流转抗火/末影珍珠/逃跑
+            boolean fireBucketStep = !isNether(maid)
+                    && com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
                     && this.hasWaterBucket(maid);
             if (fireBucketStep) {
                 this.placeClutchWater(maid);
@@ -2180,6 +2179,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 避让（仅移动层，最不紧急）——溺水掉血比卡墙急，排前；避让只是预防性
         // 绕行，放在所有"正在掉血"的逃生之后（前级有结果才轮到后级）
         if (maid.m_20069_() && maid.m_20146_() < 60) {
+            // v1.1.0 实测一百五十四：溺水保护饰品——溺水伤害由饰品免疫 + 空气
+            // 自动补满，不需要上浮/喝水肺（用户："女仆装备溺水保护时仍然会表示
+            // 自己溺水向上浮"；饰品每次溺水伤害触发时把空气回满）
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get()
+                    && hasDrownProtectBauble(maid)) {
+                return;
+            }
             // v1.5.199：溺水提示（每场一次）
             if (!this.announcedEnv) {
                 this.announcedEnv = true;
@@ -2252,13 +2258,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.209：岩浆逃生——水桶放在【最近的岩浆格上方一格】，水流下渗冷却
      *  脚下岩浆（源变黑曜石/玄武岩），深陷时比垫自己脚下更直接。3 秒后由
-     *  tickRecoverWater 收回，水桶不消耗（与落地水一致）。地狱跳过（瞬间蒸发）。
+     *  tickRecoverWater 收回，水桶不消耗（与落地水一致）。
+     *  v1.1.0 实测一百四十六：地狱跳过（水瞬间蒸发；v1.5.250 曾放开下界尝试，
+     *  玩家反馈"女仆在下界还会使用落地水"——恢复 v1.5.210 的地狱跳过，
+     * 岩浆链流转抗火/末影珍珠/垫方块）。
      *  返回 false = 没放成（没桶/已有一摊水/地狱/找不到岩浆） */
     private boolean placeWaterOnLava(EntityMaid maid) {
         try {
             if (this.waterPos != null
                     || !com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get()
-                    || !this.hasWaterBucket(maid)) {
+                    || !this.hasWaterBucket(maid)
+                    || isNether(maid)) {
                 return false;
             }
             BlockPos lava = this.findNearbyLava(maid);
@@ -2267,16 +2277,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             net.minecraft.server.level.ServerLevel level =
                     (net.minecraft.server.level.ServerLevel) maid.m_9236_();
-            // v1.5.250：下界放水节流（v1.5.210 旧设计下界直接跳过——下界水蒸发
-            // 灭火无效，但用户要求女仆尝试用水桶；每 40 tick 倒一次，其余流转珍珠/
-            // 抗火）
-            if (isNether(maid)) {
-                long gt = level.m_46467_();
-                if (gt - this.netherPourTick < 40) {
-                    return false;
-                }
-                this.netherPourTick = gt;
-            }
             BlockPos target = lava.m_7918_(0, 1, 0); // 最近岩浆格上方一格
             // v1.5.230：上方放不了（岩浆在封闭空间/脚下隔了垫块）→ 直接替换
             // 岩浆自身格（液体可被水替换）——水流替换岩浆源 = 冷却为黑曜石，更直接
@@ -2400,6 +2400,75 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
         }
         return false;
+    }
+
+    /** v1.1.0 实测一百五十三：饰品栏（TLM BaubleItemHandler，30 格）是否佩戴了
+     *  指定饰品。TLM 保护饰品（火焰/溺水等）只有放进饰品栏才生效，背包/手里
+     *  不算；饰品在槽里即视为佩戴（TLM 受伤触发时会给抗火/补空气，破损也照常
+     *  触发——不细究耐久度）。 */
+    private static boolean hasBaubleItem(EntityMaid maid, String registryName) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.inventory.handler.BaubleItemHandler bauble =
+                    maid.getMaidBauble();
+            for (int i = 0; i < bauble.getSlots(); i++) {
+                ItemStack s = bauble.getStackInSlot(i);
+                if (s.m_41619_()) {
+                    continue;
+                }
+                net.minecraft.resources.ResourceLocation key = ForgeRegistries.ITEMS.getKey(s.m_41720_());
+                if (key != null && registryName.equals(key.toString())) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    private static boolean hasFireProtectBauble(EntityMaid maid) {
+        return hasBaubleItem(maid, "touhou_little_maid:fire_protect_bauble");
+    }
+
+    private static boolean hasDrownProtectBauble(EntityMaid maid) {
+        return hasBaubleItem(maid, "touhou_little_maid:drown_protect_bauble");
+    }
+
+    /** v1.1.0 实测一百五十五：是否有保命物品——饰品栏的绀珠之药（TLM
+     *  ExtraLifeBauble，死亡复活）/不死图腾（UndyingTotemBauble）+ 双手/背包里的
+     *  不死图腾（MaidBaubleTotemMixin 致死时会从这些位置消耗）。有保命物品时她
+     *  不会轻易死，配合 COMBAT_FLEE_WITH_SAVE_ITEM 决定是否还逃跑。 */
+    private static boolean hasDeathSaveItem(EntityMaid maid) {
+        if (hasBaubleItem(maid, "touhou_little_maid:ultramarine_orb_elixir")
+                || hasBaubleItem(maid, "minecraft:totem_of_undying")) {
+            return true;
+        }
+        try {
+            ItemStack main = maid.m_21205_();
+            if (!main.m_41619_() && main.m_41720_() == net.minecraft.world.item.Items.f_42747_) {
+                return true;
+            }
+            ItemStack off = maid.m_21206_();
+            if (!off.m_41619_() && off.m_41720_() == net.minecraft.world.item.Items.f_42747_) {
+                return true;
+            }
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && s.m_41720_() == net.minecraft.world.item.Items.f_42747_) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /** v1.1.0 实测一百五十五：是否允许逃跑——有保命物品且开关关闭时不逃
+     *  （她死不了，继续战斗/垫高/治疗，不丢下工作）；开关开启或没有保命物品
+     *  则照常逃跑。 */
+    private static boolean canFlee(EntityMaid maid) {
+        return !hasDeathSaveItem(maid)
+                || com.maidsmart.config.MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get();
     }
 
     /** v1.5.208：喝饮用型抗火药水（自己喝掉、返还空瓶）——掉岩浆/着火的免疫手段，
@@ -3333,13 +3402,19 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.281：是否"无增益 + 有负面"——牛奶前提（牛奶清全部效果，
-     *  有增益时喝 = 把增益也清掉；中性效果如发光不参与判定） */
+     *  有增益时喝 = 把增益也清掉；中性效果如发光不参与判定）。
+     *  v1.1.0 实测一百五十二：MISC_MILK_FEED_WITH_BUFF 开启时忽略增益——
+     *  很多装备/饰品带永久增益，旧版永远不满足"无增益"→ 中毒/凋零也不解 */
     private static boolean hasOnlyNegativeEffects(EntityMaid maid) {
         boolean hasHarmful = false;
+        boolean buffGate = com.maidsmart.config.MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get();
         for (net.minecraft.world.effect.MobEffectInstance ei : maid.m_21220_()) {
             net.minecraft.world.effect.MobEffectCategory cat = ei.m_19544_().m_19483_();
             if (cat == net.minecraft.world.effect.MobEffectCategory.BENEFICIAL) {
-                return false; // 有增益 → 不喝牛奶
+                if (!buffGate) {
+                    return false; // 有增益 → 不喝牛奶（开关开启时照喝）
+                }
+                continue;
             }
             if (cat == net.minecraft.world.effect.MobEffectCategory.HARMFUL) {
                 hasHarmful = true;

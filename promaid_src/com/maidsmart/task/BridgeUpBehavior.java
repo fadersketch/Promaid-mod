@@ -26,24 +26,39 @@ import java.util.Map;
 /**
  * 搭路行为（v1.1.0，core 优先级 245——低于自保 250、高于落地水 240）。
  *
- * 主人在女仆上方一定距离内（默认 ≥2 格且总距离 <7 格 = 传送判定距离）时，
- * 女仆朝主人脚下走过去并逐格搭高靠近（借鉴 Zombie Invade 100 Days 的僵尸
- * MobBuildUpGoal：朝目标方向逐块垫高——女仆版用真实背包方块 + 物理上升，
- * 不像僵尸那样 setPos 瞬移）。默认关闭（bridge.enabled）。
+ * 女仆朝主人逐格搭方块靠近（借鉴 Zombie Invade 100 Days 的 MobBuildUpGoal：
+ * 真实背包方块 + 物理位移，不像僵尸 setPos 瞬移）。默认关闭（bridge.enabled）。
  *
- * 触发条件（全部满足）：
- * - 开关开启；主人存在、活着、同维度
- * - 女仆非 home 模式（在家模式 = 守家不出门，不搭路追主人）
- * - 任务空闲（v1.1.0 实测十五：挖矿/伐木已锁定目标、烹饪/酿造站桩中、建造
- *   坐下中都不追——手上的活没干完不撂挑子；详见 isTaskOccupied）
- * - 主人高于女仆 ≥ bridge.minDy 格；欧氏距离 < bridge.maxDist 格
- * - 周围 bridge.threatDist 格内无敌对生物；女仆非自保状态
- * - 背包有可放置方块（BlockItem、非下落方块）
+ * 触发条件（全部满足，见 canUse）：
+ * - 开关开启；主人存在、活着、同维度；女仆非 home 模式、非自保状态
+ * - 任务未被实质占用（挖矿/伐木锁定目标、烹饪/酿造站桩中、建造未暂停不追人；
+ *   详见 isTaskOccupied）
+ * - 启动/收尾区错开（实测一百四十三）：与 canContinue 的 2.5 格"reached"收尾不相交——
+ *   启动须离开收尾区（> max(bridge.minRadius, 2.5)），消除 2~2.5 格 start/stop 抖动
+ * - 高度/地形门槛：高差不足（dy < min(bridge.minDy, 4)）时，主人【不在下方】即启动
+ *   追逐（v1.1.0 实测一百四十一，参考 endofdays 僵尸：启动后每步冷却在前方脚下悬空
+ *   处铺桥、实心地面走路，持续尝试逼近——不再要求"前方悬空/水平 >4 格"才启动）
+ * - 距离上限：女仆【自己半空】时上限放开（v1.1.0 实测一百四十三，僵尸索敌式——搭
+ *   方块是唯一通路，主人飞多远都持续搭，方块耗尽自然停）；地面/非空中：主人空中或
+ *   高于女仆时取 max(maxDist, airMaxDist)，否则 maxDist（默认 7；airMaxDist 默认 128）
+ * - 周围 bridge.threatDist 格内无敌对生物；背包有可放置方块（MaidBuildBlockFilter）
+ * - 威胁扫描 + 背包过滤每 10 tick 节流一次（廉价判定每 tick 进行）
  *
- * 执行：置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）→
- * 水平导航到主人正下方 → 每步冷却在脚下垫方块（真实消耗背包方块）→
- * 距主人 ≤2.5 格停止（跟随接管）。搭的方块登记自清理（默认 10 秒变掉落物）。
- * 中止：威胁出现 / 方块耗尽 / 主人离开范围或换维度 / 主人不再高于女仆。
+ * 执行（每 tick，tick 方法）：
+ * - 空中平桥 tryAirBridgeStep：dy < minDy 且水平 >1.2 格时，朝主人方向三向试探
+ *   （正前/±45°），前方脚下悬空则在【前方脚下】垫块走过去——不依赖导航；
+ * - 斜上台阶 tryDiagStep：dy >= 1 且水平 >1.2 格时，朝主人方向前方脚下垫台阶，
+ *   塔朝主人斜着长；
+ * - 垂直柱 placeStep：dy >= 1 时原地垫脚下把自己顶高（放置格 + 头顶 2 格净空）；
+ * - 三条腿共用 bridge.stepCooldown（默认 5 tick/块）；垫块/落足格命中危险表
+ *   （岩浆/火等）一律跳过（实测一百二十七）；
+ * - 置 bridging 标记（禁 TLM 瞬移回主人——MaidTeleportPreserveMixin）；垫的方块
+ *   登记 PlacedBlockTracker 自清理（默认 bridge.placedLifetime 秒；reclaimToMaid
+ *   开则进最近女仆背包，有女仆站上面延后回收）。
+ *
+ * 中止（见 canContinue / doStop）：贴到主人 ≤2.5 格（跟随接管）/ 威胁出现 /
+ * 自保触发 / 任务重新占用 / 主人换维度或走远（≥ 上限+2 缓冲）/ 方块耗尽 /
+ * 20 秒垫不出方块（头顶被挡）。
  */
 public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /** bridging 标记（persistentData——MaidTeleportPreserveMixin 拦传送用） */
@@ -242,10 +257,33 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百二十一：水平远距放宽（见方法头注释）——dy 不满足高度
         // 门槛但水平已拉开（>3 格）且主人不低于女仆时照常启动，平桥横向逼近
         double hx = owner.m_20185_() - maid.m_20185_();
+        double hy = owner.m_20186_() - maid.m_20186_();
         double hz = owner.m_20189_() - maid.m_20189_();
-        boolean farHorizontal = Math.sqrt(hx * hx + hz * hz) > 3.0;
-        if (dy < Math.min(minDy, 4) && !(farHorizontal && dy >= 0)) {
-            return false; // 高度不足且水平不远的近距离场景才拦（垂直搭高才需要门槛）
+        double hDist = Math.sqrt(hx * hx + hz * hz);
+        double dist3 = Math.sqrt(hx * hx + hy * hy + hz * hz); // 3D 球面欧氏距离
+        // v1.1.0 实测一百三十（用户："应该是竖直和水平半径都要判定，总体是类似以
+        // 女仆为圆心的一个球形"）：启动门槛统一改为【最小球面半径】（3D 欧氏距离）——
+        // 主人在女仆周围球面【内部】不启桥（纯跟随走路）；球面【外部】再分两种：
+        // ① 高差达标（dy >= minDy）→ 垂直搭高（旧语义再现）；② 竖直差不多但水平
+        // 已拉开 + 前方脚下悬空（低头没路可走）→ 平铺搭桥（实心地面平地不启桥，
+        // 根治 dy=0 平地上一秒一轮 start/stop/reached 的空转抖动）。
+        // v1.1.0 实测一百四十三【启动/收尾区错开，修 2~2.5 格抖动】：旧版启动区
+        //（dist3 > minRadius=2）与 canContinue 收尾（dSq<=6.25=2.5 格"reached"）重叠在
+        // 2~2.5 格 band——行为每秒 start→reached→stop（日志实证 bridge-up start/stop
+        // reason=reached 刷屏），tick 根本没机会铺桥，主人 5 格也不搭。现在启动须离开
+        // 收尾区（>max(minRadius, 2.5)），与收尾区不相交 → 无抖动，主人 5 格照常启动。
+        double minStart = Math.max(MaidSmartConfig.BRIDGE_MIN_RADIUS.get(), 2.5);
+        if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
+                <= minStart * minStart) {
+            return false; // 未离开"已到达"区——跟随走路即可
+        }
+        if (dy < Math.min(minDy, 4)) {
+            // 高差不足 = 平地/低高差（v1.1.0 实测一百四十一追逐式）：主人不在下方即
+            // 启动追逐（每步冷却前方悬空铺桥、实心走路，像僵尸持续逼近主人）；主人
+            // 低于女仆不启桥（走下坡不需要搭）
+            if (dy < 0) {
+                return false;
+            }
         }
         boolean airborne = isAirborne(level, maid);
         // v1.1.0 实测一百二十三（用户："创造模式飞行、周围无落脚方块、主人在前上方
@@ -258,9 +296,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 实心地面走导航零副作用），跨空/爬高才真正搭方块。
         boolean ownerAirborne = !owner.m_20096_();
         boolean ownerAbove = dy >= 1;
-        int distLimit = (airborne || ownerAirborne || ownerAbove)
-                ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
-                : MaidSmartConfig.BRIDGE_MAX_DIST.get();
+        // v1.1.0 实测一百四十三（参考 endofdays 僵尸索敌机制）：女仆【自己半空中】
+        // （脚下是自己搭的塔/桥，四周无落地可走）时，搭方块是唯一通路——距离上限
+        // 放开（sq(MAX_VALUE)≈4.6e18 恒不触发），主人飞多远都持续向他的方向搭，方块
+        // 耗尽（hasBuildBlock 前置 + canContinue 无料中止）自然停，不再因"主人飞远"
+        // 而放弃。地面/非空中仍按配置上限（maxDist / airMaxDist）。
+        int distLimit = airborne ? Integer.MAX_VALUE
+                : (ownerAirborne || ownerAbove)
+                        ? Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(), MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get())
+                        : MaidSmartConfig.BRIDGE_MAX_DIST.get();
         if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit)) {
             return false;
@@ -308,9 +352,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (dSq <= 6.25) {
             return "reached";
         }
-        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
-                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
-        if (dSq >= sq(distLimit + 2)) {
+        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+                : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                        MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
+        if (distLimit != Integer.MAX_VALUE && dSq >= sq(distLimit + 2)) {
             return "owner-too-far";
         }
         if (hasThreatNearby(level, maid)) {
@@ -418,6 +463,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     || !level.m_8055_(ahead.m_7918_(0, 1, 0)).m_60795_()) {
                 continue;
             }
+            // v1.1.0 实测一百二十七：落足格/脚下垫格命中危险表（岩浆/火等）——
+            // 无导航的铺桥腿不绕行，必须显式拦（寻路 mixin 管不到这条直连施速腿）
+            if (com.maidsmart.tool.DangerBlocks.enabled()
+                    && (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            fill.m_123341_(), fill.m_123342_(), fill.m_123343_())
+                            || com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            tx, y, tz))) {
+                continue;
+            }
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -479,6 +533,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             } else {
                 continue;
             }
+            // v1.1.0 实测一百二十七：垫格/落足格危险拦截（无导航斜上腿——
+            // 旧版会把台阶垫在岩浆/火上或踩上去）
+            if (com.maidsmart.tool.DangerBlocks.enabled()
+                    && (com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            place.m_123341_(), place.m_123342_(), place.m_123343_())
+                            || com.maidsmart.tool.DangerBlocks.cellDangerous(level,
+                            tx, y, tz))) {
+                continue;
+            }
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -513,10 +576,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false; // 已贴到主人（≤2.5 格）——完成，跟随接管
         }
         // v1.1.0 实测四：距离上限与 canUse 同口径——空中用 airMaxDist（+2 缓冲），
-        // 否则远距空中铺桥刚启动就被 canContinue 掐掉
-        int distLimit = Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
-                MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
-        if (maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
+        // 否则远距空中铺桥刚启动就被 canContinue 掐掉。
+        // v1.1.0 实测一百四十三：自己半空中时与 canUse 一致放开上限（主人飞远不放弃，
+        // 持续搭桥逼近；方块耗尽由下方"无料中止"兜底）
+        int distLimit = isAirborne(level, maid) ? Integer.MAX_VALUE
+                : Math.max(MaidSmartConfig.BRIDGE_MAX_DIST.get(),
+                        MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get());
+        if (distLimit != Integer.MAX_VALUE
+                && maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_())
                 >= sq(distLimit + 2)) {
             return false; // 主人走远了（超出阈值+2 缓冲）——放弃
         }
@@ -726,7 +793,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 在找下一个或守在原地——正是用户允许的"处于任务状态但空闲"）。
      * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
      */
-    private static boolean isTaskOccupied(EntityMaid maid) {
+    public static boolean isTaskOccupied(EntityMaid maid) {
         try {
             if (com.maidsmart.task.MaidMineBehavior.isMining(maid)) {
                 return true;
@@ -748,6 +815,35 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         } catch (Throwable ignored) {
         }
         return maid.getPersistentData().m_128471_(MaidWorkTags.WORK_STILL_TAG);
+    }
+
+    /**
+     * v1.1.0 实测一百三十：主人方向前方是否"低头没路"（平铺搭桥的判定条件）——
+     * 朝主人方向 1~2 格内任一格：站立格空气 + 头顶空气 + 脚下空气（悬空）→
+     * 脚下没支撑 → 需要搭桥；前方是实心地面/上坡/一阶台阶（可走上去）→ 走路即可。
+     */
+    private static boolean hasGapAhead(ServerLevel level, EntityMaid maid,
+                                       double hx, double hz, double hDist) {
+        if (hDist < 1e-3) {
+            return false;
+        }
+        double ux = hx / hDist;
+        double uz = hz / hDist;
+        int y = maid.m_20183_().m_123342_();
+        for (int step = 1; step <= 2; step++) {
+            int tx = (int) Math.floor(maid.m_20185_() + ux * step);
+            int tz = (int) Math.floor(maid.m_20189_() + uz * step);
+            if (!level.m_8055_(new BlockPos(tx, y, tz)).m_60795_()) {
+                continue; // 前方有实体方块挡（小丘/台阶——导航会绕/跳上，不算悬空）
+            }
+            if (!level.m_8055_(new BlockPos(tx, y + 1, tz)).m_60795_()) {
+                continue; // 顶头——绕，不算悬空
+            }
+            if (level.m_8055_(new BlockPos(tx, y - 1, tz)).m_60795_()) {
+                return true; // 脚下悬空——平铺搭桥
+            }
+        }
+        return false;
     }
 
     private static double sq(double v) {
