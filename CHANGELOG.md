@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百四十七
+
+- 建造预览两连修（玩家反馈："玩家周边的黄色区块框怎么都去不掉，原本要求显示的幽灵方块也没有了，整个建造链路出现了bug"）：
+  - 【金色框去不掉·根因】`BlueprintAreaPreview.clear()` 在实测一百三十二加诊断日志时把 `active = false` **误删**（日志替换了状态复位，git diff 实证）——金色预览开启后打开手册/确认建造都关不掉，框永远跟着玩家移动。修复：恢复复位，`clear()` 真正关闭金色预览（调用点 BlueprintBookScreen.open = "再次打开手册 = 关预览"，与 render 标签"（打开手册关闭）"一致）
+  - 【幽灵方块消失·根因】实测一百零九的 renderSingleBlock 渲染方案对 1.20.1 不成立：Forge 版 7 参 `renderSingleBlock` 字节码实证——它遍历 `BakedModel.getRenderTypes` 按【模型自身图层】渲染、写进各图层自己的 buffer，**完全忽略传入的 translucent renderType**；幽灵顶点落入早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见（实测一百二十九/一百三十二"轮廓又没了"反复复发、一百零一初次引入时同样不可见被一百零五/一百零六回退——同一根因）。修复：改回与【区块框同款】的 DebugRenderer 即时渲染——每点一个 `renderFilledBox` 半透明填充盒（区块框一直在正常显示：框能显示，幽灵必能显示）；删除废弃的 GhostBufferSource/GhostVertexConsumer 包装类
+  - 投影数据链路（请求→服务端采样→分块回传）本就正常，未改动
+
 ## 实测一百四十六
 
 - 下界彻底不用水桶（玩家反馈："女仆在下界的时候仍然会使用落地水"）：
