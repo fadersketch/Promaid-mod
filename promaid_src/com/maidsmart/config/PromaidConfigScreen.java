@@ -1897,6 +1897,11 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD, s), "窗口内累计反向次数达到该值即压制本次切换（默认 2）"));
         this.rows.add(new NumRow("反向切换冷却（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS.get()),
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS, s), "压制反向切换后保持多久不再反向切（默认 200=10 秒）"));
+        // v1.1.0 实测一百七十六（移植 TLM-Sincerely）：排班最短持有期 + 切段后大脑自愈
+        this.rows.add(new NumRow("最短持有期（tick）", String.valueOf(MaidSmartConfig.MISC_SCHEDULE_MIN_HOLD_TICKS.get()),
+                s -> setInt(MaidSmartConfig.MISC_SCHEDULE_MIN_HOLD_TICKS, s), "任何一次排班切换后此期间内不允许再切换（默认 60=3 秒，借鉴 TLM-Sincerely MINIMUM_TASK_HOLD_TICKS）——防段边界秒切/战斗还原压任务连切；正常时段切换相隔约 2000 tick 不受影响；0 = 关闭"));
+        this.rows.add(new BoolRow("切段后大脑自愈", MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.get(),
+                v -> MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.set(v), "段任务应用成功后 3 秒，若女仆任务仍是段任务但脑内无任何工作记忆（非坐姿站桩可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）；关 = 完全信任 TLM"));
         // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
         this.rows.add(new SectionRow("运行日志（实测九十四）", true));
         this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),

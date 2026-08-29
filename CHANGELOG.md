@@ -1,5 +1,16 @@
 ﻿# 更新日志
 
+## 实测一百七十六
+
+- 排班切换引擎换成 TLM-Sincerely 架构（用户："目前的排班逻辑先换成这个，但是将里面的自动切换模式改成日程表里的以时间为判定"——仓库 https://github.com/Sodapopper-pixel/TLM-Sincerely，纯时间判定 + 现有排班功能全保留）：
+  - 【架构】新增 `ScheduleSwitchEngine`（镜像 TLM-Sincerely TaskSwitchDecisionEngine 的单一切换出口）：全部排班 setSchedule/setTask 统一走这里，门顺序 = 已在目标任务跳过 → 可用性门 → 最短持有 → 反向抑制 → 兼容门 → 内部标记切换 → 读回校验 → recordSwitch；`ScheduleManager.applyNow` 保留全部前置门（总开关/home 锚定/宽限/自保/战斗让位/空表/休息/去抖/重试/外部改动尊重），只做门外调度
+  - 【最短持有】`ScheduleSwitchState` 补全 TLM-Sincerely `canSwitchNormally`（新配置 `scheduleMinHoldTicks`，默认 60=3 秒）：任何切换后此期间内不再切——防段边界秒切/战斗还原压任务连切
+  - 【兼容分类】新增 `ScheduleCompatService`（移植 AutoWorkCompatService 精简版）：任务兼容分类 SUPPORTED/FALLBACK/UNSUPPORTED/BLOCKED，BLOCKED 任务（已知会卡 AI/纯交互）不自动切，提供 UID/命名空间注册扩展点——后续附属工作模式按需加表即可（用户："其他附属的工作模式也需要做兼容"）
+  - 【大脑自愈】移植 TLM-Sincerely `FORCE_BRAIN_REFRESH_ON_STUCK`（新配置 `scheduleForceBrainRefresh`，默认开）：切段成功后 60 tick，若任务仍是段任务但脑内无任何工作记忆（非坐姿站桩）→ `refreshBrain` 一次重建 AI——治"段任务应用了但女仆站着不动"
+  - 【附带修复·排班扫描 AABB 崩溃】`ScheduleManager.onServerTick` 旧版用无限 AABB 扫全维度女仆——与 AutoCombatSwitch 实测一百七十三同源的收敛 bug（±∞ 经 blockToSection 溢出到同一列 → 查询永远空列表）→ **排班扫描从未扫到过女仆，"任务不随时间段切换"的真正根因之一**（日志实证此前的"应用段"全来自保存/重入/战斗还原路径）。改用有限 AABB（x/z ±131072、y ±4096）——时间驱动切换从此真正从扫描路径生效
+  - 保留不动：日程表数据模型/NBT、排班书 GUI、网络包、守卫 mixin（排班中手动改任务被拦）、排班优先于战斗、Home 锚定、可用性门、去抖/重试/尊重手动机制
+  - 测试：重启游戏 → 排班女仆开排班 → 用时间洪流怀表快进 → 任务应随时间段真实切换（promaid.log「应用段」逐段出现，不再只出现在保存/重入时）；战斗还原压任务场景验证最短持有与反向冷却
+
 ## 实测一百七十五
 
 - 搭路"无方块空转"治理 + 无方块判定诊断（用户："解除了威胁，女仆仍然不会搭方块"——日志实证 14:38:52~14:39:05 bridge-up 行为**确实触发**（威胁解除后可以启动），但 K螺诺亚连续 18 次 `start→stop reason=no-block`（13 秒），大正女仆酒狐 `head-blocked`（主人爬高 15 格、头顶被挡 20 秒放弃）——可见的"不搭方块"= 女仆背包没方块 / 头顶被结构挡，不是行为没触发）：
