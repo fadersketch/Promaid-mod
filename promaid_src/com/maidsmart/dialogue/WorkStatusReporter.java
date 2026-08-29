@@ -1,6 +1,7 @@
 package com.maidsmart.dialogue;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.task.MaidWorkTags;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -114,6 +115,16 @@ public class WorkStatusReporter {
         // v1.5.82：坐姿不再是"卡住"原因——女仆可以坐着干活（任务照常执行）
         if (maid.m_20159_()) {
             return "被骑乘着，动不了";
+        }
+        // v1.1.0 实测一百七十四【站桩干活误报修复】：烹饪/酿造女仆坐姿 + 站桩标记 =
+        // 正贴着炉子/酿造台干活（收成品/补料/补燃料中）——导航空闲是站桩工作的
+        // 正常状态，不是卡住。日志实证：K螺诺亚一边正常取成品/喂牛肉，一边每 10 秒
+        // 报"炉子明明就在附近但我没能开始烧制"。坐姿+WORK_STILL 是烹饪/酿造贴方块
+        // 干活的特征（挖矿/伐木/建造站桩不坐下），命中即视为正常不播报；
+        // 站着等炉子的（furnacePos 为空时行为 standUp + setStill）仍会如实播报。
+        if (maid.isMaidInSittingPose()
+                && maid.getPersistentData().m_128471_(MaidWorkTags.WORK_STILL_TAG)) {
+            return null;
         }
         if (!maid.m_21573_().m_26571_()) {
             return null; // 寻路不空闲 = 正在干活
