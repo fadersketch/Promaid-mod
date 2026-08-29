@@ -49,6 +49,12 @@ public class PromaidConfigScreen extends Screen {
      *  行 y 起点整体错位 → 文本与控件/注释互相重叠 = "第 2 页起排版全错"根源） */
     private int[] pageRowY = new int[0];
     private int pagePerRow = 0;
+    /** v1.1.0 实测一百七十七：按行真实高度【逐页装填】的分页模型——pageStarts[p] =
+     *  第 p 页首行下标。旧版按"第一页能装几行"得到全局固定 perPage 再均摊到所有页，
+     *  行高不均的板块（被动技能页搭路段注释长、单行 74px）在第 4+ 页会整体溢出：
+     *  末行输入框落到 h-68 翻页按钮行内，EditBox 先于按钮注册、点击被输入框吃掉
+     *  → "第 4 页翻不到第 5 页"。每页独立装填后任何页都保证不超 contentBottom。 */
+    private final java.util.List<Integer> pageStarts = new java.util.ArrayList<>();
     /** 挖矿板块：矿表子页 */
     private boolean mineTable = false;
     /** 当前板块的行定义（分页只实例化当前页的行） */
@@ -370,23 +376,31 @@ public class PromaidConfigScreen extends Screen {
         // 只把当前页的行 y 存进 pageRowY 给渲染侧用。旧版算的是全表绝对 y、
         // 渲染侧又只画 start..end 行，第二页第一行拿到全表坐标（比正确值大
         // 一整页），且行高分布随 pageIndex 偏移错位 → "第 2 页起排版全错"
-        int perPage = 0;
-        int cursorY = CONTENT_TOP;
-        for (int i = 0; i < this.rows.size(); i++) {
-            int rh = this.rowHeight(this.rows.get(i));
-            if (cursorY + rh > contentBottom && i > 0) {
-                break;
+        // v1.1.0 实测一百七十七【分页溢出根治】：分页模型从"全局固定 perPage 均摊"
+        // 改为"逐页装填"——逐行累加真实高度，当前页装不下就开新页（pageStarts 记录
+        // 每页首行下标）。旧版的 perPage 是按【第一页】行数标定的全局常数，行高不均
+        // 的板块（被动技能页搭路段注释长、单行 74px vs 短行 44px）在第 4+ 页按第一页
+        // 的行数硬装 → 累计 y 超过 contentBottom，末行"空中搭桥距离"的输入框落到
+        // h-68 翻页按钮行内——EditBox 先于按钮注册、几何重叠处点击被输入框吃掉 =
+        // "第 4 页翻不到第 5 页"。逐页装填后每页都保证最后一行不超 contentBottom。
+        this.pageStarts.clear();
+        this.pageStarts.add(0);
+        {
+            int yAcc = CONTENT_TOP;
+            for (int i = 0; i < this.rows.size(); i++) {
+                int rh = this.rowHeight(this.rows.get(i));
+                if (yAcc + rh > contentBottom && i > this.pageStarts.get(this.pageStarts.size() - 1)) {
+                    this.pageStarts.add(i); // 当前行装不下 → 新页从 i 开始
+                    yAcc = CONTENT_TOP;
+                }
+                yAcc += rh;
             }
-            cursorY += rh;
-            perPage = i + 1;
         }
-        if (perPage < 1) {
-            perPage = 1; // 极矮窗口兜底：至少渲染一行
-        }
-        int totalPages = Math.max(1, (this.rows.size() + perPage - 1) / perPage);
-        this.pageIndex = Math.min(this.pageIndex, totalPages - 1);
-        int start = this.pageIndex * perPage;
-        int end = Math.min(this.rows.size(), start + perPage);
+        int totalPages = Math.max(1, this.pageStarts.size());
+        this.pageIndex = Math.min(Math.max(this.pageIndex, 0), totalPages - 1);
+        int start = this.pageStarts.get(this.pageIndex);
+        int end = (this.pageIndex + 1 < totalPages)
+                ? this.pageStarts.get(this.pageIndex + 1) : this.rows.size();
         // 当前页行 y：从 CONTENT_TOP 起累加（页面内相对布局，任何页都正确）
         this.pageRowY = new int[this.rows.size()];
         int yCursor = CONTENT_TOP;
@@ -394,7 +408,7 @@ public class PromaidConfigScreen extends Screen {
             this.pageRowY[i] = yCursor;
             yCursor += this.rowHeight(this.rows.get(i));
         }
-        this.pagePerRow = perPage;
+        this.pagePerRow = end - start; // 诊断用：当前页实际行数（分页模型已改逐页装填）
         for (int i = start; i < end; i++) {
             RowDef def = this.rows.get(i);
             int y = this.pageRowY[i];
@@ -2869,12 +2883,16 @@ public class PromaidConfigScreen extends Screen {
             // 行标签（按行实际位置画；行数受分页限制不会越界）
             // v1.1.0 实测二十二：渲染侧行位置与布局侧同口径（动态行高累加）——
             // 旧版渲染独立按 ROW_H 匀质计算，与布局侧脱节就是重叠的根源
-            // v1.1.0 实测四十五：直接用 init 侧算好的 pageRowY / pagePerRow——
+            // v1.1.0 实测四十五：直接用 init 侧算好的 pageRowY——
             // 渲染侧重算（旧实现）拿 start..end 行查【全表】累加坐标，第二页
             // 起行 y 是第一页的绝对位置（起点偏低/错位）→ 文本重叠排版错乱
-            int perPageR = this.pagePerRow;
-            int start = this.pageIndex * perPageR;
-            int end = Math.min(this.rows.size(), start + perPageR);
+            // v1.1.0 实测一百七十七：start/end/totalPages 同步改用 pageStarts
+            // （逐页装填分页模型，与 init 侧完全同源——旧版按全局 perPage 均摊，
+            // 行高不均的页 start/end 错位、页码总数也算错）
+            int totalPagesR = Math.max(1, this.pageStarts.size());
+            int pi = Math.min(Math.max(this.pageIndex, 0), totalPagesR - 1);
+            int start = this.pageStarts.get(pi);
+            int end = (pi + 1 < totalPagesR) ? this.pageStarts.get(pi + 1) : this.rows.size();
             for (int i = start; i < end; i++) {
                 RowDef def = this.rows.get(i);
                 int y = this.pageRowY[i];
@@ -2907,10 +2925,9 @@ public class PromaidConfigScreen extends Screen {
             }
             // 页码（v1.1.0 实测二十五：画在翻页箭头中间 h-62 行——箭头 20px 在
             // 两侧 cx±(20..40)，页码居中 <60px 宽，任何分辨率下不重叠）
-            int totalPages = Math.max(1, (this.rows.size() + perPageR - 1) / perPageR);
-            if (totalPages > 1) {
+            if (totalPagesR > 1) {
                 g.m_280653_(this.f_96547_,
-                        Component.m_237113_("第 " + (this.pageIndex + 1) + "/" + totalPages + " 页"),
+                        Component.m_237113_("第 " + (pi + 1) + "/" + totalPagesR + " 页"),
                         cx, h - 62, 0xAAAAAA);
             }
         }
