@@ -1,5 +1,14 @@
 ﻿# 更新日志
 
+## 实测一百七十三
+
+- 【总根因】还原扫描自 v1.1.0 起从未扫到过任何女仆（用户："现在可以正常切换到模组武器了，但依然做不到还原原模式"——实测一百七十二心跳实证：`auto-combat scan` 每秒在跑、`active` 恒 0、`restore-scan` 零条，而存档实测参战标记写得很正确：`combat_active=BYTE 1`、`combat_start=LONG 295280`）：
+  - 【根因①·无限 AABB 崩溃（还原永不触发的元凶）】扫描用 `new AABB(-∞, -∞, -∞, +∞, +∞, +∞)` 想遍历全维女仆——但 `getEntitiesOfClass` 内部经 `SectionPos.blockToSection` 把 AABB 换算成 section 列：`blockToSection(-∞) = floor(-∞)>>4 = 134217727`、`blockToSection(+∞)` 同样收敛到 `134217727`（double→int 溢出回绕 + 移位）。**min 和 max 相等 → 外层 section 循环只执行一次、且落在世界外（第 134217727 列）→ 永远返回空列表**。已用独立 Java 复现确认（`blockToSection(-inf)==blockToSection(+inf)==134217727`，循环恰好 1 次）。这就是"还原扫描在跑但谁都没扫到"的全部解释：心跳每秒打 active=0、restore-scan 永远不打印、还原动作永远不执行——实测一百五十二以来的所有还原问题（吞触发/永不还原/90 秒超时也不还原）全部同根。修复：改用覆盖整个可玩范围的**有限 AABB**（x/z ±131072 = ±128km、y ±4096 覆盖全部建筑高度），`blockToSection` 对有限值正常换算，循环覆盖所有已加载区块
+  - 【根因②·客户端事件漏跑（参战日志重复/标记写错实体）】`LivingHurt/LivingAttack/LivingDamage` 在客户端也会触发——日志实证 `14:15:11 [Render thread] auto-combat: maid attacked -> engage self + sisters`：客户端实体上跑整套 engage（写客户端 persistentData、`setTask`、打"参战"日志），与服务器实体是两份独立数据，既污染 promaid.log 又制造"参战了但没生效"的假象。修复：**四个女仆事件处理器统一加 `level.isClientSide` 门控**（玩家侧处理器本就 `instanceof ServerPlayer` 只会在服务端命中，无需加）
+  - 【根因③·clearMarkers 类型污染（长线隐患）】旧版清标记全用 `putBoolean(false)`——LONG 槽（`last_threat/last_contact/combat_start/attacker_time`）与 STRING 槽（`prev_task/assigned/attacker_uuid`）被塞进 Boolean 值：`getLong` 读 Boolean 恒 0、`getString` 读 Boolean 恒 ""（抖动守卫 `combatStart>0` 失效、超时/僵局判定失真）。修复：**统一改用 `remove`（m_128473_）按正确类型清键**，不再留类型污染（判定已全部走 getXxx，无 contains，remove 后读缺省值同样安全）
+  - 附带收益：老档里残留的旧战斗标记（8月28日 chunk#118/124 的 `combat_active=BYTE 1` 僵尸标记）会被修复后的扫描正常兜底清理
+  - 测试：重启游戏（加载本 jar）→ 打怪参战 → latest.log 应出现 `auto-combat scan: ... active=1`（此前恒 0）与 `restore-scan: ...`（此前零条）→ 杀怪切和平 → 约 20 秒后 promaid.log 出现「战斗还原」，任务切回原模式
+
 ## 实测一百七十二
 
 - 还原扫描心跳诊断（用户："过了 10 秒钟战斗任务不会还原"——游戏重启后 restore-scan 门级诊断仍零条，无法确定还原扫描是否在跑）：
