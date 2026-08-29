@@ -810,6 +810,25 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
         } catch (Throwable ignored) {
         }
+        // v1.1.0 实测一百七十四【烹饪/酿造被搭路劫持根治】（用户："放置多个熔炉，
+        // 女仆并不能同时工作"）：烹饪/酿造任务 = 实质占用——站桩工作任务的 WORK_STILL
+        // 标记只在【贴方块站定后】才置位，走路去炉子/酿造台途中是 false（要放行走），
+        // 旧版此处漏判 → 搭路行为（core 245，无视任务类型）趁隙启动，把女仆往主人
+        // 方向拉：烹饪行为又把她往炉子拉，两行为无限拉扯（日志实证 14:36:34 cook
+        // start 绑定 x=11 后，大正女仆酒狐连续 60 秒 bridge-up start/stop
+        // reason=reached 抖动、炉子一口没喂，另一只已贴炉的 K螺诺亚 WORK_STILL=true
+        // 反而没被劫持正常烧）。烹饪/酿造是站桩工作，任务本身即占用：无论走去路上
+        // 还是贴方块站定，都不追人。
+        try {
+            var task = maid.getTask();
+            if (task != null && task.getUid() != null) {
+                String uid = task.getUid().toString();
+                if ("maid_smart:cook".equals(uid) || "maid_smart:brew".equals(uid)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
         try {
             var target = maid.m_6274_().m_21952_(
                     net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
