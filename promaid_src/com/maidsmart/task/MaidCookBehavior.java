@@ -138,6 +138,14 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (this.furnacePos == null) {
             this.furnacePos = this.findFurnace(level, maid);
         }
+        // v1.1.0 实测一百七十四【启动即登记占用】：旧版只在 doTick 里"找不到炉子后
+        // 补扫到"时才 claim——启动时 findFurnace 直接找到的炉子从不进占用表
+        // （phantom claim）。多女仆同时开烧时各自从启动就"虚占"同一炉子，占用表
+        // 形同虚设（互不排斥）；释放侧 myFurnaceKey 也是 null，行为停止清不掉任何
+        // 东西。现在启动找到炉子就立即登记，与 doTick 补扫路径统一。
+        if (this.furnacePos != null && this.myFurnaceKey == null) {
+            this.claimFurnace(level, maid, this.furnacePos);
+        }
         this.cooldown = 0;
         LOGGER.info("cook start: maid={} furnace={}",
                 com.maidsmart.tool.PromaidLog.nameOf(maid), this.furnacePos);
