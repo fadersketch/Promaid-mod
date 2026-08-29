@@ -86,6 +86,20 @@ public final class ScheduleSwitchState {
         STATES.remove(maidUuid);
     }
 
+    /** v1.1.0 实测一百七十六（移植 TLM-Sincerely MaidSwitchState.canSwitchNormally）：
+     *  距上次切换不足 minHoldTicks → 禁止切换（绝对最短持有期）。与反向抑制互补：
+     *  反向抑制拦 A→B→A 横跳，本方法拦"任何切换太快"（段边界秒切/战斗还原压任务
+     *  导致的连切——最短持有保证每次切换落地后有一个稳定窗口）。minHoldTicks<=0 =
+     *  关闭。 */
+    public static boolean canSwitchNormally(UUID maidUuid, long currentTick, int minHoldTicks) {
+        if (minHoldTicks <= 0) {
+            return true;
+        }
+        State s = STATES.get(maidUuid);
+        return s == null || s.lastSwitchTick == Long.MIN_VALUE
+                || currentTick - s.lastSwitchTick >= minHoldTicks;
+    }
+
     /** 防御：会话内女仆 UUID 数量有限，正常到不了；极端情况兜底清空防无限膨胀 */
     private static void guardSize() {
         if (STATES.size() > 4096) {
