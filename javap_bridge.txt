@@ -1,0 +1,2447 @@
+Compiled from "BridgeUpBehavior.java"
+public class com.maidsmart.task.BridgeUpBehavior extends net.minecraft.world.entity.ai.behavior.Behavior<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid> {
+  public static final java.lang.String BRIDGING_TAG;
+
+  static final com.maidsmart.task.PlacedBlockTracker PLACED_TRACKER;
+
+  private int stepCooldown;
+
+  private int guardTicks;
+
+  private long lastPlacedGameTime;
+
+  private static final java.util.Map<java.lang.Integer, java.lang.Long> NO_BLOCK_SINCE;
+
+  private static final java.util.Map<java.lang.Integer, java.lang.Integer> canUseThrottle;
+
+  private static void track(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos, net.minecraft.world.level.block.Block, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: getstatic     #1                  // Field PLACED_TRACKER:Lcom/maidsmart/task/PlacedBlockTracker;
+         3: aload_0
+         4: aload_1
+         5: aload_2
+         6: aload_3
+         7: invokevirtual #7                  // Method com/maidsmart/task/PlacedBlockTracker.track:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        10: return
+
+  public static void expirePlaced(net.minecraft.server.MinecraftServer, long);
+    Code:
+         0: getstatic     #1                  // Field PLACED_TRACKER:Lcom/maidsmart/task/PlacedBlockTracker;
+         3: aload_0
+         4: lload_1
+         5: aload_0
+         6: invokedynamic #13,  0             // InvokeDynamic #0:test:(Lnet/minecraft/server/MinecraftServer;)Ljava/util/function/Predicate;
+        11: invokevirtual #17                 // Method com/maidsmart/task/PlacedBlockTracker.expirePlaced:(Lnet/minecraft/server/MinecraftServer;JLjava/util/function/Predicate;)V
+        14: return
+
+  private static boolean anyMaidStanding(net.minecraft.server.MinecraftServer, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: invokevirtual #21                 // Method net/minecraft/server/MinecraftServer.m_129785_:()Ljava/lang/Iterable;
+         4: invokeinterface #27,  1           // InterfaceMethod java/lang/Iterable.iterator:()Ljava/util/Iterator;
+         9: astore_2
+        10: aload_2
+        11: invokeinterface #33,  1           // InterfaceMethod java/util/Iterator.hasNext:()Z
+        16: ifeq          47
+        19: aload_2
+        20: invokeinterface #39,  1           // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        25: checkcast     #43                 // class net/minecraft/server/level/ServerLevel
+        28: astore_3
+        29: aload_3
+        30: aload_1
+        31: invokedynamic #45,  0             // InvokeDynamic #1:test:()Ljava/util/function/Predicate;
+        36: invokestatic  #48                 // Method com/maidsmart/task/PlacedBlockTracker.anyMaidStanding:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Ljava/util/function/Predicate;)Z
+        39: ifeq          44
+        42: iconst_1
+        43: ireturn
+        44: goto          10
+        47: iconst_0
+        48: ireturn
+
+  public static void clearAll(net.minecraft.server.MinecraftServer);
+    Code:
+         0: getstatic     #1                  // Field PLACED_TRACKER:Lcom/maidsmart/task/PlacedBlockTracker;
+         3: aload_0
+         4: invokevirtual #52                 // Method com/maidsmart/task/PlacedBlockTracker.clearAll:(Lnet/minecraft/server/MinecraftServer;)V
+         7: return
+
+  public static boolean supportsBridgerPublic(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokestatic  #56                 // Method supportsBridger:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Z
+         5: ireturn
+
+  private static boolean supportsBridger(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #60,  0             // InvokeDynamic #2:test:()Ljava/util/function/Predicate;
+         7: invokestatic  #48                 // Method com/maidsmart/task/PlacedBlockTracker.anyMaidStanding:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Ljava/util/function/Predicate;)Z
+        10: ireturn
+
+  private static void destroyMarked(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos, java.lang.String);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+         5: astore_3
+         6: aload_3
+         7: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        10: ifeq          14
+        13: return
+        14: getstatic     #70                 // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+        17: aload_3
+        18: invokevirtual #76                 // Method net/minecraft/world/level/block/state/BlockState.m_60734_:()Lnet/minecraft/world/level/block/Block;
+        21: invokeinterface #80,  2           // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getKey:(Ljava/lang/Object;)Lnet/minecraft/resources/ResourceLocation;
+        26: astore        4
+        28: aload_2
+        29: invokevirtual #86                 // Method java/lang/String.isEmpty:()Z
+        32: ifne          53
+        35: aload         4
+        37: ifnull        53
+        40: aload_2
+        41: aload         4
+        43: invokevirtual #91                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+        46: invokevirtual #97                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        49: ifne          53
+        52: return
+        53: aload_0
+        54: sipush        2001
+        57: aload_1
+        58: aload_3
+        59: invokestatic  #101                // Method net/minecraft/world/level/block/Block.m_49956_:(Lnet/minecraft/world/level/block/state/BlockState;)I
+        62: invokevirtual #107                // Method net/minecraft/server/level/ServerLevel.m_46796_:(ILnet/minecraft/core/BlockPos;I)V
+        65: getstatic     #111                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID:Lnet/minecraftforge/common/ForgeConfigSpec$BooleanValue;
+        68: invokevirtual #117                // Method net/minecraftforge/common/ForgeConfigSpec$BooleanValue.get:()Ljava/lang/Object;
+        71: checkcast     #122                // class java/lang/Boolean
+        74: invokevirtual #124                // Method java/lang/Boolean.booleanValue:()Z
+        77: ifeq          259
+        80: aload_3
+        81: aload_0
+        82: aload_1
+        83: aconst_null
+        84: invokestatic  #127                // Method net/minecraft/world/level/block/Block.m_49869_:(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/entity/BlockEntity;)Ljava/util/List;
+        87: astore        5
+        89: aload_0
+        90: aload_1
+        91: invokestatic  #131                // Method findNearestMaid:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;
+        94: astore        6
+        96: iconst_0
+        97: istore        7
+        99: aload         6
+       101: ifnull        200
+       104: aload         5
+       106: invokeinterface #135,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+       111: ifne          200
+       114: aload         6
+       116: iconst_1
+       117: invokevirtual #138                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getAvailableInv:(Z)Lnet/minecraftforge/items/wrapper/CombinedInvWrapper;
+       120: astore        8
+       122: aload         5
+       124: invokeinterface #144,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       129: astore        9
+       131: aload         9
+       133: invokeinterface #33,  1           // InterfaceMethod java/util/Iterator.hasNext:()Z
+       138: ifeq          192
+       141: aload         9
+       143: invokeinterface #39,  1           // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       148: checkcast     #145                // class net/minecraft/world/item/ItemStack
+       151: astore        10
+       153: aload         10
+       155: invokevirtual #147                // Method net/minecraft/world/item/ItemStack.m_41619_:()Z
+       158: ifeq          164
+       161: goto          131
+       164: aload         8
+       166: aload         10
+       168: iconst_0
+       169: invokestatic  #150                // Method net/minecraftforge/items/ItemHandlerHelper.insertItemStacked:(Lnet/minecraftforge/items/IItemHandler;Lnet/minecraft/world/item/ItemStack;Z)Lnet/minecraft/world/item/ItemStack;
+       172: astore        11
+       174: aload         11
+       176: invokevirtual #147                // Method net/minecraft/world/item/ItemStack.m_41619_:()Z
+       179: ifne          189
+       182: aload_0
+       183: aload_1
+       184: aload         11
+       186: invokestatic  #156                // Method net/minecraft/world/level/block/Block.m_49840_:(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)V
+       189: goto          131
+       192: iconst_1
+       193: istore        7
+       195: goto          200
+       198: astore        8
+       200: iload         7
+       202: ifne          256
+       205: aload         5
+       207: invokeinterface #135,  1          // InterfaceMethod java/util/List.isEmpty:()Z
+       212: ifne          256
+       215: aload         5
+       217: invokeinterface #144,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       222: astore        8
+       224: aload         8
+       226: invokeinterface #33,  1           // InterfaceMethod java/util/Iterator.hasNext:()Z
+       231: ifeq          256
+       234: aload         8
+       236: invokeinterface #39,  1           // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       241: checkcast     #145                // class net/minecraft/world/item/ItemStack
+       244: astore        9
+       246: aload_0
+       247: aload_1
+       248: aload         9
+       250: invokestatic  #156                // Method net/minecraft/world/level/block/Block.m_49840_:(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)V
+       253: goto          224
+       256: goto          270
+       259: aload_3
+       260: aload_0
+       261: aload_1
+       262: aload_0
+       263: aload_1
+       264: invokevirtual #162                // Method net/minecraft/server/level/ServerLevel.m_7702_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;
+       267: invokestatic  #166                // Method net/minecraft/world/level/block/Block.m_49892_:(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/LevelAccessor;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/entity/BlockEntity;)V
+       270: aload_0
+       271: aload_1
+       272: getstatic     #170                // Field net/minecraft/world/level/block/Blocks.f_50016_:Lnet/minecraft/world/level/block/Block;
+       275: invokevirtual #176                // Method net/minecraft/world/level/block/Block.m_49966_:()Lnet/minecraft/world/level/block/state/BlockState;
+       278: iconst_3
+       279: invokevirtual #180                // Method net/minecraft/server/level/ServerLevel.m_7731_:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z
+       282: pop
+       283: return
+      Exception table:
+         from    to  target type
+           114   195   198   Class java/lang/Exception
+
+  public static com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid findNearestMaidPublic(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos);
+    Code:
+         0: aconst_null
+         1: astore_2
+         2: ldc2_w        #184                // double 64.0d
+         5: dstore_3
+         6: aload_0
+         7: ldc           #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         9: new           #186                // class net/minecraft/world/phys/AABB
+        12: dup
+        13: aload_1
+        14: invokespecial #188                // Method net/minecraft/world/phys/AABB."<init>":(Lnet/minecraft/core/BlockPos;)V
+        17: ldc2_w        #192                // double 8.0d
+        20: invokevirtual #194                // Method net/minecraft/world/phys/AABB.m_82400_:(D)Lnet/minecraft/world/phys/AABB;
+        23: invokevirtual #198                // Method net/minecraft/server/level/ServerLevel.m_45976_:(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;
+        26: invokeinterface #144,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        31: astore        5
+        33: aload         5
+        35: invokeinterface #33,  1           // InterfaceMethod java/util/Iterator.hasNext:()Z
+        40: ifeq          116
+        43: aload         5
+        45: invokeinterface #39,  1           // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        50: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+        53: astore        6
+        55: aload         6
+        57: invokevirtual #202                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6084_:()Z
+        60: ifne          66
+        63: goto          33
+        66: aload         6
+        68: aload_1
+        69: invokevirtual #205                // Method net/minecraft/core/BlockPos.m_123341_:()I
+        72: i2d
+        73: ldc2_w        #211                // double 0.5d
+        76: dadd
+        77: aload_1
+        78: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        81: i2d
+        82: ldc2_w        #211                // double 0.5d
+        85: dadd
+        86: aload_1
+        87: invokevirtual #216                // Method net/minecraft/core/BlockPos.m_123343_:()I
+        90: i2d
+        91: ldc2_w        #211                // double 0.5d
+        94: dadd
+        95: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+        98: dstore        7
+       100: dload         7
+       102: dload_3
+       103: dcmpg
+       104: ifge          113
+       107: dload         7
+       109: dstore_3
+       110: aload         6
+       112: astore_2
+       113: goto          33
+       116: aload_2
+       117: areturn
+
+  private static com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid findNearestMaid(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokestatic  #223                // Method findNearestMaidPublic:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;
+         5: areturn
+
+  private static boolean isAirborne(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+         4: astore_2
+         5: aload_1
+         6: invokevirtual #230                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20096_:()Z
+         9: ifne          14
+        12: iconst_1
+        13: ireturn
+        14: aload_2
+        15: iconst_0
+        16: iconst_m1
+        17: iconst_0
+        18: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+        21: astore_3
+        22: aload_0
+        23: aload_3
+        24: invokestatic  #237                // Method isOwnPlaced:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Z
+        27: ifeq          32
+        30: iconst_1
+        31: ireturn
+        32: iconst_0
+        33: ireturn
+
+  public com.maidsmart.task.BridgeUpBehavior();
+    Code:
+         0: aload_0
+         1: invokestatic  #240                // Method java/util/Collections.emptyMap:()Ljava/util/Map;
+         4: ldc           #248                // int 2147483647
+         6: ldc           #248                // int 2147483647
+         8: invokespecial #249                // Method net/minecraft/world/entity/ai/behavior/Behavior."<init>":(Ljava/util/Map;II)V
+        11: aload_0
+        12: iconst_0
+        13: putfield      #254                // Field stepCooldown:I
+        16: aload_0
+        17: iconst_0
+        18: putfield      #258                // Field guardTicks:I
+        21: aload_0
+        22: lconst_0
+        23: putfield      #261                // Field lastPlacedGameTime:J
+        26: return
+
+  protected boolean m_6114_(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: getstatic     #265                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_ENABLED:Lnet/minecraftforge/common/ForgeConfigSpec$BooleanValue;
+         3: invokevirtual #117                // Method net/minecraftforge/common/ForgeConfigSpec$BooleanValue.get:()Ljava/lang/Object;
+         6: checkcast     #122                // class java/lang/Boolean
+         9: invokevirtual #124                // Method java/lang/Boolean.booleanValue:()Z
+        12: ifne          17
+        15: iconst_0
+        16: ireturn
+        17: aload_2
+        18: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        21: astore_3
+        22: aload_3
+        23: ifnull        41
+        26: aload_3
+        27: invokevirtual #272                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+        30: ifeq          41
+        33: aload_3
+        34: invokevirtual #275                // Method net/minecraft/world/entity/LivingEntity.m_9236_:()Lnet/minecraft/world/level/Level;
+        37: aload_1
+        38: if_acmpeq     43
+        41: iconst_0
+        42: ireturn
+        43: aload_2
+        44: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+        47: ldc_w         #285                // String maid_smart_preserving
+        50: invokevirtual #287                // Method net/minecraft/nbt/CompoundTag.m_128471_:(Ljava/lang/String;)Z
+        53: ifeq          58
+        56: iconst_0
+        57: ireturn
+        58: aload_2
+        59: invokevirtual #293                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.isHomeModeEnable:()Z
+        62: ifeq          67
+        65: iconst_0
+        66: ireturn
+        67: aload_2
+        68: invokestatic  #296                // Method isTaskOccupied:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+        71: ifeq          76
+        74: iconst_0
+        75: ireturn
+        76: aload_3
+        77: invokevirtual #300                // Method net/minecraft/world/entity/LivingEntity.m_20183_:()Lnet/minecraft/core/BlockPos;
+        80: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        83: aload_2
+        84: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        87: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        90: isub
+        91: istore        4
+        93: getstatic     #301                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MIN_DY:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+        96: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+        99: checkcast     #246                // class java/lang/Integer
+       102: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       105: istore        5
+       107: aload_3
+       108: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       111: aload_2
+       112: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       115: dsub
+       116: dstore        6
+       118: aload_3
+       119: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+       122: aload_2
+       123: invokevirtual #319                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20186_:()D
+       126: dsub
+       127: dstore        8
+       129: aload_3
+       130: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       133: aload_2
+       134: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       137: dsub
+       138: dstore        10
+       140: dload         6
+       142: dload         6
+       144: dmul
+       145: dload         10
+       147: dload         10
+       149: dmul
+       150: dadd
+       151: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+       154: dstore        12
+       156: dload         6
+       158: dload         6
+       160: dmul
+       161: dload         8
+       163: dload         8
+       165: dmul
+       166: dadd
+       167: dload         10
+       169: dload         10
+       171: dmul
+       172: dadd
+       173: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+       176: dstore        14
+       178: getstatic     #330                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MIN_RADIUS:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       181: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       184: checkcast     #246                // class java/lang/Integer
+       187: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       190: i2d
+       191: ldc2_w        #333                // double 2.5d
+       194: invokestatic  #335                // Method java/lang/Math.max:(DD)D
+       197: dstore        16
+       199: aload_2
+       200: aload_3
+       201: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       204: aload_3
+       205: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+       208: aload_3
+       209: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       212: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+       215: dload         16
+       217: dload         16
+       219: dmul
+       220: dcmpg
+       221: ifgt          226
+       224: iconst_0
+       225: ireturn
+       226: aload_1
+       227: aload_2
+       228: dload         6
+       230: dload         10
+       232: dload         12
+       234: invokestatic  #339                // Method hasGapAhead:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)Z
+       237: istore        18
+       239: iload         18
+       241: ifne          257
+       244: iload         4
+       246: iload         5
+       248: iconst_4
+       249: invokestatic  #343                // Method java/lang/Math.min:(II)I
+       252: if_icmpge     257
+       255: iconst_0
+       256: ireturn
+       257: iload         18
+       259: ifne          354
+       262: aload_1
+       263: aload_2
+       264: invokestatic  #347                // Method isAirborne:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       267: istore        19
+       269: iload         4
+       271: iconst_1
+       272: if_icmplt     279
+       275: iconst_1
+       276: goto          280
+       279: iconst_0
+       280: istore        20
+       282: iload         19
+       284: ifne          292
+       287: iload         20
+       289: ifne          297
+       292: ldc           #248                // int 2147483647
+       294: goto          324
+       297: getstatic     #351                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       300: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       303: checkcast     #246                // class java/lang/Integer
+       306: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       309: getstatic     #354                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_AIR_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       312: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       315: checkcast     #246                // class java/lang/Integer
+       318: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       321: invokestatic  #357                // Method java/lang/Math.max:(II)I
+       324: istore        21
+       326: aload_2
+       327: aload_3
+       328: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       331: aload_3
+       332: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+       335: aload_3
+       336: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       339: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+       342: iload         21
+       344: i2d
+       345: invokestatic  #359                // Method sq:(D)D
+       348: dcmpl
+       349: iflt          354
+       352: iconst_0
+       353: ireturn
+       354: aload_2
+       355: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+       358: istore        19
+       360: getstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+       363: iload         19
+       365: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       368: invokeinterface #373,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+       373: checkcast     #246                // class java/lang/Integer
+       376: astore        20
+       378: aload         20
+       380: ifnull        417
+       383: aload         20
+       385: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       388: ifle          417
+       391: getstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+       394: iload         19
+       396: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       399: aload         20
+       401: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       404: iconst_1
+       405: isub
+       406: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       409: invokeinterface #378,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+       414: pop
+       415: iconst_0
+       416: ireturn
+       417: getstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+       420: iload         19
+       422: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       425: bipush        10
+       427: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       430: invokeinterface #378,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+       435: pop
+       436: aload_1
+       437: aload_2
+       438: invokestatic  #382                // Method hasThreatNearby:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       441: ifeq          446
+       444: iconst_0
+       445: ireturn
+       446: aload_2
+       447: invokestatic  #385                // Method hasBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       450: ireturn
+
+  protected void m_6735_(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: aload_2
+         1: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+         4: ldc_w         #388                // String maid_smart_bridging
+         7: iconst_1
+         8: invokevirtual #390                // Method net/minecraft/nbt/CompoundTag.m_128379_:(Ljava/lang/String;Z)V
+        11: aload_0
+        12: iconst_0
+        13: putfield      #254                // Field stepCooldown:I
+        16: aload_0
+        17: iconst_0
+        18: putfield      #258                // Field guardTicks:I
+        21: aload_0
+        22: aload_1
+        23: invokevirtual #394                // Method net/minecraft/server/level/ServerLevel.m_46467_:()J
+        26: putfield      #261                // Field lastPlacedGameTime:J
+        29: invokestatic  #398                // Method com/mojang/logging/LogUtils.getLogger:()Lorg/slf4j/Logger;
+        32: ldc_w         #404                // String bridge-up start: maid={} owner-dy={}
+        35: aload_2
+        36: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+        39: ifnull        54
+        42: aload_2
+        43: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+        46: invokeinterface #410,  1          // InterfaceMethod net/minecraft/network/chat/Component.getString:()Ljava/lang/String;
+        51: goto          58
+        54: aload_2
+        55: invokevirtual #415                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20148_:()Ljava/util/UUID;
+        58: aload_2
+        59: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        62: ifnull        86
+        65: aload_2
+        66: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        69: invokevirtual #300                // Method net/minecraft/world/entity/LivingEntity.m_20183_:()Lnet/minecraft/core/BlockPos;
+        72: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        75: aload_2
+        76: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        79: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        82: isub
+        83: goto          89
+        86: sipush        -999
+        89: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        92: invokeinterface #419,  4          // InterfaceMethod org/slf4j/Logger.info:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        97: return
+
+  private java.lang.String stopReason(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: getstatic     #265                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_ENABLED:Lnet/minecraftforge/common/ForgeConfigSpec$BooleanValue;
+         3: invokevirtual #117                // Method net/minecraftforge/common/ForgeConfigSpec$BooleanValue.get:()Ljava/lang/Object;
+         6: checkcast     #122                // class java/lang/Boolean
+         9: invokevirtual #124                // Method java/lang/Boolean.booleanValue:()Z
+        12: ifne          19
+        15: ldc_w         #425                // String disabled
+        18: areturn
+        19: aload_2
+        20: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        23: astore        5
+        25: aload         5
+        27: ifnull        47
+        30: aload         5
+        32: invokevirtual #272                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+        35: ifeq          47
+        38: aload         5
+        40: invokevirtual #275                // Method net/minecraft/world/entity/LivingEntity.m_9236_:()Lnet/minecraft/world/level/Level;
+        43: aload_1
+        44: if_acmpeq     51
+        47: ldc_w         #427                // String owner-gone
+        50: areturn
+        51: aload_2
+        52: aload         5
+        54: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+        57: aload         5
+        59: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+        62: aload         5
+        64: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+        67: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+        70: dstore        6
+        72: dload         6
+        74: ldc2_w        #429                // double 6.25d
+        77: dcmpg
+        78: ifgt          85
+        81: ldc_w         #431                // String reached
+        84: areturn
+        85: aload         5
+        87: invokevirtual #300                // Method net/minecraft/world/entity/LivingEntity.m_20183_:()Lnet/minecraft/core/BlockPos;
+        90: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        93: aload_2
+        94: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        97: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+       100: isub
+       101: istore        8
+       103: aload         5
+       105: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       108: aload_2
+       109: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       112: dsub
+       113: dstore        9
+       115: aload         5
+       117: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       120: aload_2
+       121: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       124: dsub
+       125: dstore        11
+       127: dload         9
+       129: dload         9
+       131: dmul
+       132: dload         11
+       134: dload         11
+       136: dmul
+       137: dadd
+       138: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+       141: dstore        13
+       143: dload         13
+       145: ldc2_w        #433                // double 0.001d
+       148: dcmpl
+       149: iflt          170
+       152: aload_1
+       153: aload_2
+       154: dload         9
+       156: dload         11
+       158: dload         13
+       160: invokestatic  #339                // Method hasGapAhead:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)Z
+       163: ifeq          170
+       166: iconst_1
+       167: goto          171
+       170: iconst_0
+       171: istore        15
+       173: aload_1
+       174: aload_2
+       175: invokestatic  #347                // Method isAirborne:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       178: ifne          187
+       181: iload         8
+       183: iconst_1
+       184: if_icmpge     192
+       187: ldc           #248                // int 2147483647
+       189: goto          219
+       192: getstatic     #351                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       195: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       198: checkcast     #246                // class java/lang/Integer
+       201: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       204: getstatic     #354                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_AIR_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       207: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       210: checkcast     #246                // class java/lang/Integer
+       213: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       216: invokestatic  #357                // Method java/lang/Math.max:(II)I
+       219: istore        16
+       221: iload         15
+       223: ifne          251
+       226: iload         16
+       228: ldc           #248                // int 2147483647
+       230: if_icmpeq     251
+       233: dload         6
+       235: iload         16
+       237: iconst_2
+       238: iadd
+       239: i2d
+       240: invokestatic  #359                // Method sq:(D)D
+       243: dcmpl
+       244: iflt          251
+       247: ldc_w         #435                // String owner-too-far
+       250: areturn
+       251: aload_1
+       252: aload_2
+       253: invokestatic  #382                // Method hasThreatNearby:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       256: ifeq          263
+       259: ldc_w         #437                // String threat
+       262: areturn
+       263: aload_2
+       264: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+       267: ldc_w         #285                // String maid_smart_preserving
+       270: invokevirtual #287                // Method net/minecraft/nbt/CompoundTag.m_128471_:(Ljava/lang/String;)Z
+       273: ifeq          280
+       276: ldc_w         #439                // String self-preserve
+       279: areturn
+       280: aload_2
+       281: invokestatic  #296                // Method isTaskOccupied:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       284: ifeq          291
+       287: ldc_w         #441                // String task-occupied
+       290: areturn
+       291: aload_2
+       292: invokestatic  #385                // Method hasBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       295: ifne          302
+       298: ldc_w         #443                // String no-block
+       301: areturn
+       302: iload         8
+       304: iconst_1
+       305: if_icmplt     325
+       308: lload_3
+       309: aload_0
+       310: getfield      #261                // Field lastPlacedGameTime:J
+       313: lsub
+       314: ldc2_w        #445                // long 400l
+       317: lcmp
+       318: ifle          325
+       321: ldc_w         #447                // String head-blocked
+       324: areturn
+       325: ldc_w         #449                // String unknown
+       328: areturn
+
+  protected void m_6725_(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: aload_0
+         1: aload_2
+         2: invokevirtual #451                // Method antiSuffocate:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+         5: aload_0
+         6: getfield      #258                // Field guardTicks:I
+         9: ifle          28
+        12: aload_0
+        13: dup
+        14: getfield      #258                // Field guardTicks:I
+        17: iconst_1
+        18: isub
+        19: putfield      #258                // Field guardTicks:I
+        22: aload_0
+        23: aload_1
+        24: aload_2
+        25: invokevirtual #455                // Method pillarGuard:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        28: aload_2
+        29: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        32: astore        5
+        34: aload         5
+        36: ifnull        47
+        39: aload         5
+        41: invokevirtual #272                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+        44: ifne          48
+        47: return
+        48: aload_2
+        49: aload         5
+        51: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+        54: aload         5
+        56: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+        59: aload         5
+        61: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+        64: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+        67: dstore        6
+        69: aload         5
+        71: invokevirtual #300                // Method net/minecraft/world/entity/LivingEntity.m_20183_:()Lnet/minecraft/core/BlockPos;
+        74: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        77: aload_2
+        78: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        81: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        84: isub
+        85: istore        8
+        87: dload         6
+        89: ldc2_w        #429                // double 6.25d
+        92: dcmpg
+        93: ifgt          97
+        96: return
+        97: aload         5
+        99: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       102: aload_2
+       103: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       106: dsub
+       107: dstore        9
+       109: aload         5
+       111: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       114: aload_2
+       115: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       118: dsub
+       119: dstore        11
+       121: dload         9
+       123: dload         9
+       125: dmul
+       126: dload         11
+       128: dload         11
+       130: dmul
+       131: dadd
+       132: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+       135: dstore        13
+       137: dload         13
+       139: ldc2_w        #459                // double 1.2d
+       142: dcmpl
+       143: ifle          179
+       146: iload         8
+       148: getstatic     #301                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MIN_DY:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       151: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       154: checkcast     #246                // class java/lang/Integer
+       157: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       160: if_icmpge     179
+       163: aload_0
+       164: aload_1
+       165: aload_2
+       166: dload         9
+       168: dload         11
+       170: dload         13
+       172: invokevirtual #461                // Method tryAirBridgeStep:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)Z
+       175: ifeq          179
+       178: return
+       179: dload         13
+       181: ldc2_w        #459                // double 1.2d
+       184: dcmpl
+       185: ifle          213
+       188: iload         8
+       190: iconst_1
+       191: if_icmplt     213
+       194: aload_0
+       195: aload_1
+       196: aload_2
+       197: dload         9
+       199: dload         11
+       201: dload         13
+       203: invokevirtual #464                // Method tryDiagStep:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)Z
+       206: ifeq          213
+       209: iconst_1
+       210: goto          214
+       213: iconst_0
+       214: istore        15
+       216: iload         15
+       218: ifne          274
+       221: dload         13
+       223: ldc2_w        #459                // double 1.2d
+       226: dcmpl
+       227: ifgt          235
+       230: iload         8
+       232: ifge          274
+       235: aload_2
+       236: invokevirtual #467                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21573_:()Lnet/minecraft/world/entity/ai/navigation/PathNavigation;
+       239: aload         5
+       241: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       244: aload_2
+       245: invokevirtual #319                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20186_:()D
+       248: aload         5
+       250: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       253: getstatic     #471                // Field com/maidsmart/config/MaidSmartConfig.MINE_MOVE_SPEED:Lnet/minecraftforge/common/ForgeConfigSpec$DoubleValue;
+       256: invokevirtual #475                // Method net/minecraftforge/common/ForgeConfigSpec$DoubleValue.get:()Ljava/lang/Object;
+       259: checkcast     #478                // class java/lang/Double
+       262: invokevirtual #480                // Method java/lang/Double.doubleValue:()D
+       265: d2f
+       266: f2d
+       267: invokevirtual #483                // Method net/minecraft/world/entity/ai/navigation/PathNavigation.m_26519_:(DDDD)Z
+       270: pop
+       271: goto          286
+       274: iload         15
+       276: ifne          286
+       279: aload_2
+       280: invokevirtual #467                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21573_:()Lnet/minecraft/world/entity/ai/navigation/PathNavigation;
+       283: invokevirtual #489                // Method net/minecraft/world/entity/ai/navigation/PathNavigation.m_26573_:()V
+       286: iload         8
+       288: iconst_1
+       289: if_icmplt     328
+       292: aload_0
+       293: dup
+       294: getfield      #254                // Field stepCooldown:I
+       297: dup_x1
+       298: iconst_1
+       299: isub
+       300: putfield      #254                // Field stepCooldown:I
+       303: ifgt          328
+       306: aload_0
+       307: aload_1
+       308: aload_2
+       309: invokevirtual #493                // Method placeStep:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       312: aload_0
+       313: getstatic     #496                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_STEP_COOLDOWN:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       316: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       319: checkcast     #246                // class java/lang/Integer
+       322: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       325: putfield      #254                // Field stepCooldown:I
+       328: return
+
+  private boolean tryAirBridgeStep(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, double, double, double);
+    Code:
+         0: aload_0
+         1: getfield      #254                // Field stepCooldown:I
+         4: ifle          9
+         7: iconst_0
+         8: ireturn
+         9: aload_2
+        10: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        13: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        16: istore        9
+        18: dload_3
+        19: dload         7
+        21: ddiv
+        22: dstore        10
+        24: dload         5
+        26: dload         7
+        28: ddiv
+        29: dstore        12
+        31: ldc2_w        #499                // double 0.70710678d
+        34: dstore        14
+        36: iconst_3
+        37: anewarray     #501                // class "[D"
+        40: dup
+        41: iconst_0
+        42: iconst_2
+        43: newarray       double
+        45: dup
+        46: iconst_0
+        47: dload         10
+        49: dastore
+        50: dup
+        51: iconst_1
+        52: dload         12
+        54: dastore
+        55: aastore
+        56: dup
+        57: iconst_1
+        58: iconst_2
+        59: newarray       double
+        61: dup
+        62: iconst_0
+        63: dload         10
+        65: dload         12
+        67: dsub
+        68: dload         14
+        70: dmul
+        71: dastore
+        72: dup
+        73: iconst_1
+        74: dload         10
+        76: dload         12
+        78: dadd
+        79: dload         14
+        81: dmul
+        82: dastore
+        83: aastore
+        84: dup
+        85: iconst_2
+        86: iconst_2
+        87: newarray       double
+        89: dup
+        90: iconst_0
+        91: dload         10
+        93: dload         12
+        95: dadd
+        96: dload         14
+        98: dmul
+        99: dastore
+       100: dup
+       101: iconst_1
+       102: dload         10
+       104: dneg
+       105: dload         12
+       107: dadd
+       108: dload         14
+       110: dmul
+       111: dastore
+       112: aastore
+       113: astore        16
+       115: aload         16
+       117: astore        17
+       119: aload         17
+       121: arraylength
+       122: istore        18
+       124: iconst_0
+       125: istore        19
+       127: iload         19
+       129: iload         18
+       131: if_icmpge     427
+       134: aload         17
+       136: iload         19
+       138: aaload
+       139: astore        20
+       141: aload_2
+       142: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       145: aload         20
+       147: iconst_0
+       148: daload
+       149: dadd
+       150: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+       153: d2i
+       154: istore        21
+       156: aload_2
+       157: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       160: aload         20
+       162: iconst_1
+       163: daload
+       164: dadd
+       165: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+       168: d2i
+       169: istore        22
+       171: new           #206                // class net/minecraft/core/BlockPos
+       174: dup
+       175: iload         21
+       177: iload         9
+       179: iload         22
+       181: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+       184: astore        23
+       186: aload         23
+       188: iconst_0
+       189: iconst_m1
+       190: iconst_0
+       191: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+       194: astore        24
+       196: aload_1
+       197: aload         24
+       199: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       202: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       205: ifne          211
+       208: goto          421
+       211: aload_1
+       212: aload         23
+       214: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       217: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       220: ifeq          421
+       223: aload_1
+       224: aload         23
+       226: iconst_0
+       227: iconst_1
+       228: iconst_0
+       229: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+       232: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       235: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       238: ifne          244
+       241: goto          421
+       244: invokestatic  #509                // Method com/maidsmart/tool/DangerBlocks.enabled:()Z
+       247: ifeq          288
+       250: aload_1
+       251: aload         24
+       253: invokevirtual #205                // Method net/minecraft/core/BlockPos.m_123341_:()I
+       256: aload         24
+       258: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+       261: aload         24
+       263: invokevirtual #216                // Method net/minecraft/core/BlockPos.m_123343_:()I
+       266: invokestatic  #514                // Method com/maidsmart/tool/DangerBlocks.cellDangerous:(Lnet/minecraft/world/level/BlockGetter;III)Z
+       269: ifne          421
+       272: aload_1
+       273: iload         21
+       275: iload         9
+       277: iload         22
+       279: invokestatic  #514                // Method com/maidsmart/tool/DangerBlocks.cellDangerous:(Lnet/minecraft/world/level/BlockGetter;III)Z
+       282: ifeq          288
+       285: goto          421
+       288: aload_2
+       289: invokestatic  #518                // Method takeBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Lnet/minecraft/world/item/Item;
+       292: astore        25
+       294: aload         25
+       296: ifnonnull     301
+       299: iconst_0
+       300: ireturn
+       301: getstatic     #70                 // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+       304: getstatic     #522                // Field net/minecraftforge/registries/ForgeRegistries.ITEMS:Lnet/minecraftforge/registries/IForgeRegistry;
+       307: aload         25
+       309: invokeinterface #80,  2           // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getKey:(Ljava/lang/Object;)Lnet/minecraft/resources/ResourceLocation;
+       314: invokeinterface #525,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getValue:(Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/Object;
+       319: checkcast     #102                // class net/minecraft/world/level/block/Block
+       322: astore        26
+       324: aload         26
+       326: ifnonnull     331
+       329: iconst_0
+       330: ireturn
+       331: aload_1
+       332: aload         24
+       334: aload         26
+       336: invokevirtual #176                // Method net/minecraft/world/level/block/Block.m_49966_:()Lnet/minecraft/world/level/block/state/BlockState;
+       339: iconst_3
+       340: invokevirtual #180                // Method net/minecraft/server/level/ServerLevel.m_7731_:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z
+       343: pop
+       344: aload_1
+       345: aload         24
+       347: aload         26
+       349: aload_2
+       350: invokestatic  #529                // Method track:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       353: aload_2
+       354: getstatic     #530                // Field net/minecraft/world/InteractionHand.MAIN_HAND:Lnet/minecraft/world/InteractionHand;
+       357: invokevirtual #536                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6674_:(Lnet/minecraft/world/InteractionHand;)V
+       360: aload_1
+       361: aload         24
+       363: aload         26
+       365: invokestatic  #540                // Method com/maidsmart/task/PlacedBlockTracker.placeSound:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;)V
+       368: aload_0
+       369: bipush        12
+       371: putfield      #258                // Field guardTicks:I
+       374: aload_0
+       375: getstatic     #496                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_STEP_COOLDOWN:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       378: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       381: checkcast     #246                // class java/lang/Integer
+       384: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       387: putfield      #254                // Field stepCooldown:I
+       390: aload_0
+       391: aload_1
+       392: invokevirtual #394                // Method net/minecraft/server/level/ServerLevel.m_46467_:()J
+       395: putfield      #261                // Field lastPlacedGameTime:J
+       398: aload_2
+       399: iload         21
+       401: i2d
+       402: ldc2_w        #211                // double 0.5d
+       405: dadd
+       406: iload         9
+       408: i2d
+       409: iload         22
+       411: i2d
+       412: ldc2_w        #211                // double 0.5d
+       415: dadd
+       416: invokestatic  #544                // Method stepOnto:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)V
+       419: iconst_1
+       420: ireturn
+       421: iinc          19, 1
+       424: goto          127
+       427: iconst_0
+       428: ireturn
+
+  private boolean tryDiagStep(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, double, double, double);
+    Code:
+         0: aload_0
+         1: getfield      #254                // Field stepCooldown:I
+         4: ifle          9
+         7: iconst_0
+         8: ireturn
+         9: aload_2
+        10: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        13: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        16: istore        9
+        18: dload_3
+        19: dload         7
+        21: ddiv
+        22: dstore        10
+        24: dload         5
+        26: dload         7
+        28: ddiv
+        29: dstore        12
+        31: ldc2_w        #499                // double 0.70710678d
+        34: dstore        14
+        36: iconst_3
+        37: anewarray     #501                // class "[D"
+        40: dup
+        41: iconst_0
+        42: iconst_2
+        43: newarray       double
+        45: dup
+        46: iconst_0
+        47: dload         10
+        49: dastore
+        50: dup
+        51: iconst_1
+        52: dload         12
+        54: dastore
+        55: aastore
+        56: dup
+        57: iconst_1
+        58: iconst_2
+        59: newarray       double
+        61: dup
+        62: iconst_0
+        63: dload         10
+        65: dload         12
+        67: dsub
+        68: dload         14
+        70: dmul
+        71: dastore
+        72: dup
+        73: iconst_1
+        74: dload         10
+        76: dload         12
+        78: dadd
+        79: dload         14
+        81: dmul
+        82: dastore
+        83: aastore
+        84: dup
+        85: iconst_2
+        86: iconst_2
+        87: newarray       double
+        89: dup
+        90: iconst_0
+        91: dload         10
+        93: dload         12
+        95: dadd
+        96: dload         14
+        98: dmul
+        99: dastore
+       100: dup
+       101: iconst_1
+       102: dload         10
+       104: dneg
+       105: dload         12
+       107: dadd
+       108: dload         14
+       110: dmul
+       111: dastore
+       112: aastore
+       113: astore        16
+       115: aload         16
+       117: astore        17
+       119: aload         17
+       121: arraylength
+       122: istore        18
+       124: iconst_0
+       125: istore        19
+       127: iload         19
+       129: iload         18
+       131: if_icmpge     464
+       134: aload         17
+       136: iload         19
+       138: aaload
+       139: astore        20
+       141: aload_2
+       142: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       145: aload         20
+       147: iconst_0
+       148: daload
+       149: dadd
+       150: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+       153: d2i
+       154: istore        21
+       156: aload_2
+       157: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       160: aload         20
+       162: iconst_1
+       163: daload
+       164: dadd
+       165: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+       168: d2i
+       169: istore        22
+       171: new           #206                // class net/minecraft/core/BlockPos
+       174: dup
+       175: iload         21
+       177: iload         9
+       179: iload         22
+       181: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+       184: astore        23
+       186: aload         23
+       188: iconst_0
+       189: iconst_m1
+       190: iconst_0
+       191: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+       194: astore        24
+       196: aload_1
+       197: aload         23
+       199: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       202: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       205: ifeq          458
+       208: aload_1
+       209: aload         23
+       211: iconst_0
+       212: iconst_1
+       213: iconst_0
+       214: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+       217: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       220: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       223: ifne          229
+       226: goto          458
+       229: aload_1
+       230: aload         24
+       232: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       235: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       238: ifeq          248
+       241: aload         24
+       243: astore        25
+       245: goto          267
+       248: aload_1
+       249: aload         24
+       251: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       254: aload_1
+       255: aload         24
+       257: invokevirtual #548                // Method net/minecraft/world/level/block/state/BlockState.m_60796_:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z
+       260: ifeq          458
+       263: aload         23
+       265: astore        25
+       267: invokestatic  #509                // Method com/maidsmart/tool/DangerBlocks.enabled:()Z
+       270: ifeq          311
+       273: aload_1
+       274: aload         25
+       276: invokevirtual #205                // Method net/minecraft/core/BlockPos.m_123341_:()I
+       279: aload         25
+       281: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+       284: aload         25
+       286: invokevirtual #216                // Method net/minecraft/core/BlockPos.m_123343_:()I
+       289: invokestatic  #514                // Method com/maidsmart/tool/DangerBlocks.cellDangerous:(Lnet/minecraft/world/level/BlockGetter;III)Z
+       292: ifne          458
+       295: aload_1
+       296: iload         21
+       298: iload         9
+       300: iload         22
+       302: invokestatic  #514                // Method com/maidsmart/tool/DangerBlocks.cellDangerous:(Lnet/minecraft/world/level/BlockGetter;III)Z
+       305: ifeq          311
+       308: goto          458
+       311: aload_2
+       312: invokestatic  #518                // Method takeBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Lnet/minecraft/world/item/Item;
+       315: astore        26
+       317: aload         26
+       319: ifnonnull     324
+       322: iconst_0
+       323: ireturn
+       324: getstatic     #70                 // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+       327: getstatic     #522                // Field net/minecraftforge/registries/ForgeRegistries.ITEMS:Lnet/minecraftforge/registries/IForgeRegistry;
+       330: aload         26
+       332: invokeinterface #80,  2           // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getKey:(Ljava/lang/Object;)Lnet/minecraft/resources/ResourceLocation;
+       337: invokeinterface #525,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getValue:(Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/Object;
+       342: checkcast     #102                // class net/minecraft/world/level/block/Block
+       345: astore        27
+       347: aload         27
+       349: ifnonnull     354
+       352: iconst_0
+       353: ireturn
+       354: aload_1
+       355: aload         25
+       357: aload         27
+       359: invokevirtual #176                // Method net/minecraft/world/level/block/Block.m_49966_:()Lnet/minecraft/world/level/block/state/BlockState;
+       362: iconst_3
+       363: invokevirtual #180                // Method net/minecraft/server/level/ServerLevel.m_7731_:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z
+       366: pop
+       367: aload_1
+       368: aload         25
+       370: aload         27
+       372: aload_2
+       373: invokestatic  #529                // Method track:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       376: aload_2
+       377: getstatic     #530                // Field net/minecraft/world/InteractionHand.MAIN_HAND:Lnet/minecraft/world/InteractionHand;
+       380: invokevirtual #536                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6674_:(Lnet/minecraft/world/InteractionHand;)V
+       383: aload_1
+       384: aload         25
+       386: aload         27
+       388: invokestatic  #540                // Method com/maidsmart/task/PlacedBlockTracker.placeSound:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;)V
+       391: aload_0
+       392: bipush        12
+       394: putfield      #258                // Field guardTicks:I
+       397: aload_0
+       398: getstatic     #496                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_STEP_COOLDOWN:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       401: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       404: checkcast     #246                // class java/lang/Integer
+       407: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       410: putfield      #254                // Field stepCooldown:I
+       413: aload         25
+       415: aload         23
+       417: invokevirtual #552                // Method net/minecraft/core/BlockPos.equals:(Ljava/lang/Object;)Z
+       420: ifeq          431
+       423: iload         9
+       425: iconst_1
+       426: iadd
+       427: i2d
+       428: goto          434
+       431: iload         9
+       433: i2d
+       434: dstore        28
+       436: aload_2
+       437: iload         21
+       439: i2d
+       440: ldc2_w        #211                // double 0.5d
+       443: dadd
+       444: dload         28
+       446: iload         22
+       448: i2d
+       449: ldc2_w        #211                // double 0.5d
+       452: dadd
+       453: invokestatic  #544                // Method stepOnto:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)V
+       456: iconst_1
+       457: ireturn
+       458: iinc          19, 1
+       461: goto          127
+       464: iconst_0
+       465: ireturn
+
+  protected boolean m_6737_(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: getstatic     #265                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_ENABLED:Lnet/minecraftforge/common/ForgeConfigSpec$BooleanValue;
+         3: invokevirtual #117                // Method net/minecraftforge/common/ForgeConfigSpec$BooleanValue.get:()Ljava/lang/Object;
+         6: checkcast     #122                // class java/lang/Boolean
+         9: invokevirtual #124                // Method java/lang/Boolean.booleanValue:()Z
+        12: ifne          17
+        15: iconst_0
+        16: ireturn
+        17: aload_2
+        18: invokevirtual #268                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+        21: astore        5
+        23: aload         5
+        25: ifnull        45
+        28: aload         5
+        30: invokevirtual #272                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+        33: ifeq          45
+        36: aload         5
+        38: invokevirtual #275                // Method net/minecraft/world/entity/LivingEntity.m_9236_:()Lnet/minecraft/world/level/Level;
+        41: aload_1
+        42: if_acmpeq     47
+        45: iconst_0
+        46: ireturn
+        47: aload_2
+        48: aload         5
+        50: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+        53: aload         5
+        55: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+        58: aload         5
+        60: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+        63: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+        66: ldc2_w        #429                // double 6.25d
+        69: dcmpg
+        70: ifgt          75
+        73: iconst_0
+        74: ireturn
+        75: aload         5
+        77: invokevirtual #300                // Method net/minecraft/world/entity/LivingEntity.m_20183_:()Lnet/minecraft/core/BlockPos;
+        80: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        83: aload_2
+        84: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        87: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        90: isub
+        91: istore        6
+        93: aload         5
+        95: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+        98: aload_2
+        99: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       102: dsub
+       103: dstore        7
+       105: aload         5
+       107: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       110: aload_2
+       111: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       114: dsub
+       115: dstore        9
+       117: dload         7
+       119: dload         7
+       121: dmul
+       122: dload         9
+       124: dload         9
+       126: dmul
+       127: dadd
+       128: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+       131: dstore        11
+       133: dload         11
+       135: ldc2_w        #433                // double 0.001d
+       138: dcmpl
+       139: iflt          160
+       142: aload_1
+       143: aload_2
+       144: dload         7
+       146: dload         9
+       148: dload         11
+       150: invokestatic  #339                // Method hasGapAhead:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)Z
+       153: ifeq          160
+       156: iconst_1
+       157: goto          161
+       160: iconst_0
+       161: istore        13
+       163: aload_1
+       164: aload_2
+       165: invokestatic  #347                // Method isAirborne:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       168: ifne          177
+       171: iload         6
+       173: iconst_1
+       174: if_icmpge     182
+       177: ldc           #248                // int 2147483647
+       179: goto          209
+       182: getstatic     #351                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       185: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       188: checkcast     #246                // class java/lang/Integer
+       191: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       194: getstatic     #354                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_AIR_MAX_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+       197: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+       200: checkcast     #246                // class java/lang/Integer
+       203: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+       206: invokestatic  #357                // Method java/lang/Math.max:(II)I
+       209: istore        14
+       211: iload         13
+       213: ifne          256
+       216: iload         14
+       218: ldc           #248                // int 2147483647
+       220: if_icmpeq     256
+       223: aload_2
+       224: aload         5
+       226: invokevirtual #311                // Method net/minecraft/world/entity/LivingEntity.m_20185_:()D
+       229: aload         5
+       231: invokevirtual #316                // Method net/minecraft/world/entity/LivingEntity.m_20186_:()D
+       234: aload         5
+       236: invokevirtual #320                // Method net/minecraft/world/entity/LivingEntity.m_20189_:()D
+       239: invokevirtual #219                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20275_:(DDD)D
+       242: iload         14
+       244: iconst_2
+       245: iadd
+       246: i2d
+       247: invokestatic  #359                // Method sq:(D)D
+       250: dcmpl
+       251: iflt          256
+       254: iconst_0
+       255: ireturn
+       256: aload_1
+       257: aload_2
+       258: invokestatic  #382                // Method hasThreatNearby:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       261: ifeq          266
+       264: iconst_0
+       265: ireturn
+       266: aload_2
+       267: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+       270: ldc_w         #285                // String maid_smart_preserving
+       273: invokevirtual #287                // Method net/minecraft/nbt/CompoundTag.m_128471_:(Ljava/lang/String;)Z
+       276: ifeq          281
+       279: iconst_0
+       280: ireturn
+       281: aload_2
+       282: invokestatic  #296                // Method isTaskOccupied:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       285: ifeq          290
+       288: iconst_0
+       289: ireturn
+       290: aload_2
+       291: invokestatic  #385                // Method hasBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       294: ifne          304
+       297: aload_0
+       298: aload_2
+       299: invokevirtual #553                // Method notifyNoBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       302: iconst_0
+       303: ireturn
+       304: iload         6
+       306: iconst_1
+       307: if_icmplt     336
+       310: lload_3
+       311: aload_0
+       312: getfield      #261                // Field lastPlacedGameTime:J
+       315: lsub
+       316: ldc2_w        #445                // long 400l
+       319: lcmp
+       320: ifle          336
+       323: aload_2
+       324: invokevirtual #556                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getChatBubbleManager:()Lcom/github/tartaricacid/touhoulittlemaid/entity/chatbubble/ChatBubbleManager;
+       327: ldc_w         #560                // String 搭不上去了（头顶被挡住），我先下来……
+       330: invokevirtual #562                // Method com/github/tartaricacid/touhoulittlemaid/entity/chatbubble/ChatBubbleManager.addTextChatBubble:(Ljava/lang/String;)J
+       333: pop2
+       334: iconst_0
+       335: ireturn
+       336: iconst_1
+       337: ireturn
+
+  protected void m_6732_(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: lload_3
+         4: invokevirtual #568                // Method stopReason:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)Ljava/lang/String;
+         7: astore        5
+         9: invokestatic  #398                // Method com/mojang/logging/LogUtils.getLogger:()Lorg/slf4j/Logger;
+        12: ldc_w         #572                // String bridge-up stop: maid={} reason={}
+        15: aload_2
+        16: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+        19: ifnull        34
+        22: aload_2
+        23: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+        26: invokeinterface #410,  1          // InterfaceMethod net/minecraft/network/chat/Component.getString:()Ljava/lang/String;
+        31: goto          38
+        34: aload_2
+        35: invokevirtual #415                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20148_:()Ljava/util/UUID;
+        38: aload         5
+        40: invokeinterface #419,  4          // InterfaceMethod org/slf4j/Logger.info:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+        45: aload_2
+        46: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+        49: ldc_w         #388                // String maid_smart_bridging
+        52: iconst_0
+        53: invokevirtual #390                // Method net/minecraft/nbt/CompoundTag.m_128379_:(Ljava/lang/String;Z)V
+        56: getstatic     #574                // Field NO_BLOCK_SINCE:Ljava/util/Map;
+        59: aload_2
+        60: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+        63: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        66: invokeinterface #577,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+        71: pop
+        72: ldc_w         #443                // String no-block
+        75: aload         5
+        77: invokevirtual #97                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        80: ifne          94
+        83: ldc_w         #447                // String head-blocked
+        86: aload         5
+        88: invokevirtual #97                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        91: ifeq          118
+        94: getstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+        97: aload_2
+        98: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+       101: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       104: bipush        20
+       106: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       109: invokeinterface #378,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+       114: pop
+       115: goto          134
+       118: getstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+       121: aload_2
+       122: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+       125: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       128: invokeinterface #577,  2          // InterfaceMethod java/util/Map.remove:(Ljava/lang/Object;)Ljava/lang/Object;
+       133: pop
+       134: aload_0
+       135: aload_1
+       136: aload_2
+       137: lload_3
+       138: invokespecial #580                // Method net/minecraft/world/entity/ai/behavior/Behavior.m_6732_:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/entity/LivingEntity;J)V
+       141: return
+
+  private void placeStep(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_2
+         1: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+         4: astore_3
+         5: aload_1
+         6: aload_3
+         7: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        10: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        13: ifeq          20
+        16: aload_3
+        17: goto          27
+        20: aload_3
+        21: iconst_0
+        22: iconst_1
+        23: iconst_0
+        24: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+        27: astore        4
+        29: aload_1
+        30: aload         4
+        32: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        35: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        38: ifeq          77
+        41: aload_1
+        42: aload         4
+        44: iconst_0
+        45: iconst_1
+        46: iconst_0
+        47: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+        50: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        53: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        56: ifeq          77
+        59: aload_1
+        60: aload         4
+        62: iconst_0
+        63: iconst_2
+        64: iconst_0
+        65: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+        68: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        71: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        74: ifne          78
+        77: return
+        78: aload_2
+        79: invokevirtual #584                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20191_:()Lnet/minecraft/world/phys/AABB;
+        82: getstatic     #588                // Field net/minecraft/core/Direction$Axis.Y:Lnet/minecraft/core/Direction$Axis;
+        85: invokevirtual #594                // Method net/minecraft/world/phys/AABB.m_82374_:(Lnet/minecraft/core/Direction$Axis;)D
+        88: dstore        5
+        90: new           #206                // class net/minecraft/core/BlockPos
+        93: dup
+        94: aload_2
+        95: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+        98: d2i
+        99: dload         5
+       101: ldc2_w        #598                // double 0.05d
+       104: dadd
+       105: d2i
+       106: aload_2
+       107: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       110: d2i
+       111: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+       114: astore        7
+       116: aload_1
+       117: aload         7
+       119: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       122: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       125: ifeq          146
+       128: aload_1
+       129: aload         7
+       131: iconst_0
+       132: iconst_1
+       133: iconst_0
+       134: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+       137: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       140: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       143: ifne          147
+       146: return
+       147: aload_2
+       148: invokestatic  #518                // Method takeBuildBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Lnet/minecraft/world/item/Item;
+       151: astore        8
+       153: aload         8
+       155: ifnonnull     164
+       158: aload_0
+       159: aload_2
+       160: invokevirtual #553                // Method notifyNoBlock:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       163: return
+       164: getstatic     #70                 // Field net/minecraftforge/registries/ForgeRegistries.BLOCKS:Lnet/minecraftforge/registries/IForgeRegistry;
+       167: getstatic     #522                // Field net/minecraftforge/registries/ForgeRegistries.ITEMS:Lnet/minecraftforge/registries/IForgeRegistry;
+       170: aload         8
+       172: invokeinterface #80,  2           // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getKey:(Ljava/lang/Object;)Lnet/minecraft/resources/ResourceLocation;
+       177: invokeinterface #525,  2          // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getValue:(Lnet/minecraft/resources/ResourceLocation;)Ljava/lang/Object;
+       182: checkcast     #102                // class net/minecraft/world/level/block/Block
+       185: astore        9
+       187: aload         9
+       189: ifnonnull     193
+       192: return
+       193: aload_1
+       194: aload         4
+       196: aload         9
+       198: invokevirtual #176                // Method net/minecraft/world/level/block/Block.m_49966_:()Lnet/minecraft/world/level/block/state/BlockState;
+       201: iconst_3
+       202: invokevirtual #180                // Method net/minecraft/server/level/ServerLevel.m_7731_:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z
+       205: pop
+       206: aload_1
+       207: aload         4
+       209: aload         9
+       211: aload_2
+       212: invokestatic  #529                // Method track:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+       215: aload_2
+       216: getstatic     #530                // Field net/minecraft/world/InteractionHand.MAIN_HAND:Lnet/minecraft/world/InteractionHand;
+       219: invokevirtual #536                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6674_:(Lnet/minecraft/world/InteractionHand;)V
+       222: aload_1
+       223: aload         4
+       225: aload         9
+       227: invokestatic  #540                // Method com/maidsmart/task/PlacedBlockTracker.placeSound:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/Block;)V
+       230: aload_0
+       231: bipush        12
+       233: putfield      #258                // Field guardTicks:I
+       236: aload_0
+       237: aload_1
+       238: invokevirtual #394                // Method net/minecraft/server/level/ServerLevel.m_46467_:()J
+       241: putfield      #261                // Field lastPlacedGameTime:J
+       244: aload_2
+       245: aload_2
+       246: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       249: dconst_0
+       250: aload_2
+       251: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       254: invokestatic  #544                // Method stepOnto:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;DDD)V
+       257: return
+
+  private static void stepOnto(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, double, double, double);
+    Code:
+         0: dload_1
+         1: aload_0
+         2: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+         5: dsub
+         6: dstore        7
+         8: dload         5
+        10: aload_0
+        11: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+        14: dsub
+        15: dstore        9
+        17: dload         7
+        19: dload         7
+        21: dmul
+        22: dload         9
+        24: dload         9
+        26: dmul
+        27: dadd
+        28: invokestatic  #324                // Method java/lang/Math.sqrt:(D)D
+        31: dstore        11
+        33: dload         11
+        35: ldc2_w        #433                // double 0.001d
+        38: dcmpl
+        39: ifle          91
+        42: ldc2_w        #600                // double 0.35d
+        45: ldc2_w        #602                // double 0.08d
+        48: ldc2_w        #604                // double 0.1d
+        51: dload         11
+        53: dmul
+        54: dadd
+        55: invokestatic  #606                // Method java/lang/Math.min:(DD)D
+        58: dstore        13
+        60: aload_0
+        61: new           #608                // class net/minecraft/world/phys/Vec3
+        64: dup
+        65: dload         7
+        67: dload         11
+        69: ddiv
+        70: dload         13
+        72: dmul
+        73: dconst_0
+        74: dload         9
+        76: dload         11
+        78: ddiv
+        79: dload         13
+        81: dmul
+        82: invokespecial #610                // Method net/minecraft/world/phys/Vec3."<init>":(DDD)V
+        85: invokevirtual #613                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20256_:(Lnet/minecraft/world/phys/Vec3;)V
+        88: goto          125
+        91: aload_0
+        92: invokevirtual #617                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20184_:()Lnet/minecraft/world/phys/Vec3;
+        95: astore        13
+        97: aload         13
+        99: getfield      #621                // Field net/minecraft/world/phys/Vec3.f_82480_:D
+       102: ldc2_w        #625                // double 0.42d
+       105: invokestatic  #335                // Method java/lang/Math.max:(DD)D
+       108: dstore        14
+       110: aload_0
+       111: new           #608                // class net/minecraft/world/phys/Vec3
+       114: dup
+       115: dconst_0
+       116: dload         14
+       118: dconst_0
+       119: invokespecial #610                // Method net/minecraft/world/phys/Vec3."<init>":(DDD)V
+       122: invokevirtual #613                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20256_:(Lnet/minecraft/world/phys/Vec3;)V
+       125: return
+
+  private static boolean hasBuildBlock(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: invokevirtual #627                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getMaidInv:()Lnet/minecraftforge/items/ItemStackHandler;
+         4: astore_1
+         5: iconst_0
+         6: istore_2
+         7: iload_2
+         8: aload_1
+         9: invokeinterface #631,  1          // InterfaceMethod net/minecraftforge/items/IItemHandler.getSlots:()I
+        14: if_icmpge     40
+        17: aload_1
+        18: iload_2
+        19: invokeinterface #636,  2          // InterfaceMethod net/minecraftforge/items/IItemHandler.getStackInSlot:(I)Lnet/minecraft/world/item/ItemStack;
+        24: aconst_null
+        25: aconst_null
+        26: invokestatic  #640                // Method com/maidsmart/tool/MaidBuildBlockFilter.isUsableBuildStack:(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z
+        29: ifeq          34
+        32: iconst_1
+        33: ireturn
+        34: iinc          2, 1
+        37: goto          7
+        40: iconst_0
+        41: ireturn
+
+  private static net.minecraft.world.item.Item takeBuildBlock(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: invokevirtual #627                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getMaidInv:()Lnet/minecraftforge/items/ItemStackHandler;
+         4: aconst_null
+         5: aconst_null
+         6: invokestatic  #646                // Method com/maidsmart/tool/MaidBuildBlockFilter.takeBuildBlock:(Lnet/minecraftforge/items/IItemHandler;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/item/Item;
+         9: areturn
+
+  private void notifyNoBlock(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #649                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_9236_:()Lnet/minecraft/world/level/Level;
+         4: invokevirtual #650                // Method net/minecraft/world/level/Level.m_46467_:()J
+         7: lstore_2
+         8: getstatic     #574                // Field NO_BLOCK_SINCE:Ljava/util/Map;
+        11: aload_1
+        12: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+        15: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        18: invokeinterface #373,  2          // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        23: checkcast     #653                // class java/lang/Long
+        26: astore        4
+        28: aload         4
+        30: ifnull        48
+        33: lload_2
+        34: aload         4
+        36: invokevirtual #655                // Method java/lang/Long.longValue:()J
+        39: lsub
+        40: ldc2_w        #658                // long 600l
+        43: lcmp
+        44: ifge          48
+        47: return
+        48: getstatic     #574                // Field NO_BLOCK_SINCE:Ljava/util/Map;
+        51: aload_1
+        52: invokevirtual #362                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+        55: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        58: lload_2
+        59: invokestatic  #660                // Method java/lang/Long.valueOf:(J)Ljava/lang/Long;
+        62: invokeinterface #378,  3          // InterfaceMethod java/util/Map.put:(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;
+        67: pop
+        68: aload_1
+        69: invokevirtual #627                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getMaidInv:()Lnet/minecraftforge/items/ItemStackHandler;
+        72: astore        5
+        74: new           #663                // class java/util/HashMap
+        77: dup
+        78: invokespecial #665                // Method java/util/HashMap."<init>":()V
+        81: astore        6
+        83: iconst_0
+        84: istore        7
+        86: iload         7
+        88: aload         5
+        90: invokeinterface #631,  1          // InterfaceMethod net/minecraftforge/items/IItemHandler.getSlots:()I
+        95: if_icmpge     225
+        98: aload         5
+       100: iload         7
+       102: invokeinterface #636,  2          // InterfaceMethod net/minecraftforge/items/IItemHandler.getStackInSlot:(I)Lnet/minecraft/world/item/ItemStack;
+       107: astore        8
+       109: aload         8
+       111: invokevirtual #147                // Method net/minecraft/world/item/ItemStack.m_41619_:()Z
+       114: ifne          219
+       117: aload         8
+       119: invokevirtual #667                // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+       122: astore        10
+       124: aload         10
+       126: instanceof    #671                // class net/minecraft/world/item/BlockItem
+       129: ifeq          219
+       132: aload         10
+       134: checkcast     #671                // class net/minecraft/world/item/BlockItem
+       137: astore        9
+       139: getstatic     #522                // Field net/minecraftforge/registries/ForgeRegistries.ITEMS:Lnet/minecraftforge/registries/IForgeRegistry;
+       142: aload         8
+       144: invokevirtual #667                // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+       147: invokeinterface #80,  2           // InterfaceMethod net/minecraftforge/registries/IForgeRegistry.getKey:(Ljava/lang/Object;)Lnet/minecraft/resources/ResourceLocation;
+       152: astore        10
+       154: aload         8
+       156: aconst_null
+       157: aconst_null
+       158: invokestatic  #640                // Method com/maidsmart/tool/MaidBuildBlockFilter.isUsableBuildStack:(Lnet/minecraft/world/item/ItemStack;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z
+       161: istore        11
+       163: aload         6
+       165: aload         10
+       167: ifnonnull     176
+       170: ldc_w         #673                // String ?
+       173: goto          181
+       176: aload         10
+       178: invokevirtual #91                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+       181: iload         11
+       183: ifeq          192
+       186: ldc_w         #675                // String =OK
+       189: goto          195
+       192: ldc_w         #677                // String =REJECT
+       195: invokedynamic #679,  0            // InvokeDynamic #3:makeConcatWithConstants:(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;
+       200: aload         8
+       202: invokevirtual #683                // Method net/minecraft/world/item/ItemStack.m_41613_:()I
+       205: invokestatic  #369                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       208: invokedynamic #686,  0            // InvokeDynamic #4:apply:()Ljava/util/function/BiFunction;
+       213: invokeinterface #690,  4          // InterfaceMethod java/util/Map.merge:(Ljava/lang/Object;Ljava/lang/Object;Ljava/util/function/BiFunction;)Ljava/lang/Object;
+       218: pop
+       219: iinc          7, 1
+       222: goto          86
+       225: invokestatic  #398                // Method com/mojang/logging/LogUtils.getLogger:()Lorg/slf4j/Logger;
+       228: ldc_w         #694                // String bridge no-block diag: maid={} blocks={}
+       231: aload_1
+       232: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+       235: ifnull        250
+       238: aload_1
+       239: invokevirtual #406                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_5446_:()Lnet/minecraft/network/chat/Component;
+       242: invokeinterface #410,  1          // InterfaceMethod net/minecraft/network/chat/Component.getString:()Ljava/lang/String;
+       247: goto          254
+       250: aload_1
+       251: invokevirtual #415                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20148_:()Ljava/util/UUID;
+       254: aload         6
+       256: invokeinterface #419,  4          // InterfaceMethod org/slf4j/Logger.info:(Ljava/lang/String;Ljava/lang/Object;Ljava/lang/Object;)V
+       261: goto          266
+       264: astore        5
+       266: aload_1
+       267: invokevirtual #556                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getChatBubbleManager:()Lcom/github/tartaricacid/touhoulittlemaid/entity/chatbubble/ChatBubbleManager;
+       270: ldc_w         #698                // String 主人就在上面……可我背包里没有能搭的方块了（圆石/泥土等），够不着呀……
+       273: invokevirtual #562                // Method com/github/tartaricacid/touhoulittlemaid/entity/chatbubble/ChatBubbleManager.addTextChatBubble:(Ljava/lang/String;)J
+       276: pop2
+       277: return
+      Exception table:
+         from    to  target type
+            68   261   264   Class java/lang/Throwable
+
+  private void antiSuffocate(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #584                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20191_:()Lnet/minecraft/world/phys/AABB;
+         4: astore_2
+         5: aload_2
+         6: getfield      #700                // Field net/minecraft/world/phys/AABB.f_82289_:D
+         9: aload_2
+        10: getfield      #703                // Field net/minecraft/world/phys/AABB.f_82292_:D
+        13: aload_2
+        14: getfield      #700                // Field net/minecraft/world/phys/AABB.f_82289_:D
+        17: dsub
+        18: ldc2_w        #211                // double 0.5d
+        21: dmul
+        22: dadd
+        23: dstore_3
+        24: new           #206                // class net/minecraft/core/BlockPos
+        27: dup
+        28: aload_1
+        29: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+        32: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+        35: d2i
+        36: dload_3
+        37: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+        40: d2i
+        41: aload_1
+        42: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+        45: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+        48: d2i
+        49: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+        52: astore        5
+        54: aload_1
+        55: invokevirtual #649                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_9236_:()Lnet/minecraft/world/level/Level;
+        58: aload         5
+        60: invokevirtual #706                // Method net/minecraft/world/level/Level.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        63: astore        6
+        65: aload         6
+        67: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        70: ifne          87
+        73: aload         6
+        75: aload_1
+        76: invokevirtual #649                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_9236_:()Lnet/minecraft/world/level/Level;
+        79: aload         5
+        81: invokevirtual #548                // Method net/minecraft/world/level/block/state/BlockState.m_60796_:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Z
+        84: ifne          88
+        87: return
+        88: aload         5
+        90: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        93: i2d
+        94: dconst_1
+        95: dadd
+        96: dstore        7
+        98: dload         7
+       100: aload_2
+       101: getfield      #700                // Field net/minecraft/world/phys/AABB.f_82289_:D
+       104: ldc2_w        #707                // double 0.01d
+       107: dadd
+       108: dcmpl
+       109: ifle          130
+       112: aload_1
+       113: aload_1
+       114: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+       117: dload         7
+       119: ldc2_w        #709                // double 0.02d
+       122: dadd
+       123: aload_1
+       124: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       127: invokevirtual #711                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6034_:(DDD)V
+       130: return
+
+  private void pillarGuard(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_2
+         1: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+         4: astore_3
+         5: aload_3
+         6: iconst_0
+         7: iconst_m1
+         8: iconst_0
+         9: invokevirtual #233                // Method net/minecraft/core/BlockPos.m_7918_:(III)Lnet/minecraft/core/BlockPos;
+        12: astore        4
+        14: aload_1
+        15: aload         4
+        17: invokestatic  #237                // Method isOwnPlaced:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Z
+        20: ifne          31
+        23: aload_1
+        24: aload_3
+        25: invokestatic  #237                // Method isOwnPlaced:(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/core/BlockPos;)Z
+        28: ifeq          35
+        31: iconst_1
+        32: goto          36
+        35: iconst_0
+        36: istore        5
+        38: iload         5
+        40: ifne          44
+        43: return
+        44: aload_2
+        45: invokevirtual #714                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20205_:()F
+        48: f2d
+        49: ldc2_w        #718                // double 2.0d
+        52: ddiv
+        53: dstore        6
+        55: ldc2_w        #598                // double 0.05d
+        58: ldc2_w        #211                // double 0.5d
+        61: dload         6
+        63: dsub
+        64: invokestatic  #335                // Method java/lang/Math.max:(DD)D
+        67: dstore        8
+        69: aload         4
+        71: invokevirtual #205                // Method net/minecraft/core/BlockPos.m_123341_:()I
+        74: i2d
+        75: ldc2_w        #211                // double 0.5d
+        78: dadd
+        79: dstore        10
+        81: aload         4
+        83: invokevirtual #216                // Method net/minecraft/core/BlockPos.m_123343_:()I
+        86: i2d
+        87: ldc2_w        #211                // double 0.5d
+        90: dadd
+        91: dstore        12
+        93: aload_2
+        94: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+        97: dstore        14
+        99: aload_2
+       100: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+       103: dstore        16
+       105: dload         10
+       107: dload         8
+       109: dsub
+       110: dload         10
+       112: dload         8
+       114: dadd
+       115: dload         14
+       117: invokestatic  #606                // Method java/lang/Math.min:(DD)D
+       120: invokestatic  #335                // Method java/lang/Math.max:(DD)D
+       123: dstore        18
+       125: dload         12
+       127: dload         8
+       129: dsub
+       130: dload         12
+       132: dload         8
+       134: dadd
+       135: dload         16
+       137: invokestatic  #606                // Method java/lang/Math.min:(DD)D
+       140: invokestatic  #335                // Method java/lang/Math.max:(DD)D
+       143: dstore        20
+       145: dload         18
+       147: dload         14
+       149: dcmpl
+       150: ifne          161
+       153: dload         20
+       155: dload         16
+       157: dcmpl
+       158: ifeq          173
+       161: aload_2
+       162: dload         18
+       164: aload_2
+       165: invokevirtual #319                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20186_:()D
+       168: dload         20
+       170: invokevirtual #711                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6034_:(DDD)V
+       173: return
+
+  private static boolean isOwnPlaced(net.minecraft.server.level.ServerLevel, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokestatic  #720                // Method com/maidsmart/task/PlacedBlockTracker.isAnyPlaced:(Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;)Z
+         5: ireturn
+
+  private static boolean hasThreatNearby(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: getstatic     #724                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_THREAT_DIST:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+         3: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+         6: checkcast     #246                // class java/lang/Integer
+         9: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+        12: i2d
+        13: dstore_2
+        14: aload_0
+        15: ldc_w         #727                // class net/minecraft/world/entity/Entity
+        18: aload_1
+        19: invokevirtual #584                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20191_:()Lnet/minecraft/world/phys/AABB;
+        22: dload_2
+        23: invokevirtual #194                // Method net/minecraft/world/phys/AABB.m_82400_:(D)Lnet/minecraft/world/phys/AABB;
+        26: invokevirtual #198                // Method net/minecraft/server/level/ServerLevel.m_45976_:(Ljava/lang/Class;Lnet/minecraft/world/phys/AABB;)Ljava/util/List;
+        29: invokeinterface #144,  1          // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+        34: astore        4
+        36: aload         4
+        38: invokeinterface #33,  1           // InterfaceMethod java/util/Iterator.hasNext:()Z
+        43: ifeq          79
+        46: aload         4
+        48: invokeinterface #39,  1           // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+        53: checkcast     #727                // class net/minecraft/world/entity/Entity
+        56: astore        5
+        58: aload         5
+        60: invokevirtual #729                // Method net/minecraft/world/entity/Entity.m_6084_:()Z
+        63: ifeq          76
+        66: aload         5
+        68: instanceof    #730                // class net/minecraft/world/entity/monster/Enemy
+        71: ifeq          76
+        74: iconst_1
+        75: ireturn
+        76: goto          36
+        79: iconst_0
+        80: ireturn
+
+  public static boolean isTaskOccupied(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: invokevirtual #732                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getTask:()Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;
+         4: astore_1
+         5: aload_1
+         6: instanceof    #736                // class com/github/tartaricacid/touhoulittlemaid/api/task/IAttackTask
+         9: ifeq          14
+        12: iconst_1
+        13: ireturn
+        14: goto          18
+        17: astore_1
+        18: aload_0
+        19: invokevirtual #732                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getTask:()Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;
+        22: astore_1
+        23: aload_1
+        24: ifnull        68
+        27: aload_1
+        28: invokeinterface #738,  1          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask.getUid:()Lnet/minecraft/resources/ResourceLocation;
+        33: ifnull        68
+        36: aload_1
+        37: invokeinterface #738,  1          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask.getUid:()Lnet/minecraft/resources/ResourceLocation;
+        42: invokevirtual #91                 // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+        45: astore_2
+        46: ldc_w         #744                // String maid_smart:cook
+        49: aload_2
+        50: invokevirtual #97                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        53: ifne          66
+        56: ldc_w         #746                // String maid_smart:brew
+        59: aload_2
+        60: invokevirtual #97                 // Method java/lang/String.equals:(Ljava/lang/Object;)Z
+        63: ifeq          68
+        66: iconst_1
+        67: ireturn
+        68: goto          72
+        71: astore_1
+        72: aload_0
+        73: invokevirtual #748                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+        76: getstatic     #752                // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        79: invokevirtual #758                // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        82: astore_1
+        83: aload_1
+        84: invokevirtual #764                // Method java/util/Optional.isPresent:()Z
+        87: ifeq          105
+        90: aload_1
+        91: invokevirtual #769                // Method java/util/Optional.get:()Ljava/lang/Object;
+        94: checkcast     #273                // class net/minecraft/world/entity/LivingEntity
+        97: invokevirtual #272                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+       100: ifeq          105
+       103: iconst_1
+       104: ireturn
+       105: goto          109
+       108: astore_1
+       109: aload_0
+       110: invokestatic  #770                // Method com/maidsmart/task/MaidMineBehavior.isMining:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       113: ifeq          118
+       116: iconst_1
+       117: ireturn
+       118: goto          122
+       121: astore_1
+       122: aload_0
+       123: invokestatic  #775                // Method com/maidsmart/task/MaidWoodBehavior.isWooding:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       126: ifeq          131
+       129: iconst_1
+       130: ireturn
+       131: goto          135
+       134: astore_1
+       135: aload_0
+       136: invokestatic  #780                // Method com/maidsmart/build/BlueprintBuildExecutor.isBuildingTask:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       139: ifeq          158
+       142: aload_0
+       143: invokestatic  #785                // Method com/maidsmart/build/BuildPlan.isBoundPlanPaused:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       146: ifne          158
+       149: aload_0
+       150: invokestatic  #790                // Method com/maidsmart/build/BuildPlan.isMaidPaused:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       153: ifne          158
+       156: iconst_1
+       157: ireturn
+       158: goto          162
+       161: astore_1
+       162: aload_0
+       163: invokevirtual #279                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getPersistentData:()Lnet/minecraft/nbt/CompoundTag;
+       166: ldc_w         #795                // String maid_smart_work_still
+       169: invokevirtual #287                // Method net/minecraft/nbt/CompoundTag.m_128471_:(Ljava/lang/String;)Z
+       172: ireturn
+      Exception table:
+         from    to  target type
+             0    13    17   Class java/lang/Throwable
+            18    67    71   Class java/lang/Throwable
+            72   104   108   Class java/lang/Throwable
+           109   117   121   Class java/lang/Throwable
+           122   130   134   Class java/lang/Throwable
+           135   157   161   Class java/lang/Throwable
+
+  private static boolean hasGapAhead(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, double, double, double);
+    Code:
+         0: dload         6
+         2: ldc2_w        #433                // double 0.001d
+         5: dcmpg
+         6: ifge          11
+         9: iconst_0
+        10: ireturn
+        11: dload_2
+        12: dload         6
+        14: ddiv
+        15: dstore        8
+        17: dload         4
+        19: dload         6
+        21: ddiv
+        22: dstore        10
+        24: aload_1
+        25: invokevirtual #226                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        28: invokevirtual #213                // Method net/minecraft/core/BlockPos.m_123342_:()I
+        31: istore        12
+        33: iconst_1
+        34: istore        13
+        36: iload         13
+        38: iconst_2
+        39: if_icmpgt     163
+        42: aload_1
+        43: invokevirtual #315                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20185_:()D
+        46: dload         8
+        48: iload         13
+        50: i2d
+        51: dmul
+        52: dadd
+        53: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+        56: d2i
+        57: istore        14
+        59: aload_1
+        60: invokevirtual #323                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20189_:()D
+        63: dload         10
+        65: iload         13
+        67: i2d
+        68: dmul
+        69: dadd
+        70: invokestatic  #503                // Method java/lang/Math.floor:(D)D
+        73: d2i
+        74: istore        15
+        76: aload_0
+        77: new           #206                // class net/minecraft/core/BlockPos
+        80: dup
+        81: iload         14
+        83: iload         12
+        85: iload         15
+        87: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+        90: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        93: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+        96: ifne          102
+        99: goto          157
+       102: aload_0
+       103: new           #206                // class net/minecraft/core/BlockPos
+       106: dup
+       107: iload         14
+       109: iload         12
+       111: iconst_1
+       112: iadd
+       113: iload         15
+       115: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+       118: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       121: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       124: ifne          130
+       127: goto          157
+       130: aload_0
+       131: new           #206                // class net/minecraft/core/BlockPos
+       134: dup
+       135: iload         14
+       137: iload         12
+       139: iconst_1
+       140: isub
+       141: iload         15
+       143: invokespecial #506                // Method net/minecraft/core/BlockPos."<init>":(III)V
+       146: invokevirtual #61                 // Method net/minecraft/server/level/ServerLevel.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+       149: invokevirtual #65                 // Method net/minecraft/world/level/block/state/BlockState.m_60795_:()Z
+       152: ifeq          157
+       155: iconst_1
+       156: ireturn
+       157: iinc          13, 1
+       160: goto          36
+       163: iconst_0
+       164: ireturn
+
+  private static double sq(double);
+    Code:
+         0: dload_0
+         1: dload_0
+         2: dmul
+         3: dreturn
+
+  protected boolean m_6114_(net.minecraft.server.level.ServerLevel, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         6: invokevirtual #797                // Method m_6114_:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+         9: ireturn
+
+  protected boolean m_6737_(net.minecraft.server.level.ServerLevel, net.minecraft.world.entity.LivingEntity, long);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         6: lload_3
+         7: invokevirtual #800                // Method m_6737_:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)Z
+        10: ireturn
+
+  protected void m_6732_(net.minecraft.server.level.ServerLevel, net.minecraft.world.entity.LivingEntity, long);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         6: lload_3
+         7: invokevirtual #804                // Method m_6732_:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V
+        10: return
+
+  protected void m_6725_(net.minecraft.server.level.ServerLevel, net.minecraft.world.entity.LivingEntity, long);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         6: lload_3
+         7: invokevirtual #807                // Method m_6725_:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V
+        10: return
+
+  protected void m_6735_(net.minecraft.server.level.ServerLevel, net.minecraft.world.entity.LivingEntity, long);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: checkcast     #139                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+         6: lload_3
+         7: invokevirtual #810                // Method m_6735_:(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V
+        10: return
+
+  private static boolean lambda$supportsBridger$3(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  private static boolean lambda$anyMaidStanding$2(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  private static boolean lambda$expirePlaced$1(net.minecraft.server.MinecraftServer, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokestatic  #813                // Method anyMaidStanding:(Lnet/minecraft/server/MinecraftServer;Lnet/minecraft/core/BlockPos;)Z
+         5: ireturn
+
+  private static long lambda$static$0();
+    Code:
+         0: getstatic     #816                // Field com/maidsmart/config/MaidSmartConfig.BRIDGE_PLACED_LIFETIME:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+         3: invokevirtual #305                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+         6: checkcast     #246                // class java/lang/Integer
+         9: invokevirtual #308                // Method java/lang/Integer.intValue:()I
+        12: i2l
+        13: ldc2_w        #819                // long 20l
+        16: lmul
+        17: lreturn
+
+  static {};
+    Code:
+         0: new           #8                  // class com/maidsmart/task/PlacedBlockTracker
+         3: dup
+         4: invokedynamic #821,  0            // InvokeDynamic #5:getAsLong:()Ljava/util/function/LongSupplier;
+         9: invokespecial #825                // Method com/maidsmart/task/PlacedBlockTracker."<init>":(Ljava/util/function/LongSupplier;)V
+        12: putstatic     #1                  // Field PLACED_TRACKER:Lcom/maidsmart/task/PlacedBlockTracker;
+        15: new           #663                // class java/util/HashMap
+        18: dup
+        19: invokespecial #665                // Method java/util/HashMap."<init>":()V
+        22: putstatic     #574                // Field NO_BLOCK_SINCE:Ljava/util/Map;
+        25: new           #663                // class java/util/HashMap
+        28: dup
+        29: invokespecial #665                // Method java/util/HashMap."<init>":()V
+        32: putstatic     #365                // Field canUseThrottle:Ljava/util/Map;
+        35: return
+}
