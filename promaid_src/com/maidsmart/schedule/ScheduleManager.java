@@ -39,6 +39,51 @@ public final class ScheduleManager {
      *  女仆任务 → 排班会卡死）。只记尝试时刻的任务，任务没变=正常"没活不切"重试不误伤。 */
     private static final java.util.Map<java.util.UUID, String> ATTEMPTED = new java.util.HashMap<>();
 
+    /** v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段成功
+     *  后登记的大脑自愈待检（maidId → 检查 tick + 段任务 UID）。一次切换最多治一次。 */
+    private static final java.util.Map<java.util.UUID, PendingRefresh> PENDING_REFRESH =
+            new java.util.HashMap<>();
+
+    private record PendingRefresh(long checkAtTick, String taskUid) {
+    }
+
+    /** v1.1.0 实测一百七十六：切段后大脑自愈——段任务已应用但脑内无任何工作记忆
+     *  （走位/攻击目标），强制 refreshBrain 一次重建 AI（TLM 偶尔脑活动没接上，女仆
+     *  站着不动）。保守守卫：任务已被外部/战斗换走不治；idle/战斗任务不治；坐姿
+     *  （烹饪/酿造贴方块站桩，无走位记忆是常态）不治；每女仆一次切换最多触发一次。 */
+    private static void checkBrainRefresh(EntityMaid maid, ServerLevel level, long nowTick) {
+        try {
+            PendingRefresh p = PENDING_REFRESH.get(maid.m_20148_());
+            if (p == null || nowTick < p.checkAtTick) {
+                return;
+            }
+            PENDING_REFRESH.remove(maid.m_20148_());
+            var task = maid.getTask();
+            if (task == null || task.getUid() == null
+                    || !p.taskUid.equals(task.getUid().toString())) {
+                return; // 任务已变（外部/战斗/玩家）——尊重，不治
+            }
+            if (task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
+                    || "touhou_little_maid:idle".equals(task.getUid().toString())) {
+                return; // 战斗任务有自己的体系；idle 不算工作
+            }
+            if (maid.isMaidInSittingPose()) {
+                return; // 坐姿 = 站桩工作正常（烹饪/酿造贴方块），无走位记忆是常态
+            }
+            var walk = maid.m_6274_().m_21952_(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
+            var attack = maid.m_6274_().m_21952_(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
+            if (walk.isPresent() || attack.isPresent()) {
+                return; // 脑内已有工作记忆——正常工作中
+            }
+            maid.refreshBrain(level);
+            com.maidsmart.tool.PromaidLog.log("排班", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 切段后大脑无工作记忆（任务=" + p.taskUid + "）——refreshBrain 自愈");
+        } catch (Throwable ignored) {
+        }
+    }
+
     private ScheduleManager() {
     }
 
@@ -75,15 +120,23 @@ public final class ScheduleManager {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()) {
             return;
         }
+        // v1.1.0 实测一百七十六【排班扫描 AABB 崩溃修复】：旧版用无限 AABB 想扫全维度
+        // 女仆——getEntitiesOfClass 内部经 SectionPos.blockToSection 换算后 ±∞ 都溢出
+        // 收敛到同一列（134217727，与 AutoCombatSwitch 实测一百七十三同源 bug），查询
+        // 永远返回空列表 → 排班扫描从未扫到过任何女仆，"任务不随时间段切换"的根因之一
+        //（日志实证此前的"应用段"全部来自保存/重入/战斗还原路径）。改用覆盖整个可玩
+        // 范围的有限 AABB（x/z ±131072 = ±128km，y ±4096）：blockToSection 对有限值
+        // 正常换算，循环覆盖所有已加载区块。
         net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+                -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
         for (ServerLevel level : event.getServer().m_129785_()) {
             for (EntityMaid maid : level.m_45976_(EntityMaid.class, whole)) {
                 if (!maid.m_6084_() || !ScheduleData.isOn(maid)) {
                     continue;
                 }
                 applyNow(maid, level);
+                // v1.1.0 实测一百七十六：切段后大脑自愈（顺路检查待检女仆）
+                checkBrainRefresh(maid, level, level.m_46467_());
             }
         }
     }
@@ -196,90 +249,17 @@ public final class ScheduleManager {
         }
         ATTEMPTED.put(maid.m_20148_(), key + "|" + curNow);
         // —— 真正应用（去抖键在末尾写：失败不标记，下秒重试可见）——
-        String fail = null;
+        // v1.1.0 实测一百七十六：切换动作委托给 ScheduleSwitchEngine（单一切换出口，
+        // 镜像 TLM-Sincerely TaskSwitchDecisionEngine——可用性/最短持有/反向抑制/兼容
+        // 门/读回校验都在引擎内；ScheduleManager 只做门外调度与结果处理）
+        ScheduleSwitchEngine.Result result = ScheduleSwitchEngine.applySegment(maid, level, seg, nowTick);
+        String fail = result.success ? null : result.message;
         // v1.1.0 实测一百三十三：soft=true 表示"不是失败，是主动暂不切换"（没活/反向
-        // 抑制），日志措辞与硬失败分开——但同样不写去抖键、同样限频 10 秒重试
-        boolean soft = false;
-        try {
-            // 工作模式（0=DAY 早班 / 1=NIGHT 晚班 / 2=ALL 全天）——v1.1.0 实测一百三十八：
-            // setSchedule 也打内部标记（排班守卫 mixin 拦 TLM GUI 手动切作息，但不许
-            // 误伤排班自己设置工作时间）
-            var modes = com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule.values();
-            if (seg.mode() >= 0 && seg.mode() < modes.length) {
-                com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule chosen =
-                        modes[seg.mode()];
-                com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(), null,
-                        () -> maid.setSchedule(chosen));
-            } else {
-                fail = "段模式越界 mode=" + seg.mode();
-            }
-            // 任务
-            if (fail == null && seg.taskUid() != null && !seg.taskUid().isEmpty()) {
-                // v1.1.0 实测十六（审查 P1-5）：非法 taskUid 防护——taskUid 来自客户端包
-                // （SchedSavePacket/QuickApplyPacket），恶意包/损坏 NBT 的非法串（如 "###"）
-                // 会让 parse 抛 ResourceLocationException，且此处在主线程 enqueueWork 里
-                // 执行 = 服务端直接崩。1.20.1 SRG 名单里 ResourceLocation 没有 tryParse
-                //（那是 1.20.5+ 的方法），等效做法：m_135830_ = isValidResourceLocation
-                // 预检（parse 用的同一套校验，静态方法不抛异常）+ try/catch 兜底。
-                try {
-                    if (!net.minecraft.resources.ResourceLocation.m_135830_(seg.taskUid())) {
-                        fail = "段任务 UID 非法 '" + seg.taskUid() + "'（保留模式，跳过任务）";
-                    } else {
-                        var found = TaskManager.findTask(
-                                net.minecraft.resources.ResourceLocation.parse(seg.taskUid()));
-                        if (found.isPresent()) {
-                            var target = found.get();
-                            String fromUid = (maid.getTask() != null && maid.getTask().getUid() != null)
-                                    ? maid.getTask().getUid().toString() : "null";
-                            String toUid = target.getUid() == null ? "null" : target.getUid().toString();
-                            if (fromUid.equals(toUid)) {
-                                // 已经在该任务上：无需重设（避免无意义 refreshBrain 重建 AI）
-                            } else if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()
-                                    ? !ScheduleTaskAvailability.isAvailable(maid, target)
-                                    : !ScheduleTaskAvailability.isEnabled(maid, target)) {
-                                // v1.1.0 实测一百三十三 ①：切换前可用性检测——没活不切
-                                // v1.1.0 实测一百七十（用户："选择排班后任务不变化、时间
-                                // 流逝任务也不随段切换——没活不切设计失败"）：默认只查
-                                // isEnable 硬闸，不再做"附近有没有矿/树/炉子/作物"软探测——
-                                // 任务状态必须跟着时间段落真实切换（软探测开着时仍走
-                                // 完整可用性判定，可在面板调回）
-                                soft = true;
-                                fail = "目标任务 '" + seg.taskUid() + "' 当前不可用（任务被禁用/无法切换，约 10 秒后重试）";
-                            } else if (ScheduleSwitchState.shouldSuppressReverseSwitch(maid.m_20148_(),
-                                    fromUid, toUid, nowTick,
-                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get(),
-                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_THRESHOLD.get(),
-                                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS.get())) {
-                                // v1.1.0 实测一百三十三 ②：反向切换抑制——A→B→A 横跳冷却
-                                soft = true;
-                                fail = "反向切换抑制：'" + fromUid + "' ↔ '" + toUid + "' 短窗口内反复横跳";
-                            } else {
-                                // v1.1.0 实测一百三十三 ③：内部 setTask 标记——排班的自动切换
-                                // 与其它系统（战斗/蓝图/一键应用/LLM）的 setTask 区分开，防互相覆盖
-                                ScheduleSwitchGuard.runInternal(maid.m_20148_(), target.getUid(),
-                                        () -> maid.setTask(target));
-                                // v1.1.0 实测一百二十九：应用后读回校验——TLM setTask 有守卫
-                                // （睡眠/活动/不可换任务状态）时会静默拒绝，读回对比当场暴露
-                                String cur = (maid.getTask() != null && maid.getTask().getUid() != null)
-                                        ? maid.getTask().getUid().toString() : "null";
-                                if (!seg.taskUid().equals(cur)) {
-                                    fail = "【任务未生效】目标 '" + seg.taskUid() + "' 应用后任务仍 = "
-                                            + cur + "（被 TLM 守卫/睡眠/活动拒绝？）";
-                                } else {
-                                    ScheduleSwitchState.recordSwitch(maid.m_20148_(), fromUid, toUid,
-                                            nowTick, com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_REVERSE_WINDOW_TICKS.get());
-                                }
-                            }
-                        } else {
-                            fail = "段任务 '" + seg.taskUid() + "' 不存在（模组任务未装/任务被删）";
-                        }
-                    }
-                } catch (Exception e) {
-                    fail = "段任务应用异常：" + e;
-                }
-            }
-        } catch (Exception e) {
-            fail = "段应用异常：" + e;
+        // 抑制/最短持有/兼容门），日志措辞与硬失败分开——但同样不写去抖键、同样限频
+        // 10 秒重试
+        boolean soft = result.soft;
+        if (result.warning != null) {
+            com.maidsmart.tool.PromaidLog.log("排班", who + " " + result.warning);
         }
         if (fail == null) {
             RETRY_AFTER.remove(maid.m_20148_());
@@ -288,6 +268,16 @@ public final class ScheduleManager {
             // v1.1.0 实测九十四：运行日志——段应用落盘（去抖保证每段每天至多一条）
             com.maidsmart.tool.PromaidLog.log("排班", who + " 应用段 " + segLabel
                     + " 模式=" + seg.mode() + " 任务=" + seg.taskUid());
+            // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：
+            // 切段成功 → 登记大脑自愈待检（60 tick 后若无工作记忆则 refreshBrain 一次）
+            if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.get()
+                    && seg.taskUid() != null && !seg.taskUid().isEmpty()) {
+                if (PENDING_REFRESH.size() > 4096) {
+                    PENDING_REFRESH.clear();
+                }
+                PENDING_REFRESH.put(maid.m_20148_(),
+                        new PendingRefresh(nowTick + 60L, seg.taskUid()));
+            }
         } else {
             // 未生效：不写去抖键 + 10 秒重试节流——任务非法/不存在/守卫拒绝/没活/反向
             // 抑制各类每段最多记 ~6 条（10 秒限频，防刷屏也防每秒 refreshBrain 重建 AI）；
