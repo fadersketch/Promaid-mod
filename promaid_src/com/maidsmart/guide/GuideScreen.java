@@ -143,7 +143,10 @@ public class GuideScreen extends Screen {
     }
 
     /** 底部翻页按钮（v1.1.0 实测二十五：80 宽"上一页/下一页"会盖住正文末行——
-     *  改 20 宽纯箭头 ◀ cx-40 / ▶ cx+20，h-30；页码画在两箭头之间不重叠） */
+     *  改 20 宽纯箭头，页码画在两箭头之间不重叠。
+     *  v1.1.0 实测一百七十八：箭头外移 12px（◀ cx-52 / ▶ cx+32）——页码
+     *  "第 10/10 页"约 56px 宽，旧版两箭头内净宽仅 40px（cx±20），多页数时
+     *  页码两端压进箭头；外移后内净宽 64px 任意页码都不接触 */
     private void pageButtons(int totalPages, int page, int cx, int h, boolean isRead) {
         if (totalPages <= 1) {
             return;
@@ -159,7 +162,7 @@ public class GuideScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(cx - 40, py, 20, 18).m_253136_());
+                    .m_252987_(cx - 52, py, 20, 18).m_253136_());
         }
         if (page < totalPages - 1) {
             this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
@@ -171,7 +174,7 @@ public class GuideScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(cx + 20, py, 20, 18).m_253136_());
+                    .m_252987_(cx + 32, py, 20, 18).m_253136_());
         }
     }
 

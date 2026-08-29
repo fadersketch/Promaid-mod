@@ -281,31 +281,35 @@ public class PromaidConfigScreen extends Screen {
      *  永远不与"保存并返回"（h-34）相交。 */
     private void homeButtons(int w, int h, int cx) {
         int bw = Math.min(170, (w - 56) / 2);
-        // v1.5.190：行高按可用高度自适应（默认 26 间距，矮窗口压缩）
-        // v1.5.310：装了爱憎分明时左列多一个「爱憎分明模组调试」按钮（6 个），
-        // 行高统一压到 20——6 按钮底 = y0+5*20+17 ≤ h-34 恒成立，不压保存按钮
+        // v1.1.0 实测一百七十八【目录页按钮数自适应】：行距按【实际按钮数】反推，
+        // 保证末位按钮底 ≤ "保存并返回"上缘（h-34）-2——旧版固定 rowH=21/20 只按
+        // "6 按钮"校准，装了爱憎分明/heartfelt 后左列 7~8 个按钮，末位按钮
+        // （y0+7×20+17=213）压进保存按钮（h-34=206，默认 240 高）= 目录页 UI 重叠。
+        // 现在行数越多行距自动压缩（最低 14），任何板块组合/窗口高度都不相交。
         boolean ll = loveloatheLoaded();
         boolean hf = heartfeltLoaded();
-        // v1.1.0：左列常驻 6 个板块（加了伐木）→ 行高常态压缩到 21：
-        // 6 按钮底 = y0+5*21+18 ≈ 157，与"保存并返回"（h-34）永不相交
         int rowH = 21;
-        if (h < 190) {
-            rowH = 19;
-        }
-        if (h < 190) {
-            rowH = 19;
-        }
-        if (ll || hf) {
-            rowH = Math.min(rowH, 20);
-        }
         int bh = 22;
+        if (rowH < 22) {
+            bh = rowH - 3;
+        }
+        int y0Min = 50; // "选择要调整的板块"说明文字（36..45）之下
+        int availBottom = h - 36; // 保存按钮上缘（h-34）再留 2px
+        int leftCount = 6 + (ll ? 1 : 0) + (hf ? 1 : 0);
+        int rows = Math.max(leftCount, 6); // 右列恒 6 个板块
+        if (rows > 1) {
+            int fit = (availBottom - y0Min - bh) / (rows - 1);
+            rowH = Math.min(rowH, Math.max(14, fit));
+        }
         if (rowH < 22) {
             bh = rowH - 3;
         }
         int gap = rowH - bh;
         int x1 = (w - bw * 2 - 16) / 2;
         int x2 = x1 + bw + 16;
-        int y0 = Math.min(56, Math.max(34, h / 2 - rowH * 3));
+        int contentH = (rows - 1) * rowH + bh;
+        // 内容装得下时在 50~56 间垂直居中一点，装不下时顶到 y0Min（不再下移）
+        int y0 = y0Min + Math.max(0, Math.min(6, (availBottom - y0Min - contentH) / 2));
         java.util.List<Section> leftList = new java.util.ArrayList<>(java.util.List.of(
                 Section.BUILD, Section.MINE, Section.WOOD, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
         if (ll) {
@@ -316,8 +320,7 @@ public class PromaidConfigScreen extends Screen {
         }
         Section[] left = leftList.toArray(new Section[0]);
         // v1.5.294：被动技能独立成栏（用户："被动技能要单拉出来一栏放在 Promaid 模组
-        // 详细配置里面，而不是放在战斗自保里面"）——右列 COMBAT 正下方；右列 6 按钮
-        // 不压左下"保存并返回"（右列 x 范围与左下保存按钮无水平重叠）
+        // 详细配置里面，而不是放在战斗自保里面"）——右列 COMBAT 正下方
         Section[] right = {Section.COMBAT, Section.PASSIVE, Section.MISC, Section.PERCEPTION, Section.AFFECT, Section.AITOOLS};
         for (int i = 0; i < left.length; i++) {
             this.addSectionButton(x1, y0 + i * rowH, bw, bh, left[i]);
@@ -497,6 +500,9 @@ public class PromaidConfigScreen extends Screen {
         }
         // 翻页按钮（v1.1.0 实测二十五：80 宽"上一页/下一页"会盖住内容末行注释——
         // 改 20 宽纯箭头 ◀/▶，页码画在两箭头之间（渲染层 h-62 行）零重叠）
+        // v1.1.0 实测一百七十八：箭头外移 12px（cx±(32..52)）——页码"第 10/10 页"
+        // 约 56px 宽，旧版两箭头内净宽仅 40px（cx±20），多页数时页码两端压进箭头
+        // （UI 与页码重叠）；外移后内净宽 64px，任意页码宽度都不接触。
         if (totalPages > 1) {
             int py = h - 68;
             if (this.pageIndex > 0) {
@@ -505,7 +511,7 @@ public class PromaidConfigScreen extends Screen {
                                     this.pageIndex--;
                                     this.m_7856_();
                                 })
-                        .m_252987_(cx - 40, py, 20, 18).m_253136_());
+                        .m_252987_(cx - 52, py, 20, 18).m_253136_());
             }
             if (this.pageIndex < totalPages - 1) {
                 this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"),
@@ -513,7 +519,7 @@ public class PromaidConfigScreen extends Screen {
                                     this.pageIndex++;
                                     this.m_7856_();
                                 })
-                        .m_252987_(cx + 20, py, 20, 18).m_253136_());
+                        .m_252987_(cx + 32, py, 20, 18).m_253136_());
             }
         }
         // 返回目录（底部左侧，手册同款）
@@ -605,7 +611,13 @@ public class PromaidConfigScreen extends Screen {
             this.minableInput = null; // v1.0.4：障碍物模式无手动输入框
         }
         // 当前名单列表（v1.5.190：矮窗口时压缩，防止盖住底部按钮）
+        // v1.1.0 实测一百七十八：矿物模式锁定方块时，锁定红字画在 gridBottom+46
+        // （输入框下方）——旧版列表顶固定 gridBottom+48，红字（46..55）压进列表首行；
+        // 锁定时列表整体下移 12px，红字独占一行（列表高度公式按 listTop 自动收缩）。
         int listTop = inputY + 24;
+        if (this.mineTableMode == 0 && this.lockedOreId != null) {
+            listTop += 12;
+        }
         int listH = Math.max(24, Math.min((h - 78) - listTop - 4, h - listTop - 36));
         this.minableList = new MinableList(this.f_96547_, panelLeft + 10, listTop,
                 panelWidth - 20, listH);
@@ -1004,9 +1016,12 @@ public class PromaidConfigScreen extends Screen {
     /** 底部按钮（所有视图共用）——v1.5.164：只保留"保存并返回"（"完成"与其定位重合已删） */
     private void bottomButtons(int w, int h, int cx) {
         int btnY = h - 34;
+        // v1.1.0 实测一百七十八：保存按钮右对齐（w-112）——旧版居中（cx-50），
+        // 窄窗口（w<324）时与左侧"← 返回目录/← 返回参数"（12..112）水平重叠。
+        // 右对齐后两按钮分居两端，任何窗口宽度都不相交。
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a保存并返回"),
                         b -> this.m_7379_())
-                .m_252987_(cx - 50, btnY, 100, 20).m_253136_());
+                .m_252987_(Math.max(120, w - 112), btnY, 100, 20).m_253136_());
     }
 
     // ---------- 各板块行定义 ----------
