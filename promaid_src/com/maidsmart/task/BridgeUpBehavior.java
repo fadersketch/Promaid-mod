@@ -615,13 +615,24 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
+        String reason = this.stopReason(level, maid, gameTime);
         com.mojang.logging.LogUtils.getLogger().info(
                 "bridge-up stop: maid={} reason={}",
                 maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                this.stopReason(level, maid, gameTime));
+                reason);
         maid.getPersistentData().m_128379_(BRIDGING_TAG, false);
         NO_BLOCK_SINCE.remove(maid.m_19879_());
-        canUseThrottle.remove(maid.m_19879_());
+        // v1.1.0 实测一百七十五【无方块空转】：方块相关中止（no-block/head-blocked）后
+        // 保留节流——旧版每次 stop 都清节流，背包没方块（或方块判定失败）的女仆每
+        // 1~2 tick 就 start→stop 空转一次（日志实证 14:38:52~14:39:05 K螺诺亚 18 次
+        // start/stop、13 秒），每次都闪 bridging 标记（可能阻断传送拉回）。方块问题
+        // 不会在 1 秒内自愈：保留 20 tick 冷却最多每秒重试一次；reached/威胁/任务
+        // 占用等正常中止仍立即重评（条件一变马上能恢复）。
+        if ("no-block".equals(reason) || "head-blocked".equals(reason)) {
+            canUseThrottle.put(maid.m_19879_(), 20);
+        } else {
+            canUseThrottle.remove(maid.m_19879_());
+        }
         super.m_6732_(level, maid, gameTime);
     }
 
@@ -709,7 +720,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(maid.getMaidInv(), null, null);
     }
 
-    /** 材料耗尽播报（限频 30 秒） */
+    /** 材料耗尽播报（限频 30 秒）+ 背包方块判定诊断（latest.log 搜 "bridge no-block"）——
+     *  v1.1.0 实测一百七十五：把"为什么判定无方块"直接打出来——背包里有哪些 BlockItem、
+     *  每个通过/拒绝过滤器（=OK/=REJECT），一次日志区分"真没方块"与"过滤器误拒/背包
+     *  不可见"。 */
     private void notifyNoBlock(EntityMaid maid) {
         long now = maid.m_9236_().m_46467_();
         Long last = NO_BLOCK_SINCE.get(maid.m_19879_());
@@ -717,6 +731,26 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return;
         }
         NO_BLOCK_SINCE.put(maid.m_19879_(), now);
+        try {
+            IItemHandler inv = maid.getMaidInv();
+            java.util.Map<String, Integer> counts = new java.util.HashMap<>();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                net.minecraft.world.item.ItemStack st = inv.getStackInSlot(i);
+                if (st.m_41619_() || !(st.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
+                    continue;
+                }
+                net.minecraft.resources.ResourceLocation id =
+                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(st.m_41720_());
+                boolean ok = com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(st, null, null);
+                counts.merge((id == null ? "?" : id.toString()) + (ok ? "=OK" : "=REJECT"),
+                        st.m_41613_(), Integer::sum);
+            }
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "bridge no-block diag: maid={} blocks={}",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    counts);
+        } catch (Throwable ignored) {
+        }
         maid.getChatBubbleManager().addTextChatBubble(
                 "主人就在上面……可我背包里没有能搭的方块了（圆石/泥土等），够不着呀……");
     }
