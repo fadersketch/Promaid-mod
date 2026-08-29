@@ -413,6 +413,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_WINDOW_TICKS;
     public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_THRESHOLD;
     public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS;
+    // v1.1.0 实测一百七十六（移植 TLM-Sincerely MaidSwitchState.canSwitchNormally）：排班最短持有期
+    public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_MIN_HOLD_TICKS;
+    // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_FORCE_BRAIN_REFRESH;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -1280,6 +1284,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.scheduleReverseThreshold").defineInRange("scheduleReverseThreshold", 2, 1, 20);
     MISC_SCHEDULE_REVERSE_COOLDOWN_TICKS = BUILDER.comment("排班反向切换冷却（tick，默认 200=10 秒）：压制反向切换后保持多久不再反向切")
             .translation("config.promaid.misc.scheduleReverseCooldownTicks").defineInRange("scheduleReverseCooldownTicks", 200, 20, 1200);
+    // v1.1.0 实测一百七十六（移植 TLM-Sincerely MINIMUM_TASK_HOLD_TICKS）：排班最短持有期
+    MISC_SCHEDULE_MIN_HOLD_TICKS = BUILDER.comment("排班最短持有期（tick，默认 60=3 秒，借鉴 TLM-Sincerely MINIMUM_TASK_HOLD_TICKS）：任何一次排班切换后，此期间内不允许再切换（无论段怎么变）——防段边界秒切/战斗还原压任务导致的连切；正常时段切换相隔约 2000 tick，不受影响；0 = 关闭最短持有")
+            .translation("config.promaid.misc.scheduleMinHoldTicks").defineInRange("scheduleMinHoldTicks", 60, 0, 1200);
+    // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
+    MISC_SCHEDULE_FORCE_BRAIN_REFRESH = BUILDER.comment("排班切段后大脑自愈（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：段任务应用成功后 3 秒，若女仆任务仍是段任务、但脑内无任何工作记忆（走位/攻击/目标——非坐姿站桩工作可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI；关 = 完全信任 TLM")
+            .translation("config.promaid.misc.scheduleForceBrainRefresh").define("scheduleForceBrainRefresh", true);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
