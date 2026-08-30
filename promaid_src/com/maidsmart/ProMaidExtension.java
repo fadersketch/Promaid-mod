@@ -263,7 +263,9 @@ public class ProMaidExtension implements ILittleMaid {
         }
         data.m_128344_("maid_smart_blueprints_given", (byte) 1);
         net.minecraft.world.item.ItemStack[] gifts = {
-                new net.minecraft.world.item.ItemStack(ProMaidMod.BLUEPRINT_BOOK.get())
+                new net.minecraft.world.item.ItemStack(ProMaidMod.BLUEPRINT_BOOK.get()),
+                // v1.1.0 实测二百一十六：排班表与手册同款开局赠送（一次送齐，之后不再重复发）
+                new net.minecraft.world.item.ItemStack(ProMaidMod.SCHEDULE_BOOK.get())
         };
         int given = 0;
         for (net.minecraft.world.item.ItemStack gift : gifts) {
@@ -272,9 +274,10 @@ public class ProMaidExtension implements ILittleMaid {
             }
         }
         player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                "\u00a7a[maid_smart] \u300aPromaid \u624b\u518c\u300b\u5df2\u9001\u5230\u4f60\u80cc\u5305\uff01"
+                "\u00a7a[maid_smart] \u300aPromaid \u624b\u518c\u300b\u4e0e\u300a\u6392\u73ed\u8868\u300b\u5df2\u9001\u5230\u4f60\u80cc\u5305\uff01"
                         + "\u624b\u6301\u53f3\u952e\u6253\u5f00\u5168\u90e8\u56fe\u7eb8\u5217\u8868\uff08\u542b\u7f3a\u6750\u63d0\u793a\uff09\uff0c"
-                        + "\u70b9\u51fb\u5373\u8ba9\u5973\u4ec6\u5efa\u9020\uff08\u5973\u4ec6\u9700\u5148\u5207\u5230\u201c\u5efa\u7b51\u201d\u4efb\u52a1\uff09\u3002"
+                        + "\u70b9\u51fb\u5373\u8ba9\u5973\u4ec6\u5efa\u9020\uff08\u5973\u4ec6\u9700\u5148\u5207\u5230\u201c\u5efa\u7b51\u201d\u4efb\u52a1\uff09\uff1b"
+                        + "\u6392\u73ed\u8868\u6253\u5f00\u5373\u53ef\u7ed9\u5168\u90e8\u5973\u4ec6\u6392\u65e5\u7a0b\u3002"
                         + "\u62df\u91cd\u65b0\u83b7\u53d6\uff1a/give @p maid_smart:blueprint_book\u3002"));
     }
 
