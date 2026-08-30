@@ -1657,7 +1657,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，你离得再远她也直接铺桥走过来——空中没有'走路过去'的选项；设 0 关闭远距（只保留近距逻辑）。平路/低高差追逐已不受任何距离上限约束（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 6）：你至少高于女仆这么多格才走垂直搭高（平路走路/铺桥处理）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 3）：你至少高于女仆这么多格才走垂直搭高（平路走路/铺桥处理）——3 格 = 玩家手长：她搭到只差 3 格内你就能近身收回/互动，隔得更远你伸手够不到她"));
         this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 3）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
         // v1.1.0 实测一百八十七：平桥启动水平距离（用户："水平距离搭建方块有没有启动要求呢？加个启动要求"）
