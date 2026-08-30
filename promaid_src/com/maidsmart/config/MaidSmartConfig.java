@@ -1214,8 +1214,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
         MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
-        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 1.0 = 正常走路速度；TLM 原生散步只有 0.3 倍速）")
-                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 1.0, 0.3, 2.5);
+        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按用户反馈调低）")
+                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.7, 0.3, 2.5);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
