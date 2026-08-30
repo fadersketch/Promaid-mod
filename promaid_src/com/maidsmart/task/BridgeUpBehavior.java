@@ -429,11 +429,37 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                     && maid.m_20186_() >= this.walkOnY - 0.01;
             if (arrived) {
                 this.walkOnTicks = 0;
+                // v1.1.0 实测二百一十五【防摔落·潜行式收力】：到位立即清水平速度——
+                // 0.22 的速度带着惯性会在到位后继续滑行约 1.7~2 块，1 格宽的桥块
+                // 停不住直接冲出边缘失足；垂直速度保留（正在下落就继续落）
+                maid.m_20256_(new net.minecraft.world.phys.Vec3(
+                        0, maid.m_20184_().f_82480_, 0));
             } else {
                 double wdx = this.walkOnX - maid.m_20185_();
                 double wdz = this.walkOnZ - maid.m_20189_();
                 double wd = Math.sqrt(wdx * wdx + wdz * wdz);
                 if (wd > 1e-3) {
+                    // v1.1.0 实测二百一十五【防摔落·潜行式边缘守卫】：目标格无支撑
+                    // （方块回收/没放上）→ 不推，水平收力原地站住（绝不下断崖）
+                    net.minecraft.core.BlockPos wcell = new net.minecraft.core.BlockPos(
+                            (int) Math.floor(this.walkOnX), (int) Math.floor(this.walkOnY),
+                            (int) Math.floor(this.walkOnZ));
+                    net.minecraft.world.level.Level wl = maid.m_9236_();
+                    boolean wGuard = true;
+                    try {
+                        wGuard = !wl.m_8055_(wcell).m_60742_(wl, wcell,
+                                net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_()
+                                || wl.m_8055_(wcell.m_7495_()).m_60742_(wl, wcell.m_7495_(),
+                                net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
+                    } catch (Exception ignored) {
+                        wGuard = true;
+                    }
+                    if (wGuard) {
+                        maid.m_20256_(new net.minecraft.world.phys.Vec3(
+                                0, maid.m_20184_().f_82480_, 0));
+                        this.walkOnTicks = 0;
+                        return;
+                    }
                     // 斜上台阶目标（walkOnY 高于当前脚位）带起跳；平桥保持原垂直速度
                     double wvy = this.walkOnY > maid.m_20186_() + 0.5
                             ? Math.max(maid.m_20184_().f_82480_, 0.42)
