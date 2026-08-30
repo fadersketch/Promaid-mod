@@ -711,9 +711,17 @@ BlockPos stand = findStand(newLevel,
             int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
             double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
             if (dSq < (double) dist * dist) {
-                return; // 不太远——走路/跟随正常处理，不打扰
+                // v1.1.0 实测一百八十八（用户："传送机制不检测 Y 轴。女仆搭得太高不会
+                // 自己传送下来"）：3D 距离未过线但【垂直高度差】超阈值 → 按 Y 轴拉回
+                // 判定继续（水平贴身、竖直搭高 30 格时 3D 距离 900 < 48²，旧版永远不触发）
+                double dyAbs = Math.abs(maid.m_20186_() - owner.m_20186_());
+                if (dyAbs < com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get()) {
+                    return; // 水平不远、垂直也不远——走路/跟随正常处理，不打扰
+                }
             }
             int blocks = (int) Math.sqrt(dSq);
+            // 实测一百八十八：Y 轴分支标记（日志措辞区分——同一条链路，同一个安全落点判定）
+            boolean yPull = dSq < (double) dist * dist;
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
             // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
             if (maid.isHomeModeEnable()) {
@@ -727,11 +735,17 @@ BlockPos stand = findStand(newLevel,
                 return;
             }
             if (teleportCore(maid, owner)) {
-                com.maidsmart.tool.PromaidLog.log("跨维", name
-                        + " 同维度远距拉回至主人身边（原距 " + blocks + " 格）");
+                // 实测一百八十八：Y 轴成功路径留痕（找得到安全落点才传）
+                com.maidsmart.tool.PromaidLog.log("跨维", name + (yPull
+                        ? " Y 轴距离 " + (int) Math.abs(maid.m_20186_() - owner.m_20186_())
+                        + " 格（搭太高），主人旁有安全落点 → 传送下来"
+                        : " 同维度远距拉回至主人身边（原距 " + blocks + " 格）"));
             } else {
-                throttledSkipLog(maid, "sam-dim-nostand", name + " 同维度距离 " + blocks
-                        + " 格需拉回，但主人身边 16 格内无可站立点（高空/虚空）——等落地后再拉");
+                // 实测一百八十八：Y 轴失败路径（无安全落点）明确"不传"，60 秒限频
+                throttledSkipLog(maid, yPull ? "y-nostand" : "sam-dim-nostand", name + (yPull
+                        ? " Y 轴距离 " + (int) Math.abs(maid.m_20186_() - owner.m_20186_())
+                        + " 格需拉回，但主人身边 16 格内无安全落点——不传（有落点后再试）"
+                        : " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无可站立点（高空/虚空）——等落地后再拉"));
             }
         } catch (Exception ignored) {
         }
