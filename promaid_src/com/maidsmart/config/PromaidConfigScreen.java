@@ -1094,9 +1094,9 @@ public class PromaidConfigScreen extends Screen {
                     this.mineTable = true;
                     this.m_7856_();
                 }, "管理挖矿两张表：目标矿物（女仆会挖）、障碍物（可挖穿开路）"));
-        // v1.0.4：透视感知开关——默认关（关闭=女仆像玩家一样只发现视线无阻的矿；开启=隔墙找矿旧逻辑）
+        // v1.0.4：透视感知开关——默认开（开启=隔墙找矿；关闭=女仆像玩家一样只发现视线无阻的矿）
         this.rows.add(new BoolRow("透视感知（隔墙找矿）", MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.get(),
-                v -> MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被方块挡住的矿物并挖通开路（隔墙找矿，等同旧版逻辑）；关闭（默认）则女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见也不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路"));
+                v -> MaidSmartConfig.MINE_SEEK_THROUGH_WALLS.set(v), "透视感知：开启（默认）后女仆能发现视线被方块挡住的矿物并挖通开路（隔墙找矿，等同旧版逻辑）；关闭则女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见也不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.MINE_SEARCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MINE_SEARCH_RADIUS, s), "矿物检索半径（水平格）：女仆以锚点为中心扫描正方形区域找矿——调大更早发现远处矿，扫描更耗时；调小专注身边"));
         // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
@@ -1228,7 +1228,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("自动识别模组原木（标签）", MaidSmartConfig.WOOD_TAG_AUTO.get(),
                 v -> MaidSmartConfig.WOOD_TAG_AUTO.set(v), "自动识别模组原木：开启（默认）时凡带原版 #logs / #bamboo_blocks 标签的方块（模组原木）都自动视为可砍木材（价值 300，无需进名单）；关闭则只认木材名单里的方块（名单可精确控制砍什么/价值权重）"));
         this.rows.add(new BoolRow("透视感知（隔墙找木材）", MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.get(),
-                v -> MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.set(v), "透视感知：开启后女仆能发现视线被挡住的木材并挖通开路；关闭（默认）则像玩家一样只发现视线无阻的木材——树叶不挡视线，水/岩浆外任何方块都挡"));
+                v -> MaidSmartConfig.WOOD_SEEK_THROUGH_WALLS.set(v), "透视感知：开启（默认）后女仆能发现视线被挡住的木材并挖通开路；关闭则像玩家一样只发现视线无阻的木材——树叶不挡视线，水/岩浆外任何方块都挡"));
         this.rows.add(new NumRow("检索半径", String.valueOf(MaidSmartConfig.WOOD_SEARCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.WOOD_SEARCH_RADIUS, s), "木材检索半径（水平格）：以锚点为中心扫描正方形区域找树"));
         // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
