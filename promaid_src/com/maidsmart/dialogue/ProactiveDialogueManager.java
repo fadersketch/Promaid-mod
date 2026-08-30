@@ -510,6 +510,12 @@ public class ProactiveDialogueManager {
         if (!AIConfig.LLM_ENABLED.get()) {
             return;
         }
+        // v1.1.0 实测一百九十四（用户："有一些击杀日志时刻显示在我的屏幕上"）：
+        // 击杀邀功默认关——战斗频繁时每只女仆击杀就冒一次气泡就是"时刻刷屏"；
+        // 想保留 → 杂营区开「击杀邀功对话」
+        if (!com.maidsmart.config.MaidSmartConfig.DIALOGUE_PROACTIVE_KILL.get()) {
+            return;
+        }
         if (event.getSource() == null || !(event.getSource().m_7639_() instanceof EntityMaid)) {
             return;
         }

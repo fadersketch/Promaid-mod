@@ -1435,6 +1435,9 @@ public class PromaidConfigScreen extends Screen {
         // 区已有同配置，这里按用户要求放到 AI 工具设置，两处改同一个值）
         this.rows.add(new NumRow("每日主动对话上限（次/女仆）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY, s), "每日主动对话上限（次/女仆）：女仆一天内主动开口说话（关心/夜晚/沉默找话题/事件感慨）的总次数上限；超过后不再发言，并在系统消息里提示\"已达上限\"。控 LLM token 成本"));
+        // v1.1.0 实测一百九十四：击杀邀功对话开关（默认关——击杀日志时刻刷屏）
+        this.rows.add(new BoolRow("击杀邀功对话", MaidSmartConfig.DIALOGUE_PROACTIVE_KILL.get(),
+                v -> MaidSmartConfig.DIALOGUE_PROACTIVE_KILL.set(v), "女仆击杀敌人（主人 16 格内）后主动邀功的 LLM 对话气泡（默认关——战斗频繁时击杀就冒一次=时刻刷屏；想保留开启）"));
     }
 
     private void dialogueRows() {
