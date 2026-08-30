@@ -176,6 +176,8 @@ public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_PROACTIVE;
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_COOLDOWN;
     public static final ForgeConfigSpec.IntValue DIALOGUE_PROACTIVE_DAILY;
+    // v1.1.0 实测一百九十四：击杀邀功对话开关（默认关——用户反馈击杀日志时刻刷屏）
+    public static final ForgeConfigSpec.BooleanValue DIALOGUE_PROACTIVE_KILL;
     public static final ForgeConfigSpec.BooleanValue DIALOGUE_AUTONOMOUS;
     public static final ForgeConfigSpec.IntValue DIALOGUE_AUTONOMOUS_COOLDOWN;
     public static final ForgeConfigSpec.IntValue DIALOGUE_AUTONOMOUS_DAILY;
@@ -901,6 +903,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.dialogue.proactiveCooldown").defineInRange("proactiveCooldown", 4, 1, 60);
         DIALOGUE_PROACTIVE_DAILY = BUILDER.comment("主动对话日上限（次，控 token 成本；v1.5.191：4 → 12——7 阶段状态机需要更多发言额度）")
                 .translation("config.promaid.dialogue.proactiveDaily").defineInRange("proactiveDaily", 12, 0, 50);
+        // v1.1.0 实测一百九十四（用户："有一些击杀日志时刻显示在我的屏幕上。能去掉吗？"）
+        DIALOGUE_PROACTIVE_KILL = BUILDER.comment("击杀邀功对话（默认关）：女仆击杀敌人（主人 16 格内）后主动向主人邀功的 LLM 对话气泡——战斗频繁时击杀就冒一次（时刻刷屏很吵）；开启恢复旧行为")
+                .translation("config.promaid.dialogue.proactiveKill").define("proactiveKill", false);
         DIALOGUE_AUTONOMOUS = BUILDER.comment("自主决策（女仆自己换任务干活）")
                 .translation("config.promaid.dialogue.autonomous").define("autonomous", true);
         DIALOGUE_AUTONOMOUS_COOLDOWN = BUILDER.comment("自主决策冷却（分钟）")
