@@ -760,6 +760,18 @@ BlockPos stand = findStand(newLevel,
                         + " 格但干活中（挖矿/伐木/建造/站桩），不打断——任务结束或空闲后再拉");
                 return;
             }
+            // v1.1.0 实测二百零七（用户质疑："女仆当时完全不在自保模式为什么也会摔死"——
+            // 日志实证 05:11:53 搭路中（bridge-up start owner-dy=19），05:11:54 本链路 Y 轴
+            // 拉回把她传送了——正站在自己铺的半空桥上被拉走，贴上主人后脚下的桥按 3 秒
+            // 寿命回收 → 05:12:01 从 25 格高处坠落摔死（y=-60）。搭路中的女仆一律不拉：
+            // 她正踩在自己搭的半空结构上，拉回=抽掉她脚下的桥；搭路行为自己会铺到主人
+            // 脚边，不需要传送兜底；已站上（行为结束 BRIDGING_TAG 清除）才恢复拉回。
+            if (maid.getPersistentData().m_128471_(
+                    com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG)) {
+                throttledSkipLog(maid, "sam-dim-bridging", name + " 正在搭路（半空结构上），"
+                        + "不拉回——搭路自己会铺到主人脚边，拉走会抽掉她脚下的桥");
+                return;
+            }
             if (teleportCore(maid, owner)) {
                 // 实测一百八十八：Y 轴成功路径留痕（找得到安全落点才传）
                 com.maidsmart.tool.PromaidLog.log("跨维", name + (yPull
