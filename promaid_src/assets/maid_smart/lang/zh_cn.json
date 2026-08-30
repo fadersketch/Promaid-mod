@@ -149,5 +149,9 @@
   "config.promaid.misc.pickupPriority": "挖矿中禁止拾取",
   "config.promaid.build.machineSmart": "红石机器专属搭建（专属顺序+活建造+自动启动）",
   "key.categories.promaid": "Promaid 建造",
-  "key.promaid.build_rotate": "建造预览·旋转朝向（每次顺时针 90°）"
+  "key.promaid.build_rotate": "建造预览·旋转朝向（每次顺时针 90°）",
+  "bubble.callresponse.npc_event.pending": "． ． ．",
+  "bubble.callresponse.npc_event.food_thanks": "谢谢主人！我会好好吃的。",
+  "bubble.callresponse.npc_event.food_promise_timeout": "主人是在耍我吗……",
+  "bubble.callresponse.npc_event.food_repeat": "怎么还是这个呀……"
 }
