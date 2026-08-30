@@ -1,0 +1,81 @@
+Compiled from "TaskShears.java"
+public class com.github.tartaricacid.touhoulittlemaid.entity.task.TaskShears implements com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask {
+  public static final net.minecraft.resources.ResourceLocation UID;
+
+  public com.github.tartaricacid.touhoulittlemaid.entity.task.TaskShears();
+    Code:
+         0: aload_0
+         1: invokespecial #18                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public net.minecraft.resources.ResourceLocation getUid();
+    Code:
+         0: getstatic     #24                 // Field UID:Lnet/minecraft/resources/ResourceLocation;
+         3: areturn
+
+  public net.minecraft.world.item.ItemStack getIcon();
+    Code:
+         0: getstatic     #32                 // Field net/minecraft/world/item/Items.f_42574_:Lnet/minecraft/world/item/Item;
+         3: invokevirtual #37                 // Method net/minecraft/world/item/Item.m_7968_:()Lnet/minecraft/world/item/ItemStack;
+         6: areturn
+
+  public net.minecraft.sounds.SoundEvent getAmbientSound(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: getstatic     #46                 // Field com/github/tartaricacid/touhoulittlemaid/init/InitSounds.MAID_SHEARS:Lnet/minecraftforge/registries/RegistryObject;
+         4: invokevirtual #52                 // Method net/minecraftforge/registries/RegistryObject.get:()Ljava/lang/Object;
+         7: checkcast     #54                 // class net/minecraft/sounds/SoundEvent
+        10: ldc           #55                 // float 0.5f
+        12: invokestatic  #61                 // Method com/github/tartaricacid/touhoulittlemaid/util/SoundUtil.environmentSound:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/sounds/SoundEvent;F)Lnet/minecraft/sounds/SoundEvent;
+        15: areturn
+
+  public java.util.List<com.mojang.datafixers.util.Pair<java.lang.Integer, net.minecraft.world.entity.ai.behavior.BehaviorControl<? super com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> createBrainTasks(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: anewarray     #68                 // class com/mojang/datafixers/util/Pair
+         4: dup
+         5: iconst_0
+         6: iconst_5
+         7: invokestatic  #74                 // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+        10: new           #76                 // class com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/task/MaidShearTask
+        13: dup
+        14: ldc           #77                 // float 0.6f
+        16: invokespecial #80                 // Method com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/task/MaidShearTask."<init>":(F)V
+        19: invokestatic  #84                 // Method com/mojang/datafixers/util/Pair.of:(Ljava/lang/Object;Ljava/lang/Object;)Lcom/mojang/datafixers/util/Pair;
+        22: aastore
+        23: invokestatic  #90                 // Method com/google/common/collect/Lists.newArrayList:([Ljava/lang/Object;)Ljava/util/ArrayList;
+        26: areturn
+
+  public com.github.tartaricacid.touhoulittlemaid.api.task.FunctionCallSwitchResult onFunctionCallSwitch(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #97                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21205_:()Lnet/minecraft/world/item/ItemStack;
+         4: getstatic     #103                // Field net/minecraftforge/common/ToolActions.SHEARS_HARVEST:Lnet/minecraftforge/common/ToolAction;
+         7: invokevirtual #109                // Method net/minecraft/world/item/ItemStack.canPerformAction:(Lnet/minecraftforge/common/ToolAction;)Z
+        10: ifeq          17
+        13: getstatic     #115                // Field com/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult.NO_CHANGE:Lcom/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult;
+        16: areturn
+        17: aload_1
+        18: invokedynamic #134,  0            // InvokeDynamic #0:test:()Ljava/util/function/Predicate;
+        23: invokestatic  #140                // Method com/github/tartaricacid/touhoulittlemaid/util/TaskEquipUtil.tryEquipFromBackpack:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Ljava/util/function/Predicate;)Z
+        26: ifeq          33
+        29: getstatic     #143                // Field com/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult.OK:Lcom/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult;
+        32: areturn
+        33: getstatic     #146                // Field com/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult.MISSING_REQUIRED_ITEM:Lcom/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult;
+        36: areturn
+
+  public java.lang.String getMaidActionSummary();
+    Code:
+         0: ldc           #150                // String Shear wool from sheep
+         2: areturn
+
+  static {};
+    Code:
+         0: new           #155                // class net/minecraft/resources/ResourceLocation
+         3: dup
+         4: ldc           #157                // String touhou_little_maid
+         6: ldc           #159                // String shears
+         8: invokespecial #162                // Method net/minecraft/resources/ResourceLocation."<init>":(Ljava/lang/String;Ljava/lang/String;)V
+        11: putstatic     #24                 // Field UID:Lnet/minecraft/resources/ResourceLocation;
+        14: return
+}

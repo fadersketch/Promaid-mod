@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百八十四
+
+- 剪刀模式不拿背包剪刀修复（用户："剪刀模式下，女仆不会尝试拿起包里面的剪刀。这边替换的逻辑应该跟挖矿模式是一样的"）：
+  - 【根因】自动装备的词条表（`MaidToolAutoEquip.ensureForTask`，每 tick 轮询）没有 `touhou_little_maid:shears` 分支 → 落到 `default → return false`，剪刀从不装备；TLM 自己的换装（TaskShears.onFunctionCallSwitch → tryEquipFromBackpack，javap 实证：主手不能执行 SHEARS_HARVEST ToolAction 才去背包装）**只在任务切换瞬间触发一次**——排班直接 setTask、背包放进剪刀后再切任务等路径全漏掉
+  - 【修复】词条表补 `shears` 分支（与挖矿"保证主手有镐"同构）：主手能剪 → 不换（玩家安排优先）；不能 → 从背包挑一把（评分=武器评分，剪刀无攻击力自动落到 附魔>耐久 段；快坏黑名单保护照旧）。判定用 **forge:shears 标签**（Forge 47.4.21 `Tags.Items.SHEARS` javap 实证存在）——原版剪刀与模组剪切工具统一口径，比对 class instanceof ShearsItem 更贴近 TLM 的 canPerformAction(SHEARS_HARVEST) 语义
+  - 测试：重启游戏 → 女仆切剪刀任务且背包放剪刀 → 应自动把剪刀换到主手（主手非剪刀自动替换，原物品回背包）；主手已是剪刀不反复切换
+
 ## 实测一百八十三
 
 - 排班活动范围扩大 + 散步频率/速度提升（用户："排班状态应该可以正常运行了，但女仆的活动范围太小，范围稍微扩大一点就不行；一要在排班状态下增大活动的范围；二要增加女仆散步的频率和速度"）：

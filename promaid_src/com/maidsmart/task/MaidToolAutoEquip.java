@@ -114,6 +114,19 @@ public final class MaidToolAutoEquip {
                             return base + (ready ? 1_000_000L : 0L);
                         };
                     }
+                    case "shears" -> {
+                        // v1.1.0 实测一百八十四（用户："剪刀模式下，女仆不会尝试拿起
+                        // 包里面的剪刀。这边替换的逻辑应该跟挖矿模式是一样的"）：
+                        // TLM TaskShears 的换装只在 onFunctionCallSwitch（任务切换瞬间）
+                        // 触发（javap 实证：主手不能执行 SHEARS_HARVEST ToolAction →
+                        // tryEquipFromBackpack，装不上 → MISSING_REQUIRED_ITEM）——排班
+                        // 直接 setTask、背包装剪刀后再切任务等路径全漏掉，表现为"剪刀
+                        // 模式不拿背包里的剪刀"。补每 tick 词条（与挖矿"保证主手有镐"
+                        // 同构）：主手能剪（forge:shears 标签）→ 不换；不能 → 从背包挑
+                        // 一把。评分走武器评分——剪刀无攻击力自动落到 附魔>耐久 段。
+                        need = MaidToolAutoEquip::isShearsLike;
+                        scorer = MaidToolAutoEquip::weaponScore;
+                    }
                     default -> {
                         return false; // 其他任务（待命/工作）不需要工具
                     }
@@ -634,6 +647,24 @@ public final class MaidToolAutoEquip {
 
     private static boolean isPickaxe(ItemStack stack) {
         return !stack.m_41619_() && stack.m_41720_() instanceof PickaxeItem;
+    }
+
+    /**
+     * v1.1.0 实测一百八十四：剪刀判定——forge:shears 标签（Forge 47.4.21 的
+     * Tags.Items.SHEARS，javap 实证存在）。原版剪刀 + 模组剪切工具统一口径
+     * （对齐 TLM TaskShears 的 canPerformAction(SHEARS_HARVEST) 语义与范围——
+     * class instanceof ShearsItem 会漏掉模组剪切工具）。
+     */
+    private static boolean isShearsLike(ItemStack stack) {
+        if (stack.m_41619_()) {
+            return false;
+        }
+        try {
+            return stack.m_41720_().m_204114_().m_203616_().anyMatch(
+                    t -> net.minecraftforge.common.Tags.Items.SHEARS.equals(t));
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** 对齐 TaskAttack.isWeapon：主手装备槽带攻击力属性的物品（剑/斧/三叉戟等）。
