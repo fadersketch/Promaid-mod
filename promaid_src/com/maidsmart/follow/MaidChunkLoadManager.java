@@ -812,6 +812,17 @@ BlockPos stand = findStand(newLevel,
                         + "不拉回——搭路自己会铺到主人脚边，拉走会抽掉她脚下的桥（Y 轴搭太高拉回不受此限）");
                 return;
             }
+            // v1.1.0 实测二百一十七（用户："强制传送也是要判定主人旁边是否有安全地块的"）：
+            // findStand 落点只保证"站得住"，站到位却被怪围就是送死。Y 轴拉回放行搭路门后
+            // 再补第二道判定——与自保传回同口径：主人身边 4 格内（teleportSafeRadius）有
+            // 可见威胁/怪物 → 不传（落日志，威胁清除后的下一轮扫描自然再试）。
+            if (yPull && com.maidsmart.combat.SelfPreservationBehavior.anyVisibleMonsterAround(
+                    owner, com.maidsmart.config.MaidSmartConfig.COMBAT_TELEPORT_SAFE_RADIUS.get())) {
+                throttledSkipLog(maid, "sam-dim-ythreat", name + " Y 轴搭太高需拉回，但主人身边 "
+                        + com.maidsmart.config.MaidSmartConfig.COMBAT_TELEPORT_SAFE_RADIUS.get().intValue()
+                        + " 格内有威胁——不传（等威胁清除后的下一轮扫描）");
+                return;
+            }
             if (teleportCore(maid, owner)) {
                 // 实测一百八十八：Y 轴成功路径留痕（找得到安全落点才传）
                 com.maidsmart.tool.PromaidLog.log("跨维", name + (yPull
