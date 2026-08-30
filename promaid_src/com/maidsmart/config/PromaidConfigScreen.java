@@ -1843,6 +1843,15 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("兼容高炉/烟熏炉", MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烧制任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
         this.rows.add(new SectionRow("通用", true));
+        // v1.1.0 实测一百八十三：空闲散步——治 TLM 原生散步又少又慢又近
+        this.rows.add(new BoolRow("空闲散步", MaidSmartConfig.MISC_STROLL_ENABLED.get(),
+                v -> MaidSmartConfig.MISC_STROLL_ENABLED.set(v), "女仆空闲时按间隔主动散步（默认开）——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、平均一两小时才走一次）；战斗/自保/站桩工作/有移动目标时不打扰"));
+        this.rows.add(new NumRow("散步间隔（tick）", String.valueOf(MaidSmartConfig.MISC_STROLL_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.MISC_STROLL_INTERVAL, s), "空闲女仆每隔这么久散步一次（默认 200=10 秒，TLM 原生平均一两小时才走一次）；找得到落点就走，找不到顺延"));
+        this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
+        this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 1.0 = 正常走路速度；TLM 原生散步只有 0.3 倍速）"));
         this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
                 s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
         this.rows.add(new BoolRow("挖矿中禁止拾取", MaidSmartConfig.MISC_PICKUP_PRIORITY.get(),
@@ -1934,6 +1943,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MISC_SCHEDULE_MIN_HOLD_TICKS, s), "任何一次排班切换后此期间内不允许再切换（默认 60=3 秒，借鉴 TLM-Sincerely MINIMUM_TASK_HOLD_TICKS）——防段边界秒切/战斗还原压任务连切；正常时段切换相隔约 2000 tick 不受影响；0 = 关闭"));
         this.rows.add(new BoolRow("切段后大脑自愈", MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.get(),
                 v -> MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.set(v), "段任务应用成功后 3 秒，若女仆任务仍是段任务但脑内无任何工作记忆（非坐姿站桩可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）；关 = 完全信任 TLM"));
+        // v1.1.0 实测一百八十三：排班/home 模式活动半径下限
+        this.rows.add(new NumRow("排班活动半径（格）", String.valueOf(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get()),
+                s -> setInt(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE, s), "排班/在家模式下女仆的活动半径下限（默认 32；TLM 原版工作/空闲/睡觉半径只有 8~16 格，稍远就被拉回）——取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住"));
         // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
         this.rows.add(new SectionRow("运行日志（实测九十四）", true));
         this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),
