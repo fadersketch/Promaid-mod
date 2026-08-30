@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测二百零九
+
+- 幽灵方块渲染崩溃修复（用户崩溃日志：`BufferBuilder.endVertex` 抛出 "Not filled all elements of the vertex Index: 14"，堆栈直指 BlueprintAreaPreview.ghostQuad）：
+  - 【根因】实测二百零四把手写 debugQuads 顶点渲染（逐面 4 顶点 QUADS）替换进幽灵方块——同一台客户机上 BufferBuilder 被 epicfight（MixinBufferBuilder）/ ponder 的 mixin 变换，手写顶点序列的校验不通过，第一次点"建造此图纸"（2469 块点云到达）即端掉整局
+  - 【修复】回退到运行时验证过的 `DebugRenderer.renderFilledBox`（m_269311_——实测一百四十七~二百零一长期使用零崩溃；这也是 vanilla 自己的 debug 管线）；同时【每盒后立即 flush】（m_109912_ debugFilledBox）——原先多盒连续提交同一条 TRIANGLE_STRIP 会在盒间产生跨盒连接三角形（"太小/出区块消失/蓝影看不见"观感的来源），flush 后每个盒子独立成条：满体积 1×1×1、无跨盒连接面、无距离剔除，区块内外都能看到清晰幽灵方块
+- 测试：进游戏 → 点「建造此图纸」→ 蓝色幽灵应正常显示、不再崩溃；确认建造后走出区块看橙色幽灵
+
 ## 实测二百零八
 
 - 排班表新增**单独传送按键**（用户："日程表内能不能安一个单独传送的按键？"）：
