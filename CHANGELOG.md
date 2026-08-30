@@ -2,10 +2,11 @@
 
 ## 实测一百九十七
 
-- 启动崩溃热修复（用户粘贴启动日志：`Mixin prepare failed preparing PetImmunityTargetMixin ... @Mixin target type mismatch: IAttackTask is an interface`——游戏在 PREPARE 阶段直接 FATAL 退出）：
-  - 【根因】一百九十三的宠物免疫混入用了**普通 class** @Mixin **接口** `IAttackTask`——Mixin 0.8.5 的 SubType 校验要求接口 target 必须用 **interface mixin**（class mixin 版本未在启动路径验证过，编译能过但运行即崩）
-  - 【修复】`PetImmunityTargetMixin` 改为 interface mixin + default 注入方法（注入点 canAttack 是接口 default 方法，HEAD 拦截语义不变）；宠物免疫判定（PetImmunityGuard.isPetMarked）不涉及改动——编译期已验证也无法在本地起客户端，本次以 Mixin 接口规范对齐为准
-  - 测试：重启游戏应正常进入主菜单；给怪命名「玩家宠物」→ 女仆仍不锁定不伤害
+- 启动崩溃二次修复（用户第二次粘贴启动日志：interface mixin 版本仍在 APPLY 阶段失败——`@Inject ... is not supported on interface mixin method`，崩溃挂靠在 true_power_of_maid 加载真力量类时）：
+  - 【根因】Mixin 0.8.5 对【接口 target】两种形式都不支持：class mixin → SubType 校验 PREPARE 失败（一百九十七第一版）；interface mixin → @Inject 回调不被接受 APPLY 失败（第二版）。TLM 的 IAttackTask.canAttack 是接口默认方法——**不可以在运行时混入**
+  - 【终修】放弃接口混入，宠物免疫全事件实现：①伤害总闸（LivingHurtEvent，本就工作——女仆链伤害对宠物零伤害/零 AOE 溅射）；②新增【宠物仇恨清理扫描】——每 2 秒全维度检查女仆攻击记忆，目标是宠物标记 → 清掉（去仇恨；TLM StopAttackingIfTargetInvalid 行为自然接管后续），防误伤全部保持。与混入版语义差别：女仆可能先锁定一眼才被清（≤2 秒），全程无伤害
+  - 已从 mixins.promaid.json 移除 PetImmunityTargetMixin（防再次崩溃）
+  - 测试：重启游戏应正常进入主菜单；宠物免疫验证方式不变（给怪命名「玩家宠物」/自家猫狗 → 女仆不伤害，日志搜 `maid pet-hate-clear`）
 
 ## 实测一百九十六
 
