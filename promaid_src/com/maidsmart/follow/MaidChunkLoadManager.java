@@ -232,9 +232,10 @@ public final class MaidChunkLoadManager {
      *
      * 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见
      * MaidBuildBehavior.tickBuildSit）。
-     * v1.1.0 实测一百三十一：在家模式【不拦】跨维度跟随——排班自动 home/守家
-     * 模式的女仆，主人过门/换维度照样传送跟过来（home 只影响同维度行为，由
-     * TLM 原生跟随任务处理；想召回先解除她的排班/在家模式，见 summonAll）。
+     * v1.1.0 实测一百八十五（用户："排班中的女仆和处于 home 模式的女仆仍然会
+     * 响应跨维度传送"）：在家/排班模式【拦截】跨维度跟随——一百三十一"home 不拦"
+     * 的旧口径反转：home = 守家，主人过门/换维度也不跟（与同维度拉回、一键集合
+     * 的口径一致）；想召回先解除她的排班/在家模式（见 summonAll）。
      */
     public static void followIfCrossDimension(EntityMaid maid) {
         try {
@@ -246,6 +247,19 @@ public final class MaidChunkLoadManager {
             }
             if (maid.isMaidInSittingPose()) {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
+            }
+            // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
+            // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
+            // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
+            boolean scheduled = false;
+            try {
+                scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
+            } catch (Throwable ignored) {
+            }
+            if (maid.isHomeModeEnable() || scheduled) {
+                throttledSkipLog(maid, "home-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 排班/在家模式中，跨维度不传（想召回先解除排班/在家模式）");
+                return;
             }
             LivingEntity owner = maid.m_269323_();
             // v1.1.0 实测七十八（bug：主人下界死亡后看家女仆被传到下界基岩层上）——
