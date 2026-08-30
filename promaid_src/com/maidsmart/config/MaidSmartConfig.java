@@ -295,6 +295,8 @@ public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_AIR_MAX_DIST;
 public static final ForgeConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ForgeConfigSpec.IntValue BRIDGE_MIN_RADIUS;
+    // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
+    public static final ForgeConfigSpec.DoubleValue BRIDGE_START_H_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ForgeConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ForgeConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
@@ -1165,6 +1167,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
         BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 2）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
                 .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 2, 1, 8);
+        // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
+        BRIDGE_START_H_DIST = BUILDER.comment("平桥启动水平距离（格，默认 6）：女仆与主人【水平距离】达到此值、且朝主人方向前方脚下悬空才启动水平搭桥（垫块踩过去）——旧版 2.5 格就启动太敏感（主人就在沟对面几步远也垫块，来回启停）；设 3 = 最灵敏（接近旧版行为）。竖直搭高（主人更高、原地垫柱）不受影响")
+                .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 6.0, 3.0, 64.0);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
