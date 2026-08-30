@@ -373,7 +373,8 @@ public final class GuideContent {
 
     private static Chapter scheduleGuide() {
         return new Chapter("排班表（全女仆日程调度，v1.1.0）",
-                "新物品\u00a7e排班表\u00a7r（\u00a77纸 + 墨囊\u00a7r 无序合成，随便放哪格都行）——手持右键打开，"
+                "新物品\u00a7e排班表\u00a7r（\u00a77纸 + 墨囊或荧光墨囊\u00a7r 无序合成，随便放哪格都行——"
+                        + "开局也会与《Promaid 手册》一起自动送进背包一次）——手持右键打开，"
                         + "里面是你\u00a7e全部女仆的列表\u00a7r（跨维度也在列），点一只进去给她排一整天。",
                 "\u00a7e列表页军队管理\u00a7r（v1.1.0 实测六十）：",
                 "· \u00a7e搜索框\u00a7r按名字即时过滤；每行显示\u00a7e血量\u00a7r与所在\u00a7e维度\u00a7r（下界/末地的女仆标蓝色）；",

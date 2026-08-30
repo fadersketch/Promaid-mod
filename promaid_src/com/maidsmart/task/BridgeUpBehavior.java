@@ -261,7 +261,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             return false;
         }
         int dy = owner.m_20183_().m_123342_() - maid.m_20183_().m_123342_();
-        // v1.1.0 实测一百零六：放宽启动门槛——主人至少高4格即可启动搭路
+        // v1.1.0 实测一百零六放宽启动门槛（当时 minDy=2，改 4 让低频触发也能启动）；
+        // v1.1.0 实测二百一十六：旧代码用了 min(minDy, 4)——配置 minDy 调大（默认 6）
+        // 完全不生效（恒按 4 启动），"Y 轴方向距离过小就阻拦搭路"形同虚设。改为按
+        // 配置值生效：主人至少高 minDy 格（默认 6）才走垂直搭高。
         int minDy = MaidSmartConfig.BRIDGE_MIN_DY.get();
         // v1.1.0 实测一百二十一：水平远距放宽（见方法头注释）——dy 不满足高度
         // 门槛但水平已拉开（>3 格）且主人不低于女仆时照常启动，平桥横向逼近
@@ -303,8 +306,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (gapAhead && hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             return false;
         }
-        if (!gapAhead && dy < Math.min(minDy, 4)) {
-            return false; // 前方无缺口、主人也不高——跟随走路即可，不搭
+        if (!gapAhead && dy < minDy) {
+            return false; // 前方无缺口、主人也不够高（低于 minDy）——跟随走路即可，不搭
         }
         if (!gapAhead) {
             boolean airborne = isAirborne(level, maid);
