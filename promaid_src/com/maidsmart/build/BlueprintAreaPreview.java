@@ -468,8 +468,9 @@ public final class BlueprintAreaPreview {
             String key = i < REGION_PROJ_KEYS.size() ? REGION_PROJ_KEYS.get(i) : "";
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
             if (!key.isEmpty() && org != null) {
+                // 实测二百零一：幽灵面 alpha 0.20 → 0.45（区块外可见性）
                 drawGhost(pose, mc, camera, key, org[0], org[1], org[2],
-                        1.0f, 0.55f, 0.25f, 0.20f);
+                        1.0f, 0.55f, 0.25f, 0.45f);
             }
         }
         if (active) {
@@ -494,9 +495,10 @@ public final class BlueprintAreaPreview {
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
             if (previewId != null) {
+                // 实测二百零一：金预览青色幽灵 0.22 → 0.40（近景 0.22 已偏淡）
                 drawGhost(pose, mc, camera, projKey(previewId, previewQuarters),
                         p.m_123341_(), p.m_123342_(), p.m_123343_(),
-                        0.30f, 0.95f, 1.0f, 0.22f);
+                        0.30f, 0.95f, 1.0f, 0.40f);
             }
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     "建造范围 " + effX + "\u00d7" + sizeY + "\u00d7" + effZ
@@ -558,7 +560,19 @@ public final class BlueprintAreaPreview {
         //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
         // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
         // 总开关控制（帧率敏感用户关总开关即可）。
+        // v1.1.0 实测二百零一（用户："玩家仍然是一走出自己所划好的红色区块里面的
+        // 橙色幽灵方块从外面就看不见了"——日志实证数据链完好：request→2600 blocks
+        // received，问题在可见性）：①面 alpha 0.20→0.45（2600 个格子从区块外看只有
+        // 朝玩家的外皮几面可见，0.20 极淡基本看不出）；②玩家离区块中心 >24 格时
+        // 每盒补画棱线（DebugRenderer 描边轮廓——从外看框内建筑轮廓清晰可辨；
+        // 近处密盒肉眼可辨，不画省性能）。
         var bufferSource = mc.m_91269_().m_110104_();
+        double farDx = camera.f_82479_ - (ox + 0.5);
+        double farDz = camera.f_82481_ - (oz + 0.5);
+        boolean far = (farDx * farDx + farDz * farDz) > 576.0;
+        com.mojang.blaze3d.vertex.VertexConsumer edgeBuf = far
+                ? bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_)
+                : null;
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
             int by = (int) pts[i + 1];
@@ -570,6 +584,10 @@ public final class BlueprintAreaPreview {
                     wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
             net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
                     pose, bufferSource, box, r, g, b, a);
+            if (edgeBuf != null) {
+                drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
+                        Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
+            }
         }
     }
 
