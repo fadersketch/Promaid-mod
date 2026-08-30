@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
 import net.minecraft.util.Unit;
 import net.minecraft.world.entity.Entity;
@@ -633,6 +634,45 @@ BlockPos stand = findStand(newLevel,
             return rl == null ? "?" : rl.toString();
         } catch (Exception e) {
             return "?";
+        }
+    }
+
+    /**
+     * v1.1.0 实测二百零八：日程表详情页「传送到我身边」——只召唤指定 UUID 这一只
+     * 女仆（跨维度查找任意已加载世界）。豁免口径与一键集合一致：死亡/骑乘/坐着/
+     * 在家模式（排班自动 home）保持原位——想强制召回先关闭她的排班；玩家主动操作
+     * 不受"干活中不拉/搭路中不拉"等自动拉回限制（人工意图优先）。
+     *
+     * @return 0=不在已加载区块/不是主人的女仆；1=已传回；2=主人身边无可站立点；
+     *         3=状态豁免（坐/骑/家/死亡）
+     */
+    public static int summonOne(ServerPlayer player, String uuid) {
+        try {
+            if (player == null || uuid == null || uuid.isEmpty()) {
+                return 0;
+            }
+            java.util.UUID uid = java.util.UUID.fromString(uuid);
+            EntityMaid maid = null;
+            for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+                net.minecraft.world.entity.Entity e = lvl.m_8791_(uid);
+                if (e instanceof EntityMaid m && m.m_6084_()) {
+                    maid = m;
+                    break;
+                }
+            }
+            if (maid == null) {
+                return 0;
+            }
+            if (!maid.m_21830_(player)) {
+                return 0; // 非主人的女仆（安全兜底）
+            }
+            if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()
+                    || maid.isMaidInSittingPose() || maid.isHomeModeEnable()) {
+                return 3; // 状态豁免（坐/骑/家/死亡——与一键集合同口径）
+            }
+            return teleportCore(maid, player) ? 1 : 2;
+        } catch (Exception e) {
+            return 0;
         }
     }
 

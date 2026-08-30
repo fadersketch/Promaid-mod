@@ -61,6 +61,8 @@ public final class ScheduleNetworking {
         // 成功"，观感=排班锁失效；守卫拒绝时主动发本包把客户端实体扳回服务端口径）
         CHANNEL.registerMessage(9, MaidTaskResyncPacket.class,
                 MaidTaskResyncPacket::encode, MaidTaskResyncPacket::decode, MaidTaskResyncPacket::handle);
+        CHANNEL.registerMessage(10, MaidSummonPacket.class,
+                MaidSummonPacket::encode, MaidSummonPacket::decode, MaidSummonPacket::handle);
     }
 
     /* ==================== 排班守卫拒绝 → 客户端重同步 ==================== */
@@ -649,6 +651,51 @@ public final class ScheduleNetworking {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             String.join("§r；", parts)));
                 }
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** C2S 日程表详情页「传送到我身边」（实测二百零八）：只召唤指定 UUID 这一只女仆
+     *  （跨维度查找任意已加载世界；豁免口径与一键集合同——坐/骑/家/死亡不传，回复说明原因）。
+     *  服务端参照 SummonPacket 结构：enqueueWork + 聊天回复。 */
+    public static class MaidSummonPacket {
+        public final String uuid;
+
+        public MaidSummonPacket(String uuid) {
+            this.uuid = uuid == null ? "" : uuid;
+        }
+
+        public static void encode(MaidSummonPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130072_(pkt.uuid, 64);
+        }
+
+        public static MaidSummonPacket decode(FriendlyByteBuf buf) {
+            try {
+                return new MaidSummonPacket(buf.m_130136_(64));
+            } catch (Exception e) {
+                return new MaidSummonPacket("");
+            }
+        }
+
+        public static void handle(MaidSummonPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null) {
+                    return;
+                }
+                int r = com.maidsmart.follow.MaidChunkLoadManager.summonOne(player, pkt.uuid);
+                String msg;
+                if (r == 1) {
+                    msg = "§a已将女仆传送到你身边";
+                } else if (r == 2) {
+                    msg = "§7女仆没有传送：你身边 16 格内无可站立点（高空/虚空）——落地后再点";
+                } else if (r == 3) {
+                    msg = "§7她坐着/骑乘/在家模式（排班中）保持原位——想强制召回先关闭排班/解除坐姿";
+                } else {
+                    msg = "§7没找到她——不在已加载区块/不是你的女仆（试试列表页「⚑ 一键集合」，会自动强载区块召回）";
+                }
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(msg));
             });
             ctx.get().setPacketHandled(true);
         }
