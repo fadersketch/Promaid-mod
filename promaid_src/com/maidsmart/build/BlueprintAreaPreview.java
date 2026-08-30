@@ -531,19 +531,16 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测二百零九【崩溃修复】：实测二百零四改手写 debugQuads 顶点后在同一台
-     * 客户端触发 "Not filled all elements of the vertex Index: 14"（BufferBuilder 被
-     * epicfight / ponder 的 mixin 变换，手写顶点序列校验不再通过）→ 崩溃。
-     * 回退到 DebugRenderer.renderFilledBox（m_269311_）——它是 vanilla debug 管线，
-     * 一百四十七~二百零一长期使用无一崩溃；它用 TRIANGLE_STRIP，多盒连续提交会在
-     * 盒间生成跨盒连接三角形（"乱麻/太小/出区块看不见"观感的来源），现在每盒后
-     * 立即 m_109912_(debugFilledBox) flush——每个盒子独立成条，盒间零连接面：
-     * 每盒精确 1×1×1 满体积、无跨盒面、无距离剔除，区块内外都可见。
-     *
-     * 为什么弃用 renderSingleBlock（实测一百零九方案）：Forge 版 7 参 renderSingleBlock
-     * 的字节码实证——它遍历 BakedModel.getRenderTypes 按【模型自身图层】渲染、写进
-     * 各图层自己的 buffer，【完全忽略传入的 translucent renderType】。幽灵顶点落入
-     * 早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见。
+     * v1.1.0 实测二百一十【崩溃二次修复】：二百零九直接把每盒 flush 放在了共享的主
+     * bufferSource 上——同一帧里主源的描边（lines）与填充盒（debugFilledBox）共用一个
+     * 即时建造器（1.20.1 BufferSource 对未入 map 的渲染类型统一取 f_109904_），中途
+     * flush 后本地描边指针指向的建造器已不在"开始"状态 → "BufferBuilder not started"
+     * 二次崩溃（实测二百零四的手写顶点崩溃是同一根因的另一面貌）。现在幽灵填充用
+     * 【每帧独立的专用 BufferSource】（GhostBufferSource）——每盒 flush 只影响它自己，
+     * 主 bufferSource 完全不受干扰：描边/红框/本模组其他渲染/其他模组的渲染全隔离。
+     * 渲染本体 = DebugRenderer.renderFilledBox（m_269311_，vanilla debug 管线，长期
+     * 使用零崩溃）；每盒立即 flush 断掉 TRIANGLE_STRIP 跨盒连接三角形——每盒精确
+     * 1×1×1 满体积、无跨盒面、无距离剔除，区块内外都清晰可见。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -571,8 +568,13 @@ public final class BlueprintAreaPreview {
         // 每盒补画棱线（DebugRenderer 描边轮廓——从外看框内建筑轮廓清晰可辨；
         // 近处密盒肉眼可辨，不画省性能）。
         var bufferSource = mc.m_91269_().m_110104_();
-        net.minecraft.client.renderer.MultiBufferSource.BufferSource bs =
-                (net.minecraft.client.renderer.MultiBufferSource.BufferSource) bufferSource;
+        // 实测二百一十【崩溃二次修复】：幽灵填充一律走【独立 BufferSource】——1.20.1 的
+        // BufferSource 对未入 map 的渲染类型（debugFilledBox / lines 都在其列）共用同一个
+        // 即时建造器；在共享主 bufferSource 上同时写填充盒+描边（两次跨类型取缓冲/中途
+        // flush）会互踩建造器状态——实测二百零四"Not filled all elements"、二百零九
+        // "BufferBuilder not started" 都是这个。专用源每帧新建、只写 debugFilledBox、
+        // 每盒 flush 只影响它自己；主 bufferSource 的描边/红框完全隔离不受影响。
+        GhostBufferSource ghostSource = new GhostBufferSource();
         double farDx = camera.f_82479_ - (ox + 0.5);
         double farDz = camera.f_82481_ - (oz + 0.5);
         boolean far = (farDx * farDx + farDz * farDz) > 576.0;
@@ -589,16 +591,14 @@ public final class BlueprintAreaPreview {
             double wz = oz + bz;
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                     wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
-            // 实测二百零九【崩溃修复】：手写 debugQuads 顶点在这台客户端（epicfight/
-            // ponder 的 BufferBuilder mixin 共存）触发 "Not filled all elements of the
-            // vertex"（Index 14）崩溃——回退到运行时验证过的 DebugRenderer.renderFilledBox
-            // （m_269311_，实测二百零四前长期使用无一崩溃）。
-            // 条带连接的副作用（盒间跨盒三角形 = 乱麻观感）用【每盒立即 flush】断掉：
-            // m_109912_(debugFilledBox) 提交刷新该管线——每个盒子独立成条，互不连接，
-            // 满体积 1×1×1、无跨盒面、任意距离可见都与二百零四目标一致。
+            // DebugRenderer.renderFilledBox（m_269311_）是 vanilla debug 管线，实测
+            // 一百四十七~二百零一长期使用零崩溃；它是 TRIANGLE_STRIP，多盒连续提交
+            // 会产生盒间跨盒连接三角形（乱麻观感）——用【每盒立即 flush】（m_109912_）
+            // 让每个盒子独立成条：满体积 1×1×1、无跨盒连接面、无距离剔除，区块内外
+            // 都清晰可见；flush 发生在专用源上，不再破坏其他缓冲。
             net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, bufferSource, box, r, g, b, a);
-            bs.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
+                    pose, ghostSource, box, r, g, b, a);
+            ghostSource.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
             if (edgeBuf != null) {
                 drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
                         Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
@@ -611,6 +611,16 @@ public final class BlueprintAreaPreview {
             lastDrawnCount = drawn;
             com.maidsmart.tool.PromaidLog.log("投影", "drawGhost(" + id + ") 盒数="
                     + drawn + " 远距描边=" + far);
+        }
+    }
+
+    /** 实测二百一十：幽灵方块专用 BufferSource——每帧新建、只写 debugFilledBox、
+     *  每盒 flush 只影响自己；主 bufferSource（描边/红框/其他模组渲染）完全隔离。
+     *  构造器 protected，子类化即接（Builder 初始 6KB，按需自动增长）。 */
+    private static final class GhostBufferSource
+            extends net.minecraft.client.renderer.MultiBufferSource.BufferSource {
+        GhostBufferSource() {
+            super(new com.mojang.blaze3d.vertex.BufferBuilder(4096), new java.util.HashMap<>());
         }
     }
 
