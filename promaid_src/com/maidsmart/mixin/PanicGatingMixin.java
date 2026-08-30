@@ -24,6 +24,17 @@ public abstract class PanicGatingMixin {
     @Inject(method = "start", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noPanicWhileWorking(ServerLevel level, EntityMaid maid, long gameTime,
                                                CallbackInfo ci) {
+        // v1.1.0 实测一百九十六【有保命道具→不惊慌逃跑】（用户："让女仆保证在有保命
+        // 道具的时候不触发自保逃跑"）：TLM 原生 MaidPanicTask 是 CORE 优先级 1——
+        // 只被前面的"干活+血量≥30%"门控管着，血量 <30% 的女仆即使【带着绀珠之药/
+        // 不死图腾】也会被 TLM 原版恐慌满场跑，绕过了自保行为的 canFlee 判定
+        // （自保 250 的逃跑分支 100/1091/1109 都查了保命物品，唯独原生恐慌没查）。
+        // 修复：与自保同口径——有保命物品且 COMBAT_FLEE_WITH_SAVE_ITEM 关闭
+        // → 取消恐慌（她死不了，治疗/战斗由自保行为接管）。canFlee 已内含开关判定。
+        if (!com.maidsmart.combat.SelfPreservationBehavior.canFlee(maid)) {
+            ci.cancel();
+            return;
+        }
         if (com.maidsmart.config.MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get()
                 && MaidWorkTags.isNonCombatWork(maid)
                 && maid.m_21223_() >= maid.m_21233_() * 0.3f) {
