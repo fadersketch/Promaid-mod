@@ -531,16 +531,19 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测二百零四【幽灵方块再根治】：放弃 DebugRenderer.renderFilledBox
-     * （实测一百四十七方案）。字节码实证它走 RenderType.debugFilledBox =
-     * POSITION_COLOR + 【TRIANGLE_STRIP】——多个盒子连续提交进【同一条 strip】，
-     * 盒与盒之间自动产生连接三角形：2600 个幽灵盒连成一张乱麻三角网，单盒面
-     * 被跨盒连接面搅碎（观感"方块太小"）、视角移到区块外后连接面吃掉内侧盒面
-     * （"走出红色框就消失"）、近景里整片看不到成型的盒子（"蓝色幽灵看不见"）。
-     * 修复：改为 RenderType.debugQuads（m_269166_；POSITION_COLOR + QUADS，
-     * 官方为彩色半透明调试盒制作的管线，透明混合 + 双面不剔除）——每个盒子
-     * 逐面独立提交 4 顶点 QUADS，无跨盒连接、每盒精确 1×1×1 满体积、无任何
-     * 距离剔除：区块内/外、远近都能看到与真实方块同体积的幽灵方块。
+     * v1.1.0 实测二百零九【崩溃修复】：实测二百零四改手写 debugQuads 顶点后在同一台
+     * 客户端触发 "Not filled all elements of the vertex Index: 14"（BufferBuilder 被
+     * epicfight / ponder 的 mixin 变换，手写顶点序列校验不再通过）→ 崩溃。
+     * 回退到 DebugRenderer.renderFilledBox（m_269311_）——它是 vanilla debug 管线，
+     * 一百四十七~二百零一长期使用无一崩溃；它用 TRIANGLE_STRIP，多盒连续提交会在
+     * 盒间生成跨盒连接三角形（"乱麻/太小/出区块看不见"观感的来源），现在每盒后
+     * 立即 m_109912_(debugFilledBox) flush——每个盒子独立成条，盒间零连接面：
+     * 每盒精确 1×1×1 满体积、无跨盒面、无距离剔除，区块内外都可见。
+     *
+     * 为什么弃用 renderSingleBlock（实测一百零九方案）：Forge 版 7 参 renderSingleBlock
+     * 的字节码实证——它遍历 BakedModel.getRenderTypes 按【模型自身图层】渲染、写进
+     * 各图层自己的 buffer，【完全忽略传入的 translucent renderType】。幽灵顶点落入
+     * 早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -568,11 +571,11 @@ public final class BlueprintAreaPreview {
         // 每盒补画棱线（DebugRenderer 描边轮廓——从外看框内建筑轮廓清晰可辨；
         // 近处密盒肉眼可辨，不画省性能）。
         var bufferSource = mc.m_91269_().m_110104_();
+        net.minecraft.client.renderer.MultiBufferSource.BufferSource bs =
+                (net.minecraft.client.renderer.MultiBufferSource.BufferSource) bufferSource;
         double farDx = camera.f_82479_ - (ox + 0.5);
         double farDz = camera.f_82481_ - (oz + 0.5);
         boolean far = (farDx * farDx + farDz * farDz) > 576.0;
-        com.mojang.blaze3d.vertex.VertexConsumer ghostBuf =
-                bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.m_269166_());
         com.mojang.blaze3d.vertex.VertexConsumer edgeBuf = far
                 ? bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_)
                 : null;
@@ -584,8 +587,18 @@ public final class BlueprintAreaPreview {
             double wx = ox + bx;
             double wy = oy + by;
             double wz = oz + bz;
-            // 实测二百零四：debugQuads 逐面独立 QUADS（不复用 stroke 的 renderFilledBox）
-            drawGhostBox(pose, ghostBuf, camera, wx, wy, wz, r, g, b, a);
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
+            // 实测二百零九【崩溃修复】：手写 debugQuads 顶点在这台客户端（epicfight/
+            // ponder 的 BufferBuilder mixin 共存）触发 "Not filled all elements of the
+            // vertex"（Index 14）崩溃——回退到运行时验证过的 DebugRenderer.renderFilledBox
+            // （m_269311_，实测二百零四前长期使用无一崩溃）。
+            // 条带连接的副作用（盒间跨盒三角形 = 乱麻观感）用【每盒立即 flush】断掉：
+            // m_109912_(debugFilledBox) 提交刷新该管线——每个盒子独立成条，互不连接，
+            // 满体积 1×1×1、无跨盒面、任意距离可见都与二百零四目标一致。
+            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
+                    pose, bufferSource, box, r, g, b, a);
+            bs.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
             if (edgeBuf != null) {
                 drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
                         Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
@@ -599,48 +612,6 @@ public final class BlueprintAreaPreview {
             com.maidsmart.tool.PromaidLog.log("投影", "drawGhost(" + id + ") 盒数="
                     + drawn + " 远距描边=" + far);
         }
-    }
-
-    /** 实测二百零四：满体积幽灵盒——6 面 × 4 顶点独立 QUADS（精确 1×1×1，
-     *  无跨盒连接面；坐标 = 世界坐标 + 相机（与 pose 的 -相机平移对消，
-     *  与红框/描边统一口径）） */
-    private static void drawGhostBox(com.mojang.blaze3d.vertex.PoseStack pose,
-                                     com.mojang.blaze3d.vertex.VertexConsumer v,
-                                     net.minecraft.world.phys.Vec3 camera,
-                                     double wx, double wy, double wz,
-                                     float r, float g, float b, float a) {
-        double cx = camera.f_82479_;
-        double cy = camera.f_82480_;
-        double cz = camera.f_82481_;
-        double x0 = wx + cx, x1 = wx + 1.0 + cx;
-        double y0 = wy + cy, y1 = wy + 1.0 + cy;
-        double z0 = wz + cz, z1 = wz + 1.0 + cz;
-        org.joml.Matrix4f m = pose.m_85850_().m_252922_();
-        // +Z
-        ghostQuad(v, m, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, r, g, b, a);
-        // -Z
-        ghostQuad(v, m, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, r, g, b, a);
-        // +X
-        ghostQuad(v, m, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, r, g, b, a);
-        // -X
-        ghostQuad(v, m, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, r, g, b, a);
-        // +Y（顶面）
-        ghostQuad(v, m, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1, r, g, b, a);
-        // -Y（底面）
-        ghostQuad(v, m, x0, y0, z0, x0, y0, z1, x1, y0, z1, x1, y0, z0, r, g, b, a);
-    }
-
-    private static void ghostQuad(com.mojang.blaze3d.vertex.VertexConsumer v,
-                                  org.joml.Matrix4f m,
-                                  double ax, double ay, double az,
-                                  double bx, double by, double bz,
-                                  double cx, double cy, double cz,
-                                  double dx, double dy, double dz,
-                                  float r, float g, float b, float a) {
-        v.m_252986_(m, (float) ax, (float) ay, (float) az).m_85950_(r, g, b, a).m_5752_();
-        v.m_252986_(m, (float) bx, (float) by, (float) bz).m_85950_(r, g, b, a).m_5752_();
-        v.m_252986_(m, (float) cx, (float) cy, (float) cz).m_85950_(r, g, b, a).m_5752_();
-        v.m_252986_(m, (float) dx, (float) dy, (float) dz).m_85950_(r, g, b, a).m_5752_();
     }
 
     /** 画一个方框的 12 条棱（TLM RenderHelper.renderLine） */
