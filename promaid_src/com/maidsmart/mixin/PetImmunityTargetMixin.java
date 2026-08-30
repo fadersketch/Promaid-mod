@@ -16,11 +16,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 标记目标直接返回 false：仇恨不进攻击记忆；TLM TaskAttack 的 StopAttackingIf
  * TargetInvalid（javap 实证原版也在用）同谓词会自动清掉已持有的目标（去仇恨）。
  * 伤害层的兜底在 PetImmunityGuard（LivingHurtEvent 总闸）。
+ *
+ * 实测一百九十七【启动崩溃热修复】：@Mixin target 是【接口】IAttackTask——Mixin
+ * 0.8.5 的 SubType 校验要求接口 target 必须用 interface mixin（class mixin 直接
+ * PREPARE 失败 = 游戏启动即崩，玩家粘贴日志实证）。本类改为 interface + default
+ * 注入方法（对接口 default 方法 canAttack 的 HEAD 注入语义不变）。
  */
 @Mixin(com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask.class)
-public abstract class PetImmunityTargetMixin {
+public interface PetImmunityTargetMixin {
     @Inject(method = "canAttack", at = @At("HEAD"), cancellable = true)
-    private void maidsmart$petImmune(EntityMaid maid, LivingEntity target,
+    default void maidsmart$petImmune(EntityMaid maid, LivingEntity target,
                                      CallbackInfoReturnable<Boolean> cir) {
         try {
             if (com.maidsmart.combat.PetImmunityGuard.isPetMarked(maid, target)) {

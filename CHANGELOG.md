@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百九十七
+
+- 启动崩溃热修复（用户粘贴启动日志：`Mixin prepare failed preparing PetImmunityTargetMixin ... @Mixin target type mismatch: IAttackTask is an interface`——游戏在 PREPARE 阶段直接 FATAL 退出）：
+  - 【根因】一百九十三的宠物免疫混入用了**普通 class** @Mixin **接口** `IAttackTask`——Mixin 0.8.5 的 SubType 校验要求接口 target 必须用 **interface mixin**（class mixin 版本未在启动路径验证过，编译能过但运行即崩）
+  - 【修复】`PetImmunityTargetMixin` 改为 interface mixin + default 注入方法（注入点 canAttack 是接口 default 方法，HEAD 拦截语义不变）；宠物免疫判定（PetImmunityGuard.isPetMarked）不涉及改动——编译期已验证也无法在本地起客户端，本次以 Mixin 接口规范对齐为准
+  - 测试：重启游戏应正常进入主菜单；给怪命名「玩家宠物」→ 女仆仍不锁定不伤害
+
 ## 实测一百九十六
 
 - 有保命道具绝不逃跑（用户："让女仆保证在有保命道具的时候不触发自保逃跑"）：
