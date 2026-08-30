@@ -1,0 +1,138 @@
+Compiled from "RandomStroll.java"
+public class net.minecraft.world.entity.ai.behavior.RandomStroll {
+  public net.minecraft.world.entity.ai.behavior.RandomStroll();
+    Code:
+         0: aload_0
+         1: invokespecial #30                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static net.minecraft.world.entity.ai.behavior.OneShot<net.minecraft.world.entity.PathfinderMob> m_257965_(float);
+    Code:
+         0: fload_0
+         1: iconst_1
+         2: invokestatic  #317                // Method m_257798_:(FZ)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+         5: areturn
+
+  public static net.minecraft.world.entity.ai.behavior.OneShot<net.minecraft.world.entity.PathfinderMob> m_257798_(float, boolean);
+    Code:
+         0: fload_0
+         1: invokedynamic #326,  0            // InvokeDynamic #13:apply:()Ljava/util/function/Function;
+         6: iload_1
+         7: ifeq          18
+        10: invokedynamic #333,  0            // InvokeDynamic #14:test:()Ljava/util/function/Predicate;
+        15: goto          23
+        18: invokedynamic #338,  0            // InvokeDynamic #15:test:()Ljava/util/function/Predicate;
+        23: invokestatic  #342                // Method m_257629_:(FLjava/util/function/Function;Ljava/util/function/Predicate;)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+        26: areturn
+
+  public static net.minecraft.world.entity.ai.behavior.BehaviorControl<net.minecraft.world.entity.PathfinderMob> m_257960_(float, int, int);
+    Code:
+         0: fload_0
+         1: iload_1
+         2: iload_2
+         3: invokedynamic #353,  0            // InvokeDynamic #16:apply:(II)Ljava/util/function/Function;
+         8: invokedynamic #358,  0            // InvokeDynamic #17:test:()Ljava/util/function/Predicate;
+        13: invokestatic  #342                // Method m_257629_:(FLjava/util/function/Function;Ljava/util/function/Predicate;)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+        16: areturn
+
+  public static net.minecraft.world.entity.ai.behavior.BehaviorControl<net.minecraft.world.entity.PathfinderMob> m_257379_(float);
+    Code:
+         0: fload_0
+         1: invokedynamic #369,  0            // InvokeDynamic #18:apply:()Ljava/util/function/Function;
+         6: invokedynamic #374,  0            // InvokeDynamic #19:test:()Ljava/util/function/Predicate;
+        11: invokestatic  #342                // Method m_257629_:(FLjava/util/function/Function;Ljava/util/function/Predicate;)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+        14: areturn
+
+  public static net.minecraft.world.entity.ai.behavior.BehaviorControl<net.minecraft.world.entity.PathfinderMob> m_257751_(float);
+    Code:
+         0: fload_0
+         1: invokedynamic #381,  0            // InvokeDynamic #20:apply:()Ljava/util/function/Function;
+         6: invokedynamic #388,  0            // InvokeDynamic #21:test:()Ljava/util/function/Predicate;
+        11: invokestatic  #342                // Method m_257629_:(FLjava/util/function/Function;Ljava/util/function/Predicate;)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+        14: areturn
+
+  static {};
+    Code:
+         0: bipush        6
+         2: anewarray     #154                // class "[I"
+         5: dup
+         6: iconst_0
+         7: iconst_2
+         8: newarray       int
+        10: dup
+        11: iconst_0
+        12: iconst_1
+        13: iastore
+        14: dup
+        15: iconst_1
+        16: iconst_1
+        17: iastore
+        18: aastore
+        19: dup
+        20: iconst_1
+        21: iconst_2
+        22: newarray       int
+        24: dup
+        25: iconst_0
+        26: iconst_3
+        27: iastore
+        28: dup
+        29: iconst_1
+        30: iconst_3
+        31: iastore
+        32: aastore
+        33: dup
+        34: iconst_2
+        35: iconst_2
+        36: newarray       int
+        38: dup
+        39: iconst_0
+        40: iconst_5
+        41: iastore
+        42: dup
+        43: iconst_1
+        44: iconst_5
+        45: iastore
+        46: aastore
+        47: dup
+        48: iconst_3
+        49: iconst_2
+        50: newarray       int
+        52: dup
+        53: iconst_0
+        54: bipush        6
+        56: iastore
+        57: dup
+        58: iconst_1
+        59: iconst_5
+        60: iastore
+        61: aastore
+        62: dup
+        63: iconst_4
+        64: iconst_2
+        65: newarray       int
+        67: dup
+        68: iconst_0
+        69: bipush        7
+        71: iastore
+        72: dup
+        73: iconst_1
+        74: bipush        7
+        76: iastore
+        77: aastore
+        78: dup
+        79: iconst_5
+        80: iconst_2
+        81: newarray       int
+        83: dup
+        84: iconst_0
+        85: bipush        10
+        87: iastore
+        88: dup
+        89: iconst_1
+        90: bipush        7
+        92: iastore
+        93: aastore
+        94: putstatic     #409                // Field f_256848_:[[I
+        97: return
+}

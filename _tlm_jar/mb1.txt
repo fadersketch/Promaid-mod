@@ -1,0 +1,38 @@
+Compiled from "MaidBrain.java"
+class com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidBrain$1 {
+  static final int[] $SwitchMap$com$github$tartaricacid$touhoulittlemaid$entity$ai$brain$MaidSchedule;
+
+  static {};
+    Code:
+         0: invokestatic  #19                 // Method com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.values:()[Lcom/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule;
+         3: arraylength
+         4: newarray       int
+         6: putstatic     #21                 // Field $SwitchMap$com$github$tartaricacid$touhoulittlemaid$entity$ai$brain$MaidSchedule:[I
+         9: getstatic     #21                 // Field $SwitchMap$com$github$tartaricacid$touhoulittlemaid$entity$ai$brain$MaidSchedule:[I
+        12: getstatic     #25                 // Field com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.ALL:Lcom/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule;
+        15: invokevirtual #29                 // Method com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.ordinal:()I
+        18: iconst_1
+        19: iastore
+        20: goto          24
+        23: astore_0
+        24: getstatic     #21                 // Field $SwitchMap$com$github$tartaricacid$touhoulittlemaid$entity$ai$brain$MaidSchedule:[I
+        27: getstatic     #32                 // Field com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.NIGHT:Lcom/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule;
+        30: invokevirtual #29                 // Method com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.ordinal:()I
+        33: iconst_2
+        34: iastore
+        35: goto          39
+        38: astore_0
+        39: getstatic     #21                 // Field $SwitchMap$com$github$tartaricacid$touhoulittlemaid$entity$ai$brain$MaidSchedule:[I
+        42: getstatic     #35                 // Field com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.DAY:Lcom/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule;
+        45: invokevirtual #29                 // Method com/github/tartaricacid/touhoulittlemaid/entity/ai/brain/MaidSchedule.ordinal:()I
+        48: iconst_3
+        49: iastore
+        50: goto          54
+        53: astore_0
+        54: return
+      Exception table:
+         from    to  target type
+             9    20    23   Class java/lang/NoSuchFieldError
+            24    35    38   Class java/lang/NoSuchFieldError
+            39    50    53   Class java/lang/NoSuchFieldError
+}

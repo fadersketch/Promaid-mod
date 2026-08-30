@@ -25,6 +25,7 @@
     "PanicGatingMixin",
     "SchedulePullbackMixin",
     "SchedulePosTickMixin",
+    "ScheduleRangeMixin",
     "FarmSweepMixin",
     "MaidShearDropMixin",
     "MaidHoneyIgniteMixin",
