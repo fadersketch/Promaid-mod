@@ -461,7 +461,10 @@ public class ProMaidExtension implements ILittleMaid {
                         // 战斗/自保，高于施工区避让；自动喂食治疗主人 / 黑暗插火把 / 共享盾牌
                         Pair.of(190, new com.maidsmart.combat.MaidAidOwnerBehavior()),
                         Pair.of(185, new com.maidsmart.combat.MaidTorchPlacerBehavior()),
-                        Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior())
+                        Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior()),
+                        // v1.1.0 实测一百八十三：空闲散步（用户："增加女仆散步的频率和速度"）
+                        //——低于 TLM core 最高 99 与上面全部行为，只在真正空闲时生效
+                        Pair.of(50, new com.maidsmart.task.MaidStrollBehavior())
                         // v1.5.212：施工区避让已删除——自保 antiSuffocate 每 tick 防窒息
                         // 兜底后，"非建造女仆接近施工区会逃离"没有存在意义
                         //（原 Pair.of(150, new BuildAreaAvoidBehavior())）

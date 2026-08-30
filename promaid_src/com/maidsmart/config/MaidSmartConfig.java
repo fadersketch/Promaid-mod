@@ -364,6 +364,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMELT_ORES;
     // v1.1.0 实测一百八十二：通用可烧制物回退（有熔炉配方且非装备类即喂，装备类永不熔）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMELT_ANY;
+    // v1.1.0 实测一百八十三（用户："增加女仆散步的频率和速度"）：散步行为开关组
+    public static final ForgeConfigSpec.BooleanValue MISC_STROLL_ENABLED;
+    public static final ForgeConfigSpec.IntValue MISC_STROLL_INTERVAL;
+    public static final ForgeConfigSpec.IntValue MISC_STROLL_RADIUS;
+    public static final ForgeConfigSpec.DoubleValue MISC_STROLL_SPEED;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
@@ -419,6 +424,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.IntValue MISC_SCHEDULE_MIN_HOLD_TICKS;
     // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_FORCE_BRAIN_REFRESH;
+    // v1.1.0 实测一百八十三（用户："排班状态下增大活动的范围"）：排班/home 模式活动半径下限
+    public static final ForgeConfigSpec.IntValue SCHEDULE_ACTIVITY_RANGE;
     // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
     public static final ForgeConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
     // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
@@ -1192,6 +1199,16 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百八十二：通用可烧制物回退——治"女仆只投燃料不投烧制物"
         MISC_COOK_SMELT_ANY = BUILDER.comment("烧任何可烧制物（默认开）：背包没有食材白名单/矿物标签物品时，回退喂任何【当前世界有熔炉配方 且 非装备类】的物品——沙子→玻璃、圆石→石头、原木→木炭、各类模组食材/模组粗矿等都能喂（装备类永不熔：铁金钻石工具盔甲等有烧成粒配方的会被排除）；关闭 = 只按「熔炉烧矿物」+食材白名单喂")
                 .translation("config.promaid.misc.cookSmeltAny").define("cookSmeltAny", true);
+        // v1.1.0 实测一百八十三：散步行为——治 TLM 原生散步又少又慢又近（0.3 倍速/5 格/
+        // 概率 0.001×0.09²≈平均一两小时才走一次）
+        MISC_STROLL_ENABLED = BUILDER.comment("空闲散步（默认开）：女仆空闲时按间隔主动散步——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、概率约每两小时才触发一次）；战斗/自保/站桩工作/有移动目标时不打扰")
+                .translation("config.promaid.misc.strollEnabled").define("strollEnabled", true);
+        MISC_STROLL_INTERVAL = BUILDER.comment("散步间隔（tick，默认 200=10 秒）：空闲女仆每隔这么久散步一次（找得到落点就走，找不到顺延）")
+                .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
+        MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
+                .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
+        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 1.0 = 正常走路速度；TLM 原生散步只有 0.3 倍速）")
+                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 1.0, 0.3, 2.5);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
@@ -1295,6 +1312,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
     MISC_SCHEDULE_FORCE_BRAIN_REFRESH = BUILDER.comment("排班切段后大脑自愈（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：段任务应用成功后 3 秒，若女仆任务仍是段任务、但脑内无任何工作记忆（走位/攻击/目标——非坐姿站桩工作可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI；关 = 完全信任 TLM")
             .translation("config.promaid.misc.scheduleForceBrainRefresh").define("scheduleForceBrainRefresh", true);
+    // v1.1.0 实测一百八十三（用户："排班状态下增大活动的范围"）：TLM home 模式 restrictTo
+    // 的半径下限（TLM 自带 MAID_WORK/IDLE/SLEEP_RANGE 默认只有 8~16 格）
+    SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 32）：排班/在家模式下女仆的活动半径下限——TLM 原版工作/空闲/睡觉半径只有 8~16 格，范围稍大就出不去；本项取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住")
+            .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 32, 8, 512);
     // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
     // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
     MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
