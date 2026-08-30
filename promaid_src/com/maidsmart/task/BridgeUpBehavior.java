@@ -477,7 +477,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 的同时朝主人方向【前方一格脚下】也垫一块（斜上台阶，照伐木 slopeStep），
         // 垫完走上去——水平和垂直一起逼近，塔变成斜坡。
         // 前方格净空不足时退回纯垂直（等站位变化），不会把自己憋死。
+        // v1.1.0 实测二百【行为起来以后也挡】（用户选句："只挡启动、行为起来后 5 格
+        // 内照样铺"→"行为起来以后也挡"）：一百九十九只给平桥腿（dy<minDy）加了
+        // 距离门槛，斜上台阶腿（tryDiagStep，dy≥1）在 5 格内照样朝主人方向垫方块——
+        // 用户实测看到的就是它。与启动门/平桥腿同口径：水平距离 < startHDist 时
+        // 斜上台阶腿也不垫（垫脚下的垂直垫高 placeStep 保留——不朝水平方向垫块）。
         boolean diag = hDist > 1.2 && dy >= 1
+                && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()
                 && this.tryDiagStep(level, maid, hx, hz, hDist);
         // 实测一百七十九：主人在正下方（hDist≤1.2 且 dy<0）也导航逼近——旧版站桩
         // 干等；寻路会绕行/走下坡，比原地站着自然
