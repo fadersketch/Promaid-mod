@@ -100,11 +100,27 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_();
     }
 
-    /** 占用当前绑定的炉子（替换旧占用） */
+    /** 占用当前绑定的炉子（替换旧占用）。
+     *  v1.1.0 实测一百八十六：登记前【所有权校验】——findFurnace 会跳过别人占用的
+     *  炉子，但 m_6735_ 重启路径（furnacePos 保留 + myFurnaceKey 已释放）直接调这里
+     *  put 覆盖写，可把另一只女仆在用的炉子抢过来 → 两女仆挤一个炉、另一炉闲置
+     *  （"偶有发生"的竞争性根因）。现在别人在占（占用者存活）→ 放弃本炉并清空
+     *  furnacePos，走 doTick 重新找炉。 */
     private void claimFurnace(ServerLevel level, EntityMaid maid, BlockPos pos) {
+        String k = furnaceKey(level, pos);
+        java.util.UUID owner = FURNACE_USERS.get(k);
+        if (owner != null && !owner.equals(maid.m_20148_())) {
+            net.minecraft.world.entity.Entity o = level.m_8791_(owner);
+            if (o != null && o.m_6084_()) {
+                this.furnacePos = null; // 别人在用——放弃本炉，重新找炉
+                this.releaseFurnace();
+                return;
+            }
+            FURNACE_USERS.remove(k); // 占用者没了 → 释放后再占
+        }
         this.releaseFurnace();
-        this.myFurnaceKey = furnaceKey(level, pos);
-        FURNACE_USERS.put(this.myFurnaceKey, maid.m_20148_());
+        this.myFurnaceKey = k;
+        FURNACE_USERS.put(k, maid.m_20148_());
     }
 
     /** 释放本实例占用的炉子（仅当占用者是自己） */
@@ -245,9 +261,25 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /** v1.1.0 实测一百八十六：轮次日志状态迁移式——同状态只记一次（旧版每处理轮
+     *  一条，绑定炉子无料可喂时日志被刷爆）。喂料成功/收成品（状态变化）后重记，
+     *  完整反映"有料→无料→再喂上"的真实迁移。 */
+    private static final java.util.Map<java.util.UUID, String> LAST_ROUND_OUTCOME = new HashMap<>();
+
+    /** 记录一轮处理结果（同状态只记一次）——返回是否记录了本次（false = 与上次同状态，跳过） */
+    private boolean logRound(EntityMaid maid, String beName, String outcome, String detail) {
+        String last = LAST_ROUND_OUTCOME.get(maid.m_20148_());
+        if (outcome.equals(last)) {
+            return false;
+        }
+        LAST_ROUND_OUTCOME.put(maid.m_20148_(), outcome);
+        LOGGER.info("cook round: maid={} be={} {}",
+                com.maidsmart.tool.PromaidLog.nameOf(maid), beName, detail);
+        return true;
+    }
+
     private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
         IItemHandler maidInv = maid.getMaidInv();
-        String maidName = com.maidsmart.tool.PromaidLog.nameOf(maid);
         String beName = be == null ? "null" : be.getClass().getSimpleName();
         // 1. 收取成品
         ItemStack result = furnace.m_8020_(2);
@@ -257,8 +289,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             if (!left.m_41619_()) {
                 furnace.m_6836_(2, left);
             }
-            LOGGER.info("cook round: maid={} be={} tookOutput={}",
-                    maidName, beName, taken);
+            this.logRound(maid, beName, "output", "tookOutput=" + taken);
         }
         // 2. 补食材（槽 0 空）
         if (furnace.m_8020_(0).m_41619_()) {
@@ -283,14 +314,14 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
             if (!input.m_41619_()) {
                 furnace.m_6836_(0, input);
-                LOGGER.info("cook round: maid={} be={} fedSlot0={}",
-                        maidName, beName, input);
+                this.logRound(maid, beName, "fed", "fedSlot0=" + input);
             } else {
-                LOGGER.info("cook round: maid={} be={} slot0Empty但无料可喂（背包无食材/矿物或配方不匹配）",
-                        maidName, beName);
-                // v1.1.0 实测一百八十二：背包内容 dump（30 秒限频，latest.log 搜
-                // "cook no-feed diag"）——一次日志区分"真没有可喂物品"与"有但判定不认"
-                this.dumpInvOnNoFeed(level, maid, maidInv, beName);
+                // v1.1.0 实测一百八十六：迁移式记录（同状态只打一条，防刷屏）——
+                // 进入"无料可喂"状态时记一条 + 背包 dump（30 秒限频）
+                if (this.logRound(maid, beName, "nofeed",
+                        "slot0Empty但无料可喂（背包无食材/矿物或配方不匹配）")) {
+                    this.dumpInvOnNoFeed(level, maid, maidInv, beName);
+                }
             }
         }
         // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
