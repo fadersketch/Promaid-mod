@@ -1662,7 +1662,7 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 2）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
         // v1.1.0 实测一百八十七：平桥启动水平距离（用户："水平距离搭建方块有没有启动要求呢？加个启动要求"）
         this.rows.add(new NumRow("平桥启动距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_START_H_DIST.get()),
-                s -> setDouble(MaidSmartConfig.BRIDGE_START_H_DIST, s), "平桥启动水平距离（格，默认 6）：女仆与你【水平距离】达到此值、且朝你方向前方脚下悬空才启动水平搭桥（垫块踩过去）——旧版 2.5 格就启动太敏感（你就在沟对面几步远也垫块、来回启停）；设 3 = 最灵敏（接近旧版行为）。竖直搭高（你更高、原地垫柱）不受影响"));
+                s -> setDouble(MaidSmartConfig.BRIDGE_START_H_DIST, s), "平桥启动水平距离（格，默认 5）：女仆与你【水平距离】达到此值、且朝你方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随（一百九十九按你要求定为 5）；范围 3~64（3 = 最灵敏）。竖直搭高（你更高、原地垫柱）不受影响"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（搭一半挨打）；刷怪频繁的包里可再调小，过大会导致搭路几乎永不触发"));
         this.rows.add(new NumRow("搭路节奏（tick/块）", String.valueOf(MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get()),
