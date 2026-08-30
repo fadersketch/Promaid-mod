@@ -20,5 +20,9 @@
   "config.promaid.memory.personaUnify": "Persona unification",
   "config.promaid.build.machineSmart": "Redstone machine smart build (machine order + live placement + auto-start)",
   "key.categories.promaid": "Promaid Building",
-  "key.promaid.build_rotate": "Rotate Blueprint Orientation (90° per press)"
+  "key.promaid.build_rotate": "Rotate Blueprint Orientation (90° per press)",
+  "bubble.callresponse.npc_event.pending": ". . .",
+  "bubble.callresponse.npc_event.food_thanks": "Thank you, Master! I will enjoy it.",
+  "bubble.callresponse.npc_event.food_promise_timeout": "Were you only teasing me, Master...?",
+  "bubble.callresponse.npc_event.food_repeat": "Why is it this one again...?"
 }
