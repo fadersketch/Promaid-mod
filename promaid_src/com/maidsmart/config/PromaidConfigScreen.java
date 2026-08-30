@@ -1107,7 +1107,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.MINE_UP_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MINE_UP_RANGE, s), "垂直向上范围（格）：找头顶多高的矿（悬崖/天花板矿脉）；调大能发现高处矿"));
         this.rows.add(new NumRow("穿透预算", String.valueOf(MaidSmartConfig.MINE_BREAK_BUDGET.get()),
-                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算（默认 6）：选矿时统计到矿之间要穿过的实心方块层数（含石头/泥土），超过预算的矿不选、走近再看；调大=爱穿墙打隧道，调小=只挑暴露的矿"));
+                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算（默认 22）：选矿时统计到矿之间要穿过的实心方块层数（含石头/泥土），超过预算的矿不选、走近再看；调大=爱穿墙打隧道，调小=只挑暴露的矿"));
         this.rows.add(new NumRow("价值权重", String.valueOf(MaidSmartConfig.MINE_VALUE_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.MINE_VALUE_WEIGHT, s), "价值权重：矿石价值对选矿的加成——钻石/绿宝石 500 分、铁/金 250、煤 100；权重越高高价值矿越优先（哪怕更远）"));
         this.rows.add(new NumRow("深度惩罚", String.valueOf(MaidSmartConfig.MINE_DEPTH_PENALTY.get()),
@@ -1653,16 +1653,16 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("搭路", MaidSmartConfig.BRIDGE_ENABLED.get(),
                 v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：周围无威胁、女仆背包有方块时，她走过去垫方块靠近主人——主人【不低于女仆】时水平多远都启动平桥追逐（前方悬空铺桥、实心地面走路，参考僵尸搭桥追人，v1.1.0 实测一百六十五）；主人【更高】时垂直搭高靠近（搭的方块 N 秒后自动回收）；默认关闭"));
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 7）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 32）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 128）：主人【高于女仆】需爬高/或女仆已在空中时，你离得再远她也直接铺桥走过来——空中没有'走路过去'的选项；设 0 关闭远距（只保留近距逻辑）。平路/低高差追逐已不受任何距离上限约束（v1.1.0 实测一百六十五）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_AIR_MAX_DIST, s), "空中搭桥距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，你离得再远她也直接铺桥走过来——空中没有'走路过去'的选项；设 0 关闭远距（只保留近距逻辑）。平路/低高差追逐已不受任何距离上限约束（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("最小高差（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_DY.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 2）：你至少高于女仆这么多格才搭路（平路走路处理）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 6）：你至少高于女仆这么多格才走垂直搭高（平路走路/铺桥处理）"));
         this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),
-                s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 2）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
+                s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 3）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
         // v1.1.0 实测一百八十七：平桥启动水平距离（用户："水平距离搭建方块有没有启动要求呢？加个启动要求"）
         this.rows.add(new NumRow("平桥启动距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_START_H_DIST.get()),
-                s -> setDouble(MaidSmartConfig.BRIDGE_START_H_DIST, s), "平桥启动水平距离（格，默认 5）：女仆与你【水平距离】达到此值、且朝你方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随（一百九十九按你要求定为 5）；范围 3~64（3 = 最灵敏）。竖直搭高（你更高、原地垫柱）不受影响"));
+                s -> setDouble(MaidSmartConfig.BRIDGE_START_H_DIST, s), "平桥启动水平距离（格，默认 6）：女仆与你【水平距离】达到此值、且朝你方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随；范围 3~64（3 = 最灵敏）。竖直搭高（你更高、原地垫柱）不受影响"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_THREAT_DIST, s), "威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（搭一半挨打）；刷怪频繁的包里可再调小，过大会导致搭路几乎永不触发"));
         this.rows.add(new NumRow("搭路节奏（tick/块）", String.valueOf(MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get()),
