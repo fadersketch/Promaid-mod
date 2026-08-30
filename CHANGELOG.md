@@ -1,5 +1,13 @@
 ﻿# 更新日志
 
+## 实测二百一十
+
+- 幽灵方块**二次崩溃**修复（用户再次崩溃日志：`BufferBuilder not started`，堆栈经 TLM RenderHelper.renderLine → drawBoxEdges → drawGhost）：
+  - 【根因】二百零九把"每盒 flush"直接放在了共享的主 bufferSource 上——字节码实证：1.20.1 的 `MultiBufferSource.BufferSource` 对【未入 map 的渲染类型】（debugFilledBox、lines 都在其列）统一使用同一个即时建造器（f_109904_），一次只允许一个活动类型；同一帧里描边（lines）与填充盒（debugFilledBox）在此建造器上互相切换/中途 flush → 本地描边指针指向的建造器已不在"开始"状态 → `BufferBuilder not started` 崩溃（实测二百零四的"Not filled all elements Index:14"是同一根因的另一面貌）
+  - 【修复】幽灵填充改用【每帧独立的专用 BufferSource】（GhostBufferSource：子类化构造器，每次 drawGhost 新建，只写 debugFilledBox）：每盒 flush 只影响它自己，主 bufferSource（描边/红框/其他模组的渲染事件）完全隔离——两条崩溃路径都堵死
+  - 渲染本体保持 DebugRenderer.renderFilledBox + 每盒 flush（满体积 1×1×1、无跨盒连接面、无距离剔除的视觉效果不变）
+- 测试：进游戏 → 点「建造此图纸」→ 蓝色幽灵应正常显示不再崩溃；确认建造后走出区块看橙色幽灵；这次两个崩溃点（手动顶点/共享源 flush）均已按字节码级证据修复
+
 ## 实测二百零九
 
 - 幽灵方块渲染崩溃修复（用户崩溃日志：`BufferBuilder.endVertex` 抛出 "Not filled all elements of the vertex Index: 14"，堆栈直指 BlueprintAreaPreview.ghostQuad）：
