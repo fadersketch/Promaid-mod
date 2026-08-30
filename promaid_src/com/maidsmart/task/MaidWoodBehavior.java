@@ -834,7 +834,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // pickupWoodDrops 收进背包；捡不到的留给拾取任务处理，不再打断挖矿流程。
         // v1.5.87：搭方块防掉落窗口——刚搭完方块钳制在格子中心（潜行效果，速度不变），
         // 防止重心滑出方块边缘从柱子上掉下去；v1.5.88 可配置（mine.pillarGuard）
-        if (com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_GUARD.get() && this.pillarGuardTicks > 0) {
+        if (com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_GUARD.get() && this.pillarGuardTicks > 0
+                && !BlockWalkOn.isActive(maid)) { // 实测一百九十二：步进推送期间不钳制（防按回上一块中心与推送互相抵消）
             this.pillarGuardTicks--;
             this.pillarGuard(level, maid);
         }
@@ -1477,6 +1478,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * 搭高失败（没料/头顶堵）不立刻放弃——退到"走过去"兜底，走不通由导航处理。
      */
     private void approachWood(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测一百九十二【垫块后走上去】——步进推送消费本 tick（不导航不垫块）；
+        // 旧版垫完靠 walkToStep 寻路：跨沟/断崖半路折断 → 女仆踩不上刚垫的方块，
+        // 在某几格上死循环（用户："运动的幅度真的太小了"）
+        if (BlockWalkOn.tick(maid)) {
+            return;
+        }
         BlockPos t = this.targetPos;
         double hx = t.m_123341_() + 0.5 - maid.m_20185_();
         double hz = t.m_123343_() + 0.5 - maid.m_20189_();
@@ -1517,7 +1524,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // → 女仆在树旁站桩干等；放宽后中距离持续垫台阶/铺桥逼近（挖矿同款行为）
         if (dy >= 1 && hDist > 2.5 && hDist <= 8.0) {
             if (this.slopeStep(level, maid, hx, hz, hDist)) {
-                this.walkToStep(level, maid, hx, hz, hDist);
+                this.startStepOn(maid, hx, hz, hDist);
                 return;
             }
         }
@@ -1525,7 +1532,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.113：搭桥后【走一步上桥】——旧版搭完直接 return（无移动目标）
         // → 女仆站在桥头"搭一格就站着不动"根因
         if (this.bridgeToWood(level, maid, hx, hz, hDist)) {
-            this.walkToStep(level, maid, hx, hz, hDist);
+            this.startStepOn(maid, hx, hz, hDist);
             return;
         }
         // v1.5.87：走路目标 = 矿基座（矿下方 1 格）——旧版目标是矿本身（常在空中/岩壁内），
@@ -1684,6 +1691,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             stand = stand.m_7918_(0, 1, 0); // 前方格被占用（方块顶起）→ 站上一格
         }
         this.setWalkTarget(maid, stand, approachSpeed(maid, this.targetPos));
+    }
+
+    /** v1.1.0 实测一百九十二：垫台阶/桥块后登记"走上去"目标（BlockWalkOn 持续推送，
+     *  踏入即停）——取代寻路版 walkToStep（跨沟/断崖寻路半路折断 = 死循环根因） */
+    private void startStepOn(EntityMaid maid, double hx, double hz, double hDist) {
+        int y = maid.m_20183_().m_123342_();
+        int tx = (int) Math.floor(maid.m_20185_() + hx / hDist);
+        int tz = (int) Math.floor(maid.m_20189_() + hz / hDist);
+        BlockWalkOn.start(maid, tx + 0.5, y, tz + 0.5);
     }
 
     /**
