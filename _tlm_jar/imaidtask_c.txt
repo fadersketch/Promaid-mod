@@ -1,0 +1,181 @@
+Compiled from "IMaidTask.java"
+public interface com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask {
+  public static final int VERTICAL_SEARCH_RANGE;
+
+  public abstract net.minecraft.resources.ResourceLocation getUid();
+
+  public abstract net.minecraft.world.item.ItemStack getIcon();
+
+  public abstract net.minecraft.sounds.SoundEvent getAmbientSound(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+
+  public abstract java.util.List<com.mojang.datafixers.util.Pair<java.lang.Integer, net.minecraft.world.entity.ai.behavior.BehaviorControl<? super com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> createBrainTasks(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+
+  public default java.util.List<com.mojang.datafixers.util.Pair<java.lang.Integer, net.minecraft.world.entity.ai.behavior.BehaviorControl<? super com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> createRideBrainTasks(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: invokestatic  #32                 // Method java/util/Collections.emptyList:()Ljava/util/List;
+         3: areturn
+
+  public default boolean isEnable(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  public default boolean isHidden(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_0
+         1: ireturn
+
+  public default boolean enableLookAndRandomWalk(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  public default boolean enablePanic(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  public default boolean enableEating(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_1
+         1: ireturn
+
+  public default boolean workPointTask(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_0
+         1: ireturn
+
+  public default boolean canSitInJoy(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, java.lang.String);
+    Code:
+         0: iconst_0
+         1: ireturn
+
+  public default java.util.List<com.mojang.datafixers.util.Pair<java.lang.String, java.util.function.Predicate<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> getEnableConditionDesc(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: invokestatic  #32                 // Method java/util/Collections.emptyList:()Ljava/util/List;
+         3: areturn
+
+  public default net.minecraft.network.chat.MutableComponent getName();
+    Code:
+         0: ldc           #56                 // String task.%s.%s
+         2: iconst_2
+         3: anewarray     #4                  // class java/lang/Object
+         6: dup
+         7: iconst_0
+         8: aload_0
+         9: invokeinterface #58,  1           // InterfaceMethod getUid:()Lnet/minecraft/resources/ResourceLocation;
+        14: invokevirtual #64                 // Method net/minecraft/resources/ResourceLocation.m_135827_:()Ljava/lang/String;
+        17: aastore
+        18: dup
+        19: iconst_1
+        20: aload_0
+        21: invokeinterface #58,  1           // InterfaceMethod getUid:()Lnet/minecraft/resources/ResourceLocation;
+        26: invokevirtual #67                 // Method net/minecraft/resources/ResourceLocation.m_135815_:()Ljava/lang/String;
+        29: aastore
+        30: invokestatic  #73                 // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        33: invokestatic  #79                 // InterfaceMethod net/minecraft/network/chat/Component.m_237115_:(Ljava/lang/String;)Lnet/minecraft/network/chat/MutableComponent;
+        36: areturn
+
+  public default java.util.List<com.mojang.datafixers.util.Pair<java.lang.String, java.util.function.Predicate<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> getConditionDescription(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: invokestatic  #32                 // Method java/util/Collections.emptyList:()Ljava/util/List;
+         3: areturn
+
+  public default java.util.List<java.lang.String> getDescription(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: ldc           #84                 // String task.%s.%s.desc
+         2: iconst_2
+         3: anewarray     #4                  // class java/lang/Object
+         6: dup
+         7: iconst_0
+         8: aload_0
+         9: invokeinterface #58,  1           // InterfaceMethod getUid:()Lnet/minecraft/resources/ResourceLocation;
+        14: invokevirtual #64                 // Method net/minecraft/resources/ResourceLocation.m_135827_:()Ljava/lang/String;
+        17: aastore
+        18: dup
+        19: iconst_1
+        20: aload_0
+        21: invokeinterface #58,  1           // InterfaceMethod getUid:()Lnet/minecraft/resources/ResourceLocation;
+        26: invokevirtual #67                 // Method net/minecraft/resources/ResourceLocation.m_135815_:()Ljava/lang/String;
+        29: aastore
+        30: invokestatic  #73                 // Method java/lang/String.format:(Ljava/lang/String;[Ljava/lang/Object;)Ljava/lang/String;
+        33: astore_2
+        34: iconst_1
+        35: anewarray     #69                 // class java/lang/String
+        38: dup
+        39: iconst_0
+        40: aload_2
+        41: aastore
+        42: invokestatic  #90                 // Method com/google/common/collect/Lists.newArrayList:([Ljava/lang/Object;)Ljava/util/ArrayList;
+        45: areturn
+
+  public default net.minecraft.world.MenuProvider getTaskConfigGuiProvider(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #99                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+         4: istore_2
+         5: new           #7                  // class com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask$1
+         8: dup
+         9: aload_0
+        10: iload_2
+        11: invokespecial #103                // Method com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask$1."<init>":(Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;I)V
+        14: areturn
+
+  public default net.minecraft.world.MenuProvider getTaskInfoGuiProvider(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #109                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getMaidBackpackType:()Lcom/github/tartaricacid/touhoulittlemaid/api/backpack/IMaidBackpack;
+         4: aload_1
+         5: invokevirtual #99                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_19879_:()I
+         8: invokevirtual #115                // Method com/github/tartaricacid/touhoulittlemaid/api/backpack/IMaidBackpack.getGuiProvider:(I)Lnet/minecraft/world/MenuProvider;
+        11: areturn
+
+  public default net.minecraft.world.phys.AABB searchDimension(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokeinterface #121,  2          // InterfaceMethod searchRadius:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)F
+         7: fstore_2
+         8: aload_1
+         9: invokevirtual #125                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21536_:()Z
+        12: ifeq          37
+        15: new           #127                // class net/minecraft/world/phys/AABB
+        18: dup
+        19: aload_1
+        20: invokevirtual #131                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21534_:()Lnet/minecraft/core/BlockPos;
+        23: invokespecial #134                // Method net/minecraft/world/phys/AABB."<init>":(Lnet/minecraft/core/BlockPos;)V
+        26: fload_2
+        27: f2d
+        28: ldc2_w        #135                // double 4.0d
+        31: fload_2
+        32: f2d
+        33: invokevirtual #140                // Method net/minecraft/world/phys/AABB.m_82377_:(DDD)Lnet/minecraft/world/phys/AABB;
+        36: areturn
+        37: aload_1
+        38: invokevirtual #144                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20191_:()Lnet/minecraft/world/phys/AABB;
+        41: fload_2
+        42: f2d
+        43: ldc2_w        #135                // double 4.0d
+        46: fload_2
+        47: f2d
+        48: invokevirtual #140                // Method net/minecraft/world/phys/AABB.m_82377_:(DDD)Lnet/minecraft/world/phys/AABB;
+        51: areturn
+
+  public default float searchRadius(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #150                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21535_:()F
+         4: freturn
+
+  public default com.github.tartaricacid.touhoulittlemaid.api.task.FunctionCallSwitchResult onFunctionCallSwitch(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: getstatic     #159                // Field com/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult.OK:Lcom/github/tartaricacid/touhoulittlemaid/api/task/FunctionCallSwitchResult;
+         3: areturn
+
+  public default java.lang.String getMaidActionSummary();
+    Code:
+         0: aload_0
+         1: invokeinterface #58,  1           // InterfaceMethod getUid:()Lnet/minecraft/resources/ResourceLocation;
+         6: invokevirtual #67                 // Method net/minecraft/resources/ResourceLocation.m_135815_:()Ljava/lang/String;
+         9: areturn
+}
