@@ -1,0 +1,317 @@
+Compiled from "TaskNormalFarm.java"
+public class com.github.tartaricacid.touhoulittlemaid.entity.task.TaskNormalFarm implements com.github.tartaricacid.touhoulittlemaid.api.task.IFarmTask {
+  private static final net.minecraft.resources.ResourceLocation NAME;
+
+  public com.github.tartaricacid.touhoulittlemaid.entity.task.TaskNormalFarm();
+    Code:
+         0: aload_0
+         1: invokespecial #13                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public net.minecraft.resources.ResourceLocation getUid();
+    Code:
+         0: getstatic     #19                 // Field NAME:Lnet/minecraft/resources/ResourceLocation;
+         3: areturn
+
+  public net.minecraft.world.item.ItemStack getIcon();
+    Code:
+         0: getstatic     #27                 // Field net/minecraft/world/item/Items.f_42387_:Lnet/minecraft/world/item/Item;
+         3: invokevirtual #32                 // Method net/minecraft/world/item/Item.m_7968_:()Lnet/minecraft/world/item/ItemStack;
+         6: areturn
+
+  public boolean isSeed(net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload_1
+         1: invokevirtual #40                 // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+         4: astore_2
+         5: invokestatic  #46                 // Method com/github/tartaricacid/touhoulittlemaid/entity/task/crop/SpecialCropManager.getItemSeedHandlers:()Ljava/util/Map;
+         8: aload_2
+         9: invokeinterface #52,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        14: checkcast     #54                 // class com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler
+        17: astore_3
+        18: aload_3
+        19: ifnull        30
+        22: aload_3
+        23: aload_1
+        24: invokeinterface #56,  2           // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler.isSeed:(Lnet/minecraft/world/item/ItemStack;)Z
+        29: ireturn
+        30: aload_2
+        31: instanceof    #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        34: ifeq          112
+        37: aload_2
+        38: checkcast     #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        41: astore        4
+        43: aload         4
+        45: invokevirtual #62                 // Method net/minecraft/world/item/ItemNameBlockItem.m_40614_:()Lnet/minecraft/world/level/block/Block;
+        48: astore        5
+        50: aload         5
+        52: instanceof    #64                 // class net/minecraftforge/common/IPlantable
+        55: ifeq          112
+        58: aload         5
+        60: checkcast     #64                 // class net/minecraftforge/common/IPlantable
+        63: astore        6
+        65: aload         6
+        67: getstatic     #70                 // Field net/minecraft/world/level/EmptyBlockGetter.INSTANCE:Lnet/minecraft/world/level/EmptyBlockGetter;
+        70: getstatic     #76                 // Field net/minecraft/core/BlockPos.f_121853_:Lnet/minecraft/core/BlockPos;
+        73: invokeinterface #80,  3           // InterfaceMethod net/minecraftforge/common/IPlantable.getPlantType:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraftforge/common/PlantType;
+        78: getstatic     #86                 // Field net/minecraftforge/common/PlantType.CROP:Lnet/minecraftforge/common/PlantType;
+        81: if_acmpne     110
+        84: aload         6
+        86: getstatic     #70                 // Field net/minecraft/world/level/EmptyBlockGetter.INSTANCE:Lnet/minecraft/world/level/EmptyBlockGetter;
+        89: getstatic     #76                 // Field net/minecraft/core/BlockPos.f_121853_:Lnet/minecraft/core/BlockPos;
+        92: invokeinterface #90,  3           // InterfaceMethod net/minecraftforge/common/IPlantable.getPlant:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        97: invokevirtual #95                 // Method net/minecraft/world/level/block/state/BlockState.m_60734_:()Lnet/minecraft/world/level/block/Block;
+       100: getstatic     #101                // Field net/minecraft/world/level/block/Blocks.f_50016_:Lnet/minecraft/world/level/block/Block;
+       103: if_acmpeq     110
+       106: iconst_1
+       107: goto          111
+       110: iconst_0
+       111: ireturn
+       112: iconst_0
+       113: ireturn
+
+  public boolean canHarvest(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload_3
+         1: invokevirtual #95                 // Method net/minecraft/world/level/block/state/BlockState.m_60734_:()Lnet/minecraft/world/level/block/Block;
+         4: astore        4
+         6: invokestatic  #118                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/crop/SpecialCropManager.getBlockCropHandlers:()Ljava/util/Map;
+         9: aload         4
+        11: invokeinterface #52,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        16: checkcast     #54                 // class com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler
+        19: astore        5
+        21: aload         5
+        23: ifnull        37
+        26: aload         5
+        28: aload_1
+        29: aload_2
+        30: aload_3
+        31: invokeinterface #120,  4          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler.canHarvest:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;)Z
+        36: ireturn
+        37: aload         4
+        39: instanceof    #122                // class net/minecraft/world/level/block/CropBlock
+        42: ifeq          65
+        45: aload         4
+        47: checkcast     #122                // class net/minecraft/world/level/block/CropBlock
+        50: astore        6
+        52: aload         6
+        54: aload_3
+        55: invokevirtual #126                // Method net/minecraft/world/level/block/CropBlock.m_52307_:(Lnet/minecraft/world/level/block/state/BlockState;)Z
+        58: ifeq          65
+        61: iconst_1
+        62: goto          66
+        65: iconst_0
+        66: ireturn
+
+  public void harvest(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState);
+    Code:
+         0: aload_1
+         1: invokevirtual #142                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21205_:()Lnet/minecraft/world/item/ItemStack;
+         4: invokevirtual #40                 // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+         7: instanceof    #144                // class net/minecraft/world/item/HoeItem
+        10: istore        4
+        12: aload_3
+        13: invokevirtual #95                 // Method net/minecraft/world/level/block/state/BlockState.m_60734_:()Lnet/minecraft/world/level/block/Block;
+        16: astore        5
+        18: invokestatic  #118                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/crop/SpecialCropManager.getBlockCropHandlers:()Ljava/util/Map;
+        21: aload         5
+        23: invokeinterface #52,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        28: checkcast     #54                 // class com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler
+        31: astore        6
+        33: aload         6
+        35: ifnull        51
+        38: aload         6
+        40: aload_1
+        41: aload_2
+        42: aload_3
+        43: iload         4
+        45: invokeinterface #147,  5          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler.harvest:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)V
+        50: return
+        51: iload         4
+        53: ifeq          65
+        56: aload_1
+        57: aload_2
+        58: invokevirtual #151                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.destroyBlock:(Lnet/minecraft/core/BlockPos;)Z
+        61: pop
+        62: goto          194
+        65: aload         5
+        67: instanceof    #153                // class com/github/tartaricacid/touhoulittlemaid/mixin/accessor/CropBlockAccessor
+        70: ifeq          194
+        73: aload         5
+        75: checkcast     #153                // class com/github/tartaricacid/touhoulittlemaid/mixin/accessor/CropBlockAccessor
+        78: astore        7
+        80: aload_3
+        81: invokevirtual #157                // Method net/minecraft/world/level/block/state/BlockState.m_155947_:()Z
+        84: ifeq          98
+        87: aload_1
+        88: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+        91: aload_2
+        92: invokevirtual #167                // Method net/minecraft/world/level/Level.m_7702_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/entity/BlockEntity;
+        95: goto          99
+        98: aconst_null
+        99: astore        8
+       101: aload_1
+       102: aload_3
+       103: aload_1
+       104: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+       107: aload_2
+       108: aload         8
+       110: aload_1
+       111: aload_1
+       112: invokevirtual #142                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21205_:()Lnet/minecraft/world/item/ItemStack;
+       115: invokevirtual #173                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.dropResourcesToMaidInv:(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/entity/BlockEntity;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/world/item/ItemStack;)V
+       118: aload_1
+       119: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+       122: sipush        2001
+       125: aload_2
+       126: aload_3
+       127: invokestatic  #177                // Method net/minecraft/world/level/block/Block.m_49956_:(Lnet/minecraft/world/level/block/state/BlockState;)I
+       130: invokevirtual #181                // Method net/minecraft/world/level/Level.m_46796_:(ILnet/minecraft/core/BlockPos;I)V
+       133: aload_3
+       134: aload         7
+       136: invokeinterface #185,  1          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/mixin/accessor/CropBlockAccessor.tlmAgeProperty:()Lnet/minecraft/world/level/block/state/properties/IntegerProperty;
+       141: invokevirtual #189                // Method net/minecraft/world/level/block/state/BlockState.m_61138_:(Lnet/minecraft/world/level/block/state/properties/Property;)Z
+       144: ifeq          171
+       147: aload_3
+       148: aload         7
+       150: invokeinterface #185,  1          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/mixin/accessor/CropBlockAccessor.tlmAgeProperty:()Lnet/minecraft/world/level/block/state/properties/IntegerProperty;
+       155: iconst_0
+       156: invokestatic  #195                // Method java/lang/Integer.valueOf:(I)Ljava/lang/Integer;
+       159: invokevirtual #199                // Method net/minecraft/world/level/block/state/BlockState.m_263224_:(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)Ljava/lang/Object;
+       162: checkcast     #92                 // class net/minecraft/world/level/block/state/BlockState
+       165: astore_3
+       166: goto          171
+       169: astore        9
+       171: aload_1
+       172: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+       175: aload_2
+       176: aload_3
+       177: iconst_3
+       178: invokevirtual #203                // Method net/minecraft/world/level/Level.m_7731_:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z
+       181: pop
+       182: aload_1
+       183: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+       186: aload_1
+       187: getstatic     #209                // Field net/minecraft/world/level/gameevent/GameEvent.f_157792_:Lnet/minecraft/world/level/gameevent/GameEvent;
+       190: aload_2
+       191: invokevirtual #213                // Method net/minecraft/world/level/Level.m_142346_:(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/level/gameevent/GameEvent;Lnet/minecraft/core/BlockPos;)V
+       194: return
+      Exception table:
+         from    to  target type
+           147   166   169   Class java/lang/IllegalArgumentException
+
+  public boolean canPlant(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState, net.minecraft.world.item.ItemStack);
+    Code:
+         0: invokestatic  #118                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/crop/SpecialCropManager.getBlockCropHandlers:()Ljava/util/Map;
+         3: aload_3
+         4: invokevirtual #95                 // Method net/minecraft/world/level/block/state/BlockState.m_60734_:()Lnet/minecraft/world/level/block/Block;
+         7: invokeinterface #52,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        12: checkcast     #54                 // class com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler
+        15: astore        5
+        17: aload         5
+        19: ifnull        35
+        22: aload         5
+        24: aload_1
+        25: aload_2
+        26: aload_3
+        27: aload         4
+        29: invokeinterface #223,  5          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler.canPlant:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/item/ItemStack;)Z
+        34: ireturn
+        35: aload_1
+        36: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+        39: aload_2
+        40: invokevirtual #227                // Method net/minecraft/core/BlockPos.m_7494_:()Lnet/minecraft/core/BlockPos;
+        43: invokevirtual #231                // Method net/minecraft/world/level/Level.m_8055_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/world/level/block/state/BlockState;
+        46: astore        6
+        48: aload         6
+        50: invokevirtual #234                // Method net/minecraft/world/level/block/state/BlockState.m_247087_:()Z
+        53: ifeq          64
+        56: aload         6
+        58: invokevirtual #237                // Method net/minecraft/world/level/block/state/BlockState.m_278721_:()Z
+        61: ifeq          66
+        64: iconst_0
+        65: ireturn
+        66: aload         4
+        68: invokevirtual #40                 // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+        71: astore        8
+        73: aload         8
+        75: instanceof    #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        78: ifeq          125
+        81: aload         8
+        83: checkcast     #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        86: astore        7
+        88: aload         7
+        90: invokevirtual #62                 // Method net/minecraft/world/item/ItemNameBlockItem.m_40614_:()Lnet/minecraft/world/level/block/Block;
+        93: astore        8
+        95: aload         8
+        97: instanceof    #64                 // class net/minecraftforge/common/IPlantable
+       100: ifeq          125
+       103: aload         8
+       105: checkcast     #64                 // class net/minecraftforge/common/IPlantable
+       108: astore        9
+       110: aload_3
+       111: aload_1
+       112: getfield      #161                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+       115: aload_2
+       116: getstatic     #243                // Field net/minecraft/core/Direction.UP:Lnet/minecraft/core/Direction;
+       119: aload         9
+       121: invokevirtual #247                // Method net/minecraft/world/level/block/state/BlockState.canSustainPlant:(Lnet/minecraft/world/level/BlockGetter;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/Direction;Lnet/minecraftforge/common/IPlantable;)Z
+       124: ireturn
+       125: iconst_0
+       126: ireturn
+
+  public net.minecraft.world.item.ItemStack plant(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.core.BlockPos, net.minecraft.world.level.block.state.BlockState, net.minecraft.world.item.ItemStack);
+    Code:
+         0: aload         4
+         2: invokevirtual #40                 // Method net/minecraft/world/item/ItemStack.m_41720_:()Lnet/minecraft/world/item/Item;
+         5: astore        5
+         7: invokestatic  #46                 // Method com/github/tartaricacid/touhoulittlemaid/entity/task/crop/SpecialCropManager.getItemSeedHandlers:()Ljava/util/Map;
+        10: aload         5
+        12: invokeinterface #52,  2           // InterfaceMethod java/util/Map.get:(Ljava/lang/Object;)Ljava/lang/Object;
+        17: checkcast     #54                 // class com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler
+        20: astore        6
+        22: aload         6
+        24: ifnull        40
+        27: aload         6
+        29: aload_1
+        30: aload_2
+        31: aload_3
+        32: aload         4
+        34: invokeinterface #254,  5          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/ISpecialCropHandler.plant:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/world/item/ItemStack;)Lnet/minecraft/world/item/ItemStack;
+        39: areturn
+        40: aload         5
+        42: instanceof    #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        45: ifeq          81
+        48: aload         5
+        50: checkcast     #58                 // class net/minecraft/world/item/ItemNameBlockItem
+        53: astore        7
+        55: aload         7
+        57: invokevirtual #62                 // Method net/minecraft/world/item/ItemNameBlockItem.m_40614_:()Lnet/minecraft/world/level/block/Block;
+        60: astore        8
+        62: aload         8
+        64: instanceof    #64                 // class net/minecraftforge/common/IPlantable
+        67: ifeq          81
+        70: aload_1
+        71: aload_2
+        72: invokevirtual #227                // Method net/minecraft/core/BlockPos.m_7494_:()Lnet/minecraft/core/BlockPos;
+        75: aload         4
+        77: invokevirtual #258                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.placeItemBlock:(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/item/ItemStack;)Z
+        80: pop
+        81: aload         4
+        83: areturn
+
+  public java.lang.String getMaidActionSummary();
+    Code:
+         0: ldc_w         #262                // String Plant and harvest crops
+         3: areturn
+
+  static {};
+    Code:
+         0: new           #265                // class net/minecraft/resources/ResourceLocation
+         3: dup
+         4: ldc_w         #267                // String touhou_little_maid
+         7: ldc_w         #269                // String farm
+        10: invokespecial #272                // Method net/minecraft/resources/ResourceLocation."<init>":(Ljava/lang/String;Ljava/lang/String;)V
+        13: putstatic     #19                 // Field NAME:Lnet/minecraft/resources/ResourceLocation;
+        16: return
+}

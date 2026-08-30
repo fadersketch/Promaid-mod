@@ -1854,7 +1854,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
         this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 1.0 = 正常走路速度；TLM 原生散步只有 0.3 倍速）"));
+                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按用户反馈调低；TLM 原生散步只有 0.3 倍速）"));
         this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
                 s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
         this.rows.add(new BoolRow("挖矿中禁止拾取", MaidSmartConfig.MISC_PICKUP_PRIORITY.get(),
