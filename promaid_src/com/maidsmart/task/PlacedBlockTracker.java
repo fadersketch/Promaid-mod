@@ -117,6 +117,15 @@ public final class PlacedBlockTracker {
                     e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
+                // v1.1.0 实测二百零七（日志实证："从高处摔了下来" y=-60——女仆搭路贴上
+                // 主人后被顶出/上浮离开自己铺的桥，离开的瞬间 3 秒寿命到期回收，她正
+                // 悬在附近半空 → 脚下抽空坠落摔死）："站上面才延后"太窄——被自保/上浮/
+                // 传送扰动离开的刹那她很可能还依赖这块桥。绑定女仆靠近（水平 ≤4 格、
+                // 垂直差 ≤6 格）一律刷新寿命，等她真正走远（>4 格或高度差 >6）再回收。
+                if (owner != null && maidNearBlock(owner, pos)) {
+                    e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
+                    continue;
+                }
                 if (owner == null) {
                     // 绑定女仆不在线（魂符收回/区块卸载）→ 暂停倒计时（remainTicks 不减）
                     continue;
@@ -158,6 +167,15 @@ public final class PlacedBlockTracker {
             }
         }
         return null;
+    }
+
+    /** 实测二百零七：女仆是否依赖该搭块——水平 ≤4 格、垂直差 ≤6 格（她站在上面/
+     *  刚离开/悬在附近都算；真正走远或高度差拉开才放手回收） */
+    private static boolean maidNearBlock(EntityMaid owner, BlockPos pos) {
+        double dx = owner.m_20185_() - (pos.m_123341_() + 0.5);
+        double dz = owner.m_20189_() - (pos.m_123343_() + 0.5);
+        double dy = owner.m_20186_() - (pos.m_123342_() + 0.5);
+        return dx * dx + dz * dz <= 16.0 && Math.abs(dy) <= 6.0;
     }
 
     /**
