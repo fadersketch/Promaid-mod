@@ -1,5 +1,4 @@
 verify_jar_classes: OK, all out_promaid classes present in jar
-purged stale class: com/maidsmart/mixin/PetImmunityTargetMixin.class
 MISSING: none
 TOTAL entries: 410
-BUILT: C:\Users\Sketch\.zcode\workspace\default\promaid-mod\patched\promaid-1.1.0.jar 4759143 bytes
+BUILT: C:\Users\Sketch\.zcode\workspace\default\promaid-mod\patched\promaid-1.1.0.jar 4759391 bytes
