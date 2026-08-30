@@ -538,6 +538,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 返回 true = 铺了一块（本 tick 不再做别的动作）。
      */
     private boolean tryAirBridgeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        // v1.1.0 实测二百一十八（用户："女仆水平方向两个轴（不含高度）距离玩家太近时，
+        // 平方向铺方块没能被拦"）：在【铺块本身】加水平距离硬门槛——canUse 启动门/
+        // 平桥腿/斜上腿调用侧都已判 hDist>=startHDist，这里兜底：任何入口绕过调用侧
+        // （行为残留/其他触发路径）都在落方块前被拦下，绝不贴近玩家铺桥。
+        if (hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
+            return false;
+        }
         if (this.stepCooldown > 0) {
             return false;
         }
@@ -604,6 +611,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 本格（在地形上再垫一级台阶踩上来）——垂直垫高从此始终朝主人方向斜着长。
      */
     private boolean tryDiagStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        // v1.1.0 实测二百一十八：与 tryAirBridgeStep 同款的铺块内水平距离硬门槛兜底
+        // （斜上台阶也在"水平方向垫方块"之列——贴近玩家时一律不垫）
+        if (hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
+            return false;
+        }
         if (this.stepCooldown > 0) {
             return false;
         }
