@@ -2436,8 +2436,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测一百五十五：是否有保命物品——饰品栏的绀珠之药（TLM
      *  ExtraLifeBauble，死亡复活）/不死图腾（UndyingTotemBauble）+ 双手/背包里的
      *  不死图腾（MaidBaubleTotemMixin 致死时会从这些位置消耗）。有保命物品时她
-     *  不会轻易死，配合 COMBAT_FLEE_WITH_SAVE_ITEM 决定是否还逃跑。 */
-    private static boolean hasDeathSaveItem(EntityMaid maid) {
+     *  不会轻易死，配合 COMBAT_FLEE_WITH_SAVE_ITEM 决定是否还逃跑。
+     *  实测一百九十六：改 public——TLM 原生 PanicTask 的惊慌逃跑与传送系统
+     *  （跨维跟随/同维拉回）的守卫共用同一份判定，保证口径一致。 */
+    public static boolean hasDeathSaveItem(EntityMaid maid) {
         if (hasBaubleItem(maid, "touhou_little_maid:ultramarine_orb_elixir")
                 || hasBaubleItem(maid, "minecraft:totem_of_undying")) {
             return true;
@@ -2465,8 +2467,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.1.0 实测一百五十五：是否允许逃跑——有保命物品且开关关闭时不逃
      *  （她死不了，继续战斗/垫高/治疗，不丢下工作）；开关开启或没有保命物品
-     *  则照常逃跑。 */
-    private static boolean canFlee(EntityMaid maid) {
+     *  则照常逃跑。
+     *  实测一百九十六：改 public——PanicGatingMixin（TLM 原生惊慌）共用。 */
+    public static boolean canFlee(EntityMaid maid) {
         return !hasDeathSaveItem(maid)
                 || com.maidsmart.config.MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get();
     }

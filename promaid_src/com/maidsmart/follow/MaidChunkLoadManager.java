@@ -251,6 +251,16 @@ public final class MaidChunkLoadManager {
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
             // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
+            // v1.1.0 实测一百九十六【自保 vs 自动传送矛盾根治】（用户："自保逃跑禁用
+            // 传送跟跨维度传送、跨区块传送，远距离传送会有矛盾吗？"）：PRESERVE 标记
+            // 旧版只拦了 TLM 原生传送 / 跟随拉近（FollowPreserveMixin、MaidTeleport
+            // PreserveMixin），我们自己的跨维度跟随与同维度拉回链路没读它——低血/逃跑
+            // 中的女仆会被跨维或远距自动传送拉回主人身边（威胁点）送死 = 矛盾。
+            // 自保中一律不被自动拉回；玩家【主动一键集合】不受影响（人工意图优先）。
+            if (maid.getPersistentData().m_128471_(
+                    com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
+                return;
+            }
             boolean scheduled = false;
             try {
                 scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
@@ -723,6 +733,14 @@ BlockPos stand = findStand(newLevel,
             // 实测一百八十八：Y 轴分支标记（日志措辞区分——同一条链路，同一个安全落点判定）
             boolean yPull = dSq < (double) dist * dist;
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+            // v1.1.0 实测一百九十六：自保中不拉回（与跨维跟随同口径——低血/逃跑中拉
+            // 回主人身边=送死；PRESERVE 期间由自保行为自己决定去向）
+            if (maid.getPersistentData().m_128471_(
+                    com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
+                throttledSkipLog(maid, "sam-dim-preserve", name
+                        + " 自保中（低血/逃跑/垫高），不拉回——自保行为自己应变");
+                return;
+            }
             // 守家/干活中不拉，但落日志（限频）——这正是"她不回来"的可见原因
             if (maid.isHomeModeEnable()) {
                 throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
