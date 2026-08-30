@@ -68,6 +68,8 @@ public final class BlueprintAreaPreview {
 
     /** v1.5.290：每个区块的橙影投影键（"bp#q"，r[10] 蓝图 id + r[14] 朝向） */
     private static final java.util.List<String> REGION_PROJ_KEYS = new java.util.ArrayList<>();
+    /** v1.1.0 实测二百零四：最近一次实际提交的幽灵盒数（变化才落日志） */
+    private static int lastDrawnCount = -1;
     /** v1.1.0 实测八十三b：投影链路诊断日志（latest.log 搜 "projection"） */
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
@@ -468,9 +470,9 @@ public final class BlueprintAreaPreview {
             String key = i < REGION_PROJ_KEYS.size() ? REGION_PROJ_KEYS.get(i) : "";
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
             if (!key.isEmpty() && org != null) {
-                // 实测二百零一：幽灵面 alpha 0.20 → 0.45（区块外可见性）
+                // 实测二百零一/二百零四：幽灵面 alpha 0.45 → 0.55（区块外可见性）
                 drawGhost(pose, mc, camera, key, org[0], org[1], org[2],
-                        1.0f, 0.55f, 0.25f, 0.45f);
+                        1.0f, 0.55f, 0.25f, 0.55f);
             }
         }
         if (active) {
@@ -495,10 +497,10 @@ public final class BlueprintAreaPreview {
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
             if (previewId != null) {
-                // 实测二百零一：金预览青色幽灵 0.22 → 0.40（近景 0.22 已偏淡）
+                // 实测二百零一/二百零四：金预览青色幽灵 0.40 → 0.55（近景也清晰）
                 drawGhost(pose, mc, camera, projKey(previewId, previewQuarters),
                         p.m_123341_(), p.m_123342_(), p.m_123343_(),
-                        0.30f, 0.95f, 1.0f, 0.40f);
+                        0.30f, 0.95f, 1.0f, 0.55f);
             }
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     "建造范围 " + effX + "\u00d7" + sizeY + "\u00d7" + effZ
@@ -529,17 +531,16 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * v1.1.0 实测一百四十七【幽灵方块消失根治】：渲染改回与【区块框同款】的即时
-     * 渲染——每点画一个 DebugRenderer.renderFilledBox 半透明填充盒（锚点 = (ox,oy,oz)
-     * 计划原点 + 居中相对坐标，与实际搭建逐块重合；>96 格剔除）。
-     *
-     * 为什么弃用 renderSingleBlock（实测一百零九方案）：Forge 版 7 参 renderSingleBlock
-     * 的字节码实证——它遍历 BakedModel.getRenderTypes 按【模型自身图层】渲染、写进
-     * 各图层自己的 buffer，【完全忽略传入的 translucent renderType】。幽灵顶点落入
-     * 早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见
-     * （实测一百二十九/一百三十二"轮廓又没了"反复复发，一百零一初次引入时同样
-     * 不可见被一百零五/一百零六回退——同一根因）。区块框用的 DebugRenderer 管线
-     * 一直在正常显示：框能显示，幽灵必能显示。
+     * v1.1.0 实测二百零四【幽灵方块再根治】：放弃 DebugRenderer.renderFilledBox
+     * （实测一百四十七方案）。字节码实证它走 RenderType.debugFilledBox =
+     * POSITION_COLOR + 【TRIANGLE_STRIP】——多个盒子连续提交进【同一条 strip】，
+     * 盒与盒之间自动产生连接三角形：2600 个幽灵盒连成一张乱麻三角网，单盒面
+     * 被跨盒连接面搅碎（观感"方块太小"）、视角移到区块外后连接面吃掉内侧盒面
+     * （"走出红色框就消失"）、近景里整片看不到成型的盒子（"蓝色幽灵看不见"）。
+     * 修复：改为 RenderType.debugQuads（m_269166_；POSITION_COLOR + QUADS，
+     * 官方为彩色半透明调试盒制作的管线，透明混合 + 双面不剔除）——每个盒子
+     * 逐面独立提交 4 顶点 QUADS，无跨盒连接、每盒精确 1×1×1 满体积、无任何
+     * 距离剔除：区块内/外、远近都能看到与真实方块同体积的幽灵方块。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -570,9 +571,12 @@ public final class BlueprintAreaPreview {
         double farDx = camera.f_82479_ - (ox + 0.5);
         double farDz = camera.f_82481_ - (oz + 0.5);
         boolean far = (farDx * farDx + farDz * farDz) > 576.0;
+        com.mojang.blaze3d.vertex.VertexConsumer ghostBuf =
+                bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.m_269166_());
         com.mojang.blaze3d.vertex.VertexConsumer edgeBuf = far
                 ? bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_)
                 : null;
+        int drawn = 0;
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
             int by = (int) pts[i + 1];
@@ -580,15 +584,63 @@ public final class BlueprintAreaPreview {
             double wx = ox + bx;
             double wy = oy + by;
             double wz = oz + bz;
-            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                    wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, bufferSource, box, r, g, b, a);
+            // 实测二百零四：debugQuads 逐面独立 QUADS（不复用 stroke 的 renderFilledBox）
+            drawGhostBox(pose, ghostBuf, camera, wx, wy, wz, r, g, b, a);
             if (edgeBuf != null) {
                 drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
                         Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
             }
+            drawn++;
         }
+        // 实测二百零四：每帧一次落的诊断（数量变化/恢复才记，不刷屏）——"还是没显示"
+        // 时日志直接区分：没进 drawGhost（0 盒/没到渲染层） vs 进了但客户端看不出
+        if (drawn != lastDrawnCount) {
+            lastDrawnCount = drawn;
+            com.maidsmart.tool.PromaidLog.log("投影", "drawGhost(" + id + ") 盒数="
+                    + drawn + " 远距描边=" + far);
+        }
+    }
+
+    /** 实测二百零四：满体积幽灵盒——6 面 × 4 顶点独立 QUADS（精确 1×1×1，
+     *  无跨盒连接面；坐标 = 世界坐标 + 相机（与 pose 的 -相机平移对消，
+     *  与红框/描边统一口径）） */
+    private static void drawGhostBox(com.mojang.blaze3d.vertex.PoseStack pose,
+                                     com.mojang.blaze3d.vertex.VertexConsumer v,
+                                     net.minecraft.world.phys.Vec3 camera,
+                                     double wx, double wy, double wz,
+                                     float r, float g, float b, float a) {
+        double cx = camera.f_82479_;
+        double cy = camera.f_82480_;
+        double cz = camera.f_82481_;
+        double x0 = wx + cx, x1 = wx + 1.0 + cx;
+        double y0 = wy + cy, y1 = wy + 1.0 + cy;
+        double z0 = wz + cz, z1 = wz + 1.0 + cz;
+        org.joml.Matrix4f m = pose.m_85850_().m_252922_();
+        // +Z
+        ghostQuad(v, m, x0, y0, z1, x1, y0, z1, x1, y1, z1, x0, y1, z1, r, g, b, a);
+        // -Z
+        ghostQuad(v, m, x1, y0, z0, x0, y0, z0, x0, y1, z0, x1, y1, z0, r, g, b, a);
+        // +X
+        ghostQuad(v, m, x1, y0, z1, x1, y0, z0, x1, y1, z0, x1, y1, z1, r, g, b, a);
+        // -X
+        ghostQuad(v, m, x0, y0, z0, x0, y0, z1, x0, y1, z1, x0, y1, z0, r, g, b, a);
+        // +Y（顶面）
+        ghostQuad(v, m, x0, y1, z0, x1, y1, z0, x1, y1, z1, x0, y1, z1, r, g, b, a);
+        // -Y（底面）
+        ghostQuad(v, m, x0, y0, z0, x0, y0, z1, x1, y0, z1, x1, y0, z0, r, g, b, a);
+    }
+
+    private static void ghostQuad(com.mojang.blaze3d.vertex.VertexConsumer v,
+                                  org.joml.Matrix4f m,
+                                  double ax, double ay, double az,
+                                  double bx, double by, double bz,
+                                  double cx, double cy, double cz,
+                                  double dx, double dy, double dz,
+                                  float r, float g, float b, float a) {
+        v.m_252986_(m, (float) ax, (float) ay, (float) az).m_85950_(r, g, b, a).m_5752_();
+        v.m_252986_(m, (float) bx, (float) by, (float) bz).m_85950_(r, g, b, a).m_5752_();
+        v.m_252986_(m, (float) cx, (float) cy, (float) cz).m_85950_(r, g, b, a).m_5752_();
+        v.m_252986_(m, (float) dx, (float) dy, (float) dz).m_85950_(r, g, b, a).m_5752_();
     }
 
     /** 画一个方框的 12 条棱（TLM RenderHelper.renderLine） */
