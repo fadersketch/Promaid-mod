@@ -393,6 +393,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // 非工作"的跟随女仆且传送可能静默失败，这里补统一兜底）
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_SAME_DIM_PULL;
     public static final ForgeConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
+    // v1.1.0 实测一百八十八（用户："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
+    public static final ForgeConfigSpec.IntValue MISC_MAID_SAME_DIM_VERTICAL;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ForgeConfigSpec.BooleanValue MISC_MAID_RESCUE;
     // v1.1.0 实测一百五十一：跟随收紧（每 tick 重断言跟随目标，平常跟随在 4 格内）
@@ -1250,6 +1252,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.maidSameDimPull").define("maidSameDimPull", true);
         MISC_MAID_SAME_DIM_DIST = BUILDER.comment("同维度拉回距离阈值（格，默认 48）：女仆与主人同维度且水平/垂直距离超过此值才拉回——低于此值靠走路/跟随，不打扰她")
                 .translation("config.promaid.misc.maidSameDimDist").defineInRange("maidSameDimDist", 48, 16, 256);
+        // v1.1.0 实测一百八十八：Y 轴拉回（用户："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
+        MISC_MAID_SAME_DIM_VERTICAL = BUILDER.comment("Y 轴拉回门槛（格，默认 16）：女仆与主人同维度、水平距离没超上一条阈值但【垂直高度差】超过本值时——若主人旁边 16 格内有安全落点（findStand）就传送过来；没有安全落点则不传（等有落点/再试）。旧版只有 48 格 3D 距离阈值，水平贴身、竖直搭高 30 格的女仆永远不触发（骑到你头顶挂机）；守家/坐姿/骑乘/干活中同样不拉")
+                .translation("config.promaid.misc.maidSameDimVertical").defineInRange("maidSameDimVertical", 16, 4, 128);
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
         MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
