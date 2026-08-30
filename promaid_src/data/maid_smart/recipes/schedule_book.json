@@ -2,7 +2,7 @@
   "type": "minecraft:crafting_shapeless",
   "ingredients": [
     { "item": "minecraft:paper" },
-    { "item": "minecraft:ink_sac" }
+    { "tag": "maid_smart:ink_sacs" }
   ],
   "result": {
     "item": "maid_smart:schedule_book",
