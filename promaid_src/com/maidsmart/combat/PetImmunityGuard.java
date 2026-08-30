@@ -29,7 +29,71 @@ import net.minecraftforge.fml.common.Mod;
  */
 @Mod.EventBusSubscriber(modid = "promaid")
 public final class PetImmunityGuard {
+    /** 仇恨清理扫描节流（tick，40 = 2 秒）——全事件实现，不碰 TLM 混入 */
+    private static int scanCounter = 0;
+    /** 宠物仇恨清除日志限频（60 秒/女仆） */
+    private static final java.util.Map<java.util.UUID, Long> HATE_CLEAR_LOG = new java.util.HashMap<>();
+
     private PetImmunityGuard() {
+    }
+
+    /**
+     * 宠物仇恨清理扫描（v1.1.0 实测一百九十七修订）：
+     * 宠物免疫的目标选取拦截原计划混入 TLM 的 IAttackTask.canAttack——Mixin 0.8.5
+     * 对接口 target 两种形式都不支持（class mixin：SubType 校验 PREPARE 失败；
+     * interface mixin：@Inject 不被接受，APPLY 失败，玩家两次启动崩溃日志实证）。
+     * 改为全事件实现：本扫描每 2 秒全维度检查女仆攻击记忆，目标是宠物标记 →
+     * 清掉（去仇恨；TLM StopAttackingIfTargetInvalid 等行为自然接管后续）；
+     * 伤害层由下方 LivingHurtEvent 总闸兜底（锁定瞬间也零伤害、零溅射）。
+     * 与"锁定优先级"的语义差别：女仆可能先锁定一眼才被清掉（≤2 秒），
+     * 但全程无伤害；可接受。
+     */
+    @SubscribeEvent
+    public static void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
+            return;
+        }
+        if (++scanCounter < 40) {
+            return;
+        }
+        scanCounter = 0;
+        try {
+            var server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (server == null) {
+                return;
+            }
+            long now = server.m_129785_().iterator().next().m_46467_();
+            net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
+                    -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
+            for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
+                for (EntityMaid maid : lvl.m_45976_(EntityMaid.class, whole)) {
+                    if (!maid.m_6084_()) {
+                        continue;
+                    }
+                    try {
+                        var atk = maid.m_6274_().m_21952_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
+                        if (atk.isEmpty()) {
+                            continue;
+                        }
+                        LivingEntity target = atk.get();
+                        if (target == null || !isPetMarked(maid, target)) {
+                            continue;
+                        }
+                        maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
+                        Long last = HATE_CLEAR_LOG.get(maid.m_20148_());
+                        if (last == null || now - last > 1200L) {
+                            HATE_CLEAR_LOG.put(maid.m_20148_(), now);
+                            org.slf4j.LoggerFactory.getLogger("promaid").info(
+                                    "maid pet-hate-clear: maid={} target={}（宠物标记，仇恨已清、伤害免疫）",
+                                    com.maidsmart.tool.PromaidLog.nameOf(maid),
+                                    target.m_5446_() != null ? target.m_5446_().getString() : target.m_20148_());
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     @SubscribeEvent

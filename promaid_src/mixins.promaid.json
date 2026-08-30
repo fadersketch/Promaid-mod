@@ -45,8 +45,7 @@
     "HomingPotionMixin",
     "MaidChatLlmGateMixin",
     "MixinTntBuildGuard",
-    "MixinInteractionSittingAllow",
-    "PetImmunityTargetMixin"
+    "MixinInteractionSittingAllow"
   ],
   "client": [
     "MaidTtsVolumeMixin",
