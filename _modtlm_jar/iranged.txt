@@ -1,0 +1,10 @@
+Compiled from "IRangedAttackTask.java"
+public interface com.github.tartaricacid.touhoulittlemaid.api.task.IRangedAttackTask extends com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask {
+  public static final net.minecraft.world.entity.ai.targeting.TargetingConditions TARGET_CONDITIONS;
+  public static java.util.Optional<? extends net.minecraft.world.entity.LivingEntity> findFirstValidAttackTarget(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public static boolean isValidRangedTarget(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+  public static boolean targetConditionsTest(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity, net.minecraftforge.common.ForgeConfigSpec$IntValue);
+  public abstract void performRangedAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity, float);
+  public default boolean canSee(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+  static {};
+}

@@ -1,0 +1,21 @@
+Compiled from "TaskAttack.java"
+public class com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack implements com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask {
+  public static final net.minecraft.resources.ResourceLocation UID;
+  public com.github.tartaricacid.touhoulittlemaid.entity.task.TaskAttack();
+  public net.minecraft.resources.ResourceLocation getUid();
+  public net.minecraft.world.item.ItemStack getIcon();
+  public net.minecraft.sounds.SoundEvent getAmbientSound(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public java.util.List<com.mojang.datafixers.util.Pair<java.lang.Integer, net.minecraft.world.entity.ai.behavior.BehaviorControl<? super com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> createBrainTasks(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public java.util.List<com.mojang.datafixers.util.Pair<java.lang.Integer, net.minecraft.world.entity.ai.behavior.BehaviorControl<? super com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> createRideBrainTasks(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public boolean hasExtraAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.Entity);
+  public boolean doExtraAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.Entity);
+  public java.util.List<com.mojang.datafixers.util.Pair<java.lang.String, java.util.function.Predicate<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>>> getConditionDescription(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public boolean isWeapon(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.item.ItemStack);
+  private boolean hasAssaultWeapon(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  private boolean hasExtinguisher(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  public java.lang.String getMaidActionSummary();
+  private static void lambda$doExtraAttack$2(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+  private boolean lambda$createRideBrainTasks$1(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+  private boolean lambda$createBrainTasks$0(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+  static {};
+}

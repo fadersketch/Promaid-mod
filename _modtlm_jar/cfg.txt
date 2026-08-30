@@ -1,0 +1,42 @@
+Compiled from "MaidConfig.java"
+public final class com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig {
+  public static final java.lang.String TAG_PREFIX;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue GLOBAL_MAID_SOUND_FREQUENCY;
+  public static net.minecraftforge.common.ForgeConfigSpec$BooleanValue GLOBAL_MAID_SHOW_CHAT_BUBBLE;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.lang.String> MAID_TAMED_ITEM;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.lang.String> MAID_TEMPTATION_ITEM;
+  public static net.minecraftforge.common.ForgeConfigSpec$BooleanValue ENABLE_MAID_CURIOS;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_WORK_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_IDLE_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_SLEEP_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_NON_HOME_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_COMBAT_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue BOW_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue CROSS_BOW_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue DANMAKU_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue TRIDENT_RANGE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue FEED_ANIMAL_MAX_NUMBER;
+  public static net.minecraftforge.common.ForgeConfigSpec$BooleanValue MAID_CHANGE_MODEL;
+  public static net.minecraftforge.common.ForgeConfigSpec$BooleanValue MAID_GOMOKU_OWNER_LIMIT;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue OWNER_MAX_MAID_NUM;
+  public static net.minecraftforge.common.ForgeConfigSpec$DoubleValue REPLACE_ALLAY_PERCENT;
+  public static net.minecraftforge.common.ForgeConfigSpec$BooleanValue ENABLE_EMOJI;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue EMOJI_CHECK_RATE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue IMAGE_EMOJI_WEIGHT;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue KAOMOJI_EMOJI_WEIGHT;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_BACKPACK_BLACKLIST;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_ATTACK_IGNORE;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_RANGED_ATTACK_IGNORE;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_WORK_MEALS_BLOCK_LIST;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_HOME_MEALS_BLOCK_LIST;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_HEAL_MEALS_BLOCK_LIST;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_WORK_MEALS_BLOCK_LIST_REGEX;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_HOME_MEALS_BLOCK_LIST_REGEX;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.lang.String>> MAID_HEAL_MEALS_BLOCK_LIST_REGEX;
+  public static net.minecraftforge.common.ForgeConfigSpec$ConfigValue<java.util.List<java.util.List<java.lang.String>>> MAID_EATEN_RETURN_CONTAINER_LIST;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_GUN_LONG_DISTANCE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_GUN_MEDIUM_DISTANCE;
+  public static net.minecraftforge.common.ForgeConfigSpec$IntValue MAID_GUN_NEAR_DISTANCE;
+  public com.github.tartaricacid.touhoulittlemaid.config.subconfig.MaidConfig();
+  public static void init(net.minecraftforge.common.ForgeConfigSpec$Builder);
+}

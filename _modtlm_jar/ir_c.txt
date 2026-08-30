@@ -1,0 +1,125 @@
+Compiled from "IRangedAttackTask.java"
+public interface com.github.tartaricacid.touhoulittlemaid.api.task.IRangedAttackTask extends com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask {
+  public static final net.minecraft.world.entity.ai.targeting.TargetingConditions TARGET_CONDITIONS;
+
+  public static java.util.Optional<? extends net.minecraft.world.entity.LivingEntity> findFirstValidAttackTarget(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: invokedynamic #41,  0             // InvokeDynamic #0:test:()Ljava/util/function/BiPredicate;
+         6: invokestatic  #45                 // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IAttackTask.findOwnerPriorityAttackTarget:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Ljava/util/function/BiPredicate;)Ljava/util/Optional;
+         9: astore_1
+        10: aload_1
+        11: invokevirtual #51                 // Method java/util/Optional.isPresent:()Z
+        14: ifeq          19
+        17: aload_1
+        18: areturn
+        19: aload_0
+        20: invokevirtual #57                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+        23: getstatic     #63                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        26: invokevirtual #69                 // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        29: astore_2
+        30: aload_2
+        31: invokevirtual #51                 // Method java/util/Optional.isPresent:()Z
+        34: ifeq          53
+        37: aload_0
+        38: aload_2
+        39: invokevirtual #73                 // Method java/util/Optional.get:()Ljava/lang/Object;
+        42: checkcast     #75                 // class net/minecraft/world/entity/LivingEntity
+        45: invokestatic  #28                 // InterfaceMethod isValidRangedTarget:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/world/entity/LivingEntity;)Z
+        48: ifeq          53
+        51: aload_2
+        52: areturn
+        53: aload_0
+        54: invokevirtual #79                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21188_:()Lnet/minecraft/world/entity/LivingEntity;
+        57: astore_3
+        58: aload_0
+        59: aload_3
+        60: invokestatic  #28                 // InterfaceMethod isValidRangedTarget:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/world/entity/LivingEntity;)Z
+        63: ifeq          71
+        66: aload_3
+        67: invokestatic  #83                 // Method java/util/Optional.of:(Ljava/lang/Object;)Ljava/util/Optional;
+        70: areturn
+        71: aload_0
+        72: invokevirtual #57                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+        75: getstatic     #86                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_148204_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        78: invokevirtual #69                 // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        81: astore        4
+        83: aload         4
+        85: invokevirtual #89                 // Method java/util/Optional.isEmpty:()Z
+        88: ifeq          95
+        91: invokestatic  #93                 // Method java/util/Optional.empty:()Ljava/util/Optional;
+        94: areturn
+        95: aload         4
+        97: invokevirtual #73                 // Method java/util/Optional.get:()Ljava/lang/Object;
+       100: checkcast     #95                 // class java/util/List
+       103: invokeinterface #99,  1           // InterfaceMethod java/util/List.iterator:()Ljava/util/Iterator;
+       108: astore        5
+       110: aload         5
+       112: invokeinterface #104,  1          // InterfaceMethod java/util/Iterator.hasNext:()Z
+       117: ifeq          150
+       120: aload         5
+       122: invokeinterface #107,  1          // InterfaceMethod java/util/Iterator.next:()Ljava/lang/Object;
+       127: checkcast     #75                 // class net/minecraft/world/entity/LivingEntity
+       130: astore        6
+       132: aload_0
+       133: aload         6
+       135: invokestatic  #28                 // InterfaceMethod isValidRangedTarget:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/world/entity/LivingEntity;)Z
+       138: ifeq          147
+       141: aload         6
+       143: invokestatic  #83                 // Method java/util/Optional.of:(Ljava/lang/Object;)Ljava/util/Optional;
+       146: areturn
+       147: goto          110
+       150: invokestatic  #93                 // Method java/util/Optional.empty:()Ljava/util/Optional;
+       153: areturn
+
+  public static boolean isValidRangedTarget(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: aload_1
+         1: ifnull        31
+         4: aload_1
+         5: invokevirtual #122                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+         8: ifeq          31
+        11: aload_0
+        12: aload_1
+        13: invokevirtual #126                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6779_:(Lnet/minecraft/world/entity/LivingEntity;)Z
+        16: ifeq          31
+        19: aload_0
+        20: aload_1
+        21: invokevirtual #129                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.canSee:(Lnet/minecraft/world/entity/LivingEntity;)Z
+        24: ifeq          31
+        27: iconst_1
+        28: goto          32
+        31: iconst_0
+        32: ireturn
+
+  public static boolean targetConditionsTest(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity, net.minecraftforge.common.ForgeConfigSpec$IntValue);
+    Code:
+         0: getstatic     #134                // Field TARGET_CONDITIONS:Lnet/minecraft/world/entity/ai/targeting/TargetingConditions;
+         3: aload_2
+         4: invokevirtual #135                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+         7: checkcast     #137                // class java/lang/Integer
+        10: invokevirtual #141                // Method java/lang/Integer.intValue:()I
+        13: i2d
+        14: invokevirtual #147                // Method net/minecraft/world/entity/ai/targeting/TargetingConditions.m_26883_:(D)Lnet/minecraft/world/entity/ai/targeting/TargetingConditions;
+        17: pop
+        18: getstatic     #134                // Field TARGET_CONDITIONS:Lnet/minecraft/world/entity/ai/targeting/TargetingConditions;
+        21: aload_0
+        22: aload_1
+        23: invokevirtual #151                // Method net/minecraft/world/entity/ai/targeting/TargetingConditions.m_26885_:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/LivingEntity;)Z
+        26: ireturn
+
+  public abstract void performRangedAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity, float);
+
+  public default boolean canSee(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: aload_1
+         1: aload_2
+         2: invokestatic  #160                // Method net/minecraft/world/entity/ai/behavior/BehaviorUtils.m_22667_:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/world/entity/LivingEntity;)Z
+         5: ireturn
+
+  static {};
+    Code:
+         0: invokestatic  #168                // Method net/minecraft/world/entity/ai/targeting/TargetingConditions.m_148352_:()Lnet/minecraft/world/entity/ai/targeting/TargetingConditions;
+         3: putstatic     #134                // Field TARGET_CONDITIONS:Lnet/minecraft/world/entity/ai/targeting/TargetingConditions;
+         6: return
+}

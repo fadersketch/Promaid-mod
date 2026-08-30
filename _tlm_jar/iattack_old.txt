@@ -1,0 +1,10 @@
+2:public interface com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask extends com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask {
+3:  public static final java.lang.String MAID_NO_ATTACK_TAG;
+4:  public static java.util.Optional<? extends net.minecraft.world.entity.LivingEntity> findFirstValidAttackTarget(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+5:  public default boolean canAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+6:  public default boolean hasExtraAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.Entity);
+7:  public default boolean doExtraAttack(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.Entity);
+8:  public default boolean isWeapon(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.item.ItemStack);
+9:  public default com.github.tartaricacid.touhoulittlemaid.api.task.FunctionCallSwitchResult onFunctionCallSwitch(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+10:  public default net.minecraft.world.MenuProvider getTaskConfigGuiProvider(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+11:  public default boolean enablePanic(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
