@@ -1,0 +1,9 @@
+Compiled from "MaidClearStaleAttackTarget.java"
+public final class com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidClearStaleAttackTarget {
+  private static final int CANT_REACH_GIVE_UP_TICKS;
+  private com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidClearStaleAttackTarget();
+  public static net.minecraft.world.entity.ai.behavior.BehaviorControl<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid> create();
+  private static com.mojang.datafixers.kinds.App lambda$create$2(net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder$Instance);
+  private static net.minecraft.world.entity.ai.behavior.declarative.Trigger lambda$create$1(net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor, net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor, net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor);
+  private static boolean lambda$create$0(net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+}

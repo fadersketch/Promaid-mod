@@ -1,0 +1,126 @@
+Compiled from "MaidStartAttacking.java"
+public final class com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidStartAttacking {
+  private com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidStartAttacking();
+    Code:
+         0: aload_0
+         1: invokespecial #24                 // Method java/lang/Object."<init>":()V
+         4: return
+
+  public static net.minecraft.world.entity.ai.behavior.BehaviorControl<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid> create(java.util.function.Predicate<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid>, java.util.function.Function<com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, java.util.Optional<? extends net.minecraft.world.entity.LivingEntity>>);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #49,  0             // InvokeDynamic #0:apply:(Ljava/util/function/Predicate;Ljava/util/function/Function;)Ljava/util/function/Function;
+         7: invokestatic  #53                 // Method net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder.m_258034_:(Ljava/util/function/Function;)Lnet/minecraft/world/entity/ai/behavior/OneShot;
+        10: areturn
+
+  static void clearInvalidAttackMemories(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: invokevirtual #67                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+         4: getstatic     #73                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+         7: invokevirtual #79                 // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        10: aload_0
+        11: invokedynamic #92,  0             // InvokeDynamic #1:accept:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Ljava/util/function/Consumer;
+        16: invokevirtual #98                 // Method java/util/Optional.ifPresent:(Ljava/util/function/Consumer;)V
+        19: return
+
+  private static void lambda$clearInvalidAttackMemories$3(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.world.entity.LivingEntity);
+    Code:
+         0: aload_1
+         1: invokevirtual #106                // Method net/minecraft/world/entity/LivingEntity.m_6084_:()Z
+         4: ifeq          30
+         7: aload_1
+         8: invokevirtual #109                // Method net/minecraft/world/entity/LivingEntity.isAddedToWorld:()Z
+        11: ifeq          30
+        14: aload_0
+        15: aload_1
+        16: invokevirtual #113                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6779_:(Lnet/minecraft/world/entity/LivingEntity;)Z
+        19: ifeq          30
+        22: aload_0
+        23: aload_1
+        24: invokestatic  #119                // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IAttackTask.shouldAbandonTarget:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;Lnet/minecraft/world/entity/LivingEntity;)Z
+        27: ifeq          34
+        30: aload_0
+        31: invokestatic  #122                // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IAttackTask.clearAttackMemories:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        34: return
+
+  private static com.mojang.datafixers.kinds.App lambda$create$2(java.util.function.Predicate, java.util.function.Function, net.minecraft.world.entity.ai.behavior.declarative.BehaviorBuilder$Instance);
+    Code:
+         0: aload_2
+         1: aload_2
+         2: getstatic     #73                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+         5: invokevirtual #128                // Method net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder$Instance.m_257492_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Lnet/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder;
+         8: aload_2
+         9: getstatic     #131                // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26326_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        12: invokevirtual #128                // Method net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder$Instance.m_257492_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Lnet/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder;
+        15: aload_2
+        16: getstatic     #134                // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26370_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        19: invokevirtual #128                // Method net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder$Instance.m_257492_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Lnet/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder;
+        22: invokevirtual #138                // Method net/minecraft/world/entity/ai/behavior/declarative/BehaviorBuilder$Instance.group:(Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;Lcom/mojang/datafixers/kinds/App;)Lcom/mojang/datafixers/Products$P3;
+        25: aload_2
+        26: aload_0
+        27: aload_1
+        28: invokedynamic #150,  0            // InvokeDynamic #2:apply:(Ljava/util/function/Predicate;Ljava/util/function/Function;)Lcom/mojang/datafixers/util/Function3;
+        33: invokevirtual #153                // Method com/mojang/datafixers/Products$P3.apply:(Lcom/mojang/datafixers/kinds/Applicative;Lcom/mojang/datafixers/util/Function3;)Lcom/mojang/datafixers/kinds/App;
+        36: areturn
+
+  private static net.minecraft.world.entity.ai.behavior.declarative.Trigger lambda$create$1(java.util.function.Predicate, java.util.function.Function, net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor, net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor, net.minecraft.world.entity.ai.behavior.declarative.MemoryAccessor);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: invokedynamic #168,  0            // InvokeDynamic #3:m_257808_:(Ljava/util/function/Predicate;Ljava/util/function/Function;)Lnet/minecraft/world/entity/ai/behavior/declarative/Trigger;
+         7: areturn
+
+  private static boolean lambda$create$0(java.util.function.Predicate, java.util.function.Function, net.minecraft.server.level.ServerLevel, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, long);
+    Code:
+         0: aload_0
+         1: aload_3
+         2: invokeinterface #178,  2          // InterfaceMethod java/util/function/Predicate.test:(Ljava/lang/Object;)Z
+         7: ifne          12
+        10: iconst_0
+        11: ireturn
+        12: aload_1
+        13: aload_3
+        14: invokeinterface #182,  2          // InterfaceMethod java/util/function/Function.apply:(Ljava/lang/Object;)Ljava/lang/Object;
+        19: checkcast     #94                 // class java/util/Optional
+        22: astore        6
+        24: aload         6
+        26: invokevirtual #185                // Method java/util/Optional.isEmpty:()Z
+        29: ifeq          38
+        32: aload_3
+        33: invokestatic  #187                // Method clearInvalidAttackMemories:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        36: iconst_0
+        37: ireturn
+        38: aload         6
+        40: invokevirtual #191                // Method java/util/Optional.get:()Ljava/lang/Object;
+        43: checkcast     #102                // class net/minecraft/world/entity/LivingEntity
+        46: astore        7
+        48: aload_3
+        49: invokevirtual #67                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+        52: getstatic     #73                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        55: invokevirtual #79                 // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        58: astore        8
+        60: aload         8
+        62: invokevirtual #194                // Method java/util/Optional.isPresent:()Z
+        65: ifeq          86
+        68: aload         8
+        70: invokevirtual #191                // Method java/util/Optional.get:()Ljava/lang/Object;
+        73: checkcast     #102                // class net/minecraft/world/entity/LivingEntity
+        76: aload         7
+        78: invokevirtual #197                // Method net/minecraft/world/entity/LivingEntity.equals:(Ljava/lang/Object;)Z
+        81: ifeq          86
+        84: iconst_0
+        85: ireturn
+        86: aload_3
+        87: invokevirtual #67                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+        90: getstatic     #131                // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26326_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        93: invokevirtual #201                // Method net/minecraft/world/entity/ai/Brain.m_21936_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)V
+        96: aload_3
+        97: invokevirtual #67                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+       100: getstatic     #73                 // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26372_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+       103: aload         7
+       105: invokevirtual #205                // Method net/minecraft/world/entity/ai/Brain.m_21879_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;Ljava/lang/Object;)V
+       108: iconst_1
+       109: ireturn
+}
