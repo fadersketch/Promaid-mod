@@ -2070,21 +2070,27 @@ public class BlueprintBookScreen extends Screen {
                 vid,
                 this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
                 this.viewingEntry.sizeZ());
+        // v1.1.0 实测一百九十（用户："按 Z 键可以旋转区块的方向。但是这个操作没有
+        // 提示。我觉得最好在玩家点击建造此建筑之后，在系统提示里弹出这样的系统提示"）：
+        // Z 键提示从【仅首次预览发送】改为【每次点击建造此图纸都发送】——旧版只有
+        // 首次点击发（那次恰好刷走了就再看不到），重开手册直接进确认框的第二次点击
+        // 零提示，而金色预览激活期间 Z 键始终可用（标注"确认后不可改"）。
+        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
+        if (mc.f_91074_ != null) {
+            mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影）。"
+                            + "\u00a7b按 Z 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
+                            + "「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
+        }
         if (!previewed) {
             // 第 1 步：系统提示选位 → 退出手册看金色框+幽灵投影
-            net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-            if (mc.f_91074_ != null) {
-                mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影）。"
-                                + "\u00a7b按 Z 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
-                                + "「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
-            }
             this.m_7379_();
             return;
         }
         // 第 2 步：确认弹窗 → 确认才创建区块
         this.confirmAction("确定建造在这里？",
                 "\u00a7e区块范围 = 你脚下为中心（金色框当前位置，青色幽灵方块即建筑形态）。\n"
+                        + "\u00a7b仍可按 Z 键旋转建筑朝向（每次 90°，确认后不可改）。\n"
                         + "\u00a7c注意：女仆搭建会直接摧毁区块内的树、建筑等障碍物。\n"
                         + "\u00a77确认后创建区块，工地会显示红色区域框与橙色蓝图投影，到女仆管理绑定女仆开始建造。",
                 "\u00a7c确定，开始建造",
