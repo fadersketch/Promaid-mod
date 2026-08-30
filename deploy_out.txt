@@ -1,3 +1,3 @@
-staged: C:\Users\Sketch\AppData\Local\Temp\promaid-1.1.0.jar 4759391
+staged: C:\Users\Sketch\AppData\Local\Temp\promaid-1.1.0.jar 4759353
 elevated rc: 0  
-deployed: D:\.minecraft\versions\1.20.1-Forge_47.4.23\mods\promaid-1.1.0.jar 4759391 match= True
+deployed: D:\.minecraft\versions\1.20.1-Forge_47.4.23\mods\promaid-1.1.0.jar 4759353 match= True

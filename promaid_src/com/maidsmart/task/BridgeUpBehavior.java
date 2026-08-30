@@ -37,7 +37,7 @@ import java.util.Map;
  *   启动须离开收尾区（> max(bridge.minRadius, 2.5)），消除 2~2.5 格 start/stop 抖动
  * - 主触发（v1.1.0 实测一百七十九 + 一百八十七启动要求，用户口径）：水平有距离
  *   （≥ max(minRadius, 2.5)【且】平桥分支额外要求水平距离 ≥ bridge.startHDist，
- *   默认 6 格——实测一百八十七） + 朝主人方向【脚前方方块为空】（前方 1~2 格
+ *   默认 5 格——实测一百八十七/一百九十九） + 朝主人方向【脚前方方块为空】（前方 1~2 格
  *   站立格/头顶/脚下全空 = 缺口悬空）→ 朝主人搭方块并踩上去；不看主人高低
  *   （主人在下方也铺桥过去——旧版 dy<0 一律不搭）、距离无上限（方块耗尽自然停）
  * - 垂直搭高分支（保留）：前方无缺口且主人高于女仆 min(bridge.minDy, 4) 时照旧启动；
@@ -299,7 +299,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百八十七【平桥启动要求】（用户："水平距离搭建方块有没有启动
         // 要求呢？结合实际情况，加个启动要求"）：缺口在眼前但水平距离不够远 → 不启动
         //（只走路跟随）。旧版 2.5 格就启动太敏感——主人就在沟对面几步远也垫块，
-        // 且刚启动→到达→停止反复横跳。默认 6 格，设 3 接近旧版行为。
+        // 且刚启动→到达→停止反复横跳。默认 5 格（一百九十九按用户要求从 6 调低），设 3 接近旧版行为。
         if (gapAhead && hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             return false;
         }
@@ -461,7 +461,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 走过去再铺下一块（导航在半空永远返回失败 → 旧版只剩垂直叠柱/傻站）。
         // 与 tryDiagStep 的区别：那格只垫"下方一格"做台阶上楼；这里女仆已在
         // 主人高度附近（dy 已不足 minDy），铺的是平桥——空中横向逼近的主力。
-        if (hDist > 1.2 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()) {
+        // v1.1.0 实测一百九十九【平桥腿距离门槛】（用户："水平距离小于 5 的时候不会
+        // 触发水平搭建方块"）：一百八十七的 startHDist 只加在 canUse 启动门上——
+        // 行为启动后 tick 的平桥腿没有距离门槛，启程后一路铺到 2.5 格，"小于 5 不触发"
+        // 形同虚设。与启动门同口径：水平距离 < startHDist 时平桥腿不铺
+        // （走路逼近/竖直垫高不受影响）。
+        if (hDist > 1.2 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()
+                && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             if (this.tryAirBridgeStep(level, maid, hx, hz, hDist)) {
                 return; // 铺了一块并走上去——本 tick 结束
             }
