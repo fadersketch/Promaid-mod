@@ -1,0 +1,445 @@
+Compiled from "SchedulePos.java"
+public final class com.github.tartaricacid.touhoulittlemaid.entity.passive.SchedulePos {
+  private static final int MAX_TELEPORT_ATTEMPTS_TIMES;
+
+  private net.minecraft.core.BlockPos workPos;
+
+  private net.minecraft.core.BlockPos idlePos;
+
+  private net.minecraft.core.BlockPos sleepPos;
+
+  private net.minecraft.resources.ResourceLocation dimension;
+
+  private boolean configured;
+
+  public com.github.tartaricacid.touhoulittlemaid.entity.passive.SchedulePos(net.minecraft.core.BlockPos, net.minecraft.core.BlockPos, net.minecraft.core.BlockPos, net.minecraft.resources.ResourceLocation);
+    Code:
+         0: aload_0
+         1: invokespecial #31                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: iconst_0
+         6: putfield      #33                 // Field configured:Z
+         9: aload_0
+        10: aload_1
+        11: putfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        14: aload_0
+        15: aload_2
+        16: putfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        19: aload_0
+        20: aload_3
+        21: putfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        24: aload_0
+        25: aload         4
+        27: putfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+        30: return
+
+  public com.github.tartaricacid.touhoulittlemaid.entity.passive.SchedulePos(net.minecraft.core.BlockPos, net.minecraft.core.BlockPos, net.minecraft.resources.ResourceLocation);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_2
+         3: aload_2
+         4: aload_3
+         5: invokespecial #46                 // Method "<init>":(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos;Lnet/minecraft/resources/ResourceLocation;)V
+         8: return
+
+  public com.github.tartaricacid.touhoulittlemaid.entity.passive.SchedulePos(net.minecraft.core.BlockPos, net.minecraft.resources.ResourceLocation);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: aload_1
+         3: aload_2
+         4: invokespecial #49                 // Method "<init>":(Lnet/minecraft/core/BlockPos;Lnet/minecraft/core/BlockPos;Lnet/minecraft/resources/ResourceLocation;)V
+         7: return
+
+  public void setWorkPos(net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+         5: return
+
+  public void setIdlePos(net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+         5: return
+
+  public void setSleepPos(net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+         5: return
+
+  public void setDimension(net.minecraft.resources.ResourceLocation);
+    Code:
+         0: aload_0
+         1: aload_1
+         2: putfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+         5: return
+
+  public void tick(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: getfield      #62                 // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19797_:I
+         4: bipush        40
+         6: irem
+         7: ifne          90
+        10: aload_0
+        11: aload_1
+        12: invokevirtual #65                 // Method restrictTo:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        15: aload_1
+        16: invokevirtual #69                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21533_:()Z
+        19: ifeq          23
+        22: return
+        23: aload_1
+        24: invokevirtual #72                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.canBrainMoving:()Z
+        27: ifne          31
+        30: return
+        31: aload_1
+        32: invokevirtual #76                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21534_:()Lnet/minecraft/core/BlockPos;
+        35: aload_1
+        36: invokevirtual #79                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        39: invokevirtual #85                 // Method net/minecraft/core/BlockPos.m_123331_:(Lnet/minecraft/core/Vec3i;)D
+        42: dstore_2
+        43: aload_1
+        44: invokevirtual #89                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21535_:()F
+        47: f2i
+        48: iconst_4
+        49: iadd
+        50: istore        4
+        52: dload_2
+        53: iload         4
+        55: iload         4
+        57: imul
+        58: i2d
+        59: dcmpl
+        60: ifle          79
+        63: aload_0
+        64: aload_1
+        65: invokevirtual #93                 // Method sameWithRestrictCenter:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+        68: ifne          79
+        71: aload_0
+        72: aload_1
+        73: invokevirtual #96                 // Method teleport:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        76: goto          90
+        79: aload_1
+        80: aload_1
+        81: invokevirtual #76                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21534_:()Lnet/minecraft/core/BlockPos;
+        84: ldc           #97                 // float 0.7f
+        86: iconst_3
+        87: invokestatic  #103                // Method net/minecraft/world/entity/ai/behavior/BehaviorUtils.m_22617_:(Lnet/minecraft/world/entity/LivingEntity;Lnet/minecraft/core/BlockPos;FI)V
+        90: return
+
+  public void save(net.minecraft.nbt.CompoundTag);
+    Code:
+         0: new           #112                // class net/minecraft/nbt/CompoundTag
+         3: dup
+         4: invokespecial #113                // Method net/minecraft/nbt/CompoundTag."<init>":()V
+         7: astore_2
+         8: aload_2
+         9: ldc           #115                // String Work
+        11: aload_0
+        12: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        15: invokestatic  #121                // Method net/minecraft/nbt/NbtUtils.m_129224_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/nbt/CompoundTag;
+        18: invokevirtual #125                // Method net/minecraft/nbt/CompoundTag.m_128365_:(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;
+        21: pop
+        22: aload_2
+        23: ldc           #127                // String Idle
+        25: aload_0
+        26: getfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        29: invokestatic  #121                // Method net/minecraft/nbt/NbtUtils.m_129224_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/nbt/CompoundTag;
+        32: invokevirtual #125                // Method net/minecraft/nbt/CompoundTag.m_128365_:(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;
+        35: pop
+        36: aload_2
+        37: ldc           #129                // String Sleep
+        39: aload_0
+        40: getfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        43: invokestatic  #121                // Method net/minecraft/nbt/NbtUtils.m_129224_:(Lnet/minecraft/core/BlockPos;)Lnet/minecraft/nbt/CompoundTag;
+        46: invokevirtual #125                // Method net/minecraft/nbt/CompoundTag.m_128365_:(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;
+        49: pop
+        50: aload_2
+        51: ldc           #131                // String Dimension
+        53: aload_0
+        54: getfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+        57: invokevirtual #137                // Method net/minecraft/resources/ResourceLocation.toString:()Ljava/lang/String;
+        60: invokevirtual #141                // Method net/minecraft/nbt/CompoundTag.m_128359_:(Ljava/lang/String;Ljava/lang/String;)V
+        63: aload_2
+        64: ldc           #143                // String Configured
+        66: aload_0
+        67: getfield      #33                 // Field configured:Z
+        70: invokevirtual #147                // Method net/minecraft/nbt/CompoundTag.m_128379_:(Ljava/lang/String;Z)V
+        73: aload_1
+        74: ldc           #149                // String MaidSchedulePos
+        76: aload_2
+        77: invokevirtual #125                // Method net/minecraft/nbt/CompoundTag.m_128365_:(Ljava/lang/String;Lnet/minecraft/nbt/Tag;)Lnet/minecraft/nbt/Tag;
+        80: pop
+        81: return
+
+  public void load(net.minecraft.nbt.CompoundTag, com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: ldc           #149                // String MaidSchedulePos
+         3: bipush        10
+         5: invokevirtual #158                // Method net/minecraft/nbt/CompoundTag.m_128425_:(Ljava/lang/String;I)Z
+         8: ifeq          89
+        11: aload_1
+        12: ldc           #149                // String MaidSchedulePos
+        14: invokevirtual #162                // Method net/minecraft/nbt/CompoundTag.m_128469_:(Ljava/lang/String;)Lnet/minecraft/nbt/CompoundTag;
+        17: astore_3
+        18: aload_0
+        19: aload_3
+        20: ldc           #115                // String Work
+        22: invokevirtual #162                // Method net/minecraft/nbt/CompoundTag.m_128469_:(Ljava/lang/String;)Lnet/minecraft/nbt/CompoundTag;
+        25: invokestatic  #166                // Method net/minecraft/nbt/NbtUtils.m_129239_:(Lnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/core/BlockPos;
+        28: putfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        31: aload_0
+        32: aload_3
+        33: ldc           #127                // String Idle
+        35: invokevirtual #162                // Method net/minecraft/nbt/CompoundTag.m_128469_:(Ljava/lang/String;)Lnet/minecraft/nbt/CompoundTag;
+        38: invokestatic  #166                // Method net/minecraft/nbt/NbtUtils.m_129239_:(Lnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/core/BlockPos;
+        41: putfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        44: aload_0
+        45: aload_3
+        46: ldc           #129                // String Sleep
+        48: invokevirtual #162                // Method net/minecraft/nbt/CompoundTag.m_128469_:(Ljava/lang/String;)Lnet/minecraft/nbt/CompoundTag;
+        51: invokestatic  #166                // Method net/minecraft/nbt/NbtUtils.m_129239_:(Lnet/minecraft/nbt/CompoundTag;)Lnet/minecraft/core/BlockPos;
+        54: putfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        57: aload_0
+        58: new           #133                // class net/minecraft/resources/ResourceLocation
+        61: dup
+        62: aload_3
+        63: ldc           #131                // String Dimension
+        65: invokevirtual #170                // Method net/minecraft/nbt/CompoundTag.m_128461_:(Ljava/lang/String;)Ljava/lang/String;
+        68: invokespecial #173                // Method net/minecraft/resources/ResourceLocation."<init>":(Ljava/lang/String;)V
+        71: putfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+        74: aload_0
+        75: aload_3
+        76: ldc           #143                // String Configured
+        78: invokevirtual #177                // Method net/minecraft/nbt/CompoundTag.m_128471_:(Ljava/lang/String;)Z
+        81: putfield      #33                 // Field configured:Z
+        84: aload_0
+        85: aload_2
+        86: invokevirtual #65                 // Method restrictTo:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        89: return
+
+  public void restrictTo(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #180                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.isHomeModeEnable:()Z
+         4: ifne          8
+         7: return
+         8: aload_1
+         9: invokevirtual #184                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.getScheduleDetail:()Lnet/minecraft/world/entity/schedule/Activity;
+        12: astore_2
+        13: aload_2
+        14: getstatic     #190                // Field net/minecraft/world/entity/schedule/Activity.f_37980_:Lnet/minecraft/world/entity/schedule/Activity;
+        17: if_acmpne     41
+        20: aload_1
+        21: aload_0
+        22: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        25: getstatic     #196                // Field com/github/tartaricacid/touhoulittlemaid/config/subconfig/MaidConfig.MAID_WORK_RANGE:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+        28: invokevirtual #200                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+        31: checkcast     #202                // class java/lang/Integer
+        34: invokevirtual #206                // Method java/lang/Integer.intValue:()I
+        37: invokevirtual #210                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21446_:(Lnet/minecraft/core/BlockPos;I)V
+        40: return
+        41: aload_2
+        42: getstatic     #213                // Field net/minecraft/world/entity/schedule/Activity.f_37979_:Lnet/minecraft/world/entity/schedule/Activity;
+        45: if_acmpne     69
+        48: aload_1
+        49: aload_0
+        50: getfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        53: getstatic     #216                // Field com/github/tartaricacid/touhoulittlemaid/config/subconfig/MaidConfig.MAID_IDLE_RANGE:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+        56: invokevirtual #200                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+        59: checkcast     #202                // class java/lang/Integer
+        62: invokevirtual #206                // Method java/lang/Integer.intValue:()I
+        65: invokevirtual #210                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21446_:(Lnet/minecraft/core/BlockPos;I)V
+        68: return
+        69: aload_2
+        70: getstatic     #219                // Field net/minecraft/world/entity/schedule/Activity.f_37982_:Lnet/minecraft/world/entity/schedule/Activity;
+        73: if_acmpne     96
+        76: aload_1
+        77: aload_0
+        78: getfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        81: getstatic     #222                // Field com/github/tartaricacid/touhoulittlemaid/config/subconfig/MaidConfig.MAID_SLEEP_RANGE:Lnet/minecraftforge/common/ForgeConfigSpec$IntValue;
+        84: invokevirtual #200                // Method net/minecraftforge/common/ForgeConfigSpec$IntValue.get:()Ljava/lang/Object;
+        87: checkcast     #202                // class java/lang/Integer
+        90: invokevirtual #206                // Method java/lang/Integer.intValue:()I
+        93: invokevirtual #210                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21446_:(Lnet/minecraft/core/BlockPos;I)V
+        96: return
+
+  public void setConfigured(boolean);
+    Code:
+         0: aload_0
+         1: iload_1
+         2: putfield      #33                 // Field configured:Z
+         5: return
+
+  public net.minecraft.core.BlockPos getWorkPos();
+    Code:
+         0: aload_0
+         1: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+         4: areturn
+
+  public net.minecraft.core.BlockPos getIdlePos();
+    Code:
+         0: aload_0
+         1: getfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+         4: areturn
+
+  public net.minecraft.core.BlockPos getSleepPos();
+    Code:
+         0: aload_0
+         1: getfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+         4: areturn
+
+  public boolean isConfigured();
+    Code:
+         0: aload_0
+         1: getfield      #33                 // Field configured:Z
+         4: ireturn
+
+  public net.minecraft.resources.ResourceLocation getDimension();
+    Code:
+         0: aload_0
+         1: getfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+         4: areturn
+
+  public void clear(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: aload_0
+         2: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+         5: putfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+         8: aload_0
+         9: aload_0
+        10: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        13: putfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        16: aload_0
+        17: iconst_0
+        18: putfield      #33                 // Field configured:Z
+        21: aload_0
+        22: aload_1
+        23: getfield      #236                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+        26: invokevirtual #242                // Method net/minecraft/world/level/Level.m_46472_:()Lnet/minecraft/resources/ResourceKey;
+        29: invokevirtual #247                // Method net/minecraft/resources/ResourceKey.m_135782_:()Lnet/minecraft/resources/ResourceLocation;
+        32: putfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+        35: aload_0
+        36: aload_1
+        37: invokevirtual #65                 // Method restrictTo:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        40: return
+
+  public void setHomeModeEnable(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid, net.minecraft.core.BlockPos);
+    Code:
+         0: aload_0
+         1: getfield      #33                 // Field configured:Z
+         4: ifne          36
+         7: aload_0
+         8: aload_2
+         9: putfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        12: aload_0
+        13: aload_2
+        14: putfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        17: aload_0
+        18: aload_2
+        19: putfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        22: aload_0
+        23: aload_1
+        24: getfield      #236                // Field com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.f_19853_:Lnet/minecraft/world/level/Level;
+        27: invokevirtual #242                // Method net/minecraft/world/level/Level.m_46472_:()Lnet/minecraft/resources/ResourceKey;
+        30: invokevirtual #247                // Method net/minecraft/resources/ResourceKey.m_135782_:()Lnet/minecraft/resources/ResourceLocation;
+        33: putfield      #41                 // Field dimension:Lnet/minecraft/resources/ResourceLocation;
+        36: aload_0
+        37: aload_1
+        38: invokevirtual #65                 // Method restrictTo:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        41: return
+
+  public net.minecraft.core.BlockPos getNearestPos(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_0
+         1: getfield      #33                 // Field configured:Z
+         4: ifeq          79
+         7: aload_0
+         8: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        11: astore_2
+        12: aload_1
+        13: invokevirtual #79                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        16: aload_0
+        17: getfield      #35                 // Field workPos:Lnet/minecraft/core/BlockPos;
+        20: invokevirtual #85                 // Method net/minecraft/core/BlockPos.m_123331_:(Lnet/minecraft/core/Vec3i;)D
+        23: dstore_3
+        24: aload_1
+        25: invokevirtual #79                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        28: aload_0
+        29: getfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        32: invokevirtual #85                 // Method net/minecraft/core/BlockPos.m_123331_:(Lnet/minecraft/core/Vec3i;)D
+        35: dstore        5
+        37: aload_1
+        38: invokevirtual #79                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_20183_:()Lnet/minecraft/core/BlockPos;
+        41: aload_0
+        42: getfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        45: invokevirtual #85                 // Method net/minecraft/core/BlockPos.m_123331_:(Lnet/minecraft/core/Vec3i;)D
+        48: dstore        7
+        50: dload_3
+        51: dload         5
+        53: dcmpl
+        54: ifle          65
+        57: aload_0
+        58: getfield      #37                 // Field idlePos:Lnet/minecraft/core/BlockPos;
+        61: astore_2
+        62: dload         5
+        64: dstore_3
+        65: dload_3
+        66: dload         7
+        68: dcmpl
+        69: ifle          77
+        72: aload_0
+        73: getfield      #39                 // Field sleepPos:Lnet/minecraft/core/BlockPos;
+        76: astore_2
+        77: aload_2
+        78: areturn
+        79: aconst_null
+        80: areturn
+
+  private boolean sameWithRestrictCenter(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: aload_1
+         1: invokevirtual #76                 // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21534_:()Lnet/minecraft/core/BlockPos;
+         4: astore_2
+         5: aload_1
+         6: invokevirtual #260                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_6274_:()Lnet/minecraft/world/entity/ai/Brain;
+         9: getstatic     #266                // Field net/minecraft/world/entity/ai/memory/MemoryModuleType.f_26370_:Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;
+        12: invokevirtual #272                // Method net/minecraft/world/entity/ai/Brain.m_21952_:(Lnet/minecraft/world/entity/ai/memory/MemoryModuleType;)Ljava/util/Optional;
+        15: aload_2
+        16: invokedynamic #292,  0            // InvokeDynamic #0:test:(Lnet/minecraft/core/BlockPos;)Ljava/util/function/Predicate;
+        21: invokevirtual #298                // Method java/util/Optional.filter:(Ljava/util/function/Predicate;)Ljava/util/Optional;
+        24: invokevirtual #301                // Method java/util/Optional.isPresent:()Z
+        27: ireturn
+
+  private void teleport(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid);
+    Code:
+         0: iconst_0
+         1: istore_2
+         2: iload_2
+         3: bipush        10
+         5: if_icmpge     22
+         8: aload_1
+         9: invokestatic  #307                // Method com/github/tartaricacid/touhoulittlemaid/util/TeleportHelper.teleportToRestrictCenter:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+        12: ifeq          16
+        15: return
+        16: iinc          2, 1
+        19: goto          2
+        22: return
+
+  private static boolean lambda$sameWithRestrictCenter$0(net.minecraft.core.BlockPos, net.minecraft.world.entity.ai.memory.WalkTarget);
+    Code:
+         0: aload_1
+         1: invokevirtual #314                // Method net/minecraft/world/entity/ai/memory/WalkTarget.m_26420_:()Lnet/minecraft/world/entity/ai/behavior/PositionTracker;
+         4: invokeinterface #319,  1          // InterfaceMethod net/minecraft/world/entity/ai/behavior/PositionTracker.m_6675_:()Lnet/minecraft/core/BlockPos;
+         9: aload_0
+        10: invokevirtual #322                // Method net/minecraft/core/BlockPos.equals:(Ljava/lang/Object;)Z
+        13: ireturn
+}
