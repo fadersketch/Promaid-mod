@@ -1,0 +1,291 @@
+diff --git a/promaid_src/com/maidsmart/config/MaidSmartConfig.java b/promaid_src/com/maidsmart/config/MaidSmartConfig.java
+index b378faa..99bc3f4 100644
+--- a/promaid_src/com/maidsmart/config/MaidSmartConfig.java
++++ b/promaid_src/com/maidsmart/config/MaidSmartConfig.java
+@@ -1,4 +1,4 @@
+-package com.maidsmart.config;
++﻿package com.maidsmart.config;
+ 
+ import net.minecraftforge.common.ForgeConfigSpec;
+ 
+@@ -453,10 +453,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         BUILDER.comment("建造系统设置").translation("config.promaid.build").push("build");
+         BUILD_SPEED_TIER = BUILDER.comment("建造速度档位：x1 / x1.5 / x3")
+                 .translation("config.promaid.build.speedTier")
+-                .define("speedTier", "x1",
++                .define("speedTier", "x1.5",
+                         o -> o instanceof String s && (s.equals("x1") || s.equals("x1.5") || s.equals("x3")));
+         BUILD_TURBO = BUILDER.comment("极速模式（吃满服务器上限，性能风险）")
+-                .translation("config.promaid.build.turbo").define("turbo", false);
++                .translation("config.promaid.build.turbo").define("turbo", true);
+         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
+                 .translation("config.promaid.build.globalQuota")
+                 .defineInRange("globalQuota", 350, 50, 1500);
+@@ -464,7 +464,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .translation("config.promaid.build.maxForceChunks")
+                 .defineInRange("maxForceChunks", 1024, 64, 8192);
+         BUILD_MAX_BLOCKS = BUILDER.comment("LLM 蓝图最大方块数（v1.5.222：上限放开到 50 万——构建链统一支持 50 万块级建筑）")
+-                .translation("config.promaid.build.maxBlocks").defineInRange("maxBlocks", 200000, 16, 500000);
++                .translation("config.promaid.build.maxBlocks").defineInRange("maxBlocks", 200, 16, 500000);
+         BUILD_MAX_RANGE = BUILDER.comment("LLM 蓝图平面范围（±）")
+                 .translation("config.promaid.build.maxRange").defineInRange("maxRange", 12, 4, 64);
+         BUILD_MAX_HEIGHT = BUILDER.comment("LLM 蓝图高度上限")
+@@ -520,7 +520,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("deferredScanCap", 256, 32, 2048);
+         BUILD_STRUCTURE_MAX_VOLUME = BUILDER.comment("结构文件体积上限（宽×高×长，超限拒绝加载）")
+                 .translation("config.promaid.build.structureMaxVolume")
+-                .defineInRange("structureMaxVolume", 0x1000000, 100000, 67108864);
++                .defineInRange("structureMaxVolume", 16777216, 100000, 67108864);
+         BUILDER.pop();
+ 
+         // ---- 挖矿 ----
+@@ -553,30 +553,30 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         MINE_SEARCH_RADIUS = BUILDER.comment("矿物检索半径（水平）")
+                 .translation("config.promaid.mine.searchRadius").defineInRange("searchRadius", 24, 8, 64);
+         MINE_DOWN_RANGE = BUILDER.comment("垂直向下搜索范围")
+-                .translation("config.promaid.mine.downRange").defineInRange("downRange", 12, 4, 48);
++                .translation("config.promaid.mine.downRange").defineInRange("downRange", 4, 4, 48);
+         MINE_UP_RANGE = BUILDER.comment("垂直向上搜索范围")
+                 .translation("config.promaid.mine.upRange").defineInRange("upRange", 24, 4, 64);
+         // v1.1.0 实测七十二（用户反馈："矿洞里一直往下打洞"）：预算重新计入实心
+         // 可开路方块（石头/泥土），22 的旧默认等于无限穿墙选矿 → 默认降为 6；
+         // 旧档里存的 22 由 ProMaidMod 的配置迁移自动改成 6
+         MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 6）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道（旧版行为约等于无限），调小=只挑眼前暴露的矿")
+-                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 6, 0, 64);
++                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 22, 0, 64);
+         MINE_VALUE_WEIGHT = BUILDER.comment("价值权重（高价值矿优先程度）")
+                 .translation("config.promaid.mine.valueWeight")
+                 .defineInRange("valueWeight", 2.0, 0.5, 5.0);
+         MINE_DEPTH_PENALTY = BUILDER.comment("深度惩罚（越深成本越高）")
+                 .translation("config.promaid.mine.depthPenalty")
+-                .defineInRange("depthPenalty", 3.0, 0.0, 10.0);
++                .defineInRange("depthPenalty", 0.0, 0.0, 10.0);
+         MINE_SPEED_FACTOR = BUILDER.comment("挖矿速度系数（1.0=玩家速度，1.2=快20%）")
+                 .translation("config.promaid.mine.speedFactor")
+                 .defineInRange("speedFactor", 1.2, 0.5, 3.0);
+         MINE_MOVE_SPEED = BUILDER.comment("发现矿物后的移动速度（v1.5.118 默认 0.6 = TLM 伐木任务同款移速（IFarmTask 实测 0.6f），走路观感自然；v1.5.111 曾 0.4：旧 1.35×爱憎分明饥饿档基础速度（最高 0.85）= 每秒 17+ 格狂奔，搭高时女仆直接冲出柱子范围；0.4 又偏慢像爬行）")
+                 .translation("config.promaid.mine.moveSpeed")
+-                .defineInRange("moveSpeed", 0.6, 0.2, 1.5);
++                .defineInRange("moveSpeed", 0.3, 0.2, 1.5);
+         MINE_JUNK_KEEP = BUILDER.comment("废石保留量（每种超出销毁）")
+                 .translation("config.promaid.mine.junkKeep").defineInRange("junkKeep", 32, 4, 128);
+         MINE_PLACED_LIFETIME = BUILDER.comment("搭方块自动清理时间（秒）")
+-                .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
++                .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 3, 3, 60);
+         // v1.1.0 实测二十七：默认开启——软方块（徒手可挖）不磨损镐，与伐木一致。
+         // v1.5.138 曾改 false（用户反馈"挖矿不消耗耐久"），实测二十七按新需求改回。
+         MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致）")
+@@ -589,7 +589,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .translation("config.promaid.mine.creativeDefaultValue")
+                 .defineInRange("creativeDefaultValue", 300, 10, 1000);
+         MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认关）：开启后女仆能发现视线被方块挡住的矿物并挖通开路（等同旧版逻辑）；关闭后女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
+-                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", false);
++                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", true);
+         MINE_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick，出框超过此时长重埋锚点）")
+                 .translation("config.promaid.mine.anchorTimeout")
+                 .defineInRange("anchorTimeout", 200, 40, 1200);
+@@ -604,7 +604,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("reach", 4.5, 2.0, 8.0);
+         MINE_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
+                 .translation("config.promaid.mine.pillarCooldown")
+-                .defineInRange("pillarCooldown", 4, 1, 20);
++                .defineInRange("pillarCooldown", 2, 1, 20);
+         // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
+         MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘中禁止搭方块（默认开）：女仆骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘也照常搭）")
+                 .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
+@@ -669,7 +669,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
+                 .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
+         WOOD_PLACED_LIFETIME = BUILDER.comment("搭方块清理时间（秒）")
+-                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
++                .translation("config.promaid.wood.placedLifetime").defineInRange("placedLifetime", 3, 3, 60);
+         WOOD_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗斧耐久")
+                 .translation("config.promaid.wood.softNoDurability").define("softNoDurability", true);
+         WOOD_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
+@@ -703,7 +703,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
+                 .translation("config.promaid.wood.skipReportInterval").defineInRange("skipReportInterval", 600, 100, 2400);
+         WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
+-                .translation("config.promaid.wood.chainMining").define("chainMining", true);
++                .translation("config.promaid.wood.chainMining").define("chainMining", false);
+         WOOD_AUTO_COLLECT = BUILDER.comment("自动收集（砍伐掉落物直接进女仆背包，不进世界）")
+                 .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
+         WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
+@@ -714,7 +714,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         WOOD_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：伐木期间连续 N 秒既没砍掉任何方块、位置也没挪动（典型如站进挖掉的树洞里对着头顶树干发呆）时，自动整体重置该女仆的伐木状态——锚点/扫描缓存/排除表/目标全部清空重新找树，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭高都算进展，不会误触发")
+                 .translation("config.promaid.wood.stuckWatchdog").define("stuckWatchdog", true);
+         WOOD_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 5）：连续这么久既没砍掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
+-                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 5, 3, 300);
++                .translation("config.promaid.wood.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 3, 300);
+         BUILDER.pop();
+ 
+         // ---- AI 记忆 ----
+@@ -845,10 +845,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("ownerLowHealth", 30, 10, 90);
+         PERCEPTION_LOOK_TICKS = BUILDER.comment("主人持续注视判定时长（秒）")
+                 .translation("config.promaid.perception.lookTicks")
+-                .defineInRange("lookTicks", 6, 1, 30);
++                .defineInRange("lookTicks", 3, 1, 30);
+         PERCEPTION_LOOK_ENTER_DEG = BUILDER.comment("看向进入角度（度）")
+                 .translation("config.promaid.perception.lookEnterDeg")
+-                .defineInRange("lookEnterDeg", 30.0, 10.0, 80.0);
++                .defineInRange("lookEnterDeg", 35.0, 10.0, 80.0);
+         PERCEPTION_LOOK_EXIT_DEG = BUILDER.comment("看向退出角度（度）")
+                 .translation("config.promaid.perception.lookExitDeg")
+                 .defineInRange("lookExitDeg", 55.0, 20.0, 90.0);
+@@ -894,9 +894,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         DIALOGUE_STATUS_REPORTER = BUILDER.comment("工作状态播报（女仆卡住时气泡解释原因）")
+                 .translation("config.promaid.dialogue.statusReporter").define("statusReporter", true);
+         DIALOGUE_REPORT_INTERVAL = BUILDER.comment("工作播报间隔（秒，默认 20——与原硬编码一致）：女仆卡住时气泡播报的最短间隔，防刷屏")
+-                .translation("config.promaid.dialogue.reportInterval").defineInRange("reportInterval", 20, 3, 120);
++                .translation("config.promaid.dialogue.reportInterval").defineInRange("reportInterval", 10, 3, 120);
+         DIALOGUE_REPORT_RADIUS = BUILDER.comment("工作播报扫描范围")
+-                .translation("config.promaid.dialogue.reportRadius").defineInRange("reportRadius", 20, 8, 128);
++                .translation("config.promaid.dialogue.reportRadius").defineInRange("reportRadius", 32, 8, 128);
+         DIALOGUE_PROACTIVE = BUILDER.comment("主动对话（关心/夜晚/好感等主动开口）")
+                 .translation("config.promaid.dialogue.proactive").define("proactive", true);
+         DIALOGUE_PROACTIVE_COOLDOWN = BUILDER.comment("两次主动发言最小间隔（分钟）")
+@@ -970,16 +970,16 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         COMBAT_SELF_PRESERVE = BUILDER.comment("自保行为（低血逃跑/搭高/治疗）")
+                 .translation("config.promaid.combat.selfPreserve").define("selfPreserve", true);
+         COMBAT_ENTER_RATIO = BUILDER.comment("自保触发血量（0-1）")
+-                .translation("config.promaid.combat.enterRatio").defineInRange("enterRatio", 0.30, 0.05, 1.0);
++                .translation("config.promaid.combat.enterRatio").defineInRange("enterRatio", 0.3, 0.05, 1.0);
+         // v1.5.153：默认 0.60→0.70——自保取消机制之一为血量恢复到 70% 及以上
+         COMBAT_EXIT_RATIO = BUILDER.comment("自保解除血量（0-1，v1.5.153 默认 0.7：血量恢复到 70% 及以上即取消自保；另一取消机制 = 成功传送回主人身边）")
+-                .translation("config.promaid.combat.exitRatio").defineInRange("exitRatio", 0.70, 0.1, 1.0);
++                .translation("config.promaid.combat.exitRatio").defineInRange("exitRatio", 0.7, 0.1, 1.0);
+         COMBAT_THREAT_DISTANCE = BUILDER.comment("威胁感知距离")
+-                .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 8, 4, 32);
++                .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 12, 4, 32);
+         COMBAT_WATER_CLUTCH = BUILDER.comment("落地水（有水桶+坠落自动放水缓冲）")
+                 .translation("config.promaid.combat.waterClutch").define("waterClutch", true);
+         COMBAT_WATER_FALL_DISTANCE = BUILDER.comment("落地水触发高度（格）")
+-                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 4.0, 2.0, 20.0);
++                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 6.0, 2.0, 20.0);
+         // v1.5.199：水桶垫水——岩浆逃生时放水灭火（1 秒后收回）
+         COMBAT_WATER_BUCKET_LAVA = BUILDER.comment("岩浆逃生放水（垫高后周围无水源且包里有水桶 → 在自己垫的方块上放水灭火，1 秒后收回；岩浆源可能变黑曜石）")
+                 .translation("config.promaid.combat.waterBucketLava").define("waterBucketLava", true);
+@@ -990,7 +990,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("pearlCooldown", 100, 20, 1200);
+         COMBAT_PEARL_RATIO = BUILDER.comment("末影珍珠逃生触发血量（0-1，低于此值且威胁贴身才扔）")
+                 .translation("config.promaid.combat.pearlRatio")
+-                .defineInRange("pearlRatio", 0.30, 0.05, 0.5);
++                .defineInRange("pearlRatio", 0.3, 0.05, 0.5);
+         COMBAT_PEARL_DIST = BUILDER.comment("末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）")
+                 .translation("config.promaid.combat.pearlDist")
+                 .defineInRange("pearlDist", 8.0, 2.0, 16.0);
+@@ -1019,7 +1019,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("threatScan", 5, 1, 40);
+         COMBAT_FLEE_SPEED = BUILDER.comment("逃跑速度倍率")
+                 .translation("config.promaid.combat.fleeSpeed")
+-                .defineInRange("fleeSpeed", 1.1, 0.8, 3.0);
++                .defineInRange("fleeSpeed", 1.4, 0.8, 3.0);
+         // v1.1.0 实测一百五十三：TLM 火焰保护饰品识别
+         COMBAT_FIRE_PROTECT_BAUBLE = BUILDER.comment("火焰保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为（着火照常走灭火链路）")
+                 .translation("config.promaid.combat.fireProtectBauble").define("fireProtectBauble", true);
+@@ -1056,13 +1056,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+                 .defineInRange("alertCooldown", 60, 10, 300);
+         COMBAT_ANNOUNCE_COOLDOWN = BUILDER.comment("策略播报间隔（tick，防刷屏）")
+                 .translation("config.promaid.combat.announceCooldown")
+-                .defineInRange("announceCooldown", 500, 40, 600);
++                .defineInRange("announceCooldown", 200, 40, 600);
+         COMBAT_WATER_HOLD = BUILDER.comment("落地水保持时长（tick）")
+                 .translation("config.promaid.combat.waterHold")
+-                .defineInRange("waterHold", 20, 5, 100);
++                .defineInRange("waterHold", 5, 5, 100);
+         COMBAT_WATER_LANDING_SCAN = BUILDER.comment("落地水下探格数（提前放水检测）")
+                 .translation("config.promaid.combat.waterLandingScan")
+-                .defineInRange("waterLandingScan", 3, 2, 16);
++                .defineInRange("waterLandingScan", 2, 2, 16);
+         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
+         // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
+         COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
+@@ -1096,7 +1096,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（4-20：主人饱食度低于此值自动喂食；20=只要不满就喂）")
+                 .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 20);
+         AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
+-                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.30, 0.1, 1.0);
++                .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.3, 0.1, 1.0);
+         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
+                 .translation("config.promaid.combat.torchPlacerEnable").define("torchPlacerEnable", true);
+         // v1.1.0 实测六十二：女仆着火不传主人（攻击路径取消 + 接触路径自动灭火）
+@@ -1167,19 +1167,19 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         BRIDGE_ENABLED = BUILDER.comment("搭路（默认关）：主人在女仆上方一定距离内、周围无威胁、背包有方块时，女仆走过去垫方块搭高靠近主人（借鉴僵尸搭方块追人；搭的方块 N 秒后自动回收）")
+                 .translation("config.promaid.bridge.enabled").define("enabled", false);
+         BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 7）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五，参考僵尸搭桥追人）")
+-                .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 7, 2, 32);
++                .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 32, 2, 32);
+         BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 128）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
+-                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 128, 0, 128);
++                .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 50, 0, 128);
+         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 2）：主人至少高于女仆这么多格才搭路（平路/低处走路处理）")
+-                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 2, 1, 8);
++                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 6, 1, 8);
+         BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 2）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
+-                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 2, 1, 8);
++                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 3, 1, 8);
+         // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
+         // v1.1.0 实测一百九十九（用户："给搭路再加一个配置项。水平距离小于 5 的时候不会触发水平搭建方块。
+         // 此项目仍然可以在面板内自己进行配置"）：默认值 6 → 5（该配置已存在，语义=水平距离小于此值不触发
+         // 水平搭桥；仅按用户指定调整默认值，面板可调范围不变）
+         BRIDGE_START_H_DIST = BUILDER.comment("平桥启动水平距离（格，默认 5）：女仆与主人【水平距离】达到此值、且朝主人方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随；范围 3~64（3 = 最灵敏，接近一百七十九旧行为）。竖直搭高（主人更高、原地垫柱）不受影响")
+-                .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 5.0, 3.0, 64.0);
++                .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 6.0, 3.0, 64.0);
+         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
+                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
+         // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
+@@ -1188,9 +1188,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         // placedLifetime 默认 2 秒 = 稳态最多 8 块同时存在（2s × 4块/s，实测一百二十一
+         // 的"≤8 块"目标，纯数学不做额外机制）
+         BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 5）：每垫一块方块的最短间隔——≈4 块/秒与玩家持续搭块速度基本持平；调大更慢更从容")
+-                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 5, 2, 40);
++                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 2, 2, 40);
+         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 2）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）——与搭块速度联动：2 秒 × ≈4 块/秒 ≈ 8 块同时存在的稳态峰值，不会堆积成片")
+-                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 2, 1, 60);
++                .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
+         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
+                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
+         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
+@@ -1207,7 +1207,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         MISC_BREW_RADIUS = BUILDER.comment("酿造任务酿造台搜索范围")
+                 .translation("config.promaid.misc.brewRadius").defineInRange("brewRadius", 16, 4, 48);
+         MISC_PROCESS_COOLDOWN = BUILDER.comment("烧制/酿造处理间隔（tick）")
+-                .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 10, 10, 200);
++                .translation("config.promaid.misc.processCooldown").defineInRange("processCooldown", 40, 10, 200);
+         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
+         MISC_COOK_SMELT_ORES = BUILDER.comment("熔炉烧矿物（默认开）：烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单")
+                 .translation("config.promaid.misc.cookSmeltOres").define("cookSmeltOres", true);
+@@ -1223,12 +1223,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+         MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
+                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
+         MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按用户反馈调低）")
+-                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.7, 0.3, 2.5);
++                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 1.0, 0.3, 2.5);
+         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
+         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
+                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
+         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
+-                .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 10000, 500, 60000);
++                .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
+         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
+                 .translation("config.promaid.misc.pickupPriority").define("pickupPriority", true);
+         MISC_VERTICAL_RANGE = BUILDER.comment("烹饪/酿造垂直搜索范围")
+@@ -1297,7 +1297,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
+     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
+     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
+-            .translation("config.promaid.misc.chainHarvest").define("chainHarvest", false);
++            .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
+     MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
+             .translation("config.promaid.misc.autoCollect").define("autoCollect", false);
+     // v1.5.163：农场连锁收获数量上限可自定义
+@@ -1317,7 +1317,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
+             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
+     // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
+     MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认关）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭（默认）= 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（v1.1.0 实测一百七十：用户反馈\"排班后任务不变化、时间流逝任务不随段切换\"——旧默认的没活不切把女仆钉死在原地）")
+-            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", false);
++            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
+     MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
+             .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
+     MISC_SCHEDULE_REVERSE_THRESHOLD = BUILDER.comment("排班反向切换阈值（默认 2）：窗口内累计反向次数达到该值即压制本次切换")
