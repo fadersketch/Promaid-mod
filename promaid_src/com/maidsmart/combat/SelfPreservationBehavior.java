@@ -1538,7 +1538,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 安全闸：主人身边无可见威胁才放行传送。
      * v1.5.195：威胁 = 敌对生物 + 对女仆/主人带仇恨的中立生物（isThreat）。
      */
-    private static boolean anyVisibleMonsterAround(LivingEntity center, double radius) {
+    /** v1.1.0 实测二百一十七：公开给拉回/集合链路复用——主人/目标身边有此半径内的
+     *  可见威胁（怪/敌对生物）则返回 true（隔墙的不算）。 */
+    public static boolean anyVisibleMonsterAround(LivingEntity center, double radius) {
         List<Mob> mobs = center.m_9236_().m_6443_(Mob.class,
                 center.m_20191_().m_82400_(radius), m -> m.m_6084_());
         for (Mob mob : mobs) {
