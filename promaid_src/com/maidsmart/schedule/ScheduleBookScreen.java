@@ -366,6 +366,22 @@ public class ScheduleBookScreen extends Screen {
                             })
                     .m_252987_(qx, y, qw, 20).m_253136_());
         }
+        y += 26;
+        // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找；
+        // 与列表页「一键集合」同豁免口径：坐着/骑乘/在家模式（排班中）不传，服务端
+        // 会回复原因；需要强制召回先关右上角排班）
+        boolean canSummon = this.selUuid != null && !this.selUuid.isEmpty();
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_(canSummon
+                                ? "\u00a7d\u2691 传送到我身边"
+                                : "\u00a77\u2691 传送到我身边（不可用）"),
+                        b -> {
+                            if (canSummon) {
+                                ScheduleNetworking.CHANNEL.sendToServer(
+                                        new ScheduleNetworking.MaidSummonPacket(this.selUuid));
+                            }
+                        })
+                .m_252987_(qx, y, qw, 20).m_253136_());
         // 改名行（实测六十，借鉴 Maid_Roster 的重命名——直接改女仆自定义名，等同命名牌）
         y += 26;
         EditBox nameBox = new EditBox(this.f_96547_, qx, y + 1, qw - 96, 18,
