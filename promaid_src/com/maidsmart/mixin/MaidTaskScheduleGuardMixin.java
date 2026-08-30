@@ -63,11 +63,24 @@ public abstract class MaidTaskScheduleGuardMixin {
         return !com.maidsmart.schedule.ScheduleSwitchGuard.isInternalSetTask();
     }
 
-    /** 拦截时：日志 + 女仆气泡（统一措辞覆盖任务与作息） */
+    /** 拦截时：日志 + 女仆气泡（统一措辞覆盖任务与作息）+ 客户端重同步——
+     *  v1.1.0 实测一百九十一（用户："TLM 右击女仆之后的面板里面直接调整女仆的工作
+     *  任务仍然是可行的，排班所设计的不可更换排版成了笑话"）：TLM 面板换任务先在
+     *  【客户端实体】上本地 setTask 再发包——服务端 setTask 被本守卫拦截（运行日志
+     *  "手动修改任务被拦截"实证），但客户端实体已被改且无任何同步包来纠正，面板
+     *  永远显示"已改成功"（女仆实际照旧）——观感 = 排班锁失效。拒绝时主动把当前
+     *  真实任务/作息推给主人（MaidTaskResyncPacket），客户端实体扳回服务端口径。 */
     private static void reject(EntityMaid maid, String what, String detail) {
         com.maidsmart.tool.PromaidLog.log("排班",
                 com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 手动修改" + what + "被拦截（排班开启，由日程表管理）：" + detail);
+        // 客户端实体扳回：TLM 面板改的是客户端本地实体，服务端拦了但客户端会脱钩
+        try {
+            if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                com.maidsmart.schedule.ScheduleNetworking.sendResync(sp, maid);
+            }
+        } catch (Throwable ignored) {
+        }
         try {
             maid.getChatBubbleManager().addTextChatBubble(
                     "排班中呢，工作模式和任务都由日程表管理~想手动调整，先关闭我的排班吧");
