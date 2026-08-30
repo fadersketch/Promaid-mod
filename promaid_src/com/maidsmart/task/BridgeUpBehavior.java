@@ -208,6 +208,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     private int guardTicks = 0;
     /** 上次成功垫出方块的 gameTime（卡死检测：太久没垫出 = 头顶被挡/没料，放弃） */
     private long lastPlacedGameTime = 0;
+    /** v1.1.0 实测一百八十：垫块后"走上去"目标——12 tick 内持续施加水平速度把女仆
+     *  推进刚垫的方块格（踏入即停）；旧版只给一次速度脉冲，摩擦力半格就停，
+     *  跨沟导航又寻路失败 → 人不走上去 → 平桥链断掉 */
+    private int walkOnTicks = 0;
+    private double walkOnX;
+    private double walkOnY;
+    private double walkOnZ;
     /** 材料耗尽播报限频 */
     private static final Map<Integer, Long> NO_BLOCK_SINCE = new HashMap<>();
     /** v1.1.0 实测十六（审查 P2-8）：canUse 节流——旧版每 tick 每
@@ -321,6 +328,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         maid.getPersistentData().m_128379_(BRIDGING_TAG, true);
         this.stepCooldown = 0;
         this.guardTicks = 0;
+        this.walkOnTicks = 0; // 实测一百八十：跨启动残留清零
         this.lastPlacedGameTime = level.m_46467_();
         // v1.1.0 实测二十九：启动/中止日志（latest.log 搜 "bridge-up"）——
         // 间歇性失效排查用；中止原因在 doStop 记
@@ -384,7 +392,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         this.antiSuffocate(maid);
         if (this.guardTicks > 0) {
             this.guardTicks--;
-            this.pillarGuard(level, maid);
+            // 实测一百八十：主动"走上去"期间不钳制——pillarGuard 会把人按回上一块
+            // 方块中心，与走上下一块的推力互相抵消，人卡在上一块边缘永远过不去
+            if (this.walkOnTicks <= 0) {
+                this.pillarGuard(level, maid);
+            }
         }
         LivingEntity owner = maid.m_269323_();
         if (owner == null || !owner.m_6084_()) {
@@ -396,9 +408,45 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (distSq <= 6.25) {
             return; // canContinue 会结束行为
         }
+        // v1.1.0 实测一百八十【不走上去的根因】：垫完一块后持续把女仆推进刚垫的
+        // 方块格（踏入即停，12 tick 超时）。旧版 stepOnto 只给一次速度脉冲（≈0.18），
+        // 地面摩擦半格就停；跨沟导航寻路又失败（一百零二实证"半空寻路失败=人不动"）
+        // → 人不走上去，脚下格子不变，平桥链就此断掉
+        if (this.walkOnTicks > 0) {
+            this.walkOnTicks--;
+            // 到达 = 水平已进入目标格 且 脚位达到目标高度（斜上台阶目标 y+1：
+            // 不能用 |dy|<1.01 判——她还站在下面时差值恰为 1，会误判到达提前收推力）
+            boolean arrived = Math.floor(maid.m_20185_()) == Math.floor(this.walkOnX)
+                    && Math.floor(maid.m_20189_()) == Math.floor(this.walkOnZ)
+                    && maid.m_20186_() >= this.walkOnY - 0.01;
+            if (arrived) {
+                this.walkOnTicks = 0;
+            } else {
+                double wdx = this.walkOnX - maid.m_20185_();
+                double wdz = this.walkOnZ - maid.m_20189_();
+                double wd = Math.sqrt(wdx * wdx + wdz * wdz);
+                if (wd > 1e-3) {
+                    // 斜上台阶目标（walkOnY 高于当前脚位）带起跳；平桥保持原垂直速度
+                    double wvy = this.walkOnY > maid.m_20186_() + 0.5
+                            ? Math.max(maid.m_20184_().f_82480_, 0.42)
+                            : maid.m_20184_().f_82480_;
+                    maid.m_20256_(new net.minecraft.world.phys.Vec3(
+                            wdx / wd * 0.22, wvy, wdz / wd * 0.22));
+                }
+                return; // 走上去优先——本 tick 不导航不垫块，免得互相拉扯
+            }
+        }
         double hx = owner.m_20185_() - maid.m_20185_();
         double hz = owner.m_20189_() - maid.m_20189_();
         double hDist = Math.sqrt(hx * hx + hz * hz);
+        // v1.1.0 实测一百八十【平桥只搭一格的根因】：stepCooldown 旧版只在垂直腿
+        // 递减（dy >= 1 门控的 stepCooldown--），平桥/斜上腿只判不递减——第一块垫完
+        // 冷却永远卡在 5，tryAirBridgeStep/tryDiagStep 从此永远 return false，每次
+        // 启动只搭一格（用户实测："搭一格就结束"）。改为每 tick 统一递减，三条腿
+        // 共用同一节奏（垫块间隔 tick 数不变，竖直垫高节奏不变）
+        if (this.stepCooldown > 0) {
+            this.stepCooldown--;
+        }
         // v1.1.0 实测三（用户："僵尸在空中仍能左右搭方块继续追，女仆只会傻站着"）：
         // 空中水平搭桥——参照 endofdays BlockBuildBridGeGoal 的做法：不依赖导航，
         // 只要朝主人方向前方一格脚下是空的，就直接在【前方脚下】垫方块铺桥，
@@ -426,7 +474,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             maid.m_21573_().m_26573_(); // 站桩搭高（垂直列干净成型）
         }
         // 垂直接近：脚下垫方块（节奏冷却；diag 已垫过前方台阶时共用冷却）
-        if (dy >= 1 && this.stepCooldown-- <= 0) {
+        // 实测一百八十：递减上移 tick 开头统一做，这里只判就绪（节奏不变）
+        if (dy >= 1 && this.stepCooldown <= 0) {
             this.placeStep(level, maid);
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
         }
@@ -490,7 +539,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             this.guardTicks = 12;
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
             this.lastPlacedGameTime = level.m_46467_();
-            stepOnto(maid, tx + 0.5, y, tz + 0.5);
+            this.beginWalkOn(maid, tx + 0.5, y, tz + 0.5);
             return true;
         }
         return false;
@@ -560,7 +609,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             this.guardTicks = 12;
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
             double walkY = place.equals(ahead) ? y + 1 : y;
-            stepOnto(maid, tx + 0.5, walkY, tz + 0.5);
+            this.beginWalkOn(maid, tx + 0.5, walkY, tz + 0.5);
             return true;
         }
         return false;
@@ -696,6 +745,19 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 驱动走向目标格，视觉上是"走过去"而非"跳过去"。垂直垫块（d≈0）保持原地
      * 起跳——垫脚必须有垂直速度才能站上新方块。
      */
+    /**
+     * v1.1.0 实测一百八十：垫块后登记"走上去"目标并给首次推力——后续 tick 由
+     * m_6725_ 开头的 walkOn 段持续推送直到踏入目标格（踏入即停 / 12 tick 超时）。
+     * 替代旧版一次性 stepOnto 脉冲（摩擦力半格就停，跨沟导航又寻路失败）。
+     */
+    private void beginWalkOn(EntityMaid maid, double tx, double ty, double tz) {
+        this.walkOnTicks = 12;
+        this.walkOnX = tx;
+        this.walkOnY = ty;
+        this.walkOnZ = tz;
+        stepOnto(maid, tx, ty, tz);
+    }
+
     private static void stepOnto(EntityMaid maid, double tx, double ty, double tz) {
         double dx = tx - maid.m_20185_();
         double dz = tz - maid.m_20189_();
