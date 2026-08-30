@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测一百九十八
+
+- 女仆气泡显示 "bubble.call..." 原始键名修复（用户："女仆在系统字样里面为什么老是说出 bubble.call... 之类的字样"）：
+  - 【根因】爱憎分明（callresponse 2.0.9）NPC 事件系统给女仆发气泡用的键是 `bubble.callresponse.npc_event.*`（pending/food_thanks/food_promise_timeout/food_repeat 四条），TLM 气泡为 translatable 渲染——但 **callresponse 只有 en_us/zh_cn 两款语言文件**：游戏语言为繁体/日语/韩语等其他语言时这些键无翻译 → 气泡/系统字样直接显示原始键名（TLM 与 promaid 的语言文件均未提供这些键）
+  - 【修复】promaid 自己的语言文件（zh_cn.json / en_us.json，任何模组的 lang 文件都能提供任意键的翻译）补上这 4 个键，中文文案照 callresponse 官方译文——简体/英文语言下气泡正常显示"谢谢主人！我会好好吃的。"等文案（即使 callresponse 语言缺失场景也被 promaid 兜底）
+  - 测试：重启游戏 → 触发爱憎分明 NPC 事件（喂食承诺/感谢/重复）→ 气泡显示正常中文/英文而非 bubble.callresponse.npc_event.* 键名
+
 ## 实测一百九十七
 
 - 启动崩溃二次修复（用户第二次粘贴启动日志：interface mixin 版本仍在 APPLY 阶段失败——`@Inject ... is not supported on interface mixin method`，崩溃挂靠在 true_power_of_maid 加载真力量类时）：
