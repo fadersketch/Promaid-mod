@@ -1327,7 +1327,29 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (now - this.lastTeleportTime < Math.min(teleportCooldown(), 100)) {
                 return; // 传送冷却（5 秒封顶，防反复传送）
             }
-            maid.m_6034_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+            // v1.1.0 实测二百零五（用户："女仆会无条件传送，不管主人周围是否有合法方块。
+            // 玩家飞到高空中女仆传送直接摔死了"）：旧版 m_6034_(owner.x,owner.y,owner.z)
+            // 直传主人【坐标】——主人飞行/悬空（创造飞行、鞘翅、站平台边缘）时女仆被
+            // 扔进半空直接坠落摔死。复用拉回/跨维跟随同款安全落点判定：主人身边 16 格
+            // 内（下 16/上 12 + 水平环 r≤3）找到可站立格才传；找不到（主人悬空/虚空边缘）
+            // → 本次不传，等她落地后由跟随/拉回链路自然归队——宁可她走回来，不冒险。
+            if (!(owner.m_9236_() instanceof net.minecraft.server.level.ServerLevel ownerLevel)) {
+                return;
+            }
+            net.minecraft.core.BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
+                    .findStandNear(ownerLevel,
+                            new net.minecraft.core.BlockPos((int) Math.floor(owner.m_20185_()),
+                                    (int) Math.floor(owner.m_20186_()),
+                                    (int) Math.floor(owner.m_20189_())));
+            if (stand == null) {
+                LOGGER.info("self preserve exit teleport skipped (no stand near owner): maid={} ownerY={}",
+                        maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                        String.format("%.1f", owner.m_20186_()));
+                return;
+            }
+            maid.m_264318_(ownerLevel, stand.m_123341_() + 0.5, stand.m_123342_(),
+                    stand.m_123343_() + 0.5, java.util.Collections.emptySet(),
+                    owner.m_146908_(), owner.m_146909_());
             maid.f_19789_ = 0.0f;
             this.lastTeleportTime = now;
             // v1.5.227：播报 60 秒限频——5 秒传送冷却会反复触发"回到身边"播报刷屏
@@ -3113,11 +3135,27 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (this.anyVisibleMonsterAround(owner, sr)) {
             return; // 主人身边不安全，本轮不传
         }
-        // 主人身边已验证安全 → 传送（v1.5.202：传送不再结束保命会话——会话由
-        // m_6725_ 维护；传回后血若仍低会继续回血/警戒，血恢复且环境安全后自然结束）
-        maid.m_6034_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
-        // v1.5.27：传送不重置 fallDistance——主人若悬空/站在高处边缘，女仆传过去
-        // 立即坠落会带着柱子上累计的摔落距离 → 配合落地水重新计算（WaterClutch 也有突变兜底）
+        // v1.1.0 实测二百零五：安全落点闸——主人飞行/悬空时直传坐标 = 半空坠落摔死
+        // （退出传送同款根因）；无落点本轮不传，落地后自然归队
+        if (!(owner.m_9236_() instanceof net.minecraft.server.level.ServerLevel ownerLevel)) {
+            return;
+        }
+        net.minecraft.core.BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
+                .findStandNear(ownerLevel,
+                        new net.minecraft.core.BlockPos((int) Math.floor(owner.m_20185_()),
+                                (int) Math.floor(owner.m_20186_()),
+                                (int) Math.floor(owner.m_20189_())));
+        if (stand == null) {
+            LOGGER.info("self preserve teleport skipped (no stand near owner): maid={} ownerY={}",
+                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
+                    String.format("%.1f", owner.m_20186_()));
+            return;
+        }
+        // 主人身边已验证安全 → 传到安全落脚点（v1.5.202：传送不再结束保命会话——
+        // 会话由 m_6725_ 维护；传回后血若仍低会继续回血/警戒，血恢复且环境安全后自然结束）
+        maid.m_264318_(ownerLevel, stand.m_123341_() + 0.5, stand.m_123342_(),
+                stand.m_123343_() + 0.5, java.util.Collections.emptySet(),
+                owner.m_146908_(), owner.m_146909_());
         maid.f_19789_ = 0.0f;
         this.lastTeleportTime = now;
         // v1.5.158：真传送成功播报（不暗示"绝对安全"，与可能紧接着的"情况不妙"

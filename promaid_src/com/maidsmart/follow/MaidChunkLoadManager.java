@@ -547,6 +547,14 @@ BlockPos stand = findStand(newLevel,
         return null;
     }
 
+    /** v1.1.0 实测二百零五：安全落点公共入口——自保传回（SelfPreservationBehavior
+     *  teleportHome/teleportHomeOnExit）复用同一判定：主人身边 16 格内（下 16/上 12 +
+     *  水平环 r≤3）有可站立格才返回，否则 null（主人飞行/悬空/虚空边缘——不传，
+     *  宁可她走路归队也不冒半空坠落摔死风险）。 */
+    public static BlockPos findStandNear(ServerLevel level, BlockPos from) {
+        return findStand(level, from);
+    }
+
     /** 单柱扫描：从起始高度先向下最多 16 格、再向上最多 12 格，找可站立的格子。
      *  v1.1.0 实测一百四十（参考 tlm_beyond_space SafeTeleportService.canStandAt）：
      *  判定从"站立格 isAir + 脚下 isSolid 满方块"放宽为"站立格/头顶碰撞箱为空 +
