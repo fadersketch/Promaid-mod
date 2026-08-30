@@ -440,11 +440,12 @@ public final class BlueprintAreaPreview {
         pose.m_85836_(); // pushPose
         for (int i = 0; i < REGION_BOXES.size(); i++) {
             double[] b = REGION_BOXES.get(i);
-            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                    b[0], b[1], b[2], b[3], b[4], b[5])
-                    .m_82383_(camera);
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.25f, 0.2f, 0.28f);
+            // 实测二百一十二（用户："从外部往内部看会发现是一个红色的正方体/长方体，
+            // 六个面都被红色覆盖——透过那一层红色看不到里面的幽灵方块；从内部往外看
+            // 才正常"）：删除区块框的【大红填充面】——0.28 半透明大盒的 6 个面在从外
+            // 向内看时正好挡在幽灵方块前面，后画的红面覆盖/混合掉幽灵（内部看在相机
+            // 身后被裁剪所以"正常"）。区域标识由红框【棱线】+ 悬浮标签承担（从来就是
+            // 这样显示的），填充面本就是冗余且有害；幽灵线框+近处填充从此穿透可见。
             com.mojang.blaze3d.vertex.VertexConsumer buf =
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, b[0], b[1], b[2], b[3], b[4], b[5], 1.0f, 0.25f, 0.2f);
@@ -489,10 +490,8 @@ public final class BlueprintAreaPreview {
             double x1 = x0 + effX;
             double z1 = z0 + effZ;
             double y1 = y0 + sizeY;
-            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(x0, y0, z0, x1, y1, z1)
-                    .m_82383_(camera);
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, mc.m_91269_().m_110104_(), box, 1.0f, 0.85f, 0.2f, 0.3f);
+            // 实测二百一十二：金色预览同样去掉大填充面（0.3 半透明大盒会从外面挡住
+            // 青色幽灵——与红色区块框同病）；金色框棱线 + 标签已足够标识范围。
             com.mojang.blaze3d.vertex.VertexConsumer buf =
                     mc.m_91269_().m_110104_().m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
