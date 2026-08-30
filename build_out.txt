@@ -1,4 +1,4 @@
 verify_jar_classes: OK, all out_promaid classes present in jar
 MISSING: none
-TOTAL entries: 406
-BUILT: C:\Users\Sketch\.zcode\workspace\default\promaid-mod\patched\promaid-1.1.0.jar 4747915 bytes
+TOTAL entries: 407
+BUILT: C:\Users\Sketch\.zcode\workspace\default\promaid-mod\patched\promaid-1.1.0.jar 4750655 bytes

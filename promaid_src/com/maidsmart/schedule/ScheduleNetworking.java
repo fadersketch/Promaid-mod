@@ -1,5 +1,6 @@
 package com.maidsmart.schedule;
 
+import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
 import net.minecraft.network.FriendlyByteBuf;
@@ -55,6 +56,73 @@ public final class ScheduleNetworking {
                 SummonPacket::encode, SummonPacket::decode, SummonPacket::handle);
         CHANNEL.registerMessage(8, RenameMaidPacket.class,
                 RenameMaidPacket::encode, RenameMaidPacket::decode, RenameMaidPacket::handle);
+        // v1.1.0 实测一百九十一：排班守卫拒绝后的客户端重同步（TLM 面板本地 setTask
+        // 改的是【客户端实体】——服务端拦截生效但客户端实体脱钩，面板永远显示"改
+        // 成功"，观感=排班锁失效；守卫拒绝时主动发本包把客户端实体扳回服务端口径）
+        CHANNEL.registerMessage(9, MaidTaskResyncPacket.class,
+                MaidTaskResyncPacket::encode, MaidTaskResyncPacket::decode, MaidTaskResyncPacket::handle);
+    }
+
+    /* ==================== 排班守卫拒绝 → 客户端重同步 ==================== */
+
+    /** 服务端：守卫拒绝后把女仆当前真实任务/作息同步给其的主人（客户端实体扳回） */
+    public static void sendResync(net.minecraft.server.level.ServerPlayer player, EntityMaid maid) {
+        try {
+            String taskUid = maid.getTask() == null ? "touhou_little_maid:idle"
+                    : maid.getTask().getUid().toString();
+            int sched = maid.getSchedule() == null ? -1 : maid.getSchedule().ordinal();
+            CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                    new MaidTaskResyncPacket(maid.m_19879_(), taskUid, sched));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static class MaidTaskResyncPacket {
+        private final int maidId;
+        private final String taskUid;
+        private final int scheduleOrdinal;
+
+        public MaidTaskResyncPacket(int maidId, String taskUid, int scheduleOrdinal) {
+            this.maidId = maidId;
+            this.taskUid = taskUid;
+            this.scheduleOrdinal = scheduleOrdinal;
+        }
+
+        public static void encode(MaidTaskResyncPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.maidId);
+            buf.m_130072_(pkt.taskUid, 256);
+            buf.writeInt(pkt.scheduleOrdinal);
+        }
+
+        public static MaidTaskResyncPacket decode(FriendlyByteBuf buf) {
+            return new MaidTaskResyncPacket(buf.readInt(), buf.m_130136_(256), buf.readInt());
+        }
+
+        public static void handle(MaidTaskResyncPacket pkt, java.util.function.Supplier<net.minecraftforge.network.NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                try {
+                    var mc = net.minecraft.client.Minecraft.m_91087_();
+                    if (mc.f_91073_ == null) {
+                        return;
+                    }
+                    net.minecraft.world.entity.Entity e = mc.f_91073_.m_6815_(pkt.maidId);
+                    if (!(e instanceof EntityMaid maid)) {
+                        return;
+                    }
+                    var task = TaskManager.findTask(
+                                    net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                            .orElse(TaskManager.getIdleTask());
+                    maid.setTask(task); // 客户端实体：本地脱钩的假任务被扳回
+                    if (pkt.scheduleOrdinal >= 0
+                            && pkt.scheduleOrdinal < MaidSchedule.values().length) {
+                        maid.setSchedule(MaidSchedule.values()[pkt.scheduleOrdinal]);
+                    }
+                } catch (Throwable ignored) {
+                    // 客户端侧容错——绝不影响游戏
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /* ==================== 打开 UI ==================== */

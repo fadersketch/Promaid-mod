@@ -1,0 +1,144 @@
+Compiled from "MaidTaskMessage.java"
+public class com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage {
+  private final int id;
+
+  private final net.minecraft.resources.ResourceLocation uid;
+
+  public com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage(int, net.minecraft.resources.ResourceLocation);
+    Code:
+         0: aload_0
+         1: invokespecial #24                 // Method java/lang/Object."<init>":()V
+         4: aload_0
+         5: iload_1
+         6: putfield      #26                 // Field id:I
+         9: aload_0
+        10: aload_2
+        11: putfield      #28                 // Field uid:Lnet/minecraft/resources/ResourceLocation;
+        14: return
+
+  public static void encode(com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage, net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: aload_1
+         1: aload_0
+         2: getfield      #26                 // Field id:I
+         5: invokevirtual #38                 // Method net/minecraft/network/FriendlyByteBuf.writeInt:(I)Lio/netty/buffer/ByteBuf;
+         8: pop
+         9: aload_1
+        10: aload_0
+        11: getfield      #28                 // Field uid:Lnet/minecraft/resources/ResourceLocation;
+        14: invokevirtual #42                 // Method net/minecraft/network/FriendlyByteBuf.m_130085_:(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/network/FriendlyByteBuf;
+        17: pop
+        18: return
+
+  public static com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage decode(net.minecraft.network.FriendlyByteBuf);
+    Code:
+         0: new           #2                  // class com/github/tartaricacid/touhoulittlemaid/network/message/MaidTaskMessage
+         3: dup
+         4: aload_0
+         5: invokevirtual #51                 // Method net/minecraft/network/FriendlyByteBuf.readInt:()I
+         8: aload_0
+         9: invokevirtual #55                 // Method net/minecraft/network/FriendlyByteBuf.m_130281_:()Lnet/minecraft/resources/ResourceLocation;
+        12: invokespecial #57                 // Method "<init>":(ILnet/minecraft/resources/ResourceLocation;)V
+        15: areturn
+
+  public static void handle(com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage, java.util.function.Supplier<net.minecraftforge.network.NetworkEvent$Context>);
+    Code:
+         0: aload_1
+         1: invokeinterface #66,  1           // InterfaceMethod java/util/function/Supplier.get:()Ljava/lang/Object;
+         6: checkcast     #7                  // class net/minecraftforge/network/NetworkEvent$Context
+         9: astore_2
+        10: aload_2
+        11: invokevirtual #70                 // Method net/minecraftforge/network/NetworkEvent$Context.getDirection:()Lnet/minecraftforge/network/NetworkDirection;
+        14: invokevirtual #76                 // Method net/minecraftforge/network/NetworkDirection.getReceptionSide:()Lnet/minecraftforge/fml/LogicalSide;
+        17: invokevirtual #82                 // Method net/minecraftforge/fml/LogicalSide.isServer:()Z
+        20: ifeq          35
+        23: aload_2
+        24: aload_2
+        25: aload_0
+        26: invokedynamic #99,  0             // InvokeDynamic #0:run:(Lnet/minecraftforge/network/NetworkEvent$Context;Lcom/github/tartaricacid/touhoulittlemaid/network/message/MaidTaskMessage;)Ljava/lang/Runnable;
+        31: invokevirtual #103                // Method net/minecraftforge/network/NetworkEvent$Context.enqueueWork:(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;
+        34: pop
+        35: aload_2
+        36: iconst_1
+        37: invokevirtual #107                // Method net/minecraftforge/network/NetworkEvent$Context.setPacketHandled:(Z)V
+        40: return
+
+  private static void lambda$handle$0(net.minecraftforge.network.NetworkEvent$Context, com.github.tartaricacid.touhoulittlemaid.network.message.MaidTaskMessage);
+    Code:
+         0: aload_0
+         1: invokevirtual #116                // Method net/minecraftforge/network/NetworkEvent$Context.getSender:()Lnet/minecraft/server/level/ServerPlayer;
+         4: astore_2
+         5: aload_2
+         6: ifnonnull     10
+         9: return
+        10: aload_2
+        11: getfield      #122                // Field net/minecraft/server/level/ServerPlayer.f_19853_:Lnet/minecraft/world/level/Level;
+        14: aload_1
+        15: getfield      #26                 // Field id:I
+        18: invokevirtual #128                // Method net/minecraft/world/level/Level.m_6815_:(I)Lnet/minecraft/world/entity/Entity;
+        21: astore_3
+        22: aload_3
+        23: instanceof    #130                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+        26: ifeq          174
+        29: aload_3
+        30: checkcast     #130                // class com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid
+        33: astore        4
+        35: aload         4
+        37: aload_2
+        38: invokevirtual #134                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_21830_:(Lnet/minecraft/world/entity/LivingEntity;)Z
+        41: ifeq          174
+        44: aload_1
+        45: getfield      #28                 // Field uid:Lnet/minecraft/resources/ResourceLocation;
+        48: invokestatic  #140                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/TaskManager.findTask:(Lnet/minecraft/resources/ResourceLocation;)Ljava/util/Optional;
+        51: invokestatic  #144                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/TaskManager.getIdleTask:()Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;
+        54: invokevirtual #150                // Method java/util/Optional.orElse:(Ljava/lang/Object;)Ljava/lang/Object;
+        57: checkcast     #152                // class com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask
+        60: astore        5
+        62: aload         5
+        64: invokestatic  #144                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/TaskManager.getIdleTask:()Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;
+        67: if_acmpeq     93
+        70: getstatic     #158                // Field net/minecraftforge/common/MinecraftForge.EVENT_BUS:Lnet/minecraftforge/eventbus/api/IEventBus;
+        73: new           #160                // class com/github/tartaricacid/touhoulittlemaid/api/event/MaidTaskEnableEvent
+        76: dup
+        77: aload         5
+        79: aload         4
+        81: invokespecial #163                // Method com/github/tartaricacid/touhoulittlemaid/api/event/MaidTaskEnableEvent."<init>":(Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)V
+        84: invokeinterface #169,  2          // InterfaceMethod net/minecraftforge/eventbus/api/IEventBus.post:(Lnet/minecraftforge/eventbus/api/Event;)Z
+        89: ifeq          93
+        92: return
+        93: aload         5
+        95: aload         4
+        97: invokeinterface #175,  2          // InterfaceMethod com/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask.isEnable:(Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z
+       102: ifne          106
+       105: return
+       106: aload         4
+       108: aload         5
+       110: invokevirtual #179                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.setTask:(Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;)V
+       113: invokestatic  #144                // Method com/github/tartaricacid/touhoulittlemaid/entity/task/TaskManager.getIdleTask:()Lcom/github/tartaricacid/touhoulittlemaid/api/task/IMaidTask;
+       116: aload         5
+       118: invokevirtual #183                // Method java/lang/Object.equals:(Ljava/lang/Object;)Z
+       121: ifne          156
+       124: aload         4
+       126: invokevirtual #187                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.m_269323_:()Lnet/minecraft/world/entity/LivingEntity;
+       129: astore        7
+       131: aload         7
+       133: instanceof    #118                // class net/minecraft/server/level/ServerPlayer
+       136: ifeq          156
+       139: aload         7
+       141: checkcast     #118                // class net/minecraft/server/level/ServerPlayer
+       144: astore        6
+       146: getstatic     #193                // Field com/github/tartaricacid/touhoulittlemaid/init/InitTrigger.MAID_EVENT:Lcom/github/tartaricacid/touhoulittlemaid/advancements/maid/MaidEventTrigger;
+       149: aload         6
+       151: ldc           #195                // String switch_task
+       153: invokevirtual #201                // Method com/github/tartaricacid/touhoulittlemaid/advancements/maid/MaidEventTrigger.trigger:(Lnet/minecraft/server/level/ServerPlayer;Ljava/lang/String;)V
+       156: aload_2
+       157: getfield      #205                // Field net/minecraft/server/level/ServerPlayer.f_36096_:Lnet/minecraft/world/inventory/AbstractContainerMenu;
+       160: instanceof    #207                // class com/github/tartaricacid/touhoulittlemaid/inventory/container/task/TaskConfigContainer
+       163: ifeq          174
+       166: aload         4
+       168: aload_2
+       169: iconst_1
+       170: invokevirtual #211                // Method com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid.openMaidGui:(Lnet/minecraft/world/entity/player/Player;I)Z
+       173: pop
+       174: return
+}
