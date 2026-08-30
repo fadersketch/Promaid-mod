@@ -551,10 +551,13 @@ public final class BlueprintAreaPreview {
         if (pts == null || pts.length < 4) {
             return;
         }
-        net.minecraft.world.phys.Vec3 anchor = new net.minecraft.world.phys.Vec3(ox, oy, oz);
-        if (mc.f_91074_.m_20238_(anchor) > 9216.0) {
-            return;
-        }
+        // v1.1.0 实测一百八十九（用户："建造模式方块——玩家走出框选的区块以后，
+        // 蓝色方块和橙色方块在区块外是看不见的"）：移除 96 格点剔除——旧版以
+        // 【计划原点】为锚点算玩家距离（>96 格整片不画），与红框渲染策略不一致
+        //（红框永远渲染）：玩家走出框选区块投影全没；大蓝图时玩家站在框内对角
+        //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
+        // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
+        // 总开关控制（帧率敏感用户关总开关即可）。
         var bufferSource = mc.m_91269_().m_110104_();
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
