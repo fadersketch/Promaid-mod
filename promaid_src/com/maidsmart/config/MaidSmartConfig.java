@@ -693,9 +693,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.reach").defineInRange("reach", 4.5, 2.0, 8.0);
         WOOD_PILLAR_COOLDOWN = BUILDER.comment("搭方块冷却（tick，垫脚下/搭路节奏）")
                 .translation("config.promaid.wood.pillarCooldown")
-                // v1.1.0 实测五十四：4→2——垫块间隙的"停一下再挖"顿挫感减半（冷却期
-                // 女仆原地站桩等下一步，4 tick 的停顿在连续垫高砍树时肉眼可见）
-                .defineInRange("pillarCooldown", 2, 1, 20);
+                // v1.1.0 实测五十四：4→2；实测二百一十五：默认回到 4——连续高速垫块
+                // 容易失足摔死，与搭路节奏（4 tick）统一，只比玩家手速略快一点点
+                .defineInRange("pillarCooldown", 4, 1, 20);
         WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
         // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
@@ -1188,7 +1188,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         //（人手点击上限）。默认 8→5 tick/块（≈4 块/秒，玩家区间中值）——配合
         // placedLifetime 默认 2 秒 = 稳态最多 8 块同时存在（2s × 4块/s，实测一百二十一
         // 的"≤8 块"目标，纯数学不做额外机制）
-        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 2）：每垫一块方块的最短间隔——越小铺得越快（默认 2 tick ≈ 10 块/秒，玩家手速上限约 4~6 块/秒；想跟玩家持平调到 4~5）")
+        BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 4）：每垫一块方块的最短间隔——越小铺得越快（默认 4 tick ≈ 5 块/秒 = 比玩家手速 4~6 块/秒略快一点点；2 tick ≈ 10 块/秒太快，连续跳块容易失足摔死）")
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 2, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 3）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）——与搭块速度联动：默认节奏下同时存在约 20~30 块，不会堆积成片")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
