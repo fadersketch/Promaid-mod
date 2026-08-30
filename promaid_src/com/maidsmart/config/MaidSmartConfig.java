@@ -588,7 +588,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板添加矿物的默认价值")
                 .translation("config.promaid.mine.creativeDefaultValue")
                 .defineInRange("creativeDefaultValue", 300, 10, 1000);
-        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认关）：开启后女仆能发现视线被方块挡住的矿物并挖通开路（等同旧版逻辑）；关闭后女仆像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块（泥土/石头/玻璃/半砖等）都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
+        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认开）：女仆能发现视线被方块挡住的矿物并挖通开路；关闭后像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
                 .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", true);
         MINE_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick，出框超过此时长重埋锚点）")
                 .translation("config.promaid.mine.anchorTimeout")
