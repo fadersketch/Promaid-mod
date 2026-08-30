@@ -1,5 +1,13 @@
 ﻿# 更新日志
 
+## 实测一百九十七
+
+- 启动崩溃二次修复（用户第二次粘贴启动日志：interface mixin 版本仍在 APPLY 阶段失败——`@Inject ... is not supported on interface mixin method`，崩溃挂靠在 true_power_of_maid 加载真力量类时）：
+  - 【根因】Mixin 0.8.5 对【接口 target】两种形式都不支持：class mixin → SubType 校验 PREPARE 失败（一百九十七第一版）；interface mixin → @Inject 回调不被接受 APPLY 失败（第二版）。TLM 的 IAttackTask.canAttack 是接口默认方法——**不可以在运行时混入**
+  - 【终修】放弃接口混入，宠物免疫全事件实现：①伤害总闸（LivingHurtEvent，本就工作——女仆链伤害对宠物零伤害/零 AOE 溅射）；②新增【宠物仇恨清理扫描】——每 2 秒全维度检查女仆攻击记忆，目标是宠物标记 → 清掉（去仇恨；TLM StopAttackingIfTargetInvalid 行为自然接管后续），防误伤全部保持。与混入版语义差别：女仆可能先锁定一眼才被清（≤2 秒），全程无伤害
+  - 已从 mixins.promaid.json 移除 PetImmunityTargetMixin（防再次崩溃）
+  - 测试：重启游戏应正常进入主菜单；宠物免疫验证方式不变（给怪命名「玩家宠物」/自家猫狗 → 女仆不伤害，日志搜 `maid pet-hate-clear`）
+
 ## 实测一百九十六
 
 - 有保命道具绝不逃跑（用户："让女仆保证在有保命道具的时候不触发自保逃跑"）：
