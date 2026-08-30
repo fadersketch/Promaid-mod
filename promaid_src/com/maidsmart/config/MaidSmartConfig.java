@@ -1171,8 +1171,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 32, 2, 32);
         BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
                 .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 50, 0, 128);
-        BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 6）：主人至少高于女仆这么多格才走垂直搭高（平路/低处走路或铺桥处理）")
-                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 6, 1, 8);
+        BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 3）：主人至少高于女仆这么多格才走垂直搭高（平路/低处走路或铺桥处理）——3 格 = 玩家手长：她搭到与你只差 3 格内你就能近身收回/互动；隔得更远你伸手够不到她")
+                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 3, 1, 8);
         BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 3）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
                 .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 3, 1, 8);
         // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
