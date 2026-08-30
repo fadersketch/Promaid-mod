@@ -270,6 +270,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
                     input = this.extractOreFromMaid(level, maidInv);
                 }
+                if (input.m_41619_()) {
+                    // v1.1.0 实测一百八十二：仍没有 → 通用可烧制物回退——凡当前世界
+                    // 有熔炉配方且非装备类的物品都喂（沙子/圆石/原木/模组食材/无矿物
+                    // 标签的模组粗矿等）。旧版白名单+矿物标签不认的东西卡死补料，
+                    // 表现为"只投一次燃料就再也不喂"（用户实测第 2 只女仆）
+                    input = this.extractAnySmeltable(level, maidInv);
+                }
             } else {
                 // v1.1.0 实测一百五十八：烟熏炉/高炉——按各自配方类型取可烧制物
                 input = this.extractForFurnaceType(level, maidInv, be);
@@ -281,6 +288,9 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             } else {
                 LOGGER.info("cook round: maid={} be={} slot0Empty但无料可喂（背包无食材/矿物或配方不匹配）",
                         maidName, beName);
+                // v1.1.0 实测一百八十二：背包内容 dump（30 秒限频，latest.log 搜
+                // "cook no-feed diag"）——一次日志区分"真没有可喂物品"与"有但判定不认"
+                this.dumpInvOnNoFeed(level, maid, maidInv, beName);
             }
         }
         // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
@@ -385,6 +395,65 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
         }
         return ItemStack.f_41583_;
+    }
+
+    /**
+     * v1.1.0 实测一百八十二：通用可烧制物回退——背包里没有白名单食材/矿物标签
+     * 物品时，喂任何【当前世界有熔炉配方 且 非装备类】的物品（沙子→玻璃、
+     * 圆石→石头、原木→木炭、模组食材、无矿物标签的模组粗矿等）。
+     * 装备类排除（TieredItem=剑镐斧锹锄 / ArmorItem=盔甲 / TridentItem / ShieldItem）：
+     * 铁金钻石质工具盔甲在原版有"烧成粒"配方，绝不能把女仆自己的装备熔掉。
+     * 开关 misc.cookSmeltAny（默认开）；关闭 = 一百五十七旧行为。
+     */
+    private ItemStack extractAnySmeltable(ServerLevel level, IItemHandler maidInv) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ANY.get()) {
+            return ItemStack.f_41583_;
+        }
+        for (int i = 0; i < maidInv.getSlots(); i++) {
+            ItemStack stack = maidInv.getStackInSlot(i);
+            if (stack.m_41619_() || FOODS.contains(stack.m_41720_())) {
+                continue;
+            }
+            Item it = stack.m_41720_();
+            if (it instanceof net.minecraft.world.item.TieredItem
+                    || it instanceof net.minecraft.world.item.ArmorItem
+                    || it instanceof net.minecraft.world.item.TridentItem
+                    || it instanceof net.minecraft.world.item.ShieldItem) {
+                continue; // 装备类永不熔（有烧成粒配方的高价值工具/盔甲）
+            }
+            if (isSmeltable(level, stack)) {
+                return maidInv.extractItem(i, 1, false);
+            }
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** 无料可喂时的背包 dump（30 秒限频/女仆；latest.log 搜 "cook no-feed diag"） */
+    private static final Map<java.util.UUID, Long> NO_FEED_DUMP_SINCE = new HashMap<>();
+
+    private void dumpInvOnNoFeed(ServerLevel level, EntityMaid maid,
+                                 IItemHandler maidInv, String beName) {
+        try {
+            long now = level.m_46467_();
+            Long last = NO_FEED_DUMP_SINCE.get(maid.m_20148_());
+            if (last != null && now - last < 600L) {
+                return;
+            }
+            NO_FEED_DUMP_SINCE.put(maid.m_20148_(), now);
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < maidInv.getSlots(); i++) {
+                ItemStack st = maidInv.getStackInSlot(i);
+                if (st.m_41619_()) {
+                    continue;
+                }
+                ResourceLocation rl = ForgeRegistries.ITEMS.getKey(st.m_41720_());
+                sb.append(rl == null ? "?" : rl.toString()).append('x')
+                        .append(st.m_41613_()).append(' ');
+            }
+            LOGGER.info("cook no-feed diag: maid={} be={} inv=[{}]",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid), beName, sb);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** v1.5.252：燃料 = 背包中【数量最多】的可燃烧物品（原版 isFuel 判定，不限于煤炭） */
