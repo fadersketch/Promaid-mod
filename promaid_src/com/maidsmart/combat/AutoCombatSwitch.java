@@ -1092,6 +1092,16 @@ public class AutoCombatSwitch {
                 meleeWeights.add(w);
             }
         }
+        // v1.1.0 实测一百八十一（用户："女仆有概率在拿到拔刀剑的时候选择攻击模式，
+        // 而不是选择拔刀剑专属的拔刀剑模式。其他模组武器也有可能会出现这样的问题"）：
+        // 同池"模组专属任务 vs 原版通用任务"不再加权随机——旧版拔刀剑同时被原版
+        // attack 认作武器（拔刀剑物品继承剑类）→ 两任务同池按 原版:模组=1:2 权重
+        // 随机 → 1/3 概率落到原版攻击（= 拿着拔刀剑切普通攻击模式的来源；战中
+        // 换战术同池随机同理会把拔刀剑换出）。修复：池内有模组任务时原版通用任务
+        // 整体让位（模组武器 → 模组模式确定性生效）；原版任务退化为【无模组武器】
+        // 时的兜底。权重随机保留在多个模组任务之间（同为专属任务，随机选不退化）。
+        vanillaYieldToMod(meleePool, meleeWeights, vanillaNs);
+        vanillaYieldToMod(rangedPool, rangedWeights, vanillaNs);
         // v1.1.0 实测一百六十九：候选池内容诊断（每 5 秒/女仆一条，latest.log 搜
         // "combat pools"）——确认模组武器任务（ef_tlm/拔刀剑/truepower 等）有没有进池；
         // 池里只有原版任务 = 模组武器没被 isWeapon 认到；池里有模组任务 = 权重随机问题
@@ -1115,6 +1125,33 @@ public class AutoCombatSwitch {
         } catch (Throwable ignored) {
         }
         return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
+    }
+
+    /**
+     * v1.1.0 实测一百八十一：同池存在模组专属任务时，原版通用任务让位（就地移除）。
+     * 原版任务（touhou_little_maid 命名空间）是通用兜底——模组专属任务认了同一件
+     * 武器时（拔刀剑继承剑类、史诗武器带攻击力属性），通用任务与专属任务同池
+     * 加权随机会随机落到通用模式上；专属模式才吃得干这件武器的机制。
+     * 入战选任务（pickCombatTask）与战中换战术（retuneCombatTactics）共用
+     * buildPools——此处让位对两条路径同时生效。
+     */
+    private static void vanillaYieldToMod(List<IMaidTask> pool, List<Double> weights, String vanillaNs) {
+        boolean hasMod = false;
+        for (IMaidTask t : pool) {
+            if (t.getUid() != null && !vanillaNs.equals(t.getUid().m_135827_())) {
+                hasMod = true;
+                break;
+            }
+        }
+        if (!hasMod) {
+            return;
+        }
+        for (int i = pool.size() - 1; i >= 0; i--) {
+            if (pool.get(i).getUid() == null || vanillaNs.equals(pool.get(i).getUid().m_135827_())) {
+                pool.remove(i);
+                weights.remove(i);
+            }
+        }
     }
 
     /** v1.1.0 实测五十七：近战"够不着"阈值（格）——女仆跳跃横距约 3~4 格，敌人比这
