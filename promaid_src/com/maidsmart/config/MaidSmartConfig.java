@@ -362,6 +362,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue MISC_PROCESS_COOLDOWN;
     // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物（带矿物/原料标签且有熔炉配方）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMELT_ORES;
+    // v1.1.0 实测一百八十二：通用可烧制物回退（有熔炉配方且非装备类即喂，装备类永不熔）
+    public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMELT_ANY;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
@@ -1187,6 +1189,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
         MISC_COOK_SMELT_ORES = BUILDER.comment("熔炉烧矿物（默认开）：烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单")
                 .translation("config.promaid.misc.cookSmeltOres").define("cookSmeltOres", true);
+        // v1.1.0 实测一百八十二：通用可烧制物回退——治"女仆只投燃料不投烧制物"
+        MISC_COOK_SMELT_ANY = BUILDER.comment("烧任何可烧制物（默认开）：背包没有食材白名单/矿物标签物品时，回退喂任何【当前世界有熔炉配方 且 非装备类】的物品——沙子→玻璃、圆石→石头、原木→木炭、各类模组食材/模组粗矿等都能喂（装备类永不熔：铁金钻石工具盔甲等有烧成粒配方的会被排除）；关闭 = 只按「熔炉烧矿物」+食材白名单喂")
+                .translation("config.promaid.misc.cookSmeltAny").define("cookSmeltAny", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
