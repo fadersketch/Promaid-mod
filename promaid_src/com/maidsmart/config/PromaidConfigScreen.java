@@ -1836,6 +1836,9 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
         this.rows.add(new BoolRow("熔炉烧矿物", MaidSmartConfig.MISC_COOK_SMELT_ORES.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMELT_ORES.set(v), "烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单"));
+        // v1.1.0 实测一百八十二：通用可烧制物回退——治"只投燃料不投烧制物"
+        this.rows.add(new BoolRow("烧任何可烧制物", MaidSmartConfig.MISC_COOK_SMELT_ANY.get(),
+                v -> MaidSmartConfig.MISC_COOK_SMELT_ANY.set(v), "背包没有食材/矿物标签物品时，回退喂任何【有熔炉配方 且 非装备类】的物品——沙子→玻璃、圆石→石头、原木→木炭、模组食材/模组粗矿等（装备类永不熔，铁金钻石工具盔甲有烧成粒配方会被排除）；关闭 = 只按「熔炉烧矿物」+食材白名单喂"));
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         this.rows.add(new BoolRow("兼容高炉/烟熏炉", MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烧制任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
