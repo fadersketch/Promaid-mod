@@ -283,22 +283,40 @@ public final class ScheduleManager {
             // 抑制各类每段最多记 ~6 条（10 秒限频，防刷屏也防每秒 refreshBrain 重建 AI）；
             // 条件是暂时性的（睡眠解除/地里长出作物/矿被清出空位）最多 10 秒后自动恢复
             RETRY_AFTER.put(maid.m_20148_(), nowTick + 200L);
-            com.maidsmart.tool.PromaidLog.log("排班", who + " 段 " + segLabel
-                    + (soft ? " 暂不切换：" : " 应用失败：") + fail
-                    + "（去抖键未写，10 秒后重试）");
+            // v1.1.0 实测一百八十六：失败/暂不切换日志 5 分钟限频——重试本体验照旧每
+            // 10 秒进行，但"可用性检测常开 + 段任务长期不可用"时旧版每 10 秒落一条，
+            // 绑定炉子的女仆日志被刷到"非常吵"
+            long logNow = level.m_46467_();
+            Long lastFailLog = APPLY_FAIL_LOG_SINCE.get(maid.m_20148_());
+            if (lastFailLog == null || logNow - lastFailLog >= 6000L) {
+                APPLY_FAIL_LOG_SINCE.put(maid.m_20148_(), logNow);
+                com.maidsmart.tool.PromaidLog.log("排班", who + " 段 " + segLabel
+                        + (soft ? " 暂不切换：" : " 应用失败：") + fail
+                        + "（去抖键未写，10 秒后重试）");
+            }
         }
         } catch (Throwable t) {
             // v1.1.0 实测一百三十五：隔离层——任一异常落日志 + 10 秒重试节流，
             // 不让它击穿 ServerTickEvent 每 tick 重演（排班系统瘫痪）
             try {
                 RETRY_AFTER.put(maid.m_20148_(), level.m_46467_() + 200L);
-                com.maidsmart.tool.PromaidLog.log("排班",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid)
-                                + " applyNow 异常（已隔离，10 秒后重试）：" + t);
+                // 实测一百八十六：异常日志同样 5 分钟限频（持续异常时每 10 秒刷一条很吵）
+                long logNowE = level.m_46467_();
+                Long lastFailLogE = APPLY_FAIL_LOG_SINCE.get(maid.m_20148_());
+                if (lastFailLogE == null || logNowE - lastFailLogE >= 6000L) {
+                    APPLY_FAIL_LOG_SINCE.put(maid.m_20148_(), logNowE);
+                    com.maidsmart.tool.PromaidLog.log("排班",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                    + " applyNow 异常（已隔离，10 秒后重试）：" + t);
+                }
             } catch (Throwable ignored) {
             }
         }
     }
+
+    /** 排班失败/暂不切换日志限频（vtick，6000=5 分钟/女仆——重试照旧，日志不刷屏）
+     *  v1.1.0 实测一百八十六 */
+    private static final java.util.Map<java.util.UUID, Long> APPLY_FAIL_LOG_SINCE = new java.util.HashMap<>();
 
     /** v1.1.0 实测一百三十五：保存排班 = 明确意图——清掉本段去抖键/尝试记录/重试冷却，
      *  让保存后的立即应用真正落一次（修"改当前时段任务保存不生效"的观感） */
