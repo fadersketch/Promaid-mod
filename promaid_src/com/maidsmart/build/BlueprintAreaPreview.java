@@ -568,19 +568,18 @@ public final class BlueprintAreaPreview {
         // 每盒补画棱线（DebugRenderer 描边轮廓——从外看框内建筑轮廓清晰可辨；
         // 近处密盒肉眼可辨，不画省性能）。
         var bufferSource = mc.m_91269_().m_110104_();
-        // 实测二百一十【崩溃二次修复】：幽灵填充一律走【独立 BufferSource】——1.20.1 的
-        // BufferSource 对未入 map 的渲染类型（debugFilledBox / lines 都在其列）共用同一个
-        // 即时建造器；在共享主 bufferSource 上同时写填充盒+描边（两次跨类型取缓冲/中途
-        // flush）会互踩建造器状态——实测二百零四"Not filled all elements"、二百零九
-        // "BufferBuilder not started" 都是这个。专用源每帧新建、只写 debugFilledBox、
-        // 每盒 flush 只影响它自己；主 bufferSource 的描边/红框完全隔离不受影响。
-        GhostBufferSource ghostSource = new GhostBufferSource();
+        // 实测二百一十一【全量渲染 + 从外看到内】：① 每个幽灵盒【无条件画 12 条棱线】
+        // ——走 RenderType.lines（与红框同一管线，实测隔地形/任意角度可见；LINES 每段
+        // 独立成原语，没有 TRIANGLE_STRIP 的跨盒连接问题），"所有搭建方块都渲染出来
+        // "与"从外看到内"（内部结构线框叠显）由它保证；② 近处（≤24 格）再叠加满体积
+        // 填充（debugFilledBox 专用源 + 每盒独立 flush——体积感/近距离清晰度）。
+        // 旧版只有填充盒：无深度排序、逐盒混合，外层盒面盖住内层 → "从外看不到内"。
         double farDx = camera.f_82479_ - (ox + 0.5);
         double farDz = camera.f_82481_ - (oz + 0.5);
         boolean far = (farDx * farDx + farDz * farDz) > 576.0;
-        com.mojang.blaze3d.vertex.VertexConsumer edgeBuf = far
-                ? bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_)
-                : null;
+        GhostBufferSource ghostSource = far ? null : new GhostBufferSource();
+        com.mojang.blaze3d.vertex.VertexConsumer edgeBuf =
+                bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
         int drawn = 0;
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
@@ -589,19 +588,15 @@ public final class BlueprintAreaPreview {
             double wx = ox + bx;
             double wy = oy + by;
             double wz = oz + bz;
-            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                    wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
-            // DebugRenderer.renderFilledBox（m_269311_）是 vanilla debug 管线，实测
-            // 一百四十七~二百零一长期使用零崩溃；它是 TRIANGLE_STRIP，多盒连续提交
-            // 会产生盒间跨盒连接三角形（乱麻观感）——用【每盒立即 flush】（m_109912_）
-            // 让每个盒子独立成条：满体积 1×1×1、无跨盒连接面、无距离剔除，区块内外
-            // 都清晰可见；flush 发生在专用源上，不再破坏其他缓冲。
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
-                    pose, ghostSource, box, r, g, b, a);
-            ghostSource.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
-            if (edgeBuf != null) {
-                drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
-                        Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
+            // 棱线（恒定，穿透地形可见——与红框同管线；亮色便于远处辨认）
+            drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
+                    Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
+            if (ghostSource != null) {
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                        wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
+                net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
+                        pose, ghostSource, box, r, g, b, a);
+                ghostSource.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
             }
             drawn++;
         }
