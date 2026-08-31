@@ -420,6 +420,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_AUTO_COLLECT;
     // v1.5.163：农场连锁收获数量上限
     public static final ForgeConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
+    /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
+    public static final ForgeConfigSpec.BooleanValue MISC_HELD_LIGHT_ENABLED;
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
@@ -1305,6 +1307,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测九十四：运行日志——状态迁移事件落盘 logs/promaid.log，方便事后验查
         MISC_LOG_ENABLED = BUILDER.comment("运行日志（默认开）：把排班段应用、战斗参战/还原/僵局阀/任务被接管、险境脱离挪格与应急灭火、跨维跟随传送、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old，并镜像到 latest.log）——出问题后按时间线对账；关闭后完全静默")
                 .translation("config.promaid.misc.logEnabled").define("logEnabled", true);
+        // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；1.20.1 无实体发光机制，
+        // 用隐形 minecraft:light 光块产出真实方块光）
+        MISC_HELD_LIGHT_ENABLED = BUILDER.comment("手持光源发实光（默认开）：女仆主手/副手持有光源类物品（火把/灯笼/萤石/菌光体/灵魂火把等——亮度取自身方块光强）时，她脚底自动跟随一个隐形光块，周围的方块被真实照亮（与所持光源亮度一致）；不拿光源或关闭后光块自动移除。与其他环境光源同等待遇，插火把判定不受读写影响（亮处本就不该插）")
+                .translation("config.promaid.misc.heldLightMaid").define("heldLightMaid", true);
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
     // v1.1.0 实测二百二十七（用户："所有连锁采集默认为开启"）：默认值保持开并注明
