@@ -70,6 +70,8 @@ public final class MaidPlanting {
     // 扫一遍全部加载女仆，任务 == maid_smart:woodcut 才调 tick（触发仍是伐木模式）。
     private static boolean registered = false;
     private static int serverTickCounter = 0;
+    private static boolean driverLoggedAlive = false;
+    private static boolean driverLoggedMaid = false;
 
     /** ProMaidExtension 构造器调用：注册服务端 tick 监听（幂等）。 */
     public static void ensureRegistered() {
@@ -88,6 +90,10 @@ public final class MaidPlanting {
         if (++serverTickCounter % 40 != 0) {
             return; // 每 2 秒一轮
         }
+        if (!driverLoggedAlive) {
+            driverLoggedAlive = true;
+            LOGGER.info("plant driver: alive (ServerTick driver registered)");
+        }
         net.minecraft.server.MinecraftServer server = event.getServer();
         if (server == null) {
             return;
@@ -104,9 +110,16 @@ public final class MaidPlanting {
                     }
                     try {
                         com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask task = maid.getTask();
-                        if (task == null || task.getUid() == null
-                                || !"maid_smart:woodcut".equals(task.getUid().toString())) {
+                        if (task == null || task.getUid() == null) {
+                            continue;
+                        }
+                        if (!"maid_smart:woodcut".equals(task.getUid().toString())) {
                             continue; // 触发 = 伐木模式
+                        }
+                        if (!driverLoggedMaid) {
+                            driverLoggedMaid = true;
+                            LOGGER.info("plant driver: sees woodcut maid {} task={}",
+                                    maid.m_20148_(), task.getUid());
                         }
                         tick(lvl, maid);
                     } catch (Exception ignored) {
