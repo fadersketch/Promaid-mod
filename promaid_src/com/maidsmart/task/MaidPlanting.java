@@ -227,7 +227,9 @@ public final class MaidPlanting {
                 return; // 范围内没有可种土块：冷却后重试
             }
             // 3) 种下（消耗对应来源格：手部栏 extractItem / 背包 extractItem）
-            Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) sapling.m_41720_()).m_40614_();
+            // 实测二百三十七：强转改 BlockItem——物品标签口径下的树苗可能是普通
+            // BlockItem 子类（mangrove_propagule 等），ItemNameBlockItem 强转会炸
+            Block saplingBlock = ((net.minecraft.world.item.BlockItem) sapling.m_41720_()).m_40614_();
             level.m_7731_(spot, saplingBlock.m_49966_(), 3);
             level.m_46796_(2001, spot, Block.m_49956_(saplingBlock.m_49966_()));
             try {
@@ -365,15 +367,17 @@ public final class MaidPlanting {
     }
 
     /** 是否为树苗物品：优先物品标签 #minecraft:saplings（参考 maid_useful_task 同款——
-     *  原版云杉/橡/桦等全部树苗都在内，模组树苗登记了标签也自动兼容）；
-     *  兜底 ItemNameBlockItem+方块带 #minecraft:saplings（老式判定，覆盖未登记标签的模组苗）。 */
+     *  云杉/橡/桦等全部树苗 + 登记标签的模组苗自动兼容；实测二百三十七：该标签还涵盖
+     *  mangrove_propagule 等【普通 BlockItem 子类】的幼苗——物品标签分支必须验
+     *  BlockItem（旧版放行了非 ItemNameBlockItem 的块物品，种植强转当场
+     *  ClassCastException→整条种树链 silently 崩溃）；兜底 ItemNameBlockItem+方块标签。 */
     public static boolean isSaplingItem(ItemStack stack) {
         try {
             if (stack.m_41619_()) {
                 return false;
             }
             if (stack.m_204117_(net.minecraft.tags.ItemTags.f_13180_)) {
-                return true; // #minecraft:saplings（物品标签）
+                return stack.m_41720_() instanceof net.minecraft.world.item.BlockItem;
             }
             if (!(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
                 return false;
