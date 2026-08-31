@@ -271,8 +271,7 @@ public final class MaidPlanting {
         return best;
     }
 
-    /** 捡起身边（XZ 6 × Y -6..+12）掉落在地上的树苗（伐木中拾取任务让位，树叶掉的
-     *  苗捡不到；垂直向下放宽向上收——腐烂/掉落的苗常落在头顶树冠上，+12 才够得着） */
+    /** 捡起身边（XZ 6 × Y ±6）掉落在地上的树苗（伐木中拾取任务让位，树叶掉的苗捡不到） */
     private static void pickupNearbySaplings(ServerLevel level, EntityMaid maid, net.minecraft.core.BlockPos base) {
         try {
             net.minecraft.world.phys.AABB box =
@@ -285,7 +284,8 @@ public final class MaidPlanting {
                 double dx = e.m_20185_() - (base.m_123341_() + 0.5);
                 double dy = e.m_20186_() - (base.m_123342_() + 0.5);
                 double dz = e.m_20189_() - (base.m_123343_() + 0.5);
-                if (Math.abs(dx) > RADIUS || Math.abs(dz) > RADIUS || dy < -6.0 || dy > 12.0) {
+                // v1.1.0 实测二百三十二：垂直范围改回 ±6（去除 -6..+12 放宽——用户指定改回）
+                if (Math.abs(dx) > RADIUS || Math.abs(dy) > RADIUS || Math.abs(dz) > RADIUS) {
                     continue;
                 }
                 if (isSaplingItem(e.m_32055_())) {
