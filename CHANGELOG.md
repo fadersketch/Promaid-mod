@@ -1,5 +1,14 @@
 ﻿# 更新日志
 
+## 实测二百三十五（用户复测：种树仍不生效；火把/灵魂火把/红石火把持在手中不发光 → 定位总根因）
+
+- 【日志实证】12:00 会话伐木行为正常跑（wood behavior start 12:01/12:03、stuck-reset 12:02）但 `plant scan` 零输出、持光也无效果——两个自监听 ServerTick 的驱动（种树/持光）**根本没被触发**
+- 【根因①·注册时机】两个模块此前在 ProMaidExtension 构造器里 ensureRegistered——但扩展由 TLM 扫描实例化、时机不可靠（"constructed"日志其实是女仆脑重建触发，并非扩展初始化铁证）→ 驱动可能从未挂上总线。修复：注册移到 **@Mod 构造器（ProMaidMod()，每次加载必然恰好执行一次）**，扩展侧保留（幂等）
+- 【根因②·光块静态取值为 null】MaidHeldLight 的 `minecraft:light` 方块在【类加载期】查注册表——那时注册表未冻结，恒为 null → 整个持光模块早退（火把确实不会亮；火把物品本身是 BlockItem 子类 StandingAndWallBlockItem，判定没问题，纯被驱动死亡连累）。修复：**懒解析**（首次 tick 再取并缓存）
+- 【加固】伐木行为重新挂回"每 20 tick 调一次 MaidPlanting.tick"的兜底钩子（任务级驱动 + 行为钩子双驱动，模块内部 5 秒冷却天然去重）——行为窗口内必然有机会
+- 【诊断】两个驱动首次点火各落一条日志：`plant driver: alive` / `held-light driver: alive`；种树驱动见到伐木女仆再落 `plant driver: sees woodcut maid`——下次测试一眼确认"驱动到底有没有在跑/有没有认到伐木任务"
+- 测试：重启 → 搜 latest.log：应有 `plant driver: alive` + `held-light driver: alive`；伐木女仆在场时应有 `sees woodcut maid`；给她手里/包里放云杉苗 → `plant scan`（含 result/bagSaplings/handSaplings/spots）+ `plant sapling`；主手拿火把/灯笼 → 脚下方块被照亮（火把 14/灯笼 15）
+
 ## 实测二百三十四（用户：女仆主/副手持有光源类物品时自身放光，亮度与所持光源一致——套用雪傀儡套南瓜灯逻辑；此亮度不影响插火把）
 
 - 【诚实说明·机制不存在】javap 字节码实证：1.20.1 原版【没有】实体发光机制（SnowGolem 无任何亮度方法、Entity 无 getLightLevelDependentMagicValue、LightEngine 无实体分支——"雪傀儡戴南瓜灯发光"是基岩版特性）；TLM 本体亦无此工程

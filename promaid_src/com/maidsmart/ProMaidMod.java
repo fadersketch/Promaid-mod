@@ -41,6 +41,10 @@ public class ProMaidMod {
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
+        // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
+        // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
+        com.maidsmart.task.MaidPlanting.ensureRegistered();
+        com.maidsmart.tool.MaidHeldLight.ensureRegistered();
         // v1.5.88：全模组配置（COMMON——客户端/服务端都可读，配置面板可热更新）
         net.minecraftforge.fml.ModLoadingContext.get().registerConfig(
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
