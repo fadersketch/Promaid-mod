@@ -2407,32 +2407,23 @@ public final class BlueprintBookNetworking {
                     if (centered == null || centered.isEmpty()) {
                         LOGGER.info("projection: id={} q={} unavailable (missing/empty), reply empty", id, q);
                         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                                new ProjectionDataPacket(id, q, "0,0,0", 0, 1, ""));
+                                new ProjectionDataPacket(id, q, "0,0,0", ""));
                         return;
                     }
                     // v1.1.0 实测九十七：旋转版尺寸不进 SIZE_CACHE（该缓存按 id 存未旋转尺寸）
                     int[] sz = q == 0 ? BlueprintLib.blueprintSizeCached(id, centered)
                             : BlueprintLib.blueprintSize(centered);
                     String cloud = BlueprintProjectionSampler.sampleCloud(id, q, holder);
-                    // v1.1.0 实测二百二十四：单包最多 64 块 × 16000 字符 ≈1MB——点云免抽稀
-                    // 后（上限 500000）可达 4.5MB+，必须【多包】发送：每包一块 ≤16000 字符
-                    // 的切片 + seq/total，客户端拼齐再应用；旧版整云塞一包 decode 只读 64 块
-                    String sizeStr = sz[0] + "," + sz[1] + "," + sz[2];
-                    int per = PROJECTION_CHUNK_CHARS;
-                    int totalPackets = Math.max(1, (cloud.length() + per - 1) / per);
-                    for (int k = 0; k < totalPackets; k++) {
-                        int from = k * per;
-                        int to = Math.min(cloud.length(), from + per);
-                        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                                new ProjectionDataPacket(id, q, sizeStr,
-                                        k, totalPackets, cloud.substring(from, to)));
-                    }
-                    LOGGER.info("projection: id={} q={} size={} chars={} packets={} (sent)",
-                            id, q, sizeStr, cloud.length(), totalPackets);
+                    CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                            new ProjectionDataPacket(id, q,
+                                    sz[0] + "," + sz[1] + "," + sz[2],
+                                    cloud));
+                    LOGGER.info("projection: id={} q={} size={}x{}x{} chars={} (sent)",
+                            id, q, sz[0], sz[1], sz[2], cloud.length());
                 } catch (Exception e) {
                     LOGGER.error("projection: generate failed id={} q={}", id, q, e);
                     CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
-                            new ProjectionDataPacket(id, q, "0,0,0", 0, 1, ""));
+                            new ProjectionDataPacket(id, q, "0,0,0", ""));
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -2453,28 +2444,28 @@ public final class BlueprintBookNetworking {
         /** v1.1.0 实测九十七：朝向（0~3 × 90°）——客户端按 id#quarters 缓存 */
         public final int quarters;
         public final String size;
-        /** 实测二百二十四：分片序号/总片数（多包发送，单片 ≤16000 字符） */
-        public final int seq;
-        public final int total;
-        public final String chunk;
+        public final String cloud;
 
-        public ProjectionDataPacket(String blueprintId, int quarters, String size,
-                                    int seq, int total, String chunk) {
+        public ProjectionDataPacket(String blueprintId, int quarters, String size, String cloud) {
             this.blueprintId = blueprintId;
             this.quarters = quarters;
             this.size = size;
-            this.seq = seq;
-            this.total = total;
-            this.chunk = chunk;
+            this.cloud = cloud;
         }
 
         public static void encode(ProjectionDataPacket pkt, FriendlyByteBuf buf) {
             buf.m_130070_(pkt.blueprintId == null ? "" : pkt.blueprintId);
             buf.m_130070_(String.valueOf(pkt.quarters));
             buf.m_130070_(pkt.size == null ? "0,0,0" : pkt.size);
-            buf.m_130070_(String.valueOf(pkt.seq));
-            buf.m_130070_(String.valueOf(pkt.total));
-            buf.m_130070_(pkt.chunk == null ? "" : pkt.chunk);
+            String cloud = pkt.cloud == null ? "" : pkt.cloud;
+            int chunks = Math.max(1, (cloud.length() + PROJECTION_CHUNK_CHARS - 1)
+                    / PROJECTION_CHUNK_CHARS);
+            buf.m_130070_(String.valueOf(chunks));
+            for (int i = 0; i < chunks; i++) {
+                int from = i * PROJECTION_CHUNK_CHARS;
+                int to = Math.min(cloud.length(), from + PROJECTION_CHUNK_CHARS);
+                buf.m_130070_(cloud.substring(from, to));
+            }
         }
 
         public static ProjectionDataPacket decode(FriendlyByteBuf buf) {
@@ -2485,22 +2476,18 @@ public final class BlueprintBookNetworking {
             } catch (NumberFormatException ignored) {
             }
             String size = buf.m_130277_();
-            int seq = 0;
-            int total = 1;
-            try {
-                seq = Integer.parseInt(buf.m_130277_());
-                total = Math.max(1, Integer.parseInt(buf.m_130277_()));
-            } catch (NumberFormatException ignored) {
+            int chunks = Integer.parseInt(buf.m_130277_());
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < chunks && i < 64; i++) { // 上限防御：正常 ≤4 块
+                sb.append(buf.m_130277_());
             }
-            String chunk = buf.m_130277_();
-            return new ProjectionDataPacket(id, q, size, Math.max(0, seq), total, chunk);
+            return new ProjectionDataPacket(id, q, size, sb.toString());
         }
 
         public static void handle(ProjectionDataPacket pkt, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() ->
-                    com.maidsmart.build.BlueprintAreaPreview.onProjectionChunk(
-                            pkt.blueprintId, pkt.quarters, pkt.size,
-                            pkt.seq, pkt.total, pkt.chunk));
+                    com.maidsmart.build.BlueprintAreaPreview.setProjection(
+                            pkt.blueprintId, pkt.quarters, pkt.size, pkt.cloud));
             ctx.get().setPacketHandled(true);
         }
     }
