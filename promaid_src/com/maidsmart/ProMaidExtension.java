@@ -98,6 +98,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
         // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
+        // v1.1.0 实测二百三十三：随手种树任务级驱动注册（模块自监听 ServerTick，
+        // 扫"任务=伐木"的女仆——触发=伐木模式，与行为运行窗口无关）
+        com.maidsmart.task.MaidPlanting.ensureRegistered();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
