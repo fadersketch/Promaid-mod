@@ -112,12 +112,21 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         }
         // 找背包火把并放置（v1.1.0 实测五：兼容灵魂火把等——普通火把优先，
         // 没有才退而求其次；放置用对应火把自己的方块而不是写死 f_50081_）
+        // v1.1.0 实测二百三十一（审计：主副手识别）：背包没有则用主手/副手拿的
         int slot = findTorch(maid);
-        if (slot < 0) {
-            return; // 没有火把
-        }
         net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
-        ItemStack torch = inv.getStackInSlot(slot);
+        ItemStack torch;
+        boolean fromHands = false;
+        if (slot >= 0) {
+            torch = inv.getStackInSlot(slot);
+        } else {
+            torch = isTorchItem(maid.m_21205_()) ? maid.m_21205_()
+                    : (isTorchItem(maid.m_21206_()) ? maid.m_21206_() : ItemStack.f_41583_);
+            fromHands = true;
+        }
+        if (torch.m_41619_()) {
+            return; // 背包和手上都没有火把
+        }
         Block placedBlock = torchBlockOf(torch);
         if (placedBlock == null) {
             return; // 保险：取不到方块（理论上 findTorch 已过滤）
@@ -126,7 +135,12 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
         // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一
         try {
-            inv.extractItem(slot, 1, false);
+            if (fromHands) {
+                ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
+                        .extractItem(isTorchItem(maid.m_21205_()) ? 0 : 1, 1, false);
+            } else {
+                inv.extractItem(slot, 1, false);
+            }
         } catch (Exception ignored) {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);

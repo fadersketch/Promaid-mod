@@ -842,19 +842,29 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选。
      */
     private static boolean hasBuildBlock(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(
                     inv.getStackInSlot(i), null, null)) {
                 return true;
             }
         }
+        // v1.1.0 实测二百三十一：手部栏也算"有方块"（手里拿的正是准备搭的）
+        net.minecraftforge.items.IItemHandler hands = maid.getHandsInvWrapper();
+        for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+            if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(
+                    hands.getStackInSlot(i), null, null)) {
+                return true;
+            }
+        }
         return false;
     }
 
-    /** 背包数量最多的可搭方块（v1.1.0 实测七：统一走 MaidBuildBlockFilter 过滤） */
+    /** 背包数量最多的可搭方块（v1.1.0 实测七：统一走 MaidBuildBlockFilter 过滤；
+     *  v1.1.0 实测二百三十一：计数/扣取含手部栏，手里拿的优先） */
     private static Item takeBuildBlock(EntityMaid maid) {
-        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(maid.getMaidInv(), null, null);
+        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
+                maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);
     }
 
     /** 材料耗尽播报（限频 30 秒）+ 背包方块判定诊断（latest.log 搜 "bridge no-block"）——
