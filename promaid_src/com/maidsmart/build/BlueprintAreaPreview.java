@@ -288,7 +288,7 @@ public final class BlueprintAreaPreview {
             return;
         }
         String key = projKey(id, quarters);
-        Object[] pts = parseCloudWithState(cloud);
+        Object[] pts = parseCloud(cloud);
         if (pts.length == 0) {
             LOGGER.info("projection: key={} empty cloud (unavailable)", key);
             PROJECTIONS.remove(key);
@@ -299,28 +299,15 @@ public final class BlueprintAreaPreview {
     }
 
     /**
-     * 解析含方块状态的点云文本 → 平铺 Object[]{x,y,z,BlockState, x,y,z,BlockState, …}。
-     * 格式 "x,y,z,id|state;x,y,z,id|state;…"。state SNBT 为空或解析失败时用方块默认态。
+     * 解析点云文本 → 平铺 Object[]{x,y,z,占位, x,y,z,占位, …}。
+     * 格式 "x,y,z;x,y,z;…"（实测二百二十三：旧版 "x,y,z,id|state" 的状态段——
+     * 实测一百四十七起渲染走 DebugRenderer 填充盒，BlockState 不再参与绘制，
+     * 客户端却仍逐点做 SNBT 解析；已移除，状态槽留 null 占位）。
      */
-    private static Object[] parseCloudWithState(String cloud) {
+    private static Object[] parseCloud(String cloud) {
         if (cloud == null || cloud.isEmpty()) {
             return new Object[0];
         }
-        // 客户端 HolderGetter（BlockState 重建必需）
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-        net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder = null;
-        if (mc.f_91073_ != null) {
-            try {
-                holder = mc.f_91073_.m_246945_(net.minecraft.core.registries.Registries.f_256747_);
-            } catch (Exception ignored) {
-            }
-        }
-        net.minecraft.world.level.block.Block fallbackBlock =
-                net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
-                        new net.minecraft.resources.ResourceLocation("minecraft", "gray_wool"));
-        net.minecraft.world.level.block.state.BlockState fallbackState =
-                fallbackBlock != null ? fallbackBlock.m_49966_() : null;
-
         String[] segs = cloud.split(";");
         Object[] out = new Object[segs.length * 4];
         int n = 0;
@@ -328,81 +315,20 @@ public final class BlueprintAreaPreview {
             try {
                 int c1 = s.indexOf(',');
                 int c2 = s.indexOf(',', c1 + 1);
-                int c3 = s.indexOf(',', c2 + 1);
-                if (c1 < 0 || c2 < 0) {
+                if (c1 <= 0 || c2 <= c1 + 1 || c2 >= s.length() - 1) {
                     continue;
                 }
                 int x = Integer.parseInt(s.substring(0, c1));
                 int y = Integer.parseInt(s.substring(c1 + 1, c2));
-                int z;
-                String blockId;
-                String stateSnbt = "";
-                if (c3 > 0) {
-                    z = Integer.parseInt(s.substring(c2 + 1, c3));
-                    String idPart = s.substring(c3 + 1);
-                    int pipe = idPart.indexOf('|');
-                    if (pipe >= 0) {
-                        blockId = idPart.substring(0, pipe);
-                        stateSnbt = idPart.substring(pipe + 1);
-                    } else {
-                        blockId = idPart;
-                    }
-                } else {
-                    z = Integer.parseInt(s.substring(c2 + 1));
-                    blockId = "minecraft:gray_wool";
-                }
-                net.minecraft.world.level.block.state.BlockState state =
-                        resolveBlockState(blockId, stateSnbt, holder, fallbackState);
+                int z = Integer.parseInt(s.substring(c2 + 1));
                 out[n++] = x;
                 out[n++] = y;
                 out[n++] = z;
-                out[n++] = state;
+                out[n++] = null;
             } catch (Exception ignored) {
             }
         }
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
-    }
-
-    /** 客户端 BlockState 重建：blockId + stateSnbt → BlockState（失败返回 fallback） */
-    private static net.minecraft.world.level.block.state.BlockState resolveBlockState(
-            String blockId, String stateSnbt,
-            net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder,
-            net.minecraft.world.level.block.state.BlockState fallback) {
-        try {
-            net.minecraft.world.level.block.Block block =
-                    net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(
-                            new net.minecraft.resources.ResourceLocation(blockId));
-            if (block == null) {
-                return fallback;
-            }
-            if (stateSnbt == null || stateSnbt.isEmpty()) {
-                return block.m_49966_();
-            }
-            net.minecraft.nbt.CompoundTag stateTag = net.minecraft.nbt.NbtUtils.m_178024_(stateSnbt);
-            if (stateTag == null) {
-                return block.m_49966_();
-            }
-            // 补全 Name 键（蓝图 stateSnbt 只含属性不含 Name）
-            if (!stateTag.m_128425_("Name", 8)) {
-                net.minecraft.nbt.CompoundTag props = new net.minecraft.nbt.CompoundTag();
-                for (String key : stateTag.m_128431_()) {
-                    props.m_128359_(key, stateTag.m_128423_(key).m_7916_());
-                }
-                net.minecraft.nbt.CompoundTag wrapper = new net.minecraft.nbt.CompoundTag();
-                wrapper.m_128359_("Name", blockId);
-                wrapper.m_128365_("Properties", props);
-                stateTag = wrapper;
-            }
-            if (holder != null) {
-                net.minecraft.world.level.block.state.BlockState resolved =
-                        net.minecraft.nbt.NbtUtils.m_247651_(holder, stateTag);
-                if (resolved != null) {
-                    return resolved;
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return fallback;
     }
 
     private static void ensureRegistered() {
@@ -539,7 +465,7 @@ public final class BlueprintAreaPreview {
      * 主 bufferSource 完全不受干扰：描边/红框/本模组其他渲染/其他模组的渲染全隔离。
      * 渲染本体 = DebugRenderer.renderFilledBox（m_269311_，vanilla debug 管线，长期
      * 使用零崩溃）；每盒立即 flush 断掉 TRIANGLE_STRIP 跨盒连接三角形——每盒精确
-     * 1×1×1 满体积、无跨盒面、无距离剔除，区块内外都清晰可见。
+     * 1×1×1 满体积、无跨盒面（填充适用距离分档实测二百二十三：近处实心、外圈线框）。
      */
     private static void drawGhost(com.mojang.blaze3d.vertex.PoseStack pose,
                                   net.minecraft.client.Minecraft mc,
@@ -560,26 +486,47 @@ public final class BlueprintAreaPreview {
         //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
         // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
         // 总开关控制（帧率敏感用户关总开关即可）。
-        // v1.1.0 实测二百零一（用户："玩家仍然是一走出自己所划好的红色区块里面的
-        // 橙色幽灵方块从外面就看不见了"——日志实证数据链完好：request→2600 blocks
-        // received，问题在可见性）：①面 alpha 0.20→0.45（2600 个格子从区块外看只有
-        // 朝玩家的外皮几面可见，0.20 极淡基本看不出）；②玩家离区块中心 >24 格时
-        // 每盒补画棱线（DebugRenderer 描边轮廓——从外看框内建筑轮廓清晰可辨；
-        // 近处密盒肉眼可辨，不画省性能）。
+        // v1.1.0 实测二百零一：面 alpha 0.20→0.45（2600 个格子从区块外看只有朝玩家的
+        // 外皮几面可见，0.20 极淡基本看不出）。
+        // v1.1.0 实测二百二十三【逐盒距离分档，覆盖全部方块】：旧版填充闸是一道
+        // "距【区块原点】>24 格整片只描边"的全局开关——大蓝图（金字塔 251×124×251，
+        // 玩家 08:43 实测 drawGhost 盒数=3000 远距描边=true）玩家站框内任意位置都算
+        // "远"，整片只剩线框；且数据被 3000 点封顶、按扫描序抽稀成竖条纹 = "零星复刻
+        // 大概形状"。现在：① 数据层上限 3000→12000，点云只发坐标（同带宽 4 倍覆盖、
+        // 采样改确定性洗牌+等距，无竖条纹——见 BlueprintProjectionSampler）；
+        // ② 渲染层每盒按【与相机的 3D 距离】各自判定——≤32 格内的盒全部参与填充
+        // （实心体积跟随玩家），超过 2400 盒时取最近的 2400 个（帧内开销封顶）；
+        // ③ 全部盒无条件画 12 条棱线（lines 单缓冲成批、隔地形透显，与红框同管线）
+        // ——近处满体积、远处线框剪影，任意位置都能看到从近到远的完整形态。
         var bufferSource = mc.m_91269_().m_110104_();
-        // 实测二百一十一【全量渲染 + 从外看到内】：① 每个幽灵盒【无条件画 12 条棱线】
-        // ——走 RenderType.lines（与红框同一管线，实测隔地形/任意角度可见；LINES 每段
-        // 独立成原语，没有 TRIANGLE_STRIP 的跨盒连接问题），"所有搭建方块都渲染出来
-        // "与"从外看到内"（内部结构线框叠显）由它保证；② 近处（≤24 格）再叠加满体积
-        // 填充（debugFilledBox 专用源 + 每盒独立 flush——体积感/近距离清晰度）。
-        // 旧版只有填充盒：无深度排序、逐盒混合，外层盒面盖住内层 → "从外看不到内"。
-        double farDx = camera.f_82479_ - (ox + 0.5);
-        double farDz = camera.f_82481_ - (oz + 0.5);
-        boolean far = (farDx * farDx + farDz * farDz) > 576.0;
-        GhostBufferSource ghostSource = far ? null : new GhostBufferSource();
+        int total = pts.length / 4;
+        boolean[] fillSel = null;
+        GhostBufferSource ghostSource = null;
+        if (total > 0) {
+            java.util.ArrayList<int[]> near = new java.util.ArrayList<>();
+            for (int i = 0; i < total; i++) {
+                double dx = ox + (int) pts[i * 4] + 0.5 - camera.f_82479_;
+                double dy = oy + (int) pts[i * 4 + 1] + 0.5 - camera.f_82480_;
+                double dz = oz + (int) pts[i * 4 + 2] + 0.5 - camera.f_82481_;
+                double dSq = dx * dx + dy * dy + dz * dz;
+                if (dSq <= 1024.0) {
+                    near.add(new int[]{i, (int) dSq});
+                }
+            }
+            if (!near.isEmpty()) {
+                near.sort(java.util.Comparator.comparingInt(o -> o[1]));
+                int cap = Math.min(2400, near.size());
+                fillSel = new boolean[total];
+                for (int k = 0; k < cap; k++) {
+                    fillSel[near.get(k)[0]] = true;
+                }
+                ghostSource = new GhostBufferSource();
+            }
+        }
         com.mojang.blaze3d.vertex.VertexConsumer edgeBuf =
                 bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
         int drawn = 0;
+        int fillCount = 0;
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
             int by = (int) pts[i + 1];
@@ -590,12 +537,13 @@ public final class BlueprintAreaPreview {
             // 棱线（恒定，穿透地形可见——与红框同管线；亮色便于远处辨认）
             drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
                     Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
-            if (ghostSource != null) {
+            if (fillSel != null && fillSel[i / 4]) {
                 net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                         wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
                 net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(
                         pose, ghostSource, box, r, g, b, a);
                 ghostSource.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
+                fillCount++;
             }
             drawn++;
         }
@@ -604,7 +552,7 @@ public final class BlueprintAreaPreview {
         if (drawn != lastDrawnCount) {
             lastDrawnCount = drawn;
             com.maidsmart.tool.PromaidLog.log("投影", "drawGhost(" + id + ") 盒数="
-                    + drawn + " 远距描边=" + far);
+                    + drawn + " 填充=" + fillCount);
         }
     }
 
