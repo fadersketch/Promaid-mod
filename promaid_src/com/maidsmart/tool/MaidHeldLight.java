@@ -153,13 +153,50 @@ public final class MaidHeldLight {
         }
     }
 
-    /** 主手 → 副手：物品方块的自身发光（0=无光/无 BlockItem） */
+    /** 特殊光源白名单（注册名 → 光强）。实测二百三十九（用户："其他光源都验证成功
+     *  了，仅仅是火把/灵魂火把/红石火把这些特殊方块不行——为什么不能加个白名单"）：
+     *  火把系（StandingAndWallBlockItem）与普通发光方块（标准 BlockItem）的解析
+     *  路径确实有差异，白名单【优先于】通用 BlockItem 光强路径——命中即用登记值，
+     *  无法解析/被换手的不干净路径全被绕过。 */
+    private static final java.util.Map<String, Integer> LIGHT_WHITELIST = new java.util.HashMap<>();
+
+    static {
+        LIGHT_WHITELIST.put("minecraft:torch", 14);
+        LIGHT_WHITELIST.put("minecraft:soul_torch", 10);
+        LIGHT_WHITELIST.put("minecraft:redstone_torch", 7);
+        LIGHT_WHITELIST.put("minecraft:lantern", 15);
+        LIGHT_WHITELIST.put("minecraft:soul_lantern", 10);
+        LIGHT_WHITELIST.put("minecraft:campfire", 15);
+        LIGHT_WHITELIST.put("minecraft:soul_campfire", 10);
+        LIGHT_WHITELIST.put("minecraft:jack_o_lantern", 15);
+        LIGHT_WHITELIST.put("minecraft:glowstone", 15);
+        LIGHT_WHITELIST.put("minecraft:sea_lantern", 15);
+        LIGHT_WHITELIST.put("minecraft:shroomlight", 15);
+        LIGHT_WHITELIST.put("minecraft:magma_block", 3);
+    }
+
+    /** 主手 → 副手：① 白名单命中直接用登记亮度（火把系等特殊光源——用户实证
+     *  通用路径只对标准 BlockItem 成立）；② 通用路径：物品方块自身发光
+     *  （m_60739_，与光照引擎同源）。0=无光。 */
     private static int heldLightOf(EntityMaid maid, ServerLevel level) {
         try {
             ItemStack main = maid.m_21205_();
             ItemStack off = maid.m_21206_();
             for (ItemStack stack : new ItemStack[]{main, off}) {
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                // ① 白名单（优先）
+                net.minecraft.resources.ResourceLocation key =
+                        ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                if (key != null) {
+                    Integer w = LIGHT_WHITELIST.get(key.toString());
+                    if (w != null) {
+                        return Math.min(15, Math.max(1, w));
+                    }
+                }
+                // ② 通用 BlockItem 光强
+                if (!(stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
                     continue;
                 }
                 Block b = bi.m_40614_();
