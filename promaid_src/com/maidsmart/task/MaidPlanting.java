@@ -38,6 +38,25 @@ public final class MaidPlanting {
     /** 跳过原因日志限频表（女仆实体 ID → 上次记录 tick，60 秒一条防刷屏） */
     private static final java.util.Map<Integer, Long> PLANT_LOG_SINCE = new java.util.HashMap<>();
 
+    /** v1.1.0 实测二百三十一（用户："明明包里也有，那为什么不种呢？"——超平坦地表
+     *  草方块，洞穴判定错误）：每次冷却跳表的尝试都带完整状态落日志（20 秒限频/女仆）
+     *  ——【背包几根苗 / 手里几根苗 / 找到几个种点 / 结果】，一次区分"没挨到 tick"、
+     *  "没苗"、"没土块"、"种成功"。 */
+    private static void logAttempt(ServerLevel level, EntityMaid maid, String result,
+                                   int bagSaplings, int handSaplings, int spots) {
+        try {
+            long now = level.m_46467_();
+            Long last = PLANT_LOG_SINCE.get(maid.m_19879_());
+            if (last != null && now - last < 400L) {
+                return; // 20 秒
+            }
+            PLANT_LOG_SINCE.put(maid.m_19879_(), now);
+            LOGGER.info("plant scan: maid={} result={} bagSaplings={} handSaplings={} spots={} pos={}",
+                    maid.m_20148_(), result, bagSaplings, handSaplings, spots, maid.m_20183_());
+        } catch (Exception ignored) {
+        }
+    }
+
     private MaidPlanting() {
     }
 
@@ -70,6 +89,25 @@ public final class MaidPlanting {
                 return; // 冷却中
             }
             PLANT_SINCE.put(id, now + cd); // 无论成败都进冷却（避免每 20 tick 全量扫描）
+            // 0) 统计（每 20 秒落一条日志用：本 tick 是否真的执行、背包/手里多少苗）
+            int bagCount = 0;
+            int handCount = 0;
+            int scanCount = 0;
+            try {
+                net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    if (isSaplingItem(inv.getStackInSlot(i))) {
+                        bagCount += inv.getStackInSlot(i).m_41613_();
+                    }
+                }
+                for (int h = 0; h < 2; h++) {
+                    ItemStack hs = h == 0 ? maid.m_21205_() : maid.m_21206_();
+                    if (isSaplingItem(hs)) {
+                        handCount += hs.m_41613_();
+                    }
+                }
+            } catch (Exception ignored) {
+            }
             // 1) 树苗：主手 → 副手 → 背包；都没有才捡身边掉落物
             // 实测二百三十（用户："女仆手中拿的是云杉树苗"）：旧版只扫背包
             // （getMaidInv），手拿苗永远判"没苗"——手的槽位在独立手部栏
@@ -113,13 +151,15 @@ public final class MaidPlanting {
                 }
             }
             if (sapling == null) {
-                logSkip(level, maid, "no-sapling");
+                logAttempt(level, maid, "no-sapling", bagCount, handCount, -1);
                 return; // 没苗：冷却后重试
             }
-            // 2) 找最近的可种地块
-            net.minecraft.core.BlockPos spot = findPlantSpot(level, maid);
+            // 2) 找最近的可种地块（统计扫描范围内的合格格数：0 = 真没土块）
+            int[] spotInfo = findPlantSpotCount(level, maid);
+            net.minecraft.core.BlockPos spot = spotInfo.length > 0
+                    ? new net.minecraft.core.BlockPos(spotInfo[1], spotInfo[2], spotInfo[3]) : null;
             if (spot == null) {
-                logSkip(level, maid, "no-spot");
+                logAttempt(level, maid, "no-spot", bagCount, handCount, 0);
                 return; // 范围内没有可种土块：冷却后重试
             }
             // 3) 种下（消耗对应来源格：手部栏 extractItem / 背包 extractItem）
@@ -142,19 +182,46 @@ public final class MaidPlanting {
         }
     }
 
-    /** v1.1.0 实测二百三十（用户："还是不会随手种一棵树——看运行日志"）：失败原因落日志
-     *  （60 秒限频/女仆）——"没苗"还是"没土块"一目了然；成功永远记。 */
-    private static void logSkip(ServerLevel level, EntityMaid maid, String reason) {
-        try {
-            long now = level.m_46467_();
-            Long last = PLANT_LOG_SINCE.get(maid.m_19879_());
-            if (last != null && now - last < 1200L) {
-                return;
+    /** v1.1.0 实测二百三十一：findPlantSpot 的统计版——返回 [找到(0/1), x, y, z]；
+     *  count=0 即"范围内确实没有可种土块"。 */
+    private static int[] findPlantSpotCount(ServerLevel level, EntityMaid maid) {
+        net.minecraft.core.BlockPos feet = maid.m_20183_();
+        net.minecraft.core.BlockPos best = null;
+        double bestD = Double.MAX_VALUE;
+        for (int dx = -RADIUS; dx <= RADIUS; dx++) {
+            for (int dz = -RADIUS; dz <= RADIUS; dz++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    net.minecraft.core.BlockPos p = feet.m_7918_(dx, dy, dz);
+                    if (!level.m_8055_(p).m_60795_()) {
+                        continue; // 格内已被占用
+                    }
+                    net.minecraft.world.level.block.state.BlockState under =
+                            level.m_8055_(p.m_7918_(0, -1, 0));
+                    if (!(under.m_204336_(net.minecraft.tags.BlockTags.f_144274_) /* #minecraft:dirt */
+                            || under.m_60713_(net.minecraft.world.level.block.Blocks.f_50125_) /* grass_block */)) {
+                        continue;
+                    }
+                    if (p.equals(feet)) {
+                        best = p; // 树桩格允许（见 findPlantSpot 注释）
+                        break;
+                    }
+                    net.minecraft.world.phys.AABB cellBox =
+                            new net.minecraft.world.phys.AABB(p.m_123341_(), p.m_123342_(), p.m_123343_(),
+                                    p.m_123341_() + 1.0, p.m_123342_() + 1.0, p.m_123343_() + 1.0);
+                    if (!level.m_6443_(net.minecraft.world.entity.LivingEntity.class, cellBox,
+                            e -> e.m_6084_()).isEmpty()) {
+                        continue;
+                    }
+                    double d = maid.m_20275_(p.m_123341_() + 0.5, p.m_123342_() + 0.5, p.m_123343_() + 0.5);
+                    if (d < bestD) {
+                        bestD = d;
+                        best = p;
+                    }
+                }
             }
-            PLANT_LOG_SINCE.put(maid.m_19879_(), now);
-            LOGGER.info("plant scan: maid={} reason={} pos={}", maid.m_20148_(), reason, maid.m_20183_());
-        } catch (Exception ignored) {
         }
+        return best == null ? new int[]{0, 0, 0, 0}
+                : new int[]{1, best.m_123341_(), best.m_123342_(), best.m_123343_()};
     }
 
     /**
