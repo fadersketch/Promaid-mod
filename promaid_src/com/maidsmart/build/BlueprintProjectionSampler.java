@@ -22,9 +22,12 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class BlueprintProjectionSampler {
 
-    /** 点云上限（个）。3000 × 每帧 6 面半透明片 ≈ 1.8 万 quad，低端机可承受；
-     *  抽稀后剪影仍清晰（外壳本来就是稀疏的） */
-    public static final int MAX_POINTS = 3000;
+    /** 点云上限（个）。实测二百二十三：点云只发坐标（x,y,z，每点约 12~16 字符）——
+     *  旧版每点附带 blockId|state（实测一百四十七起渲染已改用 DebugRenderer 填充盒，
+     *  BlockState 不再参与绘制，客户端却仍在做 SNBT 解析——纯浪费），去掉后同样
+     *  带宽容量 3000 → 12000，覆盖率 4 倍。渲染侧逐盒距离分档（近处填充上限 2400/次），
+     *  12000 的棱线描边单缓冲成批，帧内开销可控。 */
+    public static final int MAX_POINTS = 12000;
 
     private record Cached(List<String> src, List<String> centered) {
     }
@@ -54,10 +57,10 @@ public final class BlueprintProjectionSampler {
     }
 
     /**
-     * 生成投影点云文本："x,y,z,id|state;x,y,z,id|state;…"（相对居中坐标 + 方块注册名
-     * + 状态 SNBT；空串 = 无可渲染块）。客户端据此用 renderSingleBlock 渲染真实方块
-     * 模型（Litematica 风格），而非均匀色块。
-     * 编码走 UTF 字符串——与本网络通道既有字段风格一致（避免新 SRG 依赖）。
+     * 生成投影点云文本："x,y,z;x,y,z;…"（相对居中坐标；空串 = 无可渲染块）。
+     * 实测二百二十三：只发坐标——渲染走 DebugRenderer 填充盒（每盒 1×1×1，
+     * 颜色按区域蓝/橙/青），BlockState 不影响绘制，附带的 SNBT 解析纯浪费带宽
+     * 与客户端 CPU；"x,y,z" 每点约 12~16 字符，同样带宽可装 4 倍点数。
      */
     public static String sampleCloud(String blueprintId, int quarters,
                                      net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
@@ -65,11 +68,8 @@ public final class BlueprintProjectionSampler {
         if (steps == null || steps.isEmpty()) {
             return "";
         }
-        // 收集非禁置块位置（保序）+ 方块信息；FORBIDDEN 含 air/structure_void/水岩浆等
-        // value = [x, y, z, blockIdIdx]，blockIdIdx 指向 blockIds 列表
+        // 收集非禁置块位置（保序）；FORBIDDEN 含 air/structure_void/水岩浆等
         LinkedHashMap<Long, int[]> pos = new LinkedHashMap<>(steps.size());
-        java.util.List<String> blockIds = new java.util.ArrayList<>();
-        java.util.List<String> stateSnbts = new java.util.ArrayList<>();
         for (String step : steps) {
             String[] p = BlueprintLib.parseStep(step);
             if (p == null) {
@@ -84,10 +84,7 @@ public final class BlueprintProjectionSampler {
                 }
                 long key = pack(x, y, z);
                 if (!pos.containsKey(key)) {
-                    int idx = blockIds.size();
-                    blockIds.add(p[3]);               // blockId (e.g. "minecraft:oak_planks")
-                    stateSnbts.add(p[4] != null ? p[4] : ""); // stateSnbt (may be "")
-                    pos.put(key, new int[]{x, y, z, idx});
+                    pos.put(key, new int[]{x, y, z});
                 }
             } catch (NumberFormatException ignored) {
             }
@@ -105,9 +102,16 @@ public final class BlueprintProjectionSampler {
                 shell.add(a);
             }
         }
-        // 降采样封顶（等距抽稀，保持遍历顺序 = 剪影均匀变疏）
+        // 实测二百二十三【确定性洗牌 + 等距抽稀】：旧版按扫描序（x 主序）每第 N 个
+        // ——密集墙面取成一格一格规则竖条纹（"零星复刻一个大概形状"的直接来源）；
+        // 洗牌后 ≈ 空间均匀点阵，剪影完整可辨。种子取蓝图 id 哈希：同蓝图永远同点集，
+        // 刷新/换向/多客户端一致。抽稀保序遍历（均匀变疏，不改变"全体覆盖"观感）。
+        if (shell.size() > MAX_POINTS) {
+            java.util.Random rnd = new java.util.Random((long) blueprintId.hashCode() * 0x9E3779B97F4A7C15L);
+            java.util.Collections.shuffle(shell, rnd);
+        }
         int stride = shell.size() > MAX_POINTS ? (shell.size() + MAX_POINTS - 1) / MAX_POINTS : 1;
-        StringBuilder sb = new StringBuilder(shell.size() * 20 / stride + 16);
+        StringBuilder sb = new StringBuilder(shell.size() * 14 / stride + 16);
         int kept = 0;
         for (int i = 0; i < shell.size(); i += stride) {
             int[] a = shell.get(i);
@@ -115,13 +119,6 @@ public final class BlueprintProjectionSampler {
                 sb.append(';');
             }
             sb.append(a[0]).append(',').append(a[1]).append(',').append(a[2]);
-            // 附加 blockId|stateSnbt（stateSnbt 为空时省略 | 段）
-            int idx = a[3];
-            sb.append(',').append(blockIds.get(idx));
-            String snbt = stateSnbts.get(idx);
-            if (!snbt.isEmpty()) {
-                sb.append('|').append(snbt);
-            }
             kept++;
         }
         return sb.toString();
