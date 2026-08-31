@@ -22,12 +22,14 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 public final class BlueprintProjectionSampler {
 
-    /** 点云上限（个）。实测二百二十三：点云只发坐标（x,y,z，每点约 12~16 字符）——
-     *  旧版每点附带 blockId|state（实测一百四十七起渲染已改用 DebugRenderer 填充盒，
-     *  BlockState 不再参与绘制，客户端却仍在做 SNBT 解析——纯浪费），去掉后同样
-     *  带宽容量 3000 → 12000，覆盖率 4 倍。渲染侧逐盒距离分档（近处填充上限 2400/次），
-     *  12000 的棱线描边单缓冲成批，帧内开销可控。 */
-    public static final int MAX_POINTS = 12000;
+    /** 点云上限（个）。实测二百二十四（用户："改成500000上限，保证所有方块都能被
+     *  渲染到"）：内置蓝图全部全量——包内最大（载具__BF7 星际航母 外壳 45.6 万、
+     *  总统山/加冕圣地等均在 50 万内），不再有任何抽稀损失（每盒都下发/渲染）；
+     *  玩家自导入的超巨型蓝图>50 万外壳时才按洗牌+抽稀兜底（保护网络与渲染）。
+     *  渲染侧配套：红色区块固定坐标用【后台构建的 VBO 线框缓存】（服务器成批上传、
+     *  每帧一次 drawWithShader，全区块任意数量棱线只花一次 draw 的钱——从"3000 点
+     *  网格"到"全部方块线框"）；近处仍有 32 格内最近 2400 盒的满体积填充。 */
+    public static final int MAX_POINTS = 500000;
 
     private record Cached(List<String> src, List<String> centered) {
     }
