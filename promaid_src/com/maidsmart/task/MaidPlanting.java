@@ -60,6 +60,63 @@ public final class MaidPlanting {
     private MaidPlanting() {
     }
 
+    // ================= 任务级驱动（参考 maid_useful_task 的种树语义） =================
+    // v1.1.0 实测二百三十三（用户提供参考 jar [女仆实用任务]maid_useful_task-1.4.2）：
+    // 参考模组的种树是【任务级】——只要女仆选着伐木任务，TLM 原生放置机就持续工作，
+    // 与"砍树行为是否有目标/是否运行窗口"无关。我们旧版把检查挂在伐木【行为 tick】
+    // 里：行为只在实际砍树窗口运行（日志实证每 20~30 秒启停一次），窗口外检查不跑
+    // ——"明明包里有苗却不种"最合理的解释（用户自检：超平坦地表草方块 + 包里有苗，
+    // 判定链条本身无懈可击）。本模块改为自己监听 ServerTickEvent：每 40 tick（2 秒）
+    // 扫一遍全部加载女仆，任务 == maid_smart:woodcut 才调 tick（触发仍是伐木模式）。
+    private static boolean registered = false;
+    private static int serverTickCounter = 0;
+
+    /** ProMaidExtension 构造器调用：注册服务端 tick 监听（幂等）。 */
+    public static void ensureRegistered() {
+        if (registered) {
+            return;
+        }
+        registered = true;
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(MaidPlanting.class);
+    }
+
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onServerTick(net.minecraftforge.event.TickEvent.ServerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
+            return;
+        }
+        if (++serverTickCounter % 40 != 0) {
+            return; // 每 2 秒一轮
+        }
+        net.minecraft.server.MinecraftServer server = event.getServer();
+        if (server == null) {
+            return;
+        }
+        try {
+            for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
+                if (lvl == null) {
+                    continue;
+                }
+                for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                    if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
+                            || !maid.m_6084_()) {
+                        continue;
+                    }
+                    try {
+                        com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask task = maid.getTask();
+                        if (task == null || task.getUid() == null
+                                || !"maid_smart:woodcut".equals(task.getUid().toString())) {
+                            continue; // 触发 = 伐木模式
+                        }
+                        tick(lvl, maid);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
     /** 实体卸载清理（MaidWoodBehavior.forget 调用） */
     public static void forget(int maidEntityId) {
         PLANT_SINCE.remove(maidEntityId);
@@ -299,10 +356,18 @@ public final class MaidPlanting {
         }
     }
 
-    /** 是否为树苗物品（ItemNameBlockItem 且方块带 #minecraft:saplings——原版树苗+模组树苗） */
+    /** 是否为树苗物品：优先物品标签 #minecraft:saplings（参考 maid_useful_task 同款——
+     *  原版云杉/橡/桦等全部树苗都在内，模组树苗登记了标签也自动兼容）；
+     *  兜底 ItemNameBlockItem+方块带 #minecraft:saplings（老式判定，覆盖未登记标签的模组苗）。 */
     public static boolean isSaplingItem(ItemStack stack) {
         try {
-            if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
+            if (stack.m_41619_()) {
+                return false;
+            }
+            if (stack.m_204117_(net.minecraft.tags.ItemTags.f_13180_)) {
+                return true; // #minecraft:saplings（物品标签）
+            }
+            if (!(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
                 return false;
             }
             Block b = ((net.minecraft.world.item.ItemNameBlockItem) stack.m_41720_()).m_40614_();
