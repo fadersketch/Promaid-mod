@@ -1065,6 +1065,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         if (this.destroyProgress < 1.0f) {
             return; // 还在挖掘中，下一 tick 继续
         }
+        // 实测二百二十四：挖掉前登记是不是矿（m_7731_ 换成空气后就判不了了）
+        boolean dugOre = this.isOre(level, this.targetPos);
         // 挖完：清除裂纹（stage 10 = 移除）再破坏方块
         this.broadcastCrack(level, maid, this.targetPos, 10);
         // 挖完：玩家同款破坏音效+粒子（levelEvent 2001），再掉落实体方块
@@ -1119,12 +1121,19 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // 女仆直接找下一个矿继续挖；站在柱子上的话等方块自然消失（掉落物回收）
         // v1.5.161：连锁采集——记录刚挖掉的方块类型并 BFS 填充连锁队列（队列里的
         // 同族矿挖完一块自动接下一块，直到挖完矿脉）；开关关闭时清空队列走正常找矿
+        // 实测二百二十四：连锁扩展到障碍物——挖开的挡路块（同类可挖穿）同样连锁，
+        // 与矿脉共用开关与上限（mine.chainMining / mine.chainLimit）
         this.chainBlock = state.m_60734_();
-        this.refillChainQueue(level, maid);
-        // v1.5.172：连锁采集【同时破坏】（FTB Ultimine 式）——目标矿挖完瞬间把
-        // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
-        // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
-        this.chainBreakAll(level, maid, mainHand);
+        if (dugOre) {
+            this.refillChainQueue(level, maid);
+            // v1.5.172：连锁采集【同时破坏】（FTB Ultimine 式）——目标矿挖完瞬间把
+            // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
+            // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
+            this.chainBreakAll(level, maid, mainHand);
+        } else if (isOpenStoneBlock(state)) {
+            this.refillObstacleChainQueue(level, maid);
+            this.obstacleChainBreakAll(level, maid, mainHand);
+        }
         markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
         this.targetPos = null;
         this.destroyProgress = 0.0f;
@@ -1596,6 +1605,103 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * 实测二百二十四：连锁采集扩展到障碍物——从刚挖掉的挡路块 BFS（6 方向）找相连的
+     * 同类可挖穿块排队（用户："挖一个旁边的障碍物，周围的同类障碍物也生效；要有触发
+     * 上限"）。匹配规则与矿脉一致：同 Block + isBreakable（内置+面板名单，扣除排除名单）
+     * + 不是女仆自己搭的方块 + 不是矿（矿走矿脉链路，不误连锁）。上限共用
+     * mine.chainLimit（默认 16）；BFS 展开上限 64；开关关闭时直接清空。
+     */
+    private void refillObstacleChainQueue(ServerLevel level, EntityMaid maid) {
+        if (!com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_MINING.get()
+                || this.chainBlock == null) {
+            this.chainQueue.clear();
+            this.chainBlock = null;
+            return;
+        }
+        if (!this.chainQueue.isEmpty()) {
+            return;
+        }
+        int limit = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_LIMIT.get();
+        BlockPos start = this.targetPos;
+        java.util.Set<BlockPos> visited = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> bfs = new java.util.ArrayDeque<>();
+        bfs.add(start.m_7949_());
+        visited.add(start.m_7949_());
+        while (!bfs.isEmpty() && this.chainQueue.size() < limit) {
+            BlockPos cur = bfs.poll();
+            for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+                net.minecraft.core.Vec3i step = d.m_122436_();
+                BlockPos nb = cur.m_7918_(step.m_123341_(), step.m_123342_(), step.m_123343_());
+                if (!visited.add(nb.m_7949_())) {
+                    continue;
+                }
+                BlockState ns = level.m_8055_(nb);
+                if (ns.m_60795_() || ns.m_60734_() != this.chainBlock) {
+                    continue;
+                }
+                if (!this.isOpenStone(level, nb)) {
+                    continue; // 只连锁可挖穿的障碍物（同类石头/泥土/圆石等）
+                }
+                if (this.isOre(level, nb)) {
+                    continue; // 矿归矿脉连锁，不混入障碍物链
+                }
+                if (isMiningPlaced(level, nb)) {
+                    continue; // 自己搭的方块不连锁
+                }
+                if (this.chainQueue.size() < limit) {
+                    this.chainQueue.add(nb.m_7949_());
+                }
+                if (bfs.size() < 64) {
+                    bfs.add(nb.m_7949_());
+                }
+            }
+        }
+        if (!this.chainQueue.isEmpty()) {
+            LOGGER.info("mine chain filled (blocking): maid={} block={} queued={} limit={}",
+                    maid.m_20148_(),
+                    ForgeRegistries.BLOCKS.getKey(this.chainBlock),
+                    this.chainQueue.size(), limit);
+        }
+    }
+
+    /** 实测二百二十四：障碍物连锁【同时破坏】——与 chainBreakAll 同款：掉落直接进
+     *  背包（放不下落地）、连锁块静默、不额外扣镐耐久（只由主目标扣一次）。 */
+    private void obstacleChainBreakAll(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
+        if (!com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_MINING.get()
+                || this.chainBlock == null) {
+            this.chainQueue.clear();
+            return;
+        }
+        int broken = 0;
+        int limit = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_LIMIT.get();
+        while (!this.chainQueue.isEmpty() && broken < limit) {
+            BlockPos pos = this.chainQueue.poll();
+            if (pos == null || pos.equals(this.targetPos)) {
+                continue;
+            }
+            BlockState st = level.m_8055_(pos);
+            if (st.m_60795_() || st.m_60734_() != this.chainBlock) {
+                continue; // 已被挖掉/类型不符
+            }
+            if (!this.isOpenStone(level, pos)) {
+                continue;
+            }
+            if (isMiningPlaced(level, pos)) {
+                continue;
+            }
+            BlockEntity be = level.m_7702_(pos);
+            java.util.List<ItemStack> drops = Block.m_49874_(st, level, pos, be, maid, mainHand);
+            insertIntoMaidInventory(maid, level, drops, pos);
+            level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
+            broken++;
+        }
+        if (broken > 0) {
+            LOGGER.info("mine chain burst (blocking): maid={} block={} broken={}",
+                    maid.m_20148_(), ForgeRegistries.BLOCKS.getKey(this.chainBlock), broken);
+        }
+    }
+
+    /**
      * v1.5.25 搭高一步：往脚下放方块把自己垫高。
      * v1.5.24 头顶检查防窒息；v1.5.25 放块位置【脚下格优先】（脚下悬空垫脚下，
      * 人自然站上去不夹人；脚下实心才放所在格顶起），头顶 1 格检查放宽——
@@ -1864,6 +1970,17 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private boolean isOpenStone(ServerLevel level, BlockPos pos) {
         net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(level.m_8055_(pos).m_60734_());
         return key != null && isBreakable(key.m_135815_());
+    }
+
+    /** 实测二百二十四：BlockState 是否为可挖穿障碍物（与 isOpenStone 同口径，接受状态）——
+     *  挖完瞬间方块已变空气，坐标版判不了，用挖掉的 state 登记。 */
+    private static boolean isOpenStoneBlock(net.minecraft.world.level.block.state.BlockState st) {
+        try {
+            net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(st.m_60734_());
+            return key != null && isBreakable(key.m_135815_());
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     /** v1.5.101b：是否可挖穿——内置 OPEN_BREAKABLE（自然生成方块）或 面板障碍物名单。
