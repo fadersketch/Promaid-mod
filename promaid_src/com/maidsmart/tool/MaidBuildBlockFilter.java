@@ -155,8 +155,14 @@ public final class MaidBuildBlockFilter {
     /**
      * 背包里数量最多的可用垫脚方块（各模块 takeBuildBlock 的统一实现）。
      * 返回该物品（已从背包扣 1 个）；没有可用方块返回 null。
+     * v1.1.0 实测二百三十一（用户"审计一下主副手识别"）：加 hands 版重载——
+     * 计数含手部栏（主/副手），扣取时先扣手（她手里正拿的就是想用的），无手再扣背包。
      */
     public static Item takeBuildBlock(IItemHandler inv, Level level, BlockPos pos) {
+        return takeBuildBlock(inv, null, level, pos);
+    }
+
+    public static Item takeBuildBlock(IItemHandler inv, IItemHandler hands, Level level, BlockPos pos) {
         java.util.Map<Item, Integer> counts = new java.util.HashMap<>();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
@@ -168,6 +174,18 @@ public final class MaidBuildBlockFilter {
             }
             counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
         }
+        if (hands != null) {
+            for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                ItemStack stack = hands.getStackInSlot(i);
+                if (stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
+                    continue;
+                }
+                if (!isUsableBuildBlock(bi.m_40614_(), level, pos)) {
+                    continue;
+                }
+                counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
+            }
+        }
         Item best = null;
         int bestCount = 0;
         for (java.util.Map.Entry<Item, Integer> e : counts.entrySet()) {
@@ -178,6 +196,18 @@ public final class MaidBuildBlockFilter {
         }
         if (best == null) {
             return null;
+        }
+        // 优先扣手部栏（主→副），再扣背包（与计数口径一致，见类注释）
+        if (hands != null) {
+            for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                ItemStack stack = hands.getStackInSlot(i);
+                if (!stack.m_41619_() && stack.m_41720_() == best) {
+                    ItemStack taken = hands.extractItem(i, 1, false);
+                    if (!taken.m_41619_()) {
+                        return best;
+                    }
+                }
+            }
         }
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
