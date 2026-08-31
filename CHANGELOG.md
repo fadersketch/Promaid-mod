@@ -1,5 +1,18 @@
 ﻿# 更新日志
 
+## 实测二百三十九（用户："其他光源都验证成功了，仅仅火把/灵魂火把/红石火把这些特殊方块不行——为什么不能直接加一个白名单呢？"）
+
+- 【应答·为什么最初没直接白名单】通用路径（物品→方块→方块自身 getLightEmission）理论上也覆盖火把系（StandingAndWallBlockItem 也是 BlockItem 子类），语义更"万全"；您实测证明**这条路径对特殊方块不成立**——白名单是这类"官方不按常理出牌"的最稳解，采纳
+- 【实现·白名单优先】`LIGHT_WHITELIST`（注册名 → 光强，静态表）：torch 14 / soul_torch 10 / redstone_torch 7 / lantern 15 / soul_lantern 10 / campfire 15 / soul_campfire 10 / jack_o_lantern 15 / glowstone 15 / sea_lantern 15 / shroomlight 15 / magma_block 3——判定顺序改为【白名单命中→直接用登记亮度】，未命中才走通用 BlockItem 光强（灯笼/萤石等已验证路径原样保留）；登记一个不在表内的光源后其他发光方块依旧自动生效
+- 测试：重启 → 主手拿火把 → `held light: level=14` + 地面/墙壁照亮；灵魂火把 10、红石火把 7、灯笼 15；面板开关可随时关闭
+
+## 实测二百三十八（用户问"光源问题呢"——持光功能验证化）
+
+- 【现状说明】持光的两大死因已在二百三十五修掉：①注册时机（alive 日志 12:40 实证驱动活着）；②光块懒解析（类加载期注册表未冻结的 null 陷阱）。上一会话（12:56）驱动 alive ✓、无任何报错——但持光成功时**零日志**，无法确认到底亮没亮
+- 【本次·探针日志】①每个女仆**首次点亮**落一条：`held light: maid=… level=N pos=… (first lit)`（一次/女仆）——亮没亮、亮度多少一目了然；②若 `minecraft:light` 光块解析不到，落 ERROR（`held light: light block unavailable`）
+- 【连带】本次同样包含二百三十七的种树修复（jar 4,780,051→4,780,331，含两者）
+- 测试：重启 → 女仆主手拿火把/灯笼/红石火把 → 搜 latest.log：`held light: … level=14`（火把）/`level=10`（灵魂火把）/`level=7`（红石火把）/`level=15`（灯笼；她周围地面/墙壁被照亮）；不拿光源 → 无该行、光块自动撤除
+
 ## 实测二百三十七（终局：种树不生效的全部真相——ClassCastException 每次扫描都炸，被静默吞掉）
 
 - 【日志铁证】236 的 error 日志立刻抓到：
