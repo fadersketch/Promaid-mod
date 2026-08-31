@@ -61,154 +61,6 @@ public final class BlueprintAreaPreview {
     private static final java.util.Set<String> REQUESTED =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    /** 实测二百二十四：分片接收缓冲（key -> 片数组；全部到齐才组装成点云） */
-    private static final java.util.Map<String, String[]> PROJ_PARTS = new java.util.HashMap<>();
-    private static final java.util.Map<String, String> PROJ_PARTS_SIZE = new java.util.HashMap<>();
-
-    // ================= 实测二百二十四：幽灵线框 VBO 缓存 =================
-    // 点云免抽稀后（上限 500000）全区块棱线每帧即时重建/上传不可行（45.6 万盒 ×
-    // 24 顶点 = 1000 万级顶点/帧）。改为：后台线程把某区块的线框几何一次性建成
-    // RenderedBuffer → 渲染线程上传成 VertexBuffer（GPU 显存缓存）→ 每帧一次
-    // drawWithShader 画出全区块（一次 submit 的钱画百万级顶点）→ 近处再叠加
-    // 32 格内最近的 2400 盒满体积填充。金色预览（锚点随玩家移动）不缓存，走
-    // 近场即时回退（仅 64 格内最近 6000 盒）。key = "blueprintId#q@ox,oy,oz"。
-    private static final java.util.Map<String, com.mojang.blaze3d.vertex.VertexBuffer> GHOST_VBOS =
-            new java.util.LinkedHashMap<>(8, 0.75f, true) {
-                @Override
-                protected boolean removeEldestEntry(java.util.Map.Entry<String, com.mojang.blaze3d.vertex.VertexBuffer> eldest) {
-                    if (size() > 3) { // 大蓝图单块线框可达百 MB 级（345K 盒 ≈ 133MB），上限 3 块
-                        try {
-                            eldest.getValue().close();
-                        } catch (Throwable ignored) {
-                        }
-                        return true;
-                    }
-                    return false;
-                }
-            };
-    /** 待构建队列/参数（后台线程只读，不可变快照） */
-    private static final java.util.concurrent.LinkedBlockingQueue<String> VBO_BUILD_QUEUE =
-            new java.util.concurrent.LinkedBlockingQueue<>();
-    private static final java.util.Map<String, Object[]> VBO_BUILD_PENDING =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.Map<String, double[]> VBO_BUILD_META =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    /** 后台构建完成，等渲染线程上传 */
-    private static final java.util.concurrent.ConcurrentHashMap<String, com.mojang.blaze3d.vertex.BufferBuilder.RenderedBuffer> VBO_READY =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    private static volatile boolean vboWorkerStarted = false;
-
-    private static void startGhostVboWorker() {
-        if (vboWorkerStarted) {
-            return;
-        }
-        vboWorkerStarted = true;
-        Thread t = new Thread(() -> {
-            while (true) {
-                try {
-                    String key = VBO_BUILD_QUEUE.take();
-                    Object[] pts = VBO_BUILD_PENDING.remove(key);
-                    double[] meta = VBO_BUILD_META.remove(key);
-                    if (pts == null || meta == null || pts.length < 4) {
-                        continue;
-                    }
-                    buildGhostVbo(key, pts, meta[0], meta[1], meta[2], (float) meta[3], (float) meta[4], (float) meta[5]);
-                } catch (InterruptedException e) {
-                    return;
-                } catch (Throwable t2) {
-                    // 单块构建失败跳过（下帧发现不在 PENDING 会重新排入；失败场景极少）
-                }
-            }
-        }, "promaid-ghost-vbo");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /** 后台线程：把全区块 12 棱线按【世界坐标】写入 BufferBuilder（无 camera 偏移——
-     *  绘制时配 RenderSystem 的模型视图矩阵即世界可视；颜色与即时棱线同款饱和放大） */
-    private static void buildGhostVbo(String key, Object[] pts, double ox, double oy, double oz,
-                                      float r, float g, float b) {
-        long boxes = pts.length / 4L;
-        int init = (int) Math.min(Integer.MAX_VALUE - 8L, 4096L + boxes * 384L);
-        com.mojang.blaze3d.vertex.BufferBuilder bb = new com.mojang.blaze3d.vertex.BufferBuilder(init);
-        com.mojang.blaze3d.vertex.PoseStack stack = new com.mojang.blaze3d.vertex.PoseStack();
-        float rc = Math.min(1.0f, r * 1.5f);
-        float gc = Math.min(1.0f, g * 1.5f);
-        float bc = Math.min(1.0f, b * 1.4f);
-        for (int i = 0; i + 3 < pts.length; i += 4) {
-            double wx = ox + (int) pts[i];
-            double wy = oy + (int) pts[i + 1];
-            double wz = oz + (int) pts[i + 2];
-            double x1 = wx + 1.0, y1 = wy + 1.0, z1 = wz + 1.0;
-            net.minecraft.world.phys.Vec3 c0 = new net.minecraft.world.phys.Vec3(wx, wy, wz);
-            net.minecraft.world.phys.Vec3 c1 = new net.minecraft.world.phys.Vec3(x1, wy, wz);
-            net.minecraft.world.phys.Vec3 c2 = new net.minecraft.world.phys.Vec3(x1, wy, z1);
-            net.minecraft.world.phys.Vec3 c3 = new net.minecraft.world.phys.Vec3(wx, wy, z1);
-            net.minecraft.world.phys.Vec3 t0 = new net.minecraft.world.phys.Vec3(wx, y1, wz);
-            net.minecraft.world.phys.Vec3 t1 = new net.minecraft.world.phys.Vec3(x1, y1, wz);
-            net.minecraft.world.phys.Vec3 t2 = new net.minecraft.world.phys.Vec3(x1, y1, z1);
-            net.minecraft.world.phys.Vec3 t3 = new net.minecraft.world.phys.Vec3(wx, y1, z1);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c0, c1, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c1, c2, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c2, c3, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c3, c0, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, t0, t1, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, t1, t2, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, t2, t3, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, t3, t0, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c0, t0, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c1, t1, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c2, t2, rc, gc, bc);
-            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(stack, bb, c3, t3, rc, gc, bc);
-        }
-        VBO_READY.put(key, bb.m_231168_());
-    }
-
-    /** 渲染线程：每帧最多上传一个完成的后台构建（上传是 GL 操作，不能在工作线程做） */
-    private static void pumpGhostVboUploads() {
-        for (java.util.Map.Entry<String, com.mojang.blaze3d.vertex.BufferBuilder.RenderedBuffer> e : VBO_READY.entrySet()) {
-            try {
-                com.mojang.blaze3d.vertex.VertexBuffer vb =
-                        new com.mojang.blaze3d.vertex.VertexBuffer(com.mojang.blaze3d.vertex.VertexBuffer.Usage.STATIC);
-                vb.m_231221_(e.getValue());
-                com.mojang.blaze3d.vertex.VertexBuffer old = GHOST_VBOS.put(e.getKey(), vb);
-                if (old != null) {
-                    try {
-                        old.close();
-                    } catch (Throwable ignored) {
-                    }
-                }
-            } catch (Throwable ignored) {
-            }
-            VBO_READY.remove(e.getKey());
-            break; // 每帧一个
-        }
-    }
-
-    /** 蓝图数据更新/清除时废弃对应旧 VBO（避免新旧点云错位显示） */
-    private static void invalidateGhostVbo(String blueprintId) {
-        String prefix = blueprintId + "#";
-        for (java.util.Iterator<java.util.Map.Entry<String, com.mojang.blaze3d.vertex.VertexBuffer>> it =
-             GHOST_VBOS.entrySet().iterator(); it.hasNext(); ) {
-            java.util.Map.Entry<String, com.mojang.blaze3d.vertex.VertexBuffer> e = it.next();
-            if (e.getKey().startsWith(prefix)) {
-                try {
-                    e.getValue().close();
-                } catch (Throwable ignored) {
-                }
-                it.remove();
-            }
-        }
-        for (java.util.Iterator<String> it = VBO_BUILD_PENDING.keySet().iterator(); it.hasNext(); ) {
-            String k = it.next();
-            if (k.startsWith(prefix)) {
-                VBO_BUILD_META.remove(k);
-                it.remove();
-            }
-        }
-        VBO_READY.keySet().removeIf(k -> k.startsWith(prefix));
-    }
-
     /** 投影缓存/请求的复合键（实测九十七：同蓝图不同朝向各自一份点云） */
     private static String projKey(String blueprintId, int quarters) {
         return blueprintId + "#" + Math.floorMod(quarters, 4);
@@ -443,46 +295,7 @@ public final class BlueprintAreaPreview {
             return;
         }
         PROJECTIONS.put(key, pts);
-        invalidateGhostVbo(id);
         LOGGER.info("projection: key={} received {} blocks", key, pts.length / 4);
-    }
-
-    /**
-     * 实测二百二十四：点云分片接收（S2C 多包）——等服务端把整云发完（seq 0..total-1）
-     * 再拼装应用；大蓝图（上限 500000 点 ≈ 6MB）一包装不下，拆成 ≤16000 字符的切片。
-     * 再收到重复 seq 覆盖即可（旧数据被新请求替代时自动回退到新 parts 数组）。
-     */
-    public static void onProjectionChunk(String id, int quarters, String size,
-                                         int seq, int total, String chunk) {
-        if (id == null || id.isEmpty()) {
-            return;
-        }
-        String key = projKey(id, quarters);
-        if (PROJECTIONS.containsKey(key)) {
-            return; // 已就绪（旧数据），忽略迟到的分片
-        }
-        String[] parts = PROJ_PARTS.get(key);
-        if (parts == null || parts.length != total) {
-            parts = new String[Math.max(1, total)];
-            PROJ_PARTS.put(key, parts);
-            PROJ_PARTS_SIZE.put(key, size == null ? "0,0,0" : size);
-        }
-        if (seq < 0 || seq >= parts.length) {
-            return;
-        }
-        parts[seq] = chunk == null ? "" : chunk;
-        for (String p : parts) {
-            if (p == null) {
-                return; // 未完，继续等
-            }
-        }
-        StringBuilder sb = new StringBuilder();
-        for (String p : parts) {
-            sb.append(p);
-        }
-        PROJ_PARTS.remove(key);
-        String sz = PROJ_PARTS_SIZE.remove(key);
-        setProjection(id, quarters, sz, sb.toString());
     }
 
     /**
@@ -548,8 +361,6 @@ public final class BlueprintAreaPreview {
         if (mc.f_91074_ == null || mc.f_91073_ == null) {
             return;
         }
-        // 实测二百二十四：每帧最多上传一个后台构建完的幽灵线框 VBO（GL 调用必须渲染线程）
-        pumpGhostVboUploads();
         net.minecraft.world.phys.Vec3 camera = event.getCamera().m_90583_().m_82548_();
         com.mojang.blaze3d.vertex.PoseStack pose = event.getPoseStack();
         pose.m_85836_(); // pushPose
@@ -587,9 +398,8 @@ public final class BlueprintAreaPreview {
             int[] org = i < REGION_ORIGINS_POS.size() ? REGION_ORIGINS_POS.get(i) : null;
             if (!key.isEmpty() && org != null) {
                 // 实测二百零一/二百零四：幽灵面 alpha 0.45 → 0.55（区块外可见性）
-                // 实测二百二十四：红色区块（锚点固定）启用 VBO 线框缓存（全量棱线）
                 drawGhost(pose, mc, camera, key, org[0], org[1], org[2],
-                        1.0f, 0.55f, 0.25f, 0.55f, true);
+                        1.0f, 0.55f, 0.25f, 0.55f);
             }
         }
         if (active) {
@@ -613,10 +423,9 @@ public final class BlueprintAreaPreview {
             drawBoxEdges(pose, buf, camera, x0, y0, z0, x1, y1, z1, 1.0f, 0.85f, 0.2f);
             if (previewId != null) {
                 // 实测二百零一/二百零四：金预览青色幽灵 0.40 → 0.55（近景也清晰）
-                // 实测二百二十四：金色预览锚点随玩家移动 → 不缓存 VBO，走近场回退
                 drawGhost(pose, mc, camera, projKey(previewId, previewQuarters),
                         p.m_123341_(), p.m_123342_(), p.m_123343_(),
-                        0.30f, 0.95f, 1.0f, 0.55f, false);
+                        0.30f, 0.95f, 1.0f, 0.55f);
             }
             com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
                     "建造范围 " + effX + "\u00d7" + sizeY + "\u00d7" + effZ
@@ -662,8 +471,7 @@ public final class BlueprintAreaPreview {
                                   net.minecraft.client.Minecraft mc,
                                   net.minecraft.world.phys.Vec3 camera,
                                   String id, double ox, double oy, double oz,
-                                  float r, float g, float b, float a,
-                                  boolean useVbo) {
+                                  float r, float g, float b, float a) {
         if (!com.maidsmart.config.MaidSmartConfig.BUILD_PROJECTION.get()) {
             return;
         }
@@ -671,85 +479,54 @@ public final class BlueprintAreaPreview {
         if (pts == null || pts.length < 4) {
             return;
         }
+        // v1.1.0 实测一百八十九（用户："建造模式方块——玩家走出框选的区块以后，
+        // 蓝色方块和橙色方块在区块外是看不见的"）：移除 96 格点剔除——旧版以
+        // 【计划原点】为锚点算玩家距离（>96 格整片不画），与红框渲染策略不一致
+        //（红框永远渲染）：玩家走出框选区块投影全没；大蓝图时玩家站在框内对角
+        //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
+        // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
+        // 总开关控制（帧率敏感用户关总开关即可）。
+        // v1.1.0 实测二百零一：面 alpha 0.20→0.45（2600 个格子从区块外看只有朝玩家的
+        // 外皮几面可见，0.20 极淡基本看不出）。
+        // v1.1.0 实测二百二十三【逐盒距离分档，覆盖全部方块】：旧版填充闸是一道
+        // "距【区块原点】>24 格整片只描边"的全局开关——大蓝图（金字塔 251×124×251，
+        // 玩家 08:43 实测 drawGhost 盒数=3000 远距描边=true）玩家站框内任意位置都算
+        // "远"，整片只剩线框；且数据被 3000 点封顶、按扫描序抽稀成竖条纹 = "零星复刻
+        // 大概形状"。现在：① 数据层上限 3000→12000，点云只发坐标（同带宽 4 倍覆盖、
+        // 采样改确定性洗牌+等距，无竖条纹——见 BlueprintProjectionSampler）；
+        // ② 渲染层每盒按【与相机的 3D 距离】各自判定——≤32 格内的盒全部参与填充
+        // （实心体积跟随玩家），超过 2400 盒时取最近的 2400 个（帧内开销封顶）；
+        // ③ 全部盒无条件画 12 条棱线（lines 单缓冲成批、隔地形透显，与红框同管线）
+        // ——近处满体积、远处线框剪影，任意位置都能看到从近到远的完整形态。
         var bufferSource = mc.m_91269_().m_110104_();
         int total = pts.length / 4;
-        // 实测二百二十四【全区块线框 = 后台构建的 VBO 缓存】：点云免抽稀后（上限
-        // 500000）45.6 万盒 × 12 棱 = 千万级顶点/帧，即时重建不可能。固定坐标的
-        // 红色区块用 VBO 缓存（构建在后台线程、渲染线程上传、每帧一次 drawWithShader
-        // ——一次 submit 花百万级顶点的钱）；金色预览（锚点随玩家移动，不缓存）
-        // 与 VBO 就绪前的回退 = 64 格内最近 6000 盒即时棱线。近处（32 格内最近
-        // 2400 盒）满体积填充一律即时绘制。
-        boolean vboDrawn = false;
-        if (useVbo && total >= 32) {
-            String vkey = id + "@" + ox + "," + oy + "," + oz;
-            com.mojang.blaze3d.vertex.VertexBuffer vbo = GHOST_VBOS.get(vkey);
-            if (vbo != null) {
-                net.minecraft.client.renderer.RenderType lt =
-                        net.minecraft.client.renderer.RenderType.f_110371_;
-                try {
-                    lt.m_110185_(); // setupRenderState（内部切到 lines 着色器）
-                    vbo.m_253207_(com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
-                            com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(),
-                            com.mojang.blaze3d.systems.RenderSystem.getShader());
-                    vboDrawn = true;
-                } catch (Throwable t) {
-                    vboDrawn = false; // 驱动异常 → 回退即时棱线（不崩）
-                } finally {
-                    lt.m_110188_(); // clearRenderState
-                }
-            } else if (!VBO_BUILD_PENDING.containsKey(vkey) && !VBO_READY.containsKey(vkey)) {
-                startGhostVboWorker();
-                VBO_BUILD_PENDING.put(vkey, pts);
-                VBO_BUILD_META.put(vkey, new double[]{ox, oy, oz, r, g, b});
-                VBO_BUILD_QUEUE.offer(vkey);
-            }
-        }
-        // 近处填充（≤32 格 3D 距离，最近 2400 盒）
         boolean[] fillSel = null;
         GhostBufferSource ghostSource = null;
-        // 回退棱线（VBO 未就绪/金色预览）：≤64 格、最近 6000 盒
-        int[][] edgeSel = null;
-        double[] edgeDist = null;
         if (total > 0) {
-            java.util.ArrayList<int[]> nearFill = new java.util.ArrayList<>();
-            java.util.ArrayList<int[]> nearEdge = !vboDrawn ? new java.util.ArrayList<>() : null;
+            java.util.ArrayList<int[]> near = new java.util.ArrayList<>();
             for (int i = 0; i < total; i++) {
                 double dx = ox + (int) pts[i * 4] + 0.5 - camera.f_82479_;
                 double dy = oy + (int) pts[i * 4 + 1] + 0.5 - camera.f_82480_;
                 double dz = oz + (int) pts[i * 4 + 2] + 0.5 - camera.f_82481_;
                 double dSq = dx * dx + dy * dy + dz * dz;
                 if (dSq <= 1024.0) {
-                    nearFill.add(new int[]{i, (int) dSq});
-                }
-                if (nearEdge != null && dSq <= 4096.0) {
-                    nearEdge.add(new int[]{i, (int) dSq});
+                    near.add(new int[]{i, (int) dSq});
                 }
             }
-            if (!nearFill.isEmpty()) {
-                nearFill.sort(java.util.Comparator.comparingInt(o -> o[1]));
-                int cap = Math.min(2400, nearFill.size());
+            if (!near.isEmpty()) {
+                near.sort(java.util.Comparator.comparingInt(o -> o[1]));
+                int cap = Math.min(2400, near.size());
                 fillSel = new boolean[total];
                 for (int k = 0; k < cap; k++) {
-                    fillSel[nearFill.get(k)[0]] = true;
+                    fillSel[near.get(k)[0]] = true;
                 }
                 ghostSource = new GhostBufferSource();
             }
-            if (nearEdge != null && !nearEdge.isEmpty()) {
-                nearEdge.sort(java.util.Comparator.comparingInt(o -> o[1]));
-                int cap = Math.min(6000, nearEdge.size());
-                edgeSel = new int[cap][];
-                for (int k = 0; k < cap; k++) {
-                    edgeSel[k] = nearEdge.get(k);
-                }
-            }
         }
+        com.mojang.blaze3d.vertex.VertexConsumer edgeBuf =
+                bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
         int drawn = 0;
         int fillCount = 0;
-        // 回退棱线（VBO 画过的场景这里跳过——全区块线框已由 VBO 提供）
-        com.mojang.blaze3d.vertex.VertexConsumer edgeBuf = null;
-        if (edgeSel != null) {
-            edgeBuf = bufferSource.m_6299_(net.minecraft.client.renderer.RenderType.f_110371_);
-        }
         for (int i = 0; i + 3 < pts.length; i += 4) {
             int bx = (int) pts[i];
             int by = (int) pts[i + 1];
@@ -757,6 +534,9 @@ public final class BlueprintAreaPreview {
             double wx = ox + bx;
             double wy = oy + by;
             double wz = oz + bz;
+            // 棱线（恒定，穿透地形可见——与红框同管线；亮色便于远处辨认）
+            drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
+                    Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
             if (fillSel != null && fillSel[i / 4]) {
                 net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                         wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0).m_82383_(camera);
@@ -767,23 +547,12 @@ public final class BlueprintAreaPreview {
             }
             drawn++;
         }
-        // 回退棱线第二遍绘制（选了最近 6000 盒才画——避免整点多遍线性扫）
-        if (edgeBuf != null && edgeSel != null) {
-            for (int[] sel : edgeSel) {
-                int i = sel[0];
-                double wx = ox + (int) pts[i];
-                double wy = oy + (int) pts[i + 1];
-                double wz = oz + (int) pts[i + 2];
-                drawBoxEdges(pose, edgeBuf, camera, wx, wy, wz, wx + 1.0, wy + 1.0, wz + 1.0,
-                        Math.min(1.0f, r * 1.5f), Math.min(1.0f, g * 1.5f), Math.min(1.0f, b * 1.4f));
-            }
-        }
         // 实测二百零四：每帧一次落的诊断（数量变化/恢复才记，不刷屏）——"还是没显示"
         // 时日志直接区分：没进 drawGhost（0 盒/没到渲染层） vs 进了但客户端看不出
         if (drawn != lastDrawnCount) {
             lastDrawnCount = drawn;
             com.maidsmart.tool.PromaidLog.log("投影", "drawGhost(" + id + ") 盒数="
-                    + drawn + " 填充=" + fillCount + " vbo=" + vboDrawn);
+                    + drawn + " 填充=" + fillCount);
         }
     }
 
