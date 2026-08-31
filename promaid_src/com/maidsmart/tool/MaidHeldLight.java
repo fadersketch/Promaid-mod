@@ -62,6 +62,7 @@ public final class MaidHeldLight {
     private static boolean registered = false;
     private static int tickCounter = 0;
     private static boolean driverLoggedAlive = false;
+    private static boolean driverLoggedNoBlock = false;
 
     private MaidHeldLight() {
     }
@@ -91,6 +92,10 @@ public final class MaidHeldLight {
             LOGGER.info("held-light driver: alive (ServerTick driver registered)");
         }
         if (lightBlock() == null) {
+            if (!driverLoggedNoBlock) {
+                driverLoggedNoBlock = true;
+                LOGGER.error("held light: minecraft:light block unavailable (registry not ready?)");
+            }
             return; // 光块未解析到（极早期/注册表异常）：静默跳过
         }
         net.minecraft.server.MinecraftServer server = event.getServer();
@@ -120,6 +125,10 @@ public final class MaidHeldLight {
                             clearBlock(prev.level(), prev.pos()); // 搬移/换维：旧位先撤
                         }
                         placeBlock(level, pos, light);
+                        if (LIT_LOGGED.add(maid.m_20148_())) {
+                            LOGGER.info("held light: maid={} level={} pos={} (first lit)",
+                                    maid.m_20148_(), light, pos);
+                        }
                     } else if (level.m_8055_(pos).m_60734_() != lightBlock()) {
                         placeBlock(level, pos, light); // 被替换了（罕见）：补回
                     } else {
@@ -167,6 +176,9 @@ public final class MaidHeldLight {
         }
         return 0;
     }
+
+    /** 记录每个女仆首次点亮位置（探针日志：一次/女仆，验证"照亮"确已发生） */
+    private static final java.util.Set<java.util.UUID> LIT_LOGGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     private static void placeBlock(ServerLevel level, net.minecraft.core.BlockPos pos, int light) {
         try {
