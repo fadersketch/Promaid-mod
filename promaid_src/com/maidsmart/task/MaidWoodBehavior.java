@@ -424,8 +424,6 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private static final Map<Integer, Long> NO_BLOCK_REPORT_SINCE = new HashMap<>();
     /** v1.1.0：没有斧头播报限频（实体 ID → 上次播报 tick） */
     private static final Map<Integer, Long> NO_AXE_REPORT_SINCE = new HashMap<>();
-    /** v1.1.0 实测五：树苗补种限频（实体 ID → 上次种植 tick，5 秒一次防连种） */
-    private static final Map<Integer, Long> SAPLING_PLANT_SINCE = new HashMap<>();
     /** v1.1.0 实测六十九：发呆看门狗——最近一次"真实进展"时刻（挖掉/垫了方块）。长时间零进展
      *  且原地不动 = 发呆/死循环，自动整体重置该女仆的全部行为状态（等效收回魂符再放下去——
      *  收放正是靠换实体 ID 让这些以实体 ID 为键的表失效来治好卡死的）。 */
@@ -456,7 +454,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         RECENT_DISCARD.remove(maidEntityId);
         NO_BLOCK_REPORT_SINCE.remove(maidEntityId);
         NO_AXE_REPORT_SINCE.remove(maidEntityId);
-        SAPLING_PLANT_SINCE.remove(maidEntityId);
+        com.maidsmart.task.MaidPlanting.forget(maidEntityId); // 实测二百二十八：随手种树冷却表
         WOOD_CACHE.remove(maidEntityId);
         WOOD_SCANS.remove(maidEntityId); // 实测六十一：分帧扫描游标一并清
         LAST_PROGRESS.remove(maidEntityId); // 实测六十九：看门狗三表一并清
@@ -552,6 +550,8 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private int junkCooldown = 0;
     /** v1.1.0 实测九：身边树叶冲破节流（20 tick 一轮） */
     private int leafBurstCooldown = 0;
+    /** v1.1.0 实测二百二十八：随手种树调起节拍（20 tick 一查，模块内部另有 5 秒冷却） */
+    private int plantScanCooldown = 0;
     /** v1.5.105：走过去重设 WalkTarget 节流——每 tick 重设会让 TLM 每 tick 重寻路 → 移动顿挫 */
     private int walkRetargetCooldown = 0;
     /** v1.5.116：上次设置的移动目标站立点——目标没变且导航行进中不重设
@@ -617,9 +617,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             ids.addAll(RECENT_DISCARD.keySet());
             ids.addAll(NO_BLOCK_REPORT_SINCE.keySet());
             ids.addAll(NO_AXE_REPORT_SINCE.keySet());
-            ids.addAll(SAPLING_PLANT_SINCE.keySet()); // v1.1.0 实测十六（审查 P2）：
-            // 漏加本表 → 只在 SAPLING 表有条目的女仆不在 alive 集里，条目被
-            // 无条件误删 → 5 秒补种限频被 30 秒一次的 purge 反复重置（多耗树苗）
+            ids.addAll(com.maidsmart.task.MaidPlanting.knownIds()); // v1.1.0 实测二百二十八：随手种树表
             ids.addAll(WOOD_CACHE.keySet());
             ids.addAll(LAST_PROGRESS.keySet()); // 实测六十九
             ids.addAll(WATCH_SAMPLE.keySet());
@@ -644,7 +642,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             RECENT_DISCARD.keySet().removeIf(id -> !alive.contains(id));
         NO_BLOCK_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
         NO_AXE_REPORT_SINCE.keySet().removeIf(id -> !alive.contains(id));
-        SAPLING_PLANT_SINCE.keySet().removeIf(id -> !alive.contains(id));
+        com.maidsmart.task.MaidPlanting.purgeStale(pid -> !alive.contains(pid));
             WOOD_CACHE.keySet().removeIf(id -> !alive.contains(id));
             WOOD_SCANS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十一
             LAST_PROGRESS.keySet().removeIf(id -> !alive.contains(id)); // 实测六十九
@@ -852,6 +850,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 && --this.leafBurstCooldown <= 0) {
             this.leafBurstCooldown = 20;
             this.burstNearbyLeaves(level, maid);
+        }
+        // v1.1.0 实测二百二十八【随手种树——独立模块】：种树逻辑在 MaidPlanting
+        // （自己的冷却/范围/拾苗），本行为只负责"伐木模式下周期性调起"（触发 =
+        // 伐木模式；冷却在伐木面板可调）。每 20 tick 调一次，模块内部 5 秒冷却。
+        if (--this.plantScanCooldown <= 0) {
+            this.plantScanCooldown = 20;
+            com.maidsmart.task.MaidPlanting.tick(level, maid);
         }
         // v1.5.47：废石丢弃（每 100 tick 一次；保留 JUNK_KEEP 份，超出销毁）
         if (--this.junkCooldown <= 0) {
@@ -1152,11 +1157,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 树叶清理完全交给 burstNearbyLeaves——它本来就在行为激活期间每 20 tick
         // 以女仆为中心清 3×3×3，女仆走过去自然会"经过"整片树冠逐层清完。
         // （实测九已有的机制，本次让它成为唯一的树叶清理路径）
-        // v1.1.0 实测五（用户："伐木状态下手中有树苗也尝试种下，运作逻辑与插火把类似"）：
-        // 树砍完后在树干原址补种树苗——可持续发展。限频 5 秒（与插火把同思路防连种）；
-        // 背包找任意树苗（ItemNameBlockItem 且方块带 #minecraft:saplings tag），
-        // 种在泥土/草方块上（树干基座被挖后暴露的地面通常正是）。
-        this.tryPlantSapling(level, maid);
+        // v1.1.0 实测二百二十八（用户："种树逻辑直接分开来就好——与伐木不相关"）：
+        // 伐木内部的补种已移除——「随手种树」是独立行为（MaidPlantSaplingBehavior，
+        // 手里有苗+附近有可种土块就种，什么都不干时也种）；本行为回归纯砍树/清叶。
+        // 树叶掉落的树苗仍直接进背包（自动收集开关之外的单品规则），供随手种树取用。
         this.targetPos = null;
         this.destroyProgress = 0.0f;
         this.saveProgressNow(maid);
@@ -1212,110 +1216,13 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测五：树苗补种——树砍完后在树干原址（或其正下方第一格泥土/草）种树苗。
-     * 背包找任意树苗（ItemNameBlockItem 且方块带 #minecraft:saplings 标签——原版
-     * 全部树苗 + 模组树苗自动兼容）；种下消耗 1 个。限频 5 秒（防一棵大树连锁
-     * 砍伐触发多次补种）。找不到合适的地面（基座下方是石头/悬空）就跳过不硬种。
-     * v1.1.0 实测三十（用户："随手种植树苗没做出来"）：补诊断日志（latest.log 搜
-     * "wood sapling"——记录跳过原因：没树苗/没地面/种下），排查"没生效"时可见。
-     * 树苗来源即树叶掉落——树叶破坏掉树苗（getDrops 概率掉落）进背包，砍下一棵
-     * 树时就有苗可种，形成"砍树→掉苗→补种"闭环。
+     * v1.1.0 实测二百二十八：伐木内部的补种已移除——种树逻辑拆成独立模块
+     * （MaidPlanting，自己的 5 秒冷却）仍由本行为调起（触发 = 伐木模式），
+     * 见 tick 内 saplingScanCooldown 调起点。
      */
-    private void tryPlantSapling(ServerLevel level, EntityMaid maid) {
-        long now = level.m_46467_();
-        Long last = SAPLING_PLANT_SINCE.get(maid.m_19879_());
-        // v1.1.0 实测四十九：种树间隔 100 → 50 tick（5 秒→2.5 秒，用户要求减半）
-        if (last != null && now - last < 50L) {
-            return; // 2.5 秒内种过
-        }
-        BlockPos base = this.targetPos;
-        if (base == null) {
-            return;
-        }
-        // 树干原址向下找第一个可种的地面（树干基座本身就是树苗位；树干下方
-        // 可能还有泥土——挖树挖穿的情况）
-        BlockPos plantPos = null;
-        for (int y = 0; y >= -2; y--) {
-            BlockPos p = base.m_7918_(0, y, 0);
-            if (level.m_8055_(p).m_60795_()) {
-                BlockState under = level.m_8055_(p.m_7918_(0, -1, 0));
-                // v1.1.0 实测十六（审查 P3）：扩大可种地面判定——旧版只认 dirt/grass_block，
-                // 雨林/红树/繁茂洞穴等生态的树长在灰化土/苔藓/泥巴/缠根土上不补种。
-                // 改用 #minecraft:dirt 标签（涵盖上述全部变体 + 模组泥土）+ 原版 grass_block
-                if (under.m_204336_(net.minecraft.tags.BlockTags.f_144274_) /* #minecraft:dirt */
-                        || under.m_60713_(Blocks.f_50125_) /* grass_block */) {
-                    plantPos = p;
-                    break;
-                }
-            }
-            if (!level.m_8055_(p).m_60795_()) {
-                break; // 被实心方块挡住，再往下也不是树苗位
-            }
-        }
-        if (plantPos == null) {
-            LOGGER.info("wood sapling skip: maid={} base={} reason=no-ground",
-                    maid.m_20148_(), base);
-            return;
-        }
-        // 背包找树苗
-        int saplingSlot = -1;
-        ItemStack saplingStack = null;
-        try {
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack stack = inv.getStackInSlot(i);
-                if (isSaplingItem(stack)) {
-                    saplingSlot = i;
-                    saplingStack = stack;
-                    break;
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        if (saplingSlot < 0 || saplingStack == null) {
-            // v1.1.0 实测二百二十六：背包无苗 → 先扫原址附近（XZ 8 ∓Y ±8）的树苗
-            // 掉落物捡进背包——伐木期间拾取任务让位，树叶掉的苗常留在地上/树冠上；
-            // 捡到后本 tick 直接再验一遍背包并种下。
-            if (this.pickupNearbySaplings(level, maid, base)) {
-                try {
-                    IItemHandler inv = maid.getMaidInv();
-                    for (int i = 0; i < inv.getSlots(); i++) {
-                        ItemStack stack = inv.getStackInSlot(i);
-                        if (isSaplingItem(stack)) {
-                            saplingSlot = i;
-                            saplingStack = stack;
-                            break;
-                        }
-                    }
-                } catch (Exception ignored) {
-                }
-            }
-            if (saplingSlot < 0 || saplingStack == null) {
-                LOGGER.info("wood sapling skip: maid={} base={} reason=no-sapling-in-inventory",
-                        maid.m_20148_(), base);
-                return; // 背包没有树苗（附近也没有掉落物）
-            }
-        }
-        Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) saplingStack.m_41720_()).m_40614_();
-        level.m_7731_(plantPos, saplingBlock.m_49966_(), 3);
-        // 种下音效+粒子（levelEvent 2001——玩家种树苗同款反馈）
-        level.m_46796_(2001, plantPos, Block.m_49956_(saplingBlock.m_49966_()));
-        // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
-        // 返回栈，若 handler 返回副本则 m_41774_(1) 扣不掉背包（无限补种刷方块）；
-        // 与本工程其他消耗点（搭路/药水/图腾）统一口径
-        try {
-            maid.getMaidInv().extractItem(saplingSlot, 1, false);
-        } catch (Exception ignored) {
-        }
-        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-        SAPLING_PLANT_SINCE.put(maid.m_19879_(), now);
-        LOGGER.info("wood sapling planted: maid={} pos={} sapling={}",
-                maid.m_20148_(), plantPos,
-                ForgeRegistries.BLOCKS.getKey(saplingBlock));
-    }
 
     /** 实测二百二十六：是否为树苗物品（ItemNameBlockItem 且方块带 #minecraft:saplings——
-     *  原版全部树苗 + 模组树苗自动兼容；背包扫描/树叶掉落分类/地面拾取共用）。 */
+     *  原版全部树苗 + 模组树苗自动兼容；树叶掉落分类用）。 */
     private static boolean isSaplingItem(ItemStack stack) {
         try {
             if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
@@ -1326,38 +1233,6 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
             return false;
         }
-    }
-
-    /** 实测二百二十六：拾取原址附近（XZ 8 格 × Y ±8 格）的树苗掉落物进背包——
-     *  伐木期间拾取任务让位，树叶掉落的苗常留在地上/树冠上（日志实证每次补种
-     *  都在 skip=no-sapling）；捡到任一返回 true（本 tick 调用方会再验背包）。 */
-    private boolean pickupNearbySaplings(ServerLevel level, EntityMaid maid, BlockPos base) {
-        boolean picked = false;
-        try {
-            net.minecraft.world.phys.AABB box =
-                    new net.minecraft.world.phys.AABB(base).m_82400_(10.0);
-            for (net.minecraft.world.entity.item.ItemEntity e :
-                    level.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, box)) {
-                if (e == null || !e.m_6084_()) {
-                    continue;
-                }
-                double dx = e.m_20185_() - (base.m_123341_() + 0.5);
-                double dy = e.m_20186_() - (base.m_123342_() + 0.5);
-                double dz = e.m_20189_() - (base.m_123343_() + 0.5);
-                if (Math.abs(dx) > 8.0 || Math.abs(dy) > 8.0 || Math.abs(dz) > 8.0) {
-                    continue;
-                }
-                if (isSaplingItem(e.m_32055_())) {
-                    try {
-                        maid.pickupItem(e, false);
-                        picked = true;
-                    } catch (Exception ignored) {
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return picked;
     }
 
     /**
