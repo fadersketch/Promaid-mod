@@ -1264,11 +1264,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
-                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
-                    continue;
-                }
-                Block b = ((net.minecraft.world.item.ItemNameBlockItem) stack.m_41720_()).m_40614_();
-                if (b != null && b.m_49966_().m_204336_(SAPLINGS_TAG)) {
+                if (isSaplingItem(stack)) {
                     saplingSlot = i;
                     saplingStack = stack;
                     break;
@@ -1277,9 +1273,28 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         if (saplingSlot < 0 || saplingStack == null) {
-            LOGGER.info("wood sapling skip: maid={} base={} reason=no-sapling-in-inventory",
-                    maid.m_20148_(), base);
-            return; // 背包没有树苗
+            // v1.1.0 实测二百二十六：背包无苗 → 先扫原址附近（XZ 8 ∓Y ±8）的树苗
+            // 掉落物捡进背包——伐木期间拾取任务让位，树叶掉的苗常留在地上/树冠上；
+            // 捡到后本 tick 直接再验一遍背包并种下。
+            if (this.pickupNearbySaplings(level, maid, base)) {
+                try {
+                    IItemHandler inv = maid.getMaidInv();
+                    for (int i = 0; i < inv.getSlots(); i++) {
+                        ItemStack stack = inv.getStackInSlot(i);
+                        if (isSaplingItem(stack)) {
+                            saplingSlot = i;
+                            saplingStack = stack;
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (saplingSlot < 0 || saplingStack == null) {
+                LOGGER.info("wood sapling skip: maid={} base={} reason=no-sapling-in-inventory",
+                        maid.m_20148_(), base);
+                return; // 背包没有树苗（附近也没有掉落物）
+            }
         }
         Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) saplingStack.m_41720_()).m_40614_();
         level.m_7731_(plantPos, saplingBlock.m_49966_(), 3);
@@ -1297,6 +1312,52 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         LOGGER.info("wood sapling planted: maid={} pos={} sapling={}",
                 maid.m_20148_(), plantPos,
                 ForgeRegistries.BLOCKS.getKey(saplingBlock));
+    }
+
+    /** 实测二百二十六：是否为树苗物品（ItemNameBlockItem 且方块带 #minecraft:saplings——
+     *  原版全部树苗 + 模组树苗自动兼容；背包扫描/树叶掉落分类/地面拾取共用）。 */
+    private static boolean isSaplingItem(ItemStack stack) {
+        try {
+            if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ItemNameBlockItem)) {
+                return false;
+            }
+            Block b = ((net.minecraft.world.item.ItemNameBlockItem) stack.m_41720_()).m_40614_();
+            return b != null && b.m_49966_().m_204336_(SAPLINGS_TAG);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** 实测二百二十六：拾取原址附近（XZ 8 格 × Y ±8 格）的树苗掉落物进背包——
+     *  伐木期间拾取任务让位，树叶掉落的苗常留在地上/树冠上（日志实证每次补种
+     *  都在 skip=no-sapling）；捡到任一返回 true（本 tick 调用方会再验背包）。 */
+    private boolean pickupNearbySaplings(ServerLevel level, EntityMaid maid, BlockPos base) {
+        boolean picked = false;
+        try {
+            net.minecraft.world.phys.AABB box =
+                    new net.minecraft.world.phys.AABB(base).m_82400_(10.0);
+            for (net.minecraft.world.entity.item.ItemEntity e :
+                    level.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, box)) {
+                if (e == null || !e.m_6084_()) {
+                    continue;
+                }
+                double dx = e.m_20185_() - (base.m_123341_() + 0.5);
+                double dy = e.m_20186_() - (base.m_123342_() + 0.5);
+                double dz = e.m_20189_() - (base.m_123343_() + 0.5);
+                if (Math.abs(dx) > 8.0 || Math.abs(dy) > 8.0 || Math.abs(dz) > 8.0) {
+                    continue;
+                }
+                if (isSaplingItem(e.m_32055_())) {
+                    try {
+                        maid.pickupItem(e, false);
+                        picked = true;
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return picked;
     }
 
     /**
@@ -1328,8 +1389,16 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                         if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
                             insertIntoMaidInventory(maid, level, drops, p);
                         } else {
+                            // v1.1.0 实测二百二十六（用户："女仆并不会种植树苗"）：树苗
+                            // 永远直进背包（其余掉落物遵循自动收集开关）——树苗是"砍树→
+                            // 掉苗→补种"闭环的种子，落地后伐木中拾取任务让位、大概率捡
+                            // 不到（日志实证：每次补种都 skip=no-sapling-in-inventory）
                             for (ItemStack s : drops) {
-                                Block.m_49840_(level, p, s);
+                                if (isSaplingItem(s)) {
+                                    insertIntoMaidInventory(maid, level, java.util.List.of(s), p);
+                                } else {
+                                    Block.m_49840_(level, p, s);
+                                }
                             }
                         }
                         level.m_7731_(p, Blocks.f_50016_.m_49966_(), 3);
@@ -1506,11 +1575,38 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // 目标的"站立点"全是导航去不了的空中格（findStandNearWood 兜底已删，
             // 但 walkTargetFor 仍可能选出树冠里的悬空格），走到垃圾目标 = 发呆。
             // 等待期间 15 秒目标超时照常生效（够不着且零进度 → 弃置换树）
+            // v1.1.0 实测二百二十六：水平偏开时的"原地等"修正——旧版 above == t 无
+            // 条件等待：女仆站在树干旁 1~2 格时"等"= 站到超时/看门狗重置循环。
+            // 现在她水平偏开 >1 格就先走到【树干柱底最近可站格】（她已挖穿的树洞
+            // 底部或柱下地面——可站格沿柱向下找，第一个空气且脚下有支撑的格），
+            // 走位到正下方后挖掘入口自然接管（正头上方木材伸手可及）。
             BlockPos above = this.firstWoodAbove(level, maid);
             if (above != null) {
                 if (!above.equals(t)) {
                     this.targetPos = above;
                     TARGET_SINCE.put(maid.m_19879_(), level.m_46467_());
+                    return;
+                }
+                double hx2 = t.m_123341_() + 0.5 - maid.m_20185_();
+                double hz2 = t.m_123343_() + 0.5 - maid.m_20189_();
+                if (Math.sqrt(hx2 * hx2 + hz2 * hz2) > 1.0) {
+                    BlockPos stand = null;
+                    for (int dy2 = -1; dy2 >= -10; dy2--) {
+                        BlockPos c = t.m_7918_(0, dy2, 0);
+                        if (level.m_8055_(c).m_60795_()) {
+                            BlockPos uc = c.m_7918_(0, -1, 0);
+                            if (!level.m_8055_(uc).m_60795_()
+                                    && level.m_8055_(uc).m_60796_(level, uc)) {
+                                stand = c;
+                            }
+                            break;
+                        }
+                    }
+                    if (stand == null) {
+                        this.walkToWoodBase(level, maid, t);
+                    } else {
+                        this.setWalkTarget(maid, stand, approachSpeed(maid, t));
+                    }
                 }
                 return;
             }
@@ -1554,22 +1650,36 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测四十七：找女仆头顶正上方（同柱）最近的木材块（最多 8 格）。
+     * v1.1.0 实测四十七：找女仆头顶上方（同列）最近的木材块（最多 10 格）。
      * 用于"站树洞里头顶就是树干"场景——pillarUpStep 防窒息拒绝垫块时，
      * 改挖头顶树干逐节往上啃，不再站桩发呆。
      * v1.1.0 实测一百一十九：起始 dy 2 → 1——树基的木头被砍掉后女仆站进树洞，
      * 下一根木头就在她【头平齐】的 dy=1 处（不是 2），旧版从 dy=2 起跳会漏掉
      * 它：扫描/链式都给不出目标时对着近在咫尺的头顶木头发呆。
+     * v1.1.0 实测二百二十六（用户："对树上比自己高几格的木头站在木头下一动不动"）：
+     * 旧版只搜【女仆自己所在列】——站在树干旁 1~2 格（走位/寻路落点差一格、从树冠
+     * 上滑落）时头顶列是空气/树叶，找不到木材 → 搭高失败后跌回 walkToWoodBase
+     * （最近可站格恰是她脚下）→ 原地站到 15 秒超时/看门狗重置 → 反复循环。
+     * 改为【5×5 列簇】：离女仆最近的列（|dx|+|dz| 环序）优先、列内 dy 从 1 起——
+     * 覆盖"站在树干旁一两格"的全部场景；找到后设为目标即可正常挖（无需垫块）。
      */
     private BlockPos firstWoodAbove(ServerLevel level, EntityMaid maid) {
         BlockPos feet = maid.m_20183_();
-        for (int dy = 1; dy <= 10; dy++) {
-            BlockPos p = feet.m_7918_(0, dy, 0);
-            // v1.1.0 实测六十九：被硬挡路弃置的不回选（否则「抬头选中→硬挡弃置→再抬头」
-            // 死循环，站在树洞里永远出不来）
-            if (this.isWood(level, p) && !isWoodingPlaced(level, p)
-                    && !this.blockedWoods.contains(p)) {
-                return p;
+        int[][] colOrder = {{0, 0},
+                {1, 0}, {-1, 0}, {0, 1}, {0, -1},
+                {1, 1}, {-1, 1}, {1, -1}, {-1, -1},
+                {2, 0}, {-2, 0}, {0, 2}, {0, -2},
+                {2, 1}, {1, 2}, {-1, 2}, {-2, 1}, {-2, -1}, {-1, -2}, {1, -2}, {2, -1},
+                {2, 2}, {-2, 2}, {-2, -2}, {2, -2}};
+        for (int[] off : colOrder) {
+            for (int dy = 1; dy <= 10; dy++) {
+                BlockPos p = feet.m_7918_(off[0], dy, off[1]);
+                // v1.1.0 实测六十九：被硬挡路弃置的不回选（否则「抬头选中→硬挡弃置→再抬头」
+                // 死循环，站在树洞里永远出不来）
+                if (this.isWood(level, p) && !isWoodingPlaced(level, p)
+                        && !this.blockedWoods.contains(p)) {
+                    return p;
+                }
             }
         }
         return null;
