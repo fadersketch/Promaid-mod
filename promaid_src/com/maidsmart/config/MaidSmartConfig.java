@@ -1184,12 +1184,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
-        // 稍微快一点，然后改方块滞留时间"）：原版无放置冷却，玩家持续搭约 4~6 块/秒
-        //（人手点击上限）。默认 8→5 tick/块（≈4 块/秒，玩家区间中值）——配合
-        // placedLifetime 默认 2 秒 = 稳态最多 8 块同时存在（2s × 4块/s，实测一百二十一
-        // 的"≤8 块"目标，纯数学不做额外机制）
+        // 稍微快一点"）：原版无放置冷却，玩家持续搭约 4~6 块/秒（人手点击上限）。
+        // 实测二百一十五（用户"搭建速度过快容易失足摔死——降低默认搭建速度"）：
+        // 默认定格 4 tick/块（≈5 块/秒，只比玩家快一档）；2 tick ≈10 块/秒太快
         BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 4）：每垫一块方块的最短间隔——越小铺得越快（默认 4 tick ≈ 5 块/秒 = 比玩家手速 4~6 块/秒略快一点点；2 tick ≈ 10 块/秒太快，连续跳块容易失足摔死）")
-                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 2, 2, 40);
+                .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 4, 2, 40);
         BRIDGE_PLACED_LIFETIME = BUILDER.comment("搭路方块清理时间（秒，默认 3）：垫的方块放置 N 秒后自动变掉落物回收（女仆站在上面时延后）——与搭块速度联动：默认节奏下同时存在约 20~30 块，不会堆积成片")
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
@@ -1317,7 +1316,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
     // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
-    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认关）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭（默认）= 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（v1.1.0 实测一百七十：用户反馈\"排班后任务不变化、时间流逝任务不随段切换\"——旧默认的没活不切把女仆钉死在原地）")
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认开，实测二百零二同步为你当前配置值）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭 = 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（实测一百七十档案：旧默认的\"没活不切\"曾把女仆钉死在原地、任务不随段切换——若发现排班任务不切换，先把本项关掉）")
             .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
     MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
             .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
