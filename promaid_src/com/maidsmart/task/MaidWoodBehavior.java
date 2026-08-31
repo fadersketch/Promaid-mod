@@ -550,8 +550,6 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private int junkCooldown = 0;
     /** v1.1.0 实测九：身边树叶冲破节流（20 tick 一轮） */
     private int leafBurstCooldown = 0;
-    /** v1.1.0 实测二百二十八：随手种树调起节拍（20 tick 一查，模块内部另有 5 秒冷却） */
-    private int plantScanCooldown = 0;
     /** v1.5.105：走过去重设 WalkTarget 节流——每 tick 重设会让 TLM 每 tick 重寻路 → 移动顿挫 */
     private int walkRetargetCooldown = 0;
     /** v1.5.116：上次设置的移动目标站立点——目标没变且导航行进中不重设
@@ -851,13 +849,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             this.leafBurstCooldown = 20;
             this.burstNearbyLeaves(level, maid);
         }
-        // v1.1.0 实测二百二十八【随手种树——独立模块】：种树逻辑在 MaidPlanting
-        // （自己的冷却/范围/拾苗），本行为只负责"伐木模式下周期性调起"（触发 =
-        // 伐木模式；冷却在伐木面板可调）。每 20 tick 调一次，模块内部 5 秒冷却。
-        if (--this.plantScanCooldown <= 0) {
-            this.plantScanCooldown = 20;
-            com.maidsmart.task.MaidPlanting.tick(level, maid);
-        }
+        // v1.1.0 实测二百三十三：随手种树的调起点已从行为 tick 移除——种树由
+        // MaidPlanting 自驱动（ServerTickEvent 每 2 秒扫"任务=伐木"的女仆），
+        // 行为只负责砍树/清叶；触发仍是伐木模式（判定在模块内按任务 UID）。
         // v1.5.47：废石丢弃（每 100 tick 一次；保留 JUNK_KEEP 份，超出销毁）
         if (--this.junkCooldown <= 0) {
             this.junkCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_JUNK_CHECK_INTERVAL.get();
