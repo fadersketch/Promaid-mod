@@ -1915,10 +1915,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿 */
+    /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿。
+     *  v1.1.0 实测二百三十一：含手部栏（主/副手）——手里拿的方块也能垫（审计修复） */
     private Item takeBuildBlock(EntityMaid maid) {
         // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
-        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(maid.getMaidInv(), null, null);
+        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
+                maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);
     }
 
     @Override
