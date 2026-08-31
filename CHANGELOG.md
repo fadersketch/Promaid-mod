@@ -1,5 +1,17 @@
 ﻿# 更新日志
 
+## 实测二百三十七（终局：种树不生效的全部真相——ClassCastException 每次扫描都炸，被静默吞掉）
+
+- 【日志铁证】236 的 error 日志立刻抓到：
+  ```
+  java.lang.ClassCastException: class BlockItem cannot be cast to class ItemNameBlockItem
+      at MaidPlanting.tick(MaidPlanting.java:230)
+  ```
+- 【根因】`#minecraft:saplings` 物品标签（参考 maid_useful_task 抄来的口径）除了常规树苗（ItemNameBlockItem）外还涵盖 **mangrove_propagule 等普通 BlockItem 子类**（模组树苗也可能是普通 BlockItem）——`isSaplingItem` 的物品标签分支不验类型把它放行，最后一步"(ItemNameBlockItem) 强转取方块"当场抛出 → 每次扫描（每 2 秒）都在这里崩溃、被 catch 静默 → **"驱动活着、认得到伐木任务、却一行 plant scan 都不出"** 的完整闭环
+- 【修复】①`isSaplingItem` 物品标签分支加 BlockItem 类型校验（非方块物品标签命中不算树苗）；②种植取方块强转 `ItemNameBlockItem` → **`BlockItem`**（两者都是其子类，propagule/模组苗都能种）
+- 【连带】此异常之前也破坏了"她包里到底有没有苗"的计数/搜索——修复后一切正常化
+- 测试：退出游戏 → 部署 4,780,051 → 重启 → 给她手里/包里放任意树苗（云杉/红树幼苗均可）→ 应出现 `plant scan … result=planted` + `plant sapling`
+
 ## 实测二百三十六（235 重启复测：驱动活着且认到伐木任务，但 plant scan 仍零输出 → 诊断终极化）
 
 - 【进展】235 修好注册后，日志实证：`plant driver: alive` ✓ + `held-light driver: alive` ✓ + `plant driver: sees woodcut maid … task=maid_smart:woodcut` ✓——驱动在跑、认到了伐木任务，但 `plant scan` 依然零输出 = **tick() 内部某处异常被静默吞掉**（235 的 catch 全是 `Exception ignored`）
