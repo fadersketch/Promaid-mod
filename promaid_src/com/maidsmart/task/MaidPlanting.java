@@ -35,6 +35,8 @@ public final class MaidPlanting {
 
     /** 冷却表（女仆实体 ID → 上次种植/尝试 tick），默认 100 tick = 5 秒 */
     private static final java.util.Map<Integer, Long> PLANT_SINCE = new java.util.HashMap<>();
+    /** 跳过原因日志限频表（女仆实体 ID → 上次记录 tick，60 秒一条防刷屏） */
+    private static final java.util.Map<Integer, Long> PLANT_LOG_SINCE = new java.util.HashMap<>();
 
     private MaidPlanting() {
     }
@@ -68,29 +70,26 @@ public final class MaidPlanting {
                 return; // 冷却中
             }
             PLANT_SINCE.put(id, now + cd); // 无论成败都进冷却（避免每 20 tick 全量扫描）
-            // 1) 树苗：背包优先，其次捡身边掉落物
-            int slot = -1;
-            ItemStack sapling = null;
-            try {
-                net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
-                for (int i = 0; i < inv.getSlots(); i++) {
-                    ItemStack stack = inv.getStackInSlot(i);
-                    if (isSaplingItem(stack)) {
-                        slot = i;
-                        sapling = stack;
-                        break;
-                    }
-                }
-            } catch (Exception ignored) {
+            // 1) 树苗：主手 → 副手 → 背包；都没有才捡身边掉落物
+            // 实测二百三十（用户："女仆手中拿的是云杉树苗"）：旧版只扫背包
+            // （getMaidInv），手拿苗永远判"没苗"——手的槽位在独立手部栏
+            int handSlot = -1;
+            int bagSlot = -1;
+            if (isSaplingItem(maid.m_21205_())) {
+                handSlot = 0; // 主手
+            } else if (isSaplingItem(maid.m_21206_())) {
+                handSlot = 1; // 副手
             }
-            if (sapling == null) {
-                pickupNearbySaplings(level, maid, maid.m_20183_());
+            net.minecraft.world.item.ItemStack sapling = null;
+            if (handSlot >= 0) {
+                sapling = handSlot == 0 ? maid.m_21205_() : maid.m_21206_();
+            } else {
                 try {
                     net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
                         if (isSaplingItem(stack)) {
-                            slot = i;
+                            bagSlot = i;
                             sapling = stack;
                             break;
                         }
@@ -99,19 +98,41 @@ public final class MaidPlanting {
                 }
             }
             if (sapling == null) {
+                pickupNearbySaplings(level, maid, maid.m_20183_());
+                try {
+                    net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                    for (int i = 0; i < inv.getSlots(); i++) {
+                        ItemStack stack = inv.getStackInSlot(i);
+                        if (isSaplingItem(stack)) {
+                            bagSlot = i;
+                            sapling = stack;
+                            break;
+                        }
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+            if (sapling == null) {
+                logSkip(level, maid, "no-sapling");
                 return; // 没苗：冷却后重试
             }
             // 2) 找最近的可种地块
             net.minecraft.core.BlockPos spot = findPlantSpot(level, maid);
             if (spot == null) {
+                logSkip(level, maid, "no-spot");
                 return; // 范围内没有可种土块：冷却后重试
             }
-            // 3) 种下
+            // 3) 种下（消耗对应来源格：手部栏 extractItem / 背包 extractItem）
             Block saplingBlock = ((net.minecraft.world.item.ItemNameBlockItem) sapling.m_41720_()).m_40614_();
             level.m_7731_(spot, saplingBlock.m_49966_(), 3);
             level.m_46796_(2001, spot, Block.m_49956_(saplingBlock.m_49966_()));
             try {
-                maid.getMaidInv().extractItem(slot, 1, false);
+                if (handSlot >= 0) {
+                    ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
+                            .extractItem(handSlot, 1, false);
+                } else {
+                    maid.getMaidInv().extractItem(bagSlot, 1, false);
+                }
             } catch (Exception ignored) {
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -121,8 +142,27 @@ public final class MaidPlanting {
         }
     }
 
-    /** 身边（半径 RADIUS、垂直 ±2）最近的可种地块：空气 + 脚下 #minecraft:dirt/草方块 +
-     *  格内无存活实体占用 + 不是女仆自己站的那格。 */
+    /** v1.1.0 实测二百三十（用户："还是不会随手种一棵树——看运行日志"）：失败原因落日志
+     *  （60 秒限频/女仆）——"没苗"还是"没土块"一目了然；成功永远记。 */
+    private static void logSkip(ServerLevel level, EntityMaid maid, String reason) {
+        try {
+            long now = level.m_46467_();
+            Long last = PLANT_LOG_SINCE.get(maid.m_19879_());
+            if (last != null && now - last < 1200L) {
+                return;
+            }
+            PLANT_LOG_SINCE.put(maid.m_19879_(), now);
+            LOGGER.info("plant scan: maid={} reason={} pos={}", maid.m_20148_(), reason, maid.m_20183_());
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * 身边（半径 RADIUS、垂直 ±2）最近的可种地块：空气 + 脚下 #minecraft:dirt/草方块 +
+     * 格内无存活实体占用。允许【女仆自己站的那格】——树洞/洞穴树桩场景下该格往往是
+     * 唯一有泥土的下方格（1×1 树桩窝），排除它永远找不到种点（v1.1.0 实测二百三十）。
+     * 种进自己脚下格后该格变非空气，后续扫描自然跳过，不会原地重复种。
+     */
     private static net.minecraft.core.BlockPos findPlantSpot(ServerLevel level, EntityMaid maid) {
         net.minecraft.core.BlockPos feet = maid.m_20183_();
         net.minecraft.core.BlockPos best = null;
@@ -131,9 +171,6 @@ public final class MaidPlanting {
             for (int dz = -RADIUS; dz <= RADIUS; dz++) {
                 for (int dy = -2; dy <= 2; dy++) {
                     net.minecraft.core.BlockPos p = feet.m_7918_(dx, dy, dz);
-                    if (p.equals(feet)) {
-                        continue; // 自己的脚底格不种（会把自己种在树苗里）
-                    }
                     if (!level.m_8055_(p).m_60795_()) {
                         continue; // 格内已被占用
                     }
@@ -143,7 +180,12 @@ public final class MaidPlanting {
                             || under.m_60713_(net.minecraft.world.level.block.Blocks.f_50125_) /* grass_block */)) {
                         continue;
                     }
-                    // 格内无存活实体占用（防把苗种进别的女仆/怪物身体）
+                    if (p.equals(feet)) {
+                        // 她正站着的格：允许（树洞树桩格），排除原则见上——直接选中
+                        best = p;
+                        break;
+                    }
+                    // 其他格：无存活实体占用（防把苗种进别的女仆/怪物身体）
                     net.minecraft.world.phys.AABB cellBox =
                             new net.minecraft.world.phys.AABB(p.m_123341_(), p.m_123342_(), p.m_123343_(),
                                     p.m_123341_() + 1.0, p.m_123342_() + 1.0, p.m_123343_() + 1.0);
@@ -162,7 +204,8 @@ public final class MaidPlanting {
         return best;
     }
 
-    /** 捡起身边（XZ 6 × Y ±6）掉落在地上的树苗（伐木中拾取任务让位，树叶掉的苗捡不到） */
+    /** 捡起身边（XZ 6 × Y -6..+12）掉落在地上的树苗（伐木中拾取任务让位，树叶掉的
+     *  苗捡不到；垂直向下放宽向上收——腐烂/掉落的苗常落在头顶树冠上，+12 才够得着） */
     private static void pickupNearbySaplings(ServerLevel level, EntityMaid maid, net.minecraft.core.BlockPos base) {
         try {
             net.minecraft.world.phys.AABB box =
@@ -175,7 +218,7 @@ public final class MaidPlanting {
                 double dx = e.m_20185_() - (base.m_123341_() + 0.5);
                 double dy = e.m_20186_() - (base.m_123342_() + 0.5);
                 double dz = e.m_20189_() - (base.m_123343_() + 0.5);
-                if (Math.abs(dx) > RADIUS || Math.abs(dy) > RADIUS || Math.abs(dz) > RADIUS) {
+                if (Math.abs(dx) > RADIUS || Math.abs(dz) > RADIUS || dy < -6.0 || dy > 12.0) {
                     continue;
                 }
                 if (isSaplingItem(e.m_32055_())) {
