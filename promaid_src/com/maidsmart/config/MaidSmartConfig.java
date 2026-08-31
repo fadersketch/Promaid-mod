@@ -114,7 +114,9 @@ public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ForgeConfigSpec.BooleanValue WOOD_CHAIN_MINING;
     public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
     public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
-public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
+    public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
+    /** v1.1.0 实测二百二十八：随手种树冷却（伐木面板可调，默认 100 tick = 5 秒） */
+    public static final ForgeConfigSpec.IntValue WOOD_PLANT_SAPLING_COOLDOWN;
 
     // ================= AI 记忆 =================
     public static final ForgeConfigSpec.BooleanValue MEMORY_ENABLE;
@@ -696,6 +698,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 // v1.1.0 实测五十四：4→2；实测二百一十五：默认回到 4——连续高速垫块
                 // 容易失足摔死，与搭路节奏（4 tick）统一，只比玩家手速略快一点点
                 .defineInRange("pillarCooldown", 4, 1, 20);
+        // v1.1.0 实测二百二十八（用户："种树 CD 差不多五秒左右，可以在伐木面板调"）：
+        // 随手种树——独立模块（MaidPlanting），触发 = 伐木模式（伐木行为每 20 tick 调起）
+        WOOD_PLANT_SAPLING_COOLDOWN = BUILDER.comment("补种树苗冷却（tick，默认 100≈5 秒）：她手上有树苗、附近（半径 6 格）有可种土块时随手种一棵，两次种植最短间隔；调小种得更勤（树苗消耗也更快）")
+                .translation("config.promaid.wood.plantSaplingCooldown").defineInRange("plantSaplingCooldown", 100, 20, 600);
         WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.wood.junkCheckInterval").defineInRange("junkCheckInterval", 100, 20, 400);
         // v1.1.0 实测六十一（借鉴 TLM-Sincerely 预算制探测）：全量扫描分帧执行
