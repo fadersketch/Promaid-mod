@@ -1277,7 +1277,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.WOOD_RELOCATE_THROTTLE, s), "重定位节流（tick，防边界抖动）"));
         this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.WOOD_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
-        // v1.1.0 实测二百二十八：随手种树冷却（用户指定：CD ~5 秒、在伐木面板调）
+        // v1.1.0 实测二百二十八/二百二十九：随手种树开关 + 冷却（用户：CD ~5 秒、面板可调、开关默认开）
+        this.rows.add(new BoolRow("随手种树", MaidSmartConfig.WOOD_PLANT_SAPLING_ENABLED.get(),
+                v -> MaidSmartConfig.WOOD_PLANT_SAPLING_ENABLED.set(v), "随手种树（默认开）：她手上有树苗、附近半径 6 格有可种土块时随手种一棵（触发 = 伐木模式，独立模块）；关闭 = 只砍树不种树"));
         this.rows.add(new NumRow("补种树苗冷却（tick）", String.valueOf(MaidSmartConfig.WOOD_PLANT_SAPLING_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.WOOD_PLANT_SAPLING_COOLDOWN, s), "补种树苗冷却（tick，默认 100≈5 秒）：她手上有树苗、附近半径 6 格有可种土块时随手种一棵（伐木模式下触发，独立模块）；调小种得更勤、树苗消耗更快"));
         this.rows.add(new NumRow("废石清理间隔（tick）", String.valueOf(MaidSmartConfig.WOOD_JUNK_CHECK_INTERVAL.get()),

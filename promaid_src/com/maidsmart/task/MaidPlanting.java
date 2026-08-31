@@ -54,9 +54,12 @@ public final class MaidPlanting {
         PLANT_SINCE.keySet().removeIf(id -> !aliveChecker.test(id));
     }
 
-    /** 由伐木行为每 20 tick 调起；内部 5 秒冷却。 */
+    /** 由伐木行为每 20 tick 调起；内部 5 秒冷却；总开关 wood.plantSaplingEnabled（默认开）。 */
     public static void tick(ServerLevel level, EntityMaid maid) {
         try {
+            if (!com.maidsmart.config.MaidSmartConfig.WOOD_PLANT_SAPLING_ENABLED.get()) {
+                return; // 开关关闭：只砍树不种树
+            }
             int id = maid.m_19879_();
             long now = level.m_46467_();
             Long last = PLANT_SINCE.get(id);
