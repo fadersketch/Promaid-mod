@@ -703,8 +703,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.scanBudget").defineInRange("scanBudget", 4096, 256, 65536);
         WOOD_SKIP_REPORT_INTERVAL = BUILDER.comment("跳过木材/被挡住播报间隔（tick，防刷屏）")
                 .translation("config.promaid.wood.skipReportInterval").defineInRange("skipReportInterval", 600, 100, 2400);
-        WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
-                .translation("config.promaid.wood.chainMining").define("chainMining", false);
+    WOOD_CHAIN_MINING = BUILDER.comment("连锁砍伐（同一棵树的相连木材一次砍完——树干天然相连，默认开启）")
+            .translation("config.promaid.wood.chainMining").define("chainMining", true);
         WOOD_AUTO_COLLECT = BUILDER.comment("自动收集（砍伐掉落物直接进女仆背包，不进世界）")
                 .translation("config.promaid.wood.autoCollect").define("autoCollect", false);
         WOOD_CHAIN_LIMIT = BUILDER.comment("连锁砍伐上限（块）：一次连锁砍伐的最大方块数")
