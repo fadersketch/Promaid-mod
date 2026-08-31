@@ -588,8 +588,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板添加矿物的默认价值")
                 .translation("config.promaid.mine.creativeDefaultValue")
                 .defineInRange("creativeDefaultValue", 300, 10, 1000);
-        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认开）：女仆能发现视线被方块挡住的矿物并挖通开路；关闭后像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
-                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", true);
+        MINE_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找矿，默认关）：开启后女仆能发现视线被方块挡住的矿物并挖通开路；关闭（默认）后像玩家一样只能发现视线无阻的矿物——除水/岩浆外任何方块都挡视线，被挡的矿不可见、不报点，也不会隔墙挖穿；已经看得见的矿，身前有可挖障碍物照常挖穿开路")
+                .translation("config.promaid.mine.seekThroughWalls").define("seekThroughWalls", false);
         MINE_ANCHOR_TIMEOUT = BUILDER.comment("锚点出框超时（tick，出框超过此时长重埋锚点）")
                 .translation("config.promaid.mine.anchorTimeout")
                 .defineInRange("anchorTimeout", 200, 40, 1200);
@@ -1296,7 +1296,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.logEnabled").define("logEnabled", true);
     // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
-    MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
+    // v1.1.0 实测二百二十七（用户："所有连锁采集默认为开启"）：默认值保持开并注明
+    MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（默认开：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
             .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
     MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
             .translation("config.promaid.misc.autoCollect").define("autoCollect", false);
