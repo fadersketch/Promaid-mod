@@ -1,5 +1,12 @@
 ﻿# 更新日志
 
+## 实测二百三十六（235 重启复测：驱动活着且认到伐木任务，但 plant scan 仍零输出 → 诊断终极化）
+
+- 【进展】235 修好注册后，日志实证：`plant driver: alive` ✓ + `held-light driver: alive` ✓ + `plant driver: sees woodcut maid … task=maid_smart:woodcut` ✓——驱动在跑、认到了伐木任务，但 `plant scan` 依然零输出 = **tick() 内部某处异常被静默吞掉**（235 的 catch 全是 `Exception ignored`）
+- 【诊断升级】①`plant scan` 去掉 20 秒节流——每次扫描（每 2 秒）都落账；②驱动 per-maid catch 与整轮 catch、tick 的 catch 全部从"静默"改为 `LOGGER.error`（带堆栈）——任何异常直接现形
+- 【护栏实证】本次部署时游戏正运行 → deploy69 **按设计拒绝**（"Minecraft/Java 进程正在运行（1 个）"），未覆盖运行中的 jar——混态崩溃路径已被堵死
+- 待办：退出游戏 → 部署 4,780,029 → 重启 → 搜 `plant scan`（必有结果行）+ 任何 `plant driver error`/`plant tick error` 堆栈——下一步按日志定向
+
 ## 实测二百三十五（用户复测：种树仍不生效；火把/灵魂火把/红石火把持在手中不发光 → 定位总根因）
 
 - 【日志实证】12:00 会话伐木行为正常跑（wood behavior start 12:01/12:03、stuck-reset 12:02）但 `plant scan` 零输出、持光也无效果——两个自监听 ServerTick 的驱动（种树/持光）**根本没被触发**

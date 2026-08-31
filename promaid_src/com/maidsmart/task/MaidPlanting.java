@@ -38,19 +38,11 @@ public final class MaidPlanting {
     /** 跳过原因日志限频表（女仆实体 ID → 上次记录 tick，60 秒一条防刷屏） */
     private static final java.util.Map<Integer, Long> PLANT_LOG_SINCE = new java.util.HashMap<>();
 
-    /** v1.1.0 实测二百三十一（用户："明明包里也有，那为什么不种呢？"——超平坦地表
-     *  草方块，洞穴判定错误）：每次冷却跳表的尝试都带完整状态落日志（20 秒限频/女仆）
-     *  ——【背包几根苗 / 手里几根苗 / 找到几个种点 / 结果】，一次区分"没挨到 tick"、
-     *  "没苗"、"没土块"、"种成功"。 */
+    /** v1.1.0 实测二百三十五（二次）：诊断升级——每次扫描都落盘（去掉 20 秒节流，
+     *  调试期每 2 秒/女仆一条可接受）；成功永远记。 */
     private static void logAttempt(ServerLevel level, EntityMaid maid, String result,
                                    int bagSaplings, int handSaplings, int spots) {
         try {
-            long now = level.m_46467_();
-            Long last = PLANT_LOG_SINCE.get(maid.m_19879_());
-            if (last != null && now - last < 400L) {
-                return; // 20 秒
-            }
-            PLANT_LOG_SINCE.put(maid.m_19879_(), now);
             LOGGER.info("plant scan: maid={} result={} bagSaplings={} handSaplings={} spots={} pos={}",
                     maid.m_20148_(), result, bagSaplings, handSaplings, spots, maid.m_20183_());
         } catch (Exception ignored) {
@@ -122,11 +114,13 @@ public final class MaidPlanting {
                                     maid.m_20148_(), task.getUid());
                         }
                         tick(lvl, maid);
-                    } catch (Exception ignored) {
+                    } catch (Throwable t) {
+                        LOGGER.error("plant driver per-maid error", t);
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Throwable t) {
+            LOGGER.error("plant driver error", t);
         }
     }
 
@@ -248,7 +242,8 @@ public final class MaidPlanting {
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             LOGGER.info("plant sapling: maid={} pos={} sapling={}",
                     maid.m_20148_(), spot, ForgeRegistries.BLOCKS.getKey(saplingBlock));
-        } catch (Exception ignored) {
+        } catch (Throwable t) {
+            LOGGER.error("plant tick error", t);
         }
     }
 
