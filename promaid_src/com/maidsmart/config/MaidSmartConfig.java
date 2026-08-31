@@ -115,6 +115,8 @@ public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ForgeConfigSpec.BooleanValue WOOD_AUTO_COLLECT;
     public static final ForgeConfigSpec.IntValue WOOD_CHAIN_LIMIT;
     public static final ForgeConfigSpec.BooleanValue WOOD_LEAVES_CLEAR;
+    /** v1.1.0 实测二百二十八/二百二十九：随手种树总开关（伐木面板可调，默认开） */
+    public static final ForgeConfigSpec.BooleanValue WOOD_PLANT_SAPLING_ENABLED;
     /** v1.1.0 实测二百二十八：随手种树冷却（伐木面板可调，默认 100 tick = 5 秒） */
     public static final ForgeConfigSpec.IntValue WOOD_PLANT_SAPLING_COOLDOWN;
 
@@ -700,6 +702,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("pillarCooldown", 4, 1, 20);
         // v1.1.0 实测二百二十八（用户："种树 CD 差不多五秒左右，可以在伐木面板调"）：
         // 随手种树——独立模块（MaidPlanting），触发 = 伐木模式（伐木行为每 20 tick 调起）
+        // v1.1.0 实测二百二十九（用户："是否能够种树也是有个开关的，默认开启"）：总开关
+        WOOD_PLANT_SAPLING_ENABLED = BUILDER.comment("随手种树（默认开）：她手上有树苗、附近（半径 6 格）有可种土块时随手种一棵（触发 = 伐木模式，独立模块）；关闭 = 只砍树不种树（树苗留在背包/地上）")
+                .translation("config.promaid.wood.plantSaplingEnabled").define("plantSaplingEnabled", true);
         WOOD_PLANT_SAPLING_COOLDOWN = BUILDER.comment("补种树苗冷却（tick，默认 100≈5 秒）：她手上有树苗、附近（半径 6 格）有可种土块时随手种一棵，两次种植最短间隔；调小种得更勤（树苗消耗也更快）")
                 .translation("config.promaid.wood.plantSaplingCooldown").defineInRange("plantSaplingCooldown", 100, 20, 600);
         WOOD_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
