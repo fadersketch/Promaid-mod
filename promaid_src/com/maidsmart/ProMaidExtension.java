@@ -101,6 +101,8 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测二百三十三：随手种树任务级驱动注册（模块自监听 ServerTick，
         // 扫"任务=伐木"的女仆——触发=伐木模式，与行为运行窗口无关）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
+        // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随女仆）
+        com.maidsmart.tool.MaidHeldLight.ensureRegistered();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
