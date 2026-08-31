@@ -32,9 +32,23 @@ public final class MaidHeldLight {
 
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
-    /** minecraft:light 光块（按注册名取——Blocks 类字段名不可读，运行期注册表最稳） */
-    private static final Block LIGHT_BLOCK =
-            ForgeRegistries.BLOCKS.getValue(new net.minecraft.resources.ResourceLocation("minecraft", "light"));
+    /** minecraft:light 光块——【懒解析】：类加载期（mod 启动）注册表未冻结，静态取
+     *  值为 null 会让整个模块静默死亡（实测二百三十五根因）；改为首次 tick 时取并缓存。 */
+    private static net.minecraft.world.level.block.Block lightBlock = null;
+    private static boolean lightBlockTried = false;
+
+    private static Block lightBlock() {
+        if (!lightBlockTried) {
+            lightBlockTried = true;
+            try {
+                lightBlock = ForgeRegistries.BLOCKS.getValue(
+                        new net.minecraft.resources.ResourceLocation("minecraft", "light"));
+            } catch (Exception ignored) {
+            }
+        }
+        return lightBlock;
+    }
+
     /** LightBlock.LEVEL 属性（javap：f_153657_） */
     private static final net.minecraft.world.level.block.state.properties.IntegerProperty LEVEL_PROP =
             net.minecraft.world.level.block.LightBlock.f_153657_;
@@ -47,6 +61,7 @@ public final class MaidHeldLight {
 
     private static boolean registered = false;
     private static int tickCounter = 0;
+    private static boolean driverLoggedAlive = false;
 
     private MaidHeldLight() {
     }
@@ -65,11 +80,18 @@ public final class MaidHeldLight {
         if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
             return;
         }
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get() || LIGHT_BLOCK == null) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
             return;
         }
         if (++tickCounter % 10 != 0) {
             return; // 0.5 秒一轮
+        }
+        if (!driverLoggedAlive) {
+            driverLoggedAlive = true;
+            LOGGER.info("held-light driver: alive (ServerTick driver registered)");
+        }
+        if (lightBlock() == null) {
+            return; // 光块未解析到（极早期/注册表异常）：静默跳过
         }
         net.minecraft.server.MinecraftServer server = event.getServer();
         if (server == null) {
@@ -98,12 +120,12 @@ public final class MaidHeldLight {
                             clearBlock(prev.level(), prev.pos()); // 搬移/换维：旧位先撤
                         }
                         placeBlock(level, pos, light);
-                    } else if (level.m_8055_(pos).m_60734_() != LIGHT_BLOCK) {
+                    } else if (level.m_8055_(pos).m_60734_() != lightBlock()) {
                         placeBlock(level, pos, light); // 被替换了（罕见）：补回
                     } else {
                         int cur = level.m_8055_(pos).m_61143_(LEVEL_PROP);
                         if (cur != light) {
-                            level.m_7731_(pos, LIGHT_BLOCK.m_49966_().m_61124_(LEVEL_PROP, light), 3);
+                            level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, light), 3);
                         }
                     }
                     TRACKED.put(maid.m_20148_(), new Entry(level, pos));
@@ -132,7 +154,7 @@ public final class MaidHeldLight {
                     continue;
                 }
                 Block b = bi.m_40614_();
-                if (b == null || b == LIGHT_BLOCK) {
+                if (b == null || b == lightBlock()) {
                     continue; // 手持光块本身不做（防止套娃自校验）
                 }
                 BlockState st = b.m_49966_();
@@ -148,7 +170,7 @@ public final class MaidHeldLight {
 
     private static void placeBlock(ServerLevel level, net.minecraft.core.BlockPos pos, int light) {
         try {
-            level.m_7731_(pos, LIGHT_BLOCK.m_49966_().m_61124_(LEVEL_PROP, Math.min(15, Math.max(1, light))), 3);
+            level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, Math.min(15, Math.max(1, light))), 3);
         } catch (Exception ignored) {
         }
     }
@@ -156,7 +178,7 @@ public final class MaidHeldLight {
     /** 撤块：只有【仍在原位的光块】才移除（玩家自己放的光块不误删） */
     private static void clearBlock(ServerLevel level, net.minecraft.core.BlockPos pos) {
         try {
-            if (level.m_8055_(pos).m_60734_() == LIGHT_BLOCK) {
+            if (level.m_8055_(pos).m_60734_() == lightBlock()) {
                 level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
             }
         } catch (Exception ignored) {
