@@ -1904,6 +1904,9 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_BATCH_PLANT.set(v), "农场批量种植：种植时以当前格为中心蔓延，把相连农田里的空耕地一次全种上（种子真实消耗）；默认开启"));
         this.rows.add(new NumRow("批量种植上限（格）", String.valueOf(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT, s), "农场批量种植上限（格）：一次批量种植的最大格数（4~96，默认 24）"));
+        // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；不影响插火把）
+        this.rows.add(new BoolRow("手持光源发实光", MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get(),
+                v -> MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.set(v), "手持光源发实光（默认开）：她主/副手拿火把/灯笼/萤石等光源时，脚底自动跟随一个隐形光块（亮度与该光源一致），周围被真实照亮；不拿光源自动熄灭；与其他环境光源同待遇，不影响插火把判定逻辑本身"));
         // v1.1.0 实测九十二：区块保载/受困救援/危险避让三件套入面板（此前只有 spec 键，
         // 自绘面板没有条目 = 游戏内看不到也改不了）
         this.rows.add(new SectionRow("女仆安全与区块保载", true));
