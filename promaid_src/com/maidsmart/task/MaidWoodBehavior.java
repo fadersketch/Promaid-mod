@@ -1828,20 +1828,28 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         } else {
             place = pos.m_7918_(0, 1, 0); // 平地：垫身体格顶起
         }
-        // 防窒息：放置格 + 上方 2 格必须空气（顶起后的身体空间 + 头顶空间）
+        // 防窒息：放置格必须空气（不能覆盖目标木材/任何方块）；头顶空间
+        // （place+1/place+2）放宽——目标木材所在格（搭高就是为了够它，垫块后
+        // 头短暂插进目标木材，下一 tick 挖掘入口立即挖掉，属预期）与树叶等
+        // 不窒息方块（isSuffocating=false）不拦；只拦真正会闷住她的实心满块。
+        // v1.1.0 实测二百四十（用户："伐木不会像挖矿一样搭方块够上面的树木"）：
+        // 旧版 isAir 检查在伐木场景几乎必然失败——头顶正上方就是目标木材（树干）
+        // 或树冠树叶，都不是空气 → 搭高永远失败 → 女仆原地等待到超时弃置。
         if (!level.m_8055_(place).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 1, 0)).m_60795_()
-                || !level.m_8055_(place.m_7918_(0, 2, 0)).m_60795_()) {
+                || (this.suffocates(level, place.m_7918_(0, 1, 0)) && !place.m_7918_(0, 1, 0).equals(this.targetPos))
+                || (this.suffocates(level, place.m_7918_(0, 2, 0)) && !place.m_7918_(0, 2, 0).equals(this.targetPos))) {
             return false;
         }
         // v1.5.25e 借鉴自保 buildUp：女仆实际头顶（bounding box 顶面）上方必须空旷——
         // 快速连续搭高时实体位移滞后，blockPosition 检查不够，必须按真实位置判定，
         // 否则"搭太快把自己埋了"窒息（挖矿搭高也会踩同一坑）
+        // v1.1.0 实测二百四十：isAir → suffocates——树冠场景女仆头顶就是树叶
+        // （isSuffocating 恒 false，不闷人），旧版 isAir 检查把树叶当"堵头"拦死
+        // 搭高（"伐木不搭方块"根因之二）；只拦真正会闷住她的实心满块。
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
-        if (!level.m_8055_(headPos).m_60795_()
-                || !level.m_8055_(headPos.m_7918_(0, 1, 0)).m_60795_()) {
-            return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
+        if (this.suffocates(level, headPos) || this.suffocates(level, headPos.m_7918_(0, 1, 0))) {
+            return false; // 实际头顶被会窒息的实心块堵住（正在被顶起中）→ 等站稳再垫，防窒息
         }
         // 目标矿在正上方时不误判为"障碍"（v1.5.25：头顶检查放宽，不检查矿所在格）
         Item item = this.takeBuildBlock(maid);
@@ -1864,6 +1872,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 搭高被错误阻塞
         this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get();
         return true;
+    }
+
+    /** v1.1.0 实测二百四十：该格是否【会窒息】——isSuffocating（m_60796_）为 true
+     *  的实心满块（石头/泥土/原木等）会闷住女仆；树叶/空气/水/火把等不窒息。
+     *  搭高防窒息检查用它替代 isAir：伐木场景头顶是树干/树冠，isAir 检查
+     *  让搭高永远失败（"伐木不搭方块"根因），不窒息判定只拦真正会闷住她的块。 */
+    private boolean suffocates(ServerLevel level, BlockPos pos) {
+        BlockState st = level.m_8055_(pos);
+        return !st.m_60795_() && st.m_60796_(level, pos);
     }
 
     /** v1.5.113（C2）：搭方块材料耗尽播报（限频 30 秒） */
