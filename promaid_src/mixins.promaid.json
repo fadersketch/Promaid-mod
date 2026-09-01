@@ -42,8 +42,6 @@
     "MaidChatLanguageMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
-    "HomingPotionMixin",
-    "PotionHitFallbackMixin",
     "MaidChatLlmGateMixin",
     "MixinTntBuildGuard",
     "MixinInteractionSittingAllow"
