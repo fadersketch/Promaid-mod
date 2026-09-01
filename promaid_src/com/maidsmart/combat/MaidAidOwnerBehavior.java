@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.ai.behavior.Behavior;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
 
 /**
@@ -25,6 +26,10 @@ import net.minecraft.world.item.ItemStack;
  * 抗火 = fire_resistance/long_fire_resistance）——不再用 MobEffect 字段名比对
  * （v1.5.205 修过 f_19616_ 不是 instant_health 的坑）。
  * 总开关：combat.aidOwnerEnable（默认开）+ 两个阈值可调。
+ * v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话改一下。
+ * 同时女仆战斗时也应该可以传递食物"）：互助链补两条——① 饮用型药水直接喂姐妹
+ * （finishUsingItem 强制饮用，空瓶返还；旧版只投喷溅/滞留，普通药水从不传递）；
+ * ② 姐妹正在战斗（脑内有攻击目标）且血不满时喂食（战斗续航，低血链已喂则跳过）。
  */
 public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
@@ -347,7 +352,22 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                         action = "扔了再生药水";
                     }
                 }
+                // v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话
+                // 改一下"）：低血链补【饮用型药水直接喂】——喷溅/滞留扔完、金苹果/再生
+                // 都没有时，普通治疗药水直接喂给姐妹（强制饮用，效果即时生效）。
+                // 与主人链的"塞背包"不同：姐妹没有背包 UI，直接喂才是"传递"。
                 if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.feedDrinkablePotionTo(maid, sister, HEAL_POTIONS, "治疗", true);
+                }
+                if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.feedSisterFood(maid, sister);
+                }
+                // v1.1.0 实测二百四十二（用户："女仆战斗时也应该可以传递食物"）：
+                // 战斗支援——姐妹正在战斗（脑内有攻击目标）且血不满时喂食（回血+饱食，
+                // 战斗续航）。低血链已喂过则跳过（action != null 短路）；血满但战斗中
+                // 也喂（战斗消耗大，提前补）。
+                if (action == null && sisterFighting(sister)
+                        && sister.m_21223_() < sister.m_21233_()) {
                     action = this.feedSisterFood(maid, sister);
                 }
                 if (action != null) {
@@ -608,6 +628,68 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         return null;
+    }
+
+    /**
+     * v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话改一下"）：
+     * 普通（饮用型）药水【直接喂给姐妹】——旧版互助链只投喷溅/滞留型（throwPotionTo
+     * 只认 Splash/Lingering），饮用型药水从不传递（主人链有塞背包路径，姐妹链完全没有）。
+     * 强制饮用：item.m_5922_（finishUsingItem）对姐妹实体生效——治疗/抗火等效果
+     * 直接加上，空玻璃瓶返还喂食者背包。useCd=true 时走同种药水 CD（与投掷共用
+     * potionKey 种类 CD，防喷溅刚扔完又喂一瓶）。
+     */
+    private String feedDrinkablePotionTo(EntityMaid maid, EntityMaid sister,
+                                         java.util.Set<String> potionNames, String label, boolean useCd) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                    continue;
+                }
+                if (!this.isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                if (useCd && !this.potionReady(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)), maid.m_9236_().m_46467_())) {
+                    continue;
+                }
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (taken.m_41619_()) {
+                    continue;
+                }
+                // 强制饮用：finishUsingItem 对姐妹生效（效果直接加上）
+                ItemStack result = taken.m_41720_().m_5922_(taken, sister.m_9236_(), sister);
+                // 空玻璃瓶返还喂食者背包
+                if (!result.m_41619_()) {
+                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
+                }
+                if (useCd) {
+                    int maxDur = 0;
+                    for (net.minecraft.world.effect.MobEffectInstance e :
+                            net.minecraft.world.item.alchemy.PotionUtils.m_43571_(taken)) {
+                        maxDur = Math.max(maxDur, e.m_19557_());
+                    }
+                    this.markPotionUsed(
+                            potionCdKey(maid.m_20148_(), potionKey(taken)),
+                            maid.m_9236_().m_46467_(), maxDur > 0 ? maxDur : 60);
+                }
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                playSoundAt(sister, "minecraft:entity.generic.drink");
+                return "喂了" + label + "药水";
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** v1.1.0 实测二百四十二：姐妹是否正在战斗（脑内有攻击目标记忆）——战斗时喂食支援 */
+    private static boolean sisterFighting(EntityMaid sister) {
+        try {
+            return sister.m_6274_().m_21952_(MemoryModuleType.f_26372_).isPresent();
+        } catch (Exception ignored) {
+            return false;
+        }
     }
 
     /**
