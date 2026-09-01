@@ -735,6 +735,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 效果结束）；③ 其他形态（喷溅/普通）→ 直接给目标施加所有效果。
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // v1.1.0 实测二百五十一：抛药水动画（纯观感）——空药水抛物线飞向目标
+            this.throwPotionAnimate(level, maid, target);
             int maxDur = 0;
             boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
             if (lingering) {
@@ -848,6 +850,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 效果。（原版"抛药水"的动作观感由摆臂动画保留。）
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // v1.1.0 实测二百五十一：抛药水动画（纯观感）——空药水抛物线飞向主人
+            this.throwPotionAnimate(level, maid, owner);
             int maxDur = 0;
             boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
             if (lingering) {
@@ -1022,6 +1026,59 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         return false;
+    }
+
+    /**
+     * v1.1.0 实测二百五十一（用户："再加一个药水以抛物线方式从女仆飞到目标原有位置
+     * 的动画。但那个仅仅是动画"）：抛药水【纯动画】——生成一个空喷溅药水（无任何
+     * 药水效果，落地不施加任何东西），从女仆位置按弹道公式抛物线飞向目标位置。
+     * 触发即生效的逻辑不变（动画只是观感，效果已由调用方直接施加）。
+     * 注意：动画抛掷必须【远距离（>3 格）且目标仍存活】才做——近距离/目标已消失
+     * 时抛空药水没有意义（目标位置即女仆脚下/原地）。
+     */
+    private void throwPotionAnimate(ServerLevel level, EntityMaid maid,
+                                    net.minecraft.world.entity.LivingEntity target) {
+        try {
+            if (target == null || !target.m_6084_()) {
+                return;
+            }
+            double dx = target.m_20185_() - maid.m_20185_();
+            double dz = target.m_20189_() - maid.m_20189_();
+            double len = Math.sqrt(dx * dx + dz * dz);
+            if (len <= 3.0) {
+                return; // 近距离不做动画（目标就在身边，抛出无观感意义）
+            }
+            // 空喷溅药水（无药水效果——落地只有碎裂粒子，不施加任何状态）
+            ItemStack anim = new ItemStack(net.minecraft.world.item.Items.f_42736_);
+            net.minecraft.world.item.alchemy.PotionUtils.m_43549_(anim,
+                    net.minecraft.world.item.alchemy.Potions.f_43585_); // setPotion(empty)
+            net.minecraft.world.entity.projectile.ThrownPotion potion =
+                    new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
+            potion.m_37446_(anim);
+            // 弹道公式解仰角（与旧版二百四十九同款）：速度 1.0、无随机散布、
+            // 按水平距离/高度差精确飞向目标位置；动画抛掷不设 homing 标签
+            //（纯抛物线自然飞行，落地即消失——空药水无效果，安全）。
+            double v = 1.0;
+            double g = 0.05;
+            double h = target.m_20186_() - maid.m_20186_();
+            double A = 2 * v * v / (g * len);
+            double B = 2 * v * v * h / (g * len * len) + 1;
+            double disc = A * A - 4 * B;
+            double u;
+            if (disc >= 0) {
+                u = (A - Math.sqrt(disc)) / 2;
+                if (u < 0) {
+                    u = (A + Math.sqrt(disc)) / 2;
+                }
+            } else {
+                u = 0.25;
+            }
+            double vh = v / Math.sqrt(1 + u * u);
+            double vy = v * u / Math.sqrt(1 + u * u);
+            potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
+            level.m_7967_(potion);
+        } catch (Exception ignored) {
+        }
     }
 
     /** 药水注册名是否在目标集合内（m_43579_=PotionUtils.getPotion） */
