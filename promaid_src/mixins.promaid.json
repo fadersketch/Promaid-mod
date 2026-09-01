@@ -42,6 +42,7 @@
     "MaidChatLanguageMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
+    "PotionAnimTrackMixin",
     "MaidChatLlmGateMixin",
     "MixinTntBuildGuard",
     "MixinInteractionSittingAllow"
