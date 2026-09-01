@@ -829,7 +829,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 战斗参战、搭方块、险境脱离对这只女仆永久让位。会话外发现"带着标记
             // 但血量健康且环境安全"即清掉（不满足条件时下方本就会重进会话并重新
             // 置位，无竞态）
-            if (maid.getPersistentData().m_128471_(PRESERVE_TAG) && !danger && ratio >= exitRatio()) {
+            // v1.1.0 实测二百六十五（用户："全员模式有时无法有效应用，明明已解除
+            // 排班有的女仆就是应用不到"）：自愈条件从 exitRatio（70%）放宽到
+            // enterRatio（30%）——进入自保要血 <30%，血在 30%~70% 之间且无危险时
+            // 会话不进、标记残留且永不清理（自愈条件 70% 永远够不到）= 批量应用/
+            // 排班/参战永久跳过。血 ≥30% 且无危险 = 不需要自保 = 标记是残留，清掉。
+            if (maid.getPersistentData().m_128471_(PRESERVE_TAG) && !danger && ratio >= enterRatio()) {
                 maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
                 MOVING_SURVIVE.remove(maid.m_20148_());
                 // v1.1.0 实测九十四：运行日志——自愈属罕见高价值事件，必记
@@ -2549,10 +2554,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         new net.minecraft.world.entity.AreaEffectCloud(level,
                                 maid.m_20185_(), maid.m_20188_(), maid.m_20189_());
                 cloud.m_19722_(net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack)); // setPotion
-                cloud.m_19732_(4.0f);  // setRadius：4 格溅射范围
-                cloud.m_19734_(10);    // setWaitTime：0.5 秒后开始生效
-                cloud.m_19714_(600);   // setDuration：30 秒（滞留云同款，持续刷新效果）
-                cloud.m_19718_(maid);  // setOwner
+                cloud.m_19712_(4.0f);   // setRadius：4 格溅射范围（旧版误写 m_19732_=setRadiusOnFall，半径从未变大）
+                cloud.m_19740_(10);     // setWaitTime：0.5 秒后开始生效（旧版 m_19734_ 恰是 setWaitTime，碰巧正确）
+                cloud.m_19734_(600);    // setDuration：30 秒（旧版 m_19714_ 实为 setColor，写法错误成暗色云）
+                cloud.m_19718_(maid);   // setOwner
                 level.m_7967_(cloud);
                 inv.extractItem(i, 1, false);
                 maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -3309,8 +3314,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         potionKey(stack),
                         String.format("%.0f", this.hpRatio(maid) * 100.0f));
                 int maxDur = 0;
+                // v1.1.0 实测二百五十九：旧版用 PotionUtils.m_43571_ 只读 CustomPotionEffects
+                //（标准药水效果在 Potion 注册表，读了恒空 → 女仆喝标准药水无效果）；
+                // 改用 potionEffectsOf（Potion 字段 + CustomPotionEffects 合并）。
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                        potionEffectsOf(stack)) {
                     maid.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
                     maxDur = Math.max(maxDur, e.m_19557_());
                 }
@@ -3353,9 +3361,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         new net.minecraft.world.entity.AreaEffectCloud(level,
                                 maid.m_20185_(), maid.m_20188_(), maid.m_20189_());
                 cloud.m_19722_(potion);   // setPotion
-                cloud.m_19732_(4.0f);     // setRadius
-                cloud.m_19734_(10);       // setWaitTime
-                cloud.m_19714_(600);      // setDuration：30 秒云
+                cloud.m_19712_(4.0f);     // setRadius（旧版误写 m_19732_=setRadiusOnFall）
+                cloud.m_19740_(10);       // setWaitTime（旧版 m_19734_ 恰是 setWaitTime，碰巧正确）
+                cloud.m_19734_(600);      // setDuration：30 秒云（旧版 m_19714_ 实为 setColor，误用）
                 cloud.m_19718_(maid);     // setOwner
                 level.m_7967_(cloud);
                 inv.extractItem(i, 1, false);
@@ -3375,6 +3383,25 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         return -1;
+    }
+
+    /** v1.1.0 实测二百五十三/二百五十九：药水效果完整读取——Potion 字段效果
+     *  （Potion.getEffects，标准药水的效果所在）+ CustomPotionEffects（NBT 自定义效果）
+     *  合并。PotionUtils.m_43571_ 只读后者，单独用它效果恒为空。 */
+    private static java.util.List<net.minecraft.world.effect.MobEffectInstance>
+    potionEffectsOf(ItemStack stack) {
+        java.util.List<net.minecraft.world.effect.MobEffectInstance> out =
+                new java.util.ArrayList<>();
+        try {
+            net.minecraft.world.item.alchemy.Potion p =
+                    net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
+            if (p != null) {
+                out.addAll(p.m_43488_());
+            }
+            out.addAll(net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack));
+        } catch (Exception ignored) {
+        }
+        return out;
     }
 
     /** v1.5.252g：药水是否含指定效果（按注册名，如 minecraft:water_breathing） */

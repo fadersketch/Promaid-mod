@@ -98,20 +98,19 @@ public final class ScheduleSwitchEngine {
                             String toUid = target.getUid() == null ? "null" : target.getUid().toString();
                             if (fromUid.equals(toUid)) {
                                 // 已经在该任务上：无需重设（避免无意义 refreshBrain 重建 AI）
-                            } else if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()
-                                    ? !ScheduleTaskAvailability.isAvailable(maid, target)
-                                    : !ScheduleTaskAvailability.isEnabled(maid, target)) {
+                            } else if (!ScheduleTaskAvailability.isEnabled(maid, target)) {
                                 // v1.1.0 实测一百三十三 ①：切换前可用性检测——没活不切
                                 // v1.1.0 实测一百七十：默认只查 isEnable 硬闸（任务状态必须
                                 // 跟着时间段落真实切换；软探测可在面板调回）
-                                // v1.1.0 实测一百九十一：失败文案带配置指引——"没活不切"
-                                // 是软探测判的（可用性检测开着），女仆原地发呆的根因就是
-                                // 这条被拦；关掉开关 → 任务随段时间强制切换
+                                // v1.1.0 实测二百六十三（用户："空闲状态也这样"）：排班是
+                                // 【纯时间判定】（TLM-Sincerely 环境检测子系统不移植）——
+                                // 旧版 MISC_SCHEDULE_AVAILABILITY_CHECK=true 时走 isAvailable
+                                // 完整软探测（附近有没有矿/树/炉子/作物），女仆空闲时通常
+                                // 站在家里附近没活 → 判"不可用"→ 每 10 秒重试永不切换 =
+                                // "排班开了不生效、锁定解除不了"。排班切换恒只查任务自己的
+                                // 硬闸（isEnable），任务状态跟着时间段落真实切换。
                                 soft = true;
-                                fail = "目标任务 '" + seg.taskUid() + "' 当前不可用（任务被禁用/无法切换，约 10 秒后重试）"
-                                        + (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()
-                                        ? "——检测到「切换前可用性检测」开启：附近没活（无作物可收/无种可种/无矿无树等）不让切；想让排班按时间强制切换，关掉杂营区的这个开关"
-                                        : "");
+                                fail = "目标任务 '" + seg.taskUid() + "' 当前不可用（任务被禁用/无法切换，约 10 秒后重试）";
                             } else if (!ScheduleSwitchState.canSwitchNormally(maid.m_20148_(), nowTick,
                                     com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_MIN_HOLD_TICKS.get())) {
                                 // v1.1.0 实测一百七十六（移植 TLM-Sincerely canSwitchNormally）：
