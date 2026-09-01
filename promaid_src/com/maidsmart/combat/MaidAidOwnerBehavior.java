@@ -726,86 +726,45 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return -1;
             }
             ItemStack stack = inv.getStackInSlot(bestSlot);
-            // v1.1.0 实测二百四十八（用户："当我就在女仆附近的时候，女仆就一个劲的往
-            // 地上扔。玩家也没吃到效果"）：近距离（≤3 格）不投掷——初速 dx/len*0.5
-            // 极小，药水几乎原地落下 → 落地碎裂（onHitBlock）→ 原版落地不施加效果
-            // 且实体移除 → 半秒超时强制生效永远等不到（实体已没了）→ "往地上扔 +
-            // 玩家没效果"。近距离直接强制施加效果（与半秒超时同款逻辑），不扔。
-            double dx = target.m_20185_() - maid.m_20185_();
-            double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
-            double dz = target.m_20189_() - maid.m_20189_();
-            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
-            if (len <= 3.0) {
-                for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                    target.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
-                }
-                inv.extractItem(bestSlot, 1, false);
-                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-                int maxDur0 = 0;
-                for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                    maxDur0 = Math.max(maxDur0, e.m_19557_());
-                }
-                if (useCd) {
-                    this.markPotionUsed(
-                            potionCdKey(maid.m_20148_(), potionKey(stack)),
-                            level.m_46467_(), maxDur0 > 0 ? maxDur0 : 60);
-                }
-                LOGGER.info("aid-maid close: label={} potion={} target={} dist={}",
-                        label, potionKey(stack), target.m_20148_(),
-                        String.format("%.1f", len));
-                return Math.max(60, Math.min(maxDur0 > 0 ? maxDur0 : 60, 12000));
-            }
-            net.minecraft.world.entity.projectile.ThrownPotion potion =
-                    new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
-            potion.m_37446_(stack.m_41777_());
-            // v1.1.0 实测二百四十六（用户："药水的飞行逻辑过于鬼畜了。改为和玩家一样
-            // 向目标方向以抛物线方式抛出一个药水"）：纯抛物线——玩家同款初速
-            // （0.5 速度 + 0.2 抬升），不再追踪修正；mixin 半秒后强制给目标施加
-            // 效果并清除药水（近距扔歪也不提前消失，效果必达）。
-            potion.getPersistentData().m_128359_("maid_smart_homing",
-                    target.m_20148_().toString());
-            potion.getPersistentData().m_128359_("maid_smart_born",
-                    String.valueOf(level.m_46467_()));
-            // v1.1.0 实测二百四十九（用户："药水扔的路径仍然容易出错"）：弹道精确
-            // 瞄准——旧版 0.5 速度 + inaccuracy 1.0：速度太慢（半秒只飞 5 格，远目标
-            // 药水飞一半就消失）、inaccuracy 随机散布（每次扔的方向随机偏转）→
-            // "路径容易出错"。现在：速度 1.0（射程 20 格，半秒飞 10 格）+ inaccuracy 0
-            // （精确瞄准）+ 弹道公式解仰角（药水精确飞向目标位置，抛物线弧度自然）。
-            double v = 1.0;
-            double g = 0.05;
-            double h = target.m_20186_() - maid.m_20186_();
-            double A = 2 * v * v / (g * len);
-            double B = 2 * v * v * h / (g * len * len) + 1;
-            double disc = A * A - 4 * B;
-            double u;
-            if (disc >= 0) {
-                u = (A - Math.sqrt(disc)) / 2;
-                if (u < 0) {
-                    u = (A + Math.sqrt(disc)) / 2;
-                }
-            } else {
-                u = 0.25;
-            }
-            double vh = v / Math.sqrt(1 + u * u);
-            double vy = v * u / Math.sqrt(1 + u * u);
-            potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
-            level.m_7967_(potion);
+            ItemStack potionStack = stack.m_41777_(); // 快照（extract 前复制，防槽位变动）
+            // v1.1.0 实测二百五十（用户："干脆就省去那些繁文缛节吧。只要触发扔药水
+            // 这个事件，那就给予效果，滞留型则是在目标旁边生成对应的药水效果。然后
+            // 会有一个药水抛出的动画就可以了"）：不再投掷实体——触发即生效。
+            // ① 消耗药水 + 摆臂动画（抛药水动作）；② 滞留型（LingeringPotionItem）
+            // → 目标旁边生成 AreaEffectCloud（半径 3，setPotion + addEffect，持续到
+            // 效果结束）；③ 其他形态（喷溅/普通）→ 直接给目标施加所有效果。
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             int maxDur = 0;
-            for (net.minecraft.world.effect.MobEffectInstance e :
-                    net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                maxDur = Math.max(maxDur, e.m_19557_());
+            boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
+            if (lingering) {
+                net.minecraft.world.entity.AreaEffectCloud cloud =
+                        new net.minecraft.world.entity.AreaEffectCloud(level,
+                                target.m_20185_(), target.m_20186_(), target.m_20189_());
+                cloud.m_19712_(3.0f); // setRadius
+                cloud.m_19722_(net.minecraft.world.item.alchemy.PotionUtils
+                        .m_43579_(potionStack)); // setPotion
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                    cloud.m_19716_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    maxDur = Math.max(maxDur, e.m_19557_());
+                }
+                cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
+                level.m_7967_(cloud);
+            } else {
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                    target.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    maxDur = Math.max(maxDur, e.m_19557_());
+                }
             }
             if (useCd) {
                 this.markPotionUsed(
-                        potionCdKey(maid.m_20148_(), potionKey(stack)),
+                        potionCdKey(maid.m_20148_(), potionKey(potionStack)),
                         level.m_46467_(), maxDur > 0 ? maxDur : 60);
             }
-            LOGGER.info("aid-maid throw: label={} potion={} target={}",
-                    label, potionKey(stack), target.m_20148_());
+            LOGGER.info("aid-maid cast: label={} potion={} target={} lingering={}",
+                    label, potionKey(potionStack), target.m_20148_(), lingering);
             return Math.max(60, Math.min(maxDur > 0 ? maxDur : 60, 12000));
         } catch (Exception ignored) {
         }
@@ -838,14 +797,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.231b：投掷药水给主人——【择优 + 抛物线 + 超时兜底】：
+     * v1.5.231b：投掷药水给主人——【择优】：
      * ① 择优：强效/长效优先（strong_healing > healing；long_regeneration >
      * strong_regeneration > regeneration；long_fire_resistance > fire_resistance），
      * 不再按槽位顺序取第一个；
-     * ② v1.1.0 实测二百四十三（用户："药水追踪逻辑做的并不好。会导致药水乱飞"）：
-     * 追踪弹 → 纯抛物线——初速朝主人自然下落，不再每 tick 修正方向（旧版目标
-     * 移动时药水来回甩动乱飞）；HomingPotionMixin 记录出生 tick，1 秒后无论
-     * 是否命中都强制给主人施加药水效果并清除药水（效果必达，不再依赖命中）。
+     * ② v1.1.0 实测二百五十（用户："干脆就省去那些繁文缛节吧。只要触发扔药水这个
+     * 事件，那就给予效果，滞留型则是在目标旁边生成对应的药水效果。然后会有一个药水
+     * 抛出的动画就可以了"）：触发即生效——不再投掷实体（历次投掷实体方案均被实测
+     * 否决：追踪乱飞/抛物线扔歪/落地不生效）。消耗 + 摆臂动画（抛药水动作）；滞留型
+     * → 主人旁边生成 AreaEffectCloud；其他形态 → 直接给主人施加所有效果。
      */
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
@@ -881,87 +841,45 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return -1;
             }
             ItemStack stack = inv.getStackInSlot(bestSlot);
-            // v1.1.0 实测二百四十八：近距离（≤3 格）不投掷——直接强制施加效果
-            //（同 throwPotionTo 口径：近距初速极小 → 药水原地落地碎裂 → 原版落地
-            // 不施加效果且实体移除 → 半秒超时强制生效永远等不到 → "往地上扔 +
-            // 玩家没效果"）
-            double dx = owner.m_20185_() - maid.m_20185_();
-            double dy = owner.m_20227_(0.3) - maid.m_20227_(0.6);
-            double dz = owner.m_20189_() - maid.m_20189_();
-            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
-            if (len <= 3.0) {
-                for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                    owner.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
-                }
-                inv.extractItem(bestSlot, 1, false);
-                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-                int maxDur0 = 0;
-                for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                    maxDur0 = Math.max(maxDur0, e.m_19557_());
-                }
-                if (useCd) {
-                    this.markPotionUsed(
-                            potionCdKey(maid.m_20148_(), potionKey(stack)),
-                            level.m_46467_(), maxDur0 > 0 ? maxDur0 : 60);
-                }
-                maid.getChatBubbleManager().addTextChatBubble("主人别怕，" + label + "药水来了！");
-                LOGGER.info("aid-owner close: label={} potion={} ownerDist={}",
-                        label, potionKey(stack), String.format("%.1f", len));
-                return Math.max(60, Math.min(maxDur0 > 0 ? maxDur0 : 60, 12000));
-            }
-            net.minecraft.world.entity.projectile.ThrownPotion potion =
-                    new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
-            potion.m_37446_(stack.m_41777_()); // setItem（复制药水物品；m_41777_=copy）
-            // v1.1.0 实测二百四十六：纯抛物线（同 throwPotionTo 口径）——玩家同款
-            // 初速 0.5 + 0.2 抬升，不再追踪修正；mixin 半秒后强制给主人施加效果并
-            // 清除药水（近距扔歪也不提前消失，效果必达）
-            potion.getPersistentData().m_128359_("maid_smart_homing",
-                    owner.m_20148_().toString());
-            potion.getPersistentData().m_128359_("maid_smart_born",
-                    String.valueOf(level.m_46467_()));
-            // v1.1.0 实测二百四十九：弹道精确瞄准（同 throwPotionTo 口径）——
-            // 速度 1.0 + inaccuracy 0 + 弹道公式解仰角，药水精确飞向主人
-            double v = 1.0;
-            double g = 0.05;
-            double h = owner.m_20186_() - maid.m_20186_();
-            double A = 2 * v * v / (g * len);
-            double B = 2 * v * v * h / (g * len * len) + 1;
-            double disc = A * A - 4 * B;
-            double u;
-            if (disc >= 0) {
-                u = (A - Math.sqrt(disc)) / 2;
-                if (u < 0) {
-                    u = (A + Math.sqrt(disc)) / 2;
-                }
-            } else {
-                u = 0.25;
-            }
-            double vh = v / Math.sqrt(1 + u * u);
-            double vy = v * u / Math.sqrt(1 + u * u);
-            potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
-            level.m_7967_(potion);
-            inv.extractItem(bestSlot, 1, false); // 消耗 1 个
+            ItemStack potionStack = stack.m_41777_(); // 快照（extract 前复制，防槽位变动）
+            // v1.1.0 实测二百五十：触发即生效（同 throwPotionTo 口径）——不再投掷
+            // 实体。消耗 + 摆臂动画；滞留型 → 主人旁边生成 AreaEffectCloud（半径 3，
+            // setPotion + addEffect，持续到效果结束）；其他形态 → 直接给主人施加所有
+            // 效果。（原版"抛药水"的动作观感由摆臂动画保留。）
+            inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            // v1.5.252g13：CD 记账【提前到气泡/日志之前】——旧版在气泡之后，
-            // 气泡若抛异常（被 catch 吞掉）药水已扔已消耗但 CD 没记 → 下一次
-            // 又投（"一直扔同一种药水"的重大嫌疑）
             int maxDur = 0;
-            for (net.minecraft.world.effect.MobEffectInstance e :
-                    net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
-                maxDur = Math.max(maxDur, e.m_19557_());
+            boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
+            if (lingering) {
+                net.minecraft.world.entity.AreaEffectCloud cloud =
+                        new net.minecraft.world.entity.AreaEffectCloud(level,
+                                owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+                cloud.m_19712_(3.0f); // setRadius
+                cloud.m_19722_(net.minecraft.world.item.alchemy.PotionUtils
+                        .m_43579_(potionStack)); // setPotion
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                    cloud.m_19716_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    maxDur = Math.max(maxDur, e.m_19557_());
+                }
+                cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
+                level.m_7967_(cloud);
+            } else {
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                    owner.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    maxDur = Math.max(maxDur, e.m_19557_());
+                }
             }
             if (useCd) {
                 this.markPotionUsed(
-                        potionCdKey(maid.m_20148_(), potionKey(stack)),
+                        potionCdKey(maid.m_20148_(), potionKey(potionStack)),
                         level.m_46467_(), maxDur > 0 ? maxDur : 60);
             }
             maid.getChatBubbleManager().addTextChatBubble("主人别怕，" + label + "药水来了！");
-            // v1.5.252g9：投掷日志（latest.log 搜 "aid-owner throw"，排查浪费）
-            LOGGER.info("aid-owner throw: label={} potion={} ownerDist={}",
-                    label, potionKey(stack),
-                    String.format("%.1f", maid.m_20238_(owner.m_20182_())));
+            LOGGER.info("aid-owner cast: label={} potion={} ownerDist={} lingering={}",
+                    label, potionKey(potionStack),
+                    String.format("%.1f", maid.m_20238_(owner.m_20182_())), lingering);
             return Math.max(60, Math.min(maxDur > 0 ? maxDur : 60, 12000));
         } catch (Exception ignored) {
         }
