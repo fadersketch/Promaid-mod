@@ -211,8 +211,33 @@ public final class ScheduleManager {
         }
         ScheduleData.Segment seg = ScheduleData.segmentAt(segs, ScheduleData.currentMinute(level));
         if (seg == null) {
-            diag(maid, "rest", who + " 当前游戏时间无段覆盖（休息时段）——待机/睡觉", level);
-            return; // normalize 保证覆盖 0~1440，理论到不了这里
+            // v1.1.0 实测二百六十九（用户："明明排班里面有了对应的日程，但是女仆工作的
+            // 状态仍然不符合日程安排"）：旧版休息时段直接 return——【模式也不切】，晚班
+            // 女仆（白天休息）保持排班前的模式（如图：早班+空闲），"排班开了状态却与
+            // 日程不符"。休息时段不再什么都不做：把作息切到班次模式（早班=DAY/晚班=
+            // NIGHT/全天=ALL），TLM 作息系统接管睡觉/待机；任务留给工作窗口内的段应用。
+            // 女仆模式 = 班次模式 = 排班规定的状态，GUI 同步后与日程一致。
+            int shift = ScheduleData.inferShift(segs);
+            try {
+                var modes = com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule.values();
+                if (shift >= 0 && shift < modes.length) {
+                    var cur = maid.getSchedule();
+                    if (cur == null || cur != modes[shift]) {
+                        ScheduleSwitchGuard.runInternal(maid.m_20148_(), null,
+                                () -> maid.setSchedule(modes[shift]));
+                        // GUI 立即同步（排班规定的模式已生效）
+                        try {
+                            if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                                ScheduleNetworking.sendMaidStateSync(sp, maid);
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            diag(maid, "rest", who + " 当前游戏时间无段覆盖（休息时段）——作息已切到班次模式，待机/睡觉", level);
+            return;
         }
         String segLabel = ScheduleData.fmt(seg.startMin()) + "~" + ScheduleData.fmt(seg.endMin());
         String key = ScheduleData.dayIndex(level) + "|" + seg.startMin();
@@ -268,6 +293,17 @@ public final class ScheduleManager {
             // v1.1.0 实测九十四：运行日志——段应用落盘（去抖保证每段每天至多一条）
             com.maidsmart.tool.PromaidLog.log("排班", who + " 应用段 " + segLabel
                     + " 模式=" + seg.mode() + " 任务=" + seg.taskUid());
+            // v1.1.0 实测二百六十八（用户："排班生效之后，快捷设置页的 GUI 应该也统一
+            // 立刻更改为排班所规定的状态，然后再锁定"）：段应用成功 → 把最新真实状态
+            // 推给打开着排班书的主人——快捷设置页立即显示排班规定的模式/任务并锁定，
+            // 不再停留在打开排班书那一刻的旧状态（旧版 GUI 数据来自打开包，排班生效后
+            // 永不刷新，观感"排班没生效"）。
+            try {
+                if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                    ScheduleNetworking.sendMaidStateSync(sp, maid);
+                }
+            } catch (Throwable ignored) {
+            }
             // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：
             // 切段成功 → 登记大脑自愈待检（60 tick 后若无工作记忆则 refreshBrain 一次）
             if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.get()

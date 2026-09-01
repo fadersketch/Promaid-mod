@@ -63,6 +63,64 @@ public final class ScheduleNetworking {
                 MaidTaskResyncPacket::encode, MaidTaskResyncPacket::decode, MaidTaskResyncPacket::handle);
         CHANNEL.registerMessage(10, MaidSummonPacket.class,
                 MaidSummonPacket::encode, MaidSummonPacket::decode, MaidSummonPacket::handle);
+        // v1.1.0 实测二百六十八：排班生效 → 同步给打开排班书的主人（快捷设置页立即
+        // 显示排班规定的模式/任务并锁定，不再停留在打开时的旧状态）
+        CHANNEL.registerMessage(11, MaidStateSyncPacket.class,
+                MaidStateSyncPacket::encode, MaidStateSyncPacket::decode, MaidStateSyncPacket::handle);
+    }
+
+    /* ==================== 排班生效 → GUI 状态同步 ==================== */
+
+    /** 服务端：把女仆当前真实状态（任务/模式/排班开关）推给其主人——排班段应用
+     *  成功后调用，打开着排班书的玩家 GUI 立即更新为排班状态（快捷设置页同步+锁定） */
+    public static void sendMaidStateSync(net.minecraft.server.level.ServerPlayer player, EntityMaid maid) {
+        try {
+            String taskUid = maid.getTask() == null ? "touhou_little_maid:idle"
+                    : maid.getTask().getUid().toString();
+            int sched = maid.getSchedule() == null ? 2 : maid.getSchedule().ordinal();
+            CHANNEL.send(net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> player),
+                    new MaidStateSyncPacket(maid.m_20148_().toString(), taskUid, sched,
+                            ScheduleData.isOn(maid)));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static class MaidStateSyncPacket {
+        private final String uuid;
+        private final String taskUid;
+        private final int scheduleOrdinal;
+        private final boolean schedOn;
+
+        public MaidStateSyncPacket(String uuid, String taskUid, int scheduleOrdinal, boolean schedOn) {
+            this.uuid = uuid;
+            this.taskUid = taskUid;
+            this.scheduleOrdinal = scheduleOrdinal;
+            this.schedOn = schedOn;
+        }
+
+        public static void encode(MaidStateSyncPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130072_(pkt.uuid, 64);
+            buf.m_130072_(pkt.taskUid, 256);
+            buf.writeInt(pkt.scheduleOrdinal);
+            buf.writeBoolean(pkt.schedOn);
+        }
+
+        public static MaidStateSyncPacket decode(FriendlyByteBuf buf) {
+            return new MaidStateSyncPacket(buf.m_130136_(64), buf.m_130136_(256),
+                    buf.readInt(), buf.readBoolean());
+        }
+
+        public static void handle(MaidStateSyncPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            // v1.1.0 实测十六（审查 P2-4）：S2C 方向校验（同 OpenSchedulePacket）
+            if (ctx.get().getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            ctx.get().enqueueWork(() ->
+                    com.maidsmart.schedule.ScheduleBookScreen.syncMaidState(
+                            pkt.uuid, pkt.taskUid, pkt.scheduleOrdinal, pkt.schedOn));
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /* ==================== 排班守卫拒绝 → 客户端重同步 ==================== */
@@ -562,35 +620,86 @@ public final class ScheduleNetworking {
                         // 批量改过的"原任务"）。单女仆快捷设置同样不检查，但批量是
                         // 一改一整队，必须兜住
                         // v1.1.0 实测一百六十三：真实战斗判定（残留标记不再挡批量应用）
-                        if (m.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)
-                                || com.maidsmart.combat.AutoCombatSwitch.isReallyCombatActive(m)) {
+                        // v1.1.0 实测二百六十五/二百六十六（用户："满血的时候全员模式
+                        // 也没用"）：旧版用 isReallyCombatActive 跳过——排班关闭时它含
+                        // IAttackTask 兜底（当前任务是任意攻击任务即判"战斗中"），玩家
+                        // 手动安排攻击任务的女仆（满血、无排班）被永久跳过。批量应用是
+                        // 玩家明确意图，只跳过【真本系统战斗】（ASSIGNED 匹配当前任务）
+                        // 的女仆；残留标记由 isRealCombatActive 顺带清掉。
+                        // v1.1.0 实测二百六十七（用户："剪刀模式女仆解除排班满血，全员
+                        // 模式不响应"）：跳过/失败完全静默——加逐只诊断日志（latest.log
+                        // 搜 "batch-apply"）+ 应用后读回校验（TLM setSchedule/setTask 有
+                        // 守卫会静默拒绝）+ 单只 try/catch 隔离（一只异常不再中断整队）。
+                        String mName = m.m_5446_() != null ? m.m_5446_().getString() : m.m_20148_().toString();
+                        if (m.getPersistentData().m_128471_(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
+                            com.mojang.logging.LogUtils.getLogger().info(
+                                    "batch-apply: skip {} reason=preserve", mName);
                             continue;
                         }
-                        // v1.1.0 实测七十六（用户反馈：防一下一键更改工作状态）：排班中的
-                        // 女仆【整体】跳过——工作模式与任务都由她的日程表管理，一键改了
-                        // 下个时段边界也会被日程翻回去
+                        if (com.maidsmart.combat.AutoCombatSwitch.isRealCombatActive(m)) {
+                            com.mojang.logging.LogUtils.getLogger().info(
+                                    "batch-apply: skip {} reason=combat", mName);
+                            continue;
+                        }
                         if (ScheduleData.isOn(m)) {
                             schedSkipped++;
+                            com.mojang.logging.LogUtils.getLogger().info(
+                                    "batch-apply: skip {} reason=sched", mName);
                             continue;
                         }
-                        boolean changed = false;
-                        if (applyMode) {
-                            m.setSchedule(modes[pkt.mode]);
-                            changed = true;
-                        }
-                        if (applyTask) {
-                            try {
-                                TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
-                                        .ifPresent(task -> {
-                                            m.setTask(task);
-                                            touchAppliedKey(m, lvl);
-                                        });
-                                changed = true;
-                            } catch (Exception ignored) {
+                        try {
+                            boolean changed = false;
+                            if (applyMode) {
+                                m.setSchedule(modes[pkt.mode]);
+                                // 读回校验：TLM setSchedule 有守卫（睡眠/活动中）会静默拒绝
+                                var after = m.getSchedule();
+                                if (after == null || after.ordinal() != pkt.mode) {
+                                    com.mojang.logging.LogUtils.getLogger().info(
+                                            "batch-apply: {} mode not applied (setSchedule rejected? want={} got={})",
+                                            mName, pkt.mode, after == null ? "null" : after.ordinal());
+                                } else {
+                                    changed = true;
+                                }
                             }
-                        }
-                        if (changed) {
-                            applied++;
+                            if (applyTask) {
+                                try {
+                                    TaskManager.findTask(net.minecraft.resources.ResourceLocation.parse(pkt.taskUid))
+                                            .ifPresent(task -> {
+                                                m.setTask(task);
+                                                touchAppliedKey(m, lvl);
+                                            });
+                                    // v1.1.0 实测二百七十（用户："点击应用空闲，女仆仍然
+                                    // 显示自己在别的模式。哪怕排班没有开启"）：TLM setTask
+                                    // 无守卫但客户端实体脱钩/任务被系统换回时静默失败——
+                                    // 读回校验暴露"应用了但没生效"。findTask 不存在的任务
+                                    // 时 ifPresent 不执行，同样计入 changed（虚报）。
+                                    var afterTask = m.getTask();
+                                    if (afterTask != null && afterTask.getUid() != null
+                                            && afterTask.getUid().toString().equals(pkt.taskUid)) {
+                                        changed = true;
+                                    } else {
+                                        com.mojang.logging.LogUtils.getLogger().info(
+                                                "batch-apply: {} task not applied (want={}, got={})",
+                                                mName, pkt.taskUid,
+                                                afterTask == null || afterTask.getUid() == null
+                                                        ? "null" : afterTask.getUid().toString());
+                                    }
+                                } catch (Exception ex) {
+                                    com.mojang.logging.LogUtils.getLogger().info(
+                                            "batch-apply: {} task error: {}", mName, ex.toString());
+                                }
+                            }
+                            if (changed) {
+                                applied++;
+                                com.mojang.logging.LogUtils.getLogger().info(
+                                        "batch-apply: {} applied mode={} task={}", mName,
+                                        applyMode ? pkt.mode : -1, applyTask ? pkt.taskUid : "");
+                            }
+                        } catch (Throwable t) {
+                            // 单只隔离：一只女仆异常不中断整队（旧版无保护，setSchedule
+                            // 抛异常会让循环中断、后面的女仆全部不应用）
+                            com.mojang.logging.LogUtils.getLogger().info(
+                                    "batch-apply: {} error: {}", mName, t.toString());
                         }
                     }
                 }
@@ -757,10 +866,22 @@ public final class ScheduleNetworking {
 
     /* ==================== 工具 ==================== */
 
-    /** 按 UUID 找女仆（当前维度；找不到返回 null） */
+    /** 按 UUID 找女仆（当前维度；找不到返回 null）。
+     *  v1.1.0 实测二百六十一：排班书列表是全维度扫描的（openFor 跨维度收集），但
+     *  快捷设置/开关/保存只查【玩家当前维度】——女仆在别的维度（下界/末地/别的
+     *  区块）时"开排班/关排班/改模式"全部静默失败：客户端列表显示已改、服务端
+     *  根本没执行（开关没写、模式没切、锁定没解除）。改为跨维度查找（与列表口径
+     *  一致），找不到才返回 null。 */
     static EntityMaid findMaid(ServerLevel level, String uuid) {
         try {
-            return (EntityMaid) level.m_8791_(java.util.UUID.fromString(uuid));
+            java.util.UUID id = java.util.UUID.fromString(uuid);
+            for (ServerLevel lvl : level.m_7654_().m_129785_()) {
+                EntityMaid m = (EntityMaid) lvl.m_8791_(id);
+                if (m != null) {
+                    return m;
+                }
+            }
+            return null;
         } catch (IllegalArgumentException e) {
             return null;
         }

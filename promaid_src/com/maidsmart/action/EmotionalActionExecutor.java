@@ -235,20 +235,21 @@ public final class EmotionalActionExecutor {
             if (fp == null) {
                 return false;
             }
-            // v1.5.292：喂食动作——与投药水/金苹果同款摆臂动画（m_6674_=swing，
-            // 服务端调用自动广播给客户端显示），自动投喂/治疗食物/蜂蜜全走这里
-            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            owner.m_36324_().m_38707_(fp.m_38744_(), fp.m_38745_()); // eat(nutrition, satMod)
-            // v1.5.290：喂食音效（蜂蜜=喝、其他=吃）+ 系统提示喂了什么（m_41786_ = getHoverName）
-            String foodName = food.m_41786_().getString();
-            String sndId = food.m_41720_() == net.minecraft.world.item.Items.f_42787_
-                    ? "minecraft:entity.generic.drink" : "minecraft:entity.generic.eat";
-            net.minecraft.sounds.SoundEvent snd = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
-                    .getValue(net.minecraft.resources.ResourceLocation.parse(sndId));
-            if (snd != null) {
-                owner.m_9236_().m_5594_(null, owner.m_20183_(), snd,
-                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            if (!food.m_41614_()) { // isEdible——与女仆自己吃同样的前提校验
+                return false;
             }
+            // v1.5.292：喂食动作（m_6674_=swing，服务端调用自动广播给客户端显示）
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // v1.1.0 实测二百五十六（用户："我要的喂食效果跟女仆自己吃食物效果应该
+            // 一样"）：投喂改走 LivingEntity.m_5584_（eat 完整路径）——与女仆自己
+            // 吃食物完全一致：食物效果（m_21063_ 施加原版 FoodProperties 效果）、
+            // 吃/喝音效（m_7866_）、粒子全部由原版路径触发；移除上轮手搓的
+            // eat(nutrition,satMod)+heal+手搓音效（与"自己吃"观感不一致）。
+            // 注：1.20.1 的 mob eat 不触发 eat 粒子（粒子在 Player eat 路径），
+            // 但食物效果/音效与女仆自己吃完全相同。
+            owner.m_5584_(owner.m_9236_(), food);
+            // 系统提示喂了什么（m_41786_ = getHoverName）
+            String foodName = food.m_41786_().getString();
             owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                     "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
             if (food.m_41720_() == net.minecraft.world.item.Items.f_42787_) { // honey_bottle
