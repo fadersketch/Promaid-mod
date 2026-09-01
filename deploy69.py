@@ -9,7 +9,11 @@ import tempfile
 
 sys.stdout.reconfigure(encoding="utf-8")
 SRC = r"C:\Users\Sketch\.zcode\workspace\default\promaid-mod\patched\promaid-1.1.0.jar"
-DST = r"D:\.minecraft\versions\1.20.1-Forge_47.4.23\mods\promaid-1.1.0.jar"
+# v1.1.0 实测二百四十六：游戏实际运行在 1.20.1-Forge_47.4.21（PCL2 启动实证），
+# 旧版写死 47.4.23 导致所有新修复都部署错位置（"宠物保护没用"根因）。
+# 部署目标 = 47.4.21，并删除旧文件 promaid-1.1.0 (1).jar（旧版残留）。
+DST = r"D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar"
+OLD = r"D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0 (1).jar"
 
 # 实测二百二十一：游戏运行时拒绝部署——运行中的 JVM 对已打开的 jar 做懒加载，
 # 替换 jar 后新类按旧目录索引读取失败（实测 NoClassDefFoundError:
@@ -34,8 +38,9 @@ tmp = os.path.join(tempfile.gettempdir(), "promaid-1.1.0.jar")
 shutil.copyfile(SRC, tmp)
 print("staged:", tmp, os.path.getsize(tmp))
 
-inner = "Copy-Item -LiteralPath '%s' -Destination '%s' -Force; if (!(Test-Path '%s')) { exit 2 }" % (
-    tmp, DST, DST)
+inner = ("Remove-Item -LiteralPath '%s' -Force -ErrorAction SilentlyContinue; "
+         "Copy-Item -LiteralPath '%s' -Destination '%s' -Force; if (!(Test-Path '%s')) { exit 2 }" % (
+             OLD, tmp, DST, DST))
 cmd = ["powershell", "-NoProfile", "-Command",
        "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command',"
        "'__INNER__'".replace("__INNER__", inner.replace("'", "''"))]
