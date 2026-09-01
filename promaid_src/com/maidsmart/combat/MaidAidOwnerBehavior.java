@@ -754,10 +754,27 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
                 level.m_7967_(cloud);
             } else {
+                // v1.1.0 实测二百五十二（用户："被投掷的女仆连药水粒子效果都没有，
+                // 说明效果压根就没给到"）：m_7292_（addEffect）在目标已有同类效果且
+                // 不比现有更强时【拒绝施加】返回 false——再生药水每 3~5 秒连投时
+                // 第一次生效后后续全部被拒，效果从不刷新/可见，也没有任何粒子。
+                // 修复：① 改用 m_147207_（forceAddEffect——跳过"不更强则失败"规则，
+                // 强制施加/刷新时长）；② 施加后播 entity_effect 紫色药水粒子（目标
+                // 身上可见的"效果已给到"反馈）；③ 日志记录施加结果（aid-maid effect）。
+                int applied = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
                         net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
-                    target.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    if (target.m_147207_(new net.minecraft.world.effect.MobEffectInstance(e), maid)) {
+                        applied++;
+                    }
                     maxDur = Math.max(maxDur, e.m_19557_());
+                }
+                if (applied > 0) {
+                    level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123811_,
+                            target.m_20185_(), target.m_20227_(1.0), target.m_20189_(),
+                            20, 0.4, 0.3, 0.4, 0.6);
+                    LOGGER.info("aid-maid effect: potion={} applied={} target={}",
+                            potionKey(potionStack), applied, target.m_20148_());
                 }
             }
             if (useCd) {
@@ -869,10 +886,22 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
                 level.m_7967_(cloud);
             } else {
+                // v1.1.0 实测二百五十二：同 throwPotionTo——forceAddEffect 强制施加
+                // + entity_effect 药水粒子 + 日志验证
+                int applied = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
                         net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
-                    owner.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                    if (owner.m_147207_(new net.minecraft.world.effect.MobEffectInstance(e), maid)) {
+                        applied++;
+                    }
                     maxDur = Math.max(maxDur, e.m_19557_());
+                }
+                if (applied > 0) {
+                    level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123811_,
+                            owner.m_20185_(), owner.m_20227_(1.0), owner.m_20189_(),
+                            20, 0.4, 0.3, 0.4, 0.6);
+                    LOGGER.info("aid-owner effect: potion={} applied={} owner={}",
+                            potionKey(potionStack), applied, owner.m_20148_());
                 }
             }
             if (useCd) {
