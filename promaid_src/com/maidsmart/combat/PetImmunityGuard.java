@@ -33,6 +33,9 @@ public final class PetImmunityGuard {
     private static int scanCounter = 0;
     /** 宠物仇恨清除日志限频（60 秒/女仆） */
     private static final java.util.Map<java.util.UUID, Long> HATE_CLEAR_LOG = new java.util.HashMap<>();
+    /** v1.1.0 实测二百四十五：宠物判定未命中诊断日志限频（60 秒/女仆）——
+     *  女仆伤害了名字含"宠物"字样的目标但 isPetMarked 返回 false 时记录名字原文 */
+    private static final java.util.Map<java.util.UUID, Long> PET_MISS_LOG = new java.util.HashMap<>();
 
     private PetImmunityGuard() {
     }
@@ -123,12 +126,37 @@ public final class PetImmunityGuard {
             }
             if (isPetMarked(maid, victim)) {
                 event.setCanceled(true); // 女仆链上的任何伤害打到宠物 → 免疫
+                return;
+            }
+            // v1.1.0 实测二百四十五（用户："哪怕给一个铁傀儡命名为玩家宠物，女仆仍然
+            // 可以伤到铁傀儡"）：判定未命中诊断——受害者名字含"宠物"字样但 isPetMarked
+            // 返回 false，记录名字原文（m_5446_ 显示名 / m_7770_ 自定义名 / m_7755_ 名）
+            // 到 promaid.log，60 秒限频/女仆，定位"名字判定为什么不命中"。
+            try {
+                var vn = victim.m_5446_();
+                if (vn != null && vn.getString().contains("宠物")) {
+                    long now = victim.m_9236_().m_46467_();
+                    Long last = PET_MISS_LOG.get(maid.m_20148_());
+                    if (last == null || now - last > 1200L) {
+                        PET_MISS_LOG.put(maid.m_20148_(), now);
+                        String custom = victim.m_7770_() != null ? victim.m_7770_().getString() : "null";
+                        String plain = victim.m_7755_() != null ? victim.m_7755_().getString() : "null";
+                        org.slf4j.LoggerFactory.getLogger("promaid").info(
+                                "maid pet-miss: maid={} victim={} display=[{}] custom=[{}] name=[{}]",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid),
+                                victim.m_20148_(), vn.getString(), custom, plain);
+                    }
+                }
+            } catch (Throwable ignored) {
             }
         } catch (Throwable ignored) {
         }
     }
 
-    /** 目标/受害者是否命中宠物标记（a/b 只看目标本身；c 需攻击女仆的主人比对） */
+    /** 目标/受害者是否命中宠物标记（a/b 只看目标本身；c 需攻击女仆的主人比对）
+     *  v1.1.0 实测二百四十五：名字判定双保险——m_5446_（getDisplayName，含自定义名）
+     *  之外再直接查 m_7770_（getCustomName）与 m_7755_（getName），任一命中即标记；
+     *  并放宽为"包含"匹配（旧版只查显示名，若显示名被队伍/其他模组改写会漏判）。 */
     public static boolean isPetMarked(EntityMaid maid, LivingEntity target) {
         if (target == null) {
             return false;
@@ -137,6 +165,28 @@ public final class PetImmunityGuard {
             var name = target.m_5446_();
             if (name != null) {
                 String s = name.getString();
+                if (s.contains("玩家宠物") || s.contains("主人的宠物")
+                        || s.startsWith("MaidNoAttack")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            var custom = target.m_7770_();
+            if (custom != null) {
+                String s = custom.getString();
+                if (s.contains("玩家宠物") || s.contains("主人的宠物")
+                        || s.startsWith("MaidNoAttack")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            var plain = target.m_7755_();
+            if (plain != null) {
+                String s = plain.getString();
                 if (s.contains("玩家宠物") || s.contains("主人的宠物")
                         || s.startsWith("MaidNoAttack")) {
                     return true;
