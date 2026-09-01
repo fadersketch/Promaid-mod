@@ -726,6 +726,37 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return -1;
             }
             ItemStack stack = inv.getStackInSlot(bestSlot);
+            // v1.1.0 实测二百四十八（用户："当我就在女仆附近的时候，女仆就一个劲的往
+            // 地上扔。玩家也没吃到效果"）：近距离（≤3 格）不投掷——初速 dx/len*0.5
+            // 极小，药水几乎原地落下 → 落地碎裂（onHitBlock）→ 原版落地不施加效果
+            // 且实体移除 → 半秒超时强制生效永远等不到（实体已没了）→ "往地上扔 +
+            // 玩家没效果"。近距离直接强制施加效果（与半秒超时同款逻辑），不扔。
+            double dx = target.m_20185_() - maid.m_20185_();
+            double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
+            double dz = target.m_20189_() - maid.m_20189_();
+            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
+            if (len <= 3.0) {
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                    target.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                }
+                inv.extractItem(bestSlot, 1, false);
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                int maxDur0 = 0;
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                    maxDur0 = Math.max(maxDur0, e.m_19557_());
+                }
+                if (useCd) {
+                    this.markPotionUsed(
+                            potionCdKey(maid.m_20148_(), potionKey(stack)),
+                            level.m_46467_(), maxDur0 > 0 ? maxDur0 : 60);
+                }
+                LOGGER.info("aid-maid close: label={} potion={} target={} dist={}",
+                        label, potionKey(stack), target.m_20148_(),
+                        String.format("%.1f", len));
+                return Math.max(60, Math.min(maxDur0 > 0 ? maxDur0 : 60, 12000));
+            }
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_());
@@ -737,10 +768,6 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     target.m_20148_().toString());
             potion.getPersistentData().m_128359_("maid_smart_born",
                     String.valueOf(level.m_46467_()));
-            double dx = target.m_20185_() - maid.m_20185_();
-            double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
-            double dz = target.m_20189_() - maid.m_20189_();
-            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
             potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false);
@@ -832,6 +859,36 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return -1;
             }
             ItemStack stack = inv.getStackInSlot(bestSlot);
+            // v1.1.0 实测二百四十八：近距离（≤3 格）不投掷——直接强制施加效果
+            //（同 throwPotionTo 口径：近距初速极小 → 药水原地落地碎裂 → 原版落地
+            // 不施加效果且实体移除 → 半秒超时强制生效永远等不到 → "往地上扔 +
+            // 玩家没效果"）
+            double dx = owner.m_20185_() - maid.m_20185_();
+            double dy = owner.m_20227_(0.3) - maid.m_20227_(0.6);
+            double dz = owner.m_20189_() - maid.m_20189_();
+            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
+            if (len <= 3.0) {
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                    owner.m_7292_(new net.minecraft.world.effect.MobEffectInstance(e));
+                }
+                inv.extractItem(bestSlot, 1, false);
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                int maxDur0 = 0;
+                for (net.minecraft.world.effect.MobEffectInstance e :
+                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                    maxDur0 = Math.max(maxDur0, e.m_19557_());
+                }
+                if (useCd) {
+                    this.markPotionUsed(
+                            potionCdKey(maid.m_20148_(), potionKey(stack)),
+                            level.m_46467_(), maxDur0 > 0 ? maxDur0 : 60);
+                }
+                maid.getChatBubbleManager().addTextChatBubble("主人别怕，" + label + "药水来了！");
+                LOGGER.info("aid-owner close: label={} potion={} ownerDist={}",
+                        label, potionKey(stack), String.format("%.1f", len));
+                return Math.max(60, Math.min(maxDur0 > 0 ? maxDur0 : 60, 12000));
+            }
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_()); // setItem（复制药水物品；m_41777_=copy）
@@ -843,10 +900,6 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             potion.getPersistentData().m_128359_("maid_smart_born",
                     String.valueOf(level.m_46467_()));
             // 初速朝主人（抛物线自然下落，不再每 tick 修正方向）
-            double dx = owner.m_20185_() - maid.m_20185_();
-            double dy = owner.m_20227_(0.3) - maid.m_20227_(0.6);
-            double dz = owner.m_20189_() - maid.m_20189_();
-            double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
             potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false); // 消耗 1 个
