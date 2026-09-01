@@ -729,9 +729,13 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_());
-            // 追踪标签（HomingPotionMixin 通用——目标 UUID）
+            // v1.1.0 实测二百四十三（用户："药水追踪逻辑做的并不好。会导致药水乱飞"）：
+            // 追踪弹 → 纯抛物线。不再打 homing 标签（HomingPotionMixin 不再修正方向），
+            // 只打目标 UUID + 出生 tick——mixin 在 1 秒后强制给目标施加效果并清除药水。
             potion.getPersistentData().m_128359_("maid_smart_homing",
                     target.m_20148_().toString());
+            potion.getPersistentData().m_128359_("maid_smart_born",
+                    String.valueOf(level.m_46467_()));
             double dx = target.m_20185_() - maid.m_20185_();
             double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
             double dz = target.m_20189_() - maid.m_20189_();
@@ -784,13 +788,14 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.231b：投掷药水给主人——【择优 + 追踪弹】：
+     * v1.5.231b：投掷药水给主人——【择优 + 抛物线 + 超时兜底】：
      * ① 择优：强效/长效优先（strong_healing > healing；long_regeneration >
      * strong_regeneration > regeneration；long_fire_resistance > fire_resistance），
      * 不再按槽位顺序取第一个；
-     * ② 追踪：投掷物 persistentData 打 "maid_smart_homing" = 主人 UUID，
-     * HomingPotionMixin 每 tick 修正方向锁定主人飞行直至击中（旧版抛物线
-     * 命中率极低——"喷溅治疗药水基本没喷中过"）。
+     * ② v1.1.0 实测二百四十三（用户："药水追踪逻辑做的并不好。会导致药水乱飞"）：
+     * 追踪弹 → 纯抛物线——初速朝主人自然下落，不再每 tick 修正方向（旧版目标
+     * 移动时药水来回甩动乱飞）；HomingPotionMixin 记录出生 tick，1 秒后无论
+     * 是否命中都强制给主人施加药水效果并清除药水（效果必达，不再依赖命中）。
      */
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
@@ -829,10 +834,13 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_()); // setItem（复制药水物品；m_41777_=copy）
-            // 追踪标签：HomingPotionMixin 每 tick 修正方向锁定主人，直至命中
+            // v1.1.0 实测二百四十三：追踪弹 → 纯抛物线（同 throwPotionTo 口径）——
+            // 只打目标 UUID + 出生 tick，mixin 1 秒后强制给主人施加效果并清除药水
             potion.getPersistentData().m_128359_("maid_smart_homing",
                     owner.m_20148_().toString());
-            // 初速朝主人（追踪会接管方向；初速只是让实体先动起来）
+            potion.getPersistentData().m_128359_("maid_smart_born",
+                    String.valueOf(level.m_46467_()));
+            // 初速朝主人（抛物线自然下落，不再每 tick 修正方向）
             double dx = owner.m_20185_() - maid.m_20185_();
             double dy = owner.m_20227_(0.3) - maid.m_20227_(0.6);
             double dz = owner.m_20189_() - maid.m_20189_();
