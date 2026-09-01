@@ -40,6 +40,9 @@ import java.util.Set;
  *   物品（铁矿石/粗铁/金矿石/远古残骸等）照常放进熔炉烧（开关 misc.cookSmeltOres）
  * - v1.5.252 燃料修正：**不限于煤炭——凡是可燃烧物品（原版 isFuel）都可用，
  *   优先选背包中数量最多的那个**
+ * - v1.1.0 实测二百四十一：燃料选择再修正——纯燃料优先（燃烧时长评分：
+ *   煤炭/木炭/烈焰棒/干海带块/熔岩桶等不可烧制的可燃烧物），背包没有纯燃料
+ *   才退而选可烧制燃料（原木/木板/树苗）——不再"用木头烧木头"
  * - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动）
  * - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立
  */
@@ -325,8 +328,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
         }
         // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
+        // v1.1.0 实测二百四十一：纯燃料优先（燃烧时长评分，煤炭/木炭/烈焰棒等），
+        // 没有纯燃料才退而选可烧制燃料（原木/木板）——不再"用木头烧木头"
         if (furnace.m_8020_(1).m_41619_()) {
-            ItemStack fuel = this.extractBestFuel(maidInv);
+            ItemStack fuel = this.extractBestFuel(level, maidInv);
             if (!fuel.m_41619_()) {
                 furnace.m_6836_(1, fuel);
             }
@@ -487,8 +492,16 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.5.252：燃料 = 背包中【数量最多】的可燃烧物品（原版 isFuel 判定，不限于煤炭） */
-    private ItemStack extractBestFuel(IItemHandler maidInv) {
+    /** v1.5.252：燃料 = 背包中【数量最多】的可燃烧物品（原版 isFuel 判定，不限于煤炭）。
+     *  v1.1.0 实测二百四十一（用户："女仆有的时候会使用木头烧木头"）：旧版按数量
+     *  最多选——原木/木板/树苗既是燃料又是可烧制原料，伐木女仆背包原木数量碾压
+     *  煤炭 → 原木进燃料槽、原木又进原料槽 = "用木头烧木头"。修复：
+     *  ① 评分 = 燃烧时长优先（getFuel 映射，煤炭 1600 tick ≫ 原木 300 tick），
+     *     同长再按数量——有煤必用煤，不再被数量带偏；
+     *  ② 纯燃料优先：可燃烧且【无熔炉配方】（煤炭/木炭/烈焰棒/干海带块/熔岩桶）
+     *     先选；背包没有纯燃料才退而选可烧制燃料（原木烧原木总比炉子熄火好）。 */
+    private ItemStack extractBestFuel(ServerLevel level, IItemHandler maidInv) {
+        Map<Item, Integer> burnTicks = new HashMap<>();
         Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
@@ -497,13 +510,34 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 continue;
             }
             counts.merge(stack.m_41720_(), stack.m_41613_(), Integer::sum);
+            Integer ticks = net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+                    .m_58423_().get(stack.m_41720_());
+            burnTicks.putIfAbsent(stack.m_41720_(), ticks == null ? 0 : ticks);
+        }
+        if (counts.isEmpty()) {
+            return ItemStack.f_41583_;
         }
         Item best = null;
-        int bestCount = 0;
-        for (Map.Entry<Item, Integer> e : counts.entrySet()) {
-            if (e.getValue() > bestCount) {
-                best = e.getKey();
-                bestCount = e.getValue();
+        int bestScore = Integer.MIN_VALUE;
+        // 第一轮：纯燃料（可燃烧且不可烧制）——煤炭/木炭/烈焰棒/干海带块/熔岩桶
+        for (Item it : counts.keySet()) {
+            if (isSmeltable(level, new ItemStack(it))) {
+                continue; // 可烧制燃料（原木/木板/树苗）留到第二轮兜底
+            }
+            int score = burnTicks.getOrDefault(it, 0) * 100000 + counts.get(it);
+            if (score > bestScore) {
+                bestScore = score;
+                best = it;
+            }
+        }
+        if (best == null) {
+            // 第二轮：没有纯燃料 → 可烧制燃料兜底（原木烧原木总比炉子熄火好）
+            for (Item it : counts.keySet()) {
+                int score = burnTicks.getOrDefault(it, 0) * 100000 + counts.get(it);
+                if (score > bestScore) {
+                    bestScore = score;
+                    best = it;
+                }
             }
         }
         if (best == null) {
