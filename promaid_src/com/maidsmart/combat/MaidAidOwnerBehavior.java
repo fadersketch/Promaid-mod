@@ -729,9 +729,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_());
-            // v1.1.0 实测二百四十三（用户："药水追踪逻辑做的并不好。会导致药水乱飞"）：
-            // 追踪弹 → 纯抛物线。不再打 homing 标签（HomingPotionMixin 不再修正方向），
-            // 只打目标 UUID + 出生 tick——mixin 在 1 秒后强制给目标施加效果并清除药水。
+            // v1.1.0 实测二百四十六（用户："药水的飞行逻辑过于鬼畜了。改为和玩家一样
+            // 向目标方向以抛物线方式抛出一个药水"）：纯抛物线——玩家同款初速
+            // （0.5 速度 + 0.2 抬升），不再追踪修正；mixin 半秒后强制给目标施加
+            // 效果并清除药水（近距扔歪也不提前消失，效果必达）。
             potion.getPersistentData().m_128359_("maid_smart_homing",
                     target.m_20148_().toString());
             potion.getPersistentData().m_128359_("maid_smart_born",
@@ -740,7 +741,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             double dy = target.m_20227_(0.3) - maid.m_20227_(0.6);
             double dz = target.m_20189_() - maid.m_20189_();
             double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
-            potion.m_6686_(dx / len * 0.9, dy + 0.2, dz / len * 0.9, 1.4f, 1.0f);
+            potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -834,8 +835,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(stack.m_41777_()); // setItem（复制药水物品；m_41777_=copy）
-            // v1.1.0 实测二百四十三：追踪弹 → 纯抛物线（同 throwPotionTo 口径）——
-            // 只打目标 UUID + 出生 tick，mixin 1 秒后强制给主人施加效果并清除药水
+            // v1.1.0 实测二百四十六：纯抛物线（同 throwPotionTo 口径）——玩家同款
+            // 初速 0.5 + 0.2 抬升，不再追踪修正；mixin 半秒后强制给主人施加效果并
+            // 清除药水（近距扔歪也不提前消失，效果必达）
             potion.getPersistentData().m_128359_("maid_smart_homing",
                     owner.m_20148_().toString());
             potion.getPersistentData().m_128359_("maid_smart_born",
@@ -845,7 +847,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             double dy = owner.m_20227_(0.3) - maid.m_20227_(0.6);
             double dz = owner.m_20189_() - maid.m_20189_();
             double len = Math.max(0.01, Math.sqrt(dx * dx + dz * dz));
-            potion.m_6686_(dx / len * 0.9, dy + 0.2, dz / len * 0.9, 1.4f, 1.0f);
+            potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false); // 消耗 1 个
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
