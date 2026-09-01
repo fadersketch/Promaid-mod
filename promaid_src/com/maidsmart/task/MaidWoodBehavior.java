@@ -1846,9 +1846,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测二百四十：isAir → suffocates——树冠场景女仆头顶就是树叶
         // （isSuffocating 恒 false，不闷人），旧版 isAir 检查把树叶当"堵头"拦死
         // 搭高（"伐木不搭方块"根因之二）；只拦真正会闷住她的实心满块。
+        // v1.1.0 实测二百四十七（用户："挖掘一定数量后不再搭方块"）：headPos+1
+        // 检查【漏了目标木材排除】——女仆搭了几块柱子后站在柱顶，目标木材就在
+        // 头顶 1~2 格（headPos+1 恰好是目标木材）→ suffocates 拦死后续搭高。
+        // 与 place+1/place+2 同口径：目标木材所在格排除（搭高就是为了够它）。
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
-        if (this.suffocates(level, headPos) || this.suffocates(level, headPos.m_7918_(0, 1, 0))) {
+        if ((this.suffocates(level, headPos) && !headPos.equals(this.targetPos))
+                || (this.suffocates(level, headPos.m_7918_(0, 1, 0))
+                && !headPos.m_7918_(0, 1, 0).equals(this.targetPos))) {
             return false; // 实际头顶被会窒息的实心块堵住（正在被顶起中）→ 等站稳再垫，防窒息
         }
         // 目标矿在正上方时不误判为"障碍"（v1.5.25：头顶检查放宽，不检查矿所在格）
