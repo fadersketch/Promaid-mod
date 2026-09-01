@@ -768,7 +768,29 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     target.m_20148_().toString());
             potion.getPersistentData().m_128359_("maid_smart_born",
                     String.valueOf(level.m_46467_()));
-            potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
+            // v1.1.0 实测二百四十九（用户："药水扔的路径仍然容易出错"）：弹道精确
+            // 瞄准——旧版 0.5 速度 + inaccuracy 1.0：速度太慢（半秒只飞 5 格，远目标
+            // 药水飞一半就消失）、inaccuracy 随机散布（每次扔的方向随机偏转）→
+            // "路径容易出错"。现在：速度 1.0（射程 20 格，半秒飞 10 格）+ inaccuracy 0
+            // （精确瞄准）+ 弹道公式解仰角（药水精确飞向目标位置，抛物线弧度自然）。
+            double v = 1.0;
+            double g = 0.05;
+            double h = target.m_20186_() - maid.m_20186_();
+            double A = 2 * v * v / (g * len);
+            double B = 2 * v * v * h / (g * len * len) + 1;
+            double disc = A * A - 4 * B;
+            double u;
+            if (disc >= 0) {
+                u = (A - Math.sqrt(disc)) / 2;
+                if (u < 0) {
+                    u = (A + Math.sqrt(disc)) / 2;
+                }
+            } else {
+                u = 0.25;
+            }
+            double vh = v / Math.sqrt(1 + u * u);
+            double vy = v * u / Math.sqrt(1 + u * u);
+            potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -899,8 +921,26 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     owner.m_20148_().toString());
             potion.getPersistentData().m_128359_("maid_smart_born",
                     String.valueOf(level.m_46467_()));
-            // 初速朝主人（抛物线自然下落，不再每 tick 修正方向）
-            potion.m_6686_(dx / len * 0.5, dy + 0.2, dz / len * 0.5, 0.5f, 1.0f);
+            // v1.1.0 实测二百四十九：弹道精确瞄准（同 throwPotionTo 口径）——
+            // 速度 1.0 + inaccuracy 0 + 弹道公式解仰角，药水精确飞向主人
+            double v = 1.0;
+            double g = 0.05;
+            double h = owner.m_20186_() - maid.m_20186_();
+            double A = 2 * v * v / (g * len);
+            double B = 2 * v * v * h / (g * len * len) + 1;
+            double disc = A * A - 4 * B;
+            double u;
+            if (disc >= 0) {
+                u = (A - Math.sqrt(disc)) / 2;
+                if (u < 0) {
+                    u = (A + Math.sqrt(disc)) / 2;
+                }
+            } else {
+                u = 0.25;
+            }
+            double vh = v / Math.sqrt(1 + u * u);
+            double vy = v * u / Math.sqrt(1 + u * u);
+            potion.m_6686_(dx / len * vh, vy, dz / len * vh, 1.0f, 0.0f);
             level.m_7967_(potion);
             inv.extractItem(bestSlot, 1, false); // 消耗 1 个
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
