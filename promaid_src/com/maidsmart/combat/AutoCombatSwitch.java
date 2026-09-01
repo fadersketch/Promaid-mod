@@ -1424,13 +1424,60 @@ public class AutoCombatSwitch {
     /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务
      *  （或仍在本系统指派的战斗任务上）。仅标记残留 true、任务已不是攻击任务
      *  （老版本残留/战斗早已结束）→ 返回 false：排班不再被残留标记挡死（用户：
-     *  "排班不切换、女仆一直跟随主人"——根因就是残留 COMBAT_ACTIVE 让排班永久让位）。 */
+     *  "排班不切换、女仆一直跟随主人"——根因就是残留 COMBAT_ACTIVE 让排班永久让位）。
+     *  v1.1.0 实测二百六十一（用户："排班开启后女仆一直保持未排班状态，锁定还解除
+     *  不了"）：判定收窄——【排班开启】的女仆不再参与自主战斗（tryEngageMaid 直接
+     *  跳过），她身上不可能有本系统指派的战斗任务；此时只要 ASSIGNED 与当前任务
+     *  不一致（含"当前是任意攻击任务"的旧兜底——玩家手动安排的攻击任务/第三方
+     *  攻击任务/残留标记）一律视为非本系统战斗，排班照常接管。否则排班女仆只要
+     *  手头是攻击类任务（玩家手动安排的近战/弓/弹幕）就被"战斗中"让位门永久挡死：
+     *  模式/任务永不切换、且守卫 mixin 拦下一切手动调整 = 排班锁死。 */
     public static boolean isReallyCombatActive(EntityMaid maid) {
         if (!maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
             return false;
         }
         IMaidTask task = maid.getTask();
+        if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+            return !assigned.isEmpty() && task != null
+                    && assigned.equals(task.getUid().toString());
+        }
         return isAssignedOrCombatTask(maid, task);
+    }
+
+    /** v1.1.0 实测二百六十五/二百六十六：供外部系统（批量应用等）处理战斗标记——
+     *  返回 true = 【真本系统战斗】（ASSIGNED 匹配当前任务，应跳过——防打断战斗
+     *  还原链）；false = 残留标记/玩家手动安排的攻击任务/第三方攻击任务（已清残留，
+     *  外部系统可正常应用）。旧版批量应用用 isReallyCombatActive 跳过——排班关闭时
+     *  它含 IAttackTask 兜底（当前任务是任意攻击任务即判"战斗中"），玩家手动安排
+     *  攻击任务的女仆（满血、无排班）被永久跳过 = "全员模式有时无法应用"。 */
+    public static boolean isRealCombatActive(EntityMaid maid) {
+        try {
+            if (!maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
+                return false;
+            }
+            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+            var task = maid.getTask();
+            boolean real = !assigned.isEmpty() && task != null
+                    && assigned.equals(task.getUid().toString());
+            if (!real) {
+                clearMarkersForExternal(maid); // 残留 → 清掉，让外部系统正常应用
+            }
+            return real;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** v1.1.0 实测二百六十五：供外部系统（批量应用等）清理【残留】战斗标记——
+     *  调用方已确认标记残留（当前任务非攻击任务），直接清全部标记 + 还原 home/作息
+     *  （排班关闭时），让女仆恢复可被正常操作的状态。真在战斗中的女仆不应调用。 */
+    public static void clearMarkersForExternal(EntityMaid maid) {
+        try {
+            clearMarkers(maid);
+            restorePrevMode(maid);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 清全部标记：一律 remove（m_128473_）——按【正确类型】清键，不留类型污染。

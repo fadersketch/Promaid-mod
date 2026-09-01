@@ -102,6 +102,30 @@ public class ScheduleBookScreen extends Screen {
         cur.m_7856_();
     }
 
+    /** v1.1.0 实测二百六十八（用户："排班生效之后，快捷设置页的 GUI 应该也统一立刻
+     *  更改为排班所规定的状态，然后再锁定"）：服务端排班段应用成功 → 推最新真实状态
+     *  （任务/模式/排班开关）→ 更新列表行数据并重建界面——快捷设置页立即显示排班
+     *  规定的模式/任务并锁定，不再停留在打开排班书那一刻的旧状态。 */
+    public static void syncMaidState(String uuid, String taskUid, int scheduleOrdinal, boolean schedOn) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null) {
+            return;
+        }
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                m[2] = taskUid == null ? "touhou_little_maid:idle" : taskUid;
+                m[3] = String.valueOf(Math.max(0, Math.min(2, scheduleOrdinal)));
+                m[4] = schedOn ? "1" : "0";
+                break;
+            }
+        }
+        // 详情页正在看这只女仆：同步开关状态（右上角排班开关 + 快捷设置页锁定）
+        if (uuid.equals(cur.selUuid)) {
+            cur.loadedOn = schedOn;
+        }
+        cur.m_7856_();
+    }
+
     private ScheduleBookScreen(Screen parent, List<String[]> maids, List<String> taskUids) {
         super(Component.m_237113_("排班表"));
         this.parent = parent;
@@ -213,16 +237,23 @@ public class ScheduleBookScreen extends Screen {
                             if (this.taskUids.isEmpty()) {
                                 return;
                             }
-                            int next = (this.taskUids.indexOf(this.batchTask) + 1) % this.taskUids.size();
-                            this.batchTask = this.taskUids.get(next);
+                            // v1.1.0 实测二百七十：批量任务循环【含空闲档】——旧版只在
+                            // taskUids 里循环（batchTask 初始 "" 时 indexOf=-1 → 直接跳到
+                            // 第一个任务），选不到"空闲"；末尾回绕到 ""（空闲档）。
+                            int next = (this.taskUids.indexOf(this.batchTask) + 1) % (this.taskUids.size() + 1);
+                            this.batchTask = next == this.taskUids.size() ? "" : this.taskUids.get(next);
                             this.m_7856_();
                         })
                 .m_252987_(bx0 + 106, h - 68, 100, 18).m_253136_());
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a\u2713应用任务"), b -> {
-                    if (!this.batchTask.isEmpty()) {
-                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.BatchApplyPacket(
-                                -1, this.batchTask));
-                    }
+                    // v1.1.0 实测二百七十（用户："点击应用空闲，女仆仍然显示自己在别的
+                    // 模式。哪怕排班没有开启"）："空闲"档在 GUI 里 = 空串 ""——旧版
+                    // if (!batchTask.isEmpty()) 把空串拦掉 → 点"应用空闲"什么都不发。
+                    // 空串 → 当作 touhou_little_maid:idle（TLM 空闲任务）发送。
+                    String uid = this.batchTask.isEmpty()
+                            ? "touhou_little_maid:idle" : this.batchTask;
+                    ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                            -1, uid));
                 })
                 .m_252987_(bx0 + 212, h - 68, 80, 18).m_253136_());
         // 翻页（◀ 页码 ▶ 居中一行，位于底区）

@@ -621,7 +621,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 foodName = toGive.m_41786_().getString();
             }
-            // 真实进食（m_5584_ = eat(Level, ItemStack)）：食物效果/音效/粒子全生效
+            // 真实进食（m_5584_ = eat(Level, ItemStack)）：与女仆自己吃食物完全一致
+            // 的食物效果/音效/粒子路径。
+            // v1.1.0 实测二百五十六：移除上轮手搓 heal——用户要求喂食效果与女仆
+            // 自己吃食物一样，eat() 就是标准路径（食物效果由 FoodProperties 定义，
+            // 金苹果等自带回血效果的食物自然回血），不再额外手搓。
             sister.m_5584_(sister.m_9236_(), toGive);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             return "喂了" + foodName;
@@ -667,7 +671,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (useCd) {
                     int maxDur = 0;
                     for (net.minecraft.world.effect.MobEffectInstance e :
-                            net.minecraft.world.item.alchemy.PotionUtils.m_43571_(taken)) {
+                            potionEffectsOf(taken)) {
                         maxDur = Math.max(maxDur, e.m_19557_());
                     }
                     this.markPotionUsed(
@@ -735,35 +739,45 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 效果结束）；③ 其他形态（喷溅/普通）→ 直接给目标施加所有效果。
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            // v1.1.0 实测二百五十一：抛药水动画（纯观感）——空药水抛物线飞向目标
-            this.throwPotionAnimate(level, maid, target);
+            // v1.1.0 实测二百五十一/二百五十四：抛药水动画（纯观感）——实际药水
+            // 完整复制抛物线飞向目标（形态+效果与真实投掷视觉一致）
+            this.throwPotionAnimate(level, maid, target, potionStack);
             int maxDur = 0;
             boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
             if (lingering) {
+                // v1.1.0 实测二百五十九（用户："滞留药水药水效果云还是没做好"）：
+                // 云参数全面对齐原版 ThrownPotion.m_37537_（字节码实证）。旧版
+                // cloud.m_19714_(maxDur) 注释写"setDuration"——实际是 setColor（写
+                // 颜色数据槽）！把时长当颜色写入 → 云永远是 maxDur/600 解析出的
+                // 暗色怪云（看起来像无效云）。真正的 setDuration 是 m_19734_。
+                // 同时补 setWaitTime(10)/setRadiusOnFall(-0.5f)/setRadiusPerTick
+                // (-r/dur)：waitTime 后云从 0 半径长到 3.0，与真实滞留云外观一致。
                 net.minecraft.world.entity.AreaEffectCloud cloud =
                         new net.minecraft.world.entity.AreaEffectCloud(level,
                                 target.m_20185_(), target.m_20186_(), target.m_20189_());
-                cloud.m_19712_(3.0f); // setRadius
+                cloud.m_19712_(3.0f);  // setRadius
+                cloud.m_19732_(-0.5f); // setRadiusOnFall（原版同款）
+                cloud.m_19740_(10);    // setWaitTime（0.5 秒后开始生效/成长）
                 cloud.m_19722_(net.minecraft.world.item.alchemy.PotionUtils
-                        .m_43579_(potionStack)); // setPotion
+                        .m_43579_(potionStack)); // setPotion（云颜色由 m_19750_ 按药水自动算出）
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                        potionEffectsOf(potionStack)) {
                     cloud.m_19716_(new net.minecraft.world.effect.MobEffectInstance(e));
                     maxDur = Math.max(maxDur, e.m_19557_());
                 }
-                cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
+                int cloudDur = maxDur > 0 ? maxDur : 600;
+                cloud.m_19738_(-3.0f / cloudDur); // setRadiusPerTick（原版 = -radius/duration）
+                cloud.m_19734_(cloudDur);         // setDuration
                 level.m_7967_(cloud);
             } else {
-                // v1.1.0 实测二百五十二（用户："被投掷的女仆连药水粒子效果都没有，
-                // 说明效果压根就没给到"）：m_7292_（addEffect）在目标已有同类效果且
-                // 不比现有更强时【拒绝施加】返回 false——再生药水每 3~5 秒连投时
-                // 第一次生效后后续全部被拒，效果从不刷新/可见，也没有任何粒子。
-                // 修复：① 改用 m_147207_（forceAddEffect——跳过"不更强则失败"规则，
-                // 强制施加/刷新时长）；② 施加后播 entity_effect 紫色药水粒子（目标
-                // 身上可见的"效果已给到"反馈）；③ 日志记录施加结果（aid-maid effect）。
+                // v1.1.0 实测二百五十二/二百五十三：forceAddEffect 强制施加（跳过同类
+                // 拒绝规则）+ entity_effect 药水粒子 + 日志验证；效果读取用
+                // potionEffectsOf（Potion 字段 + CustomPotionEffects 合并——旧版
+                // m_43571_ 只读 CustomPotionEffects，再生/治疗等标准药水效果在 Potion
+                // 注册表里，读出来恒为空 → 效果从第一次就没加上）
                 int applied = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                        potionEffectsOf(potionStack)) {
                     if (target.m_147207_(new net.minecraft.world.effect.MobEffectInstance(e), maid)) {
                         applied++;
                     }
@@ -867,30 +881,40 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 效果。（原版"抛药水"的动作观感由摆臂动画保留。）
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            // v1.1.0 实测二百五十一：抛药水动画（纯观感）——空药水抛物线飞向主人
-            this.throwPotionAnimate(level, maid, owner);
+            // v1.1.0 实测二百五十一/二百五十四：抛药水动画（纯观感）——实际药水
+            // 完整复制抛物线飞向主人（形态+效果与真实投掷视觉一致）
+            this.throwPotionAnimate(level, maid, owner, potionStack);
             int maxDur = 0;
             boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
             if (lingering) {
+                // v1.1.0 实测二百五十九：同 throwPotionTo——m_19714_ 实际是 setColor 不是
+                // setDuration（旧版把时长当颜色 → 暗色怪云）；setDuration 是 m_19734_。
+                // 参数对齐原版 ThrownPotion.m_37537_：waitTime 10、radiusOnFall -0.5、
+                // radiusPerTick -3/dur、Potion 字段效果（自动算紫色）+ CustomPotionEffects。
                 net.minecraft.world.entity.AreaEffectCloud cloud =
                         new net.minecraft.world.entity.AreaEffectCloud(level,
                                 owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
-                cloud.m_19712_(3.0f); // setRadius
+                cloud.m_19712_(3.0f);  // setRadius
+                cloud.m_19732_(-0.5f); // setRadiusOnFall（原版同款）
+                cloud.m_19740_(10);    // setWaitTime（0.5 秒后开始生效/成长）
                 cloud.m_19722_(net.minecraft.world.item.alchemy.PotionUtils
                         .m_43579_(potionStack)); // setPotion
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                        potionEffectsOf(potionStack)) {
                     cloud.m_19716_(new net.minecraft.world.effect.MobEffectInstance(e));
                     maxDur = Math.max(maxDur, e.m_19557_());
                 }
-                cloud.m_19714_(maxDur > 0 ? maxDur : 600); // setDuration
+                int cloudDur = maxDur > 0 ? maxDur : 600;
+                cloud.m_19738_(-3.0f / cloudDur); // setRadiusPerTick（原版 = -radius/duration）
+                cloud.m_19734_(cloudDur);         // setDuration
                 level.m_7967_(cloud);
             } else {
-                // v1.1.0 实测二百五十二：同 throwPotionTo——forceAddEffect 强制施加
-                // + entity_effect 药水粒子 + 日志验证
+                // v1.1.0 实测二百五十二/二百五十三：同 throwPotionTo——forceAddEffect
+                // 强制施加 + entity_effect 药水粒子 + 日志验证；效果读取用
+                // potionEffectsOf（Potion 字段 + CustomPotionEffects 合并）
                 int applied = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(potionStack)) {
+                        potionEffectsOf(potionStack)) {
                     if (owner.m_147207_(new net.minecraft.world.effect.MobEffectInstance(e), maid)) {
                         applied++;
                     }
@@ -1001,7 +1025,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 // v1.5.252g13：CD 记账【提前到气泡之前】（防气泡异常吞 CD）
                 int maxDur2 = 0;
                 for (net.minecraft.world.effect.MobEffectInstance e :
-                        net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)) {
+                        potionEffectsOf(stack)) {
                     maxDur2 = Math.max(maxDur2, e.m_19557_());
                 }
                 if (useCd) {
@@ -1059,14 +1083,22 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.1.0 实测二百五十一（用户："再加一个药水以抛物线方式从女仆飞到目标原有位置
-     * 的动画。但那个仅仅是动画"）：抛药水【纯动画】——生成一个空喷溅药水（无任何
-     * 药水效果，落地不施加任何东西），从女仆位置按弹道公式抛物线飞向目标位置。
-     * 触发即生效的逻辑不变（动画只是观感，效果已由调用方直接施加）。
+     * 的动画。但那个仅仅是动画"）：抛药水【纯动画】——从女仆位置按弹道公式抛物线
+     * 飞向目标位置。
+     * v1.1.0 实测二百五十四（用户："扔出去的药水所显示的动画效果理论上应该是投掷
+     * 药水的动画效果吧？而在投掷再生药水的时候，地上的药水云仍然是无效果药水云就
+     * 会显得很违和"）：动画药水改用【实际药水完整复制】（同样形态 + 实际 Potion
+     * 效果）——旧版用空喷溅药水（setPotion empty）：瓶子是红色空瓶样式、落地只有
+     * 白色水花粒子，与"投掷再生药水"的观感完全不符。现在飞出去的就是再生药水瓶
+     * （紫色），落地自然呈现再生药水的碎裂粒子/效果云——与真实投掷视觉一致。
+     * 效果重复无害：触发逻辑已用 forceAddEffect 强制施加，动画落地溅射的 addEffect
+     * 只会与已有同种效果合并（时长取更长），不叠加。
      * 注意：动画抛掷必须【远距离（>3 格）且目标仍存活】才做——近距离/目标已消失
      * 时抛空药水没有意义（目标位置即女仆脚下/原地）。
      */
     private void throwPotionAnimate(ServerLevel level, EntityMaid maid,
-                                    net.minecraft.world.entity.LivingEntity target) {
+                                    net.minecraft.world.entity.LivingEntity target,
+                                    ItemStack potionStack) {
         try {
             if (target == null || !target.m_6084_()) {
                 return;
@@ -1077,17 +1109,27 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (len <= 3.0) {
                 return; // 近距离不做动画（目标就在身边，抛出无观感意义）
             }
-            // 空喷溅药水（无药水效果——落地只有碎裂粒子，不施加任何状态）
-            ItemStack anim = new ItemStack(net.minecraft.world.item.Items.f_42736_);
-            net.minecraft.world.item.alchemy.PotionUtils.m_43549_(anim,
-                    net.minecraft.world.item.alchemy.Potions.f_43585_); // setPotion(empty)
+            // 动画药水 = 实际药水完整复制（形态 + Potion 效果与真实投掷一致）
+            ItemStack anim = potionStack.m_41777_();
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(anim);
-            // 弹道公式解仰角（与旧版二百四十九同款）：速度 1.0、无随机散布、
+            // v1.1.0 实测二百五十五（用户："动画偏移效果还是有点严重。导致效果虽然
+            // 给到了，但是落点不同还是会有一些违和感。那么药水动画的最终落点就给到
+            // 时刻追踪目标位置"）：落点时刻追踪——动画实体带目标 UUID 标签
+            //（maid_smart_anim_target），由 HomingPotionMixin 的追踪逻辑每 tick
+            // 用【当前实际位置】重算抛物线瞄准目标当前位置（既有弧线又跟目标移动），
+            // 落点与目标几乎重合，消除偏移违和感。
+            potion.getPersistentData().m_128359_("maid_smart_anim_target",
+                    target.m_20148_().toString());
+            // 弹道公式解仰角（与旧版二百四十九同款）：速度 4.0、无随机散布、
             // 按水平距离/高度差精确飞向目标位置；动画抛掷不设 homing 标签
             //（纯抛物线自然飞行，落地即消失——空药水无效果，安全）。
-            double v = 1.0;
+            // v1.1.0 实测二百六十四（用户："效果给到之后药水动画立刻落地吧"）：
+            // 速度 1.0 → 4.0——效果是触发即生效（瞬间给到），动画药水必须快速
+            // 到达落地（2~3 tick），与效果施加几乎同步，不再"效果先到、瓶子还在
+            // 天上飞半秒"的脱节观感。
+            double v = 4.0;
             double g = 0.05;
             double h = target.m_20186_() - maid.m_20186_();
             double A = 2 * v * v / (g * len);
@@ -1108,6 +1150,30 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             level.m_7967_(potion);
         } catch (Exception ignored) {
         }
+    }
+
+    /**
+     * v1.1.0 实测二百五十三（用户："女仆根本连效果都没吃到"）：药水效果读取修正——
+     * 旧版用 PotionUtils.m_43571_（getMobEffects）只读 NBT 的 CustomPotionEffects 列表，
+     * 字节码实证它【完全不读 Potion 字段】——再生/治疗/抗火等标准药水的效果存在
+     * Potion 注册表（Potion.getEffects），不在 CustomPotionEffects → 返回空列表 →
+     * 效果从第一次就没加上（"连粒子都没有/一滴血没回"的真正根因，与同类拒绝无关）。
+     * 修复：Potion 字段效果（m_43488_）+ CustomPotionEffects 合并，两路都读。
+     */
+    private static java.util.List<net.minecraft.world.effect.MobEffectInstance>
+    potionEffectsOf(ItemStack stack) {
+        java.util.List<net.minecraft.world.effect.MobEffectInstance> out =
+                new java.util.ArrayList<>();
+        try {
+            net.minecraft.world.item.alchemy.Potion p =
+                    net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
+            if (p != null) {
+                out.addAll(p.m_43488_()); // Potion.getEffects（标准药水的效果所在）
+            }
+            out.addAll(net.minecraft.world.item.alchemy.PotionUtils.m_43571_(stack)); // CustomPotionEffects
+        } catch (Exception ignored) {
+        }
+        return out;
     }
 
     /** 药水注册名是否在目标集合内（m_43579_=PotionUtils.getPotion） */

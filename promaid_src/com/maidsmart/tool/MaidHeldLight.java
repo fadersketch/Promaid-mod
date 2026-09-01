@@ -132,10 +132,7 @@ public final class MaidHeldLight {
                     } else if (level.m_8055_(pos).m_60734_() != lightBlock()) {
                         placeBlock(level, pos, light); // 被替换了（罕见）：补回
                     } else {
-                        int cur = level.m_8055_(pos).m_61143_(LEVEL_PROP);
-                        if (cur != light) {
-                            level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, light), 3);
-                        }
+                        placeBlock(level, pos, light); // 光强更新（placeBlock 内部只写空气/光块格）
                     }
                     TRACKED.put(maid.m_20148_(), new Entry(level, pos));
                 }
@@ -177,7 +174,14 @@ public final class MaidHeldLight {
 
     /** 主手 → 副手：① 白名单命中直接用登记亮度（火把系等特殊光源——用户实证
      *  通用路径只对标准 BlockItem 成立）；② 通用路径：物品方块自身发光
-     *  （m_60739_，与光照引擎同源）。0=无光。 */
+     *  （m_60791_ = getLightEmission，字节码实证：BlockStateBase 构造器把
+     *  Properties.lightEmission（m_60953_ 设置的 ToIntFunction）算进 f_60594_，
+     *  m_60791_ 直接返回该字段——蜡烛 lit?3×数量:0、火把 14、萤石 15、岩浆块 3
+     *  都走这里；木头等无发光方块 = 0）。
+     *  v1.1.0 实测二百六十二（用户："女仆手上拿的是木头，但是它仍然会发光"）：
+     *  旧版误用 m_60739_（getLightBlock——光阻挡值：完整不透明方块返回 15、
+     *  实心返回 0、否则 1），木头是完整方块恒返回 15 → 手持任何完整方块都
+     *  被当成 15 级光源。改用 m_60791_（getLightEmission）后木头 = 0 不发光。 */
     private static int heldLightOf(EntityMaid maid, ServerLevel level) {
         try {
             ItemStack main = maid.m_21205_();
@@ -195,7 +199,7 @@ public final class MaidHeldLight {
                         return Math.min(15, Math.max(1, w));
                     }
                 }
-                // ② 通用 BlockItem 光强
+                // ② 通用 BlockItem 光强（getLightEmission）
                 if (!(stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
                     continue;
                 }
@@ -204,7 +208,7 @@ public final class MaidHeldLight {
                     continue; // 手持光块本身不做（防止套娃自校验）
                 }
                 BlockState st = b.m_49966_();
-                int l = st.m_60739_(level, maid.m_20183_()); // getLightEmission（光照引擎同源）
+                int l = st.m_60791_(); // getLightEmission（自身发光，与光照引擎同源）
                 if (l > 0) {
                     return Math.min(15, Math.max(1, l));
                 }
@@ -219,7 +223,23 @@ public final class MaidHeldLight {
 
     private static void placeBlock(ServerLevel level, net.minecraft.core.BlockPos pos, int light) {
         try {
-            level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, Math.min(15, Math.max(1, light))), 3);
+            // v1.1.0 实测二百七十一（用户："女仆直接把女仆床拆掉"）：旧版 level.m_7731_
+            // 【直接替换】目标格方块——女仆睡觉时身体与床方块重叠，光块位置 = 床格，
+            // 床被光块顶掉；女仆离开后光块又被清成空气，床彻底消失。放置前检查：目标
+            // 格是空气或本光块才可写入，被床等任何方块占据 → 跳过（绝不覆盖）。
+            net.minecraft.world.level.block.state.BlockState cur = level.m_8055_(pos);
+            if (!cur.m_60795_() && cur.m_60734_() != lightBlock()) {
+                return;
+            }
+            int l = Math.min(15, Math.max(1, light));
+            if (cur.m_60734_() != lightBlock()) {
+                level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, l), 3);
+            } else {
+                int c = cur.m_61143_(LEVEL_PROP);
+                if (c != l) {
+                    level.m_7731_(pos, lightBlock().m_49966_().m_61124_(LEVEL_PROP, l), 3);
+                }
+            }
         } catch (Exception ignored) {
         }
     }
