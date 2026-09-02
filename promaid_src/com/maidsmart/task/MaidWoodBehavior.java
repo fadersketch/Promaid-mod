@@ -2369,9 +2369,12 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         maid.getChatBubbleManager().addTextChatBubble(
                 "附近有木材被硬方块挡住（基岩/箱子等），我砍不过去，暂时没有可砍的木材～");
         if (maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer owner) {
-            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7c【伐木】" + maid.m_5446_().getString()
-                            + "：附近有木材被硬方块挡住，暂时没有可砍的木材～"));
+            // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7c【伐木】" + maid.m_5446_().getString()
+                                + "：附近有木材被硬方块挡住，暂时没有可砍的木材～"));
+            }
         }
     }
 

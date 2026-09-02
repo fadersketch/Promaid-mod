@@ -92,6 +92,17 @@ public final class MaidChunkLoadManager {
     private static final Map<UUID, PendingSummon> PENDING_SUMMON = new ConcurrentHashMap<>();
 
     /** 每 100 tick（5 秒）由 ProMaidExtension.onServerTick 调用 */
+    /** v1.1.0 实测二百七十五（用户："女仆会随时乱动导致落点不稳，但建造模式又没法
+     *  一键召回，必须先解除建造——给建造模式特殊豁免，可被一键召回和单独召回"）：
+     *  建造任务中的女仆召回豁免——建造行为强制 home 模式（防 TLM 跟随拉走），
+     *  而召回链路全部豁免 home → 建造女仆恒被挡。建造女仆在召回判定中视为
+     *  【可召回】：召回后她瞬移回工地继续建（teleportToWorkSite 每 4 tick 一次），
+     *  落点不稳时先召回再让她自己回去，无需解除建造。 */
+    private static boolean isBuildingMaid(EntityMaid maid) {
+        return maid != null
+                && com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid);
+    }
+
     public static void tick(MinecraftServer server) {
         // v1.1.0 实测七十：登记全部在场有主女仆的最后出现位置（不受下方开关限制
         // ——这是"一键集合召回未加载区块女仆"的唯一线索）
@@ -103,7 +114,8 @@ public final class MaidChunkLoadManager {
                 LivingEntity ow = maid.m_269323_();
                 if (ow != null) {
                     // v1.1.0 实测八十七c：同步快照三态豁免（home/坐姿/骑乘）
-                    boolean stayPut = maid.isHomeModeEnable()
+                    // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
+                    boolean stayPut = (maid.isHomeModeEnable() && !isBuildingMaid(maid))
                             || maid.isMaidInSittingPose() || maid.m_20159_();
                     LAST_SEEN.put(maid.m_20148_(), new LastSeen(lvl.m_46472_(),
                             maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_(), stayPut));
@@ -346,7 +358,10 @@ BlockPos stand = findStand(newLevel,
                 seen.add(md.m_20148_());
                 // v1.1.0 实测七十八：home（在家）模式恢复豁免——看家的不该被一键
                 // 集合拽走（排班自动 home 的同理：想召回先关排班）
-                if (md.isMaidInSittingPose() || md.m_20159_() || md.isHomeModeEnable()) {
+                // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可被召回
+                //（召回后瞬移回工地继续建，见 isBuildingMaid 注释）
+                if (md.isMaidInSittingPose() || md.m_20159_()
+                        || (md.isHomeModeEnable() && !isBuildingMaid(md))) {
                     kept++;
                     continue;
                 }
@@ -442,6 +457,20 @@ BlockPos stand = findStand(newLevel,
                     if (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.m_20159_()) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
+                        // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
+                        if (isBuildingMaid(md)) {
+                            boolean ok = summonMaidTo(md, owner);
+                            String name2 = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
+                            try {
+                                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(ok
+                                        ? "§a【集合】" + name2 + " 已从未加载的区块召回"
+                                        : "§c【集合】" + name2 + " 召回了但身边没有可站立点"));
+                            } catch (Exception ignored) {
+                            }
+                            releasePendingTicket(server, p);
+                            it.remove();
+                            break;
+                        }
                         // v1.1.0 实测八十七c：补播报——旧版静默收队，玩家以为集合失败
                         try {
                             String name = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
@@ -667,8 +696,9 @@ BlockPos stand = findStand(newLevel,
                 return 0; // 非主人的女仆（安全兜底）
             }
             if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()
-                    || maid.isMaidInSittingPose() || maid.isHomeModeEnable()) {
-                return 3; // 状态豁免（坐/骑/家/死亡——与一键集合同口径）
+                    || maid.isMaidInSittingPose()
+                    || (maid.isHomeModeEnable() && !isBuildingMaid(maid))) {
+                return 3; // 状态豁免（坐/骑/家/死亡——与一键集合同口径；建造女仆可召回）
             }
             return teleportCore(maid, player) ? 1 : 2;
         } catch (Exception e) {
@@ -689,7 +719,8 @@ BlockPos stand = findStand(newLevel,
         if (maid.m_213877_() || maid.m_21224_() || maid.m_20159_()) {
             return false; // 已移除/死亡/骑乘中
         }
-        if (maid.isHomeModeEnable() || !owner.m_6084_()) {
+        // v1.1.0 实测二百七十五：建造女仆可召回（建造强制 home 但召回豁免）
+        if ((maid.isHomeModeEnable() && !isBuildingMaid(maid)) || !owner.m_6084_()) {
             return false;
         }
         return teleportCore(maid, owner);
