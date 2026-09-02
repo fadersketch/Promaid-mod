@@ -147,38 +147,15 @@ public class WorkStatusReporter {
             return null;
         }
         if (uid.equals(COOK)) {
-            // 诊断（v1.5.7）：真实扫描一次熔炉，区分"搜索逻辑 bug"和"行为没运行"
-            int found = countBlocks(maid, net.minecraft.world.level.block.AbstractFurnaceBlock.class);
-            if (found > 0) {
-                return "炉子明明就在附近（" + found + "个），但我没能开始烧制——请把这句话反馈给主人";
-            }
-            return "附近没有炉子可以烧制";
+            // v1.1.0 实测二百八十三：删除"炉子明明就在附近（N个）但我没能开始烧制"
+            // 诊断播报——烹饪/酿造早已改为站桩模式，女仆贴着炉子等待（烧制中/
+            // 缺料/背包满）是正常工作状态，这句老版本诊断就是纯误报（用户实证
+            // 熔炉与酿造双双弹这句话）。空闲+附近有炉子 = 站桩等待，不播报
+            return null;
         }
         if (uid.equals(BREW)) {
-            // 诊断（v1.5.7）：真实扫描一次酿造台
-            int found = countBlocks(maid, net.minecraft.world.level.block.BrewingStandBlock.class);
-            if (found > 0) {
-                return "酿造台明明就在附近（" + found + "个），但我没能开始工作——请把这句话反馈给主人";
-            }
-            return "附近没有酿造台可以酿药";
+            return null; // 同上：站桩等待是正常状态，不播报
         }
         return null;
-    }
-
-    /** 以女仆为中心扫描 16x4 格范围，统计指定类方块的数量（与任务行为同参数） */
-    private static int countBlocks(EntityMaid maid, Class<? extends net.minecraft.world.level.block.Block> blockClass) {
-        net.minecraft.core.BlockPos pos = maid.m_20183_();
-        int count = 0;
-        for (int dy = -4; dy <= 4; dy++) {
-            for (int dx = -16; dx <= 16; dx++) {
-                for (int dz = -16; dz <= 16; dz++) {
-                    net.minecraft.core.BlockPos p = pos.m_7918_(dx, dy, dz);
-                    if (blockClass.isInstance(maid.m_9236_().m_8055_(p).m_60734_())) {
-                        count++;
-                    }
-                }
-            }
-        }
-        return count;
     }
 }

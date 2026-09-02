@@ -178,6 +178,10 @@ public class ProactiveDialogueManager {
                 return;
             }
             s.dailyLimitNotified = day;
+            // v1.1.0 实测二百七十四：建造女仆静默非建造系统消息
+            if (com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                return;
+            }
             String name = maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆";
             player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                     "\u00a77\u3010\u4e3b\u52a8\u5bf9\u8bdd\u3011" + name

@@ -33,6 +33,8 @@ public class CreativeTabHandler {
         // 与手册同源——创造栏拿出来的即带附魔流光）
         if (key.equals(TAB_TOOLS_AND_UTILITIES)) {
             event.accept(ProMaidMod.SCHEDULE_BOOK);
+            // v1.1.0 实测二百七十七：女仆药剂手册（管理道具，只进工具页）
+            event.accept(ProMaidMod.BREW_MANUAL);
         }
     }
 }

@@ -191,8 +191,11 @@ public final class EmotionalActionExecutor {
                         owner.m_5446_() != null ? owner.m_5446_().getString() : "?",
                         foodLevel, FOODS.size());
                 maid.getChatBubbleManager().addTextChatBubble("主人，我背包里没有吃的了，给我备点食物吧～");
-                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "\u00a7e[maid_smart] " + maidName + "：我背包里没有吃的了，给我备点食物吧～"));
+                // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
+                if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                    owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7e[maid_smart] " + maidName + "：我背包里没有吃的了，给我备点食物吧～"));
+                }
             }
             return false;
         }
@@ -249,9 +252,12 @@ public final class EmotionalActionExecutor {
             // 但食物效果/音效与女仆自己吃完全相同。
             owner.m_5584_(owner.m_9236_(), food);
             // 系统提示喂了什么（m_41786_ = getHoverName）
-            String foodName = food.m_41786_().getString();
-            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
+            // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                String foodName = food.m_41786_().getString();
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
+            }
             if (food.m_41720_() == net.minecraft.world.item.Items.f_42787_) { // honey_bottle
                 owner.m_21195_(net.minecraft.world.effect.MobEffects.f_19614_); // 解中毒
                 net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS

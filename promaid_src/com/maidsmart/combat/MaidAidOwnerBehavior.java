@@ -379,11 +379,14 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                             ? sister.m_5446_().getString() : "姐妹女仆";
                     String maidName = maid.m_5446_() != null
                             ? maid.m_5446_().getString() : "女仆";
-                    for (net.minecraft.server.level.ServerPlayer viewer :
-                            level.m_6907_()) {
-                        viewer.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                "\u00a7a[maid_smart] " + maidName + " 支援了 " + sisterName
-                                        + "：" + action));
+                    // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
+                    if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                        for (net.minecraft.server.level.ServerPlayer viewer :
+                                level.m_6907_()) {
+                            viewer.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7a[maid_smart] " + maidName + " 支援了 " + sisterName
+                                            + "：" + action));
+                        }
                     }
                     this.setAidCooldown(maidId, 60); // 互助成功同样 3 秒间隔
                     return; // 每轮最多救一个
@@ -1037,8 +1040,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 // v1.1.0 实测三十二（用户："女仆不会传递直接可以饮用的药水"——传递
                 // 功能其实一直在，但只有气泡提示没有系统字幕，观感上像没给）：
                 // 塞背包成功发绿色系统字幕（与喂食 [maid_smart] 同款显示）
-                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        "\u00a7a[maid_smart] 女仆给了你一瓶" + label + "药水（在背包里，快喝）"));
+                // v1.1.0 实测二百七十四：建造女仆静默非建造字幕
+                if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                    owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7a[maid_smart] 女仆给了你一瓶" + label + "药水（在背包里，快喝）"));
+                }
                 // v1.5.252g9：塞背包日志（latest.log 搜 "aid-owner give"）
                 LOGGER.info("aid-owner give: label={} potion={}",
                         label, potionKey(stack));
@@ -1347,9 +1353,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // v1.5.307：金苹果路径补系统提示——用户："喂了什么系统提示不生效"；
             // 排查：食物喂食的系统消息一直在（feedFoodDirect），但金苹果路径只有
             // 气泡没有系统消息（效果是直接加成的，玩家看不到"喂了什么"）
-            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7a[maid_smart] 女仆给你吃了" + (enchanted ? "附魔金苹果" : "金苹果")
-                            + "（吸收/再生等效果已加成）"));
+            // v1.1.0 实测二百七十四：建造女仆静默非建造字幕
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7a[maid_smart] 女仆给你吃了" + (enchanted ? "附魔金苹果" : "金苹果")
+                                + "（吸收/再生等效果已加成）"));
+            }
             return true;
         } catch (Exception ignored) {
             return false;
@@ -1573,8 +1582,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             owner.m_9236_().m_5594_(null, owner.m_20183_(), snd,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
         }
-        owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                "\u00a7a[maid_smart] 女仆给你喝了牛奶，负面状态全解！"));
+        // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
+        if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a7a[maid_smart] 女仆给你喝了牛奶，负面状态全解！"));
+        }
         maid.getChatBubbleManager().addTextChatBubble("主人，牛奶喝下，负面状态全解！");
     }
 
