@@ -750,4 +750,60 @@ public final class MaidToolAutoEquip {
             return Long.MIN_VALUE;
         }
     }
+
+    /** v1.1.0 实测二百七十六（用户："农场功能加强——判定周围土块曾经是否为耕地，
+     *  是则把包内锄头放主手锄好，放主手优先级与挖矿模式矿镐一致，并消耗对应耐久"）：
+     *  锄头装备（农场锄地场景）——与挖矿"保证主手有镐"同构：
+     *  - 主手已是锄头且未即将用坏 → 零开销不换（玩家亲手放的锄头不触发切换）
+     *  - 空手/非锄头/即将用坏 → 从背包装备评分最高的一把（附魔词条数 > 剩余耐久，
+     *    锄头对耕地无挖掘等级差异，与斧评分同构）；快坏锄头由黑名单保护跳过
+     *  - 背包无锄头 → 返回 false（调用方跳过锄地，不空手硬锄） */
+    public static boolean ensureHoeForFarm(EntityMaid maid) {
+        try {
+            IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            ItemStack cur = hands.getStackInSlot(0);
+            if (isHoe(cur) && !isNearlyBroken(cur)) {
+                return true; // 手中已有锄头且未即将用坏 → 不换
+            }
+            IItemHandlerModifiable inv = maid.getMaidInv();
+            int bestSlot = -1;
+            long bestScore = Long.MIN_VALUE;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || !isHoe(stack) || isNearlyBroken(stack)) {
+                    continue;
+                }
+                long score = hoeScore(stack);
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return isHoe(cur); // 背包没锄头：手上有（可能快坏）也算有
+            }
+            hands.setStackInSlot(0, inv.getStackInSlot(bestSlot));
+            inv.setStackInSlot(bestSlot, cur);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 锄头判定（HoeItem 及其子类——模组锄头同口径） */
+    private static boolean isHoe(ItemStack stack) {
+        return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.HoeItem;
+    }
+
+    /** 锄头评分（农场场景）——附魔词条数 > 剩余耐久（锄头对耕地无挖掘等级差异） */
+    private static long hoeScore(ItemStack stack) {
+        if (stack.m_41619_()) {
+            return Long.MIN_VALUE;
+        }
+        try {
+            return enchantCount(stack) * 10_000L + durabilityScore(stack);
+        } catch (Exception e) {
+            return Long.MIN_VALUE;
+        }
+    }
 }

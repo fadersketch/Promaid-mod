@@ -102,10 +102,85 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         LAST_MISSING.remove(maidUuid);
         MISSING_CD.remove(maidUuid);
         ALT_NOTIFIED.remove(maidUuid);
+        LAST_TELEPORT.remove(maidUuid);
     }
 
-    /** v1.5.142：建造强制坐下标记（persistentData）——进入建造任务即坐下，
-     *  玩家无法让她站起（每 tick 重新按压坐下姿势）；切出建造任务自动站起 */
+    /** v1.1.0 实测二百七十二（用户："女仆建造是坐在原地的，不符合常理……先瞬移到要搭方块
+     *  的位置，然后再放置"）：建造拟真升级——方案 B（先瞬移再放置）。放置前把女仆瞬移到
+     *  目标格旁的安全站立格，配合挥臂动画即为"亲手摆放"观感；找不到安全站姿则不瞬移
+     *  （隔空放置兜底，绝不瞬移到危险/卡身位置）。限频 4 tick——极速模式连续放置不连闪。 */
+    private static final java.util.Map<java.util.UUID, Long> LAST_TELEPORT = new java.util.HashMap<>();
+    private static final int TELEPORT_MIN_INTERVAL = 4;
+
+    /** 放置前瞬移（由两处 doPlace 调用前驱动）：目标格旁水平相邻可站格（同层、脚下有承托、
+     *  头顶不卡）；已在该格 2 格内不瞬移；限频 4 tick。 */
+    protected static void teleportToWorkSite(ServerLevel level, EntityMaid maid, BlockPos target) {
+        try {
+            long now = level.m_46467_();
+            Long last = LAST_TELEPORT.get(maid.m_20148_());
+            if (last != null && now - last < TELEPORT_MIN_INTERVAL) {
+                return;
+            }
+            BlockPos stand = findStandSpot(level, target);
+            if (stand == null) {
+                return; // 无安全站姿 → 隔空放置兜底
+            }
+            double distSq = maid.m_20238_(
+                    new net.minecraft.world.phys.Vec3(stand.m_123341_() + 0.5, stand.m_123342_(), stand.m_123343_() + 0.5));
+            if (distSq < 4.0) {
+                return; // 已在该格 2 格内（就在工地旁站着）→ 不瞬移
+            }
+            maid.m_6034_(stand.m_123341_() + 0.5, stand.m_123342_(), stand.m_123343_() + 0.5);
+            maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_); // 清速度防瞬移后滑移
+            LAST_TELEPORT.put(maid.m_20148_(), now);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** 找目标格旁的安全站立格：水平相邻同层（站立格空气 + 脚下有承托 + 头顶空气）。
+     *  目标正下方不可用——目标格马上放方块，站正下方 = 放完头插方块里。 */
+    private static BlockPos findStandSpot(ServerLevel level, BlockPos target) {
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.Plane.HORIZONTAL) {
+            BlockPos stand = target.m_121945_(d); // relative(Direction)
+            if (standable(level, stand)) {
+                return stand;
+            }
+        }
+        return null;
+    }
+
+    /** 站立格可站：格本身空气 + 头顶空气 + 脚下有承托（非空气非流体）。
+     *  区块必须已加载——未加载区块 getBlockState 返回伪空气，传过去会掉虚空。 */
+    private static boolean standable(ServerLevel level, BlockPos pos) {
+        try {
+            if (!level.m_46749_(pos)) {
+                return false;
+            }
+            if (!level.m_8055_(pos).m_60795_()) {
+                return false;
+            }
+            if (!level.m_8055_(pos.m_7918_(0, 1, 0)).m_60795_()) {
+                return false;
+            }
+            net.minecraft.world.level.block.state.BlockState under = level.m_8055_(pos.m_7918_(0, -1, 0));
+            return !under.m_60795_()
+                    && !under.m_60819_().m_205070_(net.minecraft.tags.FluidTags.f_13131_);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * v1.5.142：建造强制坐下标记（persistentData）——进入建造任务即坐下，
+     *  玩家无法让她站起（每 tick 重新按压坐下姿势）；切出建造任务自动站起。
+     * v1.1.0 实测二百七十二：建造拟真化——不再强制坐下（女仆会瞬移到工地旁站立
+     *  放置，见 teleportToWorkSite）；本方法改为【确保站立】+【保留全部锁移动】：
+     *  - 处于建造任务 → 若仍是坐姿则站起（m_21839_ false，TLM override 连坐姿一起清）；
+     *    锁移动逻辑原样保留（清 WALK_TARGET/停导航/清水平速度 + BUILD_SIT_TAG 标记，
+     *    MaidMoveSuppressMixin/MaidStationaryMixin 的移动源头锁继续生效）——
+     *    她瞬移到位置后站定放置，不会被跟随/行为拉走。
+     *  - 切出建造任务 → 清标记（与旧版一致）。
+     */
     public static final String BUILD_SIT_TAG = "maid_smart_build_sitting";
 
     /**
@@ -125,9 +200,15 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      * 姿势位残留 → 脑子以为能动的边缘态）。改为与玩家操作完全同款：
      * 每 tick 直接 setOrderedToSit(true)（TLM override 会同时按姿势位），
      * 两个位始终一致——与 shift+右键坐下完全同状态，不再有边缘态小幅挪动。
+     * v1.1.0 实测二百七十二：建造拟真化——不再强制坐下，改为【确保站立】
+     * （女仆瞬移到工地旁站立放置，见 teleportToWorkSite）。玩家 shift+右键
+     * 让她坐下 → 下一 tick 站起（建造中不再"坐着隔空施法"）。
      */
     public static void tickBuildSit(EntityMaid maid) {
         boolean building = BlueprintBuildExecutor.isBuildingTask(maid);
+        // v1.1.0 实测二百七十三：建造护盾维护（无限抗性 V + 受击取消 + 仇恨拦截——
+        // 受击/仇恨由 BuildShieldGuard 事件处理；此处保证效果常驻/切出清理）
+        com.maidsmart.combat.BuildShieldGuard.tickShield(maid);
         boolean wasSitting = maid.getPersistentData().m_128471_(BUILD_SIT_TAG);
         // v1.5.333：心契誓约（MaidHugManager）交互中——交互会锁定女仆站立姿势并锁位
         // （lockMaid：m_20124_(STANDING) + m_21837_(false) + 锁定坐标），此处若继续强制
@@ -136,15 +217,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             return;
         }
         if (building) {
-            // v1.1.0 终审二：指令位（与玩家 shift+右键同款通道）——TLM override 里
-            // setOrderedToSit 会一并设坐姿位，两态永远一致
-            if (!maid.m_21825_()) { // isInSittingPose
-                maid.m_21839_(true); // setOrderedToSit（TLM override 连坐姿一起设）
+            // v1.1.0 实测二百七十二：建造拟真化——不再强制坐下；若仍坐姿（玩家手动
+            // shift+右键/旧版遗留）则站起，站定后由 teleportToWorkSite 瞬移到工地旁放置
+            if (maid.m_21825_()) { // isInSittingPose → 站起
+                maid.m_21839_(false); // setOrderedToSit false（TLM override 连坐姿一起清）
             }
-            // v1.0.4：锁移动加固——玩家"解除坐下"会清掉 TLM 指令位（DATA_SITTING），
-            // 到下一 tick 恢复前，TLM 跟随/自保的坐下判定失效 → 女仆会走动几步
-            // （视觉还坐着，很诡异）。建造中每 tick 直接清导航/行走目标/水平速度
-            // （与自保坐下锁同款，保留垂直速度正常下落/落地）。
+            // v1.0.4：锁移动——清导航/行走目标/水平速度（与自保坐下锁同款，保留垂直
+            // 速度正常下落/落地）。站桩由 WORK_STILL 标记 + MaidMoveSuppressMixin 从
+            // 源头锁住 MoveToTargetSink；此处兜底清理直连导航的移动源。
             maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
             maid.m_21573_().m_26573_();
             net.minecraft.world.phys.Vec3 v = maid.m_20184_();
@@ -545,6 +625,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
             String machineState = machineLive
                     ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+            // v1.1.0 实测二百七十二：先瞬移到工地旁（方案 B）——放置前把女仆传到
+            // 目标格旁的安全站立格，配合挥臂动画即"亲手摆放"观感；无安全站姿/已
+            // 在旁边则不瞬移（隔空放置兜底）。限频 4 tick（极速模式不连闪）。
+            teleportToWorkSite(level, maid, target);
             if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
                     prog.plannedPositions(plan), false, planMainBlock(ps, plan), machineLive)) {
                 // v1.5.45：支撑缺失（火把/按钮/拉杆等，支撑块未建）→ 延后，支撑建好后自动补建
@@ -768,6 +852,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get();
                 String machineState = machineLive
                         ? BlueprintLib.normalizeMachineState(blockId, stateSnbt) : stateSnbt;
+                // v1.1.0 实测二百七十二：先瞬移到工地旁（方案 B）——同主循环
+                teleportToWorkSite(level, maid, target);
                 if (!doPlace(level, maid, origin, target, plan, placed, machineState, beSnbt,
                         prog.plannedPositions(plan), fails >= 3, planMainBlock(ps, plan), machineLive)) {
                     // v1.5.46：支撑缺失——连续失败 ≥3 次视为"蓝图本身悬空"（作者画图

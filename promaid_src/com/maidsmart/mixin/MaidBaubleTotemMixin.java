@@ -171,9 +171,12 @@ public abstract class MaidBaubleTotemMixin {
             revive(owner, totem);
             playTotemFeedback(owner);
             // v1.5.217：共享图腾触发反馈——主人系统消息 + 女仆聊天气泡
-            owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7a[maid_smart] 女仆的不死图腾救了你一命！"));
-            m.getChatBubbleManager().addTextChatBubble("主人挺住！我的不死图腾给你用！");
+            // v1.1.0 实测二百七十四：建造女仆静默非建造消息（气泡已由 mixin 拦）
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(m)) {
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7a[maid_smart] 女仆的不死图腾救了你一命！"));
+                m.getChatBubbleManager().addTextChatBubble("主人挺住！我的不死图腾给你用！");
+            }
             cir.setReturnValue(true);
             return;
         }

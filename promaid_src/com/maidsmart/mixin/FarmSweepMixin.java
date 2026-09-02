@@ -53,6 +53,9 @@ public abstract class FarmSweepMixin {
         }
         boolean enhance = com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get();
         boolean chain = com.maidsmart.config.MaidSmartConfig.MISC_CHAIN_HARVEST.get();
+        // v1.1.0 实测二百七十六：耕地恢复（锄地）——判定周围土块曾经是否为耕地，
+        // 是则装备锄头锄好（优先级与挖矿矿镐一致）+ 消耗耐久
+        this.tillAround(world, maid, base);
         // v1.5.236：批量种植独立开关（默认开启）——每次处理农田时，把相连的
         // 空耕地一次种一片（种子真实消耗），女仆不再一格跑一趟；与连锁收割
         // 同机制（canPlant 检查）、同设置格式（misc.batchPlant / batchPlantLimit）
@@ -240,6 +243,62 @@ public abstract class FarmSweepMixin {
             return this.plantWith(maid.getAvailableInv(true), maid, basePos, world);
         } catch (Exception ignored) {
             return false;
+        }
+    }
+
+    /**
+     * v1.1.0 实测二百七十六（用户："农场功能加强——判定周围的土块曾经是否为耕地，
+     * 如果是耕地，那么会将包内的锄头放在主手将其锄好（放主手的优先级与挖矿模式
+     * 矿镐一致）。并消耗对应耐久"）：
+     * 耕地恢复——以目标格为中心 3×3（水平）扫描：
+     * - 【曾经是耕地】判定：该格是泥土（dirt，耕地退化/踩踏来的）且上方是空气，
+     *   且水平 3×3 内存在耕地（farmland）——农田区域信号（自然泥土/草方块旁
+     *   没有耕地不算"曾经是耕地"，不锄自然地形）
+     * - 锄地：装备锄头（MaidToolAutoEquip.ensureHoeForFarm——主手已是锄头不换、
+     *   背包挑附魔>耐久最高分、快坏跳过，与挖矿矿镐同优先级结构）→ 锄成耕地
+     *   （setBlock farmland，与 HoeItem 静态表同目标）→ 锄地音效 + 挥臂 +
+     *   m_41622_(1, maid) 消耗 1 点耐久（HoeItem.m_6225_ 字节码实证同款消耗路径）
+     * - 背包无锄头 → 跳过（不空手硬锄）
+     * - 2 秒冷却（与批量种植同节奏，防每 tick 全量扫描）
+     * v1.1.0 实测二百七十八：目标格本身也可能是泥土（FarmMoveTillMixin 把"需要锄的
+     * 泥土"也列为目标），中心格不再跳过；判定统一走 FarmSweepCache.isTillable。
+     */
+    private void tillAround(ServerLevel world, EntityMaid maid, BlockPos base) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
+                return;
+            }
+            long now = world.m_46467_();
+            Long last = com.maidsmart.build.FarmSweepCache.TILL_CD.get(maid.m_20148_().toString());
+            if (last != null && now - last < 40) {
+                return; // 2 秒冷却
+            }
+            // 先确认背包/主手有锄头（没有就不锄，也不写冷却——补锄头后立即生效）
+            if (!com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid)) {
+                return;
+            }
+            com.maidsmart.build.FarmSweepCache.TILL_CD.put(maid.m_20148_().toString(), now);
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    BlockPos b = base.m_7918_(dx, 0, dz);
+                    if (!com.maidsmart.build.FarmSweepCache.isTillable(world, maid, b)) {
+                        continue;
+                    }
+                    // 锄成耕地（与 HoeItem 静态表同目标：dirt → farmland）
+                    world.m_7731_(b, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
+                    // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
+                    world.m_5594_(null, b, net.minecraft.sounds.SoundEvents.f_11955_,
+                            net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
+                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥臂
+                    // 消耗 1 点耐久（HoeItem.m_6225_ 同款：m_41622_(1, LivingEntity, Consumer)）
+                    net.minecraft.world.item.ItemStack hoe = maid.m_21205_();
+                    if (!hoe.m_41619_()) {
+                        hoe.m_41622_(1, maid, e -> {
+                        });
+                    }
+                }
+            }
+        } catch (Exception ignored) {
         }
     }
 }

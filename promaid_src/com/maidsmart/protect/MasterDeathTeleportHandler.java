@@ -290,7 +290,10 @@ public class MasterDeathTeleportHandler {
             }
         }
         if (closest != null) {
-            closest.getChatBubbleManager().addTextChatBubble("主人……我马上赶到你身边！");
+            // v1.1.0 实测二百七十四：建造女仆静默非建造气泡（只拦最近这只的播报）
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(closest)) {
+                closest.getChatBubbleManager().addTextChatBubble("主人……我马上赶到你身边！");
+            }
         }
     }
 

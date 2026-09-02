@@ -27,6 +27,7 @@
     "SchedulePosTickMixin",
     "ScheduleRangeMixin",
     "FarmSweepMixin",
+    "FarmMoveTillMixin",
     "MaidShearDropMixin",
     "MaidHoneyIgniteMixin",
     "FishingAutoChairMixin",
@@ -50,7 +51,8 @@
   "client": [
     "MaidTtsVolumeMixin",
     "MaidConfigMemoryMixin",
-    "MaidDebugPanelMixin"
+    "MaidDebugPanelMixin",
+    "EmotionPoseMixin"
   ],
   "injectors": {
     "defaultRequire": 1

@@ -36,6 +36,13 @@ public abstract class ChatBubbleLimitMixin {
 
     @Inject(method = "addTextChatBubble", at = @At("HEAD"), cancellable = true)
     private void maidSmartBubbleLimit(String text, CallbackInfoReturnable<Long> cir) {
+        // v1.1.0 实测二百七十四（用户："建造模式屏蔽除了建造以外的其他所有系统信息
+        // 系统消息及气泡"）：建造女仆的非建造来源气泡全部静默——调用栈判定来源
+        // （com.maidsmart.build 包 = 建造系统）；"建好啦"完成汇报在建造包内，放行。
+        if (this.maid != null && com.maidsmart.combat.BuildShieldGuard.shouldMute(this.maid)) {
+            cir.setReturnValue(-1L);
+            return;
+        }
         // v1.5.84：完成汇报（"建好啦"）——放行静默与限频（多女仆时第一个完成的女仆
         // 可能是非工头；且完成瞬间工头可能刚发过其他气泡），保证玩家一定收到汇报
         boolean completeReport = text != null && text.startsWith("建好啦");

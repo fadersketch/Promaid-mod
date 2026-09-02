@@ -35,12 +35,22 @@ public class ProMaidMod {
     public static final RegistryObject<Item> SCHEDULE_BOOK = ITEMS.register("schedule_book",
             () -> new com.maidsmart.schedule.ScheduleBookItem(new Item.Properties()));
 
+    /** 女仆药剂手册（v1.1.0 实测二百七十七）：水瓶+书本合成，右键女仆打开酿造配置 GUI */
+    public static final RegistryObject<Item> BREW_MANUAL = ITEMS.register("brew_manual",
+            () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
+
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
+        // v1.1.0 实测二百七十七：女仆药剂手册网络层 + 右键女仆交互
+        com.maidsmart.brew.BrewManualNetworking.register();
+        // v1.1.0 实测二百八十五：情绪价值交互（G 摸摸头 / H 抱抱，键位+服务端验证）
+        com.maidsmart.emotion.EmotionNetworking.register();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.brew.BrewManualInteractHandler());
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
