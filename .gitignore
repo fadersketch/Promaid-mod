@@ -26,3 +26,49 @@ Desktop.ini
 .vscode/
 *.iml
 compile_out.txt 
+
+# ---- 诊断/临时文件（大扫除后新增，防再积累） ----
+# javap 反编译输出
+javap_*.txt
+javap_*.py
+# 编译错误输出
+compile_err*.txt
+# 诊断脚本与输出
+check_*.py
+dump_*.py
+map_*.py
+scan_*.py
+probe_*.py
+extract_*.py
+find_*.py
+fix_*.py
+blocks_*.txt
+effects_*.txt
+# 临时解包目录
+_tlm_jar/
+_modtlm_jar/
+javap_out_tlm/
+javap_out_replay/
+# 一次性脚本/输出
+cleanup.py
+gh_current_body.md
+gh_fetch_body.py
+gh_list_releases.py
+gh_save_body.py
+gh_update_release.py
+_*.log
+_*.txt
+build_out.txt
+deploy_out.txt
+fix_out.txt
+ds.txt
+mb1.txt
+maidrunone.txt
+is_stack.txt
+tags_items.txt
+titles.txt
+render_list.txt
+hoe_static.txt
+bubble_calls.txt
+maidbrain_work.txt
+

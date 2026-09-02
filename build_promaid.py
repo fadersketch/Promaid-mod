@@ -67,6 +67,8 @@ if os.path.isfile(lic):
     shutil.copy2(lic, os.path.join(STAGING, 'LICENSE'))
 
 # 5. zip everything (jar)
+# v1.1.0 大扫除：patched/ 目录被清理后打包会 FileNotFoundError——自动创建
+os.makedirs(os.path.dirname(JAR_OUT), exist_ok=True)
 if os.path.exists(JAR_OUT):
     os.remove(JAR_OUT)
 with zipfile.ZipFile(JAR_OUT, 'w', zipfile.ZIP_DEFLATED) as z:
