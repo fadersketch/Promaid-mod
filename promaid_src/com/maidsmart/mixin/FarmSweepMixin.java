@@ -262,6 +262,9 @@ public abstract class FarmSweepMixin {
      * - 2 秒冷却（与批量种植同节奏，防每 tick 全量扫描）
      * v1.1.0 实测二百七十八：目标格本身也可能是泥土（FarmMoveTillMixin 把"需要锄的
      * 泥土"也列为目标），中心格不再跳过；判定统一走 FarmSweepCache.isTillable。
+     * v1.1.0 实测二百九十一：isTillable 扩展认草方块（f_50440_）——草方块蔓延到
+     * 泥土上后不再失去判定（用户："当地块从泥土变为草方块之后，女仆就会彻底
+     * 失去判定"）；锄地冷却 40→20 tick（检测频率翻倍）。
      */
     private void tillAround(ServerLevel world, EntityMaid maid, BlockPos base) {
         try {
@@ -270,8 +273,8 @@ public abstract class FarmSweepMixin {
             }
             long now = world.m_46467_();
             Long last = com.maidsmart.build.FarmSweepCache.TILL_CD.get(maid.m_20148_().toString());
-            if (last != null && now - last < 40) {
-                return; // 2 秒冷却
+            if (last != null && now - last < 20) {
+                return; // v1.1.0 实测二百九十一：1 秒冷却（旧版 2 秒，锄地滞后）
             }
             // 先确认背包/主手有锄头（没有就不锄，也不写冷却——补锄头后立即生效）
             if (!com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid)) {
@@ -284,7 +287,7 @@ public abstract class FarmSweepMixin {
                     if (!com.maidsmart.build.FarmSweepCache.isTillable(world, maid, b)) {
                         continue;
                     }
-                    // 锄成耕地（与 HoeItem 静态表同目标：dirt → farmland）
+                    // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
                     world.m_7731_(b, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
                     // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
                     world.m_5594_(null, b, net.minecraft.sounds.SoundEvents.f_11955_,
