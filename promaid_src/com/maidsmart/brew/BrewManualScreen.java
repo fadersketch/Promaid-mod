@@ -377,9 +377,10 @@ public class BrewManualScreen extends Screen {
             // v1.1.0 实测二百八十三：药水效果行（名称+等级+时长）——旧版只有名字，
             // 玩家看不到具体效果。喷溅/滞留的实际时长酿造时才折算，此处按原版
             // tooltip 口径显示满时长
+            // v1.1.0 实测二百九十三：按当前配置形态折算时长（喷溅 ×3/4、滞留 ×1/4）
             for (net.minecraft.world.effect.MobEffectInstance eff :
                     net.minecraft.world.item.alchemy.PotionUtils.m_43547_(entry.stack)) {
-                out.add(Component.m_237113_("\u00a78" + effectLine(eff)));
+                out.add(Component.m_237113_("\u00a78" + effectLine(eff, this.cfg.form)));
             }
             BrewRecipeResolver.Chain chain = BrewRecipeResolver.chainFor(entry.id);
             if (chain == null || chain.isEmpty()) {
@@ -469,12 +470,21 @@ public class BrewManualScreen extends Screen {
      *  显示"跳跃提升 3601"= duration(3600) 被当成等级喂进罗马数字函数）。
      *  字节码字段序号实证：f_19503_（第 1 个 int 字段）= duration → m_19557_，
      *  f_19504_（第 2 个）= amplifier → m_19564_（vanilla 字段顺序 effect/
-     *  duration/amplifier/ambient/visible/showIcon）。等级始终显示（I 也显示） */
-    private String effectLine(net.minecraft.world.effect.MobEffectInstance eff) {
+     *  duration/amplifier/ambient/visible/showIcon）。等级始终显示（I 也显示）
+     *  v1.1.0 实测二百九十三：按形态折算时长——原版规则：喷溅 = 饮用 ×3/4、
+     *  滞留 = 饮用 ×1/4（Potion 注册表存的是饮用型满时长，实际生效按形态
+     *  折算）。旧版直接显示满时长，喷溅/滞留型药水的效果描述与实际不符
+     *  （用户："滞留和喷溅型药水直接套用饮用型的时间描述"）。 */
+    private String effectLine(net.minecraft.world.effect.MobEffectInstance eff, int form) {
         try {
             String name = eff.m_19544_().m_19482_().getString(); // getDisplayName
-            int dur = eff.m_19557_();  // getDuration
+            int dur = eff.m_19557_();  // getDuration（饮用型满时长）
             int amp = eff.m_19564_();  // getAmplifier
+            if (form == BrewConfig.FORM_SPLASH) {
+                dur = dur * 3 / 4;
+            } else if (form == BrewConfig.FORM_LINGERING) {
+                dur = dur / 4;
+            }
             name += " " + roman(amp + 1);
             if (dur > 20) {
                 int sec = dur / 20;
