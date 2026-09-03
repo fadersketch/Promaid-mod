@@ -76,6 +76,47 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** 目标扫描节流：找不到酿造台时每 20 tick 才扫一次 */
     private int scanCooldown = 0;
 
+    /** v1.1.0 实测二百九十一：酿造台占用表（维度|坐标 → 占用女仆 UUID）——
+     *  与熔炉同款（MaidCookBehavior.FURNACE_USERS）：多个女仆同时在场时各自
+     *  绑定不同酿造台，避免全挤到第一个上（用户："两个女仆会抢同一个酿造台"）。
+     *  占用者死亡/换维/停行为时释放（m_6732_ + 扫描时懒清理）。 */
+    private static final java.util.Map<String, java.util.UUID> BREW_USERS = new java.util.HashMap<>();
+    /** 本行为实例当前占用的酿造台 key（行为停止/台子丢失时释放） */
+    private String myBrewKey = null;
+
+    /** 酿造台占用键：维度 + 坐标（防跨维度同坐标冲突） */
+    private static String brewKey(ServerLevel level, BlockPos pos) {
+        return level.m_46472_().m_135782_() + "|"
+                + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_();
+    }
+
+    /** 占用当前绑定的酿造台（替换旧占用）。别人在占（占用者存活）→ 放弃本台
+     *  并清空 standPos，走 doTick 重新找台（与熔炉 claimFurnace 同款）。 */
+    private void claimBrew(ServerLevel level, EntityMaid maid, BlockPos pos) {
+        String k = brewKey(level, pos);
+        java.util.UUID owner = BREW_USERS.get(k);
+        if (owner != null && !owner.equals(maid.m_20148_())) {
+            net.minecraft.world.entity.Entity o = level.m_8791_(owner);
+            if (o != null && o.m_6084_()) {
+                this.standPos = null; // 别人在用——放弃本台，重新找台
+                this.releaseBrew();
+                return;
+            }
+            BREW_USERS.remove(k); // 占用者没了 → 释放后再占
+        }
+        this.releaseBrew();
+        this.myBrewKey = k;
+        BREW_USERS.put(k, maid.m_20148_());
+    }
+
+    /** 释放本实例占用的酿造台（仅当占用者是自己） */
+    private void releaseBrew() {
+        if (this.myBrewKey != null) {
+            BREW_USERS.remove(this.myBrewKey);
+            this.myBrewKey = null;
+        }
+    }
+
     // v1.1.0 实测二百八十一：缺料报告——旧版缺料静默等待，玩家不知道女仆卡在
     // 缺什么（"尝试酿隐身药水缺发酵蛛眼，女仆卡在那边不动也没有相关报告"）。
     // 报告 = 女仆气泡 + 主人系统消息；30 秒冷却（按女仆）+ 同一材料不重复报，
@@ -174,6 +215,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (this.standPos == null) {
             this.standPos = this.findBrewingStand(level, maid);
         }
+        // v1.1.0 实测二百九十一：启动即登记占用（与熔炉同款——旧版启动找到的
+        // 台子从不进占用表，多女仆同时开酿时各自"虚占"同一台）
+        if (this.standPos != null && this.myBrewKey == null) {
+            this.claimBrew(level, maid, this.standPos);
+        }
         this.cooldown = 0;
     }
 
@@ -190,10 +236,13 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (this.standPos == null) {
                 return;
             }
+            // v1.1.0 实测二百九十一：绑定成功 → 登记占用（多女仆分散）
+            this.claimBrew(level, maid, this.standPos);
         }
         BlockState state = level.m_8055_(this.standPos);
         if (!(state.m_60734_() instanceof BrewingStandBlock)) {
             this.standPos = null;
+            this.releaseBrew(); // v1.1.0 实测二百九十一：台子没了 → 释放占用
             this.standUp(maid); // v1.5.252：酿造台没了恢复站立
             MaidWorkTags.setStill(maid, true); // 酿造台没了：继续站桩等扫描
             return;
@@ -242,6 +291,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         // v1.5.24：行为真正停止时解除站桩标记（双保险）+ 恢复站立
         MaidWorkTags.setStill(maid, false);
         this.standUp(maid);
+        // v1.1.0 实测二百九十一：行为停止 → 释放酿造台占用（其他女仆可接手）
+        this.releaseBrew();
     }
 
     /** v1.5.252：恢复站立（若当前是坐姿） */
@@ -455,7 +506,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             } else if (this.isPotion(s, "minecraft:awkward")) {
                 // 粗药阶段：放下界疣以外的正向材料（红石/荧石对粗药无效、
                 // 负面材料已从 INGREDIENTS 移除）
-                ItemStack ingredient = this.extractFromMaidExcept(maidInv, INGREDIENTS, "minecraft:nether_wart", 1);
+                // v1.1.0 实测二百九十一：材料轮换（多种材料交替酿多种药水）
+                ItemStack ingredient = this.extractFromMaidExcept(maid, maidInv, INGREDIENTS, "minecraft:nether_wart", 1);
                 if (!ingredient.m_41619_()) {
                     stand.m_6836_(3, ingredient);
                 }
@@ -539,10 +591,17 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         return com.maidsmart.brew.BrewConfig.FORM_DRINK;
     }
 
-    /** 是否"最终状态"药水（water/awkward 之外的一切：真药水/平凡/浓稠都收走） */
+    /** 是否"最终状态"药水（water/awkward 之外的一切：真药水/平凡/浓稠都收走）。
+     *  v1.1.0 实测二百九十一：非药水物品（空瓶/杂物）也收走腾位——旧版只认
+     *  PotionItem，空瓶放进槽 0 后既不是药水（不收）又占着槽（不补水瓶）→
+     *  酿造台永远卡死（用户："女仆有的时候会往酿造台里面放空瓶，导致酿造
+     *  完全无法进行"）。 */
     private boolean isDonePotion(ItemStack s) {
-        if (s.m_41619_() || !(s.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+        if (s.m_41619_()) {
             return false;
+        }
+        if (!(s.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+            return true; // 非药水物品（空瓶/杂物）：收走腾位
         }
         net.minecraft.world.item.alchemy.Potion p = net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s);
         if (p == null) {
@@ -569,8 +628,34 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         return key != null && potionId.equals(key.toString());
     }
 
-    /** 从白名单取材料，但排除指定 id（awkward 阶段不能再用下界疣） */
-    private ItemStack extractFromMaidExcept(IItemHandler maidInv, Set<String> whitelistIds, String excludeId, int count) {
+    /** v1.1.0 实测二百九十一：批量模式材料轮换——每女仆记录上次用的材料，
+     *  选材料时优先选【与上次不同】的白名单材料（背包里只有一种材料时自然
+     *  退回酿那种）。效果：给多种材料 → 交替酿多种药水（A→B→C→A…），不再
+     *  按背包槽位顺序死磕第一种（用户："批量合成本意是给大量材料时酿出各种
+     *  各样的药水；只给单一材料就只酿单一药水"）。 */
+    private static final java.util.Map<java.util.UUID, String> LAST_INGREDIENT = new java.util.HashMap<>();
+
+    /** 从白名单取材料，但排除指定 id（awkward 阶段不能再用下界疣）。
+     *  v1.1.0 实测二百九十一：优先选与上次不同的材料（轮换多样化）；
+     *  只有一种材料时自然选它；取到后记录"这次用的材料"。 */
+    private ItemStack extractFromMaidExcept(EntityMaid maid, IItemHandler maidInv,
+                                            Set<String> whitelistIds, String excludeId, int count) {
+        String last = LAST_INGREDIENT.get(maid.m_20148_());
+        // 先扫"与上次不同"的材料
+        for (int i = 0; i < maidInv.getSlots(); i++) {
+            ItemStack stack = maidInv.getStackInSlot(i);
+            if (stack.m_41619_()) {
+                continue;
+            }
+            ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            if (stackId != null && whitelistIds.contains(stackId.toString())
+                    && !excludeId.equals(stackId.toString())
+                    && !stackId.toString().equals(last)) {
+                LAST_INGREDIENT.put(maid.m_20148_(), stackId.toString());
+                return maidInv.extractItem(i, count, false);
+            }
+        }
+        // 只有上次那种（或没有记录）：退回任意白名单材料
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.m_41619_()) {
@@ -579,17 +664,25 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             if (stackId != null && whitelistIds.contains(stackId.toString())
                     && !excludeId.equals(stackId.toString())) {
+                LAST_INGREDIENT.put(maid.m_20148_(), stackId.toString());
                 return maidInv.extractItem(i, count, false);
             }
         }
         return ItemStack.f_41583_;
     }
 
-    /** 从背包取 1 瓶水瓶（PotionItem 且药水为 water，动态 key 判定）；没有返回空 */
+    /** 从背包取 1 瓶【饮用型】水瓶（PotionItem 且药水为 water，动态 key 判定）；
+     *  没有返回空。v1.1.0 实测二百九十一：严格排除喷溅/滞留水瓶——旧版只认
+     *  PotionItem 不区分形态，喷溅水瓶（splash_potion + water）也会被当水瓶
+     *  放进槽 0，酿造台对喷溅水瓶不反应 → 卡死。 */
     private ItemStack extractWaterBottle(IItemHandler inv) {
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                continue;
+            }
+            // 只认饮用型（potion）——喷溅/滞留水瓶不能当酿造基底
+            if (stack.m_41720_() != com.maidsmart.brew.BrewRecipeResolver.item("minecraft:potion")) {
                 continue;
             }
             net.minecraft.world.item.alchemy.Potion potion = net.minecraft.world.item.alchemy.PotionUtils.m_43579_(stack);
@@ -640,6 +733,19 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 for (int dz = -brewRadius(); dz <= brewRadius(); dz++) {
                     BlockPos p = pos.m_7918_(dx, dy, dz);
                     if (level.m_8055_(p).m_60734_() instanceof BrewingStandBlock) {
+                        // v1.1.0 实测二百九十一：跳过被【其他女仆】占用的酿造台
+                        //（自己占的不跳）——多个女仆分散到不同台子，不挤同一个；
+                        // 占用者已死/已移除 → 懒清理该占用（与熔炉同款）
+                        String k = brewKey(level, p);
+                        java.util.UUID owner = BREW_USERS.get(k);
+                        if (owner != null && !owner.equals(maid.m_20148_())) {
+                            net.minecraft.world.entity.Entity o = level.m_8791_(owner);
+                            if (o == null || !o.m_6084_()) {
+                                BREW_USERS.remove(k); // 占用者没了 → 释放
+                            } else {
+                                continue; // 别的女仆在用 → 换下一个台子
+                            }
+                        }
                         return p;
                     }
                 }
