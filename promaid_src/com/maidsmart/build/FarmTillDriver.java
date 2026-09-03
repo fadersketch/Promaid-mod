@@ -23,6 +23,24 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 农场模式运作完全回原版（FarmMoveTillMixin 注入作废，锄地目标不再占用移动
  * 扫描），本驱动每 1 秒扫描女仆周围 5×5（水平）的可锄泥土并顺带锄掉。
  * 冷却表复用 FarmSweepCache.TILL_CD。
+ *
+ * v1.1.0 实测三百零二（用户："对曾经已经是耕地的地块打上一个标记……在 5×5
+ * 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）：锄地判定改为【标记制】——
+ * 只锄"有标记（曾经是耕地）且当前不是耕地"的地块（FarmSweepCache.isTillable），
+ * 不再用"3×3 内有耕地"启发式（连锁扩散 → 超平坦地形 5×5 全变耕地）。标记由
+ * 锄地事件自动打（玩家/女仆锄地时，FarmSweepCache.onToolModification），
+ * SavedData 持久化（FarmlandMarkStore）。
+ *
+ * v1.1.0 实测三百零三（用户："有些结构会自然生成耕地，那那些耕地也要打上标记"）：
+ * 区块加载扫描兜底——结构生成（村庄农田等）的耕地是直接放置方块，不触发锄地
+ * 事件，ChunkEvent.Load 时遍历区块内耕地方块打标记（FarmSweepCache.onChunkLoad）。
+ *
+ * v1.1.0 实测三百零四（用户："现在是怎么搞女仆都不会进行耕地"）：标记自愈——
+ * 扫描范围内【当前是耕地】的地块直接打标（耕地是"曾经是耕地"的活证据）。旧版
+ * 只靠锄地事件/区块加载打标：女仆锄地需要标记、标记又只能靠锄地产生（死锁），
+ * 区块加载扫描又只在区块加载瞬间跑一次（玩家站农田旁时早已加载）→ 女仆永远
+ * 锄不了地。自愈后：农田的标记实时补上 → 踩坏的地块有标记可锄；从未耕过的泥土
+ * 依然无标记 → 不连锁扩散。
  */
 public final class FarmTillDriver {
     private static boolean registered = false;
@@ -34,6 +52,10 @@ public final class FarmTillDriver {
         if (!registered) {
             registered = true;
             MinecraftForge.EVENT_BUS.register(new FarmTillDriver());
+            // v1.1.0 实测三百零二：锄地事件监听（玩家/女仆锄地 → 打"曾经是耕地"标记）
+            MinecraftForge.EVENT_BUS.addListener(FarmSweepCache::onToolModification);
+            // v1.1.0 实测三百零三：区块加载扫描（自然生成耕地 → 打标记）
+            MinecraftForge.EVENT_BUS.addListener(FarmSweepCache::onChunkLoad);
         }
     }
 
@@ -101,11 +123,26 @@ public final class FarmTillDriver {
                     if (!world.m_46749_(b)) {
                         continue; // 区块未加载跳过
                     }
+                    // v1.1.0 实测三百零四（用户："现在是怎么搞女仆都不会进行耕地"）：
+                    // 标记自愈——扫描范围内【当前是耕地】的地块直接打标。耕地是"曾经
+                    // 是耕地"的活证据，实时补标后踩坏的地块立刻有标记可锄；且从未
+                    // 耕过的泥土依然无标记 → 不会连锁扩散。旧版只靠锄地事件/区块加载
+                    // 打标：女仆锄地需要标记、标记又只能靠锄地产生（死锁），区块加载
+                    // 扫描又只在区块加载瞬间跑一次（玩家站农田旁时早已加载）→ 女仆
+                    // 永远锄不了地。
+                    if (world.m_8055_(b).m_60734_()
+                            == net.minecraft.world.level.block.Blocks.f_50093_) {
+                        FarmlandMarkStore.get(world).mark(b);
+                        continue;
+                    }
                     if (!FarmSweepCache.isTillable(world, maid, b)) {
                         continue;
                     }
                     // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
                     world.m_7731_(b, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
+                    // v1.1.0 实测三百零二：女仆锄地后保持标记（标记制——标记是
+                    // "曾经是耕地"的凭证，锄完不能丢，否则下次踩坏后女仆不认）
+                    FarmlandMarkStore.get(world).mark(b);
                     // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
                     world.m_5594_(null, b, net.minecraft.sounds.SoundEvents.f_11955_,
                             net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);

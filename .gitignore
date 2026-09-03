@@ -42,6 +42,13 @@ probe_*.py
 extract_*.py
 find_*.py
 fix_*.py
+run_javac*.py
+show_compile*.py
+show_v37*.py
+list_*_classes.py
+debug_*.py
+diff_*.py
+compile_stdout*.txt
 blocks_*.txt
 effects_*.txt
 # 临时解包目录

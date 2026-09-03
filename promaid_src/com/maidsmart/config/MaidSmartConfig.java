@@ -379,6 +379,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.DoubleValue MISC_STROLL_SPEED;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
+    // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
+    public static final ForgeConfigSpec.BooleanValue MISC_COOK_BURN_WOOD;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
     // v1.5.102：烹饪/酿造垂直搜索范围（v1.5.134 整理任务已删除，仅烹饪/酿造使用）
@@ -1240,6 +1242,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
+        // v1.1.0 实测三百：木材黑名单开关
+        MISC_COOK_BURN_WOOD = BUILDER.comment("烧木材（默认关）：木材类（原木/木板/树苗/竹等）默认进黑名单不烧——女仆不会拿木材当原料烧（避免「用木头烧木头」）；勾选后木材类照常可烧（仍受「烧任何可烧制物」开关约束）")
+                .translation("config.promaid.misc.cookBurnWood").define("cookBurnWood", false);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
