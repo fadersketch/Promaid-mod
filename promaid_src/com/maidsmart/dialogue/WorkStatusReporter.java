@@ -27,8 +27,11 @@ public class WorkStatusReporter {
     private static final ResourceLocation COOK = ResourceLocation.parse("maid_smart:cook");
     private static final ResourceLocation BREW = ResourceLocation.parse("maid_smart:brew");
     private static final ResourceLocation BUILD = ResourceLocation.parse("maid_smart:build");
+    // v1.1.0 实测二百九十四：农场任务（TLM 原生 touhou_little_maid:farm，TaskNormalFarm
+    // UID javap 实证）纳入看门狗——用户："因为没有看门狗，所以女仆现在还是很喜欢发呆"
+    private static final ResourceLocation FARM = ResourceLocation.parse("touhou_little_maid:farm");
     private static final List<ResourceLocation> SMART_TASKS =
-            List.of(MINE, COOK, BREW, BUILD);
+            List.of(MINE, COOK, BREW, BUILD, FARM);
 
     /** 每只女仆上次播报时间（WeakHashMap 防泄漏） */
     private final WeakHashMap<EntityMaid, Long> lastReport = new WeakHashMap<>();
@@ -155,6 +158,12 @@ public class WorkStatusReporter {
         }
         if (uid.equals(BREW)) {
             return null; // 同上：站桩等待是正常状态，不播报
+        }
+        if (uid.equals(FARM)) {
+            // v1.1.0 实测二百九十四：农场任务空闲 = 附近没有可收割/可种植/可锄的
+            // 目标（TLM 原生任务无站桩标记，空闲时如实播报——用户："没有看门狗，
+            // 女仆很喜欢发呆"）
+            return "附近没有需要打理的农田了";
         }
         return null;
     }

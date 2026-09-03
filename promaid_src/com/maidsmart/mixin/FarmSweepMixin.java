@@ -250,21 +250,27 @@ public abstract class FarmSweepMixin {
      * v1.1.0 实测二百七十六（用户："农场功能加强——判定周围的土块曾经是否为耕地，
      * 如果是耕地，那么会将包内的锄头放在主手将其锄好（放主手的优先级与挖矿模式
      * 矿镐一致）。并消耗对应耐久"）：
-     * 耕地恢复——以目标格为中心 3×3（水平）扫描：
-     * - 【曾经是耕地】判定：该格是泥土（dirt，耕地退化/踩踏来的）且上方是空气，
-     *   且水平 3×3 内存在耕地（farmland）——农田区域信号（自然泥土/草方块旁
-     *   没有耕地不算"曾经是耕地"，不锄自然地形）
+     * 耕地恢复——锄地目标格（base）：
+     * - 【曾经是耕地】判定：该格是泥土/草方块（dirt/grass_block，耕地退化/踩踏/
+     *   草方块蔓延来的）且上方是空气，且水平 3×3 内存在耕地（farmland）——
+     *   农田区域信号（自然泥土/草方块旁没有耕地不算"曾经是耕地"，不锄自然地形）
      * - 锄地：装备锄头（MaidToolAutoEquip.ensureHoeForFarm——主手已是锄头不换、
      *   背包挑附魔>耐久最高分、快坏跳过，与挖矿矿镐同优先级结构）→ 锄成耕地
      *   （setBlock farmland，与 HoeItem 静态表同目标）→ 锄地音效 + 挥臂 +
      *   m_41622_(1, maid) 消耗 1 点耐久（HoeItem.m_6225_ 字节码实证同款消耗路径）
      * - 背包无锄头 → 跳过（不空手硬锄）
-     * - 2 秒冷却（与批量种植同节奏，防每 tick 全量扫描）
+     * - 1 秒冷却（与批量种植同节奏，防每 tick 全量扫描）
      * v1.1.0 实测二百七十八：目标格本身也可能是泥土（FarmMoveTillMixin 把"需要锄的
      * 泥土"也列为目标），中心格不再跳过；判定统一走 FarmSweepCache.isTillable。
      * v1.1.0 实测二百九十一：isTillable 扩展认草方块（f_50440_）——草方块蔓延到
      * 泥土上后不再失去判定（用户："当地块从泥土变为草方块之后，女仆就会彻底
      * 失去判定"）；锄地冷却 40→20 tick（检测频率翻倍）。
+     * v1.1.0 实测二百九十四：锄地范围 3×3 → **1×1（只锄目标格）**——用户："女仆
+     * 锄一下以后是一个 3×3 的范围，我认为应该是一个 1×1 的范围"。且 3×3 把周围
+     * 泥土/草方块全锄成耕地后，FarmMoveTillMixin 又把这些新耕地旁的目标列为可锄
+     * 目标 → TARGET_POS 常驻 → 散步门禁（已有移动目标不打扰）永远拦着 → 农场
+     * 女仆失去自由漫步（用户："失去了原来自由漫步的能力"）。1×1 后目标自然清空，
+     * 散步恢复。
      */
     private void tillAround(ServerLevel world, EntityMaid maid, BlockPos base) {
         try {
@@ -281,25 +287,21 @@ public abstract class FarmSweepMixin {
                 return;
             }
             com.maidsmart.build.FarmSweepCache.TILL_CD.put(maid.m_20148_().toString(), now);
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
-                    BlockPos b = base.m_7918_(dx, 0, dz);
-                    if (!com.maidsmart.build.FarmSweepCache.isTillable(world, maid, b)) {
-                        continue;
-                    }
-                    // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
-                    world.m_7731_(b, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
-                    // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
-                    world.m_5594_(null, b, net.minecraft.sounds.SoundEvents.f_11955_,
-                            net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
-                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥臂
-                    // 消耗 1 点耐久（HoeItem.m_6225_ 同款：m_41622_(1, LivingEntity, Consumer)）
-                    net.minecraft.world.item.ItemStack hoe = maid.m_21205_();
-                    if (!hoe.m_41619_()) {
-                        hoe.m_41622_(1, maid, e -> {
-                        });
-                    }
-                }
+            // v1.1.0 实测二百九十四：只锄目标格（1×1）——不再扫周围 3×3
+            if (!com.maidsmart.build.FarmSweepCache.isTillable(world, maid, base)) {
+                return;
+            }
+            // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
+            world.m_7731_(base, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
+            // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
+            world.m_5594_(null, base, net.minecraft.sounds.SoundEvents.f_11955_,
+                    net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥臂
+            // 消耗 1 点耐久（HoeItem.m_6225_ 同款：m_41622_(1, LivingEntity, Consumer)）
+            net.minecraft.world.item.ItemStack hoe = maid.m_21205_();
+            if (!hoe.m_41619_()) {
+                hoe.m_41622_(1, maid, e -> {
+                });
             }
         } catch (Exception ignored) {
         }
