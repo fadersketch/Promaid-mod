@@ -41,6 +41,89 @@ public final class FarmSweepCache {
         TILL_CD.remove(key);
     }
 
+    /** v1.1.0 实测三百零二：锄地事件监听——玩家/女仆用锄头把泥土/草方块锄成耕地时
+     *  自动打标记（"曾经是耕地"）。女仆只锄有标记的地块，所以标记必须覆盖所有
+     *  锄地来源：玩家手锄、女仆手锄（FarmTillDriver）、女仆原版农场任务锄地。
+     *  v1.1.0 实测三百零五（用户："玩家在进入游戏之后进行耕地。然后把根蒂踩掉，
+     *  但是女仆不为所动"）：getFinalState 恒为 null——原版锄地（HoeItem.m_6225_）
+     *  走 fallback 逻辑直接 setBlock，不 setFinalState，旧版 finalState==null 直接
+     *  return → 玩家锄地永远打不上标记。改用 getState()（锄地前的原方块：泥土/
+     *  草方块/草径）判定——锄地动作 + 原方块是锄头可锄目标 = 锄成耕地，打标。 */
+    public static void onToolModification(net.minecraftforge.event.level.BlockEvent.BlockToolModificationEvent event) {
+        try {
+            if (event.isSimulated()) {
+                return;
+            }
+            if (!net.minecraftforge.common.ToolActions.HOE_TILL.equals(event.getToolAction())) {
+                return;
+            }
+            net.minecraft.world.level.block.state.BlockState orig = event.getState();
+            if (orig == null) {
+                return;
+            }
+            net.minecraft.world.level.block.Block b = orig.m_60734_();
+            // 锄头可锄目标（HoeItem.f_41332_ 表：dirt/grass_block/dirt_path → farmland）
+            if (b != net.minecraft.world.level.block.Blocks.f_50493_
+                    && b != net.minecraft.world.level.block.Blocks.f_50440_
+                    && b != net.minecraft.world.level.block.Blocks.f_50092_) {
+                return;
+            }
+            if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)) {
+                return;
+            }
+            FarmlandMarkStore.get((net.minecraft.server.level.ServerLevel) event.getLevel())
+                    .mark(event.getPos());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** v1.1.0 实测三百零三（用户："有些结构会自然生成耕地，那那些耕地也要打上
+     *  标记"）：区块加载扫描——结构生成（村庄农田等）的耕地是直接放置方块，不触发
+     *  锄地事件，需要扫描兜底。区块加载时遍历各 section 的耕地方块打标记（只扫
+     *  非空 section，跳过 hasOnlyAir）。 */
+    public static void onChunkLoad(net.minecraftforge.event.level.ChunkEvent.Load event) {
+        try {
+            if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)) {
+                return;
+            }
+            net.minecraft.world.level.chunk.ChunkAccess chunk = event.getChunk();
+            if (chunk == null) {
+                return;
+            }
+            net.minecraft.world.level.ChunkPos cp = chunk.m_7697_();
+            int minX = cp.m_151390_();
+            int minZ = cp.m_151393_();
+            int minY = chunk.m_141937_();
+            int maxY = chunk.m_141928_();
+            java.util.List<net.minecraft.core.BlockPos> found = new java.util.ArrayList<>();
+            for (net.minecraft.world.level.chunk.LevelChunkSection section : chunk.m_7103_()) {
+                if (section == null || section.m_188008_()) {
+                    continue; // 空 section 跳过
+                }
+                int secY = minY + section.m_63020_() * 16;
+                for (int x = 0; x < 16; x++) {
+                    for (int z = 0; z < 16; z++) {
+                        for (int y = 0; y < 16; y++) {
+                            int wy = secY + y;
+                            if (wy < minY || wy > maxY) {
+                                continue;
+                            }
+                            if (section.m_62982_(x, y, z).m_60734_()
+                                    == net.minecraft.world.level.block.Blocks.f_50093_) {
+                                found.add(new net.minecraft.core.BlockPos(minX + x, wy, minZ + z));
+                            }
+                        }
+                    }
+                }
+            }
+            if (!found.isEmpty()) {
+                FarmlandMarkStore.get((net.minecraft.server.level.ServerLevel) event.getLevel())
+                        .markAll(found);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /**
      * v1.1.0 实测二百七十八：锄地目标判定（FarmMoveTillMixin 与 FarmSweepMixin 共用）。
      *
@@ -56,6 +139,12 @@ public final class FarmSweepCache {
      * 之后，女仆就会彻底失去判定"——草方块蔓延到泥土上后旧版只认 dirt → 不再
      * 锄。原版锄头（HoeItem.f_41332_ 表）本来就能锄 dirt/grass_block/dirt_path
      * → farmland，判定与锄地动作对齐。
+     *
+     * v1.1.0 实测三百零二（用户："对曾经已经是耕地的地块打上一个标记……在 5×5
+     * 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）：判定改为【标记制】——
+     * 旧版"3×3 内有耕地"启发式会连锁扩散（锄一块后周围 3×3 就有耕地 → 超平坦
+     * 地形 5×5 全被锄成耕地）。现在只锄【有标记（曾经是耕地）且当前不是耕地】的
+     * 地块——标记由锄地事件自动打（玩家/女仆锄地时），SavedData 持久化。
      */
     public static boolean isTillable(net.minecraft.server.level.ServerLevel world,
                                      com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid,
@@ -79,8 +168,10 @@ public final class FarmSweepCache {
         if (!world.m_8055_(pos.m_7494_()).m_60795_()) {
             return false; // 上方不是空气（有作物/方块）不锄
         }
-        if (!nearFarmland(world, pos)) {
-            return false; // 3×3 内无耕地 = 不是"曾经是耕地"
+        // v1.1.0 实测三百零二：标记制——没有"曾经是耕地"标记的地块不锄
+        // （超平坦地形从未耕过的泥土/草方块没有标记 → 不锄）
+        if (!FarmlandMarkStore.get(world).isMarked(pos)) {
+            return false;
         }
         return com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid);
     }

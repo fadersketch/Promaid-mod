@@ -43,6 +43,10 @@ import java.util.Set;
  * - v1.1.0 实测二百四十一：燃料选择再修正——纯燃料优先（燃烧时长评分：
  *   煤炭/木炭/烈焰棒/干海带块/熔岩桶等不可烧制的可燃烧物），背包没有纯燃料
  *   才退而选可烧制燃料（原木/木板/树苗）——不再"用木头烧木头"
+ * - v1.1.0 实测三百：按背包物品类型选炉子——先扫物品栏：有食物 → 烟熏炉优先
+ *   （其次熔炉）；无食物有矿物（有高炉配方）→ 高炉优先（其次熔炉）；只有仅熔炉
+ *   可烧物 → 只选熔炉。绑定后背包没有该炉型可烧物 → 取消绑定重新找。木材类
+ *   （原木/木板/树苗/竹等）默认黑名单不烧（开关 misc.cookBurnWood，默认关）
  * - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动）
  * - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立
  */
@@ -193,6 +197,16 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             this.releaseFurnace(); // v1.1.0 实测一百六十八：炉子没了 → 释放占用
             this.standUp(maid);
             MaidWorkTags.setStill(maid, true); // 熔炉没了：继续站桩等扫描
+            return;
+        }
+        // v1.1.0 实测三百（用户："如果女仆发现自己包中没有可以对应的物品，那么会将
+        // 这个炉子的绑定取消掉……重新寻找一个新的"）：绑定后背包没有该炉型可烧物 →
+        // 取消绑定重新找（如高炉烧完矿后背包只剩食物 → 换烟熏炉/熔炉）
+        if (!this.furnaceMatchesInv(level, maid, this.furnacePos)) {
+            this.furnacePos = null;
+            this.releaseFurnace();
+            this.standUp(maid);
+            MaidWorkTags.setStill(maid, true);
             return;
         }
         double distSq = maid.m_20275_(this.furnacePos.m_123341_() + 0.5, this.furnacePos.m_123342_() + 0.5, this.furnacePos.m_123343_() + 0.5);
@@ -522,7 +536,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  ① 评分 = 燃烧时长优先（getFuel 映射，煤炭 1600 tick ≫ 原木 300 tick），
      *     同长再按数量——有煤必用煤，不再被数量带偏；
      *  ② 纯燃料优先：可燃烧且【无熔炉配方】（煤炭/木炭/烈焰棒/干海带块/熔岩桶）
-     *     先选；背包没有纯燃料才退而选可烧制燃料（原木烧原木总比炉子熄火好）。 */
+     *     先选；背包没有纯燃料才退而选可烧制燃料（原木烧原木总比炉子熄火好）。
+     *  v1.1.0 实测三百零一：曾按用户要求改为"按物品栏摆放顺序取第一个"，实测后
+     *  用户改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料
+     *  烧"，当燃料不受影响（原木/木板照常可烧炉子）。 */
     private ItemStack extractBestFuel(ServerLevel level, IItemHandler maidInv) {
         Map<Item, Integer> burnTicks = new HashMap<>();
         Map<Item, Integer> counts = new HashMap<>();
@@ -576,11 +593,14 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     private BlockPos findFurnace(ServerLevel level, EntityMaid maid) {
-        // v1.1.0 实测二百九十九（用户："女仆完全不检测自己包里面的东西是什么，
-        // 就跑到对应的炉子那边去"）：背包门控——背包里既没有食材/可烧制物、
-        // 也没有燃料时，不绑定任何炉子（站桩等待，不白跑）。有任一可烧制物或
-        // 燃料才去找炉子。
-        if (!hasAnyCookable(level, maid)) {
+        // v1.1.0 实测三百（用户："先扫物品栏，依次检索可烧制的物品……遇到食物时，
+        // 在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。
+        // 如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制"）：按背包物品类型选炉子
+        // ——食物 → 烟熏炉优先（其次熔炉）；无食物但有高炉可烧物（矿物）→ 高炉优先
+        // （其次熔炉）；只有仅熔炉可烧物 → 只选熔炉。背包里既没有可烧制物也没有
+        // 燃料时返回 null（站桩等待，不白跑）。
+        FurnaceKind kind = pickFurnaceKind(level, maid);
+        if (kind == FurnaceKind.NONE) {
             return null;
         }
         BlockPos pos = maid.m_20183_();
@@ -589,32 +609,110 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             for (int dx = -cookRadius(); dx <= cookRadius(); dx++) {
                 for (int dz = -cookRadius(); dz <= cookRadius(); dz++) {
                     BlockPos p = pos.m_7918_(dx, dy, dz);
-                    if (level.m_8055_(p).m_60734_() instanceof AbstractFurnaceBlock) {
-                        // v1.1.0 实测一百六十八：跳过被【其他女仆】占用的炉子（自己
-                        // 占的不跳）——多个女仆分散到不同炉子，不挤同一个；占用者
-                        // 已死/已移除 → 懒清理该占用
-                        String k = furnaceKey(level, p);
-                        java.util.UUID owner = FURNACE_USERS.get(k);
-                        if (owner != null && !owner.equals(maid.m_20148_())) {
-                            net.minecraft.world.entity.Entity o = level.m_8791_(owner);
-                            if (o == null || !o.m_6084_()) {
-                                FURNACE_USERS.remove(k); // 占用者没了 → 释放
-                            } else {
-                                continue; // 别的女仆在用 → 换下一个炉子
-                            }
-                        }
-                        return p;
+                    BlockState bs = level.m_8055_(p);
+                    if (!(bs.m_60734_() instanceof AbstractFurnaceBlock)) {
+                        continue;
                     }
+                    // 炉型匹配：烟熏炉只给食物、高炉只给矿物、熔炉通用
+                    if (bs.m_60734_() instanceof net.minecraft.world.level.block.SmokerBlock
+                            && kind != FurnaceKind.FOOD) {
+                        continue;
+                    }
+                    if (bs.m_60734_() instanceof net.minecraft.world.level.block.BlastFurnaceBlock
+                            && kind != FurnaceKind.ORE) {
+                        continue;
+                    }
+                    // v1.1.0 实测一百五十八：开关关闭 = 只操作熔炉（旧行为）
+                    if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get()
+                            && !(bs.m_60734_() instanceof net.minecraft.world.level.block.FurnaceBlock)) {
+                        continue;
+                    }
+                    // v1.1.0 实测一百六十八：跳过被【其他女仆】占用的炉子（自己
+                    // 占的不跳）——多个女仆分散到不同炉子，不挤同一个；占用者
+                    // 已死/已移除 → 懒清理该占用
+                    String k = furnaceKey(level, p);
+                    java.util.UUID owner = FURNACE_USERS.get(k);
+                    if (owner != null && !owner.equals(maid.m_20148_())) {
+                        net.minecraft.world.entity.Entity o = level.m_8791_(owner);
+                        if (o == null || !o.m_6084_()) {
+                            FURNACE_USERS.remove(k); // 占用者没了 → 释放
+                        } else {
+                            continue; // 别的女仆在用 → 换下一个炉子
+                        }
+                    }
+                    return p;
                 }
             }
         }
         return null;
     }
 
-    /** v1.1.0 实测二百九十九：背包是否有可烧制物或燃料（findFurnace 门控用）——
-     *  食材白名单 / 矿物标签 / 通用可烧制物 / 燃料 任一命中即 true。 */
-    private boolean hasAnyCookable(ServerLevel level, EntityMaid maid) {
+    /** 炉型偏好：NONE=无可烧制物（不找炉子）/ FOOD=食物（烟熏炉优先）/
+     *  ORE=矿物（高炉优先）/ ANY=仅熔炉可烧物（只选熔炉） */
+    private enum FurnaceKind { NONE, FOOD, ORE, ANY }
+
+    /** v1.1.0 实测三百：按背包物品类型决定炉型偏好——先扫物品栏，依次检索可烧制
+     *  的物品：遇到食物 → FOOD（烟熏炉优先）；遇到矿物（有高炉配方）→ ORE（高炉
+     *  优先）；都没有 → 有仅熔炉可烧物 → ANY（只选熔炉）。燃料不算可烧制物
+     *  （燃料是烧炉子的，不是被烧的）。 */
+    private FurnaceKind pickFurnaceKind(ServerLevel level, EntityMaid maid) {
         try {
+            IItemHandler inv = maid.getMaidInv();
+            boolean anySmeltable = false;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                Item it = stack.m_41720_();
+                if (FOODS.contains(it)) {
+                    return FurnaceKind.FOOD;
+                }
+                if (it instanceof net.minecraft.world.item.TieredItem
+                        || it instanceof net.minecraft.world.item.ArmorItem
+                        || it instanceof net.minecraft.world.item.TridentItem
+                        || it instanceof net.minecraft.world.item.ShieldItem) {
+                    continue; // 装备类永不熔
+                }
+                if (isWood(it)) {
+                    continue; // 木材黑名单（默认不烧，开关开启才烧）
+                }
+                if (hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
+                    return FurnaceKind.ORE; // 有高炉配方（矿物/粗金属）→ 高炉优先
+                }
+                if (isSmeltable(level, stack)) {
+                    anySmeltable = true; // 仅熔炉可烧物（圆石/沙子等）
+                }
+            }
+            return anySmeltable ? FurnaceKind.ANY : FurnaceKind.NONE;
+        } catch (Throwable ignored) {
+            return FurnaceKind.NONE;
+        }
+    }
+
+    /** v1.1.0 实测三百：木材类判定（原木/木板/树苗/竹等）——BlockItem 且方块是
+     *  RotatedPillarBlock（原木/竹）/ LeavesBlock（树叶）/ 树苗（SaplingBlock）。
+     *  木材默认黑名单不烧（开关 misc.cookBurnWood 开启才放行）。 */
+    private static boolean isWood(Item item) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_BURN_WOOD.get()) {
+            if (item instanceof net.minecraft.world.item.BlockItem) {
+                net.minecraft.world.level.block.Block b = ((net.minecraft.world.item.BlockItem) item).m_40614_();
+                if (b instanceof net.minecraft.world.level.block.RotatedPillarBlock
+                        || b instanceof net.minecraft.world.level.block.LeavesBlock
+                        || b instanceof net.minecraft.world.level.block.SaplingBlock) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /** v1.1.0 实测三百：已绑定的炉子与背包是否匹配——烟熏炉要求背包有食物、
+     *  高炉要求背包有矿物（高炉配方可烧物）、熔炉要求背包有任一可烧制物
+     *  （食物/矿物/仅熔炉可烧物）。不匹配 → 取消绑定重新找。 */
+    private boolean furnaceMatchesInv(ServerLevel level, EntityMaid maid, BlockPos pos) {
+        try {
+            BlockState bs = level.m_8055_(pos);
             IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
@@ -623,20 +721,29 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 }
                 Item it = stack.m_41720_();
                 if (FOODS.contains(it)) {
-                    return true;
-                }
-                if (net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
-                        .m_58399_(stack)) {
-                    return true; // 燃料（煤炭/原木/木板等）
+                    if (bs.m_60734_() instanceof net.minecraft.world.level.block.SmokerBlock
+                            || bs.m_60734_() instanceof net.minecraft.world.level.block.FurnaceBlock) {
+                        return true;
+                    }
+                    continue;
                 }
                 if (it instanceof net.minecraft.world.item.TieredItem
                         || it instanceof net.minecraft.world.item.ArmorItem
                         || it instanceof net.minecraft.world.item.TridentItem
                         || it instanceof net.minecraft.world.item.ShieldItem) {
-                    continue; // 装备类不算（永不熔）
+                    continue; // 装备类永不熔
+                }
+                if (isWood(it)) {
+                    continue; // 木材黑名单
+                }
+                if (bs.m_60734_() instanceof net.minecraft.world.level.block.BlastFurnaceBlock) {
+                    if (hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
+                        return true; // 高炉：有高炉配方可烧物
+                    }
+                    continue;
                 }
                 if (isSmeltable(level, stack)) {
-                    return true; // 可烧制物（圆石/沙子/矿石/原木等）
+                    return true; // 熔炉：任一可烧制物
                 }
             }
         } catch (Throwable ignored) {
