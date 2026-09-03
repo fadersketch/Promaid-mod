@@ -17,10 +17,12 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 可锄目标）。锄完一块泥土变成耕地后，周围没有成熟作物/空耕地时扫描空转 →
  * TARGET_POS 不设置 → start 不触发 → 锄地再也不跑。
  *
- * 修复：锄地改为【独立驱动】——不依赖 TARGET_POS，本类每 1 秒（20 tick）主动
- * 扫描农场任务女仆周围的可锄泥土（isTillable 判定）并锄掉（与 FarmSweepMixin
- * tillAround 同款动作：装备锄头/锄成耕地/音效/挥臂/消耗耐久）。冷却表复用
- * FarmSweepCache.TILL_CD（与 start TAIL 路径共用，互不冲突）。
+ * v1.1.0 实测二百九十八（用户："耕地改为一个顺带逻辑。先将整个农场模式运作的
+ * 逻辑改回原版。但是如果在自己 5×5 范围内发现到曾经是耕地的地块，然后执行目前
+ * 的换工具逻辑，并播放一下动画，并将地块变为耕地"）：锄地降级为【顺带逻辑】——
+ * 农场模式运作完全回原版（FarmMoveTillMixin 注入作废，锄地目标不再占用移动
+ * 扫描），本驱动每 1 秒扫描女仆周围 5×5（水平）的可锄泥土并顺带锄掉。
+ * 冷却表复用 FarmSweepCache.TILL_CD。
  */
 public final class FarmTillDriver {
     private static boolean registered = false;
@@ -75,7 +77,8 @@ public final class FarmTillDriver {
         }
     }
 
-    /** 扫描女仆周围 3×3（水平）的可锄泥土并锄掉（1 秒冷却/女仆） */
+    /** 扫描女仆周围 5×5（水平）的可锄泥土并锄掉（1 秒冷却/女仆）——
+     *  v1.1.0 实测二百九十八：3×3 → 5×5（用户指定范围） */
     private void tillNearby(ServerLevel world, EntityMaid maid) {
         try {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
@@ -92,8 +95,8 @@ public final class FarmTillDriver {
             }
             FarmSweepCache.TILL_CD.put(maid.m_20148_().toString(), now);
             BlockPos base = maid.m_20183_();
-            for (int dx = -1; dx <= 1; dx++) {
-                for (int dz = -1; dz <= 1; dz++) {
+            for (int dx = -2; dx <= 2; dx++) {
+                for (int dz = -2; dz <= 2; dz++) {
                     BlockPos b = base.m_7918_(dx, 0, dz);
                     if (!world.m_46749_(b)) {
                         continue; // 区块未加载跳过

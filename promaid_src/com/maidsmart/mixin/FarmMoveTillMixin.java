@@ -24,17 +24,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 女仆走过去后 MaidFarmPlantTask.start 触发，tillAround 锄地。
  * 与原逻辑同机制（真实消耗锄头耐久），无作弊。
  * 总开关：misc.produceTaskEnhance（与锄地逻辑同一开关）。
+ *
+ * v1.1.0 实测二百九十八（用户："耕地改为一个顺带逻辑。先将整个农场模式运作的
+ * 逻辑改回原版。但是如果在自己 5×5 范围内发现到曾经是耕地的地块，然后执行目前
+ * 的换工具逻辑，并播放一下动画，并将地块变为耕地。也就是说现在耕地这个逻辑
+ * 变成了一个顺带逻辑，而不再是一个主要任务"）：注入作废——不再把"需要锄的
+ * 泥土"列为移动目标（农场模式运作完全回原版：TARGET_POS 只由收割/种植驱动，
+ * 锄地目标不再占用移动扫描）。锄地由 FarmTillDriver 独立驱动（每 1 秒扫描
+ * 5×5 范围顺带锄）。本类保留空壳（mixin 注册引用），注入直接返回不干预。
  */
 @Mixin(MaidFarmMoveTask.class)
 public abstract class FarmMoveTillMixin {
     @Inject(method = "shouldMoveTo", at = @At("TAIL"), cancellable = true)
     private void maidsmart$tillTarget(ServerLevel world, EntityMaid maid, BlockPos pos,
                                       CallbackInfoReturnable<Boolean> cir) {
-        if (cir.getReturnValueZ()) {
-            return; // 原逻辑已判定为目标（可收割/可种植），不重复
-        }
-        if (com.maidsmart.build.FarmSweepCache.isTillable(world, maid, pos)) {
-            cir.setReturnValue(true);
-        }
+        // v1.1.0 实测二百九十八：锄地改顺带逻辑——不干预原版目标判定
+        return;
     }
 }
