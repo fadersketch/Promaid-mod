@@ -27,7 +27,9 @@ public final class FarmSweepCache {
     public static final java.util.Map<String, Long> PLANT_CD =
             new ConcurrentHashMap<>();
 
-    /** v1.1.0 实测二百七十六：锄地冷却（40 tick / 2 秒）——见 FarmSweepMixin.tillAround */
+    /** v1.1.0 实测二百七十六：锄地冷却（40 tick / 2 秒）——见 FarmSweepMixin.tillAround。
+     *  v1.1.0 实测二百九十一：20 tick / 1 秒——用户："锄地检测的频率不行，
+     *  导致没有办法及时锄地"（旧版 2 秒冷却 + 依赖收割/种植触发，锄地滞后）。 */
     public static final java.util.Map<String, Long> TILL_CD =
             new ConcurrentHashMap<>();
 
@@ -48,6 +50,12 @@ public final class FarmSweepCache {
      *
      * 修复：shouldMoveTo 注入第三个目标判定——"需要锄的泥土"（dirt + 上方空气 +
      * 3×3 内有耕地 + 背包/主手有锄头）也算目标，女仆走过去后 start 触发锄地。
+     *
+     * v1.1.0 实测二百九十一：判定扩展——dirt 之外认 grass_block（f_50440_，
+     * javap 实证：GrassBlock 构造 → f_50440_）。用户："当地块从泥土变为草方块
+     * 之后，女仆就会彻底失去判定"——草方块蔓延到泥土上后旧版只认 dirt → 不再
+     * 锄。原版锄头（HoeItem.f_41332_ 表）本来就能锄 dirt/grass_block/dirt_path
+     * → farmland，判定与锄地动作对齐。
      */
     public static boolean isTillable(net.minecraft.server.level.ServerLevel world,
                                      com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid,
@@ -62,8 +70,11 @@ public final class FarmSweepCache {
             return false;
         }
         net.minecraft.world.level.block.state.BlockState st = world.m_8055_(pos);
-        if (st.m_60734_() != net.minecraft.world.level.block.Blocks.f_50493_) {
-            return false; // 只锄泥土（dirt）
+        net.minecraft.world.level.block.Block b = st.m_60734_();
+        // 只锄泥土/草方块（原版锄头可锄目标；草方块蔓延后也能恢复耕地）
+        if (b != net.minecraft.world.level.block.Blocks.f_50493_
+                && b != net.minecraft.world.level.block.Blocks.f_50440_) {
+            return false;
         }
         if (!world.m_8055_(pos.m_7494_()).m_60795_()) {
             return false; // 上方不是空气（有作物/方块）不锄
