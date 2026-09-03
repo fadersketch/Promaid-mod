@@ -1080,6 +1080,16 @@ public class AutoCombatSwitch {
                     && !com.maidsmart.combat.GunCompat.hasGunAndAmmo(maid)) {
                 continue;
             }
+            // v1.1.0 实测二百九十五（粉丝："为啥女仆会把枪械识别为法杖啊，自动切换
+            // 总变成法术模式"）：枪械优先——女仆持有枪械时，法术类任务不进候选池。
+            // 根因：法术任务（万法皆通 maidspell 等）的 isWeapon 认带攻击力属性的
+            // 物品（法术书/法杖/枪械都带），枪械同时被法术任务认作武器 → 与
+            // gun_attack 同池加权随机 → 随机落到法术任务 = "自动切换变成法术模式"。
+            // 枪械就该用枪械模式（TLM gun_attack 有换弹/走位/弹药全套机制）。
+            if (com.maidsmart.combat.GunCompat.hasGunAndAmmo(maid)
+                    && isSpellTask(task)) {
+                continue;
+            }
             // v1.1.0 实测二十一：权重可配置（原版/模组各一条）——模组默认 2.0 优先、
             // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
             double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
@@ -1346,6 +1356,20 @@ public class AutoCombatSwitch {
         }
         // 未知模组任务默认近战（冲脸兜底）
         return false;
+    }
+
+    /** v1.1.0 实测二百九十五：法术类任务判定（枪械优先时排除用）——与 isRangedTask
+     *  的法术识别同口径：命名空间 maidspell/spellbook，或 UID 含 spell 关键词。 */
+    private static boolean isSpellTask(IMaidTask task) {
+        try {
+            String ns = task.getUid().m_135827_();
+            if (ns.equals("maidspell") || ns.equals("spellbook")) {
+                return true;
+            }
+            return task.getUid().toString().toLowerCase().contains("spell");
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /** v1.1.0 实测三十八：女仆周围最近敌对生物距离（格）；没有敌人返回 -1 */
