@@ -445,6 +445,12 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ANY.get()) {
             return ItemStack.f_41583_;
         }
+        // v1.1.0 实测二百九十九（用户："仍然会出现拿木材烧木头的情况，而不是优先
+        // 先烧别的物品"）：可烧制物里【不可燃烧的优先】（圆石/沙子/矿石等——烧它们
+        // 不会抢燃料），可烧制燃料（原木/木板/树苗——既是原料又是燃料）最后兜底。
+        // 旧版按槽位顺序取，原木槽位在前就喂原木 → 原木进原料槽、原木又进燃料槽
+        // = "用木头烧木头"。
+        ItemStack fallback = ItemStack.f_41583_;
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.m_41619_() || FOODS.contains(stack.m_41720_())) {
@@ -457,8 +463,25 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     || it instanceof net.minecraft.world.item.ShieldItem) {
                 continue; // 装备类永不熔（有烧成粒配方的高价值工具/盔甲）
             }
-            if (isSmeltable(level, stack)) {
-                return maidInv.extractItem(i, 1, false);
+            if (!isSmeltable(level, stack)) {
+                continue;
+            }
+            if (net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+                    .m_58399_(stack)) {
+                // 可烧制燃料（原木/木板/树苗）——留作兜底
+                if (fallback.m_41619_()) {
+                    fallback = stack.m_41777_();
+                }
+                continue;
+            }
+            return maidInv.extractItem(i, 1, false); // 不可燃烧的可烧制物：优先
+        }
+        if (!fallback.m_41619_()) {
+            for (int i = 0; i < maidInv.getSlots(); i++) {
+                ItemStack stack = maidInv.getStackInSlot(i);
+                if (!stack.m_41619_() && stack.m_41720_() == fallback.m_41720_()) {
+                    return maidInv.extractItem(i, 1, false);
+                }
             }
         }
         return ItemStack.f_41583_;
@@ -553,6 +576,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     private BlockPos findFurnace(ServerLevel level, EntityMaid maid) {
+        // v1.1.0 实测二百九十九（用户："女仆完全不检测自己包里面的东西是什么，
+        // 就跑到对应的炉子那边去"）：背包门控——背包里既没有食材/可烧制物、
+        // 也没有燃料时，不绑定任何炉子（站桩等待，不白跑）。有任一可烧制物或
+        // 燃料才去找炉子。
+        if (!hasAnyCookable(level, maid)) {
+            return null;
+        }
         BlockPos pos = maid.m_20183_();
         for (int dy = -com.maidsmart.config.MaidSmartConfig.MISC_VERTICAL_RANGE.get();
              dy <= com.maidsmart.config.MaidSmartConfig.MISC_VERTICAL_RANGE.get(); dy++) {
@@ -579,5 +609,38 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
         }
         return null;
+    }
+
+    /** v1.1.0 实测二百九十九：背包是否有可烧制物或燃料（findFurnace 门控用）——
+     *  食材白名单 / 矿物标签 / 通用可烧制物 / 燃料 任一命中即 true。 */
+    private boolean hasAnyCookable(ServerLevel level, EntityMaid maid) {
+        try {
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                Item it = stack.m_41720_();
+                if (FOODS.contains(it)) {
+                    return true;
+                }
+                if (net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+                        .m_58399_(stack)) {
+                    return true; // 燃料（煤炭/原木/木板等）
+                }
+                if (it instanceof net.minecraft.world.item.TieredItem
+                        || it instanceof net.minecraft.world.item.ArmorItem
+                        || it instanceof net.minecraft.world.item.TridentItem
+                        || it instanceof net.minecraft.world.item.ShieldItem) {
+                    continue; // 装备类不算（永不熔）
+                }
+                if (isSmeltable(level, stack)) {
+                    return true; // 可烧制物（圆石/沙子/矿石/原木等）
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 }
