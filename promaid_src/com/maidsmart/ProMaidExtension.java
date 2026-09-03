@@ -103,6 +103,9 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.task.MaidPlanting.ensureRegistered();
         // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随女仆）
         com.maidsmart.tool.MaidHeldLight.ensureRegistered();
+        // v1.1.0 实测二百九十七：锄地独立驱动（不依赖 TARGET_POS——锄完一块
+        // 泥土变耕地后扫描空转，start 不再触发，锄地再也不跑）
+        com.maidsmart.build.FarmTillDriver.ensureRegistered();
         MinecraftForge.EVENT_BUS.register(this);
     }
 

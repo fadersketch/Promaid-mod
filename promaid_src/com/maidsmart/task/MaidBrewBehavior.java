@@ -326,7 +326,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
         // 1. 补燃料（槽 4）——始终优先，没燃料什么都不酿
         if (stand.m_8020_(4).m_41619_()) {
-            ItemStack fuel = this.extractItemFromMaid(maidInv, "minecraft:blaze_powder", 1);
+            ItemStack fuel = this.extractItemFromMaid(maid, maidInv, "minecraft:blaze_powder", 1);
             if (!fuel.m_41619_()) {
                 stand.m_6836_(4, fuel);
                 swing(maid); // v1.1.0 实测二百八十一：动作可视化
@@ -502,7 +502,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (s.m_41619_()) {
                 // 空槽：补水瓶（v1.1.0 实测二百八十：链基底恒为 water——
                 // 链完整回退到水瓶起步，awkward 瓶作为链上中间产物正常推进）
-                ItemStack bottle = this.extractWaterBottle(maidInv);
+                ItemStack bottle = this.extractWaterBottle(maid, maidInv);
                 if (!bottle.m_41619_()) {
                     stand.m_6836_(i, bottle);
                     swing(maid);
@@ -532,7 +532,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (rid == null) {
                 continue;
             }
-            ItemStack ing = this.extractItemFromMaid(maidInv, rid.toString(), 1);
+            ItemStack ing = this.extractItemFromMaid(maid, maidInv, rid.toString(), 1);
             if (!ing.m_41619_()) {
                 stand.m_6836_(3, ing);
                 swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
@@ -553,7 +553,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         for (int i = 0; i <= 2; i++) {
             ItemStack s = stand.m_8020_(i);
             if (s.m_41619_()) {
-                ItemStack bottle = this.extractWaterBottle(maidInv);
+                ItemStack bottle = this.extractWaterBottle(maid, maidInv);
                 if (!bottle.m_41619_()) {
                     stand.m_6836_(i, bottle);
                     swing(maid);
@@ -564,7 +564,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 continue;
             }
             if (this.isPotion(s, "minecraft:water")) {
-                ItemStack wart = this.extractItemFromMaid(maidInv, "minecraft:nether_wart", 1);
+                ItemStack wart = this.extractItemFromMaid(maid, maidInv, "minecraft:nether_wart", 1);
                 if (!wart.m_41619_()) {
                     stand.m_6836_(3, wart);
                     swing(maid);
@@ -602,7 +602,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (form == com.maidsmart.brew.BrewConfig.FORM_DRINK && cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
             String reagentId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
                     ? "minecraft:redstone" : "minecraft:glowstone_dust";
-            ItemStack reagent = this.extractItemFromMaid(maidInv, reagentId, 1);
+            ItemStack reagent = this.extractItemFromMaid(maid, maidInv, reagentId, 1);
             if (!reagent.m_41619_()) {
                 // 当前瓶 + 强化材料能否出结果（原版配方表判定——如 healing+红石
                 // 无结果（治疗没有延长版），则跳过强化直接进形态）
@@ -633,7 +633,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (rid == null) {
                 return;
             }
-            ItemStack ing = this.extractItemFromMaid(maidInv, rid.toString(), 1);
+            ItemStack ing = this.extractItemFromMaid(maid, maidInv, rid.toString(), 1);
             if (!ing.m_41619_()) {
                 stand.m_6836_(3, ing);
                 swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
@@ -710,35 +710,51 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     /** 从白名单取材料，但排除指定 id（awkward 阶段不能再用下界疣）。
      *  v1.1.0 实测二百九十一：优先选与上次不同的材料（轮换多样化）；
-     *  只有一种材料时自然选它；取到后记录"这次用的材料"。 */
+     *  只有一种材料时自然选它；取到后记录"这次用的材料"。
+     *  v1.1.0 实测二百九十七：主副手优先（先扫双手再扫背包）。 */
     private ItemStack extractFromMaidExcept(EntityMaid maid, IItemHandler maidInv,
                                             Set<String> whitelistIds, String excludeId, int count) {
         String last = LAST_INGREDIENT.get(maid.m_20148_());
-        // 先扫"与上次不同"的材料
-        for (int i = 0; i < maidInv.getSlots(); i++) {
-            ItemStack stack = maidInv.getStackInSlot(i);
+        // 先扫"与上次不同"的材料（双手 + 背包）
+        ItemStack fromHands = this.extractFromExcept(maid.getHandsInvWrapper(),
+                whitelistIds, excludeId, last, count);
+        if (!fromHands.m_41619_()) {
+            LAST_INGREDIENT.put(maid.m_20148_(), ForgeRegistries.ITEMS.getKey(fromHands.m_41720_()).toString());
+            return fromHands;
+        }
+        ItemStack fromInv = this.extractFromExcept(maidInv, whitelistIds, excludeId, last, count);
+        if (!fromInv.m_41619_()) {
+            LAST_INGREDIENT.put(maid.m_20148_(), ForgeRegistries.ITEMS.getKey(fromInv.m_41720_()).toString());
+            return fromInv;
+        }
+        // 只有上次那种（或没有记录）：退回任意白名单材料（双手 + 背包）
+        fromHands = this.extractFromExcept(maid.getHandsInvWrapper(),
+                whitelistIds, excludeId, null, count);
+        if (!fromHands.m_41619_()) {
+            LAST_INGREDIENT.put(maid.m_20148_(), ForgeRegistries.ITEMS.getKey(fromHands.m_41720_()).toString());
+            return fromHands;
+        }
+        fromInv = this.extractFromExcept(maidInv, whitelistIds, excludeId, null, count);
+        if (!fromInv.m_41619_()) {
+            LAST_INGREDIENT.put(maid.m_20148_(), ForgeRegistries.ITEMS.getKey(fromInv.m_41720_()).toString());
+            return fromInv;
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** 从单个容器按白名单取材料（last=null 时不过滤"与上次不同"） */
+    private ItemStack extractFromExcept(IItemHandler inv, Set<String> whitelistIds,
+                                        String excludeId, String last, int count) {
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_()) {
                 continue;
             }
             ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             if (stackId != null && whitelistIds.contains(stackId.toString())
                     && !excludeId.equals(stackId.toString())
-                    && !stackId.toString().equals(last)) {
-                LAST_INGREDIENT.put(maid.m_20148_(), stackId.toString());
-                return maidInv.extractItem(i, count, false);
-            }
-        }
-        // 只有上次那种（或没有记录）：退回任意白名单材料
-        for (int i = 0; i < maidInv.getSlots(); i++) {
-            ItemStack stack = maidInv.getStackInSlot(i);
-            if (stack.m_41619_()) {
-                continue;
-            }
-            ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-            if (stackId != null && whitelistIds.contains(stackId.toString())
-                    && !excludeId.equals(stackId.toString())) {
-                LAST_INGREDIENT.put(maid.m_20148_(), stackId.toString());
-                return maidInv.extractItem(i, count, false);
+                    && (last == null || !stackId.toString().equals(last))) {
+                return inv.extractItem(i, count, false);
             }
         }
         return ItemStack.f_41583_;
@@ -747,8 +763,18 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** 从背包取 1 瓶【饮用型】水瓶（PotionItem 且药水为 water，动态 key 判定）；
      *  没有返回空。v1.1.0 实测二百九十一：严格排除喷溅/滞留水瓶——旧版只认
      *  PotionItem 不区分形态，喷溅水瓶（splash_potion + water）也会被当水瓶
-     *  放进槽 0，酿造台对喷溅水瓶不反应 → 卡死。 */
-    private ItemStack extractWaterBottle(IItemHandler inv) {
+     *  放进槽 0，酿造台对喷溅水瓶不反应 → 卡死。
+     *  v1.1.0 实测二百九十七：主副手优先——先扫双手（getHandsInvWrapper），
+     *  再扫背包（用户："酿药物品不识别主副手，只识别背包"）。 */
+    private ItemStack extractWaterBottle(EntityMaid maid, IItemHandler inv) {
+        ItemStack fromHands = this.extractWaterBottleFrom(maid.getHandsInvWrapper());
+        if (!fromHands.m_41619_()) {
+            return fromHands;
+        }
+        return this.extractWaterBottleFrom(inv);
+    }
+
+    private ItemStack extractWaterBottleFrom(IItemHandler inv) {
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
@@ -784,15 +810,25 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         return ItemStack.f_41583_;
     }
 
-    private ItemStack extractItemFromMaid(IItemHandler maidInv, String itemId, int count) {
+    /** v1.1.0 实测二百九十七：主副手优先取材料（用户："酿药物品不识别主副手，
+     *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。 */
+    private ItemStack extractItemFromMaid(EntityMaid maid, IItemHandler maidInv, String itemId, int count) {
         Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
         if (item == null) {
             return ItemStack.f_41583_;
         }
-        for (int i = 0; i < maidInv.getSlots(); i++) {
-            ItemStack stack = maidInv.getStackInSlot(i);
+        ItemStack fromHands = this.extractItemFrom(maid.getHandsInvWrapper(), item, count);
+        if (!fromHands.m_41619_()) {
+            return fromHands;
+        }
+        return this.extractItemFrom(maidInv, item, count);
+    }
+
+    private ItemStack extractItemFrom(IItemHandler inv, Item item, int count) {
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
             if (!stack.m_41619_() && stack.m_41720_() == item) {
-                return maidInv.extractItem(i, count, false);
+                return inv.extractItem(i, count, false);
             }
         }
         return ItemStack.f_41583_;
