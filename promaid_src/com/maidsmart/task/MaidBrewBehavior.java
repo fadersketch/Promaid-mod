@@ -337,6 +337,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         //    v1.1.0 实测二百七十七：定向模式只收【目标链上的最终成品】——链上
         //    中间产物（如 awkward→healing 链里的 healing 之前）不收，非目标
         //    药水（无关的成品/死路）收走腾位
+        //    v1.1.0 实测二百九十二：批量模式收成品前检查配置——未到目标强化
+        //    （红石延长/萤石强化）或形态（喷溅/滞留）的成品【不收】，留在酿造台
+        //    继续推进（用户："3 分钟的夜视不会自动合成 8 分钟的"——根因：旧版
+        //    收成品不检查配置，3 分钟夜视一出现就被收走，processForm 的强化步骤
+        //    永远轮不到）
         for (int i = 0; i <= 2; i++) {
             ItemStack s = stand.m_8020_(i);
             if (this.isDonePotion(s)) {
@@ -347,9 +352,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                         this.takeIntoMaid(maid, stand, i); // 非目标药水收走腾位
                     }
                     // 链上中间产物（非最终）留在酿造台继续
-                } else {
+                } else if (this.isBatchFinal(s, cfg)) {
                     this.takeIntoMaid(maid, stand, i);
                 }
+                // 批量模式未到目标强化/形态的成品：不收，留在酿造台继续推进
             }
         }
         // 3. 按配置下料（槽3 空时才放材料，一次一轮）
@@ -365,6 +371,66 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
         // v1.5.24：酿造中/无事可做时【不】放弃酿造台——持续站桩等待
         //（旧版 didSomething=false 就清 standPos → 酿造中开始漫游）
+    }
+
+    /** 批量模式：槽内药水是否达到配置的最终状态（强化 + 形态）。
+     *  v1.1.0 实测二百九十二：未到目标强化/形态的成品【不收】，留在酿造台继续
+     *  推进（旧版收成品不检查配置——3 分钟夜视一出现就被收走，红石延长永远
+     *  轮不到，用户："3 分钟的夜视不会自动合成 8 分钟的"）。
+     *  - 平凡/浓稠（无效果死路）：直接收走腾位
+     *  - 形态：formOf(s) < cfg.form → 不收（等 processForm 推进）
+     *  - 强化：配置红石/萤石且当前瓶无对应变体（long_/strong_ 前缀）→ 先测
+     *    原版配方表（m_43529_）该药水是否有变体——无变体（如 healing 无延长版）
+     *    放行，有变体但未强化 → 不收
+     */
+    private boolean isBatchFinal(ItemStack s, com.maidsmart.brew.BrewConfig cfg) {
+        if (s.m_41619_() || !(s.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+            return true; // 非药水物品：收走腾位
+        }
+        net.minecraft.world.item.alchemy.Potion p = net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s);
+        if (p == null) {
+            return true;
+        }
+        net.minecraft.resources.ResourceLocation key = ForgeRegistries.POTIONS.getKey(p);
+        if (key == null) {
+            return true;
+        }
+        // m_135827_ = ResourceLocation.getPath（SRG，MaidCookBehavior.hasOreTag 同款实证）
+        String path = key.m_135827_();
+        // 平凡/浓稠（无效果死路）：直接收走腾位
+        if ("mundane".equals(path) || "thick".equals(path)) {
+            return true;
+        }
+        int form = this.formOf(s);
+        // 形态检查：未到目标形态不收（等 processForm 下火药/龙息推进）
+        if (form < cfg.form) {
+            return false;
+        }
+        // 强化检查（仅饮用形态可强化——喷溅/滞留瓶无强化变体）
+        if (form == com.maidsmart.brew.BrewConfig.FORM_DRINK
+                && cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
+            String reagentId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
+                    ? "minecraft:redstone" : "minecraft:glowstone_dust";
+            boolean hasPrefix = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
+                    ? path.startsWith("long_") : path.startsWith("strong_");
+            if (!hasPrefix) {
+                // 当前瓶无对应变体前缀——测原版配方表该药水是否有变体
+                net.minecraft.world.item.Item reagent = com.maidsmart.brew.BrewRecipeResolver.item(reagentId);
+                if (reagent == null) {
+                    return true;
+                }
+                ItemStack test = net.minecraft.world.item.alchemy.PotionBrewing.m_43529_(
+                        new ItemStack(reagent), s);
+                boolean hasVariant = !test.m_41619_() && test.m_41720_() == s.m_41720_()
+                        && !net.minecraft.world.item.alchemy.PotionUtils.m_43579_(test)
+                        .equals(net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s));
+                if (!hasVariant) {
+                    return true; // 该药水无对应强化变体（如 healing 无延长版）：放行
+                }
+                return false; // 有变体但还没强化：不收，等 processForm 下料
+            }
+        }
+        return true;
     }
 
     /** 收走槽位药水进女仆背包（满则退回槽位） */
@@ -547,6 +613,13 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     stand.m_6836_(3, reagent);
                     return;
                 }
+            } else {
+                // v1.1.0 实测二百九十二：缺强化材料【不推进形态】——先强化后形态，
+                // 否则滞留/喷溅瓶无法再强化，永远普通时长（用户："要求合成时间长的
+                // 滞留型药水，但描述仍是普通药水的"——根因：旧版缺红石时跳过强化
+                // 直接下火药/龙息，滞留 3 分钟夜视一旦形成就永远 3 分钟）
+                this.notifyMissing(maid, reagentId);
+                return;
             }
         }
         // 2. 形态推进（饮用→喷溅→滞留）
