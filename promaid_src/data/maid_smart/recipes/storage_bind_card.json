@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "LLL",
+    "LLL",
+    "LLL"
+  ],
+  "key": {
+    "L": { "item": "minecraft:leather" }
+  },
+  "result": { "item": "maid_smart:storage_bind_card", "count": 1 }
+}

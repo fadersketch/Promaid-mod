@@ -201,6 +201,16 @@ public class FilePickScreen extends Screen {
     @Override
     public void m_88315_(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.m_280039_(graphics); // renderBackground
+        // v1.1.0 实测三百一十七：蓝图文件选择（手册子界面）补上蓝金品牌渐变——与手册同款
+        int w = this.f_96543_;
+        int h = this.f_96544_;
+        int bandL = Math.max(4, w / 2 - 300);
+        int bandR = Math.min(w - 4, w / 2 + 300);
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x55122A4E);   // 底层：深海军蓝
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x220F3A8C);   // 中层：宝蓝
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x1A1B4E8C);   // 高光：亮蓝
+        graphics.m_280509_(bandL, 4, bandR, 14, 0xFF2C5F9E);      // 顶部饰条：靛蓝
+        graphics.m_280509_(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         this.drawCentered(graphics, "\u00a7e" + this.pickTitle, 26, 0xFFFFFF);
         String pathText = this.dir == null ? "选择磁盘分区" : this.dir.getAbsolutePath();
         this.drawCentered(graphics, "\u00a77" + this.fit(pathText, this.f_96543_ - 20), 42, 0x888888);

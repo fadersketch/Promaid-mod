@@ -357,15 +357,31 @@ public class ScheduleBookScreen extends Screen {
         int y = CONTENT_TOP + 6;
         // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL，立即生效）
         // v1.1.0 实测七十六：排班中的女仆锁定（同任务按钮——服务端同样拦截兜底）
+        // v1.1.0 实测三百一十二（用户："排班表对于模式的切换必须要通过点击的方式
+        // 切换到下一个模式。能不能增加前后切换键，让它可以切换到上一个或者下一个"）：
+        // 拆成三键——◀ 上一个 / 中间模式名（点击仍循环，保留旧习惯）/ ▶ 下一个。
+        int curMode = Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)));
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"), b -> {
+                    if (this.loadedOn) {
+                        return; // 硬性锁定：先关右上角的排班
+                    }
+                    int mode = (curMode + 2) % 3; // 上一个（-1 取模）
+                    ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            this.selUuid, mode, "", -1));
+                    if (sel != null) {
+                        sel[3] = String.valueOf(mode);
+                    }
+                    this.m_7856_();
+                })
+                .m_252987_(qx, y, 20, 20).m_253136_());
         this.m_142416_(Button.m_253074_(
-                        Component.m_237113_("工作模式：\u00a7e"
-                                + MODE_NAMES[Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)))]
-                                + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击切换)")),
+                        Component.m_237113_("工作模式：\u00a7e" + MODE_NAMES[curMode]
+                                + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击/◀▶切换)")),
                         b -> {
                             if (this.loadedOn) {
                                 return; // 硬性锁定：先关右上角的排班
                             }
-                            int mode = (safeInt(sel != null ? sel[3] : null, 2) + 1) % 3;
+                            int mode = (curMode + 1) % 3;
                             ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
                                     this.selUuid, mode, "", -1));
                             if (sel != null) {
@@ -373,7 +389,20 @@ public class ScheduleBookScreen extends Screen {
                             }
                             this.m_7856_();
                         })
-                .m_252987_(qx, y, qw, 20).m_253136_());
+                .m_252987_(qx + 24, y, Math.max(40, qw - 48), 20).m_253136_());
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"), b -> {
+                    if (this.loadedOn) {
+                        return; // 硬性锁定：先关右上角的排班
+                    }
+                    int mode = (curMode + 1) % 3; // 下一个
+                    ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            this.selUuid, mode, "", -1));
+                    if (sel != null) {
+                        sel[3] = String.valueOf(mode);
+                    }
+                    this.m_7856_();
+                })
+                .m_252987_(qx + qw - 20, y, 20, 20).m_253136_());
         y += 26;
         // 任务循环（点一下换下一个；到头回绕；立即生效）
         // v1.1.0 实测七十（用户反馈：日程表与主人主动切任务冲突）：排班中的女仆
@@ -544,6 +573,16 @@ public class ScheduleBookScreen extends Screen {
         int w = this.f_96543_;
         int h = this.f_96544_;
         int cx = w / 2;
+        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // 一点都没变"）：排班表补上暗红渐变——保留附魔书主题，半透明色带叠加 =
+        // 渐变（m_280509_ 走 ARGB，Alpha 叠加）
+        int bandL = Math.max(4, cx - 300);
+        int bandR = Math.min(w - 4, cx + 300);
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x55200808);   // 底层：深暗红
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x22400A0A);   // 中层：红
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x1A5C1010);   // 高光：亮红
+        g.m_280509_(bandL, 4, bandR, 14, 0xFF8B1A1A);      // 顶部饰条：暗红
+        g.m_280509_(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         // 暗红背景 + 顶部饰条（附魔书紫红标题风格）
         g.m_280509_(Math.max(8, cx - 290), 8, Math.min(w - 8, cx + 290),
                 h - 8, 0xC0200808);

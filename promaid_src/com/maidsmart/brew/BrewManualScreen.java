@@ -289,8 +289,19 @@ public class BrewManualScreen extends Screen {
         int cx = w / 2;
         int panelLeft = Math.max(8, cx - 290);
         int panelRight = Math.min(w - 8, cx + 290);
+        // v1.1.0 实测三百一十三（用户："模组内新添加物品的 ui 背景都是用的原版 MC 格式，
+        // 过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：酿造手册品牌渐变背景——
+        // 半透明色带叠加 = 渐变色（m_280509_ 走 ARGB，Alpha 叠加）。紫→蓝横向
+        // 渐变底色 + 顶部金色饰条 + 底部深色高光
+        int bandL = Math.max(4, cx - 300);
+        int bandR = Math.min(w - 4, cx + 300);
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x55181840);   // 底层：深紫蓝
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x220F3A8C);   // 中层：偏蓝
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x1A5B1478);   // 高光：偏紫
+        g.m_280509_(bandL, 4, bandR, 14, 0xFF6A2C8E);      // 顶部饰条：紫金
+        g.m_280509_(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         g.m_280509_(panelLeft, 8, panelRight, h - 8, PANEL_BG);
-        g.m_280653_(this.f_96547_, Component.m_237113_("\u00a7e女仆药剂手册——酿造配置"), cx, 10, 0xFFFFD700);
+        g.m_280653_(this.f_96547_, Component.m_237113_("\u00a7e\u00a7o女仆药剂手册\u00a7r\u00a76——酿造配置"), cx, 10, 0xFFFFD700);
 
         boolean batch = this.cfg.mode == BrewConfig.MODE_BATCH;
 

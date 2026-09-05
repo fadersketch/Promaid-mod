@@ -30,8 +30,10 @@ public class WorkStatusReporter {
     // v1.1.0 实测二百九十四：农场任务（TLM 原生 touhou_little_maid:farm，TaskNormalFarm
     // UID javap 实证）纳入看门狗——用户："因为没有看门狗，所以女仆现在还是很喜欢发呆"
     private static final ResourceLocation FARM = ResourceLocation.parse("touhou_little_maid:farm");
+    // v1.1.0 实测三百一十一：宰杀任务（5×5 同种牲畜超阈值才杀）
+    private static final ResourceLocation SLAUGHTER = ResourceLocation.parse("maid_smart:slaughter");
     private static final List<ResourceLocation> SMART_TASKS =
-            List.of(MINE, COOK, BREW, BUILD, FARM);
+            List.of(MINE, COOK, BREW, BUILD, FARM, SLAUGHTER);
 
     /** 每只女仆上次播报时间（WeakHashMap 防泄漏） */
     private final WeakHashMap<EntityMaid, Long> lastReport = new WeakHashMap<>();

@@ -75,13 +75,18 @@ public class DangerEscapeHandler {
         if (server == null) {
             return;
         }
-        AABB whole = new AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                Double.NEGATIVE_INFINITY, Double.POSITIVE_INFINITY,
-                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 经 blockToSection 溢出
+        // 收敛到同一值 → 扫描恒空，同 HomePatrolHandler）
+        AABB whole = new AABB(-131072.0, -4096.0, -131072.0,
+                131072.0, 4096.0, 131072.0);
         long now = server.m_129921_();
         for (ServerLevel level : server.m_129785_()) {
-            for (EntityMaid maid : level.m_45976_(EntityMaid.class, whole)) {
-                if (!maid.m_6084_() || maid.m_269323_() == null) {
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                    net.minecraft.world.entity.Entity.class, whole)) {
+                if (!(e instanceof EntityMaid maid) || !maid.m_6084_()
+                        || maid.m_269323_() == null) {
                     continue; // 无主不处理
                 }
                 // 自保中让位（自保有珍珠/放水/垫高专属链路）；坐姿/骑乘跳过（见类注释）

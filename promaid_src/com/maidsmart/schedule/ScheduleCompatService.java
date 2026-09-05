@@ -43,7 +43,9 @@ public final class ScheduleCompatService {
         for (String uid : new String[]{
                 "maid_smart:mine", "maid_smart:woodcut", "maid_smart:cook",
                 "maid_smart:brew", "maid_smart:build", "maid_smart:sort",
-                "maid_smart:harvest", "maid_smart:feed", "maid_smart:repair"}) {
+                "maid_smart:harvest", "maid_smart:feed", "maid_smart:repair",
+                // v1.1.0 实测三百一十一：宰杀任务（5×5 同种牲畜超阈值才杀）
+                "maid_smart:slaughter"}) {
             BY_UID.put(uid, Classification.SUPPORTED);
         }
         // TLM 原生工作任务：SUPPORTED（除 feed_animal——它是 IAttackTask 的 TLM 怪胎，

@@ -124,6 +124,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private static final java.util.Map<java.util.UUID, Long> MISSING_CD = new java.util.HashMap<>();
     /** 每女仆最近一次报缺的材料（同一材料不刷屏） */
     private static final java.util.Map<java.util.UUID, String> LAST_MISSING = new java.util.HashMap<>();
+    /** v1.1.0 实测三百一十：缺料 pending 表（女仆 UUID → 首缺时刻）——
+     *  双通道确认：第一次缺料只记 pending 不报，下一轮重试确认后才真报
+     *  （防共享存储被其他女仆抢走导致的假缺料误报） */
+    private static final java.util.Map<java.util.UUID, Long> MISSING_PENDING = new java.util.HashMap<>();
 
     /** 酿造链常见材料中文名（气泡用——气泡是字符串，服务端拿不到客户端 I18n） */
     private static final java.util.Map<String, String> MAT_CN = new java.util.HashMap<>();
@@ -148,12 +152,39 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         MAT_CN.put("minecraft:slime_ball", "黏液球");
     }
 
-    /** v1.1.0 实测二百八十一：缺料报告（气泡 + 主人系统消息，30 秒冷却 + 同材料不重复）。
-     *  气泡走字符串（服务端拼中文映射）；系统消息用 translatable 组件——客户端
-     *  渲染时按客户端语言本地化，物品名天然正确。 */
+    /**
+     * v1.1.0 实测二百八十一：缺料报告（气泡 + 主人系统消息，30 秒冷却 + 同材料不重复）。
+     * 气泡走字符串（服务端拼中文映射）；系统消息用 translatable 组件——客户端
+     * 渲染时按客户端语言本地化，物品名天然正确。
+     *
+     * v1.1.0 实测三百一十（共享存储防抢误报，方案 B）：女仆绑定精妙终端/网络接口后，
+     * 多女仆可能抢同一材料——A 刚取走、B 提取瞬间为空。若立刻报缺料会误导玩家
+     * （"终端明明有却被报缺"）。方案 B：缺料判定改为【双通道确认】——第一次
+     * 取不到只记 pending（不报），下一轮处理周期重试；两轮都取不到（背包/主副手/
+     * 精妙终端/网络接口全空）才真报缺料。补上材料后 pending 清除。
+     */
     private void notifyMissing(EntityMaid maid, String itemId) {
         try {
             long nowTick = maid.m_9236_().m_46467_();
+            // v1.1.0 实测三百一十：双通道确认——第一次缺料只记 pending（下轮重试），
+            // 连续两轮都取不到才真报（防共享存储被抢导致的假缺料误报）
+            Long lastPending = MISSING_PENDING.get(maid.m_20148_());
+            if (lastPending == null) {
+                // 首缺：只记 pending（下轮重试确认），本轮不报
+                MISSING_PENDING.put(maid.m_20148_(), nowTick);
+                return;
+            }
+            if (nowTick - lastPending >= 200L) {
+                // v1.1.0 实测三百一十四（逻辑审查）：pending 超时 = 视为真缺直接报告——
+                // 旧版超时后重新记 pending，而酿造台烧制一轮 20 秒（>10 秒），女仆两次
+                // 调用 notifyMissing 间隔必然超时 → 永远走"记 pending"分支 → 真缺料
+                // 永远不报。超时说明 10 秒内没补上，按真缺处理。
+                MISSING_PENDING.remove(maid.m_20148_());
+                // 落到下方报告流程（不 return）
+            } else {
+                // 上一轮也缺（10 秒内）→ 真缺，清 pending 并报告
+                MISSING_PENDING.remove(maid.m_20148_());
+            }
             Long lastCd = MISSING_CD.get(maid.m_20148_());
             if (lastCd != null && nowTick - lastCd < 600L) {
                 return;
@@ -164,6 +195,9 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             }
             MISSING_CD.put(maid.m_20148_(), nowTick);
             LAST_MISSING.put(maid.m_20148_(), itemId);
+            // v1.1.0 实测三百二十四：缺料落盘（旧版只有气泡/聊天，事后无从验查）
+            com.maidsmart.tool.PromaidLog.log("酿造",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 真缺料：" + itemId);
             String cn = MAT_CN.getOrDefault(itemId,
                     itemId.contains(":") ? itemId.substring(itemId.indexOf(':') + 1) : itemId);
             maid.getChatBubbleManager().addTextChatBubble(
@@ -324,6 +358,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         IItemHandler maidInv = maid.getMaidInv();
         com.maidsmart.brew.BrewConfig cfg = com.maidsmart.brew.BrewConfig.load(maid);
 
+        // v1.1.0 实测三百二十四：酿造诊断日志（每处理周期一条，节流 5 秒/女仆）——
+        // 整条酿造链此前零日志，"一直做动作但练不出药水"时无从定位卡点
+        this.diagBrew(maid, stand, cfg);
+
         // 1. 补燃料（槽 4）——始终优先，没燃料什么都不酿
         if (stand.m_8020_(4).m_41619_()) {
             ItemStack fuel = this.extractItemFromMaid(maid, maidInv, "minecraft:blaze_powder", 1);
@@ -373,6 +411,93 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         //（旧版 didSomething=false 就清 standPos → 酿造中开始漫游）
     }
 
+    /** v1.1.0 实测三百二十四：诊断日志节流（女仆 UUID → 上次记录 tick），5 秒一条 */
+    private static final java.util.Map<java.util.UUID, Long> DIAG_CD = new java.util.HashMap<>();
+
+    /**
+     * v1.1.0 实测三百二十四：酿造诊断日志——旧版整条链零日志，"一直做动作但
+     * 练不出药水"（定向 3→8 分钟夜视）无从定位。每 5 秒记一条运行快照：
+     * 配置（模式/强化/形态/目标）+ 反推表状态 + 酿造台三槽 + 燃料 + 缺料。
+     * 槽内容用"物品id/药水id"短串，直接对出卡点（如槽3 有料但燃料空 =
+     * 酿造台不烧；表空 = 定向整体退化为不下料；目标链不可达 = 不下料）。
+     */
+    private void diagBrew(EntityMaid maid, Container stand, com.maidsmart.brew.BrewConfig cfg) {
+        try {
+            long now = maid.m_9236_().m_46467_();
+            Long last = DIAG_CD.get(maid.m_20148_());
+            if (last != null && now - last < 100L) {
+                return;
+            }
+            DIAG_CD.put(maid.m_20148_(), now);
+            StringBuilder slots = new StringBuilder();
+            for (int i = 0; i <= 3; i++) {
+                slots.append('[').append(i).append(':').append(this.describeStack(stand.m_8020_(i))).append("] ");
+            }
+            String fuelS = this.describeStack(stand.m_8020_(4));
+            String cfgS = (cfg.mode == com.maidsmart.brew.BrewConfig.MODE_TARGETED
+                    ? "定向 目标=" + cfg.targetPotion : "批量 强化=" + cfg.enhance)
+                    + " 形态=" + cfg.form;
+            String chainS = "";
+            if (cfg.mode == com.maidsmart.brew.BrewConfig.MODE_TARGETED) {
+                var chain = com.maidsmart.brew.BrewRecipeResolver.chainFor(cfg.targetPotion);
+                chainS = chain == null || chain.isEmpty()
+                        ? " 链=不可达(表大小=" + com.maidsmart.brew.BrewRecipeResolver.tableSize() + ')'
+                        : " 链=" + chain.steps().size() + "步(表大小="
+                        + com.maidsmart.brew.BrewRecipeResolver.tableSize() + ')';
+            }
+            String err = com.maidsmart.brew.BrewRecipeResolver.lastError;
+            if (err != null && !err.isEmpty()) {
+                chainS += " 反射错误=" + err;
+            }
+            // v1.1.0 实测三百二十六：女仆背包药水清单——槽全空且不报缺料时，
+            // 直接看背包里到底有没有可当基底的药水（给了 A 女仆、酿造的是 B
+            // 之类的错位一眼可见；双手+背包全列）
+            StringBuilder invS = new StringBuilder();
+            try {
+                this.appendPotions(invS, maid.getHandsInvWrapper());
+                this.appendPotions(invS, maid.getMaidInv());
+            } catch (Throwable ignored) {
+            }
+            com.maidsmart.tool.PromaidLog.log("酿造",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 周期快照：" + cfgS + chainS
+                            + " 槽位 " + slots.toString().trim()
+                            + " 燃料[" + fuelS + ']'
+                            + (invS.length() == 0 ? " 背包无药水" : " 背包药水: " + invS.toString().trim()));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** v1.1.0 实测三百二十四：槽内物品短描述（物品id/药水id ×数量；空 = 空） */
+    private String describeStack(ItemStack s) {
+        if (s.m_41619_()) {
+            return "空";
+        }
+        net.minecraft.resources.ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.m_41720_());
+        String base = id == null ? "?" : id.toString();
+        if (s.m_41720_() instanceof net.minecraft.world.item.PotionItem) {
+            net.minecraft.world.item.alchemy.Potion p = net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s);
+            net.minecraft.resources.ResourceLocation pk = p == null ? null : ForgeRegistries.POTIONS.getKey(p);
+            if (pk != null) {
+                base = base + "/" + pk;
+            }
+        }
+        return base + "x" + s.m_41613_();
+    }
+
+    /** v1.1.0 实测三百二十六：把容器内全部药水追加到 sb（诊断清单用） */
+    private void appendPotions(StringBuilder sb, IItemHandler inv) {
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack s = inv.getStackInSlot(i);
+            if (!s.m_41619_() && s.m_41720_() instanceof net.minecraft.world.item.PotionItem) {
+                if (sb.length() > 0) {
+                    sb.append(", ");
+                }
+                sb.append(this.describeStack(s));
+            }
+        }
+    }
+
     /** 批量模式：槽内药水是否达到配置的最终状态（强化 + 形态）。
      *  v1.1.0 实测二百九十二：未到目标强化/形态的成品【不收】，留在酿造台继续
      *  推进（旧版收成品不检查配置——3 分钟夜视一出现就被收走，红石延长永远
@@ -406,31 +531,34 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (form < cfg.form) {
             return false;
         }
-        // 强化检查（仅饮用形态可强化——喷溅/滞留瓶无强化变体）
-        if (form == com.maidsmart.brew.BrewConfig.FORM_DRINK
-                && cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
+        // 强化检查（v1.1.0 实测三百一十八：全形态 + 双材料——喷溅/滞留瓶也能
+        // 强化（喷溅夜视+红石=喷溅长夜视，原版配方表支持）；配置材料无配方时
+        // 自动测另一种（配置萤石但夜视只有红石延长版 → 红石有配方 → 不算最终，
+        // 等 processForm 下红石）。两种都无配方（如 healing 无任何强化变体）放行。
+        if (cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
             String reagentId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
                     ? "minecraft:redstone" : "minecraft:glowstone_dust";
-            boolean hasPrefix = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
-                    ? path.startsWith("long_") : path.startsWith("strong_");
-            if (!hasPrefix) {
-                // 当前瓶无对应变体前缀——测原版配方表该药水是否有变体
-                net.minecraft.world.item.Item reagent = com.maidsmart.brew.BrewRecipeResolver.item(reagentId);
-                if (reagent == null) {
-                    return true;
-                }
-                ItemStack test = net.minecraft.world.item.alchemy.PotionBrewing.m_43529_(
-                        new ItemStack(reagent), s);
-                boolean hasVariant = !test.m_41619_() && test.m_41720_() == s.m_41720_()
-                        && !net.minecraft.world.item.alchemy.PotionUtils.m_43579_(test)
-                        .equals(net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s));
-                if (!hasVariant) {
-                    return true; // 该药水无对应强化变体（如 healing 无延长版）：放行
-                }
-                return false; // 有变体但还没强化：不收，等 processForm 下料
+            String altId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
+                    ? "minecraft:glowstone_dust" : "minecraft:redstone";
+            if (this.hasBrewVariant(s, reagentId) || this.hasBrewVariant(s, altId)) {
+                return false; // 还能强化（任一材料有配方）：不收，等 processForm 下料
             }
         }
         return true;
+    }
+
+    /** v1.1.0 实测三百一十八：当前瓶 + 指定材料能否酿出【不同药水】（原版配方表
+     *  判定——m_43529_ 返回非空且药水变了才算有配方；材料不存在/无配方返回 false） */
+    private boolean hasBrewVariant(ItemStack s, String reagentId) {
+        net.minecraft.world.item.Item reagent = com.maidsmart.brew.BrewRecipeResolver.item(reagentId);
+        if (reagent == null) {
+            return false;
+        }
+        ItemStack test = net.minecraft.world.item.alchemy.PotionBrewing.m_43529_(
+                new ItemStack(reagent), s);
+        return !test.m_41619_() && test.m_41720_() == s.m_41720_()
+                && !net.minecraft.world.item.alchemy.PotionUtils.m_43579_(test)
+                .equals(net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s));
     }
 
     /** 收走槽位药水进女仆背包（满则退回槽位） */
@@ -503,7 +631,25 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 // 空槽：补水瓶（v1.1.0 实测二百八十：链基底恒为 water——
                 // 链完整回退到水瓶起步，awkward 瓶作为链上中间产物正常推进）
                 ItemStack bottle = this.extractWaterBottle(maid, maidInv);
-                if (!bottle.m_41619_()) {
+                // v1.1.0 实测三百二十九（用户："不给水瓶，只给三分钟夜视药水及
+                // 材料，定向酿造八分钟"——练不出药水根因）：条件写反——旧版
+                // `if (!bottle.m_41619_())` 在【无水瓶】（bottle 空栈，m_41619_=
+                // isEmpty=true）时为 false → 走 else 把空栈放进槽 0（等于没放）→
+                // extractBrewableBase 永远不执行 → 3 分钟夜视永远不进酿造台 →
+                // 槽 0-3 恒空、无缺料报告（日志实证）。改为 bottle 空时走回退。
+                if (bottle.m_41619_()) {
+                    // v1.1.0 实测三百一十七（粉丝："往女仆兜里只放了 3 分钟夜视和
+                    // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
+                    // 回退取【按当前配置还能继续推进】的成品药水当基底（与批量模式
+                    // extractBrewableBase 同款——如 3 分钟夜视 + 目标 long_night_vision
+                    // → 自动放入酿造台，processForm 红石延长成 8 分钟）。旧版定向
+                    // 模式只认水瓶，成品药水永远只能玩家手动放。
+                    ItemStack base = this.extractBrewableBase(maid, maidInv, cfg);
+                    if (!base.m_41619_()) {
+                        stand.m_6836_(i, base);
+                        swing(maid);
+                    }
+                } else {
                     stand.m_6836_(i, bottle);
                     swing(maid);
                 }
@@ -511,6 +657,13 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             }
             if (i != 0 || !stand.m_8020_(3).m_41619_()) {
                 continue; // 只以槽0 为准下料；槽3 有材料等酿造台消耗
+            }
+            // v1.1.0 实测三百一十七（用户："女仆会把空的玻璃瓶也放进酿造台"）：
+            // 槽里非药水物品（空瓶/杂物）→ 收走腾位（isDonePotion 对非药水返回
+            // true 会收，但空瓶占槽时 progressOf 返回 0 被当基底继续下疣 → 卡死）
+            if (!(s.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                this.takeIntoMaid(maid, stand, i);
+                continue;
             }
             int progress = com.maidsmart.brew.BrewRecipeResolver.progressOf(s, chain);
             if (progress < 0) {
@@ -538,6 +691,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
                 // 补料后重置缺料记录（下次缺别的材料能再报）
                 LAST_MISSING.remove(maid.m_20148_());
+                // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
+                MISSING_PENDING.remove(maid.m_20148_());
             } else {
                 // v1.1.0 实测二百八十一：缺料立即报告（旧版静默等待，玩家不知道
                 // 卡在缺什么）——链上已有步骤照常完成，缺的这步停下并提示
@@ -557,6 +712,19 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 if (!bottle.m_41619_()) {
                     stand.m_6836_(i, bottle);
                     swing(maid);
+                } else {
+                    // v1.1.0 实测三百零六（粉丝："往女仆兜里只放了 3 分钟夜视和
+                    // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
+                    // 背包里的成品药水当基底（如 3 分钟夜视 + 红石 → 自动放入酿造台，
+                    // processForm 红石延长成 8 分钟）。旧版槽 0 只认水瓶，成品药水
+                    // 永远只能玩家手动放。只取【按当前配置可继续推进】的药水
+                    // （isBatchFinal=false：还需要强化/形态）——已最终状态的
+                    // （如已是 8 分钟夜视）不取，取了会被当成品收走死循环。
+                    ItemStack base = this.extractBrewableBase(maid, maidInv, cfg);
+                    if (!base.m_41619_()) {
+                        stand.m_6836_(i, base);
+                        swing(maid);
+                    }
                 }
                 continue;
             }
@@ -590,6 +758,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      *   （PotionBrewing.m_43529_）判定当前瓶+红石/萤石能否出结果，能则下料
      * - 形态：饮用→喷溅（火药）→滞留（龙息），逐级推进
      * 槽3 已有材料时不动（酿造台自动续酿消耗）。
+     *
+     * v1.1.0 实测三百一十八（用户："女仆手上一直有动作，但是一直放不进去药"）：
+     * 强化材料双测——配置材料（红石/萤石）无配方时自动测另一种（配置萤石但
+     * 夜视只有红石延长版 → 下红石；反之亦然）。旧版只测配置材料：配置萤石 +
+     * 背包红石 → 永远报缺萤石卡死，3 分钟夜视永远变不成 8 分钟。
      */
     private void processForm(EntityMaid maid, Container stand, int slot, ItemStack s,
                              com.maidsmart.brew.BrewConfig cfg) {
@@ -598,29 +771,34 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         }
         IItemHandler maidInv = maid.getMaidInv();
         int form = this.formOf(s);
-        // 1. 强化（仅饮用形态可强化——喷溅/滞留瓶加红石/萤石无效）
-        if (form == com.maidsmart.brew.BrewConfig.FORM_DRINK && cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
+        // 1. 强化（饮用/喷溅/滞留均可强化——原版配方表支持喷溅/滞留瓶加红石/萤石）
+        if (cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {
             String reagentId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
                     ? "minecraft:redstone" : "minecraft:glowstone_dust";
-            ItemStack reagent = this.extractItemFromMaid(maid, maidInv, reagentId, 1);
-            if (!reagent.m_41619_()) {
-                // 当前瓶 + 强化材料能否出结果（原版配方表判定——如 healing+红石
-                // 无结果（治疗没有延长版），则跳过强化直接进形态）
-                ItemStack test = net.minecraft.world.item.alchemy.PotionBrewing.m_43529_(reagent, s);
-                if (!test.m_41619_() && test.m_41720_() == s.m_41720_()
-                        && !net.minecraft.world.item.alchemy.PotionUtils.m_43579_(test)
-                        .equals(net.minecraft.world.item.alchemy.PotionUtils.m_43579_(s))) {
+            String altId = cfg.enhance == com.maidsmart.brew.BrewConfig.ENHANCE_REDSTONE
+                    ? "minecraft:glowstone_dust" : "minecraft:redstone";
+            // 当前瓶 + 配置材料能否出结果
+            if (this.hasBrewVariant(s, reagentId)) {
+                ItemStack reagent = this.extractItemFromMaid(maid, maidInv, reagentId, 1);
+                if (!reagent.m_41619_()) {
                     stand.m_6836_(3, reagent);
                     return;
                 }
-            } else {
-                // v1.1.0 实测二百九十二：缺强化材料【不推进形态】——先强化后形态，
-                // 否则滞留/喷溅瓶无法再强化，永远普通时长（用户："要求合成时间长的
-                // 滞留型药水，但描述仍是普通药水的"——根因：旧版缺红石时跳过强化
-                // 直接下火药/龙息，滞留 3 分钟夜视一旦形成就永远 3 分钟）
+                // 配置材料有配方但背包没有 → 缺料等待（不换另一种——配置优先）
                 this.notifyMissing(maid, reagentId);
                 return;
             }
+            // 配置材料无配方 → 测另一种（如配置萤石但夜视只有红石延长版）
+            if (this.hasBrewVariant(s, altId)) {
+                ItemStack reagent = this.extractItemFromMaid(maid, maidInv, altId, 1);
+                if (!reagent.m_41619_()) {
+                    stand.m_6836_(3, reagent);
+                    return;
+                }
+                this.notifyMissing(maid, altId);
+                return;
+            }
+            // 两种都无配方（如 healing 无任何强化变体）：跳过强化直接进形态
         }
         // 2. 形态推进（饮用→喷溅→滞留）
         if (form < cfg.form) {
@@ -638,6 +816,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 stand.m_6836_(3, ing);
                 swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
                 LAST_MISSING.remove(maid.m_20148_());
+                // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
+                MISSING_PENDING.remove(maid.m_20148_());
             } else {
                 // v1.1.0 实测二百八十一：缺火药/龙息立即报告（"喷溅型根本没法酿"
                 // 的感知根因——旧版静默等待，玩家不知道还要往背包放形态材料）
@@ -796,6 +976,66 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         return ItemStack.f_41583_;
     }
 
+    /** v1.1.0 实测三百零六：批量模式基底回退——没有水瓶时，从背包取 1 瓶【按当前
+     *  配置还能继续推进】的成品药水当基底（主副手优先，同 extractWaterBottle 约定）。
+     *  推进判定 = isBatchFinal(s, cfg)==false（配置了红石/萤石/喷溅/滞留，当前瓶还没
+     *  到该最终状态——如 3 分钟夜视 + 配置红石 → 还要延长）。已最终状态的药水不取
+     *  （放进酿造台会被当成品收走 → 死循环）。
+     *  v1.1.0 实测三百一十七：定向模式用【目标链】判定——3 分钟夜视在
+     *  long_night_vision 链上且非最终（还要红石延长）→ 可取；批量判定（isBatchFinal）
+     *  对定向配置不成立（定向的强化/形态由链决定，cfg.enhance/form 可能都是默认值）。 */
+    private ItemStack extractBrewableBase(EntityMaid maid, IItemHandler inv,
+                                          com.maidsmart.brew.BrewConfig cfg) {
+        ItemStack fromHands = this.extractBrewableBaseFrom(maid.getHandsInvWrapper(), cfg);
+        if (!fromHands.m_41619_()) {
+            return fromHands;
+        }
+        return this.extractBrewableBaseFrom(inv, cfg);
+    }
+
+    private ItemStack extractBrewableBaseFrom(IItemHandler inv, com.maidsmart.brew.BrewConfig cfg) {
+        for (int i = 0; i < inv.getSlots(); i++) {
+            ItemStack stack = inv.getStackInSlot(i);
+            if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                continue;
+            }
+            if (cfg.mode == com.maidsmart.brew.BrewConfig.MODE_TARGETED) {
+                // 定向：取【在目标链上且非最终】的药水（如 3 分钟夜视 → 8 分钟夜视）
+                if (!cfg.hasValidTarget()) {
+                    continue;
+                }
+                com.maidsmart.brew.BrewRecipeResolver.Chain chain =
+                        com.maidsmart.brew.BrewRecipeResolver.chainFor(cfg.targetPotion);
+                if (chain == null || chain.isEmpty()) {
+                    continue;
+                }
+                int progress = com.maidsmart.brew.BrewRecipeResolver.progressOf(stack, chain);
+                if (progress < 0) {
+                    continue; // 不在链上：不取
+                }
+                if (progress >= chain.steps().size()) {
+                    // v1.1.0 实测三百一十八：药水效果已到目标但形态未到（如目标
+                    // 滞留、背包是饮用 8 分钟夜视）→ 可取，由 processForm 下火药/
+                    // 龙息推进形态。旧版直接 continue → 饮用成品永远放不进酿造台
+                    // → 卡死（用户："女仆手上一直有动作，但是一直放不进去药"）。
+                    if (this.formOf(stack) < cfg.form) {
+                        return inv.extractItem(i, 1, false);
+                    }
+                    continue; // 形态已到：不取（取了会被当成品收走死循环）
+                }
+                return inv.extractItem(i, 1, false);
+            }
+            if (this.isBatchFinal(stack, cfg)) {
+                continue; // 已最终状态：不取（取了会被收走死循环）
+            }
+            if (!this.isDonePotion(stack)) {
+                continue; // 水瓶/粗药不在此取（正常下料流程覆盖）
+            }
+            return inv.extractItem(i, 1, false);
+        }
+        return ItemStack.f_41583_;
+    }
+
     private ItemStack extractFromMaid(IItemHandler maidInv, Set<String> whitelistIds, int count) {
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
@@ -811,7 +1051,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.1.0 实测二百九十七：主副手优先取材料（用户："酿药物品不识别主副手，
-     *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。 */
+     *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。
+     *  v1.1.0 实测三百零八：最后回退到【精妙储存绑定终端】取物（女仆把终端当
+     *  背包——建造/酿药都能直接从终端拿材料；终端不在附近/没装精妙储存 → 自然
+     *  回退原逻辑）。
+     *  v1.1.0 实测三百零九：再兜底【超越维度网络接口】。 */
     private ItemStack extractItemFromMaid(EntityMaid maid, IItemHandler maidInv, String itemId, int count) {
         Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
         if (item == null) {
@@ -821,7 +1065,22 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (!fromHands.m_41619_()) {
             return fromHands;
         }
-        return this.extractItemFrom(maidInv, item, count);
+        ItemStack fromInv = this.extractItemFrom(maidInv, item, count);
+        if (!fromInv.m_41619_()) {
+            return fromInv;
+        }
+        // 精妙储存绑定终端回退（主副手/背包都没有才取终端）
+        if (maid.m_9236_() instanceof ServerLevel level) {
+            ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
+                    .extractFromBoundStorage(level, maid, item);
+            if (!fromTerm.m_41619_()) {
+                return fromTerm;
+            }
+            // 超越维度网络接口兜底
+            return com.maidsmart.storage.BeyondBindingInteractHandler
+                    .extractFromBoundInterface(level, maid, item);
+        }
+        return ItemStack.f_41583_;
     }
 
     private ItemStack extractItemFrom(IItemHandler inv, Item item, int count) {

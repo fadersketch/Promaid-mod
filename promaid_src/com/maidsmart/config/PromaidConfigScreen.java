@@ -1844,6 +1844,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MISC_BREW_RADIUS, s), "酿造搜索范围（格）：酿造任务在这个半径内找酿造台"));
         this.rows.add(new NumRow("处理间隔（tick）", String.valueOf(MaidSmartConfig.MISC_PROCESS_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.MISC_PROCESS_COOLDOWN, s), "处理间隔（tick，20=1 秒）：烹饪/酿造每处理一批的间隔"));
+        // v1.1.0 实测三百一十一：宰杀任务阈值
+        this.rows.add(new NumRow("宰杀数量阈值", String.valueOf(MaidSmartConfig.MISC_SLAUGHTER_COUNT.get()),
+                s -> setInt(MaidSmartConfig.MISC_SLAUGHTER_COUNT, s), "宰杀任务：女仆周围 5×5 内同种牲畜（按类型分组）超过此数 → 每 3 秒随机宰杀一只该组牲畜；≤ 阈值不动"));
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
         this.rows.add(new BoolRow("熔炉烧矿物", MaidSmartConfig.MISC_COOK_SMELT_ORES.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMELT_ORES.set(v), "烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单"));
@@ -2722,9 +2725,19 @@ public class PromaidConfigScreen extends Screen {
     @Override
     public void m_88315_(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         this.m_280039_(g); // renderBackground
+        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // 一点都没变"）：Promaid 模组详细配置（手册子界面）补上蓝金品牌渐变——与
+        // 手册主界面同款（半透明色带叠加 = 渐变，m_280509_ 走 ARGB）
         int w = this.f_96543_;
         int h = this.f_96544_;
         int cx = w / 2;
+        int bandL = Math.max(4, cx - 300);
+        int bandR = Math.min(w - 4, cx + 300);
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x55122A4E);   // 底层：深海军蓝
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x220F3A8C);   // 中层：宝蓝
+        g.m_280509_(bandL, 4, bandR, h - 4, 0x1A1B4E8C);   // 高光：亮蓝
+        g.m_280509_(bandL, 4, bandR, 14, 0xFF2C5F9E);      // 顶部饰条：靛蓝
+        g.m_280509_(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         g.m_280509_(Math.max(8, cx - 290), 8, Math.min(w - 8, cx + 290),
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
