@@ -91,6 +91,8 @@
   "config.promaid.bridge.placedLifetime": "搭路方块清理（秒）",
   "config.promaid.bridge.reclaimToMaid": "垫脚方块回收进背包",
   "config.promaid.combat.placedLifetime": "战斗搭方块清理（秒）",
+  "config.promaid.combat.snipe": "高地狙击（默认开）：远程攻击状态（手动/自动指派均可）+ 有搭方块 + 敌人近身时——进入垫高状态：原地定住（移速×0）立刻垫高 5 格站桩输出，只影响移动不影响攻击；自动指派且有近战武器优先切近战；期间禁传送；半径 8 无敌人或进入自保解除；塔被炸低自动补垫",
+  "config.promaid.combat.snipeHeight": "狙击塔高度（格，默认 5）：触发后原地定住一路垫到顶（建塔期不放弃）；塔被炸低/踩塌自动补垫回目标高度",
   "config.promaid.memory": "AI 记忆设置",
   "config.promaid.memory.enable": "AI 记忆全局开关",
   "config.promaid.memory.extractThreshold": "提取阈值（条）",
@@ -142,7 +144,9 @@
   "config.promaid.combat": "战斗与自保设置",
   "config.promaid.combat.selfPreserve": "自保行为",
   "config.promaid.combat.enterRatio": "自保触发血量",
-  "config.promaid.combat.exitRatio": "自保解除血量",
+  "config.promaid.combat.exitRatio": "自保绝对解除血量",
+  "config.promaid.combat.safeReturnRatio": "自保解除血量（默认 0.7）",
+  "config.promaid.combat.teleportCooldown": "传送成功冷却（一场最多接走一次）",
   "config.promaid.combat.threatDistance": "威胁距离",
   "config.promaid.combat.waterClutch": "落地水",
   "config.promaid.combat.waterFallDistance": "落地水触发高度",
@@ -162,5 +166,6 @@
   "bubble.callresponse.npc_event.pending": "． ． ．",
   "bubble.callresponse.npc_event.food_thanks": "谢谢主人！我会好好吃的。",
   "bubble.callresponse.npc_event.food_promise_timeout": "主人是在耍我吗……",
-  "bubble.callresponse.npc_event.food_repeat": "怎么还是这个呀……"
+  "bubble.callresponse.npc_event.food_repeat": "怎么还是这个呀……",
+  "config.promaid.combat.autoSwitchAllowModTasks": "模组任务参与自主切换（默认开）：模组攻击任务在女仆持有非原版物品时才参与；关 = 自主战斗只用原版任务"
 }

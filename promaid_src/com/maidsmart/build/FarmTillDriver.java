@@ -5,6 +5,10 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.BonemealableBlock;
+import net.minecraft.world.level.block.SaplingBlock;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -45,6 +49,11 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  */
 public final class FarmTillDriver {
     private static boolean registered = false;
+
+    /** 实测三百五十八：锄地诊断日志（30 秒/女仆限频——失效时看卡在哪一环） */
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+    private static final java.util.Map<java.util.UUID, Long> TILL_DIAG_SINCE =
+            new java.util.HashMap<>();
 
     private FarmTillDriver() {
     }
@@ -93,7 +102,16 @@ public final class FarmTillDriver {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || !isFarmTask(maid)) {
                         continue;
                     }
-                    this.tillNearby(level, maid);
+                    // v1.1.0 实测三百五十五：农场作物骨粉催熟（与树苗同款逻辑——
+                    // 主副手/背包找骨粉、施肥时主手换持骨粉、0.5 秒一株、粒子反馈）
+                    // v1.1.0 实测三百六十【优先级】（用户："伐木/种植/耕地的优先级
+                    // 应该高于骨粉，现在容易在骨粉和工具之间反复切换的鬼畜"）：
+                    // 锄地有活（找到可锄目标/正在锄/正在走过去）→ 本轮不施肥——
+                    // 耕地独占主手，不再和骨粉来回抢；锄地无活（范围内没有可锄
+                    // 地块）→ 才轮到施肥催熟作物。
+                    if (!this.tillNearby(level, maid)) {
+                        this.bonemealNearby(level, maid);
+                    }
                 }
             }
         } catch (Throwable ignored) {
@@ -110,6 +128,118 @@ public final class FarmTillDriver {
     }
 
     /**
+     * v1.1.0 实测三百五十五（用户："将同样的逻辑引入到农场给农作物施肥里面，
+     * 配置界面也是如此"）：农场作物骨粉催熟——与树苗催熟同款逻辑：
+     * ① 找骨粉 主手 → 副手 → 背包（equipBoneMeal 复用，施肥时主手换持骨粉，
+     *    停止 1 秒后由 MaidPlanting.tryRestoreHand 还原）；
+     * ② 每 0.5 秒（随本驱动节拍）对身边（半径 16 格、垂直 ±4）最近的一株
+     *    未成熟作物施肥，带粒子特效；
+     * ③ 成熟过滤用 isValidBonemealTarget（m_7370_）——CropBlock 字节码实证：
+     *    该方法 = age < maxAge（未成熟 true / 成熟 false），isBonemealSuccess
+     *    对 CropBlock 恒 true（实测三百五十六修正：旧版误用 m_214167_ 当成熟
+     *    过滤——它恒 true，把全部作物都跳过了 = 骨粉在手上一株都不催）；
+     * ④ 树苗/草方块/蘑菇/藤蔓等非农作物排除（isNonCropGrower）。
+     *
+     * @return true = 本轮施了肥（主手已换持骨粉）——调用方跳过锄地，
+     *         避免锄头自动装备把骨粉从主手抢走
+     */
+    private boolean bonemealNearby(ServerLevel world, EntityMaid maid) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.get()) {
+                return false;
+            }
+            BlockPos base = maid.m_20183_();
+            int radius = com.maidsmart.config.MaidSmartConfig.MISC_BREW_RADIUS.get();
+            BlockPos best = null;
+            double bestDistSq = Double.MAX_VALUE;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
+                    for (int dy = -4; dy <= 4; dy++) {
+                        BlockPos b = base.m_7918_(dx, dy, dz);
+                        if (!world.m_46749_(b)) {
+                            continue; // 区块未加载跳过
+                        }
+                        BlockState st = world.m_8055_(b);
+                        Block blk = st.m_60734_();
+                        if (!(blk instanceof BonemealableBlock)) {
+                            continue;
+                        }
+                        if (isNonCropGrower(blk)) {
+                            continue; // 树苗归伐木催熟管；草/蘑菇/藤蔓等不是农作物
+                        }
+                        // 只催未成熟作物：isValidBonemealTarget = age < maxAge
+                        //（成熟 false = 催了也白费——不浪费骨粉）
+                        if (!((BonemealableBlock) blk).m_7370_(world, b, st, false)) {
+                            continue;
+                        }
+                        double dsq = (double) dx * dx + (double) dz * dz + (double) dy * dy;
+                        if (dsq < bestDistSq) {
+                            bestDistSq = dsq;
+                            best = b;
+                        }
+                    }
+                }
+            }
+            if (best == null) {
+                return false; // 范围内没有未成熟作物
+            }
+            int id = maid.m_19879_();
+            long now = world.m_46467_();
+            if (!com.maidsmart.task.MaidPlanting.equipBoneMeal(maid, id, now)) {
+                return false; // 手上和背包都没有骨粉
+            }
+            // growCrop：isValidBonemealTarget → isBonemealSuccess → performBonemeal
+            // → 自 shrink(1)——骨粉消耗它自己管
+            ItemStack boneStack = maid.m_21205_();
+            boolean ok = net.minecraft.world.item.BoneMealItem.m_40627_(boneStack, world, best);
+            if (ok) {
+                // growCrop 不放 1505（原版粒子在 useOn 路径）——每次施肥都给粒子反馈
+                world.m_46796_(1505, best, 15);
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                return true;
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 实测三百五十六：非农作物的骨粉目标排除表——原版实现 BonemealableBlock
+     * 但不是"农作物"的方块（骨粉有效但不该由农场女仆催）：
+     * 树苗（伐木那边管）/ 草方块与草丛蕨（催出草花）/ 藤蔓 / 发光地衣 / 蘑菇与
+     * 菌类（催巨型蘑菇）/ 菌岩（扩散菌落）/ 海带海草 / 竹子 / 紫颂 / 垂滴叶 /
+     * 洞穴藤（发光浆果）/ 缠怨与垂泣藤 / 杜鹃（催成树）/ 苔藓块。
+     * 保留：CropBlock 系（小麦/胡萝卜/土豆/甜菜/火把花/猪笼草）、西瓜南瓜茎、
+     * 可可豆、甜浆果丛、地狱疣（m_7370_ 恒 false 自动排除）。
+     */
+    private static boolean isNonCropGrower(Block blk) {
+        return blk instanceof SaplingBlock
+                || blk instanceof net.minecraft.world.level.block.GrassBlock
+                || blk instanceof net.minecraft.world.level.block.TallGrassBlock
+                || blk instanceof net.minecraft.world.level.block.VineBlock
+                || blk instanceof net.minecraft.world.level.block.GlowLichenBlock
+                || blk instanceof net.minecraft.world.level.block.MushroomBlock
+                || blk instanceof net.minecraft.world.level.block.FungusBlock
+                || blk instanceof net.minecraft.world.level.block.NyliumBlock
+                || blk instanceof net.minecraft.world.level.block.KelpBlock
+                || blk instanceof net.minecraft.world.level.block.KelpPlantBlock
+                || blk instanceof net.minecraft.world.level.block.SeagrassBlock
+                || blk instanceof net.minecraft.world.level.block.TallSeagrassBlock
+                || blk instanceof net.minecraft.world.level.block.BambooStalkBlock
+                || blk instanceof net.minecraft.world.level.block.ChorusPlantBlock
+                || blk instanceof net.minecraft.world.level.block.ChorusFlowerBlock
+                || blk instanceof net.minecraft.world.level.block.BigDripleafBlock
+                || blk instanceof net.minecraft.world.level.block.SmallDripleafBlock
+                || blk instanceof net.minecraft.world.level.block.CaveVinesBlock
+                || blk instanceof net.minecraft.world.level.block.CaveVinesPlantBlock
+                || blk instanceof net.minecraft.world.level.block.TwistingVinesBlock
+                || blk instanceof net.minecraft.world.level.block.WeepingVinesBlock
+                || blk instanceof net.minecraft.world.level.block.AzaleaBlock
+                || blk instanceof net.minecraft.world.level.block.MossBlock;
+    }
+
+    /**
      * v1.1.0 实测三百三十四（用户："女仆对于耕地的积极性太低了。先检查一下对于
      * 更替的整个路径和判定，看看有没有办法提高积极性"）：锄地索敌重写——
      * 旧版只扫女仆【脚下 5×5】且 1 秒一轮：home 模式下女仆在锚点附近，农田稍远
@@ -120,25 +250,48 @@ public final class FarmTillDriver {
      *    MoveToTargetSink——站桩标记/移动抑制拦不住，自保逃跑验证过的通道）
      * ④ 标记自愈保留（范围内当前是耕地的地块实时打标）
      */
-    private void tillNearby(ServerLevel world, EntityMaid maid) {
+    /**
+     * v1.1.0 实测三百六十：返回本轮锄地是否"有活"（找到可锄目标/正在锄/正在
+     * 走过去）——true = 耕地工作中，调用方跳过施肥（耕地优先独占主手）；
+     * false = 无活（无锄头/范围内无可锄地块），施肥才轮得上。
+     */
+    private boolean tillNearby(ServerLevel world, EntityMaid maid) {
         try {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
-                return;
+                return false;
             }
             long now = world.m_46467_();
+            // v1.1.0 实测三百五十七：锄地前强制还原施肥换手——主手若还举着骨粉，
+            // 锄头自动装备会被打断（骨粉被顶到别处、换手状态机错乱）。先还原：
+            // 剩余骨粉收回背包、原主手物品放回，锄头干净地换上来。
+            com.maidsmart.task.MaidPlanting.forceRestoreHand(maid, maid.m_19879_());
             Long last = FarmSweepCache.TILL_CD.get(maid.m_20148_().toString());
             if (last != null && now - last < 10) {
-                return; // 0.5 秒冷却（与扫描节流一致）
+                return false; // 0.5 秒冷却（与扫描节流一致）
             }
             // 先确认背包/主手有锄头（没有就不锄，也不写冷却——补锄头后立即生效）
-            if (!com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid)) {
-                return;
+            boolean hasHoe = com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid);
+            if (!hasHoe) {
+                Long lastDiag0 = TILL_DIAG_SINCE.get(maid.m_20148_());
+                if (lastDiag0 == null || now - lastDiag0 >= 600) {
+                    TILL_DIAG_SINCE.put(maid.m_20148_(), now);
+                    LOGGER.info("till diag: maid={} hoe=false（无锄头——补锄头后立即生效）pos={}",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid), maid.m_20183_());
+                }
+                return false;
             }
             FarmSweepCache.TILL_CD.put(maid.m_20148_().toString(), now);
             BlockPos base = maid.m_20183_();
             int radius = com.maidsmart.config.MaidSmartConfig.MISC_BREW_RADIUS.get();
             BlockPos tillTarget = null;
             double bestDistSq = Double.MAX_VALUE;
+            // v1.1.0 实测三百五十八：诊断统计（与 isTillable 同口径分环计数——
+            // dirt 总数 / 其中有"曾经是耕地"标记的 / 其中上方是空气的 / 最终合格数）
+            int farmlandCount = 0;
+            int dirtCount = 0;
+            int markedCount = 0;
+            int airAboveCount = 0;
+            int tillableCount = 0;
             for (int dx = -radius; dx <= radius; dx++) {
                 for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos b = base.m_7918_(dx, 0, dz);
@@ -154,12 +307,25 @@ public final class FarmTillDriver {
                     // 永远锄不了地。
                     if (world.m_8055_(b).m_60734_()
                             == net.minecraft.world.level.block.Blocks.f_50093_) {
+                        farmlandCount++;
                         FarmlandMarkStore.get(world).mark(b);
                         continue;
+                    }
+                    net.minecraft.world.level.block.Block tb = world.m_8055_(b).m_60734_();
+                    if (tb == net.minecraft.world.level.block.Blocks.f_50493_
+                            || tb == net.minecraft.world.level.block.Blocks.f_50440_) {
+                        dirtCount++;
+                        if (FarmlandMarkStore.get(world).isMarked(b)) {
+                            markedCount++;
+                        }
+                        if (world.m_8055_(b.m_7494_()).m_60795_()) {
+                            airAboveCount++;
+                        }
                     }
                     if (!FarmSweepCache.isTillable(world, maid, b)) {
                         continue;
                     }
+                    tillableCount++;
                     double dsq = (double) dx * dx + (double) dz * dz;
                     if (dsq < bestDistSq) {
                         bestDistSq = dsq;
@@ -167,8 +333,23 @@ public final class FarmTillDriver {
                     }
                 }
             }
+            // 实测三百五十八：锄地状态诊断（30 秒/女仆限频）——hoe=有无锄头、
+            // farmland=范围内耕地数（自愈打标来源）、dirt/marked/airAbove=候选漏斗、
+            // tillable=最终合格数、target=本次目标
+            Long lastDiag = TILL_DIAG_SINCE.get(maid.m_20148_());
+            if (lastDiag == null || now - lastDiag >= 600) {
+                TILL_DIAG_SINCE.put(maid.m_20148_(), now);
+                LOGGER.info("till diag: maid={} hoe={} farmland={} dirt={} marked={} airAbove={}"
+                                + " tillable={} target={} pos={}",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid), hasHoe, farmlandCount,
+                        dirtCount, markedCount, airAboveCount, tillableCount, tillTarget,
+                        maid.m_20183_());
+            }
+            if (!hasHoe) {
+                return false; // 无锄头：补锄头后下一轮生效
+            }
             if (tillTarget == null) {
-                return; // 范围内无可锄地块
+                return false; // 范围内无可锄地块
             }
             // 近身（≤3 格）直接锄；远的目标直连导航走过去（下轮近身再锄）
             double distSq = maid.m_20275_(tillTarget.m_123341_() + 0.5,
@@ -176,10 +357,13 @@ public final class FarmTillDriver {
             if (distSq > 9.0) {
                 maid.m_21573_().m_26519_(tillTarget.m_123341_() + 0.5,
                         tillTarget.m_123342_(), tillTarget.m_123343_() + 0.5, 0.8f);
-                return;
+                return true; // 正在走过去锄 = 耕地工作中
             }
             // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
             world.m_7731_(tillTarget, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
+            // 实测三百五十八：锄地成功落日志（每次落——频率低，方便对账"踩坏的地修没修"）
+            LOGGER.info("till ok: maid={} pos={}",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid), tillTarget);
             // v1.1.0 实测三百零二：女仆锄地后保持标记（标记制——标记是
             // "曾经是耕地"的凭证，锄完不能丢，否则下次踩坏后女仆不认）
             FarmlandMarkStore.get(world).mark(tillTarget);
@@ -193,7 +377,9 @@ public final class FarmTillDriver {
                 hoe.m_41622_(1, maid, e -> {
                 });
             }
+            return true; // 本轮锄了地 = 耕地工作中
         } catch (Throwable ignored) {
+            return false;
         }
     }
 }

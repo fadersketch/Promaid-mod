@@ -395,6 +395,28 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         return hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44108_);
     }
 
+    /**
+     * v1.1.0 实测三百四十九（用户："女仆在进行烧制的时候，会把附魔的物品拿去
+     * 烧掉"）：可烧制 ≠ 可以喂——带附魔（经验修补/耐久/时运等，哪怕只有 1 条）
+     * 或耐久未满（用旧过的工具/武器/盔甲）的物品一律不进炉子。三类取料路径
+     * （食材白名单外的矿物回退 extractOreFromMaid / 通用可烧制物回退
+     * extractAnySmeltable / 烟熏炉·高炉 extractByRecipe）统一在入口拦截。
+     * m_41793_ = isEnchanted（附魔表非空，javap 实证查 NBT Enchantments 列表），
+     * m_41753_ = isDamaged（当前耐久 < 最大）。
+     */
+    private static boolean isSafeToFeed(ItemStack stack) {
+        if (stack == null || stack.m_41619_()) {
+            return false;
+        }
+        if (stack.m_41793_()) {
+            return false; // 附魔物品永不熔（原版/模组配方都可能烧掉它）
+        }
+        if (stack.m_41753_() && stack.m_41773_() > 0) {
+            return false; // 用旧过的耐久物品不熔（最大耐久 > 0 才算耐久物品）
+        }
+        return true;
+    }
+
     /** v1.1.0 实测一百五十八：烟熏炉/高炉按各自配方类型取料——
      *  烟熏炉 = 有烟熏配方的物品（生食）；高炉 = 有高炉配方的物品（矿石/粗金属，
      *  受「熔炉烧矿物」开关约束——高炉只烧矿物，开关关掉时高炉只收成品/补燃料）。 */
@@ -419,7 +441,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                               net.minecraft.world.item.crafting.RecipeType<T> type) {
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
-            if (stack.m_41619_()) {
+            if (stack.m_41619_() || !isSafeToFeed(stack)) {
                 continue;
             }
             if (hasRecipe(level, stack, type)) {
@@ -437,7 +459,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
-            if (stack.m_41619_() || FOODS.contains(stack.m_41720_())) {
+            if (stack.m_41619_() || !isSafeToFeed(stack) || FOODS.contains(stack.m_41720_())) {
                 continue;
             }
             if (hasOreTag(stack.m_41720_()) && isSmeltable(level, stack)) {
@@ -467,7 +489,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         ItemStack fallback = ItemStack.f_41583_;
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
-            if (stack.m_41619_() || FOODS.contains(stack.m_41720_())) {
+            if (stack.m_41619_() || !isSafeToFeed(stack) || FOODS.contains(stack.m_41720_())) {
                 continue;
             }
             Item it = stack.m_41720_();
@@ -545,7 +567,9 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
-            if (stack.m_41619_() || !net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+            // v1.1.0 实测三百四十九：燃料侧同拦——附魔物品（经验修补的装备/附魔书/
+            // 药水箭等）和用旧的耐久物品绝不当柴火烧
+            if (stack.m_41619_() || !isSafeToFeed(stack) || !net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
                     .m_58399_(stack)) {
                 continue;
             }

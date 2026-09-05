@@ -77,6 +77,8 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.memory.RelationshipMemoryAdapter());
         // v1.5.135：自保的"最近攻击者"记录（被攻击事件 → 5 秒威胁窗口，覆盖非 Monster 生物）
         MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.SelfPreservationBehavior.class);
+        // 实测四百零二：低血量自动回魂符（血量 ≤ 阈值 / 致死伤害 → 收进主人背包空魂符）
+        MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.MaidSoulSpellGuard.class);
         // v1.1.0：主动切换战斗模式（主人被敌对生物攻击 → 附近女仆切战斗保护，威胁消失还原）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.combat.AutoCombatSwitch());
         // v1.1.0 实测九十：险境脱离（已身处危险方块上的女仆自动挪到最近安全格+应急灭火）
@@ -109,6 +111,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测二百九十七：锄地独立驱动（不依赖 TARGET_POS——锄完一块
         // 泥土变耕地后扫描空转，start 不再触发，锄地再也不跑）
         com.maidsmart.build.FarmTillDriver.ensureRegistered();
+        // v1.1.0 实测三百四十四：中立/魔改生物威胁驱动（行为化 getTarget 判定——
+        // 发狂的狼/魔改被动生物 TLM 索敌链选不到目标，这里写目标+直接攻击+补触发参战）
+        com.maidsmart.combat.NeutralThreatDriver.ensureRegistered();
         MinecraftForge.EVENT_BUS.register(this);
     }
 

@@ -292,6 +292,16 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (SelfPreservationBehavior.isMovingToSurvive(maid)) {
             return;
         }
+        // 实测三百七十六【塔顶禁走位】：站在自己登记的战斗方块上（自保垫高塔，
+        // 寿命内站上恒刷新）→ 让位。自保接管期间 SNIPING 标记已清，此处不拦的
+        // 话战术走位会把人从塔上拽下去（"搭高完成后自己走下去"的一条主路径）；
+        // 塔顶交还 TLM 攻击 AI 站桩输出。
+        if (com.maidsmart.task.PlacedBlockTracker.trackedBlockId(level,
+                maid.m_20183_().m_7918_(0, -1, 0)) != null
+                || com.maidsmart.task.PlacedBlockTracker.trackedBlockId(level,
+                        maid.m_20183_().m_7918_(0, -2, 0)) != null) {
+            return;
+        }
         Optional<LivingEntity> ot = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_);
         if (ot.isEmpty() || !ot.get().m_6084_()) {
             return;
