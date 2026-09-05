@@ -67,6 +67,14 @@ public final class ScheduleNetworking {
         // 显示排班规定的模式/任务并锁定，不再停留在打开时的旧状态）
         CHANNEL.registerMessage(11, MaidStateSyncPacket.class,
                 MaidStateSyncPacket::encode, MaidStateSyncPacket::decode, MaidStateSyncPacket::handle);
+        // v1.1.0 实测三百四十二：排班表内单独调整女仆在家模式（不依赖排班开关——
+        // 不开排班也能让女仆守家；排班开着时 home 由排班管理，按钮锁定）
+        CHANNEL.registerMessage(12, HomeTogglePacket.class,
+                HomeTogglePacket::encode, HomeTogglePacket::decode, HomeTogglePacket::handle);
+        // v1.1.0 实测三百四十三：批量调整全部女仆在家模式（列表页「全员在家」按钮，
+        // 与全员模式/批量任务同款——排班中的女仆跳过，home 由排班管理）
+        CHANNEL.registerMessage(13, BatchHomePacket.class,
+                BatchHomePacket::encode, BatchHomePacket::decode, BatchHomePacket::handle);
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */
@@ -119,6 +127,104 @@ public final class ScheduleNetworking {
             ctx.get().enqueueWork(() ->
                     com.maidsmart.schedule.ScheduleBookScreen.syncMaidState(
                             pkt.uuid, pkt.taskUid, pkt.scheduleOrdinal, pkt.schedOn));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /* ==================== 排班表内单独调整在家模式（实测三百四十二） ==================== */
+
+    /** C2S 在家模式开关：不依赖排班开关——不开排班也能让女仆守家（home 模式）；
+     *  排班开着时 home 由排班管理（开排班自动 home），按钮锁定由客户端控制，
+     *  服务端同样兜底拦截。 */
+    public static class HomeTogglePacket {
+        public final String uuid;
+        public final boolean on;
+
+        public HomeTogglePacket(String uuid, boolean on) {
+            this.uuid = uuid;
+            this.on = on;
+        }
+
+        public static void encode(HomeTogglePacket pkt, FriendlyByteBuf buf) {
+            buf.m_130072_(pkt.uuid, 64);
+            buf.writeBoolean(pkt.on);
+        }
+
+        public static HomeTogglePacket decode(FriendlyByteBuf buf) {
+            return new HomeTogglePacket(buf.m_130136_(64), buf.readBoolean());
+        }
+
+        public static void handle(HomeTogglePacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                EntityMaid maid = findMaid(level, pkt.uuid);
+                if (maid == null || !allowed(player, maid)) {
+                    return;
+                }
+                // 排班开着时 home 由排班管理（开排班自动 home、关排班解除）——手动改无效
+                if (ScheduleData.isOn(maid)) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "§c【排班】「" + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
+                                    + "」的日程表开着，在家模式由排班管理——请先关闭她的排班再单独调整"));
+                    return;
+                }
+                maid.setHomeModeEnable(pkt.on);
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        (pkt.on ? "§a已开启" : "§7已关闭") + "「"
+                                + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
+                                + "」的在家模式" + (pkt.on ? "——她将守家不跟随，想召回先关闭" : "")));
+            });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** C2S 批量在家模式（实测三百四十三）：作用于主人全部已加载女仆（跨维度扫描，
+     *  与批量应用同口径）；排班中的女仆跳过（home 由排班管理）。 */
+    public static class BatchHomePacket {
+        public final boolean on;
+
+        public BatchHomePacket(boolean on) {
+            this.on = on;
+        }
+
+        public static void encode(BatchHomePacket pkt, FriendlyByteBuf buf) {
+            buf.writeBoolean(pkt.on);
+        }
+
+        public static BatchHomePacket decode(FriendlyByteBuf buf) {
+            return new BatchHomePacket(buf.readBoolean());
+        }
+
+        public static void handle(BatchHomePacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                int applied = 0;
+                int schedSkipped = 0;
+                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
+                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                        if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
+                            continue;
+                        }
+                        // 排班中 home 由排班管理（开排班自动 home、关排班解除）——跳过
+                        if (ScheduleData.isOn(m)) {
+                            schedSkipped++;
+                            continue;
+                        }
+                        m.setHomeModeEnable(pkt.on);
+                        applied++;
+                    }
+                }
+                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        (pkt.on ? "§a已开启 " : "§7已关闭 ") + applied + " 名女仆的在家模式"
+                                + (schedSkipped > 0 ? "§7（" + schedSkipped
+                                + " 名排班中保持原样——先关闭她们的排班才能一键更改）" : "")));
+            });
             ctx.get().setPacketHandled(true);
         }
     }
@@ -195,7 +301,7 @@ public final class ScheduleNetworking {
         if (!(player.m_9236_() instanceof ServerLevel level)) {
             return;
         }
-        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数, 血量%, 维度标签}
+        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数, 血量%, 维度标签, 在家模式"1"/"0"}
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
         for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
@@ -223,7 +329,8 @@ public final class ScheduleNetworking {
                         taskUid, String.valueOf(mode),
                         ScheduleData.isOn(m) ? "1" : "0",
                         String.valueOf(ScheduleData.load(m).size()),
-                        String.valueOf(hp), dimTag});
+                        String.valueOf(hp), dimTag,
+                        m.isHomeModeEnable() ? "1" : "0"});
                 // 任务清单：用第一只女仆生成（隐藏任务因女仆而异，取代表）
                 if (taskUids.isEmpty()) {
                     try {
@@ -259,8 +366,9 @@ public final class ScheduleNetworking {
         public static void encode(OpenSchedulePacket pkt, FriendlyByteBuf buf) {
             buf.writeInt(pkt.maids.size());
             for (String[] m : pkt.maids) {
-                for (int i = 0; i < 8; i++) {
-                    buf.m_130072_(m[i], 256);
+                // v1.1.0 实测三百四十二：9 字段（追加在家模式 m[8]）
+                for (int i = 0; i < 9; i++) {
+                    buf.m_130072_(m.length > i ? m[i] : "", 256);
                 }
             }
             buf.writeInt(pkt.taskUids.size());
@@ -273,9 +381,10 @@ public final class ScheduleNetworking {
             int n = buf.readInt();
             List<String[]> maids = new ArrayList<>();
             for (int i = 0; i < n; i++) {
+                // v1.1.0 实测三百四十二：9 字段（追加在家模式 m[8]）
                 maids.add(new String[]{buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256),
                         buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256),
-                        buf.m_130136_(256), buf.m_130136_(256)});
+                        buf.m_130136_(256), buf.m_130136_(256), buf.m_130136_(256)});
             }
             int tn = buf.readInt();
             List<String> tasks = new ArrayList<>();

@@ -195,10 +195,13 @@ public class ScheduleBookScreen extends Screen {
         for (int i = start; i < end; i++) {
             String[] m = shown.get(i);
             // 行标签：名字 + 血量% + 维度标签（跨维度才显示）+ 排班状态（实测六十）
+            // v1.1.0 实测三百四十二：追加在家模式状态（m[8]="1" 显示「在家」）
             String sched = "1".equals(m[4])
                     ? "\u00a7a排班开\u00a77（" + m[5] + " 段）" : "\u00a77排班关";
+            String home = m.length > 8 && "1".equals(m[8])
+                    ? " \u00a7d在家" : "";
             String label = "\u00a7e" + fitName(m[1]) + " \u00a7f" + m[6] + "% "
-                    + (m[7].isEmpty() ? "" : "\u00a79" + m[7] + " ") + sched;
+                    + (m[7].isEmpty() ? "" : "\u00a79" + m[7] + " ") + sched + home;
             final String uuid = m[0];
             final String name = m[1];
             this.m_142416_(Button.m_253074_(Component.m_237113_(label), b -> {
@@ -256,22 +259,53 @@ public class ScheduleBookScreen extends Screen {
                             -1, uid));
                 })
                 .m_252987_(bx0 + 212, h - 68, 80, 18).m_253136_());
-        // 翻页（◀ 页码 ▶ 居中一行，位于底区）
-        // 实测五十六：◀ cx-70 / ▶ cx+40——旧位置（cx-40 / cx+20）与 ~60px 宽的
-        // 页码文字（cx±30）两端各重叠 10px，按钮后渲染盖住"第 x/y 页"两端
+        // v1.1.0 实测三百四十三（用户："它的调整方式应该跟工作模式和任务是一样的。
+        // 都可以统一对所有女仆进行调控，或者对单一女仆进行调控"）：批量行下方新增
+        // 「全员在家」按钮（点击循环 开/关，与全员模式同款交互）——统一调控全部
+        // 女仆的在家模式；排班中的女仆跳过（home 由排班管理，服务端同样兜底）。
+        // 翻页按钮右移到 cx+40/cx+90，给全员在家让出左侧空间。
+        int homeCount = 0;
+        int freeCount = 0;
+        for (String[] m : this.maids) {
+            if (!"1".equals(m[4])) { // 非排班女仆
+                freeCount++;
+                if (m.length > 8 && "1".equals(m[8])) {
+                    homeCount++;
+                }
+            }
+        }
+        boolean allHome = freeCount > 0 && homeCount == freeCount;
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_("\u00a7d全员在家：" + (allHome ? "开" : "关")
+                                + " \u00a77(" + homeCount + "/" + freeCount + ")"),
+                        b -> {
+                            boolean next = !allHome;
+                            ScheduleNetworking.CHANNEL.sendToServer(
+                                    new ScheduleNetworking.BatchHomePacket(next));
+                            // 本地同步行数据（非排班女仆）
+                            for (String[] m : this.maids) {
+                                if (!"1".equals(m[4])) {
+                                    m[8] = next ? "1" : "0";
+                                }
+                            }
+                            this.m_7856_();
+                        })
+                .m_252987_(bx0, h - 46, 100, 18).m_253136_());
+        // 翻页（◀ 页码 ▶ 居中一行，位于底区；实测三百四十三：右移到 cx+40/cx+90
+        // 给「全员在家」让出左侧空间）
         if (this.page > 0) {
             this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"), b -> {
                         this.page--;
                         this.m_7856_();
                     })
-                    .m_252987_(cx - 70, h - 46, 20, 18).m_253136_());
+                    .m_252987_(cx + 40, h - 46, 20, 18).m_253136_());
         }
         if (this.page < totalPages - 1) {
             this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"), b -> {
                         this.page++;
                         this.m_7856_();
                     })
-                    .m_252987_(cx + 40, h - 46, 20, 18).m_253136_());
+                    .m_252987_(cx + 90, h - 46, 20, 18).m_253136_());
         }
         // 一键集合（跨维度传送全部在场女仆到身边；实测六十）+ 关闭
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7d\u2691 一键集合"), b ->
@@ -459,6 +493,28 @@ public class ScheduleBookScreen extends Screen {
                     })
                     .m_252987_(qx + qw - 20, y, 20, 20).m_253136_());
         }
+        y += 26;
+        // v1.1.0 实测三百四十二（用户："排班表内部也应该可以调整每个女仆是否可以为
+        // home模式"）：在家模式开关——不依赖排班开关，不开排班也能让女仆守家；
+        // 排班开着时 home 由排班管理（开排班自动 home），按钮锁定提示先关排班。
+        boolean homeOn = sel != null && sel.length > 8 && "1".equals(sel[8]);
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_(homeOn
+                                ? "\u00a7d在家模式：开" + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击关闭)")
+                                : "\u00a77在家模式：关" + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击开启)")),
+                        b -> {
+                            if (this.loadedOn) {
+                                return; // 排班中 home 由排班管理，先关排班
+                            }
+                            boolean next = !homeOn;
+                            ScheduleNetworking.CHANNEL.sendToServer(
+                                    new ScheduleNetworking.HomeTogglePacket(this.selUuid, next));
+                            if (sel != null) {
+                                sel[8] = next ? "1" : "0";
+                            }
+                            this.m_7856_();
+                        })
+                .m_252987_(qx, y, qw, 20).m_253136_());
         y += 26;
         // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找；
         // 与列表页「一键集合」同豁免口径：坐着/骑乘/在家模式（排班中）不传，服务端

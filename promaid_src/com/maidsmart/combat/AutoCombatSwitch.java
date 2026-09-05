@@ -231,10 +231,14 @@ public class AutoCombatSwitch {
         // 狼/带崽北极熊）也算交战对象，帮打合理；平静态的照样不触发。
         // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（发狂的驯服狼——受伤事件在
         // 记仇状态设置前触发，isAngryAt 恒 false，见 isAngryTamedAt 注释）
+        // v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外列入
+        // 威胁"）：加行为化判定——正在锁定【主人或主人身边任意女仆】的生物即使
+        // 记仇状态未就位（模组生物用自有仇恨系统、isAngry 不写）也算交战对象
         net.minecraft.world.entity.Entity victimEnt = event.getEntity();
         if (!(victimEnt instanceof net.minecraft.world.entity.monster.Enemy)
                 && !isAngryNeutralAt(victimEnt, attacker)
-                && !isAngryTamedAt(victimEnt, attacker)) {
+                && !isAngryTamedAt(victimEnt, attacker)
+                && !isTargetingAnyoneOf(victimEnt, attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -255,9 +259,12 @@ public class AutoCombatSwitch {
         }
         // v1.1.0 实测八十七：同 onOwnerAttack——敌对生物或记仇主人的中立生物
         // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（同 onOwnerAttack 口径）
+        // v1.1.0 实测三百四十六：行为化口径（同 onOwnerAttack——锁定主人/
+        // 女仆的生物即使 isAngry 未就位也算）
         if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
                 && !isAngryNeutralAt(event.getEntity(), attacker)
-                && !isAngryTamedAt(event.getEntity(), attacker)) {
+                && !isAngryTamedAt(event.getEntity(), attacker)
+                && !isTargetingAnyoneOf(event.getEntity(), attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -296,6 +303,77 @@ public class AutoCombatSwitch {
     }
 
     /* ==================== v1.1.0 实测五十八：女仆被怪打 → 自主参战 ==================== */
+
+    /** v1.1.0 实测三百四十四：对外触发单只女仆参战评估（NeutralThreatDriver 用）——
+     *  扫到"锁定主人/女仆为目标"的魔改/中立生物时补触发（主人打狼时事件在狼记仇
+     *  状态设置之前发，isAngry 判定恒 false 漏触发；这里 0.5 秒后 getTarget 已就位，
+     *  补上迟到的参战）。内部自带排班/自保/幼年让位与 COMBAT_ACTIVE 去重。 */
+    static void tryEngagePublic(EntityMaid maid) {
+        try {
+            if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+                return;
+            }
+            tryEngageMaid(maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测三百四十四（用户："有一部分 mod 会魔改原版被动生物，让被动生物
+     * 都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"）：
+     * 【行为化威胁判定】——该生物是否正在锁定（getTarget）主人或女仆本人。
+     * 与类型判定（Enemy/NeutralMob/Tamable）互补：类型接口是原版体系，模组魔改
+     * 的"被动变中立"生物不实现任何一个是常态；getTarget 是 Mob 基类字段，
+     * 所有敌对/中立/魔改生物 AI 攻击前都会写它——狼发狂咬人的瞬间 target==主人，
+     * 模组改的"攻击性奶牛"冲锋时同样写 target。这是最普适的威胁信号。
+     */
+    static boolean isTargetingOurSide(net.minecraft.world.entity.Entity e,
+                                       net.minecraft.world.entity.LivingEntity owner,
+                                       net.minecraft.world.entity.LivingEntity maid) {
+        try {
+            if (!(e instanceof net.minecraft.world.entity.Mob mob) || !mob.m_6084_()) {
+                return false;
+            }
+            // 女仆之间不打（同主人姐妹/其他玩家的女仆都不是威胁）
+            if (mob instanceof EntityMaid) {
+                return false;
+            }
+            net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
+            return t == maid || (owner != null && t == owner);
+        } catch (Throwable ex) {
+            return false;
+        }
+    }
+
+    /**
+     * v1.1.0 实测三百四十六（用户："不论是哪种生物，只要是 target=主人/女仆的
+     * 都会被额外列入威胁并当做敌对威胁处理"）：普适行为化判定——该生物是否
+     * 正在锁定【指定主人的任意女仆或主人本人】。不限定 NeutralMob/Tamable 类型
+     * （模组魔改生物不实现原版接口是常态），只看 getTarget 行为信号。
+     * 主人开火判定用（被打生物可能锁定的是主人身边的女仆而非主人本人）。
+     */
+    private static boolean isTargetingAnyoneOf(net.minecraft.world.entity.Entity e,
+                                                net.minecraft.world.entity.LivingEntity owner) {
+        try {
+            if (!(e instanceof net.minecraft.world.entity.Mob mob) || !mob.m_6084_()) {
+                return false;
+            }
+            if (mob instanceof EntityMaid) {
+                return false; // 女仆之间不打
+            }
+            net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
+            if (t == null) {
+                return false;
+            }
+            if (t == owner) {
+                return true;
+            }
+            // 锁定的是主人的任意女仆
+            return t instanceof EntityMaid tm && tm.m_269323_() == owner;
+        } catch (Throwable ex) {
+            return false;
+        }
+    }
 
     /**
      * 女仆被怪物攻击（近身拍打/远程弹射物——弹射物伤害来源=射击者）→ 她【本人】
@@ -342,6 +420,12 @@ public class AutoCombatSwitch {
         }
     }
 
+    /** 实测三百四十五：对外记录一次战斗接触（NeutralThreatDriver 直接挥砍成功时
+     *  调用——还原扫描的僵局逃逸阀以"最近伤害往来"计时，我方补刀也算往来） */
+    static void touchContactPublic(EntityMaid maid) {
+        touchContact(maid);
+    }
+
     /**
      * v1.1.0 实测八十四：记录一次与敌对生物的真实接触（任意方向伤害）。
      * v1.1.0 实测八十五：挨打侧同时登记【伤害来源生物】（uuid + 时刻）——
@@ -361,14 +445,17 @@ public class AutoCombatSwitch {
             net.minecraft.world.entity.Entity attacker = source != null ? source.m_7640_() : null;
             if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
                     && !isAngryNeutralAt(attacker, maid)
-                    && !isAngryTamedAt(attacker, maid.m_269323_())) {
+                    && !isAngryTamedAt(attacker, maid.m_269323_())
+                    && !isTargetingOurSide(attacker, maid.m_269323_(), maid)) {
                 attacker = source != null ? source.m_7639_() : null;
             }
             // v1.1.0 实测八十七：登记口径 = Enemy 或 记仇女仆的中立生物
             // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（狼记仇主人、咬女仆）
+            // v1.1.0 实测三百四十六：锁定主人/女仆的任意生物也算圈来源（普适行为化口径）
             if (attacker instanceof net.minecraft.world.entity.monster.Enemy
                     || isAngryNeutralAt(attacker, maid)
-                    || isAngryTamedAt(attacker, maid.m_269323_())) {
+                    || isAngryTamedAt(attacker, maid.m_269323_())
+                    || isTargetingOurSide(attacker, maid.m_269323_(), maid)) {
                 maid.getPersistentData().m_128359_(ATTACKER_UUID_TAG, attacker.m_20148_().toString());
                 maid.getPersistentData().m_128356_(ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
             }
@@ -394,7 +481,12 @@ public class AutoCombatSwitch {
         if (maid.m_9236_().m_5776_()) {
             return;
         }
-        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)) {
+        // v1.1.0 实测三百四十六（用户："不论是哪种生物，只要是 target=主人/女仆
+        // 的都会被额外列入威胁"）：女仆打到【锁定主人/女仆的任意生物】也算一次
+        // 战斗接触——旧版只认 Enemy，打狼/魔改生物时僵局逃逸阀收不到接触信号
+        if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
+                && !isTargetingOurSide(event.getEntity(),
+                ((EntityMaid) event.getSource().m_7640_()).m_269323_(), maid)) {
             return;
         }
         touchContact(maid);
@@ -430,6 +522,16 @@ public class AutoCombatSwitch {
         // v1.1.0 实测三百一十八：驯服宠物记仇【主人】也算——狼记仇的是主人不是
         // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（用户："狼打我
         // 女仆一点反应都没"）。记仇主人的驯服宠物咬女仆 = 真实威胁，帮打合理。
+        // v1.1.0 实测三百四十四【行为化兜底】：魔改生物不实现 NeutralMob/Tamable
+        // 接口（类型判定恒 false），但攻击前必写 getTarget——正在锁定【受害女仆
+        // 或其主人】的任意 Mob 都算真实威胁（与 isTargetingOurSide 同口径）。
+        // 野狼咬女仆时 getTarget 可能仍指向主人（记仇主人但顺手咬近身的女仆），
+        // 两侧都查。
+        EntityMaid vm = (EntityMaid) victim;
+        if (isTargetingOurSide(cause, vm.m_269323_(), vm)
+                || isTargetingOurSide(direct, vm.m_269323_(), vm)) {
+            return true;
+        }
         return isAngryNeutralAt(cause, victim) || isAngryNeutralAt(direct, victim)
                 || isAngryTamedAt(cause, victim) || isAngryTamedAt(direct, victim);
     }
@@ -1007,6 +1109,13 @@ public class AutoCombatSwitch {
             if (isAngryTamedAt(e, maid.m_269323_())) {
                 return true;
             }
+            // v1.1.0 实测三百四十四【行为化口径】：正在锁定主人/本女仆的任意 Mob
+            // 都是现役威胁（魔改生物不实现 NeutralMob/Tamable——类型判定漏掉的
+            // 全靠 getTarget 兜住；发狂的狼 getTarget==主人）。否则还原后立刻又被
+            // 咬回战斗态，反复横跳。
+            if (isTargetingOurSide(e, maid.m_269323_(), maid)) {
+                return true;
+            }
         }
         // ---- 动态威胁圈 ----
         int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
@@ -1031,10 +1140,12 @@ public class AutoCombatSwitch {
             }
             // v1.1.0 实测八十七：圈来源口径放宽——Enemy 或 记仇中的中立生物
             // v1.1.0 实测三百一十八：驯服宠物记仇主人也算圈来源（同固定圈口径）
+            // v1.1.0 实测三百四十六：锁定主人/女仆的任意生物也算（普适行为化口径）
             boolean ringSource = attacker instanceof net.minecraft.world.entity.monster.Enemy
                     || (attacker instanceof net.minecraft.world.entity.NeutralMob nm
                     && neutralAngry(nm))
-                    || isAngryTamedAt(attacker, maid.m_269323_());
+                    || isAngryTamedAt(attacker, maid.m_269323_())
+                    || isTargetingOurSide(attacker, maid.m_269323_(), maid);
             if (!ringSource) {
                 return false;
             }
@@ -1419,10 +1530,17 @@ public class AutoCombatSwitch {
         try {
             double best = -1;
             // v1.1.0 实测六十八：Monster -> Enemy（同 hasThreatNearby 口径）
+            // v1.1.0 实测三百四十四：行为化口径并入——锁定主人/本女仆的魔改生物
+            // 也算敌人（换战术距离判定要追得上/够得着它们）
             for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
                     net.minecraft.world.entity.Entity.class,
                     maid.m_20191_().m_82400_(24.0))) {
-                if (!(e instanceof net.minecraft.world.entity.monster.Enemy) || !e.m_6084_()) {
+                if (!e.m_6084_()) {
+                    continue;
+                }
+                boolean threat = e instanceof net.minecraft.world.entity.monster.Enemy
+                        || isTargetingOurSide(e, maid.m_269323_(), maid);
+                if (!threat) {
                     continue;
                 }
                 double d = maid.m_20238_(e.m_20182_());
@@ -1591,6 +1709,11 @@ public class AutoCombatSwitch {
                 // v1.1.0 实测三百一十八：驯服宠物记仇主人（发狂驯服狼）诊断口径
                 if (isAngryTamedAt(e, maid.m_269323_())) {
                     return "fixed-tamed:" + String.format("%.1f",
+                            Math.sqrt(maid.m_20238_(e.m_20182_())));
+                }
+                // v1.1.0 实测三百四十四：行为化威胁（锁定主人/女仆的魔改生物）
+                if (isTargetingOurSide(e, maid.m_269323_(), maid)) {
+                    return "fixed-targeting:" + String.format("%.1f",
                             Math.sqrt(maid.m_20238_(e.m_20182_())));
                 }
             }

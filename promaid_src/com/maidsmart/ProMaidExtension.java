@@ -109,6 +109,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测二百九十七：锄地独立驱动（不依赖 TARGET_POS——锄完一块
         // 泥土变耕地后扫描空转，start 不再触发，锄地再也不跑）
         com.maidsmart.build.FarmTillDriver.ensureRegistered();
+        // v1.1.0 实测三百四十四：中立/魔改生物威胁驱动（行为化 getTarget 判定——
+        // 发狂的狼/魔改被动生物 TLM 索敌链选不到目标，这里写目标+直接攻击+补触发参战）
+        com.maidsmart.combat.NeutralThreatDriver.ensureRegistered();
         MinecraftForge.EVENT_BUS.register(this);
     }
 
