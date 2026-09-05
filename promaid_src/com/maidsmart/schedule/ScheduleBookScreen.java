@@ -407,10 +407,29 @@ public class ScheduleBookScreen extends Screen {
         // 任务循环（点一下换下一个；到头回绕；立即生效）
         // v1.1.0 实测七十（用户反馈：日程表与主人主动切任务冲突）：排班中的女仆
         // 【锁定任务】——按钮文案提示，点击不再发包（服务端同样拦截兜底）
+        // v1.1.0 实测三百三十九（用户："全天模式有了左右的箭头，那么下面的任务
+        // 也应该有左右箭头啊。任务调整的左右箭头才是最重要的。但是你却一个都没
+        // 给"）：任务行拆成三键——◀ 上一个 / 中间任务名（点击仍循环，保留旧习惯）
+        // / ▶ 下一个，与工作模式行同款布局。
         if (!this.taskUids.isEmpty()) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"), b -> {
+                        if (this.loadedOn) {
+                            return; // 硬性锁定：先关右上角的排班才能切任务
+                        }
+                        int cur = this.taskUids.indexOf(curTask);
+                        int prev = (cur - 1 + this.taskUids.size()) % this.taskUids.size();
+                        String uid = this.taskUids.get(prev);
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                this.selUuid, -1, uid, -1));
+                        if (sel != null) {
+                            sel[2] = uid;
+                        }
+                        this.m_7856_();
+                    })
+                    .m_252987_(qx, y, 20, 20).m_253136_());
             this.m_142416_(Button.m_253074_(
                             Component.m_237113_("任务：\u00a7e" + taskCn(curTask)
-                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击切换)")),
+                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击/◀▶切换)")),
                             b -> {
                                 if (this.loadedOn) {
                                     return; // 硬性锁定：先关右上角的排班才能切任务
@@ -424,7 +443,21 @@ public class ScheduleBookScreen extends Screen {
                                 }
                                 this.m_7856_();
                             })
-                    .m_252987_(qx, y, qw, 20).m_253136_());
+                    .m_252987_(qx + 24, y, Math.max(40, qw - 48), 20).m_253136_());
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"), b -> {
+                        if (this.loadedOn) {
+                            return; // 硬性锁定：先关右上角的排班才能切任务
+                        }
+                        int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
+                        String uid = this.taskUids.get(next);
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                this.selUuid, -1, uid, -1));
+                        if (sel != null) {
+                            sel[2] = uid;
+                        }
+                        this.m_7856_();
+                    })
+                    .m_252987_(qx + qw - 20, y, 20, 20).m_253136_());
         }
         y += 26;
         // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找；
@@ -490,6 +523,9 @@ public class ScheduleBookScreen extends Screen {
                     .m_252987_(shiftX0 + i * (shiftW + 6), TAB_Y + 22, shiftW, 18).m_253136_());
         }
         // ---- 6 个任务槽按钮（行距 22、按钮高 18——给页签行让出纵向空间） ----
+        // v1.1.0 实测三百三十九（用户："任务调整的左右箭头才是最重要的。但是你
+        // 却一个都没给"）：每个槽拆成三键——◀ 上一个 / 中间任务名（点击仍循环，
+        // 保留旧习惯）/ ▶ 下一个，与快捷设置页任务行同款交互。
         int bw = Math.min(SLOT_W, w - 180);
         int x = cx - (bw + LABEL_GAP) / 2 + LABEL_GAP;
         int y = CONTENT_TOP + 20;
@@ -497,9 +533,16 @@ public class ScheduleBookScreen extends Screen {
         int len = (win[1] - win[0]) / 6;
         for (int i = 0; i < 6; i++) {
             final int idx = i;
-            String uid = this.slots[idx];
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77◀"), b -> {
+                        int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
+                        int prev = (cur - 1 + this.taskUids.size() + 1) % (this.taskUids.size() + 1);
+                        this.slots[idx] = prev == this.taskUids.size() ? "" : this.taskUids.get(prev);
+                        this.schedDirty = true; // 实测六十三：未保存编辑标记
+                        this.m_7856_();
+                    })
+                    .m_252987_(x, y, 18, 18).m_253136_());
             this.m_142416_(Button.m_253074_(
-                            Component.m_237113_(fitTask(uid)),
+                            Component.m_237113_(fitTask(this.slots[idx])),
                             b -> {
                                 // 快捷设置同款：点一下换下一个（含"空闲"档 → 循环不依赖 uid 匹配）
                                 int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
@@ -508,7 +551,15 @@ public class ScheduleBookScreen extends Screen {
                                 this.schedDirty = true; // 实测六十三：未保存编辑标记
                                 b.m_93666_(Component.m_237113_(fitTask(this.slots[idx])));
                             })
-                    .m_252987_(x, y, bw, 18).m_253136_());
+                    .m_252987_(x + 22, y, Math.max(20, bw - 44), 18).m_253136_());
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77▶"), b -> {
+                        int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
+                        int next = (cur + 1) % (this.taskUids.size() + 1);
+                        this.slots[idx] = next == this.taskUids.size() ? "" : this.taskUids.get(next);
+                        this.schedDirty = true; // 实测六十三：未保存编辑标记
+                        this.m_7856_();
+                    })
+                    .m_252987_(x + bw - 18, y, 18, 18).m_253136_());
             y += 22;
         }
         // ---- 保存（底区右侧，与"← 女仆列表"同一行；攒一次提交防频繁 rebuild brain） ----

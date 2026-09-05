@@ -35,6 +35,8 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
     private static final double STRIKE_DIST = 3.0;
     /** v1.1.0 实测三百二十七：全实体诊断节流（无牲畜时每 5 秒打一次范围内实体清单） */
     private int diagCooldown = 0;
+    /** v1.1.0 实测三百四十：无目标闲逛换点节流（每 40 tick = 2 秒换一个闲逛点） */
+    private int wanderCooldown = 0;
 
     public MaidSlaughterBehavior() {
         // 无限运行时长（与烧制/酿造同款——行为不因超时重启）
@@ -125,10 +127,26 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
                             + net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES
                             .getKey(picked.m_6095_()) + "（追踪走位中）");
         } else {
-            // 无超阈值组：站桩等待（不漫游——与烧制/酿造同款）
-            MaidWorkTags.setStill(maid, true);
-            maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
-            maid.m_21573_().m_26569_();
+            // v1.1.0 实测三百四十（用户："女仆在宰杀状态下如果没有需要宰杀的动物，
+            // 不应该站在原地不动，而应该四处闲逛"）：无超阈值组 → 不再站桩，改为
+            // 四处闲逛——每 2 秒在周围 8 格内随机选一个点设 WALK_TARGET（BlockPosTracker
+            // 固定点，MoveToTargetSink 消费驱动寻路），走位期间不站桩；扫到目标立即
+            // 打断闲逛去追（下轮 tick 的 SEEK 分支优先）。
+            MaidWorkTags.setStill(maid, false);
+            if (this.wanderCooldown-- > 0) {
+                return;
+            }
+            this.wanderCooldown = 40; // 2 秒换一个闲逛点
+            int r = 8;
+            int dx = maid.m_217043_().m_188503_(r * 2 + 1) - r;
+            int dz = maid.m_217043_().m_188503_(r * 2 + 1) - r;
+            net.minecraft.core.BlockPos base = maid.m_20183_();
+            net.minecraft.core.BlockPos spot = new net.minecraft.core.BlockPos(
+                    base.m_123341_() + dx, base.m_123342_(), base.m_123343_() + dz);
+            maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
+                    new net.minecraft.world.entity.ai.memory.WalkTarget(
+                            new net.minecraft.world.entity.ai.behavior.BlockPosTracker(spot),
+                            0.7f, 1));
         }
     }
 
