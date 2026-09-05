@@ -49,12 +49,22 @@ public final class HomePatrolHandler {
             return; // 每 4 秒一次
         }
         throttle = 0;
+        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±131072/±4096）——±∞ 经
+        // SectionPos.blockToSection 换算溢出收敛到同一个值（floor 溢出回绕 + >>4），
+        // section 循环只执行一次且落在世界外 → 扫描恒空（v330 改 Entity.class 时
+        // 保留了 ±∞，home 巡逻因此失效——"home 模式又不会动了"）
         net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+                -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
         for (ServerLevel level : event.getServer().m_129785_()) {
-            for (EntityMaid maid : level.m_45976_(EntityMaid.class, whole)) {
-                patrol(maid);
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
+            // 未预建 EntityMaid 桶的 section 被整段跳过，home 女仆单独站的 section
+            // 扫不到 → 巡逻驱动失效（"home 女仆呆立"的另一重根因）
+            for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                    net.minecraft.world.entity.Entity.class, whole)) {
+                if (e instanceof EntityMaid maid) {
+                    patrol(maid);
+                }
             }
         }
     }

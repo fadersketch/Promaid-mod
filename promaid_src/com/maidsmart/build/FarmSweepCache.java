@@ -62,10 +62,13 @@ public final class FarmSweepCache {
                 return;
             }
             net.minecraft.world.level.block.Block b = orig.m_60734_();
-            // 锄头可锄目标（HoeItem.f_41332_ 表：dirt/grass_block/dirt_path → farmland）
+            // 锄头可锄目标（HoeItem.f_41332_ 表：dirt/grass_block/dirt_path → farmland）。
+            // v1.1.0 实测三百三十五：f_50092_ 是 CropBlock（马铃薯）不是 dirt_path——
+            // javap 实证 DirtPathBlock 构造 → putstatic f_152481_。旧版草径判定字段错，
+            // 草径被锄成耕地时不打标 → 草径踩坏后女仆不认（"可锄地块判定有问题"）。
             if (b != net.minecraft.world.level.block.Blocks.f_50493_
                     && b != net.minecraft.world.level.block.Blocks.f_50440_
-                    && b != net.minecraft.world.level.block.Blocks.f_50092_) {
+                    && b != net.minecraft.world.level.block.Blocks.f_152481_) {
                 return;
             }
             if (!(event.getLevel() instanceof net.minecraft.server.level.ServerLevel)) {

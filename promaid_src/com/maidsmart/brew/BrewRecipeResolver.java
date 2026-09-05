@@ -241,6 +241,13 @@ public final class BrewRecipeResolver {
         return !REVERSE.isEmpty();
     }
 
+    /** v1.1.0 实测三百二十四：反查表大小（诊断日志用——表空 = 定向模式整体退化
+     *  为"不下料"，而 ensureBuilt 失败完全静默，玩家只看到女仆空做动作） */
+    public static int tableSize() {
+        ensureBuilt();
+        return REVERSE.size();
+    }
+
     /** 链上第 index 步需要的材料（index 从 0 起，对应基底后的第一步） */
     public static Item reagentAt(Chain chain, int index) {
         if (chain == null || index < 0 || index >= chain.steps().size()) {

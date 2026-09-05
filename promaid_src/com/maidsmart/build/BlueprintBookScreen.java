@@ -1806,6 +1806,19 @@ public class BlueprintBookScreen extends Screen {
     @Override
     public void m_88315_(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         this.m_280039_(graphics); // renderBackground
+        // v1.1.0 实测三百一十三（用户："模组内新添加物品的 ui 背景都是用的原版 MC
+        // 格式，过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：Promaid 手册
+        // 品牌渐变背景——蓝金主题（与手册建造功能呼应）。半透明色带叠加 = 渐变
+        //（m_280509_ 走 ARGB，Alpha 叠加）
+        int w = this.f_96543_;
+        int h = this.f_96544_;
+        int bandL = Math.max(4, w / 2 - 300);
+        int bandR = Math.min(w - 4, w / 2 + 300);
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x55122A4E);   // 底层：深海军蓝
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x220F3A8C);   // 中层：宝蓝
+        graphics.m_280509_(bandL, 4, bandR, h - 4, 0x1A1B4E8C);   // 高光：亮蓝
+        graphics.m_280509_(bandL, 4, bandR, 14, 0xFF2C5F9E);      // 顶部饰条：靛蓝
+        graphics.m_280509_(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         switch (this.view) {
             case VIEW_BUILD -> this.renderBuild(graphics);
             case VIEW_MAIDS -> this.renderMaids(graphics);

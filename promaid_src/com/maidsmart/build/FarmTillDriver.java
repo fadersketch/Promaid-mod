@@ -3,6 +3,7 @@ package com.maidsmart.build;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.TickEvent;
@@ -59,7 +60,8 @@ public final class FarmTillDriver {
         }
     }
 
-    /** 扫描节流（每 20 tick = 1 秒一次） */
+    /** 扫描节流（v1.1.0 实测三百三十一：每 10 tick = 0.5 秒一次——用户反馈
+     *  "农场耕地的频率太低了"，旧版 20 tick = 1 秒） */
     private int throttle = 0;
 
     @SubscribeEvent
@@ -67,7 +69,7 @@ public final class FarmTillDriver {
         if (event.phase != TickEvent.Phase.END) {
             return;
         }
-        if (++this.throttle < 20) {
+        if (++this.throttle < 10) {
             return;
         }
         this.throttle = 0;
@@ -77,10 +79,18 @@ public final class FarmTillDriver {
         }
         try {
             for (ServerLevel level : server.m_129785_()) {
-                for (EntityMaid maid : level.m_45976_(EntityMaid.class,
+                // v1.1.0 实测三百三十（用户："只有跟随的时候才会锄地，home 模式下
+                // 不会"）：EntityMaid.class 全图扫描改用 Entity.class 全量 + instanceof
+                // 过滤——与宰杀 Animal.class 同构的 ClassInstanceMultiMap 桶 bug：
+                // m_13533_(Class) 按请求 Class 精确建桶，未预建的 key 返回空桶 →
+                // EntitySection.m_188348_ 直接跳过整个 section。跟随模式女仆所在的
+                // section 被 TLM 感知系统预建了 EntityMaid 桶 → 能扫到 → 会锄地；
+                // home 女仆单独站的 section 没预建 → 空桶 → 永远找不到 → 不锄地。
+                for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                        net.minecraft.world.entity.Entity.class,
                         new net.minecraft.world.phys.AABB(-131072.0, -4096.0, -131072.0,
                                 131072.0, 4096.0, 131072.0))) {
-                    if (!maid.m_6084_() || !isFarmTask(maid)) {
+                    if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || !isFarmTask(maid)) {
                         continue;
                     }
                     this.tillNearby(level, maid);
@@ -99,8 +109,17 @@ public final class FarmTillDriver {
         }
     }
 
-    /** 扫描女仆周围 5×5（水平）的可锄泥土并锄掉（1 秒冷却/女仆）——
-     *  v1.1.0 实测二百九十八：3×3 → 5×5（用户指定范围） */
+    /**
+     * v1.1.0 实测三百三十四（用户："女仆对于耕地的积极性太低了。先检查一下对于
+     * 更替的整个路径和判定，看看有没有办法提高积极性"）：锄地索敌重写——
+     * 旧版只扫女仆【脚下 5×5】且 1 秒一轮：home 模式下女仆在锚点附近，农田稍远
+     * 就永远锄不到，只能等随机巡逻撞上（积极性低的根因）。重写：
+     * ① 扫描半径 5×5 → 16 格（与酿造/熔炉/宰杀同口径，misc.brewRadius 同值）
+     * ② 冷却 1 秒 → 0.5 秒（与扫描节流一致）
+     * ③ 近身（≤3 格）直接锄；远的目标【直连导航走过去】（m_26519_，不走
+     *    MoveToTargetSink——站桩标记/移动抑制拦不住，自保逃跑验证过的通道）
+     * ④ 标记自愈保留（范围内当前是耕地的地块实时打标）
+     */
     private void tillNearby(ServerLevel world, EntityMaid maid) {
         try {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get()) {
@@ -108,8 +127,8 @@ public final class FarmTillDriver {
             }
             long now = world.m_46467_();
             Long last = FarmSweepCache.TILL_CD.get(maid.m_20148_().toString());
-            if (last != null && now - last < 20) {
-                return; // 1 秒冷却（与 FarmSweepMixin.tillAround 同节奏）
+            if (last != null && now - last < 10) {
+                return; // 0.5 秒冷却（与扫描节流一致）
             }
             // 先确认背包/主手有锄头（没有就不锄，也不写冷却——补锄头后立即生效）
             if (!com.maidsmart.task.MaidToolAutoEquip.ensureHoeForFarm(maid)) {
@@ -117,8 +136,11 @@ public final class FarmTillDriver {
             }
             FarmSweepCache.TILL_CD.put(maid.m_20148_().toString(), now);
             BlockPos base = maid.m_20183_();
-            for (int dx = -2; dx <= 2; dx++) {
-                for (int dz = -2; dz <= 2; dz++) {
+            int radius = com.maidsmart.config.MaidSmartConfig.MISC_BREW_RADIUS.get();
+            BlockPos tillTarget = null;
+            double bestDistSq = Double.MAX_VALUE;
+            for (int dx = -radius; dx <= radius; dx++) {
+                for (int dz = -radius; dz <= radius; dz++) {
                     BlockPos b = base.m_7918_(dx, 0, dz);
                     if (!world.m_46749_(b)) {
                         continue; // 区块未加载跳过
@@ -138,22 +160,38 @@ public final class FarmTillDriver {
                     if (!FarmSweepCache.isTillable(world, maid, b)) {
                         continue;
                     }
-                    // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
-                    world.m_7731_(b, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
-                    // v1.1.0 实测三百零二：女仆锄地后保持标记（标记制——标记是
-                    // "曾经是耕地"的凭证，锄完不能丢，否则下次踩坏后女仆不认）
-                    FarmlandMarkStore.get(world).mark(b);
-                    // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
-                    world.m_5594_(null, b, net.minecraft.sounds.SoundEvents.f_11955_,
-                            net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
-                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥臂
-                    // 消耗 1 点耐久（HoeItem.m_6225_ 同款：m_41622_(1, LivingEntity, Consumer)）
-                    ItemStack hoe = maid.m_21205_();
-                    if (!hoe.m_41619_()) {
-                        hoe.m_41622_(1, maid, e -> {
-                        });
+                    double dsq = (double) dx * dx + (double) dz * dz;
+                    if (dsq < bestDistSq) {
+                        bestDistSq = dsq;
+                        tillTarget = b;
                     }
                 }
+            }
+            if (tillTarget == null) {
+                return; // 范围内无可锄地块
+            }
+            // 近身（≤3 格）直接锄；远的目标直连导航走过去（下轮近身再锄）
+            double distSq = maid.m_20275_(tillTarget.m_123341_() + 0.5,
+                    tillTarget.m_123342_() + 0.5, tillTarget.m_123343_() + 0.5);
+            if (distSq > 9.0) {
+                maid.m_21573_().m_26519_(tillTarget.m_123341_() + 0.5,
+                        tillTarget.m_123342_(), tillTarget.m_123343_() + 0.5, 0.8f);
+                return;
+            }
+            // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
+            world.m_7731_(tillTarget, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);
+            // v1.1.0 实测三百零二：女仆锄地后保持标记（标记制——标记是
+            // "曾经是耕地"的凭证，锄完不能丢，否则下次踩坏后女仆不认）
+            FarmlandMarkStore.get(world).mark(tillTarget);
+            // 锄地音效（HoeItem.m_6225_ 字节码实证：SoundEvents.f_11955_）
+            world.m_5594_(null, tillTarget, net.minecraft.sounds.SoundEvents.f_11955_,
+                    net.minecraft.sounds.SoundSource.BLOCKS, 1.0f, 1.0f);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥臂
+            // 消耗 1 点耐久（HoeItem.m_6225_ 同款：m_41622_(1, LivingEntity, Consumer)）
+            ItemStack hoe = maid.m_21205_();
+            if (!hoe.m_41619_()) {
+                hoe.m_41622_(1, maid, e -> {
+                });
             }
         } catch (Throwable ignored) {
         }

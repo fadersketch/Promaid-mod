@@ -121,8 +121,18 @@ public final class MaidChunkLoadManager {
                             maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_(), stayPut));
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
+                    // v1.1.0 实测三百零七（粉丝："地狱基岩层猪人塔女仆传送不受控制，
+                    // 拉开一点距离就不停传送声……蹲下、坐垫、home 模式全都固定会这样"）：
+                    // 根因——救援判定只有 needsRescue（下界 y≥126 一刀切）+ 距离，没有
+                    // home/坐垫/骑乘豁免（summon 系列都有，唯独救援漏了）。猪人塔女仆
+                    // 故意放在基岩层（y≥126）→ 拉开距离后被每 tick 循环拽回主人身边，
+                    // home 模式又把她送回基岩顶 → 无限循环。修复：坐垫/骑乘/在家模式 =
+                    // 玩家明确停放，不救援（与 summonOne/summonMaidTo 同口径）。
                     if (com.maidsmart.config.MaidSmartConfig.MISC_MAID_RESCUE.get()
                             && ow.m_6084_() && needsRescue(lvl, maid)
+                            && !maid.isMaidInSittingPose()
+                            && !maid.m_20159_()
+                            && !(maid.isHomeModeEnable() && !isBuildingMaid(maid))
                             && maid.m_20238_(ow.m_20182_()) >= 64.0) {
                         double fromY = maid.m_20186_();
                         if (teleportCore(maid, ow)) {
@@ -824,6 +834,16 @@ BlockPos stand = findStand(newLevel,
             if (maid.isHomeModeEnable()) {
                 throttledSkipLog(maid, "sam-dim-home", name + " 同维度距离 " + blocks
                         + " 格但守家中，不拉（想召回先解除排班/在家模式）");
+                return;
+            }
+            // v1.1.0 实测三百一十五（用户："怀疑是老代码作祟"——基岩层传送问题复查）：
+            // 坐垫/骑乘豁免——旧版同维度拉回只有 home/干活/搭路豁免，漏了坐垫/骑乘。
+            // 粉丝"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
+            // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
+            // 不拉（与救援/一键集合同口径）。
+            if (maid.isMaidInSittingPose() || maid.m_20159_()) {
+                throttledSkipLog(maid, "sam-dim-sit", name + " 同维度距离 " + blocks
+                        + " 格但坐着/骑乘中，不拉（坐垫/骑乘 = 玩家明确停放）");
                 return;
             }
             if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {

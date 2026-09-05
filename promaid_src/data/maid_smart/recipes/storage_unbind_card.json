@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:sugar_cane" }
+  },
+  "result": { "item": "maid_smart:storage_unbind_card", "count": 1 }
+}

@@ -39,6 +39,22 @@ public class ProMaidMod {
     public static final RegistryObject<Item> BREW_MANUAL = ITEMS.register("brew_manual",
             () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
 
+    /** 精妙储存终端绑定卡（v1.1.0 实测三百零八）：9 皮革合成，右击女仆→右击精妙控制器完成绑定 */
+    public static final RegistryObject<Item> STORAGE_BIND_CARD = ITEMS.register("storage_bind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 精妙储存终端解绑卡（v1.1.0 实测三百零八）：9 甘蔗合成，右击女仆解除终端绑定 */
+    public static final RegistryObject<Item> STORAGE_UNBIND_CARD = ITEMS.register("storage_unbind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 超越维度终端绑定卡（v1.1.0 实测三百零九）：9 末影珍珠合成，绑定女仆 × 网络接口 */
+    public static final RegistryObject<Item> BEYOND_BIND_CARD = ITEMS.register("beyond_bind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 超越维度终端解绑卡（v1.1.0 实测三百零九）：9 黏液球合成，右击女仆解除网络接口绑定 */
+    public static final RegistryObject<Item> BEYOND_UNBIND_CARD = ITEMS.register("beyond_unbind_card",
+            () -> new Item(new Item.Properties()));
+
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
@@ -51,6 +67,12 @@ public class ProMaidMod {
         com.maidsmart.emotion.EmotionNetworking.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new com.maidsmart.brew.BrewManualInteractHandler());
+        // v1.1.0 实测三百零八：精妙储存终端绑定/解绑交互
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.storage.BoundStorageInteractHandler());
+        // v1.1.0 实测三百零九：超越维度网络接口绑定/解绑交互
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.storage.BeyondBindingInteractHandler());
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();

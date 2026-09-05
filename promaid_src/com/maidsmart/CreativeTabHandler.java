@@ -35,6 +35,12 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.SCHEDULE_BOOK);
             // v1.1.0 实测二百七十七：女仆药剂手册（管理道具，只进工具页）
             event.accept(ProMaidMod.BREW_MANUAL);
+            // v1.1.0 实测三百零八：精妙终端绑定卡/解绑卡（管理道具）
+            event.accept(ProMaidMod.STORAGE_BIND_CARD);
+            event.accept(ProMaidMod.STORAGE_UNBIND_CARD);
+            // v1.1.0 实测三百零九：超越维度终端绑定卡/解绑卡（管理道具）
+            event.accept(ProMaidMod.BEYOND_BIND_CARD);
+            event.accept(ProMaidMod.BEYOND_UNBIND_CARD);
         }
     }
 }
