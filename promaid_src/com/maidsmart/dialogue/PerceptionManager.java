@@ -139,6 +139,11 @@ public class PerceptionManager {
      * v1.5.195：统一威胁判定——候选生物是【敌对生物】或【对女仆/主人携带仇恨】
      * （getTarget==女仆/主人，覆盖中立生物被激怒反咬、主人被攻击的生物）。
      * Monster 兜底：即使暂未锁定目标，敌对生物靠近也算威胁。
+     * v1.1.0 实测三百四十六（用户："不论是哪种生物，只要是 target=主人/女仆的
+     * 都会被额外列入威胁并当做敌对威胁处理"）：getTarget 判定从"中立生物专属
+     * 通道"提升为【普适通道】——不再限定 NeutralMob 实现类（模组魔改的"被动
+     * 变中立"生物不实现 NeutralMob 是常态），任意 Mob 只要锁定主人/女仆就是
+     * 敌对威胁。女仆本身永远不算（女仆之间不打）。
      */
     public static boolean isThreat(LivingEntity candidate, EntityMaid maid) {
         try {
@@ -147,6 +152,9 @@ public class PerceptionManager {
             }
             if (candidate instanceof Monster) {
                 return true;
+            }
+            if (candidate instanceof EntityMaid) {
+                return false; // 女仆永远不算威胁（女仆之间不打）
             }
             if (candidate instanceof Mob mob) {
                 LivingEntity t = mob.m_5448_(); // getTarget（已实证 EntityMaid 覆写即读 brain）

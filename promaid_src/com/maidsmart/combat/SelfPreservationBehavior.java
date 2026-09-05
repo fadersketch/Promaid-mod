@@ -1547,9 +1547,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         List<Mob> mobs = center.m_9236_().m_6443_(Mob.class,
                 center.m_20191_().m_82400_(radius), m -> m.m_6084_());
         for (Mob mob : mobs) {
-            if (center instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
-                    ? !com.maidsmart.dialogue.PerceptionManager.isThreat(mob, maid)
-                    : !(mob instanceof Monster)) {
+            // v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外
+            // 列入威胁"）：主人侧判定并入行为化口径——center 是主人（非女仆）时
+            // 旧版只认 Monster 类型，发狂的狼/魔改生物站在主人身边时传送安全闸
+            // 恒放行（传过去又被咬）。锁定 center 的任意 Mob 都算威胁。
+            boolean threat;
+            if (center instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid) {
+                threat = com.maidsmart.dialogue.PerceptionManager.isThreat(mob, maid);
+            } else {
+                threat = mob instanceof Monster || isTargetingCenter(mob, center);
+            }
+            if (!threat) {
                 continue;
             }
             if (!SelfPreservationBehavior.hasSight(center, mob)) {
@@ -1558,6 +1566,27 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return true;
         }
         return false;
+    }
+
+    /** v1.1.0 实测三百四十六：center（主人）侧的行为化威胁——mob 正在锁定
+     *  center 本人或 center 的任意女仆（getTarget 判定，不看类型接口） */
+    private static boolean isTargetingCenter(Mob mob, LivingEntity center) {
+        try {
+            if (mob instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid) {
+                return false; // 女仆之间不打
+            }
+            LivingEntity t = mob.m_5448_(); // getTarget
+            if (t == null) {
+                return false;
+            }
+            if (t == center) {
+                return true;
+            }
+            return t instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid tm
+                    && tm.m_269323_() == center;
+        } catch (Throwable ex) {
+            return false;
+        }
     }
 
     /** v1.5.21：视线检查（raycast，隔墙不算威胁）。v1.5.135 公开给战斗战术共用 */

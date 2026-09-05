@@ -822,11 +822,27 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.5.252g：主人 16 格内是否有敌对生物（给增益药水助战的条件） */
+    /** v1.5.252g：主人 16 格内是否有敌对生物（给增益药水助战的条件）
+     *  v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外列入
+     *  威胁"）：并入行为化口径——锁定主人/主人任意女仆的 Mob（发狂的狼/魔改
+     *  生物）也算危险，主人被狼追时女仆照常扔力量/迅捷助战。 */
     private boolean ownerInDanger(ServerLevel level, ServerPlayer owner) {
         try {
-            return !level.m_45976_(net.minecraft.world.entity.monster.Monster.class,
-                    owner.m_20191_().m_82400_(16.0)).isEmpty();
+            if (!level.m_45976_(net.minecraft.world.entity.monster.Monster.class,
+                    owner.m_20191_().m_82400_(16.0)).isEmpty()) {
+                return true;
+            }
+            for (net.minecraft.world.entity.Mob mob : level.m_45976_(
+                    net.minecraft.world.entity.Mob.class, owner.m_20191_().m_82400_(16.0))) {
+                if (mob instanceof EntityMaid || !mob.m_6084_()) {
+                    continue; // 女仆之间不打 / 死的不算
+                }
+                net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
+                if (t == owner || (t instanceof EntityMaid tm && tm.m_269323_() == owner)) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Exception e) {
             return false;
         }

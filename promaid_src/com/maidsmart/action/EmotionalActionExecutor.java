@@ -243,6 +243,12 @@ public final class EmotionalActionExecutor {
             }
             // v1.5.292：喂食动作（m_6674_=swing，服务端调用自动广播给客户端显示）
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // v1.1.0 实测三百四十八（用户："有的时候会显示女仆给主人喂了空气的系统
+            // 字样"）：食物名【进食前】读快照——m_5584_（eat）会 shrink 栈，extractItem
+            // 返回的是活引用，eat 后栈变空 → 空栈 getHoverName 返回原版 "Air"（中文
+            // 环境显示"空气"）→ 系统字幕"女仆喂你吃了 空气"。姐妹链 feedSisterFood
+            // 早就修过同款坑（"名字在进食前读"），主人链漏了。
+            String foodName = food.m_41786_().getString();
             // v1.1.0 实测二百五十六（用户："我要的喂食效果跟女仆自己吃食物效果应该
             // 一样"）：投喂改走 LivingEntity.m_5584_（eat 完整路径）——与女仆自己
             // 吃食物完全一致：食物效果（m_21063_ 施加原版 FoodProperties 效果）、
@@ -254,7 +260,6 @@ public final class EmotionalActionExecutor {
             // 系统提示喂了什么（m_41786_ = getHoverName）
             // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
             if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
-                String foodName = food.m_41786_().getString();
                 owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
             }
