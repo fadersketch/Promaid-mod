@@ -122,6 +122,15 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
+        // v1.1.0 实测三百二十（用户："装了 mod 后带女仆到雪地，空闲模式会打雪仗然后
+        // 对我触发攻击，会冲我跳劈"）：0 伤害攻击不触发参战——TLM 原版空闲模式在
+        // 雪地有打雪仗行为（MaidSnowballTargetTask），雪球命中主人伤害为 0 但事件
+        // 照发，旧版不检查伤害值 → 女仆被"雪球"拉进战斗 → 切攻击任务 → 战术行为
+        // 把主人当目标跳劈（脱甲 4 颗心）。雪球/鸡蛋等娱乐性弹射物伤害恒 0，直接
+        // 拦截；真实攻击（僵尸 3 点等）照常触发。
+        if (event.getAmount() <= 0.0f) {
+            return;
+        }
         // v1.1.0 实测二十：不再限定敌对生物来源——主人被【任何东西】攻击都算开战
         //（PVP 玩家互打、模组自定义敌对生物、弹射物等都覆盖；自伤仍排除）
         if (event.getSource() == null || event.getSource().m_7639_() == null
@@ -141,6 +150,11 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
+        // v1.1.0 实测三百二十：0 伤害攻击不触发（雪球/鸡蛋等娱乐性弹射物——
+        // 见 onOwnerHurt 注释）
+        if (event.getAmount() <= 0.0f) {
+            return;
+        }
         if (event.getSource() == null || event.getSource().m_7639_() == null
                 || event.getSource().m_7639_() == player) {
             return;
@@ -156,6 +170,10 @@ public class AutoCombatSwitch {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            return;
+        }
+        // v1.1.0 实测三百二十：0 伤害不触发（雪球/鸡蛋等娱乐性弹射物——见 onOwnerHurt 注释）
+        if (event.getAmount() <= 0.0f) {
             return;
         }
         if (event.getSource() == null || event.getSource().m_7639_() == null
@@ -211,9 +229,12 @@ public class AutoCombatSwitch {
         // 威胁、安全计时只被主人的后续命中无限续杯，是"打完收不回去"的根源。
         // v1.1.0 实测八十七：中立激怒口径——正在记仇主人的中立生物（追着主人咬的
         // 狼/带崽北极熊）也算交战对象，帮打合理；平静态的照样不触发。
+        // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（发狂的驯服狼——受伤事件在
+        // 记仇状态设置前触发，isAngryAt 恒 false，见 isAngryTamedAt 注释）
         net.minecraft.world.entity.Entity victimEnt = event.getEntity();
         if (!(victimEnt instanceof net.minecraft.world.entity.monster.Enemy)
-                && !isAngryNeutralAt(victimEnt, attacker)) {
+                && !isAngryNeutralAt(victimEnt, attacker)
+                && !isAngryTamedAt(victimEnt, attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -233,8 +254,10 @@ public class AutoCombatSwitch {
             return;
         }
         // v1.1.0 实测八十七：同 onOwnerAttack——敌对生物或记仇主人的中立生物
+        // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（同 onOwnerAttack 口径）
         if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
-                && !isAngryNeutralAt(event.getEntity(), attacker)) {
+                && !isAngryNeutralAt(event.getEntity(), attacker)
+                && !isAngryTamedAt(event.getEntity(), attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -337,12 +360,15 @@ public class AutoCombatSwitch {
         try {
             net.minecraft.world.entity.Entity attacker = source != null ? source.m_7640_() : null;
             if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
-                    && !isAngryNeutralAt(attacker, maid)) {
+                    && !isAngryNeutralAt(attacker, maid)
+                    && !isAngryTamedAt(attacker, maid.m_269323_())) {
                 attacker = source != null ? source.m_7639_() : null;
             }
             // v1.1.0 实测八十七：登记口径 = Enemy 或 记仇女仆的中立生物
+            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（狼记仇主人、咬女仆）
             if (attacker instanceof net.minecraft.world.entity.monster.Enemy
-                    || isAngryNeutralAt(attacker, maid)) {
+                    || isAngryNeutralAt(attacker, maid)
+                    || isAngryTamedAt(attacker, maid.m_269323_())) {
                 maid.getPersistentData().m_128359_(ATTACKER_UUID_TAG, attacker.m_20148_().toString());
                 maid.getPersistentData().m_128356_(ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
             }
@@ -401,7 +427,11 @@ public class AutoCombatSwitch {
             return true;
         }
         // v1.1.0 实测八十七：中立生物激怒即通行证
-        return isAngryNeutralAt(cause, victim) || isAngryNeutralAt(direct, victim);
+        // v1.1.0 实测三百一十八：驯服宠物记仇【主人】也算——狼记仇的是主人不是
+        // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（用户："狼打我
+        // 女仆一点反应都没"）。记仇主人的驯服宠物咬女仆 = 真实威胁，帮打合理。
+        return isAngryNeutralAt(cause, victim) || isAngryNeutralAt(direct, victim)
+                || isAngryTamedAt(cause, victim) || isAngryTamedAt(direct, victim);
     }
 
     /**
@@ -413,6 +443,29 @@ public class AutoCombatSwitch {
                                             net.minecraft.world.entity.Entity target) {
         try {
             return e instanceof net.minecraft.world.entity.NeutralMob nm
+                    && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
+        } catch (Exception ex) {
+            return false;
+        }
+    }
+
+    /**
+     * v1.1.0 实测三百一十八（用户："遇到发狂的狼，我打狼或是狼打我，女仆一点反应
+     * 都没"）：驯服宠物（狼/猫等 TamableAnimal）记仇【target】也算交战对象/威胁。
+     * 旧版只认 NeutralMob.isAngryAt——驯服狼记仇主人时：① 主人打狼的 LivingHurtEvent
+     * 在狼记仇状态设置【之前】触发，isAngryAt 恒 false → 主动开火不参战；② 狼咬
+     * 女仆时记仇的是主人不是女仆，isAngryAt(女仆) 恒 false → 女仆被咬也不参战；
+     * ③ 发狂驯服狼在附近不算威胁，还原被它打断又拉回。驯服宠物记仇主人 = 真实
+     * 威胁，女仆帮打合理。m_21824_ = TamableAnimal.isTame（javap 实证）。
+     */
+    private static boolean isAngryTamedAt(net.minecraft.world.entity.Entity e,
+                                          net.minecraft.world.entity.Entity target) {
+        try {
+            // m_21674_ 是 NeutralMob 接口方法（TamableAnimal 类没有）——驯服狼
+            // 同时实现 NeutralMob + TamableAnimal，两个 instanceof 都成立
+            return e instanceof net.minecraft.world.entity.TamableAnimal t
+                    && t.m_21824_()
+                    && e instanceof net.minecraft.world.entity.NeutralMob nm
                     && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
         } catch (Exception ex) {
             return false;
@@ -609,9 +662,15 @@ public class AutoCombatSwitch {
             // 零输出、还原动作从未执行）。改为覆盖整个可玩范围的有限 AABB
             // （x/z ±131072 = ±128km，y ±4096 覆盖全部建筑高度）：blockToSection
             // 对有限值正常换算，循环覆盖所有已加载区块。
-            for (EntityMaid maid : level.m_45976_(EntityMaid.class,
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
+            // 未预建 EntityMaid 桶的 section 被整段跳过，还原扫描扫不到该 section
+            // 里的战斗女仆 → 战斗还原永不触发
+            for (net.minecraft.world.entity.Entity ent : level.m_45976_(
+                    net.minecraft.world.entity.Entity.class,
                     new AABB(-131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0))) {
-                if (!maid.m_6084_() || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
+                if (!(ent instanceof EntityMaid maid) || !maid.m_6084_()
+                        || !maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
                     continue;
                 }
                 activeCount++;
@@ -943,6 +1002,11 @@ public class AutoCombatSwitch {
             if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
                 return true; // isAngry：记仇时间未清零 = 现役威胁
             }
+            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算威胁（发狂的驯服狼在附近
+            // 不还原——否则还原后立刻被咬又拉回，反复横跳）
+            if (isAngryTamedAt(e, maid.m_269323_())) {
+                return true;
+            }
         }
         // ---- 动态威胁圈 ----
         int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
@@ -966,9 +1030,11 @@ public class AutoCombatSwitch {
                 return false; // 来源已死/已移除
             }
             // v1.1.0 实测八十七：圈来源口径放宽——Enemy 或 记仇中的中立生物
+            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算圈来源（同固定圈口径）
             boolean ringSource = attacker instanceof net.minecraft.world.entity.monster.Enemy
                     || (attacker instanceof net.minecraft.world.entity.NeutralMob nm
-                    && neutralAngry(nm));
+                    && neutralAngry(nm))
+                    || isAngryTamedAt(attacker, maid.m_269323_());
             if (!ringSource) {
                 return false;
             }
@@ -1520,6 +1586,11 @@ public class AutoCombatSwitch {
                 }
                 if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
                     return "fixed-neutral:" + String.format("%.1f",
+                            Math.sqrt(maid.m_20238_(e.m_20182_())));
+                }
+                // v1.1.0 实测三百一十八：驯服宠物记仇主人（发狂驯服狼）诊断口径
+                if (isAngryTamedAt(e, maid.m_269323_())) {
+                    return "fixed-tamed:" + String.format("%.1f",
                             Math.sqrt(maid.m_20238_(e.m_20182_())));
                 }
             }

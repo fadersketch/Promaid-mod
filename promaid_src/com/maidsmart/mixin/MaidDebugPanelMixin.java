@@ -47,7 +47,14 @@ public abstract class MaidDebugPanelMixin {
         }
     }
 
-    @Inject(method = "init", at = @At("TAIL"))
+    /**
+     * v1.1.0 实测三百一十九（Issue #2：maidmarriage 2.2.0/2.3.0 打开调试面板即崩）：
+     * require=0——maidmarriage 更新后 MaidDebugPanelScreen.init 方法被移除/重命名，
+     * @Inject 找不到目标 → Mixin apply failed → 打开界面即崩（100% 复现）。
+     * require=0 后找不到目标静默跳过（AI 记忆按钮不显示，功能降级但不崩），
+     * 与 MixinInteractionSittingAllow 的 require=0 同款策略。
+     */
+    @Inject(method = "init", at = @At("TAIL"), require = 0)
     private void promaidAddMemoryToggle(CallbackInfo ci) {
         try {
             Minecraft mc = Minecraft.m_91087_();

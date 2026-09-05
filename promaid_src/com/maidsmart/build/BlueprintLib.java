@@ -3621,8 +3621,11 @@ public final class BlueprintLib {
             net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
                     sl.m_141937_(), sl.m_141937_(), sl.m_141937_(),
                     sl.m_151558_(), sl.m_151558_(), sl.m_151558_());
-            for (EntityMaid m : sl.m_45976_(EntityMaid.class, whole)) {
-                if (BuildPlan.getBoundPlanId(m) == null) {
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            for (net.minecraft.world.entity.Entity e : sl.m_45976_(
+                    net.minecraft.world.entity.Entity.class, whole)) {
+                if (!(e instanceof EntityMaid m) || BuildPlan.getBoundPlanId(m) == null) {
                     continue;
                 }
                 net.minecraftforge.items.IItemHandler inv = m.getMaidInv();
@@ -4599,6 +4602,53 @@ public final class BlueprintLib {
                 }
             }
         }
+        // v1.1.0 实测三百零八：精妙储存绑定终端统计——背包外再看终端里的数量
+        // （缺料判定/材料清单把终端当背包一并统计）。
+        if (maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel srv) {
+            net.minecraftforge.items.IItemHandler term =
+                    com.maidsmart.storage.BoundStorageInteractHandler.boundHandlerOf(srv, maid);
+            if (term != null) {
+                for (int i = 0; i < term.getSlots(); i++) {
+                    ItemStack s = term.getStackInSlot(i);
+                    if (s.m_41619_()) {
+                        continue;
+                    }
+                    if (group != null) {
+                        ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(s.m_41720_());
+                        if (stackId != null && group.contains(stackId.toString())) {
+                            count += s.m_41613_();
+                        }
+                    } else {
+                        Item item = itemForBlock(blockId);
+                        if (item != null && s.m_41720_() == item) {
+                            count += s.m_41613_();
+                        }
+                    }
+                }
+            }
+            // v1.1.0 实测三百零九：超越维度网络接口统计（同口径）
+            net.minecraftforge.items.IItemHandler bd =
+                    com.maidsmart.storage.BeyondBindingInteractHandler.boundHandlerOf(srv, maid);
+            if (bd != null) {
+                for (int i = 0; i < bd.getSlots(); i++) {
+                    ItemStack s = bd.getStackInSlot(i);
+                    if (s.m_41619_()) {
+                        continue;
+                    }
+                    if (group != null) {
+                        ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(s.m_41720_());
+                        if (stackId != null && group.contains(stackId.toString())) {
+                            count += s.m_41613_();
+                        }
+                    } else {
+                        Item item = itemForBlock(blockId);
+                        if (item != null && s.m_41720_() == item) {
+                            count += s.m_41613_();
+                        }
+                    }
+                }
+            }
+        }
         return count;
     }
 
@@ -4724,6 +4774,54 @@ public final class BlueprintLib {
                     ItemStack taken = extractExact(inv, altItem, 1);
                     if (!taken.m_41619_()) {
                         return altItem;
+                    }
+                }
+            }
+        }
+        // 4. v1.1.0 实测三百零八：精妙储存绑定终端回退——背包/等价族/替代都没有，
+        // 从女仆绑定的终端（sophisticatedstorage controller）提取（v1.1.0 实测
+        // 三百一十六起取消距离限制，同维度任意距离生效；没装精妙储存/没绑定/
+        // 终端区块未加载 → 自然回退原逻辑）。
+        if (maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel srv) {
+            if (item != null) {
+                ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
+                        .extractFromBoundStorage(srv, maid, item);
+                if (!fromTerm.m_41619_()) {
+                    return fromTerm.m_41720_();
+                }
+            }
+            if (group != null) {
+                for (String gid : group) {
+                    Item gi = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(gid));
+                    if (gi == null) {
+                        continue;
+                    }
+                    ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
+                            .extractFromBoundStorage(srv, maid, gi);
+                    if (!fromTerm.m_41619_()) {
+                        return fromTerm.m_41720_();
+                    }
+                }
+            }
+            // v1.1.0 实测三百零九：超越维度网络接口兜底——精妙终端没有再从网络
+            // 接口取（两套绑定各自独立，可同时生效）。
+            if (item != null) {
+                ItemStack fromBd = com.maidsmart.storage.BeyondBindingInteractHandler
+                        .extractFromBoundInterface(srv, maid, item);
+                if (!fromBd.m_41619_()) {
+                    return fromBd.m_41720_();
+                }
+            }
+            if (group != null) {
+                for (String gid : group) {
+                    Item gi = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(gid));
+                    if (gi == null) {
+                        continue;
+                    }
+                    ItemStack fromBd = com.maidsmart.storage.BeyondBindingInteractHandler
+                            .extractFromBoundInterface(srv, maid, gi);
+                    if (!fromBd.m_41619_()) {
+                        return fromBd.m_41720_();
                     }
                 }
             }

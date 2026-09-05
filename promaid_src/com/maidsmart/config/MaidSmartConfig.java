@@ -381,6 +381,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_BURN_WOOD;
+    // v1.1.0 实测三百一十一：宰杀任务阈值（同种牲畜超过此数才杀，默认 5）
+    public static final ForgeConfigSpec.IntValue MISC_SLAUGHTER_COUNT;
+    // v1.1.0 实测三百一十八：宰杀扫描半径（默认 16，旧版硬编码 5×5 扫不到远处牲畜）
+    public static final ForgeConfigSpec.IntValue MISC_SLAUGHTER_RADIUS;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
     // v1.5.102：烹饪/酿造垂直搜索范围（v1.5.134 整理任务已删除，仅烹饪/酿造使用）
@@ -1245,6 +1249,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测三百：木材黑名单开关
         MISC_COOK_BURN_WOOD = BUILDER.comment("烧木材（默认关）：木材类（原木/木板/树苗/竹等）默认进黑名单不烧——女仆不会拿木材当原料烧（避免「用木头烧木头」）；勾选后木材类照常可烧（仍受「烧任何可烧制物」开关约束）")
                 .translation("config.promaid.misc.cookBurnWood").define("cookBurnWood", false);
+        // v1.1.0 实测三百一十一：宰杀任务阈值
+        MISC_SLAUGHTER_COUNT = BUILDER.comment("宰杀数量阈值（默认 5）：宰杀任务女仆检测周围同种牲畜（牛/猪/羊/鸡/兔等按类型分组）的数量，某组超过此数 → 每 3 秒随机宰杀一只该组牲畜（播放动画）；≤ 阈值不动")
+                .translation("config.promaid.misc.slaughterCount").defineInRange("slaughterCount", 5, 2, 64);
+        // v1.1.0 实测三百一十八：宰杀扫描半径（默认 16，与酿造/熔炉一致）——
+        // 旧版硬编码 5×5（±2.5 格），畜栏稍大/牛在 3 格外就扫不到 → 永远"无超阈值组"
+        MISC_SLAUGHTER_RADIUS = BUILDER.comment("宰杀扫描半径（默认 16）：宰杀任务女仆检测周围水平半径内同种牲畜的数量（垂直 ±4 格）")
+                .translation("config.promaid.misc.slaughterRadius").defineInRange("slaughterRadius", 16, 4, 48);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")

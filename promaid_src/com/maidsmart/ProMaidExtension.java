@@ -20,7 +20,7 @@ import com.maidsmart.memory.QueryMemoryTool;
 import com.maidsmart.protect.MasterDeathTeleportHandler;
 import com.maidsmart.task.MaidBrewTask;
 import com.maidsmart.task.MaidCookTask;
-import com.maidsmart.task.MaidMineTask;
+import com.maidsmart.task.MaidSlaughterTask;import com.maidsmart.task.MaidMineTask;
 import com.maidsmart.task.MaidWoodTask;
 import com.maidsmart.tool.SmartGiveItemTool;
 import com.maidsmart.tool.SmartMoveToTool;
@@ -95,6 +95,9 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百一十三：Home 模式守卫巡逻（呆立根治——非干活 home 女仆
         // 每 4 秒在 home 锚点附近随机走位，不再原地呆站）
         com.maidsmart.follow.HomePatrolHandler.register();
+        // v1.1.0 实测三百三十三：Home 工作移动独立驱动（home+农场/宰杀女仆直连
+        // 导航巡逻——全盘推翻，不再依赖 TLM 大脑活动/站桩标记）
+        com.maidsmart.follow.HomeWorkMovementDriver.ensureRegistered();
         // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
         // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
@@ -131,10 +134,16 @@ public class ProMaidExtension implements ILittleMaid {
         // doStop 清标记 → 重进存档女仆永远背着 true → 禁瞬移 + 视觉挂桥。
         // 启动时全量清除（任何女仆此刻都不可能在搭路——行为刚初始化）。
         for (net.minecraft.server.level.ServerLevel level : event.getServer().m_129785_()) {
-            for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid
-                    : level.m_45976_(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class,
-                    new net.minecraft.world.phys.AABB(Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                            Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY))) {
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                    net.minecraft.world.entity.Entity.class,
+                    // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
+                    new net.minecraft.world.phys.AABB(-131072.0, -4096.0, -131072.0,
+                            131072.0, 4096.0, 131072.0))) {
+                if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+                    continue;
+                }
                 if (maid.getPersistentData().m_128471_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG)) {
                     maid.getPersistentData().m_128379_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG, false);
                 }
@@ -238,12 +247,15 @@ public class ProMaidExtension implements ILittleMaid {
             this.seatWalkTimer = 0;
             try {
                 net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                        Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                        Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+                        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
+                        -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
                 for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
-                    for (com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m :
-                            level.m_45976_(com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class, whole)) {
-                        if (m.m_6084_()) {
+                    // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+                    // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+                    for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                            net.minecraft.world.entity.Entity.class, whole)) {
+                        if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                                && m.m_6084_()) {
                             com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
                         }
                     }
@@ -411,6 +423,8 @@ public class ProMaidExtension implements ILittleMaid {
         manager.add(new MaidBuildTask());
         // v1.1.0：伐木任务（克隆挖矿架构——木材表/斧判定/树叶放行视线/连锁砍整棵树）
         manager.add(new MaidWoodTask());
+        // v1.1.0 实测三百一十一：宰杀任务（5×5 同种牲畜超阈值 → 每 3 秒随机宰杀一只）
+        manager.add(new MaidSlaughterTask());
     }
 
     @Override

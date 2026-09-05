@@ -39,7 +39,24 @@ public abstract class NativeTaskSmoothMixin {
             MaidWorkMealTask.class,
             MaidStealEdibleMoveBlockTask.class,
             MaidStealEdibleUseTask.class,
-            MaidRunOne.class);
+            MaidRunOne.class,
+            // v1.1.0 实测三百一十九（用户："农场模式下如果女仆是 home 模式就会待在
+            // 原地一动不动……放了一天那女仆也待在原地"）：MaidFarmMoveTask 必须保持
+            // 原版 60 tick 周期重启——searchForDestination（设置 TARGET_POS）只在
+            // start 时调用一次，改无限时长后行为永不 doStop → 永不重新搜索目标 →
+            // 处理完第一个目标后 TARGET_POS 不再更新 → MaidFarmPlantTask 永远等不到
+            // 新目标 → 农场停摆（"原地站死"根因）。farm 移动任务靠周期重启驱动。
+            com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFarmMoveTask.class,
+            // v1.1.0 实测三百二十八（用户："农场功能仍然是一按到 home 就完全停了下
+            // 来"）：MaidFarmPlantTask 同构漏网——javap 实证 IFarmTask.createBrainTasks
+            // 注册 [move(优先级5), plant(优先级6)]，plant 构造是单参 Map（maxDuration
+            // =60），start 处理 TARGET_POS 目标格后清目标、无 tick 覆盖——它和 move
+            // 一样靠 60 tick 周期 doStop 重启来响应 move 重搜出的新目标。v319 只豁免
+            // 了 move，plant 被改无限时长后：处理完第一个目标 → 行为永远空转 → 新
+            // TARGET_POS 出现也不重启 → 农场只处理一个目标就停摆（"一按 home 就停"
+            // 的时序：切 home 瞬间活动切换打断行为，重启后 move 找目标、plant 处理
+            // 一个目标，之后永不再动）。与 move 同款豁免。
+            com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFarmPlantTask.class);
 
     private static final java.lang.reflect.Field MIN_DURATION_FIELD = field("f_22525_");
     private static final java.lang.reflect.Field MAX_DURATION_FIELD = field("f_22526_");
@@ -75,12 +92,29 @@ public abstract class NativeTaskSmoothMixin {
                     continue;
                 }
                 Object second = pair.getSecond();
-                if (second instanceof Behavior<?> behavior && !INFRA.contains(behavior.getClass())) {
+                if (second instanceof Behavior<?> behavior && !isInfra(behavior)) {
                     setInfiniteDuration(behavior);
                 }
             }
         }
         return ImmutableList.copyOf(list);
+    }
+
+    /** v1.1.0 实测三百二十二（用户："农场模式下如果女仆是 home 模式就会待在原地
+     *  一动不动……放了一天那女仆也待在原地"）：INFRA 判定改为【父类兼容】——
+     *  旧版 Set.contains(behavior.getClass()) 精确匹配，而甘蔗/西瓜等特殊农场
+     *  任务用 MaidFarmSurroundingMoveTask（extends MaidFarmMoveTask，javap 实证），
+     *  子类实例不命中 → 时长照样被改无限 → searchForDestination 只在 start 调用
+     *  一次 → 处理完目标后永不重新搜索 → 农场停摆（"原地站死"根因）。isAssignableFrom
+     *  让父类条目覆盖全部子类。 */
+    private static boolean isInfra(Behavior<?> behavior) {
+        Class<?> cls = behavior.getClass();
+        for (Class<?> infra : INFRA) {
+            if (infra.isAssignableFrom(cls)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 反射写入（final 字段，setAccessible 后允许）——失败静默（保持原 60 tick） */

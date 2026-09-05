@@ -43,6 +43,16 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // v1.1.0 实测三百一十五（用户："怀疑是老代码作祟"——基岩层传送问题复查）：
+            // 坐垫/骑乘/蹲下豁免——TLM 原版 teleportToOwner（离主人过远自动传送）只被
+            // 自保/建造/搭路拦截，坐垫/骑乘/蹲下的女仆仍会被拉走。粉丝"蹲下、坐垫全都
+            // 固定会这样"正是这条路径（我们 mod 的救援/拉回已豁免，TLM 原版没拦）。
+            // 坐垫/骑乘/蹲下 = 玩家明确停放，TLM 原版传送同样不拉。
+            if (maid.isMaidInSittingPose() || maid.m_20159_()
+                    || maid.m_6040_()) { // m_6040_ = isShiftKeyDown（蹲下）
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

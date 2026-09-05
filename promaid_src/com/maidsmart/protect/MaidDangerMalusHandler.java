@@ -72,12 +72,18 @@ public final class MaidDangerMalusHandler {
             return; // 每 5 秒一次（覆盖配置热改/晚注册的女仆，Map.put 开销可忽略）
         }
         throttle = 0;
+        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 经 blockToSection 溢出
+        // 收敛到同一值 → 扫描恒空，同 HomePatrolHandler）
         net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY, Double.POSITIVE_INFINITY);
+                -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
         for (ServerLevel level : event.getServer().m_129785_()) {
-            for (EntityMaid maid : level.m_45976_(EntityMaid.class, whole)) {
-                apply(maid);
+            // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
+            // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
+            for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                    net.minecraft.world.entity.Entity.class, whole)) {
+                if (e instanceof EntityMaid maid) {
+                    apply(maid);
+                }
             }
         }
     }
