@@ -141,6 +141,12 @@ public class WorkStatusReporter {
         ResourceLocation uid = maid.getTask().getUid();
         if (uid.equals(MINE)) {
             ItemStack hand = maid.m_21205_();
+            // 实测三百六十一：主手是骨粉 = 施肥换手暂存中（镐多半在副手）——不误报
+            if (!hand.m_41619_()
+                    && hand.m_41720_() == com.maidsmart.task.MaidPlanting.boneMealItem()
+                    && com.maidsmart.task.MaidPlanting.isHandHolding(maid.m_19879_())) {
+                return null; // 施肥换手中，不是真没镐——不播报
+            }
             if (hand.m_41619_() || !(hand.m_41720_() instanceof PickaxeItem)) {
                 return "我没有镐，没法挖矿——给我一把镐吧";
             }
