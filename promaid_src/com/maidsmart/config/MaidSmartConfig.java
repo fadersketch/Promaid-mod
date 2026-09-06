@@ -431,6 +431,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.5.236：农场批量种植 / 上限（与连锁收获同格式）
     public static final ForgeConfigSpec.BooleanValue MISC_BATCH_PLANT;
     public static final ForgeConfigSpec.IntValue MISC_BATCH_PLANT_LIMIT;
+    // v1.1.0 实测三百五十二：树苗骨粉催熟（伐木女仆背包有骨粉时对身边树苗催熟）
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_BONEMEAL_SAPLING;
+    // v1.1.0 实测三百五十五：农场作物骨粉催熟（农场女仆背包有骨粉时对身边未成熟作物催熟）
+    public static final ForgeConfigSpec.BooleanValue MISC_MAID_BONEMEAL_FARM;
     // v1.1.0：排班表系统全局开关（关闭后排班调度器停摆——已保存的日程保留，重开恢复）
     public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_ENABLED;
     // v1.1.0 实测一百三十三：排班切换三件套（可用性检测 / 反向抑制）
@@ -1342,6 +1346,14 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.batchPlant").define("batchPlant", true);
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
+    // v1.1.0 实测三百五十二：树苗骨粉催熟（伐木女仆背包有骨粉 → 对身边树苗催熟）
+    // v1.1.0 实测三百五十三：节拍改 0.5 秒一次（用户要求）
+    MISC_MAID_BONEMEAL_SAPLING = BUILDER.comment("树苗骨粉催熟（默认开）：伐木模式的女仆背包里有骨粉时，对身边（半径 6 格、垂直 ±2）的树苗使用骨粉催熟——每 0.5 秒尝试一次，优先催熟已种下的树苗而不是种新的；【骨粉催熟不受光照限制】（地下/室内种下照常催熟），但树干上方被实心方块挡死的树苗不浪费骨粉（长不出来）；深色橡树苗不催（单株永不生长）。关闭 = 女仆不使用骨粉")
+            .translation("config.promaid.misc.maidBonemealSapling").define("maidBonemealSapling", true);
+    // v1.1.0 实测三百五十五：农场作物骨粉催熟（与树苗同款逻辑——主副手/背包找骨粉、
+    // 施肥时主手换持骨粉、0.5 秒一株、粒子反馈）
+    MISC_MAID_BONEMEAL_FARM = BUILDER.comment("农场作物骨粉催熟（默认开）：农场模式的女仆背包里有骨粉时，对身边（半径 16 格、垂直 ±4）的未成熟作物使用骨粉催熟——每 0.5 秒尝试一株（带粒子特效），优先催熟已种下的作物而不是等自然成熟；只催【当前世界有骨粉配方】的作物（原版/模组作物自动兼容），成熟作物不催（催了也白费）；施肥时主手临时换持骨粉，停止 1 秒后自动还原。关闭 = 女仆不使用骨粉")
+            .translation("config.promaid.misc.maidBonemealFarm").define("maidBonemealFarm", true);
     // v1.1.0：排班表总开关（用户"玩家可操作"原则——新功能都要有手册内开关）
     MISC_SCHEDULE_ENABLED = BUILDER.comment("排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（已保存的日程不丢，重新打开恢复生效），女仆保持当前任务")
             .translation("config.promaid.misc.scheduleEnabled").define("scheduleEnabled", true);

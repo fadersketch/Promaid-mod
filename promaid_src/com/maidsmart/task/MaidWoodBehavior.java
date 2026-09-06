@@ -1031,6 +1031,15 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return;
         }
           ItemStack mainHand = maid.m_21205_();
+          // v1.1.0 实测三百六十一（用户："手持骨粉的时候，她还是会说'我没有斧头'"）：
+          // 主手是骨粉 = 施肥换手暂存中（斧头多半正躺在副手）——先还原主手再判定，
+          // 不能对着骨粉喊"我没有斧头"；还原后主手恢复原物品（斧头回来直接挖）
+          if (!mainHand.m_41619_()
+                  && mainHand.m_41720_() == com.maidsmart.task.MaidPlanting.boneMealItem()
+                  && com.maidsmart.task.MaidPlanting.isHandHolding(maid.m_19879_())) {
+              com.maidsmart.task.MaidPlanting.forceRestoreHand(maid, maid.m_19879_());
+              mainHand = maid.m_21205_();
+          }
           if (mainHand.m_41619_() || !(mainHand.m_41720_() instanceof AxeItem)) {
               // v1.1.0 终审三（用户：木材空手也能挖，不因空手拒绝工作）：
               // 优先尝试从背包装备斧（背包有斧就换——与矿镐"空手才装备"同机制，

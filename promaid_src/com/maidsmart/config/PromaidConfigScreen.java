@@ -1907,6 +1907,12 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_BATCH_PLANT.set(v), "农场批量种植：种植时以当前格为中心蔓延，把相连农田里的空耕地一次全种上（种子真实消耗）；默认开启"));
         this.rows.add(new NumRow("批量种植上限（格）", String.valueOf(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_BATCH_PLANT_LIMIT, s), "农场批量种植上限（格）：一次批量种植的最大格数（4~96，默认 24）"));
+        // v1.1.0 实测三百五十二：树苗骨粉催熟（三百五十三：0.5 秒一株 + 粒子反馈）
+        this.rows.add(new BoolRow("树苗骨粉催熟", MaidSmartConfig.MISC_MAID_BONEMEAL_SAPLING.get(),
+                v -> MaidSmartConfig.MISC_MAID_BONEMEAL_SAPLING.set(v), "伐木模式的女仆背包里有骨粉时，对身边（半径 6 格）的树苗使用骨粉催熟——每 0.5 秒尝试一次（带粒子特效），优先催熟已种下的而不是种新的；骨粉催熟不受光照限制（地下/室内照常长成），但树干上方被实心方块挡死的不浪费骨粉；深色橡树苗不催（单株永不生长）；默认开启"));
+        // v1.1.0 实测三百五十五：农场作物骨粉催熟（与树苗同款逻辑）
+        this.rows.add(new BoolRow("农场作物骨粉催熟", MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.get(),
+                v -> MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.set(v), "农场模式的女仆背包里有骨粉时，对身边（半径 16 格）的未成熟作物使用骨粉催熟——每 0.5 秒尝试一株（带粒子特效），优先催熟已种下的而不是等自然成熟；只催当前世界有骨粉配方的作物（原版/模组作物自动兼容），成熟作物不催；施肥时主手临时换持骨粉，停止 1 秒后自动还原；默认开启"));
         // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；不影响插火把）
         this.rows.add(new BoolRow("手持光源发实光", MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.set(v), "手持光源发实光（默认开）：她主/副手拿火把/灯笼/萤石等光源时，脚底自动跟随一个隐形光块（亮度与该光源一致），周围被真实照亮；不拿光源自动熄灭；与其他环境光源同待遇，不影响插火把判定逻辑本身"));
