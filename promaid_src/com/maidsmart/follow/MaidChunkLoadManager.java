@@ -13,6 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.common.world.ForgeChunkManager;
 
 import java.util.Map;
 import java.util.UUID;
@@ -58,6 +59,10 @@ public final class MaidChunkLoadManager {
     private MaidChunkLoadManager() {
     }
 
+    /** v1.1.0 实测三百四十九：Forge 持久化强制区块的 modId（ForgeChunkManager
+     *  内部校验 ModList.isLoaded——必须用本模组真实 modid "maid_smart"） */
+    private static final String MOD_ID = "maid_smart";
+
     /** 自定义票（永不过期；名字带上 modid 便于 /forge tickets 排查） */
     private static final TicketType<Unit> MAID_TICKET =
             TicketType.m_9462_("promaid_maid", (a, b) -> 0);
@@ -67,6 +72,11 @@ public final class MaidChunkLoadManager {
 
     /** 当前持有的票：maidUuid → (dimension, chunkX, chunkZ) */
     private static final Map<UUID, TicketKey> ACTIVE_TICKETS = new ConcurrentHashMap<>();
+
+    /** v1.1.0 实测三百四十九：排班女仆的持久化强制区块票表（会话内存账——
+     *  真实票在 ForcedChunksSavedData 里，重启后由 Forge 自动重挂，这里只用来
+     *  判断"要不要调 forceChunk 换票"，重启后第一次 tick 会与实际票对齐） */
+    private static final Map<UUID, TicketKey> PERSISTENT_TICKETS = new ConcurrentHashMap<>();
 
     private record TicketKey(ResourceKey<net.minecraft.world.level.Level> dim, long chunk) {
     }
@@ -157,6 +167,15 @@ public final class MaidChunkLoadManager {
         // 女仆所在区块应该持续加载，参考区块加载器"）。现在除三态豁免
         // （home/坐姿/骑乘 = 玩家明确停放，冻结无碍）外全部持续加载。
         Map<UUID, TicketKey> wanted = new java.util.HashMap<>();
+        // v1.1.0 实测三百四十九【排班女仆跨区块加载根治】（用户："排班女仆
+        // 跨区块加载似乎没生效"）：旧票是【会话级】addRegionTicket——关服
+        // releaseAll 清光，重进游戏后调度只扫【已加载】女仆，远处未加载区块
+        // 里的排班女仆永远扫不到、永远没票 → 她的区块在她回家之前永远不加载。
+        // 排班（home 锚定 = 玩家明确让她驻守）的女仆改走 Forge 持久化强制区块
+        // （ForgeChunkManager.forceChunk：票写进维度 chunks.dat，重启自动恢复
+        // —— Forge reinstatePersistentChunks 会在启动时重挂）。她守家守到玩家
+        // 关掉她的排班为止；普通跟随女仆维持会话票（玩家在就加载，够用）。
+        java.util.Map<UUID, TicketKey> wantedPersistent = new java.util.HashMap<>();
         for (ServerLevel level : server.m_129785_()) {
             for (Entity e : level.m_8583_()) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
@@ -171,8 +190,17 @@ public final class MaidChunkLoadManager {
                     // 是传送，不是加载。停放的女仆所在区块同样保持 ticking（她只是不走动，
                     // 但周边农场/熔炉照常运转，也随时可被找到），与用户确认的口径一致。
                     long chunk = new ChunkPos(maid.m_20183_()).m_45588_();
-                    wanted.put(maid.m_20148_(),
-                            new TicketKey(level.m_46472_(), chunk));
+                    TicketKey key = new TicketKey(level.m_46472_(), chunk);
+                    boolean scheduled = false;
+                    try {
+                        scheduled = com.maidsmart.schedule.ScheduleData.isOn(maid);
+                    } catch (Throwable ignored) {
+                    }
+                    if (scheduled) {
+                        wantedPersistent.put(maid.m_20148_(), key);
+                    } else {
+                        wanted.put(maid.m_20148_(), key);
+                    }
                 } catch (Exception ignored) {
                 }
             }
@@ -202,6 +230,57 @@ public final class MaidChunkLoadManager {
             cache.m_8387_(MAID_TICKET, new ChunkPos(want.chunk()), TICKET_LEVEL, Unit.INSTANCE);
             ACTIVE_TICKETS.put(e.getKey(), want);
         }
+        // 3b. 实测三百四十九：排班女仆的持久化强制区块（换区块/关排班自动撤；
+        // forceChunk 幂等——同参数重复调用无害，区块没变就跳过）
+        for (Map.Entry<UUID, TicketKey> e : wantedPersistent.entrySet()) {
+            UUID id = e.getKey();
+            TicketKey want = e.getValue();
+            TicketKey cur = PERSISTENT_TICKETS.get(id);
+            if (want.equals(cur)) {
+                continue;
+            }
+            ServerLevel level = server.m_129880_(want.dim());
+            if (level == null) {
+                continue;
+            }
+            net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(want.chunk());
+            // 先撤旧票（跨区块搬家/换维度时旧票指向错误位置）
+            TicketKey old = PERSISTENT_TICKETS.get(id);
+            if (old != null) {
+                ServerLevel oldLevel = server.m_129880_(old.dim());
+                if (oldLevel != null) {
+                    net.minecraft.world.level.ChunkPos oldCp =
+                            new net.minecraft.world.level.ChunkPos(old.chunk());
+                    ForgeChunkManager.forceChunk(oldLevel, MOD_ID, id,
+                            oldCp.f_45578_, oldCp.f_45579_, false, true);
+                }
+            }
+            // f_45578_ = x / f_45579_ = z（ChunkPos(long) 构造器字节码实证：低 32 位 → x）
+            ForgeChunkManager.forceChunk(level, MOD_ID, id, cp.f_45578_, cp.f_45579_, true, true);
+            PERSISTENT_TICKETS.put(id, want);
+            com.maidsmart.tool.PromaidLog.log("跨维", "排班女仆持久化区块加载 @[" + cp.f_45578_
+                    + "," + cp.f_45579_ + "] dim=" + want.dim().m_135782_().m_135815_()
+                    + "（跨重启保持，关排班自动撤）");
+        }
+        // 3c. 排班关掉的女仆：撤持久化票（wantedPersistent 里没有她 = 她已不在
+        // 排班中——排班数据清了/开关关了/魂符收走（收走时实体 leave 事件清表））
+        java.util.Iterator<Map.Entry<UUID, TicketKey>> pit = PERSISTENT_TICKETS.entrySet().iterator();
+        while (pit.hasNext()) {
+            Map.Entry<UUID, TicketKey> en = pit.next();
+            UUID id = en.getKey();
+            TicketKey cur = en.getValue();
+            if (wantedPersistent.containsKey(id)) {
+                continue;
+            }
+            ServerLevel level = server.m_129880_(cur.dim());
+            if (level != null) {
+                net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(cur.chunk());
+                ForgeChunkManager.forceChunk(level, MOD_ID, id, cp.f_45578_, cp.f_45579_, false, true);
+            }
+            pit.remove();
+            com.maidsmart.tool.PromaidLog.log("跨维", "排班关闭/解除 → 撤持久化区块票："
+                    + id);
+        }
     }
 
     private static void removeTicket(MinecraftServer server, UUID id, TicketKey key) {
@@ -216,7 +295,11 @@ public final class MaidChunkLoadManager {
         ACTIVE_TICKETS.remove(id);
     }
 
-    /** 服务器停止/开关关闭：撤掉全部票（ProMaidExtension ServerStoppingEvent 调用） */
+    /** 服务器停止/开关关闭：撤掉全部票（ProMaidExtension ServerStoppingEvent 调用）
+     *  v1.1.0 实测三百四十九：持久化强制区块【不在这里撤】——它要的就是跨会话
+     *  存活（关游戏重进她还在守家），Forge 会把 chunks.dat 里的票自动重挂；
+     *  排班关闭时 3c 段会撤。开关关闭（MISC_MAID_CHUNK_LOAD）也只停会话票：
+     *  持久化票的语义是"玩家排班让她驻守"，不是"区块加载器开关"。 */
     public static void releaseAll(MinecraftServer server) {
         // v1.1.0 实测七十：待召回队列一并清场
         for (PendingSummon p : PENDING_SUMMON.values()) {
@@ -241,6 +324,7 @@ public final class MaidChunkLoadManager {
             }
         }
         ACTIVE_TICKETS.clear();
+        PERSISTENT_TICKETS.clear(); // 内存账清空（持久票留在 chunks.dat，重启后 3b/3c 与实际对齐）
     }
 
     /**
