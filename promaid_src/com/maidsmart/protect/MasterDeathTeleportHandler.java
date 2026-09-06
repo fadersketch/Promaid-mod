@@ -301,9 +301,20 @@ public class MasterDeathTeleportHandler {
      * v1.1.0 实测一百零二：死亡传送豁免——主人死亡时所有女仆（含排班 Home 模式）
      * 均应传送至重生点；仅坐姿（玩家明确停放）和骑乘中（强拽脱离载具）豁免。
      * 旧版将 Home 模式纳入豁免导致排班女仆死亡传送完全失效。
+     * v1.1.0 实测三百四十九【口径反转】（用户："排班女仆不应触发死亡传送"）：
+     * 排班中的女仆（含排班自动 home 的守家女仆）重新纳入豁免——她们驻守在
+     * 排班锚点（农场/熔炉/看家），主人死亡把守家女仆全部拽到重生点 = 守家
+     * 空窗。想召回走排班表「传送到我身边」（先关她的排班，与一键集合同口径）。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
-        return maid.isMaidInSittingPose() || maid.m_20159_();
+        if (maid.isMaidInSittingPose() || maid.m_20159_()) {
+            return true;
+        }
+        try {
+            return com.maidsmart.schedule.ScheduleData.isOn(maid);
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /** 传送单只女仆（同维度 m_6034_ / 跨维度 m_264318_ + 清摔落/速度） */

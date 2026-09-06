@@ -75,6 +75,11 @@ public final class ScheduleNetworking {
         // 与全员模式/批量任务同款——排班中的女仆跳过，home 由排班管理）
         CHANNEL.registerMessage(13, BatchHomePacket.class,
                 BatchHomePacket::encode, BatchHomePacket::decode, BatchHomePacket::handle);
+        // v1.1.0 实测三百四十九（用户："在排班表内对女仆进行改名，但是在排班表内
+        // 并没有显示出来，还是原来的名字"）：改名成功 → S2C 回发新名字，GUI 同步
+        // 列表行与详情页标题（旧版只改服务端，客户端列表是打开排班表那一刻的快照）
+        CHANNEL.registerMessage(14, MaidRenameSyncPacket.class,
+                MaidRenameSyncPacket::encode, MaidRenameSyncPacket::decode, MaidRenameSyncPacket::handle);
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */
@@ -968,7 +973,42 @@ public final class ScheduleNetworking {
                 maid.m_6593_(net.minecraft.network.chat.Component.m_237113_(n));
                 player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                         "§a已改名为「" + n + "」"));
+                // v1.1.0 实测三百四十九：改名成功 → 回发新名字，排班表 GUI 立即
+                // 同步列表行与详情页标题（客户端 maids 快照是打开那一刻的旧名字）
+                CHANNEL.send(PacketDistributor.PLAYER.with(() -> player),
+                        new MaidRenameSyncPacket(maid.m_20148_().toString(), n));
             });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** S2C 改名同步（实测三百四十九）：服务端改名成功 → 推新名字给打开排班书的玩家 */
+    public static class MaidRenameSyncPacket {
+        public final String uuid;
+        public final String name;
+
+        public MaidRenameSyncPacket(String uuid, String name) {
+            this.uuid = uuid;
+            this.name = name;
+        }
+
+        public static void encode(MaidRenameSyncPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130072_(pkt.uuid, 64);
+            buf.m_130072_(pkt.name == null ? "" : pkt.name, 64);
+        }
+
+        public static MaidRenameSyncPacket decode(FriendlyByteBuf buf) {
+            return new MaidRenameSyncPacket(buf.m_130136_(64), buf.m_130136_(64));
+        }
+
+        public static void handle(MaidRenameSyncPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            // S2C 方向校验（同 MaidStateSyncPacket——实测十六审查 P2-4 口径）
+            if (ctx.get().getDirection() != net.minecraftforge.network.NetworkDirection.PLAY_TO_CLIENT) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            ctx.get().enqueueWork(() ->
+                    com.maidsmart.schedule.ScheduleBookScreen.syncMaidName(pkt.uuid, pkt.name));
             ctx.get().setPacketHandled(true);
         }
     }

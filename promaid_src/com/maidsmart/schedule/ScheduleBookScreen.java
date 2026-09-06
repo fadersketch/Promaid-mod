@@ -126,6 +126,30 @@ public class ScheduleBookScreen extends Screen {
         cur.m_7856_();
     }
 
+    /**
+     * v1.1.0 实测三百四十九（用户："在排班表内对女仆进行改名，但是在排班表内
+     * 并没有显示出来，还是原来的名字"）：服务端改名成功 → MaidRenameSyncPacket
+     * 推回新名字，这里同步列表行（m[1]）与详情页标题（selName）——客户端 maids
+     * 快照是打开排班表那一刻收集的，不回发就永远是旧名字。
+     */
+    public static void syncMaidName(String uuid, String name) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null || uuid == null) {
+            return;
+        }
+        String n = name == null ? "" : name;
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                m[1] = n;
+                break;
+            }
+        }
+        if (uuid.equals(cur.selUuid)) {
+            cur.selName = n;
+        }
+        cur.m_7856_();
+    }
+
     private ScheduleBookScreen(Screen parent, List<String[]> maids, List<String> taskUids) {
         super(Component.m_237113_("排班表"));
         this.parent = parent;
