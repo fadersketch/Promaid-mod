@@ -964,33 +964,33 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * 用户口径："必须保证自己没有任务进程在占用——比如正准备挖矿时主人
      * 在别处打高，不应该追上去；可以处于任务状态，但该状态必须是空闲的。"
      *
-     * 占用判定（promaid 自有四工作任务的"有活"信号，全部是行为维护的实时状态）：
+     * v1.1.0 实测四百零九【被动技能化·实质接战制】：占用 = 【真有活干】，
+     * 不是【挂着任务名】——
+     * - 战斗任务：仅在脑内有存活 ATTACK_TARGET（正在接战）时占用；弓兵/近战
+     *   站岗无敌人 = 战斗模式的空闲，照常搭路（粉丝反馈的"另一种空闲"）；
+     * - 宰杀：仅在追杀在途（WALK_TARGET 存在）时占用；无牲畜闲逛 = 空闲；
      * - 挖矿：MINING 集合（找到矿才登记、框内无矿即摘除——空闲时已退出标记）
      * - 伐木：WOODING 集合（同上口径，找到树才登记）
-     * - 建造：BINDING 建造计划在身（有蓝图待建 = 占用；v1.5.177 暂停时行为
-     *   canUse 为 false、坐下标记也由行为维护——暂停中的女仆视为空闲可追）
-     * - 站桩工作（烹饪/酿造）：WORK_STILL 标记（行为激活期才有，空闲即清）
+     * - 建造：任务在身且未暂停（有蓝图待建 = 占用；暂停 = 玩家叫停视为空闲）
+     * - 站桩工作（烹饪/酿造）：任务级占用（无论走路去站还是已贴站——防搭路
+     *   劫持离岗，实测一百七十四）
      *
-     * 不拦的情况：idle/跟随/喂食等 TLM 原生任务（搭路本来就为跟随服务，
-     * 这些任务上搭路是正常画面）；挖矿/伐木任务但【无目标空闲】（挖完了
-     * 在找下一个或守在原地——正是用户允许的"处于任务状态但空闲"）。
-     * v1.1.0 实测一百六十七：战斗任务/正在接战【拦截】（旧版把战斗归为不拦，
-     * 战斗中搭路 = 边打边往主人方向跑，用户反馈）。
+     * 不拦的情况：idle/跟随/喂食/farm 等 TLM 原生任务（搭路本来就为跟随服务，
+     * 这些任务上搭路是正常画面）；战斗/宰杀任务但【无目标空闲】（本条新增放行）。
+     * v1.1.0 实测一百六十七口径升级：原"战斗任务即拦截"收窄为"正在接战才拦截"
+     * ——战斗中（有目标）依然绝不搭路，无目标不再误杀。
      * 判定全部 try/catch 兜底 false——任何一个信号表异常都不该让搭路失效。
      */
     public static boolean isTaskOccupied(EntityMaid maid) {
-        // v1.1.0 实测一百六十七（用户："即使周围存在威胁，但正处于战斗状态下的女仆
-        // 仍然会选择搭路"）：战斗任务 / 正在接战 = 占用——战斗中绝不搭路追主人
-        //（旧版注释把战斗归为"不拦"，战斗中的女仆会边打边往主人方向搭路跑）。
-        // 判定：当前任务为攻击任务（IAttackTask），或脑内有存活 ATTACK_TARGET
-        //（正在接战）——两者任一即占用。
-        try {
-            var task = maid.getTask();
-            if (task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask) {
-                return true;
-            }
-        } catch (Throwable ignored) {
-        }
+        // v1.1.0 实测四百零九【被动技能化·实质接战制】（粉丝留言："搭高可以改成
+        // 和女仆生存一样的被动技能吗，而不是空闲状态才触发"）：旧版战斗任务
+        // （IAttackTask instanceof）【无条件占用】——弓兵/宰杀站在原地发呆（周围
+        // 没有敌人/牲畜）也被拦，"处于战斗模式但没在打怪"的另一种空闲被误杀。
+        // 改为【实质接战制】：战斗任务只在脑内有存活 ATTACK_TARGET 时才算占用
+        //（无目标 = 战斗模式的空闲，照常搭路）；宰杀任务同理（行为内 target
+        // 锁定才有占用意义——以 WALK_TARGET 存在近似"正在追杀"）。
+        // 旧版接口判定的"无条件占用"删除——正在接战的覆盖由下方 ATTACK_TARGET
+        // 检查独立完成（战斗中 WALK_TARGET/接战目标必有其一，拉扯风险不变）。
         // v1.1.0 实测一百七十四【烹饪/酿造被搭路劫持根治】（用户："放置多个熔炉，
         // 女仆并不能同时工作"）：烹饪/酿造任务 = 实质占用——站桩工作任务的 WORK_STILL
         // 标记只在【贴方块站定后】才置位，走路去炉子/酿造台途中是 false（要放行走），
@@ -1004,7 +1004,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             var task = maid.getTask();
             if (task != null && task.getUid() != null) {
                 String uid = task.getUid().toString();
-                if ("maid_smart:cook".equals(uid) || "maid_smart:brew".equals(uid)) {
+                if ("maid_smart:cook".equals(uid) || "maid_smart:brew".equals(uid)
+                        || "maid_smart:slaughter".equals(uid)) {
+                    // 宰杀（四百零九）：仅在追杀目标在途时算占用——无牲畜可杀时
+                    // 她本来就在闲逛（行为 40 tick 换一个闲逛点），是"另一种空闲"
                     return true;
                 }
             }
@@ -1014,7 +1017,20 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             var target = maid.m_6274_().m_21952_(
                     net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
             if (target.isPresent() && target.get().m_6084_()) {
-                return true; // 脑内有存活攻击目标 = 正在接战
+                return true; // 脑内有存活攻击目标 = 正在接战（战斗模式的"真占用"）
+            }
+        } catch (Throwable ignored) {
+        }
+        // v1.1.0 实测四百零九：宰杀任务正在追牲畜（WALK_TARGET 在途）也算接战——
+        // 无目标闲逛时（行为内 wander）WALK_TARGET 短暂存在会被这里拦住 1~2 秒，
+        // 代价可忽略；换来"追杀途中绝不被搭路拉走"
+        try {
+            if ("maid_smart:slaughter".equals(maid.getTask() != null
+                    && maid.getTask().getUid() != null
+                    ? maid.getTask().getUid().toString() : "")
+                    && maid.m_6274_().m_21952_(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_).isPresent()) {
+                return true;
             }
         } catch (Throwable ignored) {
         }

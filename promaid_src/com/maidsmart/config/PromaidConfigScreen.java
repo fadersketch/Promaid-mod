@@ -1698,9 +1698,10 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百五十二：有增益也喂牛奶（女仆自己喝 + 给主人喂两处共用）
         this.rows.add(new BoolRow("有增益也喂牛奶", MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get(),
                 v -> MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.set(v), "女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）"));
-        // v1.1.0 实测一百五十五：保命物品下保留逃跑
-        this.rows.add(new BoolRow("保命物品下保留逃跑", MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get(),
-                v -> MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.set(v), "携带保命物品（TLM 绀珠之药 / 不死图腾）时是否还逃跑：默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑"));
+        // v1.1.0 实测一百五十五：保命物品下保留逃跑（实测三百六十三：自保逃跑
+        // 已删除，本项现只管 TLM 原生惊慌逃跑与"情况不妙"播报）
+        this.rows.add(new BoolRow("保命物品下允许惊慌", MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get(),
+                v -> MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.set(v), "携带保命物品（TLM 绀珠之药 / 不死图腾）时是否还惊慌逃跑：默认关 = 有保命物品就不惊慌逃窜、不喊\"情况不妙\"（她死不了，继续战斗/垫高/治疗）；开 = 照常惊慌。注：自保自身的走位/搭高不受此开关影响"));
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
         this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
         this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
@@ -1746,12 +1747,25 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.set(v), "近战贴脸后退：敌人贴进 2 格内主动后退拉开距离（不再贴身互搏白挨刀；女仆手长 3 格退开后照样砍得到，与打一刀退一步/跳劈节奏互补）"));
         this.rows.add(new BoolRow("远程战术", MaidSmartConfig.COMBAT_TACTICS_RANGED.get(),
                 v -> MaidSmartConfig.COMBAT_TACTICS_RANGED.set(v), "远程战术：保持理想射程（原版会走到怪脸上射）、横移绕圈放风筝"));
+        // 实测四百零一：高地狙击已整体移除（用户拍板）——配置行一并删除
         this.rows.add(new BoolRow("时机举盾", MaidSmartConfig.COMBAT_TACTICS_SHIELD.get(),
                 v -> MaidSmartConfig.COMBAT_TACTICS_SHIELD.set(v), "时机举盾：攻击冷却间隙举盾格挡、冷却满放盾攻击（攻防交替；替代原版 8 格内一直举盾）"));
         this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
         this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）；适用弓（射程15）/弩（射程8）/三叉戟（搜索半径）/枪械（TLM 枪械中距离配置）"));
+        // 实测四百零二：低血量自动回魂符（参考 maid_survival）
+        // 实测四百零三：触发口径收紧——仅致死伤害且无保命物品时收符
+        this.rows.add(new SectionRow("致死伤害自动回魂符（v1.1.0）", true));
+        this.rows.add(new BoolRow("致死伤害自动回魂符", MaidSmartConfig.SOUL_SPELL_ENABLE.get(),
+                v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 60 秒，从释放时刻起算）"));
+        this.rows.add(new BoolRow("致死伤害保护", MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get(),
+                v -> MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.set(v), "致死伤害保护：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收"));
+        this.rows.add(new NumRow("释放血量比", String.valueOf(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO, s), "释放血量比：自动收的魂符释放时女仆恢复的血量比例（0.35 = 35%）"));
+        this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
+        // 实测四百零五：收符冷却挪到"自保参数"子分区（与传送/珍珠/治疗冷却并列）
         // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
         this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
@@ -1763,6 +1777,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT, s), "模组武器权重（默认 2.0）：万法皆通/史诗战斗/真正的力量/枪械等模组攻击任务的加权随机权重——模组武器普遍更强故默认优先（2:1 约被选 67%）"));
         this.rows.add(new NumRow("原版武器权重", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT, s), "原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐"));
+        // v1.1.0 实测三百七十九：模组任务参与自主切换（模组物品背书 / 可全关）
+        this.rows.add(new BoolRow("模组任务参与切换", MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.get(),
+                v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.set(v), "模组任务参与自主切换（默认开）：开 = 模组攻击任务（万法皆通魔法/史诗战斗/拔刀剑等）在女仆持有【非原版物品】时才参与切换——万法皆通\"万物皆武器\"的判定（isWeapon 恒真）不再把只给了原版武器的女仆切进魔法任务；关 = 自主战斗只用原版任务（近战/弓/弩/三叉戟/弹幕/枪械）"));
         // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
         this.rows.add(new NumRow("近战偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT, s), "近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）"));
@@ -1790,17 +1807,17 @@ public class PromaidConfigScreen extends Screen {
         // 把开关区挤到第 3-4 页——集中到页尾，调参才需要翻到这里）
         this.rows.add(new SectionRow("自保参数", true));
         this.rows.add(new NumRow("触发血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_ENTER_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_ENTER_RATIO, s), "触发血量（0-1，0.3=30%）：血量低于此值进入保命（逃跑/搭高/喝药）；30%~70% 期间边打边喝药，70% 以上恢复正常"));
-        this.rows.add(new NumRow("解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_EXIT_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_EXIT_RATIO, s), "解除血量（0-1）：环境安全且回到此血量以上才结束保命（常驻检查器下无进出抖动）"));
-        this.rows.add(new NumRow("安全回归血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO, s), "安全回归血量（0-1，威胁消失后回到此血量解除自保）"));
+                s -> setDouble(MaidSmartConfig.COMBAT_ENTER_RATIO, s), "触发血量（0-1，0.3=30%）：血量低于此值进入保命（逃跑/搭高/喝药）；危机解除线见「安全回归血量」"));
+        this.rows.add(new NumRow("绝对解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_EXIT_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_EXIT_RATIO, s), "绝对解除血量（0-1，默认 0.7）：血量到此无条件结束保命（威胁还在也退，战斗交还战术）；更常用的解除线 = 威胁消失+安全回归血量"));
+        this.rows.add(new NumRow("解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO, s), "解除血量（0-1，默认 0.7）：血量恢复到此线即解除自保回归工作/战斗——威胁还在也解除（战斗交还战术）；0.3 触发线与本线之间为防抖滞回带。垫高后没回血资源的女仆另有兜底：塔顶被围困 10 秒传送回家养伤"));
         this.rows.add(new NumRow("威胁距离", String.valueOf(MaidSmartConfig.COMBAT_THREAT_DISTANCE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_THREAT_DISTANCE, s), "威胁距离（格）：怪物进入此距离才算威胁——调大女仆更早警觉、更容易进自保"));
         this.rows.add(new NumRow("威胁扫描间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_SCAN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_THREAT_SCAN, s), "威胁扫描间隔（tick，20=1 秒）：寻找威胁的轮询周期，调小反应快、略耗性能"));
         this.rows.add(new NumRow("威胁消失退出（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT, s), "威胁消失退出（tick，400=20 秒）：威胁消失后女仆在安全位置再观察 N 秒，确认安全才结束自保/传回主人身边——调大更谨慎，调小更快回家"));
+                s -> setInt(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT, s), "安全解除时限（tick，400=20 秒）：完全安全（无威胁+无环境危险）持续此时长即解除自保【无论血量】——危机结束就该回归工作，带伤回家/干活，再被打回触发线会重新进入"));
         this.rows.add(new NumRow("贴身距离", String.valueOf(MaidSmartConfig.COMBAT_CLOSE_DISTANCE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_CLOSE_DISTANCE, s), "贴身距离（格）：怪物低于此距离判定被近身（濒死时触发击退+搭高）"));
         // v1.5.186：原"近战搭高上限/远程搭高上限 + 近战/远程搭方块冷却"合并为唯一
@@ -1818,14 +1835,14 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_STUCK_WINDOW, s), "卡住判定窗口（tick）：逃跑中 N 秒没位移判定为卡住（然后垫台阶翻越）"));
         this.rows.add(new NumRow("卡住位移阈值", String.valueOf(MaidSmartConfig.COMBAT_STUCK_THRESHOLD.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_STUCK_THRESHOLD, s), "卡住位移阈值（格）：窗口内位移小于此值算卡住"));
-        this.rows.add(new NumRow("逃跑速度", String.valueOf(MaidSmartConfig.COMBAT_FLEE_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_FLEE_SPEED, s), "逃跑速度倍率：逃跑时的移动加成（1.0=正常）——调大跑更快但更容易撞墙/钻死角"));
+        this.rows.add(new NumRow("走位速度", String.valueOf(MaidSmartConfig.COMBAT_FLEE_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_FLEE_SPEED, s), "走位速度倍率：自保小幅走位（拉开身位）时的移动加成（1.0=正常）——调大更容易脱离贴身但可能撞墙/钻死角"));
         this.rows.add(new NumRow("警示粒子间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_ALERT_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_ALERT_COOLDOWN, s), "警示粒子间隔（tick）：女仆头顶危险警示粒子的刷新间隔"));
         this.rows.add(new NumRow("策略播报间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_ANNOUNCE_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_ANNOUNCE_COOLDOWN, s), "策略播报间隔（tick，防刷屏）"));
-        this.rows.add(new NumRow("传送回家冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN, s), "传送回家冷却（tick，20=1 秒）：自保结束后传回主人身边的最短间隔，防反复传送"));
+        this.rows.add(new NumRow("传送成功冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN, s), "传送成功冷却（tick，默认 600=30 秒）：成功传送回主人身边后此冷却内不再传——一场遭遇战最多被接走一次；传送失败（主人身边有怪）5 秒后即重试"));
         this.rows.add(new NumRow("传送安全判定半径", String.valueOf(MaidSmartConfig.COMBAT_TELEPORT_SAFE_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TELEPORT_SAFE_RADIUS, s), "传送安全判定半径（格）：主人身边此半径内【无可见怪物】才传送回主人（v1.5.150 起只判主人身边；默认 5 格防远程怪，调小更容易传回家）"));
         this.rows.add(new NumRow("珍珠逃生冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_PEARL_COOLDOWN.get()),
@@ -1834,6 +1851,10 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_RATIO, s), "末影珍珠逃生触发血量（0-1，低于此值且威胁贴身才扔）"));
         this.rows.add(new NumRow("珍珠逃生威胁距离", String.valueOf(MaidSmartConfig.COMBAT_PEARL_DIST.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_DIST, s), "末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）"));
+        // 实测四百零五：收符冷却（秒）——从"致死伤害自动回魂符"子分区移到这里，
+        // 与传送/珍珠/治疗冷却等自保参数并列；0 = 彻底关闭防抖振
+        this.rows.add(new NumRow("收符冷却（秒）", String.valueOf(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS, s), "回魂符冷却：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）；从释放时刻起算，过了就能再收；0 = 无冷却"));
     }
 
     private void miscRows() {
