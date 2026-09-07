@@ -1,4 +1,20 @@
-﻿## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
+﻿## 实测四百一十【排班贴身气泡——情绪价值彩蛋】
+
+用户需求：玩家靠近正处于排班状态的女仆时，女仆冒出气泡框对话，30 种可能文本，触发 CD 30 秒。
+
+**实现**：
+- 新增 ScheduleBubbleBehavior（core 优先级 48，任何任务都运行）——canUse 门禁：MISC_SCHEDULE_BUBBLE_ENABLED（默认开）+ ScheduleData.isOn（排班中）+ 非坐姿/骑乘 + 非自保 + 主人同维度且水平距离 < MISC_SCHEDULE_BUBBLE_RADIUS（默认 3.5 格）+ 每只女仆 30 秒冷却（NEXT_ALLOWED 按 UUID 记 gameTime，懒清理防膨胀）；
+- 30 条贴身文本池（排班情境：干活被主人看到的碎碎念/撒娇/报备风格），start 时随机一条 addTextChatBubble（TLM 气泡 + ChatBubbleLimitMixin 5 秒全局限频双保险——本功能 30 秒 CD 远大于限频，观感上不会被吞）；
+- 睡觉豁免简化：排班睡觉时段 WALK_TARGET/攻击目标/自保多半不满足，气泡本就难触发，不再单独判睡（避免猜测未映射的 SLEEPING MemoryModuleType SRG 常量）；
+- 注册 Pair.of(48, ...)（低于散步 50，保证散步优先级不被挤）。
+
+排错记录：javap 实证 Brain 无 hasMemoryValue 直名（SRG = m_21874_/m_21876_），SLEEPING 常量字段无法可靠定位——睡觉豁免改为依赖既有豁免链（战斗/自保/坐骑）自然覆盖；新源文件需先跑 gen_compile.py 重新生成 compile_promaid.txt（源数 201→202）。
+
+部署：promaid-1.1.0.jar（4,923,241 字节）→ D:\ 验证：ScheduleBubbleBehavior.class 在包内、30 条文本入常量池、注册引用在 ProMaidExtension$1。rc=0（202 源）。
+
+验收：给女仆排班并开启 → 走到她 3.5 格内 → 30 秒内第一条随机贴身气泡（同步到聊天框）；离开再回来 30 秒内不重复；战斗/自保/坐骑中不触发；配置面板「杂项」可关。
+
+## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
 
 粉丝留言：视频里的搭高能不能改成女仆生存（maid_survival）那样的被动技能，而不是空闲状态才触发——"处于战斗模式但周围没威胁、没在真正打怪，也算另一种空闲"。
 
