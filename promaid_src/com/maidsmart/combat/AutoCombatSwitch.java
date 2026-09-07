@@ -1248,6 +1248,23 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
+            // v1.1.0 实测三百七十九【模组物品背书】（用户："为啥自主战斗老喜欢切换
+            // 到魔法？明明我只给了原版武器"）：万法皆通 SpellCombatMeleeTask.isWeapon
+            // 恒 true（javap 反汇编实证）——背包里任何物品（原版剑/食物都行）都被
+            // 认作"魔法武器" → 模组任务凭空进池 + 模组让位规则（实测一百八十一）
+            // 把原版任务挤掉 → 只给原版武器的女仆在远距离被切去 spell_combat_far。
+            // 修：模组任务必须匹配到【非原版物品】才进池（拔刀剑/史诗战斗武器本就
+            // 是模组物品，不受影响；女仆持有万法皆通物品时也照常参与）；配置关 =
+            // 模组任务完全不参与自主切换。
+            String taskNs = task.getUid().m_135827_();
+            if (!vanillaNs.equals(taskNs)) {
+                if (!MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.get()) {
+                    continue;
+                }
+                if (!hasNonVanillaWeaponForTask(maid, attack)) {
+                    continue;
+                }
+            }
             // v1.1.0 实测一百二十①【枪械弹药闸】：枪械任务进池必须弹药可用——
             // TLM TaskGunAttack.isWeapon 只查 isGun（javap 实证），有枪没子弹也会
             // 进池被切到 gun_attack → TLM 换弹失败原地干等。hasGunAndAmmo 判定
@@ -1590,6 +1607,41 @@ public class AutoCombatSwitch {
         return com.maidsmart.combat.CombatTaskCompat.isWeapon(maid, task, s);
     }
 
+    /**
+     * v1.1.0 实测三百七十九：模组任务是否有【非原版物品】背书——isWeapon 匹配到的
+     * 物品至少一件来自模组注册表（命名空间 ≠ minecraft）。"万物皆武器"类任务
+     * （万法皆通 isWeapon 恒 true，javap 实证）在只给原版武器时不再进池。
+     */
+    private static boolean hasNonVanillaWeaponForTask(EntityMaid maid, IMaidTask task) {
+        try {
+            ItemStack main = maid.m_21205_();
+            if (!main.m_41619_() && isWeaponSafe(task, maid, main) && !isVanillaItem(main)) {
+                return true;
+            }
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && isWeaponSafe(task, maid, s) && !isVanillaItem(s)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 是否原版（minecraft 命名空间）物品——原版物品不给模组任务作武器背书 */
+    private static boolean isVanillaItem(ItemStack s) {
+        try {
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_());
+            return key != null && "minecraft".equals(key.m_135827_());
+        } catch (Exception e) {
+            return false; // 注册名异常按非原版处理（模组侧自定义注册）
+        }
+    }
+
     /** 是否带攻击力属性的物品（剑/斧/镐等——对齐 TaskAttack.isWeapon 语义，简化版） */
     @SuppressWarnings("unused")
     private static boolean hasAttackDamage(ItemStack stack) {
@@ -1603,6 +1655,25 @@ public class AutoCombatSwitch {
     /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
     public static boolean isAutoCombatActive(EntityMaid maid) {
         return maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG);
+    }
+
+    /**
+     * v1.1.0 实测三百八十：当前任务是否为【本系统自动指派】（ASSIGNED_TAG 与当前
+     * 任务一致）。玩家手动指派的远程任务 = 战斗方式已被玩家锁定（自动切换不碰），
+     * 包里有近战武器也不会被切 → 高地狙击对这类女仆不再要求"没有近战武器"
+     * （近身只能搭塔拉开距离）。
+     */
+    public static boolean isTaskAutoAssigned(EntityMaid maid) {
+        try {
+            IMaidTask task = maid.getTask();
+            if (task == null || task.getUid() == null) {
+                return false;
+            }
+            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
+            return !assigned.isEmpty() && assigned.equals(task.getUid().toString());
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务

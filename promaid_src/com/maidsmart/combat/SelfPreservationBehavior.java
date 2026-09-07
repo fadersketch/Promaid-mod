@@ -33,18 +33,36 @@ import java.util.Map;
  * FollowOwner=3、Panic/Await=1），250 保证自保是全部行为里最高的，
  * 跟随/任务/恐慌全部被压制，不会被任何状态"吃掉"。
  *
- * 状态机（滞回区间防抖）：
- * - 进入：HP < 30% 且 12 格内存在威胁（当前攻击目标 或 最近敌对怪物）
- * - 自保三策略（每 tick 判定）：
- *   1. 使用物品：背包里的金苹果/熟食直接进食（真实回血/吸收/再生，40 tick 冷却）
- *   2. 逃跑：朝威胁反方向以 1.4 倍速撤离——直接走 PathNavigation，
- *      因为 Brain 的移动执行器 MoveToTargetSink（优先级 2）在自保期间
- *      不会被启动，WALK_TARGET memory 无人执行
- *   3. 搭方块：威胁贴身（<4 格）时往脚下垫方块（圆石/泥土/木板，1 秒一层），
- *      近战怪够不着；头顶有方块时不垫（防窒息）
- * - 退出（恢复自保前的状态）：
- *   - HP ≥ 70% → 解除自保
- *   - 威胁消失 且 HP ≥ 45% → 解除自保（危险没了就回去干活）
+ * 状态机（实测三百六十三定稿——核心思想：残血尽可能保命，恢复后赶紧回去支援）：
+ * - 进入：HP < 30% 且 12 格内存在威胁（当前攻击目标 或 最近敌对怪物），
+ *   或环境危险（岩浆/着火/溺水/卡头）——上升沿触发
+ * - 自保手段（承诺窗口制）：
+ *   1. 回血：药水/金苹果/食物阶梯——瞬时动作，随时插队不打断当前策略
+ *   2. 搭高：贴身围殴时往脚下垫方块，垫到安全高度（默认 5 格）即停 →
+ *      塔顶守势（安心回血 + 战术并行反击），血回安全线即下塔归位。
+ *      【仅在包里有回血资源时可选】（实测三百六十五——塔的唯一意义是安全
+ *      回血，没得回血垫塔纯属干耗，从根上不给这个选项）
+ *   3. 小幅走位：朝威胁侧后方挪 2~3 格拉开身位（12 tick 承诺窗口）——
+ *      不再远程逃跑/突围（临阵脱逃观感），攻击目标不清、保持战斗姿态
+ *   4. 珍珠/水桶/药水buff/贴脸反击：危急时刻的瞬时/爆发手段
+ *   移动类策略（搭高/走位）执行到位或承诺期结束才重新评估；环境危险永远
+ *   最高优先抢占。
+ * - 退出（需连续 20 tick 稳定窗口，防抖）：
+ *   - HP ≥ 安全回归线（safeReturnRatio，默认 0.7，实测三百六十四改回）且
+ *     无环境危险 → 解除（威胁还在也退——恢复即支援，战斗交还战术、工作
+ *     交还任务；滞回带 30~70：重新进场要跌回 30% 以下，不会抖动）
+ *   - 完全安全（无威胁+无环境危险）持续 threatGoneExit（默认 20 秒）→
+ *     解除【无论血量】（安全这么久危机就算结束；带伤回归，再被打回触发线
+ *     会重新进入——回血资源耗尽也不会永久滞留）
+ * - 传送两时机（实测三百六十三~三百六十五）：
+ *   A. 保命兜底：泡岩浆 / 血 <15% / 弹尽粮绝；搭高进行中与走位承诺期不传
+ *      （危急/岩浆除外）；成功传送后走完整冷却（teleportCooldown，默认
+ *      30 秒），一场遭遇战最多被接走一次。
+ *   B. 恢复后归位支援：解除自保时威胁已散且离主人远 → 传回主人身边。
+ *      恢复中不提前接走。
+ * - 下塔（实测三百七十三）：专用拆块下塔机制删除（实用性不如直接传送）——
+ *   塔顶状态在退出/围困时直接清空：威胁已散 → 传送归位（直接传送下来）；
+ *   交战中 → 任务/战术 AI 自然下塔（3~5 格坠落有落地水兜底）。
  *   自保期间不修改任务/跟随/待命设置，解除后 Brain 自动恢复低优先级行为，
  *   女仆回到自保前正在做的事（战斗→重新索敌、挖矿→继续挖、跟随→继续跟）。
  */
@@ -54,6 +72,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 读到该标记会拒绝启动，从而禁止"低血逃跑时被传送回主人身边送死"。
      */
     public static final String PRESERVE_TAG = "maid_smart_preserving";
+
+    /** 实测三百八十九：自保会话是否激活中——垫高狙击查此让位（进入自保 →
+     *  垫高状态立即解除，移动/逃生全部交还自保；canUse 也查它防重新进入） */
+    public static boolean isSelfPreserving(EntityMaid maid) {
+        try {
+            return maid.getPersistentData().m_128471_(PRESERVE_TAG);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     /** v1.5.166：自保诊断日志（latest.log 搜 self preserve 定位触发/退出/传送） */
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
@@ -75,13 +103,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆 + 魂符收回暂停计时
      */
     static final PlacedBlockTracker COMBAT_TRACKER = new PlacedBlockTracker(
-            () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L);
+            () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L,
+            0.5, // 实测三百七十七：靠近刷新仅同柱（0.5 格）——她离开塔后 30 秒必回收
+            12.0); // 实测三百八十八：垂直带 12——8~12 格塔底的方块也要在塔上狙击期间续命
 
     private static void trackCombatPlaced(EntityMaid maid, BlockPos pos, Block block) {
         if (!(maid.m_9236_() instanceof ServerLevel sl)) {
             return;
         }
         COMBAT_TRACKER.track(sl, pos, block, maid);
+    }
+
+    /** 实测三百六十六：跨模块登记战斗方块公共入口（高地狙击的塔用同一张表：
+     *  30 秒寿命 + 女仆站上刷新 + 安全下塔逐格回收） */
+    public static void registerCombatBlock(EntityMaid maid, BlockPos pos, Block block) {
+        trackCombatPlaced(maid, pos, block);
     }
 
     /** 该位置是否是女仆搭的战斗方块（实测七十一起跨系统统一查询——战斗墙也不被
@@ -190,6 +226,37 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // LivingHurtEvent，坐着被烫会立即起身逃生
         if (maid.isMaidInSittingPose()) {
             maid.m_21837_(false);
+        }
+        // 实测三百九十八【伤害类型日志】：latest.log 搜 [maidhurt] —— 记录
+        // 伤害类型（msgId）/来源实体/伤害量/位置，确定"摔下来所受伤害类型"
+        //（fall=摔落、inFire/onFire/lava=燃烧、arrow=箭、explosion=爆炸、
+        //  mob/player=攻击）与坠落轨迹日志（[snipe] 轨迹）对照。
+        try {
+            net.minecraft.world.damagesource.DamageSource src0 = event.getSource();
+            if (src0 != null) {
+                String type = src0.m_19385_();
+                String extra = "";
+                try {
+                    if (src0.m_7986_()) {
+                        extra = " [弹射物]";
+                    }
+                } catch (Throwable ignored) {
+                }
+                net.minecraft.world.entity.Entity srcEnt = src0.m_7640_();
+                String srcName = srcEnt == null ? "无来源实体"
+                        : (srcEnt.m_5446_() != null && !srcEnt.m_5446_().getString().isEmpty()
+                                ? srcEnt.m_5446_().getString()
+                                : srcEnt.getClass().getSimpleName());
+                com.mojang.logging.LogUtils.getLogger().info(String.format(
+                        "[maidhurt] %s: 类型=%s%s 来源=%s 伤害=%.1f 位置=(%.1f,%.1f,%.1f) y=%d",
+                        maid.m_5446_() != null && !maid.m_5446_().getString().isEmpty()
+                                ? maid.m_5446_().getString() : maid.m_20148_().toString(),
+                        type, extra, srcName,
+                        event.getAmount(),
+                        maid.m_20185_(), maid.m_20186_(), maid.m_20189_(),
+                        maid.m_20183_().m_123342_()));
+            }
+        } catch (Throwable ignored) {
         }
         net.minecraft.world.damagesource.DamageSource src = event.getSource();
         if (src == null || !(src.m_7639_() instanceof LivingEntity attacker)) {
@@ -353,14 +420,35 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private int pearlCooldown = 0;
     /** v1.5.21：上次传送时间（游戏 tick，冷却防循环） */
     private long lastTeleportTime = -1200;
+    /** 实测三百六十二：上次【成功】传送时间——成功后走完整冷却（teleportCooldown，
+     *  默认 600=30 秒），一场遭遇战最多被接走一次；失败重试仍固定 5 秒实时性 */
+    private long lastTeleportSuccessTime = -100000;
+    /** 实测三百六十三：完全安全计时——无威胁且无环境危险（累计），
+     *  持续 threatGoneExit（默认 20 秒）即解除自保（无论血量——安全这么久
+     *  危机就算结束，带伤回归工作/支援，再被打回触发线会重新进入） */
+    private int noThreatTicks = 0;
+    /** 实测三百六十四：塔顶无回血资源围困计时——已到安全高度、威胁扎营、
+     *  包里无任何回血资源（累计 10 秒 → 下塔再战，不再接回家） */
+    private int heallessSiegeTicks = 0;
+    /** 实测三百六十五：塔顶无回血资源围困播报（每场一次；三百七十三改为
+     *  撤到主人身边——下塔拆方块机制已删除） */
+    private boolean announcedDescend = false;
+    /** 实测三百七十【钉柱】：垫高期间的柱心坐标——垫方块靠"脚下放块把人
+     *  顶起"，TLM 攻击寻路/击退会让人每 tick 横向漂移、顶起瞬间被横向弹出
+     *  半柱（"垫两块就摔下来反复循环"的根因）。velocity 锁不够（寻路下一
+     *  tick 又走），必须直接把人钉回柱心。 */
+    private double pillarLockX = 0;
+    private double pillarLockZ = 0;
+    private boolean pillarLocked = false;
+    /** 实测三百七十二【搭路 walkOn 同款】：垫块后的"站上去"推送状态——
+     *  持续给垂直速度直到站上目标格（12 tick 超时），站稳才垫下一块 */
+    private int walkOnTicks = 0;
+    private double walkOnY = 0;
     /** v1.5.227："我回到主人身边了"播报限频（60 秒）——传送冷却 5 秒时反复连传
      *  连喊（实测 02:07-02:11 每 5~25 秒喊一次），播报单独冷却避免刷屏 */
     private long lastHomeAnnounceTick = -1200;
     /** v1.5.21：绕路尝试计数（卡住先绕路，绕不开再搭高） */
     private int detourTicks = 0;
-    /** v1.5.21：蛇形走位计时与侧偏方向 */
-    private int zigzagTick = 0;
-    private int zigzagSide = 1;
     /** v1.5.21：药水尝试间隔 */
     /** v1.5.252g7【按药水种类记 CD】：key = 药水注册名（minecraft:long_swiftness
      *  等）或固定名（honey/golden_apple）。同种药水 CD = 该药水最长效果时长，
@@ -462,8 +550,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private long lastInLavaTick = -1000;
     /** v1.5.225 临时诊断：Brain 运行行为日志节流（latest.log 搜 "brain-run"） */
     private long diagTick = -1;
-    /** v1.5.216：逃跑方向防抖——fleeEscaping 20 tick 内保持同一目标，治
-     *  "疯狂逃窜逃得特别远"（旧版每 tick 重选方向，怪物分布变化→目标乱跳） */
+    /** 实测三百六十三：走位承诺窗口——strafeDisengage 选定的目标点保持
+     *  12 tick（0.6 秒），走完这几步再重新评估方向（治每 tick 变向乱跳） */
     private int fleeDirCooldown = 0;
     private double fleeTargetX = 0;
     private double fleeTargetZ = 0;
@@ -592,6 +680,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.resourceUsed = false;
         this.envGiveUpTick = -1000;
         this.exitStableTicks = 0;
+        this.noThreatTicks = 0;
+        this.heallessSiegeTicks = 0;
+        this.announcedDescend = false;
+        this.pillarLocked = false;
+        this.walkOnTicks = 0;
         this.waterPos = null;
         this.waterPlacedTick = 0;
         this.lavaScanCooldown = 0;
@@ -841,62 +934,19 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.tool.PromaidLog.log("自保",
                         com.maidsmart.tool.PromaidLog.nameOf(maid) + " 残留自保标记自愈（区块卸载/崩溃残留已清除）");
             }
+            // 实测三百七十三：下塔拆方块机制删除——塔顶状态在退出/围困时直接
+            // 清空（传送归位或任务 AI 自然下塔），这里只负责 MOVING_SURVIVE 收尾
+            MOVING_SURVIVE.remove(maid.m_20148_());
             // v1.5.232：会话外岩浆避让——仅移动层修正（正走向岩浆才改道），
             // 零其他干预（不碰目标/移动/任何行为，战术/任务照常）
             this.avoidLavaMovement(maid);
             return;
         }
-        // v1.5.241：会话内也做移动层避让——被僵尸追着逃跑（flee/fleeEscaping）
-        // 时方向可能踩岩浆，同样改道离岩浆最远安全点；环境危险（泡岩浆/着火）
+        // v1.5.241：会话内也做移动层避让——被僵尸追着走位/移动时方向可能踩
+        // 岩浆，同样改道离岩浆最远安全点；环境危险（泡岩浆/着火）
         // 由下方 environmentalEscape 接管，avoidLavaMovement 内部已排除岩浆中
         this.avoidLavaMovement(maid);
-        // 会话结束：血恢复且环境安全——v1.5.245 加 20 tick（1 秒）稳定窗口：
-        // danger 短暂消失（浅岩浆接触/移动卡墙抖动）不立即退出，避免"退出→又进"
-        // 频繁 start（日志实证 07:22 hp=100%→95% 间隔 0.5 秒两次 self preserve start）
-        if (ratio >= exitRatio() && !danger) {
-            if (this.exitStableTicks < 20) {
-                this.exitStableTicks++;
-            } else {
-                this.sessionActive = false;
-                maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
-                MOVING_SURVIVE.remove(maid.m_20148_());
-                // v1.5.164：血恢复退出且离主人太远 → 尝试传回主人身边
-                this.teleportHomeOnExit(maid);
-                return;
-            }
-        } else {
-            this.exitStableTicks = 0; // 仍低血/危险 → 重置稳定计数
-        }
-        maid.getPersistentData().m_128379_(PRESERVE_TAG, true);
-        // 移动接管协调：濒死有威胁 / 环境危险 / 坐下 → 战术（230）本 tick 让位
-        //（自保正在执行垫高/逃跑/环境逃生导航/坐下锁定，战术的走位/跳劈会互相覆盖移动）
-        // v1.5.212：sitting 并入——坐下时战术恒让位（配合上面每 tick 清移动，
-        // 根治"坐下仍移动"：战术不清目标会下一 tick 又拉起她走）
-        boolean moving = danger || sitting || (this.cachedThreat != null && ratio < 0.3f);
-        if (moving) {
-            MOVING_SURVIVE.add(maid.m_20148_());
-        } else {
-            MOVING_SURVIVE.remove(maid.m_20148_());
-        }
-        // v1.5.202（轻量级自保）：不再每 tick 清攻击意图——core 行为之间本就
-        // 并行（Brain 按优先级逐个运行所有 canUse 的行为），清目标 + 断 sensor/
-        // StartAttacking 只会让战术（230）拿不到目标 → "只逃不打"。现在目标
-        // 正常存在：自保（250）只做保命动作，战术（230）同 tick 并行战斗——
-        // "边打边保命"。仅进场（sessionEnter）清一次残留旧目标。
-        // v1.5.152：自保全程【实时判定】能否回主人身边——不再等"威胁消失 20 秒"
-        //（逃跑中怪一直追，原威胁判定让传送形同虚设）。每 tick 尝试传送回主人
-        //（传送冷却内不重试；主人身边安全即传，传成功立即结束自保）。
-        // 自保刚触发时也立即尝试——主人身边安全就直接回家，比就地周旋更安全。
-        this.teleportHome(maid);
-        // v1.5.140：搭方块边缘保护——搭高进行中每 tick 钳制位置（照搬玩家潜行
-        // 防掉落效果，移速不变）：防止女仆移速过快时冲出垫方块边缘飞出去
-        //（挖矿 v1.5.87 pillarGuard 同款机制；环境逃生分支内显式调用）
-        if (this.forcedPillar || this.pillarBaseY >= 0) {
-            this.edgeGuard(maid);
-        }
-        // v1.5.25：每 tick 防窒息兜底——半身卡进方块立即强制上移到方块顶面之上
-        //（搭方块后实体位移滞后/放偏时，头顶检查拦不住横向卡入，必须直接改位置）
-        this.antiSuffocate(maid);
+        // 冷却递减 + 威胁扫描提前——退出条件要用威胁状态（实测三百六十二）
         if (this.healCooldown > 0) {
             this.healCooldown--;
         }
@@ -913,12 +963,143 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             this.scanCooldown = threatScanInterval();
             this.cachedThreat = this.findThreat(maid);
         }
+        LivingEntity threat = this.cachedThreat;
+        // 实测三百六十三：完全安全计时——无威胁且无环境危险（累计），持续
+        // threatGoneExit（默认 20 秒）即解除自保（无论血量）
+        if (threat == null && !danger) {
+            this.noThreatTicks++;
+        } else {
+            this.noThreatTicks = 0;
+        }
+        // 实测三百六十四：塔顶无回血资源围困计时——已垫到安全高度、威胁仍在
+        // 扎营、包里又没有任何回血资源（药水/金苹果/食物，hasHealResource 无
+        // 副作用探测）→ 在塔上干耗没有任何意义
+        boolean atSafeHeight = this.pillarBaseY >= 0 && !this.forcedPillar
+                && maid.m_20183_().m_123342_() - this.pillarBaseY >= safePillarHeight();
+        if (threat != null && atSafeHeight && !this.hasHealResource(maid)) {
+            this.heallessSiegeTicks++;
+        } else {
+            this.heallessSiegeTicks = 0;
+        }
+        // 实测三百九十（用户：自保模式禁止传送，玩家日程表手动传送除外）：
+        // 围困传送整体停用——自保期间不再把她传回主人身边，本地逃生接管
+        //（珍珠/药水/走位/搭高/反击）。只清计数防无限累积，不清搭高状态
+        //（没传送就不该放弃塔位）。解除自保的归位传送不受影响（会话结束才发）。
+        if (this.heallessSiegeTicks >= 200) {
+            this.heallessSiegeTicks = 0;
+        }
+        // 实测三百六十三【会话退出线】（三百六十四调整默认值）：
+        // ① 血 ≥ 安全回归线（safeReturnRatio，默认 0.7）+ 无环境危险 → 解除。
+        //   【威胁还在也退】——恢复即支援：战斗交还战术 230 继续打，工作交还
+        //   任务继续干。滞回带 30~70：重新进场要跌回 30% 以下，不会抖动；
+        // ② 完全安全（无威胁+无环境危险）持续 threatGoneExit（默认 20 秒）→
+        //   解除【无论血量】——安全这么久危机就算结束，带伤回归工作，再被打
+        //   回 30% 以下会重新进入（回血资源耗尽也不会永久滞留）。
+        // 两线都需过 20 tick（1 秒）稳定窗口（防威胁/危险瞬时抖动）。
+        boolean exitCrisis = (ratio >= safeReturnRatio() && !danger)
+                || (this.noThreatTicks >= threatGoneExit() && !danger);
+        if (exitCrisis) {
+            if (this.exitStableTicks < 20) {
+                this.exitStableTicks++;
+            } else {
+                this.sessionActive = false;
+                maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
+                MOVING_SURVIVE.remove(maid.m_20148_());
+                // 实测三百七十三：人在塔上时直接清搭高状态——威胁已散走下方
+                // 的传送归位（直接传送下来），交战中由任务/战术 AI 自然下塔
+                this.pillarBaseY = -1;
+                this.forcedPillar = false;
+                this.walkOnTicks = 0;
+                this.pillarLocked = false;
+                // 实测三百七十八（用户要求）：解除自保 → 立刻传送回主人身边一次
+                //（不再要求威胁已散——恢复即支援，交火中也撤出战场回到主人身边；
+                // 绕过传送冷却闸，安全护栏全保留：主人活着/不在看家模式/主人身边
+                // 有合法落点/已在 5 格内则不传）
+                this.teleportHomeOnExit(maid, true);
+                return;
+            }
+        } else {
+            this.exitStableTicks = 0; // 仍危险/血不够 → 重置稳定计数
+        }
+        maid.getPersistentData().m_128379_(PRESERVE_TAG, true);
+        // 实测三百六十九【垫高期间锁移动】（用户："垫高这个行为开始后就不应
+        // 再移动了"）——垫方块靠"脚下放块把人顶起"，边走边垫必然走偏、顶起
+        // 瞬间偏离柱心摔下来（"才垫两块就掉下来"的根因）。锁移动 = 清寻路
+        // 目标 + 停导航 + 清水平速度；保留垂直（顶起/下落靠垂直位移，坐姿锁
+        // v1.5.348 同款教训）。塔顶站桩期间同样锁住（守势不该自己溜下塔）。
+        // 战术（230）经 moving 标记同步让位。
+        boolean pillaring = this.forcedPillar || this.pillarBaseY >= 0;
+        if (pillaring) {
+            // 实测三百七十：钉柱——首次锁柱记当前列中心；之后每 tick 把人钉回
+            // 柱心（≤1 格内强拉，超 1 格 = 已被击飞离柱，解锁交回重评估）。
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26370_);
+            maid.m_21573_().m_26573_();
+            if (!this.pillarLocked) {
+                this.pillarLockX = Math.floor(maid.m_20185_()) + 0.5;
+                this.pillarLockZ = Math.floor(maid.m_20189_()) + 0.5;
+                this.pillarLocked = true;
+            }
+            double dxc = maid.m_20185_() - this.pillarLockX;
+            double dzc = maid.m_20189_() - this.pillarLockZ;
+            if (dxc * dxc + dzc * dzc <= 1.0) {
+                maid.m_6034_(this.pillarLockX, maid.m_20186_(), this.pillarLockZ);
+            } else {
+                this.pillarLocked = false; // 被打飞离柱 → 解锁（branch 会重置塔基）
+            }
+            net.minecraft.world.phys.Vec3 v = maid.m_20184_();
+            maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0, v.f_82480_, 0.0));
+            // 实测三百七十二【搭路 walkOn 同款】：垫块后持续推送直到站上目标格
+            //（每 tick 重给垂直速度 0.42，12 tick 超时）——被击退打断也会继续推，
+            // 与搭路 beginWalkOn/walkOn 段完全一致
+            if (this.walkOnTicks > 0) {
+                this.walkOnTicks--;
+                if (maid.m_20186_() >= this.walkOnY - 0.05) {
+                    this.walkOnTicks = 0; // 站上目标格
+                } else {
+                    net.minecraft.world.phys.Vec3 vw = maid.m_20184_();
+                    maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0,
+                            Math.max(vw.f_82480_, 0.42), 0.0));
+                }
+            }
+        } else {
+            this.pillarLocked = false;
+        }
+        // 移动接管协调：濒死有威胁 / 环境危险 / 坐下 / 垫高中 → 战术（230）本 tick 让位
+        //（自保正在执行垫高/逃跑/环境逃生导航/坐下锁定，战术的走位/跳劈会互相覆盖移动）
+        // v1.5.212：sitting 并入——坐下时战术恒让位（配合上面每 tick 清移动，
+        // 根治"坐下仍移动"：战术不清目标会下一 tick 又拉起她走）
+        boolean moving = danger || sitting || (threat != null && ratio < 0.3f)
+                || pillaring;
+        if (moving) {
+            MOVING_SURVIVE.add(maid.m_20148_());
+        } else {
+            MOVING_SURVIVE.remove(maid.m_20148_());
+        }
+        // v1.5.202（轻量级自保）：不再每 tick 清攻击意图——core 行为之间本就
+        // 并行（Brain 按优先级逐个运行所有 canUse 的行为），清目标 + 断 sensor/
+        // StartAttacking 只会让战术（230）拿不到目标 → "只逃不打"。现在目标
+        // 正常存在：自保（250）只做保命动作，战术（230）同 tick 并行战斗——
+        // "边打边保命"。仅进场（sessionEnter）清一次残留旧目标。
+        // 实测三百六十三【传送只留保命兜底】：泡岩浆/血量危急/弹尽粮绝（没方块
+        // 没珍珠还被围殴）三种情况才传；恢复中（30%~45%）不提前接走——原地
+        // 回血，回到安全回归线由退出线收场（威胁已散时顺带触发归位传送）。
+        // 搭高进行中/走位承诺期不传（危急/岩浆除外）。
+        this.tryTeleportFallback(maid, threat, ratio, danger);
+        // v1.5.140：搭方块边缘保护——搭高进行中每 tick 钳制位置（照搬玩家潜行
+        // 防掉落效果，移速不变）：防止女仆移速过快时冲出垫方块边缘飞出去
+        //（挖矿 v1.5.87 pillarGuard 同款机制；环境逃生分支内显式调用）
+        if (this.forcedPillar || this.pillarBaseY >= 0) {
+            this.edgeGuard(maid);
+        }
+        // v1.5.25：每 tick 防窒息兜底——半身卡进方块立即强制上移到方块顶面之上
+        //（搭方块后实体位移滞后/放偏时，头顶检查拦不住横向卡入，必须直接改位置）
+        this.antiSuffocate(maid);
         // v1.5.158：扫到第一个威胁才播报"情况不妙"（每场自保一次）——
         // 无威胁的低血自保安静回血/回家，不喊话
-        // v1.1.0 实测一百五十五：有保命物品且开关关闭时不逃跑 → 也不喊"我先撤了"
+        // 实测三百六十三：文案改为周旋（不再"撤退"——逃跑已删除，走位保持战斗）
         if (!this.announcedThreat && this.cachedThreat != null && canFlee(maid)) {
             this.announcedThreat = true;
-            maid.getChatBubbleManager().addTextChatBubble("情况不妙，我先撤了！");
+            maid.getChatBubbleManager().addTextChatBubble("情况不妙，我小心周旋！");
         }
         // v1.5.21：头顶警示粒子（让主人一眼发现她在危险中）
         this.spawnAlert(maid);
@@ -943,7 +1124,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             this.giveUpMovement(maid);
             // 不 return：继续主流程，其他链路接管
         }
-        LivingEntity threat = this.cachedThreat;
         if (threat == null) {
             // v1.5.199：搭高惯性——本次自保已开始搭高时威胁丢失不立即中断，
             // 继续垫到安全高度（safePillarHeight，v1.5.203 起配置化）再停。
@@ -1038,12 +1218,18 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
         }
         // 2. 连续两次被近身 → 击退周围敌人 + 强制搭高
+        //    实测三百六十五：无回血资源不搭高（塔的唯一意义是安全回血）→ 走位周旋
         if (dist < closeDistance()) {
             if (!this.forcedPillar) {
                 this.grappleTicks++;
                 if (this.grappleTicks >= 2) {
                     this.grappleTicks = 0;
-                    this.triggerPillarBurst(maid);
+                    if (this.hasHealResource(maid)) {
+                        this.triggerPillarBurst(maid);
+                    } else if (!this.standingOnOwnTower(maid)) {
+                        // 实测三百六十七：塔顶不爆发走位（同 branch 4 守卫）
+                        this.strafeDisengage(maid, threat);
+                    }
                 }
             }
         } else {
@@ -1072,6 +1258,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return; // 强制搭高期间不做其他动作
         }
         // 4. 被近身：垫到安全高度后站桩（不再无脑一直搭）
+        //    实测三百六十五【根本断绝】：包里没有任何回血资源（药水/金苹果/
+        //    食物，hasHealResource 无副作用探测）→ 搭高【不再是可选项目】——
+        //    塔的唯一意义是安全回血，没得回血垫塔纯属干耗（还会白白消耗方块、
+        //    挡路 60 秒）。此时被近身 = 小幅走位周旋 + 贴脸反击（上方已跑），
+        //    珍珠/危急传送兜底不变
         int currentY = maid.m_20183_().m_123342_();
         if (this.pillarBaseY >= 0 && currentY <= this.pillarBaseY) {
             this.pillarBaseY = -1;
@@ -1081,6 +1272,15 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 高度配对：垫到 5 格跳下稳定触发落地水，水减速怪物）
         int safePillar = safePillarHeight();
         if (dist < closeDistance()) {
+            if (!this.hasHealResource(maid)) {
+                // 实测三百六十七：人站在自己塔顶（脚下方块是登记的战斗方块）
+                // 时不走位——走位会把人从塔边拽下去摔伤；塔顶是安全点，原地
+                // 站桩（贴脸反击在上方已跑，战术并行），没资源也等下塔机制
+                if (!this.standingOnOwnTower(maid)) {
+                    this.strafeDisengage(maid, threat);
+                }
+                return;
+            }
             if (pillarHeight < safePillar) {
                 if (this.buildCooldown <= 0) {
                     if (this.buildUp(maid)) {
@@ -1093,30 +1293,29 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         this.trySuffocateDuringBuild(maid, threat);
                     } else if (this.bridgeStep(maid, threat)) {
                         this.buildCooldown = buildCd;
-                    } else if (canFlee(maid)) {
-                        // v1.5.23 兜底：没有搭方块材料 → 播报 + 朝怪物最少的方向突围
+                    } else {
+                        // 实测三百六十三：无搭方块材料 → 播报 + 小幅走位拉身位
+                        //（不再突围逃跑——保持战斗姿态边打边挪）
                         this.announceNoMaterial(maid);
-                        this.fleeEscaping(maid, threat);
+                        this.strafeDisengage(maid, threat);
                     }
                 }
             }
-            // 已垫到安全高度：站在高处等（不 flee，防掉落），威胁变化交给珍珠/强制搭高/传送
+            // 已垫到安全高度：塔顶守势（站高处回血，威胁变化交给珍珠/反击/战术）
             return;
         }
-        // 5. 有威胁但离得远（4~12 格）：增益药水（隐身/迅捷/再生等）+ 逃跑 + 前方阻挡垫台阶
+        // 5. 有威胁但离得远（4~12 格）：增益药水 + 小幅走位拉开身位 + 前方阻挡垫台阶
         if (dist < threatDistance()) {
             // v1.5.25：通用增益药水（不再硬编码隐身/迅捷两种；再生/力量/抗火等都能喝）
             // v1.5.252g7：CD 按药水种类内部自管（= 药水时长）——CD 内同种不喝、
             // 其他种照喝；瞬间效果短 CD
             this.useBeneficialPotion(maid);
-            // v1.1.0 实测一百五十五：有保命物品且开关关闭 → 不逃跑（增益药水照喝，
-            // 垫台阶/逃跑跳过——她死不了，继续撑住等反击/搭高/传送）
-            if (canFlee(maid)) {
-                if (this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
-                    this.buildCooldown = buildCd;
-                }
-                this.flee(maid, threat);
+            if (this.buildCooldown <= 0 && this.bridgeStep(maid, threat)) {
+                this.buildCooldown = buildCd;
             }
+            // 实测三百六十三：逃跑删除——小幅走位（不拉开距离临阵脱逃，
+            // 攻击目标不清、战术 230 继续并行战斗）
+            this.strafeDisengage(maid, threat);
             // 6. 威胁在 8 格外（相对安全）：顺带回血（贴身时不"一直吃"）
             if (dist > 8.0) {
                 // v1.5.234：相对安全距离 → 完整回血阶梯（增益→治疗→金苹果→食物）
@@ -1124,7 +1323,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             return;
         }
-        // 7. 卡住兜底：逃跑中长时间没位移 → 垫路铺台阶
+        // 7. 卡住兜底：走位中长时间没位移 → 垫路铺台阶
         this.trackStuck(maid);
         if (this.stuckTicks >= stuckWindow()) {
             if (this.bridgeStep(maid, threat)) {
@@ -1133,7 +1332,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.5.23：材料不足播报（10 秒最多一次） */
+    /** v1.5.23：材料不足播报（10 秒最多一次；实测三百六十三文案改为周旋） */
     private void announceNoMaterial(EntityMaid maid) {
         if (this.announceCooldown-- > 0 || this.announcedNoMaterial) {
             return;
@@ -1141,7 +1340,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.announcedNoMaterial = true;
         this.announceCooldown = announceCooldown();
         maid.getChatBubbleManager().addTextChatBubble(
-                "背包里没有搭方块的材料（圆石/泥土/石头等），我先想办法突围！");
+                "背包里没有搭方块的材料（圆石/泥土/石头等），我小心周旋！");
     }
 
     /** v1.5.232：自救资源全失败播报（每场一次）——岩浆/着火链路走到底仍无解时，
@@ -1158,14 +1357,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.5.23 突围：被围殴且无法搭高时，扫描 8 个方向，朝怪物最少的
-     * 可行走方向逃跑（比单纯反威胁方向更能脱出包围圈）。
-     * v1.5.135：threat 允许为 null（着火兜底）——无威胁时只按怪物密度选方向。
+     * 实测三百六十三【小幅走位拉身位】（替代旧"突围/逃跑"——用户："逃跑很像
+     * 临阵脱逃，应该小幅度原地走位，但仍然保持战斗姿态"）：
+     * - 朝威胁侧后方挪 2~3 格（不再 8 格突围/反方向撤离——不脱离交战圈）；
+     * - 8 方向打分：怪物少 + 偏离威胁方向 + 路径无岩浆（保留下来的安全要素）；
+     * - 承诺窗口 12 tick（0.6 秒）走完这几步再重新评估——不每 tick 变向；
+     * - 攻击目标不清（战术 230 并行继续打）、贴脸反击冷却独立运行——
+     *   走位是战斗姿态下的拉开身位，不是逃离战场。
+     * threat 允许为 null（着火兜底）——无威胁时只按怪物密度选方向。
      */
-    private void fleeEscaping(EntityMaid maid, LivingEntity threat) {
-        // v1.5.216：方向防抖——20 tick（1 秒）内保持同一逃跑目标。旧版每 tick
-        // 重选方向：怪物分布稍变目标就跳，女仆来回折返 = "疯狂逃窜，逃得特别远"
-        //（还叠加每 tick 重新寻路开销）；固定方向后直线跑出危险区，1 秒后再评估
+    private void strafeDisengage(EntityMaid maid, LivingEntity threat) {
+        // 承诺窗口：走完当前这几步再重新评估
         if (this.fleeDirCooldown > 0) {
             this.fleeDirCooldown--;
             maid.m_21573_().m_26519_(this.fleeTargetX,
@@ -1180,11 +1382,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 if (dx == 0 && dz == 0) {
                     continue;
                 }
-                BlockPos probe = maid.m_20183_().m_7918_(dx * 5, 0, dz * 5);
-                // v1.5.241：该方向路径上（2~5 格）有岩浆 → 直接排除该方向
-                //（僵尸追击逃跑走进岩浆的根因：只按怪物密度选方向，不避岩浆）
+                BlockPos probe = maid.m_20183_().m_7918_(dx * 3, 0, dz * 3);
+                // 路径上（1~3 格）有岩浆 → 直接排除该方向
                 boolean lavaPath = false;
-                for (int s = 2; s <= 5; s += 3) {
+                for (int s = 1; s <= 3; s++) {
                     BlockPos p = maid.m_20183_().m_7918_(dx * s, 0, dz * s);
                     if (maid.m_9236_().m_46749_(p)
                             && isLavaBlock(maid.m_9236_().m_8055_(p).m_60734_())) {
@@ -1197,9 +1398,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 }
                 // v1.5.195：威胁 = 敌对生物 + 对女仆/主人带仇恨的中立生物（isThreat）
                 int monsters = maid.m_9236_().m_6443_(Mob.class,
-                        new net.minecraft.world.phys.AABB(probe).m_82400_(4.0),
+                        new net.minecraft.world.phys.AABB(probe).m_82400_(3.0),
                         m -> m instanceof LivingEntity && com.maidsmart.dialogue.PerceptionManager.isThreat((LivingEntity) m, maid)).size();
-                // 怪物越少分越高；有威胁时优先反威胁方向作为平局加分
+                // 怪物越少分越高；有威胁时优先偏离威胁方向作为平局加分
                 double score = 20.0 - monsters * 5.0;
                 double dot = 0;
                 if (threat != null) {
@@ -1213,14 +1414,15 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 }
             }
         }
-        int tx = (int) maid.m_20185_() + bestDx * 8;
-        int tz = (int) maid.m_20189_() + bestDz * 8;
-        this.fleeDirCooldown = 20; // 1 秒内保持方向
+        if (bestDx == 0 && bestDz == 0) {
+            return; // 八方皆险（围死）——原地站桩硬撑，交给反击/搭高/传送
+        }
+        int tx = (int) maid.m_20185_() + bestDx * 2;
+        int tz = (int) maid.m_20189_() + bestDz * 2;
+        this.fleeDirCooldown = 12; // 0.6 秒承诺窗口（走完这几步再评估）
         this.fleeTargetX = tx;
         this.fleeTargetZ = tz;
-        // v1.1.0 实测十七：逃跑方向被【自己搭的战斗方块】挡住 → 直接拆掉它。
-        // 实际战斗多变——翻墙台阶/封头块可能恰好堵死逃跑路线，女仆不能被自己
-        // 搭的方块困死。先拆脚下面前 1~2 格的战斗方块再导航。
+        // v1.1.0 实测十七：走位方向被【自己搭的战斗方块】挡住 → 直接拆掉它。
         this.breakBlockingCombatBlocks(maid, bestDx, bestDz);
         maid.m_21573_().m_26519_(tx, maid.m_20183_().m_123342_(), tz, fleeSpeed());
     }
@@ -1310,7 +1512,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 只要不在主人 5 格内就传送（无论远近、无论主人身边是否有怪——血已恢复到 70%，
      * 传过去帮忙/护卫主人，不再自己慢慢走回去）；仅保留传送冷却防反复连传。
      */
-    private void teleportHomeOnExit(EntityMaid maid) {
+    private void teleportHomeOnExit(EntityMaid maid, boolean ignoreCooldown) {
         try {
             LivingEntity owner = maid.m_269323_();
             if (owner == null) {
@@ -1329,8 +1531,19 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return; // 已在主人 5 格内（就在身边，不用传）
             }
             long now = maid.m_9236_().m_46467_();
-            if (now - this.lastTeleportTime < Math.min(teleportCooldown(), 100)) {
-                return; // 传送冷却（5 秒封顶，防反复传送）
+            // 实测三百六十二：同 teleportHome——尝试间隔 5 秒 + 成功后完整冷却，
+            // 退出传送与自保传送共用一套防连传闸。
+            // 实测三百七十八：解除自保的归位传送是每场一次的收尾动作 →
+            // ignoreCooldown=true 绕过双冷却闸（否则上一场传送的 30 秒长冷却
+            // 会把"解除即归位"静默吞掉）；会话已结束不存在连传，防连传闸
+            // 仍护着会话内的保命传送。
+            if (!ignoreCooldown) {
+                if (now - this.lastTeleportTime < 100) {
+                    return;
+                }
+                if (now - this.lastTeleportSuccessTime < teleportCooldown()) {
+                    return;
+                }
             }
             // v1.1.0 实测二百零五（用户："女仆会无条件传送，不管主人周围是否有合法方块。
             // 玩家飞到高空中女仆传送直接摔死了"）：旧版 m_6034_(owner.x,owner.y,owner.z)
@@ -1357,6 +1570,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     owner.m_146908_(), owner.m_146909_());
             maid.f_19789_ = 0.0f;
             this.lastTeleportTime = now;
+            this.lastTeleportSuccessTime = now; // 实测三百六十二：成功传送记长冷却
             // v1.5.227：播报 60 秒限频——5 秒传送冷却会反复触发"回到身边"播报刷屏
             if (now - this.lastHomeAnnounceTick >= 1200) {
                 this.lastHomeAnnounceTick = now;
@@ -1602,50 +1816,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         } catch (Exception e) {
             return true;
         }
-    }
-
-    /**
-     * 朝威胁反方向逃跑（v1.5.21：蛇形走位躲远程 + 目标点避开危险方块）。
-     * 直接调用 PathNavigation 寻路——自保期间 MoveToTargetSink（core 优先级 2）
-     * 被压制不会执行 WALK_TARGET memory，只能自己走。
-     */
-    private void flee(EntityMaid maid, LivingEntity threat) {
-        double dx = maid.m_20185_() - threat.m_20185_();
-        double dz = maid.m_20189_() - threat.m_20189_();
-        double len = Math.sqrt(dx * dx + dz * dz);
-        if (len < 0.01) {
-            return;
-        }
-        // v1.5.21 蛇形走位：每 10 tick 换一次侧偏方向，降低被远程命中率
-        if (this.zigzagTick-- <= 0) {
-            this.zigzagTick = 10;
-            this.zigzagSide = this.zigzagSide == 1 ? -1 : 1;
-        }
-        double fx = dx / len * 8.0 + (-dz / len) * this.zigzagSide * 3.0;
-        double fz = dz / len * 8.0 + (dx / len) * this.zigzagSide * 3.0;
-        int tx = (int) (maid.m_20185_() + fx);
-        int tz = (int) (maid.m_20189_() + fz);
-        // v1.5.21：目标点有危险方块（岩浆/火/仙人掌等）→ 反向侧偏再试
-        // v1.5.241：路径【中间】（每 2 格）也检查——只查目标点会被"半路踩岩浆"
-        // 漏掉（僵尸追击逃跑走进岩浆的根因之一）
-        int ty = maid.m_20183_().m_123342_();
-        boolean pathDanger = false;
-        for (int s = 1; s <= 3; s++) {
-            BlockPos mid = new BlockPos((int) (maid.m_20185_() + fx / 4.0 * s), ty,
-                    (int) (maid.m_20189_() + fz / 4.0 * s));
-            if (this.hasDangerAt(maid.m_9236_(), mid)) {
-                pathDanger = true;
-                break;
-            }
-        }
-        if (pathDanger || this.hasDangerAt(maid.m_9236_(), new BlockPos(tx, ty, tz))) {
-            this.zigzagSide = -this.zigzagSide;
-            fx = dx / len * 8.0 + (-dz / len) * this.zigzagSide * 3.0;
-            fz = dz / len * 8.0 + (dx / len) * this.zigzagSide * 3.0;
-            tx = (int) (maid.m_20185_() + fx);
-            tz = (int) (maid.m_20189_() + fz);
-        }
-        maid.m_21573_().m_26519_(tx, ty, tz, fleeSpeed());
     }
 
     /** v1.5.21：某格（及脚下）是否危险方块
@@ -2934,6 +3104,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 每 tick 兜底，搭高基本不再窒息。
      */
     private boolean buildUp(EntityMaid maid) {
+        // 实测三百七十二【搭路模式同款】："还没站上上一块（walkOn 推送中）
+        // → 本 tick 等待"（返回 true = 垫高动作进行中，不算失败/材料不足）
+        if (this.walkOnTicks > 0) {
+            return true;
+        }
         BlockPos pos = maid.m_20183_();
         // v1.5.25b：选择放置格——脚下悬空 → 垫所在格 pos（站上去升高）；
         // 脚下实心（平地）→ 垫身体格 pos+1（方块放置的实体挤压机制把她顶起一格，
@@ -2965,7 +3140,20 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return false;
         }
         maid.m_9236_().m_7731_(place, block.m_49966_(), 3);
-        trackCombatPlaced(maid, place, block); // v1.1.0 实测十七：战斗方块登记（60 秒自清）
+        trackCombatPlaced(maid, place, block); // v1.1.0 实测十七：战斗方块登记（30 秒自清）
+        // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效（搭路模式同款）
+        maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+        if (maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+            com.maidsmart.task.PlacedBlockTracker.placeSound(sl, place, block);
+        }
+        // 实测三百七十二【搭路模式同款·beginWalkOn】：登记"站上去"目标并给
+        // 首次推力——后续由钉柱段的 walkOn 持续推送直到站上目标格（12 tick
+        // 超时），与搭路 beginWalkOn/walkOn 完全一致
+        this.walkOnY = place.m_123342_() + 1.0;
+        this.walkOnTicks = 12;
+        net.minecraft.world.phys.Vec3 cur = maid.m_20184_();
+        maid.m_20256_(new net.minecraft.world.phys.Vec3(0.0,
+                Math.max(cur.f_82480_, 0.42), 0.0));
         return true;
     }
 
@@ -3128,6 +3316,128 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * 实测三百六十三【传送时机定稿】——传送只在两个时机启动：
+     *
+     * A. 保命兜底（本方法，会话内）：
+     * ① 泡岩浆（环境致命）——传送是比任何自救都快的脱身手段；
+     * ② 血量危急（<15%）——保命第一，打断搭高/走位也值得；
+     * ③ 弹尽粮绝——有威胁、血 <30%、无搭方块材料且无珍珠（走位拉不开
+     *    死局，再耗下去会死，交给主人身边更安全）。
+     * 实测三百六十五：塔顶无回血资源被围困不再传送回家——改为下塔接着打
+     *（heallessSiegeTicks → startDescend）。恢复中不提前接走。
+     *
+     * B. 恢复后归位支援：解除自保 → teleportHomeOnExit（退出分支内调用，
+     * 实测三百七十八起为解除必传、绕过冷却闸；主人身边无合法落点/看家模式/
+     * 主人死亡等安全护栏保留）。"残血保命、恢复支援"各归各位。
+     *
+     * 策略承诺窗口：搭高进行中（forcedPillar / pillarBaseY 未到安全高度）或
+     * 走位承诺期内（fleeDirCooldown > 0）不传送——选定策略就执行完，不半路
+     * 拽走；危急（②）与岩浆（①）例外，保命优先于承诺。
+     */
+    private void tryTeleportFallback(EntityMaid maid, LivingEntity threat, float ratio, boolean danger) {
+        boolean lavaNow = this.envDangerCritical(maid);
+        boolean critical = ratio < 0.15f;
+        boolean desperate = threat != null && ratio < 0.3f && !this.hasLocalEscape(maid);
+        // 实测三百六十五：塔顶无回血资源被围困不再是传送条件——改为下塔接着打
+        boolean wantTeleport = lavaNow || critical || desperate;
+        if (!wantTeleport) {
+            return;
+        }
+        boolean pillarBuilding = this.forcedPillar
+                || (this.pillarBaseY >= 0
+                    && maid.m_20183_().m_123342_() - this.pillarBaseY < safePillarHeight());
+        if ((pillarBuilding || this.fleeDirCooldown > 0) && !critical && !lavaNow) {
+            return; // 承诺窗口：搭高/走位执行中不换招
+        }
+        this.teleportHome(maid);
+    }
+
+    /** 实测三百六十五：下塔播报（每场一次，走策略播报冷却） */
+    private void announceDescend(EntityMaid maid) {
+        if (this.announceCooldown-- > 0 || this.announcedDescend) {
+            return;
+        }
+        this.announcedDescend = true;
+        this.announceCooldown = announceCooldown();
+        maid.getChatBubbleManager().addTextChatBubble("包里没有回血的东西了，我先撤到你身边！");
+    }
+
+    /**
+     * 实测三百六十三：本地逃生资源探测（无副作用）——
+     * ① 背包里有可用垫脚方块（MaidBuildBlockFilter.hasBuildBlock，只查不扣）；
+     * ② 背包里有末影珍珠。
+     * 走位拉身位不需要资源（永远算不上"弹尽粮绝"），不计入。
+     * 两者皆无 = 真正弹尽粮绝，传送兜底才有意义。
+     */
+    private boolean hasLocalEscape(EntityMaid maid) {
+        try {
+            if (com.maidsmart.tool.MaidBuildBlockFilter.hasBuildBlock(
+                    com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getMaidInv()),
+                    maid.m_9236_(), maid.m_20183_())) {
+                return true;
+            }
+            net.minecraft.world.item.Item pearl = ForgeRegistries.ITEMS
+                    .getValue(ResourceLocation.parse("minecraft:ender_pearl"));
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && pearl != null && s.m_41720_() == pearl) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 实测三百六十七：是否站在自己塔顶——脚下/脚下第二格是登记过的战斗方块
+     * （脚下一格是下落瞬间/半格顶起状态的容错）。塔顶禁止走位（防止把人从
+     * 塔边拽下去），站桩交给反击/守势/下塔机制。
+     */
+    private boolean standingOnOwnTower(EntityMaid maid) {
+        try {
+            BlockPos feet = maid.m_20183_();
+            return PlacedBlockTracker.trackedBlockId(maid.m_9236_(), feet.m_7918_(0, -1, 0)) != null
+                    || PlacedBlockTracker.trackedBlockId(maid.m_9236_(), feet.m_7918_(0, -2, 0)) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 实测三百六十四：回血资源探测（无副作用）——包里有药水（任何 PotionItem，
+     * 治疗/再生/增益都算"能帮到自己"）/ 金苹果 / 治疗食物（HEAL_FOODS 名单）。
+     * 全无 = 塔顶守势没有意义（自然回血都保证不了），围困 10 秒传送兜底。
+     */
+    private boolean hasHealResource(EntityMaid maid) {
+        try {
+            IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (s.m_41619_()) {
+                    continue;
+                }
+                if (s.m_41720_() instanceof net.minecraft.world.item.PotionItem) {
+                    return true;
+                }
+                String id = ForgeRegistries.ITEMS.getKey(s.m_41720_()).toString();
+                if (id.equals("minecraft:golden_apple")
+                        || id.equals("minecraft:enchanted_golden_apple")) {
+                    return true;
+                }
+                for (String food : HEAL_FOODS) {
+                    if (id.equals(food)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
      * v1.5.20：无威胁持续一段时间后传送回主人身边。
      * v1.5.21：加传送冷却（60 秒），防"传回家又被打→又传"循环。
      * 主人主动 TP 女仆不受影响（不走 teleportToOwner）。
@@ -3136,15 +3446,27 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 撤销自己身边判定：被怪追着跑时自己身边永远有怪 → 永远不传（用户反馈
      * "怪一直在追导致无法传送"）。现只确认【主人身边】安全即可传送（防
      * "传回主人身边送死"）；传送成功 → 立即结束自保。
+     *
+     * 实测三百六十二【冷却重定义】：调用方已收敛为 tryTeleportFallback（兜底）。
+     * 失败（主人身边有怪/无落点）重试间隔固定 5 秒；【成功】传送后走完整
+     * teleportCooldown（默认 600=30 秒）——一场遭遇战最多被接走一次，根治
+     * "传回家→跑回去→再传回家"的连传循环。
      */
     private void teleportHome(EntityMaid maid) {
+        // 实测三百九十（用户：自保模式禁止传送，玩家日程表手动传送除外）：
+        // 自保会话期间一切自保逃生传送停用（岩浆/血量危急/弹尽粮绝兜底也
+        // 不传）——本地逃生（珍珠/药水/走位/搭高/反击）接管；玩家日程表
+        // 召唤走 ScheduleNetworking 通道不受影响；解除归位传送在会话结束
+        //（标记清除）后才发，不受此限
+        if (isSelfPreserving(maid)) {
+            return;
+        }
         long now = maid.m_9236_().m_46467_();
-        // v1.5.157：传送失败重试间隔封顶 100 tick（5 秒）——旧配置 teleportCooldown
-        // = 1200（60 秒）不会跟随新默认，导致"主人身边没怪也不传送"（用户反馈，
-        // 配置实证 teleportCooldown=1200）。用 min(配置, 100) 保证实时性：
-        // 传送失败（主人身边有怪）最多 5 秒后重试；成功即结束自保，不会循环。
-        if (now - this.lastTeleportTime < Math.min(teleportCooldown(), 100)) {
-            return; // 重试冷却中，等下一轮
+        if (now - this.lastTeleportTime < 100) {
+            return; // 尝试间隔 5 秒（失败重试的实时性）
+        }
+        if (now - this.lastTeleportSuccessTime < teleportCooldown()) {
+            return; // 成功传送后的长冷却（默认 30 秒）
         }
         LivingEntity owner = maid.m_269323_();
         if (owner == null) {
@@ -3192,6 +3514,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 owner.m_146908_(), owner.m_146909_());
         maid.f_19789_ = 0.0f;
         this.lastTeleportTime = now;
+        this.lastTeleportSuccessTime = now; // 实测三百六十二：成功传送记长冷却
         // v1.5.158：真传送成功播报（不暗示"绝对安全"，与可能紧接着的"情况不妙"
         // 语义连贯："撤了" → "回到主人身边"）
         // v1.5.227：播报 60 秒限频——传送冷却 5 秒时会反复连传连喊（实测刷屏）

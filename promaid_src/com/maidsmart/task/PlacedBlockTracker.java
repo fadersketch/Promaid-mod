@@ -47,9 +47,28 @@ public final class PlacedBlockTracker {
     private final Map<ResourceKey<Level>, Map<BlockPos, Mark>> placed = new HashMap<>();
     /** 寿命（tick，从配置读——构造时传入当前配置值；expirePlaced 每次重读以支持运行时改配置） */
     private final java.util.function.LongSupplier lifetimeSupplier;
+    /** 实测三百七十七：靠近刷新半径（水平，格）的平方。搭路/桥用 4.0
+     *  （实测二百零七防摔口径）；战斗方块用 0.5（仅同柱刷新——女仆在自己
+     *  塔边打架不该给塔续命，否则战斗方块在她身边永不消失） */
+    private final double nearRadiusSq;
+    /** 实测三百八十八：靠近刷新垂直带（格）。搭路/桥 6.0；战斗塔 12.0——
+     *  旧值 ±6 够不到 8 格塔顶脚下方的塔底两格，长狙击期塔底方块寿命到
+     *  期溶解、塔从底下烂掉（站得再稳也没了根基） */
+    private final double nearVertBand;
 
     public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier) {
+        this(lifetimeSupplier, 4.0, 6.0);
+    }
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier, double nearRadius) {
+        this(lifetimeSupplier, nearRadius, 6.0);
+    }
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier,
+                              double nearRadius, double vertBand) {
         this.lifetimeSupplier = lifetimeSupplier;
+        this.nearRadiusSq = nearRadius * nearRadius;
+        this.nearVertBand = vertBand;
         ALL_INSTANCES.add(this); // 实测七十一：自动登记进全局表（供跨系统查询）
     }
 
@@ -82,6 +101,35 @@ public final class PlacedBlockTracker {
             }
         }
         return false;
+    }
+
+    /**
+     * 实测三百六十六：该位置登记的【方块注册名】（任意实例；未登记返回 null）。
+     * 下塔拆块前的安全校验用——"当前方块 = 登记时的方块"才允许拆，
+     * 玩家替换过的方块绝不碰（与到期销毁的 blockId 比对同口径）。
+     */
+    public static String trackedBlockId(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            Map<BlockPos, Mark> marks = t.placed.get(level.m_46472_());
+            if (marks != null) {
+                Mark m = marks.get(pos.m_7949_());
+                if (m != null) {
+                    return m.blockId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 实测三百六十六：移除单个登记（女仆主动拆掉自己的方块时调用——
+     *  防残留条目在到期扫描里空转/被 nearBlock 刷新永久滞留） */
+    public static void untrackAny(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            Map<BlockPos, Mark> marks = t.placed.get(level.m_46472_());
+            if (marks != null) {
+                marks.remove(pos.m_7949_());
+            }
+        }
     }
 
     /**
@@ -169,13 +217,15 @@ public final class PlacedBlockTracker {
         return null;
     }
 
-    /** 实测二百零七：女仆是否依赖该搭块——水平 ≤4 格、垂直差 ≤6 格（她站在上面/
-     *  刚离开/悬在附近都算；真正走远或高度差拉开才放手回收） */
-    private static boolean maidNearBlock(EntityMaid owner, BlockPos pos) {
+    /** 实测二百零七：女仆是否依赖该搭块——水平 ≤ 刷新半径、垂直差 ≤ 垂直带
+     *  （她站在上面/刚离开/悬在附近都算；真正走远或高度差拉开才放手回收）。
+     *  实测三百七十七：半径参数化——桥类实例 4.0，战斗方块实例 0.5（同柱）。
+     *  实测三百八十八：垂直带参数化——战斗塔 12.0（覆盖满配 12 格塔） */
+    private boolean maidNearBlock(EntityMaid owner, BlockPos pos) {
         double dx = owner.m_20185_() - (pos.m_123341_() + 0.5);
         double dz = owner.m_20189_() - (pos.m_123343_() + 0.5);
         double dy = owner.m_20186_() - (pos.m_123342_() + 0.5);
-        return dx * dx + dz * dz <= 16.0 && Math.abs(dy) <= 6.0;
+        return dx * dx + dz * dz <= this.nearRadiusSq && Math.abs(dy) <= this.nearVertBand;
     }
 
     /**

@@ -254,6 +254,8 @@ public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_VANILLA_WEIGHT;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
+    // v1.1.0 实测三百七十九：模组任务参与自主切换（模组物品背书 / 可全关）
+    public static final ForgeConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS;
     // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_MELEE_WEIGHT;
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_RANGED_WEIGHT;
@@ -339,6 +341,13 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.DoubleValue COMBAT_TACTICS_KITE_RANGE;
     // v1.5.280：近战贴脸后退（被敌人贴进 2 格内主动后退拉开，女仆手长 3 格仍能挥砍）
     public static final ForgeConfigSpec.BooleanValue COMBAT_TACTICS_MELEE_KITE;
+    // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
+    // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
+    public static final ForgeConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
+    public static final ForgeConfigSpec.BooleanValue SOUL_SPELL_LETHAL_GUARD;
+    public static final ForgeConfigSpec.DoubleValue SOUL_SPELL_RELEASE_RATIO;
+    public static final ForgeConfigSpec.DoubleValue SOUL_SPELL_OWNER_RADIUS;
+    public static final ForgeConfigSpec.IntValue SOUL_SPELL_COOLDOWN_SECONDS;
     // v1.5.199：水桶垫水（岩浆逃生——放水 1 秒后收回，水桶不消耗；击退搭高垫水
     // v1.5.250 已删除）
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
@@ -995,8 +1004,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.selfPreserve").define("selfPreserve", true);
         COMBAT_ENTER_RATIO = BUILDER.comment("自保触发血量（0-1）")
                 .translation("config.promaid.combat.enterRatio").defineInRange("enterRatio", 0.3, 0.05, 1.0);
-        // v1.5.153：默认 0.60→0.70——自保取消机制之一为血量恢复到 70% 及以上
-        COMBAT_EXIT_RATIO = BUILDER.comment("自保解除血量（0-1，v1.5.153 默认 0.7：血量恢复到 70% 及以上即取消自保；另一取消机制 = 成功传送回主人身边）")
+        // v1.5.153：默认 0.60→0.70——血量恢复到 70% 及以上无条件解除自保
+        // 实测三百六十二：另加"威胁消失 + 血 ≥ safeReturnRatio（0.45）即解除"，
+        // 治旧版 30%~70% 灰区里 tag 不清、女仆脱险后仍被各系统让位的干耗
+        COMBAT_EXIT_RATIO = BUILDER.comment("自保绝对解除血量（0-1，默认 0.7：血量到此无条件解除自保；另一解除线 = 威胁消失且血量恢复到安全回归血量 safeReturnRatio）")
                 .translation("config.promaid.combat.exitRatio").defineInRange("exitRatio", 0.7, 0.1, 1.0);
         COMBAT_THREAT_DISTANCE = BUILDER.comment("威胁感知距离")
                 .translation("config.promaid.combat.threatDistance").defineInRange("threatDistance", 12, 4, 32);
@@ -1018,9 +1029,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_PEARL_DIST = BUILDER.comment("末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）")
                 .translation("config.promaid.combat.pearlDist")
                 .defineInRange("pearlDist", 8.0, 2.0, 16.0);
-        COMBAT_SAFE_RETURN_RATIO = BUILDER.comment("安全回归血量（0-1，威胁消失后回到此血量解除自保）")
+        // 实测三百六十四：默认 0.45→0.70（用户："低血量和解除线差距太小，改回
+        // 70%"——残血自保要真回血才归位）；塔顶没回血资源被围困另有 10 秒接回兜底
+        COMBAT_SAFE_RETURN_RATIO = BUILDER.comment("安全回归血量（0-1，默认 0.7：血量恢复到此线即解除自保回归工作/战斗——威胁还在也解除，战斗交还战术；触发血量 0.3 与本线之间为滞回防抖带）")
                 .translation("config.promaid.combat.safeReturnRatio")
-                .defineInRange("safeReturnRatio", 0.45, 0.2, 0.9);
+                .defineInRange("safeReturnRatio", 0.7, 0.2, 0.9);
         COMBAT_CLOSE_DISTANCE = BUILDER.comment("贴身距离（格，低于此值判定被近身）")
                 .translation("config.promaid.combat.closeDistance")
                 .defineInRange("closeDistance", 4.0, 2.0, 8.0);
@@ -1041,7 +1054,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_THREAT_SCAN = BUILDER.comment("威胁扫描间隔（tick）")
                 .translation("config.promaid.combat.threatScan")
                 .defineInRange("threatScan", 5, 1, 40);
-        COMBAT_FLEE_SPEED = BUILDER.comment("逃跑速度倍率")
+        // 实测三百六十三：逃跑删除——本项现供自保小幅走位（拉开身位）使用
+        COMBAT_FLEE_SPEED = BUILDER.comment("走位速度倍率（自保小幅走位拉开身位的移动加成，1.0=正常）")
                 .translation("config.promaid.combat.fleeSpeed")
                 .defineInRange("fleeSpeed", 1.4, 0.8, 3.0);
         // v1.1.0 实测一百五十三：TLM 火焰保护饰品识别
@@ -1050,9 +1064,26 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十四：TLM 溺水保护饰品识别
         COMBAT_DROWN_PROTECT_BAUBLE = BUILDER.comment("溺水保护饰品识别（默认开）：女仆饰品栏佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺——饰品每 tick 自己补空气；关闭 = 旧行为（照常上浮）")
                 .translation("config.promaid.combat.drownProtectBauble").define("drownProtectBauble", true);
-        // v1.1.0 实测一百五十五：保命物品下保留逃跑
-        COMBAT_FLEE_WITH_SAVE_ITEM = BUILDER.comment("保命物品下保留逃跑（默认关）：女仆携带保命物品（TLM 绀珠之药=ExtraLifeBauble 死亡复活 / 不死图腾）时是否还逃跑——默认关 = 有保命物品就不逃跑（她死不了，继续战斗/垫高/治疗，不丢下工作）；开 = 照常逃跑")
+        // v1.1.0 实测一百五十五；实测三百六十三：自保逃跑删除，本项现只管
+        // TLM 原生惊慌（PanicGatingMixin）与"情况不妙"播报
+        COMBAT_FLEE_WITH_SAVE_ITEM = BUILDER.comment("保命物品下允许惊慌（默认关）：女仆携带保命物品（TLM 绀珠之药=ExtraLifeBauble 死亡复活 / 不死图腾）时是否还惊慌逃窜/喊\"情况不妙\"——默认关 = 不惊慌不喊话（她死不了，继续战斗/垫高/治疗）；开 = 照常。注：自保自身的走位/搭高不受此开关影响")
                 .translation("config.promaid.combat.fleeWithSaveItem").define("fleeWithSaveItem", false);
+        // 实测四百零二：低血量自动回魂符（参考 maid_survival-1.9.5 MaidSoulSpellGuard）
+        // 实测四百零三：触发口径收紧——仅致死伤害且无保命物品时收符（低血量不触发，
+        // 否则自保的喝药/搭高/珍珠全成小丑；有绀珠之药/不死图腾让保命物品生效）
+        SOUL_SPELL_ENABLE = BUILDER.comment("致死伤害自动回魂符（默认开）：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 180 秒），期间不再触发；魂符右键释放时冷却写回女仆，防收放循环")
+                .translation("config.promaid.combat.soulSpellEnable").define("soulSpellEnable", true);
+        SOUL_SPELL_LETHAL_GUARD = BUILDER.comment("致死伤害保护（默认开）：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收")
+                .translation("config.promaid.combat.soulSpellLethalGuard").define("soulSpellLethalGuard", true);
+        SOUL_SPELL_RELEASE_RATIO = BUILDER.comment("释放血量比（默认 0.35）：自动收的魂符释放时女仆恢复的血量比例（写入魂符数据，TLM 释放逻辑读取）")
+                .translation("config.promaid.combat.soulSpellReleaseRatio")
+                .defineInRange("soulSpellReleaseRatio", 0.35, 0.01, 1.0);
+        SOUL_SPELL_OWNER_RADIUS = BUILDER.comment("主人收符半径（格，默认 24）：女仆与主人距离超过此值不自动收符（太远收不了，魂符在主人背包）")
+                .translation("config.promaid.combat.soulSpellOwnerRadius")
+                .defineInRange("soulSpellOwnerRadius", 24.0, 1.0, 256.0);
+        SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
+                .translation("config.promaid.combat.soulSpellCooldownSeconds")
+                .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);
@@ -1062,11 +1093,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_THREAT_GONE_EXIT = BUILDER.comment("威胁消失退出时长（tick，400=20 秒：威胁消失后观察 20 秒确认安全才结束自保/传回主人身边）")
                 .translation("config.promaid.combat.threatGoneExit")
                 .defineInRange("threatGoneExit", 400, 40, 1200);
-        // v1.5.152：冷却默认 1200→200（10 秒）——自保全程实时尝试传送回主人，
-        // 传不走（主人身边有怪）10 秒后重试；传送成功即结束自保，不会循环
-        COMBAT_TELEPORT_COOLDOWN = BUILDER.comment("传送回家冷却（tick，默认 200 = 10 秒：自保实时判定传送，传不走 10 秒后重试）")
+        // 实测三百六十二：语义重定义——本项 = 【成功】传送后的冷却（默认 600=30 秒，
+        // 一场遭遇战最多被接走一次，根治"传回→跑回去→再传"连传循环）；
+        // 传送失败（主人身边有怪/无落点）的重试间隔固定 5 秒，不随本项
+        COMBAT_TELEPORT_COOLDOWN = BUILDER.comment("传送回家成功冷却（tick，默认 600 = 30 秒：成功传送后此冷却内不再传，一场遭遇战最多被接走一次；传送失败 5 秒后即重试，不随本项）")
                 .translation("config.promaid.combat.teleportCooldown")
-                .defineInRange("teleportCooldown", 200, 100, 6000);
+                .defineInRange("teleportCooldown", 600, 100, 6000);
         // v1.5.150：只判主人身边；v1.5.151：默认 5 格（防远程怪；传回主人身边后
         // 主人可直接拿魂符收起来绝对安全，判定不需要太大）
         COMBAT_TELEPORT_SAFE_RADIUS = BUILDER.comment("传送安全判定半径（格，主人身边此半径内无可见怪物才传送回主人，默认 5）")
@@ -1098,6 +1130,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.tacticsMelee").define("tacticsMelee", true);
         COMBAT_TACTICS_RANGED = BUILDER.comment("远程战术（保持理想射程、横移绕圈风筝）")
                 .translation("config.promaid.combat.tacticsRanged").define("tacticsRanged", true);
+        // 实测四百零一：高地狙击已整体移除（用户拍板）——配置项一并删除
         COMBAT_TACTICS_SHIELD = BUILDER.comment("时机举盾（攻击冷却间隙举盾格挡、攻防交替；替代原版一直举盾）")
                 .translation("config.promaid.combat.tacticsShield").define("tacticsShield", true);
         COMBAT_TACTICS_ORBIT_RADIUS = BUILDER.comment("绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径")
@@ -1153,6 +1186,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.autoSwitchModWeight").defineInRange("autoSwitchModWeight", 2.0, 0.1, 10.0);
         COMBAT_AUTO_SWITCH_VANILLA_WEIGHT = BUILDER.comment("原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐")
                 .translation("config.promaid.combat.autoSwitchVanillaWeight").defineInRange("autoSwitchVanillaWeight", 1.0, 0.1, 10.0);
+        // v1.1.0 实测三百七十九（用户："为啥自主战斗老喜欢切换到魔法？明明我只给了
+        // 原版武器"）：万法皆通的魔法任务 isWeapon 恒 true（javap 反汇编实证）——
+        // 背包里任何物品都被认作它的武器，模组任务凭空进候选池 + 模组让位规则
+        // （实测一百八十一）把原版任务挤掉 → 只给原版武器也会被切去魔法。
+        COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS = BUILDER.comment("模组任务参与自主切换（默认开）：开 = 模组攻击任务（万法皆通魔法/史诗战斗/拔刀剑等）在女仆持有【非原版物品】时才参与切换；关 = 自主战斗只用原版任务（近战/弓/弩/三叉戟/弹幕/枪械），模组任务一律不自动切入")
+                .translation("config.promaid.combat.autoSwitchAllowModTasks").define("autoSwitchAllowModTasks", true);
         // v1.1.0 实测五十八：近战/远程偏好权重——两者皆可用（近战远程任务池都有候选）
         // 且敌人在近身距离（≤5 格）时按权重随机选池；同时是战中换战术（实测五十七）
         // 的开关量：某类权重 0 = 永不主动选/切向该类
@@ -1219,8 +1258,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
         // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）
-        COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 60）：自保行为（搭高/翻墙/搭桥/封头盖帽/岩浆垫高）搭的方块 N 秒后自动变掉落物回收；战斗节奏多变，比挖矿/搭路的 10 秒长——女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
-                .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 60, 3, 600);
+        // 实测三百六十六：寿命 60→30 秒（用户要求"利落"）；女仆还站在上面的
+        // 方块照旧刷新计时（走开后才开始倒数），塔上狙击/守势不受影响
+        COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 30）：自保（搭高/搭桥）与高地狙击搭的方块 N 秒后自动回收；女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
+                .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 30, 3, 600);
         BUILDER.pop();
 
         // ---- 杂项 ----
