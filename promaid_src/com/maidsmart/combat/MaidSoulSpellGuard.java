@@ -126,7 +126,13 @@ public final class MaidSoulSpellGuard {
                     + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
             markAutoSaved(slab, until);
             slot.set(player, slab);
-            player.m_5661_(SUCCESS_MESSAGE, false);
+            // v1.1.0 实测四百一十二：提示语带上当前 CD 值——玩家不知道冷却机制的
+            // 常反馈"第二次就死了不收"，文案点明（0 = 无冷却，措辞区分）
+            int cdSec = com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get();
+            player.m_5661_(cdSec > 0
+                    ? net.minecraft.network.chat.Component.m_237113_(
+                    "你的女仆生命值过低，已回到魂符中。（存在CD，CD为 " + cdSec + " 秒）")
+                    : SUCCESS_MESSAGE, false);
             player.m_7292_(new net.minecraft.world.effect.MobEffectInstance(
                     net.minecraft.world.effect.MobEffects.f_19590_,
                     com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20, 0));
