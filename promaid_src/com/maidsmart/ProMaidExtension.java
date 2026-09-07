@@ -494,7 +494,11 @@ public class ProMaidExtension implements ILittleMaid {
                         Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior()),
                         // v1.1.0 实测一百八十三：空闲散步（用户："增加女仆散步的频率和速度"）
                         //——低于 TLM core 最高 99 与上面全部行为，只在真正空闲时生效
-                        Pair.of(50, new com.maidsmart.task.MaidStrollBehavior())
+                        Pair.of(50, new com.maidsmart.task.MaidStrollBehavior()),
+                        // v1.1.0 实测四百一十：排班贴身气泡（情绪价值彩蛋）——主人靠近
+                        // 排班中的女仆时冒一句贴身对话（30 条池，30 秒/只 CD）；战斗/自保/
+                        // 睡觉/坐骑中豁免，限频由 ChatBubbleLimitMixin 全局兜底
+                        Pair.of(48, new com.maidsmart.task.ScheduleBubbleBehavior())
                         // v1.5.212：施工区避让已删除——自保 antiSuffocate 每 tick 防窒息
                         // 兜底后，"非建造女仆接近施工区会逃离"没有存在意义
                         //（原 Pair.of(150, new BuildAreaAvoidBehavior())）

@@ -395,6 +395,8 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.1.0 实测三百一十八：宰杀扫描半径（默认 16，旧版硬编码 5×5 扫不到远处牲畜）
     public static final ForgeConfigSpec.IntValue MISC_SLAUGHTER_RADIUS;
     public static final ForgeConfigSpec.IntValue MISC_BUBBLE_LIMIT_MS;
+    public static final ForgeConfigSpec.BooleanValue MISC_SCHEDULE_BUBBLE_ENABLED;
+    public static final ForgeConfigSpec.DoubleValue MISC_SCHEDULE_BUBBLE_RADIUS;
     public static final ForgeConfigSpec.BooleanValue MISC_PICKUP_PRIORITY;
     // v1.5.102：烹饪/酿造垂直搜索范围（v1.5.134 整理任务已删除，仅烹饪/酿造使用）
     public static final ForgeConfigSpec.IntValue MISC_VERTICAL_RANGE;
@@ -1303,6 +1305,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.slaughterRadius").defineInRange("slaughterRadius", 16, 4, 48);
         MISC_BUBBLE_LIMIT_MS = BUILDER.comment("对话气泡限频（毫秒，防刷屏）")
                 .translation("config.promaid.misc.bubbleLimitMs").defineInRange("bubbleLimitMs", 5000, 500, 60000);
+        // v1.1.0 实测四百一十：排班女仆贴身情绪气泡（30 条文本池，触发 CD 30 秒）
+        MISC_SCHEDULE_BUBBLE_ENABLED = BUILDER.comment("排班贴身气泡（默认开）：靠近排班中的女仆（3.5 格内）时，她随机冒出一条贴身气泡对话（30 条文本池，每只女仆 30 秒最多一条）——情绪价值小彩蛋；战斗/自保/睡觉中不打扰")
+                .translation("config.promaid.misc.scheduleBubbleEnabled").define("scheduleBubbleEnabled", true);
+        MISC_SCHEDULE_BUBBLE_RADIUS = BUILDER.comment("排班贴身气泡触发距离（格，默认 3.5）：主人距排班女仆水平小于此值时可能触发（每只女仆触发冷却 30 秒，与气泡全局限频独立）")
+                .translation("config.promaid.misc.scheduleBubbleDist").defineInRange("scheduleBubbleDist", 3.5, 1.0, 16.0);
         MISC_PICKUP_PRIORITY = BUILDER.comment("挖矿中禁止拾取（捡掉落物最低优先级）")
                 .translation("config.promaid.misc.pickupPriority").define("pickupPriority", true);
         MISC_VERTICAL_RANGE = BUILDER.comment("烹饪/酿造垂直搜索范围")

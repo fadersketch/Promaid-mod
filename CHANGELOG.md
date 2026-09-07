@@ -1,4 +1,61 @@
-﻿## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
+﻿## v1.1.0 正式版【专用服务器兼容修复 ×2】
+
+粉丝反馈：mod 在专用服务器（Dedicated Server）上无法正常使用——两个独立的服务端崩溃，均已修复并实测验证。
+
+**修复一：主类内联配置界面 lambda 触发 RuntimeDistCleaner 拦截（issue #3）**
+- 根因：`ProMaidMod` 构造函数里内联注册配置界面扩展点，lambda 编译成主类合成方法，方法描述符带 `net.minecraft.client.gui.screens.Screen`；Forge 专用服务器加载主类时被 RuntimeDistCleaner 拦截 → `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER` → mod 加载失败、服务器启动中止；
+- 修复：带客户端类型签名的 lambda 全部移入客户端专类 `com.maidsmart.client.PromaidClientSetup`，主类只在 `dist.isClient()` 分支静态调用——服务端不执行该分支，客户端类永不加载；
+- 验证：旧 jar 复现崩溃 → 新 jar 服务器 `Done` 正常启动（Forge 47.4.23 与 47.4.21 双版本回归 PASS）。
+
+**修复二：主动对话调用 TLM 客户端专用方法 ChatClientInfo.fromMaid（issue #4）**
+- 根因：`ChatInfoUtil.fromMaid` 直接调用 TLM 的 `ChatClientInfo.fromMaid(EntityMaid)`——该方法标注 `@OnlyIn(Dist.CLIENT)`（内部用 `Minecraft.getInstance()` 读客户端语言、`CustomPackLoader.MAID_MODELS` 读模型描述），专用服务器加载 TLM 时被 RuntimeDistCleaner 剥离 → 服务端触发主动对话即 `NoSuchMethodError` → 服务器 tick 崩溃；
+- 修复：不再调用 TLM 客户端工厂，改为服务端安全地自行构造 `ChatClientInfo`——语言取配置（默认 zh_cn），名字取女仆实体名，描述留空；
+- 验证：javap 实证 TLM 1.5.3 jar 中该方法带 `@OnlyIn(CLIENT)` 注解；修复后 62 mod 主整合包服务器启动 PASS、tick 正常运行。
+
+> 说明：开发者平时只玩单人模式，mod 一直按单人场景开发，未对专用服务器做过适配；感谢粉丝反馈这两个服务端问题，现已修复。若服务器上还有其他问题，欢迎继续反馈。
+
+## 实测四百一十二【回魂符提示语带上 CD 值】
+
+用户需求：防止玩家不知道收回魂符有冷却机制（常见误解："第二次死了怎么不收"），在系统提示原句"你的女仆生命值过低，已回到魂符中。"后面加"（存在CD，CD为 ?? 秒）"，数值取玩家配置的当前值。
+
+**实现（MaidSoulSpellGuard.tryReturnToSoulSpell）**：
+- 提示语改为运行时拼接：CD > 0 时 → "你的女仆生命值过低，已回到魂符中。（存在CD，CD为 N 秒）"（N = SOUL_SPELL_COOLDOWN_SECONDS 当前配置值，默认 60）；CD = 0（无冷却）时保持原句——"存在CD"为 0 会变成反话；
+- 原静态常量 SUCCESS_MESSAGE 保留给无冷却分支。
+
+部署：promaid-1.1.0.jar（4,924,302 字节）→ D:\ 验证："存在CD，CD为 " 文案与原句字节级在包内。rc=0。
+
+验收：默认配置下收符 → 聊天栏显示"……（存在CD，CD为 60 秒）"；面板把冷却调 0 → 收符显示原句不带 CD 字样。
+
+## 实测四百一十一【贴身气泡文本池扩到 50 条——打工人毒鸡汤】
+
+用户需求：加点打工人毒鸡汤语录（"看到女仆傻乎乎的被半骗着说这些话也挺有意思的"），文本池扩到 50 条；同时强调文案要贴合"按日程干活"的实际情境，防止出戏。
+
+**实现（ScheduleBubbleBehavior）**：
+- 文本池 30 → 50：新增 20 条毒鸡汤（上班第几个小时/下辈子换大扫帚/老板画的饼我饭量好/摸鱼是不可能摸鱼的/干满一百天给加餐等）；
+- 防出戏口径：毒鸡汤全部落在女仆身份与排班情境里——「老板」就是主人、「工资」是摸摸头、「加餐」是干满一百天、「同事」是别的女仆——她被排班表支配但心甘情愿，不会说出"打工人/公司/加班费"这类现代职场词；
+- 触发机制/CD/豁免不变（30 秒/只，战斗/自保/坐骑豁免）。
+
+部署：promaid-1.1.0.jar（4,924,040 字节）→ D:\ 验证：毒鸡汤代表句（老板画的饼/摸鱼是不可能摸鱼的/加餐）字节级在包内。rc=0。
+
+验收：同前（实测四百一十），50 条随机——毒鸡汤与日常碎碎念混出，重复感进一步稀释。
+
+## 实测四百一十【排班贴身气泡——情绪价值彩蛋】
+
+用户需求：玩家靠近正处于排班状态的女仆时，女仆冒出气泡框对话，30 种可能文本，触发 CD 30 秒。
+
+**实现**：
+- 新增 ScheduleBubbleBehavior（core 优先级 48，任何任务都运行）——canUse 门禁：MISC_SCHEDULE_BUBBLE_ENABLED（默认开）+ ScheduleData.isOn（排班中）+ 非坐姿/骑乘 + 非自保 + 主人同维度且水平距离 < MISC_SCHEDULE_BUBBLE_RADIUS（默认 3.5 格）+ 每只女仆 30 秒冷却（NEXT_ALLOWED 按 UUID 记 gameTime，懒清理防膨胀）；
+- 30 条贴身文本池（排班情境：干活被主人看到的碎碎念/撒娇/报备风格），start 时随机一条 addTextChatBubble（TLM 气泡 + ChatBubbleLimitMixin 5 秒全局限频双保险——本功能 30 秒 CD 远大于限频，观感上不会被吞）；
+- 睡觉豁免简化：排班睡觉时段 WALK_TARGET/攻击目标/自保多半不满足，气泡本就难触发，不再单独判睡（避免猜测未映射的 SLEEPING MemoryModuleType SRG 常量）；
+- 注册 Pair.of(48, ...)（低于散步 50，保证散步优先级不被挤）。
+
+排错记录：javap 实证 Brain 无 hasMemoryValue 直名（SRG = m_21874_/m_21876_），SLEEPING 常量字段无法可靠定位——睡觉豁免改为依赖既有豁免链（战斗/自保/坐骑）自然覆盖；新源文件需先跑 gen_compile.py 重新生成 compile_promaid.txt（源数 201→202）。
+
+部署：promaid-1.1.0.jar（4,923,241 字节）→ D:\ 验证：ScheduleBubbleBehavior.class 在包内、30 条文本入常量池、注册引用在 ProMaidExtension$1。rc=0（202 源）。
+
+验收：给女仆排班并开启 → 走到她 3.5 格内 → 30 秒内第一条随机贴身气泡（同步到聊天框）；离开再回来 30 秒内不重复；战斗/自保/坐骑中不触发；配置面板「杂项」可关。
+
+## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
 
 粉丝留言：视频里的搭高能不能改成女仆生存（maid_survival）那样的被动技能，而不是空闲状态才触发——"处于战斗模式但周围没威胁、没在真正打怪，也算另一种空闲"。
 
