@@ -280,21 +280,30 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         net.minecraft.nbt.CompoundTag data = ((net.neoforged.neoforge.common.extensions.IEntityExtension) player).getPersistentData();
         // v1.5.347:类型写错——写入是 Byte(1),contains 却查 99(NBT 无此类型)永远 false,
         // 导致每次进游戏都重发手册。改为 TAG_BYTE(1) 后"只送一次"标记才真正生效。
-        if (data.contains("maid_smart_blueprints_given", 1)) {
+        // 【移植修复】SRG m_36054_ = Inventory.add（放入背包）——1.21.1 树曾误映射为
+        // contains（只检查不放入），导致首次进服手册/排班表从未真正发放。
+        // 补发逻辑：标记存在但背包里缺书（坏版本进过服的存档）→ 补发缺失的；
+        // 标记存在且背包有书 → 不重复发；无标记 → 发齐并写标记。
+        boolean hasBook = player.getInventory().hasAnyMatching(
+                s -> s.is(ProMaidMod.BLUEPRINT_BOOK.get()));
+        boolean hasSchedule = player.getInventory().hasAnyMatching(
+                s -> s.is(ProMaidMod.SCHEDULE_BOOK.get()));
+        if (data.contains("maid_smart_blueprints_given", 1) && hasBook && hasSchedule) {
             return;
         }
-        data.putByte("maid_smart_blueprints_given", (byte) 1);
-        net.minecraft.world.item.ItemStack[] gifts = {
-                new net.minecraft.world.item.ItemStack(ProMaidMod.BLUEPRINT_BOOK.get()),
-                // v1.1.0 实测二百一十六：排班表与手册同款开局赠送（一次送齐，之后不再重复发）
-                new net.minecraft.world.item.ItemStack(ProMaidMod.SCHEDULE_BOOK.get())
-        };
-        int given = 0;
-        for (net.minecraft.world.item.ItemStack gift : gifts) {
-            if (player.getInventory().contains(gift)) {
-                given++;
-            }
+        boolean allGiven = true;
+        if (!hasBook) {
+            allGiven &= player.getInventory().add(
+                    new net.minecraft.world.item.ItemStack(ProMaidMod.BLUEPRINT_BOOK.get()));
         }
+        if (!hasSchedule) {
+            allGiven &= player.getInventory().add(
+                    new net.minecraft.world.item.ItemStack(ProMaidMod.SCHEDULE_BOOK.get()));
+        }
+        if (!allGiven) {
+            return; // 背包满了：不写标记，下次进服重试
+        }
+        data.putByte("maid_smart_blueprints_given", (byte) 1);
         player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                 "\u00a7a[maid_smart] \u300aPromaid \u624b\u518c\u300b\u4e0e\u300a\u6392\u73ed\u8868\u300b\u5df2\u9001\u5230\u4f60\u80cc\u5305\uff01"
                         + "\u624b\u6301\u53f3\u952e\u6253\u5f00\u5168\u90e8\u56fe\u7eb8\u5217\u8868\uff08\u542b\u7f3a\u6750\u63d0\u793a\uff09\uff0c"

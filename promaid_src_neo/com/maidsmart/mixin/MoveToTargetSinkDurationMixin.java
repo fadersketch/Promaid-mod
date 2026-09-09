@@ -17,12 +17,12 @@ import org.spongepowered.asm.mixin.injection.ModifyConstant;
  */
 @Mixin(MoveToTargetSink.class)
 public abstract class MoveToTargetSinkDurationMixin {
-    @ModifyConstant(method = "<init>(II)V", constant = @Constant(intValue = 150))
+    @ModifyConstant(method = "<init>()V", constant = @Constant(intValue = 150))
     private static int maidsmart$sinkMinDuration(int value) {
         return com.maidsmart.config.MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get() ? 600 : value;
     }
 
-    @ModifyConstant(method = "<init>(II)V", constant = @Constant(intValue = 250))
+    @ModifyConstant(method = "<init>()V", constant = @Constant(intValue = 250))
     private static int maidsmart$sinkMaxDuration(int value) {
         return com.maidsmart.config.MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get() ? 1200 : value;
     }
