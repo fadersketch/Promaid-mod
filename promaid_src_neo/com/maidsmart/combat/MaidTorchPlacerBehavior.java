@@ -1,0 +1,228 @@
+package com.maidsmart.combat;
+
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.entity.ai.behavior.Behavior;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
+
+/**
+ * v1.5.189：被动插火把（玩家贴身辅助）——core 行为，非工作状态。
+ *
+ * 主人周围 3×3 的黑暗格（方块亮度 < 阈值，默认 7，天光/方块光都算）自动插火把：
+ * 背包有 torch（SRG TORCH = StandingAndWallBlockItem(torch)）且脚下有实心支撑
+ * 时放置（消耗 1 个火把）。冷却 1.5 秒（防连插刷屏）。
+ * 总开关：combat.torchPlacerEnable（默认开）+ 阈值可调。
+ *
+ * v1.1.0 实测五十二【亮度口径修复】："天光/方块光都算"旧版只兑现了方块光——
+ * 白天地表方块光恒 0，跟着主人走路一路狂插火把（严重浪费）。扫描亮度改为
+ * effective = max(方块光, 天光 - getSkyDarken)（原版合并亮度口径，详见 tick 内注释）。
+ */
+public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
+
+    private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
+
+    private int torchCooldown = 0;
+    /** v1.5.227：canUse 首调诊断标记（只打第一条） */
+    private boolean canUseLogged = false;
+
+    public MaidTorchPlacerBehavior() {
+        super(java.util.Collections.emptyMap(), Integer.MAX_VALUE, Integer.MAX_VALUE);
+        // v1.5.227 诊断：行为构造 = 类被加载 + 实例被创建
+        LOGGER.info("torch-placer constructed");
+    }
+
+    @Override
+    protected boolean checkExtraStartConditions(ServerLevel level, EntityMaid maid) {
+        // v1.5.227 诊断：canUse 被 Brain 调用过一次后不再刷（只打第一条）
+        if (!this.canUseLogged) {
+            this.canUseLogged = true;
+            LOGGER.info("torch-placer canUse first-call: enabled={}",
+                    com.maidsmart.config.MaidSmartConfig.TORCH_PLACER_ENABLE.get());
+        }
+        return com.maidsmart.config.MaidSmartConfig.TORCH_PLACER_ENABLE.get();
+    }
+
+    /**
+     * v1.5.228【重大修复】：canStillUse 必须重写为 true——原版 1.20.1 Behavior 的
+     * canStillUse 默认返回【false】！行为 tryStart 后下一 tick 立即被 tickOrStop
+     * 停掉，tick() 永远不执行。插火把行为从 v1.5.189 诞生起就没 tick 过。
+     */
+    @Override
+    protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
+        return true;
+    }
+
+    @Override
+    protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
+        if (this.torchCooldown > 0) {
+            this.torchCooldown--;
+            return;
+        }
+        if (!(maid.getOwner() instanceof ServerPlayer owner)) {
+            return;
+        }
+        if (!owner.isAlive()) {
+            return;
+        }
+        if (maid.position().distanceTo(owner.position()) > 8.0) {
+            return; // 主人不在身边（> 8 格）不管
+        }
+        int threshold = com.maidsmart.config.MaidSmartConfig.TORCH_DARK_THRESHOLD.get();
+        net.minecraft.core.BlockPos base = owner.blockPosition();
+        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：扫描范围 3×3 → 5×5
+        //（主人脚下半径 2 格）——3×3 只有一格宽的跟随带，走路时边缘暗格根本轮不到
+        // 检索；5×5 覆盖正常走路节奏的暗区。每轮仍只插【一根】（插最暗格），节奏
+        // 由冷却控制，不会一次连插一片。
+        // v1.1.0 实测五十二（用户："明明亮度比较高，但仍然要插火把，严重的浪费"）：
+        // 旧版只读 LightLayer.BLOCK（方块光）——白天地表方块光恒 0，跟着女仆走路
+        // 一路狂插（0.5s 冷却 ≈ 每秒 2 根）。改为原版 getMaxLocalRawBrightness 同款
+        // 合并口径：effective = max(方块光, 天光 - 天空变暗度)。getSkyDarken
+        // （getSkyDarken，javap 反编译核实）= (1-雨)×(1-雷)×(1-昼曲线)×11：正午 0、
+        // 深夜 11、暴雨白天也升到 8+——白天/雨天不插，夜晚地表 15-11=4 照插，
+        // 地下天光 0 走方块光口径不变。阈值 7 的语义从此才真正成立。
+        int skyDarken = level.getSkyDarken();
+        net.minecraft.core.BlockPos target = null;
+        int darkest = threshold;
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                net.minecraft.core.BlockPos p = base.offset(dx, 0, dz);
+                int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, p);
+                int block = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, p);
+                int light = Math.max(block, sky - skyDarken);
+                if (light < darkest) {
+                    darkest = light;
+                    target = p;
+                }
+            }
+        }
+        if (target == null) {
+            return; // 周围够亮
+        }
+        // 目标格可放（空气/可替换）且脚下有支撑
+        if (!level.getBlockState(target).isAir()) {
+            return;
+        }
+        if (level.getBlockState(target.offset(0, -1, 0)).isAir()) {
+            return; // 悬空
+        }
+        // 找背包火把并放置（v1.1.0 实测五：兼容灵魂火把等——普通火把优先，
+        // 没有才退而求其次；放置用对应火把自己的方块而不是写死 TORCH）
+        // v1.1.0 实测二百三十一（审计：主副手识别）：背包没有则用主手/副手拿的
+        int slot = findTorch(maid);
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        ItemStack torch;
+        boolean fromHands = false;
+        if (slot >= 0) {
+            torch = inv.getStackInSlot(slot);
+        } else {
+            torch = isTorchItem(maid.getMainHandItem()) ? maid.getMainHandItem()
+                    : (isTorchItem(maid.getOffhandItem()) ? maid.getOffhandItem() : ItemStack.EMPTY);
+            fromHands = true;
+        }
+        if (torch.isEmpty()) {
+            return; // 背包和手上都没有火把
+        }
+        Block placedBlock = torchBlockOf(torch);
+        if (placedBlock == null) {
+            return; // 保险：取不到方块（理论上 findTorch 已过滤）
+        }
+        level.setBlock(target, placedBlock.defaultBlockState(), 3);
+        // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
+        // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一
+        try {
+            if (fromHands) {
+                ((net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
+                        .extractItem(isTorchItem(maid.getMainHandItem()) ? 0 : 1, 1, false);
+            } else {
+                inv.extractItem(slot, 1, false);
+            }
+        } catch (Exception ignored) {
+        }
+        maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        // v1.1.0 实测三十一：30 tick（1.5 秒）→ 15 tick（0.75 秒）
+        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：15 → 10 tick（0.5 秒）
+        this.torchCooldown = 10; // 0.5 秒
+    }
+
+    /**
+     * v1.1.0 实测五：兼容火把清单（注册名）——普通火把最优先，其余按数组顺序
+     * （灵魂火把第二；含常见模组火把的注册名，找不到的自动跳过）。
+     * 灵魂火把亮度 10 比普通火把 14 低，但在下界/驱猪场景有独特价值——
+     * 有普通火把绝不用它（用户指定优先级）。
+     * v1.1.0 实测十六（审查 P2）：移出 redstone_torch——它亮度只有 7（临界）且
+     * 【会发射红石信号】：黑暗中自动"照明"会意外激活附近的红石灯/活塞/门/
+     * TNT 类机关，作为照明清单成员风险不对称，不配当自动放置的备选。
+     */
+    private static final String[] TORCH_IDS = {
+            "minecraft:torch",
+            "minecraft:soul_torch",
+            "tacz:torch"
+    };
+
+    /** 该物品是否是可插火把（按注册名匹配清单） */
+    private static boolean isTorchItem(ItemStack stack) {
+        ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        if (key == null) {
+            return false;
+        }
+        String id = key.toString();
+        for (String t : TORCH_IDS) {
+            if (t.equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 火把物品对应的放置方块（BlockItem.getBlock = getBlock）；非火把返回 null */
+    private static Block torchBlockOf(ItemStack stack) {
+        if (!isTorchItem(stack) || !(stack.getItem() instanceof net.minecraft.world.item.BlockItem bi)) {
+            return null;
+        }
+        return bi.getBlock();
+    }
+
+    /**
+     * 背包里找火把槽位（普通火把优先——按 TORCH_IDS 顺序逐档找）。
+     * v1.1.0 实测五：旧版只认 minecraft:torch（TORCH），灵魂火把在背包里
+     * 也当"没有火把"处理；现在全清单兼容且保持优先级。
+     */
+    private static int findTorch(EntityMaid maid) {
+        try {
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            for (String torchId : TORCH_IDS) {
+                Item torchItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(torchId));
+                if (torchItem == null) {
+                    continue; // 该火把未注册（模组未装）——跳过这档
+                }
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (!stack.isEmpty() && stack.getItem() == torchItem) {
+                        return i;
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return -1;
+    }
+
+    /** v1.5.215：诊断——主人脚下 3×3 里最暗的方块亮度（LightLayer.BLOCK，0-15） */
+    private static int darkestAround(ServerLevel level, net.minecraft.core.BlockPos base) {
+        int darkest = 15;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                int light = level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK,
+                        base.offset(dx, 0, dz));
+                if (light < darkest) {
+                    darkest = light;
+                }
+            }
+        }
+        return darkest;
+    }
+}

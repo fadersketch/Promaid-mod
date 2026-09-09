@@ -1,0 +1,6 @@
+{
+  "parent": "item/generated",
+  "textures": {
+    "layer0": "maid_smart:item/beyond_unbind_card"
+  }
+}

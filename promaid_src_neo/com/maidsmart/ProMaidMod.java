@@ -1,0 +1,166 @@
+package com.maidsmart;
+
+import net.minecraft.world.item.Item;
+import net.neoforged.bus.api.IEventBus;
+import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.config.ModConfig;
+import net.neoforged.fml.event.config.ModConfigEvent;
+import net.neoforged.neoforge.registries.DeferredRegister;
+import net.neoforged.neoforge.registries.DeferredItem;
+import net.neoforged.neoforge.common.NeoForge;
+
+/**
+ * Promaid（更智能的车万女仆，v1.0.0）的 @Mod 入口。
+ *
+ * 由原 maid_smart 改名重组（v1.0.0 拆分）：全部可独立运行功能（只依赖原版 TLM）
+ * 迁入本模组——建造系统/工头、AI 工具、自保、主动对话、基础记忆、挖矿/整理/
+ * 烹饪/酿造/建造任务。关系联动（心契誓约 × 爱憎分明）已迁往独立的
+ * Heartfelt-connection 补丁（本模组零依赖，可单独运行）。
+ *
+ * Forge 要求 mods.toml 声明的每个 mod 都能在 jar 中找到对应的 @Mod 注解类；
+ * TLM 的扩展发现扫描 ModList 中的 @LittleMaidExtension——本类必须存在，
+ * ProMaidExtension 才能被 TLM 发现并注册全部功能。
+ *
+ * 兼容性说明（v1.0.0）：物品/网络/TaskData/蓝图路径等持久化标识【保留
+ * maid_smart 命名空间】（如 maid_smart:blueprint_book）——旧存档物品与数据
+ * 不丢失。仅 modId 变为 promaid。
+ */
+@Mod("promaid")
+public class ProMaidMod {
+    public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems("maid_smart");
+
+    /** Promaid 手册（v1.5.16）：右键打开全部蓝图列表（内置+外部），点击即让附近女仆建造 */
+    public static final DeferredItem<Item> BLUEPRINT_BOOK = ITEMS.register("blueprint_book",
+            () -> new com.maidsmart.build.BlueprintBookItem(new Item.Properties()));
+
+    /** 排班表（v1.1.0）：纸+墨囊合成，右键打开排班界面（快捷设置 + 按游戏内时间的日程编排） */
+    public static final DeferredItem<Item> SCHEDULE_BOOK = ITEMS.register("schedule_book",
+            () -> new com.maidsmart.schedule.ScheduleBookItem(new Item.Properties()));
+
+    /** 女仆药剂手册（v1.1.0 实测二百七十七）：水瓶+书本合成，右键女仆打开酿造配置 GUI */
+    public static final DeferredItem<Item> BREW_MANUAL = ITEMS.register("brew_manual",
+            () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
+
+    /** 精妙储存终端绑定卡（v1.1.0 实测三百零八）：9 皮革合成，右击女仆→右击精妙控制器完成绑定 */
+    public static final DeferredItem<Item> STORAGE_BIND_CARD = ITEMS.register("storage_bind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 精妙储存终端解绑卡（v1.1.0 实测三百零八）：9 甘蔗合成，右击女仆解除终端绑定 */
+    public static final DeferredItem<Item> STORAGE_UNBIND_CARD = ITEMS.register("storage_unbind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 超越维度终端绑定卡（v1.1.0 实测三百零九）：9 末影珍珠合成，绑定女仆 × 网络接口 */
+    public static final DeferredItem<Item> BEYOND_BIND_CARD = ITEMS.register("beyond_bind_card",
+            () -> new Item(new Item.Properties()));
+
+    /** 超越维度终端解绑卡（v1.1.0 实测三百零九）：9 黏液球合成，右击女仆解除网络接口绑定 */
+    public static final DeferredItem<Item> BEYOND_UNBIND_CARD = ITEMS.register("beyond_unbind_card",
+            () -> new Item(new Item.Properties()));
+
+    public ProMaidMod(ModContainer container) {
+        IEventBus modBus = container.getEventBus();
+        ITEMS.register(modBus);
+        // v1.1.0：排班表调度器（按游戏内时间自动切工作模式/任务；网络层经 @EventBusSubscriber 自注册）
+        com.maidsmart.schedule.ScheduleManager.register();
+        // v1.1.0 实测二百七十七：女仆药剂手册网络层 + 右键女仆交互
+        // v1.1.0 实测二百八十五：情绪价值交互（G 摸摸头 / H 抱抱，键位+服务端验证）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.brew.BrewManualInteractHandler());
+        // v1.1.0 实测三百零八：精妙储存终端绑定/解绑交互
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.storage.BoundStorageInteractHandler());
+        // v1.1.0 实测三百零九：超越维度网络接口绑定/解绑交互
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.storage.BeyondBindingInteractHandler());
+        // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
+        // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
+        com.maidsmart.task.MaidPlanting.ensureRegistered();
+        com.maidsmart.tool.MaidHeldLight.ensureRegistered();
+        // v1.5.88：全模组配置（COMMON——客户端/服务端都可读，配置面板可热更新）
+        container.registerConfig(ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
+        // v1.1.0 实测七十二：穿透预算语义修正后默认 22→6——旧档配置文件里存的
+        // 还是旧默认 22，加载时自动迁到 6（玩家手动改过的值 ≠22 不动）
+        modBus.addListener(ModConfigEvent.Loading.class, (e) -> onConfigLoad(e));
+        modBus.addListener(ModConfigEvent.Reloading.class, (e) -> onConfigLoad(e));
+        // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）。
+        // v1.1.0【专用服务器崩溃修复】：带 Screen 签名的 lambda 一律放客户端专类
+        // （com.maidsmart.client.PromaidClientSetup）——主类内联会让合成方法描述符
+        // 带客户端类型，服务端 FML 反射主类时被 RuntimeDistCleaner 拦截
+        //（粉丝服崩报告：Attempted to load class net.minecraft.client.gui.screens.Screen
+        //  for invalid dist DEDICATED_SERVER）。服务端不执行本分支 → 客户端类不加载。
+        if (net.neoforged.fml.loading.FMLEnvironment.dist.isClient()) {
+            com.maidsmart.client.PromaidClientSetup.registerConfigScreen(container);
+        }
+    }
+
+    /** v1.1.0 实测七十二：穿透预算旧默认迁移（22 → 6；手动改过的值不动） */
+    private void onConfigLoad(net.neoforged.fml.event.config.ModConfigEvent event) {
+        try {
+            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
+                return;
+            }
+            if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
+                com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
+            }
+            // v1.1.0 实测七十五：看门狗判定时长默认 30/45 → 8 秒（发呆出现很快，
+            // 长窗口白等）；旧档存的旧默认自动迁移，手动改过的值不动
+            if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
+                com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
+            }
+            if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
+                com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
+            }
+            // v1.1.0 实测一百二十二：搭路速度/滞留时间旧默认迁移——节奏 8→5 tick/块
+            //（≈4 块/秒与玩家持平）、滞留 10→2 秒（2s×4块/s≈8 块稳态峰值）；旧档存的
+            // 旧默认（8/10）与用户此前手调的激进值（2）一并迁到新值
+            if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
+                    || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
+                com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
+            }
+            if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
+                com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
+            }
+            // v1.1.0 实测一百七十：排班切换可用性检测默认翻转 true→false——旧默认的
+            // "没活不切"把排班女仆钉死在原地、任务不随段切换（用户反馈设计失败）；
+            // 旧档存的 true 一律迁到 false，想用完整检测可在面板重新打开
+            if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
+                com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
+            }
+            migrateOreTable();
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测七十三（粉丝反馈："女仆专门不挖铜矿石"）：铜矿 2026-08-21 才首次
+     * 进入默认矿表，且更早的默认是【空列表】；而配置文件是唯一事实源（加载时清空
+     * 内置表全以文件为准）→ 老玩家存档里的矿表没有铜，女仆永远不选铜矿、甚至把它
+     * 当硬挡路报点。两条迁移规则（只补缺，绝不动玩家已有条目）：
+     * ① 空表 = 从未配置过 → 播种当前默认全家桶；
+     * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
+     */
+    private void migrateOreTable() {
+        java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
+                com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
+        boolean changed = false;
+        if (ores.isEmpty()) {
+            ores.addAll(com.maidsmart.config.MaidSmartConfig.DEFAULT_ORE_VALUES);
+            changed = true;
+        } else {
+            boolean hasCopper = ores.stream()
+                    .anyMatch(s -> s.startsWith("minecraft:copper_ore="));
+            boolean hasVanillaOre = ores.stream()
+                    .anyMatch(s -> s.startsWith("minecraft:") && s.contains("_ore="));
+            if (!hasCopper && hasVanillaOre) {
+                ores.add("minecraft:copper_ore=300");
+                ores.add("minecraft:deepslate_copper_ore=300");
+                changed = true;
+            }
+        }
+        if (changed) {
+            com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.set(
+                    new java.util.ArrayList<>(ores));
+        }
+    }
+}

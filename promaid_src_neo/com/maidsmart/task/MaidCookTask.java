@@ -1,0 +1,64 @@
+package com.maidsmart.task;
+
+import com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask;
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.mojang.datafixers.util.Pair;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.world.entity.ai.behavior.BehaviorControl;
+import net.minecraft.world.item.ItemStack;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * maid_smart:cook —— 烧制任务（v1.1.0 实测一百六十一：由「烹饪」改名——已兼容
+ * 熔炉烧矿物/高炉/烟熏炉，任务不再只是做饭）。
+ * 女仆给附近的熔炉/高炉/烟熏炉补充燃料与可烧制物（食材/矿物），并把烧好的成品收进背包。
+ */
+public class MaidCookTask implements IMaidTask {
+    public static final ResourceLocation UID = ResourceLocation.parse("maid_smart:cook");
+
+    @Override
+    public ResourceLocation getUid() {
+        return UID;
+    }
+
+    @Override
+    public ItemStack getIcon() {
+        return new ItemStack(net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse("minecraft:furnace")));
+    }
+
+    @Override
+    public SoundEvent getAmbientSound(EntityMaid maid) {
+        return null;
+    }
+
+    @Override
+    public List<Pair<Integer, BehaviorControl<? super EntityMaid>>> createBrainTasks(EntityMaid maid) {
+        // 必须返回可变列表：TLM 的 MaidBrain.registerWorkGoals 会往里追加行为
+        return new ArrayList<>(List.of(Pair.of(5, new MaidCookBehavior())));
+    }
+
+    @Override
+    public List<Pair<Integer, BehaviorControl<? super EntityMaid>>> createRideBrainTasks(EntityMaid maid) {
+        // v1.5.25：坐下/坐垫/骑乘时任务行为仍运行（RIDE_WORK activity）
+        return new ArrayList<>(List.of(Pair.of(5, new MaidCookBehavior())));
+    }
+
+    @Override
+    public boolean workPointTask(EntityMaid maid) {
+        return true;
+    }
+
+    /** v1.5.123：关闭 TLM"随机散步"（站桩任务不需要随机漫步，见 MaidMineTask 注释） */
+    @Override
+    public boolean enableLookAndRandomWalk(EntityMaid maid) {
+        return false;
+    }
+
+    @Override
+    public String getMaidActionSummary() {
+        return "\u70e7\u5236"; // 烧制（v1.1.0 实测一百六十一：烹饪改名——兼容矿石/高炉/烟熏炉）
+    }
+}
