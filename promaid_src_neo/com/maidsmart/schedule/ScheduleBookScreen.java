@@ -788,8 +788,18 @@ public class ScheduleBookScreen extends Screen {
 
     /* ==================== 渲染 ==================== */
 
+    
+        /**
+     * 【1.21.1 图层修复】1.21.1 的 Screen.render() 开头会自动调 renderBackground
+     * （游戏内=全屏模糊+菜单底纹），把 render() 先画好的自定义背景与文字再盖一层
+     * （实机截图实证：说明文字/按钮文字发暗、渐变色带错乱）。重写为空 →
+     * super.render() 内部的回调变 no-op，背景只由本类 render() 开头显式画一次
+     * （1.20.1 语义：游戏内半透明黑渐变 / 主菜单全景）。
+     */
     @Override
-    public void render(GuiGraphics g, int mx, int my, float pt) {
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    }
+public void render(GuiGraphics g, int mx, int my, float pt) {
         this.renderBackground(g, 0, 0, 0);
         int w = this.width;
         int h = this.height;
