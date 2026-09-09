@@ -912,9 +912,7 @@ public class PromaidConfigScreen extends Screen {
                                 b -> PromaidConfigScreen.this.removeAlt(this.id))
                         .bounds(0, 0, 56, 18).build();
             }
-
-            @Override
-            public void render(GuiGraphics g, int index, int top, int left, int width, int height,
+public void render(GuiGraphics g, int index, int top, int left, int width, int height,
                                 int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int x = left + 4;
                 int y = top + 4;
@@ -2750,9 +2748,24 @@ public class PromaidConfigScreen extends Screen {
         }
     }
 
+        /**
+     * 【1.21.1 图层修复】1.21.1 的 Screen.render() 开头会自动调 renderBackground
+     * （游戏内=全屏模糊+菜单底纹），把 render() 先画好的自定义背景与文字再盖一层。
+     * 重写为空 → super.render() 内部的回调变 no-op，背景只由本类 render() 开头显式画一次。
+     */
+    @Override
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    }
+
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(g, 0, 0, 0); // renderBackground
+        // 【1.21.1 图层修复】1.20.1 语义：游戏内只画半透明黑渐变；主菜单画全景。
+        // 不能用 1.21.1 默认 renderBackground（模糊+菜单底纹会盖住后画内容）
+        if (this.minecraft != null && this.minecraft.level != null) {
+            this.renderTransparentBackground(g);
+        } else {
+            super.renderBackground(g, 0, 0, 0);
+        }
         // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
         // 一点都没变"）：Promaid 模组详细配置（手册子界面）补上蓝金品牌渐变——与
         // 手册主界面同款（半透明色带叠加 = 渐变，fill 走 ARGB）

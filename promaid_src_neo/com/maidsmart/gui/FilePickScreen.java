@@ -198,9 +198,25 @@ public class FilePickScreen extends Screen {
         }
     }
 
+    
+        /**
+     * 【1.21.1 图层修复】1.21.1 的 Screen.render() 开头会自动调 renderBackground
+     * （游戏内=全屏模糊+菜单底纹），把 render() 先画好的自定义背景与文字再盖一层
+     * （实机截图实证：说明文字/按钮文字发暗、渐变色带错乱）。重写为空 →
+     * super.render() 内部的回调变 no-op，背景只由本类 render() 开头显式画一次
+     * （1.20.1 语义：游戏内半透明黑渐变 / 主菜单全景）。
+     */
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, 0, 0, 0); // renderBackground
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
+public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 【1.21.1 图层修复】1.20.1 语义：游戏内只画半透明黑渐变；主菜单画全景。
+        // 不能用 1.21.1 默认 renderBackground（模糊+菜单底纹会盖住后画内容）
+        if (this.minecraft != null && this.minecraft.level != null) {
+            this.renderTransparentBackground(graphics);
+        } else {
+            super.renderBackground(graphics, 0, 0, 0);
+        }
         // v1.1.0 实测三百一十七：蓝图文件选择（手册子界面）补上蓝金品牌渐变——与手册同款
         int w = this.width;
         int h = this.height;

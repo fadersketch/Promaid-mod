@@ -466,9 +466,12 @@ public class BlueprintBookScreen extends Screen {
         return Math.max(3, this.contentH() / MAID_ROW_H);
     }
 
-    /** v1.5.82：MC 经验条纹理（textures/gui/bars.png：v=64 亮绿进度、v=69 暗底） */
-    private static final net.minecraft.resources.ResourceLocation BARS =
-            ResourceLocation.fromNamespaceAndPath("minecraft", "textures/gui/bars.png");
+    /** v1.5.82：MC 经验条精灵（1.21.1 拆分独立 png：experience_bar_progress/background，
+     *  旧 textures/gui/bars.png 在 1.21 已删除——blit 引用缺失纹理 = 洋红棋盘格污染） */
+    private static final net.minecraft.resources.ResourceLocation EXP_BAR_BG =
+            ResourceLocation.fromNamespaceAndPath("minecraft", "hud/experience_bar_background");
+    private static final net.minecraft.resources.ResourceLocation EXP_BAR_FG =
+            ResourceLocation.fromNamespaceAndPath("minecraft", "hud/experience_bar_progress");
 
     /**
      * v1.5.83：进度显示——MC 标准经验条纹理（182×5 居中）+ 文本（自动换行居中）。
@@ -496,11 +499,11 @@ public class BlueprintBookScreen extends Screen {
             int barY = textY + Math.max(usedLines, 1) * 10 + 10;
             int barW = 182;
             int barX = (this.width - barW) / 2;
-            // MC 经验条纹理：暗底 + 亮绿进度（v=69 底 / v=64 进度，182×5）
-            graphics.blit(BARS, barX, barY, 0, 69, barW, 5);
+            // MC 经验条精灵（1.21.1）：背景 + 进度（独立 png，blitSprite 整图画）
+            graphics.blitSprite(EXP_BAR_BG, barX, barY, barW, 5);
             int fillW = Math.max(0, Math.min(barW, this.progressPct * barW / 100));
             if (fillW > 0) {
-                graphics.blit(BARS, barX, barY, 0, 64, fillW, 5);
+                graphics.blitSprite(EXP_BAR_FG, barX, barY, fillW, 5);
             }
             // v1.5.252s：进度条右侧 = 百分比 · 速度(块/秒) · 预计完成时间——
             // 超宽时左移钳制（绝不顶出屏幕右缘）
@@ -1803,9 +1806,25 @@ public class BlueprintBookScreen extends Screen {
         }
     }
 
+    
+        /**
+     * 【1.21.1 图层修复】1.21.1 的 Screen.render() 开头会自动调 renderBackground
+     * （游戏内=全屏模糊+菜单底纹），把 render() 先画好的自定义背景与文字再盖一层
+     * （实机截图实证：说明文字/按钮文字发暗、渐变色带错乱）。重写为空 →
+     * super.render() 内部的回调变 no-op，背景只由本类 render() 开头显式画一次
+     * （1.20.1 语义：游戏内半透明黑渐变 / 主菜单全景）。
+     */
     @Override
-    public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        this.renderBackground(graphics, 0, 0, 0); // renderBackground
+    public void renderBackground(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+    }
+public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // 【1.21.1 图层修复】1.20.1 语义：游戏内只画半透明黑渐变；主菜单画全景。
+        // 不能用 1.21.1 默认 renderBackground（模糊+菜单底纹会盖住后画内容）
+        if (this.minecraft != null && this.minecraft.level != null) {
+            this.renderTransparentBackground(graphics);
+        } else {
+            super.renderBackground(graphics, 0, 0, 0);
+        }
         // v1.1.0 实测三百一十三（用户："模组内新添加物品的 ui 背景都是用的原版 MC
         // 格式，过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：Promaid 手册
         // 品牌渐变背景——蓝金主题（与手册建造功能呼应）。半透明色带叠加 = 渐变
