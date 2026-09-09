@@ -1,0 +1,1019 @@
+package com.maidsmart.schedule;
+
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.network.chat.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import net.neoforged.neoforge.network.PacketDistributor;
+
+/**
+ * 排班表界面（v1.1.0）——纸+墨囊合成的「排班表」物品右键打开。
+ *
+ * v1.1.0 实测五十一【UI 重做】（用户："不再要求玩家去填时间……实际的时间分配
+ * 实际上就是将女仆的工作时间分成 6 份"）：
+ * - 旧版「日程设置」= 任意行数 + 手填 "H:MM~H:MM" 时间段——弃用（实测三十三的
+ *   时间输入框/添加分段/删除行全套移除）。
+ * - 新流程：选女仆 → 选班次（早班/晚班/全天）→ 6 个任务按钮排一天。班次工作
+ *   窗口均分 6 份（全天每份 4 小时、早/晚班每份 2 小时），点任务按钮循环切换
+ *   （与快捷设置同款循环交互），可重复（前 3 个种植后 3 个挖矿 = 一天两档）。
+ * - 底层沿用 Segment 存储（相邻同任务自动合并），跨时间点照旧自动切换；
+ *   休息时间不排段——由 TLM 作息让她睡觉（早班夜休/晚班昼休）。
+ * - 底部"保存日程"一次性提交（避免每点一下任务就 rebuild brain）。
+ */
+public class ScheduleBookScreen extends Screen {
+    private static final int VIEW_LIST = 0;
+    private static final int VIEW_DETAIL = 1;
+
+    /** 打开包数据：{uuid, 名字, 任务UID, 工作模式, 排班开, 段数} */
+    private final List<String[]> maids;
+    /** 可选任务清单（uid） */
+    private final List<String> taskUids;
+    private final Screen parent;
+
+    private int view = VIEW_LIST;
+    private int page = 0;
+    private String selUuid;
+    private String selName;
+    /** 日程请求中（等 SchedDataPacket） */
+    private boolean waiting = false;
+    private boolean loadedOn = false;
+    /** 详情页页签（实测五十九）：0=第 1 页快捷设置（立即生效） 1=第 2 页排班（班次+6 槽） */
+    private int detailPage = 0;
+    /** v1.1.0 实测六十三（自查修复）：排班页有未保存编辑——切页不再重拉数据覆盖 */
+    private boolean schedDirty = false;
+    /** 实测六十（借鉴 Maid_Roster）：列表搜索词 / 批量模式选择 / 批量任务选择 /
+     *  键盘焦点输入框 / 上次过滤后行数（空态提示用） */
+    private String searchQuery = "";
+    private int batchMode = 2;
+    private String batchTask = "";
+    private EditBox activeBox;
+    private int lastFiltered = 0;
+    /** 班次（0=早班 1=晚班 2=全天）——排班页第一步选这个 */
+    private int shift = 2;
+    /** 6 个任务槽（uid；空 = 空闲/idle）——第二步点按钮循环切换 */
+    private final String[] slots = new String[6];
+    /** 实测四百零二：任务选择面板——正在为哪个槽选任务（-1 = 未打开） */
+    private int pickSlot = -1;
+    /** 任务选择面板分页 */
+    private int pickPage = 0;
+    private static ScheduleBookScreen instance;
+
+    private static final String[] MODE_NAMES = {"早班", "晚班", "全天"};
+
+    /* ==================== 布局常量（实测三十三：全界面唯一定义处） ==================== */
+    private static final int TOP_TITLE_Y = 8;      // 标题行
+    private static final int TAB_Y = 28;           // tab 行（详情页）
+    private static final int CONTENT_TOP = 52;     // 内容区顶
+    private static final int CONTENT_BOTTOM_PAD = 56; // 底部按钮区高度预留
+    private static final int FOOT_Y = -52;         // 底部区 y（相对 h，负数=从底往上）
+    private static final int LIST_ROW_H = 22;      // 列表行高
+    /** 槽位按钮：宽 150，一列 6 行（行高 24；窄屏自动缩窄） */
+    private static final int SLOT_W = 150;
+    /** 实测五十六：时段标签与任务按钮的设计间距——标签区 72px 容纳 "22:00~24:00"
+     *  （实测 58px）后仍留 14px 净空；init（detailButtons）与渲染（render）共用 */
+    private static final int LABEL_GAP = 72;
+
+    public static void open(List<String[]> maids, List<String> taskUids) {
+        instance = new ScheduleBookScreen(null, maids, taskUids);
+        Minecraft.getInstance().setScreen(instance);
+    }
+
+    /** SchedDataPacket 到达：已存日程 → 班次 + 6 槽任务（旧版手填段也能读回来） */
+    public static void showSchedule(String uuid, boolean on, List<ScheduleData.Segment> segments) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null || !uuid.equals(cur.selUuid)) {
+            return;
+        }
+        cur.waiting = false;
+        cur.loadedOn = on;
+        cur.shift = ScheduleData.inferShift(segments);
+        // 默认任务 = 她当前任务（空表新用户的起点）
+        String curTask = "";
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                curTask = m[2];
+                break;
+            }
+        }
+        String[] tasks = ScheduleData.slotTasks(segments, cur.shift, curTask);
+        for (int i = 0; i < 6; i++) {
+            cur.slots[i] = tasks[i] == null ? "" : tasks[i];
+        }
+        cur.init();
+    }
+
+    /** v1.1.0 实测二百六十八（用户："排班生效之后，快捷设置页的 GUI 应该也统一立刻
+     *  更改为排班所规定的状态，然后再锁定"）：服务端排班段应用成功 → 推最新真实状态
+     *  （任务/模式/排班开关）→ 更新列表行数据并重建界面——快捷设置页立即显示排班
+     *  规定的模式/任务并锁定，不再停留在打开排班书那一刻的旧状态。 */
+    public static void syncMaidState(String uuid, String taskUid, int scheduleOrdinal, boolean schedOn) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null) {
+            return;
+        }
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                m[2] = taskUid == null ? "touhou_little_maid:idle" : taskUid;
+                m[3] = String.valueOf(Math.max(0, Math.min(2, scheduleOrdinal)));
+                m[4] = schedOn ? "1" : "0";
+                break;
+            }
+        }
+        // 详情页正在看这只女仆：同步开关状态（右上角排班开关 + 快捷设置页锁定）
+        if (uuid.equals(cur.selUuid)) {
+            cur.loadedOn = schedOn;
+        }
+        cur.init();
+    }
+
+    /**
+     * v1.1.0 实测三百四十九（用户："在排班表内对女仆进行改名，但是在排班表内
+     * 并没有显示出来，还是原来的名字"）：服务端改名成功 → MaidRenameSyncPacket
+     * 推回新名字，这里同步列表行（m[1]）与详情页标题（selName）——客户端 maids
+     * 快照是打开排班表那一刻收集的，不回发就永远是旧名字。
+     */
+    public static void syncMaidName(String uuid, String name) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null || uuid == null) {
+            return;
+        }
+        String n = name == null ? "" : name;
+        for (String[] m : cur.maids) {
+            if (m[0].equals(uuid)) {
+                m[1] = n;
+                break;
+            }
+        }
+        if (uuid.equals(cur.selUuid)) {
+            cur.selName = n;
+        }
+        cur.init();
+    }
+
+    private ScheduleBookScreen(Screen parent, List<String[]> maids, List<String> taskUids) {
+        super(Component.literal("排班表"));
+        this.parent = parent;
+        this.maids = new ArrayList<>(maids);
+        this.taskUids = new ArrayList<>(taskUids);
+    }
+
+    @Override
+    public void init() {
+        this.clearWidgets(); // clearWidgets
+        this.activeBox = null; // 实测六十：重建后由各页第一个输入框认领焦点
+        int w = this.width;
+        int h = this.height;
+        if (this.view == VIEW_LIST) {
+            this.listButtons(w, h);
+        } else {
+            this.detailButtons(w, h);
+        }
+    }
+
+    /* ==================== 女仆列表页 ==================== */
+
+    /**
+     * v1.1.0 实测六十（借鉴 Maid_Roster 军队管理，不学"绑定点名册"——我们直接
+     * 列出全部女仆且跨维度）：搜索框按名字过滤 / 行内血量+维度状态 / 批量应用
+     * 工作模式与任务 / 一键集合（跨维度传送回身边）。
+     * 纵向：搜索框 32..50，行区 52 起（rowsPerPage = (h-124)/22），批量行 h-68，
+     * 翻页 h-46，集合+关闭 h-24——240 高最小窗口零重叠（实测五十六口径）。
+     */
+    private void listButtons(int w, int h) {
+        int cx = w / 2;
+        int bw = Math.min(300, w - 16);
+        // 搜索框（按名字过滤，输入即刷）
+        EditBox search = new EditBox(this.font, cx - bw / 2, 32, bw, 18,
+                Component.literal("搜索名字…"));
+        search.setMaxLength(20);
+        search.setValue(this.searchQuery);
+        // 实测六十二（自查修复）：setValue 只把【旧框】的光标夹到新文本长度，而击键
+        // 重建出来的【新框】光标默认在 0——不手动移到末尾的话，输入会倒序乱掉
+        search.setHighlightPos(this.searchQuery.length());
+        search.setResponder(s -> {
+            this.searchQuery = s;
+            this.page = 0;
+            this.init();
+        });
+        search.setTextColor(0xFFFFFF);
+        this.addRenderableWidget(search);
+        this.activeBox = search; // 默认聚焦：打开即打字过滤
+        search.setFocused(true);
+        // 过滤（名字包含匹配，大小写不敏感）
+        String q = this.searchQuery == null ? "" : this.searchQuery.trim().toLowerCase();
+        java.util.List<String[]> shown = new ArrayList<>();
+        for (String[] m : this.maids) {
+            if (!q.isEmpty() && !m[1].toLowerCase().contains(q)) {
+                continue;
+            }
+            shown.add(m);
+        }
+        this.lastFiltered = shown.size();
+        int avail = h - 72 - 52;
+        int rowsPerPage = Math.max(1, Math.min(8, avail / LIST_ROW_H));
+        int totalPages = Math.max(1, (shown.size() + rowsPerPage - 1) / rowsPerPage);
+        this.page = Math.min(this.page, totalPages - 1);
+        int start = this.page * rowsPerPage;
+        int end = Math.min(shown.size(), start + rowsPerPage);
+        int y = 52;
+        for (int i = start; i < end; i++) {
+            String[] m = shown.get(i);
+            // 行标签：名字 + 血量% + 维度标签（跨维度才显示）+ 排班状态（实测六十）
+            // v1.1.0 实测三百四十二：追加在家模式状态（m[8]="1" 显示「在家」）
+            String sched = "1".equals(m[4])
+                    ? "\u00a7a排班开\u00a77（" + m[5] + " 段）" : "\u00a77排班关";
+            String home = m.length > 8 && "1".equals(m[8])
+                    ? " \u00a7d在家" : "";
+            String label = "\u00a7e" + fitName(m[1]) + " \u00a7f" + m[6] + "% "
+                    + (m[7].isEmpty() ? "" : "\u00a79" + m[7] + " ") + sched + home;
+            final String uuid = m[0];
+            final String name = m[1];
+            this.addRenderableWidget(Button.builder(Component.literal(label), b -> {
+                        this.selUuid = uuid;
+                        this.selName = name;
+                        this.view = VIEW_DETAIL;
+                        // 实测五十九：进详情默认第 1 页（快捷设置，无需日程数据）；
+                        // 排班数据改在切到第 2 页时按需拉取（每次进都拉最新）
+                        this.detailPage = 0;
+                        // v1.1.0 实测六十三（自查修复）：开关状态从列表行初始化——旧逻辑
+                        // loadedOn 残留上一只女仆的值，详情页右上角开关显示错误、切换时
+                        // 还会把错误的开/关写给新女仆
+                        this.loadedOn = "1".equals(m[4]);
+                        // v1.1.0 实测六十四（二次复查修复）：换女仆必须清排班页脏标记——
+                        // 残留 true 会让新女仆的排班页不拉数据、显示上一只的槽位
+                        this.schedDirty = false;
+                        this.init();
+                    })
+                    .bounds(cx - bw / 2, y, bw, 20).build());
+            y += LIST_ROW_H;
+        }
+        // 批量行（h-68）：全员模式（点选即应用）/ 任务选择（只选不应用）/ 应用任务
+        int bx0 = cx - 146;
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("\u00a7e全员模式：" + MODE_NAMES[Math.max(0, Math.min(2, this.batchMode))]),
+                        b -> {
+                            this.batchMode = (this.batchMode + 1) % 3;
+                            PacketDistributor.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                                    this.batchMode, ""));
+                            this.init();
+                        })
+                .bounds(bx0, h - 68, 100, 18).build());
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("任务：\u00a7e" + fitTask(this.batchTask) + " \u00a77\u25b8"),
+                        b -> {
+                            if (this.taskUids.isEmpty()) {
+                                return;
+                            }
+                            // v1.1.0 实测二百七十：批量任务循环【含空闲档】——旧版只在
+                            // taskUids 里循环（batchTask 初始 "" 时 indexOf=-1 → 直接跳到
+                            // 第一个任务），选不到"空闲"；末尾回绕到 ""（空闲档）。
+                            int next = (this.taskUids.indexOf(this.batchTask) + 1) % (this.taskUids.size() + 1);
+                            this.batchTask = next == this.taskUids.size() ? "" : this.taskUids.get(next);
+                            this.init();
+                        })
+                .bounds(bx0 + 106, h - 68, 100, 18).build());
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a7a\u2713应用任务"), b -> {
+                    // v1.1.0 实测二百七十（用户："点击应用空闲，女仆仍然显示自己在别的
+                    // 模式。哪怕排班没有开启"）："空闲"档在 GUI 里 = 空串 ""——旧版
+                    // if (!batchTask.isEmpty()) 把空串拦掉 → 点"应用空闲"什么都不发。
+                    // 空串 → 当作 touhou_little_maid:idle（TLM 空闲任务）发送。
+                    String uid = this.batchTask.isEmpty()
+                            ? "touhou_little_maid:idle" : this.batchTask;
+                    PacketDistributor.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                            -1, uid));
+                })
+                .bounds(bx0 + 212, h - 68, 80, 18).build());
+        // v1.1.0 实测三百四十三（用户："它的调整方式应该跟工作模式和任务是一样的。
+        // 都可以统一对所有女仆进行调控，或者对单一女仆进行调控"）：批量行下方新增
+        // 「全员在家」按钮（点击循环 开/关，与全员模式同款交互）——统一调控全部
+        // 女仆的在家模式；排班中的女仆跳过（home 由排班管理，服务端同样兜底）。
+        // 翻页按钮右移到 cx+40/cx+90，给全员在家让出左侧空间。
+        int homeCount = 0;
+        int freeCount = 0;
+        for (String[] m : this.maids) {
+            if (!"1".equals(m[4])) { // 非排班女仆
+                freeCount++;
+                if (m.length > 8 && "1".equals(m[8])) {
+                    homeCount++;
+                }
+            }
+        }
+        boolean allHome = freeCount > 0 && homeCount == freeCount;
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("\u00a7d全员在家：" + (allHome ? "开" : "关")
+                                + " \u00a77(" + homeCount + "/" + freeCount + ")"),
+                        b -> {
+                            boolean next = !allHome;
+                            PacketDistributor.sendToServer(
+                                    new ScheduleNetworking.BatchHomePacket(next));
+                            // 本地同步行数据（非排班女仆）
+                            for (String[] m : this.maids) {
+                                if (!"1".equals(m[4])) {
+                                    m[8] = next ? "1" : "0";
+                                }
+                            }
+                            this.init();
+                        })
+                .bounds(bx0, h - 46, 100, 18).build());
+        // 翻页（◀ 页码 ▶ 居中一行，位于底区；实测三百四十三：右移到 cx+40/cx+90
+        // 给「全员在家」让出左侧空间）
+        if (this.page > 0) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
+                        this.page--;
+                        this.init();
+                    })
+                    .bounds(cx + 40, h - 46, 20, 18).build());
+        }
+        if (this.page < totalPages - 1) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
+                        this.page++;
+                        this.init();
+                    })
+                    .bounds(cx + 90, h - 46, 20, 18).build());
+        }
+        // 一键集合（跨维度传送全部在场女仆到身边；实测六十）+ 关闭
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a7d\u2691 一键集合"), b ->
+                        PacketDistributor.sendToServer(new ScheduleNetworking.SummonPacket()))
+                .bounds(Math.max(8, cx - 145), h - 24, 90, 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a7c关闭"), b -> this.onClose())
+                .bounds(cx - 50, h - 24, 100, 20).build());
+    }
+
+    /* ==================== 详情页（实测五十九：第 1 页快捷设置 / 第 2 页排班） ==================== */
+
+    private void detailButtons(int w, int h) {
+        int cx = w / 2;
+        // 实测四百零六【任务选择整页】：先于一切整页接管——选择页只有
+        // "← 返回排班"+任务列表+分页，不画女仆列表返回/页签/排班开关（手册
+        // 阅读页同款：整页独占，零浮层、零重叠）
+        if (this.pickSlot >= 0) {
+            this.pickPageButtons(w, h, cx);
+            return;
+        }
+        // 返回列表（左下角，两页共用）
+        this.addRenderableWidget(Button.builder(Component.literal("← 女仆列表"), b -> {
+                    this.view = VIEW_LIST;
+                    this.selUuid = null;
+                    this.init();
+                })
+                .bounds(12, h - 24, 100, 20).build());
+        // ---- 页签（第 1 页快捷设置 / 第 2 页排班）——实测五十六同款自由区居中，避开右上开关 ----
+        boolean on = this.loadedOn;
+        int toggleLeft = Math.max(4, w - 120);
+        int freeL = 8;
+        int freeR = toggleLeft - 8;
+        String[] tabs = {"快捷设置", "排班"};
+        int tabW = Math.min(120, Math.max(60, (freeR - freeL - 10) / 2));
+        int tabX0 = freeL + Math.max(0, (freeR - freeL - (tabW * 2 + 10)) / 2);
+        for (int i = 0; i < 2; i++) {
+            final int ti = i;
+            this.addRenderableWidget(Button.builder(
+                            Component.literal((this.detailPage == ti ? "\u00a76\u25cf " : "\u00a77") + tabs[i]),
+                            b -> {
+                                if (this.detailPage == ti) {
+                                    return;
+                                }
+                                this.detailPage = ti;
+                                // v1.1.0 实测六十三（自查修复）：有未保存编辑时不再重拉——
+                                // 旧逻辑每次进排班页都拉最新数据，翻个页未保存的班次/任务
+                                // 就被覆盖丢失；脏标记在保存/换女仆时清除
+                                if (ti == 1 && !this.schedDirty) {
+                                    this.waiting = true;
+                                    PacketDistributor.sendToServer(
+                                            new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
+                                }
+                                this.init();
+                            })
+                    .bounds(tabX0 + i * (tabW + 10), TAB_Y, tabW, 18).build());
+        }
+        // 排班开关（右上角，两页共用；同步列表行状态防关界面后列表显示过期）
+        String[] sel = this.findSel();
+        this.addRenderableWidget(Button.builder(
+                        Component.literal(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
+                        b -> {
+                            PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                    this.selUuid, -1, "", on ? 0 : 1));
+                            this.loadedOn = !on;
+                            if (sel != null) {
+                                sel[4] = this.loadedOn ? "1" : "0";
+                            }
+                            this.init();
+                        })
+                .bounds(toggleLeft, TAB_Y, 90, 18).build());
+        if (this.waiting) {
+            return; // 渲染层显示"请求中…"，数据到了 showSchedule 会重建
+        }
+        if (this.detailPage == 0) {
+            this.quickPage(w, h, cx, sel);
+        } else {
+            this.schedPage(w, h, cx);
+        }
+    }
+
+    /**
+     * 第 1 页快捷设置（实测五十九恢复）：工作模式 / 任务循环，点击立即生效——
+     * 遥控她"现在"干什么（排班页管的是"一天怎么过"，这页管"此刻"）。
+     * 排班开关在右上角（两页共用），本页不再重复放。
+     */
+    private void quickPage(int w, int h, int cx, String[] sel) {
+        String curTask = sel != null ? sel[2] : "";
+        int qx = Math.max(8, cx - 150);
+        int qw = Math.min(300, w - qx - 8);
+        int y = CONTENT_TOP + 6;
+        // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL，立即生效）
+        // v1.1.0 实测七十六：排班中的女仆锁定（同任务按钮——服务端同样拦截兜底）
+        // v1.1.0 实测三百一十二（用户："排班表对于模式的切换必须要通过点击的方式
+        // 切换到下一个模式。能不能增加前后切换键，让它可以切换到上一个或者下一个"）：
+        // 拆成三键——◀ 上一个 / 中间模式名（点击仍循环，保留旧习惯）/ ▶ 下一个。
+        int curMode = Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)));
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
+                    if (this.loadedOn) {
+                        return; // 硬性锁定：先关右上角的排班
+                    }
+                    int mode = (curMode + 2) % 3; // 上一个（-1 取模）
+                    PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            this.selUuid, mode, "", -1));
+                    if (sel != null) {
+                        sel[3] = String.valueOf(mode);
+                    }
+                    this.init();
+                })
+                .bounds(qx, y, 20, 20).build());
+        this.addRenderableWidget(Button.builder(
+                        Component.literal("工作模式：\u00a7e" + MODE_NAMES[curMode]
+                                + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击/◀▶切换)")),
+                        b -> {
+                            if (this.loadedOn) {
+                                return; // 硬性锁定：先关右上角的排班
+                            }
+                            int mode = (curMode + 1) % 3;
+                            PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                    this.selUuid, mode, "", -1));
+                            if (sel != null) {
+                                sel[3] = String.valueOf(mode);
+                            }
+                            this.init();
+                        })
+                .bounds(qx + 24, y, Math.max(40, qw - 48), 20).build());
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
+                    if (this.loadedOn) {
+                        return; // 硬性锁定：先关右上角的排班
+                    }
+                    int mode = (curMode + 1) % 3; // 下一个
+                    PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            this.selUuid, mode, "", -1));
+                    if (sel != null) {
+                        sel[3] = String.valueOf(mode);
+                    }
+                    this.init();
+                })
+                .bounds(qx + qw - 20, y, 20, 20).build());
+        y += 26;
+        // 任务循环（点一下换下一个；到头回绕；立即生效）
+        // v1.1.0 实测七十（用户反馈：日程表与主人主动切任务冲突）：排班中的女仆
+        // 【锁定任务】——按钮文案提示，点击不再发包（服务端同样拦截兜底）
+        // v1.1.0 实测三百三十九（用户："全天模式有了左右的箭头，那么下面的任务
+        // 也应该有左右箭头啊。任务调整的左右箭头才是最重要的。但是你却一个都没
+        // 给"）：任务行拆成三键——◀ 上一个 / 中间任务名（点击仍循环，保留旧习惯）
+        // / ▶ 下一个，与工作模式行同款布局。
+        if (!this.taskUids.isEmpty()) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
+                        if (this.loadedOn) {
+                            return; // 硬性锁定：先关右上角的排班才能切任务
+                        }
+                        int cur = this.taskUids.indexOf(curTask);
+                        int prev = (cur - 1 + this.taskUids.size()) % this.taskUids.size();
+                        String uid = this.taskUids.get(prev);
+                        PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                this.selUuid, -1, uid, -1));
+                        if (sel != null) {
+                            sel[2] = uid;
+                        }
+                        this.init();
+                    })
+                    .bounds(qx, y, 20, 20).build());
+            this.addRenderableWidget(Button.builder(
+                            Component.literal("任务：\u00a7e" + taskCn(curTask)
+                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击/◀▶切换)")),
+                            b -> {
+                                if (this.loadedOn) {
+                                    return; // 硬性锁定：先关右上角的排班才能切任务
+                                }
+                                int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
+                                String uid = this.taskUids.get(next);
+                                PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                        this.selUuid, -1, uid, -1));
+                                if (sel != null) {
+                                    sel[2] = uid;
+                                }
+                                this.init();
+                            })
+                    .bounds(qx + 24, y, Math.max(40, qw - 48), 20).build());
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
+                        if (this.loadedOn) {
+                            return; // 硬性锁定：先关右上角的排班才能切任务
+                        }
+                        int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
+                        String uid = this.taskUids.get(next);
+                        PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                this.selUuid, -1, uid, -1));
+                        if (sel != null) {
+                            sel[2] = uid;
+                        }
+                        this.init();
+                    })
+                    .bounds(qx + qw - 20, y, 20, 20).build());
+        }
+        y += 26;
+        // v1.1.0 实测三百四十二（用户："排班表内部也应该可以调整每个女仆是否可以为
+        // home模式"）：在家模式开关——不依赖排班开关，不开排班也能让女仆守家；
+        // 排班开着时 home 由排班管理（开排班自动 home），按钮锁定提示先关排班。
+        boolean homeOn = sel != null && sel.length > 8 && "1".equals(sel[8]);
+        this.addRenderableWidget(Button.builder(
+                        Component.literal(homeOn
+                                ? "\u00a7d在家模式：开" + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击关闭)")
+                                : "\u00a77在家模式：关" + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击开启)")),
+                        b -> {
+                            if (this.loadedOn) {
+                                return; // 排班中 home 由排班管理，先关排班
+                            }
+                            boolean next = !homeOn;
+                            PacketDistributor.sendToServer(
+                                    new ScheduleNetworking.HomeTogglePacket(this.selUuid, next));
+                            if (sel != null) {
+                                sel[8] = next ? "1" : "0";
+                            }
+                            this.init();
+                        })
+                .bounds(qx, y, qw, 20).build());
+        y += 26;
+        // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找；
+        // 与列表页「一键集合」同豁免口径：坐着/骑乘/在家模式（排班中）不传，服务端
+        // 会回复原因；需要强制召回先关右上角排班）
+        boolean canSummon = this.selUuid != null && !this.selUuid.isEmpty();
+        this.addRenderableWidget(Button.builder(
+                        Component.literal(canSummon
+                                ? "\u00a7d\u2691 传送到我身边"
+                                : "\u00a77\u2691 传送到我身边（不可用）"),
+                        b -> {
+                            if (canSummon) {
+                                PacketDistributor.sendToServer(
+                                        new ScheduleNetworking.MaidSummonPacket(this.selUuid));
+                            }
+                        })
+                .bounds(qx, y, qw, 20).build());
+        // 改名行（实测六十，借鉴 Maid_Roster 的重命名——直接改女仆自定义名，等同命名牌）
+        y += 26;
+        EditBox nameBox = new EditBox(this.font, qx, y + 1, qw - 96, 18,
+                Component.literal("新名字"));
+        nameBox.setMaxLength(30);
+        nameBox.setValue(sel != null ? sel[1] : "");
+        nameBox.setTextColor(0xFFFFFF);
+        this.addRenderableWidget(nameBox);
+        this.addRenderableWidget(Button.builder(Component.literal("改名"), b ->
+                        PacketDistributor.sendToServer(new ScheduleNetworking.RenameMaidPacket(
+                                this.selUuid, nameBox.getValue())))
+                .bounds(qx + qw - 92, y, 92, 20).build());
+    }
+
+    /**
+     * 第 2 页排班（实测五十一的班次 + 6 任务槽）。实测五十九压缩纵向：
+     * 页签行(28..46)下方班次行(50..68)、6 槽行距 24→22（按钮 20→18，槽区
+     * 72..200），提示(h-38)与底行(h-24)不变——240 高最小窗口下全部放得下且零重叠。
+     */
+    private void schedPage(int w, int h, int cx) {
+        // ---- 实测四百零六【任务选择整页】：点任务槽中间按钮 → 整页跳转到任务
+        // 选择页（手册阅读页同款——独占整页、零重叠；旧浮层面板会压住班次按钮）----
+        if (this.pickSlot >= 0) {
+            this.pickPageButtons(w, h, cx);
+            return;
+        }
+        // ---- 班次选择：自由区内居中，窄屏自动缩窄（实测五十六口径） ----
+        int toggleLeft = Math.max(4, w - 120);
+        int freeL = 8;
+        int freeR = toggleLeft - 8;
+        int shiftW = Math.min(84, Math.max(40, (freeR - freeL - 12) / 3));
+        int shiftX0 = freeL + Math.max(0, (freeR - freeL - (shiftW * 3 + 12)) / 2);
+        for (int i = 0; i < 3; i++) {
+            final int si = i;
+            this.addRenderableWidget(Button.builder(
+                            Component.literal((this.shift == si ? "\u00a76\u25cf " : "\u00a77") + MODE_NAMES[i]),
+                            b -> {
+                                if (this.shift == si) {
+                                    return;
+                                }
+                                // 换班次：旧槽任务按新窗口重新取样（已存段自动映射）
+                                List<ScheduleData.Segment> cur = ScheduleData.segmentsFromSlots(
+                                        this.shift, java.util.Arrays.asList(this.slots));
+                                this.shift = si;
+                                this.schedDirty = true; // 实测六十三：未保存编辑标记
+                                String[] tasks = ScheduleData.slotTasks(cur, si, this.defTask());
+                                for (int k = 0; k < 6; k++) {
+                                    this.slots[k] = tasks[k] == null ? "" : tasks[k];
+                                }
+                                this.init();
+                            })
+                    .bounds(shiftX0 + i * (shiftW + 6), TAB_Y + 22, shiftW, 18).build());
+        }
+        // ---- 实测四百零二：任务选择整页（点任务名进入——整页跳转，零覆盖） ----
+        // 注意：pickSlot >= 0 的检查在 schedPage 开头，这里不会再走到
+        // ---- 6 个任务槽按钮（行距 22、按钮高 18——给页签行让出纵向空间） ----
+        // v1.1.0 实测三百三十九（用户："任务调整的左右箭头才是最重要的。但是你
+        // 却一个都没给"）：每个槽拆成三键——◀ 上一个 / 中间任务名（点击仍循环，
+        // 保留旧习惯）/ ▶ 下一个，与快捷设置页任务行同款交互。
+        int bw = Math.min(SLOT_W, w - 180);
+        int x = cx - (bw + LABEL_GAP) / 2 + LABEL_GAP;
+        int y = CONTENT_TOP + 20;
+        int[] win = ScheduleData.shiftWindow(this.shift);
+        int len = (win[1] - win[0]) / 6;
+        // 实测四百零八：当前时段行任务按钮文字变绿（与渲染端绿色外框/绿色标签同源
+        // ——客户端 dayTime 同公式；排班关闭/无世界 = -1 全灰）
+        int curRow = -1;
+        if (this.loadedOn && this.minecraft.level != null) {
+            long dayTime = this.minecraft.level.getDayTime();
+            int minute = (int) ((dayTime % 24000L) * 3L / 50L);
+            if (minute >= win[0] && minute < win[1]) {
+                curRow = (minute - win[0]) / len;
+            }
+        }
+        for (int i = 0; i < 6; i++) {
+            final int idx = i;
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
+                        int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
+                        int prev = (cur - 1 + this.taskUids.size() + 1) % (this.taskUids.size() + 1);
+                        this.slots[idx] = prev == this.taskUids.size() ? "" : this.taskUids.get(prev);
+                        this.schedDirty = true; // 实测六十三：未保存编辑标记
+                        this.init();
+                    })
+                    .bounds(x, y, 18, 18).build());
+            this.addRenderableWidget(Button.builder(
+                            Component.literal(i == curRow ? "\u00a7a" + fitTask(this.slots[idx]) : fitTask(this.slots[idx])),
+                            b -> {
+                                // 实测四百零二：点任务名弹出任务选择面板（分页点选，
+                                // 替代"点一下换下一个"——任务多时循环点十几下太累）
+                                this.pickSlot = idx;
+                                this.pickPage = 0;
+                                this.init();
+                            })
+                    .bounds(x + 22, y, Math.max(20, bw - 44), 18).build());
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
+                        int cur = this.taskUids.indexOf(String.valueOf(this.slots[idx]));
+                        int next = (cur + 1) % (this.taskUids.size() + 1);
+                        this.slots[idx] = next == this.taskUids.size() ? "" : this.taskUids.get(next);
+                        this.schedDirty = true; // 实测六十三：未保存编辑标记
+                        this.init();
+                    })
+                    .bounds(x + bw - 18, y, 18, 18).build());
+            y += 22;
+        }
+        // ---- 保存（底区右侧，与"← 女仆列表"同一行；攒一次提交防频繁 rebuild brain） ----
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a7a保存日程"), b -> this.saveSchedule())
+                .bounds(w - 112, h - 24, 100, 20).build());
+    }
+
+    /**
+     * 实测四百零六【任务选择整页】（取代旧浮层面板）——手册阅读页同款整页跳转：
+     * 独占全屏（标题行 + 左上返回），任务列表铺满内容区，不再浮层压住班次按钮。
+     * 实测四百零七：每页行数随窗口高度自适应（固定 8 行在默认缩放 287px 高下
+     * 一路铺到 h-13，压住 ◀▶ 和"← 返回排班"），列表下沿留出底部两行按钮区。
+     */
+    private void pickPageButtons(int w, int h, int cx) {
+        // 左上：返回排班页（整页跳转的返回口）
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a7e← 返回排班"), b -> {
+                    this.pickSlot = -1;
+                    this.init();
+                })
+                .bounds(12, h - 24, 100, 20).build());
+        // 空闲档（清空槽）
+        this.addRenderableWidget(Button.builder(Component.literal("\u00a77空闲（清空）"), b -> {
+                    this.slots[this.pickSlot] = "";
+                    this.schedDirty = true;
+                    this.pickSlot = -1;
+                    this.init();
+                })
+                .bounds(cx - 130, CONTENT_TOP, 260, 18).build());
+        // 每页行数自适应：列表从 CONTENT_TOP+26 起，下沿止于 h-52（给分页行
+        // h-46..h-28 和底行 h-24..h-4 让位）；240 高最小窗口 ≥5 行，够用
+        int rowsPerPage = Math.max(3, (h - 52 - (CONTENT_TOP + 26) + 4) / 22);
+        int total = this.taskUids.size();
+        int pages = Math.max(1, (total + rowsPerPage - 1) / rowsPerPage);
+        if (this.pickPage >= pages) {
+            this.pickPage = pages - 1;
+        }
+        int start = this.pickPage * rowsPerPage;
+        int end = Math.min(total, start + rowsPerPage);
+        int yy = CONTENT_TOP + 26;
+        for (int i = start; i < end; i++) {
+            final String uid = this.taskUids.get(i);
+            final boolean cur = uid.equals(String.valueOf(this.slots[this.pickSlot]));
+            this.addRenderableWidget(Button.builder(
+                            Component.literal((cur ? "\u00a76● " : "\u00a77") + taskCn(uid)),
+                            b -> {
+                                this.slots[this.pickSlot] = uid;
+                                this.schedDirty = true;
+                                this.pickSlot = -1;
+                                this.init();
+                            })
+                    .bounds(cx - 130, yy, 260, 18).build());
+            yy += 22;
+        }
+        // 分页（列表下沿已让位，此处与任务按钮零重叠）+ 页码居中
+        if (pages > 1) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
+                        this.pickPage = (this.pickPage - 1 + pages) % pages;
+                        this.init();
+                    })
+                    .bounds(cx - 24, h - 46, 20, 18).build());
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
+                        this.pickPage = (this.pickPage + 1) % pages;
+                        this.init();
+                    })
+                    .bounds(cx + 4, h - 46, 20, 18).build());
+        }
+    }
+
+    /** 槽位默认任务：她当前任务（打开包数据；找不到 = 空 = 空闲） */
+    private String defTask() {
+        String[] sel = this.findSel();
+        return sel != null ? sel[2] : "";
+    }
+
+    /* ==================== 保存 ==================== */
+
+    /**
+     * 保存日程：班次 + 6 槽 → 段列表（相邻同任务自动合并）→ 发包。
+     * 服务端只做越界防御（不再 normalize 补满 24:00——休息时间不排段）。
+     * v1.1.0 实测六十三：保存后清脏标记（之后切页可安全重拉最新数据）。
+     * 【实测六十三事故记录】本方法在实测五十一重写 UI 时被整体遗漏，导致
+     * ScheduleBookScreen.java 从五十一起每次 javac 都失败、而构建管线打包的是
+     * out 目录里实测五十时代的旧 class（verify 只对比 out↔jar 不对比 src）——
+     * 五十一~六十三的全部界面改动一直没真正进过 jar。已补回本方法并加固
+     * 构建脚本（javac 退出码真实检查 + 源文件比 class 新则拒打包）。
+     */
+    private void saveSchedule() {
+        List<String> slotList = new ArrayList<>();
+        for (int i = 0; i < 6; i++) {
+            slotList.add(this.slots[i] == null ? "" : this.slots[i]);
+        }
+        List<ScheduleData.Segment> segs = ScheduleData.segmentsFromSlots(this.shift, slotList);
+        // v1.1.0 实测一百零二【排班失效根因修复】：用户首次设置排班保存时 loadedOn
+        // 默认 false → ON_TAG 写 false → 调度器每秒扫描跳过该女仆 → 排班完全失效。
+        // 修复：有非空任务槽时自动开启排班。
+        boolean hasTask = false;
+        for (String s : slotList) {
+            if (s != null && !s.isEmpty()) {
+                hasTask = true;
+                break;
+            }
+        }
+        if (hasTask && !this.loadedOn) {
+            this.loadedOn = true;
+            // 同步列表行状态
+            String[] sel = this.findSel();
+            if (sel != null) {
+                sel[4] = "1";
+            }
+        }
+        PacketDistributor.sendToServer(new ScheduleNetworking.SchedSavePacket(
+                this.selUuid, this.loadedOn, segs));
+        this.schedDirty = false;
+        this.chat("\u00a7a日程已保存：工作时间均分 6 份，跨时间段自动切换；休息时间由作息睡觉");
+        this.init();
+    }
+
+    /* ==================== 渲染 ==================== */
+
+    @Override
+    public void render(GuiGraphics g, int mx, int my, float pt) {
+        this.renderBackground(g, 0, 0, 0);
+        int w = this.width;
+        int h = this.height;
+        int cx = w / 2;
+        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // 一点都没变"）：排班表补上暗红渐变——保留附魔书主题，半透明色带叠加 =
+        // 渐变（fill 走 ARGB，Alpha 叠加）
+        int bandL = Math.max(4, cx - 300);
+        int bandR = Math.min(w - 4, cx + 300);
+        g.fill(bandL, 4, bandR, h - 4, 0x55200808);   // 底层：深暗红
+        g.fill(bandL, 4, bandR, h - 4, 0x22400A0A);   // 中层：红
+        g.fill(bandL, 4, bandR, h - 4, 0x1A5C1010);   // 高光：亮红
+        g.fill(bandL, 4, bandR, 14, 0xFF8B1A1A);      // 顶部饰条：暗红
+        g.fill(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
+        // 暗红背景 + 顶部饰条（附魔书紫红标题风格）
+        g.fill(Math.max(8, cx - 290), 8, Math.min(w - 8, cx + 290),
+                h - 8, 0xC0200808);
+        g.fill(Math.max(8, cx - 290), 8, Math.min(w - 8, cx + 290),
+                12, 0xFF8B1A1A);
+        if (this.view == VIEW_LIST) {
+            g.drawCenteredString(this.font, Component.literal("\u00a7d\u00a7o排班表\u00a7r\u00a7c——选择女仆"), cx, TOP_TITLE_Y, 0xFFFFFF);
+            // 实测五十九/六十：副标题同步两页结构 + 列表页新能力（搜索/批量/集合）
+            g.drawCenteredString(this.font, Component.literal(
+                            "\u00a77点女仆进详情（快捷/排班）；下方搜索·批量·集合"), cx, TOP_TITLE_Y + 12, 0xAAAAAA);
+            // 实测六十：空列表/无匹配提示（画在行区首行位置，不与任何控件重叠）
+            if (this.lastFiltered == 0) {
+                String q = this.searchQuery == null ? "" : this.searchQuery.trim();
+                g.drawCenteredString(this.font, Component.literal(q.isEmpty()
+                                ? "\u00a77没有找到女仆（打开排班表时须有女仆在场）"
+                                : "\u00a77没有匹配「" + q + "」的女仆"),
+                        cx, 66, 0xAAAAAA);
+            }
+            int rowsPerPage = Math.max(1, Math.min(8, (h - 124) / LIST_ROW_H));
+            int tp = Math.max(1, (this.lastFiltered + rowsPerPage - 1) / rowsPerPage);
+            if (tp > 1) {
+                // 页码在 ◀ ▶ 中间（实测五十六：按钮外移到 cx±40~60——旧位置 ◀ 右沿
+                // cx-20 / ▶ 左沿 cx+20 会压住 ~60px 宽页码文字的两端各 10px）
+                g.drawCenteredString(this.font,
+                        Component.literal("\u00a77第 " + (this.page + 1) + "/" + tp + " 页"),
+                        cx, h - 41, 0xAAAAAA);
+            }
+        } else {
+            // 实测四百零七【整页独占渲染】：选择页只画自己的标题 + 提示，排班页
+            // 的所有文字一概不画。旧 406 先画"XX 的排班"再在同一 y 叠"选择任务"
+            // （标题重影），提示又画在 CONTENT_TOP+8 压住"空闲（清空）"按钮。
+            if (this.pickSlot >= 0) {
+                g.drawCenteredString(this.font, Component.literal(
+                                "\u00a7d\u00a7o选择任务\u00a7r\u00a77（第 " + (this.pickPage + 1) + " 页）"),
+                        cx, TOP_TITLE_Y, 0xFFFFFF);
+                g.drawCenteredString(this.font, Component.literal(
+                                "\u00a77点击任务填入第 " + (this.pickSlot + 1) + " 时段；左上返回排班"),
+                        cx, TOP_TITLE_Y + 12, 0xAAAAAA);
+            } else {
+            g.drawCenteredString(this.font, Component.literal(
+                            "\u00a7d\u00a7o" + this.selName + "\u00a7r\u00a7c 的排班"), cx, TOP_TITLE_Y, 0xFFFFFF);
+            if (this.waiting) {
+                g.drawCenteredString(this.font, Component.literal("\u00a77请求中…"), cx, CONTENT_TOP + 6, 0xAAAAAA);
+            } else if (this.detailPage == 1) {
+                // 第 2 页排班：每槽时段标签（左侧，与任务按钮同行；实测五十一）
+                // 实测五十六：lx 用与 schedPage 相同的 LABEL_GAP 公式（旧 58 间距下
+                // "22:00~24:00"（58px）右沿与按钮左沿 0px 贴边）
+                // 实测五十九：纵向随 schedPage 压缩（行距 22、按钮高 18 → 标签 y+5 居中）
+                int[] win = ScheduleData.shiftWindow(this.shift);
+                int len = (win[1] - win[0]) / 6;
+                int bw = Math.min(SLOT_W, w - 180);
+                int lx = cx - (bw + LABEL_GAP) / 2;
+                int y = CONTENT_TOP + 20;
+                // 实测四百零八【当前时段行高亮】：排班开启时按女仆世界当前时间算出
+                // 命中的槽，该行标签/任务按钮变绿 + 整行绿色外框——一眼看到她现在
+                // 在干什么。时间源 = 客户端 level dayTime（与调度器 currentMinute 同
+                // 公式；女仆通常与主人同维度，跨维度时以主人时间近似）。
+                int curRow = -1;
+                if (this.loadedOn && this.minecraft.level != null) {
+                    // 客户端版 currentMinute（ScheduleData.currentMinute 只收
+                    // ServerLevel）：dayTime % 24000 * 3 / 50 → 0~1439 分钟
+                    long dayTime = this.minecraft.level.getDayTime();
+                    int minute = (int) ((dayTime % 24000L) * 3L / 50L);
+                    if (minute >= win[0] && minute < win[1]) {
+                        curRow = (minute - win[0]) / len;
+                    }
+                }
+                for (int i = 0; i < 6; i++) {
+                    String label = ScheduleData.fmt(win[0] + len * i) + "~" + ScheduleData.fmt(win[0] + len * (i + 1));
+                    g.drawString(this.font, Component.literal((i == curRow ? "\u00a7a▶ " : "\u00a77") + label),
+                            lx, y + 5, 0xFFE5A0A0, false);
+                    y += 22;
+                }
+                // 当前槽行的绿色外框（2px，罩住 ◀/任务按钮/▶ 整行；fill =
+                // fill(x0,y0,x1,y1,color)——4 条 1px 矩形拼框）
+                if (curRow >= 0) {
+                    int gy = CONTENT_TOP + 20 + curRow * 22;
+                    int gx0 = lx - 4;
+                    int gx1 = cx + (bw + LABEL_GAP) / 2 + 4;
+                    int gy0 = gy - 3;
+                    int gy1 = gy + 21;
+                    for (int t = 0; t < 2; t++) {
+                        g.fill(gx0, gy0 + t, gx1, gy0 + t + 1, 0, 0xFF3CE03C);     // 上
+                        g.fill(gx0, gy1 - t - 1, gx1, gy1 - t, 0, 0xFF3CE03C);     // 下
+                        g.fill(gx0 + t, gy0, gx0 + t + 1, gy1, 0, 0xFF3CE03C);     // 左
+                        g.fill(gx1 - t - 1, gy0, gx1 - t, gy1, 0, 0xFF3CE03C);     // 右
+                    }
+                }
+                // 提示在槽区（下沿 200）与底行（h-24）之间的空档居中（实测五十六口径）
+                g.drawCenteredString(this.font, Component.literal(
+                                "\u00a77选班次 → 每段点一个任务（可重复）→ 保存；休息按作息睡觉"),
+                        cx, h - 38, 0xFFE5A0A0);
+            } else {
+                // 第 1 页快捷设置：提示放同一条空档线（h-38），与两行按钮零重叠
+                // v1.1.0 实测七十：排班中的女仆任务锁定——硬性提示替代普通说明
+                // v1.1.0 实测七十七：措辞压到 30 字内——最小窗口宽度（320）下不出屏
+                g.drawCenteredString(this.font, Component.literal(this.loadedOn
+                                ? "\u00a7c⚠ 她有排班：任务与工作模式由日程管理——先关闭排班才能手动更改"
+                                : "\u00a77点击立即生效：遥控她现在的作息与任务；排一天班去第 2 页"),
+                        cx, h - 38, 0xFFE5A0A0);
+            }
+            }
+        }
+        super.render(g, mx, my, pt);
+    }
+
+    /* ==================== 工具 ==================== */
+
+    private String[] findSel() {
+        for (String[] m : this.maids) {
+            if (m[0].equals(this.selUuid)) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    private static int safeInt(String s, int def) {
+        try {
+            return s == null ? def : Integer.parseInt(s.trim());
+        } catch (NumberFormatException e) {
+            return def;
+        }
+    }
+
+    /**
+     * 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段）。
+     * v1.1.0 实测五十三（用户："任务显示的是英文，很影响阅读"）：旧版用
+     * Component.literal（= literal 字面量组件，javap 核实 LiteralContents）去
+     * "查翻译"——getString() 永远返回键本身 → 恒等比对永远成立 → 永远走英文兜底，
+     * TLM/本模组语言文件里的中文（task.touhou_little_maid.farm=农场、
+     * task.maid_smart.mine=挖矿…）从来没被用过。改 translatable = translatable，
+     * getString() 走客户端合并语言表解析；键缺失时 TranslatableContents 原样返回
+     * 键 → 恒等比对依旧能正确判"无翻译"。
+     */
+    private static String taskCn(String uid) {
+        if (uid == null || uid.isEmpty()) {
+            return "空闲";
+        }
+        int idx = uid.indexOf(':');
+        if (idx < 0) {
+            return uid;
+        }
+        String key = "task." + uid.substring(0, idx) + "." + uid.substring(idx + 1);
+        String cn = Component.translatable(key).getString();
+        if (!cn.equals(key)) {
+            return cn;
+        }
+        return uid.substring(idx + 1);
+    }
+
+    /** 任务名截断到按钮宽度内（SLOT_W ≈ 150px ≈ 15 个中文字符） */
+    private static String fitTask(String uid) {
+        String cn = taskCn(uid);
+        return cn.length() > 10 ? cn.substring(0, 9) + "…" : cn;
+    }
+
+    /** 实测六十：女仆名截断（行内还要放血量/维度/排班状态，8 字符封顶） */
+    private static String fitName(String s) {
+        return s != null && s.length() > 8 ? s.substring(0, 7) + "…" : s;
+    }
+
+    /* ==================== 键盘转发（实测六十：搜索框/改名框） ==================== */
+
+    /** 点击输入框时记录 activeBox（键盘字符/按键直接转发，不依赖焦点链）；
+     *  点空白处失焦——按钮点击不受输入框焦点影响 */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            this.activeBox = null;
+            for (net.minecraft.client.gui.components.events.GuiEventListener c : this.children()) {
+                if (c instanceof EditBox eb && eb.isMouseOver(mouseX, mouseY)) {
+                    eb.setFocused(true); // setFocus
+                    this.activeBox = eb;
+                    return eb.mouseClicked(mouseX, mouseY, 0);
+                }
+            }
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (this.activeBox != null && this.activeBox.charTyped(codePoint, modifiers)) {
+            return true;
+        }
+        return super.charTyped(codePoint, modifiers);
+    }
+
+    @Override
+    public boolean keyPressed(int key, int scanCode, int modifiers) {
+        if (this.activeBox != null && this.activeBox.keyPressed(key, scanCode, modifiers)) {
+            return true;
+        }
+        return super.keyPressed(key, scanCode, modifiers);
+    }
+
+    private void chat(String msg) {
+        if (this.minecraft.player != null) {
+            this.minecraft.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(msg));
+        }
+    }
+
+    @Override
+    public void onClose() {
+        instance = null;
+        if (this.parent != null) {
+            Minecraft.getInstance().setScreen(this.parent);
+        } else {
+            super.onClose();
+        }
+    }
+}

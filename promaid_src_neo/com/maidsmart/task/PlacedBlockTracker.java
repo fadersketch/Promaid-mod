@@ -1,0 +1,308 @@
+package com.maidsmart.task;
+
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.neoforge.items.IItemHandler;
+
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
+import java.util.UUID;
+import java.util.function.Predicate;
+
+/**
+ * v1.1.0 实测四十二：女仆搭方块统一追踪器——【绑定搭建者】的到期回收。
+ *
+ * 旧机制的问题（用户："垫脚方块收回背包这个机制有问题——女仆离得远方块就掉了，
+ * 长途搭建场景必掉"）：回收时找【附近 8 格】的女仆塞背包，找不到就落地——长途
+ * 搭建（搭路去远处的矿/树）到期时女仆早走远了，方块全部掉地上。
+ *
+ * 新机制：
+ * 1. 【绑定搭建者】：登记时记录放置女仆的 UUID；到期销毁时【跨维度】找到该女仆
+ *    （同维度直接进背包；异维度也塞——IItemHandler 与位置无关），强制回收进她
+ *    背包；背包满才走落地流程（剩余掉落物 popResource）。
+ * 2. 【魂符收回暂停计时】：女仆不在任何维度的实体列表（被魂符收回/区块卸载）时，
+ *    她名下的方块【暂停倒计时】（每 tick 记录剩余寿命，重载后从剩余时间继续）；
+ *    女仆回到世界后计时恢复。
+ * 3. 女仆站在方块上仍刷新计时（实测十八同款保护，防脚下塌陷摔落）。
+ * 4. 女仆永久消失（死亡/删除）→ 名下方块立即到期回收（不再有主人，别挂着）。
+ *
+ * 四套搭方块表（挖矿/伐木/搭路/自保）共用本类，各自一个实例（寿命/销毁回调不同）。
+ */
+public final class PlacedBlockTracker {
+
+    /** 单块追踪记录：剩余寿命（tick）+ 方块注册名 + 绑定女仆 UUID */
+    public record Mark(long remainTicks, String blockId, java.util.UUID maidUuid) {
+    }
+
+    private final Map<ResourceKey<Level>, Map<BlockPos, Mark>> placed = new HashMap<>();
+    /** 寿命（tick，从配置读——构造时传入当前配置值；expirePlaced 每次重读以支持运行时改配置） */
+    private final java.util.function.LongSupplier lifetimeSupplier;
+    /** 实测三百七十七：靠近刷新半径（水平，格）的平方。搭路/桥用 4.0
+     *  （实测二百零七防摔口径）；战斗方块用 0.5（仅同柱刷新——女仆在自己
+     *  塔边打架不该给塔续命，否则战斗方块在她身边永不消失） */
+    private final double nearRadiusSq;
+    /** 实测三百八十八：靠近刷新垂直带（格）。搭路/桥 6.0；战斗塔 12.0——
+     *  旧值 ±6 够不到 8 格塔顶脚下方的塔底两格，长狙击期塔底方块寿命到
+     *  期溶解、塔从底下烂掉（站得再稳也没了根基） */
+    private final double nearVertBand;
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier) {
+        this(lifetimeSupplier, 4.0, 6.0);
+    }
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier, double nearRadius) {
+        this(lifetimeSupplier, nearRadius, 6.0);
+    }
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier,
+                              double nearRadius, double vertBand) {
+        this.lifetimeSupplier = lifetimeSupplier;
+        this.nearRadiusSq = nearRadius * nearRadius;
+        this.nearVertBand = vertBand;
+        ALL_INSTANCES.add(this); // 实测七十一：自动登记进全局表（供跨系统查询）
+    }
+
+    /** 登记一个搭方块（绑定放置女仆） */
+    public void track(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
+        ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
+        placed.computeIfAbsent(level.dimension(), k -> new HashMap<>())
+                .put(pos.immutable(), new Mark(lifetimeSupplier.getAsLong(),
+                        key != null ? key.toString() : "", maid.getUUID()));
+    }
+
+    /** 该位置是否是本追踪器登记的方块（挡路判定/防误挖用） */
+    public boolean isPlaced(Level level, BlockPos pos) {
+        Map<BlockPos, Mark> marks = placed.get(level.dimension());
+        return marks != null && marks.containsKey(pos.immutable());
+    }
+
+    /** v1.1.0 实测七十一（用户反馈："伐木状态+搭路开着，女仆会砍自己搭路的方块"）：
+     *  全部实例登记表——「是否女仆搭的方块」必须【跨系统】查询。旧版四套表各自为政，
+     *  伐木只查伐木表 → 搭路垫的原木桥不在保护名单里；搭路选材又是"背包最多的
+     *  可放置方块"（= 刚砍下的原木）→ 女仆把脚下的桥当树砍掉、自己摔下去。 */
+    private static final java.util.List<PlacedBlockTracker> ALL_INSTANCES =
+            new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    /** 该位置是否是【任何系统】（挖矿/伐木/搭路/自保）登记的女仆搭方块——防误挖统一口径 */
+    public static boolean isAnyPlaced(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            if (t.isPlaced(level, pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 实测三百六十六：该位置登记的【方块注册名】（任意实例；未登记返回 null）。
+     * 下塔拆块前的安全校验用——"当前方块 = 登记时的方块"才允许拆，
+     * 玩家替换过的方块绝不碰（与到期销毁的 blockId 比对同口径）。
+     */
+    public static String trackedBlockId(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            Map<BlockPos, Mark> marks = t.placed.get(level.dimension());
+            if (marks != null) {
+                Mark m = marks.get(pos.immutable());
+                if (m != null) {
+                    return m.blockId();
+                }
+            }
+        }
+        return null;
+    }
+
+    /** 实测三百六十六：移除单个登记（女仆主动拆掉自己的方块时调用——
+     *  防残留条目在到期扫描里空转/被 nearBlock 刷新永久滞留） */
+    public static void untrackAny(Level level, BlockPos pos) {
+        for (PlacedBlockTracker t : ALL_INSTANCES) {
+            Map<BlockPos, Mark> marks = t.placed.get(level.dimension());
+            if (marks != null) {
+                marks.remove(pos.immutable());
+            }
+        }
+    }
+
+    /**
+     * 每 tick 到期扫描。女仆站在上面 → 刷新剩余寿命；绑定女仆不在线 → 暂停倒计时；
+     * 到期 → 销毁并强制回收进绑定女仆背包（跨维度；背包满落地）。
+     */
+    public void expirePlaced(net.minecraft.server.MinecraftServer server, long gameTime,
+                             Predicate<BlockPos> stoodOnCheck) {
+        long lifetime = lifetimeSupplier.getAsLong();
+        for (ServerLevel level : server.getAllLevels()) {
+            Map<BlockPos, Mark> marks = placed.get(level.dimension());
+            if (marks == null || marks.isEmpty()) {
+                continue;
+            }
+            Iterator<Map.Entry<BlockPos, Mark>> it = marks.entrySet().iterator();
+            while (it.hasNext()) {
+                Map.Entry<BlockPos, Mark> e = it.next();
+                BlockPos pos = e.getKey();
+                Mark mark = e.getValue();
+                // 实测四十七：绑定女仆本人站上方块 → 恒刷新（她挖矿/伐木的"挖矿中"
+                // 标记在空闲扫描期会短暂移除，但脚下还是自己的垫块——不刷新就塌）。
+                // 谓词 stoodOnCheck 覆盖其他场景（同任务姐妹借踩/搭路任意踩）。
+                boolean ownerOn = false;
+                EntityMaid owner = findMaid(server, mark.maidUuid());
+                if (owner != null) {
+                    BlockPos feet = owner.blockPosition();
+                    if (feet.immutable().equals(pos) || feet.offset(0, -1, 0).immutable().equals(pos)) {
+                        ownerOn = true;
+                    }
+                }
+                // 女仆站在上面 → 刷新寿命（防脚下塌陷；实测十八同款）
+                if (ownerOn || stoodOnCheck.test(pos)) {
+                    e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
+                    continue;
+                }
+                // v1.1.0 实测二百零七（日志实证："从高处摔了下来" y=-60——女仆搭路贴上
+                // 主人后被顶出/上浮离开自己铺的桥，离开的瞬间 3 秒寿命到期回收，她正
+                // 悬在附近半空 → 脚下抽空坠落摔死）："站上面才延后"太窄——被自保/上浮/
+                // 传送扰动离开的刹那她很可能还依赖这块桥。绑定女仆靠近（水平 ≤4 格、
+                // 垂直差 ≤6 格）一律刷新寿命，等她真正走远（>4 格或高度差 >6）再回收。
+                if (owner != null && maidNearBlock(owner, pos)) {
+                    e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
+                    continue;
+                }
+                if (owner == null) {
+                    // 绑定女仆不在线（魂符收回/区块卸载）→ 暂停倒计时（remainTicks 不减）
+                    continue;
+                }
+                long remain = mark.remainTicks() - 1;
+                if (remain > 0) {
+                    e.setValue(new Mark(remain, mark.blockId(), mark.maidUuid()));
+                    continue;
+                }
+                // 到期：销毁 + 强制回收进绑定女仆背包（跨维度；背包满落地）
+                it.remove();
+                destroyAndReclaim(level, pos, mark, owner);
+            }
+        }
+    }
+
+    /** 服务器停止/启动清场（残留方块立即销毁回收；绑定女仆不在线则落地） */
+    public void clearAll(net.minecraft.server.MinecraftServer server) {
+        for (ServerLevel level : server.getAllLevels()) {
+            Map<BlockPos, Mark> marks = placed.remove(level.dimension());
+            if (marks == null) {
+                continue;
+            }
+            for (Map.Entry<BlockPos, Mark> e : marks.entrySet()) {
+                EntityMaid owner = findMaid(server, e.getValue().maidUuid());
+                destroyAndReclaim(level, e.getKey(), e.getValue(), owner);
+            }
+        }
+        placed.clear();
+    }
+
+    /** 跨维度找绑定女仆（同维度优先；任何维度在线即算）。
+     *  server 引用由 expirePlaced/clearAll 的调用方透传（MinecraftServer 可拿全维度） */
+    private static EntityMaid findMaid(net.minecraft.server.MinecraftServer server, java.util.UUID uuid) {
+        for (ServerLevel lvl : server.getAllLevels()) {
+            net.minecraft.world.entity.Entity e = lvl.getEntity(uuid);
+            if (e instanceof EntityMaid m && m.isAlive()) {
+                return m;
+            }
+        }
+        return null;
+    }
+
+    /** 实测二百零七：女仆是否依赖该搭块——水平 ≤ 刷新半径、垂直差 ≤ 垂直带
+     *  （她站在上面/刚离开/悬在附近都算；真正走远或高度差拉开才放手回收）。
+     *  实测三百七十七：半径参数化——桥类实例 4.0，战斗方块实例 0.5（同柱）。
+     *  实测三百八十八：垂直带参数化——战斗塔 12.0（覆盖满配 12 格塔） */
+    private boolean maidNearBlock(EntityMaid owner, BlockPos pos) {
+        double dx = owner.getX() - (pos.getX() + 0.5);
+        double dz = owner.getZ() - (pos.getZ() + 0.5);
+        double dy = owner.getY() - (pos.getY() + 0.5);
+        return dx * dx + dz * dz <= this.nearRadiusSq && Math.abs(dy) <= this.nearVertBand;
+    }
+
+    /**
+     * 销毁一个到期方块并回收：绑定女仆在线 → 掉落物强制塞她背包（跨维度；
+     * 背包满/塞不下 → 落地）；女仆 null（清场时已离线）→ 落地。
+     * 玩家替换过的方块不误破坏（blockId 比对，同旧口径）。
+     */
+    private static void destroyAndReclaim(ServerLevel level, BlockPos pos, Mark mark,
+                                          EntityMaid owner) {
+        BlockState state = level.getBlockState(pos);
+        if (state.isAir()) {
+            return;
+        }
+        ResourceLocation cur = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        if (!mark.blockId().isEmpty() && cur != null && !mark.blockId().equals(cur.toString())) {
+            return; // 玩家已替换，尊重改动
+        }
+        level.levelEvent(2001, pos, Block.getId(state));
+        java.util.List<ItemStack> drops = Block.getDrops(state, level, pos, null);
+        boolean handed = false;
+        if (owner != null && !drops.isEmpty()) {
+            try {
+                // 跨维度回收：直接操作女仆背包（IItemHandler 与位置无关）
+                IItemHandler inv = owner.getMaidInv();
+                for (ItemStack stack : drops) {
+                    if (stack.isEmpty()) {
+                        continue;
+                    }
+                    ItemStack remain = net.neoforged.neoforge.items.ItemHandlerHelper
+                            .insertItemStacked(inv, stack, false);
+                    if (!remain.isEmpty()) {
+                        // 背包满：落地（原版 popResource）
+                        Block.popResource(level, pos, remain);
+                    }
+                }
+                handed = true;
+            } catch (Exception ignored) {
+            }
+        }
+        if (!handed && !drops.isEmpty()) {
+            for (ItemStack stack : drops) {
+                Block.popResource(level, pos, stack);
+            }
+        }
+        level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+    }
+
+    /**
+     * v1.1.0 实测四十六：女仆放方块的【玩家同款】放置音效。
+     * 旧实现用 levelEvent 3001 + Block.getId(state)（Block id）——客户端
+     * LevelEvent handler 对 3001 的附加数据按【BlockState id】走的是原版注释/
+     * 事件路径，mod 环境下 id 与注册表错位会被解析成无关音效（用户听成"咆哮"）。
+     * 改为服务端直接 playSound：取方块自身 SoundType 的放置音效
+     * （getPlaceSound = getPlaceSound），音量/音调按原版 BlockItem 放置公式
+     * （(volume+1)/2, pitch*0.8）——与玩家放方块完全一致。
+     */
+    public static void placeSound(net.minecraft.server.level.ServerLevel level,
+                                  net.minecraft.core.BlockPos pos,
+                                  net.minecraft.world.level.block.Block block) {
+        net.minecraft.world.level.block.state.BlockState state = block.defaultBlockState();
+        net.minecraft.world.level.block.SoundType st = state.getSoundType();
+        level.playSound(null, pos, st.getPlaceSound(), net.minecraft.sounds.SoundSource.BLOCKS,
+                (st.getVolume() + 1.0f) / 2.0f, st.getPitch() * 0.8f);
+    }
+
+    /** 兼容旧调用：某位置附近是否有活的女仆（旧 supportsAnyMiner/supportsBridger 判定保留用） */
+    public static boolean anyMaidStanding(ServerLevel level, BlockPos pos,
+                                          Predicate<EntityMaid> filter) {
+        for (EntityMaid m : level.getEntitiesOfClass(EntityMaid.class,
+                new net.minecraft.world.phys.AABB(pos).inflate(2.0))) {
+            if (!m.isAlive() || !filter.test(m)) {
+                continue;
+            }
+            BlockPos feet = m.blockPosition();
+            if (feet.immutable().equals(pos) || feet.offset(0, -1, 0).immutable().equals(pos)) {
+                return true;
+            }
+        }
+        return false;
+    }
+}
