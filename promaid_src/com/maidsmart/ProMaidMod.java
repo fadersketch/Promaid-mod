@@ -84,12 +84,14 @@ public class ProMaidMod {
         // 还是旧默认 22，加载时自动迁到 6（玩家手动改过的值 ≠22 不动）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
                 (net.minecraftforge.fml.event.config.ModConfigEvent e) -> onConfigLoad(e));
-        // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）
+        // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）。
+        // v1.1.0【专用服务器崩溃修复】：带 Screen 签名的 lambda 一律放客户端专类
+        // （com.maidsmart.client.PromaidClientSetup）——主类内联会让合成方法描述符
+        // 带客户端类型，服务端 FML 反射主类时被 RuntimeDistCleaner 拦截
+        //（粉丝服崩报告：Attempted to load class net.minecraft.client.gui.screens.Screen
+        //  for invalid dist DEDICATED_SERVER）。服务端不执行本分支 → 客户端类不加载。
         if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
-            net.minecraftforge.fml.ModLoadingContext.get().registerExtensionPoint(
-                    net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory.class,
-                    () -> new net.minecraftforge.client.ConfigScreenHandler.ConfigScreenFactory(
-                            (mc, parent) -> new com.maidsmart.config.PromaidConfigScreen(parent)));
+            com.maidsmart.client.PromaidClientSetup.registerConfigScreen();
         }
     }
 

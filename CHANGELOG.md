@@ -1,4 +1,20 @@
-﻿## 实测四百一十二【回魂符提示语带上 CD 值】
+﻿## v1.1.0 正式版【专用服务器兼容修复 ×2】
+
+粉丝反馈：mod 在专用服务器（Dedicated Server）上无法正常使用——两个独立的服务端崩溃，均已修复并实测验证。
+
+**修复一：主类内联配置界面 lambda 触发 RuntimeDistCleaner 拦截（issue #3）**
+- 根因：`ProMaidMod` 构造函数里内联注册配置界面扩展点，lambda 编译成主类合成方法，方法描述符带 `net.minecraft.client.gui.screens.Screen`；Forge 专用服务器加载主类时被 RuntimeDistCleaner 拦截 → `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER` → mod 加载失败、服务器启动中止；
+- 修复：带客户端类型签名的 lambda 全部移入客户端专类 `com.maidsmart.client.PromaidClientSetup`，主类只在 `dist.isClient()` 分支静态调用——服务端不执行该分支，客户端类永不加载；
+- 验证：旧 jar 复现崩溃 → 新 jar 服务器 `Done` 正常启动（Forge 47.4.23 与 47.4.21 双版本回归 PASS）。
+
+**修复二：主动对话调用 TLM 客户端专用方法 ChatClientInfo.fromMaid（issue #4）**
+- 根因：`ChatInfoUtil.fromMaid` 直接调用 TLM 的 `ChatClientInfo.fromMaid(EntityMaid)`——该方法标注 `@OnlyIn(Dist.CLIENT)`（内部用 `Minecraft.getInstance()` 读客户端语言、`CustomPackLoader.MAID_MODELS` 读模型描述），专用服务器加载 TLM 时被 RuntimeDistCleaner 剥离 → 服务端触发主动对话即 `NoSuchMethodError` → 服务器 tick 崩溃；
+- 修复：不再调用 TLM 客户端工厂，改为服务端安全地自行构造 `ChatClientInfo`——语言取配置（默认 zh_cn），名字取女仆实体名，描述留空；
+- 验证：javap 实证 TLM 1.5.3 jar 中该方法带 `@OnlyIn(CLIENT)` 注解；修复后 62 mod 主整合包服务器启动 PASS、tick 正常运行。
+
+> 说明：开发者平时只玩单人模式，mod 一直按单人场景开发，未对专用服务器做过适配；感谢粉丝反馈这两个服务端问题，现已修复。若服务器上还有其他问题，欢迎继续反馈。
+
+## 实测四百一十二【回魂符提示语带上 CD 值】
 
 用户需求：防止玩家不知道收回魂符有冷却机制（常见误解："第二次死了怎么不收"），在系统提示原句"你的女仆生命值过低，已回到魂符中。"后面加"（存在CD，CD为 ?? 秒）"，数值取玩家配置的当前值。
 
