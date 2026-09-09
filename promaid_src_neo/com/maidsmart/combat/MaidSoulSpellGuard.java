@@ -1,0 +1,230 @@
+package com.maidsmart.combat;
+
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.item.ItemStack;
+
+/**
+ * 实测四百零二【低血量自动回魂符】——参考 maid_survival-1.9.5 的 MaidSoulSpellGuard。
+ * 实测四百零三【触发口径收紧】：仅【致死伤害且无保命物品】时收符——低血量不再
+ * 触发（否则自保的喝药/搭高/珍珠全成小丑）；有绀珠之药/不死图腾等保命物品时
+ * 让保命物品生效，不抢收。
+ *
+ * 机制：
+ * - 女仆受到【致死伤害】（伤害 ≥ 当前血量）且【没有保命物品】（绀珠之药/不死
+ *   图腾，SelfPreservationBehavior.hasDeathSaveItem 同口径）→ 尝试收进主人背包
+ *   的空魂符（TLM SMART_SLAB_EMPTY），成功则取消伤害；
+ * - 触发条件：女仆存活/未移除/未骑乘 + 冷却未到 + 主人是同维度 ServerPlayer 且
+ *   在半径内（默认 24 格）+ 主人背包（主手/副手/物品栏）有空魂符；
+ * - 动作：新建 SMART_SLAB_HAS_MAID 魂符 → ItemSmartSlab.storeMaidData 存女仆数据 →
+ *   魂符打自动标记（冷却时间戳 + 释放血量比）→ 放入主人背包空槽 → 主人收到提示 +
+ *   再生药水效果（时长=冷却）+ 升级音效 → 女仆实体从世界移除（discard discard）；
+ * - 冷却：成功收符后女仆 persistentData 写冷却时间戳（默认 180 秒），期间不再触发；
+ * - 防收放循环：魂符右键释放（MaidAndItemTransformEvent.ToMaid）时把冷却写回女仆
+ *   ForgeData，并清掉魂符上的自动标记——释放后冷却期内不会立刻又被收回去。
+ *
+ * 与自保的关系：自保是"活着保命"（喝药/搭高/珍珠），本功能是"保不住（要死了）
+ * 才收符"的兜底——低血量交给自保，只有必死一击且没有保命物品才收。玩家手动用
+ * 魂符收/放女仆不受影响（只认自动标记的魂符）。
+ */
+public final class MaidSoulSpellGuard {
+
+    private static final String AUTO_SAVED_TAG = "maid_hp_low_protect_auto_saved";
+    private static final String COOLDOWN_UNTIL_TAG = "maid_hp_low_protect_cooldown_until";
+    private static final String RELEASE_HEALTH_RATIO_TAG = "maid_hp_low_protect_release_health_ratio";
+    private static final String MAID_INFO_TAG = "MaidInfo";
+    private static final String FORGE_DATA_TAG = "ForgeData";
+
+    private static final net.minecraft.network.chat.Component SUCCESS_MESSAGE =
+            net.minecraft.network.chat.Component.literal("你的女仆生命值过低，已回到魂符中。");
+
+    private MaidSoulSpellGuard() {
+    }
+
+    /** 致死伤害保护：伤害 ≥ 当前血量 且 无保命物品 → 尝试收魂符（成功则取消伤害） */
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onMaidDamage(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
+        if (!com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_ENABLE.get()
+                || !com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof EntityMaid maid)) {
+            return;
+        }
+        if (event.getAmount() < maid.getHealth()) {
+            return; // 非致死
+        }
+        // 实测四百零三：有保命物品（绀珠之药/不死图腾）→ 让保命物品生效，不抢收
+        if (SelfPreservationBehavior.hasDeathSaveItem(maid)) {
+            return;
+        }
+        if (tryReturnToSoulSpell(maid)) {
+            event.setCanceled(true);
+            event.setAmount(0.0f);
+        }
+    }
+
+    /** 魂符释放（ToMaid）→ 把冷却写回女仆数据 + 清自动标记，防收放循环。
+     *  实测四百零四【冷却起算点修正】：旧版把魂符里存的 until（=收符时刻+180s）
+     *  原样写回女仆——释放时剩余冷却 ≈ 175 秒，放下来作战第二次致死必然还在
+     *  冷却内 → "第二次正常死亡不收符"的根因。改为【从释放时刻重新起算】：
+     *  释放后给足冷却窗口防"放出即死→又收又放"抖振，过了窗口正常作战再死可再收。 */
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onSoulSpellToMaid(
+            com.github.tartaricacid.touhoulittlemaid.api.event.MaidAndItemTransformEvent.ToMaid event) {
+        if (event.getMaid().level().isClientSide) {
+            return;
+        }
+        ItemStack item = event.getItem();
+        net.minecraft.nbt.CompoundTag tag = item.getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+        if (tag == null || !tag.getBoolean(AUTO_SAVED_TAG)) {
+            return; // 只处理本功能自动收的魂符
+        }
+        net.minecraft.nbt.CompoundTag data = event.getData();
+        long until = event.getMaid().level().getGameTime()
+                + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
+        writeCooldownToMaidData(data, until);
+        tag.remove(AUTO_SAVED_TAG);
+        tag.remove(RELEASE_HEALTH_RATIO_TAG);
+        item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(tag));
+    }
+
+    /** 核心：尝试把女仆收进主人背包的空魂符。成功返回 true。 */
+    private static boolean tryReturnToSoulSpell(EntityMaid maid) {
+        try {
+            if (maid.level().isClientSide) {
+                return false;
+            }
+            if (!(maid.level() instanceof ServerLevel level)) {
+                return false;
+            }
+            if (!maid.isAlive() || maid.isRemoved() || maid.isPassenger()) {
+                return false; // 已死/已移除/骑乘中不收
+            }
+            if (isOnCooldown(maid, level)) {
+                return false;
+            }
+            net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
+            if (!(owner instanceof ServerPlayer player)) {
+                return false; // 主人不在线/非玩家
+            }
+            if (player.level() != maid.level()) {
+                return false; // 不同维度不收（魂符在主人背包，跨维放不进去）
+            }
+            double radius = com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get();
+            if (player.distanceToSqr(maid) > radius * radius) {
+                return false; // 主人太远
+            }
+            SoulSpellSlot slot = findEmptySoulSpell(player);
+            if (slot == null) {
+                return false; // 主人背包没有空魂符
+            }
+            ItemStack slab = new ItemStack(
+                    com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get());
+            com.github.tartaricacid.touhoulittlemaid.item.ItemSmartSlab.storeMaidData(slab, maid);
+            long until = level.getGameTime()
+                    + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
+            markAutoSaved(slab, until);
+            slot.set(player, slab);
+            // v1.1.0 实测四百一十二：提示语带上当前 CD 值——玩家不知道冷却机制的
+            // 常反馈"第二次就死了不收"，文案点明（0 = 无冷却，措辞区分）
+            int cdSec = com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get();
+            player.displayClientMessage(cdSec > 0
+                    ? net.minecraft.network.chat.Component.literal(
+                    "你的女仆生命值过低，已回到魂符中。（存在CD，CD为 " + cdSec + " 秒）")
+                    : SUCCESS_MESSAGE, false);
+            player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.UNLUCK,
+                    com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20, 0));
+            level.playSound(null, maid.blockPosition(), net.minecraft.sounds.SoundEvents.BUCKET_EMPTY,
+                    net.minecraft.sounds.SoundSource.NEUTRAL, 0.65f, 1.0f);
+            ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putLong(COOLDOWN_UNTIL_TAG, until);
+            maid.discard(); // 从世界移除（收进魂符）
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean isOnCooldown(EntityMaid maid, ServerLevel level) {
+        return ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getLong(COOLDOWN_UNTIL_TAG) > level.getGameTime();
+    }
+
+    /** 魂符打自动标记：冷却时间戳 + 释放血量比（对齐 maid_survival 结构） */
+    private static void markAutoSaved(ItemStack slab, long until) {
+        net.minecraft.nbt.CompoundTag tag = slab.getOrDefault(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+        tag.putBoolean(AUTO_SAVED_TAG, true);
+        tag.putLong(COOLDOWN_UNTIL_TAG, until);
+        tag.putFloat(RELEASE_HEALTH_RATIO_TAG,
+                (float) (double) com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get());
+        net.minecraft.nbt.CompoundTag maidInfo = tag.getCompound(MAID_INFO_TAG);
+        if (!maidInfo.isEmpty()) {
+            writeCooldownToMaidData(maidInfo, until);
+            tag.put(MAID_INFO_TAG, maidInfo);
+        }
+        slab.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(tag));
+    }
+
+    /** 把冷却写进女仆数据（ForgeData 子标签——TLM 释放时读 persistentData 的路径） */
+    private static void writeCooldownToMaidData(net.minecraft.nbt.CompoundTag data, long until) {
+        net.minecraft.nbt.CompoundTag forge = data.getCompound(FORGE_DATA_TAG);
+        forge.putLong(COOLDOWN_UNTIL_TAG, until);
+        data.put(FORGE_DATA_TAG, forge);
+    }
+
+    /** 找主人背包里的空魂符（主手 → 副手 → 物品栏） */
+    private static SoulSpellSlot findEmptySoulSpell(ServerPlayer player) {
+        net.minecraft.world.entity.player.Inventory inv = player.getInventory();
+        if (isEmptySoulSpell(player.getMainHandItem())) {
+            return SoulSpellSlot.mainHand();
+        }
+        if (isEmptySoulSpell(player.getOffhandItem())) {
+            return SoulSpellSlot.offhand();
+        }
+        for (int i = 0; i < inv.items.size(); i++) {
+            if (isEmptySoulSpell(inv.items.get(i))) {
+                return SoulSpellSlot.inventory(i);
+            }
+        }
+        return null;
+    }
+
+    private static boolean isEmptySoulSpell(ItemStack stack) {
+        return stack.is(com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_EMPTY.get());
+    }
+
+    /** 魂符槽位（主手/副手/物品栏下标） */
+    private static final class SoulSpellSlot {
+        private final int type; // 0=主手 1=副手 2=物品栏
+        private final int index;
+
+        private SoulSpellSlot(int type, int index) {
+            this.type = type;
+            this.index = index;
+        }
+
+        static SoulSpellSlot mainHand() {
+            return new SoulSpellSlot(0, -1);
+        }
+
+        static SoulSpellSlot offhand() {
+            return new SoulSpellSlot(1, -1);
+        }
+
+        static SoulSpellSlot inventory(int index) {
+            return new SoulSpellSlot(2, index);
+        }
+
+        void set(ServerPlayer player, ItemStack stack) {
+            net.minecraft.world.entity.player.Inventory inv = player.getInventory();
+            if (this.type == 0) {
+                inv.items.set(0, stack); // 主手 = items[0]
+            } else if (this.type == 1) {
+                inv.armor.set(0, stack); // 副手 = offhand[0]
+            } else {
+                inv.items.set(this.index, stack);
+            }
+        }
+    }
+}

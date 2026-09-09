@@ -1,0 +1,14 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:paper" },
+    { "tag": "maid_smart:ink_sacs" }
+  ],
+  "result": {
+    "item": "maid_smart:schedule_book",
+    "count": 1,
+    "nbt": {
+      "Enchantments": [ { "id": "minecraft:mending", "lvl": 0 } ]
+    }
+  }
+}
