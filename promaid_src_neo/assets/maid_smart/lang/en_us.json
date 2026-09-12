@@ -23,5 +23,8 @@
   "key.categories.promaid": "Promaid Building",
   "key.promaid.build_rotate": "Rotate Blueprint Orientation (90° per press)",
   "key.promaid.maid_pat": "Pat Maid's Head (aim at maid)",
-  "key.promaid.maid_hug": "Hug Maid (aim at maid)"
+  "key.promaid.maid_hug": "Hug Maid (aim at maid)",
+  "config.promaid.combat.autoResurrectEnable": "Maid auto-resurrect",
+  "config.promaid.combat.autoResurrectDelaySeconds": "Resurrect delay (s)",
+  "config.promaid.combat.autoResurrectHealthRatio": "Resurrect health ratio"
 }
