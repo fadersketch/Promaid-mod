@@ -207,7 +207,12 @@ public final class MaidAutoResurrect {
         if (!dest.addFreshEntity(maid)) {
             return false;
         }
-        maid.getChatBubbleManager().addTextChatBubble("主人……我回来了。");
+        // 复活提示：女仆自己的话语气泡 + 主人的系统消息（带名字，不怕气泡被错过）
+        String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+        maid.getChatBubbleManager().addTextChatBubble("主人，我回来啦！让你担心了～");
+        owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                "\u00a7e✦ \u00a7f你的女仆 \u00a7b" + name + "\u00a7f 已复活，正在主人重生点等你。"));
+        com.maidsmart.tool.PromaidLog.log("自动复活", name + " 已在主人重生点复活");
         return true;
     }
 
