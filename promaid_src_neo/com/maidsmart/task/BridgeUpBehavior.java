@@ -26,7 +26,7 @@ import java.util.Map;
  * 搭路行为（v1.1.0，core 优先级 245——低于自保 250、高于落地水 240）。
  *
  * 女仆朝主人逐格搭方块靠近（借鉴 Zombie Invade 100 Days 的 MobBuildUpGoal：
- * 真实背包方块 + 物理位移，不像僵尸 setPos 瞬移）。默认关闭（bridge.enabled）。
+ * 真实背包方块 + 物理位移，不像僵尸 setPos 瞬移）。默认开启（bridge.enabled）。
  *
  * 触发条件（全部满足，见 canUse）：
  * - 开关开启；主人存在、活着、同维度；女仆非 home 模式、非自保状态
@@ -66,9 +66,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     public static final String BRIDGING_TAG = "maid_smart_bridging";
 
     /** v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆（到期强制进她背包，
-     *  不再 8 格附近查找）+ 魂符收回暂停计时。 */
+     *  不再 8 格附近查找）+ 魂符收回暂停计时。
+     *  实测四百二十二：refreshOnOwnerStand=true——主人踩在桥上同样刷新该块寿命
+     *  （用户："搭路方块只有在被女仆踩了以后才会被重置CD，更改为主人踩到了也会重置"）。 */
     static final PlacedBlockTracker PLACED_TRACKER = new PlacedBlockTracker(
-            () -> MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L);
+            () -> MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L, 4.0, 6.0, true);
 
     private static void track(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
         PLACED_TRACKER.track(level, pos, block, maid);
@@ -305,8 +307,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (gapAhead && hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             return false;
         }
-        if (!gapAhead && dy < minDy) {
-            return false; // 前方无缺口、主人也不够高（低于 minDy）——跟随走路即可，不搭
+        // v1.1.0【触发判定改为高度差】——旧版要求"主人至少高 minDy 格"，主人在下方
+        //（dy<0）时完全不启动，女仆无法向下搭路。改为【高度差绝对值】达标即启动：
+        // 主人在上方走垂直/斜上搭高，主人在下方走下行台阶，平路/缺口照旧。
+        if (!gapAhead && Math.abs(dy) < minDy) {
+            return false; // 前方无缺口、高度差也不够——跟随走路即可，不搭
         }
         if (!gapAhead) {
             boolean airborne = isAirborne(level, maid);
@@ -428,7 +433,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             // 不能用 |dy|<1.01 判——她还站在下面时差值恰为 1，会误判到达提前收推力）
             boolean arrived = Math.floor(maid.getX()) == Math.floor(this.walkOnX)
                     && Math.floor(maid.getZ()) == Math.floor(this.walkOnZ)
-                    && maid.getY() >= this.walkOnY - 0.01;
+                    // v1.1.0：下行台阶（walkOnY 低于当前脚位）到达判据取反——旧口径
+                    // "脚位 >= 目标"在下行时恒真会当 tick 误判到达、永远踩不下去
+                    && (this.walkOnY < maid.getY() - 0.01
+                            ? maid.getY() <= this.walkOnY + 0.01
+                            : maid.getY() >= this.walkOnY - 0.01);
             if (arrived) {
                 this.walkOnTicks = 0;
                 // v1.1.0 实测二百一十五【防摔落·潜行式收力】：到位立即清水平速度——
@@ -483,6 +492,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (this.stepCooldown > 0) {
             this.stepCooldown--;
         }
+        // v1.1.0【主人在下方 → 下行台阶】必须排在平桥腿之前：平桥腿条件 dy<minDy
+        //（含负值）会先垫平块把高度顶住，女仆永远降不下去。下行时先试下行台阶。
+        if (dy <= -1 && hDist > 1.2
+                && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()
+                && this.tryDescendStep(level, maid, hx, hz, hDist)) {
+            return; // 垫了一格下行台阶并登记走下去——本 tick 结束
+        }
         // v1.1.0 实测三（用户："僵尸在空中仍能左右搭方块继续追，女仆只会傻站着"）：
         // 空中水平搭桥——参照 endofdays BlockBuildBridGeGoal 的做法：不依赖导航，
         // 只要朝主人方向前方一格脚下是空的，就直接在【前方脚下】垫方块铺桥，
@@ -493,8 +509,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         // 触发水平搭建方块"）：一百八十七的 startHDist 只加在 canUse 启动门上——
         // 行为启动后 tick 的平桥腿没有距离门槛，启程后一路铺到 2.5 格，"小于 5 不触发"
         // 形同虚设。与启动门同口径：水平距离 < startHDist 时平桥腿不铺
-        // （走路逼近/竖直垫高不受影响）。
-        if (hDist > 1.2 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()
+        // （走路逼近/竖直垫高不受影响）。v1.1.0：平桥腿只管 dy>=0（同高/主人在上），
+        // dy<=-1 交给上面的下行台阶腿。
+        if (hDist > 1.2 && dy >= 0 && dy < MaidSmartConfig.BRIDGE_MIN_DY.get()
                 && hDist >= MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
             if (this.tryAirBridgeStep(level, maid, hx, hz, hDist)) {
                 return; // 铺了一块并走上去——本 tick 结束
@@ -595,6 +612,68 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
             this.lastPlacedGameTime = level.getGameTime();
             this.beginWalkOn(maid, tx + 0.5, y, tz + 0.5);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * v1.1.0【主人在下方 → 下行台阶】：朝主人方向前方一格【向下垫一格】并踩下去，
+     * 逐级降低高度接近主人（与挖矿/伐木 descendStep 同思路，但方向朝主人）。
+     * 条件：前方落脚层 y-1 与身体层 y 都是空气；落脚层脚下 y-2 无支撑（空气/水）。
+     * 返回 true = 垫了一块并登记"走下去"。
+     */
+    private boolean tryDescendStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (hDist < MaidSmartConfig.BRIDGE_START_H_DIST.get()) {
+            return false;
+        }
+        if (this.stepCooldown > 0) {
+            return false;
+        }
+        int y = maid.blockPosition().getY();
+        double ux = hx / hDist;
+        double uz = hz / hDist;
+        double inv = 0.70710678;
+        double[][] dirs = {
+                {ux, uz},
+                {(ux - uz) * inv, (ux + uz) * inv},
+                {(ux + uz) * inv, (-ux + uz) * inv}
+        };
+        for (double[] d : dirs) {
+            int tx = (int) Math.floor(maid.getX() + d[0]);
+            int tz = (int) Math.floor(maid.getZ() + d[1]);
+            BlockPos land = new BlockPos(tx, y - 1, tz);
+            BlockPos body = new BlockPos(tx, y, tz);
+            BlockPos support = land.offset(0, -1, 0);
+            net.minecraft.world.level.block.state.BlockState supportState = level.getBlockState(support);
+            boolean noSupport = supportState.isAir() || supportState.getBlock()
+                    == net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+                            net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
+            if (!noSupport || !level.getBlockState(land).isAir() || !level.getBlockState(body).isAir()) {
+                continue;
+            }
+            if (com.maidsmart.tool.DangerBlocks.enabled()
+                    && (com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 1, tz)
+                            || com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 2, tz))) {
+                continue;
+            }
+            Item item = takeBuildBlock(maid);
+            if (item == null) {
+                return false;
+            }
+            Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item));
+            if (block == null) {
+                return false;
+            }
+            level.setBlock(support, block.defaultBlockState(), 3);
+            track(level, support, block, maid);
+            maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.task.PlacedBlockTracker.placeSound(level, support, block);
+            this.guardTicks = 12;
+            this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
+            this.lastPlacedGameTime = level.getGameTime();
+            this.beginWalkOn(maid, tx + 0.5, y - 1, tz + 0.5);
             return true;
         }
         return false;
@@ -862,6 +941,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     /** 背包数量最多的可搭方块（v1.1.0 实测七：统一走 MaidBuildBlockFilter 过滤；
      *  v1.1.0 实测二百三十一：计数/扣取含手部栏，手里拿的优先） */
     private static Item takeBuildBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空/坠落中禁搭方块（含重锤跃起）——统一闸口
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return null;
+        }
         return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
                 maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);
     }
@@ -871,6 +954,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      *  每个通过/拒绝过滤器（=OK/=REJECT），一次日志区分"真没方块"与"过滤器误拒/背包
      *  不可见"。 */
     private void notifyNoBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空禁搭导致的"取料失败"不是真的没材料——静默
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return;
+        }
         long now = maid.level().getGameTime();
         Long last = NO_BLOCK_SINCE.get(maid.getId());
         if (last != null && now - last < 600L) {

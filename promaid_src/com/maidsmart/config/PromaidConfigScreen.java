@@ -40,6 +40,14 @@ public class PromaidConfigScreen extends Screen {
     private final Screen parent;
     /** true = 目录页；false = 板块页 */
     private boolean inHome = true;
+    /** 实测四百二十三：是否处于"大类页"（首页 inHome → 大类页 inGroup → 参数页） */
+    private boolean inGroup = false;
+    /** 当前大类（大类页/参数页返回时定位用） */
+    private Group group = Group.WORK;
+    /** 实测四百二十四：手册链接跳转的目标行标签（null = 不定位） */
+    private String focusLabel = null;
+    /** 目标行在当前页的下标（-1 = 无），渲染时黄框高亮 */
+    private int focusRow = -1;
     private Section section = Section.BUILD;
     /** 板块页内页码（每页行数按可用高度自适应） */
     private int pageIndex = 0;
@@ -187,14 +195,40 @@ public class PromaidConfigScreen extends Screen {
         creativeCacheBuilt = now;
     }
 
-    private enum Section {
-        BUILD("建造"), MINE("挖矿"), WOOD("伐木"), MEMORY("AI 记忆"), DIALOGUE("对话提示"),
-        COMBAT("战斗自保"), PASSIVE("被动技能"), MISC("杂项"), PERCEPTION("感知"), AFFECT("情绪"), AITOOLS("AI 工具"),
-        VOICE("语音");
+    /** 实测四百二十三【配置面板重组】：大类（Group）——首页只列大类，进入后列小类（Section）。 */
+    private enum Group {
+        WORK("\u00a7e生产与工作"), AI("\u00a7eAI 与对话"), COMBAT("\u00a7e战斗与自保"),
+        SURVIVAL("\u00a7e生存与复活"), MOVE("\u00a7e移动与行为"), UI("\u00a7e语音与显示"),
+        SYSTEM("\u00a7e系统与杂项");
         final String title;
 
-        Section(String title) {
+        Group(String title) {
             this.title = title;
+        }
+    }
+
+    /** 实测四百二十三：小类（每个小类一页参数行；同一大类下的小类在二级页列出）。 */
+    private enum Section {
+        BUILD("建造", Group.WORK), MINE("挖矿", Group.WORK), WOOD("伐木", Group.WORK),
+        COOK_BREW("烹饪与酿造", Group.WORK), FARM("农场与宰杀", Group.WORK),
+        MEMORY("AI 记忆", Group.AI), DIALOGUE("对话与自主", Group.AI), PERCEPTION("感知", Group.AI),
+        AFFECT("情绪", Group.AI), AITOOLS("AI 工具", Group.AI),
+        SELF_PRESERVE("自保与保命", Group.COMBAT), SELF_TACTICS("自保战术", Group.COMBAT),
+        TACTICS("单兵战术", Group.COMBAT), AUTO_COMBAT("主动参战", Group.COMBAT),
+        AID("贴身辅助", Group.COMBAT), PLAYER_DAMAGE("玩家伤害策略", Group.COMBAT),
+        FALL_GUARD("落地缓冲", Group.SURVIVAL), BRIDGE("搭路", Group.MOVE),
+        REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
+        SAFETY("女仆安全与区块", Group.SURVIVAL),
+        FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
+        SCHEDULE("排班表", Group.MOVE),
+        VOICE("语音与 TTS", Group.UI), HUD("显示与提示", Group.UI),
+        UTILITY("交互与杂项", Group.SYSTEM), LOG("运行日志", Group.SYSTEM);
+        final String title;
+        final Group group;
+
+        Section(String title, Group group) {
+            this.title = title;
+            this.group = group;
         }
     }
 
@@ -238,6 +272,54 @@ public class PromaidConfigScreen extends Screen {
                           String comment) implements RowDef {
     }
 
+    /**
+     * 实测四百二十四：手册内链接跳转入口——按【大类名/小类名（枚举名或中文标题）】
+     * 直接打开模组详细配置的对应页；rowLabel 非空时再翻到该行所在页并高亮它。
+     * 只给到小类名就进小类参数页，只给到大类名就进大类页，都没解析到则回首页。
+     */
+    public static void openAt(net.minecraft.client.gui.screens.Screen parent,
+                              String groupName, String sectionName, String rowLabel) {
+        PromaidConfigScreen scr = new PromaidConfigScreen(parent);
+        Group g = null;
+        for (Group x : Group.values()) {
+            if (matches(x.name(), x.title, groupName)) {
+                g = x;
+                break;
+            }
+        }
+        Section s = null;
+        for (Section x : Section.values()) {
+            if (matches(x.name(), x.title, sectionName)) {
+                s = x;
+                break;
+            }
+        }
+        if (g != null) {
+            scr.group = g;
+        }
+        if (s != null) {
+            scr.section = s;
+            scr.group = s.group;
+            scr.inHome = false;
+            scr.inGroup = false;
+        } else if (g != null) {
+            scr.inHome = false;
+            scr.inGroup = true;
+        }
+        scr.focusLabel = (rowLabel == null || rowLabel.isEmpty()) ? null : rowLabel;
+        net.minecraft.client.Minecraft.m_91087_().m_91152_(scr);
+    }
+
+    private static boolean matches(String enumName, String title, String wanted) {
+        if (wanted == null || wanted.isEmpty()) {
+            return false;
+        }
+        return enumName.equalsIgnoreCase(wanted)
+                || title.equals(wanted)
+                || title.contains(wanted)
+                || wanted.contains(title);
+    }
+
     public PromaidConfigScreen(Screen parent) {
         super(Component.m_237113_("Promaid 模组详细配置"));
         this.parent = parent;
@@ -255,6 +337,10 @@ public class PromaidConfigScreen extends Screen {
         int cx = w / 2;
         if (this.inHome) {
             this.homeButtons(w, h, cx);
+            return;
+        }
+        if (this.inGroup) {
+            this.groupButtons(w, h, cx);
             return;
         }
         if (this.mineTable || this.woodTable) {
@@ -279,63 +365,89 @@ public class PromaidConfigScreen extends Screen {
      *  AFFECT, AITOOLS}——9 板块各出现一次；同时主页按可用高度自适应：
      *  高度不足时压缩行距（h<216 时 22+4→18+3，h<190 再压 16+3），
      *  永远不与"保存并返回"（h-34）相交。 */
+    /** 实测四百二十三【配置面板重组】：首页只列 7 个大类，进入大类后列小类。
+     *  两级菜单共用 menuGrid（两列竖排、行距按数量/高度自适应），不与底部按钮相交。 */
     private void homeButtons(int w, int h, int cx) {
-        int bw = Math.min(170, (w - 56) / 2);
-        // v1.1.0 实测一百七十八【目录页按钮数自适应】：行距按【实际按钮数】反推，
-        // 保证末位按钮底 ≤ "保存并返回"上缘（h-34）-2——旧版固定 rowH=21/20 只按
-        // "6 按钮"校准，不同功能板块数量下，末位按钮
-        // （y0+7×20+17=213）压进保存按钮（h-34=206，默认 240 高）= 目录页 UI 重叠。
-        // 现在行数越多行距自动压缩（最低 14），任何板块组合/窗口高度都不相交。
-        int rowH = 21;
-        int bh = 22;
-        if (rowH < 22) {
-            bh = rowH - 3;
+        Group[] gs = Group.values();
+        String[] labels = new String[gs.length];
+        Runnable[] actions = new Runnable[gs.length];
+        for (int i = 0; i < gs.length; i++) {
+            final Group g = gs[i];
+            labels[i] = g.title;
+            actions[i] = () -> {
+                this.group = g;
+                this.inHome = false;
+                this.inGroup = true;
+                this.m_7856_();
+            };
         }
-        int y0Min = 50; // "选择要调整的板块"说明文字（36..45）之下
-        int availBottom = h - 36; // 保存按钮上缘（h-34）再留 2px
-        int leftCount = 6;
-        int rows = Math.max(leftCount, 6); // 右列恒 6 个板块
+        this.menuGrid(w, h, labels, actions);
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 大类页：列出该大类下的小类（点击进入参数页）。 */
+    private void groupButtons(int w, int h, int cx) {
+        java.util.List<Section> list = new java.util.ArrayList<>();
+        for (Section s : Section.values()) {
+            if (s.group == this.group) {
+                list.add(s);
+            }
+        }
+        String[] labels = new String[list.size()];
+        Runnable[] actions = new Runnable[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            final Section s = list.get(i);
+            labels[i] = "\u00a7e" + s.title;
+            actions[i] = () -> {
+                this.section = s;
+                this.pageIndex = 0;
+                this.mineTable = false;
+                this.woodTable = false;
+                this.altTable = false;
+                this.inGroup = false;
+                this.m_7856_();
+            };
+        }
+        this.menuGrid(w, h, labels, actions);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 \u8fd4\u56de\u5927\u7c7b"),
+                        b -> {
+                            this.inGroup = false;
+                            this.inHome = true;
+                            this.m_7856_();
+                        })
+                .m_252987_(12, h - 34, 100, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 两级菜单通用按钮网格：两列竖排；行距按按钮数/可用高度自适应压缩，
+     *  保证末位按钮底 ≤ 底部按钮上缘（h-34）-2，任何数量/窗口高度都不重叠。 */
+    private void menuGrid(int w, int h, String[] labels, Runnable[] actions) {
+        int n = labels.length;
+        int cols = 2;
+        int rows = Math.max(1, (n + cols - 1) / cols);
+        int bw = Math.min(190, (w - 56) / 2);
+        int bh = 22;
+        int rowH = 24;
+        int y0Min = 50;
+        int availBottom = h - 36;
         if (rows > 1) {
             int fit = (availBottom - y0Min - bh) / (rows - 1);
             rowH = Math.min(rowH, Math.max(14, fit));
         }
         if (rowH < 22) {
-            bh = rowH - 3;
+            bh = Math.max(11, rowH - 3);
         }
-        int gap = rowH - bh;
         int x1 = (w - bw * 2 - 16) / 2;
         int x2 = x1 + bw + 16;
         int contentH = (rows - 1) * rowH + bh;
-        // 内容装得下时在 50~56 间垂直居中一点，装不下时顶到 y0Min（不再下移）
         int y0 = y0Min + Math.max(0, Math.min(6, (availBottom - y0Min - contentH) / 2));
-        java.util.List<Section> leftList = new java.util.ArrayList<>(java.util.List.of(
-                Section.BUILD, Section.MINE, Section.WOOD, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
-        Section[] left = leftList.toArray(new Section[0]);
-        // v1.5.294：被动技能独立成栏（用户："被动技能要单拉出来一栏放在 Promaid 模组
-        // 详细配置里面，而不是放在战斗自保里面"）——右列 COMBAT 正下方
-        Section[] right = {Section.COMBAT, Section.PASSIVE, Section.MISC, Section.PERCEPTION, Section.AFFECT, Section.AITOOLS};
-        for (int i = 0; i < left.length; i++) {
-            this.addSectionButton(x1, y0 + i * rowH, bw, bh, left[i]);
+        for (int i = 0; i < n; i++) {
+            final Runnable act = actions[i];
+            int col = i % cols;
+            int row = i / cols;
+            this.m_142416_(Button.m_253074_(Component.m_237113_(labels[i]), b -> act.run())
+                    .m_252987_(col == 0 ? x1 : x2, y0 + row * rowH, bw, bh).m_253136_());
         }
-        for (int i = 0; i < right.length; i++) {
-            this.addSectionButton(x2, y0 + i * rowH, bw, bh, right[i]);
-        }
-        this.bottomButtons(w, h, cx);
-    }
-
-    private void addSectionButton(int x, int y, int bw, int bh, Section s) {
-        this.m_142416_(Button.m_253074_(
-                        Component.m_237113_("\u00a7e" + s.title),
-                        b -> {
-                            this.section = s;
-                            this.pageIndex = 0;
-                            this.mineTable = false;
-                            this.woodTable = false; // v1.1.0：子页互斥复位
-                            this.altTable = false; // v1.5.254：子页互斥复位
-                            this.inHome = false;
-                            this.m_7856_();
-                        })
-                .m_252987_(x, y, bw, bh).m_253136_());
     }
 
     /** 板块页：行定义 → 分页实例化 → 翻页按钮 + 底部按钮 */
@@ -351,15 +463,31 @@ public class PromaidConfigScreen extends Screen {
             case BUILD -> this.buildRows();
             case MINE -> this.mineRows();
             case WOOD -> this.woodRows();
+            case COOK_BREW -> this.cookBrewRows();
+            case FARM -> this.farmRows();
             case MEMORY -> this.memoryRows();
             case DIALOGUE -> this.dialogueRows();
-            case COMBAT -> this.combatRows();
-            case PASSIVE -> this.passiveRows();
-            case MISC -> this.miscRows();
             case PERCEPTION -> this.perceptionRows();
             case AFFECT -> this.affectRows();
             case AITOOLS -> this.aiToolsRows();
+            case SELF_PRESERVE -> this.selfPreserveRows();
+            case SELF_TACTICS -> this.selfTacticsRows();
+            case TACTICS -> this.tacticsRows();
+            case AUTO_COMBAT -> this.autoCombatRows();
+            case AID -> this.aidRows();
+            case PLAYER_DAMAGE -> this.playerDamageRows();
+            case FALL_GUARD -> this.fallGuardRows();
+            case BRIDGE -> this.bridgeRows();
+            case REVIVE -> this.reviveRows();
+            case ESCAPE -> this.escapeRows();
+            case SAFETY -> this.safetyRows();
+            case FOLLOW -> this.followRows();
+            case IDLE -> this.idleRows();
+            case SCHEDULE -> this.scheduleRows();
             case VOICE -> this.voiceRows();
+            case HUD -> this.hudRows();
+            case UTILITY -> this.utilityRows();
+            case LOG -> this.logRows();
         }
         // v1.1.0 实测二十二：perPage 按动态行高累加计算——每行高度 = rowHeight(def)
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
@@ -387,6 +515,28 @@ public class PromaidConfigScreen extends Screen {
                     yAcc = CONTENT_TOP;
                 }
                 yAcc += rh;
+            }
+        }
+        // 实测四百二十四：手册链接跳转过来的高亮行——
+        // 先找到标签匹配的行，再把 pageIndex 调到它所在页（必须在下方
+        // 计算 start/end 之前完成）。
+        this.focusRow = -1;
+        if (this.focusLabel != null) {
+            for (int i = 0; i < this.rows.size(); i++) {
+                String lb = rowLabel(this.rows.get(i));
+                if (lb != null && (lb.equals(this.focusLabel)
+                        || lb.startsWith(this.focusLabel) || this.focusLabel.startsWith(lb))) {
+                    this.focusRow = i;
+                    break;
+                }
+            }
+            if (this.focusRow >= 0) {
+                for (int p = this.pageStarts.size() - 1; p >= 0; p--) {
+                    if (this.pageStarts.get(p) <= this.focusRow) {
+                        this.pageIndex = p;
+                        break;
+                    }
+                }
             }
         }
         int totalPages = Math.max(1, this.pageStarts.size());
@@ -513,9 +663,10 @@ public class PromaidConfigScreen extends Screen {
             }
         }
         // 返回目录（底部左侧，手册同款）
-        this.m_142416_(Button.m_253074_(Component.m_237113_("← 返回目录"),
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 \u8fd4\u56de\u5206\u7c7b"),
                         b -> {
-                            this.inHome = true;
+                            this.inGroup = true;
+                            this.inHome = false;
                             this.m_7856_();
                         })
                 .m_252987_(12, h - 34, 100, 20).m_253136_());
@@ -1144,6 +1295,8 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL, s), "播报限频（tick）：'镐子挖不动/矿物被挡住'等提示的最短间隔，防刷屏"));
         this.rows.add(new NumRow("创造面板默认价值", String.valueOf(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE.get()),
                 s -> setInt(MaidSmartConfig.MINE_CREATIVE_DEFAULT_VALUE, s), "创造面板默认价值：矿表页锁定方块后，输入框留空直接点「添加」时用的分数（快捷赋值）；想自定义就输数值再点添加，或输入框填 方块id=分数 更新"));
+        this.rows.add(new BoolRow("挖矿中禁止拾取", MaidSmartConfig.MISC_PICKUP_PRIORITY.get(),
+                v -> MaidSmartConfig.MISC_PICKUP_PRIORITY.set(v), "挖矿中禁止拾取（捡掉落物最低优先级）"));
     }
 
     // ---------- v1.1.0：伐木板块（克隆挖矿；障碍物两名单与挖矿共享） ----------
@@ -1611,13 +1764,26 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("缓存上限（个）", String.valueOf(MaidSmartConfig.TTS_CACHE_MAX_FILES.get()),
                 s -> setInt(MaidSmartConfig.TTS_CACHE_MAX_FILES, s),
                 "TTS 语音缓存上限（voice_cache/，训练一次保存后复用；超出删最旧）"));
+        // v1.1.0 实测四百二十：内置日语语音包（随 jar 分发，最高优先级；可调音量/间隔/压原生）
+        this.rows.add(new SectionRow("内置日语语音包（随 mod 附带，v1.1.0）", true));
+        this.rows.add(new BoolRow("启用内置语音包", MaidSmartConfig.TTS_JAR_PACK_ENABLED.get(),
+                v -> MaidSmartConfig.TTS_JAR_PACK_ENABLED.set(v),
+                "内置日语语音包：随 mod 附带的 115 条女仆日语语音（60 条系统消息台词 + 49 条排班贴身气泡 + 6 条拥抱/摸头亲昵台词）。触发系统消息/排班气泡时自动播放，优先级高于 TLM 原生语音包与 TTS 合成；不要求配置 TTS 站点。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制"));
+        this.rows.add(new NumRow("内置语音包音量", String.valueOf(MaidSmartConfig.TTS_JAR_PACK_VOLUME.get()),
+                s -> setDouble(MaidSmartConfig.TTS_JAR_PACK_VOLUME, s),
+                "内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音，与「TTS 语音播放音量倍率」相乘。实测四百二十七已把语音素材做峰值归一化（响度约 +11 dB），一般 1.0~2.0 就够；仍嫌小可继续调大，最高 20"));
+        this.rows.add(new NumRow("内置语音最小间隔（秒）", String.valueOf(MaidSmartConfig.TTS_JAR_PACK_MIN_INTERVAL_S.get()),
+                s -> setInt(MaidSmartConfig.TTS_JAR_PACK_MIN_INTERVAL_S, s),
+                "内置语音最小间隔（秒，默认 8）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸"));
+        this.rows.add(new BoolRow("播放时暂压原生语音包", MaidSmartConfig.TTS_JAR_PACK_MUTE_NATIVE.get(),
+                v -> MaidSmartConfig.TTS_JAR_PACK_MUTE_NATIVE.set(v),
+                "播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠"));
     }
 
     /** v1.5.294：被动技能独立栏（用户："被动技能要单拉出来一栏放在 Promaid 模组详细
      *  配置里面，而不是放在战斗自保里面"）——落地水/岩浆逃生放水/主人死亡传送，
      *  全是被动保命动作，与战斗自保页的主动行为（自保策略/贴身辅助/单兵战术）分离 */
-    private void passiveRows() {
-        this.rows.add(new SectionRow("被动技能", false));
+    private void fallGuardRows() {
         this.rows.add(new BoolRow("落地水", MaidSmartConfig.COMBAT_WATER_CLUTCH.get(),
                 v -> MaidSmartConfig.COMBAT_WATER_CLUTCH.set(v), "落地水（有水桶+坠落自动放水缓冲）"));
         this.rows.add(new NumRow("落地水触发高度", String.valueOf(MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get()),
@@ -1633,12 +1799,11 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.250 已删除）
         this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
                 v -> MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.set(v), "岩浆逃生放水：垫高后周围没有水源且包里有水桶 → 在自己垫的方块上放水灭火（1 秒后收回；接触的岩浆源可能变黑曜石）"));
-        this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
-                v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
-        // v1.1.0：搭路（主人在上方时垫方块靠近——借鉴僵尸搭方块追人）
-        this.rows.add(new SectionRow("搭路（v1.1.0，默认关）", true));
+    }
+
+    private void bridgeRows() {
         this.rows.add(new BoolRow("搭路", MaidSmartConfig.BRIDGE_ENABLED.get(),
-                v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：周围无威胁、女仆背包有方块时，她走过去垫方块靠近主人——主人【不低于女仆】时水平多远都启动平桥追逐（前方悬空铺桥、实心地面走路，参考僵尸搭桥追人，v1.1.0 实测一百六十五）；主人【更高】时垂直搭高靠近（搭的方块 N 秒后自动回收）；默认关闭"));
+                v -> MaidSmartConfig.BRIDGE_ENABLED.set(v), "搭路：周围无威胁、女仆背包有方块时，她走过去垫方块靠近主人——主人【不低于女仆】时水平多远都启动平桥追逐（前方悬空铺桥、实心地面走路，参考僵尸搭桥追人，v1.1.0 实测一百六十五）；主人【更高】时垂直搭高靠近（搭的方块 N 秒后自动回收）；默认开启"));
         this.rows.add(new NumRow("搭路触发距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_MAX_DIST.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MAX_DIST, s), "搭路触发距离（格，默认 32）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五）"));
         this.rows.add(new NumRow("空中搭桥距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_AIR_MAX_DIST.get()),
@@ -1662,14 +1827,39 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
     }
 
-    private void combatRows() {
-        // v1.5.202：自保轻量化（逃生/搭高/逃跑等主动保命行为）；
-        // v1.5.294：落地水/岩浆放水/主人死亡传送等【被动技能】已独立成栏（首页被动技能按钮）
-        // v1.5.295：本页重排——高频开关（自保行为/贴身辅助/单兵战术）排前面，逃生/
-        // 搭高/逃跑的数值参数集中到页尾"自保参数"（旧版 41 行：贴身辅助在第 3 页、
-        // 单兵战术在第 4 页——GUI 缩放 2 时"自动投喂/治疗主人"等关键开关被翻页藏住，
-        // 与"自主决策按键没了"同类问题；现在所有开关前 2 页内可见）
-        this.rows.add(new SectionRow("逃生与自保（被动保命）", false));
+    private void reviveRows() {
+        this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
+                v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
+        this.rows.add(new BoolRow("致死伤害自动回魂符", MaidSmartConfig.SOUL_SPELL_ENABLE.get(),
+                v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 60 秒，从释放时刻起算）"));
+        this.rows.add(new BoolRow("致死伤害保护", MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get(),
+                v -> MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.set(v), "致死伤害保护：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收"));
+        this.rows.add(new NumRow("释放血量比", String.valueOf(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO, s), "释放血量比：自动收的魂符释放时女仆恢复的血量比例（0.35 = 35%）"));
+        this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
+        this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
+                v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不用再手动去墓碑处取回；关掉恢复 TLM 原版死亡流程"));
+        this.rows.add(new NumRow("复活延迟（秒）", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 60，也是墓碑存在的时长）"));
+        this.rows.add(new NumRow("复活血量比", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO, s), "复活血量比：复活时女仆恢复的血量比例（1.0 = 满血，0.35 = 35%）"));
+        // 实测四百二十六：复活时机（照驯养革新宠物床：可选次日黎明；右键墓碑随时可立即复活）
+        String[] reviveTiming = {"延迟 N 秒", "次日黎明"};
+        int reviveTimingIdx = Math.max(0, Math.min(1, MaidSmartConfig.AUTO_RESURRECT_TIMING.get()));
+        this.rows.add(new CycleRow("复活时机", reviveTiming, reviveTiming[reviveTimingIdx],
+                v -> {
+                    int idx = java.util.Arrays.asList(reviveTiming).indexOf(v);
+                    MaidSmartConfig.AUTO_RESURRECT_TIMING.set(idx >= 0 ? idx : 0);
+                },
+                "复活时机：延迟 N 秒 = 死后等「复活延迟（秒）」到期复活；次日黎明 = 照驯养革新宠物床，等到游戏时间 dayTime 到 1（黎明）才复活。两种方式下右键墓碑都能立即复活"));
+        // 实测四百零五：收符冷却（秒）——从"致死伤害自动回魂符"子分区移到这里，
+        // 与传送/珍珠/治疗冷却等自保参数并列；0 = 彻底关闭防抖振
+        this.rows.add(new NumRow("收符冷却（秒）", String.valueOf(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS, s), "回魂符冷却：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）；从释放时刻起算，过了就能再收；0 = 无冷却"));
+    }
+
+    private void selfPreserveRows() {
         this.rows.add(new BoolRow("自保行为", MaidSmartConfig.COMBAT_SELF_PRESERVE.get(),
                 v -> MaidSmartConfig.COMBAT_SELF_PRESERVE.set(v), "自保行为（轻量被动：环境危险/低血时插保命动作——喝药/垫高/逃跑/传送；平时零干预，与战斗/战术并行不冲突）"));
         // v1.1.0 实测一百五十三/一百五十四：TLM 保护饰品识别（火焰/溺水）
@@ -1677,17 +1867,35 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.set(v), "佩戴 TLM 火焰保护饰品（火焰伤害免疫+受伤时给 15 秒抗火并喷灭火剂）时，着火/泡岩浆不再惊慌灭火/找水/往主人身边跑——饰品自己会处理；关闭 = 旧行为"));
         this.rows.add(new BoolRow("溺水保护饰品识别", MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get(),
                 v -> MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.set(v), "佩戴 TLM 溺水保护饰品（溺水伤害免疫+空气自动补满）时，泡水不再喊\"溺水\"上浮找空气/喝水肺；关闭 = 旧行为"));
-        // v1.1.0 实测一百五十二：有增益也喂牛奶（女仆自己喝 + 给主人喂两处共用）
-        this.rows.add(new BoolRow("有增益也喂牛奶", MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get(),
-                v -> MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.set(v), "女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）"));
         // v1.1.0 实测一百五十五：保命物品下保留逃跑（实测三百六十三：自保逃跑
         // 已删除，本项现只管 TLM 原生惊慌逃跑与"情况不妙"播报）
         this.rows.add(new BoolRow("保命物品下允许惊慌", MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.get(),
                 v -> MaidSmartConfig.COMBAT_FLEE_WITH_SAVE_ITEM.set(v), "携带保命物品（TLM 绀珠之药 / 不死图腾）时是否还惊慌逃跑：默认关 = 有保命物品就不惊慌逃窜、不喊\"情况不妙\"（她死不了，继续战斗/垫高/治疗）；开 = 照常惊慌。注：自保自身的走位/搭高不受此开关影响"));
-        // v1.5.189：玩家贴身辅助（被动技能，非工作状态）
-        this.rows.add(new SectionRow("贴身辅助（v1.5.189）", true));
+        this.rows.add(new NumRow("触发血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_ENTER_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_ENTER_RATIO, s), "触发血量（0-1，0.3=30%）：血量低于此值进入保命（逃跑/搭高/喝药）；危机解除线见「安全回归血量」"));
+        this.rows.add(new NumRow("绝对解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_EXIT_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_EXIT_RATIO, s), "绝对解除血量（0-1，默认 0.7）：血量到此无条件结束保命（威胁还在也退，战斗交还战术）；更常用的解除线 = 威胁消失+安全回归血量"));
+        this.rows.add(new NumRow("解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO, s), "解除血量（0-1，默认 0.7）：血量恢复到此线即解除自保回归工作/战斗——威胁还在也解除（战斗交还战术）；0.3 触发线与本线之间为防抖滞回带。垫高后没回血资源的女仆另有兜底：塔顶被围困 10 秒传送回家养伤"));
+        this.rows.add(new NumRow("威胁距离", String.valueOf(MaidSmartConfig.COMBAT_THREAT_DISTANCE.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_THREAT_DISTANCE, s), "威胁距离（格）：怪物进入此距离才算威胁——调大女仆更早警觉、更容易进自保"));
+        this.rows.add(new NumRow("威胁扫描间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_SCAN.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_THREAT_SCAN, s), "威胁扫描间隔（tick，20=1 秒）：寻找威胁的轮询周期，调小反应快、略耗性能"));
+        this.rows.add(new NumRow("威胁消失退出（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT, s), "安全解除时限（tick，400=20 秒）：完全安全（无威胁+无环境危险）持续此时长即解除自保【无论血量】——危机结束就该回归工作，带伤回家/干活，再被打回触发线会重新进入"));
+        this.rows.add(new NumRow("贴身距离", String.valueOf(MaidSmartConfig.COMBAT_CLOSE_DISTANCE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_CLOSE_DISTANCE, s), "贴身距离（格）：怪物低于此距离判定被近身（濒死时触发击退+搭高）"));
+    }
+
+    private void aidRows() {
+        // v1.1.0 实测一百五十二：有增益也喂牛奶（女仆自己喝 + 给主人喂两处共用）
+        this.rows.add(new BoolRow("有增益也喂牛奶", MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.get(),
+                v -> MaidSmartConfig.MISC_MILK_FEED_WITH_BUFF.set(v), "女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）"));
         this.rows.add(new BoolRow("自动投喂/治疗主人", MaidSmartConfig.AID_OWNER_ENABLE.get(),
                 v -> MaidSmartConfig.AID_OWNER_ENABLE.set(v), "自动投喂/治疗：主人饿/血低自动喂熟食或投掷治疗药水（被动技能，非工作状态）"));
+        // v1.1.0：女仆互助开关（只影响女仆↔女仆，主人链不受影响）
+        this.rows.add(new BoolRow("女仆之间互相支援", MaidSmartConfig.AID_MAID_MUTUAL.get(),
+                v -> MaidSmartConfig.AID_MAID_MUTUAL.set(v), "女仆之间互相支援（默认开）：同主人、16 格内的其他女仆低血/着火/中毒时，自动投药水/金苹果/喂食支援她（与支援主人同一套方案，主人优先）；关闭 = 女仆只照顾主人、不互相支援"));
         this.rows.add(new NumRow("投喂触发饱食度", String.valueOf(MaidSmartConfig.AID_FOOD_THRESHOLD.get()),
                 s -> setInt(MaidSmartConfig.AID_FOOD_THRESHOLD, s), "投喂触发饱食度（4-20，20=只要不满就喂）：主人饱食度低于此值自动喂食（默认 12）——v1.5.301 起填 20 真实生效（旧版范围上限 18，填 20 被静默钳回 18）"));
         this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
@@ -1703,12 +1911,15 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.SHIELD_SHARE_ENABLE.set(v), "共享盾牌：主人盾牌耐久低/空时从女仆背包取盾给主人（不动女仆自己副手）"));
         this.rows.add(new BoolRow("共享不死图腾", MaidSmartConfig.TOTEM_SHARE_ENABLE.get(),
                 v -> MaidSmartConfig.TOTEM_SHARE_ENABLE.set(v), "共享不死图腾：主人致命伤时女仆背包/饰品栏的不死图腾优先救主人（特效同原版）"));
+    }
+
+    private void playerDamageRows() {
+        String[] dmgModes = {"TLM原版(÷5封顶2)", "完全免疫", "无限制", "有上限(比例)", "仅一点伤害(上限1)"};
+        int dmgMode = Math.max(0, Math.min(dmgModes.length - 1, MaidSmartConfig.PLAYER_DAMAGE_MODE.get()));
         // v1.5.207：玩家对女仆伤害策略（TLM 原版 = 主人攻击 ÷5 封顶 2 点——原版剑
         // 看起来打不到、高伤武器（更好的战斗等）能打出 2 点；这里给玩家自选）
         // v1.5.252h：current 改用【选项文字】——旧版传数字 "0"~"4" 与文字选项永不
         // 匹配（CycleButton 显示错位），onChange 按文字下标回写配置
-        String[] dmgModes = {"TLM原版(÷5封顶2)", "完全免疫", "无限制", "有上限(比例)", "仅一点伤害(上限1)"};
-        int dmgMode = Math.max(0, Math.min(dmgModes.length - 1, MaidSmartConfig.PLAYER_DAMAGE_MODE.get()));
         this.rows.add(new CycleRow("玩家对女仆伤害", dmgModes,
                 dmgModes[dmgMode],
                 v -> {
@@ -1718,8 +1929,9 @@ public class PromaidConfigScreen extends Screen {
                 "玩家对女仆伤害模式：TLM原版 = 主人攻击 ÷5 封顶 2 点（原版剑基本打不掉血、高伤武器能打出 2 点）；完全免疫 = 任何玩家都打不到女仆（含弓弩）；无限制 = 像打普通生物一样；有上限 = 单次伤害不超过女仆最大生命 × 下方比例；仅一点伤害 = 单次伤害上限 1 点（被打有反馈但不疼）"));
         this.rows.add(new NumRow("玩家伤害上限比例（0-1）", String.valueOf(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP.get()),
                 s -> setDouble(MaidSmartConfig.PLAYER_DAMAGE_MAID_CAP, s), "玩家伤害上限比例（0-1，模式=有上限时生效）：单次伤害 = 女仆最大生命 × 此比例（默认 0.1 = 10%，20 血女仆单次最多 2 点）"));
-        // v1.5.134：单兵作战战术（替代已删除的 v1.5.132 战斗协同）
-        this.rows.add(new SectionRow("单兵战术（v1.5.134）", true));
+    }
+
+    private void tacticsRows() {
         this.rows.add(new BoolRow("单兵作战战术", MaidSmartConfig.COMBAT_TACTICS.get(),
                 v -> MaidSmartConfig.COMBAT_TACTICS.set(v), "单兵作战战术总开关：绕圈走位/打退拉扯/距离控制/时机举盾（PVP 式战斗，战斗女仆单打独斗）"));
         this.rows.add(new BoolRow("近战战术", MaidSmartConfig.COMBAT_TACTICS_MELEE.get(),
@@ -1736,28 +1948,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
         this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）；适用弓（射程15）/弩（射程8）/三叉戟（搜索半径）/枪械（TLM 枪械中距离配置）"));
-        // 实测四百零二：低血量自动回魂符（参考 maid_survival）
-        // 实测四百零三：触发口径收紧——仅致死伤害且无保命物品时收符
-        this.rows.add(new SectionRow("致死伤害自动回魂符（v1.1.0）", true));
-        this.rows.add(new BoolRow("致死伤害自动回魂符", MaidSmartConfig.SOUL_SPELL_ENABLE.get(),
-                v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 60 秒，从释放时刻起算）"));
-        this.rows.add(new BoolRow("致死伤害保护", MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get(),
-                v -> MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.set(v), "致死伤害保护：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收"));
-        this.rows.add(new NumRow("释放血量比", String.valueOf(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO, s), "释放血量比：自动收的魂符释放时女仆恢复的血量比例（0.35 = 35%）"));
-        this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
-                s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
-        // 实测四百一十六：女仆自动复活（死亡→墓碑到期消失→主人重生点复活）
-        this.rows.add(new SectionRow("女仆自动复活（v1.1.0）", true));
-        this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
-                v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不用再手动去墓碑处取回；关掉恢复 TLM 原版死亡流程"));
-        this.rows.add(new NumRow("复活延迟（秒）", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()),
-                s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 60，也是墓碑存在的时长）"));
-        this.rows.add(new NumRow("复活血量比", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO, s), "复活血量比：复活时女仆恢复的血量比例（1.0 = 满血，0.35 = 35%）"));
-        // 实测四百零五：收符冷却挪到"自保参数"子分区（与传送/珍珠/治疗冷却并列）
-        // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
-        this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));
+    }
+
+    private void autoCombatRows() {
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被有来源的攻击（怪/玩家/弹射物；摔落岩浆等环境伤害不算）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；女仆自己被怪物攻击也会让她本人+周围姐妹立即参战（实测五十八）；默认开启"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
@@ -1793,23 +1986,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_DELAY, s), "还原延迟（tick，200=10 秒）：威胁消失后持续安全这么久才切回原任务——期间你手动给她换的任务不会被还原翻回去"));
         this.rows.add(new NumRow("还原威胁半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST, s), "还原威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算威胁消失、开始还原计时——比响应半径小（远处怪不该让她一直卡在战斗里回不了岗）；战斗中玩家手动给她换的任务不会被还原翻回去"));
-        // v1.5.295：逃生/搭高/逃跑数值参数（旧版混在自保行为开关与贴身辅助之间，
-        // 把开关区挤到第 3-4 页——集中到页尾，调参才需要翻到这里）
-        this.rows.add(new SectionRow("自保参数", true));
-        this.rows.add(new NumRow("触发血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_ENTER_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_ENTER_RATIO, s), "触发血量（0-1，0.3=30%）：血量低于此值进入保命（逃跑/搭高/喝药）；危机解除线见「安全回归血量」"));
-        this.rows.add(new NumRow("绝对解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_EXIT_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_EXIT_RATIO, s), "绝对解除血量（0-1，默认 0.7）：血量到此无条件结束保命（威胁还在也退，战斗交还战术）；更常用的解除线 = 威胁消失+安全回归血量"));
-        this.rows.add(new NumRow("解除血量（0-1）", String.valueOf(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_SAFE_RETURN_RATIO, s), "解除血量（0-1，默认 0.7）：血量恢复到此线即解除自保回归工作/战斗——威胁还在也解除（战斗交还战术）；0.3 触发线与本线之间为防抖滞回带。垫高后没回血资源的女仆另有兜底：塔顶被围困 10 秒传送回家养伤"));
-        this.rows.add(new NumRow("威胁距离", String.valueOf(MaidSmartConfig.COMBAT_THREAT_DISTANCE.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_THREAT_DISTANCE, s), "威胁距离（格）：怪物进入此距离才算威胁——调大女仆更早警觉、更容易进自保"));
-        this.rows.add(new NumRow("威胁扫描间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_SCAN.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_THREAT_SCAN, s), "威胁扫描间隔（tick，20=1 秒）：寻找威胁的轮询周期，调小反应快、略耗性能"));
-        this.rows.add(new NumRow("威胁消失退出（tick）", String.valueOf(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_THREAT_GONE_EXIT, s), "安全解除时限（tick，400=20 秒）：完全安全（无威胁+无环境危险）持续此时长即解除自保【无论血量】——危机结束就该回归工作，带伤回家/干活，再被打回触发线会重新进入"));
-        this.rows.add(new NumRow("贴身距离", String.valueOf(MaidSmartConfig.COMBAT_CLOSE_DISTANCE.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_CLOSE_DISTANCE, s), "贴身距离（格）：怪物低于此距离判定被近身（濒死时触发击退+搭高）"));
+    }
+
+    private void selfTacticsRows() {
         // v1.5.186：原"近战搭高上限/远程搭高上限 + 近战/远程搭方块冷却"合并为唯一
         // 控制项"至多向上搭多少个方块"（默认 30，不再按敌人近战/远程划分）
         this.rows.add(new NumRow("至多向上搭多少个方块", String.valueOf(MaidSmartConfig.COMBAT_PILLAR_MAX.get()),
@@ -1831,6 +2010,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_ALERT_COOLDOWN, s), "警示粒子间隔（tick）：女仆头顶危险警示粒子的刷新间隔"));
         this.rows.add(new NumRow("策略播报间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_ANNOUNCE_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_ANNOUNCE_COOLDOWN, s), "策略播报间隔（tick，防刷屏）"));
+    }
+
+    private void escapeRows() {
         this.rows.add(new NumRow("传送成功冷却（tick）", String.valueOf(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_TELEPORT_COOLDOWN, s), "传送成功冷却（tick，默认 600=30 秒）：成功传送回主人身边后此冷却内不再传——一场遭遇战最多被接走一次；传送失败（主人身边有怪）5 秒后即重试"));
         this.rows.add(new NumRow("传送安全判定半径", String.valueOf(MaidSmartConfig.COMBAT_TELEPORT_SAFE_RADIUS.get()),
@@ -1841,23 +2023,15 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_RATIO, s), "末影珍珠逃生触发血量（0-1，低于此值且威胁贴身才扔）"));
         this.rows.add(new NumRow("珍珠逃生威胁距离", String.valueOf(MaidSmartConfig.COMBAT_PEARL_DIST.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_PEARL_DIST, s), "末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）"));
-        // 实测四百零五：收符冷却（秒）——从"致死伤害自动回魂符"子分区移到这里，
-        // 与传送/珍珠/治疗冷却等自保参数并列；0 = 彻底关闭防抖振
-        this.rows.add(new NumRow("收符冷却（秒）", String.valueOf(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get()),
-                s -> setInt(MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS, s), "回魂符冷却：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）；从释放时刻起算，过了就能再收；0 = 无冷却"));
     }
 
-    private void miscRows() {
-        this.rows.add(new SectionRow("任务范围", false));
+    private void cookBrewRows() {
         this.rows.add(new NumRow("烧制搜索范围", String.valueOf(MaidSmartConfig.MISC_COOK_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MISC_COOK_RADIUS, s), "烧制搜索范围（格）：烧制任务在这个半径内找熔炉/高炉/烟熏炉（v1.1.0 实测一百六十一：烹饪任务改名烧制——兼容矿石/高炉/烟熏炉）"));
         this.rows.add(new NumRow("酿造搜索范围", String.valueOf(MaidSmartConfig.MISC_BREW_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MISC_BREW_RADIUS, s), "酿造搜索范围（格）：酿造任务在这个半径内找酿造台"));
         this.rows.add(new NumRow("处理间隔（tick）", String.valueOf(MaidSmartConfig.MISC_PROCESS_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.MISC_PROCESS_COOLDOWN, s), "处理间隔（tick，20=1 秒）：烹饪/酿造每处理一批的间隔"));
-        // v1.1.0 实测三百一十一：宰杀任务阈值
-        this.rows.add(new NumRow("宰杀数量阈值", String.valueOf(MaidSmartConfig.MISC_SLAUGHTER_COUNT.get()),
-                s -> setInt(MaidSmartConfig.MISC_SLAUGHTER_COUNT, s), "宰杀任务：女仆周围 5×5 内同种牲畜（按类型分组）超过此数 → 每 3 秒随机宰杀一只该组牲畜；≤ 阈值不动"));
         // v1.1.0 实测一百五十七：熔炉兼容矿物类可烧制物
         this.rows.add(new BoolRow("熔炉烧矿物", MaidSmartConfig.MISC_COOK_SMELT_ORES.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMELT_ORES.set(v), "烧制任务里背包没有食材时，兼容带矿物/原料标签（forge:ores、minecraft:*_ores、forge:raw_materials 等）且当前世界有熔炉配方的物品——铁矿石/粗铁/金矿石/远古残骸等照常放进熔炉烧；关闭 = 只烧食材白名单"));
@@ -1867,44 +2041,17 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         this.rows.add(new BoolRow("兼容高炉/烟熏炉", MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get(),
                 v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烧制任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
-        this.rows.add(new SectionRow("通用", true));
-        // v1.1.0 实测一百八十三：空闲散步——治 TLM 原生散步又少又慢又近
-        this.rows.add(new BoolRow("空闲散步", MaidSmartConfig.MISC_STROLL_ENABLED.get(),
-                v -> MaidSmartConfig.MISC_STROLL_ENABLED.set(v), "女仆空闲时按间隔主动散步（默认开）——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、平均一两小时才走一次）；战斗/自保/站桩工作/有移动目标时不打扰"));
-        this.rows.add(new NumRow("散步间隔（tick）", String.valueOf(MaidSmartConfig.MISC_STROLL_INTERVAL.get()),
-                s -> setInt(MaidSmartConfig.MISC_STROLL_INTERVAL, s), "空闲女仆每隔这么久散步一次（默认 200=10 秒，TLM 原生平均一两小时才走一次）；找得到落点就走，找不到顺延"));
-        this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
-                s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
-        this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按用户反馈调低；TLM 原生散步只有 0.3 倍速）"));
-        this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
-                s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
-        this.rows.add(new BoolRow("挖矿中禁止拾取", MaidSmartConfig.MISC_PICKUP_PRIORITY.get(),
-                v -> MaidSmartConfig.MISC_PICKUP_PRIORITY.set(v), "挖矿中禁止拾取（捡掉落物最低优先级）"));
         this.rows.add(new NumRow("任务垂直范围", String.valueOf(MaidSmartConfig.MISC_VERTICAL_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MISC_VERTICAL_RANGE, s), "任务垂直范围（格）：烹饪/酿造在上/下多少格内搜索容器"));
-        // v1.5.129：原生任务呆滞修复 + 干活不被打断
-        this.rows.add(new BoolRow("原生任务流畅化", MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get(),
-                v -> MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.set(v), "TLM 原生任务（种田/挤奶/钓鱼等）呆滞修复：任务行为不再每 3 秒重启、随机散步不再覆盖任务目标、走路少刹车、检查节流减半"));
-        this.rows.add(new BoolRow("干活不被打断", MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get(),
-                v -> MaidSmartConfig.MISC_WORK_UNINTERRUPTED.set(v), "干活中跳过：吃饭（刷好感餐）、偷吃（拆浆果丛）、小伤恐慌逃跑（血量<30% 仍会跑）、切班时被拽回工位"));
+    }
+
+    private void farmRows() {
+        // v1.1.0 实测三百一十一：宰杀任务阈值
+        this.rows.add(new NumRow("宰杀数量阈值", String.valueOf(MaidSmartConfig.MISC_SLAUGHTER_COUNT.get()),
+                s -> setInt(MaidSmartConfig.MISC_SLAUGHTER_COUNT, s), "宰杀任务：女仆周围 5×5 内同种牲畜（按类型分组）超过此数 → 每 3 秒随机宰杀一只该组牲畜；≤ 阈值不动"));
         // v1.5.130：产出型任务专项增强
         this.rows.add(new BoolRow("产出任务增强", MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.get(),
                 v -> MaidSmartConfig.MISC_PRODUCE_TASK_ENHANCE.set(v), "农场：一次收割/补种目标周围 3x3 整片作物（来回跑减少到约 1/8）；钓鱼：附近没椅子/船时主动找开阔水域，自带坐垫生成在岸边"));
-        // v1.5.142：跨维度跟随
-        this.rows.add(new BoolRow("跨维度跟随", MaidSmartConfig.MISC_DIMENSION_FOLLOW.get(),
-                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，女仆自动传送到主人身边（约 5 秒扫描一轮）；坐着的/骑乘的/主人身边无可站立点时不拉。v1.1.0 实测一百三十一起守家（home）模式也照常跟随跨维度——排班自动 home 的女仆主人过门照样跟过来"));
-        // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送兜底）
-        this.rows.add(new BoolRow("同维度远距拉回", MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get(),
-                v -> MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.set(v), "女仆与主人同维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 自带过远传送只对非home非工作的跟随女仆生效且可能静默失败）。守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉，原因会写进 logs/promaid.log（60 秒限频）"));
-        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
-        this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
-                v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
-        this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
-                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
-        // v1.1.0 实测一百八十八：Y 轴拉回门槛（用户："传送机制不检测 Y 轴"）
-        this.rows.add(new NumRow("Y 轴拉回门槛（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get()),
-                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL, s), "女仆与主人同维度、距离没超上一条但【垂直高度差】超本值时——主人旁边 16 格内有安全落点就传送过来，没有则不传（默认 16 格；旧版只按 48 格 3D 距离判定，水平贴身、竖直搭高 30 格的女仆永远不触发）"));
         // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启）
         this.rows.add(new BoolRow("农场连锁收获", MaidSmartConfig.MISC_CHAIN_HARVEST.get(),
                 v -> MaidSmartConfig.MISC_CHAIN_HARVEST.set(v), "农场连锁收获：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物（大农田多轮清完）；默认开启"));
@@ -1924,12 +2071,62 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测三百五十五：农场作物骨粉催熟（与树苗同款逻辑）
         this.rows.add(new BoolRow("农场作物骨粉催熟", MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.get(),
                 v -> MaidSmartConfig.MISC_MAID_BONEMEAL_FARM.set(v), "农场模式的女仆背包里有骨粉时，对身边（半径 16 格）的未成熟作物使用骨粉催熟——每 0.5 秒尝试一株（带粒子特效），优先催熟已种下的而不是等自然成熟；只催当前世界有骨粉配方的作物（原版/模组作物自动兼容），成熟作物不催；施肥时主手临时换持骨粉，停止 1 秒后自动还原；默认开启"));
+    }
+
+    private void idleRows() {
+        // v1.1.0 实测一百八十三：空闲散步——治 TLM 原生散步又少又慢又近
+        this.rows.add(new BoolRow("空闲散步", MaidSmartConfig.MISC_STROLL_ENABLED.get(),
+                v -> MaidSmartConfig.MISC_STROLL_ENABLED.set(v), "女仆空闲时按间隔主动散步（默认开）——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、平均一两小时才走一次）；战斗/自保/站桩工作/有移动目标时不打扰"));
+        this.rows.add(new NumRow("散步间隔（tick）", String.valueOf(MaidSmartConfig.MISC_STROLL_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.MISC_STROLL_INTERVAL, s), "空闲女仆每隔这么久散步一次（默认 200=10 秒，TLM 原生平均一两小时才走一次）；找得到落点就走，找不到顺延"));
+        this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
+        this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按用户反馈调低；TLM 原生散步只有 0.3 倍速）"));
+        // v1.5.129：原生任务呆滞修复 + 干活不被打断
+        this.rows.add(new BoolRow("原生任务流畅化", MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get(),
+                v -> MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.set(v), "TLM 原生任务（种田/挤奶/钓鱼等）呆滞修复：任务行为不再每 3 秒重启、随机散步不再覆盖任务目标、走路少刹车、检查节流减半"));
+        this.rows.add(new BoolRow("干活不被打断", MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get(),
+                v -> MaidSmartConfig.MISC_WORK_UNINTERRUPTED.set(v), "干活中跳过：吃饭（刷好感餐）、偷吃（拆浆果丛）、小伤恐慌逃跑（血量<30% 仍会跑）、切班时被拽回工位"));
+    }
+
+    private void hudRows() {
+        // 实测四百二十一：冷却可视化 HUD（复活倒计时 / 回魂符冷却显示在屏幕上）
+        this.rows.add(new BoolRow("冷却可视化 HUD", MaidSmartConfig.MISC_COOLDOWN_HUD.get(),
+                v -> MaidSmartConfig.MISC_COOLDOWN_HUD.set(v), "冷却可视化 HUD（默认开）：屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时（女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示）；关掉不显示也不发同步包"));
+        this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
+                s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
+    }
+
+    private void utilityRows() {
+        this.rows.add(new BoolRow("床铺互通", MaidSmartConfig.MISC_BED_INTEROP.get(),
+                v -> MaidSmartConfig.MISC_BED_INTEROP.set(v), "床铺互通（默认开）：女仆能睡原版床（16 色床——TLM 原生只认女仆床），玩家也能睡女仆床（并把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为。玩家潜行右键女仆床仍是只染色不躺下"));
+        // 实测四百四十三：悬空禁搭方块（用户："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
+        this.rows.add(new BoolRow("悬空禁搭方块", MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get(),
+                v -> MaidSmartConfig.MISC_NO_PLACE_IN_AIR.set(v), "悬空禁搭方块（默认开）：女仆未落地时不再搭方块——覆盖自保搭高/搭路/挖矿垫脚/伐木垫脚。触发口径：坠落距离达到「落地水触发高度」时禁（此时落地水会接管——搭方块既救不了她，还会挡住落地水害她摔死）。水里/岩浆、骑乘、鞘翅滑翔不算悬空；站在地面照常搭"));
         // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；不影响插火把）
         this.rows.add(new BoolRow("手持光源发实光", MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.set(v), "手持光源发实光（默认开）：她主/副手拿火把/灯笼/萤石等光源时，脚底自动跟随一个隐形光块（亮度与该光源一致），周围被真实照亮；不拿光源自动熄灭；与其他环境光源同待遇，不影响插火把判定逻辑本身"));
-        // v1.1.0 实测九十二：区块保载/受困救援/危险避让三件套入面板（此前只有 spec 键，
-        // 自绘面板没有条目 = 游戏内看不到也改不了）
-        this.rows.add(new SectionRow("女仆安全与区块保载", true));
+    }
+
+    private void followRows() {
+        // v1.5.142：跨维度跟随
+        this.rows.add(new BoolRow("跨维度跟随", MaidSmartConfig.MISC_DIMENSION_FOLLOW.get(),
+                v -> MaidSmartConfig.MISC_DIMENSION_FOLLOW.set(v), "主人换维度后，女仆自动传送到主人身边（约 5 秒扫描一轮）；坐着的/骑乘的/主人身边无可站立点时不拉。v1.1.0 实测一百三十一起守家（home）模式也照常跟随跨维度——排班自动 home 的女仆主人过门照样跟过来"));
+        // v1.1.0 实测一百三十四：同维度远距拉回（跨区块传送兜底）
+        this.rows.add(new BoolRow("同维度远距拉回", MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get(),
+                v -> MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.set(v), "女仆与主人同维度但距离超过阈值时自动传送到主人身边（跨区块传送的兜底——TLM 自带过远传送只对非home非工作的跟随女仆生效且可能静默失败）。守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉，原因会写进 logs/promaid.log（60 秒限频）"));
+        // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
+                v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
+        this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
+                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
+        // v1.1.0 实测一百八十八：Y 轴拉回门槛（用户："传送机制不检测 Y 轴"）
+        this.rows.add(new NumRow("Y 轴拉回门槛（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get()),
+                s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL, s), "女仆与主人同维度、距离没超上一条但【垂直高度差】超本值时——主人旁边 16 格内有安全落点就传送过来，没有则不传（默认 16 格；旧版只按 48 格 3D 距离判定，水平贴身、竖直搭高 30 格的女仆永远不触发）"));
+    }
+
+    private void safetyRows() {
         this.rows.add(new BoolRow("女仆区块持续保载", MaidSmartConfig.MISC_MAID_CHUNK_LOAD.get(),
                 v -> MaidSmartConfig.MISC_MAID_CHUNK_LOAD.set(v),
                 "所有有主女仆（含在家/坐姿/骑乘）所在区块持续保持实体 ticking（与玩家同级）：跟随落后再远也不冻结失联，随时可传送/召回/救援；关闭后远处女仆所在区块卸载时会冻结失联"));
@@ -1959,8 +2156,9 @@ public class PromaidConfigScreen extends Screen {
                     return true;
                 },
                 "完整注册名，逗号分隔（如 minecraft:lava, somemod:danger_rock）：命中站立格/脚下即视为危险——寻路绕行、险境脱离、搭块选材排除三系统共用此表"));
-        // v1.1.0：排班表系统总开关（玩家可操作原则——排班物品 UI 之外也要有全局开关）
-        this.rows.add(new SectionRow("排班表（v1.1.0）", true));
+    }
+
+    private void scheduleRows() {
         this.rows.add(new BoolRow("排班表系统", MaidSmartConfig.MISC_SCHEDULE_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_SCHEDULE_ENABLED.set(v), "排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（每只女仆已保存的日程不丢，重新打开即恢复），女仆保持当前任务——单只女仆的排班开关在排班表物品里（快捷设置）"));
         // v1.1.0 实测六十一：战斗还原后排班宽限
@@ -1983,13 +2181,16 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百八十三：排班/home 模式活动半径下限
         this.rows.add(new NumRow("排班活动半径（格）", String.valueOf(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get()),
                 s -> setInt(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE, s), "排班/在家模式下女仆的活动半径下限（默认 32；TLM 原版工作/空闲/睡觉半径只有 8~16 格，稍远就被拉回）——取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住"));
-        // v1.1.0 实测九十四：运行日志（logs/promaid.log）——方便日后验查
-        this.rows.add(new SectionRow("运行日志（实测九十四）", true));
+    }
+
+    private void logRows() {
         this.rows.add(new BoolRow("运行日志记录", MaidSmartConfig.MISC_LOG_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_LOG_ENABLED.set(v), "运行日志（默认开）：排班应用、战斗参战与还原、险境脱离、跨维跟随、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old），并镜像到 latest.log——“XX 没生效”类反馈可直接按时间线对账；关闭后完全静默"));
         this.rows.add(new InfoRow("日志文件位置", "\u00a7a<游戏目录>/logs/promaid.log\u00a7r",
                 "任意文本编辑器打开；每行格式 [真实时间] [分类] 内容（分类：排班/战斗/险境脱离/跨维/自保）。只记低频状态迁移，巡检空转不落盘"));
     }
+
+
 
 
 
@@ -2578,8 +2779,15 @@ public class PromaidConfigScreen extends Screen {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
-            g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77选择要调整的板块"),
+            g.m_280653_(this.f_96547_, Component.m_237113_("\u00a77选择功能大类"),
                     cx, 36, 0x888888);
+        } else if (this.inGroup) {
+            // 实测四百二十三：大类页——标题 = 大类名，副标题提示选择小类
+            g.m_280653_(this.f_96547_,
+                    Component.m_237113_(this.group.title + "\u00a77 · 选择小类"),
+                    cx, 32, 0xFFFFFF);
+            g.m_280653_(this.f_96547_, Component.m_237113_(groupHint(this.group)),
+                    cx, 36 + 10, 0x888888);
         } else if (this.mineTable || this.woodTable) {
             // 双名单（目标矿物/木材 + 障碍物），标题随当前名单
             String title = this.mineTableMode == 0
@@ -2788,6 +2996,10 @@ public class PromaidConfigScreen extends Screen {
             for (int i = start; i < end; i++) {
                 RowDef def = this.rows.get(i);
                 int y = this.pageRowY[i];
+                if (i == this.focusRow) {
+                    // 实测四百二十四：手册链接跳转命中行——金色底边高亮
+                    g.m_280509_(6, y - 1, this.f_96543_ - 6, y + 20, 0x33FFD700);
+                }
                 if (def instanceof SectionRow sr) {
                     String text = sr.sub()
                             ? "\u00a76—— " + sr.text() + " ——\u00a7r"
@@ -2990,4 +3202,41 @@ public class PromaidConfigScreen extends Screen {
         com.maidsmart.task.MaidWoodBehavior.loadCustomWoods();
         Minecraft.m_91087_().m_91152_(this.parent);
     }
+    /** 实测四百二十三：大类页的一句话说明。 */
+    private static String groupHint(Group g) {
+        return switch (g) {
+            case WORK -> "\u00a77建造 / 挖矿 / 伐木 / 烧制酿造 / 农场宰杀";
+            case AI -> "\u00a77记忆 / 对话 / 感知 / 情绪 / AI 工具";
+            case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害";
+            case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
+            case MOVE -> "\u00a77跟随 / 空闲流畅 / 排班表 / 搭路";
+            case UI -> "\u00a77语音 TTS / 显示与气泡";
+            case SYSTEM -> "\u00a77交互杂项 / 运行日志";
+        };
+    }
+
+    /** 实测四百二十四：行标签（供手册链接定位高亮；SectionRow 无标签）。 */
+    private static String rowLabel(RowDef def) {
+        if (def instanceof NumRow r) {
+            return r.label();
+        }
+        if (def instanceof BoolRow r) {
+            return r.label();
+        }
+        if (def instanceof BtnRow r) {
+            return r.label();
+        }
+        if (def instanceof CycleRow r) {
+            return r.label();
+        }
+        if (def instanceof TextRow r) {
+            return r.label();
+        }
+        if (def instanceof InfoRow r) {
+            return r.label();
+        }
+        return null;
+    }
+
+
 }

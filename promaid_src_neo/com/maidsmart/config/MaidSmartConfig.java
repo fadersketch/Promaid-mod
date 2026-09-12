@@ -335,6 +335,11 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue COMBAT_TACTICS_KITE_RANGE;
     // v1.5.280：近战贴脸后退（被敌人贴进 2 格内主动后退拉开，女仆手长 3 格仍能挥砍）
     public static final ModConfigSpec.BooleanValue COMBAT_TACTICS_MELEE_KITE;
+    // v1.1.0（1.21.1 专属）：重锤猛击（女仆持重锤跳起猛砸，参考 vanilla_mob_remake 僵尸用重锤）
+    public static final ModConfigSpec.BooleanValue COMBAT_MACE_SMASH;
+    public static final ModConfigSpec.BooleanValue COMBAT_MACE_WIND_CHARGE;
+    public static final ModConfigSpec.IntValue COMBAT_MACE_COOLDOWN;
+    public static final ModConfigSpec.IntValue COMBAT_MACE_TRIGGER_RANGE;
     // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
     // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
@@ -346,6 +351,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue AUTO_RESURRECT_ENABLE;
     public static final ModConfigSpec.IntValue AUTO_RESURRECT_DELAY_SECONDS;
     public static final ModConfigSpec.DoubleValue AUTO_RESURRECT_HEALTH_RATIO;
+    // 实测四百二十六：复活时机（0 = 延迟秒后复活；1 = 次日黎明复活，照驯养革新宠物床）
+    public static final ModConfigSpec.IntValue AUTO_RESURRECT_TIMING;
     // v1.5.199：水桶垫水（岩浆逃生——放水 1 秒后收回，水桶不消耗；击退搭高垫水
     // v1.5.250 已删除）
     public static final ModConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
@@ -359,6 +366,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
 
     // v1.5.189：被动技能（玩家贴身辅助）阈值——喂食/治疗/插火把/共享盾牌/图腾
     public static final ModConfigSpec.BooleanValue AID_OWNER_ENABLE;
+    // v1.1.0：女仆之间互相支援（同主人、16 格内的姐妹低血/着火时投药水/喂食）
+    public static final ModConfigSpec.BooleanValue AID_MAID_MUTUAL;
     public static final ModConfigSpec.IntValue AID_FOOD_THRESHOLD;
     public static final ModConfigSpec.DoubleValue AID_HEALTH_THRESHOLD;
     public static final ModConfigSpec.BooleanValue TORCH_PLACER_ENABLE;
@@ -384,6 +393,12 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.IntValue MISC_STROLL_INTERVAL;
     public static final ModConfigSpec.IntValue MISC_STROLL_RADIUS;
     public static final ModConfigSpec.DoubleValue MISC_STROLL_SPEED;
+    // v1.1.0 实测四百一十八（用户："让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床"）
+    public static final ModConfigSpec.BooleanValue MISC_BED_INTEROP;
+    // v1.1.0 实测四百二十一：冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却显示在玩家屏幕上）
+    public static final ModConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
+    // 实测四百四十三：悬空禁搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚统一闸口）
+    public static final ModConfigSpec.BooleanValue MISC_NO_PLACE_IN_AIR;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ModConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
@@ -464,6 +479,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.IntValue TTS_SYSTEM_COOLDOWN_S;
     public static final ModConfigSpec.BooleanValue TTS_VOICE_PACK_ENABLED;
     public static final ModConfigSpec.IntValue TTS_CACHE_MAX_FILES;
+    // v1.1.0 实测四百二十：内置日语语音包（随 jar 分发、最高优先级、可调音量/间隔/压原生）
+    public static final ModConfigSpec.BooleanValue TTS_JAR_PACK_ENABLED;
+    public static final ModConfigSpec.DoubleValue TTS_JAR_PACK_VOLUME;
+    public static final ModConfigSpec.IntValue TTS_JAR_PACK_MIN_INTERVAL_S;
+    public static final ModConfigSpec.BooleanValue TTS_JAR_PACK_MUTE_NATIVE;
 
     public static final ModConfigSpec SPEC;
 
@@ -1078,6 +1098,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AUTO_RESURRECT_HEALTH_RATIO = BUILDER.comment("复活血量比（默认 1.0 = 满血）：复活时女仆恢复的血量比例（0.35 = 35%）")
                 .translation("config.promaid.combat.autoResurrectHealthRatio")
                 .defineInRange("autoResurrectHealthRatio", 1.0, 0.05, 1.0);
+        // 实测四百二十六：复活时机（照驯养革新宠物床：0=延迟秒；1=次日黎明 dayTime≈1）
+        AUTO_RESURRECT_TIMING = BUILDER.comment("复活时机（0 = 延迟秒后复活，用上面的「复活延迟（秒）」；1 = 次日黎明复活，照驯养革新宠物床 dayTime 到 1 才复活）：两种都保留——右键墓碑可随时立即复活，不受本项影响")
+                .translation("config.promaid.combat.autoResurrectTiming")
+                .defineInRange("autoResurrectTiming", 0, 0, 1);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);
@@ -1137,9 +1161,22 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 尝试与敌人稍微拉开距离,而不是贴身搏斗……周围两格内有敌人时会自己往后退远离"
         COMBAT_TACTICS_MELEE_KITE = BUILDER.comment("近战贴脸后退（敌人贴进 2 格内主动后退拉开距离，女仆手长 3 格仍能挥砍）")
                 .translation("config.promaid.combat.tacticsMeleeKite").define("tacticsMeleeKite", true);
+        // v1.1.0（1.21.1 专属）：重锤猛击——参考 vanilla_mob_remake 的 ZombieMaceAttackGoal
+        COMBAT_MACE_SMASH = BUILDER.comment("重锤猛击（1.21.1 专属，默认开）：女仆主手持有重锤【且背包有风弹】时，贴近目标后朝其起跳、在下落中猛砸（参考僵尸用重锤——落得越高伤害越高，最高 +22 以上）；贴地命中后清零坠落距离（不会摔伤，也不会触发落地水）。关闭 = 重锤只当普通近战武器平砍")
+                .translation("config.promaid.combat.maceSmash").define("maceSmash", true);
+        COMBAT_MACE_WIND_CHARGE = BUILDER.comment("重锤·必须消耗风弹（默认开）：只有同时持有重锤与风弹、并消耗 1 枚风弹时才起跳猛击（起跳初速 1.7）；没有风弹就按原版正常持锤平砍、不起飞（旧版『不用风弹也能直接起飞』太超标，已移除）。关闭本项 = 恢复旧的不消耗风弹自由起跳（不推荐）")
+                .translation("config.promaid.combat.maceWindCharge").define("maceWindCharge", true);
+        COMBAT_MACE_COOLDOWN = BUILDER.comment("重锤猛击冷却（tick，默认 60 = 3 秒）：两次猛击之间的最短间隔")
+                .translation("config.promaid.combat.maceCooldown").defineInRange("maceCooldown", 60, 20, 400);
+        COMBAT_MACE_TRIGGER_RANGE = BUILDER.comment("重锤起跳距离（格，默认 3）：女仆与目标的直线距离在此值内才起跳猛击（参考僵尸的 3 格）")
+                .translation("config.promaid.combat.maceTriggerRange").defineInRange("maceTriggerRange", 3, 1, 6);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
+        // v1.1.0：女仆互助开关——同主人、16 格内的姐妹低血/着火/负面效果时，
+        // 从自己背包取药水/食物支援她（默认开；只影响女仆↔女仆，主人链不受影响）
+        AID_MAID_MUTUAL = BUILDER.comment("女仆之间互相支援（默认开）：同主人、16 格内的其他女仆低血/着火/中毒时，自动投药水/金苹果/喂食支援她（与支援主人同一套方案）；关闭 = 女仆只管主人、不互相支援")
+                .translation("config.promaid.combat.aidMaidMutual").define("aidMaidMutual", true);
         // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
         // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
         // 饱食度 18~19 时永远不喂（用户："那个修改按键要真实有效"——测试调 20
@@ -1221,8 +1258,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
         BUILDER.comment("搭路设置").translation("config.promaid.bridge").push("bridge");
-        BRIDGE_ENABLED = BUILDER.comment("搭路（默认关）：她背包有可放置方块、周围无威胁时，朝主人方向铺方块搭桥/搭高靠近（借鉴僵尸搭方块追人；搭的方块到期自动回收）")
-                .translation("config.promaid.bridge.enabled").define("enabled", false);
+        BRIDGE_ENABLED = BUILDER.comment("搭路（默认开）：她背包有可放置方块、周围无威胁时，朝主人方向铺方块搭桥/搭高靠近（借鉴僵尸搭方块追人；搭的方块到期自动回收）")
+                .translation("config.promaid.bridge.enabled").define("enabled", true);
         BRIDGE_MAX_DIST = BUILDER.comment("搭路触发距离（格，默认 32）：主人【高于女仆】需垂直搭高时的启动上限——超过交给传送/跟随；平路/低高差追逐（主人不低于女仆）不受此限制，水平多远都启动平桥追逐（v1.1.0 实测一百六十五，参考僵尸搭桥追人）")
                 .translation("config.promaid.bridge.maxDist").defineInRange("maxDist", 32, 2, 32);
         BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
@@ -1282,6 +1319,16 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
         MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按用户反馈调低）")
                 .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.7, 0.3, 2.5);
+        // 实测四百一十八：床铺互通（女仆睡原版床 / 玩家睡女仆床）
+        MISC_BED_INTEROP = BUILDER.comment("床铺互通（默认开）：女仆能睡原版床（16 色床，TLM 原生只认女仆床），玩家也能睡女仆床（并可把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为（女仆只睡女仆床、玩家不能睡女仆床）")
+                .translation("config.promaid.misc.bedInterop").define("bedInterop", true);
+        // 实测四百二十一：冷却可视化 HUD（用户："我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化"）
+        MISC_COOLDOWN_HUD = BUILDER.comment("冷却可视化 HUD（默认开）：在玩家屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时——女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示；关掉不显示也不发同步包")
+                .translation("config.promaid.misc.cooldownHud").define("cooldownHud", true);
+        // 实测四百四十三：悬空禁搭方块（用户："女仆在悬空状态下应该禁止搭建方块——
+        // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
+        MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：重锤跃起中（1.21.1）整段空中都禁；其余情况是坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")
+                .translation("config.promaid.misc.noPlaceInAir").define("noPlaceInAir", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);
@@ -1438,6 +1485,18 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         TTS_CACHE_MAX_FILES = BUILDER.comment("TTS 语音缓存上限（config/maid_smart/voice_cache/，训练一次保存后复用；超出删最旧）")
                 .translation("config.promaid.voice.cacheMaxFiles")
                 .defineInRange("cacheMaxFiles", 200, 10, 2000);
+        // v1.1.0 实测四百二十：内置日语语音包（用户要求——训练日语系统消息语音打进 jar，
+        // 触发系统消息自动播放；可在手册/面板调开关、音量、最小间隔；播放时暂压 TLM 原生语音包）
+        TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（115 条：60 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
+                .translation("config.promaid.voice.jarPackEnabled").define("jarPackEnabled", true);
+        TTS_JAR_PACK_VOLUME = BUILDER.comment("内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音包的播放音量，与上面的「TTS 语音播放音量倍率」相乘。实测四百二十七：语音素材已做峰值归一化（响度约 +11 dB），1.0~2.0 一般就够；仍嫌小可调到最高 20")
+                .translation("config.promaid.voice.jarPackVolume")
+                .defineInRange("jarPackVolume", 1.0, 0.1, 20.0);
+        TTS_JAR_PACK_MIN_INTERVAL_S = BUILDER.comment("内置语音包最小间隔（秒，默认 8）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸")
+                .translation("config.promaid.voice.jarPackMinIntervalS")
+                .defineInRange("jarPackMinIntervalS", 8, 0, 60);
+        TTS_JAR_PACK_MUTE_NATIVE = BUILDER.comment("播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠")
+                .translation("config.promaid.voice.jarPackMuteNative").define("jarPackMuteNative", true);
         BUILDER.pop();
 
         SPEC = BUILDER.build();

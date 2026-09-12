@@ -353,6 +353,13 @@ public final class MaidChunkLoadManager {
             if (maid.isMaidInSittingPose()) {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
             }
+            // 实测四百四十二：重锤跃起中不跨维跟随——她正跳到半空，传送会把猛击
+            // 直接打断（用户："重锤空中状态要禁止传送，否则飞到高空又被传送回来"）
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
+                throttledSkipLog(maid, "mace-air-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 重锤跃起中，跨维度跟随不传——猛击落地后自然恢复");
+                return;
+            }
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
             // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
@@ -887,6 +894,14 @@ BlockPos stand = findStand(newLevel,
     private static void trySameDimPull(EntityMaid maid, LivingEntity owner) {
         try {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_PULL.get()) {
+                return;
+            }
+            // 实测四百四十二：重锤跃起中一律不拉回——含下面 Y 轴"搭太高"分支，
+            // 都会把她从高空/冲刺路径上拽回主人身边（用户："飞到高空又传送回来，
+            // 造成战术上的失误"）。跃起 ≤5 秒自动收尾，随后自然恢复拉回。
+            if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
+                throttledSkipLog(maid, "mace-air-samedim", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 重锤跃起中，不拉回——猛击落地后自然恢复");
                 return;
             }
             int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();

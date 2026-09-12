@@ -260,6 +260,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (!aided && this.giveDrinkablePotion(maid, owner, HEAL_POTIONS, "治疗", true) >= 0) {
                 aided = true; // 普通治疗药水塞主人背包（主人自己喝）
             }
+            // v1.1.0：饱食度满时不喂食物（feedHealingFood 内部判定）——满饥饿低血时
+            // 食物回血慢又浪费；药水/金苹果给 buff 的不受影响（走上面的档）
             if (!aided && this.feedHealingFood(maid, owner)) {
                 aided = true; // 高饱食物 → 主人自然回血
             }
@@ -301,6 +303,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  再生/喂食）。主人链永远先跑完（tick 里顺序固定），同 tick 主人有需求时
      *  互助轮空。 */
     private void aidMaidSisters(ServerLevel level, EntityMaid maid, long gameTime) {
+        // v1.1.0：女仆互助总开关——关掉后女仆只管主人，不互相支援（两个调用点共用此门）
+        if (!com.maidsmart.config.MaidSmartConfig.AID_MAID_MUTUAL.get()) {
+            return;
+        }
         try {
             // v1.1.0 实测十六（审查 P1-4）：互助链独立 CD（3 秒）——旧版无任何节流：
             // 本方法在 tick 里被调用两次（主人不在分支 + 主链尾部），每 tick 全量扫描
@@ -1396,8 +1402,13 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
 
     /** 喂治疗食物（v1.5.201：按饱和度恢复量选最优；v1.5.206：清单 = EmotionalActionExecutor.
      *  FOODS 全量安全食物——金胡萝卜/兔肉煲/南瓜派等全覆盖；金苹果/附魔金苹果已移出，
-     *  走 useGoldenApple 即时增益路径） */
+     *  走 useGoldenApple 即时增益路径）
+     *  v1.1.0【满饱食不再喂食物】：主人饱食度满（=20）时直接返回——满饥饿低血时
+     *  食物回血既慢又浪费，且原版满饥饿本就吃不下；药水/金苹果等给 buff 的不走这里。 */
     private boolean feedHealingFood(EntityMaid maid, ServerPlayer owner) {
+        if (owner.m_36324_().m_38702_() >= 20) {
+            return false;
+        }
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             int bestSlot = -1;

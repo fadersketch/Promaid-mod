@@ -44,7 +44,9 @@
     "TaskAttackWeaponMixin",
     "PotionAnimTrackMixin",
     "MaidChatLlmGateMixin",
-    "MixinTntBuildGuard"
+    "MixinTntBuildGuard",
+    "MaidBedBlockInteropMixin",
+    "MaidTombstoneClickMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",

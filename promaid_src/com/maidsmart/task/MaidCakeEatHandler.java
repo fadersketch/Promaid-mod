@@ -56,7 +56,8 @@ public class MaidCakeEatHandler {
         // 回血：像喂驯养动物一样按营养回复生命（m_5634_ = heal，满血自动无效）
         maid.m_5634_(CAKE_HEAL);
         maid.getFavorabilityManager().add(CAKE_FAVOR_POINTS); // 自带升阶/心形粒子/事件
-        if (notify) {
+        // 实测四百二十九：睡觉中不弹投喂气泡/消息（回血与好感照常结算）
+        if (notify && !maid.m_5803_()) {
             showCakeMessage(maid);
         }
     }

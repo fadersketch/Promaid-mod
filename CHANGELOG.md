@@ -1,4 +1,916 @@
-﻿## 实测四百一十六【女仆自动复活（新功能）】
+﻿## v1.1.1 发布【1.20.1 Forge 正式版】
+
+**版本号**：1.20.1 Forge 版 `1.1.0` → **`1.1.1`**；附件更名为 `promaid-1.1.1.jar`。
+1.21.1 NeoForge 版仍为 beta.2，jar 文件名不变（`promaid-1.1.0-neoforge-1.21.1.jar`），
+本次同步替换其附件内容。
+
+**升级提示**：安装新 jar 前请删除 mods 目录里的旧 `promaid-1.1.0.jar`——
+两个 jar 的 `modId` 相同，同时加载会导致启动失败。
+
+**本版合并发布了 v1.1.0 之后的所有改进**（逐条见上方各实测条目），主要面：
+
+| 方向 | 内容 |
+|---|---|
+| 语音 | 内置日语语音包（121 条）随 jar 分发；情绪分五档（战斗/关心/俏皮/干活/请求）；排班闲聊 49 条；感知/敌袭 6 条；拥抱摸头 6 条；规则气泡补漏 6 条；响度归一化；睡觉静默 |
+| HUD | 冷却可视化（女仆复活倒计时 / 回魂符冷却）；1.20.1 渲染根因修复（窗口高度取错 SRG 字段，冷却+建造两个 HUD 同修） |
+| 战斗自保 | 重锤猛击与重锤专属落地水、空中禁传送（1.21.1）；悬空禁搭方块；收符期间冷却条保留；右键墓碑不再当场复活；回魂符冷却持久化修复 |
+| 移动与休息 | 床铺互通（女仆睡原版床 / 玩家睡女仆床）；搭路默认开启并迁到「移动与行为」；主人踩踏刷新垫脚方块 |
+| 界面 | 配置面板重组（两级菜单 7 大类 / 28 小类，开关集中化）；手册详细介绍重写 + 链接一键跳转配置；手册内自动复活设置页；排班表快捷调整整页任务选择 |
+| 其他 | 女仆自动复活（墓碑到期自动消失、主人重生点复活、背包全恢复）；女仆绝不伤害主人三层防护；彻底移除第三方软联动（纯 TLM 独立版） |
+
+---
+
+## 实测四百四十七【规则气泡语音补漏 6 条：「附近没有值得挖的矿石」还是人机语音】
+
+用户反馈：「附近没有值得挖的矿石这一句还是人机」。
+
+**一、根因（不是没触发，是没登记）**
+- 这句来自 `dialogue/WorkStatusReporter.java` 的"卡住原因"播报（挖矿任务空闲时每 N 秒
+  弹一次气泡解释卡在哪）。
+- 它和其他气泡不同：**文本是以变量传进气泡的**（`addTextChatBubble(reason)`、`reasonOf`
+  返回字符串），而不是字面量，所以历次补语音时被漏掉了。
+- 完整链路：`ChatBubbleLimitMixin` → `SystemTTSManager.speak` → `JarVoicePack.matchKey(text)`。
+  manifest 里没有这条文本 → 命中失败 → 落到最后的 `④ TLM TTS 合成` = 人机语音。
+
+**二、全盘扫描（把同类漏洞一次找干净）**
+用 site-aware 方式提取两棵树**所有** `addTextChatBubble(...)` 调用（含字符串拼接与三元
+表达式），并追到**变量间接来源**（WorkStatusReporter / PerceptionManager /
+EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehavior），
+再逐条与 manifest 比对。命中情况：
+
+| 来源 | 文本 | 补漏前 |
+|---|---|---|
+| WorkStatusReporter | 附近没有值得挖的矿石 | **缺** |
+| WorkStatusReporter | 我没有镐，没法挖矿——给我一把镐吧 | **缺** |
+| WorkStatusReporter | 附近没有需要打理的农田了 | **缺** |
+| WorkStatusReporter | 被骑乘着，动不了 | **缺** |
+| MaidAidOwnerBehavior | 主人，金苹果给你！ | **缺** |
+| MaidAidOwnerBehavior | 主人，附魔金苹果给你！ | **缺** |
+
+其余规则气泡（感知 7 条、排班 49 条、拥抱/摸头 6 条、建造/挖矿/伐木/酿造/自保/投喂等）
+**全部已有条目**，未发现新的漏网之鱼。
+
+**三、修复（数据层，不动逻辑）**
+1. 新增 6 条日语台词并合成 ogg（沿用五档情绪：挖矿/农田=work，没镐/被骑=plead，
+   金苹果=care）；
+2. manifest 115 → **121 条**（两棵树同步）。**附魔金苹果条目排在普通金苹果之前**——
+   二者都是 `contains`，不这样排会被 `金苹果给你` 先截胡；
+3. 插在 `fallback_*` 兜底条目之前，避免被兜底条目遮蔽；
+4. **零遮蔽校验**：把 121 条每一条用自身 `text` 反查 `matchKey`，必须仍命中自己，
+   结果 `SHADOWED 0`；
+5. ASR 客观校验：新合成音频用 whisper 转写，「近くに掘る価値のある鉱石が無いの」
+   「乗られてて動けないの」等整句正确（个别片假名如 ツルハシ 被 whisper 拆错，
+   属 ASR 对孤立词的已知误写，非发音问题）。
+
+**四、交付**
+- 语音随 jar 分发（`assets/promaid/voice/`），重建两个 jar 并部署 6 处目标；
+- `gen_voice_pack.py` 的台词表同步补上这 6 条，今后整体重训不会遗漏。
+
+---
+
+## 实测四百四十六【冷却 HUD 在 1.20.1 不渲染的真正根因：窗口高度取错了 SRG 字段】
+
+用户反馈：「最新实例里又没了」（引用此前「冷却条和显示的那些修复在 1.21.1 已经成功、
+在 1.20.1 都未能落实」）。
+
+**一、证据链（从已轮转的玩家会话日志里挖出来）**
+- `logs/debug-1.log.gz`（玩家 01:23~01:25 那一轮）里：
+  - 服务端每秒在下发：`[promaid/冷却HUD] KThragg 下发 2 条 | revive:汉服酒狐:58/60, …`
+  - 客户端有 `cooldown hud: first snapshot received (2 entries)`
+  - 客户端也有 `cooldown hud: first render event`（444 改的注册/事件是好的）
+  - **但没有 `cooldown hud: first draw`** → 数据到了、回调也进来了，是在渲染函数里被
+    某个守卫提前 `return` 掉了。
+
+**二、根因（对照 `srg1201_to_moj1211.json` 才看清）**
+- `com.mojang.blaze3d.platform.Window` 的 SRG 名是：
+  - `m_85445_` = `getGuiScaledWidth`
+  - `m_85446_` = **`getGuiScaledHeight`**
+  - `m_85447_` = **`getX()`（窗口位置！）**
+- 433/444 两版都误把 `m_85447_` 当"高度"用：`int h = event.getWindow().m_85447_();`
+  → h 实际是**窗口的 X 坐标**。窗口贴左时（最大化/全屏，x=0）`h - LINE_H - 2 = -12`，
+  而 `y = 4`，于是 `y > -12` 恒成立 → **每帧提前 return，HUD 永远不画**。
+  只有窗口恰好停在 x≥16 的位置时才偶然画得出来 —— 这正是"我自己把窗口拉出来测试就正常、
+  你那边一直没有"的原因（我上次验证成功，纯粹因为测试窗口恰好在 x>16）。
+
+**三、修复**
+1. 冷却 HUD：`h` 改用 `m_85446_`（`getGuiScaledHeight`）。
+2. **建造 HUD 同款错误一并修**：旧版 `w = m_85446_`、`h = m_85447_` 两个都错，
+   正确是 `w = m_85445_`、`h = m_85446_`；折行宽度与"超出屏幕不画"判定一起恢复正常。
+3. 加一道保险：`h <= 32` 视为取值异常，不再用它拦绘制（宁可画出来，也不要因为取值错误
+   整块消失）。
+4. 诊断：新增 `cooldown hud: SKIP[原因] …`（按原因各记一次、最多 5 行），
+   以后若再看不到，日志会直接指出是 `screen / f3 / stale / noRoom / fontNull` 哪一个。
+
+**四、实测验证**
+- 把存档**复制**成一次性世界、用玩家本人 UUID 启动 1.20.1 客户端，并把游戏窗口
+  **贴到屏幕左上角**（复现 x=0 的失败条件），杀掉一只女仆触发待复活：
+  `latest.log` 依次出现 `first snapshot received (3 entries)` → **`first draw at y=44`**，
+  HUD 确实画出来了。
+- 测试世界、临时脚本、假账号缓存条目均已清理；原存档 mtime 未变（已核对）。
+- 1.21.1 侧用的是 Mojmap 的 `getGuiScaledHeight()`，本来就没这个问题（与你"1.21.1 已经好了"
+  的观察一致）。
+
+---
+
+## 实测四百四十五【语音包情绪化重制（按情境分五档）+ 落地水"没声音/染红"两个 bug】
+
+用户反馈：「语音包在语气和情感上面能不能稍微优化一点？现在这样子读着太死气沉沉的了，
+应该要根据具体的情境来分别对应不同的情感和语音，你需要重新训练。而且我在刚刚测试的
+时候，触发了 [警示]落地水 这个语音字段。是红色的而不是蓝色的，而且这个就没有触发语音，
+还是触发了人机语音。」
+
+**一、情绪化重制（115 条重写 + 五档情绪）**
+- 关键约束：`manifest.json` 只存中文 key，**上一版的日语台词没有落盘**，所以本次按中文
+  语义**重新撰写**了 115 条日语台词（顺手把台词也写得更口语、更有情绪）。
+- 情绪的实现方式：GPT-SoVITS 的语气由**参考音频**决定。磁盘上只有两条【小酒狐本人】
+  的参考音频：
+  - A《この命ご主人様のために捧げますね》= 郑重/沉稳；
+  - B《どうしました私があまり可愛いからびっくりしちゃったんですか》= 俏皮/活泼。
+  两条同一说话人 → **不会变声**，只是换语气底色。分档：
+  | 情绪 | 条数 | 参考 | 语速 | 用在哪 |
+  |---|---|---|---|---|
+  | 战斗·紧张 | 20 | A | 1.08 | 敌袭/主人受伤/低血/自保/图腾/盾牌/落地水雪 |
+  | 关心·温柔 | 11 | A | 0.95 | 投喂/药水/复活归来/主人注视 |
+  | 俏皮·日常 | 60 | B | 1.05 | 49 条排班闲聊 + 钓鱼 + 天气 + 拥抱/摸头 |
+  | 干活·汇报 | 17 | A | 1.03 | 建造/搭路/挖矿/伐木/酿造 |
+  | 请求·为难 | 7 | B | 1.02 | 缺料/没食物/够不着 |
+- **采样参数是 ASR 客观对照试出来的**：`temperature 1.15 / top_k 20 / top_p 0.95`
+  这组会把短句合成糊掉——「敵が来たよ、気をつけて！」被 whisper 转写成
+  「てちがちだよ 塩つけて」；而 `speed 1.08 + 默认采样（temp 1.0 / k15 / p1.0）`
+  反而转写完全正确。所以**情绪靠参考音频 + 语速，采样一律用默认保守值**。
+  最终五档各抽一条 ASR 复核（enemy_near / aid_food / hug_02 / build_done /
+  no_food_left）全部清晰可辨。
+
+**二、"落地水没语音、还是人机语音"**
+- 根因：`SystemTTSManager.speak` 把「内置包最小间隔」（`jarPackMinIntervalS`，默认 **8 秒**）
+  的判断放在了**命中判定之前**——一旦命中但被间隔挡下，代码会继续往下走，最后落到
+  第 ④ 段 TLM TTS 合成，于是听到"人机语音"。
+- 修复：**先命中，再谈间隔**。命中即由内置包负责：被间隔挡下就**静默**，绝不回退 TTS；
+  并让 `clutch_water` / `clutch_snow` / `enemy_near` 三条短促关键台词**豁免**该间隔
+  （否则落地水常被吞掉，看起来像语音包失效）。
+
+**三、"[警示]落地水"染红**
+- 落地水/落地雪是女仆自己的**动作播报**，不是威胁提示；旧版只要周围 12 格有敌对生物
+  就统一按敌袭染红（`§c[警示]` 前缀 + 红色气泡）。现在这两句豁免，聊天框前缀与世界
+  气泡颜色都回到常规青色。
+
+**四、验证**
+- 两树编译零错；jar 重建（含新语音包）并部署到 6 个实例；`test_server.py 1201` 与
+  `neoforge1211` 回归均 PASS；新语音用 whisper 抽样复核（见上）。
+
+**五、已知限制（如实说明）**
+- 磁盘上只有两条小酒狐参考音频，做不到"每种情绪一套专属语气模型"。如果你能提供更多
+  **小酒狐本人**不同情绪（生气/慌乱/大笑…）的片段，我可以直接拿它们当参考再合成，
+  情绪会更到位；否则就只能在"同参考 + 语速 + 台词"这个范围内优化。
+
+---
+
+## 实测四百四十四【冷却 HUD 在 1.20.1 恒不渲染：渲染回调根本没被调用】
+
+用户反馈：「刚刚有关冷却条和显示的那些修复在 1.21.1 版本都已经成功修复了。
+但在 1.20.1 都未能落实。」
+
+**一、定位（日志说话）**
+- 1.20.1 客户端 `latest.log` 里有
+  `cooldown hud: first snapshot received (1 entries)`，
+  但**没有** `cooldown hud: first draw` —— 说明服务端数据正常下发、客户端包也收到了，
+  是**渲染回调从未进入**（不是数据问题、不是绘制逻辑问题）。
+- 1.21.1 侧同款逻辑（NeoForge 的 `RenderGuiLayerEvent.Post` + 注解注册）是好的 →
+  问题只在 1.20.1 的那套挂载方式。
+
+**二、根因**
+- 1.20.1 侧 433 版本改成了
+  `@Mod.EventBusSubscriber(modid="promaid", bus=FORGE, value=CLIENT)` +
+  `RenderGuiOverlayEvent.Post` 只认 HOTBAR 层。
+- 该**注解自动注册在 1.20.1 对这个客户端 FORGE 总线类目没有生效**（本模组里此前只有
+  MOD 总线的注解订阅者、以及懒注册的先例），于是 overlay 事件根本到不了这个类，
+  HUD 永远不画。
+
+**三、修复（1.20.1 侧）**
+1. 换事件：改用 `net.minecraftforge.client.event.RenderGuiEvent.Post`
+   （反编译 `ForgeGui.render` 实证：方法末尾**每帧必然 post 一次**），
+   不再依赖"逐层 overlay 各发一次事件 + 比对 `minecraft:hotbar` id"，少一个失败点。
+2. 换注册：改为**显式注册** —— 客户端 Mod 构造期
+   `PromaidClientSetup.registerHudHooks()` → `CooldownHudRenderer.ensureRegistered()`
+   （`MinecraftForge.EVENT_BUS.register(类)`），`onSnapshot` 里再兜一次；
+   `registered` 闸保证只注册一次。不再依赖注解扫描。
+3. 诊断三点链：`first snapshot received` / `first render event` / `first draw`，
+   以后再出问题一眼能区分是没数据、没注册/没事件、还是没绘制。
+
+**四、验证（真实客户端烟测）**
+- 把一份存档**复制**成一次性世界 `_hudtest`（不动原档），用测试账号离线启动 1.20.1
+  客户端，`latest.log` 依次出现：
+  `first snapshot received (2 entries)` → `first render event` → `first draw at y=4`，
+  即 HUD 确实被画出来了。
+- 测试世界、测试账号在 `usercache.json` 的条目、以及临时脚本/截图均已清理；
+  原存档 mtime 未变（已核对）。
+
+---
+
+## 实测四百四十三【悬空禁搭方块（自保搭高 / 搭路 / 挖矿垫脚 / 伐木垫脚）】
+
+用户反馈：「使用重锤有的时候会因为飞得太高而触发了大方块机制。所以女仆在处于悬空
+状态下的时候应该禁止搭建方块。（这个机制在挖矿和伐木的时候也通用，有的时候就是
+因为下落悬空的时候搭方块又放不了落地水导致自己被摔死了）」
+
+**一、做法：一个统一闸口**
+- 新增 `com.maidsmart.tool.MaidPlaceGuard.blocked(maid)`；四个搭方块模块
+  （自保搭高 / 搭路 / 挖矿垫脚 / 伐木垫脚）都在各自 `takeBuildBlock` 取料前问一次
+  —— 被禁就返回 `null`，各调用点现有的 `if (item == null) return false` 会自然
+  放弃本次放置：**不消耗方块、不改动世界**。
+- 取料失败时会播的"背包里没有搭方块的材料"气泡按下同一判定**静默**，
+  避免悬空时误报（自保 `announceNoMaterial`、搭路 `notifyNoBlock`、
+  挖矿/伐木 `notifyNoBuildBlock` 四处）。
+
+**二、判定口径**
+- 开关 `misc.noPlaceInAir`（默认开）。
+- **一律放行**：站在地面、在水里/岩浆里、骑乘、鞘翅滑翔 —— 这些都不是"悬空危急"。
+- **坠落距离 ≥「落地水触发高度」**（`combat.waterFallDistance`，默认 6 格）→ 禁搭。
+  理由：到这个高度落地水本来就会接管；此时搭方块既救不了她，还会把落点的水/地面
+  结构改掉、把落地水挡住 —— 正是用户实测的摔死根因。
+- **1.21.1 另加**：重锤跃起（`MaidMaceSmashBehavior.isAirborne`）**整段空中都禁**
+  （上升段也算，避免起跳瞬间乱搭）。
+
+**三、不破坏正常垫高**
+本模组的垫脚动作都是"站在地面或浅跳时往前方脚下垫一块"（`fallDistance ≈ 0`），
+所以照常工作；只有真正的坠落才被拦。
+
+**四、验证**
+- 两树编译零错（新增源文件已重新生成 argfile）；jar 重建并部署到 6 个实例；
+  `test_server.py 1201` 与 `neoforge1211` 回归均 PASS。
+
+---
+
+## 实测四百四十二【重锤专属落地水 + 重锤空中禁传送（1.21.1 专属）】
+
+用户反馈：「使用重锤的时候，女仆很容易给自己摔伤，因为触发不了落地水很难受。
+你想想有没有什么可以优化的方案。比如此时禁用通用落地水，但是在有水桶的情况下会
+强制在落地前脚下生成一格水这种（相当于重锤专属落地水）。还有女仆在重锤状态下
+空中的时候要禁止传送。否则很容易因为女仆飞到高空又传送回来，造成战术上的失误。」
+
+**一、重锤专属落地水**
+- 旧版是"半吊子抑制"：`suppressesFallClutch` 只在【目标仍在命中范围内】时让开
+  落地水——冲刺段目标一旦跑出范围，水就可能提前放、把 `fallDistance` 清零
+  （重锤下落加成全丢）；或者该放的时候来不及放，落地照样摔。
+- 现在改成：
+  - **跃起全过程**（`isAirborne`）通用落地水/雪**完全让位**；
+  - **落地帧**：`MaidMaceSmashBehavior` 在**结算完猛击之后**置位
+    `FORCED_CLUTCH` 请求，`WaterClutchBehavior`（优先级 240，在本行为 235 之后
+    tick）在同一 tick 于落点**强制**放一格水（有水桶；下界不放水）或细雪
+    （只有细雪桶），不看 `fallDistance` 阈值。
+- **顺序是关键**：先算猛击（读此刻仍非零的 `fallDistance`）→ 再放水。加成不丢、
+  人也摔不着。放水位置复用原落地水的 `findLandingPos`（落点 + 脚格双格兜底）。
+
+**二、重锤空中禁传送**
+- 新增 `MaidMaceSmashBehavior.isAirborne`；跃起期间以下**自动传送**全部让位：
+  - TLM 跟随过远瞬移（`MaidTeleportPreserveMixin.teleportToOwner`）；
+  - 同维度远距拉回，含 Y 轴"搭太高"拉回分支（`MaidChunkLoadManager.trySameDimPull`）；
+  - 跨维度跟随（`MaidChunkLoadManager.followIfCrossDimension`）；
+  - 自保归位传送（`SelfPreservationBehavior` 两处）。
+- **不受影响**：玩家手动「一键集合/救援」（人工意图）与主人死亡传送（紧急意图）。
+- 跃起最长 `MAX_AIR_TICKS = 100 tick`（5 秒）自动收尾，不会长期禁传。
+
+**三、验证**
+- neo 树编译零错；jar 重建并部署到 6 个实例；`test_server.py 1201` 与
+  `neoforge1211` 回归均 PASS。
+
+---
+
+## 实测四百四十一【收符期间冷却条消失：手动收符的魂符不带标记 + 魂符落位写错槽】
+
+用户反馈：「女仆在收回魂符的时候2个冷却的时间条就消失了，虽然实际上还在计时，
+但那样子观感不太好。」
+
+**一、根因**
+- HUD 的"女仆在符里"分支（`CooldownHudTracker` 扫主人背包）只认【自动标记】的魂符：
+  `charmCooldownUntil` 要求 `AUTO_SAVED_TAG` + 冷却戳同时存在。
+- 玩家**手动**用空魂符收女仆时，魂符是 TLM 自己 `new` 的、不带任何标记 →
+  HUD 扫不到 → 冷却条消失；而冷却其实还记在女仆 persistentData 里继续计时
+  （所以"实际上还在计时"）。
+- 另外发现魂符落位写错槽：主手恒写 `items[0]`（玩家选中槽 ≠ 0 时会把 0 号槽
+  的物品直接顶掉、而手里的空符还是空的）、副手误写 `armor[0]`（顶掉靴子）。
+
+**二、修复**
+- 新增 `MaidSoulSpellGuard.onSoulSpellToItem`，挂在 TLM 的
+  `MaidAndItemTransformEvent.ToItem`（反编译实证：`storeMaidData` 里发出，
+  1.21.1 在 `AbstractStoreMaidItem`、1.20.1 在 `ItemSmartSlab`）——**自动/手动两条
+  收符路径都会经过它**：女仆仍在冷却时，把冷却戳 + 女仆名盖到魂符物品上。
+  女仆没在冷却则不标记（手动收符不该凭空冒出冷却条）。
+- `charmCooldownUntil` 放宽为**只认冷却戳**；`AUTO_SAVED_TAG` 仍只用于
+  "释放时是否重算冷却"的语义，职责分开。
+- 自动收符路径改为**先写女仆 persistentData、再 `storeMaidData`**，确保
+  `ToItem` 钩子（以及魂符里的女仆 NBT）都能拿到本次冷却。
+- 修魂符落位：主手 → `items[selected]`，副手 → `offhand[0]`，不再顶掉别的物品。
+- `CooldownHudTracker` 的节流日志补上条目详情（`kind:名字:剩余/总`），
+  下次再出现"条不见了"能一眼区分是没数据还是名字丢了。
+
+**三、验证**
+- 两树编译零错；jar 重建并部署到 6 个实例；`test_server.py 1201` 与
+  `neoforge1211` 回归均 PASS。
+- 预期：女仆被收进魂符（无论自动/手动）期间，只要她的回魂符冷却还在跑，
+  HUD 的「回魂符 · 名字 M:SS」就会一直显示到冷却结束。
+
+---
+
+## 实测四百四十【敌袭/感知系统消息接上内置日语语音包（6 条）】
+
+用户反馈：「有敌人靠近了，离我多少多少格这个语音似乎没有实现。仍然是播放的人机语音，
+而不是我们训练的语音包。」
+
+**一、根因**
+- 所有系统气泡都会经 `ChatBubbleLimitMixin.addTextChatBubble` 汇入
+  `SystemTTSManager.speak`，先查内置包（`assets/promaid/voice/manifest.json`）。
+- 但 `PerceptionManager` 的感知类气泡**从来没进过 manifest**：
+  敌袭出现「有敌人靠近了！离我 X 格」、敌袭靠近「有敌人靠近…离我 X 格了」、
+  「附近的敌人都清掉了，安全了！」、「主人受伤了！生命值降到 X%」、
+  「主人血量很低了，我好担心…」、「主人一直在看着我…」、「天气变成…了」。
+- 未命中 → 落到第 ④ 段 TLM TTS 站点合成，就是你听到的「人机语音」。
+- 附带难点：这些文案带**动态距离/血量数字**，manifest 的 `exact` 模式永远匹配不上。
+
+**二、修复**
+- 新增 6 条 **`contains`（前缀包含）** 映射，配 6 条日语语音
+  （GPT-SoVITS 小酒狐 v2Pro 合成、峰值归一化 -1.5 dB、libvorbis q4）：
+  | 气泡文本（动态） | manifest key（contains） | 语音文件 |
+  |---|---|---|
+  | 有敌人靠近了！离我 X 格 / 有敌人靠近…离我 X 格了 | `有敌人靠近` | `enemy_near.ogg` |
+  | 附近的敌人都清掉了，安全了！ | `附近的敌人都清掉了` | `enemy_clear.ogg` |
+  | 主人受伤了！生命值降到 X% | `主人受伤了` | `owner_hurt.ogg` |
+  | 主人血量很低了，我好担心… | `主人血量很低了` | `owner_low_hp.ogg` |
+  | 主人一直在看着我… | `主人一直在看着我` | `owner_looking.ogg` |
+  | 天气变成下雨/雷雨/放晴了 | `天气变成` | `weather_change.ogg` |
+- 「有敌人靠近」一条同时覆盖"出现"和"靠近"两种敌袭提示；「天气变成」一条覆盖三种天气。
+- 语音说的是固定日语台词（不念数字）；**气泡照旧显示精确距离/血量**，两者互不影响。
+- 内置包条数 **109 → 115**（60 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头），
+  配置面板说明、手册「语音系统」章、设置页提示同步。
+- 追加位置在 manifest 末尾；脚本回归校验 12 条样例（含 3 条既有条目）全部命中，
+  未被既有 `contains` 条目截胡。
+
+**三、验证**
+- 两树 `gen_compile`/`run_javac6`/`run_javac_neo` 编译零错；
+- jar 重建（含 6 个新 ogg + manifest 115 条）并部署到 6 个实例；
+- `test_server.py 1201` 与 `neoforge1211` 回归均 PASS。
+
+---
+
+## 实测四百三十九【回魂符冷却"放出女仆后就没了"根因：1.21.1 的持久化键是 NeoForgeData】
+
+用户反馈：「自动收回魂符这个功能的冷却，在女仆被收进魂符后把女仆重新放置以后，CD 及上方冷却条就消失了。」
+
+**一、根因（javap 实证）**
+- 1.20.1 Forge 的实体持久化数据子标签叫 `ForgeData`；**1.21.1 NeoForge 改成了 `NeoForgeData`**
+  （证据：补丁版 `net.minecraft.world.entity.Entity` 的 `getPersistentData()` 读写的就是
+  `NeoForgeData`，常量池里只有这一个键，没有 ForgeData 的兼容读取）。
+- neo 树把「释放女仆时重新起算的冷却」写进的是 `ForgeData` 子标签 → 女仆加载后
+  `getPersistentData()`（读 `NeoForgeData`）根本看不到这个值 →
+  **冷却失效（可被立刻再次收符）+ HUD 不显示**。
+- 这正好解释你看到的现象：女仆在符里时，HUD 靠【魂符物品自身】的冷却戳还能显示；
+  一旦放出来、物品标记被清掉，实体上又没有冷却 → CD 与冷却条一起消失。
+
+**二、修复**
+- neo 树 `FORGE_DATA_TAG` 由 `"ForgeData"` 改为 **`"NeoForgeData"`**（写进 `MaidInfo` 子 NBT 的
+  那条路径也一并随之修正——TLM 释放时读的就是它）。
+- 两树都加一步【双保险】：在 `ToMaid` 事件里**再直接写一次实体 `getPersistentData()`**，
+  防止 TLM 在事件之后才把 `data` 应用到实体导致写入被覆盖。
+- 冷却口径不变：仍按实测四百零四「从**释放时刻**重新起算」。
+
+**三、效果**
+- 放出女仆后：冷却正常生效（冷却期内不会再被自动收符，防收放循环恢复），
+  左上角 HUD 的「回魂符 · 名字 · 剩余/总秒」也会一直显示到冷却结束。
+
+**四、验证**
+- 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十八【右键墓碑不再当场复活：改为原版行为 + 取消本次自动复活】
+
+用户反馈：「在女仆死亡期间，右击墓碑会直接复活。我感觉这个操作不好，那样子就使得我设的那个冷却毫无意义。应当改为在自动复活功能开始以后右击墓碑仍然跟原版一致，同时取消复活事件。」
+
+**一、改动**
+- **删掉"右键墓碑 = 立即复活"**（实测四百二十六引入的 `reviveFromTombstone` + 对应注入），
+  mixin 重写为 `MaidTombstoneClickMixin`：
+  - 只在【服务端 + 主手 + 自动复活开启 + 墓碑属于本人待复活登记】时，把这块墓碑对应的
+    **待复活登记移除**；
+  - **不取消事件** → 右键继续走 TLM 原版（归还墓碑里的物品等），观感与行为完全一致。
+  - 只有墓碑所属主人本人的右键会取消（防他人误触）；未登记 / 非主人 = 完全不介入，纯原版。
+- 新增 `MaidAutoResurrect.cancelPendingOnTombstoneClick(...)`；移除已废弃的
+  `reviveFromTombstone` / `pendingOwnerOfTombstone`（无引用）。mixin 注册在
+  `mixins.promaid.json` 里同步改名。
+
+**二、效果**
+- 冷却恢复意义：不再有"绕过 CD 的免费复活"。玩家若手动右键墓碑取回物品，就等于放弃
+  本次自动复活——她不会在到期时又自己冒出来。
+- HUD 同步：取消登记后，左上角的「复活 · 名字」倒计时随之消失（与服务端同一份数据源）。
+
+**三、文档**
+- 手册「女仆自动复活」章：把「右键墓碑 = 立即复活」改写为「右键墓碑 = 原版行为 + 取消本次
+  自动复活」；测试示例里"懒得等就右键"一句同步改为"想缩短等待只能调小复活延迟"。
+
+**四、验证**
+- 两树编译零错（mixin 改名后已重跑 `gen_compile*.py` 重建源清单）；重建 jar 并部署；
+  `test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十七【重锤"打着打着不再触发"：门禁加固 + 诊断日志】
+
+用户反馈：「一开始重锤的逻辑还可以使用，但是突然就不再触发重锤的战术了，很奇怪。我初步推测是自主战斗可以触发，但是 TLM 原生的攻击不能触发。」
+
+**一、先把最可能的两个原因说清楚**
+- **风弹耗尽**：现在规则是「重锤 + 风弹缺一不可」，**每次猛击消耗 1 枚风弹**——给的那几枚用完之后自然就不再触发（与战斗模式无关）。
+- **主手被换走**：本行为只认「主手 = 重锤」。若她切了别的任务/武器（自动装备把她手上的重锤换掉），也会停。
+- 这两个都能被下面的诊断日志直接证实。
+
+**二、目标读取加固（对应用户的猜测）**
+- 新增 `currentTarget(maid)`：优先读脑内 `ATTACK_TARGET`，读不到退回 `maid.getTarget()`（Mob 原生目标）——
+  用户怀疑"自主战斗写脑内记忆、TLM 原生攻击写别处"，两条都认就不会漏触发。
+  （旁注：TLM 的 `EntityMaid` 本身就持有 `ATTACK_TARGET`，理论上两种模式都会写；兜底无害。）
+
+**三、风弹读取加固**
+- 旧版 `hasWindCharge` / `consumeWindCharge` **只扫 `getMaidInv()`（背包）**——风弹放**副手**时
+  会出现「检查通过但消耗失败」或「压根不触发」。现在**背包 + 副手都认、都能消耗**。
+
+**四、门禁诊断（下次复现就能定位）**
+- 只要"身上有重锤却没触发"，每只女仆 5 秒最多写一条到 `logs/promaid.log`（分类 `重锤门`），
+  内容：原因 + 主手物品 + 风弹数量 + 目标距离 + 是否着地 + 冷却剩余。
+- 例如 `[重锤门] 小玉 不触发: 没有风弹（重锤+风弹缺一不可） | 主手=mace 风弹=0 目标=2格 地面=true 冷却剩=0t`
+  ——一眼就能区分是弹药、武器、目标还是距离的问题。
+
+**五、验证**
+- neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十六【重锤：风爆（Wind Burst）机制核实 + 补上原版猛砸冲击表现】
+
+用户反馈：「这个操作的效果应该是在下落攻击的时候会产生一个风暴吧？我在测试的时候拿没有附魔的重锤女仆是会掉到地上的。」
+
+**一、结论先说：没有附魔就没有风暴，这是原版行为，不是 bug**
+- 反编译/数据双向核实：`data/minecraft/enchantment/wind_burst.json` 里风爆是
+  `minecraft:post_attack` → `minecraft:explode`（`affected/enchanted: attacker`，
+  半径 3.5、`gust_emitter_large/small` 粒子、`entity.wind_charge.wind_burst` 音效、
+  `knockback_multiplier`），触发条件 = direct_attacker **下落 ≥1.5 格且非飞行**。
+- 也就是说：**只有重锤附了「风爆」才会炸出风暴**（吹飞周围、并把女仆自己顶起来）；
+  没附魔的重锤猛砸本来就不产生风暴、砸完直接落地——原版玩家也一样。
+
+**二、风爆对女仆【确实生效】（javap 实证调用链）**
+- `EnchantmentHelper.doPostAttackEffects(level, target, source)` 内部：
+  `attacker = source.getEntity()` → 若为 LivingEntity 则取 `attacker.getWeaponItem()`，
+  再用 `runIterationOnItem(itemSource, MAINHAND, attacker, visitor)` 遍历**攻击者主手**的
+  附魔 → 因此女仆（非玩家）的 `mobAttack` 伤害源同样会跑到风爆（`enchanted: attacker`、
+  mainhand）这条组件上。
+- 我们的 `smashHit` 是「先 `hurt` → `doPostAttackEffects` → …… → 最后才 `resetFallDistance`」，
+  风爆判定时 `fallDistance` 仍然很大（≥1.5）且未飞行 → **条件满足**。
+- 所以：给女仆一把附「风爆」的重锤，猛砸就会出风爆；没附魔就只剩落地，符合原版。
+
+**三、真正缺的是「原版猛砸冲击表现」——已补**
+- 原版 `MaceItem`：命中时 `levelEvent(PARTICLES_SMASH_ATTACK = 2013, 目标脚下, 750)`
+  （砸击烟尘环），音效按原版三选一——贴地且落距 >5 用 `MACE_SMASH_GROUND_HEAVY`、
+  贴地用 `MACE_SMASH_GROUND`、空中用 `MACE_SMASH_AIR`。
+- 我们之前只放了 `MACE_SMASH_GROUND` 一个音效、没有烟尘 → 观感就是「砸下去没动静」。
+  本次按原版补齐（**无附魔也有这一下烟尘**），位置取 `target.getOnPos()`，数值照原版 750。
+- 手册「单兵战术」章：重锤段补上「砸击烟尘」与「风爆」说明。
+
+**四、验证**
+- neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十五【拥抱 / 摸头亲昵语音（6 条，只训练女仆说的话）】
+
+用户反馈：「拥抱和摸头是没有语音的。还需要训练（注意不要训练旁白句子，只需要女仆说的话）。」
+
+**一、台词来源与范围（严格只取女仆台词）**
+- `EmotionNetworking` 的 `say(maid, ...)`（G 摸摸头 / H 抱抱触发）：
+  - 拥抱 3 条：抱抱！好温暖～ / 主人的怀抱最安心了～ / 嘿嘿，被抱着都不想动啦～
+  - 摸头 3 条：嘿嘿，好舒服～ / 摸摸头就又有精神了！ / 最喜欢主人摸头了～
+- **旁白（第三人称括号叙述，如"（你张开双臂，把 XX 轻轻拥入怀中……）"）一律不训练**——按用户要求排除。
+  这两句只走 `player.sendSystemMessage`，不进气泡、不触发语音。
+
+**二、制作（与四百二十 / 四百二十八同款流程）**
+- 本机 GPT-SoVITS（小酒狐 `小酒狐-e15.ckpt` + `小酒狐_e8_s184.pth`，日语参考音）逐条合成日语；
+- 各自峰值归一化到 −1.5 dB（`volume` + `alimiter`，libvorbis q4）；
+- 产物 `hug_01~03.ogg` / `pat_01~03.ogg` 打进 jar（`assets/promaid/voice/`），两树各一份；
+- manifest 追加 6 条 `{中文原句, 对应 ogg, mode: exact}`（追加在 103 条之后，exact 防串扰）→ 共 **109 条**；
+  已用脚本复刻 `JarVoicePack.matchKey` 验证 6/6 命中自己的音频。
+
+**三、无需改代码**
+- `say()` 走的是 `addTextChatBubble` → `ChatBubbleLimitMixin` → `SystemTTSManager.speak` →
+  内置语音包命中即播放；本次只补了音频与 manifest，接线本来就在。
+
+**四、同步**
+- 面板「启用内置语音包」说明、手册语音章、GuideScreen 音量提示的条数 103 → 109（54+49+6）。
+
+**五、验证**
+- 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十四【重锤改为「重锤 + 风弹」缺一不可 + 附魔生效性核查】
+
+用户反馈：「现在女仆不用风弹就可以直接起飞，感觉有点太超标了。我建议还是要求又要有风弹又要有重锤的时候才能使用，否则就还是原版。顺带我想问一下附魔对女仆操作重锤有用吗？我觉得这一点还是要注意一下。」
+
+**一、改为缺一不可（不再占用风弹当"加成"）**
+- `MaidMaceSmashBehavior.checkExtraStartConditions` 增加前置：`combat.maceWindCharge` 开启时
+  **必须背包里有风弹**，否则本行为不启动 → 交还原版（TLM 正常持锤平砍），**不会起飞**。
+- `start` 里只有消耗掉 1 枚风弹才继续起跳（`wind==false` 直接 return 兜底）；
+  起跳垂直初速固定用风弹档 1.7。
+- 配置语义改写：`combat.maceWindCharge` = 「重锤·必须消耗风弹（默认开）」；关掉 = 恢复旧版
+  「不消耗风弹自由起跳」（标注不推荐）。总开关 `combat.maceSmash` 不变。
+
+**二、附魔生效性核查（javap 实证原版调用链）**
+- **伤害加成** ✅：`EnchantmentHelper.modifyDamage`（锋利 / 亡灵杀手 / 节肢杀手）；
+- **下落加成** ✅：`Item.getAttackDamageBonus` 内部会调 `modifyFallBasedDamage` → **密度** 附魔算数；
+- **攻击后效** ✅：`EnchantmentHelper.doPostAttackEffects` → **火焰附加** 等 POST_ATTACK 组件；
+- **护甲穿透** ✅：**Breach** 走原版 `hurt` 的护甲结算（`modifyArmorEffectiveness` 从伤害来源的武器解析）；
+- **耐久** ✅：`hurtAndBreak(int, LivingEntity, EquipmentSlot)` 含**耐久**附魔；
+- **击退** ❌→✅：原版这一步在 `Mob.doHurtTarget` 里用 `EnchantmentHelper.modifyKnockback` 施加，
+  而我们为了带出重锤下落加成是**直接 `hurt`**、绕过了它 → 本次补上：命中后按 `modifyKnockback`
+  施加击退，并按原版把自身水平速度乘 0.6。
+
+**三、同步**
+- 面板行改名「重锤·必须消耗风弹」+ 帮助文本；手册「单兵战术」章重锤段改写（明确需风弹、
+  并列出生效的附魔）；中英 lang 同步。
+
+**四、验证**
+- neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS（1.20.1 树不含此功能）。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十三【冷却 HUD 照搬 HeartPact 显示机制 + 收符窗口数据缺口修复】
+
+用户反馈：「CD 功能还是未能正常显示。我只看到身上冒出来的效果。为什么不照我说的那样子去照搬别的模组的显示机制呢？」
+
+**一、证据链（先定位是"没数据"还是"没渲染"）**
+- 1.20.1 实例 `pro Maid.log`（promaid.log）显示 22:30:22–22:31:49 服务端**确实**在每秒下发
+  `[冷却HUD] KThragg 下发 1 条`（随后 22:31:51 `[自动复活] 汉服酒狐 已在主人重生点复活`）——
+  也就是说**服务端数据一直在发，屏幕上却没有 HUD** → 问题在客户端渲染通路，不在数据。
+- 另外「只看到身上的效果、没有 HUD」还有第二个缺口：**女仆被收进魂符后实体已移除**，
+  旧的回魂符 CD 扫描只查"存活女仆的 persistentData"，这段窗口自然没有任何条目可显示。
+
+**二、显示机制：完全照搬 HeartPact 的分娩倒计时（用户点名要求）**
+- `CooldownHudRenderer` 改为 **`@EventBusSubscriber` 注解常驻注册**（1.20.1
+  `Mod.EventBusSubscriber(Bus.FORGE, Dist.CLIENT)`；1.21.1 `EventBusSubscriber(modid, Dist.CLIENT)`）——
+  彻底去掉"收到第一个快照才 `EVENT_BUS.register(Class)`"的懒注册（这是本次 HUD 不显示的
+  最大嫌疑：懒注册未触发则整个监听器不存在）。
+- 绘制事件改为**只认 HOTBAR 那一层**（1.20.1 `RenderGuiOverlayEvent.Post` +
+  `VanillaGuiOverlay.HOTBAR`；1.21.1 `RenderGuiLayerEvent.Post` + `VanillaGuiLayers.HOTBAR`）——
+  与 HeartPact 同款：每帧在原版热键栏画完时正好画一次。
+- 带阴影绘制、按剩余秒升序、时间 `M:SS`（沿用四百三十）。
+
+**三、补上收符窗口的数据缺口**
+- `MaidSoulSpellGuard` 新增 `AUTO_SAVED_NAME_TAG`（收符时把女仆名写进魂符本身），并新增
+  `charmCooldownUntil(ItemStack)` / `charmMaidName(ItemStack)`（1.20.1 读 NBT；1.21.1 读
+  `DataComponents.CUSTOM_DATA`）。
+- `CooldownHudTracker` 每个玩家额外扫描其背包里的自动魂符：冷却中即产出
+  【回魂符 · <名字> M:SS】条目——**女仆在符里时也能显示**。
+
+**四、可验证性（关键）**
+- 客户端新增两条诊断日志（各一次）：`cooldown hud: first snapshot received (N entries)` 与
+  `cooldown hud: first draw at y=..`，与服务端「冷却HUD」日志配对——下次若仍不显示，一眼就能
+  区分"包没到客户端"还是"到了没画"。
+
+**五、验证**
+- 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十二【重锤猛击（1.21.1 专属，参考僵尸用重锤）】
+
+用户需求：「1.21.1 版本专属更新，女仆可以使用重锤。使用机制就参考 vanilla_mob_remake 里面的僵尸使用重锤。唯一的一个疑点就是要跟落地水平衡防止干扰。同时在拥有风弹的时候可以自己起跳一次。」
+
+**一、机制（反编译 vanilla_mob_remake 的 ZombieMaceAttackGoal 比对实现）**
+- 新增 `com.maidsmart.combat.MaidMaceSmashBehavior`（core 行为优先级 235，低于落地水 240、高于单兵战术 230）：女仆**主手持有重锤** + 有存活敌对目标 + 目标在起跳距离（默认 3 格）内 + 冷却（默认 60 tick）就绪 → 朝目标起跳（水平 0.15 / 垂直 1.2，与原 mod 同数值），喷 GUST / GUST_EMITTER_SMALL 粒子 + WIND_CHARGE_BURST 音效；下落中贴地（提前一 tick）或已落地时，若目标仍在 4 格内 → 猛砸。
+
+**二、为什么必须自己算重锤加成（javap 实证）**
+- 1.21.1 原版 `Item.getAttackDamageBonus`（重锤下落加成）**全 jar 只有 `Player.attack` 调用**（另有 Mob.doHurtTarget 只走 ATTACK_DAMAGE 属性）——所以**生物拿重锤挥砍是没有下落加成的**（参考 mod 的僵尸实际上也只有"起跳+挥砍"动作，没有真加成）。
+- 本实现显式复刻 Player.attack 的那一步：ATTACK_DAMAGE 属性 → `EnchantmentHelper.modifyDamage` → `Item.getAttackDamageBonus`（4f / 12+2(f−3) / 22+(f−8) 三段）→ `hurt` → 附魔后效 → `hurtAndBreak` + `resetFallDistance`。
+- 于是女仆的猛砸是**真实加成伤害**，下落越高越疼（最高 +22 以上）。
+
+**三、与落地水的平衡（用户点名的疑点）**
+- 猛击跃起会坠落 8 格以上；若落地水/雪在落点放桶会**清零 fallDistance → 猛砸加成全丢**（两功能互相干扰）。
+- 处理：`WaterClutchBehavior` 在猛击跃起期间让开（`suppressesFallClutch`），但**只在目标仍在命中范围内时**抑制——目标跑出 4 格立刻放开，落地水照常保命；命中后 `resetFallDistance`（同原版 postHurtEnemy）也不会摔伤。两头都不牺牲。
+- 另外 `MaidCombatTacticsBehavior` 在跃起期间交出移动控制（起跳水平速度只有 0.15，被战术导航覆盖就跳不向目标）。
+
+**四、风弹自我起跳**
+- 背包有风弹（可关）时消耗 1 枚，起跳垂直初速 1.2 → 1.7（跳得更高 = 更重的一砸）；没有风弹仍按原 mod 做普通起跳，不会因为没风弹就完全不会猛击。
+
+**五、配置（仅 1.21.1 树，位于「战斗与自保 → 单兵战术」小节）**
+- `combat.maceSmash`（默认开）/ `maceWindCharge`（默认开，消耗风弹自我起跳）/ `maceCooldown`（60 tick）/ `maceTriggerRange`（3 格）；手册「单兵战术」章补写重锤段；lang 补 4 条翻译。
+
+**六、验证**
+- neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS；1.20.1（1201）树不含此功能、不受影响。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十一【搭路默认开启 + 配置从「生存与复活」迁到「移动与行为」】
+
+用户反馈：「搭路功能可以默认开启了。不过搭路的配置难道不应该放在移动这一栏里面吗？」
+
+**一、默认开启**
+- `bridge.enabled` 默认 `false` → `true`（两树 `MaidSmartConfig`），配置项注释「搭路（默认关）」→「搭路（默认开）」，配置面板 `bridgeRows` 说明末尾「默认关闭」→「默认开启」。
+- 关键：已有实例的 `promaid-common.toml` 里早已写入 `enabled = false`，**光改 Java 默认值不会覆盖旧 toml**——所以 6 个本地实例（2 客户端 + 整合包 + 3 服务器）的 `[bridge] enabled` 也一并改成 `true`，否则实测看到的仍是关。
+
+**二、大类迁移**
+- `Section.BRIDGE` 的归属大类 `Group.SURVIVAL` → `Group.MOVE`（两树 `PromaidConfigScreen`）；`groupHint` 同步——「移动与行为」加「搭路」，「生存与复活」去掉「搭路」。
+- 搭路在功能上确实是移动/接近手段（跟随、拉回、散步、排班同属一类），原先落在生存与复活是分类失误。
+
+**三、手册同步**
+- 总览可点链接 `[[@SURVIVAL:BRIDGE|搭路]]` → `[[@MOVE:BRIDGE|搭路]]`（否则点击会跳到错误的大类页）；
+- 「七个大类与各自的小类」清单与「怎么找某个开关」把搭路从生存与复活挪到移动与行为；
+- 被动技能章「都在〔生存与复活〕大类下…搭路在搭路小类」改写为两处分别标注大类的写法；正文「〔生存与复活 → 搭路〕小节」→「〔移动与行为 → 搭路〕小节」；
+- 搭路说明「（v1.1.0，§c默认关§r）」→「（v1.1.0，§a默认开§r）」；`BridgeUpBehavior` 类注释「默认关闭」→「默认开启」。
+
+**四、验证**
+- 两树编译零错；重建 jar 并部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百三十【冷却 HUD 恒不渲染根因修复（F3 门禁用错字段）+ 显示方式对齐 HeartPact】
+
+用户反馈：「复活和自动回魂符的 CD 显示都未能正常显示。显示可参考 TouhouLittleMaid-HeartPact 里面的分娩倒计时显示方式。」
+
+**一、根因（javap + 用户 options.txt 双向实证）**
+- 四个 HUD 渲染器（两树 × 冷却/建造）的「打开界面 / F3 调试屏不显示」门禁都写成了
+  `mc.options.useNativeTransport`——该字段根本不是 F3 标志，且用户 `options.txt` 里
+  `useNativeTransport:true`（默认即 true）→ 条件恒真 → `onGui` 第一行就 `return`，
+  **HUD 永远不会被画出来**。
+- 正确字段：1.20.1 是 `Options.renderDebug`（SRG `f_92063_`，由 `Gui` 调
+  `DebugScreenOverlay.m_94056_` 前的 `getfield Options.f_92063_` 门禁字节码实证）；
+  1.21.1 是 `Minecraft.getDebugOverlay().showDebugScreen()`（javap 实证）。
+
+**二、顺带修掉被门禁掩盖的连带缺陷**
+- 1.21.1 `BuildHudRenderer` 的 `w/h` 颠倒（`getGuiScaledHeight` 当宽、`getGuiScaledWidth` 当高）——折行/防出屏全按错误尺寸算。
+- 1.21.1 `BuildHudRenderer` 折行绘制误用 `drawCenteredString(font, seg, x=4, ...)`——以 x=4 为中心会画到屏幕左外；改为左对齐 `drawString`。
+
+**三、显示方式对齐 HeartPact 分娩倒计时**
+- 冷却 HUD 改带阴影绘制（`drawString(..., true)`）；
+- 条目按剩余秒升序排列（最紧急在最上，参考其 `lines.sort(...)`）；
+- 时间格式改为 `M:SS`（参考其 `formatSeconds`）；
+- 1.20.1 从 per-overlay 的 `RenderGuiOverlayEvent.Post` 换成 `RenderGuiEvent.Post`——整帧只画一次，且在所有 overlay 之后触发，读到的建造 HUD 底边一定是本帧最新值（不再依赖注册先后）。
+
+**四、可验证性**
+- `CooldownHudTracker` 增加限频核对日志（每 5 秒一条，`promaid.log` 搜「冷却HUD」）：
+  下一次测试若仍不显示，可直接用日志区分「服务端没数据」还是「客户端没渲染」。
+
+**五、验证**
+- 两树编译零错；重建 jar；已部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十九【睡觉中静默系统气泡与语音】
+
+用户反馈：「女仆在睡觉的时候就不应该触发语音包和语音气泡了。」
+
+**一、判定口径**
+- 睡觉判定统一用 `LivingEntity.isSleeping()`（1.20.1 SRG `m_5803_`；javap 字节码实证其实现 = `getSleepingPos().isPresent()`，与 TLM `MaidBedTask` 调用的 `startSleeping` 同源，两树同款公共方法）。
+
+**二、改动点（两树各一份）**
+- `ChatBubbleLimitMixin.addTextChatBubble`（HEAD）：睡着直接 `-1` 返回——一次性拦住【所有女仆系统气泡】+【同步到主人聊天框】+【由此汇入的 TTS/内置语音包朗读】。覆盖感知/工作/自保/投喂/建造等全部规则气泡。
+- `SystemTTSManager.speak` 入口兜底：睡着直接 return——拦住不经 mixin 的直接调用者（排班贴身气泡）与其它触发路径，双保险。
+- `ScheduleBubbleBehavior.checkExtraStartConditions`：把原先"简化不判睡"的注释换成显式 `isSleeping` 判定（睡着不聊）。
+- `MaidCakeEatHandler`：唯一绕过 mixin 的直发 `addChatBubble` 路径（玩家蛋糕右击投喂）——睡着不再弹蓝色气泡/聊天框消息；回血与好感照常结算，不阻止投喂。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS（同时验证 mixin 注入点有效）；已部署两个客户端实例（含整合包实例）、三台本地服务器。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十八【排班气泡日语语音包（49 条，GPT-SoVITS 小酒狐）】
+
+用户反馈：「那些排班里的 50+ 条对话没有制作语音包。」
+
+**一、范围**
+- `ScheduleBubbleBehavior` 的排班贴身气泡文本池共 **49 条**（工作吐槽/撒娇/打工人毒鸡汤），此前只出气泡文字、没有语音。
+
+**二、制作（与四百二十同款流程）**
+- 用本机 GPT-SoVITS（小酒狐 `小酒狐-e15.ckpt` + `小酒狐_e8_s184.pth`，日语参考音 `この命ご主人様のために捧げますね.wav`）为 49 条逐条合成日语语音；
+- 每条合成后立即做峰值归一化（`volume` + `alimiter`，峰值 −1.5 dB，libvorbis q4）——与四百二十七口径一致，保证响度；
+- 产物 `sched_01.ogg` ~ `sched_49.ogg` 打进 jar（`assets/promaid/voice/`），两树各一份。
+- manifest 追加 49 条 `{中文原文, sched_XX.ogg, mode: exact}`（**追加在原有 54 条之后**，且用 exact 避免短模式串扰）；已脚本校验 49 条全部命中自己的音频、无被既有 contains 规则截胡。
+
+**三、接线**
+- `ScheduleBubbleBehavior.start` 冒完气泡后调用 `SystemTTSManager.speak(maid, text)`：命中内置包即播放（含压制 TLM 原生语音包），未命中则沿用原有 磁盘包 → 缓存 → TTS 合成 链路。
+- 内置包总条数 54 → **103**（54 系统消息 + 49 排班气泡）；配置面板说明与手册「语音系统」章同步更新。
+
+**四、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十七【内置语音包响度修复（素材归一化 + 音量上限提升到 20）】
+
+用户反馈：「我们自己做的语音包设置声音 5.0 都显小，感觉要至少有 10.0 的水平。当然，也有可能是别的问题导致我们这边声音太小。」
+
+**一、根因：语音素材本身太轻（不是播放音量不够）**
+- 用 ffmpeg volumedetect 实测内置 ogg：**平均 −32 dB、峰值仅 −12 dB**（正常游戏音效峰值应接近 0 dB）。GPT-SoVITS 直出的音频没有做响度处理，所以音量倍率再乘也事倍功半。
+- 播放链路本身没问题：`PromaidVoiceSoundInstance` 覆盖 `f_119573_` 为「TTS 倍率 × 内置包倍率」，`MaidTtsVolumeMixin` 的放大被我们的覆盖值取代，不存在双重/被压。位置音衰减（EntityBoundSoundInstance）属正常设计。
+
+**二、修复**
+- **素材峰值归一化**：两树各 54 条 ogg 全部重编码，把峰值抬到 −1.5 dB（`volume=<gain>dB,alimiter=limit=0.95`，libvorbis q4）——平均响度 −32 → **−21 dB**，整体约 **+11 dB**。文件体积 2,052,945 → 2,138,974 字节。
+- **音量上限 5.0 → 20.0**（`jarPackVolume`，默认仍 1.0）；配置面板「内置语音包音量」说明与手册「语音系统」章同步更新（并修正台词条数 53 → 54）。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
+- 提示：如果你之前把「内置语音包音量」存成了 5.0，素材归一化后再乘 5.0 会非常响——建议先调回 1.0~2.0 再按需微调。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十六【女仆复活机制修复：计时口径 + 墓碑右键立即复活 + 时机可配置】
+
+用户反馈：「女仆复活功能未能触发，甚至连正常点击墓碑让他复活的方式都没有了。复活这个机制可以参考一下我模组列表里面的驯养革新里面的宠物床。打开自动复活之后就会自动遵循这里面的操作。不打开那就是遵循原版。」
+
+**一、根因（两处硬 bug，均在 旧版就存在）**
+1. **到期永远不触发**：登记到期用 `level.getGameTime()`（世界游戏时间，随存档累计、数值很大），每秒检查却用 `server.getTickCount()`（服务器运行刻数，每次启动从 0 开始）。老存档里前者远大于后者，`now >= due` 永不成立 → 自动复活从不触发。
+2. **墓碑被清空**：开启自动复活时把墓碑容器清空（旧版为防物品复制），导致右键墓碑拿不到任何东西、墓碑直接消失，看起来就是「点击墓碑复活的方式没了」。另外经 CFA 反编译确认：TLM 原版右键墓碑本来只是**归还物品并删除墓碑**，并不复活女仆。
+
+**二、修复与重做**
+- **统一计时口径**：到期与检查都用世界游戏时间 `getGameTime()`；HUD 倒计时同步改口径。
+- **不再清空墓碑**：墓碑物品原样保留；开启时右键墓碑 = **立即复活**（新增 mixin `MaidTombstoneReviveMixin` 注入 TLM `EntityTombstone.m_6096_`/`interact`：墓碑属于本功能登记的待复活女仆且点击者是主人 → 销毁墓碑并在主人重生点复活，取消原版取物品）；非本人墓碑仍走原版提示。
+- **关闭 = 完全原版**：开关关闭时本功能不介入（不清墓碑、不登记），并在检测到关闭时丢弃待复活表，避免「关掉又打开」对已被取回的墓碑重复复活。
+- **复活时机可配置**（照驯养革新宠物床，新增配置项 `autoResurrectTiming`）：
+  - `0 = 延迟 N 秒`（默认，用「复活延迟（秒）」，默认 60）；
+  - `1 = 次日黎明`（游戏时间 `dayTime % 24000 == 1` 才复活，即 DI 宠物床的次日清晨）。
+  两种方式下右键墓碑都能立即复活，不受时机项影响。
+- **复活地点**：维持主人重生点（床/重生锚，无则主世界出生点）——按你的选择。
+- 配置面板「生存与复活 → 死亡与复活」新增「复活时机」循环按钮；中英翻译补齐；手册「女仆自动复活」章重写说明（右键立即复活、时机两项、关掉=原版、墓碑物品保持原样）。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十五【主人踩踏刷新扩展到挖矿/伐木/自保垫脚方块】
+
+用户需求（承接四百二十二）：「这个也应包含，防止玩家跟着女仆挖矿/伐木时掉下去。」——即：不仅搭路方块，挖矿/伐木/自保（搭高）她垫的方块也应在主人踩上去时刷新回收倒计时。
+
+**一、改动**
+- 四套搭方块追踪器全部开启 `refreshOnOwnerStand`：
+  - `BridgeUpBehavior.PLACED_TRACKER`（四百二十二已开，本次不变）；
+  - `MaidMineBehavior.PLACED_TRACKER`：`new PlacedBlockTracker(supplier, 4.0, 6.0, true)`；
+  - `MaidWoodBehavior.PLACED_TRACKER`：`new PlacedBlockTracker(supplier, 4.0, 6.0, true)`；
+  - `SelfPreservationBehavior.COMBAT_TRACKER`：`new PlacedBlockTracker(supplier, 0.5, 12.0, true)`。
+- `PlacedBlockTracker` 字段注释更新为「四套实例全部开启」；`masterOnBlock(...)` 判定逻辑不变（绑定女仆的主人、同维度、踩在上面/脚下一格）。
+
+**二、效果**
+- 玩家跟在女仆后面挖矿/伐木/爬战斗塔时，踩到她垫的方块即把该块寿命补满——不会出现「她走开、方块到期消失、玩家正踩着就踩空坠落」。
+- 她真正走远（挖矿/伐木/搭路：水平 >4 格或高度差 >6；自保：>0.5 格或 >12）且主人也不在方块上时，才按剩余寿命回收。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十四【手册详细介绍重写 + 一键跳转配置】
+
+用户需求：「现在我们对手册详细介绍这一块进行一个重写。同时在聊到某个功能的时候，可以附加一个链接，让玩家跳转到模组详细配置的对应功能处。」
+
+**一、可点击的配置链接（核心新能力）**
+- 手册正文新增链接语法 `[[@大类:小类:行标签|显示文字]]`：`GuideScreen` 的换行把整块链接当**原子 token**（按标签宽度计量、不拆行），渲染时画成§青色带下划线§r，并记录命中区；点击 → `PromaidConfigScreen.openAt(...)` 直接打开「模组详细配置」的对应页。
+- 两级定位：只给大类 → 进大类页；给到大类:小类 → 进小类参数页；再给行标签 → **翻到该行所在页并金色高亮目标参数行**。
+- 跳转用的配置面板以手册为父界面：在配置面板点「保存并返回」会回到手册正文。
+
+**二、手册内容重写**
+- 新增首章「功能总览 · 一键跳转配置」：按 7 大类清单列出全部 28 个小类的可点击链接，并给出手动导航路径。
+- 每章正文末尾**自动**附加一行「⚙ 配置入口：点此打开对应配置」链接——`GuideContent.configLinkFor(标题)` 按章节关键词映射到目标小类（建造/挖矿/伐木/烧制/农场/排班/战斗/被动技能/自动复活/床铺互通/贴身辅助/单兵战术/武器切换/AI记忆/对话/感知情绪/AI工具/语音 等），`GuideScreen.buildLines` 统一追加。
+- 「手册使用指南」章补充「点链接直达配置」的用法说明；手册内不再有任何开关（承接四百二十三）。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十三【模组详细配置面板重组（两级菜单）+ 开关集中化】
+
+用户需求：「手册里的各功能配置开关和配置项目实在是太多太乱了。我这个开发者都找不到哪个开关在哪里，我觉得需要进行一个改革重写，明确划分，重新分配和分类，细化分配。不再只有原来的那几大块。重新组一个。先声明，所有开关统一扔进模组详细配置界面里，不得出现在其它地方。……配置面板的方式跟原来是一样的，只是我需要对小项进行一个更明确的划分和重组。」
+
+**一、两级菜单（大类 → 小类 → 参数页）**
+- `PromaidConfigScreen` 新增 `Group` 枚举（7 大类），重写 `Section` 枚举（28 小类，每个小类记住所属大类）；首页只列大类，大类页列小类，小类页才是参数行（沿用原分页/保存机制）。
+- 7 大类 28 小类：
+  1. 生产与工作：建造 / 挖矿 / 伐木 / 烹饪与酿造 / 农场与宰杀
+  2. AI 与对话：AI 记忆 / 对话与自主 / 感知 / 情绪 / AI 工具
+  3. 战斗与自保：自保与保命 / 自保战术 / 单兵战术 / 主动参战 / 贴身辅助 / 玩家伤害策略
+  4. 生存与复活：落地缓冲 / 搭路 / 死亡与复活 / 传送与逃生 / 女仆安全与区块
+  5. 移动与行为：移动与跟随 / 空闲与流畅 / 排班表
+  6. 语音与显示：语音与 TTS / 显示与提示
+  7. 系统与杂项：交互与杂项 / 运行日志
+- 原来混在「战斗自保 / 被动技能 / 杂项」三大页里的约 230 条参数按配置键重新分配；`passiveRows`/`combatRows`/`miscRows` 拆成 19 个细化小类方法。原 12 板块 → 7 大类 28 小类。
+- 归类示例：「挖矿中禁止拾取」→ 挖矿；「任务垂直范围」→ 烹饪与酿造；「收符冷却」→ 死亡与复活；「树苗/作物骨粉催熟」→ 农场与宰杀；「冷却可视化 HUD / 气泡限频」→ 显示与提示。
+- 两级菜单共用 `menuGrid`（两列竖排、行距按数量/窗口高度自适应，永不与底部按钮重叠）；小类页「← 返回分类」、大类页「← 返回大类」。
+- 完整性脚本校验（对重组前备份）：BoolRow 112 / NumRow 175 / BtnRow 6 / CycleRow 3 / TextRow 5 / InfoRow 1 完全一致；配置键无丢失、无重复。
+
+**二、开关集中化（手册内不再有开关）**
+- 移除手册目录页的「⚙ 自动复活设置」「♪ 日语语音包设置」两个设置页入口——所有开关/参数只在「模组详细配置」面板里调（用户明确要求）。两个设置页相关代码标记 @Deprecated 保留（不可达，仅备回滚）。
+- 手册文本全面更新到新路径：导航章重写为 7 大类 28 小类清单 + 「怎么找某个开关」指引；各章交叉引用同步改为新路径（原来大量「杂项 → X」「战斗自保 → Y」的旧写法全部改掉）。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十二【搭路方块 CD·主人踩踏也重置】
+
+用户需求：「现在搭路方块只有在被女仆踩了以后才会被重置CD，更改为主人踩到了也会重置。」
+
+**一、改动**
+- `PlacedBlockTracker`（两树）新增第 4 个构造参数 `refreshOnOwnerStand`（默认 false，挖矿/伐木/自保方块不受影响）；
+- `expirePlaced` 的刷新判定在原有「绑定女仆踩着 / 任意女仆踩着 / 绑定女仆在附近」之外，新增 `masterOnBlock(...)`：当实例开启该开关时，绑定女仆的【主人】（玩家）正踩在该方块上（脚位同格或脚下一格）也把该块寿命补满；同维度才判，女仆离线时自然不成立（那时方块本就暂停倒计时）；
+- `BridgeUpBehavior`（两树）的搭路追踪器改用 `new PlacedBlockTracker(supplier, 4.0, 6.0, true)` —— 只有搭路开这个开关。
+
+**二、效果**
+- 主人踩着女仆搭的桥走，每踩到一块就把那一块的回收倒计时补满：谁（女仆或主人）在桥上走，脚下那块就不会断；两人都走远才按剩余时间回收。
+
+**三、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十一【冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却）】
+
+用户需求：「我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化。」
+
+**一、服务端倒计时采集**
+- `MaidAutoResurrect`：`Pending` 增加 `maidName`（墓碑生成时用 `PromaidLog.nameOf` 记录，随 SavedData 持久化；旧存档缺字段回退「女仆」）；新增 `hudReviveEntries(server, ownerId)` → {名字, 剩余秒, 总秒}，倒计时刻与到期判定同源（`getTickCount()`），并夹紧到配置的复活延迟上限；
+- `MaidSoulSpellGuard`：新增 `hudCooldownSeconds(maid, nowTick)`，读女仆 persistentData 的 `maid_hp_low_protect_cooldown_until` → {剩余秒, 总秒}；未在冷却返回 null（收在魂符里时本就安全，不显示）；
+- 新增服务端 `CooldownHudTracker.broadcast(server)`：每秒（ProMaidExtension 与建造 HUD 同节拍）全图扫一次存活女仆按主人分桶，叠加待复活表，逐玩家打包下发；只发本人女仆、无条目不发（客户端超时自清）。
+
+**二、网络与客户端 HUD**
+- 新增 S2C `CooldownHudPacket`（1.20.1 手册频道 id 26 / Neo `playToClient`），每项 {kind, 名字, 剩余秒, 总秒}，kind = `revive` / `soul`；
+- 新增客户端 `CooldownHudRenderer`（两树）：左上角「⏳ 冷却」列表，`复活 · 名字 42秒` / `回魂符 · 名字 18秒 / 60秒`；行高 10px 逐行步进、按 `BuildHudRenderer.bottomY()` 排在建造进度下方不重叠、打开界面/F3 不画、超出可用高度不画、超 2.5 秒没收到新快照自动清空（不残留旧倒计时）；`BuildHudRenderer` 两树新增 `bottomY()` 记录本帧底边。
+
+**三、配置与文档**
+- 杂项新增 `冷却可视化 HUD`（`misc.cooldownHud`，默认开，两树）+ 中英翻译 + 配置面板行；手册「女仆自动复活」章补充冷却可视化说明。
+
+**四、验证**
+- 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；
+- 重建 jar：`patched/promaid-1.1.0.jar` 6,936,317 字节、`patched/promaid-1.1.0-neoforge-1.21.1.jar` 6,946,795 字节；两个 jar 各含 `CooldownHudTracker.class`、`CooldownHudRenderer.class`、`BlueprintBookNetworking$CooldownHudPacket.class`；
+- `test_server.py 1201` 与 `test_server.py neoforge1211` 回归均 **PASS**；已部署到两个客户端实例与 pack1201 服务器（服务器用 rename-swap，无需停服）。
+- 按约定：**不提交 GitHub，等用户实测**。
+
+## 实测四百二十【内置日语语音包（GPT-SoVITS 训练，打进 jar）】
+
+用户需求：「帮我训练一个语音包，日语，就用桌面上这个 API.bat 来进行训练。训练的内容就是目前游戏里的那些系统消息语音，打包放进 .jar 里。效果就是当触发了这些系统消息之后，会自动播放这个语音。可以在手册里调整开关和音量大小以及最小间隔，播放此语音时会暂时卡掉 tlm 原来的语音包，播放完成后解除，有比原生语音包更高的优先级。」
+
+**一、语音素材（GPT-SoVITS 合成 → OGG）**
+- 用本机 GPT-SoVITS（`API.bat`，权重 `小酒狐-e15.ckpt` + `小酒狐_e8_s184.pth`、日语参考音 `この命ご主人様のために捧げますね.wav`）合成 **53 条日语台词**；
+- 覆盖范围 = 全部 49 个系统消息点（建造完成/缺料/替代/跳过 ×4 类、投喂/治疗/蜂蜜/牛奶/背包满、复活/死亡传送/盾牌共享、自保 8 条、落地水/雪、钓鱼 4 条、不死图腾 3 条、排班锁定、搭路 2 条、酿造缺料、挖矿伐木 6 条、攻击应答、发现矿/前方有）+ 4 条兜底（"缺…"/"有个…"等动态前缀）；
+- 匹配语义：manifest **自上而下、contains 优先**（更具体的模式排前面，`totem_peer` 必须先于 `totem_self` 这类包含关系）；动态消息（带坐标/方块名）在运行时是全串拼接，用静态片段（如"取代一下"/"被基岩之类的方块挡住了，我跳过它啦"）匹配；
+- ffmpeg 转 vorbis ogg（q4、约 32kHz 单声道），连同 `manifest.json` 打进 jar：`assets/promaid/voice/`（**两树各一份，53 ogg + manifest**）。
+
+**二、播放链路（服务端匹配 → 只发文件名 → 客户端本地取字节）**
+- 新增 `com.maidsmart.voice.JarVoicePack`：从 jar 内 classloader 读 manifest + ogg（惰性 + 内存缓存），提供 `matchKey(text)` → 文件名；
+- `SystemTTSManager.speak` 提升为**四段优先级**：**① 内置日语语音包（最高）** → ② 磁盘系统语音包（`config/maid_smart/system_voice/`）→ ③ TTS 语音缓存 → ④ TLM TTS 站点合成；
+- 内置包放在**站点/总开关检查之前**：只认自己的开关 + 自带最小间隔，**不要求配置 TTS 站点**（本地有音频，开箱即用）；
+- 新增 S2C 包 `PlayJarVoicePacket`（1.20.1 走手册 SimpleChannel id 25；1.21.1 走 `playToClient`）——**只下发女仆实体 id + 文件名**，客户端从自己的 jar 取同名 ogg 播放（省流量、两端一致）。
+
+**三、音量与「播放时压制原生语音包」**
+- 新增 `PromaidVoiceSoundInstance`（客户端，继承 TLM `MaidAISoundInstance` 复用其 OGG/Opus/MP3 解码），构造后覆盖音量字段 = `TTS 音量倍率 × 内置包音量倍率`（1.20.1 写 `f_119573_`；1.21.1 写 `volume`）；
+- 新增 `ClientVoicePlayback`：播放前按 ogg 字节估算时长（≈7000 字节/秒 + 0.5s 余量）开启**压制窗口**；窗口内监听 `PlaySoundEvent`，把 TLM 原生语音包实例 `setSound(null)`——1.20.1/1.21.1 的 `MaidSoundInstance`（女仆语音/音效）、1.21.1 另有的 `MaidSoundInstanceAtPos`（定点音效，按类名判定以跨版本安全）；**窗口到期自动解除**；`MaidAISoundInstance`（TTS/内置语音本体）不压；`isTestSound()` 试听音放行；客户端 tick 兜底在未进世界时清窗口；
+- 连续两条语音时压制窗口顺延不缩短。
+
+**四、配置与手册**
+- 新增 4 个配置项（两树）：`TTS_JAR_PACK_ENABLED`（默认开）、`TTS_JAR_PACK_VOLUME`（1.0，0.1~5.0）、`TTS_JAR_PACK_MIN_INTERVAL_S`（8，0~60）、`TTS_JAR_PACK_MUTE_NATIVE`（默认开）；
+- 配置面板「语音 → 内置日语语音包」4 行；**手册目录页新增「♪ 日语语音包设置」整页**（开关 + 音量 + 最小间隔，与「⚙ 自动复活设置」并排；输入延迟提交、越界钳制，关界面/返回时统一写盘）；四份 `lang/*.json` 补条目；手册「语音系统（TTS）」章节补写内置日语语音包段落。
+
+**验证**：两树全量编译零错误；jar 重建（1.20.1 = 6,927,410 字节 / 含 54 个 ogg 共 2,052,945 字节；1.21.1 = 6,937,705 字节）；1.20.1 与 1.21.1 服务器回归均 PASS；匹配自检（按 manifest 自身顺序 + contains 语义跑全部 49 条运行时消息样本）全部命中（仅 2 条"变量在中间"的样本是自检脚本无法拼全，运行时含映射片段必命中）。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等用户测试。**
+
+## 实测四百一十九【排班表快捷调整：点任务名进整页选择】
+
+用户需求：「排班表的快捷调整也引入和排班一样的机制，不再仅用 ◀ ▶ 翻页，而是点任务名进整页选择。」
+
+**改动**
+- 背景：第 2 页「排班」的任务槽此前已支持「点任务名 → 整页任务选择」（实测四百零二/四百零六），但第 1 页「快捷设置」的任务行仍只有 ◀ ▶ 循环 + 点中间换下一个——任务多时要循环点十几下。本次把整页选择推广到快捷页。
+- 两页共用同一套整页选择实现（`pickPageButtons`），靠新增字段 `pickQuick` 区分来源与去向：
+  - **快捷页进入**（点任务名）：选中任务 → 走既有 `QuickApplyPacket` **立即生效**（服务端仍校验排班锁定）→ 返回快捷设置页；「空闲」按钮 = 切到 TLM 空闲任务 `touhou_little_maid:idle`；左上返回显示「← 返回快捷设置」；标题提示「点击任务立即切换她的当前任务」。
+  - **排班页进入**（点任务槽）：选中任务 → 填入该时段槽 + 置未保存脏标记 → 返回排班页；「空闲」按钮 = 清空槽；左上返回显示「← 返回排班」；标题提示「点击任务填入第 N 时段」——**原行为完全不变**。
+- 两侧 ◀ ▶ 箭头全部保留（旧习惯不变）；当前任务/当前槽的「●」标记按来源取对应当前值。
+- 渲染层选择页标题提示也随来源切换，避免快捷页误显示"填入第 N 时段"。
+
+**两树同步**（1.20.1 SRG / 1.21.1 Mojmap）。**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,901,239 字节，1.21.1 = 4,911,622 字节）；1.20.1 与 1.21.1 服务器回归均 PASS。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等用户测试。**
+
+## 实测四百一十八【床铺互通：女仆床 ↔ 玩家床】
+
+用户需求：「让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床。」
+
+**堵点（javap/CFR 实证）**
+- **女仆睡不了原版床**：TLM 的 `MaidBedTask`（REST 活动里唯一的睡觉行为）用 POI 只查 `InitPoi.MAID_BED`，且 `start` 里硬判 `state.is(InitBlocks.MAID_BED.get())` —— 原版 16 色床既不进这个 POI 类型，也不满足这个 `is()`。
+- **玩家睡不了女仆床**：`BlockMaidBed.isBed(...)` 只在 `entity instanceof EntityMaid` 时返回 true，玩家（及重生点解析传的 null）走 `super`（= `instanceof BedBlock`）恒 false；且它的 `use`/`useItemOn` 只处理染料，非染料直接 PASS，从不调 `startSleepInBed`。
+- **可扩展点现成**：Forge/NeoForge 都已把 `LivingEntity.startSleeping` 与玩家重生点解析改为 `BlockState.isBed` / `setBedOccupied` / `getRespawnPosition` 钩子；`BlockMaidBed` 的 `OCCUPIED`/`PART` 与 `BedBlock` 是**同一 Property 实例**，`FACING` 来自 `HorizontalDirectionalBlock` —— 门一开，原版睡眠/占床/重生逻辑直接跑通。
+
+**一、方向一：女仆能睡原版床（两树）**
+- 新增 `com.maidsmart.task.MaidBedInteropBehavior`（模板照 `MaidStrollBehavior`），经 TLM 扩展点 `IExtraMaidBrain.getRestBehaviors()` 注册（两树此前都未覆写该钩子），优先级 6 —— 排在 TLM 自带 `MaidBedTask`(5) 之后、随机散步(20) 之前，**女仆床优先**；
+- 用原版 `PoiTypes.HOME` 找最近的原版床（原版把 16 色床 HEAD 都注册进 HOME），校验 `is(BlockTags.BEDS)` + `PART==HEAD` + `!OCCUPIED`（防别的模组往 HOME 塞非床方块），有 home 限制时要求床在活动范围内；
+- 够远用 `WalkTarget` 走过去，到 2 格内调 `startSleeping(headPos)` + `setPos`，与 TLM 自己的 `MaidBedTask.start` 同款 —— 占床、回血、好感度全部走 TLM 既有逻辑。
+
+**二、方向二：玩家能睡女仆床（两树）**
+- 新增 `MaidBedBlockInteropMixin`（`@Mixin(BlockMaidBed.class)`，登记进 `mixins.promaid.json`）：
+  1. `isBed` HEAD 注入：`entity == null || entity instanceof Player` 时返回 true（null 必须放行，否则重生点解析失败；女仆仍走 TLM 原 `EntityMaid` 分支，不放行其他生物）；
+  2. `use`(1.20.1 `m_6227_`) / `useItemOn`(1.21.1) HEAD 注入：手持可染色染料 → 放行走 TLM 原染色逻辑（染色优先）；潜行右键 → 不躺下；否则服务端调 `startSleepInBed(head)`，占用时发原版「床已被占用」提示；
+  3. **1.21.1 专用**：显式实现 `getRespawnPosition`（NeoForge `IBlockExtension` 默认恒 `Optional.empty()`，而 1.21.1 重生点解析只在非强制分支问这个钩子——不实现则睡下后死亡会报「重生方块缺失」回世界出生点），委托 `BedBlock.canSetSpawn` + `findStandUpPosition`，与睡原版床算法一致。1.20.1 Forge 的接口默认实现本身已走 `isBed`，无需额外方法。
+- `setBedOccupied`/`getBedDirection` 用平台默认实现（属性实例共享 + FACING 齐全），不改。
+
+**三、构建与开关**
+- 两方向共用配置 `misc.bedInterop`（默认开），面板「杂项 → 床铺互通」一行，关掉完全恢复 TLM 原版；四个 `lang/*.json` 补条目；手册新增「床铺互通（女仆床 ↔ 玩家床）」章节；
+- **neo 编译 classpath 顺序修正**：把 NeoForge 修补 jar 排到 vanilla 之前 —— `ServerPlayer$RespawnPosAngle` 在未修补 vanilla jar 里是**包私有**、在 NeoForge 修补版是 public，顺位反了「给女仆床实现 getRespawnPosition」编译不过（javac 实证）。
+
+**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,900,330 字节，1.21.1 = 4,910,712 字节）；1.20.1 与 1.21.1 服务器回归均 PASS（日志无任何 promaid 相关 mixin 报错）。已部署到两个客户端实例与 pack1201 测试服务器（服务器 jar 用 rename-swap 替换，重启后加载）。**未提交 GitHub，等用户测试。**
+
+## 实测四百一十七【手册内自动复活设置页】
+
+用户需求：「自动复活功能应该在手册里面也能够调整 CD 和开关。」
+
+**改动**
+- 《详细介绍》章节目录页右下角新增 **「⚙ 自动复活设置」** 按钮，进去是一页 **总开关 + 复活延迟（秒）+ 复活血量比** 三项控件，改完「保存并返回目录」即时生效，不必再跳「模组详细配置」面板；
+- 输入交互完全照配置面板的既有管线：点击输入框显式聚焦并自跟踪 `activeBox`，键盘输入经 `charTyped`/`keyPressed` 直接转发（1.20.1 走 `m_5534_`/`m_7933_`）——避开 1.20.1 焦点链差异导致的「点得进打不了字」；数字文本延迟提交（输入时只校验+红/白字，离开本页或关闭界面时统一写入 + `SPEC.save()`），不在输入路径上写配置，杜绝旧版「每按键 `set()` 卡输入」；
+- 越界值钳制到配置声明范围（延迟 1~86400 秒、血量比 0.05~1.0），非法/空文本跳过并保留原值；
+- 「详细介绍」新增 **「女仆自动复活（v1.1.0）」** 章节：运作链路（死亡抓快照 → 墓碑标记 → 到期消失 → 重生点复活）、话语提示、血量比、保姆式测试步骤，以及 **在哪里调开关与 CD**；顺手把手册里一处过期的「详见第 20 章」改为按章节标题引用（插入新章节不再导致编号漂移）；
+- 设置页布局用「控件与渲染共用同一套坐标」的 `settingsLayout()`（行高按窗口高自适应、说明文字按可用高度取舍），小窗口不重叠/不压按钮。
+
+**两树同步**（1.20.1 SRG / 1.21.1 Mojmap）。**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,892,596 字节，1.21.1 = 4,902,422 字节）；1.20.1 与 1.21.1 服务器回归均 PASS。已部署到 1.20.1 / 1.21.1 两个客户端实例与 pack1201 测试服务器（服务器 jar 用 rename-swap 替换成功，其重启后加载新版本）。
+
+## 实测四百一十六【女仆自动复活（新功能）】
 
 用户需求：女仆死亡后 60 秒，墓碑自动消失，她随即在主人出生点复活（也是 60 秒 CD）。
 

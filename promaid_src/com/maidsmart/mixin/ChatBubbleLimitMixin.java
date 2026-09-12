@@ -36,6 +36,11 @@ public abstract class ChatBubbleLimitMixin {
 
     @Inject(method = "addTextChatBubble", at = @At("HEAD"), cancellable = true)
     private void maidSmartBubbleLimit(String text, CallbackInfoReturnable<Long> cir) {
+        // 实测四百二十九：睡觉中不弹任何系统气泡（连带不同步聊天框、不朗读语音）
+        if (this.maid != null && this.maid.m_5803_()) {
+            cir.setReturnValue(-1L);
+            return;
+        }
         // v1.1.0 实测二百七十四（用户："建造模式屏蔽除了建造以外的其他所有系统信息
         // 系统消息及气泡"）：建造女仆的非建造来源气泡全部静默——调用栈判定来源
         // （com.maidsmart.build 包 = 建造系统）；"建好啦"完成汇报在建造包内，放行。
@@ -75,12 +80,22 @@ public abstract class ChatBubbleLimitMixin {
         // 的 TLM 原生灰色 `<名字> 文本`（addLLMChatText 独立方法，mixin 不拦截）
         if (this.maid != null
                 && this.maid.m_269323_() instanceof net.minecraft.server.level.ServerPlayer owner) {
-            boolean danger = com.maidsmart.dialogue.PerceptionManager.dangerActive(this.maid);
+            boolean danger = com.maidsmart.dialogue.PerceptionManager.dangerActive(this.maid)
+                    && !isCalmBubble(text);
             owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                     danger
                             ? "\u00a7c[\u8b66\u793a]\u00a7c[" + this.maid.m_5446_().getString() + "] \u00a7c" + text
                             : "\u00a7b[" + this.maid.m_5446_().getString() + "] \u00a7b" + text));
         }
+    }
+
+    /**
+     * 实测四百四十五：自行动作类气泡不按"敌袭警示"染红——落地水/落地雪是女仆自己的
+     * 动作播报（多半发生在战斗中坠落时），染成红色 §c[警示] 会被当成威胁提示
+     * （用户：「触发了 [警示]落地水，是红色的而不是蓝色的」）。
+     */
+    private static boolean isCalmBubble(String text) {
+        return text != null && (text.startsWith("\u843d\u5730\u6c34") || text.startsWith("\u843d\u5730\u96ea"));
     }
 
     /**
@@ -103,7 +118,8 @@ public abstract class ChatBubbleLimitMixin {
                     (com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.ChatBubbleManager) (Object) this;
             com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.IChatBubbleData data = mgr.getChatBubble(key);
             if (data instanceof com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData t) {
-                boolean danger = com.maidsmart.dialogue.PerceptionManager.dangerActive(this.maid);
+                boolean danger = com.maidsmart.dialogue.PerceptionManager.dangerActive(this.maid)
+                    && !isCalmBubble(text);
                 t.setText(net.minecraft.network.chat.Component.m_237115_(text)
                         .m_130940_(danger
                                 ? net.minecraft.ChatFormatting.RED

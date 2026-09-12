@@ -55,20 +55,30 @@ public final class PlacedBlockTracker {
      *  旧值 ±6 够不到 8 格塔顶脚下方的塔底两格，长狙击期塔底方块寿命到
      *  期溶解、塔从底下烂掉（站得再稳也没了根基） */
     private final double nearVertBand;
+    /** 实测四百二十二：主人（绑定女仆的主人）踩在上方也刷新寿命。
+     *  实测四百二十五：四套搭方块实例（搭路/挖矿/伐木/自保）全部开启——玩家跟在女仆
+     *  后面挖矿/伐木/爬塔时，踩着她垫的方块不会突然到期消失而踩空坠落。 */
+    private final boolean refreshOnOwnerStand;
 
     public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier) {
-        this(lifetimeSupplier, 4.0, 6.0);
+        this(lifetimeSupplier, 4.0, 6.0, false);
     }
 
     public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier, double nearRadius) {
-        this(lifetimeSupplier, nearRadius, 6.0);
+        this(lifetimeSupplier, nearRadius, 6.0, false);
     }
 
     public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier,
                               double nearRadius, double vertBand) {
+        this(lifetimeSupplier, nearRadius, vertBand, false);
+    }
+
+    public PlacedBlockTracker(java.util.function.LongSupplier lifetimeSupplier,
+                              double nearRadius, double vertBand, boolean refreshOnOwnerStand) {
         this.lifetimeSupplier = lifetimeSupplier;
         this.nearRadiusSq = nearRadius * nearRadius;
         this.nearVertBand = vertBand;
+        this.refreshOnOwnerStand = refreshOnOwnerStand;
         ALL_INSTANCES.add(this); // 实测七十一：自动登记进全局表（供跨系统查询）
     }
 
@@ -161,7 +171,9 @@ public final class PlacedBlockTracker {
                     }
                 }
                 // 女仆站在上面 → 刷新寿命（防脚下塌陷；实测十八同款）
-                if (ownerOn || stoodOnCheck.test(pos)) {
+                // 实测四百二十二：搭路实例额外——绑定女仆的【主人】踩在这块上也刷新
+                //（主人踩着桥走，每踩一块就把该块 CD 补满；主人不走远桥就不会断）
+                if (ownerOn || masterOnBlock(owner, level, pos) || stoodOnCheck.test(pos)) {
                     e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
@@ -226,6 +238,29 @@ public final class PlacedBlockTracker {
         double dz = owner.m_20189_() - (pos.m_123343_() + 0.5);
         double dy = owner.m_20186_() - (pos.m_123342_() + 0.5);
         return dx * dx + dz * dz <= this.nearRadiusSq && Math.abs(dy) <= this.nearVertBand;
+    }
+
+    /**
+     * 实测四百二十二【搭路 CD·主人踩踏也重置】：绑定女仆的【主人】是否正踩在该方块上。
+     * 仅在 refreshOnOwnerStand 的实例（搭路）生效；主人踩在桥上/站在桥体同格都算。
+     * 女仆离线（owner == null）时本判定必然 false——但那种情况方块本来就暂停倒计时，
+     * 不受影响。同维度才判（防另一维度的坐标巧合）。
+     */
+    private boolean masterOnBlock(EntityMaid maid, ServerLevel level, BlockPos pos) {
+        if (!this.refreshOnOwnerStand || maid == null) {
+            return false;
+        }
+        net.minecraft.world.entity.LivingEntity master;
+        try {
+            master = maid.m_269323_(); // 绑定女仆的主人（玩家）
+        } catch (Throwable ignored) {
+            return false;
+        }
+        if (master == null || !master.m_6084_() || master.m_9236_() != level) {
+            return false;
+        }
+        BlockPos feet = master.m_20183_();
+        return feet.m_7949_().equals(pos) || feet.m_7918_(0, -1, 0).m_7949_().equals(pos);
     }
 
     /**

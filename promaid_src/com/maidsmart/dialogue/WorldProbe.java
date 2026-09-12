@@ -525,7 +525,9 @@ public final class WorldProbe {
         boolean wantPlayer = t.equals("player") || t.equals("all");
         if (wantHostile || wantPassive) {
             for (Mob m : lv.m_6443_(Mob.class, box, e -> true)) {
-                double dist = m.m_20238_(maid.m_20182_());
+                // v1.1.0 修复：m_20238_ 是平方距离，与半径 r（格）比较恒偏大——
+                // 改用 m_20270_（distanceTo，带 sqrt），与实体扫描半径口径一致
+                double dist = m.m_20270_(maid);
                 if (dist > r) {
                     continue;
                 }
@@ -542,7 +544,8 @@ public final class WorldProbe {
                 if (p.m_20148_().equals(maid.m_20148_())) {
                     continue;
                 }
-                double dist = p.m_20238_(maid.m_20182_());
+                // v1.1.0 修复：同上——平方距离改线性，否则玩家距离显示/过滤全是平方值
+                double dist = p.m_20270_(maid);
                 if (dist <= r) {
                     entries.add(new Object[]{"[玩家]", p.m_5446_() != null ? p.m_5446_().getString() : "?", p.m_20183_(), p.m_21223_(), p.m_21233_(), dist});
                 }

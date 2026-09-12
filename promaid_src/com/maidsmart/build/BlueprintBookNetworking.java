@@ -137,6 +137,92 @@ public final class BlueprintBookNetworking {
         CHANNEL.registerMessage(24, RegionSyncPacket.class,
                 RegionSyncPacket::encode, RegionSyncPacket::decode,
                 RegionSyncPacket::handle);
+        // v1.1.0 实测四百二十：内置日语语音包播放（S2C）——只发女仆实体 id + jar 内
+        // 音频文件名（如 build_done.ogg，客户端从自己 jar 取字节播放，省流量且两端一致）
+        CHANNEL.registerMessage(25, PlayJarVoicePacket.class,
+                PlayJarVoicePacket::encode, PlayJarVoicePacket::decode,
+                PlayJarVoicePacket::handle);
+        // v1.1.0 实测四百二十一：冷却可视化（S2C）——复活倒计时 / 回魂符冷却每秒
+        // 快照（只发该主人名下女仆；无条目则不发，客户端超时自动清空）
+        CHANNEL.registerMessage(26, CooldownHudPacket.class,
+                CooldownHudPacket::encode, CooldownHudPacket::decode,
+                CooldownHudPacket::handle);
+    }
+
+    /**
+     * v1.1.0 实测四百二十一：冷却可视化（S2C）。每项 4 字段
+     * {kind, 显示名, 剩余秒, 总秒}，kind = "revive"（复活倒计时）/ "soul"（回魂符冷却）。
+     * CooldownHudTracker 每秒按主人打包发送；客户端 CooldownHudRenderer 左上角显示。
+     */
+    public static class CooldownHudPacket {
+        public final java.util.List<String[]> entries;
+
+        public CooldownHudPacket(java.util.List<String[]> entries) {
+            this.entries = entries == null ? new java.util.ArrayList<>() : entries;
+        }
+
+        public static void encode(CooldownHudPacket pkt, FriendlyByteBuf buf) {
+            buf.m_130070_(String.valueOf(pkt.entries.size()));
+            for (String[] e : pkt.entries) {
+                for (int i = 0; i < 4; i++) {
+                    buf.m_130070_(e.length > i ? e[i] : "");
+                }
+            }
+        }
+
+        public static CooldownHudPacket decode(FriendlyByteBuf buf) {
+            int n = Integer.parseInt(buf.m_130277_());
+            java.util.List<String[]> list = new java.util.ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                list.add(new String[]{buf.m_130277_(), buf.m_130277_(), buf.m_130277_(), buf.m_130277_()});
+            }
+            return new CooldownHudPacket(list);
+        }
+
+        public static void handle(CooldownHudPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> com.maidsmart.client.CooldownHudRenderer.onSnapshot(pkt.entries));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** v1.1.0 实测四百二十一：把冷却快照发给单个玩家（CooldownHudTracker 用） */
+    public static void sendCooldownHud(net.minecraft.server.level.ServerPlayer player,
+                                       java.util.List<String[]> entries) {
+        try {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CooldownHudPacket(entries));
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.1.0 实测四百二十：内置日语语音包播放（S2C）。
+     * 服务端匹配到系统消息对应的日语语音后发本包；客户端按 maidId 找女仆、
+     * 从自己的 jar 取出同名 ogg 播放，并在播放窗口内压制 TLM 原生语音包。
+     */
+    public static class PlayJarVoicePacket {
+        public final int maidId;
+        /** jar 内音频文件名（assets/promaid/voice/ 下，如 "build_done.ogg"） */
+        public final String file;
+
+        public PlayJarVoicePacket(int maidId, String file) {
+            this.maidId = maidId;
+            this.file = file;
+        }
+
+        public static void encode(PlayJarVoicePacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.maidId);
+            buf.m_130070_(pkt.file == null ? "" : pkt.file);
+        }
+
+        public static PlayJarVoicePacket decode(FriendlyByteBuf buf) {
+            return new PlayJarVoicePacket(buf.readInt(), buf.m_130277_());
+        }
+
+        public static void handle(PlayJarVoicePacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() ->
+                    com.maidsmart.client.PromaidVoiceSoundInstance.playFromPacket(pkt.maidId, pkt.file));
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /** v1.5.275：请求重新打开手册（C2S——配置面板跳转女仆管理：关配置 → 服务端

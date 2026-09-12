@@ -291,6 +291,11 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
+        // v1.1.0（1.21.1 重锤）：猛击跃起期间交出移动控制——战术导航会把她从
+        // 猛砸轨迹上拽走（起跳水平速度只有 0.15，被导航覆盖就跳不向目标）
+        if (com.maidsmart.combat.MaidMaceSmashBehavior.isLeaping(maid)) {
+            return;
+        }
         // v1.5.202（边打边保命）：自保正在执行移动类保命动作（濒死垫高/逃跑、
         // 环境逃生导航）→ 本 tick 让位——不抢移动控制（走位/跳劈会与自保的
         // 垫高/逃跑互相覆盖）；瞬时保命动作（喝药/传送）不在集合内，战斗照常

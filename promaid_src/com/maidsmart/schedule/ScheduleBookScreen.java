@@ -58,6 +58,13 @@ public class ScheduleBookScreen extends Screen {
     private final String[] slots = new String[6];
     /** 实测四百零二：任务选择面板——正在为哪个槽选任务（-1 = 未打开） */
     private int pickSlot = -1;
+    /**
+     * v1.1.0 实测四百一十九（用户："排班表的快捷调整也引入和排班一样的机制，
+     * 不再仅用◀▶翻页，而是点任务名进整页选择"）：本次整页选择是【快捷设置页】
+     * 打开的——选中即立即生效（QuickApply），不是填排班槽；选完回快捷页。
+     * false = 排班页打开（选中填槽，走 schedDirty 等保存）。
+     */
+    private boolean pickQuick = false;
     /** 任务选择面板分页 */
     private int pickPage = 0;
     private static ScheduleBookScreen instance;
@@ -350,7 +357,7 @@ public class ScheduleBookScreen extends Screen {
         // 实测四百零六【任务选择整页】：先于一切整页接管——选择页只有
         // "← 返回排班"+任务列表+分页，不画女仆列表返回/页签/排班开关（手册
         // 阅读页同款：整页独占，零浮层、零重叠）
-        if (this.pickSlot >= 0) {
+        if (this.pickSlot >= 0 || this.pickQuick) {
             this.pickPageButtons(w, h, cx);
             return;
         }
@@ -498,18 +505,19 @@ public class ScheduleBookScreen extends Screen {
                     .m_252987_(qx, y, 20, 20).m_253136_());
             this.m_142416_(Button.m_253074_(
                             Component.m_237113_("任务：\u00a7e" + taskCn(curTask)
-                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击/◀▶切换)")),
+                                    + (this.loadedOn ? " \u00a7c(排班中·锁定)" : " \u00a78(点击选择/◀▶切换)")),
                             b -> {
                                 if (this.loadedOn) {
                                     return; // 硬性锁定：先关右上角的排班才能切任务
                                 }
-                                int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
-                                String uid = this.taskUids.get(next);
-                                ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
-                                        this.selUuid, -1, uid, -1));
-                                if (sel != null) {
-                                    sel[2] = uid;
-                                }
+                                // v1.1.0 实测四百一十九（用户："排班表的快捷调整也引入
+                                // 和排班一样的机制，不再仅用◀▶翻页，而是点任务名进整页
+                                // 选择"）：点任务名 → 复用整页任务选择（pickQuick=true，
+                                // 选中即立即生效——快捷页没有"保存"步骤），不再是点一下
+                                // 只换下一个（任务多时要循环点十几下）。
+                                this.pickSlot = -1;   // 快捷页不是填槽
+                                this.pickQuick = true;
+                                this.pickPage = 0;
                                 this.m_7856_();
                             })
                     .m_252987_(qx + 24, y, Math.max(40, qw - 48), 20).m_253136_());
@@ -588,7 +596,7 @@ public class ScheduleBookScreen extends Screen {
     private void schedPage(int w, int h, int cx) {
         // ---- 实测四百零六【任务选择整页】：点任务槽中间按钮 → 整页跳转到任务
         // 选择页（手册阅读页同款——独占整页、零重叠；旧浮层面板会压住班次按钮）----
-        if (this.pickSlot >= 0) {
+        if (this.pickSlot >= 0 || this.pickQuick) {
             this.pickPageButtons(w, h, cx);
             return;
         }
@@ -655,7 +663,10 @@ public class ScheduleBookScreen extends Screen {
                             b -> {
                                 // 实测四百零二：点任务名弹出任务选择面板（分页点选，
                                 // 替代"点一下换下一个"——任务多时循环点十几下太累）
+                                // 实测四百一十九：明确标记来源为排班页（填槽；若上一次
+                                // 是从快捷页进来的，pickQuick 必须复位）
                                 this.pickSlot = idx;
+                                this.pickQuick = false;
                                 this.pickPage = 0;
                                 this.m_7856_();
                             })
@@ -682,17 +693,32 @@ public class ScheduleBookScreen extends Screen {
      * 一路铺到 h-13，压住 ◀▶ 和"← 返回排班"），列表下沿留出底部两行按钮区。
      */
     private void pickPageButtons(int w, int h, int cx) {
-        // 左上：返回排班页（整页跳转的返回口）
-        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7e← 返回排班"), b -> {
+        // 选中一个任务：快捷页 → 立即生效（QuickApply）并回快捷页；排班页 → 填槽 + 脏标记
+        // v1.1.0 实测四百一十九：两种来源共用这一页，靠 pickQuick 区分去向。
+        final boolean quick = this.pickQuick;
+        // 左上：返回（整页跳转的返回口；快捷页回快捷设置，排班页回排班）
+        this.m_142416_(Button.m_253074_(Component.m_237113_(quick ? "\u00a7e← 返回快捷设置" : "\u00a7e← 返回排班"), b -> {
                     this.pickSlot = -1;
+                    this.pickQuick = false;
                     this.m_7856_();
                 })
-                .m_252987_(12, h - 24, 100, 20).m_253136_());
-        // 空闲档（清空槽）
-        this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77空闲（清空）"), b -> {
-                    this.slots[this.pickSlot] = "";
-                    this.schedDirty = true;
-                    this.pickSlot = -1;
+                .m_252987_(12, h - 24, 110, 20).m_253136_());
+        // 空闲档：快捷页 = 切到 TLM 空闲任务（立即生效）；排班页 = 清空槽
+        this.m_142416_(Button.m_253074_(Component.m_237113_(
+                        quick ? "\u00a77空闲（让她不做事）" : "\u00a77空闲（清空）"), b -> {
+                    if (quick) {
+                        ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                this.selUuid, -1, "touhou_little_maid:idle", -1));
+                        String[] sel = this.findSel();
+                        if (sel != null) {
+                            sel[2] = "touhou_little_maid:idle";
+                        }
+                        this.pickQuick = false;
+                    } else {
+                        this.slots[this.pickSlot] = "";
+                        this.schedDirty = true;
+                        this.pickSlot = -1;
+                    }
                     this.m_7856_();
                 })
                 .m_252987_(cx - 130, CONTENT_TOP, 260, 18).m_253136_());
@@ -707,15 +733,31 @@ public class ScheduleBookScreen extends Screen {
         int start = this.pickPage * rowsPerPage;
         int end = Math.min(total, start + rowsPerPage);
         int yy = CONTENT_TOP + 26;
+        // 当前值：快捷页看女仆当前任务；排班页看正在编辑的槽（查一次，循环里复用）
+        String[] selRef = this.findSel();
+        final String current = quick
+                ? (selRef != null ? selRef[2] : "")
+                : String.valueOf(this.slots[this.pickSlot]);
         for (int i = start; i < end; i++) {
             final String uid = this.taskUids.get(i);
-            final boolean cur = uid.equals(String.valueOf(this.slots[this.pickSlot]));
+            final boolean cur = uid.equals(current);
             this.m_142416_(Button.m_253074_(
                             Component.m_237113_((cur ? "\u00a76● " : "\u00a77") + taskCn(uid)),
                             b -> {
-                                this.slots[this.pickSlot] = uid;
-                                this.schedDirty = true;
-                                this.pickSlot = -1;
+                                if (quick) {
+                                    // 快捷页：选中即立即生效，服务端 QuickApply 后回快捷页
+                                    ScheduleNetworking.CHANNEL.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                            this.selUuid, -1, uid, -1));
+                                    String[] sel = this.findSel();
+                                    if (sel != null) {
+                                        sel[2] = uid;
+                                    }
+                                    this.pickQuick = false;
+                                } else {
+                                    this.slots[this.pickSlot] = uid;
+                                    this.schedDirty = true;
+                                    this.pickSlot = -1;
+                                }
                                 this.m_7856_();
                             })
                     .m_252987_(cx - 130, yy, 260, 18).m_253136_());
@@ -834,12 +876,14 @@ public class ScheduleBookScreen extends Screen {
             // 实测四百零七【整页独占渲染】：选择页只画自己的标题 + 提示，排班页
             // 的所有文字一概不画。旧 406 先画"XX 的排班"再在同一 y 叠"选择任务"
             // （标题重影），提示又画在 CONTENT_TOP+8 压住"空闲（清空）"按钮。
-            if (this.pickSlot >= 0) {
+            if (this.pickSlot >= 0 || this.pickQuick) {
+                boolean quick = this.pickQuick;
                 g.m_280653_(this.f_96547_, Component.m_237113_(
                                 "\u00a7d\u00a7o选择任务\u00a7r\u00a77（第 " + (this.pickPage + 1) + " 页）"),
                         cx, TOP_TITLE_Y, 0xFFFFFF);
-                g.m_280653_(this.f_96547_, Component.m_237113_(
-                                "\u00a77点击任务填入第 " + (this.pickSlot + 1) + " 时段；左上返回排班"),
+                g.m_280653_(this.f_96547_, Component.m_237113_(quick
+                                ? "\u00a77点击任务立即切换她的当前任务；左上返回快捷设置"
+                                : "\u00a77点击任务填入第 " + (this.pickSlot + 1) + " 时段；左上返回排班"),
                         cx, TOP_TITLE_Y + 12, 0xAAAAAA);
             } else {
             g.m_280653_(this.f_96547_, Component.m_237113_(
