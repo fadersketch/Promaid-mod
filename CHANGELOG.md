@@ -5,7 +5,7 @@
 **一、死亡→墓碑→复活链路**
 - 监听 TLM 的 `MaidDeathEvent` 在死亡瞬间抓取女仆**完整存档 NBT**（`saveWithoutId`，此时背包/饰品尚未被搬走）；再监听 `MaidTombstoneEvent` 拿到墓碑引用，把「快照 + 主人 UUID + 到期刻 + 墓碑 UUID」写入新增的 `MaidAutoResurrect` 持久化表（SavedData 存主世界，跨维度共享，重启不丢）；
 - 延迟到期（默认 60 秒）→ 自动让**墓碑消失**（`discard`，走 TLM 的 `remove` 钩子同步清理 `MaidWorldData` 墓碑记录）→ 在**主人重生点**复活女仆（床/重生锚；无重生点则主世界出生点，复用 `MasterDeathTeleportHandler` 的校验与安全落点）；
-- 复活与 TLM 的「魂符释放」同构：`new EntityMaid(level)` → `load(nbt)` → 复用**原 UUID**（记忆/灵魂目录按 UUID 索引）→ 设置落点与血量 → `addFreshEntity`。背包/饰品/任务/模型全部原样恢复。
+- 复活时**女仆用话语提示玩家**（气泡「主人，我回来啦！让你担心了～」+ 主人的系统消息「你的女仆 XX 已复活」+ `promaid.log` 记录）；复活实现与 TLM 的「魂符释放」同构：`new EntityMaid(level)` → `load(nbt)` → 复用**原 UUID**（记忆/灵魂目录按 UUID 索引）→ 设置落点与血量 → `addFreshEntity`。背包/饰品/任务/模型全部原样恢复。
 
 **二、防物品复制的关键设计**
 - 抓取快照后立即**清空墓碑容器**（墓碑转为纯标记）——物品只存在于死亡快照中，复活时随 NBT 归还。否则 60 秒窗口内玩家可拾取墓碑内容，复活又归还快照 → 物品翻倍。
