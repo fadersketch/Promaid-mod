@@ -1,4 +1,23 @@
-﻿## 实测四百一十三【女仆绝不伤害主人/友方——雪地打雪仗后对主人跳劈修复】
+﻿## 实测四百一十四【主人免伤三层加固 + 移除第三方软联动（纯 TLM 独立版）】
+
+用户需求：再加保险——清除仇恨 + 取消女仆攻击主人的受击事件；同时删除对其他 mod 的软联动；覆盖两个正式版并更新主页面介绍。
+
+**一、主人免伤第三层（在四百一十三的"事件总闸 + 注入点过滤"之上）**
+- **定期清除仇恨**（`FriendlyFireGuard` 新增 ServerTick 扫描，每 2 秒）：凡女仆的 `ATTACK_TARGET` / 实体目标（`setTarget`）/ 复仇目标（`getLastHurtByMob`）是主人或同主友方 → 直接清掉（日志搜 `friendly-fire hate-clear`）。TLM 打雪仗等娱乐行为写入的目标不再残留成"敌对状态"；
+- **攻击事件取消**：1.20.1 增加 `LivingAttackEvent`（与 `LivingHurtEvent`/`LivingDamageEvent` 共三层）；1.21.1 为 `LivingIncomingDamageEvent`。女仆造成的主人/友方伤害在受伤链最上游即被取消；
+- 配合四百一十三的注入点过滤（战术 isActive/跳劈/横扫、中立威胁、自保反击含弹幕射箭、LLM 攻击工具）——**女仆对主人零伤害**。
+
+**二、删除第三方软联动（按用户口径：只删第三方 mixin + 存储/关系联动；保留按攻击力属性的通用武器逻辑）**
+- 删除第三方 mixin：`LoveLoatheHungerGateMixin`（爱憎分明饥饿门控）、`MixinInteractionSittingAllow`（心契誓约拥抱/子女交互）、`MaidDebugPanelMixin`（心契誓约调试面板）、废弃的 `CallResponseChatSpamMixin`；
+- 删除 Beyond Dimensions（超越维度）存储联动：`BeyondBindingInteractHandler`/`BeyondBindingStore`/`UnifiedStorageItemHandler` 三个类、`beyond_bind_card`/`beyond_unbind_card` 两个物品（含模型/贴图/配方/语言）及其全部调用点（BlueprintLib 材料统计与取物、女仆酿造取物兜底、创造页签、主类注册）；
+- 删除关系联动：`RelationshipMemoryAdapter`（心契/爱憎关系记忆反射适配）及其调用点（AI 上下文关系标签、武器守卫儿童判断改回 `isBaby`）、建造心契交互锁反射、自保极端饥饿反射（爱憎分明 `HungerData`）、手册 Heartfelt 纪念日联动、配置面板「爱憎分明模组调试 / heartfelt 联动」两个板块；
+- 保留：TLM 本体（唯一前置）、按攻击力属性的通用武器判定/自动装备（tacz/卓越前线/拔刀剑/万法皆通等模组武器天然参与，不依赖专属代码）、精妙储存终端绑定（本模组自有功能）。
+
+**部署**：两树同步；1.20.1 jar 4,889,089 字节、1.21.1 jar 4,898,745 字节；三客户端实例 + 三测试服务器；1201 与 neoforge1211 服务器回归 PASS。
+
+> 注：移除第三方软联动后，本模组为**纯 TLM 独立版**（只要求车万女仆前置）。此前装的软联动模组（心契誓约/爱憎分明/Heartfelt/超越维度等）与本模组不再有代码交互；对应联动功能（爱憎饥饿保命、心契交互锁、超越维度终端绑定卡、关系记忆标签等）随之下线。
+
+## 实测四百一十三【女仆绝不伤害主人/友方——雪地打雪仗后对主人跳劈修复】
 
 粉丝反馈：装了 mod 后带女仆到雪地，空闲模式会打雪仗，然后对主人触发攻击、冲主人跳劈，脱了盔甲一下打约 4 颗心；主手拿着刀打得更疼（武器伤害叠加）。
 

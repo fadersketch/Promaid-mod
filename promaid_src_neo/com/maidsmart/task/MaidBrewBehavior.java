@@ -1079,8 +1079,6 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 return fromTerm;
             }
             // 超越维度网络接口兜底
-            return com.maidsmart.storage.BeyondBindingInteractHandler
-                    .extractFromBoundInterface(level, maid, item);
         }
         return ItemStack.EMPTY;
     }

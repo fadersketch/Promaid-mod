@@ -15,7 +15,7 @@ import net.minecraftforge.items.IItemHandlerModifiable;
 
 /**
  * v1.5.332：幼儿女儿武器禁持——婴儿/幼年阶段的女儿
- * （RelationshipMemoryAdapter.isTooSmall = isChild 且阶段为 INFANT/JUVENILE）
+ * （isBaby）
  * 手上出现武器时，把武器从手上【删除】并【原地丢一个完全一样的】到地上。
  *
  * 背景（用户："小女仆手上拿武器还是有问题……如果在他手上放武器，会将这个
@@ -42,7 +42,7 @@ public final class MaidWeaponGuard {
                         net.minecraft.world.level.entity.EntityTypeTest.m_156916_(EntityMaid.class),
                         m -> true)) {
                     if (!maid.m_6084_()
-                            || !com.maidsmart.memory.RelationshipMemoryAdapter.isTooSmall(maid)) {
+                            || !maid.m_6162_()) {
                         continue;
                     }
                     stripWeapon(maid, 0); // 主手
