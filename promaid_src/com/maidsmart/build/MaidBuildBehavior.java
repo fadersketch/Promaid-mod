@@ -213,9 +213,6 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.333：心契誓约（MaidHugManager）交互中——交互会锁定女仆站立姿势并锁位
         // （lockMaid：m_20124_(STANDING) + m_21837_(false) + 锁定坐标），此处若继续强制
         // 坐下会与交互每 tick 互搏（坐下↔站起振荡）；跳过本轮，交互结束后自然恢复。
-        if (building && inMaidmarriageInteraction(maid)) {
-            return;
-        }
         if (building) {
             // v1.1.0 实测二百七十二：建造拟真化——不再强制坐下；若仍坐姿（玩家手动
             // shift+右键/旧版遗留）则站起，站定后由 teleportToWorkSite 瞬移到工地旁放置
@@ -237,32 +234,6 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 maid.m_21839_(false);
             }
             maid.getPersistentData().m_128379_(BUILD_SIT_TAG, false);
-        }
-    }
-
-    /**
-     * v1.5.333：心契誓约（maidmarriage）交互中？——反射 MaidHugManager.
-     * getInteractionPlayer(maid)（MAID_TO_PLAYER 映射，交互中返回玩家、否则 null）。
-     * 全反射软联动：未装心契誓约/方法变动 → 返回 false（维持原行为）。
-     * v1.5.352：同时查儿童管理器 ChildInteractionManager——旧版只查成人，
-     * 建造中的女儿（儿童路径 Alt+J）交互时豁免不生效 → tickBuildSit 每 tick
-     * 强坐 → ChildInteractionManager.isValidInteractionPair 判坐姿失效 →
-     * 会话立刻终止 → 面板"进入一下就瞬间退出"。
-     */
-    private static boolean inMaidmarriageInteraction(EntityMaid maid) {
-        try {
-            Class<?> c = Class.forName("com.example.maidmarriage.compat.MaidHugManager");
-            java.lang.reflect.Method m = c.getDeclaredMethod("getInteractionPlayer",
-                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class);
-            if (m.invoke(null, maid) != null) {
-                return true;
-            }
-            Class<?> cc = Class.forName("com.example.maidmarriage.compat.ChildInteractionManager");
-            java.lang.reflect.Method cm = cc.getDeclaredMethod("getInteractionPlayer",
-                    com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid.class);
-            return cm.invoke(null, maid) != null;
-        } catch (Throwable ignored) {
-            return false;
         }
     }
 

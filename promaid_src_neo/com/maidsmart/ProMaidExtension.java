@@ -74,7 +74,6 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.5.95：PAD 情绪层事件钩子（主人互动/被打/静默恢复——独立数值，兼容心契）
         NeoForge.EVENT_BUS.register(new com.maidsmart.affect.AffectEventHooks());
         // v1.5.98：关系记忆适配（软感知 maidmarriage 结婚/告白/父女 + Love Loathe 信任/恐惧）
-        NeoForge.EVENT_BUS.register(new com.maidsmart.memory.RelationshipMemoryAdapter());
         // v1.5.135：自保的"最近攻击者"记录（被攻击事件 → 5 秒威胁窗口，覆盖非 Monster 生物）
         NeoForge.EVENT_BUS.register(com.maidsmart.combat.SelfPreservationBehavior.class);
         // 实测四百零二：低血量自动回魂符（血量 ≤ 阈值 / 致死伤害 → 收进主人背包空魂符）

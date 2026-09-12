@@ -191,7 +191,7 @@ public class PromaidConfigScreen extends Screen {
     private enum Section {
         BUILD("建造"), MINE("挖矿"), WOOD("伐木"), MEMORY("AI 记忆"), DIALOGUE("对话提示"),
         COMBAT("战斗自保"), PASSIVE("被动技能"), MISC("杂项"), PERCEPTION("感知"), AFFECT("情绪"), AITOOLS("AI 工具"),
-        VOICE("语音"), LOVELOATHE("爱憎分明模组调试"), HEARTFELT("heartfelt 联动");
+        VOICE("语音");
         final String title;
 
         Section(String title) {
@@ -287,8 +287,6 @@ public class PromaidConfigScreen extends Screen {
         // "6 按钮"校准，装了爱憎分明/heartfelt 后左列 7~8 个按钮，末位按钮
         // （y0+7×20+17=213）压进保存按钮（h-34=206，默认 240 高）= 目录页 UI 重叠。
         // 现在行数越多行距自动压缩（最低 14），任何板块组合/窗口高度都不相交。
-        boolean ll = loveloatheLoaded();
-        boolean hf = heartfeltLoaded();
         int rowH = 21;
         int bh = 22;
         if (rowH < 22) {
@@ -296,7 +294,7 @@ public class PromaidConfigScreen extends Screen {
         }
         int y0Min = 50; // "选择要调整的板块"说明文字（36..45）之下
         int availBottom = h - 36; // 保存按钮上缘（h-34）再留 2px
-        int leftCount = 6 + (ll ? 1 : 0) + (hf ? 1 : 0);
+        int leftCount = 6;
         int rows = Math.max(leftCount, 6); // 右列恒 6 个板块
         if (rows > 1) {
             int fit = (availBottom - y0Min - bh) / (rows - 1);
@@ -313,12 +311,6 @@ public class PromaidConfigScreen extends Screen {
         int y0 = y0Min + Math.max(0, Math.min(6, (availBottom - y0Min - contentH) / 2));
         java.util.List<Section> leftList = new java.util.ArrayList<>(java.util.List.of(
                 Section.BUILD, Section.MINE, Section.WOOD, Section.MEMORY, Section.DIALOGUE, Section.VOICE));
-        if (ll) {
-            leftList.add(Section.LOVELOATHE);
-        }
-        if (hf) {
-            leftList.add(Section.HEARTFELT);
-        }
         Section[] left = leftList.toArray(new Section[0]);
         // v1.5.294：被动技能独立成栏（用户："被动技能要单拉出来一栏放在 Promaid 模组
         // 详细配置里面，而不是放在战斗自保里面"）——右列 COMBAT 正下方
@@ -369,8 +361,6 @@ public class PromaidConfigScreen extends Screen {
             case AFFECT -> this.affectRows();
             case AITOOLS -> this.aiToolsRows();
             case VOICE -> this.voiceRows();
-            case LOVELOATHE -> this.loveloathRows();
-        case HEARTFELT -> this.heartfeltRows();
         }
         // v1.1.0 实测二十二：perPage 按动态行高累加计算——每行高度 = rowHeight(def)
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
@@ -1327,8 +1317,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MEMORY_CARE_POINTS.set(v), "每日回顾附加'下次该怎么对主人'的行动建议（从情绪残留/边界/偏好/风格推导）——主动会话会自动复用当话题"));
         this.rows.add(new BoolRow("双 agent 提取", MaidSmartConfig.MEMORY_DUAL_AGENT.get(),
                 v -> MaidSmartConfig.MEMORY_DUAL_AGENT.set(v), "摘要与事实/事件分两次独立 LLM 调用（更聚焦、互不阻塞；关=单次合并提取省 token）"));
-        this.rows.add(new BoolRow("纪念日联动", MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.get(),
-                v -> MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.set(v), "heartfelt 纪念日里程碑（7/30/100/365 天）达成/临近 → 写关系记忆 + 情绪脉冲（纪念日正向情绪、临近期待感）；heartfelt 没触发说话时 promaid 补位主动提起（不依赖，未装 heartfelt 则静默）"));
         this.rows.add(new SectionRow("调度与检索", true));
         this.rows.add(new NumRow("扫描间隔（秒）", String.valueOf(MaidSmartConfig.MEMORY_SCAN_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MEMORY_SCAN_INTERVAL, s), "扫描间隔（秒）：记忆调度器多久检查一次待提取对话/待衰减条目，调小记忆更新更及时"));
@@ -2003,15 +1991,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
     // ---------- 爱憎分明（Love Loathe）联动调试页（v1.5.310） ----------
 
-    /** 是否安装了爱憎分明（modId=callresponse）——软联动：未装则首页不显示该按钮 */
-    private static boolean loveloatheLoaded() {
-        try {
-            return net.neoforged.fml.ModList.get().isLoaded("callresponse");
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
     /** 爱憎分明版本号（未装/异常返回 "?"） */
     private static String loveloatheVersion() {
         try {
@@ -2034,160 +2013,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         return "\u00a7c未找到\u00a7r";
     }
 
-    /** 爱憎分明联动调试页：状态探测（只读）+ 联动开关 */
-    private void loveloathRows() {
-        boolean ll = loveloatheLoaded();
-        this.rows.add(new SectionRow("联动状态（调试）", false));
-        this.rows.add(new InfoRow("爱憎分明模组", ll ? "\u00a7a已安装 v" + loveloatheVersion() + "\u00a7r（modId: callresponse）"
-                        : "\u00a7c未安装\u00a7r（本页仅在安装爱憎分明后显示）",
-                "爱憎分明（Love Loathe）是车万女仆的附属模组，提供女仆饥饿/撑死与情绪（信任/恐惧）系统；本模组与其为软联动，不装也不影响使用"));
-        this.rows.add(new InfoRow("饥饿数据接口 HungerData", probeClass(
-                "com.github.JumDa5he.callresponse.compat.hunger.HungerData",
-                "com.github.tartaricacid.callresponse.compat.hunger.HungerData"),
-                "极端饥饿判定（饥饿值 ≤9）的反射目标；2.0.2 起新包名，旧包名兼容（v1.5.284）"));
-        this.rows.add(new InfoRow("情绪数据接口 EmotionData", probeClass(
-                "com.github.JumDa5he.callresponse.compat.emotion.EmotionData",
-                "com.github.tartaricacid.callresponse.compat.emotion.EmotionData"),
-                "情绪投影（信任/恐惧）反射目标，记忆系统感知用（v1.5.284）"));
-        this.rows.add(new InfoRow("饥饿门控注入", "\u00a7aLoveLoatheHungerGateMixin\u00a7r（@Pseudo 软注入）",
-                "下方「禁用爱憎分明饥饿」开关生效时拦截其饥饿伤害/进食/速度惩罚逻辑"));
-        this.rows.add(new BtnRow("重新探测", "刷新 →", () -> this.init(),
-                "重新检测模组与反射接口（打开本页时已自动探测；此按钮仅调试用）"));
-        this.rows.add(new SectionRow("联动开关", false));
-        this.rows.add(new BoolRow("爱憎分明联动总开关", MaidSmartConfig.MISC_LOVELOATHE_MASTER.get(),
-                v -> MaidSmartConfig.MISC_LOVELOATHE_MASTER.set(v), "爱憎分明联动总开关（默认开）：关闭后不再反射读取爱憎分明数据（极端饥饿/情绪投影）；「禁用爱憎分明饥饿」开关独立生效"));
-        this.rows.add(new BoolRow("禁用爱憎分明饥饿", MaidSmartConfig.MISC_LOVELOATHE_DISABLE_HUNGER.get(),
-                v -> MaidSmartConfig.MISC_LOVELOATHE_DISABLE_HUNGER.set(v), "禁用爱憎分明饥饿/撑死（默认开）：饿死伤害/撑死/自动进食（会吃腐肉→越吃越饿）/速度惩罚全禁；关闭本项恢复爱憎分明原版饥饿行为"));
-        this.rows.add(new BoolRow("极端饥饿保命联动", MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.get(),
-                v -> MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.set(v), "极端饥饿保命（默认开）：女仆极端饥饿（爱憎分明饥饿值 ≤9）且无其他治疗食物时，吃金苹果/附魔金苹果保命"));
-        this.rows.add(new BoolRow("情绪数据联动", MaidSmartConfig.MISC_LOVELOATHE_EMOTION.get(),
-                v -> MaidSmartConfig.MISC_LOVELOATHE_EMOTION.set(v), "情绪数据联动（默认开）：记忆系统感知爱憎分明情绪投影（信任/恐惧），影响关系记忆与 AI 上下文注入"));
-    }
-
     // ==================== v1.5.367:heartfelt_connection 软联动(同爱憎分明模式) ====================
-
-    /** heartfelt_connection 是否安装(软联动:未安装本页不显示) */
-    private static boolean heartfeltLoaded() {
-        return net.neoforged.fml.ModList.get().isLoaded("heartfelt_connection");
-    }
-
-    /** heartfelt_connection 版本号(反射 ModList) */
-    private static String heartfeltVersion() {
-        try {
-            var mods = net.neoforged.fml.ModList.get().getModFileById("heartfelt_connection").getMods();
-            return mods.isEmpty() ? "?" : mods.get(0).getVersion().toString();
-        } catch (Exception e) {
-            return "?";
-        }
-    }
-
-    /** 反射读 HeartfeltConfig 静态字段(ModConfigSpec 值对象);类/字段不存在返回 null */
-    private static Object heartfeltField(String field) {
-        try {
-            Class<?> cls = Class.forName("com.heartfelt.connection.config.HeartfeltConfig");
-            return cls.getField(field).get(null);
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /** 读 heartfelt 布尔配置;读取失败返回 false */
-    private static boolean heartfeltBoolGet(String field) {
-        Object o = heartfeltField(field);
-        return o instanceof net.neoforged.neoforge.common.ModConfigSpec.BooleanValue b && b.get();
-    }
-
-    /** 读 heartfelt 数值配置;读取失败返回 "?" */
-    private static String heartfeltNumGet(String field) {
-        Object o = heartfeltField(field);
-        if (o instanceof net.neoforged.neoforge.common.ModConfigSpec.ConfigValue<?> c) {
-            return String.valueOf(c.get());
-        }
-        return "?";
-    }
-
-    /** 写 heartfelt 布尔配置;失败返回 false(行不更新) */
-    private static boolean heartfeltBoolSet(String field, boolean v) {
-        Object o = heartfeltField(field);
-        if (o instanceof net.neoforged.neoforge.common.ModConfigSpec.BooleanValue b) {
-            try {
-                b.set(v);
-                return true;
-            } catch (Exception ignored) {
-            }
-        }
-        return false;
-    }
-
-    /** 写 heartfelt 数值配置(isDouble:DoubleValue vs IntValue);失败返回 false */
-    private static boolean heartfeltNumSet(String field, String s, boolean isDouble) {
-        Object o = heartfeltField(field);
-        try {
-            if (isDouble && o instanceof net.neoforged.neoforge.common.ModConfigSpec.DoubleValue d) {
-                d.set(Double.parseDouble(s.trim()));
-                return true;
-            }
-            if (!isDouble && o instanceof net.neoforged.neoforge.common.ModConfigSpec.IntValue i) {
-                i.set(Integer.parseInt(s.trim()));
-                return true;
-            }
-        } catch (Exception ignored) {
-        }
-        return false;
-    }
-
-    /** heartfelt 联动调试页：状态(只读) + 告白/成长/前摇/伤心窗口参数(实时写入该模组配置) */
-    private void heartfeltRows() {
-        boolean hf = heartfeltLoaded();
-        this.rows.add(new SectionRow("联动状态（调试）", false));
-        this.rows.add(new InfoRow("heartfelt_connection 模组",
-                hf ? "\u00a7a已安装 v" + heartfeltVersion() + "\u00a7r（modId: heartfelt_connection）"
-                        : "\u00a7c未安装\u00a7r（本页仅在安装 heartfelt 后显示）",
-                "heartfelt_connection（心契×爱憎分明关系补丁：告白/成长/父女/伤心窗口/思慕）与 Promaid 软联动；下方参数实时写入该模组的配置文件，重启不丢"));
-        this.rows.add(new SectionRow("告白", false));
-        this.rows.add(new BoolRow("玩家告白（方向修正）", heartfeltBoolGet("PLAYER_CONFESSION_ENABLED"),
-                v -> heartfeltBoolSet("PLAYER_CONFESSION_ENABLED", v), "玩家主动告白走 heartfelt 告白屏（拦截 maidmarriage 女仆反告白剧本）；关掉回退 maidmarriage 原剧本"));
-        this.rows.add(new BoolRow("女仆告白前摇（走向主人）", heartfeltBoolGet("CONFESSION_APPROACH_ENABLED"),
-                v -> heartfeltBoolSet("CONFESSION_APPROACH_ENABLED", v), "女仆主动告白前先系统提示并走向玩家，走到身边才拉告白界面"));
-        this.rows.add(new NumRow("主动告白尝试间隔（tick）", heartfeltNumGet("CONFESSION_ATTEMPT_INTERVAL"),
-                s -> heartfeltNumSet("CONFESSION_ATTEMPT_INTERVAL", s, false), "女仆主动告白尝试的周期（tick）；0 = 不尝试"));
-        this.rows.add(new NumRow("告白所需好感", heartfeltNumGet("CONFESSION_REQUIRED_FAVOR"),
-                s -> heartfeltNumSet("CONFESSION_REQUIRED_FAVOR", s, false), "好感高于此线才可能主动告白"));
-        this.rows.add(new NumRow("告白基础概率", heartfeltNumGet("CONFESSION_BASE_CHANCE"),
-                s -> heartfeltNumSet("CONFESSION_BASE_CHANCE", s, true), "每次尝试的基础概率（0-1，随好感线性加成）"));
-        this.rows.add(new NumRow("告白失败心情惩罚", heartfeltNumGet("CONFESSION_FAIL_MOOD"),
-                s -> heartfeltNumSet("CONFESSION_FAIL_MOOD", s, false), "告白被拒（缓一缓）时的心情惩罚；0 = 不惩罚"));
-        this.rows.add(new NumRow("前摇最短等待（tick）", heartfeltNumGet("CONFESSION_APPROACH_MIN_TICKS"),
-                s -> heartfeltNumSet("CONFESSION_APPROACH_MIN_TICKS", s, false), "前摇提示后至少等多久才拉告白选项（防秒触发）"));
-        this.rows.add(new NumRow("前摇超时（tick）", heartfeltNumGet("CONFESSION_APPROACH_TIMEOUT"),
-                s -> heartfeltNumSet("CONFESSION_APPROACH_TIMEOUT", s, false), "女仆走向超时未到则取消本次告白"));
-        this.rows.add(new NumRow("前摇走向速度", heartfeltNumGet("CONFESSION_APPROACH_SPEED"),
-                s -> heartfeltNumSet("CONFESSION_APPROACH_SPEED", s, true), "告白前摇走向玩家的速度倍率"));
-        // v1.5.100:立即触发主动告白(调试/验证用)——跳过概率与冷却,直接对附近
-        // 好感最高的资格女仆启动告白前摇;结果由 heartfelt 系统消息反馈
-        this.rows.add(new BtnRow("立即触发主动告白", "触发 →", () -> {
-            try {
-                Class<?> netCls = Class.forName("com.heartfelt.connection.network.HeartfeltNetwork");
-                Object channel = netCls.getMethod("channel").invoke(null);
-                Class<?> packetCls = Class.forName(
-                        "com.heartfelt.connection.network.HeartfeltNetwork$ForceConfessionPacket");
-                Object packet = packetCls.getDeclaredConstructor().newInstance();
-                channel.getClass().getMethod("sendToServer", Object.class).invoke(channel, packet);
-            } catch (Exception ex) {
-                // 反射失败(heartfelt 未装/版本不匹配)静默——页签只在安装后显示
-            }
-        }, "跳过概率与冷却,立即让附近好感最高、符合告白条件的女仆走向你并告白（调试/验证用；结果以系统消息反馈）"));
-        this.rows.add(new SectionRow("女儿/成长", false));
-        this.rows.add(new BoolRow("成长事件", heartfeltBoolGet("GROWTH_EVENT_ENABLED"),
-                v -> heartfeltBoolSet("GROWTH_EVENT_ENABLED", v), "女儿阶段升级事件（消息+站起+旁白）"));
-        this.rows.add(new BoolRow("父女互动", heartfeltBoolGet("FATHER_DAUGHTER_ENABLED"),
-                v -> heartfeltBoolSet("FATHER_DAUGHTER_ENABLED", v), "父女日常互动（爸爸与女儿的对话）"));
-        this.rows.add(new SectionRow("伤心窗口", false));
-        this.rows.add(new NumRow("伤心窗口时长（tick）", heartfeltNumGet("HARM_FEELING_TICKS"),
-                s -> heartfeltNumSet("HARM_FEELING_TICKS", s, false), "被打伤后赌气坐着的时长；窗口内不播语音包"));
-        this.rows.add(new NumRow("伤心心情惩罚", heartfeltNumGet("HARM_MOOD_DROP"),
-                s -> heartfeltNumSet("HARM_MOOD_DROP", s, false), "触发伤心窗口时的心情惩罚"));
-    }
 
     /** v1.5.127：逗号分隔的英文 id 列表 → List（去空、去空格） */
     private static List<String> idList(String s) {

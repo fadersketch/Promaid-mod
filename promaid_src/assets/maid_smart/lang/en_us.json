@@ -14,8 +14,6 @@
   "item.maid_smart.blueprint_book": "Promaid Manual",
   "item.maid_smart.storage_bind_card": "Storage Bind Card",
   "item.maid_smart.storage_unbind_card": "Storage Unbind Card",
-  "item.maid_smart.beyond_bind_card": "Dimension Bind Card",
-  "item.maid_smart.beyond_unbind_card": "Dimension Unbind Card",
   "config.promaid.aitools.perception": "perception_query tool",
   "config.promaid.aitools.workList": "work_list tool",
   "config.promaid.memory.affectSnapshot": "Affect snapshot in memories",

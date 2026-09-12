@@ -39,19 +39,16 @@
     "MaidCakeFavorMixin",
     "MaidTaskScheduleGuardMixin",
     "BuildActivityForceMixin",
-    "LoveLoatheHungerGateMixin",
     "MaidChatLanguageMixin",
     "MaidPlayerDamageMixin",
     "TaskAttackWeaponMixin",
     "PotionAnimTrackMixin",
     "MaidChatLlmGateMixin",
-    "MixinTntBuildGuard",
-    "MixinInteractionSittingAllow"
+    "MixinTntBuildGuard"
   ],
   "client": [
     "MaidTtsVolumeMixin",
     "MaidConfigMemoryMixin",
-    "MaidDebugPanelMixin",
     "EmotionPoseMixin"
   ],
   "injectors": {

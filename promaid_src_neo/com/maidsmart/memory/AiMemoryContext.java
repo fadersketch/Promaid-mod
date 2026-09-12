@@ -58,24 +58,6 @@ public class AiMemoryContext extends AbstractMaidContext {
         }
         // 0. 关系感知标签（v1.5.98：maidmarriage 软感知——妻子/恋人/女儿，
         //    与记忆系统关系三元组联动；未装 maidmarriage 时静默）
-        if (com.maidsmart.config.MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.get()) {
-            String label = RelationshipMemoryAdapter.relationshipLabel(maid);
-            if (label != null) {
-                if (sb.length() > 0) {
-                    sb.append("；");
-                }
-                if ("女儿".equals(label)) {
-                    // 女儿称呼铁律：对主人必须叫爸爸/父亲（用户要求，覆盖"主人"称呼）
-                    // v1.0.6：LLM 防乱伦铁律——对爸爸严禁恋爱/亲密/暧昧言行
-                    sb.append("关系状态：我是主人的女儿，主人就是我的爸爸/父亲。"
-                            + "对主人说话必须称呼他为爸爸或父亲，严禁叫主人、名字或亲爱的"
-                            + "；我是他的女儿，对他只有亲情——严禁任何恋爱、亲密、暧昧的言行与情感，"
-                            + "即使已经长大也永远是父女关系，遇到恋爱或亲密话题要困惑地拒绝");
-                } else {
-                    sb.append("关系状态：主人是我的").append(label);
-                }
-            }
-        }
         // 1. 关系三元组（v1.5.95：单独段，高置信度在前——主人的关系是对话最重要参考；
         //    v1.5.96：可配置开关 memory.relationInject）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_RELATION_INJECT.get()) {
