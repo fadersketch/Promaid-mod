@@ -1604,10 +1604,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             maid.eat(maid.level(), taken);
             return true;
         }
-        // v1.5.231b：金苹果/附魔金苹果【仅极端饥饿且无其他食物】才作为食物——
-        // 珍贵资源常规不吃（已移出 HEAL_FOODS/FOODS 名单），走药水类判定；
-        // 极端饥饿（爱憎分明 HungerData ≤9，反射读取；未装则 false）且背包
-        // 没有任何治疗食物时才兜底吃
+        // 治疗食物兜底：只扫 HEAL_FOODS（金苹果等珍贵资源走 useGoldenApple 专档）
         return false;
     }
 
@@ -1640,11 +1637,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.5.231b：极端饥饿判定——反射读爱憎分明（Love Loathe）HungerData.get
-     *  （0-100，≤9 = 饥饿）；未装爱憎分明/异常返回 false（原版女仆无饥饿系统）。
-     *  v1.5.284：双包名兼容——2.0.2 迁移 com.github.tartaricacid →
-     *  com.github.JumDa5he（旧包名反射永远 ClassNotFoundException → 判定静默失效）；
-     *  先试新包名、失败回退旧包名 */
+    /** 是否治疗食物：比对 HEAL_FOODS 注册名清单 */
     private boolean isHealFood(Item item) {
         for (String id : HEAL_FOODS) {
             Item candidate = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));

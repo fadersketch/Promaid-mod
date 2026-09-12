@@ -29,7 +29,6 @@ import java.util.List;
  * 显示 per-maid 开关状态 + 记忆条目投影（仅单机/局域网主机可读本地 jsonl；
  * 纯联机客户端只显示开关与提示）。
  *
- * 关系状态仍由 Heartfelt-connection 的 RelationshipExemption 判定（反射软调用）。
  * 纯只读展示，不修改任何数据。
  *
  * v1.5.25 修复：不再用 @Shadow 取 Screen.font 字段（无 refmap 时继承字段
@@ -38,8 +37,6 @@ import java.util.List;
 @Mixin(MaidConfigContainerGui.class)
 public abstract class MaidConfigMemoryMixin {
 
-    /** Heartfelt-connection 的 RelationshipExemption 反射句柄（缓存；未装时为 null） */
-    private static java.lang.reflect.Method RELATION_LABEL;
 
     /** v1.5.227：开关防连点——双击会把"关"变回"开"（实测 03:14:31 关→32 开），
      *  600ms 内的重复点击直接忽略 */
@@ -69,19 +66,6 @@ public abstract class MaidConfigMemoryMixin {
         }
     }
 
-    /** 反射调用 Heartfelt 的关系中文标签（妻子/女儿/恋人）；未装或异常返回 null */
-    private static String reflectRelationLabel(EntityMaid maid) {
-        try {
-            if (RELATION_LABEL == null) {
-                Class<?> cls = Class.forName("com.heartfelt.connection.relationship.RelationshipExemption");
-                RELATION_LABEL = cls.getMethod("relationLabel", EntityMaid.class);
-            }
-            Object value = RELATION_LABEL.invoke(null, maid);
-            return value instanceof String s ? s : null;
-        } catch (Exception ignored) {
-            return null;
-        }
-    }
 
     /**
      * v1.5.190：反射读取继承字段 f_97735_/f_97736_（AbstractContainerScreen 的
@@ -239,11 +223,6 @@ public abstract class MaidConfigMemoryMixin {
                     drawLine(font, graphics, x, y, "（记忆已关闭——开启后恢复显示）", 0xFF666666);
                 }
                 return;
-            }
-            String relation = reflectRelationLabel(maid);
-            if (relation != null) {
-                graphics.m_280653_(font, Component.m_237113_("关系：" + relation), x, y, 0xFF55FF55);
-                y += 11;
             }
             // 记忆条目投影（仅单机/局域网主机可读本地 jsonl；联机只显示提示）——
             // v1.5.190：只显示 2 条（y 上限 52 = 原生开关列顶部，防重叠；完整记忆

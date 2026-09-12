@@ -16,7 +16,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * - 女仆被世界伤害（攻击者非主人）
  * - tick 静默恢复（每 20 秒）
  *
- * 注意：本类不修改任何现有数值系统（TLM 好感/心契/爱憎），只更新独立情绪层。
+ * 注意：本类不修改任何现有数值系统（TLM 好感等现有数值），只更新独立情绪层。
  */
 public class AffectEventHooks {
     /** v1.5.102：静默恢复间隔从配置面板读取（affect.recoverInterval，秒→tick） */

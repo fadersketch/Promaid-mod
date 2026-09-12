@@ -44,8 +44,7 @@ import java.util.List;
  * - P4：烹饪 / 酿造 任务 + 自主决策 + 长期记忆
  * - P5：建造系统（Promaid 手册/工头/全局进度）+ 自保战斗 + 主人死亡传送
  *
- * v1.0.0 拆分：关系联动（心契誓约 × 爱憎分明）已迁往 Heartfelt-connection；
- * 本扩展不注册任何关系相关类，可独立运行。
+ * 本扩展不注册任何第三方关系/存储联动类，可独立运行。
  */
 @LittleMaidExtension
 public class ProMaidExtension implements ILittleMaid {
@@ -71,9 +70,8 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.5.95：感知变化检测（借鉴 maidsoulcore PerceptionEventDetector——快照对比
         // 检测敌对出现/主人受伤/主人注视/天气变化，纯规则气泡播报，零 LLM token）
         NeoForge.EVENT_BUS.register(new com.maidsmart.dialogue.PerceptionManager());
-        // v1.5.95：PAD 情绪层事件钩子（主人互动/被打/静默恢复——独立数值，兼容心契）
+        // v1.5.95：PAD 情绪层事件钩子（主人互动/被打/静默恢复——独立数值）
         NeoForge.EVENT_BUS.register(new com.maidsmart.affect.AffectEventHooks());
-        // v1.5.98：关系记忆适配（软感知 maidmarriage 结婚/告白/父女 + Love Loathe 信任/恐惧）
         // v1.5.135：自保的"最近攻击者"记录（被攻击事件 → 5 秒威胁窗口，覆盖非 Monster 生物）
         NeoForge.EVENT_BUS.register(com.maidsmart.combat.SelfPreservationBehavior.class);
         // 实测四百零二：低血量自动回魂符（血量 ≤ 阈值 / 致死伤害 → 收进主人背包空魂符）
@@ -479,7 +477,6 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 // 保证自保压过战斗/任务/跟随/待命/睡觉/恐慌一切状态，且不会被任何行为抢占。
                 // v1.5.25：落地水（优先级 240，低于自保 250）——被动技能，不进自保状态，
                 // 有水桶+坠落时自动放水缓冲，与自保互不干扰。
-                // （v1.5.26 的反击背叛女仆已随关系联动迁往 Heartfelt-connection）
                 // v1.5.90：任务工具自动装备（攻击/弓/弩/三叉戟/挖矿）——canUse 里
                 // 换完即停、不占行为槽；优先级低于自保/落地水、高于施工区避让
                 return List.of(

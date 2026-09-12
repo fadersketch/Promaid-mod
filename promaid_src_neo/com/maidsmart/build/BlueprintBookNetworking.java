@@ -1189,7 +1189,7 @@ public final class BlueprintBookNetworking {
     }
 
     /**
-     * v1.5.86：AI 记忆 per-maid 开关（C2S）——maidmarriage 调试面板按钮点击发送。
+     * v1.5.86：AI 记忆 per-maid 开关（C2S）。
      * 服务端：校验发送者是女仆主人或 OP → 写 TaskData 并同步回客户端。
      */
     public static class AiMemoryTogglePacket implements CustomPacketPayload {
@@ -1895,7 +1895,6 @@ public final class BlueprintBookNetworking {
                 lines.add(pLine.toString());
             } catch (Exception ignored) {
             }
-            // v1.2.0：纪念日联动（heartfelt 基准日 + promaid 达成/临近游标）
             // v1.1.0：双 agent 提取 + 每日关心点
             try {
                 boolean dual = com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get();

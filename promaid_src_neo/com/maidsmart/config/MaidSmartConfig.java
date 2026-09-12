@@ -131,8 +131,6 @@ public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ModConfigSpec.BooleanValue MEMORY_CONFLICT_OVERRIDE;
     public static final ModConfigSpec.BooleanValue MEMORY_CORE_FOLD;
     public static final ModConfigSpec.BooleanValue MEMORY_WORKING_NOTE;
-    // v1.5.98：关系记忆适配（软感知 maidmarriage/Love Loathe 状态写入记忆）
-    public static final ModConfigSpec.BooleanValue MEMORY_RELATIONSHIP_ADAPTER;
     // v1.5.102：记忆剩余数值（调度/投影/超时/检索/衰减）
     public static final ModConfigSpec.IntValue MEMORY_SCAN_INTERVAL;
     public static final ModConfigSpec.IntValue MEMORY_PROJECTION_CHARS;
@@ -140,8 +138,6 @@ public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ModConfigSpec.DoubleValue MEMORY_RRF_K;
     public static final ModConfigSpec.IntValue MEMORY_DECAY_DAYS;
     public static final ModConfigSpec.IntValue MEMORY_DECAY_SALIENCE;
-    public static final ModConfigSpec.IntValue MEMORY_RELATION_SCAN;
-    public static final ModConfigSpec.DoubleValue MEMORY_TRUST_DELTA;
     // v1.5.190：记忆防抖写盘（主动会话记忆主题注入已废弃，见 v1.0.4）
     public static final ModConfigSpec.BooleanValue MEMORY_LAZY_SAVE;
     // v1.5.191：记忆维护周期（定期固化/衰减/关系置信度衰减/error_mark 传播）
@@ -168,8 +164,6 @@ public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ModConfigSpec.BooleanValue MEMORY_PERSONA;
     public static final ModConfigSpec.BooleanValue MEMORY_CARE_POINTS;
     public static final ModConfigSpec.BooleanValue MEMORY_DUAL_AGENT;
-    // v1.2.0：heartfelt 纪念日联动（软感知，未装 heartfelt 时 tag 永不出现）
-    public static final ModConfigSpec.BooleanValue MEMORY_HEARTFELT_ANNIVERSARY;
     // v1.2.1：人设统一（TLM 已有人设时人格块降级为补充）
     public static final ModConfigSpec.BooleanValue MEMORY_PERSONA_UNIFY;
 
@@ -459,12 +453,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue MISC_SCHEDULE_FORCE_BRAIN_REFRESH;
     // v1.1.0 实测一百八十三（用户："排班状态下增大活动的范围"）：排班/home 模式活动半径下限
     public static final ModConfigSpec.IntValue SCHEDULE_ACTIVITY_RANGE;
-    // v1.5.199：爱憎分明饥饿/撑死测试开关（默认 true = 禁用其饥饿系统）
-    public static final ModConfigSpec.BooleanValue MISC_LOVELOATHE_DISABLE_HUNGER;
-    // v1.5.310：爱憎分明（Love Loathe, modId=callresponse）软联动开关组——未装爱憎分明不受影响
-    public static final ModConfigSpec.BooleanValue MISC_LOVELOATHE_MASTER;
-    public static final ModConfigSpec.BooleanValue MISC_LOVELOATHE_EXTREME_HUNGER;
-    public static final ModConfigSpec.BooleanValue MISC_LOVELOATHE_EMOTION;
 
     // ================= 语音（v1.5.198） =================
     public static final ModConfigSpec.DoubleValue TTS_VOLUME_MULTIPLIER;
@@ -597,7 +585,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_SPEED_FACTOR = BUILDER.comment("挖矿速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.mine.speedFactor")
                 .defineInRange("speedFactor", 1.2, 0.5, 3.0);
-        MINE_MOVE_SPEED = BUILDER.comment("发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 实测 0.6f），走路观感自然；v1.5.111 曾 0.4：旧 1.35×爱憎分明饥饿档基础速度（最高 0.85）= 每秒 17+ 格狂奔，搭高时女仆直接冲出柱子范围；0.4 又偏慢像爬行）")
+        MINE_MOVE_SPEED = BUILDER.comment("发现矿物后的移动速度（v1.5.118 起 0.6 = TLM 伐木任务同款移速（IFarmTask 实测 0.6f），走路观感自然；v1.5.111 曾 0.4：旧值偏快（每秒 17+ 格狂奔），搭高时女仆直接冲出柱子范围；0.4 又偏慢像爬行）")
                 .translation("config.promaid.mine.moveSpeed")
                 .defineInRange("moveSpeed", 0.6, 0.2, 1.5);
         MINE_JUNK_KEEP = BUILDER.comment("废石保留量（每种超出销毁）")
@@ -776,8 +764,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.memory.coreFold").define("coreFold", true);
         MEMORY_WORKING_NOTE = BUILDER.comment("工作笔记（跨对话任务状态注入）")
                 .translation("config.promaid.memory.workingNote").define("workingNote", true);
-        MEMORY_RELATIONSHIP_ADAPTER = BUILDER.comment("关系感知适配（软感知 maidmarriage 结婚/告白/父女 + Love Loathe 信任/恐惧 → 写入记忆；不依赖，未装则静默）")
-                .translation("config.promaid.memory.relationshipAdapter").define("relationshipAdapter", true);
         MEMORY_SCAN_INTERVAL = BUILDER.comment("记忆调度扫描间隔（秒）")
                 .translation("config.promaid.memory.scanInterval")
                 .defineInRange("scanInterval", 20, 5, 120);
@@ -796,12 +782,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MEMORY_DECAY_SALIENCE = BUILDER.comment("衰减保留重要度（低于此值的非永久记忆可能被删）")
                 .translation("config.promaid.memory.decaySalience")
                 .defineInRange("decaySalience", 3, 1, 10);
-        MEMORY_RELATION_SCAN = BUILDER.comment("关系感知轮询间隔（秒）")
-                .translation("config.promaid.memory.relationScan")
-                .defineInRange("relationScan", 20, 5, 120);
-        MEMORY_TRUST_DELTA = BUILDER.comment("信任/恐惧显著变化阈值（Love Loathe）")
-                .translation("config.promaid.memory.trustDelta")
-                .defineInRange("trustDelta", 15.0, 1.0, 50.0);
         // v1.5.190：记忆防抖写盘——写盘延迟合并（默认 20 秒一次批量写），
         // 避免每次写入/检索都全量重写 6 个 jsonl（多女仆时是服务端 IO 热点）
         MEMORY_LAZY_SAVE = BUILDER.comment("防抖写盘（内存累积后按 scanInterval 批量落盘，减少磁盘 IO）")
@@ -849,8 +829,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.memory.carePoints").define("carePoints", true);
         MEMORY_DUAL_AGENT = BUILDER.comment("双 agent 提取（摘要与事实/事件分两次独立 LLM 调用，更聚焦互不阻塞；关 = 单次合并提取省 token）")
                 .translation("config.promaid.memory.dualAgent").define("dualAgent", true);
-        MEMORY_HEARTFELT_ANNIVERSARY = BUILDER.comment("纪念日联动（heartfelt 纪念日里程碑达成/临近 → 写关系记忆 + 情绪脉冲；heartfelt 未触发时 promaid 补位说话；不依赖，未装则静默）")
-                .translation("config.promaid.memory.heartfeltAnniversary").define("heartfeltAnniversary", true);
         MEMORY_PERSONA_UNIFY = BUILDER.comment("人设统一（TLM 原版已有人设时，人格种子块降级为补充——只补人格参数/核心记忆，不再重复身份，冲突以 TLM 设定为准；关 = 双人设并存旧行为）")
                 .translation("config.promaid.memory.personaUnify").define("personaUnify", true);
         BUILDER.pop();
@@ -890,7 +868,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.pop();
 
         // ---- 情绪（v1.5.95 新段：PAD 情绪层）----
-        BUILDER.comment("情绪设置（PAD 情绪层，独立于好感/心契/爱憎）")
+        BUILDER.comment("情绪设置（PAD 情绪层，独立于 TLM 好感等既有数值）")
                 .translation("config.promaid.affect").push("affect");
         AFFECT_ENABLE = BUILDER.comment("PAD 情绪层总开关（事件驱动+落盘）")
                 .translation("config.promaid.affect.enable").define("enable", true);
@@ -1428,17 +1406,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // 的半径下限（TLM 自带 MAID_WORK/IDLE/SLEEP_RANGE 默认只有 8~16 格）
     SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 32）：排班/在家模式下女仆的活动半径下限——TLM 原版工作/空闲/睡觉半径只有 8~16 格，范围稍大就出不去；本项取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住")
             .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 32, 8, 512);
-    // v1.5.199：爱憎分明饥饿测试开关——其自动进食会优先吃腐肉导致"越吃越饿/饿死"，
-    // 饿死/撑死伤害与速度惩罚也一并关闭（测试期默认关闭；关闭本项恢复原版饥饿行为）
-    MISC_LOVELOATHE_DISABLE_HUNGER = BUILDER.comment("禁用爱憎分明饥饿/撑死（默认开：饿死伤害/撑死/自动进食（含腐肉）/速度惩罚全禁；关掉恢复原版）")
-            .translation("config.promaid.misc.loveLoatheHungerOff").define("loveLoatheHungerOff", true);
-    // v1.5.310：爱憎分明软联动开关组（仅在安装爱憎分明时由「爱憎分明模组调试」页可见可调）
-    MISC_LOVELOATHE_MASTER = BUILDER.comment("爱憎分明联动总开关（默认开：极端饥饿/情绪数据等反射联动；关闭后不再读取爱憎分明数据，仅「禁用饥饿」开关独立生效）")
-            .translation("config.promaid.misc.loveLoatheMaster").define("loveLoatheMaster", true);
-    MISC_LOVELOATHE_EXTREME_HUNGER = BUILDER.comment("极端饥饿保命联动（默认开：女仆极端饥饿——爱憎分明饥饿值 ≤9——且无其他治疗食物时，吃金苹果/附魔金苹果保命）")
-            .translation("config.promaid.misc.loveLoatheExtremeHunger").define("loveLoatheExtremeHunger", true);
-    MISC_LOVELOATHE_EMOTION = BUILDER.comment("情绪数据联动（默认开：记忆系统感知爱憎分明情绪投影——信任/恐惧值影响关系记忆与 AI 上下文注入）")
-            .translation("config.promaid.misc.loveLoatheEmotion").define("loveLoatheEmotion", true);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----
