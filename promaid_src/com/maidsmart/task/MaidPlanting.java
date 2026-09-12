@@ -296,8 +296,17 @@ public final class MaidPlanting {
                     }
                     net.minecraft.world.level.block.state.BlockState under =
                             level.m_8055_(p.m_7918_(0, -1, 0));
+                    // v1.1.0 修复：旧版写 Blocks.f_50125_ 并注释为 grass_block，但
+                    // f_50125_ 实为 SNOW（薄雪层）——真正草方块是 f_50440_（GRASS_BLOCK）。
+                    // 结果：草方块/泥土上的树苗被漏判，反倒允许种在雪层上。
                     if (!(under.m_204336_(net.minecraft.tags.BlockTags.f_144274_) /* #minecraft:dirt */
-                            || under.m_60713_(net.minecraft.world.level.block.Blocks.f_50125_) /* grass_block */)) {
+                            || under.m_60713_(net.minecraft.world.level.block.Blocks.f_50440_) /* grass_block */)) {
+                        continue;
+                    }
+                    // v1.1.0 修复：脚下必须是【有支撑面】的实体方块——旧版只判"非空气"，
+                    // 火把/花草（无碰撞）也被当支撑 → 树苗种在火把上长不成。isFaceSturdy
+                    // 用方块自身支撑面判定（同原版 canSurvive/放置规则口径）。
+                    if (!under.m_60783_(level, p.m_7918_(0, -1, 0), net.minecraft.core.Direction.UP)) {
                         continue;
                     }
                     if (!areaClearOfCollision(level, p)) {

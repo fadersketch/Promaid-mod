@@ -26,4 +26,37 @@ public final class PromaidClientSetup {
                 () -> new ConfigScreenHandler.ConfigScreenFactory(
                         (mc, parent) -> new com.maidsmart.config.PromaidConfigScreen(parent)));
     }
+
+    /**
+     * v1.1.0 实测四百二十：内置日语语音包的客户端钩子——
+     * ① PlaySoundEvent：播放窗口内压制 TLM 原生语音包；
+     * ② ClientTickEvent：未进世界时清压制窗口。
+     * 客户端专属（服务端不注册、本类不加载）。
+     */
+    public static void registerVoiceHooks() {
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                com.maidsmart.client.PromaidClientSetup::onPlaySound);
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                com.maidsmart.client.PromaidClientSetup::onClientTick);
+    }
+
+    private static void onPlaySound(net.minecraftforge.client.event.sound.PlaySoundEvent event) {
+        com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
+    }
+
+    private static void onClientTick(net.minecraftforge.event.TickEvent.ClientTickEvent event) {
+        if (event.phase == net.minecraftforge.event.TickEvent.Phase.END) {
+            com.maidsmart.voice.ClientVoicePlayback.onClientTick();
+        }
+    }
+
+    /**
+     * 实测四百四十四：冷却 HUD 渲染器【显式注册】——1.20.1 侧旧的
+     * {@code @Mod.EventBusSubscriber} 注解自动注册没生效（客户端 latest.log 有
+     * "first snapshot received" 却没有 "first draw"），改为客户端 Mod 构造期直接
+     * 挂到 Forge 事件总线（registered 闸防重复；onSnapshot 里还有一次兜底）。
+     */
+    public static void registerHudHooks() {
+        com.maidsmart.client.CooldownHudRenderer.ensureRegistered();
+    }
 }

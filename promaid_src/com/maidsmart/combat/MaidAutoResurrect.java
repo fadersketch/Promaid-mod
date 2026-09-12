@@ -48,12 +48,15 @@ public final class MaidAutoResurrect {
         final UUID ownerId;
         long dueTick;
         UUID tombstoneId;
+        /** 实测四百二十一：显示名——HUD 倒计时按名字列出（旧存档无此字段时回退"女仆"） */
+        final String maidName;
 
-        Pending(CompoundTag maidNbt, UUID ownerId, long dueTick, UUID tombstoneId) {
+        Pending(CompoundTag maidNbt, UUID ownerId, long dueTick, UUID tombstoneId, String maidName) {
             this.maidNbt = maidNbt;
             this.ownerId = ownerId;
             this.dueTick = dueTick;
             this.tombstoneId = tombstoneId;
+            this.maidName = maidName == null ? "" : maidName;
         }
     }
 
@@ -106,27 +109,40 @@ public final class MaidAutoResurrect {
                 nbt = new CompoundTag();
                 maid.m_20240_(nbt);
             }
-            long due = level.m_46467_()
-                    + com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get() * 20L;
+            long due = computeDueTick(level);
             Pending p = new Pending(nbt, owner.m_20148_(), due,
-                    tombstone != null ? tombstone.m_20148_() : null);
-            // 墓碑转为纯标记：清空其容器，物品只存在死亡快照里（复活时归还）。
-            // 否则 60 秒窗口内玩家可拾取墓碑 → 复活又归还快照 = 物品复制。
-            if (tombstone != null) {
-                try {
-                    net.minecraftforge.items.ItemStackHandler items = tombstone.getItems();
-                    for (int i = 0; i < items.getSlots(); i++) {
-                        items.setStackInSlot(i, net.minecraft.world.item.ItemStack.f_41583_);
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
+                    tombstone != null ? tombstone.m_20148_() : null,
+                    com.maidsmart.tool.PromaidLog.nameOf(maid));
+            // 实测四百二十六【不再清空墓碑】：旧版把墓碑容器清空（防复制），导致右键墓碑
+            // 什么也拿不到、墓碑直接消失——看起来像"点击墓碑复活没了"。现在墓碑物品原样
+            // 实测四百三十八：右键墓碑【不再立即复活】——按 TLM 原版归还物品，同时取消
+            // 这次待复活登记（见 cancelPendingOnTombstoneClick）；关闭自动复活时纯原版。
             // 统一写主世界表（跨维度共享；读取端也只读主世界表）
             MinecraftServer server = level.m_7654_();
             ServerLevel overworld = server != null ? server.m_129880_(Level.f_46428_) : level;
             store(overworld).put(maidId, p);
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 实测四百二十六：计算到期时刻（统一 gameTime 口径——旧版登记用 getGameTime、
+     * 检查用 getTickCount，老存档里前者远大于后者，now>=due 永不成立 = "自动复活不触发"）。
+     * 时机取自配置：0 = 延迟 N 秒；1 = 次日黎明（dayTime%24000==1，照驯养革新宠物床）。
+     */
+    private static long computeDueTick(ServerLevel level) {
+        long nowGame = level.m_46467_();
+        int mode = com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_TIMING.get();
+        if (mode == 1) {
+            long into = ((level.m_8044_() % 24000L) + 24000L) % 24000L; // 当前白天时间
+            long delta = (1L - into + 24000L) % 24000L;                  // 距下一个"黎明(时刻1)"
+            if (delta <= 0L) {
+                delta = 24000L; // 正好死在黎明这一 tick → 顺延到第二天
+            }
+            return nowGame + delta;
+        }
+        return nowGame + Math.max(1,
+                com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()) * 20L;
     }
 
     // ================== 到期复活 ==================
@@ -137,6 +153,15 @@ public final class MaidAutoResurrect {
             return;
         }
         if (!com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get()) {
+            // 实测四百二十六：关掉 = 纯 TLM 原版——丢弃待复活表（墓碑物品仍在，
+            // 玩家右键仍是原版"归还物品"），避免"关掉后又打开"对已被取回的墓碑重复复活。
+            MinecraftServer s0 = ServerLifecycleHooks.getCurrentServer();
+            if (s0 != null) {
+                AutoResurrectStore d0 = store(s0.m_129880_(Level.f_46428_));
+                if (d0 != null && !d0.isEmpty()) {
+                    d0.clear();
+                }
+            }
             return;
         }
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
@@ -144,11 +169,14 @@ public final class MaidAutoResurrect {
             return;
         }
         // 待复活表跨维度共享（存在主世界 SavedData）
-        AutoResurrectStore data = store(server.m_129880_(Level.f_46428_));
+        ServerLevel overworld = server.m_129880_(Level.f_46428_);
+        AutoResurrectStore data = store(overworld);
         if (data == null || data.isEmpty()) {
             return;
         }
-        long now = server.m_129921_();
+        // 实测四百二十六：now 改用【世界游戏时间】——与登记 due 同源（旧版用 tickCount，
+        // 老存档 gameTime 远大于 tickCount，now>=due 永不成立）
+        long now = overworld != null ? overworld.m_46467_() : server.m_129921_();
         List<UUID> dueIds = new ArrayList<>();
         for (java.util.Map.Entry<UUID, Pending> e : data.entries()) {
             if (now >= e.getValue().dueTick) {
@@ -242,6 +270,91 @@ public final class MaidAutoResurrect {
         return AutoResurrectStore.get(level);
     }
 
+    // ================== HUD 查询（实测四百二十一） ==================
+
+    /**
+     * 实测四百二十一【冷却可视化】：HUD 用——该主人名下正在等待自动复活的女仆。
+     * 返回每项 {女仆显示名, 剩余秒, 总秒}；无待复活返回空表。
+     * 复用踢人用的同一份 SavedData，倒计时口径与 onServerTick 的到期判定一致
+     * （server.getTickCount()，见下方注释）。
+     */
+    public static java.util.List<String[]> hudReviveEntries(net.minecraft.server.MinecraftServer server,
+                                                            java.util.UUID ownerId) {
+        java.util.List<String[]> out = new ArrayList<>();
+        if (server == null || ownerId == null
+                || !com.maidsmart.config.MaidSmartConfig.MISC_COOLDOWN_HUD.get()) {
+            return out;
+        }
+        // 与 tick 判定同源：待复活表统一存主世界
+        ServerLevel ow = server.m_129880_(Level.f_46428_);
+        AutoResurrectStore data = store(ow);
+        if (data == null || data.isEmpty()) {
+            return out;
+        }
+        // 实测四百二十六：now 用世界游戏时间（与 due 同源）；总秒按当前时机模式给
+        long now = ow != null ? ow.m_46467_() : server.m_129921_();
+        int mode = com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_TIMING.get();
+        // 延迟模式：总秒 = 配置延迟（用于进度条/夹紧）；黎明模式：总秒未知，给 0（HUD 不做夹紧）
+        long totalSec = mode == 0
+                ? Math.max(1L, Math.max(1, com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()))
+                : 0L;
+        for (java.util.Map.Entry<UUID, Pending> e : data.entries()) {
+            Pending p = e.getValue();
+            if (!ownerId.equals(p.ownerId)) {
+                continue;
+            }
+            long remainTicks = Math.max(0L, p.dueTick - now);
+            long remainSec = (remainTicks + 19L) / 20L; // 向上取整，0 只在到期瞬间出现
+            if (totalSec > 0 && remainSec > totalSec) {
+                remainSec = totalSec; // 异常情形：显示不超过配置上限
+            }
+            String name = p.maidName == null || p.maidName.isEmpty() ? "女仆" : p.maidName;
+            out.add(new String[]{name, String.valueOf(remainSec), String.valueOf(totalSec)});
+        }
+        return out;
+    }
+
+    // ================== 墓碑右键：原版交互 + 取消自动复活（实测四百三十八） ==================
+
+    /**
+     * 实测四百三十八（用户：「在女仆死亡期间右击墓碑会直接复活……使得我设的冷却毫无意义。
+     * 应当改为：自动复活开始以后右击墓碑仍然跟原版一致，同时取消复活事件」）。
+     *
+     * 右键墓碑【不再当场复活】——松开手，行为与 TLM 原版完全一致（归还墓碑里的物品等），
+     * 只是把这块墓碑对应的【待复活登记】移除：玩家既然选择手动处理，就不再自动把她拉
+     * 回来，复活冷却因此恢复意义。只有墓碑所属主人本人的主手右键才会取消（防他人误触）；
+     * 未登记 / 非主人 → 什么都不做，纯原版。
+     */
+    public static boolean cancelPendingOnTombstoneClick(MinecraftServer server, ServerPlayer player,
+                                                        UUID tombstoneId) {
+        if (server == null || player == null || tombstoneId == null
+                || !com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get()) {
+            return false;
+        }
+        AutoResurrectStore data = store(server.m_129880_(Level.f_46428_));
+        if (data == null || data.isEmpty()) {
+            return false;
+        }
+        UUID maidId = null;
+        Pending found = null;
+        for (java.util.Map.Entry<UUID, Pending> e : data.entries()) {
+            Pending p = e.getValue();
+            if (tombstoneId.equals(p.tombstoneId) && player.m_20148_().equals(p.ownerId)) {
+                maidId = e.getKey();
+                found = p;
+                break;
+            }
+        }
+        if (maidId == null) {
+            return false;
+        }
+        data.remove(maidId);
+        String name = found.maidName == null || found.maidName.isEmpty() ? "女仆" : found.maidName;
+        com.maidsmart.tool.PromaidLog.log("自动复活",
+                name + " 右键墓碑 → 取消本次自动复活（墓碑按原版归还物品）");
+        return true;
+    }
+
     // ================== 持久化 ==================
 
     /** 待复活快照的 SavedData（存主世界，跨维度共享） */
@@ -261,8 +374,9 @@ public final class MaidAutoResurrect {
                     UUID ownerId = c.m_128342_("owner");
                     long due = c.m_128454_("due");
                     UUID tomb = c.m_128403_("tomb") ? c.m_128342_("tomb") : null;
+                    String name = c.m_128403_("name") ? c.m_128461_("name") : "";
                     if (maidId != null && nbt != null && ownerId != null) {
-                        pending.put(maidId, new Pending(nbt, ownerId, due, tomb));
+                        pending.put(maidId, new Pending(nbt, ownerId, due, tomb, name));
                     }
                 } catch (Throwable ignored) {
                 }
@@ -292,6 +406,14 @@ public final class MaidAutoResurrect {
             return pending.isEmpty();
         }
 
+        /** 实测四百二十六：关掉自动复活时丢弃全部待复活快照（墓碑物品仍在，走原版右键取回）。 */
+        public void clear() {
+            if (!pending.isEmpty()) {
+                pending.clear();
+                m_77762_();
+            }
+        }
+
         public java.util.Set<java.util.Map.Entry<UUID, Pending>> entries() {
             return pending.entrySet();
         }
@@ -305,6 +427,7 @@ public final class MaidAutoResurrect {
                 c.m_128365_("nbt", e.getValue().maidNbt);
                 c.m_128362_("owner", e.getValue().ownerId);
                 c.m_128356_("due", e.getValue().dueTick);
+                c.m_128359_("name", e.getValue().maidName);
                 if (e.getValue().tombstoneId != null) {
                     c.m_128362_("tomb", e.getValue().tombstoneId);
                 }

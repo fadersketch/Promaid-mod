@@ -244,6 +244,8 @@ public class ProMaidExtension implements ILittleMaid {
             // v1.5.252q：清扫自动生成的钓鱼坐垫（任务解除/脱离坐垫超 2 秒 → 删除）
             // v1.5.252r：逻辑在普通类 FishingChairService（mixin 类不可被普通代码直接引用）
             com.maidsmart.fishing.FishingChairService.sweep(server);
+            // v1.1.0 实测四百二十一：冷却可视化 HUD（复活倒计时 / 回魂符冷却每秒下发）
+            com.maidsmart.combat.CooldownHudTracker.broadcast(server);
         }
         // v1.5.275：每 3 tick 高频维持钓鱼女仆走位（FindSit 12 tick 间隙 + 站立行为
         // 清 WALK_TARGET → 一步一停；3 tick 内补回 → 连续走）
@@ -500,6 +502,20 @@ public class ProMaidExtension implements ILittleMaid {
                         // v1.5.212：施工区避让已删除——自保 antiSuffocate 每 tick 防窒息
                         // 兜底后，"非建造女仆接近施工区会逃离"没有存在意义
                         //（原 Pair.of(150, new BuildAreaAvoidBehavior())）
+                );
+            }
+
+            /**
+             * 实测四百一十八：床铺互通·方向一（用户："让女仆床和玩家床的代码互通。
+             * 女仆和玩家可以互相使用对方的床"）。
+             *
+             * REST 活动注册（TLM 自带 MaidBedTask=5、随机散步=20）：优先级 6 排在
+             * TLM 女仆床行为之后——女仆床优先，没有可用女仆床时才睡原版床。
+             */
+            @Override
+            public List<Pair<Integer, BehaviorControl<? super EntityMaid>>> getRestBehaviors() {
+                return List.of(
+                        Pair.of(6, new com.maidsmart.task.MaidBedInteropBehavior())
                 );
             }
         });

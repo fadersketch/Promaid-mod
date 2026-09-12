@@ -26,5 +26,14 @@
   "key.promaid.maid_hug": "Hug Maid (aim at maid)",
   "config.promaid.combat.autoResurrectEnable": "Maid auto-resurrect",
   "config.promaid.combat.autoResurrectDelaySeconds": "Resurrect delay (s)",
-  "config.promaid.combat.autoResurrectHealthRatio": "Resurrect health ratio"
+  "config.promaid.combat.autoResurrectHealthRatio": "Resurrect health ratio",
+  "config.promaid.combat.autoResurrectTiming": "Resurrect timing",
+  "config.promaid.combat.aidMaidMutual": "Maid-to-maid aid",
+  "config.promaid.misc.bedInterop": "Bed interop",
+  "config.promaid.misc.cooldownHud": "Cooldown HUD",
+  "config.promaid.misc.noPlaceInAir": "No block placing while airborne",
+  "config.promaid.voice.jarPackEnabled": "Built-in Japanese voice pack",
+  "config.promaid.voice.jarPackVolume": "Built-in voice pack volume",
+  "config.promaid.voice.jarPackMinIntervalS": "Built-in voice min interval (s)",
+  "config.promaid.voice.jarPackMuteNative": "Mute native sound pack while playing"
 }

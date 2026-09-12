@@ -23,8 +23,15 @@ public final class BuildHudRenderer {
     private static int hiddenCount = 0;
     private static final int MAX_REGIONS = 3;
     private static final int LINE_H = 10;
+    /** v1.1.0 实测四百二十一：最近一次渲染的底部 Y（空/未渲染 = 4）——冷却 HUD 在下方避让 */
+    private static int lastBottomY = 4;
 
     private BuildHudRenderer() {
+    }
+
+    /** v1.1.0 实测四百二十一：建造 HUD 当前占用的底部 Y（继续画应从这行开始） */
+    public static int bottomY() {
+        return lastBottomY;
     }
 
     /** 客户端网络包回调：更新快照（主线程） */
@@ -54,36 +61,51 @@ public final class BuildHudRenderer {
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public static void onGui(net.minecraftforge.client.event.RenderGuiOverlayEvent.Post event) {
+        lastBottomY = 4; // 本帧未画建造 HUD 时（下方提前 return）冷却 HUD 从顶部起画
         if (SNAPSHOT.isEmpty()) {
             return;
         }
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-        if (mc.f_91080_ != null || mc.f_91066_.f_92028_) {
+        // 实测四百二十九附：F3 判定修正——旧版误用 options.useNativeTransport
+        // （f_92028_，默认 true → 恒真 → 建造 HUD 也一直不渲染）；正确字段是
+        // Options.renderDebug（f_92063_）。
+        if (mc.f_91080_ != null || mc.f_91066_.f_92063_) {
             return; // 打开界面 / F3 调试屏不显示（避免与菜单/调试重叠）
         }
         net.minecraft.client.gui.Font font = mc.f_91062_;
         if (font == null) {
             return;
         }
-        int w = event.getWindow().m_85446_();
-        int h = event.getWindow().m_85447_();
+        // 实测四百四十六：Window 的 SRG 名是 m_85445_=getGuiScaledWidth /
+        // m_85446_=getGuiScaledHeight（m_85447_ 其实是 getX）——旧版 w/h 都取错，
+        // 建造 HUD 的折行宽度与"超出屏幕不画"判定一起失真（x=0 时干脆整块不画）。
+        int w = event.getWindow().m_85445_();
+        int h = event.getWindow().m_85446_();
         net.minecraft.client.gui.GuiGraphics gg = event.getGuiGraphics();
         int x = 4;
         int y = 4;
         y = line(gg, font, "\u00a7e\u26cf 建造进度", x, y, w, h);
         if (y < 0) {
+            lastBottomY = 4;
             return;
         }
         for (String[] e : SNAPSHOT.values()) {
             y = entry(gg, font, e, x, y, w, h);
             if (y < 0) {
+                lastBottomY = 4;
                 return;
             }
         }
         if (hiddenCount > 0) {
-            line(gg, font, "\u00a77\u2026还有 " + hiddenCount + " 个区块", x, y, w, h);
+            y = line(gg, font, "\u00a77\u2026\u8fd8\u6709 " + hiddenCount + " \u4e2a\u533a\u5757", x, y, w, h);
+            if (y < 0) {
+                lastBottomY = 4;
+                return;
+            }
         }
+        lastBottomY = y; // 记录本帧底边，冷却 HUD 从这里往下画
     }
+
 
     /** 一个区块两行：名称+进度 / 跳过+速度+预计时间 */
     private static int entry(net.minecraft.client.gui.GuiGraphics gg, net.minecraft.client.gui.Font font,
@@ -114,15 +136,15 @@ public final class BuildHudRenderer {
     /** 画一段文本：按宽度折行成多行逐行绘制（不截断不省略），高度超限返回 -1 */
     private static int line(net.minecraft.client.gui.GuiGraphics gg, net.minecraft.client.gui.Font font,
                             String text, int x, int y, int w, int h) {
-        if (y > h - LINE_H - 2) {
+        if (h > 32 && y > h - LINE_H - 2) {
             return -1;
         }
         int maxW = Math.min(w - x - 4, (int) (w * 0.7)); // 右缘留 4px + 单行最长占屏 70%
         for (String seg : wrap(font, text, maxW)) {
-            if (y > h - LINE_H - 2) {
+            if (h > 32 && y > h - LINE_H - 2) {
                 return -1; // 折行后超出屏幕高度 → 停画（不顶出屏幕）
             }
-            gg.m_280137_(font, seg, x, y, 0xFFFFFF); // drawString(字体, 文本, x, y, 颜色)
+            gg.m_280056_(font, seg, x, y, 0xFFFFFF, true); // drawString(字体, 文本, x, y, 颜色, 阴影)
             y += LINE_H;
         }
         return y;

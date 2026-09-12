@@ -105,7 +105,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     static final PlacedBlockTracker COMBAT_TRACKER = new PlacedBlockTracker(
             () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L,
             0.5, // 实测三百七十七：靠近刷新仅同柱（0.5 格）——她离开塔后 30 秒必回收
-            12.0); // 实测三百八十八：垂直带 12——8~12 格塔底的方块也要在塔上狙击期间续命
+            12.0, // 实测三百八十八：垂直带 12——8~12 格塔底的方块也要在塔上狙击期间续命
+            true); // 实测四百二十五：主人踩在上面也刷新（跟着上塔/踩塔边不踩空）
 
     private static void trackCombatPlaced(EntityMaid maid, BlockPos pos, Block block) {
         if (!(maid.m_9236_() instanceof ServerLevel sl)) {
@@ -1338,6 +1339,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.23：材料不足播报（10 秒最多一次；实测三百六十三文案改为周旋） */
     private void announceNoMaterial(EntityMaid maid) {
         if (this.announceCooldown-- > 0 || this.announcedNoMaterial) {
+            return;
+        }
+        // 实测四百四十三：悬空禁搭导致的"取料失败"不是真的没材料——静默，
+        // 否则会误报"背包里没有搭方块的材料"
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
             return;
         }
         this.announcedNoMaterial = true;
@@ -4054,6 +4060,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 都可用于搭高，数量最多的先取（不浪费稀有方块）。
      */
     private Block takeBuildBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空/坠落中禁搭方块——统一闸口，返回 null 让所有
+        // 搭高/搭路调用点自然放弃本次放置（不消耗方块、不动世界）
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return null;
+        }
         // v1.1.0 实测七：选材统一走 MaidBuildBlockFilter——火把等无碰撞方块、
         // 可替换方块（草/雪片）一律不再入选（旧 isSafeBuildBlock 的本地逻辑
         // 并入工具类，本类保留壳调用）。返回 Block（自保内部用 Block 放置）。

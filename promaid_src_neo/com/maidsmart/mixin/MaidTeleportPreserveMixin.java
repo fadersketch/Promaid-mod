@@ -25,6 +25,13 @@ public abstract class MaidTeleportPreserveMixin {
     @Inject(method = "teleportToOwner", at = @At("HEAD"), cancellable = true)
     private void maidSmartPreserveTeleport(LivingEntity owner, CallbackInfoReturnable<Boolean> cir) {
         EntityMaid maid = (EntityMaid) (Object) this;
+        // 实测四百四十二：重锤跃起中禁止 TLM 跟随瞬移——她跳到半空被 teleportToOwner
+        // 拽回主人身边，猛击白跳、战位全乱（用户："重锤状态下空中禁止传送，否则很
+        // 容易因为飞到高空又传送回来，造成战术上的失误"）。跃起 ≤5 秒自动收尾。
+        if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
+            cir.setReturnValue(false);
+            return;
+        }
         // v1.5.138：建造女仆（任务 = maid_smart:build）任何时刻禁止 TLM 瞬移回主人身边。
         // 根治"下达建造后女仆被传送走"：v1.5.121 的 home 模式只在建造行为 doStart 后
         // 才强制开启，切任务→行为启动前的窗口期 FollowOwner（CORE 3）若在跑且

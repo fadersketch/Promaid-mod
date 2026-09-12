@@ -1,0 +1,609 @@
+{
+  "entries": [
+    {
+      "text": "建好啦！来看看我搭的",
+      "file": "build_done.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "材料不够了，还缺",
+      "file": "build_missing_material.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "替代一下",
+      "file": "build_substitute.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "被基岩之类的方块挡住了，我跳过它啦",
+      "file": "build_skip_bedrock.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "区块一直没加载，我跳过它啦",
+      "file": "build_skip_unloaded.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "没有对应物品，我跳过它啦",
+      "file": "build_skip_noitem.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "悬空放不上，我跳过它啦",
+      "file": "build_skip_float.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "被基岩之类的方块挡住了",
+      "file": "build_blocked.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人饿了吧，给你带了吃的",
+      "file": "aid_food.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "姐妹挺住，我来帮你",
+      "file": "aid_sister_help.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "药水来了",
+      "file": "aid_potion_incoming.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "药水放你背包了，快喝",
+      "file": "aid_potion_given.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人背包满了，我给不了东西",
+      "file": "aid_bag_full.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人快吃点东西补补",
+      "file": "aid_eat_something.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "蜂蜜喝下，解一下中毒",
+      "file": "aid_honey_poison.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "牛奶喝下，负面状态全解",
+      "file": "aid_milk_debuff.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我回来啦！让你担心了",
+      "file": "resurrect_back.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我马上赶到你身边",
+      "file": "death_teleport.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "盾牌要坏了，我这面给你用",
+      "file": "shield_share.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "情况不妙，我小心周旋",
+      "file": "preserve_wary.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "背包里没有搭方块的材料",
+      "file": "preserve_no_block.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "自救手段都用尽了，我没招了",
+      "file": "preserve_no_escape.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我回到主人身边了，先缓缓",
+      "file": "preserve_return.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "掉进岩浆里了！我垫上来",
+      "file": "preserve_lava_fall.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "溺水了！我游上去",
+      "file": "preserve_drown.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我卡住了，快喘不过气了",
+      "file": "preserve_stuck.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近有岩浆，我绕开走",
+      "file": "preserve_lava_near.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "包里没有回血的东西了，我先撤到你身边",
+      "file": "preserve_no_heal.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "落地雪",
+      "file": "clutch_snow.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "落地水",
+      "file": "clutch_water.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近没找到可钓鱼的水",
+      "file": "fish_no_water.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这里没有椅子，我自己带了个坐垫",
+      "file": "fish_no_chair.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这里没有水，我找个水边坐下钓鱼",
+      "file": "fish_no_water_here.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "去水边的路走不通，我放弃啦",
+      "file": "fish_path_blocked.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "同伴的不死图腾救了我一命",
+      "file": "totem_peer.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "不死图腾救了我一命",
+      "file": "totem_self.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我的不死图腾给你用",
+      "file": "totem_give.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "排班中呢，工作模式和任务都由日程表管理",
+      "file": "schedule_locked.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "搭不上去了（头顶被挡住）",
+      "file": "bridge_cant_climb.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "可我背包里没有能搭的方块了",
+      "file": "bridge_no_block.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "酿造缺材料",
+      "file": "brew_missing.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "好像走神了……我重新理一下思路，继续干活",
+      "file": "work_distracted.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "够不着高处的矿",
+      "file": "mine_no_block_high.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "够不着高处的木材",
+      "file": "wood_no_block_high.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近有矿物被硬方块挡住",
+      "file": "mine_blocked_area.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近有木材被硬方块挡住",
+      "file": "wood_blocked_area.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "挡住了",
+      "file": "blocked_ore_report.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我没有斧头，只能用手慢慢掰了",
+      "file": "wood_no_axe.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "明白！我去解决它",
+      "file": "attack_ok.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我背包里没有吃的了，给我备点食物吧",
+      "file": "no_food_left.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我发现了一个",
+      "file": "found_something.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "前方有",
+      "file": "ahead_of_you.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附魔金苹果给你",
+      "file": "aid_enchanted_apple.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近没有值得挖的矿石",
+      "file": "mine_no_ore.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我没有镐，没法挖矿",
+      "file": "work_no_pickaxe.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近没有需要打理的农田了",
+      "file": "farm_no_work.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "被骑乘着，动不了",
+      "file": "work_ridden.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "金苹果给你",
+      "file": "aid_golden_apple.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "缺",
+      "file": "fallback_missing.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "有个",
+      "file": "fallback_something.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "哎呀，主人来啦——我正按日程干活呢，没有偷懒哦！",
+      "file": "sched_01.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "嗯嗯，这个时段轮到我做这个，马上就好～",
+      "file": "sched_02.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人要站远一点吗？别被工具碰到啦。",
+      "file": "sched_03.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "今日份日程过半了，我很有干劲的！",
+      "file": "sched_04.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "呼……这段活有点累，不过排班表上写着呢，坚持一下。",
+      "file": "sched_05.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人的脚步声我一听就认得出来～",
+      "file": "sched_06.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这里的活我熟，交给我吧！",
+      "file": "sched_07.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "等等我，把这一小块做完就去找你！",
+      "file": "sched_08.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人来视察工作啦？表现好的话……有奖励吗？",
+      "file": "sched_09.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "我可是按排班表行事的模范女仆哦。",
+      "file": "sched_10.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "唔，手上有灰，先不碰你，等下工再抱！",
+      "file": "sched_11.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "排班表可是我自己排的，含泪也要干完……",
+      "file": "sched_12.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "嘿嘿，被主人看到努力的样子了。",
+      "file": "sched_13.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "到点我就换下一个活，绝对不会赖在这一段。",
+      "file": "sched_14.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人饿不饿？等我这段做完给你做点吃的～",
+      "file": "sched_15.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这活儿越干越熟练了，夸我夸我！",
+      "file": "sched_16.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "虽然想偷懒……但是日程在那儿挂着呢。",
+      "file": "sched_17.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人也别太累，我看着日程，你看着自己好不好？",
+      "file": "sched_18.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "别担心我，我可是专业的。",
+      "file": "sched_19.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这段做完，距离下班又近了一格～",
+      "file": "sched_20.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人是来检查进度的吗？绝对保质保量！",
+      "file": "sched_21.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "要是没有排班表，我现在就想赖在你身边了。",
+      "file": "sched_22.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "哼哼，今天的我依然勤快得可怕。",
+      "file": "sched_23.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "工作的时候被看着……总感觉干劲又多了一点。",
+      "file": "sched_24.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "等这一段结束了，就有休息时间啦。",
+      "file": "sched_25.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人小心脚下，我刚整理过这边的工具。",
+      "file": "sched_26.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "日程过半，进度无忧～",
+      "file": "sched_27.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "被主人看着干活，总觉得该做得更好一点呢。",
+      "file": "sched_28.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "我的效率可是有排班表认证的！",
+      "file": "sched_29.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人慢走～记得晚点来看我干活的样子哦。",
+      "file": "sched_30.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "上班第……第几个小时来着？算了，不重要，干活！",
+      "file": "sched_31.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "老板说了，好好干，下辈子给你换个大点的扫帚。",
+      "file": "sched_32.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "别人下班我上班，别人上班我也上班——排班表就是这么写的。",
+      "file": "sched_33.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "累吗？累。但是一想到主人还在等我，就有力气了。",
+      "file": "sched_34.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这份工作最大的好处，就是能天天见到主人。",
+      "file": "sched_35.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "工资是什么？有主人的摸摸头就够了……大概。",
+      "file": "sched_36.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "今天也是元气满满地被排班表支配的一天！",
+      "file": "sched_37.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "同事（别的女仆）说她也想歇歇——大家都一样呢。",
+      "file": "sched_38.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "干完这一段就能休息了——咦，怎么还有下一段？",
+      "file": "sched_39.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "加油！你是最胖的……不是，最棒的女仆！",
+      "file": "sched_40.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "别人家的女仆在休息，我在干活——但我开心，哼。",
+      "file": "sched_41.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "要是干活能长个子就好了……",
+      "file": "sched_42.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人，我们的目标是什么？——好好干活，天天向上！",
+      "file": "sched_43.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "听说干满一百天就给加餐，我已经信了三十天了。",
+      "file": "sched_44.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这个时段的活干完，我就离「女仆楷模」又近了一步。",
+      "file": "sched_45.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "摸鱼是不可能摸鱼的，排班表盯着我呢。",
+      "file": "sched_46.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "今天也是被自己感动的一天——怎么会这么勤快呢。",
+      "file": "sched_47.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "老板画的饼有点大，不过没关系，我饭量好。",
+      "file": "sched_48.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "努力工作的话，主人会看到我的对吧？对吧！",
+      "file": "sched_49.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "抱抱！好温暖～",
+      "file": "hug_01.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人的怀抱最安心了～",
+      "file": "hug_02.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "嘿嘿，被抱着都不想动啦～",
+      "file": "hug_03.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "嘿嘿，好舒服～",
+      "file": "pat_01.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "摸摸头就又有精神了！",
+      "file": "pat_02.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "最喜欢主人摸头了～",
+      "file": "pat_03.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "有敌人靠近",
+      "file": "enemy_near.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "附近的敌人都清掉了",
+      "file": "enemy_clear.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人受伤了",
+      "file": "owner_hurt.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人血量很低了",
+      "file": "owner_low_hp.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人一直在看着我",
+      "file": "owner_looking.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "天气变成",
+      "file": "weather_change.ogg",
+      "mode": "contains"
+    }
+  ]
+}

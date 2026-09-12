@@ -30,20 +30,25 @@ import java.util.stream.Stream;
 /**
  * v1.5.198：系统消息 TTS——所有系统气泡（感知/工作/自保/建好啦等规则消息，
  * 由 ChatBubbleLimitMixin 拦截 addTextChatBubble 汇入本管理器）朗读：
- * ① 系统语音包命中 → 直接播放（免 TTS）
- * ② 语音缓存命中（config/maid_smart/voice_cache/<sha256>.ogg，"训练一次保存"）→ 直接播放
- * ③ 未命中 → 调 TLM TTS 站点合成，字节落盘缓存后播放（SystemTtsCallback）
+ * ① 内置日语语音包命中（随 jar 分发，最高优先级）→ 直接播放（免 TTS，独立最小间隔）
+ * ② 系统语音包命中（config/maid_smart/system_voice/）→ 直接播放（免 TTS）
+ * ③ 语音缓存命中（config/maid_smart/voice_cache/<sha256>.ogg，"训练一次保存"）→ 直接播放
+ * ④ 未命中 → 调 TLM TTS 站点合成，字节落盘缓存后播放（SystemTtsCallback）
  *
  * 门禁：TTS_SYSTEM_ENABLED + TLM AIConfig.TTS_ENABLED + 站点存在启用 + 有主人 +
  * 文本可朗读（含中文/空格，过滤 TLM 翻译 key 与省略号）+ per-maid 冷却。
+ * 注意：① 内置语音包在站点检查之前——没配 TTS 站点也能响（用户要求"触发即播放"）。
  */
 public final class SystemTTSManager {
     /** 每只女仆上次朗读时间（UUID → 时间戳） */
     private static final Map<UUID, Long> LAST_SPEAK = new ConcurrentHashMap<>();
+    /** v1.1.0 实测四百二十：每只女仆上次内置日语语音包播放时间（独立最小间隔门禁） */
+    private static final Map<UUID, Long> LAST_JAR_PACK = new ConcurrentHashMap<>();
 
     /** 审计：女仆卸载/移除时清理 TTS 限频表 */
     public static void forgetMaid(UUID maidUuid) {
         LAST_SPEAK.remove(maidUuid);
+        LAST_JAR_PACK.remove(maidUuid);
     }
 
     private SystemTTSManager() {
@@ -61,10 +66,8 @@ public final class SystemTTSManager {
             if (maid == null || text == null || text.isBlank()) {
                 return;
             }
-            if (!MaidSmartConfig.TTS_SYSTEM_ENABLED.get()) {
-                return;
-            }
-            if (!AIConfig.TTS_ENABLED.get()) {
+            // 实测四百二十九：睡觉中不朗读（气泡同样被 ChatBubbleLimitMixin 静默）
+            if (maid.m_5803_()) {
                 return;
             }
             if (!(maid.m_9236_() instanceof ServerLevel level)) {
@@ -74,6 +77,36 @@ public final class SystemTTSManager {
                 return;
             }
             if (!speakable(text)) {
+                return;
+            }
+            // ① 内置日语语音包（随 jar 分发，最高优先级——用户要求：触发系统消息即自动
+            //    播放）。【独立门禁】只认 TTS_JAR_PACK_ENABLED + 自带最小间隔，不要求
+            //    TLM 的 TTS 站点/总开关——本地有音频，开箱即用；只发文件名（客户端从
+            //    自己 jar 取字节），省流量且两端一致。
+            if (MaidSmartConfig.TTS_JAR_PACK_ENABLED.get()) {
+                // 实测四百四十五：先做【命中判定】再谈最小间隔——旧版把间隔判断写在
+                // 命中之前，命中但被间隔挡下时会继续往下走，最终落到 ④ TLM TTS 合成
+                // （用户实测：「触发了 [警示]落地水，却没有内置语音，还是人机语音」）。
+                // 现在：命中即由内置包负责——被间隔挡下就【静默】，绝不回落 TTS 合成。
+                String key = JarVoicePack.matchKey(text);
+                if (key != null) {
+                    long nowJar = System.currentTimeMillis();
+                    int jarCdMs = MaidSmartConfig.TTS_JAR_PACK_MIN_INTERVAL_S.get() * 1000;
+                    Long lastJar = LAST_JAR_PACK.get(maid.m_20148_());
+                    boolean throttled = jarCdMs > 0 && lastJar != null && nowJar - lastJar < jarCdMs;
+                    if (throttled && !bypassJarInterval(key)) {
+                        return; // 间隔内不重复轰炸，但也不换成人机语音
+                    }
+                    LAST_JAR_PACK.put(maid.m_20148_(), nowJar);
+                    sendJarVoice(owner, maid, key);
+                    return;
+                }
+            }
+            // ---- 以下为 TTS 合成路径（需要 TLM TTS 总开关 + 站点 + per-maid 冷却）----
+            if (!MaidSmartConfig.TTS_SYSTEM_ENABLED.get()) {
+                return;
+            }
+            if (!AIConfig.TTS_ENABLED.get()) {
                 return;
             }
             // per-maid 冷却（防连续气泡轰炸 TTS）
@@ -135,9 +168,20 @@ public final class SystemTTSManager {
         }
     }
 
+    /**
+     * 实测四百四十五：这些短促关键台词不受「内置包最小间隔」限制——被间隔吞掉时
+     * 玩家会以为语音包失效（落地水/落地雪是自行动作反馈；敌人靠近是敌袭预警）。
+     */
+    private static boolean bypassJarInterval(String jarKey) {
+        return "clutch_water.ogg".equals(jarKey)
+                || "clutch_snow.ogg".equals(jarKey)
+                || "enemy_near.ogg".equals(jarKey);
+    }
+
     /** 状态文本（设置面板"查看语音包状态"） */
     public static String statusText() {
-        return "系统语音包：已加载 " + SystemVoicePack.entryCount() + " 条文本映射"
+        return "内置日语语音包：已加载 " + JarVoicePack.entryCount() + " 条文本映射（随 jar 分发，最高优先级）"
+                + "；系统语音包（磁盘）：已加载 " + SystemVoicePack.entryCount() + " 条文本映射"
                 + "；TTS 语音缓存 " + cacheCount() + " 个音频文件（voice_cache/，训练一次保存后复用）。";
     }
 
@@ -184,6 +228,17 @@ public final class SystemTTSManager {
     private static void sendToOwner(ServerPlayer owner, EntityMaid maid, byte[] data) {
         try {
             NetworkHandler.sendToClientPlayer(new TTSAudioToClientMessage(maid.m_19879_(), data), owner);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** v1.1.0 实测四百二十：内置语音包——只发文件名（客户端从自己 jar 取字节播放） */
+    private static void sendJarVoice(ServerPlayer owner, EntityMaid maid, String file) {
+        try {
+            com.maidsmart.build.BlueprintBookNetworking.CHANNEL.send(
+                    net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> owner),
+                    new com.maidsmart.build.BlueprintBookNetworking.PlayJarVoicePacket(
+                            maid.m_19879_(), file));
         } catch (Exception ignored) {
         }
     }
