@@ -156,11 +156,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      * 气泡走字符串（服务端拼中文映射）；系统消息用 translatable 组件——客户端
      * 渲染时按客户端语言本地化，物品名天然正确。
      *
-     * v1.1.0 实测三百一十（共享存储防抢误报，方案 B）：女仆绑定精妙终端/网络接口后，
-     * 多女仆可能抢同一材料——A 刚取走、B 提取瞬间为空。若立刻报缺料会误导玩家
-     * （"终端明明有却被报缺"）。方案 B：缺料判定改为【双通道确认】——第一次
-     * 取不到只记 pending（不报），下一轮处理周期重试；两轮都取不到（背包/主副手/
-     * 精妙终端/网络接口全空）才真报缺料。补上材料后 pending 清除。
+     * v1.1.0 实测三百一十（共享存储防抢误报，方案 B）：多女仆可能抢同一材料——
+     * A 刚取走、B 提取瞬间为空。若立刻报缺料会误导玩家。方案 B：缺料判定改为
+     * 【双通道确认】——第一次取不到只记 pending（不报），下一轮处理周期重试；
+     * 两轮都取不到才真报缺料。补上材料后 pending 清除。
      */
     private void notifyMissing(EntityMaid maid, String itemId) {
         try {
@@ -1053,11 +1052,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.1.0 实测二百九十七：主副手优先取材料（用户："酿药物品不识别主副手，
-     *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。
-     *  v1.1.0 实测三百零八：最后回退到【精妙储存绑定终端】取物（女仆把终端当
-     *  背包——建造/酿药都能直接从终端拿材料；终端不在附近/没装精妙储存 → 自然
-     *  回退原逻辑）。
-     *  v1.1.0 实测三百零九：再兜底【超越维度网络接口】。 */
+     *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。 */
     private ItemStack extractItemFromMaid(EntityMaid maid, IItemHandler maidInv, String itemId, int count) {
         Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(itemId));
         if (item == null) {
@@ -1070,15 +1065,6 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         ItemStack fromInv = this.extractItemFrom(maidInv, item, count);
         if (!fromInv.isEmpty()) {
             return fromInv;
-        }
-        // 精妙储存绑定终端回退（主副手/背包都没有才取终端）
-        if (maid.level() instanceof ServerLevel level) {
-            ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
-                    .extractFromBoundStorage(level, maid, item);
-            if (!fromTerm.isEmpty()) {
-                return fromTerm;
-            }
-            // 超越维度网络接口兜底
         }
         return ItemStack.EMPTY;
     }

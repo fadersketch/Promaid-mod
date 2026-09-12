@@ -7,8 +7,8 @@ import net.minecraft.server.level.ServerLevel;
 /**
  * PAD 情绪层（v1.5.95，借鉴 maidsoulcore AffectEngine 简化版）。
  *
- * 独立于 TLM 好感 / 心契誓约心情 / 爱憎分明信任恐惧的【第四套数值】——
- * 只做"情绪状态 + 注入文本"，不改任何现有系统数值（兼容心契誓约）。
+ * 独立于 TLM 好感等既有数值系统的【第四套数值】——
+ * 只做"情绪状态 + 注入文本"，不改任何现有系统数值。
  *
  * 维度（对齐 maidsoul AffectProfile 精简）：
  * - PAD：valence 愉悦(-1~1) / arousal 唤醒(0~1) / dominance 支配(0~1)
@@ -134,29 +134,7 @@ public final class AffectManager {
         save(maid, p);
     }
 
-    /** v1.2.0：纪念日当天（heartfelt 里程碑联动）——正向大脉冲，一年一两次的稀有大事，
-     *  量级约为道歉（onOwnerApology）的 2 倍：intimacy 最高一次、消冲突/修复债 */
-    public static void onAnniversaryDay(EntityMaid maid) {
-        AffectProfile p = load(maid);
-        p.valence = clampSigned(p.valence + 0.12);
-        p.intimacy = clamp01(p.intimacy + 0.10);
-        p.conflict = clamp01(p.conflict - 0.18);
-        p.hurtDebt = clamp01(p.hurtDebt - 0.08);
-        p.repairDebt = clamp01(p.repairDebt - 0.10);
-        p.arousal = clamp01(p.arousal + 0.06);
-        p.longing = clamp01(p.longing + 0.05);
-        p.lastUpdate = System.currentTimeMillis();
-        save(maid, p);
-    }
 
-    /** v1.2.0：纪念日临近（3 天内将到里程碑）——期待感（arousal+ / longing+） */
-    public static void onAnniversaryApproaching(EntityMaid maid) {
-        AffectProfile p = load(maid);
-        p.arousal = clamp01(p.arousal + 0.03);
-        p.longing = clamp01(p.longing + 0.05);
-        p.lastUpdate = System.currentTimeMillis();
-        save(maid, p);
-    }
 
     /** 静默恢复（时间推移：情绪回落 / longing 微升 / repairDebt 缓降） */
     public static void tickRecover(EntityMaid maid) {

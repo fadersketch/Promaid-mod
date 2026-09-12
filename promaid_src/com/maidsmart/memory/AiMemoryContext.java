@@ -56,8 +56,6 @@ public class AiMemoryContext extends AbstractMaidContext {
         if (paragraphs.isEmpty() && store.relations().isEmpty() && store.profiles().isEmpty() && sb.isEmpty()) {
             return "";
         }
-        // 0. 关系感知标签（v1.5.98：maidmarriage 软感知——妻子/恋人/女儿，
-        //    与记忆系统关系三元组联动；未装 maidmarriage 时静默）
         // 1. 关系三元组（v1.5.95：单独段，高置信度在前——主人的关系是对话最重要参考；
         //    v1.5.96：可配置开关 memory.relationInject）
         if (com.maidsmart.config.MaidSmartConfig.MEMORY_RELATION_INJECT.get()) {

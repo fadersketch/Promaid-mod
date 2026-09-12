@@ -13,8 +13,6 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * 语义:该女仆的大语言模型对话是否启用（默认开）。关闭后:
  * - TLM 原版 AI 聊天(MaidAIChatManager.chat)被 MaidChatLlmGateMixin 拦截,不发请求;
- * - heartfelt 的主动对话(家庭互动/纪念日/告白等,chatWithQuota)检查同一 NBT 标记,
- *   直接降级为固定文本气泡(零跨 mod 依赖——只读 persistentData 字符串);
  * - promaid 主动对话走同一 chat 入口,同样被拦截。
  *
  * 存储与 AiMemoryManager 记忆开关同构:persistentData("maid_smart_llm", Byte;
@@ -22,7 +20,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * (S2C 广播,persistentData 不同步客户端,不广播则界面显示回"开")。
  */
 public final class LlmEnableManager {
-    /** per-maid 开关(persistentData key;heartfelt 侧只读此标记做降级) */
+    /** per-maid 开关(persistentData key) */
     public static final String PERSIST_TAG = "maid_smart_llm";
 
     /** 磁盘备份:maidUuid -> enabled(防 persistentData 丢失后开关回弹) */

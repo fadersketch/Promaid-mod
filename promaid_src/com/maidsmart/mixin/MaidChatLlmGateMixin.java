@@ -13,8 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * per-maid 大语言模型开关(v1.0.3)——拦截 TLM 的 `MaidAIChatManager.chat(...)`
- * （AI 聊天唯一入口:TLM 原版按 J/点击聊天、heartfelt 全部主动对话
- * (chatWithQuota→chat)、promaid 主动对话都汇聚于此）。
+ * （AI 聊天唯一入口:TLM 原版按 J/点击聊天、promaid 主动对话都汇聚于此）。
  *
  * LlmEnableManager.isEnabled(maid)==false → 取消请求(不发 LLM),并给玩家一条
  * 系统提示「该女仆的大语言模型已关闭」——对话静默不报错。

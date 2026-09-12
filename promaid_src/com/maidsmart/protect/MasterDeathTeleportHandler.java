@@ -131,7 +131,7 @@ public class MasterDeathTeleportHandler {
         // v1.5.audit:旧实现登记后在【同一 tick 的 END】就校验——死亡发生在
         // tick T 的实体阶段,同 tick END 立刻查,modded 图腾若在 T+1 才复活
         // (先 post 事件、后复活)仍会误传。现在记录登记 tick,严格等 ≥1 tick
-        // 后才校验执行(与 heartfelt 死亡调侃的真死核验同款时序)。
+        // 后才校验执行。
         PENDING_DEATHS.put(player.m_20148_(), ServerLifecycleHooks.getCurrentServer() != null
                 ? ServerLifecycleHooks.getCurrentServer().m_129921_() : 0L);
     }

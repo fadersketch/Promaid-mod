@@ -210,9 +210,6 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // 受击/仇恨由 BuildShieldGuard 事件处理；此处保证效果常驻/切出清理）
         com.maidsmart.combat.BuildShieldGuard.tickShield(maid);
         boolean wasSitting = maid.getPersistentData().m_128471_(BUILD_SIT_TAG);
-        // v1.5.333：心契誓约（MaidHugManager）交互中——交互会锁定女仆站立姿势并锁位
-        // （lockMaid：m_20124_(STANDING) + m_21837_(false) + 锁定坐标），此处若继续强制
-        // 坐下会与交互每 tick 互搏（坐下↔站起振荡）；跳过本轮，交互结束后自然恢复。
         if (building) {
             // v1.1.0 实测二百七十二：建造拟真化——不再强制坐下；若仍坐姿（玩家手动
             // shift+右键/旧版遗留）则站起，站定后由 teleportToWorkSite 瞬移到工地旁放置
