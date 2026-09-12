@@ -759,15 +759,15 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 子类，但攻击方式是射弹幕（DanmakuShoot），不是射箭。
      */
     private boolean counterAttack(EntityMaid maid, LivingEntity threat) {
+        if (FriendlyFireGuard.isFriendly(maid, threat)) {
+            return false; // 主人/友方不做任何形式的反击（御币弹幕/贴脸射箭/近战）
+        }
         ItemStack main = maid.m_21205_();
         if (com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(main)) {
             return this.goheiDanmaku(maid, threat);
         }
         if (main.m_41720_() instanceof net.minecraft.world.item.ProjectileWeaponItem) {
             return this.shootPointBlank(maid, threat);
-        }
-        if (FriendlyFireGuard.isFriendly(maid, threat)) {
-            return false; // 主人/友方不做近战反击
         }
         return maid.m_7327_(threat);
     }
