@@ -166,6 +166,7 @@
   "config.promaid.misc.bedInterop": "床铺互通",
   "config.promaid.misc.cooldownHud": "冷却可视化 HUD",
   "config.promaid.misc.noPlaceInAir": "悬空禁搭方块",
+  "config.promaid.misc.cakeEdible": "蛋糕可食用",
   "config.promaid.voice.jarPackEnabled": "内置日语语音包",
   "config.promaid.voice.jarPackVolume": "内置语音包音量倍率",
   "config.promaid.voice.jarPackMinIntervalS": "内置语音最小间隔（秒）",
