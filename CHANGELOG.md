@@ -1,4 +1,19 @@
-﻿## 1.21.1 NeoForge 版（beta）【首发实测修复 ×4】
+﻿## 实测四百一十三【女仆绝不伤害主人/友方——雪地打雪仗后对主人跳劈修复】
+
+粉丝反馈：装了 mod 后带女仆到雪地，空闲模式会打雪仗，然后对主人触发攻击、冲主人跳劈，脱了盔甲一下打约 4 颗心；主手拿着刀打得更疼（武器伤害叠加）。
+
+**根因**：TLM 原版空闲模式在雪地有打雪仗行为（`MaidStartSnowballAttacking`），该行为会把【主人】写进女仆 brain 的 `ATTACK_TARGET`（雪球目标）。promaid 的单兵战术行为（`MaidCombatTacticsBehavior`，v1.5.202 起不再限定战斗任务）读到 `ATTACK_TARGET` 就接管走位 + 跳劈，用 `target.hurt(mobAttack, 攻击力×1.5+附魔)` 对主人打出**真实近战暴击伤害**（主手武器攻击力越高伤害越高 = "拿刀更疼"）。旧版只拦了"雪球 0 伤害触发参战"这一层（`AutoCombatSwitch`），拦不住 TLM 自己写攻击目标这条路径。
+
+**修复（双层防护，1.20.1 与 1.21.1 两树同步）**：
+- **最终保险（新增 `FriendlyFireGuard`）**：监听伤害事件（1.20.1 `LivingHurtEvent`+`LivingDamageEvent`；1.21.1 `LivingIncomingDamageEvent`），**女仆造成的伤害只要受害者是主人/同主女仆/友军 → 直接取消**（覆盖所有路径，含 TLM 自身与未来新增）；
+- **注入点过滤（12 处）**：战术行为 `isActive`（主人/友方直接不激活）、`swingCritHit`（跳劈暴击）、`meleeCounterAttack`（近战横扫）、中立威胁反击 `doHurtTarget`、自保近战反击 `doHurtTarget`、LLM 攻击工具 `SmartAttackTool`（拒绝把主人/友方写进 ATTACK_TARGET）——目标为主人/友方时一律不执行，连动画都不出。
+- 友方判定口径：自身 / 主人（UUID 比对）/ 同主人的其他女仆 / `isAlliedTo` 同队友军。
+
+**部署**：（1.20.1 jar 4,926,514 字节；1.21.1 jar 4,936,516 字节）→ 三实例客户端 + 三测试服务器；1201 与 neoforge1211 服务器回归 PASS（Done 正常，无注入/加载错误）。
+
+验收：雪地让女仆打雪仗 → 她仍会对你扔雪球（TLM 娱乐行为保留），但**绝不会**冲你跳劈/挥刀，主人不掉血；主手换任何武器都不再影响主人受到的伤害；同主女仆之间互不误伤。
+
+## 1.21.1 NeoForge 版（beta）【首发实测修复 ×4】
 
 1.21.1 NeoForge 移植版首次实机测试（进服放女仆→手册/排班表→建造进度条全流程）后修复的 4 个问题：
 
