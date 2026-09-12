@@ -765,6 +765,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (main.getItem() instanceof net.minecraft.world.item.ProjectileWeaponItem) {
             return this.shootPointBlank(maid, threat);
         }
+        if (FriendlyFireGuard.isFriendly(maid, threat)) {
+            return false; // 主人/友方不做近战反击
+        }
         return maid.doHurtTarget(threat);
     }
 
