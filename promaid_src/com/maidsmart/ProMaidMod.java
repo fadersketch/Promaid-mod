@@ -12,8 +12,7 @@ import net.minecraftforge.registries.RegistryObject;
  *
  * 由原 maid_smart 改名重组（v1.0.0 拆分）：全部可独立运行功能（只依赖原版 TLM）
  * 迁入本模组——建造系统/工头、AI 工具、自保、主动对话、基础记忆、挖矿/整理/
- * 烹饪/酿造/建造任务。关系联动（心契誓约 × 爱憎分明）已迁往独立的
- * Heartfelt-connection 补丁（本模组零依赖，可单独运行）。
+ * 烹饪/酿造/建造任务。本模组零依赖，可单独运行。
  *
  * Forge 要求 mods.toml 声明的每个 mod 都能在 jar 中找到对应的 @Mod 注解类；
  * TLM 的扩展发现扫描 ModList 中的 @LittleMaidExtension——本类必须存在，
@@ -39,16 +38,6 @@ public class ProMaidMod {
     public static final RegistryObject<Item> BREW_MANUAL = ITEMS.register("brew_manual",
             () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
 
-    /** 精妙储存终端绑定卡（v1.1.0 实测三百零八）：9 皮革合成，右击女仆→右击精妙控制器完成绑定 */
-    public static final RegistryObject<Item> STORAGE_BIND_CARD = ITEMS.register("storage_bind_card",
-            () -> new Item(new Item.Properties()));
-
-    /** 精妙储存终端解绑卡（v1.1.0 实测三百零八）：9 甘蔗合成，右击女仆解除终端绑定 */
-    public static final RegistryObject<Item> STORAGE_UNBIND_CARD = ITEMS.register("storage_unbind_card",
-            () -> new Item(new Item.Properties()));
-
-
-
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
@@ -61,10 +50,6 @@ public class ProMaidMod {
         com.maidsmart.emotion.EmotionNetworking.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new com.maidsmart.brew.BrewManualInteractHandler());
-        // v1.1.0 实测三百零八：精妙储存终端绑定/解绑交互
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
-                new com.maidsmart.storage.BoundStorageInteractHandler());
-        // v1.1.0 实测三百零九：超越维度网络接口绑定/解绑交互
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();

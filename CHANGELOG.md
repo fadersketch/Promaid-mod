@@ -1,4 +1,36 @@
-﻿## 实测四百一十四【主人免伤三层加固 + 移除第三方软联动（纯 TLM 独立版）】
+﻿## 实测四百一十五【彻底移除第三方软联动：爱憎分明 / 心契誓约 / 超越维度 / 精妙储存】
+
+用户口径：保留「按攻击力属性」的通用武器联动不动（tacz / 卓越前线 / 拔刀剑 / 万法皆通等模组武器照常参与判定与自动装备），只把**对特定第三方模组的专属联动**彻底删干净——爱憎分明、心契誓约、超越维度、精妙储存相关的一切代码与资源全下线。
+
+**一、精妙储存 / 超越维度（存储联动全删）**
+- 删除 `com.maidsmart.storage` 整包：`BoundStorageInteractHandler`、`StorageBindingStore`（以及此前已删的 Beyond/Unified 系列）；
+- 删除两个绑定卡物品 `storage_bind_card` / `storage_unbind_card` 及其注册项、创造标签页入口、主类事件注册；
+- 删掉全部调用点：建造材料统计（`BlueprintLib.countMaterial`）、建造取物回退（`BlueprintLib.consumeBlock`）、酿药取物回退（`MaidBrewBehavior.extractItemFromMaid`）；
+- 删除配套资源：4 个模型/贴图 + 2 个配方 JSON + 4 个语言键。
+
+**二、爱憎分明（Love Loathe）**
+- 删除配置项 `MISC_LOVELOATHE_DISABLE_HUNGER` / `_MASTER` / `_EXTREME_HUNGER` / `_EMOTION` 四项及其界面行、语言键；
+- 删除配置面板「爱憎分明模组调试」整页（含 `loveloatheVersion()` 反射取版本、`probeClass()` 接口探测）；
+- 删除自保的极端饥饿反射保命逻辑（原反射读 `HungerData`）+ 相关注释，自保回血链改为纯治疗食物/药水/金苹果阶梯；
+- `AiMemoryExtractor` 的"纯模组注入状态消息跳过"规则保留（属通用健壮性），但改为不含特定模组名的通用描述。
+
+**三、心契誓约（maidmarriage / Heartfelt-connection）**
+- 删除 `MaidConfigMemoryMixin` 中 `RelationshipExemption.relationLabel` 反射句柄与关系标签渲染；
+- 删除情绪层的纪念日脉冲 `AffectManager.onAnniversaryDay/onAnniversaryApproaching`，以及 `BlueprintBookNetworking` 的纪念日调试行、手册 Heartfelt 纪念日联动配置项；
+- 删除建造 `MaidBuildBehavior.tickBuildSit` 的心契拥抱交互锁说明与相关判定；
+- 清理 `LlmEnableManager` / `MaidChatLlmGateMixin` / `PromaidPromptMixin` 等类注释里的跨模组表述。
+
+**四、其它同批清理**
+- 删除 `callresponse` 相关语言键（`bubble.callresponse.*`，共 4×2 语言）与配置面板注释；
+- 配置项 `MEMORY_RELATIONSHIP_ADAPTER` / `MEMORY_RELATION_SCAN` / `MEMORY_TRUST_DELTA` / `MEMORY_HEARTFELT_ANNIVERSARY` 四项及其界面行全部删除；
+- 手册「详细介绍/术语表/配置面板导航」中所有相关条目重写为纯独立版描述；
+- 两树 `mods.toml` / `neoforge.mods.toml` 描述去掉第三方联动声明。
+
+**保留（未动）**：TLM 本体（唯一前置）、按攻击力属性识别的通用武器判定与自动装备、本模组自有全部功能（建造/排班/AI 记忆/战斗自保/任务/交互等）。
+
+**验证**：两树全量编译零错误；两 jar 经审计确认无任何 storage/爱憎/心契类与资源残留、语言键无悬挂；1.20.1（Forge 47.4.x）、1.21.1（NeoForge 21.1.250）、95 模组整合包服务器三处回归全部 PASS。
+
+## 实测四百一十四【主人免伤三层加固 + 移除第三方软联动（纯 TLM 独立版）】
 
 用户需求：再加保险——清除仇恨 + 取消女仆攻击主人的受击事件；同时删除对其他 mod 的软联动；覆盖两个正式版并更新主页面介绍。
 

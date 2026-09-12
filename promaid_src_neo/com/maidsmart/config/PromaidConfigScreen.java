@@ -284,7 +284,7 @@ public class PromaidConfigScreen extends Screen {
         int bw = Math.min(170, (w - 56) / 2);
         // v1.1.0 实测一百七十八【目录页按钮数自适应】：行距按【实际按钮数】反推，
         // 保证末位按钮底 ≤ "保存并返回"上缘（h-34）-2——旧版固定 rowH=21/20 只按
-        // "6 按钮"校准，装了爱憎分明/heartfelt 后左列 7~8 个按钮，末位按钮
+        // "6 按钮"校准，不同功能板块数量下，末位按钮
         // （y0+7×20+17=213）压进保存按钮（h-34=206，默认 240 高）= 目录页 UI 重叠。
         // 现在行数越多行距自动压缩（最低 14），任何板块组合/窗口高度都不相交。
         int rowH = 21;
@@ -1104,7 +1104,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("挖矿速度系数", String.valueOf(MaidSmartConfig.MINE_SPEED_FACTOR.get()),
                 s -> setDouble(MaidSmartConfig.MINE_SPEED_FACTOR, s), "挖矿速度系数（1.0=玩家速度，1.2=快20%）"));
         this.rows.add(new NumRow("接近矿速度", String.valueOf(MaidSmartConfig.MINE_MOVE_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MINE_MOVE_SPEED, s), "接近矿速度倍率：0.4 = 正常步行（配合爱憎分明饥饿档速度，搭高不再漂移）；调大可跑更快接近矿石，但搭高时容易冲过头"));
+                s -> setDouble(MaidSmartConfig.MINE_MOVE_SPEED, s), "接近矿速度倍率：0.4 = 正常步行（搭高不漂移）；调大可跑更快接近矿石，但搭高时容易冲过头"));
         this.rows.add(new NumRow("废石保留量", String.valueOf(MaidSmartConfig.MINE_JUNK_KEEP.get()),
                 s -> setInt(MaidSmartConfig.MINE_JUNK_KEEP, s), "废石保留量：圆石/泥土/沙砾等每种最多保留几组，超出直接销毁——防背包被石头塞满挖不了矿"));
         this.rows.add(new NumRow("搭方块清理（秒）", String.valueOf(MaidSmartConfig.MINE_PLACED_LIFETIME.get()),
@@ -1300,8 +1300,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MEMORY_CORE_FOLD.set(v), "摘要折叠（核心记忆常驻+扩展按需）"));
         this.rows.add(new BoolRow("工作笔记注入", MaidSmartConfig.MEMORY_WORKING_NOTE.get(),
                 v -> MaidSmartConfig.MEMORY_WORKING_NOTE.set(v), "工作笔记注入：女仆干活时的任务状态（在挖什么/缺什么料）以笔记形式跨对话注入，续上话题"));
-        this.rows.add(new BoolRow("关系感知适配", MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.get(),
-                v -> MaidSmartConfig.MEMORY_RELATIONSHIP_ADAPTER.set(v), "关系感知适配（软感知 maidmarriage 结婚/告白/父女 + Love Loathe 信任/恐惧 → 写入记忆；不依赖，未装则静默）"));
         // v1.5.190：新记忆开关（防抖写盘）
         this.rows.add(new BoolRow("防抖写盘", MaidSmartConfig.MEMORY_LAZY_SAVE.get(),
                 v -> MaidSmartConfig.MEMORY_LAZY_SAVE.set(v), "记忆防抖写盘（内存累积后按扫描间隔批量落盘——减少磁盘 IO，多女仆时防止服务端卡顿；关闭=每次写入立即落盘，可靠性优先）"));
@@ -1330,10 +1328,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.MEMORY_DECAY_DAYS, s), "记忆衰减周期（天，未访问且重要度低删除）"));
         this.rows.add(new NumRow("衰减保留重要度", String.valueOf(MaidSmartConfig.MEMORY_DECAY_SALIENCE.get()),
                 s -> setInt(MaidSmartConfig.MEMORY_DECAY_SALIENCE, s), "衰减保留重要度（低于此值的非永久记忆可能被删）"));
-        this.rows.add(new NumRow("关系感知扫描（秒）", String.valueOf(MaidSmartConfig.MEMORY_RELATION_SCAN.get()),
-                s -> setInt(MaidSmartConfig.MEMORY_RELATION_SCAN, s), "关系感知扫描间隔（秒）：多久轮询一次 maidmarriage/爱憎分明状态变化写入记忆，调小反应更及时"));
-        this.rows.add(new NumRow("信任/恐惧变化阈值", String.valueOf(MaidSmartConfig.MEMORY_TRUST_DELTA.get()),
-                s -> setDouble(MaidSmartConfig.MEMORY_TRUST_DELTA, s), "信任/恐惧显著变化阈值（Love Loathe）"));
         // v1.5.191：记忆维护周期（定期固化/衰减/关系置信度衰减/error_mark 传播）
         this.rows.add(new NumRow("维护周期（分钟）", String.valueOf(MaidSmartConfig.MEMORY_MAINTENANCE_MIN.get()),
                 s -> setInt(MaidSmartConfig.MEMORY_MAINTENANCE_MIN, s), "记忆维护周期（分钟）：定期固化重要记忆、衰减陈旧记忆、降旧关系置信度、传播被否定的标记——之前只有写入时才维护，老记忆永远不衰减"));
@@ -1395,7 +1389,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
     /** 情绪页（PAD 情绪层） */
     private void affectRows() {
-        this.rows.add(new SectionRow("情绪（PAD 层，独立于好感/心契/爱憎）", false));
+        this.rows.add(new SectionRow("情绪（PAD 层，独立于 TLM 好感等既有数值）", false));
         this.rows.add(new BoolRow("情绪总开关", MaidSmartConfig.AFFECT_ENABLE.get(),
                 v -> MaidSmartConfig.AFFECT_ENABLE.set(v), "PAD 情绪层总开关（事件驱动+落盘）"));
         this.rows.add(new BoolRow("注入对话", MaidSmartConfig.AFFECT_INJECT.get(),
@@ -1986,34 +1980,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MISC_LOG_ENABLED.set(v), "运行日志（默认开）：排班应用、战斗参战与还原、险境脱离、跨维跟随、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old），并镜像到 latest.log——“XX 没生效”类反馈可直接按时间线对账；关闭后完全静默"));
         this.rows.add(new InfoRow("日志文件位置", "\u00a7a<游戏目录>/logs/promaid.log\u00a7r",
                 "任意文本编辑器打开；每行格式 [真实时间] [分类] 内容（分类：排班/战斗/险境脱离/跨维/自保）。只记低频状态迁移，巡检空转不落盘"));
-        // v1.5.310：爱憎分明相关开关已整体迁到「爱憎分明模组调试」板块页（见 loveloathRows）
     }
 
-    // ---------- 爱憎分明（Love Loathe）联动调试页（v1.5.310） ----------
 
-    /** 爱憎分明版本号（未装/异常返回 "?"） */
-    private static String loveloatheVersion() {
-        try {
-            var mods = net.neoforged.fml.ModList.get().getModFileById("callresponse").getMods();
-            return mods.isEmpty() ? "?" : mods.get(0).getVersion().toString();
-        } catch (Exception e) {
-            return "?";
-        }
-    }
 
-    /** 反射探测：依次尝试候选类名，返回第一个可加载的（✓ 前缀）；全失败返回"未找到" */
-    private static String probeClass(String... candidates) {
-        for (String c : candidates) {
-            try {
-                Class.forName(c);
-                return "\u00a7a\u2713\u00a7r " + c;
-            } catch (Throwable ignored) {
-            }
-        }
-        return "\u00a7c未找到\u00a7r";
-    }
 
-    // ==================== v1.5.367:heartfelt_connection 软联动(同爱憎分明模式) ====================
 
     /** v1.5.127：逗号分隔的英文 id 列表 → List（去空、去空格） */
     private static List<String> idList(String s) {

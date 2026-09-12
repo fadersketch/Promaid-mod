@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 /**
  * v1.5.82：Promaid 提示词运行时注入——拦截 TLM 的
  * `LLMMessage.systemChat(EntityMaid, String)`（两条设定路径唯一汇聚点，
- * 与 Heartfelt-connection 的 SmartPromptMixin 同点注入，各自追加互不冲突）。
+ * 多个扩展同点注入，各自追加互不冲突）。
  *
  * 追加坐姿工作说明（PromaidPromptAppender）：女仆坐着干活时 LLM 不再
  * 说要"先站起来"。

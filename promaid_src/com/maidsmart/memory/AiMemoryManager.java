@@ -116,7 +116,7 @@ public class AiMemoryManager {
         return com.maidsmart.config.MaidSmartConfig.MEMORY_ENABLE.get();
     }
 
-    /** 设置 per-maid 开关（手册记忆页/maidmarriage 调试面板调用） */
+    /** 设置 per-maid 开关（手册记忆页调用） */
     public static void setEnabled(EntityMaid maid, boolean enabled) {
         maid.getPersistentData().m_128379_(PERSIST_TAG, enabled); // putBoolean
         // v1.5.242：磁盘备份（防 persistentData 丢失后开关回弹）

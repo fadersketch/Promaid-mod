@@ -4601,32 +4601,6 @@ public final class BlueprintLib {
                 }
             }
         }
-        // v1.1.0 实测三百零八：精妙储存绑定终端统计——背包外再看终端里的数量
-        // （缺料判定/材料清单把终端当背包一并统计）。
-        if (maid.level() instanceof net.minecraft.server.level.ServerLevel srv) {
-            net.neoforged.neoforge.items.IItemHandler term =
-                    com.maidsmart.storage.BoundStorageInteractHandler.boundHandlerOf(srv, maid);
-            if (term != null) {
-                for (int i = 0; i < term.getSlots(); i++) {
-                    ItemStack s = term.getStackInSlot(i);
-                    if (s.isEmpty()) {
-                        continue;
-                    }
-                    if (group != null) {
-                        ResourceLocation stackId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
-                        if (stackId != null && group.contains(stackId.toString())) {
-                            count += s.getCount();
-                        }
-                    } else {
-                        Item item = itemForBlock(blockId);
-                        if (item != null && s.getItem() == item) {
-                            count += s.getCount();
-                        }
-                    }
-                }
-            }
-            // v1.1.0 实测三百零九：超越维度网络接口统计（同口径）
-        }
         return count;
     }
 
@@ -4755,34 +4729,6 @@ public final class BlueprintLib {
                     }
                 }
             }
-        }
-        // 4. v1.1.0 实测三百零八：精妙储存绑定终端回退——背包/等价族/替代都没有，
-        // 从女仆绑定的终端（sophisticatedstorage controller）提取（v1.1.0 实测
-        // 三百一十六起取消距离限制，同维度任意距离生效；没装精妙储存/没绑定/
-        // 终端区块未加载 → 自然回退原逻辑）。
-        if (maid.level() instanceof net.minecraft.server.level.ServerLevel srv) {
-            if (item != null) {
-                ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
-                        .extractFromBoundStorage(srv, maid, item);
-                if (!fromTerm.isEmpty()) {
-                    return fromTerm.getItem();
-                }
-            }
-            if (group != null) {
-                for (String gid : group) {
-                    Item gi = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(gid));
-                    if (gi == null) {
-                        continue;
-                    }
-                    ItemStack fromTerm = com.maidsmart.storage.BoundStorageInteractHandler
-                            .extractFromBoundStorage(srv, maid, gi);
-                    if (!fromTerm.isEmpty()) {
-                        return fromTerm.getItem();
-                    }
-                }
-            }
-            // v1.1.0 实测三百零九：超越维度网络接口兜底——精妙终端没有再从网络
-            // 接口取（两套绑定各自独立，可同时生效）。
         }
         return null;
     }
