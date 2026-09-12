@@ -1932,31 +1932,6 @@ public final class BlueprintBookNetworking {
             } catch (Exception ignored) {
             }
             // v1.2.0：纪念日联动（heartfelt 基准日 + promaid 达成/临近游标）
-            try {
-                if (!com.maidsmart.config.MaidSmartConfig.MEMORY_HEARTFELT_ANNIVERSARY.get()) {
-                    lines.add("纪念日: 关");
-                } else {
-                    long day = level.m_46467_() / 24000L;
-                    long confession = maid.getPersistentData().m_128454_("heartfelt_confession_at");
-                    long firstMeet = maid.getPersistentData().m_128454_("heartfelt_ev_first_meet");
-                    long baseDay = confession > 0L ? confession / 24000L
-                            : (firstMeet > 0L ? firstMeet / 24000L : 0L);
-                    long doneMark = maid.getPersistentData().m_128454_("maid_smart_anniv_mark");
-                    long appMark = maid.getPersistentData().m_128454_("maid_smart_anniv_app");
-                    StringBuilder aLine = new StringBuilder("纪念日: ");
-                    if (baseDay <= 0L) {
-                        aLine.append("无基准（未告白/初遇）");
-                    } else {
-                        aLine.append("基准=告白/初遇·第").append(day - baseDay).append("天")
-                                .append(" · 已达成").append(doneMark > 0L ? doneMark + "天" : "无");
-                        if (appMark > 0L) {
-                            aLine.append(" · 临近").append(appMark).append("天");
-                        }
-                    }
-                    lines.add(aLine.toString());
-                }
-            } catch (Exception ignored) {
-            }
             // v1.1.0：双 agent 提取 + 每日关心点
             try {
                 boolean dual = com.maidsmart.config.MaidSmartConfig.MEMORY_DUAL_AGENT.get();

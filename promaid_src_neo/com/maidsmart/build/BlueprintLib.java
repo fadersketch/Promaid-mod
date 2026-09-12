@@ -4626,27 +4626,6 @@ public final class BlueprintLib {
                 }
             }
             // v1.1.0 实测三百零九：超越维度网络接口统计（同口径）
-            net.neoforged.neoforge.items.IItemHandler bd =
-                    com.maidsmart.storage.BeyondBindingInteractHandler.boundHandlerOf(srv, maid);
-            if (bd != null) {
-                for (int i = 0; i < bd.getSlots(); i++) {
-                    ItemStack s = bd.getStackInSlot(i);
-                    if (s.isEmpty()) {
-                        continue;
-                    }
-                    if (group != null) {
-                        ResourceLocation stackId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
-                        if (stackId != null && group.contains(stackId.toString())) {
-                            count += s.getCount();
-                        }
-                    } else {
-                        Item item = itemForBlock(blockId);
-                        if (item != null && s.getItem() == item) {
-                            count += s.getCount();
-                        }
-                    }
-                }
-            }
         }
         return count;
     }
@@ -4804,26 +4783,6 @@ public final class BlueprintLib {
             }
             // v1.1.0 实测三百零九：超越维度网络接口兜底——精妙终端没有再从网络
             // 接口取（两套绑定各自独立，可同时生效）。
-            if (item != null) {
-                ItemStack fromBd = com.maidsmart.storage.BeyondBindingInteractHandler
-                        .extractFromBoundInterface(srv, maid, item);
-                if (!fromBd.isEmpty()) {
-                    return fromBd.getItem();
-                }
-            }
-            if (group != null) {
-                for (String gid : group) {
-                    Item gi = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(gid));
-                    if (gi == null) {
-                        continue;
-                    }
-                    ItemStack fromBd = com.maidsmart.storage.BeyondBindingInteractHandler
-                            .extractFromBoundInterface(srv, maid, gi);
-                    if (!fromBd.isEmpty()) {
-                        return fromBd.getItem();
-                    }
-                }
-            }
         }
         return null;
     }

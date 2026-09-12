@@ -39,8 +39,6 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.STORAGE_BIND_CARD);
             event.accept(ProMaidMod.STORAGE_UNBIND_CARD);
             // v1.1.0 实测三百零九：超越维度终端绑定卡/解绑卡（管理道具）
-            event.accept(ProMaidMod.BEYOND_BIND_CARD);
-            event.accept(ProMaidMod.BEYOND_UNBIND_CARD);
         }
     }
 }

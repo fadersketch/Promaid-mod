@@ -1609,9 +1609,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 珍贵资源常规不吃（已移出 HEAL_FOODS/FOODS 名单），走药水类判定；
         // 极端饥饿（爱憎分明 HungerData ≤9，反射读取；未装则 false）且背包
         // 没有任何治疗食物时才兜底吃
-        if (isExtremeHungry(maid)) {
-            return this.eatGoldenAppleForFire(maid);
-        }
         return false;
     }
 
@@ -1649,27 +1646,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  v1.5.284：双包名兼容——2.0.2 迁移 com.github.tartaricacid →
      *  com.github.JumDa5he（旧包名反射永远 ClassNotFoundException → 判定静默失效）；
      *  先试新包名、失败回退旧包名 */
-    private static boolean isExtremeHungry(EntityMaid maid) {
-        // v1.5.310：联动总开关 + 极端饥饿保命开关（配置面板「爱憎分明模组调试」页可调）
-        if (!com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_MASTER.get()
-                || !com.maidsmart.config.MaidSmartConfig.MISC_LOVELOATHE_EXTREME_HUNGER.get()) {
-            return false;
-        }
-        try {
-            Class<?> cls = null;
-            try {
-                cls = Class.forName("com.github.JumDa5he.callresponse.compat.hunger.HungerData");
-            } catch (Exception ignored) {
-                cls = Class.forName("com.github.tartaricacid.callresponse.compat.hunger.HungerData");
-            }
-            java.lang.reflect.Method get = cls.getMethod("get", EntityMaid.class);
-            Object v = get.invoke(null, maid);
-            return v instanceof Number n && n.floatValue() <= 9.0f;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
-
     private boolean isHealFood(Item item) {
         for (String id : HEAL_FOODS) {
             Item candidate = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id));
