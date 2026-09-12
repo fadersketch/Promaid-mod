@@ -29,9 +29,13 @@ public class MaidCakeEatHandler {
     /** 每次吃完一块蛋糕的好感加成 */
     public static final int CAKE_FAVOR_POINTS = 10;
 
-    /** 是否为蛋糕物品（与 MaidCakeEdibleMixin 同一判定口径：注册名 minecraft:cake） */
+    /** 是否为蛋糕物品（与 MaidCakeEdibleMixin 同一判定口径：注册名 minecraft:cake）
+     *  实测四百四十八：misc.cakeEdible 关掉后本功能整体停用（与 mixin 同口径）。 */
     public static boolean isCake(ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
+            return false;
+        }
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get()) {
             return false;
         }
         net.minecraft.resources.ResourceLocation key =

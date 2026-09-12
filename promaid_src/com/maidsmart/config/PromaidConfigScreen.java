@@ -2104,6 +2104,9 @@ public class PromaidConfigScreen extends Screen {
         // 实测四百四十三：悬空禁搭方块（用户："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
         this.rows.add(new BoolRow("悬空禁搭方块", MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get(),
                 v -> MaidSmartConfig.MISC_NO_PLACE_IN_AIR.set(v), "悬空禁搭方块（默认开）：女仆未落地时不再搭方块——覆盖自保搭高/搭路/挖矿垫脚/伐木垫脚。触发口径：坠落距离达到「落地水触发高度」时禁（此时落地水会接管——搭方块既救不了她，还会挡住落地水害她摔死）。水里/岩浆、骑乘、鞘翅滑翔不算悬空；站在地面照常搭"));
+        // 实测四百四十八：蛋糕可食用（粉丝建议的兜底逃生通道）
+        this.rows.add(new BoolRow("蛋糕可食用", MaidSmartConfig.MISC_CAKE_EDIBLE.get(),
+                v -> MaidSmartConfig.MISC_CAKE_EDIBLE.set(v), "蛋糕可食用（默认开）：让女仆把蛋糕当食物——女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂。关闭后蛋糕恢复原版（只能放置、女仆不再当食物），「女仆吃蛋糕」全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把可食用物品判定为投喂目标，从而抢走野生女仆的驯服交互）"));
         // v1.1.0 实测二百三十四：手持光源发实光（隐藏光块跟随；不影响插火把）
         this.rows.add(new BoolRow("手持光源发实光", MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.set(v), "手持光源发实光（默认开）：她主/副手拿火把/灯笼/萤石等光源时，脚底自动跟随一个隐形光块（亮度与该光源一致），周围被真实照亮；不拿光源自动熄灭；与其他环境光源同待遇，不影响插火把判定逻辑本身"));

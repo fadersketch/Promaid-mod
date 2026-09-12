@@ -394,6 +394,9 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
     // 实测四百四十三：悬空禁搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚统一闸口）
     public static final ForgeConfigSpec.BooleanValue MISC_NO_PLACE_IN_AIR;
+    // 实测四百四十八：蛋糕"可食用"特性开关（默认开——关掉后蛋糕不再是可吃物品，
+    // 女仆不再吃蛋糕/不给好感加成，用于与第三方模组冲突时的逃生通道）
+    public static final ForgeConfigSpec.BooleanValue MISC_CAKE_EDIBLE;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
@@ -1315,6 +1318,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
         MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")
                 .translation("config.promaid.misc.noPlaceInAir").define("noPlaceInAir", true);
+        // 实测四百四十八：蛋糕可食用开关（粉丝建议的兜底逃生通道——把蛋糕变可食是
+        // 全局改动，第三方模组的食物阈值判定会因此把蛋糕纳入，冲突时可直接关掉）
+        MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆爱吃蛋糕的设定；女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）")
+                .translation("config.promaid.misc.cakeEdible").define("cakeEdible", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
                 .translation("config.promaid.misc.cookSmokerBlast").define("cookSmokerBlast", true);

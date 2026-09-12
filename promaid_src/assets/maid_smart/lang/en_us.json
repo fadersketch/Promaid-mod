@@ -32,6 +32,7 @@
   "config.promaid.misc.bedInterop": "Bed interop",
   "config.promaid.misc.cooldownHud": "Cooldown HUD",
   "config.promaid.misc.noPlaceInAir": "No block placing while airborne",
+  "config.promaid.misc.cakeEdible": "Cake is edible",
   "config.promaid.voice.jarPackEnabled": "Built-in Japanese voice pack",
   "config.promaid.voice.jarPackVolume": "Built-in voice pack volume",
   "config.promaid.voice.jarPackMinIntervalS": "Built-in voice min interval (s)",

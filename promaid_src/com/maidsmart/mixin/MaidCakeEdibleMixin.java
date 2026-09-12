@@ -31,8 +31,13 @@ public abstract class MaidCakeEdibleMixin {
     private static final FoodProperties CAKE_FOOD =
             new FoodProperties.Builder().m_38760_(14).m_38758_(0.6f).m_38767_();
 
-    /** 是否为蛋糕物品（1.20.1 无 CakeItem 类，蛋糕就是注册名 minecraft:cake 的 BlockItem） */
+    /** 是否为蛋糕物品（1.20.1 无 CakeItem 类，蛋糕就是注册名 minecraft:cake 的 BlockItem）
+     *  实测四百四十八：misc.cakeEdible 关掉后本 mixin 完全透明（蛋糕恢复原版不可食）——
+     *  这是与第三方模组冲突时的逃生通道。 */
     private static boolean isCake(Item item) {
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get()) {
+            return false;
+        }
         if (!(item instanceof net.minecraft.world.item.BlockItem)) {
             return false;
         }
