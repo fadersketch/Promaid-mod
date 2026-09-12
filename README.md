@@ -9,6 +9,8 @@
 - **仓库**:github.com/fadersketch/Promaid-mod
 - **版本**:v1.1.0
 
+> **1.21.1 NeoForge 版(beta)**:针对 Minecraft 1.21.1 / NeoForge 21.1.250 的移植版已发布 beta(`v1.1.0-beta.2-neoforge-1.21.1`,前置 TLM 1.5.3-neoforge+mc1.21.1),功能与 1.20.1 版对齐,有问题欢迎反馈。源码位于仓库 `promaid_src_neo/` 目录。
+
 > 开发过程中使用了 AI 辅助编程工具;作者并非专业程序员,代码中可能存在缺陷,遇到问题欢迎反馈。
 
 ## 测试版本声明

@@ -129,6 +129,11 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (target.isEmpty() || !target.get().isAlive()) {
             return false;
         }
+        // 主人/友方永不是战斗目标——TLM 打雪仗（MaidStartSnowballAttacking）会把主人
+        // 写进 ATTACK_TARGET，旧版无过滤 → 战术接管 → 对主人跳劈真实伤害
+        if (FriendlyFireGuard.isFriendly(maid, target.get())) {
+            return false;
+        }
         return maid.distanceTo(target.get()) <= engageRange(maid);
     }
 
@@ -559,6 +564,9 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      * （主手）与荆棘反击（目标护甲）。
      */
     private boolean swingCritHit(ServerLevel level, EntityMaid maid, LivingEntity target) {
+        if (FriendlyFireGuard.isFriendly(maid, target)) {
+            return false; // 主人/友方不做跳劈暴击
+        }
         maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND); // 挥刀动画
         net.minecraft.world.item.ItemStack weapon = maid.getMainHandItem();
         float base = (float) maid.getAttributeValue(
@@ -747,7 +755,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             // 伤害源用女仆的伤害指示器（damageSources）构造——附魔/药水等加成照常生效
             for (LivingEntity victim : level.getEntitiesOfClass(LivingEntity.class,
                     target.getBoundingBox().inflate(MELEE_COUNTER_RANGE),
-                    e -> e != maid && e.isAlive() && !maid.isAlliedTo(e))) {
+                    e -> e != maid && e.isAlive() && !maid.isAlliedTo(e)
+                            && !FriendlyFireGuard.isFriendly(maid, e))) {
                 victim.hurt(maid.damageSources().mobAttack(maid), damage);
                 // 原版击退（knockback = knockback，方向 = 女仆→受害者，强度 0.5 = 玩家普攻级）
                 double dx = victim.getX() - maid.getX();

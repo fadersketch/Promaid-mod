@@ -105,6 +105,9 @@ public class SmartAttackTool implements ITool<SmartAttackTool.Result> {
         }
         // 双重锁定：ATTACK_TARGET 记忆（Brain 战斗行为读它）+ Mob setTarget（实体层）
         // TLM StartAttacking 只选空目标，不会覆盖；战术行为/自保自动接管后续
+        if (com.maidsmart.combat.FriendlyFireGuard.isFriendly(maid, target)) {
+            return callback.addToolResult("Refused: target is owner/ally", toolId);
+        }
         maid.getBrain().setMemory(MemoryModuleType.ATTACK_TARGET, target);
         maid.setTarget(target);
         maid.getChatBubbleManager().addTextChatBubble("明白！我去解决它！");

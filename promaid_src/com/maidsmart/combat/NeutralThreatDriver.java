@@ -218,6 +218,9 @@ public final class NeutralThreatDriver {
                 return; // TLM 刚打过（冷却间隙）——等它下一个循环，别插刀
             }
             // ③+④ 攻击速度属性算冷却 + 挥臂动画
+            if (FriendlyFireGuard.isFriendly(maid, threat)) {
+                return; // 主人/友方不做直接近战反击
+            }
             boolean hit = maid.m_7327_(threat);
             maid.m_21011_(net.minecraft.world.InteractionHand.MAIN_HAND, true); // swing 摆臂
             int cdTicks = attackIntervalTicks(maid);
