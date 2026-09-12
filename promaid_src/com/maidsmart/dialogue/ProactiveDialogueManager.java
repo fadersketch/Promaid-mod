@@ -71,12 +71,7 @@ public class ProactiveDialogueManager {
     }
     private long lastDay = -1;
 
-    /** v1.2.0：单例句柄——纪念日等外部联动经此调用 fireEventFor（ProMaidExtension
-     *  只构造一次本类，构造器赋值即可） */
-    public static ProactiveDialogueManager INSTANCE;
-
     public ProactiveDialogueManager() {
-        INSTANCE = this;
     }
 
     private static long proactiveCooldown() {
@@ -475,9 +470,6 @@ public class ProactiveDialogueManager {
 
     /** v1.2.0：外部事件驱动入口（纪念日联动用）——委托 private fireEvent，
      *  复用日上限/全局配额/敌袭冻结/反馈学习；与现有 4 个事件处理器同构 */
-    public void fireEventFor(EntityMaid maid, ServerPlayer player, String trigger) {
-        this.fireEvent(maid, player, trigger);
-    }
 
     @SubscribeEvent
     public void onFavorabilityLevelUp(MaidFavorabilityLevelChangeEvent event) {
