@@ -210,7 +210,10 @@ public class PerceptionManager {
         for (Mob m : level.m_6443_(Mob.class, maid.m_20191_().m_82400_(12.0),
                 e -> e instanceof LivingEntity && isThreat((LivingEntity) e, maid))) {
             hostiles++;
-            double d = m.m_20238_(maid.m_20182_());
+            // v1.1.0 修复：m_20238_(Vec3) 是【平方距离】（distanceToSqr，字节码 dx²+dy²+dz²
+            // 无 sqrt）——旧版直接当"格"显示，扫描盒 ±12 格时最多报 432 格（用户：
+            // "很容易检索到几百格之外的敌人"）。改用 m_20270_(Entity)（distanceTo，带 sqrt）。
+            double d = maid.m_20270_(m);
             if (nearest < 0 || d < nearest) {
                 nearest = d;
             }
@@ -307,7 +310,7 @@ public class PerceptionManager {
             return false;
         }
         // 距离过远不算"看向"
-        if (maid.m_20238_(player.m_20182_()) > 16.0) {
+        if (maid.m_20270_(player) > 16.0) {
             return false;
         }
         return lookingAngle(maid, player) < com.maidsmart.config.MaidSmartConfig.PERCEPTION_LOOK_ENTER_DEG.get();

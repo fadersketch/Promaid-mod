@@ -69,6 +69,10 @@ public class ProMaidMod {
         //  for invalid dist DEDICATED_SERVER）。服务端不执行本分支 → 客户端类不加载。
         if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
             com.maidsmart.client.PromaidClientSetup.registerConfigScreen();
+            // v1.1.0 实测四百二十：内置日语语音包客户端钩子（播放压制 + tick 兜底）
+            com.maidsmart.client.PromaidClientSetup.registerVoiceHooks();
+            // 实测四百四十四：冷却 HUD 渲染器显式注册（1.20.1 注解自动注册未生效）
+            com.maidsmart.client.PromaidClientSetup.registerHudHooks();
         }
     }
 

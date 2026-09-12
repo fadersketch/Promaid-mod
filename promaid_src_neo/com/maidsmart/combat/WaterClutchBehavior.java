@@ -130,6 +130,41 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
             }
             return; // 缓冲等待期间不重新触发
         }
+        // v1.1.0（1.21.1 重锤）/ 实测四百四十二【重锤专属落地水】：
+        // - 跃起全过程（isAirborne）：通用落地水/雪【完全让位】——提前放水会清零
+        //   fallDistance，重锤下落加成全部丢失；旧版 suppressFallClutch 的"目标在
+        //   范围内才抑制"半吊子状态已废弃。
+        // - 落地帧（重锤行为结算完猛击后置位的 FORCED_CLUTCH）：在落点【强制】放
+        //   一格水（有水桶）/细雪（只有细雪桶），不看 fallDistance 阈值与 suppress。
+        //   此时猛击加成已算完，放水只负责让她落地不摔伤。
+        // 消费必须无条件调用（否则开关全关时请求残留）。
+        boolean maceAir = com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid);
+        boolean maceLanding = com.maidsmart.combat.MaidMaceSmashBehavior.consumeForcedClutch(maid);
+        if (maceAir || maceLanding) {
+            if (!maceLanding) {
+                return; // 空中：一律不放，保住 fallDistance → 猛击加成
+            }
+            boolean forcedWater = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
+                    && !this.isNether(level)
+                    && this.hasItem(maid, "minecraft:water_bucket");
+            boolean forcedSnow = !forcedWater
+                    && com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get()
+                    && this.hasItem(maid, "minecraft:powder_snow_bucket");
+            if (!forcedWater && !forcedSnow) {
+                return; // 没桶 → 没有落地缓冲（与通用逻辑同一语义：有桶才有钥匙）
+            }
+            BlockPos maceLand = this.findLandingPos(level, maid);
+            if (maceLand == null) {
+                return;
+            }
+            this.clutchedThisFall = true;
+            com.mojang.logging.LogUtils.getLogger().info(
+                    "mace clutch trigger: maid={} snow={} fallDist={} land={}",
+                    maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
+                    !forcedWater, String.format("%.1f", maid.fallDistance), maceLand);
+            this.placeFluid(level, maid, maceLand, !forcedWater);
+            return;
+        }
         // 2. 触发判定：有钥匙桶（水/细雪）+ 真实坠落 + 未落地 + 距地面足够高。
         //    v1.1.0：水桶只在非下界作钥匙（下界放水瞬间蒸发）；细雪桶任何维度都可
         //    （下界也能用）；两者都有时优先水（行为更直观）

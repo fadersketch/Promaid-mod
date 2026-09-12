@@ -110,12 +110,10 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
         if (maid.isMaidInSittingPose() || maid.getVehicle() != null) {
             return false;
         }
-        // 睡觉中不聊（vanilla getRestrictRadius 系列：isSleeping 的 SRG = m_213852_？——
-        // 改用实体位姿兜底：hasPose(SLEEPING) 的 SRG isPassenger 是 isPassenger，
-        // 直接查 sleeping pose 用 isShiftKeyDown（isSleeping 在 Entity 上为 protected）
-        // ——简化：排班睡觉时段她多半有 HOME 限制中心且 WALK_TARGET 为空，此处
-        // 不再单独判睡（睡觉时 WALK_TARGET/攻击目标/自保多半不满足，气泡本就
-        // 很难触发；误触一条也不伤大雅）
+        // 实测四百二十九：睡觉中不聊（LivingEntity.isSleeping）
+        if (maid.isSleeping()) {
+            return false;
+        }
         // 战斗中不聊（正在接战）
         try {
             var atk = maid.getBrain().getMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET);
@@ -154,6 +152,12 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
         String text = TEXTS[RNG.nextInt(TEXTS.length)];
         try {
             maid.getChatBubbleManager().addTextChatBubble(text);
+        } catch (Throwable ignored) {
+        }
+        // 实测四百二十八：排班气泡也接入语音（内置日语语音包命中即播放并压制原生；
+        // 未命中则按 SystemTTSManager 原有链路走磁盘包/缓存/TTS 合成）
+        try {
+            com.maidsmart.voice.SystemTTSManager.speak(maid, text);
         } catch (Throwable ignored) {
         }
         NEXT_ALLOWED.put(maid.getUUID(), gameTime + COOLDOWN_TICKS);

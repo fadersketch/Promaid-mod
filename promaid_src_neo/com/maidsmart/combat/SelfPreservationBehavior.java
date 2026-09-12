@@ -104,7 +104,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     static final PlacedBlockTracker COMBAT_TRACKER = new PlacedBlockTracker(
             () -> com.maidsmart.config.MaidSmartConfig.COMBAT_PLACED_LIFETIME.get() * 20L,
             0.5, // 实测三百七十七：靠近刷新仅同柱（0.5 格）——她离开塔后 30 秒必回收
-            12.0); // 实测三百八十八：垂直带 12——8~12 格塔底的方块也要在塔上狙击期间续命
+            12.0, // 实测三百八十八：垂直带 12——8~12 格塔底的方块也要在塔上狙击期间续命
+            true); // 实测四百二十五：主人踩在上面也刷新（跟着上塔/踩塔边不踩空）
 
     private static void trackCombatPlaced(EntityMaid maid, BlockPos pos, Block block) {
         if (!(maid.level() instanceof ServerLevel sl)) {
@@ -1339,6 +1340,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (this.announceCooldown-- > 0 || this.announcedNoMaterial) {
             return;
         }
+        // 实测四百四十三：悬空禁搭导致的"取料失败"不是真的没材料——静默，
+        // 否则会误报"背包里没有搭方块的材料"
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return;
+        }
         this.announcedNoMaterial = true;
         this.announceCooldown = announceCooldown();
         maid.getChatBubbleManager().addTextChatBubble(
@@ -1565,6 +1571,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 LOGGER.info("self preserve exit teleport skipped (no stand near owner): maid={} ownerY={}",
                         maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
                         String.format("%.1f", owner.getY()));
+                return;
+            }
+            // 实测四百四十二：重锤跃起中禁止自保归位传送——她可能正跳向目标，
+            // 被拽回主人身边 = 猛击白跳（用户："重锤空中状态禁止传送"）。
+            // 跃起最长 5 秒（MAX_AIR_TICKS）自动收尾，下一 tick 就恢复正常。
+            if (MaidMaceSmashBehavior.isAirborne(maid)) {
                 return;
             }
             maid.teleportTo(ownerLevel, stand.getX() + 0.5, stand.getY(),
@@ -3481,6 +3493,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         // 主人身边已验证安全 → 传到安全落脚点（v1.5.202：传送不再结束保命会话——
         // 会话由 tick 维护；传回后血若仍低会继续回血/警戒，血恢复且环境安全后自然结束）
+        // 实测四百四十二：重锤跃起中禁止自保归位传送（同上——空中禁传送）
+        if (MaidMaceSmashBehavior.isAirborne(maid)) {
+            return;
+        }
         maid.teleportTo(ownerLevel, stand.getX() + 0.5, stand.getY(),
                 stand.getZ() + 0.5, java.util.Collections.emptySet(),
                 owner.getYRot(), owner.getXRot());
@@ -4058,6 +4074,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 都可用于搭高，数量最多的先取（不浪费稀有方块）。
      */
     private Block takeBuildBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空/坠落中禁搭方块（含重锤跃起）——统一闸口，返回
+        // null 让所有搭高/搭路调用点自然放弃本次放置（不消耗方块、不动世界）
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return null;
+        }
         // v1.1.0 实测七：选材统一走 MaidBuildBlockFilter——火把等无碰撞方块、
         // 可替换方块（草/雪片）一律不再入选（旧 isSafeBuildBlock 的本地逻辑
         // 并入工具类，本类保留壳调用）。返回 Block（自保内部用 Block 放置）。

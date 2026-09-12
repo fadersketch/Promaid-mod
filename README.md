@@ -2,7 +2,7 @@
 
 为《车万女仆》(Touhou Little Maid, TLM) 制作的扩展模组，让女仆真正"活"起来——会建造、会干活、会记事儿、会说话，还会在危险时保你的命。
 
-- **1.20.1 版**：Minecraft 1.20.1 · Forge 47.4.x · 前置 TLM ≥ 1.5.0（实测 1.5.3）· 版本 **v1.1.0**
+- **1.20.1 版**：Minecraft 1.20.1 · Forge 47.4.x · 前置 TLM ≥ 1.5.0（实测 1.5.3）· 版本 **v1.1.1**
 - **1.21.1 版**：Minecraft 1.21.1 · NeoForge 21.1.250 · 前置 TLM ≥ 1.5.0（实测 1.5.3-neoforge）· 版本 **v1.1.0-beta.2**（beta）
 - **许可证**：MIT · **仓库**：github.com/fadersketch/Promaid-mod
 

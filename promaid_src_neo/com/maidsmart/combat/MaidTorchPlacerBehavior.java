@@ -106,8 +106,12 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         if (!level.getBlockState(target).isAir()) {
             return;
         }
-        if (level.getBlockState(target.offset(0, -1, 0)).isAir()) {
-            return; // 悬空
+        // v1.1.0 修复：脚下必须是【有支撑面】的实体方块——旧版只判"非空气"，
+        // 于是火把会插在短草/花/已有火把（无碰撞方块）上悬空。改用原版放置规则
+        // 判定（isFaceSturdy 朝上），与玩家手动插火把口径一致。
+        net.minecraft.core.BlockPos below = target.offset(0, -1, 0);
+        if (!level.getBlockState(below).isFaceSturdy(level, below, net.minecraft.core.Direction.UP)) {
+            return; // 悬空 / 无支撑面（草、火把、雪层等都不行）
         }
         // 找背包火把并放置（v1.1.0 实测五：兼容灵魂火把等——普通火把优先，
         // 没有才退而求其次；放置用对应火把自己的方块而不是写死 TORCH）

@@ -523,9 +523,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测四十二：换 PlacedBlockTracker——绑定搭建女仆（到期强制进她背包，
      *  不再 8 格附近查找）；女仆魂符收回暂停计时。 */
 
-    /** 全局追踪器（绑定搭建者 + 魂符暂停计时；实测四十二） */
+    /** 全局追踪器（绑定搭建者 + 魂符暂停计时；实测四十二）
+     *  实测四百二十五：refreshOnOwnerStand=true——主人踩在她垫的方块上也刷新寿命
+     *  （玩家跟在女仆后面挖矿时，踩着她的垫脚方块不会突然到期消失而踩空坠落）。 */
     static final PlacedBlockTracker PLACED_TRACKER = new PlacedBlockTracker(
-            () -> com.maidsmart.config.MaidSmartConfig.MINE_PLACED_LIFETIME.get() * 20L);
+            () -> com.maidsmart.config.MaidSmartConfig.MINE_PLACED_LIFETIME.get() * 20L, 4.0, 6.0, true);
 
     /** v1.5.28：登记一个挖矿搭的方块（每块从自己放置时刻起单独计时，满 10 秒各自销毁） */
     private static void trackPlaced(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
@@ -1336,7 +1338,24 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 return;
             }
         }
-        // 3) 其他：目标方向前方脚下悬空 → 搭桥；否则走过去
+        // 3) v1.1.0【下方矿逐级下降】——目标比自身低时，向下垫一格并踩下去，
+        // 逐级降低高度接近矿物（旧版只能垫平/垫高，y 永不下降）
+        if (dy <= -1) {
+            if (this.descendStep(level, maid, hx, hz, hDist)) {
+                this.startStepOn(maid, hx, hz, hDist, -1);
+                return;
+            }
+            // 下不去（下面有地可走 / 危险 / 没料）→ 走位兜底；绝不再走到 bridgeToOre
+            //（它会在下降通道垫平块把高度顶住，反而卡死无法下降）
+            if (this.walkRetargetCooldown > 0) {
+                this.walkRetargetCooldown--;
+            } else {
+                this.walkRetargetCooldown = 10;
+                this.walkToOreBase(level, maid, t);
+            }
+            return;
+        }
+        // 4) 其他：目标方向前方脚下悬空 → 搭桥；否则走过去
         // v1.5.113：搭桥后【走一步上桥】——旧版搭完直接 return（无移动目标）
         // → 女仆站在桥头"搭一格就站着不动"根因
         if (this.bridgeToOre(level, maid, hx, hz, hDist)) {
@@ -1476,7 +1495,12 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测一百九十二：垫台阶/桥块后登记"走上去"目标（BlockWalkOn 持续推送，
      *  踏入即停）——取代寻路版 walkToStep（跨沟/断崖寻路半路折断 = 死循环根因） */
     private void startStepOn(EntityMaid maid, double hx, double hz, double hDist) {
-        int y = maid.blockPosition().getY();
+        this.startStepOn(maid, hx, hz, hDist, 0);
+    }
+
+    /** v1.1.0 下方下降：yOffset = -1 时目标脚位比当前低 1 格（下行台阶） */
+    private void startStepOn(EntityMaid maid, double hx, double hz, double hDist, int yOffset) {
+        int y = maid.blockPosition().getY() + yOffset;
         int tx = (int) Math.floor(maid.getX() + hx / hDist);
         int tz = (int) Math.floor(maid.getZ() + hz / hDist);
         BlockWalkOn.start(maid, tx + 0.5, y, tz + 0.5);
@@ -1764,6 +1788,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.113（C2）：搭方块材料耗尽播报（限频 30 秒） */
     private void notifyNoBuildBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空禁搭导致的"取料失败"不是真的没材料——静默
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return;
+        }
         long now = maid.level().getGameTime();
         Long last = NO_BLOCK_REPORT_SINCE.get(maid.getId());
         if (last != null && now - last < 600L) {
@@ -1816,6 +1844,61 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             return true;
         }
         return false;
+    }
+
+    /**
+     * v1.1.0【下方矿逐级下降】——目标比自己低时，在朝目标方向的前方一格【向下垫一格】
+     * 形成下行台阶（比 slopeStep 的垫块低一层），女仆踩下去后高度降低 1 格；反复执行
+     * 即可逐级下降接近矿物。其余逻辑（取料/摆臂/音效/冷却/回收）与 slopeStep 完全一致。
+     *
+     * 触发条件（缺一不可）：前方落脚层 y-1 与身体层 y 都是空气（能站能过）；
+     * 落脚层脚下 y-2 无支撑（空气/水）→ 需要垫一块；已有支撑（纯落差）→ 交给行走兜底。
+     */
+    private boolean descendStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
+        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.isPassenger()) {
+            return false; // 骑乘中不搭方块（与 slopeStep 同口径）
+        }
+        if (hDist < 1.0) {
+            return false;
+        }
+        if (this.pillarCooldown > 0) {
+            this.pillarCooldown--;
+            return true;
+        }
+        int y = maid.blockPosition().getY();
+        int tx = (int) Math.floor(maid.getX() + hx / hDist);
+        int tz = (int) Math.floor(maid.getZ() + hz / hDist);
+        BlockPos land = new BlockPos(tx, y - 1, tz);
+        BlockPos body = new BlockPos(tx, y, tz);
+        BlockPos support = land.offset(0, -1, 0);
+        BlockState supportState = level.getBlockState(support);
+        boolean noSupport = supportState.isAir() || supportState.getBlock()
+                == net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
+        if (!noSupport || !level.getBlockState(land).isAir() || !level.getBlockState(body).isAir()) {
+            return false;
+        }
+        if (com.maidsmart.tool.DangerBlocks.enabled()
+                && (com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 1, tz)
+                        || com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 2, tz))) {
+            return false;
+        }
+        Item item = this.takeBuildBlock(maid);
+        if (item == null) {
+            this.notifyNoBuildBlock(maid);
+            return false;
+        }
+        Block block = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item));
+        if (block == null) {
+            return false;
+        }
+        level.setBlock(support, block.defaultBlockState(), 3);
+        trackPlaced(level, support, block, maid);
+        maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        com.maidsmart.task.PlacedBlockTracker.placeSound(level, support, block);
+        this.pillarGuardTicks = 12;
+        this.pillarCooldown = com.maidsmart.config.MaidSmartConfig.MINE_PILLAR_COOLDOWN.get();
+        return true;
     }
 
     /**
@@ -1912,6 +1995,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** v1.5.24：取背包中数量最多的可搭方块（BlockItem + 非下落），用于搭高挖矿。
      *  v1.1.0 实测二百三十一：含手部栏（主/副手）——手里拿的方块也能垫（审计修复） */
     private Item takeBuildBlock(EntityMaid maid) {
+        // 实测四百四十三：悬空/坠落中禁搭方块（含重锤跃起）——统一闸口
+        if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
+            return null;
+        }
         // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
         return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
                 maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);

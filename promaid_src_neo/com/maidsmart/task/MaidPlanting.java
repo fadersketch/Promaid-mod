@@ -293,8 +293,15 @@ public final class MaidPlanting {
                     }
                     net.minecraft.world.level.block.state.BlockState under =
                             level.getBlockState(p.offset(0, -1, 0));
+                    // v1.1.0 修复：旧版写 Blocks.SNOW 并注释为 grass_block——雪层
+                    // 无支撑面，树苗种上去长不成；真正草方块是 Blocks.GRASS_BLOCK。
                     if (!(under.is(net.minecraft.tags.BlockTags.DIRT) /* #minecraft:dirt */
-                            || under.is(net.minecraft.world.level.block.Blocks.SNOW) /* grass_block */)) {
+                            || under.is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK))) {
+                        continue;
+                    }
+                    // v1.1.0 修复：脚下必须是【有支撑面】的实体方块——旧版只判"非空气"，
+                    // 火把/花草（无碰撞）也被当支撑。isFaceSturdy 用方块自身支撑面判定。
+                    if (!under.isFaceSturdy(level, p.offset(0, -1, 0), net.minecraft.core.Direction.UP)) {
                         continue;
                     }
                     if (!areaClearOfCollision(level, p)) {

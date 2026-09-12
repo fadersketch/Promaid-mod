@@ -241,6 +241,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             // v1.5.252q：清扫自动生成的钓鱼坐垫（任务解除/脱离坐垫超 2 秒 → 删除）
             // v1.5.252r：逻辑在普通类 FishingChairService（mixin 类不可被普通代码直接引用）
             com.maidsmart.fishing.FishingChairService.sweep(server);
+            // v1.1.0 实测四百二十一：冷却可视化 HUD（复活倒计时 / 回魂符冷却每秒下发）
+            com.maidsmart.combat.CooldownHudTracker.broadcast(server);
         }
         // v1.5.275：每 3 tick 高频维持钓鱼女仆走位（FindSit 12 tick 间隙 + 站立行为
         // 清 WALK_TARGET → 一步一停；3 tick 内补回 → 连续走）
@@ -472,7 +474,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     this.coreLogged = true;
                     org.slf4j.Logger log = com.mojang.logging.LogUtils.getLogger();
                     log.info("extra-core registered: SelfPreservation=250 WaterClutch=240 "
-                            + "CombatTactics=230 ToolAutoEquip=200 AidOwner=190 Torch=185 Shield=180");
+                            + "MaceSmash=235 CombatTactics=230 ToolAutoEquip=200 AidOwner=190 Torch=185 Shield=180");
                 }
                 // 自保：core 行为（任何 activity 都运行）。
                 // 优先级 250 > TLM 全部行为（core 最高 99：ClearSleep；跟随=3；Panic/Await=1），
@@ -487,6 +489,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         // 高于落地水/战术：搭路条件本身排除威胁/自保，不与战斗抢移动
                         Pair.of(245, new com.maidsmart.task.BridgeUpBehavior()),
                         Pair.of(240, new com.maidsmart.combat.WaterClutchBehavior()),
+                        // v1.1.0（1.21.1 专属）：重锤猛击——持重锤贴近目标跳起下落猛砸
+                        // （参考 vanilla_mob_remake 僵尸用重锤）；高于战术，跃起期间战术让位；
+                        // 落地缓冲改由本行为在【猛击结算后】请求 WaterClutchBehavior 强放
+                        // 一格水/雪（重锤专属落地水，实测四百四十二）
+                        Pair.of(235, new com.maidsmart.combat.MaidMaceSmashBehavior()),
                         // v1.5.134：单兵作战战术（PVP 式走位/拉扯/距离控制）——低于自保/落地水，
                         // 高于自动装备/施工区避让；Brain 1.20.1 无高优先级阻断，不影响 WORK 战斗行为
                         Pair.of(230, new com.maidsmart.combat.MaidCombatTacticsBehavior()),
@@ -506,6 +513,20 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         // v1.5.212：施工区避让已删除——自保 antiSuffocate 每 tick 防窒息
                         // 兜底后，"非建造女仆接近施工区会逃离"没有存在意义
                         //（原 Pair.of(150, new BuildAreaAvoidBehavior())）
+                );
+            }
+
+            /**
+             * 实测四百一十八：床铺互通·方向一（用户："让女仆床和玩家床的代码互通。
+             * 女仆和玩家可以互相使用对方的床"）。
+             *
+             * REST 活动注册（TLM 自带 MaidBedTask=5、随机散步=20）：优先级 6 排在
+             * TLM 女仆床行为之后——女仆床优先，没有可用女仆床时才睡原版床。
+             */
+            @Override
+            public List<Pair<Integer, BehaviorControl<? super EntityMaid>>> getRestBehaviors() {
+                return List.of(
+                        Pair.of(6, new com.maidsmart.task.MaidBedInteropBehavior())
                 );
             }
         });

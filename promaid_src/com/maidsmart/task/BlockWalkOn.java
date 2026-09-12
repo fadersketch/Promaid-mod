@@ -24,7 +24,8 @@ public final class BlockWalkOn {
     private BlockWalkOn() {
     }
 
-    /** 登记"走上去"目标并给首次推力（后续 tick 由 tick() 持续推送） */
+    /** 登记"走上去"目标并给首次推力（后续 tick 由 tick() 持续推送）。
+     *  v1.1.0：目标 Y 低于当前脚位时自动走"下行台阶"到达判定（见 tick）。 */
     public static void start(EntityMaid maid, double tx, double ty, double tz) {
         ACTIVE.put(maid.m_20148_(), new State(tx, ty, tz, 12));
     }
@@ -35,17 +36,23 @@ public final class BlockWalkOn {
 
     /**
      * 每 tick 调用（行为 tick 开头）。返回 true = 本 tick 已消费（调用方 return）。
-     * 到达判定：水平已进入目标格 且 脚位达到目标高度（斜上台阶目标 y+1 不能按
-     * |dy|<1.01 判——她还站在下面时差值恰为 1，会误判提前收力）。
+     * 到达判定分两档（v1.1.0 下行台阶）：
+     *  - 上行/平移（s.y >= 当前脚位）：水平进入目标格 且 脚位达到目标高度
+     *    （斜上台阶目标 y+1 不能按 |dy|<1.01 判——她还站在下面时差值恰为 1，会误判提前收力）；
+     *  - 下行（s.y < 当前脚位 - 0.01）：水平进入目标格 且 已落到目标高度附近
+     *    （脚位 ≤ targetY+0.01）——旧口径"脚位 >= targetY"在下行时恒真，会当 tick 就误判到达。
      */
     public static boolean tick(EntityMaid maid) {
         State s = ACTIVE.get(maid.m_20148_());
         if (s == null) {
             return false;
         }
-        boolean arrived = Math.floor(maid.m_20185_()) == Math.floor(s.x())
-                && Math.floor(maid.m_20189_()) == Math.floor(s.z())
-                && maid.m_20186_() >= s.y() - 0.01;
+        boolean inCell = Math.floor(maid.m_20185_()) == Math.floor(s.x())
+                && Math.floor(maid.m_20189_()) == Math.floor(s.z());
+        boolean downward = s.y() < maid.m_20186_() - 0.01;
+        boolean arrived = inCell && (downward
+                ? maid.m_20186_() <= s.y() + 0.01
+                : maid.m_20186_() >= s.y() - 0.01);
         if (arrived || s.ticks() <= 1) {
             ACTIVE.remove(maid.m_20148_());
             if (arrived) {

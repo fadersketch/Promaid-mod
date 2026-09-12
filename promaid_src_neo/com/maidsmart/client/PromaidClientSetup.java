@@ -24,4 +24,25 @@ public final class PromaidClientSetup {
         container.registerExtensionPoint(IConfigScreenFactory.class,
                 (mc, parent) -> new com.maidsmart.config.PromaidConfigScreen(parent));
     }
+
+    /**
+     * v1.1.0 实测四百二十：内置日语语音包的客户端钩子——
+     * ① PlaySoundEvent：播放窗口内压制 TLM 原生语音包；
+     * ② ClientTickEvent.Post：未进世界时清压制窗口。
+     * 客户端专属（服务端不注册、本类不加载）。
+     */
+    public static void registerVoiceHooks() {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                com.maidsmart.client.PromaidClientSetup::onPlaySound);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                com.maidsmart.client.PromaidClientSetup::onClientTickPost);
+    }
+
+    private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
+        com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
+    }
+
+    private static void onClientTickPost(net.neoforged.neoforge.client.event.ClientTickEvent.Post event) {
+        com.maidsmart.voice.ClientVoicePlayback.onClientTick();
+    }
 }

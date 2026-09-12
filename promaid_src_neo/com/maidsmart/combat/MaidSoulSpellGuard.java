@@ -33,8 +33,16 @@ public final class MaidSoulSpellGuard {
     private static final String AUTO_SAVED_TAG = "maid_hp_low_protect_auto_saved";
     private static final String COOLDOWN_UNTIL_TAG = "maid_hp_low_protect_cooldown_until";
     private static final String RELEASE_HEALTH_RATIO_TAG = "maid_hp_low_protect_release_health_ratio";
+    /** 实测四百三十三：魂符上记录的女仆名——HUD 在女仆还在符里时也能显示"回魂符 · 名字" */
+    private static final String AUTO_SAVED_NAME_TAG = "maid_hp_low_protect_auto_name";
     private static final String MAID_INFO_TAG = "MaidInfo";
-    private static final String FORGE_DATA_TAG = "ForgeData";
+    /**
+     * 实体持久化数据的子标签名。实测四百三十九：**1.21.1 NeoForge 的键是
+     * `NeoForgeData`，不是 Forge 1.20.1 的 `ForgeData`**（javap 补丁版 Entity 实证：
+     * `getPersistentData()` 读写的就是 `NeoForgeData`）。旧版把回魂符冷却写进
+     * `ForgeData` → 释放女仆后这个值谁也读不到 → 冷却失效、HUD 也消失（用户反馈）。
+     */
+    private static final String FORGE_DATA_TAG = "NeoForgeData";
 
     private static final net.minecraft.network.chat.Component SUCCESS_MESSAGE =
             net.minecraft.network.chat.Component.literal("你的女仆生命值过低，已回到魂符中。");
@@ -85,9 +93,51 @@ public final class MaidSoulSpellGuard {
         long until = event.getMaid().level().getGameTime()
                 + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
         writeCooldownToMaidData(data, until);
+        // 实测四百三十九 双保险：若 TLM 在事件之后才把 data 应用到实体，直接写实体
+        // 也能生效（getPersistentData() 读的就是 NeoForgeData；值相同，无副作用）
+        ((net.neoforged.neoforge.common.extensions.IEntityExtension) event.getMaid())
+                .getPersistentData().putLong(COOLDOWN_UNTIL_TAG, until);
         tag.remove(AUTO_SAVED_TAG);
         tag.remove(RELEASE_HEALTH_RATIO_TAG);
         item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(tag));
+    }
+
+    /** 实测四百四十一【收符期间冷却条消失修复】：任何"女仆 → 魂符"转换都把女仆当前
+     *  仍在计时的回魂符冷却与名字盖到魂符物品上。
+     *
+     *  旧版的魂符冷却标记只由自动收符路径写入；玩家【手动】用空魂符收女仆时，魂符是
+     *  TLM 自己 new 的、不带任何标记 → HUD 扫背包查不到 → 冷却条消失（而冷却其实还
+     *  记在女仆数据里继续计时，用户："虽然实际上还在计时，但那样子观感不太好"）。
+     *  TLM 的 storeMaidData 会发 MaidAndItemTransformEvent.ToItem（反编译实证：1.21.1 在
+     *  AbstractStoreMaidItem、1.20.1 在 ItemSmartSlab），在事件里补标记即可同时覆盖
+     *  手动/自动两条收符路径；女仆没在冷却时不标记（手动收符不该凭空出现冷却条）。 */
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onSoulSpellToItem(
+            com.github.tartaricacid.touhoulittlemaid.api.event.MaidAndItemTransformEvent.ToItem event) {
+        try {
+            EntityMaid maid = event.getMaid();
+            if (maid == null || maid.level().isClientSide) {
+                return;
+            }
+            long until = ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
+                    .getPersistentData().getLong(COOLDOWN_UNTIL_TAG);
+            if (until <= maid.level().getGameTime()) {
+                return; // 女仆没在冷却 → 不标记
+            }
+            ItemStack item = event.getItem();
+            // ToItem 也被相机/胶卷等"存女仆物品"共用——只认魂符，避免在别的物品上留标记
+            if (!item.is(com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get())) {
+                return;
+            }
+            net.minecraft.nbt.CompoundTag tag = item.getOrDefault(
+                    net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+            tag.putLong(COOLDOWN_UNTIL_TAG, until);
+            tag.putString(AUTO_SAVED_NAME_TAG, com.maidsmart.tool.PromaidLog.nameOf(maid));
+            item.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(tag));
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 核心：尝试把女仆收进主人背包的空魂符。成功返回 true。 */
@@ -120,12 +170,23 @@ public final class MaidSoulSpellGuard {
             if (slot == null) {
                 return false; // 主人背包没有空魂符
             }
+            long until = level.getGameTime()
+                    + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
+            // 实测四百四十一：先把冷却写进女仆数据再 storeMaidData——这样 ToItem 钩子
+            // 与魂符里的女仆 NBT 都拿得到本次冷却，收符期间 HUD 才有条目可显示
+            ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
+                    .getPersistentData().putLong(COOLDOWN_UNTIL_TAG, until);
             ItemStack slab = new ItemStack(
                     com.github.tartaricacid.touhoulittlemaid.init.InitItems.SMART_SLAB_HAS_MAID.get());
             com.github.tartaricacid.touhoulittlemaid.item.ItemSmartSlab.storeMaidData(slab, maid);
-            long until = level.getGameTime()
-                    + com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20L;
             markAutoSaved(slab, until);
+            // 实测四百三十三：把女仆名写进魂符本身——HUD 在"女仆还在符里"的冷却窗口也能显示
+            net.minecraft.nbt.CompoundTag nameTag = slab.getOrDefault(
+                    net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+            nameTag.putString(AUTO_SAVED_NAME_TAG, com.maidsmart.tool.PromaidLog.nameOf(maid));
+            slab.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                    net.minecraft.world.item.component.CustomData.of(nameTag));
             slot.set(player, slab);
             // v1.1.0 实测四百一十二：提示语带上当前 CD 值——玩家不知道冷却机制的
             // 常反馈"第二次就死了不收"，文案点明（0 = 无冷却，措辞区分）
@@ -139,7 +200,6 @@ public final class MaidSoulSpellGuard {
                     com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() * 20, 0));
             level.playSound(null, maid.blockPosition(), net.minecraft.sounds.SoundEvents.BUCKET_EMPTY,
                     net.minecraft.sounds.SoundSource.NEUTRAL, 0.65f, 1.0f);
-            ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putLong(COOLDOWN_UNTIL_TAG, until);
             maid.discard(); // 从世界移除（收进魂符）
             return true;
         } catch (Throwable ignored) {
@@ -149,6 +209,70 @@ public final class MaidSoulSpellGuard {
 
     private static boolean isOnCooldown(EntityMaid maid, ServerLevel level) {
         return ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getLong(COOLDOWN_UNTIL_TAG) > level.getGameTime();
+    }
+
+    // ================== HUD 查询（实测四百二十一） ==================
+
+    /**
+     * 实测四百二十一【冷却可视化】：HUD 用——该女仆的回魂符冷却是否未到。
+     * 返回 {剩余秒, 总秒}；未在冷却返回 null。冷却写入口径与本类一致（收符时写
+     * 女仆 persistentData，释放时从释放刻重新起算后经 TLM load 回写）。
+     */
+    public static long[] hudCooldownSeconds(EntityMaid maid, long nowTick) {
+        if (maid == null || !com.maidsmart.config.MaidSmartConfig.MISC_COOLDOWN_HUD.get()) {
+            return null;
+        }
+        long until = ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid)
+                .getPersistentData().getLong(COOLDOWN_UNTIL_TAG);
+        if (until <= nowTick) {
+            return null;
+        }
+        long totalSec = Math.max(1L,
+                com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get());
+        long remainSec = (until - nowTick + 19L) / 20L;
+        if (remainSec > totalSec) {
+            remainSec = totalSec;
+        }
+        return new long[]{remainSec, totalSec};
+    }
+
+    // ================== HUD 查询 · 手上的魂符（实测四百三十三） ==================
+
+    /**
+     * HUD 用：这枚【自动魂符】自身的冷却到期 tick（0 = 不是自动魂符 / 无冷却）。
+     * 覆盖"女仆已被收进符里、实体不存在"这段窗口——旧实现只扫存活女仆的
+     * persistentData，收符瞬间就没有任何条目可显示。
+     *
+     * 实测四百四十一：不再要求 AUTO_SAVED_TAG——手动收符的魂符也由 ToItem 钩子盖了
+     * 冷却戳，只要带 COOLDOWN_UNTIL_TAG 就该显示（AUTO_SAVED_TAG 仍只用于"是否在
+     * 释放时重算冷却"的语义）。
+     */
+    public static long charmCooldownUntil(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return 0L;
+        }
+        net.minecraft.nbt.CompoundTag tag = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+        if (!tag.contains(COOLDOWN_UNTIL_TAG)) {
+            return 0L;
+        }
+        return tag.getLong(COOLDOWN_UNTIL_TAG);
+    }
+
+    /** HUD 用：魂符上记录的女仆名（没有则 null） */
+    public static String charmMaidName(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return null;
+        }
+        net.minecraft.nbt.CompoundTag tag = stack.getOrDefault(
+                net.minecraft.core.component.DataComponents.CUSTOM_DATA,
+                net.minecraft.world.item.component.CustomData.EMPTY).copyTag();
+        if (!tag.contains(AUTO_SAVED_NAME_TAG)) {
+            return null;
+        }
+        String s = tag.getString(AUTO_SAVED_NAME_TAG);
+        return s == null || s.isBlank() ? null : s;
     }
 
     /** 魂符打自动标记：冷却时间戳 + 释放血量比（对齐 maid_survival 结构） */
@@ -166,7 +290,7 @@ public final class MaidSoulSpellGuard {
         slab.set(net.minecraft.core.component.DataComponents.CUSTOM_DATA, net.minecraft.world.item.component.CustomData.of(tag));
     }
 
-    /** 把冷却写进女仆数据（ForgeData 子标签——TLM 释放时读 persistentData 的路径） */
+    /** 把冷却写进女仆数据（持久化子标签 NeoForgeData——TLM 释放时读 persistentData 的路径） */
     private static void writeCooldownToMaidData(net.minecraft.nbt.CompoundTag data, long until) {
         net.minecraft.nbt.CompoundTag forge = data.getCompound(FORGE_DATA_TAG);
         forge.putLong(COOLDOWN_UNTIL_TAG, until);
@@ -177,7 +301,7 @@ public final class MaidSoulSpellGuard {
     private static SoulSpellSlot findEmptySoulSpell(ServerPlayer player) {
         net.minecraft.world.entity.player.Inventory inv = player.getInventory();
         if (isEmptySoulSpell(player.getMainHandItem())) {
-            return SoulSpellSlot.mainHand();
+            return SoulSpellSlot.mainHand(inv.selected);
         }
         if (isEmptySoulSpell(player.getOffhandItem())) {
             return SoulSpellSlot.offhand();
@@ -204,8 +328,8 @@ public final class MaidSoulSpellGuard {
             this.index = index;
         }
 
-        static SoulSpellSlot mainHand() {
-            return new SoulSpellSlot(0, -1);
+        static SoulSpellSlot mainHand(int selected) {
+            return new SoulSpellSlot(0, selected);
         }
 
         static SoulSpellSlot offhand() {
@@ -219,9 +343,11 @@ public final class MaidSoulSpellGuard {
         void set(ServerPlayer player, ItemStack stack) {
             net.minecraft.world.entity.player.Inventory inv = player.getInventory();
             if (this.type == 0) {
-                inv.items.set(0, stack); // 主手 = items[0]
+                // 实测四百四十一：主手 = items[selected]——旧版恒写 items[0]，玩家选中的
+                // 不是 0 号槽时会把 0 号槽的东西直接顶掉（物品丢失）而手里的空符还在
+                inv.items.set(this.index, stack);
             } else if (this.type == 1) {
-                inv.armor.set(0, stack); // 副手 = offhand[0]
+                inv.offhand.set(0, stack); // 副手 = offhand[0]（旧版误写 armor[0] 顶掉靴子）
             } else {
                 inv.items.set(this.index, stack);
             }
