@@ -157,5 +157,8 @@
   "key.promaid.build_rotate": "建造预览·旋转朝向（每次顺时针 90°）",
   "key.promaid.maid_pat": "摸摸头（对准女仆）",
   "key.promaid.maid_hug": "抱抱（对准女仆）",
-  "config.promaid.combat.autoSwitchAllowModTasks": "模组任务参与自主切换（默认开）：模组攻击任务在女仆持有非原版物品时才参与；关 = 自主战斗只用原版任务"
+  "config.promaid.combat.autoSwitchAllowModTasks": "模组任务参与自主切换（默认开）：模组攻击任务在女仆持有非原版物品时才参与；关 = 自主战斗只用原版任务",
+  "config.promaid.combat.autoResurrectEnable": "女仆自动复活",
+  "config.promaid.combat.autoResurrectDelaySeconds": "复活延迟（秒）",
+  "config.promaid.combat.autoResurrectHealthRatio": "复活血量比"
 }

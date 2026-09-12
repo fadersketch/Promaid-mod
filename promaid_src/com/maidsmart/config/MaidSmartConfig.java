@@ -342,6 +342,10 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.DoubleValue SOUL_SPELL_RELEASE_RATIO;
     public static final ForgeConfigSpec.DoubleValue SOUL_SPELL_OWNER_RADIUS;
     public static final ForgeConfigSpec.IntValue SOUL_SPELL_COOLDOWN_SECONDS;
+    // 实测四百一十六：女仆自动复活（死亡后墓碑到期消失，在主人重生点复活）
+    public static final ForgeConfigSpec.BooleanValue AUTO_RESURRECT_ENABLE;
+    public static final ForgeConfigSpec.IntValue AUTO_RESURRECT_DELAY_SECONDS;
+    public static final ForgeConfigSpec.DoubleValue AUTO_RESURRECT_HEALTH_RATIO;
     // v1.5.199：水桶垫水（岩浆逃生——放水 1 秒后收回，水桶不消耗；击退搭高垫水
     // v1.5.250 已删除）
     public static final ForgeConfigSpec.BooleanValue COMBAT_WATER_BUCKET_LAVA;
@@ -1064,6 +1068,16 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
                 .translation("config.promaid.combat.soulSpellCooldownSeconds")
                 .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
+        // 实测四百一十六：女仆自动复活（用户："女仆死亡后 60 秒那个墓碑就会自己消失掉，
+        // 然后在主人的出生点复活，也是 60 秒的 CD"）
+        AUTO_RESURRECT_ENABLE = BUILDER.comment("女仆自动复活（默认开）：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）满血或按比例复活——不再需要手动去墓碑处取回；关掉恢复 TLM 原版死亡流程")
+                .translation("config.promaid.combat.autoResurrectEnable").define("autoResurrectEnable", true);
+        AUTO_RESURRECT_DELAY_SECONDS = BUILDER.comment("复活延迟（秒，默认 60）：死亡后墓碑存在这么久才自动消失并复活女仆（也是墓碑存在的时长）")
+                .translation("config.promaid.combat.autoResurrectDelaySeconds")
+                .defineInRange("autoResurrectDelaySeconds", 60, 1, 86400);
+        AUTO_RESURRECT_HEALTH_RATIO = BUILDER.comment("复活血量比（默认 1.0 = 满血）：复活时女仆恢复的血量比例（0.35 = 35%）")
+                .translation("config.promaid.combat.autoResurrectHealthRatio")
+                .defineInRange("autoResurrectHealthRatio", 1.0, 0.05, 1.0);
         COMBAT_STUCK_WINDOW = BUILDER.comment("卡住判定窗口（tick）")
                 .translation("config.promaid.combat.stuckWindow")
                 .defineInRange("stuckWindow", 20, 5, 100);

@@ -416,7 +416,7 @@ if (PENDING_DEATHS.isEmpty()) {
      * 两者都不是（/spawnpoint 空地、床被拆、锚空电、维度不允许）→ false，
      * 调用方走主世界出生点兜底——与玩家实际复活点一致，女仆传过去就能汇合。
      */
-    private static boolean isRespawnPointValid(ServerLevel level, net.minecraft.core.BlockPos pos) {
+    public static boolean isRespawnPointValid(ServerLevel level, net.minecraft.core.BlockPos pos) {
         try {
             net.minecraft.world.level.block.state.BlockState st = level.getBlockState(pos);
             net.minecraft.world.level.block.Block b = st.getBlock();
@@ -446,7 +446,7 @@ if (PENDING_DEATHS.isEmpty()) {
      * 上，若重生点上方有树/高台，女仆落在树顶/高台再坠落（"落地水"刷屏 + 落点
      * 看起来不对）；现在贴地落，无坠落无位移。
      */
-    private static double[] findSafeLanding(ServerLevel level, double tx, double ty, double tz) {
+    public static double[] findSafeLanding(ServerLevel level, double tx, double ty, double tz) {
         int x = net.minecraft.util.Mth.floor(tx); // floor
         int z = net.minecraft.util.Mth.floor(tz);
         // v1.1.0 实测八十（粉丝 bug："主人下界死亡后女仆被传到基岩层上面"）：下界

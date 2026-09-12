@@ -1746,6 +1746,14 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO, s), "释放血量比：自动收的魂符释放时女仆恢复的血量比例（0.35 = 35%）"));
         this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
+        // 实测四百一十六：女仆自动复活（死亡→墓碑到期消失→主人重生点复活）
+        this.rows.add(new SectionRow("女仆自动复活（v1.1.0）", true));
+        this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
+                v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不用再手动去墓碑处取回；关掉恢复 TLM 原版死亡流程"));
+        this.rows.add(new NumRow("复活延迟（秒）", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 60，也是墓碑存在的时长）"));
+        this.rows.add(new NumRow("复活血量比", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO, s), "复活血量比：复活时女仆恢复的血量比例（1.0 = 满血，0.35 = 35%）"));
         // 实测四百零五：收符冷却挪到"自保参数"子分区（与传送/珍珠/治疗冷却并列）
         // v1.1.0：主动切换战斗模式（主人受攻击 → 附近女仆切战斗）
         this.rows.add(new SectionRow("主动切换战斗（v1.1.0）", true));

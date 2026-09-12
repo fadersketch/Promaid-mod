@@ -76,6 +76,8 @@ public class ProMaidExtension implements ILittleMaid {
         MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.SelfPreservationBehavior.class);
         // 实测四百零二：低血量自动回魂符（血量 ≤ 阈值 / 致死伤害 → 收进主人背包空魂符）
         MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.MaidSoulSpellGuard.class);
+        // 实测四百一十六：女仆自动复活（死亡→墓碑到期消失→主人重生点复活）
+        MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.MaidAutoResurrect.class);
         // v1.1.0：主动切换战斗模式（主人被敌对生物攻击 → 附近女仆切战斗保护，威胁消失还原）
         MinecraftForge.EVENT_BUS.register(new com.maidsmart.combat.AutoCombatSwitch());
         // v1.1.0 实测九十：险境脱离（已身处危险方块上的女仆自动挪到最近安全格+应急灭火）
