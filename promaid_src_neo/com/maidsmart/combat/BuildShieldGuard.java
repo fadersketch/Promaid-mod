@@ -10,7 +10,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 /**
- * v1.1.0 实测二百七十三（用户："给处于建造模式的女仆时长为无限的抗性5效果，
+ * v1.1.0 实测二百七十三（反馈："给处于建造模式的女仆时长为无限的抗性5效果，
  * 且取消受击事件以及其他怪物的仇恨。在建造模式解除以后这些机制去掉"）：
  * 建造护盾——建造任务（maid_smart:build）进行中的女仆：
  *  - 无限时长抗性提升 V（MobEffectInstance.INFINITE_DURATION = -1 无限，字节码实证；
@@ -39,7 +39,7 @@ public final class BuildShieldGuard {
         return maid != null && maid.isAlive() && BlueprintBuildExecutor.isBuildingTask(maid);
     }
 
-    /** v1.1.0 实测二百七十四（用户："建造模式屏蔽除了建造以外的其他所有系统信息
+    /** v1.1.0 实测二百七十四（反馈："建造模式屏蔽除了建造以外的其他所有系统信息
      *  系统消息及气泡"）：当前调用栈是否来自建造系统（com.maidsmart.build 包）——
      *  气泡来源判定（零侵入调用点）。调用栈开销小（气泡天然限频，频率低）。 */
     public static boolean fromBuildSystem() {

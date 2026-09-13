@@ -56,7 +56,7 @@ public final class ScheduleSwitchEngine {
     /**
      * 应用一个日程段：工作模式（setSchedule）+ 任务（setTask，全套门）。
      * 纯时间判定：段任务 UID 就是目标，不做环境检测（TLM-Sincerely 的检测子系统
-     * 不移植——用户："改成日程表里的以时间为判定"）。
+     * 不移植——反馈："改成日程表里的以时间为判定"）。
      *
      * @return 成功（含"已在该任务上"）/ soft fail（没活/持有/反向/兼容——主动暂不切）/
      *         硬失败（UID 非法/任务不存在/守卫拒绝/异常——需重试）
@@ -102,7 +102,7 @@ public final class ScheduleSwitchEngine {
                                 // v1.1.0 实测一百三十三 ①：切换前可用性检测——没活不切
                                 // v1.1.0 实测一百七十：默认只查 isEnable 硬闸（任务状态必须
                                 // 跟着时间段落真实切换；软探测可在面板调回）
-                                // v1.1.0 实测二百六十三（用户："空闲状态也这样"）：排班是
+                                // v1.1.0 实测二百六十三（反馈："空闲状态也这样"）：排班是
                                 // 【纯时间判定】（TLM-Sincerely 环境检测子系统不移植）——
                                 // 旧版 MISC_SCHEDULE_AVAILABILITY_CHECK=true 时走 isAvailable
                                 // 完整软探测（附近有没有矿/树/炉子/作物），女仆空闲时通常
@@ -134,7 +134,7 @@ public final class ScheduleSwitchEngine {
                                 fail = "任务 '" + seg.taskUid() + "' 被兼容分类禁止自动切换（BLOCKED）";
                             } else {
                                 // v1.1.0 实测一百七十六：UNSUPPORTED 兼容提示——切但提醒
-                                //（时间驱动语义：用户明确写进日程表就必须切）
+                                //（时间驱动语义：明确写进日程表就必须切）
                                 if (ScheduleCompatService.classify(target)
                                         == ScheduleCompatService.Classification.UNSUPPORTED) {
                                     warning = "任务 '" + seg.taskUid()

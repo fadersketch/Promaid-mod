@@ -21,11 +21,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * v1.1.0 实测八十三：追加主人死亡闸——主人已死亡（尸体停在死亡地点等待重生）
  * 时跟随一律不启动：根绝 TLM 内置的离主人过远 teleportToOwner 把女仆瞬移到
- * 【死亡地点】的路径（粉丝实测"死亡后女仆在尸体旁而不是重生点"）。原版
+ * 【死亡地点】的路径（反馈实测"死亡后女仆在尸体旁而不是重生点"）。原版
  * ownerStateConditions 只查 isRemoved 不查存活，尸体期会放行。
  *
  * v1.1.0 实测八十三c【回退 home 门】：八十三曾在此一并拦截 home 女仆的跟随启动，
- * 结果 home 女仆原地站桩（用户实测）。字节码取证：TLM 对 home 女仆本就是
+ * 结果 home 女仆原地站桩（实测）。字节码取证：TLM 对 home 女仆本就是
  * 「checkExtraStartConditions 放行 → start() 内部 maidStateConditions 全分支
  * 空转」，该任务每 tick 启动并占据其优先级组是大脑正常运转的一部分；从外部
  * 掐掉启动会让同组/后续优先级的行为接管出异常动力学。home 的传送防护由各

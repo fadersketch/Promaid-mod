@@ -45,7 +45,7 @@ public class MaidCakeEatHandler {
 
     /** 吃完一整块蛋糕回血量（= 蛋糕营养 14，与 MaidCakeEdibleMixin 的 CAKE_FOOD
      *  同口径）——女仆不是 Player 没有 FoodData，喂蛋糕要走 heal（heal）直接回血，
-     *  否则右键喂食只加好感不回复生命（实测一百二十八用户反馈） */
+     *  否则右键喂食只加好感不回复生命（实测一百二十八反馈） */
     private static final float CAKE_HEAL = 14.0F;
 
     /**

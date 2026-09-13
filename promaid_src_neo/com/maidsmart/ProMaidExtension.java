@@ -127,7 +127,7 @@ public class ProMaidExtension implements ILittleMaid {
         // 不执行 → 内存表残留进新会话：①搭路 isAirborne 误判（残留位置命中
         // 脚下 → 空中距离上限被错误放宽）②回收失效（残留 tick 是旧会话的
         // gameTime，新会话 gameTime 更小 → lifetime 判定永不过期，方块
-        // 永不回收——用户实测"搭路失效时方块回收也失效"的根因）。
+        // 永不回收——实测"搭路失效时方块回收也失效"的根因）。
         // 兜底：每次服务端启动时把残留表全清（此时世界刚加载，摧毁的
         // 最多是上个会话崩在地图上的几块垫脚方块——本来也该被回收）。
         com.maidsmart.task.MaidMineBehavior.clearAll(event.getServer());
@@ -503,7 +503,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         Pair.of(190, new com.maidsmart.combat.MaidAidOwnerBehavior()),
                         Pair.of(185, new com.maidsmart.combat.MaidTorchPlacerBehavior()),
                         Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior()),
-                        // v1.1.0 实测一百八十三：空闲散步（用户："增加女仆散步的频率和速度"）
+                        // v1.1.0 实测一百八十三：空闲散步（反馈："增加女仆散步的频率和速度"）
                         //——低于 TLM core 最高 99 与上面全部行为，只在真正空闲时生效
                         Pair.of(50, new com.maidsmart.task.MaidStrollBehavior()),
                         // v1.1.0 实测四百一十：排班贴身气泡（情绪价值彩蛋）——主人靠近
@@ -517,7 +517,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             }
 
             /**
-             * 实测四百一十八：床铺互通·方向一（用户："让女仆床和玩家床的代码互通。
+             * 实测四百一十八：床铺互通·方向一（反馈："让女仆床和玩家床的代码互通。
              * 女仆和玩家可以互相使用对方的床"）。
              *
              * REST 活动注册（TLM 自带 MaidBedTask=5、随机散步=20）：优先级 6 排在

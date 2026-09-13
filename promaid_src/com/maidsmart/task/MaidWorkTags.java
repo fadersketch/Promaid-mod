@@ -103,7 +103,7 @@ public final class MaidWorkTags {
         // 日程管理（回家走位/巡逻驱动照常）。
         // v1.5.287：idle 不算"干活"——旧版"非战斗即干活"把待机女仆一并门控
         //（待机不吃工作餐/不偷吃/被攻击不恐慌，与 docstring "空闲照常"矛盾——
-        // 用户："干活不被打断"只应作用于真正干活时）
+        // 反馈："干活不被打断"只应作用于真正干活时）
         return !"idle".equals(path) && !"follow".equals(path);
     }
 

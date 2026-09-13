@@ -480,7 +480,7 @@ public final class BlueprintBookNetworking {
                 for (String[] r : pkt.regions) {
                     // v1.5.290：14 字段（v1.5.279 起 regions 追加创建坐标 r[11..13]，
                     // 旧版写死 11 → 坐标字段永远没发出去 → 客户端 r.length>11 恒 false，
-                    // 区块"创建于 x,y,z"从未显示——用户："显示坐标还是没有做好"）
+                    // 区块"创建于 x,y,z"从未显示——反馈："显示坐标还是没有做好"）
                     // v1.1.0 实测九十七：15 字段（追加 r[14] 朝向 quarters）
                     for (int i = 0; i < 15; i++) {
                         buf.writeUtf(r.length > i ? r[i] : "");
@@ -956,7 +956,7 @@ public final class BlueprintBookNetworking {
                 BuildPlan.PlanState target = BuildPlan.getPlanById(pkt.planId);
                 if (pkt.action != SHOW_PROGRESS && pkt.action != UNBIND_MAID && target == null) {
                     // v1.5.252ae：planId 为空（客户端未定位到区块）提示更准确——
-                    // 旧版一律"区块不存在"（用户实测：区块明明存在却提示不存在）
+                    // 旧版一律"区块不存在"（实测：区块明明存在却提示不存在）
                     player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                             (pkt.planId == null || pkt.planId.isEmpty())
                                     ? "\u00a7c请先站在建造区块内再操作（区块外无法定位区块）。"
@@ -1300,7 +1300,7 @@ public final class BlueprintBookNetworking {
                 // 不同步客户端——不广播的话客户端显示会停留在旧状态）
                 // v1.5.249：TRACKING_ENTITY 只发给"正在追踪该女仆"的玩家——玩家在
                 // 女仆配置界面/离女仆远时收不到 → CLIENT_STATE 不更新 → 界面显示旧
-                // 值"开"，用户再点又发 false（日志实证 7 秒内 4 次 toggle(false)，
+                // 值"开"，玩家再点又发 false（日志实证 7 秒内 4 次 toggle(false)，
                 // "关了又自己打开"的根因）。改为【操作玩家必达 + 追踪玩家】双发。
                 // v1.5.251：附 soulId——客户端本地读记忆按灵魂目录路由
                 final EntityMaid fMaid = maid;

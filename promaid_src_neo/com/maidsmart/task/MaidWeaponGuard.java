@@ -18,7 +18,7 @@ import net.neoforged.neoforge.items.IItemHandlerModifiable;
  * （isBaby）
  * 手上出现武器时，把武器从手上【删除】并【原地丢一个完全一样的】到地上。
  *
- * 背景（用户："小女仆手上拿武器还是有问题……如果在他手上放武器，会将这个
+ * 背景（反馈："小女仆手上拿武器还是有问题……如果在他手上放武器，会将这个
  * 武器进行删除，然后再往地上丢一个，完全一样的"）：幼儿女儿拿武器既不合
  * 设定也可能引发战斗行为问题。主手/副手（getHandsInvWrapper：Forge
  * EntityHandsInvWrapper，slot 0 = 主手、slot 1 = 副手）出现武器即移除，

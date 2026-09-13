@@ -17,7 +17,7 @@ import java.util.List;
  * 该方法标注 @OnlyIn(Dist.CLIENT)（内部用 Minecraft.getInstance() 读客户端语言、
  * CustomPackLoader.MAID_MODELS 读模型描述），Forge 专用服务器加载 TLM 时会被
  * RuntimeDistCleaner 直接剥离 → 服务端调用即 NoSuchMethodError → 服务器 tick 崩溃
- *（粉丝服崩报告实证：ChatInfoUtil.fromMaid ← ProactiveDialogueManager.tryScanFire）。
+ *（反馈服崩报告实证：ChatInfoUtil.fromMaid ← ProactiveDialogueManager.tryScanFire）。
  * 改为服务端安全地自行构造：语言取配置（默认 zh_cn），名字取女仆实体名，描述留空。
  */
 public final class ChatInfoUtil {

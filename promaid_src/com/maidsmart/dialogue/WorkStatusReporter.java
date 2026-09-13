@@ -28,7 +28,7 @@ public class WorkStatusReporter {
     private static final ResourceLocation BREW = ResourceLocation.parse("maid_smart:brew");
     private static final ResourceLocation BUILD = ResourceLocation.parse("maid_smart:build");
     // v1.1.0 实测二百九十四：农场任务（TLM 原生 touhou_little_maid:farm，TaskNormalFarm
-    // UID javap 实证）纳入看门狗——用户："因为没有看门狗，所以女仆现在还是很喜欢发呆"
+    // UID javap 实证）纳入看门狗——反馈："因为没有看门狗，所以女仆现在还是很喜欢发呆"
     private static final ResourceLocation FARM = ResourceLocation.parse("touhou_little_maid:farm");
     // v1.1.0 实测三百一十一：宰杀任务（5×5 同种牲畜超阈值才杀）
     private static final ResourceLocation SLAUGHTER = ResourceLocation.parse("maid_smart:slaughter");
@@ -160,7 +160,7 @@ public class WorkStatusReporter {
         if (uid.equals(COOK)) {
             // v1.1.0 实测二百八十三：删除"炉子明明就在附近（N个）但我没能开始烧制"
             // 诊断播报——烹饪/酿造早已改为站桩模式，女仆贴着炉子等待（烧制中/
-            // 缺料/背包满）是正常工作状态，这句老版本诊断就是纯误报（用户实证
+            // 缺料/背包满）是正常工作状态，这句老版本诊断就是纯误报（实测
             // 熔炉与酿造双双弹这句话）。空闲+附近有炉子 = 站桩等待，不播报
             return null;
         }
@@ -169,7 +169,7 @@ public class WorkStatusReporter {
         }
         if (uid.equals(FARM)) {
             // v1.1.0 实测二百九十四：农场任务空闲 = 附近没有可收割/可种植/可锄的
-            // 目标（TLM 原生任务无站桩标记，空闲时如实播报——用户："没有看门狗，
+            // 目标（TLM 原生任务无站桩标记，空闲时如实播报——反馈："没有看门狗，
             // 女仆很喜欢发呆"）
             return "附近没有需要打理的农田了";
         }

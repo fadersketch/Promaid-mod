@@ -18,7 +18,7 @@ import java.util.Map;
  * 超过面板阈值（misc.slaughterCount，默认 5）时锁定该组随机一只，走过去近身
  * kill（播放挥臂动画——原版 kill 走正常死亡流程，掉落物照常产生）。
  *
- * v1.1.0 实测三百二十五（用户："宰杀的运动逻辑应该和攻击索敌类似"）：
+ * v1.1.0 实测三百二十五（反馈："宰杀的运动逻辑应该和攻击索敌类似"）：
  * 旧版纯站桩（每 tick setStill + 清 WALK_TARGET + 停导航）——牲畜不在身边
  * 永远够不着，日志反复"范围内无牲畜"却从不挪一步。重写为攻击索敌式状态机：
  * - SEEK（无目标）：扫描选目标（超阈值组随机一只），设 WALK_TARGET 追踪
@@ -127,7 +127,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
                             + net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES
                             .getKey(picked.m_6095_()) + "（追踪走位中）");
         } else {
-            // v1.1.0 实测三百四十（用户："女仆在宰杀状态下如果没有需要宰杀的动物，
+            // v1.1.0 实测三百四十（反馈："女仆在宰杀状态下如果没有需要宰杀的动物，
             // 不应该站在原地不动，而应该四处闲逛"）：无超阈值组 → 不再站桩，改为
             // 四处闲逛——每 2 秒在周围 8 格内随机选一个点设 WALK_TARGET（BlockPosTracker
             // 固定点，MoveToTargetSink 消费驱动寻路），走位期间不站桩；扫到目标立即
@@ -157,7 +157,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测三百三十二（用户："应该直接重写一套检索和判定逻辑"）：宰杀检索
+     * v1.1.0 实测三百三十二（反馈："应该直接重写一套检索和判定逻辑"）：宰杀检索
      * 判定重写——旧版过滤链有致命 bug：`a.m_6336_() == MobType.f_21640_` 排除
      * "亡灵马"，但 javap 实证 LivingEntity.m_6336_()（getMobType）默认实现恒返回
      * MobType.f_21640_（UNDEAD）——原版牲畜（牛/羊/猪/鸡/兔/山羊等）都不覆写
@@ -201,7 +201,7 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
                     com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 范围内无牲畜（半径 " + radius + "，阈值 " + threshold
                             + "，位于 " + maid.m_20185_() + "," + maid.m_20186_() + "," + maid.m_20189_() + "）");
-            // v1.1.0 实测三百二十七（用户："不要老是误判生物的位置，明明当时生物
+            // v1.1.0 实测三百二十七（反馈："不要老是误判生物的位置，明明当时生物
             // 是贴的很近的"）：无牲畜时把扫描框内【全部实体】的类型+坐标+与女仆的
             // 水平距离打出来（节流 5 秒）——直接对出"牛在框外"（位置误判）还是
             // "牛在框内但扫描漏了"（扫描 bug）。框内无任何实体也如实记录。

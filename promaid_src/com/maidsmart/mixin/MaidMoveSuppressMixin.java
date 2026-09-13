@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 三种标记，三种强度：
  * - WORK_STILL_TAG（工作站桩）：彻底静止——清 WALK_TARGET + 停导航 + 取消本 tick。
  * - SNIPING（垫高状态，v1.1.0 实测三百九十三）：同工作站桩档【彻底静止】——
- *   用户反馈"搭好高塔仍自己乱走走下塔摔下去"；TLM 远程 strafe 行为
+ *   反馈"搭好高塔仍自己乱走走下塔摔下去"；TLM 远程 strafe 行为
  *   （MaidRangedWalkToTarget / SetWalkTargetFromAttackTargetIfTargetOutOfReach）
  *   每 tick 写 WALK_TARGET 被源头取消，塔顶零移动意图；仅影响移动，
  *   弓的瞄准/射击不走此 sink 不受影响（与建造状态同款静止方案）。

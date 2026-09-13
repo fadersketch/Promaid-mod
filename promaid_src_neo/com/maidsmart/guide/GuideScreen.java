@@ -26,7 +26,7 @@ import java.util.List;
 public class GuideScreen extends Screen {
     private static final int VIEW_CHAPTERS = 0;
     private static final int VIEW_READ = 1;
-    // 实测四百二十三【已停用】：手册内的两个开关页入口已移除——用户要求
+    // 实测四百二十三【已停用】：手册内的两个开关页入口已移除——要求
     // 「所有开关统一扔进模组详细配置界面，不得出现在其它地方」。下面两个常量与
     // 对应的 settingsButtons/voiceButtons/commit* 方法已不可达（保留仅为回滚方便）。
     //   自动复活/回魂符 → 模组详细配置 · 生存与复活 · 死亡与复活
@@ -170,8 +170,8 @@ public class GuideScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.literal("← 返回"),
                         b -> this.onClose())
                 .bounds(8, 8, 70, 16).build());
-        // 实测四百二十三：手册内的开关页（⚙ 自动复活设置 / ♪ 日语语音包设置）已移除——
-        // 用户要求「所有开关统一扔进模组详细配置界面，不得出现在其它地方」。
+        // 实测四百二十三：手册内的开关页（自动复活设置 / 日语语音包设置）已移除——
+        // 要求「所有开关统一扔进模组详细配置界面，不得出现在其它地方」。
         // 对应参数现在只在 模组详细配置 里调整：
         //   自动复活 / 回魂符 → 生存与复活 · 死亡与复活
         //   内置日语语音包     → 语音与显示 · 语音与 TTS
@@ -197,7 +197,7 @@ public class GuideScreen extends Screen {
     }
 
     /**
-     * 自动复活设置页（用户："自动复活功能应该在手册里面也能够调整 CD 和开关"）。
+     * 自动复活设置页（反馈："自动复活功能应该在手册里面也能够调整 CD 和开关"）。
      * 手册里直接改，不用跳到配置面板：总开关即时写入（同配置面板 BoolRow），
      * 两个数字框延迟到离开本页时统一写（照配置面板：输入路径零配置写入），
      * 写完 SPEC.save() 落盘。
@@ -258,7 +258,7 @@ public class GuideScreen extends Screen {
     // ================= 内置日语语音包设置 =================
 
     /**
-     * v1.1.0 实测四百二十：内置日语语音包设置页（用户："可以在手册里调整开关和音量大小
+     * v1.1.0 实测四百二十：内置日语语音包设置页（反馈："可以在手册里调整开关和音量大小
      * 以及最小间隔"）。开关即时写；音量/最小间隔延迟到离开本页统一写（同复活设置页）。
      */
     private void voiceButtons(int w, int h, int cx) {
@@ -430,7 +430,7 @@ public class GuideScreen extends Screen {
         com.maidsmart.guide.GuideContent.Chapter ch = com.maidsmart.guide.GuideContent.chapters()[idx];
         int maxWidth = this.width - 24;
         if (ch.changelog) {
-            // v1.5.252h：更新日志不再 fitText 截断——用户反馈省略号太多（"至少要把
+            // v1.5.252h：更新日志不再 fitText 截断——反馈省略号太多（"至少要把
             // 这一句话显示完整"）；改为与正文一致的自动换行，每条完整可见
             String[] rows = loadChangelog();
             for (String r : rows) {
@@ -453,7 +453,7 @@ public class GuideScreen extends Screen {
             out.addAll(wrapped);
             out.add(""); // 段间空行
         }
-        // 实测四百二十四：每章正文末尾自动附一行可点击的「⚙ 配置入口」链接
+        // 实测四百二十四：每章正文末尾自动附一行可点击的「配置入口」链接
         if (ch.paras.length > 0) {
             String cfgLink = com.maidsmart.guide.GuideContent.configLinkFor(ch.title);
             if (cfgLink != null) {
@@ -464,7 +464,7 @@ public class GuideScreen extends Screen {
             }
         }
         // v1.5.252h：去掉末尾空行——段落后追加的空行若落在分页边界，
-        // 最后一页只剩空白行（用户反馈"贴身辅助第 2 页完全空白"）
+        // 最后一页只剩空白行（反馈"贴身辅助第 2 页完全空白"）
         if (!out.isEmpty() && out.get(out.size() - 1).isEmpty()) {
             out.remove(out.size() - 1);
         }
@@ -616,7 +616,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         } else {
             super.renderBackground(graphics, 0, 0, 0);
         }
-        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // v1.1.0 实测三百一十七（反馈："UI 美化仅更改了手册第一主界面，其他子界面
         // 一点都没变"）：Promaid 详细介绍（手册子界面）补上蓝金品牌渐变——与手册
         // 主界面同款（半透明色带叠加 = 渐变，fill 走 ARGB）
         int w = this.width;
@@ -692,7 +692,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             }
         } else {
             this.drawCentered(graphics, "\u00a7ePromaid 详细介绍 · 章节目录", 36, 0xFFFFFF);
-            // v1.5.252h：目录页不再显示章节总数说明（用户要求"不要再有字"）
+            // v1.5.252h：目录页不再显示章节总数说明（要求"不要再有字"）
         }
         // 页码（v1.1.0 实测二十五：画在两箭头中间 h-26 行——箭头 20px 在两侧，
         // 页码居中，任意文本长度不与按钮重叠）；设置页无分页，不画

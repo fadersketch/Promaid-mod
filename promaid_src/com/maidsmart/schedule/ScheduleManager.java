@@ -35,7 +35,7 @@ public final class ScheduleManager {
 
     /** v1.1.0 实测一百三十五：本段是否已尝试应用 + 尝试那一刻的任务（maidId → "段键|任务UID"）。
      *  用于识别"排班尝试过本段之后任务被外部（玩家/命令/TLM GUI）改走"：尊重手动选择，
-     *  写去抖键结束本段，不再死磕重试把玩家改的任务顶回去/无限重试（用户反馈：改排班
+     *  写去抖键结束本段，不再死磕重试把玩家改的任务顶回去/无限重试（反馈：改排班
      *  女仆任务 → 排班会卡死）。只记尝试时刻的任务，任务没变=正常"没活不切"重试不误伤。 */
     private static final java.util.Map<java.util.UUID, String> ATTEMPTED = new java.util.HashMap<>();
 
@@ -157,7 +157,7 @@ public final class ScheduleManager {
      *  永不重试 = 排班"应用了但没生效"的静默失效；读回对比能当场暴露。 */
     public static void applyNow(EntityMaid maid, ServerLevel level) {
         // v1.1.0 实测一百三十五：整体隔离——任何异常都不许击穿 applyNow（否则每
-        // tick 抛一次 = 排班系统整体瘫痪，即用户反馈的"排班会卡死"形态之一），
+        // tick 抛一次 = 排班系统整体瘫痪，即反馈的"排班会卡死"形态之一），
         // 统一落日志 + 10 秒重试节流，下一轮继续
         try {
         String who = com.maidsmart.tool.PromaidLog.nameOf(maid);
@@ -217,7 +217,7 @@ public final class ScheduleManager {
         }
         ScheduleData.Segment seg = ScheduleData.segmentAt(segs, ScheduleData.currentMinute(level));
         if (seg == null) {
-            // v1.1.0 实测二百六十九（用户："明明排班里面有了对应的日程，但是女仆工作的
+            // v1.1.0 实测二百六十九（反馈："明明排班里面有了对应的日程，但是女仆工作的
             // 状态仍然不符合日程安排"）：旧版休息时段直接 return——【模式也不切】，晚班
             // 女仆（白天休息）保持排班前的模式（如图：早班+空闲），"排班开了状态却与
             // 日程不符"。休息时段不再什么都不做：把作息切到班次模式（早班=DAY/晚班=
@@ -299,7 +299,7 @@ public final class ScheduleManager {
             // v1.1.0 实测九十四：运行日志——段应用落盘（去抖保证每段每天至多一条）
             com.maidsmart.tool.PromaidLog.log("排班", who + " 应用段 " + segLabel
                     + " 模式=" + seg.mode() + " 任务=" + seg.taskUid());
-            // v1.1.0 实测二百六十八（用户："排班生效之后，快捷设置页的 GUI 应该也统一
+            // v1.1.0 实测二百六十八（反馈："排班生效之后，快捷设置页的 GUI 应该也统一
             // 立刻更改为排班所规定的状态，然后再锁定"）：段应用成功 → 把最新真实状态
             // 推给打开着排班书的主人——快捷设置页立即显示排班规定的模式/任务并锁定，
             // 不再停留在打开排班书那一刻的旧状态（旧版 GUI 数据来自打开包，排班生效后

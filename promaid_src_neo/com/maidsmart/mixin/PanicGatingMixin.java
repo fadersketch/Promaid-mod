@@ -24,7 +24,7 @@ public abstract class PanicGatingMixin {
     @Inject(method = "start(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;J)V", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noPanicWhileWorking(ServerLevel level, EntityMaid maid, long gameTime,
                                                CallbackInfo ci) {
-        // v1.1.0 实测一百九十六【有保命道具→不惊慌逃跑】（用户："让女仆保证在有保命
+        // v1.1.0 实测一百九十六【有保命道具→不惊慌逃跑】（反馈："让女仆保证在有保命
         // 道具的时候不触发自保逃跑"）：TLM 原生 MaidPanicTask 是 CORE 优先级 1——
         // 只被前面的"干活+血量≥30%"门控管着，血量 <30% 的女仆即使【带着绀珠之药/
         // 不死图腾】也会被 TLM 原版恐慌满场跑，绕过了自保行为的 canFlee 判定

@@ -36,7 +36,7 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
     private static final long COOLDOWN_TICKS = 30L * 20L;
 
     /** 贴身气泡文本池（50 条）——排班情境：正在干活被主人靠近时的碎碎念/撒娇/报备
-     *  + 打工人毒鸡汤（实测四百一十一，用户："傻乎乎被半骗着说这些话挺有意思的"）。
+     *  + 打工人毒鸡汤（实测四百一十一，反馈："傻乎乎被半骗着说这些话挺有意思的"）。
      *  口径：全部贴合"被排班表支配但心甘情愿"的女仆身份——提到老板/工资/下班都
      *  落回主人身上（老板=主人、工资=摸摸头/加餐），不出戏。 */
     private static final String[] TEXTS = {

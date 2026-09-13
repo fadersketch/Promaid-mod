@@ -53,13 +53,13 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     /** 攻击完成后撤时长（tick）：打一刀退一步的"退"（v1.5.141：10→14 更明显） */
     private static final int RETREAT_TICKS = 14;
     /** v1.5.280：近战贴脸后退触发距离（格）——敌人进入此距离内主动后退远离
-     *  （用户："周围两格内有自己识别的敌人时,会自己往后退远离"；2.0 恰为
+     *  （反馈："周围两格内有自己识别的敌人时,会自己往后退远离"；2.0 恰为
      *  僵尸/骷髅的近战攻击距离，贴进 2 格 = 在挨打范围内，必须拉开） */
     private static final double KITE_MELEE_RANGE = 2.0;
     /** v1.5.280：后退目标距离（格）——退到 3 格即停：女仆手长（攻击距离 3.1）
-     *  完全打得到（用户："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
+     *  完全打得到（反馈："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
     private static final double KITE_BACK_DIST = 3.0;
-    /** v1.1.0 实测一百六十六（用户："远程战术似乎失效了——三叉戟/弓弩还是会近身"）：
+    /** v1.1.0 实测一百六十六（反馈："远程战术似乎失效了——三叉戟/弓弩还是会近身"）：
      *  最小风筝距离（格）。三叉戟（TLM TRIDENT_RANGE≈8~10）与弩（原版
      *  getDefaultProjectileRange=8）的 maxRange 小 → ideal=maxRange×0.6 只有 4.8~6
      *  格 = 贴脸放风筝（近战怪 3 格够得着，看起来就是"远程还近身"）。强制下限：
@@ -85,7 +85,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      * v1.5.174：大跳最远距离——旧 12.0 的依据（v1.5.175 注释"滞空 17 tick ×
      * 水平 0.5 = 位移 ≈8.5 格"）算错了：水平速度在空中每 tick 衰减 0.91，
      * 0.5 初速滞空 ≈19 tick 的全程位移实际只有 ≈4.6 格 → 8~12 格起跳落点
-     * 距敌 3~7 格，大跳完还剩一大截非常尴尬（用户反馈）。
+     * 距敌 3~7 格，大跳完还剩一大截非常尴尬（反馈）。
      * v1.5.185：收紧到 6.5——即大跳实际可达并能在下落中命中（挥刀 3D 距离
      * ≤3.1）的上限；超过 6.5 跳过去也够不着，先走近再跳。
      */
@@ -103,7 +103,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private static final int JUMP_DASH_CD = 200;
     /**
      * v1.5.174：单敌跳劈概率（主体是跳劈——穿插横扫补刀）。
-     * v1.5.282：0.7 → 1.0【单敌必跳劈】——用户："剑面对单怪直接改为 100%，
+     * v1.5.282：0.7 → 1.0【单敌必跳劈】——反馈："剑面对单怪直接改为 100%，
      * 因为本来就会在跳劈的中间穿插横扫"。跳劈冷却 2 秒空档由 TLM 攻击行为
      * （MaidMeleeAttack）自动打普攻/横扫（我们只接管移动+跳劈，不碰攻击），
      * 所以跳劈 100% 不会挤掉横扫——每次跳劈之间 TLM 照常挥砍补刀。
@@ -405,7 +405,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             boolean axeMode = maid.getMainHandItem().getItem()
                     instanceof net.minecraft.world.item.AxeItem;
             // v1.5.188c：群怪抑制跳劈——多敌（索敌范围 ≥2）时【完全不跳劈】
-            //（旧版 12% 概率仍会跳，用户反馈"面对群怪反而特别喜欢用跳劈"；
+            //（旧版 12% 概率仍会跳，反馈"面对群怪反而特别喜欢用跳劈"；
             // 群怪应尽最大可能横扫补伤害，跳劈单体收益低还破坏横扫节奏）
             if (this.jumpCooldown <= 0 && dist > 1.8) {
                 boolean tryJump;
@@ -440,7 +440,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                             dx = 0.0;
                             dz = 0.0;
                         }
-                        // v1.5.175：抛物线大跳（用户要求"那种抛物线曲线"）——
+                        // v1.5.175：抛物线大跳（要求"那种抛物线曲线"）——
                         // v1.5.181：垂直初速 0.95 → 0.75（峰高 ≈3.5 格——刚好不触发
                         // 落地水，v1.5.154 历史实证值；落地时清 fallDistance 无伤）；
                         // v1.5.185：水平初速按【实际可达距离】缩放——水平速度空中
@@ -535,7 +535,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
             this.jumpAir = false; // 落地 → 本次跳劈结束
             this.critDone = false;
             // v1.5.174：落地后不再禁横扫——跳劈空档由 TLM 正常攻击穿插横扫
-            // 补伤害（用户："平A没意义"——不再有单独的平A状态）
+            // 补伤害（反馈："平A没意义"——不再有单独的平A状态）
             // v1.5.175：跳劈落地清摔落距离——抛物线大跳垂直初速 0.75（峰高
             // ≈3.5 格）自然摔落仍可能掉血，跳劈是进攻动作不应自损（v1.5.181：
             // 0.95→0.75 后落距 <4，也不再触发落地水）
@@ -661,7 +661,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     private void rangedTick(EntityMaid maid, LivingEntity target) {
         double dist = maid.distanceTo(target);
-        // v1.1.0 实测四十（用户："远程被贴身时自动对周围敌人触发一次近战攻击及
+        // v1.1.0 实测四十（反馈："远程被贴身时自动对周围敌人触发一次近战攻击及
         // 击退——伤害取包内 DPH 最高的近战武器，无近战武器为 1，带近战特效动作"）：
         // 敌人贴进 2 格内（近战威胁距离）且反击冷却好 → 一次 AOE 近战反击：
         // 摆臂 + 横扫粒子音效（近战该有的特效）+ 目标伤害（DPH 最高的近战武器，
@@ -702,7 +702,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百一十六【远程风筝不明显】：旧版只在敌人贴进 ideal×0.55
         // （弓≈4.95 格）才后退、退到 ideal-dist+2（≈6 格）就开始绕圈（半径
         // 0.45×射程≈6.75）——怪物几乎全程贴在 5~7 格内，弓手看不出在放风筝
-        // （用户："拿着弓箭仍然没有与怪物拉开明显的距离"）。修复：
+        // （反馈："拿着弓箭仍然没有与怪物拉开明显的距离"）。修复：
         // ①后退阈值提前到 ideal×0.75（弓≈6.75 格——怪物刚进近战威胁区就拉开）；
         // ②后退目标 = ideal+2（弓≈11 格——干净拉出一整段射程差）；
         // ③后退速度 1.15 → 1.3（肉眼可见地甩开追兵）；
@@ -799,7 +799,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     /**
      * v1.1.0 实测四十：背包里 DPH（单发伤害）最高的近战武器。
      * 近战武器 = 攻击力属性 ≥1 且不是远程投射武器（弓/弩/三叉戟/枪械不算——
-     * 它们的攻击力属性是给近战形态用的，但用户口径"枪械算远程"）。
+     * 它们的攻击力属性是给近战形态用的，但判定口径"枪械算远程"）。
      * 剑/斧/镐/拔刀剑/史诗武器等全部按攻击力属性自然参与评分。
      * 找不到返回 EMPTY 栈（调用方按 1 点伤害处理）。
      */
@@ -814,7 +814,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 net.minecraft.world.item.Item it = s.getItem();
-                // 远程武器排除（用户口径：枪械/弓/弩/三叉戟算远程）
+                // 远程武器排除（判定口径：枪械/弓/弩/三叉戟算远程）
                 if (it instanceof ProjectileWeaponItem || it instanceof TridentItem
                         || GunCompat.isGun(s)) {
                     continue;

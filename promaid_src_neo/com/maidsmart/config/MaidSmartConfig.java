@@ -41,7 +41,7 @@ public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_WIDES;
     /** v1.5.275：无碰撞方块替代品表 */
     public static final ModConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_NOCLIPS;
-    /** v1.5.102：以下把模组其余硬编码数值全部纳入面板（用户要求"所有数值都可调"） */
+    /** v1.5.102：以下把模组其余硬编码数值全部纳入面板（要求"所有数值都可调"） */
     public static final ModConfigSpec.IntValue BUILD_STALL_INTERVAL;
     public static final ModConfigSpec.IntValue BUILD_LOOKAHEAD;
     public static final ModConfigSpec.IntValue BUILD_DEFERRED_SCAN_CAP;
@@ -174,7 +174,7 @@ public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
     public static final ModConfigSpec.BooleanValue DIALOGUE_PROACTIVE;
     public static final ModConfigSpec.IntValue DIALOGUE_PROACTIVE_COOLDOWN;
     public static final ModConfigSpec.IntValue DIALOGUE_PROACTIVE_DAILY;
-    // v1.1.0 实测一百九十四：击杀邀功对话开关（默认关——用户反馈击杀日志时刻刷屏）
+    // v1.1.0 实测一百九十四：击杀邀功对话开关（默认关——反馈击杀日志时刻刷屏）
     public static final ModConfigSpec.BooleanValue DIALOGUE_PROACTIVE_KILL;
     public static final ModConfigSpec.BooleanValue DIALOGUE_AUTONOMOUS;
     public static final ModConfigSpec.IntValue DIALOGUE_AUTONOMOUS_COOLDOWN;
@@ -297,7 +297,7 @@ public static final ModConfigSpec.IntValue BRIDGE_MAX_DIST;
 public static final ModConfigSpec.IntValue BRIDGE_AIR_MAX_DIST;
 public static final ModConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ModConfigSpec.IntValue BRIDGE_MIN_RADIUS;
-    // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
+    // v1.1.0 实测一百八十七（反馈："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
     public static final ModConfigSpec.DoubleValue BRIDGE_START_H_DIST;
     public static final ModConfigSpec.IntValue BRIDGE_THREAT_DIST;
     public static final ModConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
@@ -388,12 +388,12 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue MISC_COOK_SMELT_ORES;
     // v1.1.0 实测一百八十二：通用可烧制物回退（有熔炉配方且非装备类即喂，装备类永不熔）
     public static final ModConfigSpec.BooleanValue MISC_COOK_SMELT_ANY;
-    // v1.1.0 实测一百八十三（用户："增加女仆散步的频率和速度"）：散步行为开关组
+    // v1.1.0 实测一百八十三（反馈："增加女仆散步的频率和速度"）：散步行为开关组
     public static final ModConfigSpec.BooleanValue MISC_STROLL_ENABLED;
     public static final ModConfigSpec.IntValue MISC_STROLL_INTERVAL;
     public static final ModConfigSpec.IntValue MISC_STROLL_RADIUS;
     public static final ModConfigSpec.DoubleValue MISC_STROLL_SPEED;
-    // v1.1.0 实测四百一十八（用户："让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床"）
+    // v1.1.0 实测四百一十八（反馈："让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床"）
     public static final ModConfigSpec.BooleanValue MISC_BED_INTEROP;
     // v1.1.0 实测四百二十一：冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却显示在玩家屏幕上）
     public static final ModConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
@@ -431,7 +431,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // 非工作"的跟随女仆且传送可能静默失败，这里补统一兜底）
     public static final ModConfigSpec.BooleanValue MISC_MAID_SAME_DIM_PULL;
     public static final ModConfigSpec.IntValue MISC_MAID_SAME_DIM_DIST;
-    // v1.1.0 实测一百八十八（用户："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
+    // v1.1.0 实测一百八十八（反馈："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
     public static final ModConfigSpec.IntValue MISC_MAID_SAME_DIM_VERTICAL;
     /** v1.1.0 实测七十九：受困救援（下界基岩顶/虚空自动传回主人身边） */
     public static final ModConfigSpec.BooleanValue MISC_MAID_RESCUE;
@@ -472,7 +472,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.IntValue MISC_SCHEDULE_MIN_HOLD_TICKS;
     // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
     public static final ModConfigSpec.BooleanValue MISC_SCHEDULE_FORCE_BRAIN_REFRESH;
-    // v1.1.0 实测一百八十三（用户："排班状态下增大活动的范围"）：排班/home 模式活动半径下限
+    // v1.1.0 实测一百八十三（反馈："排班状态下增大活动的范围"）：排班/home 模式活动半径下限
     public static final ModConfigSpec.IntValue SCHEDULE_ACTIVITY_RANGE;
 
     // ================= 语音（v1.5.198） =================
@@ -543,7 +543,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILD_ALT_TALLS = BUILDER.comment("两格高替代品（门/双植物等缺料时按序使用，填完整注册名如 minecraft:oak_door）")
                 .translation("config.promaid.build.altTalls")
                 .defineList("altTalls", List.of("minecraft:oak_door"), o -> o instanceof String s && !s.isEmpty());
-        // v1.5.275：两格再分竖/横 + 无碰撞方块单独表（用户："横着高的两格和竖着的两格不一样；无碰撞方块单独画一个区"）
+        // v1.5.275：两格再分竖/横 + 无碰撞方块单独表（反馈："横着高的两格和竖着的两格不一样；无碰撞方块单独画一个区"）
         BUILD_ALT_WIDES = BUILDER.comment("横两格替代品（床等宽 2 格方块缺料时按序使用，填完整注册名如 minecraft:red_bed）")
                 .translation("config.promaid.build.altWides")
                 .defineList("altWides", List.of("minecraft:white_bed"), o -> o instanceof String s && !s.isEmpty());
@@ -597,9 +597,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.mine.downRange").defineInRange("downRange", 12, 4, 48);
         MINE_UP_RANGE = BUILDER.comment("垂直向上搜索范围")
                 .translation("config.promaid.mine.upRange").defineInRange("upRange", 24, 4, 64);
-        // v1.1.0 实测七十二（用户反馈："矿洞里一直往下打洞"）：预算重新计入实心
-        // 可开路方块（石头/泥土），曾把默认从 22 降为 6；二百零六 按用户当前配置
-        // 同步回 22（用户实值）
+        // v1.1.0 实测七十二（反馈："矿洞里一直往下打洞"）：预算重新计入实心
+        // 可开路方块（石头/泥土），曾把默认从 22 降为 6；二百零六 按玩家当前配置
+        // 同步回 22（玩家实值）
         MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 22）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道，调小=只挑眼前暴露的矿")
                 .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 22, 0, 64);
         MINE_VALUE_WEIGHT = BUILDER.comment("价值权重（高价值矿优先程度）")
@@ -619,7 +619,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MINE_PLACED_LIFETIME = BUILDER.comment("搭方块自动清理时间（秒）")
                 .translation("config.promaid.mine.placedLifetime").defineInRange("placedLifetime", 10, 3, 60);
         // v1.1.0 实测二十七：默认开启——软方块（徒手可挖）不磨损镐，与伐木一致。
-        // v1.5.138 曾改 false（用户反馈"挖矿不消耗耐久"），实测二十七按新需求改回。
+        // v1.5.138 曾改 false（反馈"挖矿不消耗耐久"），实测二十七按新需求改回。
         MINE_SOFT_NO_DURABILITY = BUILDER.comment("软方块（徒手可挖）开路不消耗镐耐久（默认开——与伐木一致）")
                 .translation("config.promaid.mine.softNoDurability").define("softNoDurability", true);
         MINE_PILLAR_GUARD = BUILDER.comment("搭方块防掉落（潜行效果，速度不变）")
@@ -659,7 +659,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.mine.skipReportInterval")
                 .defineInRange("skipReportInterval", 600, 100, 2400);
         // v1.5.161：进阶挖矿——连锁采集 / 自动收集（自动收集默认关闭；连锁采集
-        // 二百零六 按用户当前配置同步为默认开）
+        // 二百零六 按玩家当前配置同步为默认开）
         MINE_CHAIN_MINING = BUILDER.comment("连锁采集（默认开）：挖矿时自动连锁挖掘相连的同族矿石——矿脉一次挖完")
                 .translation("config.promaid.mine.chainMining").define("chainMining", true);
         MINE_AUTO_COLLECT = BUILDER.comment("自动收集（挖掘掉落物直接进女仆背包，不进世界；背包放不下才落地）")
@@ -670,7 +670,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
         MINE_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：挖矿期间连续 N 秒既没挖掉任何方块、位置也没挪动（原地发呆/内部状态卡死）时，自动整体重置该女仆的挖矿状态——锚点/扫描缓存/排除表/目标全部清空重新开始，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭路都算进展，不会误触发")
                 .translation("config.promaid.mine.stuckWatchdog").define("stuckWatchdog", true);
-        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，用户实测发呆出现很快）：连续这么久既没挖掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
+        MINE_STUCK_RESET_SECONDS = BUILDER.comment("看门狗判定时长（秒，默认 8，实测发呆出现很快）：连续这么久既没挖掉/垫过方块、也没挪动就整体重置状态。重置不会打断「够不着目标」的超时弃置流程（等待时钟跨重置保留）")
                 .translation("config.promaid.mine.stuckResetSeconds").defineInRange("stuckResetSeconds", 8, 4, 300);
         BUILDER.pop();
 
@@ -706,7 +706,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.depthPenalty").defineInRange("depthPenalty", 0.0, 0.0, 10.0);
         WOOD_SPEED_FACTOR = BUILDER.comment("砍伐速度系数（1.0=玩家速度，1.2=快20%）")
                 .translation("config.promaid.wood.speedFactor").defineInRange("speedFactor", 1.2, 0.5, 3.0);
-        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（v1.1.0 实测四十八：0.6→0.3——用户反馈伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
+        WOOD_MOVE_SPEED = BUILDER.comment("接近木材速度倍率（v1.1.0 实测四十八：0.6→0.3——实测伐木移速至少快一倍，观感像狂奔；0.3 = 挖矿同款基础的一半，悠闲走向下一棵树）")
                 .translation("config.promaid.wood.moveSpeed").defineInRange("moveSpeed", 0.3, 0.2, 1.5);
         WOOD_JUNK_KEEP = BUILDER.comment("废石保留量——砍树途中挖穿泥土/石头产生的废石每种保留几组")
                 .translation("config.promaid.wood.junkKeep").defineInRange("junkKeep", 32, 4, 128);
@@ -720,7 +720,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.wood.hardBlockReport").define("hardBlockReport", true);
         WOOD_CREATIVE_DEFAULT_VALUE = BUILDER.comment("创造面板默认价值：木材页锁定方块后，输入框留空直接点「添加」时用的分数")
                 .translation("config.promaid.wood.creativeDefaultValue").defineInRange("creativeDefaultValue", 300, 10, 1000);
-        // v1.1.0 实测四十一（用户："隔墙找木材视线感知默认打开——增加容错率"）：
+        // v1.1.0 实测四十一（反馈："隔墙找木材视线感知默认打开——增加容错率"）：
         // 树木天然被树冠/地形遮挡，关着容错率太低（玩家反感"找不到树"）
         WOOD_SEEK_THROUGH_WALLS = BUILDER.comment("透视感知（隔墙找木材，默认开）——开启后女仆能发现视线被方块挡住的木材并挖通开路；关闭则像玩家一样只发现视线无阻的木材（树叶不挡视线）")
                 .translation("config.promaid.wood.seekThroughWalls").define("seekThroughWalls", true);
@@ -737,9 +737,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 // v1.1.0 实测五十四：4→2；实测二百一十五：默认回到 4——连续高速垫块
                 // 容易失足摔死，与搭路节奏（4 tick）统一，只比玩家手速略快一点点
                 .defineInRange("pillarCooldown", 4, 1, 20);
-        // v1.1.0 实测二百二十八（用户："种树 CD 差不多五秒左右，可以在伐木面板调"）：
+        // v1.1.0 实测二百二十八（反馈："种树 CD 差不多五秒左右，可以在伐木面板调"）：
         // 随手种树——独立模块（MaidPlanting），触发 = 伐木模式（伐木行为每 20 tick 调起）
-        // v1.1.0 实测二百二十九（用户："是否能够种树也是有个开关的，默认开启"）：总开关
+        // v1.1.0 实测二百二十九（反馈："是否能够种树也是有个开关的，默认开启"）：总开关
         WOOD_PLANT_SAPLING_ENABLED = BUILDER.comment("随手种树（默认开）：她手上有树苗、附近（半径 6 格）有可种土块时随手种一棵（触发 = 伐木模式，独立模块）；关闭 = 只砍树不种树（树苗留在背包/地上）")
                 .translation("config.promaid.wood.plantSaplingEnabled").define("plantSaplingEnabled", true);
         WOOD_PLANT_SAPLING_COOLDOWN = BUILDER.comment("补种树苗冷却（tick，默认 100≈5 秒）：她手上有树苗、附近（半径 6 格）有可种土块时随手种一棵，两次种植最短间隔；调小种得更勤（树苗消耗也更快）")
@@ -942,7 +942,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.dialogue.proactiveCooldown").defineInRange("proactiveCooldown", 4, 1, 60);
         DIALOGUE_PROACTIVE_DAILY = BUILDER.comment("主动对话日上限（次，控 token 成本；v1.5.191：4 → 12——7 阶段状态机需要更多发言额度）")
                 .translation("config.promaid.dialogue.proactiveDaily").defineInRange("proactiveDaily", 12, 0, 50);
-        // v1.1.0 实测一百九十四（用户："有一些击杀日志时刻显示在我的屏幕上。能去掉吗？"）
+        // v1.1.0 实测一百九十四（反馈："有一些击杀日志时刻显示在我的屏幕上。能去掉吗？"）
         DIALOGUE_PROACTIVE_KILL = BUILDER.comment("击杀邀功对话（默认关）：女仆击杀敌人（主人 16 格内）后主动向主人邀功的 LLM 对话气泡——战斗频繁时击杀就冒一次（时刻刷屏很吵）；开启恢复旧行为")
                 .translation("config.promaid.dialogue.proactiveKill").define("proactiveKill", false);
         DIALOGUE_AUTONOMOUS = BUILDER.comment("自主决策（女仆自己换任务干活）")
@@ -1035,7 +1035,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_PEARL_DIST = BUILDER.comment("末影珍珠逃生威胁距离（威胁小于此格数才扔珍珠）")
                 .translation("config.promaid.combat.pearlDist")
                 .defineInRange("pearlDist", 8.0, 2.0, 16.0);
-        // 实测三百六十四：默认 0.45→0.70（用户："低血量和解除线差距太小，改回
+        // 实测三百六十四：默认 0.45→0.70（反馈："低血量和解除线差距太小，改回
         // 70%"——残血自保要真回血才归位）；塔顶没回血资源被围困另有 10 秒接回兜底
         COMBAT_SAFE_RETURN_RATIO = BUILDER.comment("安全回归血量（0-1，默认 0.7：血量恢复到此线即解除自保回归工作/战斗——威胁还在也解除，战斗交还战术；触发血量 0.3 与本线之间为滞回防抖带）")
                 .translation("config.promaid.combat.safeReturnRatio")
@@ -1090,7 +1090,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
                 .translation("config.promaid.combat.soulSpellCooldownSeconds")
                 .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
-        // 实测四百一十六：女仆自动复活（用户："女仆死亡后 60 秒那个墓碑就会自己消失掉，
+        // 实测四百一十六：女仆自动复活（反馈："女仆死亡后 60 秒那个墓碑就会自己消失掉，
         // 然后在主人的出生点复活，也是 60 秒的 CD"）
         AUTO_RESURRECT_ENABLE = BUILDER.comment("女仆自动复活（默认开）：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不再需要手动去墓碑处取回；关掉恢复 TLM 原版死亡流程")
                 .translation("config.promaid.combat.autoResurrectEnable").define("autoResurrectEnable", true);
@@ -1150,7 +1150,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.tacticsMelee").define("tacticsMelee", true);
         COMBAT_TACTICS_RANGED = BUILDER.comment("远程战术（保持理想射程、横移绕圈风筝）")
                 .translation("config.promaid.combat.tacticsRanged").define("tacticsRanged", true);
-        // 实测四百零一：高地狙击已整体移除（用户拍板）——配置项一并删除
+        // 实测四百零一：高地狙击已整体移除（定夺）——配置项一并删除
         COMBAT_TACTICS_SHIELD = BUILDER.comment("时机举盾（攻击冷却间隙举盾格挡、攻防交替；替代原版一直举盾）")
                 .translation("config.promaid.combat.tacticsShield").define("tacticsShield", true);
         COMBAT_TACTICS_ORBIT_RADIUS = BUILDER.comment("绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径")
@@ -1159,7 +1159,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_TACTICS_KITE_RANGE = BUILDER.comment("远程理想射程倍率（0.6 = 保持在最大射程 60% 的距离放风筝）")
                 .translation("config.promaid.combat.tacticsKiteRange")
                 .defineInRange("tacticsKiteRange", 0.6, 0.3, 0.9);
-        // v1.5.280：近战贴脸后退——用户："战斗状态且非自保状态下,即使是近战武器也应该
+        // v1.5.280：近战贴脸后退——反馈："战斗状态且非自保状态下,即使是近战武器也应该
         // 尝试与敌人稍微拉开距离,而不是贴身搏斗……周围两格内有敌人时会自己往后退远离"
         COMBAT_TACTICS_MELEE_KITE = BUILDER.comment("近战贴脸后退（敌人贴进 2 格内主动后退拉开距离，女仆手长 3 格仍能挥砍）")
                 .translation("config.promaid.combat.tacticsMeleeKite").define("tacticsMeleeKite", true);
@@ -1181,7 +1181,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.aidMaidMutual").define("aidMaidMutual", true);
         // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
         // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
-        // 饱食度 18~19 时永远不喂（用户："那个修改按键要真实有效"——测试调 20
+        // 饱食度 18~19 时永远不喂（反馈："那个修改按键要真实有效"——测试调 20
         // 只为确认"只要不满就喂"）
         AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（4-20：主人饱食度低于此值自动喂食；20=只要不满就喂）")
                 .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 20);
@@ -1219,7 +1219,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.autoSwitchModWeight").defineInRange("autoSwitchModWeight", 2.0, 0.1, 10.0);
         COMBAT_AUTO_SWITCH_VANILLA_WEIGHT = BUILDER.comment("原版武器权重（默认 1.0）：原版五件套（近战/弓/弩/三叉戟/弹幕）的加权随机权重——设 0.5=更少选原版，设 2=与模组平起平坐")
                 .translation("config.promaid.combat.autoSwitchVanillaWeight").defineInRange("autoSwitchVanillaWeight", 1.0, 0.1, 10.0);
-        // v1.1.0 实测三百七十九（用户："为啥自主战斗老喜欢切换到魔法？明明我只给了
+        // v1.1.0 实测三百七十九（反馈："为啥自主战斗老喜欢切换到魔法？明明我只给了
         // 原版武器"）：万法皆通的魔法任务 isWeapon 恒 true（javap 反汇编实证）——
         // 背包里任何物品都被认作它的武器，模组任务凭空进候选池 + 模组让位规则
         // （实测一百八十一）把原版任务挤掉 → 只给原版武器也会被切去魔法。
@@ -1239,7 +1239,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.reverseWindowTicks").defineInRange("reverseWindowTicks", 100, 20, 600);
         COMBAT_REVERSE_COOLDOWN_TICKS = BUILDER.comment("战中反向切换冷却（tick，默认 200=10 秒）：横跳被判定后进入冷却，期间不再换战术（保持当前战术硬打）——0 = 关闭反向抑制")
                 .translation("config.promaid.combat.reverseCooldownTicks").defineInRange("reverseCooldownTicks", 200, 0, 1200);
-        // v1.1.0 实测六十七（用户："手上完全没有攻击性物品的女仆，就不应该触发自主战斗"）
+        // v1.1.0 实测六十七（反馈："手上完全没有攻击性物品的女仆，就不应该触发自主战斗"）
         COMBAT_UNARMED_SKIP = BUILDER.comment("空手不参战（默认开）：背包和主手都没有任何攻击任务认可的武器（剑/弓/枪械/模组武器等）的女仆，不触发自主战斗、维持原任务继续干活；关闭恢复旧行为（没有武器也空手近战兜底）")
                 .translation("config.promaid.combat.unarmedSkip").define("unarmedSkip", true);
         // v1.1.0 实测二十：枪械优先开关已删除——附属生态（万法皆通/史诗战斗/真正的
@@ -1270,17 +1270,17 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.minDy").defineInRange("minDy", 3, 1, 8);
         BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 3）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
                 .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 3, 1, 8);
-        // v1.1.0 实测一百八十七（用户："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
-        // v1.1.0 实测一百九十九（用户："给搭路再加一个配置项。水平距离小于 5 的时候不会触发水平搭建方块。
+        // v1.1.0 实测一百八十七（反馈："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
+        // v1.1.0 实测一百九十九（反馈："给搭路再加一个配置项。水平距离小于 5 的时候不会触发水平搭建方块。
         // 此项目仍然可以在面板内自己进行配置"）：默认值 6 → 5（该配置已存在，语义=水平距离小于此值不触发
-        // 水平搭桥；仅按用户指定调整默认值，面板可调范围不变）
+        // 水平搭桥；仅按玩家指定调整默认值，面板可调范围不变）
         BRIDGE_START_H_DIST = BUILDER.comment("平桥启动水平距离（格，默认 6）：女仆与主人【水平距离】达到此值、且朝主人方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随；范围 3~64（3 = 最灵敏，接近一百七十九旧行为）。竖直搭高（主人更高、原地垫柱）不受影响")
                 .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 6.0, 3.0, 64.0);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
-        // v1.1.0 实测一百二十二（用户："女仆搭方块速度不要跟玩家有过大出入，可以
+        // v1.1.0 实测一百二十二（反馈："女仆搭方块速度不要跟玩家有过大出入，可以
         // 稍微快一点"）：原版无放置冷却，玩家持续搭约 4~6 块/秒（人手点击上限）。
-        // 实测二百一十五（用户"搭建速度过快容易失足摔死——降低默认搭建速度"）：
+        // 实测二百一十五（反馈"搭建速度过快容易失足摔死——降低默认搭建速度"）：
         // 默认定格 4 tick/块（≈5 块/秒，只比玩家快一档）；2 tick ≈10 块/秒太快
         BRIDGE_STEP_COOLDOWN = BUILDER.comment("搭路节奏（tick/块，默认 4）：每垫一块方块的最短间隔——越小铺得越快（默认 4 tick ≈ 5 块/秒 = 比玩家手速 4~6 块/秒略快一点点；2 tick ≈ 10 块/秒太快，连续跳块容易失足摔死）")
                 .translation("config.promaid.bridge.stepCooldown").defineInRange("stepCooldown", 4, 2, 40);
@@ -1291,7 +1291,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
         // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）
-        // 实测三百六十六：寿命 60→30 秒（用户要求"利落"）；女仆还站在上面的
+        // 实测三百六十六：寿命 60→30 秒（要求"利落"）；女仆还站在上面的
         // 方块照旧刷新计时（走开后才开始倒数），塔上狙击/守势不受影响
         COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 30）：自保（搭高/搭桥）与高地狙击搭的方块 N 秒后自动回收；女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
                 .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 30, 3, 600);
@@ -1319,15 +1319,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
         MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
-        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按用户反馈调低）")
+        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按实测调低）")
                 .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.7, 0.3, 2.5);
         // 实测四百一十八：床铺互通（女仆睡原版床 / 玩家睡女仆床）
         MISC_BED_INTEROP = BUILDER.comment("床铺互通（默认开）：女仆能睡原版床（16 色床，TLM 原生只认女仆床），玩家也能睡女仆床（并可把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为（女仆只睡女仆床、玩家不能睡女仆床）")
                 .translation("config.promaid.misc.bedInterop").define("bedInterop", true);
-        // 实测四百二十一：冷却可视化 HUD（用户："我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化"）
+        // 实测四百二十一：冷却可视化 HUD（反馈："我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化"）
         MISC_COOLDOWN_HUD = BUILDER.comment("冷却可视化 HUD（默认开）：在玩家屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时——女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示；关掉不显示也不发同步包")
                 .translation("config.promaid.misc.cooldownHud").define("cooldownHud", true);
-        // 实测四百四十三：悬空禁搭方块（用户："女仆在悬空状态下应该禁止搭建方块——
+        // 实测四百四十三：悬空禁搭方块（反馈："女仆在悬空状态下应该禁止搭建方块——
         // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
         MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：重锤跃起中（1.21.1）整段空中都禁；其余情况是坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")
                 .translation("config.promaid.misc.noPlaceInAir").define("noPlaceInAir", true);
@@ -1385,7 +1385,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.maidSameDimPull").define("maidSameDimPull", true);
         MISC_MAID_SAME_DIM_DIST = BUILDER.comment("同维度拉回距离阈值（格，默认 48）：女仆与主人同维度且水平/垂直距离超过此值才拉回——低于此值靠走路/跟随，不打扰她")
                 .translation("config.promaid.misc.maidSameDimDist").defineInRange("maidSameDimDist", 48, 16, 256);
-        // v1.1.0 实测一百八十八：Y 轴拉回（用户："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
+        // v1.1.0 实测一百八十八：Y 轴拉回（反馈："传送机制不检测 Y 轴。女仆搭得太高不会自己传送下来"）
         MISC_MAID_SAME_DIM_VERTICAL = BUILDER.comment("Y 轴拉回门槛（格，默认 16）：女仆与主人同维度、水平距离没超上一条阈值但【垂直高度差】超过本值时——若主人旁边 16 格内有安全落点（findStand）就传送过来；没有安全落点则不传（等有落点/再试）。旧版只有 48 格 3D 距离阈值，水平贴身、竖直搭高 30 格的女仆永远不触发（骑到你头顶挂机）；守家/坐姿/骑乘/干活中同样不拉")
                 .translation("config.promaid.misc.maidSameDimVertical").defineInRange("maidSameDimVertical", 16, 4, 128);
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
@@ -1423,9 +1423,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 用隐形 minecraft:light 光块产出真实方块光）
         MISC_HELD_LIGHT_ENABLED = BUILDER.comment("手持光源发实光（默认开）：女仆主手/副手持有光源类物品（火把/灯笼/萤石/菌光体/灵魂火把等——亮度取自身方块光强）时，她脚底自动跟随一个隐形光块，周围的方块被真实照亮（与所持光源亮度一致）；不拿光源或关闭后光块自动移除。与其他环境光源同等待遇，插火把判定不受读写影响（亮处本就不该插）")
                 .translation("config.promaid.misc.heldLightMaid").define("heldLightMaid", true);
-    // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——用户要求
+    // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启——要求
     // "连锁采集也应加入"；收获物收集保持默认关，避免自动拾取导致背包爆炸）
-    // v1.1.0 实测二百二十七（用户："所有连锁采集默认为开启"）：默认值保持开并注明
+    // v1.1.0 实测二百二十七（反馈："所有连锁采集默认为开启"）：默认值保持开并注明
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（默认开：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
             .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
     MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
@@ -1439,14 +1439,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_BATCH_PLANT_LIMIT = BUILDER.comment("农场批量种植上限（格）：一次批量种植的最大格数（默认 24，大农田多轮种完）")
             .translation("config.promaid.misc.batchPlantLimit").defineInRange("batchPlantLimit", 24, 4, 96);
     // v1.1.0 实测三百五十二：树苗骨粉催熟（伐木女仆背包有骨粉 → 对身边树苗催熟）
-    // v1.1.0 实测三百五十三：节拍改 0.5 秒一次（用户要求）
+    // v1.1.0 实测三百五十三：节拍改 0.5 秒一次（要求）
     MISC_MAID_BONEMEAL_SAPLING = BUILDER.comment("树苗骨粉催熟（默认开）：伐木模式的女仆背包里有骨粉时，对身边（半径 6 格、垂直 ±2）的树苗使用骨粉催熟——每 0.5 秒尝试一次，优先催熟已种下的树苗而不是种新的；【骨粉催熟不受光照限制】（地下/室内种下照常催熟），但树干上方被实心方块挡死的树苗不浪费骨粉（长不出来）；深色橡树苗不催（单株永不生长）。关闭 = 女仆不使用骨粉")
             .translation("config.promaid.misc.maidBonemealSapling").define("maidBonemealSapling", true);
     // v1.1.0 实测三百五十五：农场作物骨粉催熟（与树苗同款逻辑——主副手/背包找骨粉、
     // 施肥时主手换持骨粉、0.5 秒一株、粒子反馈）
     MISC_MAID_BONEMEAL_FARM = BUILDER.comment("农场作物骨粉催熟（默认开）：农场模式的女仆背包里有骨粉时，对身边（半径 16 格、垂直 ±4）的未成熟作物使用骨粉催熟——每 0.5 秒尝试一株（带粒子特效），优先催熟已种下的作物而不是等自然成熟；只催【当前世界有骨粉配方】的作物（原版/模组作物自动兼容），成熟作物不催（催了也白费）；施肥时主手临时换持骨粉，停止 1 秒后自动还原。关闭 = 女仆不使用骨粉")
             .translation("config.promaid.misc.maidBonemealFarm").define("maidBonemealFarm", true);
-    // v1.1.0：排班表总开关（用户"玩家可操作"原则——新功能都要有手册内开关）
+    // v1.1.0：排班表总开关（反馈"玩家可操作"原则——新功能都要有手册内开关）
     MISC_SCHEDULE_ENABLED = BUILDER.comment("排班表系统（默认开）：按游戏内时间自动应用女仆的排班日程；关闭后排班调度停摆（已保存的日程不丢，重新打开恢复生效），女仆保持当前任务")
             .translation("config.promaid.misc.scheduleEnabled").define("scheduleEnabled", true);
     // v1.1.0 实测六十一：战斗还原后排班宽限——威胁在还原威胁半径边缘闪烁时，
@@ -1468,7 +1468,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.1.0 实测一百七十六（移植 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：切段后大脑自愈
     MISC_SCHEDULE_FORCE_BRAIN_REFRESH = BUILDER.comment("排班切段后大脑自愈（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）：段任务应用成功后 3 秒，若女仆任务仍是段任务、但脑内无任何工作记忆（走位/攻击/目标——非坐姿站桩工作可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI；关 = 完全信任 TLM")
             .translation("config.promaid.misc.scheduleForceBrainRefresh").define("scheduleForceBrainRefresh", true);
-    // v1.1.0 实测一百八十三（用户："排班状态下增大活动的范围"）：TLM home 模式 restrictTo
+    // v1.1.0 实测一百八十三（反馈："排班状态下增大活动的范围"）：TLM home 模式 restrictTo
     // 的半径下限（TLM 自带 MAID_WORK/IDLE/SLEEP_RANGE 默认只有 8~16 格）
     SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 32）：排班/在家模式下女仆的活动半径下限——TLM 原版工作/空闲/睡觉半径只有 8~16 格，范围稍大就出不去；本项取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住")
             .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 32, 8, 512);
@@ -1490,7 +1490,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         TTS_CACHE_MAX_FILES = BUILDER.comment("TTS 语音缓存上限（config/maid_smart/voice_cache/，训练一次保存后复用；超出删最旧）")
                 .translation("config.promaid.voice.cacheMaxFiles")
                 .defineInRange("cacheMaxFiles", 200, 10, 2000);
-        // v1.1.0 实测四百二十：内置日语语音包（用户要求——训练日语系统消息语音打进 jar，
+        // v1.1.0 实测四百二十：内置日语语音包（要求——训练日语系统消息语音打进 jar，
         // 触发系统消息自动播放；可在手册/面板调开关、音量、最小间隔；播放时暂压 TLM 原生语音包）
         TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（115 条：60 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
                 .translation("config.promaid.voice.jarPackEnabled").define("jarPackEnabled", true);

@@ -15,7 +15,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 
 /**
  * smart_owner_inventory（v1.5.287）：查看主人物品栏工具——LLM 对话中按需调用，
- * 确认主人背包里有什么（用户："查看主人的物品栏来确认与获得主人物品栏中有什么东西"）。
+ * 确认主人背包里有什么（反馈："查看主人的物品栏来确认与获得主人物品栏中有什么东西"）。
  * 只读遍历（BlueprintLib.countPlayerMaterial 同款写法），不修改任何物品；
  * 输出合并计数（物品 id ×数量 + 槽位区），限行数防 token 爆表。
  */

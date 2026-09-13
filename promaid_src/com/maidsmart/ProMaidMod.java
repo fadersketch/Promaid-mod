@@ -65,7 +65,7 @@ public class ProMaidMod {
         // v1.1.0【专用服务器崩溃修复】：带 Screen 签名的 lambda 一律放客户端专类
         // （com.maidsmart.client.PromaidClientSetup）——主类内联会让合成方法描述符
         // 带客户端类型，服务端 FML 反射主类时被 RuntimeDistCleaner 拦截
-        //（粉丝服崩报告：Attempted to load class net.minecraft.client.gui.screens.Screen
+        //（反馈服崩报告：Attempted to load class net.minecraft.client.gui.screens.Screen
         //  for invalid dist DEDICATED_SERVER）。服务端不执行本分支 → 客户端类不加载。
         if (net.minecraftforge.fml.loading.FMLEnvironment.dist.isClient()) {
             com.maidsmart.client.PromaidClientSetup.registerConfigScreen();
@@ -95,7 +95,7 @@ public class ProMaidMod {
             }
             // v1.1.0 实测一百二十二：搭路速度/滞留时间旧默认迁移——节奏 8→5 tick/块
             //（≈4 块/秒与玩家持平）、滞留 10→2 秒（2s×4块/s≈8 块稳态峰值）；旧档存的
-            // 旧默认（8/10）与用户此前手调的激进值（2）一并迁到新值
+            // 旧默认（8/10）与此前手调的激进值（2）一并迁到新值
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
                     || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
@@ -104,7 +104,7 @@ public class ProMaidMod {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
             }
             // v1.1.0 实测一百七十：排班切换可用性检测默认翻转 true→false——旧默认的
-            // "没活不切"把排班女仆钉死在原地、任务不随段切换（用户反馈设计失败）；
+            // "没活不切"把排班女仆钉死在原地、任务不随段切换（反馈设计失败）；
             // 旧档存的 true 一律迁到 false，想用完整检测可在面板重新打开
             if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
                 com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
@@ -115,7 +115,7 @@ public class ProMaidMod {
     }
 
     /**
-     * v1.1.0 实测七十三（粉丝反馈："女仆专门不挖铜矿石"）：铜矿 2026-08-21 才首次
+     * v1.1.0 实测七十三（反馈："女仆专门不挖铜矿石"）：铜矿 2026-08-21 才首次
      * 进入默认矿表，且更早的默认是【空列表】；而配置文件是唯一事实源（加载时清空
      * 内置表全以文件为准）→ 老玩家存档里的矿表没有铜，女仆永远不选铜矿、甚至把它
      * 当硬挡路报点。两条迁移规则（只补缺，绝不动玩家已有条目）：

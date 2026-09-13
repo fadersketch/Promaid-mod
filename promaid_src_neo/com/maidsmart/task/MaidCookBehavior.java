@@ -94,7 +94,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /** 目标扫描节流：找不到熔炉时每 20 tick 才扫一次 */
     private int scanCooldown = 0;
     /** v1.1.0 实测一百六十八：炉子占用表（维度|坐标 → 占用女仆 UUID）——多个女仆同时
-     *  在场时各自绑定不同炉子，避免全挤到第一个炉子上（用户："两个女仆三个炉子，
+     *  在场时各自绑定不同炉子，避免全挤到第一个炉子上（反馈："两个女仆三个炉子，
      *  只有一个炉子工作"）。占用者死亡/换维/停行为时释放（stop + 扫描时懒清理）。 */
     private static final java.util.Map<String, java.util.UUID> FURNACE_USERS = new java.util.HashMap<>();
     /** 本行为实例当前占用的炉子 key（行为停止/炉子丢失时释放） */
@@ -198,7 +198,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             MaidWorkTags.setStill(maid, true); // 熔炉没了：继续站桩等扫描
             return;
         }
-        // v1.1.0 实测三百（用户："如果女仆发现自己包中没有可以对应的物品，那么会将
+        // v1.1.0 实测三百（反馈："如果女仆发现自己包中没有可以对应的物品，那么会将
         // 这个炉子的绑定取消掉……重新寻找一个新的"）：绑定后背包没有该炉型可烧物 →
         // 取消绑定重新找（如高炉烧完矿后背包只剩食物 → 换烟熏炉/熔炉）
         if (!this.furnaceMatchesInv(level, maid, this.furnacePos)) {
@@ -321,7 +321,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     // v1.1.0 实测一百八十二：仍没有 → 通用可烧制物回退——凡当前世界
                     // 有熔炉配方且非装备类的物品都喂（沙子/圆石/原木/模组食材/无矿物
                     // 标签的模组粗矿等）。旧版白名单+矿物标签不认的东西卡死补料，
-                    // 表现为"只投一次燃料就再也不喂"（用户实测第 2 只女仆）
+                    // 表现为"只投一次燃料就再也不喂"（实测第 2 只女仆）
                     input = this.extractAnySmeltable(level, maidInv);
                 }
             } else {
@@ -395,7 +395,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测三百四十九（用户："女仆在进行烧制的时候，会把附魔的物品拿去
+     * v1.1.0 实测三百四十九（反馈："女仆在进行烧制的时候，会把附魔的物品拿去
      * 烧掉"）：可烧制 ≠ 可以喂——带附魔（经验修补/耐久/时运等，哪怕只有 1 条）
      * 或耐久未满（用旧过的工具/武器/盔甲）的物品一律不进炉子。三类取料路径
      * （食材白名单外的矿物回退 extractOreFromMaid / 通用可烧制物回退
@@ -480,7 +480,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ANY.get()) {
             return ItemStack.EMPTY;
         }
-        // v1.1.0 实测二百九十九（用户："仍然会出现拿木材烧木头的情况，而不是优先
+        // v1.1.0 实测二百九十九（反馈："仍然会出现拿木材烧木头的情况，而不是优先
         // 先烧别的物品"）：可烧制物里【不可燃烧的优先】（圆石/沙子/矿石等——烧它们
         // 不会抢燃料），可烧制燃料（原木/木板/树苗——既是原料又是燃料）最后兜底。
         // 旧版按槽位顺序取，原木槽位在前就喂原木 → 原木进原料槽、原木又进燃料槽
@@ -551,15 +551,15 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.252：燃料 = 背包中【数量最多】的可燃烧物品（原版 isFuel 判定，不限于煤炭）。
-     *  v1.1.0 实测二百四十一（用户："女仆有的时候会使用木头烧木头"）：旧版按数量
+     *  v1.1.0 实测二百四十一（反馈："女仆有的时候会使用木头烧木头"）：旧版按数量
      *  最多选——原木/木板/树苗既是燃料又是可烧制原料，伐木女仆背包原木数量碾压
      *  煤炭 → 原木进燃料槽、原木又进原料槽 = "用木头烧木头"。修复：
      *  ① 评分 = 燃烧时长优先（getFuel 映射，煤炭 1600 tick ≫ 原木 300 tick），
      *     同长再按数量——有煤必用煤，不再被数量带偏；
      *  ② 纯燃料优先：可燃烧且【无熔炉配方】（煤炭/木炭/烈焰棒/干海带块/熔岩桶）
      *     先选；背包没有纯燃料才退而选可烧制燃料（原木烧原木总比炉子熄火好）。
-     *  v1.1.0 实测三百零一：曾按用户要求改为"按物品栏摆放顺序取第一个"，实测后
-     *  用户改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料
+     *  v1.1.0 实测三百零一：曾按要求改为"按物品栏摆放顺序取第一个"，实测后
+     *  玩家改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料
      *  烧"，当燃料不受影响（原木/木板照常可烧炉子）。 */
     private ItemStack extractBestFuel(ServerLevel level, IItemHandler maidInv) {
         Map<Item, Integer> burnTicks = new HashMap<>();
@@ -616,7 +616,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     private BlockPos findFurnace(ServerLevel level, EntityMaid maid) {
-        // v1.1.0 实测三百（用户："先扫物品栏，依次检索可烧制的物品……遇到食物时，
+        // v1.1.0 实测三百（反馈："先扫物品栏，依次检索可烧制的物品……遇到食物时，
         // 在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。
         // 如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制"）：按背包物品类型选炉子
         // ——食物 → 烟熏炉优先（其次熔炉）；无食物但有高炉可烧物（矿物）→ 高炉优先

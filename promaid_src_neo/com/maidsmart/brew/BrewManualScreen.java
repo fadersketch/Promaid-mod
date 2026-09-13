@@ -27,7 +27,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  *   变体药水，不使用此参数）
  * - 定向区：搜索框 + 16×N 药水网格 + 翻页；点击图标选中/取消（单选），悬停
  *   显示本地化名 + 配方链预览
- * - 底部：✓ 说明 + 保存并返回（发 C2S 保存包）
+ * - 底部：说明 + 保存并返回（发 C2S 保存包）
  *
  * v1.1.0 实测二百七十九核心修复：选中/点击判定此前用 ITEMS.getKey(stack.getItem())
  * ——所有药水瓶物品注册名都是 minecraft:potion，点一个等于全选、保存的目标也错。
@@ -305,7 +305,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         int cx = w / 2;
         int panelLeft = Math.max(8, cx - 290);
         int panelRight = Math.min(w - 8, cx + 290);
-        // v1.1.0 实测三百一十三（用户："模组内新添加物品的 ui 背景都是用的原版 MC 格式，
+        // v1.1.0 实测三百一十三（反馈："模组内新添加物品的 ui 背景都是用的原版 MC 格式，
         // 过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：酿造手册品牌渐变背景——
         // 半透明色带叠加 = 渐变色（fill 走 ARGB，Alpha 叠加）。紫→蓝横向
         // 渐变底色 + 顶部金色饰条 + 底部深色高光
@@ -342,7 +342,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
                 int x = this.left + col * GRID_CELL;
                 int y = this.gridTop + row * GRID_CELL;
                 if (this.cfg.targetPotion != null && this.cfg.targetPotion.equals(entry.id)) {
-                    // 已选 → 绿色框 + ✓
+                    // 已选 → 绿色框 +
                     g.fill(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
                     g.drawCenteredString(this.font, Component.literal("\u2714"), x + 12, y + 12, 0xFFFFFF);
                 }
@@ -382,7 +382,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
                     this.left, 118, 0x888888, false);
         }
 
-        // 底部：✓ 说明（仅定向模式）
+        // 底部：说明（仅定向模式）
         if (!batch) {
             String chkHint = "\u00a77✓ = 当前形态下已选定的目标药水；女仆按配方链+形态酿造，缺什么会主动报告";
             g.drawString(this.font, Component.literal(chkHint),
@@ -501,7 +501,7 @@ public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
      *  v1.1.0 实测二百九十三：按形态折算时长——原版规则：喷溅 = 饮用 ×3/4、
      *  滞留 = 饮用 ×1/4（Potion 注册表存的是饮用型满时长，实际生效按形态
      *  折算）。旧版直接显示满时长，喷溅/滞留型药水的效果描述与实际不符
-     *  （用户："滞留和喷溅型药水直接套用饮用型的时间描述"）。 */
+     *  （反馈："滞留和喷溅型药水直接套用饮用型的时间描述"）。 */
     private String effectLine(net.minecraft.world.effect.MobEffectInstance eff, int form) {
         try {
             String name = eff.getEffect().value().getDisplayName().getString(); // getDisplayName

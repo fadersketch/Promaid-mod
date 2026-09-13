@@ -76,7 +76,7 @@ public final class MaidBuildBlockFilter {
             }
             // v1.1.0 实测九十一：配置危险表（dangerBlocks）同样永不入搭块名单——
             // 与寻路避让/险境脱离共享同一张表，且不受避让开关影响（无论如何都不会搭）；
-            // 粉丝往表里加模组危险方块即自动从垫脚选材中消失
+            // 反馈往表里加模组危险方块即自动从垫脚选材中消失
             if (DangerBlocks.isDanger(block)) {
                 return false;
             }
@@ -154,7 +154,7 @@ public final class MaidBuildBlockFilter {
     /**
      * 背包里数量最多的可用垫脚方块（各模块 takeBuildBlock 的统一实现）。
      * 返回该物品（已从背包扣 1 个）；没有可用方块返回 null。
-     * v1.1.0 实测二百三十一（用户"审计一下主副手识别"）：加 hands 版重载——
+     * v1.1.0 实测二百三十一（反馈"审计一下主副手识别"）：加 hands 版重载——
      * 计数含手部栏（主/副手），扣取时先扣手（她手里正拿的就是想用的），无手再扣背包。
      */
     public static Item takeBuildBlock(IItemHandler inv, Level level, BlockPos pos) {

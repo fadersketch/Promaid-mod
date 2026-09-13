@@ -60,7 +60,7 @@ public final class BuildHudTracker {
                 st.lastNanos = now;
                 st.lastPlaced = p.placedCount;
                 // v1.5.252ac：剩余 = 总 − 已放 − 永久跳过（跳过的不可能再放，不算
-                // 剩余——用户要求"还需多久 = 剩余方块 ÷ 速度，已放的不算"）
+                // 剩余——要求"还需多久 = 剩余方块 ÷ 速度，已放的不算"）
                 int remaining = Math.max(0, total - p.placedCount - p.skipped);
                 int eta = st.ema > 0.01 ? (int) Math.ceil(remaining / st.ema) : -1;
                 st.lastEta = eta;

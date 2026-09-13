@@ -9,7 +9,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * 宠物免疫总闸（v1.1.0 实测一百九十三，用户："如果都被打上了玩家宠物的字样，
+ * 宠物免疫总闸（v1.1.0 实测一百九十三，反馈："如果都被打上了玩家宠物的字样，
  * 那么女仆便不会再对他造成伤害（包括 aoe，防误伤）并去除仇恨"）。
  *
  * 三层防线：
@@ -131,7 +131,7 @@ public final class PetImmunityGuard {
                 event.setCanceled(true); // 女仆链上的任何伤害打到宠物 → 免疫
                 return;
             }
-            // v1.1.0 实测二百四十五（用户："哪怕给一个铁傀儡命名为玩家宠物，女仆仍然
+            // v1.1.0 实测二百四十五（反馈："哪怕给一个铁傀儡命名为玩家宠物，女仆仍然
             // 可以伤到铁傀儡"）：判定未命中诊断——受害者名字含"宠物"字样但 isPetMarked
             // 返回 false，记录名字原文（m_5446_ 显示名 / m_7770_ 自定义名 / m_7755_ 名）
             // 到 promaid.log，60 秒限频/女仆，定位"名字判定为什么不命中"。

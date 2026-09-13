@@ -9,7 +9,7 @@ import net.neoforged.neoforge.common.NeoForge;
 import net.minecraft.resources.ResourceLocation;
 
 /**
- * v1.1.0 实测二百三十四（用户："女仆主手或副手持有光源类物品时自身放出亮度，
+ * v1.1.0 实测二百三十四（反馈："女仆主手或副手持有光源类物品时自身放出亮度，
  * 亮度与所持光源一致——套用雪傀儡套南瓜灯产生亮度的逻辑；此亮度不影响插火把"）：
  *
  * 【诚实实现说明】1.20.1 原版【没有】实体发光机制（javap 字节码实证：SnowGolem 无
@@ -148,7 +148,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
         }
     }
 
-    /** 特殊光源白名单（注册名 → 光强）。实测二百三十九（用户："其他光源都验证成功
+    /** 特殊光源白名单（注册名 → 光强）。实测二百三十九（反馈："其他光源都验证成功
      *  了，仅仅是火把/灵魂火把/红石火把这些特殊方块不行——为什么不能加个白名单"）：
      *  火把系（StandingAndWallBlockItem）与普通发光方块（标准 BlockItem）的解析
      *  路径确实有差异，白名单【优先于】通用 BlockItem 光强路径——命中即用登记值，
@@ -170,13 +170,13 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
         LIGHT_WHITELIST.put("minecraft:magma_block", 3);
     }
 
-    /** 主手 → 副手：① 白名单命中直接用登记亮度（火把系等特殊光源——用户实证
+    /** 主手 → 副手：① 白名单命中直接用登记亮度（火把系等特殊光源——实测
      *  通用路径只对标准 BlockItem 成立）；② 通用路径：物品方块自身发光
      *  （getLightEmission = getLightEmission，字节码实证：BlockStateBase 构造器把
      *  Properties.lightEmission（lightLevel 设置的 ToIntFunction）算进 lightEmission，
      *  getLightEmission 直接返回该字段——蜡烛 lit?3×数量:0、火把 14、萤石 15、岩浆块 3
      *  都走这里；木头等无发光方块 = 0）。
-     *  v1.1.0 实测二百六十二（用户："女仆手上拿的是木头，但是它仍然会发光"）：
+     *  v1.1.0 实测二百六十二（反馈："女仆手上拿的是木头，但是它仍然会发光"）：
      *  旧版误用 getLightBlock（getLightBlock——光阻挡值：完整不透明方块返回 15、
      *  实心返回 0、否则 1），木头是完整方块恒返回 15 → 手持任何完整方块都
      *  被当成 15 级光源。改用 getLightEmission（getLightEmission）后木头 = 0 不发光。 */
@@ -221,7 +221,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
 
     private static void placeBlock(ServerLevel level, net.minecraft.core.BlockPos pos, int light) {
         try {
-            // v1.1.0 实测二百七十一（用户："女仆直接把女仆床拆掉"）：旧版 level.setBlock
+            // v1.1.0 实测二百七十一（反馈："女仆直接把女仆床拆掉"）：旧版 level.setBlock
             // 【直接替换】目标格方块——女仆睡觉时身体与床方块重叠，光块位置 = 床格，
             // 床被光块顶掉；女仆离开后光块又被清成空气，床彻底消失。放置前检查：目标
             // 格是空气或本光块才可写入，被床等任何方块占据 → 跳过（绝不覆盖）。

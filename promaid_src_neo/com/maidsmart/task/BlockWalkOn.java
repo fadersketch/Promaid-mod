@@ -7,7 +7,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  *
  * 背景：挖矿/伐木垫台阶/桥块后旧版只设 WALK_TARGET 靠寻路走到目标格——跨沟/断崖
  * 或路径差一格时导航半路折断（或原地微移），女仆永远踩不上刚垫的方块，变成
- * "在某几个方块上死循环"（用户："运动的幅度真的太小了"）。
+ * "在某几个方块上死循环"（反馈："运动的幅度真的太小了"）。
  *
  * 用法：
  *  - 垫块成功 → {@link #start(EntityMaid, double, double, double)}（目标格中心）；

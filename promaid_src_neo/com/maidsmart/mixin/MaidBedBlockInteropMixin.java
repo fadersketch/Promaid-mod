@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.Optional;
 
 /**
- * 床铺互通·方向二（v1.1.0 实测四百一十八，用户："让女仆床和玩家床的代码互通。
+ * 床铺互通·方向二（v1.1.0 实测四百一十八，反馈："让女仆床和玩家床的代码互通。
  * 女仆和玩家可以互相使用对方的床"）。1.21.1 NeoForge 版（Mojmap 名）。
  *
  * TLM 的女仆床对玩家是"死"的，NeoForge 版堵点有三处：

@@ -10,7 +10,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.1.0 实测二百五十五（用户："动画偏移效果还是有点严重……那么药水动画的最终落点
+ * v1.1.0 实测二百五十五（反馈："动画偏移效果还是有点严重……那么药水动画的最终落点
  * 就给到时刻追踪目标位置"）：动画药水【落点时刻追踪】——女仆投药水的动画抛掷
  * （persistentData 带 "maid_smart_anim_target" = 目标 UUID）每 tick 用当前实际位置
  * 重算抛物线瞄准目标当前位置（速度 1.0，弹道公式解仰角）——既有弧线又跟目标移动，
@@ -24,13 +24,13 @@ public abstract class PotionAnimTrackMixin {
 
     private static final String ANIM_TARGET = "maid_smart_anim_target";
     private static final String ANIM_BORN = "maid_smart_anim_born";
-    /** 追踪时长上限（tick）：v1.1.0 实测二百五十七（用户："滞留型药水怎么突然又没有了
+    /** 追踪时长上限（tick）：v1.1.0 实测二百五十七（反馈："滞留型药水怎么突然又没有了
      *  效果？药水云怎么没了？而且投掷动画也没了"）——旧版无上限每 tick 重算瞄准目标
      *  当前位置：目标移动时动画药水永远追着飞（距离恒 ≥0.6）永不落地 → 看不到落地
      *  碎裂动画、也看不到落地生成的药水云（动画药水是实际滞留药水复制，落地本应生成
      *  云）。加 1 秒上限：超过停止追踪、保持当前速度自然落地（碎裂/云动画完整）。
-     *  v1.1.0 实测二百六十（用户要求半秒）：上限收窄为 10 tick。
-     *  v1.1.0 实测二百六十四（用户："效果给到之后药水动画立刻落地吧，要不然太奇怪了"）：
+     *  v1.1.0 实测二百六十（要求半秒）：上限收窄为 10 tick。
+     *  v1.1.0 实测二百六十四（反馈："效果给到之后药水动画立刻落地吧，要不然太奇怪了"）：
      *  效果是触发即生效（瞬间给到），动画药水却还要飞半秒才落地——观感脱节。上限收窄
      *  为 1 tick：出生后立即停止追踪，配合 throwPotionAnimate 的 4.0 高速，动画药水
      *  2~3 tick 内到达目标落地碎裂，与效果施加几乎同步。 */

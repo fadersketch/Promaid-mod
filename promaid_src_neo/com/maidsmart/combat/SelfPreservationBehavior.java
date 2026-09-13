@@ -89,7 +89,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测十七：战斗搭方块追踪表（维度 → 位置 → 放置信息）。
      *
      * 旧设计：自保（搭高/翻墙/搭桥/封头盖帽/岩浆垫高）搭的方块【永久留下】——
-     * 用户当初选择不清理。现改为与挖矿/伐木/搭路同款的打标签机制：
+     * 玩家当初选择不清理。现改为与挖矿/伐木/搭路同款的打标签机制：
      * - 60 秒后自然消失（战斗方块战斗用，打完仗战场该清干净——比挖矿的 10 秒长，
      *   因为战斗节奏多变，女仆可能还要在塔上待一阵）
      * - 女仆可以直接破坏自己搭的战斗方块（挡路就拆——实际战斗多变，防止女仆
@@ -613,7 +613,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * （95%）也反复触发自保（日志 "self preserve start hp=95%" 刷屏、搭方块
      *  刚放 1-2 块就被打断的根因之一）。
      *  v1.5.216：着火加抗火豁免——喝了抗火药水后即使身上还在烧（isOnFire 仍
-     *  true）也不掉血，不该再惊慌失措/疯狂逃窜（用户实测："服用抗火药水后
+     *  true）也不掉血，不该再惊慌失措/疯狂逃窜（实测："服用抗火药水后
      *  仍然处于惊慌失措状态"）；等火自然灭即可。
      *  v1.1.0 实测一百五十三/一百五十四：TLM 火焰/溺水保护饰品同豁免——饰品
      *  自己免疫对应伤害（火焰=受伤给抗火+灭火剂；溺水=空气自动补满），
@@ -908,7 +908,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.281：负面效果自清——【会话外也生效】：旧版蜂蜜瓶检查在会话主流程
         // 内（下方 sessionActive return 之后），满血中毒（血未低到触发自保、无
-        // 环境危险）时会话不激活 → 提前 return → 蜂蜜瓶永远不会喝（用户："女仆
+        // 环境危险）时会话不激活 → 提前 return → 蜂蜜瓶永远不会喝（反馈："女仆
         // 面对中毒竟然不用蜂蜜瓶"）。蜂蜜解毒 + 牛奶清负面提升为常驻轻量逻辑
         //（每 tick 只查效果状态，有负面效果才扫背包），与自保会话完全解耦
         this.tickCureNegativeEffects(maid);
@@ -925,7 +925,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 战斗参战、搭方块、险境脱离对这只女仆永久让位。会话外发现"带着标记
             // 但血量健康且环境安全"即清掉（不满足条件时下方本就会重进会话并重新
             // 置位，无竞态）
-            // v1.1.0 实测二百六十五（用户："全员模式有时无法有效应用，明明已解除
+            // v1.1.0 实测二百六十五（反馈："全员模式有时无法有效应用，明明已解除
             // 排班有的女仆就是应用不到"）：自愈条件从 exitRatio（70%）放宽到
             // enterRatio（30%）——进入自保要血 <30%，血在 30%~70% 之间且无危险时
             // 会话不进、标记残留且永不清理（自愈条件 70% 永远够不到）= 批量应用/
@@ -984,7 +984,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         } else {
             this.heallessSiegeTicks = 0;
         }
-        // 实测三百九十（用户：自保模式禁止传送，玩家日程表手动传送除外）：
+        // 实测三百九十（反馈：自保模式禁止传送，玩家日程表手动传送除外）：
         // 围困传送整体停用——自保期间不再把她传回主人身边，本地逃生接管
         //（珍珠/药水/走位/搭高/反击）。只清计数防无限累积，不清搭高状态
         //（没传送就不该放弃塔位）。解除自保的归位传送不受影响（会话结束才发）。
@@ -1014,7 +1014,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.forcedPillar = false;
                 this.walkOnTicks = 0;
                 this.pillarLocked = false;
-                // 实测三百七十八（用户要求）：解除自保 → 立刻传送回主人身边一次
+                // 实测三百七十八（要求）：解除自保 → 立刻传送回主人身边一次
                 //（不再要求威胁已散——恢复即支援，交火中也撤出战场回到主人身边；
                 // 绕过传送冷却闸，安全护栏全保留：主人活着/不在看家模式/主人身边
                 // 有合法落点/已在 5 格内则不传）
@@ -1025,7 +1025,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             this.exitStableTicks = 0; // 仍危险/血不够 → 重置稳定计数
         }
         ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().putBoolean(PRESERVE_TAG, true);
-        // 实测三百六十九【垫高期间锁移动】（用户："垫高这个行为开始后就不应
+        // 实测三百六十九【垫高期间锁移动】（反馈："垫高这个行为开始后就不应
         // 再移动了"）——垫方块靠"脚下放块把人顶起"，边走边垫必然走偏、顶起
         // 瞬间偏离柱心摔下来（"才垫两块就掉下来"的根因）。锁移动 = 清寻路
         // 目标 + 停导航 + 清水平速度；保留垂直（顶起/下落靠垂直位移，坐姿锁
@@ -1213,7 +1213,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
         // 1. 珍珠逃生（脱身 > 拖延：血 30% 以下且威胁贴身，立即瞬移）
         // v1.5.157：已搭高（pillarBaseY/forcedPillar——高处已安全）不再扔珍珠
-        //（日志实证：搭高到安全位置后仍扔珍珠，用户反馈）
+        //（日志实证：搭高到安全位置后仍扔珍珠，反馈）
         if (this.hpRatio(maid) < pearlThreshold() && dist < pearlThreatDist()
                 && !this.forcedPillar && this.pillarBaseY < 0) {
             if (this.pearlEscape(maid, threat)) {
@@ -1365,7 +1365,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 实测三百六十三【小幅走位拉身位】（替代旧"突围/逃跑"——用户："逃跑很像
+     * 实测三百六十三【小幅走位拉身位】（替代旧"突围/逃跑"——反馈："逃跑很像
      * 临阵脱逃，应该小幅度原地走位，但仍然保持战斗姿态"）：
      * - 朝威胁侧后方挪 2~3 格（不再 8 格突围/反方向撤离——不脱离交战圈）；
      * - 8 方向打分：怪物少 + 偏离威胁方向 + 路径无岩浆（保留下来的安全要素）；
@@ -1516,7 +1516,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.5.164：退出自保（血恢复）时传送回主人身边。
-     * v1.5.165：按用户确认——血机制解除自保后的【第一件事】就是定位主人并传送过去：
+     * v1.5.165：按玩家确认——血机制解除自保后的【第一件事】就是定位主人并传送过去：
      * 只要不在主人 5 格内就传送（无论远近、无论主人身边是否有怪——血已恢复到 70%，
      * 传过去帮忙/护卫主人，不再自己慢慢走回去）；仅保留传送冷却防反复连传。
      */
@@ -1527,7 +1527,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return;
             }
             // v1.1.0 实测八十三：主人已死亡（尸体停在死亡地点等待重生）不传——
-            // 旧版会把自保结束的女仆直接拽到主人尸体旁（粉丝实测"女仆传到了
+            // 旧版会把自保结束的女仆直接拽到主人尸体旁（反馈实测"女仆传到了
             // 死亡地点而不是重生点"的元凶）；home 看家钉死同样不传。
             // 复活后由跟随/一键集合链路自然归队。
             if (!owner.isAlive() || maid.isHomeModeEnable()) {
@@ -1553,7 +1553,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     return;
                 }
             }
-            // v1.1.0 实测二百零五（用户："女仆会无条件传送，不管主人周围是否有合法方块。
+            // v1.1.0 实测二百零五（反馈："女仆会无条件传送，不管主人周围是否有合法方块。
             // 玩家飞到高空中女仆传送直接摔死了"）：旧版 setPos(owner.x,owner.y,owner.z)
             // 直传主人【坐标】——主人飞行/悬空（创造飞行、鞘翅、站平台边缘）时女仆被
             // 扔进半空直接坠落摔死。复用拉回/跨维跟随同款安全落点判定：主人身边 16 格
@@ -1574,7 +1574,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return;
             }
             // 实测四百四十二：重锤跃起中禁止自保归位传送——她可能正跳向目标，
-            // 被拽回主人身边 = 猛击白跳（用户："重锤空中状态禁止传送"）。
+            // 被拽回主人身边 = 猛击白跳（反馈："重锤空中状态禁止传送"）。
             // 跃起最长 5 秒（MAX_AIR_TICKS）自动收尾，下一 tick 就恢复正常。
             if (MaidMaceSmashBehavior.isAirborne(maid)) {
                 return;
@@ -1744,7 +1744,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         List<Mob> mobs = center.level().getEntitiesOfClass(Mob.class,
                 center.getBoundingBox().inflate(radius), m -> m.isAlive());
         for (Mob mob : mobs) {
-            // v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外
+            // v1.1.0 实测三百四十六（反馈："只要是 target=主人/女仆的都会被额外
             // 列入威胁"）：主人侧判定并入行为化口径——center 是主人（非女仆）时
             // 旧版只认 Monster 类型，发狂的狼/魔改生物站在主人身边时传送安全闸
             // 恒放行（传过去又被咬）。锁定 center 的任意 Mob 都算威胁。
@@ -1964,7 +1964,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             // v1.5.230：位置候选链——自身 → 上方 1 → 上方 2（屋檐下头顶被堵的
             // 场景上方 2 格放水，水流下来淋到身上）
-            // v1.5.232：头顶优先（用户规范"在自己头顶位置生成一滩水"）——
+            // v1.5.232：头顶优先（玩家规范"在自己头顶位置生成一滩水"）——
             // 上方 1 → 自身 → 上方 2（屋檐下头顶被堵的场景上方 2 格放水兜底）
             for (int up : new int[]{1, 0, 2}) {
                 BlockPos cand = pos.offset(0, up, 0);
@@ -2021,7 +2021,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.199：每 tick 检查——临时放水满 3 秒（60 tick）收回（v1.5.204：1 秒 → 3 秒，
-     *  用户反馈"放下的水应该 3 秒后自动消失"） */
+     *  反馈"放下的水应该 3 秒后自动消失"） */
     private void tickRecoverWater(EntityMaid maid) {
         if (this.waterPos == null) {
             return;
@@ -2183,7 +2183,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 } catch (Exception ignored) {
                 }
             }
-            // v1.5.232：垫方块在第二步（用户规范）——垫成功 = 脱离液面 = 本链路
+            // v1.5.232：垫方块在第二步（玩家规范）——垫成功 = 脱离液面 = 本链路
             // 成功，下一 tick 自然进入着火分支处理身上的火；还在岩浆才轮到水桶等
             // 资源手段（buildCooldown 由 tick 顶部统一递减，这里只置冷却）
             if (this.buildCooldown <= 0) {
@@ -2246,7 +2246,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return;
             }
             // v1.1.0 实测一百五十三：火焰保护饰品——火焰伤害由饰品扛（受伤时给
-            // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑（用户：
+            // 15 秒抗火 + 喷灭火剂），不需要惊慌灭火/找水/往主人身边跑（反馈：
             // "女仆装备火焰保护时仍然会表示自己着火"）
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
                     && hasFireProtectBauble(maid)) {
@@ -2290,10 +2290,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     double dz = wz - maid.getZ();
                     double distSq = dx * dx + dz * dz;
                     // v1.5.288：女仆是陆地生物，寻路器默认避水——导航到水面格只会
-                    // 走到水边就停（用户："着火了却在水边下不去，难道女仆对水有恐惧？
+                    // 走到水边就停（反馈："着火了却在水边下不去，难道女仆对水有恐惧？
                     // "——不是恐惧，是寻路不下水）。
                     // v1.5.290：近水直接【传送入水】——旧版(288)给水平+垂直速度"冲进去"
-                    // 在岸沿高一格/悬空边缘时反复小跳悬空进不了水（用户："一直悬空在
+                    // 在岸沿高一格/悬空边缘时反复小跳悬空进不了水（反馈："一直悬空在
                     // 半空中，没有办法跳下去"）。传送到水源格内部直接泡水灭火
                     if (distSq < 6.25) {
                         maid.moveTo(wx, water.getY(), wz,
@@ -2389,7 +2389,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 绕行，放在所有"正在掉血"的逃生之后（前级有结果才轮到后级）
         if (maid.isInWater() && maid.getAirSupply() < 60) {
             // v1.1.0 实测一百五十四：溺水保护饰品——溺水伤害由饰品免疫 + 空气
-            // 自动补满，不需要上浮/喝水肺（用户："女仆装备溺水保护时仍然会表示
+            // 自动补满，不需要上浮/喝水肺（反馈："女仆装备溺水保护时仍然会表示
             // 自己溺水向上浮"；饰品每次溺水伤害触发时把空气回满）
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_DROWN_PROTECT_BAUBLE.get()
                     && hasDrownProtectBauble(maid)) {
@@ -3256,7 +3256,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * - 眼睛格已实心 → 直接返回（已封住/已被地形挡住），不重复烧方块；
      * - 身高 <1.4 的低矮怪（蜘蛛 0.9）跳过——眼睛在自身格内，单方块封不住；
      * - 每场自保会话最多 3 次尝试（suffocateBudget，start 重置），防耗尽背包；
-     * - 方块永久留下（用户选择，不自动清理）。
+     * - 方块永久留下（玩家选择，不自动清理）。
      */
     private void trySuffocateDuringBuild(EntityMaid maid, LivingEntity threat) {
         try {
@@ -3427,7 +3427,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 主人主动 TP 女仆不受影响（不走 teleportToOwner）。
      *
      * v1.5.91【双判定】曾改为同时判定自己身边与主人身边都无怪才传——v1.5.149
-     * 撤销自己身边判定：被怪追着跑时自己身边永远有怪 → 永远不传（用户反馈
+     * 撤销自己身边判定：被怪追着跑时自己身边永远有怪 → 永远不传（反馈
      * "怪一直在追导致无法传送"）。现只确认【主人身边】安全即可传送（防
      * "传回主人身边送死"）；传送成功 → 立即结束自保。
      *
@@ -3437,7 +3437,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * "传回家→跑回去→再传回家"的连传循环。
      */
     private void teleportHome(EntityMaid maid) {
-        // 实测三百九十（用户：自保模式禁止传送，玩家日程表手动传送除外）：
+        // 实测三百九十（反馈：自保模式禁止传送，玩家日程表手动传送除外）：
         // 自保会话期间一切自保逃生传送停用（岩浆/血量危急/弹尽粮绝兜底也
         // 不传）——本地逃生（珍珠/药水/走位/搭高/反击）接管；玩家日程表
         // 召唤走 ScheduleNetworking 通道不受影响；解除归位传送在会话结束
@@ -3457,7 +3457,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return;
         }
         // v1.1.0 实测八十三：主人已死亡（尸体停在死亡地点等待重生）不传——
-        // 旧版会把自保中的女仆直接拽到主人尸体旁（粉丝实测"女仆传到了死亡
+        // 旧版会把自保中的女仆直接拽到主人尸体旁（反馈实测"女仆传到了死亡
         // 地点而不是重生点"的元凶）；home 看家钉死同样不传。
         if (!owner.isAlive() || maid.isHomeModeEnable()) {
             return;
@@ -3467,7 +3467,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (dx * dx + dz * dz < 25.0) {
             return; // 已在主人 5 格内，不用传
         }
-        // v1.5.112：半径从写死 6 改为配置（teleportSafeRadius，默认 4）——用户反馈
+        // v1.5.112：半径从写死 6 改为配置（teleportSafeRadius，默认 4）——反馈
         // 6 格太宽松（远处怪物也算不安全，导致一直不传），4 格更贴身合理
         double sr = teleportSafeRadius();
         // v1.5.149：只判定主人身边安全即可传送（自己身边有怪不再拦截——被追时
@@ -3613,7 +3613,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             LOGGER.info("self drink: potion={} hp={}%",
                     potionKey(stack),
                     String.format("%.0f", this.hpRatio(maid) * 100.0f));
-            // v1.5.252g7：瞬间治疗短 CD（40 tick ≈ 2 秒可连喝）——用户规则
+            // v1.5.252g7：瞬间治疗短 CD（40 tick ≈ 2 秒可连喝）——规则
             // "除瞬间治疗外其他药水 CD = 时长"
             this.markPotionUsed(potionKey(stack), maid.level().getGameTime(), 40);
             return true;

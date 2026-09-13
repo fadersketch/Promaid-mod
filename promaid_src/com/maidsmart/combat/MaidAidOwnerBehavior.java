@@ -26,7 +26,7 @@ import net.minecraft.world.item.ItemStack;
  * 抗火 = fire_resistance/long_fire_resistance）——不再用 MobEffect 字段名比对
  * （v1.5.205 修过 f_19616_ 不是 instant_health 的坑）。
  * 总开关：combat.aidOwnerEnable（默认开）+ 两个阈值可调。
- * v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话改一下。
+ * v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话改一下。
  * 同时女仆战斗时也应该可以传递食物"）：互助链补两条——① 饮用型药水直接喂姐妹
  * （finishUsingItem 强制饮用，空瓶返还；旧版只投喷溅/滞留，普通药水从不传递）；
  * ② 姐妹正在战斗（脑内有攻击目标）且血不满时喂食（战斗续航，低血链已喂则跳过）。
@@ -50,7 +50,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.252g13【效果判定是情境药水的正门】：主人身上是否已有该效果——
-     *  只要有效果（哪怕剩余 1 秒）就不投，任何变体都不需要：用户规则
+     *  只要有效果（哪怕剩余 1 秒）就不投，任何变体都不需要：规则
      *  "一旦主人身上有这种效果，变体药水就都不需要投了"。效果消失瞬间
      *  立即重投（每 tick 检查，无空档）。不再依赖 CD 记时间。 */
     private static boolean hasEffectOn(net.minecraft.world.entity.LivingEntity target, String effectId) {
@@ -230,9 +230,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
         }
         // 3. 负面效果 → 牛奶（全解）/ 蜂蜜瓶（解中毒 + 回饱食）——v1.5.288：
-        //    改为【直接喂】（旧版塞主人背包/手上，用户："投喂应该直接喂给主人"）
+        //    改为【直接喂】（旧版塞主人背包/手上，反馈："投喂应该直接喂给主人"）
         //    v1.5.290：提前到治疗分支【之前】——旧版在治疗(3)之后：主人中毒+低血时
-        //    治疗先处理 → 负面解除被短路 → 蜂蜜/牛奶永远不喂（用户："还是不会喂蜂蜜"）。
+        //    治疗先处理 → 负面解除被短路 → 蜂蜜/牛奶永远不喂（反馈："还是不会喂蜂蜜"）。
         //    先解毒再治疗更合理（中毒持续掉血，先断源头）
         if (!aided && this.hasNegativeEffect(owner)) {
             if (this.feedMilkOrHoneyDirect(maid, owner)) {
@@ -268,7 +268,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         }
         // 5. 饱食度低 → 喂最优食物（全清单按饱和度排序，v1.5.201 起）
         //    v1.5.290：不再依赖 !aided——旧版：负面解除(3)喂牛奶成功（清效果但不加
-        //    饱食）→ aided=true → 饱食分支被短路 → 饿了女仆不喂（用户："饿了喂
+        //    饱食）→ aided=true → 饱食分支被短路 → 饿了女仆不喂（反馈："饿了喂
         //    蜂蜜而女仆没触发"）。饱食投喂独立判定：即使本轮已做其他动作，饱食仍低
         //    就继续喂（蜂蜜/食物都能直接加饱食，连续动作合理）
         if (owner.m_36324_().m_38702_() < com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get()) {
@@ -298,7 +298,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.1.0 实测六：给附近受伤/着火的姐妹女仆丢药水（治疗/再生；着火先抗火）
-     *  v1.1.0 实测八（用户："把套给主人的支援方案全复刻一部分给女仆，主人更高优先级"）：
+     *  v1.1.0 实测八（反馈："把套给主人的支援方案全复刻一部分给女仆，主人更高优先级"）：
      *  互助链对齐主人链——着火抗火 → 负面效果（牛奶/蜂蜜）→ 低血（治疗/金苹果/
      *  再生/喂食）。主人链永远先跑完（tick 里顺序固定），同 tick 主人有需求时
      *  互助轮空。 */
@@ -318,7 +318,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 return; // 主链已设的投喂间隔内互助也让位（本 tick 主链 return 时 aidCds
                 // 不递减——互助链不消耗间隔计数，纯让位判定）
             }
-            // v1.1.0 实测一百二十六（用户："女仆没有可支援道具却会说话，系统提示喂了
+            // v1.1.0 实测一百二十六（反馈："女仆没有可支援道具却会说话，系统提示喂了
             // 空气"）：白名单预检——背包+双手连一样能用的支援物品（药水/金苹果/牛奶/
             // 蜂蜜/FOODS 食物）都没有就整轮跳过：不说话、不扫描、不消耗。旧版依赖各
             // 分支返回 null，但手上的【活引用】会被同 tick 其他系统（隐藏物品槽/任务
@@ -358,7 +358,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                         action = "扔了再生药水";
                     }
                 }
-                // v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话
+                // v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话
                 // 改一下"）：低血链补【饮用型药水直接喂】——喷溅/滞留扔完、金苹果/再生
                 // 都没有时，普通治疗药水直接喂给姐妹（强制饮用，效果即时生效）。
                 // 与主人链的"塞背包"不同：姐妹没有背包 UI，直接喂才是"传递"。
@@ -368,7 +368,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (action == null && hpRatio2 < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
                     action = this.feedSisterFood(maid, sister);
                 }
-                // v1.1.0 实测二百四十二（用户："女仆战斗时也应该可以传递食物"）：
+                // v1.1.0 实测二百四十二（反馈："女仆战斗时也应该可以传递食物"）：
                 // 战斗支援——姐妹正在战斗（脑内有攻击目标）且血不满时喂食（回血+饱食，
                 // 战斗续航）。低血链已喂过则跳过（action != null 短路）；血满但战斗中
                 // 也喂（战斗消耗大，提前补）。
@@ -377,7 +377,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     action = this.feedSisterFood(maid, sister);
                 }
                 if (action != null) {
-                    // v1.1.0 实测三十二（用户：消息不再固定"药水来了"——牛奶/蜂蜜/食物
+                    // v1.1.0 实测三十二（反馈：消息不再固定"药水来了"——牛奶/蜂蜜/食物
                     // 也说药水不真实）：气泡改通用文案 + 绿色系统字幕记录具体支援
                     // 内容（与喂主人 [maid_smart] 绿色字幕同款显示方式）
                     maid.getChatBubbleManager().addTextChatBubble("姐妹挺住，我来帮你！");
@@ -446,7 +446,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     }
                     maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
                     // v1.1.0 实测三十二：喝牛奶音效（旧版静默——手搓效果路径没有
-                    // 任何反馈，用户："没有音效这一点很难受"）
+                    // 任何反馈，反馈："没有音效这一点很难受"）
                     playSoundAt(sister, "minecraft:entity.generic.drink");
                     return "喂了牛奶（负面全解）";
                 }
@@ -465,7 +465,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     // m_5584_ = LivingEntity.eat(Level, ItemStack)——真实进食
                     //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
                     sister.m_5584_(sister.m_9236_(), taken);
-                    // v1.1.0 实测三十四修复（用户："喂其他女仆蜂蜜没有效果，解不了
+                    // v1.1.0 实测三十四修复（反馈："喂其他女仆蜂蜜没有效果，解不了
                     // 中毒；对主人的路径仍然生效"）：eat() 只加饱食/食物效果——
                     // 原版"喝蜂蜜解中毒"发生在 HoneyBottleItem.finishUsingItem
                     //（玩家喝完才触发），eat() 不经过它 → 姐妹中毒不解。主人链
@@ -632,7 +632,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             // 真实进食（m_5584_ = eat(Level, ItemStack)）：与女仆自己吃食物完全一致
             // 的食物效果/音效/粒子路径。
-            // v1.1.0 实测二百五十六：移除上轮手搓 heal——用户要求喂食效果与女仆
+            // v1.1.0 实测二百五十六：移除上轮手搓 heal——要求喂食效果与女仆
             // 自己吃食物一样，eat() 就是标准路径（食物效果由 FoodProperties 定义，
             // 金苹果等自带回血效果的食物自然回血），不再额外手搓。
             sister.m_5584_(sister.m_9236_(), toGive);
@@ -644,7 +644,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测二百四十二（用户："女仆互助之间会传递喝的药水吗？不会的话改一下"）：
+     * v1.1.0 实测二百四十二（反馈："女仆互助之间会传递喝的药水吗？不会的话改一下"）：
      * 普通（饮用型）药水【直接喂给姐妹】——旧版互助链只投喷溅/滞留型（throwPotionTo
      * 只认 Splash/Lingering），饮用型药水从不传递（主人链有塞背包路径，姐妹链完全没有）。
      * 强制饮用：item.m_5922_（finishUsingItem）对姐妹实体生效——治疗/抗火等效果
@@ -740,7 +740,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             ItemStack stack = inv.getStackInSlot(bestSlot);
             ItemStack potionStack = stack.m_41777_(); // 快照（extract 前复制，防槽位变动）
-            // v1.1.0 实测二百五十（用户："干脆就省去那些繁文缛节吧。只要触发扔药水
+            // v1.1.0 实测二百五十（反馈："干脆就省去那些繁文缛节吧。只要触发扔药水
             // 这个事件，那就给予效果，滞留型则是在目标旁边生成对应的药水效果。然后
             // 会有一个药水抛出的动画就可以了"）：不再投掷实体——触发即生效。
             // ① 消耗药水 + 摆臂动画（抛药水动作）；② 滞留型（LingeringPotionItem）
@@ -754,7 +754,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             int maxDur = 0;
             boolean lingering = potionStack.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem;
             if (lingering) {
-                // v1.1.0 实测二百五十九（用户："滞留药水药水效果云还是没做好"）：
+                // v1.1.0 实测二百五十九（反馈："滞留药水药水效果云还是没做好"）：
                 // 云参数全面对齐原版 ThrownPotion.m_37537_（字节码实证）。旧版
                 // cloud.m_19714_(maxDur) 注释写"setDuration"——实际是 setColor（写
                 // 颜色数据槽）！把时长当颜色写入 → 云永远是 maxDur/600 解析出的
@@ -829,7 +829,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.252g：主人 16 格内是否有敌对生物（给增益药水助战的条件）
-     *  v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外列入
+     *  v1.1.0 实测三百四十六（反馈："只要是 target=主人/女仆的都会被额外列入
      *  威胁"）：并入行为化口径——锁定主人/主人任意女仆的 Mob（发狂的狼/魔改
      *  生物）也算危险，主人被狼追时女仆照常扔力量/迅捷助战。 */
     private boolean ownerInDanger(ServerLevel level, ServerPlayer owner) {
@@ -859,7 +859,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      * ① 择优：强效/长效优先（strong_healing > healing；long_regeneration >
      * strong_regeneration > regeneration；long_fire_resistance > fire_resistance），
      * 不再按槽位顺序取第一个；
-     * ② v1.1.0 实测二百五十（用户："干脆就省去那些繁文缛节吧。只要触发扔药水这个
+     * ② v1.1.0 实测二百五十（反馈："干脆就省去那些繁文缛节吧。只要触发扔药水这个
      * 事件，那就给予效果，滞留型则是在目标旁边生成对应的药水效果。然后会有一个药水
      * 抛出的动画就可以了"）：触发即生效——不再投掷实体（历次投掷实体方案均被实测
      * 否决：追踪乱飞/抛物线扔歪/落地不生效）。消耗 + 摆臂动画（抛药水动作）；滞留型
@@ -1059,7 +1059,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                             maid.m_9236_().m_46467_(), maxDur2 > 0 ? maxDur2 : 60);
                 }
                 maid.getChatBubbleManager().addTextChatBubble("主人，" + label + "药水放你背包了，快喝！");
-                // v1.1.0 实测三十二（用户："女仆不会传递直接可以饮用的药水"——传递
+                // v1.1.0 实测三十二（反馈："女仆不会传递直接可以饮用的药水"——传递
                 // 功能其实一直在，但只有气泡提示没有系统字幕，观感上像没给）：
                 // 塞背包成功发绿色系统字幕（与喂食 [maid_smart] 同款显示）
                 // v1.1.0 实测二百七十四：建造女仆静默非建造字幕
@@ -1110,10 +1110,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测二百五十一（用户："再加一个药水以抛物线方式从女仆飞到目标原有位置
+     * v1.1.0 实测二百五十一（反馈："再加一个药水以抛物线方式从女仆飞到目标原有位置
      * 的动画。但那个仅仅是动画"）：抛药水【纯动画】——从女仆位置按弹道公式抛物线
      * 飞向目标位置。
-     * v1.1.0 实测二百五十四（用户："扔出去的药水所显示的动画效果理论上应该是投掷
+     * v1.1.0 实测二百五十四（反馈："扔出去的药水所显示的动画效果理论上应该是投掷
      * 药水的动画效果吧？而在投掷再生药水的时候，地上的药水云仍然是无效果药水云就
      * 会显得很违和"）：动画药水改用【实际药水完整复制】（同样形态 + 实际 Potion
      * 效果）——旧版用空喷溅药水（setPotion empty）：瓶子是红色空瓶样式、落地只有
@@ -1142,7 +1142,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             net.minecraft.world.entity.projectile.ThrownPotion potion =
                     new net.minecraft.world.entity.projectile.ThrownPotion(level, maid);
             potion.m_37446_(anim);
-            // v1.1.0 实测二百五十五（用户："动画偏移效果还是有点严重。导致效果虽然
+            // v1.1.0 实测二百五十五（反馈："动画偏移效果还是有点严重。导致效果虽然
             // 给到了，但是落点不同还是会有一些违和感。那么药水动画的最终落点就给到
             // 时刻追踪目标位置"）：落点时刻追踪——动画实体带目标 UUID 标签
             //（maid_smart_anim_target），由 HomingPotionMixin 的追踪逻辑每 tick
@@ -1153,7 +1153,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 弹道公式解仰角（与旧版二百四十九同款）：速度 4.0、无随机散布、
             // 按水平距离/高度差精确飞向目标位置；动画抛掷不设 homing 标签
             //（纯抛物线自然飞行，落地即消失——空药水无效果，安全）。
-            // v1.1.0 实测二百六十四（用户："效果给到之后药水动画立刻落地吧"）：
+            // v1.1.0 实测二百六十四（反馈："效果给到之后药水动画立刻落地吧"）：
             // 速度 1.0 → 4.0——效果是触发即生效（瞬间给到），动画药水必须快速
             // 到达落地（2~3 tick），与效果施加几乎同步，不再"效果先到、瓶子还在
             // 天上飞半秒"的脱节观感。
@@ -1181,7 +1181,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.1.0 实测二百五十三（用户："女仆根本连效果都没吃到"）：药水效果读取修正——
+     * v1.1.0 实测二百五十三（反馈："女仆根本连效果都没吃到"）：药水效果读取修正——
      * 旧版用 PotionUtils.m_43571_（getMobEffects）只读 NBT 的 CustomPotionEffects 列表，
      * 字节码实证它【完全不读 Potion 字段】——再生/治疗/抗火等标准药水的效果存在
      * Potion 注册表（Potion.getEffects），不在 CustomPotionEffects → 返回空列表 →
@@ -1368,11 +1368,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(owner, "minecraft:fire_resistance", 6000, 0);
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 使用动画
-            // v1.1.0 实测三十二（用户："喂食金苹果的时候没有音效"）：吃苹果音效
+            // v1.1.0 实测三十二（反馈："喂食金苹果的时候没有音效"）：吃苹果音效
             playSoundAt(owner, "minecraft:entity.generic.eat");
             maid.getChatBubbleManager().addTextChatBubble(
                     enchanted ? "主人，附魔金苹果给你！" : "主人，金苹果给你！");
-            // v1.5.307：金苹果路径补系统提示——用户："喂了什么系统提示不生效"；
+            // v1.5.307：金苹果路径补系统提示——反馈："喂了什么系统提示不生效"；
             // 排查：食物喂食的系统消息一直在（feedFoodDirect），但金苹果路径只有
             // 气泡没有系统消息（效果是直接加成的，玩家看不到"喂了什么"）
             // v1.1.0 实测二百七十四：建造女仆静默非建造字幕
@@ -1500,7 +1500,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.288：负面效果【直接喂】——牛奶（清主人全部效果 + 空桶返还）优先，
-     *  其次蜂蜜瓶（解中毒 + 饱食 + 玻璃瓶返还）。旧版是塞主人背包/手上（用户：
+     *  其次蜂蜜瓶（解中毒 + 饱食 + 玻璃瓶返还）。旧版是塞主人背包/手上（反馈：
      *  "投喂应该跟本来就有的喂食功能一样是直接喂给主人"）。
      *  v1.5.289：牛奶先查【正面状态】——主人身上有增益效果时不喂牛奶（牛奶清
      *  全部效果会把力量/再生/抗火等增益一起清掉，与女仆自己喝牛奶同款前提）；
@@ -1548,7 +1548,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 handIsHoney = !handHoney.m_41619_() && handHoney.m_41720_() == honey;
             }
             if (handIsHoney) {
-                // v1.1.0 实测三十二修复（用户："喂食蜂蜜瓶似乎没有效果"）：
+                // v1.1.0 实测三十二修复（反馈："喂食蜂蜜瓶似乎没有效果"）：
                 // 旧版先 m_41774_(1) 消耗再把手上的【空瓶】传给 feedFoodDirect
                 // ——蜂蜜瓶没有 FoodProperties（空瓶），feedFoodDirect 返回 false
                 // → 把空瓶插回背包：蜂蜜凭空消失、无任何效果。

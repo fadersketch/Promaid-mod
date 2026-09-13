@@ -6,7 +6,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 
 /**
- * v1.1.0 实测二百五十八（用户："给女仆加一个不会踩坏农田的效果"）：
+ * v1.1.0 实测二百五十八（反馈："给女仆加一个不会踩坏农田的效果"）：
  * 女仆经过/落在农田（农场方块）上不再把它踩成泥土——
  * Forge 的 FarmlandTrampleEvent（农田踩踏入口，走路/跳跃/坠落都经过）：
  * 触发者是女仆 → cancel（农田保持原样，不变成泥土）。

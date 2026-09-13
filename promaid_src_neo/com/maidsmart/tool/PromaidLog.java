@@ -4,7 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
  * 运行日志（v1.1.0 实测九十四）——把各系统的【状态迁移事件】落盘到独立文件，
- * 方便日后验查（用户："补上日志记录的功能，方便以后进行验查"）。
+ * 方便日后验查（反馈："补上日志记录的功能，方便以后进行验查"）。
  *
  * 文件：游戏目录/logs/promaid.log（UTF-8 追加写，满 4MB 自动轮换为
  * promaid.log.old，仅保留一代——不无限膨胀）。同时镜像一行到 latest.log

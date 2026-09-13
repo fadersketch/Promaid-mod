@@ -326,7 +326,7 @@ public final class BlueprintLib {
     /**
      * v1.5.156："已建"判定的等价白名单——只限地形类组（泥土/草方块传播退化互搏，
      * v1.5.55/56 场景）。建材类组（石砖/圆石/木板/门/玻璃等）"已建"只认同方块：
-     * 用户日志实证——瞭望塔下达到深板岩层（远古城市），34 个石砖步骤被
+     * 日志实证——瞭望塔下达到深板岩层（远古城市），34 个石砖步骤被
      * deepslate_bricks 等价匹配为"已建"→ 0.25 秒"建造完成"。材料消耗
      * （背包匹配）仍用完整等价（isEquivalent），不受影响。
      */
@@ -380,7 +380,7 @@ public final class BlueprintLib {
         return sb.toString();
     }
 
-    /** v1.5.387：内置预设全部移除——用户要求"手册建造目录中原有的非蓝图导入的内容
+    /** v1.5.387：内置预设全部移除——要求"手册建造目录中原有的非蓝图导入的内容
      *  全部都删掉"（只保留玩家自己导入/生成的外部蓝图）。此表保持为空；
      *  BuiltinHouses 生成器保留（旧存档 id 兼容：已下达的建造任务仍可解析），
      *  但不再向手册目录/目录列表/LLM 工具注册任何内置建筑。 */
@@ -462,7 +462,7 @@ public final class BlueprintLib {
         // v1.5.39：PM 下载的现代红石智能住宅（547686 块，上限提升后入库）
         EXT_CN_NAMES.put("modernredstonesmarthouse8649399", "现代红石智能住宅");
         // v1.5.252k：挖空版已删除——挖空设计导致内部大量附着物悬空，触发强制补支撑
-        // 垫的支撑块把下部红石设施卡死（用户实测），仅保留原版
+        // 垫的支撑块把下部红石设施卡死（实测），仅保留原版
     }
 
     /**
@@ -500,7 +500,7 @@ public final class BlueprintLib {
         DESCRIBE_CACHE.clear();
         SIZE_CACHE.clear();
         if (server != null) {
-            // v1.5.387：不再自动复制内置预制蓝图（原 8 个大 snbt）——用户要求手册
+            // v1.5.387：不再自动复制内置预制蓝图（原 8 个大 snbt）——要求手册
             // 建造目录只保留玩家导入/生成的内容。已在 blueprints 目录的残留副本
             // 由 cleanupLegacyBuiltinFiles() 删除（mod 自动生成的，非玩家内容）。
             cleanupLegacyBuiltinFiles();
@@ -627,7 +627,7 @@ public final class BlueprintLib {
      * 下 8 个大 snbt 的旧副本）——这些文件是安装时自动生成的、非玩家内容。
      * v1.0.4：内置预制已彻底移除（授权不明，jar 资源一并删除）——残留副本无法再
      * 与 jar 资源比对，直接按已知文件名删除（这些文件名是预制建筑专用名，玩家
-     * 自行改写的同名文件同样清理——用户明确要求不再保留任何预制建筑）。 */
+     * 自行改写的同名文件同样清理——要求不再保留任何预制建筑）。 */
     private static void cleanupLegacyBuiltinFiles() {
         String[] legacy = {
                 "seaside_villa.snbt", "grand_palace.snbt", "skyscraper.snbt",
@@ -3354,7 +3354,7 @@ public final class BlueprintLib {
      */
     /**
      * v1.1.0 实测九十七：通用步骤旋转器（内置/JSON/任意已解析步骤列表）——
-     * 用户需求："切换的应该是整个区块，而不仅仅是其中的方块"：整体旋转 =
+     * 需求："切换的应该是整个区块，而不仅仅是其中的方块"：整体旋转 =
      * ①坐标矩阵变换（q1: rx=sz-1-z, rz=x …与 parseStructure 同款）；
      * ②占地 W/D 随新坐标边界自然互换（centerSteps/planRegion 重算即得）；
      * ③有朝向方块状态跟随旋转（楼梯/门/原木轴向等：SNBT → NbtUtils 解析 →
@@ -3575,7 +3575,7 @@ public final class BlueprintLib {
      * 每项：{id, 显示名, 描述} + 材料清单 Map<物品id, int[]{已有, 需要}>。
      * 已有 = 玩家背包持有（等价族感知），需要 = 蓝图总需求。
      *
-     * v1.5.221：材料口径修正（用户要求：区块内已建造 + 女仆背包 + 玩家背包）：
+     * v1.5.221：材料口径修正（要求：区块内已建造 + 女仆背包 + 玩家背包）：
      * - 需要 = 蓝图总需求 − 区块内已累计搭建的（活跃区块计划 placedSet 命中，
      *   含恢复时预登记的世界已建）；
      * - 已有 = 已搭建 + 绑定女仆背包 + 玩家背包；
@@ -3589,7 +3589,7 @@ public final class BlueprintLib {
         // v1.5.278：已建按【蓝图 id 隔离】——旧版把所有计划的 placedSet 混在一个
         // Map，不同蓝图共用材料时（石质山景别墅 + 现代红石智能住宅都用石头/木板/石砖），
         // 其他计划的已建会把本蓝图"剩余需求"扣成 0 → 材料表只剩 3 种未污染的
-        //（用户截图实证：圆石墙/蓝色床/火把，其余全显示"已建完"）
+        //（截图实证：圆石墙/蓝色床/火把，其余全显示"已建完"）
         java.util.Map<String, java.util.Map<String, Integer>> builtByBlueprint = new java.util.HashMap<>();
         java.util.Map<String, Integer> maidHaveMap = new java.util.HashMap<>();
         if (player.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
@@ -3659,7 +3659,7 @@ public final class BlueprintLib {
                 int maidHave = maidHaveMap.getOrDefault(entry.getKey(), 0);     // 绑定女仆背包
                 int remaining = Math.max(0, entry.getValue() - built);          // 剩余需求
                 // v1.5.252p：创造模式"已有"直接=剩余需求（显示 X/X 齐）——旧版
-                // built + MAX_VALUE 溢出成 -2147483648（-21 亿,用户实测）
+                // built + MAX_VALUE 溢出成 -2147483648（-21 亿,实测）
                 int have = isCreative(player)
                         ? remaining
                         : built + maidHave + countPlayerMaterial(player, entry.getKey()); // 已建+女仆+玩家
@@ -3721,7 +3721,7 @@ public final class BlueprintLib {
             sb.append(maxX - minX + 1).append('x').append(maxY - minY + 1).append('x').append(maxZ - minZ + 1);
             // v1.5.278：块数用【去重后】计数——与下达建造的 plan 一致（旧版用原始
             // steps.size()，生成器/转换器的同坐标重复步骤导致"共2138块" vs 进度
-            // "2024块"不一致，用户截图实证 114 块差额）
+            // "2024块"不一致，截图实证 114 块差额）
             int n = 0;
             for (String s : dedupeSteps(steps)) {
                 if (parseStep(s) != null) {
@@ -3997,7 +3997,7 @@ public final class BlueprintLib {
 
     /** 统计蓝图步骤的总需求（blockId → 数量；等价族合并到"主方块"上）。
      *  v1.5.252w：排除 FORBIDDEN 黑名单（空气/基岩/屏障等生存不可获取方块）——
-     *  不再出现在材料表（用户实测：材料表出现"空气 0/0"），缺料计算也默认
+     *  不再出现在材料表（实测：材料表出现"空气 0/0"），缺料计算也默认
      *  玩家持有（空气步骤本就无限，主循环单独处理，不影响搭建）。 */
     public static Map<String, Integer> countNeeds(List<String> steps) {
         Map<String, Integer> needed = new HashMap<>();
@@ -4678,7 +4678,7 @@ public final class BlueprintLib {
         // 取第一个背包里有的替代品（替代品必须有对应方块，防消耗物品却放不出方块）
         // v1.5.261：替代品高度类别必须与目标【严格一致】——旧配置/误添加的
         // 错配条目（半格表里的一格方块等）执行时跳过，防止半格位置被一格方块
-        // 顶坏建筑（用户需求："1 格只能用 1 格替换，半格两格同理"）
+        // 顶坏建筑（需求："1 格只能用 1 格替换，半格两格同理"）
         // v1.5.275：两格再分竖/横（门/高植物 ↔ 床），无碰撞方块单独表
         if (com.maidsmart.config.MaidSmartConfig.BUILD_ALT_ENABLED.get()) {
             Block targetBlock = ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(blockId));
@@ -4772,7 +4772,7 @@ public final class BlueprintLib {
 
     /** 两格高判定（门/双植物/甘蔗/竹子——替换表按此分类）
      *  v1.5.275：拆分为"竖两格"（本方法）与"横两格"（isWideHeight——床）。
-     *  用户："横着高的两格方块和竖着的两格方块，这两类物品也是不一样的" */
+     *  反馈："横着高的两格方块和竖着的两格方块，这两类物品也是不一样的" */
     public static boolean isTallHeight(Block block) {
         return isTallVertical(block) || isWideHeight(block);
     }
@@ -4792,7 +4792,7 @@ public final class BlueprintLib {
 
     /** 无碰撞体积方块（花/草/蕨/火把/地毯/线/红石线/压力板/按钮/梯子/铁轨/花盆/
      *  横幅/告示牌/雪层等——isSolid（有碰撞）为 false 的可放置方块）。
-     *  v1.5.275：面板单独一个区（用户："没有实体碰撞体积的方块单独画一个区"） */
+     *  v1.5.275：面板单独一个区（反馈："没有实体碰撞体积的方块单独画一个区"） */
     public static boolean isNoClip(Block block) {
         if (block == null || block == net.minecraft.world.level.block.Blocks.f_50016_) {
             return false;
@@ -4805,7 +4805,7 @@ public final class BlueprintLib {
     }
 
     /* ================= v1.5.279：替代方块多维度划分 =================
-     * 用户："自定义方块的种类需要根据多方面维度进行新的划分，仅仅根据一格高、
+     * 反馈："自定义方块的种类需要根据多方面维度进行新的划分，仅仅根据一格高、
      * 半格高这些不够"。新增两个自动判定维度（无需配置）：
      * - 材质族：木/石/砖/矿/璃/陶/毛/他（匹配时同族优先）
      * - 功能：红石/照明/存储/炉/装饰/结构（面板显示标记）
@@ -6102,7 +6102,7 @@ public final class BlueprintLib {
             int mx = maid.m_20183_().m_123341_();
             int my = maid.m_20183_().m_123342_();
             int mz = maid.m_20183_().m_123343_();
-            // v1.5.147b（用户方案）：先确认【区域内实际存在的方块种类】，再与蓝图
+            // v1.5.147b（方案）：先确认【区域内实际存在的方块种类】，再与蓝图
             // 比对取交集——锚点从"世界存在 ∩ 蓝图需要"的方块里选：缺料没建的方块
             // 根本不在世界里，不会当选锚点（瞭望塔 = 灯笼没建 → 自动落到石砖）。
             // 一次扫描同时收集种类与位置；交集方块按【世界出现次数】升序（世界越

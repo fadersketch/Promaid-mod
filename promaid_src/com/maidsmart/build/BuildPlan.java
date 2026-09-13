@@ -592,7 +592,7 @@ public final class BuildPlan {
      *  v1.5.252n：改为【绑定数】口径——旧版按"原点 ±128 格内"统计：建造是隔空的
      *  （setBlock 不需要女仆在场），远处手动绑定的女仆照样在建造却不计数；
      *  全员加入（玩家在区块内）计数正确、女仆管理手动绑定（女仆在远处）不增长——
-     *  用户实测的两入口计数不一致。绑定与区块同维度由各入口保证，跨维度存量安全。 */
+     *  实测的两入口计数不一致。绑定与区块同维度由各入口保证，跨维度存量安全。 */
     private static int countBuildersNear(net.minecraft.server.level.ServerLevel level, PlanState ps) {
         int n = 0;
         for (java.util.Map.Entry<java.util.UUID, String> e : MAID_PLAN.entrySet()) {
@@ -637,7 +637,7 @@ public final class BuildPlan {
     /**
      * v1.5.69：该女仆是否为当前工头（按其绑定区块判断）。
      * v1.5.72/74 语义修正：无工头/工头失效/工头被暂停 → 放行（防全员静默）。
-     * v1.5.266：无工头/工头失效 → 【当场随机挑一只顶上并持久化】（用户："不是说
+     * v1.5.266：无工头/工头失效 → 【当场随机挑一只顶上并持久化】（反馈："不是说
      * 没设置的时候会随机设置一个吗"——v1.5.182 的补选在 start 时机经常失败：
      * 创建区块时女仆还没绑定、远程绑定 scanAreaMaids 扫不到 → foremanUuid 恒空
      * → 全员放行 = "所有人都在发"的根因）。服务端单线程顺序执行无竞态：

@@ -27,7 +27,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 public final class BlueprintAreaPreview {
     private static boolean registered = false;
 
-    /** v1.1.0 实测九十六：金色预览回归（用户："未确认时金色区域随着玩家移动这个
+    /** v1.1.0 实测九十六：金色预览回归（反馈："未确认时金色区域随着玩家移动这个
      *  功能很重要"）——「建造此图纸」未确认阶段的玩家中心预览，叠加青色幽灵方块；
      *  独立的「区块显示」按钮保持删除，金色预览只服务建造确认流程 */
     private static boolean active = false;
@@ -161,7 +161,7 @@ public final class BlueprintAreaPreview {
      * 空列表 = 无进行中计划（取消/完成）→ 清空所有框与投影。
      */
     public static void setRegions(java.util.List<String[]> regions) {
-        // v1.1.0 实测一百三十二（用户："建筑投影的大致建筑轮廓又没有了"）：轮廓链路
+        // v1.1.0 实测一百三十二（反馈："建筑投影的大致建筑轮廓又没有了"）：轮廓链路
         // 的关键路径日志——帮助排查红色框/橙色幽灵何时被清。
         // 仅记录状态变化（非心跳静默——每 1 秒 RegionSyncPacket 到来，日志不会刷屏）
         int before = REGION_BOXES.size();
@@ -196,7 +196,7 @@ public final class BlueprintAreaPreview {
                 int d = Integer.parseInt(r[9]);
                 // v1.5.188：x/y/z 已是区块 box 的 min 角（服务端 planRegion 下发），
                 // 直接作框的起点——旧版误当中心减半 → 红色区块框偏移 ≈1 格，
-                // "实际搭建超出区块"（用户反馈）
+                // "实际搭建超出区块"（反馈）
                 double x0 = x;
                 double z0 = z;
                 REGION_BOXES.add(new double[]{x0, y, z0, x0 + w, y + h, z0 + d});
@@ -368,7 +368,7 @@ public final class BlueprintAreaPreview {
         pose.pushPose(); // pushPose
         for (int i = 0; i < REGION_BOXES.size(); i++) {
             double[] b = REGION_BOXES.get(i);
-            // 实测二百一十二（用户："从外部往内部看会发现是一个红色的正方体/长方体，
+            // 实测二百一十二（反馈："从外部往内部看会发现是一个红色的正方体/长方体，
             // 六个面都被红色覆盖——透过那一层红色看不到里面的幽灵方块；从内部往外看
             // 才正常"）：删除区块框的【大红填充面】——0.28 半透明大盒的 6 个面在从外
             // 向内看时正好挡在幽灵方块前面，后画的红面覆盖/混合掉幽灵（内部看在相机
@@ -478,13 +478,13 @@ while (com.maidsmart.build.BuildKeysClient.ROTATE_BLUEPRINT != null
         if (pts == null || pts.length < 4) {
             return;
         }
-        // v1.1.0 实测一百八十九（用户："建造模式方块——玩家走出框选的区块以后，
+        // v1.1.0 实测一百八十九（反馈："建造模式方块——玩家走出框选的区块以后，
         // 蓝色方块和橙色方块在区块外是看不见的"）：移除 96 格点剔除——旧版以
         // 【计划原点】为锚点算玩家距离（>96 格整片不画），与红框渲染策略不一致
         //（红框永远渲染）：玩家走出框选区块投影全没；大蓝图时玩家站在框内对角
         //（离原点 >96 格）也会整片消失（一百四十七"框能显示幽灵必能显示"被这条
         // 独立剔除戳穿）。现在与红框同策略：不剔距离，只受 BUILD_PROJECTION
-        // 总开关控制（帧率敏感用户关总开关即可）。
+        // 总开关控制（帧率敏感玩家关总开关即可）。
         // v1.1.0 实测二百零一：面 alpha 0.20→0.45（2600 个格子从区块外看只有朝玩家的
         // 外皮几面可见，0.20 极淡基本看不出）。
         // v1.1.0 实测二百二十三【逐盒距离分档，覆盖全部方块】：旧版填充闸是一道
