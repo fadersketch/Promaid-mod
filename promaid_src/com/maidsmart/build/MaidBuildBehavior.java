@@ -105,7 +105,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         LAST_TELEPORT.remove(maidUuid);
     }
 
-    /** v1.1.0 实测二百七十二（用户："女仆建造是坐在原地的，不符合常理……先瞬移到要搭方块
+    /** v1.1.0 实测二百七十二（反馈："女仆建造是坐在原地的，不符合常理……先瞬移到要搭方块
      *  的位置，然后再放置"）：建造拟真升级——方案 B（先瞬移再放置）。放置前把女仆瞬移到
      *  目标格旁的安全站立格，配合挥臂动画即为"亲手摆放"观感；找不到安全站姿则不瞬移
      *  （隔空放置兜底，绝不瞬移到危险/卡身位置）。限频 4 tick——极速模式连续放置不连闪。 */
@@ -192,7 +192,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *   建造本身是隔空放置（行为从不移动），坐下不影响搭方块。
      * - 玩家试图让她站起（GUI/交互）→ 下一 tick 被重新按回坐下。
      * - 切出建造任务 → 恢复站立并清标记（只恢复我们自己按下的坐姿）。
-     * v1.1.0 终审二（用户："强制坐下很怪，坐着还会小幅移动——玩家 shift+右键
+     * v1.1.0 终审二（反馈："强制坐下很怪，坐着还会小幅移动——玩家 shift+右键
      * 坐下那种绝大部分情况不会动"）：根因是两种坐状态不一致——玩家 shift+右键
      * 走的是 m_21839_（setOrderedToSit，指令位），TLM 脑内多处判定（含
      * canBrainMoving 与 RandomStroll 挂载的 Await 行为）都认【指令位】，
@@ -305,7 +305,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.59：本女仆每 tick 的放置份额 = 目标速率 / 活跃女仆数，且不超过服务器能力上限。
-     *  目标速率算法（用户规则）：
+     *  目标速率算法（规则）：
      *  - 先按当前正常速度估算单女仆耗时；若 >10 分钟 → 锁定 10 分钟反推速度（更快）
      *  - 若 ≤10 分钟 → 按正常速度搭（小建筑不刻意加速）
      *  - 多女仆 → 单女仆目标 × 2^(n-1) 指数增长（封顶 512 防溢出），再均分到每个女仆
@@ -319,7 +319,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         }
         // v1.5.140：档位硬限速率（块/秒）——×1=1、×1.5=1.5、×3=3。
         // 修复旧逻辑：`Math.max(GLOBAL_QUOTA, ...)` 在 TPS 高时档位速率被能力上限
-        // 顶掉 → ×1 也全速搭建（用户反馈"只开 x1 还是太快，小建筑没过程"）。
+        // 顶掉 → ×1 也全速搭建（反馈"只开 x1 还是太快，小建筑没过程"）。
         // 多女仆指数增长：总目标 = 单女仆 × 2^(n-1)（封顶 512 倍）
         double tierRate = PLACE_INTERVAL == 6 ? 1.0 : (PLACE_INTERVAL == 4 ? 1.5 : 3.0);
         double perTick = tierRate / 20.0;
@@ -615,7 +615,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
             // v1.5.252aa：极速模式放置冷却归零（连续摆放）——旧版放置后仍设 2 tick
             // 冷却 → 每只女仆每 3 tick 只放 1 块（6.7 块/秒/只），13 只合计被压到
-            // ~25 块/秒（用户实测"13 个女仆速度只有五格"）——TURBO 本意是吃满
+            // ~25 块/秒（实测"13 个女仆速度只有五格"）——TURBO 本意是吃满
             // 服务器能力上限（批量由 batchLeft 配额控制，TPS 反馈兜底）
             this.placeCooldown = TURBO ? 0 : currentInterval();
             this.missingNotified = null;
@@ -762,7 +762,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
                 if (used != null) {
                     // v1.5.275：用了替代品 → 提示"用 X 替代 Y"（30 秒冷却）——
-                    // 有替换时不再报缺料（用户："既然有替换品了，应该换换系统提示，
+                    // 有替换时不再报缺料（反馈："既然有替换品了，应该换换系统提示，
                     // 没有的时候才播报缺材料"）
                     // v1.5.287：itemForBlock（redstone_wire → 红石粉）
                     net.minecraft.world.item.Item exactItem = BlueprintLib.itemForBlock(blockId);
@@ -830,7 +830,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     if (fails >= 3) {
                         // v1.5.252af：支撑格在蓝图计划内 → 不跳过，延后等蓝图支撑建好。
                         // 甘蔗种泥巴上（泥巴缺料延后）→ force 补支撑 setBlock 失败 → 旧版
-                        // 跳过 124 个（用户实测"甘蔗农场跳过 172 个"）；支撑是蓝图真实
+                        // 跳过 124 个（实测"甘蔗农场跳过 172 个"）；支撑是蓝图真实
                         // 步骤时应等待（补料后泥巴建好，甘蔗自然能放），而非永久跳过。
                         boolean waitPlanSupport = false;
                         net.minecraft.core.BlockPos supPos = null; // v1.5.264：提声明到 try 外（超时判定用）
@@ -950,7 +950,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             // 不会自行消失；外力破坏的洞重新下达蓝图即可补建）
             // v1.5.252ab：红石激活提前到缺口检查【之前】——旧版在 scanGaps 之后，
             // scanGaps 发现缺口（哪怕 1 个）就 return → recalcRedstone 永不执行 →
-            // 红石机器建好不运行（用户实测：甘蔗农场红石机器无法运行）
+            // 红石机器建好不运行（实测：甘蔗农场红石机器无法运行）
             // v1.5.316：红石机器改革——机器走活建造（flag 3）+ 专属顺序，红石/水流
             // 在放置时已自然就位；完工不再"唤醒/不唤醒"（recalcRedstone/activateWater
             // 对机器均多余）。轰炸机类完工自动放矿车（spawnStartMinecarts）启动复制循环。
@@ -1148,7 +1148,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     net.minecraft.world.level.block.Block support = supportBlockFor(placed, fallbackBlock);
                     if (support != null) {
                         // v1.5.252af：支撑格区块未加载 → 直接延后（setBlock 会静默
-                        // 失败——"补支撑后支撑格仍空/流体"的根因，用户实测甘蔗 124 个跳过）
+                        // 失败——"补支撑后支撑格仍空/流体"的根因，实测甘蔗 124 个跳过）
                         if (!level.m_46749_(supPos)) {
                             logPlaceFail(level, target, placed, "支撑格区块未加载");
                             return false;
@@ -1206,7 +1206,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.252ad：bad 判定放宽——目标已是目标方块（placed 或解析状态同方块）
         // → 成功。旧版 !canSurvive 对已放置的玻璃/树叶/活塞/观察者/漏斗等误判失败
         // （日志实证：484 玻璃、96 树叶…"目标现=目标方块"却 place-fail）→ 全方块
-        // 延后 3 次 → 大量跳过（用户实测"甘蔗农场跳过 130 个"）。canSurvive 对
+        // 延后 3 次 → 大量跳过（实测"甘蔗农场跳过 130 个"）。canSurvive 对
         // 解析出的状态（stateSnbt）在部分方块上返回 false 的原因待查，但目标方块
         // 已在 = 放置成功，不应判失败。
         BlockState targetState = level.m_8055_(target);
@@ -1256,7 +1256,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
             }
             // v1.5.263：空气步骤（清除）跳过 canSurvive 验证——air.canSurvive 对部分
-            // 状态返回 false，清除成功仍报"目标仍空气或 canSurvive 失败"（用户日志：
+            // 状态返回 false，清除成功仍报"目标仍空气或 canSurvive 失败"（日志：
             // air 清除红石线失败，目标现=redstone_wire）
             if (placed != net.minecraft.world.level.block.Blocks.f_50016_
                     && (level.m_8055_(target).m_60795_() || !placeState.m_60796_(level, target))) {
@@ -1377,10 +1377,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
      *  canSurvive 失败（MC 甘蔗只认沙子/泥土/甘蔗），静默放置看似成功，但邻居更新
      *  （flag 3）触发检查时被打掉 → 反复"放置又被打掉"循环。
      *  v1.5.252aa：fallback 用蓝图主要建材——旧版无中生有补石头 → 建筑里出现
-     *  材料表没有的石头（用户实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致
+     *  材料表没有的石头（实测：甘蔗农场大量石头）——改用蓝图自己的材料视觉一致
      *  v1.5.263：红石科技件固定石头——fallback（蓝图主要建材）可能是甘蔗/水等
      *  非 canSupportRigidBlock 方块 → 红石线/中继器补在甘蔗上 canSurvive 失败
-     *  → 3 次永久跳过（用户实测："悬浮的红石放不上"） */
+     *  → 3 次永久跳过（实测："悬浮的红石放不上"） */
     private static net.minecraft.world.level.block.Block supportBlockFor(Block placed, Block fallback) {
         // v1.5.284：各分支判空兜底——查询结果缺失时落到下一分支/fallback，不返回 null
         if (placed instanceof net.minecraft.world.level.block.SugarCaneBlock) {
@@ -1726,7 +1726,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.114：估算某方块还缺多少（计划剩余需求 − 女仆背包 − 主人背包；创造模式视为充足）
-     *  v1.5.218：材料计算按用户要求 = 蓝图总需求 − 已累计搭建的 − 永久跳过的
+     *  v1.5.218：材料计算按要求 = 蓝图总需求 − 已累计搭建的 − 永久跳过的
      *  − 主人背包 − 女仆背包（旧版漏扣"已搭建"，建到一半缺口显示还是全量需求） */
     private int estimateMissing(EntityMaid maid, String blockId) {
         List<String> plan = BuildPlan.getBoundPlan(maid);

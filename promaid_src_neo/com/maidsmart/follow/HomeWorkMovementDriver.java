@@ -9,7 +9,7 @@ import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.common.NeoForge;
 
 /**
- * v1.1.0 实测三百三十三（用户："Home模式下女仆又不会动了。也是的，我们直接全盘
+ * v1.1.0 实测三百三十三（反馈："Home模式下女仆又不会动了。也是的，我们直接全盘
  * 推翻。直接为农场和宰杀home模式专门重新写一套可以运动的逻辑"）：
  * Home 工作移动独立驱动——为【home 模式 + 农场/宰杀任务】的女仆提供独立运动，
  * 不依赖 TLM 大脑活动/行为站桩标记。

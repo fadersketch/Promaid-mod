@@ -11,7 +11,7 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测四百二十一【冷却可视化】——用户："我希望女仆复活的CD及自己回魂符的CD在
+ * 实测四百二十一【冷却可视化】——反馈："我希望女仆复活的CD及自己回魂符的CD在
  * 玩家屏幕上可视化。"
  *
  * 服务端每秒（ProMaidExtension 的 hudTimer 节拍，与建造 HUD 同频）为每个在线玩家

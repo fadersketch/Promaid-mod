@@ -1064,7 +1064,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     x += 20;
                 }
                 // v1.5.279：多维标记前缀【材质族·功能】（如「木·结构」「石·装饰」）——
-                // 用户："自定义方块的种类需要根据多方面维度进行新的划分，仅仅一格高、
+                // 反馈："自定义方块的种类需要根据多方面维度进行新的划分，仅仅一格高、
                 // 半格高不够"；形态/碰撞由所在分类标签体现，这里补族与功能两维
                 String tag = "";
                 try {
@@ -1419,7 +1419,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.WOOD_RELOCATE_THROTTLE, s), "重定位节流（tick，防边界抖动）"));
         this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.WOOD_PILLAR_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.WOOD_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
-        // v1.1.0 实测二百二十八/二百二十九：随手种树开关 + 冷却（用户：CD ~5 秒、面板可调、开关默认开）
+        // v1.1.0 实测二百二十八/二百二十九：随手种树开关 + 冷却（反馈：CD ~5 秒、面板可调、开关默认开）
         this.rows.add(new BoolRow("随手种树", MaidSmartConfig.WOOD_PLANT_SAPLING_ENABLED.get(),
                 v -> MaidSmartConfig.WOOD_PLANT_SAPLING_ENABLED.set(v), "随手种树（默认开）：她手上有树苗、附近半径 6 格有可种土块时随手种一棵（触发 = 伐木模式，独立模块）；关闭 = 只砍树不种树"));
         this.rows.add(new NumRow("补种树苗冷却（tick）", String.valueOf(MaidSmartConfig.WOOD_PLANT_SAPLING_COOLDOWN.get()),
@@ -1571,7 +1571,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("smart_owner_inventory（查看主人背包）", MaidSmartConfig.TOOL_OWNER_INVENTORY.get(),
                 v -> MaidSmartConfig.TOOL_OWNER_INVENTORY.set(v), "smart_owner_inventory 工具（只读查询主人背包里有什么——LLM 需要确认主人持有某材料/装备时调用，不修改任何物品）"));
         // v1.5.250：每日主动对话次数上限（复用 dialogue.proactiveDaily——主动对话
-        // 区已有同配置，这里按用户要求放到 AI 工具设置，两处改同一个值）
+        // 区已有同配置，这里按要求放到 AI 工具设置，两处改同一个值）
         this.rows.add(new NumRow("每日主动对话上限（次/女仆）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY, s), "每日主动对话上限（次/女仆）：女仆一天内主动开口说话（关心/夜晚/沉默找话题/事件感慨）的总次数上限；超过后不再发言，并在系统消息里提示\"已达上限\"。控 LLM token 成本"));
         // v1.1.0 实测一百九十四：击杀邀功对话开关（默认关——击杀日志时刻刷屏）
@@ -1580,13 +1580,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     private void dialogueRows() {
-        // v1.5.356：API 日配额提到对话提示区第一行——用户反馈"手册里 LLM 调用次数限制的
+        // v1.5.356：API 日配额提到对话提示区第一行——反馈"手册里 LLM 调用次数限制的
         // 设置选项没了"：配置一直都在,但排在区第 5 行,窗口高度/GUI 缩放较小时被分页藏到
         // 第 2+ 页(同 v1.5.293/295 的可见性修复模式)。任何窗口高度打开对话提示第一屏即可见。
         this.rows.add(new NumRow("API 日配额", String.valueOf(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.DIALOGUE_API_DAILY_LIMIT, s), "所有女仆每日主动 LLM 调用总量上限（token 成本；默认 40，填 0 = 不限——旧版 0 是永远禁言的 bug）"));
         // v1.5.293：自主决策提到对话页第一屏——旧版在「主动对话」之后（本页第 14 行），
-        // 窗口高度/GUI 缩放较小时被分页藏到第 2+ 页（用户反馈"详细设置里自主决策按键
+        // 窗口高度/GUI 缩放较小时被分页藏到第 2+ 页（反馈"详细设置里自主决策按键
         // 没了"——分区一直都在，只是第一屏看不到）。现在本区块 5 行全在第 1 页，
         // 任何窗口高度打开对话提示第一页即可见
         this.rows.add(new SectionRow("自主决策", false));
@@ -1645,7 +1645,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.DIALOGUE_AUTO_DAY_END, s), "自主决策工作结束时刻（游戏 tick）"));
         // v1.5.198：对话输出语言强制（"突然全是日语"修复——原版按客户端游戏语言
         // 要求 LLM 输出，每次对话写入女仆 ChatLanguage）
-        // v1.5.303：手填文本框改为【选项选择】（用户："设计成选择项目吧，让人对
+        // v1.5.303：手填文本框改为【选项选择】（反馈："设计成选择项目吧，让人对
         // 着选项选——手填容易填错或无效"）——留空=跟随游戏/客户端语言，选语言=
         // 强制该语言代码（zh_cn/en_us/ja_jp/ko_kr/ru_ru 等），不再有填错风险
         this.rows.add(new SectionRow("输出语言", true));
@@ -1779,7 +1779,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 "播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠"));
     }
 
-    /** v1.5.294：被动技能独立栏（用户："被动技能要单拉出来一栏放在 Promaid 模组详细
+    /** v1.5.294：被动技能独立栏（反馈："被动技能要单拉出来一栏放在 Promaid 模组详细
      *  配置里面，而不是放在战斗自保里面"）——落地水/岩浆逃生放水/主人死亡传送，
      *  全是被动保命动作，与战斗自保页的主动行为（自保策略/贴身辅助/单兵战术）分离 */
     private void fallGuardRows() {
@@ -1811,7 +1811,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_DY, s), "最小高差（格，默认 3）：你至少高于女仆这么多格才走垂直搭高（平路走路/铺桥处理）——3 格 = 玩家手长：她搭到只差 3 格内你就能近身收回/互动，隔得更远你伸手够不到她"));
         this.rows.add(new NumRow("最小球面半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_MIN_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.BRIDGE_MIN_RADIUS, s), "最小球面半径（格，默认 3）：以女仆为圆心的 3D 半径（竖直+水平一起算）——你在球面内不启桥，靠跟随走路；球面外高差够→垂直搭高，竖直差不多+水平远+脚下悬空→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）"));
-        // v1.1.0 实测一百八十七：平桥启动水平距离（用户："水平距离搭建方块有没有启动要求呢？加个启动要求"）
+        // v1.1.0 实测一百八十七：平桥启动水平距离（反馈："水平距离搭建方块有没有启动要求呢？加个启动要求"）
         this.rows.add(new NumRow("平桥启动距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_START_H_DIST.get()),
                 s -> setDouble(MaidSmartConfig.BRIDGE_START_H_DIST, s), "平桥启动水平距离（格，默认 6）：女仆与你【水平距离】达到此值、且朝你方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随；范围 3~64（3 = 最灵敏）。竖直搭高（你更高、原地垫柱）不受影响"));
         this.rows.add(new NumRow("威胁半径（格）", String.valueOf(MaidSmartConfig.BRIDGE_THREAT_DIST.get()),
@@ -1940,7 +1940,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.COMBAT_TACTICS_MELEE_KITE.set(v), "近战贴脸后退：敌人贴进 2 格内主动后退拉开距离（不再贴身互搏白挨刀；女仆手长 3 格退开后照样砍得到，与打一刀退一步/跳劈节奏互补）"));
         this.rows.add(new BoolRow("远程战术", MaidSmartConfig.COMBAT_TACTICS_RANGED.get(),
                 v -> MaidSmartConfig.COMBAT_TACTICS_RANGED.set(v), "远程战术：保持理想射程（原版会走到怪脸上射）、横移绕圈放风筝"));
-        // 实测四百零一：高地狙击已整体移除（用户拍板）——配置行一并删除
+        // 实测四百零一：高地狙击已整体移除（定夺）——配置行一并删除
         this.rows.add(new BoolRow("时机举盾", MaidSmartConfig.COMBAT_TACTICS_SHIELD.get(),
                 v -> MaidSmartConfig.COMBAT_TACTICS_SHIELD.set(v), "时机举盾：攻击冷却间隙举盾格挡、冷却满放盾攻击（攻防交替；替代原版 8 格内一直举盾）"));
         this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
@@ -2090,7 +2090,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
         this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按用户反馈调低；TLM 原生散步只有 0.3 倍速）"));
+                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按实测调低；TLM 原生散步只有 0.3 倍速）"));
         // v1.5.129：原生任务呆滞修复 + 干活不被打断
         this.rows.add(new BoolRow("原生任务流畅化", MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get(),
                 v -> MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.set(v), "TLM 原生任务（种田/挤奶/钓鱼等）呆滞修复：任务行为不再每 3 秒重启、随机散步不再覆盖任务目标、走路少刹车、检查节流减半"));
@@ -2109,7 +2109,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     private void utilityRows() {
         this.rows.add(new BoolRow("床铺互通", MaidSmartConfig.MISC_BED_INTEROP.get(),
                 v -> MaidSmartConfig.MISC_BED_INTEROP.set(v), "床铺互通（默认开）：女仆能睡原版床（16 色床——TLM 原生只认女仆床），玩家也能睡女仆床（并把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为。玩家潜行右键女仆床仍是只染色不躺下"));
-        // 实测四百四十三：悬空禁搭方块（用户："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
+        // 实测四百四十三：悬空禁搭方块（反馈："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
         this.rows.add(new BoolRow("悬空禁搭方块", MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get(),
                 v -> MaidSmartConfig.MISC_NO_PLACE_IN_AIR.set(v), "悬空禁搭方块（默认开）：女仆未落地时不再搭方块——覆盖自保搭高/搭路/挖矿垫脚/伐木垫脚。触发口径：重锤跃起（1.21.1）整段空中都禁；其余是坠落距离达到「落地水触发高度」时禁（此时落地水会接管——搭方块既救不了她，还会挡住落地水害她摔死）。水里/岩浆、骑乘、鞘翅滑翔不算悬空；站在地面照常搭"));
         // 实测四百四十八：蛋糕可食用（兜底逃生通道）
@@ -2132,7 +2132,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
         this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
-        // v1.1.0 实测一百八十八：Y 轴拉回门槛（用户："传送机制不检测 Y 轴"）
+        // v1.1.0 实测一百八十八：Y 轴拉回门槛（反馈："传送机制不检测 Y 轴"）
         this.rows.add(new NumRow("Y 轴拉回门槛（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL, s), "女仆与主人同维度、距离没超上一条但【垂直高度差】超本值时——主人旁边 16 格内有安全落点就传送过来，没有则不传（默认 16 格；旧版只按 48 格 3D 距离判定，水平贴身、竖直搭高 30 格的女仆永远不触发）"));
     }
@@ -2520,7 +2520,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
 
         /**
          * v1.0.4：默认滚动条（亮灰滑块 0x808080/0xC0C0C0）在深色面板上像一条突兀的竖线
-         * （用户反馈"保存并返回右侧一直有一条竖线"）——覆盖为低调样式：轨道融入面板，
+         * （反馈"保存并返回右侧一直有一条竖线"）——覆盖为低调样式：轨道融入面板，
          * 滑块半透明深灰，滚动功能保留。
          */
         @Override
@@ -2747,7 +2747,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
      * v1.5.110：配置项注释绘制——自动换行（面板宽度内）+ 右缘钳制，保证完整可见。
      * 每行从 clampLeftX 起点画（面板内容左缘，比标签 20 更靠右，对齐控件区）。
      * v1.5.112：注释用【浅蓝 + "» " 前缀】渲染，与白色数值/浅灰标签明显区分——
-     * 旧版灰 0x888888 与标签 0xAAAAAA 太接近，用户反馈"注释做了跟没做一样"。
+     * 旧版灰 0x888888 与标签 0xAAAAAA 太接近，反馈"注释做了跟没做一样"。
      * 首行带前缀，续行缩进对齐（前缀宽度计入折行/钳制，防右缘越界）。
      * v1.1.0 实测二十二：折行改走 wrapComment（像素切割统一口径——布局侧
      * rowHeight 用同一份行数计算行高，渲染与布局永不脱节）。
@@ -2784,7 +2784,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         } else {
             super.renderBackground(g, 0, 0, 0);
         }
-        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // v1.1.0 实测三百一十七（反馈："UI 美化仅更改了手册第一主界面，其他子界面
         // 一点都没变"）：Promaid 模组详细配置（手册子界面）补上蓝金品牌渐变——与
         // 手册主界面同款（半透明色带叠加 = 渐变，fill 走 ARGB）
         int w = this.width;
@@ -2841,7 +2841,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 String id = key == null ? "" : key.toString();
                 if (this.isInList(id)) {
-                    // 已加入当前名单 → 彩色框 + 角标 ✓（矿物绿 / 障碍物青）
+                    // 已加入当前名单 → 彩色框 + 角标 （矿物绿 / 障碍物青）
                     int boxColor = this.mineTableMode == 0 ? 0x8022CC22 : 0x8022CCDD;
                     g.fill(x - 1, y - 1, x + 17, y + 17, boxColor);
                     g.drawCenteredString(this.font, Component.literal("\u2714"),
@@ -2903,7 +2903,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 }
             }
             // v1.5.102d：底部按钮（← 返回参数 / 保存并返回）上方一行注释——
-            // 两张名单各一句，说明方块图标上的对勾 ✓ 是什么意思
+            // 两张名单各一句，说明方块图标上的对勾 是什么意思
             String chkHint = this.mineTableMode == 0
                     ? (this.woodTable
                     ? "\u00a77✓ = 已加入木材表（价值 " + this.creativeDefaultValue()
@@ -2955,7 +2955,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 String id = key == null ? "" : key.toString();
                 if (this.isInAlt(id)) {
-                    // 已加入当前替代品表 → 蓝色框 + 角标 ✓
+                    // 已加入当前替代品表 → 蓝色框 + 角标
                     g.fill(x - 1, y - 1, x + 17, y + 17, 0x8022AADD);
                     g.drawCenteredString(this.font, Component.literal("\u2714"),
                             x + 12, y + 12, 0xFFFFFF);

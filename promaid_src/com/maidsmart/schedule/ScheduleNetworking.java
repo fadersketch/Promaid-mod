@@ -75,7 +75,7 @@ public final class ScheduleNetworking {
         // 与全员模式/批量任务同款——排班中的女仆跳过，home 由排班管理）
         CHANNEL.registerMessage(13, BatchHomePacket.class,
                 BatchHomePacket::encode, BatchHomePacket::decode, BatchHomePacket::handle);
-        // v1.1.0 实测三百四十九（用户："在排班表内对女仆进行改名，但是在排班表内
+        // v1.1.0 实测三百四十九（反馈："在排班表内对女仆进行改名，但是在排班表内
         // 并没有显示出来，还是原来的名字"）：改名成功 → S2C 回发新名字，GUI 同步
         // 列表行与详情页标题（旧版只改服务端，客户端列表是打开排班表那一刻的快照）
         CHANNEL.registerMessage(14, MaidRenameSyncPacket.class,
@@ -734,13 +734,13 @@ public final class ScheduleNetworking {
                         // 批量改过的"原任务"）。单女仆快捷设置同样不检查，但批量是
                         // 一改一整队，必须兜住
                         // v1.1.0 实测一百六十三：真实战斗判定（残留标记不再挡批量应用）
-                        // v1.1.0 实测二百六十五/二百六十六（用户："满血的时候全员模式
+                        // v1.1.0 实测二百六十五/二百六十六（反馈："满血的时候全员模式
                         // 也没用"）：旧版用 isReallyCombatActive 跳过——排班关闭时它含
                         // IAttackTask 兜底（当前任务是任意攻击任务即判"战斗中"），玩家
                         // 手动安排攻击任务的女仆（满血、无排班）被永久跳过。批量应用是
                         // 玩家明确意图，只跳过【真本系统战斗】（ASSIGNED 匹配当前任务）
                         // 的女仆；残留标记由 isRealCombatActive 顺带清掉。
-                        // v1.1.0 实测二百六十七（用户："剪刀模式女仆解除排班满血，全员
+                        // v1.1.0 实测二百六十七（反馈："剪刀模式女仆解除排班满血，全员
                         // 模式不响应"）：跳过/失败完全静默——加逐只诊断日志（latest.log
                         // 搜 "batch-apply"）+ 应用后读回校验（TLM setSchedule/setTask 有
                         // 守卫会静默拒绝）+ 单只 try/catch 隔离（一只异常不再中断整队）。
@@ -782,7 +782,7 @@ public final class ScheduleNetworking {
                                                 m.setTask(task);
                                                 touchAppliedKey(m, lvl);
                                             });
-                                    // v1.1.0 实测二百七十（用户："点击应用空闲，女仆仍然
+                                    // v1.1.0 实测二百七十（反馈："点击应用空闲，女仆仍然
                                     // 显示自己在别的模式。哪怕排班没有开启"）：TLM setTask
                                     // 无守卫但客户端实体脱钩/任务被系统换回时静默失败——
                                     // 读回校验暴露"应用了但没生效"。findTask 不存在的任务
@@ -847,7 +847,7 @@ public final class ScheduleNetworking {
                 if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
                     return;
                 }
-                // v1.1.0 实测七十（用户反馈：一键集合跨维度做不到）：根因是未加载
+                // v1.1.0 实测七十（反馈：一键集合跨维度做不到）：根因是未加载
                 // 区块里的女仆根本不在实体列表里（票务只救"还加载着"的）。改为：
                 // ① 在场女仆立即传回（坐着/骑乘/在家模式豁免——实测七十八起 home
                 //    女仆恢复不响应集合，想召回先解除她的排班/在家模式）；② 不在场的

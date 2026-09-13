@@ -78,7 +78,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     /** v1.1.0 实测二百九十一：酿造台占用表（维度|坐标 → 占用女仆 UUID）——
      *  与熔炉同款（MaidCookBehavior.FURNACE_USERS）：多个女仆同时在场时各自
-     *  绑定不同酿造台，避免全挤到第一个上（用户："两个女仆会抢同一个酿造台"）。
+     *  绑定不同酿造台，避免全挤到第一个上（反馈："两个女仆会抢同一个酿造台"）。
      *  占用者死亡/换维/停行为时释放（m_6732_ + 扫描时懒清理）。 */
     private static final java.util.Map<String, java.util.UUID> BREW_USERS = new java.util.HashMap<>();
     /** 本行为实例当前占用的酿造台 key（行为停止/台子丢失时释放） */
@@ -376,7 +376,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         //    药水（无关的成品/死路）收走腾位
         //    v1.1.0 实测二百九十二：批量模式收成品前检查配置——未到目标强化
         //    （红石延长/萤石强化）或形态（喷溅/滞留）的成品【不收】，留在酿造台
-        //    继续推进（用户："3 分钟的夜视不会自动合成 8 分钟的"——根因：旧版
+        //    继续推进（反馈："3 分钟的夜视不会自动合成 8 分钟的"——根因：旧版
         //    收成品不检查配置，3 分钟夜视一出现就被收走，processForm 的强化步骤
         //    永远轮不到）
         for (int i = 0; i <= 2; i++) {
@@ -500,7 +500,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** 批量模式：槽内药水是否达到配置的最终状态（强化 + 形态）。
      *  v1.1.0 实测二百九十二：未到目标强化/形态的成品【不收】，留在酿造台继续
      *  推进（旧版收成品不检查配置——3 分钟夜视一出现就被收走，红石延长永远
-     *  轮不到，用户："3 分钟的夜视不会自动合成 8 分钟的"）。
+     *  轮不到，反馈："3 分钟的夜视不会自动合成 8 分钟的"）。
      *  - 平凡/浓稠（无效果死路）：直接收走腾位
      *  - 形态：formOf(s) < cfg.form → 不收（等 processForm 推进）
      *  - 强化：配置红石/萤石且当前瓶无对应变体（long_/strong_ 前缀）→ 先测
@@ -630,14 +630,14 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 // 空槽：补水瓶（v1.1.0 实测二百八十：链基底恒为 water——
                 // 链完整回退到水瓶起步，awkward 瓶作为链上中间产物正常推进）
                 ItemStack bottle = this.extractWaterBottle(maid, maidInv);
-                // v1.1.0 实测三百二十九（用户："不给水瓶，只给三分钟夜视药水及
+                // v1.1.0 实测三百二十九（反馈："不给水瓶，只给三分钟夜视药水及
                 // 材料，定向酿造八分钟"——练不出药水根因）：条件写反——旧版
                 // `if (!bottle.m_41619_())` 在【无水瓶】（bottle 空栈，m_41619_=
                 // isEmpty=true）时为 false → 走 else 把空栈放进槽 0（等于没放）→
                 // extractBrewableBase 永远不执行 → 3 分钟夜视永远不进酿造台 →
                 // 槽 0-3 恒空、无缺料报告（日志实证）。改为 bottle 空时走回退。
                 if (bottle.m_41619_()) {
-                    // v1.1.0 实测三百一十七（粉丝："往女仆兜里只放了 3 分钟夜视和
+                    // v1.1.0 实测三百一十七（反馈："往女仆兜里只放了 3 分钟夜视和
                     // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
                     // 回退取【按当前配置还能继续推进】的成品药水当基底（与批量模式
                     // extractBrewableBase 同款——如 3 分钟夜视 + 目标 long_night_vision
@@ -657,7 +657,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             if (i != 0 || !stand.m_8020_(3).m_41619_()) {
                 continue; // 只以槽0 为准下料；槽3 有材料等酿造台消耗
             }
-            // v1.1.0 实测三百一十七（用户："女仆会把空的玻璃瓶也放进酿造台"）：
+            // v1.1.0 实测三百一十七（反馈："女仆会把空的玻璃瓶也放进酿造台"）：
             // 槽里非药水物品（空瓶/杂物）→ 收走腾位（isDonePotion 对非药水返回
             // true 会收，但空瓶占槽时 progressOf 返回 0 被当基底继续下疣 → 卡死）
             if (!(s.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
@@ -712,7 +712,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     stand.m_6836_(i, bottle);
                     swing(maid);
                 } else {
-                    // v1.1.0 实测三百零六（粉丝："往女仆兜里只放了 3 分钟夜视和
+                    // v1.1.0 实测三百零六（反馈："往女仆兜里只放了 3 分钟夜视和
                     // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
                     // 背包里的成品药水当基底（如 3 分钟夜视 + 红石 → 自动放入酿造台，
                     // processForm 红石延长成 8 分钟）。旧版槽 0 只认水瓶，成品药水
@@ -758,7 +758,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      * - 形态：饮用→喷溅（火药）→滞留（龙息），逐级推进
      * 槽3 已有材料时不动（酿造台自动续酿消耗）。
      *
-     * v1.1.0 实测三百一十八（用户："女仆手上一直有动作，但是一直放不进去药"）：
+     * v1.1.0 实测三百一十八（反馈："女仆手上一直有动作，但是一直放不进去药"）：
      * 强化材料双测——配置材料（红石/萤石）无配方时自动测另一种（配置萤石但
      * 夜视只有红石延长版 → 下红石；反之亦然）。旧版只测配置材料：配置萤石 +
      * 背包红石 → 永远报缺萤石卡死，3 分钟夜视永远变不成 8 分钟。
@@ -846,7 +846,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** 是否"最终状态"药水（water/awkward 之外的一切：真药水/平凡/浓稠都收走）。
      *  v1.1.0 实测二百九十一：非药水物品（空瓶/杂物）也收走腾位——旧版只认
      *  PotionItem，空瓶放进槽 0 后既不是药水（不收）又占着槽（不补水瓶）→
-     *  酿造台永远卡死（用户："女仆有的时候会往酿造台里面放空瓶，导致酿造
+     *  酿造台永远卡死（反馈："女仆有的时候会往酿造台里面放空瓶，导致酿造
      *  完全无法进行"）。 */
     private boolean isDonePotion(ItemStack s) {
         if (s.m_41619_()) {
@@ -883,7 +883,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测二百九十一：批量模式材料轮换——每女仆记录上次用的材料，
      *  选材料时优先选【与上次不同】的白名单材料（背包里只有一种材料时自然
      *  退回酿那种）。效果：给多种材料 → 交替酿多种药水（A→B→C→A…），不再
-     *  按背包槽位顺序死磕第一种（用户："批量合成本意是给大量材料时酿出各种
+     *  按背包槽位顺序死磕第一种（反馈："批量合成本意是给大量材料时酿出各种
      *  各样的药水；只给单一材料就只酿单一药水"）。 */
     private static final java.util.Map<java.util.UUID, String> LAST_INGREDIENT = new java.util.HashMap<>();
 
@@ -944,7 +944,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      *  PotionItem 不区分形态，喷溅水瓶（splash_potion + water）也会被当水瓶
      *  放进槽 0，酿造台对喷溅水瓶不反应 → 卡死。
      *  v1.1.0 实测二百九十七：主副手优先——先扫双手（getHandsInvWrapper），
-     *  再扫背包（用户："酿药物品不识别主副手，只识别背包"）。 */
+     *  再扫背包（反馈："酿药物品不识别主副手，只识别背包"）。 */
     private ItemStack extractWaterBottle(EntityMaid maid, IItemHandler inv) {
         ItemStack fromHands = this.extractWaterBottleFrom(maid.getHandsInvWrapper());
         if (!fromHands.m_41619_()) {
@@ -1016,7 +1016,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     // v1.1.0 实测三百一十八：药水效果已到目标但形态未到（如目标
                     // 滞留、背包是饮用 8 分钟夜视）→ 可取，由 processForm 下火药/
                     // 龙息推进形态。旧版直接 continue → 饮用成品永远放不进酿造台
-                    // → 卡死（用户："女仆手上一直有动作，但是一直放不进去药"）。
+                    // → 卡死（反馈："女仆手上一直有动作，但是一直放不进去药"）。
                     if (this.formOf(stack) < cfg.form) {
                         return inv.extractItem(i, 1, false);
                     }
@@ -1049,7 +1049,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         return ItemStack.f_41583_;
     }
 
-    /** v1.1.0 实测二百九十七：主副手优先取材料（用户："酿药物品不识别主副手，
+    /** v1.1.0 实测二百九十七：主副手优先取材料（反馈："酿药物品不识别主副手，
      *  只识别背包"）——先扫双手（getHandsInvWrapper），再扫背包。 */
     private ItemStack extractItemFromMaid(EntityMaid maid, IItemHandler maidInv, String itemId, int count) {
         Item item = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));

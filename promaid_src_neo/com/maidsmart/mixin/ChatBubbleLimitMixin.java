@@ -41,7 +41,7 @@ public abstract class ChatBubbleLimitMixin {
             cir.setReturnValue(-1L);
             return;
         }
-        // v1.1.0 实测二百七十四（用户："建造模式屏蔽除了建造以外的其他所有系统信息
+        // v1.1.0 实测二百七十四（反馈："建造模式屏蔽除了建造以外的其他所有系统信息
         // 系统消息及气泡"）：建造女仆的非建造来源气泡全部静默——调用栈判定来源
         // （com.maidsmart.build 包 = 建造系统）；"建好啦"完成汇报在建造包内，放行。
         if (this.maid != null && com.maidsmart.combat.BuildShieldGuard.shouldMute(this.maid)) {
@@ -92,7 +92,7 @@ public abstract class ChatBubbleLimitMixin {
     /**
      * 实测四百四十五：自行动作类气泡不按"敌袭警示"染红——落地水/落地雪是女仆自己的
      * 动作播报（多半发生在战斗中坠落时），染成红色 §c[警示] 会被当成威胁提示
-     * （用户：「触发了 [警示]落地水，是红色的而不是蓝色的」）。
+     * （反馈：「触发了 [警示]落地水，是红色的而不是蓝色的」）。
      */
     private static boolean isCalmBubble(String text) {
         return text != null && (text.startsWith("\u843d\u5730\u6c34") || text.startsWith("\u843d\u5730\u96ea"));

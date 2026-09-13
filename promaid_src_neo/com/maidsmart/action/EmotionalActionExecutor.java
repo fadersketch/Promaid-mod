@@ -66,7 +66,7 @@ public final class EmotionalActionExecutor {
         addFood("minecraft:glow_berries");     // 2 / 0.4
         addFood("minecraft:cookie");           // 2 / 0.4
         addFood("minecraft:dried_kelp");       // 1 / 0.6
-        // v1.5.288：蜂蜜瓶恢复为投喂食物（用户："蜂蜜瓶竟然不作为投喂食物"）——
+        // v1.5.288：蜂蜜瓶恢复为投喂食物（反馈："蜂蜜瓶竟然不作为投喂食物"）——
         // 饱和 14.4 排在中等优先级：主人饿了会投喂、中毒时由负面解除分支优先
         // 直接喂（解中毒+饱食）。女仆自己背包的蜂蜜仍走 drinkHoneyForPoison
         //（女仆用 vs 主人投喂是两条独立链路，不冲突）
@@ -109,10 +109,10 @@ public final class EmotionalActionExecutor {
     /** 主人饥饿时直接喂上一个熟食（v1.5.201：按"饱和度恢复量"选最优——
      *  nutrition × saturationModifier × 2.0，不再按背包槽位顺序；
      *  v1.5.288：改为【直接喂食】——饱食度直接加到主人（原版 FoodData.eat 语义），
-     *  不再塞背包/手上（用户："投喂食物应该跟本来就有的喂食功能一样是直接喂给
+     *  不再塞背包/手上（反馈："投喂食物应该跟本来就有的喂食功能一样是直接喂给
      *  主人饱食度，而不是塞在手上"）；
      *  v1.5.299：硬编码 15 改读配置阈值（旧版写死 15——主人把投喂阈值调到 20 时
-     *  饱食度 15~19 直接被拦，用户："明明饱食度不满、阈值设了 20 却无法触发"）；
+     *  饱食度 15~19 直接被拦，反馈："明明饱食度不满、阈值设了 20 却无法触发"）；
      *  手持食物（主手/副手）纳入选优——旧版只扫 maidInv 背包，肉排拿在手上时
      *  永远找不到（TLM 双手是独立 handsInvWrapper，getMaidInv 不含手部） */
     public static boolean giveFoodToOwner(EntityMaid maid, ServerPlayer owner) {
@@ -177,7 +177,7 @@ public final class EmotionalActionExecutor {
             }
         }
         if (bestSlot < 0 && handSlot == -1) {
-            // v1.5.307：缺吃的播报（手册承诺的功能，此前从未实现——用户："没有食物
+            // v1.5.307：缺吃的播报（手册承诺的功能，此前从未实现——反馈："没有食物
             // 的时候会播报缺吃的，但实际并不会播报"）+ 日志限频（旧版每 tick 刷屏：
             // 日志实证 08:03:44 起每 50ms 一条"背包与双手都无投喂食物"）
             long now = System.currentTimeMillis();
@@ -242,13 +242,13 @@ public final class EmotionalActionExecutor {
             }
             // v1.5.292：喂食动作（swing=swing，服务端调用自动广播给客户端显示）
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
-            // v1.1.0 实测三百四十八（用户："有的时候会显示女仆给主人喂了空气的系统
+            // v1.1.0 实测三百四十八（反馈："有的时候会显示女仆给主人喂了空气的系统
             // 字样"）：食物名【进食前】读快照——eat（eat）会 shrink 栈，extractItem
             // 返回的是活引用，eat 后栈变空 → 空栈 getHoverName 返回原版 "Air"（中文
             // 环境显示"空气"）→ 系统字幕"女仆喂你吃了 空气"。姐妹链 feedSisterFood
             // 早就修过同款坑（"名字在进食前读"），主人链漏了。
             String foodName = food.getHoverName().getString();
-            // v1.1.0 实测二百五十六（用户："我要的喂食效果跟女仆自己吃食物效果应该
+            // v1.1.0 实测二百五十六（反馈："我要的喂食效果跟女仆自己吃食物效果应该
             // 一样"）：投喂改走 LivingEntity.eat（eat 完整路径）——与女仆自己
             // 吃食物完全一致：食物效果（addEatEffect 施加原版 FoodProperties 效果）、
             // 吃/喝音效（getEatingSound）、粒子全部由原版路径触发；移除上轮手搓的

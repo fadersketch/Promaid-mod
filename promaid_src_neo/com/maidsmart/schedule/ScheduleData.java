@@ -103,7 +103,7 @@ public final class ScheduleData {
             cursor = end;
         }
         if (!out.isEmpty() && cursor < 1440) {
-            // 末段延伸到 24:00（用户格式："没凑到 24:00 就继续延伸直到凑满"）
+            // 末段延伸到 24:00（玩家格式："没凑到 24:00 就继续延伸直到凑满"）
             Segment last = out.remove(out.size() - 1);
             out.add(new Segment(last.startMin(), 1440, last.mode(), last.taskUid()));
         }

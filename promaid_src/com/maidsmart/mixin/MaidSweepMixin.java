@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 1. @Redirect EnchantmentHelper.m_44821_（getSweepingDamageRatio）——无附魔时
  *    返回 0.5（横扫之刃 I 的 50% 攻击力倍率）：每次平A都横扫（有附魔按附魔倍率更高）；
  * 2. @Inject doSweepHurt HEAD——空中（跳跃/下落中 = 跳劈）不横扫：跳劈暴击保持
- *    单体伤害（用户要求，玩家移动攻击也不触发横扫）。
+ *    单体伤害（要求，玩家移动攻击也不触发横扫）。
  * 注：canSweep 仍要求主手剑（ToolActions.SWORD_SWEEP）——斧/三叉戟不横扫，与玩家一致。
  */
 @Mixin(EntityMaid.class)
@@ -37,8 +37,8 @@ public abstract class MaidSweepMixin {
     }
 
     /**
-     * 跳劈不横扫——空中攻击（跳跃/下落中）保持单体暴击（用户要求，玩家移动攻击
-     * 也不触发横扫）。v1.5.174：落地后的"禁横扫平A"窗口已删除（用户：平A没意义
+     * 跳劈不横扫——空中攻击（跳跃/下落中）保持单体暴击（要求，玩家移动攻击
+     * 也不触发横扫）。v1.5.174：落地后的"禁横扫平A"窗口已删除（反馈：平A没意义
      * ——跳劈空档由 TLM 正常攻击穿插横扫补伤害，不再有单独的平A状态）。
      */
     @Inject(method = "doSweepHurt", at = @At("HEAD"), cancellable = true)

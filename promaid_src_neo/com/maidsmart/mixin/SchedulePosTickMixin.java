@@ -15,7 +15,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * SchedulePos.tick 由 EntityMaid.tick 每 40 tick（2 秒）调用一次，home 模式
  * 下会再次 restrictTo（收紧活动半径）并【出圈就传送/走回】——javap 实证
  * tick 方法体只有这段拉回逻辑，别无职责。女仆在远处挖矿/干农活时照样每
- * 2 秒被拽一次（旧 patch 漏网，用户："干活不被打断"）。
+ * 2 秒被拽一次（旧 patch 漏网，反馈："干活不被打断"）。
  *
  * 修复：非战斗干活中（isNonCombatWork，v1.5.287 起已排除 idle——待机女仆
  * 照常被日程管理）跳过本 tick 拉回。总开关 misc.workUninterrupted。

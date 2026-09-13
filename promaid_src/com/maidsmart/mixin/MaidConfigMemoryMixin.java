@@ -140,7 +140,7 @@ public abstract class MaidConfigMemoryMixin {
             // v1.5.227：界面打开时主动查询真实状态（缓存为空时按钮显示会停留在
             // 旧值——查询后服务端回 MemoryStateSyncPacket 纠正显示）
             // v1.5.242：每次打开都查询（去掉静态去重——同进程内第二次打开界面跳过
-            // 查询，缓存过期时按钮显示旧值"开"，用户一点反而又开）
+            // 查询，缓存过期时按钮显示旧值"开"，玩家一点反而又开）
             String uid = maid.m_20148_().toString();
             com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
                     new com.maidsmart.build.BlueprintBookNetworking.MemoryStateQueryPacket(uid));
@@ -178,7 +178,7 @@ public abstract class MaidConfigMemoryMixin {
             }
             // v1.5.242：每次渲染同步"AI 记忆"开关按钮文本——查询/同步包回来
             // 后按钮即时纠正（旧版只在 initAdditionWidgets 设置一次，显示旧值
-            // "开"时用户一点反而又开，是开关回弹的体感来源之一）
+            // "开"时玩家一点反而又开，是开关回弹的体感来源之一）
             if (this.maidsmart$memoryBtn != null) {
                 boolean e = AiMemoryManager.isEnabled(maid);
                 this.maidsmart$memoryBtn.setValue(Component.m_237113_(e ? "\u00a7a开" : "\u00a77关"));

@@ -159,7 +159,7 @@ public class SmartDesignTool implements ITool<SmartDesignTool.Result> {
     }
 
     /**
-     * 子 Agent 回调：messages = [建筑师 system 提示词, 用户描述]。
+     * 子 Agent 回调：messages = [建筑师 system 提示词, 玩家描述]。
      * onSuccess 覆盖：拿到子 LLM 的 JSON 回复 → 解析 → 落盘 → 正常建造 →
      * 用结果拼出给玩家的最终回复（气泡 + 聊天）。
      */

@@ -198,7 +198,7 @@ public class WorkListTool implements ITool<WorkListTool.Result> {
     }
 
     /** 材料缺口（build_need）
-     *  v1.5.218：按用户要求 = 蓝图总需求 − 已累计搭建（世界状态扫描）− 主人背包
+     *  v1.5.218：按要求 = 蓝图总需求 − 已累计搭建（世界状态扫描）− 主人背包
      *  − 女仆背包（旧版全量需求 − 仅女仆背包，缺口严重虚高） */
     private static String buildNeedText(EntityMaid maid) {
         List<String> plan = BuildPlan.getBoundPlan(maid);

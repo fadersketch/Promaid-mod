@@ -21,7 +21,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * v1.1.0 实测四十四：女仆区块强制加载（"约等于玩家"）。
  *
- * 背景（用户反馈两条）：
+ * 背景（反馈两条）：
  * ① 跨维度跟随不是真传送——旧 MaidDimensionFollow 用
  *   setRemoved(CHANGED_DIMENSION)+setPos+addFreshEntity 手动搬家：实体不重新
  *   注册到新维度的实体存储（PersistentEntitySectionManager），客户端看不到
@@ -85,7 +85,7 @@ public final class MaidChunkLoadManager {
      *  每 5 秒覆盖写，天然最新；召回失败时丢弃该条（多半已被魂符收回/死亡）。
      *  v1.1.0 实测八十七c：快照 stayPut 三态豁免（home/坐姿/骑乘）——未加载区块里
      *  读不到 persistentData，没有这份快照就无法在集合时跳过她们，导致白挂强载票 +
-     *  静默收队（用户视角="点了集合却石沉大海"）。 */
+     *  静默收队（玩家视角="点了集合却石沉大海"）。 */
     private record LastSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
                             UUID ownerId, long seenAt, boolean stayPut) {
     }
@@ -101,7 +101,7 @@ public final class MaidChunkLoadManager {
     private static final Map<UUID, PendingSummon> PENDING_SUMMON = new ConcurrentHashMap<>();
 
     /** 每 100 tick（5 秒）由 ProMaidExtension.onServerTick 调用 */
-    /** v1.1.0 实测二百七十五（用户："女仆会随时乱动导致落点不稳，但建造模式又没法
+    /** v1.1.0 实测二百七十五（反馈："女仆会随时乱动导致落点不稳，但建造模式又没法
      *  一键召回，必须先解除建造——给建造模式特殊豁免，可被一键召回和单独召回"）：
      *  建造任务中的女仆召回豁免——建造行为强制 home 模式（防 TLM 跟随拉走），
      *  而召回链路全部豁免 home → 建造女仆恒被挡。建造女仆在召回判定中视为
@@ -130,7 +130,7 @@ public final class MaidChunkLoadManager {
                             maid.blockPosition().immutable(), ow.getUUID(), lvl.getGameTime(), stayPut));
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
-                    // v1.1.0 实测三百零七（粉丝："地狱基岩层猪人塔女仆传送不受控制，
+                    // v1.1.0 实测三百零七（反馈："地狱基岩层猪人塔女仆传送不受控制，
                     // 拉开一点距离就不停传送声……蹲下、坐垫、home 模式全都固定会这样"）：
                     // 根因——救援判定只有 needsRescue（下界 y≥126 一刀切）+ 距离，没有
                     // home/坐垫/骑乘豁免（summon 系列都有，唯独救援漏了）。猪人塔女仆
@@ -162,11 +162,11 @@ public final class MaidChunkLoadManager {
         // 1. 扫描所有维度已加载女仆，找需要挂票的。
         // v1.1.0 实测八十八【持续加载】：取消"仅异维度"限制——旧版只给跨维度女仆
         // 挂票，同维度跟随的女仆一旦落后主人超过模拟距离，所在区块卸载、AI 冻结，
-        // TLM 的"离主人过远自动传送"永远无法触发（用户："无法再传送过来了；
+        // TLM 的"离主人过远自动传送"永远无法触发（反馈："无法再传送过来了；
         // 女仆所在区块应该持续加载，参考区块加载器"）。现在除三态豁免
         // （home/坐姿/骑乘 = 玩家明确停放，冻结无碍）外全部持续加载。
         Map<UUID, TicketKey> wanted = new java.util.HashMap<>();
-        // v1.1.0 实测三百四十九【排班女仆跨区块加载根治】（用户："排班女仆
+        // v1.1.0 实测三百四十九【排班女仆跨区块加载根治】（反馈："排班女仆
         // 跨区块加载似乎没生效"）：旧票是【会话级】addRegionTicket——关服
         // releaseAll 清光，重进游戏后调度只扫【已加载】女仆，远处未加载区块
         // 里的排班女仆永远扫不到、永远没票 → 她的区块在她回家之前永远不加载。
@@ -187,7 +187,7 @@ public final class MaidChunkLoadManager {
                     }
                     // v1.1.0 实测八十八b：home/坐姿/骑乘不豁免【区块加载】——三态豁免的
                     // 是传送，不是加载。停放的女仆所在区块同样保持 ticking（她只是不走动，
-                    // 但周边农场/熔炉照常运转，也随时可被找到），与用户确认的口径一致。
+                    // 但周边农场/熔炉照常运转，也随时可被找到），确认的口径一致。
                     long chunk = new ChunkPos(maid.blockPosition()).toLong();
                     TicketKey key = new TicketKey(level.dimension(), chunk);
                     boolean scheduled = false;
@@ -337,7 +337,7 @@ public final class MaidChunkLoadManager {
      *
      * 坐着的女仆不拉（建造模式强制坐下 = 玩家明确想让她留在原地，见
      * MaidBuildBehavior.tickBuildSit）。
-     * v1.1.0 实测一百八十五（用户："排班中的女仆和处于 home 模式的女仆仍然会
+     * v1.1.0 实测一百八十五（反馈："排班中的女仆和处于 home 模式的女仆仍然会
      * 响应跨维度传送"）：在家/排班模式【拦截】跨维度跟随——一百三十一"home 不拦"
      * 的旧口径反转：home = 守家，主人过门/换维度也不跟（与同维度拉回、一键集合
      * 的口径一致）；想召回先解除她的排班/在家模式（见 summonAll）。
@@ -354,7 +354,7 @@ public final class MaidChunkLoadManager {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
             }
             // 实测四百四十二：重锤跃起中不跨维跟随——她正跳到半空，传送会把猛击
-            // 直接打断（用户："重锤空中状态要禁止传送，否则飞到高空又被传送回来"）
+            // 直接打断（反馈："重锤空中状态要禁止传送，否则飞到高空又被传送回来"）
             if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
                 throttledSkipLog(maid, "mace-air-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 重锤跃起中，跨维度跟随不传——猛击落地后自然恢复");
@@ -363,7 +363,7 @@ public final class MaidChunkLoadManager {
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
             // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
-            // v1.1.0 实测一百九十六【自保 vs 自动传送矛盾根治】（用户："自保逃跑禁用
+            // v1.1.0 实测一百九十六【自保 vs 自动传送矛盾根治】（反馈："自保逃跑禁用
             // 传送跟跨维度传送、跨区块传送，远距离传送会有矛盾吗？"）：PRESERVE 标记
             // 旧版只拦了 TLM 原生传送 / 跟随拉近（FollowPreserveMixin、MaidTeleport
             // PreserveMixin），我们自己的跨维度跟随与同维度拉回链路没读它——低血/逃跑
@@ -897,7 +897,7 @@ BlockPos stand = findStand(newLevel,
                 return;
             }
             // 实测四百四十二：重锤跃起中一律不拉回——含下面 Y 轴"搭太高"分支，
-            // 都会把她从高空/冲刺路径上拽回主人身边（用户："飞到高空又传送回来，
+            // 都会把她从高空/冲刺路径上拽回主人身边（反馈："飞到高空又传送回来，
             // 造成战术上的失误"）。跃起 ≤5 秒自动收尾，随后自然恢复拉回。
             if (com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid)) {
                 throttledSkipLog(maid, "mace-air-samedim", com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -907,7 +907,7 @@ BlockPos stand = findStand(newLevel,
             int dist = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
             double dSq = maid.distanceToSqr(owner.getX(), owner.getY(), owner.getZ());
             if (dSq < (double) dist * dist) {
-                // v1.1.0 实测一百八十八（用户："传送机制不检测 Y 轴。女仆搭得太高不会
+                // v1.1.0 实测一百八十八（反馈："传送机制不检测 Y 轴。女仆搭得太高不会
                 // 自己传送下来"）：3D 距离未过线但【垂直高度差】超阈值 → 按 Y 轴拉回
                 // 判定继续（水平贴身、竖直搭高 30 格时 3D 距离 900 < 48²，旧版永远不触发）
                 double dyAbs = Math.abs(maid.getY() - owner.getY());
@@ -933,9 +933,9 @@ BlockPos stand = findStand(newLevel,
                         + " 格但守家中，不拉（想召回先解除排班/在家模式）");
                 return;
             }
-            // v1.1.0 实测三百一十五（用户："怀疑是老代码作祟"——基岩层传送问题复查）：
+            // v1.1.0 实测三百一十五（反馈："怀疑是老代码作祟"——基岩层传送问题复查）：
             // 坐垫/骑乘豁免——旧版同维度拉回只有 home/干活/搭路豁免，漏了坐垫/骑乘。
-            // 粉丝"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
+            // 反馈"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
             // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
             // 不拉（与救援/一键集合同口径）。
             if (maid.isMaidInSittingPose() || maid.isPassenger()) {
@@ -949,7 +949,7 @@ BlockPos stand = findStand(newLevel,
                 return;
             }
             // v1.1.0 实测二百零七：搭路中的女仆【水平拉回】不执行——她正踩在自己铺的
-            // 半空桥上，拉走=抽掉她脚下的桥；但 实测二百一十六 用户反馈「高度差过大
+            // 半空桥上，拉走=抽掉她脚下的桥；但 实测二百一十六 反馈「高度差过大
             // 强制传送没生效」——根因正是这条闸门把一百八十八的 Y 轴拉回连带拦掉：
             // "搭太高"恰恰发生在她自己垫的高柱/桥上。Y 轴分支（yPull）是把她往主人
             // 旁边【已验证的安全落点】传下来（不是拉离），且二百零七②的近距刷新保证

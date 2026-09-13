@@ -9,14 +9,14 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /**
  * v1.1.0 实测四百二十：内置日语语音包的客户端播放（自管声音实例）。
  *
- * 用户需求：「打包放进 .jar 里……触发了这些系统消息之后，会自动播放这个语音。」
+ * 需求：「打包放进 .jar 里……触发了这些系统消息之后，会自动播放这个语音。」
  *
  * 直接继承 TLM 的 MaidAISoundInstance——它已实现 OGG/Opus/MP3 三种格式解码
  * （getStream 按字节头判定），复用即可，无需自写解码。
  *
  * 音量：TLM 构造把音量硬编码 1.0（再经 MaidTtsVolumeMixin 乘「TTS 音量倍率」）。
- * 本类在构造后把音量覆盖为「TTS 倍率 × 内置包倍率」，让用户能单独调内置语音包音量
- * （用户要求"可以调整音量大小"）。1.20.1 音量字段 = AbstractSoundInstance.f_119573_。
+ * 本类在构造后把音量覆盖为「TTS 倍率 × 内置包倍率」，让玩家能单独调内置语音包音量
+ * （要求"可以调整音量大小"）。1.20.1 音量字段 = AbstractSoundInstance.f_119573_。
  */
 @OnlyIn(Dist.CLIENT)
 public class PromaidVoiceSoundInstance extends MaidAISoundInstance {

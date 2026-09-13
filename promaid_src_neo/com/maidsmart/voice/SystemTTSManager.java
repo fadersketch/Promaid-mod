@@ -37,7 +37,7 @@ import java.util.stream.Stream;
  *
  * 门禁：TTS_SYSTEM_ENABLED + TLM AIConfig.TTS_ENABLED + 站点存在启用 + 有主人 +
  * 文本可朗读（含中文/空格，过滤 TLM 翻译 key 与省略号）+ per-maid 冷却。
- * 注意：① 内置语音包在站点/总开关检查之前——没配 TTS 站点也能响（用户要求"触发即播放"）。
+ * 注意：① 内置语音包在站点/总开关检查之前——没配 TTS 站点也能响（要求"触发即播放"）。
  */
 public final class SystemTTSManager {
     /** 每只女仆上次朗读时间（UUID → 时间戳） */
@@ -79,14 +79,14 @@ public final class SystemTTSManager {
             if (!speakable(text)) {
                 return;
             }
-            // ① 内置日语语音包（随 jar 分发，最高优先级——用户要求：触发系统消息即自动
+            // ① 内置日语语音包（随 jar 分发，最高优先级——要求：触发系统消息即自动
             //    播放）。【独立门禁】只认 TTS_JAR_PACK_ENABLED + 自带最小间隔，不要求
             //    TLM 的 TTS 站点/总开关——本地有音频，开箱即用；只发文件名（客户端从
             //    自己 jar 取字节），省流量且两端一致。
             if (MaidSmartConfig.TTS_JAR_PACK_ENABLED.get()) {
                 // 实测四百四十五：先做【命中判定】再谈最小间隔——旧版把间隔判断写在
                 // 命中之前，命中但被间隔挡下时会继续往下走，最终落到 ④ TLM TTS 合成
-                // （用户实测：「触发了 [警示]落地水，却没有内置语音，还是人机语音」）。
+                // （实测：「触发了 [警示]落地水，却没有内置语音，还是人机语音」）。
                 // 现在：命中即由内置包负责——被间隔挡下就【静默】，绝不回落 TTS 合成。
                 String jarKey = JarVoicePack.matchKey(text);
                 if (jarKey != null) {

@@ -38,7 +38,7 @@ import java.util.Set;
  *
  * 其余任务（战斗 / 待机 / 跟随 / 第三方附属任务）不做软探测，只查 isEnable——
  * 战斗可能是"夜间守家"这类本意就歇着压阵的安排，第三方任务我们无从判别，
- * 一律保守放行，绝不误伤其它附属工作模式（用户明确要求兼容）。
+ * 一律保守放行，绝不误伤其它附属工作模式（要求兼容）。
  */
 public final class ScheduleTaskAvailability {
     private static final ResourceLocation MINE = ResourceLocation.parse("maid_smart:mine");
@@ -56,7 +56,7 @@ public final class ScheduleTaskAvailability {
     }
 
     /** v1.1.0 实测一百七十：仅硬闸（isEnable）判定——排班切任务时只查任务自己是否
-     *  可用，不做"附近有没有活"的软探测（用户："选择排班后任务不变化、时间流逝任务
+     *  可用，不做"附近有没有活"的软探测（反馈："选择排班后任务不变化、时间流逝任务
      *  也不随段切换——没活不切设计失败"）。任务状态必须跟着时间段落真实切换。 */
     public static boolean isEnabled(EntityMaid maid, IMaidTask task) {
         if (task == null) {

@@ -60,7 +60,7 @@ public final class FishingChairService {
      *  7 秒后原版仍没找到椅子才生成坐垫。 */
     private static final Map<String, Long> FIND_START = new HashMap<>();
     /** v1.5.275：原版 FindSit 找到的椅子目标（女仆 → 目标位置）——高频维持走位用。
-     *  根因（用户实测 274 后仍"一步一停"）：FindSit 每 12 tick 触发才设 walk target，
+     *  根因（实测 274 后仍"一步一停"）：FindSit 每 12 tick 触发才设 walk target，
      *  TLM 女仆的站立等行为可能清 WALK_TARGET → 每 12 tick（0.6 秒）只走一小段。
      *  tickKeepSeatWalk 每 3 tick 补寻路（目标不变时寻路器缓存路径），WALK_TARGET
      *  被清后 3 tick 内补回 → 连续走（接近空闲状态）。 */
@@ -150,8 +150,8 @@ public final class FishingChairService {
         if (stand == null) {
             // v1.5.255：12 格内没有 → 大范围扫描最近水域（限频 30 秒——大扫描
             // 是主线程逐格检查，不能高频跑）。找到则生成坐垫并自动走向岸边
-            //（用户实测：女仆在地下空洞 12 格内无水 → 一直不放坐垫）
-            // v1.5.256：半径 40 → 64、垂直 -32..+64（用户测试：水在 46 格外、
+            //（实测：女仆在地下空洞 12 格内无水 → 一直不放坐垫）
+            // v1.5.256：半径 40 → 64、垂直 -32..+64（玩家测试：水在 46 格外、
             // 高 46 层差——40/±40 覆盖不到 → 依然无反应）
             Long w = LAST_NO_WATER_WARN.get(key);
             if (w != null && now - w < 600L) {
@@ -183,7 +183,7 @@ public final class FishingChairService {
         if (!far) {
             // 近处：直接坐上
             boolean mounted = maid.m_7998_(chair, true);
-            // v1.5.252v：诊断——坐垫下方位块注册名（确认贴地；用户实测"坐垫在水上"）
+            // v1.5.252v：诊断——坐垫下方位块注册名（确认贴地；实测"坐垫在水上"）
             BlockPos under = stand.m_7918_(0, -1, 0);
             net.minecraft.resources.ResourceLocation bid = net.minecraftforge.registries.ForgeRegistries.BLOCKS
                     .getKey(world.m_8055_(under).m_60734_());
@@ -216,7 +216,7 @@ public final class FishingChairService {
     /** 找"离女仆最近的可钓鱼水域岸边"：水面格 + 上方空气，岸格空气 + 脚下实心 + 头顶空气
      *  v1.5.259：水面判定修复——m_60815_ 是 isSolid（有碰撞）不是 isLiquid！
      *  旧版 `!m_8055_(w).m_60815_()` 把"实心方块"当"水面"（水 isSolid=false 被跳过）
-     *  → 永远找不到水（252s 重写起，用户实测"草地上挖一格水识别不到"、日志
+     *  → 永远找不到水（252s 重写起，实测"草地上挖一格水识别不到"、日志
      *  "液体 75958 格"= 地形实心格数）。改用 TLM 同款判定：
      *  getFluidState().is(FluidTags.WATER)（水源/流动水都算）。 */
     private static BlockPos findWaterSpot(ServerLevel level, EntityMaid maid) {
@@ -307,7 +307,7 @@ public final class FishingChairService {
     /** 水面格四周找可站岸边：找该方向岸边柱的【最上面实心方块】，坐垫放在它上面
      *  （贴地不悬浮）。旧版只查"水面+1/+2 层"——水面与地面同高（1 格深水塘）时
      *  正确的岸（水面层空气格）永远查不到 → 只能退回 +2 层 → 坐垫悬浮在
-     *  水塘上方（用户实测："把坐垫放进水里"）。
+     *  水塘上方（实测："把坐垫放进水里"）。
      *  v1.5.252v：实心判定改用【碰撞箱】——花/草/火把等无碰撞箱的装饰方块
      *  不再被误当"地面"（旧 isAir/isLiquid 判定会把它们当地面 → 坐垫"浮"在草上） */
     private static BlockPos findBank(ServerLevel level, BlockPos w) {
@@ -321,7 +321,7 @@ public final class FishingChairService {
                 BlockState st = level.m_8055_(solid);
                 // v1.5.259：m_60815_ 是 isSolid（有碰撞）不是 isLiquid！旧版用它
                 // 跳"液体"→ 实心岸（草地/石头 isSolid=true）全被跳过 → findBank
-                // 永远 null（用户实测：水就在女仆脚下，344 格水面 32 处全失败）。
+                // 永远 null（实测：水就在女仆脚下，344 格水面 32 处全失败）。
                 // isSolidRender（m_60804_）对液体/空气/花等已返回 false，直接用它
                 if (!st.m_60804_(level, solid)) {
                     continue;
@@ -456,7 +456,7 @@ public final class FishingChairService {
                     } else {
                             // v1.5.272：只在没有 walk target 时补寻路——旧版每秒无条件
                             // 重设（与 FindSit 每 12 tick 的设置交替重置）→ 寻路频繁
-                            // 重算 → 女仆"一走一卡"（用户实测）。FindSit 已设目标时
+                            // 重算 → 女仆"一走一卡"（实测）。FindSit 已设目标时
                             // 不打扰（MoveToTargetSink 持续走，流畅）；目标被清才补。
                             if (m.m_6274_().m_21952_(
                                     net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_).isEmpty()) {

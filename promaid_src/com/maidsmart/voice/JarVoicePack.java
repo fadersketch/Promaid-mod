@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * v1.1.0 实测四百二十：内置日语语音包（打进 mod jar：assets/promaid/voice/）。
  *
- * 用户需求：「帮我训练一个语音包，日语……训练的内容就是目前游戏里的那些系统消息语音，
+ * 需求：「帮我训练一个语音包，日语……训练的内容就是目前游戏里的那些系统消息语音，
  * 打包放进 .jar 里。效果就是当触发了这些系统消息之后，会自动播放这个语音。」
  *
  * 与 SystemVoicePack（磁盘包 config/maid_smart/system_voice/）互补：

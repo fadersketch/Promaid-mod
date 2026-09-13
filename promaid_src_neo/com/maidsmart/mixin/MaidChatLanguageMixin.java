@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * v1.5.205：对话语言根治——TLM 每次对话（tryToChat）都把
- * chatLanguage = clientInfo.language()（= 客户端游戏语言，用户客户端是日语），
+ * chatLanguage = clientInfo.language()（= 客户端游戏语言，玩家客户端是日语），
  * 旧修复只改了 promaid 自己的 3 个主动对话调用点（ChatInfoUtil.fromMaid）——
  * 玩家在 TLM 聊天 GUI 发起对话（客户端语言 = 日语）后 chatLanguage 被覆盖，
  * 之后的对话全变日语（"前几句中文（promaid 主动对话强制 zh）→ 玩家聊几句 →
@@ -39,7 +39,7 @@ public abstract class MaidChatLanguageMixin {
     private ChatClientInfo maidsmart$forceOutputLanguage(ChatClientInfo clientInfo) {
         String lang = MaidSmartConfig.DIALOGUE_OUTPUT_LANGUAGE.get();
         // v1.5.228：配置留空 = 默认强制中文（zh_cn）——旧版"留空 = 跟随 TLM/客户端"
-        // 导致用户游戏里对话持续输出日文（TLM chatLanguage 被客户端/聊天 GUI 覆盖
+        // 导致玩家游戏里对话持续输出日文（TLM chatLanguage 被客户端/聊天 GUI 覆盖
         // 成日语，且每次 tryToChat 都重写）。想要跟随其他语言就显式填 ja_jp 等。
         if (lang == null || lang.isBlank()) {
             lang = "zh_cn";

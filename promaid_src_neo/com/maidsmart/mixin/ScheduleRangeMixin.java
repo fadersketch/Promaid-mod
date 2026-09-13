@@ -7,7 +7,7 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Redirect;
 
 /**
- * v1.1.0 实测一百八十三（用户："在排班状态下，增大活动的范围"）：
+ * v1.1.0 实测一百八十三（反馈："在排班状态下，增大活动的范围"）：
  * TLM home 模式（排班必进）的 SchedulePos 用 TLM 自带配置
  * MAID_WORK_RANGE / MAID_IDLE_RANGE / MAID_SLEEP_RANGE（默认只有 8~16 格）
  * 收紧女仆活动半径——原版"限制区"机制下女仆出圈会被拉回，排班状态稍微离远

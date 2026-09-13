@@ -13,7 +13,7 @@ import net.neoforged.api.distmarker.OnlyIn;
  * （getStream 按字节头判定），复用即可，无需自写解码。
  *
  * 音量：TLM 构造把音量硬编码 1.0（再经 MaidTtsVolumeMixin 乘「TTS 音量倍率」）。
- * 本类在构造后把音量覆盖为「TTS 倍率 × 内置包倍率」，让用户能单独调内置语音包音量。
+ * 本类在构造后把音量覆盖为「TTS 倍率 × 内置包倍率」，让玩家能单独调内置语音包音量。
  * 1.21.1 音量字段 = AbstractSoundInstance.volume（protected，子类可直接写）。
  */
 @OnlyIn(Dist.CLIENT)

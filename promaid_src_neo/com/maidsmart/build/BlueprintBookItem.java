@@ -29,7 +29,7 @@ public class BlueprintBookItem extends Item {
      * 修复 v1.5.251c 的历史 bug：旧代码重写 useOnRelease（Item 默认返回 false 的
      * 别的方法），真正的 isFoil 是 m_5812_（javap 实证：原版附魔书
      * EnchantedBookItem 重写 m_5812_ 返回 true → 附魔光泽；isEnchantable 才是
-     * isFireResistant）。旧写法光效从未生效（用户反馈"光效没出现"的根因）。
+     * isFireResistant）。旧写法光效从未生效（反馈"光效没出现"的根因）。
      */
     @Override
     public boolean isFoil(ItemStack stack) {
