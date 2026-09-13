@@ -1,7 +1,0 @@
-﻿javap : 错误: 找不到类: net.minecraftforge.common.Tags`$Items
-所在位置 行:1 字符: 1
-+ javap -cp 'D:\.minecraft\libraries\net\minecraftforge\forge\1.20.1-47 ...
-+ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    + CategoryInfo          : NotSpecified: (错误: 找不到类: net.m...mon.Tags`$Items:String) [], RemoteException
-    + FullyQualifiedErrorId : NativeCommandError
- 
