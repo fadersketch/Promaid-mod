@@ -1,16 +1,22 @@
 # ---- 构建产物 ----
 out_promaid/
+out_promaid_neo/
 out_addon/
 out_heartfelt/
 staging_promaid/
+staging_promaid_neo/
 staging_heartfelt/
 patched/
+logs/
 *.class
 
 # ---- 机器相关的编译参数(含本地 .minecraft 路径,勿提交) ----
 compile_promaid.txt
 compile_heartfelt.txt
 compile_addon.txt
+compile_neo.txt
+compile_neo_log.txt
+libs_neo/
 
 # ---- Python ----
 __pycache__/
@@ -25,57 +31,109 @@ Desktop.ini
 .idea/
 .vscode/
 *.iml
-compile_out.txt 
 
-# ---- 诊断/临时文件（大扫除后新增，防再积累） ----
-# javap 反编译输出
-javap_*.txt
-javap_*.py
-# 编译错误输出
-compile_err*.txt
-# 诊断脚本与输出
-check_*.py
-dump_*.py
-map_*.py
-scan_*.py
-probe_*.py
-extract_*.py
-find_*.py
-fix_*.py
-run_javac*.py
-show_compile*.py
-show_v37*.py
-list_*_classes.py
-debug_*.py
-diff_*.py
-compile_stdout*.txt
-blocks_*.txt
-effects_*.txt
-# 临时解包目录
-_tlm_jar/
-_modtlm_jar/
-javap_out_tlm/
-javap_out_replay/
-# 一次性脚本/输出
-cleanup.py
-gh_current_body.md
-gh_fetch_body.py
-gh_list_releases.py
-gh_save_body.py
-gh_update_release.py
-_*.log
-_*.txt
-build_out.txt
-deploy_out.txt
-fix_out.txt
-ds.txt
-mb1.txt
-maidrunone.txt
-is_stack.txt
-tags_items.txt
-titles.txt
-render_list.txt
-hoe_static.txt
-bubble_calls.txt
-maidbrain_work.txt
+# ---- 诊断/临时文件（全部锚定仓库根，避免误伤源码树） ----
+# 临时解包目录 / 诊断输出目录
+/_tlm_jar/
+/_modtlm_jar/
+/javap_out_tlm/
+/javap_out_replay/
+/_audit_*/
+/_javap_dumps/
+/_ref_jar/
+/_tmp_*/
+/tmp_*/
+/_voice_new*/
+/_trash*/
 
+# 一次性诊断脚本（仓库根，下划线前缀）
+/_*.py
+/_*.txt
+/_*.log
+/_*.json
+/_*.xml
+/_*.md
+/_*.class
+/_*.jar
+/_*.tsrg
+/_*.zip
+
+# 常见诊断脚本前缀（仓库根）
+/apply_*.py
+/audit_*.py
+/verify_*.py
+/inspect_*.py
+/peek_*.py
+/parse_*.py
+/build_srg*.py
+/srg*.json
+/joined_*.tsrg
+/mcp_config_*.zip
+/rt[0-9]*.py
+/dbg_*.py
+/err*.py
+/log_*.py
+/neo_*.py
+/dl_mcpconfig*.py
+/gh_*.py
+/remove_*.py
+/repair_*.py
+/restore_*.py
+/resolve_*.py
+/report_*.py
+/migrate_*.py
+/patch_*.py
+/bump_*.py
+/cfg_*.py
+/clean_*.py
+/cmp_*.py
+/count_*.py
+/decode_*.py
+/head*.py
+/make_*.py
+/read_*.py
+/run_javac*.py
+/search_*.py
+/strip_*.py
+/tail_*.py
+/test_javap*.py
+/z_*.py
+/javap_*.txt
+/javap_*.py
+/compile_err*.txt
+/compile_stdout*.txt
+/check_*.py
+/dump_*.py
+/map_*.py
+/scan_*.py
+/probe_*.py
+/extract_*.py
+/find_*.py
+/fix_*.py
+/show_compile*.py
+/show_v37*.py
+/list_*_classes.py
+/debug_*.py
+/diff_*.py
+/blocks_*.txt
+/effects_*.txt
+/cleanup.py
+/gh_current_body.md
+/gh_fetch_body.py
+/gh_list_releases.py
+/gh_save_body.py
+/gh_update_release.py
+/build_out.txt
+/deploy_out.txt
+/fix_out.txt
+/ds.txt
+/mb1.txt
+/maidrunone.txt
+/is_stack.txt
+/tags_items.txt
+/titles.txt
+/render_list.txt
+/hoe_static.txt
+/bubble_calls.txt
+/maidbrain_work.txt
+/compile_out.txt
