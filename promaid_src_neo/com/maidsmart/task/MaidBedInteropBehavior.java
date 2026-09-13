@@ -19,7 +19,7 @@ import java.util.Comparator;
 import java.util.Optional;
 
 /**
- * 床铺互通·方向一（v1.1.0 实测四百一十八，用户："让女仆床和玩家床的代码互通。
+ * 床铺互通·方向一（v1.1.0 实测四百一十八，反馈："让女仆床和玩家床的代码互通。
  * 女仆和玩家可以互相使用对方的床"）。
  *
  * TLM 原版睡觉只认自己的女仆床：MaidBedTask（REST 活动里唯一的睡觉行为）用 POI

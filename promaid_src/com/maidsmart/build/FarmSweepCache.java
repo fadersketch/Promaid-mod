@@ -28,7 +28,7 @@ public final class FarmSweepCache {
             new ConcurrentHashMap<>();
 
     /** v1.1.0 实测二百七十六：锄地冷却（40 tick / 2 秒）——见 FarmSweepMixin.tillAround。
-     *  v1.1.0 实测二百九十一：20 tick / 1 秒——用户："锄地检测的频率不行，
+     *  v1.1.0 实测二百九十一：20 tick / 1 秒——反馈："锄地检测的频率不行，
      *  导致没有办法及时锄地"（旧版 2 秒冷却 + 依赖收割/种植触发，锄地滞后）。 */
     public static final java.util.Map<String, Long> TILL_CD =
             new ConcurrentHashMap<>();
@@ -44,7 +44,7 @@ public final class FarmSweepCache {
     /** v1.1.0 实测三百零二：锄地事件监听——玩家/女仆用锄头把泥土/草方块锄成耕地时
      *  自动打标记（"曾经是耕地"）。女仆只锄有标记的地块，所以标记必须覆盖所有
      *  锄地来源：玩家手锄、女仆手锄（FarmTillDriver）、女仆原版农场任务锄地。
-     *  v1.1.0 实测三百零五（用户："玩家在进入游戏之后进行耕地。然后把根蒂踩掉，
+     *  v1.1.0 实测三百零五（反馈："玩家在进入游戏之后进行耕地。然后把根蒂踩掉，
      *  但是女仆不为所动"）：getFinalState 恒为 null——原版锄地（HoeItem.m_6225_）
      *  走 fallback 逻辑直接 setBlock，不 setFinalState，旧版 finalState==null 直接
      *  return → 玩家锄地永远打不上标记。改用 getState()（锄地前的原方块：泥土/
@@ -80,7 +80,7 @@ public final class FarmSweepCache {
         }
     }
 
-    /** v1.1.0 实测三百零三（用户："有些结构会自然生成耕地，那那些耕地也要打上
+    /** v1.1.0 实测三百零三（反馈："有些结构会自然生成耕地，那那些耕地也要打上
      *  标记"）：区块加载扫描——结构生成（村庄农田等）的耕地是直接放置方块，不触发
      *  锄地事件，需要扫描兜底。区块加载时遍历各 section 的耕地方块打标记（只扫
      *  非空 section，跳过 hasOnlyAir）。 */
@@ -138,12 +138,12 @@ public final class FarmSweepCache {
      * 3×3 内有耕地 + 背包/主手有锄头）也算目标，女仆走过去后 start 触发锄地。
      *
      * v1.1.0 实测二百九十一：判定扩展——dirt 之外认 grass_block（f_50440_，
-     * javap 实证：GrassBlock 构造 → f_50440_）。用户："当地块从泥土变为草方块
+     * javap 实证：GrassBlock 构造 → f_50440_）。反馈："当地块从泥土变为草方块
      * 之后，女仆就会彻底失去判定"——草方块蔓延到泥土上后旧版只认 dirt → 不再
      * 锄。原版锄头（HoeItem.f_41332_ 表）本来就能锄 dirt/grass_block/dirt_path
      * → farmland，判定与锄地动作对齐。
      *
-     * v1.1.0 实测三百零二（用户："对曾经已经是耕地的地块打上一个标记……在 5×5
+     * v1.1.0 实测三百零二（反馈："对曾经已经是耕地的地块打上一个标记……在 5×5
      * 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）：判定改为【标记制】——
      * 旧版"3×3 内有耕地"启发式会连锁扩散（锄一块后周围 3×3 就有耕地 → 超平坦
      * 地形 5×5 全被锄成耕地）。现在只锄【有标记（曾经是耕地）且当前不是耕地】的

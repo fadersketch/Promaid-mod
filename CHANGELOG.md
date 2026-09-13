@@ -1,6 +1,6 @@
 ﻿## 实测四百四十八【蛋糕可食用：新增配置开关（应对第三方投喂模组的交互冲突）】
 
-**现象（粉丝反馈）**：往野生（无主）女仆喂蛋糕，蛋糕被消耗、却不触发 TLM 驯服（没有爱心 / 成就）。
+**现象**：往野生（无主）女仆喂蛋糕，蛋糕被消耗、却不触发 TLM 驯服（没有爱心 / 成就）。
 
 **一、定位（字节码核实）**
 - Forge 1.20.1 的 `Player.interactOn` 先调 `ForgeHooks.onInteractEntity`：**事件被取消就直接
@@ -52,7 +52,7 @@
 
 ## 实测四百四十七【规则气泡语音补漏 6 条：「附近没有值得挖的矿石」还是人机语音】
 
-用户反馈：「附近没有值得挖的矿石这一句还是人机」。
+问题：附近没有值得挖的矿石这一句还是人机。
 
 **一、根因（不是没触发，是没登记）**
 - 这句来自 `dialogue/WorkStatusReporter.java` 的"卡住原因"播报（挖矿任务空闲时每 N 秒
@@ -100,7 +100,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十六【冷却 HUD 在 1.20.1 不渲染的真正根因：窗口高度取错了 SRG 字段】
 
-用户反馈：「最新实例里又没了」（引用此前「冷却条和显示的那些修复在 1.21.1 已经成功、
+问题：最新实例里又没了（引用此前「冷却条和显示的那些修复在 1.21.1 已经成功、
 在 1.20.1 都未能落实」）。
 
 **一、证据链（从已轮转的玩家会话日志里挖出来）**
@@ -144,10 +144,10 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十五【语音包情绪化重制（按情境分五档）+ 落地水"没声音/染红"两个 bug】
 
-用户反馈：「语音包在语气和情感上面能不能稍微优化一点？现在这样子读着太死气沉沉的了，
+问题：语音包在语气和情感上面能不能稍微优化一点？现在这样子读着太死气沉沉的了，
 应该要根据具体的情境来分别对应不同的情感和语音，你需要重新训练。而且我在刚刚测试的
 时候，触发了 [警示]落地水 这个语音字段。是红色的而不是蓝色的，而且这个就没有触发语音，
-还是触发了人机语音。」
+还是触发了人机语音。
 
 **一、情绪化重制（115 条重写 + 五档情绪）**
 - 关键约束：`manifest.json` 只存中文 key，**上一版的日语台词没有落盘**，所以本次按中文
@@ -164,7 +164,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
   | 俏皮·日常 | 60 | B | 1.05 | 49 条排班闲聊 + 钓鱼 + 天气 + 拥抱/摸头 |
   | 干活·汇报 | 17 | A | 1.03 | 建造/搭路/挖矿/伐木/酿造 |
   | 请求·为难 | 7 | B | 1.02 | 缺料/没食物/够不着 |
-- **采样参数是 ASR 客观对照试出来的**：`temperature 1.15 / top_k 20 / top_p 0.95`
+- **采样参数是 ASR 对照试出来的**：`temperature 1.15 / top_k 20 / top_p 0.95`
   这组会把短句合成糊掉——「敵が来たよ、気をつけて！」被 whisper 转写成
   「てちがちだよ 塩つけて」；而 `speed 1.08 + 默认采样（temp 1.0 / k15 / p1.0）`
   反而转写完全正确。所以**情绪靠参考音频 + 语速，采样一律用默认保守值**。
@@ -188,7 +188,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 两树编译零错；jar 重建（含新语音包）并部署到 6 个实例；`test_server.py 1201` 与
   `neoforge1211` 回归均 PASS；新语音用 whisper 抽样复核（见上）。
 
-**五、已知限制（如实说明）**
+**五、已知限制（说明）**
 - 磁盘上只有两条小酒狐参考音频，做不到"每种情绪一套专属语气模型"。如果你能提供更多
   **小酒狐本人**不同情绪（生气/慌乱/大笑…）的片段，我可以直接拿它们当参考再合成，
   情绪会更到位；否则就只能在"同参考 + 语速 + 台词"这个范围内优化。
@@ -197,8 +197,8 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十四【冷却 HUD 在 1.20.1 恒不渲染：渲染回调根本没被调用】
 
-用户反馈：「刚刚有关冷却条和显示的那些修复在 1.21.1 版本都已经成功修复了。
-但在 1.20.1 都未能落实。」
+问题：刚刚有关冷却条和显示的那些修复在 1.21.1 版本都已经成功修复了。
+但在 1.20.1 都未能落实。
 
 **一、定位（日志说话）**
 - 1.20.1 客户端 `latest.log` 里有
@@ -227,7 +227,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 3. 诊断三点链：`first snapshot received` / `first render event` / `first draw`，
    以后再出问题一眼能区分是没数据、没注册/没事件、还是没绘制。
 
-**四、验证（真实客户端烟测）**
+**四、验证（客户端烟测）**
 - 把一份存档**复制**成一次性世界 `_hudtest`（不动原档），用测试账号离线启动 1.20.1
   客户端，`latest.log` 依次出现：
   `first snapshot received (2 entries)` → `first render event` → `first draw at y=4`，
@@ -239,9 +239,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十三【悬空禁搭方块（自保搭高 / 搭路 / 挖矿垫脚 / 伐木垫脚）】
 
-用户反馈：「使用重锤有的时候会因为飞得太高而触发了大方块机制。所以女仆在处于悬空
+问题：使用重锤有的时候会因为飞得太高而触发了大方块机制。所以女仆在处于悬空
 状态下的时候应该禁止搭建方块。（这个机制在挖矿和伐木的时候也通用，有的时候就是
-因为下落悬空的时候搭方块又放不了落地水导致自己被摔死了）」
+因为下落悬空的时候搭方块又放不了落地水导致自己被摔死了）
 
 **一、做法：一个统一闸口**
 - 新增 `com.maidsmart.tool.MaidPlaceGuard.blocked(maid)`；四个搭方块模块
@@ -257,7 +257,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - **一律放行**：站在地面、在水里/岩浆里、骑乘、鞘翅滑翔 —— 这些都不是"悬空危急"。
 - **坠落距离 ≥「落地水触发高度」**（`combat.waterFallDistance`，默认 6 格）→ 禁搭。
   理由：到这个高度落地水本来就会接管；此时搭方块既救不了她，还会把落点的水/地面
-  结构改掉、把落地水挡住 —— 正是用户实测的摔死根因。
+  结构改掉、把落地水挡住 —— 正是实测的摔死根因。
 - **1.21.1 另加**：重锤跃起（`MaidMaceSmashBehavior.isAirborne`）**整段空中都禁**
   （上升段也算，避免起跳瞬间乱搭）。
 
@@ -273,10 +273,10 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十二【重锤专属落地水 + 重锤空中禁传送（1.21.1 专属）】
 
-用户反馈：「使用重锤的时候，女仆很容易给自己摔伤，因为触发不了落地水很难受。
+问题：使用重锤的时候，女仆很容易给自己摔伤，因为触发不了落地水很难受。
 你想想有没有什么可以优化的方案。比如此时禁用通用落地水，但是在有水桶的情况下会
 强制在落地前脚下生成一格水这种（相当于重锤专属落地水）。还有女仆在重锤状态下
-空中的时候要禁止传送。否则很容易因为女仆飞到高空又传送回来，造成战术上的失误。」
+空中的时候要禁止传送。否则很容易因为女仆飞到高空又传送回来，造成战术上的失误。
 
 **一、重锤专属落地水**
 - 旧版是"半吊子抑制"：`suppressesFallClutch` 只在【目标仍在命中范围内】时让开
@@ -308,8 +308,8 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十一【收符期间冷却条消失：手动收符的魂符不带标记 + 魂符落位写错槽】
 
-用户反馈：「女仆在收回魂符的时候2个冷却的时间条就消失了，虽然实际上还在计时，
-但那样子观感不太好。」
+问题：女仆在收回魂符的时候2个冷却的时间条就消失了，虽然实际上还在计时，
+但那样子观感不太好。
 
 **一、根因**
 - HUD 的"女仆在符里"分支（`CooldownHudTracker` 扫主人背包）只认【自动标记】的魂符：
@@ -344,8 +344,8 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十【敌袭/感知系统消息接上内置日语语音包（6 条）】
 
-用户反馈：「有敌人靠近了，离我多少多少格这个语音似乎没有实现。仍然是播放的人机语音，
-而不是我们训练的语音包。」
+问题：有敌人靠近了，离我多少多少格这个语音似乎没有实现。仍然是播放的人机语音，
+而不是我们训练的语音包。
 
 **一、根因**
 - 所有系统气泡都会经 `ChatBubbleLimitMixin.addTextChatBubble` 汇入
@@ -384,7 +384,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百三十九【回魂符冷却"放出女仆后就没了"根因：1.21.1 的持久化键是 NeoForgeData】
 
-用户反馈：「自动收回魂符这个功能的冷却，在女仆被收进魂符后把女仆重新放置以后，CD 及上方冷却条就消失了。」
+问题：自动收回魂符这个功能的冷却，在女仆被收进魂符后把女仆重新放置以后，CD 及上方冷却条就消失了。
 
 **一、根因（javap 实证）**
 - 1.20.1 Forge 的实体持久化数据子标签叫 `ForgeData`；**1.21.1 NeoForge 改成了 `NeoForgeData`**
@@ -409,11 +409,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十八【右键墓碑不再当场复活：改为原版行为 + 取消本次自动复活】
 
-用户反馈：「在女仆死亡期间，右击墓碑会直接复活。我感觉这个操作不好，那样子就使得我设的那个冷却毫无意义。应当改为在自动复活功能开始以后右击墓碑仍然跟原版一致，同时取消复活事件。」
+问题：在女仆死亡期间，右击墓碑会直接复活。我感觉这个操作不好，那样子就使得我设的那个冷却毫无意义。应当改为在自动复活功能开始以后右击墓碑仍然跟原版一致，同时取消复活事件。
 
 **一、改动**
 - **删掉"右键墓碑 = 立即复活"**（实测四百二十六引入的 `reviveFromTombstone` + 对应注入），
@@ -438,20 +438,20 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 **四、验证**
 - 两树编译零错（mixin 改名后已重跑 `gen_compile*.py` 重建源清单）；重建 jar 并部署；
   `test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十七【重锤"打着打着不再触发"：门禁加固 + 诊断日志】
 
-用户反馈：「一开始重锤的逻辑还可以使用，但是突然就不再触发重锤的战术了，很奇怪。我初步推测是自主战斗可以触发，但是 TLM 原生的攻击不能触发。」
+问题：一开始重锤的逻辑还可以使用，但是突然就不再触发重锤的战术了，很奇怪。我初步推测是自主战斗可以触发，但是 TLM 原生的攻击不能触发。
 
 **一、先把最可能的两个原因说清楚**
 - **风弹耗尽**：现在规则是「重锤 + 风弹缺一不可」，**每次猛击消耗 1 枚风弹**——给的那几枚用完之后自然就不再触发（与战斗模式无关）。
 - **主手被换走**：本行为只认「主手 = 重锤」。若她切了别的任务/武器（自动装备把她手上的重锤换掉），也会停。
 - 这两个都能被下面的诊断日志直接证实。
 
-**二、目标读取加固（对应用户的猜测）**
+**二、目标读取加固（对应玩家的猜测）**
 - 新增 `currentTarget(maid)`：优先读脑内 `ATTACK_TARGET`，读不到退回 `maid.getTarget()`（Mob 原生目标）——
-  用户怀疑"自主战斗写脑内记忆、TLM 原生攻击写别处"，两条都认就不会漏触发。
+  玩家怀疑"自主战斗写脑内记忆、TLM 原生攻击写别处"，两条都认就不会漏触发。
   （旁注：TLM 的 `EntityMaid` 本身就持有 `ATTACK_TARGET`，理论上两种模式都会写；兜底无害。）
 
 **三、风弹读取加固**
@@ -466,11 +466,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十六【重锤：风爆（Wind Burst）机制核实 + 补上原版猛砸冲击表现】
 
-用户反馈：「这个操作的效果应该是在下落攻击的时候会产生一个风暴吧？我在测试的时候拿没有附魔的重锤女仆是会掉到地上的。」
+问题：这个操作的效果应该是在下落攻击的时候会产生一个风暴吧？我在测试的时候拿没有附魔的重锤女仆是会掉到地上的。
 
 **一、结论先说：没有附魔就没有风暴，这是原版行为，不是 bug**
 - 反编译/数据双向核实：`data/minecraft/enchantment/wind_burst.json` 里风爆是
@@ -500,17 +500,17 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十五【拥抱 / 摸头亲昵语音（6 条，只训练女仆说的话）】
 
-用户反馈：「拥抱和摸头是没有语音的。还需要训练（注意不要训练旁白句子，只需要女仆说的话）。」
+问题：拥抱和摸头是没有语音的。还需要训练（注意不要训练旁白句子，只需要女仆说的话）。
 
 **一、台词来源与范围（严格只取女仆台词）**
 - `EmotionNetworking` 的 `say(maid, ...)`（G 摸摸头 / H 抱抱触发）：
   - 拥抱 3 条：抱抱！好温暖～ / 主人的怀抱最安心了～ / 嘿嘿，被抱着都不想动啦～
   - 摸头 3 条：嘿嘿，好舒服～ / 摸摸头就又有精神了！ / 最喜欢主人摸头了～
-- **旁白（第三人称括号叙述，如"（你张开双臂，把 XX 轻轻拥入怀中……）"）一律不训练**——按用户要求排除。
+- **旁白（第三人称括号叙述，如"（你张开双臂，把 XX 轻轻拥入怀中……）"）一律不训练**——按要求排除。
   这两句只走 `player.sendSystemMessage`，不进气泡、不触发语音。
 
 **二、制作（与四百二十 / 四百二十八同款流程）**
@@ -529,11 +529,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十四【重锤改为「重锤 + 风弹」缺一不可 + 附魔生效性核查】
 
-用户反馈：「现在女仆不用风弹就可以直接起飞，感觉有点太超标了。我建议还是要求又要有风弹又要有重锤的时候才能使用，否则就还是原版。顺带我想问一下附魔对女仆操作重锤有用吗？我觉得这一点还是要注意一下。」
+问题：现在女仆不用风弹就可以直接起飞，感觉有点太超标了。我建议还是要求又要有风弹又要有重锤的时候才能使用，否则就还是原版。顺带我想问一下附魔对女仆操作重锤有用吗？我觉得这一点还是要注意一下。
 
 **一、改为缺一不可（不再占用风弹当"加成"）**
 - `MaidMaceSmashBehavior.checkExtraStartConditions` 增加前置：`combat.maceWindCharge` 开启时
@@ -544,12 +544,12 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
   「不消耗风弹自由起跳」（标注不推荐）。总开关 `combat.maceSmash` 不变。
 
 **二、附魔生效性核查（javap 实证原版调用链）**
-- **伤害加成** ✅：`EnchantmentHelper.modifyDamage`（锋利 / 亡灵杀手 / 节肢杀手）；
-- **下落加成** ✅：`Item.getAttackDamageBonus` 内部会调 `modifyFallBasedDamage` → **密度** 附魔算数；
-- **攻击后效** ✅：`EnchantmentHelper.doPostAttackEffects` → **火焰附加** 等 POST_ATTACK 组件；
-- **护甲穿透** ✅：**Breach** 走原版 `hurt` 的护甲结算（`modifyArmorEffectiveness` 从伤害来源的武器解析）；
-- **耐久** ✅：`hurtAndBreak(int, LivingEntity, EquipmentSlot)` 含**耐久**附魔；
-- **击退** ❌→✅：原版这一步在 `Mob.doHurtTarget` 里用 `EnchantmentHelper.modifyKnockback` 施加，
+- **伤害加成** ：`EnchantmentHelper.modifyDamage`（锋利 / 亡灵杀手 / 节肢杀手）；
+- **下落加成** ：`Item.getAttackDamageBonus` 内部会调 `modifyFallBasedDamage` → **密度** 附魔算数；
+- **攻击后效** ：`EnchantmentHelper.doPostAttackEffects` → **火焰附加** 等 POST_ATTACK 组件；
+- **护甲穿透** ：**Breach** 走原版 `hurt` 的护甲结算（`modifyArmorEffectiveness` 从伤害来源的武器解析）；
+- **耐久** ：`hurtAndBreak(int, LivingEntity, EquipmentSlot)` 含**耐久**附魔；
+- **击退** →：原版这一步在 `Mob.doHurtTarget` 里用 `EnchantmentHelper.modifyKnockback` 施加，
   而我们为了带出重锤下落加成是**直接 `hurt`**、绕过了它 → 本次补上：命中后按 `modifyKnockback`
   施加击退，并按原版把自身水平速度乘 0.6。
 
@@ -559,11 +559,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS（1.20.1 树不含此功能）。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十三【冷却 HUD 照搬 HeartPact 显示机制 + 收符窗口数据缺口修复】
 
-用户反馈：「CD 功能还是未能正常显示。我只看到身上冒出来的效果。为什么不照我说的那样子去照搬别的模组的显示机制呢？」
+问题：CD 功能还是未能正常显示。我只看到身上冒出来的效果。为什么不照我说的那样子去照搬别的模组的显示机制呢？
 
 **一、证据链（先定位是"没数据"还是"没渲染"）**
 - 1.20.1 实例 `pro Maid.log`（promaid.log）显示 22:30:22–22:31:49 服务端**确实**在每秒下发
@@ -572,7 +572,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 另外「只看到身上的效果、没有 HUD」还有第二个缺口：**女仆被收进魂符后实体已移除**，
   旧的回魂符 CD 扫描只查"存活女仆的 persistentData"，这段窗口自然没有任何条目可显示。
 
-**二、显示机制：完全照搬 HeartPact 的分娩倒计时（用户点名要求）**
+**二、显示机制：完全照搬 HeartPact 的分娩倒计时（玩家点名要求）**
 - `CooldownHudRenderer` 改为 **`@EventBusSubscriber` 注解常驻注册**（1.20.1
   `Mod.EventBusSubscriber(Bus.FORGE, Dist.CLIENT)`；1.21.1 `EventBusSubscriber(modid, Dist.CLIENT)`）——
   彻底去掉"收到第一个快照才 `EVENT_BUS.register(Class)`"的懒注册（这是本次 HUD 不显示的
@@ -596,11 +596,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十二【重锤猛击（1.21.1 专属，参考僵尸用重锤）】
 
-用户需求：「1.21.1 版本专属更新，女仆可以使用重锤。使用机制就参考 vanilla_mob_remake 里面的僵尸使用重锤。唯一的一个疑点就是要跟落地水平衡防止干扰。同时在拥有风弹的时候可以自己起跳一次。」
+需求：「1.21.1 版本专属更新，女仆可以使用重锤。使用机制就参考 vanilla_mob_remake 里面的僵尸使用重锤。唯一的一个疑点就是要跟落地水平衡防止干扰。同时在拥有风弹的时候可以自己起跳一次。」
 
 **一、机制（反编译 vanilla_mob_remake 的 ZombieMaceAttackGoal 比对实现）**
 - 新增 `com.maidsmart.combat.MaidMaceSmashBehavior`（core 行为优先级 235，低于落地水 240、高于单兵战术 230）：女仆**主手持有重锤** + 有存活敌对目标 + 目标在起跳距离（默认 3 格）内 + 冷却（默认 60 tick）就绪 → 朝目标起跳（水平 0.15 / 垂直 1.2，与原 mod 同数值），喷 GUST / GUST_EMITTER_SMALL 粒子 + WIND_CHARGE_BURST 音效；下落中贴地（提前一 tick）或已落地时，若目标仍在 4 格内 → 猛砸。
@@ -610,7 +610,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 本实现显式复刻 Player.attack 的那一步：ATTACK_DAMAGE 属性 → `EnchantmentHelper.modifyDamage` → `Item.getAttackDamageBonus`（4f / 12+2(f−3) / 22+(f−8) 三段）→ `hurt` → 附魔后效 → `hurtAndBreak` + `resetFallDistance`。
 - 于是女仆的猛砸是**真实加成伤害**，下落越高越疼（最高 +22 以上）。
 
-**三、与落地水的平衡（用户点名的疑点）**
+**三、与落地水的平衡（玩家点名的疑点）**
 - 猛击跃起会坠落 8 格以上；若落地水/雪在落点放桶会**清零 fallDistance → 猛砸加成全丢**（两功能互相干扰）。
 - 处理：`WaterClutchBehavior` 在猛击跃起期间让开（`suppressesFallClutch`），但**只在目标仍在命中范围内时**抑制——目标跑出 4 格立刻放开，落地水照常保命；命中后 `resetFallDistance`（同原版 postHurtEnemy）也不会摔伤。两头都不牺牲。
 - 另外 `MaidCombatTacticsBehavior` 在跃起期间交出移动控制（起跳水平速度只有 0.15，被战术导航覆盖就跳不向目标）。
@@ -623,11 +623,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **六、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS；1.20.1（1201）树不含此功能、不受影响。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十一【搭路默认开启 + 配置从「生存与复活」迁到「移动与行为」】
 
-用户反馈：「搭路功能可以默认开启了。不过搭路的配置难道不应该放在移动这一栏里面吗？」
+问题：搭路功能可以默认开启了。不过搭路的配置难道不应该放在移动这一栏里面吗？
 
 **一、默认开启**
 - `bridge.enabled` 默认 `false` → `true`（两树 `MaidSmartConfig`），配置项注释「搭路（默认关）」→「搭路（默认开）」，配置面板 `bridgeRows` 说明末尾「默认关闭」→「默认开启」。
@@ -645,15 +645,15 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树编译零错；重建 jar 并部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十【冷却 HUD 恒不渲染根因修复（F3 门禁用错字段）+ 显示方式对齐 HeartPact】
 
-用户反馈：「复活和自动回魂符的 CD 显示都未能正常显示。显示可参考 TouhouLittleMaid-HeartPact 里面的分娩倒计时显示方式。」
+问题：复活和自动回魂符的 CD 显示都未能正常显示。显示可参考 TouhouLittleMaid-HeartPact 里面的分娩倒计时显示方式。
 
-**一、根因（javap + 用户 options.txt 双向实证）**
+**一、根因（javap + 玩家 options.txt 双向实证）**
 - 四个 HUD 渲染器（两树 × 冷却/建造）的「打开界面 / F3 调试屏不显示」门禁都写成了
-  `mc.options.useNativeTransport`——该字段根本不是 F3 标志，且用户 `options.txt` 里
+  `mc.options.useNativeTransport`——该字段根本不是 F3 标志，且玩家 `options.txt` 里
   `useNativeTransport:true`（默认即 true）→ 条件恒真 → `onGui` 第一行就 `return`，
   **HUD 永远不会被画出来**。
 - 正确字段：1.20.1 是 `Options.renderDebug`（SRG `f_92063_`，由 `Gui` 调
@@ -676,11 +676,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar；已部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十九【睡觉中静默系统气泡与语音】
 
-用户反馈：「女仆在睡觉的时候就不应该触发语音包和语音气泡了。」
+问题：女仆在睡觉的时候就不应该触发语音包和语音气泡了。
 
 **一、判定口径**
 - 睡觉判定统一用 `LivingEntity.isSleeping()`（1.20.1 SRG `m_5803_`；javap 字节码实证其实现 = `getSleepingPos().isPresent()`，与 TLM `MaidBedTask` 调用的 `startSleeping` 同源，两树同款公共方法）。
@@ -693,11 +693,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS（同时验证 mixin 注入点有效）；已部署两个客户端实例（含整合包实例）、三台本地服务器。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十八【排班气泡日语语音包（49 条，GPT-SoVITS 小酒狐）】
 
-用户反馈：「那些排班里的 50+ 条对话没有制作语音包。」
+问题：那些排班里的 50+ 条对话没有制作语音包。
 
 **一、范围**
 - `ScheduleBubbleBehavior` 的排班贴身气泡文本池共 **49 条**（工作吐槽/撒娇/打工人毒鸡汤），此前只出气泡文字、没有语音。
@@ -714,11 +714,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十七【内置语音包响度修复（素材归一化 + 音量上限提升到 20）】
 
-用户反馈：「我们自己做的语音包设置声音 5.0 都显小，感觉要至少有 10.0 的水平。当然，也有可能是别的问题导致我们这边声音太小。」
+问题：我们自己做的语音包设置声音 5.0 都显小，感觉要至少有 10.0 的水平。当然，也有可能是别的问题导致我们这边声音太小。
 
 **一、根因：语音素材本身太轻（不是播放音量不够）**
 - 用 ffmpeg volumedetect 实测内置 ogg：**平均 −32 dB、峰值仅 −12 dB**（正常游戏音效峰值应接近 0 dB）。GPT-SoVITS 直出的音频没有做响度处理，所以音量倍率再乘也事倍功半。
@@ -731,11 +731,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
 - 提示：如果你之前把「内置语音包音量」存成了 5.0，素材归一化后再乘 5.0 会非常响——建议先调回 1.0~2.0 再按需微调。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十六【女仆复活机制修复：计时口径 + 墓碑右键立即复活 + 时机可配置】
 
-用户反馈：「女仆复活功能未能触发，甚至连正常点击墓碑让他复活的方式都没有了。复活这个机制可以参考一下我模组列表里面的驯养革新里面的宠物床。打开自动复活之后就会自动遵循这里面的操作。不打开那就是遵循原版。」
+问题：女仆复活功能未能触发，甚至连正常点击墓碑让他复活的方式都没有了。复活这个机制可以参考一下我模组列表里面的驯养革新里面的宠物床。打开自动复活之后就会自动遵循这里面的操作。不打开那就是遵循原版。
 
 **一、根因（两处硬 bug，均在 旧版就存在）**
 1. **到期永远不触发**：登记到期用 `level.getGameTime()`（世界游戏时间，随存档累计、数值很大），每秒检查却用 `server.getTickCount()`（服务器运行刻数，每次启动从 0 开始）。老存档里前者远大于后者，`now >= due` 永不成立 → 自动复活从不触发。
@@ -754,11 +754,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十五【主人踩踏刷新扩展到挖矿/伐木/自保垫脚方块】
 
-用户需求（承接四百二十二）：「这个也应包含，防止玩家跟着女仆挖矿/伐木时掉下去。」——即：不仅搭路方块，挖矿/伐木/自保（搭高）她垫的方块也应在主人踩上去时刷新回收倒计时。
+需求（承接四百二十二）：「这个也应包含，防止玩家跟着女仆挖矿/伐木时掉下去。」——即：不仅搭路方块，挖矿/伐木/自保（搭高）她垫的方块也应在主人踩上去时刷新回收倒计时。
 
 **一、改动**
 - 四套搭方块追踪器全部开启 `refreshOnOwnerStand`：
@@ -774,11 +774,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十四【手册详细介绍重写 + 一键跳转配置】
 
-用户需求：「现在我们对手册详细介绍这一块进行一个重写。同时在聊到某个功能的时候，可以附加一个链接，让玩家跳转到模组详细配置的对应功能处。」
+需求：「现在我们对手册详细介绍这一块进行一个重写。同时在聊到某个功能的时候，可以附加一个链接，让玩家跳转到模组详细配置的对应功能处。」
 
 **一、可点击的配置链接（核心新能力）**
 - 手册正文新增链接语法 `[[@大类:小类:行标签|显示文字]]`：`GuideScreen` 的换行把整块链接当**原子 token**（按标签宽度计量、不拆行），渲染时画成§青色带下划线§r，并记录命中区；点击 → `PromaidConfigScreen.openAt(...)` 直接打开「模组详细配置」的对应页。
@@ -787,16 +787,16 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **二、手册内容重写**
 - 新增首章「功能总览 · 一键跳转配置」：按 7 大类清单列出全部 28 个小类的可点击链接，并给出手动导航路径。
-- 每章正文末尾**自动**附加一行「⚙ 配置入口：点此打开对应配置」链接——`GuideContent.configLinkFor(标题)` 按章节关键词映射到目标小类（建造/挖矿/伐木/烧制/农场/排班/战斗/被动技能/自动复活/床铺互通/贴身辅助/单兵战术/武器切换/AI记忆/对话/感知情绪/AI工具/语音 等），`GuideScreen.buildLines` 统一追加。
+- 每章正文末尾**自动**附加一行「配置入口：点此打开对应配置」链接——`GuideContent.configLinkFor(标题)` 按章节关键词映射到目标小类（建造/挖矿/伐木/烧制/农场/排班/战斗/被动技能/自动复活/床铺互通/贴身辅助/单兵战术/武器切换/AI记忆/对话/感知情绪/AI工具/语音 等），`GuideScreen.buildLines` 统一追加。
 - 「手册使用指南」章补充「点链接直达配置」的用法说明；手册内不再有任何开关（承接四百二十三）。
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十三【模组详细配置面板重组（两级菜单）+ 开关集中化】
 
-用户需求：「手册里的各功能配置开关和配置项目实在是太多太乱了。我这个开发者都找不到哪个开关在哪里，我觉得需要进行一个改革重写，明确划分，重新分配和分类，细化分配。不再只有原来的那几大块。重新组一个。先声明，所有开关统一扔进模组详细配置界面里，不得出现在其它地方。……配置面板的方式跟原来是一样的，只是我需要对小项进行一个更明确的划分和重组。」
+需求：「手册里的各功能配置开关和配置项目实在是太多太乱了。我这个开发者都找不到哪个开关在哪里，我觉得需要进行一个改革重写，明确划分，重新分配和分类，细化分配。不再只有原来的那几大块。重新组一个。先声明，所有开关统一扔进模组详细配置界面里，不得出现在其它地方。……配置面板的方式跟原来是一样的，只是我需要对小项进行一个更明确的划分和重组。」
 
 **一、两级菜单（大类 → 小类 → 参数页）**
 - `PromaidConfigScreen` 新增 `Group` 枚举（7 大类），重写 `Section` 枚举（28 小类，每个小类记住所属大类）；首页只列大类，大类页列小类，小类页才是参数行（沿用原分页/保存机制）。
@@ -814,16 +814,16 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 完整性脚本校验（对重组前备份）：BoolRow 112 / NumRow 175 / BtnRow 6 / CycleRow 3 / TextRow 5 / InfoRow 1 完全一致；配置键无丢失、无重复。
 
 **二、开关集中化（手册内不再有开关）**
-- 移除手册目录页的「⚙ 自动复活设置」「♪ 日语语音包设置」两个设置页入口——所有开关/参数只在「模组详细配置」面板里调（用户明确要求）。两个设置页相关代码标记 @Deprecated 保留（不可达，仅备回滚）。
+- 移除手册目录页的「自动复活设置」「日语语音包设置」两个设置页入口——所有开关/参数只在「模组详细配置」面板里调（要求）。两个设置页相关代码标记 @Deprecated 保留（不可达，仅备回滚）。
 - 手册文本全面更新到新路径：导航章重写为 7 大类 28 小类清单 + 「怎么找某个开关」指引；各章交叉引用同步改为新路径（原来大量「杂项 → X」「战斗自保 → Y」的旧写法全部改掉）。
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十二【搭路方块 CD·主人踩踏也重置】
 
-用户需求：「现在搭路方块只有在被女仆踩了以后才会被重置CD，更改为主人踩到了也会重置。」
+需求：「现在搭路方块只有在被女仆踩了以后才会被重置CD，更改为主人踩到了也会重置。」
 
 **一、改动**
 - `PlacedBlockTracker`（两树）新增第 4 个构造参数 `refreshOnOwnerStand`（默认 false，挖矿/伐木/自保方块不受影响）；
@@ -835,11 +835,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十一【冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却）】
 
-用户需求：「我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化。」
+需求：「我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化。」
 
 **一、服务端倒计时采集**
 - `MaidAutoResurrect`：`Pending` 增加 `maidName`（墓碑生成时用 `PromaidLog.nameOf` 记录，随 SavedData 持久化；旧存档缺字段回退「女仆」）；新增 `hudReviveEntries(server, ownerId)` → {名字, 剩余秒, 总秒}，倒计时刻与到期判定同源（`getTickCount()`），并夹紧到配置的复活延迟上限；
@@ -848,7 +848,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **二、网络与客户端 HUD**
 - 新增 S2C `CooldownHudPacket`（1.20.1 手册频道 id 26 / Neo `playToClient`），每项 {kind, 名字, 剩余秒, 总秒}，kind = `revive` / `soul`；
-- 新增客户端 `CooldownHudRenderer`（两树）：左上角「⏳ 冷却」列表，`复活 · 名字 42秒` / `回魂符 · 名字 18秒 / 60秒`；行高 10px 逐行步进、按 `BuildHudRenderer.bottomY()` 排在建造进度下方不重叠、打开界面/F3 不画、超出可用高度不画、超 2.5 秒没收到新快照自动清空（不残留旧倒计时）；`BuildHudRenderer` 两树新增 `bottomY()` 记录本帧底边。
+- 新增客户端 `CooldownHudRenderer`（两树）：左上角「冷却」列表，`复活 · 名字 42秒` / `回魂符 · 名字 18秒 / 60秒`；行高 10px 逐行步进、按 `BuildHudRenderer.bottomY()` 排在建造进度下方不重叠、打开界面/F3 不画、超出可用高度不画、超 2.5 秒没收到新快照自动清空（不残留旧倒计时）；`BuildHudRenderer` 两树新增 `bottomY()` 记录本帧底边。
 
 **三、配置与文档**
 - 杂项新增 `冷却可视化 HUD`（`misc.cooldownHud`，默认开，两树）+ 中英翻译 + 配置面板行；手册「女仆自动复活」章补充冷却可视化说明。
@@ -857,11 +857,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；
 - 重建 jar：`patched/promaid-1.1.0.jar` 6,936,317 字节、`patched/promaid-1.1.0-neoforge-1.21.1.jar` 6,946,795 字节；两个 jar 各含 `CooldownHudTracker.class`、`CooldownHudRenderer.class`、`BlueprintBookNetworking$CooldownHudPacket.class`；
 - `test_server.py 1201` 与 `test_server.py neoforge1211` 回归均 **PASS**；已部署到两个客户端实例与 pack1201 服务器（服务器用 rename-swap，无需停服）。
-- 按约定：**不提交 GitHub，等用户实测**。
+- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十【内置日语语音包（GPT-SoVITS 训练，打进 jar）】
 
-用户需求：「帮我训练一个语音包，日语，就用桌面上这个 API.bat 来进行训练。训练的内容就是目前游戏里的那些系统消息语音，打包放进 .jar 里。效果就是当触发了这些系统消息之后，会自动播放这个语音。可以在手册里调整开关和音量大小以及最小间隔，播放此语音时会暂时卡掉 tlm 原来的语音包，播放完成后解除，有比原生语音包更高的优先级。」
+需求：「帮我训练一个语音包，日语，就用桌面上这个 API.bat 来进行训练。训练的内容就是目前游戏里的那些系统消息语音，打包放进 .jar 里。效果就是当触发了这些系统消息之后，会自动播放这个语音。可以在手册里调整开关和音量大小以及最小间隔，播放此语音时会暂时卡掉 tlm 原来的语音包，播放完成后解除，有比原生语音包更高的优先级。」
 
 **一、语音素材（GPT-SoVITS 合成 → OGG）**
 - 用本机 GPT-SoVITS（`API.bat`，权重 `小酒狐-e15.ckpt` + `小酒狐_e8_s184.pth`、日语参考音 `この命ご主人様のために捧げますね.wav`）合成 **53 条日语台词**；
@@ -882,13 +882,13 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、配置与手册**
 - 新增 4 个配置项（两树）：`TTS_JAR_PACK_ENABLED`（默认开）、`TTS_JAR_PACK_VOLUME`（1.0，0.1~5.0）、`TTS_JAR_PACK_MIN_INTERVAL_S`（8，0~60）、`TTS_JAR_PACK_MUTE_NATIVE`（默认开）；
-- 配置面板「语音 → 内置日语语音包」4 行；**手册目录页新增「♪ 日语语音包设置」整页**（开关 + 音量 + 最小间隔，与「⚙ 自动复活设置」并排；输入延迟提交、越界钳制，关界面/返回时统一写盘）；四份 `lang/*.json` 补条目；手册「语音系统（TTS）」章节补写内置日语语音包段落。
+- 配置面板「语音 → 内置日语语音包」4 行；**手册目录页新增「日语语音包设置」整页**（开关 + 音量 + 最小间隔，与「自动复活设置」并排；输入延迟提交、越界钳制，关界面/返回时统一写盘）；四份 `lang/*.json` 补条目；手册「语音系统（TTS）」章节补写内置日语语音包段落。
 
-**验证**：两树全量编译零错误；jar 重建（1.20.1 = 6,927,410 字节 / 含 54 个 ogg 共 2,052,945 字节；1.21.1 = 6,937,705 字节）；1.20.1 与 1.21.1 服务器回归均 PASS；匹配自检（按 manifest 自身顺序 + contains 语义跑全部 49 条运行时消息样本）全部命中（仅 2 条"变量在中间"的样本是自检脚本无法拼全，运行时含映射片段必命中）。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等用户测试。**
+**验证**：两树全量编译零错误；jar 重建（1.20.1 = 6,927,410 字节 / 含 54 个 ogg 共 2,052,945 字节；1.21.1 = 6,937,705 字节）；1.20.1 与 1.21.1 服务器回归均 PASS；匹配自检（按 manifest 自身顺序 + contains 语义跑全部 49 条运行时消息样本）全部命中（仅 2 条"变量在中间"的样本是自检脚本无法拼全，运行时含映射片段必命中）。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等玩家测试。**
 
 ## 实测四百一十九【排班表快捷调整：点任务名进整页选择】
 
-用户需求：「排班表的快捷调整也引入和排班一样的机制，不再仅用 ◀ ▶ 翻页，而是点任务名进整页选择。」
+需求：「排班表的快捷调整也引入和排班一样的机制，不再仅用 ◀ ▶ 翻页，而是点任务名进整页选择。」
 
 **改动**
 - 背景：第 2 页「排班」的任务槽此前已支持「点任务名 → 整页任务选择」（实测四百零二/四百零六），但第 1 页「快捷设置」的任务行仍只有 ◀ ▶ 循环 + 点中间换下一个——任务多时要循环点十几下。本次把整页选择推广到快捷页。
@@ -898,11 +898,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 两侧 ◀ ▶ 箭头全部保留（旧习惯不变）；当前任务/当前槽的「●」标记按来源取对应当前值。
 - 渲染层选择页标题提示也随来源切换，避免快捷页误显示"填入第 N 时段"。
 
-**两树同步**（1.20.1 SRG / 1.21.1 Mojmap）。**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,901,239 字节，1.21.1 = 4,911,622 字节）；1.20.1 与 1.21.1 服务器回归均 PASS。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等用户测试。**
+**两树同步**（1.20.1 SRG / 1.21.1 Mojmap）。**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,901,239 字节，1.21.1 = 4,911,622 字节）；1.20.1 与 1.21.1 服务器回归均 PASS。已部署到两个客户端实例与 pack1201 服务器。**未提交 GitHub，等玩家测试。**
 
 ## 实测四百一十八【床铺互通：女仆床 ↔ 玩家床】
 
-用户需求：「让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床。」
+需求：「让女仆床和玩家床的代码互通。女仆和玩家可以互相使用对方的床。」
 
 **堵点（javap/CFR 实证）**
 - **女仆睡不了原版床**：TLM 的 `MaidBedTask`（REST 活动里唯一的睡觉行为）用 POI 只查 `InitPoi.MAID_BED`，且 `start` 里硬判 `state.is(InitBlocks.MAID_BED.get())` —— 原版 16 色床既不进这个 POI 类型，也不满足这个 `is()`。
@@ -925,14 +925,14 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 两方向共用配置 `misc.bedInterop`（默认开），面板「杂项 → 床铺互通」一行，关掉完全恢复 TLM 原版；四个 `lang/*.json` 补条目；手册新增「床铺互通（女仆床 ↔ 玩家床）」章节；
 - **neo 编译 classpath 顺序修正**：把 NeoForge 修补 jar 排到 vanilla 之前 —— `ServerPlayer$RespawnPosAngle` 在未修补 vanilla jar 里是**包私有**、在 NeoForge 修补版是 public，顺位反了「给女仆床实现 getRespawnPosition」编译不过（javac 实证）。
 
-**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,900,330 字节，1.21.1 = 4,910,712 字节）；1.20.1 与 1.21.1 服务器回归均 PASS（日志无任何 promaid 相关 mixin 报错）。已部署到两个客户端实例与 pack1201 测试服务器（服务器 jar 用 rename-swap 替换，重启后加载）。**未提交 GitHub，等用户测试。**
+**验证**：两树全量编译零错误；jar 重建（1.20.1 = 4,900,330 字节，1.21.1 = 4,910,712 字节）；1.20.1 与 1.21.1 服务器回归均 PASS（日志无任何 promaid 相关 mixin 报错）。已部署到两个客户端实例与 pack1201 测试服务器（服务器 jar 用 rename-swap 替换，重启后加载）。**未提交 GitHub，等玩家测试。**
 
 ## 实测四百一十七【手册内自动复活设置页】
 
-用户需求：「自动复活功能应该在手册里面也能够调整 CD 和开关。」
+需求：「自动复活功能应该在手册里面也能够调整 CD 和开关。」
 
 **改动**
-- 《详细介绍》章节目录页右下角新增 **「⚙ 自动复活设置」** 按钮，进去是一页 **总开关 + 复活延迟（秒）+ 复活血量比** 三项控件，改完「保存并返回目录」即时生效，不必再跳「模组详细配置」面板；
+- 《详细介绍》章节目录页右下角新增 **「自动复活设置」** 按钮，进去是一页 **总开关 + 复活延迟（秒）+ 复活血量比** 三项控件，改完「保存并返回目录」即时生效，不必再跳「模组详细配置」面板；
 - 输入交互完全照配置面板的既有管线：点击输入框显式聚焦并自跟踪 `activeBox`，键盘输入经 `charTyped`/`keyPressed` 直接转发（1.20.1 走 `m_5534_`/`m_7933_`）——避开 1.20.1 焦点链差异导致的「点得进打不了字」；数字文本延迟提交（输入时只校验+红/白字，离开本页或关闭界面时统一写入 + `SPEC.save()`），不在输入路径上写配置，杜绝旧版「每按键 `set()` 卡输入」；
 - 越界值钳制到配置声明范围（延迟 1~86400 秒、血量比 0.05~1.0），非法/空文本跳过并保留原值；
 - 「详细介绍」新增 **「女仆自动复活（v1.1.0）」** 章节：运作链路（死亡抓快照 → 墓碑标记 → 到期消失 → 重生点复活）、话语提示、血量比、保姆式测试步骤，以及 **在哪里调开关与 CD**；顺手把手册里一处过期的「详见第 20 章」改为按章节标题引用（插入新章节不再导致编号漂移）；
@@ -942,7 +942,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十六【女仆自动复活（新功能）】
 
-用户需求：女仆死亡后 60 秒，墓碑自动消失，她随即在主人出生点复活（也是 60 秒 CD）。
+需求：女仆死亡后 60 秒，墓碑自动消失，她随即在主人出生点复活（也是 60 秒 CD）。
 
 **一、死亡→墓碑→复活链路**
 - 监听 TLM 的 `MaidDeathEvent` 在死亡瞬间抓取女仆**完整存档 NBT**（`saveWithoutId`，此时背包/饰品尚未被搬走）；再监听 `MaidTombstoneEvent` 拿到墓碑引用，把「快照 + 主人 UUID + 到期刻 + 墓碑 UUID」写入新增的 `MaidAutoResurrect` 持久化表（SavedData 存主世界，跨维度共享，重启不丢）；
@@ -962,7 +962,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十五【彻底移除第三方软联动：爱憎分明 / 心契誓约 / 超越维度 / 精妙储存】
 
-用户口径：保留「按攻击力属性」的通用武器联动不动（tacz / 卓越前线 / 拔刀剑 / 万法皆通等模组武器照常参与判定与自动装备），只把**对特定第三方模组的专属联动**彻底删干净——爱憎分明、心契誓约、超越维度、精妙储存相关的一切代码与资源全下线。
+判定口径：保留「按攻击力属性」的通用武器联动不动（tacz / 卓越前线 / 拔刀剑 / 万法皆通等模组武器照常参与判定与自动装备），只把**对特定第三方模组的专属联动**彻底删干净——爱憎分明、心契誓约、超越维度、精妙储存相关的一切代码与资源全下线。
 
 **一、精妙储存 / 超越维度（存储联动全删）**
 - 删除 `com.maidsmart.storage` 整包：`BoundStorageInteractHandler`、`StorageBindingStore`（以及此前已删的 Beyond/Unified 系列）；
@@ -994,14 +994,14 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十四【主人免伤三层加固 + 移除第三方软联动（纯 TLM 独立版）】
 
-用户需求：再加保险——清除仇恨 + 取消女仆攻击主人的受击事件；同时删除对其他 mod 的软联动；覆盖两个正式版并更新主页面介绍。
+需求：再加保险——清除仇恨 + 取消女仆攻击主人的受击事件；同时删除对其他 mod 的软联动；覆盖两个正式版并更新主页面介绍。
 
 **一、主人免伤第三层（在四百一十三的"事件总闸 + 注入点过滤"之上）**
 - **定期清除仇恨**（`FriendlyFireGuard` 新增 ServerTick 扫描，每 2 秒）：凡女仆的 `ATTACK_TARGET` / 实体目标（`setTarget`）/ 复仇目标（`getLastHurtByMob`）是主人或同主友方 → 直接清掉（日志搜 `friendly-fire hate-clear`）。TLM 打雪仗等娱乐行为写入的目标不再残留成"敌对状态"；
 - **攻击事件取消**：1.20.1 增加 `LivingAttackEvent`（与 `LivingHurtEvent`/`LivingDamageEvent` 共三层）；1.21.1 为 `LivingIncomingDamageEvent`。女仆造成的主人/友方伤害在受伤链最上游即被取消；
 - 配合四百一十三的注入点过滤（战术 isActive/跳劈/横扫、中立威胁、自保反击含弹幕射箭、LLM 攻击工具）——**女仆对主人零伤害**。
 
-**二、删除第三方软联动（按用户口径：只删第三方 mixin + 存储/关系联动；保留按攻击力属性的通用武器逻辑）**
+**二、删除第三方软联动（按判定口径：只删第三方 mixin + 存储/关系联动；保留按攻击力属性的通用武器逻辑）**
 - 删除第三方 mixin：`LoveLoatheHungerGateMixin`（爱憎分明饥饿门控）、`MixinInteractionSittingAllow`（心契誓约拥抱/子女交互）、`MaidDebugPanelMixin`（心契誓约调试面板）、废弃的 `CallResponseChatSpamMixin`；
 - 删除 Beyond Dimensions（超越维度）存储联动：`BeyondBindingInteractHandler`/`BeyondBindingStore`/`UnifiedStorageItemHandler` 三个类、`beyond_bind_card`/`beyond_unbind_card` 两个物品（含模型/贴图/配方/语言）及其全部调用点（BlueprintLib 材料统计与取物、女仆酿造取物兜底、创造页签、主类注册）；
 - 删除关系联动：`RelationshipMemoryAdapter`（心契/爱憎关系记忆反射适配）及其调用点（AI 上下文关系标签、武器守卫儿童判断改回 `isBaby`）、建造心契交互锁反射、自保极端饥饿反射（爱憎分明 `HungerData`）、手册 Heartfelt 纪念日联动、配置面板「爱憎分明模组调试 / heartfelt 联动」两个板块；
@@ -1013,7 +1013,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十三【女仆绝不伤害主人/友方——雪地打雪仗后对主人跳劈修复】
 
-粉丝反馈：装了 mod 后带女仆到雪地，空闲模式会打雪仗，然后对主人触发攻击、冲主人跳劈，脱了盔甲一下打约 4 颗心；主手拿着刀打得更疼（武器伤害叠加）。
+问题：装了 mod 后带女仆到雪地，空闲模式会打雪仗，然后对主人触发攻击、冲主人跳劈，脱了盔甲一下打约 4 颗心；主手拿着刀打得更疼（武器伤害叠加）。
 
 **根因**：TLM 原版空闲模式在雪地有打雪仗行为（`MaidStartSnowballAttacking`），该行为会把【主人】写进女仆 brain 的 `ATTACK_TARGET`（雪球目标）。promaid 的单兵战术行为（`MaidCombatTacticsBehavior`，v1.5.202 起不再限定战斗任务）读到 `ATTACK_TARGET` 就接管走位 + 跳劈，用 `target.hurt(mobAttack, 攻击力×1.5+附魔)` 对主人打出**真实近战暴击伤害**（主手武器攻击力越高伤害越高 = "拿刀更疼"）。旧版只拦了"雪球 0 伤害触发参战"这一层（`AutoCombatSwitch`），拦不住 TLM 自己写攻击目标这条路径。
 
@@ -1048,7 +1048,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## v1.1.0 正式版【专用服务器兼容修复 ×2】
 
-粉丝反馈：mod 在专用服务器（Dedicated Server）上无法正常使用——两个独立的服务端崩溃，均已修复并实测验证。
+问题：mod 在专用服务器（Dedicated Server）上无法正常使用——两个独立的服务端崩溃，均已修复并实测验证。
 
 **修复一：主类内联配置界面 lambda 触发 RuntimeDistCleaner 拦截（issue #3）**
 - 根因：`ProMaidMod` 构造函数里内联注册配置界面扩展点，lambda 编译成主类合成方法，方法描述符带 `net.minecraft.client.gui.screens.Screen`；Forge 专用服务器加载主类时被 RuntimeDistCleaner 拦截 → `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER` → mod 加载失败、服务器启动中止；
@@ -1060,11 +1060,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 修复：不再调用 TLM 客户端工厂，改为服务端安全地自行构造 `ChatClientInfo`——语言取配置（默认 zh_cn），名字取女仆实体名，描述留空；
 - 验证：javap 实证 TLM 1.5.3 jar 中该方法带 `@OnlyIn(CLIENT)` 注解；修复后 62 mod 主整合包服务器启动 PASS、tick 正常运行。
 
-> 说明：开发者平时只玩单人模式，mod 一直按单人场景开发，未对专用服务器做过适配；感谢粉丝反馈这两个服务端问题，现已修复。若服务器上还有其他问题，欢迎继续反馈。
+> 说明：开发者平时只玩单人模式，mod 一直按单人场景开发，未对专用服务器做过适配；感谢反馈这两个服务端问题，现已修复。若服务器上还有其他问题，欢迎继续反馈。
 
 ## 实测四百一十二【回魂符提示语带上 CD 值】
 
-用户需求：防止玩家不知道收回魂符有冷却机制（常见误解："第二次死了怎么不收"），在系统提示原句"你的女仆生命值过低，已回到魂符中。"后面加"（存在CD，CD为 ?? 秒）"，数值取玩家配置的当前值。
+需求：防止玩家不知道收回魂符有冷却机制（常见误解："第二次死了怎么不收"），在系统提示原句"你的女仆生命值过低，已回到魂符中。"后面加"（存在CD，CD为 ?? 秒）"，数值取玩家配置的当前值。
 
 **实现（MaidSoulSpellGuard.tryReturnToSoulSpell）**：
 - 提示语改为运行时拼接：CD > 0 时 → "你的女仆生命值过低，已回到魂符中。（存在CD，CD为 N 秒）"（N = SOUL_SPELL_COOLDOWN_SECONDS 当前配置值，默认 60）；CD = 0（无冷却）时保持原句——"存在CD"为 0 会变成反话；
@@ -1076,7 +1076,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十一【贴身气泡文本池扩到 50 条——打工人毒鸡汤】
 
-用户需求：加点打工人毒鸡汤语录（"看到女仆傻乎乎的被半骗着说这些话也挺有意思的"），文本池扩到 50 条；同时强调文案要贴合"按日程干活"的实际情境，防止出戏。
+需求：加点打工人毒鸡汤语录（"看到女仆傻乎乎的被半骗着说这些话也挺有意思的"），文本池扩到 50 条；同时强调文案要贴合"按日程干活"的实际情境，防止出戏。
 
 **实现（ScheduleBubbleBehavior）**：
 - 文本池 30 → 50：新增 20 条毒鸡汤（上班第几个小时/下辈子换大扫帚/老板画的饼我饭量好/摸鱼是不可能摸鱼的/干满一百天给加餐等）；
@@ -1089,7 +1089,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十【排班贴身气泡——情绪价值彩蛋】
 
-用户需求：玩家靠近正处于排班状态的女仆时，女仆冒出气泡框对话，30 种可能文本，触发 CD 30 秒。
+需求：玩家靠近正处于排班状态的女仆时，女仆冒出气泡框对话，30 种可能文本，触发 CD 30 秒。
 
 **实现**：
 - 新增 ScheduleBubbleBehavior（core 优先级 48，任何任务都运行）——canUse 门禁：MISC_SCHEDULE_BUBBLE_ENABLED（默认开）+ ScheduleData.isOn（排班中）+ 非坐姿/骑乘 + 非自保 + 主人同维度且水平距离 < MISC_SCHEDULE_BUBBLE_RADIUS（默认 3.5 格）+ 每只女仆 30 秒冷却（NEXT_ALLOWED 按 UUID 记 gameTime，懒清理防膨胀）；
@@ -1105,7 +1105,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
 
-粉丝留言：视频里的搭高能不能改成女仆生存（maid_survival）那样的被动技能，而不是空闲状态才触发——"处于战斗模式但周围没威胁、没在真正打怪，也算另一种空闲"。
+问题：视频里的搭高能不能改成女仆生存（maid_survival）那样的被动技能，而不是空闲状态才触发——"处于战斗模式但周围没威胁、没在真正打怪，也算另一种空闲"。
 
 **机制盘点（先确认启动机制再动手）**：BridgeUpBehavior（core 245）唯一状态闸门 = isTaskOccupied。旧判定中【战斗任务（IAttackTask instanceof）无条件占用】——弓兵/宰杀站着发呆（周围无敌人/无牲畜）也被拦，正是"任务名挂空"的假性占用。挖矿/伐木早已是目标制（MINING/WOODING 找到目标才登记、无目标自动摘除）；烹饪/酿造/建造是站桩/蓝图任务需任务级硬闸（防搭路劫持离岗，实测一百七十四）。maid_survival 对照：它是 LivingTick 事件驱动的卡位检测架构，promaid 已有更完整的行为链，不照搬、只拆假性占用。
 
@@ -1123,7 +1123,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零八【排班页高亮当前时段行——一眼看到她在干什么】
 
-用户需求：女仆处于排班状态时，打开排班表要能一眼看出她现在在哪一段——例：早班、游戏时间 7 点，则"6:00~8:00"标签和"清雪"按钮变绿，整行被绿色框框住。
+需求：女仆处于排班状态时，打开排班表要能一眼看出她现在在哪一段——例：早班、游戏时间 7 点，则"6:00~8:00"标签和"清雪"按钮变绿，整行被绿色框框住。
 
 **实现（ScheduleBookScreen）**：
 - 当前槽计算：排班开关开（loadedOn）且客户端世界存在时，取 level dayTime（f_91073_.m_46468_），内联与调度器 ScheduleData.currentMinute 相同公式（%24000×3/50 → 0~1439 分钟），落在班次窗口内 → 槽号 = (minute-win0)/len；排班关闭或不在工作窗口（休息时段）不高亮；
@@ -1139,7 +1139,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零七【整页任务选择器残留重叠修复】
 
-用户截图（18:22）反馈：四百零六的整页选择界面仍然混乱——标题两行文字叠在一起、"空闲（清空）"按钮上叠着灰色提示、◀▶ 分页钮骑在"三叉戟攻击/枪械"按钮上、"农场"按钮被"← 返回排班"切腰。
+截图（18:22）问题：四百零六的整页选择界面仍然混乱——标题两行文字叠在一起、"空闲（清空）"按钮上叠着灰色提示、◀▶ 分页钮骑在"三叉戟攻击/枪械"按钮上、"农场"按钮被"← 返回排班"切腰。
 
 **根因（三处，全在 406 实现里）**：
 - 标题双绘：渲染主分支先在 TOP_TITLE_Y 画"XX 的排班"，选择页又在同一 y 画"选择任务"→重影；
@@ -1159,7 +1159,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零六【排班表任务选择改整页跳转——修 GUI 覆盖】
 
-用户反馈：四百零二的任务选择浮层面板出现严重 GUI 覆盖（面板压住"早班/晚班/全天"班次按钮），想要的样式 = promaid 手册那种整页跳转界面。
+问题：四百零二的任务选择浮层面板出现严重 GUI 覆盖（面板压住"早班/晚班/全天"班次按钮），想要的样式 = promaid 手册那种整页跳转界面。
 
 **修复（ScheduleBookScreen）**：
 - 任务选择从【浮层面板】改为【整页跳转】（手册阅读页同款）：点任务槽中间按钮 → 整页独占——标题行"选择任务（第 N 页）" + 左上"← 返回排班" + 内容区任务列表（每页 8 个 + "空闲（清空）"档）+ 分页 ◀▶；
@@ -1172,7 +1172,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：排班页点某时段任务名 → 整页跳到任务选择（清屏只剩标题+列表+返回+分页）→ 点击任务填回该时段并自动返回排班页（保留班次与其它时段编辑状态）。
 ## 实测四百零五【回魂符冷却并入战斗自保配置面板】
 
-用户要求："此 CD 在战斗自保中要有可配置面板。"
+要求："此 CD 在战斗自保中要有可配置面板。"
 
 改动（PromaidConfigScreen）：
 - 「收符冷却（秒）」行从「致死伤害自动回魂符」子分区移到「自保参数」子分区——与传送冷却/珍珠逃生冷却/治疗冷却等自保冷却参数并列，统一在"逃生与自保（被动保命）"面板页尾调参；
@@ -1183,7 +1183,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：手册配置 → 逃生与自保（被动保命）→ 自保参数 → 「收符冷却（秒）」可调；0 = 每次致死都收（无防抖振）。
 ## 实测四百零四【回魂符二次作战不收符——冷却起算点修正】
 
-用户实测："女仆收回魂符有 CD 吗？第一次都能触发，放下来作战第二次就正常死亡，不回魂符了。"
+实测："女仆收回魂符有 CD 吗？第一次都能触发，放下来作战第二次就正常死亡，不回魂符了。"
 
 **根因（TLM 释放链路反编译实证）**：收符瞬间把 `cooldown_until = 收符时刻 + 冷却` 写进女仆数据，数据随 ItemSmartSlab.storeMaidData 存进魂符；释放时 TLM 的 EntityMaid.m_20258_（readAdditionalSaveData 恢复路径）把魂符里的数据【原样读回女仆】——即女仆带着"收符时刻+180s"（剩余约 175 秒）的标记复生。第二次作战在释放后的冷却窗口内 → 致死也不收 → 正常死亡。完全符合日志口径。
 
@@ -1199,7 +1199,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：收起 → 放下 → 立即再被打死 = 正常死亡（冷却窗口）；等 1 分钟（或把冷却调 0）再死 = 再次收符。
 ## 实测四百零三【回魂符触发口径收紧——仅致死伤害且无保命物品】
 
-用户反馈："仅在受到致命伤害（且没有像不死图腾这样的保护）的时候会收回，低血量不回去，否则现有的自保行为就很小丑了。"
+问题：仅在受到致命伤害（且没有像不死图腾这样的保护）的时候会收回，低血量不回去，否则现有的自保行为就很小丑了。
 
 **改动（MaidSoulSpellGuard）**：
 - 删除低血量检查（onMaidTick 每秒轮询 + 收符血量阈值配置）——低血量交给自保（喝药/搭高/珍珠），不再抢收；
@@ -1213,7 +1213,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：①女仆低血量（如 20%）不消失、自保照常；②无保命物品时被打出致死伤害 → 收符；③带绀珠之药/不死图腾时致死 → 保命物品生效、不收符。
 ## 实测四百零二【低血量自动回魂符 + 排班表任务选择面板】
 
-用户两个优化建议：①排班表任务切换要跳转选择框（攻击和挖矿隔十几个任务，循环点太累）；②低血量自动回魂符（免去神龛复活），参考 maid_survival-1.9.5.jar 机制。
+玩家两个优化建议：①排班表任务切换要跳转选择框（攻击和挖矿隔十几个任务，循环点太累）；②低血量自动回魂符（免去神龛复活），参考 maid_survival-1.9.5.jar 机制。
 
 **功能一：低血量自动回魂符（MaidSoulSpellGuard，参考 maid_survival 的 MaidSoulSpellGuard）**
 - 机制：女仆血量 ≤ 阈值（默认 25%，每秒检查一次）或受到【致死伤害】（伤害 ≥ 当前血量，成功则取消伤害）→ 尝试收进主人背包里的空魂符（TLM 原版 SMART_SLAB_EMPTY）；
@@ -1226,7 +1226,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **功能二：排班表任务选择面板（ScheduleBookScreen）**
 - 排班页 6 个任务槽的中间任务名按钮：点击不再"换下一个"，改为弹出【任务选择面板】——分页（每页 8 个）列出全部任务 + "空闲（清空）"档，点选即填入该槽（◀▶ 上一个/下一个保留）；
-- 面板带暗红背景/标题/分页 ◀▶/✕ 关闭；当前槽已选任务标 ●。
+- 面板带暗红背景/标题/分页 ◀▶/关闭；当前槽已选任务标 ●。
 
 **顺带清理**：实测四百零一移除高地狙击时漏删的 COMBAT_SNIPE / COMBAT_SNIPE_HEIGHT 配置项（MaidSmartConfig + PromaidConfigScreen 配置行）一并删除。
 
@@ -1235,7 +1235,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：①女仆血量掉到 25% 以下（或被打出致死伤害）且主人背包有空魂符 → 女仆消失、魂符出现在主人背包（带"自动保存"标记）、主人收到提示；右键释放 → 女仆回到身边（血量按释放比恢复），冷却期内不再自动收；②排班表排班页点任务名 → 弹出任务列表直接点选，不再循环点十几下。
 ## 实测四百零一【移除垫高狙击——恢复旧版远程战斗】
 
-用户拍板："把远程武器攻击期间搭方块逻辑删掉，恢复旧版逻辑。" 垫高狙击（实测三百六十六起）经 387~400 多轮修复（会话静态化/单例/生命周期 SRG 修正/首 tick 续命）仍无法稳定——行为生命周期与 TLM Brain 的交互过于脆弱，用户放弃该功能。
+定夺："把远程武器攻击期间搭方块逻辑删掉，恢复旧版逻辑。" 垫高狙击（实测三百六十六起）经 387~400 多轮修复（会话静态化/单例/生命周期 SRG 修正/首 tick 续命）仍无法稳定——行为生命周期与 TLM Brain 的交互过于脆弱，玩家放弃该功能。
 
 **本次改动（全量摘除）**：
 - ProMaidExtension：删除 235 挂载（HighGroundSnipeBehavior.singleton()）；
@@ -1245,13 +1245,13 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - SelfPreservationBehavior：删除 isSniping 让位、两处 isTeleportBlocked 禁传检查（teleportHomeOnExit / teleportHome）、envDangerSoft 恢复 headInSolid 原判定（399 的 SNIPING 豁免一并移除）；
 - 删除 HighGroundSnipeBehavior.java（含 SnipeSession/OptionalTarget/Holder 内部类）。
 
-**恢复后的行为**：远程女仆 = TLM 原版远程战斗（弓/弩 strafe 走位 + 射击）+ 战术行为 rangedTick 风筝（拉开/逼近/绕圈，理想射程 ≥7 格）；自保 = 原版全链路（含传送兜底，仅自保会话内禁传保留——实测三百九十的用户设定）。不再有任何"远程攻击期间搭方块"逻辑。
+**恢复后的行为**：远程女仆 = TLM 原版远程战斗（弓/弩 strafe 走位 + 射击）+ 战术行为 rangedTick 风筝（拉开/逼近/绕圈，理想射程 ≥7 格）；自保 = 原版全链路（含传送兜底，仅自保会话内禁传保留——实测三百九十的玩家设定）。不再有任何"远程攻击期间搭方块"逻辑。
 
 部署：promaid-1.1.0.jar（4,910,702 字节）→ D:\\ 验证：jar 内无 HighGroundSnipeBehavior 类/引用/[snipe] 日志串、ProMaidExtension$1 无 235 挂载、构建脚本自动 purge 4 个残留类。
 
 ## 实测四百【首 tick 续命死锁——行为每 tick 停→启循环的根治】
 
-用户 399 实测："修了个啥？一点用都没有"。日志铁证（399 部署后窗口）：`onStop 114 条`与`"进入垫高状态" 115 条`一一对应、间隔恒 1 tick、无任何解除原因日志（无"外力传送/远离塔列/自保解除/垫块失败"）——行为每 tick stop→restart 循环，塔永远垫不到顶（enter=115 / build=25 / lockline=0 / topReached=0）。
+玩家 399 实测："修了个啥？一点用都没有"。日志铁证（399 部署后窗口）：`onStop 114 条`与`"进入垫高状态" 115 条`一一对应、间隔恒 1 tick、无任何解除原因日志（无"外力传送/远离塔列/自保解除/垫块失败"）——行为每 tick stop→restart 循环，塔永远垫不到顶（enter=115 / build=25 / lockline=0 / topReached=0）。
 
 **根因（Brain 生命周期时序）**：Brain 启动链 = tryStart（m_22554_，RUNNING + 调 onStart）→ 同周期 tick（m_22558_ 先查 canContinue）→ doTick。399 把 onStart 改成零操作后：canContinue 首 tick 查到空会话（SESSIONS 尚未建、SNIPING 空、base=-1、findTarget 恰为空）→ 立即 stop（onStop）→ 下一 tick 又 tryStart → 每 tick 停→启。397 版"onStart 清会话"恰好掩盖了这条死锁（行为启动时清、死锁时也清，循环照样空转），399 修对了清理方向却把首 tick 续命凭据也删了。
 
@@ -1264,7 +1264,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收点（latest.log 搜 [snipe]）：①"行为停止（onStop）"一行都不再出现（循环消失）；②一场战斗"进入垫高状态"1~2 条 + 垫块 #1→#5 连续递增 + "已达塔顶" + "钉柱段执行"每秒一条；③她站在塔上狙击不再乱走。
 ## 实测三百九十九【垫高摔落根因修复——Behavior 生命周期 SRG 语义反转 + 自保窒息误报打断】
 
-用户三测反馈（弓打尸壳）：②弓模式垫高每次只垫 2 块就掉；③自主战斗同样；新问题④持弓却向尸壳贴脸。398 日志层一击命中三个根因：
+玩家三测反馈（弓打尸壳）：②弓模式垫高每次只垫 2 块就掉；③自主战斗同样；新问题④持弓却向尸壳贴脸。398 日志层一击命中三个根因：
 
 **根因①【Behavior 生命周期 SRG 语义搞反】**（原版字节码铁证：Behavior.m_22554_ tryStart 成功后调 m_6735_=onStart；停止走 m_22562_→m_6732_=onStop）：旧版把全部清理写进了 m_6735_（实际是 onStart）=【每次启动都清空会话】，真 onStop（m_6732_）漏覆写。且默认构造 super(emptyMap)=60 tick 运行时长——3 秒超时自动停。行为 stop→restart 循环时每次重启会话归零（日志"进入垫高状态"每 1~5 tick 一条、base=-1、built 恒 1-2、全程 0 条"钉柱段执行"）。
 
@@ -1282,7 +1282,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测三百九十八【轨迹 + 伤害双层日志——定位"怎么摔的"】
 
-用户要求：加一层日志检测女仆运动轨迹与行为，确定摔下来是怎么摔的、以及所受伤害类型。latest.log 搜 `[snipe]`（垫高+轨迹）与 `[maidhurt]`（伤害）两类过滤。
+要求：加一层日志检测女仆运动轨迹与行为，确定摔下来是怎么摔的、以及所受伤害类型。latest.log 搜 `[snipe]`（垫高+轨迹）与 `[maidhurt]`（伤害）两类过滤。
 
 **轨迹日志**（HighGroundSnipeBehavior.m_6725_，垫高状态或坠落中每 10 tick 一条，字段已验证 SRG）：
 `轨迹 x=… y=… z=… vert=… hspd=… fall=… 着地=true/false`
@@ -1325,7 +1325,7 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测三百九十五【全链路诊断日志】
 
-用户要求：把垫高狙击整条链路打上日志，方便后续检查。latest.log 搜 `[snipe]` 过滤。
+要求：把垫高狙击整条链路打上日志，方便后续检查。latest.log 搜 `[snipe]` 过滤。
 
 **事件日志（每次一行）**（HighGroundSnipeBehavior）：
 - 进入垫高状态（塔基 y / 目标高 h / 敌人距离）
@@ -1346,11 +1346,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测三百九十四【修复：垫块锚定塔列——"4 格柱就摔、第 5 块从未垫成"】
 
-用户关键观察："每次都是 4 格柱子就摔下去，搭建 5 个这个操作从来没完成过，每次都是达到一定数量之后因为拥有速度从塔上摔下来。"
+玩家关键观察："每次都是 4 格柱子就摔下去，搭建 5 个这个操作从来没完成过，每次都是达到一定数量之后因为拥有速度从塔上摔下来。"
 
 javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTask）**直连 MoveControl（m_21566_→m_24988_(FF) 施加横向速度），完全绕开实测三百九十三拦截的 MoveToTargetSink/WALK_TARGET 链路**（393 只掐断了 MaidRangedWalkToTarget 那一路）。即速度归零（瞬态乘 0）也管不住它直接写速度。
 
-推论链（与用户观察完全吻合）：
+推论链（与玩家观察完全吻合）：
 - 垫块瞬间（beginWalkOn 12 tick 窗口）strafe 每 tick 拉她横向位移；
 - snipeBuildUp 的 place 用实时 blockPosition（m_20183_()）取格 → 每块垫偏一格、垫歪的块不在柱心正上方；
 - lockColumn 把她钉回柱心时柱心正上方是空气 = 悬空 → 带速度摔离塔列；
@@ -1364,9 +1364,9 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百九十三【垫高状态套用建造同款静止——塔顶乱走根治】
 
-用户（userselect 引用）："没有怪阻拦，搭得好好的，女仆自己从塔上乱走，然后摔下去。"用户指明方向："搭完却仍在移动，需要套用一个静止的逻辑，建造状态是个不错的方向，[垫高状态]赋予一个类似于建造的状态。"
+玩家（userselect 引用）："没有怪阻拦，搭得好好的，女仆自己从塔上乱走，然后摔下去。"玩家指明方向："搭完却仍在移动，需要套用一个静止的逻辑，建造状态是个不错的方向，[垫高状态]赋予一个类似于建造的状态。"
 
-排查确认根源：TLM 远程攻击的 strafe 走位行为（MaidRangedWalkToTarget / SetWalkTargetFromAttackTargetIfTargetOutOfReach）每 tick 都写 WALK_TARGET 让女仆横移走位。钉柱（setPos 回柱心）与这些移动输入是同 tick 先后手——位置校准永远慢半拍；移速×0 挡横向推力但挡不住"每次都被 AI 挪一步"。建造状态所以稳（粉丝实测），是因为它不止事后清理，而是从源头掐断移动意图。
+排查确认根源：TLM 远程攻击的 strafe 走位行为（MaidRangedWalkToTarget / SetWalkTargetFromAttackTargetIfTargetOutOfReach）每 tick 都写 WALK_TARGET 让女仆横移走位。钉柱（setPos 回柱心）与这些移动输入是同 tick 先后手——位置校准永远慢半拍；移速×0 挡横向推力但挡不住"每次都被 AI 挪一步"。建造状态所以稳（反馈实测），是因为它不止事后清理，而是从源头掐断移动意图。
 
 实现（MaidMoveSuppressMixin）：新增 SNIPING（垫高状态）分支——与工作站桩【彻底静止】同档：清 WALK_TARGET + 停导航 + 取消 MoveToTargetSink 本 tick。TLM 远程 strafe 写的 WALK_TARGET 从源头不执行 → 塔顶零移动意图，比钉柱/冻结更根本（不是"推不动"，是"根本没被要求动"）。仅影响移动：弓的瞄准/射击不走此 sink，攻击不受影响（正是"此状态不影响攻击，只影响移动"的规格）；状态解除（clearSnipe/stop 移除 SNIPING 标记）即恢复移动。
 
@@ -1376,11 +1376,11 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百九十二【修复：三叉戟被误判近战武器】
 
-用户询问自动切换武器逻辑里三叉戟算近战还是远程。查证结果：任务层三叉戟 = 远程（isRangedTask 白名单五件套 + 关键词 trident）；但 **HighGroundSnipeBehavior.hasMeleeWeapon 用攻击力属性口径，原版唯一带攻击力的远程武器（三叉戟，9 点）被误判为"近战武器"**。
+玩家询问自动切换武器逻辑里三叉戟算近战还是远程。查证结果：任务层三叉戟 = 远程（isRangedTask 白名单五件套 + 关键词 trident）；但 **HighGroundSnipeBehavior.hasMeleeWeapon 用攻击力属性口径，原版唯一带攻击力的远程武器（三叉戟，9 点）被误判为"近战武器"**。
 
 后果：自动指派三叉戟任务 + 包里只有三叉戟（或手持三叉戟）+ 敌人近身 → isTaskAutoAssigned && hasMeleeWeapon = true → 不垫高。但实际没有剑可切、自动切换也不会切去近战任务（三叉戟任务本身就是远程）——她既不垫高也不切近战，近身白挨打。
 
-修复：hasMeleeWeapon 排除 TridentItem（s.m_41720_() instanceof TridentItem → 跳过）——三叉戟按用户口径算远程，自动指派时近身走垫高流程。其余判定（剑/斧/锄/拔刀剑/史诗战斗武器）不变。
+修复：hasMeleeWeapon 排除 TridentItem（s.m_41720_() instanceof TridentItem → 跳过）——三叉戟按判定口径算远程，自动指派时近身走垫高流程。其余判定（剑/斧/锄/拔刀剑/史诗战斗武器）不变。
 
 部署：promaid-1.1.0.jar（4,919,993 字节）→ D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\（javap 验证 hasMeleeWeapon 方法体内含 TridentItem 判定）。
 
@@ -1388,7 +1388,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百九十一【修复：解除后放生塔顶乱走摔下】
 
-用户反馈："没有怪阻拦、搭得好好的，女仆自己从塔上乱走然后摔下去"。
+问题：没有怪阻拦、搭得好好的，女仆自己从塔上乱走然后摔下去。
 
 根因：safeDismount 用 findStandNear 从【塔基格】起扫落点——塔基格被她自己垫的第一块方块占着，扫描向下全是实心地面、向上第一个可站格是塔基+1（= 塔顶），传送等于原地踏步；状态却已解除（半径 8 无敌人/方块耗尽路径），下一 tick 行为停止、TLM 游走 AI 接管，塔顶没有钉柱没有冻结 → 乱走两步摔下。"没有怪阻拦"正是触发解除路径的场景。
 
@@ -1403,12 +1403,12 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百九十【自保模式禁止传送（玩家日程表手动传送除外）】
 
-用户规则：女仆进入自保模式后禁止传送；玩家手动用日程表传送除外，依旧可行。
+规则：女仆进入自保模式后禁止传送；玩家手动用日程表传送除外，依旧可行。
 
 排查确认外部传送面早已封闭：跨维度跟随/同维度拉回/一键集合外的自动传送都读 PRESERVE_TAG（实测一百九十六），TLM 原生传送有 FollowPreserveMixin/MaidTeleportPreserveMixin 拦截。唯一还在自保期间传她的是**自保自己的逃生传送**，本次全部停用：
 
 - **围困传送停用**（SelfPreservationBehavior）：围困 10 秒（塔上无回血资源）→ 原来清搭高状态+传送回主人身边；现在只清 heallessSiegeTicks 计数防无限累积，不传送、不清搭高状态（没传送就不该放弃塔位），本地逃生（珍珠/药水/走位/搭高/反击）接管。
-- **兜底传送停用**：teleportHome 顶部加会话闸（isSelfPreserving → return）——岩浆环境危急/血量 <15%/弹尽粮绝（无方块无珍珠）三种兜底传送全部不再触发。【后果提示】弹尽粮绝死局（被围殴、无方块、无珍珠、走位拉不开）原先靠传送保命，现在会战斗到死——本地逃生接管，用户已确认此取舍。
+- **兜底传送停用**：teleportHome 顶部加会话闸（isSelfPreserving → return）——岩浆环境危急/血量 <15%/弹尽粮绝（无方块无珍珠）三种兜底传送全部不再触发。【后果提示】弹尽粮绝死局（被围殴、无方块、无珍珠、走位拉不开）原先靠传送保命，现在会战斗到死——本地逃生接管，玩家已确认此取舍。
 - **不受影响的通道**：①玩家日程表召唤（ScheduleNetworking.summonAll/summonOne 一键集合，玩家主动意图优先）；②TLM 排班换岗传送（TLM 自身通道）；③解除自保的归位传送（teleportHomeOnExit 在会话结束、标记清除之后才发，三七十八"解除即传"功能保留）；④魂符收回（实体移除，非位置传送）。
 - 配套：teleportHome 方法与全部安全护栏（主人身边安全判定/落点闸/冷却）原样保留，只是会话期间被闸拦——随时可逆。
 
@@ -1416,9 +1416,9 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 验收点：①自保中（低血/围困/弹尽粮绝）女仆不再消失传回家，全程本地战斗；②被围困在塔上 10 秒不再被传走、塔位不丢；③玩家用日程表/一键集合召唤她 → 照常传送；④解除自保 → 立刻传送回主人身边（三七十八）照常；⑤自保期间主人切维度 → 不再被自动跨维拽走（一百九十六原有行为不变）。
 
-## 实测三百八十九【垫高状态·用户重写全套逻辑】
+## 实测三百八十九【垫高状态·玩家重写全套逻辑】
 
-用户重写了高地狙击的完整规格，HighGroundSnipeBehavior 按新逻辑整文件重写：
+玩家重写了高地狙击的完整规格，HighGroundSnipeBehavior 按新逻辑整文件重写：
 
 - **进入条件重述**：自主战斗/自动切换武器切到远程 + 敌人近身 → 先查近战武器（自动指派时），有近战武器走切换近战流程不垫高（原已实现）；没近战武器但有方块 → 进入【垫高状态】。手动指派的远程任务照旧可进（canUse 与入口评估双挡，含"行为存活中自保才激活"的时序兜底）。
 - **垫高高度 8→5 格**：COMBAT_SNIPE_HEIGHT 默认 5（范围 2~12 不变），配置注释/配置界面/zh_cn 文案同步更新。
@@ -1435,7 +1435,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百八十八【全盘审查·塔柱循环防 bug 修复两处】
 
-用户要求对塔柱循环（三八七）做全盘审查。跨文件联动复核了 PlacedBlockTracker/自保传送闸/AutoCombatSwitch 自动指派判定/部署 jar 新鲜度（javap 验证 markTeleportBlocked=3 处、safeDismount=5 处引用），发现并修复两个真 bug：
+要求对塔柱循环（三八七）做全盘审查。跨文件联动复核了 PlacedBlockTracker/自保传送闸/AutoCombatSwitch 自动指派判定/部署 jar 新鲜度（javap 验证 markTeleportBlocked=3 处、safeDismount=5 处引用），发现并修复两个真 bug：
 
 - **战斗方块刷新垂直带 vs 塔高（塔底溶解 bug）**（PlacedBlockTracker + SelfPreservationBehavior）：靠近刷新的垂直带是共享硬编码 ±6 格，而狙击塔默认 8 格——她站上塔顶后，塔底两格方块（垂直差 6.5~7.5）够不到刷新带，30 秒寿命到期后塔从底下开始逐格溶解（顶部方块因 ownerOn/±6 带持续刷新，人不会掉，但塔在狙击中烂掉）。修复：垂直带参数化（构造器第三参），桥/搭路类保持 6.0 不变，战斗方块表（COMBAT_TRACKER）提到 12.0，覆盖满配 12 格塔。0.5 格水平半径不变——只有她自己柱子上的方块会续命，离开塔 30 秒必回收的语义不受影响。
 - **无目标+有威胁时地面/半柱冻结无上限**（HighGroundSnipeBehavior）：目标记忆丢失分支的"钉住等再锁定"只该发生在塔顶（塔上安全）。被打落地/攀爬中目标没了时，ot==null 提前 return 导致建塔分支不跑、冻结却不撤——她以 0 速僵在地面或半柱上挨打且永不恢复（威胁扫描判"仍有威胁"就无限等）。修复：非塔顶（用实时 Y 与塔基差判定）无目标等待封顶 40 tick（2 秒），到点 clearSnipe + safeDismount 传回塔脚交还正常 AI（重新索敌/走位/反击；再满足触发条件会开新会话重起塔）。塔顶"钉住等再锁定"行为保留。
@@ -1446,7 +1446,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百八十七【塔柱完整循环：不滑出 + 全程禁传（排班放行）+ 被打下去再建一根】
 
-用户拍板的完整效果链：垫高后不再滑出自己垫的柱子；期间 30 秒禁传送（但玩家可以通过排班表主动触发传送）；在柱子上安心狙击敌人；被敌人打下去之后想办法再建一根柱子，重复循环。本次补齐三处缺口，"再建一根"的机制（落地重定基 + 完全承诺建塔，实测三百六十八）本身已就位：
+定夺的完整效果链：垫高后不再滑出自己垫的柱子；期间 30 秒禁传送（但玩家可以通过排班表主动触发传送）；在柱子上安心狙击敌人；被敌人打下去之后想办法再建一根柱子，重复循环。本次补齐三处缺口，"再建一根"的机制（落地重定基 + 完全承诺建塔，实测三百六十八）本身已就位：
 
 - **禁传闸会话全程刷新**（HighGroundSnipeBehavior）：此前只在每块垫成瞬间刷新 30 秒闸，塔上狙击一超过 30 秒闸就过期，自保的围困传送会把狙击中的她拽走、打断"安心狙击"。现在建塔/塔顶期间每 tick 刷新——"此期间"全程禁传，收摊后仍保留 30 秒尾闸。
 - **传送识别·排班表放行**：会话激活期间水平位置一 tick 跳 >3 格且水平速度≈0 = 被外力传送（排班表换岗传送等）→ 立即收摊放行（清标记/钉柱/冻结），残留的钉柱不会把她从传送落点再拽回旧塔。大击退的位移同样可能 >3 格，但伴随高速度（hvsq≥0.25），与传送区分 → 保留会话，落地重定基重起塔，正是"被打下去就再建一根"。
@@ -1456,7 +1456,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 验收点：①垫高+塔顶全程零滑动（实测三百八十六速度归零冻结）②狙击期间自保传送全程被拦（不再只保 30 秒）③换排班表 → 她被正常传走、不回拽、标记/冻结无残留 ④塔被打掉/被大击退轰飞 → 落地原地再建一根柱子继续狙击，循环往复 ⑤收摊后 30 秒尾闸内解除归位传送改走路（预期行为）。
 
-## 实测三百八十六（用户："失效，女仆还是会滑出去"——移动速度归零冻结）
+## 实测三百八十六（问题：失效，女仆还是会滑出去——移动速度归零冻结）
 
 - 【为什么钉柱压不住】setPos 钉柱与 AI 的移动输入是同一 tick 内的"先后手"：我们的 tick 先钉回去，弓 AI 的 strafe/游走输入在后半段的 travel 里照样把她推出去——位置校准永远慢半拍，残留滑动位移。
 - 【决定性手段：移动速度归零】狙击会话期间给女仆挂瞬态属性修饰符（MOVEMENT_SPEED × 0，MULTIPLY_TOTAL）——**AI 的移动输入乘上 0 速度 = 物理上推不动她**，strafe/游走/寻路全部失效。攀爬推送/击退/重力走 deltaMovement 通道不受影响（垫高照常、被打会退、会下落）。
@@ -1465,44 +1465,44 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【保留】无条件钉柱/edgeGuard/防窒息/水平速度清零/禁传 30 秒/收摊传回塔脚，全部不变（钉柱现在与速度冻结互为双保险）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,919,796 字节）。
 - 待实测：①垫高+塔顶全程零滑动（这是速度归零的直接验收点）②收摊后/狙击结束 → 移动能力立即恢复（跟得上人、走得了路）③下线重登 → 无残留 0 速 ④垫高爬升不受影响。
-## 实测三百八十五（用户："垫高后站在柱子上还有移动行为"——塔顶也钉回柱心，全程无条件钉柱）
+## 实测三百八十五（问题：垫高后站在柱子上还有移动行为——塔顶也钉回柱心，全程无条件钉柱）
 
 - 【根因】潜行边界钳制只能让她"贴边滑动"：塔顶虽然不走路了，但弓 AI 的横向 strafe 每 tick 都在推她，edgeGuard 拦在方块边上但拦不住"贴着边来回滑"（= 站在柱子上仍有移动行为）。要站桩不动只有钉回柱心一条路。
 - 【修复】lockColumn 改回**全程无条件钉柱**（自保同款，攀爬期与塔顶统一）：每 tick 无条件 setPos 钉回柱心（≤2.5 格），被轰飞 >2.5 格仍然解锁掉落、落地重定基重起塔（三百八十二"去掉任意距离拉回"的取舍保留）。edgeGuard 保留作第二层边界兜底。
 - 【定稿口径】狙击会话全程 = 零移动钉柱（垫高+塔顶一致），射击/索敌/收摊判定照常并行；收摊下塔 = 传回塔脚（三百八十三）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,919,225 字节）。
 - 待实测：①垫高全程钉在柱心不动 ②塔顶站桩输出全程钉在柱心不动（只有转身高视目标）③被强击退/爆炸炸飞 >2.5 格 → 掉落落地重定基重起塔 ④怪全死 → 传回塔脚。
-## 实测三百八十四（用户："还是会掉下去，这才是问题关键，哪怕威胁未解除，女仆垫高时还是有移动行为"——攀爬钉柱恢复自保同款无条件钉回）
+## 实测三百八十四（问题：还是会掉下去，这才是问题关键，哪怕威胁未解除，女仆垫高时还是有移动行为——攀爬钉柱恢复自保同款无条件钉回）
 
 - 【根因】实测三百八十一给攀爬期钉柱加的"偏出 0.3 格才拉"软阈值是错误设计：TLM 移动 AI 每 tick 都在推她，软阈值 = 允许她在柱内被推来推去（垫高期仍有可见移动行为），被一步步挤出塔沿掉下去。自保的钉柱是**每 tick 无条件钉回柱心**——这正是"自保能稳定成柱、狙击会掉"的残余差距。
 - 【修复】攀爬期（!onTower）钉柱改回自保同款：**每 tick 无条件 setPos 钉回柱心**（≤2.5 格；>2.5 格解锁落地重定基）——垫高期零移动，贴着柱子长上去。
 - 【分工定稿】垫高攀爬期 = 无条件钉柱（零移动）；塔顶站桩 = 潜行机制兜底（edgeGuard 边界钳制，无位置拉扯，三百八十二拍板不变）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,919,252 字节）。
 - 待实测：①垫高全程女仆钉在柱心不动，一路垫到 8 格顶 ②塔顶站桩输出 → 潜行钳制兜住不出格 ③被打下塔 → 正常落地重定基重起塔。
-## 实测三百八十三（用户："女仆还是会掉下去，并且会进入一个诡异的悬空状态"）
+## 实测三百八十三（问题：女仆还是会掉下去，并且会进入一个诡异的悬空状态）
 
 - 【悬空状态根因】实测三百八十的"速度降为 0"三维全清把**重力也清了**——她离塔下落时每 tick 垂直速度被清零，只剩重力逐 tick 累积 ≈ 1.5 格/秒的慢速漂浮下落（诡异悬空）。改回**只清水平、垂直归还物理**（水平清零继续压放风筝，垂直交给重力/击退/下落）。
 - 【掉下去根因】收摊放生后的乱走：塔上收摊（目标死/无威胁）后潜行钳制随会话一起停，TLM 游走 AI 把她从塔边带走摔下 8 格。改为**收摊下塔 = 直接传回塔脚**（沿用实测三百七十三"直接传送比走下去实用"的拍板）：三个塔上收摊点（目标丢失/丢视野远离/无威胁）统一走 safeDismount——findStandNear 安全落点判定（主人身边传送同款）传回自己塔基旁实地，摔伤归零；找不到落点留在塔上不冒险。
 - 【不受影响】潜行式边界钳制/攀爬期钉柱/清寻路停导航/水平速度清零/walkOn 推送/防窒息/禁传 30 秒闸全部保留；顶格 >10 格远程离塔收摊点不需要 dismount（人已不在塔上）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,919,266 字节）。
 - 待实测：①战斗中塔顶站桩 → 不再漂浮不再掉落 ②怪全死 → 塔上直接传回塔脚，无摔伤 ③被强击退打下塔 → 正常落地（不再慢速漂浮），按重定基重新起塔或继续战斗。
-## 实测三百八十二（用户 userselect："被击飞则从任意距离拉回塔顶（塔顶无松手）——这个机制去掉，现在只需要负责垫高就可以了，其他的都由潜行机制来兜底"）
+## 实测三百八十二（玩家 userselect："被击飞则从任意距离拉回塔顶（塔顶无松手）——这个机制去掉，现在只需要负责垫高就可以了，其他的都由潜行机制来兜底"）
 
 - 【按拍板精简】去掉三百八十一的"塔顶无松手、任意距离拉回柱顶"——**钉柱（lockColumn 的位置拉扯）只负责垫高攀爬期**：偏出 0.3 格拉回柱心（0.3 内微动不管防抖）、被击飞 ≤2.5 格强拉回、>2.5 格解锁落地重定基。
 - 【塔顶全交潜行机制兜底】塔顶（onTower）不做任何位置拉扯：柱内微动不管、到边走不动（edgeGuard 潜行同款边界钳制——脚下有支撑就把位置钳在支撑方块中心 ±(0.5-半宽) 出不了格）；被击飞落地后由重定基/重起塔自然兜底。
 - 【不受影响】清寻路/停导航/速度清零/walkOn 攀爬推送/防窒息/边缘钳制/人离塔列 >10 格收摊/威胁扫描垂直半径 10/丢视野水平口径，全部保留。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,918,968 字节）。
 - 待实测：①塔顶站桩期间小幅击退 → 边界钳制兜住不出格 ②强击退/爆炸炸飞 → 会掉下塔、落地后按重定基逻辑重新起塔（可接受的取舍）③攀爬期垫块 → 依旧稳定成柱。
-## 实测三百八十一（用户："手动远程可以搭出柱子了，但打完柱子之后不喜欢站在上面，而是乱动掉下去，这个问题一直修不好。我觉得可以套玩家的潜行机制"）
+## 实测三百八十一（问题：手动远程可以搭出柱子了，但打完柱子之后不喜欢站在上面，而是乱动掉下去，这个问题一直修不好。我觉得可以套玩家的潜行机制）
 
 - 【真凶一：塔顶收摊误判（威胁扫描框够不到地面）】hasNearbyThreat 扫描框垂直 ±4 格——人站 8 格塔顶时框只覆盖塔身中部，**塔脚下的怪根本扫不到** → "3 秒无威胁"在交火中误判 → 她被放生 → 乱动掉下去。垂直半径 4→10。
 - 【真凶二：丢视野收摊的"远处"口径被塔高击穿】怪贴塔基时 3D 距离 = √(塔高²+水平²) ≈ 8.5 格恒 >4——三百七十六"目标在远处丢视野才收摊"的口径在 8 格塔上永远成立：视线被塔角挡 3 秒就收摊放生。改**水平距离**口径：目标水平 ≤4 格（就贴在塔脚下，摸不到塔顶的她）→ 钉住等它绕开；真正水平远离（>4）丢视野 3 秒才收摊。
 - 【真凶三：钉柱"偏出 1 格即松手"】被击推出 1.1 格钉柱就解锁，AI 再推一把人就出塔——松手后 edgeGuard 又因脚下悬空（半空）失去支撑判定失效。这是"击退+走位一步步把人挤出塔"的元凶。
-- 【玩家潜行式钉柱】（用户："套用玩家的潜行机制"；引擎的 maybeBackOffFromEdge 是 Player 专属，javap 实证 LivingEntity 不调用——把机制本身搬过来）三段式：**①柱内微动不管**（不做每 tick 中心吸附——吸附与 TLM 移动 AI 互相拉扯就是"乱动"抖动源，偏出 0.3 格内交给边界钳制）；**②到边界走不动**（edgeGuard 潜行同款：脚下有支撑就把位置钳在支撑方块中心 ±(0.5-半宽)，出不了格）；**③被击飞拉得回来**（塔顶无距离上限——1 格宽的塔顶不存在"塔外的合法位置"，被击退/炸飞多远都拉回柱顶；攀爬期 ≤2.5 格，>2.5 落地重定基重起塔）。
+- 【玩家潜行式钉柱】（问题：套用玩家的潜行机制；引擎的 maybeBackOffFromEdge 是 Player 专属，javap 实证 LivingEntity 不调用——把机制本身搬过来）三段式：**①柱内微动不管**（不做每 tick 中心吸附——吸附与 TLM 移动 AI 互相拉扯就是"乱动"抖动源，偏出 0.3 格内交给边界钳制）；**②到边界走不动**（edgeGuard 潜行同款：脚下有支撑就把位置钳在支撑方块中心 ±(0.5-半宽)，出不了格）；**③被击飞拉得回来**（塔顶无距离上限——1 格宽的塔顶不存在"塔外的合法位置"，被击退/炸飞多远都拉回柱顶；攀爬期 ≤2.5 格，>2.5 落地重定基重起塔）。
 - 【配套】人已远离塔列 >10 格（解除归位传送后）→ 不钉柱直接收摊（防残留塔基把人从主人身边再拽回旧塔）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,918,956 字节）。
 - 待实测：①塔顶站桩输出期间骷髅远射/近战怪贴塔 → 全程钉在塔顶不乱动不掉落 ②被击退/爆炸炸飞 → 拉回塔顶继续输出 ③怪贴塔基绕圈挡视线 → 钉住不收摊 ④怪全死 3 秒 → 正常收摊跳下 ⑤解除自保传送归位 → 不会再被残留塔基拽回去。
-## 实测三百八十（用户：自主战斗远程只垫一个方块就继续游走成不了柱；手动远程任务触发不了垫高只触发旧版近战反击——修复建议："对机制进行更替，触发垫高以后立刻停止所有移动逻辑速度降为0，套用自保逻辑的垫方块立刻逐渐垫8个方块，并禁止传送30s"）
+## 实测三百八十（问题：自主战斗远程只垫一个方块就继续游走成不了柱；手动远程任务触发不了垫高只触发旧版近战反击——修复建议："对机制进行更替，触发垫高以后立刻停止所有移动逻辑速度降为0，套用自保逻辑的垫方块立刻逐渐垫8个方块，并禁止传送30s"）
 
 - 【"垫一块就游走"根因】实测三百七十七的建塔期复查门禁（敌人>贴身+2/姿态失效→弃塔）与 TLM 弓手 AI 的后撤放风筝互相打架：垫一块后 AI 一拉开距离就触发弃塔→人回风筝循环→敌人再贴身再垫一块——永远成不了柱。
 - 【机制更替·完全承诺】触发条件只在首块前全量复查（敌人贴身+远程姿态+有方块+自动任务时无近战武器可切）；**首块一垫=完全承诺：建塔期不再有任何放弃判定**，钉柱+清寻路/停导航+**速度三维清零**（攀爬推送时保留垂直）一路垫到塔顶；垫块节奏 4→3 tick。
@@ -1513,7 +1513,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【配套】目标丢失且人已远离塔列（>4 格，如被传送归位后）→ 立即收摊不等 20 tick（防传送后钉柱段原地定住 1 秒）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,918,584 字节）。
 - 待实测：①自主战斗弓女仆被近身 → 原地定住一路垫满 8 格站桩输出，全程不再游走 ②手动远程任务女仆被近身 → 同样起塔（包里有剑也搭）③塔上期间自保触发 → 不传送、不被拽走，反击照常 ④怪全死 3 秒 → 收摊跳下，方块 30 秒回收 ⑤泡水/岩浆 → 立即放弃塔位正常逃生。
-## 实测三百七十九（用户："为啥自主战斗老喜欢切换到魔法？明明我只给了原版武器"——模组任务凭空进池实锤与修复）
+## 实测三百七十九（问题：为啥自主战斗老喜欢切换到魔法？明明我只给了原版武器——模组任务凭空进池实锤与修复）
 
 - 【日志实证】latest.log：`combat pools: maid=汉服酒狐 melee=[touhou_little_maid:attack,] ranged=[maidspell:spell_combat_melee,maidspell:spell_combat_far,]` + `retune: touhou_little_maid:attack -> maidspell:spell_combat_far (dist=14.9)`——女仆没有弓（原版 ranged_attack 根本没进池），两个万法皆通魔法任务却进了远程池，远距离被切去魔法。
 - 【根因（javap 反汇编实证）】万法皆通 SpellCombatMeleeTask.isWeapon 字节码为 `iconst_1; ireturn`——**恒返回 true**（hasSpellBook 同样恒 true）：背包里任何物品（原版剑/食物都行）都被认作"魔法武器"，两个魔法任务凭空进池；池内有模组任务时原版任务整体让位（实测一百八十一规则）→ 原版任务被挤掉。
@@ -1521,21 +1521,21 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【新配置】`模组任务参与自主切换`（COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS，默认开）：关 = 模组任务完全不参与自主切换，只用原版任务（近战/弓/弩/三叉戟/弹幕/枪械）；配置界面战斗页 + zh_cn lang 同步。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,917,857 字节）。
 - 待实测：①只给剑 → 自主战斗全程近战追击，不再切魔法（日志 combat pools 的 ranged=[] 为空）②只给弓 → 正常弓手放风筝 ③给她一本万法皆通物品 → 魔法任务恢复参与 ④手动指派魔法任务芯片不受影响（自主切换不碰手动任务）。
-## 实测三百七十八（用户："加一个新机制，当解除了自保模式之后立刻执行一次传送到主人身边"）
+## 实测三百七十八（问题：加一个新机制，当解除了自保模式之后立刻执行一次传送到主人身边）
 
 - 【解除即传】自保退出（血 ≥70% 安全 1 秒 / 完全安全 20 秒，两条退出线 + 20 tick 稳定窗口任一满足）→ **立刻传送回主人身边一次**，不再要求"威胁已散"（旧口径交火中退出只交还战术继续打）——恢复即支援，交火中也撤出战场归位。
 - 【绕过冷却闸】teleportHomeOnExit 增加 ignoreCooldown：解除归位是每场一次的收尾动作，绕过"5 秒尝试间隔 + 30 秒成功冷却"双闸（否则上一场传送的长冷却会把解除归位静默吞掉）；会话已结束不存在连传。安全护栏全保留：主人死亡不传（实测八十三）、看家模式不传、已在主人 5 格内不传、主人身边无合法落点不传（实测二百零五防摔）、跨维度安全落点判定不变。
 - 【配套：狙击残留状态重置】自保接管时狙击彻底重置（snipeBaseY 清 -1）——解除必传后"解除后复用旧塔基"路径不复存在；否则传送归位后残留塔基会让狙击钉柱段在主人身边空跑（原地定住约 1 秒才被目标丢失收摊兜住）。塔块仍登记、30 秒自回收。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,916,976 字节）。
 - 待实测：①残血自保 → 回到 70% 立即传回主人身边（哪怕怪还在旁边）②完全安全 20 秒退出 → 同样立刻归位 ③主人悬空/死亡/看家模式 → 不传不摔 ④自保期间搭的塔在她离开后 30 秒回收。
-## 实测三百七十七（用户："自主战斗模式状态下还是会不分场合的去搭方块，我估计是上次的bug没修干净。而且这种情况下搭的方块以及狙击搭的永不消失"）
+## 实测三百七十七（问题：自主战斗模式状态下还是会不分场合的去搭方块，我估计是上次的bug没修干净。而且这种情况下搭的方块以及狙击搭的永不消失）
 
 - 【不分场合搭方块·根因一】三百七十五的"搭高惯性"放得太开：起塔条件（敌人贴身/没近战武器/远程姿态）只在第一块之前查，之后永不放弃——敌人短暂贴身一次就 commit 整座塔；自保退出后旧塔基续建路径同样不重查条件。现改为**建塔期每 tick 复查 + 滞回**：敌人 > 贴身距离+2 格（自家箭击退 4~6 格的抖动不弃塔，真跑了就收摊）/捡到近战武器/远程姿态失效 → 弃塔回归正常战斗；攀爬推送中（walkOnTicks>0）暂不弃——半途松锁是"垫两块摔下来"的元凶。起塔门禁保持 ≤4 格不变。
 - 【不分场合搭方块·根因二】hasRangedPosture 末尾兜底 return true 让"远程任务+主手为空"（切枪中/武器被没收）也算远程姿态。现主手空 → 直接 false。
 - 【方块永不消失·根因】expireCombatPlaced 每 tick 都在跑，但 PlacedBlockTracker.maidNearBlock 硬编码"绑定女仆水平 ≤4 格恒刷新"（实测二百零七为搭路桥防摔设计的口径）——女仆在自己塔边打架就永远给塔续命。现半径参数化：**战斗方块实例 0.5 格（仅同柱刷新）**——站塔上整柱恒刷新不塌，人一离开塔 30 秒后必回收进背包；搭路/桥实例保持 4.0 默认（二百零七防摔口径不变）。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,916,913 字节）。
 - 待实测：①近战女仆/有剑的远程女仆 → 任何情况都不再搭方块 ②弓箭女仆敌人贴身 → 起塔，敌人跑出 6 格 → 弃塔回归放风筝 ③塔上站桩结束离开后 → 塔块 30 秒回收消失 ④搭路模式不受影响（桥块靠近 4 格内仍恒刷新）。
-## 实测三百七十六（用户："狙击搭高完成后还是有自己走下去的风险"——塔顶收摊口径三处收紧 + 战术塔顶禁走位）
+## 实测三百七十六（问题：狙击搭高完成后还是有自己走下去的风险——塔顶收摊口径三处收紧 + 战术塔顶禁走位）
 
 - 【无威胁收摊误判修复】hasNearbyThreat 只扫水平 8 格——骷髅/远程怪在 8 格外放箭时被误判"威胁解除"，她在交火中自己走下塔。现在**自家攻击目标活着且带敌意（PerceptionManager.isThreat）也算威胁**，继续站桩输出；目标死了/跑了且周围也扫不到威胁 → 3 秒后照常收摊。
 - 【贴塔怪不收摊】怪贴着塔基时视线擦过塔角 → 丢视野 3 秒收摊 → 走下塔正走进它怀里。视线守卫改口径：丢视野 3 秒只在**目标在远处（> 贴身距离）**时收摊（被墙挡住 → 让 TLM 寻路重占位置）；目标贴塔（≤4 格）时它摸不到塔顶的她——钉住等它绕塔让开，视线恢复继续狙击。
@@ -1544,7 +1544,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【登记寿命无需另修】expirePlaced 已有"绑定女仆站上恒刷新 + 靠近（水平 ≤4/垂直 ≤6）恒刷新"——塔顶站桩期间整座塔不会中途到期塌陷。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,916,797 字节）。
 - 待实测：①塔顶站桩期间远处骷髅放箭 → 不再自己走下塔，站桩对射 ②近战怪贴塔基游走 → 钉在塔顶不下来，视线恢复即狙击 ③怪全死 3 秒后 → 主动下塔 ④自保接管又恢复后（30%~70% 区间）→ 不再被战术走位拽下塔。
-## 实测三百七十五（用户："其实你应该套用自保搭高的代码的，因为那个可以稳定形成柱子"；userselect："狙击塔这次是'完整'套用搭路的代码"——狙击柱体机制完整套用自保搭高）
+## 实测三百七十五（问题：其实你应该套用自保搭高的代码的，因为那个可以稳定形成柱子；userselect："狙击塔这次是'完整'套用搭路的代码"——狙击柱体机制完整套用自保搭高）
 
 - 【结构性根因】自保柱子稳的真正原因不是 walkOn 本身，而是**钉柱+清水平速度+walkOn 推送在 m_6725_ 最顶上、任何 early return 之前每 tick 无条件执行**，且后面紧跟 edgeGuard+antiSuffocate。狙击此前把 lockColumn 放在目标校验/放弃判定之后：攻击目标记忆抖动一 tick、或自家弓箭把敌人击退出 4 格一瞬（触发 dist>4 放弃判定），锁就漏空，TLM 移动指令/击退趁虚而入把人拽偏——"垫两块就摔"在狙击上复现的根因。
 - 【钉柱段顶置】狙击 m_6725_ 重构为自保同款结构：snipeBaseY>=0（塔在建/建成）期间每 tick 顶部先执行 SNIPING.add + lockColumn（清寻路目标/停导航/钉柱/清水平速度/walkOn 推送，逐行=自保 pillaring 段）+ edgeGuard + antiSuffocate，之后才做目标校验/收摊判定——目标记忆抖动不再漏锁。
@@ -1553,7 +1553,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【攀爬保护】目标记忆丢失不累计收摊计时（walkOnTicks>0 时跳过）——先站稳这一块再谈收摊；clearSnipe 收摊时必清 walkOnTicks，不带惯性进下一 tick。
 - 编译零错误；已部署 D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.0.jar（4,916,593 字节）。
 - 待实测：①弓箭女仆被近战怪贴脸且包里没剑斧 → 起塔应能一次成柱到 3 格顶站桩输出 ②搭塔途中箭把敌人击退出去 → 不再中途弃塔，继续垫到顶 ③包里有剑 → 正常切近战不搭塔 ④敌人全死/走光 3 秒 → 从塔顶下来回归战斗。
-## 实测三百七十四（用户："搭方块降级——现版本很容易把自主战斗卡掉；判定改为远程攻击状态+包内没有近战武器且有方块+敌人近身，即自主切换没武器时改为尝试搭方块"——狙击触发重定义）
+## 实测三百七十四（问题：搭方块降级——现版本很容易把自主战斗卡掉；判定改为远程攻击状态+包内没有近战武器且有方块+敌人近身，即自主切换没武器时改为尝试搭方块——狙击触发重定义）
 
 - 【触发重定义】高地狙击从"远程交战的常规战术"降级为**反近身兜底**，四条件全满足才起塔：①远程攻击状态（远程任务+手上真是远程武器+弓有箭）；②**包内没有近战武器**可切（攻击伤害属性口径，含手部栏——有剑/斧就正常走自主切换切近战，绝不搭塔）；③背包有搭方块；④敌人近身（攻击目标进入贴身距离 COMBAT_CLOSE_DISTANCE，默认 4 格）。
 - 【语义】= 自主切换远近武器逻辑里"没有武器可切"的分支改为尝试搭方块：远程女仆被近战怪贴脸、又没有近战武器能换 → 垫塔拉开高度继续射；平时远程交战/敌人还远 → 照常放风筝，不再抢着搭塔卡掉自主战斗。
@@ -1562,37 +1562,37 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,915,963
 - 待实测：①弓箭女仆远程放风筝时不再搭塔；②被近战怪贴脸（4 格内）且包里没剑斧 → 起塔反制；③包里有剑 → 正常切近战不搭塔；④敌人拉开半途 → 放弃搭塔回归战斗。
 
-## 实测三百七十三（用户："下塔拆方块从来没实际用过、实用性不如直接传送，删掉；搭高远程攻击还没成功，建议直接套用搭路的代码"——下塔机制删除 + walkOn 完整套用）
+## 实测三百七十三（问题：下塔拆方块从来没实际用过、实用性不如直接传送，删掉；搭高远程攻击还没成功，建议直接套用搭路的代码——下塔机制删除 + walkOn 完整套用）
 
 - 【下塔机制删除】MaidSafeDescend 整类删除（自保/狙击/自动切换所有引用清空）：塔顶状态在退出/围困时直接清空——威胁已散 → 传送归位（"直接传送下来"）；交战中 → 任务/战术 AI 自然下塔（3~5 格坠落有落地水兜底）。自保"无回血资源被围困 10 秒" → 清塔 + 直接传送到主人身边（播报"包里没有回血的东西了，我先撤到你身边！"）。顺带修复：围困计时器被重复块计了两次（实际 5 秒就触发）→ 恢复 10 秒。
 - 【狙击塔完整套用搭路 walkOn】上一版只借了"起跳"，没借关键的"持续推送直到站上"——现在完整照搬搭路 beginWalkOn/walkOn：垫块后登记目标格（12 tick 超时），每 tick 重给垂直速度 0.42 推送，直到 feetY 达到方块顶才停止并允许垫下一块；被击退打断也会继续推（不再一次脉冲后靠天意）。自保垫高同款。钉柱/清水平速度/清寻路全程保留。
 - 已部署 4,915,224
 - 待实测：①弓箭女仆狙击塔一格格跳着成型、站定开射；②自保垫高同样成柱；③塔顶收工/围困后走传送，不再出现"下塔"环节。
 
-## 实测三百七十二（用户："能否采用搭路模式的逻辑？"——垫高全面改用搭路的"起跳登块"）
+## 实测三百七十二（问题：能否采用搭路模式的逻辑？——垫高全面改用搭路的"起跳登块"）
 
 - 【采纳搭路逻辑】自保 buildUp 与狙击 snipeBuildUp 全面改用搭路模式（实测八十四/一百八十）验证过的"垫块 → 原地起跳（垂直速度 0.42 ≈ 跳 1.1 格）→ 落在刚垫的方块顶上"——替代挤压顶起（横向弹射，三百七十一根因）和 setPos 传送（观感生硬），物理自然、视觉像玩家搭路。
 - 【站稳才垫下一块】搭路"踏入目标格才停"节流同款：上一块垫的方块 Y 有记录，人没站上去（feetY < 方块Y+0.95，起跳中）→ 本 tick 等待不垫下一块——固定 4 tick 冷却会在半空中垫下一块的老毛病根治；等待算"进行中"不算失败（不触发无材料播报/放弃建塔）。
 - 【搭路同款细节】垫块摆臂动画（m_6674_）+ 放置音效（placeSound）补齐；狙击补防窒息兜底（起跳失败身体嵌进方块 → 推到顶面，桥模式精简版）。
-- 【补丁·锁定先于下落守卫】（用户："别忘了清水平速度和移动"）：狙击侧"下落中不垫块"守卫原在钉柱之前——起跳落向新方块顶的几 tick 有微小 fallDistance 恰好绕过锁，TLM 移动指令趁窗口拽人。修正：下落中也钉柱+清水平速度，守卫只阻止"下落中垫块"本身。自保侧确认无此窗口（钉柱全程生效）。
+- 【补丁·锁定先于下落守卫】（问题：别忘了清水平速度和移动）：狙击侧"下落中不垫块"守卫原在钉柱之前——起跳落向新方块顶的几 tick 有微小 fallDistance 恰好绕过锁，TLM 移动指令趁窗口拽人。修正：下落中也钉柱+清水平速度，守卫只阻止"下落中垫块"本身。自保侧确认无此窗口（钉柱全程生效）。
 - 已部署 4,918,667
 - 待实测：①自保/狙击垫高一格一跳自然成柱；②半空中不再抢垫下一块；③被击退打断起跳 → 钉柱拉回 + 下一块继续，柱不歪。
 
-## 实测三百七十一（用户："还是不行，弓箭女仆的狙击塔和自保塔没法一口气成柱"——弃用挤压顶起，垫块后直接站上方块顶面）
+## 实测三百七十一（问题：还是不行，弓箭女仆的狙击塔和自保塔没法一口气成柱——弃用挤压顶起，垫块后直接站上方块顶面）
 
 - 【物理根因】此前垫高依赖"方块放进她所在格 → 碰撞解算把人挤上去"。但实体在柱内被放块时，逃逸方向按【最小穿透轴】选择：她宽 0.6、柱内水平净空仅 0.2，向上顶起需要 1.0——**横向逃逸永远比向上更容易**，稍有偏移就被横向弹出半柱。这就是"垫两块就摔、反复循环"的物理根因，锁速度/钉位置都只是治标（防的是走偏，防不住弹射）。
 - 【根治】buildUp/snipeBuildUp 放置成功后【直接把她传送到刚垫方块的顶面】（setPos 确定性操作，不经过碰撞解算）——每一块都精确 +1 格，柱心由钉柱机制保持，头颈空间由放置前的空气检查保证。附带效果：下落中垫块会直接把人接到方块顶上（变相接住坠落）。
 - 已部署 4,918,177
 - 待实测：①自保垫高一口气到 5 格成柱；②狙击塔一口气 3 格；③塔顶站桩不漂移；④下落中垫块把人接住不摔。
 
-## 实测三百七十（用户："还是不行——垫两块摔下来反复循环；而且正常近战状态也开始垫脚"——钉柱根治 + 狙击门禁接线修复）
+## 实测三百七十（问题：还是不行——垫两块摔下来反复循环；而且正常近战状态也开始垫脚——钉柱根治 + 狙击门禁接线修复）
 
 - 【正常近战也垫塔·根因】狙击行为的"远程姿态"判定（远程任务+手上真是远程武器）**定义了但从未接线**——canUse 只查开关，任何有攻击目标的女仆（含纯近战满血）都进了建塔逻辑。修复：canUse = 开关 + 远程姿态门禁（远程任务 + 弓弩有箭/枪械/御币），纯近战任务永远不搭塔。
 - 【摔柱根治·钉柱】velocity 锁挡不住两个物理过程：①TLM 攻击寻路每 tick 重新下导航指令（清了下一 tick 又走）；②脚下放块顶起瞬间，实体若稍有横向偏移会被碰撞解算**横向弹出**柱体。修复 = 位置钉柱：垫高开始时记录柱心坐标，之后每 tick 清寻路/停导航 + **把人直接钉回柱心**（强拉范围内）；被击飞离柱（>1 格）则解锁交回重评估。自保（forcedPillar/pillarBaseY 全程）与狙击（建塔+塔顶）同机制。
 - 已部署 4,918,134
 - 待实测：①近战女仆正常打架不再垫脚；②弓箭女仆狙击塔/自保塔一口气成柱不再反复摔；③被击飞离柱后正常重评估（重垫/走位），不会瞬移拉扯。
 
-## 实测三百六十九（用户："才垫两块就从方块上掉下来，无法形成直立高柱——垫高开始后就不应再移动"——垫高全程锁移动）
+## 实测三百六十九（问题：才垫两块就从方块上掉下来，无法形成直立高柱——垫高开始后就不应再移动——垫高全程锁移动）
 
 - 【根因】垫方块靠"脚下放块把人顶起"，只要她还在走（战术走位/任务移动/导航残留），顶起瞬间就偏离柱心、从 1~2 格高的半柱上摔下来——自保垫高与狙击建塔都中招。
 - 【垫高全程锁移动】自保侧：`forcedPillar`/`pillarBaseY` 任一激活（开垫到塔顶站桩全程）→ 每 tick 清寻路目标 + 停导航 + 清水平速度（保留垂直——顶起/下落靠垂直位移，坐姿锁 v1.5.348 同款教训）；战术经 moving 标记同步让位。围困下塔触发时塔基同步清掉，锁交给下塔机制。
@@ -1600,7 +1600,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,917,632
 - 待实测：①自保垫高一口气到 5 格不再半路摔；②狙击塔一次成柱 3 格；③建塔放弃后战术走位正常恢复。
 
-## 实测三百六十八（用户："狙击女仆被远程怪打下来了怎么办？"——击落重新起塔 + 下落禁垫）
+## 实测三百六十八（问题：狙击女仆被远程怪打下来了怎么办？——击落重新起塔 + 下落禁垫）
 
 - 【击退抑制】塔顶每 tick 清一次水平速度——箭矢/远程弹的击退在下一 tick 就被抵消，人基本不会被推下塔（爆炸掀掉方块等真掉落场景走下述兜底）。
 - 【掉落伤害】狙击塔 3 格，掉落越过原版 3 格免伤线之前落地 → 零摔伤；更高的塔有落地水（水桶）兜底。
@@ -1610,7 +1610,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,917,558
 - 待实测：①被骷髅连射 → 塔顶不被箭的击退推下去；②被炸下塔 → 落地零摔伤、重新垫 3 格（不是 6 格）爬回塔顶；③边掉血边被射 → 残血自保接管走位喝药。
 
-## 实测三百六十七（用户："重新捋一遍自保+狙击+下塔链路；塔顶持续无威胁就该下来，省得一直站上面"——威胁解除下塔 + 塔顶防走位漏洞修复）
+## 实测三百六十七（问题：重新捋一遍自保+狙击+下塔链路；塔顶持续无威胁就该下来，省得一直站上面——威胁解除下塔 + 塔顶防走位漏洞修复）
 
 - 【威胁解除 → 主动下塔】狙击塔顶每 0.5 秒扫一圈周围（水平 8 格、垂直 ±4，复用感知系统统一威胁口径）：**持续 3 秒不存在任何威胁 → 主动安全下塔**，不再一直站上面；扫到威胁立即重新计时。与"记忆目标消失 1 秒下塔"互补——目标记忆残留时也能靠真实威胁扫描收摊。
 - 【塔顶防走位漏洞（链路捋查发现）】自保接管狙击塔后若无回血资源会走"走位周旋"——但人在 3 格塔顶，走位导航会把自己从塔边拽下去摔伤。修复：脚下（及下落容错第二格）是登记战斗方块 = 站在自家塔顶 → 禁止走位，原地站桩（贴脸反击/战术并行），下塔交给下塔机制。近身爆发分支同款守卫。
@@ -1618,19 +1618,19 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,917,438
 - 待实测：①狙击打死最后一只怪 → 约 3 秒后自动拆塔下地；②怪走远（8 格外无威胁）→ 同样下塔；③残血无资源的自保女仆在塔顶不再自己走下来，等围困 10 秒下塔机制接手。
 
-## 实测三百六十六（用户拍板："老版本远程女仆搭高狙击的骚操作有实战价值，战术可以有条件实现"；要求：战斗方块 30 秒、下塔逻辑多加保险）——高地狙击 + 安全下塔公共化
+## 实测三百六十六（定夺："老版本远程女仆搭高狙击的骚操作有实战价值，战术可以有条件实现"；要求：战斗方块 30 秒、下塔逻辑多加保险）——高地狙击 + 安全下塔公共化
 
 - 【高地狙击·新战术】新增 HighGroundSnipeBehavior（core 235，默认开，配置页"战斗与自保"区有开关和塔高）：远程女仆（弓/弩/枪械/御币弹幕等远程任务）面对敌人时垫 3 格方块（可配 2~6）站上制高点**站桩输出**——近战怪摸不到，老版本的"骚操作"回来了。
 - 【只管位置不管射击】本行为只负责搭塔+站定+锁水平位移，瞄准开火完全交给 TLM 自己的远程攻击 AI——不重复造射击轮子，零冲突面。
 - 【与自动切换武器的冲突解法】狙击激活期间置 SNIPING 标记：AutoCombatSwitch 的还原/换近远程扫描查标记直接跳过（她已经在好位置上拿着对的武器）；MaidCombatTacticsBehavior 的走位查标记让位（站桩，不绕圈把人拽下塔）；狙击结束由模块自己清标记。
 - 【触发门槛】远程姿态（主手投射武器/枪械/远程任务）+ 弓弩有箭 + 背包有垫脚方块 + 目标 16 格内；进自保会话则让位并清标记（塔保留给自保守势/下塔复用——同一座塔无缝换挡）。
 - 【退出条件】目标死亡/丢失 1 秒、塔上丢视野 3 秒（目标绕墙进屋）、弹药耗尽、方块耗尽搭不上去、骑乘/坐姿——退出时人在塔上走 MaidSafeDescend 安全下塔。
-- 【战斗方块寿命 60→30 秒】用户要求"利落"：自保/狙击搭的方块 30 秒回收（女仆站上面的方块照旧刷新计时，走开才开始倒数，不会塌塔摔人）。
-- 【安全下塔公共化 MaidSafeDescend】自保与狙击共用唯一实现，按用户要求加足保险，共八道：①blockId 比对——玩家替换过的方块绝不拆；②脚下非登记块只在落到实地才收工、空中一律等待，绝不拆自然地形/玩家建筑；③落地判据为实心方块（含台阶/耕地等碰撞形状口径）；④骑乘/坐姿立即收工；⑤10 秒总时长强制收工（任何异常不锁死）；⑥下塔每 tick 清寻路+停导航（防任务/战术拽人）；⑦拆块节流 4 tick（重力落位，不产生多格坠落）；⑧死亡/维度异常立即收工。PlacedBlockTracker 补 trackedBlockId（登记方块名查询）与 untrackAny（主动拆除移除登记，不留空转条目）。
+- 【战斗方块寿命 60→30 秒】要求"利落"：自保/狙击搭的方块 30 秒回收（女仆站上面的方块照旧刷新计时，走开才开始倒数，不会塌塔摔人）。
+- 【安全下塔公共化 MaidSafeDescend】自保与狙击共用唯一实现，按要求加足保险，共八道：①blockId 比对——玩家替换过的方块绝不拆；②脚下非登记块只在落到实地才收工、空中一律等待，绝不拆自然地形/玩家建筑；③落地判据为实心方块（含台阶/耕地等碰撞形状口径）；④骑乘/坐姿立即收工；⑤10 秒总时长强制收工（任何异常不锁死）；⑥下塔每 tick 清寻路+停导航（防任务/战术拽人）；⑦拆块节流 4 tick（重力落位，不产生多格坠落）；⑧死亡/维度异常立即收工。PlacedBlockTracker 补 trackedBlockId（登记方块名查询）与 untrackAny（主动拆除移除登记，不留空转条目）。
 - 已部署 4,916,659
 - 待实测：①弓箭女仆遇怪 → 垫 3 格塔站桩放箭、近战怪在塔下干瞪眼；②狙击期间武器不切、走位不绕圈；③目标死亡/进屋 → 自动拆塔下地、方块回背包；④狙击中被射残血 → 自保接管同一座塔回血；⑤自保下塔回归实测三百六十五场景。
 
-## 实测三百六十五（用户："没有回血道具就不再触发垫高，从根本上断绝这个问题"+"回家不是好操作/怎么下来/被打下来怎么办"——垫高门控 + 安全下塔）
+## 实测三百六十五（问题：没有回血道具就不再触发垫高，从根本上断绝这个问题+"回家不是好操作/怎么下来/被打下来怎么办"——垫高门控 + 安全下塔）
 
 - 【垫高门控（根治）】包里没有任何回血资源（药水/金苹果/治疗食物，hasHealResource 无副作用探测）→ 搭高【不再是可选项目】：被近身 = 击退爆发改为走位周旋、近身搭高分支整体跳过——塔的唯一意义是安全回血，没得回血垫塔纯属干耗，从根上断绝"无意义的塔"。
 - 【"回家"取消】塔顶无回血资源被围困 10 秒 → 不再传送回家，改为**主动下塔接着打**（播报"包里没有回血的东西了，我下塔接着打！"）；传送只保留血 <15% 危急 / 弹尽粮绝 / 泡岩浆三个保命兜底 + 战斗结束后的归位支援。
@@ -1640,7 +1640,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,908,026
 - 待实测：①空包（没吃的没药）残血被围 → 不再垫塔，原地走位周旋+反击；②塔顶吃完最后一份食物被围 10 秒 → 播报并逐格拆塔下来继续打；③血回 70% 解除自保时在塔上且威胁还在 → 拆塔下来而非传走；④被打下塔 → 立刻重新评估接着搭/周旋。
 
-## 实测三百六十四（用户："垫高以后包里没有可以回血的东西怎么办？低血量和解除线差距太小，改回 70%"——解除线回调 + 无回血资源兜底）
+## 实测三百六十四（问题：垫高以后包里没有可以回血的东西怎么办？低血量和解除线差距太小，改回 70%——解除线回调 + 无回血资源兜底）
 
 - 【解除线回调】安全回归血量（自保解除线）默认 0.45 → **0.70**：残血自保要真回血才归位，45% 太贴地；滞回带回扩为 30~70（重新进场要跌回 30% 以下，不会抖动）。"完全安全 20 秒无论血量解除"的第二退出线保留——没回血资源的女仆不会被永久卡在自保里。
 - 【塔顶无回血资源兜底】新增 hasHealResource 无副作用探测（包里有无药水/金苹果/治疗食物）：垫高到顶后威胁持续扎营、包里又没有任何回血资源 → 在塔上干耗没有意义，累计 10 秒触发传送回家养伤（主人可以喂她）；有回血资源的不受影响，安心塔顶守势回血到 70% 自然归位。
@@ -1648,7 +1648,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,906,988
 - 待实测：①残血搭高后包里没吃的没药、怪在塔下扎营 → 10 秒后被接回家；②包里有熟食/药水 → 塔顶安心回血到 70% 才归位；③完全安全 20 秒后无论血量多少都解除自保。
 
-## 实测三百六十三（用户："重新设计合理的自保逻辑和链路"——五问定稿：垫高何时停/措施切换/进出判定/传送时机/逃跑删除）
+## 实测三百六十三（问题：重新设计合理的自保逻辑和链路——五问定稿：垫高何时停/措施切换/进出判定/传送时机/逃跑删除）
 
 - 【垫高何时停】垫到安全高度（pillarSafeHeight，默认 5 格）即停，头顶被堵/没材料也停——塔顶进入守势：安心回血（药水→金苹果→食物阶梯）+ 战术 230 并行对塔下反击，塔是安全点不是终点；**血回 45%（安全回归线）即下塔恢复战斗/工作**，不再干等威胁散伙/回满 70%；塔顶全程不传送。
 - 【措施切换时机】承诺窗口制：移动类策略（搭高/走位）选定后执行到位（搭到顶/走完这几步）才重新评估；瞬时动作（喝药/进食/贴脸反击/珍珠）随时插队不打断当前策略；环境危险（岩浆/着火）永远最高优先抢占。
@@ -1659,7 +1659,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,906,626
 - 待实测：①残血贴身+有圆石 → 搭到 5 格塔顶守势回血，45% 下塔继续打/干活；②威胁还在血回 45% 也会解除自保（不再被 tag 卡住干耗）；③没方块没珍珠被围殴+血 <30% → 才会传回主人身边；④被 3~4 只怪追时小幅度侧移绕着打，不再一口气跑出 8 格。
 
-## 实测三百六十二（用户："残血搭高躲伤害却因自保反复切换不断被传到主人身边，意义很小；触发 30% 回复 70% 中间很怪，整个自保链路需要调整"——传送降级 + 退出链重做）
+## 实测三百六十二（问题：残血搭高躲伤害却因自保反复切换不断被传到主人身边，意义很小；触发 30% 回复 70% 中间很怪，整个自保链路需要调整——传送降级 + 退出链重做）
 
 - 【根因一：传送优先级错位】自保会话每 tick 第一步就无条件尝试传送回主人——主人身边安全（最常见场景）时，搭高/珍珠/逃跑这些本地逃生永远轮不到执行：残血刚进场、方块刚垫两块就被拽走，塔白搭；传回→回血→跑回危险区→再传还形成连传循环（成功传送冷却实际仅 5 秒）。
 - 【传送降级为兜底】新 tryTeleportFallback：只在五种【本地手段失效】情况传送——①泡岩浆（传送比任何自救都快）②血量危急 <15% ③威胁已消失且血未回安全回归线（安静接回家养伤）④威胁仍在但本地逃生无计可施（无搭方块材料+无珍珠+不允许逃跑，hasLocalEscape 无副作用探测）⑤塔上被围困（已垫到安全高度但威胁持续 10 秒不散）。
@@ -1671,7 +1671,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,907,067
 - 待实测：①残血女仆 3×3 内有怪、背包有圆石 → 就地搭高躲伤害回血，不再被立刻传走；②打完脱险血回 45% 即恢复工作（不再干耗到 70%）；③同一场遭遇战最多被传送一次（30 秒冷却）；④背包空无一物被围殴 → 才会传回主人身边。
 
-## 实测三百六十一（用户："手持骨粉的时候，她还是会说'我没有斧头'"——换手期间误报修正）
+## 实测三百六十一（问题：手持骨粉的时候，她还是会说'我没有斧头'——换手期间误报修正）
 
 - 【伐木误报】走到树前检查主手非斧 → 播报"我没有斧头"——施肥换手中主手是骨粉（斧头正躺在副手）也会命中。修正：主手是骨粉且换手暂存中 → 先还原主手（斧头回来直接开工）再判定，不再对着骨粉喊没斧。
 - 【挖矿误报】状态查询"我没有镐，没法挖矿"同款——主手骨粉 + 换手暂存中 → 不播报。
@@ -1679,7 +1679,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,905,941
 - 待实测：伐木女仆施肥后走到树前 → 不再说"我没有斧头"（斧头从副手还原直接砍）；挖矿女仆同款不再误报没镐。
 
-## 实测三百六十（用户："伐木/种植/耕地的优先级应该高于骨粉，现在容易在骨粉和工具之间反复切换的鬼畜；有概率刷出背包里面出现大量道具"——优先级 + 复制根治）
+## 实测三百六十（问题：伐木/种植/耕地的优先级应该高于骨粉，现在容易在骨粉和工具之间反复切换的鬼畜；有概率刷出背包里面出现大量道具——优先级 + 复制根治）
 
 - 【道具复制根因】换手状态机用"原物品 insert 进背包槽、还原时 setStackInSlot(0, original)"搬运——【同一个 ItemStack 实例同时被背包槽和主手槽引用】（背包槽旧引用未清），每次换手循环多留一个幽灵引用，存档时同一实例重复序列化 → 读档后背包刷出大量斧头/锄头副本。
 - 【状态机重写】原主手物品改放【副手】暂存（随实体持久化——施肥中途关服也不丢），不再过背包；全链路 extract-then-place（每个槽位写入前先把旧实例完整取走），任何实例任一时刻只存在于一个槽位，复制路径彻底封死。HAND_HOLD 只记还原时刻。
@@ -1687,7 +1687,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,905,703
 - 待实测：①农场女仆在有踩坏耕地的农田里：锄地优先、不鬼畜，锄完空闲才施肥；②伐木女仆砍树时不施肥、砍完空闲才催树苗；③反复施肥几十轮后存档重进——背包不再刷出多余工具；④施肥中途关服重进——工具不丢（在副手）。
 
-## 实测三百五十九（用户："严重bug：施肥的时候会直接把工具卡掉。伐木和农场都是"——工具覆盖丢失根治）
+## 实测三百五十九（问题：严重bug：施肥的时候会直接把工具卡掉。伐木和农场都是——工具覆盖丢失根治）
 
 - 【根因】equipBoneMeal 换手用 setStackInSlot 直接覆盖主手——换手状态存活期间（持续施肥时 1 秒宽限不断刷新，等于条目一直在），锄头/斧头自动装备等第三方行为可能把别的工具换进主手（顶掉我们的骨粉）；下一轮施肥时 original 记账还停留在第一代，setStackInSlot(0, 骨粉) 会把第三方换上的那个工具【原地覆盖消失】——这就是"工具被卡掉"。
 - 【修复】覆盖前先把当前主手物品安顿（收进背包，满则脚下掉落防丢）——任何情况下不再有无物品覆盖主手；original 记账保持第一代原物品，还原链路（restoreNow：主手空才放回、否则收背包）本就安全。
@@ -1695,14 +1695,14 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已构建 4,905,692（部署待游戏退出）
 - 待实测：伐木/农场女仆背包放骨粉 → 施肥若干轮 → 斧头/锄头完好（施肥时主手举骨粉，停止后还原），不再消失。
 
-## 实测三百五十八（用户："不，我是说单独的锄地这个功能似乎失效了。查一下"——锄地全链路诊断）
+## 实测三百五十八（问题：不，我是说单独的锄地这个功能似乎失效了。查一下——锄地全链路诊断）
 
 - 【排查结论】锄地核心逻辑自实测三百四十九以来零改动（git diff 确认）——判定链有 6 个静默失败点（无锄头/无"曾经是耕地"标记/上方非空气/canDestroyBlock 拒绝/范围内无目标/距离远只导航），外部完全不可见，无法定位。
 - 【全链路诊断】锄地每 30 秒/女仆落一条诊断日志（logs/promaid.log 搜 "till diag"）：hoe=有无锄头、farmland=范围内耕地数（标记自愈来源）、dirt/marked/airAbove=候选漏斗各环计数、tillable=最终合格数、target=本次目标；无锄头单独落 "hoe=false"；锄地成功落 "till ok: pos="（每次落）。跑一轮即可从漏斗计数看出卡在哪一环。
 - 已部署 4,905,656
 - 待实测：农场女仆在有踩坏耕地的农田待 30 秒 → 日志出现 "till diag"（漏斗计数）→ 把该行反馈即可精确定位；若正常工作则直接出现 "till ok"。
 
-## 实测三百五十七（用户："开启农场我发现现在女仆又不会去修补主人踩坏的地了"——锄地与施肥共存）
+## 实测三百五十七（问题：开启农场我发现现在女仆又不会去修补主人踩坏的地了——锄地与施肥共存）
 
 - 【根因】上一版"施了肥就跳过本轮锄地"在【有骨粉 + 有未成熟作物】时每轮必施肥（0.5 秒一轮全命中）→ 锄地被永久挤掉 → 踩坏的耕地再也不修。
 - 【共存方案】锄地与施肥同轮共存、锄地优先：每轮先锄地（锄地前【强制还原】施肥换手——剩余骨粉收回背包、原物品放回主手，锄头干净换上），再施肥（换持骨粉催一株）。两者互不挤占：有踩坏的地就修，有未成熟的作物就催。
@@ -1710,7 +1710,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,904,806
 - 待实测：给农场女仆放骨粉 + 踩坏一块耕地 → 踩坏的地被锄回耕地（不再被施肥挤掉），未成熟作物照常催熟，两者同轮各干各的。
 
-## 实测三百五十六（用户："失败了，把骨粉放在主手上了，但是没有进一步施肥的动作"——农场施肥筛选判定修正）
+## 实测三百五十六（问题：失败了，把骨粉放在主手上了，但是没有进一步施肥的动作——农场施肥筛选判定修正）
 
 - 【根因】作物筛选用反了判定：isBonemealSuccess（m_214167_）对 CropBlock 【恒返回 true】（javap 实证 iconst_1），我误当"已成熟"跳过——**所有作物全被跳过**，一株都选不到（骨粉换到手上一株都不催）。成熟过滤实际在 isValidBonemealTarget（m_7370_）里：CropBlock 的该方法 = age < maxAge（未成熟 true / 成熟 false，javap 实证调用 isMaxAge）。修正为只用 m_7370_ 过滤成熟。
 - 【非作物排除】原版实现骨粉接口但不是农作物的方块加排除表：树苗（归伐木）/ 草方块与草丛蕨 / 藤蔓 / 发光地衣 / 蘑菇与菌类 / 菌岩 / 海带海草 / 竹子 / 紫颂 / 垂滴叶 / 洞穴藤 / 缠怨垂泣藤 / 杜鹃 / 苔藓块。保留：小麦/胡萝卜/土豆/甜菜/火把花/猪笼草（CropBlock 系）、西瓜南瓜茎、可可豆、甜浆果丛。
@@ -1719,7 +1719,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,904,669
 - 待实测：给农场女仆包里放骨粉 → 未成熟小麦/胡萝卜等被逐株催熟（粒子特效、主手举骨粉）；成熟作物和草方块不浪费骨粉；催熟期间不锄地。
 
-## 实测三百五十五（用户："将同样的逻辑引入到农场给农作物施肥里面，配置界面也是如此"——农场作物骨粉催熟）
+## 实测三百五十五（问题：将同样的逻辑引入到农场给农作物施肥里面，配置界面也是如此——农场作物骨粉催熟）
 
 - 【农场作物催熟】农场模式的女仆背包里有骨粉时，对身边（半径 16 格、垂直 ±4）最近的一株未成熟作物使用骨粉催熟——每 0.5 秒一株（随锄地驱动节拍），带粒子特效。只催【当前世界有骨粉配方】的作物（isValidBonemealTarget 判定，原版/模组作物自动兼容）；成熟作物不催（isBonemealSuccess 会成功 = 催了也白费）；树苗不在这里催（归伐木催熟管）。
 - 【同款换手逻辑】找骨粉 主手 → 副手 → 背包；施肥时主手临时换持骨粉（equipBoneMeal 从 MaidPlanting 抽成 public 复用），停止 1 秒后由 tryRestoreHand 自动还原（剩余骨粉收回背包、原物品放回主手）。
@@ -1727,7 +1727,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,904,228
 - 待实测：给农场女仆包里放骨粉 → 未成熟小麦/胡萝卜等被逐株催熟（0.5 秒一株、粒子特效、主手举骨粉）；成熟作物不浪费骨粉；杂项页开关可关。
 
-## 实测三百五十四（用户："还是之前那个bug，只会检测背包，不检测主副手。同时在施加骨粉的时候，主手物品应该变为骨粉（施加完后变回去）"）
+## 实测三百五十四（问题：还是之前那个bug，只会检测背包，不检测主副手。同时在施加骨粉的时候，主手物品应该变为骨粉（施加完后变回去））
 
 - 【检测主副手】找骨粉顺序改为 主手 → 副手 → 背包——旧版只扫背包（与实测二百三十"手拿树苗判没苗"同款坑：手部栏是独立槽位）。
 - 【换手持骨粉】施肥时主手临时变为骨粉（从副手/背包整组拉到主手，真持有——growCrop 直接消耗主手栈），原主手物品暂存；施肥停止 1 秒后自动还原：手上剩余骨粉收回背包（满则脚下掉落防丢），原物品放回主手（被自动装备等行为抢先占了手位则收进背包不强抢）。她本来就手持骨粉时直接用，不换手也不还原。
@@ -1735,7 +1735,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,902,914
 - 待实测：骨粉放副手/背包 → 施肥时主手举起骨粉（带粒子），停止施肥 1 秒后主手变回斧头、剩余骨粉在背包；骨粉放主手 → 直接施用不换手。
 
-## 实测三百五十三（用户："催熟的积极性不高；树苗也没有冒出那种粒子特效；施肥的速度应该是每 0.5 秒尝试施肥一次"——骨粉催熟三处修正）
+## 实测三百五十三（问题：催熟的积极性不高；树苗也没有冒出那种粒子特效；施肥的速度应该是每 0.5 秒尝试施肥一次——骨粉催熟三处修正）
 
 - 【节拍 0.5 秒】催熟从挂在 5 秒种树冷却上改为独立节拍：种树驱动加密到 10 tick（0.5 秒）一轮，每轮尝试催熟一株；种树本身仍 2 秒一轮。原版 isBonemealSuccess 是 45% 概率判定（javap 实证 0.45D），配合 0.5 秒节拍一棵苗几秒内就能催成。
 - 【补粒子特效】根因：BoneMealItem.growCrop 字节码里根本没有 levelEvent 1505——原版骨粉粒子在玩家 useOn 路径上放，dispenser 式调用天生无粒子。现在每次施肥手动 levelEvent(1505)——每次都有粒子反馈。
@@ -1744,7 +1744,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,901,138
 - 待实测：给伐木女仆包里放骨粉 → 0.5 秒一次施肥节奏、每次有绿色粒子、一棵苗几秒催成；骨粉消耗速度恢复正常（一次 1 个）。
 
-## 实测三百五十二（用户："可以，但是在模组详细配置的杂项里要有开关，默认开"——树苗骨粉催熟上线）
+## 实测三百五十二（问题：可以，但是在模组详细配置的杂项里要有开关，默认开——树苗骨粉催熟上线）
 
 - 【骨粉催熟】伐木模式的女仆背包里有骨粉时，对身边（半径 6 格、垂直 ±2）最近的一株合格树苗使用骨粉催熟——每轮（随"补种树苗冷却"节流，默认 5 秒）最多催熟一株，优先把已种下的树苗催大而不是种新的；即使背包没树苗也照常催熟。成功后播放骨粉粒子+挥臂动画，手动扣 1 个骨粉（growCrop 不 shrink 栈，javap 实证）。
 - 【选择条件】SaplingBlock 实例 + 非深色橡树（单株永不生长，不浪费骨粉）+ 干列净空（树干上方被实心方块挡死的长不成，也不浪费）。【不查光照】——骨粉走 performBonemeal，不经过原版 randomTick 的光照门槛，这正是地下/室内种树能长成的唯一途径。
@@ -1753,7 +1753,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,901,071
 - 待实测：给伐木女仆包里放骨粉 → 已种的树苗被逐株催大（含光照不足的洞里/室内树苗）；深色橡树苗和树干顶死的树苗不被浪费骨粉；杂项页开关可关。
 
-## 实测三百五十一（用户："还有高度检查，防止种下去长不了。结合树苗生长的逻辑，你再想想有什么可以优化的点"）
+## 实测三百五十一（问题：还有高度检查，防止种下去长不了。结合树苗生长的逻辑，你再想想有什么可以优化的点）
 
 三项优化全部按原版树苗生长机制（javap 反编译实证）实现：
 
@@ -1763,30 +1763,30 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,899,039
 - 待实测：①伐木女仆不再把树苗种进 3 格高的洞里/屋顶下（宁可不种）；②地下洞穴/封闭房间内不补种；③背包里的深色橡树苗不再被种下；④林间（头顶是树叶）照常补种。
 
-## 实测三百五十（用户："种树逻辑优化。原来是仅检查这周围有没有树苗，现在在此基础上进一步要求3×3范围内没有碰撞体积方块才可以种植，火把什么的不算"）
+## 实测三百五十（问题：种树逻辑优化。原来是仅检查这周围有没有树苗，现在在此基础上进一步要求3×3范围内没有碰撞体积方块才可以种植，火把什么的不算）
 
 - 【3×3 碰撞体积检查】可种地块判定（findPlantSpotCount）在"空气 + 脚下 #minecraft:dirt/草方块"之外，再要求以候选格为中心的 3×3（同层）没有【带碰撞体积】的方块——树苗有生长空间，不会被墙/箱子等闷住。判定用原版碰撞箱 getCollisionShape(...).isEmpty()：火把/花草/地毯等无碰撞方块 isEmpty=true 照常放行（与自保安全落点 standableCell 同款口径）。
 - 【清理死代码】旧版 findPlantSpot（无调用方，tick 只用统计版 findPlantSpotCount）删除，避免两套种点判定逻辑漂移。
 - 已部署 4,898,686
 - 待实测：伐木女仆在火把旁/花草间照常补种树苗；贴墙、贴箱子的格子不再被选为种点。
 
-## 实测三百四十九（用户四连报："排班表内改名不显示新名字；烧制吞附魔物品；排班女仆跨区块加载没生效；排班女仆不应触发死亡传送"）
+## 实测三百四十九（玩家四连报："排班表内改名不显示新名字；烧制吞附魔物品；排班女仆跨区块加载没生效；排班女仆不应触发死亡传送"）
 
-- 【排班表改名不显示】（用户："在排班表内对女仆进行改名，但是在排班表内并没有显示出来，还是原来的名字"）：服务端改名成功但【没有回包】——客户端 `maids` 列表是打开排班表那一刻收集的快照，永远显示旧名字。新增 S2C `MaidRenameSyncPacket`（id=14）：改名成功 → 推新名字 → `ScheduleBookScreen.syncMaidName` 同步列表行（m[1]）与详情页标题（selName），列表/标题/搜索过滤立即生效。
-- 【烧制吞附魔物品】（用户："女仆在进行烧制的时候，会把附魔的物品拿去烧掉"）：`extractAnySmeltable` 的"装备类永不熔"只拦 TieredItem/ArmorItem 等类型——附魔的方块/模组物品照样被喂进炉子。新增统一守卫 `isSafeToFeed`：**带附魔（isEnchanted，哪怕 1 条）或耐久未满（isDamaged）的物品一律不进炉子**，接入全部四条路径——通用可烧制物回退（extractAnySmeltable）/ 矿物回退（extractOreFromMaid）/ 烟熏炉·高炉（extractByRecipe）/ 燃料侧（extractBestFuel，附魔物品绝不当柴火烧）。
-- 【排班女仆跨区块加载没生效】（用户："排班女仆跨区块加载似乎没生效"）：旧票是【会话级】addRegionTicket——关服 `releaseAll` 清光；重进游戏后调度只扫【已加载】女仆，远处未加载区块里的排班女仆永远扫不到、永远没票 → 她的区块永远不加载（每次重启都丢票，观感"没生效"）。排班女仆改走 **Forge 持久化强制区块**（`ForgeChunkManager.forceChunk`，modid=maid_smart，ticking=true）：票写进维度 chunks.dat，**跨重启自动恢复**（Forge 启动时 reinstatePersistentChunks 重挂）；换区块自动换票、关排班自动撤票。普通跟随女仆维持会话票不变。
-- 【排班女仆死亡传送】（用户："排班女仆不应触发死亡传送"）：实测一百零二曾把"排班 Home 模式"从豁免中拿掉（当时口径：排班女仆也要赶重生点）。按用户最新口径反转——排班中的女仆（含排班自动 home 守家女仆）**不参与死亡传送**：她们驻守排班锚点，全拽到重生点 = 守家空窗。想召回走排班表「传送到我身边」（先关排班，与一键集合同口径）。
+- 【排班表改名不显示】（问题：在排班表内对女仆进行改名，但是在排班表内并没有显示出来，还是原来的名字）：服务端改名成功但【没有回包】——客户端 `maids` 列表是打开排班表那一刻收集的快照，永远显示旧名字。新增 S2C `MaidRenameSyncPacket`（id=14）：改名成功 → 推新名字 → `ScheduleBookScreen.syncMaidName` 同步列表行（m[1]）与详情页标题（selName），列表/标题/搜索过滤立即生效。
+- 【烧制吞附魔物品】（问题：女仆在进行烧制的时候，会把附魔的物品拿去烧掉）：`extractAnySmeltable` 的"装备类永不熔"只拦 TieredItem/ArmorItem 等类型——附魔的方块/模组物品照样被喂进炉子。新增统一守卫 `isSafeToFeed`：**带附魔（isEnchanted，哪怕 1 条）或耐久未满（isDamaged）的物品一律不进炉子**，接入全部四条路径——通用可烧制物回退（extractAnySmeltable）/ 矿物回退（extractOreFromMaid）/ 烟熏炉·高炉（extractByRecipe）/ 燃料侧（extractBestFuel，附魔物品绝不当柴火烧）。
+- 【排班女仆跨区块加载没生效】（问题：排班女仆跨区块加载似乎没生效）：旧票是【会话级】addRegionTicket——关服 `releaseAll` 清光；重进游戏后调度只扫【已加载】女仆，远处未加载区块里的排班女仆永远扫不到、永远没票 → 她的区块永远不加载（每次重启都丢票，观感"没生效"）。排班女仆改走 **Forge 持久化强制区块**（`ForgeChunkManager.forceChunk`，modid=maid_smart，ticking=true）：票写进维度 chunks.dat，**跨重启自动恢复**（Forge 启动时 reinstatePersistentChunks 重挂）；换区块自动换票、关排班自动撤票。普通跟随女仆维持会话票不变。
+- 【排班女仆死亡传送】（问题：排班女仆不应触发死亡传送）：实测一百零二曾把"排班 Home 模式"从豁免中拿掉（当时口径：排班女仆也要赶重生点）。按玩家最新口径反转——排班中的女仆（含排班自动 home 守家女仆）**不参与死亡传送**：她们驻守排班锚点，全拽到重生点 = 守家空窗。想召回走排班表「传送到我身边」（先关排班，与一键集合同口径）。
 - 已部署 4,898,582
 - 待实测：①排班表内改名 → 列表与详情页标题立即变新名字；②背包放附魔镐/附魔书/用旧的工具 → 烧制女仆不烧不熔；③给远处女仆排班 → 重启游戏 → 她的区块保持加载（排班照常切换、熔炉照常烧）；④主人死亡 → 排班女仆原地驻守不传送，非排班女仆照常传送到重生点。
 
-## 实测三百四十八（用户："字段显示有问题。有的时候会显示女仆给主人喂了空气的系统字样"——喂食字幕显示"空气"修复）
+## 实测三百四十八（问题：字段显示有问题。有的时候会显示女仆给主人喂了空气的系统字样——喂食字幕显示"空气"修复）
 
 - 【根因】主人链 feedFoodDirect 的系统字幕在 `owner.m_5584_`（eat，会 shrink 栈内数量）【之后】才读 `food.m_41786_().getString()`——extractItem 返回的是活引用，eat 后栈变空 → 空栈的 getHoverName 返回原版 "Air"（中文环境显示"空气"）→ 系统字幕"女仆喂你吃了 空气"。姐妹链 feedSisterFood 早就修过同款坑（"名字在进食前读"），主人链漏了。
 - 【修复】食物名改为【进食前】读快照（与姐妹链同款），eat 后只拼字幕字符串，不再读栈。
 - 已部署 4,895,742
 - 待实测：女仆喂主人食物时系统字幕应显示真实食物名（熟牛排/面包等），不再出现"空气"。
 
-## 实测三百四十七（用户："反击没攻击动画；空手反击太强、频率又高伤害又高；只会空手反击，原有的攻击没了"——兜底攻击三处修正）
+## 实测三百四十七（问题：反击没攻击动画；空手反击太强、频率又高伤害又高；只会空手反击，原有的攻击没了——兜底攻击三处修正）
 
 - 【真兜底让位】兜底不再只看"本 tick 冷却记忆是否在"——TLM 打完后 ATTACK_COOLING_DOWN 只持续十几 tick，攻击循环间隙里兜底插进来就是"原有的攻击没了、只剩空手连拍"。改为记录 TLM 最近动作时刻：冷却记忆在（TLM 正在打）或近 40 tick（2 秒）内打过 → 完全让位不打不导航；只有 TLM 长时间没动作（链路真断了）才接管补刀。
 - 【空手不打】主手没有带攻击力属性的物品（空手/纯工具）→ 只导航跟随保持威胁登记，不亲自挥刀（实测空手反击又快又痛失衡）。参战切换本身会自动从背包装备武器（CombatTaskCompat.prepareSwitch），装上后自然恢复挥砍。
@@ -1795,7 +1795,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,895,738
 - 待实测：①惹怒狼 → 女仆参战、TLM 正常攻击带动画（兜底让位不抢）；②空手女仆被咬 → 不再空手连拍，参战装武器后正常挥砍；③拿斧的女仆兜底攻击频率明显降下来（20 tick 一刀）。
 
-## 实测三百四十六（用户："应该这么改，不论是哪种生物，只要是 target=主人/女仆的都会被额外列入威胁并当做敌对威胁处理"——威胁判定全面行为化统一）
+## 实测三百四十六（问题：应该这么改，不论是哪种生物，只要是 target=主人/女仆的都会被额外列入威胁并当做敌对威胁处理——威胁判定全面行为化统一）
 
 - 【统一口径】全项目威胁判定点审计后统一并入【行为化判定】：任意 Mob 只要 getTarget 锁定主人/女仆就是敌对威胁——不依赖 Enemy/NeutralMob/Tamable 原版类型接口（模组魔改的"被动变中立"生物不实现任何一个是常态），getTarget 是 Mob 基类字段、所有生物 AI 攻击前必写它。女仆之间永远不算威胁。
 - 【PerceptionManager.isThreat】（自保威胁扫描/敌袭判定/感知播报的统一入口）：getTarget 判定从"NeutralMob 专属通道"提升为普适通道——任意 Mob 锁定主人/女仆即威胁；补女仆排除（女仆锁定主人时——跟随/护主场景——绝不能被姐妹当威胁围殴）。
@@ -1805,7 +1805,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,894,969
 - 待实测：①惹怒任意生物（狼/北极熊/魔改被动生物）→ 女仆参战+实际攻击+战术走位；②威胁锁定主人身边女仆时主人的其他女仆也响应；③战斗接触/还原计时对这类生物正常工作（打完还原，不卡战斗态）；④主人被追时女仆扔增益药水助战。
 
-## 实测三百四十五（用户："进入了攻击模式，但是并没有进行攻击行为"——攻击执行兜底）
+## 实测三百四十五（问题：进入了攻击模式，但是并没有进行攻击行为——攻击执行兜底）
 
 - 【现象】实测三百四十四生效一半：参战触发成功（女仆确实切到攻击模式），但攻击行为没执行——写目标只解决"脑内有目标"，TLM MaidMeleeAttack 是 WORK 组行为，canUse 还有一串条件（切任务后 brain 重建时序 / 活动段 / NEAREST_VISIBLE_LIVING_ENTITIES 可见列表 / 攻击距离），任一环断了女仆就"进了攻击模式站着不动"。
 - 【修复·攻击执行兜底】NeutralThreatDriver 的 ③ 分支不再限定"非战斗任务才直接攻击"——无论什么任务，只要威胁还在就自己打：走近（直连导航，战术行为激活时让位给它管走位）+ 近身挥砍（doHurtTarget，反编译实证 canAttack 只是距离判定不滤类型）。
@@ -1813,119 +1813,119 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,894,412
 - 待实测：惹怒狼 → 女仆参战后应实际挥刀砍狼（TLM 链路断了也有兜底补刀），砍死还原。
 
-## 实测三百四十四（用户："遇到发狂的狼，我打狼或是狼打我，女仆一点反应都没" + "有一部分 mod 会魔改原版被动生物，让被动生物都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"——中立/魔改生物威胁判定全面行为化）
+## 实测三百四十四（问题：遇到发狂的狼，我打狼或是狼打我，女仆一点反应都没 + "有一部分 mod 会魔改原版被动生物，让被动生物都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"——中立/魔改生物威胁判定全面行为化）
 
 - 【根因·反编译实证】女仆对发狂的狼零反应是 TLM 索敌链的【结构性盲区】：① MaidHostilesSensor 的 ACCEPTABLE_DISTANCE_FROM_HOSTILES 白名单【只有苦力怕一个条目】——isHostile 只查白名单，发狂的狼永远不进 NEAREST_HOSTILE；② TaskAttack.createBrainTasks 用原版 StartAttacking，目标选择只认 Monster 或 NeutralMob.isAngryAt(女仆)——狼记仇的是【主人】不是女仆 → isAngryAt(女仆) 恒 false → 切了战斗任务也【选不到目标】→ 女仆站着不动；③ 实测三百一十八只补了【驯服】狼（isAngryTamedAt 要求 isTame），野狼（未驯服）全部漏判；主人打野狼时 LivingHurtEvent 在狼记仇状态设置【之前】触发，isAngry 判定也恒 false。
-- 【判定加强·行为化】（用户补充：模组会魔改被动生物成狼那样的中立生物）威胁判定全面改为【看行为不看类型】：Mob.getTarget() 是 Mob 基类字段，所有敌对/中立/魔改生物攻击前必写它——狼发狂咬人的瞬间 target==主人，模组改的"攻击性生物"冲锋时同样写 target。不再依赖 Enemy/NeutralMob/TamableAnimal 原版类型接口（魔改生物不实现任何一个是常态）。
+- 【判定加强·行为化】（玩家补充：模组会魔改被动生物成狼那样的中立生物）威胁判定全面改为【看行为不看类型】：Mob.getTarget() 是 Mob 基类字段，所有敌对/中立/魔改生物攻击前必写它——狼发狂咬人的瞬间 target==主人，模组改的"攻击性生物"冲锋时同样写 target。不再依赖 Enemy/NeutralMob/TamableAnimal 原版类型接口（魔改生物不实现任何一个是常态）。
 - 【新驱动 NeutralThreatDriver】每 0.5 秒扫描：16 格内 getTarget 锁定主人/女仆的任意 Mob → ① 补触发 AutoCombatSwitch 参战（主人打狼时事件早于记仇就位，这里补上迟到的触发）；② 索敌写目标——把威胁直接写进女仆 brain 的 ATTACK_TARGET/LOOK_TARGET（MaidMeleeAttack 的 canAttack 反编译实证只是距离判定、不滤类型 → 写了目标攻击行为就能执行，战斗任务/战术走位/跳劈全链路自动接管）；③ 无战斗任务也能打——非攻击任务的女仆没有攻击行为（WORK 组由任务 createBrainTasks 注册），写了目标没人挥刀 → 直接调 doHurtTarget（含横扫/饰品事件，自保近身反击同款通道）+ 直连导航走向目标，农场/挖矿/跟随的女仆不再干挨咬。排班/自保/坐下/幼年女仆让位。
 - 【AutoCombatSwitch 行为化兜底】maidVictimOfMonster（女仆被打判定）/hasThreatNearby（还原威胁判定）/nearestThreatDist（换战术距离）/threatDetail（诊断）全部并入 isTargetingOurSide（getTarget 锁定主人/女仆即威胁）——野狼咬女仆时 getTarget 可能仍指向主人（记仇主人但顺手咬近身的女仆），两侧都查；还原扫描不再漏掉锁定中的魔改生物（否则还原后立刻又被咬回战斗态，反复横跳）。
 - 已部署 4,894,311
 - 待实测：① 惹怒野狼 → 女仆应立即参战拔刀围殴（不再站着）；② 狼咬女仆 → 被咬女仆还击，姐妹响应；③ 装魔改生物的 mod（被动生物变中立）→ 攻击女仆/主人时同样触发参战；④ 打完狼威胁解除 → 女仆照常还原原任务。
 
-## 实测三百四十三（用户："它的调整方式应该跟工作模式和任务是一样的。都可以统一对所有女仆进行调控，或者对单一女仆进行调控"——在家模式批量调控）
+## 实测三百四十三（问题：它的调整方式应该跟工作模式和任务是一样的。都可以统一对所有女仆进行调控，或者对单一女仆进行调控——在家模式批量调控）
 
 - 【列表页·全员在家】批量行下方新增「全员在家：开/关（x/y）」按钮——点击循环开/关，与全员模式同款交互，统一调控全部女仆的在家模式；排班中的女仆跳过（home 由排班管理，服务端同样兜底拦截）。翻页按钮右移到 cx+40/cx+90 给按钮让出空间。
 - 【网络层】新增 BatchHomePacket（C2S，跨维度扫描 + 主人校验 + 排班跳过 + 结果播报）。
 - 已部署 4,890,483
 - 待实测：排班表列表页「全员在家」按钮——一键开/关全部女仆在家模式；详情页第 1 页「在家模式」开关——单一女仆调控。
 
-## 实测三百四十二（用户："排班表内部也应该可以调整每个女仆是否可以为home模式"——排班表内单独调整在家模式）
+## 实测三百四十二（问题：排班表内部也应该可以调整每个女仆是否可以为home模式——排班表内单独调整在家模式）
 
 - 【新功能】排班表内单独调整女仆在家模式：①女仆列表行显示「在家」状态（紫色标记）；②详情页第 1 页新增「在家模式：开/关」按钮——不依赖排班开关，不开排班也能让女仆守家（home 模式）；排班开着时 home 由排班管理（开排班自动 home、关排班解除），按钮锁定提示先关排班（服务端同样兜底拦截）。
 - 【网络层】女仆列表包 8 字段 → 9 字段（追加在家模式 m[8]）；新增 HomeTogglePacket（C2S，跨维度查找女仆 + 主人/OP 校验）。
 - 已部署 4,887,742
 - 待实测：排班表 → 点女仆 → 第 1 页「在家模式」开关——不开排班也能让女仆守家；列表行显示「在家」标记。
 
-## 实测三百四十一（用户："更新一下手册详细介绍内容"——详细介绍补新功能）
+## 实测三百四十一（问题：更新一下手册详细介绍内容——详细介绍补新功能）
 
 - 【详细介绍更新】手册「详细介绍」补上 v1.1.0 新功能：①功能速览加宰杀任务/耕地标记制/精妙超越绑定卡；②农场章节补耕地标记制（只锄「曾经是耕地」的地块、自然生成耕地自动补标、草径也认）与锄地索敌（16 格主动走向可锄地块）；③排班章节补任务 ◀▶ 左右箭头（第 1 页任务行 + 第 2 页 6 槽）；④酿造章节补成品药水当基底下料（3 分钟夜视自动推进 8 分钟）；⑤杂项章节补宰杀任务机制（分组计数/阈值/每 3 秒宰一只/无目标闲逛/不误杀宠物与亡灵马）与精妙/超越绑定卡用法。
 - 已部署 4,885,003
 - 待实测：手册 → 详细介绍 → 翻到对应章节——新功能描述应已更新。
 
-## 实测三百四十（用户："女仆在宰杀状态下如果没有需要宰杀的动物，不应该站在原地不动，而应该四处闲逛"——宰杀无目标闲逛）
+## 实测三百四十（问题：女仆在宰杀状态下如果没有需要宰杀的动物，不应该站在原地不动，而应该四处闲逛——宰杀无目标闲逛）
 
 - 【无目标闲逛】宰杀行为 SEEK 分支无超阈值组时不再站桩（旧版 setStill(true) + 清 WALK_TARGET + 停导航）——改为四处闲逛：每 2 秒在周围 8 格内随机选一个点设 WALK_TARGET（BlockPosTracker 固定点，MoveToTargetSink 消费驱动寻路），走位期间不站桩；扫到超阈值组立即打断闲逛去追（下轮 tick 的 SEEK 分支优先）。
 - 已部署 4,883,659
 - 待实测：宰杀任务 + 无超阈值牲畜（或空畜栏）——女仆应持续走动闲逛，不再原地站桩；畜栏牛群超阈值时照常锁定追踪宰杀。
 
-## 实测三百三十九（用户："全天模式有了左右的箭头，那么下面的任务也应该有左右箭头啊。任务调整的左右箭头才是最重要的。但是你却一个都没给"——任务行/任务槽加 ◀▶ 箭头）
+## 实测三百三十九（问题：全天模式有了左右的箭头，那么下面的任务也应该有左右箭头啊。任务调整的左右箭头才是最重要的。但是你却一个都没给——任务行/任务槽加 ◀▶ 箭头）
 
 - 【快捷设置页·任务行】任务按钮拆成三键——◀ 上一个 / 中间任务名（点击仍循环，保留旧习惯）/ ▶ 下一个，与工作模式行同款布局（实测三百一十二的三键模式）。
 - 【排班页·6 任务槽】每个槽同样拆成三键——◀ 上一个 / 中间任务名（点击仍循环）/ ▶ 下一个，含"空闲"档回绕（循环不依赖 uid 匹配，与点击循环同口径）。
 - 已部署 4,883,409
 - 待实测：排班表第 1 页任务行、第 2 页 6 个任务槽——左右箭头应能直接切上一个/下一个任务。
 
-## 实测三百三十五（用户："对于可锄地块的判定我感觉也有一些问题，你检查一下"——草径字段映射错误）
+## 实测三百三十五（问题：对于可锄地块的判定我感觉也有一些问题，你检查一下——草径字段映射错误）
 
 - 【判定检查】逐项核验可锄地块判定链：①方块 SRG 映射——javap 实证 f_50493_=泥土（普通 Block 构造）、f_50440_=草方块（GrassBlock 构造）、f_50093_=耕地（FarmBlock 构造）、**f_50092_=CropBlock（马铃薯）不是注释声称的 dirt_path**——DirtPathBlock 构造 → putstatic f_152481_（dirt_path 正确字段）；②canDestroyBlock 无距离限制（TLM 字节码实证：canEntityDestroy + Forge 事件，不查距离）——16 格索敌不受影响。
 - 【修复】onToolModification 草径判定字段 f_50092_ → f_152481_——旧版草径被锄成耕地时不打标（判定失败），草径踩坏后女仆不认（"可锄地块判定有问题"的直接原因）。
 - 已部署 4,883,072
 - 待实测：草径（dirt_path）被锄成耕地后踩坏 → 女仆应认标记并锄回耕地。
 
-## 实测三百三十四（用户："女仆对于耕地的积极性太低了。先检查一下对于更替的整个路径和判定，看看有没有办法提高积极性"）
+## 实测三百三十四（问题：女仆对于耕地的积极性太低了。先检查一下对于更替的整个路径和判定，看看有没有办法提高积极性）
 
 - 【链路审查】锄地路径：FarmTillDriver（每 0.5 秒全图扫女仆）→ tillNearby（扫女仆脚下 5×5）→ isTillable（泥土/草方块 + 上方空气 + 有"曾经是耕地"标记 + 有锄头）→ 锄成耕地 + 打标。积极性低的根因：①扫描范围只有脚下 5×5——home 模式下女仆在锚点附近，农田稍远就永远锄不到，只能等随机巡逻撞上；②无索敌——扫到可锄地块也不走过去，原地等。
 - 【锄地索敌重写】①扫描半径 5×5 → 16 格（与酿造/熔炉/宰杀同口径，misc.brewRadius 同值）；②冷却 1 秒 → 0.5 秒（与扫描节流一致）；③近身（≤3 格）直接锄，远的目标【直连导航走过去】（m_26519_，不走 MoveToTargetSink——站桩标记/移动抑制拦不住，自保逃跑验证过的通道）；④标记自愈保留（范围内当前是耕地的地块实时打标）。
 - 已部署 4,883,065
 - 待实测：农场任务 + 农田（有标记的踩坏地块）——女仆应主动走向 16 格内的可锄地块逐块锄掉，不再等巡逻撞上。
 
-## 实测三百三十三（用户："修好了！但是Home模式下女仆又不会动了。也是的，我们直接全盘推翻。直接为农场和宰杀home模式专门重新写一套可以运动的逻辑"）
+## 实测三百三十三（问题：修好了！但是Home模式下女仆又不会动了。也是的，我们直接全盘推翻。直接为农场和宰杀home模式专门重新写一套可以运动的逻辑）
 
 - 【宰杀确认】v332 检索判定重写生效——日志实证"扫描到牲畜组: cow=5（阈值 5）"（此前 alive=0 恒空）。但 5>5 不超阈值 → 无目标 → 行为 setStill + 清 WALK_TARGET + 停导航 → 原地站桩（"不会动"的直接原因）。
 - 【全盘推翻·Home 工作移动独立驱动】新建 HomeWorkMovementDriver：为【home 模式 + 农场/宰杀任务】的女仆提供独立运动，不依赖 TLM 大脑活动/行为站桩标记。每 0.25 秒全图扫描（Entity.class 全量 + instanceof，有限 AABB——桶 bug 与 ±∞ 溢出均已绕开）：有 WALK_TARGET（工作目标）→ 交给 MoveToTargetSink 正常寻路不干扰；无目标 → home 锚点附近随机点【直连导航】（PathNavigation.moveTo，m_26519_——不走 MoveToTargetSink，站桩标记/移动抑制拦不住，自保逃跑验证过的通道）→ 女仆在 home 范围内持续巡逻走动，农场/宰杀任务照常扫描执行。
 - 已部署 4,882,643（460 条目，新增 HomeWorkMovementDriver.class）
 - 待实测：home 模式 + 农场/宰杀——女仆应持续走动（无目标时巡逻，有目标时走向目标干活）。
 
-## 实测三百三十二（用户："应该直接重写一套检索和判定逻辑"——宰杀检索判定重写 + home 巡逻 AABB 溢出修复）
+## 实测三百三十二（问题：应该直接重写一套检索和判定逻辑——宰杀检索判定重写 + home 巡逻 AABB 溢出修复）
 
 - 【宰杀·根因实锤】统计诊断 total=45 animal=17 alive=0 kept=0——17 只 Animal 全被过滤误伤。javap 实证 LivingEntity.m_6336_()（getMobType）默认实现【恒返回 MobType.f_21640_（UNDEAD）】——原版牲畜（牛/羊/猪/鸡/兔/山羊等）都不覆写该方法 → 全部命中"排除亡灵马"条件 → alive=0 → 永远无目标 → 站桩不动。此 bug 自 v314 加"排除亡灵马"起埋下，历次修复（v325 索敌重写/v329 Entity.class/v331 统计）都没触及这条过滤。
-- 【宰杀·检索判定重写】按用户要求重写：① Entity.class 全量扫描（绕开 ClassInstanceMultiMap 桶 bug）② instanceof Animal ③ 存活（isAlive && !isRemoved）④ 排除驯服宠物（TamableAnimal）⑤ 排除亡灵马——限定 AbstractHorse 且 getMobType==UNDEAD（普通马 getMobType 返回 UNDEFINED 不排除，马/驴/骡算牲畜）⑥ 按 EntityType 分组计数，超阈值组随机选一只。
+- 【宰杀·检索判定重写】按要求重写：① Entity.class 全量扫描（绕开 ClassInstanceMultiMap 桶 bug）② instanceof Animal ③ 存活（isAlive && !isRemoved）④ 排除驯服宠物（TamableAnimal）⑤ 排除亡灵马——限定 AbstractHorse 且 getMobType==UNDEAD（普通马 getMobType 返回 UNDEFINED 不排除，马/驴/骡算牲畜）⑥ 按 EntityType 分组计数，超阈值组随机选一只。
 - 【home 巡逻·AABB 溢出修复】v330 改 HomePatrolHandler 时保留了 ±∞ AABB——±∞ 经 SectionPos.blockToSection 换算溢出收敛到同一值（floor 溢出回绕 + >>4），section 循环只执行一次且落在世界外 → 扫描恒空 → home 巡逻失效（"home 模式又不会动了"）。改为有限值（±131072/±4096）。同 bug 的其余 3 处（DangerEscapeHandler/MaidDangerMalusHandler/ProMaidExtension 两处）一并修复。
 - 已部署 4,880,081
 - 待实测：①宰杀——畜栏牛群应被扫到并逐只宰杀（日志出现"锁定目标"→"宰杀"循环）；②home 模式——女仆应恢复巡逻走动。
 
-## 实测三百三十一（用户："酿药修好了。宰杀还是没修好，并且仍然会停在原地。农场耕地的频率太低了，应该改为每0.5秒的间隔"）
+## 实测三百三十一（问题：酿药修好了。宰杀还是没修好，并且仍然会停在原地。农场耕地的频率太低了，应该改为每0.5秒的间隔）
 
 - 【酿造确认】定向 3→8 分钟夜视已生效（快照实证：槽位 night_vision → long_night_vision 循环推进）——v329 条件写反修复坐实。
 - 【宰杀·矛盾诊断】部署 jar 字节码核验 scanAndPick 已用 Entity.class + instanceof Animal（v329 生效），但日志仍"范围内无牲畜"而"扫描框内实体"（同 box 同 tick 的 Entity.class 扫描）扫到 cow@-4,-60,4 距9格 等——两个 Entity.class 扫描结果矛盾。加实体统计诊断（total=扫到实体数 / animal=instanceof Animal 数 / alive=存活数 / kept=入组数）——下次实测直接看出过滤在哪一步丢的（如 total 大但 animal=0 = instanceof 失效；animal 大但 alive=0 = 存活判定问题）。
-- 【耕地频率】FarmTillDriver 扫描节流 20 tick（1 秒）→ 10 tick（0.5 秒）——用户指定。
+- 【耕地频率】FarmTillDriver 扫描节流 20 tick（1 秒）→ 10 tick（0.5 秒）——玩家指定。
 - 已部署 4,880,116
 - 待实测：①宰杀——看"统计 total=… animal=… alive=… kept=…"行定位过滤断点；②耕地——0.5 秒一轮锄地。
 
-## 实测三百三十（用户："现在 home 模式的女仆农场状态下可以移动了。但是似乎还是只有跟随的时候才会锄地，home 模式下不会"——全图 EntityMaid.class 扫描系统性桶 bug）
+## 实测三百三十（问题：现在 home 模式的女仆农场状态下可以移动了。但是似乎还是只有跟随的时候才会锄地，home 模式下不会——全图 EntityMaid.class 扫描系统性桶 bug）
 
 - 【根因】FarmTillDriver 用 m_45976_(EntityMaid.class, 全图AABB) 遍历女仆——与宰杀 Animal.class 完全同构的 ClassInstanceMultiMap 桶 bug：m_13533_(Class) 按请求 Class 精确建桶，未预建的 key 返回空桶 → EntitySection.m_188348_ 直接跳过整个 section。跟随模式女仆所在的 section 被 TLM 感知系统预建了 EntityMaid 桶 → 能扫到 → 会锄地；home 女仆单独站的 section 没预建 → 空桶 → 永远找不到 → 不锄地。HomePatrolHandler（home 巡逻驱动）同 bug。
 - 【系统性修复】全仓审计 m_45976_ 调用，9 处全图 EntityMaid.class 扫描全部改为 Entity.class 全量 + instanceof 过滤：FarmTillDriver（锄地）、HomePatrolHandler（home 巡逻）、ScheduleManager（排班切段）、AutoCombatSwitch（战斗还原扫描——注释自证"还原扫描从未扫到过任何战斗女仆"）、DangerEscapeHandler（险境脱离）、MaidDangerMalusHandler（危险寻路惩罚）、PetImmunityGuard（宠物仇恨清除）、BlueprintLib（蓝图材料统计）、ProMaidExtension（启动 BRIDGING 清理 + 钓鱼坐垫走位）。局部小范围扫描（玩家/女仆周围几格）不受影响（section 内桶大概率已预建，且影响面小）。
 - 已部署 4,880,032
 - 待实测：home 模式 + 农场任务——女仆应锄地（5×5 标记地块）+ 收割/播种持续运转；顺带验证排班切段/战斗还原/危险避让等此前"时灵时不灵"的系统。
 
-## 实测三百二十九（用户实测——宰杀"扫描框内实体"铁证 + 酿造背包药水清单：两个根因同时坐实）
+## 实测三百二十九（实测——宰杀"扫描框内实体"铁证 + 酿造背包药水清单：两个根因同时坐实）
 
 - 【宰杀·扫描 bug 实锤】同一 box 同一 tick：m_45976_(Entity.class, box) 扫到 cow@15,-60,0 水平距2格、cow@16,-60,0 距2格、cow@18,-60,1 距3格 等大量牛，而 m_45976_(Animal.class, box) 返回空 → "明明贴得很近却报无牲畜"。反编译 ClassInstanceMultiMap 实证：m_13533_(Class) 按请求 Class 精确建桶（computeIfAbsent），桶内实体靠 add 时对【已存在的 key】做 isInstance 填充——Animal.class 这个 key 在 section 里从未预建 → 空桶 → EntitySection.m_188348_ 直接 return CONTINUE 跳过整个 section → Animal 扫描恒空。Entity.class 是全量桶（日志实证工作正常）。修复：宰杀扫描改用 Entity.class 全量 + instanceof Animal 过滤（语义等价，绕开桶机制）。
 - 【酿造·条件写反实锤】背包药水清单：night_visionx4（3 分钟夜视 4 瓶）+ strengthx40 都在女仆身上，但槽 0-3 恒空、无缺料报告。processTargeted 空槽分支条件写反：`if (!bottle.m_41619_())` 在【无水瓶】（bottle 空栈，m_41619_=isEmpty=true）时为 false → 走 else 把空栈放进槽 0（等于没放）→ extractBrewableBase 永远不执行 → 3 分钟夜视永远不进酿造台。修复：改为 bottle 空时走回退取基底（与 processBatch 同款正确条件）。
 - 已部署 4,879,801
 - 待实测：①宰杀——畜栏牛群应被扫描到并逐只宰杀（日志出现"锁定目标"→"宰杀"循环）；②酿造——3 分钟夜视应自动进酿造台 → 下红石 → 酿成 8 分钟收走。
 
-## 实测三百二十八（用户："农场功能仍然是一按到 home 就完全停了下来"——MaidFarmPlantTask 同构漏网）
+## 实测三百二十八（问题：农场功能仍然是一按到 home 就完全停了下来——MaidFarmPlantTask 同构漏网）
 
 - 【根因】javap 实证 IFarmTask.createBrainTasks 默认注册 [MaidFarmMoveTask(优先级5), MaidFarmPlantTask(优先级6)]。v319 只把 move 加进 NativeTaskSmoothMixin 的 INFRA 豁免名单，**漏了 plant**：MaidFarmPlantTask 构造是单参 Map（maxDuration=60），start 处理 TARGET_POS 目标格后清目标、无 tick 覆盖——它和 move 一样靠 60 tick 周期 doStop 重启来响应 move 重搜出的新目标。被改无限时长后：处理完第一个目标 → 行为永远空转 → 新 TARGET_POS 出现也不重启 → 农场只处理一个目标就停摆。"一按 home 就停"的时序：切 home 瞬间活动切换打断行为，重启后 move 找目标、plant 处理一个目标，之后永不再动。
 - 【修复】INFRA 名单补入 MaidFarmPlantTask（isAssignableFrom 父类兼容自动覆盖子类）——plant 恢复 60 tick 周期重启，move 每 3 秒重搜新目标 → plant 重启处理 → 农场持续运转。
 - 已部署 4,879,787
 - 待实测：home 模式 + 农场任务（普通作物 + 甘蔗/西瓜）——女仆应持续走动收割/播种，不再"一按 home 就停"。
 
-## 实测三百二十七（用户："你先在日志里面和功能里面加入对生物坐标的实时判定吧，不要老是误判生物的位置，明明当时生物是贴的很近的"）
+## 实测三百二十七（问题：你先在日志里面和功能里面加入对生物坐标的实时判定吧，不要老是误判生物的位置，明明当时生物是贴的很近的）
 
 - 【全实体坐标诊断】宰杀扫描报"范围内无牲畜"时，额外把扫描框内【全部实体】的类型+坐标+与女仆的水平距离打出来（节流 5 秒，框内无实体也如实记录）——直接区分两种误判：①牛在框外（位置误判：女仆站太远/牛在 16 格外）②牛在框内但扫描漏了（扫描 bug：m_45976_ 过滤链/排除逻辑误伤）。日志格式：`扫描框内实体: cow@x,y,z 水平距N格, player@...`。
 - 已部署 4,879,770
 - 待实测：畜栏放牛 → 切宰杀 → 看"扫描框内实体"行——牛在框内（有 cow@ 且水平距<16）却仍报无牲畜 = 扫描 bug 坐实，直接修过滤链；无 cow@ = 牛确实不在框内，把女仆/畜栏拉近即可。
 
-## 实测三百二十六（用户实测运行 1 分钟——酿造/宰杀诊断快照首轮解读）
+## 实测三百二十六（实测运行 1 分钟——酿造/宰杀诊断快照首轮解读）
 
 - 【酿造快照解读】反推表正常（链=3步、表大小=40——反射构建成功，二百七十九的 Holder 解包在实机工作正常）；燃料已自动补（烈焰粉×1）；但槽 0-3 全空且无"真缺料"日志——extractBrewableBase 从背包取 3 分钟夜视这步持续返回空。最大嫌疑：药水不在【执行酿造的这只女仆】背包里（日志同名"大正女仆酒狐"同时刷宰杀+酿造，可能是两只女仆错位）。本轮补诊断：快照附带背包药水清单（双手+背包全部药水 id/药水 id×数量）——下次实测直接看出药水到底在不在她身上。
 - 【宰杀快照解读】每秒扫描节奏正常（新版生效），如实报"范围内无牲畜（半径 16）"——女仆 16 格内确实没牲畜；重写后的索敌追踪逻辑只有扫到目标才走动，扫描圈空则原地等待（行为正确）。本轮补诊断：扫描日志附带女仆坐标——对照畜栏坐标即可判断是距离问题（女仆站太远）还是真没牲畜。
 - 已部署 4,879,392
 
-## 实测三百二十五（用户："宰杀功能照样没有成功生效。似乎是扫描逻辑出了问题，而且宰杀的运动逻辑应该和攻击索敌类似"）
+## 实测三百二十五（问题：宰杀功能照样没有成功生效。似乎是扫描逻辑出了问题，而且宰杀的运动逻辑应该和攻击索敌类似）
 
 - 【扫描核验】m_45976_(Class, AABB) 反编译核验签名合法（EntityGetter default 方法，走 m_6443_ 过滤链）；日志反复"范围内无牲畜（半径 16）"更可能是女仆站的位置周围真无牲畜（旧版从不移动）。排除扫描调用本身的问题。
 - 【根因·纯站桩够不着】旧版宰杀行为每 tick setStill(true) + 清 WALK_TARGET + 停导航——设计成原地检测原地杀，牲畜在 3 格外就永远够不着；日志反复"范围内无牲畜"却从不挪一步，畜栏里的牛永远等不到宰杀。
@@ -1934,7 +1934,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,879,095
 - 待实测：畜栏放 >5 只牛 → 切宰杀任务 → 女仆应走向牛群逐只宰杀（promaid.log 应出现"锁定目标"→"宰杀"循环）
 
-## 实测三百二十四（用户："酿造功能还是没有成功生效。女仆还是一直在做动作，但是练不出药水。不给水瓶，只给三分钟夜视药水及材料，定向酿造八分钟"——酿造链诊断盲区）
+## 实测三百二十四（问题：酿造功能还是没有成功生效。女仆还是一直在做动作，但是练不出药水。不给水瓶，只给三分钟夜视药水及材料，定向酿造八分钟——酿造链诊断盲区）
 
 - 【日志审查结论】promaid.log/latest.log/debug.log 全查：酿造链【零运行时日志】——MaidBrewBehavior 全程不打日志，notifyMissing 只发气泡/聊天不落盘；测试会话（16:07-16:09）里唯一女仆任务是宰杀（maid_smart:slaughter），无任何酿造痕迹。无法从日志定位卡点。
 - 【字节码核验】forge-1.20.1-47.4.21-client.jar 里 PotionBrewing$Mix 的 from/to（f_43532_/f_43534_）确为 Holder$Reference——与 BrewRecipeResolver.unwrapHolder 解包逻辑吻合，反射链理论上可用；f_43494_ 药水配方表字段名一致。定向链代码推演（3分钟夜视=long_night_vision 链上 progress=2 → 槽3 下红石 → 20 秒 → isTargetFinal 收走）未发现死路。
@@ -1943,7 +1943,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 已部署 4,878,542
 - 待实测：定向 3→8 分钟夜视场景跑 1 分钟 → 查 promaid.log [酿造] 快照——若表空/反射错误 = 反射构建失败坐实；若燃料空 = 没给烈焰粉；若槽3 有红石但 20 秒不消耗 = 下料逻辑/槽位问题；快照会直接给出答案。
 
-## 实测三百二十三（用户："农场模式下如果女仆是 home 模式就会待在原地一动不动……放了一天那女仆也待在原地"——home 农场静止复核与 v322 部署核验）
+## 实测三百二十三（问题：农场模式下如果女仆是 home 模式就会待在原地一动不动……放了一天那女仆也待在原地——home 农场静止复核与 v322 部署核验）
 
 - 【部署核验】此前修复链路已全部落地并核实：①v319 —— NativeTaskSmoothMixin 的 INFRA 排除名单加入 MaidFarmMoveTask（javap 实证 searchForDestination 只在 start 调用一次，改无限时长后永不重新搜索目标 → 农场停摆）；②v322 —— INFRA 判定从 Set.contains 精确匹配改为 isAssignableFrom 父类兼容（甘蔗/西瓜用 MaidFarmSurroundingMoveTask extends MaidFarmMoveTask，旧精确匹配漏掉子类 → 照样改无限时长 → 同样停摆）。本次反编译核验：MaidFarmMoveTask.start 字节码确认搜索仅在 start（周期重启驱动），MaidCheckRateTask 无限时长行为 start 只跑一次（checkExtraStartConditions 走过就不再挡，但永不 doStop）；isHomeModeEnable 时 checkOwnerPos 直通（TLM 原版即支持 home 农场，home 模式本身不拦农场寻路）
 - 【部署一致性核验】deployed jar（D:\.minecraft\...\mods\promaid-1.1.0.jar，4,877,413）与 patched 最新构建逐条目比对：459 条目零差异；部署 jar 内 NativeTaskSmoothMixin.class 字节码同时包含 v319 排除 + v322 isAssignableFrom 逻辑（verify_deployed_nsm 实证）；HomePatrolHandler.class 同字节；latest.log 确认 Mixing NativeTaskSmoothMixin into MaidBrain 正常应用，无 Mixin apply failed / Error applying；promaid-common.toml 实证 nativeTaskSmooth=true、workUninterrupted=true
@@ -1955,48 +1955,48 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【Mixin 崩溃修复】MaidDebugPanelMixin 注入 maidmarriage 的 MaidDebugPanelScreen.init 加 require=0——maidmarriage 更新后 init 方法被移除/重命名，@Inject 找不到目标 → Mixin apply failed → 打开界面即崩（100% 复现，crash-report 实证）。require=0 后找不到目标静默跳过（AI 记忆按钮不显示，功能降级但不崩），与 MixinInteractionSittingAllow 的 require=0 同款策略
 - 已部署 4,877,413
 
-## 实测三百一十八（用户："女仆手上一直有动作，但是一直放不进去药"——酿造强化材料错配卡死）
+## 实测三百一十八（问题：女仆手上一直有动作，但是一直放不进去药——酿造强化材料错配卡死）
 
 - 【强化材料双测修复】批量模式配置萤石强化（强化=2）但背包只有红石粉时，旧版只测配置材料：isBatchFinal 测"夜视+萤石"无配方 → 误判"无强化变体"放行 → 3 分钟夜视被当成品收走（挥臂动作）；extractBrewableBase 判定"已最终状态"不取 → 永远放不进酿造台；processForm 只找萤石 → 报缺萤石卡死。修复：强化判定双材料——配置材料无配方时自动测另一种（配置萤石但夜视只有红石延长版 → 下红石；反之亦然），两种都无配方（如 healing 无任何强化变体）才放行
 - 【全形态强化修复】喷溅/滞留瓶也能强化（喷溅夜视+红石=喷溅长夜视，原版配方表支持）——旧版只强化饮用形态，喷溅/滞留瓶永远普通时长
 - 【定向模式形态推进修复】extractBrewableBase 定向分支：药水效果已到目标但形态未到（如目标滞留、背包是饮用 8 分钟夜视）→ 可取来由 processForm 下火药/龙息推进形态。旧版直接跳过 → 饮用成品永远放不进酿造台
 - 已部署 4,877,199
 
-## 实测三百一十五（用户："先前版本有关于基岩上层的修复，我怀疑是老代码作祟"——基岩层传送问题复查）
+## 实测三百一十五（问题：先前版本有关于基岩上层的修复，我怀疑是老代码作祟——基岩层传送问题复查）
 
-- 【同维度拉回补坐垫/骑乘豁免】trySameDimPull（同维度远距拉回）旧版只有 home/干活/搭路豁免，漏了坐垫/骑乘——粉丝"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在基岩层（同维度）距主人远 → 被拉回主人身边。修复：坐垫/骑乘 = 玩家明确停放，不拉（与救援/一键集合同口径）
-- 【TLM 原版传送补蹲下/坐垫/骑乘豁免】MaidTeleportPreserveMixin 只拦自保/建造/搭路——TLM 原版 teleportToOwner（离主人过远自动传送）仍会把坐垫/骑乘/蹲下的女仆拉走（粉丝"蹲下、坐垫全都固定会这样"的元凶：我们 mod 的救援/拉回已豁免，TLM 原版没拦）。修复：坐垫/骑乘/蹲下（m_6040_ = isShiftKeyDown，javap 实证）一律拦截 TLM 原版传送
+- 【同维度拉回补坐垫/骑乘豁免】trySameDimPull（同维度远距拉回）旧版只有 home/干活/搭路豁免，漏了坐垫/骑乘——反馈"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在基岩层（同维度）距主人远 → 被拉回主人身边。修复：坐垫/骑乘 = 玩家明确停放，不拉（与救援/一键集合同口径）
+- 【TLM 原版传送补蹲下/坐垫/骑乘豁免】MaidTeleportPreserveMixin 只拦自保/建造/搭路——TLM 原版 teleportToOwner（离主人过远自动传送）仍会把坐垫/骑乘/蹲下的女仆拉走（反馈"蹲下、坐垫全都固定会这样"的元凶：我们 mod 的救援/拉回已豁免，TLM 原版没拦）。修复：坐垫/骑乘/蹲下（m_6040_ = isShiftKeyDown，javap 实证）一律拦截 TLM 原版传送
 - 已部署 4,872,515
 
-## 实测三百一十四（用户："检查一下新内容的逻辑"——全量逻辑审查）
+## 实测三百一十四（问题：检查一下新内容的逻辑——全量逻辑审查）
 
 - 【宰杀误杀修复】宰杀任务排除【驯服宠物】——狼/猫/鹦鹉（TamableAnimal）都是 Animal 子类，会被当牲畜误杀；只杀野生牲畜。另排除【亡灵马】（骷髅马/僵尸马，AbstractHorse 也是 Animal 子类但 MobType=UNDEAD 不是牲畜）
 - 【跨维度绑定落错表修复】精妙/超越绑定卡右击终端完成绑定时，绑定写入【女仆所在维度】的表——旧版写玩家当前维度，女仆在其他维度时绑定落错表，取物（按女仆维度查表）永远找不到 → 跨维度绑定失效
 - 【缺料报告永不触发修复】缺料双通道确认的 10 秒超时漏洞——pending 超时后旧版重新记 pending 不报告，而酿造台烧制一轮 20 秒（>10 秒），女仆两次缺料检查间隔必然超时 → 永远走"记 pending"分支 → 真缺料永远不报。修复：pending 超时 = 视为真缺直接报告
 - 已部署 4,872,346
 
-## 实测三百一十三（用户："Gui美化，模组内新添加物品（promaid手册，女仆酿造手册）的ui背景都是用的原版MC格式，过于单调。在背景加上更多的颜色，ui颜色也变一下"）
+## 实测三百一十三（问题：Gui美化，模组内新添加物品（promaid手册，女仆酿造手册）的ui背景都是用的原版MC格式，过于单调。在背景加上更多的颜色，ui颜色也变一下）
 
 - 【Promaid 手册 GUI 美化】背景从原版纯黑改为**蓝金品牌渐变**——多层半透明色带叠加（深海军蓝→宝蓝→亮蓝渐层）+ 靛蓝顶部饰条 + 金色细线（m_280509_ ARGB 叠加实现渐变），全页面（目录/建造/女仆管理/记忆）统一生效
 - 【女仆酿造手册 GUI 美化】同样改为**紫金品牌渐变**——深紫蓝→蓝→紫渐层 + 紫金顶部饰条 + 金线，与药水主题呼应；标题加斜体层次
 - 已部署 4,872,173
 
-## 实测三百一十二（用户："排班表优化，现在的排班表对于排班表中模式的切换必须要通过点击的方式切换到下一个模式。能不能增加前后切换键，让它可以切换到上一个或者下一个模式，这样子更加方便"）
+## 实测三百一十二（问题：排班表优化，现在的排班表对于排班表中模式的切换必须要通过点击的方式切换到下一个模式。能不能增加前后切换键，让它可以切换到上一个或者下一个模式，这样子更加方便）
 
 - 【模式前后切换键】排班表→女仆详情→第 1 页快捷设置：工作模式由"点一下循环切换"改为**三键布局——◀ 上一个 / 中间模式名（点击仍循环，保留旧习惯）/ ▶ 下一个**（早班↔晚班↔全天任意方向直达，不用再点两三次绕圈）；排班中的女仆仍锁定（三键都不发包）；立即生效同旧版
 - 已部署 4,871,908
 
-## 实测三百一十一（用户："新工作模式：宰杀。女仆会检测自己周围 5×5 范围内同种牲口的数量是否大于 5（这个数量配置可以在面板中调），如果超过的话，就会每三秒/kill 掉随机一个那种牲口（并播放动画）"）
+## 实测三百一十一（问题：新工作模式：宰杀。女仆会检测自己周围 5×5 范围内同种牲口的数量是否大于 5（这个数量配置可以在面板中调），如果超过的话，就会每三秒/kill 掉随机一个那种牲口（并播放动画））
 
 - 【宰杀任务】新工作模式「宰杀」（maid_smart:slaughter，TLM 任务列表可切）——女仆检测周围 5×5（水平）内牲畜（Animal 子类：牛/猪/羊/鸡/兔/山羊等）按**实体类型分组**计数，某组数量超过面板阈值（杂项设置→「宰杀数量阈值」，misc.slaughterCount，默认 5，范围 2~64）→ **每 3 秒随机 kill 一只**该组牲畜（m_6074_ = Entity.kill，正常死亡流程掉落物照常；挥臂动画）；≤ 阈值不动；无超阈值组时站桩等待不漫游；看门狗/排班兼容已接入
 - 已部署 4,871,737
 
-## 实测三百一十（用户担忧："女仆拥有共用的背包。女仆在使用建造和酿药的时候要从中取物品，如果同时选中了同一个物品，会不会出现错误呢？对于检测建造材料的判定会不会出现误判和错误呢？"——选定方案 B）
+## 实测三百一十（玩家担忧："女仆拥有共用的背包。女仆在使用建造和酿药的时候要从中取物品，如果同时选中了同一个物品，会不会出现错误呢？对于检测建造材料的判定会不会出现误判和错误呢？"——选定方案 B）
 
 - 【共享存储防抢（方案 B）】分析：服务端单线程逐 tick——`extractItem(i,1,false)` 原子，A 取走后 B 提取瞬间为空 → 返回空 → 该步跳过下轮重试，不会丢物品/放错/崩溃；真实风险只有两处【假性判定】：①建造缺料统计（countMaterial 含共享终端数）可能算"够"但被别的女仆抢走 → 慢一拍自动恢复；②酿药缺料报告在 A 抢走瞬间误报"缺材料"（终端明明有）。修复：改**双通道确认**——缺料第一次取不到只记 pending（不报），下一轮处理周期重试；连续两轮（10 秒内）都取不到（背包/主副手/精妙终端/网络接口全空）才真报缺料气泡+系统消息；补料成功清 pending。建造侧缺料判定（含终端统计）与消耗同源，取不到静默跳过不误报，无需改
 - 已部署 4,867,195
 
-## 实测三百零九（用户："再兼容一下超越维度，方案类似，不过 2 个物品的配方和合成表就由你来写吧"）
+## 实测三百零九（问题：再兼容一下超越维度，方案类似，不过 2 个物品的配方和合成表就由你来写吧）
 
 - 【维度终端绑定卡】新物品「维度终端绑定卡」（maid_smart:beyond_bind_card，**9 末影珍珠合成**，创造栏工具页）——手持右击自己的女仆选定目标，再右击【超越维度网络接口】（beyonddimensions:net_interface，注册名判定零硬依赖）完成绑定；卡不消耗可反复用
 - 【维度终端解绑卡】新物品「维度终端解绑卡」（**9 黏液球合成**）——右击女仆清空她的网络接口绑定
@@ -2004,7 +2004,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【绑定独立存储】与精妙储存分开（BeyondBindingStore，maid_smart_beyond_binding）——两套绑定可同时生效（先精妙后超越），各自的解绑卡只解各自的表
 - 已部署 4,867,095
 
-## 实测三百零八（用户："加入精妙储存兼容：新物品由九张皮革制成。手持此物品右击女仆，然后右击终端，随后女仆会与此终端绑定，此终端会被视作女仆的另一个背包，女仆可以直接从中取走物品，此功能服务于建造和酿药。第二个由 9 个甘蔗合成，右击女仆取消她与终端的联系"）
+## 实测三百零八（问题：加入精妙储存兼容：新物品由九张皮革制成。手持此物品右击女仆，然后右击终端，随后女仆会与此终端绑定，此终端会被视作女仆的另一个背包，女仆可以直接从中取走物品，此功能服务于建造和酿药。第二个由 9 个甘蔗合成，右击女仆取消她与终端的联系）
 
 - 【精妙终端绑定卡】新物品「精妙终端绑定卡」（maid_smart:storage_bind_card，9 皮革合成，创造栏工具页）——手持右击自己的女仆选定目标，再右击【精妙储存控制器】完成绑定（sophisticatedstorage:controller，注册名判定零硬依赖）；卡不消耗可反复用，系统消息确认
 - 【精妙终端解绑卡】新物品「精妙终端解绑卡」（9 甘蔗合成）——右击女仆清空她的终端绑定
@@ -2012,94 +2012,94 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【多女仆一终端】绑定表按维度存 SavedData（StringTag 列表）——终端坐标 → 列表，天然支持多只女仆绑同一终端；一只女仆只绑 1 个终端（新绑定替换旧的）
 - 已部署 4,856,580
 
-## 实测三百零七（粉丝："两个在地狱基岩层上猪人塔的女仆的传送不受控制，当我在附近就看不出问题，拉开一点距离就会不停有传送声，但女仆没离开原位，而如果我传送回主世界那女仆会一起传过来一下，然后又自己传送到主世界里和猪人塔坐标一致的位置。蹲下、坐垫、home模式全都固定会这样"）
+## 实测三百零七（问题：两个在地狱基岩层上猪人塔的女仆的传送不受控制，当我在附近就看不出问题，拉开一点距离就会不停有传送声，但女仆没离开原位，而如果我传送回主世界那女仆会一起传过来一下，然后又自己传送到主世界里和猪人塔坐标一致的位置。蹲下、坐垫、home模式全都固定会这样）
 
 - 【救援循环修复】根因：受困救援（MaidChunkLoadManager.tick）只有 needsRescue（**下界 y≥126 一刀切**）+ 距离 ≥8 格判定，**没有 home/坐垫/骑乘豁免**（summon 系列都有，唯独救援漏了）。猪人塔女仆故意放在基岩层（y≥126）→ 拉开距离后被每 tick 循环拽回主人身边（传送声），home 模式又把她送回基岩顶 → 下个 tick 再传 → 无限循环；传回主世界 → 跨维度再拽 → 又送回去。修复：坐垫/骑乘/在家模式 = 玩家明确停放，不救援（与 summonOne/summonMaidTo 同口径；建造女仆仍可救援）
 - 已部署 4,846,071
 
-## 实测三百零六（粉丝："1.20.1forge 具体表现这：往女仆兜里只放了3分钟夜视和红石粉，然后就不会自动把3分钟夜视放进炼药台，我只能手动放入3分钟夜视，然后她会自动放红石粉"）
+## 实测三百零六（问题：1.20.1forge 具体表现这：往女仆兜里只放了3分钟夜视和红石粉，然后就不会自动把3分钟夜视放进炼药台，我只能手动放入3分钟夜视，然后她会自动放红石粉）
 
-- 【成品药水当基底下料】批量模式下料槽 0 空且没有水瓶时，从背包取**按当前配置还能继续推进的成品药水**当基底自动放入酿造台（如 3 分钟夜视 + 配置红石增强 → 自动放入，红石延长成 8 分钟）——旧版槽 0 只认水瓶，成品药水永远只能玩家手动放（粉丝："不会自动把 3 分钟夜视放进炼药台"）。判定：主副手优先 + isBatchFinal==false（还需要强化/形态）+ 非水瓶/粗药；已最终状态的药水不取（放进去会被当成品收走死循环）
+- 【成品药水当基底下料】批量模式下料槽 0 空且没有水瓶时，从背包取**按当前配置还能继续推进的成品药水**当基底自动放入酿造台（如 3 分钟夜视 + 配置红石增强 → 自动放入，红石延长成 8 分钟）——旧版槽 0 只认水瓶，成品药水永远只能玩家手动放（问题：不会自动把 3 分钟夜视放进炼药台）。判定：主副手优先 + isBatchFinal==false（还需要强化/形态）+ 非水瓶/粗药；已最终状态的药水不取（放进去会被当成品收走死循环）
 - 已部署 4,846,035
 
-## 实测三百零五（用户："测试场景，玩家在进入游戏之后进行耕地。然后把根蒂踩掉，但是女仆不为所动"）
+## 实测三百零五（问题：测试场景，玩家在进入游戏之后进行耕地。然后把根蒂踩掉，但是女仆不为所动）
 
 - 【锄地事件打标修复】根因：getFinalState 恒为 null——原版锄地（HoeItem.m_6225_）走 fallback 逻辑直接 setBlock，不 setFinalState，旧版 finalState==null 直接 return → 玩家锄地永远打不上标记（标记自愈只覆盖女仆扫描范围内的耕地，玩家锄完走开/踩掉后女仆扫不到 → 不恢复）。修复：改用 getState()（锄地前的原方块）判定——锄地动作 + 原方块是锄头可锄目标（泥土/草方块/草径，HoeItem.f_41332_ 表）即打标
 - 已部署 4,845,793
 
-## 实测三百零四（用户："现在是怎么搞女仆都不会进行耕地"）
+## 实测三百零四（问题：现在是怎么搞女仆都不会进行耕地）
 
 - 【标记自愈】根因：标记制死锁——女仆锄地需要标记、标记又只能靠锄地事件产生（第一块地永远锄不了）；区块加载扫描只在区块加载瞬间跑一次（玩家站农田旁时早已加载）→ 标记永远为空 → 女仆完全不耕地。修复：FarmTillDriver 扫描时**当前是耕地的地块直接打标**（耕地是"曾经是耕地"的活证据）——农田的标记实时补上，踩坏的地块立刻有标记可锄；从未耕过的泥土依然无标记 → 不连锁扩散
 - 已部署 4,845,766
 
-## 实测三百零三（用户："有些结构会自然生成耕地，那那些耕地也要打上标记"）
+## 实测三百零三（问题：有些结构会自然生成耕地，那那些耕地也要打上标记）
 
 - 【自然生成耕地打标】区块加载扫描兜底——结构生成（村庄农田等）的耕地是直接放置方块，不触发锄地事件，标记会漏。ChunkEvent.Load 时遍历区块各 section 的耕地方块自动打标记（跳过空 section，hasOnlyAir 快速跳过；FarmlandMarkStore.markAll 批量写入只 setDirty 一次）
 - 已部署 4,845,691
 
-## 实测三百零二（用户："女仆在发现一个地块不是耕地的时候，就直接锄上去了，导致在超平坦地形直接 5×5 的地块全都变成了耕地。我仅仅是要求在 5×5 的范围内进行检索，然后将曾经是耕地但现在不是的替换为耕地。或者说就是对曾经已经是耕地的地块打上一个标记（不管是自然生成的还是玩家搞的）女仆可以识别这些标记，并且在 5×5 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地"）
+## 实测三百零二（问题：女仆在发现一个地块不是耕地的时候，就直接锄上去了，导致在超平坦地形直接 5×5 的地块全都变成了耕地。我仅仅是要求在 5×5 的范围内进行检索，然后将曾经是耕地但现在不是的替换为耕地。或者说就是对曾经已经是耕地的地块打上一个标记（不管是自然生成的还是玩家搞的）女仆可以识别这些标记，并且在 5×5 范围内检索到以后发现不是耕地就动用锄头将其锄成耕地）
 
 - 【耕地标记制】锄地判定从"3×3 内有耕地"启发式改为**标记制**——新增 FarmlandMarkStore（SavedData 持久化，每维度一份 data/farmland_marks.dat，long[] 存压缩坐标）：玩家/女仆用锄头把泥土/草方块锄成耕地时自动打"曾经是耕地"标记（锄地事件监听，覆盖玩家手锄/女仆手锄/女仆原版农场任务锄地）；女仆只锄**有标记且当前不是耕地**的地块（泥土/草方块 + 上方空气 + 有标记 + 有锄头）。从未耕过的泥土/草方块没有标记 → 不锄——超平坦地形不再连锁扩散全变耕地（旧版锄一块后周围 3×3 就有耕地 → 5×5 全被锄成耕地）
 - 【女仆锄地保持标记】FarmTillDriver 锄成耕地后立即补标记——标记是"曾经是耕地"的凭证，锄完不能丢，否则下次踩坏后女仆不认
 - 已部署 4,844,703
 
-## 实测三百（用户："女仆工作逻辑为，先扫物品栏，依次检索可烧制的物品……遇到食物时，在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制。木材类默认投入黑名单不会进行烧制"）
+## 实测三百（问题：女仆工作逻辑为，先扫物品栏，依次检索可烧制的物品……遇到食物时，在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制。木材类默认投入黑名单不会进行烧制）
 
-- 【按物品类型选炉子】findFurnace 重写——先扫物品栏定炉型偏好：有食物 → 烟熏炉优先（其次熔炉）；无食物但有高炉配方可烧物（矿物/粗金属）→ 高炉优先（其次熔炉）；只有仅熔炉可烧物（圆石/沙子等）→ 只选熔炉。烟熏炉只给食物、高炉只给矿物、熔炉通用（用户："遇到食物时，在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制"）
-- 【绑定后无料取消】已绑定的炉子与背包不匹配（如高炉烧完矿后背包只剩食物）→ 取消绑定释放占用，重新找匹配的炉子（用户："如果女仆发现自己包中没有可以对应的物品，那么会将这个炉子的绑定取消掉……重新寻找一个新的"）
+- 【按物品类型选炉子】findFurnace 重写——先扫物品栏定炉型偏好：有食物 → 烟熏炉优先（其次熔炉）；无食物但有高炉配方可烧物（矿物/粗金属）→ 高炉优先（其次熔炉）；只有仅熔炉可烧物（圆石/沙子等）→ 只选熔炉。烟熏炉只给食物、高炉只给矿物、熔炉通用（问题：遇到食物时，在附近搜索烟熏炉和熔炉。烟熏炉优先级高于熔炉。遇到矿物时搜索高炉和熔炉。如果是仅能通过熔炉烧制的物品，则仅用熔炉进行烧制）
+- 【绑定后无料取消】已绑定的炉子与背包不匹配（如高炉烧完矿后背包只剩食物）→ 取消绑定释放占用，重新找匹配的炉子（问题：如果女仆发现自己包中没有可以对应的物品，那么会将这个炉子的绑定取消掉……重新寻找一个新的）
 - 【木材黑名单】木材类（原木/木板/树苗/竹等，BlockItem 方块为原木/树叶/树苗）默认进黑名单不烧——女仆不会拿木材当原料烧（避免"用木头烧木头"）；模组详细设置新增「烧木材」开关（misc.cookBurnWood，默认关），勾选后木材类照常可烧（仍受「烧任何可烧制物」开关约束）
-- 【燃料按槽位顺序】燃料选择简化为**按物品栏摆放顺序取第一个可燃烧物品**（原版 isFuel 判定）——不再按燃烧时长/数量评分（用户："但可以做燃料，燃料的优先级顺序就仅仅是根据物品栏摆放顺序"）；木材黑名单只拦"当原料烧"，当燃料不受影响（原木/木板照常可烧炉子）
-- 【燃料改回评分制】实测后用户改回——燃料选择恢复**燃烧时长/数量评分**（纯燃料优先：煤炭/木炭/烈焰棒等不可烧制的可燃烧物先选，评分 = 燃烧时长 ×100000 + 数量；没有纯燃料才退而选可烧制燃料兜底）（用户："还是改回按燃烧时长/数量评分吧"）
+- 【燃料按槽位顺序】燃料选择简化为**按物品栏摆放顺序取第一个可燃烧物品**（原版 isFuel 判定）——不再按燃烧时长/数量评分（问题：但可以做燃料，燃料的优先级顺序就仅仅是根据物品栏摆放顺序）；木材黑名单只拦"当原料烧"，当燃料不受影响（原木/木板照常可烧炉子）
+- 【燃料改回评分制】实测后玩家改回——燃料选择恢复**燃烧时长/数量评分**（纯燃料优先：煤炭/木炭/烈焰棒等不可烧制的可燃烧物先选，评分 = 燃烧时长 ×100000 + 数量；没有纯燃料才退而选可烧制燃料兜底）（问题：还是改回按燃烧时长/数量评分吧）
 - 已部署 4,842,467
 
-## 实测二百九十九（用户："熔炉那边出现了问题，女仆完全不检测自己包里面的东西是什么，就跑到对应的炉子那边去，并且仍然会出现拿木材烧木头的情况，而不是优先先烧别的物品"）
+## 实测二百九十九（问题：熔炉那边出现了问题，女仆完全不检测自己包里面的东西是什么，就跑到对应的炉子那边去，并且仍然会出现拿木材烧木头的情况，而不是优先先烧别的物品）
 
-- 【炉子背包门控】findFurnace 加背包门控——背包里既没有食材/可烧制物、也没有燃料时，不绑定任何炉子（站桩等待，不白跑）；有任一可烧制物或燃料才去找炉子（用户："女仆完全不检测自己包里面的东西是什么，就跑到对应的炉子那边去"）
-- 【可烧制物优先不可燃】extractAnySmeltable（通用可烧制物回退）改为**不可燃烧的可烧制物优先**（圆石/沙子/矿石等——烧它们不抢燃料），可烧制燃料（原木/木板/树苗——既是原料又是燃料）最后兜底——旧版按槽位顺序取，原木槽位在前就喂原木 → 原木进原料槽、原木又进燃料槽 = "用木头烧木头"（用户："仍然会出现拿木材烧木头的情况，而不是优先先烧别的物品"）
+- 【炉子背包门控】findFurnace 加背包门控——背包里既没有食材/可烧制物、也没有燃料时，不绑定任何炉子（站桩等待，不白跑）；有任一可烧制物或燃料才去找炉子（问题：女仆完全不检测自己包里面的东西是什么，就跑到对应的炉子那边去）
+- 【可烧制物优先不可燃】extractAnySmeltable（通用可烧制物回退）改为**不可燃烧的可烧制物优先**（圆石/沙子/矿石等——烧它们不抢燃料），可烧制燃料（原木/木板/树苗——既是原料又是燃料）最后兜底——旧版按槽位顺序取，原木槽位在前就喂原木 → 原木进原料槽、原木又进燃料槽 = "用木头烧木头"（问题：仍然会出现拿木材烧木头的情况，而不是优先先烧别的物品）
 - 已部署 4,840,666
 
-## 实测二百九十八（用户："耕地改为一个顺带逻辑。先将整个农场模式运作的逻辑改回原版。但是如果在自己 5×5 范围内发现到曾经是耕地的地块，然后执行目前的换工具逻辑，并播放一下动画，并将地块变为耕地"）
+## 实测二百九十八（问题：耕地改为一个顺带逻辑。先将整个农场模式运作的逻辑改回原版。但是如果在自己 5×5 范围内发现到曾经是耕地的地块，然后执行目前的换工具逻辑，并播放一下动画，并将地块变为耕地）
 
 - 【锄地降级为顺带逻辑】农场模式运作完全回原版——FarmMoveTillMixin 的锄地目标注入作废（不再把"需要锄的泥土"列为移动目标，TARGET_POS 只由收割/种植驱动）；FarmSweepMixin 的 tillAround 调用与方法删除（不再挂在 start TAIL）
-- 【5×5 顺带锄地】FarmTillDriver 扫描范围 3×3 → **5×5**（用户指定）——每 1 秒扫描女仆周围 5×5 内"曾经是耕地"的地块（isTillable：泥土/草方块 + 上方空气 + 3×3 内有耕地），执行换工具逻辑（ensureHoeForFarm）+ 锄地动画（音效/挥臂）+ 锄成耕地 + 消耗耐久
+- 【5×5 顺带锄地】FarmTillDriver 扫描范围 3×3 → **5×5**（玩家指定）——每 1 秒扫描女仆周围 5×5 内"曾经是耕地"的地块（isTillable：泥土/草方块 + 上方空气 + 3×3 内有耕地），执行换工具逻辑（ensureHoeForFarm）+ 锄地动画（音效/挥臂）+ 锄成耕地 + 消耗耐久
 - 已部署 4,840,329
 
-## 实测二百九十七（用户："酿药物品不识别主副手，只识别背包；女仆耕地的积极性真的很差，锄一下之后就再也不锄地了"）
+## 实测二百九十七（问题：酿药物品不识别主副手，只识别背包；女仆耕地的积极性真的很差，锄一下之后就再也不锄地了）
 
-- 【酿造主副手识别】所有酿造提取（水瓶/烈焰粉/下界疣/红石/萤石/火药/龙息/粗药材料）改为**主副手优先**——先扫双手（getHandsInvWrapper，TLM 公开 API），再扫背包（用户："酿药物品不识别主副手，只识别背包"）
+- 【酿造主副手识别】所有酿造提取（水瓶/烈焰粉/下界疣/红石/萤石/火药/龙息/粗药材料）改为**主副手优先**——先扫双手（getHandsInvWrapper，TLM 公开 API），再扫背包（问题：酿药物品不识别主副手，只识别背包）
 - 【锄地独立驱动】根因：锄地只挂在 MaidFarmPlantTask.start 的 TAIL——start 只在 TARGET_POS 存在时触发（MaidFarmMoveTask.searchForDestination 设置，只认可收割/可种植/可锄目标）。锄完一块泥土变成耕地后，周围没有成熟作物/空耕地时扫描空转 → TARGET_POS 不设置 → start 不触发 → 锄地再也不跑。修复：新增 FarmTillDriver——ServerTick 每 1 秒主动扫描农场任务女仆周围 3×3 的可锄泥土（isTillable 判定）并锄掉（与 tillAround 同款动作：装备锄头/锄成耕地/音效/挥臂/消耗耐久），冷却表复用 FarmSweepCache.TILL_CD
 - 已部署 4,841,142
 
-## 实测二百九十六（粉丝："包里有三叉戟、下界合金剑、机枪，新放出来的女仆会默认把有远程攻击能力的东西识别为法杖，要么给三叉戟识别为近战然后疯狂绕圈——可能是模组冲突，不是我们这边的问题，先把改动撤销"）
+## 实测二百九十六（问题：包里有三叉戟、下界合金剑、机枪，新放出来的女仆会默认把有远程攻击能力的东西识别为法杖，要么给三叉戟识别为近战然后疯狂绕圈——可能是模组冲突，不是我们这边的问题，先把改动撤销）
 
-- 【撤销实测二百九十五】枪械优先于法术任务的改动已回滚（isSpellTask 删除、buildPools 的枪械排除分支删除）——粉丝实测：三叉戟被识别为近战疯狂绕圈、远程武器被识别为法杖，疑似与超时空救援等模组冲突，非本 mod 问题。恢复原逻辑（法术任务与枪械任务同池加权随机），等粉丝确认冲突来源后再处理
+- 【撤销实测二百九十五】枪械优先于法术任务的改动已回滚（isSpellTask 删除、buildPools 的枪械排除分支删除）——反馈实测：三叉戟被识别为近战疯狂绕圈、远程武器被识别为法杖，疑似与超时空救援等模组冲突，非本 mod 问题。恢复原逻辑（法术任务与枪械任务同池加权随机），等反馈确认冲突来源后再处理
 - 已部署 4,837,785（回滚后与二百九十四同字节）
 
-## 实测二百九十五（粉丝："为啥女仆会把枪械识别为法杖啊，自动切换总变成法术模式"）
+## 实测二百九十五（问题：为啥女仆会把枪械识别为法杖啊，自动切换总变成法术模式）
 
 - 【枪械优先于法术】根因：法术任务（万法皆通 maidspell 等）的 isWeapon 认带攻击力属性的物品（法术书/法杖/枪械都带）——枪械同时被法术任务认作武器 → 与 gun_attack 同池加权随机 → 随机落到法术任务 = "自动切换变成法术模式"。修复：女仆持有枪械（GunCompat.hasGunAndAmmo）时，法术类任务（isSpellTask：命名空间 maidspell/spellbook 或 UID 含 spell）不进候选池——枪械就该用枪械模式（TLM gun_attack 有换弹/走位/弹药全套机制）
 - 已部署 4,837,881
 
-## 实测二百九十四（用户："农场模式失去自由漫步；没有看门狗女仆喜欢发呆；锄地应该是 1×1 而不是 3×3"）
+## 实测二百九十四（问题：农场模式失去自由漫步；没有看门狗女仆喜欢发呆；锄地应该是 1×1 而不是 3×3）
 
-- 【锄地范围 3×3 → 1×1】只锄目标格（base）——不再扫周围 3×3（用户："女仆锄一下以后是一个 3×3 的范围，我认为应该是一个 1×1 的范围"）
+- 【锄地范围 3×3 → 1×1】只锄目标格（base）——不再扫周围 3×3（问题：女仆锄一下以后是一个 3×3 的范围，我认为应该是一个 1×1 的范围）
 - 【自由漫步恢复】根因：3×3 锄地把周围泥土/草方块全锄成耕地后，FarmMoveTillMixin 又把新耕地旁的目标列为可锄目标 → TARGET_POS 常驻 → 散步门禁（已有移动目标不打扰）永远拦着 → 农场女仆失去自由漫步。1×1 后目标自然清空，散步恢复
-- 【看门狗覆盖农场】SMART_TASKS 加 touhou_little_maid:farm（TaskNormalFarm UID javap 实证）——农场女仆空闲发呆时每 10 秒气泡解释"附近没有需要打理的农田了"（用户："因为没有看门狗，所以女仆现在还是很喜欢发呆"）
+- 【看门狗覆盖农场】SMART_TASKS 加 touhou_little_maid:farm（TaskNormalFarm UID javap 实证）——农场女仆空闲发呆时每 10 秒气泡解释"附近没有需要打理的农田了"（问题：因为没有看门狗，所以女仆现在还是很喜欢发呆）
 - 已部署 4,837,785
 
-## 实测二百九十三（用户："滞留和喷溅型药水直接套用饮用型的时间描述以及效果描述"）
+## 实测二百九十三（问题：滞留和喷溅型药水直接套用饮用型的时间描述以及效果描述）
 
 - 【GUI 时长按形态折算】药剂手册 tooltip 效果行旧版直接显示 Potion 注册表的饮用型满时长——喷溅/滞留型药水的效果描述与实际不符。修复：按原版规则折算——喷溅 = 饮用 ×3/4、滞留 = 饮用 ×1/4（如夜视 3:00 → 喷溅 2:15、滞留 0:45），等级不变
 - 已部署 4,837,765
 
-## 实测二百九十二（用户："3 分钟的夜视不会自动合成 8 分钟的；要求合成时间长的滞留型药水，但合成出来的仍然是时间短版本"）
+## 实测二百九十二（问题：3 分钟的夜视不会自动合成 8 分钟的；要求合成时间长的滞留型药水，但合成出来的仍然是时间短版本）
 
 - 【批量收成品检查配置】根因：批量模式收成品（isDonePotion 为真就收）不检查配置——3 分钟夜视一出现就被收走，processForm 的强化步骤永远轮不到 → 配置"红石延长"却产出普通时长药水。修复：新增 isBatchFinal——未到目标强化/形态的成品【不收】，留在酿造台继续推进；平凡/浓稠（无效果死路）照常收走腾位；该药水无对应强化变体（如 healing 无延长版，原版配方表 m_43529_ 实测判定）放行不卡死
-- 【缺强化材料不转形态】根因：processForm 缺红石/萤石时静默跳过强化直接转形态 → 产出未强化的滞留/喷溅药水（用户："要求 8 分钟滞留却合成出 2 分钟的"）。修复：缺强化材料 → notifyMissing 报告 + return 不转形态——饮用瓶留在酿造台等材料，补上后自动强化，强化完才转形态
+- 【缺强化材料不转形态】根因：processForm 缺红石/萤石时静默跳过强化直接转形态 → 产出未强化的滞留/喷溅药水（问题：要求 8 分钟滞留却合成出 2 分钟的）。修复：缺强化材料 → notifyMissing 报告 + return 不转形态——饮用瓶留在酿造台等材料，补上后自动强化，强化完才转形态
 - 【工程】ResourceLocation.getPath 在 SRG 下是 m_135827_（MaidCookBehavior.hasOreTag 同款实证），getPath 编译不过
 - 已部署 4,837,717
 
-## 实测二百九十一（用户："两个女仆会抢同一个酿造台；女仆会往酿造台放空瓶；锄地检测频率不行，泥土变草方块后失去判定"）
+## 实测二百九十一（问题：两个女仆会抢同一个酿造台；女仆会往酿造台放空瓶；锄地检测频率不行，泥土变草方块后失去判定）
 
 - 【酿造台占用】两个女仆抢同一酿造台 → 熔炉同款占用表（BREW_USERS，维度|坐标 → 占用女仆 UUID）：启动即登记、findBrewingStand 跳过他人占用、台子丢失/行为停止释放、占用者死亡懒清理——多女仆自动分散到不同酿造台
 - 【空瓶卡死修复】女仆往酿造台放空瓶导致酿造完全无法进行——根因：isDonePotion 只认 PotionItem，空瓶（glass_bottle）既不是药水（不收走）又占着槽（不补水瓶）→ 卡死。修复：非药水物品（空瓶/杂物）一律收走腾位；extractWaterBottle 严格只认【饮用型】水瓶（排除喷溅/滞留水瓶——旧版只认 PotionItem 不区分形态，喷溅水瓶也会被当水瓶放进槽 0 卡死）
@@ -2108,41 +2108,41 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【批量酿造材料轮换】批量模式材料选择从"按背包槽位顺序取第一个"改为"优先选与上次不同的材料"（每女仆记录 LAST_INGREDIENT）——给多种材料时交替酿多种药水（A→B→C→A…），不再死磕第一种；只给单一材料时自然只酿那种（符合批量本意）
 - 已部署 4,837,317
 
-## 实测二百九十（用户："把触发半径改为两格更拟真一些。然后把文案加一点旁白"）
+## 实测二百九十（问题：把触发半径改为两格更拟真一些。然后把文案加一点旁白）
 
 - 【触发半径】4 格 → **2 格**——摸头/抱抱是贴身动作，站 4 格外隔空摸头太假；2 格内存在女仆按 G/H 即触发（取最近）
 - 【旁白文案】系统消息改为第三人称叙述（括号包裹）：摸头 = "（你伸出手，轻轻揉了揉 XX 的头。她眯起眼睛，像只被顺毛的猫一样蹭着你的手心，头顶仿佛冒出了小星星）（好感 +1…）"；抱抱 = "（你张开双臂，把 XX 轻轻拥入怀中。她先是愣了一下，随即红着脸回抱住你，把脸埋在你胸口蹭了蹭，小声嘟囔着「主人的怀抱最安心了～」）（好感 +3…）"
 - 【判定简化回顾】实测二百八十九最终方案：不再做视线/角度/射线判定（cos≥0.9 贴脸时垂直差拉低 cos 永远失败；射线-AABB 也失败）——改为空手右击同款逻辑：范围内存在女仆即触发；查询范围 16 格（m_82363_ 正参数只向正方向膨胀，6 格查询实测找不到 dist=2.3 的女仆，16 格查询经日志实证可靠）
 - 已部署 4,844,062
 
-## 实测二百八十九（用户："明明命中了碰撞箱，但是一点用都没有"）
+## 实测二百八十九（问题：明明命中了碰撞箱，但是一点用都没有）
 
 - 【根因链】按键链路全程正常（客户端捕获→发包→服务端收包，日志实证），断点在服务端判定：旧版 cos≥0.9 角度阈值 + 距离下限 0.5 + 参考点 +0.8——TLM 女仆矮（约 1.4 格），玩家眼睛 1.62，贴脸时垂直差占比大，cos 被拉低到 0.9 以下，越贴脸越失败；距离下限 0.5 把贴脸女仆直接跳过
 - 【修复】判定简化为"范围内最近女仆"（空手右击同款逻辑），零视线判定；查询范围 16 格（6 格查询实测找不到 dist=2.3 的女仆——m_82363_ 正参数只向正方向膨胀，范围语义存疑，16 格经日志实证可靠）
 - 【诊断】emotion key / emotion srv 日志链路（客户端捕获、服务端收包、判定结果），验证后保留精简版
 - 已部署 4,843,883
 
-## 实测二百八十八（用户："先把默认按键改回 g 和 h 吧"）
+## 实测二百八十八（问题：先把默认按键改回 g 和 h 吧）
 
 - 【默认键位回退】摸摸头 = **G**、抱抱 = **H**——撤销二百八十七的 Shift+G/Shift+H 方案（Screen.m_96638_ 的 SRG 归属未做字节码实证，存在映射错误的可能，导致组合键触发不了）；恢复为直接 G/H 触发，tick 轮询 consumeClick 不再过滤 Shift
 - 【键位描述】lang 回退为"摸摸头（对准女仆）/ 抱抱（对准女仆）"
 - 已部署 4,843,598
 
-## 实测二百八十七（用户："能不能把默认键位改一下，改成 shift 加 G 和 shift 加 H"）
+## 实测二百八十七（问题：能不能把默认键位改一下，改成 shift 加 G 和 shift 加 H）
 
 - 【默认键位】摸摸头 = **Shift+G**、抱抱 = **Shift+H**——MC 的 KeyMapping 原生不支持修饰键组合注册，实现为绑定 G/H 后在 tick 轮询处过滤 Shift 状态（Screen.m_96638_ = hasShiftDown）；单独按 G/H 不触发，且 Shift 未按下时主动排空按键计数（防松开 Shift 后残余计数延迟误触发）
 - 【键位描述】lang 更新为"摸摸头（Shift+G 对准女仆）/ 抱抱（Shift+H 对准女仆）"；原版按键设置里显示的主键仍是 G/H（可改键，改键后 Shift 修饰依然生效）
 - 已部署 4,843,700
 
-## 实测二百八十六（用户："HeartPact 里面有拥抱和摸头的动作，但动作与事件没办法触发"）
+## 实测二百八十六（问题：HeartPact 里面有拥抱和摸头的动作，但动作与事件没办法触发）
 
 - 【HeartPact 源码研究】（github.com/Asumi-Nishiki/TouhouLittleMaid-HeartPact，MIT 开源）：其拥抱/摸头动作 = **mixin 到 TLM `HardcodedAnimationManger.playMaidAnimation/playGeckoMaidAnimation` 的 RETURN，在最终骨骼覆盖层手写角度**（Bedrock 模型走 ModelRendererWrapper、Gecko 模型走 AnimatedGeoBone，骨骼名多套兼容模糊查找），服务端状态 + S2C 同步 + 客户端按进度淡入淡出插值——不是动画文件
 - 【动作内建】把该机制移植进 ProMaid：EmotionPoseState（服务端姿势状态，游戏 tick 自动过期）+ EmotionPosePacket（S2C 同步，TRACKING_ENTITY_AND_SELF 广播）+ EmotionPoseClient（客户端墙钟进度：摸头 2s/抱抱 4s，300ms 淡入 500ms 淡出）+ EmotionPoseMixin（Bedrock/Gecko 双路径骨骼覆盖，姿势参数取 HeartPact 已调优数值：抱抱=肩/大臂/前臂三段弧线环抱+身体前倾，摸头=头部 sin 轻摆+微前倾；抱抱中摸头自动降级为头部轻摆叠加）
-- 【不依赖 HeartPact】用户 mods 里 HeartPact 处于 disabled 状态——动作直接内建进 promaid，无需启用第三方 mod；G/H 键触发链路不变，现在按下后女仆会**播放对应姿势动画**
+- 【不依赖 HeartPact】玩家 mods 里 HeartPact 处于 disabled 状态——动作直接内建进 promaid，无需启用第三方 mod；G/H 键触发链路不变，现在按下后女仆会**播放对应姿势动画**
 - 【工程】Gecko 头部 yaw 轴与 Bedrock 反向（HeartPact 实证）已按其调整；Math.sin 显式 (float) 强转；mixin 注册于 client 段（与其它 client mixin 同包避免 build 校验子包路径问题）；女仆卸载时 EmotionPoseState.forget 挂入 AiMemoryManager 遗忘链路
 - 已部署 4,843,599
 
-## 实测二百八十五（用户："给玩家提供情绪价值的功能——摸摸头和抱抱，先看 TLM 有没有对应动作，想办法让玩家触发并有对应效果和系统消息"）
+## 实测二百八十五（问题：给玩家提供情绪价值的功能——摸摸头和抱抱，先看 TLM 有没有对应动作，想办法让玩家触发并有对应效果和系统消息）
 
 - 【TLM 调查结论】1.5.3 无内置摸头/抱抱动作（animationId 仅模型内置 idle/walk/attack 等；joy 是坐垫方块）；可用的官方能力 = 好感度 API（EntityMaid.getFavorabilityManager().add(int)/getLevel()，javap 实证）+ 心形粒子（SpawnParticleMessage.HEART）+ 女仆语音（tryPlayMaidPickupSound）+ 气泡
 - 【触发】新增键位 **G【摸摸头】/ H【抱抱】**（默认键，注册进原版按键设置"Promaid 建造"分类可改键；G/H 原版零占用，避开 V 语音/B 背包/JEI R）。对准 4 格内的女仆按键触发；客户端只发动作类型，服务端全量验证
@@ -2151,13 +2151,13 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【实现】EmotionNetworking（自建 channel maid_smart/emotion，C2S 包 varint 动作类型——m_130130_/m_130242_）+ EmotionKeysClient（键位注册 + tick 轮询 consumeClick，Screen 打开时原版机制天然不喂键）
 - 已部署 4,835,545
 
-## 实测二百八十四（用户："这个时间太诡异了吧，你是用kick来计时的吗？而且几级效果这些也没有显示出来"）
+## 实测二百八十四（问题：这个时间太诡异了吧，你是用kick来计时的吗？而且几级效果这些也没有显示出来）
 
 - 【根因·getter 反了】effectLine 把 duration/amplifier 的 SRG 搞反——截图实证：跳跃药水（duration=3600、amplifier=0）显示"跳跃提升 3601"，即 duration(3600) 被当成等级喂进罗马数字函数（roman(3601) 超表回落数字），时长分支反而不触发。字节码字段序号实证：f_19503_（第 1 个 int 字段，vanilla 顺序 effect/duration/amplifier）= duration → **m_19557_**；f_19504_ = amplifier → **m_19564_**
 - 【修复后】效果行"跳跃提升 I (3:00)"：等级始终显示（I/II/III 罗马，I 也不再隐藏），时长 duration/20 分:秒格式
 - 已部署 4,827,566
 
-## 实测二百八十三（用户："翻页按键与页码重叠；熔炉/酿造都爱报'附近明明有 XX'；tooltip 看不到药水效果；mod 新配方是否要逐个适配"）
+## 实测二百八十三（问题：翻页按键与页码重叠；熔炉/酿造都爱报'附近明明有 XX'；tooltip 看不到药水效果；mod 新配方是否要逐个适配）
 
 - 【遗留播报删除】WorkStatusReporter 的"炉子/酿造台明明就在附近（N个）但我没能开始工作"诊断气泡删除——烹饪/酿造早已改为站桩模式，女仆贴着方块等待（烧制中/缺料/收成品）是正常工作状态，这句 v1.5.7 的诊断输出就是纯误报；COOK/BREW 空闲诊断分支整体移除（countBlocks 随删）
 - 【页码重叠】翻页箭头间距拉开（◀ cx-70 / ▶ cx+50）——旧版箭头（cx±34/-14）与居中页码"第 1/2 页"重叠
@@ -2165,15 +2165,15 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【mod 配方通用适配·拓展点】BrewRecipeResolver 追加读取 **Forge BrewingRecipeRegistry**（mod 通过 Forge API 注册的酿造配方在 Forge 自己的表里，不进 vanilla PotionBrewing 表）——getRecipes/getInput/getIngredient/getOutput 全公开 API 运行时遍历，输出为药水的配方自动并入反推链（input 提取基底、Ingredient 取代表材料）；任何 mod 的新药水配方**自动进入定向酿造**，无需逐个适配（自定义 IBrewingRecipe 实现无法静态反推的除外）
 - 已部署 4,827,578
 
-## 实测二百八十二（用户："勾选药水后切换喷溅/滞留，对应形态的药水也被勾起——同一种药水的三种形态被同时选中；重开手册依次点三形态也是全部显示选中"）
+## 实测二百八十二（问题：勾选药水后切换喷溅/滞留，对应形态的药水也被勾起——同一种药水的三种形态被同时选中；重开手册依次点三形态也是全部显示选中）
 
 - 【根因·形态选中态】绿框判定只比对药水 id、不管形态——targetPotion 在切形态时不变，绿框恒亮。玩家视角：勾选"跳跃药水"后切喷溅/滞留，"对应的喷溅/滞留药水"也显示被勾选；重开 GUI 依次点三个形态按钮，网格绿框每次都亮——**三种形态看起来同时被选中**，完全无法分辨当前目标形态，也解释了"手册内部对喷溅/滞留的判定有问题"的观感
 - 【修复】切换形态按钮即清除已选目标（cfg.targetPotion=""）——绿框语义变为「**当前形态下**已选定的目标」：切形态后必须重新点选（网格图标已是新形态的瓶），点选才亮；重开后绿框只亮在保存的形态上。点同一形态按钮不清空（防误触丢选中）
-- 【说明文案】模式说明与 ✓ 提示同步更新交互语义（"先选形态，再点选目标；切形态会清除已选；缺料会立即报告"）
+- 【说明文案】模式说明与 提示同步更新交互语义（"先选形态，再点选目标；切形态会清除已选；缺料会立即报告"）
 - 注：服务端 form 本就正确保存/生效（保存消息有形态摘要）；女仆酿不出喷溅/滞留的主因是此前缺料无提示（二百八十一已修）——喷溅需火药、滞留需火药+龙息，女仆背包缺料时会立即气泡+系统消息报告
 - 已部署 4,827,299
 
-## 实测二百八十一（用户："材料看不见，改成像 EMC 面板悬停那种跟随鼠标的显示；搜索框中文无效；女仆酿造没动作；保存无提示；缺料女仆卡住无报告；喷溅/滞留没法酿"）
+## 实测二百八十一（问题：材料看不见，改成像 EMC 面板悬停那种跟随鼠标的显示；搜索框中文无效；女仆酿造没动作；保存无提示；缺料女仆卡住无报告；喷溅/滞留没法酿）
 
 - 【材料清单改悬停 tooltip】链 + "每批 3 瓶材料"（物品名 ×数量逐行）改为**跟随鼠标的标准 tooltip**（m_280677_，仿 EMC 面板悬停样式）——旧版画在网格右侧固定区，链换行多时把材料区推出面板/被矮窗口保护线裁掉，玩家根本看不见；信息区右侧恢复只留药水名
 - 【根因·"喷溅/滞留没法酿"】形态推进逻辑本身完整（progress 到顶 → processForm 下火药/龙息），但**缺料时静默等待零提示**——玩家不知道还要往女仆背包放火药（喷溅）/火药+龙息（滞留），女仆卡在酿造台旁不动，观感即"没法选中/没法酿"。修复：缺料立即报告——女仆气泡（"主人，酿造缺材料：火药 ×1，放进我背包我就继续～"，服务端中文映射）+ 主人系统消息（translatable 组件，物品名客户端本地化）；30 秒冷却 + 同材料不重复刷屏，补料后重置
@@ -2182,7 +2182,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【保存后系统提示】保存成功即发系统消息：模式/目标/形态完整摘要（"批量酿造 / 强化=红石延长 / 形态=喷溅"）——玩家能确认形态真的存进去了，旧版保存无任何反馈
 - 已部署 4,827,236
 
-## 实测二百八十（用户："点击喷溅/滞留时下面的表也改成对应的图标；悬停药水时旁边显示酿造一瓶需要什么物品及其图标和数量"）
+## 实测二百八十（问题：点击喷溅/滞留时下面的表也改成对应的图标；悬停药水时旁边显示酿造一瓶需要什么物品及其图标和数量）
 
 - 【形态图标联动】网格里的药水图标随形态按钮联动：饮用=水瓶/喷溅=喷溅型水瓶（splash_potion）/滞留=滞留型水瓶（lingering_potion），容器物品 + 药水 NBT 渲染，颜色随药水不变
 - 【材料清单】悬停药水图标时，信息区显示"每批 3 瓶材料"：水瓶 ×3 + 链上每步材料 ×1（酿造台 1 个材料可同时酿 3 瓶）+ 形态材料（喷溅=火药 ×1 / 滞留=火药+龙息各 ×1）——图标 + 右下角数量小字（仿物品栏），随当前形态实时变化
@@ -2191,24 +2191,24 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【id 行移除】悬停信息去掉注册名行（截图实证超宽溢出面板右缘）
 - 已部署 4,824,775
 
-## 实测二百七十九（用户："图标跟字符重叠；定向酿造点一个药水全部被勾选；所有药水显示无法酿造；GUI 排版混乱反人类"）
+## 实测二百七十九（问题：图标跟字符重叠；定向酿造点一个药水全部被勾选；所有药水显示无法酿造；GUI 排版混乱反人类）
 
-- 【根因·点击全选】选中/点击判定此前用 `ITEMS.getKey(stack.getItem())`——所有药水瓶物品的注册名都是 `minecraft:potion`（不是药水 id）→ 点任一格后 targetPotion 恒为 "minecraft:potion" → 渲染时所有格子都匹配 → 全部显示绿框✓，保存的目标也是错的。改为按**药水注册名**（如 minecraft:healing）判定（GridEntry 记录药水 id，图标 stack 只负责渲染）
+- 【根因·点击全选】选中/点击判定此前用 `ITEMS.getKey(stack.getItem())`——所有药水瓶物品的注册名都是 `minecraft:potion`（不是药水 id）→ 点任一格后 targetPotion 恒为 "minecraft:potion" → 渲染时所有格子都匹配 → 全部显示绿框，保存的目标也是错的。改为按**药水注册名**（如 minecraft:healing）判定（GridEntry 记录药水 id，图标 stack 只负责渲染）
 - 【根因·全部"无法酿造"】Forge 1.20.1 对 PotionBrewing 的 **binpatch**（Forge GitHub patch 文件实证）把 `Mix.from/to` 字段类型从 Potion/Item 本体改成 **Holder.Reference**——javap 未 patch 的原版 jar 看不出来，实机反射拿到的是 Holder → `instanceof Potion` 全部失败 → 反推表为空 → isTableUsable false（连水瓶都列出来）+ 悬停全显示"无法酿造"。修复：取值后经 `unwrapHolder` 解包（m_203334_ = Holder.value()，javap SRG 实证），并新增 lastError 诊断字段；服务端定向酿造与 GUI 同源修复
 - 【悬停名】悬停此前显示注册名 "minecraft:potion"，改用药水**本地化名**（stack hoverName 走客户端语言文件，如"治疗药水"/"喷溅型夜视药水"）；配方链预览的基底/材料名同样改本地化名（"水瓶 → 下界疣 → 粗制药水 → 金西瓜"），超宽自动换行
 - 【布局重排】模式行（y=26）→ 说明行独立一行（y=50，不再压按钮）→ 形态行两种模式同一位置（y=90）；**强化行仅批量模式显示**（定向的强化走 long_/strong_ 变体药水，不使用强化参数——此前定向模式下强化行照常显示是认知混乱源头）；批量模式补充已选强化说明；矮窗口 3/2/1 行兜底；页码移到翻页箭头间
 - 【列表净化】基底/无效果药水（water/mundane/thick/empty）不再作为可选目标
 - 已部署 4,824,144
 
-## 实测二百七十八（用户："失败了，在最新运行的游戏里面没能触发这个功能。女仆还是不会去切换锄头。也不会有所动作。"）
+## 实测二百七十八（问题：失败了，在最新运行的游戏里面没能触发这个功能。女仆还是不会去切换锄头。也不会有所动作。）
 
-- 【根因】锄地逻辑挂在 `MaidFarmPlantTask.start` 的 TAIL，而 start 只在 canUse 返回 true 时触发；canUse 要求 TARGET_POS 内存存在，TARGET_POS 由 `MaidFarmMoveTask.shouldMoveTo` 扫描设置——它只认**可收割（成熟作物）/可种植（空耕地+背包有种子）**两种目标。用户验证场景（踩坏的泥土 + 空耕地 + 只有锄头没种子）两种目标都不存在 → 找不到目标 → TARGET_POS 永不设置 → start 永不触发 → 锄地永不运行（javap 字节码实证完整链路）
+- 【根因】锄地逻辑挂在 `MaidFarmPlantTask.start` 的 TAIL，而 start 只在 canUse 返回 true 时触发；canUse 要求 TARGET_POS 内存存在，TARGET_POS 由 `MaidFarmMoveTask.shouldMoveTo` 扫描设置——它只认**可收割（成熟作物）/可种植（空耕地+背包有种子）**两种目标。玩家验证场景（踩坏的泥土 + 空耕地 + 只有锄头没种子）两种目标都不存在 → 找不到目标 → TARGET_POS 永不设置 → start 永不触发 → 锄地永不运行（javap 字节码实证完整链路）
 - 【修复·目标判定注入】新增 `FarmMoveTillMixin`：`MaidFarmMoveTask.shouldMoveTo` TAIL 注入第三个目标判定——"需要锄的泥土"（dirt + 上方空气 + 3×3 内有耕地 + 背包/主手有锄头，判定抽到 `FarmSweepCache.isTillable`）也算目标。女仆会走过去，start 触发后锄地
 - 【中心格锄地】目标格本身也可能是泥土（新链路下目标格就是泥土），`tillAround` 不再跳过中心格，3×3 全扫
 - 【判定统一】`isTillable`/`nearFarmland` 抽到 FarmSweepCache（普通类，mixin 与业务代码共用），FarmSweepMixin 与 FarmMoveTillMixin 同源判定
 - 已部署 4,822,720
 
-## 实测二百七十七（用户："酿药功能鸡肋，引入新物品女仆药剂手册——批量酿造/定向酿造两种模式"）
+## 实测二百七十七（问题：酿药功能鸡肋，引入新物品女仆药剂手册——批量酿造/定向酿造两种模式）
 
 - 【新物品·女仆药剂手册】`maid_smart:brew_manual`：水瓶+书本无序合成，创造栏「工具与实用品」页；手持右击自己的女仆打开酿造配置 GUI（附魔光效同排班表）
 - 【两种模式】批量酿造（默认）：背包里有什么正向材料就酿什么，按配置的强化路线（无/红石延长/萤石强化）与成品形态（饮用/喷溅/滞留）统一处理；定向酿造：只按目标药水的配方链精确下料，缺料停止下料等待（半成品留在酿造台，补料后自动继续，不换材料凑合）
@@ -2218,28 +2218,28 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【网络层】BrewManualNetworking（SimpleChannel maid_smart/brew_manual）：S2C 打开包 + C2S 保存包（方向校验同排班表）
 
 
-## 实测二百七十六（用户："农场功能加强——判定周围土块曾经是否为耕地，是则把包内锄头放主手锄好（优先级与挖矿矿镐一致），并消耗对应耐久"）
+## 实测二百七十六（问题：农场功能加强——判定周围土块曾经是否为耕地，是则把包内锄头放主手锄好（优先级与挖矿矿镐一致），并消耗对应耐久）
 
 - 【实现·耕地恢复】FarmSweepMixin 新增 `tillAround`（挂在农场连收连种增强里，2 秒冷却）：以目标格为中心 3×3 水平扫描——该格是**泥土**（耕地退化/踩踏来的）且上方是空气、且水平 3×3 内存在**耕地**（农田区域信号，自然泥土/草方块旁无耕地不锄）→ 锄成耕地
 - 【锄头装备·与矿镐同优先级】`MaidToolAutoEquip.ensureHoeForFarm`：主手已是锄头且未即将用坏 → 零开销不换（玩家亲手放的锄头不触发切换）；空手/非锄头/快坏 → 从背包装备评分最高的一把（附魔词条数 > 剩余耐久，锄头对耕地无挖掘等级差异）；快坏锄头黑名单保护跳过；背包无锄头 → 跳过不空手硬锄
 - 【耐久消耗】锄地后 `m_41622_(1, maid)` 消耗 1 点耐久（HoeItem.m_6225_ 字节码实证同款消耗路径）+ 锄地音效（SoundEvents.f_11955_）+ 挥臂动画
 - 已部署 4,792,226
 
-## 实测二百七十五（用户："女仆会随时乱动导致落点不稳，但建造模式没法一键召回，必须先解除建造——给建造模式特殊豁免，可被一键召回和单独召回"）
+## 实测二百七十五（问题：女仆会随时乱动导致落点不稳，但建造模式没法一键召回，必须先解除建造——给建造模式特殊豁免，可被一键召回和单独召回）
 
 - 【根因】建造行为进入时强制 `setHomeModeEnable(true)`（防 TLM 跟随拉走），而召回链路（一键集合/单独传送/未加载区块召回）全部豁免 home 模式 → 建造女仆恒被挡，必须先解除建造才能召回
 - 【实现·建造女仆召回豁免】新增 `isBuildingMaid` 判定（建造任务中），5 处召回拦截点全部放行建造女仆：①一键集合在场扫描；②单独传送（详情页「传送到我身边」）；③summonMaidTo 咽喉点；④未加载区块待召回队列（强载出来发现是建造女仆 → 直接召回而非保持原位）；⑤LAST_SEEN 快照（建造女仆不记 stayPut，未加载区块也能被强载召回）
 - 【召回后自动回工地】建造女仆被召回后，`teleportToWorkSite`（每 4 tick 限频）自动把她瞬移回目标格旁继续建——落点不稳时先召回再让她自己回去，无需解除建造
 - 已部署 4,791,056
 
-## 实测二百七十四（用户："建造模式屏蔽除了建造以外的其他所有系统信息系统消息及气泡"）
+## 实测二百七十四（问题：建造模式屏蔽除了建造以外的其他所有系统信息系统消息及气泡）
 
 - 【实现·气泡统一静默】所有女仆系统气泡都走同一入口 `ChatBubbleManager.addTextChatBubble`（79 处调用，含自保喊话/喂食/互助/钓鱼/图腾/挖矿/伐木/闲聊），在既有 ChatBubbleLimitMixin 拦截点加规则：建造任务中的女仆、且调用栈**非建造系统来源**（`com.maidsmart.build` 包）→ 气泡丢弃（返回 -1）。建造系统的气泡（缺料/跳过/完成/设计师回复等）照常显示
 - 【实现·字幕点加闸】9 处"女仆自发"直接发聊天栏的系统消息逐点加 `shouldMute` 闸：没食物播报、喂食系统提示、互助支援、药水塞包、金苹果、牛奶、不死图腾、挖矿/伐木挡路字幕、主人死亡传送气泡、主动对话日上限——建造中全部静默
 - 【保留】玩家 GUI/命令操作的响应消息（排班书操作/集合/蛋糕互动/LLM 开关/配置面板/手册赠送）不受影响——那是玩家操作的反馈，不是女仆自发消息
 - 已部署 4,790,852
 
-## 实测二百七十三（用户："给建造模式女仆无限时长的抗性5，取消受击事件和其他怪物的仇恨，解除建造后去掉"）
+## 实测二百七十三（问题：给建造模式女仆无限时长的抗性5，取消受击事件和其他怪物的仇恨，解除建造后去掉）
 
 - 【实现·BuildShieldGuard 新类】建造任务进行中的女仆三层保护（全部任务级判定，切出建造立刻失效）：
   - **无限时长抗性 V**：首次进入建造施加（`MobEffectInstance.f_267388_` = -1 无限时长，字节码实证 isInfiniteDuration 判 f_19503_==-1；`MobEffects.f_19606_` = resistance，static 块 putstatic 顺序实证），无粒子无 HUD 图标，切出建造移除效果并清标记（只移除我们给的，玩家自己叠的抗性不动）
@@ -2248,7 +2248,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【接入】效果维护挂在 tickBuildSit 每 tick（全 activity 覆盖，任务级标记防残留）
 - 已部署 4,790,080
 
-## 实测二百七十二（用户："女仆建造坐在原地不符合常理，先瞬移到要搭方块的位置再放置"）
+## 实测二百七十二（问题：女仆建造坐在原地不符合常理，先瞬移到要搭方块的位置再放置）
 
 - 【方案选择】方案 B（先瞬移到要搭方块的位置，再放置）——女仆"先到位 → 挥臂 → 方块在眼前出现"，视觉因果链完整，配合既有挥臂动画即"亲手摆放"观感；方案 A（放置后再瞬移）是"方块先凭空出现、她后闪现过去"，因果倒置，违和感未消除
 - 【实现·先瞬移再放置】新增 `teleportToWorkSite`：两处 doPlace（主循环 + 延后补建）放置前把女仆瞬移到目标格旁的安全站立格——水平相邻同层、格本身空气 + 头顶空气 + 脚下有承托（非空气非流体）、区块必须已加载（防未加载区块伪空气传进虚空）；找不到安全站姿则不瞬移（隔空放置兜底）；已在 2 格内不瞬移；限频 4 tick（极速模式连续放置不连闪）
@@ -2378,7 +2378,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 ## 实测二百四十六（部署错版本根因确认 + 药水飞行逻辑重做）
 
 - 【根因确认】游戏实际运行在 1.20.1-Forge_47.4.21（PCL2 启动实证），其 mods 里是旧 jar promaid-1.1.0(1).jar（4,780,756=实测二百三十九版），所有新修复（宠物保护加强/药水改动）都部署到了 47.4.23、游戏根本没加载——这就是“宠物保护没用”的真正原因。部署脚本改指向 47.4.21 并删除旧文件
-- 【药水飞行重做】用户：过于鬼畜，改为和玩家一样向目标方向以抛物线方式抛出，强制半秒后消失并强制给予效果，不管先前是否命中：mixin 去掉每 tick 追踪修正（纯抛物线），超时从 20 tick 改 10 tick（半秒），两处投掷初速改玩家同款（0.5 速度+0.2 抬升）
+- 【药水飞行重做】问题：过于鬼畜，改为和玩家一样向目标方向以抛物线方式抛出，强制半秒后消失并强制给予效果，不管先前是否命中：mixin 去掉每 tick 追踪修正（纯抛物线），超时从 20 tick 改 10 tick（半秒），两处投掷初速改玩家同款（0.5 速度+0.2 抬升）
 
 ## 实测二百四十五（宠物保护仍然没做好（命名铁傀儡女仆仍能伤到））
 
@@ -2407,15 +2407,15 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【根因】pillarUpStep 防窒息检查用 isAir：伐木场景头顶正上方就是目标木材（树干）或树冠树叶，都不是空气→搭高永远失败→女仆原地等待到超时弃置，从不垫方块
 - 【修复】①放置格上方 2 格改 suffocates 判定（isSuffocating=false 的树叶/空气不拦，只拦真会闷住她的实心满块），目标木材所在格排除（垫块后头短暂插进目标木材属预期，下一 tick 挖掘入口立即挖掉）；②真实头顶检查同改 suffocates（树冠场景头顶就是树叶，旧 isAir 把树叶当堵头拦死搭高）；新增 suffocates 辅助方法
 
-## 实测二百三十九（用户："其他光源都验证成功了，仅仅火把/灵魂火把/红石火把这些特殊方块不行——为什么不能直接加一个白名单呢？"）
+## 实测二百三十九（问题：其他光源都验证成功了，仅仅火把/灵魂火把/红石火把这些特殊方块不行——为什么不能直接加一个白名单呢？）
 
 - 【应答·为什么最初没直接白名单】通用路径（物品→方块→方块自身 getLightEmission）理论上也覆盖火把系（StandingAndWallBlockItem 也是 BlockItem 子类），语义更"万全"；您实测证明**这条路径对特殊方块不成立**——白名单是这类"官方不按常理出牌"的最稳解，采纳
 - 【实现·白名单优先】`LIGHT_WHITELIST`（注册名 → 光强，静态表）：torch 14 / soul_torch 10 / redstone_torch 7 / lantern 15 / soul_lantern 10 / campfire 15 / soul_campfire 10 / jack_o_lantern 15 / glowstone 15 / sea_lantern 15 / shroomlight 15 / magma_block 3——判定顺序改为【白名单命中→直接用登记亮度】，未命中才走通用 BlockItem 光强（灯笼/萤石等已验证路径原样保留）；登记一个不在表内的光源后其他发光方块依旧自动生效
 - 测试：重启 → 主手拿火把 → `held light: level=14` + 地面/墙壁照亮；灵魂火把 10、红石火把 7、灯笼 15；面板开关可随时关闭
 
-## 实测二百三十八（用户问"光源问题呢"——持光功能验证化）
+## 实测二百三十八（玩家问"光源问题呢"——持光功能验证化）
 
-- 【现状说明】持光的两大死因已在二百三十五修掉：①注册时机（alive 日志 12:40 实证驱动活着）；②光块懒解析（类加载期注册表未冻结的 null 陷阱）。上一会话（12:56）驱动 alive ✓、无任何报错——但持光成功时**零日志**，无法确认到底亮没亮
+- 【现状说明】持光的两大死因已在二百三十五修掉：①注册时机（alive 日志 12:40 实证驱动活着）；②光块懒解析（类加载期注册表未冻结的 null 陷阱）。上一会话（12:56）驱动 alive 、无任何报错——但持光成功时**零日志**，无法确认到底亮没亮
 - 【本次·探针日志】①每个女仆**首次点亮**落一条：`held light: maid=… level=N pos=… (first lit)`（一次/女仆）——亮没亮、亮度多少一目了然；②若 `minecraft:light` 光块解析不到，落 ERROR（`held light: light block unavailable`）
 - 【连带】本次同样包含二百三十七的种树修复（jar 4,780,051→4,780,331，含两者）
 - 测试：重启 → 女仆主手拿火把/灯笼/红石火把 → 搜 latest.log：`held light: … level=14`（火把）/`level=10`（灵魂火把）/`level=7`（红石火把）/`level=15`（灯笼；她周围地面/墙壁被照亮）；不拿光源 → 无该行、光块自动撤除
@@ -2434,12 +2434,12 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百三十六（235 重启复测：驱动活着且认到伐木任务，但 plant scan 仍零输出 → 诊断终极化）
 
-- 【进展】235 修好注册后，日志实证：`plant driver: alive` ✓ + `held-light driver: alive` ✓ + `plant driver: sees woodcut maid … task=maid_smart:woodcut` ✓——驱动在跑、认到了伐木任务，但 `plant scan` 依然零输出 = **tick() 内部某处异常被静默吞掉**（235 的 catch 全是 `Exception ignored`）
+- 【进展】235 修好注册后，日志实证：`plant driver: alive` + `held-light driver: alive` + `plant driver: sees woodcut maid … task=maid_smart:woodcut` ——驱动在跑、认到了伐木任务，但 `plant scan` 依然零输出 = **tick() 内部某处异常被静默吞掉**（235 的 catch 全是 `Exception ignored`）
 - 【诊断升级】①`plant scan` 去掉 20 秒节流——每次扫描（每 2 秒）都落账；②驱动 per-maid catch 与整轮 catch、tick 的 catch 全部从"静默"改为 `LOGGER.error`（带堆栈）——任何异常直接现形
 - 【护栏实证】本次部署时游戏正运行 → deploy69 **按设计拒绝**（"Minecraft/Java 进程正在运行（1 个）"），未覆盖运行中的 jar——混态崩溃路径已被堵死
 - 待办：退出游戏 → 部署 4,780,029 → 重启 → 搜 `plant scan`（必有结果行）+ 任何 `plant driver error`/`plant tick error` 堆栈——下一步按日志定向
 
-## 实测二百三十五（用户复测：种树仍不生效；火把/灵魂火把/红石火把持在手中不发光 → 定位总根因）
+## 实测二百三十五（玩家复测：种树仍不生效；火把/灵魂火把/红石火把持在手中不发光 → 定位总根因）
 
 - 【日志实证】12:00 会话伐木行为正常跑（wood behavior start 12:01/12:03、stuck-reset 12:02）但 `plant scan` 零输出、持光也无效果——两个自监听 ServerTick 的驱动（种树/持光）**根本没被触发**
 - 【根因①·注册时机】两个模块此前在 ProMaidExtension 构造器里 ensureRegistered——但扩展由 TLM 扫描实例化、时机不可靠（"constructed"日志其实是女仆脑重建触发，并非扩展初始化铁证）→ 驱动可能从未挂上总线。修复：注册移到 **@Mod 构造器（ProMaidMod()，每次加载必然恰好执行一次）**，扩展侧保留（幂等）
@@ -2448,7 +2448,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【诊断】两个驱动首次点火各落一条日志：`plant driver: alive` / `held-light driver: alive`；种树驱动见到伐木女仆再落 `plant driver: sees woodcut maid`——下次测试一眼确认"驱动到底有没有在跑/有没有认到伐木任务"
 - 测试：重启 → 搜 latest.log：应有 `plant driver: alive` + `held-light driver: alive`；伐木女仆在场时应有 `sees woodcut maid`；给她手里/包里放云杉苗 → `plant scan`（含 result/bagSaplings/handSaplings/spots）+ `plant sapling`；主手拿火把/灯笼 → 脚下方块被照亮（火把 14/灯笼 15）
 
-## 实测二百三十四（用户：女仆主/副手持有光源类物品时自身放光，亮度与所持光源一致——套用雪傀儡套南瓜灯逻辑；此亮度不影响插火把）
+## 实测二百三十四（问题：女仆主/副手持有光源类物品时自身放光，亮度与所持光源一致——套用雪傀儡套南瓜灯逻辑；此亮度不影响插火把）
 
 - 【诚实说明·机制不存在】javap 字节码实证：1.20.1 原版【没有】实体发光机制（SnowGolem 无任何亮度方法、Entity 无 getLightLevelDependentMagicValue、LightEngine 无实体分支——"雪傀儡戴南瓜灯发光"是基岩版特性）；TLM 本体亦无此工程
 - 【实现·真实方块光】新建 `MaidHeldLight`（独立模块，自监听 ServerTick）：每 0.5 秒检测所有女仆的主/副手——持 BlockItem 时读取该方块自己的 getLightEmission（m_60739_，与光照引擎同源）：火把 14 / 灯笼 15 / 萤石 15 / 菌光体 15 / 海晶灯 15 / 灵魂火把 10 / 灵魂灯笼 10 / 岩浆块 3 / 模组发光方块自动同值。有光：在她脚底格放**隐藏的 minecraft:light 光块**（1.20.1 上唯一可靠动态光；不可见、无碰撞、可含水），0.5 秒节拍下位置变动即搬移（旧位仍是光块才撤——玩家自己放的光块绝不误删）；无光/离线/退服自动撤除
@@ -2456,24 +2456,24 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【配置】杂项节新增「手持光源发实光」开关（misc.heldLightMaid，默认开）+ 面板行
 - 测试：重启 → 女仆主手拿火把 → 她周围方块被照亮（贴墙/洞穴可见光斑，亮度=火把 14）；拿灯笼/萤石更亮；双手拿工具类无光 → 熄灭；面板可关
 
-## 实测二百三十三（用户提供参考 jar：[女仆实用任务] 1.20.1-maid_useful_task-1.4.2，参考其种树逻辑）
+## 实测二百三十三（玩家提供参考 jar：[女仆实用任务] 1.20.1-maid_useful_task-1.4.2，参考其种树逻辑）
 
 - 【参考解码】javap 反编译 maid_useful_task 的 MaidTreeTask：它实现了 TLM 原生 IMaidBlockPlaceTask——**种树是任务级**：只要女仆选着伐木任务，TLM 原生放置机就持续扫描/行走/放置（shouldPlacePos 的判定 = 目标格下方是 #minecraft:dirt + 格内空气 + 周围 5×5 校验；物品用 #minecraft:saplings 物品标签）
-- 【对照出的真根因】我们的种树检查挂在伐木【行为 tick】里——行为只在"实际砍树窗口"运行（日志实证每 20~30 秒启停一次），窗口外检查根本不跑：用户自检"超平坦地表草方块（判定链条覆盖）+ 包里确实有苗"却一直不种，唯一合理解释就是**检查没挨到（行为窗口外）**——与"判定错误"无关
+- 【对照出的真根因】我们的种树检查挂在伐木【行为 tick】里——行为只在"实际砍树窗口"运行（日志实证每 20~30 秒启停一次），窗口外检查根本不跑：玩家自检"超平坦地表草方块（判定链条覆盖）+ 包里确实有苗"却一直不种，唯一合理解释就是**检查没挨到（行为窗口外）**——与"判定错误"无关
 - 【修复·任务级驱动】MaidPlanting 改为自监听 ServerTickEvent（每 2 秒扫全部加载女仆，任务 UID == maid_smart:woodcut 才检查——触发语义 = 伐木模式，与行为运行窗口完全解耦）；伐木行为里的旧调起点与字段移除（单驱动源）
 - 【物品判定升级】优先 #minecraft:saplings **物品标签**（参考模组同款，云杉/橡/桦等原版全树种 + 登记标签的模组苗自动兼容），ItemNameBlockItem+方块标签保留为兜底
 - 测试：重启 → 女仆选伐木任务（无论她在不在砍）→ 手里/包里放云杉苗 → 2~5 秒内 latest.log 应出现 `plant scan`（result/bagSaplings/handSaplings/spots）+ `plant sapling`；之前的挂靠窗口限制（行为停止期不检查）已消除
 
-## 实测二百三十二（用户选句"拾苗高度放宽到 -6..+12"要求改回）
+## 实测二百三十二（玩家选句"拾苗高度放宽到 -6..+12"要求改回）
 
-- 随手种树的"拾身边树苗"垂直范围改回 ±6（与水平同半径），撤销二百三十的 -6..+12 放宽（原意是够头顶树冠上的苗——按用户口径不作此放宽）
+- 随手种树的"拾身边树苗"垂直范围改回 ±6（与水平同半径），撤销二百三十的 -6..+12 放宽（原意是够头顶树冠上的苗——按判定口径不作此放宽）
 - 其余（主副手识别/自己格允许/plant scan 诊断）不变
 - 测试：重启后拾苗行为与二百三十一前一致
 
-## 实测二百三十一（用户：①"看一下其他的任务有没有识别到主副手，以防万一" ②"明明包里也有，那为什么不种呢？" ③纠正：超平坦 -60 是地表、全是草方块——之前洞穴判定错误）
+## 实测二百三十一（问题：①"看一下其他的任务有没有识别到主副手，以防万一" ②"明明包里也有，那为什么不种呢？" ③纠正：超平坦 -60 是地表、全是草方块——之前洞穴判定错误）
 
 - 【审计+修复·主副手识别】全工程排查"只扫背包、漏手部栏"的同类死角（与种树同根因——女仆的手在独立手部栏，getMaidInv 看不到）：
-  - 种树（MaidPlanting）：主手→副手→背包 ✓（二百三十已修）
+  - 种树（MaidPlanting）：主手→副手→背包 （二百三十已修）
   - **垫脚方块（MaidBuildBlockFilter 共享过滤器，挖矿/伐木/搭路三处一次性受益）**：计数与扣取均含手部栏，手里拿的方块优先入垫——手拿圆石也能搭高/铺桥
   - **插火把（MaidTorchPlacerBehavior）**：背包没有则用主/副手的火把（消耗对应格）
   - 其余自动装备/武器/喂食链本就手部感知（MaidToolAutoEquip/喂食走手部取物），无需改动
@@ -2481,7 +2481,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【环境认知修正】超平坦 y=-60 = 地表草方块（脚下 #minecraft:dirt 或 grass_block 的判定本来就覆盖）——之前"洞穴深板岩"推断作废；若仍 no-spot，日志 spots=0 会证明是判定链条被别的因素挡住
 - 测试：重启 → 伐木女仆：①手里/包里放云杉苗，等 5~10 秒看 latest.log `plant scan`（应有 bagSaplings>0、spots≥1、result=planted）+ `plant sapling`；②若两行都没有 = 本 tick 没挨到（发我"是否有 wood behavior start"与女仆任务状态）；③垫块/火把顺手验证：手拿圆石让她搭高应成功
 
-## 实测二百三十（用户两问：①是否识别所有可种地块（只认泥土没认草方块？）②有没有识别所有树苗——女仆当时手里拿的是云杉树苗 → 仍不种）
+## 实测二百三十（玩家两问：①是否识别所有可种地块（只认泥土没认草方块？）②有没有识别所有树苗——女仆当时手里拿的是云杉树苗 → 仍不种）
 
 - 【回答①·地块判定】已覆盖：脚下 = #minecraft:dirt 标签（泥土/粗泥/灰化土/缠根土/泥巴/菌丝/苔藓，1.20.1 该标签的全部成员）**或 草方块**（草方块不在 dirt 标签里，是显式或条件）；石头/深板岩/沙**有意不认**——那上面树苗长不了（云杉/橡树等只长在泥/草上）。若你的洞穴树底是深板岩，日志会显示 reason=no-spot
 - 【回答②·树苗判定+真 bug】云杉树苗本身识别没问题（ItemNameBlockItem + #minecraft:saplings，原版全部树种都在标签内）——**真 bug 是扫描只查背包（getMaidInv），漏了主手/副手**：女仆"手中拿的云杉树苗"被当成"没苗"。修复：主手 → 副手 → 背包 依次取用，消耗也走对应格（手部栏 extractItem 同款）
@@ -2489,13 +2489,13 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【诊断】失败原因每 60 秒/女仆落一条（latest.log 搜 `plant scan`：no-sapling / no-spot + 当前位置）——"不种"从此可定位是"没苗"还是"没土块"
 - 测试：重启 → 伐木女仆：①给她手里放云杉苗 → 应优先拿手里的种（种子源=hand，日志 `plant sapling`）②地上/树冠的苗可被捡起③失败时看 `plant scan` 决定下一步
 
-## 实测二百二十九（用户：种树加个开关，默认开启）
+## 实测二百二十九（问题：种树加个开关，默认开启）
 
 - 新增伐木面板「随手种树」开关（`wood.plantSaplingEnabled`，默认**开**，位于「补种树苗冷却」上方）：关闭 = 女仆只砍树不种树（树苗留在背包/地上）；开启（默认）= 现有行为（手上有苗+附近 6 格有可种土块 → 随手种一棵，触发=伐木模式）
 - 实现：MaidPlanting.tick 顶部总开关门 + 配置注释/面板行同步（与冷却行同区，语义配对）
 - 测试：面板「伐木 → 随手种树」取消勾选 → 重启（或即时生效）后女仆砍树不再种；勾回恢复
 
-## 实测二百二十八（用户：种树逻辑单独拆开——手上有树苗就随手种一个，一定范围内判定周围有没有树苗和可种地块；与伐木不相关，但触发仍是伐木模式；CD 固定约 5 秒、在伐木面板可调）
+## 实测二百二十八（问题：种树逻辑单独拆开——手上有树苗就随手种一个，一定范围内判定周围有没有树苗和可种地块；与伐木不相关，但触发仍是伐木模式；CD 固定约 5 秒、在伐木面板可调）
 
 - 【架构】种树从伐木行为【完全剥离】成独立模块 `MaidPlanting`（新文件，自有冷却表；不读伐木目标/状态）——伐木行为只负责"每 20 tick 调起一次"（触发 = 伐木模式），两码事互不干扰
 - 【行为】冷却（默认 100 tick ≈ 5 秒）跳表后：①背包有树苗（#minecraft:saplings，原版+模组都认）→ 直接用；没有 → 先扫身边（半径 6）树苗掉落物捡进背包（伐木中拾取任务让位，落地苗捡不到）；②身边（半径 6 格、垂直 ±2）找【可种土块】：空气格 + 脚下 #minecraft:dirt/草方块 + 格内无存活实体 + 不是她自己站的那格——取最近一处；③种下（音效粒子 levelEvent 2001 + 摆臂 + extractItem 消耗 1 个）并进冷却；找不到苗/土块只记冷却重试（不播报防刷屏）
@@ -2504,17 +2504,17 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 【清理】冷却表挂在独立模块并与伐木的 per-maid 清理链打通（forget/purge 同款，不泄漏）
 - 测试：重启 → 伐木女仆砍树：①有苗时每 5 秒左右在她身边空土块随手种一棵（latest.log 搜 `plant sapling`）；②砍树节奏不受影响（种树不打断挖，只在调起点夹缝执行）；③面板「伐木 → 补种树苗冷却」可调 CD
 
-## 实测二百二十七（用户：防止别人来找茬——所有连锁采集默认开；伐木透视默认开；挖矿透视不默认开；搭路默认不开启）
+## 实测二百二十七（问题：防止别人来找茬——所有连锁采集默认开；伐木透视默认开；挖矿透视不默认开；搭路默认不开启）
 
-- 【核对/落地】四组默认值按用户指定口径（防止联网玩家质疑"文档说的默认与实际不符"）：
-  - 【连锁采集，全部默认开】挖矿「连锁采集」=开 ✓（注释默认开）、伐木「连锁砍伐」=开 ✓（注释默认开启）、农场「连锁收获」=开 ✓（注释补注"默认开"）——实测兑现"所有连锁采集默认为开"，无改动仅补声明
-  - 【伐木透视】「透视感知（隔墙找木材）」=开 ✓（注释/面板 tooltip/手册均"默认开"）
+- 【核对/落地】四组默认值按玩家指定口径（防止联网玩家质疑"文档说的默认与实际不符"）：
+  - 【连锁采集，全部默认开】挖矿「连锁采集」=开 （注释默认开）、伐木「连锁砍伐」=开 （注释默认开启）、农场「连锁收获」=开 （注释补注"默认开"）——实测兑现"所有连锁采集默认为开"，无改动仅补声明
+  - 【伐木透视】「透视感知（隔墙找木材）」=开 （注释/面板 tooltip/手册均"默认开"）
   - 【挖矿透视】「透视感知（隔墙找矿）」**true→false**：代码默认翻转为关，配置注释/面板 tooltip（"开启（默认）"→"关闭（默认）"）/手册详细介绍（"默认开"→"默认关"）三处同步
-  - 【搭路】=关 ✓（默认关，注释/面板/手册一致）
+  - 【搭路】=关 （默认关，注释/面板/手册一致）
 - 说明：只改【默认值】，你现有配置文件里的值一律不动（想用新默认，删 promaid-common.toml 重新生成即可）；面板切换即时生效
 - 测试：删配置启动或看面板——挖矿「透视感知」应显示关闭、其余四项按上表；手册挖矿章/面板 tooltip 与默认值一致
 
-## 实测二百二十六（用户：伐木①不会种树苗 ②对树上比自己高几格的木头站在木头下一动不动）
+## 实测二百二十六（问题：伐木①不会种树苗 ②对树上比自己高几格的木头站在木头下一动不动）
 
 ### ① 树苗不补种——日志实证：每次补种全部 `wood sapling skip: reason=no-sapling-in-inventory`（背包从来没苗）
 - 【根因】树叶清理（burstNearbyLeaves）的掉落物：`wood.autoCollect`（默认关）开着才进背包，默认【落地】；而伐木期间拾取任务让位，落地树苗基本捡不到——"砍树→掉苗→补种"闭环在自动收集开关上断链（实测五的设计原本就假设苗直接进背包）
@@ -2533,16 +2533,16 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 ### 测试
 - 重启 → 伐木女仆砍树：①树叶掉苗直接进背包（捡到后下一次砍树完成点补种，latest.log 搜 `wood sapling`）②让她砍一棵被树干旁站立/高几格木头的树——应走过去站到树洞正下方逐节上砍，不再原地发呆（promaid.log 搜 `wood stuck-reset` 不应再刷）
 
-## 实测二百二十五（用户复测：50 万上限+VBO 全量线框"内存不足渲染不出来了"，确认回退稀疏方式）
+## 实测二百二十五（玩家复测：50 万上限+VBO 全量线框"内存不足渲染不出来了"，确认回退稀疏方式）
 
 - 【回退】二百二十四的"点云上限 500000 + VBO 全区块线框缓存"整体回退到二百二十三的架构（已 git 检出 223 版三个渲染相关文件）：
-  - 【原因】金字塔级蓝图 VBO 线框 = 133MB/块（345K 盒 × 12 棱），×LRU 3 块 + 构建期临时 ByteBuffer（133MB）+ 点云/解析 + 每帧上传 → 数百 MB 显存/内存峰值——用户的机器"渲染不出来"，只能回到稀疏的方式
+  - 【原因】金字塔级蓝图 VBO 线框 = 133MB/块（345K 盒 × 12 棱），×LRU 3 块 + 构建期临时 ByteBuffer（133MB）+ 点云/解析 + 每帧上传 → 数百 MB 显存/内存峰值——玩家的机器"渲染不出来"，只能回到稀疏的方式
   - 【保留】二百二十四的【障碍物连锁】（与渲染无关，纯挖矿行为）与多包分片网络（12000 点 ≈170KB 时单包即可，回退后为 223 原版单包格式，同样正常工作）
 - 回退后的渲染形态（与二百二十三一致）：点云上限 12000（洗牌+等距抽稀，无竖条纹）；每盒无条件 12 条棱线（lines 单缓冲成批）；近处（32 格内）最近 2400 盒满体积填充——近实心、远线框剪影；无 VBO、无额外显存占用（12000 盒 ≈ 几十 MB 量级）
 - 若以后还想"全量+流畅"，正确路线是分片缓存+可见性剔除（Litematica 式区块网格），工程量大——见正式版需求再议；当前以稳定为准
 - 测试：重启 → 金字塔「建造此图纸」→ 金色框内青色幽灵全貌（近处实心+远处线框）→ 确认建造后红色区块橙色幽灵同款；promaid.log 搜 `drawGhost` 盒数应 ≈12000、无 vbo 字段
 
-## 实测二百二十四（用户两项：①挖矿连锁采集对障碍物也生效，有触发上限 ②投影点云上限改 500000，保证所有方块都被渲染到）
+## 实测二百二十四（玩家两项：①挖矿连锁采集对障碍物也生效，有触发上限 ②投影点云上限改 500000，保证所有方块都被渲染到）
 
 ### ① 挖矿连锁采集 → 障碍物（"挖一个旁边的障碍物，周围的同类障碍物也生效"）
 - 【现状】连锁采集（FTB Ultimine 式同时破坏）只对【矿脉】生效（refillChainQueue 明写"只连锁矿，不连锁石头/泥土"）——挖开挡路的泥土/圆石/石头时，旁边的同类挡路块还需一块块挖
@@ -2559,7 +2559,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 性能提示：显存占用随蓝图规模（百万级方块蓝图 ≈133~175MB/块线框缓存，最多 3 块）；帧率敏感可关「建造投影总开关」
 - 测试：重启 → 金字塔「建造此图纸」→ 金色框内青色幽灵全貌（回退模式）→ 确认建造后红色区块橙色幽灵：promaid.log 搜 `drawGhost` 应见 `盒数=345xxx 填充=… vbo=true`（VBO 构建约 1~3 秒，期间为回退模式无 vbo 标志）
 
-## 实测二百二十三（用户复测：橙色幽灵方块只零星复刻大概形状，绝大部分方块没被覆盖——参考《传说之下》金字塔）
+## 实测二百二十三（玩家复测：橙色幽灵方块只零星复刻大概形状，绝大部分方块没被覆盖——参考《传说之下》金字塔）
 
 - 【日志实证完整链路】`projection: request 金字塔 q=0` → 服务端 `size=251x124x251 chars=170603 (sent)` → 客户端 `received 3000 blocks` → `drawGhost 盒数=3000 远距描边=true`：
   - 【根因①·数据封顶】金字塔蓝图 251×124×251、实际 37.6 万非空气方块、外壳 34.5 万——旧采样上限 3000 点 ≈ 外壳的 0.9%，且每点还附 blockId|state（实测一百四十七起渲染已不用 BlockState，客户端却逐点做 SNBT 解析——白费带宽）；去掉状态串后限流 3000→**12000**（同带宽 4 倍覆盖）
@@ -2572,15 +2572,15 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 ## 实测二百二十二（v1.1.0 beta 发布前自查）
 
 - 搭路节奏默认值真正落地（自查发现二百一十五只改了注释、代码默认值没改）：
-  - 【问题】`bridge.stepCooldown` 代码默认仍是 **2 tick/块（≈10 块/秒）**——注释/提交记录/二百一十五条目都写着"默认 4"，但值从未落下去；按 4 tick ≈5 块/秒（只比玩家手速快一档）才是二百一十五用户原意（"降低默认搭建速度，只比玩家稍微快一点点"）
+  - 【问题】`bridge.stepCooldown` 代码默认仍是 **2 tick/块（≈10 块/秒）**——注释/提交记录/二百一十五条目都写着"默认 4"，但值从未落下去；按 4 tick ≈5 块/秒（只比玩家手速快一档）才是二百一十五玩家原意（"降低默认搭建速度，只比玩家稍微快一点点"）
   - 【修复】默认值 2→**4**（范围 2~40 不变）；顶部遗留的旧注释块（"默认 8→5 tick/块 ≈4 块/秒"）一并清理；与你当前配置目录里的 stepCooldown=4 一致，删配置重新生成也是 4
-  - 【连带】伐木搭方块冷却（wood.pillarCooldown）二百一十五已正确落为 4（代码默认=注释=4）✓；你配置目录里该值目前是 2，想同步可在面板「伐木 → 搭方块冷却」调到 4
+  - 【连带】伐木搭方块冷却（wood.pillarCooldown）二百一十五已正确落为 4（代码默认=注释=4）；你配置目录里该值目前是 2，想同步可在面板「伐木 → 搭方块冷却」调到 4
 - 排班可用性检测注释修正（二百零二"默认=你当前配置"同步后，代码默认已是开，注释仍写"默认关"——虚假宣传自纠）：注释改为"默认开，二百零二同步为你当前配置值"，并补一句排班任务不切换时的排查指引（先关掉本项）
 - 无其他不一致：脚本复核关键默认（搭路开关关/最小高差3/平桥启动6/连锁采集开/透视感知开/穿透22/散步0.7/看门狗8/播报10/重力落地雪1×1 等）与注释、面板说明三方一致
 
 ## 实测二百二十一
 
-- 部署安全护栏 + 启动崩溃解释（用户崩溃日志：`NoClassDefFoundError: com/maidsmart/tool/MaidBuildBlockFilter` @ BridgeUpBehavior.hasBuildBlock）：
+- 部署安全护栏 + 启动崩溃解释（玩家崩溃日志：`NoClassDefFoundError: com/maidsmart/tool/MaidBuildBlockFilter` @ BridgeUpBehavior.hasBuildBlock）：
   - 【解释】不是代码 bug——游戏 07:48 启动**之后**我替换了 mods 里的 jar（UAC 部署成功覆盖）。运行中的 JVM 对已打开的 jar 做懒加载：类在首次使用时才按【旧目录索引】去读文件，jar 被替换后新类按旧偏移读不到 → ClassNotFoundException（类本身就在新 jar 里，已验证：源码/编译产物/部署 jar 三处均在）。重启游戏即恢复
   - 【护栏】deploy69.py 增加运行检测：存在 java/javaw 进程（游戏未关闭）直接拒绝部署（不再弹 UAC 覆盖运行中的 jar）——杜绝此类"半新半旧运行态"崩溃
 - 另注：此会话日志 07:48:55「西行寺幽幽子从高处摔了下来」也是混态 jar 的附带现象，重启后不存在
@@ -2588,35 +2588,35 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百二十
 
-- 搭路竖直启动高差默认改为 3 格（用户："竖直高度差启动搭路改为三格——正好对应玩家的手长，方便玩家收回女仆；隔得太远玩家没法收回"）：
+- 搭路竖直启动高差默认改为 3 格（问题：竖直高度差启动搭路改为三格——正好对应玩家的手长，方便玩家收回女仆；隔得太远玩家没法收回）：
   - BRIDGE_MIN_DY 默认 6 → **3**（范围 1~8 不变）：她与你垂直高度差 ≥3 格才走垂直搭高——3 格 = 玩家手长：她搭到只差 3 格内你就能近身收回/互动，不用再爬着她搭的半空柱子够她
   - 配置注释/面板说明同步（说明"3 = 手长，收回方便"）；只改默认值——你现有配置目录里的 minDy 仍是你当前值，想用新默认删配置重新生成即可
 - 测试：你比她高 4~6 格 → 她应开始垂直搭高并在 3 格差内停下等你收回
 
 ## 实测二百一十九
 
-- 撤销二百一十七的"Y 轴拉回主人身边威胁检查"（用户选句要求去掉）：
+- 撤销二百一十七的"Y 轴拉回主人身边威胁检查"（玩家选句要求去掉）：
   - 移除 trySameDimPull 里 yPull 分支的 `anyVisibleMonsterAround`（主人身边 4 格有威胁→不传）检查与 sam-dim-ythreat 日志；`anyVisibleMonsterAround` 恢复为私有（仅自保传送内部使用）
   - Y 轴拉回的判定恢复为：搭太高(垂直超出门槛) + 搭路门豁免 + 唯一落点判定 findStand（主人身边 16 格内可站立格,找不到不传）——主人身边有怪不再拦截拉回
 - 测试：搭高的女仆在主人身边有怪时也会正常传回（落在安全站立格）
 
 ## 实测二百一十八
 
-- 平桥近距离拦截补强（用户澄清："我指的是女仆水平方向两个轴（不含高度）距离玩家坐标太近时，不再进行平方向铺方块——这个没能触发"）：
+- 平桥近距离拦截补强（玩家澄清："我指的是女仆水平方向两个轴（不含高度）距离玩家坐标太近时，不再进行平方向铺方块——这个没能触发"）：
   - 【兜底修复】水平铺块的入口集中在 tryAirBridgeStep（平桥）与 tryDiagStep（斜上台阶）——现在在这两个铺块函数【内部】再各加一道水平距离硬门槛 hDist < 平桥启动距离（默认 6）→ 直接不垫：调用侧（canUse 启动门/平桥腿/斜上腿）早有判断，内部兜底保证任何绕过路径（行为残留帧/触发顺序变化）都在落方块前被拦下——贴近玩家（水平 6 格内）绝不再水平方向垫方块
   - 垂直垫高 placeStep 保持豁免（你只是垂直爬高不受影响——近距离贴着爬塔仍可立柱）
 - 测试：你站在沟/悬崖对面 5 格内 → 女仆应在沟边走走路，不再朝你水平垫块；拉远到 6 格以上才恢复铺桥
 
 ## 实测二百一十七
 
-- 强制传送补充"主人旁安全地块"判定（用户："强制传送也是要判定主人旁边是否有安全地块的"）：
+- 强制传送补充"主人旁安全地块"判定（问题：强制传送也是要判定主人旁边是否有安全地块的）：
   - 说明：所有强制传送链路（Y 轴拉回/同维度拉回/跨维跟随/一键集合/单独传送按钮/自保传回/救援）本来就走同一个落点判定 findStand——主人身边 16 格内找"脚下有碰撞面 + 身体格无碰撞 + 无流体 + 无危险方块（岩浆/火等）+ 无实体占用"的可站立格，找不到不传
   - 【本次补充】Y 轴拉回在二百一十六放行搭路门后,落点"站得住"之外再加第二道判定,与自保传回同口径:**主人身边 4 格内(teleportSafeRadius)有可见威胁/怪物 → 不传**(落日志 sam-dim-ythreat,威胁清除后下一轮扫描自动再试)——站到主人身边却被怪围就是送死,同样属于"不安全地块"
 - 测试:你身边站只僵尸时让女仆搭高 → 应不传(promaid.log 搜 sam-dim-ythreat);怪清掉后下一轮自动传
 
 ## 实测二百一十六
 
-- 三项修正（用户："高度差过大强制传送、X/Y 轴距离过小就阻拦搭路似乎并没有生效。排班表用墨囊和荧光墨囊都可合成。排班表开局赠送，与手册一致"）：
+- 三项修正（问题：高度差过大强制传送、X/Y 轴距离过小就阻拦搭路似乎并没有生效。排班表用墨囊和荧光墨囊都可合成。排班表开局赠送，与手册一致）：
   - 【Y 轴拉回没生效·根因】实测二百零七 的"搭路中不拉"闸门把一百八十八 的【Y 轴拉回】连带拦掉了——"搭太高"恰恰发生在她自己垫的高柱/桥上，搭路闸门让 Y 轴拉回永远不触发。修复：Y 轴分支（yPull）豁免除搭路闸门——它是把她往主人旁边【已验证的安全落点】传下来，不是拉离，且二百零七②的近距刷新保证她脚下桥块不会立刻回收；水平远距拉回仍保留搭路门
   - 【近距离拦搭路没生效·根因】canUse 的垂直启动门槛写成了 `dy < min(minDy, 4)`——配置 minDy（默认 6）调到大于 4 完全无效，恒按 4 启动："Y 轴方向距离过小就阻拦搭路"形同虚设。修复：改为按配置值 `dy < minDy` 生效（主人至少高 minDy 格才走垂直搭高；默认 6 格）
   - 【合成表】排班表改为 纸 + 墨囊/荧光墨囊 均可合成（新增物品标签 `maid_smart:ink_sacs` 同时收录墨囊与荧光墨囊）
@@ -2625,7 +2625,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百一十五
 
-- 搭建失足摔死防护（用户："女仆搭建方块因为速度过快容易失足摔死——降低默认搭建速度，只比玩家稍微快一点点；加类似潜行的防摔落机制"）：
+- 搭建失足摔死防护（问题：女仆搭建方块因为速度过快容易失足摔死——降低默认搭建速度，只比玩家稍微快一点点；加类似潜行的防摔落机制）：
   - 【默认速度回调】搭路节奏 2 → **4 tick/块（≈5 块/秒，比玩家手速 4~6 块/秒略快一点点；原来 2 tick ≈ 10 块/秒）**；伐木搭方块冷却 2 → 4（与挖矿、搭路统一节奏）；注释同步
   - 【防摔落·潜行式收力】走到刚垫的方块上"到位"的瞬间——旧版只清推力标记，**0.22 的水平速度带着惯性继续滑行约 1.7~2 块**（0.22 × 0.91/(1-0.91)），1 格宽的桥块停不住，直接冲出边缘失足——速度越快越明显。现在两处 walk-on（搭路/挖矿/伐木"垫块踩上去"共用机制）到位即清水平速度（垂直保留，该落照样落到块面上）
   - 【防摔落·潜行式边缘守卫】每 tick 推送前检查目标格：目标格自身无碰撞 + 脚下一格有碰撞面（她搭的方块或地形都算）才推；无支撑（方块被回收/没放上）→ 水平收力原地站住，绝不在断崖边上把自己推下去
@@ -2633,14 +2633,14 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百一十四
 
-- 两项修正（用户："建造方面有些过时的建筑也被记录在里面了。还有一件事，我希望的是搭路默认关"）：
+- 两项修正（问题：建造方面有些过时的建筑也被记录在里面了。还有一件事，我希望的是搭路默认关）：
   - 【建造章过时建筑清理】手册建造章原写的"石砖小屋"示例与 7 台旧机器（仙人掌塔农场/超级熔炉组/无限岩浆泉/高效作物农场/自动伐木场/全自动养鸡场/自动熔炉组）来自早期的旧蓝图时代——当前随模组附赠的 81 套蓝图包里已经没有它们。已按实际蓝图包更新：示例改为「三层木制别墅」；机器清单改为当下包内的红石蓝图（中世纪刷石机/全树种树场（有红树）/国风刷铁机——黑金楼/优雅的村民交易所/彩虹信标/心形下界传送门 + 甘蔗牧场（已失效）注明不建议建）；蓝图来源①分类同步为 房屋/地形/天空/树木/武器/水/红石/节日/装饰/载具/雕像
   - 【搭路默认改回关】`bridge.enabled` 默认值 true→false（二百零六 曾按当时配置同步为默认开——按你现在的意愿改回关）；手册三处（被动技能章/面板导航章/这是什么速览）同步改回"默认关"；配置面板 SectionRow 本就是"默认关"无需改
 - 测试：重启后配置面板/手册里的"搭路"应显示默认关；手册建造章的示例与机器清单与蓝图包一致
 
 ## 实测二百一十三
 
-- 手册「详细介绍」按当前版本全面校对（用户："手册内详细介绍已经有很多功能过时了，重新写一下吧"）——逐章对照实际代码/配置逐项修正过时声明：
+- 手册「详细介绍」按当前版本全面校对（问题：手册内详细介绍已经有很多功能过时了，重新写一下吧）——逐章对照实际代码/配置逐项修正过时声明：
   - 「什么是」速览刷新：补入 v1.1.0 最新功能（模组武器专属模式、排班表单独传送按键、建造投影线框渲染、搭路默认开等）
   - 挖矿/伐木章：「透视感知（隔墙找矿/找木材）」默认关→**默认开**（当前实际默认开启——注释/面板同样修正，之前三处文本都写反了）
   - 杂项章：「挖矿中禁止拾取」默认关→**默认开**
@@ -2651,21 +2651,21 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百一十二
 
-- 红色区块框挡住幽灵方块修复（用户："从外部往内部看会发现是一个红色的正方体/长方体，六个面都被红色覆盖——透过那一层红色看不到里面的幽灵方块；从内部往外看才正常"）：
+- 红色区块框挡住幽灵方块修复（问题：从外部往内部看会发现是一个红色的正方体/长方体，六个面都被红色覆盖——透过那一层红色看不到里面的幽灵方块；从内部往外看才正常）：
   - 【根因】红色区块框（和金色预览框）各自带一个 0.28/0.3 半透明的【大填充面】（整个区域一个大盒子 6 个面）：从外向内看时这层红面正好卡在相机与幽灵方块之间，后画的红面覆盖/混合掉幽灵——所以"外看是红盒子、内看正常"（内看时红面在相机身后被裁剪，挡不到）
   - 【修复】两块区域框的【大填充面】全部移除，只保留棱线框 + 悬浮标签（区域标识本来就靠它们）——从外向内看：红框轮廓 + 幽灵线框/填充全部穿透可见，不再有红色遮罩
 - 测试：站在建造区块外回头看——红框应只是棱线（不再有红色雾面），幽灵方块轮廓清晰；金色预览同款
 
 ## 实测二百一十一
 
-- 幽灵方块"未全渲染 + 从外看不到内"修复（用户："好像没有把所有的搭建方块都渲染出来。仍然没有办法从外看到内，这可能是所画区块内部渲染的问题"）：
+- 幽灵方块"未全渲染 + 从外看不到内"修复（问题：好像没有把所有的搭建方块都渲染出来。仍然没有办法从外看到内，这可能是所画区块内部渲染的问题）：
   - 【根因】幽灵只画填充盒（debugFilledBox 半透明面）：① 逐盒独立 flush 后无深度/距离排序，混合按提交顺序——站在区块外时外层盒面先画、内层后画，内层被外层盖糊（"从外看不到内"）；② 填充面受地形遮挡 / 盒面互相覆盖，部分方块在视角下不可见（"没全部渲染"）
   - 【修复】每盒**无条件画 12 条棱线**——走与红框同一的 lines 管线（实测隔地形/任意角度透显；LINES 每段独立原语，无条带连接问题）：所有搭建方块逐一成框，从外看内部结构线框清晰叠显（Litematica 式示意图观感）；**近处（24 格内）再叠加满体积填充**（专用源 + 每盒独立 flush，体积感与近距离清晰度保留）
 - 测试：点「建造此图纸」→ 蓝色/橙色幽灵都应是"满框线 + 近处填充"：从区块外任意角度能看到全部方块轮廓与内部结构
 
 ## 实测二百一十
 
-- 幽灵方块**二次崩溃**修复（用户再次崩溃日志：`BufferBuilder not started`，堆栈经 TLM RenderHelper.renderLine → drawBoxEdges → drawGhost）：
+- 幽灵方块**二次崩溃**修复（玩家再次崩溃日志：`BufferBuilder not started`，堆栈经 TLM RenderHelper.renderLine → drawBoxEdges → drawGhost）：
   - 【根因】二百零九把"每盒 flush"直接放在了共享的主 bufferSource 上——字节码实证：1.20.1 的 `MultiBufferSource.BufferSource` 对【未入 map 的渲染类型】（debugFilledBox、lines 都在其列）统一使用同一个即时建造器（f_109904_），一次只允许一个活动类型；同一帧里描边（lines）与填充盒（debugFilledBox）在此建造器上互相切换/中途 flush → 本地描边指针指向的建造器已不在"开始"状态 → `BufferBuilder not started` 崩溃（实测二百零四的"Not filled all elements Index:14"是同一根因的另一面貌）
   - 【修复】幽灵填充改用【每帧独立的专用 BufferSource】（GhostBufferSource：子类化构造器，每次 drawGhost 新建，只写 debugFilledBox）：每盒 flush 只影响它自己，主 bufferSource（描边/红框/其他模组的渲染事件）完全隔离——两条崩溃路径都堵死
   - 渲染本体保持 DebugRenderer.renderFilledBox + 每盒 flush（满体积 1×1×1、无跨盒连接面、无距离剔除的视觉效果不变）
@@ -2673,22 +2673,22 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零九
 
-- 幽灵方块渲染崩溃修复（用户崩溃日志：`BufferBuilder.endVertex` 抛出 "Not filled all elements of the vertex Index: 14"，堆栈直指 BlueprintAreaPreview.ghostQuad）：
+- 幽灵方块渲染崩溃修复（玩家崩溃日志：`BufferBuilder.endVertex` 抛出 "Not filled all elements of the vertex Index: 14"，堆栈直指 BlueprintAreaPreview.ghostQuad）：
   - 【根因】实测二百零四把手写 debugQuads 顶点渲染（逐面 4 顶点 QUADS）替换进幽灵方块——同一台客户机上 BufferBuilder 被 epicfight（MixinBufferBuilder）/ ponder 的 mixin 变换，手写顶点序列的校验不通过，第一次点"建造此图纸"（2469 块点云到达）即端掉整局
   - 【修复】回退到运行时验证过的 `DebugRenderer.renderFilledBox`（m_269311_——实测一百四十七~二百零一长期使用零崩溃；这也是 vanilla 自己的 debug 管线）；同时【每盒后立即 flush】（m_109912_ debugFilledBox）——原先多盒连续提交同一条 TRIANGLE_STRIP 会在盒间产生跨盒连接三角形（"太小/出区块消失/蓝影看不见"观感的来源），flush 后每个盒子独立成条：满体积 1×1×1、无跨盒连接面、无距离剔除，区块内外都能看到清晰幽灵方块
 - 测试：进游戏 → 点「建造此图纸」→ 蓝色幽灵应正常显示、不再崩溃；确认建造后走出区块看橙色幽灵
 
 ## 实测二百零八
 
-- 排班表新增**单独传送按键**（用户："日程表内能不能安一个单独传送的按键？"）：
-  - 女仆详情页 → 第 1 页·快捷设置 新增「⚑ 传送到我身边」——把**这一只**女仆传到你身边（不用再靠全员一键集合；跨维度/远处都行）
+- 排班表新增**单独传送按键**（问题：日程表内能不能安一个单独传送的按键？）：
+  - 女仆详情页 → 第 1 页·快捷设置 新增「传送到我身边」——把**这一只**女仆传到你身边（不用再靠全员一键集合；跨维度/远处都行）
   - 与列表页「一键集合」同口径：她坐着/骑乘/在家模式（排班守家中）保持原位——服务端回复原因（"想强制召回先关闭排班/解除坐姿"）；你身边 16 格内无可站立点（高空/虚空）则不传并提示；她不在已加载区块就提示改用一键集合（那有强载区块自动召回）
   - 实现：新网络包 `MaidSummonPacket`（id 10）+ `MaidChunkLoadManager.summonOne`（跨维度搜索、人工意图优先）
 - 测试：排班表 → 点女仆 → 第 1 页 → 「传送到我身边」；传成功的到她脚边，坐/家/高空的看聊天栏原因
 
 ## 实测二百零七
 
-- 高空摔死真正根因（用户质疑："当时女仆完全就不处于自保模式啊，为什么也会摔死呢？"——质疑正确，二百零五修错了对象）：
+- 高空摔死真正根因（玩家质疑："当时女仆完全就不处于自保模式啊，为什么也会摔死呢？"——质疑正确，二百零五修错了对象）：
   - 【日志还原完整事故链】2026-08-31 05:11:28~05:12:01（你飞去高空，女仆 K螺诺亚 搭桥追你）：
     - 05:11:53 `bridge-up start owner-dy=19`——她正**搭路中**（站在自己铺的半空桥上）
     - 05:11:54 **我们自己的同维度 Y 轴拉回把她传送了**——"干活中不拉"的门**没有覆盖搭路状态**：`isTaskOccupied` 判的是挖矿/伐木/建造/站桩，搭路行为（BridgeUpBehavior）不在其列 → 拉回把站在半空桥上的她硬拉走
@@ -2700,7 +2700,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零六
 
-- 默认参数重新同步 + 虚假宣传清理（用户："重新同步一下默认参数，因为有些说法属于虚假宣传。比如解释字段里写的默认 0.7，但实际默认值为 1.0"）：
+- 默认参数重新同步 + 虚假宣传清理（问题：重新同步一下默认参数，因为有些说法属于虚假宣传。比如解释字段里写的默认 0.7，但实际默认值为 1.0）：
   - 【同步 9 处】代码默认值改为你当前配置的实值（脚本逐键对比 toml vs 代码，DIFF 归零）：
     - 搭路开关 默认关→默认开（你当前配置开着搭路）；挖矿：连锁采集 默认开、垂直向下搜索 4→12、深度惩罚 0→3、移动速度 0.3→0.6、搭方块冷却 2→4、搭方块清理 3→10 秒；伐木：搭方块清理 3→10 秒；散步速度倍率 1.0→0.7（你举例的这一条：注释写 0.7 实际 1.0——现在注释与默认值一致了）
   - 【清理 14 处虚假声明】解释字段里"默认 X"与实际默认值不符的（注释 12 处 + 面板提示 6 处中 4 处重复、2 处为 50 万/100 万单位误报）：
@@ -2712,7 +2712,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零五
 
-- 女仆高空摔死修复（用户："女仆会无条件传送——不管主人周围是否有合法方块，玩家飞到高空中女仆传送直接摔死了"）：
+- 女仆高空摔死修复（问题：女仆会无条件传送——不管主人周围是否有合法方块，玩家飞到高空中女仆传送直接摔死了）：
   - 【根因】自保系统的两处"传送回主人身边"（自保中无怪时 `teleportHome` / 自保结束退出时 `teleportHomeOnExit`）是 `m_6034_(主人x, 主人y, 主人z)`——**直传主人的实时坐标，从不检查落脚点**。主人飞行/悬空（创造飞行、鞘翅、站平台边缘）时女仆被直接扔进半空 → 高空坠落摔死（有落地水+水桶才侥幸不死）。同维度拉回/跨维度跟随/Boss 拉链里的"安全落点检查"它一个都没走
   - 【修复】两处传送接入与拉回/跨维跟随**同一个安全落点判定**（findStand：主人格下 16/上 12 格 + 水平环 r≤3 内寻找"脚下的碰撞面 + 身体格空气 + 无流体 + 无危险 + 无占用"的可站立格）：找到落点 → 传到落点（不再传半空）；**找不到（主人悬空/虚空边缘）→ 本次不传**——宁可她走回来或等落地后由跟随/拉回链路归队，绝不冒险。传送改用 `teleportTo`（m_264318_，跨维度也安全）
   - 附带日志：拒绝传送时落 `self preserve teleport skipped (no stand near owner)`（latest.log）——之后"女仆没传回来"也有可查的明确原因
@@ -2720,7 +2720,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零四
 
-- 幽灵方块渲染根治（用户："幽灵方块不显示还是没有修好——走出红色框就消失、方块太小、黄色框里的蓝色幽灵方块这次直接看不见了"）：
+- 幽灵方块渲染根治（问题：幽灵方块不显示还是没有修好——走出红色框就消失、方块太小、黄色框里的蓝色幽灵方块这次直接看不见了）：
   - 【根因】幽灵方块渲染用的是 DebugRenderer.renderFilledBox——字节码实证它走 `RenderType.debugFilledBox`（POSITION_COLOR + **TRIANGLE_STRIP** 三角形条带）：两百多个幽灵盒（大蓝图可达 2600 盒）按 24 顶点/盒连续提交进**同一条条带**，盒与盒之间自动补出跨盒连接三角形——整片幽灵变成"乱麻三角网"：单盒面被搅碎（看小）、走出区块后再看不到成型方块（连接面吃掉内侧面）、金色预览的蓝色幽灵直接看不清
   - 【修复】改走 `RenderType.debugQuads`（官方专为彩色半透明调试盒做的管线，POSITION_COLOR + QUADS）：每个盒子 6 面逐面独立提交 4 顶点——每盒**精确 1×1×1 满体积**（和真实方块一样大）、无跨盒连接面、双面不剔除、无任何距离剔除——红色区块内/外、远近都能看到完整幽灵方块；面透明度 0.45→0.55（橙）/ 0.40→0.55（青），远处仍补棱线描边
   - 附带诊断：每帧实际提交的幽灵盒数变化时落一条日志（promaid.log 搜 `drawGhost`）——若"还是看不到"，日志能直接区分"没进渲染层"还是"渲染了但客户端看不出"
@@ -2728,7 +2728,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零三
 
-- 手册「详细介绍」补写 v1.1.0 新功能使用方法（用户："手册里没有写新物品/新功能怎么用，对照 1.0.4 的新内容加到对应章节"）：
+- 手册「详细介绍」补写 v1.1.0 新功能使用方法（问题：手册里没有写新物品/新功能怎么用，对照 1.0.4 的新内容加到对应章节）：
   - 战斗与自保章：宠物免伤怎么用（命名牌改「玩家宠物/主人的宠物」、主人驯服的猫狗马等自动识别、模组宠物标记）、带保命道具（绀珠之药/不死图腾）低血不会逃跑、拿模组武器必定切它的专属战斗模式
   - 被动技能章：搭路新启动规则（有水平距离 + 前方脚下悬空就朝你铺方块踩上去；「平桥启动距离」默认 6 格可调；挖矿/伐木垫块也会踩上去不再卡住）
   - 农场与杂项章：回家与传送（跨维度跟随 / 同维度 48 格拉回 / 垂直 16 格拉回，主人旁有安全落点才传，排班与守家不响应）
@@ -2740,7 +2740,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测二百零二
 
-- 当前配置同步为默认参数（用户："现在同步一下我目前配置里的参数作为默认参数"）：
+- 当前配置同步为默认参数（问题：现在同步一下我目前配置里的参数作为默认参数）：
   - 从你当前游戏的配置（`版本目录\config\promaid-common.toml`，最近一次会话实值）同步 **40 处参数**写入代码默认值（建造速度 x1.5、极速模式开、建造上限 200、各类范围/倍率/开关等按你当前实值；10 个列表型配置保持内置默认）
   - 同步后：删掉这份配置文件再启动，生成的配置就是你现在的这套参数；不删的话现有配置继续生效，两者已一致
   - 测试：详见手册 → 模组详细配置面板各参数（默认值应等于你当前配置）
@@ -2798,7 +2798,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百七十二
 
-- 还原扫描心跳诊断（用户："过了 10 秒钟战斗任务不会还原"——游戏重启后 restore-scan 门级诊断仍零条，无法确定还原扫描是否在跑）：
+- 还原扫描心跳诊断（问题：过了 10 秒钟战斗任务不会还原——游戏重启后 restore-scan 门级诊断仍零条，无法确定还原扫描是否在跑）：
   - 【问题】所有会话 restore-scan（一百六十四）零条 + 无还原日志 + 无异常——卡点可能是：扫描没跑 / 女仆被排班门清理 / 还原动作静默失败，静态无法区分
   - 【本次】还原扫描新增**心跳 + 门统计**（每 10 秒一条，latest.log 搜 `auto-combat scan`）：`active=扫描看到的战斗态女仆数 / schedCleared=被排班门清理的`——一次测试定案：
     - 心跳完全不出现 → onServerTick 没跑（注册/事件问题）
@@ -2816,7 +2816,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百七十
 
-- 排班任务切换设计修复（用户："选择排班之后会锁定任务但当前任务不变化——女仆空闲时安排排班，结算后仍空闲；用时间洪流怀表测试，任务状态不会随时间更改而更改，设计从一开始就很失败"）：
+- 排班任务切换设计修复（问题：选择排班之后会锁定任务但当前任务不变化——女仆空闲时安排排班，结算后仍空闲；用时间洪流怀表测试，任务状态不会随时间更改而更改，设计从一开始就很失败）：
   - 【根因】排班切换前的"完整可用性检测"（默认开）做软探测：切糖甘蔗/瓜/矿/树/炉子等任务前检查附近有没有活干——没有就"没活不切"。结果：① 排班一分配，段任务是糖甘蔗但附近没作物 → 任务切不过去，女仆钉死在原地（空闲），而排班锁了手动修改 → 动弹不得；② 时间流逝到新段落，每个段任务都因"没活"被拦 → 任务状态永远不随段切换 = 排班看起来完全失效
   - 【修复】可用性检测默认**关闭**（默认只查任务自己的 isEnable 硬闸）——排班切任务不再看附近有没有矿/树/炉子/作物，**任务状态跟着时间段落真实切换**（切过去没活就站桩在对应任务上，状态是变的、时间到了下段再切）；想用回完整检测可在面板重新打开
   - 附带：旧档存的 `scheduleAvailabilityCheck = true` 自动迁移为 false（重启生效）；toml 被运行中的游戏锁定无法直接改，迁移兜底
@@ -2824,21 +2824,21 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百六十九
 
-- 战斗候选池内容诊断（用户："女仆仍然不会使用模组的武器"）：
+- 战斗候选池内容诊断（问题：女仆仍然不会使用模组的武器）：
   - 【背景】ef_tlm 的 `isWeaponCap(ItemStack)` 反射签名已 javap 验证匹配（CombatTaskCompat 判定正确）；8月27日日志实证 true_power 拔刀剑任务曾被选中使用——模组武器链路本身通
   - 【本次】buildPools 新增候选池内容诊断（每 5 秒/女仆一条，latest.log 搜 `combat pools`）：直接列出近战/远程候选池里有哪些任务——池里只有原版任务 = 模组武器没被 isWeapon 认到（模组任务/武器判定问题）；池里有模组任务 = 权重随机或距离选择问题。一次日志区分两种根因
   - 【同时发现】运行中的游戏是旧 jar：日志实证 00:14/00:21 排班开启的女仆仍参战（一百六十三"排班中不参战"门没生效）、restore-scan 诊断零条（一百六十四没加载）——**当前 jar 需重启游戏才生效**（一百六十三排班优先 / 一百六十四还原诊断 / 一百六十五平桥追逐 / 一百六十六远程风筝 / 一百六十七战斗中不搭路 / 一百六十八多女仆共炉全在新 jar 里）
 
 ## 实测一百六十八
 
-- 多女仆共炉分散（用户："两个女仆同时在场，摆三个炉子，但只有一个炉子会工作"）：
+- 多女仆共炉分散（问题：两个女仆同时在场，摆三个炉子，但只有一个炉子会工作）：
   - 【根因】烧制行为找炉（`findFurnace`）按固定扫描顺序返回【第一个】炉子——两个女仆站在附近，各自扫描都先命中同一个炉子并绑定，另外两个炉子永远没人喂料（"只有一个炉子工作"）
   - 【修复】新增**炉子占用表**（维度|坐标 → 占用女仆 UUID）：绑定炉子时登记、行为停止/炉子丢失时释放；找炉时**跳过已被其他女仆占用的炉子**（自己占的不跳）——多个女仆自动分散到不同炉子，N 个炉子 N 个女仆各烧各的；占用者死亡/换维/被懒清理，不会占住炉子不放
   - 影响范围：烧制任务（熔炉/高炉/烟熏炉通用）；单女仆场景无感知（自己占自己用）
 
 ## 实测一百六十七
 
-- 战斗中不再搭路（用户："即使周围存在威胁，但正处于战斗状态下的女仆仍然会选择搭路"）：
+- 战斗中不再搭路（问题：即使周围存在威胁，但正处于战斗状态下的女仆仍然会选择搭路）：
   - 【根因①】搭路的任务占用门（`isTaskOccupied`）明确把【战斗任务】列为"不拦"（设计注释原文："不拦的情况：idle/跟随/战斗/喂食"）——战斗中的女仆照样被搭路行为接管移动，边打边往主人方向搭路跑；实测一百六十五放开搭路距离上限后更明显
   - 【根因②】搭路的威胁扫描只认 `Monster` 类 + 半径 8 格——史莱姆/岩浆怪等实现 `Enemy` 接口但不实现 `Monster` 的不算威胁；敌人站在 8 格外接战时搭路完全无感知
   - 【修复】① 战斗任务（`IAttackTask`）或脑内有存活攻击目标（ATTACK_TARGET 记忆）一律算占用，搭路不启动/立即中止；② 威胁扫描放宽到 `Enemy` 接口（与参战/还原同口径）
@@ -2846,7 +2846,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百六十六
 
-- 远程走位修复（用户："远程战术似乎失效了——使用三叉戟攻击以及弓弩的时候，女仆还是会选择近身敌人"）：
+- 远程走位修复（问题：远程战术似乎失效了——使用三叉戟攻击以及弓弩的时候，女仆还是会选择近身敌人）：
   - 【根因】远程走位的理想射程 = 武器最大射程 × 0.6 倍率。三叉戟的射程走 TLM 配置 `TRIDENT_RANGE`（约 8~10 格）、弩走原版 `getDefaultProjectileRange`（8 格）——乘 0.6 后理想风筝距离只有 **4.8~6 格 = 贴脸**（近战怪 3 格就摸得到），看起来就是"远程还近身"；日志实证女仆在贴脸距离（2.9~4.4 格）反复跳劈
   - 【修复】理想射程强制**最小风筝距离 7 格**：任何远程武器（弓/弩/三叉戟/枪械）都保持 ≥7 格清晰射程——太近后退到 ideal+2、太远逼近、理想区间绕圈放风筝，近战怪完全摸不到；弓（射程 15 → ideal 9）与枪械不受影响
   - 附带：远程走位诊断日志（每 2 秒一条，latest.log 搜 `ranged kite`）——显示任务/主手武器/当前距离/理想射程，确认走位在跑、数值对不对
@@ -2854,15 +2854,15 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百六十五
 
-- 搭路平桥追逐放开距离上限（用户："还是做不到追逐主人。即使水平离得距离太远，仍然会启用平桥搭建路接近主人"——参考 Zombie Invade 100 Days 僵尸搭桥追人）：
-  - 【根因】搭路行为的启动（canUse）与保持（canContinue/stopReason）有三处距离上限：平路/低高差场景（主人不低于女仆）受 `maxDist`（用户已调到 32 格）限制，超过就 `return false` 不启桥；追逐中途主人走远（>50 格）还会被 canContinue 掐断——水平距离一远就完全追不上
+- 搭路平桥追逐放开距离上限（问题：还是做不到追逐主人。即使水平离得距离太远，仍然会启用平桥搭建路接近主人——参考 Zombie Invade 100 Days 僵尸搭桥追人）：
+  - 【根因】搭路行为的启动（canUse）与保持（canContinue/stopReason）有三处距离上限：平路/低高差场景（主人不低于女仆）受 `maxDist`（玩家已调到 32 格）限制，超过就 `return false` 不启桥；追逐中途主人走远（>50 格）还会被 canContinue 掐断——水平距离一远就完全追不上
   - 【修复】平路/低高差追逐（主人不低于女仆、无需爬高）距离上限【全部放开】——水平方向多远都启动平桥追逐：前方脚下悬空就铺桥（tryAirBridgeStep，参考僵尸 BlockBuildBridGeGoal）、实心地面走导航，像僵尸持续逼近主人，方块耗尽/威胁出现/任务被占用自然停；只有主人【高于女仆】需垂直搭高时才受 `airMaxDist`（默认 128）约束（防搭到天上去）
   - 三处判定（canUse 启动 / canContinue 保持 / stopReason 中止）统一同口径；配置面板说明同步更新（「搭路触发距离」现只约束垂直搭高场景）
   - 注意：搭路仍要求女仆【非守家】（home 模式不追人）、非工作占用、背包有方块、周围无威胁
 
 ## 实测一百六十四
 
-- 还原扫描门级诊断（用户追问："为什么会卡，就没有办法修复它吗？偏要加个硬性的时间调整"）：
+- 还原扫描门级诊断（追问："为什么会卡，就没有办法修复它吗？偏要加个硬性的时间调整"）：
   - 【诚实回答】90 秒硬超时是【安全网】不是根因修复。现状：整份日志零条还原记录 + 还原扫描零异常 → 扫描卡在威胁判定或安全计时两个【静默 continue】之一，静态分析无法区分（`pick dist=37.0` 是平方距离=实际 6 格，威胁判定半径本身没错）
   - 【本次】还原扫描新增门级诊断（每 10 秒/女仆一条，latest.log 搜 `restore-scan`）：`task=当前任务 / assigned=指派战斗任务 / lastThreatAge=距上次威胁刷新秒数 / threatDetail=威胁来源明细（fixed=固定半径内敌对生物距离 / ring=动态圈来源存活/已死 / none） / preserve=自保 / isOnSched=排班开启`
   - 测试路径：进游戏打怪→杀怪→切和平，等 1~2 分钟，把 latest.log 搜 `restore-scan` 的行发我——一条日志就能指出卡在哪道门（威胁一直 true？安全计时被续杯？任务判定异常？），然后针对性修根因
@@ -2870,16 +2870,16 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百六十三
 
-- 排班优先级方案落地（用户："退而求其次——让排班拥有更高的优先级。排班状态下不触发自主战斗，也不会响应"）：
+- 排班优先级方案落地（问题：退而求其次——让排班拥有更高的优先级。排班状态下不触发自主战斗，也不会响应）：
   - 【根因回顾】日志实证：8月26-27日排班正常应用段（"应用段 0:00~4:00 任务=sugar_cane"等），8月28日 14:53 起**排班再也没应用过任何段**，取而代之的是一连串"主动战斗中——排班让位"——女仆的 COMBAT_ACTIVE 战斗标记卡死在 true（战斗还原从没跑成功的同源问题），排班调度每次尝试应用都被"战斗中让位"挡掉 → 任务永不切换、女仆一直跟随主人
-  - 【方案（按用户要求）】**排班 > 自主战斗**：排班开启的女仆【不参与自主战斗、不响应任何参战触发】（主人被打/女仆被打都不切战斗）——任务/模式全由日程表管理，从根上杜绝战斗标记与排班互相拉扯；想让她打 → 排班段任务直接配攻击任务（日程表驱动），或关闭该女仆排班
+  - 【方案（按要求）】**排班 > 自主战斗**：排班开启的女仆【不参与自主战斗、不响应任何参战触发】（主人被打/女仆被打都不切战斗）——任务/模式全由日程表管理，从根上杜绝战斗标记与排班互相拉扯；想让她打 → 排班段任务直接配攻击任务（日程表驱动），或关闭该女仆排班
   - 【残留清理】老版本留下的残留 COMBAT_ACTIVE 标记自动清理：排班女仆在还原扫描中直接清标记（1 秒内）；非排班女仆的残留标记（无开始时间戳 + 当前任务非攻击）强制还原自愈；新参战仍受 90 秒硬超时兜底
   - 【让位收紧】排班让位判定改为"真实在战斗"（标记 + 当前任务确实是攻击任务）——残留标记不再拦截排班应用；批量一键应用同样跳过残留标记女仆
   - 效果：排班女仆每天准时切段（应用段日志恢复）、不再被战斗状态卡住跟随主人；非排班女仆的自主战斗/还原照旧工作
 
 ## 实测一百六十二
 
-- 主动战斗"被吞 + 不还原"根治（用户："现在别说还原主动攻击了，连先前主动攻击都被吞掉了没法触发。新生成的女仆可以，但还是无法还原。实在不行直接套用 tlm_beyond_space"）：
+- 主动战斗"被吞 + 不还原"根治（问题：现在别说还原主动攻击了，连先前主动攻击都被吞掉了没法触发。新生成的女仆可以，但还是无法还原。实在不行直接套用 tlm_beyond_space）：
   - 【根因①·参战被吞】`tryEngageMaid` 的 COMBAT_ACTIVE 门：只要读到 idle（战斗早已结束、任务回落 idle）就 `return 0` 吞掉参战——老女仆身上残留的战斗标记（旧版本崩溃/半途退出留下的 `maid_smart_combat_active=true`）永远清不掉 → 参战被永久吞掉。新女仆没有残留标记所以能触发。修复：**只有真实还在战斗任务（指派或任意攻击任务）才吞**；idle 读数 = 残留标记 → 清掉并落日志「残留战斗标记自愈」后继续走参战评估
   - 【根因②·永不还原】整份日志【零条】还原日志（战斗还原/无需还原/兜底还原/还原未生效都没有）——还原动作从没被执行到，卡在还原扫描前面的某个门（威胁判定/安全计时）。修复：**硬性超时兜底**——参战瞬间记录 `maid_smart_combat_start` 时间戳，战斗会话超过 90 秒仍未还原 → 无论威胁是否仍在、安全计时是否被续杯、僵局阀是否失效，一律强制走还原（`forceRestore` 统一接管原来的"无武器强制还原"门，跳过远处切远程/还原开关门）
   - 还原动作本身已是 tlm_beyond_space 的 restoreTemporaryState 模式（快照任务+home+作息、先还原后清会话、读回校验、失败保留标记下轮重试），本次不再动
@@ -2887,7 +2887,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百六十一
 
-- 烧制任务改名 + 烧不起来诊断（用户："女仆用熔炉/烟熏炉准备烧制兔肉却无法开始工作"；日志实证：`[大正女仆酒狐] 熔炉明明就在附近（2~3个），但我没能开始工作`——女仆拿着烧制任务、寻路空闲、炉子就在 16 格内，但行为没有把兔肉放进去）：
+- 烧制任务改名 + 烧不起来诊断（问题：女仆用熔炉/烟熏炉准备烧制兔肉却无法开始工作；日志实证：`[大正女仆酒狐] 熔炉明明就在附近（2~3个），但我没能开始工作`——女仆拿着烧制任务、寻路空闲、炉子就在 16 格内，但行为没有把兔肉放进去）：
   - 【改名】「烹饪」任务改名「烧制」（任务名/任务摘要/配置面板/手册/工作报告文案全量更新；`zh_cn`=烧制、`en_us`=Smelting）——任务已兼容矿石/高炉/烟熏炉，不再只是做饭
   - 【诊断】给烧制行为加断点日志（latest.log 搜 `cook `）：行为启动时绑定哪个炉子（`cook start`）→ 门控是否通过（`cook gate-blocked`）→ 每轮收了什么成品/喂了什么料/还是"背包无料可喂"（`cook round`）。日志能直接区分：行为没跑 / 找不到炉子 / 门控没通过 / 配方没匹配，四种断点一次定位
   - 【待验证】当前日志无法确定断点（旧版行为无日志）。请再测试一次：给女仆兔肉+燃料、切「烧制」任务、附近放熔炉/烟熏炉，跑 1~2 分钟后把 `logs/latest.log` 里搜 `cook ` 的行发我——按断点直接修
@@ -2908,7 +2908,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百五十八
 
-- 烹饪任务兼容高炉与烟熏炉（用户："能不能让它也兼容高炉和烟熏炉呢？"）：
+- 烹饪任务兼容高炉与烟熏炉（问题：能不能让它也兼容高炉和烟熏炉呢？）：
   - 【根因】行为只处理 `FurnaceBlockEntity`——烟熏炉/高炉是熔炉方块类（AbstractFurnaceBlock）但不是熔炉实体，女仆走到它们面前只会干坐（收成品/补燃料/喂料全不执行）
   - 【修复】三种炉子统一操作，按各炉子配方类型喂料：熔炉 = 食材白名单 → 矿物类可烧制物（实测一百五十七）；烟熏炉 = 有烟熏配方的物品（生食）；高炉 = 有高炉配方的物品（矿石/粗金属）。成品收取/燃料补充三种炉子通用
   - 约束关系：高炉只烧矿物 → 高炉喂料受「熔炉烧矿物」（`misc.cookSmeltOres`）开关约束，关掉后高炉只收成品/补燃料不喂料；烟熏炉喂生食不受该开关影响
@@ -2916,56 +2916,56 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百五十七
 
-- 熔炉兼容矿物类可烧制物（用户："女仆使用熔炉兼容一下带有矿物标签的可烧制物质"）：
+- 熔炉兼容矿物类可烧制物（问题：女仆使用熔炉兼容一下带有矿物标签的可烧制物质）：
   - 【根因】烹饪任务补食材只认 `FOODS` 内置白名单（生肉/鱼/土豆等）——背包里的铁矿石/粗铁/金矿石/远古残骸等矿物类可烧制物永远不会被放进熔炉，女仆守着炉子只烧食物
   - 【修复】背包没有食材时，新增矿物类可烧制物补料：物品**带矿物/原料标签**（标签路径含 `ores` 或 `raw_materials`——forge:ores、forge:ores/*、minecraft:*_ores、forge:raw_materials 等，模组矿物标签同样命中）**且当前世界有熔炉配方**（走配方管理器查 SMELTING，模组自定义烧制配方也认）才放入熔炉槽 0；食材优先、矿物兜底，成品收取/燃料逻辑不变
   - 总开关 `misc.cookSmeltOres`（默认开）+ 配置面板「熔炉烧矿物」行；关闭 = 只烧食材白名单
 
 ## 实测一百五十六
 
-- 骑乘中禁止搭方块（用户："我和女仆在扫帚上挖矿时，如果设置为挖矿模式，女仆会搭方块；加个检测，骑乘状态不允许搭方块"）：
+- 骑乘中禁止搭方块（问题：我和女仆在扫帚上挖矿时，如果设置为挖矿模式，女仆会搭方块；加个检测，骑乘状态不允许搭方块）：
   - 【根因】挖矿模式的搭高/搭斜坡/搭桥（`pillarUpStep`/`slopeStep`/`bridgeToOre`）不检查骑乘状态——女仆骑在扫帚上（RIDE_WORK activity 任务照常运行）够不着矿时照样垫方块，留下一堆残渣
   - 【修复】三处搭方块入口统一加骑乘守卫（`isPassenger`）：骑乘中直接返回不垫块——移动由载具控制，垫方块只会留残渣；挖矿其他逻辑（找矿/挖矿/收集）不受影响
   - 总开关 `mine.rideNoPillar`（默认开）+ 配置面板「骑乘中禁止搭方块」行；关闭 = 旧行为
 
 ## 实测一百五十五
 
-- 保命物品下保留逃跑开关（用户："加个开关，在女仆装备甘珠之药/不死图腾等时是否保留逃跑功能"）：
+- 保命物品下保留逃跑开关（问题：加个开关，在女仆装备甘珠之药/不死图腾等时是否保留逃跑功能）：
   - 【背景】TLM 绀珠之药 = `ultramarine_orb_elixir`（ExtraLifeBauble，死亡复活，等价不死图腾，仅 `bypasses_invulnerability` 伤害不救）；原版不死图腾在饰品栏（UndyingTotemBauble）/双手/背包（MaidBaubleTotemMixin）都能救命。女仆带着这些保命物品时低血还在逃跑 = 死不了却丢下工作满场跑
   - 【修复】新增 `hasDeathSaveItem`（饰品栏绀珠之药/不死图腾 + 双手/背包不死图腾）与 `canFlee`：开关关闭（默认）时——有保命物品就不逃跑（继续战斗/垫高/治疗，不丢下工作），同时不再播报"我先撤了"；开关开启 = 照常逃跑
   - 总开关 `combat.fleeWithSaveItem`（默认关）+ 配置面板「保命物品下保留逃跑」行
 
 ## 实测一百五十四
 
-- 溺水保护饰品识别（用户："女仆装备溺水保护时仍然会表示自己'溺水'向上浮，希望修改或加开关"）：
+- 溺水保护饰品识别（问题：女仆装备溺水保护时仍然会表示自己'溺水'向上浮，希望修改或加开关）：
   - 【根因】TLM 溺水保护饰品（`touhou_little_maid:drown_protect_bauble`，DrownProtectBauble）的机制 = 每次溺水伤害触发时**空气回满 + 伤害免疫**（javap 实证：`setAirSupply(getMaxAirSupply)` + 取消 `is_drowning` 伤害）——但女仆泡水时氧气仍会自然消耗，promaid 的溺水判定（泡水且氧气<60）照常触发 → "溺水了！我游上去！"上浮找空气，完全无视饰品
   - 【修复】溺水软危险判定 + 溺水分支 + 溺水兜底三处统一加饰品豁免：佩戴溺水保护饰品（且开关开启）时泡水不再喊溺水/上浮/喝水肺——饰品每 tick 自己补空气，她淹不死
   - 总开关 `combat.drownProtectBauble`（默认开）+ 配置面板「溺水保护饰品识别」行；关闭 = 旧行为
 
 ## 实测一百五十三
 
-- 火焰保护饰品识别（用户："女仆装备火焰保护时仍然会表示自己'着火'，希望修改或加开关"）：
+- 火焰保护饰品识别（问题：女仆装备火焰保护时仍然会表示自己'着火'，希望修改或加开关）：
   - 【根因】TLM 火焰保护饰品（`touhou_little_maid:fire_protect_bauble`，FireProtectBauble）的机制 = 受到 `is_fire` 标签伤害时**给 15 秒抗火 + 喷灭火剂 + 伤害免疫**（javap 实证：MobEffects.FIRE_RESISTANCE 300 tick + EntityExtinguishingAgent）——但刚点燃还没吃到第一次火焰伤害的窗口期（或灭火剂未生效时）身上仍是 `isOnFire`，promaid 的着火判定照常触发 → 惊慌灭火/找水/往主人身边跑
   - 【修复】致命危险（泡岩浆）+ 软危险（着火）+ 着火分支 + 环境逃生兜底四处统一加饰品豁免：佩戴火焰保护饰品（且开关开启）时着火/泡岩浆不再惊慌——饰品自己会处理（受伤触发给抗火 + 灭火剂浇灭）
   - 总开关 `combat.fireProtectBauble`（默认开）+ 配置面板「火焰保护饰品识别」行；关闭 = 旧行为
 
 ## 实测一百五十二
 
-- 有增益也喂牛奶（用户："加开关，在有增益的时候，如果有负面buff也喂牛奶——很多装备具有永久增益"）：
+- 有增益也喂牛奶（问题：加开关，在有增益的时候，如果有负面buff也喂牛奶——很多装备具有永久增益）：
   - 【根因】牛奶前提 = "无增益 + 有负面"（v1.5.281 设计：牛奶清全部效果，有增益时喝会连增益一起清掉）——但很多装备/饰品带**永久增益**（如 TLM 饰品/护甲附魔效果），女仆身上永远有增益 → 永远不满足"无增益" → 中毒/凋零/虚弱也不喝牛奶不解负面
   - 【修复】新增 `misc.milkFeedWithBuff`（默认开）：开启时女仆自己喝牛奶解负面（`hasOnlyNegativeEffects` 忽略增益）与给主人喂牛奶解负面（`feedMilkOrHoneyDirect` 无视主人增益）都照喂——有负面 buff 就喂牛奶，装备永久增益会被一起清掉；关闭 = 旧行为（有增益不喂牛奶，只喂蜂蜜解中毒）
   - 配置面板「有增益也喂牛奶」行（自保区）
 
 ## 实测一百五十一
 
-- 跟随模式乱跑修复（用户："跟随模式时女仆有时候会乱跑，参照桌面改版 TLM jar 的设计，平常的时候女仆会跟随在 4 格以内"）：
+- 跟随模式乱跑修复（问题：跟随模式时女仆有时候会乱跑，参照桌面改版 TLM jar 的设计，平常的时候女仆会跟随在 4 格以内）：
   - 【实证分析】反编译对比改版 jar（touhoulittlemaid-1.5.3-modified-all.jar）与官方 1.5.3 的 `MaidFollowOwnerTask`：距离逻辑（start 里的 teleport/walk 分支，`getRestrictRadius` 双带）**字节码完全一致**；唯一区别是改版把逻辑提取成 `tryFollowOwner` 并加了 **tick 覆写——每 tick 驱动**。官方版只在行为【启动时】设一次寻路目标：被其他行为覆盖、或 MoveToTargetSink 的 150~250 tick 刹车（走路满 7.5~12.5 秒清 WALK_TARGET + 停导航，实测一百二十九修过的同源问题）清掉后，女仆失去跟随目标 → 走走停停/乱跑
   - 【修复】新增 `MaidFollowOwnerTickMixin`：注入跟随任务的 tick（`m_6725_`，继承自 Behavior），每 tick 重断言——**4 格内不动（跟随已达成）；超过 4 格重新 setWalkAndLookTarget 指向主人**（speedModifier/stopDistance 与官方任务字段一致，跟随自然收敛在 4 格内）；守家/脑冻结/无主/跨维度不拉（与官方 maidStateConditions 同口径）；**干活中不拉**（防跟随目标覆盖工作寻路）
   - 总开关 `misc.followTighten`（默认开）+ 配置面板「跟随收紧」行；关闭 = 官方 1.5.3 原版行为
 
 ## 实测一百五十
 
-- 和平模式（怪全清）后女仆仍不还原的兜底根治（用户复现路径：简单难度 → 玩家攻击怪 → 女仆参战 → 女仆杀怪 → 切和平 → 女仆仍不切回原模式；参考 tlm_beyond_space 的 restoreTemporaryState：**先还原、后清会话——失败不清标记、下轮重试**）：
+- 和平模式（怪全清）后女仆仍不还原的兜底根治（玩家复现路径：简单难度 → 玩家攻击怪 → 女仆参战 → 女仆杀怪 → 切和平 → 女仆仍不切回原模式；参考 tlm_beyond_space 的 restoreTemporaryState：**先还原、后清会话——失败不清标记、下轮重试**）：
   - 【根因】promaid 旧版还原是【先 clearMarkers 再 setTask】——TLM 的 setTask 有守卫（睡眠/活动等）会**静默拒绝**（实测一百二十九的读回校验同源）：任务没切走、标记却已清 → 还原扫描不再处理她（COMBAT_ACTIVE=false）→ 永久卡在战斗任务 = "切不回原来的模式"的最后一道漏洞
   - 【修复】还原与兜底两条路径都改为**先还原、后清标记 + 读回校验**：setTask 后读回任务 UID，切走了才算还原成功并清标记；没切走（TLM 守卫拒绝）保留 COMBAT_ACTIVE、落日志"还原未生效…保留标记下轮重试"，下轮扫描继续重试直到成功——还原链再也不会被"半途清标记"丢掉
   - 附带：兜底（原任务不存在）路径同样读回校验 idle/排班切换，失败不清标记
@@ -2973,7 +2973,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十九
 
-- 主动战斗"切回之前模式"根治（用户："主动攻击模式切换为之前的模式这个bug一直修不好"，参考 tlm_beyond_space 的会话快照机制——RegularRescueSupport 捕获 / TaskSwitchService.restore 还原 / restoreAfterExternalTaskChange 接管兜底）：
+- 主动战斗"切回之前模式"根治（问题：主动攻击模式切换为之前的模式这个bug一直修不好，参考 tlm_beyond_space 的会话快照机制——RegularRescueSupport 捕获 / TaskSwitchService.restore 还原 / restoreAfterExternalTaskChange 接管兜底）：
   - 【历史教训】日志实证整份 promaid.log 里【从来没有一条"战斗还原"日志】——还原从未跑成，反复出现的是"战斗中任务被接管…清标记退出"→ 重新参战的循环；且参战快照多为 idle
   - 【根因①·状态只存一半】参战只存了前任务 UID，没存 home 模式与作息（MaidSchedule）——"之前的模式"缺了一半。参考项目参战瞬间快照 任务+home+作息 三件套，结束时全量还原。修复：新增 `COMBAT_PREV_HOME_TAG`/`COMBAT_PREV_SCHEDULE_TAG`，参战捕获、还原时（排班关闭才生效，排班开启由日程表管理不覆盖）恢复 home+作息——"切回之前的模式"完整闭环
   - 【根因②·"接管"只清标记不还原】任务被外部改走时旧版只清标记退出——参考项目 `restoreAfterExternalTaskChange` 是【尊重新任务、但把 home/作息还原回战斗前】。修复：两处接管路径（参战入口/还原扫描）清标记的同时调用 `restorePrevMode` 兜底
@@ -2983,7 +2983,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十八
 
-- 战斗武器两连修（用户："女仆切换武器的时候还是不会使用模组武器；塞入模组武器后即使再拿出来，主动战斗就再也不触发了"，参考 tlm_beyond_space 的 CombatTaskCompatibility/TaskSwitchService）：
+- 战斗武器两连修（问题：女仆切换武器的时候还是不会使用模组武器；塞入模组武器后即使再拿出来，主动战斗就再也不触发了，参考 tlm_beyond_space 的 CombatTaskCompatibility/TaskSwitchService）：
   - 【根因①·模组武器不用】`ef_tlm:fight_mode_task`（史诗战斗联动）**没有覆写 `isWeapon(maid, stack)`**——`IAttackTask` 默认实现恒 false（javap 实证）→ 该任务的武器永远进不了战斗候选池、也永远不被自动装备 = "切换武器时不用模组武器"。该任务只暴露 `isWeaponCap(ItemStack)`/`hasCapWeapon(maid)`——新建 `CombatTaskCompat`，用反射调用 `isWeaponCap` 补上判定（照搬参考项目的兼容层），接入战斗池判定（`hasWeaponForTask`）与模组任务自动装备（`MaidToolAutoEquip`）
   - 【根因②·再也不触发】切任务前从不【预检+自动装备】。TLM 官方 `onFunctionCallSwitch` 默认实现（javap 实证）= 主手有武器 → NO_CHANGE；没有 → `TaskEquipUtil.tryEquipFromBackpack` 自动装备 → OK；装不上 → `MISSING_REQUIRED_ITEM`。参考项目正是用它做切换前预检。修复三处：
     - 参战入口：`pickCombatTask` 后先 `prepareSwitch`，`MISSING_REQUIRED_ITEM`（武器被拿走/任务要求特殊物品）→ 不切入，绝不把女仆卡在打不出伤害的战斗任务上
@@ -2993,28 +2993,28 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十七
 
-- 建造预览两连修（玩家反馈："玩家周边的黄色区块框怎么都去不掉，原本要求显示的幽灵方块也没有了，整个建造链路出现了bug"）：
+- 建造预览两连修（玩家问题：玩家周边的黄色区块框怎么都去不掉，原本要求显示的幽灵方块也没有了，整个建造链路出现了bug）：
   - 【金色框去不掉·根因】`BlueprintAreaPreview.clear()` 在实测一百三十二加诊断日志时把 `active = false` **误删**（日志替换了状态复位，git diff 实证）——金色预览开启后打开手册/确认建造都关不掉，框永远跟着玩家移动。修复：恢复复位，`clear()` 真正关闭金色预览（调用点 BlueprintBookScreen.open = "再次打开手册 = 关预览"，与 render 标签"（打开手册关闭）"一致）
   - 【幽灵方块消失·根因】实测一百零九的 renderSingleBlock 渲染方案对 1.20.1 不成立：Forge 版 7 参 `renderSingleBlock` 字节码实证——它遍历 `BakedModel.getRenderTypes` 按【模型自身图层】渲染、写进各图层自己的 buffer，**完全忽略传入的 translucent renderType**；幽灵顶点落入早已刷新的 solid/cutout buffer，透明混合与刷新时机都不对 → 方块不可见（实测一百二十九/一百三十二"轮廓又没了"反复复发、一百零一初次引入时同样不可见被一百零五/一百零六回退——同一根因）。修复：改回与【区块框同款】的 DebugRenderer 即时渲染——每点一个 `renderFilledBox` 半透明填充盒（区块框一直在正常显示：框能显示，幽灵必能显示）；删除废弃的 GhostBufferSource/GhostVertexConsumer 包装类
   - 投影数据链路（请求→服务端采样→分块回传）本就正常，未改动
 
 ## 实测一百四十六
 
-- 下界彻底不用水桶（玩家反馈："女仆在下界的时候仍然会使用落地水"）：
+- 下界彻底不用水桶（玩家问题：女仆在下界的时候仍然会使用落地水）：
   - 【排查结论】落地水本身（WaterClutchBehavior）下界早已有闸（`!isNether`，下界只会用细雪）——玩家看到的下界放水来自自保系统的 v1.5.250 改动：当时按"女仆喜欢用水桶"的要求，把着火灭火链和岩浆逃生链的下界跳过取消了，改为每 40 tick（2 秒）倒一次水（放置动作/蒸汽可见，实际水瞬间蒸发、灭火无效）——女仆在下界着火/坠入岩浆时看起来在乱放水，玩家误认为"还在用落地水"
   - 【修复】恢复 v1.5.210 设计，下界不再用任何水：① `placeClutchWater`（着火灭火）开头下界直接 return（双保险：调用侧 `fireBucketStep` 同时加回 `!isNether`）；② `placeWaterOnLava`（岩浆黑曜石逃生）下界 return false；③ 删除 `netherPourTick` 下界倒水节流字段与全部逻辑。下界着火/岩浆流转末影珍珠→抗火药水→金苹果→物理逃离，全部仍可用
   - 主世界（水会流动铺开/灭火/岩浆变黑曜石）行为完全不变
 
 ## 实测一百四十五
 
-- 落地雪 3×3 → 1×1（用户："将女仆的落地雪改为 1×1，现版本是 3×3"）：
+- 落地雪 3×3 → 1×1（问题：将女仆的落地雪改为 1×1，现版本是 3×3）：
   - 【改法】`WaterClutchBehavior.ensureSnowPad` 不再铺 3×3 九宫格，只铺【落点中心一格】（落点格非空气/本轮已铺过则直接返回，不重置保持计时）
   - 【影响】细雪本就不流动、只认实体真正落进去的那一格——3×3 是容错垫，1×1 后无容差：能否接住完全依赖坠落途中逐 tick 的落点追补（击退/横移偏出一格、落点格非空气铺不进雪即空摔）。机制固有难度提升，追求稳请用水桶（水会流动自己铺开）
   - 同步更新：配置注释（combat.snowClutch）、配置面板文案、被动技能手册文案（"1×1 无容错，偏一格即空摔"）
 
 ## 实测一百四十四
 
-- 排班表三连修（用户："排班瞬间开启的时候模式没有切换；女仆收进魂符再放出排班没切换；正式进入排班的女仆不断瞬移，原因未知"）：
+- 排班表三连修（问题：排班瞬间开启的时候模式没有切换；女仆收进魂符再放出排班没切换；正式进入排班的女仆不断瞬移，原因未知）：
   - 【不断瞬移·根因】受困救援的"真虚空"判定用错了方法——`needsRescue` 注释写的是"掉出最低建筑高度"，实际调用的 SRG `m_141928_` 是 `getHeight`（主世界 384）："y < 384" 对所有站立女仆恒真 → 救援系统把每只**距主人 >8 格**的女仆（含守家/排班女仆，无豁免）每 5 秒拽回主人身边一次（日志实证：排班锚点 (91,-60,139) 的女仆被当成"掉出世界"循环救援，14:58 起每 5 秒一条 `maid rescue`）。修正确认映射（javap `Level.getHeight` 实证 `m_141937_` = getMinBuildHeight，主世界 -64 / 下界与末地 0），只有真正掉出维度底部才触发救援；救援日志附带维度最低高度（min=）便于现场核对
   - 【瞬移连锁反应】救援循环还把排班女仆反复拽进主人身边的怪堆 → 每 5 秒重新参战 → 排班调度器因"主动战斗中"持续让位 → 排班"开了却一直不生效"观感加重。救援修复后此连锁一并消失
   - 【开启不切模式】排班开启瞬间 applyNow 让位于主动战斗（设计如此），但**零反馈**——玩家看不到任何提示，只看到"没切换"；现在保存/快捷开启排班时若女仆正在战斗，聊天栏明确告知「排班已开启，战斗中——战斗结束自动切换当前时段（模式/任务）」，不再静默
@@ -3022,7 +3022,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十三
 
-- 半空女仆向飞行主人搭桥（用户："女仆在半空中站在自己搭的方块上，玩家仅水平飞行移动，女仆很难再向主人方向搭建。希望运用僵尸的索敌机制保证女仆会向玩家方向搭方块"）——两层根因一起修：
+- 半空女仆向飞行主人搭桥（问题：女仆在半空中站在自己搭的方块上，玩家仅水平飞行移动，女仆很难再向主人方向搭建。希望运用僵尸的索敌机制保证女仆会向玩家方向搭方块）——两层根因一起修：
   - 【根因①·启动/收尾区重叠抖动】canUse 启动区（dist3 > minRadius=2）与 canContinue 收尾区（dSq<=6.25=2.5 格"reached"）重叠在 2~2.5 格 band：行为每秒 start→reached→stop（日志实证 bridge-up start/stop reason=reached 刷屏），tick 根本没机会铺桥——这就是"主人只有 5 格也不搭"的真凶（她一直悬在 2~2.5 空转）。修复：启动须离开收尾区（> max(minRadius, 2.5)），两区不相交 → 无抖动
   - 【根因②·多余门槛】实测一百四十一加的"水平 >4 格才启动"把 5 格左右的平地场景也挡在门外——去掉（近距离由根因①的收尾区兜底）
   - 【根因③·距离上限】女仆自己半空（isAirborne）时 distLimit=airMaxDist(24)，主人飞出 24 格 she 放弃——半空放开上限（参考僵尸索敌：方块耗尽自然停）；airMaxDist 默认 24→128 兜底地面女仆追空中主人
@@ -3030,14 +3030,14 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十二
 
-- 修复挖矿/伐木"每 5 秒重置一次状态"（用户："伐木与挖矿的时候，每 5 秒重置一次女仆的状态，等效于拿魂符收起来再释放"）：
+- 修复挖矿/伐木"每 5 秒重置一次状态"（问题：伐木与挖矿的时候，每 5 秒重置一次女仆的状态，等效于拿魂符收起来再释放）：
   - 【根因】矿/木材缓存 TTL = 100 tick（5 秒）到期强制全量重扫：挖完一块后 targetPos 置空 → findOre/findWood 发现缓存到期 → 启动分帧全量扫描（几十 tick，期间"无目标"站着等）→ 扫完重新选目标，可能换一块更"优"的矿/树重新走 → 观感 = 每 5 秒停一下/重置/换目标，像收放魂符
   - 【修复】去掉 TTL 到期强制重建——缓存轮（pickFromCache）每次本就逐格校验矿/木材是否还在（存在性/框内/可挖/挡路/弃置），到期重建纯属多余；缓存一直用到【轮空】才全量重建（轮空即框内确无矿 → 立即重建/迁移，实测五十五·一百二十七的"原地愣 2~3 秒"修复保留）。锚点变化/迁框时另有强制重建路径，框内新露头的矿在缓存轮空后的全量扫描里自然被发现
   - 挖矿与伐木两处同款修改（ORE_CACHE_TTL / WOOD_CACHE_TTL 逻辑统一）
 
 ## 实测一百四十一
 
-- 平地搭桥意愿提升（用户："与主人高度相差不大但水平距离很远时搭桥欲望太低，希望像整合包僵尸一样尝试追逐玩家"，参考 Zombie Invade 100 Days 的 endofdays 僵尸 BlockBuildBridGeGoal）：
+- 平地搭桥意愿提升（问题：与主人高度相差不大但水平距离很远时搭桥欲望太低，希望像整合包僵尸一样尝试追逐玩家，参考 Zombie Invade 100 Days 的 endofdays 僵尸 BlockBuildBridGeGoal）：
   - 【根因】实测一百三十的平地门槛要求"前方 1~2 格脚下悬空（hasGapAhead）才启动"——平地/低高差场景（dy<minDy）行为根本不启动，只有垂直搭高和空中铺桥在跑，平路追逐缺失
   - 【修改】平地/低高差场景去掉"必须前方悬空才启动"：主人【不在下方】且水平距离 >4 格即启动追逐——启动后每步冷却（默认 5 tick）在前方脚下悬空处铺桥、实心地面走路，与僵尸 BlockBuildBridGeGoal 行为一致（其 canUse 对玩家目标近乎无条件，铺桥逻辑同样是"前方脚下悬空才垫、实心走路"）
   - 【防抖动】hDist≤4 不启动（太近走路即可）+ 球面半径门槛保留——避免 2~2.5 格处的启动/停止边界空转（实测一百三十治的抖动不回归）
@@ -3045,7 +3045,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百四十
 
-- 传送"无落脚点"根治（用户："一传送到下界进行集合的时候，总会提示玩家旁边没有落脚点。我觉得这才是传送bug的根源"）：
+- 传送"无落脚点"根治（问题：一传送到下界进行集合的时候，总会提示玩家旁边没有落脚点。我觉得这才是传送bug的根源）：
   - 【根因】落点扫描判定过严：要求"站立格 isAir + 脚下 isSolid 满方块"——下界里脚下有火/火把/草丛、站在台阶/栅栏上、1 格窄道、或传送门平台边缘时必判失败 → "无可站立点" → 一键集合/跨维度跟随/同维度拉回全被卡（实测一百三十四加的三条传送链路全走这一个 findStand）
   - 【判定放宽，参考 tlm_beyond_space SafeTeleportService.canStandAt】新 `standableCell`：脚下有碰撞面（不限满方块）、站立格与头顶碰撞箱为空（无碰撞方块不挡）、站立格与头顶无流体、未加载区块不扫。附加保险：命中危险表（岩浆/火）不落、目标格无存活实体占用（防传进玩家身体被挤走）
   - 【失败落日志】findStand 全失败时（60 秒限频）记录 脚格/下格/头顶 方块 ID——万一还有误杀，日志直接指明
@@ -3053,7 +3053,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十九
 
-- 自主战斗还原根治（用户："女仆将自主战斗切回原来模式还是有问题，仍然不会切回原来的模式"，参考 tlm_beyond_space 的会话快照机制）：
+- 自主战斗还原根治（问题：女仆将自主战斗切回原来模式还是有问题，仍然不会切回原来的模式，参考 tlm_beyond_space 的会话快照机制）：
   - 【根因】关键链路用了不稳定的读数：①参战时原任务用 `getTask()` 记录——TLM getTask 读同步数据 DATA_TASK，uid 解析抖动时回落成 idle（日志实证每次参战都录成 idle → 还原目标恒为 idle = "切不回原来的模式"）；②还原扫描/参战评估拿"当前任务是 idle"当"玩家接管"→ 清标记退出、还原链被丢
   - 【原任务可靠快照】`resolvePrevTaskUid`：参战裸记录顺序改为 真任务(非idle) > 排班当前时段任务 > idle——排班女仆还原时回到的是排班段任务，不再被假 idle 带偏
   - 【还原不依赖 getTask 猜测】`isIdleReading`：当前任务读数为 idle/空 时不再判"玩家接管"清标记（继续走还原）；只有**真实的其他任务**（非 idle、非战斗、非指派）才算接管、尊重不还原
@@ -3061,20 +3061,20 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十八
 
-- 排班开启的女仆同步锁住【工作模式】（作息 DAY/NIGHT/ALL）——用户："排班名义上不允许玩家切换模式，但玩家用 TLM 本身能切，禁用调整变成无用"：
+- 排班开启的女仆同步锁住【工作模式】（作息 DAY/NIGHT/ALL）——问题：排班名义上不允许玩家切换模式，但玩家用 TLM 本身能切，禁用调整变成无用：
   - 一百三十六只守了 setTask（任务），TLM 原版 GUI 切作息直接调 `setSchedule` 绕了过去 → 段内去抖键命中排班不纠正，作息调整形同虚设
   - 守卫 mixin 扩展：`setSchedule` 同样拦截（排班开启 + 非自动系统调用即拒绝），女仆气泡与日志统一提示"工作模式和任务都由日程表管理"
   - 排班调度器自己的 setSchedule 打内部标记放行（不误伤排班设工作时间）；未开排班的快捷设置/批量应用照常可切
 
 ## 实测一百三十七
 
-- 切换至排班 = 强制接管（用户："当女仆切换至排班的时候手头的任务应该强制改为此时间段排班的任务"）：
+- 切换至排班 = 强制接管（问题：当女仆切换至排班的时候手头的任务应该强制改为此时间段排班的任务）：
   - 排班书快捷设置【开启排班】的瞬间：清掉可能残留的本段去抖键/尝试记录/重试冷却 + 立即 applyNow——手头任务**当场**强制改为当前时段排班的任务（旧版只等 1 秒扫描，且残留去抖键会直接跳过，要拖到下个时段边界才切；配合一百三十五保存路径已修的"改当前段保存不生效"）
   - 修复保存【关闭排班】的反向执行：旧版保存（无论开关）都无条件调 applyNow——关排班后 applyNow 仍会强制 home 模式并按日程应用段任务（等于排班没关）。现在仅开启时清残留+立即应用并进 home；关闭时只清残留记录、解除 home、不应用任何段任务，保持她当前状态
 
 ## 实测一百三十六
 
-- 排班中的女仆【禁止手动改任务】——源头拦截（用户："理论上排班中的女仆玩家不应该可以手动修改她的任务的"）：
+- 排班中的女仆【禁止手动改任务】——源头拦截（问题：理论上排班中的女仆玩家不应该可以手动修改她的任务的）：
   - 新增 `MaidTaskScheduleGuardMixin`：拦截 `EntityMaid.setTask`——排班开启（ScheduleData.isOn）且非【自动系统】调用（ScheduleSwitchGuard 内部标记）时直接拒绝。TLM 原版 GUI、蓝图书切任务、LLM 指令等一切手动入口在源头被掐掉，不再与调度重试互相顶（此前只拦了排班书自己的快捷设置/批量应用，TLM GUI/蓝图书/LLM 是绕过去的）
   - 主动战斗系统的 setTask 全部打上内部标记（参战/还原/换战术/idle 兜底 4 处）：战斗是自动系统，不因守卫误伤——排班女仆战斗中依然能正常切战斗、威胁解除后正常还原本职
   - smart_attack / smart_build 两个 LLM 工具加显式拦截：排班中的女仆直接拒绝并在工具结果里说明（而不是静默失败让 LLM 以为成功）
@@ -3083,7 +3083,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十五
 
-- 修复"玩家修改排班状态下女仆的任务 → 排班卡死"（用户反馈）：
+- 修复"玩家修改排班状态下女仆的任务 → 排班卡死"：
   - 【根因】TLM 的 setTask 是无条件执行的（字节码实证：无睡眠/活动守卫），所以卡死不在 TLM；卡死出在我们调度器自己：段任务因"没活不切/暂不可用"进入 10 秒重试循环后，玩家手动把任务改走，排班每 10 秒仍想切回段任务 → 把玩家改的任务顶回/无限重试，观感 = 排班卡死
   - 【外部改动识别】新增尝试记录（记录"本段尝试时刻的任务"）：排班尝试过本段之后，当前任务 ≠ 尝试时刻的任务 = 外部改动（玩家 TLM GUI/命令/LLM）→ 排班**尊重手动选择**：写去抖键结束本段、不再重试、下个时段边界再接管，并落日志说明。尝试时刻任务没变 = 正常"没活不切"重试不受影响
   - 【整体隔离】applyNow 整段 try/catch——任一异常只落日志 + 10 秒重试，绝不击穿服务端 tick（防止某种异常每 tick 重演把排班整个瘫痪）
@@ -3092,7 +3092,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十四
 
-- 跨区块/跨维度传送根治（用户："这个 bug 已经修了至少五六次，但就是修不好"）——先定位再补刀：
+- 跨区块/跨维度传送根治（问题：这个 bug 已经修了至少五六次，但就是修不好）——先定位再补刀：
   - 【根因】同维度（跨区块）的远距自动传送此前**完全依赖 TLM 自带机制**：MaidFollowOwnerTask 的 teleportToOwner 只对 非home+可脑动+主人同维度 的跟随女仆触发，且 10 次 ±3 随机试探可能全部落空（悬崖/窄道/主人飞行）而**静默失败**；排班自动 home 的女仆同维度更是永远不被 TLM 拉。历次修复（八十八区块保载/九十二接线/一百三十一 home 不拦跨维）改善的都是跨维度和"能否找到她"，**同维度远距拉回要么不存在、要么是 TLM 的随机静默失败**——所以怎么修都"还是不行"
   - 【新增】同维度远距拉回兜底（misc.maidSameDimPull，默认开，距离阈值 48 格可调）：与跨维度同款可靠链路（findStand + teleportTo 真传送），每 5 秒扫描中同维度超距即拉回；守家/坐姿/骑乘/干活中（挖矿/伐木/建造/站桩）不拉
   - 【新增】传送链路失败路径落日志（logs/promaid.log，60 秒限频）：跨维度无可站立点、"本该拉但守家/干活中不拉"、同维度拉回失败都有可见原因——"为什么不传"从此可查，不再玄学
@@ -3100,7 +3100,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十三
 
-- 排班表三件套（学习 TLM-Sincerely，用户："我认为排班表功能可以学习一下这个里面的"）：
+- 排班表三件套（学习 TLM-Sincerely，问题：我认为排班表功能可以学习一下这个里面的）：
   - ① 切换前可用性检测（没活不切）：段任务应用前先查目标任务当前有没有活可干——硬闸 `IMaidTask.isEnable(maid)`（TLM 任务自身可用开关）+ 软探测（挖矿有矿 / 伐木有树 / 烹饪有熔炉 / 酿造有酿造台 / 农场有可收作物或可种空地）。没活就保持当前任务不切，约 10 秒后自动重试；战斗/待机/跟随/第三方附属任务不做扫描、只查 isEnable（保证其它附属工作模式兼容、夜班守家照常压阵）
   - ② 反向切换抑制（A→B→A 横跳冷却）：短窗口内同两任务来回反复到阈值即压制，防止战斗还原/可用性重试压任务导致的秒级来回覆盖；正常时段切换相隔约 2000 tick 天然不误判
   - ③ 自动 setTask 打内标记：排班自己的 `setTask` 用线程局部标记包住（`ScheduleSwitchGuard`），将来任何需要区分"排班自动切换"与"外部/玩家手动切换"的 mixin/守卫/兼容层都能识别，不再靠脆弱的启发式推断；每个服务端 tick 开头防御性清理残留标记
@@ -3113,7 +3113,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百三十一
 
-- 修复跨维度跟随被 home 拦停（用户："女仆仍然不会选择跨维度传送"；日志链路实证：排班自动 home + followIfCrossDimension home 拦停 = 她永远住在第一维度）：home 模式现在只拦【同维度跟随】（TLM 原生跟随照旧），不拦【跨维度跟随】——主人过门/到下界/到末地，排班/家用女仆都直接传送跟过来。测试清单的「跨维跟随」日志（PromaidLog，logs/promaid.log）也可直接查到成功结果（跨维：女仆名 跟随主人跨维传送至 x,y,z）
+- 修复跨维度跟随被 home 拦停（问题：女仆仍然不会选择跨维度传送；日志链路实证：排班自动 home + followIfCrossDimension home 拦停 = 她永远住在第一维度）：home 模式现在只拦【同维度跟随】（TLM 原生跟随照旧），不拦【跨维度跟随】——主人过门/到下界/到末地，排班/家用女仆都直接传送跟过来。测试清单的「跨维跟随」日志（PromaidLog，logs/promaid.log）也可直接查到成功结果（跨维：女仆名 跟随主人跨维传送至 x,y,z）
 
 ## 实测一百三十
 
@@ -3122,7 +3122,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百二十九
 
-- 排班失效排查：全链路诊断日志落盘 logs/promaid.log（用户反馈"排班表不停失效"）
+- 排班失效排查：全链路诊断日志落盘 logs/promaid.log（反馈"排班表不停失效"）
   - 每步让位都留痕：总开关关/宽限期剩秒数/自保中/主动战斗中/日程空表/休息时段无段/去抖命中（60 秒限频）
   - 【应用后读回校验】TLM setTask 有守卫（睡眠/活动中）时静默拒绝，旧版去抖键已写→本段永不重试=应用了但没生效；现在应用后立即读回 getTask() 对比目标任务，不一致当场记录"任务未生效+实际任务"
   - 应用失败（任务UID非法/任务不存在/守卫拒绝/异常）不写去抖键 + 10 秒重试节流，条件解除后自动恢复
@@ -3135,7 +3135,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测一百二十七
 
-- 修复蛋糕吸引下女仆仍走岩浆块（用户复测，日志实证 hp 掉到 25% 自保仍无人救）：
+- 修复蛋糕吸引下女仆仍走岩浆块（玩家复测，日志实证 hp 掉到 25% 自保仍无人救）：
   - 【致命错配】DangerBlocks 危险表缓存 Set<Block> 但 isDanger/idIn 用 rl.toString() 字符串查询 → HashSet<Block>.contains(String) 恒 false → 寻路 mixin 与险境脱离全静默失效（脱离零日志的铁证）；缓存改 Set<String> 注册名
   - 【飞行缺口】1.20.1 FlyNodeEvaluator 自己覆写 m_7209_ → 旧 mixin 只注入 WalkNodeEvaluator，飞行女仆节点评估完全漏防；mixin 改为双类目标同时覆盖
   - 【脱离循环】险境脱离的安全格查找不排除玩家/实体占用的格 → 闭环岩浆测试把女仆传进主人脚底、碰撞挤回岩浆反复掉血；现排除占用格 + 搜索半径 4→8 + "无处可逃"静默路径补落盘日志
@@ -3199,7 +3199,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - promaid 1.5.252i：钓鱼坐垫岸边判定修复（水面高 1 格才找岸边）+ 世界存档导入兼容带顶层目录的 zip + 悬空方块强制补支撑（不再大量跳过）
 - promaid 1.5.252g15：治疗链只看血量（环境优先由分支顺序保证）
 - promaid 1.5.252g14：治疗链跳过条件改为"正处于危险情境中"（不再看效果残留）
-- promaid 1.5.252g13：情境药水改用【效果判定】做正门（按用户规则重做）
+- promaid 1.5.252g13：情境药水改用【效果判定】做正门（按规则重做）
 - promaid 1.5.252g12：投掷间隔按女仆记 + 主人有效果不投 + 情境中跳过治疗
 - promaid 1.5.252g11：投喂优先级重排——情境保命（着火/溺水）优先于低血治疗
 - promaid 1.5.252g10：蜂蜜瓶归为药物（只在中毒喝，不当食物）
@@ -3240,7 +3240,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - promaid 1.5.235：自保播报精简（不聒噪）——只留危险/求救，删光动作汇报
 - promaid 1.5.234：阶梯判定思想推广——环境逃生补全阶梯 + 回血资源阶梯化
 - promaid 1.5.233：判定阶梯（岩浆 300 > 着火 280 > 自保 250）+ 链路全失败让位恢复
-- promaid 1.5.232：岩浆/着火链路按用户规范重写 + 避让降级为仅移动 + 全失败"我没招了"播报
+- promaid 1.5.232：岩浆/着火链路按玩家规范重写 + 避让降级为仅移动 + 全失败"我没招了"播报
 - promaid 1.5.231d：语言检测改自动重刷（直到中文才放行）+ 背包满明确"我给不了东西"
 - promaid 1.5.231：着火不逃窜（朝主人走）/ 追踪药水弹 / 死亡传送全维度 / 女仆烧死兜底 / 记忆防注入污染
 - promaid 1.5.230：放水判定补强（岩浆放水 fallback + 着火多位置）
@@ -3299,7 +3299,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - promaid 1.5.177：暂停 = 解除绑定——暂停后女仆可以停下来去干别的事
 - promaid 1.5.176：修复游戏加载世界时崩溃（MixinTransformerError 致命错误）
 - promaid 2.0：建造系统彻底重构（单计划状态机 + 统一已建感知 + 区块内右击进详情）
-- promaid 1.5.175：跳劈斩改抛物线大跳（用户指定"那种抛物线曲线"）
+- promaid 1.5.175：跳劈斩改抛物线大跳（玩家指定"那种抛物线曲线"）
 - promaid 1.5.174：跳劈触发重构（距离触发 + 人数分流）+ 取消"平A"概念
 - promaid 1.5.173：建造不启动根因修复（TLM 时间表 activity≠WORK → 任务行为不被评估）
 - promaid 1.5.172：连锁采集改为同时破坏（FTB Ultimine 式）+ 挖矿换镐改目标驱动
@@ -3327,7 +3327,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - promaid 1.5.151：传送安全半径默认 4→5 格（防远程怪；魂符可兜底绝对安全）
 - promaid 1.5.150：自保传送只判定主人身边安全（撤销"自己身边无怪"拦截）
 - promaid 1.5.149：跳劈"只跳不打"根因修复——空中挥砍由行为亲自执行 + 明显暴击提示
-- promaid 1.5.148：半成品原点识别改为"世界方块种类 ∩ 蓝图"交集锚点（用户方案）
+- promaid 1.5.148：半成品原点识别改为"世界方块种类 ∩ 蓝图"交集锚点（方案）
 - promaid 1.5.147：御币弹幕还击（遵循御币原版攻击方式）/ 取消后续建识别兜底
 - promaid 1.5.146：跳劈高度回调（0.8 ≈4 格 → 0.5 ≈1.7 格，和玩家差不多）
 - promaid 1.5.145：自保近身反击支持远程武器（弓/弩贴脸直接放箭）
@@ -3363,9 +3363,9 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 1.5.120：感知播报"分时宜"——危险时停止不合时宜的非紧急感知
 - 1.5.119：敌对感知显示降频（感知检测照常，仅显示频率降低）
 - 1.5.118：挖矿移速对齐 TLM 伐木（0.6）+ 部署 116/117
-- 1.5.117：建造侧传送从根源停用（用户决策）+ 撤销强制 home 模式
+- 1.5.117：建造侧传送从根源停用（玩家决策）+ 撤销强制 home 模式
 - 1.5.116：挖矿"一走一停"修复 + 建造被埋判定消抖（诊断预备）
-- 1.5.115：确认建造 → 施工区【一次性清场传送】（按用户预期修订）
+- 1.5.115：确认建造 → 施工区【一次性清场传送】（按玩家预期修订）
 - 1.5.114：建造逻辑深度优化（A 正确性 + B 性能 + C 手感 + D 清理 全组实施）
 - 1.5.113：挖矿机制深度优化（A 性能 + B 正确性 + C 手感 + D 清理 全组实施）
 - 1.5.112：自保传送节奏 + 死亡传送重定位 + 换工具评分分离 + 手册注释全面重写

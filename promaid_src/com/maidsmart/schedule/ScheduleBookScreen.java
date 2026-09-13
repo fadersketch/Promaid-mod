@@ -13,7 +13,7 @@ import java.util.List;
 /**
  * 排班表界面（v1.1.0）——纸+墨囊合成的「排班表」物品右键打开。
  *
- * v1.1.0 实测五十一【UI 重做】（用户："不再要求玩家去填时间……实际的时间分配
+ * v1.1.0 实测五十一【UI 重做】（反馈："不再要求玩家去填时间……实际的时间分配
  * 实际上就是将女仆的工作时间分成 6 份"）：
  * - 旧版「日程设置」= 任意行数 + 手填 "H:MM~H:MM" 时间段——弃用（实测三十三的
  *   时间输入框/添加分段/删除行全套移除）。
@@ -59,7 +59,7 @@ public class ScheduleBookScreen extends Screen {
     /** 实测四百零二：任务选择面板——正在为哪个槽选任务（-1 = 未打开） */
     private int pickSlot = -1;
     /**
-     * v1.1.0 实测四百一十九（用户："排班表的快捷调整也引入和排班一样的机制，
+     * v1.1.0 实测四百一十九（反馈："排班表的快捷调整也引入和排班一样的机制，
      * 不再仅用◀▶翻页，而是点任务名进整页选择"）：本次整页选择是【快捷设置页】
      * 打开的——选中即立即生效（QuickApply），不是填排班槽；选完回快捷页。
      * false = 排班页打开（选中填槽，走 schedDirty 等保存）。
@@ -98,7 +98,7 @@ public class ScheduleBookScreen extends Screen {
         cur.waiting = false;
         cur.loadedOn = on;
         cur.shift = ScheduleData.inferShift(segments);
-        // 默认任务 = 她当前任务（空表新用户的起点）
+        // 默认任务 = 她当前任务（空表新玩家的起点）
         String curTask = "";
         for (String[] m : cur.maids) {
             if (m[0].equals(uuid)) {
@@ -113,7 +113,7 @@ public class ScheduleBookScreen extends Screen {
         cur.m_7856_();
     }
 
-    /** v1.1.0 实测二百六十八（用户："排班生效之后，快捷设置页的 GUI 应该也统一立刻
+    /** v1.1.0 实测二百六十八（反馈："排班生效之后，快捷设置页的 GUI 应该也统一立刻
      *  更改为排班所规定的状态，然后再锁定"）：服务端排班段应用成功 → 推最新真实状态
      *  （任务/模式/排班开关）→ 更新列表行数据并重建界面——快捷设置页立即显示排班
      *  规定的模式/任务并锁定，不再停留在打开排班书那一刻的旧状态。 */
@@ -138,7 +138,7 @@ public class ScheduleBookScreen extends Screen {
     }
 
     /**
-     * v1.1.0 实测三百四十九（用户："在排班表内对女仆进行改名，但是在排班表内
+     * v1.1.0 实测三百四十九（反馈："在排班表内对女仆进行改名，但是在排班表内
      * 并没有显示出来，还是原来的名字"）：服务端改名成功 → MaidRenameSyncPacket
      * 推回新名字，这里同步列表行（m[1]）与详情页标题（selName）——客户端 maids
      * 快照是打开排班表那一刻收集的，不回发就永远是旧名字。
@@ -284,7 +284,7 @@ public class ScheduleBookScreen extends Screen {
                         })
                 .m_252987_(bx0 + 106, h - 68, 100, 18).m_253136_());
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a7a\u2713应用任务"), b -> {
-                    // v1.1.0 实测二百七十（用户："点击应用空闲，女仆仍然显示自己在别的
+                    // v1.1.0 实测二百七十（反馈："点击应用空闲，女仆仍然显示自己在别的
                     // 模式。哪怕排班没有开启"）："空闲"档在 GUI 里 = 空串 ""——旧版
                     // if (!batchTask.isEmpty()) 把空串拦掉 → 点"应用空闲"什么都不发。
                     // 空串 → 当作 touhou_little_maid:idle（TLM 空闲任务）发送。
@@ -294,7 +294,7 @@ public class ScheduleBookScreen extends Screen {
                             -1, uid));
                 })
                 .m_252987_(bx0 + 212, h - 68, 80, 18).m_253136_());
-        // v1.1.0 实测三百四十三（用户："它的调整方式应该跟工作模式和任务是一样的。
+        // v1.1.0 实测三百四十三（反馈："它的调整方式应该跟工作模式和任务是一样的。
         // 都可以统一对所有女仆进行调控，或者对单一女仆进行调控"）：批量行下方新增
         // 「全员在家」按钮（点击循环 开/关，与全员模式同款交互）——统一调控全部
         // 女仆的在家模式；排班中的女仆跳过（home 由排班管理，服务端同样兜底）。
@@ -433,7 +433,7 @@ public class ScheduleBookScreen extends Screen {
         int y = CONTENT_TOP + 6;
         // 工作模式（早班/晚班/全天 → TLM DAY/NIGHT/ALL，立即生效）
         // v1.1.0 实测七十六：排班中的女仆锁定（同任务按钮——服务端同样拦截兜底）
-        // v1.1.0 实测三百一十二（用户："排班表对于模式的切换必须要通过点击的方式
+        // v1.1.0 实测三百一十二（反馈："排班表对于模式的切换必须要通过点击的方式
         // 切换到下一个模式。能不能增加前后切换键，让它可以切换到上一个或者下一个"）：
         // 拆成三键——◀ 上一个 / 中间模式名（点击仍循环，保留旧习惯）/ ▶ 下一个。
         int curMode = Math.max(0, Math.min(2, safeInt(sel != null ? sel[3] : null, 2)));
@@ -481,9 +481,9 @@ public class ScheduleBookScreen extends Screen {
                 .m_252987_(qx + qw - 20, y, 20, 20).m_253136_());
         y += 26;
         // 任务循环（点一下换下一个；到头回绕；立即生效）
-        // v1.1.0 实测七十（用户反馈：日程表与主人主动切任务冲突）：排班中的女仆
+        // v1.1.0 实测七十（反馈：日程表与主人主动切任务冲突）：排班中的女仆
         // 【锁定任务】——按钮文案提示，点击不再发包（服务端同样拦截兜底）
-        // v1.1.0 实测三百三十九（用户："全天模式有了左右的箭头，那么下面的任务
+        // v1.1.0 实测三百三十九（反馈："全天模式有了左右的箭头，那么下面的任务
         // 也应该有左右箭头啊。任务调整的左右箭头才是最重要的。但是你却一个都没
         // 给"）：任务行拆成三键——◀ 上一个 / 中间任务名（点击仍循环，保留旧习惯）
         // / ▶ 下一个，与工作模式行同款布局。
@@ -510,7 +510,7 @@ public class ScheduleBookScreen extends Screen {
                                 if (this.loadedOn) {
                                     return; // 硬性锁定：先关右上角的排班才能切任务
                                 }
-                                // v1.1.0 实测四百一十九（用户："排班表的快捷调整也引入
+                                // v1.1.0 实测四百一十九（反馈："排班表的快捷调整也引入
                                 // 和排班一样的机制，不再仅用◀▶翻页，而是点任务名进整页
                                 // 选择"）：点任务名 → 复用整页任务选择（pickQuick=true，
                                 // 选中即立即生效——快捷页没有"保存"步骤），不再是点一下
@@ -537,7 +537,7 @@ public class ScheduleBookScreen extends Screen {
                     .m_252987_(qx + qw - 20, y, 20, 20).m_253136_());
         }
         y += 26;
-        // v1.1.0 实测三百四十二（用户："排班表内部也应该可以调整每个女仆是否可以为
+        // v1.1.0 实测三百四十二（反馈："排班表内部也应该可以调整每个女仆是否可以为
         // home模式"）：在家模式开关——不依赖排班开关，不开排班也能让女仆守家；
         // 排班开着时 home 由排班管理（开排班自动 home），按钮锁定提示先关排班。
         boolean homeOn = sel != null && sel.length > 8 && "1".equals(sel[8]);
@@ -630,7 +630,7 @@ public class ScheduleBookScreen extends Screen {
         // ---- 实测四百零二：任务选择整页（点任务名进入——整页跳转，零覆盖） ----
         // 注意：pickSlot >= 0 的检查在 schedPage 开头，这里不会再走到
         // ---- 6 个任务槽按钮（行距 22、按钮高 18——给页签行让出纵向空间） ----
-        // v1.1.0 实测三百三十九（用户："任务调整的左右箭头才是最重要的。但是你
+        // v1.1.0 实测三百三十九（反馈："任务调整的左右箭头才是最重要的。但是你
         // 却一个都没给"）：每个槽拆成三键——◀ 上一个 / 中间任务名（点击仍循环，
         // 保留旧习惯）/ ▶ 下一个，与快捷设置页任务行同款交互。
         int bw = Math.min(SLOT_W, w - 180);
@@ -802,7 +802,7 @@ public class ScheduleBookScreen extends Screen {
             slotList.add(this.slots[i] == null ? "" : this.slots[i]);
         }
         List<ScheduleData.Segment> segs = ScheduleData.segmentsFromSlots(this.shift, slotList);
-        // v1.1.0 实测一百零二【排班失效根因修复】：用户首次设置排班保存时 loadedOn
+        // v1.1.0 实测一百零二【排班失效根因修复】：玩家首次设置排班保存时 loadedOn
         // 默认 false → ON_TAG 写 false → 调度器每秒扫描跳过该女仆 → 排班完全失效。
         // 修复：有非空任务槽时自动开启排班。
         boolean hasTask = false;
@@ -835,7 +835,7 @@ public class ScheduleBookScreen extends Screen {
         int w = this.f_96543_;
         int h = this.f_96544_;
         int cx = w / 2;
-        // v1.1.0 实测三百一十七（用户："UI 美化仅更改了手册第一主界面，其他子界面
+        // v1.1.0 实测三百一十七（反馈："UI 美化仅更改了手册第一主界面，其他子界面
         // 一点都没变"）：排班表补上暗红渐变——保留附魔书主题，半透明色带叠加 =
         // 渐变（m_280509_ 走 ARGB，Alpha 叠加）
         int bandL = Math.max(4, cx - 300);
@@ -974,7 +974,7 @@ public class ScheduleBookScreen extends Screen {
 
     /**
      * 任务 UID → 中文名（翻译键 task.<ns>.<path>；无翻译回退 path 段）。
-     * v1.1.0 实测五十三（用户："任务显示的是英文，很影响阅读"）：旧版用
+     * v1.1.0 实测五十三（反馈："任务显示的是英文，很影响阅读"）：旧版用
      * Component.m_237113_（= literal 字面量组件，javap 核实 LiteralContents）去
      * "查翻译"——getString() 永远返回键本身 → 恒等比对永远成立 → 永远走英文兜底，
      * TLM/本模组语言文件里的中文（task.touhou_little_maid.farm=农场、

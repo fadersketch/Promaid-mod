@@ -371,7 +371,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.102c：方块注册名 path → 中文名。v1.5.140：未知方块回退改用 BlueprintLib
      *  cnName（CN_NAMES 精确表 + 颜色/材质规则兜底，mod 方块也尽量出中文——
-     *  旧版直接回退英文 path，用户反馈"阻挡汇报用英文字符"） */
+     *  旧版直接回退英文 path，反馈"阻挡汇报用英文字符"） */
     private static String blockCnName(net.minecraft.world.level.block.Block block) {
         net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
         if (key == null) {
@@ -388,7 +388,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.139：软方块判定 = "镐不是正确工具"的方块（草/土/沙/粘土——铲或徒手挖）。
      * 旧判定 hardness ≤ 1 会把低硬度的 mod 矿物（如匠魂/魔法 mod 的 1 硬度矿石）
-     * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（用户反馈
+     * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（反馈
      * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定：
      * 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
      */
@@ -820,7 +820,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 拦不住横向卡入，这是最后一道保险：宁可瞬移半步也不被自己搭的方块闷住
         this.antiSuffocate(maid);
         // v1.1.0 实测六十九：发呆看门狗——长时间零进展且原地不动时整体重置状态。
-        // 用户反馈：站坑发呆要收回魂符重放才恢复（重放换实体 ID 清空全部静态表）；
+        // 反馈：站坑发呆要收回魂符重放才恢复（重放换实体 ID 清空全部静态表）；
         // 现在行为自己周期性做同款复位，不再需要玩家手动救
         if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_WATCHDOG.get()
                 && this.stuckReset(level, maid, gameTime)) {
@@ -829,7 +829,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
         // 移动完全交给导航：目标够得着→挖；够不着→搭方块/走过去（approachWood）。
-        // v1.5.111：珍稀矿物掉落物回收子系统整体移除（用户反馈：女仆挖矿途中被
+        // v1.5.111：珍稀矿物掉落物回收子系统整体移除（反馈：女仆挖矿途中被
         // 掉落物吸引、满场飞奔去捡，支柱永远建不起来）——挖出的掉落物就地由
         // pickupWoodDrops 收进背包；捡不到的留给拾取任务处理，不再打断挖矿流程。
         // v1.5.87：搭方块防掉落窗口——刚搭完方块钳制在格子中心（潜行效果，速度不变），
@@ -842,7 +842,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.5.28：搭方块 10 秒后统一销毁（全局表——行为停止后由 ServerTickEvent 兜底，
         // 此处保留双保险；不做任何即时破坏）
         expirePlaced(level.getServer(), gameTime);
-        // v1.1.0 实测九（用户："伐木状态下直接冲破自己周围的树叶"）：每 20 tick
+        // v1.1.0 实测九（反馈："伐木状态下直接冲破自己周围的树叶"）：每 20 tick
         // 把身边 3×3×3 立方体内的树叶直接摧毁（产生掉落物落地/自动收集）——
         // 走路被树冠卡住时不再绕路或站桩等，直接穿过去；掉落物与树冠清理同款
         // 进背包口径。原版女仆在树冠里会被树叶挤压减速绕圈，这是"砍树不痛快"
@@ -904,7 +904,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     return;
                 }
                 if (this.targetPos == null) {
-                // v1.1.0 实测五十四（用户："站到挖掉的树干位置发呆，对头顶较高的木头
+                // v1.1.0 实测五十四（反馈："站到挖掉的树干位置发呆，对头顶较高的木头
                 // 视而不见"）：扫描框/排除表都给不出目标时，先【抬头看一眼】——脚下
                 // 正上方同柱还有木材就直接当目标（树洞场景最终兜底：挖掉树干下几节
                 // 站进洞里后，剩余树干就在头顶，不该对着它发呆）。刚弃置 30 秒内的
@@ -919,7 +919,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                     return;
                 }
                 // v1.5.140：挖矿空闲（附近无矿）→ 退出"挖矿中"标记，拾取任务恢复正常
-                //（用户反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
+                //（反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
                 WOODING.remove(maid.getUUID());
                 // v1.5.85：框内有矿但镐子挖不动 → 不迁移（换镐还是挖不动）：
                 // 气泡+主人聊天栏播报一次（限频）等玩家换镐
@@ -1032,7 +1032,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return;
         }
           ItemStack mainHand = maid.getMainHandItem();
-          // v1.1.0 实测三百六十一（用户："手持骨粉的时候，她还是会说'我没有斧头'"）：
+          // v1.1.0 实测三百六十一（反馈："手持骨粉的时候，她还是会说'我没有斧头'"）：
           // 主手是骨粉 = 施肥换手暂存中（斧头多半正躺在副手）——先还原主手再判定，
           // 不能对着骨粉喊"我没有斧头"；还原后主手恢复原物品（斧头回来直接挖）
           if (!mainHand.isEmpty()
@@ -1042,7 +1042,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
               mainHand = maid.getMainHandItem();
           }
           if (mainHand.isEmpty() || !(mainHand.getItem() instanceof AxeItem)) {
-              // v1.1.0 终审三（用户：木材空手也能挖，不因空手拒绝工作）：
+              // v1.1.0 终审三（反馈：木材空手也能挖，不因空手拒绝工作）：
               // 优先尝试从背包装备斧（背包有斧就换——与矿镐"空手才装备"同机制，
               // 玩家手中放的斧在非空手分支永远不动）；背包也没斧 → 空手照样开挖
               // （下 tick 走挖掘公式慢速分支，与玩家空手砍树一致），不再弃目标。
@@ -1154,16 +1154,16 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         this.refillChainQueue(level, maid);
         // v1.5.172：连锁采集【同时破坏】（FTB Ultimine 式）——目标矿挖完瞬间把
         // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
-        // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
+        // 不再逐个挖（旧版"自动连挖"看不出连锁效果，反馈）
         this.chainBreakAll(level, maid, mainHand);
         markProgress(maid, gameTime); // 实测六十九：喂看门狗（真实进展）
-        // v1.1.0 实测三十（用户："树冠清理不自然——直接整个树冠一下子清掉；
+        // v1.1.0 实测三十（反馈："树冠清理不自然——直接整个树冠一下子清掉；
         // 我要的只是以女仆为中心 3×3×3 范围内的树叶被破坏，带音效和特效"）：
         // 删除 clearTreeTop 整冠 BFS 清除（一次性清掉整棵树的树叶不自然）。
         // 树叶清理完全交给 burstNearbyLeaves——它本来就在行为激活期间每 20 tick
         // 以女仆为中心清 3×3×3，女仆走过去自然会"经过"整片树冠逐层清完。
         // （实测九已有的机制，本次让它成为唯一的树叶清理路径）
-        // v1.1.0 实测二百二十八（用户："种树逻辑直接分开来就好——与伐木不相关"）：
+        // v1.1.0 实测二百二十八（反馈："种树逻辑直接分开来就好——与伐木不相关"）：
         // 伐木内部的补种已移除——「随手种树」是独立行为（MaidPlantSaplingBehavior，
         // 手里有苗+附近有可种土块就种，什么都不干时也种）；本行为回归纯砍树/清叶。
         // 树叶掉落的树苗仍直接进背包（自动收集开关之外的单品规则），供随手种树取用。
@@ -1212,7 +1212,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.1.0 实测四：树冠清理——从刚砍的树干位置向上 BFS 清树叶。
-     * v1.1.0 实测三十：【已删除】——用户反馈"整个树冠一下子清掉不自然"，要的只是
+     * v1.1.0 实测三十：【已删除】——反馈"整个树冠一下子清掉不自然"，要的只是
      * 以女仆为中心 3×3×3 的树叶破坏（burstNearbyLeaves 已有）。方法保留为空壳
      * 防外部调用残留（实际无外部调用者，纯保险）。
      */
@@ -1246,7 +1246,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * 直接摧毁。掉落物走 getDrops（树苗/苹果/木棍按概率），autoCollect 开着
      * 直接进背包，否则落地（走原版掉落，拾取任务后续处理）。只清树叶——
      * 立方体内的原木不碰（那是正常挖掘目标，走挖掘流程有工具加成）。
-     * v1.1.0 实测三十（用户："每块树叶要有破坏音效和破坏特效"）：每块树叶
+     * v1.1.0 实测三十（反馈："每块树叶要有破坏音效和破坏特效"）：每块树叶
      * 破坏时各自播 levelEvent 2001（同玩家挖方块——音效+粒子一起），不再
      * 只在中心播一次（旧版静默清除观感突兀）。树冠清理（clearTreeTop）删除后
      * 本方法是唯一的树叶清理路径：女仆走动经过树冠就逐层清 3×3×3。
@@ -1270,7 +1270,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                         if (com.maidsmart.config.MaidSmartConfig.WOOD_AUTO_COLLECT.get()) {
                             insertIntoMaidInventory(maid, level, drops, p);
                         } else {
-                            // v1.1.0 实测二百二十六（用户："女仆并不会种植树苗"）：树苗
+                            // v1.1.0 实测二百二十六（反馈："女仆并不会种植树苗"）：树苗
                             // 永远直进背包（其余掉落物遵循自动收集开关）——树苗是"砍树→
                             // 掉苗→补种"闭环的种子，落地后伐木中拾取任务让位、大概率捡
                             // 不到（日志实证：每次补种都 skip=no-sapling-in-inventory）
@@ -1430,7 +1430,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     private void approachWood(ServerLevel level, EntityMaid maid) {
         // v1.1.0 实测一百九十二【垫块后走上去】——步进推送消费本 tick（不导航不垫块）；
         // 旧版垫完靠 walkToStep 寻路：跨沟/断崖半路折断 → 女仆踩不上刚垫的方块，
-        // 在某几格上死循环（用户："运动的幅度真的太小了"）
+        // 在某几格上死循环（反馈："运动的幅度真的太小了"）
         if (BlockWalkOn.tick(maid)) {
             return;
         }
@@ -1495,7 +1495,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // 2) 斜上方矿：向前垫台阶（斜坡），水平+垂直同时逼近
         // v1.5.113：垫完【走一步到刚垫的台阶上】——旧版垫完只 walkToWoodBase
         // （目的地可能隔着未垫完的沟，导航找不到路 → 站着不动）；改走一步再评估
-        // v1.1.0 实测三（用户："伐木不像挖矿会四处走，喜欢站原地"）：斜坡/搭桥的
+        // v1.1.0 实测三（反馈："伐木不像挖矿会四处走，喜欢站原地"）：斜坡/搭桥的
         // 距离门槛从 4.5 格放宽到 8 格——树是竖直目标，树干下半部常在 4.5~8 格处，
         // 旧版这个距离段"不垫也不走"（walkToWoodBase 的站立点在树底下、贴着就停）
         // → 女仆在树旁站桩干等；放宽后中距离持续垫台阶/铺桥逼近（挖矿同款行为）
@@ -1554,7 +1554,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测一百一十九：起始 dy 2 → 1——树基的木头被砍掉后女仆站进树洞，
      * 下一根木头就在她【头平齐】的 dy=1 处（不是 2），旧版从 dy=2 起跳会漏掉
      * 它：扫描/链式都给不出目标时对着近在咫尺的头顶木头发呆。
-     * v1.1.0 实测二百二十六（用户："对树上比自己高几格的木头站在木头下一动不动"）：
+     * v1.1.0 实测二百二十六（反馈："对树上比自己高几格的木头站在木头下一动不动"）：
      * 旧版只搜【女仆自己所在列】——站在树干旁 1~2 格（走位/寻路落点差一格、从树冠
      * 上滑落）时头顶列是空气/树叶，找不到木材 → 搭高失败后跌回 walkToWoodBase
      * （最近可站格恰是她脚下）→ 原地站到 15 秒超时/看门狗重置 → 反复循环。
@@ -1718,7 +1718,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.113（C1）：两档接近速度——矿远（>8 格）1.5× 快走赶路，矿近（≤3 格）
      * 0.8× 慢走（准备搭高/挖掘，防冲过头漂移）；中间距离用基础速度（wood.moveSpeed）。
-     * v1.1.0 实测四十八：基础速度 0.6→0.3（用户反馈伐木移速过快像狂奔）。
+     * v1.1.0 实测四十八：基础速度 0.6→0.3（反馈伐木移速过快像狂奔）。
      */
     private float approachSpeed(EntityMaid maid, BlockPos t) {
         if (t == null) {
@@ -1859,7 +1859,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // （place+1/place+2）放宽——目标木材所在格（搭高就是为了够它，垫块后
         // 头短暂插进目标木材，下一 tick 挖掘入口立即挖掉，属预期）与树叶等
         // 不窒息方块（isSuffocating=false）不拦；只拦真正会闷住她的实心满块。
-        // v1.1.0 实测二百四十（用户："伐木不会像挖矿一样搭方块够上面的树木"）：
+        // v1.1.0 实测二百四十（反馈："伐木不会像挖矿一样搭方块够上面的树木"）：
         // 旧版 isAir 检查在伐木场景几乎必然失败——头顶正上方就是目标木材（树干）
         // 或树冠树叶，都不是空气 → 搭高永远失败 → 女仆原地等待到超时弃置。
         if (!level.getBlockState(place).isAir()
@@ -1873,7 +1873,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测二百四十：isAir → suffocates——树冠场景女仆头顶就是树叶
         // （isSuffocating 恒 false，不闷人），旧版 isAir 检查把树叶当"堵头"拦死
         // 搭高（"伐木不搭方块"根因之二）；只拦真正会闷住她的实心满块。
-        // v1.1.0 实测二百四十七（用户："挖掘一定数量后不再搭方块"）：headPos+1
+        // v1.1.0 实测二百四十七（反馈："挖掘一定数量后不再搭方块"）：headPos+1
         // 检查【漏了目标木材排除】——女仆搭了几块柱子后站在柱顶，目标木材就在
         // 头顶 1~2 格（headPos+1 恰好是目标木材）→ suffocates 拦死后续搭高。
         // 与 place+1/place+2 同口径：目标木材所在格排除（搭高就是为了够它）。
@@ -1897,7 +1897,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
         }
         level.setBlock(place, block.defaultBlockState(), 3);
         trackPlaced(level, place, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
-        // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
+        // v1.1.0 实测三十七（反馈："搭方块的时候也播放一下动作"）：摆臂动画 + 放置音效
         maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.pillarGuardTicks = 12; // v1.5.87：搭块防掉落窗口
@@ -2479,7 +2479,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      * - 弃置矿 30 秒短时排除（RECENT_DISCARD，B4）。
      */
     private BlockPos findWood(ServerLevel level, EntityMaid maid, BlockPos anchor) {
-        // v1.1.0 终审三（用户：木材空手也能挖，不能因为空手就拒绝工作）：
+        // v1.1.0 终审三（反馈：木材空手也能挖，不能因为空手就拒绝工作）：
         // 找树前仍优先换斧（有斧砍得快），但没斧照样干活——空手慢挖。
         // 换斧机制与矿镐一致：玩家手中放的斧不动，空手/非斧才从背包装备。
         if (maid.getMainHandItem().isEmpty()

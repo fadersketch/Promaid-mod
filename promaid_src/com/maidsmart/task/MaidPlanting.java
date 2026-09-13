@@ -7,7 +7,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraftforge.registries.ForgeRegistries;
 
 /**
- * v1.1.0 实测二百二十八（用户："种树逻辑直接分开来——手上有树苗就随手种一个；
+ * v1.1.0 实测二百二十八（反馈："种树逻辑直接分开来——手上有树苗就随手种一个；
  * 在一定范围内判定周围有没有树苗和可种地块，没有就随手种一个；与伐木不相关，
  * 但触发仍然是伐木这个模式"）：
  *
@@ -26,7 +26,7 @@ public final class MaidPlanting {
 
     private static final org.slf4j.Logger LOGGER = com.mojang.logging.LogUtils.getLogger();
 
-    /** 随手种树的搜索半径（格）——用户说"在一定范围内" */
+    /** 随手种树的搜索半径（格）——反馈"在一定范围内" */
     private static final int RADIUS = 6;
     /** 树苗物品判定标签（原版+模组树苗） */
     private static final net.minecraft.tags.TagKey<Block> SAPLINGS_TAG =
@@ -65,11 +65,11 @@ public final class MaidPlanting {
     }
 
     // ================= 任务级驱动（参考 maid_useful_task 的种树语义） =================
-    // v1.1.0 实测二百三十三（用户提供参考 jar [女仆实用任务]maid_useful_task-1.4.2）：
+    // v1.1.0 实测二百三十三（玩家提供参考 jar [女仆实用任务]maid_useful_task-1.4.2）：
     // 参考模组的种树是【任务级】——只要女仆选着伐木任务，TLM 原生放置机就持续工作，
     // 与"砍树行为是否有目标/是否运行窗口"无关。我们旧版把检查挂在伐木【行为 tick】
     // 里：行为只在实际砍树窗口运行（日志实证每 20~30 秒启停一次），窗口外检查不跑
-    // ——"明明包里有苗却不种"最合理的解释（用户自检：超平坦地表草方块 + 包里有苗，
+    // ——"明明包里有苗却不种"最合理的解释（玩家自检：超平坦地表草方块 + 包里有苗，
     // 判定链条本身无懈可击）。本模块改为自己监听 ServerTickEvent：每 40 tick（2 秒）
     // 扫一遍全部加载女仆，任务 == maid_smart:woodcut 才调 tick（触发仍是伐木模式）。
     private static boolean registered = false;
@@ -92,7 +92,7 @@ public final class MaidPlanting {
             return;
         }
         // v1.1.0 实测三百五十三：驱动节拍从 40 tick 加密到 10 tick（0.5 秒）——
-        // 骨粉催熟按用户要求 0.5 秒尝试一次（原版 isBonemealSuccess 是 45% 概率
+        // 骨粉催熟按要求 0.5 秒尝试一次（原版 isBonemealSuccess 是 45% 概率
         // 判定，太慢的节拍观感就是"催熟积极性不高"）；种树本身仍每 40 tick 一轮
         if (++serverTickCounter % 10 != 0) {
             return;
@@ -200,7 +200,7 @@ public final class MaidPlanting {
             } catch (Exception ignored) {
             }
             // 1) 树苗：主手 → 副手 → 背包；都没有才捡身边掉落物
-            // 实测二百三十（用户："女仆手中拿的是云杉树苗"）：旧版只扫背包
+            // 实测二百三十（反馈："女仆手中拿的是云杉树苗"）：旧版只扫背包
             // （getMaidInv），手拿苗永远判"没苗"——手的槽位在独立手部栏
             int handSlot = -1;
             int bagSlot = -1;
@@ -278,7 +278,7 @@ public final class MaidPlanting {
 
     /** v1.1.0 实测二百三十一：findPlantSpot 的统计版——返回 [找到(0/1), x, y, z]；
      *  count=0 即"范围内确实没有可种土块"。
-     *  v1.1.0 实测三百五十（用户："原来是仅检查这周围有没有树苗，现在在此基础
+     *  v1.1.0 实测三百五十（反馈："原来是仅检查这周围有没有树苗，现在在此基础
      *  上进一步要求3×3范围内没有碰撞体积方块才可以种植，火把什么的不算"）：
      *  候选格在"空气 + 脚下泥土"之外，再要求以该格为中心的 3×3（同层）没有
      *  【带碰撞体积】的方块——树苗有生长空间，不会被墙/箱子闷死；火把、
@@ -390,7 +390,7 @@ public final class MaidPlanting {
 
     /**
      * v1.1.0 实测三百五十二：骨粉催熟——对身边（半径 RADIUS、垂直 ±2）最近的一株
-     * 合格树苗使用背包里的骨粉。实测三百五十三（用户："催熟的积极性不高；树苗
+     * 合格树苗使用背包里的骨粉。实测三百五十三（反馈："催熟的积极性不高；树苗
      * 没有冒出粒子特效；施肥速度应该是每 0.5 秒尝试一次"）调整：
      * ① 节拍独立于种树冷却，由驱动每 10 tick（0.5 秒）调一次；
      * ② 修双扣——growCrop（m_40627_）尾部自带 shrink(1)（javap 实证 offset 83，
@@ -481,7 +481,7 @@ public final class MaidPlanting {
 
     /**
      * v1.1.0 实测三百五十四：施肥换手持骨粉状态。实测三百六十【状态机重写】
-     * （用户："工具和骨粉之间反复切换的鬼畜；有概率刷出背包里面出现大量道具"）：
+     * （反馈："工具和骨粉之间反复切换的鬼畜；有概率刷出背包里面出现大量道具"）：
      * 旧版把原主手物品 insert 进背包槽、还原时又 setStackInSlot(0, original)——
      * 【同一个 ItemStack 实例同时被背包槽和主手槽引用】（背包槽旧引用未清），
      * 每次换手循环留一个幽灵引用 → 存档时同一实例重复序列化 → 读档刷出道具。
@@ -648,7 +648,7 @@ public final class MaidPlanting {
                 double dx = e.m_20185_() - (base.m_123341_() + 0.5);
                 double dy = e.m_20186_() - (base.m_123342_() + 0.5);
                 double dz = e.m_20189_() - (base.m_123343_() + 0.5);
-                // v1.1.0 实测二百三十二：垂直范围改回 ±6（去除 -6..+12 放宽——用户指定改回）
+                // v1.1.0 实测二百三十二：垂直范围改回 ±6（去除 -6..+12 放宽——玩家指定改回）
                 if (Math.abs(dx) > RADIUS || Math.abs(dy) > RADIUS || Math.abs(dz) > RADIUS) {
                     continue;
                 }

@@ -11,7 +11,7 @@ import net.minecraftforge.fml.ModLoadingContext;
  * 主类里内联的 (mc, parent) -> new PromaidConfigScreen(...) 合成方法描述符含
  * net.minecraft.client.gui.screens.Screen，Forge 的 RuntimeDistCleaner 在
  * DEDICATED_SERVER 直接抛 "Attempted to load class ... for invalid dist DEDICATED_SERVER"
- * → 整个 mod 加载失败、服务器启动中止（粉丝服崩报告实证，崩溃报告 MOD promaid 条目为 ERROR）。
+ * → 整个 mod 加载失败、服务器启动中止（反馈服崩报告实证，崩溃报告 MOD promaid 条目为 ERROR）。
  * 主类只在 dist.isClient() 分支里静态调用本类，服务端该分支不执行 → 本类不被加载 →
  * 客户端类型永不被触碰。
  */

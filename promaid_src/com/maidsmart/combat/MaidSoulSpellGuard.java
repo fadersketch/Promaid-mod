@@ -98,7 +98,7 @@ public final class MaidSoulSpellGuard {
      *
      *  旧版的魂符冷却标记只由自动收符路径写入；玩家【手动】用空魂符收女仆时，魂符是
      *  TLM 自己 new 的、不带任何标记 → HUD 扫背包查不到 → 冷却条消失（而冷却其实还
-     *  记在女仆数据里继续计时，用户："虽然实际上还在计时，但那样子观感不太好"）。
+     *  记在女仆数据里继续计时，反馈："虽然实际上还在计时，但那样子观感不太好"）。
      *  TLM 的 storeMaidData 会发 MaidAndItemTransformEvent.ToItem（反编译实证），在事件
      *  里补标记即可同时覆盖手动/自动两条收符路径；女仆没在冷却时不标记。 */
     @net.minecraftforge.eventbus.api.SubscribeEvent

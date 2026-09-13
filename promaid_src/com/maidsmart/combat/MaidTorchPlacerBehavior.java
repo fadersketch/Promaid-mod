@@ -74,11 +74,11 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         }
         int threshold = com.maidsmart.config.MaidSmartConfig.TORCH_DARK_THRESHOLD.get();
         net.minecraft.core.BlockPos base = owner.m_20183_();
-        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：扫描范围 3×3 → 5×5
+        // v1.1.0 实测三十五（反馈："检索间隔隔得有点儿嫌久"）：扫描范围 3×3 → 5×5
         //（主人脚下半径 2 格）——3×3 只有一格宽的跟随带，走路时边缘暗格根本轮不到
         // 检索；5×5 覆盖正常走路节奏的暗区。每轮仍只插【一根】（插最暗格），节奏
         // 由冷却控制，不会一次连插一片。
-        // v1.1.0 实测五十二（用户："明明亮度比较高，但仍然要插火把，严重的浪费"）：
+        // v1.1.0 实测五十二（反馈："明明亮度比较高，但仍然要插火把，严重的浪费"）：
         // 旧版只读 LightLayer.BLOCK（方块光）——白天地表方块光恒 0，跟着女仆走路
         // 一路狂插（0.5s 冷却 ≈ 每秒 2 根）。改为原版 getMaxLocalRawBrightness 同款
         // 合并口径：effective = max(方块光, 天光 - 天空变暗度)。getSkyDarken
@@ -149,7 +149,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         // v1.1.0 实测三十一：30 tick（1.5 秒）→ 15 tick（0.75 秒）
-        // v1.1.0 实测三十五（用户："检索间隔隔得有点儿嫌久"）：15 → 10 tick（0.5 秒）
+        // v1.1.0 实测三十五（反馈："检索间隔隔得有点儿嫌久"）：15 → 10 tick（0.5 秒）
         this.torchCooldown = 10; // 0.5 秒
     }
 
@@ -157,7 +157,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测五：兼容火把清单（注册名）——普通火把最优先，其余按数组顺序
      * （灵魂火把第二；含常见模组火把的注册名，找不到的自动跳过）。
      * 灵魂火把亮度 10 比普通火把 14 低，但在下界/驱猪场景有独特价值——
-     * 有普通火把绝不用它（用户指定优先级）。
+     * 有普通火把绝不用它（玩家指定优先级）。
      * v1.1.0 实测十六（审查 P2）：移出 redstone_torch——它亮度只有 7（临界）且
      * 【会发射红石信号】：黑暗中自动"照明"会意外激活附近的红石灯/活塞/门/
      * TNT 类机关，作为照明清单成员风险不对称，不配当自动放置的备选。

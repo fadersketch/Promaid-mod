@@ -40,14 +40,14 @@ public abstract class NativeTaskSmoothMixin {
             MaidStealEdibleMoveBlockTask.class,
             MaidStealEdibleUseTask.class,
             MaidRunOne.class,
-            // v1.1.0 实测三百一十九（用户："农场模式下如果女仆是 home 模式就会待在
+            // v1.1.0 实测三百一十九（反馈："农场模式下如果女仆是 home 模式就会待在
             // 原地一动不动……放了一天那女仆也待在原地"）：MaidFarmMoveTask 必须保持
             // 原版 60 tick 周期重启——searchForDestination（设置 TARGET_POS）只在
             // start 时调用一次，改无限时长后行为永不 doStop → 永不重新搜索目标 →
             // 处理完第一个目标后 TARGET_POS 不再更新 → MaidFarmPlantTask 永远等不到
             // 新目标 → 农场停摆（"原地站死"根因）。farm 移动任务靠周期重启驱动。
             com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.task.MaidFarmMoveTask.class,
-            // v1.1.0 实测三百二十八（用户："农场功能仍然是一按到 home 就完全停了下
+            // v1.1.0 实测三百二十八（反馈："农场功能仍然是一按到 home 就完全停了下
             // 来"）：MaidFarmPlantTask 同构漏网——javap 实证 IFarmTask.createBrainTasks
             // 注册 [move(优先级5), plant(优先级6)]，plant 构造是单参 Map（maxDuration
             // =60），start 处理 TARGET_POS 目标格后清目标、无 tick 覆盖——它和 move
@@ -100,7 +100,7 @@ public abstract class NativeTaskSmoothMixin {
         return ImmutableList.copyOf(list);
     }
 
-    /** v1.1.0 实测三百二十二（用户："农场模式下如果女仆是 home 模式就会待在原地
+    /** v1.1.0 实测三百二十二（反馈："农场模式下如果女仆是 home 模式就会待在原地
      *  一动不动……放了一天那女仆也待在原地"）：INFRA 判定改为【父类兼容】——
      *  旧版 Set.contains(behavior.getClass()) 精确匹配，而甘蔗/西瓜等特殊农场
      *  任务用 MaidFarmSurroundingMoveTask（extends MaidFarmMoveTask，javap 实证），

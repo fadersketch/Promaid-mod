@@ -13,7 +13,7 @@ import net.neoforged.fml.common.EventBusSubscriber;
  * 玩家可以直接从创造物品栏拿取，无需 /give。
  * v1.5.284：modid 修复——旧版写 "maid_smart"（物品注册命名空间）≠ modId "promaid"
  * （mods.toml）→ 事件订阅对不存在的 mod 注册，创造栏注入从未生效。
- * v1.1.0 实测二十六：排班表也进"工具与实用品"标签页（用户：创造物品栏直接拿）。
+ * v1.1.0 实测二十六：排班表也进"工具与实用品"标签页（反馈：创造物品栏直接拿）。
  */
 @EventBusSubscriber(modid = "promaid", bus = EventBusSubscriber.Bus.MOD)
 public class CreativeTabHandler {

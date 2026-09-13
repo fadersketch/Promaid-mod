@@ -14,7 +14,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * v1.1.0 实测一百四十八：战斗任务兼容层（参考 tlm_beyond_space 的
- * CombatTaskCompatibility——用户："女仆切换武器的时候还是不会使用模组武器；
+ * CombatTaskCompatibility——反馈："女仆切换武器的时候还是不会使用模组武器；
  * 塞入模组武器后即使再拿出来，主动战斗就再也不触发了"）。
  *
  * 两个问题同根：战斗任务的【武器契约不完整 + 切换前不预检】。

@@ -46,7 +46,7 @@ public final class EmotionKeysClient {
      *  Shift 修饰方案作废——Screen.m_96638_ 的 SRG 归属未做字节码实证，
      *  存在映射错误的可能，导致触发不了；后续如需组合键须先 javap 实证）。
      *  v1.1.0 实测二百八十九：按键捕获/发包加诊断日志（latest.log 搜
-     *  "emotion key"）——用户反馈按 G/H 无反应，需定位断点（客户端未捕获
+     *  "emotion key"）——反馈按 G/H 无反应，需定位断点（客户端未捕获
      *  按键 / 包未达服务端 / 服务端判定失败）。 */
     private static final class TickPoll {
         private static final org.slf4j.Logger LOG = com.mojang.logging.LogUtils.getLogger();

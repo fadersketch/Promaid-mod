@@ -16,7 +16,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
  * Promaid 手册界面（v1.5.71 布局重构版）：
  * - 大目录页：两个大入口【建造】【女仆管理】+ 顶部实时进度行
  * - 建造面板：总目录（全部建筑仅显示名称，翻页）→ 点名称 → 材料详情页
- *   材料详情：2 列 × 8 行 = 16 种/页（用户规则，小字体），放不下自动翻页
+ *   材料详情：2 列 × 8 行 = 16 种/页（规则，小字体），放不下自动翻页
  * - 女仆管理面板：128 格内所有建造女仆（上限 30 只，翻页），行内点击暂停/继续 + 设工头，
  *   右上角全部暂停/继续
  * - 实时进度：客户端每 2 秒轮询 SHOW_PROGRESS，服务端回发 ProgressUpdatePacket，
@@ -47,7 +47,7 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.182：区块绑定女仆名单（设置工头） */
     private static final int VIEW_REGION_MAIDS = 5;
     /** 女仆管理上限 */
-    /** 材料详情：2 列 × 8 行 = 16 种/页（用户规则），小行高 */
+    /** 材料详情：2 列 × 8 行 = 16 种/页（规则），小行高 */
     private static final int MAT_COLS = 2;
     private static final int MAT_ROWS_PER_PAGE = 8;
     private static final int MAT_LINE_H = 9;
@@ -276,7 +276,7 @@ public class BlueprintBookScreen extends Screen {
                 int d = Integer.parseInt(r[9]);
                 // v1.5.188：x/y/z 为区块 box 的 min 角（服务端 planRegion 下发），
                 // 不再减半——旧版"中心"语义导致玩家站在实际建造区内却不被判定在
-                // 区块内 → 区块内右击跳转不到对应区块详情页（用户反馈）
+                // 区块内 → 区块内右击跳转不到对应区块详情页（反馈）
                 if (p.getX() >= x && p.getX() < x + w
                         && p.getY() >= y && p.getY() < y + h
                         && p.getZ() >= z && p.getZ() < z + d) {
@@ -488,7 +488,7 @@ public class BlueprintBookScreen extends Screen {
         boolean over = this.progressPct > 100;
         int usedLines = 0;
         if (hasText) {
-            // v1.5.102c：进度文字整体右对齐（用户要求"向右移一大步"——结尾的
+            // v1.5.102c：进度文字整体右对齐（要求"向右移一大步"——结尾的
             // 【全局暂停中】/速度 等字样从中间跳到最右侧）；进度条仍居中
             // v1.5.252u：分行显示（\n 分隔），返回实际行数，进度条随之自适应下移
             usedLines = this.drawWrapped(graphics, (over ? "\u00a7c" : "\u00a7b") + this.progressText,
@@ -514,7 +514,7 @@ public class BlueprintBookScreen extends Screen {
             } catch (NumberFormatException ignored) {
             }
             // v1.5.278：速度/预计【无条件显示】——旧版 bps≤0.01 整个不显示
-            // （缺料停滞时 ema→0 → 进度条旁只剩"56%"，用户："搭建速度和剩余
+            // （缺料停滞时 ema→0 → 进度条旁只剩"56%"，反馈："搭建速度和剩余
             // 时间看不到"，截图实证 speed=0.0 eta=-1）。停滞时如实显示
             // "0.0块/秒 · 预计--"（-- = 无法估计：缺料/刚启动统计窗口内），
             // 有速度时正常显示实测值
@@ -650,7 +650,7 @@ public class BlueprintBookScreen extends Screen {
         return super.keyPressed(key, scanCode, modifiers);
     }
 
-    /** 目录页点击：搜索框聚焦兜底 + 条目（打开详情）/删除（✖）坐标命中 */
+    /** 目录页点击：搜索框聚焦兜底 + 条目（打开详情）/删除（）坐标命中 */
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0 && this.view == VIEW_BUILD && this.viewingEntry == null && this.searchBox != null) {
@@ -723,7 +723,7 @@ public class BlueprintBookScreen extends Screen {
         int bh = Math.max(12, rowH - 3);
         int gap = rowH - bh;
         int y0 = Math.max(52, Math.min(64, h - rowH * 5 - 44));
-        // v1.5.252h：详细介绍放目录【最上面】（用户反馈"放最下面怪怪的"）
+        // v1.5.252h：详细介绍放目录【最上面】（反馈"放最下面怪怪的"）
         this.addRenderableWidget(Button.builder(
                         Component.literal("\u00a76\u25c6 详细介绍"),
                         b -> com.maidsmart.guide.GuideScreen.open(this))
@@ -772,7 +772,7 @@ public class BlueprintBookScreen extends Screen {
             // 无计划时底部只有 返回/建造此图纸/区块显示
             // v1.5.162：续建/暂停等控制按钮还要求【玩家处于建造区块内】——区块范围由
             // 服务端下发（regionX/Y/Z + W/H/D，2 秒轮询刷新）；玩家进到区块内才有控制权
-            // v1.5.171：取消区块内限制——用户反馈"继续建造按钮消失、走到区块内也看不到"
+            // v1.5.171：取消区块内限制——反馈"继续建造按钮消失、走到区块内也看不到"
             //（计划在远处/地下矿洞时玩家根本找不到区块 → 无法取消/继续 = 死锁）；
             // 改为【有计划就显示控制按钮】，红色区块框仍由服务端推送指示计划位置
             boolean hasPlan = this.progressPct >= 0;
@@ -933,7 +933,7 @@ public class BlueprintBookScreen extends Screen {
                             this.rebuildButtons();
                         })
                 .bounds(8, TOP_BTN_Y, 80, TOP_BTN_H).build());
-        // v1.5.290：建造名单页直达女仆管理（用户："名单内部仍然没有跳转按键"）
+        // v1.5.290：建造名单页直达女仆管理（反馈："名单内部仍然没有跳转按键"）
         this.addRenderableWidget(Button.builder(Component.literal("\u00a7b\u2640 女仆管理"),
                         b -> {
                             this.view = VIEW_MAIDS;
@@ -1176,7 +1176,7 @@ public class BlueprintBookScreen extends Screen {
                                             BlueprintBookNetworking.BuildControlPacket.BIND_MAID, uuid, sid)))
                     .bounds(cx - 140, y, 280, 20).build());
         }
-        // v1.5.305：删除「⚙ 女仆配置」按钮（用户："有 bug 不想修，直接删了；
+        // v1.5.305：删除「女仆配置」按钮（反馈："有 bug 不想修，直接删了；
         // 不走这个路径了"——打开 TLM 女仆配置请直接右键女仆）
         // 提示行：未绑定区块时的引导（render 绘制，避免与按钮重叠）
         if (!isBound && this.buildRegions.isEmpty()) {
@@ -1208,7 +1208,7 @@ public class BlueprintBookScreen extends Screen {
         // 翻页按钮被推出屏幕（找不回 = 死锁）。改为分页（每页按可用高度算行数）。
         // v1.5.308：行数公式【预留进度条空间】——旧版只给翻页按钮留 32px，绑定
         // 女仆多时（6 只 + 小窗口）底部进度条叠在最后几行女仆按钮上
-        //（用户："又一次出现了进度条重合在了一起"）；48px = 4 行状态文本 + 进度条
+        //（反馈："又一次出现了进度条重合在了一起"）；48px = 4 行状态文本 + 进度条
         int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 32 - 48) / (MAID_ROW_H + 1));
         int total = Math.max(1, (bound.size() + maxRows - 1) / maxRows);
         this.regionMaidPage = Math.min(this.regionMaidPage, total - 1);
@@ -1226,7 +1226,7 @@ public class BlueprintBookScreen extends Screen {
                     + (isFm ? " \u00a7e（工头）" : "");
             this.addRenderableWidget(Button.builder(Component.literal(mainText), b -> {
                         // v1.5.290：区块详情页名单点击 → 跳转女仆详情页（查看/绑定/解绑）
-                        //（旧版是空按钮，用户："右击区块详细页里面的名单，要有跳转功能"）
+                        //（旧版是空按钮，反馈："右击区块详细页里面的名单，要有跳转功能"）
                         this.detailMaidUuid = uuid;
                         this.selectedPlanId = pid;
                         this.view = VIEW_MAID_DETAIL;
@@ -1246,7 +1246,7 @@ public class BlueprintBookScreen extends Screen {
         if (bound.isEmpty()) {
             this.graphicsHint("该区块还没有绑定女仆——点右上「♀ 女仆管理」进女仆管理页，点女仆行进详情页绑定。");
         }
-        // v1.5.298：本页跳转女仆管理（用户："在此页面要的跳转界面仍然没有出现"——
+        // v1.5.298：本页跳转女仆管理（反馈："在此页面要的跳转界面仍然没有出现"——
         // 旧版此页只有「← 返回详情」，提示却指向女仆管理——空名单页是死胡同；
         // 加右上角直达按钮）
         this.addRenderableWidget(Button.builder(Component.literal("\u00a7b\u2640 女仆管理"),
@@ -1768,7 +1768,7 @@ public class BlueprintBookScreen extends Screen {
     private void addControlButtons() {
         // v1.5.252ae：控制按钮只在玩家处于建造区块内时显示——注释承诺但旧版未实现，
         // 区块外也显示按钮 → 点击后 currentPlanId 为空 → 服务端误报"区块不存在"
-        // （用户实测：区块明明存在却提示不存在）
+        // （实测：区块明明存在却提示不存在）
         if (this.currentPlanId == null || this.currentPlanId.isEmpty()) {
             return;
         }
@@ -1825,7 +1825,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         } else {
             super.renderBackground(graphics, 0, 0, 0);
         }
-        // v1.1.0 实测三百一十三（用户："模组内新添加物品的 ui 背景都是用的原版 MC
+        // v1.1.0 实测三百一十三（反馈："模组内新添加物品的 ui 背景都是用的原版 MC
         // 格式，过于单调。在背景加上更多的颜色，ui 颜色也变一下"）：Promaid 手册
         // 品牌渐变背景——蓝金主题（与手册建造功能呼应）。半透明色带叠加 = 渐变
         //（fill 走 ARGB，Alpha 叠加）
@@ -1854,7 +1854,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         // v1.5.64：固定布局（按钮在 70/130，文字不重叠）
         // v1.5.100b：改名（Promaid 手册 → Promaid 功能手册）；v1.5.192：统一为 Promaid 手册
         this.drawCentered(graphics, "\u00a7ePromaid 手册", 20, 0xFFFFFF);
-        // v1.5.252w：大目录不再显示建造进度/进度条（用户要求——目录页保持干净，
+        // v1.5.252w：大目录不再显示建造进度/进度条（要求——目录页保持干净，
         // 进度显示保留在建造面板/女仆管理等具体页面）
         this.drawCentered(graphics, "\u00a77点击下方入口进入对应面板", 46, 0x888888);
     }
@@ -1949,7 +1949,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 PANEL_TITLE_Y, 0xFFFFFF);
         // v1.5.182：有效区块列表（信息显示；v1.5.183：fitText 像素级截断防突出屏幕）
         // v1.5.279：区块【打标签】竖排——每区块两行：名字/状态行 + 创建坐标行
-        //（用户："区块上面只会显示某某建筑建造中，再隔一行显示玩家在哪个坐标创建的"）
+        //（反馈："区块上面只会显示某某建筑建造中，再隔一行显示玩家在哪个坐标创建的"）
         if (this.buildRegions.isEmpty()) {
             this.drawCentered(graphics, "\u00a78有效建造区块：0 —— 先到建造目录创建区块", PANEL_TITLE_Y + 9, 0x888888);
         } else {
@@ -1980,7 +1980,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                     10, CONTENT_TOP, 0x888888, false);
         }
         // v1.5.302：女仆管理页【不再画进度条】——旧版底部进度条叠在女仆名单最后几行
-        // 上（用户："此页面字段重叠，进度条不应该在这个地方显示"）；进度条移到
+        // 上（反馈："此页面字段重叠，进度条不应该在这个地方显示"）；进度条移到
         // 区块详细页（renderRegionMaids），"只在对应区块的详细界面那边显示"
     }
 
@@ -2027,7 +2027,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             graphics.drawString(this.font, Component.literal(this.maidEmptyText),
                     10, CONTENT_TOP, 0x888888, false);
         }
-        // v1.5.302：区块详细页显示进度条（用户："进度条只在对应区块的详细界面那边
+        // v1.5.302：区块详细页显示进度条（反馈："进度条只在对应区块的详细界面那边
         // 显示出来就可以了"——女仆管理页的进度条已移除，这里补上本区块的进度；
         // 有翻页按钮时上移避开底行，无翻页贴底）
         // v1.5.308：maxRows 公式与按钮区一致（预留进度条 48px，防行数口径不一致
@@ -2102,7 +2102,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 vid,
                 this.viewingEntry.sizeX(), this.viewingEntry.sizeY(),
                 this.viewingEntry.sizeZ());
-        // v1.1.0 实测一百九十（用户："按 Z 键可以旋转区块的方向。但是这个操作没有
+        // v1.1.0 实测一百九十（反馈："按 Z 键可以旋转区块的方向。但是这个操作没有
         // 提示。我觉得最好在玩家点击建造此建筑之后，在系统提示里弹出这样的系统提示"）：
         // Z 键提示从【仅首次预览发送】改为【每次点击建造此图纸都发送】——旧版只有
         // 首次点击发（那次恰好刷走了就再看不到），重开手册直接进确认框的第二次点击

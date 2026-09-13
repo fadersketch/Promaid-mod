@@ -59,7 +59,7 @@ import java.util.UUID;
  * 玩家手动"一键集合/救援"与主人死亡传送不在此列（那是玩家/紧急意图）。
  * 跃起最长 MAX_AIR_TICKS=100 tick（5 秒）自动收尾，不会长期禁传。
  *
- * 【重锤 + 风弹，缺一不可】用户要求（1.21.1）：只有同时持有重锤与风弹、并消耗
+ * 【重锤 + 风弹，缺一不可】要求（1.21.1）：只有同时持有重锤与风弹、并消耗
  * 1 枚风弹时才起跳猛击；没有风弹就交还原版（TLM 正常持锤平砍）——旧版"不用
  * 风弹也能直接起飞"太超标，已移除。起跳垂直初速 1.7。
  * （开关 combat.maceWindCharge 关掉 = 恢复旧的不消耗风弹自由起跳，不推荐。）
@@ -123,7 +123,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
 
     /**
      * 实测四百三十七：当前攻击目标——优先读脑内 ATTACK_TARGET，读不到就退回
-     * `maid.getTarget()`（Mob 原生目标）。用户反馈"自主战斗能触发、TLM 原生攻击
+     * `maid.getTarget()`（Mob 原生目标）。反馈"自主战斗能触发、TLM 原生攻击
      * 不能触发"，两种战斗模式写入目标的位置可能不同，两条都认，避免漏触发。
      */
     private static LivingEntity currentTarget(EntityMaid maid) {
@@ -204,7 +204,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
             noteGate(maid, "主手不是重锤", level.getGameTime());
             return false;
         }
-        // 用户要求（1.21.1）：**必须同时持有重锤与风弹**才允许起跳猛击——没有风弹就
+        // 要求（1.21.1）：**必须同时持有重锤与风弹**才允许起跳猛击——没有风弹就
         // 交还原版（TLM 正常持锤平砍），不再出现"不用风弹也能直接起飞"的超标行为。
         if (com.maidsmart.config.MaidSmartConfig.COMBAT_MACE_WIND_CHARGE.get()
                 && !hasWindCharge(maid)) {
@@ -357,7 +357,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
             // 附魔后效（火焰附加等 POST_ATTACK 组件）
             EnchantmentHelper.doPostAttackEffects(level, target, source);
             // 附魔【击退】：原版由 Mob.doHurtTarget 计算并施加，我们直接 hurt 会绕过它
-            // ——不补这一步，女仆重锤吃了击退附魔也不会击退（用户："附魔对女仆操作重锤有用吗"）
+            // ——不补这一步，女仆重锤吃了击退附魔也不会击退（反馈："附魔对女仆操作重锤有用吗"）
             float knockback = EnchantmentHelper.modifyKnockback(level, weapon, target, source, 0.0f);
             if (knockback > 0.0f) {
                 double kx = net.minecraft.util.Mth.sin(maid.getYRot() * ((float) Math.PI / 180.0F));

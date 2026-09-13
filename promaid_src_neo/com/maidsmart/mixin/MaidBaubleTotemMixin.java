@@ -73,7 +73,7 @@ public abstract class MaidBaubleTotemMixin {
                 cir.setReturnValue(true);
                 return;
             }
-            // v1.5.286：背包里的图腾也触发（用户："一击秒杀时背包内不死图腾不会
+            // v1.5.286：背包里的图腾也触发（反馈："一击秒杀时背包内不死图腾不会
             // 触发"）——旧版只认"手 + 饰品栏"：自保机制平时会把图腾提前放进饰品栏，
             // 但饰品栏满/未转移时背包里的图腾被白白浪费 → 秒杀直接死。致死伤害
             //（含秒杀）原版都会先走 checkTotemDeathProtection（checkTotemDeathProtection），这里补

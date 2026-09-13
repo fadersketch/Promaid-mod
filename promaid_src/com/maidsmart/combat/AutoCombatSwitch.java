@@ -95,11 +95,11 @@ public class AutoCombatSwitch {
      *  永不触发"是扫描没跑 / 女仆被门拦 / 还是还原动作本身失败 */
     private long lastScanHeartbeat = 0;
     /** v1.1.0 实测一百六十四：还原扫描诊断节流（maidId → 上次诊断 tick）——定位
-     *  "还原扫描卡在哪个门"（用户追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
+     *  "还原扫描卡在哪个门"（追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
      *  一条 latest.log（搜 "restore-scan"）。 */
     private static final java.util.Map<java.util.UUID, Long> RESTORE_DIAG_SINCE = new java.util.HashMap<>();
     /** v1.1.0 实测一百六十九：候选池诊断节流（maidId → 上次诊断 tick）——确认模组
-     *  武器任务有没有进战斗候选池（用户："女仆仍然不会使用模组的武器"）。每 5 秒/
+     *  武器任务有没有进战斗候选池（反馈："女仆仍然不会使用模组的武器"）。每 5 秒/
      *  女仆一条 latest.log（搜 "combat pools"）。 */
     private static final java.util.Map<java.util.UUID, Long> POOL_DIAG_SINCE = new java.util.HashMap<>();
 
@@ -107,7 +107,7 @@ public class AutoCombatSwitch {
      *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
      *  非标准敌对生物、环境伤害都不触发。现改为任意来源受伤即触发（自伤除外）。
      *
-     *  v1.1.0 实测三十六（用户："主人满血受伤仍不触发，当时拿的是卓越前线充能手枪"）：
+     *  v1.1.0 实测三十六（反馈："主人满血受伤仍不触发，当时拿的是卓越前线充能手枪"）：
      *  LivingHurtEvent 不是唯一的"主人受伤"信号——SBW（卓越前线）等枪械模组的
      *  伤害走自定义管线（DamageHandler 自管伤害计算），受伤事件可能【不发】或
      *  被其他订阅者【取消】（EF/SBW 都会 cancel LivingHurtEvent 改走自己的减伤）。
@@ -122,7 +122,7 @@ public class AutoCombatSwitch {
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return;
         }
-        // v1.1.0 实测三百二十（用户："装了 mod 后带女仆到雪地，空闲模式会打雪仗然后
+        // v1.1.0 实测三百二十（反馈："装了 mod 后带女仆到雪地，空闲模式会打雪仗然后
         // 对我触发攻击，会冲我跳劈"）：0 伤害攻击不触发参战——TLM 原版空闲模式在
         // 雪地有打雪仗行为（MaidSnowballTargetTask），雪球命中主人伤害为 0 但事件
         // 照发，旧版不检查伤害值 → 女仆被"雪球"拉进战斗 → 切攻击任务 → 战术行为
@@ -205,7 +205,7 @@ public class AutoCombatSwitch {
      * v1.1.0 实测二十：主人攻击了别的生物 → 也触发（护主不只被动挨打才算开战，
      * 主人主动开火同样进入战斗）。
      *
-     * v1.1.0 实测二十八修复（用户："主动战斗没有成功生效"）：旧版把
+     * v1.1.0 实测二十八修复（反馈："主动战斗没有成功生效"）：旧版把
      * event.getEntity()（=【受害者】）instanceof ServerPlayer 当判断——受害者
      * 是玩家、来源又是玩家的组合只在"玩家打玩家"才成立；主人打怪时受害者是
      * Monster，第一个 if 直接 return，主动开火触发从未生效。正确写法：
@@ -231,7 +231,7 @@ public class AutoCombatSwitch {
         // 狼/带崽北极熊）也算交战对象，帮打合理；平静态的照样不触发。
         // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（发狂的驯服狼——受伤事件在
         // 记仇状态设置前触发，isAngryAt 恒 false，见 isAngryTamedAt 注释）
-        // v1.1.0 实测三百四十六（用户："只要是 target=主人/女仆的都会被额外列入
+        // v1.1.0 实测三百四十六（反馈："只要是 target=主人/女仆的都会被额外列入
         // 威胁"）：加行为化判定——正在锁定【主人或主人身边任意女仆】的生物即使
         // 记仇状态未就位（模组生物用自有仇恨系统、isAngry 不写）也算交战对象
         net.minecraft.world.entity.Entity victimEnt = event.getEntity();
@@ -319,7 +319,7 @@ public class AutoCombatSwitch {
     }
 
     /**
-     * v1.1.0 实测三百四十四（用户："有一部分 mod 会魔改原版被动生物，让被动生物
+     * v1.1.0 实测三百四十四（反馈："有一部分 mod 会魔改原版被动生物，让被动生物
      * 都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"）：
      * 【行为化威胁判定】——该生物是否正在锁定（getTarget）主人或女仆本人。
      * 与类型判定（Enemy/NeutralMob/Tamable）互补：类型接口是原版体系，模组魔改
@@ -346,7 +346,7 @@ public class AutoCombatSwitch {
     }
 
     /**
-     * v1.1.0 实测三百四十六（用户："不论是哪种生物，只要是 target=主人/女仆的
+     * v1.1.0 实测三百四十六（反馈："不论是哪种生物，只要是 target=主人/女仆的
      * 都会被额外列入威胁并当做敌对威胁处理"）：普适行为化判定——该生物是否
      * 正在锁定【指定主人的任意女仆或主人本人】。不限定 NeutralMob/Tamable 类型
      * （模组魔改生物不实现原版接口是常态），只看 getTarget 行为信号。
@@ -481,7 +481,7 @@ public class AutoCombatSwitch {
         if (maid.m_9236_().m_5776_()) {
             return;
         }
-        // v1.1.0 实测三百四十六（用户："不论是哪种生物，只要是 target=主人/女仆
+        // v1.1.0 实测三百四十六（反馈："不论是哪种生物，只要是 target=主人/女仆
         // 的都会被额外列入威胁"）：女仆打到【锁定主人/女仆的任意生物】也算一次
         // 战斗接触——旧版只认 Enemy，打狼/魔改生物时僵局逃逸阀收不到接触信号
         if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
@@ -520,7 +520,7 @@ public class AutoCombatSwitch {
         }
         // v1.1.0 实测八十七：中立生物激怒即通行证
         // v1.1.0 实测三百一十八：驯服宠物记仇【主人】也算——狼记仇的是主人不是
-        // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（用户："狼打我
+        // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（反馈："狼打我
         // 女仆一点反应都没"）。记仇主人的驯服宠物咬女仆 = 真实威胁，帮打合理。
         // v1.1.0 实测三百四十四【行为化兜底】：魔改生物不实现 NeutralMob/Tamable
         // 接口（类型判定恒 false），但攻击前必写 getTarget——正在锁定【受害女仆
@@ -552,7 +552,7 @@ public class AutoCombatSwitch {
     }
 
     /**
-     * v1.1.0 实测三百一十八（用户："遇到发狂的狼，我打狼或是狼打我，女仆一点反应
+     * v1.1.0 实测三百一十八（反馈："遇到发狂的狼，我打狼或是狼打我，女仆一点反应
      * 都没"）：驯服宠物（狼/猫等 TamableAnimal）记仇【target】也算交战对象/威胁。
      * 旧版只认 NeutralMob.isAngryAt——驯服狼记仇主人时：① 主人打狼的 LivingHurtEvent
      * 在狼记仇状态设置【之前】触发，isAngryAt 恒 false → 主动开火不参战；② 狼咬
@@ -619,7 +619,7 @@ public class AutoCombatSwitch {
         if (!maid.m_6084_() || maid.m_6162_()) {
             return 0; // 死亡/幼年不参战
         }
-        // v1.1.0 实测一百六十三（用户："退而求其次——让排班拥有更高的优先级。排班
+        // v1.1.0 实测一百六十三（反馈："退而求其次——让排班拥有更高的优先级。排班
         // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
         // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
         // "排班不切换、女仆一直跟随主人"的根因就是战斗 COMBAT_ACTIVE 残留把排班
@@ -751,7 +751,7 @@ public class AutoCombatSwitch {
             return;
         }
         // v1.1.0 实测五十七：战中近远程换战术只依赖总开关——自动还原关掉时，
-        // 换战术仍然工作（还原关 = 用户要她打到底，但打得聪明依旧成立）
+        // 换战术仍然工作（还原关 = 玩家要她打到底，但打得聪明依旧成立）
         boolean restoreOn = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE.get();
         int activeCount = 0;
         int schedCleared = 0;
@@ -795,7 +795,7 @@ public class AutoCombatSwitch {
                 // 打印却变 idle）会让还原链被丢 = 切不回原来模式
                 IMaidTask curTask = maid.getTask();
                 // v1.1.0 实测一百六十四：还原扫描诊断（每 10 秒/女仆一条，latest.log 搜
-                // "restore-scan"）——定位"还原扫描卡在哪个门"（用户追问：为什么卡住，
+                // "restore-scan"）——定位"还原扫描卡在哪个门"（追问：为什么卡住，
                 // 不能只加超时兜底）：task=当前任务 / assigned=指派战斗任务 /
                 // lastThreatAge=距上次威胁刷新秒数 / threatDetail=威胁来源明细 /
                 // preserve=自保 / isOnSched=排班开启
@@ -835,7 +835,7 @@ public class AutoCombatSwitch {
                         && !hasWeaponForTask(maid, curTask);
                 // v1.1.0 实测一百六十二【硬性兜底】：战斗会话超过 90 秒仍未还原——
                 // 无论威胁是否仍在、安全计时是否被续杯、僵局阀是否失效，都强制切回。
-                // 保证任何门都卡不死女仆（用户："怎么都没法还原"）。
+                // 保证任何门都卡不死女仆（反馈："怎么都没法还原"）。
                 long combatStart = maid.getPersistentData().m_128454_(COMBAT_START_TAG);
                 boolean hardDeadline = combatStart > 0 && now - combatStart > COMBAT_HARD_DEADLINE_TICKS;
                 // v1.1.0 实测一百六十三【残留标记自愈】：老版本（无 COMBAT_START 时间戳）
@@ -921,7 +921,7 @@ public class AutoCombatSwitch {
                 }
                 // 还原。战斗期间排班表可能已跨段——排班在主动战斗之上，还原时先清
                 // 排班去抖键并立即重应用当前段；没排班/重应用没换成 → 落回"战斗前任务"
-                // v1.1.0 实测三十九修复（用户："消除威胁后无法转回原任务，女仆停在
+                // v1.1.0 实测三十九修复（反馈："消除威胁后无法转回原任务，女仆停在
                 // 切换的模式"）：旧版【先 clearMarkers 再还原】——还原链路任何一环
                 // 失败（findTask 找不到原任务/排班 applyNow 抛异常/任务 UID 非法），
                 // 标记已被清掉：下次触发时 isCombatTask 把她当"玩家手动安排"跳过、
@@ -1077,7 +1077,7 @@ public class AutoCombatSwitch {
      * 敌对生物。v1.1.0 审查：旧版复用响应半径，刷怪频繁的整合包里远处怪一直"续杯"，
      * 女仆永远等不满 20 秒安全期，卡在战斗任务回不了岗。
      *
-     * v1.1.0 实测八十五【动态威胁圈】（用户设计："威胁圈会自然放大，直至包含检索到
+     * v1.1.0 实测八十五【动态威胁圈】（玩家设计："威胁圈会自然放大，直至包含检索到
      * 伤害来源的那个生物"）：固定圆与参战触发的口径不对称——骷髅站在 10 多格外放
      * 风筝时，固定 8 格扫不到它 → 还原计时照走 → 还原 10 秒后又中一箭再参战，反复
      * 横跳。现在挨打时登记伤害来源生物（uuid + 时刻），还原扫描发现该生物仍存活、
@@ -1159,7 +1159,7 @@ public class AutoCombatSwitch {
     /**
      * v1.1.0 实测二十：选战斗任务——武器等权随机（原版武器降权重）。
      *
-     * v1.1.0 实测三十八（用户："选武器不再单纯随机，加距离判定——史诗战斗/拔刀剑
+     * v1.1.0 实测三十八（反馈："选武器不再单纯随机，加距离判定——史诗战斗/拔刀剑
      * 算近战、枪械等算远程；近战远程都有时按距离选"）：改为【距离感知的两段选择】：
      * ① 候选任务按武器类型分近战/远程两池（分类规则见 classifyTask）；
      * ② 只有一类有候选 → 该类内按原加权随机；
@@ -1197,7 +1197,7 @@ public class AutoCombatSwitch {
         if (!pools.rangedPool().isEmpty()) {
             return weightedPick(pools.rangedPool(), pools.rangedWeights());
         }
-        // v1.1.0 实测六十七（用户："手上完全没有攻击性物品的女仆，就不应该触发自主
+        // v1.1.0 实测六十七（反馈："手上完全没有攻击性物品的女仆，就不应该触发自主
         // 战斗，应该维持原任务"）：两池全空 = 主手/背包没有任何攻击任务认的武器
         // → 不参战（返回 null，tryEngageMaid 跳过、维持原任务）；
         // 开关关闭时保留旧行为（空手近战兜底）
@@ -1248,7 +1248,7 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
-            // v1.1.0 实测三百七十九【模组物品背书】（用户："为啥自主战斗老喜欢切换
+            // v1.1.0 实测三百七十九【模组物品背书】（反馈："为啥自主战斗老喜欢切换
             // 到魔法？明明我只给了原版武器"）：万法皆通 SpellCombatMeleeTask.isWeapon
             // 恒 true（javap 反汇编实证）——背包里任何物品（原版剑/食物都行）都被
             // 认作"魔法武器" → 模组任务凭空进池 + 模组让位规则（实测一百八十一）
@@ -1286,7 +1286,7 @@ public class AutoCombatSwitch {
                 meleeWeights.add(w);
             }
         }
-        // v1.1.0 实测一百八十一（用户："女仆有概率在拿到拔刀剑的时候选择攻击模式，
+        // v1.1.0 实测一百八十一（反馈："女仆有概率在拿到拔刀剑的时候选择攻击模式，
         // 而不是选择拔刀剑专属的拔刀剑模式。其他模组武器也有可能会出现这样的问题"）：
         // 同池"模组专属任务 vs 原版通用任务"不再加权随机——旧版拔刀剑同时被原版
         // attack 认作武器（拔刀剑物品继承剑类）→ 两任务同池按 原版:模组=1:2 权重
@@ -1397,7 +1397,7 @@ public class AutoCombatSwitch {
         if (cur == null) {
             return;
         }
-        // v1.1.0 实测一百零七（用户："女仆不会自己的近远战切换"）：旧版只允许
+        // v1.1.0 实测一百零七（反馈："女仆不会自己的近远战切换"）：旧版只允许
         // touhou_little_maid 命名空间任务参与近远程切换，模组任务（拔刀剑/弹幕/御币等）
         // 永远被排除——即使女仆拿着弓站在远处也只会傻站着近战。修复：改为
         // IAttackTask 实例即可参与切换（与 pickCombatTask/buildPools 同口径）。
@@ -1425,7 +1425,7 @@ public class AutoCombatSwitch {
             if (dist > MELEE_RANGE) {
                 return; // 还没被近身，远程继续输出
             }
-            // v1.1.0 实测五十八：近战偏好权重 0 = 用户不要近战——被近身也不切，
+            // v1.1.0 实测五十八：近战偏好权重 0 = 玩家不要近战——被近身也不切，
             // 保持远程硬打（近身反击击退机制兜底）
             if (MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get() <= 0) {
                 return;
@@ -1435,7 +1435,7 @@ public class AutoCombatSwitch {
             if (dist <= JUMP_UNREACHABLE_DIST || dist > TARGETING_RANGE) {
                 return; // 追得上（跳跃+贴身可达）或超出索敌范围，维持近战
             }
-            // v1.1.0 实测五十八：远程偏好权重 0 = 用户不要远程——够不着也保持近战追击
+            // v1.1.0 实测五十八：远程偏好权重 0 = 玩家不要远程——够不着也保持近战追击
             if (MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get() <= 0) {
                 return;
             }
@@ -1503,7 +1503,7 @@ public class AutoCombatSwitch {
 
     /**
      * v1.1.0 实测三十八：任务武器类型分类——true=远程，false=近战。
-     * 用户口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
+     * 判定口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
      * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
      * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
      * （未知模组任务按近战兜底——冲脸总比站桩安全）。
@@ -1579,7 +1579,7 @@ public class AutoCombatSwitch {
      * 模组武器"）。
      */
     private static boolean hasWeaponForTask(EntityMaid maid, IMaidTask task) {
-        // v1.1.0 实测六十八（用户："拿斧子的女仆被切到三叉戟模式无法攻击"）：
+        // v1.1.0 实测六十八（反馈："拿斧子的女仆被切到三叉戟模式无法攻击"）：
         // 旧版异常兜底是【整个方法级】的——任何物品的 isWeapon 抛异常就让整个
         // 方法 return true，该任务无凭无据进候选池（三叉戟任务就是这样混进去的，
         // 没三叉戟的女仆切过去根本无法攻击，怪杀不掉威胁不消失也永远不还原）。
@@ -1678,9 +1678,9 @@ public class AutoCombatSwitch {
 
     /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务
      *  （或仍在本系统指派的战斗任务上）。仅标记残留 true、任务已不是攻击任务
-     *  （老版本残留/战斗早已结束）→ 返回 false：排班不再被残留标记挡死（用户：
+     *  （老版本残留/战斗早已结束）→ 返回 false：排班不再被残留标记挡死（反馈：
      *  "排班不切换、女仆一直跟随主人"——根因就是残留 COMBAT_ACTIVE 让排班永久让位）。
-     *  v1.1.0 实测二百六十一（用户："排班开启后女仆一直保持未排班状态，锁定还解除
+     *  v1.1.0 实测二百六十一（反馈："排班开启后女仆一直保持未排班状态，锁定还解除
      *  不了"）：判定收窄——【排班开启】的女仆不再参与自主战斗（tryEngageMaid 直接
      *  跳过），她身上不可能有本系统指派的战斗任务；此时只要 ASSIGNED 与当前任务
      *  不一致（含"当前是任意攻击任务"的旧兜底——玩家手动安排的攻击任务/第三方
@@ -1842,7 +1842,7 @@ public class AutoCombatSwitch {
                 || "touhou_little_maid:idle".equals(task.getUid().toString());
     }
 
-    /** v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore / 
+    /** v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore /
      *  restoreAfterExternalTaskChange）：还原战斗前的 home 模式与作息（MaidSchedule）
      *  ——"切回之前的模式"完整闭环（任务 + home + 作息）。只在【排班关闭】时生效：
      *  排班开启时作息/守家由日程表管理（调度器每秒重断言），此处覆盖会与排班打架；

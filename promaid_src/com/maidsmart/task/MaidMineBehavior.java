@@ -334,7 +334,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.102c：方块注册名 path → 中文名。v1.5.140：未知方块回退改用 BlueprintLib
      *  cnName（CN_NAMES 精确表 + 颜色/材质规则兜底，mod 方块也尽量出中文——
-     *  旧版直接回退英文 path，用户反馈"阻挡汇报用英文字符"） */
+     *  旧版直接回退英文 path，反馈"阻挡汇报用英文字符"） */
     private static String blockCnName(net.minecraft.world.level.block.Block block) {
         net.minecraft.resources.ResourceLocation key = ForgeRegistries.BLOCKS.getKey(block);
         if (key == null) {
@@ -351,7 +351,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.139：软方块判定 = "镐不是正确工具"的方块（草/土/沙/粘土——铲或徒手挖）。
      * 旧判定 hardness ≤ 1 会把低硬度的 mod 矿物（如匠魂/魔法 mod 的 1 硬度矿石）
-     * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（用户反馈
+     * 误判为"软方块"→ softNoDurability=true 时挖矿物也不扣耐久（反馈
      * "就算挖的是矿物也不会掉耐久"的根因）。改为按"镐是否为正确工具"判定：
      * 镐是正确工具的方块（原版+mod 全部矿物/石头/深板岩，无论硬度）一律算硬，必扣。
      */
@@ -797,7 +797,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         // v1.5.109：移除 pullTowardTarget（setDeltaMovement 直接注入速度）——
         // 它与导航互相覆盖、搭高时把女仆从柱子上推走（"移速过快疯狂漂移"根因）。
         // 移动完全交给导航：目标够得着→挖；够不着→搭方块/走过去（approachOre）。
-        // v1.5.111：珍稀矿物掉落物回收子系统整体移除（用户反馈：女仆挖矿途中被
+        // v1.5.111：珍稀矿物掉落物回收子系统整体移除（反馈：女仆挖矿途中被
         // 掉落物吸引、满场飞奔去捡，支柱永远建不起来）——挖出的掉落物就地由
         // pickupOreDrops 收进背包；捡不到的留给拾取任务处理，不再打断挖矿流程。
         // v1.5.87：搭方块防掉落窗口——刚搭完方块钳制在格子中心（潜行效果，速度不变），
@@ -852,7 +852,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 }
                 if (this.targetPos == null) {
                 // v1.5.140：挖矿空闲（附近无矿）→ 退出"挖矿中"标记，拾取任务恢复正常
-                //（用户反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
+                //（反馈：空闲时捡东西积极性太低；空闲 = 与其他工作任务的空闲一致）
                 MINING.remove(maid.m_20148_());
                 // v1.5.85：框内有矿但镐子挖不动 → 不迁移（换镐还是挖不动）：
                 // 气泡+主人聊天栏播报一次（限频）等玩家换镐
@@ -974,7 +974,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             // v1.5.25：够不着（超过玩家手长 4.5 格）→ 三选一搭路决策
             //（向上搭高 / 向前搭斜坡 / 搭桥+走过去），每 tick 重算直到够得着
             // v1.1.0 实测四十三：走路卡死检测——够不着且 2 秒位置没挪过 = 导航被
-            // 地形卡住（有路径走不动）。用户实测"收回重放立刻恢复"正是因为重放
+            // 地形卡住（有路径走不动）。实测"收回重放立刻恢复"正是因为重放
             // 清空了导航状态强制重寻路；这里在 tick 内做同款软复位：清移动记忆
             // → 下一次 setWalkTarget 必定重设（重寻路）。多次仍卡 = 真不可达，
             // 走目标超时弃置流程，不再原地磨蹭
@@ -1130,7 +1130,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             this.refillChainQueue(level, maid);
             // v1.5.172：连锁采集【同时破坏】（FTB Ultimine 式）——目标矿挖完瞬间把
             // 队列里相连的同族矿一次性全部破坏（掉落直接进背包），视觉上一挖一串；
-            // 不再逐个挖（旧版"自动连挖"看不出连锁效果，用户反馈）
+            // 不再逐个挖（旧版"自动连挖"看不出连锁效果，反馈）
             this.chainBreakAll(level, maid, mainHand);
         } else if (isOpenStoneBlock(state)) {
             this.refillObstacleChainQueue(level, maid);
@@ -1317,7 +1317,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private void approachOre(ServerLevel level, EntityMaid maid) {
         // v1.1.0 实测一百九十二【垫块后走上去】——步进推送消费本 tick（不导航不垫块）；
         // 旧版垫完靠 walkToStep 寻路：跨沟/断崖半路折断 → 女仆踩不上刚垫的方块，
-        // 在某几格上死循环（用户："运动的幅度真的太小了"）
+        // 在某几格上死循环（反馈："运动的幅度真的太小了"）
         if (BlockWalkOn.tick(maid)) {
             return;
         }
@@ -1630,7 +1630,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
 
     /**
      * 实测二百二十四：连锁采集扩展到障碍物——从刚挖掉的挡路块 BFS（6 方向）找相连的
-     * 同类可挖穿块排队（用户："挖一个旁边的障碍物，周围的同类障碍物也生效；要有触发
+     * 同类可挖穿块排队（反馈："挖一个旁边的障碍物，周围的同类障碍物也生效；要有触发
      * 上限"）。匹配规则与矿脉一致：同 Block + isBreakable（内置+面板名单，扣除排除名单）
      * + 不是女仆自己搭的方块 + 不是矿（矿走矿脉链路，不误连锁）。上限共用
      * mine.chainLimit（默认 16）；BFS 展开上限 64；开关关闭时直接清空。
@@ -1733,7 +1733,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      */
     private boolean pillarUpStep(ServerLevel level, EntityMaid maid) {
         // v1.1.0 实测一百五十六：骑乘中（扫帚等载具）不搭方块——移动由载具控制，
-        // 垫方块只会留一堆残渣（用户："和女仆在扫帚上挖矿时女仆会搭方块"）
+        // 垫方块只会留一堆残渣（反馈："和女仆在扫帚上挖矿时女仆会搭方块"）
         if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
             return false;
         }
@@ -1781,7 +1781,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         }
         level.m_7731_(place, block.m_49966_(), 3);
         trackPlaced(level, place, block, maid); // v1.5.28：全局登记（实测四十二：绑定搭建女仆）
-        // v1.1.0 实测三十七（用户："搭方块的时候也播放一下动作"）：摆臂动画 +
+        // v1.1.0 实测三十七（反馈："搭方块的时候也播放一下动作"）：摆臂动画 +
         // 放置音效（blockEvent 3000/3001 = 放置方块音效+粒子，原版放置同款）
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
@@ -2375,7 +2375,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         if (cache != null) {
             // v1.1.0 实测一百四十二：去掉 5 秒 TTL 到期强制重建——缓存轮每次都会逐格
             // 校验矿是否还在（存在性/框内/可挖/挡路/弃置，pickFromCache 内），到期重建
-            // 只会造成"每 5 秒停一下重扫/换目标"（用户：挖矿伐木每 5 秒重置一次状态，
+            // 只会造成"每 5 秒停一下重扫/换目标"（反馈：挖矿伐木每 5 秒重置一次状态，
             // 等效收放魂符）。缓存一直用到轮空才全量重建（锚点变化/迁框另有强制重建
             // 路径）；框内新露头的矿在缓存轮空后的下一次全量扫描里自然被找到
             this.lastScanWasFull = false;
@@ -2655,7 +2655,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             if (!st.m_60796_(level, sample)) {
                 continue; // 非满块（楼梯/台阶/花/草）不挡；水不算
             }
-            // v1.1.0 实测七十二（用户反馈："穿透默认太高，矿洞里一直往下打洞"）：
+            // v1.1.0 实测七十二（反馈："穿透默认太高，矿洞里一直往下打洞"）：
             // 实心可开路方块（石头/泥土/深板岩等）重新计入阻挡层数——旧版跳过它们，
             // 地下到处是石头 = 0 阻挡，预算形同虚设，隔地板的矿全都入选 → 女仆对着
             // 脚下连凿竖井。现在预算真正约束"穿几层实心方块"（默认 6），更远的矿

@@ -7,7 +7,7 @@ import net.minecraftforge.client.event.RenderGuiEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 /**
- * 实测四百二十一【冷却可视化】——用户："我希望女仆复活的CD及自己回魂符的CD在
+ * 实测四百二十一【冷却可视化】——反馈："我希望女仆复活的CD及自己回魂符的CD在
  * 玩家屏幕上可视化。"
  *
  * 实测四百三十三【照搬 HeartPact 的分娩倒计时显示机制】：
@@ -26,7 +26,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  *   首个快照到达时 register 本类，不依赖注解扫描，注册行为确定可查。
  *
  * 显示（左上角，建造 HUD 之下）：
- *   ⏳ 冷却
+ * 冷却
  *   复活 · 小玉    0:42
  *   回魂符 · 小玉  0:18 / 1:00
  */

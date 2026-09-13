@@ -17,7 +17,7 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * 主人/友方免伤总闸——女仆绝不伤害主人与同主女仆（三层防护）。
  *
- * 根因（粉丝反馈：带女仆到雪地，空闲模式打雪仗后冲主人跳劈，脱甲约 4 心，主手武器越强越疼）：
+ * 根因（反馈：带女仆到雪地，空闲模式打雪仗后冲主人跳劈，脱甲约 4 心，主手武器越强越疼）：
  * TLM 原版空闲模式在雪地有打雪仗行为（MaidStartSnowballAttacking），该行为会把【主人】
  * 写进女仆 brain 的 ATTACK_TARGET（雪球目标）。promaid 的单兵战术行为
  * （MaidCombatTacticsBehavior，v1.5.202 起不再限定战斗任务）读到 ATTACK_TARGET 就接管

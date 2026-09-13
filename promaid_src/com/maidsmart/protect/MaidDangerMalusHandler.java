@@ -13,14 +13,14 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * v1.1.0 实测一百一十七：危险方块避让——【原版寻路 malus 机制】（用户建议：
+ * v1.1.0 实测一百一十七：危险方块避让——【原版寻路 malus 机制】（玩家建议：
  * "这边就不能套用原版生物的一些寻路逻辑吗？"）。
  *
  * 背景（javap 字节码实证）：原版寻路对"危险格子"的通行裁决是 Mob 的
  * getPathfindingMalus（m_21439_）——没设覆盖时回落 BlockPathTypes 枚举默认值
  * （m_77124_）：LAVA=-1（不可通行，原版生物自动躲岩浆）、DAMAGE_OTHER=-1
  * （仙人掌/浆果丛，原版自动躲）、而 **DAMAGE_FIRE=+16（正数=可通行只是代价
- * 高）——原版生物会踩岩浆块/火/营火**。这正是用户实测"女仆仍会走岩浆块"的
+ * 高）——原版生物会踩岩浆块/火/营火**。这正是实测"女仆仍会走岩浆块"的
  * 原版层面根因：TLM 女仆寻路（MaidPathNavigation → MaidWrappedPathFinder →
  * MaidNodeEvaluator，均 extends 原版 WalkNodeEvaluator 体系）对岩浆格/岩浆
  * 上方的空气格都返回 DAMAGE_FIRE，而 16 的 malus 不拦路。

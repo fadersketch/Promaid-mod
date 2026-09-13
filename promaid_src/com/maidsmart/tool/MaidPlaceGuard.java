@@ -3,7 +3,7 @@ package com.maidsmart.tool;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 
 /**
- * 实测四百四十三【悬空禁搭方块】——用户："女仆在处于悬空状态下的时候应该禁止搭建
+ * 实测四百四十三【悬空禁搭方块】——反馈："女仆在处于悬空状态下的时候应该禁止搭建
  * 方块（这个机制在挖矿和伐木的时候也通用，有时候就是因为下落悬空的时候搭方块又
  * 放不了落地水，导致自己被摔死了）。"
  *
@@ -14,7 +14,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  * - 没骑乘、没鞘翅滑翔；
  * - 且满足坠落下限：坠落距离 ≥ 落地水触发高度（combat.waterFallDistance）——
  *   这个高度落地水本来就会接管；此时搭方块既救不了她，又会把落点的水/地面结构
- *   改掉、挡住落地水（用户实测的摔死根因）。
+ *   改掉、挡住落地水（实测的摔死根因）。
  *   （1.20.1 无重锤跃起——重锤是 1.21.1 专属）
  *
  * 【统一闸口】四个搭方块模块（自保搭高·搭路·挖矿垫脚·伐木垫脚）都在各自的

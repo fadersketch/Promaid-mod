@@ -12,7 +12,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
-     * v1.1.0 实测八十九：女仆寻路【危险方块避让】——用户需求："让他可以自己避开
+     * v1.1.0 实测八十九：女仆寻路【危险方块避让】——需求："让他可以自己避开
      * 一些危险的方块"。
      *
      * 原理：注入原版 WalkNodeEvaluator 的逐节点方块路径类型评估（m_7209_ =

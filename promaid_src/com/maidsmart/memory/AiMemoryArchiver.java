@@ -175,8 +175,8 @@ public final class AiMemoryArchiver {
 
     /**
      * 会话收尾（玩家登出/退出游戏）——补齐 Sphantosis 睡眠语义中被漏掉的
-     * 【真人用户】维度：原项目的 wrap-up 不只覆盖角色入睡，也覆盖真人用户
-     * 结束一天的聊天下线（用户状态机 active/sleeping/offline）。MC 里真人
+     * 【真人玩家】维度：原项目的 wrap-up 不只覆盖角色入睡，也覆盖真人玩家
+     * 结束一天的聊天下线（状态机 active/sleeping/offline）。MC 里真人
      * 睡觉 = 退出游戏：登出时把当日（部分天）「日」级日记边界【先持久化进
      * pending 再尝试生成】——单人模式关服后异步响应可能丢失，pending 已
      * 落盘，下次进游戏由周期 tick 自动补生成（"女仆在你睡觉时整理好了
