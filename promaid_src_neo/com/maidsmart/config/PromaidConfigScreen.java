@@ -1978,7 +1978,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new SectionRow("内置日语语音包（随 mod 附带，v1.1.0）", true));
         this.rows.add(new BoolRow("启用内置语音包", MaidSmartConfig.TTS_JAR_PACK_ENABLED.get(),
                 v -> MaidSmartConfig.TTS_JAR_PACK_ENABLED.set(v),
-                "内置日语语音包：随 mod 附带的 115 条女仆日语语音（60 条系统消息台词 + 49 条排班贴身气泡 + 6 条拥抱/摸头亲昵台词）。触发系统消息/排班气泡时自动播放，优先级高于 TLM 原生语音包与 TTS 合成；不要求配置 TTS 站点。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制"));
+                "内置日语语音包：随 mod 附带的 122 条女仆日语语音（67 条系统消息台词 + 49 条排班贴身气泡 + 6 条拥抱/摸头亲昵台词）。触发系统消息/排班气泡时自动播放，优先级高于 TLM 原生语音包与 TTS 合成；不要求配置 TTS 站点。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制"));
         this.rows.add(new NumRow("内置语音包音量", String.valueOf(MaidSmartConfig.TTS_JAR_PACK_VOLUME.get()),
                 s -> setDouble(MaidSmartConfig.TTS_JAR_PACK_VOLUME, s),
                 "内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音，与「TTS 语音播放音量倍率」相乘。实测四百二十七已把语音素材做峰值归一化（响度约 +11 dB），一般 1.0~2.0 就够；仍嫌小可继续调大，最高 20"));

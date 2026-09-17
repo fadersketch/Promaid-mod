@@ -1622,7 +1622,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("cacheMaxFiles", 200, 10, 2000);
         // v1.1.0 实测四百二十：内置日语语音包（要求——训练日语系统消息语音打进 jar，
         // 触发系统消息自动播放；可在手册/面板调开关、音量、最小间隔；播放时暂压 TLM 原生语音包）
-        TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（115 条：60 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
+        TTS_JAR_PACK_ENABLED = BUILDER.comment("内置日语语音包（默认开）：随 mod 附带的女仆日语语音（122 条：67 条系统消息 + 49 条排班气泡 + 6 条拥抱/摸头亲昵台词），触发系统消息时自动播放——优先级高于 TLM 原生语音包与 TTS 合成；关掉则只走磁盘语音包/TTS。实测四百四十五：已按情境分五档情绪（战斗·紧张/关心·温柔/俏皮·日常/干活·汇报/请求·为难）重制——同一位女仆的两条参考音频 + 语速区分，不再一律平淡")
                 .translation("config.promaid.voice.jarPackEnabled").define("jarPackEnabled", true);
         TTS_JAR_PACK_VOLUME = BUILDER.comment("内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音包的播放音量，与上面的「TTS 语音播放音量倍率」相乘。实测四百二十七：语音素材已做峰值归一化（响度约 +11 dB），1.0~2.0 一般就够；仍嫌小可调到最高 20")
                 .translation("config.promaid.voice.jarPackVolume")
