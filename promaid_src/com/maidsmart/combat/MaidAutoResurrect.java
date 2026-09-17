@@ -111,35 +111,14 @@ public final class MaidAutoResurrect {
                 maid.m_20240_(nbt);
             }
             long due = computeDueTick(level);
-            // v1.2.0【死亡循环断路器】：若她是在"上次复活后 30 秒内"又死的，说明复活点
-            // 有问题（实机日志：复活→4 秒摔死→1 秒复活→再摔死）。此时不再按原延迟傻转，
-            // 而是退避推迟（1 分钟起、翻倍、上限 10 分钟）+ 明确告警，给玩家介入的机会。
-            long breaker = loopBreakerDelay(level, maidId);
-            if (breaker > 0L) {
-                due = Math.max(due, level.m_46467_() + breaker);
-                ReviveGuard g = REVIVE_GUARD.get(maidId);
-                int n = g != null ? g.consecutiveDeaths : 1;
-                if (g != null && !g.warned) {
-                    g.warned = true;
-                    String nm = com.maidsmart.tool.PromaidLog.nameOf(maid);
-                    long sec = breaker / 20L;
-                    try {
-                        net.minecraft.world.entity.LivingEntity ow = maid.m_269323_();
-                        if (ow instanceof ServerPlayer sp) {
-                            sp.m_5661_(net.minecraft.network.chat.Component.m_237113_(
-                                    "\u00a7c\u26a0 \u00a7f你的女仆 \u00a7b" + nm
-                                            + "\u00a7f 复活后很快又死亡（第 " + n
-                                            + " 次）——复活点可能不安全（地形被改动/床被拆/"
-                                            + "她落在会摔死的位置）。已把下次复活推迟 "
-                                            + sec + " 秒；请检查她的重生点，或先关掉自动复活。"), false);
-                        }
-                    } catch (Throwable ignored) {
-                    }
-                    com.maidsmart.tool.PromaidLog.log("自动复活",
-                            nm + " 复活后 " + (LOOP_WINDOW_TICKS / 20L) + " 秒内又死亡（第 " + n
-                                    + " 次）→ 断路器退避 " + sec + " 秒（复活点可能不安全）");
-                }
-            }
+            // v1.2.0 实测五百四十六【去掉内置 CD（原"死亡循环断路器"）】：反馈"系统消息写着
+            // 再过 60 秒再触发一次复活，但实际一直被卡住、复活不了"。
+            // 那个断路器是 实测四百一十六 加的硬编码退避（死亡→复活→又死 → 推迟 60 秒，
+            // 连续则 120/240/480/600 秒封顶）。它制造的问题比解决的多：
+            // ①它的提示语承诺"60 秒后再试"，而退避是翻倍的 —— 玩家看到的就是"卡住"；
+            // ②它把"复活点不安全"这个真问题掩盖成了"等一会就好"。
+            // 现在直接删掉退避（不再是 CD），改由 resurrect() 侧从根上处理：
+            // **重生点不可用就强制落在主人所在位置**（见那里的注释）。
             Pending p = new Pending(nbt, owner.m_20148_(), due,
                     tombstone != null ? tombstone.m_20148_() : null,
                     com.maidsmart.tool.PromaidLog.nameOf(maid));
@@ -177,73 +156,6 @@ public final class MaidAutoResurrect {
 
     // ================== 到期复活 ==================
 
-    /**
-     * v1.2.0【死亡循环断路器】——实机日志暴露的真实问题。
-     *
-     * 现场（龙之梦整合包 promail.log/latest.log，2026-09-13）：同一只女仆
-     * 「复活 → 4 秒后摔死 → 1 秒后又复活」连转 3 轮以上，日志里
-     * `[maidhurt] 类型=fall 伤害=91.4 位置=(28.2,294.0,101.9)` 明确是摔落致死。
-     * 落点 bug 已修（findSafeLanding 高度上下界取反 → 落点在 y≈386 天空），
-     * 但只要【任何】因素让复活点不安全（地形被改、床被拆、跨维传送、维度规则），
-     * 这个"复活即死"循环就会再次出现，而且延迟设得越小转得越快。
-     *
-     * 断路器：记住每只女仆【上次复活的世界时间】。若她又在【循环窗口】内死亡，
-     * 说明复活点有问题——不再按原延迟傻转，而是把这次复活【推迟】并升级告警，
-     * 让玩家有机会介入。连续多次则推迟得越来越久（退避），上限 10 分钟。
-     */
-    private static final Map<UUID, ReviveGuard> REVIVE_GUARD = new java.util.concurrent.ConcurrentHashMap<>();
-
-    /** 复活的"循环窗口"：在这个时间内又死 = 视为复活点不安全 */
-    private static final long LOOP_WINDOW_TICKS = 20L * 30L; // 30 秒
-    /** 触发断路器后的基础推迟（tick） */
-    private static final long BREAKER_BASE_DELAY = 20L * 60L; // 1 分钟
-    /** 退避上限（tick）= 10 分钟 */
-    private static final long BREAKER_MAX_DELAY = 20L * 600L;
-
-    private static final class ReviveGuard {
-        long lastReviveGameTime;   // 上次复活时刻
-        int consecutiveDeaths;     // 连续"复活后很快又死"的次数
-        boolean warned;            // 是否已就该女仆连续告警过（每次退避只告警一次）
-
-        ReviveGuard(long t) {
-            this.lastReviveGameTime = t;
-        }
-    }
-
-    /**
-     * 判断本次死亡是否落在"上次复活的循环窗口"内；是则累计次数并返回退避推迟量
-     * （tick）。返回 0 = 不需要推迟。
-     */
-    private static long loopBreakerDelay(ServerLevel level, UUID maidId) {
-        long now = level.m_46467_();
-        ReviveGuard g = REVIVE_GUARD.get(maidId);
-        if (g == null) {
-            REVIVE_GUARD.put(maidId, new ReviveGuard(now));
-            return 0;
-        }
-        if (now - g.lastReviveGameTime > LOOP_WINDOW_TICKS) {
-            // 距上次复活已经很久 → 正常死亡，重置计数
-            g.consecutiveDeaths = 0;
-            g.warned = false;
-            return 0;
-        }
-        // 循环窗口内又死 → 退避
-        g.consecutiveDeaths++;
-        long delay = Math.min(BREAKER_MAX_DELAY,
-                BREAKER_BASE_DELAY * (1L << Math.min(4, g.consecutiveDeaths - 1)));
-        return delay;
-    }
-
-    private static void noteRevive(ServerLevel level, UUID maidId) {
-        ReviveGuard g = REVIVE_GUARD.get(maidId);
-        if (g == null) {
-            REVIVE_GUARD.put(maidId, new ReviveGuard(level.m_46467_()));
-        } else {
-            g.lastReviveGameTime = level.m_46467_();
-            g.warned = false;
-        }
-    }
-
     @SubscribeEvent
     public static void onServerTick(TickEvent.ServerTickEvent event) {
         if (event.phase != TickEvent.Phase.END) {
@@ -259,9 +171,8 @@ public final class MaidAutoResurrect {
                     d0.clear();
                 }
             }
-            // v1.2.0：断路器状态一并清空——玩家关掉（等于已介入处理）后重开，
-            // 退避不应残留（否则"明明修好了还得等十分钟"）。
-            REVIVE_GUARD.clear();
+            // v1.2.0 实测五百四十六：断路器已移除（见 onTombstone 的注释）——关掉再打开时
+            // 不再有任何退避状态需要清理。
             return;
         }
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
@@ -301,8 +212,6 @@ public final class MaidAutoResurrect {
                 // 2. 在主人重生点复活
                 if (resurrect(server, owner, p, maidId)) {
                     data.remove(maidId);
-                    // v1.2.0：记下复活时刻，供死亡循环断路器判断"是否复活后很快又死"
-                    noteRevive(overworld != null ? overworld : (ServerLevel) owner.m_9236_(), maidId);
                 } else {
                     // 复活失败（异常）：推迟 5 秒重试，不丢快照
                     p.dueTick = now + 100L;
@@ -328,23 +237,44 @@ public final class MaidAutoResurrect {
 
     /** 在主人重生点复活女仆（与 TLM 魂符释放同构：new + load + 落点 + addFreshEntity） */
     private static boolean resurrect(MinecraftServer server, ServerPlayer owner, Pending p, UUID maidId) {
-        // 重生点解析（复用死亡传送的口径：床/重生锚校验，无则主世界出生点）
+        // 重生点解析（复用死亡传送的口径：床/重生锚校验）
         ServerLevel dest = server.m_129880_(owner.m_8963_());
         net.minecraft.core.BlockPos respawn = owner.m_8961_();
-        if (dest == null || respawn == null
-                || !com.maidsmart.protect.MasterDeathTeleportHandler.isRespawnPointValid(dest, respawn)) {
-            dest = server.m_129880_(Level.f_46428_);
-            respawn = dest != null ? dest.m_220360_() : null;
+        boolean respawnUsable = dest != null && respawn != null
+                && com.maidsmart.protect.MasterDeathTeleportHandler.isRespawnPointValid(dest, respawn);
+        double[] safe;
+        boolean forced;
+        if (respawnUsable) {
+            // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
+            // findStandUpPosition（与玩家复活站的那一格完全一致），而不是自己柱状扫描。
+            // 旧版的 findSafeLanding 高度上下界取反（getHeight 当成最低建筑高度），
+            // 扫描循环全空 → 兜底返回 y≈386 的天空 → 女仆一放出来就自由落体摔死。
+            safe = com.maidsmart.protect.MasterDeathTeleportHandler.respawnLanding(dest, respawn);
+            forced = false;
+        } else {
+            // ── v1.2.0 实测五百四十六【重生点不可用 → 强制落在主人所在位置】──
+            // 反馈原文："自动复活触发以后发现女仆没有合适的复活点。明面上系统消息写的是
+            // 再过 60 秒之后再触发一次复活，但是实际上会被卡住无法复活。"
+            //
+            // 【旧版为什么是"卡住"】这里原本退回【主世界出生点】。出生点往往是另一个
+            // 坐标（甚至另一个维度）的荒郊：女仆落在那儿可能立刻又死，于是 实测四百一十六
+            // 的"死亡循环断路器"把复活一再推迟（60→120→…→600 秒），玩家看到的就是
+            // "说要等 60 秒，然后一直不来"。
+            //
+            // 【现在的口径】重生点不可用（床被拆 / 重生锚没电 / 维度不允许 / 从没设过
+            // /spawnpoint）→ 直接落在【主人当前所在位置】，**强制生效、不看地块**
+            // （主人在高空、岩浆边、水底也照落）。理由：主人站的地方 = 玩家自己站的
+            // 地方，是这颗星球上最不会让她"一放出来又死一次"的落点；这也是"复活到她
+            // 该在的人身边"这个功能的本意。
+            // 主人在线的判定由调用方保证（主人不在线时整条复活都会跳过、墓碑保留）。
+            dest = owner.m_9236_() instanceof ServerLevel own
+                    ? own : server.m_129880_(Level.f_46428_);
+            if (dest == null) {
+                return false;
+            }
+            safe = new double[]{owner.m_20185_(), owner.m_20186_(), owner.m_20189_()};
+            forced = true;
         }
-        if (dest == null || respawn == null) {
-            return false;
-        }
-        // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
-        // findStandUpPosition（与玩家复活站的那一格完全一致），而不是自己柱状扫描。
-        // 旧版的 findSafeLanding 高度上下界取反（getHeight 当成最低建筑高度），
-        // 扫描循环全空 → 兜底返回 y≈386 的天空 → 女仆一放出来就自由落体摔死，
-        // 摔死又触发自动收符、放出再摔，形成"原地反复摔死"的死循环。
-        double[] safe = com.maidsmart.protect.MasterDeathTeleportHandler.respawnLanding(dest, respawn);
         EntityMaid maid = new EntityMaid(dest);
         // v1.2.0：死亡快照先清洗再 load——存档里带着"坠落中"的状态（FallDistance/
         // 下坠速度），不清就会"落地前先扣一次摔落伤害"；同时清死亡计时/受击计时，
@@ -365,9 +295,17 @@ public final class MaidAutoResurrect {
         // 复活提示：女仆自己的话语气泡 + 主人的系统消息（带名字，不怕气泡被错过）
         String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
         maid.getChatBubbleManager().addTextChatBubble("主人，我回来啦！让你担心了～");
-        owner.m_5661_(net.minecraft.network.chat.Component.m_237113_(
-                "\u00a7e✦ \u00a7f你的女仆 \u00a7b" + name + "\u00a7f 已复活，正在主人重生点等你。"), false);
-        com.maidsmart.tool.PromaidLog.log("自动复活", name + " 已在主人重生点复活");
+        // v1.2.0 实测五百四十六：措辞按实际落点分流——旧版无论落在哪都写"正在主人重生点等你"，
+        // 而重生点不可用时她其实是在主人身边（甚至另一个维度），玩家照着提示去找会扑空。
+        owner.m_5661_(net.minecraft.network.chat.Component.m_237113_(forced
+                ? "\u00a7e\u2726 \u00a7f你的女仆 \u00a7b" + name
+                        + "\u00a7f 的重生点不可用（床被拆/重生锚没电/维度不允许），"
+                        + "\u00a7e已直接在你所在的位置复活\u00a7f。"
+                : "\u00a7e\u2726 \u00a7f你的女仆 \u00a7b" + name
+                        + "\u00a7f 已复活，正在主人重生点等你。"), false);
+        com.maidsmart.tool.PromaidLog.log("自动复活", name + (forced
+                ? " 的重生点不可用 → 已在主人所在位置强制复活"
+                : " 已在主人重生点复活"));
         return true;
     }
 

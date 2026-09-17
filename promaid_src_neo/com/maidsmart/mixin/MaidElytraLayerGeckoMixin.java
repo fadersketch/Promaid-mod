@@ -23,5 +23,7 @@ public abstract class MaidElytraLayerGeckoMixin {
     private void promaid$addElytraLayer(EntityRendererProvider.Context context, CallbackInfo ci) {
         GeckoEntityMaidRenderer<?> self = (GeckoEntityMaidRenderer<?>) (Object) this;
         self.addGeoLayerRenderer(new com.maidsmart.client.LayerMaidElytraGecko(self, context));
+        // 实测五百四十三：激流旋转特效（复刻原版 SpinAttackEffectLayer）
+        self.addGeoLayerRenderer(new com.maidsmart.client.LayerMaidSpinAttackGecko(self));
     }
 }

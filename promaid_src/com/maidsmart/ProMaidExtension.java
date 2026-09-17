@@ -159,6 +159,10 @@ public class ProMaidExtension implements ILittleMaid {
                 // + 空中禁传送/落地缓冲全线卡死）。启动时对该女仆清一次状态，并清掉滑翔标志位。
                 // （旧版 1.20.1 定义了 forget/clearAll 却从未接线，属漏同步。）
                 com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.m_20148_());
+                // 实测五百四十四：激流突进的表同样会残留（本行为是 core 行为，女仆被强杀时
+                // 也走不到 stop()），而且它现在还会让空袭让位 + 豁免自动传送——残留的代价比
+                // 之前大得多，必须一起清。（旧版只定义了 forget 却从未接线，属漏同步。）
+                com.maidsmart.combat.MaidTridentSpinBehavior.forget(maid.m_20148_());
                 com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }

@@ -876,7 +876,8 @@ public final class ScheduleNetworking {
                             + " 名不在已加载区块——正在按最后出现位置强载区块并自动召回（稍候几秒，无需再点）");
                 }
                 if (r.failStand() > 0) {
-                    parts.add("§7" + r.failStand() + " 名因身边无可站立点未动");
+                    // v1.2.0 实测五百四十六：集合已改强制 + 无视地块，这条不再是"无可站立点"
+                    parts.add("§7" + r.failStand() + " 名传送失败（状态异常，稍后再试）");
                 }
                 if (r.kept() > 0) {
                     parts.add("§7" + r.kept() + " 名坐着/骑乘/在家模式保持原位");
@@ -926,7 +927,10 @@ public final class ScheduleNetworking {
                 if (r == 1) {
                     msg = "§a已将女仆传送到你身边";
                 } else if (r == 2) {
-                    msg = "§7女仆没有传送：你身边 16 格内无可站立点（高空/虚空）——落地后再点";
+                    // v1.2.0 实测五百四十六：人工传送已改**强制 + 无视地块**（找不到可站立格
+                    // 就直接落在你所在的位置，空中也行），所以这条"你身边无可站立点"的
+                    // 旧拒绝路径不再存在；走到这里只剩状态异常（维度不可达/实体异常）。
+                    msg = "§7女仆没有传送：她当前状态异常，稍后再试一次";
                 } else if (r == 3) {
                     msg = "§7她坐着/骑乘/在家模式（排班中）保持原位——想强制召回先关闭排班/解除坐姿";
                 } else {
@@ -1149,9 +1153,11 @@ public final class ScheduleNetworking {
                     BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
                             .findStandNear(target, maid.m_20183_());
                     if (stand == null) {
-                        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                                "§7传送取消：她脚下没找到可站立的位置"));
-                        return;
+                        // v1.2.0 实测五百四十六【强制 + 无视地块】：旧版这里直接取消传送
+                        //（"她脚下没找到可站立的位置"）——空袭女仆悬停/飞在海上或虚空上时
+                        // 就永远传不过去。现在退到**她自己所在的那一格**（同维度分支早就
+                        // 是这么兜底的，跨维度漏了）；她那格若是空中，就把你放到空中。
+                        stand = maid.m_20183_();
                     }
                     boolean ok = player.m_264318_(target, stand.m_123341_() + 0.5,
                             stand.m_123342_(), stand.m_123343_() + 0.5,

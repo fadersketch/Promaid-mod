@@ -568,7 +568,8 @@ public final class MaidFlightKit {
      * 【口径】候选 = **任意烟花火箭**（`isFirework`），与 `hasAmmoForRanged` 的弩分支、
      * 原版 `CrossbowItem` 的弹药谓词三处一致。
      * v1.2.0 实测五百三十五：是否包含"普通烟花"（无爆炸组件）由配置
-     * `combat.crossbowPlainFirework` 决定（默认包含；关掉则只认攻击性烟花）。
+     * `combat.crossbowPlainFirework` 决定。**实测五百三十七起默认【关】**：普通烟花在原版
+     * 恒为 0 伤害（见 {@link #isExplosiveFirework}），默认只当飞行燃料；打开才认它们。
      *
      * 【为什么按威力挑】原版烟花的伤害只取决于爆炸条目数：
      * `FireworkRocketEntity.m_37087_` 字节码 = `5.0f + 2 * Explosions.size()`，
@@ -599,7 +600,7 @@ public final class MaidFlightKit {
             }
             int p = fireworkPower(s);
             if (!allowPlain && p <= 0) {
-                continue; // 开关关掉：普通烟花不当弹药
+                continue; // 开关关掉（默认）：普通烟花不当弹药
             }
             if (p > bestPower) {
                 bestPower = p;
@@ -616,7 +617,7 @@ public final class MaidFlightKit {
                 }
                 int p = fireworkPower(s);
                 if (!allowPlain && p <= 0) {
-                    continue; // 开关关掉：普通烟花不当弹药
+                    continue; // 开关关掉（默认）：普通烟花不当弹药
                 }
                 if (p > bestPower) {
                     bestPower = p;
@@ -659,9 +660,10 @@ public final class MaidFlightKit {
      * 身上是否有**可当弩弹药**的烟花——由配置 {@code combat.crossbowPlainFirework} 决定
      * 是否把"普通烟花"（无爆炸组件）也算进来。
      *
-     * v1.2.0 实测五百三十五。默认 **true** = 任意烟花都能当弹药（原版 `CrossbowItem`
-     * 的弹药谓词就不看爆炸组件，玩家拿普通烟花照样能射）；关掉则只认**攻击性烟花**
-     * （带烟火之星的那种）——普通烟花留着当飞行燃料，绝不被弩烧掉。
+     * v1.2.0 实测五百三十五。v1.2.0 实测五百三十七起默认 **false** = 只认**攻击性烟花**
+     * （带烟火之星的那种）——普通烟花留着当飞行燃料，绝不被弩烧掉（它打出去本来也是
+     * 0 伤害，见 {@link #isExplosiveFirework}）。打开才退回"任意烟花都能当弹药"
+     * （原版 `CrossbowItem` 的弹药谓词就不看爆炸组件，玩家拿普通烟花照样能射）。
      *
      * 【与取用口径必须一致】本判据与 {@link #takeBestCrossbowFirework} 读同一个开关，
      * 否则会出现"判定有弹药、起飞后一发打不出来"的死角（本文件反复强调的红线）。
@@ -688,8 +690,10 @@ public final class MaidFlightKit {
      * 开头就是 `if (!this.hasExplosion()) return;`（= `!getExplosions().isEmpty()`），
      * 也就是说**不带爆炸的烟花打出去是 0 伤害**（只有一条直线飞行轨迹）。
      *
-     * v1.2.0 实测五百三十三：本判据**不再用于弩的弹药门禁**——那边改成"任意烟花都算"
-     * （原版 `CrossbowItem` 的弹药谓词就不看爆炸组件），见 {@link #takeBestCrossbowFirework}。
+     * v1.2.0 实测五百三十三：一度改成"任意烟花都算"；实测五百三十七起弩默认又回到本判据
+     * ——`combat.crossbowPlainFirework` 默认关闭，弩只认带爆炸的（开关打开才退回"任意烟花
+     * 都算"，原版 `CrossbowItem` 的弹药谓词就不看爆炸组件），见
+     * {@link #takeBestCrossbowFirework}。
      * 保留它是因为"这枚打出去有没有伤害"仍是个有意义的判据。
      */
     public static boolean isExplosiveFirework(ItemStack stack) {

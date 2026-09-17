@@ -282,9 +282,19 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *
      * 状态表由 `forget()` 在行为收尾时整清，所以豁免是"有界"的：一轮打完、
      * 目标消失、或行为停止后立刻恢复正常传送。
+     *
+     * v1.2.0 实测五百四十四：**激流的空中旋转冲击**也并进来（它同样会主动收翅、同样是
+     * "一次不能被打断的出手"），判据见 {@link MaidTridentSpinBehavior#isDashing}。
      */
     public static boolean isEngaged(EntityMaid maid) {
-        return maid != null && isEngaged(maid.getUUID());
+        if (maid == null) {
+            return false;
+        }
+        // 实测五百四十四：空中的旋转冲击也算"本轮正在打"——它只有十几 tick，一旦主人走远、
+        // 自动传送把她当场拽走，这一记就白转了（与 实测四百八十七 收翅猛击被传送打断同一类）。
+        // isDashing 自带过期自愈，所以豁免同样有界。
+        return isEngaged(maid.getUUID())
+                || com.maidsmart.combat.MaidTridentSpinBehavior.isDashing(maid);
     }
 
     /** 同上（按 UUID 判定，供只在 server tick 里拿得到 id 的调用方用） */
@@ -460,6 +470,22 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (maid.onGround()) {
                 groundMelee(level, maid, target);
             }
+            return;
+        }
+
+        // ── 实测五百四十四：激流旋转突进期间让位（**只让那十几 tick 的速度与滑翔权**）──
+        // 【为什么必须让】突进是"这一 tick 的速度由我指定"的打法；空袭这边同一 tick 会
+        // ①放烟花（推力沿她的视线方向）②开滑翔（`travel` 的滑翔分支每 tick 把水平速度往
+        // 视线方向拽并限速）。三套速度互相覆盖的结果就是"刚起手就被冲掉，只闪一下"，
+        // 旋转根本放不完。早先（实测五百三十八）在空袭里加过早退，但那是"目标进 N 格就自主
+        // 起手"的年代——突进占了大半时间，于是起跳滑翔被反复打断，实机"突然不会起飞了"。
+        // 【这次为什么不会重演】①起手时机 = **她的攻击时机**（有攻击冷却 + 收招硬直，
+        // 不是按距离自主触发）；②让位只在这个有界窗口（上限一次旋转的时长 + 陈旧自愈，
+        // 见 MaidTridentSpinBehavior.isDashing）；③放在三件套维护与"缺件提示"**之后**——
+        // 装备照穿、缺件照报，被让掉的只有状态机本身。
+        if (MaidTridentSpinBehavior.isDashing(maid)) {
+            MaidFlightKit.setGliding(maid, false); // 收翅：滑翔会把突进速度拽回去、还限速
+            suppressVanillaMelee(maid);
             return;
         }
 
@@ -706,7 +732,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SMASH.remove(id);
         SMASH_TICKS.remove(id);
         WAIT_LAUNCH.add(id);
-        if (!maid.onGround()) {
+        // 实测五百四十四：这一记被换成了激流旋转冲击时**先别开滑翔**——滑翔的 `travel` 会
+        // 每 tick 把水平速度往视线方向拽并限速，正好把突进速度磨掉。突进结束后空袭自然回到
+        // 本状态机，那时再开滑翔（阶段二那一条），中间只差十几 tick。
+        if (!maid.onGround() && !MaidTridentSpinBehavior.isDashing(maid)) {
             MaidFlightKit.setGliding(maid, true);
         }
         FIREWORK_READY.put(id, Math.max(FIREWORK_READY.getOrDefault(id, 0L), gameTime));
@@ -732,6 +761,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 调用方（tickSmash）会继续俯冲压着打，等视线一通就打出去。
         if (!SelfPreservationBehavior.hasSight(maid, target)) {
             return false;
+        }
+        // 实测五百三十八 / 五百四十一 / 五百四十四：主手是激流三叉戟时，这一记换成朝目标的
+        // 旋转冲击（起手成功 = 这次出手了，吃攻击冷却）。起不了手（硬直中 / 超出突进距离）
+        // 就照常走下面的俯冲猛击 —— 绝不吞掉这一记，否则她在空袭里会变成不出手的哑巴。
+        // 【实测五百四十四】这里是**唯一允许空中起手**的入口：收翅俯冲本来就是"她主动朝敌人
+        // 砸下去"的那一瞬（用户口径："这个功能在空中的实战价值更大"）。airborne 直接取当前是否
+        // 离地——她已经落地时这一记自动退回地面规则（连"顶着怪推"的那道刹车也一起退回去）。
+        if (MaidTridentSpinBehavior.replacesMelee(maid)
+                && MaidTridentSpinBehavior.tryStartDash(level, maid, target, !maid.onGround())) {
+            ATTACK_READY.put(attackId, gameTime + attackCooldown(maid));
+            return true;
         }
         ATTACK_READY.put(attackId, gameTime + attackCooldown(maid));
         maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
@@ -1087,6 +1127,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             // 近战的视线门控不一致）。看不见就走过去，别对着墙砍。
             if (!SelfPreservationBehavior.hasSight(maid, target)) {
                 maid.getNavigation().moveTo(target, 1.0);
+                return;
+            }
+            // 实测五百三十八 / 五百四十一：持激流三叉戟时，地面近战换成旋转冲击；
+            // 起不了手（硬直中 / 超出突进距离）就照常挥砍，别让她变成哑巴。
+            if (MaidTridentSpinBehavior.replacesMelee(maid)
+                    && MaidTridentSpinBehavior.tryStartDash(level, maid, target)) {
+                double atkSpeed38 = maid.getAttributeValue(Attributes.ATTACK_SPEED);
+                maid.getBrain().setMemoryWithExpiry(MemoryModuleType.ATTACK_COOLING_DOWN, true,
+                        atkSpeed38 > 0.0 ? (long) (20.0 / atkSpeed38) : 20L);
                 return;
             }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
