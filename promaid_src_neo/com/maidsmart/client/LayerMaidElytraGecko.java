@@ -4,6 +4,7 @@ import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.GeckoEnti
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.core.processor.ILocationBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
+import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoBone;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.animated.AnimatedGeoModel;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.render.built.GeoBone;
@@ -66,7 +67,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *    故 `translate(0, +0.7, 0)`（放在 `scale(k)` **之前**，所以是实打实的世界格，不会被 k 缩放）。
  *    挂点 `ElytraLocator` 换算后本就落在肩线上 → 顶端位置只由本上移量决定。
  */
-public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, GeckoEntityMaidRenderer<Mob>> {
+public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> {
 
     private static final ResourceLocation WINGS =
             ResourceLocation.withDefaultNamespace("textures/entity/elytra.png");
@@ -107,18 +108,18 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, GeckoEntityMaidR
     private final ElytraModel<Mob> elytraModel;
 
     @SuppressWarnings("unchecked")
-    public LayerMaidElytraGecko(GeckoEntityMaidRenderer<?> renderer, EntityRendererProvider.Context context) {
-        super((GeckoEntityMaidRenderer<Mob>) renderer);
+    public LayerMaidElytraGecko(IGeoEntityRenderer<?> renderer, EntityRendererProvider.Context context) {
+        super((IGeoEntityRenderer<Mob>) renderer);
         this.elytraModel = new ElytraModel<>(context.bakeLayer(ModelLayers.ELYTRA));
     }
 
-    private LayerMaidElytraGecko(GeckoEntityMaidRenderer<Mob> renderer, ElytraModel<Mob> model) {
+    private LayerMaidElytraGecko(IGeoEntityRenderer<Mob> renderer, ElytraModel<Mob> model) {
         super(renderer);
         this.elytraModel = model;
     }
 
     @Override
-    public GeoLayerRenderer<Mob, GeckoEntityMaidRenderer<Mob>> copy(GeckoEntityMaidRenderer<Mob> renderer) {
+    public GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> copy(IGeoEntityRenderer<Mob> renderer) {
         return new LayerMaidElytraGecko(renderer, this.elytraModel);
     }
 
@@ -126,6 +127,25 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, GeckoEntityMaidR
     public void render(PoseStack poseStack, MultiBufferSource buffer, int light, Mob mob,
                        float limbSwing, float limbSwingAmount, float partialTick,
                        float ageInTicks, float netHeadYaw, float headPitch) {
+        // v1.2.0 实测五百四十八【YSM 兼容】：装了「是，史蒂夫模型」时，TLM 会把女仆交给
+        // YSM 的渲染器（`EntityMaidRenderer.initYsmModelRenderer`：ysmMaidRenderer =
+        // IGeoEntityRenderer<Mob>），并把既有 geo 图层逐个 `copy` 到它上面。
+        //
+        // 【旧写法为什么直接黑屏进不去游戏】本层原先把 R 写死成 `GeckoEntityMaidRenderer<Mob>`，
+        // 而 `GeoLayerRenderer<T, R extends IGeoEntityRenderer<T>>` 的 `copy(R)` 在泛型擦除后
+        // 生成的桥接方法会 `checkcast GeckoEntityMaidRenderer`；YSM 那个渲染器只实现了
+        // `IGeoEntityRenderer`（继承的是 YSM 自己的类），于是 copy 抛
+        // ClassCastException → `EntityRenderers.createEntityRenderers` 整体中断
+        // → `Minecraft.abortResourcePackRecovery`（资源重载被中止、实体渲染器没建起来）
+        // → 黑屏。现在 R 改为公共上界 `IGeoEntityRenderer<Mob>`，桥接方法不再强转。
+        //
+        // 【为什么在 YSM 下直接跳过】本层的挂点逻辑依赖 Gecko 骨骼表
+        // （`AnimatedGeoModel.bones()` 里的 ElytraLocator/Elytra/UpperBody/Root），
+        // YSM 模型没有这套骨骼，硬画只会把翅膀堆在原点——那比不画更糟。
+        // 女仆的背部物品/鞘翅在 YSM 那条链上由 TLM 自己的图层负责。
+        if (!(getRenderer() instanceof GeckoEntityMaidRenderer)) {
+            return;
+        }
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
