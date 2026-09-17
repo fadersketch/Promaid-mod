@@ -1,5 +1,60 @@
 ﻿【版本号说明】promaid 已正式发布：自 V1.0.4 起不再沿用内测阶段的 1.5.X 版本号，正式发布版本号从 1.0.X 开始计，此前的内测版本号全部作废。
 
+## 实测五百四十八【装了「是，史蒂夫模型」(YSM) 时黑屏进不去游戏：鞘翅图层的泛型参数写死导致 ClassCastException】
+
+### 现象
+
+同时装本模组与「是，史蒂夫模型」(Yes Steve Model, YSM) 时，游戏能启动、能加载资源，
+然后**卡在黑屏**进不去（日志里是 `Minecraft.abortResourcePackRecovery`）。
+
+### 根因（一个 checkcast）
+
+TLM 自带 YSM 联动：装了 YSM 时它把女仆交给 YSM 的渲染器
+（`EntityMaidRenderer.initYsmModelRenderer`，字段 `ysmMaidRenderer` 的类型是
+`IGeoEntityRenderer<Mob>`），并把已有 geo 图层逐个 `copy` 到那个渲染器上。
+
+TLM 的基类是 `GeoLayerRenderer<T, R extends IGeoEntityRenderer<T>>`，`copy(R)` 的形参
+就是 `R`。我们那两个图层（`LayerMaidElytraGecko` / `LayerMaidSpinAttackGecko`）把 `R`
+写死成 `GeckoEntityMaidRenderer<Mob>`，泛型擦除后 javac 会生成桥接方法，里面
+`checkcast GeckoEntityMaidRenderer`。而 YSM 的渲染器（`com.elfmcys.yesstevemodel.*`）
+只实现了 `IGeoEntityRenderer`、继承的是 YSM 自己的类，**不是 `GeckoEntityMaidRenderer`
+的子类**。于是：
+
+```
+ClassCastException: com.elfmcys.yesstevemodel.ooOoooo0o000Oo0OoOooo0oo
+  cannot be cast to GeckoEntityMaidRenderer
+  at com.maidsmart.client.LayerMaidElytraGecko.copy
+  at TLM EntityMaidRenderer.initYsmModelRenderer
+→ EntityRenderers.createEntityRenderers 整体中断（实体渲染器整批没建起来）
+→ Minecraft.abortResourcePackRecovery → 黑屏
+```
+
+### 改法
+
+1. 两个图层的 `R` 从 `GeckoEntityMaidRenderer<Mob>` **放宽为公共上界
+   `IGeoEntityRenderer<Mob>`**——`copy` 的形参类型随之与擦除后的签名一致，桥接方法里的
+   checkcast 直接消失；构造参数放宽为 `IGeoEntityRenderer<?>`，两个调用点（mixin）不用改。
+2. `render()` 开头加 `getRenderer() instanceof GeckoEntityMaidRenderer` 守卫：走 YSM 时
+   **不画**我们的鞘翅与旋转特效。本层的挂点逻辑依赖 Gecko 骨骼表
+   （`AnimatedGeoModel.bones()` 里的 ElytraLocator/Elytra/UpperBody/Root），YSM 模型没有
+   那套骨骼，硬画只会把翅膀堆在原点——那比不画更糟。女仆的背部物品/鞘翅在 YSM 那条链上
+   由 TLM 自己的图层负责。
+3. **两树同步**：1.20.1 的 TLM 1.5.3 同样带 `initYsmModelRenderer` + `ysmMaidRenderer`，
+   装了 YSM 一样会崩，所以这不是 1.21.1 独有的问题。
+
+### 验证
+
+- 两树编译零错；重新打包后 javap 确认两个图层的类声明与 `copy` 形参都已是
+  `IGeoEntityRenderer`，桥接 checkcast 消失；
+- 没装 YSM 时 `getRenderer()` 必然是 Gecko 渲染器，守卫不生效，原有行为不变。
+
+### 顺带说明（另一个"黑屏"传闻无关的坑）
+
+把 jar 换进 `mods` 目录**必须在游戏完全退出后做**。运行中替换文件会让 ModLauncher
+按旧偏移去读新文件，表现为"某个类明明在包里却 ClassNotFoundException"，同样会死在
+加载阶段（实测五百四十六 那次的崩溃日志就是这种）。
+
+
 ## 实测五百四十七【空袭牵引绳：空袭期间离主人超出半径（默认 100 格）就立刻传送回主人身边】
 
 ### 一、"自己回不来"是怎么来的（三道路闸全对她关着）
