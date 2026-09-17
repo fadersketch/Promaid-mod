@@ -53,6 +53,13 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // v1.2.0：飞行作战——滑翔途中禁止 TLM 跟随瞬移。滑翔中/猛击下落中被
+            // teleportToOwner 拽回主人身边 = 这一轮飞行与猛击全部白费（与 1.21.1 的
+            // "滑翔途中不能触发传送"同一条硬约束）。
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

@@ -444,12 +444,118 @@ public class MasterDeathTeleportHandler {
     }
 
     /**
+     * v1.2.0【复活原地摔死根因修复】：原版等效落点——床/重生锚用原版
+     * findStandUpPosition 算出的精确站位（与玩家复活站的地方一模一样），
+     * 其余情况退回 findSafeLanding 的柱状扫描。
+     *
+     * 为什么必须有这个：findSafeLanding 只能保证"两格净空、脚下有面"，它不保证
+     * 落点【在重生点方块旁边】。床是两格宽的方块，站在床上方 1 格时脚下是床——
+     * 看着能站，实际上一旦床被判定为不可站立就会掉进下一格；而 findSafeLanding
+     * 的"向下贴地"循环会一路把她放到地面，与原版复活位置差出半张床的距离。
+     * 原版玩家复活走的就是 findStandUpPosition（床边一圈扫描 + 碰撞校验），
+     * 直接复用才能保证"女仆落在主人复活时站的那一格"。
+     */
+    public static double[] respawnLanding(ServerLevel level, net.minecraft.core.BlockPos respawn) {
+        // 床：原版 findStandUpPosition（含床边一圈站位 + 碰撞箱校验）
+        try {
+            net.minecraft.world.level.block.state.BlockState st = level.m_8055_(respawn);
+            net.minecraft.world.level.block.Block b = st.m_60734_();
+            if (b instanceof net.minecraft.world.level.block.RespawnAnchorBlock) {
+                java.util.Optional<net.minecraft.world.phys.Vec3> p =
+                        net.minecraft.world.level.block.RespawnAnchorBlock.m_55839_(
+                                net.minecraft.world.entity.EntityType.f_20532_, level, respawn);
+                if (p.isPresent()) {
+                    net.minecraft.world.phys.Vec3 v = p.get();
+                    return new double[]{v.f_82479_, v.f_82480_, v.f_82481_};
+                }
+            } else if (b instanceof net.minecraft.world.level.block.BedBlock) {
+                java.util.Optional<net.minecraft.world.phys.Vec3> p =
+                        net.minecraft.world.level.block.BedBlock.m_260958_(
+                                net.minecraft.world.entity.EntityType.f_20532_, level, respawn,
+                                st.m_61143_(net.minecraft.world.level.block.BedBlock.f_54117_), 0.0f);
+                if (p.isPresent()) {
+                    net.minecraft.world.phys.Vec3 v = p.get();
+                    return new double[]{v.f_82479_, v.f_82480_, v.f_82481_};
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        // 非床/非锚（/spawnpoint 空地、床边无站位）：退回柱状扫描
+        return findSafeLanding(level, respawn.m_123341_() + 0.5,
+                respawn.m_123342_(), respawn.m_123343_() + 0.5);
+    }
+
+    /**
+     * v1.2.0：清洗死亡快照里的"死亡瞬间状态"，让复活等价于原版复活。
+     *
+     * 女仆的死亡存档是【死亡那一刻】的实体 NBT，里面带着：坠落距离 FallDistance、
+     * 下坠速度 Motion、着火剩余 Fire、死亡计时 DeathTime、受击计时 HurtTime。
+     * 直接 load 出来的话，她会以"还在下坠/还在着火/还在濒死"的状态出现——落地的
+     * 第一 tick 就再吃一次摔落伤害，摔死又触发自动收符，形成死循环。
+     * 这些键对应原版 load 时的默认值（0 / 空），删掉即可回到干净状态。
+     */
+    public static void sanitizeDeathState(net.minecraft.nbt.CompoundTag nbt) {
+        if (nbt == null) {
+            return;
+        }
+        try {
+            for (String k : new String[]{"FallDistance", "Motion", "Fire",
+                    "DeathTime", "HurtTime", "HurtByTimestamp"}) {
+                nbt.m_128473_(k);
+            }
+            nbt.m_128350_("FallDistance", 0.0f);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * v1.2.0：复活血洗完——清死亡/受击/坠落状态、清着火、清负面效果，并给一段
+     * 短效抗性提升。这是"复活后立刻又摔死"的第二道保险（第一道是落点修正）：
+     * 即便落点因地形被改动而不理想，这两秒内她也不会被摔伤/烧死/中毒致死，
+     * 玩家有时间发现并处理。
+     */
+    public static void cleanseAfterRevive(net.minecraft.world.entity.LivingEntity maid) {
+        try {
+            maid.f_19789_ = 0.0f;            // fallDistance
+            maid.f_20919_ = 0;               // deathTime（真正的死亡计时）
+            maid.f_20916_ = 0;               // hurtTime
+            maid.f_20917_ = 0;               // hurtDuration
+            maid.f_19802_ = 20;              // invulnerableTime：1 秒硬直免疫，防落地首 tick 吃伤
+            maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_); // 速度清零
+            maid.m_20095_();                 // clearFire：清着火
+            // 清全部负面效果（中毒/凋零/燃烧/缓慢等）
+            for (net.minecraft.world.effect.MobEffectInstance ei
+                    : new java.util.ArrayList<>(maid.m_21220_())) {
+                if (ei != null && ei.m_19544_().m_19483_()
+                        == net.minecraft.world.effect.MobEffectCategory.HARMFUL) {
+                    maid.m_21195_(ei.m_19544_());
+                }
+            }
+            // 抗性提升 V + 抗火，各 2 秒（复活保护窗口）
+            maid.m_7292_(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.f_19606_, 40, 4));
+            maid.m_7292_(new net.minecraft.world.effect.MobEffectInstance(
+                    net.minecraft.world.effect.MobEffects.f_19607_, 40, 0));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * v1.5.227：在 (tx, ty, tz) 所在柱子上找安全落点——从 ty 起向上扫描最多 24 格，
      * 找第一个【脚部 + 头部都是空气】的位置（女仆 1.8 格身高需要两格净空，否则
      * 卡进方块 → 实体剔除/模型卡没，"传过去女仆消失"的根因）。
      * v1.5.228：找到空气格后【继续向下走到地面】再落——旧版直接落在第一个空气格
      * 上，若重生点上方有树/高台，女仆落在树顶/高台再坠落（"落地水"刷屏 + 落点
      * 看起来不对）；现在贴地落，无坠落无位移。
+     *
+     * v1.2.0【致命：高度上下界取反，复活必摔死的根因】：
+     * `m_141928_` = getHeight（主世界 384 = 总高度）、`m_141937_` = getMinBuildHeight
+     * （主世界 -64）、`m_151558_` = getMaxBuildHeight（= min + height = 320）。旧版
+     * 写成 minY = getHeight()+1 = 385、limitUp = getMinBuildHeight()-3 = -67，两个
+     * 扫描循环都是【空循环】→ airY 恒 -1 → 走"兜底：原坐标上方 1 格" → 落点其实是
+     * y≈386 的天空。女仆一放出来就自由落体，复活→摔死→自动收符→放出→再摔死，
+     * 无限循环（反馈的"原地反复摔死"）。现在改为 minY = getMinBuildHeight()+1、
+     * limitUp = getMaxBuildHeight()-3，上下界各自归位。
      */
     public static double[] findSafeLanding(ServerLevel level, double tx, double ty, double tz) {
         int x = net.minecraft.util.Mth.m_14107_(tx); // floor
@@ -462,8 +568,8 @@ public class MasterDeathTeleportHandler {
         // 上也照此办理）；②向上找不到时从重生点向【下】继续扫（地下空腔/基地
         // 内部）；③都无果才退回原坐标上方一格。
         boolean netherCeiling = "the_nether".equals(level.m_46472_().m_135782_().m_135815_());
-        int minY = level.m_141928_() + 1; // getMinBuildHeight
-        int limitUp = level.m_141937_() - 3; // getMaxBuildHeight
+        int minY = level.m_141937_() + 1;   // getMinBuildHeight + 1（本维度最低可站层）
+        int limitUp = level.m_151558_() - 3; // getMaxBuildHeight - 3（留出头顶净空）
         if (netherCeiling) {
             limitUp = Math.min(limitUp, 124);
         }
@@ -491,7 +597,7 @@ public class MasterDeathTeleportHandler {
         }
         // 从空气格向下走到地面（下方是空气就继续下移；贴地才落，不悬空不坠落）
         int groundY = airY;
-        while (groundY > level.m_141928_() + 1
+        while (groundY > level.m_141937_() + 1
                 && level.m_8055_(new net.minecraft.core.BlockPos(x, groundY - 1, z)).m_60795_()) {
             groundY--;
         }

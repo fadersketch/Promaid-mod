@@ -68,6 +68,15 @@ public class ScheduleBookScreen extends Screen {
     private boolean pickQuick = false;
     /** 任务选择面板分页 */
     private int pickPage = 0;
+    /** v1.2.0：详情页坐标显示——女仆一直在走动，打开排班表那一刻的快照不可靠，
+     *  所以详情页开着期间每秒向服务端问一次当前位置。coordX=MIN_VALUE 表示
+     *  还没收到回包（首次显示"查询中…"）；coordGone=服务端已找不到她。 */
+    private int coordX = Integer.MIN_VALUE;
+    private int coordY;
+    private int coordZ;
+    private String coordDim = "";
+    private boolean coordGone = false;
+    private int coordTick = 0;
     private static ScheduleBookScreen instance;
 
     private static final String[] MODE_NAMES = {"早班", "晚班", "全天"};
@@ -162,6 +171,23 @@ public class ScheduleBookScreen extends Screen {
         cur.init();
     }
 
+    /**
+     * v1.2.0：服务端坐标回包 → 存下来给渲染层用。
+     * 只认当前正在看的那一只（玩家可能已经换人/退出详情页，迟到的回包直接丢）。
+     * gone=true 时把坐标标记为"不在场"并停止后续刷新。
+     */
+    public static void onCoord(String uuid, boolean gone, String dim, int x, int y, int z) {
+        ScheduleBookScreen cur = instance;
+        if (cur == null || uuid == null || !uuid.equals(cur.selUuid)) {
+            return;
+        }
+        cur.coordGone = gone;
+        cur.coordDim = dim == null ? "" : dim;
+        cur.coordX = x;
+        cur.coordY = y;
+        cur.coordZ = z;
+    }
+
     private ScheduleBookScreen(Screen parent, List<String[]> maids, List<String> taskUids) {
         super(Component.literal("排班表"));
         this.parent = parent;
@@ -254,6 +280,10 @@ public class ScheduleBookScreen extends Screen {
                         // v1.1.0 实测六十四（二次复查修复）：换女仆必须清排班页脏标记——
                         // 残留 true 会让新女仆的排班页不拉数据、显示上一只的槽位
                         this.schedDirty = false;
+                        // v1.2.0：坐标同理清零——不清就有一瞬间显示上一只的位置
+                        this.coordX = Integer.MIN_VALUE;
+                        this.coordGone = false;
+                        this.coordTick = 0;
                         this.init();
                     })
                     .bounds(cx - bw / 2, y, bw, 20).build());
@@ -562,18 +592,33 @@ public class ScheduleBookScreen extends Screen {
         // v1.1.0 实测二百零八：单独传送按键——只把这一只女仆传到身边（跨维度查找；
         // 与列表页「一键集合」同豁免口径：坐着/骑乘/在家模式（排班中）不传，服务端
         // 会回复原因；需要强制召回先关右上角排班）
+        // v1.2.0：这一行拆成两个方向——「召她过来」是她过来，「去她身边」是我过去
+        // （反向需求：想知道她在哪、想直接过去找她）。两键同宽并排，纵向不多占一行
+        // （240 高最小窗口下再加一行会压住底部提示）。
         boolean canSummon = this.selUuid != null && !this.selUuid.isEmpty();
+        int halfW = Math.max(40, (qw - 6) / 2);
         this.addRenderableWidget(Button.builder(
                         Component.literal(canSummon
-                                ? "\u00a7d\u2691 传送到我身边"
-                                : "\u00a77\u2691 传送到我身边（不可用）"),
+                                ? "\u00a7d\u2691 召她过来"
+                                : "\u00a77\u2691 召她过来"),
                         b -> {
                             if (canSummon) {
                                 PacketDistributor.sendToServer(
                                         new ScheduleNetworking.MaidSummonPacket(this.selUuid));
                             }
                         })
-                .bounds(qx, y, qw, 20).build());
+                .bounds(qx, y, halfW, 20).build());
+        this.addRenderableWidget(Button.builder(
+                        Component.literal(canSummon
+                                ? "\u00a7d\u2691 去她身边"
+                                : "\u00a77\u2691 去她身边"),
+                        b -> {
+                            if (canSummon) {
+                                PacketDistributor.sendToServer(
+                                        new ScheduleNetworking.MaidTeleportToPacket(this.selUuid));
+                            }
+                        })
+                .bounds(qx + halfW + 6, y, halfW, 20).build());
         // 改名行（实测六十，借鉴 Maid_Roster 的重命名——直接改女仆自定义名，等同命名牌）
         y += 26;
         EditBox nameBox = new EditBox(this.font, qx, y + 1, qw - 96, 18,
@@ -899,6 +944,24 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
             } else {
             g.drawCenteredString(this.font, Component.literal(
                             "\u00a7d\u00a7o" + this.selName + "\u00a7r\u00a7c 的排班"), cx, TOP_TITLE_Y, 0xFFFFFF);
+            // v1.2.0：快捷设置页显示她此刻的位置（每秒向服务端问一次——她一直在走动，
+            // 打开排班表那一刻的快照不作数）。第 2 页排班不需要坐标，不画。
+            // y 取 47：页签行下沿 46、内容区首行 58，正好塞进这条空档（不压页签/不压按钮）
+            if (this.detailPage == 0 && !this.waiting) {
+                if (this.coordGone) {
+                    g.drawCenteredString(this.font, Component.literal(
+                                    "\u00a77她现在不在场（已被收进魂符或所在区块未加载）"),
+                            cx, 47, 0xAAAAAA);
+                } else if (this.coordX == Integer.MIN_VALUE) {
+                    g.drawCenteredString(this.font, Component.literal("\u00a77位置查询中…"),
+                            cx, 47, 0xAAAAAA);
+                } else {
+                    g.drawCenteredString(this.font, Component.literal(
+                                    "\u00a7e位置：\u00a7f" + this.coordDim + " \u00a7e"
+                                            + this.coordX + " " + this.coordY + " " + this.coordZ),
+                            cx, 47, 0xFFFFFF);
+                }
+            }
             if (this.waiting) {
                 g.drawCenteredString(this.font, Component.literal("\u00a77请求中…"), cx, CONTENT_TOP + 6, 0xAAAAAA);
             } else if (this.detailPage == 1) {
@@ -1059,6 +1122,45 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
         if (this.minecraft.player != null) {
             this.minecraft.player.sendSystemMessage(net.minecraft.network.chat.Component.literal(msg));
         }
+    }
+
+    /* ==================== 坐标轮询（v1.2.0） ==================== */
+
+    /**
+     * v1.2.0：本界面不能暂停单人世界。
+     * Screen 默认 isPauseScreen()=true，而 Minecraft 的暂停判定是
+     * 「有集成服务器 && 当前 Screen.isPauseScreen() && 没开局域网」→ 暂停整个世界；
+     * 一旦暂停，集成服务器不再 tick 连接，于是本界面发出去的包（坐标轮询 / 改名 /
+     * 召唤 / 保存日程）全部堆在通道里，要等关闭界面才被服务端处理——坐标行会永远
+     * 停在「位置查询中…」。与 AbstractContainerScreen / ChatScreen 同口径返回 false
+     * （那正是原版背包、聊天界面不暂停世界的原因），让世界照常跑、服务端实时响应。
+     */
+    @Override
+    public boolean isPauseScreen() {
+        return false;
+    }
+
+    /**
+     * 每秒问一次她的当前位置——只在「详情页 + 快捷设置页」开着时发。
+     * 排班页/任务选择页不需要坐标，列表页更是几十只女仆一起刷，一概不发。
+     * 服务端回了"找不到"（收进魂符/区块卸载）就停，避免无意义地持续发问。
+     */
+    @Override
+    public void tick() {
+        super.tick();
+        if (this.view != VIEW_DETAIL || this.pickSlot >= 0 || this.pickQuick
+                || this.detailPage != 0 || this.waiting) {
+            return;
+        }
+        if (this.selUuid == null || this.selUuid.isEmpty() || this.coordGone) {
+            return;
+        }
+        if (--this.coordTick > 0) {
+            return;
+        }
+        this.coordTick = 20; // 20 tick = 1 秒
+        PacketDistributor.sendToServer(
+                new ScheduleNetworking.MaidCoordRequestPacket(this.selUuid));
     }
 
     @Override

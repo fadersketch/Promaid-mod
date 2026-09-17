@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Deploy the fixed jars to all local instances (single UAC elevation).
 
-1.21.1 NeoForge instance  : patched/promaid-1.1.0-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.21      : patched/promaid-1.1.1.jar   (user's main modpack)
-1.20.1 Forge 47.4.23      : patched/promaid-1.1.1.jar   (test instance)
+1.21.1 NeoForge instance  : patched/promaid-1.2.0-neoforge-1.21.1.jar
+1.20.1 Forge 47.4.21      : patched/promaid-1.2.0.jar   (user's main modpack)
+1.20.1 Forge 47.4.23      : patched/promaid-1.2.0.jar   (test instance)
 Old jars are backed up under patched/backup_old/ first.
 """
 import os
@@ -16,12 +16,12 @@ sys.stdout.reconfigure(encoding='utf-8')
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 JOBS = [
-    (os.path.join(BASE, 'patched', 'promaid-1.1.0-neoforge-1.21.1.jar'),
-     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.1.0-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.1.1.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.1.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.1.1.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.1.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.0-neoforge-1.21.1.jar'),
+     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.2.0-neoforge-1.21.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.0.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.2.0.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.0.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.2.0.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)
@@ -66,6 +66,12 @@ for src, dst in JOBS:
 inner_parts = []
 for tmp, dst, size in staged:
     inner_parts.append("Copy-Item -LiteralPath '%s' -Destination '%s' -Force" % (tmp, dst))
+# v1.2.0 改名（1.1.x → 1.2.0）：同一 modId 的旧包若留在 mods 目录会与新包冲突导致启动失败，
+# 所以在同一次提权里把目标目录下所有 promaid-1.1*.jar 一并删掉（只删本模组的旧版本包）。
+for src, dst in JOBS:
+    d = os.path.dirname(dst)
+    inner_parts.append("Get-ChildItem -LiteralPath '%s' -Filter 'promaid-1.1*.jar' "
+                       "-ErrorAction SilentlyContinue | Remove-Item -Force" % d)
 inner = '; '.join(inner_parts)
 cmd = ['powershell', '-NoProfile', '-Command',
        "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command',"

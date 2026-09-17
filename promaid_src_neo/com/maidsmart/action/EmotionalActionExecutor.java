@@ -29,59 +29,56 @@ import java.util.Set;
  * - giveFoodToOwner：主人饥饿（<15）且背包有熟食时递上一个
  */
 public final class EmotionalActionExecutor {
-    /** 递食白名单（v1.5.206 扩展为原版【全量安全有益食物】）：
-     *  - 熟食/煲汤/蔬果全收录——喂食按饱和度恢复量自动选最优
-     *    （nutrition × saturationModifier × 2.0：金胡萝卜 14.4 最高、熟牛排/猪排 12.8 次之）；
-     *  - 金苹果/附魔金苹果【不在内】——走即时增益道具路径（MaidAidOwnerBehavior.useGoldenApple）；
-     *  - 危险/负面【不喂】——腐肉/蜘蛛眼/毒马铃薯/河豚/紫颂果（瞬移）/可疑炖菜（效果随机），
-     *    以及一切生食（raw_*，生鸡肉有中毒概率）；
-     *  - 牛奶桶/蜂蜜瓶不在内——走"负面效果解除"药物路径（v1.5.252g10：蜂蜜
-     *    只在中毒时喝，不当普通食物消耗）。 */
-    public static final Set<ItemStack> FOODS = new HashSet<>();
     /** v1.5.307：「缺吃的」播报限频（按女仆记，60 秒一次；服务端单线程访问） */
     private static final java.util.Map<java.util.UUID, Long> NO_FOOD_ANNOUNCE = new java.util.HashMap<>();
 
-    static {
-        // 高饱熟食
-        addFood("minecraft:cooked_beef");      // 8 营养 / 12.8 饱和
-        addFood("minecraft:cooked_porkchop");  // 8 / 12.8
-        addFood("minecraft:cooked_mutton");    // 6 / 9.6
-        addFood("minecraft:cooked_salmon");    // 6 / 9.6
-        addFood("minecraft:cooked_chicken");   // 6 / 7.2
-        addFood("minecraft:cooked_rabbit");    // 5 / 6
-        addFood("minecraft:cooked_cod");       // 5 / 6
-        // 煲汤/派（碗装/高营养）
-        addFood("minecraft:rabbit_stew");      // 10 / 12
-        addFood("minecraft:beetroot_soup");    // 6 / 7.2
-        addFood("minecraft:mushroom_stew");    // 6 / 7.2
-        addFood("minecraft:pumpkin_pie");      // 8 / 4.8
-        // 蔬果/主食（含最高饱和的金胡萝卜）
-        addFood("minecraft:golden_carrot");    // 6 / 14.4（饱和最高）
-        addFood("minecraft:baked_potato");     // 5 / 6
-        addFood("minecraft:bread");            // 5 / 6
-        addFood("minecraft:carrot");           // 3 / 3.6
-        addFood("minecraft:apple");            // 4 / 2.4
-        addFood("minecraft:melon_slice");      // 2 / 1.2
-        addFood("minecraft:sweet_berries");    // 2 / 0.4
-        addFood("minecraft:glow_berries");     // 2 / 0.4
-        addFood("minecraft:cookie");           // 2 / 0.4
-        addFood("minecraft:dried_kelp");       // 1 / 0.6
-        // v1.5.288：蜂蜜瓶恢复为投喂食物（反馈："蜂蜜瓶竟然不作为投喂食物"）——
-        // 饱和 14.4 排在中等优先级：主人饿了会投喂、中毒时由负面解除分支优先
-        // 直接喂（解中毒+饱食）。女仆自己背包的蜂蜜仍走 drinkHoneyForPoison
-        //（女仆用 vs 主人投喂是两条独立链路，不冲突）
-        addFood("minecraft:honey_bottle");     // 6 / 1.2（直接喂食时额外解中毒）
-    }
-
-    private static void addFood(String id) {
-        // v1.5.284：getValue 判空——物品不存在时跳过，防 new ItemStack(null) 类加载即崩
-        net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(id));
-        if (item == null) {
-            return;
+    /**
+     * v1.2.0 实测五百一十九：这个物品能不能作为【投喂食物】——通用判定 + 黑名单。
+     *
+     * 【反馈】"女仆的喂食功能可以喂其他mod的食物吗？检测背包中是否有能够喂食的食物的时候
+     * 有没有跳过模组食物？这个提醒是只判定原版食物吗，往女仆背包里塞一堆三明治疯狂跳没食物"
+     *
+     * 【旧版问题】这里原本是 21 项**硬编码原版物品白名单**（{@code Set<ItemStack> FOODS}），
+     * 按物品身份逐个比对 → 任何模组食物（三明治等）都不在内 → 背包塞满也判"没有食物"
+     * → 疯狂播报"我背包里没有吃的了"。而 TLM 自己"女仆饿了吃"那条链
+     * （{@code DefaultMaidHealSelfMeal.isHealMeal}，javap 实证）判据是
+     * **"有食物属性 && 不在黑名单"**，从不看是不是原版——一个模组里两套食物哲学，
+     * 这正是本问题的根源。
+     *
+     * 【现口径】与 TLM 完全同口径：{@code 有 FoodProperties && 不在黑名单}。
+     * 任何注册了食物属性的物品（含模组三明治）都能喂；可吃但有害/浪费的用黑名单排除。
+     * 黑名单是配置项 {@code AID_FOOD_BLACKLIST}（面板「战斗与自保 → 贴身辅助」可改），
+     * 默认放：腐肉/蜘蛛眼/毒马铃薯/河豚/紫颂果/可疑炖菜 + 全部生食 +
+     * **金苹果/附魔金苹果**（这两个刻意保留给"低血即时增益"路径
+     * {@code MaidAidOwnerBehavior.useGoldenApple}，当普通食物喂掉是浪费）。
+     *
+     * 【与"能吃"的分工】本方法只回答"值得喂给她/主人吗"；真正喂食时的原版前提校验
+     * （1.21.1 是 {@code DataComponents.FOOD} 组件）仍在 {@link #feedFoodDirect} 里，两者不冲突。
+     */
+    public static boolean isFeedableFood(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
         }
-        ItemStack stack = new ItemStack(item);
-        if (!stack.isEmpty()) {
-            FOODS.add(stack);
+        try {
+            // ① 通用判定：有食物属性组件（模组食物同样满足——这是本次放宽的核心）
+            if (!stack.has(net.minecraft.core.component.DataComponents.FOOD)) {
+                return false;
+            }
+            // ② 黑名单（配置项，完整注册名；留空 = 不排除任何食物）
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+            if (key == null) {
+                return false;
+            }
+            String id = key.toString();
+            for (String bad : com.maidsmart.config.MaidSmartConfig.AID_FOOD_BLACKLIST.get()) {
+                if (id.equals(bad.trim())) {
+                    return false;
+                }
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false; // 任何判定异常一律视为"不可喂"（保守）
         }
     }
 
@@ -135,14 +132,7 @@ public final class EmotionalActionExecutor {
             if (hs.isEmpty()) {
                 continue;
             }
-            boolean isFood = false;
-            for (ItemStack food : FOODS) {
-                if (food.getItem() == hs.getItem()) {
-                    isFood = true;
-                    break;
-                }
-            }
-            if (!isFood) {
+            if (!isFeedableFood(hs)) {
                 continue;
             }
             double sat = foodSaturation(hs, owner);
@@ -160,14 +150,7 @@ public final class EmotionalActionExecutor {
             if (stack.isEmpty()) {
                 continue;
             }
-            boolean isFood = false;
-            for (ItemStack food : FOODS) {
-                if (food.getItem() == stack.getItem()) {
-                    isFood = true;
-                    break;
-                }
-            }
-            if (!isFood) {
+            if (!isFeedableFood(stack)) {
                 continue;
             }
             double sat = foodSaturation(stack, owner);
@@ -185,10 +168,10 @@ public final class EmotionalActionExecutor {
             if (last == null || now - last >= 60_000L) {
                 NO_FOOD_ANNOUNCE.put(maid.getUUID(), now);
                 String maidName = maid.getDisplayName() != null ? maid.getDisplayName().getString() : "女仆";
-                log.info("aid feed: maid={} owner={} foodLevel={} FOODS={} 背包与双手都无投喂食物（已播报，60 秒限频）",
-                        maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
+                log.info("aid feed: maid={} owner={} foodLevel={} 黑名单={} 背包与双手都无投喂食物（已播报，60 秒限频）",
+                        maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID().toString(),
                         owner.getDisplayName() != null ? owner.getDisplayName().getString() : "?",
-                        foodLevel, FOODS.size());
+                        foodLevel, com.maidsmart.config.MaidSmartConfig.AID_FOOD_BLACKLIST.get().size());
                 maid.getChatBubbleManager().addTextChatBubble("主人，我背包里没有吃的了，给我备点食物吧～");
                 // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
                 if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {

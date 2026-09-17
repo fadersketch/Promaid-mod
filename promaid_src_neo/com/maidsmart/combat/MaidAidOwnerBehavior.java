@@ -558,14 +558,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                boolean isFood = false;
-                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-                    if (food.getItem() == stack.getItem()) {
-                        isFood = true;
-                        break;
-                    }
-                }
-                if (!isFood) {
+                if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(stack)) {
                     continue;
                 }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(stack, sister);
@@ -583,14 +576,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (hs.isEmpty()) {
                     continue;
                 }
-                boolean isFood = false;
-                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-                    if (food.getItem() == hs.getItem()) {
-                        isFood = true;
-                        break;
-                    }
-                }
-                if (!isFood) {
+                if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(hs)) {
                     continue;
                 }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, sister);
@@ -1258,21 +1244,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         return n;
     }
 
-    /** v1.5.215：诊断——女仆背包里可投喂的食物数量（FOODS 白名单） */
+    /** v1.5.215：诊断——女仆背包里可投喂的食物数量（v1.2.0 实测五百一十九：改走通用判定） */
     private static int countFoods(EntityMaid maid) {
         int n = 0;
         try {
             net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (s.isEmpty()) {
-                    continue;
-                }
-                for (net.minecraft.world.item.ItemStack f : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-                    if (!f.isEmpty() && s.is(f.getItem())) {
-                        n += s.getCount();
-                        break;
-                    }
+                if (com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s)) {
+                    n += s.getCount();
                 }
             }
         } catch (Exception ignored) {
@@ -1321,12 +1301,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         if (it == net.minecraft.world.item.Items.HONEY_BOTTLE) {
             return true;
         }
-        for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-            if (food.getItem() == it) {
-                return true;
-            }
-        }
-        return false;
+        // v1.2.0 实测五百一十九：食物判定改走通用判定（有食物属性且不在黑名单）
+        return com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s);
     }
 
     /**
@@ -1423,14 +1399,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (hs.isEmpty()) {
                     continue;
                 }
-                boolean isFood = false;
-                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-                    if (food.getItem() == hs.getItem()) {
-                        isFood = true;
-                        break;
-                    }
-                }
-                if (!isFood) {
+                if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(hs)) {
                     continue;
                 }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, owner);
@@ -1451,14 +1420,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (stack.isEmpty()) {
                     continue;
                 }
-                boolean isFood = false;
-                for (ItemStack food : com.maidsmart.action.EmotionalActionExecutor.FOODS) {
-                    if (food.getItem() == stack.getItem()) {
-                        isFood = true;
-                        break;
-                    }
-                }
-                if (!isFood) {
+                if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(stack)) {
                     continue;
                 }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(stack, owner);

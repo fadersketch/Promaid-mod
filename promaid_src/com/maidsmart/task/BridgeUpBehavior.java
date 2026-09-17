@@ -598,6 +598,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                             tx, y, tz))) {
                 continue;
             }
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
+                continue;
+            }
             Item item = takeBuildBlock(maid);
             if (item == null) {
                 return false;
@@ -656,6 +661,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.tool.DangerBlocks.enabled()
                     && (com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 1, tz)
                             || com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 2, tz))) {
+                continue;
+            }
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
                 continue;
             }
             Item item = takeBuildBlock(maid);
@@ -731,6 +741,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                             place.m_123341_(), place.m_123342_(), place.m_123343_())
                             || com.maidsmart.tool.DangerBlocks.cellDangerous(level,
                             tx, y, tz))) {
+                continue;
+            }
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
                 continue;
             }
             Item item = takeBuildBlock(maid);
@@ -853,6 +868,11 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double headY = maid.m_20191_().m_82374_(net.minecraft.core.Direction.Axis.Y);
         BlockPos headPos = new BlockPos((int) maid.m_20185_(), (int) (headY + 0.05), (int) maid.m_20189_());
         if (!level.m_8055_(headPos).m_60795_() || !level.m_8055_(headPos.m_7918_(0, 1, 0)).m_60795_()) {
+            return;
+        }
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
             return;
         }
         Item item = takeBuildBlock(maid);

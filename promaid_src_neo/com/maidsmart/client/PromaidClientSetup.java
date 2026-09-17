@@ -38,6 +38,11 @@ public final class PromaidClientSetup {
                 com.maidsmart.client.PromaidClientSetup::onClientTickPost);
     }
 
+    /** v1.2.0：指标石预览渲染器（绿框跟随指针 / 红框锁定 / 橙色幽灵格 + 长射线锁定） */
+    public static void registerIndexStoneHooks() {
+        com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();
+    }
+
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
         com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
     }

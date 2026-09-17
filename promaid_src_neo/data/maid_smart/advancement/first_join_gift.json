@@ -1,0 +1,17 @@
+{
+  "criteria": {
+    "given": {
+      "trigger": "minecraft:impossible"
+    }
+  },
+  "requirements": [
+    [
+      "given"
+    ]
+  ],
+  "rewards": {
+    "loot": [
+      "maid_smart:gift/first_join"
+    ]
+  }
+}

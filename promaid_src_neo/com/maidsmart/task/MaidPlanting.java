@@ -250,27 +250,73 @@ public final class MaidPlanting {
                 logAttempt(level, maid, "no-spot", bagCount, handCount, 0);
                 return; // 范围内没有可种土块：冷却后重试
             }
-            // 3) 种下（消耗对应来源格：手部栏 extractItem / 背包 extractItem）
-            // 实测二百三十七：强转改 BlockItem——物品标签口径下的树苗可能是普通
-            // BlockItem 子类（mangrove_propagule 等），ItemNameBlockItem 强转会炸
+            // 3) 先【扣料】再【落地】——顺序必须是"搭一个扣一个"。
+            // v1.2.0 实测四百八十二：旧版先 setBlock 再 extractItem，且完全没检查
+            // 扣除结果——扣除失败（槽位被并发改动/物品被拿走）时树苗已经种下去了，
+            // 等于凭空多出一棵苗（生存可刷）。改为：扣成功才放；扣不到直接放弃本轮。
             Block saplingBlock = ((net.minecraft.world.item.BlockItem) sapling.getItem()).getBlock();
+            if (!takeOneSapling(maid, handSlot, bagSlot)) {
+                logAttempt(level, maid, "take-failed", bagCount, handCount, -1);
+                return; // 扣料失败 → 不放置（下一轮冷却后重试）
+            }
             level.setBlock(spot, saplingBlock.defaultBlockState(), 3);
             level.levelEvent(2001, spot, Block.getId(saplingBlock.defaultBlockState()));
-            try {
-                if (handSlot >= 0) {
-                    ((net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
-                            .extractItem(handSlot, 1, false);
-                } else {
-                    maid.getMaidInv().extractItem(bagSlot, 1, false);
-                }
-            } catch (Exception ignored) {
-            }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             LOGGER.info("plant sapling: maid={} pos={} sapling={}",
                     maid.getUUID(), spot, net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(saplingBlock));
         } catch (Throwable t) {
             LOGGER.error("plant tick error", t);
         }
+    }
+
+    /**
+     * v1.2.0 实测四百八十二：真实扣掉 1 个树苗（手部栏优先，其次背包）。
+     *
+     * 与其它消耗点同口径——`extractItem(..., false)` 直接操作存储，返回栈必非空才算成功
+     * （封装 handler 返回副本时扣不掉的坑，见工程其它消耗点注释）。
+     *
+     * @return true = 确实扣掉了 1 个
+     */
+    private static boolean takeOneSapling(EntityMaid maid, int handSlot, int bagSlot) {
+        try {
+            if (handSlot >= 0) {
+                ItemStack taken = ((net.neoforged.neoforge.items.IItemHandlerModifiable)
+                        maid.getHandsInvWrapper()).extractItem(handSlot, 1, false);
+                if (!taken.isEmpty()) {
+                    return true;
+                }
+            }
+            if (bagSlot >= 0) {
+                ItemStack taken = maid.getMaidInv().extractItem(bagSlot, 1, false);
+                if (!taken.isEmpty()) {
+                    return true;
+                }
+            }
+            // 槽位已变（并发改动）→ 退化为按物品搜一遍
+            net.neoforged.neoforge.items.IItemHandler hands = maid.getHandsInvWrapper();
+            for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                if (!isSaplingItem(hands.getStackInSlot(i))) {
+                    continue;
+                }
+                ItemStack taken = ((net.neoforged.neoforge.items.IItemHandlerModifiable) hands)
+                        .extractItem(i, 1, false);
+                if (!taken.isEmpty()) {
+                    return true;
+                }
+            }
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (!isSaplingItem(inv.getStackInSlot(i))) {
+                    continue;
+                }
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (!taken.isEmpty()) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /** v1.1.0 实测二百三十一：findPlantSpot 的统计版——返回 [找到(0/1), x, y, z]；

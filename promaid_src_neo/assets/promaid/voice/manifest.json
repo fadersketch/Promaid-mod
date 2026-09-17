@@ -1,6 +1,11 @@
 {
   "entries": [
     {
+      "text": "空战装备不齐",
+      "file": "flight_not_ready.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "建好啦！来看看我搭的",
       "file": "build_done.ogg",
       "mode": "contains"

@@ -1,0 +1,12 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "minecraft:smooth_stone" }
+  },
+  "result": { "id": "maid_smart:index_stone", "count": 1 }
+}

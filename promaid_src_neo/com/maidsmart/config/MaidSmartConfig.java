@@ -26,6 +26,8 @@ public final class MaidSmartConfig {
     public static final ModConfigSpec.IntValue BUILD_STRUCTURE_MAX_BLOCKS;
     public static final ModConfigSpec.IntValue BUILD_MAX_MAIDS;
     public static final ModConfigSpec.BooleanValue BUILD_ORIGIN_PLAYER;
+    /** v1.2.0：指标石（临时蓝图制作器）总开关 */
+    public static final ModConfigSpec.BooleanValue BUILD_INDEX_STONE;
 /** v1.5.316：红石机器专属搭建（专属顺序 + 活建造 + 自动放矿车），默认开 */
 public static final ModConfigSpec.BooleanValue BUILD_MACHINE_SMART;
 // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期压制一切 TNT 点火
@@ -326,6 +328,11 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.IntValue COMBAT_WATER_LANDING_SCAN;
     /** v1.1.0：落地雪（细雪桶版落地水——下界也能用） */
     public static final ModConfigSpec.BooleanValue COMBAT_SNOW_CLUTCH;
+    // v1.2.0：落地雪的独立数值——旧版只借用水的触发高度/保持时长/下探格数，
+    // 面板里只有水的项、雪的调不了；现在两项各自可调
+    public static final ModConfigSpec.DoubleValue COMBAT_SNOW_FALL_DISTANCE;
+    public static final ModConfigSpec.IntValue COMBAT_SNOW_HOLD;
+    public static final ModConfigSpec.IntValue COMBAT_SNOW_LANDING_SCAN;
     // v1.5.134：单兵作战战术（替代已删除的 v1.5.132 战斗协同——PVP 式走位/拉扯/时机格挡）
     public static final ModConfigSpec.BooleanValue COMBAT_TACTICS;
     public static final ModConfigSpec.BooleanValue COMBAT_TACTICS_MELEE;
@@ -340,11 +347,50 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_MACE_WIND_CHARGE;
     public static final ModConfigSpec.IntValue COMBAT_MACE_COOLDOWN;
     public static final ModConfigSpec.IntValue COMBAT_MACE_TRIGGER_RANGE;
+    // v1.2.0（1.21.1 专属）：飞行作战——鞘翅 + 重锤 + 烟花三件齐备才激活的新作战模式
+    // （照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那套：滑翔 + 烟花推进 + 下落猛砸）
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_MODE;
+    /** v1.2.0 实测四百六十九：飞行作战时免疫"鞘翅撞墙伤害"（默认开，属生存与复活分区） */
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_NO_WALL_DAMAGE;
+    /**
+     * v1.2.0 实测四百九十四：空袭时免疫【摔落伤害】（**默认关**，属生存与复活分区）。
+     *
+     * 默认关是有意的：空袭的落地水/雪本身就能接住（见 WaterClutchBehavior 的空袭
+     * 落地缓冲分支），这条是"即使没桶/没接住也不摔死"的硬保险。用户明确要求默认关。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_NO_FALL_DAMAGE;
+    /**
+     * v1.2.0 实测五百三十四：激流三叉戟的**旋转突进**（默认开）。
+     *
+     * 需求原文："能不能想办法把玩家一的代码套到女仆身上呢？当处于攻击模式/近战空袭且
+     * 手中的武器为激流三叉戟时调用。"
+     *
+     * 开启后，攻击模式 / 近战空袭下主手拿着激流三叉戟时，她会照原版玩家的方式
+     * 朝目标旋转突进（撞到谁就打谁）。默认开——这是"激流三叉戟"这个附魔存在的意义，
+     * 关掉等于把她手里的激流三叉戟降级成普通三叉戟。
+     */
+    public static final ModConfigSpec.BooleanValue RIPTIDE_DASH_ENABLE;
+    /**
+     * v1.2.0 实测五百三十五：弩是否可以用**普通烟花**（无爆炸组件）当弹药（默认开）。
+     *
+     * 默认开 = 任意烟花都能当弩弹药，与原版 `CrossbowItem` 的弹药谓词一致
+     * （玩家拿一叠普通烟花配弩照样能射）。
+     * 关掉 = 只有**攻击性烟花**（合成时放了烟火之星、带 `Explosions` 的那种）才当弹药，
+     * 普通烟花留着当飞行燃料，绝不被弩烧掉。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_CROSSBOW_PLAIN_FIREWORK;
+    /**
+     * v1.2.0 实测五百零三：远程空袭的**近身弹开**（默认开）。
+     *
+     * 需求："周围三格内出现怪物时女仆被弹开（强制加一个远离怪物的速度矢量），
+     * 防止远程攻击时还往敌人身上飞、下落途中被贴脸打死。女仆自己被弹开更平衡，
+     * 弹开敌人太超模（也保证狭小空间内敌人仍有命中的可能）。"
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_RANGED_PUSH;
     // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
     // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_LETHAL_GUARD;
-    public static final ModConfigSpec.DoubleValue SOUL_SPELL_RELEASE_RATIO;
     public static final ModConfigSpec.DoubleValue SOUL_SPELL_OWNER_RADIUS;
     public static final ModConfigSpec.IntValue SOUL_SPELL_COOLDOWN_SECONDS;
     // 实测四百一十六：女仆自动复活（死亡后墓碑到期消失，在主人重生点复活）
@@ -369,6 +415,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.1.0：女仆之间互相支援（同主人、16 格内的姐妹低血/着火时投药水/喂食）
     public static final ModConfigSpec.BooleanValue AID_MAID_MUTUAL;
     public static final ModConfigSpec.IntValue AID_FOOD_THRESHOLD;
+    // v1.2.0 实测五百一十九：投喂食物黑名单（通用判定 + 黑名单）
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> AID_FOOD_BLACKLIST;
     public static final ModConfigSpec.DoubleValue AID_HEALTH_THRESHOLD;
     public static final ModConfigSpec.BooleanValue TORCH_PLACER_ENABLE;
     // v1.1.0 实测六十二：女仆着火不传主人
@@ -399,6 +447,9 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
     // 实测四百四十三：悬空禁搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚统一闸口）
     public static final ModConfigSpec.BooleanValue MISC_NO_PLACE_IN_AIR;
+    // 实测五百三十六：不得搭在主人身上（目标格被主人碰撞箱占着就不搭——
+    // 防把主人挤住/卡住；覆盖四个自主搭块模块 + 插火把 + smart_place + 蓝图/碑石建造）
+    public static final ModConfigSpec.BooleanValue MISC_NO_PLACE_ON_OWNER;
     // 实测四百四十八：蛋糕"可食用"特性开关（默认开——关掉后蛋糕不再是可吃物品）
     public static final ModConfigSpec.BooleanValue MISC_CAKE_EDIBLE;
     // v1.1.0 实测一百五十八：兼容高炉与烟熏炉（烟熏炉按烟熏配方喂生食、高炉按高炉配方喂矿石/粗金属）
@@ -519,6 +570,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.build.maxMaids").defineInRange("maxMaids", 30, 8, 64);
         BUILD_ORIGIN_PLAYER = BUILDER.comment("建造地点基准：true=玩家脚下（默认），false=女仆脚下")
                 .translation("config.promaid.build.originPlayer").define("originPlayer", true);
+        // v1.2.0：指标石（临时蓝图制作器）——右击方块锁定（绿→红）→ 右击女仆绑定
+        // → 两点之间的空气格组成临时蓝图，女仆立刻用背包/主人背包里数量最多的
+        // 可搭方块逐格填充（材料不固定，搭路同款取材规则）
+        BUILD_INDEX_STONE = BUILDER.comment("指标石（默认开）：手持指标石右击方块锁定（绿→红，可锁很远）→ 右击你的女仆绑定 → 从女仆所在格到锁定格之间的空气方块组成临时蓝图，她立刻从自己背包（不够从你背包）取材料逐格填充，材料不固定（数量最多者优先、必须有碰撞）。关闭后指标石退化为普通物品")
+                .translation("config.promaid.build.indexStone").define("indexStone", true);
         // v1.5.316：红石机器改革开关——机器专属搭建顺序 + 活建造（去禁锢）
         BUILD_MACHINE_SMART = BUILDER.comment("红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→惰性机构→活动件→传感→动力源→TNT，动力源最后落位）+ 活建造（红石/水流随放随算），机器建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默放置+完工唤醒）")
                 .translation("config.promaid.build.machineSmart").define("machineSmart", true);
@@ -1020,7 +1076,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_WATER_CLUTCH = BUILDER.comment("落地水（有水桶+坠落自动放水缓冲）")
                 .translation("config.promaid.combat.waterClutch").define("waterClutch", true);
         COMBAT_WATER_FALL_DISTANCE = BUILDER.comment("落地水触发高度（格）")
-                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 6.0, 2.0, 20.0);
+                .translation("config.promaid.combat.waterFallDistance").defineInRange("waterFallDistance", 4.0, 2.0, 20.0);
         // v1.5.199：水桶垫水——岩浆逃生时放水灭火（1 秒后收回）
         COMBAT_WATER_BUCKET_LAVA = BUILDER.comment("岩浆逃生放水（垫高后周围无水源且包里有水桶 → 在自己垫的方块上放水灭火，1 秒后收回；岩浆源可能变黑曜石）")
                 .translation("config.promaid.combat.waterBucketLava").define("waterBucketLava", true);
@@ -1081,9 +1137,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.soulSpellEnable").define("soulSpellEnable", true);
         SOUL_SPELL_LETHAL_GUARD = BUILDER.comment("致死伤害保护（默认开）：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收")
                 .translation("config.promaid.combat.soulSpellLethalGuard").define("soulSpellLethalGuard", true);
-        SOUL_SPELL_RELEASE_RATIO = BUILDER.comment("释放血量比（默认 0.35）：自动收的魂符释放时女仆恢复的血量比例（写入魂符数据，TLM 释放逻辑读取）")
-                .translation("config.promaid.combat.soulSpellReleaseRatio")
-                .defineInRange("soulSpellReleaseRatio", 0.35, 0.01, 1.0);
         SOUL_SPELL_OWNER_RADIUS = BUILDER.comment("主人收符半径（格，默认 24）：女仆与主人距离超过此值不自动收符（太远收不了，魂符在主人背包）")
                 .translation("config.promaid.combat.soulSpellOwnerRadius")
                 .defineInRange("soulSpellOwnerRadius", 24.0, 1.0, 256.0);
@@ -1141,8 +1194,17 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("waterLandingScan", 2, 2, 16);
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
         // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
-        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水")
+        COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；触发高度/保持时长/下探格数各自独立可调（见下方三项），两者都有桶时优先用水")
                 .translation("config.promaid.combat.snowClutch").define("snowClutch", true);
+        // v1.2.0：落地雪独立数值（旧版借用水的三项；默认与落地水一致，保持旧行为）
+        COMBAT_SNOW_FALL_DISTANCE = BUILDER.comment("落地雪触发高度（格，默认 4）：累计坠落高度超过此值才铺雪垫缓冲")
+                .translation("config.promaid.combat.snowFallDistance").defineInRange("snowFallDistance", 4.0, 2.0, 20.0);
+        COMBAT_SNOW_HOLD = BUILDER.comment("落地雪保持时长（tick，默认 5）：铺出的细雪保留多久后收回（上限 100 tick = 5 秒 < 细雪冻伤线 140 tick——安全）")
+                .translation("config.promaid.combat.snowHold")
+                .defineInRange("snowHold", 5, 5, 100);
+        COMBAT_SNOW_LANDING_SCAN = BUILDER.comment("落地雪下探格数（默认 2）：提前向下探测几格判断要不要铺雪垫（防高空误放）")
+                .translation("config.promaid.combat.snowLandingScan")
+                .defineInRange("snowLandingScan", 2, 2, 16);
         // v1.5.134：单兵作战战术（v1.5.132 战斗协同已删除——协同不如单兵 PVP 操作感）
         COMBAT_TACTICS = BUILDER.comment("单兵作战战术（绕圈走位/打退拉扯/距离控制/时机举盾——PVP 式战斗）")
                 .translation("config.promaid.combat.tactics").define("tactics", true);
@@ -1172,6 +1234,28 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.maceCooldown").defineInRange("maceCooldown", 60, 20, 400);
         COMBAT_MACE_TRIGGER_RANGE = BUILDER.comment("重锤起跳距离（格，默认 3）：女仆与目标的直线距离在此值内才起跳猛击（参考僵尸的 3 格）")
                 .translation("config.promaid.combat.maceTriggerRange").defineInRange("maceTriggerRange", 3, 1, 6);
+        // v1.2.0（1.21.1 专属）：飞行作战（鞘翅 + 重锤 + 烟花三件齐备才激活）
+        COMBAT_FLIGHT_MODE = BUILDER.comment("飞行作战（1.21.1 专属，默认开）：新的作战模式（图标=鞘翅），女仆身上【鞘翅 + 重锤 + 烟花火箭】三件齐备时激活——进入后自己在胸甲穿鞘翅、主手换重锤（烟花不必拿在手上，副手留给你放盾牌/食物），照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那一套：目标升空/自身坠落时张开鞘翅滑翔、用烟花火箭推进接近，到目标上方后收翅俯冲用重锤猛砸（重锤下落加成要求不在滑翔状态，所以必须先收翅），落地后仍有烟花则继续起飞。三件缺任意一件 = 模式不激活，行为表现与普通攻击模式一致（地面近战）。本模式【不响应自主切换】。关闭 = 该模式完全不工作")
+                .translation("config.promaid.combat.flightMode").define("flightMode", true);
+        // v1.2.0 实测四百六十九：飞行作战免疫"鞘翅撞击伤害"（用户指定"开个后门"，默认开）
+        COMBAT_FLIGHT_NO_WALL_DAMAGE = BUILDER.comment("飞行作战免疫鞘翅撞击伤害（默认开）：女仆在飞行作战滑翔中撞到方块不再受到 fly_into_wall 伤害——高速滑翔撞墙在飞行链路里很容易发生，一撞就掉血会打断连招；关闭则恢复原版撞击伤害")
+                .translation("config.promaid.combat.flightNoWallDamage").define("flightNoWallDamage", true);
+        // v1.2.0 实测四百九十四：空袭免疫摔落伤害
+        // v1.2.0 实测五百二十六：**默认关 → 默认开**（用户实测后回头要求"飞行的摔落免疫还是默认开吧"）。
+        // 理由：空袭链路本身是"高空盘旋 + 收翅俯冲"，落地缓冲（水/雪）只是兜底，
+        // 而兜底失败（背包没桶 / 落点被占 / 被打断 / 水里滑翔分支被顶掉）代价是十几点伤害甚至摔死，
+        // 她只有 20 血——那属于"机制没接住"，不该由玩家承担。想按原版吃摔伤随时可关。
+        COMBAT_FLIGHT_NO_FALL_DAMAGE = BUILDER.comment("空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪（与重锤同款特殊落地缓冲）保护")
+                .translation("config.promaid.combat.flightNoFallDamage").define("flightNoFallDamage", true);
+        // v1.2.0 实测五百三十四：激流三叉戟的旋转突进（用户点名"把玩家的代码套到女仆身上"）
+        RIPTIDE_DASH_ENABLE = BUILDER.comment("激流三叉戟旋转突进（默认开）：攻击模式 / 近战空袭下主手拿着【激流】三叉戟时，她会照原版玩家的方式朝目标旋转突进（撞到谁就打谁，按等级决定冲量与音效）。默认开——这是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍")
+                .translation("config.promaid.combat.riptideDash").define("riptideDash", true);
+        // v1.2.0 实测五百三十五：普通烟花能否当弩弹药（用户要求"加一下开关"）
+        COMBAT_CROSSBOW_PLAIN_FIREWORK = BUILDER.comment("弩可用普通烟花当弹药（默认开）：开启后任意烟花火箭都能当弩的弹药——与原版玩家一致（原版 CrossbowItem 的弹药谓词不看有没有爆炸组件），代价是极少数情况下会烧掉一枚本可当飞行燃料的普通烟花。关闭 = 只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用")
+                .translation("config.promaid.combat.crossbowPlainFirework").define("crossbowPlainFirework", true);
+        // v1.2.0 实测五百零三：远程空袭近身弹开（用户指定，默认开）
+        COMBAT_FLIGHT_RANGED_PUSH = BUILDER.comment("远程空袭近身弹开（默认开）：怪物贴到 3 格内时，女仆会被施加一个【远离怪物】的速度矢量并保持 1.5 秒，防止她在远程攻击时仍往敌人身上飞、下落途中被贴脸打死。只弹开女仆自己、不弹开怪物——她脱离的同时也就离开了输出位，且在狭小空间（墙角/洞穴）里跑不掉，所以敌人仍有命中机会。关闭 = 恢复旧行为（贴着怪物盘旋）")
+                .translation("config.promaid.combat.flightRangedPush").define("flightRangedPush", true);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
@@ -1185,6 +1269,36 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 只为确认"只要不满就喂"）
         AID_FOOD_THRESHOLD = BUILDER.comment("投喂触发饱食度（4-20：主人饱食度低于此值自动喂食；20=只要不满就喂）")
                 .translation("config.promaid.combat.aidFoodThreshold").defineInRange("aidFoodThreshold", 12, 4, 20);
+        // v1.2.0 实测五百一十九（反馈："女仆的喂食功能可以喂其他mod的食物吗？检测背包中是否有能够
+        // 喂食的食物的时候有没有跳过模组食物？这个提醒是只判定原版食物吗，往女仆背包里塞一堆三明治
+        // 疯狂跳没食物"）：投喂判定从【21 项硬编码原版白名单】改为【通用判定 + 黑名单】——
+        // 与 TLM 自己的 DefaultMaidHealSelfMeal.isHealMeal 同口径（"有 FoodProperties 且不在
+        // 黑名单"），模组食物（三明治等）现在也能喂，可吃但有害的用本黑名单排除。
+        // 默认黑名单 = 腐肉/蜘蛛眼/毒马铃薯/河豚/紫颂果/可疑炖菜 + 全部生食 + 金苹果/附魔金苹果
+        //（金苹果系列刻意留给"低血即时增益"路径 useGoldenApple）。
+        // v1.2.0 实测五百二十五：补上【不祥之瓶】——它在 1.21 带食物组件、能"喝"，
+        // 于是被通用判定当成普通食物，喂下去等于给女仆挂【不祥之兆】（袭击/试炼触发条件）。
+        // 玩家喂她是为了回饱食度，不该顺手给她上一层负面标记，故默认拉黑。
+        AID_FOOD_BLACKLIST = BUILDER.comment("投喂食物黑名单（完整注册名，逗号分隔；留空 = 只按\"能吃\"判定，所有食物可喂）")
+                .translation("config.promaid.combat.aidFoodBlacklist")
+                .defineList("aidFoodBlacklist", java.util.List.of(
+                        "minecraft:rotten_flesh",
+                        "minecraft:spider_eye",
+                        "minecraft:poisonous_potato",
+                        "minecraft:pufferfish",
+                        "minecraft:chorus_fruit",
+                        "minecraft:suspicious_stew",
+                        "minecraft:beef",
+                        "minecraft:porkchop",
+                        "minecraft:chicken",
+                        "minecraft:mutton",
+                        "minecraft:rabbit",
+                        "minecraft:cod",
+                        "minecraft:salmon",
+                        "minecraft:tropical_fish",
+                        "minecraft:golden_apple",
+                        "minecraft:enchanted_golden_apple",
+                        "minecraft:ominous_bottle"), o -> o instanceof String s && !s.isEmpty());
         AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
                 .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.3, 0.1, 1.0);
         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
@@ -1331,6 +1445,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
         MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：重锤跃起中（1.21.1）整段空中都禁；其余情况是坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")
                 .translation("config.promaid.misc.noPlaceInAir").define("noPlaceInAir", true);
+        // 实测五百三十六：不得搭在主人身上（反馈："不得将方块搭在主人（尤其是头部）
+        // 所在位置…即不得将方块搭在主人碰撞箱所触碰到的空气方块位置"）
+        MISC_NO_PLACE_ON_OWNER = BUILDER.comment("不得搭在主人身上（默认开）：目标格被主人碰撞箱占着时不搭方块——防把主人挤住、卡住或盖住头部。覆盖四个自主搭块模块（自保搭高/搭路/挖矿垫脚/伐木垫脚）、插火把、AI 工具 smart_place，以及蓝图建造与碑石建造；蓝图类遇到该情形是【延后】而非跳过——主人让开后自动续建。判据用碰撞箱真正交叠（严格不等式），所以主人站在方块上时不会误判他脚下那格。关掉 = 恢复旧行为（允许搭在主人身上）")
+                .translation("config.promaid.misc.noPlaceOnOwner").define("noPlaceOnOwner", true);
         // 实测四百四十八：蛋糕可食用开关（兜底逃生通道）
         MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）")
                 .translation("config.promaid.misc.cakeEdible").define("cakeEdible", true);
@@ -1497,9 +1615,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         TTS_JAR_PACK_VOLUME = BUILDER.comment("内置语音包音量倍率（默认 1.0，范围 0.1-20.0）：只作用于内置日语语音包的播放音量，与上面的「TTS 语音播放音量倍率」相乘。实测四百二十七：语音素材已做峰值归一化（响度约 +11 dB），1.0~2.0 一般就够；仍嫌小可调到最高 20")
                 .translation("config.promaid.voice.jarPackVolume")
                 .defineInRange("jarPackVolume", 1.0, 0.1, 20.0);
-        TTS_JAR_PACK_MIN_INTERVAL_S = BUILDER.comment("内置语音包最小间隔（秒，默认 8）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸")
+        TTS_JAR_PACK_MIN_INTERVAL_S = BUILDER.comment("内置语音包最小间隔（秒，默认 5）：同一女仆两次播放内置语音之间的最小间隔，防连续系统消息刷屏轰炸。"
+                        + "实测四百七十五：8 → 5 秒——支援/互助类语音与系统消息共用这道门，间隔太长时一场战斗里只播得出一两句，听感上像「支援语音没做」。"
+                        + "调小 = 语音更密（可能重叠），调 0 = 不限制")
                 .translation("config.promaid.voice.jarPackMinIntervalS")
-                .defineInRange("jarPackMinIntervalS", 8, 0, 60);
+                .defineInRange("jarPackMinIntervalS", 5, 0, 60);
         TTS_JAR_PACK_MUTE_NATIVE = BUILDER.comment("播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠")
                 .translation("config.promaid.voice.jarPackMuteNative").define("jarPackMuteNative", true);
         BUILDER.pop();
