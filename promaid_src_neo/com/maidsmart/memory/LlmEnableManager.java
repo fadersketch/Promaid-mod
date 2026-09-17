@@ -60,7 +60,9 @@ public final class LlmEnableManager {
         }
         net.minecraft.nbt.CompoundTag pd = ((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData();
         if (pd.contains(PERSIST_TAG, 1)) {
-            return pd.getTagType(PERSIST_TAG) != 0;
+            // v1.2.0 实测四百八十三【修】：getTagType 返回类型 id（ByteTag 恒为 1 →
+            // `!= 0` 恒真，等于开关关不掉）；必须读值 = getByte。
+            return pd.getByte(PERSIST_TAG) != 0;
         }
         return true; // 默认开
     }

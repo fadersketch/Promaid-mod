@@ -137,11 +137,21 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         return maid.distanceTo(target.get()) <= engageRange(maid);
     }
 
-    /** 接战范围：近战 8 格；远程（弓/弩/三叉戟/枪械 v1.1.0）= 任务搜索半径 */
+    /**
+     * 接战范围：近战 8 格；远程（弓/弩/枪械 + 远程分类任务）= 任务搜索半径。
+     *
+     * v1.2.0 实测五百一十七【三叉戟不再一律按远程算接战范围】：旧版把
+     * `TridentItem` 也列在这个"物品即远程"的表里，于是**攻击模式（近战任务）
+     * 手持三叉戟时接战范围被撑到搜索半径**、战术行为从十几格就接管走位 →
+     * 后面 tick 又落进 rangedTick 绕圈（"像个傻子一样在那边转圈"）。
+     * 三叉戟是**双用武器**（`TridentItem` 两树都不是 `ProjectileWeaponItem`，
+     * 近战还有 8.0 攻击力属性——javap 实证），该按【当前任务】分类而不是按物品：
+     * 近战任务 → 8 格接战；`trident_attack` 投掷任务 → 走 `isRangedTaskActive`
+     * 拿搜索半径（远程风筝照旧）。
+     */
     private static double engageRange(EntityMaid maid) {
         ItemStack main = maid.getMainHandItem();
         if (main.getItem() instanceof ProjectileWeaponItem
-                || main.getItem() instanceof TridentItem
                 || GunCompat.isGun(main)
                 || isRangedTaskActive(maid)) {
             return maid.searchRadius();
@@ -336,8 +346,29 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测一百二十②：远程分类任务（法术书/法杖等非投射远程武器）同样
         // 进 rangedTick 拉开距离风筝——旧版主手不是弓/弩/枪就落进 meleeTick
         //（跳劈/贴脸绕圈），与距离切换的远程分类矛盾
+        //
+        // v1.2.0 实测五百一十七【三叉戟：攻击模式走近战，不再绕圈】。反馈原文：
+        // "三叉戟现在没法作为近战武器用在攻击模式里面了……我希望保留它被女仆拿在
+        // 手上开攻击模式的时候不是像个傻子一样在那边转圈。核心问题就在于三叉戟目前
+        // 只认远程武器那个模式，调整为攻击模式时候根本就不认这个武器。明明这个武器
+        // 也有近战的方式的。"
+        //
+        // 根因（javap 实证）：三叉戟两树都**不是** `ProjectileWeaponItem`
+        //（1.20.1 `extends Item implements Vanishable`，1.21.1 `extends Item implements ProjectileItem`），
+        // 而且近战带 8.0 攻击力属性；TLM 侧完全认它——
+        // `TaskAttack.isWeapon` = "主手有攻击力属性"（含三叉戟）、
+        // `MaidMeleeAttack` 只在 `isHoldingUsableProjectileWeapon`（只认
+        // `ProjectileWeaponItem`）时才停手 → 近战任务是愿意挥三叉戟的。
+        // 所以"攻击模式不认三叉戟"不是 TLM 的限制，而是**本行为按物品类型
+        // 一刀切成远程**：三叉戟落进 rangedTick → 保持理想射程 ≥7 格 + 横移绕圈
+        // ——正是反馈里的"原地转圈不打架"。
+        //
+        // 修法：分类看【当前任务】而非物品——`isRangedTaskActive` 为真（远程分类
+        // 任务，含 trident_attack 投掷模式）→ rangedTick 风筝（远程机制保留）；
+        // 否则（含 attack 近战任务持三叉戟）→ meleeTick 走近战：蛇形逼近、
+        // 跳劈暴击、贴脸绕圈——三叉戟 8 点攻击力的近战形态这才用得上。
+        // 判定口径与 AutoCombatSwitch.isRangedTask（同样按任务 UID）对齐。
         if (main.getItem() instanceof ProjectileWeaponItem
-                || main.getItem() instanceof TridentItem
                 || GunCompat.isGun(main)
                 || isRangedTaskActive(maid)) {
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_RANGED.get()) {
@@ -744,6 +775,16 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     private void meleeCounterAttack(EntityMaid maid, LivingEntity target) {
         try {
             ServerLevel level = (ServerLevel) maid.level();
+            // v1.2.0 实测五百零五【隔墙扫到墙后怪】：本反击按"目标周围 2 格 AABB"横扫，
+            // 旧版只查 FriendlyFireGuard，**没有视线判定**——隔着一堵墙时目标贴墙站着，
+            // 她的横扫范围会穿过墙把墙后的怪一起打到（比"空挥"更糟：是真掉血）。
+            // 与 TLM 原生近战同口径（它出手前必过 nearestVisibleLivingEntities.contains
+            // → Sensing.hasLineOfSight），这里补上：主目标看不见就整段不做（连挥臂粒子
+            // 都不放，免得看起来像打了）；看见才继续，逐个受害者再各查一次视线
+            // （AABB 里的其他怪也可能被墙挡住，不能只看主目标）。
+            if (!SelfPreservationBehavior.hasSight(maid, target)) {
+                return;
+            }
             // 1. 背包 DPH 最高的近战武器（无 → 1 点空手伤害）
             ItemStack bestWeapon = findBestMeleeWeapon(maid);
             float damage = 1.0f;
@@ -762,6 +803,10 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     target.getBoundingBox().inflate(MELEE_COUNTER_RANGE),
                     e -> e != maid && e.isAlive() && !maid.isAlliedTo(e)
                             && !FriendlyFireGuard.isFriendly(maid, e))) {
+                // v1.2.0 实测五百零五：被墙挡住的受害者不结算（横扫不能穿墙）
+                if (!SelfPreservationBehavior.hasSight(maid, victim)) {
+                    continue;
+                }
                 victim.hurt(maid.damageSources().mobAttack(maid), damage);
                 // 原版击退（knockback = knockback，方向 = 女仆→受害者，强度 0.5 = 玩家普攻级）
                 double dx = victim.getX() - maid.getX();
@@ -798,9 +843,14 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     /**
      * v1.1.0 实测四十：背包里 DPH（单发伤害）最高的近战武器。
-     * 近战武器 = 攻击力属性 ≥1 且不是远程投射武器（弓/弩/三叉戟/枪械不算——
-     * 它们的攻击力属性是给近战形态用的，但判定口径"枪械算远程"）。
-     * 剑/斧/镐/拔刀剑/史诗武器等全部按攻击力属性自然参与评分。
+     *
+     * v1.2.0 实测五百一十七【三叉戟算近战武器】:旧版把 `TridentItem` 也排除在
+     * 近战武器之外，于是远程任务被贴身时的近战反击（{@link #meleeCounterAttack}）
+     * 找不到三叉戟、只能按"无近战武器 1 点"结算——**手里握着 8 点攻击力的三叉戟
+     * 却拍出 1 点**。三叉戟是双用武器（近战 8.0 攻击力，javap 实证），该参与评分。
+     * 仍然排除的是**纯投射武器**：弓/弩（`ProjectileWeaponItem`）与枪械
+     * （它们没有可用的近战形态，枪械贴脸也不是挥砍）。
+     * 剑/斧/镐/拔刀剑/史诗武器/三叉戟等按攻击力属性自然参与评分。
      * 找不到返回 EMPTY 栈（调用方按 1 点伤害处理）。
      */
     private static ItemStack findBestMeleeWeapon(EntityMaid maid) {
@@ -814,9 +864,8 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 net.minecraft.world.item.Item it = s.getItem();
-                // 远程武器排除（判定口径：枪械/弓/弩/三叉戟算远程）
-                if (it instanceof ProjectileWeaponItem || it instanceof TridentItem
-                        || GunCompat.isGun(s)) {
+                // 纯远程武器排除（弓/弩 = ProjectileWeaponItem；枪械）；三叉戟不算
+                if (it instanceof ProjectileWeaponItem || GunCompat.isGun(s)) {
                     continue;
                 }
                 float dmg = weaponAttack(s);

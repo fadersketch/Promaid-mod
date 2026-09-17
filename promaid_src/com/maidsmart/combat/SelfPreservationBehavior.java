@@ -594,6 +594,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // v1.5.202（轻量级自保，落地水格式）：常驻检查器——canUse 只查开关，
         // 是否真正需要保命由 m_6725_ 每 tick 内部判定（环境危险/低血），
         // 不需要时零干预（不占用任何行为、不干扰战斗/任务/战术）
+        // v1.2.0：飞行作战的豁免【不放在这里】——canUse 返回 false 会让行为根本不
+        // 启动（setTask→refreshBrain 后新实例永不 tick），那样 m_6725_ 里的
+        // PRESERVE_TAG 残留清理就永远跑不到。豁免统一放 m_6725_（行为常驻、
+        // 每 tick 都能清理）。
         return com.maidsmart.config.MaidSmartConfig.COMBAT_SELF_PRESERVE.get();
     }
 
@@ -763,6 +767,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (FriendlyFireGuard.isFriendly(maid, threat)) {
             return false; // 主人/友方不做任何形式的反击（御币弹幕/贴脸射箭/近战）
         }
+        // v1.2.0 实测五百零五【隔墙挥空】：本方法是自保所有"直接出手"的统一收口
+        // （御币弹幕 / 贴脸射箭 / 近战挥砍都从这里走），旧版没有视线判定。
+        // 上游 findThreat 查了 hasSight，但"着火兜底"那条走的是
+        // findNearestThreatNearby（只判 PerceptionManager.isThreat + 距离，
+        // **没有视线**）→ 墙后的怪也能让她隔墙挥刀。放在收口处最省事：
+        // 一处判定覆盖全部三个分支与两个调用点。
+        // 与 TLM 原生近战同口径（它出手前必过 nearestVisibleLivingEntities.contains
+        // → Sensing.hasLineOfSight，原版女仆隔墙本来就打不到）。
+        if (!hasSight(maid, threat)) {
+            return false; // 看不见 → 不出手（不算"反击成功"，调用方不消耗冷却）
+        }
         ItemStack main = maid.m_21205_();
         if (com.github.tartaricacid.touhoulittlemaid.item.ItemHakureiGohei.isGohei(main)) {
             return this.goheiDanmaku(maid, threat);
@@ -867,6 +882,40 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 会话往往立即结束（危险消失），旧位置在会话 return 之后 → 水永远留在
         // 地图上（"放下的水一直不消失"的根因）
         this.tickRecoverWater(maid);
+        // v1.2.0：飞行作战（近战/远战）下【不触发自保】——
+        // 需求："2 种飞行作战状态下不触发自保"。飞行模式自己负责索敌/攻击/换装，
+        // 且滑翔方向=视线方向，自保的传送/垫高/放水/逃跑链路会把她从空中拽下来、
+        // 打断烟花推进与盘旋（与 AutoCombatSwitch 里"飞行任务自主战斗不介入"
+        // 同一口径）。这里做成【硬闸】：不但不进会话，已经在会话里的（切飞行任务
+        // 前触发的）也立刻安静退出——否则 PRESERVE_TAG 残留会让排班/参战/搭方块
+        // 永久让位。放在岩浆扫描之前：空中不需要岩浆避让，顺带省掉方块扫描。
+        // 注意只拦"自保会话"，不放宽真实伤害：飞行中照样掉血/被击落，
+        // 只是不再由自保系统接管（要不要保命由飞行模式自己的逻辑与玩家决定）。
+        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+            // 无条件清标记：飞行任务下 PRESERVE_TAG 永远不该为 true——
+            // 既覆盖"刚切进来还带着会话"的上升沿，也覆盖"重载后 sessionActive
+            // 归零、标记残留在存档里"的情况（那种情况下方会话外自愈分支跑不到，
+            // 不在这里清就会永久让位排班/参战/搭方块）。
+            boolean hadSession = this.sessionActive;
+            boolean hadTag = maid.getPersistentData().m_128471_(PRESERVE_TAG);
+            if (hadSession || hadTag) {
+                this.sessionActive = false;
+                this.exitStableTicks = 0;
+                this.noThreatTicks = 0;
+                this.pillarBaseY = -1;
+                this.forcedPillar = false;
+                this.walkOnTicks = 0;
+                this.pillarLocked = false;
+                maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
+                MOVING_SURVIVE.remove(maid.m_20148_());
+                com.maidsmart.tool.PromaidLog.log("自保",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 切飞行作战 → 自保中止（飞行模式不触发自保）");
+            }
+            // 会话外的常驻轻量逻辑照常保留：负面效果自清（喝蜂蜜/牛奶解毒）——
+            // 与保命无关，属于"顺手治病"，飞行中中毒也该喝。
+            this.tickCureNegativeEffects(maid);
+            return;
+        }
         // v1.5.204：附近岩浆感知（bug 3）——半径 3 内任何岩浆（含流动）即视为
         // 危险，提前绕开；10 tick 节流防每 tick 全量方块扫描
         if (this.lavaScanCooldown-- <= 0) {
@@ -2829,6 +2878,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (st.m_60796_(maid.m_9236_(), pos)) {
             return false; // 身体格已是实心（防御，不该发生）
         }
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, pos)) {
+            return false;
+        }
         Block block = this.takeBuildBlock(maid);
         if (block == null) {
             return false;
@@ -3113,6 +3167,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 || !maid.m_9236_().m_8055_(headPos.m_7918_(0, 1, 0)).m_60795_()) {
             return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
         }
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
+            return false;
+        }
         Block block = this.takeBuildBlock(maid);
         if (block == null) {
             return false;
@@ -3229,6 +3288,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** 放一块搭方块（背包数量最多的优先，v1.5.20） */
     private boolean placeBlock(EntityMaid maid, BlockPos pos) {
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, pos)) {
+            return false;
+        }
         Block block = this.takeBuildBlock(maid);
         if (block == null) {
             return false;
@@ -3270,6 +3334,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!maid.m_9236_().m_8055_(eyeCap).m_60795_()) {
                 return; // 眼睛格已实心 → 已封住/已被堵，跳过
             }
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, eyeCap)) {
+                return;
+            }
             Block block = this.takeBuildBlock(maid);
             if (block == null) {
                 return;
@@ -3281,6 +3350,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             int headH = (int) Math.ceil(threat.m_20206_());
             BlockPos cap = foot.m_7918_(0, headH, 0);
             if (!cap.equals(eyeCap) && maid.m_9236_().m_8055_(cap).m_60795_()) {
+                // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+                // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+                if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, cap)) {
+                    return;
+                }
                 Block capBlock = this.takeBuildBlock(maid);
                 if (capBlock != null) {
                     maid.m_9236_().m_7731_(cap, capBlock.m_49966_(), 3);

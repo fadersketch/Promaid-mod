@@ -253,27 +253,73 @@ public final class MaidPlanting {
                 logAttempt(level, maid, "no-spot", bagCount, handCount, 0);
                 return; // 范围内没有可种土块：冷却后重试
             }
-            // 3) 种下（消耗对应来源格：手部栏 extractItem / 背包 extractItem）
-            // 实测二百三十七：强转改 BlockItem——物品标签口径下的树苗可能是普通
-            // BlockItem 子类（mangrove_propagule 等），ItemNameBlockItem 强转会炸
+            // 3) 先【扣料】再【落地】——顺序必须是"搭一个扣一个"。
+            // v1.2.0 实测四百八十二：旧版先 m_7731_(setBlock) 再 extractItem，且完全没检查
+            // 扣除结果——扣除失败（槽位被并发改动/物品被拿走）时树苗已经种下去了，
+            // 等于凭空多出一棵苗（生存可刷）。改为：扣成功才放；扣不到直接放弃本轮。
             Block saplingBlock = ((net.minecraft.world.item.BlockItem) sapling.m_41720_()).m_40614_();
+            if (!takeOneSapling(maid, handSlot, bagSlot)) {
+                logAttempt(level, maid, "take-failed", bagCount, handCount, -1);
+                return; // 扣料失败 → 不放置（下一轮冷却后重试）
+            }
             level.m_7731_(spot, saplingBlock.m_49966_(), 3);
             level.m_46796_(2001, spot, Block.m_49956_(saplingBlock.m_49966_()));
-            try {
-                if (handSlot >= 0) {
-                    ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
-                            .extractItem(handSlot, 1, false);
-                } else {
-                    maid.getMaidInv().extractItem(bagSlot, 1, false);
-                }
-            } catch (Exception ignored) {
-            }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             LOGGER.info("plant sapling: maid={} pos={} sapling={}",
                     maid.m_20148_(), spot, ForgeRegistries.BLOCKS.getKey(saplingBlock));
         } catch (Throwable t) {
             LOGGER.error("plant tick error", t);
         }
+    }
+
+    /**
+     * v1.2.0 实测四百八十二：真实扣掉 1 个树苗（手部栏优先，其次背包）。
+     *
+     * 与其它消耗点同口径——`extractItem(..., false)` 直接操作存储，返回栈非空才算成功
+     * （封装 handler 返回副本时扣不掉的坑，见工程其它消耗点注释）。
+     *
+     * @return true = 确实扣掉了 1 个
+     */
+    private static boolean takeOneSapling(EntityMaid maid, int handSlot, int bagSlot) {
+        try {
+            if (handSlot >= 0) {
+                ItemStack taken = ((net.minecraftforge.items.IItemHandlerModifiable)
+                        maid.getHandsInvWrapper()).extractItem(handSlot, 1, false);
+                if (!taken.m_41619_()) {
+                    return true;
+                }
+            }
+            if (bagSlot >= 0) {
+                ItemStack taken = maid.getMaidInv().extractItem(bagSlot, 1, false);
+                if (!taken.m_41619_()) {
+                    return true;
+                }
+            }
+            // 槽位已变（并发改动）→ 退化为按物品搜一遍
+            net.minecraftforge.items.IItemHandler hands = maid.getHandsInvWrapper();
+            for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                if (!isSaplingItem(hands.getStackInSlot(i))) {
+                    continue;
+                }
+                ItemStack taken = ((net.minecraftforge.items.IItemHandlerModifiable) hands)
+                        .extractItem(i, 1, false);
+                if (!taken.m_41619_()) {
+                    return true;
+                }
+            }
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (!isSaplingItem(inv.getStackInSlot(i))) {
+                    continue;
+                }
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (!taken.m_41619_()) {
+                    return true;
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return false;
     }
 
     /** v1.1.0 实测二百三十一：findPlantSpot 的统计版——返回 [找到(0/1), x, y, z]；

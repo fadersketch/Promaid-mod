@@ -60,7 +60,9 @@ public final class LlmEnableManager {
         }
         net.minecraft.nbt.CompoundTag pd = maid.getPersistentData();
         if (pd.m_128425_(PERSIST_TAG, 1)) {
-            return pd.m_128435_(PERSIST_TAG) != 0;
+            // v1.2.0 实测四百八十三【修】：m_128435_ 是 getTagType（返回类型 id，
+            // ByteTag 恒为 1 → `!= 0` 恒真，等于开关关不掉）；必须读值 = m_128445_(getByte)。
+            return pd.m_128445_(PERSIST_TAG) != 0;
         }
         return true; // 默认开
     }

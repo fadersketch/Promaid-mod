@@ -3,6 +3,7 @@ package com.maidsmart.schedule;
 import com.github.tartaricacid.touhoulittlemaid.entity.ai.brain.MaidSchedule;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.TaskManager;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -54,6 +55,11 @@ public final class ScheduleNetworking {
         r.playToServer(HomeTogglePacket.TYPE, StreamCodec.ofMember(HomeTogglePacket::encode, HomeTogglePacket::decode), HomeTogglePacket::handle);
         r.playToServer(BatchHomePacket.TYPE, StreamCodec.ofMember(BatchHomePacket::encode, BatchHomePacket::decode), BatchHomePacket::handle);
         r.playToClient(MaidRenameSyncPacket.TYPE, StreamCodec.ofMember(MaidRenameSyncPacket::encode, MaidRenameSyncPacket::decode), MaidRenameSyncPacket::handle);
+        // v1.2.0：快捷设置页显示女仆当前坐标 + 「去她身边」——坐标由服务端回（客户端
+        // 只拿到打开排班表那一刻的快照，女仆走动后就不准了，所以每秒问一次）
+        r.playToServer(MaidCoordRequestPacket.TYPE, StreamCodec.ofMember(MaidCoordRequestPacket::encode, MaidCoordRequestPacket::decode), MaidCoordRequestPacket::handle);
+        r.playToClient(MaidCoordPacket.TYPE, StreamCodec.ofMember(MaidCoordPacket::encode, MaidCoordPacket::decode), MaidCoordPacket::handle);
+        r.playToServer(MaidTeleportToPacket.TYPE, StreamCodec.ofMember(MaidTeleportToPacket::encode, MaidTeleportToPacket::decode), MaidTeleportToPacket::handle);
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */
@@ -304,7 +310,11 @@ public final class ScheduleNetworking {
                 String taskUid = m.getTask() == null ? "touhou_little_maid:idle"
                         : m.getTask().getUid().toString();
                 int mode = m.getSchedule() == null ? 2 : m.getSchedule().ordinal();
-                int hp = (int) Math.round(m.getMaxHealth() / Math.max(1.0f, m.getHealth()) * 100.0f);
+                // v1.2.0【血量百分比公式修正】：旧版写成 getMaxHealth / getHealth——取反了。
+                // 满血时恰好 100% 所以一直没被发现；一旦掉血，数字会往上涨（15/20 显示
+                // 133%、10/20 显示 200%、1/20 显示 2000%）。改为与其它 8 处一致的
+                // 【当前/最大】：掉血就显示 75%、50%、5%。
+                int hp = (int) Math.round(m.getHealth() / Math.max(1.0f, m.getMaxHealth()) * 100.0f);
                 String dimTag = "";
                 if (lvl != level) {
                     dimTag = switch (lvl.dimension().location().getPath()) {
@@ -1021,6 +1031,180 @@ public final class ScheduleNetworking {
         }
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /* ==================== 坐标显示 / 去她身边（v1.2.0） ==================== */
+
+    /** C2S 问坐标：详情页打开期间每秒一次（女仆走动后打开时的快照就不准了）。
+     *  只在详情页开着时发，界面关闭即停——不产生常驻流量。 */
+    public static class MaidCoordRequestPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<MaidCoordRequestPacket> TYPE = new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "maid_coord_request"));
+        public final String uuid;
+
+        public MaidCoordRequestPacket(String uuid) {
+            this.uuid = uuid == null ? "" : uuid;
+        }
+
+        public static void encode(MaidCoordRequestPacket pkt, FriendlyByteBuf buf) {
+            buf.writeUtf(pkt.uuid, 64);
+        }
+
+        public static MaidCoordRequestPacket decode(FriendlyByteBuf buf) {
+            return new MaidCoordRequestPacket(buf.readUtf(64));
+        }
+
+        public static void handle(MaidCoordRequestPacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                ServerPlayer player = (ServerPlayer) ctx.player();
+                if (player == null || !(player.level() instanceof ServerLevel level)) {
+                    return;
+                }
+                EntityMaid maid = findMaid(level, pkt.uuid);
+                if (maid == null || !allowed(player, maid)) {
+                    // 不在了（被收进魂符/换维度加载不到）——回一个空标记让界面停止刷新
+                    PacketDistributor.sendToPlayer(player,
+                            new MaidCoordPacket(pkt.uuid, true, "", 0, 0, 0));
+                    return;
+                }
+                BlockPos p = maid.blockPosition();
+                PacketDistributor.sendToPlayer(player,
+                        new MaidCoordPacket(pkt.uuid, false, dimName(maid.level()),
+                                p.getX(), p.getY(), p.getZ()));
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /** S2C 坐标回包。gone=true = 服务端找不到她（界面显示"不在场"并停止刷新）。 */
+    public static class MaidCoordPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<MaidCoordPacket> TYPE = new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "maid_coord"));
+        public final String uuid;
+        public final boolean gone;
+        public final String dim;
+        public final int x;
+        public final int y;
+        public final int z;
+
+        public MaidCoordPacket(String uuid, boolean gone, String dim, int x, int y, int z) {
+            this.uuid = uuid;
+            this.gone = gone;
+            this.dim = dim == null ? "" : dim;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public static void encode(MaidCoordPacket pkt, FriendlyByteBuf buf) {
+            buf.writeUtf(pkt.uuid, 64);
+            buf.writeBoolean(pkt.gone);
+            buf.writeUtf(pkt.dim, 64);
+            buf.writeInt(pkt.x);
+            buf.writeInt(pkt.y);
+            buf.writeInt(pkt.z);
+        }
+
+        public static MaidCoordPacket decode(FriendlyByteBuf buf) {
+            return new MaidCoordPacket(buf.readUtf(64), buf.readBoolean(), buf.readUtf(64),
+                    buf.readInt(), buf.readInt(), buf.readInt());
+        }
+
+        public static void handle(MaidCoordPacket pkt, IPayloadContext ctx) {
+            // S2C 方向校验（同 MaidRenameSyncPacket——实测十六审查 P2-4 口径）
+            if (ctx.flow() != PacketFlow.CLIENTBOUND) {
+                return;
+            }
+            ctx.enqueueWork(() -> com.maidsmart.schedule.ScheduleBookScreen
+                    .onCoord(pkt.uuid, pkt.gone, pkt.dim, pkt.x, pkt.y, pkt.z));
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /** C2S 把【玩家】传到【女仆】身边（与「传送到我身边」方向相反）。
+     *  女仆那一侧不动——是她待的地方，玩家过去找她。 */
+    public static class MaidTeleportToPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<MaidTeleportToPacket> TYPE = new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "maid_teleport_to"));
+        public final String uuid;
+
+        public MaidTeleportToPacket(String uuid) {
+            this.uuid = uuid == null ? "" : uuid;
+        }
+
+        public static void encode(MaidTeleportToPacket pkt, FriendlyByteBuf buf) {
+            buf.writeUtf(pkt.uuid, 64);
+        }
+
+        public static MaidTeleportToPacket decode(FriendlyByteBuf buf) {
+            return new MaidTeleportToPacket(buf.readUtf(64));
+        }
+
+        public static void handle(MaidTeleportToPacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                ServerPlayer player = (ServerPlayer) ctx.player();
+                if (player == null) {
+                    return;
+                }
+                EntityMaid maid = findMaid((ServerLevel) player.level(), pkt.uuid);
+                if (maid == null || !allowed(player, maid)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§7没找到她——可能已被收进魂符或不在已加载区块"));
+                    return;
+                }
+                if (maid.level() instanceof ServerLevel target
+                        && !target.dimension().equals(player.level().dimension())) {
+                    // 跨维度：目的地用她脚下的安全落点（findStand 的判定口径与召回一致）
+                    String nm = maid.getDisplayName() != null ? maid.getDisplayName().getString() : "女仆";
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§e她不在你这个维度（在" + dimName(maid.level()) + "）——正在把你送过去"));
+                    BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
+                            .findStandNear(target, maid.blockPosition());
+                    if (stand == null) {
+                        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                                "§7传送取消：她脚下没找到可站立的位置"));
+                        return;
+                    }
+                    boolean ok = player.teleportTo(target, stand.getX() + 0.5,
+                            stand.getY(), stand.getZ() + 0.5,
+                            java.util.Collections.emptySet(), player.getYRot(), player.getXRot());
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(ok
+                            ? "§a已传送到「" + nm + "」身边（" + dimName(target) + "）"
+                            : "§c传送失败"));
+                    return;
+                }
+                // 同维度：她脚下找落点；找不到就退到她自己站的那一格（她站的地方总归能站人）
+                BlockPos stand = com.maidsmart.follow.MaidChunkLoadManager
+                        .findStandNear((ServerLevel) player.level(), maid.blockPosition());
+                if (stand == null) {
+                    stand = maid.blockPosition();
+                }
+                player.teleportTo((ServerLevel) player.level(), stand.getX() + 0.5,
+                        stand.getY(), stand.getZ() + 0.5,
+                        java.util.Collections.emptySet(), player.getYRot(), player.getXRot());
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                        "§a已传送到她身边（" + stand.getX() + " " + stand.getY()
+                                + " " + stand.getZ() + "）"));
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /** 维度显示名（主世界/下界/末地，其余用注册路径） */
+    static String dimName(net.minecraft.world.level.Level level) {
+        try {
+            return switch (level.dimension().location().getPath()) {
+                case "overworld" -> "主世界";
+                case "the_nether" -> "下界";
+                case "the_end" -> "末地";
+                default -> level.dimension().location().getPath();
+            };
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     /* ==================== 工具 ==================== */

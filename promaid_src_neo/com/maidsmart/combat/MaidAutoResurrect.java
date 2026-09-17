@@ -101,6 +101,34 @@ public final class MaidAutoResurrect {
                 maid.saveWithoutId(nbt);
             }
             long due = computeDueTick(level);
+            // v1.2.0【死亡循环断路器】：若她是在"上次复活后 30 秒内"又死的，说明复活点
+            // 有问题（实机日志：复活→4 秒摔死→1 秒复活→再摔死）。此时不再按原延迟傻转，
+            // 而是退避推迟（1 分钟起、翻倍、上限 10 分钟）+ 明确告警，给玩家介入的机会。
+            long breaker = loopBreakerDelay(level, maidId);
+            if (breaker > 0L) {
+                due = Math.max(due, level.getGameTime() + breaker);
+                ReviveGuard g = REVIVE_GUARD.get(maidId);
+                int n = g != null ? g.consecutiveDeaths : 1;
+                if (g != null && !g.warned) {
+                    g.warned = true;
+                    String nm = com.maidsmart.tool.PromaidLog.nameOf(maid);
+                    long sec = breaker / 20L;
+                    try {
+                        if (maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer sp) {
+                            sp.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                                    "\u00a7c\u26a0 \u00a7f你的女仆 \u00a7b" + nm
+                                            + "\u00a7f 复活后很快又死亡（第 " + n
+                                            + " 次）——复活点可能不安全（地形被改动/床被拆/"
+                                            + "她落在会摔死的位置）。已把下次复活推迟 "
+                                            + sec + " 秒；请检查她的重生点，或先关掉自动复活。"));
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                    com.maidsmart.tool.PromaidLog.log("自动复活",
+                            nm + " 复活后 " + (LOOP_WINDOW_TICKS / 20L) + " 秒内又死亡（第 " + n
+                                    + " 次）→ 断路器退避 " + sec + " 秒（复活点可能不安全）");
+                }
+            }
             Pending p = new Pending(nbt, owner.getUUID(), due,
                     tombstone != null ? tombstone.getUUID() : null,
                     com.maidsmart.tool.PromaidLog.nameOf(maid));
@@ -136,6 +164,67 @@ public final class MaidAutoResurrect {
 
     // ================== 到期复活 ==================
 
+    /**
+     * v1.2.0【死亡循环断路器】——实机日志暴露的真实问题。
+     *
+     * 现场（整合包 latest.log，2026-09-13）：同一只女仆「复活 → 4 秒后摔死 →
+     * 1 秒后又复活」连转 3 轮以上，`[maidhurt] 类型=fall 伤害=91.4 位置=(28.2,294.0,101.9)`
+     * 明确是摔落致死。落点 bug 已修（findSafeLanding 高度上下界取反 → 落点在
+     * y≈386 天空），但只要【任何】因素让复活点不安全（地形被改、床被拆、跨维传送、
+     * 维度规则），这个"复活即死"循环就会再来，且延迟设得越小转得越快。
+     *
+     * 断路器：记住每只女仆上次复活的世界时间。若她又在【循环窗口】内死亡，说明复活点
+     * 有问题——不再按原延迟傻转，而是把这次复活【推迟】并升级告警，给玩家介入机会。
+     * 连续多次则退避越来越久（1 分钟起、翻倍、上限 10 分钟）。
+     */
+    private static final java.util.Map<UUID, ReviveGuard> REVIVE_GUARD =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 复活的"循环窗口"：在这个时间内又死 = 视为复活点不安全 */
+    private static final long LOOP_WINDOW_TICKS = 20L * 30L; // 30 秒
+    /** 触发断路器后的基础推迟（tick） */
+    private static final long BREAKER_BASE_DELAY = 20L * 60L; // 1 分钟
+    /** 退避上限（tick）= 10 分钟 */
+    private static final long BREAKER_MAX_DELAY = 20L * 600L;
+
+    private static final class ReviveGuard {
+        long lastReviveGameTime;
+        int consecutiveDeaths;
+        boolean warned;
+
+        ReviveGuard(long t) {
+            this.lastReviveGameTime = t;
+        }
+    }
+
+    /** 本次死亡是否落在"上次复活的循环窗口"内；是则累计次数并返回退避推迟量（tick）。 */
+    private static long loopBreakerDelay(ServerLevel level, UUID maidId) {
+        long now = level.getGameTime();
+        ReviveGuard g = REVIVE_GUARD.get(maidId);
+        if (g == null) {
+            REVIVE_GUARD.put(maidId, new ReviveGuard(now));
+            return 0;
+        }
+        if (now - g.lastReviveGameTime > LOOP_WINDOW_TICKS) {
+            g.consecutiveDeaths = 0;
+            g.warned = false;
+            return 0;
+        }
+        g.consecutiveDeaths++;
+        return Math.min(BREAKER_MAX_DELAY,
+                BREAKER_BASE_DELAY * (1L << Math.min(4, g.consecutiveDeaths - 1)));
+    }
+
+    private static void noteRevive(ServerLevel level, UUID maidId) {
+        ReviveGuard g = REVIVE_GUARD.get(maidId);
+        if (g == null) {
+            REVIVE_GUARD.put(maidId, new ReviveGuard(level.getGameTime()));
+        } else {
+            g.lastReviveGameTime = level.getGameTime();
+            g.warned = false;
+        }
+    }
+
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
         if (!com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get()) {
@@ -148,6 +237,8 @@ public final class MaidAutoResurrect {
                     d0.clear();
                 }
             }
+            // v1.2.0：断路器状态一并清空（玩家关掉 = 已介入，退避不该残留）
+            REVIVE_GUARD.clear();
             return;
         }
         MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
@@ -184,6 +275,8 @@ public final class MaidAutoResurrect {
                 // 复用原 UUID——记忆/灵魂目录按 UUID 索引，换 UUID 会丢记忆
                 if (resurrect(server, owner, p, maidId)) {
                     data.remove(maidId);
+                    // v1.2.0：记下复活时刻，供死亡循环断路器判断"是否复活后很快又死"
+                    noteRevive(server.overworld(), maidId);
                 } else {
                     p.dueTick = now + 100L;
                 }
@@ -216,9 +309,17 @@ public final class MaidAutoResurrect {
         if (dest == null || respawn == null) {
             return false;
         }
-        double[] safe = com.maidsmart.protect.MasterDeathTeleportHandler.findSafeLanding(
-                dest, respawn.getX() + 0.5, respawn.getY(), respawn.getZ() + 0.5);
+        // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
+        // findStandUpPosition（与玩家复活站的那一格完全一致），而不是自己柱状扫描。
+        // 旧版的 findSafeLanding 高度上下界取反（getHeight 当成最低建筑高度），
+        // 扫描循环全空 → 兜底返回 y≈386 的天空 → 女仆一放出来就自由落体摔死，
+        // 摔死又触发自动收符、放出再摔，形成"原地反复摔死"的死循环。
+        double[] safe = com.maidsmart.protect.MasterDeathTeleportHandler.respawnLanding(dest, respawn);
         EntityMaid maid = new EntityMaid(dest);
+        // v1.2.0：死亡快照先清洗再 load——存档里带着"坠落中"的状态（FallDistance/
+        // 下坠速度），不清就会"落地前先扣一次摔落伤害"；同时清死亡计时/受击计时，
+        // 保证她以干净状态出现（原版复活等价）。
+        com.maidsmart.protect.MasterDeathTeleportHandler.sanitizeDeathState(p.maidNbt);
         maid.load(p.maidNbt);
         maid.setUUID(maidId); // 复用原 UUID——记忆/灵魂目录按 UUID 索引
         maid.setPos(safe[0], safe[1], safe[2]);
@@ -226,9 +327,8 @@ public final class MaidAutoResurrect {
         float ratio = (float) (double) com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get();
         maid.setHealth(Math.max(1.0f, max * ratio));
         maid.setAirSupply(20);
-        maid.fallDistance = 0.0f;
-        maid.deathTime = 0; // 存档里的 DeathTime 会被 load 恢复
-        maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        maid.setTicksFrozen(0);
+        com.maidsmart.protect.MasterDeathTeleportHandler.cleanseAfterRevive(maid);
         if (!dest.addFreshEntity(maid)) {
             return false;
         }

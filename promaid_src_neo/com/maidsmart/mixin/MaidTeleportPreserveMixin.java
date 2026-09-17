@@ -60,6 +60,15 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // v1.2.0【实测四百八十七】：飞行作战进行中禁止 TLM 跟随瞬移——她正扑向敌人，
+            // 主人一远就被 teleportToOwner 拽回主人身边 = 这一轮攻击白费（用户反馈：
+            // "飞向敌人离地面较近的时候，如果主人离得太远会触发自动传送，导致本次攻击
+            // 被卡掉"）。与 1.20.1 同款豁免；旧版这棵树定义了 isFlightAirborne 却从未接线。
+            // 注意：本判定含"收翅猛击"阶段（那一刻滑翔位是清的），一轮打完即恢复。
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

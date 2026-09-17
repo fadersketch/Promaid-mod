@@ -42,13 +42,18 @@ public abstract class BuildActivityForceMixin {
             CallbackInfo ci) {
         if (maid.getTask() != null && maid.getTask().getUid() != null
                 && "maid_smart".equals(maid.getTask().getUid().m_135827_())
-                && "build".equals(maid.getTask().getUid().m_135815_())) {
+                && ("build".equals(maid.getTask().getUid().m_135815_())
+                    // v1.2.0：指标石一次性临时建造同样强制 WORK activity——
+                    // 否则休息时段不切到 WORK，临时建造行为根本不被评估（绑定后站原地不动）
+                    || "index_build".equals(maid.getTask().getUid().m_135815_()))) {
             // v1.5.177：暂停 = 解除绑定——暂停中【不】强制 WORK，女仆恢复正常作息
             //（可自由走动/切任务去干别的事）；恢复建造后重新强制。
             // canUse 也已挡掉行为评估（MaidBuildBehavior.m_6114_），双保险。
             // v1.5.180：暂停按女仆绑定区块判定（多区块共存）
-            if (com.maidsmart.build.BuildPlan.isBoundPlanPaused(maid)
-                    || com.maidsmart.build.BuildPlan.isMaidPaused(maid)) {
+            // v1.2.0：指标石临时任务不走 BuildPlan 暂停语义，跳过该判定
+            if ("build".equals(maid.getTask().getUid().m_135815_())
+                    && (com.maidsmart.build.BuildPlan.isBoundPlanPaused(maid)
+                        || com.maidsmart.build.BuildPlan.isMaidPaused(maid))) {
                 return;
             }
             try {

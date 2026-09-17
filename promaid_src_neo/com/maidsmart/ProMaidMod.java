@@ -38,8 +38,16 @@ public class ProMaidMod {
             () -> new com.maidsmart.schedule.ScheduleBookItem(new Item.Properties()));
 
     /** 女仆药剂手册（v1.1.0 实测二百七十七）：水瓶+书本合成，右键女仆打开酿造配置 GUI */
+    /** v1.2.0：最近一次配置事件带来的 COMMON 配置对象——迁移改完值后显式 save，
+     *  让磁盘文件与运行时一致（NeoForge 不会自动回写迁移结果）。 */
+    public static net.neoforged.fml.config.ModConfig COMMON_CONFIG;
+
     public static final DeferredItem<Item> BREW_MANUAL = ITEMS.register("brew_manual",
             () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
+
+    /** 指标石（v1.2.0）：9 平滑石头合成，右击方块锁定（绿→红）→ 右击女仆绑定 → 临时搭建 */
+    public static final DeferredItem<Item> INDEX_STONE = ITEMS.register("index_stone",
+            () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
 
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
@@ -50,6 +58,12 @@ public class ProMaidMod {
         // v1.1.0 实测二百八十五：情绪价值交互（G 摸摸头 / H 抱抱，键位+服务端验证）
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 new com.maidsmart.brew.BrewManualInteractHandler());
+        // v1.2.0：指标石右键女仆 = 绑定/解绑（网络层经 @EventBusSubscriber 自注册）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.build.IndexStoneInteractHandler());
+        // v1.2.0：指标石中断清理（女仆被收回/死亡 → 结束临时搭建）
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.build.IndexStoneInterruptHandler());
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -70,29 +84,26 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerConfigScreen(container);
             // v1.1.0 实测四百二十：内置日语语音包客户端钩子（播放压制 + tick 兜底）
             com.maidsmart.client.PromaidClientSetup.registerVoiceHooks();
+            // v1.2.0：指标石预览渲染器（绿框跟随指针 / 红框锁定 / 橙色幽灵格 + 长射线锁定）
+            com.maidsmart.client.PromaidClientSetup.registerIndexStoneHooks();
         }
     }
 
     /** v1.1.0 实测七十二：穿透预算旧默认迁移（22 → 6；手动改过的值不动） */
-    private void onConfigLoad(net.neoforged.fml.event.config.ModConfigEvent event) {
+    /** v1.2.0：把默认值迁移集中到静态入口——配置事件与服务端启动都可调用。
+     *  实测教训：NeoForge 侧仅靠 ModConfigEvent 没能生效，故启动时兜底再跑一次
+     *（迁移是幂等的：只在"值==旧默认"时才改，跑多次无副作用）。 */
+    public static void runConfigMigration() {
         try {
-            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
-                return;
-            }
             if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
                 com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
             }
-            // v1.1.0 实测七十五：看门狗判定时长默认 30/45 → 8 秒（发呆出现很快，
-            // 长窗口白等）；旧档存的旧默认自动迁移，手动改过的值不动
             if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
                 com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
             }
             if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
                 com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
             }
-            // v1.1.0 实测一百二十二：搭路速度/滞留时间旧默认迁移——节奏 8→5 tick/块
-            //（≈4 块/秒与玩家持平）、滞留 10→2 秒（2s×4块/s≈8 块稳态峰值）；旧档存的
-            // 旧默认（8/10）与此前手调的激进值（2）一并迁到新值
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
                     || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
@@ -100,13 +111,32 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
             }
-            // v1.1.0 实测一百七十：排班切换可用性检测默认翻转 true→false——旧默认的
-            // "没活不切"把排班女仆钉死在原地、任务不随段切换（反馈设计失败）；
-            // 旧档存的 true 一律迁到 false，想用完整检测可在面板重新打开
             if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
                 com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
             }
+            // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
+                com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
+            }
             migrateOreTable();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void onConfigLoad(net.neoforged.fml.event.config.ModConfigEvent event) {
+        try {
+            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
+                return;
+            }
+            // 配置事件里拿到的就是官方注册的那个 ModConfig —— 迁移后用它显式 save
+            COMMON_CONFIG = event.getConfig();
+            runConfigMigration();
+            try {
+                if (COMMON_CONFIG.getLoadedConfig() != null) {
+                    COMMON_CONFIG.getLoadedConfig().save();
+                }
+            } catch (Throwable ignored) {
+            }
         } catch (Exception ignored) {
         }
     }
@@ -119,7 +149,7 @@ public class ProMaidMod {
      * ① 空表 = 从未配置过 → 播种当前默认全家桶；
      * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
      */
-    private void migrateOreTable() {
+    private static void migrateOreTable() {
         java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
                 com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
         boolean changed = false;

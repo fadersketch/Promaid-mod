@@ -58,5 +58,7 @@ public final class PromaidClientSetup {
      */
     public static void registerHudHooks() {
         com.maidsmart.client.CooldownHudRenderer.ensureRegistered();
+        // v1.2.0：指标石预览渲染器（绿框跟随指针 / 红框锁定 / 橙色幽灵格）
+        com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();
     }
 }

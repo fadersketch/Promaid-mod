@@ -38,9 +38,15 @@ public class ProMaidMod {
     public static final RegistryObject<Item> BREW_MANUAL = ITEMS.register("brew_manual",
             () -> new com.maidsmart.brew.BrewManualItem(new Item.Properties()));
 
+    /** 指标石（v1.2.0）：9 平滑石头合成，右击方块锁定（绿→红）→ 右击女仆绑定 → 临时搭建 */
+    public static final RegistryObject<Item> INDEX_STONE = ITEMS.register("index_stone",
+            () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
+
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
+        // v1.2.0：指标石网络层（C2S 锁定请求 + S2C 会话状态）
+        com.maidsmart.build.IndexStoneNetworking.register();
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
@@ -50,6 +56,12 @@ public class ProMaidMod {
         com.maidsmart.emotion.EmotionNetworking.register();
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new com.maidsmart.brew.BrewManualInteractHandler());
+        // v1.2.0：指标石右键女仆 = 绑定/解绑
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.build.IndexStoneInteractHandler());
+        // v1.2.0：指标石中断清理（女仆被收回/死亡 → 结束临时搭建）
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.build.IndexStoneInterruptHandler());
         // v1.1.0 实测二百三十五：两个自监听 ServerTick 的模块在此注册（@Mod 构造器
         // 保证每次加载恰好一次——TLM 扩展实例化时机不可靠，曾导致驱动永不生效）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -59,8 +71,13 @@ public class ProMaidMod {
                 net.minecraftforge.fml.config.ModConfig.Type.COMMON, com.maidsmart.config.MaidSmartConfig.SPEC);
         // v1.1.0 实测七十二：穿透预算语义修正后默认 22→6——旧档配置文件里存的
         // 还是旧默认 22，加载时自动迁到 6（玩家手动改过的值 ≠22 不动）
-        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
-                (net.minecraftforge.fml.event.config.ModConfigEvent e) -> onConfigLoad(e));
+        // v1.2.0【根因修复】ModConfigEvent 是【MOD 总线】事件（implements IModBusEvent，
+        // javap 实证），旧版却注册在 MinecraftForge.EVENT_BUS（forge 总线）上——
+        // 因此本回调从未被调用过，此前所有"旧默认自动迁移"（22→6、30→8、搭路…）
+        // 其实一直是失效的（实测：把 waterFallDistance 故意写成旧默认 6.0 再启动，
+        // 优雅退出后读回仍是 6.0）。改为注册到 MOD 总线。
+        net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext.get().getModEventBus()
+                .addListener((net.minecraftforge.fml.event.config.ModConfigEvent e) -> onConfigLoad(e));
         // v1.5.88：MC 主菜单→模组→promaid→Config 打开自定义配置面板（仅客户端）。
         // v1.1.0【专用服务器崩溃修复】：带 Screen 签名的 lambda 一律放客户端专类
         // （com.maidsmart.client.PromaidClientSetup）——主类内联会让合成方法描述符
@@ -77,25 +94,20 @@ public class ProMaidMod {
     }
 
     /** v1.1.0 实测七十二：穿透预算旧默认迁移（22 → 6；手动改过的值不动） */
-    private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent event) {
+    /** v1.2.0：把默认值迁移集中到静态入口——配置事件与服务端启动都可调用。
+     *  实测教训：NeoForge 侧仅靠 ModConfigEvent 没能生效，故启动时兜底再跑一次
+     *（迁移是幂等的：只在"值==旧默认"时才改，跑多次无副作用）。 */
+    public static void runConfigMigration() {
         try {
-            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
-                return;
-            }
             if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
                 com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
             }
-            // v1.1.0 实测七十五：看门狗判定时长默认 30/45 → 8 秒（发呆出现很快，
-            // 长窗口白等）；旧档存的旧默认自动迁移，手动改过的值不动
             if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
                 com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
             }
             if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
                 com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
             }
-            // v1.1.0 实测一百二十二：搭路速度/滞留时间旧默认迁移——节奏 8→5 tick/块
-            //（≈4 块/秒与玩家持平）、滞留 10→2 秒（2s×4块/s≈8 块稳态峰值）；旧档存的
-            // 旧默认（8/10）与此前手调的激进值（2）一并迁到新值
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
                     || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
@@ -103,13 +115,24 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
             }
-            // v1.1.0 实测一百七十：排班切换可用性检测默认翻转 true→false——旧默认的
-            // "没活不切"把排班女仆钉死在原地、任务不随段切换（反馈设计失败）；
-            // 旧档存的 true 一律迁到 false，想用完整检测可在面板重新打开
             if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
                 com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
             }
+            // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
+                com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
+            }
             migrateOreTable();
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent event) {
+        try {
+            if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
+                return;
+            }
+            runConfigMigration();
         } catch (Exception ignored) {
         }
     }
@@ -122,7 +145,7 @@ public class ProMaidMod {
      * ① 空表 = 从未配置过 → 播种当前默认全家桶；
      * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
      */
-    private void migrateOreTable() {
+    private static void migrateOreTable() {
         java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
                 com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
         boolean changed = false;

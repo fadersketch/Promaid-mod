@@ -619,6 +619,11 @@ public class AutoCombatSwitch {
         if (!maid.m_6084_() || maid.m_6162_()) {
             return 0; // 死亡/幼年不参战
         }
+        // v1.2.0：飞行作战（近战/远战）下【自主战斗不介入】——模式自己负责索敌/攻击/换装，
+        // 自主战斗不得把她切走、不得换战术、不得还原（返回 2 = "已是战斗任务，跳过"）
+        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+            return 2;
+        }
         // v1.1.0 实测一百六十三（反馈："退而求其次——让排班拥有更高的优先级。排班
         // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
         // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
@@ -987,6 +992,7 @@ public class AutoCombatSwitch {
                 // 旧版只认 ASSIGNED 完全一致，换过战术/任务被第三方改过的战斗女仆
                 // 永不还原（"威胁解除后回不了原任务"）。
                 boolean stillOnCombat = maid.getTask() != null
+                        && !com.maidsmart.combat.MaidFlightKit.isFlightUid(maid.getTask().getUid())
                         && (maid.getTask().getUid().toString().equals(assignedUid)
                         || MaidWorkTags.isCombatTask(maid));
                 if (stillOnCombat
@@ -1248,6 +1254,11 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
+            // v1.2.0：飞行作战【不参与自主切换】——入战选任务时永远不进池，
+            // 玩家手动指定的飞行作战不会被自主切换顶掉。
+            if (com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {
+                continue;
+            }
             // v1.1.0 实测三百七十九【模组物品背书】（反馈："为啥自主战斗老喜欢切换
             // 到魔法？明明我只给了原版武器"）：万法皆通 SpellCombatMeleeTask.isWeapon
             // 恒 true（javap 反汇编实证）——背包里任何物品（原版剑/食物都行）都被
@@ -1395,6 +1406,11 @@ public class AutoCombatSwitch {
     private static void retuneCombatTactics(EntityMaid maid) {
         IMaidTask cur = maid.getTask();
         if (cur == null) {
+            return;
+        }
+        // v1.2.0：飞行作战【不参与战中换战术】——她的战斗节奏（放烟花/滑翔/收翅猛击）
+        // 由 MaidFlightCombatBehavior 独占，换到别的近远战任务只会把整个链路打断。
+        if (com.maidsmart.combat.MaidFlightKit.isFlightUid(cur.getUid())) {
             return;
         }
         // v1.1.0 实测一百零七（反馈："女仆不会自己的近远战切换"）：旧版只允许

@@ -150,6 +150,48 @@ if (++this.throttle < 10) {
         // ① 触发参战（AutoCombatSwitch 内部自带排班/自保/幼年让位与去重）——
         // 主人打狼时狼的记仇状态在事件后才就位，这里补上迟到的触发
         com.maidsmart.combat.AutoCombatSwitch.tryEngagePublic(maid);
+
+        // v1.2.0 实测五百一十六【严格门控：②③ 也归"主动参战"总开关管】。
+        //
+        // 【反馈】"是默认会自动清敌对怪吗？把主动参战关了好像也会自己打怪，工作模式甚至
+        // 都没变，似乎是空手攻击。创造模式下检测不出来，一旦切回生存模式，就会主动攻击
+        // 敌对生物。"——用户选定**严格口径**：关了主动参战，女仆就只挨打不还手。
+        //
+        // 【旧版漏在哪】①②③ 三件事里只有 ①（切战斗任务）在 AutoCombatSwitch 内部
+        // 查了 COMBAT_AUTO_SWITCH；②（往 brain 写 ATTACK_TARGET）与 ③（直接
+        // doHurtTarget 挥砍 + 导航追人）**一个配置项都没读**（本类此前不引用任何配置）。
+        // 于是关掉总开关后：任务不切（①被挡），但②③照跑——**任务 UID 不变、人却自己
+        // 走上去挥刀**，正是用户看到的"工作模式没变却在打怪"。又因为 `isArmed` 只查主手
+        // 有没有 ATTACK_DAMAGE 属性、而镐/斧/锹/锄这类工具**都带该属性**（DiggerItem
+        // 构造器挂了 "Tool modifier"，字节码实证），拿着锄头的女仆也算"有武器"→
+        // 挥出来的却是工具那点加成，观感就是"空手攻击"。
+        //
+        // 【创造模式为何测不出】本驱动的威胁判据是行为化的 `mob.getTarget() == 主人/女仆`，
+        // 而原版 `TargetingConditions.test` 会经 `canBeSeenAsEnemy()` 过滤目标，创造模式
+        // 玩家的 `Abilities.invulnerable` 为 true → 该判定 false → **怪物根本不会把创造
+        // 模式的玩家当成敌人**，getTarget 恒为 null → 本驱动静默。切回生存
+        // （invulnerable=false）→ 怪物立刻锁定主人 → getTarget 就位 → 当轮即出手。
+        //
+        // 【门控位置】放在 ① 之后、②③ 之前：威胁扫描与"威胁解除清理"（上面 threat==null
+        // 那两个 remove）照常运行，保持 Map 不积压；只是不再主动出手。
+        //
+        // 【顺手收回自己写过的目标】关掉开关时若她脑里还留着**我们写的** ATTACK_TARGET，
+        // TLM 的攻击行为仍会照着打——所以用 ASSIGNED_TARGETS 这个"只登记我们写过的"
+        // 表精确判断：命中才清 ATTACK_TARGET/LOOK_TARGET，不碰 TLM 自己写的目标
+        //（战斗任务的女仆由 TLM 传感器写目标，本表无记录）。
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
+            boolean mine = ASSIGNED_TARGETS.remove(maid.getUUID()) != null;
+            ATTACK_CDS.remove(maid.getUUID());
+            if (mine) {
+                try {
+                    maid.getBrain().eraseMemory(MemoryModuleType.ATTACK_TARGET);
+                    maid.getBrain().eraseMemory(MemoryModuleType.LOOK_TARGET);
+                } catch (Throwable ignored) {
+                }
+            }
+            return; // 关了主动参战 → ②写目标 / ③挥砍 一律不做（只挨打不还手）
+        }
+
         // ② 索敌写目标：战斗任务的女仆写了目标就有攻击行为执行（TLM 索敌
         //    传感器选不到魔改生物，这里直接喂目标）
         boolean hasBrainTarget = maid.getBrain()
@@ -219,6 +261,21 @@ if (++this.throttle < 10) {
             if (FriendlyFireGuard.isFriendly(maid, threat)) {
                 return; // 主人/友方不做直接近战反击
             }
+            // v1.2.0 实测五百零五【隔墙挥空根因】：本兜底直调 doHurtTarget，绕过了 TLM
+            // 原生近战那道视线门。TLM `MaidMeleeAttack`（两树反编译实证）的出手条件是
+            // `!isHoldingUsableProjectileWeapon && isWithinMeleeAttackRange(target)
+            //  && nearestVisibleLivingEntities.contains(target)`——最后那条 `contains`
+            // 走 `Sensor.isEntityAttackable` → `TargetingConditions.test`
+            // （`ignoreLineOfSight` 默认 false）→ `Sensing.hasLineOfSight`。
+            // 也就是说**原版女仆隔墙本来打不到怪**；而本驱动只按"距离 + getTarget 锁定"
+            // 就出手，于是墙后的怪一直锁定主人/女仆 → 女仆每 12 tick 对着墙挥一刀。
+            // 修法：出手前补一次视线判定（复用项目现有的那条 raycast 工具，不新造轮子）。
+            // 【隔墙不罚站】这里只在"挥砍"这一步拦——下面导航照常，她仍会朝怪走过去、
+            // 绕到能看见的位置再打，追击欲望不受影响。
+            if (!com.maidsmart.combat.SelfPreservationBehavior.hasSight(maid, threat)) {
+                navigateTo(maid, threat); // 看不见 → 不挥空刀，继续走近找视线
+                return;
+            }
             boolean hit = maid.doHurtTarget(threat);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND, true); // swing 摆臂
             int cdTicks = attackIntervalTicks(maid);
@@ -228,14 +285,23 @@ if (++this.throttle < 10) {
                 com.maidsmart.combat.AutoCombatSwitch.touchContactPublic(maid);
             }
         } else {
-            // 远：直连导航走过去（不走 MoveToTargetSink——站桩标记拦不住；
-            // 战术行为（230）激活时它自己管走位，isActive 判定只查目标+距离，
-            // 有目标时它自然接管，这里只是兜底导航）
-            if (!com.maidsmart.combat.MaidCombatTacticsBehavior.isActive(maid)) {
-                maid.getNavigation().moveTo(
-                        threat.getX(), threat.getY(), threat.getZ(), CHASE_SPEED);
-            }
+            navigateTo(maid, threat);
         }
+    }
+
+    /**
+     * 直连导航走向威胁（不走 MoveToTargetSink——站桩标记拦不住；战术行为（230）
+     * 激活时它自己管走位，isActive 判定只查目标+距离，有目标时它自然接管，
+     * 这里只是兜底导航）。
+     *
+     * v1.2.0 实测五百零五：从原来"远距离分支的内联写法"提成方法，供"看不见所以
+     * 不出手"的那条路径复用（隔墙继续走近找视线，而不是原地罚站）。
+     */
+    private static void navigateTo(EntityMaid maid, Mob threat) {
+        if (com.maidsmart.combat.MaidCombatTacticsBehavior.isActive(maid)) {
+            return;
+        }
+        maid.getNavigation().moveTo(threat.getX(), threat.getY(), threat.getZ(), CHASE_SPEED);
     }
 
     /** v1.1.0 实测三百四十七：TLM 最近一次攻击动作时刻（真兜底让位判定——
