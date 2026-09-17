@@ -4,5 +4,5 @@
     { "item": "minecraft:book" },
     { "item": "minecraft:paper" }
   ],
-  "result": { "item": "maid_smart:blueprint_book", "count": 1 }
+  "result": { "id": "maid_smart:blueprint_book", "count": 1 }
 }
