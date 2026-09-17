@@ -11,7 +11,7 @@ Scan source list from promaid_src_neo.
 """
 import os, glob, zipfile
 
-MOD = r'C:\Users\Sketch\.zcode\workspace\default\promaid-mod'
+MOD = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(MOD, 'promaid_src_neo')
 
 def find(*cands):
