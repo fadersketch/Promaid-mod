@@ -130,6 +130,31 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * 实测五百五十：搭高被拒原因诊断（限频 5 秒/女仆，运行日志搜「自保搭高」）。
+     *
+     * 实测四百四十三当初把"取料失败"的气泡在悬空时静默了，本意是不误报"没材料"，
+     * 副作用是**搭高整条堵死时一个字都不留**——四百九十八那次收紧就是这么把自保
+     * 搭高掐死的：围殴中她一跳就判悬空 → 取料返回 null → 不搭、不吭声、挨打到死。
+     * 这里补一行限频日志把"为什么没搭成"落到运行日志里，下一场实测一眼可判。
+     */
+    private static final java.util.Map<java.util.UUID, Long> BUILD_REFUSE_SINCE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void logBuildRefused(EntityMaid maid, String reason) {
+        try {
+            long now = maid.level().getGameTime();
+            Long last = BUILD_REFUSE_SINCE.get(maid.getUUID());
+            if (last != null && now - last < 100L) { // 5 秒
+                return;
+            }
+            BUILD_REFUSE_SINCE.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("自保搭高",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 这次没搭成：" + reason);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * 战斗方块到期销毁（ProMaidExtension 每 tick 调；60 秒）。
      * v1.1.0 实测四十二：改走 PlacedBlockTracker（绑定搭建者/魂符暂停）。
      */
@@ -3163,6 +3188,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (!maid.level().getBlockState(place).isAir()
                 || !maid.level().getBlockState(place.offset(0, 1, 0)).isAir()
                 || !maid.level().getBlockState(place.offset(0, 2, 0)).isAir()) {
+            logBuildRefused(maid, "放置格/头顶 2 格不是空气（防窒息拦下）");
             return false;
         }
         // v1.5.24：女仆实际头顶（bounding box 顶面）上方必须空旷——
@@ -3171,15 +3197,20 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         BlockPos headPos = new BlockPos((int) maid.getX(), (int) (headY + 0.05), (int) maid.getZ());
         if (!maid.level().getBlockState(headPos).isAir()
                 || !maid.level().getBlockState(headPos.offset(0, 1, 0)).isAir()) {
+            logBuildRefused(maid, "实际头顶被堵（正在被顶起/贴天花板）");
             return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
         }
         // 实测五百三十六：目标格被主人碰撞箱占着就不搭
         // （防把主人痊住/盖头）——在取料前拦，不浪费方块
         if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
+            logBuildRefused(maid, "目标格被主人碰撞箱占着");
             return false;
         }
         Block block = this.takeBuildBlock(maid);
         if (block == null) {
+            logBuildRefused(maid, com.maidsmart.tool.MaidPlaceGuard.blocked(maid)
+                    ? "悬空禁搭（脚下无地 / 滑翔飞行中）"
+                    : "背包里没有能搭的方块");
             return false;
         }
         maid.level().setBlock(place, block.defaultBlockState(), 3);
