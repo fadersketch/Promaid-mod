@@ -51,6 +51,17 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
             // 挂在本 core 行为上（任何 activity 都跑、每 tick 一次）是为了拿到
             // 真实的排班活动字段——搜索盒子正是按它分流的。有目标时静默。
             com.maidsmart.combat.FlightTargetProbe.tick(maid);
+            // v1.2.0 实测五百四十七【空袭牵引绳】：空袭期间以她为圆心、半径 N 格（默认 100，
+            // 配置 combat.flightRecallDistance，0=关闭）的球内找不到主人 → 立刻传送回主人身边
+            // （与排班表的人工传送同一条强制链路）。
+            //
+            // 挂在本 core 行为上的理由：① 任何 activity 都跑、每 tick 一次 = "立即"；
+            // ② 空袭行为本身要"有攻击目标"才 tick，而本条要管的恰恰是**目标已经死了**之后
+            //   "她还挂在几百格高空"的那段（旧版那段谁都不拉她：同维度拉回/跨维度跟随/
+            //   TLM 原版 teleportToOwner 三条链路全都主动放行"飞行作战空中"）。
+            // 详细口径（为什么不查 home、为什么只在空中生效、为什么跨维度不抢）见
+            // MaidFlightRecall 的类注释。
+            com.maidsmart.combat.MaidFlightRecall.tick(maid);
             // v1.2.0 实测四百八十八【缺装备提示改为"进入即报"】：本行为是 core 行为
             // （任何 activity 都跑、每 tick 一次），而飞行作战行为要等有敌人才启动——
             // 旧版把提示写在那里面，于是"没有敌人时缺装备永远不报，只有遇到敌人才说一句"

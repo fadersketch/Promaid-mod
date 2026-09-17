@@ -464,7 +464,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     }
                     // eat = LivingEntity.eat(Level, ItemStack)——真实进食
                     //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
+                    // v1.2.0 实测五百四十五：蜂蜜也是食物（nutrition=6），补上 TLM 餐食系统
+                    // 那一记"吃食物回血"（与她自己喝蜂蜜瓶完全同口径）。
+                    // 【必须传快照】eat() 末尾 shrink(1)，taken 之后就是空栈（同 feedSisterFood）。
+                    ItemStack honeyFed = taken.copy();
                     sister.eat(sister.level(), taken);
+                    com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, honeyFed);
                     // v1.1.0 实测三十四修复（反馈："喂其他女仆蜂蜜没有效果，解不了
                     // 中毒；对主人的路径仍然生效"）：eat() 只加饱食/食物效果——
                     // 原版"喝蜂蜜解中毒"发生在 HoneyBottleItem.finishUsingItem
@@ -616,12 +621,23 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 }
                 foodName = toGive.getHoverName().getString();
             }
-            // 真实进食（eat = eat(Level, ItemStack)）：与女仆自己吃食物完全一致
-            // 的食物效果/音效/粒子路径。
+            // 真实进食（eat = eat(Level, ItemStack)）：食物效果/音效/粒子路径
             // v1.1.0 实测二百五十六：移除上轮手搓 heal——要求喂食效果与女仆
             // 自己吃食物一样，eat() 就是标准路径（食物效果由 FoodProperties 定义，
             // 金苹果等自带回血效果的食物自然回血），不再额外手搓。
+            // v1.2.0 实测五百四十五【补上 TLM 那一记回血】：反编译实证 TLM 的"吃食物回血"
+            // **不在 eat() 里**，而在餐食系统（DefaultMaidHealSelfMeal.onMaidEat）：
+            // `total = 营养 + 饱和度`（1.21.1 的 saturation() 已含 ×2），
+            // `random.nextInt(5) < total` 时 `heal(max(total/5, 1))`
+            // （自己吃一根胡萝卜 = total 6.6 → 必触发 → 回 1.32）。
+            // 旧版只调 eat()，那记回血整段缺失 → 用户反馈"喂食效果没有她自己吃强"。
+            //
+            // 【必须传快照】原版 eat() 末尾会 `shrink(1)`（反编译实证）——
+            // eat 之后这个栈已经空了，直接传 toGive 会被 Bridge 判空而整段跳过（静默失效）。
+            // 所以先把食物复制一份当"喂进去的那一份"，再调 eat。
+            ItemStack fed = toGive.copy();
             sister.eat(sister.level(), toGive);
+            com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, fed);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             return "喂了" + foodName;
         } catch (Exception ignored) {

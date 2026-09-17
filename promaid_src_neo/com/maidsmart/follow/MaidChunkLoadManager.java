@@ -144,7 +144,7 @@ public final class MaidChunkLoadManager {
                             && !(maid.isHomeModeEnable() && !isBuildingMaid(maid))
                             && maid.position().distanceTo(ow.position()) >= 64.0) {
                         double fromY = maid.getY();
-                        if (teleportCore(maid, ow)) {
+                        if (teleportCore(maid, ow, false)) {
                             // v1.1.0 实测一百四十四：日志带上维度最低建筑高度（min=）——
                             // 救援触发即"真虚空"的现场证据，映射再错一眼可见
                             LOGGER.info("maid rescue: id={} dim={} y={} min={}->owner side",
@@ -806,7 +806,7 @@ BlockPos stand = findStand(newLevel,
                     || (maid.isHomeModeEnable() && !isBuildingMaid(maid))) {
                 return 3; // 状态豁免（坐/骑/家/死亡——与一键集合同口径；建造女仆可召回）
             }
-            return teleportCore(maid, player) ? 1 : 2;
+            return teleportCore(maid, player, true) ? 1 : 2;
         } catch (Exception e) {
             return 0;
         }
@@ -817,7 +817,10 @@ BlockPos stand = findStand(newLevel,
      * 排班表列表页「一键集合」按钮调用；复用 followIfCrossDimension 的真传送链路
      * （teleportTo 原版 teleportTo + 摔落/导航/速度清理 + 末影人音效）。
      *
-     * @return true = 传送成功；false = 无可站立点（主人高空/虚空）或女仆状态异常
+     * v1.2.0 实测五百四十六：人工传送走**强制**口径（findStand 失败就落在主人所在格，
+     * 无视地块、可空中）——见 teleportCore 的 force 注释。
+     *
+     * @return true = 传送成功；false = 女仆状态异常 / 主人不可达
      */
     public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
         // 咽喉点判定（实测七十八）：home（在家）模式不被任何传送打扰——守家钉死；
@@ -829,14 +832,47 @@ BlockPos stand = findStand(newLevel,
         if ((maid.isHomeModeEnable() && !isBuildingMaid(maid)) || !owner.isAlive()) {
             return false;
         }
-        return teleportCore(maid, owner);
+        return teleportCore(maid, owner, true);
+    }
+
+    /**
+     * v1.2.0 实测五百四十七【空袭牵引绳】的传送入口：飞行任务下"主人跑出 N 格"的立即召回
+     * （调用方 = {@code com.maidsmart.combat.MaidFlightRecall}，挂在 core 行为上每 tick 一次）。
+     *
+     * 效力与人工传送完全一致：{@link #teleportCore} 的 {@code force = true}——强制
+     * （主人身边找不到可站立格就直接落在主人所在格）+ 无视地块 + 可空中。
+     * 与 {@link #summonMaidTo} 的唯一差别是**不查 home（在家）模式**：本入口只在她
+     * "正在空中"时被调用（MaidFlightRecall 把关），停放的语义已经被"她飞起来了"这件事
+     * 本身打破；而我们的排班表会自动给女仆锚定 home，若照抄那道门，结果恰恰是
+     * "用了排班的那批女仆永远召不回"——正是用户报的场景。
+     *
+     * @return true = 传送成功
+     */
+    public static boolean recallFromFlight(EntityMaid maid, LivingEntity owner) {
+        if (maid == null || owner == null) {
+            return false;
+        }
+        if (maid.isRemoved() || maid.isDeadOrDying() || maid.isPassenger()) {
+            return false; // 已移除 / 死亡 / 骑乘中
+        }
+        if (!owner.isAlive()) {
+            return false; // 主人非存活：没有可传的目标（防传到死亡点/基岩顶）
+        }
+        return teleportCore(maid, owner, true);
     }
 
     /**
      * v1.1.0 实测七十九：传送本体（不含豁免判定）——救援路径复用。受困女仆即使是
      * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
+     *
+     * @param force v1.2.0 实测五百四十六【强制 + 无视地块】：主人身边找不到可站立格时，
+     *              不再拒绝，而是把女仆直接放在**主人当前所在格**（主人飞在高空 /
+     *              悬在虚空 / 站在岩浆边也照传）。排班表的人工传送（「传送到我身边」/
+     *              「一键集合」）走 true —— 玩家点这个按钮就是要她**立刻**出现在身边，
+     *              被"无可站立点"顶回来是最恼人的；自动路径（受困救援 / 远距拉回）走
+     *              false，保持"宁可她走路归队也不冒半空坠落风险"的老口径。
      */
-    private static boolean teleportCore(EntityMaid maid, LivingEntity owner) {
+    private static boolean teleportCore(EntityMaid maid, LivingEntity owner, boolean force) {
         try {
             if (!(owner.level() instanceof ServerLevel dest)) {
                 return false;
@@ -846,7 +882,12 @@ BlockPos stand = findStand(newLevel,
                             (int) Math.floor(owner.getY()),
                             (int) Math.floor(owner.getZ())));
             if (stand == null) {
-                return false; // 主人身边 16 格内无可站立点
+                if (!force) {
+                    return false; // 主人身边 16 格内无可站立点（非强制路径：宁可不传）
+                }
+                // 强制落点 = 主人所在格。可能悬空（主人正在飞/悬在虚空边），这正是
+                // "无视地块、可以空中传送"的意思：她要出现在主人身边，而不是被留在原地。
+                stand = owner.blockPosition();
             }
             maid.teleportTo(dest, stand.getX() + 0.5, stand.getY(),
                     stand.getZ() + 0.5, java.util.Collections.emptySet(),
@@ -977,7 +1018,7 @@ BlockPos stand = findStand(newLevel,
                         + "不拉回——搭路自己会铺到主人脚边，拉走会抽掉她脚下的桥（Y 轴搭太高拉回不受此限）");
                 return;
             }
-            if (teleportCore(maid, owner)) {
+            if (teleportCore(maid, owner, false)) {
                 // 实测一百八十八：Y 轴成功路径留痕（找得到安全落点才传）
                 com.maidsmart.tool.PromaidLog.log("跨维", name + (yPull
                         ? " Y 轴距离 " + (int) Math.abs(maid.getY() - owner.getY())

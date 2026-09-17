@@ -344,6 +344,9 @@ public class AiMemoryManager {
         // 空中禁传送/落地缓冲全线卡死。本方法（EntityLeaveLevelEvent）是既有的
         // 统一清理点，一并清掉。（旧版 1.20.1 缺这一步，属漏同步。）
         com.maidsmart.combat.MaidFlightCombatBehavior.forget(maidUuid);
+        // 实测五百四十四：激流突进（MaidTridentSpinBehavior）的表同样要清——它现在会让空袭
+        // 让位、并豁免自动传送，残留 = 该女仆再也飞不起来（与上面 实测四百八十三 同一类漏同步）。
+        com.maidsmart.combat.MaidTridentSpinBehavior.forget(maidUuid);
         com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
     }
 

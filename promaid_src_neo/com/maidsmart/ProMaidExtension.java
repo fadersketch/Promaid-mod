@@ -158,6 +158,10 @@ public class ProMaidExtension implements ILittleMaid {
                 // 到 stop()，残留会让该女仆永久"俯冲中"（再进不了飞行作战 + 空中禁
                 // 传送/落地缓冲全线卡死）。启动时对该女仆清一次状态，并清掉滑翔标志位。
                 com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.getUUID());
+                // 实测五百四十四：激流突进的表同样会残留（本行为是 core 行为，女仆被强杀时
+                // 也走不到 stop()），而且它现在还会让空袭让位 + 豁免自动传送——残留的代价比
+                // 之前大得多，必须一起清。
+                com.maidsmart.combat.MaidTridentSpinBehavior.forget(maid.getUUID());
                 com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }

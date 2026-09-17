@@ -191,6 +191,7 @@
   "config.promaid.combat.riptideDash": "激流三叉戟旋转突进",
   "config.promaid.combat.crossbowPlainFirework": "弩可用普通烟花当弹药",
   "config.promaid.combat.flightRangedPush": "远程空袭近身弹开",
+  "config.promaid.combat.flightRecallDistance": "空袭牵引绳（格）",
   "item.maid_smart.index_stone": "指标石",
   "config.promaid.build.indexStone": "指标石",
   "task.maid_smart.index_build": "临时搭建",

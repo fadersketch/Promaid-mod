@@ -38,7 +38,7 @@ TARGETS = {
         'modname': 'promaid-1.2.0-neoforge-1.21.1.jar',
     },
 }
-WAIT = 90
+WAIT = 180
 # 看到 Done 之后再盯这么久，捕捉启动后延迟崩溃（蓝图扫描 OOM / ServerStarted 异常等）
 POST_DONE_WATCH = 30
 
