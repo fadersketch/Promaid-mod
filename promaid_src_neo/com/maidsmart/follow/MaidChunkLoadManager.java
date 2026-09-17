@@ -360,6 +360,13 @@ public final class MaidChunkLoadManager {
                         + " 重锤跃起中，跨维度跟随不传——猛击落地后自然恢复");
                 return;
             }
+            // v1.2.0【实测四百八十七】：飞行作战进行中不跨维度跟随——她正在扑向敌人，
+            // 跨维传送会把这一轮攻击直接打断。与上面"重锤跃起中"同口径；一轮打完自然恢复。
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+                throttledSkipLog(maid, "flight-air-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复");
+                return;
+            }
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
             // 守家/排班锚点全废）。本扫描每 5 秒跑全服，节流日志防刷屏。
@@ -919,6 +926,16 @@ BlockPos stand = findStand(newLevel,
             // 实测一百八十八：Y 轴分支标记（日志措辞区分——同一条链路，同一个安全落点判定）
             boolean yPull = dSq < (double) dist * dist;
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+            // v1.2.0【实测四百八十七】：飞行作战进行中不拉回——含下面 Y 轴"搭太高"分支。
+            // 只认滑翔位是不够的：收翅猛击会主动清滑翔位，而"飞向敌人、贴近地面"正是
+            // 那一刻（用户反馈："飞向敌人离地面较近的时候…触发自动传送，导致本次攻击
+            // 被卡掉"）。isFlightAirborne 已并入"本轮攻击进行中"（起跳/爬升/收翅猛击/
+            // 等待再放烟花），一轮打完即 restore，不会永久禁传。
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+                throttledSkipLog(maid, "flight-air-samedim", name
+                        + " 飞行作战进行中（滑翔/扑击），不拉回——本轮攻击结束后自然恢复");
+                return;
+            }
             // v1.1.0 实测一百九十六：自保中不拉回（与跨维跟随同口径——低血/逃跑中拉
             // 回主人身边=送死；PRESERVE 期间由自保行为自己决定去向）
             if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(

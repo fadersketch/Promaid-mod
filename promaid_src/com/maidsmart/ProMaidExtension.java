@@ -122,6 +122,9 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.BlueprintLib.setServer(event.getServer());
         // v1.5.88：应用配置面板的建造默认档位（build.speedTier / build.turbo）
         com.maidsmart.build.MaidBuildBehavior.applyConfigDefaults();
+        // v1.2.0：配置默认值迁移兜底——NeoForge 侧仅靠 ModConfigEvent 实测未生效，
+        // 服务端启动时再跑一次（迁移幂等：只在"值==旧默认"时才改）
+        com.maidsmart.ProMaidMod.runConfigMigration();
         // v1.1.0 实测二十九：搭路/挖矿/伐木 PLACED 表跨会话兜底清理——
         // ServerStopping 正常退出会清，但崩溃/任务管理器强杀进程时 clearAll
         // 不执行 → 内存表残留进新会话：①搭路 isAirborne 误判（残留位置命中
@@ -151,8 +154,17 @@ public class ProMaidExtension implements ILittleMaid {
                 if (maid.getPersistentData().m_128471_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG)) {
                     maid.getPersistentData().m_128379_(com.maidsmart.task.BridgeUpBehavior.BRIDGING_TAG, false);
                 }
+                // v1.2.0 实测四百八十三【同步 1.21.1】：飞行作战的滑翔/俯冲状态是 static 表——
+                // 崩溃/强杀时行为没走到 stop()，残留会让该女仆永久"俯冲中"（再进不了飞行作战
+                // + 空中禁传送/落地缓冲全线卡死）。启动时对该女仆清一次状态，并清掉滑翔标志位。
+                // （旧版 1.20.1 定义了 forget/clearAll 却从未接线，属漏同步。）
+                com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.m_20148_());
+                com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }
+        // 全清兜底：static 表不能跨会话残留（世界已重新加载，此刻没有任何女仆在飞）
+        com.maidsmart.combat.MaidFlightCombatBehavior.clearAll();
+        com.maidsmart.combat.MaidTridentSpinBehavior.clearAll();
     }
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
@@ -164,6 +176,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.task.BridgeUpBehavior.clearAll(event.getServer());
         com.maidsmart.combat.SelfPreservationBehavior.clearCombatPlaced(event.getServer());
         com.maidsmart.build.BuildPlan.clearAll();
+        // v1.2.0：指标石会话清空（防跨存档残留锁定/绑定状态）
+        com.maidsmart.build.IndexStoneService.clearAll();
         com.maidsmart.build.ChunkFreeze.clearAll();
         com.maidsmart.build.BlueprintLib.setServer(null);
         // v1.1.0 实测四十四：撤掉全部女仆区块强制加载票（防票残留锁区块）
@@ -273,38 +287,21 @@ public class ProMaidExtension implements ILittleMaid {
     }
 
     /**
-     * v1.5.13 生存优化：玩家首次进入世界时赠送 5 张蓝图卷轴
-     * （每种内置蓝图各 1 张，只送一次，标记存在玩家持久 NBT 里）。
+     * v1.5.13 生存优化：玩家首次进入世界时赠送手册与排班表。
+     *
+     * v1.2.0【改用原版进度系统，修"重复给予"】：旧版在这里用 persistentData 里的
+     * 手搓标记判断"已发过"，但实机日志显示同一存档 10:55 登录发一次、10:59 又登录
+     * 又发一次（背包里确实多出书）——手搓 NBT 标记拦不住跨会话重发。现改为
+     * 参照 TLM《记忆中的幻想乡》的做法：用一个 minecraft:impossible 进度的完成
+     * 状态当"已领取"记录（由原版进度系统持久化），奖励走进度掉落表自动发放。
+     * 具体见 com.maidsmart.FirstJoinGift（含老存档迁移：已拿过的人静默记账不重发）。
      */
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public void onPlayerLoggedIn(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player)) {
             return;
         }
-        net.minecraft.nbt.CompoundTag data = player.getPersistentData();
-        // v1.5.347:类型写错——写入是 Byte(1),contains 却查 99(NBT 无此类型)永远 false,
-        // 导致每次进游戏都重发手册。改为 TAG_BYTE(1) 后"只送一次"标记才真正生效。
-        if (data.m_128425_("maid_smart_blueprints_given", 1)) {
-            return;
-        }
-        data.m_128344_("maid_smart_blueprints_given", (byte) 1);
-        net.minecraft.world.item.ItemStack[] gifts = {
-                new net.minecraft.world.item.ItemStack(ProMaidMod.BLUEPRINT_BOOK.get()),
-                // v1.1.0 实测二百一十六：排班表与手册同款开局赠送（一次送齐，之后不再重复发）
-                new net.minecraft.world.item.ItemStack(ProMaidMod.SCHEDULE_BOOK.get())
-        };
-        int given = 0;
-        for (net.minecraft.world.item.ItemStack gift : gifts) {
-            if (player.m_150109_().m_36054_(gift)) {
-                given++;
-            }
-        }
-        player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                "\u00a7a[maid_smart] \u300aPromaid \u624b\u518c\u300b\u4e0e\u300a\u6392\u73ed\u8868\u300b\u5df2\u9001\u5230\u4f60\u80cc\u5305\uff01"
-                        + "\u624b\u6301\u53f3\u952e\u6253\u5f00\u5168\u90e8\u56fe\u7eb8\u5217\u8868\uff08\u542b\u7f3a\u6750\u63d0\u793a\uff09\uff0c"
-                        + "\u70b9\u51fb\u5373\u8ba9\u5973\u4ec6\u5efa\u9020\uff08\u5973\u4ec6\u9700\u5148\u5207\u5230\u201c\u5efa\u7b51\u201d\u4efb\u52a1\uff09\uff1b"
-                        + "\u6392\u73ed\u8868\u6253\u5f00\u5373\u53ef\u7ed9\u5168\u90e8\u5973\u4ec6\u6392\u65e5\u7a0b\u3002"
-                        + "\u62df\u91cd\u65b0\u83b7\u53d6\uff1a/give @p maid_smart:blueprint_book\u3002"));
+        com.maidsmart.FirstJoinGift.onLogin(player);
     }
 
     /**
@@ -427,10 +424,17 @@ public class ProMaidExtension implements ILittleMaid {
         manager.add(new MaidCookTask());
         manager.add(new MaidBrewTask());
         manager.add(new MaidBuildTask());
+        // v1.2.0：指标石一次性临时建造任务（隐藏任务——不出现在任务面板，
+        // 只由 IndexStoneService 在玩家绑定女仆时临时指派，完成后还原原任务）
+        manager.add(new com.maidsmart.build.IndexStoneBuildTask());
         // v1.1.0：伐木任务（克隆挖矿架构——木材表/斧判定/树叶放行视线/连锁砍整棵树）
         manager.add(new MaidWoodTask());
         // v1.1.0 实测三百一十一：宰杀任务（5×5 同种牲畜超阈值 → 每 3 秒随机宰杀一只）
         manager.add(new MaidSlaughterTask());
+        // v1.2.0：飞行作战任务（1.20.1 版——武器无关：鞘翅 + 任意近战武器 + 烟花）
+        manager.add(new com.maidsmart.combat.MaidFlightCombatTask());
+        // v1.2.0：飞行远战（空中盘旋如幻翼 + 每 5 秒补烟花 + 手持远程武器开火）
+        manager.add(new com.maidsmart.combat.MaidFlightRangedTask());
     }
 
     @Override
@@ -483,6 +487,10 @@ public class ProMaidExtension implements ILittleMaid {
                         // 高于落地水/战术：搭路条件本身排除威胁/自保，不与战斗抢移动
                         Pair.of(245, new com.maidsmart.task.BridgeUpBehavior()),
                         Pair.of(240, new com.maidsmart.combat.WaterClutchBehavior()),
+                        // v1.2.0 实测五百三十四：激流三叉戟旋转突进（攻击模式 / 近战空袭 + 主手激流三叉戟）——
+                        // 低于落地水（240）、高于战术（230）：突进本身是一次"贴脸手段"，
+                        // 命中判定由 MaidSpinAttackTouchMixin 补（原版 doAutoAttackOnTouch 对非玩家是空实现）
+                        Pair.of(235, new com.maidsmart.combat.MaidTridentSpinBehavior()),
                         // v1.5.134：单兵作战战术（PVP 式走位/拉扯/距离控制）——低于自保/落地水，
                         // 高于自动装备/施工区避让；Brain 1.20.1 无高优先级阻断，不影响 WORK 战斗行为
                         Pair.of(230, new com.maidsmart.combat.MaidCombatTacticsBehavior()),

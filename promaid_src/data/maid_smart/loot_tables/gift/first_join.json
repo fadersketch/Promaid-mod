@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:advancement_reward",
+  "pools": [
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "maid_smart:blueprint_book"
+        }
+      ]
+    },
+    {
+      "rolls": 1.0,
+      "bonus_rolls": 0.0,
+      "entries": [
+        {
+          "type": "minecraft:item",
+          "name": "maid_smart:schedule_book"
+        }
+      ]
+    }
+  ],
+  "random_sequence": "maid_smart:gift/first_join"
+}

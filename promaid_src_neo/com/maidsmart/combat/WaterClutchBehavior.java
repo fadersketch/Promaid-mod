@@ -50,6 +50,14 @@ import net.neoforged.neoforge.items.IItemHandler;
 public class WaterClutchBehavior extends Behavior<EntityMaid> {
     /** v1.5.102：数值改从配置面板读取（combat 段）——保持时长 / 下探格数 */
 
+    /**
+     * v1.2.0 实测五百一十二：空袭落地缓冲的冷却（tick）。
+     * 2 秒 = 40 tick——用户指定"给它内置一个 2 秒 cd"。只作用于**空袭分支**
+     * （`isFlightAirborne`），不碰通用落地水的"收水后再放一次"语义。
+     * 详见 {@link #flightClutchCd} 的根因说明。
+     */
+    private static final long FLIGHT_CLUTCH_CD = 40L;
+
     /** 已放的缓冲方块（水=落点+所在格 2 处；细雪=落点平面 1×1 雪垫，追踪漂移会补块） */
     private final java.util.ArrayList<BlockPos> placedList = new java.util.ArrayList<>();
     /** v1.1.0：本次放的是细雪（true）还是水（false）——收回时按类型移除 */
@@ -58,6 +66,36 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     private long placedTick = 0;
     /** v1.5.25e：本次坠落是否已用过落地水（落地后重置——防止高塔坠落途中反复放水） */
     private boolean clutchedThisFall = false;
+    /**
+     * v1.2.0 实测五百一十二【空袭落地雪/水的无限重放 CD】：下一允许放缓冲的 tick。
+     *
+     * 【根因】空袭分支复用了 `clutchedThisFall`，但 `recoverFluid()` 结尾会把它重置为
+     * false（那行是为【通用落地水】故意加的——"极高塔坠落时 1 秒水可能提前收，落地前
+     * 最后一段若仍达标就再放一次接住"）。空袭里这个重置就变成了无限循环：
+     * 保持期一到 → 标志清零 → 下一 tick 条件再次满足 → 又放一次 → 再清零……而
+     * **细雪不是实心方块**（实体沉进雪里、`onGround` 一直不成立），于是她"落了地"
+     * 仍在触发，雪花不停铺、行为槽一直被占 → **女仆无法起飞**（用户反馈的 bug）。
+     *
+     * 【修法】给空袭分支单独加一个 2 秒冷却（与通用分支解耦，不动它的"收水后再放"语义）：
+     * 触发时记 `gameTime + FLIGHT_CLUTCH_CD`，冷却内不再触发。2 秒也足够跨过
+     * "落进雪/水 → onGround 尚未成立"的那几 tick 窗口，循环被彻底切断。
+     */
+    private long flightClutchCd = 0;
+    /**
+     * v1.2.0 实测五百二十五【落地水阻拦飞行】：本次缓冲方块是不是**空袭/重锤落地帧**放的。
+     *
+     * 【为什么需要它】水是**流体**，而 `LivingEntity.travel` 的第一个分支就是
+     * `isInWater() → travelInWater(...)`——只要她还在水里，滑翔分支整个被顶掉：
+     * 烟花推力几乎全被水阻尼吃掉，而且水里 `onGround()` 恒为 false，
+     * 空袭"落脚再起飞"的支点判定也进不去。她于是站在自己刚放的水里"看着敌人不动"
+     * （用户反馈："落地水放出的水会阻拦女仆飞行"）。细雪不是流体、没这一层，
+     * 所以过去只有落地水挡飞行。
+     *
+     * 【怎么用】这类缓冲只负责"接住这一下"：她一旦不再下坠（落进水里/踩到地面，
+     * 竖直速度回到 ≥0）就立刻收回——见主循环里的"接住了就收"分支。
+     * 通用（高塔坠落）那条路**不置位**，它的保持时长仍由配置 waterHold 决定，语义不变。
+     */
+    private boolean flightPlaced = false;
     /** v1.5.27：上一 tick 的位置（传送突变检测——传送不会重置 fallDistance，
      *  且旧位置的水/本次坠落标志不跟着走；检测到突变立即清状态） */
     private BlockPos lastTickPos = null;
@@ -70,6 +108,9 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      *  v1.5.88：落地水开关（combat.waterClutch）；v1.1.0：落地雪开关（combat.snowClutch） */
     @Override
     protected boolean checkExtraStartConditions(ServerLevel level, EntityMaid maid) {
+        // v1.2.0 实测四百六十九：飞行作战不再豁免落地水/雪（用户要求"2 个模式下落地水/雪
+        // 恢复照常"）。此前为"水雪浇在女仆与怪物之间干扰作战"而屏蔽；现在收翅猛击命中时
+        // 已 resetFallDistance，落地水/雪只在真坠落时触发，正常作战不会误放。
         return com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
                 || com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get();
     }
@@ -118,52 +159,109 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
                     && !maid.onGround()
                     && maid.getDeltaMovement().y < 0
                     && !this.touchingPlacedSnow(level, maid)) {
-                BlockPos land = this.findLandingPos(level, maid);
+                BlockPos land = this.findLandingPos(level, maid, true);
                 if (land != null && this.ensureSnowPad(level, land)) {
                     this.placedTick = level.getGameTime();
                 }
             }
+            // v1.2.0 实测五百二十五【落地水阻拦飞行】：空袭/重锤落地帧放的**水**只负责
+            // "接住这一下"——她一旦不再下坠（竖直速度回到 ≥0：要么落进水里被水阻尼停住、
+            // 要么踩到地面）就**立刻**收回。详见 {@link #flightPlaced} 的根因说明。
+            // 细雪不走这一支（它不是流体，不挡滑翔分支）；通用（高塔坠落）也不走（保持时长
+            // 仍由配置 waterHold 决定，那是"极高塔补一次"语义的既有行为）。
+            if (this.flightPlaced && !this.placedSnow
+                    && maid.getDeltaMovement().y >= 0.0) {
+                this.recoverFluid(level, maid);
+                return;
+            }
             // 收回：HOLD_TICKS 到 → 移除全部缓冲方块（水或细雪，桶始终不消耗）；
-            // 保持时长对水/细雪共用（配置上限 100 tick = 5 秒 < 细雪冻伤线 140 tick——安全）
-            if (gameTime - this.placedTick >= com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_HOLD.get()) {
+            // v1.2.0：保持时长水/雪各自独立（细雪上限 100 tick = 5 秒 < 冻伤线 140 tick——安全）
+            int hold = this.placedSnow
+                    ? com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_HOLD.get()
+                    : com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_HOLD.get();
+            if (gameTime - this.placedTick >= hold) {
                 this.recoverFluid(level, maid);
             }
             return; // 缓冲等待期间不重新触发
         }
         // v1.1.0（1.21.1 重锤）/ 实测四百四十二【重锤专属落地水】：
-        // - 跃起全过程（isAirborne）：通用落地水/雪【完全让位】——提前放水会清零
+        // - 跃起全过程（isLeaping）：通用落地水/雪【完全让位】——提前放水会清零
         //   fallDistance，重锤下落加成全部丢失；旧版 suppressFallClutch 的"目标在
         //   范围内才抑制"半吊子状态已废弃。
         // - 落地帧（重锤行为结算完猛击后置位的 FORCED_CLUTCH）：在落点【强制】放
         //   一格水（有水桶）/细雪（只有细雪桶），不看 fallDistance 阈值与 suppress。
         //   此时猛击加成已算完，放水只负责让她落地不摔伤。
         // 消费必须无条件调用（否则开关全关时请求残留）。
-        boolean maceAir = com.maidsmart.combat.MaidMaceSmashBehavior.isAirborne(maid);
+        //
+        // 实测四百九十四：把【重锤跃起】与【空袭】拆开判。旧版用的是
+        // `MaidMaceSmashBehavior.isAirborne`（= 跃起 **或** 空袭）当作一个整体，
+        // 于是空袭被当成"重锤跃起中"直接 return —— 空袭落地永远没有落地水/雪
+        // （用户反馈的正是这个）。现在：跃起 → 让位；空袭 → 走下面的落地缓冲。
+        boolean maceLeap = com.maidsmart.combat.MaidMaceSmashBehavior.isLeaping(maid);
         boolean maceLanding = com.maidsmart.combat.MaidMaceSmashBehavior.consumeForcedClutch(maid);
-        if (maceAir || maceLanding) {
-            if (!maceLanding) {
-                return; // 空中：一律不放，保住 fallDistance → 猛击加成
-            }
+        // 注意顺序：maceLanding 必须【先于】maceLeap 判——重锤落地帧那一 tick 里
+        // 行为已把自身从 LEAPING 摘掉、同时置位 FORCED_CLUTCH，两个标志会同时为真。
+        if (maceLanding) {
             boolean forcedWater = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
                     && !this.isNether(level)
                     && this.hasItem(maid, "minecraft:water_bucket");
             boolean forcedSnow = !forcedWater
                     && com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get()
                     && this.hasItem(maid, "minecraft:powder_snow_bucket");
-            if (!forcedWater && !forcedSnow) {
-                return; // 没桶 → 没有落地缓冲（与通用逻辑同一语义：有桶才有钥匙）
+            if (forcedWater || forcedSnow) {
+                BlockPos maceLand = this.findLandingPos(level, maid, forcedSnow);
+                // v1.2.0 实测五百二十五：这一帧也吃与空袭同一个内置 CD（用户要求"跟落地雪一样"）。
+                // 重锤落地帧本来由 FORCED_CLUTCH"一次性消费"保证不重复，但跃起 → 落地 →
+                // 立刻再跃起的连击（重锤每 3 秒一发、落地水保持 5 tick）会让水**连着放**，
+                // 而她每次都要从水里重新起飞。加一道 2 秒闸门与空袭分支同口径。
+                if (maceLand != null && gameTime >= this.flightClutchCd) {
+                    this.clutchedThisFall = true;
+                    this.flightClutchCd = gameTime + FLIGHT_CLUTCH_CD;
+                    com.mojang.logging.LogUtils.getLogger().info(
+                            "mace clutch trigger: maid={} snow={} fallDist={} land={}",
+                            maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
+                            forcedSnow, String.format("%.1f", maid.fallDistance), maceLand);
+                    this.placeFluid(level, maid, maceLand, forcedSnow, true);
+                }
             }
-            BlockPos maceLand = this.findLandingPos(level, maid);
-            if (maceLand == null) {
-                return;
-            }
-            this.clutchedThisFall = true;
-            com.mojang.logging.LogUtils.getLogger().info(
-                    "mace clutch trigger: maid={} snow={} fallDist={} land={}",
-                    maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
-                    !forcedWater, String.format("%.1f", maid.fallDistance), maceLand);
-            this.placeFluid(level, maid, maceLand, !forcedWater);
             return;
+        }
+        if (maceLeap) {
+            return; // 跃起中：一律不放，保住 fallDistance → 猛击加成
+        }
+        // 实测四百九十四【空袭落地缓冲——与重锤同款的"特殊落地水"】：
+        // 空袭（近战空袭/远程空袭）常态是十几格高空盘旋与收翅俯冲，落地水/雪必须
+        // 一直能接住，否则就是十几点伤害甚至摔死。这里照搬重锤落地帧的语义，但
+        // 【落点帧由本行为自己判】——空袭没有"一次性跃起结束"这样的事件，改成看
+        // "未落地 + 正在下坠 + 脚下 1~2 格内是地面"，即重锤 `isNearGround` 的同款判据。
+        // 不看 fallDistance 阈值：滑翔把它钳在 ~1.0，按阈值判永远不触发（这也是旧版
+        // 空袭接不住的原因之一）。
+        if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            if (!maid.onGround()
+                    && maid.getDeltaMovement().y < 0
+                    && this.isNearGround(level, maid)
+                    && !this.clutchedThisFall
+                    && gameTime >= this.flightClutchCd) {
+                boolean flightWater = com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_CLUTCH.get()
+                        && !this.isNether(level)
+                        && this.hasItem(maid, "minecraft:water_bucket");
+                boolean flightSnow = !flightWater
+                        && com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_CLUTCH.get()
+                        && this.hasItem(maid, "minecraft:powder_snow_bucket");
+                if (flightWater || flightSnow) {
+                    BlockPos airLand = this.findLandingPos(level, maid, flightSnow);
+                    if (airLand != null) {
+                        this.clutchedThisFall = true;
+                        this.flightClutchCd = gameTime + FLIGHT_CLUTCH_CD;
+                        com.mojang.logging.LogUtils.getLogger().info(
+                                "flight clutch trigger: maid={} snow={} fallDist={} land={}",
+                                maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
+                                flightSnow, String.format("%.1f", maid.fallDistance), airLand);
+                        this.placeFluid(level, maid, airLand, flightSnow, true);
+                    }
+                }
+            }
+            return; // 空袭期间不放通用落地水（保住 fallDistance）
         }
         // 2. 触发判定：有钥匙桶（水/细雪）+ 真实坠落 + 未落地 + 距地面足够高。
         //    v1.1.0：水桶只在非下界作钥匙（下界放水瞬间蒸发）；细雪桶任何维度都可
@@ -182,13 +280,18 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         // 触发，任何高度坠落（3 格以上）都会在落水窗口内激活；被击退的轻微离地
         // （fallDistance 只有零点几）不会误触发。
         // v1.5.88：触发高度从配置面板读取（combat.waterFallDistance）
-        if (maid.fallDistance < (float) (double) com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get()) {
+        // v1.2.0：水/雪触发高度各自独立——本轮实际会用哪种缓冲，就按哪种的阈值判
+        boolean useSnow = snowKey && !waterKey; // 两者都有桶时优先用水（与下方 placeFluid 同口径）
+        double fallThreshold = useSnow
+                ? (double) com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_FALL_DISTANCE.get()
+                : (double) com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get();
+        if (maid.fallDistance < (float) fallThreshold) {
             return; // 累计下落不足（不是高空坠落）
         }
         if (this.clutchedThisFall) {
             return; // 本次坠落已用过落地水（防高塔坠落途中反复放水）
         }
-        BlockPos land = this.findLandingPos(level, maid);
+        BlockPos land = this.findLandingPos(level, maid, useSnow);
         if (land == null) {
             return;
         }
@@ -199,15 +302,14 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         com.mojang.logging.LogUtils.getLogger().info(
                 "clutch trigger: maid={} snow={} fallDist={} hasWater={} hasSnow={} land={}",
                 maid.getDisplayName() != null ? maid.getDisplayName().getString() : maid.getUUID(),
-                snowKey && !waterKey,
+                useSnow,
                 String.format("%.1f", maid.fallDistance),
                 waterKey, snowKey, land);
         this.placeFluid(level, maid, land, !waterKey); // 有水钥匙用水；只有细雪钥匙 → 落地雪
     }
 
     /** 背包里是否有指定物品（v1.1.0：水桶/细雪桶通用——落地雪复用） */
-    private boolean hasItem(EntityMaid maid, String itemId) {
-        Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
+    private boolean hasItem(EntityMaid maid, String itemId) {        Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                 net.minecraft.resources.ResourceLocation.parse(itemId));
         if (item == null) {
             return false;
@@ -228,6 +330,22 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * 脚下 1~2 格内有非空气方块 = 贴近地面。判据与
+     * `MaidFlightCombatBehavior.isNearGround` / `MaidMaceSmashBehavior.isNearGround` 一致
+     * （那两处是 private，这里照抄同一口径）。空袭落地缓冲用它代替 fallDistance 阈值：
+     * 滑翔把 fallDistance 钳在 ~1.0，按阈值判永远不触发。
+     */
+    private boolean isNearGround(ServerLevel level, EntityMaid maid) {
+        BlockPos p = maid.blockPosition();
+        for (int i = 0; i <= 1; i++) {
+            if (!level.getBlockState(p.below(i)).isAir()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
      * 找"即将落地"的放水格：从脚下向下扫 LANDING_SCAN 格，
      * 第一个实心方块的上方格就是落地点（若该格是空气则返回）。
      * v1.5.25g：加距离窗口——落水点必须在脚下 2~7 格之间（太近 <2 格来不及放水；
@@ -235,12 +353,16 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      * v1.5.27：d 从 1 开始扫——旧版从 2 开始，"地面就在脚下 1 格"（传送后或
      * 高速坠落瞬间）时第一个实心块是地面本身，其上方格是地面表面（实心）
      * → 永远 null → 不触发 → 摔死。d=1 时上方格即女仆脚格（空气）→ 能触发。
+     * v1.2.0：下探格数水/雪各自独立（snow=true 用雪的下探格数，否则用水的）。
      */
-    private BlockPos findLandingPos(ServerLevel level, EntityMaid maid) {
+    private BlockPos findLandingPos(ServerLevel level, EntityMaid maid, boolean snow) {
         Block waterBlock = net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(
                 net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
+        int scan = snow
+                ? com.maidsmart.config.MaidSmartConfig.COMBAT_SNOW_LANDING_SCAN.get()
+                : com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get();
         BlockPos feet = maid.blockPosition();
-        for (int d = 1; d <= Math.min(com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get(), 7); d++) {
+        for (int d = 1; d <= Math.min(scan, 7); d++) {
             BlockPos check = feet.offset(0, -d, 0);
             BlockState state = level.getBlockState(check);
             if (state.isAir()) {
@@ -276,6 +398,16 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
      * 桶只是【触发钥匙】——不真正消耗、不变化背包；收回时直接移除方块。
      */
     private void placeFluid(ServerLevel level, EntityMaid maid, BlockPos pos, boolean snow) {
+        this.placeFluid(level, maid, pos, snow, false);
+    }
+
+    /**
+     * @param flightSource true = 空袭/重锤落地帧放的（这类缓冲"接住就收"，见 {@link #flightPlaced}）；
+     *                     false = 通用高塔坠落放的（保持时长按配置 waterHold）
+     */
+    private void placeFluid(ServerLevel level, EntityMaid maid, BlockPos pos, boolean snow,
+                            boolean flightSource) {
+        this.flightPlaced = flightSource;
         if (snow) {
             this.placedSnow = true;
             this.ensureSnowPad(level, pos);

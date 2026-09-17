@@ -564,6 +564,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
             }
+            // 实测五百三十六：目标格被主人碰撞箱占着——【延后】
+            // （不消耗材料，主人让开后自动续建；这里不能直接跳过，
+            //  否则蓝图永远缺一块）
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, target)) {
+                prog.deferred.putIfAbsent(i, 0);
+                lookaheadLeft--;
+                continue;
+            }
             // 背包取料（支持等价族：要求橡木木板时任何木板都行），放置实际消耗的方块
             net.minecraft.world.item.Item used = BlueprintLib.consumeBlock(maid, blockId);
             if (used == null) {
@@ -754,6 +762,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         }
                         continue;
                     }
+                }
+                // 实测五百三十六：目标格被主人碰撞箱占着——【延后】不消耗
+                if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, target)) {
+                    reorder.add(idx);
+                    continue;
                 }
                 net.minecraft.world.item.Item used = BlueprintLib.consumeBlock(maid, blockId);
                 if (used == null && tryTakeFromOwner(maid, blockId)) {
@@ -1152,6 +1165,19 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                             logPlaceFail(level, target, placed, "支撑格区块未加载");
                             return false;
                         }
+                        // 实测五百三十六：支撑格被主人碰撞箱占着就不补支撑
+                        // （延后，不扣料；主人让开后自动续建）
+                        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, supPos)) {
+                            logPlaceFail(level, target, placed, "支撑格被主人占着");
+                            return false;
+                        }
+                        // v1.2.0 实测四百八十二【搭一个扣一个】：补支撑也是"放一块"，
+                        // 必须【先扣料再放】——旧版这里裸 setBlock，补的支撑方块凭空出现
+                        // （生存可刷）。扣不到就不补支撑 → 延后，等有料再建。
+                        if (!consumeExtraBlock(maid, support)) {
+                            logPlaceFail(level, target, placed, "补支撑无材料");
+                            return false;
+                        }
                         level.setBlock(supPos, support.defaultBlockState(), 3);
                         supState = level.getBlockState(supPos);
                         if (!supState.isAir()
@@ -1232,6 +1258,16 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     BlockPos supPos = target.relative(sup);
                     if (!(level.getBlockState(supPos).getBlock()
                             instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                        // 实测五百三十六：支撑格被主人碰撞箱占着就不补（延后，不扣料）
+                        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, supPos)) {
+                            logPlaceFail(level, target, placed, "支撑格被主人占着");
+                            return false;
+                        }
+                        // v1.2.0 实测四百八十二：补支撑先扣料（同 doPlace 主支撑）
+                        if (!consumeExtraBlock(maid, support)) {
+                            logPlaceFail(level, target, placed, "补支撑无材料");
+                            return false;
+                        }
                         level.setBlock(supPos, support.defaultBlockState(), 3);
                         placeTntSafe(level, target, placeState, flag);
                     }
@@ -1246,6 +1282,16 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                             // v1.5.252m：树叶不换（同附着类，保护树冠）
                             if (!(belowState.getBlock()
                                     instanceof net.minecraft.world.level.block.LeavesBlock)) {
+                                // 实测五百三十六：支撑格被主人碰撞箱占着就不补（延后，不扣料）
+                                if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, below)) {
+                                    logPlaceFail(level, target, placed, "下方支撑格被主人占着");
+                                    return false;
+                                }
+                                // v1.2.0 实测四百八十二：补下方支撑先扣料（同 doPlace 主支撑）
+                                if (!consumeExtraBlock(maid, support)) {
+                                    logPlaceFail(level, target, placed, "补下方支撑无材料");
+                                    return false;
+                                }
                                 level.setBlock(below, support.defaultBlockState(), 3);
                                 // 重放（复用上面的 flag：附着/红石类已按 flag 3 计算）
                                 placeTntSafe(level, target, placeState, flag);
@@ -1270,7 +1316,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             }
         }
         // v1.5.15：门下半放置后补全上半（setBlock 不会自动补，避免"半扇门"）
-        ensureDoorUpper(level, target, placeState);
+        ensureDoorUpper(level, maid, target, placeState);
         // v1.5.275/276：放置成功后回收目标格附近【同 id】掉落物——替代品"搭一个又掉
         // 一个"的循环根源已由替代品验收（altUsed/isAltPlaced）根治：替代品放置后被
         // 认可为已建，不再被拆掉重放（拆→掉→捡回背包→再放→再拆 = 材料数量翻倍观感）。
@@ -1562,6 +1608,33 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 || b instanceof net.minecraft.world.level.block.BannerBlock);
     }
 
+    /**
+     * v1.2.0 实测四百八十二【搭一个扣一个】：为"自动补支撑"额外扣 1 块材料。
+     *
+     * 补支撑（把目标格下方/附着方向换成合法支撑方块，见 doPlace）也是**真实放置了一块**，
+     * 旧版却是裸 `setBlock` 不扣料 → 每补一次就白送一块，生存模式可刷。
+     * 这里与主放置同口径：优先女仆背包（含手部栏），其次主人背包（`tryTakeFromOwner`
+     * 会把一组材料转给女仆）；创造模式主人无限。
+     *
+     * @return true = 确实扣到了 1 块（或创造模式豁免）；false = 没料，调用方应延后
+     */
+    private static boolean consumeExtraBlock(EntityMaid maid, Block support) {
+        try {
+            String id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(support).toString();
+            net.minecraft.world.item.Item used = BlueprintLib.consumeBlock(maid, id);
+            if (used != null) {
+                return true;
+            }
+            // 女仆没有 → 从主人背包拉一组再取（与主放置同款补料路径）
+            if (tryTakeFromOwner(maid, id)) {
+                return BlueprintLib.consumeBlock(maid, id) != null;
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** v1.5.82：放置成功计数——placedSet 按相对坐标去重，补建/覆盖重复放置
      *  同一位置不再重复累加（修复进度出现 150% 等超 100% 的重复计算） */
     private static void countPlaced(BuildPlan.Progress prog, int x, int y, int z) {
@@ -1650,8 +1723,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         return found;
     }
 
-    /** v1.5.25：主人背包有该材料时自动转一组给女仆（分批补料自动续建，无需重新下达） */
-    private boolean tryTakeFromOwner(EntityMaid maid, String blockId) {
+    /** v1.5.25：主人背包有该材料时自动转一组给女仆（分批补料自动续建，无需重新下达）
+     *  v1.2.0 实测四百八十二：改 static——不依赖实例字段，供 static 的 doPlace/补支撑复用 */
+    private static boolean tryTakeFromOwner(EntityMaid maid, String blockId) {
         net.minecraft.world.entity.player.Player owner = null;
         if (maid.getOwner() instanceof net.minecraft.world.entity.player.Player p) {
             owner = p;
@@ -1768,7 +1842,8 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** 门上半自动补全：放置 door 下半后，若上方是空气则补 upper half（防止半扇门） */
-    private static void ensureDoorUpper(ServerLevel level, BlockPos target, BlockState state) {
+    private static void ensureDoorUpper(ServerLevel level, EntityMaid maid, BlockPos target,
+                                       BlockState state) {
         for (net.minecraft.world.level.block.state.properties.Property<?> p : state.getProperties()) {
             if (!"half".equals(p.getName())) {
                 continue;
@@ -1781,7 +1856,10 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     return;
                 }
                 BlockPos above = target.offset(0, 1, 0);
-                if (level.getBlockState(above).isAir()) {
+                // 实测五百三十六：上半扇也是一块方块——
+                // 目标格被主人碰撞箱占着就不补（防把主人头部塞上）
+                if (level.getBlockState(above).isAir()
+                        && !com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, above)) {
                     level.setBlock(above, state.setValue(halfProp, net.minecraft.world.level.block.state.properties.DoubleBlockHalf.UPPER), 3);
                 }
             } catch (Exception ignored) {

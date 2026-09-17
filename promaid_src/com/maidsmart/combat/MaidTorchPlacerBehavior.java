@@ -107,6 +107,11 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         if (!level.m_8055_(target).m_60795_()) {
             return;
         }
+        // 实测五百三十六：目标格被主人碰撞箱占着就不插火把
+        // （火把虽不窒息，但插在人身上/头上同样是把人当墙）
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, target)) {
+            return;
+        }
         // v1.1.0 修复：脚下必须是【有支撑面】的实体方块——旧版只判"非空气"，
         // 于是火把会插在短草/花/已有火把（无碰撞方块）上悬空。改用原版放置规则
         // 判定（isFaceSturdy 朝上），与玩家手动插火把口径一致。

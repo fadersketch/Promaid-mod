@@ -114,7 +114,10 @@ public class BuildArchive extends net.minecraft.world.level.saveddata.SavedData 
                 p.blueprintId = oldId;
                 p.name = tag.getString("name");
                 p.cursor = tag.getInt("cursor");
-                p.paused = tag.getTagType("paused") != 0; // v1.5.250：contains 是 containsKey 不是 getBoolean
+                // v1.5.250：contains 是 containsKey 不是 getBoolean。
+                // v1.2.0 实测四百八十三【修】：getTagType 返回类型 id（ByteTag 恒为 1 →
+                // `!= 0` 恒真，paused 读不回 false）；读值要用 getByte。
+                p.paused = tag.getByte("paused") != 0;
                 p.foremanUuid = tag.contains("foremanUuid", 8) ? tag.getString("foremanUuid") : "";
                 a.plans.add(p);
             }

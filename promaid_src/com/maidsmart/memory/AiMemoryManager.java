@@ -111,7 +111,10 @@ public class AiMemoryManager {
             // ——旧代码这里返回"键是否存在"（putBoolean 后恒 true）→ 服务端
             // isEnabled 恒 true → Query 回包永远 Sync(true) → 客户端被覆盖回"开"
             // （"关了又自己打开"的根因）。getBoolean 等价实现 = getByte != 0。
-            return pd.m_128435_(PERSIST_TAG) != 0;
+            // v1.2.0 实测四百八十三【修】：此处原先误用 m_128435_(=getTagType)——
+            // 它返回 Tag 的类型 id，而 ByteTag.getId() 是常量 1（字节码 iconst_1/ireturn），
+            // 所以 `!= 0` 恒为 true，等于上一版 bug 原样复发。必须读值：m_128445_(=getByte)。
+            return pd.m_128445_(PERSIST_TAG) != 0;
         }
         return com.maidsmart.config.MaidSmartConfig.MEMORY_ENABLE.get();
     }
@@ -335,6 +338,13 @@ public class AiMemoryManager {
         com.maidsmart.task.MaidMineBehavior.forgetUuid(maidUuid);
         com.maidsmart.task.MaidWoodBehavior.forget(maid.m_19879_());
         com.maidsmart.task.MaidWoodBehavior.forgetUuid(maidUuid);
+        // v1.2.0 实测四百八十三【同步 1.21.1】：飞行作战的滑翔/俯冲状态是 static 表——
+        // 女仆卸载/死亡时若行为没走到 stop()（LivingEntity.remove 只 clearMemories，
+        // 不 stopAll），残留会让该 UUID 永久"俯冲中"：再也进不了飞行作战 +
+        // 空中禁传送/落地缓冲全线卡死。本方法（EntityLeaveLevelEvent）是既有的
+        // 统一清理点，一并清掉。（旧版 1.20.1 缺这一步，属漏同步。）
+        com.maidsmart.combat.MaidFlightCombatBehavior.forget(maidUuid);
+        com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
     }
 
     /**
@@ -375,6 +385,14 @@ public class AiMemoryManager {
      */
     @SubscribeEvent
     public void onPlayerLogout(net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        // v1.2.0：指标石会话清理（无论记忆功能是否开启）——玩家下线 → 解绑并还原女仆任务，
+        // 防"人走了女仆还卡在临时建造任务上"
+        try {
+            if (event.getEntity() instanceof ServerPlayer sp) {
+                com.maidsmart.build.IndexStoneService.onPlayerLeave(sp);
+            }
+        } catch (Throwable ignored) {
+        }
         if (!com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ENABLE.get()
                 || !com.maidsmart.config.MaidSmartConfig.MEMORY_INDEX_ON_LOGOUT.get()) {
             return;

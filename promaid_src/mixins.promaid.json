@@ -46,12 +46,22 @@
     "MaidChatLlmGateMixin",
     "MixinTntBuildGuard",
     "MaidBedBlockInteropMixin",
-    "MaidTombstoneClickMixin"
+    "MaidTombstoneClickMixin",
+    "EntityFlagInvoker",
+    "LivingEntitySpinAccessor",
+    "MaidSpinAttackTouchMixin",
+    "MaidSwimGlideMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
     "MaidConfigMemoryMixin",
-    "EmotionPoseMixin"
+    "EmotionPoseMixin",
+    "LivingEntityRendererAddLayerInvoker",
+    "MaidElytraLayerMixin",
+    "MaidElytraLayerGeckoMixin",
+    "MaidFlightDiveTiltMixin",
+    "ElytraModelAccessor",
+    "MaidModelPackSortMixin"
   ],
   "injectors": {
     "defaultRequire": 1

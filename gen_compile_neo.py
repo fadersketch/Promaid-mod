@@ -31,10 +31,19 @@ if tlm is None:
         tlm = p
         break
 
-cp = [neo, mc, neou, tlm]
-# NeoForge 修补过的类必须排在 vanilla 前面（与运行时一致）：ServerPlayer$RespawnPosAngle
-# 在未修补的 vanilla jar 里是包私有，只有 NeoForge 修补版是 public——
-# 顺位反了会让"给女仆床实现 getRespawnPosition"编译不过（实测）。
+cp = [neo, neou, mc, tlm]
+# 【顺序必须与运行期一致：NeoForge 补丁 jar 在前，未修补的 vanilla 在后】
+# 依据（实测 + javap 对照三个 jar 的 class 标志）：
+#   ServerPlayer$RespawnPosAngle
+#     - client-1.21.1-…-srg.jar          → final class（【包私有】）
+#     - neoforge-21.1.250-client.jar     → public final class（NeoForge 修补版）
+#     - neoforge-21.1.250-universal.jar  → 无此类
+# MaidBedBlockInteropMixin 要实现 IBlockExtension.getRespawnPosition，其返回类型正是
+# ServerPlayer.RespawnPosAngle —— 用【包私有】类型做 public 方法的返回类型，按 JLS
+# 是编译错误。旧版 cp=[neo, mc, neou, tlm] 把未修补的 mc 排在修补版前面，javac 取到
+# 包私有那份，本该直接编译失败；能过是因为 classpath 上先命中了 neo(client) 里的
+# public 版本。顺序写反等于"靠偶然命中"，换成 universal-only classpath 或调整 jar
+# 顺序就会突然编译不过。这里改成与运行期一致的 [neo, neou, mc]，消除该隐患。
 # NeoForge platform libs (event bus, FML loader, lwjgl, distmarker)
 import glob as _g
 cp += [

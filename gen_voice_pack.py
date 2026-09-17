@@ -105,6 +105,7 @@ JP = {
     # -------- battle --------
     'enemy_near.ogg': '敵が来たよ、気をつけて！',
     'enemy_clear.ogg': '敵は片付けたよ、もう安心して！',
+    'flight_not_ready.ogg': '空戦の装備が足りないの、普通に戦うね',
     'owner_hurt.ogg': 'ご主人様、怪我したの！？',
     'owner_low_hp.ogg': 'ご主人様の体力が危ないよ、心配だよ…',
     'shield_share.ogg': '盾がもう壊れそう、これを使って！',

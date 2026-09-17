@@ -145,6 +145,10 @@ public class PromaidConfigScreen extends Screen {
     private int altTableMode = 0;
     private EditBox altInput;
     private AltList altList;
+    /** v1.2.0 实测五百一十九：投喂食物勾选子页（食物黑名单图形化勾选，与矿表/替代品子页同款交互） */
+    private boolean foodTable = false;
+    private EditBox foodInput;
+    private FoodList foodList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -169,6 +173,9 @@ public class PromaidConfigScreen extends Screen {
      */
     private static java.util.List<String[]> creativeCache = null; // {id, cnName}
     private static long creativeCacheBuilt = -1;
+    /** v1.2.0 实测五百一十九：食物缓存（{id, 中文名}）——与 creativeCache 同款懒构建 */
+    private static java.util.List<String[]> foodCache = null;
+    private static long foodCacheBuilt = -1;
 
     private static void ensureCreativeCache() {
         long now = System.currentTimeMillis();
@@ -194,6 +201,45 @@ public class PromaidConfigScreen extends Screen {
             creativeCache.add(new String[]{id, cn == null ? "" : cn});
         }
         creativeCacheBuilt = now;
+    }
+
+    /**
+     * 实测五百一十九：食物候选缓存（{id, 中文名}）——与 ensureCreativeCache 同款懒构建、
+     * 1 分钟缓存。候选口径 = **带食物属性**的任意物品（含模组食物），与 TLM 自己吃食
+     * 同一判据（有 `getFoodProperties()` 即可，不看是不是原版）。
+     */
+    private static void ensureFoodCache() {
+        long now = System.currentTimeMillis();
+        if (foodCache != null && now - foodCacheBuilt < 60_000L) {
+            return; // 1 分钟缓存（模组运行时注册表不会变）
+        }
+        foodCache = new ArrayList<>();
+        for (net.minecraft.world.item.Item item : net.minecraft.core.registries.BuiltInRegistries.ITEM) {
+            net.minecraft.world.item.ItemStack stack;
+            try {
+                stack = new net.minecraft.world.item.ItemStack(item);
+                if (stack.isEmpty()) {
+                    continue;
+                }
+                if (stack.get(net.minecraft.core.component.DataComponents.FOOD) == null) {
+                    continue; // 没有食物属性 → 不是食物
+                }
+            } catch (Throwable ignored) {
+                continue;
+            }
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+            if (key == null) {
+                continue;
+            }
+            String cn = "";
+            try {
+                cn = stack.getHoverName().getString();
+            } catch (Exception ignored) {
+            }
+            foodCache.add(new String[]{key.toString(), cn == null ? "" : cn});
+        }
+        foodCacheBuilt = now;
     }
 
     /** 实测四百二十三【配置面板重组】：大类（Group）——首页只列大类，进入后列小类（Section）。 */
@@ -352,6 +398,10 @@ public class PromaidConfigScreen extends Screen {
             this.altTableButtons(w, h, cx);
             return;
         }
+        if (this.foodTable) {
+            this.foodTableButtons(w, h, cx);
+            return;
+        }
         this.sectionButtons(w, h, cx);
     }
 
@@ -405,6 +455,7 @@ public class PromaidConfigScreen extends Screen {
                 this.mineTable = false;
                 this.woodTable = false;
                 this.altTable = false;
+                this.foodTable = false;
                 this.inGroup = false;
                 this.init();
             };
@@ -777,6 +828,162 @@ public class PromaidConfigScreen extends Screen {
 
     /** v1.5.254：替代品名单子页（建造板块）——三张按高度分类的名单（半格/一格/两格），
      *  交互与矿表子页同款（名单切换 + 创造面板搜索/网格点击 toggle + 输入添加 + 列表）。 */
+    /**
+     * v1.2.0 实测五百一十九：投喂食物勾选子页——顶部搜索框 + 物品网格（点击图标切换"能不能吃"）
+     * + 底部黑名单列表（每行「允许吃」一键移出）。交互与矿表/替代品子页同款。
+     */
+    private void foodTableButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        this.creativeInput = new EditBox(this.font, left, 46, panelWidth - 20, 18,
+                Component.literal("搜索食物（中英文皆可）"));
+        this.creativeInput.setMaxLength(64);
+        this.creativeInput.setValue(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.setResponder(s -> {
+            this.creativeQuery = s;
+            this.rebuildFoodCreative();
+        });
+        this.addRenderableWidget(this.creativeInput);
+        int gridTop = 66;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildFoodCreative();
+        int pageY = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25c0"), b -> {
+                this.creativePage--;
+                this.rebuildWidgets();
+            }).bounds(cx - 40, pageY, 20, 16).build());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.addRenderableWidget(Button.builder(Component.literal("\u00a77\u25b6"), b -> {
+                this.creativePage++;
+                this.rebuildWidgets();
+            }).bounds(cx + 20, pageY, 20, 16).build());
+        }
+        int inputY = gridBottom + 24;
+        this.foodInput = new EditBox(this.font, left, inputY, panelWidth - 116, 18,
+                Component.literal("列为不能吃"));
+        this.foodInput.setMaxLength(64);
+        this.foodInput.setHint(Component.literal("minecraft:rotten_flesh"));
+        this.addRenderableWidget(this.foodInput);
+        this.addRenderableWidget(Button.builder(Component.literal("列为不能吃"), b -> this.addFoodBlacklist())
+                .bounds(left + panelWidth - 96, inputY, 80, 18).build());
+        int listTop = inputY + 24;
+        int listH = Math.max(24, Math.min(h - 78 - listTop - 4, h - listTop - 36));
+        this.foodList = new FoodList(this.font, left, listTop, panelWidth - 20, listH);
+        this.foodList.setX(left);
+        this.addRenderableWidget(this.foodList);
+        this.addRenderableWidget(Button.builder(Component.literal("\u2190 返回参数"), b -> {
+            this.foodTable = false;
+            this.rebuildWidgets();
+        }).bounds(12, h - 34, 100, 20).build());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 是否"能吃"（不在黑名单里即能吃） */
+    private boolean isFoodChecked(String id) {
+        return !MaidSmartConfig.AID_FOOD_BLACKLIST.get().contains(id);
+    }
+
+    /** 当前可喂食物总数（子页按钮上的 "(可喂 N / 不能吃 M)" 用） */
+    private int countFeedableFoods() {
+        try {
+            ensureFoodCache();
+            int n = 0;
+            for (String[] e : foodCache) {
+                if (!this.isFoodChecked(e[0])) {
+                    continue;
+                }
+                n++;
+            }
+            return n;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 切换某物品"能不能吃"（写回 aidFoodBlacklist 并刷新底部列表） */
+    private void toggleFoodChecked(String id) {
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_FOOD_BLACKLIST.get());
+        if (list.contains(id)) {
+            list.remove(id);
+        } else {
+            list.add(id);
+        }
+        MaidSmartConfig.AID_FOOD_BLACKLIST.set(list);
+        if (this.foodList != null) {
+            this.foodList.rebuild();
+        }
+    }
+
+    /** 手动输入 id 列入"不能吃"（支持省略 minecraft: 前缀） */
+    private void addFoodBlacklist() {
+        if (this.foodInput == null) {
+            return;
+        }
+        String text = this.foodInput.getValue().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        if (!text.contains(":")) {
+            text = "minecraft:" + text;
+        }
+        net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                .get(net.minecraft.resources.ResourceLocation.parse(text));
+        if (item == null) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        if (key == null) {
+            return;
+        }
+        String id = key.toString();
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_FOOD_BLACKLIST.get());
+        if (!list.contains(id)) {
+            list.add(id);
+            MaidSmartConfig.AID_FOOD_BLACKLIST.set(list);
+        }
+        this.foodInput.setValue("");
+        if (this.foodList != null) {
+            this.foodList.rebuild();
+        }
+    }
+
+    /** 从"不能吃"移回能吃（底部列表每行的「允许吃」按钮） */
+    private void removeFoodBlacklist(String id) {
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_FOOD_BLACKLIST.get());
+        list.remove(id);
+        MaidSmartConfig.AID_FOOD_BLACKLIST.set(list);
+        if (this.foodList != null) {
+            this.foodList.rebuild();
+        }
+    }
+
+    /** 重建食物网格（搜索过滤；与 rebuildCreative 同款，只过滤内存缓存） */
+    private void rebuildFoodCreative() {
+        this.creativeItems.clear();
+        ensureFoodCache();
+        String q = this.creativeQuery == null ? "" : this.creativeQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        for (String[] e : foodCache) {
+            String id = e[0];
+            String cn = e[1];
+            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q)))) {
+                continue;
+            }
+            net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                    .get(net.minecraft.resources.ResourceLocation.parse(id));
+            if (item == null) {
+                continue;
+            }
+            this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+        }
+        this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
+    }
+
     private void altTableButtons(int w, int h, int cx) {
         int panelLeft = Math.max(8, cx - 280);
         int panelWidth = Math.min(560, w - 16);
@@ -1207,6 +1414,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.BUILD_MAX_MAIDS, s), "女仆管理上限：128 格内参与建造的女仆超过此数时手册列表截断（只影响显示，不影响实际建造）"));
         this.rows.add(new BoolRow("建造地点=玩家脚下", MaidSmartConfig.BUILD_ORIGIN_PLAYER.get(),
                 v -> MaidSmartConfig.BUILD_ORIGIN_PLAYER.set(v), "建造地点基准：true=玩家脚下（默认），false=女仆脚下"));
+        this.rows.add(new BoolRow("指标石",
+                MaidSmartConfig.BUILD_INDEX_STONE.get(),
+                v -> MaidSmartConfig.BUILD_INDEX_STONE.set(v),
+                "指标石（默认开）：手持右击方块锁定（绿→红，可锁很远）→ 右击你的女仆绑定 → 从女仆所在格到锁定格之间的空气方块组成临时蓝图，她立刻从自己背包（不够从你背包）取材料逐格填充，材料不固定（数量最多者优先、必须有碰撞）。关 = 指标石退化为普通物品"));
         // v1.5.316：红石机器改革开关（专属顺序+活建造+自动放矿车）
         this.rows.add(new BoolRow("红石机器专属搭建", MaidSmartConfig.BUILD_MACHINE_SMART.get(),
                 v -> MaidSmartConfig.BUILD_MACHINE_SMART.set(v), "红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→机构→活动件→传感→动力源→TNT）+ 活建造，建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默+完工唤醒）"));
@@ -1794,10 +2005,42 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发、细雪不会）
         this.rows.add(new BoolRow("落地雪", MaidSmartConfig.COMBAT_SNOW_CLUTCH.get(),
                 v -> MaidSmartConfig.COMBAT_SNOW_CLUTCH.set(v), "落地雪（细雪桶版落地水，默认开）：高空坠落时在落点平面铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动，落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（偏一格即空摔，追求稳请用水桶），且绝不在高处拦她（细雪减速后剩下的路照样摔）；下界也能用（水会蒸发、细雪不会）；细雪接触 7 秒才开始冻伤、收回上限 5 秒在安全线内；与落地水共用触发高度/保持时长/下探格数，两者都有桶时优先用水"));
+        this.rows.add(new NumRow("落地雪触发高度",
+                String.valueOf(MaidSmartConfig.COMBAT_SNOW_FALL_DISTANCE.get()),
+                v -> PromaidConfigScreen.setDouble(MaidSmartConfig.COMBAT_SNOW_FALL_DISTANCE, v),
+                "落地雪触发高度（格，默认 4）：累计坠落高度超过此值才铺雪垫缓冲"));
+        this.rows.add(new NumRow("落地雪保持（tick）",
+                String.valueOf(MaidSmartConfig.COMBAT_SNOW_HOLD.get()),
+                v -> PromaidConfigScreen.setInt(MaidSmartConfig.COMBAT_SNOW_HOLD, v),
+                "落地雪保持（tick，默认 5）：铺出的细雪保留多久后收回（上限 100 tick = 5 秒 < 细雪冻伤线 140 tick）"));
+        this.rows.add(new NumRow("落地雪下探格数",
+                String.valueOf(MaidSmartConfig.COMBAT_SNOW_LANDING_SCAN.get()),
+                v -> PromaidConfigScreen.setInt(MaidSmartConfig.COMBAT_SNOW_LANDING_SCAN, v),
+                "落地雪下探格数（默认 2）：提前向下探测几格判断要不要铺雪垫（防高空误放）"));
         // v1.5.199：水桶垫水（岩浆灭火，1 秒后收回，水桶不消耗；击退搭高垫水
         // v1.5.250 已删除）
         this.rows.add(new BoolRow("岩浆逃生放水", MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.get(),
                 v -> MaidSmartConfig.COMBAT_WATER_BUCKET_LAVA.set(v), "岩浆逃生放水：垫高后周围没有水源且包里有水桶 → 在自己垫的方块上放水灭火（1 秒后收回；接触的岩浆源可能变黑曜石）"));
+        this.rows.add(new BoolRow("免疫鞘翅撞击伤害",
+                MaidSmartConfig.COMBAT_FLIGHT_NO_WALL_DAMAGE.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_NO_WALL_DAMAGE.set(v),
+                "飞行作战免疫鞘翅撞击伤害（默认开）：女仆在飞行作战滑翔中撞到方块不再受 fly_into_wall 伤害——高速滑翔撞墙在飞行链路里很容易发生，一撞就掉血会打断连招；关闭则恢复原版撞击伤害。只作用于飞行作战任务"));
+        this.rows.add(new BoolRow("空袭免疫摔落伤害",
+                MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.set(v),
+                "空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪保护（与重锤同款特殊落地缓冲）"));
+        this.rows.add(new BoolRow("激流三叉戟突进",
+                MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
+                v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),
+                "激流三叉戟旋转突进（默认开）：攻击模式 / 近战空袭下主手拿着【激流】三叉戟时，她会照原版玩家的方式朝目标旋转突进（撞到谁就打谁，按等级决定冲量与音效）。默认开——这是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍。"));
+        this.rows.add(new BoolRow("远程空袭近身弹开",
+                MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.set(v),
+                "远程空袭近身弹开（默认开）：怪物贴到 3 格内时，女仆会被施加一个【远离怪物】的速度矢量并保持 1.5 秒，防止她在远程攻击时仍往敌人身上飞、下落途中被贴脸打死。只弹开女仆自己、不弹开怪物——她脱离的同时也就离开了输出位，且在狭小空间（墙角/洞穴）里跑不掉，所以敌人仍有命中机会。关闭 = 恢复旧行为（贴着怪物盘旋）"));
+        this.rows.add(new BoolRow("弩用普通烟花当弹药",
+                MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.get(),
+                v -> MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.set(v),
+                "弩用普通烟花当弹药（默认开）：开启后任意烟花火箭都能当弩的弹药——与原版玩家一致（原版弩的弹药判据不看烟花有没有爆炸组件），代价是极少数情况下会烧掉一枚本可当飞行燃料的普通烟花。关闭 = 只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用；两种情况下都会优先挑威力大的（合成用烟火之星多的）。"));
     }
 
     private void bridgeRows() {
@@ -1833,8 +2076,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 60 秒，从释放时刻起算）"));
         this.rows.add(new BoolRow("致死伤害保护", MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get(),
                 v -> MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.set(v), "致死伤害保护：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收"));
-        this.rows.add(new NumRow("释放血量比", String.valueOf(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get()),
-                s -> setDouble(MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO, s), "释放血量比：自动收的魂符释放时女仆恢复的血量比例（0.35 = 35%）"));
         this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
         this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
@@ -1897,6 +2138,14 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.AID_MAID_MUTUAL.set(v), "女仆之间互相支援（默认开）：同主人、16 格内的其他女仆低血/着火/中毒时，自动投药水/金苹果/喂食支援她（与支援主人同一套方案，主人优先）；关闭 = 女仆只照顾主人、不互相支援"));
         this.rows.add(new NumRow("投喂触发饱食度", String.valueOf(MaidSmartConfig.AID_FOOD_THRESHOLD.get()),
                 s -> setInt(MaidSmartConfig.AID_FOOD_THRESHOLD, s), "投喂触发饱食度（4-20，20=只要不满就喂）：主人饱食度低于此值自动喂食（默认 12）——v1.5.301 起填 20 真实生效（旧版范围上限 18，填 20 被静默钳回 18）"));
+        this.rows.add(new BtnRow("投喂食物勾选",
+                "打开 →（可喂 " + this.countFeedableFoods() + " / 不能吃 " + ((List)MaidSmartConfig.AID_FOOD_BLACKLIST.get()).size() + "）",
+                () -> {
+            this.foodTable = true;
+            this.creativePage = 0;
+            this.rebuildWidgets();
+        },
+                "列出全部带食物属性的物品（含模组食物如三明治），点图标切换「能不能吃」——打勾 = 女仆可以喂，取消勾选 = 列入「不能吃」（写进 aidFoodBlacklist）；留空黑名单则所有食物都能喂。与 TLM 自己吃食同一判据（有食物属性即可，不看是不是原版）"));
         this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
                 s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0.1-1，1=掉血就治）：主人血量低于此比例自动治疗（默认 0.30）"));
         this.rows.add(new BoolRow("被动插火把", MaidSmartConfig.TORCH_PLACER_ENABLE.get(),
@@ -1961,6 +2210,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     private void autoCombatRows() {
         this.rows.add(new BoolRow("主动切换战斗模式", MaidSmartConfig.COMBAT_AUTO_SWITCH.get(),
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH.set(v), "主动切换战斗模式：主人被有来源的攻击（怪/玩家/弹射物；摔落岩浆等环境伤害不算）或主人攻击了别的生物时，附近的女仆无论在干什么（挖矿/伐木/烹饪/跟随…）都立即切战斗模式保护主人；女仆自己被怪物攻击也会让她本人+周围姐妹立即参战（实测五十八）；默认开启"));
+        this.rows.add(new BoolRow("飞行作战（1.21.1）",
+                MaidSmartConfig.COMBAT_FLIGHT_MODE.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_MODE.set(v),
+                "飞行作战：新的作战模式（图标=鞘翅），女仆身上【鞘翅+重锤+烟花火箭】三件齐备时激活——进入后自己在胸甲穿鞘翅、主手换重锤（烟花不必拿在手上，副手留给你放盾牌/食物），照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那一套：目标升空/自身坠落时张开鞘翅滑翔、烟花火箭推进接近，到目标上方后收翅俯冲用重锤猛砸（重锤下落加成要求不在滑翔状态，所以必须先收翅），落地后仍有烟花则继续起飞。三件缺任意一件 = 模式不激活，行为与普通攻击模式一致（地面近战）。本模式不响应自主切换；滑翔/俯冲全程禁止传送。关闭 = 该模式完全不工作"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
         // v1.1.0 实测二十一：武器权重可配置（选任务时加权随机——模组/原版各一条）
@@ -2112,6 +2365,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // 实测四百四十三：悬空禁搭方块（反馈："悬空状态应禁止搭建方块——挖矿/伐木也通用"）
         this.rows.add(new BoolRow("悬空禁搭方块", MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get(),
                 v -> MaidSmartConfig.MISC_NO_PLACE_IN_AIR.set(v), "悬空禁搭方块（默认开）：女仆未落地时不再搭方块——覆盖自保搭高/搭路/挖矿垫脚/伐木垫脚。触发口径：重锤跃起（1.21.1）整段空中都禁；其余是坠落距离达到「落地水触发高度」时禁（此时落地水会接管——搭方块既救不了她，还会挡住落地水害她摔死）。水里/岩浆、骑乘、鞘翅滑翔不算悬空；站在地面照常搭"));
+        // 实测五百三十六：不得搭在主人身上（目标格被主人碰撞箱占着就不搭）
+        this.rows.add(new BoolRow("不得搭在主人身上", MaidSmartConfig.MISC_NO_PLACE_ON_OWNER.get(),
+                v -> MaidSmartConfig.MISC_NO_PLACE_ON_OWNER.set(v), "不得搭在主人身上（默认开）：目标格被主人碰撞箱占着时不搭方块——防把主人挤住、卡住或盖住头部。覆盖自保搭高/搭路/挖矿垫脚/伐木垫脚、插火把、AI 工具「填上这里」，以及蓝图/碑石建造；蓝图类遇到这种情况是【延后】而非跳过——你让开后她会自动续建。主人站在方块上时不会误判（判据取碰撞箱真正交叠）。关掉 = 恢复旧行为"));
         // 实测四百四十八：蛋糕可食用（兜底逃生通道）
         this.rows.add(new BoolRow("蛋糕可食用", MaidSmartConfig.MISC_CAKE_EDIBLE.get(),
                 v -> MaidSmartConfig.MISC_CAKE_EDIBLE.set(v), "蛋糕可食用（默认开）：让女仆把蛋糕当食物——女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂。关闭后蛋糕恢复原版（只能放置、女仆不再当食物），「女仆吃蛋糕」全部停用——这是与第三方模组冲突时的逃生通道"));
@@ -2485,6 +2741,97 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         }
     }
 
+    /** v1.2.0 实测五百一十九：黑名单列表（底部）——每行物品图标 + 中文名 + 「允许吃」按钮 */
+    private class FoodList extends ObjectSelectionList<FoodList.FoodEntry> {
+        private final List<String> entries = new ArrayList<>();
+
+        FoodList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.getInstance(), width, height, top, 22);
+            this.setX(x);
+            // 1.21.1 无 setRenderBackground / setRenderTopAndBottom
+            this.setWidth(width); // 行宽 = 列表宽（同 MinableList）
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.clearEntries();
+            this.entries.clear();
+            this.entries.addAll(MaidSmartConfig.AID_FOOD_BLACKLIST.get());
+            for (String e : this.entries) {
+                this.addEntry(new FoodEntry(e));
+            }
+        }
+
+        @Override
+        public int getRowWidth() {
+            return Math.max(this.getWidth(), 120);
+        }
+
+        /** 同 MinableList：滚动条覆盖为低调样式 */
+        @Override
+        protected void renderItem(GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.renderItem(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.getX() + this.getRowWidth() - 6;
+            g.fill(sx, this.getY(), sx + 6, this.getBottom(), 0xFF101010);
+            int maxScroll = this.getMaxScroll();
+            if (maxScroll > 0) {
+                int area = this.getBottom() - this.getY();
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.getScrollAmount() * (double) (area - sh)) + this.getY();
+                g.fill(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        /** 单行：物品图标 + 红色叉 + 中文名 + 「允许吃」按钮（点了移出黑名单） */
+        private class FoodEntry extends ObjectSelectionList.Entry<FoodList.FoodEntry> {
+            private final String id;
+            private final Button allowButton;
+
+            FoodEntry(String id) {
+                this.id = id;
+                this.allowButton = Button.builder(Component.literal("允许吃"),
+                                b -> PromaidConfigScreen.this.removeFoodBlacklist(this.id))
+                        .bounds(0, 0, 56, 18).build();
+            }
+
+            @Override
+            public void render(GuiGraphics g, int index, int top, int left, int width, int height,
+                                int mouseX, int mouseY, boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                        .get(net.minecraft.resources.ResourceLocation.parse(this.id));
+                if (item != null) {
+                    g.renderItem(new net.minecraft.world.item.ItemStack(item), x, y - 2);
+                    x += 20;
+                }
+                g.drawString(PromaidConfigScreen.this.font,
+                        Component.literal("\u00a7c\u2716 \u00a7f"
+                                + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                        x, y, 0xFFAAAAAA, false);
+                this.allowButton.setX(left + FoodList.this.getRowWidth() - 62);
+                this.allowButton.setY(top + 1);
+                this.allowButton.render(g, mouseX, mouseY, partialTick);
+            }
+
+            @Override
+            public boolean mouseClicked(double mx, double my, int button) {
+                if (button == 0 && this.allowButton.isMouseOver(mx, my)) {
+                    this.allowButton.mouseClicked(mx, my, 0);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component getNarration() {
+                return Component.literal(this.id);
+            }
+        }
+    }
+
     private class MinableList extends ObjectSelectionList<MinableList.MinableEntry> {
         private final List<String> entries = new ArrayList<>();
 
@@ -2801,7 +3148,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
         // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
-        if (!this.mineTable && !this.woodTable && !this.altTable) {
+        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable) {
             g.drawCenteredString(this.font, Component.literal("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
@@ -2927,6 +3274,82 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 g.drawString(this.font, Component.literal(lockTxt),
                         left, gridBottom + 46, lockColor, false);
             }
+        } else if (this.foodTable) {
+            // v1.2.0 实测五百一十九：投喂食物勾选子页——网格里绿色勾=能吃 / 红叉=不能吃
+            String title = "\u00a7e投喂食物——点击图标切换「能不能吃」（\u00a7a\u2714 能吃\u00a7e / \u00a7c\u2716 不能吃\u00a7e）";
+            g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
+            int panelLeft = Math.max(8, cx - 280);
+            int panelWidth = Math.min(560, w - 16);
+            int left = panelLeft + 10;
+            int gridTop = GRID_TOP;
+            int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+            int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+            g.fill(panelLeft + 8, gridTop - 4, panelLeft + panelWidth - 8, gridBottom, 0x80101010);
+            int perPage = GRID_COLS * this.gridRows;
+            int start = this.creativePage * perPage;
+            int end = Math.min(this.creativeItems.size(), start + perPage);
+            int hoverIdx = -1;
+            int totalFoods = 0;
+            int feedableFoods = 0;
+            ensureFoodCache();
+            for (String[] e : foodCache) {
+                totalFoods++;
+                if (!this.isFoodChecked(e[0])) {
+                    continue;
+                }
+                feedableFoods++;
+            }
+            for (int i = start; i < end; i++) {
+                int col = (i - start) % GRID_COLS;
+                int row = (i - start) / GRID_COLS;
+                int x = left + col * GRID_CELL;
+                int y = gridTop + row * GRID_CELL;
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+                String id = key == null ? "" : key.toString();
+                if (this.isFoodChecked(id)) {
+                    g.fill(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
+                    g.drawCenteredString(this.font, Component.literal("\u2714"), x + 12, y + 12, 0xFFFFFF);
+                } else {
+                    g.fill(x - 1, y - 1, x + 17, y + 17, 0x80CC2222);
+                    g.drawString(this.font, Component.literal("\u00a7c\u2716"),
+                            x + 12, y + 12, 0xFF5555, false);
+                }
+                g.renderItem(stack, x, y);
+                if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                    hoverIdx = i;
+                }
+            }
+            int infoX = left + GRID_COLS * GRID_CELL + 12;
+            int infoY = gridTop + 2;
+            if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+                String hover = key == null ? "?" : key.toString();
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                g.drawString(this.font,
+                        Component.literal("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                        infoX, infoY, 0xFFFFFF, false);
+                g.drawString(this.font, Component.literal("\u00a77" + hover),
+                        infoX, infoY + 10, 0xAAAAAA, false);
+                g.drawString(this.font, Component.literal(this.isFoodChecked(hover)
+                                ? "\u00a7a当前：能吃（点击改成不能吃）"
+                                : "\u00a7c当前：不能吃（点击改回能吃）"),
+                        infoX, infoY + 20, 0xFFFFFF, false);
+            } else {
+                int pages = this.creativePages();
+                if (pages > 1) {
+                    String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                    g.drawString(this.font, Component.literal(pg),
+                            infoX, infoY, 0x888888, false);
+                }
+            }
+            String chkHint = "\u00a77共 " + totalFoods + " 种食物，当前可喂 " + feedableFoods
+                    + " 种；取消勾选即列入「不能吃」，下方列表可一键恢复";
+            g.drawCenteredString(this.font, Component.literal(chkHint),
+                    this.clampCenterX(chkHint, cx), this.height - 50, 0x888888);
         } else if (this.altTable) {
             // v1.5.254：替代品名单子页（建造板块）——交互与矿表同款
             String[] modeNames = {"半格高（台阶类）", "一格高（整方块）", "竖两格（门/高植物等）",
@@ -3124,6 +3547,31 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
         }
         // v1.5.254：替代品子页网格点击 → 加入/取消当前替代品表
+        // v1.2.0 实测五百一十九：投喂食物子页网格点击 → 切换该物品"能不能吃"
+        if (this.foodTable && button == 0) {
+            int fcx = this.width / 2;
+            int fPanelLeft = Math.max(8, fcx - 280);
+            int fLeft = fPanelLeft + 10;
+            int fGridTop = GRID_TOP;
+            int fGridRows = this.height < 215 ? 2 : GRID_ROWS;
+            int fGridBottom = fGridTop + fGridRows * GRID_CELL;
+            if (mouseX >= fLeft && mouseX < fLeft + GRID_COLS * GRID_CELL
+                    && mouseY >= fGridTop && mouseY < fGridBottom) {
+                int perPage = GRID_COLS * this.gridRows;
+                int start = this.creativePage * perPage;
+                int col = (int) ((mouseX - fLeft) / GRID_CELL);
+                int row = (int) ((mouseY - fGridTop) / GRID_CELL);
+                int idx = start + row * GRID_COLS + col;
+                if (idx >= 0 && idx < this.creativeItems.size()) {
+                    net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM
+                            .getKey(this.creativeItems.get(idx).getItem());
+                    if (key != null) {
+                        this.toggleFoodChecked(key.toString());
+                    }
+                    return true;
+                }
+            }
+        }
         if (this.altTable && button == 0) {
             int cx = this.width / 2;
             int panelLeft = Math.max(8, cx - 280);

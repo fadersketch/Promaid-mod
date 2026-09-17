@@ -5,7 +5,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STAGING = os.path.join(BASE, 'staging_promaid_neo')
 OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.1.0-neoforge-1.21.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.2.0-neoforge-1.21.1.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
@@ -60,6 +60,16 @@ shutil.copytree(os.path.join(OUT, 'com'), os.path.join(STAGING, 'com'))
 # 3. assets + data
 shutil.copytree(os.path.join(SRC, 'assets'), os.path.join(STAGING, 'assets'))
 shutil.copytree(os.path.join(SRC, 'data'), os.path.join(STAGING, 'data'))
+
+# 3a. 语言文件语法校验（实测四百六十九：一份 lang 多一个尾逗号 → 整份被客户端跳过 →
+#     任务名/配置项全变键名。这里在打包前卡死，避免坏文件再次进 jar）
+import json as _json
+for _p in pathlib.Path(SRC, 'assets').rglob('lang/*.json'):
+    try:
+        _json.loads(_p.read_text(encoding='utf-8-sig'))
+    except Exception as _e:
+        raise SystemExit('FATAL: 语言文件 JSON 非法（会导致整份被客户端跳过）: %s -> %s' % (_p, _e))
+print('lang json: OK')
 
 # 4. mixins + pack.mcmeta + LICENSE
 shutil.copy2(os.path.join(SRC, 'mixins.promaid.json'), os.path.join(STAGING, 'mixins.promaid.json'))

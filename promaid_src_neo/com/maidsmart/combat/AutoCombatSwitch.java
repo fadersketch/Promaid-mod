@@ -619,6 +619,11 @@ public class AutoCombatSwitch {
         if (!maid.isAlive() || maid.isBaby()) {
             return 0; // 死亡/幼年不参战
         }
+        // v1.2.0：飞行作战（近战/远战）下【自主战斗不介入】——模式自己负责索敌/攻击/换装，
+        // 自主战斗不得把她切走、不得换战术、不得还原（返回 2 = "已是战斗任务，跳过"）
+        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+            return 2;
+        }
         // v1.1.0 实测一百六十三（反馈："退而求其次——让排班拥有更高的优先级。排班
         // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
         // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
@@ -986,6 +991,18 @@ if (++this.restoreThrottle < 20) {
                 boolean stillOnCombat = maid.getTask() != null
                         && (maid.getTask().getUid().toString().equals(assignedUid)
                         || MaidWorkTags.isCombatTask(maid));
+                // v1.2.0：飞行作战【绝不被还原链切走】——它是玩家手动指定的模式
+                // （需三件齐备）。若女仆曾被自动参战过（残留 COMBAT_ACTIVE 标记）后又
+                // 被玩家切到飞行作战，还原链会因 isCombatTask(flight)=true 把她当成
+                // "本系统的战斗任务"还原回战斗前任务 = 顶掉玩家选择。这里按
+                // "玩家已接管"处理：不动她的任务，只清我们的战斗簿记（走下面
+                // !stillOnCombat 分支：clearMarkers + restorePrevMode）。
+                if (stillOnCombat && maid.getTask() != null
+                        && com.maidsmart.combat.MaidFlightKit.isFlightUid(maid.getTask().getUid())) {
+                    stillOnCombat = false;
+                    com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 当前为飞行作战（玩家手动指定），还原链不动任务，仅清战斗标记");
+                }
                 if (stillOnCombat
                         && com.maidsmart.schedule.ScheduleData.isOn(maid)
                         && !com.maidsmart.schedule.ScheduleData.load(maid).isEmpty()) {
@@ -1234,6 +1251,17 @@ if (++this.restoreThrottle < 20) {
                 }
             } catch (Throwable ignored) {
             }
+            // v1.2.0：飞行作战【不响应自主切换】——它是玩家手动指定的作战模式（需鞘翅+
+            // 重锤+烟花三件齐备才激活），主人被打时不应被自动切进来；已在飞行作战的
+            // 女仆也不应被自动切走。本判定同时挡住"入战选任务"与"战中换战术"两条
+            // 路径（它们共用本池）。按 UID 精确排除。
+            try {
+                if (task.getUid() != null
+                        && com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {
+                    continue;
+                }
+            } catch (Throwable ignored) {
+            }
             try {
                 if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
                     continue;
@@ -1400,6 +1428,16 @@ if (++this.restoreThrottle < 20) {
         // IAttackTask 实例即可参与切换（与 pickCombatTask/buildPools 同口径）。
         if (!(cur instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask)) {
             return;
+        }
+        // v1.2.0：飞行作战【不参与近远距离换战术】——它是玩家手动指定的模式
+        // （需鞘翅+重锤+烟花三件齐备），换战术把她切去别的战斗任务等于把玩家的
+        // 选择顶掉，且滑翔状态会被 setTask 打断。彻底不评估（buildPools 的排除只
+        // 挡住"切进来"，挡不住"从这里切出去"，必须在此显式提前返回）。
+        try {
+            if (com.maidsmart.combat.MaidFlightKit.isFlightUid(cur.getUid())) {
+                return;
+            }
+        } catch (Throwable ignored) {
         }
         // v1.1.0 实测六十一：最短持有 / 反向横跳冷却（防抖三件套之二）
         long now = maid.level().getGameTime();

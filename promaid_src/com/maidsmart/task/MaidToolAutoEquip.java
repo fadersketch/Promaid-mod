@@ -672,8 +672,10 @@ public final class MaidToolAutoEquip {
      *  三叉戟/斧/剑等保留（三叉戟投掷近战双用、斧高伤害）。
      *  v1.5.166：再排除御币——御币是 ProjectileWeaponItem 子类（弹幕武器），
      *  攻击模式下自动装备机制会把御币当"合格近战武器"留下不换，女仆拿着御币
-     *  在攻击任务里打不出弹幕（弹幕走弹幕任务），等于拿根弱棍打架。 */
-    private static boolean isMeleeWeapon(ItemStack stack) {
+     *  在攻击任务里打不出弹幕（弹幕走弹幕任务），等于拿根弱棍打架。
+     *  v1.2.0：放宽为 public——飞行作战的"三件套"里武器位改成"任意近战武器"，
+     *  复用这里的同一判据，保证与自动装备口径一致（镐/弓/弩/御币照样排除）。 */
+    public static boolean isMeleeWeapon(ItemStack stack) {
         if (stack.m_41619_()) {
             return false;
         }

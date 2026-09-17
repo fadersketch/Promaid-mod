@@ -107,9 +107,39 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
     /**
      * 实测四百四十二：是否处于"重锤空中状态"——跃起期间禁止自动传送 + 禁止通用
      * 落地缓冲（保住 fallDistance 给猛击）。与 isLeaping 同义，语义名更明确。
+     * v1.2.0：飞行作战（滑翔/俯冲）同属"空中且靠坠落距离吃加成"，一并算进来——
+     * 否则突袭途中会被传送链拽走、或被落地水提前清零坠落距离。
      */
     public static boolean isAirborne(EntityMaid maid) {
-        return isLeaping(maid);
+        return isLeaping(maid) || MaidFlightKit.isFlightAirborne(maid);
+    }
+
+    /**
+     * v1.2.0：外部（飞行作战俯冲落地时）请求一次落地缓冲——语义与跃起落地帧
+     * 完全相同，由 WaterClutchBehavior 在同一 tick 消费，在落点强放一格水/雪。
+     */
+    public static void requestForcedClutch(EntityMaid maid) {
+        if (maid != null) {
+            // 实测四百四十二 / v1.2.0：兜底清理——落地缓冲开关全关时没人消费，
+            // 残留 UUID 会在同 UUID 女仆下次落地时误触发。飞行作战（俯冲）也走本
+            // 通道，所以上限判定不能只看 LEAPING。
+            if (FORCED_CLUTCH.size() > 256) {
+                FORCED_CLUTCH.clear();
+            }
+            FORCED_CLUTCH.add(maid.getUUID());
+        }
+    }
+
+    /** v1.2.0：清理某只女仆的残留请求（女仆消失/服务端停止时的兜底） */
+    public static void forgetForcedClutch(java.util.UUID maidId) {
+        if (maidId != null) {
+            FORCED_CLUTCH.remove(maidId);
+        }
+    }
+
+    /** v1.2.0：全清（服务端启动兜底；static 表不跨会话） */
+    public static void clearForcedClutch() {
+        FORCED_CLUTCH.clear();
     }
 
     /**

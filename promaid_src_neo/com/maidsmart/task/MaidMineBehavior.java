@@ -1763,6 +1763,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             return false; // 实际头顶被堵（正在被顶起中）→ 等站稳再垫，防窒息
         }
         // 目标矿在正上方时不误判为"障碍"（v1.5.25：头顶检查放宽，不检查矿所在格）
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, place)) {
+            return false;
+        }
         Item item = this.takeBuildBlock(maid);
         if (item == null) {
             // v1.5.113（C2）：搭方块材料耗尽 → 气泡提示一次（限频），不再反复尝试
@@ -1825,6 +1830,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         boolean gap = below.isAir() || below.getBlock()
                 == net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
         if (gap && level.getBlockState(ahead).isAir()) {
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
+                return false;
+            }
             Item item = this.takeBuildBlock(maid);
             if (item == null) {
                 this.notifyNoBuildBlock(maid); // v1.5.113（C2）
@@ -1882,6 +1892,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                         || com.maidsmart.tool.DangerBlocks.cellDangerous(level, tx, y - 2, tz))) {
             return false;
         }
+        // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+        // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+        if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, support)) {
+            return false;
+        }
         Item item = this.takeBuildBlock(maid);
         if (item == null) {
             this.notifyNoBuildBlock(maid);
@@ -1925,6 +1940,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         boolean gap = below.isAir() || below.getBlock()
                 == net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(net.minecraft.resources.ResourceLocation.parse("minecraft:water"));
         if (gap && level.getBlockState(ahead).isAir()) {
+            // 实测五百三十六：目标格被主人碰撞箱占着就不搭
+            // （防把主人痊住/盖头）——在取料前拦，不浪费方块
+            if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, fill)) {
+                return false;
+            }
             Item item = this.takeBuildBlock(maid);
             if (item == null) {
                 this.notifyNoBuildBlock(maid); // v1.5.113（C2）

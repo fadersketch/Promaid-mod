@@ -18,7 +18,7 @@ import net.minecraft.world.item.ItemStack;
  * - 触发条件：女仆存活/未移除/未骑乘 + 冷却未到 + 主人是同维度 ServerPlayer 且
  *   在半径内（默认 24 格）+ 主人背包（主手/副手/物品栏）有空魂符；
  * - 动作：新建 SMART_SLAB_HAS_MAID 魂符 → ItemSmartSlab.storeMaidData 存女仆数据 →
- *   魂符打自动标记（冷却时间戳 + 释放血量比）→ 放入主人背包空槽 → 主人收到提示 +
+ *   魂符打自动标记（冷却时间戳）→ 放入主人背包空槽 → 主人收到提示 +
  *   再生药水效果（时长=冷却）+ 升级音效 → 女仆实体从世界移除（m_146870_ discard）；
  * - 冷却：成功收符后女仆 persistentData 写冷却时间戳（默认 180 秒），期间不再触发；
  * - 防收放循环：魂符右键释放（MaidAndItemTransformEvent.ToMaid）时把冷却写回女仆
@@ -32,7 +32,6 @@ public final class MaidSoulSpellGuard {
 
     private static final String AUTO_SAVED_TAG = "maid_hp_low_protect_auto_saved";
     private static final String COOLDOWN_UNTIL_TAG = "maid_hp_low_protect_cooldown_until";
-    private static final String RELEASE_HEALTH_RATIO_TAG = "maid_hp_low_protect_release_health_ratio";
     /** 实测四百三十三：魂符上记录的女仆名——HUD 在女仆还在符里时也能显示"回魂符 · 名字" */
     private static final String AUTO_SAVED_NAME_TAG = "maid_hp_low_protect_auto_name";
     private static final String MAID_INFO_TAG = "MaidInfo";
@@ -89,8 +88,19 @@ public final class MaidSoulSpellGuard {
         writeCooldownToMaidData(data, until);
         // 实测四百三十九 双保险：若 TLM 在事件之后才把 data 应用到实体，直接写实体也能生效
         event.getMaid().getPersistentData().m_128356_(COOLDOWN_UNTIL_TAG, until);
+        // v1.2.0【放出即摔死】：收符时存的死亡快照带着"坠落中"状态（FallDistance /
+        // 下坠速度 Motion / 着火 Fire / 死亡计时 DeathTime），TLM 释放时原样 load →
+        // 她以"还在下坠"的姿态出现在落点，落地首 tick 就再吃一次摔落伤害 → 再收符
+        // → 再放出，死循环。这里在 TLM load 之前把死亡瞬间状态清干净（data 就是
+        // 即将应用给实体的那份 NBT）。
+        com.maidsmart.protect.MasterDeathTeleportHandler.sanitizeDeathState(data);
+        // 同一份清洗也作用到物品里的女仆数据，防止 TLM 从物品读取
+        try {
+            net.minecraft.nbt.CompoundTag maidInfo = item.m_41698_(MAID_INFO_TAG);
+            com.maidsmart.protect.MasterDeathTeleportHandler.sanitizeDeathState(maidInfo);
+        } catch (Throwable ignored) {
+        }
         tag.m_128473_(AUTO_SAVED_TAG);
-        tag.m_128473_(RELEASE_HEALTH_RATIO_TAG);
     }
 
     /** 实测四百四十一【收符期间冷却条消失修复】：任何"女仆 → 魂符"转换都把女仆当前
@@ -252,13 +262,11 @@ public final class MaidSoulSpellGuard {
         return s == null || s.isBlank() ? null : s;
     }
 
-    /** 魂符打自动标记：冷却时间戳 + 释放血量比（对齐 maid_survival 结构） */
+    /** 魂符打自动标记：冷却时间戳（对齐 maid_survival 结构，用于 HUD 与防收放循环） */
     private static void markAutoSaved(ItemStack slab, long until) {
         net.minecraft.nbt.CompoundTag tag = slab.m_41784_();
         tag.m_128379_(AUTO_SAVED_TAG, true);
         tag.m_128356_(COOLDOWN_UNTIL_TAG, until);
-        tag.m_128350_(RELEASE_HEALTH_RATIO_TAG,
-                (float) (double) com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_RELEASE_RATIO.get());
         net.minecraft.nbt.CompoundTag maidInfo = slab.m_41698_(MAID_INFO_TAG);
         if (maidInfo != null) {
             writeCooldownToMaidData(maidInfo, until);
