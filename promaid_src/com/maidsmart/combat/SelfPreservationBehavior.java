@@ -456,8 +456,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** 实测三百六十四：塔顶无回血资源围困计时——已到安全高度、威胁扎营、
      *  包里无任何回血资源（累计 10 秒 → 下塔再战，不再接回家） */
     private int heallessSiegeTicks = 0;
-    /** 实测五百五十一：下塔请求（"塔顶无回血资源围困满 10 秒"置位，branch 4 消费） */
-    private boolean towerDescendRequest = false;
     /** 实测五百五十一：本场自保的决策快照是否已记录（首 tick 锁定威胁时写一次） */
     private boolean loggedDecision = false;
     /** 实测三百六十五：塔顶无回血资源围困播报（每场一次；三百七十三改为
@@ -716,7 +714,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.exitStableTicks = 0;
         this.noThreatTicks = 0;
         this.heallessSiegeTicks = 0;
-        this.towerDescendRequest = false;
         this.loggedDecision = false;
         this.announcedDescend = false;
         this.pillarLocked = false;
@@ -1053,12 +1050,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 起因：实测五百五十那轮只能看到"她没搭"，看不出卡在哪一道门槛上。
         if (!this.loggedDecision && threat != null) {
             this.loggedDecision = true;
+            String heal = this.healResourceId(maid);
             com.maidsmart.tool.PromaidLog.log("自保诊断",
                     com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 血 " + Math.round(ratio * 100.0f) + "%"
                             + " 距威胁 " + String.format(java.util.Locale.ROOT, "%.1f", maid.m_20270_(threat)) + " 格"
                             + "（贴身线 " + String.format(java.util.Locale.ROOT, "%.1f", closeDistance()) + " 格）"
-                            + " | 回血资源=" + (this.hasHealResource(maid) ? "有" : "无")
+                            + " | 回血资源=" + (heal == null ? "无" : heal)
                             + " 可搭方块=" + (this.hasBuildBlock(maid) ? "有" : "无"));
         }
         // 实测三百六十三：完全安全计时——无威胁且无环境危险（累计），持续
@@ -1084,10 +1082,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //（没传送就不该放弃塔位）。解除自保的归位传送不受影响（会话结束才发）。
         if (this.heallessSiegeTicks >= 200) {
             this.heallessSiegeTicks = 0;
-            // 实测五百五十一：这一条原来是"只清计数、什么都不做"（实测三百九十把
-            // 围困传送停用后留下的空壳）→ 塔顶没回血资源也只能干站着。现在让它真的
-            // 下塔：标记交给 branch 4 清塔位（下塔回地面继续打，不是站塔上等死）
-            this.towerDescendRequest = true;
+            // 实测五百五十二：这里保持原样（实测三百九十停用围困传送后就是"只清计数"）。
+            // 五百五十一 曾让它真的下塔，已回退——塔位状态由会话退出线统一处理。
         }
         // 实测三百六十三【会话退出线】（三百六十四调整默认值）：
         // ① 血 ≥ 安全回归线（safeReturnRatio，默认 0.7）+ 无环境危险 → 解除。
@@ -1319,18 +1315,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
         }
         // 2. 连续两次被近身 → 击退周围敌人 + 强制搭高
-        //    实测三百六十五原本写的是"无回血资源不搭高（塔的唯一意义是安全回血）"。
-        //    v1.2.0 实测五百五十一【改成按材料】——那条口径把"她手里有一堆方块、
-        //    正被按在地上打"也算成"不该搭"（玩家：宁愿被打到死）。搭高真正的门槛
-        //    是【背包里有没有能搭的方块】，回血资源只决定"上去以后干什么"：
-        //    有回血资源 → 塔顶守势回血（原设计）；没有 → 只垫到够不着的高度、
-        //    塔顶待 10 秒就下来继续打（见 branch 3 的上限分流与 branch 4 的下塔）。
+        //    实测三百六十五：无回血资源不搭高（塔的唯一意义是安全回血）→ 走位周旋。
+        //    实测五百五十一曾把这条门槛改成"按材料判"，实测五百五十二**回退**：
+        //    没得回血爬上去确实没意义，门槛就该是回血资源；当时之所以"看着像这块的锅"，
+        //    是因为【回血资源的判定太窄】（只认一小撮原版食物，金胡萝卜都不认）——
+        //    该修的是判定，不是门槛（见 hasHealResource）。
         if (dist < closeDistance()) {
             if (!this.forcedPillar) {
                 this.grappleTicks++;
                 if (this.grappleTicks >= 2) {
                     this.grappleTicks = 0;
-                    if (this.hasBuildBlock(maid)) {
+                    if (this.hasHealResource(maid)) {
                         this.triggerPillarBurst(maid);
                     } else if (!this.standingOnOwnTower(maid)) {
                         // 实测三百六十七：塔顶不爆发走位（同 branch 4 守卫）
@@ -1348,12 +1343,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 this.pillarBaseY = -1;
             }
             int fh = this.pillarBaseY >= 0 ? fy - this.pillarBaseY : 0;
-            // 实测五百五十一【上限分流】：有回血资源 → 原来那样垫到 pillarMax
-            // （塔顶守势安心回血）；没有回血资源 → 只垫到"够不着"的安全高度
-            // （safePillarHeight，默认 5）就停——旧版会一路垫到 30 格然后站桩，
-            // 没得回血就是纯干耗（实测三百六十五当初反对的正是这个）
-            int fhCap = this.hasHealResource(maid) ? maxPillar : Math.min(maxPillar, safePillarHeight());
-            if (fh >= fhCap) {
+            if (fh >= maxPillar) {
                 // v1.5.194：搭到顶 → 站在最高处等威胁消失（原"糊脸"已删除——
                 // 30 格时怪物早丢索敌，封头无意义；窒息封头改为搭方块中途触发）
                 this.buildCooldown = buildCd;
@@ -1369,10 +1359,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             return; // 强制搭高期间不做其他动作
         }
         // 4. 被近身：垫到安全高度后站桩（不再无脑一直搭）
-        //    实测三百六十五原本的门槛是"包里没有任何回血资源 → 搭高不再是可选项"
-        //    （塔的唯一意义是安全回血）。v1.2.0 实测五百五十一改为**按材料**判：
-        //    门槛 = 背包里有没有能搭的方块（hasBuildBlock）。没回血资源也照样上去，
-        //    只是上限低（不垫 30 格）且塔顶不干耗（见下方 10 秒下塔）。 */
+        //    实测三百六十五【根本断绝】：包里没有任何回血资源（药水/金苹果/
+        //    食物，hasHealResource 无副作用探测）→ 搭高【不再是可选项目】——
+        //    塔的唯一意义是安全回血，没得回血垫塔纯属干耗（还会白白消耗方块、
+        //    挡路 60 秒）。此时被近身 = 小幅走位周旋 + 贴脸反击（上方已跑），
+        //    珍珠/危急传送兜底不变。
+        //    实测五百五十二：这条门槛本身是对的、保持不动（五百五十一 改用"材料"
+        //    判是错的，已回退）；要修的是 hasHealResource 认不出模组食物/金胡萝卜
+        //    这件事——"包里明明有食物，却判成没有"。 */
         int currentY = maid.m_20183_().m_123342_();
         if (this.pillarBaseY >= 0 && currentY <= this.pillarBaseY) {
             this.pillarBaseY = -1;
@@ -1382,7 +1376,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 高度配对：垫到 5 格跳下稳定触发落地水，水减速怪物）
         int safePillar = safePillarHeight();
         if (dist < closeDistance()) {
-            if (!this.hasBuildBlock(maid)) {
+            if (!this.hasHealResource(maid)) {
                 // 实测三百六十七：人站在自己塔顶（脚下方块是登记的战斗方块）
                 // 时不走位——走位会把人从塔边拽下去摔伤；塔顶是安全点，原地
                 // 站桩（贴脸反击在上方已跑，战术并行），没资源也等下塔机制
@@ -1409,21 +1403,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         this.announceNoMaterial(maid);
                         this.strafeDisengage(maid, threat);
                     }
-                }
-            }
-            // 实测五百五十一：塔顶守势 + 无回血资源 → 不原地干耗（实测三百六十五的
-            // 原意）。towerDescendRequest 由上方"围困满 10 秒"置位：清掉塔位状态下塔，
-            // 回地面继续打——再被近身会重新垫上去，"打不过就上去躲、躲不成就下来打"
-            if (this.towerDescendRequest) {
-                this.towerDescendRequest = false;
-                if (this.pillarBaseY >= 0 || this.forcedPillar) {
-                    this.pillarBaseY = -1;
-                    this.forcedPillar = false;
-                    this.walkOnTicks = 0;
-                    this.pillarLocked = false;
-                    com.maidsmart.tool.PromaidLog.log("自保搭高",
-                            com.maidsmart.tool.PromaidLog.nameOf(maid)
-                                    + " 塔顶没有回血资源 → 下塔再战（不原地干耗）");
                 }
             }
             // 已垫到安全高度：塔顶守势（站高处回血，威胁变化交给珍珠/反击/战术）
@@ -3556,8 +3535,23 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * 实测三百六十四：回血资源探测（无副作用）——包里有药水（任何 PotionItem，
      * 治疗/再生/增益都算"能帮到自己"）/ 金苹果 / 治疗食物（HEAL_FOODS 名单）。
      * 全无 = 塔顶守势没有意义（自然回血都保证不了），围困 10 秒传送兜底。
+     *
+     * 实测五百五十二【判定放宽，门槛不动】：旧版只认上面那一小撮硬编码名单，
+     * 于是"包里明明有食物（金胡萝卜、各种模组料理）却判成没有" → 被围殴时一块不搭
+     * （实测五百五十一 之所以绕道去改门槛，就是被这个假阴性带偏的）。
+     * 现在改成与投喂系统【同一个口径】——{@link com.maidsmart.action.EmotionalActionExecutor#isFeedableFood}
+     * （= TLM 自己的 {@code DefaultMaidHealSelfMeal.isHealMeal} 口径：有食物属性且不在
+     * 投喂黑名单里），任何"能吃的东西"都算回血资源；金苹果走上面那条单独判定
+     * （它被投喂黑名单刻意排除，但作为回血资源必须算）。
      */
     private boolean hasHealResource(EntityMaid maid) {
+        return healResourceId(maid) != null;
+    }
+
+    /** 实测五百五十二：回血资源探测的"证据"版——返回第一个被认出来的物品注册名，
+     *  没有则 null。自保诊断日志会把它写出来（"回血资源=minecraft:golden_carrot"），
+     *  以后再出现"她怎么不搭"就能一眼看出判定有没有认错。 */
+    private String healResourceId(EntityMaid maid) {
         try {
             IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -3566,22 +3560,26 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 if (s.m_41720_() instanceof net.minecraft.world.item.PotionItem) {
-                    return true;
+                    return ForgeRegistries.ITEMS.getKey(s.m_41720_()).toString();
                 }
                 String id = ForgeRegistries.ITEMS.getKey(s.m_41720_()).toString();
                 if (id.equals("minecraft:golden_apple")
                         || id.equals("minecraft:enchanted_golden_apple")) {
-                    return true;
+                    return id;
+                }
+                // 实测五百五十二：通用食物判定（模组食物/金胡萝卜等同样算）
+                if (com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s)) {
+                    return id;
                 }
                 for (String food : HEAL_FOODS) {
                     if (id.equals(food)) {
-                        return true;
+                        return id;
                     }
                 }
             }
         } catch (Exception ignored) {
         }
-        return false;
+        return null;
     }
 
     /**
