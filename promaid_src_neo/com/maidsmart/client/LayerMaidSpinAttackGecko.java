@@ -2,6 +2,7 @@ package com.maidsmart.client;
 
 import com.github.tartaricacid.touhoulittlemaid.client.renderer.entity.GeckoEntityMaidRenderer;
 import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.GeoLayerRenderer;
+import com.github.tartaricacid.touhoulittlemaid.geckolib3.geo.IGeoEntityRenderer;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.world.entity.Mob;
@@ -23,15 +24,15 @@ import net.minecraft.world.entity.Mob;
  *
  * 【判据】{@link MaidSpinAttackEffect#shouldRender}（＝原版那个已同步的旋转标志位）。
  */
-public class LayerMaidSpinAttackGecko extends GeoLayerRenderer<Mob, GeckoEntityMaidRenderer<Mob>> {
+public class LayerMaidSpinAttackGecko extends GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> {
 
     @SuppressWarnings("unchecked")
-    public LayerMaidSpinAttackGecko(GeckoEntityMaidRenderer<?> renderer) {
-        super((GeckoEntityMaidRenderer<Mob>) renderer);
+    public LayerMaidSpinAttackGecko(IGeoEntityRenderer<?> renderer) {
+        super((IGeoEntityRenderer<Mob>) renderer);
     }
 
     @Override
-    public GeoLayerRenderer<Mob, GeckoEntityMaidRenderer<Mob>> copy(GeckoEntityMaidRenderer<Mob> renderer) {
+    public GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> copy(IGeoEntityRenderer<Mob> renderer) {
         return new LayerMaidSpinAttackGecko(renderer);
     }
 
@@ -39,6 +40,13 @@ public class LayerMaidSpinAttackGecko extends GeoLayerRenderer<Mob, GeckoEntityM
     public void render(PoseStack poseStack, MultiBufferSource buffer, int light, Mob mob,
                        float limbSwing, float limbSwingAmount, float partialTick,
                        float ageInTicks, float netHeadYaw, float headPitch) {
+        // v1.2.0 实测五百四十八【YSM 兼容】：理由同 LayerMaidElytraGecko——R 从
+        // GeckoEntityMaidRenderer 放宽为 IGeoEntityRenderer，避免擦除后的桥接方法在
+        // TLM 把图层复制到 YSM 渲染器时抛 ClassCastException（那会让实体渲染器整体建不起来
+        // → 黑屏进不去游戏）；同时本层只在 Gecko 渲染器下绘制。
+        if (!(getRenderer() instanceof GeckoEntityMaidRenderer)) {
+            return;
+        }
         if (!MaidSpinAttackEffect.shouldRender(mob)) {
             return;
         }
