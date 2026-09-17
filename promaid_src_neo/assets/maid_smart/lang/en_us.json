@@ -57,6 +57,7 @@
   "config.promaid.combat.riptideDash": "Riptide Trident Dash",
   "config.promaid.combat.crossbowPlainFirework": "Crossbow: Plain Fireworks as Ammo",
   "config.promaid.combat.flightRangedPush": "Ranged Air Raid: Close-Range Push-Away",
+  "config.promaid.combat.flightRecallDistance": "Air Raid Leash (blocks)",
   "item.maid_smart.index_stone": "Index Stone",
   "config.promaid.build.indexStone": "Index Stone",
   "task.maid_smart.index_build": "Temporary Build",

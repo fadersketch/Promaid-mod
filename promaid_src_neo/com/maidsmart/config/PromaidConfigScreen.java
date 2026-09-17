@@ -2029,18 +2029,23 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.set(v),
                 "空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪保护（与重锤同款特殊落地缓冲）"));
-        this.rows.add(new BoolRow("激流三叉戟突进",
+        this.rows.add(new BoolRow("激流三叉戟旋转冲击",
                 MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
                 v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),
-                "激流三叉戟旋转突进（默认开）：攻击模式 / 近战空袭下主手拿着【激流】三叉戟时，她会照原版玩家的方式朝目标旋转突进（撞到谁就打谁，按等级决定冲量与音效）。默认开——这是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍。"));
+                "激流三叉戟旋转冲击（默认开）：攻击模式 / 空袭下主手拿着【激流】三叉戟时，她原本那一记普通挥砍会被换成旋转冲击——近身 4 格内替换（地面要站在地上；空袭的收翅俯冲那一记在空中也替换，那一下本来就在空中、实战价值更大），旋转 16 tick（平躺 + 高速自转，与玩家同款），撞到就结算一次伤害（攻击力 + 附魔，同一目标每次突进只打一下；空中旋转期间不自我摔伤）；触发时机就是她的攻击时机，走路/索敌/排班不变。关闭 = 激流三叉戟只当普通三叉戟挥砍。"));
         this.rows.add(new BoolRow("远程空袭近身弹开",
                 MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.set(v),
                 "远程空袭近身弹开（默认开）：怪物贴到 3 格内时，女仆会被施加一个【远离怪物】的速度矢量并保持 1.5 秒，防止她在远程攻击时仍往敌人身上飞、下落途中被贴脸打死。只弹开女仆自己、不弹开怪物——她脱离的同时也就离开了输出位，且在狭小空间（墙角/洞穴）里跑不掉，所以敌人仍有命中机会。关闭 = 恢复旧行为（贴着怪物盘旋）"));
+        // v1.2.0 实测五百四十七：空袭牵引绳（用户指定半径 100 格，0 = 关闭）
+        this.rows.add(new NumRow("空袭牵引绳（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_RECALL_DISTANCE.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_RECALL_DISTANCE, s),
+                "空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则，所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢（那一路由跨维度跟随在本轮攻击结束后处理）。触发时会给主人发一条系统消息（10 秒最多一条）。"));
         this.rows.add(new BoolRow("弩用普通烟花当弹药",
                 MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.get(),
                 v -> MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.set(v),
-                "弩用普通烟花当弹药（默认开）：开启后任意烟花火箭都能当弩的弹药——与原版玩家一致（原版弩的弹药判据不看烟花有没有爆炸组件），代价是极少数情况下会烧掉一枚本可当飞行燃料的普通烟花。关闭 = 只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用；两种情况下都会优先挑威力大的（合成用烟火之星多的）。"));
+                "弩用普通烟花当弹药（默认关）：普通烟花火箭（合成没放烟火之星）在原版任何版本都是【0 伤害】——只冒烟不掉血，拿它当弩弹药等于白烧一枚飞行燃料，所以默认关：只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用。打开 = 与原版玩家的弹药判据一致（原版弩不看烟花有没有爆炸组件），普通烟花也会被打出去（仍然 0 伤害）；两种情况下都会优先挑威力大的（合成用烟火之星多的）。"));
     }
 
     private void bridgeRows() {
@@ -2079,7 +2084,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS, s), "主人收符半径：女仆与主人距离超过此值不自动收符（魂符在主人背包，太远收不了）"));
         this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
-                v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不用再手动去墓碑处取回；关掉恢复 TLM 原版死亡流程"));
+                v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚）按比例复活——不用再手动去墓碑处取回；重生点不可用（床被拆/重生锚没电/维度不允许/从没设过）时直接在主人所在位置复活（强制、不看地形，主人在高空/岩浆边也照落）；关掉恢复 TLM 原版死亡流程"));
         this.rows.add(new NumRow("复活延迟（秒）", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()),
                 s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 60，也是墓碑存在的时长）"));
         this.rows.add(new NumRow("复活血量比", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get()),

@@ -28,7 +28,9 @@ public abstract class MaidElytraLayerMixin {
     @Inject(method = "<init>", at = @At("RETURN"))
     private void promaid$addElytraLayer(EntityRendererProvider.Context context, CallbackInfo ci) {
         EntityMaidRenderer self = (EntityMaidRenderer) (Object) this;
-        ((LivingEntityRendererAddLayerInvoker) self)
-                .promaid$addLayer(new com.maidsmart.client.LayerMaidElytra(self, context));
+        LivingEntityRendererAddLayerInvoker invoker = (LivingEntityRendererAddLayerInvoker) self;
+        invoker.promaid$addLayer(new com.maidsmart.client.LayerMaidElytra(self, context));
+        // 实测五百四十三：激流旋转特效（复刻原版 SpinAttackEffectLayer）
+        invoker.promaid$addLayer(new com.maidsmart.client.LayerMaidSpinAttack(self));
     }
 }

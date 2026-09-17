@@ -50,6 +50,7 @@
     "EntityFlagInvoker",
     "LivingEntitySpinAccessor",
     "MaidSpinAttackTouchMixin",
+    "MaidMeleeRiptideMixin",
     "MaidSwimGlideMixin"
   ],
   "client": [
@@ -60,6 +61,8 @@
     "MaidElytraLayerMixin",
     "MaidElytraLayerGeckoMixin",
     "MaidFlightDiveTiltMixin",
+    "MaidGeckoSpinDedupMixin",
+    "MaidSpinLiftMixin",
     "ElytraModelAccessor",
     "MaidModelPackSortMixin"
   ],

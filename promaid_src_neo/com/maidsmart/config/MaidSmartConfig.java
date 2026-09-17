@@ -365,9 +365,10 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 需求原文："能不能想办法把玩家一的代码套到女仆身上呢？当处于攻击模式/近战空袭且
      * 手中的武器为激流三叉戟时调用。"
      *
-     * 开启后，攻击模式 / 近战空袭下主手拿着激流三叉戟时，她会照原版玩家的方式
-     * 朝目标旋转突进（撞到谁就打谁）。默认开——这是"激流三叉戟"这个附魔存在的意义，
-     * 关掉等于把她手里的激流三叉戟降级成普通三叉戟。
+     * v1.2.0 实测五百三十八：改成**独立攻击链路**——开启后，攻击模式 / 空袭下主手拿着
+     * 激流三叉戟时，"她的攻击"就是朝目标冲过去旋转一击（10 格内直接发起、旋转 20 tick、
+     * 撞到就结算一次伤害），原本的普通挥砍由这条链路取代。默认开——这是"激流三叉戟"
+     * 这个附魔存在的意义，关掉等于把她手里的激流三叉戟降级成普通三叉戟。
      */
     public static final ModConfigSpec.BooleanValue RIPTIDE_DASH_ENABLE;
     /**
@@ -387,6 +388,17 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 弹开敌人太超模（也保证狭小空间内敌人仍有命中的可能）。"
      */
     public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_RANGED_PUSH;
+    /**
+     * v1.2.0 实测五百四十七【空袭牵引绳】（默认 100 格，0 = 关闭）。
+     *
+     * 需求原文："空袭期间加个机制，如果以自身为圆心，半径100格范围内没有发现主人。
+     * 立即执行一次传送到主人身边（等效拿排班表的传送）。防止女仆飞太高把目标打死后，
+     * 自己回不来。"
+     *
+     * 只在"她确实在空中"时生效（地面上交给同维度拉回那套更保守的规则）；距离按 3D 算，
+     * 所以"飞太高"本身也会触发。完整口径见 {@code com.maidsmart.combat.MaidFlightRecall}。
+     */
+    public static final ModConfigSpec.IntValue COMBAT_FLIGHT_RECALL_DISTANCE;
     // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
     // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
@@ -1145,7 +1157,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
         // 实测四百一十六：女仆自动复活（反馈："女仆死亡后 60 秒那个墓碑就会自己消失掉，
         // 然后在主人的出生点复活，也是 60 秒的 CD"）
-        AUTO_RESURRECT_ENABLE = BUILDER.comment("女仆自动复活（默认开）：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚，无则主世界出生点）按比例复活——不再需要手动去墓碑处取回；关掉恢复 TLM 原版死亡流程")
+        AUTO_RESURRECT_ENABLE = BUILDER.comment("女仆自动复活（默认开）：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚）按比例复活——不再需要手动去墓碑处取回；**重生点不可用**（床被拆/重生锚没电/维度不允许/从没设过）时直接在**主人所在位置**复活（强制生效、不看地形，主人在高空/岩浆边也照落）；关掉恢复 TLM 原版死亡流程")
                 .translation("config.promaid.combat.autoResurrectEnable").define("autoResurrectEnable", true);
         AUTO_RESURRECT_DELAY_SECONDS = BUILDER.comment("复活延迟（秒，默认 60）：死亡后墓碑存在这么久才自动消失并复活女仆（也是墓碑存在的时长）")
                 .translation("config.promaid.combat.autoResurrectDelaySeconds")
@@ -1248,14 +1260,27 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_NO_FALL_DAMAGE = BUILDER.comment("空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪（与重锤同款特殊落地缓冲）保护")
                 .translation("config.promaid.combat.flightNoFallDamage").define("flightNoFallDamage", true);
         // v1.2.0 实测五百三十四：激流三叉戟的旋转突进（用户点名"把玩家的代码套到女仆身上"）
-        RIPTIDE_DASH_ENABLE = BUILDER.comment("激流三叉戟旋转突进（默认开）：攻击模式 / 近战空袭下主手拿着【激流】三叉戟时，她会照原版玩家的方式朝目标旋转突进（撞到谁就打谁，按等级决定冲量与音效）。默认开——这是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍")
+        // v1.2.0 实测五百三十八：从"偶尔多打一下"改成"她的攻击就是旋转冲击"——
+        // 触发距离 5 → 10 格（原来 III 级 3 格/tick 只要 2 tick 就撞上，旋转根本看不见）、
+        // 突进期间每 tick 顶住标志位（撞人不再提前收招，20 tick 完整放完）、持戟时普通挥砍
+        // 被这条链路取代（TLM 原生近战不再出手）。
+        RIPTIDE_DASH_ENABLE = BUILDER.comment("激流三叉戟旋转冲击（默认开）：攻击模式 / 空袭下主手拿着【激流】三叉戟时，**她原本那一记普通挥砍会被换成旋转冲击**——近身 4 格内替换（地面要站在地上；空袭的**收翅俯冲那一记在空中也替换**：那一下本来就在空中、实战价值更大），旋转 16 tick（与玩家同款：平躺 + 高速自转），撞到谁就结算一次伤害（攻击力 + 附魔，同一目标每次突进只打一下；空中旋转期间不自我摔伤）；触发时机就是她的攻击时机，走路、索敌、排班等一律不变。默认开——这才是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍")
                 .translation("config.promaid.combat.riptideDash").define("riptideDash", true);
         // v1.2.0 实测五百三十五：普通烟花能否当弩弹药（用户要求"加一下开关"）
-        COMBAT_CROSSBOW_PLAIN_FIREWORK = BUILDER.comment("弩可用普通烟花当弹药（默认开）：开启后任意烟花火箭都能当弩的弹药——与原版玩家一致（原版 CrossbowItem 的弹药谓词不看有没有爆炸组件），代价是极少数情况下会烧掉一枚本可当飞行燃料的普通烟花。关闭 = 只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用")
-                .translation("config.promaid.combat.crossbowPlainFirework").define("crossbowPlainFirework", true);
+        // v1.2.0 实测五百三十七：默认改为【关】。用户实测"烟花火箭竟然一点伤害都没有"，
+        // 取证结论：这不是版本差异、也不是他哪里出错，而是原版机制——`FireworkRocketEntity`
+        // 的爆炸结算只认 `Fireworks.Explosions`（1.20.1 `m_37087_`、1.21.1
+        // `dealExplosionDamage`）：空则伤害恒为 0，只冒烟（`hasExplosion` 同样为假，
+        // 连撞方块的爆炸都不触发）。所以普通烟花当弹药 = 白烧一枚飞行燃料。
+        COMBAT_CROSSBOW_PLAIN_FIREWORK = BUILDER.comment("弩可用普通烟花当弹药（默认关）：普通烟花火箭（合成时没放烟火之星）在原版任何版本都是【0 伤害】——反编译 FireworkRocketEntity 的爆炸结算：伤害 = 5 + 2×爆炸条目数，而爆炸条目为空时整段早退，只冒烟不掉血。拿它当弩弹药等于白烧一枚飞行燃料，所以默认关：只有带烟火之星的【攻击性烟花】才当弩弹药，普通烟花一律留给飞行推进用。打开 = 与原版玩家的弹药判据一致（原版 CrossbowItem 不看有没有爆炸组件），普通烟花也会被打出去（仍然 0 伤害）。两种情况下都会优先挑威力大的（合成用烟火之星多的）")
+                .translation("config.promaid.combat.crossbowPlainFirework").define("crossbowPlainFirework", false);
         // v1.2.0 实测五百零三：远程空袭近身弹开（用户指定，默认开）
         COMBAT_FLIGHT_RANGED_PUSH = BUILDER.comment("远程空袭近身弹开（默认开）：怪物贴到 3 格内时，女仆会被施加一个【远离怪物】的速度矢量并保持 1.5 秒，防止她在远程攻击时仍往敌人身上飞、下落途中被贴脸打死。只弹开女仆自己、不弹开怪物——她脱离的同时也就离开了输出位，且在狭小空间（墙角/洞穴）里跑不掉，所以敌人仍有命中机会。关闭 = 恢复旧行为（贴着怪物盘旋）")
                 .translation("config.promaid.combat.flightRangedPush").define("flightRangedPush", true);
+        // v1.2.0 实测五百四十七：空袭牵引绳（用户指定半径 100 格，0 = 关闭）
+        COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免），所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
+                .translation("config.promaid.combat.flightRecallDistance")
+                .defineInRange("flightRecallDistance", 100, 0, 1000);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
