@@ -63,7 +63,6 @@
   范围，那一步是把她捞回来、不是打断她。
 
 
-
 ## 实测五百四十六【自动复活：去掉内置 CD、重生点不可用就强制落在主人身边；排班表传送同样强制 + 无视地块】
 
 ### 一、"卡住无法复活"是怎么来的
@@ -410,11 +409,6 @@ for (int i = 0; i < 3; ++i) {
 
 ## 实测五百四十【修：持激流三叉戟切攻击模式 → 女仆 AI 直接死、收回魂符再放下会消失】
 
-### 现象（需求原文）
-
-"当现在女仆手持武器为激流三叉戟的时候，切换为攻击模式，女仆的AI会被直接杀死。女仆会一动不动，
-将她收回魂符再放下来会直接消失。"
-
 ### 根因（是我的锅，日志铁证）
 
 实测五百三十八 新增的 `MaidMeleeRiptideMixin` 注入 TLM 近战任务时，**回调方法写成了非静态**，
@@ -524,7 +518,7 @@ TLM 构建大脑时才会被加载** —— 所以那次回归"全绿"却根本�
 **③ 同一目标每次突进只打一下**。标志位被顶住后，原版"撞击即收招"那条天然的一次性保护就没了，
 所以 `onSpinTouch` 按本次突进记 hit 集合去重（最终效果与原版一致：一冲一伤）。
 
-**④ 攻击环节被替换**（需求原文的"替换原本的攻击环节"）。持激流三叉戟且在攻击模式 / 空袭下时，
+**④ 攻击环节被替换**（即"替换原本的攻击环节"）。持激流三叉戟且在攻击模式 / 空袭下时，
 普通挥砍不再出手：
 
 | 原本的攻击步骤 | 现在 |
@@ -560,7 +554,7 @@ TLM 构建大脑时才会被加载** —— 所以那次回归"全绿"却根本�
 
 ### 一、Gecko 模型女仆的激流：只有音效和伤害，没有旋转与俯卧（bug 修复）
 
-**症状（需求原文）**："激流我只能听到音效和看到伤害，但是没有像玩家那样的旋转特效和动作。"
+**症状**：只有音效和伤害，没有玩家那样的旋转特效与动作。
 
 **根因：TLM 自己那对旋转把原版的那对正好抵消了。**
 
@@ -1151,7 +1145,6 @@ private static boolean onTargetAltitude(EntityMaid maid, LivingEntity target) {
    视线一开立刻打——日志里 `[promaid/飞行撞击免疫]`、`[promaid/空袭免摔]` 不受影响。
 
 
-
 ## 实测五百二十六【空袭免疫摔落伤害：默认关 → 默认开】
 
 ### 改法
@@ -1206,7 +1199,6 @@ D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\config\promaid-common.toml  flig
   与 `实测四百九十四` 的口径一致。
 - 未改任何配置项键名、网络协议号；`config.promaid.combat.flightNoFallDamage` 的翻译键与
   中英文名都没动（面板行的标题仍是「空袭免疫摔落伤害」）。
-
 
 
 ## 实测五百二十五【排班表分类说明补齐 + 空袭"敌人更高"方案 + 落地水不再挡飞行 + 不祥之瓶默认不喂】
@@ -1373,7 +1365,6 @@ if (this.flightPlaced && !this.placedSnow
 4. 往女仆背包塞不祥之瓶：饿到阈值以下她**不应**喂它（顶多去拿别的食物）。
 
 
-
 ## 实测五百二十四【空袭"飞太高就丢目标、飘走"根治：索敌三处修正（16 格上限 / 起飞丢锁 / 停止清瞄准）】
 
 ### 先用实测日志定位，不靠猜
@@ -1506,7 +1497,6 @@ isEntityAttackable(a, b) { return brain.isMemoryValue(ATTACK_TARGET, b)
 2. 飞得再高也不丢目标，不再"飘出战场"；落地后若目标还在，是否立刻重新起飞；
 3. 隔墙的怪**仍然不会被新锁定**（这条要专门验一下，是本轮唯一"放宽"的地方的对立面）；
 4. 日志里 `我方有视线` 与 `原版可判(含16格上限)` 两列的差别，能直观看出旧口径卡在哪一环。
-
 
 
 ## 实测五百二十三【版本号统一为 1.2.0（两端一致）】
@@ -5267,7 +5257,6 @@ jar 重建部署、server 回归 PASS。
 
 ## 实测四百四十七【规则气泡语音补漏 6 条：「附近没有值得挖的矿石」还是人机语音】
 
-问题：附近没有值得挖的矿石这一句还是人机。
 
 **一、根因（不是没触发，是没登记）**
 - 这句来自 `dialogue/WorkStatusReporter.java` 的"卡住原因"播报（挖矿任务空闲时每 N 秒
@@ -5315,8 +5304,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十六【冷却 HUD 在 1.20.1 不渲染的真正根因：窗口高度取错了 SRG 字段】
 
-问题：最新实例里又没了（引用此前「冷却条和显示的那些修复在 1.21.1 已经成功、
-在 1.20.1 都未能落实」）。
 
 **一、证据链（从已轮转的玩家会话日志里挖出来）**
 - `logs/debug-1.log.gz`（玩家 01:23~01:25 那一轮）里：
@@ -5359,10 +5346,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十五【语音包情绪化重制（按情境分五档）+ 落地水"没声音/染红"两个 bug】
 
-问题：语音包在语气和情感上面能不能稍微优化一点？现在这样子读着太死气沉沉的了，
-应该要根据具体的情境来分别对应不同的情感和语音，你需要重新训练。而且我在刚刚测试的
-时候，触发了 [警示]落地水 这个语音字段。是红色的而不是蓝色的，而且这个就没有触发语音，
-还是触发了人机语音。
 
 **一、情绪化重制（115 条重写 + 五档情绪）**
 - 关键约束：`manifest.json` 只存中文 key，**上一版的日语台词没有落盘**，所以本次按中文
@@ -5412,8 +5395,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十四【冷却 HUD 在 1.20.1 恒不渲染：渲染回调根本没被调用】
 
-问题：刚刚有关冷却条和显示的那些修复在 1.21.1 版本都已经成功修复了。
-但在 1.20.1 都未能落实。
 
 **一、定位（日志说话）**
 - 1.20.1 客户端 `latest.log` 里有
@@ -5454,9 +5435,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十三【悬空禁搭方块（自保搭高 / 搭路 / 挖矿垫脚 / 伐木垫脚）】
 
-问题：使用重锤有的时候会因为飞得太高而触发了大方块机制。所以女仆在处于悬空
-状态下的时候应该禁止搭建方块。（这个机制在挖矿和伐木的时候也通用，有的时候就是
-因为下落悬空的时候搭方块又放不了落地水导致自己被摔死了）
 
 **一、做法：一个统一闸口**
 - 新增 `com.maidsmart.tool.MaidPlaceGuard.blocked(maid)`；四个搭方块模块
@@ -5488,10 +5466,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十二【重锤专属落地水 + 重锤空中禁传送（1.21.1 专属）】
 
-问题：使用重锤的时候，女仆很容易给自己摔伤，因为触发不了落地水很难受。
-你想想有没有什么可以优化的方案。比如此时禁用通用落地水，但是在有水桶的情况下会
-强制在落地前脚下生成一格水这种（相当于重锤专属落地水）。还有女仆在重锤状态下
-空中的时候要禁止传送。否则很容易因为女仆飞到高空又传送回来，造成战术上的失误。
 
 **一、重锤专属落地水**
 - 旧版是"半吊子抑制"：`suppressesFallClutch` 只在【目标仍在命中范围内】时让开
@@ -5523,8 +5497,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十一【收符期间冷却条消失：手动收符的魂符不带标记 + 魂符落位写错槽】
 
-问题：女仆在收回魂符的时候2个冷却的时间条就消失了，虽然实际上还在计时，
-但那样子观感不太好。
 
 **一、根因**
 - HUD 的"女仆在符里"分支（`CooldownHudTracker` 扫主人背包）只认【自动标记】的魂符：
@@ -5559,8 +5531,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百四十【敌袭/感知系统消息接上内置日语语音包（6 条）】
 
-问题：有敌人靠近了，离我多少多少格这个语音似乎没有实现。仍然是播放的人机语音，
-而不是我们训练的语音包。
 
 **一、根因**
 - 所有系统气泡都会经 `ChatBubbleLimitMixin.addTextChatBubble` 汇入
@@ -5599,7 +5569,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百三十九【回魂符冷却"放出女仆后就没了"根因：1.21.1 的持久化键是 NeoForgeData】
 
-问题：自动收回魂符这个功能的冷却，在女仆被收进魂符后把女仆重新放置以后，CD 及上方冷却条就消失了。
 
 **一、根因（javap 实证）**
 - 1.20.1 Forge 的实体持久化数据子标签叫 `ForgeData`；**1.21.1 NeoForge 改成了 `NeoForgeData`**
@@ -5624,11 +5593,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十八【右键墓碑不再当场复活：改为原版行为 + 取消本次自动复活】
 
-问题：在女仆死亡期间，右击墓碑会直接复活。我感觉这个操作不好，那样子就使得我设的那个冷却毫无意义。应当改为在自动复活功能开始以后右击墓碑仍然跟原版一致，同时取消复活事件。
 
 **一、改动**
 - **删掉"右键墓碑 = 立即复活"**（实测四百二十六引入的 `reviveFromTombstone` + 对应注入），
@@ -5653,11 +5620,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 **四、验证**
 - 两树编译零错（mixin 改名后已重跑 `gen_compile*.py` 重建源清单）；重建 jar 并部署；
   `test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十七【重锤"打着打着不再触发"：门禁加固 + 诊断日志】
 
-问题：一开始重锤的逻辑还可以使用，但是突然就不再触发重锤的战术了，很奇怪。我初步推测是自主战斗可以触发，但是 TLM 原生的攻击不能触发。
 
 **一、先把最可能的两个原因说清楚**
 - **风弹耗尽**：现在规则是「重锤 + 风弹缺一不可」，**每次猛击消耗 1 枚风弹**——给的那几枚用完之后自然就不再触发（与战斗模式无关）。
@@ -5681,11 +5646,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十六【重锤：风爆（Wind Burst）机制核实 + 补上原版猛砸冲击表现】
 
-问题：这个操作的效果应该是在下落攻击的时候会产生一个风暴吧？我在测试的时候拿没有附魔的重锤女仆是会掉到地上的。
 
 **一、结论先说：没有附魔就没有风暴，这是原版行为，不是 bug**
 - 反编译/数据双向核实：`data/minecraft/enchantment/wind_burst.json` 里风爆是
@@ -5715,11 +5678,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十五【拥抱 / 摸头亲昵语音（6 条，只训练女仆说的话）】
 
-问题：拥抱和摸头是没有语音的。还需要训练（注意不要训练旁白句子，只需要女仆说的话）。
 
 **一、台词来源与范围（严格只取女仆台词）**
 - `EmotionNetworking` 的 `say(maid, ...)`（G 摸摸头 / H 抱抱触发）：
@@ -5744,11 +5705,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十四【重锤改为「重锤 + 风弹」缺一不可 + 附魔生效性核查】
 
-问题：现在女仆不用风弹就可以直接起飞，感觉有点太超标了。我建议还是要求又要有风弹又要有重锤的时候才能使用，否则就还是原版。顺带我想问一下附魔对女仆操作重锤有用吗？我觉得这一点还是要注意一下。
 
 **一、改为缺一不可（不再占用风弹当"加成"）**
 - `MaidMaceSmashBehavior.checkExtraStartConditions` 增加前置：`combat.maceWindCharge` 开启时
@@ -5774,11 +5733,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS（1.20.1 树不含此功能）。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十三【冷却 HUD 照搬 HeartPact 显示机制 + 收符窗口数据缺口修复】
 
-问题：CD 功能还是未能正常显示。我只看到身上冒出来的效果。为什么不照我说的那样子去照搬别的模组的显示机制呢？
 
 **一、证据链（先定位是"没数据"还是"没渲染"）**
 - 1.20.1 实例 `pro Maid.log`（promaid.log）显示 22:30:22–22:31:49 服务端**确实**在每秒下发
@@ -5811,7 +5768,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar 并部署；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十二【重锤猛击（1.21.1 专属，参考僵尸用重锤）】
 
@@ -5838,11 +5794,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **六、验证**
 - neo 树编译零错；重建 jar 并部署；`test_server.py neoforge1211` 回归 PASS；1.20.1（1201）树不含此功能、不受影响。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十一【搭路默认开启 + 配置从「生存与复活」迁到「移动与行为」】
 
-问题：搭路功能可以默认开启了。不过搭路的配置难道不应该放在移动这一栏里面吗？
 
 **一、默认开启**
 - `bridge.enabled` 默认 `false` → `true`（两树 `MaidSmartConfig`），配置项注释「搭路（默认关）」→「搭路（默认开）」，配置面板 `bridgeRows` 说明末尾「默认关闭」→「默认开启」。
@@ -5860,11 +5814,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树编译零错；重建 jar 并部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百三十【冷却 HUD 恒不渲染根因修复（F3 门禁用错字段）+ 显示方式对齐 HeartPact】
 
-问题：复活和自动回魂符的 CD 显示都未能正常显示。显示可参考 TouhouLittleMaid-HeartPact 里面的分娩倒计时显示方式。
 
 **一、根因（javap + 玩家 options.txt 双向实证）**
 - 四个 HUD 渲染器（两树 × 冷却/建造）的「打开界面 / F3 调试屏不显示」门禁都写成了
@@ -5891,11 +5843,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **五、验证**
 - 两树编译零错；重建 jar；已部署全部本地目标；`test_server.py 1201` / `neoforge1211` 回归 PASS。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十九【睡觉中静默系统气泡与语音】
 
-问题：女仆在睡觉的时候就不应该触发语音包和语音气泡了。
 
 **一、判定口径**
 - 睡觉判定统一用 `LivingEntity.isSleeping()`（1.20.1 SRG `m_5803_`；javap 字节码实证其实现 = `getSleepingPos().isPresent()`，与 TLM `MaidBedTask` 调用的 `startSleeping` 同源，两树同款公共方法）。
@@ -5908,7 +5858,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS（同时验证 mixin 注入点有效）；已部署两个客户端实例（含整合包实例）、三台本地服务器。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十八【排班气泡日语语音包（49 条，GPT-SoVITS 小酒狐）】
 
@@ -5929,11 +5878,9 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **四、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十七【内置语音包响度修复（素材归一化 + 音量上限提升到 20）】
 
-问题：我们自己做的语音包设置声音 5.0 都显小，感觉要至少有 10.0 的水平。当然，也有可能是别的问题导致我们这边声音太小。
 
 **一、根因：语音素材本身太轻（不是播放音量不够）**
 - 用 ffmpeg volumedetect 实测内置 ogg：**平均 −32 dB、峰值仅 −12 dB**（正常游戏音效峰值应接近 0 dB）。GPT-SoVITS 直出的音频没有做响度处理，所以音量倍率再乘也事倍功半。
@@ -5945,12 +5892,10 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例（含整合包实例）与 pack1201。
-- 提示：如果你之前把「内置语音包音量」存成了 5.0，素材归一化后再乘 5.0 会非常响——建议先调回 1.0~2.0 再按需微调。
-- 按约定：**不提交 GitHub，等实测**。
+- 提示：若此前把「内置语音包音量」存成了 5.0，素材归一化后再乘 5.0 会非常响——建议先调回 1.0~2.0 再按需微调。
 
 ## 实测四百二十六【女仆复活机制修复：计时口径 + 墓碑右键立即复活 + 时机可配置】
 
-问题：女仆复活功能未能触发，甚至连正常点击墓碑让他复活的方式都没有了。复活这个机制可以参考一下我模组列表里面的驯养革新里面的宠物床。打开自动复活之后就会自动遵循这里面的操作。不打开那就是遵循原版。
 
 **一、根因（两处硬 bug，均在 旧版就存在）**
 1. **到期永远不触发**：登记到期用 `level.getGameTime()`（世界游戏时间，随存档累计、数值很大），每秒检查却用 `server.getTickCount()`（服务器运行刻数，每次启动从 0 开始）。老存档里前者远大于后者，`now >= due` 永不成立 → 自动复活从不触发。
@@ -5964,12 +5909,11 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
   - `0 = 延迟 N 秒`（默认，用「复活延迟（秒）」，默认 60）；
   - `1 = 次日黎明`（游戏时间 `dayTime % 24000 == 1` 才复活，即 DI 宠物床的次日清晨）。
   两种方式下右键墓碑都能立即复活，不受时机项影响。
-- **复活地点**：维持主人重生点（床/重生锚，无则主世界出生点）——按你的选择。
+- **复活地点**：维持主人重生点（床/重生锚，无则主世界出生点）。
 - 配置面板「生存与复活 → 死亡与复活」新增「复活时机」循环按钮；中英翻译补齐；手册「女仆自动复活」章重写说明（右键立即复活、时机两项、关掉=原版、墓碑物品保持原样）。
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十五【主人踩踏刷新扩展到挖矿/伐木/自保垫脚方块】
 
@@ -5989,7 +5933,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十四【手册详细介绍重写 + 一键跳转配置】
 
@@ -6007,7 +5950,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十三【模组详细配置面板重组（两级菜单）+ 开关集中化】
 
@@ -6034,7 +5976,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十二【搭路方块 CD·主人踩踏也重置】
 
@@ -6050,7 +5991,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 **三、验证**
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；重建 jar 后 `test_server.py 1201` / `neoforge1211` 回归 PASS；已部署两个客户端实例与 pack1201（rename-swap）。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十一【冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却）】
 
@@ -6072,7 +6012,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 - 两树 `run_javac6.py` / `run_javac_neo.py` 编译零错；
 - 重建 jar：`patched/promaid-1.1.0.jar` 6,936,317 字节、`patched/promaid-1.1.0-neoforge-1.21.1.jar` 6,946,795 字节；两个 jar 各含 `CooldownHudTracker.class`、`CooldownHudRenderer.class`、`BlueprintBookNetworking$CooldownHudPacket.class`；
 - `test_server.py 1201` 与 `test_server.py neoforge1211` 回归均 **PASS**；已部署到两个客户端实例与 pack1201 服务器（服务器用 rename-swap，无需停服）。
-- 按约定：**不提交 GitHub，等实测**。
 
 ## 实测四百二十【内置日语语音包（GPT-SoVITS 训练，打进 jar）】
 
@@ -6228,7 +6167,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百一十三【女仆绝不伤害主人/友方——雪地打雪仗后对主人跳劈修复】
 
-问题：装了 mod 后带女仆到雪地，空闲模式会打雪仗，然后对主人触发攻击、冲主人跳劈，脱了盔甲一下打约 4 颗心；主手拿着刀打得更疼（武器伤害叠加）。
 
 **根因**：TLM 原版空闲模式在雪地有打雪仗行为（`MaidStartSnowballAttacking`），该行为会把【主人】写进女仆 brain 的 `ATTACK_TARGET`（雪球目标）。promaid 的单兵战术行为（`MaidCombatTacticsBehavior`，v1.5.202 起不再限定战斗任务）读到 `ATTACK_TARGET` 就接管走位 + 跳劈，用 `target.hurt(mobAttack, 攻击力×1.5+附魔)` 对主人打出**真实近战暴击伤害**（主手武器攻击力越高伤害越高 = "拿刀更疼"）。旧版只拦了"雪球 0 伤害触发参战"这一层（`AutoCombatSwitch`），拦不住 TLM 自己写攻击目标这条路径。
 
@@ -6263,7 +6201,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## v1.1.0 正式版【专用服务器兼容修复 ×2】
 
-问题：mod 在专用服务器（Dedicated Server）上无法正常使用——两个独立的服务端崩溃，均已修复并实测验证。
 
 **修复一：主类内联配置界面 lambda 触发 RuntimeDistCleaner 拦截（issue #3）**
 - 根因：`ProMaidMod` 构造函数里内联注册配置界面扩展点，lambda 编译成主类合成方法，方法描述符带 `net.minecraft.client.gui.screens.Screen`；Forge 专用服务器加载主类时被 RuntimeDistCleaner 拦截 → `Attempted to load class net/minecraft/client/gui/screens/Screen for invalid dist DEDICATED_SERVER` → mod 加载失败、服务器启动中止；
@@ -6320,7 +6257,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零九【搭路被动技能化——"实质接战"替代"任务名占用"】
 
-问题：视频里的搭高能不能改成女仆生存（maid_survival）那样的被动技能，而不是空闲状态才触发——"处于战斗模式但周围没威胁、没在真正打怪，也算另一种空闲"。
 
 **机制盘点（先确认启动机制再动手）**：BridgeUpBehavior（core 245）唯一状态闸门 = isTaskOccupied。旧判定中【战斗任务（IAttackTask instanceof）无条件占用】——弓兵/宰杀站着发呆（周围无敌人/无牲畜）也被拦，正是"任务名挂空"的假性占用。挖矿/伐木早已是目标制（MINING/WOODING 找到目标才登记、无目标自动摘除）；烹饪/酿造/建造是站桩/蓝图任务需任务级硬闸（防搭路劫持离岗，实测一百七十四）。maid_survival 对照：它是 LivingTick 事件驱动的卡位检测架构，promaid 已有更完整的行为链，不照搬、只拆假性占用。
 
@@ -6374,7 +6310,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 
 ## 实测四百零六【排班表任务选择改整页跳转——修 GUI 覆盖】
 
-问题：四百零二的任务选择浮层面板出现严重 GUI 覆盖（面板压住"早班/晚班/全天"班次按钮），想要的样式 = promaid 手册那种整页跳转界面。
 
 **修复（ScheduleBookScreen）**：
 - 任务选择从【浮层面板】改为【整页跳转】（手册阅读页同款）：点任务槽中间按钮 → 整页独占——标题行"选择任务（第 N 页）" + 左上"← 返回排班" + 内容区任务列表（每页 8 个 + "空闲（清空）"档）+ 分页 ◀▶；
@@ -6414,7 +6349,6 @@ EmotionNetworking / ScheduleBubbleBehavior / SmartDesignTool / MaidAidOwnerBehav
 验收：收起 → 放下 → 立即再被打死 = 正常死亡（冷却窗口）；等 1 分钟（或把冷却调 0）再死 = 再次收符。
 ## 实测四百零三【回魂符触发口径收紧——仅致死伤害且无保命物品】
 
-问题：仅在受到致命伤害（且没有像不死图腾这样的保护）的时候会收回，低血量不回去，否则现有的自保行为就很小丑了。
 
 **改动（MaidSoulSpellGuard）**：
 - 删除低血量检查（onMaidTick 每秒轮询 + 收符血量阈值配置）——低血量交给自保（喝药/搭高/珍珠），不再抢收；
@@ -6603,7 +6537,6 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 
 ## 实测三百九十一【修复：解除后放生塔顶乱走摔下】
 
-问题：没有怪阻拦、搭得好好的，女仆自己从塔上乱走然后摔下去。
 
 根因：safeDismount 用 findStandNear 从【塔基格】起扫落点——塔基格被她自己垫的第一块方块占着，扫描向下全是实心地面、向上第一个可站格是塔基+1（= 塔顶），传送等于原地踏步；状态却已解除（半径 8 无敌人/方块耗尽路径），下一 tick 行为停止、TLM 游走 AI 接管，塔顶没有钉柱没有冻结 → 乱走两步摔下。"没有怪阻拦"正是触发解除路径的场景。
 
@@ -7976,7 +7909,7 @@ javap 实证找到移动通道盲区：TLM 远程 strafe（MaidAttackStrafingTas
 - 熔炉"第二只女仆只加燃料不烧东西"、搭路"只搭一块就停"、挖矿伐木"垫了块却踩不上去"、女仆气泡显示 `bubble.call...` 代码、建造投影走出区块看不见——都已修复
 - 一次启动崩溃（宠物免伤功能的内部问题）已修复，游戏现在能正常进
 
-**关于你的设置**：v1.0.4 的全部配置数值一个没改；新功能新增的设置项都给了合适的默认值（手册 → 模组详细配置里可调）。
+**关于既有配置**：v1.0.4 的全部配置数值一个没改；新功能新增的设置项都给了合适的默认值（手册 → 模组详细配置里可调）。
 
 ---
 
