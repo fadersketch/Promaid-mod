@@ -4,5 +4,5 @@
     { "item": "minecraft:potion" },
     { "item": "minecraft:book" }
   ],
-  "result": { "item": "maid_smart:brew_manual", "count": 1 }
+  "result": { "id": "maid_smart:brew_manual", "count": 1 }
 }
