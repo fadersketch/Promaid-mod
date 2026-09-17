@@ -30,10 +30,12 @@ import net.minecraft.core.BlockPos;
  *      落点结构、挡住落地水。
  *   b) 【1.21.1】重锤跃起中（`MaidMaceSmashBehavior.isAirborne`）——整段空中都禁
  *      （上升段也算：起跳瞬间乱搭同样破坏猛击节奏）。
- *   c) 正在下落（`fallDistance > 0`）——**由四百四十三的"≥ 落地水高度"改为"只要在
- *      降就禁"**（本次收紧的第二处）。原阈值是给"浅跳垫脚"留的余量，但反馈明确
- *      要求悬空就不该搭；**上升段（`fallDistance == 0`，如垫脚/搭路把自己顶上去的
- *      那一推）不受影响**，所以正常垫高与搭路链路照常工作。
+ *   c) 【v1.2.0 实测五百五十已改】真·悬空（脚下 3 格内没有可站立面）。四百九十八
+ *      当时写的是"只要 fallDistance > 0 就禁"，把**她自己一跳**（战术跳劈、走位跨
+ *      台阶、搭高"放块→顶起→落回"）也判成了悬空——自保搭高在围殴中一放不下、
+ *      二还因为 443 的静默设计不吭声（详见下面 blocked 的类注释）。现在恢复四百
+ *      四十三的深坠落阈值（≥ 落地水触发高度）+ 单独补一条"脚下无地"，
+ *      滑翔/飞行那条漏口照旧拦着，浅跳与搭高自身动作放行。
  *
  * 【统一闸口】四个搭方块模块（自保搭高·搭路·挖矿垫脚·伐木垫脚）都在各自的
  * takeBuildBlock 取料前问一次本判定：被禁 → 返回 null → 各模块自然放弃本次
@@ -52,7 +54,27 @@ public final class MaidPlaceGuard {
     private MaidPlaceGuard() {
     }
 
-    /** 悬空/滑翔/坠落中 → true = 本次禁止搭方块 */
+    /**
+     * 实测五百五十【悬空禁搭把"她自己一跳"也算成悬空——自保搭高整条被掐死】
+     *
+     * ── 现象 ──
+     * 实测四百九十八把口径收紧成"只要 fallDistance &gt; 0 就禁"之后，实测五百零九
+     * 先撞出一处（岩浆垫方块自救被误伤），本次是同一处收紧的**第二类误伤**：
+     * 自保被围殴时她一边挨打一边在打（战术跳劈/走位跨台阶都会带起 1 格的小跳），
+     * 落地前的那几 tick `fallDistance` 是正数 → 被这套闸口判成"悬空" →
+     * `takeBuildBlock` 返回 `null` → 搭高【一次都放不下】；而 443 又特意把
+     * "取料失败"的气泡在悬空时静默了，于是表现为**她既不搭方块、也不吭声地挨打到死**。
+     * 搭高自己的"顶起"（放块 → 抬离地面 → 落回）同样在这类 tick 里，属于同一条误伤。
+     *
+     * ── 改法 ──
+     * "悬空"回到它字面的意思：**脚下没有地**。判据换成"脚下三格内有没有可站立面"，
+     * 而不是"是否正在下落"。四百九十八要拦的两件事一件没丢：
+     * 1. 滑翔 / 飞行空中——单独判（原样保留，那是四百九十八的主漏口）；
+     * 2. 从高处掉下来——原来的深坠落阈值（≥ 落地水触发高度）恢复，同时
+     *    "脚下 3 格内无地"天然覆盖"3~5 格的浅坠"（离地超过 3 格即判悬空）。
+     * 上升段本来就放行，浅跳/被击飞/搭高自身下沉也不再被误判。
+     *
+     * 三处放行（未落地也不禁）：水里、岩浆里（实测五百零九）、骑乘中。 */
     public static boolean blocked(EntityMaid maid) {
         try {
             if (maid == null || !com.maidsmart.config.MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get()) {
@@ -66,7 +88,8 @@ public final class MaidPlaceGuard {
             // （读 FluidTags.f_13132_ = LAVA）。旧注释导致放行名单里**从来没有岩浆这一条**。
             // v1.2.0 实测五百零九：补上真 m_20077_()——"女仆在没有火焰保护饰品和抗火效果的
             // 情况下，在岩浆里垫方块自救是很正常的行为"。不补这一条会出什么事：泡岩浆下沉时
-            // 三个水判定全 false、又没落地没骑乘 → 落到下面 `fallDistance > 0` 那条 → 禁搭
+            // 三个水判定全 false、又没落地没骑乘 → 落到下面"正在下落"那条（当时的
+            // 口径是 fallDistance > 0）→ 禁搭
             // → `lavaStepUp` 取料失败返回 null → **岩浆垫方块自救整条失效**（她背包只有方块、
             // 没水桶/珍珠/抗火药时就会一路走到"自救手段都用尽了"）。
             // 岩浆不会像水那样把 fallDistance 清零，只每 tick 减半（Entity.baseTick 里
@@ -80,11 +103,38 @@ public final class MaidPlaceGuard {
             if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
                 return true;
             }
-            // (c) 只要在下落就禁（旧版要坠够 6 格才禁；上升段 fallDistance==0 不受影响）
-            return maid.f_19789_ > 0.0f;
+            // (b) 深坠落：坠够"落地水触发高度"就交给落地水（四百四十三的原始口径）
+            //     ——搭方块此刻既救不了她，还会把落点的水/地面结构改掉、挡住落地水
+            if (maid.f_19789_ >= (float) (double)
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get()) {
+                return true;
+            }
+            // (c) 真·悬空 = 脚下 3 格内没有可站立面（实测五百五十把"下落中"换成这条）
+            //     浅跳/被击飞/搭高自身"放块→顶起→落回"都落在 1 格以内 → 放行
+            return !hasStandableGroundBelow(maid, 3);
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    /**
+     * 实测五百五十：脚下 maxDepth 格内有没有"能站上去的面"——"悬空"的判据。
+     *
+     * 用 `isFaceSturdy(level, pos, UP)`（SRG `m_60783_`，javap 实证）而不是
+     * `isSolidRender`：台阶/楼梯/栅栏/雪层这类"顶面能站人但不是整块实心"的方块
+     * 也算落点，否则站在台阶边跳一下就会被误判成悬空。
+     */
+    private static boolean hasStandableGroundBelow(EntityMaid maid, int maxDepth) {
+        net.minecraft.world.level.Level level = maid.m_9236_();
+        BlockPos feet = maid.m_20183_();
+        for (int d = 1; d <= maxDepth; d++) {
+            BlockPos p = feet.m_7918_(0, -d, 0);
+            net.minecraft.world.level.block.state.BlockState st = level.m_8055_(p);
+            if (!st.m_60795_() && st.m_60783_(level, p, net.minecraft.core.Direction.UP)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
