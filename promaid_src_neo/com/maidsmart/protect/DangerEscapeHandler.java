@@ -75,14 +75,12 @@ if (++this.throttle < 10) {
         }
         // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 经 blockToSection 溢出
         // 收敛到同一值 → 扫描恒空，同 HomePatrolHandler）
-        AABB whole = new AABB(-131072.0, -4096.0, -131072.0,
-                131072.0, 4096.0, 131072.0);
         long now = server.getTickCount();
         for (ServerLevel level : server.getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : level.getEntitiesOfClass(
-                    net.minecraft.world.entity.Entity.class, whole)) {
+            // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
+            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()
                         || maid.getOwner() == null) {
                     continue; // 无主不处理
