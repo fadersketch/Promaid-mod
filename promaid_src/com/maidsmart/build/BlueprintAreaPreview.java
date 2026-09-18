@@ -40,22 +40,6 @@ public final class BlueprintAreaPreview {
      *  换蓝图时归零，同一蓝图取消后重新选位保留上次选择 */
     private static int previewQuarters = 0;
 
-    /**
-     * 实测五百五十三②：预览落点——**打开预览那一刻**的玩家脚下格。此后不再随玩家移动
-     * （旧版 onRender 每帧取玩家位置 = 框跟着人走，落点不可控），改由微调界面
-     * （BuildPlacementScreen 的 X±1/Y±1/Z±1）与「回到脚下」按钮控制；
-     * 确认建造时这个坐标随 SelectBlueprintPacket 下发，服务端按它落地。
-     */
-    private static net.minecraft.core.BlockPos previewOrigin = null;
-
-    /** 实测五百五十三①：投影调色板（key → 每项 "i~blockId~stateSnbt"）+ 解析好的
-     *  BlockState 数组缓存（调色板换了就失效）——真方块渲染要用它把每个点还原成
-     *  原版模型（石砖就是石砖、楼梯朝向也对） */
-    private static final java.util.Map<String, String[]> PALETTES =
-            new java.util.concurrent.ConcurrentHashMap<>();
-    private static final java.util.Map<String, Object[]> PARSED_STATES =
-            new java.util.concurrent.ConcurrentHashMap<>();
-
     /** v1.5.180：实际建造区块的红色固定框（多区块共存——每个区块一框）
      *  框 = {x0,y0,z0,x1,y1,z1}；名称与框一一对应（顶部悬浮文字） */
     private static final java.util.List<double[]> REGION_BOXES = new java.util.ArrayList<>();
@@ -116,43 +100,8 @@ public final class BlueprintAreaPreview {
         previewId = blueprintId;
         active = true;
         previewSeen = true; // 看过预览 → 建造确认流程放行第 2 步
-        // 实测五百五十三②：落点 = 这一刻的玩家脚下格（之后不再跟着人走）
-        resetOriginToPlayer();
         ensureRegistered();
         ensureProjection(blueprintId, previewQuarters);
-    }
-
-    /** 实测五百五十三②：当前落点（null = 还没开过预览） */
-    public static net.minecraft.core.BlockPos origin() {
-        return previewOrigin;
-    }
-
-    /** 实测五百五十三②：直接设置落点（微调界面用） */
-    public static void setOrigin(net.minecraft.core.BlockPos pos) {
-        if (pos != null) {
-            previewOrigin = pos;
-        }
-    }
-
-    /** 实测五百五十三②：落点平移（微调按钮 X±1/Y±1/Z±1 用） */
-    public static void shiftOrigin(int dx, int dy, int dz) {
-        if (previewOrigin != null) {
-            previewOrigin = previewOrigin.m_7918_(dx, dy, dz);
-        }
-    }
-
-    /** 实测五百五十三②：落点拉回玩家脚下（「回到脚下」按钮） */
-    public static void resetOriginToPlayer() {
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-        if (mc.f_91074_ != null) {
-            previewOrigin = mc.f_91074_.m_20183_();
-        }
-    }
-
-    /** 实测五百五十三②：占地尺寸（金色框与微调界面显示用，不含朝向互换） */
-    public static int[] previewSize() {
-        boolean swapped = (previewQuarters & 1) != 0;
-        return new int[]{swapped ? sizeZ : sizeX, sizeY, swapped ? sizeX : sizeZ};
     }
 
     /**
@@ -179,29 +128,9 @@ public final class BlueprintAreaPreview {
         return previewSeen;
     }
 
-    /** 实测五百五十三②：逆时针 90°（微调界面的「左转」按钮；Z 键仍是顺时针） */
-    public static void rotateCounterClockwise() {
-        if (!active || previewId == null) {
-            return;
-        }
-        previewQuarters = (previewQuarters + 3) & 3;
-        ensureProjection(previewId, previewQuarters);
-        net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
-        if (mc.f_91074_ != null) {
-            mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7b【建造转向】建筑已逆时针旋转至 " + (previewQuarters * 90)
-                            + "\u00a7b°——确认建造后以此落地"));
-        }
-    }
-
     /** v1.1.0 实测九十七：当前选定的朝向（0~3 × 90° 顺时针）——确认建造时随包下发 */
     public static int previewQuarters() {
         return previewQuarters;
-    }
-
-    /** 实测五百五十三②：当前预览的蓝图 id（微调界面的「确认建造」要用） */
-    public static String previewBlueprintId() {
-        return previewId;
     }
 
     /** 建造确认成功后重置——下一轮建造仍先看范围（防误操作） */
@@ -363,41 +292,23 @@ public final class BlueprintAreaPreview {
         if (pts.length == 0) {
             LOGGER.info("projection: key={} empty cloud (unavailable)", key);
             PROJECTIONS.remove(key);
-            PALETTES.remove(key);
-            PARSED_STATES.remove(key);
             return;
         }
-        // 实测五百五十三①：调色板（真方块渲染用）单独存——点里只带调色板下标
-        String[] pal = parsePalette(cloud);
-        if (pal != null && pal.length > 0) {
-            String[] old = PALETTES.put(key, pal);
-            if (old != pal) {
-                PARSED_STATES.remove(key); // 调色板换了 → 解析缓存失效
-            }
-        }
         PROJECTIONS.put(key, pts);
-        LOGGER.info("projection: key={} received {} blocks, palette={}", key, pts.length / 4,
-                pal == null ? 0 : pal.length);
+        LOGGER.info("projection: key={} received {} blocks", key, pts.length / 4);
     }
 
     /**
-     * 解析点云文本 → 平铺 Object[]{x,y,z,调色板下标(Integer，旧格式为 null), …}。
-     *
-     * 实测五百五十三①起格式为 `<点>|<调色板>`：
-     * - 点：`x,y,z,i`（i = 调色板下标的 base36）；
-     * - 调色板：`i~blockId~stateSnbt` 以 ';' 分隔。
-     * 没有 '|' 的老格式（纯 "x,y,z"）继续兼容——那走旧的彩色填充盒渲染。
+     * 解析点云文本 → 平铺 Object[]{x,y,z,占位, x,y,z,占位, …}。
+     * 格式 "x,y,z;x,y,z;…"（实测二百二十三：旧版 "x,y,z,id|state" 的状态段——
+     * 实测一百四十七起渲染走 DebugRenderer 填充盒，BlockState 不再参与绘制，
+     * 客户端却仍逐点做 SNBT 解析；已移除，状态槽留 null 占位）。
      */
     private static Object[] parseCloud(String cloud) {
         if (cloud == null || cloud.isEmpty()) {
             return new Object[0];
         }
-        int bar = cloud.indexOf('|');
-        String pointSection = bar >= 0 ? cloud.substring(0, bar) : cloud;
-        if (pointSection.isEmpty()) {
-            return new Object[0];
-        }
-        String[] segs = pointSection.split(";");
+        String[] segs = cloud.split(";");
         Object[] out = new Object[segs.length * 4];
         int n = 0;
         for (String s : segs) {
@@ -409,47 +320,15 @@ public final class BlueprintAreaPreview {
                 }
                 int x = Integer.parseInt(s.substring(0, c1));
                 int y = Integer.parseInt(s.substring(c1 + 1, c2));
-                int c3 = s.indexOf(',', c2 + 1);
-                int z;
-                Integer idx = null;
-                if (c3 > 0) {
-                    z = Integer.parseInt(s.substring(c2 + 1, c3));
-                    String is = s.substring(c3 + 1).trim();
-                    if (!is.isEmpty()) {
-                        idx = Integer.parseInt(is, 36);
-                    }
-                } else {
-                    z = Integer.parseInt(s.substring(c2 + 1));
-                }
+                int z = Integer.parseInt(s.substring(c2 + 1));
                 out[n++] = x;
                 out[n++] = y;
                 out[n++] = z;
-                out[n++] = idx;
+                out[n++] = null;
             } catch (Exception ignored) {
             }
         }
         return n == out.length ? out : java.util.Arrays.copyOf(out, n);
-    }
-
-    /** 实测五百五十三①：解析调色板段 `i~blockId~stateSnbt;i~…`（无该段返回 null） */
-    private static String[] parsePalette(String cloud) {
-        if (cloud == null || cloud.isEmpty()) {
-            return null;
-        }
-        int bar = cloud.indexOf('|');
-        if (bar < 0 || bar >= cloud.length() - 1) {
-            return null;
-        }
-        String[] parts = cloud.substring(bar + 1).split(";");
-        java.util.List<String> out = new java.util.ArrayList<>(parts.length);
-        for (String p : parts) {
-            String s = p.trim();
-            if (s.isEmpty()) {
-                continue;
-            }
-            out.add(s);
-        }
-        return out.isEmpty() ? null : out.toArray(new String[0]);
     }
 
     private static void ensureRegistered() {
@@ -467,13 +346,7 @@ public final class BlueprintAreaPreview {
         if (!registered || (!active && REGION_BOXES.isEmpty())) {
             return;
         }
-        // 实测五百五十三①：真方块幽灵走半透明方块图集 → 必须在【半透明层之后】绘制
-        //（否则会被世界的半透明面盖住/混色不对）；旧的彩色填充盒仍在方块实体之后画。
-        net.minecraftforge.client.event.RenderLevelStageEvent.Stage wantStage =
-                com.maidsmart.config.MaidSmartConfig.BUILD_REAL_GHOST_BLOCKS.get()
-                        ? net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS
-                        : net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES;
-        if (event.getStage() != wantStage) {
+        if (event.getStage() != net.minecraftforge.client.event.RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
             return;
         }
         // 画质：遥控到此时的值——红框渲染不检查这个开关，只橙影/金影检查
@@ -530,13 +403,13 @@ public final class BlueprintAreaPreview {
             }
         }
         if (active) {
-            // 实测五百五十三②：金色预览改用**固定落点**（打开预览那一刻的玩家脚下格，
-            // 微调界面/回到脚下按钮可改）——不再每帧取玩家位置；
+            // 金色预览：以玩家所在格为中心（每帧取玩家位置 → 框随玩家移动）；
+            // v1.1.0 实测九十六：青色幽灵方块同步显示——未确认阶段即可看形态朝向；
             // v1.1.0 实测九十七：奇数朝向（90°/270°）占地 W/D 互换，金色框整体换向
             boolean swapped = (previewQuarters & 1) != 0;
             int effX = swapped ? sizeZ : sizeX;
             int effZ = swapped ? sizeX : sizeZ;
-            net.minecraft.core.BlockPos p = previewOrigin != null ? previewOrigin : mc.f_91074_.m_20183_();
+            net.minecraft.core.BlockPos p = mc.f_91074_.m_20183_();
             double x0 = p.m_123341_() - effX / 2.0;
             double z0 = p.m_123343_() - effZ / 2.0;
             double y0 = p.m_123342_();
@@ -580,15 +453,6 @@ public final class BlueprintAreaPreview {
                 rotateClockwise();
             }
         }
-        // 实测五百五十三②：G 键打开落点微调界面（仅金色预览激活时；同样无条件排空计数）
-        while (com.maidsmart.build.BuildKeysClient.PLACEMENT_SCREEN != null
-                && com.maidsmart.build.BuildKeysClient.PLACEMENT_SCREEN.m_90859_()) {
-            if (active && previewId != null
-                    && net.minecraft.client.Minecraft.m_91087_().f_91080_ == null) {
-                net.minecraft.client.Minecraft.m_91087_().m_91152_(
-                        new com.maidsmart.build.BuildPlacementScreen());
-            }
-        }
     }
 
     /**
@@ -614,17 +478,6 @@ public final class BlueprintAreaPreview {
         Object[] pts = PROJECTIONS.get(id);
         if (pts == null || pts.length < 4) {
             return;
-        }
-        // 实测五百五十三①【真方块半透明渲染】：点里带调色板下标（新格式）且开关开着时，
-        // 直接按每点的方块用原版烘焙模型画——效果与参照的 TLM-Builder 一致（看得出
-        // 石砖/木板/楼梯朝向），比彩色填充盒信息量大得多。开关关掉或老格式 → 走下面的
-        // 填充盒老路径（行为完全不变）。
-        if (com.maidsmart.config.MaidSmartConfig.BUILD_REAL_GHOST_BLOCKS.get()) {
-            net.minecraft.world.level.block.state.BlockState[] states = parsedStates(mc, id);
-            if (states != null) {
-                drawRealGhost(pose, mc, camera, pts, states, ox, oy, oz, a);
-                return;
-            }
         }
         // v1.1.0 实测一百八十九（反馈："建造模式方块——玩家走出框选的区块以后，
         // 蓝色方块和橙色方块在区块外是看不见的"）：移除 96 格点剔除——旧版以
@@ -710,206 +563,6 @@ public final class BlueprintAreaPreview {
             extends net.minecraft.client.renderer.MultiBufferSource.BufferSource {
         GhostBufferSource() {
             super(new com.mojang.blaze3d.vertex.BufferBuilder(4096), new java.util.HashMap<>());
-        }
-    }
-
-    /**
-     * 实测五百五十三①：调色板 → BlockState 数组（带缓存；调色板数组换了就重解析）。
-     * 解析用原版的 {@code BlockStateParser.parseForBlock}，所以楼梯朝向/半砖类型/
-     * 含水状态这些都能还原——预览里看到的就是建好以后的样子。
-     */
-    private static net.minecraft.world.level.block.state.BlockState[] parsedStates(
-            net.minecraft.client.Minecraft mc, String key) {
-        String[] pal = PALETTES.get(key);
-        if (pal == null || pal.length == 0 || mc.f_91073_ == null) {
-            return null;
-        }
-        Object[] cached = PARSED_STATES.get(key);
-        if (cached != null && cached.length == 3 && cached[0] == pal) {
-            @SuppressWarnings("unchecked")
-            net.minecraft.world.level.block.state.BlockState[] hit =
-                    (net.minecraft.world.level.block.state.BlockState[]) cached[1];
-            return hit;
-        }
-        net.minecraft.core.HolderLookup<net.minecraft.world.level.block.Block> lookup =
-                mc.f_91073_.m_9598_()
-                        .m_254861_(net.minecraft.core.registries.Registries.f_256747_)
-                        .orElse(null);
-        if (lookup == null) {
-            return null;
-        }
-        net.minecraft.world.level.block.state.BlockState[] states =
-                new net.minecraft.world.level.block.state.BlockState[pal.length];
-        int ok = 0;
-        for (int i = 0; i < pal.length; i++) {
-            String entry = pal[i];
-            try {
-                int t = entry.indexOf('~');
-                if (t <= 0) {
-                    continue;
-                }
-                int t2 = entry.indexOf('~', t + 1);
-                String id = t2 > 0 ? entry.substring(t + 1, t2) : entry.substring(t + 1);
-                String state = t2 > 0 ? entry.substring(t2 + 1) : "";
-                String text = state == null || state.isEmpty() ? id : id + state;
-                net.minecraft.commands.arguments.blocks.BlockStateParser.BlockResult res =
-                        net.minecraft.commands.arguments.blocks.BlockStateParser.m_245437_(lookup, text, false);
-                states[i] = res.f_234748_();
-                ok++;
-            } catch (Throwable ignored) {
-                states[i] = null; // 单个方块解析失败（模组方块被卸？）→ 该点跳过，不影响其它
-            }
-        }
-        if (ok == 0) {
-            return null; // 一个都解析不了 → 退回填充盒渲染，至少还能看见范围
-        }
-        PARSED_STATES.put(key, new Object[]{pal, states});
-        return states;
-    }
-
-    /**
-     * 实测五百五十三①：真方块幽灵——按每点的方块用**原版烘焙模型**画进半透明方块图集，
-     * 顶点颜色 alpha×0.6、RGB 略压暗（参照 TLM-Builder 的 GhostVertexConsumer 做法），
-     * 看上去就是"一栋半透明的真建筑"。已经建好（世界里已是同种方块）的点不再画。
-     * 绘制上限走 {@code build.ghostBlockCap}（真模型比填充盒重），仍是最近优先。
-     */
-    private static void drawRealGhost(com.mojang.blaze3d.vertex.PoseStack pose,
-                                      net.minecraft.client.Minecraft mc,
-                                      net.minecraft.world.phys.Vec3 camera,
-                                      Object[] pts, net.minecraft.world.level.block.state.BlockState[] states,
-                                      double ox, double oy, double oz, float alpha) {
-        net.minecraft.client.multiplayer.ClientLevel level = mc.f_91073_;
-        if (level == null) {
-            return;
-        }
-        int total = pts.length / 4;
-        int cap = com.maidsmart.config.MaidSmartConfig.BUILD_GHOST_BLOCK_CAP.get();
-        java.util.ArrayList<int[]> near = new java.util.ArrayList<>();
-        for (int i = 0; i < total; i++) {
-            double dx = ox + (int) pts[i * 4] + 0.5 - camera.f_82479_;
-            double dy = oy + (int) pts[i * 4 + 1] + 0.5 - camera.f_82480_;
-            double dz = oz + (int) pts[i * 4 + 2] + 0.5 - camera.f_82481_;
-            double dSq = dx * dx + dy * dy + dz * dz;
-            if (dSq <= 4096.0) { // 64 格内
-                near.add(new int[]{i, (int) dSq});
-            }
-        }
-        if (near.isEmpty()) {
-            return;
-        }
-        near.sort(java.util.Comparator.comparingInt(o -> o[1]));
-        int limit = Math.min(cap, near.size());
-        net.minecraft.client.renderer.block.BlockRenderDispatcher brd = mc.m_91289_();
-        net.minecraft.client.renderer.MultiBufferSource.BufferSource buffers = mc.m_91269_().m_110104_();
-        com.mojang.blaze3d.vertex.VertexConsumer vc = new GhostBlockVertexConsumer(
-                buffers.m_6299_(net.minecraft.client.renderer.Sheets.m_110792_()));
-        int drawn = 0;
-        int oxi = (int) Math.floor(ox);
-        int oyi = (int) Math.floor(oy);
-        int ozi = (int) Math.floor(oz);
-        for (int k = 0; k < limit; k++) {
-            int i = near.get(k)[0];
-            Object idxObj = pts[i * 4 + 3];
-            if (!(idxObj instanceof Integer idx) || idx < 0 || idx >= states.length) {
-                continue;
-            }
-            net.minecraft.world.level.block.state.BlockState st = states[idx];
-            if (st == null || st.m_60795_()) {
-                continue;
-            }
-            net.minecraft.core.BlockPos bp = new net.minecraft.core.BlockPos(
-                    oxi + (int) pts[i * 4], oyi + (int) pts[i * 4 + 1], ozi + (int) pts[i * 4 + 2]);
-            // 世界里已经是同一种方块 → 建好了，不再画（与参照一致）
-            if (level.m_8055_(bp).m_60713_(st.m_60734_())) {
-                continue;
-            }
-            // 本帧的 PoseStack 没有做 -camera 平移（描边/填充盒都是手算相机相对坐标），
-            // 所以这里自己平移到"相机相对位置"，BlockPos 仍用世界坐标算光照/种子。
-            pose.m_85836_();
-            pose.m_252880_((float) (bp.m_123341_() - camera.f_82479_),
-                    (float) (bp.m_123342_() - camera.f_82480_),
-                    (float) (bp.m_123343_() - camera.f_82481_));
-            brd.m_110937_().tesselateBlock(level, brd.m_110910_(st), st, bp, pose, vc, false,
-                    level.f_46441_, st.m_60726_(bp),
-                    net.minecraft.client.renderer.texture.OverlayTexture.f_118083_,
-                    net.minecraftforge.client.model.data.ModelData.EMPTY, null);
-            pose.m_85849_();
-            drawn++;
-        }
-        buffers.m_109912_(net.minecraft.client.renderer.Sheets.m_110792_());
-        if (drawn != lastDrawnCount) {
-            lastDrawnCount = drawn;
-            com.maidsmart.tool.PromaidLog.log("投影", "drawRealGhost 方块数=" + drawn
-                    + "（调色板 " + states.length + " 种）");
-        }
-    }
-
-    /**
-     * 实测五百五十三①：真方块幽灵的顶点包装——把原版方块图集的顶点颜色
-     * alpha 压到 0.6、RGB 略压暗，得到"半透明真方块"的观感。
-     * （1.20.1 的 VertexConsumer 是 9 个抽象方法的 SRG 版，javap 实证）
-     */
-    private static final class GhostBlockVertexConsumer
-            implements com.mojang.blaze3d.vertex.VertexConsumer {
-        private final com.mojang.blaze3d.vertex.VertexConsumer delegate;
-
-        GhostBlockVertexConsumer(com.mojang.blaze3d.vertex.VertexConsumer delegate) {
-            this.delegate = delegate;
-        }
-
-        private static int dim(int c) {
-            return Math.max(0, Math.min(255, (int) (c * 0.88f)));
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5483_(double x, double y, double z) {
-            delegate.m_5483_(x, y, z);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_6122_(int r, int g, int b, int a) {
-            delegate.m_6122_(dim(r), dim(g), dim(b), (int) (a * 0.6f));
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7421_(float u, float v) {
-            delegate.m_7421_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7122_(int u, int v) {
-            delegate.m_7122_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_7120_(int u, int v) {
-            delegate.m_7120_(u, v);
-            return this;
-        }
-
-        @Override
-        public com.mojang.blaze3d.vertex.VertexConsumer m_5601_(float x, float y, float z) {
-            delegate.m_5601_(x, y, z);
-            return this;
-        }
-
-        @Override
-        public void m_5752_() {
-            delegate.m_5752_();
-        }
-
-        @Override
-        public void m_7404_(int r, int g, int b, int a) {
-            delegate.m_7404_(dim(r), dim(g), dim(b), (int) (a * 0.6f));
-        }
-
-        @Override
-        public void m_141991_() {
-            delegate.m_141991_();
         }
     }
 

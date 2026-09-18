@@ -17,6 +17,8 @@ public final class MaidSmartConfig {
     // ================= 建造 =================
     public static final ForgeConfigSpec.ConfigValue<String> BUILD_SPEED_TIER;
     public static final ForgeConfigSpec.BooleanValue BUILD_TURBO;
+/** v1.2.0 实测五百五十七：建造默认速度迁移标记（内部，一次性） */
+public static final ForgeConfigSpec.BooleanValue BUILD_SPEED_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_FORCE_CHUNKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_BLOCKS;
@@ -34,12 +36,6 @@ public static final ForgeConfigSpec.BooleanValue BUILD_MACHINE_SMART;
 public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 /** v1.1.0 实测八十二：蓝图投影预览——区块显示时叠加半透明幽灵方块轮廓（确认朝向/形状） */
 public static final ForgeConfigSpec.BooleanValue BUILD_PROJECTION;
-/** 实测五百五十三①：投影用原版模型渲染真方块（半透明）而非彩色填充盒 */
-public static final ForgeConfigSpec.BooleanValue BUILD_REAL_GHOST_BLOCKS;
-/** 实测五百五十三①：投影每帧绘制上限（真方块模型比填充盒重） */
-public static final ForgeConfigSpec.IntValue BUILD_GHOST_BLOCK_CAP;
-/** 实测五百五十三②：落点微调允许的最远距离（超过则服务端拒绝开建） */
-public static final ForgeConfigSpec.IntValue BUILD_PLACEMENT_RANGE;
 /** 实测五百五十三③：建造缺料时从区块内容器取料 */
 public static final ForgeConfigSpec.BooleanValue BUILD_FETCH_FROM_CHESTS;
 /** 实测五百五十三③：取料扫描在区块外再外扩的格数 */
@@ -566,10 +562,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("建造系统设置").translation("config.promaid.build").push("build");
         BUILD_SPEED_TIER = BUILDER.comment("建造速度档位：x1 / x1.5 / x3")
                 .translation("config.promaid.build.speedTier")
-                .define("speedTier", "x1.5",
+                .define("speedTier", "x1",
                         o -> o instanceof String s && (s.equals("x1") || s.equals("x1.5") || s.equals("x3")));
+        // v1.2.0 实测五百五十七：极速模式默认由【开】改【关】——旧默认下所有新档一上来就是
+        // "吃满服务器上限"（1427 块/秒），既看不出建造过程也白烧性能；默认回到 ×1。
         BUILD_TURBO = BUILDER.comment("极速模式（吃满服务器上限，性能风险）")
-                .translation("config.promaid.build.turbo").define("turbo", true);
+                .translation("config.promaid.build.turbo").define("turbo", false);
+        // v1.2.0 实测五百五十七：迁移标记（内部，一次性）——上面这条默认值改了以后，
+        // 老存档的 toml 里已经写着 turbo = true（那是旧默认，不是玩家选的），只凭值分不出来；
+        // 所以用这个标记把"迁移只做一次"钉死：跑过之后玩家再手动打开极速就不会被改回去。
+        BUILD_SPEED_MIGRATED = BUILDER.comment("内部标记：建造默认速度迁移（极速→关、x1.5→x1）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.build.speedMigrated").define("speedMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -608,16 +611,6 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测八十二：蓝图投影——只有区块框不好确认建筑朝向/形状
         BUILD_PROJECTION = BUILDER.comment("蓝图投影预览：「区块显示」与建造中区块叠加半透明幽灵方块轮廓（外壳抽稀采样，确认建筑朝向/形状）；关闭则只显示区块框")
                 .translation("config.promaid.build.projection").define("projection", true);
-        // v1.2.0 实测五百五十三①：投影改为「真方块半透明」渲染（参照 TLM-Builder 的做法）
-        BUILD_REAL_GHOST_BLOCKS = BUILDER.comment("投影显示真方块（默认开）：幽灵投影按每点的方块用**原版模型**半透明绘制（能看出石砖/木板/玻璃的具体样子），而不是彩色填充盒；关闭则回旧的填充盒渲染")
-                .translation("config.promaid.build.realGhostBlocks").define("realGhostBlocks", true);
-        BUILD_GHOST_BLOCK_CAP = BUILDER.comment("投影每帧绘制上限（个，默认 1500）：真方块模型比填充盒重，超出按最近优先截断；卡顿时调小")
-                .translation("config.promaid.build.ghostBlockCap")
-                .defineInRange("ghostBlockCap", 1500, 200, 8000);
-        // v1.2.0 实测五百五十三②：落点微调
-        BUILD_PLACEMENT_RANGE = BUILDER.comment("落点微调范围（格，默认 32）：微调界面把落点挪到多远都允许；超过这个距离服务端拒绝开建（防误点把区块建到远处）")
-                .translation("config.promaid.build.placementRange")
-                .defineInRange("placementRange", 32, 4, 128);
         // v1.2.0 实测五百五十三③：区块内容器取料
         BUILD_FETCH_FROM_CHESTS = BUILDER.comment("从箱子取材料（默认开）：建造缺料时，女仆会去**建造区块内**的箱子/桶/潜影箱取该材料（走过去 + 开箱动画），取完回工地继续盖")
                 .translation("config.promaid.build.fetchFromChests").define("fetchFromChests", true);

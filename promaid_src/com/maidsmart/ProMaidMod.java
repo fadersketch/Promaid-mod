@@ -122,6 +122,20 @@ public class ProMaidMod {
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
             }
+            // v1.2.0 实测五百五十七：建造默认速度 x1.5 → x1、极速模式 开 → 关。
+            // 【用一次性标记来判定，而不是"值 == 旧默认"】——实测玩家 toml 里的实际组合是
+            // `speedTier = "x1" + turbo = true`（档位早就是 x1、只有极速还开着），
+            // 只凭值分不出"旧默认留下的 true"和"玩家自己打开的 true"。
+            // 标记跑过一次就不再碰这两个值：玩家之后想开极速，随时打开都能留着。
+            if (!com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_MIGRATED.get()) {
+                com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_MIGRATED.set(true);
+                if (com.maidsmart.config.MaidSmartConfig.BUILD_TURBO.get()) {
+                    com.maidsmart.config.MaidSmartConfig.BUILD_TURBO.set(false);
+                }
+                if ("x1.5".equals(com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_TIER.get())) {
+                    com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_TIER.set("x1");
+                }
+            }
             migrateOreTable();
         } catch (Exception ignored) {
         }

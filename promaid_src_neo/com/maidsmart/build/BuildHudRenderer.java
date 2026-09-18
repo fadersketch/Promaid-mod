@@ -25,6 +25,13 @@ public final class BuildHudRenderer {
     private static final int LINE_H = 10;
     /** v1.1.0 实测四百二十一：最近一次渲染的底部 Y（空/未渲染 = 4）——冷却 HUD 在下方避让 */
     private static int lastBottomY = 4;
+    /**
+     * v1.2.0 实测五百五十七【建造完成后 HUD 不消失】的第二道保险：
+     * 服务端每秒推一次快照；超过 5 秒一个都没来（计划结束但空快照丢包、服务端广播异常、
+     * 切世界/重连）就本地清屏——HUD 绝不允许永久挂在左上角。
+     */
+    private static long lastSnapshotNanos = 0L;
+    private static final long SNAPSHOT_TIMEOUT_NANOS = 5_000_000_000L;
 
     private BuildHudRenderer() {
     }
@@ -38,6 +45,7 @@ public final class BuildHudRenderer {
     public static void onSnapshot(java.util.List<String[]> entries) {
         SNAPSHOT.clear();
         hiddenCount = 0;
+        lastSnapshotNanos = System.nanoTime();
         if (entries != null) {
             for (String[] e : entries) {
                 if (SNAPSHOT.size() < MAX_REGIONS) {
@@ -62,6 +70,11 @@ public final class BuildHudRenderer {
     @net.neoforged.bus.api.SubscribeEvent
     public static void onGui(net.neoforged.neoforge.client.event.RenderGuiEvent.Post event) {
         lastBottomY = 4; // 本帧未画建造 HUD 时（下方提前 return）冷却 HUD 从顶部起画
+        // v1.2.0 实测五百五十七：快照超时（5 秒无推送）→ 本地清屏，防 HUD 永久挂在左上角
+        if (!SNAPSHOT.isEmpty() && System.nanoTime() - lastSnapshotNanos > SNAPSHOT_TIMEOUT_NANOS) {
+            SNAPSHOT.clear();
+            hiddenCount = 0;
+        }
         if (SNAPSHOT.isEmpty()) {
             return;
         }
