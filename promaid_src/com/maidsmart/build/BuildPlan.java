@@ -109,6 +109,17 @@ public final class BuildPlan {
         public int skipped = 0;
         /** v1.5.62：真实放置数（进度显示用——游标是扫描位置会虚高，不是已建数） */
         public int placedCount = 0;
+        /**
+         * v1.2.0 实测五百五十七【进度到不了 100%】：**开工时就已是目标方块**的格子数
+         * （蓝图盖在已有地形上时的"已建"）。旧版这类格子只前进游标不计数，于是
+         * "她真的一块都不差地建完了"，进度却永远停在 99%（实测：80,445 / 80,446）。
+         *
+         * 与 {@link #placedCount} **分开存**：完成判定（缺口扫描那套）仍按"她真放的"
+         * 算，不受影响；只有**展示**（HUD / 手册进度条）用 placedCount + prebuiltCount。
+         */
+        public int prebuiltCount = 0;
+        /** v1.2.0 实测五百五十七：已计入 prebuiltCount 的位置（防重复计数；与 placedSet 互斥） */
+        public final java.util.Set<Long> prebuiltSet = new java.util.HashSet<>();
         /** v1.5.82：已放置位置集合（相对坐标 key）——补建/覆盖重复放置同一位置
          *  不再重复计数（修复进度出现 150% 等超 100% 的重复计算） */
         public final java.util.Set<Long> placedSet = new java.util.HashSet<>();
@@ -488,7 +499,8 @@ public final class BuildPlan {
         }
         Progress p = progress(ps);
         // v1.5.83：不 clamp 到 100——超过时客户端显示 >100% 并染红（超料警示）
-        return Math.max(0, p.placedCount * 100 / total);
+        // v1.2.0 实测五百五十七：已建 = 真放置 + 开工时已是目标方块的格子（否则建完了还停在 99%）
+        return Math.max(0, (p.placedCount + p.prebuiltCount) * 100 / total);
     }
 
     // ==================== 状态文本 ====================

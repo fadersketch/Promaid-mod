@@ -1,7 +1,7 @@
 # Promaid 上传 CurseForge / Modrinth 发布指南
 
 > 本文是**操作手册**，回答"点哪里、填什么"。两个平台都是**先提交、再人工审核**，新项目第一次提交会进审核队列（CurseForge 常见几小时到 3 天，Modrinth 常见 1~2 天，周末更慢）。
-> 版本：v1.2.0 · 对应 jar：`patched/promaid-1.2.0.jar`（Forge）与 `patched/promaid-1.2.0-neoforge-1.21.1.jar`（NeoForge）
+> 版本：v1.2.1 · 对应 jar：`patched/promaid-1.2.1.jar`（Forge）与 `patched/promaid-1.2.0-neoforge-1.21.1.jar`（NeoForge）
 
 ---
 
@@ -25,7 +25,7 @@
 
 **① 4~6 张游戏内截图**（平台都建议至少 3 张，缺图是常见驳回理由）。建议按这个清单拍：
 
-1. 空袭女仆在天上放烟花俯冲打怪（最能代表 v1.2.0）；
+1. 空袭女仆在天上放烟花俯冲打怪（最能代表 1.2 系列）；
 2. 远程空袭空中盘旋开火；
 3. 建造系统工地（红色区块框 + 橙色幽灵方块投影）；
 4. 排班表界面（列表 + 时段高亮）；
@@ -68,21 +68,21 @@
 
 ### 2.2 传版本（左侧 Versions → Create version）
 
-**要传两次**（同一个 1.2.0，两个加载器）：
+**要传两次**（同一个 1.2.1，两个加载器）：
 
 | 字段 | 第 1 次（Forge） | 第 2 次（NeoForge） |
 | --- | --- | --- |
-| Version name | `v1.2.0 (Forge 1.20.1)` | `v1.2.0 (NeoForge 1.21.1)` |
-| Version number | `1.2.0` | `1.2.0` |
+| Version name | `v1.2.1 (Forge 1.20.1)` | `v1.2.1 (NeoForge 1.21.1)` |
+| Version number | `1.2.1` | `1.2.1` |
 | Release channel | `Release` | `Release` |
 | Loaders | **只勾 Forge** | **只勾 NeoForge** |
 | Game versions | **只勾 1.20.1** | **只勾 1.21.1** |
-| File | `promaid-1.2.0.jar` | `promaid-1.2.0-neoforge-1.21.1.jar` |
+| File | `promaid-1.2.0.jar` | `promaid-1.2.1-neoforge-1.21.1.jar` |
 | Dependencies | 添加 **Required** → `Touhou Little Maid` | 同上 |
 | Changelog | 贴第 4.3 节 | 贴第 4.3 节 |
 
 > 千万别一个文件勾两个加载器——Forge 包放进 NeoForge 环境会直接启动失败，这是投诉最多的来源。
-> 文件名建议改成 `promaid-1.2.0-forge-1.20.1.jar` / `promaid-1.2.0-neoforge-1.21.1.jar` 再传（纯为了下载者一眼能分辨，不影响加载）。
+> 文件名建议改成 `promaid-1.2.1-forge-1.20.1.jar` / `promaid-1.2.1-neoforge-1.21.1.jar` 再传（纯为了下载者一眼能分辨，不影响加载）。
 
 ### 2.3 提交审核
 
@@ -115,8 +115,8 @@
 
 | 字段 | 第 1 次 | 第 2 次 |
 | --- | --- | --- |
-| File | `promaid-1.2.0.jar` | `promaid-1.2.0-neoforge-1.21.1.jar` |
-| Display name | `Promaid 1.2.0 — Forge 1.20.1` | `Promaid 1.2.0 — NeoForge 1.21.1` |
+| File | `promaid-1.2.0.jar` | `promaid-1.2.1-neoforge-1.21.1.jar` |
+| Display name | `Promaid 1.2.1 — Forge 1.20.1` | `Promaid 1.2.1 — NeoForge 1.21.1` |
 | Release type | **Release** | **Release** |
 | Game version | `1.20.1` | `1.21.1` |
 | Modloader | **Forge** | **NeoForge** |
@@ -255,7 +255,7 @@ A Touhou Little Maid addon: flying air-raid combat, blueprint building, mining, 
 **MIT** —— 源码与问题反馈：<https://github.com/fadersketch/Promaid-mod>
 ````
 
-### 4.3 v1.2.0 版本更新说明（填到"该版本的 changelog"字段）
+### 4.3 v1.2.1 版本更新说明（填到"该版本的 changelog"字段）
 
 ```markdown
 ## 本版主题：空袭（会飞的女仆）
@@ -302,4 +302,4 @@ A Touhou Little Maid addon: flying air-raid combat, blueprint building, mining, 
 
 1. 把两个平台的项目链接加回仓库：`README.md` 顶部已留了"仓库"一行，可再加 CurseForge / Modrinth 徽章；
 2. 之后每次发版：**先**在本地重新构建两个 jar（`build_promaid.py` / `build_promaid_neo.py`）→ 部署本地 → 传两个平台的新版本 → 再在 GitHub 发 Release（顺序反了会出现"平台上的包和仓库里的不一致"）；
-3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.2.0`）。
+3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.2.1`）。

@@ -36,7 +36,10 @@ public class MaidBuildTask implements IMaidTask {
     @Override
     public List<Pair<Integer, BehaviorControl<? super EntityMaid>>> createBrainTasks(EntityMaid maid) {
         // 必须返回可变列表：TLM 的 MaidBrain.registerWorkGoals 会往里追加行为
-        return new ArrayList<>(List.of(Pair.of(5, new MaidBuildBehavior())));
+        // 实测五百五十三③：取料行为优先级 7 > 建造 5 —— 缺料时才抢占，取完接着盖
+        return new ArrayList<>(List.of(
+                Pair.of(5, new MaidBuildBehavior()),
+                Pair.of(7, new BuildContainerFetchBehavior())));
     }
 
     @Override

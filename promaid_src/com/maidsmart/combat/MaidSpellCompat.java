@@ -69,7 +69,7 @@ public final class MaidSpellCompat {
     /** 附属是否在场（不在场 → 本类所有判定恒 false） */
     public static boolean isLoaded() {
         try {
-            return net.neoforged.fml.ModList.get().isLoaded(MOD_ID);
+            return net.minecraftforge.fml.ModList.get().isLoaded(MOD_ID);
         } catch (Throwable ignored) {
             return false;
         }
@@ -108,7 +108,7 @@ public final class MaidSpellCompat {
      * 附属没装 / 反射失败一律 false——调用方据此把它排除在切换列表外。
      */
     public static boolean isSpellWeapon(ItemStack stack) {
-        if (stack == null || stack.isEmpty() || !resolve()) {
+        if (stack == null || stack.m_41619_() || !resolve()) {
             return false;
         }
         try {
@@ -140,7 +140,7 @@ public final class MaidSpellCompat {
             return false;
         }
         try {
-            if (isSpellWeapon(maid.getMainHandItem()) || isSpellWeapon(maid.getOffhandItem())) {
+            if (isSpellWeapon(maid.m_21205_()) || isSpellWeapon(maid.m_21206_())) {
                 return true;
             }
             var inv = maid.getMaidInv();
@@ -205,7 +205,7 @@ public final class MaidSpellCompat {
             return false;
         }
         try {
-            java.util.UUID id = maid.getUUID();
+            java.util.UUID id = maid.m_20148_();
             for (Method get : mDataGet) {
                 if (get == null) {
                     continue;

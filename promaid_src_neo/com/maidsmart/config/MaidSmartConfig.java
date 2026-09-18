@@ -17,6 +17,8 @@ public final class MaidSmartConfig {
     // ================= 建造 =================
     public static final ModConfigSpec.ConfigValue<String> BUILD_SPEED_TIER;
     public static final ModConfigSpec.BooleanValue BUILD_TURBO;
+/** v1.2.0 实测五百五十七：建造默认速度迁移标记（内部，一次性） */
+public static final ModConfigSpec.BooleanValue BUILD_SPEED_MIGRATED;
     public static final ModConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
     public static final ModConfigSpec.IntValue BUILD_MAX_FORCE_CHUNKS;
     public static final ModConfigSpec.IntValue BUILD_MAX_BLOCKS;
@@ -34,6 +36,14 @@ public static final ModConfigSpec.BooleanValue BUILD_MACHINE_SMART;
 public static final ModConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 /** v1.1.0 实测八十二：蓝图投影预览——区块显示时叠加半透明幽灵方块轮廓（确认朝向/形状） */
 public static final ModConfigSpec.BooleanValue BUILD_PROJECTION;
+/** 实测五百五十三③：建造缺料时从区块内容器取料 */
+public static final ModConfigSpec.BooleanValue BUILD_FETCH_FROM_CHESTS;
+/** 实测五百五十三③：取料扫描在区块外再外扩的格数 */
+public static final ModConfigSpec.IntValue BUILD_CHEST_SEARCH_MARGIN;
+/** 实测五百五十三③：每趟每格容器取多少个 */
+public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_PER_TAKE;
+/** 实测五百五十三③：两趟取料之间的最短间隔（tick） */
+public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
     public static final ModConfigSpec.BooleanValue BUILD_ALT_ENABLED;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> BUILD_ALT_SLABS;
@@ -411,7 +421,7 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 自己的 ISpellContainer 扫描覆盖 curios，不看主手）。
      *
      * 需要装《车万女仆：魔法》（touhou_little_maid_spell）——没装时本项无任何效果
-     * （软兼容，反射适配层见 {@code com.maidsmart.combat.MaidSpellCompat}）。
+     * （软兼容，反射适配层见 {@code com.maidsmart.combat.MaidSpellCastCompat}）。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_SPELL_CAST;
     /**
@@ -430,6 +440,19 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 空袭是立体作战，敌人在斜上方 20 格时水平距离早就出界）。
      */
     public static final ModConfigSpec.DoubleValue COMBAT_FLIGHT_SPELL_CAST_RANGE;
+    /**
+     * v1.2.2 实测五百六十【友军风免】（默认开）。
+     *
+     * 需求原文："玩家和其他女仆免疫女仆释放的风暴/风弹效果，不会被震开。当前版本免疫伤害，
+     * 但是会被震风。导致从高空攻击的时候会直接把主人也打到空中。"
+     *
+     * 伤害那条路本来就已经免了（{@code FriendlyFireGuard} + 万法皆通自己的盟友事件），
+     * 漏的是**击退**：原版 Explosion 的击退与铁魔法"呼啸之风"这类效果都直接改速度、
+     * 不走伤害事件。本项开 = 女仆的法术/炸弹/风弹不再震开主人与同主女仆
+     * （只拦"明显外力"，女仆自己的机动一字不改）。口径见
+     * {@code com.maidsmart.combat.FriendlyWindGuard}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_FRIENDLY_WIND_IMMUNE;
     // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
     // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
@@ -588,10 +611,17 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("建造系统设置").translation("config.promaid.build").push("build");
         BUILD_SPEED_TIER = BUILDER.comment("建造速度档位：x1 / x1.5 / x3")
                 .translation("config.promaid.build.speedTier")
-                .define("speedTier", "x1.5",
+                .define("speedTier", "x1",
                         o -> o instanceof String s && (s.equals("x1") || s.equals("x1.5") || s.equals("x3")));
+        // v1.2.0 实测五百五十七：极速模式默认由【开】改【关】——旧默认下所有新档一上来就是
+        // "吃满服务器上限"（1427 块/秒），既看不出建造过程也白烧性能；默认回到 ×1。
         BUILD_TURBO = BUILDER.comment("极速模式（吃满服务器上限，性能风险）")
-                .translation("config.promaid.build.turbo").define("turbo", true);
+                .translation("config.promaid.build.turbo").define("turbo", false);
+        // v1.2.0 实测五百五十七：迁移标记（内部，一次性）——上面这条默认值改了以后，
+        // 老存档的 toml 里已经写着 turbo = true（那是旧默认，不是玩家选的），只凭值分不出来；
+        // 所以用这个标记把"迁移只做一次"钉死：跑过之后玩家再手动打开极速就不会被改回去。
+        BUILD_SPEED_MIGRATED = BUILDER.comment("内部标记：建造默认速度迁移（极速→关、x1.5→x1）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.build.speedMigrated").define("speedMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -630,6 +660,18 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测八十二：蓝图投影——只有区块框不好确认建筑朝向/形状
         BUILD_PROJECTION = BUILDER.comment("蓝图投影预览：「区块显示」与建造中区块叠加半透明幽灵方块轮廓（外壳抽稀采样，确认建筑朝向/形状）；关闭则只显示区块框")
                 .translation("config.promaid.build.projection").define("projection", true);
+        // v1.2.0 实测五百五十三③：区块内容器取料
+        BUILD_FETCH_FROM_CHESTS = BUILDER.comment("从箱子取材料（默认开）：建造缺料时，女仆会去**建造区块内**的箱子/桶/潜影箱取该材料（走过去 + 开箱动画），取完回工地继续盖")
+                .translation("config.promaid.build.fetchFromChests").define("fetchFromChests", true);
+        BUILD_CHEST_SEARCH_MARGIN = BUILDER.comment("取料扫描外扩（格，默认 4）：在建造区块边界外再向外找几格的容器；0 = 只扫区块本身")
+                .translation("config.promaid.build.chestSearchMargin")
+                .defineInRange("chestSearchMargin", 4, 0, 16);
+        BUILD_CHEST_FETCH_PER_TAKE = BUILDER.comment("每趟每格容器取多少（个，默认 8）")
+                .translation("config.promaid.build.chestFetchPerTake")
+                .defineInRange("chestFetchPerTake", 8, 1, 64);
+        BUILD_CHEST_FETCH_COOLDOWN = BUILDER.comment("取料冷却（tick，默认 60）：一趟取完回工地后，至少隔这么久才会再去取下一次（防箱子被锁/取不到时来回跑）")
+                .translation("config.promaid.build.chestFetchCooldown")
+                .defineInRange("chestFetchCooldown", 60, 10, 1200);
         // v1.5.254：缺料自动替代（先同族后自定义；按高度分类的三张自定义表）
         BUILD_ALT_ENABLED = BUILDER.comment("缺料自动替代开关：目标方块没有时，先找同族（木板/原木/石砖等等价族），再按高度分类（半格/一格/两格）用自定义替代表")
                 .translation("config.promaid.build.altEnabled").define("altEnabled", true);
@@ -1321,6 +1363,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_SPELL_CAST_RANGE = BUILDER.comment("空袭施法距离（格，默认 24）：空袭中只在目标进入这个 3D 距离内才发起施法。默认 24 与法术模组自己的 maxSpellRange 一致（它的任务行为用的就是这个上限）；调大可让她在更远处起手（法术飞行途中还能命中），调小 = 只有贴近了才放法术")
                 .translation("config.promaid.combat.flightSpellCastRange")
                 .defineInRange("flightSpellCastRange", 24.0, 4.0, 64.0);
+        // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
+        COMBAT_FRIENDLY_WIND_IMMUNE = BUILDER.comment("友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。")
+                .translation("config.promaid.combat.friendlyWindImmune").define("friendlyWindImmune", true);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);

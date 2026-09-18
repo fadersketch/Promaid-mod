@@ -131,6 +131,22 @@ public final class MaidToolAutoEquip {
                         return false; // 其他任务（待命/工作）不需要工具
                     }
                 }
+            } else if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(maid)) {
+                // v1.2.0 实测五百五十九【法术模式自动换武器收紧】：
+                // 万法皆通的两个法术任务（近战法术/远程法术）isWeapon **恒 true**（javap 实证:
+                // 方法体只有 iconst_1; ireturn）——走"任务自带判据"对我们等于"万物皆武器"，
+                // 旧路径会把背包里最高 DPS 的冷兵器（剑/斧）塞进法术模式的主手。
+                // 现在收紧为两条：
+                //   ① 她得**真的带着法术装备**（会用）才开放切换——没带 → 一次都不换，
+                //      不往法术模式塞冷兵器；
+                //   ② 换也只换**法术装备**（附属 provider 认的法术书/法器）——mod 武器优先。
+                if (!com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
+                    return false;
+                }
+                need = com.maidsmart.combat.MaidSpellCompat::isSpellWeapon;
+                // 法术装备没有攻击力属性 → weaponScore 落到"附魔词条 > 剩余耐久"段，
+                // 与其它无攻击力武器（弓/弩）同一口径，不会与冷兵器混在一起比 DPS
+                scorer = MaidToolAutoEquip::weaponScore;
             } else {
                 // v1.1.0 实测一百零三：模组战斗任务（拔刀剑/slashblade/ef_tlm/truepower
                 // 等）自动装备武器——旧版只处理 touhou_little_maid 命名空间，模组任务

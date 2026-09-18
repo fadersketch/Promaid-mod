@@ -60,6 +60,7 @@ Desktop.ini
 /_*.ps1
 /_*.bat
 /_logs/
+/_ref/
 
 # 常见诊断脚本前缀（仓库根）
 /apply_*.py
