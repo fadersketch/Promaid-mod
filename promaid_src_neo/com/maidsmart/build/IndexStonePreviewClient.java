@@ -313,8 +313,11 @@ public final class IndexStonePreviewClient {
         try {
             java.util.UUID id = java.util.UUID.fromString(maidId);
             Entity found = null;
-            for (Entity e : mc.level.getEntitiesOfClass(Entity.class,
-                    new AABB(-131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0))) {
+            // v1.2.0（2026-09-18）【Sable 兼容 + 客户端口径】：这里原来也是"全世界 AABB"扫描，
+            // 客户端同样会被 Sable 拒绝（返回空 → 指标石预览连线永远找不到女仆）。
+            // ClientLevel 没有 ServerLevel 的 getAllEntities()，用 entitiesForRendering()
+            // （客户端实际渲染中的实体集合，正是"要画连线"需要的那个集合）。
+            for (Entity e : mc.level.entitiesForRendering()) {
                 if (e.getUUID().equals(id)) {
                     found = e;
                     break;
