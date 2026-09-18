@@ -124,7 +124,13 @@ public class ProMaidExtension implements ILittleMaid {
         // 服务端启动时再跑一次（迁移幂等：只在"值==旧默认"时才改）。
         // v1.2.0 实测五百五十七：顺序调到 applyConfigDefaults **之前**——否则本会话
         // 的建造档位仍是迁移前的旧值（旧档第一次进游戏还会是极速），要再进一次才生效。
-        com.maidsmart.ProMaidMod.runConfigMigration();
+        // v1.2.2 实测五百六十一：迁移结果**只在真的改过值时**落盘一次。以前是在配置事件里
+        // 无条件 save()，而写盘会触发 NeoForge 的文件监听器 → 再发 Reloading → 再写 →
+        // 无限写盘风暴（实测 20 秒被重写 38 次），玩家侧表现就是「一点保存就卡死」和
+        // 「下次进游戏卡在 mod 加载界面」。这里在配置回调之外，写一次是安全的。
+        if (com.maidsmart.ProMaidMod.runConfigMigration()) {
+            com.maidsmart.ProMaidMod.persistConfigQuietly();
+        }
         // v1.5.88：应用配置面板的建造默认档位（build.speedTier / build.turbo）
         com.maidsmart.build.MaidBuildBehavior.applyConfigDefaults();
         // v1.1.0 实测二十九：搭路/挖矿/伐木 PLACED 表跨会话兜底清理——

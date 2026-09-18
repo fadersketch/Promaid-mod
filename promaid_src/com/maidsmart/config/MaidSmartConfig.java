@@ -308,6 +308,19 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 所以"飞太高"本身也会触发。完整口径见 {@code com.maidsmart.combat.MaidFlightRecall}。
      */
     public static final ForgeConfigSpec.IntValue COMBAT_FLIGHT_RECALL_DISTANCE;
+    /**
+     * v1.2.2 实测五百六十【友军风免】（默认开）。
+     *
+     * 需求原文："玩家和其他女仆免疫女仆释放的风暴/风弹效果，不会被震开。当前版本免疫伤害，
+     * 但是会被震风。导致从高空攻击的时候会直接把主人也打到空中。"
+     *
+     * 伤害那条路本来就已经免了（{@code FriendlyFireGuard} + 万法皆通自己的盟友事件），
+     * 漏的是**击退**：原版 Explosion 的击退与铁魔法"呼啸之风"这类效果都直接改速度、
+     * 不走伤害事件。本项开 = 女仆的法术/炸弹/风弹不再震开主人与同主女仆
+     * （只拦"明显外力"，女仆自己的机动一字不改）。口径见
+     * {@code com.maidsmart.combat.FriendlyWindGuard}。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FRIENDLY_WIND_IMMUNE;
     public static final ForgeConfigSpec.IntValue COMBAT_AUTO_SWITCH_RADIUS;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_VANILLA_WEIGHT;
     public static final ForgeConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
@@ -1364,6 +1377,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免），所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
                 .translation("config.promaid.combat.flightRecallDistance")
                 .defineInRange("flightRecallDistance", 100, 0, 1000);
+        // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
+        COMBAT_FRIENDLY_WIND_IMMUNE = BUILDER.comment("友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。")
+                .translation("config.promaid.combat.friendlyWindImmune").define("friendlyWindImmune", true);
         COMBAT_AUTO_SWITCH_RADIUS = BUILDER.comment("主动切战斗响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换")
                 .translation("config.promaid.combat.autoSwitchRadius").defineInRange("autoSwitchRadius", 16, 4, 64);
         // v1.1.0 实测二十一：武器权重可配置（原版/模组各一条）——选战斗任务时

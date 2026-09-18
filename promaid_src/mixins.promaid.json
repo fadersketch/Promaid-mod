@@ -51,7 +51,10 @@
     "LivingEntitySpinAccessor",
     "MaidSpinAttackTouchMixin",
     "MaidMeleeRiptideMixin",
-    "MaidSwimGlideMixin"
+    "MaidSwimGlideMixin",
+    "EntityTickBlameMixin",
+    "EntitySetDeltaMovementMixin",
+    "ExplosionWindGuardMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
