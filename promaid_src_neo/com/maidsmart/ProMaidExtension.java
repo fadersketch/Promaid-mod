@@ -353,6 +353,14 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                     + maid.level().dimension().location() + "）——法术模组会据此通知客户端删掉她的实体");
         } catch (Throwable ignored) {
         }
+        // v1.2.0 实测五百五十七：**离场也登记一次补包**。
+        // 【为什么】实测现场：她飞在离主人上千格处（-1184, 115, 96）时客户端实体丢失，
+        // 手动 resync 一次即恢复——服务端始终在追踪，是客户端被"通知删除"后没人补回。
+        // 触发者就是上面这条离场链路（法术模组对**没带锚核**的女仆"只删不补"）。
+        // 若她随后又被加回同一个 level，"重新入世界"那一枪未必打得到（实测兜底后
+        // 出现频率下降了，但没归零）；离场这一枪把窗口两头都盖住：
+        // 队列按 UUID 在全部维度里找她，只有"她还活着 + 主人同维度"时才真的补包。
+        com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
     }
 
     @net.neoforged.bus.api.SubscribeEvent
