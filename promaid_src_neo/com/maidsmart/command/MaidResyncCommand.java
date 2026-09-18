@@ -144,6 +144,76 @@ public final class MaidResyncCommand {
         return synced;
     }
 
+
+    // ================= v1.2.0 实测五百五十六：入世界自动补包 =================
+
+    /** 待补包队列（女仆 UUID → 剩余 tick）。女仆重新入世界后延迟补一次，避开同一 tick 的生成包 */
+    private static final java.util.Map<UUID, Integer> PENDING_AUTO =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * v1.2.0 实测五百五十六【自动补包】：女仆重新入世界时登记一次延迟补包。
+     *
+     * 【为什么需要】实测现场：女仆在战斗中"客户端消失、服务端照打"，**重启游戏就回来**。
+     * 顺着代码追下去是一条"两个模组各做一半"的链：
+     * <ol>
+     *   <li>法术模组 `MaidSpellEventHandler.onEntityLeaveLevel`：女仆一旦**离开世界**
+     *       （区块卸载 / 维度切换 / 被搬进 Sable 的 sub-level 等等），只要移除原因属于
+     *       "该释放区块加载"那类，它就发一个包**让客户端把她的实体删掉**
+     *       （`MaidHardRemovalProtection.allowClientRemoval`）；</li>
+     *   <li>它自己的"客户端实体恢复"（`MaidEntityRestoreMessage`）**只对带锚核的女仆生效**
+     *       （`handleMaidLeaveLevel` 里 `isProtectedMaid` 不成立就直接放行删除）——没带
+     *       锚核的女仆被删掉后，**没有任何一方会把她补回来**；</li>
+     *   <li>而她随后又被重新加回同一个 level（Sable 的 sub-level 挂载/卸载，或别的链路），
+     *       原版追踪表未必会再发一次生成包（Sable 还改了追踪位置的计算：见
+     *       `TrackedEntityMixin#sable$trackSubLevelEntities`）→ 结果就是"服务端好好的、
+     *       客户端永远没有她"，直到玩家重登（重登会重新下发生成包）。</li>
+     * </ol>
+     *
+     * 【本方法】入世界后延迟 {@link #AUTO_RESYNC_DELAY_TICKS} 给主人补一次"删+生成+数据+装备"。
+     * 纯补包、不改服务端状态；同一 tick 的生成包不会被撞掉（延迟 20 tick）。
+     */
+    public static final int AUTO_RESYNC_DELAY_TICKS = 20;
+
+    public static void scheduleAutoResync(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        PENDING_AUTO.put(maid.getUUID(), AUTO_RESYNC_DELAY_TICKS);
+    }
+
+    /** 由 ProMaidExtension 的 ServerTick 每 tick 调一次（空队列零开销） */
+    public static void tickAutoResync(net.minecraft.server.MinecraftServer server) {
+        if (PENDING_AUTO.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<java.util.Map.Entry<UUID, Integer>> it = PENDING_AUTO.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<UUID, Integer> e = it.next();
+            int left = e.getValue() - 1;
+            if (left > 0) {
+                e.setValue(left);
+                continue;
+            }
+            it.remove();
+            UUID id = e.getKey();
+            try {
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    net.minecraft.world.entity.Entity ent = lvl.getEntity(id);
+                    if (ent instanceof EntityMaid maid && maid.isAlive()
+                            && maid.getOwner() instanceof ServerPlayer owner
+                            && owner.level() == maid.level()) {
+                        resyncTo(owner, maid);
+                        PromaidLog.log("重同步", PromaidLog.nameOf(maid)
+                                + " 重新入世界 → 已给主人补一次实体包（防客户端实体丢失）");
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
     /**
      * 服务端侧"强制重同步"：删 → 生成 → 数据 → 装备。
      * 不改服务端任何状态（不动追踪表、不动实体），纯粹把客户端缺的那几包补齐；
