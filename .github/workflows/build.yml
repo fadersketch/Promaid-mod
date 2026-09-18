@@ -1,0 +1,56 @@
+name: build
+
+# 分叉版专用：把源码自动编成 jar，附在工作流产物上；打 tag（v*）时自动挂到 Release。
+# 依赖全由 tools/ci_build_neoforge.py 自己下（NeoForge 客户端安装 + Touhou Little Maid + 编译期库），
+# 所以 runner 上不需要任何 Minecraft 安装。
+
+on:
+  push:
+    branches: [ main, 'release/**', 'feat/**', 'fix/**' ]
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-neoforge-1-21-1:
+    name: Build (NeoForge 1.21.1)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Cache NeoForge / 依赖缓存
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/promaid-ci
+          key: promaid-ci-${{ runner.os }}-${{ hashFiles('tools/ci_build_neoforge.py') }}
+          restore-keys: promaid-ci-${{ runner.os }}-
+
+      - name: Compile + package
+        run: python3 tools/ci_build_neoforge.py
+
+      - name: List output
+        run: ls -la patched/
+
+      - name: Upload jar artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: promaid-1.2.1-neoforge-1.21.1
+          path: patched/*.jar
+          if-no-files-found: error
+
+      - name: Attach to Release (仅 tag 触发)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: patched/*.jar
+          prerelease: true
+          generate_release_notes: false

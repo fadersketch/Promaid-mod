@@ -141,3 +141,6 @@ Desktop.ini
 /bubble_calls.txt
 /maidbrain_work.txt
 /compile_out.txt
+
+# CI 构建参数文件（机器相关，同 compile_neo.txt）
+compile_ci.txt
