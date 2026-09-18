@@ -21,6 +21,8 @@ import net.neoforged.neoforge.common.NeoForge;
 public final class BuildKeysClient {
     /** 建造预览·旋转朝向（默认 Z；原版按键设置可改） */
     public static KeyMapping ROTATE_BLUEPRINT = null;
+    /** 实测五百五十三②：建造落点微调界面（默认 G；金色预览激活时才生效） */
+    public static KeyMapping PLACEMENT_SCREEN = null;
 
     private BuildKeysClient() {
     }
@@ -33,6 +35,10 @@ public final class BuildKeysClient {
         ROTATE_BLUEPRINT = new KeyMapping("key.promaid.build_rotate",
                 GLFW.GLFW_KEY_Z, "key.categories.promaid");
         event.register(ROTATE_BLUEPRINT);
+        // 实测五百五十三②：G——原版零占用（G 在原版无默认绑定；留 Z 给转向）
+        PLACEMENT_SCREEN = new KeyMapping("key.promaid.build_placement",
+                GLFW.GLFW_KEY_G, "key.categories.promaid");
+        event.register(PLACEMENT_SCREEN);
     }
 
     /**
