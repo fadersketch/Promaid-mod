@@ -15,6 +15,14 @@ public final class BuildHudTracker {
     private static final java.util.Map<String, Integer> TOTAL = new java.util.HashMap<>();
     /** v1.5.252s：HUD 广播验证日志节流（每 5 秒一条，latest.log 搜 "hud broadcast"） */
     private static long lastHudLogNanos = 0L;
+    /**
+     * v1.2.0 实测五百五十七【建造完成后 HUD 不消失】：上一轮是否真的发过内容。
+     *
+     * 旧版"没有进行中计划"时直接 return（一个包都不发），而 HUD 是客户端拿快照画的
+     * ——计划一完成/取消，服务端从此静默，客户端就把最后那一帧（实测：卡在 99%）
+     * 一直挂在左上角，直到退出游戏。现在计划清空时**补发一次空快照**，客户端据此清屏。
+     */
+    private static boolean lastHadEntries = false;
 
     private static final class Stat {
         long lastNanos = -1;
@@ -34,6 +42,14 @@ public final class BuildHudTracker {
                 if (!STATS.isEmpty()) {
                     STATS.clear();
                     TOTAL.clear();
+                }
+                // v1.2.0 实测五百五十七：最后一批计划结束（完成/取消/清空）→ 补发一次空快照，
+                // 客户端左上角 HUD 才会消失（旧版这里直接 return，HUD 永久挂着最后一帧）
+                if (lastHadEntries) {
+                    lastHadEntries = false;
+                    BlueprintBookNetworking.CHANNEL.send(
+                            net.minecraftforge.network.PacketDistributor.ALL.noArg(),
+                            new BlueprintBookNetworking.BuildHudPacket(new java.util.ArrayList<>()));
                 }
                 return;
             }
@@ -61,10 +77,13 @@ public final class BuildHudTracker {
                 st.lastPlaced = p.placedCount;
                 // v1.5.252ac：剩余 = 总 − 已放 − 永久跳过（跳过的不可能再放，不算
                 // 剩余——要求"还需多久 = 剩余方块 ÷ 速度，已放的不算"）
-                int remaining = Math.max(0, total - p.placedCount - p.skipped);
+                // v1.2.0 实测五百五十七：已放 = 真放置 + **开工时就已是目标方块的格子**
+                // （旧版只算前者 → "全部建好"时进度永远差最后那几格，屏幕上卡在 99%）
+                int built = p.placedCount + p.prebuiltCount;
+                int remaining = Math.max(0, total - built - p.skipped);
                 int eta = st.ema > 0.01 ? (int) Math.ceil(remaining / st.ema) : -1;
                 st.lastEta = eta;
-                entries.add(new String[]{ps.planId, ps.name, String.valueOf(p.placedCount),
+                entries.add(new String[]{ps.planId, ps.name, String.valueOf(built),
                         String.valueOf(total), String.valueOf(p.skipped),
                         String.format("%.1f", st.ema), String.valueOf(eta),
                         String.valueOf(ps.paused)});
@@ -80,6 +99,7 @@ public final class BuildHudTracker {
             STATS.keySet().removeIf(k -> !alive.contains(k));
             TOTAL.keySet().removeIf(k -> !alive.contains(k));
             if (!entries.isEmpty()) {
+                lastHadEntries = true;
                 BlueprintBookNetworking.CHANNEL.send(
                         net.minecraftforge.network.PacketDistributor.ALL.noArg(),
                         new BlueprintBookNetworking.BuildHudPacket(entries));

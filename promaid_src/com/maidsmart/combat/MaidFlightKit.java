@@ -108,18 +108,19 @@ public final class MaidFlightKit {
 
     /* ---------------- 装备检测 ---------------- */
 
-    /** 身上（主手/副手/护甲/背包）是否有可用鞘翅 */
+    /** 身上（主手/副手/护甲/背包）是否有可用鞘翅
+     *  （v1.2.0 实测五百五十五：判据放宽为 {@link #isElytraLike}——模组"内置鞘翅的装备"也算） */
     public static boolean hasElytra(EntityMaid maid) {
         if (maid == null) {
             return false;
         }
-        if (isUsableElytra(maid.m_6844_(EquipmentSlot.CHEST))) {
+        if (isElytraLike(maid.m_6844_(EquipmentSlot.CHEST), maid)) {
             return true;
         }
-        if (isUsableElytra(maid.m_21205_()) || isUsableElytra(maid.m_21206_())) {
+        if (isElytraLike(maid.m_21205_(), maid) || isElytraLike(maid.m_21206_(), maid)) {
             return true;
         }
-        return hasInBackpack(maid, MaidFlightKit::isUsableElytra);
+        return hasInBackpack(maid, s -> isElytraLike(s, maid));
     }
 
     /** 身上是否有近战武器（3.5 件套里的"武器位"） */
@@ -477,13 +478,27 @@ public final class MaidFlightKit {
         }
         boolean ok = true;
         // 胸甲槽：鞘翅（updateFallFlying 只认 CHEST 槽的鞘翅，这一步是滑翔能否持续的关键）
-        if (!isUsableElytra(maid.m_6844_(EquipmentSlot.CHEST))) {
-            ItemStack ely = takeFromBackpack(maid, MaidFlightKit::isUsableElytra);
+        // v1.2.0 实测五百五十五：判据放宽到 isElytraLike——玩家给女仆穿的是"鞘翅胸甲"
+        // 这类模组装备时**原地不动**（旧的严格判据会把它当成"没穿鞘翅"，转手把它换下来
+        // 塞回背包，等于把玩家的护甲扒了）。
+        if (!isElytraLike(maid.m_6844_(EquipmentSlot.CHEST), maid)) {
+            // 实测五百五十五补充【取用优先级】：背包里同时有普通鞘翅和"鞘翅胸甲"这类装备时
+            // **优先穿带护甲的那件**（既滑翔又当护甲，对玩家更划算）；没有护甲型才退回普通鞘翅。
+            // 两趟扫描而不是一次谓词：takeFromBackpack 取的是第一个匹配，想要"优先"必须分两趟问。
+            ItemStack ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            if (ely.m_41619_()) {
+                ely = takeFromBackpack(maid, s -> isElytraLike(s, maid));
+            }
             if (ely.m_41619_()) {
                 // 背包没有就从手上来（hasElytra 认主/副手，可穿戴口径必须一致）
                 IItemHandlerModifiable h = (IItemHandlerModifiable) maid.getHandsInvWrapper();
                 for (int slot = 0; slot <= 1 && ely.m_41619_(); slot++) {
-                    if (isUsableElytra(h.getStackInSlot(slot))) {
+                    if (isElytraLike(h.getStackInSlot(slot), maid) && isArmorElytra(h.getStackInSlot(slot))) {
+                        ely = h.extractItem(slot, 1, false);
+                    }
+                }
+                for (int slot = 0; slot <= 1 && ely.m_41619_(); slot++) {
+                    if (isElytraLike(h.getStackInSlot(slot), maid)) {
                         ely = h.extractItem(slot, 1, false);
                     }
                 }
@@ -494,6 +509,9 @@ public final class MaidFlightKit {
                 if (!old.m_41619_()) {
                     giveBack(maid, old);
                 }
+                // 实测五百五十五补充【飞坏了会自己换】的诊断：鞘翅耐久见底会消失/失效，
+                // 这一行落盘即证明"她换了下一件"；包里没得换就不会有这行（她会落地）。
+                logElytraSwap(maid, ely, old);
             } else {
                 ok = false;
             }
@@ -526,7 +544,7 @@ public final class MaidFlightKit {
         // 造一枚全新火箭弹体并直接入世界，从不读女仆手里的物品。所以"常驻副手"纯属多余占用。
         // 现在改为：**副手完全让出**（供盾牌/食物使用），烟花只从背包按需取用
         // （`hasFirework` / `takeFirework` 都已是"主手→副手→背包"三处覆盖，不依赖副手）。
-        return ok && isUsableElytra(maid.m_6844_(EquipmentSlot.CHEST))
+        return ok && isElytraLike(maid.m_6844_(EquipmentSlot.CHEST), maid)
                 && isWeaponForTask(maid, maid.m_21205_()) && hasFirework(maid);
     }
 
@@ -645,11 +663,147 @@ public final class MaidFlightKit {
 
     /* ---------------- 内部工具 ---------------- */
 
-    /** 可用鞘翅：ELYTRA 物品且未耗尽（ElytraItem.isFlyEnabled 同判据） */
+    /**
+     * 可用鞘翅（**严格口径**）：原版鞘翅物品且未耗尽（`ElytraItem.isFlyEnabled` 同判据）。
+     *
+     * 【渲染层专用】——{@link com.maidsmart.client.LayerMaidElytra} 用它决定"要不要给女仆
+     * 画我们的鞘翅翅膀"。这里是严格口径而不是宽松口径，理由是**模组的鞘翅装备自带模型**
+     * （鞘翅胸甲本身就是一件胸甲，有它自己的外观），再叠一层我们的翅膀只会穿模；原版自己的
+     * `ElytraLayer` 同样只认 `Items.ELYTRA`（反编译实证）。识别/穿脱请用 {@link #isElytraLike}。
+     */
     public static boolean isUsableElytra(ItemStack stack) {
         return !stack.m_41619_()
                 && stack.m_41720_() instanceof ElytraItem
                 && ElytraItem.m_41140_(stack);
+    }
+
+    /**
+     * v1.2.0 实测五百五十五【模组"内置鞘翅的装备"兼容】：宽松口径——**原版鞘翅** 或者
+     * **任何自称能滑翔的物品**（鞘翅胸甲这类：不是 `ElytraItem`，是护甲 + 重写滑翔钩子）。
+     *
+     * 判据取 `ItemStack.canElytraFly(LivingEntity)`（Forge/NeoForge 扩展方法，javap 实证
+     * `ItemStack implements IForgeItemStack` / `IItemStackExtension`）。选它的唯一理由是
+     * **口径同源**：原版滑翔的闸门 `LivingEntity.updateFallFlying`（SRG `m_21323_`，aiStep 内、
+     * travel 之前）在 Forge/NeoForge 里读的就是这个方法——字节码里依次调用
+     * `ItemStack.canElytraFly` 与 `ItemStack.elytraFlightTick`，而原版 `ElytraItem` 的实现
+     * 恰好就是 `ElytraItem.isFlyEnabled`（等于旧判据）。所以"她能不能滑翔"与"我们认不认这件
+     * 装备"从此是同一个判据：不会出现"我们认了但原版每 tick 把滑翔位清掉"，也不会反过来。
+     *
+     * 【旧版的病】只认 `instanceof ElytraItem` → 鞘翅胸甲被当成"没有鞘翅" → 三件套永远不齐
+     * → 空袭模式不激活、并且会不停播报"缺鞘翅"。
+     *
+     * @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时退化为只认原版鞘翅
+     */
+    public static boolean isElytraLike(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
+        if (isUsableElytra(stack)) {
+            return true;
+        }
+        if (entity == null || stack == null || stack.m_41619_()) {
+            return false;
+        }
+        try {
+            return stack.canElytraFly(entity);
+        } catch (Throwable ignored) {
+            return false; // 模组实现抛异常不能把她的空袭整段带崩
+        }
+    }
+
+    /** 实测五百五十五补充：既是鞘翅、又是护甲的装备（鞘翅胸甲这类）——背包取用时优先它。
+     *  `ElytraItem` **不是** ArmorItem（原版鞘翅 = `Item implements Equipable`），所以这条
+     *  只会命中"护甲 + 滑翔钩子"的模组装备，不会把原版鞘翅也带进来。 */
+    public static boolean isArmorElytra(ItemStack stack) {
+        return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.ArmorItem;
+    }
+
+    /** 实测五百五十五补充：胸甲槽换装写一行运行日志（40 tick 节流，防模组拒绝穿戴时刷屏）。
+     *  用来回答"鞘翅飞坏了会不会自己换下一件"——换了就有这行，包里没得换就不会有。 */
+    private static final java.util.Map<EntityMaid, Long> ELYTRA_SWAP_LOG =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    private static void logElytraSwap(EntityMaid maid, ItemStack now, ItemStack old) {
+        try {
+            long t = maid.m_9236_().m_46467_();
+            Long last = ELYTRA_SWAP_LOG.get(maid);
+            if (last != null && t - last < 40L) {
+                return;
+            }
+            ELYTRA_SWAP_LOG.put(maid, t);
+            String nowId;
+            try {
+                nowId = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(now.m_41720_()));
+            } catch (Throwable ignored) {
+                nowId = now.m_41720_().toString();
+            }
+            String oldId = "空";
+            if (!old.m_41619_()) {
+                try {
+                    oldId = String.valueOf(
+                            net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(old.m_41720_()));
+                } catch (Throwable ignored) {
+                    oldId = old.m_41720_().toString();
+                }
+            }
+            com.maidsmart.tool.PromaidLog.log("空袭装备", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 胸甲槽换装：" + nowId + "（原 " + oldId + "）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * v1.2.0 实测五百五十五【排查用诊断】：一行说清"鞘翅判定为什么不过"——
+     * 胸甲/主手/副手各是什么物品、`canElytraFly` 钩子对女仆返回什么。
+     *
+     * 有了它，"模组鞘翅装备不认"这种问题一眼定位：如果日志里 `canElytraFly=false`，
+     * 那就是**那个物品没实现滑翔钩子**（原版滑翔闸门认的就是它），我们认了也没用——
+     * 那种装备对玩家同样滑不起来，该找的是那个模组。由 `notifyNotReady` 在播报
+     * "缺鞘翅"的同一节流里落盘（最多 15 秒一行）。
+     */
+    public static String elytraDiagnostic(EntityMaid maid) {
+        if (maid == null) {
+            return "鞘翅判定: 女仆为空";
+        }
+        // 主人（在线时非空）——用来区分"这个物品只对玩家开放滑翔"（模组的 canElytraFly 里
+        // 写死 instanceof Player 的情况：那种装备对玩家能飞、对女仆永远不行，我们认了也没用）
+        net.minecraft.world.entity.player.Player owner = null;
+        try {
+            if (maid.m_269323_() instanceof net.minecraft.world.entity.player.Player p) {
+                owner = p;
+            }
+        } catch (Throwable ignored) {
+        }
+        return "鞘翅判定: 胸甲=" + describeElytraCandidate(maid.m_6844_(EquipmentSlot.CHEST), maid, owner)
+                + " 主手=" + describeElytraCandidate(maid.m_21205_(), maid, owner)
+                + " 副手=" + describeElytraCandidate(maid.m_21206_(), maid, owner);
+    }
+
+    private static String describeElytraCandidate(ItemStack stack, net.minecraft.world.entity.LivingEntity entity,
+                                                 net.minecraft.world.entity.player.Player owner) {
+        if (stack == null || stack.m_41619_()) {
+            return "空";
+        }
+        String id;
+        try {
+            id = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_()));
+        } catch (Throwable ignored) {
+            id = stack.m_41720_().toString();
+        }
+        boolean vanilla = isUsableElytra(stack);
+        boolean hook;
+        try {
+            hook = stack.canElytraFly(entity);
+        } catch (Throwable ignored) {
+            hook = false;
+        }
+        String text = id + "(原版鞘翅=" + vanilla + "，canElytraFly=" + hook + ")";
+        if (!vanilla && !hook && owner != null) {
+            try {
+                if (stack.canElytraFly(owner)) {
+                    text += "← 它对玩家返回 true、对女仆 false：这个物品的滑翔是写死给玩家的，女仆用不了";
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return text;
     }
 
     public static boolean isFirework(ItemStack stack) {

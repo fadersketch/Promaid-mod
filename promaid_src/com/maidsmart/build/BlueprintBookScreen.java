@@ -2091,10 +2091,9 @@ public class BlueprintBookScreen extends Screen {
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.m_91087_();
         if (mc.f_91074_ != null) {
             mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                    "\u00a7e【请确认建造范围】金色框固定在\u00a7b你点这一下的位置\u00a7e（不再跟着你走，青色幽灵方块为建筑投影）。"
-                            + "\u00a7b按 Z 键顺时针旋转建筑朝向（每次 90°）\u00a7e；要挪位置就按 \u00a7bG\u00a7e 打开"
-                            + "「落点微调」界面用 X/Y/Z 按钮挪。选好后再次打开手册点击「建造此图纸」确认建造。"
-                            + "女仆搭建会直接摧毁区块内的障碍物。"));
+                    "\u00a7e【请确认建造范围】金色框以你为中心显示占地范围（青色幽灵方块为建筑投影）。"
+                            + "\u00a7b按 Z 键顺时针旋转建筑朝向（每次 90°）\u00a7e，选好位置与朝向后再次打开手册点击"
+                            + "「建造此图纸」确认建造。女仆搭建会直接摧毁区块内的障碍物。"));
         }
         if (!previewed) {
             // 第 1 步：系统提示选位 → 退出手册看金色框+幽灵投影
@@ -2102,32 +2101,16 @@ public class BlueprintBookScreen extends Screen {
             return;
         }
         // 第 2 步：确认弹窗 → 确认才创建区块
-        net.minecraft.core.BlockPos org = com.maidsmart.build.BlueprintAreaPreview.origin();
-        String distText = "";
-        if (org != null && mc.f_91074_ != null) {
-            double ddx = org.m_123341_() + 0.5 - mc.f_91074_.m_20185_();
-            double ddy = org.m_123342_() - mc.f_91074_.m_20186_();
-            double ddz = org.m_123343_() + 0.5 - mc.f_91074_.m_20189_();
-            distText = "（离你 " + String.format(java.util.Locale.ROOT, "%.1f",
-                    Math.sqrt(ddx * ddx + ddy * ddy + ddz * ddz)) + " 格）";
-        }
-        String orgText = org == null ? "你脚下"
-                : (org.m_123341_() + ", " + org.m_123342_() + ", " + org.m_123343_() + distText);
         this.confirmAction("确定建造在这里？",
-                "\u00a7e落点 = " + orgText + "（金色框当前位置，青色幽灵方块即建筑形态）。\n"
-                        + "\u00a7b仍可按 Z 键旋转建筑朝向（每次 90°，确认后不可改）；\u00a7bG\u00a7e 打开落点微调。\n"
+                "\u00a7e区块范围 = 你脚下为中心（金色框当前位置，青色幽灵方块即建筑形态）。\n"
+                        + "\u00a7b仍可按 Z 键旋转建筑朝向（每次 90°，确认后不可改）。\n"
                         + "\u00a7c注意：女仆搭建会直接摧毁区块内的树、建筑等障碍物。\n"
                         + "\u00a77确认后创建区块，工地会显示红色区域框与橙色蓝图投影，到女仆管理绑定女仆开始建造。",
                 "\u00a7c确定，开始建造",
                 () -> {
-                    net.minecraft.core.BlockPos o = com.maidsmart.build.BlueprintAreaPreview.origin();
                     BlueprintBookNetworking.CHANNEL.sendToServer(
-                            o == null
-                                    ? new BlueprintBookNetworking.SelectBlueprintPacket(vid,
-                                            com.maidsmart.build.BlueprintAreaPreview.previewQuarters())
-                                    : new BlueprintBookNetworking.SelectBlueprintPacket(vid,
-                                            com.maidsmart.build.BlueprintAreaPreview.previewQuarters(),
-                                            o.m_123341_(), o.m_123342_(), o.m_123343_(), true));
+                            new BlueprintBookNetworking.SelectBlueprintPacket(vid,
+                                    com.maidsmart.build.BlueprintAreaPreview.previewQuarters()));
                     // 金色框关闭；红色区块框+橙色幽灵投影由服务端每秒同步接管
                     com.maidsmart.build.BlueprintAreaPreview.clear();
                     // 本轮确认完成 → 重置标记，下一轮建造重新先看范围

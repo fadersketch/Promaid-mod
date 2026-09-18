@@ -26,16 +26,16 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.0.jar',
-        'modname': 'promaid-1.2.0.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1.jar',
+        'modname': 'promaid-1.2.1.jar',
     },
     'neoforge1211': {
         'dir': r'C:/Users/Sketch/mc_server_test/neoforge1211',
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-delta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.0-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.0-neoforge-1.21.1.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.1-neoforge-1.21.1.jar',
     },
 }
 WAIT = 180
@@ -55,8 +55,20 @@ if os.path.exists(pid_file):
     subprocess.run(['taskkill', '/PID', pid, '/T', '/F'], capture_output=True)
     time.sleep(3)
 
-shutil.copyfile(cfg['jar'], os.path.join(server, 'mods', cfg['modname']))
+# v1.2.1：先清掉 mods 目录里本模组的旧版本包（同一 modId 双 jar 会启动失败——
+# 版本改名后残留的 promaid-1.2.0.jar 会让服务器直接崩，看起来像"新包有问题"）
+mods_dir = os.path.join(server, 'mods')
+import glob
+for old in glob.glob(os.path.join(mods_dir, 'promaid-*.jar')):
+    if os.path.basename(old) != cfg['modname']:
+        os.remove(old)
+        print('removed stale jar:', os.path.basename(old))
+
+shutil.copyfile(cfg['jar'], os.path.join(mods_dir, cfg['modname']))
 print('jar copied:', cfg['modname'], os.path.getsize(cfg['jar']))
+for nm in sorted(os.listdir(mods_dir)):
+    if nm.lower().startswith('promaid'):
+        print('   mods/ 内当前 promaid 包:', nm)
 
 log_path = os.path.join(server, 'console_test.log')
 log = open(log_path, 'wb')

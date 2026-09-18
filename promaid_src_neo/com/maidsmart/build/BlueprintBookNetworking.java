@@ -850,34 +850,15 @@ public final class BlueprintBookNetworking {
         public final String blueprintId;
         /** v1.1.0 实测九十七：朝向（0~3 × 90° 顺时针）——金色预览按 P 选定后携带 */
         public final int quarters;
-        /** 实测五百五十三②：落点（微调界面/金色预览的固定原点）。hasOrigin=false
-         *  时退回"按玩家脚下建"（老客户端不带这三个字段时的兼容路径） */
-        public final double ox;
-        public final double oy;
-        public final double oz;
-        public final boolean hasOrigin;
 
         public SelectBlueprintPacket(String blueprintId, int quarters) {
-            this(blueprintId, quarters, 0, 0, 0, false);
-        }
-
-        public SelectBlueprintPacket(String blueprintId, int quarters,
-                                     double ox, double oy, double oz, boolean hasOrigin) {
             this.blueprintId = blueprintId;
             this.quarters = quarters;
-            this.ox = ox;
-            this.oy = oy;
-            this.oz = oz;
-            this.hasOrigin = hasOrigin;
         }
 
         public static void encode(SelectBlueprintPacket pkt, FriendlyByteBuf buf) {
             buf.writeUtf(pkt.blueprintId);
             buf.writeUtf(String.valueOf(pkt.quarters));
-            // 实测五百五十三②：落点坐标（三个字符串，空串 = 没带）
-            buf.writeUtf(pkt.hasOrigin ? String.valueOf(pkt.ox) : "");
-            buf.writeUtf(pkt.hasOrigin ? String.valueOf(pkt.oy) : "");
-            buf.writeUtf(pkt.hasOrigin ? String.valueOf(pkt.oz) : "");
         }
 
         public static SelectBlueprintPacket decode(FriendlyByteBuf buf) {
@@ -887,23 +868,7 @@ public final class BlueprintBookNetworking {
                 q = Integer.parseInt(buf.readUtf());
             } catch (NumberFormatException ignored) {
             }
-            double ox = 0;
-            double oy = 0;
-            double oz = 0;
-            boolean has = false;
-            try {
-                String sx = buf.readUtf();
-                String sy = buf.readUtf();
-                String sz = buf.readUtf();
-                if (!sx.isEmpty() && !sy.isEmpty() && !sz.isEmpty()) {
-                    ox = Double.parseDouble(sx);
-                    oy = Double.parseDouble(sy);
-                    oz = Double.parseDouble(sz);
-                    has = true;
-                }
-            } catch (Throwable ignored) {
-            }
-            return new SelectBlueprintPacket(id, q, ox, oy, oz, has);
+            return new SelectBlueprintPacket(id, q);
         }
 
         public static void handle(SelectBlueprintPacket pkt, IPayloadContext ctx) {
@@ -912,31 +877,10 @@ public final class BlueprintBookNetworking {
                 if (player == null || !(player.level() instanceof net.minecraft.server.level.ServerLevel level)) {
                     return;
                 }
-                // 实测五百五十三②：落点 = 客户端微调界面选定的那个（默认 = 打开预览那一刻
-                // 的玩家脚下格）；合法性在这里守：太远/区块没加载都拒绝（重叠由执行器查）
-                net.minecraft.core.BlockPos origin = player.blockPosition();
-                if (pkt.hasOrigin) {
-                    int max = com.maidsmart.config.MaidSmartConfig.BUILD_PLACEMENT_RANGE.get();
-                    double dx = pkt.ox - player.getX();
-                    double dy = pkt.oy - player.getY();
-                    double dz = pkt.oz - player.getZ();
-                    if (dx * dx + dy * dy + dz * dz > (double) max * max) {
-                        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                                "\u00a7c落点离你太远了（上限 " + max + " 格）——走近点再建，或者用「回到脚下」。"));
-                        return;
-                    }
-                    origin = new net.minecraft.core.BlockPos(
-                            (int) Math.floor(pkt.ox), (int) Math.floor(pkt.oy), (int) Math.floor(pkt.oz));
-                    if (!level.isLoaded(origin)) {
-                        player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                                "\u00a7c落点所在区块还没加载，稍等一下（或换个位置）。"));
-                        return;
-                    }
-                }
-                // v1.5.180：创建区块【不需要女仆在场】——以选定落点为原点创建
+                // v1.5.180：创建区块【不需要女仆在场】——以玩家脚下为原点创建
                 //（手册点击 = 明确意图：材料不足时直接先建材料够的部分）
                 BlueprintBuildExecutor.Outcome outcome = BlueprintBuildExecutor.execute(
-                        level, origin, pkt.blueprintId, true, player,
+                        level, player.blockPosition(), pkt.blueprintId, true, player,
                         Math.floorMod(pkt.quarters, 4));
                 String bubble;
                 switch (outcome.type()) {
