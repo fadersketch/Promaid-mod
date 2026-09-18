@@ -195,5 +195,8 @@
   "item.maid_smart.index_stone": "指标石",
   "config.promaid.build.indexStone": "指标石",
   "task.maid_smart.index_build": "临时搭建",
-  "task.maid_smart.index_build.desc": "指标石一次性临时建造（隐藏任务，不由玩家选择）"
+  "task.maid_smart.index_build.desc": "指标石一次性临时建造（隐藏任务，不由玩家选择）",
+  "config.promaid.combat.flightSpellCast": "空袭顺带施法（需装《车万女仆：魔法》）",
+  "config.promaid.combat.flightSpellCastInterval": "空袭施法间隔（tick）",
+  "config.promaid.combat.flightSpellCastRange": "空袭施法距离（格）"
 }
