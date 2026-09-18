@@ -2201,6 +2201,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
         this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）；适用弓（射程15）/弩（射程8）/三叉戟（搜索半径）/枪械（TLM 枪械中距离配置）"));
+        // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
+        this.rows.add(new BoolRow("友军风免",
+                MaidSmartConfig.COMBAT_FRIENDLY_WIND_IMMUNE.get(),
+                v -> MaidSmartConfig.COMBAT_FRIENDLY_WIND_IMMUNE.set(v),
+                "友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。"));
         // v1.1.0（1.21.1 专属）：重锤猛击（参考僵尸用重锤——跳起下落猛砸，下落越高伤害越高）
         this.rows.add(new BoolRow("重锤猛击（1.21.1）", MaidSmartConfig.COMBAT_MACE_SMASH.get(),
                 v -> MaidSmartConfig.COMBAT_MACE_SMASH.set(v), "重锤猛击：女仆主手持有重锤时贴近目标起跳、下落中猛砸（参考僵尸用重锤）——下落越高伤害越高（最高 +22 以上）；贴地命中后清零坠落距离（不摔伤、也不触发落地水）；关闭 = 重锤只当普通近战武器平砍"));

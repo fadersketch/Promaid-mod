@@ -42,6 +42,9 @@ public class ProMaidMod {
     public static final RegistryObject<Item> INDEX_STONE = ITEMS.register("index_stone",
             () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
 
+    /** v1.2.2 实测五百六十一：官方注册的那个 ModConfig（配置事件里记下来；只读引用，事件里不写盘） */
+    public static net.minecraftforge.fml.config.ModConfig COMMON_CONFIG;
+
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
@@ -97,30 +100,38 @@ public class ProMaidMod {
     /** v1.2.0：把默认值迁移集中到静态入口——配置事件与服务端启动都可调用。
      *  实测教训：NeoForge 侧仅靠 ModConfigEvent 没能生效，故启动时兜底再跑一次
      *（迁移是幂等的：只在"值==旧默认"时才改，跑多次无副作用）。 */
-    public static void runConfigMigration() {
+    public static boolean runConfigMigration() {
+        boolean changed = false;
         try {
             if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
                 com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
                 com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.get() == 45) {
                 com.maidsmart.config.MaidSmartConfig.MINE_STUCK_RESET_SECONDS.set(8);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 2
                     || com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get() == 8) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_STEP_COOLDOWN.set(5);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() == 10) {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
                 com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
+                changed = true;
             }
             // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
+                changed = true;
             }
             // v1.2.0 实测五百五十七：建造默认速度 x1.5 → x1、极速模式 开 → 关。
             // 【用一次性标记来判定，而不是"值 == 旧默认"】——实测玩家 toml 里的实际组合是
@@ -129,6 +140,7 @@ public class ProMaidMod {
             // 标记跑过一次就不再碰这两个值：玩家之后想开极速，随时打开都能留着。
             if (!com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_MIGRATED.get()) {
                 com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_MIGRATED.set(true);
+                changed = true;
                 if (com.maidsmart.config.MaidSmartConfig.BUILD_TURBO.get()) {
                     com.maidsmart.config.MaidSmartConfig.BUILD_TURBO.set(false);
                 }
@@ -136,18 +148,57 @@ public class ProMaidMod {
                     com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_TIER.set("x1");
                 }
             }
-            migrateOreTable();
+            changed |= migrateOreTable();
         } catch (Exception ignored) {
         }
+        return changed;
     }
 
+    /**
+     * v1.2.2 实测五百六十一：**配置事件里绝对不要写盘**。
+     *
+     * 【事故】1.2.0 起 NeoForge 侧在这里收到配置事件后显式 `save()`（为了让迁移落盘）。
+     * 但 NeoForge 用文件监听器盯着 config/*.toml：**写盘 → 监听器触发 → 再发一次
+     * {@code ModConfigEvent.Reloading} → 处理器再 save() → …** 无限写盘风暴。
+     * 实测复现（专用服务器，外部把 config 改一次）：20 秒内该文件被重写 **38 次**，
+     * 并留下截断的 `promaid-common.new.tmp.toml`。
+     *
+     * 玩家侧表现完全对得上反馈：点「保存并返回」= 一次写盘 → 风暴起来 → 客户端卡死/崩；
+     * 下次进游戏时 NeoForge 修正旧键（"Configuration file ... is not correct. Correcting"）
+     * 本身也要写盘 → 同样踩进风暴 → 卡在 mod 加载界面。
+     *
+     * 【现在】事件里只记录 ModConfig 引用，一个字节都不写；迁移改由服务端启动时跑一次
+     * （{@code ProMaidExtension.onServerStarted}），只有真的改过值才
+     * {@link #persistConfigQuietly()} 落盘一次。Forge 侧原本没写盘，这里同步收紧，
+     * 两树行为一致、也防以后有人再加回来。
+     */
     private void onConfigLoad(net.minecraftforge.fml.event.config.ModConfigEvent event) {
+        inConfigEvent = true; // 本方法体内禁止任何落盘（见方法注释）
         try {
             if (event.getConfig().getSpec() != com.maidsmart.config.MaidSmartConfig.SPEC) {
                 return;
             }
-            runConfigMigration();
-        } catch (Exception ignored) {
+            COMMON_CONFIG = event.getConfig();
+        } catch (Throwable ignored) {
+        } finally {
+            inConfigEvent = false;
+        }
+    }
+
+    /** 配置事件处理中标志：这期间任何落盘请求一律拒绝（见 {@link #onConfigLoad}） */
+    private static boolean inConfigEvent = false;
+
+    /**
+     * 迁移/默认值改动后落盘一次。**只能在配置事件之外调用**（配置事件期间会被直接拒绝，
+     * 防"写盘→监听器→再写"自触发风暴）。
+     */
+    public static void persistConfigQuietly() {
+        if (inConfigEvent) {
+            return;
+        }
+        try {
+            com.maidsmart.config.MaidSmartConfig.SPEC.save();
+        } catch (Throwable ignored) {
         }
     }
 
@@ -159,7 +210,7 @@ public class ProMaidMod {
      * ① 空表 = 从未配置过 → 播种当前默认全家桶；
      * ② 表里有原版矿但没有铜 → 只补 copper / deepslate_copper 两项。
      */
-    private static void migrateOreTable() {
+    private static boolean migrateOreTable() {
         java.util.LinkedHashSet<String> ores = new java.util.LinkedHashSet<>(
                 com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.get());
         boolean changed = false;
@@ -181,5 +232,6 @@ public class ProMaidMod {
             com.maidsmart.config.MaidSmartConfig.MINE_ORE_VALUES.set(
                     new java.util.ArrayList<>(ores));
         }
+        return changed;
     }
 }
