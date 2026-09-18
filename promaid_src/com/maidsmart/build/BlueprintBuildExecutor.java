@@ -127,7 +127,8 @@ public final class BlueprintBuildExecutor {
             obstacleWarn = "（" + obs + "——创建后女仆建造时会拆掉这些阻挡）";
         }
         // v1.5.179：材料缺口 = 需求 − 已建 − 背包（绑定女仆 + 主人）
-        Map<String, Integer> shortfall = combinedShortfall(player, level, pending);
+        // 实测五百五十三③：+ 建造区块内的容器（材料放箱子里也能开建）
+        Map<String, Integer> shortfall = combinedShortfall(player, level, pending, origin, sz);
         List<String> buildable = pending;
         if (shortfall != null && partialOnShortfall) {
             // v1.5.144：缺料步骤保留在计划里，由建造行为延后（deferred）+ 补料轮播
@@ -138,6 +139,19 @@ public final class BlueprintBuildExecutor {
                     anyMaterial = true;
                     break;
                 }
+            }
+            // 实测五百五十三③：袋子/背包都没有，但建造区块内的箱子里有料 → 也算能开建
+            //（女仆缺料时会自己去箱子拿）
+            if (!anyMaterial && com.maidsmart.config.MaidSmartConfig.BUILD_FETCH_FROM_CHESTS.get()) {
+                java.util.List<String> ids = new java.util.ArrayList<>(pending.size());
+                for (String step : pending) {
+                    String[] pp = BlueprintLib.parseStep(step);
+                    if (pp != null) {
+                        ids.add(pp[3]);
+                    }
+                }
+                anyMaterial = BuildContainerSource.hasAnyOf(level,
+                        BuildContainerSource.regionOf(origin, sz[0], sz[1], sz[2]), ids);
             }
             if (!anyMaterial) {
                 return new Outcome(TYPE_SHORTFALL, "背包里没有任何建造材料，无法创建。缺少："
@@ -213,14 +227,22 @@ public final class BlueprintBuildExecutor {
     }
 
     /** v1.5.24：组合材料预检（v1.5.179：主人背包 + 该维度所有绑定女仆背包总量），
-     *  返回缺失清单；充足返回 null */
+     *  返回缺失清单；充足返回 null
+     *  实测五百五十三③：把**建造区块内的容器**也算进"已有材料"——材料全放箱子/潜影箱里
+     *  也能正常开建（女仆缺料时会自己去箱子拿），不再误报"材料不足" */
     private static Map<String, Integer> combinedShortfall(
             net.minecraft.world.entity.player.Player owner, net.minecraft.server.level.ServerLevel level,
-            List<String> steps) {
+            List<String> steps, net.minecraft.core.BlockPos origin, int[] size) {
         Map<String, Integer> needed = BlueprintLib.countNeeds(steps);
         Map<String, Integer> shortfall = new java.util.HashMap<>();
+        int[] box = (origin != null && size != null && size.length >= 3)
+                ? BuildContainerSource.regionOf(origin, size[0], size[1], size[2]) : null;
+        boolean chests = box != null && com.maidsmart.config.MaidSmartConfig.BUILD_FETCH_FROM_CHESTS.get();
         for (Map.Entry<String, Integer> entry : needed.entrySet()) {
             int have = BlueprintLib.combinedHaveAll(level, owner, entry.getKey());
+            if (chests) {
+                have += BuildContainerSource.countIn(level, box, entry.getKey());
+            }
             if (have < entry.getValue()) {
                 shortfall.put(entry.getKey(), entry.getValue() - have);
             }
