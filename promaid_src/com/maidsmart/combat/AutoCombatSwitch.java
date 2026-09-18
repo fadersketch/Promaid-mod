@@ -1254,6 +1254,15 @@ public class AutoCombatSwitch {
             if (!hasWeaponForTask(maid, attack)) {
                 continue;
             }
+            // v1.2.0 实测五百五十九【法术任务进池收紧】：万法皆通的法术任务 isWeapon 恒 true
+            // （javap 实证），旧版只要求"背包里有任意一件非原版物品"就让它们进池
+            //（实测三百七十九的兜底）——那等于"带个模组食物也算会用魔法"。现在要求她
+            // **真的带着法术装备**（法术书/法器在主手、副手、背包或饰品栏，或者附属数据里
+            // 已经有她的法术书）才允许进池；不满足 → 这个任务不进任何池。
+            if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(attack)
+                    && !com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
+                continue;
+            }
             // v1.2.0：飞行作战【不参与自主切换】——入战选任务时永远不进池，
             // 玩家手动指定的飞行作战不会被自主切换顶掉。
             if (com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {

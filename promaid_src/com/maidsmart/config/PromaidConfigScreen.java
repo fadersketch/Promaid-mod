@@ -2200,6 +2200,11 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_TACTICS_SHIELD.set(v), "时机举盾：攻击冷却间隙举盾格挡、冷却满放盾攻击（攻防交替；替代原版 8 格内一直举盾）"));
         this.rows.add(new NumRow("绕圈半径（格）", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_ORBIT_RADIUS, s), "绕圈半径（格）：近战贴脸绕圈 / 远程横移的圆周半径，越小打得越密、越大越飘"));
+        // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
+        this.rows.add(new BoolRow("友军风免",
+                MaidSmartConfig.COMBAT_FRIENDLY_WIND_IMMUNE.get(),
+                v -> MaidSmartConfig.COMBAT_FRIENDLY_WIND_IMMUNE.set(v),
+                "友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。"));
         this.rows.add(new NumRow("远程理想射程倍率", String.valueOf(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_TACTICS_KITE_RANGE, s), "远程理想射程倍率：0.6 = 保持在武器最大射程 60% 的距离放风筝（远了追、近了退）；适用弓（射程15）/弩（射程8）/三叉戟（搜索半径）/枪械（TLM 枪械中距离配置）"));
     }

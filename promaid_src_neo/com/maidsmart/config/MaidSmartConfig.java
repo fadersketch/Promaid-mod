@@ -409,6 +409,19 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 所以"飞太高"本身也会触发。完整口径见 {@code com.maidsmart.combat.MaidFlightRecall}。
      */
     public static final ModConfigSpec.IntValue COMBAT_FLIGHT_RECALL_DISTANCE;
+    /**
+     * v1.2.2 实测五百六十【友军风免】（默认开）。
+     *
+     * 需求原文："玩家和其他女仆免疫女仆释放的风暴/风弹效果，不会被震开。当前版本免疫伤害，
+     * 但是会被震风。导致从高空攻击的时候会直接把主人也打到空中。"
+     *
+     * 伤害那条路本来就已经免了（{@code FriendlyFireGuard} + 万法皆通自己的盟友事件），
+     * 漏的是**击退**：原版 Explosion 的击退与铁魔法"呼啸之风"这类效果都直接改速度、
+     * 不走伤害事件。本项开 = 女仆的法术/炸弹/风弹不再震开主人与同主女仆
+     * （只拦"明显外力"，女仆自己的机动一字不改）。口径见
+     * {@code com.maidsmart.combat.FriendlyWindGuard}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_FRIENDLY_WIND_IMMUNE;
     // 实测四百零二：低血量自动回魂符（参考 maid_survival——受致死伤害且无保命
     // 物品时，把女仆收进主人背包的空魂符，免去神龛复活；冷却防反复收放）
     public static final ModConfigSpec.BooleanValue SOUL_SPELL_ENABLE;
@@ -1310,6 +1323,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免），所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
                 .translation("config.promaid.combat.flightRecallDistance")
                 .defineInRange("flightRecallDistance", 100, 0, 1000);
+        // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
+        COMBAT_FRIENDLY_WIND_IMMUNE = BUILDER.comment("友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。")
+                .translation("config.promaid.combat.friendlyWindImmune").define("friendlyWindImmune", true);
         // v1.5.189：玩家贴身辅助（被动技能，非工作状态——女仆随时照看主人）
         AID_OWNER_ENABLE = BUILDER.comment("自动投喂/治疗主人（被动：主人饿/血低自动喂食或投掷治疗药水）")
                 .translation("config.promaid.combat.aidOwnerEnable").define("aidOwnerEnable", true);
