@@ -31,8 +31,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.0.jar',
-        'modname': 'promaid-1.2.0.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1.jar',
+        'modname': 'promaid-1.2.1.jar',
         'task': 'maid_smart:flight_combat',
         # 1.20.1：附魔写在物品的 tag.Enchantments（老格式）。
         # 【只写键值体、不写外层花括号】由调用处包一层 —— 因为同一个物品既要塞进
@@ -49,8 +49,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-delta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.0-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.0-neoforge-1.21.1.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.1-neoforge-1.21.1.jar',
         'task': 'maid_smart:flight_combat',
         # 1.21.1：附魔是**数据组件**，而且 `ItemEnchantments.CODEC` 是
         #   `FULL_CODEC = RecordCodecBuilder…LEVELS_CODEC.fieldOf("levels")`（带

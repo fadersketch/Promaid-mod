@@ -412,6 +412,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 return;
             }
             NOTIFY_READY.put(maid, gameTime + cooldown);
+            // v1.2.0 实测五百五十五【模组鞘翅装备排查】：与播报同一节流（最多 15 秒一行）——
+            // 缺鞘翅时把"胸甲装的是什么、它自称能不能滑翔"写进运行日志。模组"内置鞘翅的装备"
+            // 认不认的问题，看这一行就知道是"我们没认"还是"那个物品没实现滑翔钩子"。
+            if (!MaidFlightKit.hasElytra(maid)) {
+                com.maidsmart.tool.PromaidLog.log("空袭装备",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " 缺鞘翅（" + MaidFlightKit.elytraDiagnostic(maid) + "）");
+            }
             maid.getChatBubbleManager().addTextChatBubble(
                     "空战装备不齐，缺" + missing + "，先按普通战斗来");
         } catch (Throwable ignored) {

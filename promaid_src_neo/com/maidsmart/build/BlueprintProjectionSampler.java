@@ -57,21 +57,10 @@ public final class BlueprintProjectionSampler {
     }
 
     /**
-     * 生成投影点云文本。
-     *
-     * 实测五百五十三①【带调色板的真方块投影】：输出改成
-     * `<点>|<调色板>` 两段——
-     * - 点：`x,y,z,i` 以 ';' 分隔，i = 调色板下标的 base36（1~2 字符）；
-     * - 调色板：`i~blockId~stateSnbt` 以 ';' 分隔（不带状态时 stateSnbt 为空）。
-     * 方块 id 与状态是**按种类去重**后放进调色板的（一栋房子通常几十种），
-     * 所以带宽只比纯坐标多 1~2 字符/点，客户端却能按原版模型画出"真方块"
-     * （石砖就是石砖、楼梯朝向也对），而不是彩色填充盒。
-     *
-     * 分隔符选 '~' 与 ';'：方块注册名与方块状态的取值域里都不可能出现它们
-     * （状态 SNBT 里只有字母数字下划线、引号、逗号、花括号、冒号、点），
-     * 所以不需要转义。
-     *
-     * 旧格式（纯 `x,y,z`）仍被客户端兼容解析——老服务端/老客户端混用时退回填充盒。
+     * 生成投影点云文本："x,y,z;x,y,z;…"（相对居中坐标；空串 = 无可渲染块）。
+     * 实测二百二十三：只发坐标——渲染走 DebugRenderer 填充盒（每盒 1×1×1，
+     * 颜色按区域蓝/橙/青），BlockState 不影响绘制，附带的 SNBT 解析纯浪费带宽
+     * 与客户端 CPU；"x,y,z" 每点约 12~16 字符，同样带宽可装 4 倍点数。
      */
     public static String sampleCloud(String blueprintId, int quarters,
                                      net.minecraft.core.HolderGetter<net.minecraft.world.level.block.Block> holder) {
@@ -79,9 +68,8 @@ public final class BlueprintProjectionSampler {
         if (steps == null || steps.isEmpty()) {
             return "";
         }
-        // 收集非禁置块位置（保序）+ 该格的"方块描述"（id~state）
+        // 收集非禁置块位置（保序）；FORBIDDEN 含 air/structure_void/水岩浆等
         LinkedHashMap<Long, int[]> pos = new LinkedHashMap<>(steps.size());
-        java.util.HashMap<Long, String> desc = new java.util.HashMap<>(steps.size() * 2);
         for (String step : steps) {
             String[] p = BlueprintLib.parseStep(step);
             if (p == null) {
@@ -97,7 +85,6 @@ public final class BlueprintProjectionSampler {
                 long key = pack(x, y, z);
                 if (!pos.containsKey(key)) {
                     pos.put(key, new int[]{x, y, z});
-                    desc.put(key, p[3] + "~" + (p[4] == null ? "" : p[4]));
                 }
             } catch (NumberFormatException ignored) {
             }
@@ -124,39 +111,16 @@ public final class BlueprintProjectionSampler {
             java.util.Collections.shuffle(shell, rnd);
         }
         int stride = shell.size() > MAX_POINTS ? (shell.size() + MAX_POINTS - 1) / MAX_POINTS : 1;
-        StringBuilder sb = new StringBuilder(shell.size() * 16 / stride + 64);
-        // 调色板（保序去重）：种类 → 下标
-        LinkedHashMap<String, Integer> palette = new LinkedHashMap<>();
+        StringBuilder sb = new StringBuilder(shell.size() * 14 / stride + 16);
         int kept = 0;
         for (int i = 0; i < shell.size(); i += stride) {
             int[] a = shell.get(i);
-            String d = desc.get(pack(a[0], a[1], a[2]));
-            if (d == null) {
-                continue;
-            }
-            Integer idx = palette.get(d);
-            if (idx == null) {
-                idx = palette.size();
-                palette.put(d, idx);
-            }
             if (kept > 0) {
                 sb.append(';');
             }
-            sb.append(a[0]).append(',').append(a[1]).append(',').append(a[2]).append(',')
-                    .append(Integer.toString(idx, 36));
+            sb.append(a[0]).append(',').append(a[1]).append(',').append(a[2]);
             kept++;
         }
-        // 调色板段：`点|i~id~state;i~id~state;…`
-        StringBuilder pal = new StringBuilder(palette.size() * 40 + 16);
-        boolean first = true;
-        for (Map.Entry<String, Integer> e : palette.entrySet()) {
-            if (!first) {
-                pal.append(';');
-            }
-            first = false;
-            pal.append(Integer.toString(e.getValue(), 36)).append('~').append(e.getKey());
-        }
-        sb.append('|').append(pal);
         return sb.toString();
     }
 

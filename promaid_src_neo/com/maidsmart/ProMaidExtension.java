@@ -120,11 +120,13 @@ public class ProMaidExtension implements ILittleMaid {
     @net.neoforged.bus.api.SubscribeEvent
     public void onServerStarted(net.neoforged.neoforge.event.server.ServerStartedEvent event) {
         com.maidsmart.build.BlueprintLib.setServer(event.getServer());
+        // v1.2.0：配置默认值迁移兜底——NeoForge 侧仅靠 ModConfigEvent 实测未生效，
+        // 服务端启动时再跑一次（迁移幂等：只在"值==旧默认"时才改）。
+        // v1.2.0 实测五百五十七：顺序调到 applyConfigDefaults **之前**——否则本会话
+        // 的建造档位仍是迁移前的旧值（旧档第一次进游戏还会是极速），要再进一次才生效。
+        com.maidsmart.ProMaidMod.runConfigMigration();
         // v1.5.88：应用配置面板的建造默认档位（build.speedTier / build.turbo）
         com.maidsmart.build.MaidBuildBehavior.applyConfigDefaults();
-        // v1.2.0：配置默认值迁移兜底——NeoForge 侧仅靠 ModConfigEvent 实测未生效，
-        // 服务端启动时再跑一次（迁移幂等：只在"值==旧默认"时才改）
-        com.maidsmart.ProMaidMod.runConfigMigration();
         // v1.1.0 实测二十九：搭路/挖矿/伐木 PLACED 表跨会话兜底清理——
         // ServerStopping 正常退出会清，但崩溃/任务管理器强杀进程时 clearAll
         // 不执行 → 内存表残留进新会话：①搭路 isAirborne 误判（残留位置命中

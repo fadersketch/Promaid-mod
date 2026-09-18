@@ -107,12 +107,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测二百七十二（反馈："女仆建造是坐在原地的，不符合常理……先瞬移到要搭方块
      *  的位置，然后再放置"）：建造拟真升级——方案 B（先瞬移再放置）。放置前把女仆瞬移到
      *  目标格旁的安全站立格，配合挥臂动画即为"亲手摆放"观感；找不到安全站姿则不瞬移
-     *  （隔空放置兜底，绝不瞬移到危险/卡身位置）。限频 4 tick——极速模式连续放置不连闪。 */
+     *  （隔空放置兜底，绝不瞬移到危险/卡身位置）。
+     *  限频 4 tick → 实测五百五十六改为 **2 tick**（用户："把传送到要搭建的方块旁边的间隔减半"）
+     *  ——摆放连着出时瞬移能跟上每一次落块；极速模式仍是放置冷却本身在控节奏，不会连闪到失控。 */
     private static final java.util.Map<java.util.UUID, Long> LAST_TELEPORT = new java.util.HashMap<>();
-    private static final int TELEPORT_MIN_INTERVAL = 4;
+    private static final int TELEPORT_MIN_INTERVAL = 2;
 
     /** 放置前瞬移（由两处 doPlace 调用前驱动）：目标格旁水平相邻可站格（同层、脚下有承托、
-     *  头顶不卡）；已在该格 2 格内不瞬移；限频 4 tick。 */
+     *  头顶不卡）；已在该格 2 格内不瞬移；限频 2 tick。 */
     protected static void teleportToWorkSite(ServerLevel level, EntityMaid maid, BlockPos target) {
         try {
             long now = level.getGameTime();
@@ -518,6 +520,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 if (i == prog.cursor) {
                     prog.cursor = i + 1;
                 }
+                // v1.2.0 实测五百五十七：这种"开工就已建"的格子也计入进度（展示用），
+                // 否则蓝图盖在已有地形上时，全建完进度仍停在 99%
+                countPrebuilt(prog, x, y, z);
                 continue;
             }
             // v1.5.79：空气步骤（蓝图挖空/清除要求）——空气不可能在生存收集，
@@ -1636,13 +1641,35 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
     }
 
     /** v1.5.82：放置成功计数——placedSet 按相对坐标去重，补建/覆盖重复放置
-     *  同一位置不再重复累加（修复进度出现 150% 等超 100% 的重复计算） */
+     *  同一位置不再重复累加（修复进度出现 150% 等超 100% 的重复计算）。
+     *  v1.2.0 实测五百五十七：同一位置若先被记成"开工即已建"（prebuilt），真放上去时
+     *  把它从 prebuilt 摘掉——两套计数【互斥】，展示用的 placedCount + prebuiltCount
+     *  才是"已建格子数"，不会把一个格子算两遍。 */
     private static void countPlaced(BuildPlan.Progress prog, int x, int y, int z) {
         long key = (long) (x & 0xFFFFF) << 42
                 | (long) (y & 0x1FFFFF) << 21
                 | (long) (z & 0x1FFFFF);
         if (prog.placedSet.add(key)) {
             prog.placedCount++;
+            if (prog.prebuiltSet.remove(key)) {
+                prog.prebuiltCount = Math.max(0, prog.prebuiltCount - 1);
+            }
+        }
+    }
+
+    /** v1.2.0 实测五百五十七：**开工时就已是目标方块**的格子计数（蓝图盖在已有地形上）。
+     *  旧版这类格子只前进游标不计数 → 全部建好后进度仍停在 99%（HUD 80,445 / 80,446）。
+     *  只进 prebuilt 计数、不进 placedCount：完成判定（缺口扫描）口径不变。
+     *  已真放过的位置不重复计（视作 placed）。 */
+    private static void countPrebuilt(BuildPlan.Progress prog, int x, int y, int z) {
+        long key = (long) (x & 0xFFFFF) << 42
+                | (long) (y & 0x1FFFFF) << 21
+                | (long) (z & 0x1FFFFF);
+        if (prog.placedSet.contains(key)) {
+            return;
+        }
+        if (prog.prebuiltSet.add(key)) {
+            prog.prebuiltCount++;
         }
     }
 

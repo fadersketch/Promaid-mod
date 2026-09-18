@@ -681,17 +681,14 @@ public class ScheduleBookScreen extends Screen {
         int bw = Math.min(SLOT_W, w - 180);
         int x = cx - (bw + LABEL_GAP) / 2 + LABEL_GAP;
         int y = CONTENT_TOP + 20;
-        int[] win = ScheduleData.shiftWindow(this.shift);
-        int len = (win[1] - win[0]) / 6;
         // 实测四百零八：当前时段行任务按钮文字变绿（与渲染端绿色外框/绿色标签同源
         // ——客户端 dayTime 同公式；排班关闭/无世界 = -1 全灰）
+        // v1.2.0 实测五百五十八：时段判定统一走 ScheduleData（挂钟口径 + 晚班跨午夜），
+        // 客户端不再自己算 dayTime——两份实现不一致正是"表里时间对不上游戏时间"的温床
         int curRow = -1;
         if (this.loadedOn && this.minecraft.level != null) {
-            long dayTime = this.minecraft.level.getDayTime();
-            int minute = (int) ((dayTime % 24000L) * 3L / 50L);
-            if (minute >= win[0] && minute < win[1]) {
-                curRow = (minute - win[0]) / len;
-            }
+            curRow = ScheduleData.slotAt(this.shift,
+                    ScheduleData.currentMinute(this.minecraft.level));
         }
         for (int i = 0; i < 6; i++) {
             final int idx = i;
@@ -969,8 +966,6 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
                 // 实测五十六：lx 用与 schedPage 相同的 LABEL_GAP 公式（旧 58 间距下
                 // "22:00~24:00"（58px）右沿与按钮左沿 0px 贴边）
                 // 实测五十九：纵向随 schedPage 压缩（行距 22、按钮高 18 → 标签 y+5 居中）
-                int[] win = ScheduleData.shiftWindow(this.shift);
-                int len = (win[1] - win[0]) / 6;
                 int bw = Math.min(SLOT_W, w - 180);
                 int lx = cx - (bw + LABEL_GAP) / 2;
                 int y = CONTENT_TOP + 20;
@@ -978,18 +973,16 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
                 // 命中的槽，该行标签/任务按钮变绿 + 整行绿色外框——一眼看到她现在
                 // 在干什么。时间源 = 客户端 level dayTime（与调度器 currentMinute 同
                 // 公式；女仆通常与主人同维度，跨维度时以主人时间近似）。
+                // v1.2.0 实测五百五十八：改走 ScheduleData（挂钟口径 + 晚班跨午夜），
+                // 槽标签也用 slotWindow 生成——晚班下半段那三行显示 0:00~2:00 等。
                 int curRow = -1;
                 if (this.loadedOn && this.minecraft.level != null) {
-                    // 客户端版 currentMinute（ScheduleData.currentMinute 只收
-                    // ServerLevel）：dayTime % 24000 * 3 / 50 → 0~1439 分钟
-                    long dayTime = this.minecraft.level.getDayTime();
-                    int minute = (int) ((dayTime % 24000L) * 3L / 50L);
-                    if (minute >= win[0] && minute < win[1]) {
-                        curRow = (minute - win[0]) / len;
-                    }
+                    curRow = ScheduleData.slotAt(this.shift,
+                            ScheduleData.currentMinute(this.minecraft.level));
                 }
                 for (int i = 0; i < 6; i++) {
-                    String label = ScheduleData.fmt(win[0] + len * i) + "~" + ScheduleData.fmt(win[0] + len * (i + 1));
+                    int[] sw = ScheduleData.slotWindow(this.shift, i);
+                    String label = ScheduleData.fmt(sw[0]) + "~" + ScheduleData.fmt(sw[1]);
                     g.drawString(this.font, Component.literal((i == curRow ? "\u00a7a▶ " : "\u00a77") + label),
                             lx, y + 5, 0xFFE5A0A0, false);
                     y += 22;
