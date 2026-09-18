@@ -318,6 +318,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     @net.neoforged.bus.api.SubscribeEvent
     public void onRegisterCommands(net.neoforged.neoforge.event.RegisterCommandsEvent event) {
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
+        // v1.2.0 实测五百五十五：客户端重同步（修"服务端活着、客户端连实体都没有"）
+        com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
     }
 
     /**
