@@ -525,6 +525,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 if (jumpLeft <= 1) {
                     JUMP_LEFT.remove(id); // 起跳失败（低矮空间），放弃，走常规逻辑
                 } else {
+                    // 实测五百七十：离地前的每一 tick 都补一跳。旧版重试只摆头不补跳——
+                    // 第一跳被同 tick 的 AI 走位/贴墙吃掉时，整个窗口她都离不了地，
+                    // 烟花点不着、落地、再来一轮，观感就是"有时候触发起飞有点困难"。
+                    // 补跳与 jumpForLaunch 同一冲量（0.42），离地后照旧走原流程。
+                    Vec3 dm = maid.getDeltaMovement();
+                    maid.setDeltaMovement(dm.x, 0.42, dm.z);
+                    maid.hurtMarked = true;
                     JUMP_LEFT.put(id, jumpLeft - 1);
                     faceLaunchDirection(maid, target);
                     return;
@@ -633,6 +640,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 即将接触 → 取消滑翔，转入猛击段
         if (dist <= SMASH_RANGE && !WAIT_LAUNCH.contains(id)) {
             MaidFlightKit.setGliding(maid, false);
+            // 实测五百七十：收翅起手那一刻挥臂。旧版唯一的挥臂在命中结算里（1~20 tick
+            // 俯冲的最末尾），高速俯冲中那一瞬几乎看不见——用户观感"近战空袭没有攻击动作"。
+            // 起手挥臂让整段俯冲带着攻击动作；命中结算里的那一挥保留。激流三叉戟有自转
+            // 动画（随后 tryStartDash 接管），起手挥臂对它跳过。
+            if (!MaidTridentSpinBehavior.replacesMelee(maid)) {
+                maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            }
             SMASH.add(id);
             SMASH_TICKS.put(id, 0);
             return;
