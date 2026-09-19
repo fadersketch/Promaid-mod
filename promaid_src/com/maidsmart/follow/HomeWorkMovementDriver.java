@@ -58,11 +58,8 @@ public final class HomeWorkMovementDriver {
         }
         try {
             // 有限 AABB（±∞ 经 blockToSection 溢出收敛 → 扫描恒空，实测三百三十二）
-            net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                    -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
             for (ServerLevel level : server.m_129785_()) {
-                for (net.minecraft.world.entity.Entity e : level.m_45976_(
-                        net.minecraft.world.entity.Entity.class, whole)) {
+                for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
                     if (e instanceof EntityMaid maid) {
                         drive(level, maid);
                     }

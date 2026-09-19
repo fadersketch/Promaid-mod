@@ -108,10 +108,8 @@ public final class NeutralThreatDriver {
         try {
             // 有限 AABB 全图扫描（Entity.class 全量 + instanceof——ClassInstanceMultiMap
             // 桶 bug 与 ±∞ 溢出均已绕开，HomeWorkMovementDriver 同款口径）
-            net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                    -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
             for (ServerLevel level : server.m_129785_()) {
-                for (Entity e : level.m_45976_(net.minecraft.world.entity.Entity.class, whole)) {
+                for (Entity e : level.m_8583_()) {
                     if (e instanceof EntityMaid maid) {
                         try {
                             drive(level, maid);

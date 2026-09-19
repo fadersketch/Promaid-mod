@@ -151,11 +151,9 @@ public class ProMaidExtension implements ILittleMaid {
         for (net.minecraft.server.level.ServerLevel level : event.getServer().m_129785_()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : level.m_45976_(
-                    net.minecraft.world.entity.Entity.class,
-                    // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
-                    new net.minecraft.world.phys.AABB(-131072.0, -4096.0, -131072.0,
-                            131072.0, 4096.0, 131072.0))) {
+            // 实测五百六十四（PR #9 移植）：全世界 AABB → getAllEntities()——
+            // Sable 会拒查超大 AABB 并静默返回空（下同）
+            for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
                 if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
                     continue;
                 }
@@ -278,14 +276,10 @@ public class ProMaidExtension implements ILittleMaid {
         if (++this.seatWalkTimer >= 3) {
             this.seatWalkTimer = 0;
             try {
-                net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
-                        -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
                 for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
                     // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                     // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                    for (net.minecraft.world.entity.Entity e : level.m_45976_(
-                            net.minecraft.world.entity.Entity.class, whole)) {
+                    for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
                         if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
                                 && m.m_6084_()) {
                             com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);

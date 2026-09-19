@@ -337,8 +337,7 @@ public final class IndexStonePreviewClient {
         try {
             java.util.UUID id = java.util.UUID.fromString(maidId);
             Entity found = null;
-            for (Entity e : mc.f_91073_.m_45976_(Entity.class,
-                    new AABB(-131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0))) {
+            for (Entity e : mc.f_91073_.m_104735_()) {
                 if (e.m_20148_().equals(id)) {
                     found = e;
                     break;

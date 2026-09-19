@@ -95,10 +95,7 @@ public final class FarmTillDriver {
                 // EntitySection.m_188348_ 直接跳过整个 section。跟随模式女仆所在的
                 // section 被 TLM 感知系统预建了 EntityMaid 桶 → 能扫到 → 会锄地；
                 // home 女仆单独站的 section 没预建 → 空桶 → 永远找不到 → 不锄地。
-                for (net.minecraft.world.entity.Entity e : level.m_45976_(
-                        net.minecraft.world.entity.Entity.class,
-                        new net.minecraft.world.phys.AABB(-131072.0, -4096.0, -131072.0,
-                                131072.0, 4096.0, 131072.0))) {
+                for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || !isFarmTask(maid)) {
                         continue;
                     }
