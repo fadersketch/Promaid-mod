@@ -445,8 +445,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                         com.maidsmart.tool.PromaidLog.nameOf(maid)
                                 + " 缺鞘翅（" + MaidFlightKit.elytraDiagnostic(maid) + "）");
             }
+            // 实测五百七十四：措辞按缺件内容分流——缺"可以飞行的道具"时把三种手段点出来
+            // （烟花火箭 / 孔雀羽扇 / 能上天的位移类法术任一即可），免得玩家以为只能用烟花。
+            String hint = missing.contains("可以飞行的道具")
+                    ? "（烟花火箭 / 孔雀羽扇 / 位移类法术任一）" : "";
             maid.getChatBubbleManager().addTextChatBubble(
-                    "空战装备不齐，缺" + missing + "，先按普通战斗来");
+                    "空战装备不齐，没有" + missing + hint + "，先按普通战斗来");
         } catch (Throwable ignored) {
         }
     }
@@ -613,26 +617,31 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (maid.onGround()) {
             if (ranged) {
                 // 飞行远战：落地就重新起飞恢复盘旋（开火由 performRangedAttack 通道负责）；
-                // 没烟花/冷却中就站着（TLM 的目标会在原地继续打）
-                if (distH <= LAUNCH_RANGE && canLaunch(maid, gameTime)) {
-                    jumpForLaunch(maid, target, id);
-                    return;
-                }
-                // v1.2.0 实测五百七十二：烟花不可用 → 用"提供高度"的位移法术平地起飞
-                if (distH <= LAUNCH_RANGE && tryDashClimb(maid, target, id, gameTime, true)) {
-                    return;
+                // 真的一点飞行手段都没有（烟花/羽扇/位移法术全缺）才站着，目标会在原地继续被远程打
+                if (distH <= LAUNCH_RANGE && canTakeOff(maid, gameTime)) {
+                    if (canLaunch(maid, gameTime)) {
+                        jumpForLaunch(maid, target, id); // 起跳滑翔 + 空中放烟花/挥扇
+                        return;
+                    }
+                    // 实测五百七十二（五百七十四并入总判定）：烟花不可用（用完/冷却）→
+                    // 用"提供高度"的位移法术平地起飞
+                    if (tryDashClimb(maid, target, id, gameTime, true)) {
+                        return;
+                    }
                 }
                 MaidFlightKit.setGliding(maid, false);
                 return;
             }
-            if (distH <= LAUNCH_RANGE && canLaunch(maid, gameTime)) {
-                jumpForLaunch(maid, target, id);
-                return;
-            }
-            // v1.2.0 实测五百七十二：烟花不可用（用完/冷却）→ 用"提供高度"的位移法术
-            // 平地起飞，不用再站在地上等（这正是"平地起飞"要解决的场景）
-            if (distH <= LAUNCH_RANGE && tryDashClimb(maid, target, id, gameTime, true)) {
-                return;
+            if (distH <= LAUNCH_RANGE && canTakeOff(maid, gameTime)) {
+                if (canLaunch(maid, gameTime)) {
+                    jumpForLaunch(maid, target, id);
+                    return;
+                }
+                // 实测五百七十二（五百七十四并入总判定）：烟花不可用（用完/冷却）→
+                // 用"提供高度"的位移法术平地起飞，不用再站在地上等
+                if (tryDashClimb(maid, target, id, gameTime, true)) {
+                    return;
+                }
             }
             MaidFlightKit.setGliding(maid, false);
             groundMelee(level, maid, target);
@@ -692,6 +701,22 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
         // 实测五百六十三：燃料口径 = 烟花 或 孔雀羽扇（扇子优先，见 tryLaunch）
         return !onFireworkCooldown(maid, gameTime) && MaidFlightKit.hasFlightFuel(maid);
+    }
+
+    /**
+     * 实测五百七十四【可起飞判定：烟花/羽扇 **或** 位移法术】。
+     *
+     * 反馈："既然法术可以飞……飞行法术也进入可起飞判定。" 旧版地面分支先用 {@link #canLaunch}
+     * （只认烟花/羽扇、还带烟花内置 CD）决定"要不要起跳"，法术只是它失败之后的兜底分支——
+     * 判定口径上法术不算"能起飞"，与 {@link MaidFlightKit#isModeActive}、
+     * {@link MaidFlightKit#missingParts}（两处都认法术）不一致，文案也还在点名烟花/羽扇。
+     *
+     * 现在统一：**能起飞 = 烟花/羽扇可用（canLaunch）或 她会"提供高度"的位移法术**
+     * （{@link MaidFlightKit#hasClimbSpell}，不看冷却——沿用套件判定的既有口径）。顺序仍是
+     * "有烟花先走烟花链路、没有才用位移法术"，旧手感一字不变。
+     */
+    private static boolean canTakeOff(EntityMaid maid, long gameTime) {
+        return canLaunch(maid, gameTime) || MaidFlightKit.hasClimbSpell(maid);
     }
 
     /**
