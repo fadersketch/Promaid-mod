@@ -125,7 +125,22 @@ public final class FriendlyWindGuard {
         return null;
     }
 
-    /** 爆炸归因：直系来源（女仆本人/她的火球）→ 间系来源（原版 getIndirectSourceEntity，含 TNT 的主人） */
+    /**
+     * 爆炸归因：直系来源（女仆本人/她的火球）→ 间系来源（原版 getIndirectSourceEntity，含 TNT 的主人）
+     * → **当前 tick 实体兜底**（实测五百七十三）。
+     *
+     * 【为什么必须有第三条】原版**重锤风爆附魔**（`minecraft:wind_burst`）的爆炸是
+     * `attribute_to_user` 缺省 false（1.21.1 `data/minecraft/enchantment/wind_burst.json` 实证：
+     * 既无 attribute_to_user 也无 damage_type）——`ExplodeEffect.apply` 于是传 `entity = null`，
+     * 爆炸的直系/间系来源**都是 null**，前两条全部落空 → 击退照推（**只震不伤**，伤害那条路
+     * 本来就没有）。反馈的"主人被女仆重锤波及"就是这一条（1.21.1）：女仆俯冲砸怪时风爆在
+     * **她身上**炸开，旁边的主人被 3.5 格半径的冲击波掀飞。1.20.1 没有重锤，但第三方模组的
+     * "无来源实体爆炸"同理，一并兜住。
+     *
+     * 兜底口径与 {@code EntitySetDeltaMovementMixin} 的总闸完全一致：**这一下爆炸是在谁的
+     * tick 里创建的，就算谁放的**（风爆由女仆的攻击结算触发，必然发生在她自己的 tick 内）。
+     * 归因不到女仆方时（爬行者/TNT 等自爆实体在它们自己的 tick 里炸）返回 null，行为不变。
+     */
     public static EntityMaid maidOfExplosion(Explosion ex) {
         if (ex == null) {
             return null;
@@ -135,7 +150,12 @@ public final class FriendlyWindGuard {
             if (m != null) {
                 return m;
             }
-            return maidOf(ex.m_252906_()); // getIndirectSourceEntity
+            m = maidOf(ex.m_252906_()); // getIndirectSourceEntity
+            if (m != null) {
+                return m;
+            }
+            // 无来源实体的爆炸（原版风爆）：退回"当前 tick 实体"归因（与总闸同一口径）
+            return maidOf(ticking);
         } catch (Throwable ignored) {
             return null;
         }

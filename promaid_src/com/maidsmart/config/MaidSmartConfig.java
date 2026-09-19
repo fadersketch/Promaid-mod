@@ -547,6 +547,16 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_BED_INTEROP;
     // v1.1.0 实测四百二十一：冷却可视化 HUD（女仆复活倒计时 / 回魂符冷却显示在玩家屏幕上）
     public static final ForgeConfigSpec.BooleanValue MISC_COOLDOWN_HUD;
+    /**
+     * 实测五百七十三【中键工位标记开关】（默认开）。
+     *
+     * 潜行 + 鼠标中键方块 = 把身边自家 home 模式女仆的工位/休闲锚点标过去（实测五百六十二）。
+     * 反馈：这条手势与 TLM 自带的【河童的罗盘】（`touhou_little_maid:kappa_compass`）撞车——
+     * 罗盘是"右键方块记坐标 → 右键女仆写入"的另一套入口，两者**写的是同一份 TLM 排班锚点**
+     * （谁后写谁生效）。关掉本项 = 中键完全交还原版取方块；另外**手持河童的罗盘时本功能自动
+     * 让位**（不管开关），避免"两个都在标"。
+     */
+    public static final ForgeConfigSpec.BooleanValue MISC_WORK_POS_MARKER;
     // 实测四百四十三：悬空禁搭方块（自保搭高/搭路/挖矿垫脚/伐木垫脚统一闸口）
     public static final ForgeConfigSpec.BooleanValue MISC_NO_PLACE_IN_AIR;
     // 实测五百三十六：不得搭在主人身上（目标格被主人碰撞箱占着就不搭——
@@ -1620,6 +1630,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 实测四百二十一：冷却可视化 HUD（反馈："我希望女仆复活的CD及自己回魂符的CD在玩家屏幕上可视化"）
         MISC_COOLDOWN_HUD = BUILDER.comment("冷却可视化 HUD（默认开）：在玩家屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时——女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示；关掉不显示也不发同步包")
                 .translation("config.promaid.misc.cooldownHud").define("cooldownHud", true);
+        // 实测五百七十三：中键工位标记开关（与 TLM 自带的「河童的罗盘」撞车 → 给开关 + 让位）
+        MISC_WORK_POS_MARKER = BUILDER.comment("中键工位标记（默认开）：潜行 + 鼠标中键方块 = 把身边自家「在家/排班」女仆的工位与休闲锚点标到那个方块（范围=排班活动半径）。与 TLM 自带的「河童的罗盘」功能重叠——两者写的是同一份排班锚点（谁后写谁生效），所以手持河童的罗盘时本功能自动让位；这里关掉则中键完全交还原版取方块")
+                .translation("config.promaid.misc.workPosMarker").define("workPosMarker", true);
         // 实测四百四十三：悬空禁搭方块（反馈："女仆在悬空状态下应该禁止搭建方块——
         // 挖矿/伐木也通用；下落悬空时搭方块又放不了落地水，结果自己摔死"）
         MISC_NO_PLACE_IN_AIR = BUILDER.comment("悬空禁搭方块（默认开）：女仆未落地时不再搭方块——涵盖自保搭高/搭路/挖矿垫脚/伐木垫脚四个模块。触发口径：坠落距离达到「落地水触发高度」时禁（此时落地水会接管，搭方块既救不了她、又会挡住落地水）。水里/岩浆里、骑乘、鞘翅滑翔不算悬空；站在地面照常搭")

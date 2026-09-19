@@ -204,5 +204,6 @@
   "config.promaid.combat.flightDashBoost": "位移法术·飞行加速（提供速度）",
   "config.promaid.combat.flightDashClimbSpells": "提供高度的法术表",
   "config.promaid.combat.flightDashBoostSpells": "提供速度的法术表",
-  "config.promaid.combat.flightDashBoostRespectCooldown": "飞行加速·尊重法术冷却（提供速度）"
+  "config.promaid.combat.flightDashBoostRespectCooldown": "飞行加速·尊重法术冷却（提供速度）",
+  "config.promaid.misc.workPosMarker": "中键工位标记（潜行+中键）"
 }

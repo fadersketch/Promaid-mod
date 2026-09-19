@@ -42,8 +42,15 @@ import net.minecraftforge.registries.ForgeRegistries;
  * 每挥 1+ 耐久）——三件套的"飞行燃料"口径扩为【烟花 或 羽扇】，有扇先用扇。
  */
 public final class TwilightFanKit {
-    /** 暮色森林孔雀羽扇的注册名（1.20.1 与 1.21.1 相同） */
-    public static final String FAN_ID = "twilightforest:peacock_fan";
+    /**
+     * 暮色森林孔雀羽扇的注册名（1.20.1 与 1.21.1 相同）。
+     *
+     * 【实测五百七十三：名字写错了】真实注册名是 `peacock_feather_fan`（暮色森林 1.20.1-4.3.2508
+     * 与 1.21.1-4.8.3345 两版 lang 键 `item.twilightforest.peacock_feather_fan` 一致，item 类
+     * `twilightforest.item.PeacockFanItem`）——旧值 `twilightforest:peacock_fan` 少一个 feather，
+     * **永远匹配不上**，症状就是"放背包里也报缺羽扇"（本轮反馈）。
+     */
+    public static final String FAN_ID = "twilightforest:peacock_feather_fan";
     /** 原版 use 持续 20 tick（getUseDuration）——扇子的自然使用节奏 */
     public static final int FAN_USE_INTERVAL = 20;
     /** 扇风盒：视线方向前 3 格、半径 2 格（PeacockFanItem 同值） */

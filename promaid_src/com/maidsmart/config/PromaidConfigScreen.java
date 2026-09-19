@@ -148,6 +148,10 @@ public class PromaidConfigScreen extends Screen {
     private boolean foodTable = false;
     private EditBox foodInput;
     private FoodList foodList;
+    /** 实测五百七十三：喂水白名单子页（口渴软联动）——与投喂食物勾选子页同款交互 */
+    private boolean waterTable = false;
+    private EditBox waterInput;
+    private WaterList waterList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -175,6 +179,9 @@ public class PromaidConfigScreen extends Screen {
     /** v1.2.0 实测五百一十九：食物缓存（{id, 中文名}）——与 creativeCache 同款懒构建 */
     private static java.util.List<String[]> foodCache = null;
     private static long foodCacheBuilt = -1;
+    /** 实测五百七十三：喂水候选缓存（{id, 中文名}）——与 foodCache 同款懒构建 */
+    private static java.util.List<String[]> waterCache = null;
+    private static long waterCacheBuilt = -1;
 
     private static void ensureCreativeCache() {
         long now = System.currentTimeMillis();
@@ -239,6 +246,66 @@ public class PromaidConfigScreen extends Screen {
             foodCache.add(new String[]{key.toString(), cn == null ? "" : cn});
         }
         foodCacheBuilt = now;
+    }
+
+    /**
+     * 实测五百七十三：喂水候选缓存（{id, 中文名}）——与 ensureFoodCache 同款懒构建、1 分钟缓存。
+     * 候选口径 = **能恢复口渴的物品**（口渴软联动的 ThirstHelper.itemRestoresThirst）∪ 水瓶
+     * ∪ 白名单里已有的条目（物品被移除/改名时也要能在列表里取消勾选）。
+     * 没装「口渴」时本页不会打开（入口行本身按模组在场条件注册）。
+     */
+    private static void ensureWaterCache() {
+        long now = System.currentTimeMillis();
+        if (waterCache != null && now - waterCacheBuilt < 60_000L) {
+            return;
+        }
+        waterCache = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
+        for (net.minecraft.world.item.Item item : net.minecraftforge.registries.ForgeRegistries.ITEMS) {
+            net.minecraft.world.item.ItemStack stack;
+            try {
+                stack = new net.minecraft.world.item.ItemStack(item);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                if (!com.maidsmart.action.ThirstCompat.itemRestoresThirst(stack)
+                        && !com.maidsmart.action.ThirstCompat.isWaterPotion(stack)) {
+                    continue; // 既不恢复口渴也不是水瓶 → 不是候选
+                }
+            } catch (Throwable ignored) {
+                continue;
+            }
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item);
+            if (key == null || !seen.add(key.toString())) {
+                continue;
+            }
+            String cn = "";
+            try {
+                cn = stack.m_41786_().getString();
+            } catch (Exception ignored) {
+            }
+            waterCache.add(new String[]{key.toString(), cn == null ? "" : cn});
+        }
+        try {
+            for (String id : MaidSmartConfig.AID_DRINK_WHITELIST.get()) {
+                if (id == null || id.isEmpty() || !seen.add(id)) {
+                    continue;
+                }
+                String cn = "";
+                try {
+                    net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                    if (it != null) {
+                        cn = new net.minecraft.world.item.ItemStack(it).m_41786_().getString();
+                    }
+                } catch (Throwable ignored) {
+                }
+                waterCache.add(new String[]{id, cn == null ? "" : cn});
+            }
+        } catch (Throwable ignored) {
+        }
+        waterCacheBuilt = now;
     }
 
     /** 实测四百二十三【配置面板重组】：大类（Group）——首页只列大类，进入后列小类（Section）。 */
@@ -401,6 +468,10 @@ public class PromaidConfigScreen extends Screen {
             this.foodTableButtons(w, h, cx);
             return;
         }
+        if (this.waterTable) {
+            this.waterTableButtons(w, h, cx);
+            return;
+        }
         this.sectionButtons(w, h, cx);
     }
 
@@ -455,6 +526,7 @@ public class PromaidConfigScreen extends Screen {
                 this.woodTable = false;
                 this.altTable = false;
                 this.foodTable = false;
+                this.waterTable = false;
                 this.inGroup = false;
                 this.m_7856_();
             };
@@ -877,9 +949,168 @@ public class PromaidConfigScreen extends Screen {
         this.m_142416_(this.foodList);
         this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 返回参数"), b -> {
             this.foodTable = false;
+                this.waterTable = false;
             this.m_7856_();
         }).m_252987_(12, h - 34, 100, 20).m_253136_());
         this.bottomButtons(w, h, cx);
+    }
+
+    /**
+     * 实测五百七十三：喂水白名单子页——顶部搜索框 + 物品网格（点击图标切换"能不能喂"）
+     * + 底部白名单列表（每行「不喂了」一键移出）。交互与投喂食物勾选子页同款。
+     */
+    private void waterTableButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
+                Component.m_237113_("搜索饮品（中英文皆可）"));
+        this.creativeInput.m_94199_(64);
+        this.creativeInput.m_94144_(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.m_94151_(s -> {
+            this.creativeQuery = s;
+            this.rebuildWaterCreative();
+        });
+        this.m_142416_(this.creativeInput);
+        int gridTop = 66;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildWaterCreative();
+        int pageY = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25c0"), b -> {
+                this.creativePage--;
+                this.m_7856_();
+            }).m_252987_(cx - 40, pageY, 20, 16).m_253136_());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25b6"), b -> {
+                this.creativePage++;
+                this.m_7856_();
+            }).m_252987_(cx + 20, pageY, 20, 16).m_253136_());
+        }
+        int inputY = gridBottom + 24;
+        this.waterInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116, 18,
+                Component.m_237113_("填注册名加进白名单"));
+        this.waterInput.m_94199_(64);
+        this.waterInput.m_257771_(Component.m_237113_("thirst:terracotta_water_bowl"));
+        this.m_142416_(this.waterInput);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("加进白名单"), b -> this.addWaterWhitelist())
+                .m_252987_(left + panelWidth - 96, inputY, 80, 18).m_253136_());
+        int listTop = inputY + 24;
+        int listH = Math.max(24, Math.min(h - 78 - listTop - 4, h - listTop - 36));
+        this.waterList = new WaterList(this.f_96547_, left, listTop, panelWidth - 20, listH);
+        this.waterList.m_93507_(left);
+        this.m_142416_(this.waterList);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 返回参数"), b -> {
+            this.waterTable = false;
+            this.m_7856_();
+        }).m_252987_(12, h - 34, 100, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 实测五百七十三：是否"可以喂"（在白名单里 = 可以喂） */
+    private boolean isWaterChecked(String id) {
+        return MaidSmartConfig.AID_DRINK_WHITELIST.get().contains(id);
+    }
+
+    /** 当前白名单数量（入口按钮上的「可喂 N / 候选 M」用） */
+    private int countDrinkables() {
+        try {
+            return MaidSmartConfig.AID_DRINK_WHITELIST.get().size();
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 候选总数（网格里的饮品件数） */
+    private int countWaterCandidates() {
+        try {
+            ensureWaterCache();
+            return waterCache.size();
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 切换某物品"能不能喂"（写回 aidDrinkWhitelist 并刷新底部列表） */
+    private void toggleWaterChecked(String id) {
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_DRINK_WHITELIST.get());
+        if (list.contains(id)) {
+            list.remove(id);
+        } else {
+            list.add(id);
+        }
+        MaidSmartConfig.AID_DRINK_WHITELIST.set(list);
+        if (this.waterList != null) {
+            this.waterList.rebuild();
+        }
+    }
+
+    /** 手动输入 id 加进白名单（支持省略 minecraft: 前缀） */
+    private void addWaterWhitelist() {
+        if (this.waterInput == null) {
+            return;
+        }
+        String text = this.waterInput.m_94155_().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        if (!text.contains(":")) {
+            text = "minecraft:" + text;
+        }
+        net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                .getValue(net.minecraft.resources.ResourceLocation.parse(text));
+        if (item == null) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item);
+        if (key == null) {
+            return;
+        }
+        String id = key.toString();
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_DRINK_WHITELIST.get());
+        if (!list.contains(id)) {
+            list.add(id);
+            MaidSmartConfig.AID_DRINK_WHITELIST.set(list);
+        }
+        this.waterInput.m_94144_("");
+        if (this.waterList != null) {
+            this.waterList.rebuild();
+        }
+    }
+
+    /** 从白名单移除（底部列表「不喂了」按钮） */
+    private void removeWaterWhitelist(String id) {
+        List<String> list = new ArrayList<>(MaidSmartConfig.AID_DRINK_WHITELIST.get());
+        list.remove(id);
+        MaidSmartConfig.AID_DRINK_WHITELIST.set(list);
+        if (this.waterList != null) {
+            this.waterList.rebuild();
+        }
+    }
+
+    /** 重建饮品网格（搜索过滤；与 rebuildFoodCreative 同款，只过滤内存缓存） */
+    private void rebuildWaterCreative() {
+        this.creativeItems.clear();
+        ensureWaterCache();
+        String q = this.creativeQuery == null ? "" : this.creativeQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        for (String[] e : waterCache) {
+            String id = e[0];
+            String cn = e[1];
+            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q)))) {
+                continue;
+            }
+            net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                    .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+            if (item == null) {
+                continue;
+            }
+            this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+        }
+        this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
     }
 
     /** 是否"能吃"（不在黑名单里即能吃） */
@@ -2192,18 +2423,15 @@ public class PromaidConfigScreen extends Screen {
         if (com.maidsmart.action.ThirstCompat.available() && MaidSmartConfig.AID_THIRST_THRESHOLD != null) {
             this.rows.add(new NumRow("投喂触发口渴度", String.valueOf(MaidSmartConfig.AID_THIRST_THRESHOLD.get()),
                     s -> setInt(MaidSmartConfig.AID_THIRST_THRESHOLD, s), "投喂触发口渴度（4-20）：主人口渴值（Thirst Was Taken，0-20）低于此值自动喂水（默认 15）。判定位点 = 口渴值；效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还全走原版喝的路径；未装该模组时本页没有这两项"));
-            this.rows.add(new TextRow("喂水白名单", String.join(",", MaidSmartConfig.AID_DRINK_WHITELIST.get()),
-                    s -> {
-                        java.util.List<String> out = new java.util.ArrayList<>();
-                        for (String part : s.split("[,，]")) {
-                            String id = part.trim();
-                            if (!id.isEmpty()) {
-                                out.add(id);
-                            }
-                        }
-                        MaidSmartConfig.AID_DRINK_WHITELIST.set(out);
-                        return true;
-                    }, "允许女仆喂的饮品（完整注册名，逗号分隔）：命中白名单且「口渴」模组认识（能回口渴值）才喂——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶）、其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水"));
+            // 实测五百七十三：与「投喂食物勾选」同款的图形化勾选子页（用户要求照搬喂食那套）
+            this.rows.add(new BtnRow("喂水白名单",
+                    "打开 →（可喂 " + this.countDrinkables() + " / 候选 " + this.countWaterCandidates() + "）",
+                    () -> {
+                        this.waterTable = true;
+                        this.creativePage = 0;
+                        this.m_7856_();
+                    },
+                    "喂水白名单：列出全部「能恢复口渴」的饮品（含模组装水容器，按口渴模组自己的口径扫描）——点图标切换「能不能喂」（写进 aidDrinkWhitelist）：绿框 ✔ = 可以喂、红框 ✖ = 不喂；minecraft:potion 只认纯净水（水瓶）、其它药水永不喂；留空 = 不喂水。支持搜索与翻页，下方列表可一键把某个饮品移出白名单"));
         }
         this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
                 s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0.1-1，1=掉血就治）：主人血量低于此比例自动治疗（默认 0.30）"));
@@ -2410,6 +2638,9 @@ public class PromaidConfigScreen extends Screen {
         // 实测四百二十一：冷却可视化 HUD（复活倒计时 / 回魂符冷却显示在屏幕上）
         this.rows.add(new BoolRow("冷却可视化 HUD", MaidSmartConfig.MISC_COOLDOWN_HUD.get(),
                 v -> MaidSmartConfig.MISC_COOLDOWN_HUD.set(v), "冷却可视化 HUD（默认开）：屏幕左上角实时显示本人女仆的自动复活倒计时与回魂符冷却倒计时（女仆死亡等待复活、或放出后处于回魂符冷却窗口时显示）；关掉不显示也不发同步包"));
+        // 实测五百七十三：中键工位标记开关（与 TLM 自带的「河童的罗盘」写同一份排班锚点）
+        this.rows.add(new BoolRow("中键工位标记", MaidSmartConfig.MISC_WORK_POS_MARKER.get(),
+                v -> MaidSmartConfig.MISC_WORK_POS_MARKER.set(v), "潜行+鼠标中键方块 = 把身边在家/排班女仆的工位锚点标到那个方块（范围=排班活动半径）。与 TLM 自带的「河童的罗盘」写的是同一份排班锚点（谁后写谁生效）——手持罗盘时本功能自动让位给罗盘；关掉 = 中键完全交还原版取方块"));
         this.rows.add(new NumRow("气泡限频（毫秒）", String.valueOf(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS.get()),
                 s -> setInt(MaidSmartConfig.MISC_BUBBLE_LIMIT_MS, s), "气泡限频（毫秒）：对话气泡的最短显示间隔，防连续说话刷屏"));
     }
@@ -2794,6 +3025,101 @@ public class PromaidConfigScreen extends Screen {
         }
         if (this.minableList != null) {
             this.minableList.rebuild();
+        }
+    }
+
+    /** 实测五百七十三：白名单列表（底部）——每行物品图标 + 中文名 + 「不喂了」按钮 */
+    private class WaterList extends ObjectSelectionList<WaterList.WaterEntry> {
+        private final List<String> entries = new ArrayList<>();
+
+        WaterList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.m_91087_(), width, height, top, top + height, 22);
+            this.m_93507_(x);
+            this.m_93488_(false);
+            this.m_93496_(false);
+            this.f_93390_ = width; // 行宽 = 列表宽（同 FoodList）
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.m_93516_();
+            this.entries.clear();
+            try {
+                this.entries.addAll(MaidSmartConfig.AID_DRINK_WHITELIST.get());
+            } catch (Throwable ignored) {
+            }
+            for (String e : this.entries) {
+                this.m_7085_(new WaterEntry(e));
+            }
+        }
+
+        @Override
+        public int m_5759_() {
+            return Math.max(this.f_93390_, 120);
+        }
+
+        /** 同 FoodList：滚动条覆盖为低调样式 */
+        @Override
+        protected void m_238964_(GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        /** 单行：物品图标 + 绿色勾 + 中文名 + 「不喂了」按钮（点了移出白名单） */
+        private class WaterEntry extends ObjectSelectionList.Entry<WaterList.WaterEntry> {
+            private final String id;
+            private final Button removeButton;
+
+            WaterEntry(String id) {
+                this.id = id;
+                this.removeButton = Button.m_253074_(Component.m_237113_("不喂了"),
+                                b -> PromaidConfigScreen.this.removeWaterWhitelist(this.id))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
+            }
+
+            @Override
+            public void m_6311_(GuiGraphics g, int index, int top, int left, int width, int height,
+                                int mouseX, int mouseY, boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                if (item != null) {
+                    g.m_280480_(new net.minecraft.world.item.ItemStack(item), x, y - 2);
+                    x += 20;
+                }
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_("\u00a7a\u2714 \u00a7f"
+                                + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                        x, y, 0xFFAAAAAA, false);
+                this.removeButton.m_252865_(left + WaterList.this.m_5759_() - 62);
+                this.removeButton.m_253211_(top + 1);
+                this.removeButton.m_88315_(g, mouseX, mouseY, partialTick);
+            }
+
+            @Override
+            public boolean m_6375_(double mx, double my, int button) {
+                if (button == 0 && this.removeButton.m_5953_(mx, my)) {
+                    this.removeButton.m_6375_(mx, my, 0);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component m_142172_() {
+                return Component.m_237113_(this.id);
+            }
         }
     }
 
@@ -3418,6 +3744,74 @@ public class PromaidConfigScreen extends Screen {
                     + " 种；取消勾选即列入「不能吃」，下方列表可一键恢复";
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
+        } else if (this.waterTable) {
+            // 实测五百七十三：喂水白名单子页——网格里绿色勾=可以喂 / 红叉=不喂
+            String wTitle = "\u00a7e喂水白名单——点击图标切换「能不能喂」（\u00a7a\u2714 可以喂\u00a7e / \u00a7c\u2716 不喂\u00a7e）";
+            g.m_280653_(this.f_96547_, Component.m_237113_(wTitle), cx, 10, 0xFFFFFF);
+            int wPanelLeft = Math.max(8, cx - 280);
+            int wPanelWidth = Math.min(560, w - 16);
+            int wLeft = wPanelLeft + 10;
+            int wGridTop = GRID_TOP;
+            int wGridRowsNow = h < 215 ? 2 : GRID_ROWS;
+            int wGridBottom = wGridTop + wGridRowsNow * GRID_CELL;
+            g.m_280509_(wPanelLeft + 8, wGridTop - 4, wPanelLeft + wPanelWidth - 8, wGridBottom, 0x80101010);
+            int wPerPage = GRID_COLS * this.gridRows;
+            int wStart = this.creativePage * wPerPage;
+            int wEnd = Math.min(this.creativeItems.size(), wStart + wPerPage);
+            int wHoverIdx = -1;
+            ensureWaterCache();
+            int wTotal = waterCache.size();
+            for (int i = wStart; i < wEnd; i++) {
+                int col = (i - wStart) % GRID_COLS;
+                int row = (i - wStart) / GRID_COLS;
+                int x = wLeft + col * GRID_CELL;
+                int y = wGridTop + row * GRID_CELL;
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                String id = key == null ? "" : key.toString();
+                if (this.isWaterChecked(id)) {
+                    g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
+                    g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFFFFFF);
+                } else {
+                    g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x80CC2222);
+                    g.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c\u2716"),
+                            x + 12, y + 12, 0xFF5555, false);
+                }
+                g.m_280480_(stack, x, y);
+                if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                    wHoverIdx = i;
+                }
+            }
+            int wInfoX = wLeft + GRID_COLS * GRID_CELL + 12;
+            int wInfoY = wGridTop + 2;
+            if (wHoverIdx >= 0 && wHoverIdx < this.creativeItems.size()) {
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(wHoverIdx);
+                net.minecraft.resources.ResourceLocation key =
+                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                String hover = key == null ? "?" : key.toString();
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                        wInfoX, wInfoY, 0xFFFFFF, false);
+                g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                        wInfoX, wInfoY + 10, 0xAAAAAA, false);
+                g.m_280614_(this.f_96547_, Component.m_237113_(this.isWaterChecked(hover)
+                                ? "\u00a7a当前：可以喂（点击改成不喂）"
+                                : "\u00a7c当前：不喂（点击加进白名单）"),
+                        wInfoX, wInfoY + 20, 0xFFFFFF, false);
+            } else {
+                int pages = this.creativePages();
+                if (pages > 1) {
+                    String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                    g.m_280614_(this.f_96547_, Component.m_237113_(pg),
+                            wInfoX, wInfoY, 0x888888, false);
+                }
+            }
+            String wHint = "\u00a77候选 " + wTotal + " 种饮品，当前白名单 " + this.countDrinkables()
+                    + " 种；留空白名单 = 不喂水。水瓶只认纯净水，其它药水永不喂";
+            g.m_280614_(this.f_96547_, Component.m_237113_(wHint),
+                    this.clampCenterX(wHint, cx), this.f_96544_ - 50, 0x888888, false);
         } else if (this.altTable) {
             // v1.5.254：替代品名单子页（建造板块）——交互与矿表同款
             String[] modeNames = {"半格高（台阶类）", "一格高（整方块）", "竖两格（门/高植物等）",
@@ -3635,6 +4029,32 @@ public class PromaidConfigScreen extends Screen {
                             .getKey(this.creativeItems.get(idx).m_41720_());
                     if (key != null) {
                         this.toggleFoodChecked(key.toString());
+                    }
+                    return true;
+                }
+            }
+        }
+        // 实测五百七十三：喂水白名单子页网格点击 → 切换该物品"能不能喂"
+        if (this.waterTable && button == 0) {
+            int wcx = this.f_96543_ / 2;
+            int wPanelLeft = Math.max(8, wcx - 280);
+            int wLeft = wPanelLeft + 10;
+            int wGridTop = GRID_TOP;
+            int wGridRows = this.f_96544_ < 215 ? 2 : GRID_ROWS;
+            int wGridBottom = wGridTop + wGridRows * GRID_CELL;
+            if (mouseX >= wLeft && mouseX < wLeft + GRID_COLS * GRID_CELL
+                    && mouseY >= wGridTop && mouseY < wGridBottom) {
+                int perPage = GRID_COLS * this.gridRows;
+                int start = this.creativePage * perPage;
+                int col = (int) ((mouseX - wLeft) / GRID_CELL);
+                int row = (int) ((mouseY - wGridTop) / GRID_CELL);
+                int idx = start + row * GRID_COLS + col;
+                if (idx >= 0 && idx < this.creativeItems.size()) {
+                    net.minecraft.resources.ResourceLocation key =
+                            net.minecraftforge.registries.ForgeRegistries.ITEMS
+                                    .getKey(this.creativeItems.get(idx).m_41720_());
+                    if (key != null) {
+                        this.toggleWaterChecked(key.toString());
                     }
                     return true;
                 }
