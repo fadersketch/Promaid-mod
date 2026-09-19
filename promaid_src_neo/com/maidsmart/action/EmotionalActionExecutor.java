@@ -135,6 +135,10 @@ public final class EmotionalActionExecutor {
             if (!isFeedableFood(hs)) {
                 continue;
             }
+            // 实测五百七十九：冷却中的食物跳过（遗物类食物自己不消耗，见 MaidMealBridge）
+            if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(owner, hs)) {
+                continue;
+            }
             double sat = foodSaturation(hs, owner);
             if (sat > handSat) {
                 handSat = sat;
@@ -151,6 +155,10 @@ public final class EmotionalActionExecutor {
                 continue;
             }
             if (!isFeedableFood(stack)) {
+                continue;
+            }
+            // 实测五百七十九：冷却中的食物跳过（同手持扫描）
+            if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(owner, stack)) {
                 continue;
             }
             double sat = foodSaturation(stack, owner);
@@ -184,7 +192,7 @@ public final class EmotionalActionExecutor {
         ItemStack toGive;
         if (handSlot != -1 && handSat >= bestSat) {
             // 手持食物最优（同饱食度优先用手上，不翻背包）——v1.1.0 实测一百二十六：
-            // handItem 是扫描时刻的【快照】；消耗前核对当前手上仍是同种食物才 shrink
+            // handItem 是扫描时刻的【快照】；消耗前核对当前手上仍是同种食物
             //（防同 tick 手被隐藏槽/换手系统清空或替换）
             toGive = handItem;
             if (toGive.isEmpty()) {
@@ -194,12 +202,18 @@ public final class EmotionalActionExecutor {
             if (liveHand.isEmpty() || !liveHand.is(toGive.getItem())) {
                 return false;
             }
-            liveHand.shrink(1);
+            // v1.2.2 实测五百七十九：**不再在这里 shrink** —— 把真栈交给 feedFoodDirect，
+            // 由物品自己的 finishUsingItem 决定消耗几个（手搓扣一个会毁掉"吃完不消失"的遗物）
+            toGive = liveHand;
         } else {
-            toGive = maidInv.extractItem(bestSlot, 1, false);
+            // 同理：不再 extractItem(1)（提前摘走会让遗物类食物凭空消失），取槽位真栈
+            toGive = maidInv.getStackInSlot(bestSlot);
+            if (toGive.isEmpty()) {
+                return false;
+            }
         }
         if (!feedFoodDirect(maid, owner, toGive)) {
-            ItemHandlerHelper.insertItemStacked(maidInv, toGive, false);
+            // 失败 = 物品根本不能吃（无食物属性）：它一直在原处，什么都不用放回
             return false;
         }
         log.info("aid feed: maid={} owner={} foodLevel={} 阈值={} 喂了 {}",
@@ -238,14 +252,21 @@ public final class EmotionalActionExecutor {
             // eat(nutrition,satMod)+heal+手搓音效（与"自己吃"观感不一致）。
             // 注：1.20.1 的 mob eat 不触发 eat 粒子（粒子在 Player eat 路径），
             // 但食物效果/音效与女仆自己吃完全相同。
-            owner.eat(owner.level(), food);
+            // v1.2.2 实测五百七十九【走物品自己的 finishUsingItem】——原地结算：
+            // 普通食物（Item.finishUsingItem 默认实现）与旧版 eat() **完全等价**；而重写过
+            // 它的物品（例：奇异饰品「永恒牛排」= 吃副本 + 上冷却 + 原栈不消耗）才会按物品
+            // 自己的语义生效，不会被我们手搓的"扣一个"毁掉。
+            // 【必须先取 item 引用】进食后 food（活栈）可能变空，空栈 getItem() 是 AIR，
+            // 下面的蜂蜜分支就认不出来了。
+            net.minecraft.world.item.Item fedItem = food.getItem();
+            int consumed = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(owner, food);
             // 系统提示喂了什么（getHoverName = getHoverName）
             // v1.1.0 实测二百七十四：建造女仆静默非建造字幕（气泡已由 mixin 拦）
             if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
                 owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                         "\u00a7a[maid_smart] 女仆喂你吃了 " + foodName));
             }
-            if (food.getItem() == net.minecraft.world.item.Items.HONEY_BOTTLE) { // honey_bottle
+            if (consumed > 0 && fedItem == net.minecraft.world.item.Items.HONEY_BOTTLE) { // honey_bottle
                 owner.removeEffect(net.minecraft.world.effect.MobEffects.POISON); // 解中毒
                 net.minecraft.world.item.Item bottle = net.minecraft.core.registries.BuiltInRegistries.ITEM
                         .get(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
