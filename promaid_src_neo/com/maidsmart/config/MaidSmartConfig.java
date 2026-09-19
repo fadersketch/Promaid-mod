@@ -493,6 +493,76 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 关掉则那一类也完全按空袭间隔来。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN;
+
+    // ================= 空袭数值（v1.2.2 实测五百八十一：原来全是 MaidFlightCombatBehavior 里的硬编码常量，现在全部可调；配置面板：战斗与自保 → 空袭数值） =================
+    /** 起飞段时长·近战（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_LAUNCH_TICKS_MELEE;
+    /** 起飞段时长·远程（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_LAUNCH_TICKS_RANGED;
+    /** 起飞仰角·近战（正切值）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_LAUNCH_CLIMB_TAN_MELEE;
+    /** 起飞仰角·远程（正切值）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_LAUNCH_CLIMB_TAN_RANGED;
+    /** 起飞触发距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_LAUNCH_RANGE;
+    /** 占位高度容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_ALTITUDE_TOLERANCE;
+    /** 起跳等待上限（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_JUMP_TICKS;
+    /** 烟花最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_FIREWORK_COOLDOWN;
+    /** 羽扇最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_FAN_COOLDOWN;
+    /** 收翅俯冲触发距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_SMASH_RANGE;
+    /** 猛击命中判定距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_SMASH_HIT_RANGE;
+    /** 范围强制命中半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_FORCED_HIT_RADIUS;
+    /** 猛击下落加成门槛（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_SMASH_MIN_FALL;
+    /** 猛击段最长（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_SMASH_MAX_TICKS;
+    /** 俯仰限幅·抬头（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_MAX_PITCH_UP;
+    /** 俯仰限幅·低头（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_MAX_PITCH_DOWN;
+    /** 盘旋半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_ORBIT_RADIUS;
+    /** 期望盘旋高度（目标上方格数）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_HEIGHT;
+    /** 高度修正增益。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_GAIN;
+    /** 高度修正偏置（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_BIAS;
+    /** 掉高容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_BOOST_DROP;
+    /** 盘旋抬头上限（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_ORBIT_UP_MAX;
+    /** 盘旋低头上限（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_ORBIT_DOWN_MAX;
+    /** 掉高补推间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_RANGED_BOOST_INTERVAL;
+    /** 补推抬头窗口（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_RANGED_BOOST_AIM_TICKS;
+    /** 补推仰角（度）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_BOOST_PITCH;
+    /** 远程开火基础间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_RANGED_SHOT_COOLDOWN;
+    /** 远程射程（格，弓弩）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_ATTACK_RANGE;
+    /** 弹开触发半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_PUSH_RADIUS;
+    /** 弹开水平速度。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_PUSH_SPEED;
+    /** 弹开抬升速度。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_PUSH_UP;
+    /** 弹开保持（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.IntValue AIR_RAID_RANGED_PUSH_TICKS;
+    /** 冲刺最小距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DASH_BOOST_MIN_RANGE;
+    /** 冲刺最大距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DASH_BOOST_MAX_RANGE;
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
      *
@@ -1615,6 +1685,117 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测八十五：动态威胁圈——远程风筝怪不再引发"还原又中箭"反复横跳
         COMBAT_AUTO_SWITCH_EXPAND = BUILDER.comment("动态威胁圈（秒，默认 10）：最近伤害过女仆的敌对生物即使站在还原半径（8 格）之外，只要它还活着、距离不超过 32 格、且这个时间内有过接触，还原判定的威胁圈就自动放大把它包含进来——被远程怪压着打期间保持战斗态还击，不再'刚还原又中箭反复横跳'；怪死/走远/超窗后圈回落。0 = 关闭（只用固定半径）")
                 .translation("config.promaid.combat.autoSwitchThreatExpandSeconds").defineInRange("autoSwitchThreatExpandSeconds", 10, 0, 120);
+        BUILDER.pop();
+
+
+        // ---- 空袭数值（v1.2.2 实测五百八十一）----
+        // 需求原文：「关于空袭等各项数值也要有一个详细的配置面板，在模组详细配置。」
+        // 这 30 多项原本是 MaidFlightCombatBehavior 里的硬编码常量（起飞时长/仰角/俯冲判定/
+        // 盘旋半径/期望高度/补推窗口/开火射程/弹开强度/冲刺距离……），现在逐项搬进配置，
+        // **默认值与原常量一字未改**（不改行为，只是把旋钮交给玩家）。面板：战斗与自保 → 空袭数值。
+        BUILDER.comment("空袭各项数值（配置面板：战斗与自保 → 空袭数值）").translation("config.promaid.airRaid").push("airRaid");
+        AIR_RAID_LAUNCH_TICKS_MELEE = BUILDER.comment("起飞段时长·近战（tick，默认 30 = 1.5 秒）：放烟花后维持「背离敌人 + 抬头」朝向的时长。近战靠这一段把高度拉起来（贴地滑翔位会被清掉），所以比远程长")
+                .translation("config.promaid.airRaid.launchTicksMelee")
+                .defineInRange("launchTicksMelee", 30, 5, 200);
+        AIR_RAID_LAUNCH_TICKS_RANGED = BUILDER.comment("起飞段时长·远程（tick，默认 20 = 1 秒）：远战只求悬停高度、不吃俯冲，故比近战短（爬太高反而够不到地面敌人）")
+                .translation("config.promaid.airRaid.launchTicksRanged")
+                .defineInRange("launchTicksRanged", 20, 5, 200);
+        AIR_RAID_LAUNCH_CLIMB_TAN_MELEE = BUILDER.comment("起飞仰角正切·近战（默认 1.88 ≈ 62°）：1 = 45°、1.88 ≈ 62°、2.75 ≈ 70°。仰角过低她一放烟花就往目标方向压头，几 tick 内贴地、滑翔位被清掉即摔")
+                .translation("config.promaid.airRaid.launchClimbTanMelee")
+                .defineInRange("launchClimbTanMelee", 1.88, 0.0, 10.0);
+        AIR_RAID_LAUNCH_CLIMB_TAN_RANGED = BUILDER.comment("起飞仰角正切·远程（默认 1.0 = 45°）：远战起飞只要够悬停，平飞一段更早进入盘旋")
+                .translation("config.promaid.airRaid.launchClimbTanRanged")
+                .defineInRange("launchClimbTanRanged", 1.0, 0.0, 10.0);
+        AIR_RAID_LAUNCH_RANGE = BUILDER.comment("地面重新起飞的最大水平距离（格，默认 20）：太远就先跑过去再起飞，避免「越炸越远」；只按水平距离算，比她高很多的敌人不受这条限制")
+                .translation("config.promaid.airRaid.launchRange")
+                .defineInRange("launchRange", 20.0, 0.0, 64.0);
+        AIR_RAID_ALTITUDE_TOLERANCE = BUILDER.comment("占位高度容差（格，默认 10）：她比目标低不超过这么多格就视为已占位、直接走原链路（近战俯冲 / 远程盘旋）；同时也是起飞朝向的判据（容差内起飞走「背离 + 抬头」）")
+                .translation("config.promaid.airRaid.altitudeTolerance")
+                .defineInRange("altitudeTolerance", 10.0, 0.0, 64.0);
+        AIR_RAID_JUMP_TICKS = BUILDER.comment("起跳等待上限（tick，默认 3）：先跳一下离地、下一 tick 再放烟花才吃得到推力；这么久还没离地（低矮空间）就放弃本轮")
+                .translation("config.promaid.airRaid.jumpTicks")
+                .defineInRange("jumpTicks", 3, 0, 20);
+        AIR_RAID_FIREWORK_COOLDOWN = BUILDER.comment("烟花最小间隔（tick，默认 30 = 1.5 秒）：两次点火之间的最短间隔")
+                .translation("config.promaid.airRaid.fireworkCooldown")
+                .defineInRange("fireworkCooldown", 30, 0, 400);
+        AIR_RAID_FAN_COOLDOWN = BUILDER.comment("羽扇最小间隔（tick，默认 20 = 1 秒，与原版 getUseDuration 一致）：两次挥扇之间的最短间隔")
+                .translation("config.promaid.airRaid.fanCooldown")
+                .defineInRange("fanCooldown", 20, 0, 400);
+        AIR_RAID_SMASH_RANGE = BUILDER.comment("收翅俯冲触发距离（格，默认 3.5）：水平距离进入此值即取消滑翔、收翅自由落体俯冲")
+                .translation("config.promaid.airRaid.smashRange")
+                .defineInRange("smashRange", 3.5, 0.5, 32.0);
+        AIR_RAID_SMASH_HIT_RANGE = BUILDER.comment("猛击命中判定距离（格，默认 4.0）：按「点到本 tick 位移线段」算距离，俯冲 1~2 格/tick 也不会整段穿过去")
+                .translation("config.promaid.airRaid.smashHitRange")
+                .defineInRange("smashHitRange", 4.0, 0.5, 32.0);
+        AIR_RAID_FORCED_HIT_RADIUS = BUILDER.comment("范围强制命中半径（格，默认 2.5）：身边这个范围内的其他合法敌对目标也会被结算一次猛击（俯冲时判定框经常判不到贴身怪）")
+                .translation("config.promaid.airRaid.forcedHitRadius")
+                .defineInRange("forcedHitRadius", 2.5, 0.0, 16.0);
+        AIR_RAID_SMASH_MIN_FALL = BUILDER.comment("猛击下落加成门槛（格，默认 1.5）：重锤下落加成要求 fallDistance > 1.5（恰好等于 1.5 时加成仍为 0），写回时取比这个值大一点")
+                .translation("config.promaid.airRaid.smashMinFall")
+                .defineInRange("smashMinFall", 1.5, 0.0, 20.0);
+        AIR_RAID_SMASH_MAX_TICKS = BUILDER.comment("猛击段最长（tick，默认 20 = 1 秒）：超时按打空收尾（不摔伤、切回滑翔）")
+                .translation("config.promaid.airRaid.smashMaxTicks")
+                .defineInRange("smashMaxTicks", 20, 1, 200);
+        AIR_RAID_MAX_PITCH_UP = BUILDER.comment("阶段二俯仰限幅·抬头（度，默认 55）：飞向目标时抬头不超过这个角度")
+                .translation("config.promaid.airRaid.maxPitchUp")
+                .defineInRange("maxPitchUp", 55.0, 0.0, 89.0);
+        AIR_RAID_MAX_PITCH_DOWN = BUILDER.comment("阶段二俯仰限幅·低头（度，默认 70）：飞向目标时低头不超过这个角度（90 = 垂直扎下去）")
+                .translation("config.promaid.airRaid.maxPitchDown")
+                .defineInRange("maxPitchDown", 70.0, 0.0, 89.0);
+        AIR_RAID_ORBIT_RADIUS = BUILDER.comment("远程空袭的盘旋半径（格，默认 10）：以目标为圆心维持的水平距离，靠径向修正拉回圈上")
+                .translation("config.promaid.airRaid.orbitRadius")
+                .defineInRange("orbitRadius", 10.0, 2.0, 48.0);
+        AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，实测五百七十九由 3.5 提到 10")
+                .translation("config.promaid.airRaid.rangedHoldHeight")
+                .defineInRange("rangedHoldHeight", 10.0, 0.0, 64.0);
+        AIR_RAID_RANGED_HOLD_GAIN = BUILDER.comment("高度修正增益（默认 5.0）：高度误差 → 俯仰角度的比例系数，越大越急着回到期望高度")
+                .translation("config.promaid.airRaid.rangedHoldGain")
+                .defineInRange("rangedHoldGain", 5.0, 0.0, 50.0);
+        AIR_RAID_RANGED_HOLD_BIAS = BUILDER.comment("高度修正偏置（格，默认 1.0）：给高度误差加一点正偏置，让她略微偏高于期望高度（留余量）")
+                .translation("config.promaid.airRaid.rangedHoldBias")
+                .defineInRange("rangedHoldBias", 1.0, -20.0, 20.0);
+        AIR_RAID_RANGED_BOOST_DROP = BUILDER.comment("掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补一口推（烟花 / 位移法术），实测五百七十八由 3.0 收到 0.5")
+                .translation("config.promaid.airRaid.rangedBoostDrop")
+                .defineInRange("rangedBoostDrop", 0.5, 0.0, 20.0);
+        AIR_RAID_RANGED_ORBIT_UP_MAX = BUILDER.comment("盘旋抬头上限（度，默认 45）：高度修正抬头时的角度上限")
+                .translation("config.promaid.airRaid.rangedOrbitUpMax")
+                .defineInRange("rangedOrbitUpMax", 45.0, 0.0, 89.0);
+        AIR_RAID_RANGED_ORBIT_DOWN_MAX = BUILDER.comment("盘旋低头上限（度，默认 35）：高度修正低头时的角度上限（低头会掉速掉高，所以比抬头上限小）")
+                .translation("config.promaid.airRaid.rangedOrbitDownMax")
+                .defineInRange("rangedOrbitDownMax", 35.0, 0.0, 89.0);
+        AIR_RAID_RANGED_BOOST_INTERVAL = BUILDER.comment("掉高补推间隔（tick，默认 100 = 5 秒）：两次补推（烟花 / 位移法术）之间的最短间隔")
+                .translation("config.promaid.airRaid.rangedBoostInterval")
+                .defineInRange("rangedBoostInterval", 100, 0, 1200);
+        AIR_RAID_RANGED_BOOST_AIM_TICKS = BUILDER.comment("补推抬头窗口（tick，默认 10 = 0.5 秒）：补推成功后就按「抬头朝目标」维持这么久，把推力吃满才会回到盘旋朝向")
+                .translation("config.promaid.airRaid.rangedBoostAimTicks")
+                .defineInRange("rangedBoostAimTicks", 10, 1, 100);
+        AIR_RAID_RANGED_BOOST_PITCH = BUILDER.comment("补推仰角（度，默认 -45 = 抬头 45°）：掉高窗口里朝目标抬头的角度（烟花与位移法术共用同一口径）")
+                .translation("config.promaid.airRaid.rangedBoostPitch")
+                .defineInRange("rangedBoostPitch", -45.0, -89.0, 0.0);
+        AIR_RAID_RANGED_SHOT_COOLDOWN = BUILDER.comment("远程开火基础间隔（tick，默认 20 = 1 秒）：弓弩的基础射击间隔；快速装填附魔会按比例缩短（最低 4 tick、不超过本值）")
+                .translation("config.promaid.airRaid.rangedShotCooldown")
+                .defineInRange("rangedShotCooldown", 20, 1, 200);
+        AIR_RAID_RANGED_ATTACK_RANGE = BUILDER.comment("远程射程（格，默认 24）：弓弩的 3D 距离射程（枪械用枪械模组自己的射程）；也是远程空袭锁敌的上限")
+                .translation("config.promaid.airRaid.rangedAttackRange")
+                .defineInRange("rangedAttackRange", 24.0, 4.0, 64.0);
+        AIR_RAID_RANGED_PUSH_RADIUS = BUILDER.comment("弹开触发半径（格，默认 3）：怪物贴到这么近就触发「近身弹开」（开关在落地缓冲那页）")
+                .translation("config.promaid.airRaid.rangedPushRadius")
+                .defineInRange("rangedPushRadius", 3.0, 0.0, 16.0);
+        AIR_RAID_RANGED_PUSH_SPEED = BUILDER.comment("弹开水平速度（默认 0.55）：弹开时施加的、远离威胁方向的水平速度大小")
+                .translation("config.promaid.airRaid.rangedPushSpeed")
+                .defineInRange("rangedPushSpeed", 0.55, 0.0, 5.0);
+        AIR_RAID_RANGED_PUSH_UP = BUILDER.comment("弹开抬升速度（默认 0.25）：弹开时同时给一点上升速度，避免弹开途中继续下坠")
+                .translation("config.promaid.airRaid.rangedPushUp")
+                .defineInRange("rangedPushUp", 0.25, 0.0, 5.0);
+        AIR_RAID_RANGED_PUSH_TICKS = BUILDER.comment("弹开保持（tick，默认 30 = 1.5 秒）：弹开速度持续施加这么久")
+                .translation("config.promaid.airRaid.rangedPushTicks")
+                .defineInRange("rangedPushTicks", 30, 0, 200);
+        AIR_RAID_DASH_BOOST_MIN_RANGE = BUILDER.comment("【提供速度】位移法术的最小施放距离（格，默认 6）：目标太近就不冲（会直接冲过头/扎进敌人身上）")
+                .translation("config.promaid.airRaid.dashBoostMinRange")
+                .defineInRange("dashBoostMinRange", 6.0, 0.0, 64.0);
+        AIR_RAID_DASH_BOOST_MAX_RANGE = BUILDER.comment("【提供速度】位移法术的最大施放距离（格，默认 28）：目标太远也不冲（冲刺是加速手段、不是位移追击）")
+                .translation("config.promaid.airRaid.dashBoostMaxRange")
+                .defineInRange("dashBoostMaxRange", 28.0, 0.0, 128.0);
         BUILDER.pop();
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
