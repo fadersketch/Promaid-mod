@@ -131,6 +131,20 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** v1.2.0：攻击冷却到期 gameTime——强制受击的间隔 = 女仆自己的攻击频率，不是无条件触发 */
     private static final Map<UUID, Long> ATTACK_READY = new HashMap<>();
 
+    /**
+     * v1.2.0（2026-09-18）：下一次可以在空袭中发起施法的 gameTime。
+     *
+     * 法术模组（Touhou Little Maid: Spell）自己管"吟唱多久、冷却多久、放哪个法术"，
+     * 这张表只管**我们这边的发起节奏**——不设间隔的话，飞在目标上方的那几个 tick 里
+     * 会每 tick 喊一次 {@code castSpell}（它内部虽然有 {@code isCasting} 去重，但连续
+     * 秒放会让"法术"彻底盖过"武器"，与需求（用武器打的同时顺带放法术）不符）。
+     */
+    private static final Map<UUID, Long> SPELL_NEXT_CAST = new HashMap<>();
+
+    /** 施法日志限频（每只女仆 30 秒至多一条）——空袭施法是常态，不节流会把 promaid.log 刷满 */
+    private static final Map<UUID, Long> SPELL_LAST_LOG = new HashMap<>();
+    private static final long SPELL_LOG_INTERVAL = 600L;
+
     /** v1.2.0 实测四百七十七【后门】本轮飞行周期内到过的最高 Y（每轮起跳重置）——
      *  重锤下落加成按"从最高点砸下来"算，见 forcedFallDistance。 */
     private static final Map<UUID, Double> MAX_Y = new HashMap<>();
@@ -196,6 +210,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_GUN_CD.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
+        SPELL_NEXT_CAST.remove(maidId);
+        SPELL_LAST_LOG.remove(maidId);
         MAX_Y.remove(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
@@ -242,6 +258,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_GUN_CD.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
+        SPELL_NEXT_CAST.remove(maidId);
         MAX_Y.remove(maidId);
         // 【刻意不动的两张表】
         //  - FIREWORK_READY：烟花冷却必须跨过这次停止（否则同一秒能连放两枚）
@@ -265,6 +282,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_PUSH_LEFT.clear();
         RANGED_PUSH_LAST_LOG.clear();
         NOTIFY_READY.clear();
+        SPELL_NEXT_CAST.clear();
+        SPELL_LAST_LOG.clear();
         MAX_Y.clear();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
@@ -602,6 +621,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             tickRangedAir(level, maid, target, id, gameTime);
             return;
         }
+        // 【空袭·法术层】近战空袭的施法时机：此刻她已在目标上方、正要压低朝向俯冲——
+        // 法术模组的"吟唱期间把朝向钉在目标上"与这一段的意图一致。
+        // 放在 faceTarget 之前，让本 tick 的朝向仍以空袭的为准（吟唱抢朝向发生在下一 tick）。
+        // 爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见 tryCastSpell 的注释。
+        tryCastSpell(maid, target, id, gameTime);
+
         suppressVanillaMelee(maid);
         faceTarget(maid, target);
 
@@ -1361,6 +1386,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
         // ② 开火（必须放在"朝向"之前——枪械开火会自己把身体拧向目标，随后要把盘旋朝向
         //    盖回去，否则滑翔会顺着那次瞄准把女仆直接拉向目标，"盘旋"就散了）
+        //    法术同款：法术模组的吟唱也会拧朝向，所以同样放在"朝向"之前一起被盖回去。
+        tryCastSpell(maid, target, id, gameTime);
         fireRanged(maid, target, id, gameTime);
 
         // ③ v1.2.0 实测五百零三【近身弹开】：怪物贴到 3 格内就给一个"远离怪物"的速度矢量，
@@ -1574,6 +1601,66 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                             + threatName + "）");
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * v1.2.0（2026-09-18）【空袭·法术层】——在空袭途中顺带向当前目标发起一次施法。
+     *
+     * 【需求】"女仆能使用近战/远程空袭的默认武器（近战：鞘翅+重锤，远程：鞘翅+弓/枪械）
+     * 的同时进行法术释放"——所以这是一个**叠加层**，不是新任务、也不占武器位：
+     * 武器三件套（鞘翅 + 武器 + 烟花）一条不变，法术书放在**饰品栏/背包**里就行
+     * （法术模组自己扫背包与 curios，不看主手）。
+     *
+     * 【为什么只在这两个相位调用】法术模组在吟唱期间每 tick 把她的朝向拧向目标
+     * （{@code forceLookAtTarget} 直写 yaw/pitch），而鞘翅滑翔的转向力来自视线方向
+     * ——吟唱一旦开始，**我们这一 tick 之后写的朝向都会被它下一 tick 覆盖**。
+     * 所以发起时机只挑"本来就该面向目标、且不需要背离抬头"的两处：
+     * <ul>
+     *   <li>远战盘旋（{@link #tickRangedAir} ② 开火之前）——盘旋本来就是朝目标；</li>
+     *   <li>近战"已在目标上方、正要压低朝向俯冲"那一刻（阶段二 {@code faceTarget} 之前）
+     *       ——这时她要的就是对着目标下去，吟唱把朝向钉在目标上不冲突；</li>
+     * </ul>
+     * 而**爬升（{@link #tickClimbToAltitude}）与收翅猛击那一段不发起施法**：前者要求
+     * "背离敌人 + 抬头"把烟花推力吃满，后者是"这一轮唯一的致命一击"，都不能被吟唱抢朝向。
+     *
+     * 【距离口径】默认 24 格 = 法术模组自己的 {@code Config.maxSpellRange}（其行为层
+     * 用的就是这个上限）。我们直连 provider，它不会替我们拦距离，所以这里必须自己判——
+     * 判据用**3D 距离**（空袭是立体作战，敌人常在斜上方）。
+     *
+     * @return true = 该相位这一 tick 发起了一次施法（实际法术成不成立由法术模组决定）
+     */
+    private boolean tryCastSpell(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST.get()) {
+            return false;
+        }
+        if (gameTime < SPELL_NEXT_CAST.getOrDefault(id, 0L)) {
+            return false;
+        }
+        double range = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE.get();
+        if (maid.distanceToSqr(target) > range * range) {
+            return false;
+        }
+        // v1.2.0 实测五百三十三：与开火同款"要看得见才出手"——隔墙施法既浪费冷却，
+        // 也会让"她在墙这边对着墙放法术"看起来像 bug（法术模组的弹道自己会撞墙）。
+        if (!SelfPreservationBehavior.hasSight(maid, target)) {
+            return false;
+        }
+        if (!MaidSpellCastCompat.castSpell(maid, target)) {
+            return false; // 没装法术模组 / 探针失败 → 静默不生效
+        }
+        SPELL_NEXT_CAST.put(id, gameTime
+                + com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL.get());
+        // 限频日志：确认"她在空中确实把法术交出去了"（法术成不成立由法术模组决定——
+        // 没带法术书 / 全在冷却时它会静默收下这条指令，这是它的口径，不是我们的 bug）
+        if (gameTime - SPELL_LAST_LOG.getOrDefault(id, Long.MIN_VALUE / 2) >= SPELL_LOG_INTERVAL) {
+            SPELL_LAST_LOG.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("空袭·法术",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 空中施法（目标 "
+                            + String.format(java.util.Locale.ROOT, "%.1f",
+                                    Math.sqrt(maid.distanceToSqr(target)))
+                            + " 格" + (ranged ? "，远程空袭" : "，近战空袭") + "）");
+        }
+        return true;
     }
 
     /**
