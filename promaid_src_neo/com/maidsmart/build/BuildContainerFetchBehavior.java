@@ -67,6 +67,8 @@ public class BuildContainerFetchBehavior extends Behavior<EntityMaid> {
             return false;
         }
         BuildPlan.PlanState ps = BuildPlan.getBoundPlanState(maid);
+        // v1.2.2 实测五百八十六（issue #14）：容器取料的材料匹配与就地建造同一口径
+        BlueprintLib.setMaterialScope(ps == null ? null : ps.blueprintId);
         if (ps == null || ps.paused || ps.steps == null || ps.steps.isEmpty()) {
             return false;
         }
