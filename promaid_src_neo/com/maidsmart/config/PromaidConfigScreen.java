@@ -334,7 +334,7 @@ public class PromaidConfigScreen extends Screen {
         REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
         SAFETY("女仆安全与区块", Group.SURVIVAL),
         FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
-        SCHEDULE("排班表", Group.MOVE),
+        SCHEDULE("排班表", Group.WORK), // 实测五百七十五：手册一直写「生产与工作 → 排班表」，面板却挂在移动与行为——按手册归位
         VOICE("语音与 TTS", Group.UI), HUD("显示与提示", Group.UI),
         UTILITY("交互与杂项", Group.SYSTEM), LOG("运行日志", Group.SYSTEM);
         final String title;
@@ -3415,6 +3415,22 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         }
     }
 
+    /**
+     * 实测五百七十五【窄窗口溢出】：物品网格右侧那几行悬停信息，按**最宽那行**把起点收进屏幕
+     * （`min(期望 x, 屏宽 − 6 − 宽)`，再兜底到 8）。旧版固定画在 `left + 16×20 + 12`，
+     * 小窗 / 大 GUI 缩放下右半截被直接切掉（反馈截图：喂食、喂水两个子页都中招）。
+     */
+    private void drawHoverInfo(GuiGraphics g, int infoX, int infoY, String[] lines, int[] colors) {
+        int widest = 0;
+        for (String s : lines) {
+            widest = Math.max(widest, this.font.width(s));
+        }
+        int x = Math.max(8, Math.min(infoX, this.width - 6 - widest));
+        for (int i = 0; i < lines.length; i++) {
+            g.drawString(this.font, Component.literal(lines[i]), x, infoY + i * 10, colors[i], false);
+        }
+    }
+
     // ---------- 渲染（标签按行位置画；无滚轮，全部静态布局） ----------
 
     /**
@@ -3684,8 +3700,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
         } else if (this.foodTable) {
             // v1.2.0 实测五百一十九：投喂食物勾选子页——网格里绿色勾=能吃 / 红叉=不能吃
-            String title = "\u00a7e投喂食物——点击图标切换「能不能吃」（\u00a7a\u2714 能吃\u00a7e / \u00a7c\u2716 不能吃\u00a7e）";
-            g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
+            String title = "\u00a7e投喂食物——点图标切换「能不能吃」（\u2714 能吃 / \u2716 不能吃）";
+            g.drawCenteredString(this.font, Component.literal(title),
+                    this.clampCenterX(title, cx), 10, 0xFFFFFF);
             int panelLeft = Math.max(8, cx - 280);
             int panelWidth = Math.min(560, w - 16);
             int left = panelLeft + 10;
@@ -3737,15 +3754,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 String hover = key == null ? "?" : key.toString();
                 String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
-                g.drawString(this.font,
-                        Component.literal("\u00a7f" + (hc.equals(hover) ? hover : hc)),
-                        infoX, infoY, 0xFFFFFF, false);
-                g.drawString(this.font, Component.literal("\u00a77" + hover),
-                        infoX, infoY + 10, 0xAAAAAA, false);
-                g.drawString(this.font, Component.literal(this.isFoodChecked(hover)
+                                this.drawHoverInfo(g, infoX, infoY, new String[]{
+                        "\u00a7f" + (hc.equals(hover) ? hover : hc),
+                        "\u00a77" + hover,
+                        this.isFoodChecked(hover)
                                 ? "\u00a7a当前：能吃（点击改成不能吃）"
-                                : "\u00a7c当前：不能吃（点击改回能吃）"),
-                        infoX, infoY + 20, 0xFFFFFF, false);
+                                : "\u00a7c当前：不能吃（点击改回能吃）"},
+                        new int[]{0xFFFFFF, 0xAAAAAA, 0xFFFFFF});
             } else {
                 int pages = this.creativePages();
                 if (pages > 1) {
@@ -3754,14 +3769,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                             infoX, infoY, 0x888888, false);
                 }
             }
-            String chkHint = "\u00a77共 " + totalFoods + " 种食物，当前可喂 " + feedableFoods
-                    + " 种；取消勾选即列入「不能吃」，下方列表可一键恢复";
+            String chkHint = "\u00a77共 " + totalFoods + " 种食物，可喂 " + feedableFoods
+                    + " 种（点图标切换；下方列表可恢复）";
             g.drawCenteredString(this.font, Component.literal(chkHint),
                     this.clampCenterX(chkHint, cx), this.height - 50, 0x888888);
         } else if (this.waterTable) {
             // 实测五百七十三：喂水白名单子页——网格里绿色勾=可以喂 / 红叉=不喂
-            String wTitle = "\u00a7e喂水白名单——点击图标切换「能不能喂」（\u00a7a\u2714 可以喂\u00a7e / \u00a7c\u2716 不喂\u00a7e）";
-            g.drawCenteredString(this.font, Component.literal(wTitle), cx, 10, 0xFFFFFF);
+            String wTitle = "\u00a7e喂水白名单——点图标切换「能不能喂」（\u2714 可以喂 / \u2716 不喂）";
+            g.drawCenteredString(this.font, Component.literal(wTitle),
+                    this.clampCenterX(wTitle, cx), 10, 0xFFFFFF);
             int wPanelLeft = Math.max(8, cx - 280);
             int wPanelWidth = Math.min(560, w - 16);
             int wLeft = wPanelLeft + 10;
@@ -3805,15 +3821,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 String hover = key == null ? "?" : key.toString();
                 String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
-                g.drawString(this.font,
-                        Component.literal("\u00a7f" + (hc.equals(hover) ? hover : hc)),
-                        wInfoX, wInfoY, 0xFFFFFF, false);
-                g.drawString(this.font, Component.literal("\u00a77" + hover),
-                        wInfoX, wInfoY + 10, 0xAAAAAA, false);
-                g.drawString(this.font, Component.literal(this.isWaterChecked(hover)
+                                this.drawHoverInfo(g, wInfoX, wInfoY, new String[]{
+                        "\u00a7f" + (hc.equals(hover) ? hover : hc),
+                        "\u00a77" + hover,
+                        this.isWaterChecked(hover)
                                 ? "\u00a7a当前：可以喂（点击改成不喂）"
-                                : "\u00a7c当前：不喂（点击加进白名单）"),
-                        wInfoX, wInfoY + 20, 0xFFFFFF, false);
+                                : "\u00a7c当前：不喂（点击加进白名单）"},
+                        new int[]{0xFFFFFF, 0xAAAAAA, 0xFFFFFF});
             } else {
                 int pages = this.creativePages();
                 if (pages > 1) {
@@ -3822,8 +3836,8 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                             wInfoX, wInfoY, 0x888888, false);
                 }
             }
-            String wHint = "\u00a77候选 " + wTotal + " 种饮品，当前白名单 " + this.countDrinkables()
-                    + " 种；留空白名单 = 不喂水。水瓶只认纯净水，其它药水永不喂";
+            String wHint = "\u00a77候选 " + wTotal + " 种饮品，白名单 " + this.countDrinkables()
+                    + " 种；留空 = 不喂水（potion 只认纯净水）";
             g.drawCenteredString(this.font, Component.literal(wHint),
                     this.clampCenterX(wHint, cx), this.height - 50, 0x888888);
         } else if (this.altTable) {
@@ -4184,11 +4198,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     /** 实测四百二十三：大类页的一句话说明。 */
     private static String groupHint(Group g) {
         return switch (g) {
-            case WORK -> "\u00a77建造 / 挖矿 / 伐木 / 烧制酿造 / 农场宰杀";
+            case WORK -> "\u00a77建造 / 挖矿 / 伐木 / 烹饪与酿造 / 农场宰杀 / 排班表";
             case AI -> "\u00a77记忆 / 对话 / 感知 / 情绪 / AI 工具";
             case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害";
             case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
-            case MOVE -> "\u00a77跟随 / 空闲流畅 / 排班表 / 搭路";
+            case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路";
             case UI -> "\u00a77语音 TTS / 显示与气泡";
             case SYSTEM -> "\u00a77交互杂项 / 运行日志";
         };
