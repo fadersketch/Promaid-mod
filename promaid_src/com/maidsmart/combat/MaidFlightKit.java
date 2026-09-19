@@ -404,6 +404,20 @@ public final class MaidFlightKit {
         return hasInBackpack(maid, MaidFlightKit::isFirework);
     }
 
+    /** 实测五百六十三：身上是否有暮色森林孔雀羽扇（软兼容——暮色森林不在场恒 false） */
+    public static boolean hasFan(EntityMaid maid) {
+        return TwilightFanKit.hasFan(maid);
+    }
+
+    /**
+     * 实测五百六十三：飞行燃料 = 烟花火箭 <b>或</b> 暮色森林孔雀羽扇。
+     * 三件套的"燃料件"从单一烟花扩为二选一——有扇先用扇（推进照搬扇子自己的
+     * 公式、每挥一次按扇子自己的口径扣耐久），没扇才烧烟花。
+     */
+    public static boolean hasFlightFuel(EntityMaid maid) {
+        return hasFirework(maid) || hasFan(maid);
+    }
+
     /* v1.2.0 实测五百三十三：原 `hasExplosiveFirework`（只认带爆炸的烟花）已删除——
      * 弩的弹药门禁改为直接复用 {@link #hasFirework}（任意烟花火箭都算），
      * 见 `hasAmmoForRanged` 的弩分支。 */
@@ -415,7 +429,7 @@ public final class MaidFlightKit {
      * 没箭/没子弹就没必要起飞（需求："否则没必要起飞"）。近战空袭不受影响。
      */
     public static boolean isModeActive(EntityMaid maid) {
-        if (!(hasElytra(maid) && hasWeapon(maid) && hasFirework(maid))) {
+        if (!(hasElytra(maid) && hasWeapon(maid) && hasFlightFuel(maid))) {
             return false;
         }
         return !isRangedTask(maid) || hasAmmoForRanged(maid);
@@ -444,15 +458,16 @@ public final class MaidFlightKit {
             }
             sb.append(isRangedTask(maid) ? "远程武器" : "近战武器");
         }
-        if (!hasFirework(maid)) {
+        // 实测五百六十三：燃料件 = 烟花或羽扇，缺件文案跟着口径走
+        if (!hasFlightFuel(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
-            sb.append("烟花火箭");
+            sb.append("烟花火箭/羽扇");
         }
         // v1.2.0 实测四百九十五：远程空袭还要报"缺弹药"（否则玩家只看到"三件齐了却没起飞"，
         // 完全不知道为什么——这正是本次需求要修的可观测性问题）。
-        if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid) && hasFirework(maid)
+        if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid) && hasFlightFuel(maid)
                 && !hasAmmoForRanged(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");

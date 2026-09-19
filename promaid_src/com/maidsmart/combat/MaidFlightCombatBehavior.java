@@ -63,6 +63,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final int LAUNCH_TICKS_RANGED = 20;
     /** 烟花最小间隔（tick）——1.5 秒 */
     private static final int FIREWORK_COOLDOWN = 30;
+    /** 实测五百六十三：羽扇最小间隔（tick）——原版 getUseDuration=20，每秒最多挥一次 */
+    private static final int FAN_COOLDOWN = 20;
     /** 起飞仰角正切——**近战**用：1.88 ≈ 62°（回退到远战调参之前的原值）。
      *  近战链路是"起飞→扑击→收翅猛击→再起飞"的循环，每次重新起飞都要先把
      *  高度拉起来；仰角过低时她一放烟花就往目标方向压头，几 tick 内就贴地，
@@ -586,12 +588,27 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
-        return !onFireworkCooldown(maid, gameTime) && MaidFlightKit.hasFirework(maid);
+        // 实测五百六十三：燃料口径 = 烟花 或 孔雀羽扇（扇子优先，见 tryLaunch）
+        return !onFireworkCooldown(maid, gameTime) && MaidFlightKit.hasFlightFuel(maid);
     }
 
     private boolean tryLaunch(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         if (onFireworkCooldown(maid, gameTime)) {
             return false;
+        }
+        // 实测五百六十三【扇子优先】：有暮色森林孔雀羽扇就挥扇起飞——推进公式、
+        // 扇风盒、扣耐久全部照搬扇子自己（见 TwilightFanKit），使用节奏 = 原版
+        // getUseDuration 的 20 tick/次；没扇才走烟花。
+        if (TwilightFanKit.hasFan(maid) && TwilightFanKit.boostGlide(level, maid)) {
+            faceLaunchDirection(maid, target);
+            // 必须置位：与烟花同通道——鞘翅滑翔每 tick 吃朝向
+            MaidFlightKit.setGliding(maid, true);
+            LAUNCH_LEFT.put(id, this.ranged ? LAUNCH_TICKS_RANGED : LAUNCH_TICKS_MELEE);
+            WAIT_LAUNCH.remove(id);
+            FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
+            com.maidsmart.tool.PromaidLog.log("飞行作战",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 挥羽扇起飞");
+            return true;
         }
         ItemStack fw = MaidFlightKit.takeFirework(maid);
         if (fw.m_41619_()) {
@@ -1290,17 +1307,28 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         boolean tooLow = maid.m_20186_() < holdY - RANGED_BOOST_DROP;
         if (boostLeft <= 0 && tooLow && gameTime >= RANGED_NEXT_BOOST.getOrDefault(id, 0L)
                 && canLaunch(maid, gameTime)) {
-            ItemStack fw = MaidFlightKit.takeFirework(maid);
-            if (!fw.m_41619_()) {
-                launchFirework(level, maid, fw);
-                // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
-                FlightFireworkPose.show(maid, fw);
-                FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
+            // 实测五百六十三：扇子优先——掉高时挥羽扇维持高度（推进/扣耐久照搬扇子
+            // 自己，节奏 20t），没扇才烧烟花
+            if (TwilightFanKit.hasFan(maid) && TwilightFanKit.boostGlide(level, maid)) {
+                FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
                 RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
                 RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
                 boostLeft = RANGED_BOOST_AIM_TICKS;
                 com.maidsmart.tool.PromaidLog.log("远程空袭",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高补烟花");
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高挥羽扇");
+            } else {
+                ItemStack fw = MaidFlightKit.takeFirework(maid);
+                if (!fw.m_41619_()) {
+                    launchFirework(level, maid, fw);
+                    // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
+                    FlightFireworkPose.show(maid, fw);
+                    FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
+                    RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
+                    RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
+                    boostLeft = RANGED_BOOST_AIM_TICKS;
+                    com.maidsmart.tool.PromaidLog.log("远程空袭",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高补烟花");
+                }
             }
         }
 

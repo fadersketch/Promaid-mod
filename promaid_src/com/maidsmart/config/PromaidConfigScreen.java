@@ -2448,8 +2448,9 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("切段后大脑自愈", MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.get(),
                 v -> MaidSmartConfig.MISC_SCHEDULE_FORCE_BRAIN_REFRESH.set(v), "段任务应用成功后 3 秒，若女仆任务仍是段任务但脑内无任何工作记忆（非坐姿站桩可能被 TLM 脑活动卡住），强制 refreshBrain 一次重建 AI（默认开，借鉴 TLM-Sincerely FORCE_BRAIN_REFRESH_ON_STUCK）；关 = 完全信任 TLM"));
         // v1.1.0 实测一百八十三：排班/home 模式活动半径下限
+        // v1.2.2 实测五百六十二：默认回归 12（TLM 原版量级），语义改为"工作区域"圈
         this.rows.add(new NumRow("排班活动半径（格）", String.valueOf(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get()),
-                s -> setInt(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE, s), "排班/在家模式下女仆的活动半径下限（默认 32；TLM 原版工作/空闲/睡觉半径只有 8~16 格，稍远就被拉回）——取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住"));
+                s -> setInt(MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE, s), "排班/在家模式下女仆的「工作区域」半径下限（默认 12，与 TLM 原版工作半径同量级）——任务选点/散步/巡逻都被钳在工位锚点的这个圈内，收工出圈会被送回；想让她大范围干活就调大（8~512），或潜行+中键把工位标到目标处。取 max(本值, TLM 设置) 生效"));
     }
 
     private void logRows() {

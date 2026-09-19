@@ -12,7 +12,8 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * MAID_WORK_RANGE / MAID_IDLE_RANGE / MAID_SLEEP_RANGE（默认只有 8~16 格）
  * 收紧女仆活动半径——原版"限制区"机制下女仆出圈会被拉回，排班状态稍微离远
  * 一点就不行。本 mixin 把这三处半径取值改为 max(promaid「排班活动半径」,
- * TLM 设置)——promaid 值是下限（默认 32），TLM 调更大也尊重。
+ * TLM 设置)——promaid 值是下限（实测五百六十二起默认 12，回归 TLM 原版量级），
+ * TLM 调更大也尊重。
  */
 @Mixin(SchedulePos.class)
 public abstract class ScheduleRangeMixin {

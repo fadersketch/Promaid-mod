@@ -93,7 +93,8 @@ if (++throttle < 80) {
                 }
             }
             // home 锚点：restrictCenter（TLM restrictTo 每 2 秒刷新）→ schedulePos 最近点 → 当前位置
-            BlockPos center = maid.getRestrictCenter();
+            // 实测五百六十二：锚点链去掉"当前位置"兜底（跟随人漂移）；圈心排除零点
+            BlockPos center = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
             if (center == null) {
                 var sp = maid.getSchedulePos();
                 if (sp != null && sp.isConfigured()) {
@@ -101,7 +102,7 @@ if (++throttle < 80) {
                 }
             }
             if (center == null) {
-                center = maid.blockPosition();
+                return;
             }
             // 巡逻半径：home 限制半径内（留 1 格余量防触发越界传送），上限 12 格
             int radius = Math.max(3, Math.min((int) maid.getRestrictRadius() - 1, 12));

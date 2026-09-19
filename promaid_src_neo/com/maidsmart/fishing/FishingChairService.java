@@ -148,6 +148,15 @@ public final class FishingChairService {
         BlockPos stand = findWaterSpot(world, maid);
         boolean far = false;
         if (stand == null) {
+            // 实测五百六十二：home（不跟随/排班）模式不跑限制圈外——圈外生成的坐垫
+            // 要么被原版 FindSit 的圈内过滤（isWithinRestriction）拒收、要么走向
+            // 目标被出圈清掉（60 秒弃疗循环）。提示主人把工作区域标到水边（潜行+
+            // 中键）；跟随模式没有限制圈，照旧大范围找水。
+            if (maid.isHomeModeEnable()) {
+                maid.getChatBubbleManager().addTextChatBubble(
+                        "我的活动范围里没有能坐下的水边～主人可以潜行+中键水边方块，把我的工作区域标到那里");
+                return;
+            }
             // v1.5.255：12 格内没有 → 大范围扫描最近水域（限频 30 秒——大扫描
             // 是主线程逐格检查，不能高频跑）。找到则生成坐垫并自动走向岸边
             //（实测：女仆在地下空洞 12 格内无水 → 一直不放坐垫）
@@ -236,7 +245,10 @@ public final class FishingChairService {
                             continue; // 鱼钩落点上方需空气
                         }
                         BlockPos stand = findBank(level, w);
-                        if (stand != null) {
+                        // 实测五百六十二：home 模式只认限制圈内的岸边（工作区域口径），
+                        // 圈外的水对面前的她而言"看得见坐不了"，与原版 FindSit 同拒
+                        if (stand != null
+                                && com.maidsmart.follow.WorkAreaClamp.allows(maid, stand)) {
                             return stand;
                         }
                     }
@@ -293,6 +305,8 @@ public final class FishingChairService {
                         }
                         stats[1]++;
                         BlockPos stand = findBank(level, w);
+                        // 实测五百六十二：本函数只服务跟随模式（home 模式已在
+                        // tryAutoChair 提前返回、不跑远水扫描）——这里没有圈可钳
                         if (stand != null) {
                             return stand;
                         }

@@ -1,0 +1,182 @@
+package com.maidsmart.combat;
+
+import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.core.particles.ParticleTypes;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvent;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.Projectile;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
+import net.minecraftforge.registries.ForgeRegistries;
+
+/**
+ * 实测五百六十三：空袭 × 暮色森林【孔雀羽扇】软兼容。
+ *
+ * 需求原文："空袭可以兼容一下暮色森林的孔雀羽扇，也和烟花火箭一样可以起飞（起飞力度
+ * 及后续使用烟花的路段都照搬孔雀羽扇自己），每使用一次都使用孔雀羽扇自己的扣耐久机制"。
+ *
+ * 【全部照搬 1.20.1 / 1.21.1 两版 PeacockFanItem 反编译实证的原版数值】：
+ * <ul>
+ *   <li><b>滑翔助推</b>（use 的滑翔分支）：Δv = 速度 + 视线×0.1 + (视线×2 − 速度)×0.5
+ *       + 竖直 1.25——女仆带鞘翅滑翔，与玩家持扇滑翔同一份推力；</li>
+ *   <li><b>扇风盒</b>（getEffectAABB/fanEntitiesInAABB）：视线方向前 3 格、半径 2 格，
+ *       盒内 isPushable 生物 / 掉落物 / 弹射物被 视线×2 的速度扇飞——空袭途中顺带扇开
+ *       贴脸的怪（友军由友军风免闸口自行拦，见 FriendlyWindGuard）；</li>
+ *   <li><b>扣耐久</b>（use 的服务端分支）：{@code hurtAndBreak(扇飞数 + 1)}——
+ *       与原版逐字同口径，含耐久附魔的随机豁免；对玩家给出的扇子照常消耗；</li>
+ *   <li><b>使用节奏</b>（getUseDuration = 20）：每 20 tick（1 秒）最多挥一次；</li>
+ *   <li><b>音效/粒子</b>：TF 自己的 item.fan.whoosh + 云朵粒子。</li>
+ * </ul>
+ *
+ * 【为什么是软兼容】不 import 任何 TF 类：扇子按注册名 twilightforest:peacock_fan
+ * 识别（ForgeRegistries 运行时查表），音效按注册名取——暮色森林不在场时本类全部
+ * 静默返回 false / 空物品，零开销零崩溃。也不搬 TF 的方块扇风（吹灭蜡烛/吹散花）
+ * ——那是玩家使用路径的彩蛋，女仆空中挥扇不涉及，扇飞数里也不计入。
+ *
+ * 【能量对比】烟花 = 一次性弹药（30 tick 推力）；羽扇 = 可修装备（20 tick 一挥、
+ * 每挥 1+ 耐久）——三件套的"飞行燃料"口径扩为【烟花 或 羽扇】，有扇先用扇。
+ */
+public final class TwilightFanKit {
+    /** 暮色森林孔雀羽扇的注册名（1.20.1 与 1.21.1 相同） */
+    public static final String FAN_ID = "twilightforest:peacock_fan";
+    /** 原版 use 持续 20 tick（getUseDuration）——扇子的自然使用节奏 */
+    public static final int FAN_USE_INTERVAL = 20;
+    /** 扇风盒：视线方向前 3 格、半径 2 格（PeacockFanItem 同值） */
+    private static final double FAN_RANGE = 3.0;
+    private static final double FAN_RADIUS = 2.0;
+
+    private TwilightFanKit() {
+    }
+
+    /** 是否孔雀羽扇（按注册名识别，暮色森林不在场时恒 false） */
+    public static boolean isFan(ItemStack stack) {
+        if (stack == null || stack.m_41619_()) {
+            return false;
+        }
+        try {
+            ResourceLocation key = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            return key != null && FAN_ID.equals(key.toString());
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 找扇子：主手 → 副手 → 背包（与 MaidFlightKit 的烟花口径一致）；空手返回 EMPTY */
+    public static ItemStack findFan(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.f_41583_;
+        }
+        if (isFan(maid.m_21205_())) {
+            return maid.m_21205_();
+        }
+        if (isFan(maid.m_21206_())) {
+            return maid.m_21206_();
+        }
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (isFan(inv.getStackInSlot(i))) {
+                    return inv.getStackInSlot(i);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** 身上是否有孔雀羽扇 */
+    public static boolean hasFan(EntityMaid maid) {
+        return !findFan(maid).m_41619_();
+    }
+
+    /**
+     * 挥一次扇子（空袭的"放烟花"等价动作）：滑翔助推 + 扇飞身前实体 + 扣耐久 + 音效粒子。
+     *
+     * @return true = 确实挥了（调用方按"本次推进已发生"处理）；false = 没有扇子/异常
+     */
+    public static boolean boostGlide(ServerLevel level, EntityMaid maid) {
+        ItemStack fan = findFan(maid);
+        if (fan.m_41619_() || level == null || maid == null) {
+            return false;
+        }
+        try {
+            Vec3 look = maid.m_20154_();
+            Vec3 mv = maid.m_20184_();
+            // 滑翔助推：与 TF use() 滑翔分支逐字同式
+            maid.m_20256_(mv.m_82520_(
+                    look.f_82479_ * 0.1 + (look.f_82479_ * 2.0 - mv.f_82479_) * 0.5,
+                    look.f_82480_ * 0.1 + (look.f_82480_ * 2.0 - mv.f_82480_) * 0.5 + 1.25,
+                    look.f_82481_ * 0.1 + (look.f_82481_ * 2.0 - mv.f_82481_) * 0.5));
+            int fanned = fanEntities(level, maid, look);
+            damageFan(maid, fan, fanned);
+            playWhoosh(level, maid);
+            fanParticles(level, maid, look);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 扇风盒：身前 3 格半径 2 内的可推实体被 视线×2 扇飞（返回扇飞数，计入耐久） */
+    private static int fanEntities(ServerLevel level, EntityMaid maid, Vec3 look) {
+        try {
+            Vec3 src = new Vec3(maid.m_20185_(),
+                    maid.m_20186_() + maid.m_20192_(), maid.m_20189_());
+            Vec3 dest = src.m_82520_(look.f_82479_ * FAN_RANGE,
+                    look.f_82480_ * FAN_RANGE, look.f_82481_ * FAN_RANGE);
+            AABB box = new AABB(dest.f_82479_ - FAN_RADIUS, dest.f_82480_ - FAN_RADIUS,
+                    dest.f_82481_ - FAN_RADIUS, dest.f_82479_ + FAN_RADIUS,
+                    dest.f_82480_ + FAN_RADIUS, dest.f_82481_ + FAN_RADIUS);
+            Vec3 moveVec = look.m_82490_(2.0);
+            int fanned = 0;
+            for (Entity e : level.m_45976_(Entity.class, box)) {
+                if (e == maid) {
+                    continue;
+                }
+                if (e.m_6094_() || e instanceof ItemEntity || e instanceof Projectile) {
+                    e.m_20334_(moveVec.f_82479_, moveVec.f_82480_, moveVec.f_82481_);
+                    fanned++;
+                }
+            }
+            return fanned;
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    /** 扣耐久：hurtAndBreak(扇飞数 + 1)——与 TF use() 同口径（含耐久附魔随机豁免） */
+    private static void damageFan(EntityMaid maid, ItemStack fan, int fanned) {
+        try {
+            fan.m_41622_(fanned + 1, maid,
+                    user -> user.m_21190_(net.minecraft.world.InteractionHand.MAIN_HAND));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** TF 自己的挥扇音效（注册名不存在=暮色森林不在场，静默跳过） */
+    private static void playWhoosh(ServerLevel level, EntityMaid maid) {
+        try {
+            SoundEvent snd = ForgeRegistries.SOUND_EVENTS.getValue(
+                    new ResourceLocation("twilightforest", "item.fan.whoosh"));
+            if (snd != null) {
+                level.m_5594_(null, maid.m_20183_(), snd, SoundSource.NEUTRAL, 1.0f, 1.0f);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 云朵粒子（TF 同款粒子，服务端 sendParticles 广播给附近玩家） */
+    private static void fanParticles(ServerLevel level, EntityMaid maid, Vec3 look) {
+        try {
+            level.m_8767_(ParticleTypes.f_123796_, maid.m_20185_(),
+                    maid.m_20186_() + maid.m_20192_(), maid.m_20189_(),
+                    10, look.f_82479_ * 1.5, look.f_82480_ * 1.5, look.f_82481_ * 1.5, 0.02);
+        } catch (Throwable ignored) {
+        }
+    }
+}

@@ -60,6 +60,87 @@ public final class ScheduleNetworking {
         r.playToServer(MaidCoordRequestPacket.TYPE, StreamCodec.ofMember(MaidCoordRequestPacket::encode, MaidCoordRequestPacket::decode), MaidCoordRequestPacket::handle);
         r.playToClient(MaidCoordPacket.TYPE, StreamCodec.ofMember(MaidCoordPacket::encode, MaidCoordPacket::decode), MaidCoordPacket::handle);
         r.playToServer(MaidTeleportToPacket.TYPE, StreamCodec.ofMember(MaidTeleportToPacket::encode, MaidTeleportToPacket::decode), MaidTeleportToPacket::handle);
+        // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
+        r.playToServer(MarkWorkPosPacket.TYPE, StreamCodec.ofMember(MarkWorkPosPacket::encode, MarkWorkPosPacket::decode), MarkWorkPosPacket::handle);
+    }
+
+    /* ==================== 实测五百六十二：潜行+中键 工位标记 ==================== */
+
+    /** C2S：玩家潜行+中键方块 → 把身边 32 格内自家 home 模式女仆的工位/休闲锚点
+     *  标到该处并立即 restrictTo。粉丝反馈的直接入口："不跟随状态下女仆找不到
+     *  工作区域"——标记=快速设定 TLM home 的工位锚点（复用原版 SchedulePos 骨架，
+     *  不另起一套定点系统）。睡眠锚点不动（夜间照常回原处）。 */
+    public static class MarkWorkPosPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<MarkWorkPosPacket> TYPE = new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "mark_work_pos"));
+        public final int x;
+        public final int y;
+        public final int z;
+
+        public MarkWorkPosPacket(int x, int y, int z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public static void encode(MarkWorkPosPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.x);
+            buf.writeInt(pkt.y);
+            buf.writeInt(pkt.z);
+        }
+
+        public static MarkWorkPosPacket decode(FriendlyByteBuf buf) {
+            return new MarkWorkPosPacket(buf.readInt(), buf.readInt(), buf.readInt());
+        }
+
+        public static void handle(MarkWorkPosPacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                if (!(ctx.player() instanceof ServerPlayer player)) {
+                    return;
+                }
+                if (!(player.level() instanceof ServerLevel level)) {
+                    return;
+                }
+                // 标记点距玩家 ≤64 格（客户端射线 8 格，这里防御恶意远标）
+                double dSq = player.distanceToSqr(pkt.x + 0.5, pkt.y + 0.5, pkt.z + 0.5);
+                if (dSq > 64.0 * 64.0) {
+                    return;
+                }
+                BlockPos pos = new BlockPos(pkt.x, pkt.y, pkt.z);
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                        player.getX() - 32, player.getY() - 32, player.getZ() - 32,
+                        player.getX() + 32, player.getY() + 32, player.getZ() + 32);
+                int n = 0;
+                for (net.minecraft.world.entity.Entity e : level.getEntitiesOfClass(
+                        net.minecraft.world.entity.Entity.class, box)) {
+                    if (!(e instanceof EntityMaid maid)
+                            || maid.getOwner() != player
+                            || !maid.isHomeModeEnable()) {
+                        continue;
+                    }
+                    var sp = maid.getSchedulePos();
+                    if (sp == null) {
+                        continue;
+                    }
+                    sp.setWorkPos(pos);
+                    sp.setIdlePos(pos);
+                    sp.setConfigured(true);
+                    sp.restrictTo(maid);
+                    n++;
+                }
+                String at = "(" + pkt.x + ", " + pkt.y + ", " + pkt.z + ")";
+                if (n > 0) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§a已把 " + n + " 名女仆的工作区域标到 " + at
+                                    + "——她们的任务选点/散步/巡逻都会收进这里（半径=「排班活动半径」）"));
+                } else {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§7附近 32 格内没有在家模式（不跟随/排班中）的女仆，标记没生效"));
+                }
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */
