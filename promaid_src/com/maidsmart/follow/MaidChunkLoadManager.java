@@ -312,6 +312,7 @@ public final class MaidChunkLoadManager {
             }
         }
         PENDING_SUMMON.clear();
+        AIR_DEFER_SINCE.clear(); // 实测五百六十五（PR #10）：滞空计时一并清场
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             TicketKey key = e.getValue();
             ServerLevel level = server.m_129880_(key.dim());
@@ -344,6 +345,51 @@ public final class MaidChunkLoadManager {
      * 的旧口径反转：home = 守家，主人过门/换维度也不跟（与同维度拉回、一键集合
      * 的口径一致）；想召回先解除她的排班/在家模式（见 summonAll）。
      */
+    /**
+     * 实测五百六十五（PR #10 移植）：空中让位计时起点（女仆 → 首次因"空中"被拦下的 gameTime）。
+     * 键用实体本体，随女仆卸载自动回收；releaseAll 时整表清空。
+     */
+    private static final Map<EntityMaid, Long> AIR_DEFER_SINCE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** 空中让位窗口（tick，300 = 15 秒）：距离/维度已经超线、又持续空中这么久 → 放弃让位、强拉回来 */
+    private static final long MAX_AIR_DEFER = 300L;
+
+    /**
+     * 实测五百六十五（PR #10 移植）：空中让位是否继续生效。
+     *
+     * 让位的本意是"别打断这一轮攻击"，而空袭女仆整个作战期间都在空中；不设上限时，
+     * 这道闸对"被卡在远处/别的维度"的女仆就是永久禁传（社区实测：45 分钟每 60 秒一条
+     * 「飞行作战进行中…不传」，客户端连实体都没有）。超过窗口就作废这一轮让位并清干净
+     * 空袭状态，让调用方继续往下走强拉。
+     *
+     * @return true = 已超时，调用方继续往下走（强拉）；false = 继续让位，调用方直接 return
+     */
+    private static boolean airDeferAllows(EntityMaid maid, String logKey, String logText) {
+        String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
+        long now = maid.m_9236_().m_46467_();
+        Long since = AIR_DEFER_SINCE.get(maid);
+        if (since == null || now - since < MAX_AIR_DEFER) {
+            if (since == null) {
+                AIR_DEFER_SINCE.put(maid, now);
+            }
+            throttledSkipLog(maid, logKey, name + " " + logText);
+            return false;
+        }
+        // ── 超时：距离/维度已经超线、又持续空中超过窗口 → 不再让位，强拉 ──
+        // 先把空袭/跃起状态清干净：否则传送把她放到主人身边后，静态表里那套
+        // "跃起中/滑翔中"还会继续拦住后续的传送链（同一个坑换到新维度重演）。
+        AIR_DEFER_SINCE.remove(maid);
+        try {
+            com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
+            com.maidsmart.combat.MaidFlightCombatBehavior.pauseRound(maid.m_20148_());
+            com.maidsmart.combat.MaidFlightCombatBehavior.forget(maid.m_20148_());
+        } catch (Throwable ignored) {
+        }
+        com.maidsmart.tool.PromaidLog.log("传送", name + " 持续空中让位超过 "
+                + (MAX_AIR_DEFER / 20) + " 秒（距离/维度已超线）→ 放弃本轮让位，强制拉回");
+        return true;
+    }
+
     public static void followIfCrossDimension(EntityMaid maid) {
         try {
             if (maid.m_213877_() || maid.m_21224_()) {
@@ -356,11 +402,28 @@ public final class MaidChunkLoadManager {
                 return; // 坐着的女仆不拉（建造强制坐下 = 玩家要她留在原地）
             }
             // v1.2.0【实测四百八十七】：飞行作战进行中不跨维度跟随——她正在扑向敌人，
-            // 跨维传送会把这一轮攻击直接打断。与下面"重锤跃起中"同口径；一轮打完自然恢复。
+            // 跨维传送会把这一轮攻击直接打断。
+            // 实测五百六十五（PR #10 移植）【滞空超时兜底——修"空袭女仆被困在异维度"】：
+            // 这道闸的语义是"别打断这一轮攻击"，不是"永远别传"。空袭女仆整个作战期间
+            // 都在空中，一旦她落在别的维度，这里就是永久禁传（社区实测：45 分钟每 60 秒
+            // 一条「飞行作战进行中…不传」，客户端连实体都没有）。口径：确认她确实与主人
+            // 不在同一维度后才开始计时，持续空中超过 MAX_AIR_DEFER 就作废这一轮让位、
+            // 清空袭状态后强拉。同维度不参与这里的计时（同维度远距召回由 trySameDimPull
+            // 与空袭牵引绳负责，不在这里抢）。
+            boolean crossDimAir = false;
+            try {
+                net.minecraft.world.entity.LivingEntity airOwner = maid.m_269323_();
+                crossDimAir = airOwner != null && airOwner.m_6084_()
+                        && maid.m_9236_() != airOwner.m_9236_();
+            } catch (Throwable ignored) {
+            }
             if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
-                throttledSkipLog(maid, "flight-air-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复");
-                return;
+                if (!crossDimAir || !airDeferAllows(maid, "flight-air-cross",
+                        "飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复")) {
+                    return;
+                }
+            } else {
+                AIR_DEFER_SINCE.remove(maid); // 落地了 → 计时清零
             }
             // v1.1.0 实测一百八十五：排班/在家模式 → 跨维度也不传（旧版漏判——
             // 一百三十一口径是"home 不拦跨维"；home 女仆被拉到主人新维度，
@@ -423,6 +486,7 @@ BlockPos stand = findStand(newLevel,
                     stand.m_123343_() + 0.5, java.util.Collections.emptySet(),
                     owner.m_146908_(), owner.m_146909_());
             // 传送后清理：摔落距离归零 + 停止旧导航 + 清残留速度
+            AIR_DEFER_SINCE.remove(maid); // 实测五百六十五（PR #10）：传送成功 → 计时清零
             maid.f_19789_ = 0.0f;
             maid.m_21573_().m_26569_();
             maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_);
@@ -960,10 +1024,26 @@ BlockPos stand = findStand(newLevel,
             // 那一刻（用户反馈："飞向敌人离地面较近的时候…触发自动传送，导致本次攻击
             // 被卡掉"）。isFlightAirborne 已并入"本轮攻击进行中"（起跳/爬升/收翅猛击/
             // 等待再放烟花），一轮打完即 restore，不会永久禁传。
+            // 实测五百六十五（PR #10 移植）【滞空超时兜底】：让位必须有界——先把距离算
+            // 出来：她确实该被拉回（水平超线或竖直搭太高）才启动计时；超过窗口（15 秒）
+            // 就强拉，免得"空袭女仆长期在空中"把这条链路也变成永久禁传。
+            int dist0 = com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get();
+            double dSq0 = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+            boolean shouldPull = dSq0 >= (double) dist0 * dist0
+                    || Math.abs(maid.m_20186_() - owner.m_20186_())
+                            >= com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get();
             if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
-                throttledSkipLog(maid, "flight-air-samedim", name
-                        + " 飞行作战进行中（滑翔/扑击），不拉回——本轮攻击结束后自然恢复");
-                return;
+                if (!shouldPull) {
+                    throttledSkipLog(maid, "flight-air-samedim", name
+                            + " 飞行作战进行中（滑翔/扑击），不拉回——本轮攻击结束后自然恢复");
+                    return; // 没到该拉的距离：纯让位，不计时
+                }
+                if (!airDeferAllows(maid, "flight-air-samedim",
+                        "飞行作战进行中（滑翔/扑击），不拉回——本轮攻击结束后自然恢复")) {
+                    return; // 确实该拉，但这一轮让位还没超时
+                }
+            } else {
+                AIR_DEFER_SINCE.remove(maid); // 落地了 → 计时清零
             }
             // v1.1.0 实测一百九十六：自保中不拉回（与跨维跟随同口径——低血/逃跑中拉
             // 回主人身边=送死；PRESERVE 期间由自保行为自己决定去向）
