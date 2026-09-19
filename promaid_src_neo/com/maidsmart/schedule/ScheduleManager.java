@@ -124,15 +124,13 @@ public final class ScheduleManager {
         //（日志实证此前的"应用段"全部来自保存/重入/战斗还原路径）。改用覆盖整个可玩
         // 范围的有限 AABB（x/z ±131072 = ±128km，y ±4096）：blockToSection 对有限值
         // 正常换算，循环覆盖所有已加载区块。
-        net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
         for (ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
             // 未预建 EntityMaid 桶的 section 被整段跳过，排班扫描扫不到该 section
             // 里的女仆 → 任务不随时间段切换
-            for (net.minecraft.world.entity.Entity e : level.getEntitiesOfClass(
-                    net.minecraft.world.entity.Entity.class, whole)) {
+            // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
+            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()
                         || !ScheduleData.isOn(maid)) {
                     continue;
