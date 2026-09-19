@@ -68,8 +68,12 @@ public final class TwilightFanKit {
      *
      * 所以这里只夹**合成后的竖直速度**（水平照搬原公式不动）：不高过这个值，
      * 也绝不低于当前速度（她本来冲得更快时不减速）。
+     *
+     * 【取值 1.05 的来历（实测五百七十六）】0.85 实机反馈"又有点太低了、飞太低难以发挥作用"，
+     * 要求"取玩家飞行高度的 1.25 倍左右"——0.85 在实机观感上≈玩家水平，故取 0.85 × 1.25 ≈ 1.06，
+     * 定为 1.05（仍远低于旧公式在低速挥扇时的 2.2）。
      */
-    private static final double FAN_MAX_UP = 0.85;
+    private static final double FAN_MAX_UP = 1.05;
 
     private TwilightFanKit() {
     }

@@ -439,6 +439,15 @@ public final class MaidFlightKit {
     private static final java.util.Map<java.util.UUID, Long> DASH_KIT_CACHE_TICK = new java.util.HashMap<>();
     private static final long DASH_KIT_CACHE_INTERVAL = 20L;
 
+    /** 实测五百七十六：女仆入世界（魂符放出/区块重载/跨维）时清掉她的法术书缓存——见负缓存注释 */
+    public static void forgetClimbSpellCache(java.util.UUID maidId) {
+        if (maidId == null) {
+            return;
+        }
+        DASH_KIT_CACHE.remove(maidId);
+        DASH_KIT_CACHE_TICK.remove(maidId);
+    }
+
     public static boolean hasClimbSpell(EntityMaid maid) {
         if (maid == null
                 || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get()) {
@@ -460,7 +469,9 @@ public final class MaidFlightKit {
             }
             boolean has = com.maidsmart.combat.MaidSpellCastCompat.hasDashSpell(maid, ids);
             DASH_KIT_CACHE.put(maid.getUUID(), has);
-            DASH_KIT_CACHE_TICK.put(maid.getUUID(), now);
+            // 实测五百七十六：**负结果只缓存 5 tick**——刚放出来时法术数据要一拍才就绪，
+            // 若把那一拍的 false 缓存满 20 tick，缺件提示会在这段时间里一直误报（同 NOTIFY_GRACE_TICKS）。
+            DASH_KIT_CACHE_TICK.put(maid.getUUID(), has ? now : now - (DASH_KIT_CACHE_INTERVAL - 5L));
             return has;
         } catch (Throwable ignored) {
             return false;

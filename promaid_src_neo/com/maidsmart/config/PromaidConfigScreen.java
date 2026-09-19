@@ -2423,6 +2423,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             this.rows.add(new NumRow("投喂触发口渴度", String.valueOf(MaidSmartConfig.AID_THIRST_THRESHOLD.get()),
                     s -> setInt(MaidSmartConfig.AID_THIRST_THRESHOLD, s), "投喂触发口渴度（4-20）：主人口渴值（Thirst Was Taken，0-20）低于此值自动喂水（默认 15）。判定位点 = 口渴值；效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还全走原版喝的路径；未装该模组时本页没有这两项"));
             // 实测五百七十三：与「投喂食物勾选」同款的图形化勾选子页（用户要求照搬喂食那套）
+            this.rows.add(new NumRow("喂水最低水质（0-3）",
+                    String.valueOf(MaidSmartConfig.AID_DRINK_MIN_PURITY.get()),
+                    s -> setInt(MaidSmartConfig.AID_DRINK_MIN_PURITY, s),
+                    "喂水最低水质（0-3，默认 2=可接受的）：装水容器必须达到这个等级才喂——口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的（默认）/ 3 纯净。只对装水容器生效（果汁/牛奶等没有水质概念的饮品不受影响）；填 0 = 脏水也喂。喂水白名单子页里每杯水都会标出它的水质"));
             this.rows.add(new BtnRow("喂水白名单",
                     "打开 →（可喂 " + this.countDrinkables() + " / 候选 " + this.countWaterCandidates() + "）",
                     () -> {
@@ -3821,13 +3825,27 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
                 String hover = key == null ? "?" : key.toString();
                 String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
-                                this.drawHoverInfo(g, wInfoX, wInfoY, new String[]{
-                        "\u00a7f" + (hc.equals(hover) ? hover : hc),
-                        "\u00a77" + hover,
-                        this.isWaterChecked(hover)
-                                ? "\u00a7a当前：可以喂（点击改成不喂）"
-                                : "\u00a7c当前：不喂（点击加进白名单）"},
-                        new int[]{0xFFFFFF, 0xAAAAAA, 0xFFFFFF});
+                                // 实测五百七十六：装水容器额外标一行水质（反馈："把这些水细分"）
+                int wPur = com.maidsmart.action.ThirstCompat.waterPurity(stack);
+                String wPurName = com.maidsmart.action.ThirstCompat.purityLabel(wPur);
+                boolean wShowPur = wPurName != null;
+                String[] wLines = new String[wShowPur ? 4 : 3];
+                int[] wColors = new int[wShowPur ? 4 : 3];
+                wLines[0] = "\u00a7f" + (hc.equals(hover) ? hover : hc);
+                wColors[0] = 0xFFFFFF;
+                wLines[1] = "\u00a77" + hover;
+                wColors[1] = 0xAAAAAA;
+                int wIdx = 2;
+                if (wShowPur) {
+                    wLines[wIdx] = "\u00a77水质：" + wPurName;
+                    wColors[wIdx] = com.maidsmart.action.ThirstCompat.purityColor(wPur);
+                    wIdx++;
+                }
+                wLines[wIdx] = this.isWaterChecked(hover)
+                        ? "\u00a7a当前：可以喂（点击改成不喂）"
+                        : "\u00a7c当前：不喂（点击加进白名单）";
+                wColors[wIdx] = 0xFFFFFF;
+                this.drawHoverInfo(g, wInfoX, wInfoY, wLines, wColors);
             } else {
                 int pages = this.creativePages();
                 if (pages > 1) {
