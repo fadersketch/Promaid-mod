@@ -84,7 +84,7 @@ public final class FlightTargeting {
      *
      * 【v1.2.0 实测五百二十四：为什么必须与 RANGE 分开】
      * 空袭的起飞动作是**主动背离敌人 + 抬头 62°**去把烟花推力吃满（见
-     * {@code MaidFlightCombatBehavior.faceAwayAndUp} 与 {@code LAUNCH_TICKS_MELEE}），
+     * {@code MaidFlightCombatBehavior.faceAwayAndUp} 与起飞段时长（{@code launchTicksMelee()}）），
      * 这一口气就能把她推出 50 格外——实测日志（1.21.1，2026-09-16 22:20:25）：
      * 锁定监守者时距离 7.1 格、放烟花起飞，**2 秒后就已经没有目标了**。
      * 旧口径"超过 RANGE 就丢锁"= 每一轮起飞都在半路自我解除瞄准，行为随即停止、
