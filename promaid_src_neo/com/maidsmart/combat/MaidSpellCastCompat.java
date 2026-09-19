@@ -224,8 +224,15 @@ public final class MaidSpellCastCompat {
     public static final String[] DEFAULT_BOOST_SPELLS = {
             "irons_spellbooks:burning_dash",
     };
-    /** 位移法术按几级放（1 级足够；等级只影响伤害，冲刺距离由法术自己定） */
-    public static final int DASH_SPELL_LEVEL = 1;
+    /**
+     * 位移法术的**兜底等级**——只在读不到书里铭刻等级时使用（正常路径见
+     * {@link #spellLevelInBooks}）。
+     *
+     * 【纠错：等级确实影响冲量】本常量旁边原来写着"1 级足够、等级只影响伤害"——**那是错的**：
+     * 烈焰冲锋的冲量系数就是 `(15 + 法术强度) / 12`（1 级 1.33、10 级 2.08），
+     * 升腾的强度也进它自己的公式。所以正常路径一律按书里铭刻的等级放，这个常量只是兜底。
+     */
+    public static final int DASH_SPELL_FALLBACK_LEVEL = 1;
 
     private static Class<?> cMaidData;
     private static Method mMaidDataGetOrCreate;
