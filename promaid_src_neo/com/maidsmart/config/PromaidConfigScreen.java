@@ -2012,6 +2012,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.5.287：查看主人物品栏工具（只读查询主人背包内容）
         this.rows.add(new BoolRow("smart_owner_inventory（查看主人背包）", MaidSmartConfig.TOOL_OWNER_INVENTORY.get(),
                 v -> MaidSmartConfig.TOOL_OWNER_INVENTORY.set(v), "smart_owner_inventory 工具（只读查询主人背包里有什么——LLM 需要确认主人持有某材料/装备时调用，不修改任何物品）"));
+        // v1.2.2 实测五百七十八：指挥三件套 + 状态自检（此前模型只能打怪，别的模式够不到）
+        this.rows.add(new BoolRow("smart_switch_task（换任务/模式）", MaidSmartConfig.TOOL_SWITCH_TASK.get(),
+                v -> MaidSmartConfig.TOOL_SWITCH_TASK.set(v), "smart_switch_task 工具（切换任务/工作模式：TLM 原生 + 本模组任务全可切，支持\"空袭/远程空袭/挖矿/砍树/建造/攻击/待命\"等中文别名；认不出会把可用任务列表回给模型；排班中的女仆拒绝外部指派）"));
+        this.rows.add(new BoolRow("smart_air_raid（起飞/停止空袭）", MaidSmartConfig.TOOL_AIR_RAID.get(),
+                v -> MaidSmartConfig.TOOL_AIR_RAID.set(v), "smart_air_raid 工具（起飞空袭——近战/远程可选、顺手锁定目标，并如实回报\"缺不缺件\"；停止=清目标清本轮状态并切回地面攻击）"));
+        this.rows.add(new BoolRow("smart_work_area（定工作区/驻守）", MaidSmartConfig.TOOL_WORK_AREA.get(),
+                v -> MaidSmartConfig.TOOL_WORK_AREA.set(v), "smart_work_area 工具（把工作/休闲锚点设到主人脚下或她自己所在处并开启驻守，也可解除驻守恢复跟随、或只查看锚点——写的是与潜行+中键工位标记、河童罗盘同一份 SchedulePos 数据）"));
+        this.rows.add(new BoolRow("smart_readiness（状态自检）", MaidSmartConfig.TOOL_READINESS.get(),
+                v -> MaidSmartConfig.TOOL_READINESS.set(v), "smart_readiness 工具（只读自检：空袭三件套/是否缺件/远程弹药/驻守与排班状态/工作锚点/血量/主人饥饿——让模型\"先查后做\"，不改任何状态）"));
         // v1.5.250：每日主动对话次数上限（复用 dialogue.proactiveDaily——主动对话
         // 区已有同配置，这里按要求放到 AI 工具设置，两处改同一个值）
         this.rows.add(new NumRow("每日主动对话上限（次/女仆）", String.valueOf(MaidSmartConfig.DIALOGUE_PROACTIVE_DAILY.get()),
@@ -2290,11 +2299,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("位移法术·起飞/补高",
                 MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.set(v),
-                "启用【提供高度】那一类位移法术：烟花/羽扇不可用时平地起飞，以及空中不够高时补一口高度。施法前会把她的俯仰摆到抬头 62°。"));
+                "启用【提供高度】那一类位移法术：烟花/羽扇不可用时平地起飞、空中不够高时补一口高度，以及盘旋掉高时维持高度（掉高窗口里它优先于烟花——不消耗燃料、也不占烟花冷却，所以不带烟花也能一直飞）。朝向完全照抄烟花（实测五百七十八：地面目标＝背离＋抬头、目标在头顶＝朝目标＋抬头、盘旋掉高＝45° 抬头朝目标），不再自己发明角度。"));
         this.rows.add(new BoolRow("位移法术·飞行加速",
                 MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.set(v),
-                "启用【提供速度】那一类位移法术：滑翔途中对着目标冲刺续速（鞘翅掉速就是掉高度）。"));
+                "启用【提供速度】那一类位移法术：在盘旋的掉高窗口里（与烟花同窗口、同朝向：抬头 45° 朝目标）冲刺续速（鞘翅掉速就是掉高度）。实测五百七十八：窗口外不再放——旧版挂在盘旋相位每一 tick，等于周期性从圈上切进去冲敌人。"));
         this.rows.add(new TextRow("提供高度的法术表", String.join("、", MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()),
                 s -> setStringList(MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS, s),
                 "【提供高度】的法术 id（用、或逗号分隔）：用于起飞与补高。默认 ascension（升腾，原生向上冲量）+ burning_dash（烈焰冲锋——沿视线冲刺且垂直分量保留，抬头瞄着放同样能顶人起来，所以只带它也起飞得动）"));

@@ -1337,8 +1337,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final double RANGED_HOLD_GAIN = 5.0;
     /** 高度偏置（格）：抵消滑翔的固定下沉与转弯损耗，让平衡点落在略抬头处 */
     private static final double RANGED_HOLD_BIAS = 1.0;
-    /** 低于期望高度这么多格才补烟花（5 秒间隔仍是下限，避免浪费烟花） */
-    private static final double RANGED_BOOST_DROP = 3.0;
+    /**
+     * 低于期望高度这么多格就补推（5 秒间隔仍是下限，避免浪费燃料）。
+     *
+     * 【实测五百七十八：旧值 3.0 与期望高度 3.5 相消 ⇒ 触发点 = 目标脚下 +0.5 格，等于"必须
+     * 贴地才补"】期望盘旋高度是"目标上方 3.5 格"（{@link #RANGED_HOLD_HEIGHT}），旧值 3.0
+     * 意味着 `y < 目标高度 + 0.5` 才补推。对地面目标而言"贴到 0.5 格"就是**已经落地**，于是
+     * 这个分支永远走不到，直接掉到地上再走地面支点重新起飞（反馈原话："低于期望高度就补烟花
+     * 这一点根本就没有生效过，每次都是掉到地上再补"）——结果远程空袭反而比近战更容易挨打。
+     * 取 0.5 = "比期望高度带低半格就补"，这才是"低于期望高度就补"的原意。
+     */
+    private static final double RANGED_BOOST_DROP = 0.5;
     /** 盘旋俯仰限幅（度） */
     private static final float RANGED_ORBIT_UP_MAX = 45.0f;
     private static final float RANGED_ORBIT_DOWN_MAX = 35.0f;
@@ -1438,32 +1447,37 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 期望盘旋高度（目标上方 RANGED_HOLD_HEIGHT 格）
         double holdY = target.getY() + RANGED_HOLD_HEIGHT;
 
-        // ① 按需补烟花：只在真的掉出高度带时才补一口（5 秒间隔只是下限）
+        // ① 按需补推：只在真的掉出高度带时才补（5 秒间隔只是下限）
         int boostLeft = RANGED_BOOST_LEFT.getOrDefault(id, 0);
         boolean tooLow = maid.getY() < holdY - RANGED_BOOST_DROP;
-        if (boostLeft <= 0 && tooLow && gameTime >= RANGED_NEXT_BOOST.getOrDefault(id, 0L)
-                && canLaunch(maid, gameTime)) {
-            // 实测五百六十三：扇子优先——掉高时挥羽扇维持高度（推进/扣耐久照搬扇子
-            // 自己，节奏 20t），没扇才烧烟花
-            if (TwilightFanKit.hasFan(maid) && TwilightFanKit.boostGlide(level, maid)) {
-                FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
-                RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
-                RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
-                boostLeft = RANGED_BOOST_AIM_TICKS;
-                com.maidsmart.tool.PromaidLog.log("远程空袭",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高挥羽扇");
-            } else {
-                ItemStack fw = MaidFlightKit.takeFirework(maid);
-                if (!fw.isEmpty()) {
-                    launchFirework(level, maid, fw);
-                    // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
-                    FlightFireworkPose.show(maid, fw);
-                    FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
+        if (boostLeft <= 0 && tooLow && gameTime >= RANGED_NEXT_BOOST.getOrDefault(id, 0L)) {
+            // 实测五百七十八【A 方案】第一顺位是**位移法术**：不消耗燃料、也不占烟花冷却，
+            // "能像玩家那样持续飞很久"就落在这一条上；它成功时会自己开同一个抬头窗口。
+            if (tryDashHold(maid, target, id, gameTime)) {
+                boostLeft = RANGED_BOOST_LEFT.getOrDefault(id, 0);
+            } else if (canLaunch(maid, gameTime)) {
+                // 实测五百六十三：扇子优先——掉高时挥羽扇维持高度（推进/扣耐久照搬扇子
+                // 自己，节奏 20t），没扇才烧烟花
+                if (TwilightFanKit.hasFan(maid) && TwilightFanKit.boostGlide(level, maid)) {
+                    FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
                     RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
                     RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
                     boostLeft = RANGED_BOOST_AIM_TICKS;
                     com.maidsmart.tool.PromaidLog.log("远程空袭",
-                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高补烟花");
+                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高挥羽扇");
+                } else {
+                    ItemStack fw = MaidFlightKit.takeFirework(maid);
+                    if (!fw.isEmpty()) {
+                        launchFirework(level, maid, fw);
+                        // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
+                        FlightFireworkPose.show(maid, fw);
+                        FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
+                        RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
+                        RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
+                        boostLeft = RANGED_BOOST_AIM_TICKS;
+                        com.maidsmart.tool.PromaidLog.log("远程空袭",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高补烟花");
+                    }
                 }
             }
         }
@@ -1471,7 +1485,6 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // ② 开火（必须放在"朝向"之前——枪械开火会自己把身体拧向目标，随后要把盘旋朝向
         //    盖回去，否则滑翔会顺着那次瞄准把女仆直接拉向目标，"盘旋"就散了）
         //    法术同款：法术模组的吟唱也会拧朝向，所以同样放在"朝向"之前一起被盖回去。
-        tryDashBoost(maid, target, id, gameTime);
         tryCastSpell(maid, target, id, gameTime);
         fireRanged(maid, target, id, gameTime);
 
@@ -1497,7 +1510,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // ④ 朝向：抬头窗口内抬头爬升，其余时间绕目标盘旋 + 高度保持
         if (boostLeft > 0) {
             RANGED_BOOST_LEFT.put(id, boostLeft - 1);
+            // 【实测五百七十八】朝向先摆（冲量沿视线走，必须在本 tick 的施法之前）：
+            // 这就是烟花掉高窗口那 45°，"提供速度"那一口因此与烟花的推力同向。
             faceUpForward(maid, target, RANGED_BOOST_PITCH);
+            // "提供速度"只在窗口内放（旧版挂在盘旋相位的每一 tick，等于当着敌人的面从圈上切进去）
+            tryDashBoost(maid, target, id, gameTime);
         } else {
             faceOrbit(maid, target, holdY);
         }
@@ -1763,15 +1780,19 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Long> DASH_NEXT = new HashMap<>();
     /** 位移法术日志限频 */
     private static final Map<UUID, Long> DASH_LAST_LOG = new HashMap<>();
-    /** 起飞/补高抬头角（与烟花起飞的近战仰角一致：62°） */
-    private static final float DASH_LAUNCH_PITCH = -62.0f;
     /**
-     * 实测五百七十六【空中冲刺加速的朝向】：冲刺法术沿**视线**冲，而远程空袭的盘旋相位里
-     * 她的视线是**沿切线**的（绕圈用）——不摆正就"横着飞出去"（反馈：飞行的方向不太对）。
-     * 所以放之前的朝向取"水平朝目标 + 略微抬起 12°"（既朝目标、又顺手换一点高度，
-     * 与鞘翅"掉速就是掉高度"的补偿方向一致）。
+     * 实测五百七十八【A 方案：位移法术的朝向一律取自"该相位烟花会用的朝向"】。
+     *
+     * 旧版这里写死了两个角：起飞抬头 {@code DASH_LAUNCH_PITCH = -62°} **并且朝目标**，
+     * 空中加速 {@code DASH_BOOST_PITCH = -12°}（五百七十六 为修"横着窜出去"加的）——
+     * 而烟花的起飞/爬升由 {@code faceLaunchDirection} 决定：**地面目标是"背离敌人 + 抬头"**
+     * （爬升时别站在对方近战/爆炸包线里），只有"目标高出 10 格以上"才朝目标爬；盘旋相位
+     * 更是**根本不会点烟花**。再加上 ISS 的冲量公式把水平放大 3 倍
+     * （`normalize(视线×(3,1,3)) + (0,0.25,0)`），"抬头 62°"实际只有约 45°，于是位移法术
+     * 起飞变成**斜着往敌人脸上窜**、盘旋里变成**从圈上切进去**。现在：
+     * 起飞/补高 → {@code faceLaunchDirection}；远战掉高窗口 → {@code RANGED_BOOST_PITCH}
+     * （见 {@code tryDashHold}）；近战俯冲前 → {@code faceTarget}。两个写死的角因此删除。
      */
-    private static final float DASH_BOOST_PITCH = -12.0f;
     /** 空中冲刺的最近/最远距离（格）：太近没必要、太远别白冲 */
     private static final double DASH_BOOST_MIN_RANGE = 6.0;
     private static final double DASH_BOOST_MAX_RANGE = 28.0;
@@ -1844,9 +1865,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *   <li>{@code takeoff = false}：她在空中但不够高（爬升相位 / 远战掉出高度带）——补一口高度。</li>
      * </ul>
      *
-     * 【朝向是关键】`AscensionSpell` 取 `entity.getLookAngle()`；`BurningDashSpell` 也是沿视线冲刺
-     * （垂直分量保留）。所以先把法术模组那份**施法目标清空**（否则它施法前 `forceLookAtTarget`
-     * 会把朝向拧向目标、把抬头掰平），再抬头到 {@link #DASH_LAUNCH_PITCH} 才施法。
+     * 【朝向是关键】**一律沿用烟花在这个相位的朝向**（实测五百七十八 A 方案）：`AscensionSpell`
+     * 取 `entity.getLookAngle()`、`BurningDashSpell` 也沿视线冲刺，所以先把法术模组那份
+     * **施法目标清空**（否则它施法前 `forceLookAtTarget` 会把朝向拧平），再调
+     * {@link #faceLaunchDirection}：**地面目标 = 背离敌人 + 抬头**（烟花起飞同款，
+     * 爬升时别站在对方近战/爆炸包线里）、目标高出 10 格以上 = 朝目标 + 抬头；
+     * 抬头角跟 {@code climbPitch()} 走（近战 62°/远战 45°）。
      */
     private boolean tryDashClimb(EntityMaid maid, LivingEntity target, UUID id, long gameTime,
                                  boolean takeoff) {
@@ -1861,8 +1885,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (spell == null) {
             return false;
         }
-        MaidSpellCastCompat.clearCastTarget(maid);       // 别让它把抬头掰平（见方法注释）
-        faceUpForward(maid, target, DASH_LAUNCH_PITCH);  // 抬头
+        MaidSpellCastCompat.clearCastTarget(maid);  // 别让它把朝向拧平（见方法注释）
+        faceLaunchDirection(maid, target);          // 与烟花起飞/爬升同一套朝向（A 方案）
         if (!MaidSpellCastCompat.castSpecific(maid, spell,
                 dashSpellLevel(maid, spell), dashCooldownFor(spell, false))) {
             return false;
@@ -1876,11 +1900,20 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * v1.2.0 实测五百七十二【提供速度：飞行加速】。
+     * v1.2.0 实测五百七十二【提供速度：飞行加速】，实测五百七十八 改成"**只在烟花同款窗口里放**"。
      *
      * 滑翔途中用"提供速度"表里的法术给速度续一口——鞘翅"掉速就是掉高度"。
-     * 只在"本来就对着目标"的相位调用（与 {@link #tryCastSpell} 同一原则）：这类法术沿视线冲刺，
-     * 而法术模组施法前会把朝向拧向目标——方向一致，不冲突。
+     *
+     * 【为什么现在只在窗口里放】五百七十六 曾把它挂在盘旋相位的每一 tick（只要 6~28 格 +
+     * 看得见就冲一口），并自己把视线摆到"朝目标 + 略抬 12°"。方向是摆正了，但**烟花在这个
+     * 相位根本不会点**，于是她变成周期性从圈上切进去冲敌人（实测五百七十八 复核结论）。
+     * 现在调用点只有两处，都是"该相位本来就对着目标"的时刻：
+     * <ul>
+     *   <li>远战盘旋：**掉高窗口内**（{@code boostLeft > 0}）——视线由窗口自己给（抬头 45°
+     *       朝目标，与烟花推力同向）；</li>
+     *   <li>近战空袭：俯冲前那一刻——视线由上一 tick 的 {@code faceTarget} 给。</li>
+     * </ul>
+     * 冲量方向因此**永远等于该相位的朝向**，不再由这里发明角度。
      */
     private boolean tryDashBoost(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.get()) {
@@ -1901,14 +1934,67 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (spell == null) {
             return false;
         }
-        // 实测五百七十六【方向】：先把视线摆到"水平朝目标 + 略抬"再放——冲刺沿视线走，
-        // 而盘旋相位她本来在绕圈（视线沿切线），不摆正就会横着窜出去（反馈"方向不太对"）。
-        faceUpForward(maid, target, DASH_BOOST_PITCH);
+        // 实测五百七十八：**不再自己摆朝向**——冲量沿视线走，而视线由调用相位负责
+        // （远战窗口 = 45° 朝目标；近战 = faceTarget）。理由见方法注释。
         if (!MaidSpellCastCompat.castSpecific(maid, spell,
                 dashSpellLevel(maid, spell), dashCooldownFor(spell, true))) {
             return false;
         }
         markDash(id, gameTime, maid, "空中冲刺加速（" + spell
+                + " Lv" + dashSpellLevel(maid, spell) + "）");
+        return true;
+    }
+
+    /**
+     * v1.2.0 实测五百七十八【A 方案：位移法术接替烟花维持盘旋高度带】。
+     *
+     * 需求口径（用户原话）："理论上烈焰冲锋就是为了替代原来烟花的作用的，所有烟花能干的事情
+     * 它应该都能干，飞行路线也应该保持一致"，以及"玩家使用烈焰冲锋的时候可以持续使用很长的
+     * 时间"——所以位移法术在这里不是"没烟花时的备胎"，而是**第一顺位的续航手段**（不消耗
+     * 燃料、也不占烟花冷却，能一直用）。与烟花做同一件事，就用同一套口径：
+     *
+     * <ul>
+     *   <li>**同一触发**：掉出期望高度带（{@link #RANGED_BOOST_DROP}，由调用方判）；</li>
+     *   <li>**同一朝向**：{@code faceUpForward(target, RANGED_BOOST_PITCH)}——就是烟花掉高
+     *       窗口那 45° 抬头朝目标（不是这里发明的新角度）；</li>
+     *   <li>**同一窗口**：成功就自己开 {@link #RANGED_BOOST_AIM_TICKS} tick 的抬头窗口，
+     *       于是"只带法术、不带烟花"的女仆也进得了这个相位（旧版她永远进不来：窗口只由
+     *       烟花/扇子开）。</li>
+     * </ul>
+     *
+     * 表序：先"提供高度"（**不看法术自身冷却**——与滑翔掉高的救急口径一致，也是"没有烟花
+     * 也能持续飞"的来源），没有再退到"提供速度"（尊重冷却，与它在加速角色上的口径一致）。
+     * 两张表共用一个节流 {@link #DASH_NEXT}，所以同一 tick 只会放一口。
+     *
+     * @return true = 放了一口并开了窗口（调用方据此进入抬头窗口）
+     */
+    private boolean tryDashHold(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        boolean climbOk = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get();
+        boolean boostOk = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.get();
+        if (!climbOk && !boostOk) {
+            return false;
+        }
+        if (gameTime < DASH_NEXT.getOrDefault(id, 0L)) {
+            return false;
+        }
+        String spell = climbOk
+                ? MaidSpellCastCompat.findClimbSpellIgnoringCooldown(maid, climbSpellIds()) : null;
+        boolean fromBoostTable = false;
+        if (spell == null && boostOk) {
+            spell = MaidSpellCastCompat.findAvailableDashSpell(maid, boostSpellIds());
+            fromBoostTable = spell != null;
+        }
+        if (spell == null) {
+            return false;
+        }
+        MaidSpellCastCompat.clearCastTarget(maid);          // 别让它把 45° 拧平（同 tryDashClimb）
+        faceUpForward(maid, target, RANGED_BOOST_PITCH);    // 与烟花掉高窗口同朝向
+        if (!MaidSpellCastCompat.castSpecific(maid, spell, dashSpellLevel(maid, spell),
+                dashCooldownFor(spell, fromBoostTable))) {
+            return false;
+        }
+        RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);  // 法术自己开窗口（纯法术女仆靠这条）
+        markDash(id, gameTime, maid, "掉高·位移法术顶高度（" + spell
                 + " Lv" + dashSpellLevel(maid, spell) + "）");
         return true;
     }
