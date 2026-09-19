@@ -479,13 +479,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     if (taken.m_41619_()) {
                         continue;
                     }
-                    // m_5584_ = LivingEntity.eat(Level, ItemStack)——真实进食
-                    //（TLM 女仆进食同款入口：食物效果+音效+粒子，比手搓 FoodData 通用）
+                    // v1.2.2 实测五百七十九：改走**物品自己的 finishUsingItem**（蜂蜜瓶是普通
+                    // 食物，与旧版 eat() 完全等价；统一走这个入口后，"吃完不消失"的遗物类
+                    // 食物就不会被手搓的消耗毁掉）。
                     // v1.2.0 实测五百四十五：蜂蜜也是食物（nutrition=6）——同样补上 TLM
                     // 餐食系统那一记"吃食物回血"（与她自己喝蜂蜜瓶完全同口径）。
-                    // 【必须传快照】eat() 末尾 shrink(1)，taken 之后就是空栈（同 feedSisterFood）。
+                    // 【必须传快照】进食会把栈吃空，直接传 taken 会被 Bridge 判空而整段跳过。
                     ItemStack honeyFed = taken.m_41777_();
-                    sister.m_5584_(sister.m_9236_(), taken);
+                    int honeyEaten = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(sister, taken);
+                    if (honeyEaten == 0) {
+                        // 物品自己不消耗（蜂蜜理论上不会走到这里）：放回背包，别让它凭空消失
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
+                        continue;
+                    }
                     com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, honeyFed);
                     // v1.1.0 实测三十四修复（反馈："喂其他女仆蜂蜜没有效果，解不了
                     // 中毒；对主人的路径仍然生效"）：eat() 只加饱食/食物效果——
@@ -583,6 +589,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(stack)) {
                     continue;
                 }
+                // 实测五百七十九：冷却中的食物跳过（见 MaidMealBridge.onFeedCooldown）
+                if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(sister, stack)) {
+                    continue;
+                }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(stack, sister);
                 if (sat > bestSat) {
                     bestSat = sat;
@@ -601,6 +611,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(hs)) {
                     continue;
                 }
+                // 实测五百七十九：冷却中的食物跳过（同背包扫描）
+                if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(sister, hs)) {
+                    continue;
+                }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, sister);
                 if (sat > handSat) {
                     handSat = sat;
@@ -617,44 +631,48 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
             ItemStack toGive;
             String foodName;
+            ItemStack live;
             if (handItem != null && handSat >= bestSat) {
                 toGive = handItem;
                 if (toGive.m_41619_()) {
                     return null; // 扫描后手上已被清空——不支援、不播报、不消耗
                 }
-                // 名字在进食前读（m_5584_ = eat 会 shrink 掉栈内数量，读晚了拿不到）
-                foodName = toGive.m_41786_().getString();
-                // 消耗前核对：当前手上还是同种食物才 shrink（防同 tick 手被换走，
+                // 消耗前核对：当前手上还是同种食物才吃（防同 tick 手被换走，
                 // 误把新物品当成旧食物吃掉）
-                ItemStack liveNow = handIdx == 0 ? maid.m_21205_() : maid.m_21206_();
-                if (liveNow.m_41619_() || !liveNow.m_150930_(toGive.m_41720_())) {
+                live = handIdx == 0 ? maid.m_21205_() : maid.m_21206_();
+                if (live.m_41619_() || !live.m_150930_(toGive.m_41720_())) {
                     return null;
                 }
-                liveNow.m_41774_(1);
             } else {
-                toGive = inv.extractItem(bestSlot, 1, false);
-                if (toGive.m_41619_()) {
+                // 实测五百七十九：**不再 extractItem** —— 直接拿槽位里的真栈，
+                // 让物品自己的 finishUsingItem 原地决定消耗（extract 会把
+                // "吃完不消失"的遗物提前从背包里摘走）
+                live = inv.getStackInSlot(bestSlot);
+                if (live.m_41619_()) {
                     return null;
                 }
-                foodName = toGive.m_41786_().getString();
             }
-            // 真实进食（m_5584_ = eat(Level, ItemStack)）：食物自带效果/音效/粒子
-            // v1.1.0 实测二百五十六：移除上轮手搓 heal——eat() 就是标准路径。
-            // v1.2.0 实测五百四十五【补上 TLM 那一记回血】：反编译实证 TLM 的"吃食物回血"
-            // **不在 eat() 里**，而在餐食系统（DefaultMaidHealSelfMeal.onMaidEat）：
-            // `total = 营养 + 营养×饱和度系数×2`，`random.nextInt(5) < total` 时
-            // `heal(max(total/5, 1))`（自己吃一根胡萝卜 = total 6.6 → 必触发 → 回 1.32）。
-            // 旧版只调 eat()，那记回血整段缺失 → 用户反馈"喂食效果没有她自己吃强"。
-            // 现在 eat() 之后补调 TLM 的 HEAL_MEAL（同一份实现，公式/概率/黑名单全部同源）。
-            //
-            // 【必须传快照】原版 eat() 末尾会 `shrink(1)`（m_41774_，反编译实证）——
-            // eat 之后这个栈已经空了，直接传 toGive 会被 Bridge 判空而整段跳过（静默失效）。
-            // 所以先把食物复制一份当"喂进去的那一份"，再调 eat。
-            ItemStack fed = toGive.m_41777_();
-            sister.m_5584_(sister.m_9236_(), toGive);
-            com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, fed);
+            // 冷却中的食物不喂：遗物类食物自己不消耗（它自己的冷却多半只对玩家生效），
+            // 不挡一下会被互助链每 3 秒反复触发（见 MaidMealBridge.eatByItemLogic）
+            if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(sister, live)) {
+                return null;
+            }
+            // 名字在进食前读（进食会把栈吃空，读晚了拿到的是"空气"）
+            foodName = live.m_41786_().getString();
+            // 真实进食（实测五百七十九换成**物品自己的 finishUsingItem**）：普通食物等价于
+            // 原来的 eat()，而重写过 finishUsingItem 的物品（例：奇异饰品「永恒牛排」
+            // artifacts:eternal_steak）才会走它自己的"吃副本 + 上冷却 + 原栈不消耗"逻辑。
+            // v1.2.0 实测五百四十五【补上 TLM 那一记回血】：TLM 的"吃食物回血"不在 eat() 里，
+            // 而在餐食系统（DefaultMaidHealSelfMeal.onMaidEat）——只有真的吃掉一份时才补调
+            // HEAL_MEAL（没被消耗的遗物类不给回血，否则那件遗物就成了无限回血器）。
+            // 【必须传快照】进食会把栈吃空，直接传 live 会被 Bridge 判空而整段跳过（静默失效）。
+            ItemStack fed = live.m_41777_();
+            int consumed = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(sister, live);
+            if (consumed > 0) {
+                com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(sister, fed);
+            }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
-            return "喂了" + foodName;
+            return consumed > 0 ? "喂了" + foodName : "喂了" + foodName + "（遗物类食物，用完不消失）";
         } catch (Exception ignored) {
         }
         return null;
@@ -1433,6 +1451,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(hs)) {
                     continue;
                 }
+                // 实测五百七十九：冷却中的食物跳过（遗物类食物自己不消耗，见 MaidMealBridge）
+                if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(owner, hs)) {
+                    continue;
+                }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(hs, owner);
                 if (sat > handSat) {
                     handSat = sat;
@@ -1452,6 +1474,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 if (!com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(stack)) {
+                    continue;
+                }
+                // 实测五百七十九：冷却中的食物跳过（同手持扫描）
+                if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(owner, stack)) {
                     continue;
                 }
                 double sat = com.maidsmart.action.EmotionalActionExecutor.foodSaturation(stack, owner);
@@ -1476,13 +1502,19 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 if (liveHand.m_41619_() || !liveHand.m_150930_(toGive.m_41720_())) {
                     return false;
                 }
-                liveHand.m_41774_(1);
+                // v1.2.2 实测五百七十九：**不再手搓 shrink** —— 交给物品自己的
+                // finishUsingItem 决定消耗几个（手搓扣一个会毁掉"吃完不消失"的遗物）
+                toGive = liveHand;
             } else {
-                toGive = inv.extractItem(bestSlot, 1, false);
+                // 同理不再 extractItem(1)：提前摘走会让遗物类食物凭空消失；取槽位真栈
+                toGive = inv.getStackInSlot(bestSlot);
+                if (toGive.m_41619_()) {
+                    return false;
+                }
             }
             // v1.5.288：改为直接喂食（饱食度直接加到主人，不再塞背包/快捷栏）
             if (!com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, toGive)) {
-                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, toGive, false);
+                // 失败 = 物品根本不能吃（无食物属性）：它一直在原处，什么都不用放回
                 return false;
             }
             maid.getChatBubbleManager().addTextChatBubble("主人快吃点东西补补！");

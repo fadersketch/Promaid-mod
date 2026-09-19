@@ -1330,9 +1330,19 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** 盘旋半径（格） */
     private static final double ORBIT_RADIUS = 10.0;
-    /** 期望盘旋高度（格，目标上方）——v1.2.0 实测四百六十九：6 → 3.5（飞太高锁不到敌，
-     *  女仆在目标斜上方 3.5 格既能盘旋又保持锁敌与开火视线） */
-    private static final double RANGED_HOLD_HEIGHT = 3.5;
+    /**
+     * 期望盘旋高度（格，目标上方）。
+     *
+     * 实测四百六十九 曾把它从 6 降到 3.5（理由是"飞太高锁不到敌"）；实测五百七十九 按用户
+     * 口径改回 **10**——反馈是"问题有所缓解了，但是还是达不到预期要的效果，而且时常容易出现
+     * 低于目标高度的情况。这边建议把期望高度改为目标高度以上 10 格"。3.5 格的高度带太薄：
+     * 滑翔转弯本身就会掉高度，一掉就低于敌人，观感差、也不安全（远程空袭的核心要求是
+     * "脚不沾地"）。10 格 + {@link #RANGED_BOOST_DROP}（低于带 0.5 格就补）才留得出余量。
+     *
+     * 锁敌/开火不受影响：射程判据是 3D 的 {@link #RANGED_ATTACK_RANGE}（24 格），
+     * 盘旋半径 10 格时"目标上方 10 格"的 3D 距离约 14 格，仍在射程内。
+     */
+    private static final double RANGED_HOLD_HEIGHT = 10.0;
     /** 高度偏差 → 俯仰角增益（度/格）：低了抬头把速度换成高度、高了低头把高度换成速度 */
     private static final double RANGED_HOLD_GAIN = 5.0;
     /** 高度偏置（格）：抵消滑翔的固定下沉与转弯损耗，让平衡点落在略抬头处 */

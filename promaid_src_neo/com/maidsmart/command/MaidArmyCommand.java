@@ -113,7 +113,9 @@ public final class MaidArmyCommand {
             float before = maid.getHealth();
             // 与 feedSisterFood 同一序列：先把"喂进去的那一份"存快照（eat 会 shrink 掉原栈）
             net.minecraft.world.item.ItemStack fed = food.copy();
-            maid.eat(level, food);
+            // 实测五百七十九：与喂食链同一入口（普通食物等价于旧版 eat()，
+            // "吃完不消失"的遗物类不会被手搓消耗毁掉）
+            com.maidsmart.combat.MaidMealBridge.eatByItemLogic(maid, food);
             boolean meal = com.maidsmart.combat.MaidMealBridge.applySelfEatingEffect(maid, fed);
             float after = maid.getHealth();
             String msg = String.format("\u00a7a%s：血量 %.2f → %.2f（TLM 餐食回血=%s）",

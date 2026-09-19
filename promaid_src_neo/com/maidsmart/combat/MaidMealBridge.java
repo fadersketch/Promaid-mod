@@ -63,7 +63,110 @@ public final class MaidMealBridge {
     /** "TLM 未注册餐食实现"只报一次（见 applySelfEatingEffect 里的说明） */
     private static final AtomicBoolean WARNED = new AtomicBoolean(false);
 
+    /**
+     * "喂了但物品没被消耗"的本地冷却（键 = 被喂者 UUID|物品 id，值 = 到期毫秒）。
+     * 见 {@link #eatByItemLogic} 第三条说明。
+     */
+    private static final java.util.Map<String, Long> NON_CONSUMED_CD = new java.util.HashMap<>();
+    /** 遗物类食物（自己不消耗）的本地冷却：10 秒（与奇异饰品「永恒牛排」默认冷却同量级） */
+    private static final long NON_CONSUMED_CD_MS = 10_000L;
+
     private MaidMealBridge() {
+    }
+
+    /**
+     * v1.2.2 实测五百七十九【喂食必须走物品自己的 finishUsingItem】——对**真栈**原地结算，
+     * 返回真正吃掉的份数。
+     *
+     * 【反馈】"女仆投喂其她女仆的时候，会把像永恒牛排这样的吃不掉的食物给消耗掉。
+     *  理论上我们走的效果是进行一次吃，但其实可能漏掉了什么环节。"
+     *
+     * 【根因（javap 实证，两版同构）】`Item.finishUsingItem` 的默认实现**就是** eat：
+     * <pre>
+     *   public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity entity) {
+     *       if (this.isEdible()) { return entity.eat(level, stack); }   // ← 普通食物：与 eat() 完全等价
+     *       return stack;
+     *   }
+     * </pre>
+     * 所以对**普通食物**走 eat() 与走 finishUsingItem 没有任何区别；但**重写了
+     * finishUsingItem 的物品**只有走物品自己的路径才生效——例：奇异饰品的「永恒牛排」
+     * `artifacts:eternal_steak`（`artifacts.item.EverlastingFoodItem`）：
+     * <pre>
+     *   finishUsingItem(stack, level, entity) {
+     *       if (isEdible()) { entity.eat(level, stack.copy());      // 吃的是**副本**
+     *                         addCooldown(entity, eatingCooldown); } // 给实体上冷却
+     *       return stack;                                           // 原栈原样返回 ⇒ **不消耗**
+     *   }
+     * </pre>
+     * 旧版投喂是"手搓 `shrink(1)` / `extractItem(1)` 再调 `eat()`"——等于把这类
+     * "吃完不消失"的遗物硬扣掉了，它的冷却也从来没上过（所以还能被反复喂）。
+     *
+     * 【本方法的语义】把**真栈**交给物品自己的逻辑，让它决定消耗几个：
+     * <ul>
+     *   <li>普通食物 → 内部走 `eat()` → 原地减 1（与旧版等效，无回归）；</li>
+     *   <li>遗物类 → 不消耗（返回 0），并记一笔**本地冷却**：这类物品自己的冷却通常只对
+     *       玩家生效（`Player.getCooldowns()`，`LivingEntity` 没有这个 API），女仆身上读不到，
+     *       不记就等着互助链每 3 秒反复触发同一次效果。</li>
+     * </ul>
+     *
+     * @param eater 被喂的那个实体（女仆 / 主人）
+     * @param live  真栈——手上或背包槽位里的**那个对象**（不是快照）；本方法会原地改它
+     * @return 真正被吃掉的份数（0 = 物品自己的逻辑不消耗）
+     */
+    public static int eatByItemLogic(net.minecraft.world.entity.LivingEntity eater, ItemStack live) {
+        if (eater == null || live == null || live.isEmpty()) {
+            return 0;
+        }
+        try {
+            int before = live.getCount();
+            // finishUsingItem = Item.finishUsingItem（ItemStack 的同名方法就是转发到它）
+            live.getItem().finishUsingItem(live, eater.level(), eater);
+            int consumed = Math.max(0, before - live.getCount());
+            if (consumed == 0) {
+                NON_CONSUMED_CD.put(cdKey(eater, live), System.currentTimeMillis() + NON_CONSUMED_CD_MS);
+            }
+            return consumed;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /**
+     * 这个食物对"她"是否还在喂食冷却里——**选食物时必须先问这一句**，否则"自己不消耗"的
+     * 遗物会被互补链每 3 秒反复触发（物品自己的冷却只对玩家生效，见 {@link #eatByItemLogic}）。
+     */
+    public static boolean onFeedCooldown(net.minecraft.world.entity.LivingEntity eater, ItemStack stack) {
+        if (eater == null || stack == null || stack.isEmpty()) {
+            return false;
+        }
+        try {
+            String key = cdKey(eater, stack);
+            Long until = NON_CONSUMED_CD.get(key);
+            if (until != null) {
+                if (until > System.currentTimeMillis()) {
+                    return true;
+                }
+                NON_CONSUMED_CD.remove(key);
+            }
+            // 玩家侧还有真正的物品冷却（getCooldowns / isOnCooldown）；女仆侧靠上面的本地表
+            if (eater instanceof net.minecraft.world.entity.player.Player player) {
+                return player.getCooldowns().isOnCooldown(stack.getItem());
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static String cdKey(net.minecraft.world.entity.LivingEntity eater, ItemStack stack) {
+        String id;
+        try {
+            net.minecraft.resources.ResourceLocation rl =
+                    net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+            id = rl == null ? String.valueOf(stack.getItem()) : rl.toString();
+        } catch (Throwable ignored) {
+            id = "?";
+        }
+        return eater.getUUID() + "|" + id;
     }
 
     /**

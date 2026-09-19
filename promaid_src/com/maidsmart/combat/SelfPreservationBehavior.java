@@ -1707,8 +1707,18 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (taken.m_41619_()) {
                 continue;
             }
-            // 真实进食：应用食物属性（金苹果=吸收+再生，熟食=饱食）
-            maid.m_5584_(maid.m_9236_(), taken);
+            // 实测五百七十九：冷却中的食物跳过（遗物类食物自己不消耗，见 MaidMealBridge）
+            if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(maid, taken)) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
+                continue;
+            }
+            // 真实进食——v1.2.2 实测五百七十九 改走**物品自己的 finishUsingItem**：
+            // 普通食物与旧版 eat() 等价，而"吃完不消失"的遗物类不会被手搓消耗毁掉；
+            // 没被消耗（返回 0）就放回背包并继续找下一种（否则下一次判定会反复触发同一件遗物）。
+            if (com.maidsmart.combat.MaidMealBridge.eatByItemLogic(maid, taken) == 0) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
+                continue;
+            }
             return true;
         }
         // 治疗食物兜底：只扫 HEAL_FOODS（金苹果等珍贵资源走 useGoldenApple 专档）
@@ -2895,11 +2905,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (taken.m_41619_()) {
                 return false;
             }
-            // v1.5.231b：真实进食（m_5584_）——走原版食物属性：附魔金苹果 =
-            // 吸收 IV + 再生 II + 抗火 5 分钟 + 抗性；普通金苹果 = 吸收 I + 再生。
-            // 不再手动 applyEffectTo（效果数值与原版一致，还加饱食——极端饥饿
-            // 场景当食物吃也正确）
-            maid.m_5584_(maid.m_9236_(), taken);
+            // 实测五百七十九：冷却中的物品不重复触发；改走**物品自己的 finishUsingItem**
+            // （普通食物/金苹果与旧版 eat() 等价，"吃完不消失"的遗物类不会被手搓消耗毁掉）
+            if (com.maidsmart.combat.MaidMealBridge.onFeedCooldown(maid, taken)
+                    || com.maidsmart.combat.MaidMealBridge.eatByItemLogic(maid, taken) == 0) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
+                return false;
+            }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             this.resourceUsed = true; // v1.5.232：用过自救资源
             return true;
