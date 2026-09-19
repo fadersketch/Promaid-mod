@@ -452,6 +452,16 @@ public class ProMaidExtension implements ILittleMaid {
         register.register(new com.maidsmart.dialogue.WorkListTool());
         // v1.5.287：查看主人物品栏工具（确认/获得主人背包里有什么——只读查询）
         register.register(new com.maidsmart.tool.OwnerInventoryTool());
+        // v1.2.2 实测五百七十八【指挥三件套 + 自检】：让模型真正能"换模式 / 起飞 / 定工位 /
+        // 查能不能干"。此前 LLM 只能打怪（smart_attack 顺手切攻击任务），别的模式够不到：
+        //   smart_switch_task —— 切换任意任务（TLM 原生 + 本模组，支持中文别名，认不出就回可用列表）
+        //   smart_air_raid    —— 起飞空袭（近战/远程 + 锁目标 + 缺件回报）/ 停止空袭落地
+        //   smart_work_area   —— 设工作区并驻守 / 解除驻守跟随（写的就是中键标记那份 SchedulePos）
+        //   smart_readiness   —— 只读自检（空袭三件套、弹药、驻守、排班、锚点、血量）
+        register.register(new com.maidsmart.tool.SwitchTaskTool());
+        register.register(new com.maidsmart.tool.AirRaidTool());
+        register.register(new com.maidsmart.tool.WorkAreaTool());
+        register.register(new com.maidsmart.tool.ReadinessTool());
     }
 
     @Override

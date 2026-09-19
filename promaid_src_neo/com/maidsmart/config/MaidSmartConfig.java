@@ -244,6 +244,11 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue TOOL_WORK_LIST;
     // v1.5.287：查看主人物品栏工具（只读查询主人背包）
     public static final ModConfigSpec.BooleanValue TOOL_OWNER_INVENTORY;
+    // v1.2.2 实测五百七十八：指挥三件套（切任务 / 空袭 / 工位）+ 状态自检
+    public static final ModConfigSpec.BooleanValue TOOL_SWITCH_TASK;
+    public static final ModConfigSpec.BooleanValue TOOL_AIR_RAID;
+    public static final ModConfigSpec.BooleanValue TOOL_WORK_AREA;
+    public static final ModConfigSpec.BooleanValue TOOL_READINESS;
 
     // ================= 战斗与自保 =================
     public static final ModConfigSpec.BooleanValue COMBAT_SELF_PRESERVE;
@@ -1142,6 +1147,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.5.287：查看主人物品栏工具（只读查询主人背包内容）
         TOOL_OWNER_INVENTORY = BUILDER.comment("smart_owner_inventory 工具（查看主人背包里有什么——只读查询，不修改物品）")
                 .translation("config.promaid.aitools.ownerInventory").define("ownerInventory", true);
+        // v1.2.2 实测五百七十八：指挥三件套 + 状态自检（让模型能真正换模式/起飞/定工位/先查后做）
+        TOOL_SWITCH_TASK = BUILDER.comment("smart_switch_task 工具（切换任务/工作模式——TLM 原生 + 本模组任务全可切，支持空袭/挖矿/砍树/建造/攻击/待命等中文别名；排班中的女仆拒绝外部指派）")
+                .translation("config.promaid.aitools.switchTask").define("switchTask", true);
+        TOOL_AIR_RAID = BUILDER.comment("smart_air_raid 工具（起飞空袭/停止空袭——可指定近战或远程、锁定目标，并回报\"缺不缺件\"）")
+                .translation("config.promaid.aitools.airRaid").define("airRaid", true);
+        TOOL_WORK_AREA = BUILDER.comment("smart_work_area 工具（把工作区设到此处并驻守 / 解除驻守恢复跟随 / 查看锚点——写的是与中键工位标记同一份 SchedulePos 数据）")
+                .translation("config.promaid.aitools.workArea").define("workArea", true);
+        TOOL_READINESS = BUILDER.comment("smart_readiness 工具（只读自检——空袭三件套/弹药/驻守/排班/工作锚点/血量，让模型\"先查后做\"）")
+                .translation("config.promaid.aitools.readiness").define("readiness", true);
         BUILDER.pop();
 
         // ---- 对话与提示 ----
@@ -1436,9 +1450,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.flightSpellCastInterval")
                 .defineInRange("flightSpellCastInterval", 20, 5, 200);
         // v1.2.0 实测五百七十二：位移法术分两类——"提供高度"（起飞/补高）与"提供速度"（飞行加速）
-        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：用于**平地起飞**与**补高**——施法前把她的俯仰摆到抬头 62°（并清掉法术模组那份施法目标，否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
+        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：用于**平地起飞**与**补高**——朝向**完全照抄烟花**（实测五百七十八 A 方案）：起飞/爬升用烟花那一套（地面目标＝背离敌人＋抬头，目标高出 10 格以上才朝目标爬），并清掉法术模组那份施法目标（否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
                 .translation("config.promaid.combat.flightDashClimb").define("flightDashClimb", true);
-        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：飞行途中对着目标冲一口给速度续命（鞘翅掉速就是掉高度）。这一类只负责「在空中加速」，不参与起飞判定；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
+        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：在盘旋的**掉高窗口**里（与烟花同窗口、同朝向：抬头 45° 朝目标）冲一口给速度续命（鞘翅掉速就是掉高度）——实测五百七十八：窗口之外不再放，否则等于当着敌人的面从盘旋圈上切进去。这一类只负责「在空中加速」，不参与起飞判定、也不参与维持高度；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
                 .translation("config.promaid.combat.flightDashBoost").define("flightDashBoost", true);
         COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）")
                 .translation("config.promaid.combat.flightDashClimbSpells")
