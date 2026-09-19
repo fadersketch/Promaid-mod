@@ -2277,11 +2277,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.get(),
                 v -> MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.set(v),
                 "弩用普通烟花当弹药（默认关）：普通烟花火箭（合成没放烟火之星）在原版任何版本都是【0 伤害】——只冒烟不掉血，拿它当弩弹药等于白烧一枚飞行燃料，所以默认关：只有带烟火之星的【攻击性烟花】才当弹药，普通烟花一律留给飞行推进用。打开 = 与原版玩家的弹药判据一致（原版弩不看烟花有没有爆炸组件），普通烟花也会被打出去（仍然 0 伤害）；两种情况下都会优先挑威力大的（合成用烟火之星多的）。"));
-        // v1.2.0（2026-09-18）：空袭·法术层（需装《车万女仆：魔法》）
+        // v1.2.0（2026-09-18）：空袭·法术层（需装《车万女仆：万法皆通》）
         this.rows.add(new BoolRow("空袭顺带施法",
                 MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST.set(v),
-                "空袭顺带施法（默认开，需装《车万女仆：魔法》）：女仆在近战空袭 / 远程空袭途中，除了用默认武器打（近战=鞘翅+重锤、远程=鞘翅+弓/枪械），还会向当前目标顺带释放法术——法术书放在背包或饰品栏即可（法术模组自己扫背包与 curios，不看主手，所以不占武器位）。施法只发生在「本来就该面向目标」的两个相位（远战盘旋开火前、近战已在目标上方准备俯冲时）：法术模组吟唱期间每 tick 把朝向拧向目标，而鞘翅滑翔顺着视线转向，挑这两个时机才不被抢飞向（爬升段要背离敌人抬头吃烟花推力、收翅俯冲是致命一击，这两段刻意不施法）。没装法术模组 = 本项无效果。"));
+                "空袭顺带施法（默认开，需装《车万女仆：万法皆通》）：女仆在近战空袭 / 远程空袭途中，除了用默认武器打（近战=鞘翅+重锤、远程=鞘翅+弓/枪械），还会向当前目标顺带释放法术——法术书放在背包或饰品栏即可（法术模组自己扫背包与 curios，不看主手，所以不占武器位）。施法只发生在「本来就该面向目标」的两个相位（远战盘旋开火前、近战已在目标上方准备俯冲时）：法术模组吟唱期间每 tick 把朝向拧向目标，而鞘翅滑翔顺着视线转向，挑这两个时机才不被抢飞向（爬升段要背离敌人抬头吃烟花推力、收翅俯冲是致命一击，这两段刻意不施法）。没装法术模组 = 本项无效果。"));
         this.rows.add(new NumRow("空袭施法间隔（tick）",
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL, s),
