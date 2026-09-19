@@ -1737,7 +1737,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** v1.2.0 实测五百六十九：按她书里**铭刻的等级**施法（读不到就按 1 级） */
     private static int dashSpellLevel(EntityMaid maid, String spellId) {
         int lvl = MaidSpellCastCompat.spellLevelInBooks(maid, spellId);
-        return lvl > 0 ? lvl : MaidSpellCastCompat.DASH_SPELL_LEVEL;
+        return lvl > 0 ? lvl : MaidSpellCastCompat.DASH_SPELL_FALLBACK_LEVEL;
     }
 
     /**
@@ -1798,7 +1798,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (takeoff) {
             MaidFlightKit.setGliding(maid, true);
         }
-        markDash(id, gameTime, maid, (takeoff ? "平地起飞（" : "空中补高（") + spell + "）");
+        markDash(id, gameTime, maid, (takeoff ? "平地起飞（" : "空中补高（") + spell
+                + " Lv" + dashSpellLevel(maid, spell) + "）");
         return true;
     }
 
@@ -1832,7 +1833,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 dashSpellLevel(maid, spell), dashCooldownFor(spell, true))) {
             return false;
         }
-        markDash(id, gameTime, maid, "空中冲刺加速（" + spell + "）");
+        markDash(id, gameTime, maid, "空中冲刺加速（" + spell
+                + " Lv" + dashSpellLevel(maid, spell) + "）");
         return true;
     }
 
