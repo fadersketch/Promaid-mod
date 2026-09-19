@@ -97,7 +97,22 @@ public final class MaidSpellCastCompat {
             // 参数类型都用编译期就有的 TLM/MC 类，反射拿到的 Method 可直接 invoke 任意子类实例
             mGetOrCreateManager = manager.getMethod("getOrCreateManager", EntityMaid.class);
             mGetProviders = manager.getMethod("getProviders");
-            mStopAllCasting = manager.getMethod("stopAllCasting");
+            // 实测五百七十五【版本差异兜底，必须放在 try 里单独吞】：插件包 1.21.1-1.8.4 是
+            // `stopAllCasting()`（无参），1.20.1-1.8.2 是 `stopAllCasting(EntityMaid)`。
+            // 旧版探针写死无参 → 1.20.1 上直接 NoSuchMethodException → **整层（顺带施法 +
+            // 位移法术）被一起关掉**（用户实测现场："饰品栏装着烈焰冲锋的书也不起飞"，
+            // 日志里就一行「探针失败，空袭法术层关闭」）。现在两种签名都认；都没有时
+            // 只把"中止施法"降级为不可用（那是个可选能力），绝不拖垮整层。
+            mStopAllCasting = null;
+            try {
+                mStopAllCasting = manager.getMethod("stopAllCasting");
+            } catch (NoSuchMethodException e1) {
+                try {
+                    mStopAllCasting = manager.getMethod("stopAllCasting", EntityMaid.class);
+                } catch (NoSuchMethodException ignored) {
+                    // 两版都没有 → 中止施法不可用（其余能力照常）
+                }
+            }
             mSetTarget = provider.getMethod("setTarget", EntityMaid.class, LivingEntity.class);
             mCastSpell = provider.getMethod("castSpell", EntityMaid.class);
             mIsCasting = provider.getMethod("isCasting", EntityMaid.class);
@@ -270,7 +285,15 @@ public final class MaidSpellCastCompat {
             mDataSetSpellCooldown = cData.getMethod("setSpellCooldown", String.class, int.class, EntityMaid.class);
             mDataIsSpellOnCooldown = cData.getMethod("isSpellOnCooldown", String.class);
             mDataGetMagicData = cMaidData.getMethod("getMagicData");
-            mDataSetCurrentCastingSpell = cMaidData.getMethod("setCurrentCastingSpell", cSlot);
+            // 实测五百七十五【同款版本差异】：1.21.1-1.8.4 是
+            // `setCurrentCastingSpell(SpellSlot)`，1.20.1-1.8.2 是
+            // `setCurrentCastingSpell(SpellData)`——两种都认（调用侧按形参类型传对对象，
+            // 见 castSpecific；SpellSlot 在 1.20.1 依旧存在，读她书单槽位还要用）。
+            try {
+                mDataSetCurrentCastingSpell = cMaidData.getMethod("setCurrentCastingSpell", cSlot);
+            } catch (NoSuchMethodException e1) {
+                mDataSetCurrentCastingSpell = cMaidData.getMethod("setCurrentCastingSpell", spellDataCls);
+            }
             mDataSetCachedCastSource = cMaidData.getMethod("setCachedCastSource", cCastSource);
             mDataResetCastingState = cMaidData.getMethod("resetCastingState");
             mSpellRegistryGetSpell = cRegistry.getMethod("getSpell", net.minecraft.resources.ResourceLocation.class);
@@ -507,8 +530,11 @@ public final class MaidSpellCastCompat {
             mMagicInitiateCast.invoke(magic, spell, level, castTime, oCastSourceCommand, "offhand");
             mSpellOnServerPreCast.invoke(spell, maid.m_9236_(), level, maid, magic);
             Object spellData = cSpellData.newInstance(spell, level);
-            Object slot = cSpellSlot.newInstance(spellData, 0);
-            mDataSetCurrentCastingSpell.invoke(data, slot);
+            // 实测五百七十五：按目标方法的形参类型决定传什么——1.21.1 要 SpellSlot(spellData, 0)，
+            // 1.20.1 要裸 SpellData（它的 setter 就收这个）。
+            Object slotArg = mDataSetCurrentCastingSpell.getParameterTypes()[0].isInstance(spellData)
+                    ? spellData : cSpellSlot.newInstance(spellData, 0);
+            mDataSetCurrentCastingSpell.invoke(data, slotArg);
             mDataSetCachedCastSource.invoke(data, oCastSourceCommand);
             mDataSetCasting.invoke(data, true);
             // 位移法术都是 INSTANT：立刻结算，不留吟唱
@@ -555,13 +581,17 @@ public final class MaidSpellCastCompat {
      * 这类需要抢飞行权的场合（见 MaidFlightCombatBehavior 的用法说明）。
      */
     public static void stopCasting(EntityMaid maid) {
-        if (maid == null || !available()) {
-            return;
+        if (maid == null || !available() || mStopAllCasting == null) {
+            return; // 两版签名都没探到 → 该能力不可用（静默降级）
         }
         try {
             Object manager = mGetOrCreateManager.invoke(null, maid);
             if (manager != null) {
-                mStopAllCasting.invoke(manager);
+                if (mStopAllCasting.getParameterCount() == 0) {
+                    mStopAllCasting.invoke(manager);            // 1.21.1：stopAllCasting()
+                } else {
+                    mStopAllCasting.invoke(manager, maid);      // 1.20.1：stopAllCasting(maid)
+                }
             }
         } catch (Throwable ignored) {
         }

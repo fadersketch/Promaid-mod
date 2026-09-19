@@ -57,6 +57,20 @@ public final class TwilightFanKit {
     /** 扇风盒：视线方向前 3 格、半径 2 格（PeacockFanItem 同值） */
     private static final double FAN_RANGE = 3.0;
     private static final double FAN_RADIUS = 2.0;
+    /**
+     * 实测五百七十五：**女仆用扇的竖直速度上限**（格/tick）。
+     *
+     * 【为什么玩家的公式在女仆身上会"飞太高"】原版公式里那一项 `(视线×2 − 速度)×0.5`
+     * 是"把速度往 视线×2 收敛"的意思——**玩家挥扇时本来就在高速滑翔**（速度≈视线×1.5），
+     * 这一项几乎抵消，实际只吃到 视线×0.1 + 竖直 1.25；而女仆常常是**从地面起跳、
+     * 速度接近 0** 时挥扇（起跳那一挥、抬头 62° 补高那一挥），同一公式就变成
+     * 视线×1.1 + 1.25 ≈ **2.2 格/tick** 的竖直冲量——反馈原话："给予的飞行高度有点太高了，
+     * 远远高于玩家飞行的高度"。
+     *
+     * 所以这里只夹**合成后的竖直速度**（水平照搬原公式不动）：不高过这个值，
+     * 也绝不低于当前速度（她本来冲得更快时不减速）。
+     */
+    private static final double FAN_MAX_UP = 0.85;
 
     private TwilightFanKit() {
     }
@@ -115,11 +129,19 @@ public final class TwilightFanKit {
         try {
             Vec3 look = maid.getLookAngle();
             Vec3 mv = maid.getDeltaMovement();
-            // 滑翔助推：与 TF use() 滑翔分支逐字同式
-            maid.setDeltaMovement(mv.add(
-                    look.x * 0.1 + (look.x * 2.0 - mv.x) * 0.5,
-                    look.y * 0.1 + (look.y * 2.0 - mv.y) * 0.5 + 1.25,
-                    look.z * 0.1 + (look.z * 2.0 - mv.z) * 0.5));
+            // 滑翔助推：与 TF use() 滑翔分支同式（水平逐字同式）
+            double nx = mv.x + (look.x * 0.1 + (look.x * 2.0 - mv.x) * 0.5);
+            double ny = mv.y + (look.y * 0.1 + (look.y * 2.0 - mv.y) * 0.5 + 1.25);
+            double nz = mv.z + (look.z * 0.1 + (look.z * 2.0 - mv.z) * 0.5);
+            // 实测五百七十五：竖直分量夹到 FAN_MAX_UP（见常量注释——玩家公式在"低速起跳挥扇"
+            // 时竖直冲量能到 2.2 格/tick，比玩家实际体感高太多；不夹会一路窜上天）
+            if (ny > FAN_MAX_UP) {
+                ny = Math.max(mv.y, FAN_MAX_UP);
+            }
+            maid.setDeltaMovement(new Vec3(nx, ny, nz));
+            // 实测五百七十五：挥臂动作——反馈"女仆也没有使用的动作（挥臂一下）"。
+            // 与其它武器口径一致：服务器侧调用即同步给客户端（纯视觉，不影响任何判定）。
+            maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             int fanned = fanEntities(level, maid, look);
             damageFan(maid, fan, fanned);
             playWhoosh(level, maid);
