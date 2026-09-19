@@ -3618,13 +3618,11 @@ public final class BlueprintLib {
                 }
             }
             // 绑定过区块计划的女仆背包（本维度）
-            net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                    sl.m_141937_(), sl.m_141937_(), sl.m_141937_(),
-                    sl.m_151558_(), sl.m_151558_(), sl.m_151558_());
+            // 实测五百六十四（PR #9 移植）：改为 getAllEntities() 遍历本维度全部实体
+            // ——旧版的原点高度盒扫不到远处的女仆，Sable 也不会拒查它
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : sl.m_45976_(
-                    net.minecraft.world.entity.Entity.class, whole)) {
+            for (net.minecraft.world.entity.Entity e : sl.m_8583_()) {
                 if (!(e instanceof EntityMaid m) || BuildPlan.getBoundPlanId(m) == null) {
                     continue;
                 }

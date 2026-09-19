@@ -66,13 +66,10 @@ public final class PetImmunityGuard {
                 return;
             }
             long now = server.m_129785_().iterator().next().m_46467_();
-            net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                    -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
             for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
                 // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                 // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                for (net.minecraft.world.entity.Entity e : lvl.m_45976_(
-                        net.minecraft.world.entity.Entity.class, whole)) {
+                for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }

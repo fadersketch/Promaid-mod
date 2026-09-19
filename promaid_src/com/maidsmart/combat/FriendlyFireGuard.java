@@ -35,8 +35,6 @@ public final class FriendlyFireGuard {
     private static int scanCounter = 0;
     /** 仇恨清除日志限频（10 秒/女仆） */
     private static final java.util.Map<java.util.UUID, Long> HATE_LOG = new java.util.HashMap<>();
-    /** 全维度范围（与 PetImmunityGuard 同款） */
-    private static final AABB WHOLE = new AABB(-131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
 
     private FriendlyFireGuard() {
     }
@@ -81,7 +79,9 @@ public final class FriendlyFireGuard {
                 return;
             }
             for (ServerLevel lvl : server.m_129785_()) {
-                for (Entity e : lvl.m_6443_(Entity.class, WHOLE, e0 -> true)) {
+                // 实测五百六十四（PR #9 移植）：全世界 AABB → getAllEntities()——
+                // Sable 会拒查超大 AABB 并静默返回空
+                for (Entity e : lvl.m_8583_()) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }
