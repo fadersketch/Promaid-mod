@@ -2055,6 +2055,19 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL, s),
                 "空袭施法间隔（tick，默认 20 = 1 秒）：两次发起施法之间的最短间隔。法术模组自己管吟唱时长、法术冷却与「放哪个法术」（随机挑一个不在冷却、不在黑名单的），这一项只管发起节奏——调小 = 法术更密、武器退居其次；调大 = 武器为主、法术为辅。"));
+        // v1.2.0 实测五百六十六：空袭·位移法术（冲刺加速 / 平地起飞）
+        this.rows.add(new BoolRow("空袭用位移法术",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_CAST.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_CAST.set(v),
+                "空袭用位移法术（默认开，需装《车万女仆：魔法》+ 位移类法术）：把冲刺类法术当推进器——飞行途中对着目标冲一口给速度续命（鞘翅掉速就是掉高度），没有烟花时还能平地起飞。默认认【烈焰冲锋】（irons_spellbooks:burning_dash，飞行加速）与【升腾】（irons_spellbooks:ascension，起飞）；识别走法术模组自己维护的书单。"));
+        this.rows.add(new BoolRow("平地起飞也用位移法术",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_TAKEOFF.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_TAKEOFF.set(v),
+                "空袭平地起飞也用位移法术（默认开）：烟花用完或冷却中时，抬头 62° 放一记向上冲量的法术把自己顶上天空，不用再站在地上干等。关掉 = 只在飞行途中加速，起飞仍然只认烟花。"));
+        this.rows.add(new NumRow("位移法术间隔（tick）",
+                String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL, s),
+                "位移法术间隔（tick，默认 40 = 2 秒）：两次冲刺/起飞之间的最短间隔；同时写回法术模组自己的冷却表，避免与它的随机施法互相打架。调小 = 窜得更勤。"));
         this.rows.add(new NumRow("空袭施法距离（格）",
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE, s),

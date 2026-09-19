@@ -64,5 +64,8 @@
   "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)",
   "config.promaid.combat.flightSpellCast": "Cast Spells During Air Raid (requires Touhou Little Maid: Spell)",
   "config.promaid.combat.flightSpellCastInterval": "Air Raid Cast Interval (ticks)",
-  "config.promaid.combat.flightSpellCastRange": "Air Raid Cast Range (blocks)"
+  "config.promaid.combat.flightSpellCastRange": "Air Raid Cast Range (blocks)",
+  "config.promaid.combat.flightDashCast": "Use Dash Spells During Air Raid (Touhou Little Maid: Spell)",
+  "config.promaid.combat.flightDashTakeoff": "Use Dash Spells for Ground Takeoff",
+  "config.promaid.combat.flightDashInterval": "Air Raid Dash Interval (ticks)"
 }
