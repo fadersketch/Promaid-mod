@@ -321,7 +321,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 的节奏向她当前的空袭目标发起一次施法；法术书放在**饰品栏**完全可用（法术模组
      * 自己的 ISpellContainer 扫描覆盖 curios，不看主手）。
      *
-     * 需要装《车万女仆：魔法》（touhou_little_maid_spell）——没装时本项无任何效果
+     * 需要装《车万女仆：万法皆通》（touhou_little_maid_spell）——没装时本项无任何效果
      * （软兼容，反射适配层见 com.maidsmart.combat.MaidSpellCastCompat）。
      */
     public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_SPELL_CAST;
@@ -1492,16 +1492,16 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.flightRecallDistance")
                 .defineInRange("flightRecallDistance", 100, 0, 1000);
         // 实测五百六十七（PR #8 移植）：空袭·法术层（需求："用空袭的默认武器的同时进行法术释放"）
-        COMBAT_FLIGHT_SPELL_CAST = BUILDER.comment("空袭顺带施法（默认开，需装《车万女仆：魔法》touhou_little_maid_spell）：女仆在近战空袭 / 远程空袭途中，除了用默认武器打，还会向当前目标顺带释放法术——法术书放在背包或饰品栏即可（法术模组自己扫背包与 curios，不看主手，所以不占武器位）。施法时机只挑「本来就该面向目标」的两个相位（远战盘旋开火前、近战已在目标上方准备俯冲时）：法术模组在吟唱期间每 tick 把女仆朝向拧向目标，而鞘翅滑翔的转向力来自视线方向，挑这两个时机才不会被抢朝向（爬升段要求背离敌人抬头吃烟花推力、收翅俯冲那一记是致命一击，这两段刻意不施法）。没装法术模组时本项无任何效果。关闭 = 空袭只用手上的武器")
+        COMBAT_FLIGHT_SPELL_CAST = BUILDER.comment("空袭顺带施法（默认开，需装《车万女仆：万法皆通》touhou_little_maid_spell）：女仆在近战空袭 / 远程空袭途中，除了用默认武器打，还会向当前目标顺带释放法术——法术书放在背包或饰品栏即可（法术模组自己扫背包与 curios，不看主手，所以不占武器位）。施法时机只挑「本来就该面向目标」的两个相位（远战盘旋开火前、近战已在目标上方准备俯冲时）：法术模组在吟唱期间每 tick 把女仆朝向拧向目标，而鞘翅滑翔的转向力来自视线方向，挑这两个时机才不会被抢朝向（爬升段要求背离敌人抬头吃烟花推力、收翅俯冲那一记是致命一击，这两段刻意不施法）。没装法术模组时本项无任何效果。关闭 = 空袭只用手上的武器")
                 .translation("config.promaid.combat.flightSpellCast").define("flightSpellCast", true);
         COMBAT_FLIGHT_SPELL_CAST_INTERVAL = BUILDER.comment("空袭施法间隔（tick，默认 20 = 1 秒）：两次发起施法之间的最短间隔。法术模组自己管吟唱时长、法术冷却与「放哪个法术」（随机挑一个不在冷却、不在黑名单的），这一项只管发起节奏——调小 = 法术放得更密、武器退居其次；调大 = 武器为主、法术为辅")
                 .translation("config.promaid.combat.flightSpellCastInterval")
                 .defineInRange("flightSpellCastInterval", 20, 5, 200);
 
         // v1.2.0 实测五百七十二：位移法术分两类——"提供高度"（起飞/补高）与"提供速度"（飞行加速）
-        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：魔法》+ 对应法术）：用于**平地起飞**与**补高**——施法前把她的俯仰摆到抬头 62°（并清掉法术模组那份施法目标，否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
+        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：用于**平地起飞**与**补高**——施法前把她的俯仰摆到抬头 62°（并清掉法术模组那份施法目标，否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
                 .translation("config.promaid.combat.flightDashClimb").define("flightDashClimb", true);
-        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：魔法》+ 对应法术）：飞行途中对着目标冲一口给速度续命（鞘翅掉速就是掉高度）。这一类只负责「在空中加速」，不参与起飞判定；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
+        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：飞行途中对着目标冲一口给速度续命（鞘翅掉速就是掉高度）。这一类只负责「在空中加速」，不参与起飞判定；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
                 .translation("config.promaid.combat.flightDashBoost").define("flightDashBoost", true);
         COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）")
                 .translation("config.promaid.combat.flightDashClimbSpells")

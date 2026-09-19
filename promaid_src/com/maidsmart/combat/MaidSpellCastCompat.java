@@ -8,7 +8,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 
 /**
- * 《车万女仆：魔法》（Touhou Little Maid: Spell，modid = touhou_little_maid_spell，
+ * 《车万女仆：万法皆通》（Touhou Little Maid: Spell，modid = touhou_little_maid_spell，
  * 作者 yimeng261）的**软兼容层**——让女仆在空袭过程中顺带释放法术。
  *
  * 【为什么走反射，不编译期依赖】本模组的既定口径是"只保留通用武器联动、不做第三方专属
