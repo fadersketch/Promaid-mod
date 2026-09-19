@@ -2074,10 +2074,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL, s),
                 "两次起飞/冲刺/补高之间的最短间隔（tick，默认 40 = 2 秒）"));
-        this.rows.add(new BoolRow("位移法术·尊重法术自身冷却",
-                MaidSmartConfig.COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN.get(),
-                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN.set(v),
-                "开启后写回冷却取 max(上面的间隔, 法术自身冷却)——例如烈焰冲锋原版冷却 10 秒，她不会比玩家用同一法术更频繁；关掉则完全按上面的间隔来（窜得更勤）"));
+        this.rows.add(new BoolRow("飞行加速·尊重法术冷却",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN.set(v),
+                "只管【提供速度】那一类（空中冲刺）：开启后写回冷却取 max(上面的间隔, 法术自身冷却)——例如烈焰冲锋原版 10 秒，她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。注意【提供高度】（起飞/补高）始终不受法术自身冷却约束、只按上面的间隔放——与激流三叉戟忽略「水中/雨中」的既有口径一致，也是「没有烟花也能持续飞」的前提"));
         this.rows.add(new NumRow("空袭施法距离（格）",
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE, s),
