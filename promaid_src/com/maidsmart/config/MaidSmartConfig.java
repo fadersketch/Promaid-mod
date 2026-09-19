@@ -330,6 +330,53 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 实测五百六十七：空袭期间的施法距离（格，默认 24 = 法术模组自己的 maxSpellRange）。 */
     public static final ForgeConfigSpec.DoubleValue COMBAT_FLIGHT_SPELL_CAST_RANGE;
     /**
+     * v1.2.0 实测五百七十二【空袭·位移法术：分"提供高度"与"提供速度"两类】（默认开）。
+     *
+     * 需求：① 位移类法术用于**飞行加速**；② 用于**平地起飞**（来自法术模组作者转达的玩家反馈）。
+     *
+     * 【为什么要分两类】ISS 里两类位移法术的**冲量方向**不同，行为逻辑因此也不同：
+     * - 「升腾」`irons_spellbooks:ascension`：`motion = 视线水平分量 + (0,5,0)` —— 给**向上**初速；
+     * - 「烈焰冲锋」`irons_spellbooks:burning_dash`：`forward.multiply(3,1,3).normalize().add(0,.25,0)`——
+     *   **沿视线**冲刺，而且**垂直分量被保留**（水平只放大 3 倍），站在地上时还会先把她抬高 1.5 格。
+     *   也就是说：**抬头瞄着放烈焰冲锋 = 也能起飞**（实测仰角 62° 时冲量 Y ≈ 0.98 格/tick）。
+     *
+     * 因此本组配置分成：
+     * - {@link #COMBAT_FLIGHT_DASH_CLIMB_SPELLS}「提供高度」：用于**起飞**与**补高**——施法前把她的
+     *   俯仰摆到抬头（并清掉法术模组那份施法目标，否则它施法前会把朝向拧平）；
+     * - {@link #COMBAT_FLIGHT_DASH_BOOST_SPELLS}「提供速度」：用于**飞行加速**——对着目标冲，
+     *   让法术模组自己的朝向逻辑生效即可。
+     * 一个法术可以**同时出现在两张表里**（烈焰冲锋默认就是这样：既顶得起人、也能在空中续速）。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_CLIMB;
+    /** v1.2.0 实测五百七十二：「提供速度」那一类是否启用（默认开）——飞行途中对着目标冲刺续速 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_BOOST;
+    /** v1.2.0 实测五百七十二：「提供高度」的法术表（用于起飞与补高） */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> COMBAT_FLIGHT_DASH_CLIMB_SPELLS;
+    /** v1.2.0 实测五百七十二：「提供速度」的法术表（用于飞行加速） */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> COMBAT_FLIGHT_DASH_BOOST_SPELLS;
+    /**
+     * v1.2.0 实测五百七十二：两次位移法术之间的最短间隔（tick，默认 40 = 2 秒）。
+     * 这是我们这边的节流下限；会不会把法术模组自己的冷却压短见
+     * {@link #COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN}。
+     */
+    public static final ForgeConfigSpec.IntValue COMBAT_FLIGHT_DASH_INTERVAL;
+    /**
+     * v1.2.0 实测五百七十二：**「提供速度」那一类**是否尊重法术自身冷却（默认开）。
+     *
+     * 【口径：起飞不设限、加速照旧】"提供高度"（起飞/补高）**始终不受法术自身冷却约束**——
+     * 只按 {@link #COMBAT_FLIGHT_DASH_INTERVAL} 的节奏放。依据有两条：
+     * ① 本模组对**位移手段**一向是"让女仆比玩家宽松"：激流三叉戟那一套就是
+     *   **忽略原版"必须在水中/雨中"的限制**（玩家做不到、女仆能做）；
+     * ② "平地起飞"这个需求本身要求她**没有烟花也能持续飞**——若起飞也卡法术冷却，
+     *   升腾 15 秒一记只能把她抬约 6 格、随后缓降（实测），需求就等于没满足。
+     *
+     * 本项管的是"提供速度"那一类（飞行加速）：开启时写回冷却取
+     * `max(空袭位移间隔, 法术自身冷却)`（例：烈焰冲锋 10 秒），不会让空中冲刺比玩家更频繁；
+     * 关掉则那一类也完全按空袭间隔来。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN;
+
+    /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
      *
      * 需求原文："玩家和其他女仆免疫女仆释放的风暴/风弹效果，不会被震开。当前版本免疫伤害，
@@ -1428,6 +1475,28 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_SPELL_CAST_INTERVAL = BUILDER.comment("空袭施法间隔（tick，默认 20 = 1 秒）：两次发起施法之间的最短间隔。法术模组自己管吟唱时长、法术冷却与「放哪个法术」（随机挑一个不在冷却、不在黑名单的），这一项只管发起节奏——调小 = 法术放得更密、武器退居其次；调大 = 武器为主、法术为辅")
                 .translation("config.promaid.combat.flightSpellCastInterval")
                 .defineInRange("flightSpellCastInterval", 20, 5, 200);
+
+        // v1.2.0 实测五百七十二：位移法术分两类——"提供高度"（起飞/补高）与"提供速度"（飞行加速）
+        COMBAT_FLIGHT_DASH_CLIMB = BUILDER.comment("空袭·位移法术【提供高度】（默认开，需装《车万女仆：魔法》+ 对应法术）：用于**平地起飞**与**补高**——施法前把她的俯仰摆到抬头 62°（并清掉法术模组那份施法目标，否则它施法前会把朝向拧平）。默认表里放了【升腾】irons_spellbooks:ascension（原生的向上冲量）与【烈焰冲锋】irons_spellbooks:burning_dash（沿视线冲刺、垂直分量保留，所以抬头瞄着放同样能起飞——只带这一个也能上天）。没有烟花/羽扇时，它也是空袭模式能否激活的那件「推进剂」")
+                .translation("config.promaid.combat.flightDashClimb").define("flightDashClimb", true);
+        COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：魔法》+ 对应法术）：飞行途中对着目标冲一口给速度续命（鞘翅掉速就是掉高度）。这一类只负责「在空中加速」，不参与起飞判定；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
+                .translation("config.promaid.combat.flightDashBoost").define("flightDashBoost", true);
+        COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）")
+                .translation("config.promaid.combat.flightDashClimbSpells")
+                .defineList("flightDashClimbSpells",
+                        List.of("irons_spellbooks:ascension", "irons_spellbooks:burning_dash"),
+                        o -> o instanceof String s && !s.isEmpty());
+        COMBAT_FLIGHT_DASH_BOOST_SPELLS = BUILDER.comment("【提供速度】的法术表（填完整法术 id）：用于飞行加速。默认只有 burning_dash；要加别的冲刺类法术往这里加（例如把某些瞬移/突进法术也当加速用）")
+                .translation("config.promaid.combat.flightDashBoostSpells")
+                .defineList("flightDashBoostSpells",
+                        List.of("irons_spellbooks:burning_dash"),
+                        o -> o instanceof String s && !s.isEmpty());
+        COMBAT_FLIGHT_DASH_INTERVAL = BUILDER.comment("位移法术间隔（tick，默认 40 = 2 秒）：两次起飞/冲刺/补高之间的最短间隔（我们这边的节流下限）。搭配下面那条「尊重法术自身冷却」一起看——默认下真实间隔取两者较大值")
+                .translation("config.promaid.combat.flightDashInterval")
+                .defineInRange("flightDashInterval", 40, 10, 600);
+        COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN = BUILDER.comment("位移法术·【提供速度】尊重法术自身冷却（默认开）：只管空中冲刺那一类——开启时写回冷却取 max(空袭位移间隔, 法术自身冷却)（例：烈焰冲锋原版 10 秒），她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。\n\n注意【提供高度】（起飞/补高）**始终不受法术自身冷却约束**、只按上面的间隔放——依据是本模组对位移手段一向让女仆比玩家宽松（激流三叉戟就是忽略原版「必须在水中/雨中」的限制），而且「平地起飞」本身就要求她没烟花也能持续飞：若这里也卡冷却，升腾 15 秒一记只抬约 6 格后缓降（实测），需求等于没满足")
+                .translation("config.promaid.combat.flightDashBoostRespectCooldown")
+                .define("flightDashBoostRespectCooldown", true);
         COMBAT_FLIGHT_SPELL_CAST_RANGE = BUILDER.comment("空袭施法距离（格，默认 24）：空袭中只在目标进入这个 3D 距离内才发起施法。默认 24 与法术模组自己的 maxSpellRange 一致（它的任务行为用的就是这个上限）；调大可让她在更远处起手（法术飞行途中还能命中），调小 = 只有贴近了才放法术")
                 .translation("config.promaid.combat.flightSpellCastRange")
                 .defineInRange("flightSpellCastRange", 24.0, 4.0, 64.0);

@@ -2056,6 +2056,29 @@ public class PromaidConfigScreen extends Screen {
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_INTERVAL, s),
                 "空袭施法间隔（tick，默认 20 = 1 秒）：两次发起施法之间的最短间隔。法术模组自己管吟唱时长、法术冷却与「放哪个法术」（随机挑一个不在冷却、不在黑名单的），这一项只管发起节奏——调小 = 法术更密、武器退居其次；调大 = 武器为主、法术为辅。"));
+        // v1.2.0 实测五百七十二：空袭·位移法术——分"提供高度"（起飞/补高）与"提供速度"（飞行加速）
+        this.rows.add(new BoolRow("位移法术·起飞/补高",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.set(v),
+                "启用【提供高度】那一类位移法术：烟花/羽扇不可用时平地起飞，以及空中不够高时补一口高度。施法前会把她的俯仰摆到抬头 62°。"));
+        this.rows.add(new BoolRow("位移法术·飞行加速",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST.set(v),
+                "启用【提供速度】那一类位移法术：滑翔途中对着目标冲刺续速（鞘翅掉速就是掉高度）。"));
+        this.rows.add(new TextRow("提供高度的法术表", String.join("、", MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()),
+                s -> setStringList(MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS, s),
+                "【提供高度】的法术 id（用、或逗号分隔）：用于起飞与补高。默认 ascension（升腾，原生向上冲量）+ burning_dash（烈焰冲锋——沿视线冲刺且垂直分量保留，抬头瞄着放同样能顶人起来，所以只带它也起飞得动）"));
+        this.rows.add(new TextRow("提供速度的法术表", String.join("、", MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_SPELLS.get()),
+                s -> setStringList(MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_SPELLS, s),
+                "【提供速度】的法术 id（用、或逗号分隔）：用于飞行加速。默认只有 burning_dash（烈焰冲锋）；要加别的冲刺类法术填这里"));
+        this.rows.add(new NumRow("位移法术间隔（tick）",
+                String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL, s),
+                "两次起飞/冲刺/补高之间的最短间隔（tick，默认 40 = 2 秒）"));
+        this.rows.add(new BoolRow("飞行加速·尊重法术冷却",
+                MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN.set(v),
+                "只管【提供速度】那一类（空中冲刺）：开启后写回冷却取 max(上面的间隔, 法术自身冷却)——例如烈焰冲锋原版 10 秒，她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。注意【提供高度】（起飞/补高）始终不受法术自身冷却约束、只按上面的间隔放——与激流三叉戟忽略「水中/雨中」的既有口径一致，也是「没有烟花也能持续飞」的前提"));
         this.rows.add(new NumRow("空袭施法距离（格）",
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_FLIGHT_SPELL_CAST_RANGE, s),
@@ -3040,6 +3063,27 @@ public class PromaidConfigScreen extends Screen {
         }
         return false;
     }
+
+    /** v1.2.0 实测五百七十二：字符串列表配置（用、或逗号分隔；空项丢弃） */
+    private static boolean setStringList(ForgeConfigSpec.ConfigValue<List<? extends String>> value, String s) {
+        try {
+            java.util.List<String> out = new java.util.ArrayList<>();
+            for (String part : s.split("[、,;\\s]+")) {
+                String t = part.trim();
+                if (!t.isEmpty()) {
+                    out.add(t);
+                }
+            }
+            if (out.isEmpty()) {
+                return false; // 全空 = 不改（与 TextRow 的"跳过空文本"口径一致）
+            }
+            value.set(out);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
 
     // ---------- 渲染（标签按行位置画；无滚轮，全部静态布局） ----------
 
