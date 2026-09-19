@@ -12,7 +12,7 @@
 
 | 树 | `promaid-mod` | `maidmods`（修正前） |
 | --- | --- | --- |
-| `promaid_src` | v1.2.1，467 文件 | v1.1.0，247 文件（停在 2026-08-24） |
+| `promaid_src` | v1.2.2，496 文件 | v1.1.0，247 文件（停在 2026-08-24） |
 | `promaid_src_neo` | 470 文件 | **不存在** |
 
 当时若直接跑 `sync_to_git.bat`，`robocopy /MIR` 会**删除** `promaid-mod` 侧
@@ -27,7 +27,7 @@
 
 | 项目 | 镜像仓库 | 分支 | 当前版本 |
 | --- | --- | --- | --- |
-| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.1 |
+| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.2 |
 | Heartfelt-connection | `C:\Users\Sketch\.zcode\workspace\default\heartfelt-mod` | `main` | v1.0.2 |
 
 - `promaid-mod` 另有分支 `experimental/memory-port`，**停在 v1.1.0、不含 `promaid_src_neo`**，
