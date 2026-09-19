@@ -43,6 +43,11 @@ public final class PromaidClientSetup {
         com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();
     }
 
+    /** 实测五百六十二：潜行+中键 工位标记的客户端手势识别（仅客户端注册） */
+    public static void registerWorkPosMarker() {
+        com.maidsmart.marker.WorkPosMarkerClient.register();
+    }
+
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
         com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
     }

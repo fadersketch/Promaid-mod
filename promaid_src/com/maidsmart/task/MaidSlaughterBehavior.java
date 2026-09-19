@@ -143,6 +143,10 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
             net.minecraft.core.BlockPos base = maid.m_20183_();
             net.minecraft.core.BlockPos spot = new net.minecraft.core.BlockPos(
                     base.m_123341_() + dx, base.m_123342_(), base.m_123343_() + dz);
+            // 实测五百六十二：闲逛点同样受工作圈钳制（home 模式不逛出限制圈）
+            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+                return; // 本轮不闲逛，下轮再选
+            }
             maid.m_6274_().m_21879_(MemoryModuleType.f_26370_,
                     new net.minecraft.world.entity.ai.memory.WalkTarget(
                             new net.minecraft.world.entity.ai.behavior.BlockPosTracker(spot),
@@ -191,6 +195,11 @@ public class MaidSlaughterBehavior extends Behavior<EntityMaid> {
             // UNDEAD（javap 实证），原版牲畜全命中；必须限定 AbstractHorse
             if (a instanceof net.minecraft.world.entity.animal.horse.AbstractHorse
                     && a.m_6336_() == net.minecraft.world.entity.MobType.f_21640_) {
+                continue;
+            }
+            // 实测五百六十二：home 模式限制圈外的牲畜不进组（工作区域=工位锚点圈，
+            // 追出圈的追踪走位会被原版 Await 清掉、收工还会被拉回——不如一开始不选）
+            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, a.m_20183_())) {
                 continue;
             }
             groups.computeIfAbsent(a.m_6095_(), k -> new ArrayList<>()).add(a);

@@ -89,6 +89,9 @@ public final class ScheduleNetworking {
                 MaidCoordPacket::encode, MaidCoordPacket::decode, MaidCoordPacket::handle);
         CHANNEL.registerMessage(17, MaidTeleportToPacket.class,
                 MaidTeleportToPacket::encode, MaidTeleportToPacket::decode, MaidTeleportToPacket::handle);
+        // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
+        CHANNEL.registerMessage(18, MarkWorkPosPacket.class,
+                MarkWorkPosPacket::encode, MarkWorkPosPacket::decode, MarkWorkPosPacket::handle);
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */
@@ -1232,6 +1235,80 @@ public final class ScheduleNetworking {
         if (seg != null) {
             maid.getPersistentData().m_128359_(ScheduleData.APPLIED_TAG,
                     ScheduleData.dayIndex(level) + "|" + seg.startMin());
+        }
+    }
+
+    /* ==================== 实测五百六十二：潜行+中键 工位标记 ==================== */
+
+    /** C2S：玩家潜行+中键方块 → 把身边 32 格内自家 home 模式女仆的工位/休闲锚点
+     *  标到该处并立即 restrictTo。粉丝反馈的直接入口："不跟随状态下女仆找不到
+     *  工作区域"——标记=快速设定 TLM home 的工位锚点（复用原版 SchedulePos 骨架，
+     *  不另起一套定点系统）。睡眠锚点不动（夜间照常回原处）。 */
+    public static class MarkWorkPosPacket {
+        public final int x;
+        public final int y;
+        public final int z;
+
+        public MarkWorkPosPacket(int x, int y, int z) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+        }
+
+        public static void encode(MarkWorkPosPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.x);
+            buf.writeInt(pkt.y);
+            buf.writeInt(pkt.z);
+        }
+
+        public static MarkWorkPosPacket decode(FriendlyByteBuf buf) {
+            return new MarkWorkPosPacket(buf.readInt(), buf.readInt(), buf.readInt());
+        }
+
+        public static void handle(MarkWorkPosPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer player = ctx.get().getSender();
+                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
+                    return;
+                }
+                // 标记点距玩家 ≤64 格（客户端射线 8 格，这里防御恶意远标）
+                double dSq = player.m_20275_(pkt.x + 0.5, pkt.y + 0.5, pkt.z + 0.5);
+                if (dSq > 64.0 * 64.0) {
+                    return;
+                }
+                BlockPos pos = new BlockPos(pkt.x, pkt.y, pkt.z);
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                        player.m_20185_() - 32, player.m_20186_() - 32, player.m_20189_() - 32,
+                        player.m_20185_() + 32, player.m_20186_() + 32, player.m_20189_() + 32);
+                int n = 0;
+                for (net.minecraft.world.entity.Entity e : level.m_45976_(
+                        net.minecraft.world.entity.Entity.class, box)) {
+                    if (!(e instanceof EntityMaid maid)
+                            || maid.m_269323_() != player
+                            || !maid.isHomeModeEnable()) {
+                        continue;
+                    }
+                    var sp = maid.getSchedulePos();
+                    if (sp == null) {
+                        continue;
+                    }
+                    sp.setWorkPos(pos);
+                    sp.setIdlePos(pos);
+                    sp.setConfigured(true);
+                    sp.restrictTo(maid);
+                    n++;
+                }
+                String at = "(" + pkt.x + ", " + pkt.y + ", " + pkt.z + ")";
+                if (n > 0) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a7a已把 " + n + " 名女仆的工作区域标到 " + at
+                                    + "——她们的任务选点/散步/巡逻都会收进这里（半径=「排班活动半径」）"));
+                } else {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                            "\u00a77附近 32 格内没有在家模式（不跟随/排班中）的女仆，标记没生效"));
+                }
+            });
+            ctx.get().setPacketHandled(true);
         }
     }
 }
