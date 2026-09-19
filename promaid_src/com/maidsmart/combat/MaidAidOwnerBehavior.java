@@ -277,6 +277,23 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 aided = true;
             }
         }
+        // 5.5 口渴值低 → 喂水（实测五百七十一：软联动「口渴」Thirst Was Taken——
+        // 判定位点 = 口渴值，与饱食度分支同款独立判定（不依赖 !aided）。
+        // 效果 = 主人自己喝：饮品自己的 finishUsingItem 走完整路径（药水瓶的口渴由
+        // TWT 的 MixinPotionItem 施加、TWT 自家物品自己结算、可食用走 FoodData 路径，
+        // 玻璃瓶/陶碗/空桶等容器返还照旧）；其他 mod 的装水工具由 ThirstCompat
+        // 按钩子同口径兜底。模组不在场时 available() 为假，整条分支零开销）。
+        if (com.maidsmart.action.ThirstCompat.available()
+                && com.maidsmart.config.MaidSmartConfig.AID_THIRST_THRESHOLD != null) {
+            Integer thirst = com.maidsmart.action.ThirstCompat.ownerThirst(owner);
+            if (thirst != null
+                    && thirst < com.maidsmart.config.MaidSmartConfig.AID_THIRST_THRESHOLD.get()) {
+                if (this.feedDrinkToOwner(maid, owner)) {
+                    maid.getChatBubbleManager().addTextChatBubble("主人口渴了吧，给你带了喝的～");
+                    aided = true;
+                }
+            }
+        }
         // 6. 主人附近有威胁且没有力量/迅捷增益 → 增益药水助战（v1.5.252g7：
         this.ownerBuffChain(level, maid, owner, aided, maidId);
 
@@ -1601,5 +1618,156 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             }
         }
         return false;
+    }
+
+    /* ================= 实测五百七十一：喂水（软联动「口渴」Thirst Was Taken） ================= */
+
+    /**
+     * 喂水主流程——结构照搬喂食链（feedHealingFood）：手持（主手→副手）与背包同扫、
+     * 按分选优、副本喂给主人、成功才消耗来源。
+     *
+     * 【与喂食的差异（需求原文："把判定位点改为口渴值即可"）】
+     * - 门禁：白名单（{@code AID_DRINK_WHITELIST}，留空 = 不喂）且「口渴」模组认识该物品
+     *   （{@code itemRestoresThirst}，能真的回口渴值才喂——白名单是玩家意愿，这一层是
+     *   模组口径，喂了没效果的饮品只会浪费）；
+     * - 选优：口渴恢复量 ×100 + 解渴缓冲（ThirstHelper.getThirst/getQuenched），
+     *   替代食物链的饱和度评分；
+     * - 喝的语义：不调 {@code owner.eat}（那是吃的路径，饮品没有食物组件）——直接
+     *   {@code stack.finishUsingItem(level, owner)}（SRG m_5922_），即"主人亲手喝完"：
+     *   药水瓶效果 + TWT 口渴/纯度（MixinPotionItem / DrinkableItem 自结算）+ 音效 +
+     *   容器返还全走原版路径；容器栈塞回女仆背包（与喂蜂蜜返还玻璃瓶同一口径）；
+     * - 其他 mod 的装水工具：finishUsingItem 不带口渴的，由
+     *   {@link ThirstCompat#applyHookThirst} 按钩子同口径兜底（绝不双重计数）。
+     */
+    private boolean feedDrinkToOwner(EntityMaid maid, ServerPlayer owner) {
+        if (com.maidsmart.config.MaidSmartConfig.AID_DRINK_WHITELIST == null) {
+            return false; // 配置未注册 = 口渴模组不在场（双保险，正常不会走到）
+        }
+        java.util.List<? extends String> whitelist =
+                com.maidsmart.config.MaidSmartConfig.AID_DRINK_WHITELIST.get();
+        if (whitelist == null || whitelist.isEmpty()) {
+            return false; // 白名单留空 = 明确不喂水
+        }
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            // 手持（主手 → 副手）与背包同扫，取评分最高的一杯（同喂食链的选优结构）
+            int handPick = -1;    // -1 无 / -2 主手 / -3 副手（喂食链同款哨兵）
+            double handScore = 0.0;
+            for (int h = 0; h < 2; h++) {
+                double sc = drinkScore(h == 0 ? maid.m_21205_() : maid.m_21206_(), whitelist);
+                if (sc > handScore) {
+                    handScore = sc;
+                    handPick = h == 0 ? -2 : -3;
+                }
+            }
+            int bestSlot = -1;
+            double bestScore = 0.0;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                double sc = drinkScore(inv.getStackInSlot(i), whitelist);
+                if (sc > bestScore) {
+                    bestScore = sc;
+                    bestSlot = i;
+                }
+            }
+            if (handPick == -1 && bestSlot < 0) {
+                return false;
+            }
+            boolean fromHand = handPick != -1 && handScore >= bestScore;
+            ItemStack src = fromHand
+                    ? (handPick == -2 ? maid.m_21205_() : maid.m_21206_())
+                    : inv.getStackInSlot(bestSlot);
+            if (src.m_41619_()) {
+                return false;
+            }
+            // 喂 1 个副本（finishUsingItem 会消耗传入的栈；来源成功后才扣）
+            ItemStack toGive = src.m_41777_();
+            toGive.m_41764_(1);
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 喂的动作（v1.5.292 同款）
+            String drinkName = toGive.m_41786_().getString();  // getHoverName().getString()
+            ItemStack result;
+            try {
+                // 主人"亲手喝完"：效果/口渴/纯度/容器返还全走物品自己的路径
+                //（SRG 树 ItemStack 的 finishUsingItem 经 Item 中转——与 692 行
+                // 强制给姐妹喝药水的既有调用同款：m_41720_().m_5922_(stack, level, entity)）
+                result = toGive.m_41720_().m_5922_(toGive, owner.m_9236_(), owner);
+            } catch (Throwable ignored) {
+                result = null;
+            }
+            if (result == null) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, toGive, false);
+                return false; // 物品自己抛异常 → 退回，不消耗来源
+            }
+            // 其他 mod 的装水工具兜底（药水瓶/TWT 自家/可食用已由 finishUsingItem 覆盖，
+            // 该方法内部会按钩子排除口径跳过它们，不会双重计数）
+            com.maidsmart.action.ThirstCompat.applyHookThirst(toGive, owner);
+            // 容器返还：喝完返回的栈（玻璃瓶/陶碗/空桶）塞回女仆背包——跟玩家自己喝一样，
+            // 容器不消失（有的物品经由原版把容器放进主人背包/掉落，也不损失）
+            if (!result.m_41619_()) {
+                net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
+            }
+            // 消耗来源（手持 shrink / 背包 extract——喂食链同款）
+            if (fromHand) {
+                src.m_41774_(1);
+            } else {
+                inv.extractItem(bestSlot, 1, false);
+            }
+            // 喝的音效（applyMilkEffect 同款取法——物品自己的 finishUsingItem 多数也播了，
+            // 这里与牛奶分支保持一致的手感兜底）
+            net.minecraft.sounds.SoundEvent snd = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
+                    .getValue(new net.minecraft.resources.ResourceLocation("minecraft", "entity.generic.drink"));
+            if (snd != null) {
+                owner.m_9236_().m_5594_(null, owner.m_20183_(), snd,
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            }
+            if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                        "\u00a7a[maid_smart] 女仆喂你喝了 " + drinkName));
+            }
+            return true;
+        } catch (Exception ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 喂水候选评分：白名单命中 + 口渴模组认识 + 药水瓶只认水瓶（其它药水的效果不该由
+     * 女仆替主人做主）→ 返回 口渴恢复量×100 + 解渴缓冲；不喂返回 0。
+     */
+    private static double drinkScore(ItemStack stack, java.util.List<? extends String> whitelist) {
+        if (stack == null || stack.m_41619_()) {
+            return 0.0;
+        }
+        try {
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            if (key == null) {
+                return 0.0;
+            }
+            boolean listed = false;
+            for (String s : whitelist) {
+                if (s != null && key.toString().equals(s.trim())) {
+                    listed = true;
+                    break;
+                }
+            }
+            if (!listed) {
+                return 0.0;
+            }
+            if (stack.m_41720_() instanceof net.minecraft.world.item.PotionItem
+                    && !com.maidsmart.action.ThirstCompat.isWaterPotion(stack)) {
+                return 0.0;
+            }
+            if (!com.maidsmart.action.ThirstCompat.itemRestoresThirst(stack)) {
+                return 0.0;
+            }
+            int hydration = com.maidsmart.action.ThirstCompat.drinkHydration(stack);
+            if (hydration <= 0) {
+                return 0.0;
+            }
+            int quenched = com.maidsmart.action.ThirstCompat.drinkQuenched(stack);
+            return hydration * 100.0 + Math.max(0, quenched);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
     }
 }

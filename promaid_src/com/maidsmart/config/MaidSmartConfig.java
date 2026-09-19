@@ -467,6 +467,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.IntValue AID_FOOD_THRESHOLD;
     // v1.2.0 实测五百一十九：投喂食物黑名单（通用判定 + 黑名单）
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> AID_FOOD_BLACKLIST;
+    // 实测五百七十一：喂水（软联动「口渴」Thirst Was Taken，modid=thirst）——判定位点 =
+    // 主人口渴值。模组不在场时这两项【不注册】（保持 null，配置文件与面板都不出现；
+    // 需求原文："如果没有装这个模组，那么此配置项目不会出现"）
+    public static final ForgeConfigSpec.IntValue AID_THIRST_THRESHOLD;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> AID_DRINK_WHITELIST;
     public static final ForgeConfigSpec.DoubleValue AID_HEALTH_THRESHOLD;
     public static final ForgeConfigSpec.BooleanValue TORCH_PLACER_ENABLE;
     // v1.1.0 实测六十二：女仆着火不传主人
@@ -1342,6 +1347,21 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                         "minecraft:golden_apple",
                         "minecraft:enchanted_golden_apple",
                         "minecraft:ominous_bottle"), o -> o instanceof String s && !s.isEmpty());
+        // ── 实测五百七十一：喂水配置（软联动「口渴」Thirst Was Taken）——
+        // 构建期判定：模组在 → 注册；不在 → 保持 null。面板（贴身辅助小节）同步按
+        // ThirstCompat.available() 条件渲染，toml 里也不会出现这两项。
+        if (thirstModLoaded()) {
+            AID_THIRST_THRESHOLD = BUILDER.comment("投喂触发口渴度（4-20：主人口渴值低于此值自动喂水；需装「口渴」Thirst Was Taken。判定位点 = 口渴值，效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还都走原版喝的路径）")
+                    .translation("config.promaid.combat.aidThirstThreshold").defineInRange("aidThirstThreshold", 15, 4, 20);
+            AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水")
+                    .translation("config.promaid.combat.aidDrinkWhitelist")
+                    .defineList("aidDrinkWhitelist", java.util.List.of(
+                            "minecraft:potion",
+                            "thirst:terracotta_water_bowl"), o -> o instanceof String s && !s.isEmpty());
+        } else {
+            AID_THIRST_THRESHOLD = null;
+            AID_DRINK_WHITELIST = null;
+        }
         AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
                 .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.3, 0.1, 1.0);
         TORCH_PLACER_ENABLE = BUILDER.comment("被动插火把（主人周围黑暗自动插火把照明）")
@@ -1718,6 +1738,19 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.pop();
 
         SPEC = BUILDER.build();
+    }
+
+    /**
+     * 「口渴」Thirst Was Taken（modid=thirst）是否在场——喂水两项配置的条件注册判据。
+     * 本类静态初始化发生在 mod 构造期（ModList 已就绪）；万一被更早加载，保守视为未装
+     * （喂水整段不出现，运行时行为由 ThirstCompat.available() 同口径把关，不会矛盾）。
+     */
+    private static boolean thirstModLoaded() {
+        try {
+            return net.minecraftforge.fml.ModList.get().isLoaded("thirst");
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     private MaidSmartConfig() {
