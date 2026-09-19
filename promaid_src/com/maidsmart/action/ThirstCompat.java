@@ -67,6 +67,9 @@ public final class ThirstCompat {
                             "dev.ghen.thirst.foundation.common.capability.ModCapabilities");
                     Class<?> drinkable = Class.forName(
                             "dev.ghen.thirst.foundation.common.item.DrinkableItem");
+                    // 实测五百七十六【水质分级】：再加两个水质句柄（0 肮脏 … 3 纯净）——
+                    // 挂在 WaterPurity 上（静态，两版同名同签名，1.20.1-1.4.0 / 1.21.1-2.1.5 反编译实证）
+                    Class<?> purity = Class.forName("dev.ghen.thirst.content.purity.WaterPurity");
                     java.lang.reflect.Field capField = caps.getField("PLAYER_THIRST");
                     capField.setAccessible(true);
                     API = new Object[]{
@@ -77,7 +80,9 @@ public final class ThirstCompat {
                                     net.minecraft.world.entity.player.Player.class),
                             capField.get(null),
                             thirst.getMethod("getThirst"),
-                            drinkable};
+                            drinkable,
+                            purity.getMethod("isWaterFilledContainer", ItemStack.class),
+                            purity.getMethod("getPurity", ItemStack.class)};
                 } catch (Throwable t) {
                     API = new Object[0];
                 }
@@ -192,4 +197,58 @@ public final class ThirstCompat {
         } catch (Throwable ignored) {
         }
     }
+
+    /* ================= 实测五百七十六：水质分级（反馈："喂脏水反而耽误玩家"） ================= */
+
+    /**
+     * 这杯饮品的水质等级：**0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净**
+     * （口渴模组自己的 WaterPurity，lang 键 thirst.purity.* 四档实证）。
+     *
+     * @return -1 = **没有水质概念**（不是"装水容器"，比如果汁/牛奶）或模组不在场/取不到——
+     *         调用方据此**不做**水质过滤，避免把无关饮品一起挡掉
+     */
+    public static int waterPurity(ItemStack stack) {
+        Object[] api = api();
+        if (api == null || api.length <= 8 || stack == null || stack.m_41619_()) {
+            return -1;
+        }
+        try {
+            Object isWater = ((java.lang.reflect.Method) api[7]).invoke(null, stack);
+            if (!Boolean.TRUE.equals(isWater)) {
+                return -1; // 不是装水容器 → 没有水质
+            }
+            Object p = ((java.lang.reflect.Method) api[8]).invoke(null, stack);
+            return p instanceof Integer i ? i : -1;
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    /** 水质等级的中文名（悬停提示用）；未知返回 null */
+    public static String purityLabel(int purity) {
+        switch (purity) {
+            case 0: return "\u00a7c肮脏";
+            case 1: return "\u00a7e有点脏";
+            case 2: return "\u00a7a可接受的";
+            case 3: return "\u00a7b纯净";
+            default: return null;
+        }
+    }
+
+    /** 水质等级的显示颜色（悬停提示用） */
+    public static int purityColor(int purity) {
+        switch (purity) {
+            case 0: return 0xFF5555;
+            case 1: return 0xFFAA00;
+            case 2: return 0x55FF55;
+            case 3: return 0x55FFFF;
+            default: return 0xAAAAAA;
+        }
+    }
+
+    /** 该物品是不是"装水容器"（水瓶/陶碗/其他模组的装水工具）——用于面板提示 */
+    public static boolean isWaterContainer(ItemStack stack) {
+        return waterPurity(stack) >= 0;
+    }
+
 }

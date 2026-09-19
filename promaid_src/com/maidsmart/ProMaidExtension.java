@@ -337,6 +337,9 @@ public class ProMaidExtension implements ILittleMaid {
         }
         // 实测五百六十六（PR #10 移植）：入世界 → 延迟给主人补一次实体包（治"客户端实体丢失"）
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
+        // 实测五百七十六：入世界第一拍法术数据可能还没就绪 —— 清掉位移法术的书单缓存，
+        // 下一拍重新问一次（配合 notifyNotReady 的 0.5 秒静默，治"刚放出来就报缺件"）
+        com.maidsmart.combat.MaidFlightKit.forgetClimbSpellCache(maid.m_20148_());
         try {
             if (com.maidsmart.schedule.ScheduleData.isOn(maid)
                     && com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()

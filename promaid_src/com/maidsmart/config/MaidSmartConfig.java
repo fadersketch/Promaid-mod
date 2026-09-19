@@ -519,6 +519,14 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // 需求原文："如果没有装这个模组，那么此配置项目不会出现"）
     public static final ForgeConfigSpec.IntValue AID_THIRST_THRESHOLD;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> AID_DRINK_WHITELIST;
+    /**
+     * 实测五百七十六【喂水最低水质】（0-3，默认 2 = 可接受的）：喂水时**装水容器**必须达到这个
+     * 水质等级（口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净）。
+     *
+     * 反馈："口渴模组对水的品质是有要求的，如果女仆给玩家喂脏水那么反而会耽误玩家。"
+     * 只对"装水容器"生效（果汁/牛奶这类没有水质概念的饮品不受影响）；0 = 脏水也喂。
+     */
+    public static final ForgeConfigSpec.IntValue AID_DRINK_MIN_PURITY;
     public static final ForgeConfigSpec.DoubleValue AID_HEALTH_THRESHOLD;
     public static final ForgeConfigSpec.BooleanValue TORCH_PLACER_ENABLE;
     // v1.1.0 实测六十二：女仆着火不传主人
@@ -1410,7 +1418,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         if (thirstModLoaded()) {
             AID_THIRST_THRESHOLD = BUILDER.comment("投喂触发口渴度（4-20：主人口渴值低于此值自动喂水；需装「口渴」Thirst Was Taken。判定位点 = 口渴值，效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还都走原版喝的路径）")
                     .translation("config.promaid.combat.aidThirstThreshold").defineInRange("aidThirstThreshold", 15, 4, 20);
-            AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水")
+            AID_DRINK_MIN_PURITY = BUILDER.comment("喂水最低水质（0-3，默认 2=可接受的）：喂水时【装水容器】必须达到这个水质等级——口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净。反馈：如果女仆给玩家喂脏水那么反而会耽误玩家，所以默认只喂可接受的及以上；只对装水容器生效（果汁/牛奶这类没有水质概念的饮品不受影响）；填 0 = 脏水也喂")
+                .translation("config.promaid.combat.aidDrinkMinPurity")
+                .defineInRange("aidDrinkMinPurity", 2, 0, 3);
+        AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水")
                     .translation("config.promaid.combat.aidDrinkWhitelist")
                     .defineList("aidDrinkWhitelist", java.util.List.of(
                             "minecraft:potion",
@@ -1418,6 +1429,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         } else {
             AID_THIRST_THRESHOLD = null;
             AID_DRINK_WHITELIST = null;
+            AID_DRINK_MIN_PURITY = null;
         }
         AID_HEALTH_THRESHOLD = BUILDER.comment("治疗触发血量（0.1-1：主人血量低于此比例自动治疗；1=掉血就治）")
                 .translation("config.promaid.combat.aidHealthThreshold").defineInRange("aidHealthThreshold", 0.3, 0.1, 1.0);
