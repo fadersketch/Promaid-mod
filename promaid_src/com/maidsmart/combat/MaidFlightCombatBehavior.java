@@ -380,6 +380,23 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final java.util.Map<EntityMaid, Long> NOTIFY_READY =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
+    /**
+     * 实测五百七十六【刚放出就误报缺件】：第一次见到这只女仆的 gameTime（同一个实体实例只记一次）。
+     *
+     * 反馈："刚把女仆放出来的时候，如果身上没有烟花和孔雀羽扇、但是有魔法书，虽然可以正常行动，
+     * 但刚放出来那个瞬间还是会有一个系统消息警告你没有相关的配件，最后又正常运行。"
+     *
+     * 根因：魂符放出/区块重载后，**法术模组的她的法术数据（书单）要一拍才初始化**——放出来的
+     * 那一 tick 里 `hasClimbSpell` 还是 false → 缺件判定成立 → 立刻报一条。所以这里给入世界后
+     * 前 {@link #NOTIFY_GRACE_TICKS} tick 一个宽限期：这段时间内不报（也不占用播报冷却）。
+     * 键是**实体实例**，所以"放出来 = 新实例"天然重置宽限；老实例（她一直在世界里）只在
+     * 第一次被看到时延迟一拍，之后照旧。
+     */
+    private static final java.util.Map<EntityMaid, Long> NOTIFY_FIRST_SEEN =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** 入世界后的静默窗口（tick）——0.5 秒，与反馈建议一致 */
+    private static final long NOTIFY_GRACE_TICKS = 10;
+
     public static void notifyNotReady(EntityMaid maid, long gameTime) {
         try {
             if (maid == null) {
@@ -390,6 +407,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 // 三件齐备 = 这一轮"缺件"状态结束 → 清冷却，下次再缺立刻能报
                 NOTIFY_READY.remove(maid);
                 return; // 其实是齐的（判定竞态）→ 不误报
+            }
+            // 实测五百七十六：入世界后的前 0.5 秒静默（法术/饰品数据要一拍才就绪，早了会误报）
+            Long firstSeen = NOTIFY_FIRST_SEEN.get(maid);
+            if (firstSeen == null) {
+                NOTIFY_FIRST_SEEN.put(maid, gameTime);
+                return;
+            }
+            if (gameTime - firstSeen < NOTIFY_GRACE_TICKS) {
+                return;
             }
             Long ready = NOTIFY_READY.get(maid);
             int cooldown = 300; // 15 秒
@@ -1710,6 +1736,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Long> DASH_LAST_LOG = new HashMap<>();
     /** 起飞/补高抬头角（与烟花起飞的近战仰角一致：62°） */
     private static final float DASH_LAUNCH_PITCH = -62.0f;
+    /**
+     * 实测五百七十六【空中冲刺加速的朝向】：冲刺法术沿**视线**冲，而远程空袭的盘旋相位里
+     * 她的视线是**沿切线**的（绕圈用）——不摆正就"横着飞出去"（反馈：飞行的方向不太对）。
+     * 所以放之前的朝向取"水平朝目标 + 略微抬起 12°"（既朝目标、又顺手换一点高度，
+     * 与鞘翅"掉速就是掉高度"的补偿方向一致）。
+     */
+    private static final float DASH_BOOST_PITCH = -12.0f;
     /** 空中冲刺的最近/最远距离（格）：太近没必要、太远别白冲 */
     private static final double DASH_BOOST_MIN_RANGE = 6.0;
     private static final double DASH_BOOST_MAX_RANGE = 28.0;
@@ -1840,6 +1873,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (spell == null) {
             return false;
         }
+        // 实测五百七十六【方向】：先把视线摆到"水平朝目标 + 略抬"再放——冲刺沿视线走，
+        // 而盘旋相位她本来在绕圈（视线沿切线），不摆正就会横着窜出去（反馈"方向不太对"）。
+        faceUpForward(maid, target, DASH_BOOST_PITCH);
         if (!MaidSpellCastCompat.castSpecific(maid, spell,
                 dashSpellLevel(maid, spell), dashCooldownFor(spell, true))) {
             return false;

@@ -1760,6 +1760,15 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (!com.maidsmart.action.ThirstCompat.itemRestoresThirst(stack)) {
                 return 0.0;
             }
+            // 实测五百七十六【水质分级】：装水容器还要过"最低水质"闸（反馈：喂脏水反而耽误主人）。
+            // 非装水容器（果汁/牛奶等）返回 -1 → 不参与过滤。
+            if (com.maidsmart.config.MaidSmartConfig.AID_DRINK_MIN_PURITY != null) {
+                int purity = com.maidsmart.action.ThirstCompat.waterPurity(stack);
+                if (purity >= 0
+                        && purity < com.maidsmart.config.MaidSmartConfig.AID_DRINK_MIN_PURITY.get()) {
+                    return 0.0;
+                }
+            }
             int hydration = com.maidsmart.action.ThirstCompat.drinkHydration(stack);
             if (hydration <= 0) {
                 return 0.0;
