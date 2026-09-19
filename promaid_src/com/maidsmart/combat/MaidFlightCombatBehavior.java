@@ -1,6 +1,7 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.config.MaidSmartConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
@@ -56,27 +57,45 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** 阶段一：放烟花后维持"背离+向上"朝向的时长——**近战**用（1.5 秒）。
      *  v1.2.0 实测四百七十二【回退】：近战必须爬够高度才能维持滑翔（贴地就掉），
      *  故与本值配套的仰角一起回退到远战调参之前的口径。 */
-    private static final int LAUNCH_TICKS_MELEE = 30;
+    // ---- v1.2.2 实测五百八十一【空袭数值面板】：下面这些 xxxYyy() 访问器取代了原来的
+    //      硬编码常量（经 MaidSmartConfig.AIR_RAID_* 读配置），默认值与原常量一字未改；
+    //      每一项的面板位置都是「战斗与自保 → 空袭数值」。需求原文：「关于空袭等
+    //      各项数值也要有一个详细的配置面板，在模组详细配置。」 ----
+    private static int launchTicksMelee() {
+        return MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_MELEE.get();
+    }
     /** 阶段一：放烟花后维持"背离+向上"朝向的时长——**远战**用（1 秒）。
      *  v1.2.0 实测四百六十九：远战 1.5s → 1s，提前转入朝敌盘旋，少爬高
      *  （远战只求悬停高度、不吃俯冲，爬太高反而够不到地面敌人）。 */
-    private static final int LAUNCH_TICKS_RANGED = 20;
+    private static int launchTicksRanged() {
+        return MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_RANGED.get();
+    }
     /** 烟花最小间隔（tick）——1.5 秒 */
-    private static final int FIREWORK_COOLDOWN = 30;
+    private static int fireworkCooldown() {
+        return MaidSmartConfig.AIR_RAID_FIREWORK_COOLDOWN.get();
+    }
     /** 实测五百六十三：羽扇最小间隔（tick）——原版 getUseDuration=20，每秒最多挥一次 */
-    private static final int FAN_COOLDOWN = 20;
+    private static int fanCooldown() {
+        return MaidSmartConfig.AIR_RAID_FAN_COOLDOWN.get();
+    }
     /** 起飞仰角正切——**近战**用：1.88 ≈ 62°（回退到远战调参之前的原值）。
      *  近战链路是"起飞→扑击→收翅猛击→再起飞"的循环，每次重新起飞都要先把
      *  高度拉起来；仰角过低时她一放烟花就往目标方向压头，几 tick 内就贴地，
      *  滑翔位被 `updateFallFlying` 清掉 → 直接变自由落体摔死（实测四百七十二
      *  的 fall 21~23 全部由此而来）。 */
-    private static final double LAUNCH_CLIMB_TAN_MELEE = 1.88;
+    private static double launchClimbTanMelee() {
+        return MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_MELEE.get();
+    }
     /** 起飞仰角正切——**远战**用：1.0 = 45°（实测四百六十九"飞太高够不到地面敌人"）。 */
-    private static final double LAUNCH_CLIMB_TAN_RANGED = 1.0;
+    private static double launchClimbTanRanged() {
+        return MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_RANGED.get();
+    }
     /** 地面重新起飞的最大距离（格）：太远先跑过去，避免"越炸越远"
      *  v1.2.0 实测五百二十五：这个门槛只对**水平**距离生效（见 tick 里 distH 的注释）——
      *  3D 距离会让"比她高 50 格的敌人"永远进不了起飞分支。 */
-    private static final double LAUNCH_RANGE = 20.0;
+    private static double launchRange() {
+        return MaidSmartConfig.AIR_RAID_LAUNCH_RANGE.get();
+    }
     /**
      * 高度容差（格）：她与目标的高度差在此范围内即视为**已占位（可以开打）**。
      *
@@ -84,7 +103,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * **实测五百三十改为 10**——用户口径："改为10，也就是说，除非高出10格以上，
      * 否则都可以用原链路来应付。"（差 10 格以内的敌人，原链路本来就能打）
      *
-     * 判据是 {@code maid.getY() >= target.getY() - ALTITUDE_TOLERANCE}：她比目标低
+     * 判据是 {@code maid.getY() >= target.getY() - altitudeTolerance()}：她比目标低
      * **10 格以内**即视为**已占位**，直接落回原链路（近战俯冲猛击 / 远战盘旋开火）。
      * 这个常量同时也是起飞朝向的判据（见 faceLaunchDirection），所以"10 格以内"连
      * 起飞也回到老口径"背离 + 向上"——正是"用原链路应付"的意思。
@@ -93,24 +112,43 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 推力吃完才交棒（见 tickClimbToAltitude），所以调这个值不会省下烟花，
      * 只是早/晚一点进入持推段。
      */
-    private static final double ALTITUDE_TOLERANCE = 10.0;
+    private static double altitudeTolerance() {
+        return MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE.get();
+    }
     /** 起跳滑翔的等待上限（tick）：起跳失败（低矮空间）就放弃本轮 */
-    private static final int JUMP_TICKS = 3;
+    private static int jumpTicks() {
+        return MaidSmartConfig.AIR_RAID_JUMP_TICKS.get();
+    }
 
     /** 取消滑翔的触发距离（格）：进入即收翅自由落体 */
-    private static final double SMASH_RANGE = 3.5;
+    private static double smashRange() {
+        return MaidSmartConfig.AIR_RAID_SMASH_RANGE.get();
+    }
     /** 猛击命中判定距离（格） */
-    private static final double SMASH_HIT_RANGE = 4.0; // v1.2.0：2.5 → 4.0 格（提高命中率）
+    private static double smashHitRange() {
+        return MaidSmartConfig.AIR_RAID_SMASH_HIT_RANGE.get();
+    }
     /** v1.2.0：范围强制命中半径（格）——见 smashHit */
-    private static final double FORCED_HIT_RADIUS = 2.5;
+    private static double forcedHitRadius() {
+        return MaidSmartConfig.AIR_RAID_FORCED_HIT_RADIUS.get();
+    }
     /** 猛击下落加成门槛（格）：滑翔中 fallDistance 被钳在 1.0，收翅后补几 tick 即可 */
     private static final float SMASH_MIN_FALL = 1.5f;
     /** 猛击段最长 tick：超时按打空收尾（不摔伤、切回滑翔） */
-    private static final int SMASH_MAX_TICKS = 20;    /** 地面近战触及距离（格） */
-    private static final double MELEE_REACH = 3.0;
+    private static int smashMaxTicks() {
+        return MaidSmartConfig.AIR_RAID_SMASH_MAX_TICKS.get();
+    }
+    /** 地面近战触及距离（格）——v1.2.2 实测五百八十一改为配置项 */
+    private static double meleeReach() {
+        return MaidSmartConfig.AIR_RAID_MELEE_REACH.get();
+    }
     /** 阶段二俯仰限幅（度） */
-    private static final float MAX_PITCH_UP = 55.0f;
-    private static final float MAX_PITCH_DOWN = 70.0f;
+    private static float maxPitchUp() {
+        return MaidSmartConfig.AIR_RAID_MAX_PITCH_UP.get().floatValue();
+    }
+    private static float maxPitchDown() {
+        return MaidSmartConfig.AIR_RAID_MAX_PITCH_DOWN.get().floatValue();
+    }
 
     private static final Map<UUID, Integer> LAUNCH_LEFT = new HashMap<>();
     private static final Map<UUID, Integer> JUMP_LEFT = new HashMap<>();
@@ -543,7 +581,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
 
         // ── 垂直占位（v1.2.0 实测五百二十七 / 实测五百二十八 / 实测五百三十）──
-        // 判据里的"够高"= 她的高度追到目标身下 ALTITUDE_TOLERANCE 格以内（现为 10 格）：
+        // 判据里的"够高"= 她的高度追到目标身下 altitudeTolerance() 格以内（现为 10 格）：
         // 目标只高出 10 格以内时不进本相位，原链路（俯冲猛击 / 盘旋开火）自己就能打。
         // "时刻检查自己的高度是否高于目标单位，高于或等于就走正常路径；否则持续上升
         //  释放火箭飞行（走内置 CD），期间持续判定高度"——判据见 onTargetAltitude。
@@ -583,12 +621,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double dist = maid.m_20270_(target);
         // v1.2.0 实测五百二十五【敌人比她高时飞不起来】：起飞门槛只看【水平距离】。
         //
-        // 【旧版为什么"只会看着"】旧版这里拿 3D 距离（`m_20270_`）与 LAUNCH_RANGE(=20) 比。
+        // 【旧版为什么"只会看着"】旧版这里拿 3D 距离（`m_20270_`）与 launchRange()(=20) 比。
         // 敌人比她高 50 格时，**光是垂直分量就 ≥50 > 20**——她站在敌人正下方也永远进不了
         // 起飞分支：既不跳、也不放烟花，只会原地仰头看（用户反馈原话："只会对着比自己高
         // 50 格的敌人看着，但是不知道该怎么起飞"）。
         //
-        // 【为什么改成水平】LAUNCH_RANGE 这句话的原意是"太远先跑过去，避免越炸越远"
+        // 【为什么改成水平】launchRange() 这句话的原意是"太远先跑过去，避免越炸越远"
         // （见常量注释），那本来就是**水平**概念；垂直方向本来就不该有限制——空袭是
         // 立体作战，敌人飞多高都要能打。爬升量由起飞仰角（近战 62°/远战 45°）承担，
         // 而"目标在头顶时朝它爬而不是背离"由 {@link #faceLaunchDirection} 负责。
@@ -601,7 +639,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (ranged) {
                 // 飞行远战：落地就重新起飞恢复盘旋（开火由 performRangedAttack 通道负责）；
                 // 真的一点飞行手段都没有（烟花/羽扇/位移法术全缺）才站着，目标会在原地继续被远程打
-                if (distH <= LAUNCH_RANGE && canTakeOff(maid, gameTime)) {
+                if (distH <= launchRange() && canTakeOff(maid, gameTime)) {
                     if (canLaunch(maid, gameTime)) {
                         jumpForLaunch(maid, target, id); // 起跳滑翔 + 空中放烟花/挥扇
                         return;
@@ -615,7 +653,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 MaidFlightKit.setGliding(maid, false);
                 return;
             }
-            if (distH <= LAUNCH_RANGE && canTakeOff(maid, gameTime)) {
+            if (distH <= launchRange() && canTakeOff(maid, gameTime)) {
                 if (canLaunch(maid, gameTime)) {
                     jumpForLaunch(maid, target, id);
                     return;
@@ -650,7 +688,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         faceTarget(maid, target);
 
         // 即将接触 → 取消滑翔，转入猛击段
-        if (dist <= SMASH_RANGE && !WAIT_LAUNCH.contains(id)) {
+        if (dist <= smashRange() && !WAIT_LAUNCH.contains(id)) {
             MaidFlightKit.setGliding(maid, false);
             // 实测五百七十：收翅起手那一刻挥臂。旧版唯一的挥臂在命中结算里（1~20 tick
             // 俯冲的最末尾），高速俯冲中那一瞬几乎看不见——用户观感"近战空袭没有攻击动作"。
@@ -677,7 +715,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         Vec3 dm = maid.m_20184_();
         maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
         MaidFlightKit.setGliding(maid, true);
-        JUMP_LEFT.put(id, JUMP_TICKS);
+        JUMP_LEFT.put(id, jumpTicks());
     }
 
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
@@ -712,9 +750,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             faceLaunchDirection(maid, target);
             // 必须置位：与烟花同通道——鞘翅滑翔每 tick 吃朝向
             MaidFlightKit.setGliding(maid, true);
-            LAUNCH_LEFT.put(id, this.ranged ? LAUNCH_TICKS_RANGED : LAUNCH_TICKS_MELEE);
+            LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
             WAIT_LAUNCH.remove(id);
-            FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
+            FIREWORK_READY.put(id, gameTime + fanCooldown());
             com.maidsmart.tool.PromaidLog.log("飞行作战",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 挥羽扇起飞");
             return true;
@@ -730,9 +768,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         faceLaunchDirection(maid, target);
         // 必须置位：挂载烟花只对"正在滑翔"的实体给推力
         MaidFlightKit.setGliding(maid, true);
-        LAUNCH_LEFT.put(id, this.ranged ? LAUNCH_TICKS_RANGED : LAUNCH_TICKS_MELEE);
+        LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
         WAIT_LAUNCH.remove(id);
-        FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
+        FIREWORK_READY.put(id, gameTime + fireworkCooldown());
         com.maidsmart.tool.PromaidLog.log("飞行作战",
                 com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放烟花起飞");
         return true;
@@ -789,7 +827,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // v1.2.0 实测四百七十三【命中率】：改用"点到本 tick 位移线段"的距离，
         // 而不是只看当前瞬间距离——她俯冲 1~2 格/tick，瞬时判定会整段穿过去
         // （这就是"命中率堪忧"的主因）。擦身而过的这一 tick 也算够得着。
-        boolean inReach = sweepWithin(maid, target, SMASH_HIT_RANGE);
+        boolean inReach = sweepWithin(maid, target, smashHitRange());
 
         // v1.2.0：够近就尽快打（t>=2 即可——收翅那一刻 fallDistance 已被滑翔钳在 ~1.0，
         // 暴击条件 fallDistance>0 已成立；久等只会让她擦身而过）
@@ -802,7 +840,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 若像旧版那样在命中分支里 return，贴地时既没清零也没收尾 → 她带着满坠落距离撞地。
         // 【命中率】空中且冷却中不在此列（未落地未贴地且 t < MAX）→ 下一 tick 继续压着打，
         // 不再"整个俯冲白打一次"（旧版无论打没打中都 endSmash，是命中率差的一大来源）。
-        if (landed || nearGround || t >= SMASH_MAX_TICKS) {
+        if (landed || nearGround || t >= smashMaxTicks()) {
             maid.f_19789_ = 0.0f;
             endSmash(maid, id, gameTime);
         }
@@ -863,11 +901,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 1) 主目标：正常结算（附魔 + 暴击 ×1.5 + 击退 + 火焰附加 + 荆棘 + 特效）
         hitOne(level, maid, target);
         // 2) v1.2.0 范围强制命中（"走点后门"提高命中率，用户要求）：她俯冲速度快，按精确
-        //    判定框经常判不到；这里对身边 FORCED_HIT_RADIUS 格内的**其他合法敌对目标**
+        //    判定框经常判不到；这里对身边 forcedHitRadius() 格内的**其他合法敌对目标**
         //    也结算一次。只认 IAttackTask.canAttack（不会误伤主人/宠物/中立动物），
         //    并且【女仆一律跳过】——女仆免疫这一记重锤友伤。
         try {
-            net.minecraft.world.phys.AABB box = maid.m_20191_().m_82400_(FORCED_HIT_RADIUS);
+            net.minecraft.world.phys.AABB box = maid.m_20191_().m_82400_(forcedHitRadius());
             com.github.tartaricacid.touhoulittlemaid.api.task.IMaidTask task = maid.getTask();
             if (task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask attackTask) {
                 for (LivingEntity other : level.m_6443_(LivingEntity.class, box, e -> e != maid && e != target)) {
@@ -994,7 +1032,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 期间持续判定高度。直至高度超过 → 处于悬空状态 → 进入瞄准敌人的分支。"
      *
      * 【口径】进本相位的判据有两条（或）：{@link #onTargetAltitude} 为假
-     * （目标高出她 10 格以上，见 {@link #ALTITUDE_TOLERANCE}），
+     * （目标高出她 10 格以上，见 {@link #altitudeTolerance()}），
      * 或"本相位点着的这枚烟花的推力还没烧完"。两条都不成立才落回原链路
      * （近战俯冲猛击 / 远战盘旋开火）。
      *
@@ -1015,7 +1053,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *
      * 【烟花走内置 CD】复用 {@link #canLaunch}（`FIREWORK_READY` 30 tick 冷却 + 有烟花），
      * 与地面起飞、远战补烟花同一套闸门，不另开计时器。而 `LAUNCH_LEFT`(30/20) 与
-     * `FIREWORK_COOLDOWN`(30) 基本同量级，所以"推力刚烧完"就是"下一枚可以点了"。
+     * `fireworkCooldown()`(30) 基本同量级，所以"推力刚烧完"就是"下一枚可以点了"。
      *
      * 【远战一边爬一边照常开火】近战爬升途中没有可打的（要贴到 3.5 格才收翅猛击），
      * 远战则不然——所以这里额外调一次 {@link #fireRanged}，让它在爬升途中继续输出。
@@ -1054,12 +1092,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 两种模式必须分开取值（实测四百七十二）：共用远战那套 45° 会让近战爬升腰斩、贴地摔死。
      */
     private float climbPitch() {
-        double climbTan = this.ranged ? LAUNCH_CLIMB_TAN_RANGED : LAUNCH_CLIMB_TAN_MELEE;
+        double climbTan = this.ranged ? launchClimbTanRanged() : launchClimbTanMelee();
         return (float) (-Math.toDegrees(Math.atan(climbTan)));
     }
 
     /**
-     * 是否已"占位"——高度是否已经**追到目标身下 {@link #ALTITUDE_TOLERANCE} 格以内**
+     * 是否已"占位"——高度是否已经**追到目标身下 {@link #altitudeTolerance()} 格以内**
      * （v1.2.0 实测五百二十七 引入，实测五百三十 把容差从 0 放到 10）。
      *
      * 这是本模组空袭唯一的垂直判据（取代了 实测五百二十五 那个"高过 8 格"的启发式）：
@@ -1068,7 +1106,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 判据每 tick 重算，所以爬升途中一够高就马上转段，不会多烧烟花。
      */
     private static boolean onTargetAltitude(EntityMaid maid, LivingEntity target) {
-        return maid.m_20186_() >= target.m_20186_() - ALTITUDE_TOLERANCE;
+        return maid.m_20186_() >= target.m_20186_() - altitudeTolerance();
     }
 
     /**
@@ -1076,7 +1114,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *
      * 两条分支，判据就是 {@link #onTargetAltitude}：
      * <ul>
-     *   <li>**目标高出 10 格以上**（{@link #ALTITUDE_TOLERANCE} 之外） → 朝目标 + 抬头
+     *   <li>**目标高出 10 格以上**（{@link #altitudeTolerance()} 之外） → 朝目标 + 抬头
      *       （"顺着敌人的方向爬上去"）；</li>
      *   <li>**其余情况**（差 10 格以内 / 等高 / 已在它头上） → 老口径"背离 + 向上"——
      *       那是为地面目标设计的：爬升时别站在对方近战/爆炸包线里。10 格以内的目标
@@ -1107,7 +1145,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *  `resetXRotOnTick()` 同样恒真），这套机制当时没有同步到 1.20.1，现补上。
      */
     private void faceAwayAndUp(EntityMaid maid, LivingEntity target) {
-        double climbTan = this.ranged ? LAUNCH_CLIMB_TAN_RANGED : LAUNCH_CLIMB_TAN_MELEE;
+        double climbTan = this.ranged ? launchClimbTanRanged() : launchClimbTanMelee();
         double dx = maid.m_20185_() - target.m_20185_();
         double dz = maid.m_20189_() - target.m_20189_();
         double dh = Math.sqrt(dx * dx + dz * dz);
@@ -1193,7 +1231,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double eyeM = maid.m_20186_() + maid.m_20206_() * 0.5;
         float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
         float pitch = (float) (-(Math.atan2(eyeT - eyeM, Math.max(1.0E-4, dh)) * (180.0 / Math.PI)));
-        pitch = Math.max(-MAX_PITCH_UP, Math.min(MAX_PITCH_DOWN, pitch));
+        pitch = Math.max(-maxPitchUp(), Math.min(maxPitchDown(), pitch));
         applyRotation(maid, yaw, pitch);
         try {
             maid.m_21563_().m_24960_(target, 360.0f, 360.0f);
@@ -1208,7 +1246,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         try {
             faceTarget(maid, target);
             double dist = maid.m_20270_(target);
-            if (dist > MELEE_REACH) {
+            if (dist > meleeReach()) {
                 maid.m_21573_().m_5624_(target, 1.0);
                 return;
             }
@@ -1302,7 +1340,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /* ---------------- 飞行远战：空中盘旋（用户指定） ---------------- */
 
     /** 盘旋半径（格） */
-    private static final double ORBIT_RADIUS = 10.0;
+    private static double orbitRadius() {
+        return MaidSmartConfig.AIR_RAID_ORBIT_RADIUS.get();
+    }
     /**
      * 期望盘旋高度（格，目标上方）。
      *
@@ -1310,42 +1350,64 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 口径改回 **10**——反馈是"问题有所缓解了，但是还是达不到预期要的效果，而且时常容易出现
      * 低于目标高度的情况。这边建议把期望高度改为目标高度以上 10 格"。3.5 格的高度带太薄：
      * 滑翔转弯本身就会掉高度，一掉就低于敌人，观感差、也不安全（远程空袭的核心要求是
-     * "脚不沾地"）。10 格 + {@link #RANGED_BOOST_DROP}（低于带 0.5 格就补）才留得出余量。
+     * "脚不沾地"）。10 格 + {@link #rangedBoostDrop()}（低于带 0.5 格就补）才留得出余量。
      *
-     * 锁敌/开火不受影响：射程判据是 3D 的 {@link #RANGED_ATTACK_RANGE}（24 格），
+     * 锁敌/开火不受影响：射程判据是 3D 的 {@link #rangedAttackRange()}（24 格），
      * 盘旋半径 10 格时"目标上方 10 格"的 3D 距离约 14 格，仍在射程内。
      */
-    private static final double RANGED_HOLD_HEIGHT = 10.0;
+    private static double rangedHoldHeight() {
+        return MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT.get();
+    }
     /** 高度偏差 → 俯仰角增益（度/格）：低了抬头把速度换成高度、高了低头把高度换成速度 */
-    private static final double RANGED_HOLD_GAIN = 5.0;
+    private static double rangedHoldGain() {
+        return MaidSmartConfig.AIR_RAID_RANGED_HOLD_GAIN.get();
+    }
     /** 高度偏置（格）：抵消滑翔的固定下沉与转弯损耗，让平衡点落在略抬头处 */
-    private static final double RANGED_HOLD_BIAS = 1.0;
+    private static double rangedHoldBias() {
+        return MaidSmartConfig.AIR_RAID_RANGED_HOLD_BIAS.get();
+    }
     /**
      * 低于期望高度这么多格就补推（5 秒间隔仍是下限，避免浪费燃料）。
      *
      * 【实测五百七十八：旧值 3.0 与期望高度 3.5 相消 ⇒ 触发点 = 目标脚下 +0.5 格，等于"必须
-     * 贴地才补"】那时期望盘旋高度是"目标上方 3.5 格"（{@link #RANGED_HOLD_HEIGHT}，实测
+     * 贴地才补"】那时期望盘旋高度是"目标上方 3.5 格"（{@link #rangedHoldHeight()}，实测
      * 五百七十九 已按用户口径提到 10 格），旧值 3.0 意味着 `y < 目标高度 + 0.5` 才补推。
      * 对地面目标而言"贴到 0.5 格"就是**已经落地**，于是这个分支永远走不到，直接掉到地上再走
      * 地面支点重新起飞（反馈原话："低于期望高度就补烟花这一点根本就没有生效过，每次都是掉到
      * 地上再补"）——结果远程空袭反而比近战更容易挨打。
      * 取 0.5 = "比期望高度带低半格就补"，这才是"低于期望高度就补"的原意。
      */
-    private static final double RANGED_BOOST_DROP = 0.5;
+    private static double rangedBoostDrop() {
+        return MaidSmartConfig.AIR_RAID_RANGED_BOOST_DROP.get();
+    }
     /** 盘旋俯仰限幅（度） */
-    private static final float RANGED_ORBIT_UP_MAX = 45.0f;
-    private static final float RANGED_ORBIT_DOWN_MAX = 35.0f;
+    private static float rangedOrbitUpMax() {
+        return MaidSmartConfig.AIR_RAID_RANGED_ORBIT_UP_MAX.get().floatValue();
+    }
+    private static float rangedOrbitDownMax() {
+        return MaidSmartConfig.AIR_RAID_RANGED_ORBIT_DOWN_MAX.get().floatValue();
+    }
     /** 补烟花的间隔下限（tick）——用户要求 5 秒 */
-    private static final int RANGED_BOOST_INTERVAL = 100;
+    private static int rangedBoostInterval() {
+        return MaidSmartConfig.AIR_RAID_RANGED_BOOST_INTERVAL.get();
+    }
     /** 补烟花时"抬头窗口"的 tick 数——v1.2.0 实测四百六十九：20 → 10（提前转圈，
      *  别把整枚烟花的推力都用去爬高，只借前半段升一点就回到盘旋） */
-    private static final int RANGED_BOOST_AIM_TICKS = 10;
+    private static int rangedBoostAimTicks() {
+        return MaidSmartConfig.AIR_RAID_RANGED_BOOST_AIM_TICKS.get();
+    }
     /** 抬头窗口的仰角（度）——v1.2.0 实测四百六十九：55° → 45°（配合用户"角度调整到 45 度"） */
-    private static final float RANGED_BOOST_PITCH = -45.0f;
+    private static float rangedBoostPitch() {
+        return MaidSmartConfig.AIR_RAID_RANGED_BOOST_PITCH.get().floatValue();
+    }
     /** 开火间隔（tick） */
-    private static final int RANGED_SHOT_COOLDOWN = 20;
+    private static int rangedShotCooldown() {
+        return MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN.get();
+    }
     /** 开火的最大距离（格） */
-    private static final double RANGED_ATTACK_RANGE = 24.0;
+    private static double rangedAttackRange() {
+        return MaidSmartConfig.AIR_RAID_RANGED_ATTACK_RANGE.get();
+    }
 
     /**
      * v1.2.0 实测五百零三【远程空袭的"近身弹开"】：怪物贴到这么近就给她一个**远离怪物**
@@ -1356,22 +1418,30 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 被敌人打死。女仆自己被弹开更加平衡，弹开敌人太超模……（也保证了在狭小空间内，
      * 敌人仍然有命中的可能）"
      */
-    private static final double RANGED_PUSH_RADIUS = 3.0;
+    private static double rangedPushRadius() {
+        return MaidSmartConfig.AIR_RAID_RANGED_PUSH_RADIUS.get();
+    }
     /**
      * 弹开的水平速度（格/tick）。取 0.55 的理由：
      * - 鞘翅滑翔的水平巡航速度大致就在 0.4~0.8 区间，0.55 足以在一两 tick 内把
      *   "向敌飞"的矢量**反向压过去**，但她仍是一条连续的弧线而非瞬移；
      * - 刻意**不用** impulse 式的 1.0+：那会让女仆被"弹飞"，既不像盘旋也不平衡。
      */
-    private static final double RANGED_PUSH_SPEED = 0.55;
+    private static double rangedPushSpeed() {
+        return MaidSmartConfig.AIR_RAID_RANGED_PUSH_SPEED.get();
+    }
     /** 弹开时附加的向上分量（格/tick）——顺手把高度抬一点，脱离怪物的近战竖直包线 */
-    private static final double RANGED_PUSH_UP = 0.25;
+    private static double rangedPushUp() {
+        return MaidSmartConfig.AIR_RAID_RANGED_PUSH_UP.get();
+    }
     /**
      * 弹开后的"冷却/持续"时长（tick）。这段时间内**持续施加**远离矢量（不是打一枪就完），
      * 否则下一 tick 盘旋的向敌分量会立刻把速度拉回去、等于没弹。
-     * 30 tick = 1.5 秒，与 {@link #FIREWORK_COOLDOWN} 同量级——足够飘出怪物的一次攻击间隔。
+     * 30 tick = 1.5 秒，与 {@link #fireworkCooldown()} 同量级——足够飘出怪物的一次攻击间隔。
      */
-    private static final int RANGED_PUSH_TICKS = 30;
+    private static int rangedPushTicks() {
+        return MaidSmartConfig.AIR_RAID_RANGED_PUSH_TICKS.get();
+    }
     /** 弹开日志限频（毫秒）——这是高频事件，绝不能让日志被它刷屏 */
     private static final long RANGED_PUSH_LOG_INTERVAL_MS = 5000L;
 
@@ -1393,7 +1463,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      */
     private static int rangedShotCooldown(ItemStack weapon) {
         if (!(weapon.m_41720_() instanceof net.minecraft.world.item.CrossbowItem)) {
-            return RANGED_SHOT_COOLDOWN;
+            return rangedShotCooldown();
         }
         int quickCharge = 0;
         try {
@@ -1402,10 +1472,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         } catch (Throwable ignored) {
         }
         if (quickCharge <= 0) {
-            return RANGED_SHOT_COOLDOWN;
+            return rangedShotCooldown();
         }
-        int cd = (int) Math.round(RANGED_SHOT_COOLDOWN * (25.0 - 5.0 * quickCharge) / 25.0);
-        return Math.max(4, Math.min(RANGED_SHOT_COOLDOWN, cd));
+        int cd = (int) Math.round(rangedShotCooldown() * (25.0 - 5.0 * quickCharge) / 25.0);
+        return Math.max(4, Math.min(rangedShotCooldown(), cd));
     }
 
     /** v1.2.0 实测四百六十八：枪械开火冷却（tick）——由 performGunAttack 的返回值驱动 */
@@ -1428,12 +1498,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private void tickRangedAir(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         MaidFlightKit.setGliding(maid, true);
 
-        // 期望盘旋高度（目标上方 RANGED_HOLD_HEIGHT 格）
-        double holdY = target.m_20186_() + RANGED_HOLD_HEIGHT;
+        // 期望盘旋高度（目标上方 rangedHoldHeight() 格）
+        double holdY = target.m_20186_() + rangedHoldHeight();
 
         // ① 按需补推：只在真的掉出高度带时才补（5 秒间隔只是下限）
         int boostLeft = RANGED_BOOST_LEFT.getOrDefault(id, 0);
-        boolean tooLow = maid.m_20186_() < holdY - RANGED_BOOST_DROP;
+        boolean tooLow = maid.m_20186_() < holdY - rangedBoostDrop();
         if (boostLeft <= 0 && tooLow && gameTime >= RANGED_NEXT_BOOST.getOrDefault(id, 0L)) {
             // 实测五百七十八【A 方案】第一顺位是**位移法术**：不消耗燃料、也不占烟花冷却，
             // "能像玩家那样持续飞很久"就落在这一条上；它成功时会自己开同一个抬头窗口。
@@ -1443,10 +1513,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 // 实测五百六十三：扇子优先——掉高时挥羽扇维持高度（推进/扣耐久照搬扇子
                 // 自己，节奏 20t），没扇才烧烟花
                 if (TwilightFanKit.hasFan(maid) && TwilightFanKit.boostGlide(level, maid)) {
-                    FIREWORK_READY.put(id, gameTime + FAN_COOLDOWN);
-                    RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
-                    RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
-                    boostLeft = RANGED_BOOST_AIM_TICKS;
+                    FIREWORK_READY.put(id, gameTime + fanCooldown());
+                    RANGED_NEXT_BOOST.put(id, gameTime + rangedBoostInterval());
+                    RANGED_BOOST_LEFT.put(id, rangedBoostAimTicks());
+                    boostLeft = rangedBoostAimTicks();
                     com.maidsmart.tool.PromaidLog.log("远程空袭",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高挥羽扇");
                 } else {
@@ -1455,10 +1525,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                         launchFirework(level, maid, fw);
                         // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
                         FlightFireworkPose.show(maid, fw);
-                        FIREWORK_READY.put(id, gameTime + FIREWORK_COOLDOWN);
-                        RANGED_NEXT_BOOST.put(id, gameTime + RANGED_BOOST_INTERVAL);
-                        RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);
-                        boostLeft = RANGED_BOOST_AIM_TICKS;
+                        FIREWORK_READY.put(id, gameTime + fireworkCooldown());
+                        RANGED_NEXT_BOOST.put(id, gameTime + rangedBoostInterval());
+                        RANGED_BOOST_LEFT.put(id, rangedBoostAimTicks());
+                        boostLeft = rangedBoostAimTicks();
                         com.maidsmart.tool.PromaidLog.log("远程空袭",
                                 com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高补烟花");
                     }
@@ -1474,7 +1544,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         fireRanged(maid, target, id, gameTime);
 
         // ③ v1.2.0 实测五百零三【近身弹开】：怪物贴到 3 格内就给一个"远离怪物"的速度矢量，
-        //    并让它在接下来 RANGED_PUSH_TICKS 内**持续**生效（见 pushAwayFromThreat）。
+        //    并让它在接下来 rangedPushTicks() 内**持续**生效（见 pushAwayFromThreat）。
         //
         //    【为什么必须"同时改速度 + 改朝向"】滑翔的物理在 `LivingEntity.travel` 的
         //    `isFallFlying()` 分支里（反编译实证）：它每 tick 都做一次
@@ -1497,7 +1567,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             RANGED_BOOST_LEFT.put(id, boostLeft - 1);
             // 【实测五百七十八】朝向先摆（冲量沿视线走，必须在本 tick 的施法之前）：
             // 这就是烟花掉高窗口那 45°，"提供速度"那一口因此与烟花的推力同向。
-            faceUpForward(maid, target, RANGED_BOOST_PITCH);
+            faceUpForward(maid, target, rangedBoostPitch());
             // "提供速度"只在窗口内放（旧版挂在盘旋相位的每一 tick，等于当着敌人的面从圈上切进去）
             tryDashBoost(maid, target, id, gameTime);
         } else {
@@ -1524,7 +1594,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 也就脱离了输出位，而且**在狭小空间里跑不掉**（墙角/洞穴），所以敌人仍然有机会命中，
      * 这正是用户要的平衡。
      *
-     * 【强度取值的理由】见 {@link #RANGED_PUSH_SPEED}：不给 impulse，给的是
+     * 【强度取值的理由】见 {@link #rangedPushSpeed()}：不给 impulse，给的是
      * "在一两 tick 内把向敌速度压过去"的连续修正；持续 1.5 秒而不是一 tick，是因为
      * 盘旋的向敌分量每 tick 都在拉她。
      *
@@ -1551,13 +1621,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 避免把"中立动物路过"也算成贴脸。
         LivingEntity nearest = findNearestThreat(level, maid);
         boolean tooClose = nearest != null
-                && maid.m_20280_(nearest) <= RANGED_PUSH_RADIUS * RANGED_PUSH_RADIUS;
+                && maid.m_20280_(nearest) <= rangedPushRadius() * rangedPushRadius();
 
         int left = RANGED_PUSH_LEFT.getOrDefault(id, 0);
         if (tooClose) {
             // 贴脸：刷新持续时间（怪物一直在身边就一直保持脱离姿态），并施加远离矢量
-            RANGED_PUSH_LEFT.put(id, RANGED_PUSH_TICKS);
-            left = RANGED_PUSH_TICKS;
+            RANGED_PUSH_LEFT.put(id, rangedPushTicks());
+            left = rangedPushTicks();
             applyAwayVelocity(maid, nearest);
             logPushThrottled(maid, nearest);
             return nearest;
@@ -1587,7 +1657,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             double bestSqr = Double.MAX_VALUE;
             for (net.minecraft.world.entity.Entity e : level.m_6443_(
                     net.minecraft.world.entity.Entity.class,
-                    maid.m_20191_().m_82400_(RANGED_PUSH_RADIUS),
+                    maid.m_20191_().m_82400_(rangedPushRadius()),
                     ent -> true)) {
                 if (!(e instanceof LivingEntity le) || e == maid || !e.m_6084_()) {
                     continue;
@@ -1643,8 +1713,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 施加"远离该威胁"的速度矢量：水平方向背离 × {@link #RANGED_PUSH_SPEED}，
-     * 竖直方向抬一点（{@link #RANGED_PUSH_UP}）。
+     * 施加"远离该威胁"的速度矢量：水平方向背离 × {@link #rangedPushSpeed()}，
+     * 竖直方向抬一点（{@link #rangedPushUp()}）。
      *
      * 水平分量是**覆盖式**的（直接写水平速度）而不是叠加：叠加会让反复触发时速度越滚越大，
      * 几 tick 后就变成"被弹飞"，与用户要的"平衡"相反。竖直分量保留原值再抬升，
@@ -1666,9 +1736,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             double uz = dz / d;
             Vec3 v = maid.m_20184_();
             maid.m_20256_(new Vec3(
-                    ux * RANGED_PUSH_SPEED,
-                    Math.max(v.f_82480_, 0.0) + RANGED_PUSH_UP,
-                    uz * RANGED_PUSH_SPEED));
+                    ux * rangedPushSpeed(),
+                    Math.max(v.f_82480_, 0.0) + rangedPushUp(),
+                    uz * rangedPushSpeed()));
         } catch (Throwable ignored) {
         }
     }
@@ -1773,8 +1843,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * {@code faceLaunchDirection}（抬头角也跟着 {@code climbPitch()}：近战 62°/远战 45°）。
      */
     /** 空中冲刺的最近/最远距离（格）：太近没必要、太远别白冲 */
-    private static final double DASH_BOOST_MIN_RANGE = 6.0;
-    private static final double DASH_BOOST_MAX_RANGE = 28.0;
+    private static double dashBoostMinRange() {
+        return MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE.get();
+    }
+    private static double dashBoostMaxRange() {
+        return MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE.get();
+    }
 
     private static void markDash(UUID id, long gameTime, EntityMaid maid, String what) {
         DASH_NEXT.put(id, gameTime
@@ -1903,8 +1977,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         // 1.20.1 的 Entity 没有 distanceToSqr(Entity) 重载（1.21.1 才有）→ 按目标坐标展开
         double d2 = maid.m_20275_(target.m_20185_(), target.m_20186_(), target.m_20189_());
-        if (d2 < DASH_BOOST_MIN_RANGE * DASH_BOOST_MIN_RANGE
-                || d2 > DASH_BOOST_MAX_RANGE * DASH_BOOST_MAX_RANGE) {
+        if (d2 < dashBoostMinRange() * dashBoostMinRange()
+                || d2 > dashBoostMaxRange() * dashBoostMaxRange()) {
             return false;
         }
         if (!SelfPreservationBehavior.hasSight(maid, target)) {
@@ -1934,10 +2008,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 燃料、也不占烟花冷却，能一直用）。与烟花做同一件事，就用同一套口径：
      *
      * <ul>
-     *   <li>**同一触发**：掉出期望高度带（{@link #RANGED_BOOST_DROP}，由调用方判）；</li>
-     *   <li>**同一朝向**：{@code faceUpForward(target, RANGED_BOOST_PITCH)}——就是烟花掉高
+     *   <li>**同一触发**：掉出期望高度带（{@link #rangedBoostDrop()}，由调用方判）；</li>
+     *   <li>**同一朝向**：{@code faceUpForward(target, rangedBoostPitch())}——就是烟花掉高
      *       窗口那 45° 抬头朝目标（不是这里发明的新角度）；</li>
-     *   <li>**同一窗口**：成功就自己开 {@link #RANGED_BOOST_AIM_TICKS} tick 的抬头窗口，
+     *   <li>**同一窗口**：成功就自己开 {@link #rangedBoostAimTicks()} tick 的抬头窗口，
      *       于是"只带法术、不带烟花"的女仆也进得了这个相位（旧版她永远进不来：窗口只由
      *       烟花/扇子开）。</li>
      * </ul>
@@ -1968,12 +2042,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return false;
         }
         MaidSpellCastCompat.clearCastTarget(maid);          // 别让它把 45° 拧平（同 tryDashClimb）
-        faceUpForward(maid, target, RANGED_BOOST_PITCH);    // 与烟花掉高窗口同朝向
+        faceUpForward(maid, target, rangedBoostPitch());    // 与烟花掉高窗口同朝向
         if (!MaidSpellCastCompat.castSpecific(maid, spell, dashSpellLevel(maid, spell),
                 dashCooldownFor(spell, fromBoostTable))) {
             return false;
         }
-        RANGED_BOOST_LEFT.put(id, RANGED_BOOST_AIM_TICKS);  // 法术自己开窗口（纯法术女仆靠这条）
+        RANGED_BOOST_LEFT.put(id, rangedBoostAimTicks());  // 法术自己开窗口（纯法术女仆靠这条）
         markDash(id, gameTime, maid, "掉高·位移法术顶高度（" + spell
                 + " Lv" + dashSpellLevel(maid, spell) + "）");
         return true;
@@ -1982,12 +2056,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /**
      * 远战开火：主手是枪械（TACZ / 卓越前线）→ 走 TLM 自己的枪械通道；否则走本任务
      * 实现的 `performRangedAttack`（箭矢通道）。射程分口径：枪械用 TLM 的枪械中距离
-     * 配置（`GunCompat.gunMaxRange`），弓弩用 {@link #RANGED_ATTACK_RANGE}。
+     * 配置（`GunCompat.gunMaxRange`），弓弩用 {@link #rangedAttackRange()}。
      */
     private void fireRanged(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack main = maid.m_21205_();
         boolean gun = GunCompat.isGun(main);
-        double range = gun ? GunCompat.gunMaxRange() : RANGED_ATTACK_RANGE;
+        double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
         double dist = maid.m_20270_(target);
         if (dist > range) {
             return;
@@ -2101,13 +2175,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         double ux = dx / r;
         double uz = dz / r;
-        double radial = (r - ORBIT_RADIUS) * 0.5;
+        double radial = (r - orbitRadius()) * 0.5;
         double ox = -uz - ux * radial;
         double oz = ux - uz * radial;
         // 高度保持：低于期望高度就抬头（速度换高度），高了就低头（高度换速度）
-        double err = (holdY - maid.m_20186_()) + RANGED_HOLD_BIAS;
-        double pitch = -err * RANGED_HOLD_GAIN;
-        pitch = Math.max(-RANGED_ORBIT_UP_MAX, Math.min(RANGED_ORBIT_DOWN_MAX, pitch));
+        double err = (holdY - maid.m_20186_()) + rangedHoldBias();
+        double pitch = -err * rangedHoldGain();
+        pitch = Math.max(-rangedOrbitUpMax(), Math.min(rangedOrbitDownMax(), pitch));
         double h = Math.sqrt(ox * ox + oz * oz);
         float yaw = (float) (Math.atan2(oz, ox) * (180.0 / Math.PI)) - 90.0f;
         applyRotation(maid, yaw, (float) pitch);

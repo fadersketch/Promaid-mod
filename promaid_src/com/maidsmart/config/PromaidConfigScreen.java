@@ -372,6 +372,7 @@ public class PromaidConfigScreen extends Screen {
         SELF_PRESERVE("自保与保命", Group.COMBAT), SELF_TACTICS("自保战术", Group.COMBAT),
         TACTICS("单兵战术", Group.COMBAT), AUTO_COMBAT("主动参战", Group.COMBAT),
         AID("贴身辅助", Group.COMBAT), PLAYER_DAMAGE("玩家伤害策略", Group.COMBAT),
+        AIR_RAID("空袭数值", Group.COMBAT),
         FALL_GUARD("落地缓冲", Group.SURVIVAL), BRIDGE("搭路", Group.MOVE),
         REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
         SAFETY("女仆安全与区块", Group.SURVIVAL),
@@ -642,6 +643,7 @@ public class PromaidConfigScreen extends Screen {
             case AUTO_COMBAT -> this.autoCombatRows();
             case AID -> this.aidRows();
             case PLAYER_DAMAGE -> this.playerDamageRows();
+            case AIR_RAID -> this.airRaidRows();
             case FALL_GUARD -> this.fallGuardRows();
             case BRIDGE -> this.bridgeRows();
             case REVIVE -> this.reviveRows();
@@ -2305,6 +2307,91 @@ public class PromaidConfigScreen extends Screen {
     /** v1.5.294：被动技能独立栏（反馈："被动技能要单拉出来一栏放在 Promaid 模组详细
      *  配置里面，而不是放在战斗自保里面"）——落地水/岩浆逃生放水/主人死亡传送，
      *  全是被动保命动作，与战斗自保页的主动行为（自保策略/贴身辅助/单兵战术）分离 */
+    /**
+     * v1.2.2 实测五百八十一【空袭数值】：原本硬编码在 {@code MaidFlightCombatBehavior} 里的
+     * 空袭数值全部改为配置项，集中到这一页（需求原文：「关于空袭等各项数值也要有一个详细的
+     * 配置面板，在模组详细配置。」）。**默认值与原常量一字不差**——不改任何行为，只是把
+     * 原来只能改代码的旋钮交给玩家；飞行链路本身的取舍（为什么背离起飞、为什么收翅才吃加成）
+     * 仍写在各个数值的注释里，出处见该类同名访问器的 javadoc。
+     */
+    private void airRaidRows() {
+        this.rows.add(new SectionRow("空袭数值（原硬编码常量，默认值未改）", false));
+        this.rows.add(new SectionRow("① 起飞与爬升", true));
+        this.rows.add(new NumRow("起飞段时长·近战（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_MELEE.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_MELEE, s), "起飞段时长·近战（tick，默认 30 = 1.5 秒）：放烟花后维持「背离敌人 + 抬头」的时长——近战必须爬够高度才维持得住滑翔，调短 = 更早转向敌人但爬得矮、贴地风险大"));
+        this.rows.add(new NumRow("起飞段时长·远程（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_RANGED.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_LAUNCH_TICKS_RANGED, s), "起飞段时长·远程（tick，默认 20 = 1 秒）：远战只求盘旋高度、不吃俯冲——调大 = 爬得更高、更安全但起手更慢"));
+        this.rows.add(new NumRow("起飞仰角·近战（正切值）", String.valueOf(MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_MELEE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_MELEE, s), "起飞仰角正切·近战（默认 1.88 ≈ 62°）：1 = 45°、2.75 ≈ 70°。越低越平飞、越高越直上；太低会「一放烟花就往敌人方向压头」然后贴地"));
+        this.rows.add(new NumRow("起飞仰角·远程（正切值）", String.valueOf(MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_RANGED.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_LAUNCH_CLIMB_TAN_RANGED, s), "起飞仰角正切·远程（默认 1.0 = 45°）：远战起飞只要够悬停高度，压低仰角能更早进入盘旋开火"));
+        this.rows.add(new NumRow("起飞触发距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_LAUNCH_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_LAUNCH_RANGE, s), "地面重新起飞的最大水平距离（格，默认 20）：超出先跑近再起飞（防越炸越远）。只算水平距离——敌人站在高处不影响这条"));
+        this.rows.add(new NumRow("占位高度容差（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE, s), "占位高度容差（格，默认 10）：她比目标低不超过这么多格就算「已经到位」，直接开打不再爬高。这个值同时也是起飞朝向的判据"));
+        this.rows.add(new NumRow("起跳等待上限（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_JUMP_TICKS.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_JUMP_TICKS, s), "起跳等待上限（tick，默认 3）：起跳失败（头顶有方块 / 低矮空间）超过这么久就放弃本轮空袭"));
+        this.rows.add(new NumRow("烟花最小间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_FIREWORK_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_FIREWORK_COOLDOWN, s), "烟花最小间隔（tick，默认 30 = 1.5 秒）：调小 = 更频繁点火（燃料消耗快）、调大 = 更省烟花但掉速掉高更明显"));
+        this.rows.add(new NumRow("羽扇最小间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_FAN_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_FAN_COOLDOWN, s), "羽扇最小间隔（tick，默认 20 = 1 秒，与原版挥扇动作时长一致）：扇子不消耗、只受这条限制"));
+        this.rows.add(new SectionRow("② 收翅俯冲（近战空袭）", true));
+        this.rows.add(new NumRow("收翅俯冲触发距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_SMASH_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_SMASH_RANGE, s), "收翅俯冲触发距离（格，默认 3.5）：进到这么近就收翅砸下去。调大 = 更早收翅（砸得更重但更容易砸空）"));
+        this.rows.add(new NumRow("猛击命中判定距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_SMASH_HIT_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_SMASH_HIT_RANGE, s), "猛击命中判定距离（格，默认 4.0）：按本 tick 的位移线段判定（不是瞬时点），擦身而过也算命中；调大 = 更容易打中"));
+        this.rows.add(new NumRow("范围强制命中半径（格）", String.valueOf(MaidSmartConfig.AIR_RAID_FORCED_HIT_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_FORCED_HIT_RADIUS, s), "范围强制命中半径（格，默认 2.5）：身边这个范围内的其它敌对目标也一起吃一下猛击（防贴身小怪判不到）"));
+        this.rows.add(new NumRow("猛击段最长（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_SMASH_MAX_TICKS.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_SMASH_MAX_TICKS, s), "猛击段最长（tick，默认 20 = 1 秒）：这么久还没打到人就按打空收尾、切回滑翔继续盘旋"));
+        this.rows.add(new NumRow("地面近战触及距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_MELEE_REACH.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_MELEE_REACH, s), "地面近战触及距离（格，默认 3.0）：地面退路用的近战判定距离，超出先走位靠近"));
+        this.rows.add(new NumRow("俯仰限幅·抬头（度）", String.valueOf(MaidSmartConfig.AIR_RAID_MAX_PITCH_UP.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_MAX_PITCH_UP, s), "俯仰限幅·抬头（度，默认 55）：飞向目标时最多抬头多少——调大 = 爬升更陡"));
+        this.rows.add(new NumRow("俯仰限幅·低头（度）", String.valueOf(MaidSmartConfig.AIR_RAID_MAX_PITCH_DOWN.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_MAX_PITCH_DOWN, s), "俯仰限幅·低头（度，默认 70）：最多低头多少，接近 90 = 允许垂直扎下去"));
+        this.rows.add(new SectionRow("③ 盘旋与补高（远程空袭）", true));
+        this.rows.add(new NumRow("盘旋半径（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS, s), "远程空袭的盘旋半径（格，默认 10）：以目标为圆心保持的距离，也是高度修正环的基准圈"));
+        this.rows.add(new NumRow("期望盘旋高度（目标上方格数）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT, s), "期望盘旋高度（目标上方格数，默认 10）：低于这条带就补高度——远程空袭要的就是脚不沾地，掉下去就是被贴脸"));
+        this.rows.add(new NumRow("高度修正增益", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_GAIN.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_HOLD_GAIN, s), "高度修正增益（默认 5.0）：高度误差换算成俯仰角的比例——调大 = 更急着回到期望高度，容易起伏"));
+        this.rows.add(new NumRow("高度修正偏置（格）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_BIAS.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_HOLD_BIAS, s), "高度修正偏置（格，默认 1.0）：给误差加一点正偏置，默认略偏高于期望高度、留安全余量"));
+        this.rows.add(new NumRow("掉高容差（格）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_BOOST_DROP.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_BOOST_DROP, s), "掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补推。调大 = 更省燃料但高度起伏更大"));
+        this.rows.add(new NumRow("盘旋抬头上限（度）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_ORBIT_UP_MAX.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_ORBIT_UP_MAX, s), "盘旋抬头上限（度，默认 45）：高度修正最多抬头多少"));
+        this.rows.add(new NumRow("盘旋低头上限（度）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_ORBIT_DOWN_MAX.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_ORBIT_DOWN_MAX, s), "盘旋低头上限（度，默认 35）：高度修正最多低头多少——低头会掉速，所以默认比抬头上限小"));
+        this.rows.add(new NumRow("掉高补推间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_BOOST_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_BOOST_INTERVAL, s), "掉高补推间隔（tick，默认 100 = 5 秒）：两次补推之间的最短间隔，调小 = 高度更稳但更耗燃料/法术"));
+        this.rows.add(new NumRow("补推抬头窗口（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_BOOST_AIM_TICKS.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_BOOST_AIM_TICKS, s), "补推抬头窗口（tick，默认 10 = 0.5 秒）：补推后维持抬头朝目标这么久，推力吃完才回盘旋朝向"));
+        this.rows.add(new NumRow("补推仰角（度）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_BOOST_PITCH.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_BOOST_PITCH, s), "补推仰角（度，默认 -45 = 抬头 45°）：掉高时朝目标抬头多少——负数表示抬头"));
+        this.rows.add(new SectionRow("④ 远程开火", true));
+        this.rows.add(new NumRow("远程开火基础间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN, s), "远程开火基础间隔（tick，默认 20 = 1 秒）：弓弩的基础射速（快速装填会按比例缩短）；枪械用枪械模组自己的射速"));
+        this.rows.add(new NumRow("远程射程（格，弓弩）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_ATTACK_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_ATTACK_RANGE, s), "远程射程（格，默认 24）：弓弩的射程与锁敌上限（枪械走枪械模组自己的射程）"));
+        this.rows.add(new SectionRow("⑤ 近身弹开", true));
+        this.rows.add(new NumRow("弹开触发半径（格）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_PUSH_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_PUSH_RADIUS, s), "弹开触发半径（格，默认 3）：怪物贴到这么近就触发近身弹开（总开关在「落地缓冲」页）"));
+        this.rows.add(new NumRow("弹开水平速度", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_PUSH_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_PUSH_SPEED, s), "弹开水平速度（默认 0.55）：弹开瞬间给她的水平速度，调大 = 脱得更远"));
+        this.rows.add(new NumRow("弹开抬升速度", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_PUSH_UP.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_PUSH_UP, s), "弹开抬升速度（默认 0.25）：弹开时同时抬一点高度，防弹开途中继续掉"));
+        this.rows.add(new NumRow("弹开保持（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_PUSH_TICKS.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_PUSH_TICKS, s), "弹开保持（tick，默认 30 = 1.5 秒）：这段时间内持续施加弹开速度"));
+        this.rows.add(new SectionRow("⑥ 位移法术（需装《车万女仆：万法皆通》）", true));
+        this.rows.add(new NumRow("冲刺最小距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE, s), "【提供速度】法术的最小施放距离（格，默认 6）：太近不冲，防冲过头扎进敌人身上"));
+        this.rows.add(new NumRow("冲刺最大距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));
+    }
+
     private void fallGuardRows() {
         this.rows.add(new BoolRow("落地水", MaidSmartConfig.COMBAT_WATER_CLUTCH.get(),
                 v -> MaidSmartConfig.COMBAT_WATER_CLUTCH.set(v), "落地水（有水桶+坠落自动放水缓冲）"));
@@ -4295,7 +4382,7 @@ public class PromaidConfigScreen extends Screen {
         return switch (g) {
             case WORK -> "\u00a77建造 / 挖矿 / 伐木 / 烹饪与酿造 / 农场宰杀 / 排班表";
             case AI -> "\u00a77记忆 / 对话 / 感知 / 情绪 / AI 工具";
-            case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害";
+            case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害 / 空袭数值";
             case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
             case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路";
             case UI -> "\u00a77语音 TTS / 显示与气泡";
