@@ -151,11 +151,11 @@ public class ProMaidExtension implements ILittleMaid {
         for (net.minecraft.server.level.ServerLevel level : event.getServer().getAllLevels()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : level.getEntitiesOfClass(
-                    net.minecraft.world.entity.Entity.class,
-                    // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
-                    new net.minecraft.world.phys.AABB(-131072.0, -4096.0, -131072.0,
-                            131072.0, 4096.0, 131072.0))) {
+            // v1.2.0（2026-09-18）【Sable 兼容】：原来的"有限值全世界 AABB"改为
+            // level.getAllEntities()——超大 AABB 会被 Sable 直接拒绝（Aborting entity get
+            // → 返回空列表 + 每次附完整堆栈刷日志），getAllEntities() 不传 AABB，
+            // 同时绕开桶 bug 与 ±∞ 经 blockToSection 溢出两个老坑。
+            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
                 if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
                     continue;
                 }
@@ -275,14 +275,12 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         if (++this.seatWalkTimer >= 3) {
             this.seatWalkTimer = 0;
             try {
-                net.minecraft.world.phys.AABB whole = new net.minecraft.world.phys.AABB(
-                        // v1.1.0 实测三百三十二：全图 AABB 用有限值（±∞ 溢出 → 扫描恒空）
-                        -131072.0, -4096.0, -131072.0, 131072.0, 4096.0, 131072.0);
+                // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB 扫描改为 getAllEntities()
+                //（超大 AABB 被 Sable 拒绝查询，见 FarmTillDriver 同款说明）
                 for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                     // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                     // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                    for (net.minecraft.world.entity.Entity e : level.getEntitiesOfClass(
-                            net.minecraft.world.entity.Entity.class, whole)) {
+                    for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
                         if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
                                 && m.isAlive()) {
                             com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
