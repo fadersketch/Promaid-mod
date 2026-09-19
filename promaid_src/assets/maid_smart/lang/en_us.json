@@ -1,4 +1,4 @@
-﻿{
+{
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",
   "task.maid_smart.organize": "Organize Chests",
@@ -52,5 +52,8 @@
   "item.maid_smart.index_stone": "Index Stone",
   "config.promaid.build.indexStone": "Index Stone",
   "task.maid_smart.index_build": "Temporary Build",
-  "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)"
+  "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)",
+  "config.promaid.combat.flightSpellCast": "Air-raid spell casting (needs Touhou Little Maid: Spell)",
+  "config.promaid.combat.flightSpellCastInterval": "Air-raid spell interval (ticks)",
+  "config.promaid.combat.flightSpellCastRange": "Air-raid spell range (blocks)"
 }
