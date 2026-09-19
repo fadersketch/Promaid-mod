@@ -1,4 +1,61 @@
-﻿## 实测五百七十八【位移法术照抄烟花（A 方案）/ 盘旋「掉高补推」从来没生效过 / 空袭续航战术 / 新增 4 个 LLM 工具】
+﻿## 实测五百七十九【盘旋高度提到目标上方 10 格 / 喂食改走物品自己的 finishUsingItem（永恒牛排不再被吃掉）】
+
+### ① 远程空袭的期望盘旋高度：3.5 → 10 格
+
+反馈原话："问题有所缓解了，但是还是达不到预期要的效果。而且时常容易出现低于目标高度的情况。
+这边建议把期望高度改为目标高度以上 10 格。"
+
+- `RANGED_HOLD_HEIGHT` **3.5 → 10**（实测四百六十九 曾把它从 6 降到 3.5，理由是"飞太高锁不到敌"；
+  这次按作者口径改回来）：3.5 格的高度带太薄——滑翔转弯本身就在掉高度，一掉就低于敌人，
+  观感与安全都差（远程空袭的核心要求是"脚不沾地"）；
+- 配合 实测五百七十八 修好的补推阈值（`RANGED_BOOST_DROP = 0.5`）＝现在"低于期望高度带半格就补"；
+- 锁敌/开火不受影响：判据是 3D 的 24 格（`RANGED_ATTACK_RANGE`），盘旋半径 10 格时
+  "目标上方 10 格"的 3D 距离约 14 格，仍在射程内。
+
+### ② 喂食改走**物品自己的 finishUsingItem**（遗物类食物不再被吃掉）
+
+反馈原话："我发现女仆投喂其她女仆的时候，会把像永恒牛排这样的吃不掉的食物给消耗掉。
+理论上我们走的效果是进行一次吃，但其实可能漏掉了什么环节。"
+
+**根因（javap 实证，两版同构）**：`Item.finishUsingItem` 的默认实现**就是** eat——
+```java
+public ItemStack finishUsingItem(ItemStack stack, Level level, LivingEntity entity) {
+    if (this.isEdible()) { return entity.eat(level, stack); }   // ← 普通食物：与 eat() 完全等价
+    return stack;
+}
+```
+所以**普通食物**走 eat() 与走 finishUsingItem 没有任何区别；但**重写了 finishUsingItem 的物品**
+只有走物品自己的路径才生效。反馈里的「永恒牛排」＝奇异饰品 `artifacts:eternal_steak`
+（`artifacts.item.EverlastingFoodItem`）：
+```java
+finishUsingItem(stack, level, entity) {
+    if (isEdible()) { entity.eat(level, stack.copy());      // 吃的是**副本**
+                      addCooldown(entity, eatingCooldown); } // 给实体上冷却
+    return stack;                                           // 原栈原样返回 ⇒ **不消耗**
+}
+```
+而旧版投喂是"我们手搓 `shrink(1)` / `extractItem(1)` 再调 `eat()`"——等于把这类
+"吃完不消失"的遗物硬扣掉了，它的冷却也从来没上过（所以还能被反复触发）。
+
+**改动（两条链 + 自救 + 调试命令，共 7 处站点）**：
+
+1. `MaidMealBridge.eatByItemLogic(eater, live)`：把**真栈**交给物品自己的
+   `finishUsingItem`，**原地**结算并返回真正吃掉的份数（0 = 物品自己不消耗）；
+   没被消耗时记一笔**本地冷却**（10 秒）——这类物品自己的冷却通常只对玩家生效
+   （`Player.getCooldowns()`；`LivingEntity` 没有这个 API），女仆身上读不到；
+2. `MaidMealBridge.onFeedCooldown(eater, stack)`：**选食物时先问这一句**（本地表 + 玩家侧真冷却），
+   否则互助链每 3 秒会把同一件遗物反复触发；
+3. **姐妹链** `feedSisterFood`：不再 `shrink(1)`/`extractItem(1)`，直接吃手上/槽位里的真栈；
+   TLM 的 HEAL_MEAL 回血只在"真的吃掉一份"时补调（没被消耗的遗物不给回血，否则它成了无限回血器）；
+4. **主人链** `feedFoodDirect` + 两个调用点：同样改成对真栈结算、不再预扣；蜂蜜分支的
+   `Item` 引用改为在进食前捕获（进食后活栈会变空、`getItem()` 变 AIR）；
+5. **自救吃食物**（`SelfPreservationBehavior` 两处：治疗食物 / 金苹果专档）：同一入口，
+   没被消耗就放回背包并继续找下一种；
+6. `/maid_smart feedtest` 调试命令同口径。
+
+手册「贴身辅助」章补一条"遗物类食物不会被吃掉"，README 的远程空袭条目同步高度口径。
+
+## 实测五百七十八【位移法术照抄烟花（A 方案）/ 盘旋「掉高补推」从来没生效过 / 空袭续航战术 / 新增 4 个 LLM 工具】
 
 ### ① 位移法术的朝向一律照抄烟花（A 方案）
 
