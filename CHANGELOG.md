@@ -1,4 +1,4 @@
-﻿## 实测五百六十七【空袭·法术层：用飞行武器的同时顺手放法术（需装《车万女仆：魔法》）】
+﻿## 实测五百六十七【空袭·法术层：用飞行武器的同时顺手放法术（需装《车万女仆：魔法》）】（PR #8，@rodericksthescriptkid 社区贡献）
 
 ### 需求
 
@@ -88,7 +88,7 @@ Iron's Spells 'n Spellbooks 1.21.1-3.16.3（+ geckolib / curios / playeranimator
   `burning_dash`）来给飞行加速。那条路要的是"**指定法术**"的施法路径
   （`MaidIronsSpellData` + `MagicData.initiateCast` 自己结算 onCast/onServerCastComplete），
   与本次"随机挑一个不在冷却的"路径不同，留待下一轮。
-## 实测五百六十五【空袭女仆被困在远处/异维度：三条自动召回链全被"无界让位"挡死】
+## 实测五百六十五【空袭女仆被困在远处/异维度：三条自动召回链全被"无界让位"挡死】（PR #10，@rodericksthescriptkid 社区贡献）
 
 **现象**：女仆击败 BOSS 后"凭空消失"，日志里连着几十分钟每 60 秒一条
 「[跨维] … 重锤跃起中，跨维度跟随不传」。
@@ -102,7 +102,9 @@ Iron's Spells 'n Spellbooks 1.21.1-3.16.3（+ geckolib / curios / playeranimator
 （先收翅 + 清空袭静态状态再强拉）；落地即清零；近处的正常扑击不参与计时。
 新增日志「[传送] … 持续空中让位超过 15 秒（距离/维度已超线）→ 放弃本轮让位，强制拉回」。
 
-## 实测五百六十六【客户端实体丢失（服务端照打、客户端没有她）→ 重同步兜底】
+**已知限制**：烈焰冲锋（ISS 的 burning_dash）这类**自身冲刺法术**的「指定法术」受控使用——比如让她主动用冲刺给飞行加速——本版未做；当前只会随机向目标施放不在冷却的指向型法术，作者留待下一轮。
+
+## 实测五百六十六【客户端实体丢失（服务端照打、客户端没有她）→ 重同步兜底】（PR #10，@rodericksthescriptkid 社区贡献）
 
 **现象**：女仆战斗中"客户端消失"——F3+B 看不到碰撞箱、客户端实体列表里没有她；
 但服务端一切正常（照常攻击、`/tp` 找得到、凋灵按稳定间隔掉血）；**退出重进立刻恢复**。
@@ -119,7 +121,7 @@ Iron's Spells 'n Spellbooks 1.21.1-3.16.3（+ geckolib / curios / playeranimator
 
 **验证**：实测现象发生时执行一次 `resync` 即恢复可见（输出同时显示
 `Sable: 不在 sub-level 内（追踪位置=原坐标）`，据此排除了 Sable 追踪误判这条支线）。
-## 实测五百六十四【Sable 同装时：全图扫描被拒查 → 一大片功能静默失效 + 日志刷爆】
+## 实测五百六十四【Sable 同装时：全图扫描被拒查 → 一大片功能静默失效 + 日志刷爆】（PR #9，@rodericksthescriptkid 社区贡献）
 
 **现象**：装了 Sable（Create Aeronautics 的物理引擎）后 `latest.log` 被
 「Aborting entity get for abnormally large AABB」刷爆（实测 ~1 小时 19 万条 / 500MB+）。
