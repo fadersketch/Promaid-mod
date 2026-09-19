@@ -199,7 +199,10 @@
   "config.promaid.combat.flightSpellCast": "空袭顺带施法（需装《车万女仆：魔法》）",
   "config.promaid.combat.flightSpellCastInterval": "空袭施法间隔（tick）",
   "config.promaid.combat.flightSpellCastRange": "空袭施法距离（格）",
-  "config.promaid.combat.flightDashCast": "空袭用位移法术（需装《车万女仆：魔法》）",
-  "config.promaid.combat.flightDashTakeoff": "平地起飞也用位移法术",
-  "config.promaid.combat.flightDashInterval": "位移法术间隔（tick）"
+  "config.promaid.combat.flightDashInterval": "位移法术间隔（tick）",
+  "config.promaid.combat.flightDashClimb": "位移法术·起飞/补高（提供高度）",
+  "config.promaid.combat.flightDashBoost": "位移法术·飞行加速（提供速度）",
+  "config.promaid.combat.flightDashClimbSpells": "提供高度的法术表",
+  "config.promaid.combat.flightDashBoostSpells": "提供速度的法术表",
+  "config.promaid.combat.flightDashRespectCooldown": "位移法术·尊重法术自身冷却"
 }

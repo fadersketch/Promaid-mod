@@ -439,10 +439,9 @@ public final class MaidFlightKit {
     private static final java.util.Map<java.util.UUID, Long> DASH_KIT_CACHE_TICK = new java.util.HashMap<>();
     private static final long DASH_KIT_CACHE_INTERVAL = 20L;
 
-    public static boolean hasDashTakeoffSpell(EntityMaid maid) {
+    public static boolean hasClimbSpell(EntityMaid maid) {
         if (maid == null
-                || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CAST.get()
-                || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_TAKEOFF.get()) {
+                || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get()) {
             return false;
         }
         try {
@@ -452,8 +451,14 @@ public final class MaidFlightKit {
                 return Boolean.TRUE.equals(DASH_KIT_CACHE.get(maid.getUUID()));
             }
             // 【必须用不看冷却的那个】否则她每冲刺一次（写回 2 秒冷却）模式就掉回未激活
-            boolean has = com.maidsmart.combat.MaidSpellCastCompat.hasDashSpell(
-                    maid, com.maidsmart.combat.MaidSpellCastCompat.TAKEOFF_DASH_SPELLS);
+            String[] ids;
+            try {
+                ids = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
+                        .toArray(new String[0]);
+            } catch (Throwable ignored) {
+                ids = com.maidsmart.combat.MaidSpellCastCompat.DEFAULT_CLIMB_SPELLS;
+            }
+            boolean has = com.maidsmart.combat.MaidSpellCastCompat.hasDashSpell(maid, ids);
             DASH_KIT_CACHE.put(maid.getUUID(), has);
             DASH_KIT_CACHE_TICK.put(maid.getUUID(), now);
             return has;
@@ -475,7 +480,7 @@ public final class MaidFlightKit {
         // v1.2.0 实测五百六十九：推进剂 = 烟花 / 羽扇（hasFlightFuel）**或**能上天的位移法术——
         // 后者是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）
         if (!(hasElytra(maid) && hasWeapon(maid)
-                && (hasFlightFuel(maid) || hasDashTakeoffSpell(maid)))) {
+                && (hasFlightFuel(maid) || hasClimbSpell(maid)))) {
             return false;
         }
         return !isRangedTask(maid) || hasAmmoForRanged(maid);
@@ -505,7 +510,7 @@ public final class MaidFlightKit {
             sb.append(isRangedTask(maid) ? "远程武器" : "近战武器");
         }
         // 实测五百六十三：燃料件 = 烟花或羽扇；v1.2.0 实测五百六十九：位移法术也能顶上
-        if (!hasFlightFuel(maid) && !hasDashTakeoffSpell(maid)) {
+        if (!hasFlightFuel(maid) && !hasClimbSpell(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
@@ -514,7 +519,7 @@ public final class MaidFlightKit {
         // v1.2.0 实测四百九十五：远程空袭还要报"缺弹药"（否则玩家只看到"三件齐了却没起飞"，
         // 完全不知道为什么——这正是本次需求要修的可观测性问题）。
         if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid)
-                && (hasFlightFuel(maid) || hasDashTakeoffSpell(maid)) && !hasAmmoForRanged(maid)) {
+                && (hasFlightFuel(maid) || hasClimbSpell(maid)) && !hasAmmoForRanged(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
