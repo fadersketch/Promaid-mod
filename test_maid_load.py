@@ -25,16 +25,16 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1.jar',
-        'modname': 'promaid-1.2.1.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.2.jar',
+        'modname': 'promaid-1.2.2.jar',
     },
     'neoforge1211': {
         'dir': r'C:/Users/Sketch/mc_server_test/neoforge1211',
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-delta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.1-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.1-neoforge-1.21.1.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.2-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.2-neoforge-1.21.1.jar',
     },
 }
 WAIT = 180          # 机器忙时 NeoForge 的并行装载会明显变慢，90s 曾误报过两次"没到 Done"
