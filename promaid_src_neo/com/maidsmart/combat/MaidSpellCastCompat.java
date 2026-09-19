@@ -211,13 +211,18 @@ public final class MaidSpellCastCompat {
     // **把它的目标清空**（`setTarget(maid, null)` → `forceLookAtTarget` 里 target==null 直接跳过），
     // 自己把俯仰角摆到抬头；冲刺那一枪则照常让它对着目标（方向一致，不冲突）。
 
-    /** 飞行加速用的位移法术（前向冲刺）。默认：铁魔法「烈焰冲锋」。要加别的冲刺法术往这里加即可 */
-    public static final String[] FLIGHT_DASH_SPELLS = {
+    /** v1.2.0 实测五百六十九：「提供高度」的位移法术默认表——用于**起飞**与**补高**。
+     *  ascension（升腾）自带 80 tick 悬浮效果，是"平地起飞并爬上去"的主力；
+     *  burning_dash（烈焰冲锋）沿视线冲刺且垂直分量保留、站地上时还会先抬高 1.5 格，
+     *  所以**抬头瞄着放也能顶一下**（但只跳得动一下，没有持续升力）——放进来是为了
+     *  "只带烈焰冲锋的女仆也能起飞"（默认表顺序 = 优先级，见 findDashSpell）。 */
+    public static final String[] DEFAULT_CLIMB_SPELLS = {
+            "irons_spellbooks:ascension",
             "irons_spellbooks:burning_dash",
     };
-    /** 平地起飞用的位移法术（向上冲量）。默认：铁魔法「升腾」 */
-    public static final String[] TAKEOFF_DASH_SPELLS = {
-            "irons_spellbooks:ascension",
+    /** v1.2.0 实测五百六十九：「提供速度」的位移法术默认表——用于**飞行加速**（沿视线冲刺） */
+    public static final String[] DEFAULT_BOOST_SPELLS = {
+            "irons_spellbooks:burning_dash",
     };
     /** 位移法术按几级放（1 级足够；等级只影响伤害，冲刺距离由法术自己定） */
     public static final int DASH_SPELL_LEVEL = 1;
@@ -237,6 +242,7 @@ public final class MaidSpellCastCompat {
     private static Method mContainerGet;
     private static Method mContainerGetActiveSpells;
     private static Method mSlotGetSpell;
+    private static Method mSlotGetLevel;
     private static Method mSpellGetId;
     private static Method mSpellCheckPreCast;
     private static Method mSpellEffectiveCastTime;
@@ -284,6 +290,7 @@ public final class MaidSpellCastCompat {
             mContainerGet = cContainer.getMethod("get", net.minecraft.world.item.ItemStack.class);
             mContainerGetActiveSpells = cContainer.getMethod("getActiveSpells");
             mSlotGetSpell = cSlot.getMethod("getSpell");
+            mSlotGetLevel = cSlot.getMethod("getLevel");
             mSpellGetId = cSpell.getMethod("getSpellId");
             mSpellCheckPreCast = cSpell.getMethod("checkPreCastConditions", net.minecraft.world.level.Level.class,
                     int.class, LivingEntity.class, cMagic);
@@ -306,6 +313,89 @@ public final class MaidSpellCastCompat {
             com.maidsmart.tool.PromaidLog.log("法术兼容", "位移法术反射链不可用：" + t);
         }
         return dashReady;
+    }
+
+
+    // ── v1.2.0 实测五百六十九：法术自身冷却 + 书里铭刻的等级 ──
+
+    private static Method mSpellGetCooldown;
+
+    /**
+     * 某个法术**自身**的冷却（换算成 tick）——读 ISS 的 `AbstractSpell#getSpellCooldown()`（秒）。
+     *
+     * 【为什么要它】"提供速度/提供高度"这两类法术在原版都是有冷却的输出手段（烈焰冲锋 10 秒、
+     * 升腾 15 秒）；写回冷却时若只按我们的间隔（默认 2 秒）写，等于让她比玩家频繁好几倍。
+     * 默认口径 `max(空袭位移间隔, 法术自身冷却)`；想让她窜得更勤可关掉"尊重法术自身冷却"。
+     *
+     * @return 冷却 tick；读不到返回 0（调用方按自己的间隔处理）
+     */
+    public static int spellCooldownTicks(String spellId) {
+        if (spellId == null || !dashAvailable()) {
+            return 0;
+        }
+        try {
+            if (mSpellGetCooldown == null) {
+                mSpellGetCooldown = Class.forName("io.redspace.ironsspellbooks.api.spells.AbstractSpell")
+                        .getMethod("getSpellCooldown");
+            }
+            Object spell = mSpellRegistryGetSpell.invoke(null,
+                    net.minecraft.resources.ResourceLocation.parse(spellId));
+            if (spell == null) {
+                return 0;
+            }
+            Object seconds = mSpellGetCooldown.invoke(spell);
+            if (seconds instanceof Integer i) {
+                return Math.max(0, i) * 20;
+            }
+            return 0;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /**
+     * 她书里那个法术**铭刻的等级**（找不到返回 0）。
+     *
+     * 【为什么要按铭刻等级放】ISS 位移法术的推力随等级走（烈焰冲锋的冲量系数 =
+     * `(15 + 法术强度) / 12`：1 级 1.33、10 级 2.08），原先一律按 1 级施法等于把玩家
+     * 升级过的法术书降级用。现在按书里实际等级放，与玩家自己施法一致。
+     */
+    public static int spellLevelInBooks(EntityMaid maid, String spellId) {
+        if (maid == null || spellId == null || !dashAvailable()) {
+            return 0;
+        }
+        try {
+            Object data = mMaidDataGetOrCreate.invoke(null, maid);
+            Object books = data == null ? null : mGetSpellBooks.invoke(data);
+            if (!(books instanceof java.util.List<?> list)) {
+                return 0;
+            }
+            for (Object book : list) {
+                if (!(book instanceof net.minecraft.world.item.ItemStack stack) || stack.isEmpty()) {
+                    continue;
+                }
+                Object container = mContainerGet.invoke(null, stack);
+                Object slots = container == null ? null : mContainerGetActiveSpells.invoke(container);
+                if (!(slots instanceof java.util.List<?> slotList)) {
+                    continue;
+                }
+                for (Object slot : slotList) {
+                    if (slot == null) {
+                        continue;
+                    }
+                    Object spell = mSlotGetSpell.invoke(slot);
+                    if (spell == null || !spellId.equals(mSpellGetId.invoke(spell))) {
+                        continue;
+                    }
+                    Object lvl = mSlotGetLevel.invoke(slot);
+                    if (lvl instanceof Integer i && i > 0) {
+                        return i;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0;
     }
 
     /** 位移法术（冲刺/起飞）是否可用 */
@@ -358,20 +448,23 @@ public final class MaidSpellCastCompat {
                 if (!(slots instanceof java.util.List<?> slotList)) {
                     continue;
                 }
-                for (Object slot : slotList) {
-                    if (slot == null) {
+                // 【顺序口径】外层走**候选表**、内层走她的书单槽位 —— "配置表里排前面的优先"。
+                // 旧版按槽位顺序返回，结果"提供高度"表里排第一的升腾永远被书里排在前面的
+                // 烈焰冲锋抢掉（实测症状：她只跳 1 格、爬不上去）。
+                for (String want : candidates) {
+                    if (want == null) {
                         continue;
                     }
-                    Object spell = mSlotGetSpell.invoke(slot);
-                    if (spell == null) {
-                        continue;
-                    }
-                    Object idObj = mSpellGetId.invoke(spell);
-                    if (!(idObj instanceof String id)) {
-                        continue;
-                    }
-                    for (String want : candidates) {
-                        if (want == null || !want.equals(id)) {
+                    for (Object slot : slotList) {
+                        if (slot == null) {
+                            continue;
+                        }
+                        Object spell = mSlotGetSpell.invoke(slot);
+                        if (spell == null) {
+                            continue;
+                        }
+                        Object idObj = mSpellGetId.invoke(spell);
+                        if (!(idObj instanceof String id) || !want.equals(id)) {
                             continue;
                         }
                         if (requireReady && Boolean.TRUE.equals(mDataIsSpellOnCooldown.invoke(data, id))) {
