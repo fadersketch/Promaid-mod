@@ -310,6 +310,20 @@ public class ProMaidExtension implements ILittleMaid {
             return;
         }
         com.maidsmart.FirstJoinGift.onLogin(player);
+        // v1.2.2 实测五百八十四（issue #13）：登录补一次指标石状态同步——客户端那份镜像
+        // 只在 S2C 到达时更新，而旧版全项目没有任何"进入世界时同步"的入口（syncTo 只在
+        // 右击方块/右击女仆/建造收尾三处），于是"服务端会话已清空、客户端还以为锁着"
+        // 会一直持续到下次 syncTo 为止 = 假死锁。
+        com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+    }
+
+    /** v1.2.2 实测五百八十四（issue #13）：换维度同样补一次——跨维度后锁定格不在当前
+     *  维度，客户端的红框/幽灵格会指向一个本维度不存在的坐标（看着像"锁在虚空上"）。 */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onPlayerChangedDimension(net.minecraftforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer player) {
+            com.maidsmart.build.IndexStoneNetworking.syncTo(player);
+        }
     }
 
     /**

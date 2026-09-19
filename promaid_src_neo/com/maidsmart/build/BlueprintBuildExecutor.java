@@ -75,6 +75,8 @@ public final class BlueprintBuildExecutor {
         // 活动件→传感→动力源→TNT，动力源最后落位），取代常规"结构→功能→装饰红石"
         // 排序；配合活放置（flag 3）机器建好即自然运行，不再需要静默+完工唤醒的禁锢。
         // 开关 BUILD_MACHINE_SMART 可一键回退旧行为。
+        // v1.2.2 实测五百八十六（issue #14）：开建/查缺料前登记图纸作用域（同上）
+        BlueprintLib.setMaterialScope(blueprintId);
         String machineFam = BlueprintLib.machineFamily(blueprintId);
         if (machineFam != null && com.maidsmart.config.MaidSmartConfig.BUILD_MACHINE_SMART.get()) {
             centered = BlueprintLib.sortMachinePlan(centered, machineFam);
@@ -171,14 +173,17 @@ public final class BlueprintBuildExecutor {
                     Math.floorMod(quarters, 4));
         }
         String needText = needBubbleText(buildable);
+        // v1.2.2 实测五百八十五（issue #15）：这份图纸的流体被剥离过 → 开工前明说
+        //（旧版完全静默：建好之后机器一动不动，玩家查不到任何线索）
+        String stripWarn = BlueprintLib.fluidStripWarning(blueprintId);
         if (resuming) {
             return new Outcome(TYPE_OK, "继续建造「" + name + "」！（已建部分自动跳过，还剩 "
-                    + buildable.size() + " 块）" + needText);
+                    + buildable.size() + " 块）" + needText + stripWarn);
         }
         return new Outcome(TYPE_OK, "好！区块「" + name + "」已创建（共 " + buildable.size() + " 块）。"
                 + obstacleWarn + " 在手册女仆管理里绑定女仆后，她们就会开始建造。"
                 + (shortfall != null ? "材料不足：" + formatShortfall(shortfall)
-                + "——把材料放进你的背包或女仆背包即可。" : needText));
+                + "——把材料放进你的背包或女仆背包即可。" : needText) + stripWarn);
     }
 
     /** v1.5.43：剩余材料需求气泡文案（前 5 种 + 合计） */

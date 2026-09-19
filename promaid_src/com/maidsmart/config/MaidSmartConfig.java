@@ -34,6 +34,10 @@ public static final ForgeConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
     public static final ForgeConfigSpec.BooleanValue BUILD_INDEX_STONE;
 /** v1.5.316：红石机器专属搭建（专属顺序 + 活建造 + 自动放矿车），默认开 */
 public static final ForgeConfigSpec.BooleanValue BUILD_MACHINE_SMART;
+/** v1.2.2 实测五百八十五（issue #15）：图纸流体保留档位 auto/always/never */
+public static final ForgeConfigSpec.ConfigValue<String> BUILD_KEEP_FLUIDS;
+/** v1.2.2 实测五百八十六（issue #14）：缺料同类宽松档位 off/machine/always */
+public static final ForgeConfigSpec.ConfigValue<String> BUILD_LOOSE_MATERIALS;
 // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期压制一切 TNT 点火
 public static final ForgeConfigSpec.IntValue BUILD_TNT_IGNITION_GRACE;
 /** v1.1.0 实测八十二：蓝图投影预览——区块显示时叠加半透明幽灵方块轮廓（确认朝向/形状） */
@@ -785,6 +789,20 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.5.316：红石机器改革开关——机器专属搭建顺序 + 活建造（去禁锢）
         BUILD_MACHINE_SMART = BUILDER.comment("红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→惰性机构→活动件→传感→动力源→TNT，动力源最后落位）+ 活建造（红石/水流随放随算），机器建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默放置+完工唤醒）")
                 .translation("config.promaid.build.machineSmart").define("machineSmart", true);
+        // v1.2.2 实测五百八十五（issue #15）：流体保留判据——旧版只看文件名关键词，
+        // 玩家改个文件名（或图纸本来就不含关键词的刷石机/熔炉组）就从"能跑"变"坏的"，
+        // 而且剥离时完全静默（建好了机器一动不动、没有日志没有提示）。
+        BUILD_KEEP_FLUIDS = BUILDER.comment("图纸流体保留（水/岩浆）：auto = 机器图纸保留（文件名含机器关键词，或图纸里有 >=3 种红石机器件）、普通建筑剥离；always = 任何图纸都按图纸建水/岩浆；never = 一律剥离。剥离时会在日志与建造开始时写明剥掉了多少格，并提示怎么改成保留。普通建筑保留流体有淹水/岩浆事故风险，默认 auto")
+                .translation("config.promaid.build.keepFluids")
+                .define("keepFluids", "auto",
+                        o -> o instanceof String s && (s.equals("auto")
+                                || s.equals("always") || s.equals("never")));
+        // v1.2.2 实测五百八十六（issue #14）：缺料同类宽松——建筑要外观严格，机器只要功能
+        BUILD_LOOSE_MATERIALS = BUILDER.comment("缺料同类宽松：off = 只认同族表（外观优先，旧行为）；machine = 只对机器蓝图放宽（机器里告示牌/树叶/羊毛/染色玻璃只是功能件）；always = 所有图纸都放宽。放宽范围：任意告示牌↔任意告示牌、任意树叶↔任意树叶、任意羊毛/地毯↔同类型、任意染色玻璃/玻璃板↔同类型（颜色/树种不再严格）")
+                .translation("config.promaid.build.looseMaterials")
+                .define("looseMaterials", "machine",
+                        o -> o instanceof String s && (s.equals("off")
+                                || s.equals("machine") || s.equals("always")));
         // v1.5.331：TNT 点火保护期（秒）——建造期/完工激活期/宽限期内压制一切 TNT
         // 点火（放置/活塞推动/邻居更新），防"刚建好炸膛"（天机屠龙炮：观察者→活塞
         // 推 TNT 链在完工瞬间触发）；完工点火结算只点燃邻接带电的 TNT（轰炸机当场

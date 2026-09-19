@@ -423,6 +423,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         MaidWorkTags.setStill(maid, true);
         // v1.5.180：计划来源 = 女仆绑定的区块（多区块共存；无绑定 → 站桩等待绑定）
         BuildPlan.PlanState ps = BuildPlan.getBoundPlanState(maid);
+        // v1.2.2 实测五百八十六（issue #14）：告诉材料链"这次建的是哪份图纸"——
+        // 同类宽松的 machine 档只对机器蓝图生效（建筑外观保持严格）
+        BlueprintLib.setMaterialScope(ps == null ? null : ps.blueprintId);
         List<String> plan = ps == null ? new java.util.ArrayList<>() : ps.toPlan();
         // v1.5.18：站桩等待——每 tick 清移动目标 + 停止导航，即使没有计划也站立不动
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
@@ -586,6 +589,26 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 }
             }
             if (used == null) {
+                // v1.2.2 实测五百八十三（issue #12）：先判"这个方块在游戏里有没有对应物品"。
+                // 没有对应物品（墙上告示牌/墙上火把这类：只有方块、没有同名物品）→ 永久跳过
+                // 并如实报告；旧版没有这道闸，于是每一步都只能"缺料延后"，整份计划永久卡死
+                // （日志里只有反复的"材料不够了，还缺 红石墙火把"）。
+                net.minecraft.world.item.Item exactFast = BlueprintLib.itemForBlock(blockId);
+                if (exactFast == null) {
+                    if (prog.skippedIdx.add(i)) { // 首次判定才计数/播报（集合语义幂等）
+                        prog.skipped++;
+                        int n = SKIP_NOTIFIED.merge(maid.getUUID(), 1, Integer::sum);
+                        if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
+                            maid.getChatBubbleManager().addTextChatBubble(
+                                    "有个" + BlueprintLib.cnName(blockId)
+                                            + "在游戏里没有对应物品（墙上的告示牌/火把这类），我跳过它啦～");
+                        }
+                        LOGGER.info("build skip: {}@({},{},{}) 原因=该方块在游戏里没有对应物品（材料链无解）",
+                                blockId, x, y, z);
+                    }
+                    lookaheadLeft--;
+                    continue;
+                }
                 // 缺料：延后，补料后轮询自动续建（每轮只提示一次）
                 // v1.5.317：水/岩浆缺的是桶（材料链按桶结算），提示报桶名
                 prog.deferred.putIfAbsent(i, 0);
@@ -596,6 +619,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
             net.minecraft.resources.ResourceLocation usedId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(used);
             Block placed = usedId != null ? net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(usedId) : null;
             if (placed == null) {
+                placed = block;
+            } else if (usedId != null
+                    && BlueprintLib.itemIdForBlock(blockId).equals(usedId.toString())) {
+                // v1.2.2 实测五百八十三（issue #12）：消耗的物品就是"这个方块自己的物品"
+                // （含 wall_* 归一：墙上告示牌→告示牌、红石线→红石粉、水→水桶、耕地→泥土）
+                // → 要放的是【蓝图里的那个方块】，而不是物品对应的方块：物品对应的可能是
+                // 不存在的方块（redstone / water_bucket 查注册表得到 air），或者是立式版本
+                // （oak_sign）而蓝图要的是墙上版本。
                 placed = block;
             }
             // v1.5.316：机器活建造——机器模式 flag 3 活放置 + 状态归一化（丢弃蓝图
@@ -811,8 +842,11 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                         int n = SKIP_NOTIFIED.merge(maid.getUUID(), 1, Integer::sum);
                         if (BuildPlan.isForeman(maid) && n <= 3) { // v1.5.265：汇报只由工头发
                             maid.getChatBubbleManager().addTextChatBubble(
-                                    "有个" + BlueprintLib.cnName(blockId) + "没有对应物品，我跳过它啦～");
+                                    "有个" + BlueprintLib.cnName(blockId)
+                                            + "在游戏里没有对应物品（墙上的告示牌/火把这类），我跳过它啦～");
                         }
+                        LOGGER.info("build skip: {}@({},{},{}) 原因=该方块在游戏里没有对应物品（材料链无解）",
+                                blockId, x, y, z);
                     } else {
                         reorder.add(idx); // 真缺料：沉底轮换，补料后自然排到前面补建
                         // v1.5.287：缺料退避 40 tick（不再每 tick 反复扫空背包）
@@ -825,6 +859,14 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                 net.minecraft.resources.ResourceLocation usedId = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(used);
                 Block placed = usedId != null ? net.minecraft.core.registries.BuiltInRegistries.BLOCK.get(usedId) : null;
                 if (placed == null) {
+                    placed = block;
+                } else if (usedId != null
+                        && BlueprintLib.itemIdForBlock(blockId).equals(usedId.toString())) {
+                    // v1.2.2 实测五百八十三（issue #12）：消耗的物品就是"这个方块自己的物品"
+                    // （含 wall_* 归一：墙上告示牌→告示牌、红石线→红石粉、水→水桶、耕地→泥土）
+                    // → 要放的是【蓝图里的那个方块】，而不是物品对应的方块：物品对应的可能是
+                    // 不存在的方块（redstone / water_bucket 查注册表得到 air），或者是立式版本
+                    // （oak_sign）而蓝图要的是墙上版本。
                     placed = block;
                 }
                 // v1.5.252i：先计失败次数，第 3 次起用 force 模式——蓝图支撑步骤
@@ -1819,7 +1861,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         // v1.5.114：带缺口数量（计划剩余需求 - 女仆已有 - 主人已有）
         // v1.5.144：方块名改中文（旧版直接输出英文注册名 minecraft:lantern）
         int need = estimateMissing(maid, blockId);
-        String cn = BlueprintLib.cnName(blockId);
+        // v1.2.2 实测五百八十三（issue #12）：念【物品】名——wall_* 这类方块没有同名物品，
+        // 报方块名会让玩家在游戏里怎么搜都搜不到（箱子里放对了也说缺）
+        String cn = BlueprintLib.cnItemName(blockId);
         maid.getChatBubbleManager().addTextChatBubble("材料不够了，还缺 " + cn
                 + (need > 0 ? " ×" + need : "") + "。把 " + cn
                 + " 放进你自己的背包里，我会自己拿，接着盖～（不用再点手册）");

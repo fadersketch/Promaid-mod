@@ -70,6 +70,34 @@ public final class IndexStonePreviewClient {
         cells = cellsIn == null ? java.util.Collections.emptyList() : cellsIn;
     }
 
+    /** v1.2.2 实测五百八十四（issue #13）：把客户端镜像清回空态。
+     *  这份状态是 static（单人档里"退出世界"不会重载客户端类），而它只在收到 S2C
+     *  时才更新——旧版"退出世界再进"仍是锁定中，右键被无限拦截、也锁不上新方块，
+     *  玩家体感就是"指标石永久死锁、退出世界都救不回来"（服务端那边其实早清了）。 */
+    public static void reset() {
+        locked = false;
+        lx = 0;
+        ly = 0;
+        lz = 0;
+        maidId = "";
+        cells = java.util.Collections.emptyList();
+        hinted = false;
+        hintedLocked = false;
+        hintCooldown = 0;
+    }
+
+    /** v1.2.2 实测五百八十四（issue #13）：断线/重连时清一次本地镜像（双保险——
+     *  服务端另有登录/换维度补推，两条独立通道任意一条生效即可自愈）。 */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onLoggingOut(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut event) {
+        reset();
+    }
+
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onLoggingIn(net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingIn event) {
+        reset();
+    }
+
     public static boolean isLockedLocally() {
         return locked;
     }
@@ -122,7 +150,16 @@ public final class IndexStonePreviewClient {
             // 旧版（实测四百八十四）虽已做到"右击别处不解锁"，但仍会把右键当作【换锁定点】，
             // 等于锁定期间还能改选别的方块 —— 与用户要求不符。现在改为：
             //  ① 右击的就是那个锁定方块 → 解除锁定；
-            //  ② 右击任何【别的方块 / 空气】→ 一律无效（锁定保持不变），只提示怎么解锁。
+            //  ② 右击任何【别的方块 / 空气】→ 一律无效（锁定保持不变），只提示怎么解锁；
+            //  ③【潜行 + 右键】= 无条件解锁出口（v1.2.2 实测五百八十四，issue #13）。
+            // 解锁原本只有"重新右击那一格"一条路，而锁定格完全可能已经瞄不到（水/地形
+            // 遮挡、走远超出 512 格长射线）→ 永久死锁。潜行右键在这里不占任何既有操作，
+            // 是安全的逃生通道；服务端仍按原规则校验（女仆正在搭建时会婉拒）。
+            if (mc.f_91074_.m_6040_()) {
+                IndexStoneNetworking.CHANNEL.sendToServer(new IndexStoneNetworking.LockRequestPacket(true, 0, 0, 0));
+                event.setCanceled(true);
+                return;
+            }
             BlockPos aim = pickAnyBlock(mc);
             if (aim != null && aim.m_123341_() == lx && aim.m_123342_() == ly
                     && aim.m_123343_() == lz) {
