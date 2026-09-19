@@ -251,6 +251,8 @@ public class ProMaidExtension implements ILittleMaid {
         }
         // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
         com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
+        // 实测五百六十六（PR #10 移植）：入世界自动补包队列（空队列零开销）
+        com.maidsmart.command.MaidResyncCommand.tickAutoResync(server);
         // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
         // → 移除并原地丢一个完全一样的到地上）
         if (++this.weaponGuardTimer >= 20) {
@@ -316,6 +318,8 @@ public class ProMaidExtension implements ILittleMaid {
     @net.minecraftforge.eventbus.api.SubscribeEvent
     public void onRegisterCommands(net.minecraftforge.event.RegisterCommandsEvent event) {
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
+        // 实测五百六十五（PR #10 移植）：客户端实体重同步（修"服务端活着、客户端连实体都没有"）
+        com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
     }
 
     /**
@@ -331,6 +335,8 @@ public class ProMaidExtension implements ILittleMaid {
                 || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return; // 只服务端处理女仆
         }
+        // 实测五百六十六（PR #10 移植）：入世界 → 延迟给主人补一次实体包（治"客户端实体丢失"）
+        com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
         try {
             if (com.maidsmart.schedule.ScheduleData.isOn(maid)
                     && com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()
@@ -340,6 +346,27 @@ public class ProMaidExtension implements ILittleMaid {
             }
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 实测五百六十六（PR #10 移植）【离场诊断 + 离场也登记补包】。
+     * 女仆离开世界时记一行（含移除原因）——排查"客户端看不见她"的第一现场；
+     * 同时登记一次补包：法术模组对没带锚核的女仆"只删不补"客户端实体，她随后被
+     * 重新加回同一维度时"重新入世界"那一枪未必打得到，离场这一枪把窗口两头盖住。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onMaidLeaveLevel(net.minecraftforge.event.entity.EntityLeaveLevelEvent event) {
+        if (event.getLevel().m_5776_()
+                || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+            return;
+        }
+        try {
+            com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 离开世界（reason=" + maid.m_146911_() + "，维度="
+                    + maid.m_9236_().m_46472_().m_135782_() + "）");
+        } catch (Throwable ignored) {
+        }
+        com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
     }
 
     /**
