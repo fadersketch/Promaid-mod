@@ -189,6 +189,383 @@ public final class MaidSpellCastCompat {
         return false;
     }
 
+
+    // ================= v1.2.0 实测五百七十二：位移类法术（冲刺加速 / 平地起飞） =================
+    //
+    // 【需求】位移类法术（如铁魔法的 `irons_spellbooks:burning_dash`「烈焰冲锋」）也用起来：
+    // ① **飞行途中加速**；② **平地起飞**（没有烟花也能上天）。
+    //
+    // 【机制（ISS 源码实证，两条都是 CastType.INSTANT，直接改施法者速度）】
+    // - `BurningDashSpell#onCast`：`entity.setDeltaMovement(旧速度 + 前向脉冲)`——**沿视线方向**冲刺；
+    // - `AscensionSpell#onCast`：`motion = 视线水平分量 + (0,5,0)`（再 ×0.125）加进速度——**给向上初速**。
+    // 也就是说：法术自己会推她，我们只负责"什么时候放、放之前把朝向摆对"。
+    //
+    // 【为什么不用 castSpell（随机法术）】那条路径从她书里**随机**挑一个不在冷却的法术，
+    // 拿来当"冲刺"用不成立（可能放出一个火球）。所以这里走**指定法术**的施法路径——
+    // 与法术模组自己的 `/maidspell iron_cast <spell> [level]` 命令同一套序列（见
+    // `MaidSpellCommand#castSpellOnMaid`），只是我们全程走反射保持软依赖。
+    //
+    // 【一个必须知道的坑】法术模组的 `actualCasting` 会先 `forceLookAtTarget`（把朝向拧向
+    // 它的 data.target）再施法。**起飞那一枪会因此被掰平**（`AscensionSpell` 取的是
+    // `getLookAngle()`，朝向一平就变成了"向前扑"而不是"窜上天"）。所以起飞前我们
+    // **把它的目标清空**（`setTarget(maid, null)` → `forceLookAtTarget` 里 target==null 直接跳过），
+    // 自己把俯仰角摆到抬头；冲刺那一枪则照常让它对着目标（方向一致，不冲突）。
+
+    /** v1.2.0 实测五百七十二：「提供高度」的位移法术默认表——用于**起飞**与**补高**。
+     *  ascension（升腾）自带 80 tick 悬浮效果，是"平地起飞并爬上去"的主力；
+     *  burning_dash（烈焰冲锋）沿视线冲刺且垂直分量保留、站地上时还会先抬高 1.5 格，
+     *  所以**抬头瞄着放也能顶一下**（但只跳得动一下，没有持续升力）——放进来是为了
+     *  "只带烈焰冲锋的女仆也能起飞"（默认表顺序 = 优先级，见 findDashSpell）。 */
+    public static final String[] DEFAULT_CLIMB_SPELLS = {
+            "irons_spellbooks:ascension",
+            "irons_spellbooks:burning_dash",
+    };
+    /** v1.2.0 实测五百七十二：「提供速度」的位移法术默认表——用于**飞行加速**（沿视线冲刺） */
+    public static final String[] DEFAULT_BOOST_SPELLS = {
+            "irons_spellbooks:burning_dash",
+    };
+    /**
+     * 位移法术的**兜底等级**——只在读不到书里铭刻等级时使用（正常路径见
+     * {@link #spellLevelInBooks}）。
+     *
+     * 【纠错：等级确实影响冲量】本常量旁边原来写着"1 级足够、等级只影响伤害"——**那是错的**：
+     * 烈焰冲锋的冲量系数就是 `(15 + 法术强度) / 12`（1 级 1.33、10 级 2.08），
+     * 升腾的强度也进它自己的公式。所以正常路径一律按书里铭刻的等级放，这个常量只是兜底。
+     */
+    public static final int DASH_SPELL_FALLBACK_LEVEL = 1;
+
+    private static Class<?> cMaidData;
+    private static Method mMaidDataGetOrCreate;
+    private static Method mGetSpellBooks;
+    private static Method mDataSetTarget;
+    private static Method mDataSetCasting;
+    private static Method mDataSetSpellCooldown;
+    private static Method mDataIsSpellOnCooldown;
+    private static Method mDataSetCurrentCastingSpell;
+    private static Method mDataSetCachedCastSource;
+    private static Method mDataResetCastingState;
+    private static Method mDataGetMagicData;
+    private static Method mSpellRegistryGetSpell;
+    private static Method mContainerGet;
+    private static Method mContainerGetActiveSpells;
+    private static Method mSlotGetSpell;
+    private static Method mSlotGetLevel;
+    private static Method mSpellGetId;
+    private static Method mSpellCheckPreCast;
+    private static Method mSpellEffectiveCastTime;
+    private static Method mSpellOnServerPreCast;
+    private static Method mSpellOnCast;
+    private static Method mSpellOnServerCastComplete;
+    private static Method mMagicInitiateCast;
+    private static java.lang.reflect.Constructor<?> cSpellData;
+    private static java.lang.reflect.Constructor<?> cSpellSlot;
+    private static Object oCastSourceCommand;
+
+    /** 位移法术所需的额外反射句柄（与主探针分开，缺了只关掉冲刺、不影响普通施法） */
+    private static Boolean dashReady;
+
+    private static boolean dashAvailable() {
+        if (dashReady != null) {
+            return dashReady;
+        }
+        try {
+            if (!available()) {
+                dashReady = Boolean.FALSE;
+                return false;
+            }
+            cMaidData = Class.forName("com.github.yimeng261.maidspell.spell.data.MaidIronsSpellData");
+            Class<?> cData = Class.forName("com.github.yimeng261.maidspell.api.IMaidSpellData");
+            Class<?> cContainer = Class.forName("io.redspace.ironsspellbooks.api.spells.ISpellContainer");
+            Class<?> cSlot = Class.forName("io.redspace.ironsspellbooks.api.spells.SpellSlot");
+            Class<?> cSpell = Class.forName("io.redspace.ironsspellbooks.api.spells.AbstractSpell");
+            Class<?> cMagic = Class.forName("io.redspace.ironsspellbooks.api.magic.MagicData");
+            Class<?> cRegistry = Class.forName("io.redspace.ironsspellbooks.api.registry.SpellRegistry");
+            Class<?> cCastSource = Class.forName("io.redspace.ironsspellbooks.api.spells.CastSource");
+            Class<?> spellDataCls = Class.forName("io.redspace.ironsspellbooks.api.spells.SpellData");
+
+            mMaidDataGetOrCreate = cMaidData.getMethod("getOrCreate", EntityMaid.class);
+            mGetSpellBooks = cData.getMethod("getSpellBooks");
+            mDataSetTarget = cData.getMethod("setTarget", LivingEntity.class);
+            mDataSetCasting = cData.getMethod("setCasting", boolean.class);
+            mDataSetSpellCooldown = cData.getMethod("setSpellCooldown", String.class, int.class, EntityMaid.class);
+            mDataIsSpellOnCooldown = cData.getMethod("isSpellOnCooldown", String.class);
+            mDataGetMagicData = cMaidData.getMethod("getMagicData");
+            mDataSetCurrentCastingSpell = cMaidData.getMethod("setCurrentCastingSpell", cSlot);
+            mDataSetCachedCastSource = cMaidData.getMethod("setCachedCastSource", cCastSource);
+            mDataResetCastingState = cMaidData.getMethod("resetCastingState");
+            mSpellRegistryGetSpell = cRegistry.getMethod("getSpell", net.minecraft.resources.ResourceLocation.class);
+            mContainerGet = cContainer.getMethod("get", net.minecraft.world.item.ItemStack.class);
+            mContainerGetActiveSpells = cContainer.getMethod("getActiveSpells");
+            mSlotGetSpell = cSlot.getMethod("getSpell");
+            mSlotGetLevel = cSlot.getMethod("getLevel");
+            mSpellGetId = cSpell.getMethod("getSpellId");
+            mSpellCheckPreCast = cSpell.getMethod("checkPreCastConditions", net.minecraft.world.level.Level.class,
+                    int.class, LivingEntity.class, cMagic);
+            mSpellEffectiveCastTime = cSpell.getMethod("getEffectiveCastTime", int.class, LivingEntity.class);
+            mSpellOnServerPreCast = cSpell.getMethod("onServerPreCast", net.minecraft.world.level.Level.class,
+                    int.class, LivingEntity.class, cMagic);
+            mSpellOnCast = cSpell.getMethod("onCast", net.minecraft.world.level.Level.class, int.class,
+                    LivingEntity.class, cCastSource, cMagic);
+            mSpellOnServerCastComplete = cSpell.getMethod("onServerCastComplete",
+                    net.minecraft.world.level.Level.class, int.class, LivingEntity.class, cMagic, boolean.class);
+            mMagicInitiateCast = cMagic.getMethod("initiateCast", cSpell, int.class, int.class, cCastSource,
+                    String.class);
+            cSpellData = spellDataCls.getConstructor(cSpell, int.class);
+            cSpellSlot = cSlot.getConstructor(spellDataCls, int.class);
+            oCastSourceCommand = Enum.valueOf((Class) cCastSource, "COMMAND");
+            dashReady = Boolean.TRUE;
+            com.maidsmart.tool.PromaidLog.log("法术兼容", "位移法术（冲刺/起飞）反射链就绪");
+        } catch (Throwable t) {
+            dashReady = Boolean.FALSE;
+            com.maidsmart.tool.PromaidLog.log("法术兼容", "位移法术反射链不可用：" + t);
+        }
+        return dashReady;
+    }
+
+
+    // ── v1.2.0 实测五百七十二：法术自身冷却 + 书里铭刻的等级 ──
+
+    private static Method mSpellGetCooldown;
+
+    /**
+     * 某个法术**自身**的冷却（换算成 tick）——读 ISS 的 `AbstractSpell#getSpellCooldown()`（秒）。
+     *
+     * 【为什么要它】"提供速度/提供高度"这两类法术在原版都是有冷却的输出手段（烈焰冲锋 10 秒、
+     * 升腾 15 秒）；写回冷却时若只按我们的间隔（默认 2 秒）写，等于让她比玩家频繁好几倍。
+     * 默认口径 `max(空袭位移间隔, 法术自身冷却)`；想让她窜得更勤可关掉"尊重法术自身冷却"。
+     *
+     * @return 冷却 tick；读不到返回 0（调用方按自己的间隔处理）
+     */
+    public static int spellCooldownTicks(String spellId) {
+        if (spellId == null || !dashAvailable()) {
+            return 0;
+        }
+        try {
+            if (mSpellGetCooldown == null) {
+                mSpellGetCooldown = Class.forName("io.redspace.ironsspellbooks.api.spells.AbstractSpell")
+                        .getMethod("getSpellCooldown");
+            }
+            Object spell = mSpellRegistryGetSpell.invoke(null,
+                    net.minecraft.resources.ResourceLocation.parse(spellId));
+            if (spell == null) {
+                return 0;
+            }
+            Object seconds = mSpellGetCooldown.invoke(spell);
+            if (seconds instanceof Integer i) {
+                return Math.max(0, i) * 20;
+            }
+            return 0;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /**
+     * 她书里那个法术**铭刻的等级**（找不到返回 0）。
+     *
+     * 【为什么要按铭刻等级放】ISS 位移法术的推力随等级走（烈焰冲锋的冲量系数 =
+     * `(15 + 法术强度) / 12`：1 级 1.33、10 级 2.08），原先一律按 1 级施法等于把玩家
+     * 升级过的法术书降级用。现在按书里实际等级放，与玩家自己施法一致。
+     */
+    public static int spellLevelInBooks(EntityMaid maid, String spellId) {
+        if (maid == null || spellId == null || !dashAvailable()) {
+            return 0;
+        }
+        try {
+            Object data = mMaidDataGetOrCreate.invoke(null, maid);
+            Object books = data == null ? null : mGetSpellBooks.invoke(data);
+            if (!(books instanceof java.util.List<?> list)) {
+                return 0;
+            }
+            for (Object book : list) {
+                if (!(book instanceof net.minecraft.world.item.ItemStack stack) || stack.isEmpty()) {
+                    continue;
+                }
+                Object container = mContainerGet.invoke(null, stack);
+                Object slots = container == null ? null : mContainerGetActiveSpells.invoke(container);
+                if (!(slots instanceof java.util.List<?> slotList)) {
+                    continue;
+                }
+                for (Object slot : slotList) {
+                    if (slot == null) {
+                        continue;
+                    }
+                    Object spell = mSlotGetSpell.invoke(slot);
+                    if (spell == null || !spellId.equals(mSpellGetId.invoke(spell))) {
+                        continue;
+                    }
+                    Object lvl = mSlotGetLevel.invoke(slot);
+                    if (lvl instanceof Integer i && i > 0) {
+                        return i;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0;
+    }
+
+    /** 位移法术（冲刺/起飞）是否可用 */
+    public static boolean dashUsable() {
+        return dashAvailable();
+    }
+
+    /**
+     * 在她书里找一个"可用的"位移法术（在候选列表里、且不在冷却）——找不到返回 null。
+     * 注意这里读的是**法术模组维护的书单**（`IMaidSpellData#getSpellBooks`），
+     * 与它自己施法时看的是同一份，所以"她带了这本书"与"它认这本书"永远一致。
+     */
+    public static String findAvailableDashSpell(EntityMaid maid, String[] candidates) {
+        return findDashSpell(maid, candidates, true);
+    }
+
+    /**
+     * v1.2.0 实测五百七十二【起飞/补高专用】：找"提供高度"里能用的法术，**不看它的冷却**。
+     *
+     * 依据：本模组对位移手段一向让女仆比玩家宽松——激流三叉戟那一套就是忽略原版
+     * "必须在水中/雨中"的限制；而"平地起飞"要求她没烟花也能持续飞（若卡 15 秒冷却，
+     * 升腾一记只抬约 6 格后缓降，需求等于没满足）。空中**冲刺加速**那一类仍然尊重冷却。
+     */
+    public static String findClimbSpellIgnoringCooldown(EntityMaid maid, String[] candidates) {
+        return findDashSpell(maid, candidates, false);
+    }
+
+    /**
+     * v1.2.0 实测五百七十二【套件判定专用】：她书里**有没有**起飞法术——**不看冷却**。
+     *
+     * 【为什么必须分开】"有没有这件装备"与"现在能不能放"是两件事：
+     * 套件判定若把冷却中的法术算作"缺件"，那么每次冲刺（写回 2 秒冷却）之后模式都会
+     * 掉回未激活——她会当场停掉空袭、顺惯性飘走（本地实测就是这个现象）。
+     */
+    public static boolean hasDashSpell(EntityMaid maid, String[] candidates) {
+        return findDashSpell(maid, candidates, false) != null;
+    }
+
+    private static String findDashSpell(EntityMaid maid, String[] candidates, boolean requireReady) {
+        if (maid == null || candidates == null || candidates.length == 0 || !dashAvailable()) {
+            return null;
+        }
+        try {
+            Object data = mMaidDataGetOrCreate.invoke(null, maid);
+            if (data == null) {
+                return null;
+            }
+            Object books = mGetSpellBooks.invoke(data);
+            if (!(books instanceof java.util.List<?> list)) {
+                return null;
+            }
+            for (Object book : list) {
+                if (!(book instanceof net.minecraft.world.item.ItemStack stack) || stack.isEmpty()) {
+                    continue;
+                }
+                Object container = mContainerGet.invoke(null, stack);
+                if (container == null) {
+                    continue;
+                }
+                Object slots = mContainerGetActiveSpells.invoke(container);
+                if (!(slots instanceof java.util.List<?> slotList)) {
+                    continue;
+                }
+                // 【顺序口径】外层走**候选表**、内层走她的书单槽位 —— "配置表里排前面的优先"。
+                // 旧版按槽位顺序返回，结果"提供高度"表里排第一的升腾永远被书里排在前面的
+                // 烈焰冲锋抢掉（实测症状：她只跳 1 格、爬不上去）。
+                for (String want : candidates) {
+                    if (want == null) {
+                        continue;
+                    }
+                    for (Object slot : slotList) {
+                        if (slot == null) {
+                            continue;
+                        }
+                        Object spell = mSlotGetSpell.invoke(slot);
+                        if (spell == null) {
+                            continue;
+                        }
+                        Object idObj = mSpellGetId.invoke(spell);
+                        if (!(idObj instanceof String id) || !want.equals(id)) {
+                            continue;
+                        }
+                        if (requireReady && Boolean.TRUE.equals(mDataIsSpellOnCooldown.invoke(data, id))) {
+                            continue; // 只在"真要放"时看冷却（套件判定不看，见 hasDashSpell 注释）
+                        }
+                        return id;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * 放一个**指定**法术（瞬发路径）——与法术模组的 `/maidspell iron_cast` 同一序列。
+     *
+     * 不在施法前设目标（`IMaidSpellData#setTarget` 由调用方决定）：起飞那一枪必须让她的
+     * 视线朝上，一旦有目标，它施法前会把朝向拧平（见类注释里那个坑）。
+     *
+     * @param cooldownTicks 写回它自己的冷却表（避免与我们这边节流打架；失败忽略）
+     * @return true = 已施放（不代表法术一定产生位移：由所放法术自己决定）
+     */
+    public static boolean castSpecific(EntityMaid maid, String spellId, int level, int cooldownTicks) {
+        if (maid == null || spellId == null || !dashAvailable()) {
+            return false;
+        }
+        try {
+            Object data = mMaidDataGetOrCreate.invoke(null, maid);
+            if (data == null) {
+                return false;
+            }
+            Object magic = mDataGetMagicData.invoke(data);
+            Object spell = mSpellRegistryGetSpell.invoke(null, net.minecraft.resources.ResourceLocation.parse(spellId));
+            if (spell == null) {
+                return false;
+            }
+            if (!Boolean.TRUE.equals(mSpellCheckPreCast.invoke(spell, maid.level(), level, maid, magic))) {
+                return false; // 前置条件不过（本组法术恒 true，失败说明环境不允许）
+            }
+            int castTime = (Integer) mSpellEffectiveCastTime.invoke(spell, level, maid);
+            mMagicInitiateCast.invoke(magic, spell, level, castTime, oCastSourceCommand, "offhand");
+            mSpellOnServerPreCast.invoke(spell, maid.level(), level, maid, magic);
+            Object spellData = cSpellData.newInstance(spell, level);
+            Object slot = cSpellSlot.newInstance(spellData, 0);
+            mDataSetCurrentCastingSpell.invoke(data, slot);
+            mDataSetCachedCastSource.invoke(data, oCastSourceCommand);
+            mDataSetCasting.invoke(data, true);
+            // 位移法术都是 INSTANT：立刻结算，不留吟唱
+            mSpellOnCast.invoke(spell, maid.level(), level, maid, oCastSourceCommand, magic);
+            mSpellOnServerCastComplete.invoke(spell, maid.level(), level, maid, magic, false);
+            mDataResetCastingState.invoke(data);
+            try {
+                mDataSetSpellCooldown.invoke(data, spellId, cooldownTicks, maid);
+            } catch (Throwable ignored) {
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 清掉法术模组那份"施法目标"（起飞前用：让它的 forceLookAtTarget 不再掰朝向） */
+    public static boolean clearCastTarget(EntityMaid maid) {
+        if (maid == null || !available()) {
+            return false;
+        }
+        try {
+            Object manager = mGetOrCreateManager.invoke(null, maid);
+            Object providers = manager == null ? null : mGetProviders.invoke(manager);
+            if (providers instanceof java.util.List<?> list) {
+                for (Object provider : list) {
+                    if (provider != null) {
+                        mSetTarget.invoke(provider, maid, null);
+                    }
+                }
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     /**
      * 中止当前施法（法术模组自己的 {@code stopAllCasting}：会给她正在吟唱的那个法术
      * 记上冷却，但**不会**结算伤害——即"打断成功、法术作废"）。
