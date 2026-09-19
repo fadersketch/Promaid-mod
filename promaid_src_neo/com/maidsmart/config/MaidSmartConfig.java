@@ -410,6 +410,37 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      */
     public static final ModConfigSpec.IntValue COMBAT_FLIGHT_RECALL_DISTANCE;
     /**
+     * v1.2.0（2026-09-18）【空袭·法术层】——空袭途中顺带释放法术（默认开）。
+     *
+     * 需求原文："女仆能使用近战/远程空袭的默认武器（近战：鞘翅+重锤，远程：鞘翅+弓/枪械）
+     * 的同时进行法术释放。"
+     *
+     * 这是**叠加层**：不新增任务、不占武器位、不改三件套激活口径。女仆身上（背包 /
+     * 饰品栏 / 主手任一）有法术书时，空袭途中会按 {@link #COMBAT_FLIGHT_SPELL_CAST_INTERVAL}
+     * 的节奏向她当前的空袭目标发起一次施法；法术书放在**饰品栏**完全可用（法术模组
+     * 自己的 ISpellContainer 扫描覆盖 curios，不看主手）。
+     *
+     * 需要装《车万女仆：魔法》（touhou_little_maid_spell）——没装时本项无任何效果
+     * （软兼容，反射适配层见 {@code com.maidsmart.combat.MaidSpellCastCompat}）。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_SPELL_CAST;
+    /**
+     * v1.2.0（2026-09-18）：空袭期间两次施法之间的最短间隔（tick，默认 20 = 1 秒）。
+     *
+     * 法术模组自己管吟唱/冷却，"放哪个法术"也是它随机挑（跳过冷却中与黑名单里的），
+     * 这一项只管**我们这边的发起节奏**：不设间隔会让她在目标上方的那几 tick 里连续
+     * 秒放法术，武器反而成了陪衬，与"用武器打的同时顺带放法术"的需求不符。
+     */
+    public static final ModConfigSpec.IntValue COMBAT_FLIGHT_SPELL_CAST_INTERVAL;
+    /**
+     * v1.2.0（2026-09-18）：空袭期间的施法距离（格，默认 24）。
+     *
+     * 默认值刻意与法术模组自己的 {@code Config.maxSpellRange}（=24）对齐——它的任务行为
+     * 用的就是这个上限。我们直连 provider 时它不替我们拦距离，所以这里自己判（3D 距离：
+     * 空袭是立体作战，敌人在斜上方 20 格时水平距离早就出界）。
+     */
+    public static final ModConfigSpec.DoubleValue COMBAT_FLIGHT_SPELL_CAST_RANGE;
+    /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
      *
      * 需求原文："玩家和其他女仆免疫女仆释放的风暴/风弹效果，不会被震开。当前版本免疫伤害，
@@ -1323,6 +1354,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_RECALL_DISTANCE = BUILDER.comment("空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则（48 格，且守家/坐姿/干活都有豁免），所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢——那一路由跨维度跟随在本轮攻击结束后处理（立刻抢会打断扑击）。触发时会给她主人发一条系统消息（10 秒最多一条）。")
                 .translation("config.promaid.combat.flightRecallDistance")
                 .defineInRange("flightRecallDistance", 100, 0, 1000);
+        // v1.2.0（2026-09-18）：空袭·法术层（需求："用空袭的默认武器的同时进行法术释放"）
+        COMBAT_FLIGHT_SPELL_CAST = BUILDER.comment("空袭顺带施法（默认开，需装《车万女仆：魔法》touhou_little_maid_spell）：女仆在近战空袭 / 远程空袭途中，除了用默认武器打，还会向当前目标顺带释放法术——法术书放在背包或饰品栏即可（法术模组自己扫背包与 curios，不看主手，所以不占武器位）。施法时机只挑「本来就该面向目标」的两个相位（远战盘旋开火前、近战已在目标上方准备俯冲时）：法术模组在吟唱期间每 tick 把女仆朝向拧向目标，而鞘翅滑翔的转向力来自视线方向，挑这两个时机才不会被抢朝向（爬升段要求背离敌人抬头吃烟花推力、收翅俯冲那一记是致命一击，这两段刻意不施法）。没装法术模组时本项无任何效果。关闭 = 空袭只用手上的武器")
+                .translation("config.promaid.combat.flightSpellCast").define("flightSpellCast", true);
+        COMBAT_FLIGHT_SPELL_CAST_INTERVAL = BUILDER.comment("空袭施法间隔（tick，默认 20 = 1 秒）：两次发起施法之间的最短间隔。法术模组自己管吟唱时长、法术冷却与「放哪个法术」（随机挑一个不在冷却、不在黑名单的），这一项只管发起节奏——调小 = 法术放得更密、武器退居其次；调大 = 武器为主、法术为辅")
+                .translation("config.promaid.combat.flightSpellCastInterval")
+                .defineInRange("flightSpellCastInterval", 20, 5, 200);
+        COMBAT_FLIGHT_SPELL_CAST_RANGE = BUILDER.comment("空袭施法距离（格，默认 24）：空袭中只在目标进入这个 3D 距离内才发起施法。默认 24 与法术模组自己的 maxSpellRange 一致（它的任务行为用的就是这个上限）；调大可让她在更远处起手（法术飞行途中还能命中），调小 = 只有贴近了才放法术")
+                .translation("config.promaid.combat.flightSpellCastRange")
+                .defineInRange("flightSpellCastRange", 24.0, 4.0, 64.0);
         // v1.2.2 实测五百六十：友军风免（玩家/同主女仆不被女仆的法术·风弹震开）
         COMBAT_FRIENDLY_WIND_IMMUNE = BUILDER.comment("友军风免（默认开）：女仆放出的风暴/火球/风弹不再把你和同主女仆震开。伤害本来就已免疫，漏的是击退——原版爆炸（铁魔法火球正是用女仆当来源构造的原版爆炸）与呼啸之风这类效果都直接改速度、不经过伤害事件，所以「血不掉、人还是飞了」。开 = 只对主人与同主女仆生效、只拦明显的外力位移（女仆自己的烟花推进/风弹自起跳完全不受影响）；关 = 恢复旧行为（会被震开）。")
                 .translation("config.promaid.combat.friendlyWindImmune").define("friendlyWindImmune", true);

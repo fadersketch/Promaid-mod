@@ -61,5 +61,8 @@
   "item.maid_smart.index_stone": "Index Stone",
   "config.promaid.build.indexStone": "Index Stone",
   "task.maid_smart.index_build": "Temporary Build",
-  "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)"
+  "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)",
+  "config.promaid.combat.flightSpellCast": "Cast Spells During Air Raid (requires Touhou Little Maid: Spell)",
+  "config.promaid.combat.flightSpellCastInterval": "Air Raid Cast Interval (ticks)",
+  "config.promaid.combat.flightSpellCastRange": "Air Raid Cast Range (blocks)"
 }
