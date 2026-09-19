@@ -481,6 +481,9 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             shooter.m_9236_().m_5594_(null, shooter.m_20183_(), SoundEvents.f_11847_, SoundSource.PLAYERS,
                     1.0f, 1.0f / (shooter.m_217043_().m_188501_() * 0.4f + 0.8f));
         }
+        // 实测五百六十九：开火瞬间挥臂（与三叉戟/御币分支同口径——旧版弓弩分支没挥，
+        // 远程空袭全程只见弹道不见动作）
+        shooter.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         crossbow.m_41622_(1, shooter, m -> m.m_21166_(EquipmentSlot.MAINHAND));
         if (!infinity) {
             ammo.m_41774_(1);   // Multishot 只吃 1 份弹药（原版 loadProjectiles 同款）
@@ -570,6 +573,8 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             shooter.m_9236_().m_5594_(null, shooter.m_20183_(), shoot, SoundSource.PLAYERS, 1.0f, 1.0f);
         }
         shooter.m_9236_().m_7967_(arrow);
+        // 实测五百六十九：开火瞬间挥臂（旧版弓分支没挥）
+        shooter.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
     }
 
     /**
@@ -685,6 +690,8 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
             rocket.m_6686_(dx, dy, dz, (float) velocity, (float) inaccuracy);
 
             shooter.m_9236_().m_7967_(rocket);
+            // 实测五百六十九：开火瞬间挥臂（旧版弩烟花分支没挥）
+            shooter.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
             weapon.m_41622_(3, shooter, m -> m.m_21166_(EquipmentSlot.MAINHAND));
             shooter.m_9236_().m_5594_(null, shooter.m_20183_(), SoundEvents.f_11847_, SoundSource.PLAYERS,
                     1.0f, 1.0f / (shooter.m_217043_().m_188501_() * 0.4f + 0.8f));
