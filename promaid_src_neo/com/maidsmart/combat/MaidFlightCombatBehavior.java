@@ -212,6 +212,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_PUSH_LAST_LOG.remove(maidId);
         SPELL_NEXT_CAST.remove(maidId);
         SPELL_LAST_LOG.remove(maidId);
+        DASH_NEXT.remove(maidId);
+        DASH_LAST_LOG.remove(maidId);
         MAX_Y.remove(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
@@ -284,6 +286,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         NOTIFY_READY.clear();
         SPELL_NEXT_CAST.clear();
         SPELL_LAST_LOG.clear();
+        DASH_NEXT.clear();
+        DASH_LAST_LOG.clear();
         MAX_Y.clear();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
@@ -602,11 +606,20 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     jumpForLaunch(maid, target, id);
                     return;
                 }
+                // v1.2.0 实测五百六十六：烟花不可用 → 试一次"位移法术起飞"（升腾之类）
+                if (distH <= LAUNCH_RANGE && tryDashTakeoff(maid, target, id, gameTime)) {
+                    return;
+                }
                 MaidFlightKit.setGliding(maid, false);
                 return;
             }
             if (distH <= LAUNCH_RANGE && canLaunch(maid, gameTime)) {
                 jumpForLaunch(maid, target, id);
+                return;
+            }
+            // v1.2.0 实测五百六十六：烟花不可用（用完/冷却）→ 用位移法术平地起飞，
+            // 不用再站在地上等（这正是"平地起飞"要解决的场景）
+            if (distH <= LAUNCH_RANGE && tryDashTakeoff(maid, target, id, gameTime)) {
                 return;
             }
             MaidFlightKit.setGliding(maid, false);
@@ -625,6 +638,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 法术模组的"吟唱期间把朝向钉在目标上"与这一段的意图一致。
         // 放在 faceTarget 之前，让本 tick 的朝向仍以空袭的为准（吟唱抢朝向发生在下一 tick）。
         // 爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见 tryCastSpell 的注释。
+        tryDashBoost(maid, target, id, gameTime);
         tryCastSpell(maid, target, id, gameTime);
 
         suppressVanillaMelee(maid);
@@ -1387,6 +1401,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // ② 开火（必须放在"朝向"之前——枪械开火会自己把身体拧向目标，随后要把盘旋朝向
         //    盖回去，否则滑翔会顺着那次瞄准把女仆直接拉向目标，"盘旋"就散了）
         //    法术同款：法术模组的吟唱也会拧朝向，所以同样放在"朝向"之前一起被盖回去。
+        tryDashBoost(maid, target, id, gameTime);
         tryCastSpell(maid, target, id, gameTime);
         fireRanged(maid, target, id, gameTime);
 
@@ -1660,6 +1675,102 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                                     Math.sqrt(maid.distanceToSqr(target)))
                             + " 格" + (ranged ? "，远程空袭" : "，近战空袭") + "）");
         }
+        return true;
+    }
+
+
+    // ================= v1.2.0 实测五百六十六：位移类法术（冲刺加速 / 平地起飞） =================
+
+    /** 位移法术节流：下次可用 gameTime（与普通施法分开，互不抢占） */
+    private static final Map<UUID, Long> DASH_NEXT = new HashMap<>();
+    /** 位移法术日志限频（30 秒/女仆） */
+    private static final Map<UUID, Long> DASH_LAST_LOG = new HashMap<>();
+    /** 起飞抬头角（与烟花起飞的近战仰角一致：62°） */
+    private static final float DASH_LAUNCH_PITCH = -62.0f;
+    /** 空中冲刺的最近/最远距离（格）：太近没必要、太远别白冲 */
+    private static final double DASH_BOOST_MIN_RANGE = 6.0;
+    private static final double DASH_BOOST_MAX_RANGE = 28.0;
+
+    private static int dashCooldownTicks() {
+        return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get();
+    }
+
+    private static void markDash(UUID id, long gameTime, EntityMaid maid, String what) {
+        DASH_NEXT.put(id, gameTime + dashCooldownTicks());
+        if (gameTime - DASH_LAST_LOG.getOrDefault(id, Long.MIN_VALUE / 2) >= SPELL_LOG_INTERVAL) {
+            DASH_LAST_LOG.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("空袭·位移",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + what);
+        }
+    }
+
+    /**
+     * v1.2.0 实测五百六十六【平地起飞】：没有烟花（在用完/冷却中）时，用**向上冲量的位移法术**
+     * （默认铁魔法「升腾」`irons_spellbooks:ascension`）把自己顶上天空。
+     *
+     * 【为什么要单独做】空袭原本只有一条起飞路径：跳一下 + 放烟花。烟花用完或冷却中，她就只能
+     * 在地面干等——而位移法术给的是**速度**，不消耗任何燃料。
+     *
+     * 【朝向是关键】`AscensionSpell#onCast` 取 `entity.getLookAngle()`：视线朝前 = "向前扑"，
+     * 只有抬头才是"窜上天"。所以先把法术模组那份**施法目标清空**（否则它施法前会把朝向拧向
+     * 目标、把抬头掰平），再抬头到 {@link #DASH_LAUNCH_PITCH} 才施法。
+     */
+    private boolean tryDashTakeoff(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CAST.get()
+                || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_TAKEOFF.get()) {
+            return false;
+        }
+        if (gameTime < DASH_NEXT.getOrDefault(id, 0L)) {
+            return false;
+        }
+        String spell = MaidSpellCastCompat.findAvailableDashSpell(maid,
+                MaidSpellCastCompat.TAKEOFF_DASH_SPELLS);
+        if (spell == null) {
+            return false;
+        }
+        MaidSpellCastCompat.clearCastTarget(maid);       // 别让它把抬头掰平（见注释）
+        faceUpForward(maid, target, DASH_LAUNCH_PITCH);  // 抬头
+        if (!MaidSpellCastCompat.castSpecific(maid, spell,
+                MaidSpellCastCompat.DASH_SPELL_LEVEL, dashCooldownTicks())) {
+            return false;
+        }
+        MaidFlightKit.setGliding(maid, true);
+        markDash(id, gameTime, maid, "平地起飞（" + spell + "）");
+        return true;
+    }
+
+    /**
+     * v1.2.0 实测五百六十六【飞行加速】：滑翔途中用**前向冲刺**位移法术（默认「烈焰冲锋」）
+     * 给速度续一口——鞘翅"掉速就是掉高度"，冲刺把速度补回来等于替她续命。
+     *
+     * 只在"本来就对着目标"的相位调用（与 {@link #tryCastSpell} 同一原则）：这类法术沿视线冲刺，
+     * 而法术模组施法前会把朝向拧向目标——方向一致，不冲突。
+     */
+    private boolean tryDashBoost(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CAST.get()) {
+            return false;
+        }
+        if (gameTime < DASH_NEXT.getOrDefault(id, 0L)) {
+            return false;
+        }
+        double d2 = maid.distanceToSqr(target);
+        if (d2 < DASH_BOOST_MIN_RANGE * DASH_BOOST_MIN_RANGE
+                || d2 > DASH_BOOST_MAX_RANGE * DASH_BOOST_MAX_RANGE) {
+            return false;
+        }
+        if (!SelfPreservationBehavior.hasSight(maid, target)) {
+            return false; // 隔墙冲过去没意义
+        }
+        String spell = MaidSpellCastCompat.findAvailableDashSpell(maid,
+                MaidSpellCastCompat.FLIGHT_DASH_SPELLS);
+        if (spell == null) {
+            return false;
+        }
+        if (!MaidSpellCastCompat.castSpecific(maid, spell,
+                MaidSpellCastCompat.DASH_SPELL_LEVEL, dashCooldownTicks())) {
+            return false;
+        }
+        markDash(id, gameTime, maid, "空中冲刺加速（" + spell + "）");
         return true;
     }
 
