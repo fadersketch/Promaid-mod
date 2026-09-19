@@ -1,4 +1,95 @@
-﻿## 实测五百六十一【修：点「保存并返回」卡死 / 下次进游戏卡在 mod 加载界面（配置自触发写盘风暴）】
+﻿## 实测五百六十二【空袭·法术层：用飞行武器的同时顺手放法术（需装《车万女仆：魔法》）】
+
+### 需求
+
+需求原文："……女仆能使用近战/远程空袭的默认武器（近战：鞘翅+重锤，远程：鞘翅+弓/枪械mods枪械）
+的同时进行法术释放。"
+
+补充口径（需求方补充）：法术书不是武器、是**饰品栏位装备**，所以它**不该参与"近战/远程 DPS"
+那套自动模式选择**（此前那条按 DPS 选模式的路子对法术攻击模式无效）。因此这一版做的是
+**叠加层**：不新增任务、不占武器位、不改三件套激活口径（还是鞘翅 + 武器 + 烟花；法术书不是第四件必需品）。
+
+### 两侧接口（反编译实证：车万女仆：魔法 1.8.4-neoforge + TLM 1.5.3-neoforge）
+
+- **唯一施法入口链**：任务行为 → `SimplifiedSpellCaster.melee_tick/far_tick`
+  → `SpellBookManager#castSpell` → `ISpellBookProvider#castSpell`
+  → `IronsSpellbooksProvider.initiateCasting/actualCasting`（forceLookAtTarget → setupSpellTargetData
+  → checkPreCastConditions → MagicData.initiateCast → onServerPreCast → setCasting）。
+- **空中无门槛**：整条链路（provider / manager / ISS 侧）**没有任何 isFallFlying / onGround /
+  isPassenger 判定**——鞘翅滑翔中照样能放（唯一的 isPassenger 是雷步落点的 stopRiding，不是门禁）。
+- **不看主手**：ISS 路径只要求女仆身上（**背包 / curios 饰品栏 / 主手任一**）有
+  `ISpellContainer.isSpellContainer(item)` 为真的物品 → 法术书放**饰品栏**完全可用。
+- **女仆没有法力**：她走自有 `MagicData(false)`，ISS 的 `canBeCastedBy`（查蓝）与
+  `castSpell`（扣蓝）都不在这条链上——只剩"**法术冷却 + 黑名单**"两道闸，且两道闸都在
+  `initiateCasting` 里判（我们调 `castSpell` 时它自己会筛掉冷却中的法术）。
+- **续施法不依赖任务**：法术模组自己挂在 TLM `MaidTickEvent` 上每 tick 调
+  `SpellBookManager#tick()` 推进吟唱/连续施法/冷却 → "她的任务是不是法术任务"对施法链路没有影响。
+
+### 改法（promaid_src_neo，1.21.1 专属）
+
+1. **新增 `MaidSpellCompat`**（`com/maidsmart/combat/`）：全反射软兼容层，与
+   `GunCompat`（枪械）/ `SlashBladeCompat`（拔刀剑）同范式——没装 / 换版本 / 内部改名
+   都只是"这层不生效"，不会让本模组起不来。探针拿的是
+   `SpellBookManager.getOrCreateManager` / `getProviders` / `stopAllCasting` 与
+   `ISpellBookProvider.setTarget` / `castSpell` / `isCasting` —— **全部是公开方法，不需要 mixin**。
+   **刻意不用它的 `SimplifiedSpellCaster.melee_tick/far_tick`**：那两个方法在放法术之外还会替女仆
+   挥一记 `doHurtTarget`，而空袭的伤害结算有自己的口径（收翅俯冲那一记 + 无敌帧清零），
+   多出来的这一挥会打乱命中判定；需求也是"用武器打的同时施法"，所以只触发法术那一半。
+2. **`MaidFlightCombatBehavior` 新增 `tryCastSpell`** + 两个调用点 + 两张节流表
+   （`SPELL_NEXT_CAST` 发起节奏 / `SPELL_LAST_LOG` 日志限频，随 `forget`/`pauseRound`/`clearAll` 清理）。
+   命中判定先过自己的三道闸：开关、3D 距离（默认 24 格，与法术模组自己的 `maxSpellRange` 对齐——
+   我们直连 provider，它不替我们拦距离）、`SelfPreservationBehavior.hasSight`（隔墙不施法）。
+3. **三个配置项**（`MaidSmartConfig` + `PromaidConfigScreen` + 中英 lang）：`flightSpellCast`（默认开）、
+   `flightSpellCastInterval`（默认 20 tick）、`flightSpellCastRange`（默认 24 格）。
+4. **手册新增第七节**（`GuideContent.flightGuide`）：法术书放哪儿、放哪个法术、什么时候放、
+   三个开关、以及"怎么确认她在放法术"（运行日志搜「空袭·法术」）。
+
+**没有动的**：三件套激活口径、空袭状态机、伤害结算、自主切换排除名单、落地缓冲。
+
+### 为什么只在这两个相位发起施法（关键设计）
+
+法术模组在**吟唱期间每 tick** 把女仆的朝向拧向目标（`forceLookAtTarget` 直写 yaw/pitch），
+而 TLM 的 `MaidTickEvent` 在 `EntityMaid.tick()` 里**早于 brain tick** 发出
+（字节码实证：先 post 事件、再 `super.tick()`）——所以**吟唱期间我们写的盘旋/爬升朝向会被它覆盖**，
+而鞘翅滑翔的转向力来自视线方向（`LivingEntity.travel` 滑翔分支把水平速度往视线拽），
+硬顶就是两种朝向互相打架、飞行轨迹被掰歪。
+
+于是只在**本来就该面向目标**的两段发起：
+- **远程空袭**：`tickRangedAir` 的"开火"之前（与枪械开火同一位置——理由同款：开火会拧朝向，
+  放在朝向逻辑之前才能被本 tick 的盘旋朝向盖回去）；
+- **近战空袭**：已经爬到目标上方、正要压低俯冲那一刻（`faceTarget` 之前）。
+
+**爬升段刻意不施法**（那一段要"背离敌人 + 抬头"把烟花推力吃满），**收翅俯冲那一段也不施法**
+（本轮唯一的致命一击，不能让吟唱抢朝向）。
+
+### 验证（专用服务器实测，2026-09-18）
+
+环境：NeoForge 21.1.250 + TLM 1.5.3-neoforge + 车万女仆：魔法 1.8.4-neoforge +
+Iron's Spells 'n Spellbooks 1.21.1-3.16.3（+ geckolib / curios / playeranimator / irons_lib）+ 本模组；
+无头服务器 + RCON 驱动场景（`/summon` 直接带 `MaidTask` 与 `MaidInventory` NBT 生成女仆，
+背包放鞘翅/重锤或弓/烟花/法术书，旁边放一只带抗性的目标）。
+
+- **近战空袭**：日志出现 `[空袭·法术] 测试女仆 空中施法（目标 23.4 格，近战空袭）`（多轮）；
+- **远程空袭**：同上，`远战测试 … 远程空袭`；
+- **法术确实生效**（决定性证据）：给她一本只带 `irons_spellbooks:oakskin` 的法术书，
+  实测她身上挂出 **`irons_spellbooks:oakskin`（amplifier 2）且持续时间不断刷新**
+  （386 → 266 → 341 → 221 → 300 → 380 → …）——说明 trigger → castSpell → initiateCasting → onCast
+  全链路通，不是"只是喊了一声"；
+- 编译：`promaid_src_neo` 249 个源文件 0 错；打包 650 条目通过。
+
+**待实测**：画面观感（她施法时的朝向与飞行动作是否自然、盘旋/爬升受多少影响）需在客户端确认。
+
+### 已知限制 / 后续
+
+- 吟唱期间朝目标由法术模组接管 → 盘旋与爬升轨迹会受一点影响。已用"只在面向目标的相位发起"
+  压到最小；若实机观感仍不佳，下一步的选项是"吟唱期间进入固定盘旋姿态"或"爬升前主动中止施法"
+  （`stopAllCasting` 会给她正在吟唱的法术记冷却但不结算伤害，即"打断成功、法术作废"）。
+- 需求方另提的**第二项未做**：让她智能使用带冲刺能力的法术（如「烈焰冲锋」= ISS 的
+  `burning_dash`）来给飞行加速。那条路要的是"**指定法术**"的施法路径
+  （`MaidIronsSpellData` + `MagicData.initiateCast` 自己结算 onCast/onServerCastComplete），
+  与本次"随机挑一个不在冷却的"路径不同，留待下一轮。
+
+## 实测五百六十一【修：点「保存并返回」卡死 / 下次进游戏卡在 mod 加载界面（配置自触发写盘风暴）】
 
 反馈原文："promaid 配置书在最新版也开始不稳定，一旦点保存有大概率导致游戏崩溃，然后再次进入时
 mc 卡在 mod 加载页面，触发了两次卡死，退回到 1.10 版本恢复正常。"
