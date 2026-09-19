@@ -65,7 +65,10 @@
   "config.promaid.combat.flightSpellCast": "Cast Spells During Air Raid (requires Touhou Little Maid: Spell)",
   "config.promaid.combat.flightSpellCastInterval": "Air Raid Cast Interval (ticks)",
   "config.promaid.combat.flightSpellCastRange": "Air Raid Cast Range (blocks)",
-  "config.promaid.combat.flightDashCast": "Use Dash Spells During Air Raid (Touhou Little Maid: Spell)",
-  "config.promaid.combat.flightDashTakeoff": "Use Dash Spells for Ground Takeoff",
-  "config.promaid.combat.flightDashInterval": "Air Raid Dash Interval (ticks)"
+  "config.promaid.combat.flightDashInterval": "Air Raid Dash Interval (ticks)",
+  "config.promaid.combat.flightDashClimb": "Dash Spells: Liftoff / Altitude (climb list)",
+  "config.promaid.combat.flightDashBoost": "Dash Spells: In-flight Speed Boost",
+  "config.promaid.combat.flightDashClimbSpells": "Climb Spell IDs",
+  "config.promaid.combat.flightDashBoostSpells": "Speed Boost Spell IDs",
+  "config.promaid.combat.flightDashRespectCooldown": "Dash Spells: Respect Spell Cooldown"
 }
