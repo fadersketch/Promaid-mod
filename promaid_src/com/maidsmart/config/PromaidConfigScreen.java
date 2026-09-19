@@ -2165,6 +2165,23 @@ public class PromaidConfigScreen extends Screen {
             this.m_7856_();
         },
                 "列出全部带食物属性的物品（含模组食物如三明治），点图标切换「能不能吃」——打勾 = 女仆可以喂，取消勾选 = 列入「不能吃」（写进 aidFoodBlacklist）；留空黑名单则所有食物都能喂。与 TLM 自己吃食同一判据（有食物属性即可，不看是不是原版）"));
+        // 实测五百七十一：喂水（软联动「口渴」Thirst Was Taken）——模组不在场时这两项不出现
+        if (com.maidsmart.action.ThirstCompat.available() && MaidSmartConfig.AID_THIRST_THRESHOLD != null) {
+            this.rows.add(new NumRow("投喂触发口渴度", String.valueOf(MaidSmartConfig.AID_THIRST_THRESHOLD.get()),
+                    s -> setInt(MaidSmartConfig.AID_THIRST_THRESHOLD, s), "投喂触发口渴度（4-20）：主人口渴值（Thirst Was Taken，0-20）低于此值自动喂水（默认 15）。判定位点 = 口渴值；效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还全走原版喝的路径；未装该模组时本页没有这两项"));
+            this.rows.add(new TextRow("喂水白名单", String.join(",", MaidSmartConfig.AID_DRINK_WHITELIST.get()),
+                    s -> {
+                        java.util.List<String> out = new java.util.ArrayList<>();
+                        for (String part : s.split("[,，]")) {
+                            String id = part.trim();
+                            if (!id.isEmpty()) {
+                                out.add(id);
+                            }
+                        }
+                        MaidSmartConfig.AID_DRINK_WHITELIST.set(out);
+                        return true;
+                    }, "允许女仆喂的饮品（完整注册名，逗号分隔）：命中白名单且「口渴」模组认识（能回口渴值）才喂——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶）、其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水"));
+        }
         this.rows.add(new NumRow("治疗触发血量（0-1）", String.valueOf(MaidSmartConfig.AID_HEALTH_THRESHOLD.get()),
                 s -> setDouble(MaidSmartConfig.AID_HEALTH_THRESHOLD, s), "治疗触发血量（0.1-1，1=掉血就治）：主人血量低于此比例自动治疗（默认 0.30）"));
         this.rows.add(new BoolRow("被动插火把", MaidSmartConfig.TORCH_PLACER_ENABLE.get(),
