@@ -250,6 +250,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         }
         // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
         com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
+        // v1.2.0 实测五百五十六：入世界自动补包队列（空队列零开销）
+        com.maidsmart.command.MaidResyncCommand.tickAutoResync(server);
         // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
         // → 移除并原地丢一个完全一样的到地上）
         if (++this.weaponGuardTimer >= 20) {
@@ -316,6 +318,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
     @net.neoforged.bus.api.SubscribeEvent
     public void onRegisterCommands(net.neoforged.neoforge.event.RegisterCommandsEvent event) {
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
+        // v1.2.0 实测五百五十五：客户端重同步（修"服务端活着、客户端连实体都没有"）
+        com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
     }
 
     /**
@@ -325,12 +329,46 @@ net.minecraft.server.MinecraftServer server = event.getServer();
      * 并立即按当前时段应用一次（模式/任务/在家锚点全部重放——SchedulePos 锚点随
      * 实体 NBT 保存，不会在放出位置错误重锚）。未开排班/总开关关闭零成本。
      */
+    /**
+     * v1.2.0 实测五百五十六【离场诊断】：女仆离开世界时记一行（含移除原因）。
+     *
+     * 【为什么要记】法术模组的 `MaidSpellEventHandler.onEntityLeaveLevel` 会在"该释放
+     * 区块加载"那类移除原因下，**发通知让客户端删掉她的实体**；而它自己的"客户端实体
+     * 恢复"只对带锚核的女仆生效。没带锚核的女仆被删掉后若又被加回同一个 level，原版
+     * 追踪表未必再发一次生成包 → 表现就是"服务端还活着、客户端永远没有她"（重启游戏
+     * 才会回来）。这一行日志是排查该现象的第一现场：出现"客户端看不见她"时，先看这里
+     * 有没有同一时刻的离场记录与移除原因。
+     */
+    @net.neoforged.bus.api.SubscribeEvent
+    public void onMaidLeaveLevel(net.neoforged.neoforge.event.entity.EntityLeaveLevelEvent event) {
+        if (event.getLevel().isClientSide()
+                || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+            return;
+        }
+        try {
+            com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 离开世界（reason=" + maid.getRemovalReason() + "，维度="
+                    + maid.level().dimension().location() + "）——法术模组会据此通知客户端删掉她的实体");
+        } catch (Throwable ignored) {
+        }
+        // v1.2.0 实测五百五十七：**离场也登记一次补包**。
+        // 【为什么】实测现场：她飞在离主人上千格处（-1184, 115, 96）时客户端实体丢失，
+        // 手动 resync 一次即恢复——服务端始终在追踪，是客户端被"通知删除"后没人补回。
+        // 触发者就是上面这条离场链路（法术模组对**没带锚核**的女仆"只删不补"）。
+        // 若她随后又被加回同一个 level，"重新入世界"那一枪未必打得到（实测兜底后
+        // 出现频率下降了，但没归零）；离场这一枪把窗口两头都盖住：
+        // 队列按 UUID 在全部维度里找她，只有"她还活着 + 主人同维度"时才真的补包。
+        com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
+    }
+
     @net.neoforged.bus.api.SubscribeEvent
     public void onMaidJoin(net.neoforged.neoforge.event.entity.EntityJoinLevelEvent event) {
         if (event.getLevel().isClientSide()
                 || !(event.getEntity() instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return; // 只服务端处理女仆
         }
+        // v1.2.0 实测五百五十六：入世界 → 延迟给主人补一次实体包（治"客户端实体丢失"）
+        com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
         try {
             if (com.maidsmart.schedule.ScheduleData.isOn(maid)
                     && com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_ENABLED.get()
