@@ -1,4 +1,29 @@
-﻿## 实测五百六十七【空袭·法术层：用飞行武器的同时顺手放法术（需装《车万女仆：魔法》）】（PR #8，@rodericksthescriptkid 社区贡献）
+﻿## 实测五百六十八【TACZ 弹药箱兼容：弹药箱也算「有子弹」，空袭/枪械两道判定门放行】
+
+反馈原文："远程空战模式不识别 TACZ 的弹药箱，会提示没有弹药按照普通模式来，但普通模式不会开枪
+（因为觉得没有弹药），能做一下兼容吗"。
+
+**根因只有一处（反编译对账 tacz 1.1.8-hotfix 两版 + TLM 1.5.3）**：TACZ 自己的换弹链路本来就
+**原生支持弹药箱**——`AbstractGunItem.canReload` / `findAndExtractInventoryAmmo` 按
+`IAmmoBox.isAmmoBoxOfGun` 认箱、扣 `AmmoCount`、打空清 `AmmoId`，扫描走
+`shooter.getCapability(ITEM_HANDLER)`（女仆 = 护甲+双手+背包+饰品四合一，`EntityMaid.getCapability`
+反编译实证）；TLM 的 `TacInnerCompat.performGunAttack` 收到 `NO_AMMO` 也只管调
+`gunOperator.reload()`，喂弹全交给 TACZ。所以坏的只有**本模组的判定门**：
+`GunCompat.hasGunAndAmmo` 只数散装 `tacz:ammo`，弹药箱被当「没子弹」——空袭的弹药门禁不过
+（气泡报缺弹药、退普通模式）+ 自主战斗的枪械弹药闸不过（`gun_attack` 不进池、普通模式不开枪），
+粉丝看到的整条链全卡在这一道门上。
+
+**修法（两树同步）**：
+- `hasGunAndAmmo` 弹药箱兜底：散装弹药缺位时，把身上的枪 × 身上的箱两两配对
+  （`isAmmoBoxOfGun(gun, box)` + `getAmmoCount(box) > 0`），对上任何一把即放行；
+  判据与 TACZ `canReload` 同口径——**比散装那条「任意 tacz:ammo 都算」的宽松判据更严**：
+  箱内弹药型号必须对得上枪（9mm 箱喂不了步枪）、创造/全类型创造箱读作无限、打空的箱不算，
+  绝不出现「判定有弹却永远装填不上」的死角；
+- 挑枪评分同步认箱（枪械自动装备的「有弹药优先」加成）；
+- 反射软兼容（IAmmoBox 全公开接口，1.20.1/1.21.1 两版 1.1.8 签名逐一对上）：没装 TACZ 时
+  行为与旧版完全一致，零开销。
+
+## 实测五百六十七【空袭·法术层：用飞行武器的同时顺手放法术（需装《车万女仆：魔法》）】（PR #8，@rodericksthescriptkid 社区贡献）
 
 ### 需求
 

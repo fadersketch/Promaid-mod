@@ -306,13 +306,16 @@ public final class MaidToolAutoEquip {
         return !stack.isEmpty() && stack.getItem() instanceof net.minecraft.world.item.AxeItem;
     }
 
-    /** v1.1.0：女仆背包是否有任意枪械弹药（枪械评分加成用——弹药充足的枪优先装备） */
+    /** v1.1.0：女仆背包是否有任意枪械弹药（枪械评分加成用——弹药充足的枪优先装备）。
+     *  v1.2.0 实测五百六十八：弹药箱也算——这里只是同分排序偏好，粗判即可
+     *  （真正的可用性判定在 GunCompat.hasGunAndAmmo，那边才做"箱对得上枪"的精判） */
     private static boolean gunHasAmmoInBackpack(EntityMaid maid) {
         try {
             IItemHandlerModifiable inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (!s.isEmpty() && com.maidsmart.combat.GunCompat.isAmmo(s)) {
+                if (!s.isEmpty() && (com.maidsmart.combat.GunCompat.isAmmo(s)
+                        || com.maidsmart.combat.GunCompat.isAmmoBox(s))) {
                     return true;
                 }
             }
