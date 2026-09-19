@@ -413,6 +413,17 @@ public final class MaidSpellCastCompat {
     }
 
     /**
+     * v1.2.0 实测五百六十九【起飞/补高专用】：找"提供高度"里能用的法术，**不看它的冷却**。
+     *
+     * 依据：本模组对位移手段一向让女仆比玩家宽松——激流三叉戟那一套就是忽略原版
+     * "必须在水中/雨中"的限制；而"平地起飞"要求她没烟花也能持续飞（若卡 15 秒冷却，
+     * 升腾一记只抬约 6 格后缓降，需求等于没满足）。空中**冲刺加速**那一类仍然尊重冷却。
+     */
+    public static String findClimbSpellIgnoringCooldown(EntityMaid maid, String[] candidates) {
+        return findDashSpell(maid, candidates, false);
+    }
+
+    /**
      * v1.2.0 实测五百六十六【套件判定专用】：她书里**有没有**起飞法术——**不看冷却**。
      *
      * 【为什么必须分开】"有没有这件装备"与"现在能不能放"是两件事：
