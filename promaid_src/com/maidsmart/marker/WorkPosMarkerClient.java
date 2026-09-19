@@ -37,6 +37,19 @@ public final class WorkPosMarkerClient {
         if (!mc.f_91066_.f_92090_.m_90857_()) { // options.keyShift.isDown()
             return;
         }
+        // 实测五百七十三：开关关掉 → 中键完全交还原版（取方块）
+        if (!com.maidsmart.config.MaidSmartConfig.MISC_WORK_POS_MARKER.get()) {
+            return;
+        }
+        // 实测五百七十三【与 TLM 自带的「河童的罗盘」撞车 → 让位】：
+        // 罗盘（touhou_little_maid:kappa_compass）是"右键方块记坐标 → 右键女仆写入工作/休息/
+        // 睡觉区域"的另一套入口，写的是**同一份 TLM 排班锚点**（谁后写谁生效）。手持罗盘时
+        // 说明玩家正在用罗盘那套流程，此时我们的中键不再抢着标。
+        if (holdingKappaCompass(mc)) {
+            mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                    "\u00a77手持河童的罗盘：中键工位标记已让位（罗盘优先）；想用中键标记先收好罗盘"));
+            return;
+        }
         net.minecraft.core.BlockPos pos = pickBlock(mc);
         if (pos == null) {
             return; // 指着空气/实体 → 原版行为
@@ -50,9 +63,27 @@ public final class WorkPosMarkerClient {
                         + pos.m_123343_() + "）——范围内在家模式的女仆会认这里当工作区域"));
     }
 
-    /** 与指标石同款的客户端射线：命中非空气方块返回坐标，否则 null */
-    private static net.minecraft.core.BlockPos pickBlock(net.minecraft.client.Minecraft mc) {
+    /**
+     * 实测五百七十三：玩家主手/副手是不是拿着 TLM 自带的「河童的罗盘」。
+     * 按注册名查（不 import TLM 的物品常量，与其它软兼容同口径）；取不到恒 false。
+     */
+    private static boolean holdingKappaCompass(net.minecraft.client.Minecraft mc) {
         try {
+            net.minecraft.world.item.Item compass =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                            new net.minecraft.resources.ResourceLocation("touhou_little_maid", "kappa_compass"));
+            if (compass == null) {
+                return false;
+            }
+            return mc.f_91074_.m_21205_().m_150930_(compass)
+                    || mc.f_91074_.m_21206_().m_150930_(compass);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 与指标石同款的客户端射线：命中非空气方块返回坐标，否则 null */
+    private static net.minecraft.core.BlockPos pickBlock(net.minecraft.client.Minecraft mc) {        try {
             net.minecraft.world.entity.Entity cam = mc.m_91288_() != null
                     ? mc.m_91288_() : mc.f_91074_;
             net.minecraft.world.phys.HitResult hit = cam.m_19907_(MARK_REACH, mc.m_91296_(), false);

@@ -207,8 +207,17 @@ public final class MaidResyncCommand {
         try {
             viewer.f_8906_.m_9829_(new ClientboundRemoveEntitiesPacket(maid.m_19879_()));
             viewer.f_8906_.m_9829_(new ClientboundAddEntityPacket(maid, 0, maid.m_20183_()));
+            // 【实测五百七十三：这里必须用 getNonDefaultValues（m_252804_）而不是 packDirty！】
+            // AddEntity 在客户端新建的是一只"全新实体"（同步数据全是默认值），所以必须把
+            // **全部非默认值**补过去——这正是原版生成实体时发的那个包
+            // （ClientboundSetEntityDataPacket(id, getEntityData().getNonDefaultValues())）。
+            // 旧版误用了 m_135378_（= packDirty：只返回"自上次同步以来变化过"的值，且会清脏标记），
+            // 于是重同步时通常一个值都不发 → 客户端那只新实体保持默认数据 → **模型回落成默认
+            // （灵梦）**，服务端数据完全正常，所以"重进游戏就好了"。这正是反馈的
+            // "1.20.1 魂符放出后模型变了"的根因（1.21.1 树本来就是 getNonDefaultValues，
+            // 是移植到 1.20.1 时的 SRG 映射错误）。
             List<net.minecraft.network.syncher.SynchedEntityData.DataValue<?>> vals =
-                    maid.m_20088_().m_135378_();
+                    maid.m_20088_().m_252804_(); // getNonDefaultValues：不动脏标记
             if (vals != null) {
                 viewer.f_8906_.m_9829_(new ClientboundSetEntityDataPacket(maid.m_19879_(), vals));
             }
