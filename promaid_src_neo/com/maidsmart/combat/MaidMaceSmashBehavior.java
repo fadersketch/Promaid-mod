@@ -373,6 +373,10 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
      * 基础攻击力 → 附魔修正 → 重锤下落加成 → 命中 → 附魔后效 → 耐久 + 清坠落。
      */
     private static void smashHit(ServerLevel level, EntityMaid maid, LivingEntity target) {
+        // 实测五百六十九：命中瞬间的挥臂动画。本方法全程直接 hurt 结算，旧版只播
+        // 粒子音效不挥臂（反馈："下落攻击的时候没有攻击的动作，只有效果"）。挥在结算前，
+        // 途中换武器走 doHurtTarget 的那条也一并有动作；纯视觉，不写任何伤害/记忆。
+        maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
         ItemStack weapon = maid.getMainHandItem();
         if (!weapon.is(Items.MACE)) {
             maid.doHurtTarget(target); // 途中换了武器 → 退回普通近战
