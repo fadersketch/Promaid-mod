@@ -67,14 +67,15 @@ public final class EmotionalActionExecutor {
                 return false;
             }
             // ② 黑名单（配置项，完整注册名；留空 = 不排除任何食物）
+            // 实测五百八十【剩余次数细分】：黑名单条目可以是裸 id（= 该物品**任意剩余次数**
+            // 都不能喂，向后兼容）或 id#剩余次数（只禁某一档，例如"剩 1 次的破水壶别喂"）。
             net.minecraft.resources.ResourceLocation key =
                     ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             if (key == null) {
                 return false;
             }
-            String id = key.toString();
             for (String bad : com.maidsmart.config.MaidSmartConfig.AID_FOOD_BLACKLIST.get()) {
-                if (id.equals(bad.trim())) {
+                if (com.maidsmart.action.ItemUses.matches(bad, stack)) {
                     return false;
                 }
             }

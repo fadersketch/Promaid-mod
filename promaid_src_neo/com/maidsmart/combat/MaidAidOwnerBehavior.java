@@ -1712,35 +1712,34 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (src.isEmpty()) {
                 return false;
             }
-            // 喂 1 个副本（finishUsingItem 会消耗传入的栈；来源成功后才扣）
-            ItemStack toGive = src.copy();
-            toGive.setCount(1);
+            // 实测五百八十【对**真栈**结算，不再"喂副本 + 扣来源"】
+            // 旧版：喂一个副本 → 成功后把来源 shrink/extract 一个。对"多次使用的容器"
+            // （水壶那种，用完还剩 3/4 次）等于把整件容器当一次性扣掉；而且副本交还的
+            // 残余栈塞不进背包就被静默丢弃（物品凭空消失）。现在由物品自己的
+            // finishUsingItem 原地决定消耗几个，残余栈一定有着落。
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND); // 喂的动作（v1.5.292 同款）
-            String drinkName = toGive.getHoverName().getString();
-            ItemStack result;
-            try {
-                // 主人"亲手喝完"：效果/口渴/纯度/容器返还全走物品自己的路径
-                result = toGive.finishUsingItem(owner.level(), owner);
-            } catch (Throwable ignored) {
-                result = null;
-            }
+            String drinkName = src.getHoverName().getString();
+            ItemStack result = com.maidsmart.combat.MaidMealBridge.useByItemLogic(owner, src);
             if (result == null) {
-                net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, toGive, false);
-                return false; // 物品自己抛异常 → 退回，不消耗来源
+                return false; // 物品自己抛异常 → 什么都没发生，来源没被碰过
             }
             // 其他 mod 的装水工具兜底（药水瓶/TWT 自家/可食用已由 finishUsingItem 覆盖，
             // 该方法内部会按钩子排除口径跳过它们，不会双重计数）
-            com.maidsmart.action.ThirstCompat.applyHookThirst(toGive, owner);
-            // 容器返还：喝完返回的栈（玻璃瓶/陶碗/空桶）塞回女仆背包——跟玩家自己喝一样，
-            // 容器不消失（有的物品经由原版把容器放进主人背包/掉落，也不损失）
-            if (!result.isEmpty()) {
-                net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
-            }
-            // 消耗来源（手持 shrink / 背包 extract——喂食链同款）
-            if (fromHand) {
-                src.shrink(1);
-            } else {
-                inv.extractItem(bestSlot, 1, false);
+            com.maidsmart.action.ThirstCompat.applyHookThirst(src, owner);
+            // 容器/残余归还：塞回女仆背包；**背包满就掉在她脚下**（旧版直接丢弃）。
+            // `result == src` 表示物品原栈返回（多次使用的容器就地改了剩余次数）→ 没有残余要收。
+            if (!result.isEmpty() && result != src) {
+                ItemStack remain = net.neoforged.neoforge.items.ItemHandlerHelper
+                        .insertItemStacked(inv, result, false);
+                if (!remain.isEmpty()) {
+                    try {
+                        net.minecraft.world.entity.item.ItemEntity drop =
+                                new net.minecraft.world.entity.item.ItemEntity(maid.level(),
+                                        maid.getX(), maid.getY() + 0.5, maid.getZ(), remain);
+                        maid.level().addFreshEntity(drop);
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
             // 喝的音效（applyMilkEffect 同款取法——物品自己的 finishUsingItem 多数也播了，
             // 这里与牛奶分支保持一致的手感兜底）
@@ -1774,9 +1773,11 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (key == null) {
                 return 0.0;
             }
+            // 实测五百八十【剩余次数细分】：白名单条目可以是裸 id（= 该物品**任意剩余次数**
+            // 都算命中，向后兼容）或 id#剩余次数（只认某一档，例如"只喂满的水壶"）。
             boolean listed = false;
             for (String s : whitelist) {
-                if (s != null && key.toString().equals(s.trim())) {
+                if (com.maidsmart.action.ItemUses.matches(s, stack)) {
                     listed = true;
                     break;
                 }
