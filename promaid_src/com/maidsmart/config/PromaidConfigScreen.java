@@ -1726,6 +1726,18 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.316：红石机器改革开关（专属顺序+活建造+自动放矿车）
         this.rows.add(new BoolRow("红石机器专属搭建", MaidSmartConfig.BUILD_MACHINE_SMART.get(),
                 v -> MaidSmartConfig.BUILD_MACHINE_SMART.set(v), "红石机器专属搭建（v1.5.316 改革）：机器按红石拓扑分层放置（结构→机构→活动件→传感→动力源→TNT）+ 活建造，建好即自然运行；轰炸机类完工自动放矿车启动。关 = 回退旧行为（常规顺序+静默+完工唤醒）"));
+        // v1.2.2 实测五百八十五（issue #15）：流体保留判据（原文件名关键词 → 可配置 + 看图内容）
+        this.rows.add(new CycleRow("图纸流体保留",
+                new String[]{"auto", "always", "never"},
+                MaidSmartConfig.BUILD_KEEP_FLUIDS.get(),
+                v -> MaidSmartConfig.BUILD_KEEP_FLUIDS.set(v),
+                "图纸里的水/岩浆怎么办：auto（默认）= 机器图纸保留（文件名含机器关键词，或图纸里有 >=3 种红石机器件）、普通建筑剥离（防水淹/岩浆事故）；always = 任何图纸都照图纸建水/岩浆；never = 一律剥离。剥离时会在日志和建造开始时写明剥掉了多少格、怎么改成保留"));
+        // v1.2.2 实测五百八十六（issue #14）：缺料同类宽松（建筑严格 / 机器放宽）
+        this.rows.add(new CycleRow("缺料同类宽松",
+                new String[]{"off", "machine", "always"},
+                MaidSmartConfig.BUILD_LOOSE_MATERIALS.get(),
+                v -> MaidSmartConfig.BUILD_LOOSE_MATERIALS.set(v),
+                "缺料时能不能用同类方块顶替：off = 只认同族表（外观优先，旧行为）；machine（默认）= 只对机器蓝图放宽；always = 所有图纸都放宽。放宽范围：任意告示牌↔任意告示牌、任意树叶↔任意树叶、任意羊毛/地毯↔同类型、任意染色玻璃/玻璃板↔同类型（颜色/树种不再严格）"));
         // v1.5.331：TNT 点火保护期——防"刚建好炸膛"（天机屠龙炮等观察者→活塞推 TNT 机器）
         this.rows.add(new NumRow("TNT 点火保护期（秒）", String.valueOf(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE.get()),
                 s -> setInt(MaidSmartConfig.BUILD_TNT_IGNITION_GRACE, s), "TNT 点火保护期（秒，默认 120）：建造期+完工激活期+宽限期内压制一切 TNT 点火（放置/活塞推动/邻居更新），防机器'刚建好炸膛'；完工点火结算只点燃邻接带电的 TNT（轰炸机当场启动），期满后机器按正常红石逻辑点火。0 = 关闭保护"));

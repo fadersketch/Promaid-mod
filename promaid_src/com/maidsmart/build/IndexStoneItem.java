@@ -100,7 +100,8 @@ public class IndexStoneItem extends Item {
     /** 用法提示（客户端聊天栏显示；纯字符串，无客户端类型依赖） */
     public static String usageHint() {
         return "\u00a7e指标石用法：右击方块锁定（绿→红，可锁很远）→ 右击你的女仆绑定 → 她开始临时搭建；"
-                + "右击【同一个锁定方块】才会解除锁定，锁定期间不能改选别的方块。";
+                + "右击【同一个锁定方块】才会解除锁定，锁定期间不能改选别的方块。"
+                + "（那格已经瞄不到了：\u00a7f潜行 + 右键\u00a7e = 强制解锁，也可以对着自己的女仆右键一次）";
     }
 
     /**
@@ -108,6 +109,7 @@ public class IndexStoneItem extends Item {
      * 与 {@link #usageHint} 一样是纯字符串，无客户端类型依赖。
      */
     public static String lockedHint() {
-        return "\u00a7e指标石：锁定中——右击【那个锁定方块】解除锁定后才能选新的方块。";
+        return "\u00a7e指标石：锁定中——右击【那个锁定方块】解除锁定后才能选新的方块。"
+                + "（若已经瞄不到那一格：\u00a7f潜行 + 右键\u00a7e = 强制解锁）";
     }
 }

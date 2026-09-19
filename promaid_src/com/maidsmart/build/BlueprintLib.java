@@ -349,7 +349,7 @@ public final class BlueprintLib {
         if (actualId == null) {
             return false;
         }
-        Set<String> group = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> group = equivalentGroup(blockId);
         return group != null && group.contains(actualId.toString());
     }
 
@@ -1050,15 +1050,17 @@ public final class BlueprintLib {
             }
             // v1.5.317：机器蓝图（文件名匹配机器家族）保留水/岩浆步骤——机器水道/
             // 气泡柱/岩浆焚烧口需要；普通建筑维持剥离（防洪水/岩浆事故）
-            boolean keepFluids = false;
-            if (p.getFileName() != null) {
-                String fname = p.getFileName().toString();
-                int dot = fname.lastIndexOf('.');
-                if (dot > 0) {
-                    keepFluids = machineFamily(fname.substring(0, dot)) != null;
-                }
-            }
+            // v1.2.2 实测五百八十五（issue #15）：判据改为可配置，且 auto 档除文件名
+            // 关键词外还【看图内容】（红石机器件）——"川川12w刷石机"这类名字里不含关键词
+            // 的机器不再被静默剥掉水/岩浆，导致"建好了机器一动不动、毫无线索"。
+            String bpFile = p.getFileName() != null ? p.getFileName().toString() : "";
+            int dot = bpFile.lastIndexOf('.');
+            String stem = dot > 0 ? bpFile.substring(0, dot) : bpFile;
+            boolean keepFluids = keepFluidsFor(tag, stem);
             List<String> steps = parseStructure(tag, 0, null, keepFluids);
+            if (!keepFluids) {
+                recordFluidStrip("maid_smart_ext:" + stem, tag, bpFile);
+            }
             if (steps == null) {
                 // v1.5.25f 诊断：解析失败原因（LogUtils → 进 latest.log）
                 // v1.5.227：同一文件只 WARN 一次——目录每 2 秒重扫一次外部文件，
@@ -4480,7 +4482,7 @@ public final class BlueprintLib {
         if (isCreative(player)) {
             return Integer.MAX_VALUE; // 创造模式：任何材料视为备齐
         }
-        Set<String> group = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> group = equivalentGroup(blockId);
         // v1.5.287：itemForBlock（redstone_wire → 红石粉）
         Item exact = itemForBlock(blockId);
         int count = 0;
@@ -4527,7 +4529,7 @@ public final class BlueprintLib {
         if (count <= 0) {
             return;
         }
-        Set<String> group = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> group = equivalentGroup(blockId);
         // v1.5.287：itemForBlock（redstone_wire → 红石粉）
         Item exact = itemForBlock(blockId);
         net.minecraft.world.entity.player.Inventory inv = player.m_150109_();
@@ -4579,7 +4581,7 @@ public final class BlueprintLib {
 
     /** 统计背包中指定方块物品的持有数量（支持等价族：族内任意物品都算） */
     public static int countMaterial(EntityMaid maid, String blockId) {
-        Set<String> group = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> group = equivalentGroup(blockId);
         int count = 0;
         IItemHandler inv = maid.getMaidInv();
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -4615,7 +4617,7 @@ public final class BlueprintLib {
             if (exact != null) {
                 return exact;
             }
-            Set<String> cg = EQUIVALENT_GROUPS.get(blockId);
+            Set<String> cg = equivalentGroup(blockId);
             if (cg != null) {
                 for (String id : cg) {
                     Item gi = itemForBlock(id);
@@ -4655,7 +4657,7 @@ public final class BlueprintLib {
             }
         }
         // 2. 等价族内任意物品
-        Set<String> group = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> group = equivalentGroup(blockId);
         if (group != null) {
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
@@ -4753,14 +4755,295 @@ public final class BlueprintLib {
             "minecraft:water", "minecraft:water_bucket",
             "minecraft:lava", "minecraft:lava_bucket");
 
-    /** 方块 id → 对应物品 id（含特例映射；无特例返回原 id） */
+    /** 方块 id → 对应物品 id（含特例映射 + 动态归一；两类都对不上返回原 id）。
+     *  v1.2.2 实测五百八十三（issue #12）：wall_* 系列（墙上火把/告示牌/横幅/悬挂告示牌）
+     *  是【独立方块但没有同名物品】——原版里它们由前身物品（oak_sign / redstone_torch /
+     *  white_banner / oak_hanging_sign）按点击面自动变成墙上版本。旧版只查"同名物品"，
+     *  于是这类步骤永远取不到料、永久报缺料。这里统一做一次「去掉 wall_ 再查注册表」的
+     *  归一（原版 + 模组方块同样适用；墙上告示牌就是 world 存档提取链路最常带进来的）。 */
     public static String itemIdForBlock(String blockId) {
-        return BLOCK_ITEM_OVERRIDES.getOrDefault(blockId, blockId);
+        String ov = BLOCK_ITEM_OVERRIDES.get(blockId);
+        if (ov != null) {
+            return ov;
+        }
+        if (hasItemForm(blockId)) {
+            return blockId;
+        }
+        String stripped = stripWallToken(blockId);
+        if (stripped != null && hasItemForm(stripped)) {
+            return stripped;
+        }
+        return blockId;
     }
 
-    /** 方块 id → 对应物品（含特例：redstone_wire → 红石粉）——材料链统一入口 */
+    /** v1.2.2 实测五百八十三：物品注册表里真的有这个物品吗？
+     *  （注册表把查不到的 id 解析成 air，不能只判 null） */
+    private static boolean hasItemForm(String itemId) {
+        Item it = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemId));
+        return it != null && it != net.minecraft.world.item.Items.f_41852_;
+    }
+
+    /** v1.2.2 实测五百八十三：wall_* → 前身物品 id。
+     *  oak_wall_sign→oak_sign、redstone_wall_torch→redstone_torch、
+     *  white_wall_banner→white_banner、oak_wall_hanging_sign→oak_hanging_sign、
+     *  wall_torch→torch；不含 wall_ 的返回 null。 */
+    private static String stripWallToken(String blockId) {
+        if (blockId == null) {
+            return null;
+        }
+        int ns = blockId.indexOf(':');
+        String path = ns >= 0 ? blockId.substring(ns + 1) : blockId;
+        int at = path.indexOf("wall_");
+        if (at < 0) {
+            return null;
+        }
+        String stripped = path.substring(0, at) + path.substring(at + "wall_".length());
+        if (stripped.isEmpty()) {
+            return null;
+        }
+        return ns >= 0 ? blockId.substring(0, ns + 1) + stripped : stripped;
+    }
+
+    /** 方块 id → 对应物品（含特例与 wall_* 归一）——材料链统一入口。
+     *  v1.2.2 实测五百八十三（issue #12）：【没有对应物品时返回 null】。旧版直接返回
+     *  注册表结果，而注册表对查不到的 id 会给出 air（DefaultedRegistry 语义）——于是
+     *  MaidBuildBehavior 里那条「没有对应物品 → 永久跳过并报告」的分支成了死代码，
+     *  任何无物品方块都会以「材料不够」的名义永久卡住整份计划（实测 8 分钟不动，
+     *  切创造才过关）。 */
     public static Item itemForBlock(String blockId) {
-        return ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(itemIdForBlock(blockId)));
+        String id = itemIdForBlock(blockId);
+        if (id == null) {
+            return null;
+        }
+        Item it = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(id));
+        return it == null || it == net.minecraft.world.item.Items.f_41852_ ? null : it;
+    }
+
+    /** v1.2.2 实测五百八十三（issue #12）：材料提示改念【物品】名——玩家要去找的是物品。
+     *  例：`minecraft:redstone_wall_torch` 中文规则会拼成"红石墙火把"（游戏里搜不到），
+     *  它对应的物品是"红石火把"；`oak_wall_sign` → "橡木告示牌"。 */
+    public static String cnItemName(String blockId) {
+        return cnName(itemIdForBlock(blockId));
+    }
+
+    /* ================= v1.2.2 实测五百八十五（issue #15）：流体保留判据 ================= */
+
+    /** 机器件关键词（只用于"这份图纸像不像机器"的流体判据，不影响建造顺序/活放置口径） */
+    private static final String[] MACHINE_PART_KEYS = {
+            "piston", "observer", "repeater", "comparator", "dispenser", "dropper", "hopper",
+            "redstone_torch", "redstone_wire", "redstone_block", "redstone_lamp", "lever",
+            "target", "note_block", "detector_rail", "powered_rail", "tripwire_hook",
+            "daylight_detector", "trapped_chest", "slime_block", "honey_block", "soul_sand"};
+
+    /** 玩家要"保留流体"时可加的文件名关键词（提示文案用） */
+    public static String machineKeywordHint() {
+        return "村民 / 分类机 / 打包机 / 仓库 / 南瓜 / 甘蔗 / 铁砧 / 轰炸机";
+    }
+
+    /** v1.2.2 实测五百八十五（issue #15）：这份图纸要不要保留水/岩浆步骤。
+     *  never → 否；always → 是；auto（默认）→ 文件名机器关键词 或 图纸内容像机器。 */
+    public static boolean keepFluidsFor(net.minecraft.nbt.CompoundTag tag, String stem) {
+        String mode = com.maidsmart.config.MaidSmartConfig.BUILD_KEEP_FLUIDS.get();
+        if ("always".equalsIgnoreCase(mode)) {
+            return true;
+        }
+        if ("never".equalsIgnoreCase(mode)) {
+            return false;
+        }
+        if (stem != null && machineFamily(stem) != null) {
+            return true;
+        }
+        return looksLikeMachine(tag);
+    }
+
+    /** v1.2.2 实测五百八十五（issue #15）：图纸内容判据——调色板里出现 >=3 种机器件
+     *  就当"机器图纸"（只影响流体是否保留）。单件红石装饰（一个拉杆 + 一盏灯）不会命中。 */
+    private static boolean looksLikeMachine(net.minecraft.nbt.CompoundTag tag) {
+        try {
+            net.minecraft.nbt.ListTag palette = tag.m_128425_("palettes", 9)
+                    ? tag.m_128437_("palettes", 9).m_128744_(0)
+                    : tag.m_128437_("palette", 10);
+            if (palette == null) {
+                return false;
+            }
+            java.util.Set<String> hit = new java.util.HashSet<>();
+            for (int i = 0; i < palette.size(); i++) {
+                String nm = palette.m_128728_(i).m_128461_("Name");
+                if (nm == null) {
+                    continue;
+                }
+                String path = nm.contains(":") ? nm.substring(nm.indexOf(':') + 1) : nm;
+                for (String k : MACHINE_PART_KEYS) {
+                    if (path.equals(k) || path.endsWith("_" + k)) {
+                        hit.add(k);
+                        break;
+                    }
+                }
+                if (hit.size() >= 3) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 蓝图 id → 剥离掉的流体数量描述（"水×158、岩浆×48"）；未剥离过的图纸不存在 */
+    private static final Map<String, String> FLUID_STRIPPED = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** v1.2.2 实测五百八十五（issue #15）：记录这次解析剥掉了多少流体。
+     *  旧版剥离完全静默——玩家只能靠反编译 / 对比两个版本的 jar 才查得出原因。 */
+    private static void recordFluidStrip(String blueprintId, net.minecraft.nbt.CompoundTag tag, String fname) {
+        try {
+            int water = 0;
+            int lava = 0;
+            net.minecraft.nbt.ListTag palette = tag.m_128425_("palettes", 9)
+                    ? tag.m_128437_("palettes", 9).m_128744_(0)
+                    : tag.m_128437_("palette", 10);
+            net.minecraft.nbt.ListTag cells = tag.m_128437_("blocks", 10);
+            if (palette == null) {
+                return;
+            }
+            for (net.minecraft.nbt.Tag t : cells) {
+                int si = ((net.minecraft.nbt.CompoundTag) t).m_128451_("state");
+                if (si < 0 || si >= palette.size()) {
+                    continue;
+                }
+                String nm = palette.m_128728_(si).m_128461_("Name");
+                if ("minecraft:water".equals(nm)) {
+                    water++;
+                } else if ("minecraft:lava".equals(nm)) {
+                    lava++;
+                }
+            }
+            if (water == 0 && lava == 0) {
+                return;
+            }
+            StringBuilder sb = new StringBuilder();
+            if (water > 0) {
+                sb.append("水×").append(water);
+            }
+            if (lava > 0) {
+                sb.append(sb.length() > 0 ? "、" : "").append("岩浆×").append(lava);
+            }
+            FLUID_STRIPPED.put(blueprintId, sb.toString());
+            LOGGER.info("loadExternalFile: {} 含流体（{} 格）已按「普通建筑」剥离——"
+                            + "需要流体的机器图纸请把文件名加上机器关键词（{}），"
+                            + "或把配置 build.keepFluids 改成 always",
+                    fname, sb, machineKeywordHint());
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** v1.2.2 实测五百八十五（issue #15）：剥离提示全文（建造开始时给玩家看一眼）；无则空串 */
+    public static String fluidStripWarning(String blueprintId) {
+        String s = blueprintId == null ? null : FLUID_STRIPPED.get(blueprintId);
+        if (s == null) {
+            return "";
+        }
+        return "\u00a7e注意：这份图纸原本含 " + s + "，已按「普通建筑」处理并剥离（不会建水/岩浆）。"
+                + "如果它是靠流体工作的机器：把文件名加上关键词（" + machineKeywordHint()
+                + "）后重新导入，或到「模组详细配置 → 建造 → 图纸流体保留」改成「always」再重建。";
+    }
+
+    /* ================= v1.2.2 实测五百八十六（issue #14）：缺料同类宽松 =================
+     * 建筑要外观严格（一栋橡木+云杉混搭的房子不该被换成清一色橡木、樱花树不该变橡树），
+     * 但机器里告示牌/树叶/羊毛/染色玻璃只是【功能件】（挡水/标记/遮光），缺一个颜色就整台
+     * 卡住不值当。所以放宽做成档位：off（旧行为）/ machine（只对机器蓝图）/ always。 */
+
+    /** 当前正在处理哪份图纸（蓝图 id）——machine 档据此判断要不要放宽 */
+    private static volatile String materialScope = null;
+
+    /** 建造行为 / 建造入口在动手前告诉材料链"现在是哪份图纸"（无图纸传 null = 严格） */
+    public static void setMaterialScope(String blueprintId) {
+        materialScope = blueprintId;
+    }
+
+    /** v1.2.2 实测五百八十六（issue #14）：等价族查询统一入口（含按档位生效的同类宽族）。
+     *  材料统计 / 取料 / 转移 / 替代品验收全部走这里，口径一致。 */
+    public static Set<String> equivalentGroup(String blockId) {
+        Set<String> base = EQUIVALENT_GROUPS.get(blockId);
+        Set<String> wide = looseGroup(blockId);
+        if (wide == null || wide.isEmpty()) {
+            return base;
+        }
+        if (base == null || base.isEmpty()) {
+            return wide;
+        }
+        Set<String> union = new HashSet<>(base);
+        union.addAll(wide);
+        return union;
+    }
+
+    private static boolean looseAllowed() {
+        String mode = com.maidsmart.config.MaidSmartConfig.BUILD_LOOSE_MATERIALS.get();
+        if ("always".equalsIgnoreCase(mode)) {
+            return true;
+        }
+        if ("machine".equalsIgnoreCase(mode)) {
+            String scope = materialScope;
+            return scope != null && isMachineBlueprint(scope);
+        }
+        return false;
+    }
+
+    /** 同类宽族缓存（桶名 → 物品 id 集合；注册表定稿后扫一次即固定） */
+    private static final Map<String, Set<String>> LOOSE_BUCKETS = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 该方块（按归一后的物品 id）所属的同类宽族；不在放宽范围 / 档位不允许 → null */
+    public static Set<String> looseGroup(String blockId) {
+        if (!looseAllowed()) {
+            return null;
+        }
+        String bucket = looseBucket(itemIdForBlock(blockId));
+        if (bucket == null) {
+            return null;
+        }
+        Set<String> cached = LOOSE_BUCKETS.get(bucket);
+        if (cached != null) {
+            return cached;
+        }
+        Set<String> set = new HashSet<>();
+        for (ResourceLocation key : ForgeRegistries.ITEMS.getKeys()) {
+            if (bucket.equals(looseBucket(key.toString()))) {
+                set.add(key.toString());
+            }
+        }
+        LOOSE_BUCKETS.put(bucket, set);
+        return set;
+    }
+
+    /** v1.2.2 实测五百八十六（issue #14）：同类分桶——只放宽"换了也不改变功能"的类目。
+     *  墙上版本已由 itemIdForBlock 归一成前身物品（oak_wall_sign → oak_sign），
+     *  所以立式告示牌与墙上告示牌天然同族；悬挂告示牌单独一桶（物品/放法都不同）。 */
+    private static String looseBucket(String itemId) {
+        if (itemId == null) {
+            return null;
+        }
+        String path = itemId.contains(":") ? itemId.substring(itemId.indexOf(':') + 1) : itemId;
+        if (path.endsWith("_wall_hanging_sign") || path.endsWith("_hanging_sign")) {
+            return "hanging_sign";
+        }
+        if (path.endsWith("_wall_sign") || path.endsWith("_sign")) {
+            return "sign";
+        }
+        if (path.endsWith("_leaves")) {
+            return "leaves";
+        }
+        if (path.endsWith("_wool")) {
+            return "wool";
+        }
+        if (path.endsWith("_carpet")) {
+            return "carpet";
+        }
+        if (path.endsWith("_stained_glass_pane")) {
+            return "stained_glass_pane";
+        }
+        if (path.endsWith("_stained_glass")) {
+            return "stained_glass";
+        }
+        return null;
     }
 
     /** 半格高判定（台阶类——替换表按此分类） */

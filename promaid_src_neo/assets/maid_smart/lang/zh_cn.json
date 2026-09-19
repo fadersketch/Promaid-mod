@@ -158,6 +158,8 @@
   "config.promaid.misc.bubbleLimitMs": "气泡限频（毫秒）",
   "config.promaid.misc.pickupPriority": "挖矿中禁止拾取",
   "config.promaid.build.machineSmart": "红石机器专属搭建（专属顺序+活建造+自动启动）",
+  "config.promaid.build.keepFluids": "图纸流体保留（水/岩浆）",
+  "config.promaid.build.looseMaterials": "缺料同类宽松",
   "key.categories.promaid": "Promaid 建造",
   "key.promaid.build_rotate": "建造预览·旋转朝向（每次顺时针 90°）",
   "key.promaid.maid_pat": "摸摸头（对准女仆）",
