@@ -423,13 +423,60 @@ public final class MaidFlightKit {
      * 见 `hasAmmoForRanged` 的弩分支。 */
 
     /**
+     * v1.2.0 实测五百七十二【位移法术可顶替烟花】：她有没有"能把自己顶上天"的位移法术。
+     *
+     * 需求（法术模组作者转达的玩家反馈）：位移类法术（如「升腾」）也要能用于**平地起飞**。
+     * 而空袭原来把"烟花火箭"写死在激活条件里——没有烟花模式压根不激活，那条路永远走不到。
+     * 所以这里给烟花开一个替代件：带得起飞法术 = 推进剂不缺。
+     *
+     * 结果按 20 tick 缓存（isModeActive 每 tick 会被问好几次，而扫她的书单是反射调用）。
+     */
+    private static final java.util.Map<java.util.UUID, Boolean> DASH_KIT_CACHE = new java.util.HashMap<>();
+    private static final java.util.Map<java.util.UUID, Long> DASH_KIT_CACHE_TICK = new java.util.HashMap<>();
+    private static final long DASH_KIT_CACHE_INTERVAL = 20L;
+
+    public static boolean hasClimbSpell(EntityMaid maid) {
+        if (maid == null
+                || !com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get()) {
+            return false;
+        }
+        try {
+            long now = maid.m_9236_().m_46467_();
+            Long cached = DASH_KIT_CACHE_TICK.get(maid.m_20148_());
+            if (cached != null && now - cached < DASH_KIT_CACHE_INTERVAL) {
+                return Boolean.TRUE.equals(DASH_KIT_CACHE.get(maid.m_20148_()));
+            }
+            // 【必须用不看冷却的那个】否则她每冲刺一次（写回 2 秒冷却）模式就掉回未激活
+            String[] ids;
+            try {
+                ids = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
+                        .toArray(new String[0]);
+            } catch (Throwable ignored) {
+                ids = com.maidsmart.combat.MaidSpellCastCompat.DEFAULT_CLIMB_SPELLS;
+            }
+            boolean has = com.maidsmart.combat.MaidSpellCastCompat.hasDashSpell(maid, ids);
+            DASH_KIT_CACHE.put(maid.m_20148_(), has);
+            DASH_KIT_CACHE_TICK.put(maid.m_20148_(), now);
+            return has;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * 三要素齐备 = 模式激活（缺一即未激活，行为退回普通攻击模式）。
      *
      * v1.2.0 实测四百九十五：**远程空袭**额外要求弹药（见 {@link #hasAmmoForRanged}）——
      * 没箭/没子弹就没必要起飞（需求："否则没必要起飞"）。近战空袭不受影响。
+     *
+     * v1.2.0 实测五百七十二：推进剂那一件改成 **烟花火箭 或 能上天的位移法术**——
+     * 这也是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）。
      */
     public static boolean isModeActive(EntityMaid maid) {
-        if (!(hasElytra(maid) && hasWeapon(maid) && hasFlightFuel(maid))) {
+        // v1.2.0 实测五百七十二：推进剂 = 烟花 / 羽扇（hasFlightFuel）**或**能上天的位移法术——
+        // 后者是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）
+        if (!(hasElytra(maid) && hasWeapon(maid)
+                && (hasFlightFuel(maid) || hasClimbSpell(maid)))) {
             return false;
         }
         return !isRangedTask(maid) || hasAmmoForRanged(maid);
@@ -458,17 +505,17 @@ public final class MaidFlightKit {
             }
             sb.append(isRangedTask(maid) ? "远程武器" : "近战武器");
         }
-        // 实测五百六十三：燃料件 = 烟花或羽扇，缺件文案跟着口径走
-        if (!hasFlightFuel(maid)) {
+        // 实测五百六十三：燃料件 = 烟花或羽扇；v1.2.0 实测五百七十二：位移法术也能顶上
+        if (!hasFlightFuel(maid) && !hasClimbSpell(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
-            sb.append("烟花火箭/羽扇");
+            sb.append("烟花火箭/羽扇（或能上天的位移法术）");
         }
         // v1.2.0 实测四百九十五：远程空袭还要报"缺弹药"（否则玩家只看到"三件齐了却没起飞"，
         // 完全不知道为什么——这正是本次需求要修的可观测性问题）。
-        if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid) && hasFlightFuel(maid)
-                && !hasAmmoForRanged(maid)) {
+        if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid)
+                && (hasFlightFuel(maid) || hasClimbSpell(maid)) && !hasAmmoForRanged(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }

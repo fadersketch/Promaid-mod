@@ -194,5 +194,11 @@
   "task.maid_smart.index_build.desc": "指标石一次性临时建造（隐藏任务，不由玩家选择）",
   "config.promaid.combat.flightSpellCast": "空袭顺带施法（需装《车万女仆：魔法》）",
   "config.promaid.combat.flightSpellCastInterval": "空袭施法间隔（tick）",
-  "config.promaid.combat.flightSpellCastRange": "空袭施法距离（格）"
+  "config.promaid.combat.flightSpellCastRange": "空袭施法距离（格）",
+  "config.promaid.combat.flightDashInterval": "位移法术间隔（tick）",
+  "config.promaid.combat.flightDashClimb": "位移法术·起飞/补高（提供高度）",
+  "config.promaid.combat.flightDashBoost": "位移法术·飞行加速（提供速度）",
+  "config.promaid.combat.flightDashClimbSpells": "提供高度的法术表",
+  "config.promaid.combat.flightDashBoostSpells": "提供速度的法术表",
+  "config.promaid.combat.flightDashBoostRespectCooldown": "飞行加速·尊重法术冷却（提供速度）"
 }
