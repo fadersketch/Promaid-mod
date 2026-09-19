@@ -210,6 +210,38 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /**
+     * 实测五百八十：把一个候选物品按"**剩余次数**"铺成若干行（用户需求："能够喝 4/4 次的
+     * 和喝 3/4 次的在面板里面属于两种不同的物品"）。
+     *
+     * 行格式统一为 4 元：{裸 id, 中文名, 配置项键, 剩余次数说明}——
+     * 裸 id 用于解析图标/搜索，**配置项键**才是写进白/黑名单的值（{@code id#剩余次数}）。
+     * 耐久物品（水壶这类能喝好几次的）每档一行；普通物品只有一行（键 = 裸 id，与旧版一致）。
+     */
+    private static void addVariantRows(java.util.List<String[]> out,
+                                       net.minecraft.world.item.Item item,
+                                       String id, String cn, java.util.Set<String> seen) {
+        net.minecraft.world.item.ItemStack probe;
+        try {
+            probe = new net.minecraft.world.item.ItemStack(item);
+        } catch (Throwable ignored) {
+            return;
+        }
+        int max = com.maidsmart.action.ItemUses.total(probe);
+        if (max <= 0) {
+            if (seen.add(id)) {
+                out.add(new String[]{id, cn == null ? "" : cn, id, ""});
+            }
+            return;
+        }
+        for (int rem = max; rem >= 1; rem--) {
+            String k = id + com.maidsmart.action.ItemUses.SEP + rem;
+            if (seen.add(k)) {
+                out.add(new String[]{id, cn == null ? "" : cn, k, "剩余 " + rem + "/" + max + " 次"});
+            }
+        }
+    }
+
+    /**
      * 实测五百一十九：食物候选缓存（{id, 中文名}）——与 ensureCreativeCache 同款懒构建、
      * 1 分钟缓存。候选口径 = **带食物属性**的任意物品（含模组食物），与 TLM 自己吃食
      * 同一判据（有 `m_41473_()` 即可，不看是不是原版）。
@@ -220,6 +252,7 @@ public class PromaidConfigScreen extends Screen {
             return; // 1 分钟缓存（模组运行时注册表不会变）
         }
         foodCache = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.HashSet<>();
         for (net.minecraft.world.item.Item item : net.minecraftforge.registries.ForgeRegistries.ITEMS) {
             net.minecraft.world.item.ItemStack stack;
             try {
@@ -243,7 +276,8 @@ public class PromaidConfigScreen extends Screen {
                 cn = stack.m_41786_().getString();
             } catch (Exception ignored) {
             }
-            foodCache.add(new String[]{key.toString(), cn == null ? "" : cn});
+            // 实测五百八十：耐久物品（"能喂好几次"的）按剩余次数各占一行
+            addVariantRows(foodCache, item, key.toString(), cn, seen);
         }
         foodCacheBuilt = now;
     }
@@ -285,23 +319,32 @@ public class PromaidConfigScreen extends Screen {
                 cn = stack.m_41786_().getString();
             } catch (Exception ignored) {
             }
-            waterCache.add(new String[]{key.toString(), cn == null ? "" : cn});
+            // 实测五百八十：同 ensureFoodCache——耐久容器（水壶）按剩余次数各占一行
+            addVariantRows(waterCache, item, key.toString(), cn, seen);
         }
         try {
             for (String id : MaidSmartConfig.AID_DRINK_WHITELIST.get()) {
                 if (id == null || id.isEmpty() || !seen.add(id)) {
                     continue;
                 }
+                String base = com.maidsmart.action.ItemUses.baseId(id);
                 String cn = "";
                 try {
                     net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                            .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                            .getValue(new net.minecraft.resources.ResourceLocation(base));
                     if (it != null) {
+                        // 耐久物品：注册表循环已按剩余次数铺好行，这里补一行会与"满次数"那行长得一样
+                        //（都是满耐久图标）→ 跳过；裸条目仍留在底部列表里可点「不喂了」移除
+                        if (com.maidsmart.action.ItemUses.variant(
+                                new net.minecraft.world.item.ItemStack(it))) {
+                            continue;
+                        }
                         cn = new net.minecraft.world.item.ItemStack(it).m_41786_().getString();
                     }
                 } catch (Throwable ignored) {
                 }
-                waterCache.add(new String[]{id, cn == null ? "" : cn});
+                waterCache.add(new String[]{base, cn == null ? "" : cn, id,
+                        com.maidsmart.action.ItemUses.labelOfKey(id)});
             }
         } catch (Throwable ignored) {
         }
@@ -1011,8 +1054,12 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /** 实测五百七十三：是否"可以喂"（在白名单里 = 可以喂） */
-    private boolean isWaterChecked(String id) {
-        return MaidSmartConfig.AID_DRINK_WHITELIST.get().contains(id);
+    private boolean isWaterChecked(String key) {
+        List<? extends String> wl = MaidSmartConfig.AID_DRINK_WHITELIST.get();
+        if (wl.contains(key)) {
+            return true;
+        }
+        return wl.contains(com.maidsmart.action.ItemUses.baseId(key));
     }
 
     /** 当前白名单数量（入口按钮上的「可喂 N / 候选 M」用） */
@@ -1035,12 +1082,15 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /** 切换某物品"能不能喂"（写回 aidDrinkWhitelist 并刷新底部列表） */
-    private void toggleWaterChecked(String id) {
+    private void toggleWaterChecked(String key) {
         List<String> list = new ArrayList<>(MaidSmartConfig.AID_DRINK_WHITELIST.get());
-        if (list.contains(id)) {
-            list.remove(id);
+        if (this.isWaterChecked(key)) {
+            // 当前可以喂 → 连同可能存在的"裸 id（任意次数）"条目一起移出白名单
+            list.remove(key);
+            list.remove(com.maidsmart.action.ItemUses.baseId(key));
         } else {
-            list.add(id);
+            // 只把**这一档**加进白名单（例如"只喂满的水壶"）
+            list.add(key);
         }
         MaidSmartConfig.AID_DRINK_WHITELIST.set(list);
         if (this.waterList != null) {
@@ -1100,22 +1150,33 @@ public class PromaidConfigScreen extends Screen {
         for (String[] e : waterCache) {
             String id = e[0];
             String cn = e[1];
-            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q)))) {
+            String label = e.length > 3 ? e[3] : "";
+            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q))
+                    || (label != null && label.contains(q)))) {
                 continue;
             }
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                    .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                    .getValue(new net.minecraft.resources.ResourceLocation(id));
             if (item == null) {
                 continue;
             }
-            this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+            // 实测五百八十：该行是"剩余 N 次"那一档 → 造一个损耗对得上的栈（耐久条一眼可辨）
+            int rem = com.maidsmart.action.ItemUses.usesOfKey(e.length > 2 ? e[2] : id);
+            this.creativeItems.add(rem < 0
+                    ? new net.minecraft.world.item.ItemStack(item)
+                    : com.maidsmart.action.ItemUses.stackFor(item, rem));
         }
         this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
     }
 
     /** 是否"能吃"（不在黑名单里即能吃） */
-    private boolean isFoodChecked(String id) {
-        return !MaidSmartConfig.AID_FOOD_BLACKLIST.get().contains(id);
+    private boolean isFoodChecked(String key) {
+        List<? extends String> bl = MaidSmartConfig.AID_FOOD_BLACKLIST.get();
+        if (bl.contains(key)) {
+            return false;
+        }
+        // 裸 id 条目（旧配置 / 手动输入）= 该物品任意剩余次数都按条目处理
+        return !bl.contains(com.maidsmart.action.ItemUses.baseId(key));
     }
 
     /** 当前可喂食物总数（子页按钮上的 "(可喂 N / 不能吃 M)" 用） */
@@ -1124,7 +1185,7 @@ public class PromaidConfigScreen extends Screen {
             ensureFoodCache();
             int n = 0;
             for (String[] e : foodCache) {
-                if (!this.isFoodChecked(e[0])) {
+                if (!this.isFoodChecked(e.length > 2 ? e[2] : e[0])) {
                     continue;
                 }
                 n++;
@@ -1136,12 +1197,16 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /** 切换某物品"能不能吃"（写回 aidFoodBlacklist 并刷新底部列表） */
-    private void toggleFoodChecked(String id) {
+    private void toggleFoodChecked(String key) {
         List<String> list = new ArrayList<>(MaidSmartConfig.AID_FOOD_BLACKLIST.get());
-        if (list.contains(id)) {
-            list.remove(id);
+        if (this.isFoodChecked(key)) {
+            // 当前能吃 → 把**这一档**列入"不能吃"（其余档位照旧能吃）
+            list.add(key);
         } else {
-            list.add(id);
+            // 当前不能吃 → 一次点回能吃：连同可能存在的"裸 id（任意次数）"条目一起清掉，
+            // 否则点了没反应（裸条目仍然盖着这一档）
+            list.remove(key);
+            list.remove(com.maidsmart.action.ItemUses.baseId(key));
         }
         MaidSmartConfig.AID_FOOD_BLACKLIST.set(list);
         if (this.foodList != null) {
@@ -1201,15 +1266,21 @@ public class PromaidConfigScreen extends Screen {
         for (String[] e : foodCache) {
             String id = e[0];
             String cn = e[1];
-            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q)))) {
+            String label = e.length > 3 ? e[3] : "";
+            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q))
+                    || (label != null && label.contains(q)))) {
                 continue;
             }
             net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                    .getValue(net.minecraft.resources.ResourceLocation.parse(id));
+                    .getValue(new net.minecraft.resources.ResourceLocation(id));
             if (item == null) {
                 continue;
             }
-            this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+            // 实测五百八十：该行是"剩余 N 次"那一档 → 造一个损耗对得上的栈
+            int rem = com.maidsmart.action.ItemUses.usesOfKey(e.length > 2 ? e[2] : id);
+            this.creativeItems.add(rem < 0
+                    ? new net.minecraft.world.item.ItemStack(item)
+                    : com.maidsmart.action.ItemUses.stackFor(item, rem));
         }
         this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
     }
@@ -3105,15 +3176,19 @@ public class PromaidConfigScreen extends Screen {
                                 int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int x = left + 4;
                 int y = top + 4;
+                // 实测五百八十：配置项键可能带 #剩余次数 后缀 → 图标/名字用裸 id，后缀单独显示
+                String base = com.maidsmart.action.ItemUses.baseId(this.id);
+                String usesLabel = com.maidsmart.action.ItemUses.labelOfKey(this.id);
                 net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                        .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                        .getValue(new net.minecraft.resources.ResourceLocation(base));
                 if (item != null) {
                     g.m_280480_(new net.minecraft.world.item.ItemStack(item), x, y - 2);
                     x += 20;
                 }
                 g.m_280614_(PromaidConfigScreen.this.f_96547_,
                         Component.m_237113_("\u00a7a\u2714 \u00a7f"
-                                + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                                + com.maidsmart.build.BlueprintLib.cnName(base)
+                                + (usesLabel.isEmpty() ? "" : " \u00a7b" + usesLabel)),
                         x, y, 0xFFAAAAAA, false);
                 this.removeButton.m_252865_(left + WaterList.this.m_5759_() - 62);
                 this.removeButton.m_253211_(top + 1);
@@ -3197,15 +3272,19 @@ public class PromaidConfigScreen extends Screen {
                                 int mouseX, int mouseY, boolean hovered, float partialTick) {
                 int x = left + 4;
                 int y = top + 4;
+                // 实测五百八十：配置项键可能带 #剩余次数 后缀 → 图标/名字用裸 id，后缀单独显示
+                String base = com.maidsmart.action.ItemUses.baseId(this.id);
+                String usesLabel = com.maidsmart.action.ItemUses.labelOfKey(this.id);
                 net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                        .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                        .getValue(new net.minecraft.resources.ResourceLocation(base));
                 if (item != null) {
                     g.m_280480_(new net.minecraft.world.item.ItemStack(item), x, y - 2);
                     x += 20;
                 }
                 g.m_280614_(PromaidConfigScreen.this.f_96547_,
                         Component.m_237113_("\u00a7c\u2716 \u00a7f"
-                                + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                                + com.maidsmart.build.BlueprintLib.cnName(base)
+                                + (usesLabel.isEmpty() ? "" : " \u00a7b" + usesLabel)),
                         x, y, 0xFFAAAAAA, false);
                 this.allowButton.m_252865_(left + FoodList.this.m_5759_() - 62);
                 this.allowButton.m_253211_(top + 1);
@@ -3699,7 +3778,8 @@ public class PromaidConfigScreen extends Screen {
             }
         } else if (this.foodTable) {
             // v1.2.0 实测五百一十九：投喂食物勾选子页——网格里绿色勾=能吃 / 红叉=不能吃
-            String title = "\u00a7e投喂食物——点图标切换「能不能吃」（\u2714 能吃 / \u2716 不能吃）";
+            String title = "\u00a7e投喂食物——点图标切换「能不能吃」（\u2714 能吃 / \u2716 不能吃）"
+                    + "\u00a77；能喂好几次的物品按「剩余次数」分行";
             g.m_280653_(this.f_96547_, Component.m_237113_(title),
                     this.clampCenterX(title, cx), 10, 0xFFFFFF);
             int panelLeft = Math.max(8, cx - 280);
@@ -3729,9 +3809,8 @@ public class PromaidConfigScreen extends Screen {
                 int x = left + col * GRID_CELL;
                 int y = gridTop + row * GRID_CELL;
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
-                net.minecraft.resources.ResourceLocation key =
-                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-                String id = key == null ? "" : key.toString();
+                // 实测五百八十：这一格可能是"剩余 N 次"的某一档 → 键带上次数
+                String id = com.maidsmart.action.ItemUses.key(stack);
                 if (this.isFoodChecked(id)) {
                     g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
                     g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFFFFFF);
@@ -3751,15 +3830,20 @@ public class PromaidConfigScreen extends Screen {
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
                 net.minecraft.resources.ResourceLocation key =
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-                String hover = key == null ? "?" : key.toString();
-                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
-                                this.drawHoverInfo(g, infoX, infoY, new String[]{
-                        "\u00a7f" + (hc.equals(hover) ? hover : hc),
+                String hover = com.maidsmart.action.ItemUses.key(stack);
+                String hoverId = com.maidsmart.action.ItemUses.baseIdOf(stack);
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hoverId);
+                // 实测五百八十：耐久物品每一格是一个"剩余次数档位"，悬停写清楚
+                String usesLabel = com.maidsmart.action.ItemUses.label(stack);
+                this.drawHoverInfo(g, infoX, infoY, new String[]{
+                        "\u00a7f" + (hc.equals(hoverId) ? hoverId : hc),
                         "\u00a77" + hover,
+                        usesLabel.isEmpty() ? ""
+                                : "\u00a7b" + usesLabel + "\u00a77（同物品的其它次数是独立条目）",
                         this.isFoodChecked(hover)
-                                ? "\u00a7a当前：能吃（点击改成不能吃）"
+                                ? "\u00a7a当前：能吃（点击改成「这一档不能吃」）"
                                 : "\u00a7c当前：不能吃（点击改回能吃）"},
-                        new int[]{0xFFFFFF, 0xAAAAAA, 0xFFFFFF});
+                        new int[]{0xFFFFFF, 0xAAAAAA, 0x55FFFF, 0xFFFFFF});
             } else {
                 int pages = this.creativePages();
                 if (pages > 1) {
@@ -3774,7 +3858,8 @@ public class PromaidConfigScreen extends Screen {
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
         } else if (this.waterTable) {
             // 实测五百七十三：喂水白名单子页——网格里绿色勾=可以喂 / 红叉=不喂
-            String wTitle = "\u00a7e喂水白名单——点图标切换「能不能喂」（\u2714 可以喂 / \u2716 不喂）";
+            String wTitle = "\u00a7e喂水白名单——点图标切换「能不能喂」（\u2714 可以喂 / \u2716 不喂）"
+                    + "\u00a77；能喝好几次的容器按「剩余次数」分行";
             g.m_280653_(this.f_96547_, Component.m_237113_(wTitle),
                     this.clampCenterX(wTitle, cx), 10, 0xFFFFFF);
             int wPanelLeft = Math.max(8, cx - 280);
@@ -3796,9 +3881,8 @@ public class PromaidConfigScreen extends Screen {
                 int x = wLeft + col * GRID_CELL;
                 int y = wGridTop + row * GRID_CELL;
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
-                net.minecraft.resources.ResourceLocation key =
-                        net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-                String id = key == null ? "" : key.toString();
+                // 实测五百八十：这一格可能是"剩余 N 次"的某一档 → 键带上次数
+                String id = com.maidsmart.action.ItemUses.key(stack);
                 if (this.isWaterChecked(id)) {
                     g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
                     g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFFFFFF);
@@ -3818,19 +3902,29 @@ public class PromaidConfigScreen extends Screen {
                 net.minecraft.world.item.ItemStack stack = this.creativeItems.get(wHoverIdx);
                 net.minecraft.resources.ResourceLocation key =
                         net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-                String hover = key == null ? "?" : key.toString();
-                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                String hover = com.maidsmart.action.ItemUses.key(stack);
+                String hoverId = com.maidsmart.action.ItemUses.baseIdOf(stack);
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hoverId);
                                 // 实测五百七十六：装水容器额外标一行水质（反馈："把这些水细分"）
                 int wPur = com.maidsmart.action.ThirstCompat.waterPurity(stack);
                 String wPurName = com.maidsmart.action.ThirstCompat.purityLabel(wPur);
                 boolean wShowPur = wPurName != null;
-                String[] wLines = new String[wShowPur ? 4 : 3];
-                int[] wColors = new int[wShowPur ? 4 : 3];
-                wLines[0] = "\u00a7f" + (hc.equals(hover) ? hover : hc);
+                // 实测五百八十：耐久容器（水壶）再标一行"剩余 N/M 次"
+                String wUses = com.maidsmart.action.ItemUses.label(stack);
+                boolean wShowUses = !wUses.isEmpty();
+                int wCount = 2 + (wShowUses ? 1 : 0) + (wShowPur ? 1 : 0) + 1;
+                String[] wLines = new String[wCount];
+                int[] wColors = new int[wCount];
+                wLines[0] = "\u00a7f" + (hc.equals(hoverId) ? hoverId : hc);
                 wColors[0] = 0xFFFFFF;
                 wLines[1] = "\u00a77" + hover;
                 wColors[1] = 0xAAAAAA;
                 int wIdx = 2;
+                if (wShowUses) {
+                    wLines[wIdx] = "\u00a7b" + wUses + "\u00a77（同物品的其它次数是独立条目）";
+                    wColors[wIdx] = 0x55FFFF;
+                    wIdx++;
+                }
                 if (wShowPur) {
                     wLines[wIdx] = "\u00a77水质：" + wPurName;
                     wColors[wIdx] = com.maidsmart.action.ThirstCompat.purityColor(wPur);
@@ -3849,8 +3943,9 @@ public class PromaidConfigScreen extends Screen {
                             wInfoX, wInfoY, 0x888888, false);
                 }
             }
-            String wHint = "\u00a77候选 " + wTotal + " 种饮品，白名单 " + this.countDrinkables()
-                    + " 种；留空 = 不喂水（potion 只认纯净水）";
+            String wHint = "\u00a77候选 " + wTotal + " 项，白名单 " + this.countDrinkables()
+                    + " 项；留空 = 不喂水（potion 只认纯净水）；带「#次数」的条目只认那一档，"
+                    + "裸 id 条目 = 该物品任意次数";
             g.m_280614_(this.f_96547_, Component.m_237113_(wHint),
                     this.clampCenterX(wHint, cx), this.f_96544_ - 50, 0x888888, false);
         } else if (this.altTable) {
@@ -4066,11 +4161,9 @@ public class PromaidConfigScreen extends Screen {
                 int row = (int) ((mouseY - fGridTop) / GRID_CELL);
                 int idx = start + row * GRID_COLS + col;
                 if (idx >= 0 && idx < this.creativeItems.size()) {
-                    net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS
-                            .getKey(this.creativeItems.get(idx).m_41720_());
-                    if (key != null) {
-                        this.toggleFoodChecked(key.toString());
-                    }
+                    // 实测五百八十：切换的是"这一档剩余次数"（不是整个物品）
+                    this.toggleFoodChecked(
+                            com.maidsmart.action.ItemUses.key(this.creativeItems.get(idx)));
                     return true;
                 }
             }
@@ -4091,12 +4184,9 @@ public class PromaidConfigScreen extends Screen {
                 int row = (int) ((mouseY - wGridTop) / GRID_CELL);
                 int idx = start + row * GRID_COLS + col;
                 if (idx >= 0 && idx < this.creativeItems.size()) {
-                    net.minecraft.resources.ResourceLocation key =
-                            net.minecraftforge.registries.ForgeRegistries.ITEMS
-                                    .getKey(this.creativeItems.get(idx).m_41720_());
-                    if (key != null) {
-                        this.toggleWaterChecked(key.toString());
-                    }
+                    // 实测五百八十：切换的是"这一档剩余次数"（不是整个物品）
+                    this.toggleWaterChecked(
+                            com.maidsmart.action.ItemUses.key(this.creativeItems.get(idx)));
                     return true;
                 }
             }

@@ -1406,7 +1406,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 留在这张表里是空操作，只为两端配置默认值保持一致）。它在 1.21 带食物组件、能"喝"，
         // 于是被通用判定当成普通食物，喂下去等于给女仆挂【不祥之兆】——玩家喂她是为了回饱食度，
         // 不该顺手给她上一层负面标记，故默认拉黑。
-        AID_FOOD_BLACKLIST = BUILDER.comment("投喂食物黑名单（完整注册名，逗号分隔；留空 = 只按\"能吃\"判定，所有食物可喂）")
+        AID_FOOD_BLACKLIST = BUILDER.comment("投喂食物黑名单（完整注册名，逗号分隔；留空 = 只按\"能吃\"判定，所有食物可喂）。"
+                + "\n\n【剩余次数细分（实测五百八十）】能喂好几次的物品（水壶这类耐久容器）可以按剩余次数分开禁："
+                + "条目写成「完整注册名#剩余次数」（例：mod:water_canteen#1 = 只剩 1 次的别喂），"
+                + "不带 # 的裸注册名 = 该物品**任意剩余次数**都不能喂（旧配置语义不变）。")
                 .translation("config.promaid.combat.aidFoodBlacklist")
                 .defineList("aidFoodBlacklist", java.util.List.of(
                         "minecraft:rotten_flesh",
@@ -1435,7 +1438,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             AID_DRINK_MIN_PURITY = BUILDER.comment("喂水最低水质（0-3，默认 2=可接受的）：喂水时【装水容器】必须达到这个水质等级——口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净。反馈：如果女仆给玩家喂脏水那么反而会耽误玩家，所以默认只喂可接受的及以上；只对装水容器生效（果汁/牛奶这类没有水质概念的饮品不受影响）；填 0 = 脏水也喂")
                 .translation("config.promaid.combat.aidDrinkMinPurity")
                 .defineInRange("aidDrinkMinPurity", 2, 0, 3);
-        AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水")
+        AID_DRINK_WHITELIST = BUILDER.comment("喂水白名单（完整注册名，逗号分隔）：只喂名单里、且「口渴」模组认识（能回口渴值）的饮品——其他 mod 的装水容器把注册名加进来即可；minecraft:potion 只认纯净水（水瓶），其它药水永不喂；留空 = 不喂水。默认：水瓶、陶碗水。"
+                + "\n\n【剩余次数细分（实测五百八十）】能喝好几次的容器（水壶这类）可以按剩余次数分开允许："
+                + "条目写成「完整注册名#剩余次数」（例：mod:water_canteen#4 = 只喂满的那个），"
+                + "不带 # 的裸注册名 = 该物品**任意剩余次数**都算命中（旧配置语义不变）")
                     .translation("config.promaid.combat.aidDrinkWhitelist")
                     .defineList("aidDrinkWhitelist", java.util.List.of(
                             "minecraft:potion",

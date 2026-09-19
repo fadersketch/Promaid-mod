@@ -158,6 +158,31 @@ public final class MaidMealBridge {
         return false;
     }
 
+    /**
+     * v1.2.2 实测五百八十【喝的那一份也走物品自己的 finishUsingItem】。
+     *
+     * 与 {@link #eatByItemLogic} 同一思想，区别是**要把物品交还的容器/残余栈还给调用方**——
+     * 玻璃瓶、空桶、以及"只剩 3 次的水壶"都是这么回来的。旧版喂水是"喂一个**副本** +
+     * 成功后把来源 `shrink(1)`/`extractItem(1)`"，对**多次使用的容器**（水壶这类）等于把整件
+     * 容器当一次性物品扣掉，而且交还的残余栈一旦塞不进背包就被静默丢弃（物品凭空消失）。
+     * 现在改成对**真栈**原地结算，消耗几个由物品自己决定。
+     *
+     * @return 物品交还的栈（空栈 = 没有残余）；**null = 物品自己抛异常**（调用方按"什么都没
+     *         发生"处理，不要消耗任何来源）
+     */
+    public static ItemStack useByItemLogic(net.minecraft.world.entity.LivingEntity user, ItemStack live) {
+        if (user == null || live == null || live.m_41619_()) {
+            return null; // 没有可用的东西 → 调用方按"什么都没发生"处理
+        }
+        try {
+            ItemStack result = live.m_41720_().m_5922_(live, user.m_9236_(), user);
+            // 物品没交还任何东西时归还**真栈本身**（它可能已被原地清空 → 调用方判空跳过）
+            return result == null ? live : result;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private static String cdKey(net.minecraft.world.entity.LivingEntity eater, ItemStack stack) {
         String id;
         try {
