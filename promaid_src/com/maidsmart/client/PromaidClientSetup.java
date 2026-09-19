@@ -61,4 +61,9 @@ public final class PromaidClientSetup {
         // v1.2.0：指标石预览渲染器（绿框跟随指针 / 红框锁定 / 橙色幽灵格）
         com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();
     }
+
+    /** 实测五百六十二：潜行+中键 工位标记的客户端手势识别（仅客户端注册） */
+    public static void registerWorkPosMarker() {
+        com.maidsmart.marker.WorkPosMarkerClient.register();
+    }
 }

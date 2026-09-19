@@ -19,6 +19,8 @@ public final class MaidSmartConfig {
     public static final ForgeConfigSpec.BooleanValue BUILD_TURBO;
 /** v1.2.0 实测五百五十七：建造默认速度迁移标记（内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue BUILD_SPEED_MIGRATED;
+/** v1.2.2 实测五百六十二：排班活动半径默认迁移标记（内部，一次性） */
+public static final ForgeConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_FORCE_CHUNKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_BLOCKS;
@@ -586,6 +588,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 所以用这个标记把"迁移只做一次"钉死：跑过之后玩家再手动打开极速就不会被改回去。
         BUILD_SPEED_MIGRATED = BUILDER.comment("内部标记：建造默认速度迁移（极速→关、x1.5→x1）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.build.speedMigrated").define("speedMigrated", false);
+        // v1.2.2 实测五百六十二：同款一次性标记——scheduleActivityRange 旧默认 32 写在
+        // 老档 toml 里，只凭值分不出"旧默认"和"玩家就要 32"，用标记钉死只迁一次
+        SCHEDULE_RANGE_MIGRATED = BUILDER.comment("内部标记：排班活动半径默认迁移（32→12）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.misc.scheduleRangeMigrated").define("scheduleRangeMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -1645,8 +1651,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.scheduleForceBrainRefresh").define("scheduleForceBrainRefresh", true);
     // v1.1.0 实测一百八十三（反馈："排班状态下增大活动的范围"）：TLM home 模式 restrictTo
     // 的半径下限（TLM 自带 MAID_WORK/IDLE/SLEEP_RANGE 默认只有 8~16 格）
-    SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 32）：排班/在家模式下女仆的活动半径下限——TLM 原版工作/空闲/睡觉半径只有 8~16 格，范围稍大就出不去；本项取 max(本值, TLM 设置) 生效，散步/干活都不再被小圈拴住")
-            .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 32, 8, 512);
+    // v1.2.2 实测五百六十二：默认 32 → 12 回归 TLM 原版量级——旧默认放大三倍正是
+    // "不跟随女仆工作区域走乱"的观感放大器；32 变成明确的大范围选项（迁移只迁旧默认）
+    SCHEDULE_ACTIVITY_RANGE = BUILDER.comment("排班活动半径（格，默认 12）：排班/在家模式下女仆的工作区域半径下限——这是 TLM home 模式的「工作区域」圈（工位/休闲锚点 ± 本值），任务选点、散步、巡逻都被钳在圈内；本项取 max(本值, TLM 设置) 生效，想让她大范围干活就调大（8~512）")
+            .translation("config.promaid.misc.scheduleActivityRange").defineInRange("scheduleActivityRange", 12, 8, 512);
     BUILDER.pop();
 
         // ---- 语音（v1.5.198：TTS 音量倍率 / 系统消息朗读 / 系统语音包 / 语音缓存）----

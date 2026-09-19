@@ -94,8 +94,10 @@ public final class HomePatrolHandler {
                     return;
                 }
             }
-            // home 锚点：restrictCenter（TLM restrictTo 每 2 秒刷新）→ schedulePos 最近点 → 当前位置
-            BlockPos center = maid.m_21534_();
+            // home 锚点：restrictCenter（实测五百六十二起干活中也每 2 秒刷新，且
+            // 排除"零点=未配置"）→ schedulePos 最近点；都拿不到 → 本轮不巡逻
+            // （旧版兜底"当前位置"会让巡逻中心跟着人漂移，是"工作区域走乱"的一环）
+            BlockPos center = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
             if (center == null) {
                 var sp = maid.getSchedulePos();
                 if (sp != null && sp.isConfigured()) {
@@ -103,7 +105,7 @@ public final class HomePatrolHandler {
                 }
             }
             if (center == null) {
-                center = maid.m_20183_();
+                return;
             }
             // 巡逻半径：home 限制半径内（留 1 格余量防触发越界传送），上限 12 格
             int radius = Math.max(3, Math.min((int) maid.m_21535_() - 1, 12));

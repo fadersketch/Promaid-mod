@@ -93,6 +93,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerVoiceHooks();
             // 实测四百四十四：冷却 HUD 渲染器显式注册（1.20.1 注解自动注册未生效）
             com.maidsmart.client.PromaidClientSetup.registerHudHooks();
+            // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
+            com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
         }
     }
 
@@ -146,6 +148,15 @@ public class ProMaidMod {
                 }
                 if ("x1.5".equals(com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_TIER.get())) {
                     com.maidsmart.config.MaidSmartConfig.BUILD_SPEED_TIER.set("x1");
+                }
+            }
+            // v1.2.2 实测五百六十二：排班活动半径默认 32 → 12（回归 TLM home 工作区域
+            // 原版量级）。同款一次性标记——玩家手动设的 32（真想要大圈）不会被误迁。
+            if (!com.maidsmart.config.MaidSmartConfig.SCHEDULE_RANGE_MIGRATED.get()) {
+                com.maidsmart.config.MaidSmartConfig.SCHEDULE_RANGE_MIGRATED.set(true);
+                changed = true;
+                if (com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.get() == 32) {
+                    com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.set(12);
                 }
             }
             changed |= migrateOreTable();

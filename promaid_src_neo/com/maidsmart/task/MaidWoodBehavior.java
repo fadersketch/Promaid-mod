@@ -876,7 +876,9 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             // 队列矿若已被挖掉/失效，走下面的目标失效检查自然跳过，再取下一块）
             if (!this.chainQueue.isEmpty()) {
                 BlockPos chained = this.chainQueue.poll();
-                if (chained != null && this.isWood(level, chained)) {
+                // 实测五百六十二：连锁队列的木材同样受工作圈钳制
+                if (chained != null && this.isWood(level, chained)
+                        && com.maidsmart.follow.WorkAreaClamp.allows(maid, chained)) {
                     this.targetPos = chained;
                     TARGET_SINCE.put(maid.getId(), gameTime);
                     WOODING.add(maid.getUUID());
@@ -2324,7 +2326,16 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return;
         }
         LAST_RELOCATE.put(id, now);
-        ANCHORS.put(id, maid.blockPosition().immutable());
+        // 实测五百六十二：home 模式下女仆在限制圈外（被推/被打飞）时，锚点落在圈心
+        // 而不是脚下——她自然走回工作区域，而不是原地开新框把圈外越砍越远
+        BlockPos anchorPos = maid.blockPosition();
+        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, anchorPos)) {
+            BlockPos cc = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
+            if (cc != null) {
+                anchorPos = cc;
+            }
+        }
+        ANCHORS.put(id, anchorPos.immutable());
         OUT_SINCE.remove(id);
     }
 
@@ -2345,6 +2356,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return; // 5 秒一次
         }
         SLIDE_SINCE.put(id, now);
+        // 实测五百六十二：home 模式锚点固定在工作区域内——迁移正是"伐木女仆越走越远"
+        // 的源头（框框相连追出去半个地图），圈砍空就待在圈里等（树苗长成/换任务）
+        if (maid.hasRestriction()) {
+            return; // home 模式不迁移
+        }
         int step = Math.max(4, com.maidsmart.config.MaidSmartConfig.WOOD_SEARCH_RADIUS.get());
         int dirX = 1;
         int dirZ = 0;
@@ -2596,6 +2612,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             if (value == null) {
                 continue;
             }
+            // 实测五百六十二：home 模式限制圈外的木材不进候选（工作区域=工位锚点圈，
+            // 与 TLM 原生 MaidMoveToBlockTask 同口径）；圈外木材曾靠锚点滑动越追越远
+            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+                continue;
+            }
             // v1.1.0：不把自己 10 秒内搭的方块当木材（搭路材料几乎必是原木——
             // 不跳过会把刚垫脚的原木砍掉，循环拆了再搭）
             if (isWoodingPlaced(level, p)) {
@@ -2667,6 +2688,10 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             }
             if (!this.isWood(level, p)) {
                 continue; // 已被挖掉
+            }
+            // 实测五百六十二：缓存轮同口径——限制圈外的木材不选（home 工作区域）
+            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, p)) {
+                continue;
             }
             // v1.1.0：缓存轮同样跳过自己 10 秒内搭的方块（不当木材砍，与全量扫描同口径）
             if (isWoodingPlaced(level, p)) {

@@ -91,11 +91,20 @@ public class MaidStrollBehavior extends Behavior<EntityMaid> {
     @Override
     protected void m_6735_(ServerLevel level, EntityMaid maid, long gameTime) {
         int r = Math.max(4, MaidSmartConfig.MISC_STROLL_RADIUS.get());
-        float restrictR = maid.m_21535_();     // getRestrictRadius（未限制时 -1）
+        float restrictR = maid.m_21535_();     // getRestrictRadius
         BlockPos center = maid.m_20183_();
-        boolean restricted = restrictR >= 0;
+        // 实测五百六十二：受限与否必须用 hasRestriction（TLM 把它重写为
+        // isHomeModeEnable）——旧版判 restrictR >= 0，但 EntityMaid 的半径在非
+        // home 模式恒为 MaidNonHomeRange（8，构造器写入、永不为 -1），圈心还是
+        // 零点 → 跟随模式永远选不出点，空闲散步在跟随状态下整段失效
+        boolean restricted = maid.m_21536_();
         if (restricted) {
-            center = maid.m_21534_();          // getRestrictCenter——限制区中心
+            BlockPos cc = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
+            if (cc == null) {
+                restricted = false; // home 但锚点没配好（圈心=零点）→ 不按圈钳
+            } else {
+                center = cc;        // getRestrictCenter——限制区中心
+            }
         }
         BlockPos pick = null;
         for (int i = 0; i < 14; i++) {

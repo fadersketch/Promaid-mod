@@ -83,7 +83,9 @@ public final class HomeWorkMovementDriver {
                 return;
             }
             // 无目标 → home 锚点附近随机点直连导航（巡逻式移动）
-            BlockPos center = maid.m_21534_();
+            // 实测五百六十二：锚点链去掉"当前位置"兜底——restrictCenter（干活中也
+            // 刷新，排除零点）→ schedulePos 最近点；都拿不到 → 本轮不巡逻
+            BlockPos center = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
             if (center == null) {
                 var sp = maid.getSchedulePos();
                 if (sp != null && sp.isConfigured()) {
@@ -91,7 +93,7 @@ public final class HomeWorkMovementDriver {
                 }
             }
             if (center == null) {
-                center = maid.m_20183_();
+                return;
             }
             // 巡逻半径：home 限制半径内（留 1 格余量防触发越界传送），上限 12 格
             int radius = Math.max(3, Math.min((int) maid.m_21535_() - 1, 12));
