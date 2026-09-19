@@ -1,4 +1,24 @@
-﻿## 实测五百六十一【修：点「保存并返回」卡死 / 下次进游戏卡在 mod 加载界面（配置自触发写盘风暴）】
+﻿## 实测五百六十三【Sable 同装时：全图扫描被拒查 → 一大片功能静默失效 + 日志刷爆】
+
+**现象**：装了 Sable（Create Aeronautics 的物理引擎）后 `latest.log` 被
+「Aborting entity get for abnormally large AABB」刷爆（实测 ~1 小时 19 万条 / 500MB+）。
+
+**根因**（Sable 2.0.5 字节码实证）：`SubLevelInclusiveLevelEntityGetter#get(AABB, Consumer)`
+开头即 `if (box.getSize() > 100000.0) { logError(box); return; }`——本模组用了多年的
+"有限值全世界 AABB"（±131072/±4096，getSize≈3.7e5）**一个实体都不会交付**。
+
+**影响面**（在 Sable 环境里等于彻底失效，不只是刷日志）：农场锄地/骨粉催熟、钓鱼座椅走位、
+指标石找女仆（含客户端预览连线）、自主战斗还原扫描、仇恨清除、中立威胁驱动、宠物免疫、
+home 巡逻/走动、险境脱离、危险减益、排班扫描、搭路状态清理。
+
+**改法**：14 处"有限值全世界 AABB"统一改 `level.getAllEntities()`（客户端那处改
+`entitiesForRendering()`）——不传 AABB，同时继续绕开早期两个老坑（`EntityMaid.class`
+桶 bug、±∞ 经 `blockToSection` 溢出）。
+
+**验证**：本地无头服 + Sable 2.0.5 A/B —— 旧 jar 45 秒 406 条报错、农场女仆的 `till diag`
+诊断 0 行；修复后同场景 0 条、4 行（扫描确实重新看到了女仆）。
+
+## 实测五百六十一【修：点「保存并返回」卡死 / 下次进游戏卡在 mod 加载界面（配置自触发写盘风暴）】
 
 反馈原文："promaid 配置书在最新版也开始不稳定，一旦点保存有大概率导致游戏崩溃，然后再次进入时
 mc 卡在 mod 加载页面，触发了两次卡死，退回到 1.10 版本恢复正常。"
