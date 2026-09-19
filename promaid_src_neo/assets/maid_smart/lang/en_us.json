@@ -70,5 +70,5 @@
   "config.promaid.combat.flightDashBoost": "Dash Spells: In-flight Speed Boost",
   "config.promaid.combat.flightDashClimbSpells": "Climb Spell IDs",
   "config.promaid.combat.flightDashBoostSpells": "Speed Boost Spell IDs",
-  "config.promaid.combat.flightDashRespectCooldown": "Dash Spells: Respect Spell Cooldown"
+  "config.promaid.combat.flightDashBoostRespectCooldown": "Speed Boost Spells: Respect Spell Cooldown"
 }

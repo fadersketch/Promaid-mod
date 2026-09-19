@@ -1740,11 +1740,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         return lvl > 0 ? lvl : MaidSpellCastCompat.DASH_SPELL_LEVEL;
     }
 
-    /** 写回冷却时的取值：尊重法术自身冷却时取 max(空袭间隔, 法术自身冷却) */
-    private static int dashCooldownFor(String spellId) {
+    /**
+     * 写回冷却时的取值（按角色分档）。
+     *
+     * @param boost true = 「提供速度」（飞行加速）：按配置决定是否尊重法术自身冷却；
+     *              false = 「提供高度」（起飞/补高）：**始终只按空袭间隔**，
+     *                      不受法术自身冷却约束——依据见配置项
+     *                      {@code COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN} 的注释
+     *                      （位移手段一向让女仆比玩家宽松：激流三叉戟忽略"水中/雨中"限制；
+     *                       而且不这样就满足不了"没有烟花也能持续飞"）。
+     */
+    private static int dashCooldownFor(String spellId, boolean boost) {
         int ours = com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get();
         try {
-            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN.get()) {
+            if (!boost || !com.maidsmart.config.MaidSmartConfig
+                    .COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN.get()) {
                 return ours;
             }
             return Math.max(ours, com.maidsmart.combat.MaidSpellCastCompat.spellCooldownTicks(spellId));
@@ -1774,14 +1784,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (gameTime < DASH_NEXT.getOrDefault(id, 0L)) {
             return false;
         }
-        String spell = MaidSpellCastCompat.findAvailableDashSpell(maid, climbSpellIds());
+        // 起飞/补高**不看法术自身冷却**（见 dashCooldownFor 注释）
+        String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(maid, climbSpellIds());
         if (spell == null) {
             return false;
         }
         MaidSpellCastCompat.clearCastTarget(maid);       // 别让它把抬头掰平（见方法注释）
         faceUpForward(maid, target, DASH_LAUNCH_PITCH);  // 抬头
         if (!MaidSpellCastCompat.castSpecific(maid, spell,
-                dashSpellLevel(maid, spell), dashCooldownFor(spell))) {
+                dashSpellLevel(maid, spell), dashCooldownFor(spell, false))) {
             return false;
         }
         if (takeoff) {
@@ -1818,7 +1829,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return false;
         }
         if (!MaidSpellCastCompat.castSpecific(maid, spell,
-                dashSpellLevel(maid, spell), dashCooldownFor(spell))) {
+                dashSpellLevel(maid, spell), dashCooldownFor(spell, true))) {
             return false;
         }
         markDash(id, gameTime, maid, "空中冲刺加速（" + spell + "）");

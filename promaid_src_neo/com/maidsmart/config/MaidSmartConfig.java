@@ -474,13 +474,20 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      */
     public static final ModConfigSpec.IntValue COMBAT_FLIGHT_DASH_INTERVAL;
     /**
-     * v1.2.0 实测五百六十九：写回冷却时**至少尊重法术自身的冷却**（默认开）。
+     * v1.2.0 实测五百六十九：**「提供速度」那一类**是否尊重法术自身冷却（默认开）。
      *
-     * 例：烈焰冲锋原版冷却 10 秒。开启本项时，我们写回的冷却取
-     * `max(空袭位移间隔, 法术自身冷却)`——不会让她比玩家用同一法术时更频繁；
-     * 关掉则完全按我们的间隔来（窜得更勤，但等于给她开了小灶）。
+     * 【口径：起飞不设限、加速照旧】"提供高度"（起飞/补高）**始终不受法术自身冷却约束**——
+     * 只按 {@link #COMBAT_FLIGHT_DASH_INTERVAL} 的节奏放。依据有两条：
+     * ① 本模组对**位移手段**一向是"让女仆比玩家宽松"：激流三叉戟那一套就是
+     *   **忽略原版"必须在水中/雨中"的限制**（玩家做不到、女仆能做）；
+     * ② "平地起飞"这个需求本身要求她**没有烟花也能持续飞**——若起飞也卡法术冷却，
+     *   升腾 15 秒一记只能把她抬约 6 格、随后缓降（实测），需求就等于没满足。
+     *
+     * 本项管的是"提供速度"那一类（飞行加速）：开启时写回冷却取
+     * `max(空袭位移间隔, 法术自身冷却)`（例：烈焰冲锋 10 秒），不会让空中冲刺比玩家更频繁；
+     * 关掉则那一类也完全按空袭间隔来。
      */
-    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN;
+    public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN;
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
      *
@@ -1423,8 +1430,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_FLIGHT_DASH_INTERVAL = BUILDER.comment("位移法术间隔（tick，默认 40 = 2 秒）：两次起飞/冲刺/补高之间的最短间隔（我们这边的节流下限）。搭配下面那条「尊重法术自身冷却」一起看——默认下真实间隔取两者较大值")
                 .translation("config.promaid.combat.flightDashInterval")
                 .defineInRange("flightDashInterval", 40, 10, 600);
-        COMBAT_FLIGHT_DASH_RESPECT_COOLDOWN = BUILDER.comment("位移法术·尊重法术自身冷却（默认开）：写回冷却时取 max(空袭位移间隔, 法术自身冷却)——例如烈焰冲锋原版冷却 10 秒，开启后她不会比玩家用同一法术更频繁；关掉则完全按上面的间隔来（窜得更勤，等于给她开小灶）")
-                .translation("config.promaid.combat.flightDashRespectCooldown").define("flightDashRespectCooldown", true);
+        COMBAT_FLIGHT_DASH_BOOST_RESPECT_COOLDOWN = BUILDER.comment("位移法术·【提供速度】尊重法术自身冷却（默认开）：只管空中冲刺那一类——开启时写回冷却取 max(空袭位移间隔, 法术自身冷却)（例：烈焰冲锋原版 10 秒），她不会比玩家更频繁；关掉则那一类也完全按上面的间隔来。\n\n注意【提供高度】（起飞/补高）**始终不受法术自身冷却约束**、只按上面的间隔放——依据是本模组对位移手段一向让女仆比玩家宽松（激流三叉戟就是忽略原版「必须在水中/雨中」的限制），而且「平地起飞」本身就要求她没烟花也能持续飞：若这里也卡冷却，升腾 15 秒一记只抬约 6 格后缓降（实测），需求等于没满足")
+                .translation("config.promaid.combat.flightDashBoostRespectCooldown")
+                .define("flightDashBoostRespectCooldown", true);
         COMBAT_FLIGHT_SPELL_CAST_RANGE = BUILDER.comment("空袭施法距离（格，默认 24）：空袭中只在目标进入这个 3D 距离内才发起施法。默认 24 与法术模组自己的 maxSpellRange 一致（它的任务行为用的就是这个上限）；调大可让她在更远处起手（法术飞行途中还能命中），调小 = 只有贴近了才放法术")
                 .translation("config.promaid.combat.flightSpellCastRange")
                 .defineInRange("flightSpellCastRange", 24.0, 4.0, 64.0);
