@@ -21,6 +21,11 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean checkExtraStartConditions(ServerLevel level, EntityMaid maid) {
+        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不自动换装】——她的主手要一直
+        // 拿着那个模组的道具（万能手杖），换掉就等于把她的玩法拆了
+        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+            return false;
+        }
         // v1.2.0：飞行作战（近战/远战）下【不自动切换武器/盾】——玩家指定什么就是什么；
         // 换装只由 MaidFlightKit.equip 负责"补齐三件套"，不做主手武器择优替换
         if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {

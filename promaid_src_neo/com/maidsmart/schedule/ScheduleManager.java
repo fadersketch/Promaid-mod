@@ -164,6 +164,13 @@ public final class ScheduleManager {
             diag(maid, "off", who + " 排班总开关关闭（misc.scheduleEnabled=false）——调度停摆", level);
             return;
         }
+        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【排班暂缓】——玩家手动把她切到
+        // 那个模式，本模组安排的战术（含排班换段）全体让位，只留那个模组自己的玩法；
+        // 玩家把她切回来之后排班照常接管（日程数据一直保留，没改过任何东西）
+        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+            diag(maid, "puppet", who + " 傀儡模式（第三方玩法）中——排班暂缓，切回后照常接管", level);
+            return;
+        }
         // v1.1.0 实测七十：排班中的女仆自动 home 模式——旧档已开排班的女仆在这里
         // 自动迁移；建造行为临时关过 home 的也会被重新扶正（有翻转才写，无存档压力）
         if (!maid.isHomeModeEnable()) {

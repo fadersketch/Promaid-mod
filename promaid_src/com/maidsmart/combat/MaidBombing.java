@@ -16,6 +16,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
+import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
@@ -118,6 +119,11 @@ public final class MaidBombing {
 
     private static int cfgTntInterval() {
         return MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get();
+    }
+
+    /** v1.2.2 实测五百九十：TNT 追踪（默认开）——引信期间朝目标修正朝向 */
+    private static boolean cfgTntTrack() {
+        return MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.get();
     }
 
     private static double cfgTntSpeed() {
@@ -371,6 +377,28 @@ public final class MaidBombing {
     }
 
     /** 待回收的轰炸底座（黑曜石 / 重生锚 / 床）：起爆后保留一会儿再撤（不掉落） */
+    /**
+     * v1.2.2 实测五百九十【追踪弹】：反馈原文「TNT 再加一个小型追踪功能，TNT 会朝着目标的
+     * 方向飞行（只更改方向，速度不变）直到爆炸。」
+     *
+     * 记住这一发的初速度大小，引信期间每 tick 把速度**方向**掰向目标（大小不变）——
+     * 所以它是「拐弯」而不是「加速」，观感就是炮弹拖着弧线追人。
+     */
+    private static final class Homing {
+        final ServerLevel level;
+        final PrimedTnt tnt;
+        final LivingEntity target;
+        /** 初速度大小（格/tick）：每 tick 只改方向，这个值保持不变 */
+        final double speed;
+
+        Homing(ServerLevel level, PrimedTnt tnt, LivingEntity target, double speed) {
+            this.level = level;
+            this.tnt = tnt;
+            this.target = target;
+            this.speed = Math.max(0.2, speed);
+        }
+    }
+
     private static final List<Reclaim> RECLAIMS = new ArrayList<>();
 
     private static final class Reclaim {
@@ -408,6 +436,14 @@ public final class MaidBombing {
     private static final Map<UUID, Phase> PHASE = new HashMap<>();
     private static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
     private static final List<Bomb> PENDING = new ArrayList<>();
+    /** v1.2.2 实测五百九十：攻击链路收尾登记的「待投放」（女仆 UUID → 登记时刻） */
+    private static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
+    /** 上一次扫描时她是否处于攻击冷却（无 → 有的跳变 = 刚打完一记） */
+    private static final Map<UUID, Boolean> COOLDOWN_SEEN = new HashMap<>();
+    /** 追踪中的 TNT（引信期间每 tick 把方向掰向目标；只改方向、不改速度） */
+    private static final List<Homing> HOMING = new ArrayList<>();
+    /** 「待投放」的有效期（tick）：挂这么久还没投出去就作废，免得留一发陈年老弹 */
+    private static final long ARMED_TIMEOUT = 200L;
     /** 相位最长存活（tick）：超了当陈旧状态丢掉（防"打到一半目标没了"留下的尾巴） */
     private static final long PHASE_TIMEOUT = 100L;
     private static final int MAX_PENDING = 256;
@@ -463,6 +499,9 @@ public final class MaidBombing {
         }
         PHASE.remove(maidId);
         TNT_NEXT.remove(maidId);
+
+        TNT_ARMED.remove(maidId);
+        COOLDOWN_SEEN.remove(maidId);
     }
 
     public static void clearAll() {
@@ -470,6 +509,10 @@ public final class MaidBombing {
         TNT_NEXT.clear();
         PENDING.clear();
         RECLAIMS.clear();
+
+        TNT_ARMED.clear();
+        COOLDOWN_SEEN.clear();
+        HOMING.clear();
         combatScanTick = 0;
     }
 
@@ -486,6 +529,12 @@ public final class MaidBombing {
     public static boolean tryStartMelee(ServerLevel level, EntityMaid maid, LivingEntity target) {
         try {
             if (level == null || maid == null || target == null || !cfgMelee()) {
+                return false;
+            }
+
+            // v1.2.2 实测五百九十：傀儡模式（第三方玩法 Modular Golems 的「傀儡师」）期间
+            // 不介入——轰炸也是本模组的战术，那个模式要的是原汁原味的傀儡装配玩法
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
                 return false;
             }
             UUID id = maid.m_20148_();
@@ -554,6 +603,13 @@ public final class MaidBombing {
         if (ph == null) {
             return false;
         }
+
+        // v1.2.2 实测五百九十：傀儡模式期间不介入——打到一半被玩家切过去也立刻收手
+        if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+            rollback(level, ph);
+            PHASE.remove(id);
+            return false;
+        }
         try {
             if (target == null || !maid.m_6084_() || gameTime - ph.start > PHASE_TIMEOUT) {
                 rollback(level, ph);
@@ -574,6 +630,10 @@ public final class MaidBombing {
                 return false;
             }
             PHASE.remove(id);
+
+            // v1.2.2 实测五百九十【TNT 挂链路最末】：轰炸这一段走完 = 这一次攻击链路收尾，
+            // TNT 就挂在最后（有料就扔，缺料静默跳过；最短间隔只当下限，见 flushTnt）
+            flushTnt(level, maid, target, id, gameTime);
             return false; // 交还链路：她接着放烟花起飞，0.5 秒后那边起爆
         } catch (Throwable t) {
             log("执行异常：" + t);
@@ -861,18 +921,18 @@ public final class MaidBombing {
     /* ==================== 远程空袭：投掷 TNT ==================== */
 
     /**
-     * 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：把她的当前目标直接交给
-     * 共用投掷实现——与下面"所有战斗模式"那条走的是**同一套投掷与冷却**，不会重复扔。
+     * 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：调用点在
+     * {@code fireRanged} 之后 = 这一次开火打完，于是直接走"攻击链路收尾"（
+     * {@link #onAttackChainEnd}）。与下面"所有战斗模式"那条共用同一套最短间隔，不会重复扔。
      */
     public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         try {
             if (level == null || maid == null || target == null || !cfgTnt()) {
                 return;
             }
-            if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
-                return;
-            }
-            throwTntAt(level, maid, target, id, gameTime);
+            // v1.2.2 实测五百九十【改挂攻击链路】：本方法由空袭远程链路在 fireRanged
+            // **之后**调用 = 「这一次开火打完」，所以直接走链路收尾（最短间隔只当下限）
+            onAttackChainEnd(level, maid, target);
         } catch (Throwable t) {
             log("投掷异常：" + t);
         }
@@ -884,15 +944,26 @@ public final class MaidBombing {
      * 口径（对照女仆生存 MaidTntInteractionController 的做法，自己实现）：
      * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
      *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
-     * ② 有 TNT + 打火石（缺料静默跳过，不占用冷却）；
-     * ③ 冷却到点 + 半径内有**合法敌对目标**；
-     * ④ 防误伤：目标先过 {@link FriendlyFireGuard#isFriendly}（主人 / 同主女仆 / 友军一律不打），
+     * ② 有 TNT + 打火石（缺料静默跳过，不占用间隔）；
+     * ③ **打完一记之后才扔**（v1.2.2 实测五百九十改）：攻击冷却记忆由无到有 = 刚完成一次
+     *    攻击链路收尾 → 登记待投放；距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
+     *    挂着等下一记——最短间隔只当下限，不再是驱动本身（详见 {@link #onAttackChainEnd}）；
+     * ④ 半径内有**合法敌对目标**（优先用她记忆里的攻击目标，不合法再按半径找）；
+     * ⑤ 防误伤：目标先过 {@link FriendlyFireGuard#isFriendly}（主人 / 同主女仆 / 友军一律不打），
      *    再过任务自己的 {@code IAttackTask.canAttack}（与 TLM 的索敌口径一致）；
-     * ⑤ 女仆自己残血（≤ 阈值）时**连投**数发，横向散开——照女仆生存那套"低血量爆发"思路。
+     * ⑥ 女仆自己残血（≤ 阈值）时**连投**数发，横向散开——照女仆生存那套"低血量爆发"思路。
+     * ⑦ 傀儡模式（第三方玩法）期间整段不介入。
+     *
+     * 附：本方法只跑【她自己的战斗链路】——TNT 由 TLM 的攻击行为自己触发（近战挥砍/远程开火
+     * 都会写攻击冷却记忆），我们只负责"这一记打完的收尾动作"，不额外替她索敌开火。
      */
     public static void tickCombatTnt(ServerLevel level, EntityMaid maid) {
         try {
             if (level == null || maid == null || !cfgTnt()) {
+                return;
+            }
+            // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间不介入
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
                 return;
             }
             if (!com.maidsmart.task.MaidWorkTags.isCombatTask(maid)) {
@@ -903,19 +974,156 @@ public final class MaidBombing {
             }
             UUID id = maid.m_20148_();
             long gameTime = level.m_46467_();
+            // ① 攻击链路完成检测：攻击冷却记忆【由无到有】= 她刚打完一记（TLM 近战与远程
+            //    攻击都会写这个记忆）——TNT 因此挂在「打完这一记」后面，而不是自己计时开火
+            boolean cooling = maid.m_6274_().m_21952_(MemoryModuleType.f_26373_).isPresent();
+            Boolean prev = COOLDOWN_SEEN.put(id, cooling);
+            if (cooling && (prev == null || !prev)) {
+                TNT_ARMED.put(id, gameTime);
+            }
+            // ② 这一轮还没打完任何一记 → 不投
+            Long armedAt = TNT_ARMED.get(id);
+            if (armedAt == null) {
+                return;
+            }
+            if (gameTime - armedAt > ARMED_TIMEOUT) {
+                TNT_ARMED.remove(id); // 挂太久：作废
+                return;
+            }
             if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
-                return;
+                return; // 最短间隔（默认 200 tick = 10 秒）没到：挂着，等下一记
             }
-            if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
-                return; // 不刚需：缺料直接跳过
+            LivingEntity target = null;
+            try {
+                target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
+            } catch (Throwable ignored) {
             }
-            LivingEntity target = findThrowTarget(level, maid);
-            if (target == null) {
-                return;
+            if (!legalThrowTarget(maid, target)) {
+                target = findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找
             }
-            throwTntAt(level, maid, target, id, gameTime);
+            flushTnt(level, maid, target, id, gameTime);
         } catch (Throwable t) {
             log("战斗投掷异常：" + t);
+        }
+    }
+
+    /* ==================== v1.2.2 实测五百九十：TNT 挂进攻击链路 ==================== */
+
+    /**
+     * 【为什么要改】反馈原文：「投掷 TNT 这个功能最好是跟末影水晶一样放在攻击链条的某个部分，
+     * 我的建议是适当的正常攻击链路走完之后加到最后。而不是一个固定的 Cd，CD 仅作为最小释放，
+     * 间隔 10 秒左右。」
+     *
+     * 于是把「冷却到点就扔」换成「打完一记之后才扔」：
+     * ① 攻击链路收尾时登记一发待投放（{@link #TNT_ARMED}）；
+     * ② 投放只在【登记过之后】发生，且距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
+     *    挂着等下一记——最短间隔只当下限，不再是驱动本身；
+     * ③ 挂太久（{@link #ARMED_TIMEOUT}）自动作废，免得留一发陈年老弹。
+     *
+     * 登记点（三种链路，见各自的调用处）：
+     * - 近战空袭：猛击命中那一记打完 → 轰炸相位（黑曜石/水晶、重生锚、床）走完 → 链路最末投；
+     * - 远程空袭：盘旋期间每次开火之后（{@link #tickRangedTnt}）；
+     * - 其余战斗任务：扫描里发现她的攻击冷却记忆【由无到有】= 刚打完一记（<b>共用一个最短
+     *   间隔，不会两边各扔一发</b>）。
+     */
+    public static void onAttackChainEnd(ServerLevel level, EntityMaid maid, LivingEntity target) {
+        try {
+            if (level == null || maid == null || !cfgTnt()) {
+                return;
+            }
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+                return; // 傀儡模式（第三方玩法）期间不介入
+            }
+            UUID id = maid.m_20148_();
+            long gameTime = level.m_46467_();
+            TNT_ARMED.put(id, gameTime);
+            flushTnt(level, maid, target, id, gameTime);
+        } catch (Throwable t) {
+            log("链路投掷异常：" + t);
+        }
+    }
+
+    /**
+     * 链路末段真正投放：过了最短间隔 + 有料 + 目标合法才扔；扔成功才清「待投放」。
+     * 放在这里的好处：缺料那一下不会白等一个间隔（下一记只要料齐了立刻投）。
+     */
+    private static void flushTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        try {
+            if (level == null || maid == null || !cfgTnt()) {
+                return;
+            }
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+                return;
+            }
+            if (!legalThrowTarget(maid, target)) {
+                return; // 没目标（或目标不合法）：挂着等下一记
+            }
+            if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
+                return; // 最短间隔没到
+            }
+            if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
+                return; // 不刚需：缺料直接跳过（不占用间隔）
+            }
+            if (throwTntAt(level, maid, target, id, gameTime) > 0) {
+                TNT_ARMED.remove(id);
+            }
+        } catch (Throwable t) {
+            log("投放异常：" + t);
+        }
+    }
+
+    /**
+     * 追踪弹每 tick 一次（在实体 tick 之前调用，于是这一 tick 的原版物理按「新方向」走）。
+     * 这一发炸了 / 目标没了 → 摘掉条目（剩下按当前朝向直飞），绝不留悬挂引用。
+     */
+    private static void tickHoming() {
+        for (Iterator<Homing> it = HOMING.iterator(); it.hasNext(); ) {
+            Homing h = it.next();
+            try {
+                if (h.tnt == null || h.tnt.m_213877_()) {
+                    it.remove(); // 已经炸了 / 被清掉了
+                    continue;
+                }
+                if (h.target == null || !h.target.m_6084_() || h.target.m_213877_()
+                        || h.target.m_9236_() != h.level) {
+                    it.remove(); // 目标没了 / 换维度了 → 这一发按当前朝向直飞
+                    continue;
+                }
+                double dx = h.target.m_20185_() - h.tnt.m_20185_();
+                double dy = (h.target.m_20186_() + h.target.m_20192_() * 0.5) - h.tnt.m_20186_();
+                double dz = h.target.m_20189_() - h.tnt.m_20189_();
+                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                if (len < 1.0) {
+                    continue; // 已经贴脸：交给原版物理自然落点（不再硬掰，免得绕着目标打转）
+                }
+                double nx = dx / len;
+                double ny = dy / len;
+                double nz = dz / len;
+                // 补一点抬升抵消 TNT 每 tick 的 −0.04 重力，方向才是真的指向目标
+                ny += 0.04 / h.speed;
+                double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
+                if (nl < 1.0E-6) {
+                    continue;
+                }
+                h.tnt.m_20256_(new Vec3(nx / nl * h.speed, ny / nl * h.speed, nz / nl * h.speed));
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 该实体能不能当投掷目标（防误伤 + 「她的任务认的敌人」两道，与 findThrowTarget 同口径） */
+    private static boolean legalThrowTarget(EntityMaid maid, LivingEntity le) {
+        try {
+            if (le == null || le == maid || !le.m_6084_()) {
+                return false;
+            }
+            if (FriendlyFireGuard.isFriendly(maid, le)) {
+                return false; // 防误伤：主人 / 同主女仆 / 友军不扔
+            }
+            return maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask at
+                    && at.canAttack(maid, le); // 只打「她的任务认的敌人」（与 TLM 索敌同口径）
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -990,7 +1198,7 @@ public final class MaidBombing {
      * 手法照"女仆生存"那套思路自己实现：水平单位向量 × 初速 + 竖直补偿（按 TNT 重力估飞行时间），
      * 落点按目标中心算；连投时按序号横向散开，避免三枚叠在一条线上。
      */
-    private static void throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+    private static int throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         int want = throwCount(maid);
         int thrown = 0;
         for (int i = 0; i < want; i++) {
@@ -1061,6 +1269,11 @@ public final class MaidBombing {
                 giveBack(maid, tntStack);
                 break;
             }
+
+            // v1.2.2 实测五百九十【追踪】：登记这一发（引信期间每 tick 把方向掰向目标）
+            if (cfgTntTrack() && HOMING.size() < MAX_PENDING) {
+                HOMING.add(new Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz)));
+            }
             SoundEvent snd = sound(ID_TNT_PRIMED_SOUND);
             if (snd != null) {
                 level.m_5594_(null, maid.m_20183_(), snd, SoundSource.BLOCKS, 1.0f, 1.0f);
@@ -1080,6 +1293,7 @@ public final class MaidBombing {
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
                     + "（引信 " + cfgTntFuse() + " tick）");
         }
+        return thrown;
     }
 
     /* ==================== 起爆 ==================== */
@@ -1091,6 +1305,8 @@ public final class MaidBombing {
         }
         try {
             // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
+            // v1.2.2 实测五百九十：追踪弹每 tick 修正一次朝向（在实体 tick 之前）
+            tickHoming();
             for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
                 Reclaim r = ri.next();
                 if (r.level == null) {
@@ -1144,7 +1360,7 @@ public final class MaidBombing {
             log("起爆异常：" + t);
         }
         // v1.2.2 实测五百八十八：战斗任务女仆的 TNT 投掷扫描（4 tick 一次；投掷本身有 ≥20 tick 冷却）
-        if ((++combatScanTick % 4) == 0) {
+        if ((++combatScanTick % 2) == 0) {
             try {
                 net.minecraft.server.MinecraftServer server = event.getServer();
                 if (server != null) {

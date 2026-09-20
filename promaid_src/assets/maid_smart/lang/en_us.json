@@ -121,5 +121,8 @@
   "config.promaid.bombing.tntBurstCount": "Low-Health Burst Count",
   "config.promaid.bombing.reclaimSeconds": "Bomb Base Reclaim Delay (s)",
   "config.promaid.bombing.anchorNeedsGlowstone": "Respawn Anchor Needs Glowstone",
-  "config.promaid.bombing.airPlace": "Force Place in Air"
+  "config.promaid.bombing.airPlace": "Force Place in Air",
+  "config.promaid.bombing.tntTrack": "TNT Homing",
+  "config.promaid.compat": "Third-party Compat",
+  "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)"
 }

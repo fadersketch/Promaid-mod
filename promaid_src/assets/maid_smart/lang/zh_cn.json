@@ -260,5 +260,8 @@
   "config.promaid.bombing.tntBurstCount": "连投最多（发）",
   "config.promaid.bombing.reclaimSeconds": "炸弹底座回收延迟（秒）",
   "config.promaid.bombing.anchorNeedsGlowstone": "重生锚需要萤石",
-  "config.promaid.bombing.airPlace": "空中强制放置"
+  "config.promaid.bombing.airPlace": "空中强制放置",
+  "config.promaid.bombing.tntTrack": "TNT 追踪飞行",
+  "config.promaid.compat": "第三方兼容",
+  "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）"
 }
