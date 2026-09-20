@@ -32,6 +32,7 @@
 - 新类 `com.maidsmart.compat.MaidModeCompat`：UID 硬编码比对——**没装那个模组时它就是一句恒假判断**（黑名单为空，一切照旧）；
 - **自主系统永不切进去**：① `AutoCombatSwitch` 的战斗任务候选池（`buildPools`，入战与战中换战术共用）过滤掉它；
   ② LLM 工具 `smart_switch_task` 的可用任务列表不再列给它、硬性拒绝切过去（回一句"已列入黑名单，请手动切换"）；
+  ②b **TLM 自带的 `switch_work_task` 也上了一道 mixin 闸**（`PuppetModeLlmGuardMixin`）：它由 `AutonomousTaskManager` 的自主决策驱动、完全不经过本模组代码——在 `onCall(String, Result, LLMCallback)` 入口按 `Result.id()` 拒绝黑名单模式，命中即回一条工具结果并整段取消；`require = 0`（TLM 换版本改了描述符时只让这道闸失效，绝不启动崩溃），已用临时 `require = 1` 在两树各跑一次专用服务器确认注入点对得上；
   ③ `tryEngageMaid` 见到她已在该模式时返回 2（不切走、不换战术），还原扫描也只清残留标记、不还原。
 
 ### ⑤ 玩家手动切进去之后：本模组战术全体让位
