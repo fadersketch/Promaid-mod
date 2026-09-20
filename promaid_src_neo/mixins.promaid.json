@@ -54,7 +54,8 @@
     "MaidSwimGlideMixin",
     "EntityTickBlameMixin",
     "EntitySetDeltaMovementMixin",
-    "ExplosionWindGuardMixin"
+    "ExplosionWindGuardMixin",
+    "PuppetModeLlmGuardMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
