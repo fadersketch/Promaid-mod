@@ -841,7 +841,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (inReach && (t >= 2 || nearGround || landed) && smashHit(level, maid, target, gameTime)) {
             // v1.2.2 实测五百八十七【空袭轰炸】：这一记打中了 → 起手轰炸（材料齐才起手；
             // 相位接管下面两 tick：先放方块、再放水晶，之后照旧 endSmash → 起飞）。
-            MaidBombing.tryStartMelee(level, maid, target);
+            // v1.2.2 实测五百九十【TNT 在链路最末】：这一记猛击打完 = 攻击链路收尾——
+            // 没起手轰炸段（材料不齐）就地投 TNT；起手了则由 MaidBombing.tick 在该段收尾
+            // 之后投，顺序是「猛击 → 黑曜石/末地水晶那一段 → TNT」
+            if (!MaidBombing.tryStartMelee(level, maid, target)) {
+                MaidBombing.onAttackChainEnd(level, maid, target);
+            }
             endSmash(maid, id, gameTime);
             return;
         }

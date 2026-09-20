@@ -117,6 +117,13 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
      *  被怪物锁定在接战范围内都会进入战术战斗（"该打就打"）；轻量自保只负责保命
      *  动作，两者互补不冲突（盾牌 mixin 判定用） */
     public static boolean isTacticsEnabled(EntityMaid maid) {
+        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【战术全体让位】——走位/跳劈/
+        // 举盾/威胁驱动全部停手，只保留那个模组自己的玩法。这条是总闸：isActive 挂在
+        // 它上面，于是移动抑制 / 举盾 mixin / 巡逻 / 威胁驱动一并让位。
+        // 保命动作（自保/落地水/防火）不走这条闸——那是「别死」的保险，不是战术。
+        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+            return false;
+        }
         return com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS.get();
     }
 

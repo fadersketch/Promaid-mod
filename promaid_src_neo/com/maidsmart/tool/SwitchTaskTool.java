@@ -201,6 +201,14 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
             return callback.addToolResult("认不出任务「" + result.task() + "」。可用任务："
                     + availableIds(maid), toolId);
         }
+
+        // v1.2.2 实测五百九十：第三方玩法模式（傀儡师）已在黑名单里——LLM 自主切换一律
+        // 不许切过去；玩家想让她去这个模式请在 TLM 面板手动切（届时本模组战术全体让位）
+        if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(task)) {
+            return callback.addToolResult("「" + result.task() + "」是第三方玩法模式（"
+                    + com.maidsmart.compat.MaidModeCompat.descriptionOf(task)
+                    + "），已列入黑名单、不参与自主切换——要她去这个模式请手动切换。", toolId);
+        }
         StringBuilder sb = new StringBuilder();
         try {
             if (maid.getTask() != task) {
@@ -324,6 +332,10 @@ public class SwitchTaskTool implements ITool<SwitchTaskTool.Result> {
         int n = 0;
         try {
             for (IMaidTask t : TaskManager.getNotHiddenTaskList(maid)) {
+                // v1.2.2 实测五百九十：黑名单模式（傀儡师）不列给模型——防它自己挑过去
+                if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(t)) {
+                    continue;
+                }
                 if (n++ >= 40) {
                     sb.append(" …");
                     break;

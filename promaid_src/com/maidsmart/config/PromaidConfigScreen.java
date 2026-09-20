@@ -2413,11 +2413,14 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
                 "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与打火石；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
         this.rows.add(new NumRow("投掷间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷间隔（tick，默认 120 = 6 秒）：两次投掷之间的最短间隔"));
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷最短间隔（tick，默认 200 = 10 秒）：TNT 已改为【攻击链路末段】投放（打完一记之后才扔），这条只是两次投放之间的下限；调小 = 更凶更费 TNT"));
         this.rows.add(new NumRow("TNT 引信（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE, s), "投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间"));
         this.rows.add(new NumRow("投掷初速（格/tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED, s), "投掷初速（格/tick，默认 0.9）：调大飞得更快更直，调小抛物线更明显"));
+        this.rows.add(new BoolRow("TNT 追踪飞行", MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.set(v),
+                "TNT 追踪飞行（默认开）：引信期间朝目标拐弯——只改方向、速度不变，目标跑得快也能砸到；关 = 纯抛物线"));
         this.rows.add(new NumRow("投掷索敌半径（格）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE, s), "投掷索敌半径（格，默认 12）：战斗任务下自动找这么近的敌人扔 TNT（照《女仆生存》的 12 格）"));
         this.rows.add(new NumRow("残血连投阈值（0-1）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get()),
@@ -2443,6 +2446,10 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("淡粉色标记（客户端）", MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.set(v),
                 "女仆放置物的淡粉色标记（默认开）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充（纯客户端渲染）"));
+        this.rows.add(new SectionRow("第三方玩法模式（实测五百九十）", false));
+        this.rows.add(new BoolRow("傀儡模式黑名单", MaidSmartConfig.COMPAT_PUPPET_BLACKLIST.get(),
+                v -> MaidSmartConfig.COMPAT_PUPPET_BLACKLIST.set(v),
+                "傀儡模式黑名单（默认开）：检测到《傀儡装配》Modular Golems 的女仆模式「傀儡师」时自动列入——自主参战/LLM 自主切换永不切进去；玩家手动切进去后本模组战术（走位/跳劈/举盾/投弹/自动换装/排班换段）全体让位，只留那个模组自己的玩法，切回来即恢复（保命动作不受影响）"));
 
     }
 

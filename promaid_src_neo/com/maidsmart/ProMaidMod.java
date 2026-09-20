@@ -130,6 +130,14 @@ public class ProMaidMod {
             // 只迁移"还是旧默认值"的配置，玩家自己调过的值不动
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get() == 120) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.set(40);
+                changed = true;
+            }
+            // v1.2.2 实测五百九十：投掷间隔默认 40 → 200（TNT 改挂攻击链路的末段，
+            // 这条间隔从此只是"两次投放之间的下限"= 10 秒；上面那次 120→40 的老配置
+            // 会紧接着被这一次接到 200，玩家自己调过的值一律不动）
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get() == 40) {
+                com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.set(200);
+                changed = true;
             }
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
