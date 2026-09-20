@@ -624,6 +624,11 @@ public class AutoCombatSwitch {
         if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
             return 2;
         }
+        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）下【自主作战不介入】——不切走、
+        // 不换战术、不还原（返回 2 = 「已是战斗任务，跳过」；她由玩家安排着玩那个玩法）
+        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+            return 2;
+        }
         // v1.1.0 实测一百六十三（反馈："退而求其次——让排班拥有更高的优先级。排班
         // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
         // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
@@ -779,6 +784,12 @@ public class AutoCombatSwitch {
                     continue;
                 }
                 activeCount++;
+                // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不还原、不干预】——
+                // 只清掉残留的战斗标记就退出（她的任务由玩家管，本模组战术全体让位）
+                if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
+                    clearMarkers(maid);
+                    continue;
+                }
                 // v1.1.0 实测一百六十三：排班开启的女仆不参与自主战斗——残留的战斗
                 // 标记直接清掉（她的任务/模式由日程表管理，战斗还原链不再适用）
                 if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
@@ -1240,6 +1251,12 @@ public class AutoCombatSwitch {
                     continue;
                 }
             } catch (Throwable ignored) {
+            }
+            // v1.2.2 实测五百九十【第三方玩法模式黑名单】：傀儡师（傀儡装配 Modular
+            // Golems）不是本模组该碰的战斗模式——自主参战/战中换战术都永不切进去
+            //（玩家手动切过去不受影响；届时本模组战术全体让位，见 MaidModeCompat）
+            if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(task)) {
+                continue;
             }
             try {
                 if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
