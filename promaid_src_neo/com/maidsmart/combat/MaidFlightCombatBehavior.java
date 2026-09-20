@@ -250,7 +250,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_NEXT_CAST.remove(maidId);
         SPELL_LAST_LOG.remove(maidId);
         DASH_NEXT.remove(maidId);
-        DASH_LAST_LOG.remove(maidId);        MaidBombing.forget(maidId);
+        DASH_LAST_LOG.remove(maidId);
+        MaidBombing.forget(maidId);
         MAX_Y.remove(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
@@ -324,7 +325,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_NEXT_CAST.clear();
         SPELL_LAST_LOG.clear();
         DASH_NEXT.clear();
-        DASH_LAST_LOG.clear();        MaidBombing.clearAll();
+        DASH_LAST_LOG.clear();
+        MaidBombing.clearAll();
         MAX_Y.clear();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
