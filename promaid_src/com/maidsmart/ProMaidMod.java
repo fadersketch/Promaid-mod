@@ -47,6 +47,8 @@ public class ProMaidMod {
 
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
+        // v1.2.2 实测六百〇二：粉火"一定会灭"的兜底层（登记表到期抹除 + 区块加载清理）
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.PinkFireSweep.class);
         // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体
         com.maidsmart.combat.PinkFireBlock.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
