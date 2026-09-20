@@ -1,6 +1,7 @@
 package com.maidsmart.mixin;
 
 import com.maidsmart.combat.PinkFireBlock;
+import com.maidsmart.combat.PinkFireSweep;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.BaseFireBlock;
@@ -46,6 +47,8 @@ public abstract class BaseFireBlockPinkMixin {
             BlockState pink = PinkFireBlock.fromVanillaFire(cir.getReturnValue());
             if (pink != null) {
                 PinkFireBlock.countConverted(); // 只用于"这一炸点着了 N 格"那行日志
+                // v1.2.2 实测六百〇二：顺手登记一条"兜底熄灭"（不靠方块 tick 链，见 PinkFireSweep）
+                PinkFireSweep.track(level, pos);
                 cir.setReturnValue(pink);
             }
         } catch (Throwable ignored) {

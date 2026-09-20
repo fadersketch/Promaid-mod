@@ -13,6 +13,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.FireBlock;
@@ -65,6 +66,11 @@ import org.joml.Vector3f;
  * ── 三条行为收紧（这是"女仆自己放的火"，不该像野火一样烧掉她的家）──
  * ① {@link #m_213897_}（tick）：**不蔓延**。原版 {@code FireBlock.tick} 会按可燃度往四向 + 上方
  *    传火（那才是"一把火烧掉整片森林"的来源），这里整段替换成"数秒后自己熄灭"，一个邻居都不点。
+ *    **v1.2.2 实测六百〇二【一定会灭】**：这条路依赖方块 tick 链，而链只在"区块正在 tick"时才会走
+ *    ——实测玩家世界里残留的 70 格粉火 AGE 全是 0/1、每格都还挂着计划 tick，说明它们的区块在老化
+ *    之前就停了 tick（远处战斗 / 玩家走开 / 区块卸载），于是"粉色的火又不会熄灭了"。
+ *    现在由 {@link PinkFireSweep} 补两条不依赖 tick 的兜底（登记表到期抹除 + 区块加载即清），
+ *    tick 链本身保持不动。
  * ② {@link #m_7892_}（entityInside）：**玩家与女仆免伤**（开关 {@code bombing.fireProtect}）。
  *    原版这一处既点燃（{@code remainingFireTicks + 1}、归零那一下 {@code setSecondsOnFire(8)}）
  *    又掉血（{@code damageSources().inFire()}），所以豁免要**整个跳过**——只挡伤害不挡点燃
@@ -364,6 +370,68 @@ public final class PinkFireBlock extends FireBlock {
             return MaidSmartConfig.COMBAT_BOMBING_FIRE_RENDER.get();
         } catch (Throwable ignored) {
             return true;
+        }
+    }
+
+    /* ==================== ④ 邻居更新不许把粉火打回原版火 ==================== */
+
+    /**
+     * v1.2.2 实测六百〇二【"又出现橙火焰"与"火不灭"的真正根因——就在这两处转发】。
+     *
+     * 原版 {@code FireBlock.m_7417_}（updateShape）在**任何邻居变化**时都会把火重算一遍：
+     * {@code canSurvive ? m_53437_(level, pos, AGE) : AIR}，而那个私有助手算出来的是
+     * **原版火**的状态——它内部走 {@code BaseFireBlock.getState(level, pos)}，里面写死
+     * {@code (FireBlock) Blocks.f_50083_}。于是粉火只要旁边动一下（爆炸、方块变化、水流、别的火…）
+     * 就会被打回 {@code minecraft:fire}。
+     *
+     * 【实测证据】专用服务器：命令放下粉火 → 旁边放一块石头 → 探针 `if block … maid_smart:pink_fire`
+     * 立刻为假；存档 NBT 里那一格是 {@code minecraft:fire age=1..3}，整段调色板里根本没有
+     * {@code maid_smart:pink_fire}。玩家看到的两个现象因此都能对上：
+     * ① "爆炸的时候又产生粉色火焰又产生普通火焰"（橙色那些就是被打回原版的）；
+     * ② **原版火在不燃物上是永不熄灭的**（粉火会自灭，橙火不会）——"粉色的火又不会熄灭了"。
+     *
+     * 现在把这一步翻回粉色，并且**保留它自己当前的 AGE**：否则每次邻居更新都会把自灭计时清零，
+     * 频繁更新等于给它反复续命。
+     */
+    @Override
+    public BlockState m_7417_(BlockState state, Direction dir, BlockState neighborState, LevelAccessor level,
+                              BlockPos pos, BlockPos neighborPos) {
+        BlockState out = super.m_7417_(state, dir, neighborState, level, pos, neighborPos);
+        try {
+            if (out == null || !isVanillaFire(out)) {
+                return out; // 支撑没了（原版给 air）等其它情形：原样返回，绝不在该消失的地方复活
+            }
+            BlockState pink = fromVanillaFire(out);
+            if (pink == null) {
+                return out;
+            }
+            return pink.m_61124_(FireBlock.f_53408_, state.m_61143_(FireBlock.f_53408_));
+        } catch (Throwable ignored) {
+            return out;
+        }
+    }
+
+    /**
+     * 这一格是不是"原版火"（{@code Blocks.f_50083_} = FIRE、{@code f_50084_} = SOUL_FIRE）。
+     *
+     * 【用字段身份比较，不用 instanceof】反编译实证（javap {@code BaseFireBlock.m_49245_}）：
+     * 原版火是 {@code Blocks.f_50083_}——注意**不是** {@code f_50025_}（实测六百〇二踩过这个坑：
+     * 一开始写错字段，守卫永远为假，于是"粉火被打回原版火"照旧发生）。
+     */
+    private static boolean isVanillaFire(BlockState st) {
+        Block owner = st.m_60734_();
+        return owner == Blocks.f_50083_ || owner == Blocks.f_50084_;
+    }
+
+    /** 上面那一支的重算源头（原版同样返回原版火）——照抄它，只把颜色换回粉色 */
+    @Override
+    protected BlockState m_53470_(BlockGetter level, BlockPos pos) {
+        BlockState out = super.m_53470_(level, pos);
+        try {
+            BlockState pink = fromVanillaFire(out);
+            return pink != null ? pink : out;
+        } catch (Throwable ignored) {
+            return out;
         }
     }
 

@@ -507,13 +507,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
         LivingEntity target = currentTarget(maid);
-        // v1.2.2 实测五百八十七【空袭轰炸】：轰炸相位（放黑曜石+水晶 / 重生锚 / 床）优先接管本
-        // tick——她放完那两步立刻把控制权交还给下面的 WAIT_LAUNCH → 起飞，0.5 秒后炸弹自己响。
-        // v1.2.2 实测五百九十二：相位改由**服务端 tick 统一驱动**（所有攻击模式共用同一台机器，
-        // 见 MaidBombing.tickPhases），所以这里只问"她这一轮在不在轰炸段里"。
-        if (MaidBombing.isBombing(maid)) {
-            return;
-        }
+        // v1.2.2 实测六百〇二【轰炸改判为"附加链路"，不再占用原链路】：这里原本有一道
+        // `if (MaidBombing.isBombing(maid)) return;`——轰炸相位在飞的那十几 tick 里，本行为
+        // 整段让位。反馈原话："这套链路可能因为动作占用而会影响起飞，导致反而拖累了战斗。
+        // 所以整个轰炸链路最终应该是被判定为一个额外附加链路，不影响原链路的行动和飞行。"
+        // 确实如此：起手那一刻正是"收翅猛击打完、马上要再起飞"的瞬间，让位等于把**起飞**
+        // 整整压后 0.5~1 秒（相位走完 step0+placeGap+step1 才还回来），一轮里反复几次就是肉眼
+        // 可见的"她怎么不起飞"。
+        // 现在轰炸完全走自己的服务端驱动（见 MaidBombing.tickPhases）：放方块 / 挂水晶 / 充能
+        // 都不需要她停手——落点是**目标脚边或她正下方**（MaidBombing.placeOnSupport），
+        // 她在飞也照放。于是本行为从此**一眼都不看轰炸状态**：该起飞起飞、该扑击扑击、
+        // 该开火开火，炸弹只是"顺手挂在她的攻击链路末尾"的额外一份礼物。
         if (target == null) {
             // v1.2.0 实测四百七十二【摔死主因】：目标一没就无条件清滑翔位 —— 她多半
             // 正在高空（烟花推进的必然结果），清位即自由落体，20 血必死。改为
