@@ -1562,8 +1562,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     }
                     sl.m_46796_(2001, p, net.minecraft.world.level.block.Block.m_49956_(state));
                     if (com.maidsmart.config.MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get()) {
+                        // v1.2.2 实测五百九十八：回收口径统一走 PlacedBlockTracker.reclaimDrops
+                        // （自己放下去的方块整体还她——萤石不再变萤石粉，见该方法注释）
                         java.util.List<net.minecraft.world.item.ItemStack> drops =
-                                net.minecraft.world.level.block.Block.m_49869_(state, sl, p, null);
+                                com.maidsmart.task.PlacedBlockTracker.reclaimDrops(state, sl, p);
                         EntityMaid nearest = com.maidsmart.task.BridgeUpBehavior.findNearestMaidPublic(sl, p);
                         boolean handed = false;
                         if (nearest != null && !drops.isEmpty()) {

@@ -279,7 +279,7 @@ public final class PlacedBlockTracker {
             return; // 玩家已替换，尊重改动
         }
         level.m_46796_(2001, pos, Block.m_49956_(state));
-        java.util.List<ItemStack> drops = Block.m_49869_(state, level, pos, null);
+        java.util.List<ItemStack> drops = reclaimDrops(state, level, pos);
         boolean handed = false;
         if (owner != null && !drops.isEmpty()) {
             try {
@@ -306,6 +306,32 @@ public final class PlacedBlockTracker {
             }
         }
         level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
+    }
+
+    /**
+     * v1.2.2 实测五百九十八【回收要"整体还她"，不能按挖掘掉落表打折】。
+     *
+     * 旧版回收走 {@code Block.getDrops}——那是**挖掘口径**：萤石→萤石粉、草方块→泥土、
+     * 石头→圆石、树叶→树苗/木棍、黏土→黏土球、矿石→原矿……可这些方块是女仆**从自己背包里
+     * 拿出来垫的**（搭路 / 搭高 / 战斗垫脚 / 深井挖矿），她放下去的本来就是一件件"物品"，
+     * 回收时理应把**那件物品**原样还她。反馈原文："回收方块的时候是整体回到女仆的背包，
+     * 但是我发现在搭建萤石的时候会掉落萤石粉。"
+     *
+     * 现在：方块有对应物品（{@code Block.asItem()}，SRG m_5456_）就还 1 个该物品本身；
+     * 只有**没有物品形式**的方块（水/岩浆/火/红石线/耕地/茎这些）才回退原版掉落表
+     * （红石线→红石粉之类本来就得靠掉落表，见 BlueprintLib.BLOCK_ITEM_OVERRIDES 同一口径）。
+     *
+     * 不会凭空生料：这些方块是女仆先扣了自己 1 个物品才放下去的，回收只是把它还回去。
+     */
+    public static java.util.List<ItemStack> reclaimDrops(BlockState state, ServerLevel level, BlockPos pos) {
+        try {
+            net.minecraft.world.item.Item item = state.m_60734_().m_5456_();
+            if (item != null && item != net.minecraft.world.item.Items.f_41852_) {
+                return java.util.List.of(new ItemStack(item));
+            }
+        } catch (Throwable ignored) {
+        }
+        return Block.m_49869_(state, level, pos, null);
     }
 
     /**
