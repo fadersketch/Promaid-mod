@@ -386,6 +386,65 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
     }
 
+    /** 实测五百九十六：装备离开限频表（女仆 UUID → 上次记录毫秒） */
+    private static final java.util.Map<java.util.UUID, Long> EQUIP_WATCH_CD =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * v1.2.2 实测五百九十六【谁把她的装备拿走了】——诊断用，纯日志、不改任何状态。
+     *
+     * 女仆的**装备槽**（头盔/胸甲/护腿/靴子/主手/副手）从"有东西"变成"空"时记一行：
+     * 哪个槽、丢的是什么、她背包此刻的快照、以及一小段调用栈。反馈里的"收放魂符后把
+     * 装备从装备栏拖进物品栏，装备直接没了"——服务端的拖拽逻辑本身经模拟点击实测是
+     * 正确的（东西确实进了她背包），所以下一枪要能指出**到底是谁把装备槽清空的**
+     * （调用栈里若是 `AbstractContainerMenu.clicked` 就是玩家拖拽；若是别的类就是代码路径），
+     * 以及东西最后落在哪（背包快照）。复现一次，日志里就有答案。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onMaidEquipmentLeave(
+            net.minecraftforge.event.entity.living.LivingEquipmentChangeEvent event) {
+        try {
+            if (!(event.getEntity()
+                    instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
+                    || maid.m_9236_().m_5776_()) {
+                return;
+            }
+            net.minecraft.world.item.ItemStack from = event.getFrom();
+            if (from.m_41619_() || !event.getTo().m_41619_()) {
+                return; // 只记"槽位被清空"
+            }
+            long now = System.currentTimeMillis();
+            Long last = EQUIP_WATCH_CD.get(maid.m_20148_());
+            if (last != null && now - last < 1500L) {
+                return; // 限频：同一只女仆 1.5 秒内只记一条
+            }
+            EQUIP_WATCH_CD.put(maid.m_20148_(), now);
+            StringBuilder inv = new StringBuilder();
+            for (int i = 0; i < maid.getMaidInv().getSlots(); i++) {
+                net.minecraft.world.item.ItemStack st = maid.getMaidInv().getStackInSlot(i);
+                if (!st.m_41619_()) {
+                    inv.append(i).append(':').append(st.m_41613_()).append('x')
+                            .append(st.m_41720_()).append(' ');
+                }
+            }
+            StringBuilder frames = new StringBuilder();
+            StackTraceElement[] stack = new Throwable().getStackTrace();
+            for (int i = 0; i < stack.length && i < 8; i++) {
+                frames.append("\n    at ").append(stack[i]);
+            }
+            com.maidsmart.tool.PromaidLog.log("装备离开", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 槽=" + event.getSlot() + " 失去 " + from.m_41613_() + "x" + from.m_41720_()
+                    + " | 她背包[" + inv + "] 头=" + short0(maid.m_6844_(net.minecraft.world.entity.EquipmentSlot.HEAD))
+                    + " 主手=" + short0(maid.m_21205_())
+                    + " | 调用栈：" + frames);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String short0(net.minecraft.world.item.ItemStack st) {
+        return st.m_41619_() ? "空" : (st.m_41613_() + "x" + st.m_41720_());
+    }
+
     /**
      * v1.5.47：经验球归属（借鉴 maidmining）——8 格内有玩家 → 让原版（玩家优先）；
      * 否则 24 格内最近挖矿女仆直接吸收经验并取消生成（治"女仆挖矿 + 玩家同区双倍经验"）。
