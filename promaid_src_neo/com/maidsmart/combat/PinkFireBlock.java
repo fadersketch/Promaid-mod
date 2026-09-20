@@ -51,17 +51,16 @@ import org.joml.Vector3f;
  * 于是形状就是玩家熟悉的那团火，只是颜色换成粉色。
  *
  * ── 谁把它放下来 ──
- * v1.2.2 实测六百起：**开关开着时，世界里新点着的每一格原版火都直接生成为这个方块**
- * （{@code BaseFireBlockPinkMixin} 把 {@code BaseFireBlock.getState} 的返回值换掉，见
- * {@link #pinkEnabled()}）——不再区分"是不是我们这一炸点着的"。原因（实测日志）见
- * {@link #pinkEnabled()}：爆炸窗口那条路本身没问题（那一炸点着的 119 格火全部直接生成为粉色火），
- * 但烧到人的火是<b>窗口之外</b>那些（世界里既有的、岩浆点的、别的模组点的）。
- * 另外 {@link MaidBombing} 每炸一次还会在爆炸范围内 {@link #sweepVanillaFire} 扫一遍，
- * 把早先留下的原版火一并换掉。每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——
- * 外观位置与原版一模一样。
+ * **只有 {@link MaidBombing} 自己那一炸**：爆炸前后开一段同步窗口（{@link #beginWindow()}），
+ * 窗口内原版每点着一格火都会经过 {@code BaseFireBlock.getState}，mixin 就把返回值换成这个方块
+ * ——那一炸点着的**每一格**都是粉色火，与距离无关（实测日志：`粉色火焰：这一炸点着的 119 格火
+ * 直接生成为粉色火`）。
  * <p>
- * 打火石 / 闪电 / 岩浆点出来的火**也会**跟着变成粉色火（这是需求要的"所有被生成的黄色火焰
- * 都会被替换成粉色火焰"），而粉色火不蔓延、几秒后自灭——不想要这种效果就把上面那条开关关掉。
+ * 实测六百〇一【范围收紧，反馈："你这样等于直接开挂了呀"】：实测六百 曾经把这条改成"开关开着
+ * 就把世界里每一格新火都换掉"，那等于顺手关掉了全世界的火蔓延（含玩家自己点的火）——
+ * <b>已经收回</b>：窗口之外的火一概不碰，谁点的还是谁的（打火石 / 闪电 / 岩浆 / 别的模组 /
+ * 世界里早就存在的原版火都不受影响）。
+ * 每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——外观位置与原版一模一样。
  *
  * ── 三条行为收紧（这是"女仆自己放的火"，不该像野火一样烧掉她的家）──
  * ① {@link #tick}：**不蔓延**。原版 {@code FireBlock.tick} 会按可燃度往四向 + 上方传火
@@ -119,23 +118,23 @@ public final class PinkFireBlock extends FireBlock {
     private static int windowCount = 0;
 
     /**
-     * v1.2.2 实测六百【"橙火还在"的最终修法】：**模式开着的时候，世界里新点着的每一格原版火
-     * 都直接生成为粉色火**（不再只在爆炸窗口内换）。
+     * v1.2.2 实测六百〇一【范围收回到"她那一炸"】。
      *
-     * ── 为什么改成"全都换" ──
-     * 反馈原文："重生锚/床爆炸产生的火焰还有可能会出现橙火焰。上次的问题没有修复，玩家还是会被
-     * 粉火烧到。这边建议改为在此模式开启的时候，所有被生成的黄色火焰都会被替换成粉色火焰。
-     * 同时再加入不会被烧。"
+     * 实测六百 曾经把这里改成"开关开着 → 世界里每一格新火都换成粉色"（为了兜住窗口之外那些
+     * 把玩家烧着的火）。反馈原话：**"你这样等于直接开挂了呀。你应该只影响女仆造成爆炸所产生的
+     * 火焰，并且将它替换。而不是将所有的火焰全都开了。"**——确实如此：粉火不蔓延、几秒自灭，
+     * "全都换"实际上等于顺手把整个世界的火蔓延关掉了（你自己点的火也一样），
+     * 那已经超出这个功能的边界。现在收回成**只认她自己那一炸**：
      *
-     * 实测日志（latest.log）证实：窗口那条路**本身是好的**——那一炸点着的 119 格火确实全部直接
-     * 生成为粉色火（搜「粉色火焰：这一炸点着的」）。玩家/女仆烧到的火来自<b>窗口之外</b>：
-     * 世界里既有的原版火（早先版本留下的、岩浆点的、别的模组点的）、以及任何不是"我们这一炸"
-     * 点着的火。窗口再怎么开也罩不住这些，于是按需求直接改成**全局替换**。
-     *
-     * ── 代价（写在这里，面板上也写了）──
-     * 开关开着时，打火石 / 闪电 / 岩浆蔓延点出来的火也一律是粉色火——而粉色火**不蔓延、几秒后
-     * 自灭**。也就是说这条开关同时也是一条"世界火不再蔓延"的开关；不想要这种效果就把它关掉
-     *（关掉 = 回到原版橙色火，等同旧版行为）。
+     * <ul>
+     *   <li>换的时机 = {@link MaidBombing} 爆炸前后开的那一段窗口（{@link #inWindow()}）——
+     *       原版点火的每一格都在这个同步调用链里拿到粉色火，一炸点着多少格就换多少格
+     *       （实测日志：`粉色火焰：这一炸点着的 119 格火直接生成为粉色火`）；</li>
+     *   <li>窗口之外（打火石 / 闪电 / 火焰弹 / 岩浆 / 别的模组 / 世界里早就存在的原版火）
+     *       <b>一概不碰</b>——那些火是谁的就是谁的，本模组既不换也不灭；</li>
+     *   <li>{@link #pinkEnabled()} 只作为"这一炸要不要换"的判据（半路把开关关掉 → 之后的炸
+     *       照原版口径留橙色火）。</li>
+     * </ul>
      */
     public static boolean pinkEnabled() {
         try {
@@ -143,68 +142,6 @@ public final class PinkFireBlock extends FireBlock {
         } catch (Throwable ignored) {
             return false; // 读不到配置 = 什么都不换（绝不擅自改世界）
         }
-    }
-
-    /** 这一格是不是我们的粉色火 */
-    public static boolean isPinkFire(BlockState state) {
-        try {
-            Block self = block();
-            return state != null && self != null && state.getBlock() == self;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.2.2 实测六百【把战场上留下的原版火一并清干净】。
-     *
-     * 起爆之后在自己那一炸的范围内扫一遍：**原版火 / 灵魂火 → 换成粉色火**（不碰水、不碰
-     * 营火之类的其它火源方块，也不碰已经是粉色火的那几格）。这样"她打过的这一片"里不会剩下
-     * 任何橙色的火——包括早先版本/岩浆/别的模组留下的那些。
-     *
-     * 开销：半径按威力算（重生锚/床 = 5 → 半径 10），一次约 20×20×20 = 8000 次方块查询，
-     * 一炸只跑一次，量级可以忽略（同样的方块查询量爆炸本身每炸都要走一遍射线扫）。
-     *
-     * @param radius 扫描半径（格）；≤0 直接返回
-     * @return 换掉了几格
-     */
-    public static int sweepVanillaFire(ServerLevel level, BlockPos center, int radius) {
-        if (level == null || center == null || radius <= 0) {
-            return 0;
-        }
-        int changed = 0;
-        try {
-            int minY = level.getMinBuildHeight();
-            int maxY = level.getMaxBuildHeight();
-            for (int dx = -radius; dx <= radius; dx++) {
-                for (int dy = -radius; dy <= radius; dy++) {
-                    for (int dz = -radius; dz <= radius; dz++) {
-                        int y = center.getY() + dy;
-                        if (y <= minY || y >= maxY) {
-                            continue;
-                        }
-                        BlockPos pos = new BlockPos(center.getX() + dx, y, center.getZ() + dz);
-                        if (!level.hasChunkAt(pos)) {
-                            continue; // 未加载的区块不动
-                        }
-                        BlockState st = level.getBlockState(pos);
-                        if (!(st.getBlock() instanceof FireBlock)
-                                || st.getBlock() instanceof PinkFireBlock) {
-                            continue; // 不是火 / 已经是粉色火
-                        }
-                        BlockState pink = fromVanillaFire(st);
-                        if (pink != null && level.setBlock(pos, pink, 3)) {
-                            changed++;
-                            if (window) {
-                                countConverted();
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return changed;
     }
 
     /** 开窗口（{@link MaidBombing} 在爆炸前调用） */
