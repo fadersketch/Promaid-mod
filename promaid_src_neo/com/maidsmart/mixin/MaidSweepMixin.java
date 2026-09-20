@@ -41,6 +41,9 @@ public abstract class MaidSweepMixin {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/entity/ai/attributes/AttributeMap;getValue(Lnet/minecraft/core/Holder;)D"))
     private double maidsmart$sweepAlways(AttributeMap attributes, Holder<Attribute> attribute) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return attributes.getValue(attribute); // v1.2.2 实测六百：无主女仆走原版横扫倍率
+        }
         double value = attributes.getValue(attribute);
         if (attribute == Attributes.SWEEPING_DAMAGE_RATIO) {
             // 无横扫之刃附魔 → 0（原版不扫）→ 强制给 0.5（横扫之刃 I 倍率），保证每次平A横扫
@@ -56,6 +59,9 @@ public abstract class MaidSweepMixin {
      */
     @Inject(method = "doSweepHurt", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noSweepInAir(Entity target, CallbackInfo ci) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return; // v1.2.2 实测六百：无主女仆不干预
+        }
         if (!((EntityMaid) (Object) this).onGround()) {
             ci.cancel();
         }

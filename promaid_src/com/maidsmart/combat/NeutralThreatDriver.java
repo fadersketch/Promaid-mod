@@ -123,6 +123,9 @@ public final class NeutralThreatDriver {
     }
 
     private static void drive(ServerLevel level, EntityMaid maid) {
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         if (!maid.m_6084_() || maid.m_6162_() || maid.isMaidInSittingPose()) {
             return; // 死亡/幼年/坐下不参战
         }

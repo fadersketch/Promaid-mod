@@ -42,6 +42,9 @@ public abstract class MaidMoveSuppressMixin {
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         if (MaidWorkTags.isStill(maid) || MaidWorkTags.isBuildSitting(maid)) {
             // 工作站桩 / 建造强制坐下（v1.1.0）：完全静止——玩家"解除坐下"后
             // MaidMoveControl 直施速度等通道一并被源头锁住，坐着绝不走动
