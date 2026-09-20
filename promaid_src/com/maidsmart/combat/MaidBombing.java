@@ -2029,11 +2029,13 @@ public final class MaidBombing {
         // （Explosion.finalizeExplosion）着火那段在 `interactsWithBlocks()` 之外，只看 fire=true，
         // 所以哪怕我们默认"不破坏方块"（ExplosionInteraction.NONE → BlockInteraction.KEEP），
         // 重生锚 / 床那一炸照样在地上留下原版橙色火（末地水晶 / TNT 原版 fire=false，不留火）。
-        // 现在：先记下爆炸前那一带**已有的**火，爆炸后只把"新出现的"逐个换成粉色火
-        // （主人自己的火堆 / 营火不受影响，见 pinkifyFire）。
-        java.util.Set<net.minecraft.core.BlockPos> fireBefore = null;
-        if (fire && cfgPinkFire()) {
-            fireBefore = scanFire(level, x, y, z, power);
+        // v1.2.2 实测五百九十八【改法换代】：旧版是"爆炸后按盒子把新出现的原版火换成粉色"，
+        // 而原版点火的那些格子是**射线**扫出来的（空气阻力 0 → 射线能跑二十格开外），盒子永远
+        // 罩不住 → 实测"又粉又橙"。现在换成"边点边换"：爆炸期间开着点火窗口，原版点火那一刻
+        // 拿到手的就是粉色火（见 PinkFireBlock.beginWindow 与 BaseFireBlockPinkMixin）。
+        boolean pinkWindow = fire && cfgPinkFire();
+        if (pinkWindow) {
+            PinkFireBlock.beginWindow();
         }
         // v1.2.2 实测五百九十三【特效对齐原版】：反馈"爆炸的特效太小了，比正常生成的末地水晶和
         // TNT 要小很多"。javap 实证原因就在这个模式上——原版 {@code Explosion.finalizeExplosion}
@@ -2071,11 +2073,13 @@ public final class MaidBombing {
         } finally {
             selfImmuneBlast = false;
             selfImmuneMaidId = null;
-        }
-        // v1.2.2 实测五百九十七：这一炸新点着的原版火 → 换成粉色火（必须在原版爆炸之后做：
-        // 原版是在 explode() 里逐个 setBlock 点火的，这一秒之后才知道到底点着了哪几格）
-        if (fireBefore != null) {
-            pinkifyFire(level, x, y, z, power, fireBefore);
+            // 关窗口（若开着）：这一炸点着的每一格都已经是粉色火，这里只把条数取出来写日志
+            if (pinkWindow) {
+                int pink = PinkFireBlock.endWindow();
+                if (pink > 0) {
+                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
+                }
+            }
         }
     }
 
@@ -2084,89 +2088,4 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
     }
 
-    /**
-     * v1.2.2 实测五百九十七：扫出爆炸范围内**已经存在**的火（原版火 / 灵魂火）。
-     *
-     * 用它把"爆炸前就有的火"摘出去——玩家自己的火堆、营火旁燃起来的草，都不该被我们染成粉色。
-     * 范围取 {@code ceil(power) + 2}：原版 {@code toBlow} 的格子最远到半径的 1.3 倍左右，
-     * 这个盒子足够罩住，一次爆炸扫一遍（锚是 5 → 15³ ≈ 3400 格）开销可忽略。
-     */
-    private static java.util.Set<net.minecraft.core.BlockPos> scanFire(
-            ServerLevel level, double x, double y, double z, float power) {
-        java.util.Set<net.minecraft.core.BlockPos> set = new java.util.HashSet<>();
-        try {
-            int r = Mth.m_14143_(power) + 2;
-            int cx = Mth.m_14107_(x);
-            int cy = Mth.m_14107_(y);
-            int cz = Mth.m_14107_(z);
-            net.minecraft.core.BlockPos.MutableBlockPos mp = new net.minecraft.core.BlockPos.MutableBlockPos();
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dy = -r; dy <= r; dy++) {
-                    for (int dz = -r; dz <= r; dz++) {
-                        mp.m_122178_(cx + dx, cy + dy, cz + dz);
-                        if (isFire(level.m_8055_(mp))) {
-                            set.add(mp.m_7949_());
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return set;
-    }
-
-    private static boolean isFire(BlockState st) {
-        try {
-            return st.m_60713_(Blocks.f_50083_) || st.m_60713_(Blocks.f_50084_);
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.2.2 实测五百九十七：把这一炸新点着的原版火逐个换成 {@link PinkFireBlock}。
-     *
-     * 只换"爆炸前不在集合里"的那些（{@code before} 里的跳过）；换的时候把原状态的
-     * NORTH/EAST/SOUTH/WEST/UP/AGE 照抄过来（{@link PinkFireBlock#fromVanillaFire}），
-     * 于是外观位置、连着哪几面与原版一模一样，只是颜色变粉。
-     *
-     * 用 {@code m_7731_(pos, state, 3)}（不触发邻居更新的那档）——这一格本来是火，
-     * 换成另一团火，不需要惊动周围方块。
-     */
-    private static void pinkifyFire(ServerLevel level, double x, double y, double z, float power,
-                                    java.util.Set<net.minecraft.core.BlockPos> before) {
-        try {
-            if (PinkFireBlock.block() == null) {
-                return;
-            }
-            int r = Mth.m_14143_(power) + 2;
-            int cx = Mth.m_14107_(x);
-            int cy = Mth.m_14107_(y);
-            int cz = Mth.m_14107_(z);
-            int n = 0;
-            net.minecraft.core.BlockPos.MutableBlockPos mp = new net.minecraft.core.BlockPos.MutableBlockPos();
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dy = -r; dy <= r; dy++) {
-                    for (int dz = -r; dz <= r; dz++) {
-                        mp.m_122178_(cx + dx, cy + dy, cz + dz);
-                        BlockState cur = level.m_8055_(mp);
-                        if (!isFire(cur) || before.contains(mp)) {
-                            continue;
-                        }
-                        BlockState pink = PinkFireBlock.fromVanillaFire(cur);
-                        if (pink == null) {
-                            continue;
-                        }
-                        level.m_7731_(mp, pink, 3);
-                        n++;
-                    }
-                }
-            }
-            if (n > 0) {
-                log("粉色火焰：这一炸新点着的 " + n + " 格原版火已换成粉色火");
-            }
-        } catch (Throwable t) {
-            log("粉色火焰替换异常：" + t);
-        }
-    }
 }

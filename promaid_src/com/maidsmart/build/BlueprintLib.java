@@ -67,6 +67,9 @@ public final class BlueprintLib {
     /** v1.5.227：外部文件解析失败 WARN 去重（目录反复重扫时每个文件只提示一次） */
     private static final java.util.Set<String> WARNED_PARSE_FAIL =
             java.util.concurrent.ConcurrentHashMap.newKeySet();
+    /** v1.2.2 实测五百九十八（issue #12）：解析期"跳过无对应物品方块"的提示去重（同上） */
+    private static final java.util.Set<String> NO_ITEM_SKIP_LOGGED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
     /** 结构文件蓝图上限（v1.5.34：32768 → 131072——社区大建筑（佛寺 81588 块、
      *  迷你要塞 42656 块）之前被挡在手册外；上限对齐"宏大建筑"需求，
@@ -1057,9 +1060,18 @@ public final class BlueprintLib {
             int dot = bpFile.lastIndexOf('.');
             String stem = dot > 0 ? bpFile.substring(0, dot) : bpFile;
             boolean keepFluids = keepFluidsFor(tag, stem);
+            // v1.2.2 实测五百九十八（issue #14）：把内容判据的结果记在这份图纸 id 下——
+            // "缺料同类宽松（machine 档）"要与流体判据用同一把尺子（见 isMachineForMaterials）
+            recordMachineByContent("maid_smart_ext:" + stem, tag);
             List<String> steps = parseStructure(tag, 0, null, keepFluids);
             if (!keepFluids) {
                 recordFluidStrip("maid_smart_ext:" + stem, tag, bpFile);
+            }
+            // v1.2.2 实测五百九十八（issue #12）：解析期跳过了哪些"没有对应物品"的方块——旧版静默
+            if (noItemCells > 0 && NO_ITEM_SKIP_LOGGED.add(stem)) {
+                LOGGER.info("loadExternalFile: {} 有 {} 格方块在游戏里没有对应物品（火/传送门/活塞头这类"
+                                + "不可获取方块）→ 已跳过（同一种方块全图纸只提示一次）",
+                        bpFile, noItemCells);
             }
             if (steps == null) {
                 // v1.5.25f 诊断：解析失败原因（LogUtils → 进 latest.log）
@@ -2251,6 +2263,8 @@ public final class BlueprintLib {
             }
             net.minecraft.nbt.ListTag blocks = tag.m_128437_("blocks", 10);
             List<String> steps = new ArrayList<>();
+            // v1.2.2 实测五百九十八（issue #12）：跳过的"没有对应物品"格数（调用方写日志用）
+            noItemCells = 0;
             for (int i = 0; i < blocks.size(); i++) {
                 net.minecraft.nbt.CompoundTag cell = blocks.m_128728_(i);
                 net.minecraft.nbt.ListTag pos = cell.m_128437_("pos", 3);
@@ -2291,8 +2305,20 @@ public final class BlueprintLib {
                 }
                 net.minecraft.world.level.block.Block block =
                         net.minecraftforge.registries.ForgeRegistries.BLOCKS.getValue(ResourceLocation.parse(blockName));
-                if (block == null || (block.m_5456_() == net.minecraft.world.item.Items.f_41852_ && !fluidKept)) {
-                    continue; // 无此方块或没有对应物品（对齐 numen：无物品方块跳过）
+                // v1.2.2 实测五百九十八（issue #12 追查）【这道过滤旧版对墙上方块从来没生效过】：
+                // 旧版判"有没有对应物品"用的是 `block.asItem() == AIR`，而原版墙上方块
+                // （wall_torch / *_wall_sign / *_wall_banner / *_wall_hanging_sign）的 asItem()
+                // **并不是 AIR**——BlockItem 注册时把墙上方块也登记进了 BY_BLOCK，返回的是
+                // **前身物品**（redstone_wall_torch → 红石火把、oak_wall_sign → 橡木告示牌）。
+                // 于是这类方块照样进计划，然后在取料那一步撞上"同名物品查不到"——那正是
+                // issue #12 的现场（反馈者观察到"过滤没拦住"）；材料侧已在实测五百八十三
+                // 修好（itemForBlock 做 wall_ 归一）。现在这里统一走**同一个** itemForBlock()：
+                // 判据与材料链完全一致，真正没有物品形式的方块（火/传送门…）才跳过，
+                // 跳过的格数由调用方写进日志（旧版静默——反馈原话"失败完全静默"）。
+                boolean fluidBlock = "minecraft:water".equals(blockName) || "minecraft:lava".equals(blockName);
+                if (block == null || (fluidBlock && !fluidKept) || itemForBlock(blockName) == null) {
+                    noItemCells++;
+                    continue;
                 }
                 StringBuilder step = new StringBuilder();
                 step.append(rx).append(',').append(y).append(',').append(rz).append(',').append(blockName);
@@ -2316,6 +2342,11 @@ public final class BlueprintLib {
             return null;
         }
     }
+
+    /** v1.2.2 实测五百九十八（issue #12）：上一次 parseStructure 跳过了几格"没有对应物品"的方块
+     *  （解析在同一线程上串行调用，用 volatile 传递；调用方按文件名限频写一条日志——目录每 2 秒
+     *  重扫一次，不这么限频会刷屏）。 */
+    private static volatile int noItemCells = 0;
 
     /** 兼容重载：非机器路径（普通建筑 .nbt/旋转）默认剥离水/岩浆 */
     public static List<String> parseStructure(net.minecraft.nbt.CompoundTag tag, int quarters,
@@ -4835,12 +4866,88 @@ public final class BlueprintLib {
             "target", "note_block", "detector_rail", "powered_rail", "tripwire_hook",
             "daylight_detector", "trapped_chest", "slime_block", "honey_block", "soul_sand"};
 
+    /** v1.2.2 实测五百九十八（issue #14 追补）【结构件】关键词：**纯物理结构型机器**
+     *  几乎没有红石件——史莱姆农场（岩浆块 + 水 + 铁傀儡）、刷冰机 / 刷雪机（冰 + 水）、
+     *  刷石机（水 + 岩浆 + 少量红石，卡在阈值边缘）、刷怪塔（水 + 漏斗）——只数红石件会把
+     *  它们判成"普通建筑"，水被静默剥离。这些方块在机器里高频、在装饰房里罕见。
+     *  反馈原文："要不要考虑给内容判据补一类『结构件』？" */
+    private static final String[] MACHINE_STRUCT_KEYS = {
+            "magma_block", "ice", "packed_ice", "blue_ice", "soul_sand", "soul_soil",
+            "bubble_column", "anvil", "stonecutter", "composter", "cauldron", "scaffolding"};
+
     /** 玩家要"保留流体"时可加的文件名关键词（提示文案用） */
     public static String machineKeywordHint() {
         return "村民 / 分类机 / 打包机 / 仓库 / 南瓜 / 甘蔗 / 铁砧 / 轰炸机";
     }
 
-    /** v1.2.2 实测五百八十五（issue #15）：这份图纸要不要保留水/岩浆步骤。
+    /** v1.2.2 实测五百九十八（issue #14）：图纸内容判据的结果（蓝图 id → 是否像机器）。
+     *  解析（loadExternalFile）时算一次记下来，"缺料同类宽松"要与流体判据用同一把尺子时读它。 */
+    private static final Map<String, Boolean> MACHINE_BY_CONTENT = new java.util.concurrent.ConcurrentHashMap<>();
+    /** 同一份判决的可读描述（"红石件 2 种（hopper、redstone_wire）/ 结构件 1 种（magma_block）"）——
+     *  写进日志，让"为什么判成/没判成机器"一眼可查（#14 要的就是这个可见性） */
+    private static final Map<String, String> MACHINE_CONTENT_DESC = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** v1.2.2 实测五百九十八（issue #14）：记下这份图纸的内容判据结果（解析时调用一次）。 */
+    private static void recordMachineByContent(String blueprintId, net.minecraft.nbt.CompoundTag tag) {
+        if (blueprintId == null) {
+            return;
+        }
+        MachineLook look = scanMachineParts(tag);
+        MACHINE_BY_CONTENT.put(blueprintId, look.machine());
+        MACHINE_CONTENT_DESC.put(blueprintId, look.describe());
+    }
+
+    /** 内容判据的扫描结果（红石/物流件 vs 结构件，各自命中的关键词） */
+    private record MachineLook(java.util.Set<String> parts, java.util.Set<String> structs) {
+        boolean machine() {
+            // 三条任一即算机器：红石/物流件 >= 3 种（原口径）；
+            // 红石件 >= 1 且 结构件 >= 1（史莱姆农场 = 漏斗 + 岩浆块）；结构件 >= 2（刷冰机 = 冰 + 水）
+            return parts.size() >= 3 || (parts.size() >= 1 && structs.size() >= 1) || structs.size() >= 2;
+        }
+
+        String describe() {
+            return "红石/物流件 " + parts.size() + " 种" + (parts.isEmpty() ? "" : "（" + String.join("、", parts) + "）")
+                    + " / 结构件 " + structs.size() + " 种" + (structs.isEmpty() ? "" : "（" + String.join("、", structs) + "）");
+        }
+    }
+
+    private static MachineLook scanMachineParts(net.minecraft.nbt.CompoundTag tag) {
+        java.util.Set<String> parts = new java.util.LinkedHashSet<>();
+        java.util.Set<String> structs = new java.util.LinkedHashSet<>();
+        try {
+            net.minecraft.nbt.ListTag palette = tag.m_128425_("palettes", 9)
+                    ? tag.m_128437_("palettes", 9).m_128744_(0)
+                    : tag.m_128437_("palette", 10);
+            if (palette == null) {
+                return new MachineLook(parts, structs);
+            }
+            for (int i = 0; i < palette.size(); i++) {
+                String nm = palette.m_128728_(i).m_128461_("Name");
+                if (nm == null) {
+                    continue;
+                }
+                String path = nm.contains(":") ? nm.substring(nm.indexOf(':') + 1) : nm;
+                if (matchesAny(path, MACHINE_PART_KEYS)) {
+                    parts.add(path);
+                } else if (matchesAny(path, MACHINE_STRUCT_KEYS)) {
+                    structs.add(path);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return new MachineLook(parts, structs);
+    }
+
+    private static boolean matchesAny(String path, String[] keys) {
+        for (String k : keys) {
+            if (path.equals(k) || path.endsWith("_" + k)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** v1.2.2 实测五百九十八（issue #14）：这份图纸要不要保留水/岩浆步骤。
      *  never → 否；always → 是；auto（默认）→ 文件名机器关键词 或 图纸内容像机器。 */
     public static boolean keepFluidsFor(net.minecraft.nbt.CompoundTag tag, String stem) {
         String mode = com.maidsmart.config.MaidSmartConfig.BUILD_KEEP_FLUIDS.get();
@@ -4856,37 +4963,10 @@ public final class BlueprintLib {
         return looksLikeMachine(tag);
     }
 
-    /** v1.2.2 实测五百八十五（issue #15）：图纸内容判据——调色板里出现 >=3 种机器件
-     *  就当"机器图纸"（只影响流体是否保留）。单件红石装饰（一个拉杆 + 一盏灯）不会命中。 */
+    /** v1.2.2 实测五百九十八（issue #14）：内容判据——见 {@link MachineLook#machine()}。
+     *  只在流体判据用（不动机器专属搭建顺序 / 活放置，那条线仍按文件名判，见 isMachineBlueprint）。 */
     private static boolean looksLikeMachine(net.minecraft.nbt.CompoundTag tag) {
-        try {
-            net.minecraft.nbt.ListTag palette = tag.m_128425_("palettes", 9)
-                    ? tag.m_128437_("palettes", 9).m_128744_(0)
-                    : tag.m_128437_("palette", 10);
-            if (palette == null) {
-                return false;
-            }
-            java.util.Set<String> hit = new java.util.HashSet<>();
-            for (int i = 0; i < palette.size(); i++) {
-                String nm = palette.m_128728_(i).m_128461_("Name");
-                if (nm == null) {
-                    continue;
-                }
-                String path = nm.contains(":") ? nm.substring(nm.indexOf(':') + 1) : nm;
-                for (String k : MACHINE_PART_KEYS) {
-                    if (path.equals(k) || path.endsWith("_" + k)) {
-                        hit.add(k);
-                        break;
-                    }
-                }
-                if (hit.size() >= 3) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Exception e) {
-            return false;
-        }
+        return scanMachineParts(tag).machine();
     }
 
     /** 蓝图 id → 剥离掉的流体数量描述（"水×158、岩浆×48"）；未剥离过的图纸不存在 */
@@ -4928,10 +5008,10 @@ public final class BlueprintLib {
                 sb.append(sb.length() > 0 ? "、" : "").append("岩浆×").append(lava);
             }
             FLUID_STRIPPED.put(blueprintId, sb.toString());
-            LOGGER.info("loadExternalFile: {} 含流体（{} 格）已按「普通建筑」剥离——"
+            LOGGER.info("loadExternalFile: {} 含流体（{} 格）已按「普通建筑」剥离（内容判据：{}）——"
                             + "需要流体的机器图纸请把文件名加上机器关键词（{}），"
                             + "或把配置 build.keepFluids 改成 always",
-                    fname, sb, machineKeywordHint());
+                    fname, sb, scanMachineParts(tag).describe(), machineKeywordHint());
         } catch (Exception ignored) {
         }
     }
@@ -4976,6 +5056,27 @@ public final class BlueprintLib {
         return union;
     }
 
+    /** v1.2.2 实测五百九十八（issue #14）：**缺料同类宽松用的"机器"判据**——
+     *  与流体判据（{@link #keepFluidsFor}）用同一把尺子：文件名机器关键词 **∪** 图纸内容
+     *  （解析时记进 {@link #MACHINE_BY_CONTENT}）。
+     *
+     *  反馈原文："同一个『这台是不是机器』，在两个配置项里答案可能不同……结果就是『流体保留了、
+     *  材料却不宽松』，这台机器会同时呈现两种矛盾的行为。"——两个配置项都属于"放宽匹配范围"
+     *  这一档（不改建造流程），风险等级相同，所以判据统一。
+     *
+     *  **不动机器专属搭建顺序 / 活放置**：那条线仍走 {@link #isMachineBlueprint}（文件名口径）——
+     *  它会改整个建造流程（红石拓扑分层 + flag 3 活放置），把"看起来像机器"的图纸也塞进去
+     *  风险不对等（这一点 #15 那轮已经跟反馈者对过口径，双方同意）。 */
+    public static boolean isMachineForMaterials(String id) {
+        if (id == null) {
+            return false;
+        }
+        if (id.startsWith("maid_smart:machine_") || machineFamily(id) != null) {
+            return true;
+        }
+        return Boolean.TRUE.equals(MACHINE_BY_CONTENT.get(id));
+    }
+
     private static boolean looseAllowed() {
         String mode = com.maidsmart.config.MaidSmartConfig.BUILD_LOOSE_MATERIALS.get();
         if ("always".equalsIgnoreCase(mode)) {
@@ -4983,9 +5084,36 @@ public final class BlueprintLib {
         }
         if ("machine".equalsIgnoreCase(mode)) {
             String scope = materialScope;
-            return scope != null && isMachineBlueprint(scope);
+            return scope != null && isMachineForMaterials(scope);
         }
         return false;
+    }
+
+    /** v1.2.2 实测五百九十八（issue #14）：machine 档"没放宽"时把**为什么**写进日志——
+     *  反馈原文："至少在判定失败时，把『为什么没放宽』写进日志，免得又变成一次静默的不一致。"
+     *  材料统计每 tick 都在调 {@link #looseGroup}，所以每份图纸 + 每个桶只写一次。 */
+    private static final Set<String> NOT_RELAXED_LOGGED = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    private static void logNotRelaxed(String blockId, String bucket) {
+        try {
+            if (!"machine".equalsIgnoreCase(
+                    com.maidsmart.config.MaidSmartConfig.BUILD_LOOSE_MATERIALS.get())) {
+                return; // off / always 两种档位不需要解释
+            }
+            String scope = materialScope;
+            if (scope == null || bucket == null) {
+                return;
+            }
+            if (!NOT_RELAXED_LOGGED.add(scope + "|" + bucket)) {
+                return;
+            }
+            String desc = MACHINE_CONTENT_DESC.getOrDefault(scope, "未记录");
+            LOGGER.info("缺料同类宽松：图纸 {} 判为【非机器】→ 不放宽同类材料（{} 桶缺色就照缺色报）。"
+                            + "内容判据：{}；要放宽请把文件名加上机器关键词（{}），"
+                            + "或把配置 build.looseMaterials 改成 always",
+                    scope, bucket, desc, machineKeywordHint());
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 同类宽族缓存（桶名 → 物品 id 集合；注册表定稿后扫一次即固定） */
@@ -4994,6 +5122,7 @@ public final class BlueprintLib {
     /** 该方块（按归一后的物品 id）所属的同类宽族；不在放宽范围 / 档位不允许 → null */
     public static Set<String> looseGroup(String blockId) {
         if (!looseAllowed()) {
+            logNotRelaxed(blockId, looseBucket(itemIdForBlock(blockId)));
             return null;
         }
         String bucket = looseBucket(itemIdForBlock(blockId));

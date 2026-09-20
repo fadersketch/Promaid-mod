@@ -51,9 +51,10 @@ import org.joml.Vector3f;
  * 于是形状就是玩家熟悉的那团火，只是颜色换成粉色。
  *
  * ── 谁把它放下来 ──
- * 只有 {@link MaidBombing} 的爆炸：那一炸结束时**把它自己刚点着的原版火逐个换成这个方块**。
- * 做法是先记下爆炸前就存在的火、爆炸后只换"新出现的"那些（主人自己的火堆不受影响），
- * 而每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——外观位置与原版一模一样。
+ * 只有 {@link MaidBombing} 的爆炸：那一炸期间开着"点火窗口"，原版每点着一格火都会经过
+ * {@code BaseFireBlock.getState}，窗口内的 mixin 直接把返回值换成这个方块（见 {@link #beginWindow}）。
+ * 每一格连着哪几面照抄原版状态（{@link #fromVanillaFire}）——外观位置与原版一模一样，
+ * 而主人自己的火堆**根本不走点火路径**，不受影响。
  *
  * ── 三条行为收紧（这是"女仆自己放的火"，不该像野火一样烧掉她的家）──
  * ① {@link #m_213897_}（tick）：**不蔓延**。原版 {@code FireBlock.tick} 会按可燃度往四向 + 上方
@@ -83,8 +84,56 @@ public final class PinkFireBlock extends FireBlock {
     /** 粉色火星的颜色（与贴图色相一致） */
     private static final Vector3f PINK = new Vector3f(1.00F, 0.36F, 0.86F);
 
-    /** AGE 到这条线就自灭（每次间隔见 tick：0.75~1.25 秒），于是总寿命约 3~5 秒 */
+    /** AGE 到这条线就自灭；每拍间隔：第一拍沿用原版 onPlace 的 30~39 tick，之后 15~24 tick
+     *  （实测：放下去到 AGE=4 约 8 秒，再下一拍消失） */
     private static final int MAX_AGE_TICKS = 4;
+
+    /* ==================== ⓪ 点火窗口（爆炸时"边点边换"） ==================== */
+
+    /**
+     * v1.2.2 实测五百九十八【"又粉又橙"的根因与改法】。
+     *
+     * 旧做法是"爆炸前把这一带已有的火扫一遍、爆炸后把新出现的原版火逐个换成粉色"，两个洞：
+     * <ul>
+     *   <li><b>盒子永远不够大</b>：原版点火的位置来自 {@code Explosion.finalizeExplosion} 里那个
+     *       {@code toBlow} 集合，而它是**射线**扫出来的——空气的爆炸阻力是 0，射线每步只花
+     *       0.09 能量，于是"功率 5"的一炸，射线能穿过空气跑到 {@code 5 × 1.3 ÷ 0.09 × 0.3}
+     *       ≈ <b>20 格开外</b>。旧版按 {@code ceil(power)+2 = 7} 扫，盒子外的那些火自然还是
+     *       原版的——实测反馈"爆炸的时候又产生粉色火焰又产生普通火焰"就是这个；</li>
+     *   <li><b>顺序不对</b>：换的动作发生在爆炸之后，那一瞬间火仍是原版火（受重力/蔓延规则影响）。</li>
+     * </ul>
+     * 现在改成<b>在它点火那一刻就把状态换掉</b>：{@link MaidBombing} 在 {@code level.explode(...)}
+     * 前后开/关这个窗口，{@code BaseFireBlockPinkMixin} 在窗口内把 {@code BaseFireBlock.getState}
+     * 的返回值翻译成粉色火——于是原版点出来的**每一格**直接就是粉色火，与距离无关，
+     * 也没有"先橙后粉"的中间态。窗口之外（打火石 / 闪电 / 火焰弹点的火）一概不动，
+     * 主人自己的火堆更不会受影响（它压根不走点火路径）。
+     */
+    private static boolean window = false;
+    /** 本次爆炸点着的火有几格（关窗口时取走并清零，只用于日志） */
+    private static int windowCount = 0;
+
+    /** 开窗口（{@link MaidBombing} 在爆炸前调用） */
+    public static void beginWindow() {
+        window = true;
+        windowCount = 0;
+    }
+
+    /** 关窗口，返回这一次点着的粉色火格数 */
+    public static int endWindow() {
+        window = false;
+        int n = windowCount;
+        windowCount = 0;
+        return n;
+    }
+
+    public static boolean inWindow() {
+        return window;
+    }
+
+    /** mixin 每换掉一格调一次 */
+    public static void countConverted() {
+        windowCount++;
+    }
 
     public PinkFireBlock() {
         // 属性照抄原版火（Blocks 反编译实证：of().mapColor(COLOR_ORANGE)….noCollission().
@@ -161,8 +210,18 @@ public final class PinkFireBlock extends FireBlock {
                 level.m_7471_(pos, false); // 烧够了 → 自灭（不掉落任何东西）
                 return;
             }
-            level.m_7731_(pos, state.m_61124_(FireBlock.f_53408_, age + 1), 3);
-            level.m_6933_(pos, this.m_49966_(), 15 + random.m_188503_(10), 0);
+            // v1.2.2 实测五百九十八【"粉色火焰永远不熄灭"的根因】：原版火每 tick 都靠
+            // `ServerLevel.scheduleTick(pos, this, 30 + rand(10))`（SRG **m_186460_**）给自己
+            // 排下一拍；旧版这里误写成了 `m_6933_(pos, state, 15 + rand(10), 0)`——那是
+            // **Level.setBlock 的四参重载**（m_7731_ 的兄弟，不是排 tick！），于是：
+            // ① 方块只在原版 onPlace 排的那一拍动过一次（AGE 0→1），之后**永远不再 tick**，
+            //    AGE 到不了 MAX_AGE_TICKS，火就那样烧到天荒地老（实测反馈原文）；
+            // ② 那次"假设置"还把状态写回默认值 + 用了个 15~24 的奇怪 flag（含 16 =
+            //    UPDATE_KNOWN_SHAPE），等于每次 tick 顺手把火的外形重置一遍。
+            // 现在照原版 FireBlock.tick 的口径：先改 AGE（flag 4，与 `p_221161_.m_7731_(pos, state, 4)`
+            // 同一个值：只发变化、不惊动邻居），再排下一拍。
+            level.m_7731_(pos, state.m_61124_(FireBlock.f_53408_, age + 1), 4);
+            level.m_186460_(pos, this, 15 + random.m_188503_(10));
         } catch (Throwable ignored) {
         }
     }
