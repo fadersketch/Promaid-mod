@@ -389,6 +389,26 @@ public final class MaidBombing {
         return selfImmuneBlast;
     }
 
+    /** 窗口期内"放这一发炸弹的女仆"UUID（按人认，避免误免别人） */
+    private static volatile java.util.UUID selfImmuneMaidId = null;
+
+    /**
+     * 这一下要施加在 {@code victim} 身上的风，是不是"放炸弹的她本人"该免掉的。
+     * 只有"窗口开着 + 受害者的 UUID 正是这只女仆"才返回 true——这样窗口期内
+     * 恰好最后一个 tick 的别的实体、或另一只女仆自己的法术，都不会被误免。
+     */
+    public static boolean isSelfImmuneBlastFor(Entity victim) {
+        if (!selfImmuneBlast || victim == null) {
+            return false;
+        }
+        try {
+            java.util.UUID caster = selfImmuneMaidId;
+            return caster != null && caster.equals(victim.m_20148_());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 本轮结束/女仆消失时清掉相位（待起爆的那几发照旧自己炸，不跟着清） */
     public static void forget(UUID maidId) {
         if (maidId == null) {
@@ -1026,6 +1046,7 @@ public final class MaidBombing {
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
         // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
         selfImmuneBlast = true;
+        selfImmuneMaidId = maid == null ? null : maid.m_20148_();
         try {
             if (!cfgHurtFriendly()) {
                 // 默认口径：**把女仆当爆炸来源**（伤害源交给原版按来源实体自己构造）。
@@ -1044,6 +1065,7 @@ public final class MaidBombing {
             }
         } finally {
             selfImmuneBlast = false;
+            selfImmuneMaidId = null;
         }
     }
 }
