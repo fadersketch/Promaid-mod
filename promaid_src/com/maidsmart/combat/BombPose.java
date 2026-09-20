@@ -173,8 +173,23 @@ public final class BombPose {
         }
     }
 
-    /** 把原副手物品写回去（口径与 FlightFireworkPose 一致：到了就还，不做条件判断） */
+    /**
+     * 把原副手物品写回去。
+     *
+     * v1.2.2 实测五百九十五【不覆盖玩家刚放进去的东西】：旧版无条件
+     * `setItemInHand(OFF_HAND, 原物)`——这十几 tick 的展示窗口里，玩家手动往她副手
+     * 放的东西会被这一写直接顶掉（那件物品就没了）。现在只有"副手还是我们那件展示品
+     * 或空着"才写回原位；玩家已经换了别的 → 原物走
+     * {@link com.maidsmart.tool.MaidGiveBack}（进背包、塞不下落地），两边都不丢。
+     */
     private static void restore(EntityMaid maid, State st) {
-        maid.m_21008_(InteractionHand.OFF_HAND, st.original);
+        ItemStack now = maid.m_21206_();
+        boolean untouched = now.m_41619_()
+                || (!st.shown.m_41619_() && ItemStack.m_41728_(now, st.shown));
+        if (untouched) {
+            maid.m_21008_(InteractionHand.OFF_HAND, st.original);
+        } else if (!st.original.m_41619_()) {
+            com.maidsmart.tool.MaidGiveBack.give(maid, st.original, "副手展示期间被换下的原物");
+        }
     }
 }
