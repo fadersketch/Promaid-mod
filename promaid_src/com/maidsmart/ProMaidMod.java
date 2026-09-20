@@ -49,7 +49,8 @@ public class ProMaidMod {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
         // v1.2.0：指标石网络层（C2S 锁定请求 + S2C 会话状态）
-        com.maidsmart.build.IndexStoneNetworking.register();
+        com.maidsmart.build.IndexStoneNetworking.register();        // v1.2.2 实测五百八十七：轰炸标记（S2C）
+        com.maidsmart.combat.BombMarkNetworking.register();
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
