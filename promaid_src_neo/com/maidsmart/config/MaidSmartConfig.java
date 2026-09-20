@@ -595,11 +595,14 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.IntValue COMBAT_BOMBING_TNT_BURST_COUNT;
     /** 炸弹底座回收延迟（秒，默认 10；0 = 起爆即回收） */
     public static final ModConfigSpec.IntValue COMBAT_BOMBING_RECLAIM_SECONDS;
-    /** 重生锚是否需要萤石（默认 true = 原版口径） */
-    public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE;
-    /** 空中强制放置（默认 true） */
+    /** 方块与『挂水晶 / 充能』之间的可见间隔（tick，默认 10 = 0.5 秒；v1.2.2 实测五百九十一） */
+    public static final ModConfigSpec.IntValue COMBAT_BOMBING_PLACE_GAP;
+    /** 维度闸（默认开；v1.2.2 实测五百九十一）：只在原版会爆炸的维度开放重生锚 / 床链路 */
+    public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_DIMENSION_GUARD;
     /** TNT 追踪（默认开，v1.2.2 实测五百九十：只改方向、速度不变） */
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_TNT_TRACK;
+    /** TNT 追踪时长（tick，默认 10 = 0.5 秒；v1.2.2 实测五百九十一，0 = 不追踪） */
+    public static final ModConfigSpec.IntValue COMBAT_BOMBING_TNT_TRACK_TICKS;
     /** 第三方玩法模式黑名单（默认开，v1.2.2 实测五百九十：傀儡装配的「傀儡师」） */
     public static final ModConfigSpec.BooleanValue COMPAT_PUPPET_BLACKLIST;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
@@ -1861,7 +1864,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
         BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
                 .translation("config.promaid.bombing").push("bombing");
-        COMBAT_BOMBING_MELEE = BUILDER.comment("近战空袭轰炸（默认开）：猛击命中之后、再次起飞之前，按包里材料放一枚炸弹——① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过、直接接着起飞")
+        COMBAT_BOMBING_MELEE = BUILDER.comment("近战空袭轰炸（默认开）：猛击命中之后、再次起飞之前，按包里材料放一枚炸弹——① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚（威力 5，下界不生效，**不需要萤石**）③ 床（威力 5，主世界不生效）。放置失败就整段跳过、直接接着起飞；『下界 / 主世界不生效』这两条由维度闸按当前维度自动判（见维度闸那条）")
                 .translation("config.promaid.bombing.melee").define("melee", true);
         COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；材料不齐直接跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
@@ -1873,7 +1876,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 200, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
-        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的黑曜石/重生锚/床无论开关都会由她回收，不会留在世界里")
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包，重生锚/床起爆即被它们自己那一炸消耗掉（都不产生掉落物）")
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
         COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
@@ -1886,19 +1889,22 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 点打火石耐久）；1 = 关掉连投")
                 .translation("config.promaid.bombing.tntBurstCount")
                 .defineInRange("tntBurstCount", 3, 1, 16);
-        COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：女仆放下的黑曜石 / 重生锚 / 床在起爆后**留在原地**这么久再由她回收——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子；回收不掉落，不存在白送材料")
+        COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：末地水晶链路里那块黑曜石 / 基岩在起爆后**留在原地**这么久，再由她**收进自己的背包**——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子。回收一律不掉落地面（背包满就这一块就地消失），所以不会变成白送黑曜石；重生锚 / 床不进这张表：它们自己那一炸就把方块消耗掉了")
                 .translation("config.promaid.bombing.reclaimSeconds")
                 .defineInRange("reclaimSeconds", 10, 0, 600);
-        COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE = BUILDER.comment("重生锚需要萤石（默认开 = 原版口径）：反编译实证——重生锚 0 级充能右键不炸（充能等级只决定『炸不炸』、不决定『炸多狠』，那一炸固定 5.0），所以默认要 1 颗萤石点火。关掉 = 不消耗萤石，她直接把那 1 级补上就炸")
-                .translation("config.promaid.bombing.anchorNeedsGlowstone")
-                .define("anchorNeedsGlowstone", true);
+        COMBAT_BOMBING_PLACE_GAP = BUILDER.comment("放置间隔（tick，默认 10 = 0.5 秒）：先放下黑曜石 / 重生锚 / 床，停这么久再挂末地水晶 / 给她充能——不然两步是同一瞬间完成的，玩家根本看不出中间有过动作。0 = 不间隔")
+                .translation("config.promaid.bombing.placeGap").defineInRange("placeGap", 10, 0, 40);
+        COMBAT_BOMBING_DIMENSION_GUARD = BUILDER.comment("维度闸（默认开）：只在这个维度『原版真的会炸』时才开放重生锚 / 床链路——判据就是原版 use() 里判断要不要炸的那两句（重生锚看 respawnAnchorWorks、床看 bedWorks）。其他模组新增的维度只要把这两条写成『能用』，这两条链路就整段不开放，不会在『那个维度根本炸不了』的地方硬炸。关掉 = 只看材料、不看维度")
+                .translation("config.promaid.bombing.dimensionGuard").define("dimensionGuard", true);
         COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
-        COMBAT_BOMBING_TNT_TRACK = BUILDER.comment("TNT 追踪飞行（默认开）：扔出去的 TNT 在引信期间会朝目标方向拐弯——**只改方向、速度不变**，直到爆炸（目标跑得快也追得上）；关 = 纯弹道抛物线")
+        COMBAT_BOMBING_TNT_TRACK = BUILDER.comment("TNT 追踪飞行（默认开）：扔出去的 TNT 在**离手后的一小段时间里**朝目标方向拐一点弯——**只改方向、速度不变**（目标跑得快也更容易吃到）；关 = 纯弹道抛物线。追多久见下面那条『TNT 追踪时长』")
                 .translation("config.promaid.bombing.tntTrack").define("tntTrack", true);
+        COMBAT_BOMBING_TNT_TRACK_TICKS = BUILDER.comment("TNT 追踪时长（tick，默认 10 = 0.5 秒，0 = 不追踪）：扔出去之后只在这段时间内修正方向，之后按当时方向直飞——0.5 秒刚好是『稍微修一下准度』的量；另外每 tick 最多转 5 度（限转角），所以观感是一段平滑小弧线，不会像旧版那样一离手就折线乱拐")
+                .translation("config.promaid.bombing.tntTrackTicks").defineInRange("tntTrackTicks", 10, 0, 200);
         BUILDER.pop();
 
         // ---- 第三方玩法模式黑名单（v1.2.2 实测五百九十：傀儡装配 Modular Golems 的「傀儡师」） ----

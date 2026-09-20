@@ -67,10 +67,28 @@ import java.util.UUID;
  *
  * ── 三段链路（材料齐才做；齐了但放不下就整段放弃）──
  * ① 水晶：黑曜石/基岩（有黑曜石优先）+ 末地水晶 → 目标脚边那一格放方块、上面挂水晶；
- * ② 重生锚：重生锚 + 萤石（下界不生效）→ 放下 → 萤石充 1 级；
+ * ② 重生锚：重生锚（下界不生效）→ 放下 → 替她充 1 级（实测五百九十一起**不要萤石**）；
  * ③ 床：任意床（主世界不生效）→ 放下（原版两格床，朝向按她的朝向）。
  * 三段按 ①②③ 取第一个材料齐的；**放置失败不再试下一段**，直接交还原链路（再次起飞）——
  * 需求原话"不会再进行判定，会直接跳到下一个链路"。
+ *
+ * ── 实测五百九十一（七件事）──
+ * ① 重生锚**不再需要萤石**：那一炸的威力与充能等级无关（javap 实证固定 5.0F），而引信本来就是
+ *    我们自己点的定时器——所以它的放置口径与黑曜石完全一致（反馈："重生锚还是放不了，放置逻辑
+ *    改为跟放黑曜石一样"）。
+ * ② 方块与水晶 / 充能之间留出**看得见的间隔**（bombing.placeGap，默认 10 tick = 0.5 秒）——
+ *    反馈："黑曜石和末地水晶几乎是同时放置的，根本看不出间隔"。
+ * ③ **维度闸**（bombing.dimensionGuard）：只在这个维度"原版真的会炸"时才开放重生锚 / 床链路
+ *    （见 {@link #explodesHere}）——其他模组新增的维度里那两条写着"能用"就整段不开放。
+ * ④ TNT 追踪改成**限时 0.5 秒 + 限转角**（bombing.tntTrackTicks / {@link #TRACK_TURN_DEG}）：
+ *    反馈"太鬼畜、运动很不自然"——现在是离手后一小段平滑弧线，只为小幅修准。
+ * ⑤ 打火石改成**就地扣耐久**（旧版把整件取出来、只对取出来的那份扣耐久 = 玩家看到的"吞掉"）。
+ * ⑥ 放置 / 充能 / 投掷 / 起爆各有一记动作：主手挥臂 + 副手短暂举起正在用的那件东西
+ *    （{@link BombPose}，用完原物必还）。
+ * ⑦ 回收：黑曜石/基岩底座起爆后仍保留 cfgReclaimSeconds 秒，然后**变成物品回收到她背包**
+ *    （背包满则这一块就地消失——**绝不产生地面掉落物**，所以不会变成白送黑曜石）；重生锚 / 床
+ *    由它们自己那一炸消耗掉（javap 实证原版就是先 removeBlock 再 explode），起爆即撤、
+ *    不进回收表、不回背包（回背包 = 放一次白拿一个重生锚）；相位中途失败回滚时原物还她。
  *
  * ── 时序（为什么是"起飞之前"）──
  * 猛击命中那一 tick 起手：step 0 放方块、step 1 放水晶/充能，随后立刻把控制权交还
@@ -146,8 +164,19 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get();
     }
 
-    private static boolean cfgAnchorNeedsGlowstone() {
-        return MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get();
+    /** v1.2.2 实测五百九十一：方块与"挂水晶 / 充能"之间留出的可见间隔（tick，默认 10 = 0.5 秒） */
+    private static int cfgPlaceGap() {
+        return MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP.get();
+    }
+
+    /** v1.2.2 实测五百九十一：TNT 追踪时长（tick，默认 10 = 0.5 秒；0 = 不追踪） */
+    private static int cfgTntTrackTicks() {
+        return MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS.get();
+    }
+
+    /** v1.2.2 实测五百九十一：维度闸（默认开）——原版不炸的维度不开放重生锚 / 床链路 */
+    private static boolean cfgDimensionGuard() {
+        return MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.get();
     }
 
     private static boolean cfgAirPlace() {
@@ -172,7 +201,6 @@ public final class MaidBombing {
     private static final String ID_BEDROCK = "minecraft:bedrock";
     private static final String ID_END_CRYSTAL = "minecraft:end_crystal";
     private static final String ID_RESPAWN_ANCHOR = "minecraft:respawn_anchor";
-    private static final String ID_GLOWSTONE = "minecraft:glowstone";
     private static final String ID_TNT = "minecraft:tnt";
     private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
     private static final String ID_TNT_PRIMED_SOUND = "minecraft:entity.tnt.primed";
@@ -309,6 +337,59 @@ public final class MaidBombing {
         }
     }
 
+    /**
+     * v1.2.2 实测五百九十一【打火石不再被吞】：**就地**给她手上/背包里的那一件扣 1 点耐久，
+     * 没坏就**放回原槽**。
+     *
+     * 反馈原文："我发现扔 TNT 的时候会直接把打火石吞掉，而不是消耗打火石的耐久。"
+     * 旧版走的是 takeOne(...)：把整件打火石从背包里**取出来**（= 从背包消失），只对取出来的那一份
+     * 扣耐久——于是背包里那一件凭空没了，玩家看到的就是"被吞掉"。现在从**同一格**取出、扣耐久、
+     * 再塞回**同一格**：耐久条正常走，耐久见底才真的少一件（原版口径）。
+     */
+    private static boolean useFlintAndSteel(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        try {
+            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
+            if (damageFlintIn(hands, maid)) {
+                return true;
+            }
+            return damageFlintIn(maid.getMaidInv(), maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 在给定容器里找一件打火石：取出 1 件 → 扣 1 点耐久 → 放回原槽（耐久耗尽则不放回） */
+    private static boolean damageFlintIn(IItemHandler inv, EntityMaid maid) {
+        try {
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (!isStack(inv.getStackInSlot(i), ID_FLINT_AND_STEEL)) {
+                    continue;
+                }
+                ItemStack one = inv.extractItem(i, 1, false);
+                if (one.m_41619_()) {
+                    continue;
+                }
+                try {
+                    // 原版口径：点一次掉 1 点耐久（1.20.1：hurtAndBreak(1, 实体, 损坏回调)）
+                    one.m_41622_(1, maid, m -> m.m_21166_(EquipmentSlot.MAINHAND));
+                } catch (Throwable ignored) {
+                }
+                if (!one.m_41619_()) {
+                    ItemStack left = inv.insertItem(i, one, false); // 先放回原槽（那一格刚被我们腾出来）
+                    if (!left.m_41619_()) {
+                        giveBack(maid, left);
+                    }
+                }
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     private static SoundEvent sound(String id) {
         try {
             return ForgeRegistries.SOUND_EVENTS.getValue(new net.minecraft.resources.ResourceLocation(id));
@@ -340,14 +421,20 @@ public final class MaidBombing {
     /** 近战轰炸的分步相位（step 0 放方块 / step 1 放水晶或充能 → 交还链路） */
     private static final class Phase {
         final Kind kind;
+        final EntityMaid maid;
         final long start;
         int step;
+        /** 上一步发生的时刻（gameTime）：用来在"放方块"与"挂水晶/充能"之间留可见间隔 */
+        long stepAt;
         BlockPos spot;
+        /** 这一步正在用的那件东西：副手短暂举起它做动作（{@link BombPose}） */
+        ItemStack display;
         final List<BlockPos> placed = new ArrayList<>(2);
         final List<Block> placedBlock = new ArrayList<>(2);
 
-        Phase(Kind kind, long start) {
+        Phase(Kind kind, EntityMaid maid, long start) {
             this.kind = kind;
+            this.maid = maid;
             this.start = start;
         }
     }
@@ -362,9 +449,11 @@ public final class MaidBombing {
         final List<Block> placedBlock;
         final Kind kind;
         final long due;
+        /** 起爆那一刻副手要亮一下的那件东西（实测五百九十一："好像真的打了一下水晶/重生锚"） */
+        final ItemStack display;
 
         Bomb(ServerLevel level, EntityMaid maid, Entity entity, BlockPos pos,
-             List<BlockPos> placedPos, List<Block> placedBlock, Kind kind, long due) {
+             List<BlockPos> placedPos, List<Block> placedBlock, Kind kind, long due, ItemStack display) {
             this.level = level;
             this.maid = maid;
             this.entity = entity;
@@ -373,16 +462,20 @@ public final class MaidBombing {
             this.placedBlock = placedBlock;
             this.kind = kind;
             this.due = due;
+            this.display = display;
         }
     }
 
-    /** 待回收的轰炸底座（黑曜石 / 重生锚 / 床）：起爆后保留一会儿再撤（不掉落） */
     /**
      * v1.2.2 实测五百九十【追踪弹】：反馈原文「TNT 再加一个小型追踪功能，TNT 会朝着目标的
      * 方向飞行（只更改方向，速度不变）直到爆炸。」
      *
-     * 记住这一发的初速度大小，引信期间每 tick 把速度**方向**掰向目标（大小不变）——
-     * 所以它是「拐弯」而不是「加速」，观感就是炮弹拖着弧线追人。
+     * 记住这一发的初速度大小，引信期间每 tick 把速度**方向**朝目标掰一点（大小不变）——
+     * 所以它是「拐弯」而不是「加速」。
+     *
+     * 【实测五百九十一改】只追踪 cfgTntTrackTicks（默认 10 tick = 0.5 秒）、且每 tick 最多转
+     * {@link #TRACK_TURN_DEG} 度——反馈"太鬼畜、运动很不自然"就是因为旧版每 tick 把方向**硬掰**
+     * 到正指目标；现在是离手后一小段平滑弧线，只为小幅修准，到点即撒手（按当前方向直飞）。
      */
     private static final class Homing {
         final ServerLevel level;
@@ -390,12 +483,15 @@ public final class MaidBombing {
         final LivingEntity target;
         /** 初速度大小（格/tick）：每 tick 只改方向，这个值保持不变 */
         final double speed;
+        /** 追踪截止时刻（gameTime）：到点就撒手（实测五百九十一：默认离手后 0.5 秒） */
+        final long until;
 
-        Homing(ServerLevel level, PrimedTnt tnt, LivingEntity target, double speed) {
+        Homing(ServerLevel level, PrimedTnt tnt, LivingEntity target, double speed, long until) {
             this.level = level;
             this.tnt = tnt;
             this.target = target;
             this.speed = Math.max(0.2, speed);
+            this.until = until;
         }
     }
 
@@ -403,12 +499,15 @@ public final class MaidBombing {
 
     private static final class Reclaim {
         final ServerLevel level;
+        /** 回收进谁的背包（实测五百九十一：底座变成物品还给她；她自己没了则这一块就地消失） */
+        final EntityMaid maid;
         final List<BlockPos> pos;
         final List<Block> block;
         final long due;
 
-        Reclaim(ServerLevel level, List<BlockPos> pos, List<Block> block, long due) {
+        Reclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos, List<Block> block, long due) {
             this.level = level;
+            this.maid = maid;
             this.pos = pos;
             this.block = block;
             this.due = due;
@@ -417,19 +516,23 @@ public final class MaidBombing {
 
     /**
      * 排一次"到期回收"：延迟秒数取自配置（默认 10 秒）。0 = 起爆时立刻回收（旧行为）。
-     * 回收一律**不掉落**（removePlaced 的口径），所以"女仆放的黑曜石"不会被玩家捡走 = 不存在白送材料。
+     *
+     * v1.2.2 实测五百九十一：回收的**归属**变了——黑曜石/基岩底座不再是"直接抹掉"，
+     * 而是变成物品**塞回女仆背包**（{@link #returnBlockItem}）；背包满则这一块就地消失。
+     * 两种情形都**绝不产生地面掉落物**，所以不会变成"白送黑曜石"。
      */
-    private static void scheduleReclaim(ServerLevel level, List<BlockPos> pos, List<Block> block) {
+    private static void scheduleReclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos,
+                                       List<Block> block) {
         if (level == null || pos == null || block == null || pos.isEmpty()) {
             return;
         }
         int seconds = Math.max(0, cfgReclaimSeconds());
         if (seconds <= 0) {
-            removePlaced(level, pos, block);
+            removePlaced(level, pos, block, maid);
             return;
         }
         if (RECLAIMS.size() < MAX_PENDING) {
-            RECLAIMS.add(new Reclaim(level, pos, block, level.m_46467_() + seconds * 20L));
+            RECLAIMS.add(new Reclaim(level, maid, pos, block, level.m_46467_() + seconds * 20L));
         }
     }
 
@@ -444,6 +547,14 @@ public final class MaidBombing {
     private static final List<Homing> HOMING = new ArrayList<>();
     /** 「待投放」的有效期（tick）：挂这么久还没投出去就作废，免得留一发陈年老弹 */
     private static final long ARMED_TIMEOUT = 200L;
+    /** v1.2.2 实测五百九十一：追踪时每 tick 最多转这么多度（限转角 = 平滑弧线，不是瞬间折向） */
+    private static final double TRACK_TURN_DEG = 5.0;
+    /** 同上（弧度） */
+    private static final double TRACK_TURN_RAD = Math.toRadians(TRACK_TURN_DEG);
+    /** 动作姿势：副手举起那件东西的时长（tick）——放置/充能/投掷 10（0.5 秒） */
+    private static final int BOMB_POSE_TICKS = 10;
+    /** 动作姿势：起爆那一记挥臂的时长（tick） */
+    private static final int BLAST_POSE_TICKS = 8;
     /** 相位最长存活（tick）：超了当陈旧状态丢掉（防"打到一半目标没了"留下的尾巴） */
     private static final long PHASE_TIMEOUT = 100L;
     private static final int MAX_PENDING = 256;
@@ -502,6 +613,7 @@ public final class MaidBombing {
 
         TNT_ARMED.remove(maidId);
         COOLDOWN_SEEN.remove(maidId);
+        SKIP_DIAG.remove(maidId);
     }
 
     public static void clearAll() {
@@ -513,6 +625,8 @@ public final class MaidBombing {
         TNT_ARMED.clear();
         COOLDOWN_SEEN.clear();
         HOMING.clear();
+        SKIP_DIAG.clear();
+        BombPose.clearAll(); // 实测五百九十一：动作姿势的表也一并清（尽量当场把原副手物品还回去）
         combatScanTick = 0;
     }
 
@@ -549,7 +663,7 @@ public final class MaidBombing {
             if (kind == null) {
                 return false; // 材料不齐：静默跳过（需求："判定没有就会直接跳过"）
             }
-            PHASE.put(id, new Phase(kind, level.m_46467_()));
+            PHASE.put(id, new Phase(kind, maid, level.m_46467_()));
             return true;
         } catch (Throwable t) {
             log("起手异常：" + t);
@@ -564,14 +678,55 @@ public final class MaidBombing {
         }
         // 注：重生锚"必须有 ≥1 级充能才会炸"是原版规则，所以默认要 1 颗萤石当引信；
         // 关掉「重生锚需要萤石」后不检查它（放下即由我们补上那 1 级，见 stepPayload）。
-        if (!anchorWorks(level) && has(maid, ID_RESPAWN_ANCHOR)
-                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE))) {
+        // ── v1.2.2 实测五百九十一：重生锚**不再需要萤石**，放置口径与黑曜石完全一致 ──
+        //（那一炸固定 5.0F、与充能等级无关，引信本来就是我们自己点的定时器；维度闸见 explodesHere）
+        if (explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)) {
             return Kind.ANCHOR;
         }
-        if (!bedWorks(level) && hasBed(maid)) {
+        // 床同样走维度闸（主世界 = bedWorks 为 true = 不开放）
+        if (explodesHere(level, Kind.BED) && hasBed(maid)) {
             return Kind.BED;
         }
+        // ── v1.2.2 实测五百九十一【为什么没放】：她带着材料却没起手 → 落一条限频日志
+        //（latest.log 搜「轰炸跳过」），把"缺哪一件 / 哪条链路被维度闸关掉"写清楚
+        //（反馈："重生锚还是放不了"——旧版这一路是**静默**返回 null，谁都看不出原因）
+        diagSkip(level, maid);
         return null;
+    }
+
+    /** 缺料 / 维度闸诊断的限频表（女仆 → 上次落日志的 gameTime） */
+    private static final Map<UUID, Long> SKIP_DIAG = new HashMap<>();
+
+    /** 材料齐但没有可用链路时的限频诊断（每 10 秒最多一条/女仆；她什么都没带就静默） */
+    private static void diagSkip(ServerLevel level, EntityMaid maid) {
+        try {
+            boolean crystal = has(maid, ID_END_CRYSTAL);
+            boolean base = has(maid, ID_OBSIDIAN) || has(maid, ID_BEDROCK);
+            boolean anchor = has(maid, ID_RESPAWN_ANCHOR);
+            boolean bed = hasBed(maid);
+            if (!crystal && !anchor && !bed) {
+                return; // 她什么都没带：正常跳过，不刷日志
+            }
+            long now = level.m_46467_();
+            Long last = SKIP_DIAG.get(maid.m_20148_());
+            if (last != null && now - last < 200L) {
+                return;
+            }
+            SKIP_DIAG.put(maid.m_20148_(), now);
+            StringBuilder sb = new StringBuilder();
+            if (crystal || base) {
+                sb.append("水晶链路缺").append(base ? "末地水晶" : "黑曜石/基岩").append("；");
+            }
+            if (anchor) {
+                sb.append("重生锚：").append(anchorWorks(level) ? "本维度不炸（维度闸关）" : "可选")
+                        .append("；");
+            }
+            if (bed) {
+                sb.append("床：").append(bedWorks(level) ? "本维度不炸（维度闸关）" : "可选").append("；");
+            }
+            log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 下界=false、其余=true（原版 respawn_anchor_works）：重生锚在下界不炸，机制不生效 */
@@ -580,6 +735,42 @@ public final class MaidBombing {
             return net.minecraft.world.level.block.RespawnAnchorBlock.m_55850_(level);
         } catch (Throwable ignored) {
             return true;
+        }
+    }
+
+    /**
+     * v1.2.2 实测五百九十一【维度闸】：只在这个维度"原版真的会炸"时才开放重生锚 / 床链路。
+     *
+     * 需求原文："重生锚和床判定收紧，因为其他模组会添加其他的维度。在其他的维度不会爆炸。
+     * 必须要检测当前维度，有可以爆炸的代码，才会开放这条链路。"
+     *
+     * 判据就是**原版 use() 里判断"要不要炸"的那两句**（javap 实证，两树同口径）：
+     * <ul>
+     *   <li>重生锚：{@link #anchorWorks}（= 维度类型的 respawnAnchorWorks）——**false 才炸**，
+     *       下界为 true = 不炸；</li>
+     *   <li>床：{@link #bedWorks}（= 维度类型的 bedWorks）——**false 才炸**，主世界为 true = 不炸。</li>
+     * </ul>
+     * 于是数据包 / 其他模组新增的维度只要把这两条写成"能用"，这两条链路就整段不开放——
+     * 不会在"那个维度根本炸不了"的地方硬炸。任何异常一律当作"不能炸"（关链路）。
+     * 面板开关「维度闸」关掉 = 回到"只看材料、不看维度"。
+     */
+    private static boolean explodesHere(ServerLevel level, Kind kind) {
+        if (level == null) {
+            return false;
+        }
+        if (!cfgDimensionGuard()) {
+            return true;
+        }
+        try {
+            if (kind == Kind.ANCHOR) {
+                return !anchorWorks(level);
+            }
+            if (kind == Kind.BED) {
+                return !bedWorks(level);
+            }
+            return true; // 末地水晶不挑维度：原版哪儿都能放、哪儿都炸
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -622,6 +813,12 @@ public final class MaidBombing {
                     return false; // 放不下：整段放弃，直接走下一个链路
                 }
                 ph.step = 1;
+                ph.stepAt = gameTime;
+                return true;
+            }
+            // v1.2.2 实测五百九十一【看得出间隔】：放下方块与"挂水晶 / 充能"之间留一段可见停顿——
+            // 反馈："黑曜石和末地水晶几乎是同时放置的，根本看不出间隔"。默认 10 tick = 0.5 秒。
+            if (gameTime - ph.stepAt < cfgPlaceGap()) {
                 return true;
             }
             if (!stepPayload(level, maid, ph, gameTime)) {
@@ -656,6 +853,11 @@ public final class MaidBombing {
         if (stack.m_41619_()) {
             return false;
         }
+        // v1.2.2 实测五百九十一【动作】：放置会把这 1 件消耗掉（place 内部 shrink）→ **先留快照**，
+        // 拿它当"她手上正举着的那件东西"做动作（副手短暂亮一下，见 BombPose）
+        ItemStack display = stack.m_41777_();
+        display.m_41764_(1);
+        ph.display = display;
         BlockPos spot = placeOnSupport(level, maid, target, stack);
         if (spot == null) {
             giveBack(maid, stack);
@@ -672,6 +874,7 @@ public final class MaidBombing {
             }
         }
         maid.m_6674_(InteractionHand.MAIN_HAND);
+        BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
         log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放下 " + ph.kind.cn
                 + " @" + spot.m_123341_() + "," + spot.m_123342_() + "," + spot.m_123343_());
         return true;
@@ -699,27 +902,33 @@ public final class MaidBombing {
                 return false;
             }
             spawned = ec;
+            // 起爆那一刻副手亮的是水晶（"好像真的打了一下末影水晶"）
+            ph.display = crystal.m_41777_();
+            ph.display.m_41764_(1);
             maid.m_6674_(InteractionHand.MAIN_HAND);
+            BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
         } else if (ph.kind == Kind.ANCHOR) {
-            if (cfgAnchorNeedsGlowstone()) {
-                // 原版口径：0 级充能右键不炸，所以默认要 1 颗萤石"点火"（威力与等级无关，1 级足够）。
-                ItemStack glow = takeOne(maid, ID_GLOWSTONE);
-                if (glow.m_41619_()) {
-                    log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
-                    return false;
-                }
-            }
-            // 关掉「重生锚需要萤石」时：不消耗萤石，直接替她把那 1 级补上（照原版 charge，有音效 + 挥臂）
+            // ── v1.2.2 实测五百九十一：**不再需要萤石** ──
+            // 反馈："重生锚和床不需要有这个机制，因为它自己会炸"、"重生锚还是放不了，放置逻辑改为
+            // 跟放黑曜石一样"。javap 实证：那一炸固定 5.0F、与充能等级无关，而引信本来就是我们
+            // 自己点的定时器——所以这里只保留"充能"这一记**动作**（原版 charge：音效 + 等级变化），
+            // 不消耗任何引信类材料（旧版要 1 颗萤石，没有就静默放弃 = 玩家看到的"放不了"）。
             try {
-                net.minecraft.world.level.block.RespawnAnchorBlock.m_269573_(maid, level, base, level.m_8055_(base));
+                BlockState cur = level.m_8055_(base);
+                if (cur.m_60734_() instanceof net.minecraft.world.level.block.RespawnAnchorBlock
+                        && cur.m_61143_(net.minecraft.world.level.block.RespawnAnchorBlock.f_55833_) < 4) {
+                    net.minecraft.world.level.block.RespawnAnchorBlock.m_269573_(maid, level, base, cur);
+                }
             } catch (Throwable ignored) {
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
+            BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
         }
         List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
         List<Block> blockList = ph.placedBlock.isEmpty() ? null : new ArrayList<>(ph.placedBlock);
         if (PENDING.size() < MAX_PENDING) {
-            PENDING.add(new Bomb(level, maid, spawned, base, posList, blockList, ph.kind, gameTime + cfgFuse()));
+            PENDING.add(new Bomb(level, maid, spawned, base, posList, blockList, ph.kind,
+                    gameTime + cfgFuse(), ph.display));
         }
         if (cfgPinkMark()) {
             if (spawned != null) {
@@ -733,14 +942,22 @@ public final class MaidBombing {
         return true;
     }
 
-    /** 把女仆自己放下的那几块撤掉（不掉落） */
+    /**
+     * 撤掉女仆自己放下的那几块（不掉落）。
+     *
+     * v1.2.2 实测五百九十一：`returnTo` 非空 = 这几块**变成物品还进她的背包**（实测：
+     * "黑曜石的回收是回收到女仆的背包里"）——相位中途失败回滚时传她本人，于是"放不下
+     * 又撤回"不会白丢她一件材料；起爆后的回收也走这里（带她）。传 null = 只撤不还
+     *（重生锚 / 床：它们由自己那一炸消耗掉，还回去等于白送炸药）。
+     */
     private static void rollback(ServerLevel level, Phase ph) {
-        removePlaced(level, ph.placed, ph.placedBlock);
+        removePlaced(level, ph.placed, ph.placedBlock, ph.maid);
         ph.placed.clear();
         ph.placedBlock.clear();
     }
 
-    private static void removePlaced(ServerLevel level, List<BlockPos> posList, List<Block> blockList) {
+    private static void removePlaced(ServerLevel level, List<BlockPos> posList, List<Block> blockList,
+                                     EntityMaid returnTo) {
         if (level == null || posList == null || blockList == null) {
             return;
         }
@@ -757,6 +974,33 @@ public final class MaidBombing {
             } else {
                 level.m_7471_(p, false); // 单体方块：removeBlock 不掉落
             }
+            if (returnTo != null) {
+                returnBlockItem(returnTo, want);
+            }
+        }
+    }
+
+    /**
+     * v1.2.2 实测五百九十一：把撤下来的一块变成物品**塞回女仆背包**（背包满则这一块就地消失，
+     * **绝不掉落地面**——掉落物会被玩家捡走，那就成了"白送黑曜石"）。
+     * 口径照本模组挖矿/搭路的方块回收（`ItemHandlerHelper.insertItemStacked` 进背包），
+     * 只把"背包满就落地"改成了"背包满就消失"。
+     */
+    private static void returnBlockItem(EntityMaid maid, Block block) {
+        if (maid == null || block == null) {
+            return;
+        }
+        try {
+            ItemStack st = new ItemStack(block.m_5456_());
+            if (st.m_41619_()) {
+                return; // 没有对应物品（空气之类）→ 不还原
+            }
+            ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                    maid.getMaidInv(), st, false);
+            if (!left.m_41619_()) {
+                log("回收的炸弹底座塞不进背包（背包满）→ 这一块就地消失（不掉落）");
+            }
+        } catch (Throwable ignored) {
         }
     }
 
@@ -1074,7 +1318,16 @@ public final class MaidBombing {
 
     /**
      * 追踪弹每 tick 一次（在实体 tick 之前调用，于是这一 tick 的原版物理按「新方向」走）。
-     * 这一发炸了 / 目标没了 → 摘掉条目（剩下按当前朝向直飞），绝不留悬挂引用。
+     *
+     * ── v1.2.2 实测五百九十一：改「限时 + 限转角」的小幅修准 ──
+     * 反馈原文："追踪这个功能还是太鬼畜了，tnt 运动很不自然。追踪的时间最好控制在 0.5 秒左右。
+     * 0.5 秒之后不再追踪。相当于仅仅是稍微提升一下提升准度。（时间可调）"
+     *
+     * 旧版每 tick 把速度方向**硬掰**成"正指目标"（还带竖直补偿），于是它一离手就折线乱拐。
+     * 现在两条限制：① 只在离手后的 cfgTntTrackTicks（默认 10 tick = 0.5 秒）内修正；
+     * ② 每 tick 最多转 {@link #TRACK_TURN_DEG} 度——把"当前方向"朝"目标方向"按角度插值，
+     * 再按原来的速度大小放回去：观感是一段平滑的小弧线，而不是瞬间转向。
+     * 到点 / 贴脸 / 目标没了 / 炸了 → 摘掉条目（剩下按当前方向直飞），绝不留悬挂引用。
      */
     private static void tickHoming() {
         for (Iterator<Homing> it = HOMING.iterator(); it.hasNext(); ) {
@@ -1082,6 +1335,10 @@ public final class MaidBombing {
             try {
                 if (h.tnt == null || h.tnt.m_213877_()) {
                     it.remove(); // 已经炸了 / 被清掉了
+                    continue;
+                }
+                if (h.level.m_46467_() >= h.until) {
+                    it.remove(); // v1.2.2 实测五百九十一：追踪时间到 → 撒手，按当前方向直飞
                     continue;
                 }
                 if (h.target == null || !h.target.m_6084_() || h.target.m_213877_()
@@ -1097,15 +1354,41 @@ public final class MaidBombing {
                     continue; // 已经贴脸：交给原版物理自然落点（不再硬掰，免得绕着目标打转）
                 }
                 double nx = dx / len;
-                double ny = dy / len;
-                double nz = dz / len;
                 // 补一点抬升抵消 TNT 每 tick 的 −0.04 重力，方向才是真的指向目标
-                ny += 0.04 / h.speed;
+                double ny = dy / len + 0.04 / h.speed;
+                double nz = dz / len;
                 double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
                 if (nl < 1.0E-6) {
                     continue;
                 }
-                h.tnt.m_20256_(new Vec3(nx / nl * h.speed, ny / nl * h.speed, nz / nl * h.speed));
+                nx /= nl;
+                ny /= nl;
+                nz /= nl;
+                // 它现在朝着哪：这一 tick 的原速度方向
+                Vec3 mv = h.tnt.m_20184_();
+                double mx = mv.f_82479_;
+                double my = mv.f_82480_;
+                double mz = mv.f_82481_;
+                double ml = Math.sqrt(mx * mx + my * my + mz * mz);
+                if (ml < 1.0E-4) {
+                    continue; // 速度没了（卡住了）→ 不插手
+                }
+                mx /= ml;
+                my /= ml;
+                mz /= ml;
+                // 限转角：夹角在阈值内就直接到位，否则只走这一小步（两向量线性插值后归一化）
+                double dot = Math.max(-1.0, Math.min(1.0, mx * nx + my * ny + mz * nz));
+                double ang = Math.acos(dot);
+                double t = ang <= TRACK_TURN_RAD ? 1.0 : TRACK_TURN_RAD / ang;
+                double sx = mx + (nx - mx) * t;
+                double sy = my + (ny - my) * t;
+                double sz = mz + (nz - mz) * t;
+                double sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
+                if (sl < 1.0E-6) {
+                    continue;
+                }
+                // 只改方向、不改速度大小（需求原话）
+                h.tnt.m_20256_(new Vec3(sx / sl * h.speed, sy / sl * h.speed, sz / sl * h.speed));
             } catch (Throwable ignored) {
             }
         }
@@ -1209,14 +1492,11 @@ public final class MaidBombing {
             if (tntStack.m_41619_()) {
                 break;
             }
-            ItemStack flint = takeOne(maid, ID_FLINT_AND_STEEL);
-            if (flint.m_41619_()) {
+            // v1.2.2 实测五百九十一【打火石不再被吞】：从**原槽**取出 → 扣 1 点耐久 → 放回**原槽**
+            //（旧版是整件取出、只对取出来的那份扣耐久 = 玩家看到的"直接把打火石吞掉"）
+            if (!useFlintAndSteel(maid)) {
                 giveBack(maid, tntStack);
                 break;
-            }
-            try {
-                flint.m_41622_(1, maid, m -> m.m_21166_(EquipmentSlot.MAINHAND)); // 打火石点一次掉 1 耐久（原版口径）
-            } catch (Throwable ignored) {
             }
             double sx = maid.m_20185_();
             double sy = maid.m_20186_() + maid.m_20192_() * 0.75;
@@ -1270,18 +1550,22 @@ public final class MaidBombing {
                 break;
             }
 
-            // v1.2.2 实测五百九十【追踪】：登记这一发（引信期间每 tick 把方向掰向目标）
-            if (cfgTntTrack() && HOMING.size() < MAX_PENDING) {
-                HOMING.add(new Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz)));
+            // v1.2.2 实测五百九十【追踪】/ 实测五百九十一【限时】：登记这一发——只在离手后的
+            // cfgTntTrackTicks（默认 10 tick = 0.5 秒）内朝目标修正方向，之后按当时方向直飞
+            if (cfgTntTrack() && cfgTntTrackTicks() > 0 && HOMING.size() < MAX_PENDING) {
+                HOMING.add(new Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz),
+                        gameTime + cfgTntTrackTicks()));
             }
             SoundEvent snd = sound(ID_TNT_PRIMED_SOUND);
             if (snd != null) {
                 level.m_5594_(null, maid.m_20183_(), snd, SoundSource.BLOCKS, 1.0f, 1.0f);
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
+            // 投掷那一记的动作：副手亮一下刚扔出去的那枚 TNT（实测五百九十一）
+            BombPose.show(maid, tntStack, BOMB_POSE_TICKS);
             if (PENDING.size() < MAX_PENDING) {
                 PENDING.add(new Bomb(level, maid, tnt, tnt.m_20183_(), null, null,
-                        Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2));
+                        Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2, tntStack));
             }
             thrown++;
             if (cfgPinkMark()) {
@@ -1321,7 +1605,7 @@ public final class MaidBombing {
                     continue;
                 }
                 ri.remove();
-                removePlaced(r.level, r.pos, r.block);
+                removePlaced(r.level, r.pos, r.block, r.maid);
             }
             Iterator<Bomb> it = PENDING.iterator();
             while (it.hasNext()) {
@@ -1407,14 +1691,34 @@ public final class MaidBombing {
             y = c.f_82480_;
             z = c.f_82481_;
         }
-        // ① v1.2.2 实测五百八十九【保留黑曜石】：起爆这一刻**不再立刻撤掉**她放的那几块——
+        // ① v1.2.2 实测五百八十九【保留黑曜石】：起爆这一刻**不再立刻撤掉**水晶底座——
         //    黑曜石留在原地（水晶就是放在它上面的那副样子，爆炸不破坏方块时尤其明显），
-        //    过 cfgReclaimSeconds() 秒（默认 10）再由我们回收；回收不掉落，所以不会白送材料。
-        //    配置填 0 就回到旧行为（起爆即回收）。
-        scheduleReclaim(level, b.placedPos, b.placedBlock);
-        // ② 炸弹实体本身清掉（不能走 kill()——末地水晶的 kill 会触发原版那一炸）
+        //    过 cfgReclaimSeconds() 秒（默认 10）再由我们回收。配置填 0 就起爆即回收。
+        // ② v1.2.2 实测五百九十一【回收口径按种类分】：
+        //    · 水晶链路：底座（黑曜石/基岩）**留着 → 到期回收到她背包**（绝不落地）；
+        //    · 重生锚 / 床：它们**自己那一炸就把方块消耗掉了**（javap 实证：原版 use() 里先
+        //      `removeBlock(pos, false)` 再 explode）——所以我们起爆这一刻直接撤掉、不进回收表、
+        //      也不回背包（回背包 = 放一次白拿一个重生锚，那是白送炸药）。
+        if (b.kind == Kind.CRYSTAL) {
+            scheduleReclaim(level, maid, b.placedPos, b.placedBlock);
+        } else if (b.placedPos != null) {
+            removePlaced(level, b.placedPos, b.placedBlock, null);
+        }
+        // ③ 炸弹实体本身清掉（不能走 kill()——末地水晶的 kill 会触发原版那一炸）
         if (b.entity != null && b.entity.m_6084_()) {
             b.entity.m_142687_(Entity.RemovalReason.DISCARDED);
+        }
+        // ④ v1.2.2 实测五百九十一【起爆那一记挥臂】：反馈"放置完重生锚/末地水晶后 0.5s 也会有一个
+        //    挥臂的动作（好像真的打了一下末影水晶/重生锚）"——只有她还在近处（8 格内）才做，
+        //    副手亮的是当时用的那一件（水晶 / 重生锚 / 床 / TNT）。
+        if (b.display != null && maid != null && maid.m_6084_()) {
+            double ddx = maid.m_20185_() - x;
+            double ddy = maid.m_20186_() - y;
+            double ddz = maid.m_20189_() - z;
+            if (ddx * ddx + ddy * ddy + ddz * ddz <= 64.0) {
+                maid.m_6674_(InteractionHand.MAIN_HAND);
+                BombPose.show(maid, b.display, BLAST_POSE_TICKS);
+            }
         }
         explode(level, maid, x, y, z, b.kind.power, b.kind.fire);
     }
