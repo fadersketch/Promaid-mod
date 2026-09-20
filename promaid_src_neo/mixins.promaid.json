@@ -55,6 +55,7 @@
     "EntityTickBlameMixin",
     "EntitySetDeltaMovementMixin",
     "ExplosionWindGuardMixin",
+    "BaseFireBlockPinkMixin",
     "PuppetModeLlmGuardMixin"
   ],
   "client": [

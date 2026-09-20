@@ -501,6 +501,14 @@ public final class MaidBombing {
         /** v1.2.2 实测五百九十二：相位改由服务端 tick 统一驱动 → 自己记住维度与目标 */
         final ServerLevel level;
         final LivingEntity target;
+        /**
+         * v1.2.2 实测五百九十九【目标死了也把这一轮走完】：她这一轮要"贴在哪一格"放炸弹。
+         *
+         * 目标还活着时每拍刷新；目标一死就冻结在它最后站的那一格——收翅猛击常常就是致命一击，
+         * 旧版一见 {@code !target.isAlive()} 就整段回滚，于是近战空袭**从来看不到她放重生锚**
+         *（实测：`tryStartMelee=true` → 目标死 → 下一拍 `isBombing=false`、附近重生锚 0）。
+         */
+        BlockPos targetPos;
         final long start;
         int step;
         /** 上一步发生的时刻（gameTime）：用来在"放方块"与"挂水晶/充能"之间留可见间隔 */
@@ -516,6 +524,7 @@ public final class MaidBombing {
             this.maid = maid;
             this.level = level;
             this.target = target;
+            this.targetPos = target == null ? null : target.blockPosition();
             this.start = start;
         }
     }
@@ -1008,13 +1017,22 @@ public final class MaidBombing {
             return false;
         }
         try {
-            if (ph.target == null || !ph.target.isAlive() || gameTime - ph.start > PHASE_TIMEOUT) {
+            // v1.2.2 实测五百九十九【"近战空袭从不放重生锚"的根因】：旧版这一行目标是"死了/没了"
+            // 就整段回滚 —— 而收翅猛击**常常就是致命一击**：起手那一 tick 之后目标马上就死了，
+            // 于是相位在 step 0 之前被撤掉，玩家永远看不到她放重生锚（实测日志：
+            // `C tryStartMelee=true isBombing=true` → 目标死 → 下一拍 `isBombing=false 附近重生锚=0`）。
+            // 现在：目标死了**不中止**，改用"它最后站的那一格"把这一轮走完（炸弹落在原地），
+            // 只有"从没拿到过目标位置"或超时才回滚。
+            if (ph.targetPos == null || gameTime - ph.start > PHASE_TIMEOUT) {
                 rollback(level, ph);
                 PHASE.remove(id);
                 return false;
             }
+            if (ph.target != null && ph.target.isAlive()) {
+                ph.targetPos = ph.target.blockPosition(); // 目标活着 → 跟着它走
+            }
             if (ph.step == 0) {
-                if (!stepBlock(level, maid, ph.target, ph)) {
+                if (!stepBlock(level, maid, ph.targetPos, ph)) {
                     PHASE.remove(id);
                     return false; // 放不下：整段放弃，直接走下一个链路
                 }
@@ -1087,7 +1105,7 @@ public final class MaidBombing {
     }
 
     /** step 0：把黑曜石/重生锚/床放到目标脚边那一格（走原版 BlockItem.place，两格床也由它铺） */
-    private static boolean stepBlock(ServerLevel level, EntityMaid maid, LivingEntity target, Phase ph) {
+    private static boolean stepBlock(ServerLevel level, EntityMaid maid, BlockPos targetPos, Phase ph) {
         ItemStack stack;
         if (ph.kind == Kind.BED) {
             stack = takeOneBed(maid);
@@ -1104,7 +1122,7 @@ public final class MaidBombing {
         ItemStack display = stack.copy();
         display.setCount(1);
         ph.display = display;
-        BlockPos spot = placeOnSupport(level, maid, target, stack);
+        BlockPos spot = placeOnSupport(level, maid, targetPos, stack);
         if (spot == null) {
             giveBack(maid, stack);
             log(ph.kind.cn + " 放不下（目标脚边 4 邻 / 她正下方 16 格 / 空中强制="
@@ -1279,10 +1297,9 @@ public final class MaidBombing {
      *    可替换的位置**直接悬空放下**——原版放置本身就允许悬空（`BlockItem.place` 只看
      *    点击位置能不能被替换），只是玩家手点不到空气，我们用构造出来的放置上下文可以。
      */
-    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, LivingEntity target, ItemStack stack) {
+    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, BlockPos tp, ItemStack stack) {
         BlockPos maidFeet = maid.blockPosition();
         BlockPos maidHead = maidFeet.above();
-        BlockPos tp = target.blockPosition();
         List<BlockPos> near = new ArrayList<>(4);
         for (Direction d : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
             near.add(tp.relative(d));
@@ -2040,11 +2057,13 @@ public final class MaidBombing {
         // （Explosion.finalizeExplosion）着火那段在 `interactsWithBlocks()` 之外，只看 fire=true，
         // 所以哪怕我们默认"不破坏方块"（ExplosionInteraction.NONE → BlockInteraction.KEEP），
         // 重生锚 / 床那一炸照样在地上留下原版橙色火（末地水晶 / TNT 原版 fire=false，不留火）。
-        // 现在：先记下爆炸前那一带**已有的**火，爆炸后只把"新出现的"逐个换成粉色火
-        // （主人自己的火堆 / 营火不受影响，见 pinkifyFire）。
-        java.util.Set<net.minecraft.core.BlockPos> fireBefore = null;
-        if (fire && cfgPinkFire()) {
-            fireBefore = scanFire(level, x, y, z, power);
+        // v1.2.2 实测五百九十八【改法换代】：旧版是"爆炸后按盒子把新出现的原版火换成粉色"，
+        // 而原版点火的那些格子是**射线**扫出来的（空气阻力 0 → 射线能跑二十格开外），盒子永远
+        // 罩不住 → 实测"又粉又橙"。现在换成"边点边换"：爆炸期间开着点火窗口，原版点火那一刻
+        // 拿到手的就是粉色火（见 PinkFireBlock.beginWindow 与 BaseFireBlockPinkMixin）。
+        boolean pinkWindow = fire && cfgPinkFire();
+        if (pinkWindow) {
+            PinkFireBlock.beginWindow();
         }
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
         // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
@@ -2069,11 +2088,13 @@ public final class MaidBombing {
         } finally {
             selfImmuneBlast = false;
             selfImmuneMaidId = null;
-        }
-        // v1.2.2 实测五百九十七：这一炸新点着的原版火 → 换成粉色火（必须在原版爆炸之后做：
-        // 原版是在 explode() 里逐个 setBlock 点火的，这一秒之后才知道到底点着了哪几格）
-        if (fireBefore != null) {
-            pinkifyFire(level, x, y, z, power, fireBefore);
+            // 关窗口（若开着）：这一炸点着的每一格都已经是粉色火，这里只把条数取出来写日志
+            if (pinkWindow) {
+                int pink = PinkFireBlock.endWindow();
+                if (pink > 0) {
+                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
+                }
+            }
         }
     }
 
@@ -2082,89 +2103,4 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
     }
 
-    /**
-     * v1.2.2 实测五百九十七：扫出爆炸范围内**已经存在**的火（原版火 / 灵魂火）。
-     *
-     * 用它把"爆炸前就有的火"摘出去——玩家自己的火堆、营火旁燃起来的草，都不该被我们染成粉色。
-     * 范围取 {@code ceil(power) + 2}：原版 {@code toBlow} 的格子最远到半径的 1.3 倍左右，
-     * 这个盒子足够罩住，一次爆炸扫一遍（锚是 5 → 15³ ≈ 3400 格）开销可忽略。
-     */
-    private static java.util.Set<net.minecraft.core.BlockPos> scanFire(
-            ServerLevel level, double x, double y, double z, float power) {
-        java.util.Set<net.minecraft.core.BlockPos> set = new java.util.HashSet<>();
-        try {
-            int r = Mth.ceil(power) + 2;
-            int cx = Mth.floor(x);
-            int cy = Mth.floor(y);
-            int cz = Mth.floor(z);
-            net.minecraft.core.BlockPos.MutableBlockPos mp = new net.minecraft.core.BlockPos.MutableBlockPos();
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dy = -r; dy <= r; dy++) {
-                    for (int dz = -r; dz <= r; dz++) {
-                        mp.set(cx + dx, cy + dy, cz + dz);
-                        if (isFire(level.getBlockState(mp))) {
-                            set.add(mp.immutable());
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return set;
-    }
-
-    private static boolean isFire(BlockState st) {
-        try {
-            return st.is(Blocks.FIRE) || st.is(Blocks.SOUL_FIRE);
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.2.2 实测五百九十七：把这一炸新点着的原版火逐个换成 {@link PinkFireBlock}。
-     *
-     * 只换"爆炸前不在集合里"的那些（{@code before} 里的跳过）；换的时候把原状态的
-     * NORTH/EAST/SOUTH/WEST/UP/AGE 照抄过来（{@link PinkFireBlock#fromVanillaFire}），
-     * 于是外观位置、连着哪几面与原版一模一样，只是颜色变粉。
-     *
-     * 用 {@code setBlock(pos, state, 3)}（不触发邻居更新的那档）——这一格本来是火，
-     * 换成另一团火，不需要惊动周围方块。
-     */
-    private static void pinkifyFire(ServerLevel level, double x, double y, double z, float power,
-                                    java.util.Set<net.minecraft.core.BlockPos> before) {
-        try {
-            if (PinkFireBlock.block() == null) {
-                return;
-            }
-            int r = Mth.ceil(power) + 2;
-            int cx = Mth.floor(x);
-            int cy = Mth.floor(y);
-            int cz = Mth.floor(z);
-            int n = 0;
-            net.minecraft.core.BlockPos.MutableBlockPos mp = new net.minecraft.core.BlockPos.MutableBlockPos();
-            for (int dx = -r; dx <= r; dx++) {
-                for (int dy = -r; dy <= r; dy++) {
-                    for (int dz = -r; dz <= r; dz++) {
-                        mp.set(cx + dx, cy + dy, cz + dz);
-                        BlockState cur = level.getBlockState(mp);
-                        if (!isFire(cur) || before.contains(mp)) {
-                            continue;
-                        }
-                        BlockState pink = PinkFireBlock.fromVanillaFire(cur);
-                        if (pink == null) {
-                            continue;
-                        }
-                        level.setBlock(mp, pink, 3);
-                        n++;
-                    }
-                }
-            }
-            if (n > 0) {
-                log("粉色火焰：这一炸新点着的 " + n + " 格原版火已换成粉色火");
-            }
-        } catch (Throwable t) {
-            log("粉色火焰替换异常：" + t);
-        }
-    }
 }
