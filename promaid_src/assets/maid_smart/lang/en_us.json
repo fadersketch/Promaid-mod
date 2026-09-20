@@ -118,5 +118,8 @@
   "config.promaid.bombing.pinkMark": "Pink Marker on Maid-Placed Bombs",
   "config.promaid.bombing.tntRange": "TNT Target Radius (blocks)",
   "config.promaid.bombing.tntBurstRatio": "Low-Health Burst Ratio",
-  "config.promaid.bombing.tntBurstCount": "Low-Health Burst Count"
+  "config.promaid.bombing.tntBurstCount": "Low-Health Burst Count",
+  "config.promaid.bombing.reclaimSeconds": "Bomb Base Reclaim Delay (s)",
+  "config.promaid.bombing.anchorNeedsGlowstone": "Respawn Anchor Needs Glowstone",
+  "config.promaid.bombing.airPlace": "Force Place in Air"
 }

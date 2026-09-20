@@ -481,6 +481,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_BOMBING_TNT_BURST_RATIO;
     /** 连投最多几发（默认 3） */
     public static final ForgeConfigSpec.IntValue COMBAT_BOMBING_TNT_BURST_COUNT;
+    /** 炸弹底座回收延迟（秒，默认 10；0 = 起爆即回收） */
+    public static final ForgeConfigSpec.IntValue COMBAT_BOMBING_RECLAIM_SECONDS;
+    /** 重生锚是否需要萤石（默认 true = 原版口径） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE;
+    /** 空中强制放置（默认 true） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
 
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
@@ -1835,8 +1841,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
         COMBAT_BOMBING_TNT_FUSE = BUILDER.comment("投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间，调小 = 落地即炸更准、调大 = 更容易被躲开")
                 .translation("config.promaid.bombing.tntFuse").defineInRange("tntFuse", 40, 10, 200);
-        COMBAT_BOMBING_TNT_INTERVAL = BUILDER.comment("投掷 TNT 的间隔（tick，默认 120 = 6 秒）：两次投掷之间的最短间隔（材料不齐时不占用这个计时）")
-                .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 120, 20, 1200);
+        COMBAT_BOMBING_TNT_INTERVAL = BUILDER.comment("投掷 TNT 的间隔（tick，默认 40 = 2 秒）：两次投掷之间的最短间隔（材料不齐时不占用这个计时）。玩家反馈『CD 太长』，默认由 120 降到 40；老配置里还是 120 的会在启动时自动迁移一次")
+                .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 40, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
         COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的黑曜石/重生锚/床无论开关都会由她回收，不会留在世界里")
@@ -1852,6 +1858,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 点打火石耐久）；1 = 关掉连投")
                 .translation("config.promaid.bombing.tntBurstCount")
                 .defineInRange("tntBurstCount", 3, 1, 16);
+        COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：女仆放下的黑曜石 / 重生锚 / 床在起爆后**留在原地**这么久再由她回收——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子；回收不掉落，不存在白送材料")
+                .translation("config.promaid.bombing.reclaimSeconds")
+                .defineInRange("reclaimSeconds", 10, 0, 600);
+        COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE = BUILDER.comment("重生锚需要萤石（默认开 = 原版口径）：反编译实证——重生锚 0 级充能右键不炸（充能等级只决定『炸不炸』、不决定『炸多狠』，那一炸固定 5.0），所以默认要 1 颗萤石点火。关掉 = 不消耗萤石，她直接把那 1 级补上就炸")
+                .translation("config.promaid.bombing.anchorNeedsGlowstone")
+                .define("anchorNeedsGlowstone", true);
+        COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
+                .translation("config.promaid.bombing.airPlace")
+                .define("airPlace", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
         BUILDER.pop();

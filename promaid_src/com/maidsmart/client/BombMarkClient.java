@@ -122,7 +122,8 @@ public final class BombMarkClient {
         pose.m_85836_();
         try {
             for (int[] b : BLOCKS) {
-                drawBox(pose, mc, camera, b[0], b[1], b[2], 0.16f);
+                drawBox(pose, mc, camera, b[0], b[1], b[2], 0.34f);
+                drawLabel(pose, b[0] + 0.5, b[1] + 1.35, b[2] + 0.5);
             }
             for (Integer id : ENTITIES.keySet()) {
                 Entity e = mc.f_91073_.m_6815_(id);
@@ -130,6 +131,7 @@ public final class BombMarkClient {
                     continue;
                 }
                 drawEntityBox(pose, mc, camera, e);
+                drawLabel(pose, e.m_20185_(), e.m_20186_() + e.m_20192_() + 0.45, e.m_20189_());
             }
         } finally {
             pose.m_85849_();
@@ -138,22 +140,82 @@ public final class BombMarkClient {
 
     /* ---------------- 画 ---------------- */
 
+    /** 亮粉（v1.2.2 实测五百八十九：玩家反馈"太不明显、看不出是友方的"→ 填充加重 + 加棱线 + 加浮字） */
+    private static final float PINK_R = 1.0f;
+    private static final float PINK_G = 0.47f;
+    private static final float PINK_B = 0.80f;
+    private static final java.lang.String PINK_LABEL = "\u00a7d友军炸弹";
+
     private static void drawEntityBox(PoseStack pose, Minecraft mc, Vec3 camera, Entity e) {
         try {
             AABB box = e.m_20191_().m_82383_(camera);
-            MarkBufferSource src = new MarkBufferSource();
-            net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, src, box, 1.0f, 0.62f, 0.80f, 0.20f);
-            src.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
+            drawFilled(pose, box, 0.38f);
+            drawEdges(pose, mc, camera, box);
         } catch (Throwable ignored) {
         }
     }
 
     private static void drawBox(PoseStack pose, Minecraft mc, Vec3 camera,
                                 int bx, int by, int bz, float a) {
-        MarkBufferSource src = new MarkBufferSource();
         AABB box = new AABB(bx, by, bz, bx + 1.0, by + 1.0, bz + 1.0).m_82383_(camera);
-        net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, src, box, 1.0f, 0.62f, 0.80f, a);
+        drawFilled(pose, box, a);
+        drawEdges(pose, mc, camera, box);
+    }
+
+    /** 半透明填充：每盒独立 BufferSource + 立即 flush（与蓝图/指标石预览同款） */
+    private static void drawFilled(PoseStack pose, AABB box, float a) {
+        MarkBufferSource src = new MarkBufferSource();
+        net.minecraft.client.renderer.debug.DebugRenderer.m_269311_(pose, src, box, PINK_R, PINK_G, PINK_B, a);
         src.m_109912_(net.minecraft.client.renderer.RenderType.m_269313_());
+    }
+
+    /** 亮粉棱线：比填充更实，隔一段距离也能一眼认出"这是友军的东西" */
+    private static void drawEdges(PoseStack pose, Minecraft mc, Vec3 camera, AABB box) {
+        try {
+            com.mojang.blaze3d.vertex.VertexConsumer buf = mc.m_91269_().m_110104_().m_6299_(
+                    net.minecraft.client.renderer.RenderType.f_110371_);
+            drawBoxEdges(pose, buf,
+                    box.f_82288_ - camera.f_82479_, box.f_82289_ - camera.f_82480_, box.f_82290_ - camera.f_82481_,
+                    box.f_82291_ - camera.f_82479_, box.f_82292_ - camera.f_82480_, box.f_82293_ - camera.f_82481_);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 12 条棱（照蓝图/指标石预览的实现：TLM RenderHelper.renderLine） */
+    private static void drawBoxEdges(PoseStack pose, com.mojang.blaze3d.vertex.VertexConsumer buf,
+                                     double x0, double y0, double z0, double x1, double y1, double z1) {
+        float r = 1.0f;
+        float g = 0.55f;
+        float b = 0.85f;
+        Vec3 c0 = new Vec3(x0, y0, z0);
+        Vec3 c1 = new Vec3(x1, y0, z0);
+        Vec3 c2 = new Vec3(x1, y0, z1);
+        Vec3 c3 = new Vec3(x0, y0, z1);
+        Vec3 t0 = new Vec3(x0, y1, z0);
+        Vec3 t1 = new Vec3(x1, y1, z0);
+        Vec3 t2 = new Vec3(x1, y1, z1);
+        Vec3 t3 = new Vec3(x0, y1, z1);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c0, c1, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c1, c2, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c2, c3, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c3, c0, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, t0, t1, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, t1, t2, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, t2, t3, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, t3, t0, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c0, t0, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c1, t1, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c2, t2, r, g, b);
+        com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderLine(pose, buf, c3, t3, r, g, b);
+    }
+
+    /** "友军炸弹"浮字：直接写字，比只靠颜色可靠 */
+    private static void drawLabel(PoseStack pose, double x, double y, double z) {
+        try {
+            com.github.tartaricacid.touhoulittlemaid.util.RenderHelper.renderFloatingText(pose,
+                    PINK_LABEL, x, y, z, 0xFF88CC, 0.12f, true, -5.0f, false);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 与 {@code BlueprintAreaPreview.GhostBufferSource} 同款：每盒独立、立即 flush */

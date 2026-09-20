@@ -261,5 +261,8 @@
   "config.promaid.bombing.pinkMark": "女仆放置物的淡粉色标记",
   "config.promaid.bombing.tntRange": "投掷索敌半径（格）",
   "config.promaid.bombing.tntBurstRatio": "残血连投阈值（0-1）",
-  "config.promaid.bombing.tntBurstCount": "连投最多（发）"
+  "config.promaid.bombing.tntBurstCount": "连投最多（发）",
+  "config.promaid.bombing.reclaimSeconds": "炸弹底座回收延迟（秒）",
+  "config.promaid.bombing.anchorNeedsGlowstone": "重生锚需要萤石",
+  "config.promaid.bombing.airPlace": "空中强制放置"
 }
