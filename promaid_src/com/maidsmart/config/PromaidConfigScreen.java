@@ -2412,6 +2412,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_FUSE, s), "起爆延迟（tick，默认 10 = 0.5 秒）：放下之后多久响；这半秒正好够她重新起飞"));
         this.rows.add(new NumRow("放置间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP, s), "放置间隔（tick，默认 10 = 0.5 秒）：先放下方块、停这么久再挂水晶/充能——不然两步同一瞬间完成，看不出中间有过动作"));
+        this.rows.add(new BoolRow("副手动作表现", MaidSmartConfig.COMBAT_BOMBING_POSE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_POSE.set(v),
+                "副手动作表现（默认开，v1.2.2 实测五百九十四）：放置 / 充能 / 投掷 / 起爆时副手短暂举起她正在用的那一件（方块 / 萤石 / 打火石）——扔 TNT 时举的是打火石；关掉 = 副手全程不被换，只剩挥臂 / 音效 / 爆炸"));
         this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
         this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),

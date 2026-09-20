@@ -125,6 +125,7 @@
   "config.promaid.bombing.tntTrackTicks": "TNT Homing Duration (ticks)",
   "config.promaid.bombing.bombInterval": "Bombing Min Interval (ticks)",
   "config.promaid.bombing.anchorNeedsGlowstone": "Respawn Anchor Needs Glowstone",
+  "config.promaid.bombing.pose": "Offhand Pose (place / charge / throw)",
   "config.promaid.bombing.airPlace": "Force Place in Air",
   "config.promaid.bombing.tntTrack": "TNT Homing",
   "config.promaid.compat": "Third-party Compat",
