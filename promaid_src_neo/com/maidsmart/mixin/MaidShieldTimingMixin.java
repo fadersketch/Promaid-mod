@@ -27,6 +27,9 @@ public abstract class MaidShieldTimingMixin {
     @Inject(method = "checkExtraStartConditions(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z", at = @At("HEAD"), cancellable = true)
     private void maidsmart$shieldTiming(ServerLevel level, EntityMaid maid,
                                         CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         if (!MaidCombatTacticsBehavior.isTacticsEnabled(maid)) {
             return; // 战术关闭：原版"一直举盾"逻辑
         }

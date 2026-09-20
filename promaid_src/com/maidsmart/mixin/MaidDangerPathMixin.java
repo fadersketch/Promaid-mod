@@ -48,6 +48,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
         if (!(mob instanceof EntityMaid)) {
             return; // 仅女仆生效
         }
+        if (!com.maidsmart.tool.MaidScope.owned(mob)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包的野生女仆 AI 一律不动）
+        }
         try {
             if (!MaidSmartConfig.MISC_DANGER_AVOID.get()) {
                 return; // 开关关闭：整体旁路

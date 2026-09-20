@@ -33,6 +33,7 @@ import net.minecraft.core.registries.BuiltInRegistries;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -69,8 +70,14 @@ import java.util.UUID;
  * ① 水晶：黑曜石/基岩（有黑曜石优先）+ 末地水晶 → 目标脚边那一格放方块、上面挂水晶；
  * ② 重生锚：重生锚（下界不生效）→ 放下 → 替她充 1 级（实测五百九十一起**不要萤石**）；
  * ③ 床：任意床（主世界不生效）→ 放下（原版两格床，朝向按她的朝向）。
- * 三段按 ①②③ 取第一个材料齐的；**放置失败不再试下一段**，直接交还原链路（再次起飞）——
- * 需求原话"不会再进行判定，会直接跳到下一个链路"。
+ * v1.2.2 实测六百【三段并行】：旧版是"按 ①②③ 取第一个材料齐的"，于是**只要她带着末地水晶，
+ * 重生锚和床就永远轮不到**（反馈原文："在女仆同时可以放 TNT 和末影水晶时，重生锚和床的链路会被
+ * 吞掉。也就是说此时女仆只会扔 TNT 和放末影水晶，压根不会去放重生锚。我认为它的优先级应和放末影
+ * 水晶是一样的。两者可以同时启动。"）。现在**每一段各有一个相位、各有一条最短间隔**，
+ * 同一次攻击里材料齐的几段同时起手（最多三段），落点互不抢（{@code claimedByOtherPhase}）；
+ * 三段**放置走的是完全同一套代码**（{@link #placeOnSupport}：原版 place → 落点兜底强制放下 →
+ * 空中强制，{@link #stepBlock} 只是取的那件东西不同）——"照搬放末影水晶黑曜石那套逻辑"
+ * 就是这么落地的。
  *
  * ── 实测五百九十一（七件事）──
  * ① 重生锚的放置口径与黑曜石完全一致（同一套三级落点找法）——反馈："重生锚还是放不了，
@@ -604,6 +611,183 @@ public final class MaidBombing {
         }
     }
 
+    /* ==================== v1.2.2 实测六百：起爆后的"不会被烧"守护区 ==================== */
+
+    /**
+     * 反馈原文："玩家还是会被粉火烧到。……同时再加入不会被烧。"
+     *
+     * 实测日志（latest.log）显示：那一炸点着的 119 格火**确实全部**是粉色火（窗口那条路是好的），
+     * 但女仆随后（3 秒后）在某格**原版火**上吃到了 {@code inFire} 伤害、接着 {@code onFire}
+     * 连烧——也就是说烧到人的不是我们保护得住的粉色火，而是场地上**别的来源**留下的火。
+     * 于是除了"新火全变粉"（{@link PinkFireBlock#pinkEnabled()}）之外再加这一层兜底：
+     *
+     * <ol>
+     *   <li>每一次带火的起爆都登记一块**守护区**（中心 + 半径 = 威力×2，持续 15 秒）；</li>
+     *   <li>守护期内每 5 tick 扫一次区里的玩家与女仆：身上还带着火（{@code remainingFireTicks > 0}）
+     *       就**直接熄灭**——"不会被烧"落到"出火圈也不带火"；</li>
+     *   <li>{@code LivingAttackEvent} 那一层（见 {@link #onBurnGuardAttack}）：区里站在火上的
+     *       玩家/女仆吃到火类伤害时**直接取消**——同 tick 踩进火里的那一下也拦得住。</li>
+     * </ol>
+     *
+     * 只认"身上有火"和"站在火上"，不认伤害来源——所以不依赖"那格火是不是我们的"，
+     * 场地里任何来源的火都罩得住。区外、超时后一概不管。
+     */
+    private static final List<BurnGuard> BURN_GUARDS = new ArrayList<>();
+
+    /** 守护区持续时长（tick）：15 秒——够覆盖"女仆在旁边打一会儿"的整个窗口 */
+    private static final long BURN_GUARD_TICKS = 300L;
+
+    private static final class BurnGuard {
+        final ServerLevel level;
+        final double x;
+        final double y;
+        final double z;
+        final double r2;
+        final long until;
+
+        BurnGuard(ServerLevel level, double x, double y, double z, double radius, long until) {
+            this.level = level;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.r2 = radius * radius;
+            this.until = until;
+        }
+
+        boolean contains(Entity e) {
+            if (e == null) {
+                return false;
+            }
+            double dx = e.getX() - this.x;
+            double dy = e.getY() - this.y;
+            double dz = e.getZ() - this.z;
+            return dx * dx + dy * dy + dz * dz <= this.r2;
+        }
+    }
+
+    /** 登记守护区（起爆时调用一次） */
+    private static void addBurnGuard(ServerLevel level, double x, double y, double z, double radius) {
+        try {
+            if (level == null || radius <= 0.0) {
+                return;
+            }
+            if (BURN_GUARDS.size() > 64) {
+                BURN_GUARDS.remove(0); // 极端情况（连环炸）只保留最近 64 块
+            }
+            BURN_GUARDS.add(new BurnGuard(level, x, y, z, radius, level.getGameTime() + BURN_GUARD_TICKS));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 这个实体此刻是否在某块守护区里（守护区没过期） */
+    private static boolean inBurnGuard(Entity e) {
+        if (e == null || BURN_GUARDS.isEmpty()) {
+            return false;
+        }
+        try {
+            long now = e.level().getGameTime();
+            for (int i = 0; i < BURN_GUARDS.size(); i++) {
+                BurnGuard g = BURN_GUARDS.get(i);
+                if (now <= g.until && g.level == e.level() && g.contains(e)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 守护区巡检（每 5 tick）：区里的玩家/女仆身上还带着火就熄灭 */
+    private static void tickBurnGuards() {
+        if (BURN_GUARDS.isEmpty()) {
+            return;
+        }
+        try {
+            for (Iterator<BurnGuard> it = BURN_GUARDS.iterator(); it.hasNext(); ) {
+                BurnGuard g = it.next();
+                long now = g.level.getGameTime();
+                if (now > g.until + BOMB_TIMEOUT) {
+                    it.remove();
+                    continue;
+                }
+                if (now > g.until) {
+                    continue;
+                }
+                double r = Math.sqrt(g.r2);
+                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                        g.x - r, g.y - r, g.z - r, g.x + r, g.y + r, g.z + r);
+                for (net.minecraft.world.entity.player.Player p : g.level.getEntitiesOfClass(
+                        net.minecraft.world.entity.player.Player.class, box)) {
+                    clearFire(p, g);
+                }
+                for (EntityMaid m : g.level.getEntitiesOfClass(EntityMaid.class, box)) {
+                    clearFire(m, g);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 熄灭（只对真的还在区里的做，AABB 只是粗筛） */
+    private static void clearFire(Entity e, BurnGuard g) {
+        try {
+            if (!g.contains(e)) {
+                return;
+            }
+            if (e.getRemainingFireTicks() > 0) {
+                e.setRemainingFireTicks(0); // 出火圈也不带火
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 火类伤害的守护：区里的玩家 / 女仆被火伤害时直接取消。
+     *
+     * 判据是"伤害类型属于 {@code is_fire} 标签**且**她/他此刻正站在火焰方块里"——放在岩浆里、
+     * 站在岩浆块上（hot_floor）不在其内，那些是玩家自己的事，本模组不碰。
+     */
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onBurnGuardAttack(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
+        try {
+            if (!cfgFireProtect() || BURN_GUARDS.isEmpty()) {
+                return;
+            }
+            Entity victim = event.getEntity();
+            if (!(victim instanceof net.minecraft.world.entity.player.Player) && !(victim instanceof EntityMaid)) {
+                return; // 只护主人与女仆（其它生物照常被烧）
+            }
+            if (victim.getRemainingFireTicks() <= 0 && !standingInFire(victim)) {
+                return; // 与火无关的这一下不管（区里的普通攻击照旧生效）
+            }
+            net.minecraft.world.damagesource.DamageSource src = event.getSource();
+            if (src == null || !src.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
+                return; // 不是火类伤害
+            }
+            if (!inBurnGuard(victim)) {
+                return; // 不在（15 秒内的）炸弹守护区里
+            }
+            victim.setRemainingFireTicks(0);
+            event.setCanceled(true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 脚下或身体所在格是不是火焰方块（原版火 / 灵魂火 / 我们的粉色火） */
+    private static boolean standingInFire(Entity e) {
+        try {
+            net.minecraft.world.level.Level lvl = e.level();
+            BlockPos base = e.blockPosition();
+            for (BlockPos pos : new BlockPos[]{base, base.above()}) {
+                if (lvl.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     /**
      * 排一次"到期回收"：延迟秒数取自配置（默认 10 秒）。0 = 起爆时立刻回收（旧行为）。
      *
@@ -626,10 +810,25 @@ public final class MaidBombing {
         }
     }
 
-    private static final Map<UUID, Phase> PHASE = new HashMap<>();
+    /**
+     * 正在推进的轰炸相位：**女仆 → (链路 → 相位)**。
+     *
+     * v1.2.2 实测六百【三段并行】：旧版是「女仆 → 单个相位」，于是 {@code pickKind} 按
+     * 水晶 → 重生锚 → 床 取第一个材料齐的——**只要她带着末地水晶，重生锚和床就永远轮不到**
+     *（反馈原文："在女仆同时可以放 TNT 和末影水晶时，重生锚和床的链路会被吞掉。也就是说此时
+     * 女仆只会扔 TNT 和放末影水晶，压根不会去放重生锚。我认为它的优先级应和放末影水晶是一样的。
+     * 两者可以同时启动。"）。现在一条链路一个相位、各走各的步骤与间隔，
+     * 同一次攻击里**材料齐的几段可以同时起手**（最多三段）。
+     */
+    private static final Map<UUID, EnumMap<Kind, Phase>> PHASE = new HashMap<>();
     private static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
-    /** v1.2.2 实测五百九十二：整条轰炸链路的最短间隔下限（女仆 → 下次可起手的 gameTime） */
-    private static final Map<UUID, Long> BOMB_NEXT = new HashMap<>();
+    /**
+     * v1.2.2 实测五百九十二：整条轰炸链路的最短间隔下限（女仆 → 链路 → 下次可起手的 gameTime）。
+     *
+     * 实测六百：从"每只女仆一条"细化成"**每只女仆、每条链路各一条**"——三段并行之后，
+     * 若还共用一条下限，先起手的把下限顶掉就等于又把其它两段吞了（正好是要修的那个毛病）。
+     */
+    private static final Map<UUID, EnumMap<Kind, Long>> BOMB_NEXT = new HashMap<>();
     private static final List<Bomb> PENDING = new ArrayList<>();
     /** v1.2.2 实测五百九十：攻击链路收尾登记的「待投放」（女仆 UUID → 登记时刻） */
     private static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
@@ -730,13 +929,19 @@ public final class MaidBombing {
      * 硬清某个女仆的相位：能还就把**已放下的方块原物还她**（照 rollback 的口径）。
      * v1.2.2 实测五百九十二：旧版 forget 只 `PHASE.remove`，那一块黑曜石 / 重生锚就白留
      * 在世界里了（空袭行为每次收尾都走 forget，所以这个漏点相当常见）。
+     * v1.2.2 实测六百：三段并行后要**逐段**回滚（每段各自放过的东西各自还）。
      */
     private static void rollbackPhase(UUID maidId) {
-        Phase ph = PHASE.remove(maidId);
-        if (ph != null && ph.level != null) {
-            try {
-                rollback(ph.level, ph);
-            } catch (Throwable ignored) {
+        EnumMap<Kind, Phase> map = PHASE.remove(maidId);
+        if (map == null) {
+            return;
+        }
+        for (Phase ph : map.values()) {
+            if (ph != null && ph.level != null) {
+                try {
+                    rollback(ph.level, ph);
+                } catch (Throwable ignored) {
+                }
             }
         }
     }
@@ -750,6 +955,10 @@ public final class MaidBombing {
     /**
      * 猛击命中之后调用（在 endSmash 之前）。true = 本 tick 起手成功、由轰炸相位接管；
      * 材料不齐 / 已在本段里 → false（原链路照旧：再次起飞）。
+     *
+     * v1.2.2 实测六百【三段并行】：不再是"取第一个材料齐的链路"，而是**材料齐的每一段各自
+     * 起一个相位**（水晶 / 重生锚 / 床 最多三段同时在飞）——需求原文："我认为它的优先级应和
+     * 放末影水晶是一样的。两者可以同时启动。"
      */
     public static boolean tryStartMelee(ServerLevel level, EntityMaid maid, LivingEntity target) {
         try {
@@ -763,65 +972,93 @@ public final class MaidBombing {
                 return false;
             }
             UUID id = maid.getUUID();
-            Phase old = PHASE.get(id);
-            if (old != null) {
-                if (level.getGameTime() - old.start < PHASE_TIMEOUT) {
-                    return true; // 已经在本段里（正常不会走到这里）
-                }
-                PHASE.remove(id);
-            }
-            // v1.2.2 实测五百九十二【最短间隔】：轰炸推广到所有攻击模式之后，一次挥砍放一枚会在
-            // 几秒内烧光她的黑曜石 / 水晶 / 重生锚——所以整条链路上一个下限（默认 200 tick = 10 秒，
-            // 与 TNT 那条"CD 只当下限"同一套思路，面板「轰炸最短间隔」可调）。
-            // 缺料那一下**不占用**间隔（下面直接返回，不写 BOMB_NEXT）。
             long now = level.getGameTime();
-            if (now < BOMB_NEXT.getOrDefault(id, 0L)) {
-                return false;
+            EnumMap<Kind, Phase> running = PHASE.get(id);
+            if (running != null) {
+                // 陈旧相位（超时）先丢掉：它自己那一轮已经不成立了
+                for (Iterator<Phase> it = running.values().iterator(); it.hasNext(); ) {
+                    Phase ph = it.next();
+                    if (now - ph.start >= PHASE_TIMEOUT) {
+                        it.remove();
+                    }
+                }
+                if (running.isEmpty()) {
+                    PHASE.remove(id);
+                }
             }
-            Kind kind = pickKind(level, maid);
-            if (kind == null) {
-                return false; // 材料不齐 / 维度闸关：跳过（需求："判定没有就会直接跳过"；不占间隔）
+            // v1.2.2 实测五百九十二【最短间隔】+ 实测六百【按段各算】：一次挥砍放一枚会在几秒内
+            // 烧光她的材料，所以每段各有一条下限（默认 200 tick = 10 秒，面板「轰炸最短间隔」可调）。
+            // 缺料那一下**不占用**间隔（没起手的段不写 BOMB_NEXT）。
+            List<Kind> ready = readyKinds(level, maid, id, now, running);
+            if (ready.isEmpty()) {
+                return false; // 一段都起不来：跳过（需求："判定没有就会直接跳过"）
             }
-            PHASE.put(id, new Phase(kind, maid, level, target, now));
-            BOMB_NEXT.put(id, now + cfgBombInterval());
-            return true;
+            EnumMap<Kind, Long> next = BOMB_NEXT.computeIfAbsent(id, k -> new EnumMap<>(Kind.class));
+            boolean started = false;
+            for (Kind kind : ready) {
+                if (running != null && running.containsKey(kind)) {
+                    continue; // 这一段还在飞，不重复起手
+                }
+                PHASE.computeIfAbsent(id, k -> new EnumMap<>(Kind.class))
+                        .put(kind, new Phase(kind, maid, level, target, now));
+                next.put(kind, now + cfgBombInterval());
+                started = true;
+            }
+            return started;
         } catch (Throwable t) {
             log("起手异常：" + t);
             return false;
         }
     }
 
-    /** 材料齐的第一段链路（顺序：水晶 → 重生锚 → 床；维度不合适的跳过那一段） */
-    private static Kind pickKind(ServerLevel level, EntityMaid maid) {
-        if (has(maid, ID_END_CRYSTAL) && has(maid, ID_OBSIDIAN, ID_BEDROCK)) {
-            return Kind.CRYSTAL;
+    /**
+     * 这一步可以起手的链路（顺序：水晶 → 重生锚 → 床；维度不合适的跳过那一段），
+     * 并顺手把"没开成的原因"记进日志（重生锚那一段仍然照 实测五百九十四 的口径）。
+     *
+     * v1.2.2 实测六百：从"返回第一个"改成"返回全部可以起的"——{@code running} 里已经在飞的
+     * 那几段由调用方排除，所以这里只判"材料 / 维度 / 间隔"。
+     */
+    private static List<Kind> readyKinds(ServerLevel level, EntityMaid maid, UUID id, long now,
+                                         EnumMap<Kind, Phase> running) {
+        List<Kind> out = new ArrayList<>(3);
+        EnumMap<Kind, Long> next = BOMB_NEXT.get(id);
+        // ① 末地水晶（黑曜石 / 基岩底座）
+        if (has(maid, ID_END_CRYSTAL) && has(maid, ID_OBSIDIAN, ID_BEDROCK)
+                && !onCooldown(next, Kind.CRYSTAL, now)) {
+            out.add(Kind.CRYSTAL);
         }
-        // 注：重生锚"必须有 ≥1 级充能才会炸"是原版规则，所以默认要 1 颗萤石当引信；
-        // 关掉「重生锚需要萤石」后不检查它（放下即由我们补上那 1 级，见 stepPayload）。
-        // ── v1.2.2 实测五百九十二：**萤石要一颗**（反馈："重生锚还是需要一个萤石进行充能的"）──
-        // 放置不需要它，但"要它炸"就需要 ≥1 级充能（原版规则：0 级右键不炸）；威力是写死的 5.0F、
-        // 与充能等级无关（javap 实证），所以 1 颗就够。维度闸见 explodesHere。
-        if (explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)
-                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE))) {
-            return Kind.ANCHOR;
+        // ② 重生锚（需要 1 颗萤石当引信；维度闸见 explodesHere）
+        boolean anchorReady = explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)
+                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE));
+        if (anchorReady && !onCooldown(next, Kind.ANCHOR, now)) {
+            out.add(Kind.ANCHOR);
+        } else if (!anchorReady) {
+            // ── v1.2.2 实测五百九十四【把原因说到玩家脸上】──
+            // 第三次反馈"重生锚还是放不下来"，而实测日志（latest.log 搜「空袭轰炸」）里那一行写得
+            // 明明白白：她带着重生锚、**缺萤石**。旧版这条原因只落在日志里（玩家不看日志就等于没有），
+            // 而且床能顶上时**连日志都不会有**（diagSkip 只在"一条链路都开不了"时才跑）。
+            // 现在不管后面是床顶上、还是整条链都没开成，只要重生锚这一段被跳过就记明原因。
+            hintAnchorSkip(level, maid);
         }
-        // ── v1.2.2 实测五百九十四【把原因说到玩家脸上】──
-        // 第三次反馈"重生锚还是放不下来"，而实测日志（latest.log 搜「空袭轰炸」）里那一行写得
-        // 明明白白：她带着重生锚、**缺萤石**。旧版这条原因只落在日志里（玩家不看日志就等于没有），
-        // 而且床能顶上时**连日志都不会有**（diagSkip 只在"一条链路都开不了"时才跑）。
-        // 现在不管后面是床顶上、还是整条链都没开成，只要重生锚这一段被跳过就冒气泡说清原因。
-        hintAnchorSkip(level, maid);
-        // 床同样走维度闸（主世界 = bedWorks 为 true = 不开放）
-        if (explodesHere(level, Kind.BED) && hasBed(maid)) {
-            return Kind.BED;
+        // ③ 床（同样走维度闸：主世界 = bedWorks 为 true = 不开放）
+        if (explodesHere(level, Kind.BED) && hasBed(maid) && !onCooldown(next, Kind.BED, now)) {
+            out.add(Kind.BED);
         }
-        // ── v1.2.2 实测五百九十一【为什么没放】：她带着材料却没起手 → 落一条限频日志
-        //（latest.log 搜「轰炸跳过」），把"缺哪一件 / 哪条链路被维度闸关掉"写清楚
-        //（反馈："重生锚还是放不了"——旧版这一路是**静默**返回 null，谁都看不出原因）
-        diagSkip(level, maid);
-        return null;
+        if (out.isEmpty() && (running == null || running.isEmpty())) {
+            // ── v1.2.2 实测五百九十一【为什么没放】：她带着材料却没起手 → 落一条限频日志
+            //（latest.log 搜「轰炸跳过」），把"缺哪一件 / 哪条链路被维度闸关掉"写清楚
+            //（反馈："重生锚还是放不了"——旧版这一路是**静默**返回 null，谁都看不出原因）
+            diagSkip(level, maid);
+        }
+        return out;
     }
 
+    /** 这一段是不是还在最短间隔里（没有记录 = 没起过 = 不冷却） */
+    private static boolean onCooldown(EnumMap<Kind, Long> next, Kind kind, long now) {
+        return next != null && now < next.getOrDefault(kind, 0L);
+    }
+
+    /** 材料齐的第一段链路（顺序：水晶 → 重生锚 → 床；维度不合适的跳过那一段） */
     /** 缺料 / 维度闸诊断的限频表（女仆 → 上次落日志的 gameTime） */
     private static final Map<UUID, Long> SKIP_DIAG = new HashMap<>();
 
@@ -1002,19 +1239,29 @@ public final class MaidBombing {
      *
      * v1.2.2 实测五百九十二：它不再由空袭行为调用，而是由 {@link #tickPhases}（服务端 tick）
      * 统一驱动——轰炸因此对所有攻击模式一视同仁（远程空袭除外，见 {@link #tickCombatTnt}）。
+     *
+     * v1.2.2 实测六百：返回 {@link Result}，**不再自己从相位表里摘自己**——三段并行之后
+     * 摘除与"这一段走完了要不要投 TNT"都由驱动器（{@link #tickPhases}）统一处理。
      */
-    private static boolean tick(Phase ph) {
+    private enum Result {
+        /** 还在这一段的中间（等间隔 / 等下一拍） */
+        CONTINUE,
+        /** 这一段走完了（已经排好起爆） */
+        DONE,
+        /** 这一段作废（放不下 / 超时 / 她被傀儡模式接管）——已放下的方块撤回她背包 */
+        ABORT
+    }
+
+    private static Result tick(Phase ph) {
         if (ph == null || ph.level == null || ph.maid == null || !ph.maid.isAlive()) {
-            return false;
+            return Result.ABORT;
         }
         ServerLevel level = ph.level;
         EntityMaid maid = ph.maid;
-        UUID id = maid.getUUID();
         long gameTime = level.getGameTime();
         if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
             rollback(level, ph);
-            PHASE.remove(id);
-            return false;
+            return Result.ABORT;
         }
         try {
             // v1.2.2 实测五百九十九【"近战空袭从不放重生锚"的根因】：旧版这一行目标是"死了/没了"
@@ -1025,49 +1272,44 @@ public final class MaidBombing {
             // 只有"从没拿到过目标位置"或超时才回滚。
             if (ph.targetPos == null || gameTime - ph.start > PHASE_TIMEOUT) {
                 rollback(level, ph);
-                PHASE.remove(id);
-                return false;
+                return Result.ABORT;
             }
             if (ph.target != null && ph.target.isAlive()) {
                 ph.targetPos = ph.target.blockPosition(); // 目标活着 → 跟着它走
             }
             if (ph.step == 0) {
                 if (!stepBlock(level, maid, ph.targetPos, ph)) {
-                    PHASE.remove(id);
-                    return false; // 放不下：整段放弃，直接走下一个链路
+                    return Result.ABORT; // 放不下：这一段放弃（其它段各走各的，不受影响）
                 }
                 ph.step = 1;
                 ph.stepAt = gameTime;
-                return true;
+                return Result.CONTINUE;
             }
             // v1.2.2 实测五百九十一【看得出间隔】：放下方块与"挂水晶 / 充能"之间留一段可见停顿——
             // 反馈："黑曜石和末地水晶几乎是同时放置的，根本看不出间隔"。默认 10 tick = 0.5 秒。
             if (gameTime - ph.stepAt < cfgPlaceGap()) {
-                return true;
+                return Result.CONTINUE;
             }
             if (!stepPayload(level, maid, ph, gameTime)) {
                 rollback(level, ph);
-                PHASE.remove(id);
-                return false;
+                return Result.ABORT;
             }
-            PHASE.remove(id);
-
-            // v1.2.2 实测五百九十【TNT 挂链路最末】：轰炸这一段走完 = 这一次攻击链路收尾，
-            // TNT 就挂在最后（有料就扔，缺料静默跳过；最短间隔只当下限，见 flushTnt）
-            flushTnt(level, maid, ph.target, id, gameTime);
-            return false; // 交还链路：她接着放烟花起飞，0.5 秒后那边起爆
+            return Result.DONE; // 交还链路：她接着放烟花起飞，0.5 秒后那边起爆
         } catch (Throwable t) {
             log("执行异常：" + t);
             rollback(level, ph);
-            PHASE.remove(id);
-            return false;
+            return Result.ABORT;
         }
     }
 
-    /** 她这一轮是不是正在轰炸段里（空袭行为用它决定本 tick 让不让位） */
+    /** 她这一轮是不是正在轰炸段里（空袭行为用它决定本 tick 让不让位）——三段里**任一段**还在飞就算 */
     public static boolean isBombing(EntityMaid maid) {
         try {
-            return maid != null && PHASE.containsKey(maid.getUUID());
+            if (maid == null) {
+                return false;
+            }
+            EnumMap<Kind, Phase> map = PHASE.get(maid.getUUID());
+            return map != null && !map.isEmpty();
         } catch (Throwable ignored) {
             return false;
         }
@@ -1080,25 +1322,63 @@ public final class MaidBombing {
      * 只存在于飞行近战。需求要把它推广到所有攻击模式（远程空袭除外），而地面近战 / 弓弩 / 三叉戟
      * / 弹幕 / 枪械 / 第三方战斗任务压根没有"空袭行为"这个东西，所以驱动器必须独立出来。
      * 相位表很小（只有正在放炸弹的那几只女仆），每 tick 遍历无压力。
+     *
+     * v1.2.2 实测六百：一个女仆可能有多段（水晶 / 重生锚 / 床）在飞——逐段推、逐段摘，
+     * **她的最后一段走完那一刻**才投 TNT（照旧"TNT 挂链路最末"，只是链路末端变成了
+     * "所有能放的段都放完"）。
      */
     private static void tickPhases() {
         if (PHASE.isEmpty()) {
             return;
         }
-        for (Map.Entry<UUID, Phase> e : new ArrayList<>(PHASE.entrySet())) {
-            UUID id = e.getKey();
-            Phase ph = e.getValue();
-            try {
-                if (ph == null || ph.level == null || ph.maid == null || !ph.maid.isAlive()) {
-                    PHASE.remove(id);
-                    if (ph != null && ph.level != null) {
-                        rollback(ph.level, ph); // 她没了：已放下的方块撤掉（不掉落）
-                    }
-                    continue;
+        for (UUID id : new ArrayList<>(PHASE.keySet())) {
+            EnumMap<Kind, Phase> map = PHASE.get(id);
+            if (map == null || map.isEmpty()) {
+                PHASE.remove(id);
+                continue;
+            }
+            EntityMaid maid = null;
+            LivingEntity target = null;
+            for (Phase ph : map.values()) {
+                if (ph != null && ph.maid != null) {
+                    maid = ph.maid;
+                    target = ph.target;
+                    break;
                 }
-                tick(ph);
+            }
+            try {
+                boolean anyDone = false;
+                for (Phase ph : new ArrayList<>(map.values())) {
+                    if (ph == null || ph.level == null || ph.maid == null || !ph.maid.isAlive()) {
+                        if (ph != null && ph.level != null) {
+                            rollback(ph.level, ph); // 她没了：已放下的方块撤掉（不掉落）
+                        }
+                        if (ph != null) {
+                            map.remove(ph.kind);
+                        }
+                        continue;
+                    }
+                    Result r = tick(ph);
+                    if (r == Result.CONTINUE) {
+                        continue;
+                    }
+                    map.remove(ph.kind);
+                    if (r == Result.DONE) {
+                        anyDone = true;
+                    }
+                }
+                if (map.isEmpty()) {
+                    PHASE.remove(id);
+                    if (anyDone && maid != null && maid.isAlive()) {
+                        // v1.2.2 实测五百九十【TNT 挂链路最末】：所有段都放完了 = 这一次攻击链路收尾，
+                        // TNT 挂在最后（有料就扔，缺料静默跳过；最短间隔只当下限，见 flushTnt）
+                        flushTnt(maid.level() instanceof ServerLevel sl ? sl : null, maid, target, id,
+                                maid.level().getGameTime());
+                    }
+                }
             } catch (Throwable t) {
                 log("相位推进异常：" + t);
+                rollbackPhase(id);
                 PHASE.remove(id);
             }
         }
@@ -1351,6 +1631,9 @@ public final class MaidBombing {
             if (p.equals(maidFeet) || p.equals(maidHead)) {
                 continue; // 别把自己埋了
             }
+            if (claimedByOtherPhase(maid, p)) {
+                continue; // 她**另一段**链路已经占了这一格（实测六百：三段并行时各占各的落点）
+            }
             BlockPos support = p.below();
             boolean supported = level.getBlockState(support).isFaceSturdy(level, support, Direction.UP);
             if (requireSupport && !supported) {
@@ -1386,6 +1669,32 @@ public final class MaidBombing {
             }
         }
         return null;
+    }
+
+    /**
+     * 这一格是不是被她**另一段**轰炸链路占了（实测六百：三段并行时各占各的落点）。
+     *
+     * 同一 tick 起手的几段会各自去挑"目标脚边 / 她正下方"的落点，候选表是同一个——
+     * 没有这道闸时第二段会挑到第一段刚放下的那一格（原版 place 会拒绝，但拒绝走的是
+     * "这一段放弃"那条路，等于把没抢到落点的那段整段吞掉，正是要修的现象）。
+     */
+    private static boolean claimedByOtherPhase(EntityMaid maid, BlockPos p) {
+        try {
+            EnumMap<Kind, Phase> map = PHASE.get(maid.getUUID());
+            if (map == null || p == null) {
+                return false;
+            }
+            for (Phase ph : map.values()) {
+                if (ph == null) {
+                    continue;
+                }
+                if (p.equals(ph.spot) || ph.placed.contains(p)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     /** 放完之后那一格的方块（用于后面精确撤除） */
@@ -1898,6 +2207,10 @@ public final class MaidBombing {
             // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
             // v1.2.2 实测五百九十：追踪弹每 tick 修正一次朝向（在实体 tick 之前）
             tickHoming();
+            // v1.2.2 实测六百：起爆后的 "不会被烧" 守护区（15 秒内区里的玩家/女仆带火就熄灭）
+            if (burnGuardThrottle++ % 5 == 0) {
+                tickBurnGuards();
+            }
             // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
             tickPhases();
             for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
@@ -2065,6 +2378,9 @@ public final class MaidBombing {
         if (pinkWindow) {
             PinkFireBlock.beginWindow();
         }
+        // v1.2.2 实测六百【不会被烧】：带火的一炸登记一块守护区（15 秒），期内区里的玩家/女仆
+        // 带火就熄灭、吃到火类伤害就取消——不依赖"那格火是不是我们点的"，见 BURN_GUARDS
+        boolean burnGuard = fire && cfgFireProtect();
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
         // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
         selfImmuneBlast = true;
@@ -2091,9 +2407,22 @@ public final class MaidBombing {
             // 关窗口（若开着）：这一炸点着的每一格都已经是粉色火，这里只把条数取出来写日志
             if (pinkWindow) {
                 int pink = PinkFireBlock.endWindow();
-                if (pink > 0) {
-                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
+                // v1.2.2 实测六百：顺手把这一片**既有的**原版火也换成粉色（早先版本/岩浆/别的模组
+                // 留下的那些——它们不受点火窗口管辖，却照样能把主人和女仆点着）
+                int swept = 0;
+                try {
+                    swept = PinkFireBlock.sweepVanillaFire(level,
+                            new BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)),
+                            Math.max(2, (int) Math.ceil(power * 2.0F)));
+                } catch (Throwable ignored) {
                 }
+                if (pink > 0 || swept > 0) {
+                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火"
+                            + (swept > 0 ? "，另把场地里 " + swept + " 格原版火一并换成粉色" : ""));
+                }
+            }
+            if (burnGuard) {
+                addBurnGuard(level, x, y, z, power * 2.0);
             }
         }
     }
@@ -2102,5 +2431,17 @@ public final class MaidBombing {
     private static boolean cfgPinkFire() {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
     }
+
+    /** v1.2.2 实测六百：火不烧主人/女仆的开关（守护区与粉火免伤都看它） */
+    private static boolean cfgFireProtect() {
+        try {
+            return MaidSmartConfig.COMBAT_BOMBING_FIRE_PROTECT.get();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 守护区巡检节流（每 5 tick 跑一次） */
+    private static int burnGuardThrottle = 0;
 
 }

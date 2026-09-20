@@ -11,21 +11,27 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.2.2 实测五百九十八【粉色火焰：边点边换】。
+ * v1.2.2 实测五百九十八【粉色火焰：边点边换】 → 实测六百【改成全局替换】。
  *
- * 原版爆炸点火只有一条路径：{@code Explosion.finalizeExplosion} 里
- * {@code level.setBlockAndUpdate(pos, BaseFireBlock.getState(level, pos))}——
- * 也就是说"哪几格着火"由原版自己决定（射线扫出来的，能跑到二十格开外），
- * 我们事后再按盒子扫一遍永远会漏（实测反馈"又粉又橙"）。
+ * 原版点火只有一条路径：任何一处"放一格火"最终都落到
+ * {@code BaseFireBlock.getState(level, pos)}（javap 实证：爆炸的
+ * {@code Explosion.finalizeExplosion}、火自己蔓延的 {@code FireBlock.getState}、打火石/火焰弹的
+ * {@code getStateForPlacement} 全部经过它）。所以只要挂在这一个点上，就等于接管了**世界上
+ * 出现的每一格火**。
  *
- * 所以这里挂在**点火那一刻**：{@code MaidBombing} 爆炸前后开/关
- * {@link PinkFireBlock#beginWindow()} 那个窗口，窗口内把 getState 的返回值翻译成粉色火——
- * 原版点出来的每一格直接就是粉色火，与距离无关，也不会有"先橙后粉"的中间态。
+ * ── 五百九十八做了什么、为什么还不够 ──
+ * 旧版是"爆炸前后开一个窗口，只在窗口内换"——理由是"常开会把主人自己点的火也变粉"。
+ * 但实测日志（latest.log）显示：那一炸点着的 119 格火**确实全部**直接生成成了粉色火
+ * （搜「粉色火焰：这一炸点着的」），而反馈里"还有橙火焰、玩家还是会被烧到"来自
+ * <b>窗口之外</b>的火——世界里早先留下的、岩浆点的、别的模组点的。窗口再精确也罩不住它们。
  *
- * 【为什么不让窗口常开】{@code getState} 也是打火石 / 火焰弹 / 闪电 / 发射器点火走的
- * 同一个入口；常开 = 把**所有**火都变粉色（含主人自己点的营火/火把引燃）。窗口只在我们
- * 自己那一炸的同步调用链里开着（爆炸是同步的，窗口不会跨 tick —— 与
- * {@code SelfPreservationBehavior} 那套"自爆风免窗口"同一手法）。
+ * ── 现在（实测六百，按需求原话）──
+ * "在此模式开启的时候，所有被生成的黄色火焰都会被替换成粉色火焰"：
+ * {@link PinkFireBlock#pinkEnabled()}（= 面板「爆炸火焰改粉色」）开着 → **每一格新火都换**；
+ * 关着 → 一个都不换（保持原版橙色火，等同旧版行为）。
+ *
+ * 窗口（{@link PinkFireBlock#inWindow()}）现在只用来<b>记日志</b>——"这一炸点着的 N 格火"
+ * 那一行照旧，方便实测对账（爆炸是同步调用链，窗口内点着的火都算这一炸的）。
  *
  * 【静态注入的写法】目标是 vanilla 的静态方法，处理函数必须是 static；SRG 名写死在
  * 注解里（与 LeavesBlockMixin 等一致：手工编译没有 refmap，Forge 运行期就是 SRG）。
@@ -36,17 +42,19 @@ public abstract class BaseFireBlockPinkMixin {
     @Inject(method = "m_49245_", at = @At("RETURN"), cancellable = true)
     private static void maidsmart$pinkFire(BlockGetter level, BlockPos pos,
                                            CallbackInfoReturnable<BlockState> cir) {
-        if (!PinkFireBlock.inWindow()) {
-            return;
+        if (!PinkFireBlock.pinkEnabled()) {
+            return; // 开关关着 = 完全不碰（原版橙色火）
         }
         try {
             BlockState pink = PinkFireBlock.fromVanillaFire(cir.getReturnValue());
             if (pink != null) {
-                PinkFireBlock.countConverted();
+                if (PinkFireBlock.inWindow()) {
+                    PinkFireBlock.countConverted(); // 只用于"这一炸点着了 N 格"那行日志
+                }
                 cir.setReturnValue(pink);
             }
         } catch (Throwable ignored) {
-            // 翻译失败就保持原版火——宁可橙一点，也不能让爆炸链断在这里
+            // 翻译失败就保持原版火——宁可橙一点，也不能让世界生成链断在这里
         }
     }
 }

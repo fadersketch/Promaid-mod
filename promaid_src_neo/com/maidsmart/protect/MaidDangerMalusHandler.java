@@ -86,6 +86,9 @@ if (++throttle < 100) {
 
     /** 按当前配置给女仆刷 malus：表内类型 → -1（不可通行），表外/开关关 → 枚举默认值 */
     private static void apply(EntityMaid maid) {
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         try {
             boolean on = MaidSmartConfig.MISC_DANGER_AVOID.get();
             Set<PathType> danger = typesFor(MaidSmartConfig.MISC_DANGER_BLOCKS.get());

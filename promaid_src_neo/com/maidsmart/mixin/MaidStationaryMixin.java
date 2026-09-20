@@ -27,6 +27,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class MaidStationaryMixin {
     @Inject(method = "travel", at = @At("HEAD"))
     private void maidsmart$lockWhenStationary(Vec3 travelVector, CallbackInfo ci) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return; // v1.2.2 实测六百：无主女仆不干预
+        }
         EntityMaid maid = (EntityMaid) (Object) this;
         if (MaidWorkTags.isStill(maid) || MaidWorkTags.isBuildSitting(maid)) {
             // v1.5.98c：只清水平速度（x/z 归零），保留垂直（y）——防溺水/保下落
