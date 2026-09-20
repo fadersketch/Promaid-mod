@@ -171,7 +171,8 @@ public final class FriendlyWindGuard {
         if (t == victim) {
             // 受害者==当前 tick 实体：默认是她自己的机动（烟花推进/风弹自起跳）——不拦。
             // v1.2.2 实测五百八十八：**女仆自己炸弹产生的风**是例外，对放炸弹的她本人也不生效。
-            return com.maidsmart.combat.MaidBombing.isSelfImmuneBlast();
+            // 按 UUID 认人：只有"放这一发的她"被免，窗口期内别的实体照常受影响。
+            return com.maidsmart.combat.MaidBombing.isSelfImmuneBlastFor(victim);
         }
         return shouldBlock(maidOf(t), victim, newVel);
     }
@@ -195,8 +196,8 @@ public final class FriendlyWindGuard {
             if (maid == victim) {
                 // 受害者==推人者：默认"她自己的机动一字不改"（烟花推进 / 风弹自起跳 / 空袭弹开）。
                 // v1.2.2 实测五百八十八：**这条链路做的炸弹**是例外——它的风对放炸弹的她本人
-                // 也不生效（与重锤风爆不同），窗口由 MaidBombing 在爆炸期间挂上。
-                return com.maidsmart.combat.MaidBombing.isSelfImmuneBlast();
+                // 也不生效（与重锤风爆不同）。按 UUID 认人，窗口由 MaidBombing 在爆炸期间挂上。
+                return com.maidsmart.combat.MaidBombing.isSelfImmuneBlastFor(victim);
             }
             if (!(victim instanceof Player || victim instanceof EntityMaid)) {
                 return false; // 只保护玩家与女仆（怪物该被打飞就打飞）
