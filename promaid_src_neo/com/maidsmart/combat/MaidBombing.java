@@ -136,6 +136,18 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.get();
     }
 
+    private static int cfgReclaimSeconds() {
+        return MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get();
+    }
+
+    private static boolean cfgAnchorNeedsGlowstone() {
+        return MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get();
+    }
+
+    private static boolean cfgAirPlace() {
+        return MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get();
+    }
+
     private static double cfgTntRange() {
         return MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get();
     }
@@ -358,6 +370,41 @@ public final class MaidBombing {
         }
     }
 
+    /** 待回收的轰炸底座（黑曜石 / 重生锚 / 床）：起爆后保留一会儿再撤（不掉落） */
+    private static final List<Reclaim> RECLAIMS = new ArrayList<>();
+
+    private static final class Reclaim {
+        final ServerLevel level;
+        final List<BlockPos> pos;
+        final List<Block> block;
+        final long due;
+
+        Reclaim(ServerLevel level, List<BlockPos> pos, List<Block> block, long due) {
+            this.level = level;
+            this.pos = pos;
+            this.block = block;
+            this.due = due;
+        }
+    }
+
+    /**
+     * 排一次"到期回收"：延迟秒数取自配置（默认 10 秒）。0 = 起爆时立刻回收（旧行为）。
+     * 回收一律**不掉落**（removePlaced 的口径），所以"女仆放的黑曜石"不会被玩家捡走 = 不存在白送材料。
+     */
+    private static void scheduleReclaim(ServerLevel level, List<BlockPos> pos, List<Block> block) {
+        if (level == null || pos == null || block == null || pos.isEmpty()) {
+            return;
+        }
+        int seconds = Math.max(0, cfgReclaimSeconds());
+        if (seconds <= 0) {
+            removePlaced(level, pos, block);
+            return;
+        }
+        if (RECLAIMS.size() < MAX_PENDING) {
+            RECLAIMS.add(new Reclaim(level, pos, block, level.getGameTime() + seconds * 20L));
+        }
+    }
+
     private static final Map<UUID, Phase> PHASE = new HashMap<>();
     private static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
     private static final List<Bomb> PENDING = new ArrayList<>();
@@ -422,6 +469,7 @@ public final class MaidBombing {
         PHASE.clear();
         TNT_NEXT.clear();
         PENDING.clear();
+        RECLAIMS.clear();
         combatScanTick = 0;
     }
 
@@ -465,7 +513,10 @@ public final class MaidBombing {
         if (has(maid, ID_END_CRYSTAL) && has(maid, ID_OBSIDIAN, ID_BEDROCK)) {
             return Kind.CRYSTAL;
         }
-        if (!anchorWorks(level) && has(maid, ID_RESPAWN_ANCHOR) && has(maid, ID_GLOWSTONE)) {
+        // 注：重生锚"必须有 ≥1 级充能才会炸"是原版规则，所以默认要 1 颗萤石当引信；
+        // 关掉「重生锚需要萤石」后不检查它（放下即由我们补上那 1 级，见 stepPayload）。
+        if (!anchorWorks(level) && has(maid, ID_RESPAWN_ANCHOR)
+                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE))) {
             return Kind.ANCHOR;
         }
         if (!bedWorks(level) && hasBed(maid)) {
@@ -580,7 +631,9 @@ public final class MaidBombing {
                 return false;
             }
             EndCrystal ec = new EndCrystal(level, base.getX() + 0.5, base.getY() + 1.0, base.getZ() + 0.5);
-            ec.setShowBottom(true);
+            // 原版"拿末地水晶物品放在黑曜石上"就是 setShowBottom(false)（EndCrystalItem 反编译实证），
+            // 不是末地柱子上那种带底座的形态——按玩家反馈改成普通放置的样子。
+            ec.setShowBottom(false);
             if (!level.addFreshEntity(ec)) {
                 log("末地水晶生成失败 → 放弃轰炸");
                 return false;
@@ -588,11 +641,15 @@ public final class MaidBombing {
             spawned = ec;
             maid.swing(InteractionHand.MAIN_HAND);
         } else if (ph.kind == Kind.ANCHOR) {
-            ItemStack glow = takeOne(maid, ID_GLOWSTONE);
-            if (glow.isEmpty()) {
-                log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
-                return false;
+            if (cfgAnchorNeedsGlowstone()) {
+                // 原版口径：0 级充能右键不炸，所以默认要 1 颗萤石"点火"（威力与等级无关，1 级足够）。
+                ItemStack glow = takeOne(maid, ID_GLOWSTONE);
+                if (glow.isEmpty()) {
+                    log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
+                    return false;
+                }
             }
+            // 关掉「重生锚需要萤石」时：不消耗萤石，直接替她把那 1 级补上（照原版 charge，有音效 + 挥臂）
             try {
                 net.minecraft.world.level.block.RespawnAnchorBlock.charge(maid, level, base, level.getBlockState(base));
             } catch (Throwable ignored) {
@@ -645,38 +702,86 @@ public final class MaidBombing {
 
     /* ==================== 放置 ==================== */
 
+    /** 空中"往下找落点"的扫描深度（格）——空袭时她一直在飞，落点在正下方 */
+    private static final int AIR_SCAN_DROP = 16;
+
     /**
-     * 在目标脚边找一格放下（离她最近的四个水平邻居优先）。
-     * 放在**目标脚边**而不是目标身上：既不把怪顶起来，水晶也正好贴在它身侧。
+     * 找一个能放下的落点并放下去（v1.2.2 实测五百八十九重写）：
+     *
+     * ① **目标脚边**那四个水平邻居（离她最近的优先）——贴脸放，水晶正好贴在怪身侧；
+     * ② **她正下方**一路往下扫（最多 {@link #AIR_SCAN_DROP} 格）——这是玩家反馈的那条：
+     *    "放重生锚会因为一直在空中飞，导致没地方放……落点位于自己下方可放置方块的区域"；
+     * ③ ①② 都要求**实心支撑面**；都没有且开了「空中强制放置」时，就在她正下方取第一格
+     *    可替换的位置**直接悬空放下**——原版放置本身就允许悬空（`BlockItem.place` 只看
+     *    点击位置能不能被替换），只是玩家手点不到空气，我们用构造出来的放置上下文可以。
      */
     private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, LivingEntity target, ItemStack stack) {
+        BlockPos maidFeet = maid.blockPosition();
+        BlockPos maidHead = maidFeet.above();
         BlockPos tp = target.blockPosition();
-        List<BlockPos> cand = new ArrayList<>(4);
+        List<BlockPos> near = new ArrayList<>(4);
         for (Direction d : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
-            cand.add(tp.relative(d));
+            near.add(tp.relative(d));
         }
+        sortByDistToMaid(near, maid);
+        List<BlockPos> below = new ArrayList<>(AIR_SCAN_DROP);
+        for (int dy = 1; dy <= AIR_SCAN_DROP; dy++) {
+            below.add(maidFeet.relative(Direction.DOWN, dy));
+        }
+        BlockPos spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, true);
+        if (spot != null) {
+            return spot;
+        }
+        spot = tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, true);
+        if (spot != null) {
+            return spot;
+        }
+        if (!cfgAirPlace()) {
+            return null;
+        }
+        // 空中强制放置（不要求支撑面）
+        spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, false);
+        if (spot != null) {
+            return spot;
+        }
+        return tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, false);
+    }
+
+    /** 按"离女仆的 3D 距离"排序（贴脸放优先） */
+    private static void sortByDistToMaid(List<BlockPos> list, EntityMaid maid) {
         final double mx = maid.getX();
         final double my = maid.getY();
         final double mz = maid.getZ();
-        BlockPos maidFeet = maid.blockPosition();
-        BlockPos maidHead = maidFeet.above();
-        cand.sort(Comparator.comparingDouble(p -> {
+        list.sort(Comparator.comparingDouble(p -> {
             double dx = p.getX() + 0.5 - mx;
             double dy = p.getY() + 0.5 - my;
             double dz = p.getZ() + 0.5 - mz;
             return dx * dx + dy * dy + dz * dz;
         }));
+    }
+
+    /**
+     * 依次试放（第一格成功就返回实际落点）。requireSupport=true 时跳过悬空格；
+     * false 时对着那格空气本身点（= 悬空强制放置）。
+     */
+    private static BlockPos tryPlaceAll(ServerLevel level, EntityMaid maid, ItemStack stack, List<BlockPos> cand,
+                                       BlockPos maidFeet, BlockPos maidHead, boolean requireSupport) {
         for (BlockPos p : cand) {
             if (p.equals(maidFeet) || p.equals(maidHead)) {
                 continue; // 别把自己埋了
             }
-            BlockState below = level.getBlockState(p.below());
-            if (!below.isFaceSturdy(level, p.below(), Direction.UP)) {
-                continue; // 悬空放不住
+            BlockPos support = p.below();
+            boolean supported = level.getBlockState(support).isFaceSturdy(level, support, Direction.UP);
+            if (requireSupport && !supported) {
+                continue;
             }
-            BlockPlaceContext ctx = new MaidPlaceContext(level, maid, InteractionHand.MAIN_HAND, stack,
-                    new BlockHitResult(new Vec3(p.getX() + 0.5, p.getY(), p.getZ() + 0.5),
-                            Direction.UP, p.below(), false));
+            // 有支撑：贴在支撑面顶上放；无支撑：直接对着这一格放（悬空强制）
+            BlockHitResult hit = supported
+                    ? new BlockHitResult(new Vec3(p.getX() + 0.5, p.getY(), p.getZ() + 0.5),
+                            Direction.UP, support, false)
+                    : new BlockHitResult(new Vec3(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5),
+                            Direction.UP, p, false);
+            BlockPlaceContext ctx = new MaidPlaceContext(level, maid, InteractionHand.MAIN_HAND, stack, hit);
             try {
                 InteractionResult r = ((BlockItem) stack.getItem()).place(ctx);
                 if (r != null && r.consumesAction()) {
@@ -842,6 +947,32 @@ public final class MaidBombing {
         return best;
     }
 
+    /**
+     * 水平距离 dh、水平初速 vx0 时飞完全程需要的 tick 数。
+     * 水平位移是等比级数之和：x_n = vx0·(1−0.98^n)/0.02 → 反解 n = ln(1 − 0.02·dh/vx0)/ln 0.98。
+     * 阻尼决定了水平极限射程 ≈ 49·vx0 格，超出就只能给个上限（落点会偏短，属于物理上够不着）。
+     */
+    private static double flightTicks(double dh, double vx0) {
+        if (dh <= 1.0E-4 || vx0 <= 1.0E-6) {
+            return 1.0;
+        }
+        double base = 1.0 - 0.02 * dh / vx0;
+        if (base <= 0.02) {
+            return 200.0;
+        }
+        double n = Math.log(base) / Math.log(0.98);
+        return Math.max(1.0, Math.min(200.0, n));
+    }
+
+    /** 解竖直初速：让 TNT 飞完 n tick 时正好落在目标高度上（闭式，见 {@link #flightTicks} 的注释） */
+    private static double requiredVy(double dh, double dy, double vx0) {
+        double n = flightTicks(dh, vx0);
+        double a = (1.0 - Math.pow(0.98, n)) / 0.02;
+        double b = (n - a) / 0.02;
+        double vy = (dy + 0.04 * b) / Math.max(1.0E-6, a) + 0.04;
+        return Mth.clamp(vy, -1.5, 1.5);
+    }
+
     /** 这一发要扔几枚：残血（≤ 阈值）连投，否则 1 枚 */
     private static int throwCount(EntityMaid maid) {
         try {
@@ -885,11 +1016,30 @@ public final class MaidBombing {
             double tx = target.getX();
             double ty = target.getY() + target.getBbHeight() * 0.5;
             double tz = target.getZ();
-            double dx = tx - sx;
-            double dy = ty - sy;
-            double dz = tz - sz;
+            // ── v1.2.2 实测五百八十九【准度】──
+            // 旧版是"飞行时间 ≈ 水平距离 / 水平速度，再补一点落差"——忽略了 0.98/tick 的水平阻尼
+            // （水平射程因此是有限的等比级数），目标一动就偏。现在两处一起改：
+            // ① 目标带提前量（按它的速度外推预计飞行时间，迭代两轮）；
+            // ② 用反编译实证的 TNT 物理做**闭式解**：每 tick 先 −0.04 重力、再位移、最后整体 ×0.98，
+            //    于是水平位移 = vx0·A_n、竖直位移 = (vy0−0.04)·A_n − 0.04·B_n
+            //    （A_n=(1−0.98^n)/0.02、B_n=(n−A_n)/0.02）：先由水平距离解出飞行时间 n，再解出 vy0。
+            double speed = Math.max(0.2, cfgTntSpeed());
+            double aimX = tx;
+            double aimZ = tz;
+            double aimY = ty;
+            Vec3 tv = target.getDeltaMovement();
+            for (int it = 0; it < 2; it++) {
+                double ddx = aimX - sx;
+                double ddz = aimZ - sz;
+                double flight = flightTicks(Math.sqrt(ddx * ddx + ddz * ddz), speed);
+                aimX = tx + tv.x * flight;
+                aimZ = tz + tv.z * flight;
+                aimY = ty + tv.y * flight * 0.5;
+            }
+            double dx = aimX - sx;
+            double dy = aimY - sy;
+            double dz = aimZ - sz;
             double dh = Math.sqrt(dx * dx + dz * dz);
-            double speed = Math.max(0.05, cfgTntSpeed());
             double vx = 0.0;
             double vz = 0.0;
             if (dh > 1.0E-4) {
@@ -903,9 +1053,7 @@ public final class MaidBombing {
                     vz += sz2;
                 }
             }
-            // 抛体：飞行时间 ≈ 水平距离 / 水平速度，竖直初速补落差（TNT 重力 0.04、每 tick 阻尼 0.98）
-            double t = Math.max(1.0, dh / speed);
-            double vy = Mth.clamp(dy / t + 0.5 * 0.04 * t, 0.05, 0.9);
+            double vy = requiredVy(dh, dy, speed);
             PrimedTnt tnt = new PrimedTnt(level, sx, sy, sz, maid);
             tnt.setFuse(cfgTntFuse());
             tnt.setDeltaMovement(new Vec3(vx, vy, vz));
@@ -940,6 +1088,23 @@ public final class MaidBombing {
     public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Pre event) {
         // Pre = 实体 tick 之前：原版 TNT 那一炸永远轮不到
         try {
+            // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
+            for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
+                Reclaim r = ri.next();
+                if (r.level == null) {
+                    ri.remove();
+                    continue;
+                }
+                long now = r.level.getGameTime();
+                if (now < r.due) {
+                    if (now > r.due + BOMB_TIMEOUT) {
+                        ri.remove();
+                    }
+                    continue;
+                }
+                ri.remove();
+                removePlaced(r.level, r.pos, r.block);
+            }
             Iterator<Bomb> it = PENDING.iterator();
             while (it.hasNext()) {
                 Bomb b = it.next();
@@ -1024,8 +1189,11 @@ public final class MaidBombing {
             y = c.y;
             z = c.z;
         }
-        // ① 先撤掉女仆自己放的那几块（无论开不开"破坏方块"都要撤：不撤就等于白送黑曜石/床）
-        removePlaced(level, b.placedPos, b.placedBlock);
+        // ① v1.2.2 实测五百八十九【保留黑曜石】：起爆这一刻**不再立刻撤掉**她放的那几块——
+        //    黑曜石留在原地（水晶就是放在它上面的那副样子，爆炸不破坏方块时尤其明显），
+        //    过 cfgReclaimSeconds() 秒（默认 10）再由我们回收；回收不掉落，所以不会白送材料。
+        //    配置填 0 就回到旧行为（起爆即回收）。
+        scheduleReclaim(level, b.placedPos, b.placedBlock);
         // ② 炸弹实体本身清掉（不能走 kill()——末地水晶的 kill 会触发原版那一炸）
         if (b.entity != null && b.entity.isAlive()) {
             b.entity.discard();

@@ -132,6 +132,11 @@ public class ProMaidMod {
                 changed = true;
             }
             // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
+            // v1.2.2 实测五百八十九：投掷 TNT 间隔默认 120 → 40（玩家反馈"CD 太长"）
+            // 只迁移"还是旧默认值"的配置，玩家自己调过的值不动
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get() == 120) {
+                com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.set(40);
+            }
             if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.get() == 6.0) {
                 com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_FALL_DISTANCE.set(4.0);
                 changed = true;
