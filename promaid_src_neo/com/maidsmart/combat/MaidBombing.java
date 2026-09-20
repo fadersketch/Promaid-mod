@@ -718,6 +718,8 @@ public final class MaidBombing {
         COOLDOWN_SEEN.clear();
         HOMING.clear();
         SKIP_DIAG.clear();
+        HINT_CD.clear(); // 实测五百九十四：气泡限频表（forget 不清它，见字段注释）
+        HINT_LAST.clear();
         BombPose.clearAll(); // 实测五百九十一：动作姿势的表也一并清（尽量当场把原副手物品还回去）
         combatScanTick = 0;
     }
@@ -880,7 +882,12 @@ public final class MaidBombing {
     /** 床没开成的说法（维度闸，主世界） */
     private static final String HINT_BED_DIM = "这个维度里床不会炸，我换个办法（维度闸）～";
 
-    /** 气泡 / 日志的限频（女仆 → 上次时间；女仆 → 上次说的那句） */
+    /**
+     * 气泡 / 日志的限频（女仆 → 上次时间；女仆 → 上次说的那句）。
+     *
+     * 注意这两张表**不跟 {@link #forget} 一起清**：空袭行为每次收尾都会调 forget，
+     * 一清 60 秒限频就形同虚设（每次轰炸都会再冒一遍同一句话）。只在 {@link #clearAll} 清。
+     */
     private static final Map<UUID, Long> HINT_CD = new HashMap<>();
     private static final Map<UUID, String> HINT_LAST = new HashMap<>();
 
