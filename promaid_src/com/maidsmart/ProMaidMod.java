@@ -47,6 +47,8 @@ public class ProMaidMod {
 
     public ProMaidMod() {
         ITEMS.register(FMLJavaModLoadingContext.get().getModEventBus());
+        // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体
+        com.maidsmart.combat.PinkFireBlock.register(FMLJavaModLoadingContext.get().getModEventBus());
         com.maidsmart.build.BlueprintBookNetworking.register();
         // v1.2.0：指标石网络层（C2S 锁定请求 + S2C 会话状态）
         com.maidsmart.build.IndexStoneNetworking.register();        // v1.2.2 实测五百八十七：轰炸标记（S2C）
