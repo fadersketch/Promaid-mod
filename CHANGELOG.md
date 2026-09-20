@@ -1,4 +1,60 @@
-﻿## 实测五百九十六【第 2 个问题（收放魂符后装备被吞）没修好的真凶：我们自己的"入世界自动补包"在每次魂符放出都把客户端那只女仆删了重建】
+﻿## 实测五百九十七【动作细化：副手持物推广到全链路；爆炸火焰改粉色 + 玩家女仆免伤；坐下不搭路；issue #16 法术冷却多乘 20】
+
+### ① 需求原文
+
+"1.然后就是一些动作上的细化。在放置重生锚的时候副手应该要拿对应的方块。使用荧石激活的时候也是。我们这个新的版本加的任何一个链路行动的时候副手都应该拿对应的物品。这样更拟真。现版本只有动作
+2.同时将重生锚，末影水晶，床爆炸渲染出来的火焰变成粉色。不需要有其他的文字描述。玩家和女仆会免疫这个火焰造成的伤害。配置里面可以关闭这个火焰的渲染或者伤害保护。
+3.女仆坐下的时候还是会触发搭路
+4.https://github.com/fadersketch/Promaid-mod/issues/16"
+
+### ② 副手动作表现：从"轰炸专用"推广到所有"从背包掏出来就用"的链路
+
+实测五百九十四 加的那套只挂在轰炸链路上（`MaidBombing.pose` → `BombPose`）。本批把它变成**全模组公用的动作表现**，调用点是"她从背包掏出一件东西、当场用掉"的那一刻，拿的就是**真正在用的那一件**：
+
+| 链路 | 插入点（两树各一份） | 举的是什么 |
+| --- | --- | --- |
+| 搭路（4 条腿：平桥/下行/斜上/立柱） | 每次 `setBlock` 之后、摆臂那一行 | 刚铺下去的那块方块 |
+| 插火把 | 扣料**之前**留快照 | 那根火把（灵魂火把也是它自己） |
+| 建造（主循环 + 延后补建） | `BlueprintLib.consumeBlock` 拿到 `Item` 之后 | 她马上要放的那块 |
+| 种植 | 扣树苗**之前**留快照（只对"从背包掏的"举） | 那棵树苗 |
+| 酿造（补燃料/补水瓶/下界疣/正向材料/强化/形态，共 9 处） | 原 `swing(maid)` 改成 `swing(maid, 那一件)` | 萤石粉/水瓶/疣/红石/火药/龙息… |
+| 喂主人（药水/金苹果/牛奶/蜂蜜/其它饮品） | 扣料处留快照 + 结算处 | 那一瓶/那一颗 |
+| 轰炸（重生锚/萤石/末地水晶/床/TNT/打火石） | 原样保留 | 同前 |
+
+**已在主手看得见的链路不动**：挖矿的镐、砍树的斧、耕地/骨粉（那几条 `MaidToolAutoEquip` 会先把工具塞进主手）——再举一次是两只手同一件，反而怪。总开关沿用原来的 `combat.bombing.pose`（语义扩到全链路，配置注释与面板文案同步更新）。
+
+顺带修掉这套表现自己的两个坑（都是读代码实证）：
+
+1. **不再静默丢弃**：`BombPose.show` 撞上"烟花姿势正在用副手"时旧版直接 `return`——那一记动作在视觉上整个消失（近战空袭打完就投弹时最常撞上）。现在改成**记一条待办**，烟花姿势还原完的下一 tick 再举；
+2. **改完立刻补一包装备同步**（`ClientboundSetEquipmentPacket`，`ServerChunkCache.broadcastAndSend`）。原版靠 `LivingEntity` 每 tick 的装备变更检测同步（反编译实证：`m_21315_ → m_21142_ → broadcastAndSend`），理论同 tick 到位；但展示窗口只有 10 tick，中间任何一环被跳过就整段看不见——而"副手亮一下"的观感完全取决于它，所以主动补一包（成本一个小包）。
+
+### ③ 爆炸火焰改粉色（新方块 `maid_smart:pink_fire`）+ 玩家女仆免伤 + 三个开关
+
+**先把"火焰到底哪来的"钉死**（javap 实证，不是推理）：原版 `Explosion.finalizeExplosion` 里点火那一段在 `interactsWithBlocks()` **之外**，只看 `fire=true`——所以我们默认的"不破坏方块"（`ExplosionInteraction.NONE` → `BlockInteraction.KEEP`）**照样会在地上留下火**；四类炸弹里只有重生锚与床是 `fire=true`（末地水晶 6.0F/fire=false、TNT 4.0F/fire=false，原版就不留火）。
+
+**颜色只能靠换贴图**：原版火的外观来自方块模型（`fire_floor/side/side_alt/up/up_alt` 十份 JSON + `fire_0/fire_1` 贴图，32 帧动画），"哪里着火"由 `FireBlock` 的 NORTH/EAST/SOUTH/WEST/UP 五个布尔 + multipart blockstate 决定。火焰贴图的**蓝通道几乎为 0**，任何 tint 乘法都只能变暗、乘不出粉色——所以本批新增一个自定义方块：
+
+- **`com.maidsmart.combat.PinkFireBlock extends FireBlock`**（属性、连接逻辑、点燃判定盒全部照原版；属性链照抄 `Blocks` 反编译里 fire 那一行）；
+- **贴图是把原版 `fire_0/fire_1` 做色相映射到粉色**（保持 alpha 与明度、形状与 32 帧动画原样沿用，`.mcmeta` 帧表照抄），blockstate 与 10 份模型也照抄原版、只换命名空间与贴图名——所以形状就是玩家熟悉的那团火，只是颜色变粉；
+- **三条行为收紧**：① `tick` 整段替换原版传火逻辑（**不蔓延**、AGE 到 4 就自灭，约 3~5 秒）；② `entityInside` 对**玩家与女仆整段跳过**（原版这一处既点燃又掉血，只挡伤害不挡点燃等于"跑出火圈还在烧"）；③ `animateTick` 把粒子换成**粉色尘粒**（原版火星是按"火下面那块方块"选粒子类型的，粉色火冒橙色火星会很怪）；
+- **只在爆炸那一炸换火**：`MaidBombing.explode` 先扫下爆炸范围里**原有的**火，爆炸后只把"新出现的"那些换成粉色火，并把原状态的 NORTH/EAST/SOUTH/WEST/UP/AGE 全部照抄（`PinkFireBlock.fromVanillaFire`）——主人自己的火堆/营火不受影响，外观位置与原版一模一样；
+- 三个配置（`MaidSmartConfig` + 配置面板 + 中英文 lang）：`bombing.pinkFire`（默认开：改粉色；关 = 保持原版橙色火）、`bombing.fireRender`（默认开：关掉后火还在原地、只是不画出来）、`bombing.fireProtect`（默认开：玩家与女仆免疫点燃与掉血；关 = 照原版烧人）。
+
+**上服实测（临时探针 /pinkfireprobe，验完已删）**：`block() → maid_smart:pink_fire`、`defaultBlockState()` 的 owner 就是它自己且非空气、`fromVanillaFire(原版火)` → 同款粉色状态、`level.setBlock` 返回 true 且那一格真的变成了粉色火、`canSurvive=true`（石头底面）。注：无人在线的专用服务器上那些格子不是 ticking chunk，`tick`（自灭/蔓延）不在那里跑，所以"几秒后自己熄灭"这条要你进游戏看。
+
+### ④ 坐下不搭路（两树）
+
+反馈"女仆坐下的时候还是会触发搭路"。`BridgeUpBehavior` 的 `canUse` / `canStillUse` 里**一条坐姿判定都没有**——她坐在椅子上（`isPassenger`）或被玩家叫坐下（`isMaidInSittingPose`）时，只要"水平离开主人 >2.5 格 + 朝主人方向脚前方是空的"照旧启动；人挪不动（passenger 由载具驱动），表现就是"坐着也在搭路"。现在两条入口都拦（与工程其它链路同一口径，见 `MaidPlaceGuard` / `HomePatrolHandler`），`canStillUse` 顺便负责"搭到一半被坐下立即让位"，中止原因在日志里也单独记一条 `sitting`。
+
+### ⑤ issue #16：法术自身冷却被多乘了 20（单处换算修正）
+
+`MaidSpellCastCompat.spellCooldownTicks` 把 ISS 的 `AbstractSpell#getSpellCooldown()` 当成"秒"又乘了一次 20，而它**返回的本来就是 tick**（`(int)(SpellConfigManager.getSpellConfigValue(this, COOLDOWN_IN_SECONDS) * 20)`）。于是烈焰冲锋（真实 10 秒 = 200 tick）被写成 **4000 tick = 200 秒**，"提供速度"第一次放过之后两百秒再也不放，而且这个错值还会被 `castSpecific` 写回 ISS 冷却表。现在原样返回（一处改动、无行为分支变化）。
+
+### ⑥ 交付与验证
+
+两树同步改完 → `gen_compile*.py` + 两树编译零错（各 274/276 源文件）→ 重建两个 jar（`promaid-1.2.2.jar` 9,597,803 / `promaid-1.2.2-neoforge-1.21.1.jar` 9,619,775）→ 三处部署 hash 一致（两个客户端 + pack1201 服务器）→ 回归 4/4 PASS：`test_server.py 1201`、`test_server.py neoforge1211`、`test_maid_load.py 1201`、`test_maid_load.py neoforge1211`。新方块与资源确认在包里（`assets/maid_smart/blockstates/pink_fire.json` + 10 份模型 + 两张贴图与 `.mcmeta`）。**要你进游戏验收**：① 重生锚放置/充能时副手拿的是不是锚与萤石（搭路/酿造/喂食同理）；② 重生锚/床炸出来的火是不是粉色、烧不烧你；③ 坐下时不再搭路；④ 空袭的"提供速度"能不能明显地反复放。
+
+## 实测五百九十六【第 2 个问题（收放魂符后装备被吞）没修好的真凶：我们自己的"入世界自动补包"在每次魂符放出都把客户端那只女仆删了重建】
 
 ### ① 反馈原文
 
