@@ -1880,7 +1880,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 200, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
-        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包，重生锚/床起爆即被它们自己那一炸消耗掉（都不产生掉落物）")
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
         COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
@@ -1893,7 +1893,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 点打火石耐久）；1 = 关掉连投")
                 .translation("config.promaid.bombing.tntBurstCount")
                 .defineInRange("tntBurstCount", 3, 1, 16);
-        COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：末地水晶链路里那块黑曜石 / 基岩在起爆后**留在原地**这么久，再由她**收进自己的背包**——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子。回收一律不掉落地面（背包满就这一块就地消失），所以不会变成白送黑曜石；重生锚 / 床不进这张表：它们自己那一炸就把方块消耗掉了")
+        COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：末地水晶链路里那块黑曜石 / 基岩在起爆后**留在原地**这么久，再由她**收进自己的背包**——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子。回收进她自己的背包；**背包满就掉在她脚下**（与挖矿 / 搭路的方块回收同一口径）；重生锚 / 床不进这张表：它们自己那一炸就把方块消耗掉了")
                 .translation("config.promaid.bombing.reclaimSeconds")
                 .defineInRange("reclaimSeconds", 10, 0, 600);
         COMBAT_BOMBING_PLACE_GAP = BUILDER.comment("放置间隔（tick，默认 10 = 0.5 秒）：先放下黑曜石 / 重生锚 / 床，停这么久再挂末地水晶 / 给她充能——不然两步是同一瞬间完成的，玩家根本看不出中间有过动作。0 = 不间隔")
