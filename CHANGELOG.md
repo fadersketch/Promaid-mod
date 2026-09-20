@@ -28,9 +28,14 @@
 - 反馈："同时这个功能应该有开关。"整条链路里有三处会被临时换掉的副手物品（放置时举方块 / 充能时举萤石 / 投掷时举打火石，起爆那一记再举一次），面板新增「副手动作表现」一栏可以整体关掉；
 - 关掉之后只剩挥臂 / 音效 / 爆炸（挥臂是打斗反馈，不归这个开关管）；**半路关掉也不会把她的盾牌 / 食物留在手上**——还原逻辑独立于开关。
 
-### ⑥ 验证
+### ⑥ 两版本代码审查（顺手修掉一处）
 
-- 两树编译零错（forge `EXITCODE=0` / neo exit 0）；重打 `patched/promaid-1.2.2.jar`（9,554,874 字节 / 690 项）与 `patched/promaid-1.2.2-neoforge-1.21.1.jar`（9,576,900 字节 / 692 项）；
+- 逐行核对了这一批动过的两树源码（`MaidBombing`：pickKind / stepBlock / stepPayload / placeOnSupport / tryPlaceAll / tickPhases / tickCombatTnt / flushTnt / detonate / explode，加上配置、面板、语言、手册四类文件），两树一一对应、没有 SRG/Mojmap 漏映射；
+- 审查发现一处：新增的气泡限频表 `HINT_CD` / `HINT_LAST` 没有跟 `clearAll()` 一起清。已补上——并且**故意不放进 `forget`**：空袭行为每次收尾都会调 forget，一清 60 秒限频就形同虚设（每次轰炸都会再冒一遍同一句话），字段注释里写明了这个口径。
+
+### ⑦ 验证
+
+- 两树编译零错（forge `EXITCODE=0` / neo exit 0）；重打 `patched/promaid-1.2.2.jar`（9,554,884 字节 / 690 项）与 `patched/promaid-1.2.2-neoforge-1.21.1.jar`（9,576,909 字节 / 692 项）；
 - 三个实例部署 `match=True`；1.20.1 与 1.21.1 专用服务器回归均 `verdict: PASS`；两份 `promaid-common.toml` 都已生成 `pose = true`。
 
 
