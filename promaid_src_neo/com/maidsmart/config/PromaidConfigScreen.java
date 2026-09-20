@@ -2433,7 +2433,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("连投最多（发）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 点打火石耐久"));
         this.rows.add(new NumRow("炸弹底座回收延迟（秒）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：水晶链路那块黑曜石/基岩起爆后留在原地这么久，再收进她背包（一律不掉落地面；重生锚/床由自己那一炸消耗掉，不进这张表）"));
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：水晶链路那块黑曜石/基岩起爆后留在原地这么久，再收进她背包——背包满则掉在她脚下（与挖矿/搭路同一口径）；重生锚/床由自己那一炸消耗掉，不进这张表"));
         this.rows.add(new SectionRow("放置与材料", false));
         this.rows.add(new BoolRow("重生锚需要萤石", MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.set(v),
