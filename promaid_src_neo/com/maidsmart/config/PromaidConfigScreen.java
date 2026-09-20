@@ -2400,7 +2400,34 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("冲刺最小距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE, s), "【提供速度】法术的最小施放距离（格，默认 6）：太近不冲，防冲过头扎进敌人身上"));
         this.rows.add(new NumRow("冲刺最大距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE.get()),
-                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
+        this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
+        this.rows.add(new BoolRow("近战空袭轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
+                "近战空袭轰炸（默认开）：猛击命中后按包里材料放炸弹——① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；放置失败直接跳过、接着起飞"));
+        this.rows.add(new NumRow("起爆延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_FUSE.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_FUSE, s), "起爆延迟（tick，默认 10 = 0.5 秒）：放下之后多久响；这半秒正好够她重新起飞"));
+        this.rows.add(new SectionRow("远程空袭：盘旋期间额外扔 TNT", false));
+        this.rows.add(new BoolRow("投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
+                "远程空袭投掷 TNT（默认开）：需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；缺料直接跳过，不影响开火"));
+        this.rows.add(new NumRow("投掷间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷间隔（tick，默认 120 = 6 秒）：两次投掷之间的最短间隔"));
+        this.rows.add(new NumRow("TNT 引信（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE, s), "投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间"));
+        this.rows.add(new NumRow("投掷初速（格/tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED, s), "投掷初速（格/tick，默认 0.9）：调大飞得更快更直，调小抛物线更明显"));
+        this.rows.add(new SectionRow("爆炸口径（四类炸弹共用）", false));
+        this.rows.add(new BoolRow("破坏方块", MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.set(v),
+                "轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形；开 = 原版爆炸照原样炸坑。女仆自己放的方块无论开关都由她回收"));
+        this.rows.add(new BoolRow("伤到主人/友军", MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.set(v),
+                "轰炸伤到主人/友军（默认关）：关 = 主人与同主女仆不掉血也不被震（归因给女仆，走友伤守卫 + 风免）；开 = 原版爆炸，主人照掉血照被炸飞"));
+        this.rows.add(new BoolRow("淡粉色标记（客户端）", MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.set(v),
+                "女仆放置物的淡粉色标记（默认开）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充（纯客户端渲染）"));
+
     }
 
     private void fallGuardRows() {

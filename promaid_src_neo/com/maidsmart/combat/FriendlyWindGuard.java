@@ -178,6 +178,11 @@ public final class FriendlyWindGuard {
 
     /** 唯一的判据（两条路径共用；public 供爆炸的"发包击退向量"过滤复用） */
     public static boolean shouldBlock(EntityMaid maid, Entity victim, Vec3 newVel) {
+        // v1.2.2 实测五百八十七【空袭轰炸】：女仆的炸弹切到"原版模式"（配置「伤到主人/友军」
+        // 打开）时这一瞬间的爆炸**不归因女仆**——本闸口必须让位，否则会出现"血掉了、人没飞"。
+        if (com.maidsmart.combat.MaidBombing.inVanillaBlast()) {
+            return false;
+        }
         try {
             if (maid == null || victim == null || newVel == null || maid == victim) {
                 return false;

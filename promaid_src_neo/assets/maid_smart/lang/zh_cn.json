@@ -248,5 +248,15 @@
   "config.promaid.airRaid.dashBoostMinRange": "冲刺最小距离（格）",
   "config.promaid.airRaid.dashBoostMaxRange": "冲刺最大距离（格）",
   "config.promaid.misc.workPosMarker": "中键工位标记（潜行+中键）",
-  "config.promaid.combat.aidDrinkMinPurity": "喂水最低水质（0-3，2=可接受的）"
+  "config.promaid.combat.aidDrinkMinPurity": "喂水最低水质（0-3，2=可接受的）",
+  "config.promaid.bombing": "空袭轰炸",
+  "config.promaid.bombing.melee": "近战空袭轰炸（打完那一记放炸弹）",
+  "config.promaid.bombing.tnt": "远程空袭投掷 TNT",
+  "config.promaid.bombing.fuse": "起爆延迟（tick）",
+  "config.promaid.bombing.tntFuse": "投掷 TNT 引信（tick）",
+  "config.promaid.bombing.tntInterval": "投掷间隔（tick）",
+  "config.promaid.bombing.tntSpeed": "投掷初速（格/tick）",
+  "config.promaid.bombing.breakBlocks": "轰炸破坏方块",
+  "config.promaid.bombing.hurtFriendly": "轰炸伤到主人/友军",
+  "config.promaid.bombing.pinkMark": "女仆放置物的淡粉色标记"
 }
