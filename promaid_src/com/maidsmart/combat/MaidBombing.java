@@ -80,7 +80,9 @@ import java.util.UUID;
  * - 伤害源**归因给女仆**（{@code damageSources().explosion(maid, maid)}）：于是
  *   {@link FriendlyFireGuard} 照旧取消"女仆→主人/同主女仆/友军"的伤害，主人与友军**既不掉血
  *   也不被震**（击退那条走既有的 {@link FriendlyWindGuard}，与重锤风爆同一套）；她自己也被
- *   {@code isFriendly(maid, maid)} 覆盖 → 不会被自己的炸弹炸伤（只会被震开，正好当起飞推力）。
+ *   {@code isFriendly(maid, maid)} 覆盖 → 不会被自己的炸弹炸伤；而"风"这一层更严：
+ *   实测五百八十八起，**这套炸弹的风对放炸弹的她本人也不生效**（与重锤风爆不同，
+ *   窗口见 {@link #isSelfImmuneBlast()}）。
  * - 想改成"原版爆炸"（主人照掉血照被炸飞）：打开配置里的"伤到主人/友军"——那时**不归因**
  *   （伤害源与爆炸来源都留空），并用 {@link #inVanillaBlast()} 让风免在这一瞬间让位，
  *   否则会出现"血掉了、人没飞"这种半吊子状态。
@@ -132,6 +134,18 @@ public final class MaidBombing {
 
     private static boolean cfgPinkMark() {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.get();
+    }
+
+    private static double cfgTntRange() {
+        return MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get();
+    }
+
+    private static double cfgTntBurstRatio() {
+        return MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get();
+    }
+
+    private static int cfgTntBurstCount() {
+        return MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get();
     }
 
     /* ==================== 物品（按注册名找，不写 SRG 字段名） ==================== */
@@ -361,6 +375,20 @@ public final class MaidBombing {
         return vanillaBlast;
     }
 
+    /**
+     * v1.2.2 实测五百八十八【自爆风免窗口】：这一下爆炸的**风对"放它的女仆本人"也不生效**。
+     *
+     * 需求原文："此处爆炸机制与重锤不同，通过这种方式产生的风暴对释放的女仆自己也不生效。"
+     * ——重锤的风爆会把包括她在内的所有人一起掀飞；我们这条链路做的炸弹不一样：
+     * 她自己不会被打退（伤害本来就被友伤守卫拦掉了，这里连击退一起免）。
+     */
+    private static volatile boolean selfImmuneBlast = false;
+
+    /** 供 {@link FriendlyWindGuard} 查询：此刻这一下爆炸的风，对放炸弹的女仆本人是否也不生效 */
+    public static boolean isSelfImmuneBlast() {
+        return selfImmuneBlast;
+    }
+
     /** 本轮结束/女仆消失时清掉相位（待起爆的那几发照旧自己炸，不跟着清） */
     public static void forget(UUID maidId) {
         if (maidId == null) {
@@ -374,6 +402,7 @@ public final class MaidBombing {
         PHASE.clear();
         TNT_NEXT.clear();
         PENDING.clear();
+        combatScanTick = 0;
     }
 
     private static void log(String msg) {
@@ -707,9 +736,8 @@ public final class MaidBombing {
     /* ==================== 远程空袭：投掷 TNT ==================== */
 
     /**
-     * 远程空袭盘旋期间的附加链路（"女仆会在天上盘旋期间额外发射 tnt"）。
-     * 需求：所需物品 = TNT + 打火石，**不刚需**——没有就静默跳过（连计时都不推）。
-     * 投掷手法照"女仆生存"那套思路：水平单位向量 × 速度 + 竖直补偿，落点按目标中心算。
+     * 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：把她的当前目标直接交给
+     * 共用投掷实现——与下面"所有战斗模式"那条走的是**同一套投掷与冷却**，不会重复扔。
      */
     public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         try {
@@ -719,17 +747,113 @@ public final class MaidBombing {
             if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
                 return;
             }
+            throwTntAt(level, maid, target, id, gameTime);
+        } catch (Throwable t) {
+            log("投掷异常：" + t);
+        }
+    }
+
+    /**
+     * v1.2.2 实测五百八十八【推广到所有有战斗标签的模式】：不再只在远程空袭的盘旋里扔。
+     *
+     * 口径（对照女仆生存 MaidTntInteractionController 的做法，自己实现）：
+     * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
+     *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
+     * ② 有 TNT + 打火石（缺料静默跳过，不占用冷却）；
+     * ③ 冷却到点 + 半径内有**合法敌对目标**；
+     * ④ 防误伤：目标先过 {@link FriendlyFireGuard#isFriendly}（主人 / 同主女仆 / 友军一律不打），
+     *    再过任务自己的 {@code IAttackTask.canAttack}（与 TLM 的索敌口径一致）；
+     * ⑤ 女仆自己残血（≤ 阈值）时**连投**数发，横向散开——照女仆生存那套"低血量爆发"思路。
+     */
+    public static void tickCombatTnt(ServerLevel level, EntityMaid maid) {
+        try {
+            if (level == null || maid == null || !cfgTnt()) {
+                return;
+            }
+            if (!com.maidsmart.task.MaidWorkTags.isCombatTask(maid)) {
+                return; // 非战斗任务不扔（干活/待机/跟随都不打扰）
+            }
+            if (!maid.m_6084_() || maid.m_213877_()) {
+                return;
+            }
+            UUID id = maid.m_20148_();
+            long gameTime = level.m_46467_();
+            if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
+                return;
+            }
             if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
                 return; // 不刚需：缺料直接跳过
             }
+            LivingEntity target = findThrowTarget(level, maid);
+            if (target == null) {
+                return;
+            }
+            throwTntAt(level, maid, target, id, gameTime);
+        } catch (Throwable t) {
+            log("战斗投掷异常：" + t);
+        }
+    }
+
+    /** 半径内最近的**合法敌对**目标（防误伤口径见 {@link #tickCombatTnt} 的注释） */
+    private static LivingEntity findThrowTarget(ServerLevel level, EntityMaid maid) {
+        double r = Math.max(2.0, cfgTntRange());
+        LivingEntity best = null;
+        double bestSqr = Double.MAX_VALUE;
+        for (LivingEntity le : level.m_6443_(LivingEntity.class, maid.m_20191_().m_82400_(r), e -> true)) {
+            try {
+                if (le == maid || !le.m_6084_()) {
+                    continue;
+                }
+                if (FriendlyFireGuard.isFriendly(maid, le)) {
+                    continue; // 防误伤：主人 / 同主女仆 / 友军不扔
+                }
+                if (!(maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask at)
+                        || !at.canAttack(maid, le)) {
+                    continue; // 只打"她的任务认的敌人"（与 TLM 索敌同口径）
+                }
+                double d = maid.m_20280_(le);
+                if (d < bestSqr) {
+                    bestSqr = d;
+                    best = le;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return best;
+    }
+
+    /** 这一发要扔几枚：残血（≤ 阈值）连投，否则 1 枚 */
+    private static int throwCount(EntityMaid maid) {
+        try {
+            float max = maid.m_21233_();
+            if (max > 0.0f && maid.m_21223_() / max <= cfgTntBurstRatio()) {
+                return Math.max(1, cfgTntBurstCount());
+            }
+        } catch (Throwable ignored) {
+        }
+        return 1;
+    }
+
+    /**
+     * 共用的投掷实现（远程空袭盘旋 + 所有战斗模式两条入口都走这里）。
+     * 手法照"女仆生存"那套思路自己实现：水平单位向量 × 初速 + 竖直补偿（按 TNT 重力估飞行时间），
+     * 落点按目标中心算；连投时按序号横向散开，避免三枚叠在一条线上。
+     */
+    private static void throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        int want = throwCount(maid);
+        int thrown = 0;
+        for (int i = 0; i < want; i++) {
+            if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
+                break;
+            }
             ItemStack tntStack = takeOne(maid, ID_TNT);
             if (tntStack.m_41619_()) {
-                return;
+                break;
             }
             ItemStack flint = takeOne(maid, ID_FLINT_AND_STEEL);
             if (flint.m_41619_()) {
                 giveBack(maid, tntStack);
-                return;
+                break;
             }
             try {
                 flint.m_41622_(1, maid, m -> m.m_21166_(EquipmentSlot.MAINHAND)); // 打火石点一次掉 1 耐久（原版口径）
@@ -751,6 +875,13 @@ public final class MaidBombing {
             if (dh > 1.0E-4) {
                 vx = dx / dh * speed;
                 vz = dz / dh * speed;
+                if (want > 1) {
+                    double spread = (i - (want - 1) * 0.5) * 0.18;
+                    double sx2 = -vz / speed * spread;
+                    double sz2 = vx / speed * spread;
+                    vx += sx2;
+                    vz += sz2;
+                }
             }
             // 抛体：飞行时间 ≈ 水平距离 / 水平速度，竖直初速补落差（TNT 重力 0.04、每 tick 阻尼 0.98）
             double t = Math.max(1.0, dh / speed);
@@ -760,7 +891,7 @@ public final class MaidBombing {
             tnt.m_20256_(new Vec3(vx, vy, vz));
             if (!level.m_7967_(tnt)) {
                 giveBack(maid, tntStack);
-                return;
+                break;
             }
             SoundEvent snd = sound(ID_TNT_PRIMED_SOUND);
             if (snd != null) {
@@ -771,13 +902,15 @@ public final class MaidBombing {
                 PENDING.add(new Bomb(level, maid, tnt, tnt.m_20183_(), null, null,
                         Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2));
             }
-            TNT_NEXT.put(id, gameTime + cfgTntInterval());
+            thrown++;
             if (cfgPinkMark()) {
                 BombMarkNetworking.send(maid, 1, tnt.m_19879_(), null, cfgTntFuse() + 40);
             }
-            log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT（引信 " + cfgTntFuse() + " tick）");
-        } catch (Throwable t) {
-            log("投掷异常：" + t);
+        }
+        if (thrown > 0) {
+            TNT_NEXT.put(id, gameTime + cfgTntInterval());
+            log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
+                    + "（引信 " + cfgTntFuse() + " tick）");
         }
     }
 
@@ -825,7 +958,27 @@ public final class MaidBombing {
         } catch (Throwable t) {
             log("起爆异常：" + t);
         }
+        // v1.2.2 实测五百八十八：战斗任务女仆的 TNT 投掷扫描（4 tick 一次；投掷本身有 ≥20 tick 冷却）
+        if ((++combatScanTick % 4) == 0) {
+            try {
+                net.minecraft.server.MinecraftServer server = event.getServer();
+                if (server != null) {
+                    for (ServerLevel lvl : server.m_129785_()) {
+                        for (Entity e : lvl.m_8583_()) {
+                            if (e instanceof EntityMaid m) {
+                                tickCombatTnt(lvl, m);
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable t) {
+                log("战斗投掷扫描异常：" + t);
+            }
+        }
     }
+
+    /** 战斗投掷扫描节流计数（tick） */
+    private static int combatScanTick = 0;
 
     /** 放弃一发作废的炸弹：实体一起清掉（不能留着让它走原版爆炸） */
     private static void dropEntity(Bomb b) {
@@ -870,20 +1023,27 @@ public final class MaidBombing {
         Level.ExplosionInteraction mode = cfgBreakBlocks()
                 ? Level.ExplosionInteraction.BLOCK
                 : Level.ExplosionInteraction.NONE;
-        if (!cfgHurtFriendly()) {
-            // 默认口径：**把女仆当爆炸来源**（伤害源交给原版按来源实体自己构造）。
-            // 于是 damageSource.getEntity() == 女仆 → FriendlyFireGuard 取消主人/同主女仆/友军的
-            // 伤害；Explosion 的来源实体同样是她 → FriendlyWindGuard 的击退豁免也一并生效。
-            level.m_254951_(maid, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
-            return;
-        }
-        // 原版口径：来源实体留空 = 完全不归因（主人/友军照掉血照被炸飞），
-        // 并用 vanillaBlast 让风免在这一瞬间让位，避免"血掉了、人没飞"。
-        vanillaBlast = true;
+        // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
+        // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
+        selfImmuneBlast = true;
         try {
-            level.m_254951_(null, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
+            if (!cfgHurtFriendly()) {
+                // 默认口径：**把女仆当爆炸来源**（伤害源交给原版按来源实体自己构造）。
+                // 于是 damageSource.getEntity() == 女仆 → FriendlyFireGuard 取消主人/同主女仆/友军的
+                // 伤害；Explosion 的来源实体同样是她 → FriendlyWindGuard 的击退豁免也一并生效。
+                level.m_254951_(maid, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
+                return;
+            }
+            // 原版口径：来源实体留空 = 完全不归因（主人/友军照掉血照被炸飞），
+            // 并用 vanillaBlast 让风免在这一瞬间让位，避免"血掉了、人没飞"。
+            vanillaBlast = true;
+            try {
+                level.m_254951_(null, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
+            } finally {
+                vanillaBlast = false;
+            }
         } finally {
-            vanillaBlast = false;
+            selfImmuneBlast = false;
         }
     }
 }
