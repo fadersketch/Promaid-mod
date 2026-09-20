@@ -85,7 +85,7 @@ import java.util.UUID;
  * ⑥ 放置 / 充能 / 投掷 / 起爆各有一记动作：主手挥臂 + 副手短暂举起正在用的那件东西
  *    （{@link BombPose}，用完原物必还）。
  * ⑦ 回收：黑曜石/基岩底座起爆后仍保留 cfgReclaimSeconds 秒，然后**变成物品回收到她背包**
- *    （背包满则这一块就地消失——**绝不产生地面掉落物**，所以不会变成白送黑曜石）；重生锚 / 床
+ *    （实测五百九十三改为：**背包满就掉在她脚下**，与挖矿 / 搭路的方块回收同一口径）；重生锚 / 床
  *    由它们自己那一炸消耗掉（javap 实证原版就是先 removeBlock 再 explode），起爆即撤、
  *    不进回收表、不回背包（回背包 = 放一次白拿一个重生锚）；相位中途失败回滚时原物还她。
  *
@@ -103,6 +103,26 @@ import java.util.UUID;
  *    远程空袭按任务 UID 排除（{@link com.maidsmart.combat.MaidFlightKit#isRangedTask}）。
  *    顺带给整条链路加了最短间隔（bombing.bombInterval，默认 200 tick = 10 秒）：一次挥砍放一枚
  *    会在几秒内烧光她的黑曜石 / 水晶，缺料那一下不占用间隔。
+ *
+ * ── 实测五百九十三（三件事）──
+ * ① 回收的底座**变成掉落物**：塞不进背包的那一份掉在她脚下（{@code spawnAtLocation}，
+ *    与挖矿 / 搭路的方块回收同一口径）。
+ * ② **爆炸特效对齐原版**：不破坏方块时原版恒走小粒子（{@code ExplosionInteraction.NONE} 的
+ *    {@code interactsWithBlocks()} 恒 false，javap 实证）→ 我们**自己补发一枚大粒子**。
+ * ③ 落点**兜底强制放置**：原版 place() 会拒绝"那一格站着实体"这类落点，
+ *    拒绝之后我们补一手 setBlock（只在那格确实可替换时才做）。
+ *
+ * ── 实测五百九十四（三件事）──
+ * ① **"重生锚还是放不下来"的真相**：实测日志（latest.log，搜「空袭轰炸」）里写的是
+ *    `重生锚：缺萤石`——她带着重生锚，只是背包里没有那 1 颗萤石（原版 0 级充能右键不炸）。
+ *    旧版这条原因只落日志、而且**床能顶上时连日志都不会有**，于是现在改成**女仆气泡**
+ *    把原因说清（{@link #hintAnchorSkip}，60 秒一条）：缺萤石 / 这个维度不炸各有各的说法，
+ *    日志同步落一条，下一轮排查不用再猜。
+ * ② **投掷 TNT 时副手举打火石**：反馈"在扔 TNT 的时候，副手武器应该切换成打火石"——
+ *    旧版亮的是刚扔出去的那枚 TNT，现在点亮火那只手里的打火石（{#link #flintDisplay}，
+ *    耐久已在 {@link #useFlintAndSteel} 里就地扣掉，这里只借模型）。
+ * ③ **动作表现总开关**（bombing.pose，默认开）：整条链路的"副手亮一下"可以整体关掉，
+ *    关掉之后只剩挥臂 / 音效 / 爆炸（见 {@link #pose}）。
  *
  * ── 时序（为什么是"起飞之前"）──
  * 猛击命中那一 tick 起手：step 0 放方块、step 1 放水晶/充能，随后立刻把控制权交还
@@ -201,6 +221,44 @@ public final class MaidBombing {
     /** v1.2.2 实测五百九十二：整条轰炸链路的最短间隔（tick，默认 200 = 10 秒） */
     private static int cfgBombInterval() {
         return MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL.get();
+    }
+
+    /** v1.2.2 实测五百九十四：动作表现（副手亮一下）总开关（默认开） */
+    private static boolean cfgPose() {
+        return MaidSmartConfig.COMBAT_BOMBING_POSE.get();
+    }
+
+    /**
+     * v1.2.2 实测五百九十四【动作表现总开关】。
+     *
+     * 需求原文："同时这个功能应该有开关。"——整条链路里有三处会被临时换掉的副手物品
+     * （放置时举方块 / 充能时举萤石 / 投掷时举打火石，起爆那一记再举一次），这是"看得见她
+     * 在做什么"的来源，但也可能有人不想让副手武器在打架时被闪一下——所以给一个开关。
+     *
+     * 关掉之后只剩挥臂 / 音效 / 爆炸本身（挥臂是打斗反馈，不归这个开关管）；还原逻辑
+     * （{@link BombPose#tick}）不受开关影响，所以半路关掉也不会把她的盾牌 / 食物留在手上
+     * 换不回来。
+     */
+    private static void pose(EntityMaid maid, ItemStack display, int ticks) {
+        if (!cfgPose()) {
+            return;
+        }
+        BombPose.show(maid, display, ticks);
+    }
+
+    /**
+     * v1.2.2 实测五百九十四【投掷时副手举打火石】：反馈"在扔 TNT 的时候，副手武器应该切换成
+     * 打火石"——照玩家点火的样子来：手里拿的是打火石（那枚 TNT 已经扔出去了、本来就不在手上）。
+     * 打火石的耐久早在 {@link #useFlintAndSteel} 里就地扣掉了，这里只借它的模型做表现，
+     * 数量与耐久一概不动（{@link BombPose} 到点原物奉还）。
+     */
+    private static ItemStack flintDisplay() {
+        try {
+            Item it = item(ID_FLINT_AND_STEEL);
+            return it == null ? ItemStack.f_41583_ : new ItemStack(it);
+        } catch (Throwable ignored) {
+            return ItemStack.f_41583_;
+        }
     }
 
     private static boolean cfgAirPlace() {
@@ -743,6 +801,12 @@ public final class MaidBombing {
                 && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE))) {
             return Kind.ANCHOR;
         }
+        // ── v1.2.2 实测五百九十四【把原因说到玩家脸上】──
+        // 第三次反馈"重生锚还是放不下来"，而实测日志（latest.log 搜「空袭轰炸」）里那一行写得
+        // 明明白白：她带着重生锚、**缺萤石**。旧版这条原因只落在日志里（玩家不看日志就等于没有），
+        // 而且床能顶上时**连日志都不会有**（diagSkip 只在"一条链路都开不了"时才跑）。
+        // 现在不管后面是床顶上、还是整条链都没开成，只要重生锚这一段被跳过就冒气泡说清原因。
+        hintAnchorSkip(level, maid);
         // 床同样走维度闸（主世界 = bedWorks 为 true = 不开放）
         if (explodesHere(level, Kind.BED) && hasBed(maid)) {
             return Kind.BED;
@@ -795,8 +859,74 @@ public final class MaidBombing {
                 sb.append("床：").append(bedWorks(level)
                         ? "本维度不炸（维度闸关，" + dimKey(level) + "）；"
                         : "可选；");
+                // v1.2.2 实测五百九十四：维度闸把床拦下（主世界用床）看着最像 bug，冒气泡说清
+                if (bedWorks(level)) {
+                    hint(level, maid, HINT_BED_DIM);
+                }
             }
+            // v1.2.2 实测五百九十四：重生锚那一段的原因（缺萤石 / 这个维度不炸）同样说给她主人听
+            hintAnchorSkip(level, maid);
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
+        } catch (Throwable ignored) {
+        }
+    }
+
+
+    /* ==================== v1.2.2 实测五百九十四：把"为什么没用重生锚"说到玩家脸上 ==================== */
+
+    /** 重生锚没开成的两种说法（同一句话不重复说，见 hint） */
+    private static final String HINT_ANCHOR_DIM = "这个维度里重生锚不会炸，我换个办法（维度闸）～";
+    private static final String HINT_ANCHOR_GLOW = "主人，给我 1 颗萤石吧——重生锚要充能 1 级才会炸～";
+    /** 床没开成的说法（维度闸，主世界） */
+    private static final String HINT_BED_DIM = "这个维度里床不会炸，我换个办法（维度闸）～";
+
+    /** 气泡 / 日志的限频（女仆 → 上次时间；女仆 → 上次说的那句） */
+    private static final Map<UUID, Long> HINT_CD = new HashMap<>();
+    private static final Map<UUID, String> HINT_LAST = new HashMap<>();
+
+    /** 同一句话至少隔这么久才再说一次（tick，60 秒；气泡本身另有 5 秒全局限频兜底） */
+    private static final long HINT_CD_TICKS = 1200L;
+
+    /**
+     * v1.2.2 实测五百九十四：重生锚这一段被跳过时，把原因说给她主人听。
+     *
+     * 实测依据（latest.log，1.21.1 实例）：`轰炸跳过（没有可用链路）：水晶链路缺黑曜石/基岩；
+     * 重生锚：缺萤石；`——她确实带着重生锚，只是背包里没有那 1 颗萤石（原版 0 级充能右键不炸）。
+     * 三种情况：
+     * <ul>
+     *   <li>她压根没带重生锚 → 什么都不说（不打扰）；</li>
+     *   <li>这个维度原版重生锚不会炸（维度闸把它关了）→ 说清是维度的事、不是缺材料；</li>
+     *   <li>缺 1 颗萤石 → 直接告诉主人往她背包里放萤石。</li>
+     * </ul>
+     * 链路是开着的时候**不说话**（真的起手失败另有日志，见 stepBlock 的"放不下"）。
+     */
+    private static void hintAnchorSkip(ServerLevel level, EntityMaid maid) {
+        if (level == null || maid == null || !has(maid, ID_RESPAWN_ANCHOR)) {
+            return;
+        }
+        if (!explodesHere(level, Kind.ANCHOR)) {
+            hint(level, maid, HINT_ANCHOR_DIM);
+        } else if (cfgAnchorNeedsGlowstone() && !has(maid, ID_GLOWSTONE)) {
+            hint(level, maid, HINT_ANCHOR_GLOW);
+        }
+    }
+
+    /** 限频说一句话（女仆气泡 + 日志；同一句话 60 秒内不重复） */
+    private static void hint(ServerLevel level, EntityMaid maid, String said) {
+        if (level == null || maid == null || said == null) {
+            return;
+        }
+        try {
+            UUID id = maid.m_20148_();
+            long now = level.m_46467_();
+            Long last = HINT_CD.get(id);
+            if (last != null && now - last < HINT_CD_TICKS && said.equals(HINT_LAST.get(id))) {
+                return;
+            }
+            HINT_CD.put(id, now);
+            HINT_LAST.put(id, said);
+            maid.getChatBubbleManager().addTextChatBubble(said);
+            log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸链路没开成：" + said);
         } catch (Throwable ignored) {
         }
     }
@@ -990,7 +1120,7 @@ public final class MaidBombing {
             }
         }
         maid.m_6674_(InteractionHand.MAIN_HAND);
-        BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
+        pose(maid, ph.display, BOMB_POSE_TICKS);
         log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放下 " + ph.kind.cn
                 + " @" + spot.m_123341_() + "," + spot.m_123342_() + "," + spot.m_123343_());
         return true;
@@ -1022,7 +1152,7 @@ public final class MaidBombing {
             ph.display = crystal.m_41777_();
             ph.display.m_41764_(1);
             maid.m_6674_(InteractionHand.MAIN_HAND);
-            BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
+            pose(maid, ph.display, BOMB_POSE_TICKS);
         } else if (ph.kind == Kind.ANCHOR) {
             // ── v1.2.2 实测五百九十二：这一段的动作照需求原话走 ──
             // "攻击→副手换成重生锚，放置重生锚（摆臂）→副手换成萤石，拿一颗萤石充能（摆臂动画）
@@ -1036,7 +1166,7 @@ public final class MaidBombing {
                     log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
                     return false;
                 }
-                BombPose.show(maid, glow, BOMB_POSE_TICKS); // 副手这时换成的就是萤石
+                pose(maid, glow, BOMB_POSE_TICKS); // 副手这时换成的就是萤石
             }
             // 照原版 charge：音效 + 充能等级 +1（等级只决定"炸不炸"，1 级足够；< 4 只是防越界）
             try {
@@ -1049,7 +1179,7 @@ public final class MaidBombing {
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
             if (glow.m_41619_()) {
-                BombPose.show(maid, ph.display, BOMB_POSE_TICKS); // 没消耗萤石（开关关掉）→ 亮重生锚
+                pose(maid, ph.display, BOMB_POSE_TICKS); // 没消耗萤石（开关关掉）→ 亮重生锚
             }
         }
         List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
@@ -1720,8 +1850,10 @@ public final class MaidBombing {
                 level.m_5594_(null, maid.m_20183_(), snd, SoundSource.BLOCKS, 1.0f, 1.0f);
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
-            // 投掷那一记的动作：副手亮一下刚扔出去的那枚 TNT（实测五百九十一）
-            BombPose.show(maid, tntStack, BOMB_POSE_TICKS);
+            // 投掷那一记的动作：副手举的是**打火石**（实测五百九十四）——旧版亮的是刚扔出去的
+            // 那枚 TNT，反馈要的是"点火的那只手"：扔 TNT 的时候副手切换成打火石。
+            ItemStack flint = flintDisplay();
+            pose(maid, flint.m_41619_() ? tntStack : flint, BOMB_POSE_TICKS);
             if (PENDING.size() < MAX_PENDING) {
                 PENDING.add(new Bomb(level, maid, tnt, tnt.m_20183_(), null, null,
                         Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2, tntStack));
@@ -1878,7 +2010,7 @@ public final class MaidBombing {
             double ddz = maid.m_20189_() - z;
             if (ddx * ddx + ddy * ddy + ddz * ddz <= 64.0) {
                 maid.m_6674_(InteractionHand.MAIN_HAND);
-                BombPose.show(maid, b.display, BLAST_POSE_TICKS);
+                pose(maid, b.display, BLAST_POSE_TICKS);
             }
         }
         explode(level, maid, x, y, z, b.kind.power, b.kind.fire);

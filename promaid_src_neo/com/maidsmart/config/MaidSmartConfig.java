@@ -607,6 +607,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE;
     /** 整条轰炸链路的最短间隔（tick，默认 200 = 10 秒；v1.2.2 实测五百九十二） */
     public static final ModConfigSpec.IntValue COMBAT_BOMBING_BOMB_INTERVAL;
+    /** 动作表现总开关（默认开；v1.2.2 实测五百九十四）：放置 / 充能 / 投掷时副手亮一下 */
+    public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_POSE;
     /** 第三方玩法模式黑名单（默认开，v1.2.2 实测五百九十：傀儡装配的「傀儡师」） */
     public static final ModConfigSpec.BooleanValue COMPAT_PUPPET_BLACKLIST;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
@@ -1906,6 +1908,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_BOMB_INTERVAL = BUILDER.comment("轰炸最短间隔（tick，默认 200 = 10 秒）：整条轰炸链路（黑曜石+末地水晶 / 重生锚+萤石 / 床）两次之间的下限——轰炸已经挂进攻击链路（**打完一记之后**才放），这条只是下限；推广到所有攻击模式之后，不加下限会在几秒内烧光她的黑曜石 / 水晶。缺料那一下不占用间隔")
                 .translation("config.promaid.bombing.bombInterval")
                 .defineInRange("bombInterval", 200, 10, 2400);
+        COMBAT_BOMBING_POSE = BUILDER.comment("副手动作表现（默认开）：放置黑曜石/重生锚/床、给重生锚充能、投掷 TNT 时，副手短暂举起她正在用的那一件（方块 / 萤石 / 打火石）——『好像真的打了一下』就是靠它，起爆那一刻还会再举一次。关掉 = 副手全程不被换，只剩挥臂 / 音效 / 爆炸（挥臂是打斗反馈，不归这个开关管）。半路关掉也不会把她的盾牌 / 食物留在手上：还原逻辑独立于开关")
+                .translation("config.promaid.bombing.pose").define("pose", true);
         COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);
