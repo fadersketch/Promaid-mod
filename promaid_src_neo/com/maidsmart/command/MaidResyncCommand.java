@@ -152,6 +152,16 @@ public final class MaidResyncCommand {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
+     * v1.2.2 实测五百九十五：每个 UUID 因为"她正开着物品栏/装备栏"被推迟过几次。
+     * 见 {@link #tickAutoResync}——她的界面开着时重建客户端实体会让容器槽位错位。
+     */
+    private static final java.util.Map<UUID, Integer> AUTO_DEFER =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 推迟上限（次，每次 1 秒）：一直开着界面就不再补，等关掉界面后的下一次入世界 */
+    public static final int AUTO_RESYNC_MAX_DEFER = 10;
+
+    /**
      * v1.2.0 实测五百五十六【自动补包】：女仆重新入世界时登记一次延迟补包。
      *
      * 【为什么需要】实测现场：女仆在战斗中"客户端消失、服务端照打"，**重启游戏就回来**。
@@ -203,6 +213,26 @@ public final class MaidResyncCommand {
                     if (ent instanceof EntityMaid maid && maid.isAlive()
                             && maid.getOwner() instanceof ServerPlayer owner
                             && owner.level() == maid.level()) {
+                        // v1.2.2 实测五百九十五【她的界面开着时不重建客户端实体】：
+                        // 玩家正开着她的物品栏/装备栏时把客户端实体"删掉再生成"，TLM 的容器
+                        // 槽位（SlotItemHandler）抓的还是那只**已被删掉**的实体、背包/饰品
+                        // 句柄也一起作废 —— 客户端的"哪一格有什么"与服务端错位，反馈的
+                        // "收放魂符之后在物品栏/装备栏之间反复拖动会把装备卡掉"就出在这个窗口。
+                        // 现在遇到 guiOpening 就推迟 1 秒再看，最多 10 次；她一直开着界面
+                        // 就不补了（真丢了实体的话，关掉界面后的下一次入世界还会登记补包）。
+                        if (maid.guiOpening) {
+                            int tries = AUTO_DEFER.getOrDefault(id, 0);
+                            if (tries < AUTO_RESYNC_MAX_DEFER) {
+                                AUTO_DEFER.put(id, tries + 1);
+                                PENDING_AUTO.put(id, AUTO_RESYNC_DELAY_TICKS);
+                            } else {
+                                AUTO_DEFER.remove(id);
+                                PromaidLog.log("重同步", PromaidLog.nameOf(maid)
+                                        + " 重同步推迟：她的界面一直开着（等下次入世界再补）");
+                            }
+                            break;
+                        }
+                        AUTO_DEFER.remove(id);
                         resyncTo(owner, maid);
                         PromaidLog.log("重同步", PromaidLog.nameOf(maid)
                                 + " 重新入世界 → 已给主人补一次实体包（防客户端实体丢失）");
@@ -225,6 +255,26 @@ public final class MaidResyncCommand {
             viewer.connection.send(new ClientboundAddEntityPacket(maid, 0, maid.blockPosition()));
             viewer.connection.send(new ClientboundSetEntityDataPacket(maid.getId(),
                     maid.getEntityData().getNonDefaultValues()));
+            // v1.2.2 实测五百九十五【"收放魂符后血量上限掉回 20"的根因】：原版只在
+            // "开始追踪"那一刻下发属性表（ServerEntity.sendPairingData →
+            // ClientboundUpdateAttributesPacket），之后只有属性变脏时才补发。本方法绕过了
+            // 原版追踪，客户端那边是**刚 new 出来的新实体**——属性表全是默认值
+            // （TLM 女仆 MAX_HEALTH 默认 20）。于是"删+生成"之后客户端算出来的血量上限
+            // 永远是 20（TLM 自带界面画的血条 = getHealth()/getMaxHealth()，各类显示模组
+            // 读的也是它）：观感就是"收放魂符后上限掉回 20"；等服务端属性再次变脏
+            // （好感度升阶时 FavorabilityManager 调 setBaseValue）才又变回 80，正是反馈里
+            // 的"80 和 20 反复横跳"。补发属性表，口径与 ServerEntity 一字不差。
+            java.util.Collection<net.minecraft.world.entity.ai.attributes.AttributeInstance> attrs =
+                    maid.getAttributes().getSyncableAttributes();
+            if (!attrs.isEmpty()) {
+                viewer.connection.send(
+                        new net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket(
+                                maid.getId(), attrs));
+            }
+            if (!maid.getPassengers().isEmpty()) {
+                viewer.connection.send(
+                        new net.minecraft.network.protocol.game.ClientboundSetPassengersPacket(maid));
+            }
             List<com.mojang.datafixers.util.Pair<EquipmentSlot, net.minecraft.world.item.ItemStack>> eq =
                     new ArrayList<>();
             eq.add(com.mojang.datafixers.util.Pair.of(EquipmentSlot.MAINHAND, maid.getMainHandItem()));

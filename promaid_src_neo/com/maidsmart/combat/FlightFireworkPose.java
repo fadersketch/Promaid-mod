@@ -53,7 +53,7 @@ public final class FlightFireworkPose {
     /** 烟花在副手停留的 tick 数（0.5 秒——够看清"她掏了烟花"，又不至于像换了武器） */
     private static final int HOLD_TICKS = 10;
 
-    /** maidId → [剩余 tick, 原副手物品] */
+    /** maidId → [剩余 tick, 原副手物品, 我们放进去的展示品]（第三项用于判断副手有没有被玩家动过） */
     private static final Map<UUID, Object[]> ACTIVE = new HashMap<>();
 
     private FlightFireworkPose() {
@@ -84,7 +84,9 @@ public final class FlightFireworkPose {
                     : new ItemStack(Items.FIREWORK_ROCKET); // 兜底（理论上不会走到）
             display.setCount(1); // 只显示一枚
             maid.setItemInHand(InteractionHand.OFF_HAND, display);
-            ACTIVE.put(id, new Object[]{HOLD_TICKS, original});
+            // v1.2.2 实测五百九十五：连"我们放进去的那件"一起记——归还时要靠它判断副手
+            // 是否还保持着我们的展示品（玩家中途放进别的东西就不能覆盖，见 restore）
+            ACTIVE.put(id, new Object[]{HOLD_TICKS, original, display.copy()});
         } catch (Throwable ignored) {
         }
     }
@@ -151,9 +153,21 @@ public final class FlightFireworkPose {
         ACTIVE.clear();
     }
 
+    /**
+     * 归还：副手还是我们的展示品（或空着）→ 原物写回；已被玩家换成别的 → 原物走
+     * {@link com.maidsmart.tool.MaidGiveBack}（进背包/落地），绝不覆盖玩家的东西。
+     * v1.2.2 实测五百九十五：旧版无条件写回，会把展示窗口里玩家放进去的装备顶掉。
+     */
     private static void restore(EntityMaid maid, Object[] cur) {
-        Object orig = cur[1];
-        ItemStack original = (orig instanceof ItemStack s) ? s : ItemStack.EMPTY;
-        maid.setItemInHand(InteractionHand.OFF_HAND, original);
+        ItemStack original = (cur[1] instanceof ItemStack s) ? s : ItemStack.EMPTY;
+        ItemStack shown = (cur.length > 2 && cur[2] instanceof ItemStack d) ? d : ItemStack.EMPTY;
+        ItemStack now = maid.getOffhandItem();
+        boolean untouched = now.isEmpty()
+                || (!shown.isEmpty() && ItemStack.isSameItemSameComponents(now, shown));
+        if (untouched) {
+            maid.setItemInHand(InteractionHand.OFF_HAND, original);
+        } else if (!original.isEmpty()) {
+            com.maidsmart.tool.MaidGiveBack.give(maid, original, "副手展示烟花期间被换下的原物");
+        }
     }
 }

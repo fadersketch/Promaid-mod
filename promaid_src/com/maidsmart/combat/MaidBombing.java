@@ -402,22 +402,17 @@ public final class MaidBombing {
         return ItemStack.f_41583_;
     }
 
-    /** 用不掉就还回去（背包满则丢在脚下） */
+    /**
+     * 用不掉就还回去（背包满则丢在脚下）。
+     *
+     * v1.2.2 实测五百九十五【不再吞装备】：旧版是"找第一个空格 → `insertItem` →
+     * 不看返回值直接 return"——那一格被规则拒收（TLM 女仆背包的禁放规则
+     * `MaidBackpackHandler.isItemValid`、模组背包的槽位限制）或那一栈放不下时，
+     * `insertItem` 会把**整栈原样退回来**，旧版拿到就丢 = 物品凭空消失。
+     * 现在统一走 {@link com.maidsmart.tool.MaidGiveBack}：堆叠插入，塞不下的落地。
+     */
     private static void giveBack(EntityMaid maid, ItemStack stack) {
-        if (stack == null || stack.m_41619_()) {
-            return;
-        }
-        try {
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                if (inv.getStackInSlot(i).m_41619_()) {
-                    inv.insertItem(i, stack, false);
-                    return;
-                }
-            }
-            maid.m_5552_(stack, 0.5f);
-        } catch (Throwable ignored) {
-        }
+        com.maidsmart.tool.MaidGiveBack.give(maid, stack, "轰炸用不掉的材料");
     }
 
     /**
@@ -861,12 +856,12 @@ public final class MaidBombing {
                 sb.append("床：").append(bedWorks(level)
                         ? "本维度不炸（维度闸关，" + dimKey(level) + "）；"
                         : "可选；");
-                // v1.2.2 实测五百九十四：维度闸把床拦下（主世界用床）看着最像 bug，冒气泡说清
+                // v1.2.2 实测五百九十四：维度闸把床拦下（主世界用床）看着最像 bug，写下来
                 if (bedWorks(level)) {
                     hint(level, maid, HINT_BED_DIM);
                 }
             }
-            // v1.2.2 实测五百九十四：重生锚那一段的原因（缺萤石 / 这个维度不炸）同样说给她主人听
+            // v1.2.2 实测五百九十四：重生锚那一段的原因（缺萤石 / 这个维度不炸）同样写下来
             hintAnchorSkip(level, maid);
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
         } catch (Throwable ignored) {
@@ -874,38 +869,38 @@ public final class MaidBombing {
     }
 
 
-    /* ==================== v1.2.2 实测五百九十四：把"为什么没用重生锚"说到玩家脸上 ==================== */
+    /* ============ v1.2.2 实测五百九十四起：把"为什么没用重生锚/床"写进日志（五百九十五撤掉气泡） ============ */
 
-    /** 重生锚没开成的两种说法（同一句话不重复说，见 hint） */
-    private static final String HINT_ANCHOR_DIM = "这个维度里重生锚不会炸，我换个办法（维度闸）～";
-    private static final String HINT_ANCHOR_GLOW = "主人，给我 1 颗萤石吧——重生锚要充能 1 级才会炸～";
-    /** 床没开成的说法（维度闸，主世界） */
-    private static final String HINT_BED_DIM = "这个维度里床不会炸，我换个办法（维度闸）～";
+    /** 重生锚没开成的两种原因（同一句话不重复记，见 hint） */
+    private static final String HINT_ANCHOR_DIM = "本维度重生锚不炸（维度闸）→ 换别的链路";
+    private static final String HINT_ANCHOR_GLOW = "缺萤石（重生锚要充能 1 级才会炸）";
+    /** 床没开成的原因（维度闸，主世界） */
+    private static final String HINT_BED_DIM = "本维度床不炸（维度闸）→ 换别的链路";
 
     /**
-     * 气泡 / 日志的限频（女仆 → 上次时间；女仆 → 上次说的那句）。
+     * 日志的限频（女仆 → 上次时间；女仆 → 上次记的那句）。
      *
      * 注意这两张表**不跟 {@link #forget} 一起清**：空袭行为每次收尾都会调 forget，
-     * 一清 60 秒限频就形同虚设（每次轰炸都会再冒一遍同一句话）。只在 {@link #clearAll} 清。
+     * 一清 60 秒限频就形同虚设（每次轰炸都会再记一遍同一句）。只在 {@link #clearAll} 清。
      */
     private static final Map<UUID, Long> HINT_CD = new HashMap<>();
     private static final Map<UUID, String> HINT_LAST = new HashMap<>();
 
-    /** 同一句话至少隔这么久才再说一次（tick，60 秒；气泡本身另有 5 秒全局限频兜底） */
+    /** 同一句话至少隔这么久才再记一次（tick，60 秒） */
     private static final long HINT_CD_TICKS = 1200L;
 
     /**
-     * v1.2.2 实测五百九十四：重生锚这一段被跳过时，把原因说给她主人听。
+     * v1.2.2 实测五百九十四：重生锚这一段被跳过时，把原因写下来（五百九十五起只进日志）。
      *
      * 实测依据（latest.log，1.21.1 实例）：`轰炸跳过（没有可用链路）：水晶链路缺黑曜石/基岩；
      * 重生锚：缺萤石；`——她确实带着重生锚，只是背包里没有那 1 颗萤石（原版 0 级充能右键不炸）。
      * 三种情况：
      * <ul>
-     *   <li>她压根没带重生锚 → 什么都不说（不打扰）；</li>
-     *   <li>这个维度原版重生锚不会炸（维度闸把它关了）→ 说清是维度的事、不是缺材料；</li>
-     *   <li>缺 1 颗萤石 → 直接告诉主人往她背包里放萤石。</li>
+     *   <li>她压根没带重生锚 → 什么都不记（不打扰）；</li>
+     *   <li>这个维度原版重生锚不会炸（维度闸把它关了）→ 记明是维度的事、不是缺材料；</li>
+     *   <li>缺 1 颗萤石 → 记明"往她背包里放 1 颗萤石就好"。</li>
      * </ul>
-     * 链路是开着的时候**不说话**（真的起手失败另有日志，见 stepBlock 的"放不下"）。
+     * 链路是开着的时候**不记**（真的起手失败另有日志，见 stepBlock 的"放不下"）。
      */
     private static void hintAnchorSkip(ServerLevel level, EntityMaid maid) {
         if (level == null || maid == null || !has(maid, ID_RESPAWN_ANCHOR)) {
@@ -918,7 +913,9 @@ public final class MaidBombing {
         }
     }
 
-    /** 限频说一句话（女仆气泡 + 日志；同一句话 60 秒内不重复） */
+    /** 限频记一句（只进日志；同一句话 60 秒内不重复）。
+     *  v1.2.2 实测五百九十五【气泡删掉】：这一批（五百九十四）加的气泡按要求撤掉——
+     *  原因只写日志（搜「轰炸链路没开成」）。 */
     private static void hint(ServerLevel level, EntityMaid maid, String said) {
         if (level == null || maid == null || said == null) {
             return;
@@ -932,7 +929,6 @@ public final class MaidBombing {
             }
             HINT_CD.put(id, now);
             HINT_LAST.put(id, said);
-            maid.getChatBubbleManager().addTextChatBubble(said);
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸链路没开成：" + said);
         } catch (Throwable ignored) {
         }
