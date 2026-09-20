@@ -78,6 +78,12 @@ public final class MaidModeCompat {
         }
     }
 
+    /** 黑名单 UID 的人类可读名（LLM 工具回话用；非黑名单返回兜底文案） */
+    public static String descriptionOfUid(String uid) {
+        String name = BLACKLIST.get(uid);
+        return name == null ? "第三方玩法模式" : name;
+    }
+
     /**
      * 她当前是不是正处在这个第三方玩法模式里。是的话本模组的战术全体让位，
      * 只保留那个模组自己的玩法（见类注释的口径 ②）。
