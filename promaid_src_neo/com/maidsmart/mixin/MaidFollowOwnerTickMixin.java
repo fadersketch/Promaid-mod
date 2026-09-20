@@ -56,6 +56,9 @@ public abstract class MaidFollowOwnerTickMixin {
     @Inject(method = "checkExtraStartConditions(Lnet/minecraft/server/level/ServerLevel;Lcom/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid;)Z",
             at = @At("HEAD"))
     private void maidsmart$perTickFollow(ServerLevel level, EntityMaid maid, CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         try {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get()) {
                 return;

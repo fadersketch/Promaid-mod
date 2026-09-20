@@ -504,6 +504,9 @@ public class AutoCombatSwitch {
         if (!(victim instanceof EntityMaid)) {
             return false;
         }
+        if (!com.maidsmart.tool.MaidScope.owned(victim)) {
+            return false; // v1.2.2 实测六百：无主女仆不参战（整合包自己的仇恨体系接管）
+        }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
             return false;
         }

@@ -35,6 +35,9 @@ public abstract class MaidPlayerDamageMixin {
     @Inject(method = "m_6469_", at = @At("HEAD"), cancellable = true)
     private void maidsmart$playerDamageHead(DamageSource source, float amount,
                                             CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return; // v1.2.2 实测六百：无主女仆不干预
+        }
         Entity attacker = source.m_7639_();
         if (!(attacker instanceof Player)) {
             return; // 非玩家攻击（怪物/环境/女仆互殴等）不管
@@ -48,6 +51,9 @@ public abstract class MaidPlayerDamageMixin {
     @Redirect(method = "m_6469_",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;m_14036_(FFF)F"))
     private float maidsmart$unclampPlayerDamage(float value, float min, float max) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return Mth.m_14036_(value, min, max); // v1.2.2 实测六百：无主女仆走原版压制
+        }
         int mode = MaidSmartConfig.PLAYER_DAMAGE_MODE.get();
         if (mode == 0) {
             return Mth.m_14036_(value, min, max); // 原版压制

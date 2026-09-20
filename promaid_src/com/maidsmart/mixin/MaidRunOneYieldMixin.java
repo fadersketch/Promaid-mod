@@ -28,6 +28,9 @@ public abstract class MaidRunOneYieldMixin {
     @Inject(method = "tryStart", at = @At("HEAD"), cancellable = true)
     private void maidsmart$yieldWhenTaskTargets(ServerLevel level, EntityMaid maid, long gameTime,
                                                 CallbackInfoReturnable<Boolean> cir) {
+        if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+            return; // v1.2.2 实测六百：无主女仆不干预（整合包对野生女仆的规则一律不动）
+        }
         if (com.maidsmart.config.MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get()
                 && (maid.m_6274_().m_21874_(MemoryModuleType.f_26370_)
                 || maid.m_6274_().m_21874_(InitEntities.TARGET_POS.get()))) {

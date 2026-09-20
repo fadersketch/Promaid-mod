@@ -32,6 +32,9 @@ public abstract class MaidSweepMixin {
             at = @At(value = "INVOKE",
                     target = "Lnet/minecraft/world/item/enchantment/EnchantmentHelper;m_44821_(Lnet/minecraft/world/entity/LivingEntity;)F"))
     private float maidsmart$sweepAlways(LivingEntity entity) {
+        if (!com.maidsmart.tool.MaidScope.owned(entity)) {
+            return EnchantmentHelper.m_44821_(entity); // v1.2.2 实测六百：无主女仆走原版横扫公式
+        }
         // 无横扫之刃附魔 → 0（原版不扫）→ 强制给 0.5（横扫之刃 I 倍率），保证每次平A横扫
         return Math.max(0.5f, EnchantmentHelper.m_44821_(entity));
     }
@@ -43,6 +46,9 @@ public abstract class MaidSweepMixin {
      */
     @Inject(method = "doSweepHurt", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noSweepInAir(Entity target, CallbackInfo ci) {
+        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+            return; // v1.2.2 实测六百：无主女仆不干预
+        }
         // m_20096_ = onGround（v1.5.137 实证 m_20162_ 是 isSneaking 不可用）
         if (!((EntityMaid) (Object) this).m_20096_()) {
             ci.cancel();
