@@ -2414,7 +2414,16 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP, s), "放置间隔（tick，默认 10 = 0.5 秒）：先放下方块、停这么久再挂水晶/充能——不然两步同一瞬间完成，看不出中间有过动作"));
         this.rows.add(new BoolRow("副手动作表现", MaidSmartConfig.COMBAT_BOMBING_POSE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_POSE.set(v),
-                "副手动作表现（默认开，v1.2.2 实测五百九十四）：放置 / 充能 / 投掷 / 起爆时副手短暂举起她正在用的那一件（方块 / 萤石 / 打火石）——扔 TNT 时举的是打火石；关掉 = 副手全程不被换，只剩挥臂 / 音效 / 爆炸"));
+                "副手动作表现（默认开，v1.2.2 实测五百九十四 / 五百九十七扩到全链路）：放置 / 充能 / 投掷 / 起爆，以及搭路 / 火把 / 建造 / 种植 / 酿造 / 喂主人时，副手短暂举起她正在用的那一件（方块 / 萤石 / 打火石 / 树苗 / 酿造材料 / 食物）——扔 TNT 时举的是打火石；关掉 = 副手全程不被换，只剩挥臂 / 音效 / 爆炸"));
+        this.rows.add(new BoolRow("爆炸火焰改粉色", MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.set(v),
+                "爆炸火焰改粉色（默认开，v1.2.2 实测五百九十七）：重生锚 / 床那一炸按原版口径留下的火换成粉色火（粉色贴图 + 粉色火星，不蔓延、几秒后自灭）；关 = 保持原版橙色火。末地水晶与 TNT 原版就不留火"));
+        this.rows.add(new BoolRow("粉色火焰渲染", MaidSmartConfig.COMBAT_BOMBING_FIRE_RENDER.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_FIRE_RENDER.set(v),
+                "粉色火焰渲染（默认开）：关掉之后那团火还在原地（熄灭与伤害判定照旧），只是不画出来；想彻底不要火请关上面那条『爆炸火焰改粉色』"));
+        this.rows.add(new BoolRow("火焰伤害保护", MaidSmartConfig.COMBAT_BOMBING_FIRE_PROTECT.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_FIRE_PROTECT.set(v),
+                "火焰伤害保护（默认开）：女仆炸出来的粉色火对玩家与女仆完全无效（既不点燃也不掉血），其它生物照常被烧；关掉 = 照原版口径烧人"));
         this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
         this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),

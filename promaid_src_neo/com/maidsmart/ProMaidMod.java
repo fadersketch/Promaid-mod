@@ -52,6 +52,8 @@ public class ProMaidMod {
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);
+        // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体
+        com.maidsmart.combat.PinkFireBlock.register(modBus);
         // v1.1.0：排班表调度器（按游戏内时间自动切工作模式/任务；网络层经 @EventBusSubscriber 自注册）
         com.maidsmart.schedule.ScheduleManager.register();
         // v1.1.0 实测二百七十七：女仆药剂手册网络层 + 右键女仆交互

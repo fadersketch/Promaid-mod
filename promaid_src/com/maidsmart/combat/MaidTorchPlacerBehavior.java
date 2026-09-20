@@ -141,6 +141,10 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
             return; // 保险：取不到方块（理论上 findTorch 已过滤）
         }
         level.m_7731_(target, placedBlock.m_49966_(), 3);
+        // v1.2.2 实测五百九十七【副手举一下这根火把】：快照必须在扣料之前取——
+        // 下面 extractItem 之后就地把这一格缩了，再读就是空的。
+        // 只有"从背包掏出来的"才举：本来拿在手上的（fromHands）再举一次 = 两只手同一件，反而怪。
+        ItemStack torchShow = torch.m_41777_();
         // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
         // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一
         try {
@@ -153,6 +157,9 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+        if (slot >= 0) {
+            com.maidsmart.combat.BombPose.showGated(maid, torchShow);
+        }
         // v1.1.0 实测三十一：30 tick（1.5 秒）→ 15 tick（0.75 秒）
         // v1.1.0 实测三十五（反馈："检索间隔隔得有点儿嫌久"）：15 → 10 tick（0.5 秒）
         this.torchCooldown = 10; // 0.5 秒

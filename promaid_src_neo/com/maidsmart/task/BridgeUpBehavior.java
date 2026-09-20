@@ -202,6 +202,26 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         return false;
     }
 
+    /**
+     * v1.2.2 实测五百九十七【坐着不搭路】：反馈"女仆坐下的时候还是会触发搭路"。
+     *
+     * 坐下的两种形态都要拦：① {@code isPassenger()}——骑乘/坐在 TLM 的椅子上（passenger 形态，
+     * 与工程其它链路同一口径，见 {@code MaidPlaceGuard} 第 99 行、{@code HomePatrolHandler} 第 72 行）；
+     * ② {@code isMaidInSittingPose()}——TLM 自己的"坐下"姿态。
+     *
+     * 旧版 canUse / canStillUse 里一条坐姿判定都没有：她坐在椅子上、或玩家让她坐下时，
+     * 只要"水平离开主人 >2.5 格 + 朝主人方向脚前方是空的"就照旧启动——人挪不动（passenger
+     * 由载具驱动），于是表现为"坐着也在搭路"（日志里 bridge-up start/stop 空转）。
+     * canUse 拦启动、canStillUse（{@link #m_6737_}）拦"搭到一半被坐下"。
+     */
+    private static boolean isSitting(EntityMaid maid) {
+        try {
+            return maid.isPassenger() || maid.isMaidInSittingPose();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ==================== 行为本体 ==================== */
 
     /** 垫块节奏冷却（tick 计数） */
@@ -254,6 +274,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return false; // 自保优先
+        }
+        if (isSitting(maid)) {
+            return false; // v1.2.2 实测五百九十七：坐着（椅子 / 坐下姿态）不搭路
         }
         if (maid.isHomeModeEnable()) {
             return false;
@@ -367,6 +390,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double dSq = maid.distanceToSqr(owner.getX(), owner.getY(), owner.getZ());
         if (dSq <= 6.25) {
             return "reached";
+        }
+        if (isSitting(maid)) {
+            return "sitting"; // v1.2.2 实测五百九十七：日志里能一眼看出"因为坐下中止"
         }
         // v1.1.0 实测一百六十五：平路/低高差追逐放开距离上限（同 canUse/canContinue）
         // 实测一百七十九：缺口铺桥分支同样豁免上限（与 canUse/canContinue 同口径）
@@ -612,6 +638,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             level.setBlock(fill, block.defaultBlockState(), 3);
             track(level, fill, block, maid);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, new net.minecraft.world.item.ItemStack(item));
             com.maidsmart.task.PlacedBlockTracker.placeSound(level, fill, block);
             this.guardTicks = 12;
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
@@ -679,6 +706,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             level.setBlock(support, block.defaultBlockState(), 3);
             track(level, support, block, maid);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, new net.minecraft.world.item.ItemStack(item));
             com.maidsmart.task.PlacedBlockTracker.placeSound(level, support, block);
             this.guardTicks = 12;
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
@@ -759,6 +787,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             level.setBlock(place, block.defaultBlockState(), 3);
             track(level, place, block, maid);
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            com.maidsmart.combat.BombPose.showGated(maid, new net.minecraft.world.item.ItemStack(item));
             com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
             this.guardTicks = 12;
             this.stepCooldown = MaidSmartConfig.BRIDGE_STEP_COOLDOWN.get();
@@ -777,6 +806,9 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         LivingEntity owner = maid.getOwner();
         if (owner == null || !owner.isAlive() || owner.level() != level) {
             return false;
+        }
+        if (isSitting(maid)) {
+            return false; // v1.2.2 实测五百九十七：搭到一半被坐下 → 立即中止让位
         }
         if (maid.distanceToSqr(owner.getX(), owner.getY(), owner.getZ()) <= 6.25) {
             return false; // 已贴到主人（≤2.5 格）——完成，跟随接管
@@ -888,6 +920,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         track(level, place, block, maid);
         // v1.1.0 实测三十七：搭方块摆臂动画 + 放置音效
         maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+        com.maidsmart.combat.BombPose.showGated(maid, new net.minecraft.world.item.ItemStack(item));
         com.maidsmart.task.PlacedBlockTracker.placeSound(level, place, block);
         this.guardTicks = 12;
         this.lastPlacedGameTime = level.getGameTime();
