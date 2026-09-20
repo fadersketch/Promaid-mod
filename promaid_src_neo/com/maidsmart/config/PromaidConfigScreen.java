@@ -2423,6 +2423,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO, s), "残血连投阈值（默认 0.7 = 七成血以下）：血量比例低于它就一次连投数发"));
         this.rows.add(new NumRow("连投最多（发）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 点打火石耐久"));
+        this.rows.add(new NumRow("炸弹底座回收延迟（秒）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：黑曜石/重生锚/床起爆后留在原地这么久再由她回收（不掉落）"));
+        this.rows.add(new SectionRow("放置与材料", false));
+        this.rows.add(new BoolRow("重生锚需要萤石", MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.set(v),
+                "重生锚需要萤石（默认开 = 原版口径）：重生锚 0 级充能不炸，所以默认要 1 颗萤石点火（威力与等级无关）；关掉 = 不消耗萤石，她直接补上那 1 级"));
+        this.rows.add(new BoolRow("空中强制放置", MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.set(v),
+                "空中强制放置（默认开）：空袭时先找目标脚边、再找她正下方；都没有支撑面就直接悬空放下（原版放置本身允许，玩家手点不到而已）；关 = 找不到带支撑的落点就整段跳过"));
         this.rows.add(new SectionRow("爆炸口径（四类炸弹共用）", false));
         this.rows.add(new BoolRow("破坏方块", MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.set(v),
