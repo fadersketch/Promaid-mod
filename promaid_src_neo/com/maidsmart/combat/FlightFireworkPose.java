@@ -111,6 +111,20 @@ public final class FlightFireworkPose {
         }
     }
 
+    /**
+     * v1.2.2 实测五百九十一：这个女仆此刻是不是正举着烟花。
+     *
+     * 给 {@code BombPose} 让位用的只读查询——两套姿势都是"先快照副手、到点还原"，同时上会把
+     * 对方的快照覆盖掉（盾牌/食物会丢）。炸弹姿势那边见到这里为 true 就不动手（或等这里还完）。
+     */
+    public static boolean isShowing(EntityMaid maid) {
+        try {
+            return maid != null && ACTIVE.containsKey(maid.getUUID());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 立即归还并清记录（行为收尾 / 强杀兜底） */
     public static void restoreNow(EntityMaid maid) {
         if (maid == null) {

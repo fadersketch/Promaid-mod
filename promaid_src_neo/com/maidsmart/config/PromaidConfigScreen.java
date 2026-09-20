@@ -2404,9 +2404,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
         this.rows.add(new BoolRow("近战空袭轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
-                "近战空袭轰炸（默认开）：猛击命中后按包里材料放炸弹——① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；放置失败直接跳过、接着起飞"));
+                "近战空袭轰炸（默认开）：猛击命中后按包里材料放炸弹——① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚（不需要萤石）③ 床；②③ 在『本维度不会炸』时自动不开放（见维度闸）；放置失败直接跳过、接着起飞"));
         this.rows.add(new NumRow("起爆延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_FUSE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_FUSE, s), "起爆延迟（tick，默认 10 = 0.5 秒）：放下之后多久响；这半秒正好够她重新起飞"));
+        this.rows.add(new NumRow("放置间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP, s), "放置间隔（tick，默认 10 = 0.5 秒）：先放下方块、停这么久再挂水晶/充能——不然两步同一瞬间完成，看不出中间有过动作"));
         this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
         this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
@@ -2419,7 +2421,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED, s), "投掷初速（格/tick，默认 0.9）：调大飞得更快更直，调小抛物线更明显"));
         this.rows.add(new BoolRow("TNT 追踪飞行", MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.set(v),
-                "TNT 追踪飞行（默认开）：引信期间朝目标拐弯——只改方向、速度不变，目标跑得快也能砸到；关 = 纯抛物线"));
+                "TNT 追踪飞行（默认开）：离手后一小段时间里朝目标拐一点弯——只改方向、速度不变；关 = 纯抛物线"));
+        this.rows.add(new NumRow("TNT 追踪时长（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS, s), "TNT 追踪时长（tick，默认 10 = 0.5 秒，0 = 不追踪）：只在这段时间里修正方向，之后直飞；每 tick 最多转 5 度，所以是平滑小弧线（旧版全程硬掰，显得鬼畜）"));
         this.rows.add(new NumRow("投掷索敌半径（格）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE, s), "投掷索敌半径（格，默认 12）：战斗任务下自动找这么近的敌人扔 TNT（照《女仆生存》的 12 格）"));
         this.rows.add(new NumRow("残血连投阈值（0-1）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get()),
@@ -2427,11 +2431,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("连投最多（发）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 点打火石耐久"));
         this.rows.add(new NumRow("炸弹底座回收延迟（秒）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：黑曜石/重生锚/床起爆后留在原地这么久再由她回收（不掉落）"));
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：水晶链路那块黑曜石/基岩起爆后留在原地这么久，再收进她背包（一律不掉落地面；重生锚/床由自己那一炸消耗掉，不进这张表）"));
         this.rows.add(new SectionRow("放置与材料", false));
-        this.rows.add(new BoolRow("重生锚需要萤石", MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get(),
-                v -> MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.set(v),
-                "重生锚需要萤石（默认开 = 原版口径）：重生锚 0 级充能不炸，所以默认要 1 颗萤石点火（威力与等级无关）；关掉 = 不消耗萤石，她直接补上那 1 级"));
+        this.rows.add(new BoolRow("维度闸（原版会炸才开）", MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.set(v),
+                "维度闸（默认开）：只在这个维度『原版真的会炸』时才开放重生锚/床链路——重生锚看 respawnAnchorWorks（下界不炸）、床看 bedWorks（主世界不炸），其他模组的维度按它自己的设定判。关掉 = 只看材料、不看维度"));
         this.rows.add(new BoolRow("空中强制放置", MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.set(v),
                 "空中强制放置（默认开）：空袭时先找目标脚边、再找她正下方；都没有支撑面就直接悬空放下（原版放置本身允许，玩家手点不到而已）；关 = 找不到带支撑的落点就整段跳过"));
