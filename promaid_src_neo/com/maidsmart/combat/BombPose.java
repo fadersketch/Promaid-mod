@@ -87,6 +87,13 @@ public final class BombPose {
         int left;
         /** 已经为"让烟花姿势先还"等过几轮 */
         int defer;
+        /**
+         * v1.2.2 实测五百九十九【"举 10 tick"实际只举了 3~5 tick 的根因】：
+         * core 行为 {@code MaidToolAutoEquipBehavior} 在同一 tick 里可能被大脑评估多次
+         *（实测：请求 40 tick，不到 20 tick 就归还了），于是展示窗口被静默缩短、
+         * 玩家几乎看不见。这里记"上一次真正扣数的 gameTime"，一 tick 只扣一次。
+         */
+        long lastTick = Long.MIN_VALUE;
         /** 原副手整栈快照 */
         final ItemStack original;
         /** 我们放进副手的那件展示品（可能被换成新的一件） */
@@ -158,7 +165,15 @@ public final class BombPose {
             ItemStack original = maid.getOffhandItem().copy(); // 副手整栈快照（含 NBT/数量）
             maid.setItemInHand(InteractionHand.OFF_HAND, want);
             syncOffhand(maid);
-            ACTIVE.put(id, new State(original, want, maid));
+            // v1.2.2 实测五百九十九【"所有链路的副手都不换"的真凶就在这里】：
+            // 旧版新建 State 时**忘了把 ticks 写进 left**（字段默认 0）→ 下一 tick 判定
+            // `left - 1 <= 0` 立刻还原 → 那件东西只在副手上存在了 **1 tick**（16 毫秒），
+            // 玩家屏幕上根本看不到（实测：请求 40 tick，+2 tick 就已经是原物）。
+            // 注意 `cur != null` 那条分支一直是好的（那里显式写了 cur.left），所以"连续两次
+            // 展示"时看起来正常——这也是这个 bug 一直没被发现的原因。
+            State fresh = new State(original, want, maid);
+            fresh.left = Math.max(1, ticks);
+            ACTIVE.put(id, fresh);
         } catch (Throwable ignored) {
         }
     }
@@ -170,6 +185,7 @@ public final class BombPose {
         }
         try {
             UUID id = maid.getUUID();
+            long now = maid.level().getGameTime();
             State st = ACTIVE.get(id);
             if (st == null) {
                 // 没有在举 → 看有没有排队的（等烟花姿势让位）
@@ -184,6 +200,10 @@ public final class BombPose {
                 show(maid, pending.display, pending.ticks);
                 return;
             }
+            if (st.lastTick == now) {
+                return; // 这一 tick 已经扣过了（core 行为同 tick 可能被评估多次）
+            }
+            st.lastTick = now;
             int left = st.left - 1;
             if (left > 0) {
                 st.left = left;
@@ -194,6 +214,7 @@ public final class BombPose {
             if (FlightFireworkPose.isShowing(maid) && st.defer < MAX_DEFER) {
                 st.defer++;
                 st.left = 5;
+                st.lastTick = now;
                 return;
             }
             ACTIVE.remove(id);

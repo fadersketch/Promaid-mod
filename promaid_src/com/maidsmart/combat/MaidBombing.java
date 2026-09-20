@@ -501,6 +501,14 @@ public final class MaidBombing {
         /** v1.2.2 实测五百九十二：相位改由服务端 tick 统一驱动 → 自己记住维度与目标 */
         final ServerLevel level;
         final LivingEntity target;
+        /**
+         * v1.2.2 实测五百九十九【目标死了也把这一轮走完】：她这一轮要"贴在哪一格"放炸弹。
+         *
+         * 目标还活着时每拍刷新；目标一死就冻结在它最后站的那一格——收翅猛击常常就是致命一击，
+         * 旧版一见 {@code !target.isAlive()} 就整段回滚，于是近战空袭**从来看不到她放重生锚**
+         *（实测：`tryStartMelee=true` → 目标死 → 下一拍 `isBombing=false`、附近重生锚 0）。
+         */
+        BlockPos targetPos;
         final long start;
         int step;
         /** 上一步发生的时刻（gameTime）：用来在"放方块"与"挂水晶/充能"之间留可见间隔 */
@@ -516,6 +524,7 @@ public final class MaidBombing {
             this.maid = maid;
             this.level = level;
             this.target = target;
+            this.targetPos = target == null ? null : target.m_20183_();
             this.start = start;
         }
     }
@@ -1008,13 +1017,22 @@ public final class MaidBombing {
             return false;
         }
         try {
-            if (ph.target == null || !ph.target.m_6084_() || gameTime - ph.start > PHASE_TIMEOUT) {
+            // v1.2.2 实测五百九十九【"近战空袭从不放重生锚"的根因】：旧版这一行目标是"死了/没了"
+            // 就整段回滚 —— 而收翅猛击**常常就是致命一击**：起手那一 tick 之后目标马上就死了，
+            // 于是相位在 step 0 之前被撤掉，玩家永远看不到她放重生锚（实测日志：
+            // `C tryStartMelee=true isBombing=true` → 目标死 → 下一拍 `isBombing=false 附近重生锚=0`）。
+            // 现在：目标死了**不中止**，改用"它最后站的那一格"把这一轮走完（炸弹落在原地），
+            // 只有"从没拿到过目标位置"或超时才回滚。
+            if (ph.targetPos == null || gameTime - ph.start > PHASE_TIMEOUT) {
                 rollback(level, ph);
                 PHASE.remove(id);
                 return false;
             }
+            if (ph.target != null && ph.target.m_6084_()) {
+                ph.targetPos = ph.target.m_20183_(); // 目标活着 → 跟着它走
+            }
             if (ph.step == 0) {
-                if (!stepBlock(level, maid, ph.target, ph)) {
+                if (!stepBlock(level, maid, ph.targetPos, ph)) {
                     PHASE.remove(id);
                     return false; // 放不下：整段放弃，直接走下一个链路
                 }
@@ -1087,7 +1105,7 @@ public final class MaidBombing {
     }
 
     /** step 0：把黑曜石/重生锚/床放到目标脚边那一格（走原版 BlockItem.place，两格床也由它铺） */
-    private static boolean stepBlock(ServerLevel level, EntityMaid maid, LivingEntity target, Phase ph) {
+    private static boolean stepBlock(ServerLevel level, EntityMaid maid, BlockPos targetPos, Phase ph) {
         ItemStack stack;
         if (ph.kind == Kind.BED) {
             stack = takeOneBed(maid);
@@ -1104,7 +1122,7 @@ public final class MaidBombing {
         ItemStack display = stack.m_41777_();
         display.m_41764_(1);
         ph.display = display;
-        BlockPos spot = placeOnSupport(level, maid, target, stack);
+        BlockPos spot = placeOnSupport(level, maid, targetPos, stack);
         if (spot == null) {
             giveBack(maid, stack);
             log(ph.kind.cn + " 放不下（目标脚边 4 邻 / 她正下方 16 格 / 空中强制="
@@ -1279,10 +1297,9 @@ public final class MaidBombing {
      *    可替换的位置**直接悬空放下**——原版放置本身就允许悬空（`BlockItem.place` 只看
      *    点击位置能不能被替换），只是玩家手点不到空气，我们用构造出来的放置上下文可以。
      */
-    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, LivingEntity target, ItemStack stack) {
+    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, BlockPos tp, ItemStack stack) {
         BlockPos maidFeet = maid.m_20183_();
         BlockPos maidHead = maidFeet.m_7494_();
-        BlockPos tp = target.m_20183_();
         List<BlockPos> near = new ArrayList<>(4);
         for (Direction d : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
             near.add(tp.m_121945_(d));
