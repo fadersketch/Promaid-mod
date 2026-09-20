@@ -185,11 +185,44 @@ public final class MaidResyncCommand {
      */
     public static final int AUTO_RESYNC_DELAY_TICKS = 20;
 
+    /**
+     * v1.2.2 实测五百九十六【新实体不补包】：每个女仆 UUID 上一次见到的实体网络 id。
+     * 入世界/离世界各记一次，用来分辨"同一只女仆离场又回来"（id 不变）与
+     * "换了一只新实体"（id 变了，例如魂符放出）。
+     */
+    private static final java.util.Map<UUID, Integer> LAST_ENTITY_ID =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 自动补包：女仆重新入世界时登记一次延迟补包（口径见类注释）。
+     *
+     * 【实测五百九十六：新实体必须放过】上面那条链的前提是"客户端那边已经有过她、
+     * 只是被弄丢了"——只有**同一只实体**（同一个网络 id）才会这样。收放魂符放出的是
+     * TLM 全新 spawn 的一只女仆（**新 id**），原版追踪本来就会把"生成+数据+属性+装备"
+     * 全套发过去，我们再来一次"删了重生成"纯属节外生枝：客户端那只女仆被销毁重建，
+     * 她正开着的容器、TLM 在"开始追踪"时发的饰品/模型同步（MaidTrackEvent）全被抹掉。
+     * 所以改成：id 与上一次不同（新实体）→ 不补包，只记 id；id 相同（同一只离场又回来）
+     * → 照旧补包；第一次见到（没有可比对的前一次）→ 也不补（客户端刚连上，不存在残留）。
+     */
     public static void scheduleAutoResync(EntityMaid maid) {
         if (maid == null) {
             return;
         }
-        PENDING_AUTO.put(maid.getUUID(), AUTO_RESYNC_DELAY_TICKS);
+        java.util.UUID id = maid.getUUID();
+        int eid = maid.getId();
+        Integer prev = LAST_ENTITY_ID.put(id, eid);
+        if (prev == null) {
+            return; // 首次见到：客户端刚连上/首次加载，没有"弄丢过"可言
+        }
+        if (prev != eid) {
+            PENDING_AUTO.remove(id);
+            AUTO_DEFER.remove(id);
+            PromaidLog.log("重同步", PromaidLog.nameOf(maid)
+                    + " 补包跳过：她是新实体（收放魂符/重新召唤，id " + prev + "→" + eid
+                    + "）——原版追踪会自己发全套包");
+            return;
+        }
+        PENDING_AUTO.put(id, AUTO_RESYNC_DELAY_TICKS);
     }
 
     /** 由 ProMaidExtension 的 ServerTick 每 tick 调一次（空队列零开销） */
@@ -285,6 +318,20 @@ public final class MaidResyncCommand {
                 }
             }
             viewer.connection.send(new ClientboundSetEquipmentPacket(maid.getId(), eq));
+            // v1.2.2 实测五百九十六：TLM 在"开始追踪"时还会单独发一份饰品全量同步
+            // （MaidTrackEvent → SyncBaublePackage.fullSync）。我们绕过了原版追踪，
+            // 这一枪得自己补上——否则客户端那只女仆的饰品数据是空的（TLM 女仆界面的
+            // 饰品栏、法术模组的"锚核"判定、渲染层都读它）。只在本方法真的补包时发。
+            try {
+                it.unimi.dsi.fastutil.ints.Int2ObjectSortedMap<net.minecraft.world.item.ItemStack> baubles =
+                        maid.getMaidBauble().getSyncClientBauble(maid);
+                if (baubles != null && !baubles.isEmpty()) {
+                    com.github.tartaricacid.touhoulittlemaid.network.NetworkHandler.sendToClientPlayer(
+                            com.github.tartaricacid.touhoulittlemaid.network.message.SyncBaublePackage
+                                    .fullSync(maid.getId(), baubles), viewer);
+                }
+            } catch (Throwable ignored) {
+            }
         } catch (Throwable t) {
             PromaidLog.log("重同步", "补包失败：" + t);
         }
