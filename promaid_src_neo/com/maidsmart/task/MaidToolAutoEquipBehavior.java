@@ -21,6 +21,11 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
 
     @Override
     protected boolean checkExtraStartConditions(ServerLevel level, EntityMaid maid) {
+        // v1.2.2 实测五百九十一【炸弹动作的归收入口】：放置/充能/投掷/起爆那一刻副手会短暂举起
+        // 正在用的那件（黑曜石 / 末地水晶 / 重生锚 / 床 / TNT，见 BombPose），到点在这里原样还回去——
+        // 本行为是 core 行为、任何 activity 都跑、每 tick 一次，所以即使动作链路被强杀（切任务/死亡），
+        // 最迟十几 tick 后也会自动还原，不会把盾牌/食物顶掉。无记录时零开销。
+        com.maidsmart.combat.BombPose.tick(maid);
         // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不自动换装】——她的主手要一直
         // 拿着那个模组的道具（万能手杖），换掉就等于把她的玩法拆了
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
