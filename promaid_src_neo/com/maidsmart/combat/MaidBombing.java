@@ -548,8 +548,8 @@ public final class MaidBombing {
      * 排一次"到期回收"：延迟秒数取自配置（默认 10 秒）。0 = 起爆时立刻回收（旧行为）。
      *
      * v1.2.2 实测五百九十一：回收的**归属**变了——黑曜石/基岩底座不再是"直接抹掉"，
-     * 而是变成物品**塞回女仆背包**（{@link #returnBlockItem}）；背包满则这一块就地消失。
-     * 两种情形都**绝不产生地面掉落物**，所以不会变成"白送黑曜石"。
+     * 而是变成物品**塞回女仆背包**（{@link #returnBlockItem}）；
+     * v1.2.2 实测五百九十三：背包满时改为**掉在她脚下**（掉落物），与挖矿 / 搭路同一口径。
      */
     private static void scheduleReclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos,
                                        List<Block> block) {
@@ -757,6 +757,15 @@ public final class MaidBombing {
     /** 缺料 / 维度闸诊断的限频表（女仆 → 上次落日志的 gameTime） */
     private static final Map<UUID, Long> SKIP_DIAG = new HashMap<>();
 
+    /** 维度键（诊断用：告诉玩家"哪条链路在这个维度被闸掉了"） */
+    private static String dimKey(ServerLevel level) {
+        try {
+            return String.valueOf(level.dimension().location());
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
     /** 材料齐但没有可用链路时的限频诊断（每 10 秒最多一条/女仆；她什么都没带就静默） */
     private static void diagSkip(ServerLevel level, EntityMaid maid) {
         try {
@@ -778,11 +787,14 @@ public final class MaidBombing {
                 sb.append("水晶链路缺").append(base ? "末地水晶" : "黑曜石/基岩").append("；");
             }
             if (anchor) {
-                sb.append("重生锚：").append(anchorWorks(level) ? "本维度不炸（维度闸关）" : "可选")
-                        .append("；");
+                sb.append("重生锚：").append(!has(maid, ID_GLOWSTONE) && cfgAnchorNeedsGlowstone()
+                        ? "缺萤石；"
+                        : (anchorWorks(level) ? "本维度不炸（维度闸关，" + dimKey(level) + "）；" : "可选；"));
             }
             if (bed) {
-                sb.append("床：").append(bedWorks(level) ? "本维度不炸（维度闸关）" : "可选").append("；");
+                sb.append("床：").append(bedWorks(level)
+                        ? "本维度不炸（维度闸关，" + dimKey(level) + "）；"
+                        : "可选；");
             }
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 轰炸跳过（没有可用链路）：" + sb);
         } catch (Throwable ignored) {
@@ -964,7 +976,8 @@ public final class MaidBombing {
         BlockPos spot = placeOnSupport(level, maid, target, stack);
         if (spot == null) {
             giveBack(maid, stack);
-            log(ph.kind.cn + " 放不下（附近没有可放置的落点）→ 本次放弃轰炸");
+            log(ph.kind.cn + " 放不下（目标脚边 4 邻 / 她正下方 16 格 / 空中强制="
+                    + (cfgAirPlace() ? "开" : "关") + " 都没成）→ 本次放弃轰炸");
             return false;
         }
         ph.spot = spot;
@@ -1058,7 +1071,7 @@ public final class MaidBombing {
     }
 
     /**
-     * 撤掉女仆自己放下的那几块（不掉落）。
+     * 撤掉女仆自己放下的那几块。
      *
      * v1.2.2 实测五百九十一：`returnTo` 非空 = 这几块**变成物品还进她的背包**（实测：
      * "黑曜石的回收是回收到女仆的背包里"）——相位中途失败回滚时传她本人，于是"放不下
@@ -1096,10 +1109,10 @@ public final class MaidBombing {
     }
 
     /**
-     * v1.2.2 实测五百九十一：把撤下来的一块变成物品**塞回女仆背包**（背包满则这一块就地消失，
-     * **绝不掉落地面**——掉落物会被玩家捡走，那就成了"白送黑曜石"）。
-     * 口径照本模组挖矿/搭路的方块回收（`ItemHandlerHelper.insertItemStacked` 进背包），
-     * 只把"背包满就落地"改成了"背包满就消失"。
+     * v1.2.2 实测五百九十一：把撤下来的一块变成物品**塞回女仆背包**。
+     *
+     * v1.2.2 实测五百九十三【背包满就落地】：反馈"应该变成掉落物"——塞不进背包的那一份
+     * **掉在她脚下**（`spawnAtLocation`），与挖矿 / 搭路的方块回收是**完全同一口径**。
      */
     private static void returnBlockItem(EntityMaid maid, Block block) {
         if (maid == null || block == null) {
@@ -1113,7 +1126,8 @@ public final class MaidBombing {
             ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(
                     maid.getMaidInv(), st, false);
             if (!left.isEmpty()) {
-                log("回收的炸弹底座塞不进背包（背包满）→ 这一块就地消失（不掉落）");
+                maid.spawnAtLocation(left, 0.5f); // 背包满 → 掉在她脚下（实测五百九十三）
+                log("回收的炸弹底座塞不进背包（背包满）→ 掉在她脚下");
             }
         } catch (Throwable ignored) {
         }
@@ -1205,6 +1219,19 @@ public final class MaidBombing {
                 InteractionResult r = ((BlockItem) stack.getItem()).place(ctx);
                 if (r != null && r.consumesAction()) {
                     return ctx.getClickedPos();
+                }
+                // v1.2.2 实测五百九十三【兜底强制放置】：原版 place() 会拒绝一些它认为不合法的
+                // 落点——最典型的是"那一格里站着实体"（BlockItem.canPlace 里的 isUnobstructed），
+                // 而我们的落点恰恰常常在**目标脚边**（反馈："重生锚还是放不下来"）。这里在它拒绝
+                // 之后补一手：那一格确实**可替换**（空气 / 草 / 水…）且不是床（床是两格，强制单格
+                // 会留下半张床）→ 直接 setBlock 放下去。只多做这一步，别的判定一概不动。
+                if (level.getBlockState(p).canBeReplaced(ctx)) {
+                    Block bi = ((BlockItem) stack.getItem()).getBlock();
+                    if (bi != null && !(bi instanceof BedBlock)
+                            && level.setBlock(p, bi.defaultBlockState(), 3)) {
+                        log("原版拒绝了落点，已强制放下（那一格站着实体或形状不合规）");
+                        return p;
+                    }
                 }
             } catch (Throwable t) {
                 log("放置异常：" + t);
@@ -1863,6 +1890,19 @@ public final class MaidBombing {
         Level.ExplosionInteraction mode = cfgBreakBlocks()
                 ? Level.ExplosionInteraction.BLOCK
                 : Level.ExplosionInteraction.NONE;
+        // v1.2.2 实测五百九十三【特效对齐原版】：反馈"爆炸的特效太小了，比正常生成的末地水晶和
+        // TNT 要小很多"。javap 实证原因就在这个模式上——原版 {@code Explosion.finalizeExplosion}
+        // 选粒子是"半径 ≥ 2 且 interactsWithBlocks()"才用大粒子 EXPLOSION_EMITTER，否则用小的
+        // EXPLOSION；而 ExplosionInteraction.NONE 的 interactsWithBlocks() **恒为 false**
+        //（我们默认不破坏方块），于是永远走小粒子分支。修法：不破坏方块时**自己补发一枚大粒子**
+        //（服务端广播给附近玩家）；只补视觉，伤害 / 击退 / 地形一概不动。
+        if (!cfgBreakBlocks()) {
+            try {
+                level.sendParticles(net.minecraft.core.particles.ParticleTypes.EXPLOSION_EMITTER,
+                        x, y, z, 1, 0.0, 0.0, 0.0, 0.0);
+            } catch (Throwable ignored) {
+            }
+        }
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
         // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
         selfImmuneBlast = true;
