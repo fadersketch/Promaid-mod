@@ -611,183 +611,6 @@ public final class MaidBombing {
         }
     }
 
-    /* ==================== v1.2.2 实测六百：起爆后的"不会被烧"守护区 ==================== */
-
-    /**
-     * 反馈原文："玩家还是会被粉火烧到。……同时再加入不会被烧。"
-     *
-     * 实测日志（latest.log）显示：那一炸点着的 119 格火**确实全部**是粉色火（窗口那条路是好的），
-     * 但女仆随后（3 秒后）在某格**原版火**上吃到了 {@code inFire} 伤害、接着 {@code onFire}
-     * 连烧——也就是说烧到人的不是我们保护得住的粉色火，而是场地上**别的来源**留下的火。
-     * 于是除了"新火全变粉"（{@link PinkFireBlock#pinkEnabled()}）之外再加这一层兜底：
-     *
-     * <ol>
-     *   <li>每一次带火的起爆都登记一块**守护区**（中心 + 半径 = 威力×2，持续 15 秒）；</li>
-     *   <li>守护期内每 5 tick 扫一次区里的玩家与女仆：身上还带着火（{@code remainingFireTicks > 0}）
-     *       就**直接熄灭**——"不会被烧"落到"出火圈也不带火"；</li>
-     *   <li>{@code LivingAttackEvent} 那一层（见 {@link #onBurnGuardAttack}）：区里站在火上的
-     *       玩家/女仆吃到火类伤害时**直接取消**——同 tick 踩进火里的那一下也拦得住。</li>
-     * </ol>
-     *
-     * 只认"身上有火"和"站在火上"，不认伤害来源——所以不依赖"那格火是不是我们的"，
-     * 场地里任何来源的火都罩得住。区外、超时后一概不管。
-     */
-    private static final List<BurnGuard> BURN_GUARDS = new ArrayList<>();
-
-    /** 守护区持续时长（tick）：15 秒——够覆盖"女仆在旁边打一会儿"的整个窗口 */
-    private static final long BURN_GUARD_TICKS = 300L;
-
-    private static final class BurnGuard {
-        final ServerLevel level;
-        final double x;
-        final double y;
-        final double z;
-        final double r2;
-        final long until;
-
-        BurnGuard(ServerLevel level, double x, double y, double z, double radius, long until) {
-            this.level = level;
-            this.x = x;
-            this.y = y;
-            this.z = z;
-            this.r2 = radius * radius;
-            this.until = until;
-        }
-
-        boolean contains(Entity e) {
-            if (e == null) {
-                return false;
-            }
-            double dx = e.getX() - this.x;
-            double dy = e.getY() - this.y;
-            double dz = e.getZ() - this.z;
-            return dx * dx + dy * dy + dz * dz <= this.r2;
-        }
-    }
-
-    /** 登记守护区（起爆时调用一次） */
-    private static void addBurnGuard(ServerLevel level, double x, double y, double z, double radius) {
-        try {
-            if (level == null || radius <= 0.0) {
-                return;
-            }
-            if (BURN_GUARDS.size() > 64) {
-                BURN_GUARDS.remove(0); // 极端情况（连环炸）只保留最近 64 块
-            }
-            BURN_GUARDS.add(new BurnGuard(level, x, y, z, radius, level.getGameTime() + BURN_GUARD_TICKS));
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** 这个实体此刻是否在某块守护区里（守护区没过期） */
-    private static boolean inBurnGuard(Entity e) {
-        if (e == null || BURN_GUARDS.isEmpty()) {
-            return false;
-        }
-        try {
-            long now = e.level().getGameTime();
-            for (int i = 0; i < BURN_GUARDS.size(); i++) {
-                BurnGuard g = BURN_GUARDS.get(i);
-                if (now <= g.until && g.level == e.level() && g.contains(e)) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    /** 守护区巡检（每 5 tick）：区里的玩家/女仆身上还带着火就熄灭 */
-    private static void tickBurnGuards() {
-        if (BURN_GUARDS.isEmpty()) {
-            return;
-        }
-        try {
-            for (Iterator<BurnGuard> it = BURN_GUARDS.iterator(); it.hasNext(); ) {
-                BurnGuard g = it.next();
-                long now = g.level.getGameTime();
-                if (now > g.until + BOMB_TIMEOUT) {
-                    it.remove();
-                    continue;
-                }
-                if (now > g.until) {
-                    continue;
-                }
-                double r = Math.sqrt(g.r2);
-                net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                        g.x - r, g.y - r, g.z - r, g.x + r, g.y + r, g.z + r);
-                for (net.minecraft.world.entity.player.Player p : g.level.getEntitiesOfClass(
-                        net.minecraft.world.entity.player.Player.class, box)) {
-                    clearFire(p, g);
-                }
-                for (EntityMaid m : g.level.getEntitiesOfClass(EntityMaid.class, box)) {
-                    clearFire(m, g);
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** 熄灭（只对真的还在区里的做，AABB 只是粗筛） */
-    private static void clearFire(Entity e, BurnGuard g) {
-        try {
-            if (!g.contains(e)) {
-                return;
-            }
-            if (e.getRemainingFireTicks() > 0) {
-                e.setRemainingFireTicks(0); // 出火圈也不带火
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 火类伤害的守护：区里的玩家 / 女仆被火伤害时直接取消。
-     *
-     * 判据是"伤害类型属于 {@code is_fire} 标签**且**她/他此刻正站在火焰方块里"——放在岩浆里、
-     * 站在岩浆块上（hot_floor）不在其内，那些是玩家自己的事，本模组不碰。
-     */
-    @net.neoforged.bus.api.SubscribeEvent
-    public static void onBurnGuardAttack(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
-        try {
-            if (!cfgFireProtect() || BURN_GUARDS.isEmpty()) {
-                return;
-            }
-            Entity victim = event.getEntity();
-            if (!(victim instanceof net.minecraft.world.entity.player.Player) && !(victim instanceof EntityMaid)) {
-                return; // 只护主人与女仆（其它生物照常被烧）
-            }
-            if (victim.getRemainingFireTicks() <= 0 && !standingInFire(victim)) {
-                return; // 与火无关的这一下不管（区里的普通攻击照旧生效）
-            }
-            net.minecraft.world.damagesource.DamageSource src = event.getSource();
-            if (src == null || !src.is(net.minecraft.tags.DamageTypeTags.IS_FIRE)) {
-                return; // 不是火类伤害
-            }
-            if (!inBurnGuard(victim)) {
-                return; // 不在（15 秒内的）炸弹守护区里
-            }
-            victim.setRemainingFireTicks(0);
-            event.setCanceled(true);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** 脚下或身体所在格是不是火焰方块（原版火 / 灵魂火 / 我们的粉色火） */
-    private static boolean standingInFire(Entity e) {
-        try {
-            net.minecraft.world.level.Level lvl = e.level();
-            BlockPos base = e.blockPosition();
-            for (BlockPos pos : new BlockPos[]{base, base.above()}) {
-                if (lvl.getBlockState(pos).getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
     /**
      * 排一次"到期回收"：延迟秒数取自配置（默认 10 秒）。0 = 起爆时立刻回收（旧行为）。
      *
@@ -2207,10 +2030,6 @@ public final class MaidBombing {
             // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
             // v1.2.2 实测五百九十：追踪弹每 tick 修正一次朝向（在实体 tick 之前）
             tickHoming();
-            // v1.2.2 实测六百：起爆后的 "不会被烧" 守护区（15 秒内区里的玩家/女仆带火就熄灭）
-            if (burnGuardThrottle++ % 5 == 0) {
-                tickBurnGuards();
-            }
             // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
             tickPhases();
             for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
@@ -2378,9 +2197,6 @@ public final class MaidBombing {
         if (pinkWindow) {
             PinkFireBlock.beginWindow();
         }
-        // v1.2.2 实测六百【不会被烧】：带火的一炸登记一块守护区（15 秒），期内区里的玩家/女仆
-        // 带火就熄灭、吃到火类伤害就取消——不依赖"那格火是不是我们点的"，见 BURN_GUARDS
-        boolean burnGuard = fire && cfgFireProtect();
         // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
         // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
         selfImmuneBlast = true;
@@ -2405,24 +2221,13 @@ public final class MaidBombing {
             selfImmuneBlast = false;
             selfImmuneMaidId = null;
             // 关窗口（若开着）：这一炸点着的每一格都已经是粉色火，这里只把条数取出来写日志
+            // v1.2.2 实测六百〇一【范围收回】：旧版这里顺手把场地里既有的原版火也扫成粉色，
+            // 反馈"你这样等于直接开挂了呀"——那些火不是她点的，本模组一概不碰，已删掉那一步。
             if (pinkWindow) {
                 int pink = PinkFireBlock.endWindow();
-                // v1.2.2 实测六百：顺手把这一片**既有的**原版火也换成粉色（早先版本/岩浆/别的模组
-                // 留下的那些——它们不受点火窗口管辖，却照样能把主人和女仆点着）
-                int swept = 0;
-                try {
-                    swept = PinkFireBlock.sweepVanillaFire(level,
-                            new BlockPos((int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z)),
-                            Math.max(2, (int) Math.ceil(power * 2.0F)));
-                } catch (Throwable ignored) {
+                if (pink > 0) {
+                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
                 }
-                if (pink > 0 || swept > 0) {
-                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火"
-                            + (swept > 0 ? "，另把场地里 " + swept + " 格原版火一并换成粉色" : ""));
-                }
-            }
-            if (burnGuard) {
-                addBurnGuard(level, x, y, z, power * 2.0);
             }
         }
     }
@@ -2431,17 +2236,5 @@ public final class MaidBombing {
     private static boolean cfgPinkFire() {
         return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
     }
-
-    /** v1.2.2 实测六百：火不烧主人/女仆的开关（守护区与粉火免伤都看它） */
-    private static boolean cfgFireProtect() {
-        try {
-            return MaidSmartConfig.COMBAT_BOMBING_FIRE_PROTECT.get();
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** 守护区巡检节流（每 5 tick 跑一次） */
-    private static int burnGuardThrottle = 0;
 
 }

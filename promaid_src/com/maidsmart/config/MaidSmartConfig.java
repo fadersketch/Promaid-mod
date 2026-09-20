@@ -1897,11 +1897,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .define("airPlace", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
-        COMBAT_BOMBING_PINK_FIRE = BUILDER.comment("爆炸火焰改粉色（默认开）：**开启后，世界里新点着的每一格火都会直接生成为粉色火**——重生锚 / 床那一炸点着的固然是粉色（javap 实证：着火只看 fire=true，与「破不破坏方块」无关），打火石 / 闪电 / 岩浆点着的也一样；她每炸一次还会把爆炸范围里**既有的**原版火一并换成粉色（实测反馈「还有橙火焰 / 玩家还是会被烧到」——那些火就是旧版只换爆炸窗口内、管不到的）。粉火长这样：粉色火焰贴图 + 粉色火星，不蔓延、几秒后自己熄灭。关 = 一个都不换，保持原版橙色火（等同旧版行为）。**代价**：开着时整个世界的新火都不再蔓延（包括你自己点的），不想要就关掉这条。注意末地水晶与 TNT 原版都是 fire=false、本来就不留火，所以这条对它们没有可见变化")
+        COMBAT_BOMBING_PINK_FIRE = BUILDER.comment("爆炸火焰改粉色（默认开）：**只有她自己那一炸点着的火换成粉色**（重生锚 / 床那一炸会按原版口径在地上留火——javap 实证：着火只看 fire=true，与「破不破坏方块」无关）。换的时机是「边点边换」：那一炸点着的每一格直接生成为粉色火，与距离无关（实测：一炸 119 格全部直接变粉）。**世界里别的火一概不碰**——打火石 / 闪电 / 岩浆 / 别的模组 /早先留下的原版火，本模组既不换也不灭（实测六百〇一收回：曾经「全都换」，那等于顺手把全世界的火蔓延关掉，是越界）。粉火长这样：粉色火焰贴图 + 粉色火星，不蔓延、几秒后自己熄灭。关 = 保持原版橙色火（等同旧版行为）。注意末地水晶与 TNT 原版都是 fire=false、本来就不留火，所以这条对它们没有可见变化")
                 .translation("config.promaid.bombing.pinkFire").define("pinkFire", true);
         COMBAT_BOMBING_FIRE_RENDER = BUILDER.comment("粉色火焰渲染（默认开）：关掉之后粉色火**还在那个位置**（熄灭逻辑、伤害判定照旧按下面那条走），只是不画出来——相当于「看不见的火」。想彻底不要火请关上面那条『爆炸火焰改粉色』")
                 .translation("config.promaid.bombing.fireRender").define("fireRender", true);
-        COMBAT_BOMBING_FIRE_PROTECT = BUILDER.comment("火焰伤害保护（默认开）：女仆炸出来的这种粉色火对**玩家与女仆**完全无效——既不点燃也不掉血（其它生物照常被烧，她扔的毕竟是炸弹）。另外她每炸一次会在爆炸范围内挂 15 秒的**守护区**：区里你和女仆身上若带着火会被直接熄灭，踩进火里挨的那一下也取消（实测反馈「玩家还是会被粉火烧到」——兜住那些**不是**她点着的火，包括世界里早就存在的原版火）。关掉 = 照原版口径烧人（与站在普通火里一样）")
+        COMBAT_BOMBING_FIRE_PROTECT = BUILDER.comment("火焰伤害保护（默认开）：她炸出来的这种粉色火对**玩家与女仆**完全无效——既不点燃也不掉血（其它生物照常被烧，她扔的毕竟是炸弹）。只保护**她这一炸点着的粉火**：别处的火（你自己点的 / 岩浆 / 别的模组 / 早先留下的原版火）是原版规则，本模组不碰。关掉 = 照原版口径烧人（与站在普通火里一样）")
                 .translation("config.promaid.bombing.fireProtect").define("fireProtect", true);
         COMBAT_BOMBING_TNT_TRACK = BUILDER.comment("TNT 追踪飞行（默认开）：扔出去的 TNT 在**离手后的一小段时间里**朝目标方向拐一点弯——**只改方向、速度不变**（目标跑得快也更容易吃到）；关 = 纯弹道抛物线。追多久见下面那条『TNT 追踪时长』")
                 .translation("config.promaid.bombing.tntTrack").define("tntTrack", true);
