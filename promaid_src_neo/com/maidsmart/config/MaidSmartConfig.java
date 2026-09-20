@@ -603,6 +603,10 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_TNT_TRACK;
     /** TNT 追踪时长（tick，默认 10 = 0.5 秒；v1.2.2 实测五百九十一，0 = 不追踪） */
     public static final ModConfigSpec.IntValue COMBAT_BOMBING_TNT_TRACK_TICKS;
+    /** 重生锚是否需要萤石（默认 true = 原版口径；v1.2.2 实测五百九十二回到"要一颗"） */
+    public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE;
+    /** 整条轰炸链路的最短间隔（tick，默认 200 = 10 秒；v1.2.2 实测五百九十二） */
+    public static final ModConfigSpec.IntValue COMBAT_BOMBING_BOMB_INTERVAL;
     /** 第三方玩法模式黑名单（默认开，v1.2.2 实测五百九十：傀儡装配的「傀儡师」） */
     public static final ModConfigSpec.BooleanValue COMPAT_PUPPET_BLACKLIST;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
@@ -1864,7 +1868,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
         BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
                 .translation("config.promaid.bombing").push("bombing");
-        COMBAT_BOMBING_MELEE = BUILDER.comment("近战空袭轰炸（默认开）：猛击命中之后、再次起飞之前，按包里材料放一枚炸弹——① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚（威力 5，下界不生效，**不需要萤石**）③ 床（威力 5，主世界不生效）。放置失败就整段跳过、直接接着起飞；『下界 / 主世界不生效』这两条由维度闸按当前维度自动判（见维度闸那条）")
+        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 第三方战斗任务都会放；**远程空袭除外**（她一直飞在天上，本来就放不了）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
                 .translation("config.promaid.bombing.melee").define("melee", true);
         COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；材料不齐直接跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
@@ -1896,6 +1900,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.placeGap").defineInRange("placeGap", 10, 0, 40);
         COMBAT_BOMBING_DIMENSION_GUARD = BUILDER.comment("维度闸（默认开）：只在这个维度『原版真的会炸』时才开放重生锚 / 床链路——判据就是原版 use() 里判断要不要炸的那两句（重生锚看 respawnAnchorWorks、床看 bedWorks）。其他模组新增的维度只要把这两条写成『能用』，这两条链路就整段不开放，不会在『那个维度根本炸不了』的地方硬炸。关掉 = 只看材料、不看维度")
                 .translation("config.promaid.bombing.dimensionGuard").define("dimensionGuard", true);
+        COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE = BUILDER.comment("重生锚需要萤石（默认开 = 原版口径）：重生锚 0 级充能右键不炸（充能只决定『炸不炸』、不决定『炸多狠』，那一炸固定 5.0），所以炸之前要 1 颗萤石把等级从 0 顶到 1——链路是「先放锚（摆臂）→ 副手换成萤石 → 充能（摆臂）→ 0.5 秒后挥臂，正好压上它自己那一炸」。关掉 = 不消耗萤石，她直接替你把那 1 级补上（照样有充能音效与动作）")
+                .translation("config.promaid.bombing.anchorNeedsGlowstone")
+                .define("anchorNeedsGlowstone", true);
+        COMBAT_BOMBING_BOMB_INTERVAL = BUILDER.comment("轰炸最短间隔（tick，默认 200 = 10 秒）：整条轰炸链路（黑曜石+末地水晶 / 重生锚+萤石 / 床）两次之间的下限——轰炸已经挂进攻击链路（**打完一记之后**才放），这条只是下限；推广到所有攻击模式之后，不加下限会在几秒内烧光她的黑曜石 / 水晶。缺料那一下不占用间隔")
+                .translation("config.promaid.bombing.bombInterval")
+                .defineInRange("bombInterval", 200, 10, 2400);
         COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);

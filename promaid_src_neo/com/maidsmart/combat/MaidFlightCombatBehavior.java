@@ -550,7 +550,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         LivingEntity target = currentTarget(maid);
         // v1.2.2 实测五百八十七【空袭轰炸】：轰炸相位（放黑曜石+水晶 / 重生锚 / 床）优先接管本
         // tick——她放完那两步立刻把控制权交还给下面的 WAIT_LAUNCH → 起飞，0.5 秒后炸弹自己响。
-        if (MaidBombing.tick(level, maid, target, id, gameTime)) {
+        // v1.2.2 实测五百九十二：相位改由**服务端 tick 统一驱动**（所有攻击模式共用同一台机器，
+        // 见 MaidBombing.tickPhases），所以这里只问"她这一轮在不在轰炸段里"。
+        if (MaidBombing.isBombing(maid)) {
             return;
         }
         if (target == null) {

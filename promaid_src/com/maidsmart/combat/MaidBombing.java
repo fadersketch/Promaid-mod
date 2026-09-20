@@ -73,9 +73,8 @@ import java.util.UUID;
  * 需求原话"不会再进行判定，会直接跳到下一个链路"。
  *
  * ── 实测五百九十一（七件事）──
- * ① 重生锚**不再需要萤石**：那一炸的威力与充能等级无关（javap 实证固定 5.0F），而引信本来就是
- *    我们自己点的定时器——所以它的放置口径与黑曜石完全一致（反馈："重生锚还是放不了，放置逻辑
- *    改为跟放黑曜石一样"）。
+ * ① 重生锚的放置口径与黑曜石完全一致（同一套三级落点找法）——反馈："重生锚还是放不了，
+ *    放置逻辑改为跟放黑曜石一样"；缺料那一路也不再静默（见 ⑨ 的 diagSkip）。
  * ② 方块与水晶 / 充能之间留出**看得见的间隔**（bombing.placeGap，默认 10 tick = 0.5 秒）——
  *    反馈："黑曜石和末地水晶几乎是同时放置的，根本看不出间隔"。
  * ③ **维度闸**（bombing.dimensionGuard）：只在这个维度"原版真的会炸"时才开放重生锚 / 床链路
@@ -89,6 +88,21 @@ import java.util.UUID;
  *    （背包满则这一块就地消失——**绝不产生地面掉落物**，所以不会变成白送黑曜石）；重生锚 / 床
  *    由它们自己那一炸消耗掉（javap 实证原版就是先 removeBlock 再 explode），起爆即撤、
  *    不进回收表、不回背包（回背包 = 放一次白拿一个重生锚）；相位中途失败回滚时原物还她。
+ *
+ * ── 实测五百九十二（两件事）──
+ * ① **萤石要回来**。反馈原文："不行啊，重生锚还是需要一个萤石进行充能的。所以正确的链路应该是
+ *    攻击→副手换成重生锚，放置重生锚（摆臂）→副手换成萤石，拿一颗萤石充能（摆臂动画）→继续
+ *    切换回飞行。0.5 秒后再挥一次手臂。正好对上重生锚自爆。"
+ *    ——于是 pickKind 重新要求 1 颗萤石、stepPayload 重新消耗它，并且**两步各自换一次副手**：
+ *    放置时举重生锚、充能时举萤石（{@link BombPose}）；起爆那一刻（放置后 0.5 秒）再挥一记，
+ *    副手亮回重生锚——时序正好压上它自己那一炸。
+ * ② **轰炸推广到所有攻击模式**。反馈原文："将末地水晶/重生锚/床的机制推广到所有的攻击模式下
+ *    （除了远程空袭，因为一直飞在天上，本来就放不了。）"
+ *    ——相位机改成由**服务端 tick 统一驱动**（{@link #tickPhases}，它不再只是空袭行为里的一步），
+ *    所有战斗任务都在"攻击冷却记忆由无到有"= 刚打完一记那一刻试起手（{@link #tickCombatTnt}），
+ *    远程空袭按任务 UID 排除（{@link com.maidsmart.combat.MaidFlightKit#isRangedTask}）。
+ *    顺带给整条链路加了最短间隔（bombing.bombInterval，默认 200 tick = 10 秒）：一次挥砍放一枚
+ *    会在几秒内烧光她的黑曜石 / 水晶，缺料那一下不占用间隔。
  *
  * ── 时序（为什么是"起飞之前"）──
  * 猛击命中那一 tick 起手：step 0 放方块、step 1 放水晶/充能，随后立刻把控制权交还
@@ -179,6 +193,16 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.get();
     }
 
+    /** v1.2.2 实测五百九十二：重生锚要 1 颗萤石点火（默认开 = 原版口径） */
+    private static boolean cfgAnchorNeedsGlowstone() {
+        return MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get();
+    }
+
+    /** v1.2.2 实测五百九十二：整条轰炸链路的最短间隔（tick，默认 200 = 10 秒） */
+    private static int cfgBombInterval() {
+        return MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL.get();
+    }
+
     private static boolean cfgAirPlace() {
         return MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get();
     }
@@ -201,6 +225,7 @@ public final class MaidBombing {
     private static final String ID_BEDROCK = "minecraft:bedrock";
     private static final String ID_END_CRYSTAL = "minecraft:end_crystal";
     private static final String ID_RESPAWN_ANCHOR = "minecraft:respawn_anchor";
+    private static final String ID_GLOWSTONE = "minecraft:glowstone";
     private static final String ID_TNT = "minecraft:tnt";
     private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
     private static final String ID_TNT_PRIMED_SOUND = "minecraft:entity.tnt.primed";
@@ -422,6 +447,9 @@ public final class MaidBombing {
     private static final class Phase {
         final Kind kind;
         final EntityMaid maid;
+        /** v1.2.2 实测五百九十二：相位改由服务端 tick 统一驱动 → 自己记住维度与目标 */
+        final ServerLevel level;
+        final LivingEntity target;
         final long start;
         int step;
         /** 上一步发生的时刻（gameTime）：用来在"放方块"与"挂水晶/充能"之间留可见间隔 */
@@ -432,9 +460,11 @@ public final class MaidBombing {
         final List<BlockPos> placed = new ArrayList<>(2);
         final List<Block> placedBlock = new ArrayList<>(2);
 
-        Phase(Kind kind, EntityMaid maid, long start) {
+        Phase(Kind kind, EntityMaid maid, ServerLevel level, LivingEntity target, long start) {
             this.kind = kind;
             this.maid = maid;
+            this.level = level;
+            this.target = target;
             this.start = start;
         }
     }
@@ -538,6 +568,8 @@ public final class MaidBombing {
 
     private static final Map<UUID, Phase> PHASE = new HashMap<>();
     private static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
+    /** v1.2.2 实测五百九十二：整条轰炸链路的最短间隔下限（女仆 → 下次可起手的 gameTime） */
+    private static final Map<UUID, Long> BOMB_NEXT = new HashMap<>();
     private static final List<Bomb> PENDING = new ArrayList<>();
     /** v1.2.2 实测五百九十：攻击链路收尾登记的「待投放」（女仆 UUID → 登记时刻） */
     private static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
@@ -608,8 +640,9 @@ public final class MaidBombing {
         if (maidId == null) {
             return;
         }
-        PHASE.remove(maidId);
+        rollbackPhase(maidId);
         TNT_NEXT.remove(maidId);
+        BOMB_NEXT.remove(maidId);
 
         TNT_ARMED.remove(maidId);
         COOLDOWN_SEEN.remove(maidId);
@@ -619,6 +652,7 @@ public final class MaidBombing {
     public static void clearAll() {
         PHASE.clear();
         TNT_NEXT.clear();
+        BOMB_NEXT.clear();
         PENDING.clear();
         RECLAIMS.clear();
 
@@ -628,6 +662,21 @@ public final class MaidBombing {
         SKIP_DIAG.clear();
         BombPose.clearAll(); // 实测五百九十一：动作姿势的表也一并清（尽量当场把原副手物品还回去）
         combatScanTick = 0;
+    }
+
+    /**
+     * 硬清某个女仆的相位：能还就把**已放下的方块原物还她**（照 rollback 的口径）。
+     * v1.2.2 实测五百九十二：旧版 forget 只 `PHASE.remove`，那一块黑曜石 / 重生锚就白留
+     * 在世界里了（空袭行为每次收尾都走 forget，所以这个漏点相当常见）。
+     */
+    private static void rollbackPhase(UUID maidId) {
+        Phase ph = PHASE.remove(maidId);
+        if (ph != null && ph.level != null) {
+            try {
+                rollback(ph.level, ph);
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     private static void log(String msg) {
@@ -659,11 +708,20 @@ public final class MaidBombing {
                 }
                 PHASE.remove(id);
             }
+            // v1.2.2 实测五百九十二【最短间隔】：轰炸推广到所有攻击模式之后，一次挥砍放一枚会在
+            // 几秒内烧光她的黑曜石 / 水晶 / 重生锚——所以整条链路上一个下限（默认 200 tick = 10 秒，
+            // 与 TNT 那条"CD 只当下限"同一套思路，面板「轰炸最短间隔」可调）。
+            // 缺料那一下**不占用**间隔（下面直接返回，不写 BOMB_NEXT）。
+            long now = level.m_46467_();
+            if (now < BOMB_NEXT.getOrDefault(id, 0L)) {
+                return false;
+            }
             Kind kind = pickKind(level, maid);
             if (kind == null) {
-                return false; // 材料不齐：静默跳过（需求："判定没有就会直接跳过"）
+                return false; // 材料不齐 / 维度闸关：跳过（需求："判定没有就会直接跳过"；不占间隔）
             }
-            PHASE.put(id, new Phase(kind, maid, level.m_46467_()));
+            PHASE.put(id, new Phase(kind, maid, level, target, now));
+            BOMB_NEXT.put(id, now + cfgBombInterval());
             return true;
         } catch (Throwable t) {
             log("起手异常：" + t);
@@ -678,9 +736,11 @@ public final class MaidBombing {
         }
         // 注：重生锚"必须有 ≥1 级充能才会炸"是原版规则，所以默认要 1 颗萤石当引信；
         // 关掉「重生锚需要萤石」后不检查它（放下即由我们补上那 1 级，见 stepPayload）。
-        // ── v1.2.2 实测五百九十一：重生锚**不再需要萤石**，放置口径与黑曜石完全一致 ──
-        //（那一炸固定 5.0F、与充能等级无关，引信本来就是我们自己点的定时器；维度闸见 explodesHere）
-        if (explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)) {
+        // ── v1.2.2 实测五百九十二：**萤石要一颗**（反馈："重生锚还是需要一个萤石进行充能的"）──
+        // 放置不需要它，但"要它炸"就需要 ≥1 级充能（原版规则：0 级右键不炸）；威力是写死的 5.0F、
+        // 与充能等级无关（javap 实证），所以 1 颗就够。维度闸见 explodesHere。
+        if (explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)
+                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE))) {
             return Kind.ANCHOR;
         }
         // 床同样走维度闸（主世界 = bedWorks 为 true = 不开放）
@@ -786,29 +846,32 @@ public final class MaidBombing {
     /* ==================== 近战轰炸：分步执行 ==================== */
 
     /**
-     * 轰炸相位每 tick 一次（放在空袭主 tick 最前面）。true = 本 tick 由轰炸接管。
-     * step 0 放方块；step 1 放水晶 / 萤石充能 → 排好起爆时间并把控制权交还原链路。
+     * 轰炸相位推进一次。step 0 放方块；step 1 挂水晶 / 萤石充能 → 排好起爆时间并交还链路。
+     *
+     * v1.2.2 实测五百九十二：它不再由空袭行为调用，而是由 {@link #tickPhases}（服务端 tick）
+     * 统一驱动——轰炸因此对所有攻击模式一视同仁（远程空袭除外，见 {@link #tickCombatTnt}）。
      */
-    public static boolean tick(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        Phase ph = PHASE.get(id);
-        if (ph == null) {
+    private static boolean tick(Phase ph) {
+        if (ph == null || ph.level == null || ph.maid == null || !ph.maid.m_6084_()) {
             return false;
         }
-
-        // v1.2.2 实测五百九十：傀儡模式期间不介入——打到一半被玩家切过去也立刻收手
+        ServerLevel level = ph.level;
+        EntityMaid maid = ph.maid;
+        UUID id = maid.m_20148_();
+        long gameTime = level.m_46467_();
         if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
             rollback(level, ph);
             PHASE.remove(id);
             return false;
         }
         try {
-            if (target == null || !maid.m_6084_() || gameTime - ph.start > PHASE_TIMEOUT) {
+            if (ph.target == null || !ph.target.m_6084_() || gameTime - ph.start > PHASE_TIMEOUT) {
                 rollback(level, ph);
                 PHASE.remove(id);
                 return false;
             }
             if (ph.step == 0) {
-                if (!stepBlock(level, maid, target, ph)) {
+                if (!stepBlock(level, maid, ph.target, ph)) {
                     PHASE.remove(id);
                     return false; // 放不下：整段放弃，直接走下一个链路
                 }
@@ -830,13 +893,53 @@ public final class MaidBombing {
 
             // v1.2.2 实测五百九十【TNT 挂链路最末】：轰炸这一段走完 = 这一次攻击链路收尾，
             // TNT 就挂在最后（有料就扔，缺料静默跳过；最短间隔只当下限，见 flushTnt）
-            flushTnt(level, maid, target, id, gameTime);
+            flushTnt(level, maid, ph.target, id, gameTime);
             return false; // 交还链路：她接着放烟花起飞，0.5 秒后那边起爆
         } catch (Throwable t) {
             log("执行异常：" + t);
             rollback(level, ph);
             PHASE.remove(id);
             return false;
+        }
+    }
+
+    /** 她这一轮是不是正在轰炸段里（空袭行为用它决定本 tick 让不让位） */
+    public static boolean isBombing(EntityMaid maid) {
+        try {
+            return maid != null && PHASE.containsKey(maid.m_20148_());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * v1.2.2 实测五百九十二【相位的唯一驱动器】：每 tick 推一次所有活着的相位（在实体 tick 之前）。
+     *
+     * 【为什么要改成全服驱动】旧版相位只由空袭行为在它的 tick 里推——于是"打完一记放炸弹"这件事
+     * 只存在于飞行近战。需求要把它推广到所有攻击模式（远程空袭除外），而地面近战 / 弓弩 / 三叉戟
+     * / 弹幕 / 枪械 / 第三方战斗任务压根没有"空袭行为"这个东西，所以驱动器必须独立出来。
+     * 相位表很小（只有正在放炸弹的那几只女仆），每 tick 遍历无压力。
+     */
+    private static void tickPhases() {
+        if (PHASE.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<UUID, Phase> e : new ArrayList<>(PHASE.entrySet())) {
+            UUID id = e.getKey();
+            Phase ph = e.getValue();
+            try {
+                if (ph == null || ph.level == null || ph.maid == null || !ph.maid.m_6084_()) {
+                    PHASE.remove(id);
+                    if (ph != null && ph.level != null) {
+                        rollback(ph.level, ph); // 她没了：已放下的方块撤掉（不掉落）
+                    }
+                    continue;
+                }
+                tick(ph);
+            } catch (Throwable t) {
+                log("相位推进异常：" + t);
+                PHASE.remove(id);
+            }
         }
     }
 
@@ -908,11 +1011,21 @@ public final class MaidBombing {
             maid.m_6674_(InteractionHand.MAIN_HAND);
             BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
         } else if (ph.kind == Kind.ANCHOR) {
-            // ── v1.2.2 实测五百九十一：**不再需要萤石** ──
-            // 反馈："重生锚和床不需要有这个机制，因为它自己会炸"、"重生锚还是放不了，放置逻辑改为
-            // 跟放黑曜石一样"。javap 实证：那一炸固定 5.0F、与充能等级无关，而引信本来就是我们
-            // 自己点的定时器——所以这里只保留"充能"这一记**动作**（原版 charge：音效 + 等级变化），
-            // 不消耗任何引信类材料（旧版要 1 颗萤石，没有就静默放弃 = 玩家看到的"放不了"）。
+            // ── v1.2.2 实测五百九十二：这一段的动作照需求原话走 ──
+            // "攻击→副手换成重生锚，放置重生锚（摆臂）→副手换成萤石，拿一颗萤石充能（摆臂动画）
+            //  →继续切换回飞行。0.5 秒后再挥一次手臂。正好对上重生锚自爆"
+            // step 0 已经放好重生锚（副手举的是它，见 stepBlock）；这里换萤石、充能、摆臂，
+            // 副手这一下亮的是萤石；ph.display 不覆盖，起爆那一刻亮的仍是重生锚。
+            ItemStack glow = ItemStack.f_41583_;
+            if (cfgAnchorNeedsGlowstone()) {
+                glow = takeOne(maid, ID_GLOWSTONE);
+                if (glow.m_41619_()) {
+                    log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
+                    return false;
+                }
+                BombPose.show(maid, glow, BOMB_POSE_TICKS); // 副手这时换成的就是萤石
+            }
+            // 照原版 charge：音效 + 充能等级 +1（等级只决定"炸不炸"，1 级足够；< 4 只是防越界）
             try {
                 BlockState cur = level.m_8055_(base);
                 if (cur.m_60734_() instanceof net.minecraft.world.level.block.RespawnAnchorBlock
@@ -922,7 +1035,9 @@ public final class MaidBombing {
             } catch (Throwable ignored) {
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
-            BombPose.show(maid, ph.display, BOMB_POSE_TICKS);
+            if (glow.m_41619_()) {
+                BombPose.show(maid, ph.display, BOMB_POSE_TICKS); // 没消耗萤石（开关关掉）→ 亮重生锚
+            }
         }
         List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
         List<Block> blockList = ph.placedBlock.isEmpty() ? null : new ArrayList<>(ph.placedBlock);
@@ -1197,13 +1312,18 @@ public final class MaidBombing {
      *    再过任务自己的 {@code IAttackTask.canAttack}（与 TLM 的索敌口径一致）；
      * ⑥ 女仆自己残血（≤ 阈值）时**连投**数发，横向散开——照女仆生存那套"低血量爆发"思路。
      * ⑦ 傀儡模式（第三方玩法）期间整段不介入。
+     * ⑧ v1.2.2 实测五百九十二：这一记打完**先试轰炸起手**（末地水晶 / 重生锚 + 萤石 / 床，
+     *    见 {@link #tryStartMelee}）——材料齐就整段交给轰炸相位，相位收尾自己会投 TNT；
+     *    远程空袭按任务 UID 排除（她一直飞在天上、本来就放不了，需求原话）。
      *
      * 附：本方法只跑【她自己的战斗链路】——TNT 由 TLM 的攻击行为自己触发（近战挥砍/远程开火
      * 都会写攻击冷却记忆），我们只负责"这一记打完的收尾动作"，不额外替她索敌开火。
      */
     public static void tickCombatTnt(ServerLevel level, EntityMaid maid) {
         try {
-            if (level == null || maid == null || !cfgTnt()) {
+            // v1.2.2 实测五百九十二：这条扫描现在同时负责【轰炸起手】与【TNT 投放】，所以只要
+            // 两个开关里有一个开着就得跑（各自的部分再各自判开关）
+            if (level == null || maid == null || (!cfgTnt() && !cfgMelee())) {
                 return;
             }
             // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间不介入
@@ -1218,14 +1338,34 @@ public final class MaidBombing {
             }
             UUID id = maid.m_20148_();
             long gameTime = level.m_46467_();
-            // ① 攻击链路完成检测：攻击冷却记忆【由无到有】= 她刚打完一记（TLM 近战与远程
-            //    攻击都会写这个记忆）——TNT 因此挂在「打完这一记」后面，而不是自己计时开火
+            // ① 目标先解出来（轰炸与 TNT 共用同一套目标口径：记忆优先、不合法再按半径找）
+            LivingEntity target = null;
+            try {
+                target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
+            } catch (Throwable ignored) {
+            }
+            if (!legalThrowTarget(maid, target)) {
+                target = findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找
+            }
+            // ② 攻击链路完成检测：攻击冷却记忆【由无到有】= 她刚打完一记（TLM 近战与远程
+            //    攻击都会写这个记忆）——轰炸与 TNT 都挂在「打完这一记」后面
             boolean cooling = maid.m_6274_().m_21952_(MemoryModuleType.f_26373_).isPresent();
             Boolean prev = COOLDOWN_SEEN.put(id, cooling);
             if (cooling && (prev == null || !prev)) {
                 TNT_ARMED.put(id, gameTime);
+                // ③ v1.2.2 实测五百九十二【轰炸推广到所有攻击模式】：这一记打完 → 先试轰炸起手
+                //    （黑曜石+末地水晶 / 重生锚+萤石 / 床）。起手成功则整段交给轰炸相位，
+                //    相位收尾自己会投 TNT（见 tick 末尾的 flushTnt）——所以这里直接返回。
+                //    远程空袭除外：她一直飞在天上、本来就放不了（需求原话）。
+                if (cfgMelee() && !com.maidsmart.combat.MaidFlightKit.isRangedTask(maid)
+                        && tryStartMelee(level, maid, target)) {
+                    return;
+                }
             }
-            // ② 这一轮还没打完任何一记 → 不投
+            // ④ 剩下的才是 TNT 那一发
+            if (!cfgTnt()) {
+                return;
+            }
             Long armedAt = TNT_ARMED.get(id);
             if (armedAt == null) {
                 return;
@@ -1236,14 +1376,6 @@ public final class MaidBombing {
             }
             if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
                 return; // 最短间隔（默认 200 tick = 10 秒）没到：挂着，等下一记
-            }
-            LivingEntity target = null;
-            try {
-                target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
-            } catch (Throwable ignored) {
-            }
-            if (!legalThrowTarget(maid, target)) {
-                target = findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找
             }
             flushTnt(level, maid, target, id, gameTime);
         } catch (Throwable t) {
@@ -1591,6 +1723,8 @@ public final class MaidBombing {
             // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
             // v1.2.2 实测五百九十：追踪弹每 tick 修正一次朝向（在实体 tick 之前）
             tickHoming();
+            // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
+            tickPhases();
             for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
                 Reclaim r = ri.next();
                 if (r.level == null) {
