@@ -1018,22 +1018,15 @@ public final class MaidFlightKit {
         return ItemStack.EMPTY;
     }
 
-    /** 把换下来的物品塞回背包第一格空位；没空位就原地丢弃（与原版换装一致的兜底） */
+    /**
+     * 把换下来的物品塞回背包；塞不下的部分丢在脚下。
+     *
+     * v1.2.2 实测五百九十五【不再吞装备】：旧版与 MaidBombing 那处同一个形状
+     * （"第一个空格 insertItem 后不看返回值"）——空袭换鞘翅 / 换武器时换下来的
+     * 胸甲、武器就都是从这条路径"消失"的：`insertItem` 把整栈退回来、返回值被丢掉。
+     * 现在统一走 {@link com.maidsmart.tool.MaidGiveBack}。
+     */
     private static void giveBack(EntityMaid maid, ItemStack stack) {
-        if (stack.isEmpty()) {
-            return;
-        }
-        try {
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                if (inv.getStackInSlot(i).isEmpty()) {
-                    inv.insertItem(i, stack, false);
-                    return;
-                }
-            }
-            // 背包满：塞进主人背包链路的兜底由调用方决定，这里直接丢在脚下
-            maid.spawnAtLocation(stack);
-        } catch (Throwable ignored) {
-        }
+        com.maidsmart.tool.MaidGiveBack.give(maid, stack, "空袭换装换下来的装备");
     }
 }
