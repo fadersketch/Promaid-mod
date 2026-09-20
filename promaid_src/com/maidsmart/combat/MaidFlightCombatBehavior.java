@@ -212,7 +212,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_NEXT_CAST.remove(maidId);
         SPELL_LAST_LOG.remove(maidId);
         DASH_NEXT.remove(maidId);
-        DASH_LAST_LOG.remove(maidId);
+        DASH_LAST_LOG.remove(maidId);        MaidBombing.forget(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
         // v1.2.0 实测五百一十一：这里【不】清 FlightFireworkPose 的表——它的归还要靠
@@ -286,7 +286,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_NEXT_CAST.clear();
         SPELL_LAST_LOG.clear();
         DASH_NEXT.clear();
-        DASH_LAST_LOG.clear();
+        DASH_LAST_LOG.clear();        MaidBombing.clearAll();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
         FlightFireworkPose.clearAll();
@@ -505,6 +505,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
         LivingEntity target = currentTarget(maid);
+        // v1.2.2 实测五百八十七【空袭轰炸】：轰炸相位（放黑曜石+水晶 / 重生锚 / 床）优先接管本
+        // tick——她放完那两步立刻把控制权交还给下面的 WAIT_LAUNCH → 起飞，0.5 秒后炸弹自己响。
+        if (MaidBombing.tick(level, maid, target, id, gameTime)) {
+            return;
+        }
         if (target == null) {
             // v1.2.0 实测四百七十二【摔死主因】：目标一没就无条件清滑翔位 —— 她多半
             // 正在高空（烟花推进的必然结果），清位即自由落体，20 血必死。改为
@@ -832,6 +837,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // v1.2.0：够近就尽快打（t>=2 即可——收翅那一刻 fallDistance 已被滑翔钳在 ~1.0，
         // 暴击条件 fallDistance>0 已成立；久等只会让她擦身而过）
         if (inReach && (t >= 2 || nearGround || landed) && smashHit(level, maid, target, gameTime)) {
+            // v1.2.2 实测五百八十七【空袭轰炸】：这一记打中了 → 起手轰炸（材料齐才起手；
+            // 相位接管下面两 tick：先放方块、再放水晶，之后照旧 endSmash → 起飞）。
+            MaidBombing.tryStartMelee(level, maid, target);
             endSmash(maid, id, gameTime);
             return;
         }
@@ -1542,6 +1550,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         //    放在"朝向"之前一起被盖回去。
         tryCastSpell(maid, target, id, gameTime);
         fireRanged(maid, target, id, gameTime);
+        // v1.2.2 实测五百八十七：盘旋期间的附加链路——TNT + 打火石齐了才扔，缺料静默跳过。
+        // 放在开火之后、朝向之前（同"开火必须早于朝向"的道理：投掷会给命中方向一点朝向扰动）。
+        MaidBombing.tickRangedTnt(level, maid, target, id, gameTime);
 
         // ③ v1.2.0 实测五百零三【近身弹开】：怪物贴到 3 格内就给一个"远离怪物"的速度矢量，
         //    并让它在接下来 rangedPushTicks() 内**持续**生效（见 pushAwayFromThreat）。

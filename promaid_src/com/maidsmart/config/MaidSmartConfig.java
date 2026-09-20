@@ -455,6 +455,27 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 冲刺最大距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_DASH_BOOST_MAX_RANGE;
 
+    // ================= 空袭轰炸（v1.2.2 实测五百八十七：近战空袭打完放炸弹 + 远程空袭投掷 TNT。
+    //   配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸；口径与反编译实证见 com.maidsmart.combat.MaidBombing） =================
+    /** 近战空袭轰炸总开关（默认开） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_MELEE;
+    /** 远程空袭投掷 TNT（默认开） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_TNT;
+    /** 起爆延迟（tick，默认 10 = 0.5 秒） */
+    public static final ForgeConfigSpec.IntValue COMBAT_BOMBING_FUSE;
+    /** 投掷 TNT 的引信（tick，默认 40 = 2 秒） */
+    public static final ForgeConfigSpec.IntValue COMBAT_BOMBING_TNT_FUSE;
+    /** 投掷 TNT 的间隔（tick，默认 120 = 6 秒） */
+    public static final ForgeConfigSpec.IntValue COMBAT_BOMBING_TNT_INTERVAL;
+    /** 投掷初速（格/tick，默认 0.9） */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BOMBING_TNT_SPEED;
+    /** 爆炸是否破坏方块（默认关） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_BREAK_BLOCKS;
+    /** 爆炸是否伤到主人/友军（默认关） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_HURT_FRIENDLY;
+    /** 女仆放置物的淡粉色标记（默认开，纯客户端渲染） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_PINK_MARK;
+
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
      *
@@ -1790,6 +1811,34 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_DASH_BOOST_MAX_RANGE = BUILDER.comment("【提供速度】位移法术的最大施放距离（格，默认 28）：目标太远也不冲（冲刺是加速手段、不是位移追击）")
                 .translation("config.promaid.airRaid.dashBoostMaxRange")
                 .defineInRange("dashBoostMaxRange", 28.0, 0.0, 128.0);
+        BUILDER.pop();
+
+        // ---- 空袭轰炸（v1.2.2 实测五百八十七）----
+        // 需求原文："当包内同时存在黑耀石/基岩，末地水晶时，在空袭近战攻击打出后再次起飞之前
+        // 加几步……远程空袭加一个投掷 TNT 的机制……上述提到的爆炸效果，默认不对玩家造成伤害
+        // 以及击飞，同时不破坏方块。但都可以在手册内部调试。"
+        // 反编译实证：重生锚那一炸是写死的 5.0F，与萤石充能等级无关（充能只决定"炸不炸"），
+        // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
+        BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
+                .translation("config.promaid.bombing").push("bombing");
+        COMBAT_BOMBING_MELEE = BUILDER.comment("近战空袭轰炸（默认开）：猛击命中之后、再次起飞之前，按包里材料放一枚炸弹——① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过、直接接着起飞")
+                .translation("config.promaid.bombing.melee").define("melee", true);
+        COMBAT_BOMBING_TNT = BUILDER.comment("远程空袭投掷 TNT（默认开）：盘旋期间额外扔 TNT，需要同时有 TNT 与打火石（每发消耗 1 TNT、打火石掉 1 耐久）；材料不齐直接跳过，不影响弓弩/枪械开火")
+                .translation("config.promaid.bombing.tnt").define("tnt", true);
+        COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害）")
+                .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
+        COMBAT_BOMBING_TNT_FUSE = BUILDER.comment("投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间，调小 = 落地即炸更准、调大 = 更容易被躲开")
+                .translation("config.promaid.bombing.tntFuse").defineInRange("tntFuse", 40, 10, 200);
+        COMBAT_BOMBING_TNT_INTERVAL = BUILDER.comment("投掷 TNT 的间隔（tick，默认 120 = 6 秒）：两次投掷之间的最短间隔（材料不齐时不占用这个计时）")
+                .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 120, 20, 1200);
+        COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
+                .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的黑曜石/重生锚/床无论开关都会由她回收，不会留在世界里")
+                .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
+        COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
+                .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
+        COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
+                .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
         BUILDER.pop();
 
         // ---- 搭路（v1.1.0：主人在上方一定距离内 → 垫方块靠近，默认关） ----
