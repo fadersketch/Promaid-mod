@@ -2403,9 +2403,11 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("冲刺最大距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
         this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
-        this.rows.add(new BoolRow("近战空袭轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
+        this.rows.add(new BoolRow("战斗模式轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
-                "近战空袭轰炸（默认开）：猛击命中后按包里材料放炸弹——① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚（不需要萤石）③ 床；②③ 在『本维度不会炸』时自动不开放（见维度闸）；放置失败直接跳过、接着起飞"));
+                "战斗模式轰炸（默认开）：所有攻击模式打完一记就按包里材料放炸弹——地面近战/弓弩/三叉戟/弹幕/枪械/近战空袭/第三方战斗任务都有，远程空袭除外（一直飞在天上）；① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；②③ 在『本维度不会炸』时自动不开放（见维度闸）"));
+        this.rows.add(new NumRow("轰炸最短间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL, s), "轰炸最短间隔（tick，默认 200 = 10 秒）：整条轰炸链路两次之间的下限（打完一记才放，这条只当下限）——不加下限会在几秒内烧光她的黑曜石/水晶；缺料那一下不占用间隔"));
         this.rows.add(new NumRow("起爆延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_FUSE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_FUSE, s), "起爆延迟（tick，默认 10 = 0.5 秒）：放下之后多久响；这半秒正好够她重新起飞"));
         this.rows.add(new NumRow("放置间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP.get()),
@@ -2434,6 +2436,9 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("炸弹底座回收延迟（秒）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：水晶链路那块黑曜石/基岩起爆后留在原地这么久，再收进她背包（一律不掉落地面；重生锚/床由自己那一炸消耗掉，不进这张表）"));
         this.rows.add(new SectionRow("放置与材料", false));
+        this.rows.add(new BoolRow("重生锚需要萤石", MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.set(v),
+                "重生锚需要萤石（默认开 = 原版口径）：0 级充能不炸，所以炸之前要 1 颗萤石把等级顶到 1（威力与等级无关）——链路是「放锚（摆臂）→ 副手换萤石 → 充能（摆臂）→ 0.5 秒后挥臂，正好压上自爆」；关掉 = 不消耗萤石，她直接补上那 1 级"));
         this.rows.add(new BoolRow("维度闸（原版会炸才开）", MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.set(v),
                 "维度闸（默认开）：只在这个维度『原版真的会炸』时才开放重生锚/床链路——重生锚看 respawnAnchorWorks（下界不炸）、床看 bedWorks（主世界不炸），其他模组的维度按它自己的设定判。关掉 = 只看材料、不看维度"));
