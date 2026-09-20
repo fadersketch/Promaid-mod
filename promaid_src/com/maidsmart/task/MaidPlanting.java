@@ -258,6 +258,9 @@ public final class MaidPlanting {
             // 扣除结果——扣除失败（槽位被并发改动/物品被拿走）时树苗已经种下去了，
             // 等于凭空多出一棵苗（生存可刷）。改为：扣成功才放；扣不到直接放弃本轮。
             Block saplingBlock = ((net.minecraft.world.item.BlockItem) sapling.m_41720_()).m_40614_();
+            // v1.2.2 实测五百九十七【副手举一下这棵树苗】：快照必须在扣料之前（下面扣完这一格就空了）；
+            // 只对"从背包掏出来的"举——本来拿在手上的（handSlot>=0）再举一次是两只手同一件。
+            ItemStack saplingShow = bagSlot >= 0 ? sapling.m_41777_() : ItemStack.f_41583_;
             if (!takeOneSapling(maid, handSlot, bagSlot)) {
                 logAttempt(level, maid, "take-failed", bagCount, handCount, -1);
                 return; // 扣料失败 → 不放置（下一轮冷却后重试）
@@ -265,6 +268,9 @@ public final class MaidPlanting {
             level.m_7731_(spot, saplingBlock.m_49966_(), 3);
             level.m_46796_(2001, spot, Block.m_49956_(saplingBlock.m_49966_()));
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            if (!saplingShow.m_41619_()) {
+                com.maidsmart.combat.BombPose.showGated(maid, saplingShow);
+            }
             LOGGER.info("plant sapling: maid={} pos={} sapling={}",
                     maid.m_20148_(), spot, ForgeRegistries.BLOCKS.getKey(saplingBlock));
         } catch (Throwable t) {

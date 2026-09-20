@@ -941,6 +941,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 效果。（原版"抛药水"的动作观感由摆臂动画保留。）
             inv.extractItem(bestSlot, 1, false);
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // v1.2.2 实测五百九十七【副手举一下这瓶药水】：她这一下真在用的是它
+            com.maidsmart.combat.BombPose.showGated(maid, potionStack);
             // v1.1.0 实测二百五十一/二百五十四：抛药水动画（纯观感）——实际药水
             // 完整复制抛物线飞向主人（形态+效果与真实投掷视觉一致）
             this.throwPotionAnimate(level, maid, owner, potionStack);
@@ -1384,6 +1386,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (bestSlot < 0) {
                 return false;
             }
+            ItemStack appleShow = inv.getStackInSlot(bestSlot).m_41777_(); // 扣料前留快照（实测五百九十七：副手举它）
             inv.extractItem(bestSlot, 1, false);
             // 原版金苹果效果（数值与原版食物一致；m_7292_=addEffect）
             applyEffect(owner, "minecraft:absorption", 2400, enchanted ? 3 : 0);
@@ -1393,6 +1396,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 applyEffect(owner, "minecraft:fire_resistance", 6000, 0);
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 使用动画
+            com.maidsmart.combat.BombPose.showGated(maid, appleShow); // 实测五百九十七：副手举这颗苹果
             // v1.1.0 实测三十二（反馈："喂食金苹果的时候没有音效"）：吃苹果音效
             playSoundAt(owner, "minecraft:entity.generic.eat");
             maid.getChatBubbleManager().addTextChatBubble(
@@ -1559,7 +1563,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     if (stack.m_41619_() || stack.m_41720_() != milk) {
                         continue;
                     }
+                    // v1.2.2 实测五百九十七：副手举一下这桶牛奶（背包这条来源才举——手上的本来就看得见）
+                    ItemStack milkShow = stack.m_41777_();
                     inv.extractItem(i, 1, false);
+                    com.maidsmart.combat.BombPose.showGated(maid, milkShow);
                     this.applyMilkEffect(maid, owner, inv);
                     return true;
                 }
@@ -1600,6 +1607,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                 ItemStack honeyCopy2 = stack.m_41777_();
                 if (com.maidsmart.action.EmotionalActionExecutor.feedFoodDirect(maid, owner, honeyCopy2)) {
                     inv.extractItem(i, 1, false);
+                    // v1.2.2 实测五百九十七：副手举一下这瓶蜂蜜（背包这条来源才举）
+                    com.maidsmart.combat.BombPose.showGated(maid, honeyCopy2);
                     maid.getChatBubbleManager().addTextChatBubble("主人，蜂蜜喝下，解一下中毒！");
                     return true;
                 }
@@ -1717,6 +1726,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             // 残余栈塞不进背包就被静默丢弃（物品凭空消失）。现在由物品自己的
             // finishUsingItem 原地决定消耗几个，残余栈一定有着落。
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND); // 喂的动作（v1.5.292 同款）
+            // v1.2.2 实测五百九十七【副手举一下这件喝的】：`src` 就是她这一下真正结算的那一件
+            //（多次使用的容器就地改剩余次数，复制品只用于显示，用完 BombPose 原样还回去）
+            com.maidsmart.combat.BombPose.showGated(maid, src);
             String drinkName = src.m_41786_().getString();  // getHoverName().getString()
             ItemStack result = com.maidsmart.combat.MaidMealBridge.useByItemLogic(owner, src);
             if (result == null) {

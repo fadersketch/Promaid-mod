@@ -225,6 +225,17 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * v1.2.2 实测五百九十七【副手举一下正在下的这一件】：反馈"任何一个链路行动的时候副手都
+     * 应该拿对应的物品"，酿造整条链（补燃料 / 补水瓶 / 下疣 / 下正向材料 / 强化 / 形态）就是
+     * 最典型的一条——她手里明明"拿着一件东西在下料"，之前只有一个挥臂。
+     * 收成品那一路（把药水从酿造台收回背包）不叫下料、不举。
+     */
+    private static void swing(EntityMaid maid, ItemStack used) {
+        swing(maid);
+        com.maidsmart.combat.BombPose.showGated(maid, used);
+    }
+
 
     public MaidBrewBehavior() {
         // v1.5.124：无限运行时长（旧版默认 60 tick 上限导致行为每 3 秒重启）
@@ -365,7 +376,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             ItemStack fuel = this.extractItemFromMaid(maid, maidInv, "minecraft:blaze_powder", 1);
             if (!fuel.isEmpty()) {
                 stand.setItem(4, fuel);
-                swing(maid); // v1.1.0 实测二百八十一：动作可视化
+                swing(maid, fuel); // v1.1.0 实测二百八十一：动作可视化（五百九十七：副手举燃料）
             }
         }
         // 2. 收成品：槽0-2 里是"最终状态"（water/awkward 之外的一切药水）→ 收走
@@ -648,11 +659,11 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     ItemStack base = this.extractBrewableBase(maid, maidInv, cfg);
                     if (!base.isEmpty()) {
                         stand.setItem(i, base);
-                        swing(maid);
+                        swing(maid, base);
                     }
                 } else {
                     stand.setItem(i, bottle);
-                    swing(maid);
+                    swing(maid, bottle);
                 }
                 continue;
             }
@@ -689,7 +700,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             ItemStack ing = this.extractItemFromMaid(maid, maidInv, rid.toString(), 1);
             if (!ing.isEmpty()) {
                 stand.setItem(3, ing);
-                swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
+                swing(maid, ing); // v1.1.0 实测二百八十一：下料动作可视化（五百九十七：副手举它）
                 // 补料后重置缺料记录（下次缺别的材料能再报）
                 LAST_MISSING.remove(maid.getUUID());
                 // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
@@ -712,7 +723,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 ItemStack bottle = this.extractWaterBottle(maid, maidInv);
                 if (!bottle.isEmpty()) {
                     stand.setItem(i, bottle);
-                    swing(maid);
+                    swing(maid, bottle);
                 } else {
                     // v1.1.0 实测三百零六（反馈："往女仆兜里只放了 3 分钟夜视和
                     // 红石粉，然后就不会自动把 3 分钟夜视放进炼药台"）：没有水瓶 →
@@ -724,7 +735,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                     ItemStack base = this.extractBrewableBase(maid, maidInv, cfg);
                     if (!base.isEmpty()) {
                         stand.setItem(i, base);
-                        swing(maid);
+                        swing(maid, base);
                     }
                 }
                 continue;
@@ -736,7 +747,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 ItemStack wart = this.extractItemFromMaid(maid, maidInv, "minecraft:nether_wart", 1);
                 if (!wart.isEmpty()) {
                     stand.setItem(3, wart);
-                    swing(maid);
+                    swing(maid, wart);
                 }
             } else if (this.isPotion(s, "minecraft:awkward")) {
                 // 粗药阶段：放下界疣以外的正向材料（红石/荧石对粗药无效、
@@ -745,6 +756,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 ItemStack ingredient = this.extractFromMaidExcept(maid, maidInv, INGREDIENTS, "minecraft:nether_wart", 1);
                 if (!ingredient.isEmpty()) {
                     stand.setItem(3, ingredient);
+                    swing(maid, ingredient); // v1.2.2 实测五百九十七：这一路旧版连挥臂都没有
                 }
             } else {
                 // 基础药水（真药水/平凡/浓稠）：按配置补强化/形态
@@ -783,6 +795,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 ItemStack reagent = this.extractItemFromMaid(maid, maidInv, reagentId, 1);
                 if (!reagent.isEmpty()) {
                     stand.setItem(3, reagent);
+                    swing(maid, reagent); // v1.2.2 实测五百九十七：强化材料同样举一下
                     return;
                 }
                 // 配置材料有配方但背包没有 → 缺料等待（不换另一种——配置优先）
@@ -794,6 +807,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 ItemStack reagent = this.extractItemFromMaid(maid, maidInv, altId, 1);
                 if (!reagent.isEmpty()) {
                     stand.setItem(3, reagent);
+                    swing(maid, reagent); // v1.2.2 实测五百九十七：强化材料同样举一下
                     return;
                 }
                 this.notifyMissing(maid, altId);
@@ -815,7 +829,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             ItemStack ing = this.extractItemFromMaid(maid, maidInv, rid.toString(), 1);
             if (!ing.isEmpty()) {
                 stand.setItem(3, ing);
-                swing(maid); // v1.1.0 实测二百八十一：下料动作可视化
+                swing(maid, ing); // v1.1.0 实测二百八十一：下料动作可视化（五百九十七：副手举它）
                 LAST_MISSING.remove(maid.getUUID());
                 // v1.1.0 实测三百一十：补料成功 → 清 pending（下次真缺时重新双通道确认）
                 MISSING_PENDING.remove(maid.getUUID());

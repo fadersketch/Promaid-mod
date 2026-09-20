@@ -351,11 +351,21 @@ public final class MaidSpellCastCompat {
     private static Method mSpellGetCooldown;
 
     /**
-     * 某个法术**自身**的冷却（换算成 tick）——读 ISS 的 `AbstractSpell#getSpellCooldown()`（秒）。
+     * 某个法术**自身**的冷却（tick）——读 ISS 的 `AbstractSpell#getSpellCooldown()`。
      *
      * 【为什么要它】"提供速度/提供高度"这两类法术在原版都是有冷却的输出手段（烈焰冲锋 10 秒、
      * 升腾 15 秒）；写回冷却时若只按我们的间隔（默认 2 秒）写，等于让她比玩家频繁好几倍。
      * 默认口径 `max(空袭位移间隔, 法术自身冷却)`；想让她窜得更勤可关掉"尊重法术自身冷却"。
+     *
+     * v1.2.2 实测五百九十七（issues #16）【单处换算修正，无行为分支变化】：旧版这里
+     * 把它的返回值当成"秒"、又乘了一次 20（`Math.max(0, i) * 20`）——而 ISS 的
+     * `AbstractSpell#getSpellCooldown()` **返回的本来就是 tick**：
+     * `(int) (SpellConfigManager.getSpellConfigValue(this, COOLDOWN_IN_SECONDS) * 20)`。
+     * 于是烈焰冲锋（真实 10 秒 = 200 tick）被写成 **4000 tick = 200 秒**，"提供速度"
+     * 第一次放过之后两百秒再也不放（面板与日志都看不出来，像是"法术推进偶尔不工作"）；
+     * 这个错误值还会被 `castSpecific` 写回 ISS 冷却表，并让 `findAvailableDashSpell(..., ready)`
+     * 长时间挑不到它。报告者实测：改回原样返回后同一条日志从"每 4000 tick 一记"变成
+     * "每 200 tick 一记"。现在原样返回。
      *
      * @return 冷却 tick；读不到返回 0（调用方按自己的间隔处理）
      */
@@ -373,9 +383,9 @@ public final class MaidSpellCastCompat {
             if (spell == null) {
                 return 0;
             }
-            Object seconds = mSpellGetCooldown.invoke(spell);
-            if (seconds instanceof Integer i) {
-                return Math.max(0, i) * 20;
+            Object ticks = mSpellGetCooldown.invoke(spell); // 已经是 tick（见方法头 实测五百九十七）
+            if (ticks instanceof Integer i) {
+                return Math.max(0, i);
             }
             return 0;
         } catch (Throwable ignored) {

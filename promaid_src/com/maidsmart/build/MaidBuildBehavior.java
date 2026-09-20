@@ -589,6 +589,13 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     used = BlueprintLib.consumeBlock(maid, blockId);
                 }
             }
+            // v1.2.2 实测五百九十七【副手举一下手里那一块】：她马上要放的就是它。
+            // 连续建造时每次放置都续期 → 整段建造期间副手一直举着这个方块，停下来 0.5 秒后收回
+            //（关掉"动作表现"总开关则完全不举）。
+            if (used != null) {
+                com.maidsmart.combat.BombPose.showGated(maid,
+                        new net.minecraft.world.item.ItemStack(used));
+            }
             if (used == null) {
                 // v1.2.2 实测五百八十三（issue #12）：先判"这个方块在游戏里有没有对应物品"。
                 // 没有对应物品（墙上告示牌/墙上火把这类：只有方块、没有同名物品）→ 永久跳过
@@ -810,6 +817,9 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
                     used = BlueprintLib.consumeBlock(maid, blockId);
                 }
                 if (used != null) {
+                    // v1.2.2 实测五百九十七：副手举一下这一块（延后补建这条路同样算"她要放的东西"）
+                    com.maidsmart.combat.BombPose.showGated(maid,
+                            new net.minecraft.world.item.ItemStack(used));
                     // v1.5.275：用了替代品 → 提示"用 X 替代 Y"（30 秒冷却）——
                     // 有替换时不再报缺料（反馈："既然有替换品了，应该换换系统提示，
                     // 没有的时候才播报缺材料"）
