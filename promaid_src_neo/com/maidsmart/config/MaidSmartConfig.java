@@ -587,6 +587,12 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_HURT_FRIENDLY;
     /** 女仆放置物的淡粉色标记（默认开，纯客户端渲染） */
     public static final ModConfigSpec.BooleanValue COMBAT_BOMBING_PINK_MARK;
+    /** 投掷索敌半径（格，默认 12） */
+    public static final ModConfigSpec.DoubleValue COMBAT_BOMBING_TNT_RANGE;
+    /** 残血连投阈值（默认 0.7） */
+    public static final ModConfigSpec.DoubleValue COMBAT_BOMBING_TNT_BURST_RATIO;
+    /** 连投最多几发（默认 3） */
+    public static final ModConfigSpec.IntValue COMBAT_BOMBING_TNT_BURST_COUNT;
 
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
@@ -1847,9 +1853,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing").push("bombing");
         COMBAT_BOMBING_MELEE = BUILDER.comment("近战空袭轰炸（默认开）：猛击命中之后、再次起飞之前，按包里材料放一枚炸弹——① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过、直接接着起飞")
                 .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("远程空袭投掷 TNT（默认开）：盘旋期间额外扔 TNT，需要同时有 TNT 与打火石（每发消耗 1 TNT、打火石掉 1 耐久）；材料不齐直接跳过，不影响弓弩/枪械开火")
+        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；材料不齐直接跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
-        COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害）")
+        COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
         COMBAT_BOMBING_TNT_FUSE = BUILDER.comment("投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间，调小 = 落地即炸更准、调大 = 更容易被躲开")
                 .translation("config.promaid.bombing.tntFuse").defineInRange("tntFuse", 40, 10, 200);
@@ -1861,6 +1867,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
         COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
+        COMBAT_BOMBING_TNT_RANGE = BUILDER.comment("投掷索敌半径（格，默认 12）：战斗任务下她自动找这么近的敌人扔 TNT——照《女仆生存》那套 12 格索敌；调小 = 只贴脸扔，调大 = 主动远投")
+                .translation("config.promaid.bombing.tntRange")
+                .defineInRange("tntRange", 12.0, 2.0, 64.0);
+        COMBAT_BOMBING_TNT_BURST_RATIO = BUILDER.comment("残血连投阈值（默认 0.7 = 七成血以下）：血量比例降到这条线以下时，一次投掷改成连投数发（《女仆生存》的『低血量爆发』思路）")
+                .translation("config.promaid.bombing.tntBurstRatio")
+                .defineInRange("tntBurstRatio", 0.7, 0.0, 1.0);
+        COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 点打火石耐久）；1 = 关掉连投")
+                .translation("config.promaid.bombing.tntBurstCount")
+                .defineInRange("tntBurstCount", 3, 1, 16);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
         BUILDER.pop();

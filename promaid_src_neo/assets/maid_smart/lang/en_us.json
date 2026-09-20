@@ -117,12 +117,15 @@
   "config.promaid.combat.aidDrinkMinPurity": "Min Water Purity to Feed (0-3, 2=Acceptable)",
   "config.promaid.bombing": "Air Raid Bombing",
   "config.promaid.bombing.melee": "Melee Bombing (place a bomb after the hit)",
-  "config.promaid.bombing.tnt": "Ranged Air Raid TNT Throw",
+  "config.promaid.bombing.tnt": "Combat TNT Throw",
   "config.promaid.bombing.fuse": "Detonation Delay (ticks)",
   "config.promaid.bombing.tntFuse": "Thrown TNT Fuse (ticks)",
   "config.promaid.bombing.tntInterval": "Throw Interval (ticks)",
   "config.promaid.bombing.tntSpeed": "Throw Speed (blocks/tick)",
   "config.promaid.bombing.breakBlocks": "Bombing Breaks Blocks",
   "config.promaid.bombing.hurtFriendly": "Bombing Hurts Owner/Allies",
-  "config.promaid.bombing.pinkMark": "Pink Marker on Maid-Placed Bombs"
+  "config.promaid.bombing.pinkMark": "Pink Marker on Maid-Placed Bombs",
+  "config.promaid.bombing.tntRange": "TNT Target Radius (blocks)",
+  "config.promaid.bombing.tntBurstRatio": "Low-Health Burst Ratio",
+  "config.promaid.bombing.tntBurstCount": "Low-Health Burst Count"
 }

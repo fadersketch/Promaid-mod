@@ -166,8 +166,13 @@ public final class FriendlyWindGuard {
     /** 路径①：Entity.setDeltaMovement（风弹/呼啸之风/击退构件/任何直接改速度的法术） */
     public static boolean shouldBlockTick(Entity victim, Vec3 newVel) {
         Entity t = ticking;
-        if (t == null || t == victim) {
-            return false; // 受害者==当前 tick 实体：她自己的机动（烟花推进/风弹自起跳）
+        if (t == null) {
+            return false;
+        }
+        if (t == victim) {
+            // 受害者==当前 tick 实体：默认是她自己的机动（烟花推进/风弹自起跳）——不拦。
+            // v1.2.2 实测五百八十八：**女仆自己炸弹产生的风**是例外，对放炸弹的她本人也不生效。
+            return com.maidsmart.combat.MaidBombing.isSelfImmuneBlast();
         }
         return shouldBlock(maidOf(t), victim, newVel);
     }
@@ -185,8 +190,14 @@ public final class FriendlyWindGuard {
             return false;
         }
         try {
-            if (maid == null || victim == null || newVel == null || maid == victim) {
+            if (maid == null || victim == null || newVel == null) {
                 return false;
+            }
+            if (maid == victim) {
+                // 受害者==推人者：默认"她自己的机动一字不改"（烟花推进 / 风弹自起跳 / 空袭弹开）。
+                // v1.2.2 实测五百八十八：**这条链路做的炸弹**是例外——它的风对放炸弹的她本人
+                // 也不生效（与重锤风爆不同），窗口由 MaidBombing 在爆炸期间挂上。
+                return com.maidsmart.combat.MaidBombing.isSelfImmuneBlast();
             }
             if (!(victim instanceof Player || victim instanceof EntityMaid)) {
                 return false; // 只保护玩家与女仆（怪物该被打飞就打飞）

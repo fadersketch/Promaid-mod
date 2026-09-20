@@ -2408,16 +2408,22 @@ public class PromaidConfigScreen extends Screen {
                 "近战空袭轰炸（默认开）：猛击命中后按包里材料放炸弹——① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；放置失败直接跳过、接着起飞"));
         this.rows.add(new NumRow("起爆延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_FUSE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_FUSE, s), "起爆延迟（tick，默认 10 = 0.5 秒）：放下之后多久响；这半秒正好够她重新起飞"));
-        this.rows.add(new SectionRow("远程空袭：盘旋期间额外扔 TNT", false));
-        this.rows.add(new BoolRow("投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
+        this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
+        this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
-                "远程空袭投掷 TNT（默认开）：需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；缺料直接跳过，不影响开火"));
+                "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与打火石；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
         this.rows.add(new NumRow("投掷间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷间隔（tick，默认 120 = 6 秒）：两次投掷之间的最短间隔"));
         this.rows.add(new NumRow("TNT 引信（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE, s), "投掷 TNT 的引信（tick，默认 40 = 2 秒）：扔出去到爆炸的时间"));
         this.rows.add(new NumRow("投掷初速（格/tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED, s), "投掷初速（格/tick，默认 0.9）：调大飞得更快更直，调小抛物线更明显"));
+        this.rows.add(new NumRow("投掷索敌半径（格）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE, s), "投掷索敌半径（格，默认 12）：战斗任务下自动找这么近的敌人扔 TNT（照《女仆生存》的 12 格）"));
+        this.rows.add(new NumRow("残血连投阈值（0-1）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO, s), "残血连投阈值（默认 0.7 = 七成血以下）：血量比例低于它就一次连投数发"));
+        this.rows.add(new NumRow("连投最多（发）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 点打火石耐久"));
         this.rows.add(new SectionRow("爆炸口径（四类炸弹共用）", false));
         this.rows.add(new BoolRow("破坏方块", MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.set(v),
