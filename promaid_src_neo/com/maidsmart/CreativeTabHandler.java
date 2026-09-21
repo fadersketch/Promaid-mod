@@ -31,6 +31,8 @@ public class CreativeTabHandler {
         event.accept(ProMaidMod.BLUEPRINT_BOOK);
         // v1.2.0：指标石同时进建材页与工具页（它是"临时蓝图制作器"，两页都好找）
         event.accept(ProMaidMod.INDEX_STONE);
+        // v1.2.2 实测六百一十六：压缩盒是收纳道具——建材页与工具页都放
+        event.accept(ProMaidMod.COMPRESSION_BOX);
         // 排班表是管理道具不是建材，只进工具页（实测五十五：光效走 m_5812_，
         // 与手册同源——创造栏拿出来的即带附魔流光）
         if (key.equals(TAB_TOOLS_AND_UTILITIES)) {

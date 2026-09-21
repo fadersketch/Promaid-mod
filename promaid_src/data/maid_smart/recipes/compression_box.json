@@ -1,0 +1,23 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PDP",
+    "DYD",
+    "PDP"
+  ],
+  "key": {
+    "P": {
+      "item": "minecraft:cherry_planks"
+    },
+    "D": {
+      "item": "minecraft:diamond"
+    },
+    "Y": {
+      "item": "minecraft:pink_dye"
+    }
+  },
+  "result": {
+    "item": "maid_smart:compression_box",
+    "count": 1
+  }
+}

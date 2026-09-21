@@ -1,4 +1,4 @@
-{
+﻿{
   "task.maid_smart.mine": "挖矿",
   "task.maid_smart.mine.desc": "在附近寻找矿石，手持镐开采",
   "task.maid_smart.woodcut": "伐木",
@@ -203,6 +203,10 @@
   "config.promaid.combat.flightRecallDistance": "空袭牵引绳（格）",
   "item.maid_smart.index_stone": "指标石",
   "block.maid_smart.pink_fire": "粉色火焰",
+  "item.maid_smart.compression_box": "压缩盒",
+  "config.promaid.compressionBox": "压缩盒设置",
+  "config.promaid.compressionBox.maidExtension": "女仆背包延伸",
+  "config.promaid.compressionBox.maxStack": "每格上限",
   "config.promaid.build.indexStone": "指标石",
   "task.maid_smart.index_build": "临时搭建",
   "task.maid_smart.index_build.desc": "指标石一次性临时建造（隐藏任务，不由玩家选择）",
