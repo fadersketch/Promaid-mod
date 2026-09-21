@@ -45,9 +45,57 @@ public final class FriendlyFireGuard {
     /** ① 最终保险（攻击事件，受伤链最上游）：女仆 → 主人/友方 直接取消 */
     @SubscribeEvent
     public static void onIncomingDamage(LivingIncomingDamageEvent event) {
-        Entity src = event.getSource() == null ? null : event.getSource().getEntity();
-        if (src instanceof EntityMaid maid && isFriendly(maid, event.getEntity())) {
+        EntityMaid maid = maidOfDamage(event.getSource());
+        if (maid != null && isFriendly(maid, event.getEntity())) {
             event.setCanceled(true);
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十：这一记伤害**算谁头上**——主人/友军免伤的唯一入口。
+     *
+     * 三级归因（越靠前越可靠）：
+     * <ol>
+     *   <li>**造成者**是女仆（{@code getEntity}）：近战 / 横扫 / 法术 / 我们自己那几类炸弹都走这条；</li>
+     *   <li>**直接实体**是女仆：弹射物的直接实体是她本人时的那一档（既有行为）；</li>
+     *   <li>**直接实体是她放的 TNT**（{@link MaidTntBlastGuard#maidOfTnt}：引信 TNT 记的点火者 →
+     *       我们亲手登记过的那一枚）。</li>
+     * </ol>
+     *
+     * ── 为什么补第 ③ 条 ──
+     * 六百〇七 收走模组 TNT 的"破不破方块"时留了一句"那一炸的伤害源是那枚 TNT 实体、不是女仆，
+     * 所以主人/友军免伤覆盖不到它"。实测六百一十 把这句话验了：对**等价交换的爆破新星**而言，
+     * 伤害源的**造成者其实是她**（引信 TNT 记了点火者 {@code PrimedTnt.getOwner()}，原版
+     * {@code DamageSources.explosion} 就是拿它当造成者——javap 实证），所以主人/友军本来就被
+     * 这条出口护住了（实机日志逐条对上：同队女仆在她连炸十几发新星期间一格血没掉，没入队的
+     * 对照女仆被炸到 69 血）。
+     * 但那句话指出的**边界是真的**：模组的爆炸未必把点火者写进伤害源（六百〇七 给地形那半边
+     * 留的"我们亲手登记过的那一枚"兜底就是为这种模组准备的）。那种情况下造成者是空的、
+     * 谁也认不出这一炸，第 ③ 条按登记表把账算回她头上——这是"她扔的模组 TNT 不伤主人/友军"
+     * 这个承诺在地形之外的另一半。
+     *
+     * 【让位】「轰炸伤到主人/友军」开着时（{@code hurtFriendly=true}）第 ③ 条整段让位：那是
+     * 玩家明确要的原版口径（主人/友军照掉血照被炸飞），我们不替他兜。
+     */
+    public static EntityMaid maidOfDamage(net.minecraft.world.damagesource.DamageSource source) {
+        try {
+            if (source == null) {
+                return null;
+            }
+            Entity cause = source.getEntity();         // 造成者
+            if (cause instanceof EntityMaid m) {
+                return m;
+            }
+            Entity direct = source.getDirectEntity();  // 直接实体（箭矢 / 那一枚 TNT）
+            if (direct instanceof EntityMaid m) {
+                return m;
+            }
+            if (com.maidsmart.config.MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.get()) {
+                return null; // 玩家要原版口径 → 这一层让位
+            }
+            return MaidTntBlastGuard.maidOfTnt(direct != null ? direct : cause);
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
