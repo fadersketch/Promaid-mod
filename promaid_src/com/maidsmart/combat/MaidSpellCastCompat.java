@@ -219,6 +219,34 @@ public final class MaidSpellCastCompat {
     public static final String[] DEFAULT_BOOST_SPELLS = {
             "irons_spellbooks:burning_dash",
     };
+
+    /**
+     * v1.2.2 实测六百一十三【飞行跟随的启动并入位移法术】：取「提供高度」的法术 id 表。
+     *
+     * 【为什么提到兼容层】原先取这张表的代码只在空袭里（{@code MaidFlightCombatBehavior
+     * .climbSpellIds}），飞行跟随也要用同一张表——表面上是"两处各写四行"，实际的风险在**兜底**：
+     * 配置读不出来时回落到 {@link #DEFAULT_CLIMB_SPELLS} 这一步若各写一份，改默认表就会出现
+     * "空袭认、飞行跟随不认"的分裂。表只有一份（{@code combat.flightDashClimbSpells}），
+     * 取法也只能有一份。空袭那边现在只是转发到这里（行为一字不变）。
+     */
+    public static String[] climbSpellIds() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
+                    .toArray(new String[0]);
+        } catch (Throwable ignored) {
+            return DEFAULT_CLIMB_SPELLS;
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十三：按她书里**铭刻的等级**施法，读不到就用
+     * {@link #DASH_SPELL_FALLBACK_LEVEL}（与空袭 {@code dashSpellLevel} 完全同口径——
+     * 冲量随等级走，见 {@link #spellLevelInBooks} 的注释）。
+     */
+    public static int spellLevelOrDefault(EntityMaid maid, String spellId) {
+        int lvl = spellLevelInBooks(maid, spellId);
+        return lvl > 0 ? lvl : DASH_SPELL_FALLBACK_LEVEL;
+    }
     /**
      * 位移法术的**兜底等级**——只在读不到书里铭刻等级时使用（正常路径见
      * {@link #spellLevelInBooks}）。

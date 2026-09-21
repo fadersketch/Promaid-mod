@@ -100,9 +100,18 @@ summoned = False
 if done:
     print('Done reached — summoning a maid (this is what loads TLM brain task classes)')
     send('summon touhou_little_maid:maid ~ ~2 ~')
-    time.sleep(AFTER_SUMMON)
-    data = readlog()
-    summoned = 'Summoned new' in data
+    # 【实测六百一十三：固定 10 秒窗口踩过一次"假失败"】首次 summon 要连带加载 TLM 的实体/
+    # 大脑类，机器忙时 10 秒不够——现象是判定「maid was not summoned」，可翻同一份
+    # console_maidload.log 能看到那条「Summoned new …」就在几秒之后（本批实测：确实召出来了）。
+    # 所以改成**轮询**：最多 40 秒，出现就立刻继续（正常情况 2~3 秒就返回，不影响耗时）。
+    data = ''
+    summoned = False
+    for _ in range(AFTER_SUMMON * 4):
+        time.sleep(1)
+        data = readlog()
+        if 'Summoned new' in data:
+            summoned = True
+            break
     if not summoned:
         verdict = 'FAIL(maid was not summoned - the brain path was never exercised)'
     for pat in FAIL_PATTERNS:

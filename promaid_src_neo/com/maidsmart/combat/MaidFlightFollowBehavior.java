@@ -81,6 +81,33 @@ import java.util.WeakHashMap;
  * 进到 {@link #endRadius()} 格内不再推（本批起还会把已给的速度解掉）。背包里有孔雀羽扇时
  * 走扇子那条（不烧烟花），与空袭"扇子优先"同序。
  *
+ * ── 六百一十三 改的一件事（用户原话："位移法术也可以加入到飞行跟随的启动中"）──
+ * <b>启动的"能飞的道具"从两选一扩成三选一</b>：烟花火箭 / 孔雀羽扇 / **能上天的位移法术**
+ * （{@link MaidSpellCastCompat} 的「提供高度」那一类）。此前只带法术书、不带烟花的存档里，
+ * 她**压根不会起飞**——判定链上第一条就把她挡掉了（"背包里既没有烟花火箭、也没有孔雀羽扇"）。
+ *
+ * <ol>
+ *   <li><b>门禁</b>（{@link #m_6114_} 与 {@link #m_6737_}）：改调
+ *       {@link MaidFlightKit#hasFlightPropellant}——与空袭三件套的第三条**同一份定义**。
+ *       （六百一十三 顺手把散在三处的"三选一"收敛成一个方法，见该方法的注释：
+ *       口径只能有一处定义，否则迟早又出现"气泡说齐了、她却不飞"。）</li>
+ *   <li><b>那一口推进</b>（{@link #boost}）：顺序 = 扇子 → 烟花 → **位移法术**（新增）。
+ *       这是**空袭的起飞顺序**（"有烟花先走烟花链路、没有才用位移法术"），不是它"盘旋掉高"
+ *       那一套（那边是法术优先，实测五百七十八 A 方案单独确认过）。用户这次要的是"加入
+ *       **启动**"，所以带了烟花/羽扇的存档**手感与烧料节奏一字不变**——法术是**第三条腿**：
+ *       烟花烧完（消耗档）或压根没带烟花时，她照样起飞、照样跟进。</li>
+ *   <li><b>打法照抄空袭的"平地起飞 / 补高"</b>（{@link #castClimbSpell}）：先清掉法术模组那份
+ *       施法目标（否则它施法前 `forceLookAtTarget` 会把朝向拧平——升腾就变成"向前扑"而不是
+ *       "窜上天"），再 {@link #faceToward}(…, takeoff=true)：**抬头至少 {@link #TAKEOFF_PITCH}
+ *       度、瞄着主人**。节流用本链路自己的 {@link #BOOST_INTERVAL}（与烟花共一张表——抢的是
+ *       同一种"这一口推进"），写回冷却用 {@code combat.flightDashInterval}（与空袭"提供高度"
+ *       那一类的写回值完全一致）。</li>
+ * </ol>
+ * <b>开关归属</b>：法术这一支由空袭的「位移法术·起飞/补高」（{@code combat.flightDashClimb}，
+ * 默认开）管——关掉它，本链路也**一起**退回只认烟花/羽扇（不新增配置项，两处口径仍然一致）。
+ * 起飞那行日志会把这一趟的燃料写成三种里的哪一种（{@link #fuelLabel}），
+ * 验收入口：日志搜「飞行跟随」看到「放位移法术追主人（irons_spellbooks:ascension Lv3）」。
+ *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
  * 没有方块阻拦，自己包里面还有鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞
@@ -98,9 +125,9 @@ import java.util.WeakHashMap;
  *   <li>主人（或调试目标，见下）存在、活着、同维度，且**3D 距离超过
  *       {@code bridge.flightFollowDist}（默认 5 格，六百一十二 由 16 改小）**——太近就走路/
  *       搭路，犯不上烧烟花；</li>
- *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇
- *       （{@link MaidFlightKit#hasFlightFuel}，缺一件就不飞；六百一十一 起不再只认烟花，
- *       与空袭的燃料口径对齐）；</li>
+ *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇 **或** 能上天的
+ *       位移法术（{@link MaidFlightKit#hasFlightPropellant}，缺一件就不飞；六百一十一 起
+ *       不再只认烟花、六百一十三 起法术也算；与空袭三件套的第三条同一口径）；</li>
  *   <li>与主人之间**没有方块阻拦**（raycast 视线，复用自保那套 {@code hasSight}）；</li>
  *   <li>周围 {@code bridge.threatDist} 格内没有敌对生物（与搭路同口径，绝不往怪堆里飞）。</li>
  * </ul>
@@ -152,8 +179,9 @@ import java.util.WeakHashMap;
  *
  * ── 两个"省料"开关（作者要求"可以调整是否消耗烟花和鞘翅耐久"）──
  * <ul>
- *   <li>{@code bridge.flightFollowFirework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
- *       能飞的道具**（烟花火箭或孔雀羽扇，它是"她能飞"的凭证），但每次补推不再从背包扣那一枚
+     *   <li>{@code bridge.flightFollowFirework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
+     *       能飞的道具**（烟花火箭 **或** 孔雀羽扇 **或** 能上天的位移法术，它是"她能飞"的凭证；
+     *       六百一十三 起法术也在这一列），但每次补推不再从背包扣那一枚
  *       ——纯观赏档，适合"只想看她跟着飞"的存档。**背包里有羽扇时走扇子那条**（不烧烟花，
  *       照羽扇自己的口径扣耐久），这条开关只管烟花那一支。</li>
  *   <li>{@code bridge.flightFollowElytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
@@ -322,6 +350,19 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         return MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.get();
     }
 
+    /**
+     * 六百一十三：位移法术那一支的开关归属——**复用空袭的**「位移法术·起飞/补高」
+     * （{@code combat.flightDashClimb}，默认开）。
+     *
+     * 【为什么不新增一个配置项】"她能不能用位移法术飞"这件事在空袭与飞行跟随里是同一件事
+     * （同一张法术表、同一条施法链路），分成两个开关只会造出"空袭能用、跟随不能用"这种
+     * 没人想要的中间档；玩家关掉它时想的也是"我不想让她放这个法术"，不是"我不想让她在某个
+     * 模式下放"。{@link MaidFlightKit#hasFlightPropellant} 里读的也是这一个。
+     */
+    private static boolean cfgClimbSpell() {
+        return MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB.get();
+    }
+
     /* ==================== 对外只读/清理 ==================== */
 
     /** 她此刻正在"飞行跟随"（同维度拉回让位、搭路让位、落地保护都认这一条） */
@@ -479,9 +520,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (!MaidFlightKit.hasElytra(maid)) {
                 return skip(maid, now, "背包里没有可用鞘翅");
             }
-            if (!MaidFlightKit.hasFlightFuel(maid)) {
-                // 六百一十一：燃料口径与空袭一致——烟花火箭 **或** 孔雀羽扇任一即可
-                return skip(maid, now, "背包里既没有烟花火箭、也没有孔雀羽扇（能飞的道具）");
+            if (!MaidFlightKit.hasFlightPropellant(maid)) {
+                // 六百一十一：燃料口径与空袭一致——烟花火箭 **或** 孔雀羽扇任一即可；
+                // 六百一十三：再加第三条腿——**能上天的位移法术**（与空袭三件套的第三条同一份
+                // 定义，同一个开关 combat.flightDashClimb 管），于是"只带法术书、不带烟花"的
+                // 女仆也能起飞。措辞沿用实测五百七十四 的口径「可以飞行的道具」，
+                // 三种是哪三种在日志里展开（手册/气泡那边仍然只说「可以飞行的道具」）。
+                return skip(maid, now, "背包里没有「可以飞行的道具」"
+                        + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）");
             }
             if (!SelfPreservationBehavior.hasSight(maid, target)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
@@ -527,18 +573,29 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         logState(START_LOG, maid, id, gameTime, "主人飞远了（" + fmtDist(maid, targetOf(maid))
                 + " 格），背上鞘翅追过去（燃料=" + fuelLabel(maid)
                 + "，烟花=" + (cfgFirework() ? "消耗" : "不消耗")
+                + "，位移法术=" + (cfgClimbSpell() ? "开" : "关")
                 + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗") + "）");
     }
 
     /**
-     * 这一趟按什么飞（六百一十一 起燃料有两种，日志里写清楚是哪一种）。
+     * 这一趟按什么飞（六百一十一 起燃料有两种，六百一十三 起三种，日志里写清楚是哪一种）。
      *
-     * 【为什么值得单独一行日志】"她说自己没烟花却照样飞了"这类疑问，读一行就知道走的是羽扇那条；
-     * 与空袭 {@code tryLaunch} 的"扇子优先"同序（那边也有「挥羽扇起飞」/「放烟花起飞」两行）。
+     * 【为什么值得单独一行日志】"她说自己没烟花却照样飞了"这类疑问，读一行就知道走的是羽扇
+     * 还是法术那条；与 {@link #boost} 的取用顺序**严格同序**（扇子 → 烟花 → 位移法术），
+     * 所以这行永远与现实一致——不能各写各的顺序，否则日志会撒谎。
      */
     private static String fuelLabel(EntityMaid maid) {
         try {
-            return TwilightFanKit.hasFan(maid) ? "孔雀羽扇（优先）" : "烟花火箭";
+            if (TwilightFanKit.hasFan(maid)) {
+                return "孔雀羽扇（优先）";
+            }
+            if (MaidFlightKit.hasFirework(maid)) {
+                return "烟花火箭";
+            }
+            // 六百一十三：只剩法术书的女仆（她没有烟花也没有羽扇，门禁是靠法术过的）
+            String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(
+                    maid, MaidSpellCastCompat.climbSpellIds());
+            return spell != null ? "位移法术（" + spell + "）" : "位移法术";
         } catch (Throwable ignored) {
             return "烟花火箭";
         }
@@ -582,7 +639,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         faceToward(maid, target, false);
         if (shouldBoost(maid, target, gameTime)) {
-            boost(level, maid, id, gameTime);
+            boost(level, maid, id, gameTime, target);
         }
     }
 
@@ -606,8 +663,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
             return false; // 超时收手
         }
-        if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFlightFuel(maid)) {
-            return false; // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完且没羽扇）→ 落地走
+        if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFlightPropellant(maid)) {
+            // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完、没羽扇、法术书也丢了）→ 落地走
+            return false;
         }
         if (threatNearby(level, maid)) {
             return false; // 威胁出现：交回战斗/自保（**保持动量**自然滑翔，与"进距离解除矢量"相反）
@@ -713,6 +771,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      *       这一条是"把推进整份解掉"。</li>
      * </ol>
      *
+     * 【六百一十三：位移法术给的那一份也一并解掉】法术是**瞬发**改速度（没有烟花那种"活着期间
+     * 每 tick 都推"的残留），所以下面那句"速度归零"天然把法术给的那一份也解掉了——这点与烟花
+     * 不同（烟花必须额外收掉那枚火箭，见上）。两句合起来看就是"进半径 → 推进整份归零"。
+     *
      * 【与威胁收手的区别（刻意不一致）】威胁出现（canStillUse 里那条）是"撤"——**保持动量**
      * 自然滑翔；本方法只用于"主人已经进到收手半径内"这一种收手，是"收"。空袭那边**两处都不解除**
      * （她要那一份动量贴脸、扑击），所以本方法只属于本模式。
@@ -781,13 +843,21 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 补一口推进：**有孔雀羽扇先挥扇**（与空袭 {@code tryLaunch} 同序），没扇才烧烟花。
+     * 补一口推进：**有孔雀羽扇先挥扇**（与空袭 {@code tryLaunch} 同序），没扇才烧烟花，
+     * 烟花也拿不出来时用**位移法术**顶上（六百一十三）。
      *
      * 【为什么扇子优先】空袭从实测五百六十三 起就是"有扇用扇"（扇子按它自己的公式推进、
      * 扣它自己的耐久）。飞行跟随是同一件事（都只是"给滑翔补一口推力"），口径必须同源，
      * 否则同一个背包在两套模式里会烧不同的东西。
+     *
+     * 【为什么法术排在最后（六百一十三 的口径）】用户原话是"位移法术也可以加入到飞行跟随的
+     * **启动**中"——要的是"只带法术书也能飞"这条腿，**不是**"法术抢烟花的活"。这个顺序正是
+     * 空袭**起飞**那一套（"有烟花先走烟花链路、没有才用位移法术"，见 {@code tryLaunch} →
+     * {@code tryDashClimb}）：带烟花的存档手感与烧料节奏一字不变，法术只在"扇子不在、
+     * 烟花也真拿不出来"时接手——消耗档把最后一枚烧完之后的下一脚，就是它。
      */
-    private static void boost(ServerLevel level, EntityMaid maid, UUID id, long gameTime) {
+    private static void boost(ServerLevel level, EntityMaid maid, UUID id, long gameTime,
+                              LivingEntity target) {
         if (TwilightFanKit.hasFan(maid)) {
             if (!TwilightFanKit.boostGlide(level, maid)) {
                 return; // 扇子挥不动（异常/扇子没了）——这一 tick 就算了
@@ -799,28 +869,87 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return;
         }
         ItemStack display;
+        boolean haveFirework;
         if (cfgFirework()) {
-            ItemStack one = MaidFlightKit.takeFirework(maid);
-            if (one.isEmpty()) {
-                return; // 消耗档：背包真空了（canStillUse 下一 tick 就会收手）
-            }
-            display = one;
+            display = MaidFlightKit.takeFirework(maid);
+            haveFirework = !display.isEmpty();
+            // 【六百一十三：这一支不再就地收手】旧版"背包真空了"直接 return（交给 canStillUse
+            // 的燃料门禁收手）；现在继续往下试位移法术——她可能只是"烟花烧完了、法术书还在"。
         } else {
             // 不消耗档：**照旧要求背包里有能飞的道具**（它是"能飞"的凭证），但不扣那一枚
             display = new ItemStack(Items.FIREWORK_ROCKET);
+            haveFirework = MaidFlightKit.hasFirework(maid);
         }
-        // 六百一十二：把这枚火箭记下来——进到主人身边要**收掉它**才算"解除推进矢量"
-        // （见 releaseThrust 与 BOOST_ROCKET 的注释：烟花每 tick 都在推，不收掉它清零就白清）
-        net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
-                MaidFlightKit.launchBoostRocket(level, maid);
-        if (rocket == null) {
-            return; // 没放成（异常/世界拒绝）——这一 tick 就算了
+        if (haveFirework) {
+            // 六百一十二：把这枚火箭记下来——进到主人身边要**收掉它**才算"解除推进矢量"
+            // （见 releaseThrust 与 BOOST_ROCKET 的注释：烟花每 tick 都在推，不收掉它清零就白清）
+            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
+                    MaidFlightKit.launchBoostRocket(level, maid);
+            if (rocket != null) {
+                BOOST_ROCKET.put(id, rocket);
+                FlightFireworkPose.show(maid, display);
+                BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
+                logThrottled(maid, id, gameTime, "补一枚烟花追主人（烟花="
+                        + (cfgFirework() ? "消耗" : "不消耗") + "）");
+                return;
+            }
+            // 没放成（异常/世界拒绝）——继续往下试法术，别因为一次异常白丢这一口推进
         }
-        BOOST_ROCKET.put(id, rocket);
-        FlightFireworkPose.show(maid, display);
-        BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
-        logThrottled(maid, id, gameTime, "补一枚烟花追主人（烟花="
-                + (cfgFirework() ? "消耗" : "不消耗") + "）");
+        // ③ 位移法术（六百一十三）：扇子不在、烟花也拿不出来时的第三条腿
+        castClimbSpell(maid, target, id, gameTime);
+    }
+
+    /**
+     * ③ 用位移法术补一口（v1.2.2 实测六百一十三）——顺序与理由见 {@link #boost}。
+     *
+     * ── 朝向：照抄空袭"平地起飞/补高"那一套（两个坑都要躲）──
+     * <ol>
+     *   <li>先 {@link MaidSpellCastCompat#clearCastTarget}：法术模组施法前会
+     *       {@code forceLookAtTarget}，把她的朝向拧向它自己那份目标——**起飞那一枪会被掰平**
+     *       （{@code AscensionSpell} 取的是 {@code getLookAngle()}，朝前一平就从"窜上天"
+     *       变成"向前扑"）；清掉目标它就跳过这一步；</li>
+     *   <li>再 {@link #faceToward}(…, takeoff=true)：**抬头至少 {@link #TAKEOFF_PITCH} 度、
+     *       瞄着主人**。空袭的口径是"起飞/补高一律抬头瞄着放"（{@code tryDashClimb} 里的
+     *       {@code faceLaunchDirection}），这里不发明新角度——本链路烟花那一口用的朝向本来
+     *       就是"看着主人"（实测五百七十八 的教训：位移法术的朝向一律取自"该相位烟花会用的
+     *       朝向"），只多一个抬头下限，保证她不会越飞越低。</li>
+     * </ol>
+     *
+     * ── 节流与冷却 ──
+     * 本地节流用本链路自己的 {@link #BOOST_INTERVAL}（30 tick），与烟花**共用同一张**
+     * {@link #BOOST_READY} 表——它们抢的是同一种"这一口推进"，各记一张表等于同一 tick 能放两口。
+     * 写回法术模组冷却表用 {@code combat.flightDashInterval}（40 tick），与空袭"提供高度"那一类
+     * 的写回值完全一致（那边同样**不看法术自身冷却**，依据见
+     * {@link MaidSpellCastCompat#findClimbSpellIgnoringCooldown}：不这样就满足不了
+     * "没有烟花也能持续飞"）。法术不消耗物资，所以"消耗烟花"那个开关对它无意义。
+     *
+     * @return true = 这一口放出去了
+     */
+    private static boolean castClimbSpell(EntityMaid maid, LivingEntity target, UUID id,
+                                          long gameTime) {
+        try {
+            if (!cfgClimbSpell()) {
+                return false; // 玩家关了「位移法术·起飞/补高」→ 本链路也退回只认烟花/羽扇
+            }
+            String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(
+                    maid, MaidSpellCastCompat.climbSpellIds());
+            if (spell == null) {
+                return false; // 她书里没有这张表里的法术（或法术模组不在场/版本不符）
+            }
+            MaidSpellCastCompat.clearCastTarget(maid); // 别让它施法前把朝向拧平（同空袭）
+            faceToward(maid, target, true);            // 抬头瞄着主人放（至少 TAKEOFF_PITCH）
+            int lvl = MaidSpellCastCompat.spellLevelOrDefault(maid, spell);
+            if (!MaidSpellCastCompat.castSpecific(maid, spell, lvl,
+                    MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get())) {
+                return false; // 前置条件不过/世界拒绝——这一 tick 就算了
+            }
+            MaidFlightKit.setGliding(maid, true); // 滑翔位每 tick 都要站住（同扇子那条）
+            BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
+            logThrottled(maid, id, gameTime, "放位移法术追主人（" + spell + " Lv" + lvl + "）");
+            return true;
+        } catch (Throwable ignored) {
+            return false; // 任何异常都当"这一口没有"（canStillUse 的燃料门禁会自己收手）
+        }
     }
 
     /** 补推日志：同一只女仆 {@link #LOG_INTERVAL}（5 秒）最多一行 */
