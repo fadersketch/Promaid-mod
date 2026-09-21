@@ -1,4 +1,32 @@
-﻿## 实测六百〇三【远程空袭也放炸弹（重生锚 / 末地水晶 / 床）；「走后门」让悬空目标也放得下；TNT 点火料多个烈焰弹】
+﻿## 实测六百〇四【TNT 边界放宽：注册名里带 tnt 的都算；投掷日志点名物品】
+
+### ① 需求原文
+
+"为 tnt 放宽界线，木模组内含有 tnt 词条的都可被视作 tnt。"
+
+### ② 判据放宽：注册名里出现 tnt 就算
+
+旧版这一段把 `minecraft:tnt` 写死（`MaidBombing.ID_TNT`）：别的模组自己加的 TNT（`tntmod:tnt` / `xxx:tnt_block` / `yyy:super_tnt` …）她一概看不见——玩家把那种 TNT 塞进背包，投掷链路照样按"缺料"跳过。现在判据换成 `isTnt`：**注册名（`namespace:path`）里出现 `tnt` 就算**，大小写不敏感（有的模组把 path 写成大写）。
+
+判据只有两处——`flushTnt` 的"料齐没齐"与 `throwTntAt` 的"取一件"，各走新的 `hasTnt` / `takeOneTnt`。取料的底层顺带从"注册名数组 + `ids == null` 表示任意床"改成**按判据取**（`takeFirstMatch` 收 `Predicate`）：床 / 固定注册名 / TNT 各自把判据传进来，调用方行为一字未变（`hasBed` / `takeOneBed` 与三段轰炸的取料全走同一条路）。
+
+- 【为什么不看显示名】那是本地化文本（中文客户端里它根本不叫 tnt），按它判会随语言变、还会误伤名字里恰好带 tnt 的别的物品；注册名才是稳定的那份身份。
+- 【边界说清】判据只看名字、不看"这一件能不能放"——所以像 `minecraft:tnt_minecart` 这种名字里带 tnt 的也算数（她扔出去的本来就是一枚原版引信 TNT，与手上那件的样子无关）。真要不认这一类，说一声就加例外。
+
+### ③ 投掷日志点名物品
+
+那一行原来是 `投掷 TNT ×1（引信 40 tick）`，现在是 `投掷 TNT ×1（minecraft:tnt_minecart，引信 40 tick）`——模组 TNT 到底认没认，翻日志（搜「投掷 TNT」）一眼就知道。
+
+### ④ 验证（专用服务器场景实测，两树各一轮）
+
+两台测试服的 mods 里**没有任何"注册名带 tnt 的模组物品"**（全部 jar 扫过：0 命中），所以探针用 `minecraft:tnt_minecart`——它的注册名里有 tnt、但绝不是 `minecraft:tnt`，正好是这次放宽的那条边界。同一场里再放一台**负向对照**女仆（背包只有圆石 + 打火石），验证"放宽的是名字里带 tnt，不是什么都算"：
+
+- **1.20.1**：`Bomb604TntCart 投掷 TNT ×1（minecraft:tnt_minecart，引信 40 tick）`；紧接着回读 `…{Slot: 1, id: "minecraft:flint_and_steel", Count: 1b, tag: {Damage: 1}}, {Slot: 2, id: "minecraft:arrow", Count: 62b}, …`——矿车那一格已空（**真消耗**）、打火石掉 1 点耐久（**点火料照旧口径走**）；负向对照 `Bomb604Stone` **0 条投掷行**，圆石原封不动。
+- **1.21.1（NeoForge）**：同样一行 `投掷 TNT ×1（minecraft:tnt_minecart，引信 40 tick）`；回读里矿车同样不见、打火石 `components:{"minecraft:damage": 1}`；负向对照同样 0 条。两版都照常起飞（`放烟花起飞`）。
+- 测试脚本收进仓库：`test_bomb604.py`（A/B 两台女仆一场跑完，四种判据全在日志里）。
+- 两树编译零错（forge 52 / neo 18 警告，均为基线）；两个 jar 重建、三处部署 `match=True`；四条回归 PASS。
+
+## 实测六百〇三【远程空袭也放炸弹（重生锚 / 末地水晶 / 床）；「走后门」让悬空目标也放得下；TNT 点火料多个烈焰弹】
 
 ### ① 需求原文
 
