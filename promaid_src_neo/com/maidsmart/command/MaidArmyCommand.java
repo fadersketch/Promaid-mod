@@ -119,11 +119,36 @@ public final class MaidArmyCommand {
                 // CompressionBoxData），光看背包界面看不出"她的代码能看见什么"。这条命令把
                 // **她那一侧的真实视图**打出来：视图多少格、每格她看得见多少、盒子里实际存了多少。
                 .then(net.minecraft.commands.Commands.literal("box")
+                        // v1.2.2 实测六百一十七【自检】——把"盒子能不能装盒子"这条路真的走一遍
+                        // （用假玩家调界面点击的那个方法）：改的是点击路径，而自动化回归里没有
+                        // 客户端、点不了界面，所以这一步只能放在游戏里跑。细则见 CompressionBoxCheck。
+                        .then(net.minecraft.commands.Commands.literal("check")
+                                .executes(ctx -> boxCheck(ctx.getSource(), null))
+                                .then(net.minecraft.commands.Commands.argument("maid", // argument
+                                                net.minecraft.commands.arguments.EntityArgument.entity())
+                                        .executes(ctx -> boxCheck(ctx.getSource(),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .getEntity(ctx, "maid")))))
                         .then(net.minecraft.commands.Commands.argument("maid", // argument
                                         net.minecraft.commands.arguments.EntityArgument.entity())
                                 .executes(ctx -> boxReport(ctx.getSource(),
                                         net.minecraft.commands.arguments.EntityArgument
                                                 .getEntity(ctx, "maid"))))));
+    }
+
+    /** v1.2.2 实测六百一十七：{@code /maid_smart box check [女仆]} —— 压缩盒自检 */
+    private static int boxCheck(net.minecraft.commands.CommandSourceStack source,
+                                net.minecraft.world.entity.Entity entity) {
+        com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
+                entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        ? m : null;
+        java.util.List<Component> lines =
+                com.maidsmart.box.CompressionBoxCheck.run(source.getLevel(), maid);
+        for (Component line : lines) {
+            source.sendSuccess(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log("\u538b\u7f29\u76d2\u81ea\u68c0", line.getString());
+        }
+        return lines.size();
     }
 
     /** v1.2.2 实测六百一十六：{@code /maid_smart box <女仆>} —— 把她的背包视图（含压缩盒那几格）打进日志 */

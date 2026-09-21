@@ -28,6 +28,8 @@ import java.util.List;
  *   <li>{@link #DEPOSIT_STACK} / {@link #DEPOSIT_ONE}：把玩家背包某一格的一整叠 / 1 个存进盒子。</li>
  * </ul>
  * 背包满时多出来的部分**掉在玩家脚边**（与原版拿取习惯一致），提示写在界面里。
+ * 压缩盒本身**永远不往下存**（见 {@link #deposit}）——盒子装盒子既看不见里面，
+ * 又是「把自己装进去就整盒消失」那个 bug 的入口。
  */
 public final class CompressionBoxService {
 
@@ -61,7 +63,7 @@ public final class CompressionBoxService {
             if (action <= TAKE_ALL) {
                 changed = take(player, inv, items, index, action);
             } else {
-                changed = deposit(inv, items, index, action == DEPOSIT_ONE ? 1 : Integer.MAX_VALUE);
+                changed = deposit(player, inv, items, index, action == DEPOSIT_ONE ? 1 : Integer.MAX_VALUE);
             }
             if (changed) {
                 // 写回手上那件物品（就是同一个 ItemStack 对象；改完由原版的背包同步
@@ -118,13 +120,22 @@ public final class CompressionBoxService {
         return left.m_41613_() < out.m_41613_();
     }
 
-    /** 把玩家背包第 slot 格存进盒子 */
-    private static boolean deposit(IItemHandler inv, List<ItemStack> items, int slot, int amount) {
+    /**
+     * 把玩家背包第 slot 格存进盒子。
+     *
+     * <b>压缩盒一律不存</b>（v1.2.2 实测六百一十七修的 bug）：先取出来再发现塞不进去、
+     * 或者干脆把自己装进自己——界面开着时 Shift+点手上那一格就是这个动作，而那时
+     * 取出来的正好是「打开着的这个盒子」，写标签的对象已经不在背包里，整盒东西就没了。
+     * 所以在**动手取之前**就拒掉（{@link CompressionBoxData#mergeInto} 里还有一道，
+     * 防的是女仆背包那条路）。
+     */
+    private static boolean deposit(ServerPlayer player, IItemHandler inv, List<ItemStack> items,
+                                   int slot, int amount) {
         if (slot < 0 || slot >= inv.getSlots()) {
             return false;
         }
         ItemStack from = inv.getStackInSlot(slot);
-        if (from.m_41619_()) {
+        if (from.m_41619_() || CompressionBoxData.isBox(from)) {
             return false;
         }
         int take = Math.min(amount, from.m_41613_());
@@ -134,10 +145,11 @@ public final class CompressionBoxService {
         }
         ItemStack left = CompressionBoxData.merge(items, moved);
         if (!left.m_41619_()) {
-            // 盒子满了：原样塞回背包（塞不回去就掉在脚边——不凭空销毁）
+            // 盒子满了：原样塞回背包；连背包也塞不下（理论上不该发生，取出来的那格刚空）
+            // 就掉在脚边——不凭空销毁
             left = ItemHandlerHelper.insertItemStacked(inv, left, false);
             if (!left.m_41619_()) {
-                return false;
+                player.m_36176_(left, false); // drop
             }
         }
         return true;

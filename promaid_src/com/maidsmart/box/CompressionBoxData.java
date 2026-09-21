@@ -121,8 +121,11 @@ public final class CompressionBoxData {
             if (count <= 0) {
                 count = item.m_41613_();
             }
-            item.m_41769_(Math.min(count, cap));
-            out.set(slot, item);
+            // 数量写回：**用 copyWithCount**（javap 实证 m_255036_ = copyWithCount）。这里不能图省事
+            // 写成 m_41769_ ——那是 grow（= setCount(getCount()+n)）而不是 setCount：Item 里存的是
+            // 1 个，grow(count) 会变成 count+1，整盒数量统统多 1（实测六百一十七就是被这条断住的：
+            // 盒子里 3 个石头读出来是 4 个，114514 个烟花读出来是 114515）。
+            out.set(slot, item.m_255036_(Math.min(count, cap)));
         }
         return out;
     }
@@ -185,9 +188,15 @@ public final class CompressionBoxData {
     /**
      * 把 {@code in} 尽量并进盒子的**指定那一格**（并到上限为止），返回没塞进去的部分。
      * 只动这一格——女仆背包侧的 insertItem(盒格子) 就是它。
+     *
+     * <b>压缩盒不许装压缩盒</b>（v1.2.2 实测六百一十七修的那个 bug）：把盒子塞进盒子，
+     * 玩家既看不见里面那一层（女仆那一侧的视野也是只读外层），又能把自己装进去——
+     * 界面里 Shift+点自己那一格，服务端会先把它从背包取出来再写标签，于是**整个盒子
+     * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法：
+     * 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。
      */
     public static ItemStack mergeInto(List<ItemStack> items, int slot, ItemStack in) {
-        if (slot < 0 || slot >= items.size() || in.m_41619_()) {
+        if (slot < 0 || slot >= items.size() || in.m_41619_() || isBox(in)) {
             return in;
         }
         ItemStack cur = items.get(slot);
@@ -205,11 +214,11 @@ public final class CompressionBoxData {
             return in;
         }
         int put = Math.min(room, in.m_41613_());
-        cur.m_41774_(put);
+        cur.m_41769_(put); // grow（javap 实证；m_41774_ 是 shrink，别用反）
         return in.m_41613_() > put ? in.m_255036_(in.m_41613_() - put) : ItemStack.f_41583_;
     }
 
-    /** 把 {@code in} 塞进盒子（先并同名、再占空格），返回没塞进去的部分 */
+    /** 把 {@code in} 塞进盒子（先并同名、再占空格），返回没塞进去的部分（压缩盒一律原样退回） */
     public static ItemStack merge(List<ItemStack> items, ItemStack in) {
         ItemStack left = in;
         for (int i = 0; i < items.size() && !left.m_41619_(); i++) {
