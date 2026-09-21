@@ -506,6 +506,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 第三方玩法模式黑名单（默认开，v1.2.2 实测五百九十：傀儡装配的「傀儡师」） */
     public static final ForgeConfigSpec.BooleanValue COMPAT_PUPPET_BLACKLIST;
     public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_AIR_PLACE;
+    /** 空中悬空投弹（走后门，默认开；v1.2.2 实测六百〇三）：落点的最后一级——目标头顶 / 目标自己那一格，悬空也放 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BOMBING_AIR_DROP;
 
     /**
      * v1.2.2 实测五百六十【友军风免】（默认开）。
@@ -1852,9 +1854,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 所以重生锚链路只要 1 颗萤石；末地水晶 6.0F、床 5.0F、TNT 4.0F，详见 MaidBombing。
         BUILDER.comment("空袭轰炸（配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸）")
                 .translation("config.promaid.bombing").push("bombing");
-        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 第三方战斗任务都会放；**远程空袭除外**（她一直飞在天上，本来就放不了）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
+        COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 远程空袭（盘旋期间每次开火之后）/ 第三方战斗任务都会放（实测六百〇三起远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
                 .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与打火石（每发 1 TNT + 打火石 1 耐久）；材料不齐直接跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
+        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——打火石（优先，每发掉 1 点耐久）或烈焰弹 / 火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；两种点火料都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
         COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
@@ -1874,7 +1876,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_TNT_BURST_RATIO = BUILDER.comment("残血连投阈值（默认 0.7 = 七成血以下）：血量比例降到这条线以下时，一次投掷改成连投数发（《女仆生存》的『低血量爆发』思路）")
                 .translation("config.promaid.bombing.tntBurstRatio")
                 .defineInRange("tntBurstRatio", 0.7, 0.0, 1.0);
-        COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 点打火石耐久）；1 = 关掉连投")
+        COMBAT_BOMBING_TNT_BURST_COUNT = BUILDER.comment("连投最多几发（默认 3）：残血时一次投出的上限（每发各消耗 1 个 TNT 与 1 份点火料——打火石掉 1 点耐久，烈焰弹消耗 1 个）；1 = 关掉连投")
                 .translation("config.promaid.bombing.tntBurstCount")
                 .defineInRange("tntBurstCount", 3, 1, 16);
         COMBAT_BOMBING_RECLAIM_SECONDS = BUILDER.comment("炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：末地水晶链路里那块黑曜石 / 基岩在起爆后**留在原地**这么久，再由她**收进自己的背包**——黑曜石留着才能看出『水晶是放在黑曜石上』那副样子。回收进她自己的背包；**背包满就掉在她脚下**（与挖矿 / 搭路的方块回收同一口径）；重生锚 / 床不进这张表：它们自己那一炸就把方块消耗掉了")
@@ -1895,6 +1897,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BOMBING_AIR_PLACE = BUILDER.comment("空中强制放置（默认开）：空袭时她一直在飞、脚边常常没有地面——开启后先在目标脚边、再在**她正下方**找可放置的格子；都找不到支撑面时就**直接悬空放下**（原版放置本身允许悬空，只是玩家手点不到空气）。关 = 找不到带支撑的落点就整段跳过")
                 .translation("config.promaid.bombing.airPlace")
                 .define("airPlace", true);
+        COMBAT_BOMBING_AIR_DROP = BUILDER.comment("空中悬空投弹（走后门，默认开，v1.2.2 实测六百〇三）：落点的最后一级。远程空袭她一直在天上盘旋，而目标常常自己就悬空（蝙蝠 / 恶魂 / 被击飞到半空中的怪 / 站在水里的怪）——它脚边那四格全是空气、原版又会以『那一格站着实体』为由拒绝，前几级落点因此全部落空。开启后最后再试一手：直接把落点取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着目标自己（原版拒绝之后就强制放下），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。唯一保留的避让是那一格若站着除目标以外的别人的活物就跳过（免得把路过的埋进黑曜石）。关 = 只按原版规则落点，悬空的目标基本放不下")
+                .translation("config.promaid.bombing.airDrop")
+                .define("airDrop", true);
         COMBAT_BOMBING_PINK_MARK = BUILDER.comment("女仆放置物的淡粉色标记（默认开，纯客户端）：她刚放下的黑曜石/重生锚/床、刚挂上的末地水晶、刚扔出的 TNT 会套一层很淡的粉色描边与填充，便于分辨「哪些是女仆放的」")
                 .translation("config.promaid.bombing.pinkMark").define("pinkMark", true);
         COMBAT_BOMBING_PINK_FIRE = BUILDER.comment("爆炸火焰改粉色（默认开）：**只有她自己那一炸点着的火换成粉色**（重生锚 / 床那一炸会按原版口径在地上留火——javap 实证：着火只看 fire=true，与「破不破坏方块」无关）。换的时机是「边点边换」：那一炸点着的每一格直接生成为粉色火，与距离无关（实测：一炸 119 格全部直接变粉）。**世界里别的火一概不碰**——打火石 / 闪电 / 岩浆 / 别的模组 /早先留下的原版火，本模组既不换也不灭（实测六百〇一收回：曾经「全都换」，那等于顺手把全世界的火蔓延关掉，是越界）。粉火长这样：粉色火焰贴图 + 粉色火星，不蔓延、几秒后自己熄灭。关 = 保持原版橙色火（等同旧版行为）。注意末地水晶与 TNT 原版都是 fire=false、本来就不留火，所以这条对它们没有可见变化")
