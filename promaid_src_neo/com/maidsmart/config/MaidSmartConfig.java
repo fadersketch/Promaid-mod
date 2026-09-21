@@ -1941,9 +1941,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 200, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
-        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。**模组自己的 TNT 也归这条管**（v1.2.2 实测六百〇七）：她扔出去的模组 TNT（例如等价交换的爆破新星）威力与带不带火仍归它自己，但「破不破方块」跟着这条开关走——关着时那一炸也一个方块都不拆（只收走地形权限，伤害照旧）。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。**模组自己的 TNT 也归这条管**（v1.2.2 实测六百〇七）：她扔出去的模组 TNT（例如等价交换的爆破新星）威力与带不带火仍归它自己，但「破不破方块」跟着这条开关走——关着时那一炸也一个方块都不拆（只收走地形权限；伤害那一半见下面那条「伤到主人/友军」，v1.2.2 实测六百一十 起那一炸同样认得出是她放的）。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
-        COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
+        COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发。**她自己扔的模组 TNT（例如等价交换的爆破新星）也归这条管**（v1.2.2 实测六百一十）：关着时那一炸同样认得出是她放的、主人/友军一格血不掉；开着才照它自己的口径来")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
         COMBAT_BOMBING_TNT_RANGE = BUILDER.comment("投掷索敌半径（格，默认 12）：战斗任务下她自动找这么近的敌人扔 TNT——照《女仆生存》那套 12 格索敌；调小 = 只贴脸扔，调大 = 主动远投")
                 .translation("config.promaid.bombing.tntRange")
