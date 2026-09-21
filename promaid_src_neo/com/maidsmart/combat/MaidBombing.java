@@ -169,6 +169,17 @@ import java.util.UUID;
  *    （{@code minecraft:fire_charge}），两者都没有才跳过——材料判定因此从"TNT + 打火石"
  *    放宽成"TNT + 任意一种点火料"（{@link #hasIgniter}）。
  *
+ * ── 实测六百〇四【TNT 的边界放宽到"注册名里带 tnt"】──
+ * 反馈原文："为 tnt 放宽界线，模组内含有 tnt 词条的都可被视作 tnt。"
+ *
+ * 旧版这一段的判据是写死的 {@link #ID_TNT}（{@code minecraft:tnt}）——别的模组自己加的 TNT
+ * （{@code tntmod:tnt} / {@code xxx:tnt_block} / {@code yyy:super_tnt} …）她一概看不见，
+ * 玩家把那种 TNT 塞进背包也触发不了投掷。现在判据换成 {@link #isTnt}：**注册名里出现 tnt
+ * 就算**（大小写不敏感）——原版那一件天然还在里面，各模组的 TNT 一视同仁；判断处只有两处
+ * （{@link #flushTnt} 与 {@link #throwTntAt}），都走 {@link #hasTnt} / {@link #takeOneTnt}。
+ * 顺带把日志说清：那一行会写明**这一发到底扔的是哪一件**
+ * （{@code 投掷 TNT ×1（modid:tnt，引信 40 tick）}），模组 TNT 生效与否不用再猜。
+ *
  * ── 爆炸口径（默认全保护，全部可在配置面板调）──
  * - 伤害源**归因给女仆**（{@code damageSources().explosion(maid, maid)}）：于是
  *   {@link FriendlyFireGuard} 照旧取消"女仆→主人/同主女仆/友军"的伤害，主人与友军**既不掉血
@@ -334,6 +345,7 @@ public final class MaidBombing {
     private static final String ID_END_CRYSTAL = "minecraft:end_crystal";
     private static final String ID_RESPAWN_ANCHOR = "minecraft:respawn_anchor";
     private static final String ID_GLOWSTONE = "minecraft:glowstone";
+    /** 原版 TNT：v1.2.2 实测六百〇四起判据放宽为"注册名里带 tnt 的都算"（见 {@link #isTnt}），这个常量只代表那一件本身 */
     private static final String ID_TNT = "minecraft:tnt";
     private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
     /** v1.2.2 实测六百〇三：烈焰弹 / 火焰弹——打火石之后的第二号点火料（原版口径也是靠它点着 TNT 的） */
@@ -375,6 +387,16 @@ public final class MaidBombing {
         return false;
     }
 
+    /** 物品的注册名（拿不到就空串）——v1.2.2 实测六百〇四：TNT 判据与投掷日志都靠它 */
+    private static String idOf(ItemStack stack) {
+        try {
+            net.minecraft.resources.ResourceLocation rl = BuiltInRegistries.ITEM.getKey(stack.getItem());
+            return rl == null ? "" : rl.toString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
     /** 是不是任意一张床（原版 16 色都算，不写死颜色） */
     private static boolean isBed(ItemStack stack) {
         try {
@@ -388,6 +410,28 @@ public final class MaidBombing {
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    /**
+     * v1.2.2 实测六百〇四【TNT 的边界放宽】：**注册名里带 tnt 的都算 TNT**。
+     *
+     * 需求原文："为 tnt 放宽界线，模组内含有 tnt 词条的都可被视作 tnt。"——旧版只认
+     * {@link #ID_TNT} 这一件，模组自加的 TNT 全被漏掉。现在判据是"注册名（{@code namespace:path}）
+     * 里出现 {@code tnt}"，大小写不敏感（有的模组把 path 写成大写）。
+     *
+     * 【为什么不看显示名 / 中文名】那是本地化文本（中文客户端里它根本不叫 tnt），按它判会随
+     * 语言变、还会误伤名字里恰好带 tnt 的别的物品；注册名才是稳定的那份身份。
+     * 【边界】判据只看名字、不看"这一件能不能放"——所以像 {@code minecraft:tnt_minecart}
+     * 这种名字里带 tnt 的也算数（她扔出去的本来就是一枚原版引信 TNT，与手上那件的样子无关）。
+     */
+    private static boolean isTnt(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (isStack(stack, ID_TNT)) {
+            return true; // 原版那一件：注册表查询万一失手也照认
+        }
+        return idOf(stack).toLowerCase(java.util.Locale.ROOT).contains("tnt");
     }
 
     /** 手上（主手/副手）+ 女仆背包里有没有这个东西 */
@@ -414,7 +458,12 @@ public final class MaidBombing {
     }
 
     private static boolean hasBed(EntityMaid maid) {
-        return maid != null && !takeFirst(maid, null, true).isEmpty();
+        return maid != null && !takeFirstMatch(maid, MaidBombing::isBed, true).isEmpty();
+    }
+
+    /** TNT：v1.2.2 实测六百〇四起判据放宽（注册名里带 tnt 的都算，见 {@link #isTnt}） */
+    private static boolean hasTnt(EntityMaid maid) {
+        return !takeFirstMatch(maid, MaidBombing::isTnt, true).isEmpty();
     }
 
     /** 取 1 个（手 → 背包）；取不到返回空。dryRun=true 时只探测不抽取（内部用） */
@@ -426,11 +475,26 @@ public final class MaidBombing {
         return takeFirst(maid, null, false);
     }
 
-    /**
-     * 唯一的取料实现：ids == null 表示"任意床"，否则按注册名匹配。
-     * dryRun=true 只回答"有没有"（hasBed 用），一个物品都不动。
-     */
+    /** 取 1 个 TNT（同样是放宽后的判据）——v1.2.2 实测六百〇四 */
+    private static ItemStack takeOneTnt(EntityMaid maid) {
+        return takeFirstMatch(maid, MaidBombing::isTnt, false);
+    }
+
+    /** 按注册名取：ids == null 表示"任意床"（照旧的特例），否则按注册名逐个匹配 */
     private static ItemStack takeFirst(EntityMaid maid, String[] ids, boolean dryRun) {
+        return takeFirstMatch(maid, ids == null ? MaidBombing::isBed : s -> matchAny(s, ids), dryRun);
+    }
+
+    /**
+     * 唯一的取料实现（v1.2.2 实测六百〇四改成**按判据取**）：手上 → 背包里第一个满足 match
+     * 的那一件。dryRun=true 只回答"有没有"（hasBed / hasTnt 用），一个物品都不动。
+     *
+     * 【为什么改收判据】旧版收的是注册名数组，再外挂一个"ids == null 表示任意床"的特例；
+     * TNT 那条放宽规则（"注册名里带 tnt"，不是一个固定 id）用注册名数组表达不出来，
+     * 所以改成收 {@link java.util.function.Predicate}——床 / 固定注册名 / TNT 各自把判据传进来。
+     */
+    private static ItemStack takeFirstMatch(EntityMaid maid,
+                                            java.util.function.Predicate<ItemStack> match, boolean dryRun) {
         if (maid == null) {
             return ItemStack.EMPTY;
         }
@@ -438,14 +502,14 @@ public final class MaidBombing {
             IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
             for (int i = 0; i < hands.getSlots(); i++) {
                 ItemStack s = hands.getStackInSlot(i);
-                if (ids == null ? isBed(s) : matchAny(s, ids)) {
+                if (match.test(s)) {
                     return dryRun ? s : hands.extractItem(i, 1, false);
                 }
             }
             IItemHandler inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (ids == null ? isBed(s) : matchAny(s, ids)) {
+                if (match.test(s)) {
                     return dryRun ? s : inv.extractItem(i, 1, false);
                 }
             }
@@ -1779,6 +1843,7 @@ public final class MaidBombing {
      * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
      *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
      * ② 有 TNT + 点火料（打火石 或 烈焰弹，见 {@link #hasIgniter}；缺料静默跳过，不占用间隔）；
+     *    TNT 的判据 v1.2.2 实测六百〇四 起放宽成"注册名里带 tnt 的都算"（{@link #isTnt}），
      * ③ **打完一记之后才扔**（v1.2.2 实测五百九十改）：攻击冷却记忆由无到有 = 刚完成一次
      *    攻击链路收尾 → 登记待投放；距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
      *    挂着等下一记——最短间隔只当下限，不再是驱动本身（详见 {@link #onAttackChainEnd}）；
@@ -1915,8 +1980,9 @@ public final class MaidBombing {
             if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
                 return; // 最短间隔没到
             }
-            if (!has(maid, ID_TNT) || !hasIgniter(maid)) {
-                return; // 不刚需：缺料直接跳过（不占用间隔）——v1.2.2 实测六百〇三：点火料 = 打火石 或 烈焰弹
+            if (!hasTnt(maid) || !hasIgniter(maid)) {
+                return; // 不刚需：缺料直接跳过（不占用间隔）——v1.2.2 实测六百〇三：点火料 = 打火石 或 烈焰弹；
+                        // 实测六百〇四：TNT 判据放宽，注册名里带 tnt 的模组 TNT 也算（见 isTnt）
             }
             if (throwTntAt(level, maid, target, id, gameTime) > 0) {
                 TNT_ARMED.remove(id);
@@ -2094,14 +2160,17 @@ public final class MaidBombing {
     private static int throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         int want = throwCount(maid);
         int thrown = 0;
+        // v1.2.2 实测六百〇四：扔的到底是哪一件（模组 TNT 也认之后，日志里得说清，排查不用猜）
+        String usedId = "";
         for (int i = 0; i < want; i++) {
-            if (!has(maid, ID_TNT) || !hasIgniter(maid)) {
+            if (!hasTnt(maid) || !hasIgniter(maid)) {
                 break;
             }
-            ItemStack tntStack = takeOne(maid, ID_TNT);
+            ItemStack tntStack = takeOneTnt(maid);
             if (tntStack.isEmpty()) {
                 break;
             }
+            usedId = idOf(tntStack);
             // v1.2.2 实测五百九十一【打火石不再被吞】：从**原槽**取出 → 扣 1 点耐久 → 放回**原槽**
             //（旧版是整件取出、只对取出来的那份扣耐久 = 玩家看到的"直接把打火石吞掉"）
             // v1.2.2 实测六百〇三：没有打火石时用 **1 个烈焰弹**（真的消耗掉）——返回的是"刚用掉的
@@ -2190,7 +2259,7 @@ public final class MaidBombing {
         if (thrown > 0) {
             TNT_NEXT.put(id, gameTime + cfgTntInterval());
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
-                    + "（引信 " + cfgTntFuse() + " tick）");
+                    + "（" + (usedId.isEmpty() ? "未知物品" : usedId) + "，引信 " + cfgTntFuse() + " tick）");
         }
         return thrown;
     }
