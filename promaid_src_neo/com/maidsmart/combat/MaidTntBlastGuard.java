@@ -68,8 +68,13 @@ import java.util.Map;
  * </ol>
  *
  * ── 边界（写在这里，免得以后误以为它管得更宽）──
- * · **只管地形，不管伤害**：那一炸的实体伤害照旧。它的伤害源是**那枚 TNT 实体**（不是女仆），
- *   所以现有"主人/友军免伤"（{@link FriendlyFireGuard}）覆盖不到它——本次刻意不动。
+ * · **地形这一半**归本类（清 {@code getToBlow()}）；**伤害那一半**：六百〇七 当时写的是
+ *   "那一炸的伤害源是那枚 TNT 实体、不是女仆，所以主人/友军免伤覆盖不到它"——六百一十
+ *   实机更正：那颗 TNT 的**造成者就是她**（原版拿引信 TNT 记的点火者当造成者，javap 实证：
+ *   {@code DamageSources.explosion} 的造成者参数就是 {@code Explosion.getIndirectSourceEntity()}
+ *   = {@code PrimedTnt.getOwner()}），所以主人/友军本来就被 {@link FriendlyFireGuard} 护住了。
+ *   本类真正的用处是**模组没把点火者写进伤害源**的那一类：{@link #maidOfTnt} 按这张登记表
+ *   把账算回她头上，让"她扔的模组 TNT 不伤主人/友军"这个承诺不依赖第三方怎么写。
  * · 若某个模组的爆炸**不走 {@code getToBlow()}**、而是自己另开一套循环拆方块，这层拦不住。
  */
 @EventBusSubscriber(modid = "promaid")
@@ -158,7 +163,7 @@ public final class MaidTntBlastGuard {
             }
             int n = blocks.size();
             blocks.clear(); // 活表（= getToBlow()）：清掉即"这一炸不拆方块"，伤害照旧
-            log(maid, n);
+            log(maid, n, ex);
         } catch (Throwable ignored) {
         }
     }
@@ -170,20 +175,50 @@ public final class MaidTntBlastGuard {
     private static EntityMaid ownerMaidOf(Explosion ex) {
         try {
             Entity direct = ex.getDirectSourceEntity();
-            Entity indirect = ex.getIndirectSourceEntity();
             if (!(direct instanceof PrimedTnt)) {
                 return null; // 只认 TNT（她扔的模组 TNT 也继承 PrimedTnt）
             }
-            // ① 主人链：点火者就是女仆
-            if (indirect instanceof EntityMaid m) {
-                return m;
+            // ① 主人链（点火者就是女仆）+ ② 我们亲手登记过的那一枚
+            EntityMaid mine = maidOfTnt(direct);
+            if (mine != null) {
+                return mine;
             }
-            // ② 我们亲手登记过的那一枚（模组不记 owner 时的兜底）
-            Tracked t = tracked(direct);
-            return t == null ? null : t.maid;
+            // 直系是 TNT 但两条都不中：再看一眼间系（个别模组把点火者放在别处）
+            Entity indirect = ex.getIndirectSourceEntity();
+            return indirect instanceof EntityMaid m ? m : null;
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    /**
+     * v1.2.2 实测六百一十：**这一枚 TNT 是不是她放的** —— 是就返回那位女仆，否则 null。
+     *
+     * 由 {@link #ownerMaidOf} 与主人/友军免伤（{@code FriendlyFireGuard.maidOfDamage}）共用：
+     * 爆炸事件里我们拿得到 {@code Explosion}，而伤害事件里只有一枚**直接实体**，
+     * 两边都要能把账算回她头上，所以这条判据必须是公开的、与 {@link #tracked} 的表同一份。
+     *
+     * 判据与类注释那两条一致（只认 {@link PrimedTnt} 这一类）：
+     * <ol>
+     *   <li><b>主人链</b>：引信 TNT 自己记的点火者（原版 {@code PrimedTnt.getOwner()}，
+     *       {@code Explosion.getIndirectSourceEntity()} 读的就是它）；</li>
+     *   <li><b>我们亲手登记过的那一枚</b>：{@code MaidBombing.primeTnt} 放出模组自己的 TNT 时登记，
+     *       防的是"模组不把点火者写进爆炸/伤害源"那一类（这时前一条整段落空）。</li>
+     * </ol>
+     */
+    public static EntityMaid maidOfTnt(Entity tnt) {
+        if (!(tnt instanceof PrimedTnt)) {
+            return null;
+        }
+        try {
+            net.minecraft.world.entity.LivingEntity owner = ((PrimedTnt) tnt).getOwner();
+            if (owner instanceof EntityMaid m) {
+                return m;
+            }
+        } catch (Throwable ignored) {
+        }
+        Tracked t = tracked(tnt);
+        return t == null ? null : t.maid;
     }
 
     /** 这一枚是否还在"我们亲手放出去的模组 TNT"表里（顺手做过期清理） */
@@ -206,8 +241,8 @@ public final class MaidTntBlastGuard {
         }
     }
 
-    /** 一条限频日志：说清"这一炸按不破坏方块处理了、别的一概没动" */
-    private static void log(EntityMaid maid, int n) {
+    /** 一条限频日志：说清"这一炸按不破坏方块处理了、别的一概没动"，并带上归因现场 */
+    private static void log(EntityMaid maid, int n, Explosion ex) {
         try {
             long now = maid.level() == null ? 0L : maid.level().getGameTime();
             String who = com.maidsmart.tool.PromaidLog.nameOf(maid);
@@ -218,8 +253,47 @@ public final class MaidTntBlastGuard {
             LOG_AT.put(who, now);
             com.maidsmart.tool.PromaidLog.log("空袭轰炸", who
                     + " 模组 TNT 那一炸按「不破坏方块」处理（清掉 " + n + " 个方块；"
-                    + "威力与伤害照它自己的）");
+                    + "威力与伤害照它自己的）；" + attribution(ex));
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 这一炸的**归因现场**（给日志用）：她到底认在哪一条上。
+     *
+     * 为什么要有这一行：六百一十 定"主人/友军免伤"这一半时，`伤害源里谁是造成者` 决定了
+     * {@code FriendlyFireGuard} 能不能接住这一炸——而那件事**只能靠实机读出来**
+     * （爆炸是模组自己 new 的，直系/间系/伤害源三者未必一致）。1.20.1 那边就是靠这一行
+     * 才看清：伤害源的造成者其实是她（引信 TNT 记的点火者），六百〇七 那句"不是女仆"
+     * 说的是**直接实体**。
+     *
+     * 【1.21.1 少了半行】这一版的 {@code Explosion} 把 {@code damageSource} 字段收了私有、
+     * **没有公开读取口**（javap 实证：只有 {@code getDirectSourceEntity}/{@code getIndirectSourceEntity}，
+     * 1.20.1 的 {@code getDamageSource()} 已删）。所以这边只记直系 / 间系 / 我方登记；
+     * "伤害源里谁是造成者"要看 1.20.1 那棵树（同一套逻辑，两边都是"造成者=她"）。
+     */
+    private static String attribution(Explosion ex) {
+        try {
+            return "归因[直系=" + who(ex.getDirectSourceEntity())
+                    + " 间系=" + who(ex.getIndirectSourceEntity())
+                    + " 我方登记=" + (tracked(ex.getDirectSourceEntity()) != null) + "]";
+        } catch (Throwable ignored) {
+            return "归因[读不到]";
+        }
+    }
+
+    /** 日志里那个实体叫什么（女仆点名，其它给类名；空给"空"） */
+    private static String who(Entity e) {
+        try {
+            if (e == null) {
+                return "空";
+            }
+            if (e instanceof EntityMaid m) {
+                return "女仆(" + com.maidsmart.tool.PromaidLog.nameOf(m) + ")";
+            }
+            return e.getClass().getSimpleName();
+        } catch (Throwable ignored) {
+            return "?";
         }
     }
 }

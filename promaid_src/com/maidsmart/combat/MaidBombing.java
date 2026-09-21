@@ -2474,6 +2474,8 @@ public final class MaidBombing {
             before.add(e.m_19879_());
         }
         try {
+            // 点火者就是她——原版拿它当这一炸的"造成者"（见 MaidTntBlastGuard 类注释与实测六百一十），
+            // 主人/友军免伤正是靠这条认人；模组不记它时由那张登记表兜底。
             tb.onCaughtFire(tb.m_49966_(), level, pos, Direction.UP, maid);
         } catch (Throwable t) {
             log("模组 TNT 点火钩子异常：" + t);
