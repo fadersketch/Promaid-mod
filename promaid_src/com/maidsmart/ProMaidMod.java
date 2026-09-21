@@ -42,6 +42,10 @@ public class ProMaidMod {
     public static final RegistryObject<Item> INDEX_STONE = ITEMS.register("index_stone",
             () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
 
+    /** 压缩盒（v1.2.2 实测六百一十六）：5 格 × 每格 114514，放进女仆背包 = 背包延伸 */
+    public static final RegistryObject<Item> COMPRESSION_BOX = ITEMS.register("compression_box",
+            () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties()));
+
     /** v1.2.2 实测五百六十一：官方注册的那个 ModConfig（配置事件里记下来；只读引用，事件里不写盘） */
     public static net.minecraftforge.fml.config.ModConfig COMMON_CONFIG;
 
@@ -51,6 +55,8 @@ public class ProMaidMod {
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(com.maidsmart.combat.PinkFireSweep.class);
         // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体
         com.maidsmart.combat.PinkFireBlock.register(FMLJavaModLoadingContext.get().getModEventBus());
+        // v1.2.2 实测六百一十六：压缩盒网络层（自制界面：大堆数量走自己的 int）
+        com.maidsmart.box.CompressionBoxNetworking.register();
         com.maidsmart.build.BlueprintBookNetworking.register();
         // v1.2.0：指标石网络层（C2S 锁定请求 + S2C 会话状态）
         com.maidsmart.build.IndexStoneNetworking.register();        // v1.2.2 实测五百八十七：轰炸标记（S2C）

@@ -383,7 +383,9 @@ public class PromaidConfigScreen extends Screen {
         FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
         SCHEDULE("排班表", Group.WORK), // 实测五百七十五：手册一直写「生产与工作 → 排班表」，面板却挂在移动与行为——按手册归位
         VOICE("语音与 TTS", Group.UI), HUD("显示与提示", Group.UI),
-        UTILITY("交互与杂项", Group.SYSTEM), LOG("运行日志", Group.SYSTEM);
+        UTILITY("交互与杂项", Group.SYSTEM), LOG("运行日志", Group.SYSTEM),
+        // v1.2.2 实测六百一十六：压缩盒（新道具）——自己的两条参数，挂在系统与杂项下
+        COMPRESSION_BOX("压缩盒", Group.SYSTEM);
         final String title;
         final Group group;
 
@@ -661,6 +663,7 @@ public class PromaidConfigScreen extends Screen {
             case HUD -> this.hudRows();
             case UTILITY -> this.utilityRows();
             case LOG -> this.logRows();
+            case COMPRESSION_BOX -> this.compressionBoxRows();
         }
         // v1.1.0 实测二十二：perPage 按动态行高累加计算——每行高度 = rowHeight(def)
         // （注释折行多则高、SectionRow 紧凑），从 CONTENT_TOP 起逐行累加、超出
@@ -2628,13 +2631,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.2.2 实测六百一十三：启动的"能飞的道具"两选一 → 三选一（加能上天的位移法术，与空袭三件套同一口径）
         // v1.2.2 实测六百一十五：起手球 25 / 收手球 5 拆成两个配置 + 整块搬到本小节
         this.rows.add(new BoolRow("飞行跟随（鞘翅追主人）", MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(v), "飞行跟随（默认关）：开启后，轮到该搭路时如果主人离她超过下面那条【起手距离】、你俩之间【没有方块挡住视线】、她背包里又同时有【可用鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、周围威胁半径内也没有怪，她就不垫方块了——直接背上鞘翅飞过来（起飞与空袭那套一模一样，只是把目标从敌人换成了你；动作也是空袭那套：展翅的游泳姿态、背上的鞘翅翅膀、跟着俯角前倾）。你进到【收手距离】（默认 5 格，见下面那条）内就收手交回普通跟随：**当场解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），不用贴到你身边，之后照原样自然滑翔落地（滑翔期间原版每 tick 清坠落距离，摔不伤）；你飞远了会再飞一趟。**所有任务模式通用**——两个空袭任务【未接敌】时也照飞，真在打或真有活干才让位；威胁半径内出现敌对生物会当场解除本趟链路（与搭路同款判据）。六百一十三 起**位移法术也算「可以飞行的道具」**：只带法术书、不带烟花的女仆照样起飞（推进顺序：扇子优先 → 烟花 → 位移法术，也就是空袭起飞那套顺序；法术那一支沿用空袭的「位移法术·起飞/补高」开关，不消耗物资所以下面的「消耗烟花」管不到它）。飞行期间自动传送与同维度拉回一律让位，撞墙/摔落免疫照飞行任务那两档一起管；起飞前会替她换上鞘翅、收手时原样还回胸甲。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条。六百一十四 起她还能**飞向指定坐标**：`/maid_smart elytra_goto <x> <y> <z> [女仆]`（走的就是上面这条链路，到点/超时/遇敌即收手）——这一件取自粉丝 Roderick32 的「鞘翅赶路」分支。**升级注意**：这批把本小节从「搭路」里搬了出来，老配置文件 [bridge] 下的 flightFollow* 四行不再生效，重新打开一次开关即可"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(v), "飞行跟随（默认关）：开启后，主人离她超过【起手距离】、你俩之间没有方块挡住视线、她背包里有能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）、周围又没怪，她就背上鞘翅飞过来（动作与空袭那套一样）；进到【收手距离】内就收手交回普通跟随，并当场消掉烟花给的推进矢量。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条。完整判定、调试入口与「位移法术也算能飞的道具」这类细则见手册的「跟随」一章。升级注意：本小节已从「搭路」搬到独立的 [flightFollow]，老配置文件 [bridge] 下那四行不再生效，重开一次开关即可"));
         this.rows.add(new NumRow("起手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_DIST.get()),
-                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_DIST, s), "飞行跟随·起手距离（格，默认 25，范围 3~128；实测六百一十五 由 5 改大）：主人与她【3D 距离】超过这个值才起飞追——**更近的距离走路/搭路本来就够了**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。**与收手距离是两个不同的球**（下面那条，默认 5）：旧版收手半径是「起手减 1」推出来的，迟滞只有 1 格，她会在两条线之间来回起降；现在默认档留 20 格迟滞。注意威胁半径内（搭路那条）她绝不会起飞。老配置文件里若写着 dist = 5，NeoForge 不会替你改大——想用新默认就删掉那一行或手动改成 25"));
+                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_DIST, s), "飞行跟随·起手距离（格，默认 25，范围 3~128）：主人与她【3D 距离】超过这个值才起飞追——更近的距离走路/搭路本来就够了，犯不上烧烟花（旧默认 5 太灵敏，她稍微走出去一点就起飞）。与下面那条【收手距离】是**两个不同的球**，两者之差就是迟滞带；想更早起飞就把它调小。老配置文件里若写着 dist = 5，请手动改成 25（模组不会替你改）"));
         this.rows.add(new NumRow("收手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get()),
-                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST, s), "飞行跟随·收手距离（格，默认 5，范围 1~64；实测六百一十五 新增）：主人进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。**必须比起手距离小**：写成大于等于起手距离时她会「起飞即收手」，本模组会自动把它压到「起手距离 − 1」（默认 25/5 用不到这条兜底）"));
+                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST, s), "飞行跟随·收手距离（格，默认 5，范围 1~64）：主人进到这么近（3D 距离）就中断本趟、交回普通跟随，并**消掉烟花的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。**必须比起手距离小**：写成大于等于起手距离时她会「起飞即收手」，模组会自动把它压到「起手距离 − 1」"));
         this.rows.add(new BoolRow("飞行跟随·消耗烟花", MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是'她能飞'的凭证），但每次补推不再从背包扣那一枚——纯观赏档，适合只想看她跟着飞的存档。背包里同时有羽扇时走扇子那条（挥扇推进、按扇子自己的口径扣耐久），这条只管烟花——位移法术不消耗物资，开与关都一样（它按自己的冷却放）"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 位移法术任一，它是「她能飞」的凭证），但每次补推不再从背包扣那一枚——纯观赏档。羽扇按它自己的口径扣耐久、位移法术不消耗物资，这条只管烟花"));
         this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get(),
                 v -> MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
     }
@@ -3052,6 +3055,23 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MISC_LOG_ENABLED.set(v), "运行日志（默认开）：排班应用、战斗参战与还原、险境脱离、跨维跟随、自保标记自愈等状态变化写入 游戏目录/logs/promaid.log（满 4MB 自动轮换为 promaid.log.old），并镜像到 latest.log——“XX 没生效”类反馈可直接按时间线对账；关闭后完全静默"));
         this.rows.add(new InfoRow("日志文件位置", "\u00a7a<游戏目录>/logs/promaid.log\u00a7r",
                 "任意文本编辑器打开；每行格式 [真实时间] [分类] 内容（分类：排班/战斗/险境脱离/跨维/自保）。只记低频状态迁移，巡检空转不落盘"));
+    }
+
+    /**
+     * v1.2.2 实测六百一十六【压缩盒】——新道具那一档的参数。
+     *
+     * 这一页只有两条（格数固定 5、界面交互固定，不开放）：盒子放进女仆背包算不算
+     * 她背包的延伸，以及每格能堆多少（默认 114514）。
+     */
+    private void compressionBoxRows() {
+        this.rows.add(new BoolRow("女仆背包延伸", MaidSmartConfig.COMPRESSION_BOX_MAID_EXTENSION.get(),
+                v -> MaidSmartConfig.COMPRESSION_BOX_MAID_EXTENSION.set(v),
+                "压缩盒·女仆背包延伸（默认开）：开 = 背包里的压缩盒，她的取物/数物代码当它是背包尾部（每个盒子追加 5 格）——找材料、拿食物、取建材都会先看盒子里有没有；关 = 盒子只是个普通收纳道具，她的代码看不见里面的东西。"
+                        + "两条硬边界：她一次最多从盒子里拿 64 个（大堆留在盒子里，不然 114514 个进了她的存档会被截断）；她的「背包等级」截断那条路（小/中/大背包可用格数）看不见盒子，只有主取物路径看得见"));
+        this.rows.add(new NumRow("每格上限", String.valueOf(MaidSmartConfig.COMPRESSION_BOX_MAX_STACK.get()),
+                s -> setInt(MaidSmartConfig.COMPRESSION_BOX_MAX_STACK, s),
+                "压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里每一格能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；往下调不会删已有的东西（已存的堆只在下次写入时被夹到新上限）。"
+                        + "放进女仆背包时她仍然一次只拿 64（原版堆叠口径）"));
     }
 
 
@@ -4539,7 +4559,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
             case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路 / 飞行跟随";
             case UI -> "\u00a77语音 TTS / 显示与气泡";
-            case SYSTEM -> "\u00a77交互杂项 / 运行日志";
+            case SYSTEM -> "\u00a77交互杂项 / 运行日志 / 压缩盒";
         };
     }
 

@@ -372,6 +372,10 @@ public static final ModConfigSpec.DoubleValue FLIGHT_FOLLOW_END_DIST;
 public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_FIREWORK;
 /** 飞行跟随是否消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1）：关 = 只对她飞行跟随期间的鞘翅免掉 */
 public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
+/** 压缩盒·放进女仆背包时是否算她背包的延伸（默认开；关 = 只当普通收纳道具用，她的取物代码看不见盒子里的东西） */
+public static final ModConfigSpec.BooleanValue COMPRESSION_BOX_MAID_EXTENSION;
+/** 压缩盒每格上限（默认 114514 = 用户点名的那个数；范围 64~1000000——低于 64 会让「一格顶一叠」这件事失去意义，故下限锁 64） */
+public static final ModConfigSpec.IntValue COMPRESSION_BOX_MAX_STACK;
 /** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
 public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
@@ -2088,6 +2092,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.flightFollow.firework").define("firework", true);
         FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
                 .translation("config.promaid.flightFollow.elytra").define("elytra", true);
+        BUILDER.pop();
+
+// ---- v1.2.2 实测六百一十六【压缩盒：一格 114514 个，放进女仆背包算她背包的延伸】----
+        // 用户原话："加入一个新道具，压缩盒……将这个箱子放进女仆的背包里面，女仆可以从这个里面拿
+        // 东西，这个箱子里面的内容会被视为女仆背包的延伸。而且这个箱子里面物品堆叠上限大大增加，
+        // 也就是说不再是只能堆 64 个，而是可以堆 114514 个……虽然堆叠上限很高，但它的格子数量只有 5 个。"
+        // 只有两条可调：她要能"看见"盒子（女仆侧开关）与每格上限。格数固定 5（用户点名的），
+        // 界面的交互方式与那一堆原版数量字段的坑写在 CHANGELOG 与 CompressionBoxData 里。
+        BUILDER.comment("压缩盒设置").translation("config.promaid.compressionBox").push("compressionBox");
+        COMPRESSION_BOX_MAID_EXTENSION = BUILDER.comment("压缩盒·女仆背包延伸（默认开）：开 = 背包里的压缩盒，她的取物/数物代码当它是背包尾部（每个盒子追加 5 格）——找材料、拿食物、取建材都会先看盒子里有没有；关 = 盒子只是个普通收纳道具，她的代码看不见里面的东西。\n\n注意两条硬边界（都与原版把数量写成一字节 / 有取值范围有关，详见 CHANGELOG）：\n- 她一次最多从盒子里拿 64 个（大堆留在盒子里）——不然 114514 个塞进她背包会在存档时被截断；\n- 她的『背包等级』截断（小/中/大背包可用格数）那条路（getAvailableInv）看不见盒子，只有 getMaidInv 这条路看得见。")
+                .translation("config.promaid.compressionBox.maidExtension").define("maidExtension", true);
+        COMPRESSION_BOX_MAX_STACK = BUILDER.comment("压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里**每一格**能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；**往下调不会删已有的东西**（已存的堆只在下次写入时被夹到新上限）。\n\n放进女仆背包时她仍然一次只拿 64（原版堆叠口径，见上一条）。")
+                .translation("config.promaid.compressionBox.maxStack").defineInRange("maxStack", 114514, 64, 1000000);
         BUILDER.pop();
 
         // ---- 杂项 ----

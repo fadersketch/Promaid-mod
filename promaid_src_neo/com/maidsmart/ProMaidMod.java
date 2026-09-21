@@ -49,6 +49,11 @@ public class ProMaidMod {
     public static final DeferredItem<Item> INDEX_STONE = ITEMS.register("index_stone",
             () -> new com.maidsmart.build.IndexStoneItem(new Item.Properties()));
 
+    /** 压缩盒（v1.2.2 实测六百一十六）：5 格 × 每格 114514，放进女仆背包 = 背包延伸
+     *  （网络层经 @EventBusSubscriber 自注册，与药剂手册同款） */
+    public static final DeferredItem<Item> COMPRESSION_BOX = ITEMS.register("compression_box",
+            () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties()));
+
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);

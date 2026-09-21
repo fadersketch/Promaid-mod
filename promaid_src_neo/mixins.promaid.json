@@ -58,7 +58,8 @@
     "BaseFireBlockPinkMixin",
     "BehaviorOwnerlessGateMixin",
     "PuppetModeLlmGuardMixin",
-    "ElytraWearGuardMixin"
+    "ElytraWearGuardMixin",
+    "MaidCompressionBoxMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
