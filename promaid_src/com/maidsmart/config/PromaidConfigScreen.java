@@ -2405,7 +2405,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
         this.rows.add(new BoolRow("战斗模式轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
-                "战斗模式轰炸（默认开）：所有攻击模式打完一记就按包里材料放炸弹——地面近战/弓弩/三叉戟/弹幕/枪械/近战空袭/第三方战斗任务都有，远程空袭除外（一直飞在天上）；① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；②③ 在『本维度不会炸』时自动不开放（见维度闸）"));
+                "战斗模式轰炸（默认开）：所有攻击模式打完一记就按包里材料放炸弹——地面近战/弓弩/三叉戟/弹幕/枪械/近战空袭/远程空袭（盘旋期间每次开火之后）/第三方战斗任务都有；① 黑曜石/基岩 + 末地水晶（威力 6）② 重生锚 + 萤石（下界不生效）③ 床（主世界不生效）；②③ 在『本维度不会炸』时自动不开放（见维度闸）"));
         this.rows.add(new NumRow("轰炸最短间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL, s), "轰炸最短间隔（tick，默认 200 = 10 秒）：整条轰炸链路两次之间的下限（打完一记才放，这条只当下限）——不加下限会在几秒内烧光她的黑曜石/水晶；缺料那一下不占用间隔"));
         this.rows.add(new NumRow("起爆延迟（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_FUSE.get()),
@@ -2427,7 +2427,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
         this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
-                "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与打火石；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
+                "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与点火料——打火石（优先，每发掉 1 点耐久）或烈焰弹/火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
         this.rows.add(new NumRow("投掷间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷最短间隔（tick，默认 200 = 10 秒）：TNT 已改为【攻击链路末段】投放（打完一记之后才扔），这条只是两次投放之间的下限；调小 = 更凶更费 TNT"));
         this.rows.add(new NumRow("TNT 引信（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get()),
@@ -2444,7 +2444,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("残血连投阈值（0-1）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO, s), "残血连投阈值（默认 0.7 = 七成血以下）：血量比例低于它就一次连投数发"));
         this.rows.add(new NumRow("连投最多（发）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 点打火石耐久"));
+                s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT, s), "连投最多几发（默认 3，1 = 关掉连投）：每发各消耗 1 个 TNT 与 1 份点火料（打火石掉 1 点耐久 / 烈焰弹消耗 1 个）"));
         this.rows.add(new NumRow("炸弹底座回收延迟（秒）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS, s), "炸弹底座回收延迟（秒，默认 10，0 = 起爆即回收）：水晶链路那块黑曜石/基岩起爆后留在原地这么久，再收进她背包——背包满则掉在她脚下（与挖矿/搭路同一口径）；重生锚/床由自己那一炸消耗掉，不进这张表"));
         this.rows.add(new SectionRow("放置与材料", false));
@@ -2457,6 +2457,9 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("空中强制放置", MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.set(v),
                 "空中强制放置（默认开）：空袭时先找目标脚边、再找她正下方；都没有支撑面就直接悬空放下（原版放置本身允许，玩家手点不到而已）；关 = 找不到带支撑的落点就整段跳过"));
+        this.rows.add(new BoolRow("空中悬空投弹（走后门）", MaidSmartConfig.COMBAT_BOMBING_AIR_DROP.get(),
+                v -> MaidSmartConfig.COMBAT_BOMBING_AIR_DROP.set(v),
+                "空中悬空投弹（走后门，默认开，v1.2.2 实测六百〇三）：落点的最后一级——目标常常自己就悬空（蝙蝠/恶魂/被打飞到半空/站在水里的怪），它脚边那四格全是空气、原版又以『那一格站着实体』为由拒绝，前几级就全落空。开启后最后再试一手：落点直接取在【目标头顶那一格 → 目标自己那一格】，不要求支撑面、也不要求那格没站着目标（原版拒绝后强制放下）——底座可以悬在空中、贴在目标身上，0.5 秒后原地开花；那格若站着除目标以外的别人则跳过。关 = 只按原版规则落点"));
         this.rows.add(new SectionRow("爆炸口径（四类炸弹共用）", false));
         this.rows.add(new BoolRow("破坏方块", MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.set(v),

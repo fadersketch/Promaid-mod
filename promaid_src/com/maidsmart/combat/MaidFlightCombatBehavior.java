@@ -1563,7 +1563,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         //    放在"朝向"之前一起被盖回去。
         tryCastSpell(maid, target, id, gameTime);
         fireRanged(maid, target, id, gameTime);
-        // v1.2.2 实测五百八十七：盘旋期间的附加链路——TNT + 打火石齐了才扔，缺料静默跳过。
+        // v1.2.2 实测五百八十七：盘旋期间的附加链路——TNT + 点火料（打火石 / 烈焰弹）齐了才扔，
+        // 缺料静默跳过。
+        // v1.2.2 实测六百〇三：这一步现在**还负责轰炸起手**（需求原文："将重生锚之类的放置也
+        // 加入到远程空袭，同时走后门让它在空中也可以放置"）——先试放重生锚 / 末地水晶 / 床，
+        // 材料齐就交给相位（相位收尾自己投 TNT），没起手才就地投 TNT，与近战猛击那条路对称。
         // 放在开火之后、朝向之前（同"开火必须早于朝向"的道理：投掷会给命中方向一点朝向扰动）。
         MaidBombing.tickRangedTnt(level, maid, target, id, gameTime);
 
