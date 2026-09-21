@@ -156,6 +156,45 @@ public final class TwilightFanKit {
         }
     }
 
+    /**
+     * v1.2.2 实测六百〇六【俯冲段用扇】：**只借扇子的动作与消耗**，速度由调用方给。
+     *
+     * 【为什么不能直接用 {@link #boostGlide}】它照搬原式，自带 {@code +1.25} 的竖直升力
+     * 与「把速度往 视线×2 收敛」那一项——在俯冲段（朝向朝下对着敌人）会把"往下扎"顶成
+     * "往前平飞"，俯冲角度就没了（用户实测"孔雀羽扇好像不行"的由来）。而原式那一份推力
+     * 在**收翅**状态下本来也吃不到（javap 实证 {@code PeacockFanItem.use} 的滑翔分支开头
+     * 就是 {@code if (isFallFlying())}）。
+     *
+     * 【这里给的】挥臂动作 + 扇风盒（把贴脸的怪用原版口径扇开）+ 原版扣耐久（{@code 扇飞数 + 1}）
+     * + 音效粒子；速度由 {@code velocity} 参数原样写回（调用方算好的"方向不变、只加大小"那一口）。
+     *
+     * @param velocity 调用方已经算好的新速度（含那一口冲刺）；null = 只做动作、不写速度
+     * @return true = 确实挥了（扇子还在）；false = 没有扇子 / 异常
+     */
+    public static boolean boostGlideWith(ServerLevel level, EntityMaid maid, Vec3 velocity) {
+        ItemStack fan = findFan(maid);
+        if (fan.isEmpty() || level == null || maid == null) {
+            return false;
+        }
+        try {
+            Vec3 look = maid.getLookAngle();
+            if (velocity != null) {
+                Vec3 mv = maid.getDeltaMovement();
+                // 竖直分量：不低于当前速度（她本来扎得更快时不减速），也不额外给升力
+                double ny = Math.min(velocity.y, Math.max(mv.y, 0.0));
+                maid.setDeltaMovement(new Vec3(velocity.x, ny, velocity.z));
+            }
+            maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
+            int fanned = fanEntities(level, maid, look);
+            damageFan(maid, fan, fanned);
+            playWhoosh(level, maid);
+            fanParticles(level, maid, look);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 扇风盒：身前 3 格半径 2 内的可推实体被 视线×2 扇飞（返回扇飞数，计入耐久） */
     private static int fanEntities(ServerLevel level, EntityMaid maid, Vec3 look) {
         try {

@@ -177,6 +177,19 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final long SPELL_LOG_INTERVAL = 600L;
     /** 地面近战冷却到期 gameTime */
     private static final Map<UUID, Long> GROUND_READY = new HashMap<>();
+    /** v1.2.2 实测六百〇六：俯冲段冲刺·下次可用 gameTime（与其它燃料冷却同一套"到点才能再来"的口径） */
+    private static final Map<UUID, Long> DIVE_NEXT = new HashMap<>();
+    /**
+     * v1.2.2 实测六百〇六：俯冲段冲刺日志限频。
+     *
+     * 【为什么单独一条、而不是复用 SPELL_LOG_INTERVAL】那条是 600 tick = **30 秒**一条
+     * （为"常态施法"设的，怕刷屏）。本轮场景实测第一版就复用了它，结果 60 秒的观察窗里
+     * 只看到 2 行「俯冲加速」——而实际上她每轮俯冲都补了一口（烟花从 64 掉到 32），
+     * 日志把绝大多数都吞了，看起来像"只偶尔生效"。验收要看的就是这条链路，所以给它
+     * 自己的节奏：100 tick = 5 秒一条（比施法密，又不至于每 1.5 秒一行把日志刷满）。
+     */
+    private static final Map<UUID, Long> DIVE_LAST_LOG = new HashMap<>();
+    private static final long DIVE_LOG_INTERVAL = 100L;
 
     /** v1.2.0：true = 飞行远战（空中盘旋 + 远程开火），false = 飞行近战（扑击 + 收翅猛击） */
     private final boolean ranged;
@@ -213,6 +226,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_LAST_LOG.remove(maidId);
         DASH_NEXT.remove(maidId);
         DASH_LAST_LOG.remove(maidId);
+        DIVE_NEXT.remove(maidId);
+        DIVE_LAST_LOG.remove(maidId);
         MaidBombing.forget(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
@@ -288,6 +303,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SPELL_LAST_LOG.clear();
         DASH_NEXT.clear();
         DASH_LAST_LOG.clear();
+        DIVE_NEXT.clear();
+        DIVE_LAST_LOG.clear();
         MaidBombing.clearAll();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
@@ -694,11 +711,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 的意图一致。放在 faceTarget 之前，让本 tick 的朝向仍以空袭的为准（吟唱抢朝向
         // 发生在下一 tick）。爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见
         // tryCastSpell 的注释。
-        tryDashBoost(maid, target, id, gameTime);
         tryCastSpell(maid, target, id, gameTime);
 
         suppressVanillaMelee(maid);
         faceTarget(maid, target);
+
+        // v1.2.2 实测六百〇六【俯冲段冲刺加速】：**这一段（朝目标压低机头、一路滑翔扎下去）
+        // 就是用户说的"向下朝着敌人俯冲"**——它才是周期里最长的一截。放在 faceTarget 之后
+        // 调用，因为那一口加速的方向取的是"她此刻的朝向"（刚被钉在目标上）。
+        // 旧版这里单独调 tryDashBoost（只认位移法术）；现在收进 tickDiveBoost 统一排序：
+        // 法术 → 烟花 → 羽扇（见方法注释）。
+        tickDiveBoost(level, maid, target, id, gameTime);
 
         // 即将接触 → 取消滑翔，转入猛击段
         if (dist <= smashRange() && !WAIT_LAUNCH.contains(id)) {
@@ -879,6 +902,119 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             MaidFlightKit.setGliding(maid, true);
         }
         FIREWORK_READY.put(id, Math.max(FIREWORK_READY.getOrDefault(id, 0L), gameTime));
+    }
+
+    /* ==================== v1.2.2 实测六百〇六：俯冲段冲刺加速 ==================== */
+
+    /**
+     * 需求原文："近战空袭向下朝着敌人俯冲期间补一个链路：用烟花/法术加速（孔雀羽扇好像不行，
+     * 行的话也加上），方向不变，这样可以大幅提高周期 dps。"
+     *
+     * ── 先说清"俯冲"是哪一段（这段链路的位置就靠它定）──
+     * 近战空袭一轮 = ① 放烟花/挥扇爬升（{@code LAUNCH_LEFT}，30 tick）→ ② **朝目标压低机头
+     * 一路滑翔扎下去**（阶段二，滑翔中、朝向由 {@link #faceTarget} 钉在目标上）→ ③ 进到 3.5 格
+     * 收翅、最后一段自由落体砸一记（{@code SMASH}）。用户说的"向下朝着敌人俯冲"= **②那一段**
+     * （它才是周期里最长、最影响 DPS 的一截）；③只有最后 3.5 格、几 tick 而已。
+     *
+     * ── ② 这一段能用什么（javap 实证，两版本一致）──
+     * <ul>
+     *   <li>**原版挂载烟花的推力**：{@code FireworkRocketEntity} 的分支是
+     *       `if (ridee.isFallFlying()) { 沿视线给推力 } else { vec = ZERO }`——②是**滑翔**中，
+     *       所以**点一枚烟花是真的有推力的**（沿着她的视线 = 朝着敌人，方向不变）；</li>
+     *   <li>**暮色孔雀羽扇**：{@code PeacockFanItem.use} 的滑翔分支同样是 `if (isFallFlying())`
+     *       ——推力也吃得到，但那一式自带 **+1.25 的竖直升力**、还会把速度往 `视线×2` 收敛，
+     *       在"朝下扎"的俯冲里等于把她**顶成平飞**（这就是用户实测"孔雀羽扇好像不行"的由来：
+     *       不是扇子坏了，是它的推力方向不对）。所以扇子这一路**只借动作与消耗**，
+     *       速度改用下面那一口（见 {@link TwilightFanKit#boostGlideWith}）；</li>
+     *   <li>**位移法术**：原来就有一处 {@link #tryDashBoost}（阶段二每 tick 都会问一次）——
+     *       本改动把它收进这条链路统一排序，不再各说各话。</li>
+     * </ul>
+     *
+     * ── 燃料优先级：法术 → 烟花 → 羽扇 ──
+     * 法术不消耗任何物资、最省，所以有可用法术时先走法术；没有才轮到烟花（**真的消耗 1 枚**、
+     * 推力由原版给、并照旧让副手亮一下）；最后才是羽扇（面板默认关）。一件都没有 → 静默跳过
+     * （与全模组"缺料跳过"的口径一致，不占间隔）。
+     *
+     * ── 闸口 ──
+     * ① 距目标 3D 距离落在 [{@code diveBoostMinRange()}, {@code diveBoostMaxRange()}] 之间：
+     *    比 5 格更近就是"已经贴脸"（冲了会直接穿过它，而且再两 tick 就进收翅段了），
+     *    比 40 格更远则是"还没到位"（那是爬升/盘旋的活）；② 节流 {@code diveBoostInterval()}；
+     * ③ 激流突进期间让位（那一段的速度由突进指定）。
+     */
+    private void tickDiveBoost(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        try {
+            if (!cfgDiveBoost()) {
+                return;
+            }
+            if (gameTime < DIVE_NEXT.getOrDefault(id, 0L)) {
+                return;
+            }
+            if (MaidTridentSpinBehavior.isDashing(maid)) {
+                return; // 突进期间速度归它管（与 tick 的让位同口径）
+            }
+            double d2 = maid.m_20275_(target.m_20185_(), target.m_20186_(), target.m_20189_());
+            if (d2 < diveBoostMinRange() * diveBoostMinRange()
+                    || d2 > diveBoostMaxRange() * diveBoostMaxRange()) {
+                return;
+            }
+            String what = null;
+            // ① 法术（不消耗物资；它自带冲量、沿视线冲刺——成功即算这一口）
+            if (MaidSpellCastCompat.dashUsable() && tryDashBoost(maid, target, id, gameTime)) {
+                what = "位移法术";
+            }
+            // ② 烟花：真的点一枚（原版推力沿视线生效，方向不变），并让副手亮一下
+            if (what == null && cfgDiveBoostFirework() && MaidFlightKit.hasFirework(maid)) {
+                ItemStack fw = MaidFlightKit.takeFirework(maid);
+                if (!fw.m_41619_()) {
+                    launchFirework(level, maid, fw);
+                    FlightFireworkPose.show(maid, fw);
+                    what = "烟花";
+                }
+            }
+            // ③ 羽扇：借它的动作与消耗（挥臂/音效/扇风盒/扣耐久），速度用"方向不变、只加大小"那一口
+            if (what == null && cfgDiveBoostFan() && TwilightFanKit.hasFan(maid)) {
+                Vec3 look = maid.m_20154_();
+                double k = diveBoostImpulse();
+                Vec3 v = maid.m_20184_().m_82520_(look.f_82479_ * k, look.f_82480_ * k, look.f_82481_ * k);
+                if (TwilightFanKit.boostGlideWith(level, maid, v)) {
+                    what = "羽扇";
+                }
+            }
+            if (what == null) {
+                return; // 一件燃料都没有：静默跳过（不占间隔）
+            }
+            DIVE_NEXT.put(id, gameTime + diveBoostInterval());
+            if (gameTime - DIVE_LAST_LOG.getOrDefault(id, Long.MIN_VALUE / 2) >= DIVE_LOG_INTERVAL) {
+                DIVE_LAST_LOG.put(id, gameTime);
+                com.maidsmart.tool.PromaidLog.log("空袭·俯冲",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 俯冲加速（" + what
+                                + "，距敌 " + String.format(java.util.Locale.ROOT, "%.1f", Math.sqrt(d2))
+                                + " 格）");
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean cfgDiveBoost() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST.get();
+    }
+    private static int diveBoostInterval() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_INTERVAL.get();
+    }
+    private static double diveBoostMinRange() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_MIN_RANGE.get();
+    }
+    private static double diveBoostMaxRange() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_MAX_RANGE.get();
+    }
+    private static double diveBoostImpulse() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_IMPULSE.get();
+    }
+    private static boolean cfgDiveBoostFirework() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK.get();
+    }
+    private static boolean cfgDiveBoostFan() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.get();
     }
 
     /**
