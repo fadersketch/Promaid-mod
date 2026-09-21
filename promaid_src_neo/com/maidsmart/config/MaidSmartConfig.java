@@ -567,6 +567,20 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue AIR_RAID_DASH_BOOST_MIN_RANGE;
     /** 冲刺最大距离（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.DoubleValue AIR_RAID_DASH_BOOST_MAX_RANGE;
+    /** v1.2.2 实测六百〇六：俯冲段冲刺加速总开关（默认开） */
+    public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST;
+    /** v1.2.2 实测六百〇六：俯冲段两次加速之间的最短间隔（tick，默认 30） */
+    public static final ModConfigSpec.IntValue AIR_RAID_DIVE_BOOST_INTERVAL;
+    /** v1.2.2 实测六百〇六：俯冲段加速的最近距离（格，默认 5） */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_MIN_RANGE;
+    /** v1.2.2 实测六百〇六：俯冲段加速的最远距离（格，默认 40） */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_MAX_RANGE;
+    /** v1.2.2 实测六百〇六：俯冲段一口加速补多少速度（格/tick，默认 0.55） */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_IMPULSE;
+    /** v1.2.2 实测六百〇六：俯冲段是否把烟花当加速手段（默认开） */
+    public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_FIREWORK;
+    /** v1.2.2 实测六百〇六：俯冲段是否把羽扇当加速手段（默认关——原式那份竖直升力会把俯冲顶成平飞） */
+    public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_FAN;
     // ================= 空袭轰炸（v1.2.2 实测五百八十七：近战空袭打完放炸弹 + 远程空袭投掷 TNT。
     //   配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸；口径与反编译实证见 com.maidsmart.combat.MaidBombing） =================
     /** 近战空袭轰炸总开关（默认开） */
@@ -1868,6 +1882,26 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_DASH_BOOST_MAX_RANGE = BUILDER.comment("【提供速度】位移法术的最大施放距离（格，默认 28）：目标太远也不冲（冲刺是加速手段、不是位移追击）")
                 .translation("config.promaid.airRaid.dashBoostMaxRange")
                 .defineInRange("dashBoostMaxRange", 28.0, 0.0, 128.0);
+        // ---- v1.2.2 实测六百〇六：俯冲段冲刺加速 ----
+        // 【机制实证】两条飞行加速手段**都在滑翔时生效**（javap：原版 FireworkRocketEntity 的
+        // 推力分支、暮色 PeacockFanItem 的滑翔分支，开头都是 `if (isFallFlying())`）。用户说的
+        // "向下朝着敌人俯冲"= 阶段二那一段（滑翔中、朝目标压低机头扎下去）——所以烟花在那里
+        // **点得着**（推力沿视线 = 朝着敌人，方向不变）；扇子的推力则带 +1.25 竖直升力，
+        // 会把俯冲顶成平飞，所以扇子这一路只借动作与消耗。
+        AIR_RAID_DIVE_BOOST = BUILDER.comment("俯冲段冲刺加速（默认开）：近战空袭【朝目标压低机头、一路滑翔扎下去】那一段（= 用户说的「向下朝着敌人俯冲」）按节奏补一口推进，**方向不变**（方向 = 她此刻的朝向 = 朝着敌人）——目的：缩短一轮「起飞→俯冲」的周期 = 提高周期 DPS。\n\n【为什么以前没有】这一段旧版只有一处位移法术的冲刺，烟花与扇子都不参与；而烟花其实在这段**点得着**（滑翔中，原版推力沿视线生效，方向天然不变）。现在把三者收进同一条链路排序：法术 → 烟花 → 羽扇（见面板下两条）")
+                .translation("config.promaid.airRaid.diveBoost").define("diveBoost", true);
+        AIR_RAID_DIVE_BOOST_INTERVAL = BUILDER.comment("俯冲段冲刺间隔（tick，默认 30 = 1.5 秒）：两次冲刺之间的最短间隔（与烟花冷却同量级）。俯冲段本身只有 1 秒上下，所以一轮通常吃得到一口；调小 = 一轮能吃几口、冲得更猛（更费烟花）")
+                .translation("config.promaid.airRaid.diveBoostInterval").defineInRange("diveBoostInterval", 30, 5, 600);
+        AIR_RAID_DIVE_BOOST_MIN_RANGE = BUILDER.comment("俯冲段冲刺·最近距离（格，默认 5）：比这更近就不冲——已经贴脸了，再冲会直接穿过目标（而且再两 tick 就进收翅猛击段了）")
+                .translation("config.promaid.airRaid.diveBoostMinRange").defineInRange("diveBoostMinRange", 5.0, 0.0, 64.0);
+        AIR_RAID_DIVE_BOOST_MAX_RANGE = BUILDER.comment("俯冲段冲刺·最远距离（格，默认 40）：比这更远就不冲（那是「还没到位」，该走的链路是爬升/盘旋）。默认 40 覆盖「从高空扑到地面」的常见落差")
+                .translation("config.promaid.airRaid.diveBoostMaxRange").defineInRange("diveBoostMaxRange", 40.0, 0.0, 128.0);
+        AIR_RAID_DIVE_BOOST_IMPULSE = BUILDER.comment("俯冲段冲刺·一口补多少速度（格/tick，默认 0.55）：**只在羽扇那一路用到**——烟花与法术各有自己的冲量（原版推力 / 法术自己的公式），这里是借扇子动作时由本模组补的那一口（方向不变、只加大小），所以刻意不含任何竖直升力。调大 = 冲得更狠")
+                .translation("config.promaid.airRaid.diveBoostImpulse").defineInRange("diveBoostImpulse", 0.55, 0.05, 3.0);
+        AIR_RAID_DIVE_BOOST_FIREWORK = BUILDER.comment("俯冲段冲刺·用烟花（默认开）：俯冲途中真的点一枚挂载烟花——**消耗 1 枚**，推力由原版给（滑翔中生效、沿视线 = 朝着敌人，方向不变），并照旧让副手亮一下烟花模型、放点火音效")
+                .translation("config.promaid.airRaid.diveBoostFirework").define("diveBoostFirework", true);
+        AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是实测里「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 烟花 → 羽扇：法术不消耗物资、最省，有可用法术时先走法术")
+                .translation("config.promaid.airRaid.diveBoostFan").define("diveBoostFan", false);
         BUILDER.pop();
 
         // ---- 空袭轰炸（v1.2.2 实测五百八十七）----

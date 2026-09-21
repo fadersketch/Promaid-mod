@@ -2400,7 +2400,26 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("冲刺最小距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MIN_RANGE, s), "【提供速度】法术的最小施放距离（格，默认 6）：太近不冲，防冲过头扎进敌人身上"));
         this.rows.add(new NumRow("冲刺最大距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE.get()),
-                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DASH_BOOST_MAX_RANGE, s), "【提供速度】法术的最大施放距离（格，默认 28）：太远不冲——冲刺是续速手段，不是追击手段"));
+        this.rows.add(new SectionRow("⑥.5 俯冲段冲刺加速（实测六百〇六）", true));
+        this.rows.add(new BoolRow("俯冲段冲刺加速", MaidSmartConfig.AIR_RAID_DIVE_BOOST.get(),
+                v -> MaidSmartConfig.AIR_RAID_DIVE_BOOST.set(v),
+                "俯冲段冲刺加速（默认开）：近战空袭【朝目标压低机头、一路滑翔扎下去】那一段（= 「向下朝着敌人俯冲」）按节奏补一口推进，**方向不变**（方向 = 她此刻的朝向 = 朝着敌人）——缩短一轮「起飞→俯冲」的周期 = 提高周期 DPS。旧版这一段只有位移法术参与；现在烟花也进来了（滑翔中点烟花，原版推力沿视线生效、方向天然不变），扇子则只借动作与消耗（它那一式带竖直升力，会把俯冲顶成平飞——这就是「孔雀羽扇好像不行」的由来）"));
+        this.rows.add(new NumRow("俯冲段冲刺间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_DIVE_BOOST_INTERVAL.get()),
+                s -> setInt(MaidSmartConfig.AIR_RAID_DIVE_BOOST_INTERVAL, s), "俯冲段冲刺间隔（tick，默认 30 = 1.5 秒）：两次冲刺之间的最短间隔。俯冲段本身只有 1 秒上下，所以一轮通常吃得到一口；调小 = 一轮能吃几口、冲得更猛（更费烟花）"));
+        this.rows.add(new NumRow("俯冲段冲刺·最近距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DIVE_BOOST_MIN_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DIVE_BOOST_MIN_RANGE, s), "俯冲段冲刺·最近距离（格，默认 5）：比这更近就不冲——已经贴脸了，再冲会直接穿过目标（而且再两 tick 就进收翅猛击段了）"));
+        this.rows.add(new NumRow("俯冲段冲刺·最远距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_DIVE_BOOST_MAX_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DIVE_BOOST_MAX_RANGE, s), "俯冲段冲刺·最远距离（格，默认 40）：比这更远就不冲（那是「还没到位」，该走的链路是爬升/盘旋）。默认 40 覆盖「从高空扑到地面」的常见落差"));
+        this.rows.add(new NumRow("俯冲段冲刺·一口速度", String.valueOf(MaidSmartConfig.AIR_RAID_DIVE_BOOST_IMPULSE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_DIVE_BOOST_IMPULSE, s), "俯冲段冲刺·一口补多少速度（格/tick，默认 0.55）：只在羽扇那一路用到——烟花与法术各有自己的冲量，这里是借扇子动作时由本模组补的那一口（方向不变、只加大小、不含竖直升力）"));
+        this.rows.add(new BoolRow("俯冲段冲刺·用烟花", MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK.get(),
+                v -> MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK.set(v),
+                "俯冲段冲刺·用烟花（默认开）：俯冲途中真的点一枚挂载烟花——消耗 1 枚，推力由原版给（滑翔中生效、沿视线 = 朝着敌人，方向不变），并照旧让副手亮一下烟花模型、放点火音效"));
+        this.rows.add(new BoolRow("俯冲段冲刺·用羽扇", MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.get(),
+                v -> MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.set(v),
+                "俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但不用它那一式推力（带 +1.25 竖直升力，会把俯冲顶成平飞）；速度改由本模组按「一口速度」给。燃料优先级：法术 → 烟花 → 羽扇"));
+        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
         this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
         this.rows.add(new BoolRow("战斗模式轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
