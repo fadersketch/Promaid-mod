@@ -2481,7 +2481,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new SectionRow("爆炸口径（四类炸弹共用）", false));
         this.rows.add(new BoolRow("破坏方块", MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.set(v),
-                "轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形；开 = 原版爆炸照原样炸坑。女仆自己放的方块无论开关都由她回收"));
+                "轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形；开 = 原版爆炸照原样炸坑。**她自己扔的模组 TNT 也归这条管**（v1.2.2 实测六百〇七）：威力与带不带火仍归它自己，但关着时那一炸也一个方块都不拆（只收地形权限，伤害照旧）。女仆自己放的方块无论开关都由她回收"));
         this.rows.add(new BoolRow("伤到主人/友军", MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.set(v),
                 "轰炸伤到主人/友军（默认关）：关 = 主人与同主女仆不掉血也不被震（归因给女仆，走友伤守卫 + 风免）；开 = 原版爆炸，主人照掉血照被炸飞"));

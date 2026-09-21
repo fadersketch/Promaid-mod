@@ -979,6 +979,7 @@ public final class MaidBombing {
         HINT_CD.clear(); // 实测五百九十四：气泡限频表（forget 不清它，见字段注释）
         HINT_LAST.clear();
         BombPose.clearAll(); // 实测五百九十一：动作姿势的表也一并清（尽量当场把原副手物品还回去）
+        MaidTntBlastGuard.clearAll(); // 实测六百〇七：模组 TNT 的登记表（跨存档/重载不留死 id）
         combatScanTick = 0;
     }
 
@@ -2440,6 +2441,13 @@ public final class MaidBombing {
                     // 放出来的是引信 TNT 的子类 = 模组自己的 TNT 形式（那一炸归它自己）；
                     // 放出来的就是原版 PrimedTnt = 这个方块没改点火路径，照原版 TNT 的老口径接管
                     boolean plain = made.getClass() == PrimedTnt.class;
+                    if (!plain) {
+                        // v1.2.2 实测六百〇七【模组 TNT 也受「不破坏方块」管辖】：把这一枚登记给
+                        // MaidTntBlastGuard —— 它的爆炸不经过我们的出口（威力/带火归它自己），
+                        // 所以"破不破方块"得靠那一层在爆炸事件里收走。登记带过期时间，见那类注释。
+                        MaidTntBlastGuard.rememberTnt(made, maid,
+                                level.m_46467_() + MaidTntBlastGuard.TRACK_TTL);
+                    }
                     return new TntOut(made, true, plain, plain
                             ? "模组方块放的是原版引信 TNT"
                             : "它自己那一枚 " + entityIdOf(made));
