@@ -145,7 +145,7 @@ def read_config():
 
 
 def set_bridge_flags(**kv):
-    """改 [bridge] 小节里的开关。键不存在就插在 [bridge] 那一行后面。"""
+    """改 [flightFollow] 小节里的开关。键不存在就插在 [bridge] 那一行后面。"""
     t = read_config()
     lines = t.split('\n')
     out = []
@@ -153,7 +153,7 @@ def set_bridge_flags(**kv):
     hit = set()
     for line in lines:
         stripped = line.strip()
-        if stripped == '[bridge]':
+        if stripped == '[flightFollow]':
             toc = len(out)
         out.append(line)
         for k, v in kv.items():
@@ -171,7 +171,7 @@ def set_bridge_flags(**kv):
 
 
 def drop_bridge_key(key):
-    """删掉 [bridge] 小节里的某一项——**这样代码里的默认值才真正生效**
+    """删掉 [flightFollow] 小节里的某一项——**这样代码里的默认值才真正生效**
     （Forge/NeoForge 只在使用新默认值时才会把文件改写回去；文件里写着旧值就不会动它）。"""
     t = read_config()
     out = [l for l in t.split('\n')
@@ -632,42 +632,47 @@ def fail(msg):
 a = a2 = b = c = d = {}   # --only 只跑某一轮时，其余轮次留空（下面的打印循环按空跳过）
 
 if 'A' in ROUNDS:
-    # ── A 轮：代码默认档（把 flightFollowDist 那行删掉，让 612 的新默认 5 生效）──
-    # 【为什么必须删那一行】Forge/NeoForge 只在"使用新默认值"时改写文件——文件里已经写着 16 的存档，
-    # 升级后不会自动变小（这条写进 changelog 的"升级注意"）。要验默认值就得让那一项缺席。
+    # ── A 轮：代码默认档（把 dist / endDist 两行删掉，让**六百一十五 的新默认 25 / 5** 生效）──
+    # 【为什么必须删那两行】Forge/NeoForge 只在"使用新默认值"时改写文件——文件里已经写着旧值的存档，
+    # 升级后不会自动变（这条写进 changelog 的"升级注意"）。要验默认值就得让那两项缺席。
+    # 【六百一十五 起这一轮的期望**反过来**了】旧默认 5 时"12.8 格该起飞"；新默认 25 时
+    # "12.8 格**不该起飞**、tp 到 64 格才飞"——判据见下面那段。
 
-    drop_bridge_key('flightFollowDist')
-    print('config A:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                        flightFollowElytra='true'),
-          '; flightFollowDist ->', config_value('flightFollowDist'))
+    drop_bridge_key('dist')
+    print('config A:', set_bridge_flags(enabled='true', firework='true',
+                                        elytra='true'),
+          '; flightFollowDist ->', config_value('dist'))
     a = run_round('A', phases=True)
     notes += a['notes']
-    dist_after = config_value('flightFollowDist')
-    notes.append("A 轮跑完配置文件里的 flightFollowDist = %s（新默认应为 5.0；旧 jar 会写回 16.0）"
+    dist_after = config_value('dist')
+    notes.append("A 轮跑完配置文件里的 flightFollowDist = %s（新默认应为 25.0；旧版是 5.0 / 16.0）"
                  % dist_after)
-    if a['takeoff'] == 0:
-        fail('A 轮替代主人只在约 12.8 格外（10 平 + 8 高），她**压根没起飞** —— 触发距离默认值那一档'
-             '不对（flightFollowDist=%s）' % dist_after)
-    elif a['takeoff_p1'] == 0:
-        fail('A 轮替代主人只在约 12.8 格外时她**没起飞**（等到 tp 到 64 格才飞）—— '
-             '触发距离默认仍是旧的 16 那一档（新默认应为 5；flightFollowDist=%s）' % dist_after)
+    if dist_after is not None and abs(float(dist_after) - 25.0) > 0.01:
+        fail('A 轮配置文件里 dist 被写回 %s —— 起手距离默认值不是 25（六百一十五 的口径）'
+             % dist_after)
+    if a['takeoff_p1'] > 0:
+        fail('A 轮替代主人只在约 12.8 格外（10 平 + 8 高）时她**起飞了** —— 起手距离默认值没收紧'
+             '（新默认 25 应当挡住 12.8 格；dist=%s）' % dist_after)
+    elif a['takeoff'] == 0:
+        fail('A 轮把替代主人 tp 到 64 格外之后她**压根没起飞** —— 判定/接线哪一环不对'
+             '（dist=%s）' % dist_after)
     if a['end'] == 0 and a['legacy_end'] > 0:
         fail('A 轮结束行没有距离（旧式"结束（…）" %d 行）—— 旧口径' % a['legacy_end'])
     elif a['end'] == 0:
         fail('A 轮既没有带距离的结束行，也没有旧式结束行 —— 观察窗口内她没走完一趟')
     elif min(a['end_dists']) > 5.5:
-        fail('A 轮收手半径不是"触发距离-1"那一档：最短结束距离 %.1f 格（新默认触发 5 → 收手 4）'
-             % min(a['end_dists']))
+        fail('A 轮收手半径不是"新默认 5 格"那一档：最短结束距离 %.1f 格（六百一十五 起收手半径'
+             '由 flightFollow.endDist 决定，默认 5）' % min(a['end_dists']))
     if a['release'] == 0:
         fail('A 轮没有「解除火箭推进矢量」那一行 —— 进半径解除矢量没接上（旧 jar 会在这里挂）')
     elif a['release_dists'] and max(a['release_dists']) > 5.5:
         fail('A 轮的解除行出现在 %.1f 格 —— 那是"还没进半径就解除"，判据接错了'
              % max(a['release_dists']))
     if a['motion_h'] is not None and a['motion_h'] >= 0.5:
-        # 【不是判据，是参考值】默认触发距离只有 5 格：她收手后一沉就又超过 5 格、**一秒内自己又起飞**，
+        # 【不是判据，是参考值】默认起手 25 / 收手 5（六百一十五）：她收手后要飘出去 20 格才会重启，
         # 取样常常落在"新一趟的推进"上（本批实测取到 1.673 = 烟花推力的不动点那一档）。
         # "矢量确实归零"的**硬判据**放在 A2 轮（触发距离 20 → 收手半径 15，收手后不会立刻重启）。
-        notes.append('参考值：A 轮 Motion 取样 = %.3f 格/tick（%s）—— 默认 5 格档收手后一秒内会重启，'
+        notes.append('参考值：A 轮 Motion 取样 = %.3f 格/tick（%s）—— 默认 25/5 档收手后要飘 20 格才会重启，'
                      '这个数常常落在新一趟的推进上，不作为判据（硬判据见 A2 轮）'
                      % (a['motion_h'], '在空中' if (a['probe_air'] or 0) > (a['base_y'] or 0) + 1
                         else '在地面'))
@@ -689,7 +694,7 @@ if 'A' in ROUNDS:
     if a['takeoff'] > 0 and a['elytra_total'] != 1:
         fail('A 轮鞘翅件数=%d（应为 1：没丢也没多）' % a['elytra_total'])
     if not failures:
-        notes.append('阳性对照：A 轮（10 格外的替代主人）起飞成功、结束距离 %s（≤5 = 收手半径 4 那一档）、'
+        notes.append('阳性对照：A 轮（tp 到 64 格外的替代主人）起飞成功、结束距离 %s（≤5 = 新收手半径 5 那一档）、'
                      '解除矢量 %d 行、结束那一刻水平 Motion=%.3f、tp 到 64 格后又飞了 %d 趟'
                      % (['%.1f' % x for x in a['end_dists']], a['release'],
                         -1.0 if a['motion_h'] is None else a['motion_h'],
@@ -699,21 +704,21 @@ if 'A' in ROUNDS:
 
 if 'A2' in ROUNDS:
     # ── A2 轮：**"解除推进矢量"的硬判据**（独立取证：结束之后的 Motion）──
-    # 为什么单独一轮：默认触发距离 5 格时，收手半径 4 格、收手后一沉就又超过 5 格 → 她**一秒内
-    # 自己又起飞**，Motion 取样必然和"新一趟的推进"打架（A 轮那个 1.673 就是这么来的）。
-    # 这一轮把触发距离设成 20（收手半径 = min(15, 20-1) = 15）、替代主人放到约 40.8 格外：
-    # 她 15 格收手，之后要飘出去 5 格才会重启——取样稳落在"解除之后"的那一刻。
-    print('config A2:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                         flightFollowElytra='true', flightFollowDist='20.0'))
+    # 为什么单独一轮：默认收手半径只有 5 格，收手后她一沉就可能又超过起手线 → 一秒钟内**自己又
+    # 起飞**，Motion 取样必然和"新一趟的推进"打架（A 轮那个 1.673 就是这么来的）。
+    # 这一轮把触发距离设成 20（六百一十五 起收手半径与它无关，取 endDist 默认 5）、替代主人放到
+    # 约 40.8 格外：她 5 格收手，之后要飘出去 15 格才会重启——取样稳落在"解除之后"的那一刻。
+    print('config A2:', set_bridge_flags(enabled='true', firework='true',
+                                         elytra='true', dist='20.0'))
     a2 = run_round('A2', target_off='~ ~8 ~40', phases=False, release_probe=True)
     notes += a2['notes']
     if a2['takeoff'] == 0:
         fail('A2 轮（触发距离 20、替代主人约 40.8 格外）没起飞 —— 场景/判据哪一环不对')
     elif a2['release'] == 0:
         fail('A2 轮没有「解除火箭推进矢量」那一行')
-    elif not a2['end_dists'] or abs(a2['end_dists'][0] - 15.0) > 2.5:
-        fail('A2 轮收手距离不是"上限 15 格"那一档：%s（触发 20 → 收手 min(15,19)=15）'
-             % (['%.1f' % x for x in a2['end_dists']] or '无'))
+    elif not a2['end_dists'] or min(a2['end_dists']) > 5.5:
+        fail('A2 轮收手距离不是"endDist 默认 5"那一档：%s（六百一十五 起收手半径**不再**由起手距离'
+             '推导，20 那一档也是 5）' % (['%.1f' % x for x in a2['end_dists']] or '无'))
     elif a2['motion_h'] is None:
         notes.append('警告：A2 轮没取到 Motion 样本（独立取证缺一条）')
     elif a2['probe_air'] is not None and a2['base_y'] is not None \
@@ -725,7 +730,7 @@ if 'A2' in ROUNDS:
              '（解除后应接近 0；烟花推力的不动点是 1.7 格/tick）—— 矢量没被真正解除'
              '（旧 jar 走的正是这条）' % a2['motion_h'])
     else:
-        notes.append('阳性对照：A2 轮收手距离 %s（= 上限 15 那一档）、解除行 %d 条，'
+        notes.append('阳性对照：A2 轮收手距离 %s（= endDist 默认 5 那一档）、解除行 %d 条，'
                      '**独立取证**：解除之后她还在空中（y=%.1f，基线 %.1f）'
                      '水平速度只有 %.3f 格/tick（旧版是 1.7 那一档）'
                      % (['%.1f' % x for x in a2['end_dists']], a2['release'],
@@ -735,8 +740,8 @@ if 'A2' in ROUNDS:
 
 if 'B' in ROUNDS:
     # ── B 轮：空袭任务**未接敌**也必须能触发（六百一十二 第 2 条）──
-    print('config B:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                        flightFollowElytra='true', flightFollowDist='5.0'))
+    print('config B:', set_bridge_flags(enabled='true', firework='true',
+                                        elytra='true', dist='10.0'))
     b = run_round('B', maid_task=FLIGHT_TASK, phases=False)
     notes += b['notes']
     if b['takeoff'] == 0:
@@ -756,8 +761,8 @@ if 'C' in ROUNDS:
     # 场景：替代主人摆到 **64 格**外（航程长），她起飞之后**把僵尸刷到她旁边 3 格**——
     # 威胁半径 8 格内出现敌对生物，canContinue 里那条与搭路逐字同源的判据必须当场断链。
     # 她这时离替代主人还有几十格，所以结束距离必然 ≥8：这条正是"威胁断的"而不是"进收手半径收的"。
-    print('config C:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                        flightFollowElytra='true', flightFollowDist='5.0'))
+    print('config C:', set_bridge_flags(enabled='true', firework='true',
+                                        elytra='true', dist='5.0'))
     c = run_round('C', target_off=TARGET_FAR_OFF, zombie=True, phases=False, release_probe=False)
     notes += c['notes']
     if c['takeoff'] == 0:
@@ -784,8 +789,8 @@ if 'C' in ROUNDS:
 
 if 'D' in ROUNDS:
     # ── D 轮：开关关着（默认）──
-    print('config D:', set_bridge_flags(flightFollow='false', flightFollowFirework='true',
-                                        flightFollowElytra='true', flightFollowDist='5.0'))
+    print('config D:', set_bridge_flags(enabled='false', firework='true',
+                                        elytra='true', dist='5.0'))
     d = run_round('D', phases=False, release_probe=False)
     notes += d['notes']
     if d['takeoff'] or d['boost'] or d['release']:

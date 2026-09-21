@@ -88,7 +88,9 @@ def stop_server():
 
 
 def set_bridge_flags(**kv):
-    """改 [bridge] 小节里的开关（与 test_spellfly613.py 同一份实现）。"""
+    """改 [flightFollow] 小节里的开关（与 test_spellfly613.py 同一份实现）。
+    **六百一十五 起 flightFollow* 从 [bridge] 搬到了 [flightFollow]，键名也短了**
+    （flightFollow→enabled、flightFollowDist→dist 等）。"""
     raw = open(CONFIG, 'rb').read()
     try:
         t = raw.decode('utf-8')
@@ -100,7 +102,7 @@ def set_bridge_flags(**kv):
     hit = set()
     for line in lines:
         stripped = line.strip()
-        if stripped == '[bridge]':
+        if stripped == '[flightFollow]':
             toc = len(out)
         out.append(line)
         for k, v in kv.items():
@@ -313,8 +315,8 @@ for old in [f for f in os.listdir(os.path.join(server, 'mods')) if f.startswith(
 shutil.copyfile(cfg['jar'], os.path.join(server, 'mods', cfg['modname']))
 print('jar copied:', cfg['modname'], os.path.getsize(cfg['jar']))
 
-print('config A:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config A:', set_bridge_flags(enabled='true', firework='true',
+                                    elytra='true', dist='16.0'))
 a = run_round('on', True)
 
 verdicts = []
@@ -341,7 +343,7 @@ else:
         verdicts.append('FAIL(A 轮坐标档起飞行 %d 条 —— 一次性目标不该反复重启'
                         % len(a['takeoffCoord']))
 
-print('config B:', set_bridge_flags(flightFollow='false'))
+print('config B:', set_bridge_flags(enabled='false', dist='16.0'))
 b = run_round('off', False)
 if not b['data']:
     verdicts.append('FAIL(B 轮服务端没起来)')

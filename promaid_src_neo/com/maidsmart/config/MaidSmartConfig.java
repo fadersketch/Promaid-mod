@@ -350,14 +350,28 @@ public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
  * **位移法术**（与空袭**起飞**同序："有烟花先走烟花链路、没有才用位移法术"——带烟花的存档手感与
  * 烧料节奏一字不变）。法术那一支复用空袭的「位移法术·起飞/补高」开关（{@code flightDashClimb}），
  * **没有新增配置项**。
+ *
+ * v1.2.2 实测六百一十五【起手/收手拆成两个球 + 整块搬到自己的板块】——
+ * <ol>
+ *   <li><b>起手半径默认 5 → 25 格</b>（用户原话："现在女仆稍微走出去一点就开始飞（默认5格导致的），
+ *       需要对判定进行一个收紧……25 格球内无主人 + 无方块阻挡 + 未发现威胁 + 开关打开 = 启动"）；</li>
+ *   <li><b>收手半径独立成一个配置</b>（{@code endDist}，默认 5 格）——旧版收手半径是"起手减 1"
+ *       推导出来的，现在两个球各管各的（用户原话："开始跟结束两个半点的球大小应该不一样，
+ *       默认值就是我说的那两个，依旧可以在手册内调试"）；</li>
+ *   <li><b>从 {@code [bridge]} 搬到自己的 {@code [flightFollow]} 小节</b>（用户原话："把飞行跟随
+ *       这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块"）——
+ *       <b>老配置里 {@code [bridge]} 那几行不再生效</b>（NeoForge 不会替你搬），重新打开一次即可。</li>
+ * </ol>
  */
-public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW;
-/** 飞行跟随触发距离（格，默认 5；v1.2.2 实测六百一十二 由 16 改小）：主人比她远这么多格（3D）才起飞追——更近就走路/搭路，犯不上烧烟花。收手半径 = min(15, 它 - 1) */
-public static final ModConfigSpec.DoubleValue BRIDGE_FLIGHT_FOLLOW_DIST;
+public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_ENABLED;
+/** 飞行跟随起手距离（格，默认 25；v1.2.2 实测六百一十五 由 5 改大）：主人比她远这么多格（3D）才起飞追——更近就走路/搭路，犯不上烧烟花。收手半径见 {@link #FLIGHT_FOLLOW_END_DIST} */
+public static final ModConfigSpec.DoubleValue FLIGHT_FOLLOW_DIST;
+/** 飞行跟随收手距离（格，默认 5；v1.2.2 实测六百一十五 新增）：主人进到这么近就中断本趟并解除推进矢量——与起手半径是两个不同的球（默认 25 进 / 5 出，中间 20 格迟滞） */
+public static final ModConfigSpec.DoubleValue FLIGHT_FOLLOW_END_DIST;
 /** 飞行跟随是否消耗烟花（默认开）：关 = 照旧要求背包里有能飞的道具（烟花/羽扇/能上天的位移法术任一），但每次补推不扣那一枚（纯观赏档；位移法术本来就不消耗物资，不受这条管） */
-public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW_FIREWORK;
+public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_FIREWORK;
 /** 飞行跟随是否消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1）：关 = 只对她飞行跟随期间的鞘翅免掉 */
-public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW_ELYTRA;
+public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
 /** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
 public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
@@ -611,6 +625,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_IMPULSE;
     /** v1.2.2 实测六百〇六：俯冲段是否把烟花当加速手段（默认开） */
     public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_FIREWORK;
+    /** 俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 实测六百一十五 新增）：俯冲时那一枚挂载烟花的推力系数 × 它（原版不动点 1.7 倍视线 → 1.7×倍数）；1.0 = 完全照原版，不额外消耗烟花 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_FIREWORK_SCALE;
     /** v1.2.2 实测六百〇六：俯冲段是否把羽扇当加速手段（默认关——原式那份竖直升力会把俯冲顶成平飞） */
     public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_FAN;
     // ================= 空袭轰炸（v1.2.2 实测五百八十七：近战空袭打完放炸弹 + 远程空袭投掷 TNT。
@@ -1932,6 +1948,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.airRaid.diveBoostImpulse").defineInRange("diveBoostImpulse", 0.55, 0.05, 3.0);
         AIR_RAID_DIVE_BOOST_FIREWORK = BUILDER.comment("俯冲段冲刺·用烟花（默认开）：俯冲途中真的点一枚挂载烟花——**消耗 1 枚**，推力由原版给（滑翔中生效、沿视线 = 朝着敌人，方向不变），并照旧让副手亮一下烟花模型、放点火音效")
                 .translation("config.promaid.airRaid.diveBoostFirework").define("diveBoostFirework", true);
+        AIR_RAID_DIVE_BOOST_FIREWORK_SCALE = BUILDER.comment("俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 实测六百一十五 新增）：用户原话「我发现加强力度太小，加速效果不明显。还耗了一颗烟花，没啥用。这边建议这个烟花加速力度效果乘以1.4倍」。\n\n【这一条到底乘的是什么（字节码实证，两版本一致）】原版挂载烟花每 tick 做的是 v = v×0.5 + 视线×0.85（1.20.1 FireworkRocketEntity.tick / 1.21.1 同名方法：`look×0.1 + (look×1.5 − v)×0.5`），即**把速度往「1.7 倍视线」这个不动点上拉**。本模组给俯冲段点的那一枚挂载烟花**额外补一份沿视线的推力**，大小 = 0.85 ×(倍数 − 1)，于是不动点从 1.7 变成 1.7×倍数——默认 1.4 就是「俯冲时那枚烟花把速度拉到 2.38 倍视线」，而不是只把速度改得快一点。\n\n【为什么不是「多发一枚」】用户要的是「这一枚更狠」，不是「烧得更快」：倍数只改推力大小，**不额外消耗烟花**（仍然一发一枚）。范围 1.0~3.0：1.0 = 完全照原版（与旧版一字不差），调大 = 俯冲更猛。\n\n【只影响俯冲那一段】起飞/爬升/盘旋用的是原版烟花（倍数 1.0），行为一字未改。")
+                .translation("config.promaid.airRaid.diveBoostFireworkScale").defineInRange("diveBoostFireworkScale", 1.4, 1.0, 3.0);
         AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是实测里「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 烟花 → 羽扇：法术不消耗物资、最省，有可用法术时先走法术")
                 .translation("config.promaid.airRaid.diveBoostFan").define("diveBoostFan", false);
         BUILDER.pop();
@@ -2042,28 +2060,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
-        // ---- v1.2.2 实测六百〇八【飞行跟随】：搭路这一档的替代路径（默认关，观赏玩法） ----
-        // v1.2.2 实测六百一十一 改了三处：① 燃料口径并入孔雀羽扇（与空袭一致）；② 收手距离
-        // 4 → 15 格且不再"抬头泄速"（自然滑翔，与"空袭把怪打死之后"同一套）；③ 外观与空袭同款
-        // （游泳展翅姿态 / 鞘翅翅膀 / 俯冲前倾，判据从"飞行任务"放宽成"飞行任务或正在滑翔"）。
-        // 作者原话："女仆跟随能不能给她整个使用鞘翅一起飞呢，自己飞了后女仆只能搭着方块干着急了"
-        // → "开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间没有方块阻拦，
-        //    自己包里面还鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞是一样的，
-        //    但是 target 等于主人）。可以调整这种飞行跟随的时候是否消耗烟花和鞘翅耐久。"
-        // v1.2.2 实测六百一十三【启动并入位移法术】：用户原话"位移法术也可以加入到飞行跟随的启动中"。
-        // "能飞的道具"由两选一扩成三选一（烟花 / 羽扇 / 能上天的位移法术），判据与空袭三件套的
-        // 第三条**同一份定义**（MaidFlightKit.hasFlightPropellant）；那一口推进的顺序 = 扇子 →
-        // 烟花 → 位移法术，与空袭的**起飞**同序（"有烟花先走烟花链路、没有才用位移法术"），
-        // 所以带烟花的存档手感与烧料节奏一字不变。法术那一支复用空袭的「位移法术·起飞/补高」
-        // 开关（flightDashClimb，默认开）——**不新增配置项**。
-        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到「触发距离 - 1」格内就收手交回普通跟随（默认 4 格；进半径时**解除烟花给的推进矢量**，之后自然滑翔、落地还回胸甲，与空袭打完一波同款）；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）；威胁半径内出现敌对生物会当场解除本趟链路。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
-                .translation("config.promaid.bridge.flightFollow").define("flightFollow", false);
-        BRIDGE_FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随触发距离（格，默认 5，v1.2.2 实测六百一十二 由 16 改小）：你离她超过这个 3D 距离才起飞追——更近的距离走路/搭路本来就够得着，犯不上烧烟花。收手半径取它减 1（上限 15），进到收手半径时除了中断本趟，还会**解除烟花给的推进矢量**（不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 3~128。注意：老存档的配置文件里若已写着 flightFollowDist = 16，NeoForge 不会替你改小，想用新默认请删掉那一行或手动改成 5")
-                .translation("config.promaid.bridge.flightFollowDist").defineInRange("flightFollowDist", 5.0, 3.0, 128.0);
-        BRIDGE_FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
-                .translation("config.promaid.bridge.flightFollowFirework").define("flightFollowFirework", true);
-        BRIDGE_FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
-                .translation("config.promaid.bridge.flightFollowElytra").define("flightFollowElytra", true);
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
         // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）
@@ -2071,6 +2067,27 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 方块照旧刷新计时（走开后才开始倒数），塔上狙击/守势不受影响
         COMBAT_PLACED_LIFETIME = BUILDER.comment("战斗搭方块清理时间（秒，默认 30）：自保（搭高/搭桥）与高地狙击搭的方块 N 秒后自动回收；女仆还站在上面的方块会刷新计时（走开后才开始倒数），不会把她摔下去")
                 .translation("config.promaid.combat.placedLifetime").defineInRange("combatPlacedLifetime", 30, 3, 600);
+        BUILDER.pop();
+
+        // ---- v1.2.2 实测六百一十五【飞行跟随：整块从 [bridge] 搬出来，与搭路平级】----
+        // 用户原话："把飞行跟随这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块。"
+        // 它此前挂在 [bridge] 里只有一个理由：六百〇八 的实现位置是"轮到该搭路时的替代路径"。
+        // 但它本身是**独立的一整套玩法**（自己的开关、自己的两个距离、两个省料开关），与搭路共用
+        // 一节只会让"我只想调飞行"的人在一堆搭路参数里翻。**升级注意**：老配置里 [bridge] 下的
+        // flightFollow / flightFollowDist / flightFollowFirework / flightFollowElytra 四行
+        // **不再生效**（Forge 不会替你把值搬过来）——要沿用旧设置请手动搬进 [flightFollow]；
+        // 面板上它也从「移动与行为 → 搭路」搬到了平级的「移动与行为 → 飞行跟随」。
+        BUILDER.comment("飞行跟随设置").translation("config.promaid.flightFollow").push("flightFollow");
+        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三 / 六百一十五）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
+                .translation("config.promaid.flightFollow.enabled").define("enabled", false);
+        FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随·起手距离（格，默认 25，v1.2.2 实测六百一十五 由 5 改大）：你离她超过这个 3D 距离才起飞追——**更近的距离走路/搭路本来就够得着**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。范围 3~128。\n\n【起手与收手是两个不同的球】用户原话「开始跟结束两个半点的球大小应该不一样，默认值就是我说的那两个（25 / 5）」。 旧版只有**一个**判定球（收手半径由起手距离减 1 推导），于是「起飞门槛」与「收手门槛」绑死——迟滞只有 1 格，她在边界上来回起降。现在起手 = 这一条（默认 25），收手 = 下面那条（默认 5），默认档留 20 格迟滞。\n\n注意：老存档的配置文件里若已写着 dist = 5，Forge 不会替你改大，想用新默认请删掉那一行或手动改成 25")
+                .translation("config.promaid.flightFollow.dist").defineInRange("dist", 25.0, 3.0, 128.0);
+        FLIGHT_FOLLOW_END_DIST = BUILDER.comment("飞行跟随·收手距离（格，默认 5，v1.2.2 实测六百一十五 新增）：你进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 1~64。\n\n【必须比起手距离小】写成大于等于起手距离时，她会「一起飞就已经在收手半径内」= 起飞即刻收手、一次都飞不起来。所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值；默认 25 / 5 用不到这条兜底）")
+                .translation("config.promaid.flightFollow.endDist").defineInRange("endDist", 5.0, 1.0, 64.0);
+        FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
+                .translation("config.promaid.flightFollow.firework").define("firework", true);
+        FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
+                .translation("config.promaid.flightFollow.elytra").define("elytra", true);
         BUILDER.pop();
 
         // ---- 杂项 ----

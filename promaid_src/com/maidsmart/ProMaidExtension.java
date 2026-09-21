@@ -609,7 +609,7 @@ public class ProMaidExtension implements ILittleMaid {
                         // v1.2.2 实测六百〇八【飞行跟随】：主人飞远了、她包里有鞘翅+烟花、
                         // 中间没方块挡着 → 背上鞘翅追过去（作者口径"跟空袭起飞一样，target=主人"）。
                         // 卡在 246——**刚好压过搭路（245）**：这就是需求里"在判定使用搭路时"的那个点，
-                        // 条件不满足本行为压根不启动，搭路一字不动。默认关（bridge.flightFollow）。
+                        // 条件不满足本行为压根不启动，搭路一字不动。默认关（flightFollow.enabled）。
                         Pair.of(246, new com.maidsmart.combat.MaidFlightFollowBehavior()),
                         // v1.1.0：搭路（主人在上方时垫方块靠近，默认关）——低于自保、
                         // 高于落地水/战术：搭路条件本身排除威胁/自保，不与战斗抢移动

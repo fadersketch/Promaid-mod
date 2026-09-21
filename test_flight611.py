@@ -105,7 +105,9 @@ def stop_server():
 
 
 def set_bridge_flags(**kv):
-    """改 [bridge] 小节里的开关。键不存在就插在 [bridge] 那一行后面。"""
+    """改 [flightFollow] 小节里的开关。**六百一十五 起 flightFollow* 从 [bridge] 搬到了
+    [flightFollow]**，键名也短了（flightFollow→enabled、flightFollowDist→dist、
+    flightFollowFirework→firework、flightFollowElytra→elytra）；键不存在就插在该小节标题后面。"""
     raw = open(CONFIG, 'rb').read()
     try:
         t = raw.decode('utf-8')
@@ -117,7 +119,7 @@ def set_bridge_flags(**kv):
     hit = set()
     for line in lines:
         stripped = line.strip()
-        if stripped == '[bridge]':
+        if stripped == '[flightFollow]':
             toc = len(out)
         out.append(line)
         for k, v in kv.items():
@@ -305,7 +307,8 @@ def run_round(suffix, with_firework=True, phases=True, observe=20):
                 mine)
 
     take1 = 0
-    # ⑥ 阶段一：等她起飞并在 15 格处收手；结束那一刻抓一次真实坐标（自报距离的独立对照）
+    # ⑥ 阶段一：等她起飞、在收手半径（六百一十五 起 = flightFollow.endDist，默认 5 格）处收手；
+    #    结束那一刻抓一次真实坐标（自报距离的独立对照）
     last_end = 0
     t0 = time.time()
     while time.time() - t0 < PHASE1_MAX:
@@ -426,8 +429,8 @@ verdict = 'PASS'
 notes = []
 
 # ── A 轮：默认档（消耗烟花 / 照原版扣鞘翅耐久）——本批的主判据都在这轮 ──
-print('config A:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config A:', set_bridge_flags(enabled='true', firework='true',
+                                    elytra='true', dist='16.0'))
 a = run_round('A', with_firework=True, phases=True)
 notes += a['notes']
 if a['takeoff'] == 0:
@@ -437,12 +440,23 @@ elif a['end'] == 0 and a['legacy_end'] > 0:
                '说明 15 格中断没生效' % a['legacy_end'])
 elif a['end'] == 0:
     verdict = 'FAIL(A 轮既没有带距离的结束行，也没有旧式结束行 —— 观察窗口内她没走完一趟'
-elif min(a['end_dists']) < 5.0:
-    verdict = ('FAIL(A 轮她仍要贴到身边才收手：最短结束距离 %.1f 格（应为 ≥5，'
-               '口径是"15 格内就中断"）' % min(a['end_dists']))
+elif min(a['end_dists']) > 5.5:
+    # 【六百一十五 起判据反向】旧口径是"进到 15 格内就中断"，所以当时写的是"最短结束距离 ≥5"
+    # （"贴到身边才收手"就是回归）；现在收手半径是独立配置、默认 5（用户原话："当发现5格内有
+    # 主人后，结束此模式"）——结束距离落在 4~5 格才是**对的**，反了才是回归。
+    verdict = ('FAIL(A 轮收手距离不是"新默认 5 格"那一档：最短结束距离 %.1f 格（应为 ≤5.5；'
+               '六百一十五 起收手半径 = flightFollow.endDist，默认 5）' % min(a['end_dists']))
 elif a['takeoff'] <= a['takeoff_p1']:
-    verdict = ('FAIL(A 轮"飞出去会再启动"没生效：把替代主人 tp 到 64 格外之后没有新的起飞行'
-               '（起飞 %d = 阶段一的 %d）' % (a['takeoff'], a['takeoff_p1']))
+    # 【六百一十五 起降级为提示】这条判据依赖旧口径（收手半径 15 格：阶段一结束时她离目标还有
+    # 十几格，tp 之后距离一下拉到 80 格，"再飞一趟"看得清清楚楚）。新口径收手半径 5 格 ⇒
+    # 阶段一结束时她就贴在目标身边，tp 之后 10 秒采样窗读到的是 4.6~0.6 格——**分不出**
+    # "她又飞了一趟"与"她本来就站在那儿"（起飞行本身的限频也是 5 秒）。同一构建两次跑：
+    # 起飞 2（第一次，链路本身没问题）与起飞 1（第二次）。
+    # 该属性改由 test_radius615 / test_flight612 覆盖，这里只留提示、不再判失败。
+    a['notes'].append('提示：A 轮"tp 到 64 格后再飞一趟"没读到新的起飞行（起飞 %d = 阶段一 %d）'
+                      '—— 六百一十五 起收手半径 5 格、阶段一结束时她就在目标身边，'
+                      '这条判据在 10 秒窗里不可靠（见本处注释），不作为失败理由'
+                      % (a['takeoff'], a['takeoff_p1']))
 elif a['boost'] == 0:
     verdict = 'FAIL(A 轮没有补推行 —— 起飞了但没推进（烟花链路没走通）)'
 elif '燃料=烟花火箭' not in a['takeoff_line']:
@@ -452,7 +466,7 @@ elif a['fw_before'] is not None and a['fw_after'] is not None and a['fw_after'] 
 elif a['elytra_total'] != 1:
     verdict = 'FAIL(A 轮鞘翅件数=%d（应为 1：没丢也没多）' % a['elytra_total']
 else:
-    notes.append('阳性对照：A 轮结束距离 %s（都 ≥5 格 = 不再贴到身边才收手）；'
+    notes.append('阳性对照：A 轮结束距离 %s（≤5.5 格 = 六百一十五 的新收手半径那一档）；'
                  'tp 到 64 格后又飞了 %d 趟'
                  % (['%.1f' % x for x in a['end_dists']], a['takeoff'] - a['takeoff_p1']))
     if a['end_glide'] == 0:
@@ -472,8 +486,8 @@ else:
         notes.append('提示：A 轮没读到归还（「已落地，把胸甲还回去」或「槽=CHEST 失去鞘翅」都没有）')
 
 # ── B 轮：两个省料档 ──
-print('config B:', set_bridge_flags(flightFollow='true', flightFollowFirework='false',
-                                    flightFollowElytra='false'))
+print('config B:', set_bridge_flags(enabled='true', firework='false',
+                                    elytra='false', dist='16.0'))
 b = run_round('B', with_firework=True, phases=False, observe=18)
 notes += b['notes']
 if b['takeoff'] == 0:
@@ -486,8 +500,8 @@ elif b['dmg_mid'] != 0 or b['dmg_after'] != 0:
     verdict = 'FAIL(B 轮鞘翅 Damage=%d/%d —— 免耐久档没生效（mixin 没拦住）' % (b['dmg_mid'], b['dmg_after'])
 
 # ── C 轮：开关关着（默认）──
-print('config C:', set_bridge_flags(flightFollow='false', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config C:', set_bridge_flags(enabled='false', firework='true',
+                                    elytra='true', dist='16.0'))
 c = run_round('C', with_firework=True, phases=False, observe=12)
 notes += c['notes']
 if c['takeoff'] or c['boost']:
@@ -495,8 +509,8 @@ if c['takeoff'] or c['boost']:
         c['takeoff'], c['boost'])
 
 # ── D 轮：只给鞘翅、不给任何能飞的道具（六百一十一 新燃料口径的反向闸门）──
-print('config D:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config D:', set_bridge_flags(enabled='true', firework='true',
+                                    elytra='true', dist='16.0'))
 d = run_round('D', with_firework=False, phases=False, observe=14)
 notes += d['notes']
 if d['takeoff']:
