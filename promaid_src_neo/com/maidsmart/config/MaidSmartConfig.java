@@ -326,6 +326,23 @@ public static final ModConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ModConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ModConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
 public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
+/**
+ * v1.2.2 实测六百〇八【飞行跟随】：主人自己飞走了，她也能背上鞘翅追过来（默认关，观赏玩法）。
+ *
+ * 口径来自作者原话："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
+ * 没有方块阻拦，自己包里面还鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞是一样的，
+ * 但是 target 等于主人）。可以调整这种飞行跟随的时候是否消耗烟花和鞘翅耐久。"
+ *
+ * 所以它们是**搭路这一档的替代路径**：条件满足时她直接起飞，条件不满足时搭路那条老链路一字不动。
+ * 逻辑见 {@code com.maidsmart.combat.MaidFlightFollowBehavior}。
+ */
+public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW;
+/** 飞行跟随触发距离（格，默认 16）：主人比她远这么多格（3D）才起飞追——更近就走路/搭路，犯不上烧烟花 */
+public static final ModConfigSpec.DoubleValue BRIDGE_FLIGHT_FOLLOW_DIST;
+/** 飞行跟随是否消耗烟花（默认开）：关 = 照旧要求背包里有烟花，但每次补推不扣那一枚（纯观赏档） */
+public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW_FIREWORK;
+/** 飞行跟随是否消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1）：关 = 只对她飞行跟随期间的鞘翅免掉 */
+public static final ModConfigSpec.BooleanValue BRIDGE_FLIGHT_FOLLOW_ELYTRA;
 /** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
 public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
@@ -2010,6 +2027,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
+        // ---- v1.2.2 实测六百〇八【飞行跟随】：搭路这一档的替代路径（默认关，观赏玩法） ----
+        // 作者原话："女仆跟随能不能给她整个使用鞘翅一起飞呢，自己飞了后女仆只能搭着方块干着急了"
+        // → "开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间没有方块阻拦，
+        //    自己包里面还鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞是一样的，
+        //    但是 target 等于主人）。可以调整这种飞行跟随的时候是否消耗烟花和鞘翅耐久。"
+        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 烟花】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。飞到 4 格内收手，交回普通跟随。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条")
+                .translation("config.promaid.bridge.flightFollow").define("flightFollow", false);
+        BRIDGE_FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随触发距离（格，默认 16）：你离她超过这个 3D 距离才起飞追——更近的距离走路/搭路本来就够得着，犯不上烧烟花。范围 6~128")
+                .translation("config.promaid.bridge.flightFollowDist").defineInRange("flightFollowDist", 16.0, 6.0, 128.0);
+        BRIDGE_FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有烟花**（它是她能飞的凭证），但补推不再扣——纯观赏档，适合只想看她跟着飞的存档")
+                .translation("config.promaid.bridge.flightFollowFirework").define("flightFollowFirework", true);
+        BRIDGE_FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
+                .translation("config.promaid.bridge.flightFollowElytra").define("flightFollowElytra", true);
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
         // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）

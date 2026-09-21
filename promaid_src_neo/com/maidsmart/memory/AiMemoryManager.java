@@ -343,6 +343,8 @@ MinecraftServer server = event.getServer();
         // 让位、并豁免自动传送，残留 = 该女仆再也飞不起来（与上面 实测四百八十三 同一类漏同步）。
         com.maidsmart.combat.MaidTridentSpinBehavior.forget(maidUuid);
         com.maidsmart.combat.MaidMaceSmashBehavior.forgetForcedClutch(maidUuid);
+        // v1.2.2 实测六百〇八：飞行跟随同理——它还会替她换胸甲，收不到 stop() 就永远不还。
+        com.maidsmart.combat.MaidFlightFollowBehavior.forget(maidUuid);
         com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
     }
 

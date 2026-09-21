@@ -55,7 +55,118 @@ public final class MaidArmyCommand {
                                         com.mojang.brigadier.arguments.StringArgumentType.greedyString())
                                 .executes(ctx -> feedTest(ctx.getSource(),
                                         com.mojang.brigadier.arguments.StringArgumentType
-                                                .getString(ctx, "item"))))));
+                                                .getString(ctx, "item")))))
+                // v1.2.2 实测六百〇八【飞行跟随的可验证入口】。
+                // 【为什么必须有】这条链的 target 是**在线主人实体**（{@code maid.getOwner()}
+                // 走 PlayerList，专用服务器上没有玩家就是 null），与"女仆喂女仆"（实测五百四十五）
+                // 完全同一类困境：结构上无法端到端触发。照那条的先例留一条控制台可用的命令——
+                // 给指定女仆挂一个"替代主人"，走的仍是 MaidFlightFollowBehavior **同一套**判定与
+                // 飞行链路，只替换目标来源（就为了能在专用服务器上验证"她真的会起飞追人"）。
+                // 【前提】bridge.flightFollow 开关必须是开的（默认关），否则行为压根不启动。
+                .then(net.minecraft.commands.Commands.literal("flyfollow")
+                        .then(net.minecraft.commands.Commands.literal("clear")
+                                .executes(ctx -> flightFollowClear(ctx.getSource())))
+                        .then(net.minecraft.commands.Commands.argument("target", // argument
+                                        net.minecraft.commands.arguments.EntityArgument.entity())
+                                .executes(ctx -> flightFollow(ctx.getSource(),
+                                        net.minecraft.commands.arguments.EntityArgument
+                                                .getEntity(ctx, "target"), null))
+                                // 【第三个参数是可选的指定女仆】不给就取"离执行点最近的一只"——
+                                // 但测试/多女仆场景下"最近"可能不是你心里那只（本批实测踩过：
+                                // 测试世界里堆着前几批留下的女仆，命令挂到了别人身上，现象是
+                                // "她怎么不飞"），所以留一个显式指定的口子。
+                                .then(net.minecraft.commands.Commands.argument("maid", // argument
+                                                net.minecraft.commands.arguments.EntityArgument.entity())
+                                        .executes(ctx -> flightFollow(ctx.getSource(),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .getEntity(ctx, "target"),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .getEntity(ctx, "maid")))))));
+    }
+
+    /** v1.2.2 实测六百〇八：{@code /maid_smart flyfollow clear} —— 摘掉全部"替代主人"（调试目标表很小） */
+    private static int flightFollowClear(net.minecraft.commands.CommandSourceStack source) {
+        com.maidsmart.combat.MaidFlightFollowBehavior.clearDebugTargets();
+        source.sendFailure(Component.literal("\u00a77已摘掉全部飞行跟随调试目标。"));
+        return 1;
+    }
+
+    /**
+     * v1.2.2 实测六百〇八：{@code /maid_smart flyfollow <目标实体> [女仆]} —— 把"替代主人"挂上。
+     *
+     * 不给女仆参数时就取**离执行点最近**的一只（按 3D 距离排序——本批实测踩过"取列表第一只"
+     * 导致挂到别人身上的坑）；给了就必须是女仆。
+     *
+     * 【只用于验证】它不改任何玩法配置，只把 MaidFlightFollowBehavior 的目标来源换成命令指定的
+     * 实体；因此它同时是"这条链在实机上到底会不会起飞"的唯一可核验入口。
+     * 权限同 /maid_smart（OP），与控制台兼容（无执行者时退回主世界出生点定位女仆）。
+     */
+    private static int flightFollow(net.minecraft.commands.CommandSourceStack source,
+                                    net.minecraft.world.entity.Entity target,
+                                    net.minecraft.world.entity.Entity maidArg) {
+        try {
+            net.minecraft.world.entity.Entity executor = source.getEntity();
+            net.minecraft.server.level.ServerLevel level;
+            net.minecraft.core.BlockPos around;
+            if (executor != null && executor.level() instanceof net.minecraft.server.level.ServerLevel sl) {
+                level = sl;
+                around = net.minecraft.core.BlockPos.containing(
+                        executor.getX(), executor.getY(), executor.getZ());
+            } else {
+                level = source.getServer().overworld();
+                around = level.getSharedSpawnPos();
+            }
+            if (level == null) {
+                source.sendFailure(Component.literal("\u00a7c需要在一个世界里执行。"));
+                return 0;
+            }
+            EntityMaid maid = null;
+            if (maidArg != null) {
+                if (!(maidArg instanceof EntityMaid m)) {
+                    source.sendFailure(Component.literal("\u00a7c指定的实体不是女仆。"));
+                    return 0;
+                }
+                maid = m;
+            } else {
+                java.util.List<EntityMaid> maids = level.getEntitiesOfClass(EntityMaid.class,
+                        new net.minecraft.world.phys.AABB(around).inflate(64.0));
+                maids.removeIf(m -> !m.isAlive());
+                if (maids.isEmpty()) {
+                    source.sendFailure(Component.literal("\u00a7c附近 64 格内没有存活的女仆。"));
+                    return 0;
+                }
+                // 按到执行点的 3D 距离排序取最近的（不是"列表第一只"）
+                final double cx = around.getX() + 0.5;
+                final double cy = around.getY() + 0.5;
+                final double cz = around.getZ() + 0.5;
+                maids.sort(java.util.Comparator.comparingDouble(m -> m.distanceToSqr(cx, cy, cz)));
+                maid = maids.get(0);
+            }
+            // 【必须是"实际上的最终变量"】下面 sendSuccess 的 lambda 要捕获它，而 maid 本身被赋值两次
+            final EntityMaid chosen = maid;
+            if (target == null) {
+                com.maidsmart.combat.MaidFlightFollowBehavior.setDebugTarget(chosen, null);
+                source.sendSuccess(() -> Component.literal("\u00a77已摘掉 "
+                        + chosen.getDisplayName().getString() + " 的飞行跟随调试目标。"), false);
+                return 1;
+            }
+            if (!(target instanceof net.minecraft.world.entity.LivingEntity living)) {
+                source.sendFailure(Component.literal("\u00a7c目标必须是活体实体（她要追的是活物）。"));
+                return 0;
+            }
+            com.maidsmart.combat.MaidFlightFollowBehavior.setDebugTarget(chosen, living);
+            String msg = "\u00a7a" + chosen.getDisplayName().getString() + " 的飞行跟随目标已设为 "
+                    + living.getDisplayName().getString()
+                    + "\uff08\u9700 bridge.flightFollow=true\uff1b"
+                    + "\u7f3a\u9798\u7fc5/\u70df\u82b1\u3001\u8ddd\u79bb\u4e0d\u591f\u3001"
+                    + "\u4e2d\u95f4\u6709\u65b9\u5757\u906e\u6321\u90fd\u4e0d\u4f1a\u8d77\u98de\uff09";
+            source.sendSuccess(() -> Component.literal(msg), false);
+            com.maidsmart.tool.PromaidLog.log("飞行跟随", "flyfollow " + msg);
+            return 1;
+        } catch (Throwable t) {
+            source.sendFailure(Component.literal("\u00a7cflyfollow 失败：" + t));
+            return 0;
+        }
     }
 
     /**

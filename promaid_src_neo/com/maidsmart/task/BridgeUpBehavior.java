@@ -268,6 +268,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
             return false;
         }
+        // v1.2.2 实测六百〇八【给飞行跟随让位】：她正在"飞行跟随"（core 246 压着本行为）
+        // 时绝不搭路——她此刻是要背鞘翅去追主人，垫方块既没意义、又会把刚起的飞打断。
+        // 方位与"飞行任务让位"同一套写法：只挡本状态，别的都不动。
+        if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+            return false;
+        }
         LivingEntity owner = maid.getOwner();
         if (owner == null || !owner.isAlive() || owner.level() != level) {
             return false;
@@ -801,6 +807,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
     @Override
     protected boolean canStillUse(ServerLevel level, EntityMaid maid, long gameTime) {
         if (!MaidSmartConfig.BRIDGE_ENABLED.get()) {
+            return false;
+        }
+        // v1.2.2 实测六百〇八：飞行跟随中（哪怕搭到一半才切进飞行）立刻交出控制权
+        if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
             return false;
         }
         LivingEntity owner = maid.getOwner();

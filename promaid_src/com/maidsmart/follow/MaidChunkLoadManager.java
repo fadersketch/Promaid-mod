@@ -1032,6 +1032,17 @@ BlockPos stand = findStand(newLevel,
             boolean shouldPull = dSq0 >= (double) dist0 * dist0
                     || Math.abs(maid.m_20186_() - owner.m_20186_())
                             >= com.maidsmart.config.MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get();
+            // v1.2.2 实测六百〇八【飞行跟随期间不拉回】：她此刻滑翔位为真，下面那道"飞行作战
+            // 进行中"的闸本来也会生效——但那条闸有 15 秒超时（超时就强拉，还顺带清掉滑翔位），
+            // 而飞行跟随一趟最长 60 秒（MaidFlightFollowBehavior.MAX_TICKS），飞到一半被拉走
+            // 就等于"一起飞"这件事当场结束。所以这里单独让位，**不计时、不设超时**：本行为自带
+            // 收手（追上/超时/燃料耗尽/威胁出现），到点她自然落地，之后照常规规则处理。
+            // （跨维度不在此列：本行为的 canStillUse 一见目标与自己不同维度就收手，不会跨维飞。）
+            if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+                throttledSkipLog(maid, "flight-follow-samedim", name
+                        + " 正在背鞘翅追主人（飞行跟随），不拉回——追上/超时后自然结束");
+                return;
+            }
             if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
                 if (!shouldPull) {
                     throttledSkipLog(maid, "flight-air-samedim", name

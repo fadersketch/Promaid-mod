@@ -971,6 +971,72 @@ public final class MaidFlightKit {
         }
     }
 
+    /**
+     * v1.2.2 实测六百〇八【飞行跟随】：从背包/手上取一件可用鞘翅（**只取，不穿**）。
+     *
+     * 取用优先级与 {@link #equip} 完全一致（带护甲的"鞘翅胸甲"优先，其次普通鞘翅，最后手上），
+     * 只是把"穿上"那一步留给调用方——飞行跟随要记下**换下来的原胸甲**并在收手时还回去，
+     * 那件事只有调用方知道。
+     *
+     * @return 取到的鞘翅（空 = 没有）
+     */
+    public static ItemStack takeElytra(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.EMPTY;
+        }
+        try {
+            ItemStack ely = takeOneFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            if (ely.isEmpty()) {
+                ely = takeOneFromBackpack(maid, s -> isElytraLike(s, maid));
+            }
+            if (!ely.isEmpty()) {
+                return ely;
+            }
+            IItemHandlerModifiable h = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            for (int slot = 0; slot <= 1; slot++) {
+                if (isElytraLike(h.getStackInSlot(slot), maid) && isArmorElytra(h.getStackInSlot(slot))) {
+                    return h.extractItem(slot, 1, false);
+                }
+            }
+            for (int slot = 0; slot <= 1; slot++) {
+                if (isElytraLike(h.getStackInSlot(slot), maid)) {
+                    return h.extractItem(slot, 1, false);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.EMPTY;
+    }
+
+    /**
+     * v1.2.2 实测六百〇八【飞行跟随】：放一枚"只有推力、没有爆炸"的挂载型烟花。
+     *
+     * 与 {@link MaidFlightCombatBehavior} 里那一枚同一口径：**爆炸条目为空列表**，
+     * 所以到期 `explode()` 时伤害为 0，不会按 5+2n 炸到骑乘者自己（女仆只有 20 血）。
+     * 单独提出来是为了让"飞行跟随"不必复用空袭行为里的私有发射方法。
+     *
+     * @return true = 已经放出去了（调用方可以推进冷却）
+     */
+    public static boolean launchBoostRocket(net.minecraft.server.level.ServerLevel level, EntityMaid maid) {
+        if (level == null || maid == null) {
+            return false;
+        }
+        try {
+            ItemStack rocketStack = new ItemStack(Items.FIREWORK_ROCKET);
+            rocketStack.set(net.minecraft.core.component.DataComponents.FIREWORKS,
+                    new net.minecraft.world.item.component.Fireworks(1, java.util.List.of()));
+            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
+                    new net.minecraft.world.entity.projectile.FireworkRocketEntity(level, rocketStack, maid);
+            level.addFreshEntity(rocket);
+            level.playSound(null, maid.getX(), maid.getY(), maid.getZ(),
+                    net.minecraft.sounds.SoundEvents.FIREWORK_ROCKET_LAUNCH,
+                    net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private interface StackFilter {
         boolean test(ItemStack stack);
     }

@@ -347,6 +347,8 @@ public class AiMemoryManager {
         // 实测五百四十四：激流突进（MaidTridentSpinBehavior）的表同样要清——它现在会让空袭
         // 让位、并豁免自动传送，残留 = 该女仆再也飞不起来（与上面 实测四百八十三 同一类漏同步）。
         com.maidsmart.combat.MaidTridentSpinBehavior.forget(maidUuid);
+        // v1.2.2 实测六百〇八：飞行跟随同理——它还会替她换胸甲，收不到 stop() 就永远不还。
+        com.maidsmart.combat.MaidFlightFollowBehavior.forget(maidUuid);
         com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
     }
 
