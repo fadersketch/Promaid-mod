@@ -1890,7 +1890,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing").push("bombing");
         COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 远程空袭（盘旋期间每次开火之后）/ 第三方战斗任务都会放（实测六百〇三起远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
                 .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 v1.2.2 实测六百〇四/六百〇五 起放宽为**注册名里带 tnt 的都算，方块继承 TntBlock 的也算**（原版那一件与各模组自加的 TNT 通吃）；而且认出来的那一件是**它自己那一枚就放它自己**——模组自己写的 TNT 方块走它自己的点火钩子（放出来的是模组自己的 TNT 实体，威力/破坏/带火全归它自己），原版那一件才由本模组按『不破坏方块』的口径接管；点火料 = 类打火石（打火石及其子类，优先，每发掉 1 点耐久）或类火焰弹（火焰弹及其子类，没有打火石时消耗 1 个），走哪条看这一件**有没有耐久**（有耐久＝道具扣耐久、没耐久＝消耗品整件消耗），两种都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，本模组自己的炸弹伤害与击飞对主人/友军/她自己都不生效")
+        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 v1.2.2 实测六百〇四/六百〇五 起放宽为**注册名里带 tnt 的都算，方块继承 TntBlock 的也算**（原版那一件与各模组自加的 TNT 通吃）；而且认出来的那一件是**它自己那一枚就放它自己**——模组自己写的 TNT 方块走它自己的点火钩子（放出来的是模组自己的 TNT 实体，威力/带火归它自己；**「破不破方块」自 v1.2.2 实测六百〇七 起跟着「轰炸破坏方块」开关走**：关着时那一炸也一个方块都不拆、伤害照旧），原版那一件才由本模组按『不破坏方块』的口径整段接管；点火料 = 类打火石（打火石及其子类，优先，每发掉 1 点耐久）或类火焰弹（火焰弹及其子类，没有打火石时消耗 1 个），走哪条看这一件**有没有耐久**（有耐久＝道具扣耐久、没耐久＝消耗品整件消耗），两种都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，本模组自己的炸弹伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
         COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
@@ -1900,7 +1900,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing.tntInterval").defineInRange("tntInterval", 200, 10, 1200);
         COMBAT_BOMBING_TNT_SPEED = BUILDER.comment("投掷初速（格/tick，默认 0.9）：水平方向的速度，调大 = 飞得更快更直、调小 = 抛物线更明显")
                 .translation("config.promaid.bombing.tntSpeed").defineInRange("tntSpeed", 0.9, 0.1, 3.0);
-        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
+        COMBAT_BOMBING_BREAK_BLOCKS = BUILDER.comment("轰炸破坏方块（默认关）：关 = 只炸伤害与击退、不动地形（ExplosionInteraction.NONE）；开 = 原版爆炸，照原样炸出坑。**模组自己的 TNT 也归这条管**（v1.2.2 实测六百〇七）：她扔出去的模组 TNT（例如等价交换的爆破新星）威力与带不带火仍归它自己，但「破不破方块」跟着这条开关走——关着时那一炸也一个方块都不拆（只收走地形权限，伤害照旧）。注意女仆自己放的那几块无论开关都不会留在世界里：黑曜石/基岩到期回收进她背包（背包满落地），重生锚/床起爆即被它们自己那一炸消耗掉")
                 .translation("config.promaid.bombing.breakBlocks").define("breakBlocks", false);
         COMBAT_BOMBING_HURT_FRIENDLY = BUILDER.comment("轰炸伤到主人/友军（默认关）：关 = 爆炸归因给女仆，主人与同主女仆既不掉血也不被震（与重锤风爆同一套风免）；开 = 完全不归因的原版爆炸，主人/友军照掉血照被炸飞，女仆自己也吃自己那一发")
                 .translation("config.promaid.bombing.hurtFriendly").define("hurtFriendly", false);
