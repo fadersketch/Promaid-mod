@@ -107,8 +107,9 @@ import java.util.UUID;
  * ② **轰炸推广到所有攻击模式**。反馈原文："将末地水晶/重生锚/床的机制推广到所有的攻击模式下
  *    （除了远程空袭，因为一直飞在天上，本来就放不了。）"
  *    ——相位机改成由**服务端 tick 统一驱动**（{@link #tickPhases}，它不再只是空袭行为里的一步），
- *    所有战斗任务都在"攻击冷却记忆由无到有"= 刚打完一记那一刻试起手（{@link #tickCombatTnt}），
- *    远程空袭按任务 UID 排除（{@link com.maidsmart.combat.MaidFlightKit#isRangedTask}）。
+ *    所有战斗任务都在"攻击冷却记忆由无到有"= 刚打完一记那一刻试起手（{@link #tickCombatTnt}）。
+ *    （实测五百九十二当时把远程空袭按任务 UID 排除了——「她一直飞在天上，本来就放不了」；
+ *    实测六百〇三 按新需求放开，见下。）
  *    顺带给整条链路加了最短间隔（bombing.bombInterval，默认 200 tick = 10 秒）：一次挥砍放一枚
  *    会在几秒内烧光她的黑曜石 / 水晶，缺料那一下不占用间隔。
  *
@@ -148,6 +149,26 @@ import java.util.UUID;
  * 读到 {@link #tickPhases} 由服务端 tick 驱动，放方块 / 挂水晶 / 充能都不需要她停手
  * （落点是目标脚边或她正下方，她飞着也照放），飞行、扑击、开火、起飞一概不受影响。
  * {@link #isBombing(EntityMaid)} 保留下来只作**查询/日志**用（不再是让位判据）。
+ *
+ * ── 实测六百〇三【远程空袭也放炸弹 + 点火料多个烈焰弹】──
+ * 反馈原文："现在将重生锚之类的放置也加入到远程空袭，同时走后门让它在空中也可以放置。"
+ *             "女仆包内有烈焰弹的时候也可以触发投掷 tnt 效果是消耗一个烈焰弹。优先用打火石。"
+ *
+ * ① **远程空袭加入放置链路**：旧版 {@link #tickCombatTnt} 里有一道
+ *    {@code !MaidFlightKit.isRangedTask(maid)}——那是 实测五百九十二 按当时的理解（"她一直飞在
+ *    天上，本来就放不了"）加的闸。现在整个放开：远程空袭盘旋期间**每次开火之后**先试
+ *    {@link #tryStartMelee}（材料齐就起相位，相位收尾自己投 TNT），没起手才就地投 TNT
+ *    （{@link #tickRangedTnt}，与近战猛击那条路完全对称）。
+ * ② **走后门：悬空也放得下**（{@link #tryPlaceAirDrop}，面板「空中悬空投弹」默认开）：
+ *    前三级落点都要求"那一格没被别人占着 + 原版肯收"，而目标**悬空**（蝙蝠 / 恶魂 / 半空中的怪）
+ *    时它脚边那四格全是空气、原版又以"那一格站着实体"为由拒绝 → 整段放弃。这最后一级把落点
+ *    直接取在**目标头顶那一格 → 目标自己那一格**上，不要求支撑面、也不要求那一格没站着它
+ *    （只避开"第三方生物"，免得把路过的别人埋进去）——于是炸弹可以是一座**悬在空中的底座**，
+ *    正好贴在目标身上。
+ * ③ **投掷 TNT 的点火料多了烈焰弹**（{@link #useIgniter}）：打火石**优先**（就地扣 1 点耐久，
+ *    照 实测五百九十一 的口径），没有打火石时消耗 **1 个烈焰弹 / 火焰弹**
+ *    （{@code minecraft:fire_charge}），两者都没有才跳过——材料判定因此从"TNT + 打火石"
+ *    放宽成"TNT + 任意一种点火料"（{@link #hasIgniter}）。
  *
  * ── 爆炸口径（默认全保护，全部可在配置面板调）──
  * - 伤害源**归因给女仆**（{@code damageSources().explosion(maid, maid)}）：于是
@@ -283,6 +304,18 @@ public final class MaidBombing {
         return MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get();
     }
 
+    /**
+     * v1.2.2 实测六百〇三【走后门：悬空也放得下】（默认开）——落点的最后一级。
+     *
+     * 需求原文："同时走后门让它在空中也可以放置。"前三级（目标脚边四邻 / 她正下方 / 悬空）
+     * 都有一个共同前提：那一格**没被别人占着**、原版也肯收。目标悬空时（蝙蝠 / 恶魂 /
+     * 半空中的怪）它脚边那四格全是空气、原版又以"那一格站着实体"为由拒绝 → 整段放弃。
+     * 这一级直接把落点取在**目标头顶 / 目标自己那一格**上（见 {@link #tryPlaceAirDrop}）。
+     */
+    private static boolean cfgAirDrop() {
+        return MaidSmartConfig.COMBAT_BOMBING_AIR_DROP.get();
+    }
+
     private static double cfgTntRange() {
         return MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get();
     }
@@ -304,6 +337,8 @@ public final class MaidBombing {
     private static final String ID_GLOWSTONE = "minecraft:glowstone";
     private static final String ID_TNT = "minecraft:tnt";
     private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
+    /** v1.2.2 实测六百〇三：烈焰弹 / 火焰弹——打火石之后的第二号点火料（原版口径也是靠它点着 TNT 的） */
+    private static final String ID_FIRE_CHARGE = "minecraft:fire_charge";
     private static final String ID_TNT_PRIMED_SOUND = "minecraft:entity.tnt.primed";
 
     private static final Map<String, Item> ITEM_CACHE = new HashMap<>();
@@ -484,6 +519,40 @@ public final class MaidBombing {
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /**
+     * v1.2.2 实测六百〇三【点火料：打火石 或 烈焰弹】。
+     *
+     * 需求原文："女仆包内有烈焰弹的时候也可以触发投掷 tnt 效果是消耗一个烈焰弹。优先用打火石。"
+     * ——打火石**优先**（按原版点一次掉 1 点耐久，见 {@link #useFlintAndSteel}）；
+     * 没有打火石时消耗 **1 个烈焰弹 / 火焰弹**（{@code minecraft:fire_charge}）。
+     * 两者都没有 → 这一发跳过（不记间隔）。
+     */
+    private static boolean hasIgniter(EntityMaid maid) {
+        return has(maid, ID_FLINT_AND_STEEL) || has(maid, ID_FIRE_CHARGE);
+    }
+
+    /**
+     * 用掉一份点火料，返回"刚用掉的那一件"（给 {@link BombPose} 做动作：副手亮一下）；
+     * 空 = 一件都没有（这一发别投）。
+     *
+     * ① 打火石优先：就地扣 1 点耐久（不消耗整件），返回它的模型快照；
+     * ② 没有打火石：从背包里**取出 1 个烈焰弹**（真的消耗掉，照需求原话"效果是消耗一个烈焰弹"），
+     *    返回的正是这一件——动作里亮的也就是它。
+     */
+    private static ItemStack useIgniter(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.f_41583_;
+        }
+        try {
+            if (useFlintAndSteel(maid)) {
+                return flintDisplay();
+            }
+            return takeOne(maid, ID_FIRE_CHARGE);
+        } catch (Throwable ignored) {
+            return ItemStack.f_41583_;
+        }
     }
 
     private static SoundEvent sound(String id) {
@@ -1078,7 +1147,8 @@ public final class MaidBombing {
      * 轰炸相位推进一次。step 0 放方块；step 1 挂水晶 / 萤石充能 → 排好起爆时间并交还链路。
      *
      * v1.2.2 实测五百九十二：它不再由空袭行为调用，而是由 {@link #tickPhases}（服务端 tick）
-     * 统一驱动——轰炸因此对所有攻击模式一视同仁（远程空袭除外，见 {@link #tickCombatTnt}）。
+     * 统一驱动——轰炸因此对所有攻击模式一视同仁（实测六百〇三起**远程空袭也算在内**，
+     * 见 {@link #tickRangedTnt}）；旧版那道"远程空袭除外"的闸见 {@link #tickCombatTnt} 的注释。
      *
      * v1.2.2 实测六百：返回 {@link Result}，**不再自己从相位表里摘自己**——三段并行之后
      * 摘除与"这一段走完了要不要投 TNT"都由驱动器（{@link #tickPhases}）统一处理。
@@ -1165,7 +1235,8 @@ public final class MaidBombing {
      * v1.2.2 实测五百九十二【相位的唯一驱动器】：每 tick 推一次所有活着的相位（在实体 tick 之前）。
      *
      * 【为什么要改成全服驱动】旧版相位只由空袭行为在它的 tick 里推——于是"打完一记放炸弹"这件事
-     * 只存在于飞行近战。需求要把它推广到所有攻击模式（远程空袭除外），而地面近战 / 弓弩 / 三叉戟
+     * 只存在于飞行近战。需求要把它推广到所有攻击模式（实测六百〇三起连远程空袭也算，见
+     * {@link #tickRangedTnt}），而地面近战 / 弓弩 / 三叉戟
      * / 弹幕 / 枪械 / 第三方战斗任务压根没有"空袭行为"这个东西，所以驱动器必须独立出来。
      * 相位表很小（只有正在放炸弹的那几只女仆），每 tick 遍历无压力。
      *
@@ -1248,11 +1319,12 @@ public final class MaidBombing {
         ItemStack display = stack.m_41777_();
         display.m_41764_(1);
         ph.display = display;
-        BlockPos spot = placeOnSupport(level, maid, targetPos, stack);
+        BlockPos spot = placeOnSupport(level, maid, targetPos, stack, ph.target);
         if (spot == null) {
             giveBack(maid, stack);
             log(ph.kind.cn + " 放不下（目标脚边 4 邻 / 她正下方 16 格 / 空中强制="
-                    + (cfgAirPlace() ? "开" : "关") + " 都没成）→ 本次放弃轰炸");
+                    + (cfgAirPlace() ? "开" : "关") + " / 后门悬空投弹="
+                    + (cfgAirDrop() ? "开" : "关") + " 都没成）→ 本次放弃轰炸");
             return false;
         }
         ph.spot = spot;
@@ -1422,8 +1494,13 @@ public final class MaidBombing {
      * ③ ①② 都要求**实心支撑面**；都没有且开了「空中强制放置」时，就在她正下方取第一格
      *    可替换的位置**直接悬空放下**——原版放置本身就允许悬空（`BlockItem.place` 只看
      *    点击位置能不能被替换），只是玩家手点不到空气，我们用构造出来的放置上下文可以。
+     *
+     * v1.2.2 实测六百〇三【走后门：悬空也放得下】：上面三级都失败（典型就是**目标悬空**——
+     * 蝙蝠 / 恶魂 / 半空中的怪：它脚边那四格全是空气、原版又以"那一格站着实体"为由拒绝）
+     * 时，再走 {@link #tryPlaceAirDrop}——落点直接取在目标头顶 / 目标自己那一格上。
      */
-    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, BlockPos tp, ItemStack stack) {
+    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, BlockPos tp, ItemStack stack,
+                                          LivingEntity target) {
         BlockPos maidFeet = maid.m_20183_();
         BlockPos maidHead = maidFeet.m_7494_();
         List<BlockPos> near = new ArrayList<>(4);
@@ -1443,15 +1520,76 @@ public final class MaidBombing {
         if (spot != null) {
             return spot;
         }
-        if (!cfgAirPlace()) {
+        if (cfgAirPlace()) {
+            // 空中强制放置（不要求支撑面）
+            spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, false);
+            if (spot != null) {
+                return spot;
+            }
+            spot = tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, false);
+            if (spot != null) {
+                return spot;
+            }
+        }
+        // v1.2.2 实测六百〇三【走后门】：最后一级——目标头顶 / 目标自己那一格，悬空也认
+        return cfgAirDrop() ? tryPlaceAirDrop(level, maid, stack, tp, target, maidFeet, maidHead) : null;
+    }
+
+    /**
+     * v1.2.2 实测六百〇三【走后门：悬空也放得下】。
+     *
+     * 需求原文："现在将重生锚之类的放置也加入到远程空袭，同时走后门让它在空中也可以放置。"
+     *
+     * 【为什么需要它】远程空袭她一直在天上盘旋，目标还常常**自己就悬空**（蝙蝠 / 恶魂 /
+     * 被击飞到半空中的怪 / 站在水里的怪）：目标脚边那四个邻居全是空气、她正下方也没有地面时，
+     * 前四级要么找不到支撑面、要么被原版以"那一格站着实体"（{@code isUnobstructed}）拒掉，
+     * 于是整段放弃——玩家看到的就是"她带着重生锚却从来不放"。
+     *
+     * 【走后门怎么走】落点直接取**目标头顶那一格 → 目标自己那一格**：不要求支撑面、
+     * 也不要求那一格没站着目标自己（原版拒绝之后由 {@code tryPlaceAll} 的兜底强制放下接手，
+     * 那一格可替换就 setBlock），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。
+     * 唯一保留的避让是"**第三方生物**"：那一格里若站着除目标以外的任何活物就跳过，
+     * 免得把路过的友军 / 主人埋进黑曜石里（`occupiedByThirdParty`）。
+     */
+    private static BlockPos tryPlaceAirDrop(ServerLevel level, EntityMaid maid, ItemStack stack, BlockPos tp,
+                                           LivingEntity target, BlockPos maidFeet, BlockPos maidHead) {
+        List<BlockPos> cand = new ArrayList<>(2);
+        BlockPos aboveTarget = tp.m_7494_();
+        if (!occupiedByThirdParty(level, aboveTarget, target)) {
+            cand.add(aboveTarget); // ① 目标头顶那一格（最自然：像"照头砸下来"）
+        }
+        if (!occupiedByThirdParty(level, tp, target)) {
+            cand.add(tp);          // ② 目标自己那一格（贴脸）
+        }
+        if (cand.isEmpty()) {
             return null;
         }
-        // 空中强制放置（不要求支撑面）
-        spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, false);
+        BlockPos spot = tryPlaceAll(level, maid, stack, cand, maidFeet, maidHead, false);
         if (spot != null) {
-            return spot;
+            log("走后门：目标那一格 / 头顶那一格悬空放下 @" + spot.m_123341_() + ","
+                    + spot.m_123342_() + "," + spot.m_123343_() + "（落点无支撑面也算数）");
         }
-        return tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, false);
+        return spot;
+    }
+
+    /**
+     * 这一格里是不是站着**除 {@code allowed} 以外**的活物（走后门落点的唯一避让，见
+     * {@link #tryPlaceAirDrop}）。
+     */
+    private static boolean occupiedByThirdParty(ServerLevel level, BlockPos p, LivingEntity allowed) {
+        if (level == null || p == null) {
+            return true;
+        }
+        try {
+            for (LivingEntity le : level.m_6443_(LivingEntity.class,
+                    new net.minecraft.world.phys.AABB(p), e -> true)) {
+                if (le != allowed) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     /** 按"离女仆的 3D 距离"排序（贴脸放优先） */
@@ -1613,14 +1751,26 @@ public final class MaidBombing {
      * 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：调用点在
      * {@code fireRanged} 之后 = 这一次开火打完，于是直接走"攻击链路收尾"（
      * {@link #onAttackChainEnd}）。与下面"所有战斗模式"那条共用同一套最短间隔，不会重复扔。
+     *
+     * v1.2.2 实测六百〇三【远程空袭也放炸弹】：这一步的顺序改成与近战猛击那条路**完全对称**——
+     * 需求原文："现在将重生锚之类的放置也加入到远程空袭"。先试 {@link #tryStartMelee}
+     * （末地水晶 / 重生锚 + 萤石 / 床；材料齐才起手、放不下就整段跳过），起手成功就交给相位，
+     * **TNT 由相位收尾那一步投**（{@link #tickPhases} → {@link #flushTnt}），所以这里直接返回
+     * （免得同一记打完既放了炸弹又立刻多扔一发）；没起手才就地投 TNT。
      */
     public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         try {
-            if (level == null || maid == null || target == null || !cfgTnt()) {
+            if (level == null || maid == null || target == null || (!cfgTnt() && !cfgMelee())) {
                 return;
+            }
+            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+                return; // 傀儡模式（第三方玩法）期间不介入
             }
             // v1.2.2 实测五百九十【改挂攻击链路】：本方法由空袭远程链路在 fireRanged
             // **之后**调用 = 「这一次开火打完」，所以直接走链路收尾（最短间隔只当下限）
+            if (cfgMelee() && tryStartMelee(level, maid, target)) {
+                return; // 起手成功：TNT 归相位收尾（与猛击那条路一致）
+            }
             onAttackChainEnd(level, maid, target);
         } catch (Throwable t) {
             log("投掷异常：" + t);
@@ -1633,7 +1783,7 @@ public final class MaidBombing {
      * 口径（对照女仆生存 MaidTntInteractionController 的做法，自己实现）：
      * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
      *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
-     * ② 有 TNT + 打火石（缺料静默跳过，不占用间隔）；
+     * ② 有 TNT + 点火料（打火石 或 烈焰弹，见 {@link #hasIgniter}；缺料静默跳过，不占用间隔）；
      * ③ **打完一记之后才扔**（v1.2.2 实测五百九十改）：攻击冷却记忆由无到有 = 刚完成一次
      *    攻击链路收尾 → 登记待投放；距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
      *    挂着等下一记——最短间隔只当下限，不再是驱动本身（详见 {@link #onAttackChainEnd}）；
@@ -1644,7 +1794,9 @@ public final class MaidBombing {
      * ⑦ 傀儡模式（第三方玩法）期间整段不介入。
      * ⑧ v1.2.2 实测五百九十二：这一记打完**先试轰炸起手**（末地水晶 / 重生锚 + 萤石 / 床，
      *    见 {@link #tryStartMelee}）——材料齐就整段交给轰炸相位，相位收尾自己会投 TNT；
-     *    远程空袭按任务 UID 排除（她一直飞在天上、本来就放不了，需求原话）。
+     *    v1.2.2 实测六百〇三：**远程空袭也一视同仁**（旧版这里有一道
+     *    {@code !MaidFlightKit.isRangedTask} 的闸，是 实测五百九十二 按当时的理解加的；
+     *    现在放开，落点悬空那一档由 {@link #tryPlaceAirDrop} 兜住）。
      *
      * 附：本方法只跑【她自己的战斗链路】——TNT 由 TLM 的攻击行为自己触发（近战挥砍/远程开火
      * 都会写攻击冷却记忆），我们只负责"这一记打完的收尾动作"，不额外替她索敌开火。
@@ -1686,9 +1838,10 @@ public final class MaidBombing {
                 // ③ v1.2.2 实测五百九十二【轰炸推广到所有攻击模式】：这一记打完 → 先试轰炸起手
                 //    （黑曜石+末地水晶 / 重生锚+萤石 / 床）。起手成功则整段交给轰炸相位，
                 //    相位收尾自己会投 TNT（见 tick 末尾的 flushTnt）——所以这里直接返回。
-                //    远程空袭除外：她一直飞在天上、本来就放不了（需求原话）。
-                if (cfgMelee() && !com.maidsmart.combat.MaidFlightKit.isRangedTask(maid)
-                        && tryStartMelee(level, maid, target)) {
+                //    v1.2.2 实测六百〇三：远程空袭那道闸**删掉**（需求："将重生锚之类的放置
+                //    也加入到远程空袭"）——她飞在天上也照放，落点是目标脚边 / 她正下方 /
+                //    悬空 / 最后走 tryPlaceAirDrop 的后门。
+                if (cfgMelee() && tryStartMelee(level, maid, target)) {
                     return;
                 }
             }
@@ -1767,8 +1920,8 @@ public final class MaidBombing {
             if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
                 return; // 最短间隔没到
             }
-            if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
-                return; // 不刚需：缺料直接跳过（不占用间隔）
+            if (!has(maid, ID_TNT) || !hasIgniter(maid)) {
+                return; // 不刚需：缺料直接跳过（不占用间隔）——v1.2.2 实测六百〇三：点火料 = 打火石 或 烈焰弹
             }
             if (throwTntAt(level, maid, target, id, gameTime) > 0) {
                 TNT_ARMED.remove(id);
@@ -1947,7 +2100,7 @@ public final class MaidBombing {
         int want = throwCount(maid);
         int thrown = 0;
         for (int i = 0; i < want; i++) {
-            if (!has(maid, ID_TNT) || !has(maid, ID_FLINT_AND_STEEL)) {
+            if (!has(maid, ID_TNT) || !hasIgniter(maid)) {
                 break;
             }
             ItemStack tntStack = takeOne(maid, ID_TNT);
@@ -1956,7 +2109,10 @@ public final class MaidBombing {
             }
             // v1.2.2 实测五百九十一【打火石不再被吞】：从**原槽**取出 → 扣 1 点耐久 → 放回**原槽**
             //（旧版是整件取出、只对取出来的那份扣耐久 = 玩家看到的"直接把打火石吞掉"）
-            if (!useFlintAndSteel(maid)) {
+            // v1.2.2 实测六百〇三：没有打火石时用 **1 个烈焰弹**（真的消耗掉）——返回的是"刚用掉的
+            // 那一件"，下面拿它做副手动作（亮打火石 / 亮烈焰弹，各亮各的）
+            ItemStack igniter = useIgniter(maid);
+            if (igniter.m_41619_()) {
                 giveBack(maid, tntStack);
                 break;
             }
@@ -2023,10 +2179,10 @@ public final class MaidBombing {
                 level.m_5594_(null, maid.m_20183_(), snd, SoundSource.BLOCKS, 1.0f, 1.0f);
             }
             maid.m_6674_(InteractionHand.MAIN_HAND);
-            // 投掷那一记的动作：副手举的是**打火石**（实测五百九十四）——旧版亮的是刚扔出去的
-            // 那枚 TNT，反馈要的是"点火的那只手"：扔 TNT 的时候副手切换成打火石。
-            ItemStack flint = flintDisplay();
-            pose(maid, flint.m_41619_() ? tntStack : flint, BOMB_POSE_TICKS);
+            // 投掷那一记的动作：副手举的是**点火的那一件**（实测五百九十四）——旧版亮的是刚扔出去的
+            // 那枚 TNT，反馈要的是"点火的那只手"：扔 TNT 的时候副手切换成打火石；
+            // 实测六百〇三起没有打火石就用烈焰弹，这时副手亮的自然是那枚烈焰弹。
+            pose(maid, igniter.m_41619_() ? tntStack : igniter, BOMB_POSE_TICKS);
             if (PENDING.size() < MAX_PENDING) {
                 PENDING.add(new Bomb(level, maid, tnt, tnt.m_20183_(), null, null,
                         Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2, tntStack));
