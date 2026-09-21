@@ -199,6 +199,37 @@ public final class MaidFlightKit {
 
     /* ---------------- 装备检测 ---------------- */
 
+    /**
+     * v1.2.2 实测六百〇九：**本模组自己借走的那件副手物品**（没借走就空栈）。
+     *
+     * 两个"手上亮一下"的链路（{@link BombPose} / {@link FlightFireworkPose}）只补动作表现：
+     * 把"她这一下正在用的那件"放进副手举十几 tick，原物留在它们自己的快照里。也就是说
+     * 那十几 tick 里，玩家给她的那件东西（羽扇 / 烟花 / 盾牌…）**不在任何槽位里**——
+     * 就绪判定若只看槽位，就会在这十几 tick 里得到"没有"。
+     *
+     * 实测现场：粉丝把孔雀羽扇挂在她副手，空袭每十几秒起手一次轰炸 → 就绪判定报
+     * 「可以飞行的道具」→ 主人聊天框一条系统消息；借还之后判定又齐、把播报冷却清零，
+     * 下一轮再报一条，**每 10 秒一条永远不停**。修法：就绪判定把"借走的那件"算作
+     * **仍在她身上**（{@link #hasInHandsOrBorrowed}）。取用（{@code takeFirework} /
+     * {@code TwilightFanKit.findFan}）**不变**：真要动手挥扇 / 烧烟花时它必须在槽位里。
+     */
+    public static ItemStack borrowedOffhand(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.EMPTY;
+        }
+        ItemStack a = BombPose.savedOffhand(maid);
+        if (!a.isEmpty()) {
+            return a;
+        }
+        return FlightFireworkPose.savedOffhand(maid);
+    }
+
+    /** 主手 / 副手 / 被我们自己借走的那件副手物品 —— 三处任一满足即算"在她身上" */
+    private static boolean hasInHandsOrBorrowed(EntityMaid maid, StackFilter filter) {
+        return filter.test(maid.getMainHandItem()) || filter.test(maid.getOffhandItem())
+                || filter.test(borrowedOffhand(maid));
+    }
+
     /** 身上（主手/副手/护甲/背包）是否有可用鞘翅
      *  （v1.2.0 实测五百五十五：判据放宽为 {@link #isElytraLike}——模组"内置鞘翅的装备"也算） */
     public static boolean hasElytra(EntityMaid maid) {
@@ -208,7 +239,7 @@ public final class MaidFlightKit {
         if (isElytraLike(maid.getItemBySlot(EquipmentSlot.CHEST), maid)) {
             return true;
         }
-        if (isElytraLike(maid.getMainHandItem(), maid) || isElytraLike(maid.getOffhandItem(), maid)) {
+        if (hasInHandsOrBorrowed(maid, s -> isElytraLike(s, maid))) {
             return true;
         }
         return hasInBackpack(maid, s -> isElytraLike(s, maid));
@@ -219,7 +250,7 @@ public final class MaidFlightKit {
         if (maid == null) {
             return false;
         }
-        if (isWeaponForTask(maid, maid.getMainHandItem()) || isWeaponForTask(maid, maid.getOffhandItem())) {
+        if (hasInHandsOrBorrowed(maid, s -> isWeaponForTask(maid, s))) {
             return true;
         }
         return hasInBackpack(maid, s -> isWeaponForTask(maid, s));
@@ -402,7 +433,8 @@ public final class MaidFlightKit {
         if (maid == null) {
             return false;
         }
-        if (isFirework(maid.getMainHandItem()) || isFirework(maid.getOffhandItem())) {
+        // 实测六百〇九：含"被我们自己的动作表现借走的那件副手物品"——见 borrowedOffhand
+        if (hasInHandsOrBorrowed(maid, MaidFlightKit::isFirework)) {
             return true;
         }
         return hasInBackpack(maid, MaidFlightKit::isFirework);
@@ -899,6 +931,43 @@ public final class MaidFlightKit {
         return text;
     }
 
+    /**
+     * v1.2.2 实测六百〇九【排查用诊断】：一行说清"飞行燃料判定为什么不过"——
+     * 主手 / 副手各是什么、背包里有没有烟花和羽扇、她会不会"能上天的位移法术"。
+     *
+     * 与 {@link #elytraDiagnostic} 同一用途、同一节流（由 {@code notifyNotReady} 落盘，
+     * 最多 15 秒一行）。
+     *
+     * 【为什么补这一行】旧版只给"缺鞘翅"留了诊断，缺"可以飞行的道具"时运行日志里一片安静，
+     * 而气泡 / 主人系统消息照发——玩家报"她明明拿着孔雀羽扇却说缺飞行道具"时，日志里
+     * 查无此事，只能靠猜。本批真正的根因（本模组自己的"手上亮一下"把副手借走十几 tick）
+     * 就是靠这一行读出来的：现场那一行里 `副手=` 显示的是**我们的展示件**而不是玩家的羽扇。
+     */
+    public static String fuelDiagnostic(EntityMaid maid) {
+        if (maid == null) {
+            return "燃料判定: 女仆为空";
+        }
+        return "燃料判定: 主手=" + describeStack(maid.getMainHandItem())
+                + " 副手=" + describeStack(maid.getOffhandItem())
+                + " 背包烟花=" + hasInBackpack(maid, MaidFlightKit::isFirework)
+                + " 背包羽扇=" + hasInBackpack(maid, TwilightFanKit::isFan)
+                + " 位移法术=" + hasClimbSpell(maid);
+    }
+
+    /** 一行物品描述：`1xminecraft:elytra` / `空`（诊断日志专用） */
+    private static String describeStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return "空";
+        }
+        String id;
+        try {
+            id = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem()));
+        } catch (Throwable ignored) {
+            id = stack.getItem().toString();
+        }
+        return stack.getCount() + "x" + id;
+    }
+
     public static boolean isFirework(ItemStack stack) {
         return !stack.isEmpty() && stack.is(Items.FIREWORK_ROCKET);
     }
@@ -923,8 +992,7 @@ public final class MaidFlightKit {
             return hasFirework(maid);
         }
         return hasInBackpack(maid, MaidFlightKit::isExplosiveFirework)
-                || isExplosiveFirework(maid.getMainHandItem())
-                || isExplosiveFirework(maid.getOffhandItem());
+                || hasInHandsOrBorrowed(maid, MaidFlightKit::isExplosiveFirework);
     }
 
     /**

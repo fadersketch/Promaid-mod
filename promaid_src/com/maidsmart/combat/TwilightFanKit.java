@@ -114,9 +114,20 @@ public final class TwilightFanKit {
         return ItemStack.f_41583_;
     }
 
-    /** 身上是否有孔雀羽扇 */
+    /**
+     * 身上是否有孔雀羽扇。
+     *
+     * v1.2.2 实测六百〇九：**"在身上"包含被我们自己的动作表现借走的那件副手物品**——
+     * 粉丝现场就是"她副手明明挂着羽扇、却说没有可以飞行的道具"（羽扇被
+     * {@code BombPose} 借走的十几 tick 里不在任何槽位，见
+     * {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}）。
+     * 这里改的是**就绪口径**；真要挥扇时仍走 {@link #findFan}（必须在槽位里）。
+     */
     public static boolean hasFan(EntityMaid maid) {
-        return !findFan(maid).m_41619_();
+        if (!findFan(maid).m_41619_()) {
+            return true;
+        }
+        return isFan(com.maidsmart.combat.MaidFlightKit.borrowedOffhand(maid));
     }
 
     /**
