@@ -4867,10 +4867,17 @@ public final class BlueprintLib {
             "daylight_detector", "trapped_chest", "slime_block", "honey_block", "soul_sand"};
 
     /** v1.2.2 实测五百九十八（issue #14 追补）【结构件】关键词：**纯物理结构型机器**
-     *  几乎没有红石件——史莱姆农场（岩浆块 + 水 + 铁傀儡）、刷冰机 / 刷雪机（冰 + 水）、
-     *  刷石机（水 + 岩浆 + 少量红石，卡在阈值边缘）、刷怪塔（水 + 漏斗）——只数红石件会把
-     *  它们判成"普通建筑"，水被静默剥离。这些方块在机器里高频、在装饰房里罕见。
-     *  反馈原文："要不要考虑给内容判据补一类『结构件』？" */
+     *  几乎没有红石件——史莱姆农场（岩浆块 + 水 + 铁傀儡）、刷冰机 / 刷雪机（冰 + 活塞以外的
+     *  物理机制）、刷石机（水 + 岩浆 + 少量红石，卡在阈值边缘）、刷怪塔（水 + 漏斗）——只数
+     *  红石件会把它们判成"普通建筑"，水被静默剥离。这些方块在机器里高频、在装饰房里罕见。
+     *  反馈原文："要不要考虑给内容判据补一类『结构件』？"
+     *
+     *  【边界·2026-09-21 更正】"结构件 >= 2"**不覆盖"单一结构件 + 流体"**的图纸：调色板里
+     *  只有 `ice` + `water` 的刷冰机只数到 structs=1——**水不在任何一栏**（它正是被剥离的那个
+     *  流体自己），三条都不命中。本文件与 changelog 原先都把"冰 + 水"当成这一条的样本，**那是
+     *  错的**（写回复时逐条过判据才发现）。要覆盖它有两条路：把水列进来，或加一条"结构件 >= 1
+     *  且图纸含流体"——两条都会放宽到"带一格冰的装饰水景"，口径得先定，**所以判据一字未改**，
+     *  这里只把边界写清楚。 */
     private static final String[] MACHINE_STRUCT_KEYS = {
             "magma_block", "ice", "packed_ice", "blue_ice", "soul_sand", "soul_soil",
             "bubble_column", "anvil", "stonecutter", "composter", "cauldron", "scaffolding"};
@@ -4901,7 +4908,9 @@ public final class BlueprintLib {
     private record MachineLook(java.util.Set<String> parts, java.util.Set<String> structs) {
         boolean machine() {
             // 三条任一即算机器：红石/物流件 >= 3 种（原口径）；
-            // 红石件 >= 1 且 结构件 >= 1（史莱姆农场 = 漏斗 + 岩浆块）；结构件 >= 2（刷冰机 = 冰 + 水）
+            // 红石件 >= 1 且 结构件 >= 1（史莱姆农场 = 漏斗 + 岩浆块）；
+            // 结构件 >= 2（两种以上的结构件，如 冰 + 浮冰 / 蓝冰）。
+            // 注意"冰 + 水"数不到 2 —— 水不在任何一栏，见 MACHINE_STRUCT_KEYS 头上的边界说明
             return parts.size() >= 3 || (parts.size() >= 1 && structs.size() >= 1) || structs.size() >= 2;
         }
 
