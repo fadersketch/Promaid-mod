@@ -127,6 +127,26 @@ public final class FlightFireworkPose {
         }
     }
 
+    /**
+     * v1.2.2 实测六百〇九：**我们借走的那件副手物品**的只读查询（没借走就返回空栈）。
+     *
+     * 与 {@link BombPose#savedOffhand} 同一用途：展示窗口里那件东西不在任何槽位里
+     * （原栈已被 {@code setItemInHand} 顶掉，快照就在本类的记录里），"她身上有没有某件东西"
+     * 的判定若只看槽位，就会在**那件东西明明在她身上**的十几 tick 里得到 false。
+     * 判定口径修在 {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}。
+     */
+    public static ItemStack savedOffhand(EntityMaid maid) {
+        try {
+            Object[] cur = maid == null ? null : ACTIVE.get(maid.getUUID());
+            if (cur == null || cur.length < 2 || !(cur[1] instanceof ItemStack s)) {
+                return ItemStack.EMPTY;
+            }
+            return s;
+        } catch (Throwable ignored) {
+            return ItemStack.EMPTY;
+        }
+    }
+
     /** 立即归还并清记录（行为收尾 / 强杀兜底） */
     public static void restoreNow(EntityMaid maid) {
         if (maid == null) {
