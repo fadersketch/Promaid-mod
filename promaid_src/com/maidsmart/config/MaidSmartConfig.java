@@ -2004,15 +2004,18 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
         // ---- v1.2.2 实测六百〇八【飞行跟随】：搭路这一档的替代路径（默认关，观赏玩法） ----
+        // v1.2.2 实测六百一十一 改了三处：① 燃料口径并入孔雀羽扇（与空袭一致）；② 收手距离
+        // 4 → 15 格且不再"抬头泄速"（自然滑翔，与"空袭把怪打死之后"同一套）；③ 外观与空袭同款
+        // （游泳展翅姿态 / 鞘翅翅膀 / 俯冲前倾，判据从"飞行任务"放宽成"飞行任务或正在滑翔"）。
         // 作者原话："女仆跟随能不能给她整个使用鞘翅一起飞呢，自己飞了后女仆只能搭着方块干着急了"
         // → "开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间没有方块阻拦，
         //    自己包里面还鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞是一样的，
         //    但是 target 等于主人）。可以调整这种飞行跟随的时候是否消耗烟花和鞘翅耐久。"
-        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 烟花】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。飞到 4 格内收手，交回普通跟随。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条")
+        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭或孔雀羽扇）】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到她 15 格内就收手交回普通跟随（空中就自然滑翔、落地还回胸甲，与空袭打完一波同款）；你飞远了会再飞一趟。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条")
                 .translation("config.promaid.bridge.flightFollow").define("flightFollow", false);
-        BRIDGE_FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随触发距离（格，默认 16）：你离她超过这个 3D 距离才起飞追——更近的距离走路/搭路本来就够得着，犯不上烧烟花。范围 6~128")
+        BRIDGE_FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随触发距离（格，默认 16）：你离她超过这个 3D 距离才起飞追——更近的距离走路/搭路本来就够得着，犯不上烧烟花（收手半径取它减 1、上限 15）。范围 6~128")
                 .translation("config.promaid.bridge.flightFollowDist").defineInRange("flightFollowDist", 16.0, 6.0, 128.0);
-        BRIDGE_FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有烟花**（它是她能飞的凭证），但补推不再扣——纯观赏档，适合只想看她跟着飞的存档")
+        BRIDGE_FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花或孔雀羽扇，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久，这条开关只管烟花)")
                 .translation("config.promaid.bridge.flightFollowFirework").define("flightFollowFirework", true);
         BRIDGE_FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
                 .translation("config.promaid.bridge.flightFollowElytra").define("flightFollowElytra", true);

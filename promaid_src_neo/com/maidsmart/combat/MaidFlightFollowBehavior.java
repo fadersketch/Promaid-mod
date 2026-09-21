@@ -20,12 +20,30 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 
 /**
- * v1.2.2 实测六百〇八【飞行跟随】：主人自己飞走了，她也能背上鞘翅追上来——而不是只在
+ * v1.2.2 实测六百〇八 / 六百一十一【飞行跟随】：主人自己飞走了，她也能背上鞘翅追上来——而不是只在
  * 底下垫方块干着急。
  *
- * ── 需求原文 ──
+ * ── 需求原文（六百〇八）──
  * "女仆跟随能不能给她整个使用鞘翅一起飞呢，自己飞了后女仆只能搭着方块干着急了，两人一起飞
  * 想想还挺有意思的。"（本条由作者回复确认为**可选玩法**：默认关闭，要玩的人在手册/面板里打开）
+ *
+ * ── 六百一十一 改的三件事（用户反馈原文）──
+ * "飞行跟随的启动只认烟花，而且动作没有换成空袭飞行的动作。而且不需要和主人离那么近，在飞行
+ * 跟随期间自身周围 15 格内找到主人那么此链路就中断，不需要紧挨着主人。具体的表现就跟空袭女仆
+ * 把怪打死一样。自然滑翔。反正飞出去了会再次启动链路。"
+ * <ol>
+ *   <li><b>推进剂口径并入羽扇</b>：起飞与补推的燃料从"只认烟花"扩成
+ *       {@link MaidFlightKit#hasFlightFuel}（烟花火箭 **或** 孔雀羽扇），与空袭
+ *       {@code canLaunch} 同一口径；有扇先挥扇（{@link TwilightFanKit#boostGlide}），
+ *       顺序也与空袭的"扇子优先"一致。</li>
+ *   <li><b>收手距离 4 格 → 15 格，并且不再"抬头泄速"</b>：主人进到她
+ *       {@link #END_RADIUS}（15）格内，本趟链路就中断——**不需要贴到身边**；她若还在空中，
+ *       就照原样继续自然滑翔、落地自然收尾，与"空袭女仆把怪打死之后"那一段
+ *       （{@code MaidFlightCombatBehavior.endFlightSafely}）完全是同一套。</li>
+ *   <li><b>外观与空袭同款</b>：滑翔中的女仆现在也走空袭那三样——模型游泳（展翅）姿态、
+ *       鞘翅翅膀图层、跟随俯角的前倾。判据统一取"滑翔位"（同步过的共享标志位 7），
+ *       多人下客户端也认得出（与 {@code MaidFlightKit.isGliding} 同源）。</li>
+ * </ol>
  *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
@@ -42,7 +60,9 @@ import java.util.WeakHashMap;
  *       与搭路同一口径——"另一种空闲"照飞，接战中绝不飞）；</li>
  *   <li>主人（或调试目标，见下）存在、活着、同维度，且**3D 距离超过
  *       {@code bridge.flightFollowDist}（默认 16 格）**——太近就走路/搭路，犯不上烧烟花；</li>
- *   <li>她包里有**可用鞘翅 + 烟花火箭**（缺一件就不飞——这正是需求里点名的那两件）；</li>
+ *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇
+ *       （{@link MaidFlightKit#hasFlightFuel}，缺一件就不飞；六百一十一 起不再只认烟花，
+ *       与空袭的燃料口径对齐）；</li>
  *   <li>与主人之间**没有方块阻拦**（raycast 视线，复用自保那套 {@code hasSight}）；</li>
  *   <li>周围 {@code bridge.threatDist} 格内没有敌对生物（与搭路同口径，绝不往怪堆里飞）。</li>
  * </ul>
@@ -56,17 +76,45 @@ import java.util.WeakHashMap;
  *       与空袭 {@code launchFirework} 同一口径）。推力沿她的**视线**方向生效，而她此刻正看着
  *       主人，所以推力方向天然就是"朝主人去"（不需要额外造速度）；</li>
  *   <li><b>持续操纵</b>——每 tick 把视线钉在主人身上（滑翔的操纵杆就是视线），
- *       离得远/比主人低/速度掉了就补一枚烟花（{@link #BOOST_INTERVAL} = 1.5 秒最短间隔）；</li>
- *   <li><b>追上就收手</b>——贴到 {@link #STOP_DIST} 格：落地的就地结束；还在空中的先抬头
- *       {@link #FLARE_PITCH} 度泄速（flare）{@link #FLARE_TICKS} tick，再交回普通跟随，
- *       剩下的高度靠滑翔自然落下去（滑翔期间原版每 tick 清坠落距离，所以不会摔伤）。</li>
+ *       离得远/比主人低/速度掉了就补一口推进（{@link #BOOST_INTERVAL} = 1.5 秒最短间隔；
+ *       有孔雀羽扇先挥扇，没扇才烧烟花——与空袭的推进顺序同款）；</li>
+ *   <li><b>飞出去就重启</b>（六百一十一）——她滑过头、或者主人又飞远了，距离重新超过
+ *       「飞行跟随距离」时本行为再次启动（再起飞 → 再补推 → 再飞过来），一趟一趟地跟，
+ *       不需要玩家干预。**每趟仍有界**：一趟最长 {@link #MAX_TICKS}（60 秒）；超时 / 燃料
+ *       没了 / 鞘翅没了 / 威胁出现 / 自保 / 主人跨维度 一律立刻收手（收手**不清滑翔位**——
+ *       空中清位就是自由落体，那条老教训见 {@code MaidFlightCombatBehavior.endFlightSafely}）。</li>
  * </ol>
+ *
+ * ── 收手长什么样（六百一十一 改口径：与"空袭把怪打死之后"完全一致）──
+ * 主人进到 {@link #END_RADIUS} 格内 → 本趟中断。她此刻可能还在空中：那就**什么都不做**，
+ * 原版滑翔物理会把她自然带下去（滑翔期间每 tick 清坠落距离，所以不会摔伤），落地那一 tick
+ * 由 {@link #settleOnGround} 把胸甲还回去。旧版（六百〇八）要贴到 4 格、还要"抬头
+ * {@code FLARE_PITCH} 度泄速 {@code FLARE_TICKS} tick"才算收手——用户要的是**自然滑翔**，
+ * 那套主动减速整段删掉了。
+ *
+ * ── 外观：与空袭同款（六百一十一）──
+ * 用户原话是"动作没有换成空袭飞行的动作"。空袭那三样外观各有各的判据，原来全都写着
+ * {@code MaidFlightKit.isFlightTask(maid)}——而**跟着飞的她并不是飞行任务**，于是三样一样都没跟上：
+ * <ul>
+ *   <li>{@code MaidSwimGlideMixin}：滑翔时让 {@code isVisuallySwimming} 为真 → TLM 的
+ *       {@code AnimationRegister} 播放自带的游泳（展翅）动画。**实测六百一十一 扫过 TLM
+ *       1.5.3 的 2344 个类：引用这个方法的只有 3 个（AnimationRegister / SwimAnimation /
+ *       EntityMaid 自己的覆写），全是客户端动画**——所以这里放宽成"只要在滑翔就为真"
+ *       （正是原版 {@code LivingEntity} 里被 TLM 覆写丢掉的那一支），不会碰到任何玩法判定；</li>
+ *   <li>{@code LayerMaidElytra} / {@code LayerMaidElytraGecko}：背上画鞘翅翅膀（并在离地时
+ *       强制展翅）；</li>
+ *   <li>{@code FlightDiveTilt}：按俯角叠前倾（玩家鞘翅那套 {@code -getXRot()}）。</li>
+ * </ul>
+ * 判据统一收在 {@code MaidFlightKit.isFlightVisual(maid)} = {@code isFlightTask || isGliding}：
+ * 空袭那边一字不变（它本来就滑翔），跟着飞的她从此也认；判据取**同步过的滑翔位**，所以多人下
+ * 客户端不需要服务端那张 {@link #FOLLOWING} 表也认得出。
  *
  * ── 两个"省料"开关（作者要求"可以调整是否消耗烟花和鞘翅耐久"）──
  * <ul>
- *   <li>{@code bridge.flightFollowFirework}（默认**开** = 真消耗）：关掉之后**照旧需要背包里
- *       有烟花**（它是"她能飞"的凭证，也是 {@code isFlightFuel} 的口径），但每次补推不再从
- *       背包扣那一枚——纯观赏档，适合"只想看她跟着飞"的存档。</li>
+ *   <li>{@code bridge.flightFollowFirework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
+ *       能飞的道具**（烟花火箭或孔雀羽扇，它是"她能飞"的凭证），但每次补推不再从背包扣那一枚
+ *       ——纯观赏档，适合"只想看她跟着飞"的存档。**背包里有羽扇时走扇子那条**（不烧烟花，
+ *       照羽扇自己的口径扣耐久），这条开关只管烟花那一支。</li>
  *   <li>{@code bridge.flightFollowElytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
  *       由 {@link com.maidsmart.mixin.ElytraWearGuardMixin} 在
  *       {@code ElytraItem.elytraFlightTick} 入口拦掉那次 {@code hurtAndBreak}
@@ -87,9 +135,8 @@ import java.util.WeakHashMap;
  * </ul>
  *
  * ── 有界性 ──
- * 一趟最多 {@link #MAX_TICKS}（60 秒）；超时/燃料没了/鞘翅没了/威胁出现/自保/主人跨维度
- * 一律立刻收手（收手**不清滑翔位**——空中清位就是自由落体，那条老教训见
- * {@code MaidFlightCombatBehavior.endFlightSafely}）。
+ * 见上一条"飞出去就重启"：每趟最多 {@link #MAX_TICKS}（60 秒），到点/缺料/威胁一律收手，
+ * 收手之后能不能再起飞由下一趟判定重新决定（**重启没有次数上限**，但每次都重新过一遍全套判定）。
  *
  * ── 专用服务器上的验收入口 ──
  * 这条链的 target 是**在线主人实体**（{@code maid.getOwner()} 走 PlayerList，专用服务器上
@@ -99,32 +146,42 @@ import java.util.WeakHashMap;
  */
 public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
-    /** 追上判定（格）：离目标这么近就算追上，交回普通跟随 */
-    private static final double STOP_DIST = 4.0;
+    /**
+     * 中断判定（格）：主人进到她这么近的球里，本趟链路就中断、交回普通跟随。
+     *
+     * v1.2.2 实测六百一十一 由 4 改成 15——用户口径："在飞行跟随期间自身周围 15 格内找到主人
+     * 那么此链路就中断，不需要紧挨着主人。"（旧值 4 会让她一路贴到你脸前，还得抬头泄速刹车，
+     * 与"自然滑翔"相反。）实际取值见 {@link #endRadius()}：触发距离被调小时它跟着缩，
+     * 不会出现"刚起飞就收手"。
+     */
+    private static final double END_RADIUS = 15.0;
     /** 滑翔操纵杆的俯仰限幅（度）：抬头 60 / 低头 45（与空袭同档） */
     private static final float PITCH_UP = 60.0f;
     private static final float PITCH_DOWN = 45.0f;
     /** 起跳后至少抬头这么多度：滑翔初速为 0，不先换点高度会一路贴地 */
     private static final float TAKEOFF_PITCH = 20.0f;
-    /** 两次补烟花的最短间隔（tick，30 = 1.5 秒；与空袭 fireworkCooldown 默认值同档） */
+    /** 两次补推的最短间隔（tick，30 = 1.5 秒；与空袭 fireworkCooldown 默认值同档） */
     private static final int BOOST_INTERVAL = 30;
-    /** 进入"最后十几格"就不再多补推的半径（格，见 {@link #shouldBoost} 的超车问题） */
-    private static final double NEAR_DIST = 10.0;
     /** 一趟飞行的最长时长（tick，1200 = 60 秒）——到点还没追上就放弃 */
     private static final long MAX_TICKS = 1200L;
-    /** 贴到主人身边却还在空中：先抬头泄速这么多 tick，再收手让她自然滑翔落地 */
-    private static final int FLARE_TICKS = 60;
-    /** flare 时的抬头角度（度） */
-    private static final float FLARE_PITCH = 15.0f;
-    /** "飞行跟随"日志限频（tick，100 = 5 秒）——补推每次都会发生，不能每 1.5 秒刷一行 */
+    /** "补推"日志限频（tick，100 = 5 秒）——补推每次都会发生，不能每 1.5 秒刷一行 */
     private static final long LOG_INTERVAL = 100L;
+    /**
+     * "起飞/结束"这两行的限频（tick，100 = 5 秒）。
+     *
+     * 【六百一十一 新增，起因是新的重启口径】收手距离改成 15 格之后，她在"刚过 15 格"与
+     * "刚过触发距离"之间来回滑是常态（滑过去 → 中断 → 再滑出去 → 重启），若不加限频，
+     * 这两行会跟着来回刷。**与补推那行的限频分开**（各有各的 5 秒预算），否则补推会把
+     * 起降两行挤掉——而这两行正是玩家/验收用来判断"她这一趟到底飞没飞"的证据。
+     * **起飞与结束之间也各记各的**（{@link #START_LOG} / {@link #END_LOG} 两张表）：共用一张
+     * 表时"起飞 1~2 秒后收手"这种短趟会把**结束行整条吞掉**（绿轮实测踩到）。
+     */
+    private static final long STATE_LOG_INTERVAL = 100L;
 
     /** 正在飞行跟随（滑翔位之外的第二判据——收翅猛击那套让位判据的同类，见类注释） */
     private static final Set<UUID> FOLLOWING = new HashSet<>();
-    /** 下次可以补烟花的 gameTime */
+    /** 下次可以补推的 gameTime */
     private static final Map<UUID, Long> BOOST_READY = new HashMap<>();
-    /** flare 剩余 tick（贴到主人但还在空中） */
-    private static final Map<UUID, Integer> FLARE_LEFT = new HashMap<>();
     /** 本趟起飞时刻（超时用） */
     private static final Map<UUID, Long> STARTED_AT = new HashMap<>();
     /** 我们替她换上的鞘翅：原胸甲物品（收手时原样还回去；她自己本来就穿着鞘翅时不记） */
@@ -135,8 +192,19 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 窗口。落地那一 tick 由 {@link #settleOnGround} 收尾。撞墙免疫与"免耐久"都要认这条。
      */
     private static final Set<UUID> SETTLING = new HashSet<>();
-    /** 日志限频 */
+    /** 补推日志限频 */
     private static final Map<UUID, Long> LAST_LOG = new HashMap<>();
+    /**
+     * "起飞 / 结束"两行的限频（**各记各的**，见 {@link #STATE_LOG_INTERVAL}）。
+     *
+     * 【为什么要分成两张表：绿轮实测踩到的】一开始两行共用一张表，于是"起飞 → 1~2 秒后收手"
+     * 这种**又快又短的一趟**里，结束那行被起飞那行的 5 秒预算吃掉——运行日志里只剩「起飞、
+     * 补推、已落地」，**偏偏少掉验收要读的「结束（主人 N 格…）」**（实测六百一十一 绿轮第一趟
+     * 就是这样：起飞 22.0 格 → 1 秒后收手，结束行一个字都没落盘）。分开之后每类各自 5 秒最多
+     * 一行，最坏情况 2 行/5 秒/只，仍然不刷屏，但**任何一趟的起降都能各留一行**。
+     */
+    private static final Map<UUID, Long> START_LOG = new HashMap<>();
+    private static final Map<UUID, Long> END_LOG = new HashMap<>();
     /** "为什么不起飞"诊断日志限频（tick，200 = 10 秒/只女仆；只在开关开着时才可能记） */
     private static final long SKIP_LOG_INTERVAL = 200L;
     private static final Map<UUID, Long> SKIP_LOG = new HashMap<>();
@@ -247,11 +315,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         FOLLOWING.remove(maidId);
         BOOST_READY.remove(maidId);
-        FLARE_LEFT.remove(maidId);
         STARTED_AT.remove(maidId);
         SWAPPED_CHEST.remove(maidId);
         SETTLING.remove(maidId);
         LAST_LOG.remove(maidId);
+        START_LOG.remove(maidId);
+        END_LOG.remove(maidId);
         SKIP_LOG.remove(maidId);
         CANUSE_THROTTLE.remove(maidId);
         try {
@@ -263,11 +332,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     public static void clearAll() {
         FOLLOWING.clear();
         BOOST_READY.clear();
-        FLARE_LEFT.clear();
         STARTED_AT.clear();
         SWAPPED_CHEST.clear();
         SETTLING.clear();
         LAST_LOG.clear();
+        START_LOG.clear();
+        END_LOG.clear();
         SKIP_LOG.clear();
         CANUSE_THROTTLE.clear();
         DEBUG_TARGET.clear();
@@ -320,8 +390,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (!MaidFlightKit.hasElytra(maid)) {
                 return skip(maid, now, "背包里没有可用鞘翅");
             }
-            if (!MaidFlightKit.hasFirework(maid)) {
-                return skip(maid, now, "背包里没有烟花火箭");
+            if (!MaidFlightKit.hasFlightFuel(maid)) {
+                // 六百一十一：燃料口径与空袭一致——烟花火箭 **或** 孔雀羽扇任一即可
+                return skip(maid, now, "背包里既没有烟花火箭、也没有孔雀羽扇（能飞的道具）");
             }
             if (!SelfPreservationBehavior.hasSight(maid, target)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
@@ -362,17 +433,38 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         UUID id = maid.getUUID();
         FOLLOWING.add(id);
         BOOST_READY.remove(id);
-        FLARE_LEFT.remove(id);
         STARTED_AT.put(id, gameTime);
         wearElytra(maid, id);
-        com.maidsmart.tool.PromaidLog.log("飞行跟随",
-                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 主人飞远了（"
-                        + (int) Math.sqrt(maid.distanceToSqr(targetOf(maid) == null ? maid.getX()
-                        : targetOf(maid).getX(),
-                        targetOf(maid) == null ? maid.getY() : targetOf(maid).getY(),
-                        targetOf(maid) == null ? maid.getZ() : targetOf(maid).getZ()))
-                        + " 格），背上鞘翅追过去（烟花=" + (cfgFirework() ? "消耗" : "不消耗")
-                        + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗") + "）");
+        logState(START_LOG, maid, id, gameTime, "主人飞远了（" + fmtDist(maid, targetOf(maid))
+                + " 格），背上鞘翅追过去（燃料=" + fuelLabel(maid)
+                + "，烟花=" + (cfgFirework() ? "消耗" : "不消耗")
+                + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗") + "）");
+    }
+
+    /**
+     * 这一趟按什么飞（六百一十一 起燃料有两种，日志里写清楚是哪一种）。
+     *
+     * 【为什么值得单独一行日志】"她说自己没烟花却照样飞了"这类疑问，读一行就知道走的是羽扇那条；
+     * 与空袭 {@code tryLaunch} 的"扇子优先"同序（那边也有「挥羽扇起飞」/「放烟花起飞」两行）。
+     */
+    private static String fuelLabel(EntityMaid maid) {
+        try {
+            return TwilightFanKit.hasFan(maid) ? "孔雀羽扇（优先）" : "烟花火箭";
+        } catch (Throwable ignored) {
+            return "烟花火箭";
+        }
+    }
+
+    /** 她与目标的距离（格），给日志用；目标没了就返回 `?`（不抛异常） */
+    private static String fmtDist(EntityMaid maid, LivingEntity target) {
+        try {
+            if (target == null) {
+                return "?";
+            }
+            return String.format("%.1f", maid.distanceTo(target));
+        } catch (Throwable ignored) {
+            return "?";
+        }
     }
 
     @Override
@@ -390,11 +482,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             MaidFlightKit.setGliding(maid, true);
             return;
         }
-        // ── 空中：保持滑翔 + 视线钉在主人身上 + 需要时补一枚烟花 ──
+        // ── 空中：保持滑翔 + 视线钉在主人身上 + 需要时补一口推进 ──
         MaidFlightKit.setGliding(maid, true);
-        double dist = maid.distanceTo(target);
-        if (dist <= STOP_DIST) {
-            faceFlare(maid, target); // 贴到了却还在空中：抬头泄速，等滑翔把她放下来
+        if (maid.distanceTo(target) <= endRadius()) {
+            // 主人已经进到 15 格内：本趟到此为止（canStillUse 下一 tick 收手）。
+            // 【这里故意什么都不做】不再摆朝向 = 她保持当前的滑翔方向自然滑过去，
+            // 与"空袭女仆把怪打死之后"那一段一样（用户要的"自然滑翔"）。
             return;
         }
         faceToward(maid, target, false);
@@ -423,24 +516,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
             return false; // 超时收手
         }
-        if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFirework(maid)) {
-            return false; // 鞘翅飞坏了 / 烟花烧完了 → 落地走
+        if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFlightFuel(maid)) {
+            return false; // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完且没羽扇）→ 落地走
         }
         if (threatNearby(level, maid)) {
             return false; // 威胁出现：交回战斗/自保
         }
-        double dist = maid.distanceTo(target);
-        if (dist > STOP_DIST) {
-            FLARE_LEFT.remove(id);
-            return true;
-        }
-        // 贴到主人身边：落地的就地结束；还在空中的给她一段 flare，之后收手自然滑翔落地
-        if (maid.onGround()) {
-            return false;
-        }
-        int flare = FLARE_LEFT.getOrDefault(id, FLARE_TICKS) - 1;
-        FLARE_LEFT.put(id, flare);
-        return flare > 0;
+        // 主人已经进到 15 格内 → 本趟中断（**不需要贴到身边**，用户口径）。
+        // 空中/地面一视同仁：落地的就地结束，还在空中的交给自然滑翔（收手不清滑翔位）。
+        return maid.distanceTo(target) > endRadius();
     }
 
     @Override
@@ -448,7 +532,6 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         UUID id = maid.getUUID();
         FOLLOWING.remove(id);
         BOOST_READY.remove(id);
-        FLARE_LEFT.remove(id);
         STARTED_AT.remove(id);
         LAST_LOG.remove(id);
         // 【绝不在空中摘鞘翅——它和"空中清滑翔位"是同一件事】原版 updateFallFlying 每 tick 都要
@@ -463,9 +546,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         } else {
             SETTLING.add(id); // 交给 settleOnGround 在她落地那一 tick 收尾
         }
-        com.maidsmart.tool.PromaidLog.log("飞行跟随",
-                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 结束（"
-                        + (grounded ? "已落地" : "仍在滑翔下降，落地后自动还回胸甲") + "）");
+        logState(END_LOG, maid, id, gameTime, "结束（主人 " + fmtDist(maid, targetOf(maid)) + " 格，"
+                + (grounded ? "她已落地，胸甲还回去" : "她还在滑翔，落地后自动还回胸甲") + "）");
     }
 
     /**
@@ -492,7 +574,19 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /* ==================== 起飞/操纵 ==================== */
 
-    /** 本 tick 该不该补一枚烟花：比主人低、或者速度掉了（滑翔没速度就等着掉高） */
+    /**
+     * 本趟"够了"的半径（格）：主人进到这么近就中断本趟链路。
+     *
+     * 默认口径 = {@link #END_RADIUS}（15 格，用户原话），但**触发距离被玩家调小时它得跟着缩**
+     * ——否则"飞行跟随距离 = 8"的存档会变成"一起飞就已经在 15 格内"= 起飞即刻收手，一次都飞不起来。
+     * 所以取 {@code min(15, 触发距离 - 1)}：默认 16 → 15；调到 8 → 7（中间留 1 格滞回，
+     * 免得她在边界上每 tick 起降一次）。
+     */
+    private static double endRadius() {
+        return Math.max(1.0, Math.min(END_RADIUS, cfgDist() - 1.0));
+    }
+
+    /** 本 tick 该不该补一口推进：比主人低、或者速度掉了（滑翔没速度就等着掉高） */
     private static boolean shouldBoost(EntityMaid maid, LivingEntity target, long gameTime) {
         Long ready = BOOST_READY.get(maid.getUUID());
         if (ready != null && gameTime < ready) {
@@ -501,19 +595,31 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         Vec3 v = maid.getDeltaMovement();
         double speed = Math.sqrt(v.x * v.x + v.z * v.z);
         double dy = target.getY() - maid.getY();
-        // 【进入"最后十几格"就松油门（不含"比她低"的情况）】滑翔是"放出去收不回来"的：离得近
-        // 还补推，她必然超车 → 掉头 → 再超车（滑翔掉头半径很大）。本批实测两次吃到：22 格的目标
-        // 飞了 43 秒、烧掉 29 枚烟花；加了"近且正在靠近才不补"之后仍有第二趟绕圈（掉头时"正在
-        // 靠近"为假 → 又补推 → 又超车）。所以这里的判据干脆只用两条：**近 + 不低于你** → 不补。
-        // 低于你（dy > 0.5）时照补——那是爬升，不补就够不着；靠滑翔进场 + 收手前的抬头泄速落地。
-        if (maid.distanceTo(target) <= NEAR_DIST && dy <= 0.5) {
-            return false;
-        }
+        // 【六百一十一：删掉了"最后十几格就松油门"那一条】旧版要靠它压住"离得近还补推 → 超车 →
+        // 掉头 → 再超车"的绕圈（六百〇八 实测吃过两次：22 格的目标飞了 43 秒、烧掉 29 枚烟花）。
+        // 现在收手半径从 4 格提到 15 格，**这一趟根本进不到"最后十几格"**（进 15 格就中断了），
+        // 那条判据成了死代码，索性去掉；剩下的两条就是"该补才补"：低于主人（爬升）或速度掉了。
         return dy > 0.5 || speed < 0.35;
     }
 
-    /** 真放一枚（或不放只摆样子）挂载烟花，并把"她在放烟花"摆到副手上（FlightFireworkPose） */
+    /**
+     * 补一口推进：**有孔雀羽扇先挥扇**（与空袭 {@code tryLaunch} 同序），没扇才烧烟花。
+     *
+     * 【为什么扇子优先】空袭从实测五百六十三 起就是"有扇用扇"（扇子按它自己的公式推进、
+     * 扣它自己的耐久）。飞行跟随是同一件事（都只是"给滑翔补一口推力"），口径必须同源，
+     * 否则同一个背包在两套模式里会烧不同的东西。
+     */
     private static void boost(ServerLevel level, EntityMaid maid, UUID id, long gameTime) {
+        if (TwilightFanKit.hasFan(maid)) {
+            if (!TwilightFanKit.boostGlide(level, maid)) {
+                return; // 扇子挥不动（异常/扇子没了）——这一 tick 就算了
+            }
+            // 必须置位：滑翔每 tick 吃朝向，扇子那一口速度也只在滑翔状态下站得住（同空袭）
+            MaidFlightKit.setGliding(maid, true);
+            BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
+            logThrottled(maid, id, gameTime, "挥羽扇追主人");
+            return;
+        }
         ItemStack display;
         if (cfgFirework()) {
             ItemStack one = MaidFlightKit.takeFirework(maid);
@@ -522,7 +628,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             }
             display = one;
         } else {
-            // 不消耗档：**照旧要求背包里有烟花**（它是"能飞"的凭证），但不扣那一枚
+            // 不消耗档：**照旧要求背包里有能飞的道具**（它是"能飞"的凭证），但不扣那一枚
             display = new ItemStack(Items.FIREWORK_ROCKET);
         }
         if (!MaidFlightKit.launchBoostRocket(level, maid)) {
@@ -530,11 +636,42 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         FlightFireworkPose.show(maid, display);
         BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
-        if (gameTime - LAST_LOG.getOrDefault(id, Long.MIN_VALUE / 2) >= LOG_INTERVAL) {
+        logThrottled(maid, id, gameTime, "补一枚烟花追主人（烟花="
+                + (cfgFirework() ? "消耗" : "不消耗") + "）");
+    }
+
+    /** 补推日志：同一只女仆 {@link #LOG_INTERVAL}（5 秒）最多一行 */
+    private static void logThrottled(EntityMaid maid, UUID id, long gameTime, String what) {
+        try {
+            if (gameTime - LAST_LOG.getOrDefault(id, Long.MIN_VALUE / 2) < LOG_INTERVAL) {
+                return;
+            }
             LAST_LOG.put(id, gameTime);
             com.maidsmart.tool.PromaidLog.log("飞行跟随",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 补一枚烟花追主人（烟花="
-                            + (cfgFirework() ? "消耗" : "不消耗") + "）");
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + what);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * "起飞/结束"两行：**每类各自** {@link #STATE_LOG_INTERVAL}（5 秒）最多一行。
+     *
+     * 【六百一十一 新增，起因是新的重启口径】收手半径提到 15 格之后，她会在"滑出去 → 重启 →
+     * 滑回来 → 中断"之间反复，这两行要限频；但又不能跟补推那行共用一个预算（补推会把起降挤掉，
+     * 而那两行才是"她这一趟到底飞没飞"的证据）。
+     * 【两行也不能共用一张表】详见 {@link #START_LOG} 的注释：共用时"起飞 1 秒后收手"这种短趟
+     * 会把结束行整条吞掉（绿轮实测）。
+     */
+    private static void logState(Map<UUID, Long> table, EntityMaid maid, UUID id, long gameTime,
+                                 String what) {
+        try {
+            if (gameTime - table.getOrDefault(id, Long.MIN_VALUE / 2) < STATE_LOG_INTERVAL) {
+                return;
+            }
+            table.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("飞行跟随",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + what);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -554,14 +691,6 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             pitch = Math.min(pitch, -TAKEOFF_PITCH); // 起跳那一下先抬头（负 = 抬头）
         }
         applyRotation(maid, yaw, pitch, target);
-    }
-
-    /** 贴到主人但还在空中：抬头泄速（滑翔抬头 = 拿速度换高度、很快慢下来） */
-    private static void faceFlare(EntityMaid maid, LivingEntity target) {
-        double dx = target.getX() - maid.getX();
-        double dz = target.getZ() - maid.getZ();
-        float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
-        applyRotation(maid, yaw, -FLARE_PITCH, target);
     }
 
     /**

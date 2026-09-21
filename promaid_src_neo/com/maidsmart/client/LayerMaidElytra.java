@@ -72,7 +72,9 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!(mob instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return;
         }
-        if (maid.isInvisible() || !MaidFlightKit.isFlightTask(maid)) {
+        if (maid.isInvisible() || !MaidFlightKit.isFlightVisual(maid)) {
+            // 六百一十一：判据加上"正在滑翔"——飞行跟随的女仆不是飞行任务，旧判据看不见她
+            // （与 Gecko 那层同一口径，见 MaidFlightKit.isFlightVisual）
             return;
         }
         if (!MaidFlightKit.isUsableElytra(maid.getItemBySlot(EquipmentSlot.CHEST))) {
@@ -116,9 +118,9 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             float k = SIZE_FACTOR * VANILLA_PLAYER_SCALE / modelScale;
             poseStack.scale(k, k, k);
             this.elytraModel.setupAnim(mob, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-            // 展翅：飞行任务且离地就强制展翅（原版按下落速度收拢翅膀，同步间隙会露出折叠态）
+            // 展翅：飞行任务或正在滑翔、且离地就强制展翅（原版按下落速度收拢翅膀，同步间隙会露出折叠态）
             ElytraSpread.forceSpread(this.elytraModel,
-                    MaidFlightKit.isFlightTask(maid) && !maid.onGround());
+                    MaidFlightKit.isFlightVisual(maid) && !maid.onGround());
             // v1.2.0 实测五百零七【改回按附魔判定】：原版 `getArmorFoilBuffer` 的第 3 参
             // 就是 "hasFoil"（字节码实证：为 true 时复合一层 `armorEntityGlint` 光泽层）。
             // 实测五百零四曾固定传 true（常亮），反馈指出那不对（"不管附没附魔都渲染出了
