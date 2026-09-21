@@ -19,6 +19,8 @@ import net.minecraft.world.entity.boss.enderdragon.EndCrystal;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.entity.item.PrimedTnt;
 import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.FireChargeItem;
+import net.minecraft.world.item.FlintAndSteelItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.context.BlockPlaceContext;
@@ -26,6 +28,7 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.TntBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -127,9 +130,9 @@ import java.util.UUID;
  *    旧版这条原因只落日志、而且**床能顶上时连日志都不会有**，于是现在改成**女仆气泡**
  *    把原因说清（{@link #hintAnchorSkip}，60 秒一条）：缺萤石 / 这个维度不炸各有各的说法，
  *    日志同步落一条，下一轮排查不用再猜。
- * ② **投掷 TNT 时副手举打火石**：反馈"在扔 TNT 的时候，副手武器应该切换成打火石"——
- *    旧版亮的是刚扔出去的那枚 TNT，现在点亮火那只手里的打火石（{#link #flintDisplay}，
- *    耐久已在 {@link #useFlintAndSteel} 里就地扣掉，这里只借模型）。
+ * ② **投掷 TNT 时副手举点火料**：反馈"在扔 TNT 的时候，副手武器应该切换成打火石"——
+ *    旧版亮的是刚扔出去的那枚 TNT，现在点亮火那只手里的那一件（打火石 / 烈焰弹 / 模组自己的
+ *    点火料，见 {@link #useIgniterIn}：耐久在用掉那一刻就地扣掉，这里只借模型）。
  * ③ **动作表现总开关**（bombing.pose，默认开）：整条链路的"副手亮一下"可以整体关掉，
  *    关掉之后只剩挥臂 / 音效 / 爆炸（见 {@link #pose}）。
  *
@@ -180,6 +183,34 @@ import java.util.UUID;
  * （{@link #flushTnt} 与 {@link #throwTntAt}），都走 {@link #hasTnt} / {@link #takeOneTnt}。
  * 顺带把日志说清：那一行会写明**这一发到底扔的是哪一件**
  * （{@code 投掷 TNT ×1（modid:tnt，引信 40 tick）}），模组 TNT 生效与否不用再猜。
+ *
+ * ── 实测六百〇五【认出来的 TNT 就放它自己那一枚 + 点火料按"类"认】──
+ * 反馈原文："1.我们应该判断一下这个方块是否存在其对应 tnt 形式，如果有则确认，并释放其对应的
+ * TNT（而不是原版tnt）。2.类打火石/火焰弹识别；即可以（点燃 tnt 的消耗品走消耗，道具走自己的
+ * 耐久机制）。"
+ *
+ * ① **判据再加一条结构证据**（{@link #tntBlockOf}）：注册名里带 tnt 只是"起名习惯"，
+ *    模组 TNT 十有八九根本不含这三个字母（ProjectE 的爆破新星 = {@code projecte:nova_catalyst}，
+ *    怎么念都念不出 tnt）。可靠的那条是**血统**：那一件是方块物品、**方块继承 {@link TntBlock}**
+ *    就算 TNT——名字可以随便写，方块的血统骗不了人。两条取并集（原版那一件两条都命中）。
+ * ② **放出来的是它自己的 TNT 形式**（{@link #primeTnt}）：旧版不论手上拿的是哪一件，扔出去的
+ *    都是自己 {@code new} 出来的**原版**引信 TNT——ProjectE 的新星被换成一枚原版 TNT 炸，
+ *    威力 / 破不破方块 / 带不带火全被抹掉。现在投放前先问那一件自己：方块不是 {@code TntBlock}
+ *    本身（= 模组自己写的 TNT 方块）就走它自己的点火钩子 {@code onCaughtFire}
+ *    （原版 {@code TntBlock.use}——打火石点 TNT——走的正是这一步），放出来的是**它自己的 TNT
+ *    实体**（ProjectE 在这一步 new 的是 {@code projecte:nova_catalyst_primed}）；那一炸完全
+ *    归它自己，本模组**不接管**（它继承 {@code PrimedTnt}，所以追踪照旧生效，引信仍按
+ *    {@code bombing.tntFuse}）。原版那一件一字没动：还是自己造引信 TNT + 本模组"默认不破坏
+ *    方块"的那一炸。
+ * ③ **点火料按"类"认**（{@link #isFlintLike} / {@link #isChargeLike}）：**类打火石**
+ *    （{@code FlintAndSteelItem} 的子类）/ **类火焰弹**（{@code FireChargeItem} 的子类）都算，
+ *    注册名兜底——模组自加的点火料不用再各自打补丁。
+ * ④ **道具走耐久、消耗品走消耗**（{@link #useIgniterIn}）：走哪一条不看名字，看这一件
+ *    **有没有耐久**（{@code getMaxDamage() > 0}）——打火石 64 点耐久 → 扣 1 点、放回原槽；
+ *    火焰弹没耐久 → 整件消耗。模组自加的点火料各按自己的性质落进对应那一档。
+ * ⑤ 日志那一行还会点名**放出来的是哪一枚**（搜「投掷 TNT」），例如
+ *    {@code 投掷 TNT ×1（projecte:nova_catalyst，引信 40 tick，它自己那一枚 projecte:nova_catalyst_primed）}；
+ *    方块没改点火路径（放出来的还是原版引信 TNT）也会写明，验收不用猜。
  *
  * ── 爆炸口径（默认全保护，全部可在配置面板调）──
  * - 伤害源**归因给女仆**（{@code damageSources().explosion(maid, maid)}）：于是
@@ -296,21 +327,6 @@ public final class MaidBombing {
         BombPose.showGated(maid, display, ticks);
     }
 
-    /**
-     * v1.2.2 实测五百九十四【投掷时副手举打火石】：反馈"在扔 TNT 的时候，副手武器应该切换成
-     * 打火石"——照玩家点火的样子来：手里拿的是打火石（那枚 TNT 已经扔出去了、本来就不在手上）。
-     * 打火石的耐久早在 {@link #useFlintAndSteel} 里就地扣掉了，这里只借它的模型做表现，
-     * 数量与耐久一概不动（{@link BombPose} 到点原物奉还）。
-     */
-    private static ItemStack flintDisplay() {
-        try {
-            Item it = item(ID_FLINT_AND_STEEL);
-            return it == null ? ItemStack.f_41583_ : new ItemStack(it);
-        } catch (Throwable ignored) {
-            return ItemStack.f_41583_;
-        }
-    }
-
     private static boolean cfgAirPlace() {
         return MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get();
     }
@@ -414,16 +430,21 @@ public final class MaidBombing {
     }
 
     /**
-     * v1.2.2 实测六百〇四【TNT 的边界放宽】：**注册名里带 tnt 的都算 TNT**。
+     * v1.2.2 实测六百〇四【TNT 的边界放宽】：**注册名里带 tnt 的都算 TNT**
+     * ＋ 实测六百〇五【方块继承 {@link TntBlock} 的也算】——两条取并集。
      *
-     * 需求原文："为 tnt 放宽界线，模组内含有 tnt 词条的都可被视作 tnt。"——旧版只认
-     * {@link #ID_TNT} 这一件，模组自加的 TNT 全被漏掉。现在判据是"注册名（{@code namespace:path}）
-     * 里出现 {@code tnt}"，大小写不敏感（有的模组把 path 写成大写）。
+     * 需求原文："为 tnt 放宽界线，模组内含有 tnt 词条的都可被视作 tnt。"
+     *            "我们应该判断一下这个方块是否存在其对应 tnt 形式，如果有则确认……"
+     *
+     * ① 注册名（{@code namespace:path}）里出现 {@code tnt}，大小写不敏感（有的模组把 path 写成大写）；
+     * ② 或者这一件是方块物品、而**它的方块继承 {@link TntBlock}**（见 {@link #tntBlockOf}）。
+     *    这一条是六百〇五 补的：模组 TNT 的注册名常常根本不含 tnt（ProjectE 的爆破新星 =
+     *    {@code projecte:nova_catalyst}），光按名字判会整片漏掉；方块的血统才是可靠证据。
      *
      * 【为什么不看显示名 / 中文名】那是本地化文本（中文客户端里它根本不叫 tnt），按它判会随
-     * 语言变、还会误伤名字里恰好带 tnt 的别的物品；注册名才是稳定的那份身份。
-     * 【边界】判据只看名字、不看"这一件能不能放"——所以像 {@code minecraft:tnt_minecart}
-     * 这种名字里带 tnt 的也算数（她扔出去的本来就是一枚原版引信 TNT，与手上那件的样子无关）。
+     * 语言变、还会误伤名字里恰好带 tnt 的别的物品；注册名 + 方块血统才是稳定的那两份身份。
+     * 【边界】判据只看"名字 / 血统"，不看"这一件能不能放"——所以像 {@code minecraft:tnt_minecart}
+     * 这种名字里带 tnt 的也算数（它没有对应方块，扔出去的还是一枚原版引信 TNT，见 {@link #primeTnt}）。
      */
     private static boolean isTnt(ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
@@ -432,7 +453,28 @@ public final class MaidBombing {
         if (isStack(stack, ID_TNT)) {
             return true; // 原版那一件：注册表查询万一失手也照认
         }
+        if (tntBlockOf(stack) != null) {
+            return true; // v1.2.2 实测六百〇五：方块继承 TntBlock 的（模组 TNT 多半名字里没有 tnt）
+        }
         return idOf(stack).toLowerCase(java.util.Locale.ROOT).contains("tnt");
+    }
+
+    /**
+     * 这一件如果是"方块本身就是 {@link TntBlock}（含子类）"的物品，返回那个方块；否则 null。
+     *
+     * v1.2.2 实测六百〇五：这是 {@link #isTnt} 的第二条判据，也是 {@link #primeTnt} 决定
+     * "要不要问它自己"的那把钥匙——拿到的**不是** {@code TntBlock} 本身（{@code tb.getClass()}
+     * 不等于 {@code TntBlock.class}）就说明这是模组自己写的 TNT 方块，投放时走它自己的点火钩子。
+     */
+    private static TntBlock tntBlockOf(ItemStack stack) {
+        try {
+            if (stack == null || stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
+                return null;
+            }
+            return bi.m_40614_() instanceof TntBlock tb ? tb : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /** 手上（主手/副手）+ 女仆背包里有没有这个东西 */
@@ -462,7 +504,7 @@ public final class MaidBombing {
         return maid != null && !takeFirstMatch(maid, MaidBombing::isBed, true).m_41619_();
     }
 
-    /** TNT：v1.2.2 实测六百〇四起判据放宽（注册名里带 tnt 的都算，见 {@link #isTnt}） */
+    /** TNT：v1.2.2 实测六百〇四/六百〇五 起判据放宽（注册名带 tnt 的、方块继承 TntBlock 的，见 {@link #isTnt}） */
     private static boolean hasTnt(EntityMaid maid) {
         return !takeFirstMatch(maid, MaidBombing::isTnt, true).m_41619_();
     }
@@ -533,42 +575,38 @@ public final class MaidBombing {
     }
 
     /**
-     * v1.2.2 实测五百九十一【打火石不再被吞】：**就地**给她手上/背包里的那一件扣 1 点耐久，
-     * 没坏就**放回原槽**。
+     * v1.2.2 实测五百九十一【打火石不再被吞】+ 实测六百〇五【按"类"认、按"有没有耐久"用掉】：
+     * **就地**给她手上/背包里的那一件扣 1 点耐久，没坏就**放回原槽**。
      *
-     * 反馈原文："我发现扔 TNT 的时候会直接把打火石吞掉，而不是消耗打火石的耐久。"
+     * 反馈原文（五百九十一）："我发现扔 TNT 的时候会直接把打火石吞掉，而不是消耗打火石的耐久。"
+     * 反馈原文（六百〇五）："点燃 tnt 的消耗品走消耗，道具走自己的耐久机制。"
+     *
      * 旧版走的是 takeOne(...)：把整件打火石从背包里**取出来**（= 从背包消失），只对取出来的那一份
      * 扣耐久——于是背包里那一件凭空没了，玩家看到的就是"被吞掉"。现在从**同一格**取出、扣耐久、
      * 再塞回**同一格**：耐久条正常走，耐久见底才真的少一件（原版口径）。
+     *
+     * 【六百〇五 的两条放宽】哪一件算"点火料"由判据给（{@link #isFlintLike} / {@link #isChargeLike}），
+     * 而"怎么用掉"完全看这一件**有没有耐久**（{@code getMaxDamage() > 0}）：
+     * 有耐久 = 道具 → 扣 1 点耐久、本体放回原槽；没耐久 = 消耗品 → 整件消耗。
+     * 于是打火石与火焰弹各走各的，模组自加的点火料也不用再打补丁（见 {@link #useIgniter}）。
      */
-    private static boolean useFlintAndSteel(EntityMaid maid) {
-        if (maid == null) {
-            return false;
-        }
-        try {
-            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            if (damageFlintIn(hands, maid)) {
-                return true;
-            }
-            return damageFlintIn(maid.getMaidInv(), maid);
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** 在给定容器里找一件打火石：取出 1 件 → 扣 1 点耐久 → 放回原槽（耐久耗尽则不放回） */
-    private static boolean damageFlintIn(IItemHandler inv, EntityMaid maid) {
+    private static ItemStack useIgniterIn(IItemHandler inv, EntityMaid maid,
+                                         java.util.function.Predicate<ItemStack> match) {
         try {
             for (int i = 0; i < inv.getSlots(); i++) {
-                if (!isStack(inv.getStackInSlot(i), ID_FLINT_AND_STEEL)) {
+                if (!match.test(inv.getStackInSlot(i))) {
                     continue;
                 }
                 ItemStack one = inv.extractItem(i, 1, false);
                 if (one.m_41619_()) {
                     continue;
                 }
+                if (one.m_41776_() <= 0) {
+                    return one; // 消耗品（没有耐久）：整件消耗——取出来的这一件就是"刚用掉的那一件"
+                }
+                ItemStack display = one.m_41777_(); // 给动作亮的快照（与槽里那一件不共用对象）
                 try {
-                    // 原版口径：点一次掉 1 点耐久（1.20.1：hurtAndBreak(1, 实体, 损坏回调)）
+                    // 道具（有耐久）：原版口径——点一次掉 1 点耐久（1.20.1：hurtAndBreak(1, 实体, 损坏回调)）
                     one.m_41622_(1, maid, m -> m.m_21166_(EquipmentSlot.MAINHAND));
                 } catch (Throwable ignored) {
                 }
@@ -578,42 +616,92 @@ public final class MaidBombing {
                         giveBack(maid, left);
                     }
                 }
+                return display;
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /**
+     * v1.2.2 实测六百〇五【点火料按"类"认】：**类打火石**——{@code FlintAndSteelItem} 的子类都算
+     * （模组自加的打火石 / 点火棒走的正是这条路），原版那一件与"只改了注册名"的变体由注册名兜底。
+     */
+    private static boolean isFlintLike(ItemStack stack) {
+        try {
+            if (stack == null || stack.m_41619_()) {
+                return false;
+            }
+            if (stack.m_41720_() instanceof FlintAndSteelItem) {
                 return true;
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        return isStack(stack, ID_FLINT_AND_STEEL);
     }
 
     /**
-     * v1.2.2 实测六百〇三【点火料：打火石 或 烈焰弹】。
+     * v1.2.2 实测六百〇五：**类火焰弹**——{@code FireChargeItem} 的子类都算
+     * （原版火焰弹就是它，模组自加的火种多半也继承它），原版那一件由注册名兜底。
+     */
+    private static boolean isChargeLike(ItemStack stack) {
+        try {
+            if (stack == null || stack.m_41619_()) {
+                return false;
+            }
+            if (stack.m_41720_() instanceof FireChargeItem) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return isStack(stack, ID_FIRE_CHARGE);
+    }
+
+    /** 点火料：类打火石 或 类火焰弹——v1.2.2 实测六百〇五 */
+    private static boolean isIgniter(ItemStack stack) {
+        return isFlintLike(stack) || isChargeLike(stack);
+    }
+
+    /**
+     * v1.2.2 实测六百〇三【点火料：打火石 或 烈焰弹】＋ 实测六百〇五【按"类"认】。
      *
-     * 需求原文："女仆包内有烈焰弹的时候也可以触发投掷 tnt 效果是消耗一个烈焰弹。优先用打火石。"
-     * ——打火石**优先**（按原版点一次掉 1 点耐久，见 {@link #useFlintAndSteel}）；
-     * 没有打火石时消耗 **1 个烈焰弹 / 火焰弹**（{@code minecraft:fire_charge}）。
-     * 两者都没有 → 这一发跳过（不记间隔）。
+     * 需求原文（六百〇三）："女仆包内有烈焰弹的时候也可以触发投掷 tnt 效果是消耗一个烈焰弹。
+     * 优先用打火石。"
+     * 需求原文（六百〇五）："类打火石/火焰弹识别；即可以……点燃 tnt 的消耗品走消耗，
+     * 道具走自己的耐久机制。"
+     * ——手上 / 背包里只要有一件**类打火石**或**类火焰弹**就算有料；两样都有时打火石那一类优先。
      */
     private static boolean hasIgniter(EntityMaid maid) {
-        return has(maid, ID_FLINT_AND_STEEL) || has(maid, ID_FIRE_CHARGE);
+        return !takeFirstMatch(maid, MaidBombing::isIgniter, true).m_41619_();
     }
 
     /**
      * 用掉一份点火料，返回"刚用掉的那一件"（给 {@link BombPose} 做动作：副手亮一下）；
      * 空 = 一件都没有（这一发别投）。
      *
-     * ① 打火石优先：就地扣 1 点耐久（不消耗整件），返回它的模型快照；
-     * ② 没有打火石：从背包里**取出 1 个烈焰弹**（真的消耗掉，照需求原话"效果是消耗一个烈焰弹"），
-     *    返回的正是这一件——动作里亮的也就是它。
+     * ① 打火石那一类优先（有耐久 → 就地扣 1 点耐久、放回原槽）；
+     * ② 没有才轮到火焰弹那一类（没耐久 → 整件消耗掉）。
+     * 每一类都是"手 → 背包"（hand 先看，与旧版一致）；怎么用掉由 {@link #useIgniterIn} 按
+     * "有没有耐久"决定，不写死名字——v1.2.2 实测六百〇五。
      */
     private static ItemStack useIgniter(EntityMaid maid) {
         if (maid == null) {
             return ItemStack.f_41583_;
         }
         try {
-            if (useFlintAndSteel(maid)) {
-                return flintDisplay();
+            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
+            IItemHandler inv = maid.getMaidInv();
+            ItemStack used = useIgniterIn(hands, maid, MaidBombing::isFlintLike);
+            if (used.m_41619_()) {
+                used = useIgniterIn(inv, maid, MaidBombing::isFlintLike);
             }
-            return takeOne(maid, ID_FIRE_CHARGE);
+            if (used.m_41619_()) {
+                used = useIgniterIn(hands, maid, MaidBombing::isChargeLike);
+            }
+            if (used.m_41619_()) {
+                used = useIgniterIn(inv, maid, MaidBombing::isChargeLike);
+            }
+            return used;
         } catch (Throwable ignored) {
             return ItemStack.f_41583_;
         }
@@ -1847,8 +1935,10 @@ public final class MaidBombing {
      * 口径（对照女仆生存 MaidTntInteractionController 的做法，自己实现）：
      * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
      *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
-     * ② 有 TNT + 点火料（打火石 或 烈焰弹，见 {@link #hasIgniter}；缺料静默跳过，不占用间隔）；
-     *    TNT 的判据 v1.2.2 实测六百〇四 起放宽成"注册名里带 tnt 的都算"（{@link #isTnt}），
+     * ② 有 TNT + 点火料（类打火石 或 类火焰弹，见 {@link #hasIgniter}；缺料静默跳过，不占用间隔）；
+     *    TNT 的判据 v1.2.2 实测六百〇四 起放宽成"注册名里带 tnt 的都算"、实测六百〇五 再加
+     *    "方块继承 TntBlock 的都算"（{@link #isTnt}），投放时放出去的是**它自己的 TNT 形式**
+     *    （{@link #primeTnt}），
      * ③ **打完一记之后才扔**（v1.2.2 实测五百九十改）：攻击冷却记忆由无到有 = 刚完成一次
      *    攻击链路收尾 → 登记待投放；距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
      *    挂着等下一记——最短间隔只当下限，不再是驱动本身（详见 {@link #onAttackChainEnd}）；
@@ -1987,7 +2077,8 @@ public final class MaidBombing {
             }
             if (!hasTnt(maid) || !hasIgniter(maid)) {
                 return; // 不刚需：缺料直接跳过（不占用间隔）——v1.2.2 实测六百〇三：点火料 = 打火石 或 烈焰弹；
-                        // 实测六百〇四：TNT 判据放宽，注册名里带 tnt 的模组 TNT 也算（见 isTnt）
+                        // 实测六百〇四：TNT 判据放宽，注册名里带 tnt 的模组 TNT 也算（见 isTnt）；
+                        // 实测六百〇五：判据再加"方块继承 TntBlock"那条，且放出的是它自己那一枚（见 primeTnt）
             }
             if (throwTntAt(level, maid, target, id, gameTime) > 0) {
                 TNT_ARMED.remove(id);
@@ -2161,12 +2252,17 @@ public final class MaidBombing {
      * 共用的投掷实现（远程空袭盘旋 + 所有战斗模式两条入口都走这里）。
      * 手法照"女仆生存"那套思路自己实现：水平单位向量 × 初速 + 竖直补偿（按 TNT 重力估飞行时间），
      * 落点按目标中心算；连投时按序号横向散开，避免三枚叠在一条线上。
+     *
+     * v1.2.2 实测六百〇五：放出去的是**这一件自己的 TNT 形式**（见 {@link #primeTnt}）——
+     * 模组自己写的 TNT 方块走它自己的点火钩子，它那一炸本模组不接管。
      */
     private static int throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         int want = throwCount(maid);
         int thrown = 0;
         // v1.2.2 实测六百〇四：扔的到底是哪一件（模组 TNT 也认之后，日志里得说清，排查不用猜）
         String usedId = "";
+        // v1.2.2 实测六百〇五：放出来的到底是哪一枚（它自己那一枚 / 模组方块放的是原版引信 TNT）
+        String usedNote = "";
         for (int i = 0; i < want; i++) {
             if (!hasTnt(maid) || !hasIgniter(maid)) {
                 break;
@@ -2229,17 +2325,34 @@ public final class MaidBombing {
                 }
             }
             double vy = requiredVy(dh, dy, speed);
-            PrimedTnt tnt = new PrimedTnt(level, sx, sy, sz, maid);
-            tnt.m_32085_(cfgTntFuse());
-            tnt.m_20256_(new Vec3(vx, vy, vz));
-            if (!level.m_7967_(tnt)) {
+            // ── v1.2.2 实测六百〇五【认出来的 TNT，就放它自己那一枚】──
+            // 旧版（含实测六百〇四）不论手上拿的是哪一件，扔出去的都是这里 new 出来的**原版**引信 TNT
+            // ——模组 TNT 的威力 / 破不破方块 / 带不带火全被抹掉。现在先问那一件自己：方块继承
+            // TntBlock 吗？继承就走它自己的点火钩子（onCaughtFire），放出来的是它自己的 TNT 形式。
+            TntOut primed = primeTnt(level, maid, tntStack, sx, sy, sz);
+            if (primed == null) {
                 giveBack(maid, tntStack);
                 break;
+            }
+            Entity bomb = primed.entity;
+            bomb.m_6034_(sx, sy, sz); // 模组钩子按"方块中心"放，挪回她手上那一格（抛物线才算得准）
+            bomb.m_20256_(new Vec3(vx, vy, vz));
+            PrimedTnt tnt = bomb instanceof PrimedTnt pt ? pt : null;
+            if (tnt != null) {
+                tnt.m_32085_(cfgTntFuse());
+            }
+            if (!primed.added && !level.m_7967_(bomb)) {
+                giveBack(maid, tntStack);
+                break;
+            }
+            if (!primed.note.isEmpty()) {
+                usedNote = primed.note;
             }
 
             // v1.2.2 实测五百九十【追踪】/ 实测五百九十一【限时】：登记这一发——只在离手后的
             // cfgTntTrackTicks（默认 10 tick = 0.5 秒）内朝目标修正方向，之后按当时方向直飞
-            if (cfgTntTrack() && cfgTntTrackTicks() > 0 && HOMING.size() < MAX_PENDING) {
+            //（模组自己的 TNT 实体也继承 PrimedTnt，追踪照旧生效）
+            if (tnt != null && cfgTntTrack() && cfgTntTrackTicks() > 0 && HOMING.size() < MAX_PENDING) {
                 HOMING.add(new Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz),
                         gameTime + cfgTntTrackTicks()));
             }
@@ -2252,21 +2365,141 @@ public final class MaidBombing {
             // 那枚 TNT，反馈要的是"点火的那只手"：扔 TNT 的时候副手切换成打火石；
             // 实测六百〇三起没有打火石就用烈焰弹，这时副手亮的自然是那枚烈焰弹。
             pose(maid, igniter.m_41619_() ? tntStack : igniter, BOMB_POSE_TICKS);
-            if (PENDING.size() < MAX_PENDING) {
-                PENDING.add(new Bomb(level, maid, tnt, tnt.m_20183_(), null, null,
+            // ── v1.2.2 实测六百〇五【那一炸归谁】──
+            // 只有"原版那一枚"才登记进 PENDING（本模组接管那一炸 = 默认不破坏方块 / 不伤友军）；
+            // 模组自己的 TNT 形式**一律不登记**：它自己那一炸该多大、破不破方块、带不带火，
+            // 全归它自己——本模组不替换、不拦截（伤害的友军豁免仍由 FriendlyFireGuard /
+            // FriendlyWindGuard 按"爆炸来源是女仆"那条既有判据兜住）。
+            if (primed.vanilla && tnt != null && PENDING.size() < MAX_PENDING) {
+                PENDING.add(new Bomb(level, maid, tnt, bomb.m_20183_(), null, null,
                         Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2, tntStack));
             }
             thrown++;
             if (cfgPinkMark()) {
-                BombMarkNetworking.send(maid, 1, tnt.m_19879_(), null, cfgTntFuse() + 40);
+                BombMarkNetworking.send(maid, 1, bomb.m_19879_(), null, cfgTntFuse() + 40);
             }
         }
         if (thrown > 0) {
             TNT_NEXT.put(id, gameTime + cfgTntInterval());
             log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
-                    + "（" + (usedId.isEmpty() ? "未知物品" : usedId) + "，引信 " + cfgTntFuse() + " tick）");
+                    + "（" + (usedId.isEmpty() ? "未知物品" : usedId) + "，引信 " + cfgTntFuse() + " tick"
+                    + (usedNote.isEmpty() ? "" : "，" + usedNote) + "）");
         }
         return thrown;
+    }
+
+    /* ==================== v1.2.2 实测六百〇五：放出"它自己的 TNT 形式" ==================== */
+
+    /**
+     * 投出去的那一枚：{@link #primeTnt} 的结果。
+     *
+     * @param entity  放进世界的那一枚（原版引信 TNT，或模组自己的 TNT 实体）
+     * @param added   true = 是模组钩子自己加进世界的（我们不能再 addFreshEntity 一次）
+     * @param vanilla true = 它就是原版引信 TNT（本模组接管那一炸的老口径）
+     * @param note    日志后缀（点名放出来的是哪一枚；原版那条路为空串 = 日志照旧）
+     */
+    private static final class TntOut {
+        final Entity entity;
+        final boolean added;
+        final boolean vanilla;
+        final String note;
+
+        TntOut(Entity entity, boolean added, boolean vanilla, String note) {
+            this.entity = entity;
+            this.added = added;
+            this.vanilla = vanilla;
+            this.note = note;
+        }
+    }
+
+    /**
+     * 把手上这一件 TNT 放进世界，返回"放进世界的那一枚"（放不出去 = null）。
+     *
+     * ── 怎么判断"有没有对应的 TNT 形式" ──
+     * ① 这一件的方块**继承 {@link TntBlock} 而且不是 TntBlock 本身**（= 模组自己写的 TNT 方块）：
+     *    调它自己的点火钩子 {@code onCaughtFire(state, level, pos, face, 她)}——原版
+     *    {@code TntBlock.use}（拿打火石点 TNT）走的正是这一步，模组要放自己那一枚就在这里放
+     *    （ProjectE 的爆破新星在这一步 new 出来的是它自己的 {@code EntityNovaCatalystPrimed}）。
+     *    钩子是"先放后报"、没有返回值，所以我们在调用前后各扫一遍那一小块里的实体，
+     *    **多出来的那一枚**就是它的 TNT 形式（引信 TNT 那一类优先）。
+     * ② 没有钩子可走（原版那一件、或模组的方块没改点火路径）：自己造一枚原版引信 TNT
+     *    （与旧版逐字相同）。
+     *
+     * ── 为什么不把方块真放下去再点 ──
+     * 原版 use() 里那一块本来就在地上；我们是在半空中扔炸弹，落点可能是别人家的红石。
+     * 放下去会触发邻居更新（{@code TntBlock.onPlace} 还会自己检查红石信号）、放完还得再拆掉，
+     * 得不偿失。钩子本身不需要方块在位（ProjectE 只用坐标）。
+     */
+    private static TntOut primeTnt(ServerLevel level, EntityMaid maid, ItemStack stack,
+                                   double sx, double sy, double sz) {
+        try {
+            TntBlock tb = tntBlockOf(stack);
+            if (tb != null && tb.getClass() != TntBlock.class) {
+                Entity made = igniteByBlock(level, maid, tb, sx, sy, sz);
+                if (made != null) {
+                    // 放出来的是引信 TNT 的子类 = 模组自己的 TNT 形式（那一炸归它自己）；
+                    // 放出来的就是原版 PrimedTnt = 这个方块没改点火路径，照原版 TNT 的老口径接管
+                    boolean plain = made.getClass() == PrimedTnt.class;
+                    return new TntOut(made, true, plain, plain
+                            ? "模组方块放的是原版引信 TNT"
+                            : "它自己那一枚 " + entityIdOf(made));
+                }
+                // 钩子什么也没放出来（这个方块压根不是 TNT 那种用法）→ 回落到原版那一枚
+            }
+        } catch (Throwable t) {
+            log("模组 TNT 点火失败：" + t);
+        }
+        return new TntOut(new PrimedTnt(level, sx, sy, sz, maid), false, true, "");
+    }
+
+    /**
+     * 让方块自己点火：调 {@code onCaughtFire}，返回它当场放出来的那一枚实体（没放出来 = null）。
+     * 判据是**实体 id 差集**（调用前那一小块里的 id 集合 vs 调用后），不看类型、不看位置，
+     * 免得模组把实体放在别处或者放的是不继承 PrimedTnt 的自家类型。
+     */
+    private static Entity igniteByBlock(ServerLevel level, EntityMaid maid, TntBlock tb,
+                                       double sx, double sy, double sz) {
+        BlockPos pos = BlockPos.m_274561_(sx, sy, sz);
+        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(pos).m_82377_(2.0, 2.0, 2.0);
+        java.util.Set<Integer> before = new java.util.HashSet<>();
+        for (Entity e : level.m_45976_(Entity.class, box)) {
+            before.add(e.m_19879_());
+        }
+        try {
+            tb.onCaughtFire(tb.m_49966_(), level, pos, Direction.UP, maid);
+        } catch (Throwable t) {
+            log("模组 TNT 点火钩子异常：" + t);
+        }
+        Entity pick = null;
+        for (Entity e : level.m_45976_(Entity.class, box)) {
+            if (before.contains(e.m_19879_())) {
+                continue;
+            }
+            if (e instanceof PrimedTnt) {
+                return e; // 引信 TNT 那一类优先
+            }
+            if (pick == null) {
+                pick = e;
+            }
+        }
+        return pick;
+    }
+
+    /** 实体的注册名（拿不到就类名）——实测六百〇五 的日志点名用 */
+    private static String entityIdOf(Entity e) {
+        try {
+            net.minecraft.resources.ResourceLocation rl =
+                    net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.m_6095_());
+            if (rl != null) {
+                return rl.toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            return e.getClass().getSimpleName();
+        } catch (Throwable ignored) {
+            return "未知实体";
+        }
     }
 
     /* ==================== 起爆 ==================== */
