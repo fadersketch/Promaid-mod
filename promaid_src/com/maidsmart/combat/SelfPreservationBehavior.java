@@ -1896,9 +1896,28 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.21：视线检查（raycast，隔墙不算威胁）。v1.5.135 公开给战斗战术共用 */
     public static boolean hasSight(LivingEntity from, LivingEntity other) {
         try {
+            return hasSight(from, other.m_20182_());
+        } catch (Exception e) {
+            return true;
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十四：视线检查的**坐标版**（除下面这一处取值外，与上面那条完全同一套）。
+     *
+     * 【为什么要它】飞行跟随的"坐标档"（{@code /maid_smart elytra_goto <x> <y> <z>}，取自
+     * 粉丝 Roderick32 的「鞘翅赶路」分支）要追的是**一个坐标**，没有实体可以传给上面那条
+     * 重载。行为里"起飞前先看有没有方块挡住"这道门禁是必须留的（不然她会贴着山壁一直顶），
+     * 所以把判定抽成坐标版，两条重载共用同一份实现——**不允许各写一份 raycast**，
+     * 否则"实体档能飞、坐标档不能飞"这种分裂迟早出现（本仓踩过同类）。
+     *
+     * 口径与实体版逐字一致：眼高 +1.2 → 眼高 +1.2，只挡 COLLIDER 方块、不看流体。
+     */
+    public static boolean hasSight(LivingEntity from, net.minecraft.world.phys.Vec3 to) {
+        try {
             net.minecraft.world.level.ClipContext ctx = new net.minecraft.world.level.ClipContext(
                     from.m_20182_().m_82520_(0.0, 1.2, 0.0),
-                    other.m_20182_().m_82520_(0.0, 1.2, 0.0),
+                    to.m_82520_(0.0, 1.2, 0.0),
                     net.minecraft.world.level.ClipContext.Block.COLLIDER,
                     net.minecraft.world.level.ClipContext.Fluid.NONE, from);
             net.minecraft.world.phys.BlockHitResult hit = from.m_9236_().m_45547_(ctx);
