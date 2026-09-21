@@ -466,9 +466,32 @@ public final class MaidFlightKit {
      * 实测五百六十三：飞行燃料 = 烟花火箭 <b>或</b> 暮色森林孔雀羽扇。
      * 三件套的"燃料件"从单一烟花扩为二选一——有扇先用扇（推进照搬扇子自己的
      * 公式、每挥一次按扇子自己的口径扣耐久），没扇才烧烟花。
+     *
+     * （v1.2.2 实测六百一十三：要判"她到底能不能飞起来"请用 {@link #hasFlightPropellant}——
+     * 那是三选一（含不需要物资的位移法术）；本方法只是其中"可燃的那两件"。）
      */
     public static boolean hasFlightFuel(EntityMaid maid) {
         return hasFirework(maid) || hasFan(maid);
+    }
+
+    /**
+     * v1.2.2 实测六百一十三【飞行跟随的启动并入位移法术】：她"能飞起来"的**道具件**口径——
+     * 烟花火箭 / 孔雀羽扇（{@link #hasFlightFuel}）**或**能上天的位移法术（{@link #hasClimbSpell}）。
+     *
+     * 【为什么收敛成一个方法】这个"三选一"原先在空袭激活（{@link #isModeActive}）与缺件气泡
+     * （{@link #missingParts}）里各写一遍，六百一十三 又要给飞行跟随的启动门禁加同一件事——
+     * 再加一遍就是第四份。口径必须**只有一处定义**：这一类的账本模组里已经吃过好几次亏
+     * （"气泡说齐了、她却不飞"就是两处判据写歪出来的）。现在空袭与飞行跟随共用这一份。
+     *
+     * 【开关归属】位移法术那一支由空袭的「位移法术·起飞/补高」开关
+     * （{@code combat.flightDashClimb}，默认开）管：关掉它 → 空袭与飞行跟随**同时**退回
+     * 只认烟花/羽扇，两处口径依然一致（不需要再开一个新开关）。
+     *
+     * 【与 {@link #hasFlightFuel} 的区别】那个是"有没有可燃的道具"（烟花/羽扇，补推要扣它）；
+     * 这个是"能不能飞起来"（含不消耗物资的法术）。要判断"能不能起飞"一律用这一个。
+     */
+    public static boolean hasFlightPropellant(EntityMaid maid) {
+        return hasFlightFuel(maid) || hasClimbSpell(maid);
     }
 
     /* v1.2.0 实测五百三十三：原 `hasExplosiveFirework`（只认带爆炸的烟花）已删除——
@@ -539,8 +562,9 @@ public final class MaidFlightKit {
     public static boolean isModeActive(EntityMaid maid) {
         // v1.2.0 实测五百七十二：推进剂 = 烟花 / 羽扇（hasFlightFuel）**或**能上天的位移法术——
         // 后者是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）
-        if (!(hasElytra(maid) && hasWeapon(maid)
-                && (hasFlightFuel(maid) || hasClimbSpell(maid)))) {
+        // v1.2.2 实测六百一十三：这个三选一收进 hasFlightPropellant——飞行跟随的启动门禁
+        // 用的是同一份定义（原先这里与缺件气泡各写一遍，等于同一个口径有两份实现）
+        if (!(hasElytra(maid) && hasWeapon(maid) && hasFlightPropellant(maid))) {
             return false;
         }
         return !isRangedTask(maid) || hasAmmoForRanged(maid);
@@ -574,7 +598,9 @@ public final class MaidFlightKit {
         // 反馈："既然法术可以飞，那无法启动空袭的消息应该改成'没有可以飞行的道具'，
         // 而不仅仅是烟花/羽扇。" 三种手段（烟花火箭 / 孔雀羽扇 / 能上天的位移类法术）任一即可，
         // 具体是哪三种由气泡尾注与手册展开说明。
-        if (!hasFlightFuel(maid) && !hasClimbSpell(maid)) {
+        // 六百一十三：判据改调 hasFlightPropellant——空袭与飞行跟随共用同一份"能飞的道具"口径
+        // （文案一字不变，仍然只报「可以飞行的道具」）。
+        if (!hasFlightPropellant(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
@@ -583,7 +609,7 @@ public final class MaidFlightKit {
         // v1.2.0 实测四百九十五：远程空袭还要报"缺弹药"（否则玩家只看到"三件齐了却没起飞"，
         // 完全不知道为什么——这正是本次需求要修的可观测性问题）。
         if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid)
-                && (hasFlightFuel(maid) || hasClimbSpell(maid)) && !hasAmmoForRanged(maid)) {
+                && hasFlightPropellant(maid) && !hasAmmoForRanged(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
