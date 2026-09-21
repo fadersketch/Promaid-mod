@@ -169,12 +169,16 @@ public class ProMaidExtension implements ILittleMaid {
                 // 也走不到 stop()），而且它现在还会让空袭让位 + 豁免自动传送——残留的代价比
                 // 之前大得多，必须一起清。（旧版只定义了 forget 却从未接线，属漏同步。）
                 com.maidsmart.combat.MaidTridentSpinBehavior.forget(maid.m_20148_());
+                // v1.2.2 实测六百〇八：飞行跟随的表同理（也是 core 行为，被强杀时走不到 stop()），
+                // 而且她还可能正穿着我们替她换上的鞘翅 —— 收不到 stop 就永远还不回去了。
+                com.maidsmart.combat.MaidFlightFollowBehavior.forget(maid.m_20148_());
                 com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }
         // 全清兜底：static 表不能跨会话残留（世界已重新加载，此刻没有任何女仆在飞）
         com.maidsmart.combat.MaidFlightCombatBehavior.clearAll();
         com.maidsmart.combat.MaidTridentSpinBehavior.clearAll();
+        com.maidsmart.combat.MaidFlightFollowBehavior.clearAll(); // v1.2.2 实测六百〇八
     }
 
     @net.minecraftforge.eventbus.api.SubscribeEvent
@@ -602,6 +606,11 @@ public class ProMaidExtension implements ILittleMaid {
                 // 换完即停、不占行为槽；优先级低于自保/落地水、高于施工区避让
                 return List.of(
                         Pair.of(250, new SelfPreservationBehavior()),
+                        // v1.2.2 实测六百〇八【飞行跟随】：主人飞远了、她包里有鞘翅+烟花、
+                        // 中间没方块挡着 → 背上鞘翅追过去（作者口径"跟空袭起飞一样，target=主人"）。
+                        // 卡在 246——**刚好压过搭路（245）**：这就是需求里"在判定使用搭路时"的那个点，
+                        // 条件不满足本行为压根不启动，搭路一字不动。默认关（bridge.flightFollow）。
+                        Pair.of(246, new com.maidsmart.combat.MaidFlightFollowBehavior()),
                         // v1.1.0：搭路（主人在上方时垫方块靠近，默认关）——低于自保、
                         // 高于落地水/战术：搭路条件本身排除威胁/自保，不与战斗抢移动
                         Pair.of(245, new com.maidsmart.task.BridgeUpBehavior()),

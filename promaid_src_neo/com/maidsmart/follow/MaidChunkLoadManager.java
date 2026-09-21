@@ -1059,6 +1059,17 @@ BlockPos stand = findStand(newLevel,
             // 那一刻（用户反馈："飞向敌人离地面较近的时候…触发自动传送，导致本次攻击
             // 被卡掉"）。isFlightAirborne 已并入"本轮攻击进行中"（起跳/爬升/收翅猛击/
             // 等待再放烟花），一轮打完即 restore，不会永久禁传。
+            // v1.2.2 实测六百〇八【飞行跟随期间不拉回】：她此刻滑翔位为真，下面那道"飞行作战
+            // 进行中"的闸本来也会生效——但那条闸有 15 秒超时（超时就强拉，还顺带清掉滑翔位），
+            // 而飞行跟随一趟最长 60 秒（MaidFlightFollowBehavior.MAX_TICKS），飞到一半被拉走
+            // 就等于"一起飞"这件事当场结束。所以这里单独让位，**不计时、不设超时**：本行为自带
+            // 收手（追上/超时/燃料耗尽/威胁出现），到点她自然落地，之后照常规规则处理。
+            // （跨维度不在此列：本行为的 canStillUse 一见目标与自己不同维度就收手，不会跨维飞。）
+            if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+                throttledSkipLog(maid, "flight-follow-samedim", name
+                        + " 正在背鞘翅追主人（飞行跟随），不拉回——追上/超时后自然结束");
+                return;
+            }
             if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
                 // v1.2.0 实测五百五十四：这里距离已经确认"确实该拉"（上面两道距离判定
                 // 都过了），所以让位必须有界——超时即强拉，理由与跨维度那两处同源。

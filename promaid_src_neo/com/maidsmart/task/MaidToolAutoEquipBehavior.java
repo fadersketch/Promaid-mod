@@ -26,6 +26,12 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         // 本行为是 core 行为、任何 activity 都跑、每 tick 一次，所以即使动作链路被强杀（切任务/死亡），
         // 最迟十几 tick 后也会自动还原，不会把盾牌/食物顶掉。无记录时零开销。
         com.maidsmart.combat.BombPose.tick(maid);
+        // v1.2.2 实测六百〇八：本句原先在下面"飞行作战任务"分支里（实测五百一十一），
+        // 只有空袭/远战任务才跑到 —— 而 六百〇八 的【飞行跟随】根本不是飞行任务，
+        // 于是她挂着烟花追主人的整段时间里，副手一直顶着那枚烟花模型收不回来。
+        // 挪到 BombPose 旁边这个**无条件区域**：任何玩法（含飞行跟随）、甚至行为被强杀，
+        // 最迟 10 tick 都会把盾牌/食物原样换回去。无记录时零开销（先判空 Map）。
+        com.maidsmart.combat.FlightFireworkPose.tick(maid);
         // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不自动换装】——她的主手要一直
         // 拿着那个模组的道具（万能手杖），换掉就等于把她的玩法拆了
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
@@ -52,7 +58,8 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
             // 本行为是 core 行为、任何 activity 都跑、每 tick 一次，所以把"到点归还原副手物品"
             // 放在这里最可靠——即使飞行行为被强杀（切任务/目标丢失/死亡），最迟 10 tick 后
             // 也会自动把盾牌/食物换回去，绝不永久占用副手。无记录时零开销（先判空 Map）。
-            com.maidsmart.combat.FlightFireworkPose.tick(maid);
+            // v1.2.2 实测六百〇八：已挪到本方法开头的无条件区域（飞行跟随不是飞行任务，
+            // 原先挂在这个分支里她收不回副手）。
             // v1.2.0 实测五百一十五【空袭索敌诊断】：只读探针——空袭任务且当前
             // 没有攻击目标时，按 TLM 原版那条链逐环计数（候选/存活/可攻击/
             // 活动范围内/有视线）并落盘，用来定位"到底哪一环把目标滤掉了"。
