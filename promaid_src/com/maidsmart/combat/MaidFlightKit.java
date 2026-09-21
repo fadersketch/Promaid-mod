@@ -1090,11 +1090,28 @@ public final class MaidFlightKit {
      * 所以到期 `explode()` 时伤害为 0，不会按 5+2n 炸到骑乘者自己（女仆只有 20 血）。
      * 单独提出来是为了让"飞行跟随"不必复用空袭行为里的私有发射方法。
      *
-     * @return true = 已经放出去了（调用方可以推进冷却）
+     * 【实测六百一十二：返回值从 boolean 改成那枚火箭本身】调用方需要它来**解除推进矢量**
+     * （见 {@code MaidFlightFollowBehavior.releaseThrust}）。烟花对骑手的推力**不是一次性的**，
+     * 而是它活着的那十几 tick 里**每 tick 都把骑手速度往"1.7×视线"上拉**——1.20.1
+     * `FireworkRocketEntity.tick`（SRG `m_8119_`）字节码实证：
+     * <pre>
+     *   if (this.isAttachedToEntity()) {                       // m_37088_
+     *       if (rider.isFallFlying()) {                        // m_21255_（正是我们置的滑翔位）
+     *           Vec3 look = rider.getLookAngle();              // m_20154_
+     *           rider.setDeltaMovement(vel.add(                // m_20256_
+     *               look.x * 0.1 + (look.x * 1.5 - vel.x) * 0.5, …y…, …z…));
+     * </pre>
+     * 即 `v = v * 0.5 + look * 0.85`（不动点 = 1.7 倍视线方向）。所以"进到主人身边就解除"
+     * 必须把**还挂在背上的那枚**收掉（`Entity.remove(RemovalReason.DISCARDED)`；**别写
+     * `m_6075_`**——javap 实证那是 `baseTick()`，调了等于没收），否则下一 tick 它又把速度
+     * 补回来，清零等于白清。
+     *
+     * @return 放出去的那枚火箭（要给调用方 discard 用）；null = 没放成
      */
-    public static boolean launchBoostRocket(net.minecraft.server.level.ServerLevel level, EntityMaid maid) {
+    public static net.minecraft.world.entity.projectile.FireworkRocketEntity launchBoostRocket(
+            net.minecraft.server.level.ServerLevel level, EntityMaid maid) {
         if (level == null || maid == null) {
-            return false;
+            return null;
         }
         try {
             ItemStack rocketStack = new ItemStack(Items.f_42688_);
@@ -1109,9 +1126,9 @@ public final class MaidFlightKit {
             if (launch != null) {
                 level.m_5594_(null, maid.m_20183_(), launch, net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
             }
-            return true;
+            return rocket;
         } catch (Throwable ignored) {
-            return false;
+            return null;
         }
     }
 
