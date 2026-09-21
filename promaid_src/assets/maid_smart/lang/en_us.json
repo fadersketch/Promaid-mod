@@ -1,4 +1,4 @@
-{
+﻿{
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",
   "task.maid_smart.organize": "Organize Chests",
@@ -58,6 +58,10 @@
   "config.promaid.combat.flightRecallDistance": "Air Raid Leash (blocks)",
   "item.maid_smart.index_stone": "Index Stone",
   "block.maid_smart.pink_fire": "Pink Fire",
+  "item.maid_smart.compression_box": "Compression Box",
+  "config.promaid.compressionBox": "Compression Box",
+  "config.promaid.compressionBox.maidExtension": "Maid backpack extension",
+  "config.promaid.compressionBox.maxStack": "Max stack per slot",
   "config.promaid.build.indexStone": "Index Stone",
   "task.maid_smart.index_build": "Temporary Build",
   "task.maid_smart.index_build.desc": "One-off temporary build triggered by the index stone (hidden task)",

@@ -112,7 +112,39 @@ public final class MaidArmyCommand {
                                                                 com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "y"),
                                                                 com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "z"),
                                                                 net.minecraft.commands.arguments.EntityArgument
-                                                                        .getEntity(ctx, "maid")))))))));
+                                                                        .getEntity(ctx, "maid"))))))))
+                // v1.2.2 实测六百一十六【压缩盒的诊断入口】——只读，不改任何东西。
+                // 【为什么要有】"她到底看没看见盒子里那十万个石头"是这一档最容易让人困惑的地方：
+                // 盒子在她背包里、开关也开着，但她一次只拿 64（大堆不许漏进她的存档，理由见
+                // CompressionBoxData），光看背包界面看不出"她的代码能看见什么"。这条命令把
+                // **她那一侧的真实视图**打出来：视图多少格、每格她看得见多少、盒子里实际存了多少。
+                .then(net.minecraft.commands.Commands.literal("box")
+                        .then(net.minecraft.commands.Commands.argument("maid", // argument
+                                        net.minecraft.commands.arguments.EntityArgument.entity())
+                                .executes(ctx -> boxReport(ctx.getSource(),
+                                        net.minecraft.commands.arguments.EntityArgument
+                                                .getEntity(ctx, "maid"))))));
+    }
+
+    /** v1.2.2 实测六百一十六：{@code /maid_smart box <女仆>} —— 把她的背包视图（含压缩盒那几格）打进日志 */
+    private static int boxReport(net.minecraft.commands.CommandSourceStack source,
+                                 net.minecraft.world.entity.Entity entity) {
+        if (!(entity instanceof EntityMaid maid)) {
+            source.sendFailure(Component.literal("\u00a7c那不是女仆。"));
+            return 0;
+        }
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        java.util.List<Component> lines =
+                inv instanceof com.maidsmart.box.CompressionBoxMaidInv ext
+                        ? ext.describe()
+                        : java.util.List.of(Component.literal("\u00a77"
+                        + maid.getName().getString() + " 的背包视图是原版的 " + inv.getSlots()
+                        + " 格——没有压缩盒（盒子不在背包里，或 compressionBox.maidExtension 关着）"));
+        for (Component line : lines) {
+            source.sendSuccess(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log("\u538b\u7f29\u76d2", line.getString());
+        }
+        return lines.size();
     }
 
     /** v1.2.2 实测六百〇八：{@code /maid_smart flyfollow clear} —— 摘掉全部"替代主人"（调试目标表很小） */
