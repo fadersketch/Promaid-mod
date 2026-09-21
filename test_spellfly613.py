@@ -99,7 +99,9 @@ def stop_server():
 
 
 def set_bridge_flags(**kv):
-    """改 [bridge] 小节里的开关。键不存在就插在 [bridge] 那一行后面（首次用新 jar 时还没这些键）。"""
+    """改 [flightFollow] 小节里的开关。**六百一十五 起它从 [bridge] 搬出来了**，键名也换了
+    （flightFollow→enabled、flightFollowDist→dist、flightFollowFirework→firework、
+    flightFollowElytra→elytra）；键不存在就插在该小节标题那一行后面。"""
     raw = open(CONFIG, 'rb').read()
     try:
         t = raw.decode('utf-8')
@@ -111,7 +113,7 @@ def set_bridge_flags(**kv):
     hit = set()
     for line in lines:
         stripped = line.strip()
-        if stripped == '[bridge]':
+        if stripped == '[flightFollow]':
             toc = len(out)
         out.append(line)
         for k, v in kv.items():
@@ -293,8 +295,8 @@ for old in [f for f in os.listdir(os.path.join(server, 'mods')) if f.startswith(
 shutil.copyfile(cfg['jar'], os.path.join(server, 'mods', cfg['modname']))
 print('jar copied:', cfg['modname'], os.path.getsize(cfg['jar']))
 
-print('config:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                  flightFollowElytra='true'))
+print('config:', set_bridge_flags(enabled='true', firework='true',
+                                  elytra='true', dist='16.0'))
 r = run_round()
 
 verdict = 'PASS'

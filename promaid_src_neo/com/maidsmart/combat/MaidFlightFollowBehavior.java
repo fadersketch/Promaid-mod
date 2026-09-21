@@ -37,7 +37,7 @@ import java.util.WeakHashMap;
  *       {@code canLaunch} 同一口径；有扇先挥扇（{@link TwilightFanKit#boostGlide}），
  *       顺序也与空袭的"扇子优先"一致。</li>
  *   <li><b>收手距离 4 格 → 15 格，并且不再"抬头泄速"</b>：主人进到她
- *       {@link #END_RADIUS}（15）格内，本趟链路就中断——**不需要贴到身边**；她若还在空中，
+ *       {@link #endRadius()} 格内，本趟链路就中断——**不需要贴到身边**；她若还在空中，
  *       就照原样继续自然滑翔、落地自然收尾，与"空袭女仆把怪打死之后"那一段
  *       （{@code MaidFlightCombatBehavior.endFlightSafely}）完全是同一套。</li>
  *   <li><b>外观与空袭同款</b>：滑翔中的女仆现在也走空袭那三样——模型游泳（展翅）姿态、
@@ -52,7 +52,9 @@ import java.util.WeakHashMap;
  * 检测到威胁的时候会解除这个链路（又变成自然滑行）。4.我需要确认一点，在此类状态下，女仆在
  * 什么时候会使用烟花火箭这类推进呢？"
  * <ol>
- *   <li><b>触发距离默认 16 → 5 格</b>（{@code bridge.flightFollowDist}，范围 3~128）。
+ *   <li><b>触发距离默认 16 → 5 格</b>（当时的键 {@code bridge.flightFollowDist}，范围 3~128；
+ *       **六百一十五 起这个键改名为 {@code flightFollow.dist} 并搬到自己的小节，默认值 25**——
+ *       本条的 5 是历史值，见类注释末尾的六百一十五 一节）。
  *       16 格那档配上"收手取 min(15, 距离-1)"只剩 1 格迟滞，实际很难触发；5 格才是"她跟得上
  *       你"的距离。**注意**：老存档的 config 文件里若已写着 16，NeoForge 不会替你改小——要么删掉
  *       那一行、要么手动改 5，见 changelog 的"升级注意"。</li>
@@ -125,7 +127,28 @@ import java.util.WeakHashMap;
  * <b>他那份实现里我们**刻意没要**的部分</b>（都写在 CHANGELOG 里）：
  * mixin 拦 TLM 跟随瞬移（本链路用"距离阈值 + isFollowing 让位"达成同一目的，不动原版链路）、
  * 8 个平行配置项（本链路已有等价开关）、"没进展就收手"的定时器（本链路已有 60 秒上限 +
- * 起飞前视线判定）、"不消耗鞘翅耐久"（本链路已有 {@code bridge.flightFollowElytra}）。
+ * 起飞前视线判定）、"不消耗鞘翅耐久"（本链路已有 {@code flightFollow.elytra}）。
+ *
+ * ── 六百一十五 改的两件事（用户反馈原文）──
+ * "1.现在女仆稍微走出去一点就开始飞（默认5格导致的），需要对判定进行一个收紧。首先，启动飞行跟随
+ * 要求：以自身为圆心，半径25格球内无主人 + 无方块阻挡 + 未发现威胁 + 开关打开 = 启动跟随飞行。
+ * 重点：如何结束这个模式？当发现5格内有主人后，结束此模式。如果有烟花矢量则消去（现在已经做了）。
+ * 在先前的版本，进入此模式和取消此模式走的都是同一个判定球，这样子带来的麻烦很多。实际上开始跟结束
+ * 两个半点的球大小应该不一样，默认值就是我说的那两个。依旧可以在手册内调试。
+ * 2.然后把飞行跟随这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块。"
+ * <ol>
+ *   <li><b>起手球 25 格 / 收手球 5 格（两个不同的球）</b>：旧版只有一个判定球——收手半径是
+ *       "起手距离 − 1"推出来的（六百一十二 起默认 5 → 收手 4），迟滞只有 1 格，于是"刚过起手线
+ *       就起飞、走两步又进收手线就收手"的来回抖动是常态。现在起手 {@link #cfgDist()}（默认 25）
+ *       与收手 {@link #cfgEndDist()}（默认 5）**各读各的配置**，默认档留 20 格迟滞；
+ *       两个值都能在配置面板「移动与行为 → 飞行跟随」里调（用户："依旧可以在手册内调试"）。</li>
+ *   <li><b>整块从 {@code [bridge]} 搬到自己的 {@code [flightFollow]} 板块</b>（用户第 2 条）：
+ *       配置小节、配置面板的页、手册里的引用一起搬——**与搭路平级**，不再是搭路参数里的一行。
+ *       <b>升级注意</b>：老配置里 {@code [bridge]} 下的四个 {@code flightFollow*} 键**不再生效**
+ *       （Forge/NeoForge 不会替你把值搬过来），重新打开一次开关即可。</li>
+ * </ol>
+ * 判定链本身一字未改，仍是：开关打开 → 目标存在且同维度 → **3D 距离 > 起手距离（25）** →
+ * 有可用鞘翅 + 能飞的道具 → 与目标之间没有方块阻挡视线 → 威胁半径内没有敌对生物。
  *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
@@ -136,15 +159,15 @@ import java.util.WeakHashMap;
  *
  * ── 判定（全部满足才起飞）──
  * <ul>
- *   <li>开关 {@code bridge.flightFollow}（**默认关**）打开；</li>
+ *   <li>开关 {@code flightFollow.enabled}（**默认关**）打开；</li>
  *   <li>她**没有在打**（六百一十二 起口径）：不在守家/坐姿/骑乘/睡觉、不在自保、任务没有实质
  *       占用（{@link com.maidsmart.task.BridgeUpBehavior#isTaskOccupied}，与搭路同一口径
  *       ——"另一种空闲"照飞，接战中绝不飞）；两个空袭任务**未接敌**时也在放行之列
  *       （见 {@link #ownFlightBusy}），旧版那句"空袭任务一律不起飞"已删除；</li>
  *   <li>目标存在、活着、同维度（主人 / {@code /maid_smart flyfollow} 挂的"替代主人" / 六百一十四
  *       起的 {@code /maid_smart elytra_goto} 指定的坐标），且**3D 距离超过
- *       {@code bridge.flightFollowDist}（默认 5 格，六百一十二 由 16 改小）**——太近就走路/
- *       搭路，犯不上烧烟花；</li>
+ *       {@code flightFollow.dist}（**起手距离**，默认 **25** 格，范围 3~128；六百一十二 曾把它
+ *       从 16 降到 5、六百一十五 又改回 25）**——太近就走路/搭路，犯不上烧烟花；</li>
  *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇 **或** 能上天的
  *       位移法术（{@link MaidFlightKit#hasFlightPropellant}，缺一件就不飞；六百一十一 起
  *       不再只认烟花、六百一十三 起法术也算；与空袭三件套的第三条同一口径）；</li>
@@ -171,8 +194,9 @@ import java.util.WeakHashMap;
  * </ol>
  *
  * ── 收手长什么样（六百一十一 改口径：与"空袭把怪打死之后"完全一致；六百一十二 加"解除矢量"）──
- * 主人进到 {@link #endRadius()} 格内 → 本趟中断（**实际半径** = min({@link #END_RADIUS}=15,
- * 触发距离 - 1)：默认 5 格触发 → 4 格收手，留 1 格迟滞；把触发距离调大到 16 以上才回到 15）。
+ * 目标进到 {@link #endRadius()} 格内 → 本趟中断。**六百一十五 起收手半径是自己的一个配置**
+ * （{@code flightFollow.endDist}，默认 **5** 格；起手是另一个配置、默认 **25**）——旧版只有一个
+ * 判定球（收手 = 起手 − 1），迟滞 1 格、来回抖动，见 {@link #endRadius()} 的注释。
  * 六百一十二 起这里多一步 {@link #releaseThrust}：**把烟花给的速度解掉**（收掉还挂着的助推
  * 火箭 + 速度归零）——不然她带着 1.7 格/tick 的动量从你身边冲过去。解除之后她还在空中就
  * 什么都不做，原版滑翔物理会把她自然带下去（滑翔分支里 `checkSlowFallDistance` 会在下落缓慢时
@@ -199,12 +223,12 @@ import java.util.WeakHashMap;
  *
  * ── 两个"省料"开关（作者要求"可以调整是否消耗烟花和鞘翅耐久"）──
  * <ul>
-     *   <li>{@code bridge.flightFollowFirework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
+     *   <li>{@code flightFollow.firework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
      *       能飞的道具**（烟花火箭 **或** 孔雀羽扇 **或** 能上天的位移法术，它是"她能飞"的凭证；
      *       六百一十三 起法术也在这一列），但每次补推不再从背包扣那一枚
  *       ——纯观赏档，适合"只想看她跟着飞"的存档。**背包里有羽扇时走扇子那条**（不烧烟花，
  *       照羽扇自己的口径扣耐久），这条开关只管烟花那一支。</li>
- *   <li>{@code bridge.flightFollowElytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
+ *   <li>{@code flightFollow.elytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
  *       由 {@link com.maidsmart.mixin.ElytraWearGuardMixin} 在
  *       {@code ElytraItem.elytraFlightTick} 入口拦掉那次 {@code hurtAndBreak}
  *       （**注意**：只认原版 {@code ElytraItem} 及其子类；模组"内置鞘翅的护甲"走它自己的
@@ -238,17 +262,12 @@ import java.util.WeakHashMap;
  */
 public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
-    /**
-     * 中断判定（格，**上限**）：主人进到她这么近的球里，本趟链路就中断、交回普通跟随。
-     *
-     * v1.2.2 实测六百一十一 由 4 改成 15——用户口径："在飞行跟随期间自身周围 15 格内找到主人
-     * 那么此链路就中断，不需要紧挨着主人。"（旧值 4 会让她一路贴到你脸前，还得抬头泄速刹车，
-     * 与"自然滑翔"相反。）实际取值见 {@link #endRadius()}：**取 min(15, 触发距离 - 1)**——
-     * v1.2.2 实测六百一十二 把触发距离默认值降到 5 之后，默认实际半径就是 4 格；
-     * 15 这一档只在玩家把触发距离调到 16 以上时才生效（触发距离是"起飞"的门槛，收手必须
-     * 比它更近，否则会"刚起飞就收手"）。
+    /*
+     * 【六百一十五 删掉了一个常量】旧版这里写着 {@code END_RADIUS = 15}（六百一十一 定的"收手半径
+     * 上限"，六百一十二 把起手距离降到 5 之后它实际只在"起手距离 ≥ 16"时才生效）。本批收手半径
+     * 独立成了一个配置（{@code flightFollow.endDist}，默认 5），那个写死的上限就没有存在意义，
+     * 连同它的 {@code min(15, …)} 一起删掉了——历史留在 {@link #endRadius()} 的注释里。
      */
-    private static final double END_RADIUS = 15.0;
     /** 滑翔操纵杆的俯仰限幅（度）：抬头 60 / 低头 45（与空袭同档） */
     private static final float PITCH_UP = 60.0f;
     private static final float PITCH_DOWN = 45.0f;
@@ -384,19 +403,25 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     /* ==================== 开关 ==================== */
 
     private static boolean cfg() {
-        return MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.get();
+        return MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get();
     }
 
+    /** 起手距离（格，默认 25）：她比目标远这么多才起飞——六百一十五 起与收手距离**拆成两个球** */
     private static double cfgDist() {
-        return MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST.get();
+        return MaidSmartConfig.FLIGHT_FOLLOW_DIST.get();
+    }
+
+    /** 收手距离（格，默认 5，六百一十五 新增）：目标进到这么近就收手 + 解除推进矢量 */
+    private static double cfgEndDist() {
+        return MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get();
     }
 
     private static boolean cfgFirework() {
-        return MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_FIREWORK.get();
+        return MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get();
     }
 
     private static boolean cfgElytra() {
-        return MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.get();
+        return MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get();
     }
 
     /**
@@ -600,7 +625,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             }
             double dSq = aim.distSq(maid);
             if (dSq <= cfgDist() * cfgDist()) {
-                return skip(maid, now, String.format("距离不够（%.1f 格 ≤ 阈值 %.1f）",
+                return skip(maid, now, String.format("距离不够（%.1f 格 ≤ 起手距离 %.1f）",
                         Math.sqrt(dSq), cfgDist())); // 还不够远：走路/搭路足够
             }
             // 昂贵的判定（背包扫描 + 视线 raycast + 威胁扫描）10 tick 一次，与搭路同款节流
@@ -640,7 +665,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      *
      * 【为什么值得常驻】开关一开，玩家看到的现象就是"她怎么不飞"——没有这一行，判定链上十来个
      * 条件里到底是哪一个没过，玩家与作者都只能猜（这跟"搭路跳过/轰炸跳过"是同一类可核验性问题）。
-     * 【为什么不会吵】只在 {@code bridge.flightFollow} 开着时才可能记（默认关 = 一行都没有），
+     * 【为什么不会吵】只在 {@code flightFollow.enabled} 开着时才可能记（默认关 = 一行都没有），
      * 且每只女仆 10 秒最多一条。运行日志搜「飞行跟随跳过」即可。
      */
     private static boolean skip(EntityMaid maid, long now, String why) {
@@ -854,15 +879,27 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     /* ==================== 起飞/操纵 ==================== */
 
     /**
-     * 本趟"够了"的半径（格）：主人进到这么近就中断本趟链路 + **解除推进矢量**。
+     * 本趟"够了"的半径（格）：目标进到这么近就中断本趟链路 + **解除推进矢量**。
      *
-     * 默认口径 = {@link #END_RADIUS}（15 格，用户原话），但**触发距离比它小时它得跟着缩**
-     * ——否则"飞行跟随距离 = 8"的存档会变成"一起飞就已经在 15 格内"= 起飞即刻收手，一次都飞不起来。
-     * 所以取 {@code min(15, 触发距离 - 1)}：**六百一十二 起默认触发距离 5 → 实际 4 格**；
-     * 玩家把它调到 16 → 15；调到 8 → 7（中间留 1 格滞回，免得她在边界上每 tick 起降一次）。
+     * 【六百一十五：起手与收手是两个不同的球】用户原话："开始跟结束两个半点的球大小应该不一样，
+     * 默认值就是我说的那两个（起手 25 / 收手 5）。" 它要治的是**旧版只有一个判定球**的毛病：
+     * 六百一十二 起收手半径是"起手距离 − 1"推导出来的，于是迟滞只有 1 格——她在"刚过起手线"与
+     * "刚进收手线"之间来回滑，就是常态（滑出去 → 起飞 → 走两步又进线 → 收手 → 再滑出去……）。
+     * 现在两个数**各读各的配置**：起手 {@link #cfgDist()}（默认 25）、收手 {@link #cfgEndDist()}
+     * （默认 5），默认档留 20 格迟滞。
+     *
+     * 【为什么要压一道上限】收手半径 ≥ 起手距离时，她会"一起飞就已经在收手半径内"= 起飞即刻收手、
+     * 一次都飞不起来（旧版那个"减 1"就是为了防这个）。所以这里仍取 {@code min(收手, 起手 − 1)}，
+     * 下界 1：玩家把两个数都调到很小（比如起手 3 / 收手 5）时自动退化成"起飞即收手"的边界档，
+     * 而**不是**静悄悄地什么都不做。默认 25 / 5 用不到这条兜底。
+     *
+     * 【六百一十五 删掉了一个常量】旧版这里写着 {@code END_RADIUS = 15}（六百一十一 定的"收手半径
+     * 上限"，六百一十二 把起手距离降到 5 之后它实际只在"起手距离 ≥ 16"时才生效）——收手半径本批
+     * 独立成一个配置之后，那个写死的上限就没有存在意义，连同它的 {@code min(15, …)} 一起删掉了。
      */
     private static double endRadius() {
-        return Math.max(1.0, Math.min(END_RADIUS, cfgDist() - 1.0));
+        double start = cfgDist();
+        return Math.max(1.0, Math.min(cfgEndDist(), Math.max(1.0, start - 1.0)));
     }
 
     /**

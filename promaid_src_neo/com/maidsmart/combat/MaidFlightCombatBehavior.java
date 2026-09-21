@@ -881,7 +881,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (fw.isEmpty()) {
             return false;
         }
-        launchFirework(level, maid, fw);
+        launchFirework(level, maid, fw, false);
         // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"烟花模型（纯表现，用完还原原物）；
         // 展示的就是本次真正消耗掉的那一枚（模型与它完全一致）
         FlightFireworkPose.show(maid, fw);
@@ -906,18 +906,81 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /**
      * 生成挂载型烟花助推（无爆炸星，避免到期 `explode()` 对骑乘者造成 5+2n 伤害——
      * 女仆只有 20 血）。消耗的仍是玩家给的真实烟花（1 枚）。
+     *
+     * @param scaled v1.2.2 实测六百一十五：true = 用 {@link DiveBoostRocket}——**只在俯冲段
+     *               那一枚**上，除了原版推力再补一份「俯冲段冲刺·烟花力度倍数」的沿视线推力。
+     *               起飞/爬升/盘旋那几处一律 false（照原版一字不动）。
      */
-    private void launchFirework(ServerLevel level, EntityMaid maid, ItemStack consumedIgnored) {
+    private void launchFirework(ServerLevel level, EntityMaid maid, ItemStack consumedIgnored,
+                                boolean scaled) {
         try {
             ItemStack rocketStack = new ItemStack(Items.FIREWORK_ROCKET);
             rocketStack.set(net.minecraft.core.component.DataComponents.FIREWORKS,
                     new net.minecraft.world.item.component.Fireworks(1, java.util.List.of()));
-            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
-                    new net.minecraft.world.entity.projectile.FireworkRocketEntity(level, rocketStack, maid);
+            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket = scaled
+                    ? new DiveBoostRocket(level, rocketStack, maid)
+                    : new net.minecraft.world.entity.projectile.FireworkRocketEntity(
+                            level, rocketStack, maid);
             level.addFreshEntity(rocket);
             level.playSound(null, maid.getX(), maid.getY(), maid.getZ(),
                     SoundEvents.FIREWORK_ROCKET_LAUNCH, SoundSource.NEUTRAL, 1.0f, 1.0f);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十五【俯冲段烟花力度 ×1.4】：只在**俯冲段**点的那一枚挂载烟花上生效。
+     *
+     * ── 它到底做了什么（javap 实证，1.20.1 SRG {@code m_8119_} / 1.21.1 {@code tick} 一致）──
+     * 原版挂载烟花对骑手的推力不是"一次给一份速度"，而是它活着的十几 tick 里**每 tick**：
+     * <pre>
+     *   if (rider.isFallFlying())
+     *       rider.setDeltaMovement(v.add(
+     *           look.x * 0.1 + (look.x * 1.5 - v.x) * 0.5, …y…, …z…));
+     * </pre>
+     * 即 {@code v ← v×0.5 + 视线×0.85}——**向"1.7 倍视线"这个不动点收敛**（0.85 / 0.5 = 1.7）。
+     * 所以"力度"不是可以随手乘的冲量，而要让**不动点**变大：本类在 {@code super.tick()}（原版那一口）
+     * 之后，再给骑手补一份沿视线的推力 {@code 视线 × 0.85 ×(倍数 − 1)}——代入递推式
+     * {@code v ← v×0.5 + 视线×(0.85 + 0.85×(倍数−1))} = {@code v ← v×0.5 + 视线×(0.85×倍数)}，
+     * 不动点正好变成 **1.7×倍数**（用户口径"烟花加速力度效果 ×1.4 倍"）。
+     *
+     * ── 为什么用"子类覆盖 tick"而不是在行为里每 tick 补 ──
+     * 行为那边的 tick 与这枚火箭的 tick 是**两个实体各自的 tick**，谁先谁后取决于实体遍历顺序；
+     * 而原版那一口会把上一 tick 的速度折半，顺序不同结果差一倍。写在 {@code super.tick()} 之后
+     * = **永远紧跟原版那一口**，与遍历顺序无关。
+     *
+     * ── 只在这一枚上生效 ──
+     * 本类是 {@code private static}，**只有俯冲段那一次 {@code launchFirework(…, true)} 会 new 它**；
+     * 玩家自己的烟花、空袭起飞/爬升/盘旋用的烟花都是原版 {@code FireworkRocketEntity}，一个字节都不碰。
+     * 网络同步也没问题：{@code getType()} 仍是 {@code EntityType.FIREWORK_ROCKET}，客户端按原版那一类
+     * 创建与渲染，服务端跑的才是本子类（推力是服务端物理）。倍数为 1.0 时**不补任何东西**
+     * （与旧版逐字节等价，这也是验收里"倍数 1.0 = 原版"那一条）。
+     */
+    private static final class DiveBoostRocket
+            extends net.minecraft.world.entity.projectile.FireworkRocketEntity {
+
+        DiveBoostRocket(ServerLevel level, ItemStack stack, EntityMaid maid) {
+            super(level, stack, maid);
+        }
+
+        @Override
+        public void tick() {
+            super.tick(); // 原版那一口：v ← v×0.5 + 视线×0.85（含"未滑翔就不推"的门）
+            try {
+                double k = diveBoostFireworkScale();
+                if (k <= 1.0) {
+                    return; // 1.0 = 完全照原版（不补任何东西）
+                }
+                net.minecraft.world.entity.Entity rider = this.getOwner();
+                if (!(rider instanceof LivingEntity r) || !r.isFallFlying()) {
+                    return; // 与原版同一个门：不是滑翔中的骑手就没有推力可乘
+                }
+                double add = 0.85 * (k - 1.0); // 原版那一口的系数 0.85 ×(倍数−1)
+                Vec3 look = r.getLookAngle();
+                Vec3 v = r.getDeltaMovement();
+                r.setDeltaMovement(v.add(look.x * add, look.y * add, look.z * add));
+            } catch (Throwable ignored) {
+            }
         }
     }
 
@@ -1024,6 +1087,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 推力由原版给、并照旧让副手亮一下）；最后才是羽扇（面板默认关）。一件都没有 → 静默跳过
      * （与全模组"缺料跳过"的口径一致，不占间隔）。
      *
+     * ── 烟花这一路的力度倍数（v1.2.2 实测六百一十五）──
+     * 用户反馈「加强力度太小，加速效果不明显，还耗了一颗烟花没啥用」，所以俯冲段点的那一枚
+     * **走 {@link DiveBoostRocket}**：原版推力之外再补一份 {@code 视线 × 0.85×(倍数−1)}，
+     * 把原版的不动点从"1.7 倍视线"抬到"1.7×倍数 倍视线"（默认 1.4；见那个类的推导与
+     * 字节码实证）。**只有这一路**——起飞/爬升/盘旋照旧发原版烟花，倍数 1.0 时逐字节等价。
+     * 日志上也会写出来：{@code 俯冲加速（烟花×1.4，距敌 12.3 格）}。
+     *
      * ── 闸口 ──
      * ① 距目标 3D 距离落在 [{@code diveBoostMinRange()}, {@code diveBoostMaxRange()}] 之间：
      *    比 5 格更近就是"已经贴脸"（冲了会直接穿过它，而且再两 tick 就进收翅段了），
@@ -1052,12 +1122,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 what = "位移法术";
             }
             // ② 烟花：真的点一枚（原版推力沿视线生效，方向不变），并让副手亮一下
+            //     六百一十五：这一枚走 **DiveBoostRocket**——原版推力之外再补一份
+            //     "×（俯冲段冲刺·烟花力度倍数）"的沿视线推力（默认 1.4，见那个类的注释）
             if (what == null && cfgDiveBoostFirework() && MaidFlightKit.hasFirework(maid)) {
                 ItemStack fw = MaidFlightKit.takeFirework(maid);
                 if (!fw.isEmpty()) {
-                    launchFirework(level, maid, fw);
+                    launchFirework(level, maid, fw, true);
                     FlightFireworkPose.show(maid, fw);
-                    what = "烟花";
+                    what = "烟花×" + trimScale(diveBoostFireworkScale());
                 }
             }
             // ③ 羽扇：借它的动作与消耗（挥臂/音效/扇风盒/扣耐久），速度用"方向不变、只加大小"那一口
@@ -1101,6 +1173,18 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
     private static boolean cfgDiveBoostFirework() {
         return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK.get();
+    }
+    /** 俯冲段那一枚烟花的推力倍数（默认 1.4，v1.2.2 实测六百一十五）：1.0 = 完全照原版 */
+    private static double diveBoostFireworkScale() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FIREWORK_SCALE.get();
+    }
+    /** 日志里的倍数写法：1.4→"1.4"、2.0→"2"（去掉尾随的 0，别写"2.0 倍"这种别扭字） */
+    private static String trimScale(double k) {
+        String s = String.format(java.util.Locale.ROOT, "%.2f", k);
+        while (s.endsWith("0")) {
+            s = s.substring(0, s.length() - 1);
+        }
+        return s.endsWith(".") ? s.substring(0, s.length() - 1) : s;
     }
     private static boolean cfgDiveBoostFan() {
         return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.get();
@@ -1739,7 +1823,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 } else {
                     ItemStack fw = MaidFlightKit.takeFirework(maid);
                     if (!fw.isEmpty()) {
-                        launchFirework(level, maid, fw);
+                        launchFirework(level, maid, fw, false);
                         // v1.2.0 实测五百一十一/五百一十四：副手"亮一下"实际消耗的那枚烟花
                         FlightFireworkPose.show(maid, fw);
                         FIREWORK_READY.put(id, gameTime + fireworkCooldown());

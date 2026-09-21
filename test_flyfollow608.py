@@ -25,8 +25,8 @@ NoAI 木桩僵尸），走的仍是同一套判定与飞行链路。
       拿僵尸当替代主人只会验出"起飞 1 tick 就收手"的假象）站在台子另一端（22 格外 > 默认 16 格）。
     · `/maid_smart flyfollow <目标> <女仆>` 点名指定，不靠"最近的"。
 
-三轮（改服务端 config/promaid-common.toml 的 [bridge] 小节后重启）：
-  A 轮 flightFollow=true / Firework=true / Elytra=true（全默认档）
+三轮（改服务端 config/promaid-common.toml 的 [flightFollow] 小节后重启）：
+  A 轮 enabled=true / Firework=true / Elytra=true（全默认档）
     ① 起飞日志「飞行跟随 … 主人飞远了（N 格），背上鞘翅追过去（烟花=消耗，鞘翅耐久=照原版扣）」
     ② 补烟花日志 ≥1 行「补一枚烟花追主人（烟花=消耗）」
     ③ 结束日志 1 行；且她已经贴到目标（ARRIVED/NEAR）
@@ -34,11 +34,11 @@ NoAI 木桩僵尸），走的仍是同一套判定与飞行链路。
     ⑤ 背包烟花 **真的少了几枚**（消耗档确实扣）
     ⑥ 鞘翅 **没丢**（背包 + 胸甲一共 1 件）、落地日志「已落地，把胸甲还回去」、
        战后胸甲槽重新变空（归还链路收尾）
-  B 轮 flightFollow=true / Firework=false / Elytra=false（两个省料档）
+  B 轮 enabled=true / Firework=false / Elytra=false（两个省料档）
     ⑦ 起飞日志写的是「烟花=不消耗，鞘翅耐久=不消耗」
     ⑧ 背包烟花 **一枚不少**
     ⑨ 鞘翅 Damage == 0（A 轮同一趟飞行会扣，这轮不扣 = 免耐久真生效）
-  C 轮 flightFollow=false（默认关）
+  C 轮 enabled=false（默认关）
     ⑩ 日志里「飞行跟随」 **0 行**（开关管得住）
 
 【踩过的坑（写在这里免得下次再踩）】`data get entity … <字段>` 的回显**不带字段名**
@@ -108,7 +108,9 @@ def stop_server():
 
 
 def set_bridge_flags(**kv):
-    """改 [bridge] 小节里的开关。键不存在就插在 [bridge] 那一行后面（首次用新 jar 时还没这些键）。"""
+    """改 [flightFollow] 小节里的开关。**六百一十五 起它从 [bridge] 搬出来了**，键名也换了
+    （flightFollow→enabled、flightFollowDist→dist、flightFollowFirework→firework、
+    flightFollowElytra→elytra）；键不存在就插在该小节标题那一行后面。"""
     raw = open(CONFIG, 'rb').read()
     try:
         t = raw.decode('utf-8')
@@ -120,7 +122,7 @@ def set_bridge_flags(**kv):
     hit = set()
     for line in lines:
         stripped = line.strip()
-        if stripped == '[bridge]':
+        if stripped == '[flightFollow]':
             toc = len(out)
         out.append(line)
         for k, v in kv.items():
@@ -397,8 +399,8 @@ verdict = 'PASS'
 notes = []
 
 # ── A 轮：全默认档（消耗烟花 / 照原版扣鞘翅耐久）──
-print('config A:', set_bridge_flags(flightFollow='true', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config A:', set_bridge_flags(enabled='true', firework='true',
+                                    elytra='true', dist='16.0'))
 a = run_round('A')
 notes += a['notes']
 if a['takeoff'] == 0:
@@ -428,8 +430,8 @@ if not a['arrived']:
     notes.append('警告：没读到 ARRIVED_A（飞行结束后 12 格内）—— 她可能没贴到目标')
 
 # ── B 轮：两个省料档（不消耗烟花 / 免鞘翅耐久）──
-print('config B:', set_bridge_flags(flightFollow='true', flightFollowFirework='false',
-                                    flightFollowElytra='false'))
+print('config B:', set_bridge_flags(enabled='true', firework='false',
+                                    elytra='false', dist='16.0'))
 b = run_round('B')
 notes += b['notes']
 if b['takeoff'] == 0:
@@ -444,8 +446,8 @@ elif b['takeoff'] > 0 and b['boost'] == 0:
     notes.append('警告：B 轮起飞了但没补烟花 —— 推进链路异常（不消耗档不该影响推进）')
 
 # ── C 轮：开关关着（默认）──
-print('config C:', set_bridge_flags(flightFollow='false', flightFollowFirework='true',
-                                    flightFollowElytra='true'))
+print('config C:', set_bridge_flags(enabled='false', firework='true',
+                                    elytra='true', dist='16.0'))
 c = run_round('C')
 notes += c['notes']
 if c['takeoff'] or c['boost']:
