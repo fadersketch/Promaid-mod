@@ -151,7 +151,9 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
-        if (maid.m_20145_() || !MaidFlightKit.isFlightTask(maid)) {
+        if (maid.m_20145_() || !MaidFlightKit.isFlightVisual(maid)) {
+            // 六百一十一：判据加上"正在滑翔"——飞行跟随的女仆不是飞行任务，旧判据看不见她
+            // （与 Bedrock 那层同一口径，见 MaidFlightKit.isFlightVisual）
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
@@ -199,9 +201,9 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             poseStack.m_252880_(0.0f, 0.0f, 0.125f);
 
             this.elytraModel.m_6973_(mob, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-            // 展翅：飞行任务且离地就张开（不只认滑翔，避免同步间隙露出折叠态）
+            // 展翅：飞行任务或正在滑翔、且离地就张开（不只认滑翔中，避免同步间隙露出折叠态）
             ElytraSpread.forceSpread(this.elytraModel,
-                    MaidFlightKit.isFlightTask(maid) && !maid.m_20096_());
+                    MaidFlightKit.isFlightVisual(maid) && !maid.m_20096_());
             // v1.2.0 实测五百零七【改回按附魔判定】：`m_115184_` 的第 4 参就是原版的
             // "hasFoil"（字节码实证：为 true 时复合一层 armor_entity_glint 光泽层）。
             // 实测五百零四曾固定传 true（常亮），反馈指出那不对（"不管附没附魔都渲染出了

@@ -48,10 +48,15 @@ import net.minecraftforge.api.distmarker.OnlyIn;
  * 1.21.1 写 `XP` 的 `SwimAnimation.setupRotations`）。
  *
  * ── 触发口径 ──
- * `MaidFlightKit.isFlightTask(maid) && !onGround()`——与鞘翅图层的展翅口径完全一致
- * （`LayerMaidElytra` 同款）。**刻意不认 `isFallFlying()`**：收翅猛击那段 `tickSmash`
+ * `MaidFlightKit.isFlightVisual(maid) && !onGround()`——原本是
+ * `isFlightTask(maid) && !onGround()`，与鞘翅图层的展翅口径完全一致（`LayerMaidElytra` 同款）。
+ * **实测六百一十一 把它放宽成"飞行任务 或 正在滑翔"**：用户反馈"飞行跟随……动作没有换成空袭
+ * 飞行的动作"，而飞行跟随的女仆并不是飞行任务 → 她俯冲/滑翔时这一段前倾一点没跟上。放宽之后
+ * 空袭那边一字不变（它本来就滑翔），跟着飞的她也认。
+ *
+ * **刻意不认 `isFallFlying()`**：收翅猛击那段 `tickSmash`
  * 会主动 `setGliding(false)`（收翅才吃得到猛击判定），只认滑翔位的话"飞向敌人"最需要
- * 前倾的那一段恰好不生效。
+ * 前倾的那一段恰好不生效（所以判据里保留了 `isFlightTask` 这一支）。
  *
  * ── 可调 ──
  * {@link #TILT_FACTOR} 是唯一调节量：1.0 = 与玩家鞘翅同款；嫌翻太多调小、嫌不够调大；
@@ -78,7 +83,7 @@ public final class FlightDiveTilt {
             if (!(entity instanceof EntityMaid maid)) {
                 return;
             }
-            if (!MaidFlightKit.isFlightTask(maid) || maid.m_20096_()) {
+            if (!MaidFlightKit.isFlightVisual(maid) || maid.m_20096_()) {
                 return;
             }
             float pitch = maid.m_146909_();

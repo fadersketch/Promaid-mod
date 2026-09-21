@@ -23,8 +23,15 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 /**
  * v1.2.0（1.20.1）：飞行作战——鞘翅图层（**Bedrock 模型** 女仆走这条）。
  *
- * 【显示条件】任务为飞行作战 且 胸甲槽穿着可用鞘翅（三件齐备时 MaidFlightKit.equip
- * 会穿上）= "激活即显示"，与玩家穿戴鞘翅一致。
+ * 【显示条件】任务为飞行作战 **或 正在滑翔**（六百一十一 放宽，见下）且胸甲槽穿着可用鞘翅
+ * （三件齐备时 MaidFlightKit.equip 会穿上）= "激活即显示"，与玩家穿戴鞘翅一致。
+ *
+ * ── v1.2.2 实测六百一十一【判据加上"正在滑翔"】──
+ * 用户反馈："飞行跟随……动作没有换成空袭飞行的动作。"飞行跟随的女仆**不是飞行任务**
+ * （她在跟主人，任务可能是空闲/搭路），旧判据只看 `isFlightTask` → 她滑翔时背上一片空白。
+ * 现在改成 `MaidFlightKit.isFlightVisual(maid)`（= `isFlightTask || isGliding`）：空袭那边一字不变（它本来就在滑翔），
+ * 跟着飞的她与"玩家给她鞘翅、她自己滑起来"的情况也一并认——滑翔位是**同步过的共享标志位 7**，
+ * 所以多人下客户端也认得出（不依赖服务端那些状态表）。
  *
  * 【照抄原版 ElytraLayer 的渲染配方】1.20.1 的 `ElytraLayer.m_6494_` 就是
  * `pushPose + translate(0,0,0.125) + setupAnim + getArmorFoilBuffer + renderToBuffer`；
@@ -74,7 +81,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
-        if (maid.m_20145_() || !MaidFlightKit.isFlightTask(maid)) {
+        if (maid.m_20145_() || !MaidFlightKit.isFlightVisual(maid)) {
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
@@ -116,7 +123,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             this.elytraModel.m_6973_(mob, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
             // v1.2.0：飞行任务且离地就强制展翅（原版按下落速度收拢，同步间隙也会露出折叠态）
             com.maidsmart.client.ElytraSpread.forceSpread(this.elytraModel,
-                    MaidFlightKit.isFlightTask(maid) && !maid.m_20096_());
+                    MaidFlightKit.isFlightVisual(maid) && !maid.m_20096_());
             // v1.2.0 实测五百零七【改回按附魔判定】：`m_115184_` 的第 4 参就是原版的
             // "hasFoil"（字节码实证：为 true 时复合一层 armor_entity_glint 光泽层）。
             // 实测五百零四曾固定传 true（常亮），当时是按"本模组手册/排班表常亮"的口径
