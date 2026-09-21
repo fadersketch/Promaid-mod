@@ -454,6 +454,24 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** 入世界后的静默窗口（tick）——0.5 秒，与反馈建议一致 */
     private static final long NOTIFY_GRACE_TICKS = 10;
 
+    /**
+     * v1.2.2 实测六百〇九【判定要"站稳"】：缺件 / 齐备都必须**连续成立**这么久（tick）才认账。
+     *
+     * 【为什么】旧版是"看到一拍齐就清冷却、看到一拍缺就播报"，而**我们自己的动作表现**
+     * （{@code BombPose} / {@code FlightFireworkPose} 把副手那件借走十几 tick）恰好每隔
+     * 十几秒就造一次这种抖动：缺 → 报一条 → 还回来 → 判定又齐 → 播报冷却被清零 →
+     * 下一轮再报一条……粉丝原话"这个系统消息不停"就是这个循环。
+     * 2 秒足够盖住任何一次"举一下"（单次 10 tick 起，连续接力最长也就 30 tick 上下），
+     * 又不至于让真正的缺件提示迟到多久——她本来就在按普通战斗打，提示是补充说明。
+     */
+    private static final long STABLE_TICKS = 40;
+    /** maid → "缺件"最早被看到的 gameTime（一旦齐备就清掉） */
+    private static final java.util.Map<EntityMaid, Long> MISSING_SINCE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    /** maid → "齐备"最早被看到的 gameTime（一旦缺件就清掉） */
+    private static final java.util.Map<EntityMaid, Long> COMPLETE_SINCE =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
     public static void notifyNotReady(EntityMaid maid, long gameTime) {
         try {
             if (maid == null) {
@@ -461,10 +479,23 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             }
             String missing = MaidFlightKit.missingParts(maid);
             if (missing == null) {
-                // 三件齐备 = 这一轮"缺件"状态结束 → 清冷却，下次再缺立刻能报
-                NOTIFY_READY.remove(maid);
+                // 三件齐备 = 这一轮"缺件"状态结束 → 清冷却，下次再缺立刻能报。
+                // 实测六百〇九：**齐备也要站稳 STABLE_TICKS 才算真齐**——见 STABLE_TICKS 的注释
+                //（旧版见到一拍齐就清冷却，于是"我们自己的副手动作借出去又还回来"这种
+                // 十几 tick 的抖动每轮都能把冷却清零，假提示每 10 秒一条、永远不停）。
+                MISSING_SINCE.remove(maid);
+                Long cSince = COMPLETE_SINCE.get(maid);
+                if (cSince == null) {
+                    COMPLETE_SINCE.put(maid, gameTime);
+                    return;
+                }
+                if (gameTime - cSince >= STABLE_TICKS) {
+                    COMPLETE_SINCE.remove(maid);
+                    NOTIFY_READY.remove(maid);
+                }
                 return; // 其实是齐的（判定竞态）→ 不误报
             }
+            COMPLETE_SINCE.remove(maid);
             // 实测五百七十六：入世界后的前 0.5 秒静默（法术/饰品数据要一拍才就绪，早了会误报）
             Long firstSeen = NOTIFY_FIRST_SEEN.get(maid);
             if (firstSeen == null) {
@@ -472,6 +503,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 return;
             }
             if (gameTime - firstSeen < NOTIFY_GRACE_TICKS) {
+                return;
+            }
+            // 实测六百〇九：缺件同样要**站稳 STABLE_TICKS** 才播报（见 STABLE_TICKS）
+            Long mSince = MISSING_SINCE.get(maid);
+            if (mSince == null) {
+                MISSING_SINCE.put(maid, gameTime);
+                return;
+            }
+            if (gameTime - mSince < STABLE_TICKS) {
                 return;
             }
             Long ready = NOTIFY_READY.get(maid);
@@ -487,6 +527,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 com.maidsmart.tool.PromaidLog.log("空袭装备",
                         com.maidsmart.tool.PromaidLog.nameOf(maid)
                                 + " 缺鞘翅（" + MaidFlightKit.elytraDiagnostic(maid) + "）");
+            }
+            // v1.2.2 实测六百〇九【缺燃料也要有一行日志】：与上面那行同一节流（最多 15 秒一行）。
+            // 旧版缺"可以飞行的道具"时日志里什么都不写，气泡却照发——现场无法复核。
+            // 见 {@link MaidFlightKit#fuelDiagnostic}。
+            if (missing.contains("可以飞行的道具")) {
+                com.maidsmart.tool.PromaidLog.log("空袭装备",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                + " 缺可以飞行的道具（" + MaidFlightKit.fuelDiagnostic(maid) + "）");
             }
             // 实测五百七十四：措辞按缺件内容分流——缺"可以飞行的道具"时把三种手段点出来
             // （烟花火箭 / 孔雀羽扇 / 能上天的位移类法术任一即可），免得玩家以为只能用烟花。

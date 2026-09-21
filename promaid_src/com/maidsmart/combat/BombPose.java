@@ -249,6 +249,29 @@ public final class BombPose {
     }
 
     /**
+     * v1.2.2 实测六百〇九：**我们借走的那件副手物品**的只读查询（没借走就返回空栈）。
+     *
+     * 【为什么必须有】展示窗口里那件东西**不在任何槽位里**——它就是本类 {@code State.original}
+     * 那份快照（原栈已被 {@code setItemInHand} 顶掉）。于是"她身上有没有某件东西"的判定
+     * （{@code MaidFlightKit.hasFirework/hasFan}、{@code TwilightFanKit.hasFan}）只要还只看
+     * 槽位，就会在**玩家那件东西明明在她身上**的十几 tick 里得到 false。
+     *
+     * 实测现场（粉丝反馈"明明拿着孔雀羽扇却说缺飞行道具、系统消息不停"）：玩家把羽扇挂在
+     * 她副手，空袭每隔十几秒起手一次轰炸 → 副手被本类借走 → 就绪判定报「可以飞行的道具」；
+     * 还回去之后判定又齐了、把播报冷却清零 → 下一轮再报一条，永远不停。
+     * 判定口径修在 {@link com.maidsmart.combat.MaidFlightKit#borrowedOffhand}（那一处同时
+     * 覆盖 {@link FlightFireworkPose}），这里只提供"借走的是哪一件"。
+     */
+    public static ItemStack savedOffhand(EntityMaid maid) {
+        try {
+            State st = maid == null ? null : ACTIVE.get(maid.m_20148_());
+            return st == null ? ItemStack.f_41583_ : st.original;
+        } catch (Throwable ignored) {
+            return ItemStack.f_41583_;
+        }
+    }
+
+    /**
      * 清记录（女仆被移除等）：这里手上还留着**弱引用**，所以只要她还在就顺手把原物还回去
      * ——{@code FlightFireworkPose.forget} 只有 UUID、做不到这一步。
      */
