@@ -17,6 +17,9 @@ compile_addon.txt
 compile_neo.txt
 compile_neo_log.txt
 libs_neo/
+# 1.20.1 那侧的 ASCII 副本目录（TLM 的 forge jar 在带中文的路径下，
+# javac 的 @argfile 读不了中文路径，照 libs_neo 的老办法复制一份）
+libs_forge/
 
 # ---- Python ----
 __pycache__/

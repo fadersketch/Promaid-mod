@@ -45,6 +45,42 @@ import java.util.WeakHashMap;
  *       多人下客户端也认得出（与 {@code MaidFlightKit.isGliding} 同源）。</li>
  * </ol>
  *
+ * ── 六百一十二 改的四件事（用户反馈原文）──
+ * "1.飞行跟随配置默认距离从16改为5，同时加一个判定，在距离内检测到主人之后解除烟花带来的矢量
+ * （之前空袭状态下是不解除，在此模式下改为解除）2.2个空袭状态（未接敌），也可以触发飞行跟随，
+ * 不做额外抑制。简单来说，就是目前飞行跟随触发判定推广到所有模式下。3.跟搭路有同款的判定，
+ * 检测到威胁的时候会解除这个链路（又变成自然滑行）。4.我需要确认一点，在此类状态下，女仆在
+ * 什么时候会使用烟花火箭这类推进呢？"
+ * <ol>
+ *   <li><b>触发距离默认 16 → 5 格</b>（{@code bridge.flightFollowDist}，范围 3~128）。
+ *       16 格那档配上"收手取 min(15, 距离-1)"只剩 1 格迟滞，实际很难触发；5 格才是"她跟得上
+ *       你"的距离。**注意**：老存档的 config 文件里若已写着 16，Forge 不会替你改小——要么删掉
+ *       那一行、要么手动改 5，见 changelog 的"升级注意"。</li>
+ *   <li><b>进到主人身边 = 解除推进矢量</b>（{@link #releaseThrust}，由 {@link #m_6732_} 执行）：
+ *       主人进到 {@link #endRadius()} 格内，本趟不但中断，还要**把烟花给的这份速度解掉**——收掉还挂在
+ *       背上的那枚助推火箭（它活着期间每 tick 都把速度往 1.7×视线拉，见
+ *       {@code MaidFlightKit#launchBoostRocket} 的字节码实证）+ 速度归零，之后交给原版滑翔
+ *       自然下沉。空袭那边**不解除**（她正需要这份动量贴脸/扑击），这是本模式与空袭的第一处
+ *       刻意分歧，用户口径里点名了这一条。**为什么由 stop() 而不是 tick() 执行**：Brain 的
+ *       {@code Behavior.tickOrStop} 是"canContinue 为假就直接 stop、本 tick 不调 tick()"，
+ *       而"进半径"这条判据就在 canContinue 末尾——写在 tick() 里等于**永不执行**（绿轮实测
+ *       踩到：日志里没有那一行），见 {@link #RELEASE_ON_STOP} 的注释。</li>
+ *   <li><b>触发判定推广到所有模式</b>：旧版有一句"她是空袭任务就不起飞"（"它自己有飞行作战
+ *       链路"）——现在拆成**接敌与否**（{@link #ownFlightBusy}）：两个空袭任务**未接敌**
+ *       （脑内没有存活攻击目标、且没在起跳/爬升/猛击/助推那几段出手里）照样可以由本链路接管，
+ *       其余任务（空闲/战斗/挖矿/烹饪……）本来就一视同仁。真在打、或真有活干
+ *       （{@code isTaskOccupied}，与搭路同一套）才让位——**不做额外抑制**。</li>
+ *   <li><b>威胁解除链路</b>：与搭路同一口径（同一个配置 {@code bridge.threatDist}、同一个
+ *       {@code instanceof Enemy}）——威胁半径内出现敌对生物，本趟当场中断、交回普通跟随/战斗，
+ *       空中就**保持动量自然滑翔**（这一条 六百一十一 起就在 canContinue 里生效，本批把它与
+ *       "进距离解除矢量"的**区别**写清楚：威胁是"撤"，进距离是"收"）。</li>
+ * </ol>
+ * 第 4 条是**提问**（"女仆在什么时候会使用烟花火箭这类推进呢？"），答案见
+ * {@link #shouldBoost} 的注释与手册里的"她什么时候烧烟花"：起飞后第一口、以及此后每
+ * {@link #BOOST_INTERVAL}（1.5 秒）一次的"比你低 / 水平速度掉了（&lt;0.35 格/tick）"补推；
+ * 进到 {@link #endRadius()} 格内不再推（本批起还会把已给的速度解掉）。背包里有孔雀羽扇时
+ * 走扇子那条（不烧烟花），与空袭"扇子优先"同序。
+ *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
  * 没有方块阻拦，自己包里面还有鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞
@@ -55,11 +91,13 @@ import java.util.WeakHashMap;
  * ── 判定（全部满足才起飞）──
  * <ul>
  *   <li>开关 {@code bridge.flightFollow}（**默认关**）打开；</li>
- *   <li>她不是空袭任务（那两个任务有自己的飞行作战链路，不抢）、不在守家/坐姿/骑乘/睡觉、
- *       不在自保、任务也没有实质占用（{@link com.maidsmart.task.BridgeUpBehavior#isTaskOccupied}，
- *       与搭路同一口径——"另一种空闲"照飞，接战中绝不飞）；</li>
+ *   <li>她**没有在打**（六百一十二 起口径）：不在守家/坐姿/骑乘/睡觉、不在自保、任务没有实质
+ *       占用（{@link com.maidsmart.task.BridgeUpBehavior#isTaskOccupied}，与搭路同一口径
+ *       ——"另一种空闲"照飞，接战中绝不飞）；两个空袭任务**未接敌**时也在放行之列
+ *       （见 {@link #ownFlightBusy}），旧版那句"空袭任务一律不起飞"已删除；</li>
  *   <li>主人（或调试目标，见下）存在、活着、同维度，且**3D 距离超过
- *       {@code bridge.flightFollowDist}（默认 16 格）**——太近就走路/搭路，犯不上烧烟花；</li>
+ *       {@code bridge.flightFollowDist}（默认 5 格，六百一十二 由 16 改小）**——太近就走路/
+ *       搭路，犯不上烧烟花；</li>
  *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇
  *       （{@link MaidFlightKit#hasFlightFuel}，缺一件就不飞；六百一十一 起不再只认烟花，
  *       与空袭的燃料口径对齐）；</li>
@@ -85,12 +123,15 @@ import java.util.WeakHashMap;
  *       空中清位就是自由落体，那条老教训见 {@code MaidFlightCombatBehavior.endFlightSafely}）。</li>
  * </ol>
  *
- * ── 收手长什么样（六百一十一 改口径：与"空袭把怪打死之后"完全一致）──
- * 主人进到 {@link #END_RADIUS} 格内 → 本趟中断。她此刻可能还在空中：那就**什么都不做**，
- * 原版滑翔物理会把她自然带下去（滑翔期间每 tick 清坠落距离，所以不会摔伤），落地那一 tick
- * 由 {@link #settleOnGround} 把胸甲还回去。旧版（六百〇八）要贴到 4 格、还要"抬头
- * {@code FLARE_PITCH} 度泄速 {@code FLARE_TICKS} tick"才算收手——用户要的是**自然滑翔**，
- * 那套主动减速整段删掉了。
+ * ── 收手长什么样（六百一十一 改口径：与"空袭把怪打死之后"完全一致；六百一十二 加"解除矢量"）──
+ * 主人进到 {@link #endRadius()} 格内 → 本趟中断（**实际半径** = min({@link #END_RADIUS}=15,
+ * 触发距离 - 1)：默认 5 格触发 → 4 格收手，留 1 格迟滞；把触发距离调大到 16 以上才回到 15）。
+ * 六百一十二 起这里多一步 {@link #releaseThrust}：**把烟花给的速度解掉**（收掉还挂着的助推
+ * 火箭 + 速度归零）——不然她带着 1.7 格/tick 的动量从你身边冲过去。解除之后她还在空中就
+ * 什么都不做，原版滑翔物理会把她自然带下去（滑翔分支里 `checkSlowFallDistance` 会在下落缓慢时
+ * 清坠落距离，所以不会摔伤），落地那一 tick 由 {@link #settleOnGround} 把胸甲还回去。旧版
+ * （六百〇八）要贴到 4 格、还要"抬头 {@code FLARE_PITCH} 度泄速 {@code FLARE_TICKS} tick"
+ * 才算收手——用户要的是**自然滑翔**，那套主动减速整段删掉了。
  *
  * ── 外观：与空袭同款（六百一十一）──
  * 用户原话是"动作没有换成空袭飞行的动作"。空袭那三样外观各有各的判据，原来全都写着
@@ -147,12 +188,14 @@ import java.util.WeakHashMap;
 public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /**
-     * 中断判定（格）：主人进到她这么近的球里，本趟链路就中断、交回普通跟随。
+     * 中断判定（格，**上限**）：主人进到她这么近的球里，本趟链路就中断、交回普通跟随。
      *
      * v1.2.2 实测六百一十一 由 4 改成 15——用户口径："在飞行跟随期间自身周围 15 格内找到主人
      * 那么此链路就中断，不需要紧挨着主人。"（旧值 4 会让她一路贴到你脸前，还得抬头泄速刹车，
-     * 与"自然滑翔"相反。）实际取值见 {@link #endRadius()}：触发距离被调小时它跟着缩，
-     * 不会出现"刚起飞就收手"。
+     * 与"自然滑翔"相反。）实际取值见 {@link #endRadius()}：**取 min(15, 触发距离 - 1)**——
+     * v1.2.2 实测六百一十二 把触发距离默认值降到 5 之后，默认实际半径就是 4 格；
+     * 15 这一档只在玩家把触发距离调到 16 以上时才生效（触发距离是"起飞"的门槛，收手必须
+     * 比它更近，否则会"刚起飞就收手"）。
      */
     private static final double END_RADIUS = 15.0;
     /** 滑翔操纵杆的俯仰限幅（度）：抬头 60 / 低头 45（与空袭同档） */
@@ -182,6 +225,19 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static final Set<UUID> FOLLOWING = new HashSet<>();
     /** 下次可以补推的 gameTime */
     private static final Map<UUID, Long> BOOST_READY = new HashMap<>();
+    /**
+     * 【实测六百一十二】本趟我们替她放的**最后一枚**助推火箭（没收掉就留在表里）。
+     *
+     * 【为什么必须记着它】烟花对骑手的推力不是一次性的：它活着的那十几 tick 里**每 tick**
+     * 都把骑手速度往 1.7×视线拉（字节码实证见 {@code MaidFlightKit#launchBoostRocket}）。
+     * 于是"进到主人身边就把矢量解除"这件事**必须把那枚火箭收掉**——只把速度清零的话，
+     * 下一 tick 它又给补回来，等于没解除。收掉之后她只剩滑翔的自然下沉。
+     *
+     * 【有界性】链一停就 {@code remove}（不 discard——威胁/超时那几种收手要保持动量自然滑翔，
+     * 这与"进距离解除矢量"是两件事，见 {@link #releaseThrust}）；女仆卸载走 {@link #forget}。
+     */
+    private static final Map<UUID, net.minecraft.world.entity.projectile.FireworkRocketEntity>
+            BOOST_ROCKET = new HashMap<>();
     /** 本趟起飞时刻（超时用） */
     private static final Map<UUID, Long> STARTED_AT = new HashMap<>();
     /** 我们替她换上的鞘翅：原胸甲物品（收手时原样还回去；她自己本来就穿着鞘翅时不记） */
@@ -195,6 +251,22 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     /** 补推日志限频 */
     private static final Map<UUID, Long> LAST_LOG = new HashMap<>();
     /**
+     * 【实测六百一十二】"这一趟是因为**主人进到收手半径内**而停的"——{@link #m_6732_} 据此决定
+     * 要不要**解除推进矢量**。
+     *
+     * 【为什么非得绕这一道】Brain 的行为循环是"先 canContinue、为真才 tick，否则直接 stop"
+     * （原版 {@code Behavior.tickOrStop}）——**canContinue 一旦为假，本 tick 的 {@code tick()}
+     * 根本不会被调用**。而"主人进到收手半径内"这条判据写在 canContinue 的**末尾**，所以
+     * "在 tick 里看到进半径了再解除"那段代码**一次都跑不到**（绿轮实测：起飞 10.0 格、
+     * 结束 3.9 格、"她还在滑翔"，但运行日志里根本没有「解除火箭推进矢量」那一行）。
+     * 现在改成：canContinue 判出"是因为进半径才停"时把 UUID 记进本表，{@link #m_6732_}
+     * 开头照单执行——解除发生在**链真正收手的那一 tick**，时机反而更准。
+     *
+     * 【为什么威胁/超时那几种不收】本表**只在进半径那一支**写；威胁出现（canContinue 里更靠前的
+     * 那条）与超时/缺料都是"撤"，要**保持动量**自然滑翔（见 {@link #releaseThrust} 的注释）。
+     */
+    private static final Set<UUID> RELEASE_ON_STOP = new HashSet<>();
+    /**
      * "起飞 / 结束"两行的限频（**各记各的**，见 {@link #STATE_LOG_INTERVAL}）。
      *
      * 【为什么要分成两张表：绿轮实测踩到的】一开始两行共用一张表，于是"起飞 → 1~2 秒后收手"
@@ -205,6 +277,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      */
     private static final Map<UUID, Long> START_LOG = new HashMap<>();
     private static final Map<UUID, Long> END_LOG = new HashMap<>();
+    /**
+     * 【实测六百一十二】"解除推进矢量"这一行的限频（5 秒，**再开一张表**）。
+     *
+     * 起因还是六百一十一 那条教训（起降两行共用一张表会把结束行整条吞掉）：本批新增的这行
+     * 发生在"进到主人 4 格内"的那一 tick，而结束行就在**下一 tick**——两者若共用预算，
+     * 结束行必被吞。所以解除那行单独一张表：一趟最多一行，且永远吃不掉起降两行。
+     */
+    private static final Map<UUID, Long> RELEASE_LOG = new HashMap<>();
     /** "为什么不起飞"诊断日志限频（tick，200 = 10 秒/只女仆；只在开关开着时才可能记） */
     private static final long SKIP_LOG_INTERVAL = 200L;
     private static final Map<UUID, Long> SKIP_LOG = new HashMap<>();
@@ -315,12 +395,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         FOLLOWING.remove(maidId);
         BOOST_READY.remove(maidId);
+        BOOST_ROCKET.remove(maidId);
+        RELEASE_ON_STOP.remove(maidId);
         STARTED_AT.remove(maidId);
         SWAPPED_CHEST.remove(maidId);
         SETTLING.remove(maidId);
         LAST_LOG.remove(maidId);
         START_LOG.remove(maidId);
         END_LOG.remove(maidId);
+        RELEASE_LOG.remove(maidId);
         SKIP_LOG.remove(maidId);
         CANUSE_THROTTLE.remove(maidId);
         try {
@@ -332,12 +415,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     public static void clearAll() {
         FOLLOWING.clear();
         BOOST_READY.clear();
+        BOOST_ROCKET.clear();
+        RELEASE_ON_STOP.clear();
         STARTED_AT.clear();
         SWAPPED_CHEST.clear();
         SETTLING.clear();
         LAST_LOG.clear();
         START_LOG.clear();
         END_LOG.clear();
+        RELEASE_LOG.clear();
         SKIP_LOG.clear();
         CANUSE_THROTTLE.clear();
         DEBUG_TARGET.clear();
@@ -361,8 +447,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (maid.isHomeModeEnable()) {
                 return skip(maid, now, "守家（home）模式中");
             }
-            if (MaidFlightKit.isFlightTask(maid)) {
-                return skip(maid, now, "空袭任务（它自己有飞行作战链路）");
+            if (ownFlightBusy(maid)) {
+                // 【六百一十二】旧版这里是"她是空袭任务就不起飞"（"它自己有飞行作战链路"）。
+                // 那一条被用户否了："2 个空袭状态（未接敌），也可以触发飞行跟随，不做额外抑制。
+                // 简单来说，就是目前飞行跟随触发判定推广到所有模式下。" 现在只挡"真在打"。
+                return skip(maid, now, "空袭任务正在接敌（这一轮出手不可打断，她自己的飞行链路优先）");
             }
             if (SelfPreservationBehavior.isSelfPreserving(maid)) {
                 return skip(maid, now, "自保中");
@@ -485,9 +574,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // ── 空中：保持滑翔 + 视线钉在主人身上 + 需要时补一口推进 ──
         MaidFlightKit.setGliding(maid, true);
         if (maid.m_20270_(target) <= endRadius()) {
-            // 主人已经进到 15 格内：本趟到此为止（canContinue 下一 tick 收手）。
-            // 【这里故意什么都不做】不再摆朝向 = 她保持当前的滑翔方向自然滑过去，
-            // 与"空袭女仆把怪打死之后"那一段一样（用户要的"自然滑翔"）。
+            // 主人已经进到收手半径内：本趟到此为止（canContinue 下一 tick 收手并解除矢量）。
+            // 【这段理论上是死代码】canContinue 先跑、为假就直接 stop（tick 不执行），所以正常
+            // 情况下走不到这里；留着当"判定顺序哪天变了"的安全带——真跑到了也只是提前解除一次。
+            releaseThrust(maid, id, gameTime);
             return;
         }
         faceToward(maid, target, false);
@@ -519,11 +609,23 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return false; // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完且没羽扇）→ 落地走
         }
         if (threatNearby(level, maid)) {
-            return false; // 威胁出现：交回战斗/自保
+            return false; // 威胁出现：交回战斗/自保（**保持动量**自然滑翔，与"进距离解除矢量"相反）
         }
-        // 主人已经进到 15 格内 → 本趟中断（**不需要贴到身边**，用户口径）。
-        // 空中/地面一视同仁：落地的就地结束，还在空中的交给自然滑翔（收手不清滑翔位）。
-        return maid.m_20270_(target) > endRadius();
+        if (ownFlightBusy(maid)) {
+            // 【六百一十二】链飞到一半她接上敌了（脑内有存活攻击目标，或正在起跳/爬升/猛击/
+            // 助推那几段出手里）→ 当场把控制权交回她自己的空袭链路。这是"未接敌才由本链路
+            // 接管"的另一半：起飞时挡（canUse），飞到一半也要让。让了之后她保持滑翔，
+            // 空袭那一套会自己接上（它的 canUse 只看目标，不看谁在飞）。
+            return false;
+        }
+        if (maid.m_20270_(target) > endRadius()) {
+            return true; // 还没进到收手半径内 → 本趟继续
+        }
+        // 主人已经进到收手半径内 → 本趟中断（**不需要贴到身边**，用户口径）。
+        // 【解除推进矢量交给 stop()】见 RELEASE_ON_STOP 的注释：canContinue 判假时 tick 不会再跑，
+        // 所以这里只登记"原因是进半径"，真正的"收火箭 + 速度归零"在 stop() 开头做。
+        RELEASE_ON_STOP.add(id);
+        return false;
     }
 
     @Override
@@ -533,6 +635,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         BOOST_READY.remove(id);
         STARTED_AT.remove(id);
         LAST_LOG.remove(id);
+        // 【实测六百一十二】本趟若是"主人进到收手半径内"才停的，**这一 tick** 就解除推进矢量
+        // （收掉还挂着的助推火箭 + 速度归零；为什么不能在 tick() 里做，见 RELEASE_ON_STOP 注释）
+        if (RELEASE_ON_STOP.remove(id)) {
+            releaseThrust(maid, id, gameTime);
+        } else {
+            BOOST_ROCKET.remove(id); // 别的收手理由（威胁/超时/缺料）：保持动量自然滑翔，只丢引用
+        }
         // 【绝不在空中摘鞘翅——它和"空中清滑翔位"是同一件事】原版 updateFallFlying 每 tick 都要
         // 看胸甲槽里那件鞘翅能不能飞（{@code ItemStack.canElytraFly} + {@code elytraFlightTick}）：
         // 空中把鞘翅摘走，下一 tick 滑翔位就被清掉 = 自由落体（女仆 20 血，实测四百七十二 的教训）。
@@ -574,18 +683,95 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     /* ==================== 起飞/操纵 ==================== */
 
     /**
-     * 本趟"够了"的半径（格）：主人进到这么近就中断本趟链路。
+     * 本趟"够了"的半径（格）：主人进到这么近就中断本趟链路 + **解除推进矢量**。
      *
-     * 默认口径 = {@link #END_RADIUS}（15 格，用户原话），但**触发距离被玩家调小时它得跟着缩**
+     * 默认口径 = {@link #END_RADIUS}（15 格，用户原话），但**触发距离比它小时它得跟着缩**
      * ——否则"飞行跟随距离 = 8"的存档会变成"一起飞就已经在 15 格内"= 起飞即刻收手，一次都飞不起来。
-     * 所以取 {@code min(15, 触发距离 - 1)}：默认 16 → 15；调到 8 → 7（中间留 1 格滞回，
-     * 免得她在边界上每 tick 起降一次）。
+     * 所以取 {@code min(15, 触发距离 - 1)}：**六百一十二 起默认触发距离 5 → 实际 4 格**；
+     * 玩家把它调到 16 → 15；调到 8 → 7（中间留 1 格滞回，免得她在边界上每 tick 起降一次）。
      */
     private static double endRadius() {
         return Math.max(1.0, Math.min(END_RADIUS, cfgDist() - 1.0));
     }
 
-    /** 本 tick 该不该补一口推进：比主人低、或者速度掉了（滑翔没速度就等着掉高） */
+    /**
+     * 【实测六百一十二】进到主人身边 → **解除烟花（/羽扇）给的推进矢量**。
+     *
+     * 用户口径："在距离内检测到主人之后解除烟花带来的矢量（之前空袭状态下是不解除，在此模式下
+     * 改为解除）。" 两件事一起做，缺一不可：
+     * <ol>
+     *   <li><b>收掉还挂在背上的那枚助推火箭</b>（{@link #BOOST_ROCKET}）——烟花不是"一次性给一份
+     *       速度"，而是它活着的那十几 tick 里每 tick 都把骑手速度往 1.7×视线拉（字节码实证见
+     *       {@code MaidFlightKit#launchBoostRocket}）。不收掉它，下面那句清零下一 tick 就被
+     *       它补回来，"解除"等于白做。
+     *       **【SRG 名字的教训（绿轮实测踩到）】**收掉实体要写
+     *       {@code entity.m_142687_(Entity.RemovalReason.DISCARDED)}（= 1.20.1 SRG 的
+     *       {@code remove(RemovalReason.DISCARDED)}，本模组 {@code MaidBombing} 里既有写法），
+     *       **不是** {@code m_6075_}——后者 javap 实证是 {@code baseTick()}（`entityBaseTick`
+     *       profiler 段），调它等于"让那枚火箭白 tick 一次"，它照旧活着、照旧每 tick 推她。
+     *       现场症状：日志说"解除（水平速度 1.35 → 0）"、可她一秒后仍以 1.4~1.6 格/tick
+     *       飞出去 140 格——因为推力一直在被补回来；</li>
+     *   <li><b>速度归零</b>。滑翔位**不动**：她仍然"在滑翔"，只是没有推进——原版
+     *       {@code LivingEntity.travel} 的滑翔分支会把她自然带下去（水平没有推力就一直很小，
+     *       下沉被那一支的升力项压得很慢，`checkSlowFallDistance` 顺带清坠落距离，所以既不摔伤
+     *       也不"往前冲"）。这正是用户要的"自然滑翔"，与旧版"抬头泄速刹车"（{@code FLARE_PITCH}
+     *       那套，六百一十一 已整段删除）**不是一回事**：那套是"主动减速但仍然朝你飞"，
+     *       这一条是"把推进整份解掉"。</li>
+     * </ol>
+     *
+     * 【与威胁收手的区别（刻意不一致）】威胁出现（canContinue 里那条）是"撤"——**保持动量**
+     * 自然滑翔；本方法只用于"主人已经进到收手半径内"这一种收手，是"收"。空袭那边**两处都不解除**
+     * （她要那一份动量贴脸、扑击），所以本方法只属于本模式。
+     *
+     * 【调用点】{@link #m_6732_}（链收手那一 tick，由 {@link #RELEASE_ON_STOP} 点名）——
+     * **不能写在 tick() 里**：Brain 的 {@code Behavior.tickOrStop} 先问 canContinue，为假就直接
+     * stop、本 tick 的 tick() 不执行，而"进半径"正是 canContinue 末尾那条（绿轮实测踩到）。
+     *
+     * 【为什么是"清零"而不是"减掉烟花那一份"】烟花给的是叠加在滑翔速度上的插值
+     * （`v = v*0.5 + look*0.85`），来源无法从 `getDeltaMovement()` 里分离出来；而用户要的语义
+     * 就是"到你身边不要再有推进"，清零即达意。清零之后她立刻变成零速滑翔，落地那一 tick 由
+     * {@link #settleOnGround} 收尾。
+     */
+    private static void releaseThrust(EntityMaid maid, UUID id, long gameTime) {
+        try {
+            boolean dropped = false;
+            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket = BOOST_ROCKET.remove(id);
+            if (rocket != null && rocket.m_6084_()) {
+                // 收掉它 = 停掉每 tick 那一下推力（**不是** discard()——见方法头注释里的 SRG 教训）
+                rocket.m_142687_(net.minecraft.world.entity.Entity.RemovalReason.DISCARDED);
+                dropped = true;
+            }
+            Vec3 v = maid.m_20184_();
+            double speed = Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82481_ * v.f_82481_);
+            maid.m_20256_(Vec3.f_82478_); // Vec3.ZERO
+            logState(RELEASE_LOG, maid, id, gameTime, "进到主人 " + fmtDist(maid, targetOf(maid))
+                    + " 格内，解除火箭推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
+                    + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 本 tick 该不该补一口推进：比主人低、或者速度掉了（滑翔没速度就等着掉高）。
+     *
+     * ── 【实测六百一十二 第 4 条：她到底什么时候烧烟花？】──
+     * 用户原话："我需要确认一点，在此类状态下，女仆在什么时候会使用烟花火箭这类推进呢？"
+     * 答案是**只有三个闸门同时开着**的时候（本方法 + {@link #BOOST_INTERVAL} 冷却 + 燃料口径）：
+     * <ol>
+     *   <li><b>本趟还没进到 {@link #endRadius()} 格内</b>（进了就不再推，还会把已给的矢量解除）；</li>
+     *   <li><b>距离上次补推 ≥ {@link #BOOST_INTERVAL}（30 tick = 1.5 秒）</b>；</li>
+     *   <li><b>她比主人低 0.5 格以上，或者水平速度掉到 0.35 格/tick 以下</b>——后者就是"起飞那一下"：
+     *       刚跳起来时水平速度是 0，所以**起飞后第一口推进几乎是立刻发生的**；之后滑翔靠视线
+     *       操纵维持速度，速度掉下来才补。</li>
+     * </ol>
+     * 也就是说：**不是"每隔几秒固定烧一枚"，而是"掉了才补"**。背包里有孔雀羽扇时这一口走扇子
+     * （不烧烟花，见 {@link #boost}）；两者都没有就没得补，本趟会因燃料门禁收手。
+     *
+     * 【六百一十一：删掉了"最后十几格就松油门"那一条】旧版要靠它压住"离得近还补推 → 超车 →
+     * 掉头 → 再超车"的绕圈（六百〇八 实测吃过两次：22 格的目标飞了 43 秒、烧掉 29 枚烟花）。
+     * 收手半径提到 15 格（六百一十二 起默认实际 4 格）之后，**这一趟根本进不到"最后十几格"**
+     * （进半径就中断了），那条判据成了死代码，索性去掉；剩下的两条就是"该补才补"。
+     */
     private static boolean shouldBoost(EntityMaid maid, LivingEntity target, long gameTime) {
         Long ready = BOOST_READY.get(maid.m_20148_());
         if (ready != null && gameTime < ready) {
@@ -630,9 +816,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 不消耗档：**照旧要求背包里有能飞的道具**（它是"能飞"的凭证），但不扣那一枚
             display = new ItemStack(Items.f_42688_);
         }
-        if (!MaidFlightKit.launchBoostRocket(level, maid)) {
-            return;
+        // 六百一十二：把这枚火箭记下来——进到主人身边要**收掉它**才算"解除推进矢量"
+        // （见 releaseThrust 与 BOOST_ROCKET 的注释：烟花每 tick 都在推，不收掉它清零就白清）
+        net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
+                MaidFlightKit.launchBoostRocket(level, maid);
+        if (rocket == null) {
+            return; // 没放成（异常/世界拒绝）——这一 tick 就算了
         }
+        BOOST_ROCKET.put(id, rocket);
         FlightFireworkPose.show(maid, display);
         BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
         logThrottled(maid, id, gameTime, "补一枚烟花追主人（烟花="
@@ -774,6 +965,50 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return maid.m_269323_();
         } catch (Throwable ignored) {
             return null;
+        }
+    }
+
+    /**
+     * 【实测六百一十二】她自己的空袭链路是不是**正在打**（未接敌 = 放行给飞行跟随）。
+     *
+     * 需求原文第 2 条："2 个空袭状态（未接敌），也可以触发飞行跟随，不做额外抑制。简单来说，
+     * 就是目前飞行跟随触发判定推广到所有模式下。"
+     *
+     * 所以旧版那句"**她是空袭任务就不起飞**"（原话"它自己有飞行作战链路"）被拆成"接敌与否"：
+     * <ul>
+     *   <li>{@code MaidFlightCombatBehavior.isEngaged}——起跳/烟花爬升/收翅猛击/等待再放烟花/
+     *       垂直占位爬升/远程俯冲助推任一在表里 = 这一轮出手**不能被打断**（与实测四百八十七
+     *       给"自动传送"写的那条让位同源）。正在出这一手时不起飞，也不接管（不然两个链路会
+     *       同 tick 各给一个速度，就是"拉扯"）；</li>
+     *   <li>脑内还有**存活的** {@code ATTACK_TARGET} = 正在接敌（与搭路 {@code isTaskOccupied}
+     *       完全同口径）。canUse 里那道 isTaskOccupied 已经覆盖了它，这里再判一次是为了
+     *       canContinue：**链飞到一半她接上敌了，本趟要当场交回**给她自己的空袭链路。</li>
+     * </ul>
+     * 【为什么只判这两样 = "不做额外抑制"】两个判据都不看"她挂的是哪个任务"——任务名不再是
+     * 理由（空闲/战斗/挖矿/烹饪/搭路……一视同仁），只有"真在打"（上面两条）与"真有活干"
+     * （canUse 里那道 {@code isTaskOccupied}：挖矿/伐木/建造/站桩工作/追杀）才让位。
+     * 两个空袭任务**未接敌**的那段时间（她自己的行为没在跑、索敌没锁到人）从此归本链路管。
+     *
+     * 【为什么读脑内记忆而不是调 {@code FlightTargeting.resolve}】后者会**顺手选定并回写**
+     * 目标（它自己就是索敌器），从"搭路/跟随"这一档去调它等于我们替空袭开了一次火；
+     * 读记忆没有副作用，与 isTaskOccupied 读的是同一格数据。
+     */
+    private static boolean ownFlightBusy(EntityMaid maid) {
+        if (!MaidFlightKit.isFlightTask(maid)) {
+            return false; // 非空袭任务：这一条整个不适用（本来就没有"她自己的飞行链路"）
+        }
+        try {
+            if (com.maidsmart.combat.MaidFlightCombatBehavior.isEngaged(maid)) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            var mem = maid.m_6274_().m_21952_(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26372_);
+            return mem.isPresent() && mem.get().m_6084_();
+        } catch (Throwable ignored) {
+            return false; // 读不到记忆时按"没接敌"处理（宁可让她飞，也不误杀她的空袭）
         }
     }
 
