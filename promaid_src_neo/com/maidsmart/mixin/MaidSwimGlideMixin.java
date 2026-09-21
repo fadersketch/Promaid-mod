@@ -24,6 +24,19 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *
  * 注意：pose 保持站立（不设 Pose.SWIMMING）——setPose(SWIMMING) 会把判定箱缩到
  * 0.6×0.6（getDefaultDimensions 实证），滑翔时体积变化会影响碰撞与客户端插值。
+ *
+ * ── v1.2.2 实测六百一十一【判据从"飞行任务"放宽成"正在滑翔"】──
+ * 用户反馈："飞行跟随……动作没有换成空袭飞行的动作。"根因就在这里：这一支原来多问了一句
+ * {@link com.maidsmart.combat.MaidFlightKit#isFlightTask}，而**飞行跟随（跟着主人飞）的女仆
+ * 并不是飞行任务**，于是她滑翔时模型仍是走路/站立的姿态——空袭那套展翅动画一点没跟上。
+ *
+ * 【为什么放心放宽：扫过整个 TLM 的 2344 个类，引用 isVisuallySwimming 的只有 3 个】
+ * `client/animation/gecko/AnimationRegister`（动画选择谓词）、
+ * `client/animation/special/SwimAnimation`（游泳动画本体）、
+ * `entity/passive/EntityMaid`（就是它自己的覆写）——**全是客户端动画**，没有一个玩法判定读它，
+ * 所以这个放宽只影响渲染。放成"只要在滑翔就为真"同时也是把原版语义还回来（原版
+ * `LivingEntity.isVisuallySwimming` 本来就把 FALL_FLYING 算进去，是 TLM 覆写时丢的），
+ * 而且判据取的是**同步过的滑翔位**——多人下客户端也认得出，不依赖服务端状态表。
  */
 @Mixin(EntityMaid.class)
 public abstract class MaidSwimGlideMixin {
@@ -31,9 +44,9 @@ public abstract class MaidSwimGlideMixin {
     @Inject(method = "isVisuallySwimming", at = @At("HEAD"), cancellable = true)
     private void promaid$glideAsSwimming(CallbackInfoReturnable<Boolean> cir) {
         EntityMaid maid = (EntityMaid) (Object) this;
-        // 仅飞行作战的滑翔/俯冲中套用游泳动作；其余情况保持 TLM 原逻辑
-        if (maid.isFallFlying()
-                && com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+        // 六百一十一：只看"在不在滑翔"，不再要求"是飞行任务"——原因见类注释
+        // （飞行跟随不是飞行任务；且 TLM 里读这个方法的只有 3 个客户端动画类）
+        if (maid.isFallFlying()) {
             cir.setReturnValue(true);
         }
     }

@@ -22,8 +22,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 自带的 `swim` 动画，谓词是 `isVisuallySwimming()`）。用扩展点够不到，必须 mixin 这个
  * 渲染器方法本身。
  *
- * 【只影响飞行作战】具体的判定与角度计算都在 {@link com.maidsmart.client.FlightDiveTilt}
- * 里（含"为什么是 -getXRot()"的完整推导）。非飞行任务、非女仆、已落地一律原样返回。
+ * 【只影响飞行中的女仆】具体的判定与角度计算都在 {@link com.maidsmart.client.FlightDiveTilt}
+ * 里（含"为什么是 -getXRot()"的完整推导）。非女仆、已落地一律原样返回；六百一十一 起
+ * 判据从"飞行任务"放宽成"飞行任务 **或** 正在滑翔"（飞行跟随的女仆不是飞行任务，
+ * 见 {@code MaidFlightKit.isFlightVisual}）。
  *
  * 【描述符说明】1.20.1 的 SRG 名是 `m_7523_`、1.21.1 是 `setupRotations`，本项目的两树
  * 源码本就分开维护（各自 mixin json + 各自文件名），故两树各写一份、互不影响。
