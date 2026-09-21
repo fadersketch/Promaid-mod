@@ -2102,14 +2102,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 从配置表里取"提供高度"的法术 id 表 */
+    /** 从配置表里取"提供高度"的法术 id 表。
+     *  v1.2.2 实测六百一十三：实现搬进 {@link MaidSpellCastCompat#climbSpellIds()}——
+     *  飞行跟随也要用同一张表（含那份配置读不出来时的兜底），表与取法都只能有一份。
+     *  这里只留一个转发，空袭的行为一字不变。 */
     private static String[] climbSpellIds() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_CLIMB_SPELLS.get()
-                    .toArray(new String[0]);
-        } catch (Throwable ignored) {
-            return com.maidsmart.combat.MaidSpellCastCompat.DEFAULT_CLIMB_SPELLS;
-        }
+        return MaidSpellCastCompat.climbSpellIds();
     }
 
     /** 从配置表里取"提供速度"的法术 id 表 */
@@ -2122,10 +2120,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** v1.2.0 实测五百七十二：按她书里**铭刻的等级**施法（读不到就按 1 级） */
+    /** v1.2.0 实测五百七十二：按她书里**铭刻的等级**施法（读不到就按 1 级）
+     *  v1.2.2 实测六百一十三：口径搬进 {@link MaidSpellCastCompat#spellLevelOrDefault}，飞行跟随共用 */
     private static int dashSpellLevel(EntityMaid maid, String spellId) {
-        int lvl = MaidSpellCastCompat.spellLevelInBooks(maid, spellId);
-        return lvl > 0 ? lvl : MaidSpellCastCompat.DASH_SPELL_FALLBACK_LEVEL;
+        return MaidSpellCastCompat.spellLevelOrDefault(maid, spellId);
     }
 
     /**
