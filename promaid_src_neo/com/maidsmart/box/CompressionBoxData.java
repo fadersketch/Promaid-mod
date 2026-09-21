@@ -221,9 +221,15 @@ public final class CompressionBoxData {
     /**
      * 把 {@code in} 尽量并进盒子的**指定那一格**（并到上限为止），返回没塞进去的部分。
      * 只动这一格——女仆背包侧的 insertItem(盒格子) 就是它。
+     *
+     * <b>压缩盒不许装压缩盒</b>（v1.2.2 实测六百一十七修的那个 bug）：把盒子塞进盒子，
+     * 玩家既看不见里面那一层（女仆那一侧的视野也是只读外层），又能把自己装进去——
+     * 界面里 Shift+点自己那一格，服务端会先把它从背包取出来再写标签，于是**整个盒子
+     * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法：
+     * 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。
      */
     public static ItemStack mergeInto(List<ItemStack> items, int slot, ItemStack in) {
-        if (slot < 0 || slot >= items.size() || in.isEmpty()) {
+        if (slot < 0 || slot >= items.size() || in.isEmpty() || isBox(in)) {
             return in;
         }
         ItemStack cur = items.get(slot);
@@ -244,7 +250,7 @@ public final class CompressionBoxData {
         return in.getCount() > put ? in.copyWithCount(in.getCount() - put) : ItemStack.EMPTY;
     }
 
-    /** 把 {@code in} 塞进盒子（先并同名、再占空格），返回没塞进去的部分 */
+    /** 把 {@code in} 塞进盒子（先并同名、再占空格），返回没塞进去的部分（压缩盒一律原样退回） */
     public static ItemStack merge(List<ItemStack> items, ItemStack in) {
         ItemStack left = in;
         for (int i = 0; i < items.size() && !left.isEmpty(); i++) {

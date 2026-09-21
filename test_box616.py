@@ -349,8 +349,13 @@ if a is not None:
         seen, real = fw[0][1], fw[0][3]
         if seen != 64:
             fail('A 轮她对大堆"看得见"的是 ×%d，应为 64（视野封顶没生效）' % seen)
-        if real < FIREWORK_TOTAL:
-            fail('A 轮盒子里实际只剩 ×%d（< %d）——存入/读取口径不对' % (real, FIREWORK_TOTAL))
+        if real != FIREWORK_TOTAL:
+            # 【必须是精确相等，不能写 real < FIREWORK_TOTAL】六百一十七查出 fromTag 的
+            # 数量写回用错了方法（m_41769_ 是 grow 不是 setCount），读回来整整多 1 个：
+            # 写 114514 读成 114515。这里当时写的是 `<`，多的那 1 个就被放过去了——
+            # 松断言等于没断言，这条现在收紧成等号。
+            fail('A 轮盒子里实际是 ×%d，应为 ×%d —— 数量读写口径不对（多/少了）'
+                 % (real, FIREWORK_TOTAL))
     ely = [v for v in a['view'] if v[0] == 'minecraft:elytra']
     if not ely:
         fail('A 轮视图里没有鞘翅那一格')

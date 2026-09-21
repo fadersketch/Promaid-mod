@@ -31,6 +31,14 @@ import java.util.List;
  * </ul>
  * 布局全部是纯色块（{@code m_280509_}）+ 物品图标，与本模组其它几个界面同款——
  * 不额外塞 GUI 贴图。数量画在格子下方（6 位数字也放得下，不会被截成「114.5k」）。
+ *
+ * ── 背包那 36 格按**原版口径**画（v1.2.2 实测六百一十七）──
+ * 数量与耐久条都调原版那套装饰绘制（{@code m_280370_} = {@code renderItemDecorations}，
+ * javap 实证它就是把「非 1 的数量写在右下角 + 底部耐久条」画出来的那个方法），
+ * 所以这一片看起来和生存模式按 E 打开的物品栏一模一样：一叠是多少、工具还剩多少
+ * 耐久都在。盒子那 5 格只借用它的**耐久条**（数量文字传空串，因为 6 位数字会糊住
+ * 16 像素的图标，大堆的数量仍画在格子下方）。悬停说明也不再只认盒子格——背包格
+ * 悬停同样有名字/数量/耐久（见 {@link #buildTip}）。
  */
 public class CompressionBoxScreen extends Screen {
 
@@ -51,6 +59,7 @@ public class CompressionBoxScreen extends Screen {
     private static final int C_FRAME = 0xFF2A2A33;
     private static final int C_WELL = 0xFF14141A;
     private static final int C_HOVER = 0xFFFFFFFF;
+    private static final int C_WARN = 0xFFFF6A6A;    // 耐久见底 / 不能这么干
 
     private final int hand;
     private List<ItemStack> items;
@@ -183,6 +192,12 @@ public class CompressionBoxScreen extends Screen {
             }
             int invSlot = invSlotAt(mx, my);
             if (invSlot >= 0 && m_96638_()) { // Shift+点背包格 = 存入
+                IItemHandler pinv = playerInv();
+                ItemStack from = pinv == null ? ItemStack.f_41583_ : pinv.getStackInSlot(invSlot);
+                if (from.m_41619_() || CompressionBoxData.isBox(from)) {
+                    // 空格子没什么可存；压缩盒不许装压缩盒（服务端也会拒，这里连包都不发）
+                    return true;
+                }
                 int action = button == 1 ? CompressionBoxService.DEPOSIT_ONE
                         : CompressionBoxService.DEPOSIT_STACK;
                 CompressionBoxNetworking.BoxActionPacket.send(this.hand, action, invSlot);
@@ -232,6 +247,9 @@ public class CompressionBoxScreen extends Screen {
                 continue;
             }
             g.m_280480_(s.m_255036_(1), boxIconX(i), y0 + BOX_Y);
+            // 耐久条走原版那套装饰；数量文字传空串（原版只在「数量≠1 或文字非空」时画字，
+            // 空串什么都不会画，但底部的耐久条照画）——6 位数下面另有一行
+            g.m_280302_(this.f_96547_, s, boxIconX(i), y0 + BOX_Y, "");
             String n = String.valueOf(s.m_41613_());
             g.m_280653_(this.f_96547_, Component.m_237113_(n),
                     boxCellX(i) + CELL / 2, y0 + COUNT_Y, s.m_41613_() > 64 ? C_BIG : C_TEXT);
@@ -254,26 +272,70 @@ public class CompressionBoxScreen extends Screen {
                     continue;
                 }
                 g.m_280480_(s, invIconX(col), invIconY(row));
+                // 原版同款装饰：右下角数量（1 个不写）+ 底部耐久条 —— 与生存物品栏一致
+                g.m_280370_(this.f_96547_, s, invIconX(col), invIconY(row));
             }
         }
 
-        // 悬停说明（自己画：名称 + 数量 + 每格上限）
-        ItemStack hover = hoverBox >= 0 ? slotOf(this.items, hoverBox) : ItemStack.f_41583_;
+        // 悬停说明：名称 + 数量 + 耐久（背包格也画，跟原版一样）
+        ItemStack hover = hovered(hoverBox, hoverInv, inv);
         if (!hover.m_41619_()) {
-            String line1 = hover.m_41786_().getString();
-            String line2 = "\u00d7" + hover.m_41613_() + "  \u00a77(\u6bcf\u683c\u4e0a\u9650 "
-                    + CompressionBoxData.maxStack() + ")";
-            int w = Math.max(this.f_96547_.m_92895_(line1), this.f_96547_.m_92895_(line2)) + 8;
+            Tip tip = buildTip(hover, hoverBox >= 0, m_96638_());
+            int w = 0;
+            for (String line : tip.lines) {
+                w = Math.max(w, this.f_96547_.m_92895_(line));
+            }
+            w += 8;
             int hx = Math.min(mx + 8, this.f_96543_ - w - 4);
             int hy = Math.max(4, my - 20);
-            g.m_280509_(hx - 3, hy - 3, hx + w, hy + 20, 0xF0101010);
-            g.m_280056_(this.f_96547_, line1, hx, hy, 0xFFFFFFFF, true);
-            g.m_280056_(this.f_96547_, line2, hx, hy + 10, 0xFFE0E0E0, true);
+            g.m_280509_(hx - 3, hy - 3, hx + w, hy + tip.size() * 10 + 3, 0xF0101010);
+            for (int i = 0; i < tip.size(); i++) {
+                g.m_280056_(this.f_96547_, tip.lines.get(i), hx, hy + i * 10,
+                        tip.colors.get(i), true);
+            }
         } else if (hoverBox >= 0) {
             g.m_280056_(this.f_96547_, "\u7a7a\u683c\u5b50", mx + 8, my - 6, C_DIM, true);
-        } else if (hoverInv >= 0 && m_96638_()) {
-            g.m_280056_(this.f_96547_, "\u5b58\u5165\u538b\u7f29\u76d2", mx + 8, my - 6, C_TEXT, true);
         }
+    }
+
+    /** 鼠标底下那一格的东西（盒子格优先；都没有 → 空堆） */
+    private ItemStack hovered(int hoverBox, int hoverInv, IItemHandler inv) {
+        if (hoverBox >= 0) {
+            return slotOf(this.items, hoverBox);
+        }
+        if (hoverInv >= 0 && inv != null) {
+            return inv.getStackInSlot(hoverInv);
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /**
+     * 悬停说明的几行：名称 / 数量 / 耐久 /（按着 Shift 时的）那一行。
+     * 用户要的「有多少个、耐久还剩多少」就在这里——数量 1 的原版不写，这里跟着不写（盒子格除外，
+     * 盒子里 1 个也可能是关键的一格）；耐久只有能坏的物品有，掉到三分之一以下改成红字。
+     */
+    private Tip buildTip(ItemStack s, boolean inBox, boolean shift) {
+        Tip tip = new Tip();
+        tip.add(s.m_41786_().getString(), C_TEXT);
+        if (inBox) {
+            tip.add("\u00d7" + s.m_41613_() + "  \u6bcf\u683c\u4e0a\u9650 "
+                    + CompressionBoxData.maxStack(), s.m_41613_() > 64 ? C_BIG : C_DIM);
+        } else if (s.m_41613_() > 1) {
+            tip.add("\u00d7" + s.m_41613_(), C_DIM);
+        }
+        int max = s.m_41776_();
+        if (max > 0) {
+            int left = max - s.m_41773_();
+            tip.add("\u8010\u4e45 " + left + " / " + max, left * 3 <= max ? C_WARN : C_DIM);
+        }
+        if (shift && !inBox) {
+            if (CompressionBoxData.isBox(s)) {
+                tip.add("\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2", C_WARN);
+            } else {
+                tip.add("Shift+\u5de6\u952e\u5b58\u5165\u538b\u7f29\u76d2", C_DIM);
+            }
+        }
+        return tip;
     }
 
     /** 「已装 N 个 · 占 x/5 格 · 每格上限 M」 */
@@ -283,6 +345,21 @@ public class CompressionBoxScreen extends Screen {
         return "\u5df2\u88c5 " + total + " \u4e2a \u00b7 \u5360 " + used + "/"
                 + CompressionBoxData.SLOTS + " \u683c \u00b7 \u6bcf\u683c\u4e0a\u9650 "
                 + CompressionBoxData.maxStack();
+    }
+
+    /** 悬停说明的一小块：几行字 + 每行自己的颜色（行由 {@link #buildTip} 拼） */
+    private static final class Tip {
+        private final java.util.List<String> lines = new java.util.ArrayList<>(4);
+        private final java.util.List<Integer> colors = new java.util.ArrayList<>(4);
+
+        void add(String text, int color) {
+            this.lines.add(text);
+            this.colors.add(color);
+        }
+
+        int size() {
+            return this.lines.size();
+        }
     }
 
     private static ItemStack slotOf(List<ItemStack> list, int i) {
