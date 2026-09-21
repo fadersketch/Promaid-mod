@@ -81,7 +81,38 @@ public final class MaidArmyCommand {
                                                 net.minecraft.commands.arguments.EntityArgument
                                                         .m_91452_(ctx, "target"),
                                                 net.minecraft.commands.arguments.EntityArgument
-                                                        .m_91452_(ctx, "maid")))))));
+                                                        .m_91452_(ctx, "maid"))))))
+                // v1.2.2 实测六百一十四【飞行跟随的坐标档】——取自粉丝 Roderick32 的「鞘翅赶路」分支。
+                // 【两个用途】① 实用：想让她"飞去那边的高台/浮空岛"时，不必先跑一趟再等她飞丢；
+                // ② 排查：专用服务器上没有在线主人（{@code getOwner()} 恒为 null），这条链结构上
+                // 无法自动触发（与"女仆喂女仆"同一类困境）——给一个坐标就能把整条起飞链路跑起来。
+                // 【本仓没有照搬他那套的哪一半】他的命令只是"挂个请求"，由他自己那套平行飞行状态机
+                // 消费；本仓的飞行跟随已经把这套链路做全了（实测六百〇八～六百一十三），所以这里
+                // 只做"设目标"这一件事（与上面 flyfollow 同形），判定/起飞/补推/收手全部复用。
+                .then(net.minecraft.commands.Commands.m_82127_("elytra_goto")
+                        .then(net.minecraft.commands.Commands.m_82129_("x", // argument
+                                        com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg())
+                                .then(net.minecraft.commands.Commands.m_82129_("y", // argument
+                                                com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg())
+                                        .then(net.minecraft.commands.Commands.m_82129_("z", // argument
+                                                        com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg())
+                                                .executes(ctx -> elytraGoto(ctx.getSource(),
+                                                        com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "x"),
+                                                        com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "y"),
+                                                        com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "z"),
+                                                        null))
+                                                // 【第 4 个参数是可选的指定女仆】不给就取"离执行点最近的一只"。
+                                                // 取实体选择器而不是他自己那版的"名字字符串"：能补全、能写
+                                                // @e[type=...]，多女仆时点名同样准（他给的理由——"否则很容易
+                                                // 把命令下给旁边一只站桩的旧女仆"——本仓实测六百〇八 也踩到过）。
+                                                .then(net.minecraft.commands.Commands.m_82129_("maid", // argument
+                                                                net.minecraft.commands.arguments.EntityArgument.m_91449_())
+                                                        .executes(ctx -> elytraGoto(ctx.getSource(),
+                                                                com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "x"),
+                                                                com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "y"),
+                                                                com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "z"),
+                                                                net.minecraft.commands.arguments.EntityArgument
+                                                                        .m_91452_(ctx, "maid")))))))));
     }
 
     /** v1.2.2 实测六百〇八：{@code /maid_smart flyfollow clear} —— 摘掉全部"替代主人"（调试目标表很小） */
@@ -120,27 +151,9 @@ public final class MaidArmyCommand {
                 source.m_243053_(Component.m_237113_("\u00a7c需要在一个世界里执行。"));
                 return 0;
             }
-            EntityMaid maid = null;
-            if (maidArg != null) {
-                if (!(maidArg instanceof EntityMaid m)) {
-                    source.m_243053_(Component.m_237113_("\u00a7c指定的实体不是女仆。"));
-                    return 0;
-                }
-                maid = m;
-            } else {
-                java.util.List<EntityMaid> maids = level.m_45976_(EntityMaid.class,
-                        new net.minecraft.world.phys.AABB(around).m_82400_(64.0));
-                maids.removeIf(m -> !m.m_6084_());
-                if (maids.isEmpty()) {
-                    source.m_243053_(Component.m_237113_("\u00a7c附近 64 格内没有存活的女仆。"));
-                    return 0;
-                }
-                // 按到执行点的 3D 距离排序取最近的（不是"列表第一只"）
-                final double cx = around.m_123341_() + 0.5;
-                final double cy = around.m_123342_() + 0.5;
-                final double cz = around.m_123343_() + 0.5;
-                maids.sort(java.util.Comparator.comparingDouble(m -> m.m_20275_(cx, cy, cz)));
-                maid = maids.get(0);
+            EntityMaid maid = pickMaid(source, level, around, maidArg);
+            if (maid == null) {
+                return 0; // 原因已经报给执行者了（见 pickMaid）
             }
             if (target == null) {
                 com.maidsmart.combat.MaidFlightFollowBehavior.setDebugTarget(maid, null);
@@ -163,6 +176,117 @@ public final class MaidArmyCommand {
             return 1;
         } catch (Throwable t) {
             source.m_243053_(Component.m_237113_("\u00a7cflyfollow 失败：" + t));
+            return 0;
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十四：从命令上下文里挑一只女仆——显式给了就用它，否则取**离执行点最近**的一只
+     * （64 格内，按到执行点的 3D 距离排序）。
+     *
+     * 【为什么抽出来】{@code flyfollow} 与 {@code elytra_goto} 是同一件事的两个目标来源（实体 / 坐标），
+     * "怎么挑这只女仆"必须同口径——本批实测踩过"取列表第一只 → 挂到旁边站桩的旧女仆身上"，
+     * 那种坑各写一遍就会各踩一遍。失败原因由本方法直接报给执行者，返回 null 即"已报过、别再往下走"。
+     */
+    private static EntityMaid pickMaid(net.minecraft.commands.CommandSourceStack source,
+                                       net.minecraft.server.level.ServerLevel level,
+                                       net.minecraft.core.BlockPos around,
+                                       net.minecraft.world.entity.Entity maidArg) {
+        if (maidArg != null) {
+            if (!(maidArg instanceof EntityMaid m)) {
+                source.m_243053_(Component.m_237113_("\u00a7c指定的实体不是女仆。"));
+                return null;
+            }
+            return m;
+        }
+        java.util.List<EntityMaid> maids = level.m_45976_(EntityMaid.class,
+                new net.minecraft.world.phys.AABB(around).m_82400_(64.0));
+        maids.removeIf(m -> !m.m_6084_());
+        if (maids.isEmpty()) {
+            source.m_243053_(Component.m_237113_("\u00a7c附近 64 格内没有存活的女仆。"));
+            return null;
+        }
+        // 按到执行点的 3D 距离排序取最近的（不是"列表第一只"）
+        final double cx = around.m_123341_() + 0.5;
+        final double cy = around.m_123342_() + 0.5;
+        final double cz = around.m_123343_() + 0.5;
+        maids.sort(java.util.Comparator.comparingDouble(m -> m.m_20275_(cx, cy, cz)));
+        return maids.get(0);
+    }
+
+    /**
+     * v1.2.2 实测六百一十四【取自粉丝 Roderick32 的「鞘翅赶路」分支】：
+     * {@code /maid_smart elytra_goto <x> <y> <z> [女仆]} —— 让女仆穿鞘翅飞向指定坐标。
+     *
+     * 【这条命令做什么、不做什么】它只做一件事：给 {@code MaidFlightFollowBehavior} 挂一个
+     * **坐标目标**（{@code setGotoTarget}）。判定（开关/鞘翅/燃料/视线/威胁/距离）、起飞、补推、
+     * 收手全部复用那条已有链路——本仓**没有**为它新开状态机（他那份实现自带一整套平行的飞行
+     * 状态机与 8 个配置项，与飞行跟随撞车，见 CHANGELOG 的取舍说明）。
+     *
+     * 【一次性】到点 / 超时（60 秒）/ 出现威胁 / 燃料与鞘翅掉了 / 她换维度 → 链收手并**自动摘掉**
+     * 这个坐标（见 {@code MaidFlightFollowBehavior.stop}），之后她恢复正常跟随。
+     *
+     * 【这里为什么先把几条硬条件判一遍】不然命令会回一句"开始赶路"，而实际什么都没发生
+     * （行为那边只在日志里写「飞行跟随跳过：…」）。判据全部取自**同一份定义**
+     * （{@code MaidFlightKit} / 那个开关本身），不另写一套——否则就是第二个口径。
+     */
+    private static int elytraGoto(net.minecraft.commands.CommandSourceStack source,
+                                  double x, double y, double z,
+                                  net.minecraft.world.entity.Entity maidArg) {
+        try {
+            net.minecraft.world.entity.Entity executor = source.m_81373_();
+            net.minecraft.server.level.ServerLevel level;
+            net.minecraft.core.BlockPos around;
+            if (executor != null && executor.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
+                level = sl;
+                around = net.minecraft.core.BlockPos.m_274561_(
+                        executor.m_20185_(), executor.m_20186_(), executor.m_20189_());
+            } else {
+                level = source.m_81377_().m_129783_(); // getServer().overworld()
+                around = level.m_220360_();            // getSharedSpawnPos()
+            }
+            if (level == null) {
+                source.m_243053_(Component.m_237113_("\u00a7c需要在一个世界里执行。"));
+                return 0;
+            }
+            EntityMaid maid = pickMaid(source, level, around, maidArg);
+            if (maid == null) {
+                return 0;
+            }
+            if (!com.maidsmart.config.MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.get()) {
+                source.m_243053_(Component.m_237113_("\u00a7c" + maid.m_5446_().getString()
+                        + " 的「飞行跟随」开关关着（bridge.flightFollow，默认关）——"
+                        + "这个坐标档跑的就是那条链路，开关关着时她不会起飞。"));
+                return 0;
+            }
+            net.minecraft.world.phys.Vec3 pos = new net.minecraft.world.phys.Vec3(x, y, z);
+            double dist = Math.sqrt(maid.m_20275_(x, y, z));
+            double need = com.maidsmart.config.MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST.get();
+            if (dist <= need) {
+                source.m_243053_(Component.m_237113_(String.format(
+                        "\u00a7c目标点离她只有 %.1f 格（≤ 飞行跟随距离 %.1f）——这么近她会走路/搭路过去，"
+                                + "不会起飞。", dist, need)));
+                return 0;
+            }
+            if (!com.maidsmart.combat.MaidFlightKit.hasElytra(maid)) {
+                source.m_243053_(Component.m_237113_("\u00a7c" + maid.m_5446_().getString()
+                        + " 没有可用鞘翅（穿在身上/拿在手里/放在背包里都算，起飞时自动穿上）。"));
+                return 0;
+            }
+            if (!com.maidsmart.combat.MaidFlightKit.hasFlightPropellant(maid)) {
+                source.m_243053_(Component.m_237113_("\u00a7c" + maid.m_5446_().getString()
+                        + " 没有「可以飞行的道具」（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）。"));
+                return 0;
+            }
+            com.maidsmart.combat.MaidFlightFollowBehavior.setGotoTarget(maid, pos, level.m_46472_());
+            String msg = "\u00a7a" + maid.m_5446_().getString() + " 飞向 " + (int) x + " " + (int) y
+                    + " " + (int) z + "（距 " + String.format("%.1f", dist) + " 格；到点/超时/遇敌即收手，"
+                    + "之后恢复正常跟随）。";
+            source.m_288197_(() -> Component.m_237113_(msg), true);
+            com.maidsmart.tool.PromaidLog.log("飞行跟随", "elytra_goto " + msg);
+            return 1;
+        } catch (Throwable t) {
+            source.m_243053_(Component.m_237113_("\u00a7celytra_goto 失败：" + t));
             return 0;
         }
     }

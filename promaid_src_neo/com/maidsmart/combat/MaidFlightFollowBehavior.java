@@ -108,6 +108,25 @@ import java.util.WeakHashMap;
  * 起飞那行日志会把这一趟的燃料写成三种里的哪一种（{@link #fuelLabel}），
  * 验收入口：日志搜「飞行跟随」看到「放位移法术追主人（irons_spellbooks:ascension Lv3）」。
  *
+ * ── 六百一十四 改的一件事（来源：粉丝 Roderick32 的「鞘翅赶路」分支，取其精华）──
+ * 他的分支里"主人跑远 → 穿鞘翅飞过去"这件事**与本链路完全撞车**（我们这边六百〇八～六百一十三
+ * 已经把它做全了：所有模式通用、烟花/羽扇/位移法术三种燃料、两个省料开关、与搭路/自保/传送的
+ * 让位全套）。所以本批**没有**照搬他那套平行状态机（自带会话表、8 个配置项、没进展判定，还要
+ * mixin 拦 TLM 的跟随瞬移），只取他这条链里本类确实没有的那一件能力：
+ * <b>目标可以是一个坐标</b>（{@code /maid_smart elytra_goto <x> <y> <z> [女仆]}，他给的两个用途是
+ * "想让她飞去那边的高台/浮空岛"与"无头服里复现整条飞行链路"）。实现方式是把"目标"抽成一个点
+ * （{@link Aim}：实体档 / 坐标档），**判定、起飞、补推、收手全部复用本类**。
+ *
+ * 另外顺手收了他一条诊断（与本链路无关，但站在同一处代码上）：法术 id 写错时，配置表里
+ * **排在第一的那个法术会永远静默失效**——现在 {@link MaidSpellCastCompat#warnUnknownSpellIds}
+ * 会报一条 {@code [法术兼容]} 日志（判据是他用字节码钉出来的：ISS 的 {@code SpellRegistry.getSpell}
+ * 对未知 id 返回的是 {@code noneSpell} 而不是 null）。
+ *
+ * <b>他那份实现里我们**刻意没要**的部分</b>（都写在 CHANGELOG 里）：
+ * mixin 拦 TLM 跟随瞬移（本链路用"距离阈值 + isFollowing 让位"达成同一目的，不动原版链路）、
+ * 8 个平行配置项（本链路已有等价开关）、"没进展就收手"的定时器（本链路已有 60 秒上限 +
+ * 起飞前视线判定）、"不消耗鞘翅耐久"（本链路已有 {@code bridge.flightFollowElytra}）。
+ *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
  * 没有方块阻拦，自己包里面还有鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞
@@ -122,7 +141,8 @@ import java.util.WeakHashMap;
  *       占用（{@link com.maidsmart.task.BridgeUpBehavior#isTaskOccupied}，与搭路同一口径
  *       ——"另一种空闲"照飞，接战中绝不飞）；两个空袭任务**未接敌**时也在放行之列
  *       （见 {@link #ownFlightBusy}），旧版那句"空袭任务一律不起飞"已删除；</li>
- *   <li>主人（或调试目标，见下）存在、活着、同维度，且**3D 距离超过
+ *   <li>目标存在、活着、同维度（主人 / {@code /maid_smart flyfollow} 挂的"替代主人" / 六百一十四
+ *       起的 {@code /maid_smart elytra_goto} 指定的坐标），且**3D 距离超过
  *       {@code bridge.flightFollowDist}（默认 5 格，六百一十二 由 16 改小）**——太近就走路/
  *       搭路，犯不上烧烟花；</li>
  *   <li>她包里有**可用鞘翅**，以及**能飞的道具**——烟花火箭 **或** 孔雀羽扇 **或** 能上天的
@@ -212,6 +232,9 @@ import java.util.WeakHashMap;
  * 没有玩家就是 null），所以与"女仆喂女仆"（实测五百四十五）同一类困境：结构上无法端到端触发。
  * 照那条的先例留了 {@code /maid_smart flyfollow <实体>} 指定一个"替代主人"
  * （{@link #setDebugTarget}）——走的仍是本类**同一套**判定与飞行链路，只替换目标来源。
+ * 六百一十四 起又多一个更省事的入口：{@code /maid_smart elytra_goto <x> <y> <z> [女仆]}
+ * （{@link #setGotoTarget}）——**连"替代主人"那个实体都不用摆**，直接给坐标；平时它也是
+ * "送她飞去某地"的实用命令（到点/超时/遇敌即收手，见 {@link #stop}）。
  */
 public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
@@ -328,6 +351,32 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static final Map<EntityMaid, LivingEntity> DEBUG_TARGET =
             Collections.synchronizedMap(new WeakHashMap<>());
 
+    /**
+     * 【v1.2.2 实测六百一十四 · 取自粉丝 Roderick32 的「鞘翅赶路」分支】坐标档：
+     * {@code /maid_smart elytra_goto <x> <y> <z>} 指定的"要去的地方"（键 = 女仆 UUID）。
+     *
+     * 【为什么并入本类，而不是照他的分支另起一套】他那份实现自带一条与飞行跟随**平行**的飞行状态机
+     * （自己的会话表、自己的 8 个配置项、自己的"没进展"判定、还要 mixin 拦 TLM 的跟随瞬移）——而
+     * "主人跑远 → 穿鞘翅追过去"这件事本类已经做了（实测六百〇八～六百一十三：所有模式通用、
+     * 鞘翅+烟花+羽扇+位移法术四件都能当燃料、两个省料开关）。所以只取他这条链里本类**确实没有**
+     * 的那一件能力：**目标可以是一个坐标**（他给的两个用途都很实在——"想让她飞去那边的高台/浮空岛"，
+     * 以及"无头测试服里没有玩家/没有主人，怎么复现整条飞行链路"）。目标来源换了，判定/起飞/补推/
+     * 收手**全部复用本类**：一条状态机、一份开关、一份日志口径。
+     *
+     * 【一次性】到点 / 超时 / 威胁 / 缺料 / 跨维度：链一停就把它摘掉（见 {@link #stop}）——它是
+     * "去一趟"，不是"长期驻扎在那儿"；摘掉之后她恢复正常跟随（主人还远的话由 TLM 的瞬移接手）。
+     */
+    private static final Map<UUID, Vec3> GOTO = new HashMap<>();
+    /**
+     * 坐标档下单时她所在的维度：她在**别的维度**里时这条目标作废（与"主人跨维度不追"同口径）。
+     *
+     * 【为什么存维度而不是存 level 对象】静态表不能长期持有 {@code ServerLevel}（存档卸载会漏，
+     * 而这张表按 UUID 存活、只在 {@link #forget} 时才清）——存 {@code ResourceKey} 是同一个判据
+     * 的无泄漏写法（与 {@code SelfPreservationBehavior} 记攻击者维度同款）。
+     */
+    private static final Map<UUID, net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>>
+            GOTO_DIM = new HashMap<>();
+
     public MaidFlightFollowBehavior() {
         super(Collections.emptyMap(), Integer.MAX_VALUE, Integer.MAX_VALUE);
     }
@@ -429,6 +478,45 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * v1.2.2 实测六百一十四：挂上"要去的地方"（{@code /maid_smart elytra_goto <x> <y> <z>}）。
+     *
+     * @param dim 下单时**她**所在的维度（不是命令执行者的）——两者不同时这条目标压根不会生效，
+     *            命令侧已经把这一条拦下来并报了原因，这里只是把判据存下来。
+     */
+    public static void setGotoTarget(EntityMaid maid, Vec3 pos,
+                                     net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> dim) {
+        if (maid == null || pos == null) {
+            return;
+        }
+        try {
+            GOTO.put(maid.getUUID(), pos);
+            GOTO_DIM.put(maid.getUUID(), dim);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 摘掉"要去的地方"（一次性目标的清尾；链收手时本类自己会调，见 {@link #stop}） */
+    public static void clearGotoTarget(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        try {
+            GOTO.remove(maid.getUUID());
+            GOTO_DIM.remove(maid.getUUID());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 本趟走的是"坐标档"吗（只影响日志措辞与收尾清目标，判定一字不动） */
+    private static boolean isGoto(EntityMaid maid) {
+        try {
+            return maid != null && GOTO.containsKey(maid.getUUID());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 女仆卸载/死亡/服务器停止：清这个 UUID 的全部状态（收手时的归还由实体侧自己走） */
     public static void forget(UUID maidId) {
         if (maidId == null) {
@@ -447,6 +535,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         RELEASE_LOG.remove(maidId);
         SKIP_LOG.remove(maidId);
         CANUSE_THROTTLE.remove(maidId);
+        GOTO.remove(maidId);
+        GOTO_DIM.remove(maidId);
         try {
             DEBUG_TARGET.keySet().removeIf(m -> maidId.equals(m.getUUID()));
         } catch (Throwable ignored) {
@@ -467,6 +557,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         RELEASE_LOG.clear();
         SKIP_LOG.clear();
         CANUSE_THROTTLE.clear();
+        GOTO.clear();
+        GOTO_DIM.clear();
         DEBUG_TARGET.clear();
     }
 
@@ -500,11 +592,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
                 return skip(maid, now, "任务占用中（在干活/正在接战）");
             }
-            LivingEntity target = targetOf(maid);
-            if (target == null || !target.isAlive() || target.level() != level) {
-                return skip(maid, now, "没有可追的目标（主人离线/跨维度，或调试目标没挂上）");
+            Aim aim = aimOf(maid, level);
+            if (aim == null) {
+                return skip(maid, now, isGoto(maid)
+                        ? "指定的目标点不在她这个维度（跨维度不飞）"
+                        : "没有可追的目标（主人离线/跨维度，或调试目标没挂上）");
             }
-            double dSq = maid.distanceToSqr(target.getX(), target.getY(), target.getZ());
+            double dSq = aim.distSq(maid);
             if (dSq <= cfgDist() * cfgDist()) {
                 return skip(maid, now, String.format("距离不够（%.1f 格 ≤ 阈值 %.1f）",
                         Math.sqrt(dSq), cfgDist())); // 还不够远：走路/搭路足够
@@ -529,7 +623,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 return skip(maid, now, "背包里没有「可以飞行的道具」"
                         + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）");
             }
-            if (!SelfPreservationBehavior.hasSight(maid, target)) {
+            if (!sightOk(maid, aim)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
             }
             if (threatNearby(level, maid)) {
@@ -570,8 +664,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         BOOST_READY.remove(id);
         STARTED_AT.put(id, gameTime);
         wearElytra(maid, id);
-        logState(START_LOG, maid, id, gameTime, "主人飞远了（" + fmtDist(maid, targetOf(maid))
-                + " 格），背上鞘翅追过去（燃料=" + fuelLabel(maid)
+        // 【六百一十四】坐标档的措辞单列一句（"目标点飞远了"不成话）；实体档那一句逐字未动——
+        // 它是验收（logs 里搜「飞行跟随」）与 test_spellfly613 / test_flight612 断言的原文。
+        Aim aim = aimOf(maid, level);
+        String head = isGoto(maid)
+                ? "飞向指定坐标（" + fmtDist(maid, aim) + " 格）"
+                : "主人飞远了（" + fmtDist(maid, aim) + " 格）";
+        logState(START_LOG, maid, id, gameTime, head
+                + "，背上鞘翅追过去（燃料=" + fuelLabel(maid)
                 + "，烟花=" + (cfgFirework() ? "消耗" : "不消耗")
                 + "，位移法术=" + (cfgClimbSpell() ? "开" : "关")
                 + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗") + "）");
@@ -601,13 +701,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 她与目标的距离（格），给日志用；目标没了就返回 `?`（不抛异常） */
-    private static String fmtDist(EntityMaid maid, LivingEntity target) {
+    /** 她与目标点的距离（格），给日志用；目标没了就返回 `?`（不抛异常） */
+    private static String fmtDist(EntityMaid maid, Aim aim) {
         try {
-            if (target == null) {
+            if (aim == null) {
                 return "?";
             }
-            return String.format("%.1f", maid.distanceTo(target));
+            return String.format("%.1f", aim.dist(maid));
         } catch (Throwable ignored) {
             return "?";
         }
@@ -616,13 +716,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.getUUID();
-        LivingEntity target = targetOf(maid);
-        if (target == null) {
+        Aim aim = aimOf(maid, level);
+        if (aim == null) {
             return; // canStillUse 会收手
         }
         // ── 起跳滑翔（与空袭的 jumpForLaunch 同一套：先离地，滑翔位才站得住）──
         if (maid.onGround()) {
-            faceToward(maid, target, true);
+            faceToward(maid, aim, true);
             Vec3 dm = maid.getDeltaMovement();
             maid.setDeltaMovement(new Vec3(dm.x, 0.42, dm.z));
             MaidFlightKit.setGliding(maid, true);
@@ -630,16 +730,16 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
         // ── 空中：保持滑翔 + 视线钉在主人身上 + 需要时补一口推进 ──
         MaidFlightKit.setGliding(maid, true);
-        if (maid.distanceTo(target) <= endRadius()) {
-            // 主人已经进到收手半径内：本趟到此为止（canStillUse 下一 tick 收手并解除矢量）。
+        if (aim.dist(maid) <= endRadius()) {
+            // 目标已经进到收手半径内：本趟到此为止（canStillUse 下一 tick 收手并解除矢量）。
             // 【这段理论上是死代码】canStillUse 先跑、为假就直接 stop（tick 不执行），所以正常
             // 情况下走不到这里；留着当"判定顺序哪天变了"的安全带——真跑到了也只是提前解除一次。
-            releaseThrust(maid, id, gameTime);
+            releaseThrust(level, maid, id, gameTime);
             return;
         }
-        faceToward(maid, target, false);
-        if (shouldBoost(maid, target, gameTime)) {
-            boost(level, maid, id, gameTime, target);
+        faceToward(maid, aim, false);
+        if (shouldBoost(maid, aim, gameTime)) {
+            boost(level, maid, id, gameTime, aim);
         }
     }
 
@@ -649,8 +749,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (!cfg()) {
             return false;
         }
-        LivingEntity target = targetOf(maid);
-        if (target == null || !target.isAlive() || target.level() != level) {
+        Aim aim = aimOf(maid, level);
+        if (aim == null) {
             return false; // 目标没了/跨维度 → 追不上也不该追
         }
         if (maid.isSleeping() || maid.isPassenger() || maid.isMaidInSittingPose() || maid.isHomeModeEnable()) {
@@ -677,7 +777,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 她保持滑翔，空袭那一套会自己接上（它的 canUse 只看目标，不看谁在飞）。
             return false;
         }
-        if (maid.distanceTo(target) > endRadius()) {
+        if (aim.dist(maid) > endRadius()) {
             return true; // 还没进到收手半径内 → 本趟继续
         }
         // 主人已经进到收手半径内 → 本趟中断（**不需要贴到身边**，用户口径）。
@@ -690,6 +790,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     @Override
     protected void stop(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.getUUID();
+        // 【六百一十四】坐标档是**一次性**的：链一停就摘掉目标（到点/超时/威胁/缺料一律如此）。
+        // 摘掉之后她恢复正常跟随；不摘的话她会一直"想飞去那个点"（跟着主人走两步又想飞回去）。
+        // 【摘的时机：本方法**最后**一步】下面两行日志（解除矢量 / 结束）都要用到"这一趟的瞄准点"，
+        // 摘早了它们就只能打「进到主人 ? 格内」——绿轮实测踩到（releaseThrust 里 aimOf 返回 null、
+        // isGoto 也变 false，措辞当场退回主人版）。所以先取快照、日志打完再摘。
+        Aim aim = aimOf(maid, level);
+        boolean gotoMode = isGoto(maid);
         FOLLOWING.remove(id);
         BOOST_READY.remove(id);
         STARTED_AT.remove(id);
@@ -697,7 +804,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 【实测六百一十二】本趟若是"主人进到收手半径内"才停的，**这一 tick** 就解除推进矢量
         // （收掉还挂着的助推火箭 + 速度归零；为什么不能在 tick() 里做，见 RELEASE_ON_STOP 注释）
         if (RELEASE_ON_STOP.remove(id)) {
-            releaseThrust(maid, id, gameTime);
+            releaseThrust(level, maid, id, gameTime);
         } else {
             BOOST_ROCKET.remove(id); // 别的收手理由（威胁/超时/缺料）：保持动量自然滑翔，只丢引用
         }
@@ -713,8 +820,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         } else {
             SETTLING.add(id); // 交给 settleOnGround 在她落地那一 tick 收尾
         }
-        logState(END_LOG, maid, id, gameTime, "结束（主人 " + fmtDist(maid, targetOf(maid)) + " 格，"
+        logState(END_LOG, maid, id, gameTime, "结束（" + (gotoMode ? "目标点" : "主人") + " "
+                + fmtDist(maid, aim) + " 格，"
                 + (grounded ? "她已落地，胸甲还回去" : "她还在滑翔，落地后自动还回胸甲") + "）");
+        // 日志都打完了，这才摘掉坐标档（见本方法开头那段注释：摘早了上面两行会退回主人版措辞）
+        if (gotoMode) {
+            clearGotoTarget(maid);
+        }
     }
 
     /**
@@ -788,7 +900,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 就是"到你身边不要再有推进"，清零即达意。清零之后她立刻变成零速滑翔，落地那一 tick 由
      * {@link #settleOnGround} 收尾。
      */
-    private static void releaseThrust(EntityMaid maid, UUID id, long gameTime) {
+    private static void releaseThrust(ServerLevel level, EntityMaid maid, UUID id, long gameTime) {
         try {
             boolean dropped = false;
             net.minecraft.world.entity.projectile.FireworkRocketEntity rocket = BOOST_ROCKET.remove(id);
@@ -799,7 +911,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             Vec3 v = maid.getDeltaMovement();
             double speed = Math.sqrt(v.x * v.x + v.z * v.z);
             maid.setDeltaMovement(Vec3.ZERO);
-            logState(RELEASE_LOG, maid, id, gameTime, "进到主人 " + fmtDist(maid, targetOf(maid))
+            logState(RELEASE_LOG, maid, id, gameTime, "进到" + (isGoto(maid) ? "目标点" : "主人") + " "
+                    + fmtDist(maid, aimOf(maid, level))
                     + " 格内，解除火箭推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
                     + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
         } catch (Throwable ignored) {
@@ -827,14 +940,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 收手半径提到 15 格（六百一十二 起默认实际 4 格）之后，**这一趟根本进不到"最后十几格"**
      * （进半径就中断了），那条判据成了死代码，索性去掉；剩下的两条就是"该补才补"。
      */
-    private static boolean shouldBoost(EntityMaid maid, LivingEntity target, long gameTime) {
+    private static boolean shouldBoost(EntityMaid maid, Aim aim, long gameTime) {
         Long ready = BOOST_READY.get(maid.getUUID());
         if (ready != null && gameTime < ready) {
             return false;
         }
         Vec3 v = maid.getDeltaMovement();
         double speed = Math.sqrt(v.x * v.x + v.z * v.z);
-        double dy = target.getY() - maid.getY();
+        double dy = aim.y - maid.getY();
         // 【六百一十一：删掉了"最后十几格就松油门"那一条】旧版要靠它压住"离得近还补推 → 超车 →
         // 掉头 → 再超车"的绕圈（六百〇八 实测吃过两次：22 格的目标飞了 43 秒、烧掉 29 枚烟花）。
         // 现在收手半径从 4 格提到 15 格，**这一趟根本进不到"最后十几格"**（进 15 格就中断了），
@@ -857,7 +970,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 烟花也真拿不出来"时接手——消耗档把最后一枚烧完之后的下一脚，就是它。
      */
     private static void boost(ServerLevel level, EntityMaid maid, UUID id, long gameTime,
-                              LivingEntity target) {
+                              Aim aim) {
         if (TwilightFanKit.hasFan(maid)) {
             if (!TwilightFanKit.boostGlide(level, maid)) {
                 return; // 扇子挥不动（异常/扇子没了）——这一 tick 就算了
@@ -896,7 +1009,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 没放成（异常/世界拒绝）——继续往下试法术，别因为一次异常白丢这一口推进
         }
         // ③ 位移法术（六百一十三）：扇子不在、烟花也拿不出来时的第三条腿
-        castClimbSpell(maid, target, id, gameTime);
+        castClimbSpell(maid, aim, id, gameTime);
     }
 
     /**
@@ -925,19 +1038,22 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      *
      * @return true = 这一口放出去了
      */
-    private static boolean castClimbSpell(EntityMaid maid, LivingEntity target, UUID id,
+    private static boolean castClimbSpell(EntityMaid maid, Aim aim, UUID id,
                                           long gameTime) {
         try {
             if (!cfgClimbSpell()) {
                 return false; // 玩家关了「位移法术·起飞/补高」→ 本链路也退回只认烟花/羽扇
             }
+            // 【实测六百一十四】挑之前先校验两张法术表：id 写错时本链路只会"静默跳过"，
+            // 看不出任何原因（这条诊断取自粉丝 Roderick32 的「鞘翅赶路」分支）。
+            MaidSpellCastCompat.checkSpellTables();
             String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(
                     maid, MaidSpellCastCompat.climbSpellIds());
             if (spell == null) {
                 return false; // 她书里没有这张表里的法术（或法术模组不在场/版本不符）
             }
             MaidSpellCastCompat.clearCastTarget(maid); // 别让它施法前把朝向拧平（同空袭）
-            faceToward(maid, target, true);            // 抬头瞄着主人放（至少 TAKEOFF_PITCH）
+            faceToward(maid, aim, true);               // 抬头瞄着主人放（至少 TAKEOFF_PITCH）
             int lvl = MaidSpellCastCompat.spellLevelOrDefault(maid, spell);
             if (!MaidSpellCastCompat.castSpecific(maid, spell, lvl,
                     MaidSmartConfig.COMBAT_FLIGHT_DASH_INTERVAL.get())) {
@@ -989,12 +1105,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /* ==================== 朝向 ==================== */
 
-    /** 把视线钉在目标上（滑翔的操纵杆就是视线）；takeoff=true 时至少抬头 TAKEOFF_PITCH 度 */
-    private static void faceToward(EntityMaid maid, LivingEntity target, boolean takeoff) {
-        double dx = target.getX() - maid.getX();
-        double dz = target.getZ() - maid.getZ();
+    /** 把视线钉在目标点上（滑翔的操纵杆就是视线）；takeoff=true 时至少抬头 TAKEOFF_PITCH 度 */
+    private static void faceToward(EntityMaid maid, Aim aim, boolean takeoff) {
+        double dx = aim.x - maid.getX();
+        double dz = aim.z - maid.getZ();
         double dh = Math.sqrt(dx * dx + dz * dz);
-        double eyeT = target.getY() + target.getBbHeight() * 0.5;
+        double eyeT = aim.centerY();
         double eyeM = maid.getY() + maid.getBbHeight() * 0.5;
         float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
         float pitch = (float) (-(Math.atan2(eyeT - eyeM, Math.max(1.0E-4, dh)) * (180.0 / Math.PI)));
@@ -1002,7 +1118,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (takeoff) {
             pitch = Math.min(pitch, -TAKEOFF_PITCH); // 起跳那一下先抬头（负 = 抬头）
         }
-        applyRotation(maid, yaw, pitch, target);
+        applyRotation(maid, yaw, pitch, aim);
     }
 
     /**
@@ -1011,8 +1127,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * 【为什么不能只调 lookAt】LookControl 每 tick 会把 xRot 归零（1.20.1 与 1.21.1 都一样，
      * 反编译实证见 {@code MaidFlightCombatBehavior.faceAwayAndUp}），只写期望值下一 tick 就被
      * 抹平 —— 所以既要直接写实体（含 O 值，渲染插值用），也要交给 LookControl 让它每 tick 重施加。
+     *
+     * 【实测六百一十四：坐标档走坐标重载】实体档照旧用 {@code setLookAt(Entity, …)}（它按对方的
+     * **眼睛**高度算，与原本口径一致）；坐标档没有实体，改用 {@code setLookAt(double, double,
+     * double, …)} 传那个点本身。两条路径写进去的都是"她这一 tick 的视线"，滑翔的转向完全一致。
      */
-    private static void applyRotation(EntityMaid maid, float yaw, float pitch, LivingEntity target) {
+    private static void applyRotation(EntityMaid maid, float yaw, float pitch, Aim aim) {
         maid.setYRot(yaw);
         maid.setXRot(pitch);
         maid.yRotO = yaw;
@@ -1020,7 +1140,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         maid.setYHeadRot(yaw);
         maid.setYBodyRot(yaw);
         try {
-            maid.getLookControl().setLookAt(target, 360.0f, 360.0f);
+            if (aim.entity != null) {
+                maid.getLookControl().setLookAt(aim.entity, 360.0f, 360.0f);
+            } else {
+                maid.getLookControl().setLookAt(aim.x, aim.y, aim.z, 360.0f, 360.0f);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -1077,16 +1201,102 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /* ==================== 目标/环境 ==================== */
 
-    /** 本 tick 要追的目标：调试目标优先（专用服务器验收用），否则就是主人 */
-    private static LivingEntity targetOf(EntityMaid maid) {
+    /**
+     * 本趟"要去的那个点"（v1.2.2 实测六百一十四）——两种来源，几何上统一成一个点：
+     * <ul>
+     *   <li><b>实体档</b>：主人，或 {@code /maid_smart flyfollow} 挂的"替代主人"（{@link #DEBUG_TARGET}）
+     *       ——{@link #entity} 非空；</li>
+     *   <li><b>坐标档</b>：{@code /maid_smart elytra_goto} 指定的固定坐标（{@link #GOTO}）
+     *       ——{@link #entity} 为 null。</li>
+     * </ul>
+     *
+     * 【为什么值得抽出来】本链路真正用到目标的只有三件事：**距离、高差、朝向**（滑翔的操纵杆就是
+     * 视线）——全是坐标；只有两处需要实体：判"还在不在/同不同维度"，以及 LookControl 的实体重载
+     * （坐标档改用坐标重载，两者写在 {@link #applyRotation} 里）。抽成一个点之后，"追主人"与
+     * "飞去某地"共用同一条起飞/补推/收手链路——**这正是我们没有照搬粉丝那份实现的原因**：
+     * 他那版为"飞去某地"又养了一整套平行的飞行状态机（自己的配置项、自己的没进展判定）。
+     */
+    private static final class Aim {
+        /** 实体档的实体；坐标档为 null */
+        final LivingEntity entity;
+        /** 脚底坐标（实体档 = {@code entity.getX/Y/Z()}，与改动前的取值口径完全一致） */
+        final double x, y, z;
+        /** 碰撞箱高度（坐标档 = 0）：朝向判定要"瞄身体中心"，见 {@link #centerY()} */
+        final double height;
+
+        private Aim(LivingEntity entity, double x, double y, double z, double height) {
+            this.entity = entity;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.height = height;
+        }
+
+        static Aim ofEntity(LivingEntity e) {
+            return new Aim(e, e.getX(), e.getY(), e.getZ(), e.getBbHeight());
+        }
+
+        static Aim ofPos(Vec3 p) {
+            return new Aim(null, p.x, p.y, p.z, 0.0);
+        }
+
+        /** 身体中心的高度（改动前写的是 {@code target.getY() + target.getBbHeight() * 0.5}） */
+        double centerY() {
+            return y + height * 0.5;
+        }
+
+        /** 她到这个点的距离（格）——与改动前的 {@code maid.distanceTo(target)} 完全同一个值 */
+        double dist(EntityMaid maid) {
+            return Math.sqrt(distSq(maid));
+        }
+
+        /** 距离的平方（门槛判定用，省一次开方） */
+        double distSq(EntityMaid maid) {
+            return maid.distanceToSqr(x, y, z);
+        }
+
+        Vec3 pos() {
+            return new Vec3(x, y, z);
+        }
+    }
+
+    /**
+     * 本 tick 要去的点：**坐标档优先**，其次"替代主人"（调试/验收），最后主人；null = 没得追。
+     *
+     * 【口径与改动前逐条对齐】实体档那两条：调试目标活着就用它、否则退回主人；再统一要求
+     * "活着 + 同一个 level"（原来是各调用点自己判，现在收在这里一处）。坐标档多一条维度判据
+     * （她换维度 = 这条目标作废，同"主人跨维度不追"）。
+     */
+    private static Aim aimOf(EntityMaid maid, net.minecraft.world.level.Level level) {
         try {
-            LivingEntity dbg = DEBUG_TARGET.get(maid);
-            if (dbg != null && dbg.isAlive()) {
-                return dbg;
+            UUID id = maid.getUUID();
+            Vec3 pos = GOTO.get(id);
+            if (pos != null) {
+                if (!level.dimension().equals(GOTO_DIM.get(id))) {
+                    return null; // 跨维度：坐标目标作废
+                }
+                return Aim.ofPos(pos);
             }
-            return maid.getOwner();
+            LivingEntity dbg = DEBUG_TARGET.get(maid);
+            LivingEntity e = (dbg != null && dbg.isAlive()) ? dbg : maid.getOwner();
+            if (e == null || !e.isAlive() || e.level() != level) {
+                return null;
+            }
+            return Aim.ofEntity(e);
         } catch (Throwable ignored) {
             return null;
+        }
+    }
+
+    /** 与目标点之间没有方块阻拦（实体档走原签名；坐标档走实测六百一十四 新增的坐标重载） */
+    private static boolean sightOk(EntityMaid maid, Aim aim) {
+        try {
+            if (aim.entity != null) {
+                return SelfPreservationBehavior.hasSight(maid, aim.entity);
+            }
+            return SelfPreservationBehavior.hasSight(maid, aim.pos());
+        } catch (Throwable ignored) {
+            return true; // 与 hasSight 的兜底一致：判不出来就当她看得见（宁可不飞也不误判）
         }
     }
 

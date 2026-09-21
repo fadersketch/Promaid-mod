@@ -2080,14 +2080,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         return MaidSpellCastCompat.climbSpellIds();
     }
 
-    /** 从配置表里取"提供速度"的法术 id 表 */
+    /** 从配置表里取"提供速度"的法术 id 表。
+     *  v1.2.2 实测六百一十四：实现搬进 {@link MaidSpellCastCompat#boostSpellIds()}——
+     *  本批新增的"id 认不出来"诊断要同时读两张表（见 {@link MaidSpellCastCompat#checkSpellTables}），
+     *  诊断与施法各读一次配置就会分裂。这里只留一个转发，空袭的行为一字不变。 */
     private static String[] boostSpellIds() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_SPELLS.get()
-                    .toArray(new String[0]);
-        } catch (Throwable ignored) {
-            return com.maidsmart.combat.MaidSpellCastCompat.DEFAULT_BOOST_SPELLS;
-        }
+        return MaidSpellCastCompat.boostSpellIds();
+    }
+
+    /**
+     * 挑法术之前先校验配置表（v1.2.2 实测六百一十四，取自粉丝 Roderick32 的「鞘翅赶路」分支）：
+     * id 写错时本链路只会"静默跳过"，看不出任何原因——本方法把认不出的 id 报一条日志
+     * （同一个 id 只报一次，见 {@link MaidSpellCastCompat#warnUnknownSpellIds}）。
+     */
+    private static void checkSpellTables() {
+        MaidSpellCastCompat.checkSpellTables();
     }
 
     /** v1.2.0 实测五百七十二：按她书里**铭刻的等级**施法（读不到就按 1 级）
@@ -2144,6 +2151,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return false;
         }
         // 起飞/补高**不看法术自身冷却**（见 dashCooldownFor 注释）
+        checkSpellTables(); // 实测六百一十四：id 写错时先报一条（否则只是"第一个法术永不生效"）
         String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(maid, climbSpellIds());
         if (spell == null) {
             return false;
@@ -2194,6 +2202,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         if (!SelfPreservationBehavior.hasSight(maid, target)) {
             return false; // 隔墙冲过去没意义
         }
+        checkSpellTables(); // 实测六百一十四：两张表一起校验（见该方法注释）
         String spell = MaidSpellCastCompat.findAvailableDashSpell(maid, boostSpellIds());
         if (spell == null) {
             return false;
