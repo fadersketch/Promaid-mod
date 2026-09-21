@@ -247,6 +247,77 @@ public final class MaidSpellCastCompat {
         int lvl = spellLevelInBooks(maid, spellId);
         return lvl > 0 ? lvl : DASH_SPELL_FALLBACK_LEVEL;
     }
+
+    /**
+     * v1.2.2 实测六百一十四【取自粉丝 Roderick32 的「鞘翅赶路」分支】：取「提供速度」的法术 id 表。
+     *
+     * 【为什么提到这里（与 {@link #climbSpellIds} 同一理由）】原先这张表只写在
+     * {@code MaidFlightCombatBehavior.boostSpellIds} 里；本批要给两张表都做"id 认不出来"的诊断
+     * （见 {@link #checkSpellTables}），诊断若各自读一次配置，就会出现"诊断读的是 A、施法读的是 B"。
+     * 空袭那边现在只转发到这里（行为一字不变）。
+     */
+    public static String[] boostSpellIds() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_FLIGHT_DASH_BOOST_SPELLS.get()
+                    .toArray(new String[0]);
+        } catch (Throwable ignored) {
+            return DEFAULT_BOOST_SPELLS;
+        }
+    }
+
+    /** 已经报过"认不出这个 id"的法术（避免每 tick 刷屏） */
+    private static final java.util.Set<String> WARNED_IDS = new java.util.HashSet<>();
+
+    /**
+     * v1.2.2 实测六百一十四：把配置里**认不出来**的法术 id 报一次（取自粉丝 Roderick32 的
+     * 「鞘翅赶路」分支，两树的接入口径由本类统一）。
+     *
+     * 【为什么需要】id 写错（少个 s、写成 {@code irons_spellbook:} 少了复数、或者照抄了别的模组
+     * 的名字）时，表现是"这张表里排第一的法术永远不被使用、只有第二个在工作"——极难自查：
+     * 挑法术的链路对认不出的 id 只是"跳过"，一声不响。这里在每次挑法术之前顺手校验一遍，
+     * 认不出的报一条 {@code [法术兼容]} 日志（同一个 id 只报一次）。
+     *
+     * 【判定口径（这条是粉丝用字节码钉出来的）】ISS 的 {@code SpellRegistry.getSpell} 对未知 id
+     * **不返回 null**，而是返回共享的 {@code noneSpell} 实例——所以"判 null"永远不会触发。
+     * 改判"**解析回来的法术 id 与请求的 id 不一致** = 这个 id 认不出来"（本仓
+     * {@link #spellLevelInBooks} 早就在用同一个判据挑她书里的法术）。
+     */
+    public static void warnUnknownSpellIds(String[] ids) {
+        if (ids == null || !dashAvailable()) {
+            return;
+        }
+        for (String id : ids) {
+            if (id == null || id.isBlank() || WARNED_IDS.contains(id)) {
+                continue;
+            }
+            try {
+                Object spell = mSpellRegistryGetSpell.invoke(null,
+                        new net.minecraft.resources.ResourceLocation(id));
+                if (spell == null || !id.equals(String.valueOf(mSpellGetId.invoke(spell)))) {
+                    WARNED_IDS.add(id);
+                    com.maidsmart.tool.PromaidLog.log("法术兼容",
+                            "配置里的法术 id 认不出来，已被跳过：" + id
+                                    + "（检查拼写；ISS 的命名空间是 irons_spellbooks:，复数 s）");
+                }
+            } catch (Throwable ignored) {
+                WARNED_IDS.add(id);
+                com.maidsmart.tool.PromaidLog.log("法术兼容",
+                        "配置里的法术 id 认不出来，已被跳过：" + id + "（检查拼写）");
+            }
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百一十四：给**两张法术表**都跑一遍 {@link #warnUnknownSpellIds}。
+     *
+     * 调用点就是"要挑法术"的那几处（空袭的起飞/补高、飞行跟随的补推）：一共两处出口，
+     * 每次都是常数级开销（{@link #WARNED_IDS} 命中即返回），比在配置加载时挂钩子稳当
+     * ——面板改配置不需要重启，这里下次挑法术就跟得上。
+     */
+    public static void checkSpellTables() {
+        warnUnknownSpellIds(climbSpellIds());
+        warnUnknownSpellIds(boostSpellIds());
+    }
     /**
      * 位移法术的**兜底等级**——只在读不到书里铭刻等级时使用（正常路径见
      * {@link #spellLevelInBooks}）。

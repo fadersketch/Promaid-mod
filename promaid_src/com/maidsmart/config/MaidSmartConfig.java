@@ -1707,12 +1707,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.combat.flightDashClimb").define("flightDashClimb", true);
         COMBAT_FLIGHT_DASH_BOOST = BUILDER.comment("空袭·位移法术【提供速度】（默认开，需装《车万女仆：万法皆通》+ 对应法术）：在盘旋的**掉高窗口**里（与烟花同窗口、同朝向：抬头 45° 朝目标）冲一口给速度续命（鞘翅掉速就是掉高度）——实测五百七十八：窗口之外不再放，否则等于当着敌人的面从盘旋圈上切进去。这一类只负责「在空中加速」，不参与起飞判定、也不参与维持高度；默认表里是【烈焰冲锋】irons_spellbooks:burning_dash")
                 .translation("config.promaid.combat.flightDashBoost").define("flightDashBoost", true);
-        COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）")
+        COMBAT_FLIGHT_DASH_CLIMB_SPELLS = BUILDER.comment("【提供高度】的法术表（填完整法术 id）：用于起飞与补高；一个法术可以同时出现在两张表里。默认 ascension + burning_dash（后者抬头瞄着放也能顶人起来，这样「只带烈焰冲锋」的女仆同样能平地起飞）。id 写错时表现是【这张表里排第一的法术永远不生效】——六百一十四 起挑法术前会校验一遍，认不出的在 logs/promaid.log 里报一条「法术兼容 … 认不出来，已被跳过」（同一个 id 只报一次；最常见的原因是少写复数 s，ISS 的命名空间是 irons_spellbooks:）")
                 .translation("config.promaid.combat.flightDashClimbSpells")
                 .defineList("flightDashClimbSpells",
                         List.of("irons_spellbooks:ascension", "irons_spellbooks:burning_dash"),
                         o -> o instanceof String s && !s.isEmpty());
-        COMBAT_FLIGHT_DASH_BOOST_SPELLS = BUILDER.comment("【提供速度】的法术表（填完整法术 id）：用于飞行加速。默认只有 burning_dash；要加别的冲刺类法术往这里加（例如把某些瞬移/突进法术也当加速用）")
+        COMBAT_FLIGHT_DASH_BOOST_SPELLS = BUILDER.comment("【提供速度】的法术表（填完整法术 id）：用于飞行加速。默认只有 burning_dash；要加别的冲刺类法术往这里加（例如把某些瞬移/突进法术也当加速用）。id 写错的诊断与上面那张表同款（六百一十四 起，认不出的会报一条「法术兼容」日志）")
                 .translation("config.promaid.combat.flightDashBoostSpells")
                 .defineList("flightDashBoostSpells",
                         List.of("irons_spellbooks:burning_dash"),
@@ -2028,7 +2028,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 烟花 → 位移法术，与空袭的**起飞**同序（"有烟花先走烟花链路、没有才用位移法术"），
         // 所以带烟花的存档手感与烧料节奏一字不变。法术那一支复用空袭的「位移法术·起飞/补高」
         // 开关（flightDashClimb，默认开）——**不新增配置项**。
-        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到「触发距离 - 1」格内就收手交回普通跟随（默认 4 格；进半径时**解除烟花给的推进矢量**，之后自然滑翔、落地还回胸甲，与空袭打完一波同款）；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）；威胁半径内出现敌对生物会当场解除本趟链路。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条")
+        BRIDGE_FLIGHT_FOLLOW = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条距离、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到「触发距离 - 1」格内就收手交回普通跟随（默认 4 格；进半径时**解除烟花给的推进矢量**，之后自然滑翔、落地还回胸甲，与空袭打完一波同款）；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）；威胁半径内出现敌对生物会当场解除本趟链路。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
                 .translation("config.promaid.bridge.flightFollow").define("flightFollow", false);
         BRIDGE_FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随触发距离（格，默认 5，v1.2.2 实测六百一十二 由 16 改小）：你离她超过这个 3D 距离才起飞追——更近的距离走路/搭路本来就够得着，犯不上烧烟花。收手半径取它减 1（上限 15），进到收手半径时除了中断本趟，还会**解除烟花给的推进矢量**（不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 3~128。注意：老存档的配置文件里若已写着 flightFollowDist = 16，Forge 不会替你改小，想用新默认请删掉那一行或手动改成 5")
                 .translation("config.promaid.bridge.flightFollowDist").defineInRange("flightFollowDist", 5.0, 3.0, 128.0);
