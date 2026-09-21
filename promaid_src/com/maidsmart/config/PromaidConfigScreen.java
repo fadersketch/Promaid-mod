@@ -374,6 +374,9 @@ public class PromaidConfigScreen extends Screen {
         AID("贴身辅助", Group.COMBAT), PLAYER_DAMAGE("玩家伤害策略", Group.COMBAT),
         AIR_RAID("空袭数值", Group.COMBAT),
         FALL_GUARD("落地缓冲", Group.SURVIVAL), BRIDGE("搭路", Group.MOVE),
+        // v1.2.2 实测六百一十五：飞行跟随从「搭路」里拎出来，与搭路平级（用户原话："把飞行跟随这个
+        // 板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块"）
+        FLIGHT_FOLLOW("飞行跟随", Group.MOVE),
         REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
         SAFETY("女仆安全与区块", Group.SURVIVAL),
         FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
@@ -646,6 +649,7 @@ public class PromaidConfigScreen extends Screen {
             case AIR_RAID -> this.airRaidRows();
             case FALL_GUARD -> this.fallGuardRows();
             case BRIDGE -> this.bridgeRows();
+            case FLIGHT_FOLLOW -> this.flightFollowRows();
             case REVIVE -> this.reviveRows();
             case ESCAPE -> this.escapeRows();
             case SAFETY -> this.safetyRows();
@@ -2610,18 +2614,29 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_PLACED_LIFETIME, s), "战斗搭方块清理时间（秒，默认 60）：自保行为（搭高/翻墙/搭桥/封头盖帽）搭的方块 N 秒后自动回收——战斗节奏多变比挖矿/搭路的 10 秒长；女仆踩着时刷新计时，不会把她摔下去"));
         this.rows.add(new BoolRow("垫脚方块回收进背包", MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get(),
                 v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
+    }
+
+    /**
+     * 【v1.2.2 实测六百一十五】飞行跟随**从「搭路」里搬出来**，成为与搭路平级的一个小节
+     * （用户原话："把飞行跟随这个板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的
+     * 一个板块"）。配置侧同步：TOML 里它也从 {@code [bridge]} 搬到了 {@code [flightFollow]}。
+     */
+    private void flightFollowRows() {
         // v1.2.2 实测六百〇八【飞行跟随】（玩家建议："女仆跟随能不能给她整个使用鞘翅一起飞呢"）
         // v1.2.2 实测六百一十一：收手 4→15 格且不再抬头泄速（自然滑翔）、燃料并入羽扇、外观与空袭同款
-        // v1.2.2 实测六百一十二：触发距离默认 16→5、进半径解除推进矢量、所有任务模式通用（空袭未接敌也照飞）
+        // v1.2.2 实测六百一十二：进半径解除推进矢量、所有任务模式通用（空袭未接敌也照飞）
         // v1.2.2 实测六百一十三：启动的"能飞的道具"两选一 → 三选一（加能上天的位移法术，与空袭三件套同一口径）
-        this.rows.add(new BoolRow("飞行跟随（鞘翅追主人）", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.get(),
-                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.set(v), "飞行跟随（默认关）：开启后，轮到该搭路时如果主人离她超过下面那条距离、你俩之间【没有方块挡住视线】、她背包里又同时有【可用鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】，她就不垫方块了——直接背上鞘翅飞过来（起飞与空袭那套一模一样，只是把目标从敌人换成了你；动作也是空袭那套：展翅的游泳姿态、背上的鞘翅翅膀、跟着俯角前倾）。你进到【收手半径】（默认 4 格 = 触发距离减 1，上限 15）内就收手交回普通跟随：**当场解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），不用贴到你身边，之后照原样自然滑翔落地（滑翔期间原版每 tick 清坠落距离，摔不伤）；你飞远了会再飞一趟。**所有任务模式通用**——两个空袭任务【未接敌】时也照飞，真在打或真有活干才让位；威胁半径内出现敌对生物会当场解除本趟链路（与搭路同款判据）。六百一十三 起**位移法术也算「可以飞行的道具」**：只带法术书、不带烟花的女仆照样起飞（推进顺序：扇子优先 → 烟花 → 位移法术，也就是空袭起飞那套顺序；法术那一支沿用空袭的「位移法术·起飞/补高」开关，不消耗物资所以下面的「消耗烟花」管不到它）。飞行期间自动传送与同维度拉回一律让位，撞墙/摔落免疫照飞行任务那两档一起管；起飞前会替她换上鞘翅、收手时原样还回胸甲。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条。六百一十四 起她还能**飞向指定坐标**：`/maid_smart elytra_goto <x> <y> <z> [女仆]`（走的就是上面这条链路，到点/超时/遇敌即收手）——这一件取自粉丝 Roderick32 的「鞘翅赶路」分支"));
-        this.rows.add(new NumRow("飞行跟随距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST.get()),
-                s -> setDouble(MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST, s), "飞行跟随触发距离（格，默认 5，范围 3~128；实测六百一十二 由 16 改小）：主人与她【3D 距离】超过这个值才起飞追——更近的距离走路/搭路本来就够了，犯不上烧烟花。收手半径 = 这个值减 1（上限 15 格，免得刚起飞就收手），进到收手半径就中断本趟并解除推进矢量。注意威胁半径内（见上面那条）她绝不会起飞。老配置文件里若还写着 16，Forge 不会替你改小——想用新默认就删掉那一行或手动改成 5"));
-        this.rows.add(new BoolRow("飞行跟随·消耗烟花", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_FIREWORK.get(),
-                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是'她能飞'的凭证），但每次补推不再从背包扣那一枚——纯观赏档，适合只想看她跟着飞的存档。背包里同时有羽扇时走扇子那条（挥扇推进、按扇子自己的口径扣耐久），这条只管烟花——位移法术不消耗物资，开与关都一样（它按自己的冷却放）"));
-        this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.get(),
-                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
+        // v1.2.2 实测六百一十五：起手球 25 / 收手球 5 拆成两个配置 + 整块搬到本小节
+        this.rows.add(new BoolRow("飞行跟随（鞘翅追主人）", MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get(),
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(v), "飞行跟随（默认关）：开启后，轮到该搭路时如果主人离她超过下面那条【起手距离】、你俩之间【没有方块挡住视线】、她背包里又同时有【可用鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、周围威胁半径内也没有怪，她就不垫方块了——直接背上鞘翅飞过来（起飞与空袭那套一模一样，只是把目标从敌人换成了你；动作也是空袭那套：展翅的游泳姿态、背上的鞘翅翅膀、跟着俯角前倾）。你进到【收手距离】（默认 5 格，见下面那条）内就收手交回普通跟随：**当场解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），不用贴到你身边，之后照原样自然滑翔落地（滑翔期间原版每 tick 清坠落距离，摔不伤）；你飞远了会再飞一趟。**所有任务模式通用**——两个空袭任务【未接敌】时也照飞，真在打或真有活干才让位；威胁半径内出现敌对生物会当场解除本趟链路（与搭路同款判据）。六百一十三 起**位移法术也算「可以飞行的道具」**：只带法术书、不带烟花的女仆照样起飞（推进顺序：扇子优先 → 烟花 → 位移法术，也就是空袭起飞那套顺序；法术那一支沿用空袭的「位移法术·起飞/补高」开关，不消耗物资所以下面的「消耗烟花」管不到它）。飞行期间自动传送与同维度拉回一律让位，撞墙/摔落免疫照飞行任务那两档一起管；起飞前会替她换上鞘翅、收手时原样还回胸甲。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条。六百一十四 起她还能**飞向指定坐标**：`/maid_smart elytra_goto <x> <y> <z> [女仆]`（走的就是上面这条链路，到点/超时/遇敌即收手）——这一件取自粉丝 Roderick32 的「鞘翅赶路」分支。**升级注意**：这批把本小节从「搭路」里搬了出来，老配置文件 [bridge] 下的 flightFollow* 四行不再生效，重新打开一次开关即可"));
+        this.rows.add(new NumRow("起手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_DIST.get()),
+                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_DIST, s), "飞行跟随·起手距离（格，默认 25，范围 3~128；实测六百一十五 由 5 改大）：主人与她【3D 距离】超过这个值才起飞追——**更近的距离走路/搭路本来就够了**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。**与收手距离是两个不同的球**（下面那条，默认 5）：旧版收手半径是「起手减 1」推出来的，迟滞只有 1 格，她会在两条线之间来回起降；现在默认档留 20 格迟滞。注意威胁半径内（搭路那条）她绝不会起飞。老配置文件里若写着 dist = 5，Forge 不会替你改大——想用新默认就删掉那一行或手动改成 25"));
+        this.rows.add(new NumRow("收手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get()),
+                s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST, s), "飞行跟随·收手距离（格，默认 5，范围 1~64；实测六百一十五 新增）：主人进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。**必须比起手距离小**：写成大于等于起手距离时她会「起飞即收手」，本模组会自动把它压到「起手距离 − 1」（默认 25/5 用不到这条兜底）"));
+        this.rows.add(new BoolRow("飞行跟随·消耗烟花", MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get(),
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是'她能飞'的凭证），但每次补推不再从背包扣那一枚——纯观赏档，适合只想看她跟着飞的存档。背包里同时有羽扇时走扇子那条（挥扇推进、按扇子自己的口径扣耐久），这条只管烟花——位移法术不消耗物资，开与关都一样（它按自己的冷却放）"));
+        this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get(),
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
     }
 
     private void reviveRows() {
@@ -4499,7 +4514,7 @@ public class PromaidConfigScreen extends Screen {
             case AI -> "\u00a77记忆 / 对话 / 感知 / 情绪 / AI 工具";
             case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害 / 空袭数值";
             case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
-            case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路";
+            case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路 / 飞行跟随";
             case UI -> "\u00a77语音 TTS / 显示与气泡";
             case SYSTEM -> "\u00a77交互杂项 / 运行日志";
         };

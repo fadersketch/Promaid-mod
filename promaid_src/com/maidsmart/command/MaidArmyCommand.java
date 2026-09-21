@@ -62,7 +62,7 @@ public final class MaidArmyCommand {
                 // 完全同一类困境：结构上无法端到端触发。照那条的先例留一条控制台可用的命令——
                 // 给指定女仆挂一个"替代主人"，走的仍是 MaidFlightFollowBehavior **同一套**判定与
                 // 飞行链路，只替换目标来源（就为了能在专用服务器上验证"她真的会起飞追人"）。
-                // 【前提】bridge.flightFollow 开关必须是开的（默认关），否则行为压根不启动。
+                // 【前提】flightFollow.enabled 开关必须是开的（默认关），否则行为压根不启动。
                 .then(net.minecraft.commands.Commands.m_82127_("flyfollow")
                         .then(net.minecraft.commands.Commands.m_82127_("clear")
                                 .executes(ctx -> flightFollowClear(ctx.getSource())))
@@ -168,7 +168,7 @@ public final class MaidArmyCommand {
             com.maidsmart.combat.MaidFlightFollowBehavior.setDebugTarget(maid, living);
             String msg = "\u00a7a" + maid.m_5446_().getString() + " 的飞行跟随目标已设为 "
                     + living.m_5446_().getString()
-                    + "\uff08\u9700 bridge.flightFollow=true\uff1b"
+                    + "\uff08\u9700 flightFollow.enabled=true\uff1b"
                     + "\u7f3a\u9798\u7fc5/\u70df\u82b1\u3001\u8ddd\u79bb\u4e0d\u591f\u3001"
                     + "\u4e2d\u95f4\u6709\u65b9\u5757\u906e\u6321\u90fd\u4e0d\u4f1a\u8d77\u98de\uff09";
             source.m_243053_(Component.m_237113_(msg));
@@ -253,19 +253,19 @@ public final class MaidArmyCommand {
             if (maid == null) {
                 return 0;
             }
-            if (!com.maidsmart.config.MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.get()) {
+            if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get()) {
                 source.m_243053_(Component.m_237113_("\u00a7c" + maid.m_5446_().getString()
-                        + " 的「飞行跟随」开关关着（bridge.flightFollow，默认关）——"
+                        + " 的「飞行跟随」开关关着（flightFollow.enabled，默认关）——"
                         + "这个坐标档跑的就是那条链路，开关关着时她不会起飞。"));
                 return 0;
             }
             net.minecraft.world.phys.Vec3 pos = new net.minecraft.world.phys.Vec3(x, y, z);
             double dist = Math.sqrt(maid.m_20275_(x, y, z));
-            double need = com.maidsmart.config.MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST.get();
+            double need = com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_DIST.get();
             if (dist <= need) {
                 source.m_243053_(Component.m_237113_(String.format(
-                        "\u00a7c目标点离她只有 %.1f 格（≤ 飞行跟随距离 %.1f）——这么近她会走路/搭路过去，"
-                                + "不会起飞。", dist, need)));
+                        "\u00a7c目标点离她只有 %.1f 格（≤ 起手距离 %.1f，flightFollow.dist）——"
+                                + "这么近她会走路/搭路过去，不会起飞。", dist, need)));
                 return 0;
             }
             if (!com.maidsmart.combat.MaidFlightKit.hasElytra(maid)) {
