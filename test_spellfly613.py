@@ -87,8 +87,17 @@ CONFIG = os.path.join(server, 'config', 'promaid-common.toml')
 
 MAID_A_OFF = '~ ~ ~'       # 女仆 A 站位（锚点）
 MAID_B_OFF = '~ ~ ~3'      # 女仆 B 站位（同一台面）
-TARGET_A_OFF = '~ ~ ~22'   # A 的目标（22 格外）
-TARGET_B_OFF = '~ ~ ~27'   # B 的目标（24 格外）
+# 【A 的目标为什么放到 40 格（实测六百一十七 改）】这条用例 A 那半验的是
+# "只带鞘翅、没有任何飞行动具 → 门禁走到「背包里没有可以飞行的道具」"。
+# 可那个门禁**先看距离、再看道具**，而女仆挂上 flyfollow 之后会**朝目标走过去**：
+# 目标原本放 22 格，她只要走 6 格就进到起手距离 16 以内，于是后面每次都只报
+# 「距离不够」，「没有可以飞行的道具」那一句可能一次都没打出来。
+# 实测六百一十七 的回归里就真踩上了（rc=1，跳过 6 行全是「没有可追的目标」/「距离不够」），
+# 重跑一次又过 —— 能不能过取决于"第一次扫描"和"她走到 16 格内"谁先到，是一次抛硬币。
+# 放到 40 格后她要走 24 格（十几秒）才会进 16 格，观察窗内一定有几轮扫描落在 40~16 之间，
+# 那条道具判定的文案就必然被打出来。
+TARGET_A_OFF = '~ ~ ~40'   # A 的目标（40 格外；见上面的说明，别再调回 22）
+TARGET_B_OFF = '~ ~ ~27'   # B 的目标（27 格外）
 
 
 def stop_server():
@@ -200,9 +209,11 @@ def run_round():
          'Tags:["fly613anchor"]}')
     time.sleep(2)
     A = '@e[tag=fly613anchor,limit=1]'
-    send('execute at %s run fill ~-2 ~-1 ~-4 ~2 ~-1 ~30 minecraft:stone' % A)
+    # 台面铺到 +45：A 的目标挪到 40 格之后（见 TARGET_A_OFF 的说明），她要能一路走过去，
+    # 否则走到台面尽头掉下去，日志会变成"脚下没路"那一类，又验不到道具判定了。
+    send('execute at %s run fill ~-2 ~-1 ~-4 ~2 ~-1 ~45 minecraft:stone' % A)
     time.sleep(1)
-    send('execute at %s run fill ~-2 ~ ~-4 ~2 ~4 ~30 minecraft:air' % A)
+    send('execute at %s run fill ~-2 ~ ~-4 ~2 ~4 ~45 minecraft:air' % A)
     time.sleep(2)
 
     # ② 女仆 A：**只有鞘翅**（没有任何飞行动具）→ 该"不起飞 + 新跳过文案"

@@ -52,6 +52,16 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         return this.backing.getSlots();
     }
 
+    /** 她自己的背包有多少格（不含后面追加的盒子格）——自检/诊断用来认出「从第几格起是盒子」 */
+    public int baseSlots() {
+        return maidSlots();
+    }
+
+    /** 背包里有几个压缩盒 */
+    public int boxCount() {
+        return boxSlots().size();
+    }
+
     /** 背包里所有压缩盒（按她背包里的顺序；一个都没有就是空表） */
     private List<Integer> boxSlots() {
         List<Integer> out = new ArrayList<>(2);
@@ -133,6 +143,9 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         if (stack.isEmpty()) {
             items.set(cell.slotInBox, ItemStack.EMPTY);
         } else {
+            if (CompressionBoxData.isBox(stack)) {
+                return; // 盒子不装盒子（与 isItemValid / mergeInto 同一个口径）
+            }
             ItemStack copy = stack.copy();
             copy.setCount(Math.min(copy.getCount(), CompressionBoxData.maxStack()));
             items.set(cell.slotInBox, copy);
