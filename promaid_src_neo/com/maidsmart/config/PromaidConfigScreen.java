@@ -2426,7 +2426,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new SectionRow("所有战斗模式：TNT 投掷（推广自「女仆生存」那套）", false));
         this.rows.add(new BoolRow("战斗模式投掷 TNT", MaidSmartConfig.COMBAT_BOMBING_TNT.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_TNT.set(v),
-                "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与点火料——打火石（优先，每发掉 1 点耐久）或烈焰弹/火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
+                "战斗模式的 TNT 投掷（默认开）：所有有战斗标签的模式都会朝最近敌人扔 TNT，需要同时有 TNT 与点火料——**TNT 判据放宽**（v1.2.2 实测六百〇四）：注册名里带 tnt 的都算，各模组自己的 TNT 也认；点火料 = 打火石（优先，每发掉 1 点耐久）或烈焰弹/火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；防误伤：主人/友军不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效"));
         this.rows.add(new NumRow("投掷间隔（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL, s), "投掷最短间隔（tick，默认 200 = 10 秒）：TNT 已改为【攻击链路末段】投放（打完一记之后才扔），这条只是两次投放之间的下限；调小 = 更凶更费 TNT"));
         this.rows.add(new NumRow("TNT 引信（tick）", String.valueOf(MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get()),

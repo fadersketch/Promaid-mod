@@ -1856,7 +1856,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bombing").push("bombing");
         COMBAT_BOMBING_MELEE = BUILDER.comment("战斗模式轰炸（默认开）：**所有攻击模式**打完一记之后按包里材料放一枚炸弹——地面近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭（猛击命中后、再次起飞前）/ 远程空袭（盘旋期间每次开火之后）/ 第三方战斗任务都会放（实测六百〇三起远程空袭也算在内，她飞在天上也照放）。三段按顺序取第一个材料齐的：① 黑曜石/基岩 + 末地水晶（威力 6，优先）② 重生锚 + 萤石（威力 5，下界不生效）③ 床（威力 5，主世界不生效）。放置失败就整段跳过；『下界 / 主世界不生效』由维度闸按当前维度自动判，两次之间还有『轰炸最短间隔』兜底")
                 .translation("config.promaid.bombing.melee").define("melee", true);
-        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——打火石（优先，每发掉 1 点耐久）或烈焰弹 / 火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；两种点火料都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
+        COMBAT_BOMBING_TNT = BUILDER.comment("战斗模式的 TNT 投掷（默认开）：**所有有战斗标签的模式**（近战 / 弓弩 / 三叉戟 / 弹幕 / 枪械 / 近战空袭 / 远程空袭 / 第三方战斗任务）都会朝最近的敌人扔 TNT，需要同时有 TNT 与**点火料**——TNT 的判据 v1.2.2 实测六百〇四 起放宽为**注册名里带 tnt 的都算**（原版那一件与各模组自加的 TNT 通吃，不用再换成原版 TNT）；点火料 = 打火石（优先，每发掉 1 点耐久）或烈焰弹 / 火焰弹（没有打火石时消耗 1 个，v1.2.2 实测六百〇三）；两种点火料都没有才跳过、不影响本职开火。防误伤：主人与友军绝不作为目标，炸弹的伤害与击飞对主人/友军/她自己都不生效")
                 .translation("config.promaid.bombing.tnt").define("tnt", true);
         COMBAT_BOMBING_FUSE = BUILDER.comment("起爆延迟（tick，默认 10 = 0.5 秒）：放下炸弹之后多久响——这半秒正好够她重新起飞，爆炸与起飞重叠（她自己免疫自己炸弹的伤害与击飞）")
                 .translation("config.promaid.bombing.fuse").defineInRange("fuse", 10, 1, 200);
