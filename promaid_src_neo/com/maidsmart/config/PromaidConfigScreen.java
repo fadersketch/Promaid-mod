@@ -2610,6 +2610,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.COMBAT_PLACED_LIFETIME, s), "战斗搭方块清理时间（秒，默认 60）：自保行为（搭高/翻墙/搭桥/封头盖帽）搭的方块 N 秒后自动回收——战斗节奏多变比挖矿/搭路的 10 秒长；女仆踩着时刷新计时，不会把她摔下去"));
         this.rows.add(new BoolRow("垫脚方块回收进背包", MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get(),
                 v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
+        // v1.2.2 实测六百〇八【飞行跟随】（玩家建议："女仆跟随能不能给她整个使用鞘翅一起飞呢"）
+        this.rows.add(new BoolRow("飞行跟随（鞘翅追主人）", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.get(),
+                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW.set(v), "飞行跟随（默认关）：开启后，轮到该搭路时如果主人离她超过下面那条距离、你俩之间【没有方块挡住视线】、她背包里又同时有【可用鞘翅 + 烟花火箭】，她就不垫方块了——直接背上鞘翅飞过来（起飞与空袭那套一模一样，只是把目标从敌人换成了你）。飞到 4 格内收手交回普通跟随；贴到你身边却还在空中时先抬头泄速，剩下的高度靠滑翔自然落地（滑翔期间原版每 tick 清坠落距离，摔不伤）。飞行期间自动传送与同维度拉回一律让位，撞墙/摔落免疫照飞行任务那两档一起管；起飞前会替她换上鞘翅、收手时原样还回胸甲。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条"));
+        this.rows.add(new NumRow("飞行跟随距离（格）", String.valueOf(MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST.get()),
+                s -> setDouble(MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_DIST, s), "飞行跟随触发距离（格，默认 16，范围 6~128）：主人与她【3D 距离】超过这个值才起飞追——更近的距离走路/搭路本来就够了，犯不上烧烟花。注意威胁半径内（见上面那条）她绝不会起飞"));
+        this.rows.add(new BoolRow("飞行跟随·消耗烟花", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_FIREWORK.get(),
+                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有烟花】（它是'她能飞'的凭证），但每次补推不再从背包扣那一枚——纯观赏档，适合只想看她跟着飞的存档"));
+        this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.get(),
+                v -> MaidSmartConfig.BRIDGE_FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
     }
 
     private void reviveRows() {

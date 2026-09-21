@@ -39,7 +39,15 @@ public final class MaidFlightWallGuard {
             return;
         }
         if (!MaidFlightKit.isFlightTask(maid)) {
-            return;
+            // v1.2.2 实测六百〇八【飞行跟随也要一起管】：她不是飞行任务，但此刻确实挂在鞘翅上
+            // ——撞墙/摔落这两个开关若按"飞行任务"判就会把她整个漏掉（女仆 20 血，撞一次墙
+            // 就没）。只多认这一个状态，普通坠落/撞墙照旧不碰。
+            // 【isSettling 那一半】她收手时若还在空中，鞘翅会继续戴着让她滑翔落地（空中摘 =
+            // 自由落体），那一段"行为已停、人还在鞘翅上"的窗口同样要管。
+            if (!com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)
+                    && !com.maidsmart.combat.MaidFlightFollowBehavior.isSettling(maid)) {
+                return;
+            }
         }
         var src = event.getSource();
         if (src == null) {

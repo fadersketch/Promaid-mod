@@ -1,6 +1,7 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.item.ElytraItem;
@@ -957,6 +958,75 @@ public final class MaidFlightKit {
             return explosions.size();
         } catch (Throwable ignored) {
             return 0;
+        }
+    }
+
+    /**
+     * v1.2.2 实测六百〇八【飞行跟随】：从背包/手上取一件可用鞘翅（**只取，不穿**）。
+     *
+     * 取用优先级与 {@link #equip} 完全一致（带护甲的"鞘翅胸甲"优先，其次普通鞘翅，最后手上），
+     * 只是把"穿上"那一步留给调用方——飞行跟随要记下**换下来的原胸甲**并在收手时还回去，
+     * 那件事只有调用方知道。
+     *
+     * @return 取到的鞘翅（空 = 没有）
+     */
+    public static ItemStack takeElytra(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.f_41583_;
+        }
+        try {
+            ItemStack ely = takeFromBackpack(maid, s -> isElytraLike(s, maid) && isArmorElytra(s));
+            if (ely.m_41619_()) {
+                ely = takeFromBackpack(maid, s -> isElytraLike(s, maid));
+            }
+            if (!ely.m_41619_()) {
+                return ely;
+            }
+            IItemHandlerModifiable h = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            for (int slot = 0; slot <= 1; slot++) {
+                if (isElytraLike(h.getStackInSlot(slot), maid) && isArmorElytra(h.getStackInSlot(slot))) {
+                    return h.extractItem(slot, 1, false);
+                }
+            }
+            for (int slot = 0; slot <= 1; slot++) {
+                if (isElytraLike(h.getStackInSlot(slot), maid)) {
+                    return h.extractItem(slot, 1, false);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /**
+     * v1.2.2 实测六百〇八【飞行跟随】：放一枚"只有推力、没有爆炸"的挂载型烟花。
+     *
+     * 与 {@link MaidFlightCombatBehavior} 里那一枚同一口径：**只写飞行时长、不写爆炸组件**，
+     * 所以到期 `explode()` 时伤害为 0，不会按 5+2n 炸到骑乘者自己（女仆只有 20 血）。
+     * 单独提出来是为了让"飞行跟随"不必复用空袭行为里的私有发射方法。
+     *
+     * @return true = 已经放出去了（调用方可以推进冷却）
+     */
+    public static boolean launchBoostRocket(net.minecraft.server.level.ServerLevel level, EntityMaid maid) {
+        if (level == null || maid == null) {
+            return false;
+        }
+        try {
+            ItemStack rocketStack = new ItemStack(Items.f_42688_);
+            CompoundTag fireworks = new CompoundTag();
+            fireworks.m_128405_("Flight", 1);
+            rocketStack.m_41784_().m_128365_("Fireworks", fireworks);
+            net.minecraft.world.entity.projectile.FireworkRocketEntity rocket =
+                    new net.minecraft.world.entity.projectile.FireworkRocketEntity(level, rocketStack, maid);
+            level.m_7967_(rocket);
+            net.minecraft.sounds.SoundEvent launch = net.minecraftforge.registries.ForgeRegistries.SOUND_EVENTS
+                    .getValue(new ResourceLocation("minecraft", "entity.firework_rocket.launch"));
+            if (launch != null) {
+                level.m_5594_(null, maid.m_20183_(), launch, net.minecraft.sounds.SoundSource.NEUTRAL, 1.0f, 1.0f);
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
