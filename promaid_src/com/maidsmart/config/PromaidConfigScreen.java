@@ -2827,6 +2827,15 @@ public class PromaidConfigScreen extends Screen {
                     return true;
                 },
                 "战斗模式分类表（默认空 = 全部按内置规则参与）：一行一条「任务UID=近战/远程/不参与」，逗号分隔。写「不参与」= 该模式自主参战与战中换战术都不再选它；写近战/远程 = 分类以表为准、且不被上面那条「模组优先让位」挤掉。UID 用 /maid_smart combat modes 抄（手册「主动参战」章有完整说明）"));
+        // v1.2.4 实测六百二十五：法术装备忽略表（默认排掉拔刀剑/弹幕这类"本身就是武器"的 provider）
+        this.rows.add(new TextRow("法术装备忽略表",
+                com.maidsmart.combat.MaidSpellCompat.spellGearIgnorePretty(),
+                s -> {
+                    MaidSmartConfig.COMBAT_SPELL_GEAR_IGNORE.set(
+                            com.maidsmart.combat.MaidSpellCompat.normalizeIgnoreList(s));
+                    return true;
+                },
+                "法术装备忽略表（默认 slashblade, youkaishomecoming）：万法皆通靠各前置附属的 provider 判「这件算不算法术书」，而其中两个认的「法术装备」本身就是武器——拔刀剑（slashblade）与弹幕/激光/符卡（youkaishomecoming），它们在 TLM 侧都已有专属战斗模式。列在这里 = 这些物品不再让她算「会用法术」，只拿了拔刀剑的女仆不会被自主战斗切进法术模式；写 modId、逗号分隔，留空 = 旧口径"));
         // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
         this.rows.add(new NumRow("近战偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT, s), "近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）"));

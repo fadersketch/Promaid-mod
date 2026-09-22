@@ -173,6 +173,7 @@
   "config.promaid.combat.autoSwitchAllowModTasks": "模组任务参与自主切换（默认开）：模组攻击任务在女仆持有非原版物品时才参与；关 = 自主战斗只用原版任务",
   "config.promaid.combat.taskModes": "战斗模式分类表（一行一条 任务UID=近战/远程/不参与；留空 = 全部按内置规则参与）",
   "config.promaid.combat.vanillaYieldToMod": "模组任务优先让位（默认开）：池里有模组专属任务时原版通用五件套整体让位；关 = 纯按权重随机",
+  "config.promaid.combat.spellGearIgnore": "法术装备忽略表（默认 slashblade, youkaishomecoming）：这两个 provider 认的「法术装备」本身就是武器（拔刀剑 / 弹幕·激光·符卡），不再算她会用法术；留空 = 旧口径",
   "config.promaid.combat.autoResurrectEnable": "女仆自动复活",
   "config.promaid.combat.autoResurrectDelaySeconds": "复活延迟（秒）",
   "config.promaid.combat.autoResurrectHealthRatio": "复活血量比",

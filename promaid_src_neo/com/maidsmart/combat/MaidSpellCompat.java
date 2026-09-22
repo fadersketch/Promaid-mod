@@ -30,7 +30,10 @@ import java.util.List;
  * 【判据口径】
  * - "法术装备" = 附属自己认的法术书/法器（`ISpellBookProvider.isSpellBook`：铁魔法的法术书、
  *   新生魔艺的法器…）——法术本体就存在这些物品里（铁魔法一本法术书 = 一个法术），
- *   所以"随身有法术装备"就是"学过法术、用得出法术"。
+ *   所以"随身有法术装备"就是"学过法术、用得出法术"；**v1.2.4 实测六百二十五 起再排掉
+ *   两个 provider**（`slashblade` 认拔刀剑、`youkaishomecoming` 认弹幕/激光/符卡——它们
+ *   本身就是武器、且各自已有专属战斗模式），见 {@link #spellProviderOf} 与配置
+ *   `combat.spellGearIgnore`。
  * - "会不会用法术" = 主手/副手/背包/饰品栏里有法术装备，或者附属自己的数据里已经有她的
  *   法术书（`MaidIronsSpellData/MaidArsNouveauSpellData.get(uuid).getSpellBooks()` 非空，
  *   覆盖附属收进"末影口袋"等特殊位置的情况）。
@@ -105,20 +108,43 @@ public final class MaidSpellCompat {
 
     /**
      * 这件物品是不是"法术装备"（附属各 provider 认的法术书/法器）。
-     * 附属没装 / 反射失败一律 false——调用方据此把它排除在切换列表外。
+     * 附属没装 / 反射失败 / 命中的 provider 在忽略表里 → false。
      */
     public static boolean isSpellWeapon(ItemStack stack) {
+        return spellProviderOf(stack) != null;
+    }
+
+    /**
+     * 这件物品命中了哪个附属 provider 的"法术装备"判定（没命中 / 被忽略 → null）。
+     *
+     * 【忽略表，v1.2.4 实测六百二十五】为什么不能"附属说什么就是什么"：附属把"法术装备"
+     * 的定义交给各前置附属自己的 provider，而其中两个 provider 认的"法术装备"
+     * **本身就是武器/投掷物**，且它们在 TLM 侧各自已有**专属战斗模式**（javap 反编译实证）：
+     * - {@code slashblade}：{@code isSpellBook} = {@code item instanceof
+     *   mods.flammpfeil.slashblade.item.ItemSlashBlade} → 拔刀剑；
+     * - {@code youkaishomecoming}：{@code instanceof DanmakuItem/LaserItem} 或附属自己的
+     *   符卡 → 弹幕/激光/符卡（TLM 原版任务里就有 {@code touhou_little_maid:danmaku_attack}）。
+     * 于是"背包里有把拔刀剑"＝"她带着法术书"：法术任务进候选池 →「模组任务优先让位」
+     * 再把原版任务挤掉 → 玩家看到的正是"我明明只给了她一把刀，她怎么自己切去法术了"
+     * （实测三百七十九 同款反馈再临）。默认把这两个 provider 排除在"法术装备"之外；
+     * 想还原旧口径就把 id 从配置 {@code combat.spellGearIgnore} 里删掉。
+     */
+    private static String spellProviderOf(ItemStack stack) {
         if (stack == null || stack.isEmpty() || !resolve()) {
-            return false;
+            return null;
         }
+        java.util.Set<String> ignore = ignoreProviders();
         try {
             Object mods = mLoadedMods.invoke(null);
             if (!(mods instanceof List<?> list)) {
-                return false;
+                return null;
             }
             for (Object id : list) {
                 if (!(id instanceof String s)) {
                     continue;
+                }
+                if (ignore.contains(s.trim().toLowerCase(java.util.Locale.ROOT))) {
+                    continue; // 忽略表里的 provider：它认的"法术装备"本身是武器
                 }
                 Object provider = mGetProvider.invoke(null, s);
                 if (provider == null) {
@@ -126,38 +152,135 @@ public final class MaidSpellCompat {
                 }
                 Object r = mIsSpellBook.invoke(provider, stack);
                 if (r instanceof Boolean b && b) {
-                    return true;
+                    return s;
                 }
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        return null;
+    }
+
+    /**
+     * 忽略表（配置 {@code combat.spellGearIgnore}，默认 {@code slashblade, youkaishomecoming}）。
+     * 与 {@link CombatModeTable} 同款缓存：缓存键就是配置内容本身（{@code equals} 比内容），
+     * 面板/toml 一改自动重建，不需要失效逻辑；配置还没建好（极早期调用）→ 按默认两条处理。
+     */
+    private static volatile java.util.List<? extends String> cachedIgnoreRaw = null;
+    private static volatile java.util.Set<String> cachedIgnore = java.util.Set.of();
+
+    private static java.util.Set<String> ignoreProviders() {
+        java.util.List<? extends String> raw;
+        try {
+            raw = com.maidsmart.config.MaidSmartConfig.COMBAT_SPELL_GEAR_IGNORE.get();
+        } catch (Throwable ignored) {
+            return java.util.Set.of("slashblade", "youkaishomecoming");
+        }
+        if (raw != null && raw.equals(cachedIgnoreRaw)) {
+            return cachedIgnore;
+        }
+        java.util.Set<String> out = new java.util.TreeSet<>();
+        if (raw != null) {
+            for (String s : raw) {
+                out.addAll(splitIgnore(s));
+            }
+        }
+        cachedIgnoreRaw = raw;
+        cachedIgnore = out;
+        return out;
+    }
+
+    /** 一整串（逗号/顿号/空白分隔，大小写不计）→ provider id 列表；空 token 丢掉 */
+    private static java.util.List<String> splitIgnore(String raw) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        if (raw == null) {
+            return out;
+        }
+        for (String part : raw.split("[,，、\\s]+")) {
+            String id = part.trim().toLowerCase(java.util.Locale.ROOT);
+            if (!id.isEmpty() && !out.contains(id)) {
+                out.add(id);
+            }
+        }
+        return out;
+    }
+
+    /** 面板显示用：忽略表的规范写法（按字母序、逗号分隔） */
+    public static String spellGearIgnorePretty() {
+        return String.join(", ", ignoreProviders());
+    }
+
+    /** 面板输入框的一整串 → 规范列表（任何非空 token 都收；空串 = 清空忽略表 = 旧口径） */
+    public static java.util.List<String> normalizeIgnoreList(String text) {
+        return splitIgnore(text);
     }
 
     /** 女仆身上（主手/副手/背包/饰品栏）有没有法术装备 */
     public static boolean hasSpellGear(EntityMaid maid) {
+        return gearDetail(maid) != null;
+    }
+
+    /**
+     * 诊断用：让"法术闸门"放行的**第一件**东西，写成 {@code provider:物品注册名}
+     * （{@code addon-data} = 随身没有、但附属数据里已经存着她的法术书）；什么都没放行 → null。
+     * 只在 latest.log 的 {@code combat pools} 那条里露面——专门用来回答
+     * "她明明没有法术书，为什么还会被切去法术模式"（答案会是比如
+     * {@code slashblade:slashblade:slashblade}）。
+     */
+    public static String spellGearDetail(EntityMaid maid) {
+        String hit = gearDetail(maid);
+        if (hit != null) {
+            return hit;
+        }
         if (maid == null || !isLoaded()) {
-            return false;
+            return null;
+        }
+        return addonDataHasSpellBook(maid) ? "addon-data" : null;
+    }
+
+    /** 她身上第一件命中"法术装备"的东西（provider:物品）；没有 → null */
+    private static String gearDetail(EntityMaid maid) {
+        if (maid == null || !isLoaded()) {
+            return null;
         }
         try {
-            if (isSpellWeapon(maid.getMainHandItem()) || isSpellWeapon(maid.getOffhandItem())) {
-                return true;
+            String hit = weaponDetail(maid.getMainHandItem());
+            if (hit != null) {
+                return hit;
+            }
+            hit = weaponDetail(maid.getOffhandItem());
+            if (hit != null) {
+                return hit;
             }
             var inv = maid.getMaidInv();
             for (int i = 0; i < inv.getSlots(); i++) {
-                if (isSpellWeapon(inv.getStackInSlot(i))) {
-                    return true;
+                hit = weaponDetail(inv.getStackInSlot(i));
+                if (hit != null) {
+                    return hit;
                 }
             }
             var bauble = maid.getMaidBauble();
             for (int i = 0; i < bauble.getSlots(); i++) {
-                if (isSpellWeapon(bauble.getStackInSlot(i))) {
-                    return true;
+                hit = weaponDetail(bauble.getStackInSlot(i));
+                if (hit != null) {
+                    return hit;
                 }
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        return null;
+    }
+
+    /** 单件物品 → {@code provider:物品注册名}（没命中 / 被忽略表排除 → null） */
+    private static String weaponDetail(ItemStack stack) {
+        String provider = spellProviderOf(stack);
+        if (provider == null) {
+            return null;
+        }
+        try {
+            return provider + ":" + net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(stack.getItem());
+        } catch (Throwable ignored) {
+            return provider + ":?";
+        }
     }
 
     /**

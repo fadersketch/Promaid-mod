@@ -224,9 +224,16 @@ public final class AutoCombatPools {
                 for (IMaidTask t : rangedPool) {
                     rp.append(t.getUid()).append(',');
                 }
+                // v1.2.4 实测六百二十五：池里有法术任务时，把"是哪件东西让她算会用法术"
+                // 一并打出来——专门回答"她明明没有法术书，为什么会被切去法术"。
+                String gear = "-";
+                if (containsSpellTask(meleePool) || containsSpellTask(rangedPool)) {
+                    String d = com.maidsmart.combat.MaidSpellCompat.spellGearDetail(maid);
+                    gear = d == null ? "无" : d;
+                }
                 com.mojang.logging.LogUtils.getLogger().info(
-                        "combat pools: maid={} melee=[{}] ranged=[{}]",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp);
+                        "combat pools: maid={} melee=[{}] ranged=[{}] spellGear={}",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp, gear);
             }
         } catch (Throwable ignored) {
         }
@@ -256,6 +263,16 @@ public final class AutoCombatPools {
                 weights.remove(i);
             }
         }
+    }
+
+    /** 池里有没有法术任务（万法皆通）——诊断用，见 buildPools 里 combat pools 那条日志 */
+    private static boolean containsSpellTask(List<IMaidTask> pool) {
+        for (IMaidTask t : pool) {
+            if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     static final double JUMP_UNREACHABLE_DIST = 6.0;
