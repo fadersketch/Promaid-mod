@@ -185,7 +185,7 @@ public final class MaidPlanting {
             int handCount = 0;
             int scanCount = 0;
             try {
-                net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     if (isSaplingItem(inv.getStackInSlot(i))) {
                         bagCount += inv.getStackInSlot(i).m_41613_();
@@ -214,7 +214,7 @@ public final class MaidPlanting {
                 sapling = handSlot == 0 ? maid.m_21205_() : maid.m_21206_();
             } else {
                 try {
-                    net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                    net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
                         if (isSaplingItem(stack)) {
@@ -229,7 +229,7 @@ public final class MaidPlanting {
             if (sapling == null) {
                 pickupNearbySaplings(level, maid, maid.m_20183_());
                 try {
-                    net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                    net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
                         if (isSaplingItem(stack)) {
@@ -296,7 +296,7 @@ public final class MaidPlanting {
                 }
             }
             if (bagSlot >= 0) {
-                ItemStack taken = maid.getMaidInv().extractItem(bagSlot, 1, false);
+                ItemStack taken = maid.getAvailableBackpackInv().extractItem(bagSlot, 1, false);
                 if (!taken.m_41619_()) {
                     return true;
                 }
@@ -313,7 +313,7 @@ public final class MaidPlanting {
                     return true;
                 }
             }
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (!isSaplingItem(inv.getStackInSlot(i))) {
                     continue;
@@ -574,7 +574,7 @@ public final class MaidPlanting {
             if (!off.m_41619_() && off.m_41720_() == boneMeal) {
                 boneStack = off;
             } else {
-                net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack st = inv.getStackInSlot(i);
                     if (!st.m_41619_() && st.m_41720_() == boneMeal) {
@@ -589,7 +589,7 @@ public final class MaidPlanting {
             }
             ItemStack pulled = boneStack == off
                     ? hands.extractItem(1, boneStack.m_41613_(), false)
-                    : maid.getMaidInv().extractItem(boneSlot, boneStack.m_41613_(), false);
+                    : maid.getAvailableBackpackInv().extractItem(boneSlot, boneStack.m_41613_(), false);
             if (pulled.m_41619_()) {
                 return false;
             }
@@ -600,7 +600,7 @@ public final class MaidPlanting {
                 // 换手存续中（原物品在副手）：主手是第三方顶进来的工具 → 收背包
                 if (!curMain.m_41619_()) {
                     ItemStack left = net.minecraftforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), curMain, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), curMain, false);
                     if (!left.m_41619_()) {
                         maid.m_5552_(left, 0.5f);
                     }
@@ -612,7 +612,7 @@ public final class MaidPlanting {
                 hands.setStackInSlot(1, ItemStack.f_41583_);
                 if (!offOld.m_41619_()) {
                     ItemStack left = net.minecraftforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), offOld, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), offOld, false);
                     if (!left.m_41619_()) {
                         maid.m_5552_(left, 0.5f);
                     }
@@ -664,7 +664,7 @@ public final class MaidPlanting {
                 // 手上还是我们的骨粉 → 收回背包（满则掉在脚下），防丢
                 hands.setStackInSlot(0, ItemStack.f_41583_);
                 ItemStack left = net.minecraftforge.items.ItemHandlerHelper
-                        .insertItemStacked(maid.getMaidInv(), cur, false);
+                        .insertItemStacked(maid.getAvailableBackpackInv(), cur, false);
                 if (!left.m_41619_()) {
                     maid.m_5552_(left, 0.5f);
                 }
@@ -677,7 +677,7 @@ public final class MaidPlanting {
                     hands.setStackInSlot(0, held);
                 } else {
                     ItemStack left = net.minecraftforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), held, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), held, false);
                     if (!left.m_41619_()) {
                         maid.m_5552_(left, 0.5f);
                     }

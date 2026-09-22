@@ -2160,8 +2160,22 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return null;
         }
         // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
-        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
-                maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);
+        // ---- v1.2.3-dbg 探针：取料前后真实库存对照（查完删掉） ----
+        net.minecraftforge.items.IItemHandler __inv = maid.getAvailableBackpackInv();
+        net.minecraftforge.items.IItemHandler __hands = maid.getHandsInvWrapper();
+        String __c0 = com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
+                + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]";
+        Item __took = com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(__inv, __hands, null, null,
+                com.maidsmart.combat.BombPose.offhandBorrowed(maid));
+        com.maidsmart.tool.MaidProbe.take("maid." + maid.m_20148_(), "wood",
+                com.maidsmart.tool.MaidBuildBlockFilter.probeItem(__took),
+                com.maidsmart.combat.BombPose.isShowing(maid),
+                com.maidsmart.tool.MaidBuildBlockFilter.probeStack(
+                        com.maidsmart.combat.BombPose.savedOffhand(maid)),
+                __c0,
+                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
+                        + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]");
+        return __took;
     }
 
     @Override
@@ -2902,7 +2916,7 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
      *  v1.5.88：保留量从配置面板读取（mine.junkKeep） */
     private void maybeDropJunk(EntityMaid maid) {
         int keep = com.maidsmart.config.MaidSmartConfig.WOOD_JUNK_KEEP.get();
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         java.util.Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);

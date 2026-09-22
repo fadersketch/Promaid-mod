@@ -371,7 +371,7 @@ public final class BlueprintMachineFinish {
             }
         }
         // 女仆背包：取 1 辆矿车
-        net.minecraft.world.item.ItemStack taken = BlueprintMaterials.extractExact(maid.getMaidInv(), minecart, 1);
+        net.minecraft.world.item.ItemStack taken = BlueprintMaterials.extractExact(maid.getAvailableBackpackInv(), minecart, 1);
         return !taken.isEmpty();
     }
 

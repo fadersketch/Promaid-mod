@@ -163,7 +163,7 @@ public final class BombItems {
                     return true;
                 }
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (matchAny(inv.getStackInSlot(i), ids)) {
                     return true;
@@ -205,13 +205,22 @@ public final class BombItems {
         }
         try {
             IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
+            // v1.2.4【issue #19 同族·战斗放置】动作表现借走副手那 10 tick 里，副手上是**展示件**
+            // （复制品，见 BombPose.show）——把它当材料等于"免费放一块"。而这条链的底座是
+            // **逐格回收真物品**的（BombPlacement.removePlaced → returnBlockItem，按方块 id 合成
+            // 一件还她），一进一出就是净产出，与搭路刷物品同一形状。
+            // 所以取材跳过副手；没被借走时照旧（玩家把方块挂她副手是正常用法）。
+            boolean borrowed = BombPose.offhandBorrowed(maid);
             for (int i = 0; i < hands.getSlots(); i++) {
+                if (borrowed && i == com.maidsmart.tool.MaidBuildBlockFilter.OFFHAND_HAND_SLOT) {
+                    continue;
+                }
                 ItemStack s = hands.getStackInSlot(i);
                 if (match.test(s)) {
                     return dryRun ? s : hands.extractItem(i, 1, false);
                 }
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (match.test(s)) {
@@ -300,7 +309,7 @@ public final class BombItems {
         }
         try {
             IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             ItemStack used = useIgniterIn(hands, maid, BombItems::isFlintLike);
             if (used.isEmpty()) {
                 used = useIgniterIn(inv, maid, BombItems::isFlintLike);

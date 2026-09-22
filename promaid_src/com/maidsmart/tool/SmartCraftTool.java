@@ -117,7 +117,7 @@ public class SmartCraftTool implements ITool<SmartCraftTool.Result> {
         List<Ingredient> ings = recipe.m_7527_(); // getIngredients
         List<ItemStack> used = new ArrayList<>();
         StringBuilder missing = new StringBuilder();
-        net.minecraftforge.items.IItemHandler maidInv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler maidInv = maid.getAvailableBackpackInv();
         for (Ingredient ing : ings) {
             // v1.5.190b：有序配方 getIngredients() 返回 3×3 共 9 格，空槽是
             // Ingredient.EMPTY（getItems 为空数组）——必须跳过，否则会把空槽

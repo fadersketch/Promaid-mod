@@ -365,7 +365,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      * 燃料槽 4 始终优先补烈焰粉；槽3 已有材料时不动（酿造台自动续酿消耗）。
      */
     private void processStand(EntityMaid maid, Container stand) {
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         com.maidsmart.brew.BrewConfig cfg = com.maidsmart.brew.BrewConfig.load(maid);
 
         // v1.1.0 实测三百二十四：酿造诊断日志（每处理周期一条，节流 5 秒/女仆）——
@@ -465,7 +465,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             StringBuilder invS = new StringBuilder();
             try {
                 this.appendPotions(invS, maid.getHandsInvWrapper());
-                this.appendPotions(invS, maid.getMaidInv());
+                this.appendPotions(invS, maid.getAvailableBackpackInv());
             } catch (Throwable ignored) {
             }
             com.maidsmart.tool.PromaidLog.log("酿造",
@@ -574,7 +574,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     /** 收走槽位药水进女仆背包（满则退回槽位） */
     private void takeIntoMaid(EntityMaid maid, Container stand, int slot) {
         ItemStack taken = stand.m_8016_(slot);
-        ItemStack left = ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), taken, false);
+        ItemStack left = ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), taken, false);
         if (!left.m_41619_()) {
             stand.m_6836_(slot, left);
         } else {
@@ -634,7 +634,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (chain == null || chain.isEmpty()) {
             return; // 无链可达：不下料
         }
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         for (int i = 0; i <= 2; i++) {
             ItemStack s = stand.m_8020_(i);
             if (s.m_41619_()) {
@@ -714,7 +714,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
 
     /** 批量模式：按槽0 阶段补水瓶/疣/正向材料 + 配置的强化/形态 */
     private void processBatch(EntityMaid maid, Container stand, com.maidsmart.brew.BrewConfig cfg) {
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         for (int i = 0; i <= 2; i++) {
             ItemStack s = stand.m_8020_(i);
             if (s.m_41619_()) {
@@ -780,7 +780,7 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (!stand.m_8020_(3).m_41619_()) {
             return;
         }
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         int form = this.formOf(s);
         // 1. 强化（饮用/喷溅/滞留均可强化——原版配方表支持喷溅/滞留瓶加红石/萤石）
         if (cfg.enhance != com.maidsmart.brew.BrewConfig.ENHANCE_NONE) {

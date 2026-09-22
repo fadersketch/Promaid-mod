@@ -123,7 +123,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         // 没有才退而求其次；放置用对应火把自己的方块而不是写死 f_50081_）
         // v1.1.0 实测二百三十一（审计：主副手识别）：背包没有则用主手/副手拿的
         int slot = findTorch(maid);
-        net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         ItemStack torch;
         boolean fromHands = false;
         if (slot >= 0) {
@@ -210,7 +210,7 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
      */
     private static int findTorch(EntityMaid maid) {
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (String torchId : TORCH_IDS) {
                 Item torchItem = ForgeRegistries.ITEMS.getValue(ResourceLocation.parse(torchId));
                 if (torchItem == null) {

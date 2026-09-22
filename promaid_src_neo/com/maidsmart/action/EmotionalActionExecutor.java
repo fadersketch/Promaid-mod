@@ -120,7 +120,7 @@ public final class EmotionalActionExecutor {
         if (foodLevel >= com.maidsmart.config.MaidSmartConfig.AID_FOOD_THRESHOLD.get()) {
             return false;
         }
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         double bestSat = -1.0;
         // v1.5.299：手持食物参与选优（h=0 主手 getMainHandItem，h=1 副手 getOffhandItem；
@@ -272,7 +272,7 @@ public final class EmotionalActionExecutor {
                 net.minecraft.world.item.Item bottle = net.minecraft.core.registries.BuiltInRegistries.ITEM
                         .get(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
                 if (bottle != null) {
-                    ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), new ItemStack(bottle), false);
+                    ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), new ItemStack(bottle), false);
                 }
             }
             return true;

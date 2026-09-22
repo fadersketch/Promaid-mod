@@ -591,7 +591,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         }
         try {
             java.util.function.Predicate<ItemStack> supported = pwi.m_6437_();
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && s.m_41720_() instanceof ArrowItem && supported.test(s)) {
@@ -601,7 +601,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         } catch (Throwable ignored) {
         }
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && s.m_41720_() instanceof ArrowItem) {

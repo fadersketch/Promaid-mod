@@ -161,18 +161,18 @@ public final class PlacedBlockTracker {
                 // 实测四十七：绑定女仆本人站上方块 → 恒刷新（她挖矿/伐木的"挖矿中"
                 // 标记在空闲扫描期会短暂移除，但脚下还是自己的垫块——不刷新就塌）。
                 // 谓词 stoodOnCheck 覆盖其他场景（同任务姐妹借踩/搭路任意踩）。
-                boolean ownerOn = false;
                 EntityMaid owner = findMaid(server, mark.maidUuid());
-                if (owner != null) {
-                    BlockPos feet = owner.blockPosition();
-                    if (feet.immutable().equals(pos) || feet.offset(0, -1, 0).immutable().equals(pos)) {
-                        ownerOn = true;
-                    }
-                }
+                boolean ownerOn = standsOn(owner, pos);
                 // 女仆站在上面 → 刷新寿命（防脚下塌陷；实测十八同款）
                 // 实测四百二十二：搭路实例额外——绑定女仆的【主人】踩在这块上也刷新
                 //（主人踩着桥走，每踩一块就把该块 CD 补满；主人不走远桥就不会断）
-                if (ownerOn || masterOnBlock(owner, level, pos) || stoodOnCheck.test(pos)) {
+                // v1.2.4【主人同款刷新】需求原文："将主人站在方块上采用和女仆同款的刷新机制。"
+                // 旧版主人只有"脚下那一格"这一条（masterOnBlock），站的位置略偏 / 站在
+                // 1 格宽桥的边缘 / 刚走开半格，正在踩的那块就不再被刷新 → 寿命照走，
+                // 站久了自己脚下的桥烂掉（反馈："似乎只是重置了一次时间，站太久还是会掉下去"）。
+                // 现在主人与女仆共用同一套几何：站上去【或靠近刷新带内】都刷新。
+                if (ownerOn || masterOnBlock(owner, level, pos) || masterNearBlock(owner, level, pos)
+                        || stoodOnCheck.test(pos)) {
                     e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
@@ -181,7 +181,7 @@ public final class PlacedBlockTracker {
                 // 悬在附近半空 → 脚下抽空坠落摔死）："站上面才延后"太窄——被自保/上浮/
                 // 传送扰动离开的刹那她很可能还依赖这块桥。绑定女仆靠近（水平 ≤4 格、
                 // 垂直差 ≤6 格）一律刷新寿命，等她真正走远（>4 格或高度差 >6）再回收。
-                if (owner != null && maidNearBlock(owner, pos)) {
+                if (nearBlock(owner, pos)) {
                     e.setValue(new Mark(lifetime, mark.blockId(), mark.maidUuid()));
                     continue;
                 }
@@ -196,6 +196,20 @@ public final class PlacedBlockTracker {
                 }
                 // 到期：销毁 + 强制回收进绑定女仆背包（跨维度；背包满落地）
                 it.remove();
+                // v1.2.3-dbg 探针：这块到期时主人站在哪（查完删掉）
+                try {
+                    net.minecraft.world.entity.LivingEntity __m = owner == null ? null : owner.getOwner();
+                    if (__m != null) {
+                        com.maidsmart.tool.MaidProbe.expireUnderMaster(
+                                "maid." + owner.getUUID(), pos.getX() + "," + pos.getY() + "," + pos.getZ(), mark.blockId(),
+                                __m.getX() - (pos.getX() + 0.5),
+                                __m.getY() - (pos.getY() + 0.5),
+                                __m.getZ() - (pos.getZ() + 0.5),
+                                this.masterOnBlock(owner, level, pos), this.refreshOnOwnerStand,
+                                String.valueOf(__m.getUUID()));
+                    }
+                } catch (Throwable ignored) {
+                }
                 destroyAndReclaim(level, pos, mark, owner);
             }
         }
@@ -228,38 +242,78 @@ public final class PlacedBlockTracker {
         return null;
     }
 
-    /** 实测二百零七：女仆是否依赖该搭块——水平 ≤ 刷新半径、垂直差 ≤ 垂直带
-     *  （她站在上面/刚离开/悬在附近都算；真正走远或高度差拉开才放手回收）。
+    /**
+     * v1.2.4【女仆与主人共用】"正站在 pos 上"——脚下那一格就是 pos，或者脚在 pos 上面一格
+     * （站在这块方块顶上）。旧版女仆/主人各写了一份同样的三行，现在合成一条，
+     * 免得下次只改一边（本次的问题就出在两条判定不同款）。
+     */
+    private static boolean standsOn(net.minecraft.world.entity.Entity e, BlockPos pos) {
+        if (e == null) {
+            return false;
+        }
+        BlockPos feet = e.blockPosition();
+        return feet.equals(pos) || feet.below().equals(pos);
+    }
+
+    /** 实测二百零七：是否依赖该搭块——水平 ≤ 刷新半径、垂直差 ≤ 垂直带
+     *  （站在上面/刚离开/悬在附近都算；真正走远或高度差拉开才放手回收）。
      *  实测三百七十七：半径参数化——桥类实例 4.0，战斗方块实例 0.5（同柱）。
-     *  实测三百八十八：垂直带参数化——战斗塔 12.0（覆盖满配 12 格塔） */
-    private boolean maidNearBlock(EntityMaid owner, BlockPos pos) {
-        double dx = owner.getX() - (pos.getX() + 0.5);
-        double dz = owner.getZ() - (pos.getZ() + 0.5);
-        double dy = owner.getY() - (pos.getY() + 0.5);
+     *  实测三百八十八：垂直带参数化——战斗塔 12.0（覆盖满配 12 格塔）。
+     *  v1.2.4：入参从女仆放宽到任意活体——主人走的是同一条几何（blockedAtOwner 同款口径）。 */
+    private boolean nearBlock(net.minecraft.world.entity.Entity e, BlockPos pos) {
+        if (e == null) {
+            return false;
+        }
+        double dx = e.getX() - (pos.getX() + 0.5);
+        double dz = e.getZ() - (pos.getZ() + 0.5);
+        double dy = e.getY() - (pos.getY() + 0.5);
         return dx * dx + dz * dz <= this.nearRadiusSq && Math.abs(dy) <= this.nearVertBand;
     }
 
     /**
      * 实测四百二十二【搭路 CD·主人踩踏也重置】：绑定女仆的【主人】是否正踩在该方块上。
-     * 仅在 refreshOnOwnerStand 的实例（搭路）生效；主人踩在桥上/站在桥体同格都算。
+     * 仅在 refreshOnOwnerStand 的实例（四套全部开启）生效。
      * 女仆离线（owner == null）时本判定必然 false——但那种情况方块本来就暂停倒计时。
      * 同维度才判（防另一维度的坐标巧合）。
      */
     private boolean masterOnBlock(EntityMaid maid, ServerLevel level, BlockPos pos) {
+        net.minecraft.world.entity.LivingEntity master = masterOf(maid, level);
+        return master != null && standsOn(master, pos);
+    }
+
+    /**
+     * v1.2.4【主人同款：靠近也刷新】——主人走进刷新带内（与女仆同一个 nearRadius/vertBand）
+     * 就给这块续命，而不是只认"脚下那一格"。
+     *
+     * 需求原文："将主人站在方块上采用和女仆同款的刷新机制。"
+     * 女仆那一侧一直是「站在上面 **或** 靠近半径内」两条（实测二百零七防摔口径），
+     * 主人只有前一条：他站在 1 格宽桥的边缘、或刚抬脚走到下一格、或站在桥头略偏的位置时，
+     * 正在承重的那块已经不在"脚下/脚下一格"的严格口径里 → 计时继续走 → 3 秒后
+     * 脚下抽空（反馈："站的时间太久还是会掉下去"）。同款之后，主人走在桥上 = 沿路的
+     * 桥体一路续命，真正走远（>半径或高度差超出）才开始回收。
+     *
+     * 只对 refreshOnOwnerStand 的实例生效；维度/存活/主人存在性与 masterOnBlock 同一套前置。
+     */
+    private boolean masterNearBlock(EntityMaid maid, ServerLevel level, BlockPos pos) {
+        net.minecraft.world.entity.LivingEntity master = masterOf(maid, level);
+        return master != null && nearBlock(master, pos);
+    }
+
+    /** 主人解析（两处共用）：refreshOnOwnerStand 关 / 女仆不在 / 主人不在同维度 → null */
+    private net.minecraft.world.entity.LivingEntity masterOf(EntityMaid maid, ServerLevel level) {
         if (!this.refreshOnOwnerStand || maid == null) {
-            return false;
+            return null;
         }
         net.minecraft.world.entity.LivingEntity master;
         try {
             master = maid.getOwner(); // 绑定女仆的主人（玩家）
         } catch (Throwable ignored) {
-            return false;
+            return null;
         }
         if (master == null || !master.isAlive() || master.level() != level) {
-            return false;
+            return null;
         }
-        BlockPos feet = master.blockPosition();
-        return feet.equals(pos) || feet.below().equals(pos);
+        return master;
     }
 
     /**
@@ -279,11 +333,17 @@ public final class PlacedBlockTracker {
         }
         level.levelEvent(2001, pos, Block.getId(state));
         java.util.List<ItemStack> drops = reclaimDrops(state, level, pos);
+        // ---- v1.2.3-dbg 探针（查完删掉） ----
+        String __probeKey = owner == null ? "-" : ("maid." + owner.getUUID());
+        String __probeC0 = owner == null ? "-" : com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(owner.getAvailableBackpackInv(), owner.getHandsInvWrapper());
         boolean handed = false;
         if (owner != null && !drops.isEmpty()) {
             try {
                 // 跨维度回收：直接操作女仆背包（IItemHandler 与位置无关）
-                IItemHandler inv = owner.getMaidInv();
+                // v1.2.4【落点=她真正装得下的格子】——旧版塞 getMaidInv()（原始 36 格）：
+                // 她的前 12/24 格一满，回收的方块就写进"背包等级之外"的格子，玩家界面里
+                // 看不见（实测：小背包女仆收的 20 个铜锭躺在第 12 格）。现在按背包等级截。
+                IItemHandler inv = owner.getAvailableBackpackInv();
                 for (ItemStack stack : drops) {
                     if (stack.isEmpty()) {
                         continue;
@@ -304,6 +364,9 @@ public final class PlacedBlockTracker {
                 Block.popResource(level, pos, stack);
             }
         }
+        com.maidsmart.tool.MaidProbe.reclaim(__probeKey, pos.getX() + "," + pos.getY() + "," + pos.getZ(),
+                mark.blockId(), handed, drops.size(), __probeC0,
+                owner == null ? "-" : com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(owner.getAvailableBackpackInv(), owner.getHandsInvWrapper()));
         level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
     }
 

@@ -66,7 +66,7 @@ public class SmartGiveItemTool implements ITool<SmartGiveItemTool.Result> {
         if (item == null) {
             return callback.addToolResult("Unknown item id: " + result.item(), toolId);
         }
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.m_41619_() || stack.m_41720_() != item) {

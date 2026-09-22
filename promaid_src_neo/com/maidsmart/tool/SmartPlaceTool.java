@@ -108,7 +108,7 @@ public class SmartPlaceTool implements ITool<SmartPlaceTool.Result> {
             return callback.addToolResult("这不是一个可放置的方块：" + blockStr, toolId);
         }
         // 背包里找这种方块（只消耗实际有的）
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         int slot = -1;
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);

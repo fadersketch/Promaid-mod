@@ -845,7 +845,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (empty < 0) {
                 return; // 饰品栏满了 → 不放
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.m_41619_() || !s.m_150930_(net.minecraft.world.item.Items.f_42747_)) {
@@ -966,7 +966,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** 从背包取 1 根箭（普通/药水/光灵）；没有返回空栈 */
     private ItemStack takeArrow(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
             if (s.m_41619_() || !(s.m_41720_() instanceof net.minecraft.world.item.ArrowItem)) {
@@ -1772,7 +1772,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** 吃背包里的治疗食物（真实进食：食物效果+声音+粒子） */
     private boolean eatHealingFood(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_()) {
@@ -2102,7 +2102,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (isWaterBucketItem(maid.m_21206_())) {
             return true;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (isWaterBucketItem(inv.getStackInSlot(i))) {
                 return true;
@@ -2358,7 +2358,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     boolean hasPearl = false;
                     boolean hasFirePot = false;
                     int buildBlocks = 0;
-                    net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+                    net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack s = inv.getStackInSlot(i);
                         if (s.m_41619_()) {
@@ -2717,7 +2717,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (this.pearlCooldown > 0) {
             return false;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         net.minecraft.world.item.Item pearlItem = ForgeRegistries.ITEMS
                 .getValue(ResourceLocation.parse("minecraft:ender_pearl"));
         int slot = -1;
@@ -2864,7 +2864,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!off.m_41619_() && off.m_41720_() == net.minecraft.world.item.Items.f_42747_) {
                 return true;
             }
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && s.m_41720_() == net.minecraft.world.item.Items.f_42747_) {
@@ -2889,7 +2889,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  8 分钟抗火。背包无饮用型抗火返回 false */
     private boolean drinkFireResistPotion(EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
@@ -2921,7 +2921,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  实体（含自己）施加抗火药水效果，与滞留药水同机制 */
     private boolean throwFireResistPotion(EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_()) {
@@ -2981,7 +2981,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!goldenAppleReady(maid)) {
                 return false;
             }
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int slot = -1;
             boolean enchanted = false;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -3066,7 +3066,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (ext == null) {
             return false;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
             if (s.m_41619_() || s.m_41720_() != ext) {
@@ -3596,13 +3596,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private boolean hasLocalEscape(EntityMaid maid) {
         try {
             if (com.maidsmart.tool.MaidBuildBlockFilter.hasBuildBlock(
-                    com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getMaidInv()),
+                    com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getAvailableBackpackInv()),
                     maid.m_9236_(), maid.m_20183_())) {
                 return true;
             }
             net.minecraft.world.item.Item pearl = ForgeRegistries.ITEMS
                     .getValue(ResourceLocation.parse("minecraft:ender_pearl"));
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && pearl != null && s.m_41720_() == pearl) {
@@ -3639,7 +3639,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private boolean hasBuildBlock(EntityMaid maid) {
         try {
             return com.maidsmart.tool.MaidBuildBlockFilter.hasBuildBlock(
-                    com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getMaidInv()),
+                    com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getAvailableBackpackInv()),
                     maid.m_9236_(), maid.m_20183_());
         } catch (Throwable ignored) {
             return false;
@@ -3668,7 +3668,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  以后再出现"她怎么不搭"就能一眼看出判定有没有认错。 */
     private String healResourceId(EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.m_41619_()) {
@@ -3789,7 +3789,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         if (this.pearlCooldown > 0) {
             return false;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         net.minecraft.world.item.Item pearlItem = ForgeRegistries.ITEMS
                 .getValue(ResourceLocation.parse("minecraft:ender_pearl"));
         int slot = -1;
@@ -3847,7 +3847,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
 
     /** v1.5.21：喝治疗药水（Instant Health 直接回血）；没有返回 false */
     private boolean useHealingPotion(EntityMaid maid) {
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_()) {
@@ -3898,7 +3898,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         net.minecraft.world.item.Item bottle = ForgeRegistries.ITEMS
                 .getValue(ResourceLocation.parse("minecraft:glass_bottle"));
         if (bottle != null) {
-            ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), new ItemStack(bottle), false);
+            ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), new ItemStack(bottle), false);
         }
     }
 
@@ -3909,7 +3909,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private int drinkPotionWithEffect(EntityMaid maid, String effectId) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
@@ -3951,7 +3951,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private int splashPotionWithEffect(EntityMaid maid, String effectId) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_()) {
@@ -4040,7 +4040,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private boolean drinkHoneyForPoison(EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.m_41619_() || stack.m_41720_() != net.minecraft.world.item.Items.f_42787_) {
@@ -4106,7 +4106,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.281：喝牛奶桶——消耗 1 桶、清全部效果、返还空桶（原版一致） */
     private boolean drinkMilkBucket(EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             net.minecraft.world.item.Item milk = ForgeRegistries.ITEMS
                     .getValue(ResourceLocation.parse("minecraft:milk_bucket"));
             if (milk == null) {
@@ -4141,7 +4141,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         net.minecraft.world.item.Item bucket = ForgeRegistries.ITEMS
                 .getValue(ResourceLocation.parse("minecraft:bucket"));
         if (bucket != null) {
-            ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), new ItemStack(bucket), false);
+            ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), new ItemStack(bucket), false);
         }
     }
 
@@ -4157,7 +4157,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!goldenAppleReady(maid)) {
                 return false;
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             boolean enchanted = false;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -4228,7 +4228,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private int useBeneficialPotion(EntityMaid maid) {
         long nowTick = maid.m_9236_().m_46467_();
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         // v1.5.252g8：第一遍【只找饮用型】——喷溅/滞留型效果时长只有饮用型的
         // 1/2~1/4，同样一瓶药水吃滞留型纯浪费（旧版按槽位顺序取第一瓶，可能
         // 先吃到滞留型）；没有饮用型才用喷溅/滞留兜底
@@ -4357,7 +4357,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 可替换方块（草/雪片）一律不再入选（旧 isSafeBuildBlock 的本地逻辑
         // 并入工具类，本类保留壳调用）。返回 Block（自保内部用 Block 放置）。
         net.minecraft.world.item.Item item = com.maidsmart.tool.MaidBuildBlockFilter
-                .takeBuildBlock(maid.getMaidInv(), maid.m_9236_(), maid.m_20183_());
+                .takeBuildBlock(maid.getAvailableBackpackInv(), maid.m_9236_(), maid.m_20183_());
         if (item == null) {
             return null;
         }

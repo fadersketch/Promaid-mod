@@ -202,7 +202,7 @@ public final class GunCompat {
             } else if (isAmmoBox(main)) {
                 boxes.add(main);
             }
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.isEmpty()) {

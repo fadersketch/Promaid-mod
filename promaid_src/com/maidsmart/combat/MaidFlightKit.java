@@ -386,7 +386,7 @@ public final class MaidFlightKit {
             return maid.m_21205_();
         }
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && isWeaponForTask(maid, s)) {
@@ -420,7 +420,7 @@ public final class MaidFlightKit {
             if (weapon.m_41720_() instanceof net.minecraft.world.item.ProjectileWeaponItem pwi) {
                 supported = pwi.m_6437_();
             }
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             if (supported != null) {
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack s = inv.getStackInSlot(i);
@@ -779,7 +779,7 @@ public final class MaidFlightKit {
         }
         int bestBagSlot = -1;
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!isFirework(s)) {
@@ -798,7 +798,7 @@ public final class MaidFlightKit {
         }
         if (bestBagSlot >= 0) {
             try {
-                return maid.getMaidInv().extractItem(bestBagSlot, 1, false);
+                return maid.getAvailableBackpackInv().extractItem(bestBagSlot, 1, false);
             } catch (Throwable ignored) {
                 return ItemStack.f_41583_;
             }
@@ -1163,7 +1163,7 @@ public final class MaidFlightKit {
 
     private static boolean hasInBackpack(EntityMaid maid, StackFilter filter) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (filter.test(inv.getStackInSlot(i))) {
                     return true;
@@ -1177,7 +1177,7 @@ public final class MaidFlightKit {
     /** 从背包整叠取出（换装语义） */
     private static ItemStack takeFromBackpack(EntityMaid maid, StackFilter filter) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (filter.test(s)) {
@@ -1192,7 +1192,7 @@ public final class MaidFlightKit {
     /** 从背包只抽走 1 个（烟花消耗专用） */
     private static ItemStack takeOneFromBackpack(EntityMaid maid, StackFilter filter) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (filter.test(s)) {

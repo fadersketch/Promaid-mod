@@ -295,7 +295,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
-        IItemHandler maidInv = maid.getMaidInv();
+        IItemHandler maidInv = maid.getAvailableBackpackInv();
         String beName = be == null ? "null" : be.getClass().getSimpleName();
         // 1. 收取成品
         ItemStack result = furnace.getItem(2);
@@ -680,7 +680,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  （燃料是烧炉子的，不是被烧的）。 */
     private FurnaceKind pickFurnaceKind(ServerLevel level, EntityMaid maid) {
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             boolean anySmeltable = false;
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
@@ -736,7 +736,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     private boolean furnaceMatchesInv(ServerLevel level, EntityMaid maid, BlockPos pos) {
         try {
             BlockState bs = level.getBlockState(pos);
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.isEmpty()) {

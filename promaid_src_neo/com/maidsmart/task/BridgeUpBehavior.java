@@ -73,6 +73,13 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             () -> MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L, 4.0, 6.0, true);
 
     private static void track(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
+        com.maidsmart.tool.MaidProbe.place("maid." + maid.getUUID(), "bridge",
+                pos.getX() + "," + pos.getY() + "," + pos.getZ()
+                        + " dim=" + level.dimension(),
+                com.maidsmart.tool.MaidBuildBlockFilter.probeBlock(block),
+                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(
+                        maid.getAvailableBackpackInv(), maid.getHandsInvWrapper()),
+                com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, pos));
         PLACED_TRACKER.track(level, pos, block, maid);
     }
 
@@ -983,7 +990,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
      * v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选。
      */
     private static boolean hasBuildBlock(EntityMaid maid) {
-        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(
                     inv.getStackInSlot(i), null, null)) {
@@ -991,8 +998,15 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             }
         }
         // v1.1.0 实测二百三十一：手部栏也算"有方块"（手里拿的正是准备搭的）
+        // v1.2.4【issue #19】：副手正被动作表现借去展示时**不算**——那件是复制品，
+        // 取材口径已经跳开它（见 MaidBuildBlockFilter 五参重载）。这里不跟着修的话，
+        // 真料耗尽后本门禁仍被展示件骗成 true：她会一直"试试看→取不到料→报缺料"。
+        boolean borrowed = com.maidsmart.combat.BombPose.offhandBorrowed(maid);
         net.neoforged.neoforge.items.IItemHandler hands = maid.getHandsInvWrapper();
         for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+            if (borrowed && i == com.maidsmart.tool.MaidBuildBlockFilter.OFFHAND_HAND_SLOT) {
+                continue;
+            }
             if (com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(
                     hands.getStackInSlot(i), null, null)) {
                 return true;
@@ -1008,8 +1022,22 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.tool.MaidPlaceGuard.blocked(maid)) {
             return null;
         }
-        return com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(
-                maid.getMaidInv(), maid.getHandsInvWrapper(), null, null);
+        // ---- v1.2.3-dbg 探针：取料前后真实库存对照（查完删掉） ----
+        net.neoforged.neoforge.items.IItemHandler __inv = maid.getAvailableBackpackInv();
+        net.neoforged.neoforge.items.IItemHandler __hands = maid.getHandsInvWrapper();
+        String __c0 = com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
+                + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]";
+        Item __took = com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(__inv, __hands, null, null,
+                com.maidsmart.combat.BombPose.offhandBorrowed(maid));
+        com.maidsmart.tool.MaidProbe.take("maid." + maid.getUUID(), "bridge",
+                com.maidsmart.tool.MaidBuildBlockFilter.probeItem(__took),
+                com.maidsmart.combat.BombPose.isShowing(maid),
+                com.maidsmart.tool.MaidBuildBlockFilter.probeStack(
+                        com.maidsmart.combat.BombPose.savedOffhand(maid)),
+                __c0,
+                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
+                        + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]");
+        return __took;
     }
 
     /** 材料耗尽播报（限频 30 秒）+ 背包方块判定诊断（latest.log 搜 "bridge no-block"）——
@@ -1028,7 +1056,7 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         NO_BLOCK_SINCE.put(maid.getId(), now);
         try {
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             java.util.Map<String, Integer> counts = new java.util.HashMap<>();
             for (int i = 0; i < inv.getSlots(); i++) {
                 net.minecraft.world.item.ItemStack st = inv.getStackInSlot(i);
@@ -1064,6 +1092,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         double top = mid.getY() + 1.0;
         if (top > box.minY + 0.01) {
+            com.maidsmart.tool.MaidProbe.crush("maid." + maid.getUUID(), "suffocate",
+                    "-", "mid=" + mid);
             maid.setPos(maid.getX(), top + 0.02, maid.getZ());
         }
     }
@@ -1084,6 +1114,8 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double nx = Math.max(cx - limit, Math.min(cx + limit, x));
         double nz = Math.max(cz - limit, Math.min(cz + limit, z));
         if (nx != x || nz != z) {
+            com.maidsmart.tool.MaidProbe.crush("maid." + maid.getUUID(), "pillarGuard",
+                    "-", "feet=" + feet);
             maid.setPos(nx, maid.getY(), nz);
         }
     }

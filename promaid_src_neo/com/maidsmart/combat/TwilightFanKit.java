@@ -104,7 +104,7 @@ public final class TwilightFanKit {
             return maid.getOffhandItem();
         }
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (isFan(inv.getStackInSlot(i))) {
                     return inv.getStackInSlot(i);
