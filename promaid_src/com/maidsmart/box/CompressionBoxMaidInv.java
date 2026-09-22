@@ -92,6 +92,27 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         return CompressionBoxData.read(this.backing.getStackInSlot(cell.maidSlot));
     }
 
+    /**
+     * 只含「盒子那几格」的一段视图（v1.2.2 实测六百一十八）。
+     *
+     * 【为什么需要它】TLM 有几条路走的是 {@code getAvailableInv} /
+     * {@code getAvailableBackpackInv}（它们读的是 {@code maidInv} **字段**，不是
+     * {@code getMaidInv()}，六百一十六那批只注入了后者）——**女仆自己吃食物**
+     * （{@code MaidHealSelfTask} 就是拿 {@code getAvailableBackpackInv()} 逐格找吃的）
+     * 正好是其中一条。于是「盒子里放食物她不吃、放弹药/TNT 她认」（弹药是走
+     * {@code getMaidInv()} 的我们自己的代码）——这就是用户报的那条。
+     * 修法在 {@code MaidCompressionBoxMixin}：把那两个方法的返回值**再套一层**，
+     * 把这一段接在后面；这里只负责把这 5×N 格切出来。
+     */
+    public net.minecraftforge.items.IItemHandlerModifiable boxRange() {
+        int base = maidSlots();
+        int n = CompressionBoxData.SLOTS * boxSlots().size();
+        if (n <= 0) {
+            return null; // 背包里没有盒子：不给调用方多套一层
+        }
+        return new net.minecraftforge.items.wrapper.RangedWrapper(this, base, base + n);
+    }
+
     /** 把改过的内容写回她那格盒子（写回会触发背包的脏标记/同步） */
     private void writeBox(Cell cell, List<ItemStack> items) {
         ItemStack cur = this.backing.getStackInSlot(cell.maidSlot);
@@ -123,8 +144,16 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         if (s.m_41619_()) {
             return ItemStack.f_41583_;
         }
-        // 视野封顶：大堆只暴露 64，且给的是副本（外部改不到盒子里去）
-        return s.m_255036_(Math.min(s.m_41613_(), VIEW_CAP));
+        // 视野封顶：大堆只暴露一点点，而且给的是副本（外部改不到盒子里去）。
+        // 【六百一十八修】上限不能一律按 64 算——见 CompressionBoxData.viewCap：
+        // 不可堆叠的物品（附魔书/工具/甲）上限是 1，给原版一个「2 个的附魔书」这种
+        // 非法堆，TLM 那边「插进背包」的调用点大多不看返回值，多出来的那个就没了。
+        //
+        // 【必须 min(真实数量, 上限)】viewCap 是**上限**不是数量——第一版写成
+        // `copyWithCount(viewCap(s))`，于是"盒子里 5 个石头"会变成"她看见 64 个"
+        // （凭空多出来，实测六百一十八自检的石头对照当场打红）。原版口径本来就是
+        // 「不超过 min(64, 物品上限)」，真实数量更小时以真实数量为准。
+        return s.m_255036_(Math.min(s.m_41613_(), CompressionBoxData.viewCap(s)));
     }
 
     @Override
@@ -186,7 +215,8 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return ItemStack.f_41583_;
         }
         List<ItemStack> items = readBox(cell);
-        int take = Math.min(amount, VIEW_CAP); // 大堆不许整格漏出去
+        // 大堆不许整格漏出去；不可堆叠的东西一次也只给 1（viewCap 见 CompressionBoxData）
+        int take = Math.min(amount, CompressionBoxData.viewCap(items.get(cell.slotInBox)));
         ItemStack out = CompressionBoxData.take(items, cell.slotInBox, take);
         if (!simulate && !out.m_41619_()) {
             writeBox(cell, items);

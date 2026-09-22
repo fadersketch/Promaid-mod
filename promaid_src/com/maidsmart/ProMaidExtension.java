@@ -486,6 +486,40 @@ public class ProMaidExtension implements ILittleMaid {
         }
     }
 
+    /**
+     * v1.2.2 实测六百一十八【压缩盒界面：鼠标上那一叠的两道兜底】。
+     *
+     * 界面改成箱子式取放之后，玩家可能「把一叠东西挂在鼠标上」就出事：死掉、
+     * 被传送、客户端崩了、直接退游戏。这一叠的真身在服务端（见
+     * {@code CompressionBoxService.CARRIES}，客户端自己记账等于送物品），所以必须有
+     * 不依赖客户端配合的归还点：
+     * <ul>
+     *   <li><b>每 tick 对一次账</b>：那只手里已经不是压缩盒（换手/被拿走/丢出去/死了
+     *       背包被清）→ 把手上的东西放回背包，装不下掉在脚边；</li>
+     *   <li><b>掉线</b>：同上（掉线那一刻背包还在，能塞回去）。</li>
+     * </ul>
+     * 两处都只做一件事：{@code returnCarry}。**任何路径都不许把它弄丢**——
+     * 界面那条路（ESC / 关界面发的 CARRY_DROP）只是快一步，这两道才是保底。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onPlayerTickBoxCarry(net.minecraftforge.event.TickEvent.PlayerTickEvent event) {
+        if (event.phase != net.minecraftforge.event.TickEvent.Phase.END) {
+            return;
+        }
+        if (event.player instanceof net.minecraft.server.level.ServerPlayer sp) {
+            com.maidsmart.box.CompressionBoxService.tickPlayer(sp);
+        }
+    }
+
+    /** 见 {@link #onPlayerTickBoxCarry}：掉线也要把鼠标上那一叠还回去 */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public void onPlayerLoggedOutBoxCarry(
+            net.minecraftforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof net.minecraft.server.level.ServerPlayer sp) {
+            com.maidsmart.box.CompressionBoxService.returnCarry(sp);
+        }
+    }
+
     @Override
     public void registerAITool(ToolRegister register) {
         register.register(new SmartMoveToTool());
