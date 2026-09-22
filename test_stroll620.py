@@ -39,8 +39,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvmargs_placeholder.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.2.jar',
-        'modname': 'promaid-1.2.2.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.3.jar',
+        'modname': 'promaid-1.2.3.jar',
     },
     'neoforge1211': {
         'dir': r'C:/Users/Sketch/mc_server_test/neoforge1211',
@@ -48,8 +48,8 @@ TARGETS = {
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
         'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/'
-               r'promaid-1.2.2-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.2-neoforge-1.21.1.jar',
+               r'promaid-1.2.3-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.3-neoforge-1.21.1.jar',
     },
 }
 # 1.20.1 那台的 jvm args 文件名与 neo 不同（沿用 test_target619 的写法）
