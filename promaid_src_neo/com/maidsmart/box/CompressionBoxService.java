@@ -69,6 +69,18 @@ public final class CompressionBoxService {
      */
     private static final Map<UUID, Carry> CARRIES = new HashMap<>();
 
+    /**
+     * 「这一下为什么没成」——最近一次被拒的原因文案（v1.2.2 实测六百二十）。
+     *
+     * 【为什么要有】六百一十八起界面点击的裁决在服务端，而服务端拒了就什么都不发生：
+     * 玩家只看得到「点了没反应」。界面上那几条红字是**客户端自己算的**，只能覆盖
+     * 写死的那几条判据（压缩盒/附魔）；配置禁入清单这种「服务端才知道」的判据，
+     * 只有服务端说得清。所以这里记一句人话，随下一次内容同步发给客户端画出来
+     * （{@link CompressionBoxNetworking.BoxStatePacket} 的 notice 字段）。
+     * 与 {@link #CARRIES} 一样：所有访问都在服务端主线程，用普通 HashMap。
+     */
+    private static final Map<UUID, String> NOTICES = new HashMap<>();
+
     private CompressionBoxService() {
     }
 
@@ -90,6 +102,27 @@ public final class CompressionBoxService {
     public static ItemStack carryOf(ServerPlayer player) {
         Carry c = CARRIES.get(player.getUUID());
         return c == null ? ItemStack.EMPTY : c.stack;
+    }
+
+    /** 上一次被拒的原因（没有 = 空串）——随内容同步发给客户端，界面上画成一行红字 */
+    public static String noticeOf(ServerPlayer player) {
+        String s = NOTICES.get(player.getUUID());
+        return s == null ? "" : s;
+    }
+
+    /** 记一句「为什么没成」（{@link #noticeOf} 读的就是它）；传 null/空串 = 清掉 */
+    private static void notice(ServerPlayer player, String text) {
+        if (text == null || text.isEmpty()) {
+            NOTICES.remove(player.getUUID());
+        } else {
+            NOTICES.put(player.getUUID(), text);
+        }
+    }
+
+    /** 拒绝并记一句人话（所有「不肯收」的分支都走这里，免得漏掉提示） */
+    private static boolean refuse(ServerPlayer player, String text) {
+        notice(player, text);
+        return false;
     }
 
     private static Carry carry(ServerPlayer player, int handOrdinal) {
@@ -178,6 +211,8 @@ public final class CompressionBoxService {
             }
             List<ItemStack> items = CompressionBoxData.read(box);
             IItemHandler inv = new PlayerMainInvWrapper(player.getInventory());
+            // 新的一次点击：先清掉上一次的拒绝提示（本次真被拒了会重新写上）
+            notice(player, null);
             if (action <= DEPOSIT_ONE) {
                 // 旧口径（自检一直在跑这几条，保留）
                 return action <= TAKE_ALL
@@ -281,8 +316,14 @@ public final class CompressionBoxService {
             return false;
         }
         ItemStack from = inv.getStackInSlot(slot);
-        if (from.isEmpty() || CompressionBoxData.isBox(from)) {
+        if (from.isEmpty()) {
             return false;
+        }
+        // 六百二十：压缩盒 / 带附魔的物品 / 配置禁入清单——一律不往盒子里放，
+        // 并且把「为什么」留给界面（notice → 客户端画一行红字）
+        String why = CompressionBoxFilter.reason(from);
+        if (why != null) {
+            return refuse(player, why);
         }
         int want = Math.min(amount, from.getCount());
         List<ItemStack> work = CompressionBoxData.duplicate(items);
@@ -331,6 +372,12 @@ public final class CompressionBoxService {
         }
         Carry c = carry(player, handOrdinal);
         if (inBox) {
+            // 六百二十：手上这一叠先过禁入清单（压缩盒/附魔物品/配置清单）。
+            // 挡在这里而不是 clickBox 里——clickBox 拿不到玩家，说不清「为什么」。
+            String why = CompressionBoxFilter.reason(c.stack);
+            if (why != null) {
+                return refuse(player, why);
+            }
             // 【为什么先拷副本】拿起/放下同时会改「盒子那一格」和「手上这一叠」，
             // 而盒子的真身要到最后一次 write 才落盘。在副本上算完再写，中途出错时
             // 盒子保持原样（手上的那一叠还没发出去，客户端下一拍刷新就回到旧样子）。
@@ -360,8 +407,8 @@ public final class CompressionBoxService {
         // 放下：左键放整叠（能塞多少塞多少），右键放 1 个
         int want = Math.min(button == 1 ? 1 : c.stack.getCount(), c.stack.getCount());
         ItemStack put = c.stack.copyWithCount(want);
-        if (CompressionBoxData.isBox(put)) {
-            return false; // 盒子不装盒子（mergeInto 里还有一道，这里先挡以便界面给提示）
+        if (!CompressionBoxFilter.canStore(put)) {
+            return false; // 禁入清单（mergeInto 里还有一道，这里先挡以便界面给提示）
         }
         ItemStack left = CompressionBoxData.mergeInto(items, slot, put);
         int moved = want - left.getCount();
@@ -375,10 +422,26 @@ public final class CompressionBoxService {
         return true;
     }
 
-    /** 左/右键点背包某一格（拿起 / 放下 / 合并 / 交换）。背包是**真列表**（不像盒子要先落盘） */
+    /**
+     * 左/右键点背包某一格（拿起 / 放下 / 合并 / 交换）。背包是**真列表**（不像盒子要先落盘）。
+     *
+     * 六百二十【用户要的「压缩盒在这个界面内无法被鼠标选中」】：这一格装的是压缩盒时，
+     * 鼠标对它**什么都不做**——不能被拿起来（挂着走 = 之后每一次点击都会被服务端的
+     * 「那只手里还是不是盒子」判据挡掉，看着像界面坏了），也不能被「交换」那一路
+     * 顶到鼠标上去。全库只有这里能改变鼠标上挂着的东西，所以挡在入口就够：
+     * <ul>
+     *   <li>手里空 + 这一格是盒子 → 不拿（原来会整叠拿起来）；</li>
+     *   <li>手上有东西 + 这一格是盒子 → 不换（原来会走「交换」把手上的东西塞进去、
+     *       把盒子提到鼠标上）。</li>
+     * </ul>
+     * 拒绝时回一句「压缩盒不能装进压缩盒」——这正是用户要的那句再次提示。
+     */
     private static boolean clickInv(ServerPlayer player, IItemHandler inv, int slot, Carry c,
                                     int button) {
         ItemStack cur = inv.getStackInSlot(slot);
+        if (CompressionBoxData.isBox(cur)) {
+            return refuse(player, CompressionBoxFilter.MSG_BOX);
+        }
         if (c.stack.isEmpty()) {
             if (cur.isEmpty()) {
                 return false;
@@ -453,8 +516,14 @@ public final class CompressionBoxService {
                                      List<ItemStack> items, boolean inBox, int slot) {
         if (!inBox) {
             ItemStack from = inv.getStackInSlot(slot);
-            if (from.isEmpty() || CompressionBoxData.isBox(from)) {
-                return false; // 空的没得存；压缩盒不许装压缩盒（用户报过的那个 bug）
+            if (from.isEmpty()) {
+                return false; // 空的没得存
+            }
+            // 六百二十：Shift+点这一格 = 「整叠存进去」，同样要过禁入清单
+            // （压缩盒不许装压缩盒是用户报过的那个 bug；附魔物品是这一批新加的口径）
+            String why = CompressionBoxFilter.reason(from);
+            if (why != null) {
+                return refuse(player, why);
             }
             return deposit(player, inv, box, items, slot, Integer.MAX_VALUE);
         }
