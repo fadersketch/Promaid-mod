@@ -58,6 +58,33 @@ public final class CompressionBoxData {
     /** 界面上一次点击最多拿走多少（原版堆叠口径） */
     public static final int TAKE_PER_CLICK = 64;
 
+    /**
+     * 这一个堆最多能「看见」多少（v1.2.2 实测六百一十八）。
+     *
+     * ── 为什么不能一律 64 ──
+     * 盒子一格能堆 114514 个，而**不可堆叠的物品**（附魔书、附魔工具/武器/盔甲、药水、
+     * 船……原版 {@code getMaxStackSize()} 就是 1）一格也能存好几个：两个同名同附魔的
+     * 附魔书存进同一格，那一格的堆就是 {@code ×2}。六百一十六起这条路的视野封顶只按
+     * 64 算，于是**把一个「2 个的附魔书」这种非法堆交给了原版**——原版任何一处
+     * 「插进背包/手里」的代码都会按 {@code getMaxStackSize()=1} 只收下 1 个并把剩下的
+     * **作为返回值退回**，而 TLM 那几十处调用点大多不看返回值（它们的入参在正常世界里
+     * 永远不可能装不下）——那 1 个就这样凭空消失。用户报的「附魔类物品存进去会消失」
+     * 与这条完全吻合（普通物品的视野本来就是 64 = 合法堆，所以只有附魔这一类出问题）。
+     *
+     * 所以口径改成 {@code min(64, 物品自己的堆叠上限)}：**交给原版的每一个堆都必须是
+     * 合法堆**，大数量只活在盒子的数据组件与界面里的那行数字上。
+     */
+    public static int viewCap(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return 0;
+        }
+        try {
+            return Math.max(1, Math.min(MAID_VIEW_CAP, stack.getMaxStackSize()));
+        } catch (Throwable ignored) {
+            return MAID_VIEW_CAP;
+        }
+    }
+
     static final String TAG_ROOT = "CompressionBox";
     static final String TAG_ITEMS = "Items";
     static final String TAG_SLOT = "Slot";
@@ -195,6 +222,24 @@ public final class CompressionBoxData {
     }
 
     /* ==================== 内容搬运 ==================== */
+
+    /**
+     * 深拷一份内容（v1.2.2 实测六百一十八）。
+     *
+     * 【为什么必须有这一步】六百一十八把界面改成了箱子式鼠标取放，一次点击可能**同时**
+     * 改「盒子里那一格」和「玩家背包那一格」。这两处只要有一处先动了、另一处抛异常，
+     * 东西就没了（用户报的「存进去会消失」正是在这类路径上最疼）。所以现在的口径是：
+     * **先在副本上把整件事算完，再动真东西**——副本里改的是 {@code copy()} 出来的堆，
+     * 原列表一个引用都不碰（不深拷就会在 {@code grow}/{@code set} 时改到真列表里的对象）。
+     */
+    public static List<ItemStack> duplicate(List<ItemStack> items) {
+        List<ItemStack> out = empty();
+        for (int i = 0; i < out.size() && i < items.size(); i++) {
+            ItemStack s = items.get(i);
+            out.set(i, s.isEmpty() ? ItemStack.EMPTY : s.copy());
+        }
+        return out;
+    }
 
     /** 一共装了多少件（物品描述用；long 防溢出） */
     public static long totalCount(List<ItemStack> items) {
