@@ -27,7 +27,7 @@
 
 | 项目 | 镜像仓库 | 分支 | 当前版本 |
 | --- | --- | --- | --- |
-| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.2 |
+| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.3 |
 | Heartfelt-connection | `C:\Users\Sketch\.zcode\workspace\default\heartfelt-mod` | `main` | v1.0.2 |
 
 - `promaid-mod` 另有分支 `experimental/memory-port`，**停在 v1.1.0、不含 `promaid_src_neo`**，
@@ -80,7 +80,7 @@ cd /d C:\Users\Sketch\.zcode\workspace\default\maidmods
 python gen_compile.py
 call compile_promaid.bat          rem 期望 EXITCODE=0 / 0 个错误
 python gen_compile_neo.py
-python run_javac_neo.py           rem 期望 exit: 0 / 16 个警告
+call compile_neo.bat              rem 期望 EXITCODE=0 / 只有 note（与 forge 侧同款封装脚本）
 ```
 
 ## 行尾规范
@@ -97,7 +97,7 @@ python run_javac_neo.py           rem 期望 exit: 0 / 16 个警告
 
 ## 发布前检查
 
-1. 版本号三处一致：`META-INF/mods.toml`、`build_*.py`、`build_all.bat`。
+1. 版本号三处一致：`META-INF/mods.toml`（两树 + neo 的 `neoforge.mods.toml`）、`build_promaid*.py`、`deploy*.py`。
 2. `patched/` 只保留最新两个 jar。
 3. 重新运行构建（或手动 `python build_*.py`）后，jar 内 `mods.toml` 版本正确。
 4. `git status` 干净（或只有你预期的改动）。
