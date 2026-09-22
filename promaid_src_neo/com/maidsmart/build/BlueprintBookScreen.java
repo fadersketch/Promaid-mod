@@ -76,7 +76,7 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.252u：大目录页进度区离底边距离（3 行字段 + 进度条 + 标签） */
     private static final int PROGRESS_BOTTOM_GAP = 60;
 
-    private List<BlueprintBookNetworking.Entry> entries;
+    private List<BlueprintBookBuildPackets.Entry> entries;
     /** v1.5.43：周围建造女仆状态列表 {uuid, 名字, 状态[, 工头标记]} */
     private List<String[]> maids = new ArrayList<>();
     /** v1.5.100b：全部女仆（记忆页用，不限距离）：{uuid, 名字, 记忆开关 "1"/"0"} */
@@ -114,7 +114,7 @@ public class BlueprintBookScreen extends Screen {
     /** v1.5.63：当前视图 */
     private int view = VIEW_HOME;
     /** 建造面板：当前查看材料详情的蓝图（null = 建造目录） */
-    private BlueprintBookNetworking.Entry viewingEntry = null;
+    private BlueprintBookBuildPackets.Entry viewingEntry = null;
     /** 材料详情页页码 */
     private int matPage = 0;
     /** 建造目录页 */
@@ -143,7 +143,7 @@ public class BlueprintBookScreen extends Screen {
     private static int lastMatPage = 0;
     private static int lastMaidPage = 0;
 
-    protected BlueprintBookScreen(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
+    protected BlueprintBookScreen(List<BlueprintBookBuildPackets.Entry> entries, List<String[]> maids,
                                   List<String[]> allMaids, boolean paused, String speed, String progressText,
                                   int progressPct, int regionX, int regionY, int regionZ,
                                   int regionW, int regionH, int regionD,
@@ -175,7 +175,7 @@ public class BlueprintBookScreen extends Screen {
         //（覆盖上次视图恢复）；区块外右击 = 正常目录
         boolean jumped = false;
         if (inPlanRegion && currentPlanId != null && !currentPlanId.isEmpty() && this.entries != null) {
-            for (BlueprintBookNetworking.Entry e : this.entries) {
+            for (BlueprintBookBuildPackets.Entry e : this.entries) {
                 if (e.id().equals(currentPlanId)) {
                     this.view = VIEW_BUILD;
                     this.viewingEntry = e;
@@ -190,7 +190,7 @@ public class BlueprintBookScreen extends Screen {
             this.view = lastView;
             this.viewingEntry = null;
             if (lastViewingId != null && this.entries != null) {
-                for (BlueprintBookNetworking.Entry e : this.entries) {
+                for (BlueprintBookBuildPackets.Entry e : this.entries) {
                     if (e.id().equals(lastViewingId)) {
                         this.viewingEntry = e;
                         break;
@@ -207,7 +207,7 @@ public class BlueprintBookScreen extends Screen {
      *  v1.5.204：clear 不重置"看过预览"标记，第 2 步确认可达；
      *  红色区块框与幽灵投影由服务端每秒同步驱动，不受开关手册影响）
      *  v1.5.275：initialView 0=大目录 1=女仆管理（配置面板"跳转女仆管理"） */
-    public static void open(List<BlueprintBookNetworking.Entry> entries, List<String[]> maids,
+    public static void open(List<BlueprintBookBuildPackets.Entry> entries, List<String[]> maids,
                             List<String[]> allMaids, boolean paused, String speed, String progressText,
                             int progressPct, int regionX, int regionY, int regionZ,
                             int regionW, int regionH, int regionD,
@@ -303,8 +303,8 @@ public class BlueprintBookScreen extends Screen {
         super.tick();
         if (++this.tickCount % 40 == 0) {
             PacketDistributor.sendToServer(
-                    new BlueprintBookNetworking.BuildControlPacket(
-                            BlueprintBookNetworking.BuildControlPacket.SHOW_PROGRESS, null));
+                    new BlueprintBookBuildPackets.BuildControlPacket(
+                            BlueprintBookBuildPackets.BuildControlPacket.SHOW_PROGRESS, null));
         }
     }
 
@@ -351,7 +351,7 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /** 材料文本（缺口黄色、充足绿色） */
-    private List<String> materialItems(BlueprintBookNetworking.Entry entry) {
+    private List<String> materialItems(BlueprintBookBuildPackets.Entry entry) {
         List<String> items = new ArrayList<>();
         if (entry.materials() == null || entry.materials().isEmpty()) {
             items.add("\u00a7a材料充足");
@@ -375,7 +375,7 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /** 材料页数（16 种/页 = 2 列 × 8 行） */
-    private int materialPages(BlueprintBookNetworking.Entry entry) {
+    private int materialPages(BlueprintBookBuildPackets.Entry entry) {
         int n = this.materialItems(entry).size();
         return Math.max(1, (n + MAT_COLS * MAT_ROWS_PER_PAGE - 1) / (MAT_COLS * MAT_ROWS_PER_PAGE));
     }
@@ -434,13 +434,13 @@ public class BlueprintBookScreen extends Screen {
     }
 
     /** v1.5.374：按搜索串过滤目录条目（名称 / 蓝图 id 包含匹配，大小写不敏感） */
-    private java.util.List<BlueprintBookNetworking.Entry> filteredEntries() {
+    private java.util.List<BlueprintBookBuildPackets.Entry> filteredEntries() {
         String q = this.searchQuery == null ? "" : this.searchQuery.trim().toLowerCase(java.util.Locale.ROOT);
         if (q.isEmpty()) {
             return this.entries;
         }
-        java.util.List<BlueprintBookNetworking.Entry> out = new java.util.ArrayList<>();
-        for (BlueprintBookNetworking.Entry e : this.entries) {
+        java.util.List<BlueprintBookBuildPackets.Entry> out = new java.util.ArrayList<>();
+        for (BlueprintBookBuildPackets.Entry e : this.entries) {
             if (e.name() != null && e.name().toLowerCase(java.util.Locale.ROOT).contains(q)) {
                 out.add(e);
             } else if (e.id() != null && e.id().toLowerCase(java.util.Locale.ROOT).contains(q)) {
@@ -657,7 +657,7 @@ public class BlueprintBookScreen extends Screen {
             if (this.searchBox.isMouseOver(mouseX, mouseY)) {
                 this.searchBox.setFocused(true);
             } else if (mouseY >= 72 && mouseY <= this.height - 30) {
-                java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+                java.util.List<BlueprintBookBuildPackets.Entry> list = this.filteredEntries();
                 int cols = this.buildGridCols();
                 int rows = this.buildGridRowsPerPage();
                 int perPage = cols * rows;
@@ -670,7 +670,7 @@ public class BlueprintBookScreen extends Screen {
                 if (colIdx >= 0 && colIdx < cols && rowIdx >= 0 && rowIdx < rows) {
                     int idx = start + rowIdx * cols + colIdx;
                     if (idx >= 0 && idx < list.size()) {
-                        BlueprintBookNetworking.Entry entry = list.get(idx);
+                        BlueprintBookBuildPackets.Entry entry = list.get(idx);
                         boolean ext = entry.id().startsWith("maid_smart_ext:");
                         if (ext) {
                             int delW = 14;
@@ -681,7 +681,7 @@ public class BlueprintBookScreen extends Screen {
                                         "\u00a7e\u300c" + entry.name() + "\u300d将从手册中删除（文件也会被移除，无法恢复）",
                                         "\u00a7c确认删除",
                                         () -> PacketDistributor.sendToServer(
-                                                new BlueprintBookNetworking.DeleteBlueprintPacket(deleteId)));
+                                                new BlueprintBookEntityPackets.DeleteBlueprintPacket(deleteId)));
                                 return true;
                             }
                         }
@@ -817,8 +817,8 @@ public class BlueprintBookScreen extends Screen {
                 final String cid = this.currentPlanId;
                 this.addRenderableWidget(Button.builder(Component.literal("全员加入"),
                                 b -> PacketDistributor.sendToServer(
-                                        new BlueprintBookNetworking.BuildControlPacket(
-                                                BlueprintBookNetworking.BuildControlPacket.JOIN_ALL, null, cid)))
+                                        new BlueprintBookBuildPackets.BuildControlPacket(
+                                                BlueprintBookBuildPackets.BuildControlPacket.JOIN_ALL, null, cid)))
                         .bounds(x, h - 30, bw[1], 20).build());
                 x += bw[1] + gap2;
                 // v1.5.182：名单——区块内右击手册时额外多出的按钮：查看绑定该区块的
@@ -883,7 +883,7 @@ public class BlueprintBookScreen extends Screen {
         // v1.5.159：建造总目录（点击进入建筑详情页）
         // v1.5.374：加搜索框 + 网格多列显示——条目改为【渲染 + 坐标点击】（不再每键
         // 重建按钮，避免中文输入法被打断 / 焦点丢失），搜索框只建一次
-        java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+        java.util.List<BlueprintBookBuildPackets.Entry> list = this.filteredEntries();
         if (list.isEmpty()) {
             this.maidEmptyText = "没有可用蓝图——把 .nbt/.litematic/.schem 图纸放进 config/maid_smart/blueprints/ 或存档 schematics/";
         }
@@ -974,7 +974,7 @@ public class BlueprintBookScreen extends Screen {
                 new String[]{"zip"},
                 path -> {
                     PacketDistributor.sendToServer(
-                            new BlueprintBookNetworking.WorldImportPacket(path));
+                            new BlueprintBookEntityPackets.WorldImportPacket(path));
                     this.chatHint("\u00a77已发送世界地图导入请求，结果请看聊天框");
                 });
     }
@@ -989,7 +989,7 @@ public class BlueprintBookScreen extends Screen {
                 new String[]{"schem", "litematic", "nbt", "snbt", "schematic", "json", "zip"},
                 path -> {
                     PacketDistributor.sendToServer(
-                            new BlueprintBookNetworking.BuildImportPacket(path));
+                            new BlueprintBookEntityPackets.BuildImportPacket(path));
                     this.chatHint("\u00a77已发送导入请求，结果请看聊天框");
                 });
     }
@@ -1050,8 +1050,8 @@ public class BlueprintBookScreen extends Screen {
             final String pid = herePlanId;
             this.addRenderableWidget(Button.builder(Component.literal(this.paused ? "全部继续" : "全部暂停"),
                             b -> PacketDistributor.sendToServer(
-                                    new BlueprintBookNetworking.BuildControlPacket(
-                                            BlueprintBookNetworking.BuildControlPacket.TOGGLE_PAUSE, null, pid)))
+                                    new BlueprintBookBuildPackets.BuildControlPacket(
+                                            BlueprintBookBuildPackets.BuildControlPacket.TOGGLE_PAUSE, null, pid)))
                     .bounds(w - 88, TOP_BTN_Y, 80, TOP_BTN_H).build());
         }
         this.addRenderableWidget(Button.builder(Component.literal("← 大目录"),
@@ -1165,15 +1165,15 @@ public class BlueprintBookScreen extends Screen {
         if (isBound) {
             this.addRenderableWidget(Button.builder(Component.literal("\u00a7e解绑（离开当前区块）"),
                             b -> PacketDistributor.sendToServer(
-                                    new BlueprintBookNetworking.BuildControlPacket(
-                                            BlueprintBookNetworking.BuildControlPacket.UNBIND_MAID, uuid, null)))
+                                    new BlueprintBookBuildPackets.BuildControlPacket(
+                                            BlueprintBookBuildPackets.BuildControlPacket.UNBIND_MAID, uuid, null)))
                     .bounds(cx - 140, y, 280, 20).build());
         } else if (this.selectedPlanId != null) {
             final String sid = this.selectedPlanId;
             this.addRenderableWidget(Button.builder(Component.literal("\u00a7a绑定到选中区块"),
                             b -> PacketDistributor.sendToServer(
-                                    new BlueprintBookNetworking.BuildControlPacket(
-                                            BlueprintBookNetworking.BuildControlPacket.BIND_MAID, uuid, sid)))
+                                    new BlueprintBookBuildPackets.BuildControlPacket(
+                                            BlueprintBookBuildPackets.BuildControlPacket.BIND_MAID, uuid, sid)))
                     .bounds(cx - 140, y, 280, 20).build());
         }
         // v1.5.305：删除「女仆配置」按钮（反馈："有 bug 不想修，直接删了；
@@ -1237,8 +1237,8 @@ public class BlueprintBookScreen extends Screen {
             if (!isFm) {
                 this.addRenderableWidget(Button.builder(Component.literal("设为工头"),
                                 b -> PacketDistributor.sendToServer(
-                                        new BlueprintBookNetworking.BuildControlPacket(
-                                                BlueprintBookNetworking.BuildControlPacket.SET_FOREMAN, uuid, pid)))
+                                        new BlueprintBookBuildPackets.BuildControlPacket(
+                                                BlueprintBookBuildPackets.BuildControlPacket.SET_FOREMAN, uuid, pid)))
                         .bounds(cx + btnW / 2 - 88, y, 88, MAID_ROW_H).build());
             }
             y += MAID_ROW_H + 1;
@@ -1341,7 +1341,7 @@ public class BlueprintBookScreen extends Screen {
             return;
         }
         PacketDistributor.sendToServer(
-                new BlueprintBookNetworking.MaidDebugRequestPacket(this.memoryMaidUuid));
+                new BlueprintBookEntityPackets.MaidDebugRequestPacket(this.memoryMaidUuid));
     }
 
     /** v1.5.103：清空女仆记忆确认框（MC 删除世界样式）——确认后发 ClearMemoryPacket，
@@ -1357,7 +1357,7 @@ public class BlueprintBookScreen extends Screen {
                 "\u00a7c确认清空",
                 () -> {
                     PacketDistributor.sendToServer(
-                            new BlueprintBookNetworking.ClearMemoryPacket(uuid));
+                            new BlueprintBookEntityPackets.ClearMemoryPacket(uuid));
                     this.memoryLines = null;
                 });
     }
@@ -1466,7 +1466,7 @@ public class BlueprintBookScreen extends Screen {
                                 this.rebuildButtons();
                                 // 请求记忆
                                 PacketDistributor.sendToServer(
-                                        new BlueprintBookNetworking.MemoryViewRequestPacket(uuid));
+                                        new BlueprintBookEntityPackets.MemoryViewRequestPacket(uuid));
                             })
                     .bounds(cx - btnW / 2, y, mainW, MAID_ROW_H).build());
             // 记忆开关（点击切换 per-maid 记忆，服务端写 persistentData + 磁盘备份）
@@ -1481,7 +1481,7 @@ public class BlueprintBookScreen extends Screen {
                                 }
                                 this.lastMemoryToggleClick = now;
                                 PacketDistributor.sendToServer(
-                                        new BlueprintBookNetworking.AiMemoryTogglePacket(uuid, !memOn));
+                                        new BlueprintBookEntityPackets.AiMemoryTogglePacket(uuid, !memOn));
                                 // 本地立即翻转（服务端确认消息另发聊天框）
                                 m[2] = memOn ? "0" : "1";
                                 this.rebuildButtons();
@@ -1497,7 +1497,7 @@ public class BlueprintBookScreen extends Screen {
                                 }
                                 this.lastLlmToggleClick = now;
                                 PacketDistributor.sendToServer(
-                                        new BlueprintBookNetworking.AiLlmTogglePacket(uuid, !llmOn));
+                                        new BlueprintBookEntityPackets.AiLlmTogglePacket(uuid, !llmOn));
                                 // 本地立即翻转（服务端确认消息另发聊天框）
                                 m[9] = llmOn ? "0" : "1";
                                 this.rebuildButtons();
@@ -1714,7 +1714,7 @@ public class BlueprintBookScreen extends Screen {
         }
         String[] r = this.debugRows.get(this.debugSelected);
         PacketDistributor.sendToServer(
-                new BlueprintBookNetworking.MaidDebugActionPacket(
+                new BlueprintBookEntityPackets.MaidDebugActionPacket(
                         this.memoryMaidUuid, action, r[1]));
     }
 
@@ -1781,9 +1781,9 @@ public class BlueprintBookScreen extends Screen {
                 "取消建造"
         };
         int[] actions = {
-                BlueprintBookNetworking.BuildControlPacket.TOGGLE_PAUSE,
-                BlueprintBookNetworking.BuildControlPacket.CYCLE_SPEED,
-                BlueprintBookNetworking.BuildControlPacket.CANCEL
+                BlueprintBookBuildPackets.BuildControlPacket.TOGGLE_PAUSE,
+                BlueprintBookBuildPackets.BuildControlPacket.CYCLE_SPEED,
+                BlueprintBookBuildPackets.BuildControlPacket.CANCEL
         };
         // v1.5.162：3 个按钮（cx-70 起，64 间距）居中排布
         for (int i = 0; i < labels.length; i++) {
@@ -1791,15 +1791,15 @@ public class BlueprintBookScreen extends Screen {
             this.addRenderableWidget(Button.builder(Component.literal(labels[i]),
                             b -> {
                                 // v1.5.103：取消建造是破坏性操作（清计划/释放强制加载）→ 确认弹窗
-                                if (action == BlueprintBookNetworking.BuildControlPacket.CANCEL) {
+                                if (action == BlueprintBookBuildPackets.BuildControlPacket.CANCEL) {
                                     this.confirmAction("取消建造？",
                                             "\u00a7e当前建造区块将被清除（区块标记删除），已建的部分将不再被识别为半成品、会被当成障碍物处理",
                                             "\u00a7c确认取消",
                                             () -> PacketDistributor.sendToServer(
-                                                    new BlueprintBookNetworking.BuildControlPacket(action, null, cid)));
+                                                    new BlueprintBookBuildPackets.BuildControlPacket(action, null, cid)));
                                 } else {
                                     PacketDistributor.sendToServer(
-                                            new BlueprintBookNetworking.BuildControlPacket(action, null, cid));
+                                            new BlueprintBookBuildPackets.BuildControlPacket(action, null, cid));
                                 }
                             })
                     .bounds(cx - 70 + i * 64, h - 52, 56, 20).build());
@@ -1863,7 +1863,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
     private void renderBuild(net.minecraft.client.gui.GuiGraphics graphics) {
         if (this.viewingEntry != null) {
             // 材料详情页
-            BlueprintBookNetworking.Entry entry = this.viewingEntry;
+            BlueprintBookBuildPackets.Entry entry = this.viewingEntry;
             List<String> items = this.materialItems(entry);
             String matTitle = "\u00a7e\u300c" + entry.name() + "\u300d所需材料（"
                     + items.size() + " 种 · 第 " + (this.matPage + 1) + "/"
@@ -1898,7 +1898,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
             return;
         }
         // 建造总目录（v1.5.374：网格多列渲染 + 搜索）
-        java.util.List<BlueprintBookNetworking.Entry> list = this.filteredEntries();
+        java.util.List<BlueprintBookBuildPackets.Entry> list = this.filteredEntries();
         int cols = this.buildGridCols();
         int rows = this.buildGridRowsPerPage();
         int perPage = cols * rows;
@@ -1914,7 +1914,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 : "\u00a7e搜索「" + q + "」· 共 " + list.size() + " 个结果 · 点击名称查看材料";
         this.drawCentered(graphics, title, PANEL_TITLE_Y, 0xFFFFFF);
         for (int i = start; i < end; i++) {
-            BlueprintBookNetworking.Entry entry = list.get(i);
+            BlueprintBookBuildPackets.Entry entry = list.get(i);
             int idx = i - start;
             int col = idx % cols;
             int row = idx / cols;
@@ -2128,7 +2128,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 "\u00a7c确定，开始建造",
                 () -> {
                     PacketDistributor.sendToServer(
-                            new BlueprintBookNetworking.SelectBlueprintPacket(vid,
+                            new BlueprintBookBuildPackets.SelectBlueprintPacket(vid,
                                     com.maidsmart.build.BlueprintAreaPreview.previewQuarters()));
                     // 金色框关闭；红色区块框+橙色幽灵投影由服务端每秒同步接管
                     com.maidsmart.build.BlueprintAreaPreview.clear();

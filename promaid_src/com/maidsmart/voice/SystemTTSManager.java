@@ -237,7 +237,7 @@ public final class SystemTTSManager {
         try {
             com.maidsmart.build.BlueprintBookNetworking.CHANNEL.send(
                     net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> owner),
-                    new com.maidsmart.build.BlueprintBookNetworking.PlayJarVoicePacket(
+                    new com.maidsmart.build.BlueprintBookBuildPackets.PlayJarVoicePacket(
                             maid.m_19879_(), file));
         } catch (Exception ignored) {
         }

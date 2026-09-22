@@ -51,13 +51,13 @@ public class BlueprintBookItem extends Item {
     public static void openFor(ServerPlayer serverPlayer, int initialView) {
         Level level = serverPlayer.level();
         // v1.5.24：材料缺口以【主人背包】为准（0/N）——确认后由服务端自动交付给女仆
-        List<BlueprintBookNetworking.Entry> entries = new ArrayList<>();
+        List<BlueprintBookBuildPackets.Entry> entries = new ArrayList<>();
         for (Map.Entry<String[], Map<String, int[]>> e
                 : BlueprintLib.buildCatalogEntriesWithMaterials(serverPlayer).entrySet()) {
             String[] base = e.getKey();
             // v1.5.159：占地尺寸（区块显示预览用）——v1.5.375 走缓存（启动预热）
             int[] size = BlueprintLib.blueprintSizeCached(base[0], BlueprintLib.getBlueprint(base[0]));
-            entries.add(new BlueprintBookNetworking.Entry(base[0], base[1], base[2],
+            entries.add(new BlueprintBookBuildPackets.Entry(base[0], base[1], base[2],
                     new ArrayList<>(e.getValue().entrySet().stream()
                             .map(m -> new String[]{m.getKey(), String.valueOf(m.getValue()[0]), String.valueOf(m.getValue()[1])})
                             .toList()),
@@ -78,7 +78,7 @@ public class BlueprintBookItem extends Item {
         // v1.5.252ad：打开手册诊断（latest.log 搜 "hud book"）——确认打开瞬间速度值
         com.maidsmart.build.BlueprintBookNetworking.logBookSpeed("open", here == null ? null : here.planId, openBps, openEta);
         BlueprintBookNetworking.sendToPlayer(serverPlayer,
-                new BlueprintBookNetworking.OpenBlueprintBookPacket(
+                new BlueprintBookBuildPackets.OpenBlueprintBookPacket(
                         entries, BlueprintBookNetworking.collectMaidStatus(serverPlayer),
                         sl == null ? new ArrayList<>() : BlueprintBookNetworking.collectAllMaids(sl),
                         here != null && here.paused,

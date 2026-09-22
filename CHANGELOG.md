@@ -1,4 +1,52 @@
-﻿## 实测六百二十三【版本号升为 v1.2.3（正式发布 · 加急）：先修「收放魂符丢血量上限与装备」，再带上 v1.2.2 之后攒下的一批新功能；手册正文与 README 首页同步补齐】
+﻿## 实测六百二十四【内部大扫除：把「巨型石山」文件拆开、删掉死代码（玩家可见行为零变化，不重新发布）】
+
+### ① 为什么做
+
+到 v1.2.3 为止，仓库里攒出一批「读一次要滚几千行」的文件：`BlueprintLib.java` **6677 行**、`PromaidConfigScreen.java` 4647 行、`SelfPreservationBehavior.java` 4392 行……改一行得先把整屏灌进上下文，越改越慢、越改越容易碰坏别处。
+
+本条**只做文件搬运**：不改游戏逻辑、不改配置项名、不改任何玩家可见文案与数值。
+
+### ② 拆了什么（两树同步）
+
+| 原文件 | 原行数 | 拆后 | 新增类 |
+| --- | --- | --- | --- |
+| `build/BlueprintLib.java` | 6677 | **570** | 14 |
+| `combat/MaidBombing.java` | 2733 | **1058** | 6 |
+| `build/BlueprintBookNetworking.java` | 2618 | **854** | 2 |
+| `guide/GuideContent.java` | 2090 | **194** | 5 |
+| `schedule/ScheduleNetworking.java` | 1265 | **约 350** | 2 |
+
+- **`BlueprintLib` → 14 个类**：`BlueprintBlockData`（方块分类表）、`BlueprintLegacyIds`（旧版数字 id 兼容层）、`BlueprintStructureCodec`（litematic/schem/schematic 解码）、`BlueprintFileIo`（外部文件扫描与导入）、`BlueprintWorldExtract`（从 .mca 提取建筑）、`BlueprintCatalog`（目录与描述）、`BlueprintStepMath`（步骤几何运算与缓存）、`BlueprintBlockTraits`（形状/材质族判定）、`BlueprintMaterials`（材料统计与交付）、`BlueprintMachineDetect`（机器识别与流体流水）、`BlueprintLooseMatching`（宽松替代与等价族）、`BlueprintNames`（中文名表）、`BlueprintMachineFinish`（机器收尾）、`BlueprintPlacement`（放置与场地处理）；
+- **`MaidBombing` → 6 个类**：`BombConfig` / `BombItems` / `BombExplosion` / `BombPlacement` / `BombThrow` / `BombTntTick`（状态模型 `Kind`/`Phase`/`Bomb`/`Homing` 与各张 UUID 表仍留在原类，它们是「谁在炸」的唯一真相）；
+- **`BlueprintBookNetworking` → 2 个包容器**：`BlueprintBookBuildPackets`（建造/目录/投影/区域）、`BlueprintBookEntityPackets`（AI 记忆/调试/导入/语音）；
+- **`GuideContent` → 5 个章节文件**：`GuideChaptersBasics` / `Work` / `Combat` / `Flight` / `System`（手册正文**逐字未改**，只是按主题分开写）；
+- **`ScheduleNetworking` → 2 个包容器**：`SchedulePacketsPlan`（排班数据）、`SchedulePacketsMaid`（女仆个体操作）。
+
+**搬运的四条硬约束**（保证外部调用点一行都不用改）：
+
+1. 公开方法在原类留**同签名转发桩**、公开常量表留**同名字段别名**——`BlueprintLib.canBreak(...)`、`BlueprintLib.FORBIDDEN` 这些写法在外部照旧可用；
+2. 被搬走的代码里对「留下成员」的引用自动加**原类前缀**，跨类引用自动加**新类前缀**，被引用的私有成员自动放宽到包内可见；
+3. 搬走的嵌套网络包类，外部 `BlueprintBookNetworking.X` 写法**全树改写**为容器类名——`import ...Outer.Member` 全限定写法与 `Outer::method` 方法引用一起改（本轮各树 7 个文件）；
+4. 重写只动**代码**，字符串字面量与注释一律不碰（中文提示、`§` 着色码、配置键名全部原样）。
+
+### ③ 删了什么
+
+- `BlueprintLib` 里 **5 个死方法**：`builtInHut` / `builtInGazebo` / `builtInFountain` / `builtInTower` / `builtInWell`——内置预设早已全部移除（`getBuiltIn` 现在走 `BuiltinHouses`），这五个只剩定义、全仓库零调用；
+- `persona/PersonaSyncManager.java`（151 行，两树）：**写完从没接线**的类，全仓库零引用，CHANGELOG / 手册 / README 也从未提过它（人设同步这件事实际上没有任何代码在跑）；
+- 构建产物 `out_promaid` / `out_promaid_neo` / `staging_promaid` / `staging_promaid_neo` 全部清空后**全量重编**：拆分前残留的 `BlueprintLib$RotCached.class` / `BlueprintLib$MachineLook.class` 这类**内部类旧字节码**会被照常打进 jar（现有「源比 class 新」检查拦不住），清空重编后不再有。
+
+### ④ 验证
+
+- 两树 `gen_compile` + `javac` **全量重编：0 错误**（forge 295 → 309 个源文件，neo 297 → 311）；
+- 两个 jar 重新打包：`verify_jar_classes` OK、语言文件 JSON OK、mixins 类齐全，条目数 forge 747 → **772**、neo 749 → **774**；
+- **本条不重新发布**：GitHub 上的 v1.2.3 附件保持原样，只提交推送源码；游戏内行为与 v1.2.3 完全一致。
+
+### ⑤ 没拆的（以及为什么）
+
+- **`PromaidConfigScreen`（4647）/ `BlueprintBookScreen`（2120）/ `SelfPreservationBehavior`（4378）/ `MaidAidOwnerBehavior`（1824）/ `MaidWoodBehavior`（2932）/ `MaidMineBehavior`（2804）/ `MaidFlightCombatBehavior`（2503）/ `BridgeUpBehavior`（1241）**：静态成员只占 6% ~ 47%，主体是**绑在 `this` 上的实例方法**（界面构建与行为 tick）。机械搬运会让语义断链，要拆必须重新设计状态归属——那是另一种改动，不属于本次「只搬文件」的范围；
+- **`MaidSmartConfig`（2372）**：其中 **1479 行是一个 static 初始化块**，`public static final` 配置项按 Java 语言规则**只能在本类初始化**，把块搬走即编译失败；拆它等于重排配置项分组，风险与收益不对等。
+
+## 实测六百二十三【版本号升为 v1.2.3（正式发布 · 加急）：先修「收放魂符丢血量上限与装备」，再带上 v1.2.2 之后攒下的一批新功能；手册正文与 README 首页同步补齐】
 
 ### ① 为什么是「加急」
 

@@ -236,489 +236,12 @@ public final class MaidBombing {
 
     /* ==================== 配置 ==================== */
 
-    private static boolean cfgMelee() {
-        return MaidSmartConfig.COMBAT_BOMBING_MELEE.get();
-    }
-
-    private static boolean cfgTnt() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT.get();
-    }
-
-    private static int cfgFuse() {
-        return MaidSmartConfig.COMBAT_BOMBING_FUSE.get();
-    }
-
-    private static int cfgTntFuse() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_FUSE.get();
-    }
-
-    private static int cfgTntInterval() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_INTERVAL.get();
-    }
-
-    /** v1.2.2 实测五百九十：TNT 追踪（默认开）——引信期间朝目标修正朝向 */
-    private static boolean cfgTntTrack() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK.get();
-    }
-
-    private static double cfgTntSpeed() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_SPEED.get();
-    }
-
-    private static boolean cfgBreakBlocks() {
-        return MaidSmartConfig.COMBAT_BOMBING_BREAK_BLOCKS.get();
-    }
-
-    private static boolean cfgHurtFriendly() {
-        return MaidSmartConfig.COMBAT_BOMBING_HURT_FRIENDLY.get();
-    }
-
-    private static boolean cfgPinkMark() {
-        return MaidSmartConfig.COMBAT_BOMBING_PINK_MARK.get();
-    }
-
-    private static int cfgReclaimSeconds() {
-        return MaidSmartConfig.COMBAT_BOMBING_RECLAIM_SECONDS.get();
-    }
-
-    /** v1.2.2 实测五百九十一：方块与"挂水晶 / 充能"之间留出的可见间隔（tick，默认 10 = 0.5 秒） */
-    private static int cfgPlaceGap() {
-        return MaidSmartConfig.COMBAT_BOMBING_PLACE_GAP.get();
-    }
-
-    /** v1.2.2 实测五百九十一：TNT 追踪时长（tick，默认 10 = 0.5 秒；0 = 不追踪） */
-    private static int cfgTntTrackTicks() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_TRACK_TICKS.get();
-    }
-
-    /** v1.2.2 实测五百九十一：维度闸（默认开）——原版不炸的维度不开放重生锚 / 床链路 */
-    private static boolean cfgDimensionGuard() {
-        return MaidSmartConfig.COMBAT_BOMBING_DIMENSION_GUARD.get();
-    }
-
-    /** v1.2.2 实测五百九十二：重生锚要 1 颗萤石点火（默认开 = 原版口径） */
-    private static boolean cfgAnchorNeedsGlowstone() {
-        return MaidSmartConfig.COMBAT_BOMBING_ANCHOR_NEEDS_GLOWSTONE.get();
-    }
-
-    /** v1.2.2 实测五百九十二：整条轰炸链路的最短间隔（tick，默认 200 = 10 秒） */
-    private static int cfgBombInterval() {
-        return MaidSmartConfig.COMBAT_BOMBING_BOMB_INTERVAL.get();
-    }
-
-    /** v1.2.2 实测五百九十四：动作表现（副手亮一下）总开关（默认开） */
-    private static boolean cfgPose() {
-        return MaidSmartConfig.COMBAT_BOMBING_POSE.get();
-    }
-
-    /**
-     * v1.2.2 实测五百九十四【动作表现总开关】。
-     *
-     * 需求原文："同时这个功能应该有开关。"——整条链路里有三处会被临时换掉的副手物品
-     * （放置时举方块 / 充能时举萤石 / 投掷时举打火石，起爆那一记再举一次），这是"看得见她
-     * 在做什么"的来源，但也可能有人不想让副手武器在打架时被闪一下——所以给一个开关。
-     *
-     * 关掉之后只剩挥臂 / 音效 / 爆炸本身（挥臂是打斗反馈，不归这个开关管）；还原逻辑
-     * （{@link BombPose#tick}）不受开关影响，所以半路关掉也不会把她的盾牌 / 食物留在手上
-     * 换不回来。
-     */
-    private static void pose(EntityMaid maid, ItemStack display, int ticks) {
-        // v1.2.2 实测五百九十七：开关判定收进 BombPose.showGated（全模组同一条开关）
-        BombPose.showGated(maid, display, ticks);
-    }
-
-    private static boolean cfgAirPlace() {
-        return MaidSmartConfig.COMBAT_BOMBING_AIR_PLACE.get();
-    }
-
-    /**
-     * v1.2.2 实测六百〇三【走后门：悬空也放得下】（默认开）——落点的最后一级。
-     *
-     * 需求原文："同时走后门让它在空中也可以放置。"前三级（目标脚边四邻 / 她正下方 / 悬空）
-     * 都有一个共同前提：那一格**没被别人占着**、原版也肯收。目标悬空时（蝙蝠 / 恶魂 /
-     * 半空中的怪）它脚边那四格全是空气、原版又以"那一格站着实体"为由拒绝 → 整段放弃。
-     * 这一级直接把落点取在**目标头顶 / 目标自己那一格**上（见 {@link #tryPlaceAirDrop}）。
-     */
-    private static boolean cfgAirDrop() {
-        return MaidSmartConfig.COMBAT_BOMBING_AIR_DROP.get();
-    }
-
-    private static double cfgTntRange() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_RANGE.get();
-    }
-
-    private static double cfgTntBurstRatio() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_RATIO.get();
-    }
-
-    private static int cfgTntBurstCount() {
-        return MaidSmartConfig.COMBAT_BOMBING_TNT_BURST_COUNT.get();
-    }
-
     /* ==================== 物品（按注册名找，不写 SRG 字段名） ==================== */
-
-    private static final String ID_OBSIDIAN = "minecraft:obsidian";
-    private static final String ID_BEDROCK = "minecraft:bedrock";
-    private static final String ID_END_CRYSTAL = "minecraft:end_crystal";
-    private static final String ID_RESPAWN_ANCHOR = "minecraft:respawn_anchor";
-    private static final String ID_GLOWSTONE = "minecraft:glowstone";
-    /** 原版 TNT：v1.2.2 实测六百〇四起判据放宽为"注册名里带 tnt 的都算"（见 {@link #isTnt}），这个常量只代表那一件本身 */
-    private static final String ID_TNT = "minecraft:tnt";
-    private static final String ID_FLINT_AND_STEEL = "minecraft:flint_and_steel";
-    /** v1.2.2 实测六百〇三：烈焰弹 / 火焰弹——打火石之后的第二号点火料（原版口径也是靠它点着 TNT 的） */
-    private static final String ID_FIRE_CHARGE = "minecraft:fire_charge";
-    private static final String ID_TNT_PRIMED_SOUND = "minecraft:entity.tnt.primed";
-
-    private static final Map<String, Item> ITEM_CACHE = new HashMap<>();
-
-    private static Item item(String id) {
-        Item cached = ITEM_CACHE.get(id);
-        if (cached != null) {
-            return cached;
-        }
-        try {
-            Item it = ForgeRegistries.ITEMS.getValue(new net.minecraft.resources.ResourceLocation(id));
-            if (it != null) {
-                ITEM_CACHE.put(id, it);
-            }
-            return it;
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    private static boolean isStack(ItemStack stack, String id) {
-        if (stack == null || stack.m_41619_()) {
-            return false;
-        }
-        Item want = item(id);
-        return want != null && stack.m_150930_(want);
-    }
-
-    private static boolean matchAny(ItemStack stack, String... ids) {
-        for (String id : ids) {
-            if (isStack(stack, id)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** 物品的注册名（拿不到就空串）——v1.2.2 实测六百〇四：TNT 判据与投掷日志都靠它 */
-    private static String idOf(ItemStack stack) {
-        try {
-            net.minecraft.resources.ResourceLocation rl = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
-            return rl == null ? "" : rl.toString();
-        } catch (Throwable ignored) {
-            return "";
-        }
-    }
-
-    /** 是不是任意一张床（原版 16 色都算，不写死颜色） */
-    private static boolean isBed(ItemStack stack) {
-        try {
-            if (stack == null || stack.m_41619_()) {
-                return false;
-            }
-            if (!(stack.m_41720_() instanceof BlockItem bi)) {
-                return false;
-            }
-            return bi.m_40614_() instanceof BedBlock;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.2.2 实测六百〇四【TNT 的边界放宽】：**注册名里带 tnt 的都算 TNT**
-     * ＋ 实测六百〇五【方块继承 {@link TntBlock} 的也算】——两条取并集。
-     *
-     * 需求原文："为 tnt 放宽界线，模组内含有 tnt 词条的都可被视作 tnt。"
-     *            "我们应该判断一下这个方块是否存在其对应 tnt 形式，如果有则确认……"
-     *
-     * ① 注册名（{@code namespace:path}）里出现 {@code tnt}，大小写不敏感（有的模组把 path 写成大写）；
-     * ② 或者这一件是方块物品、而**它的方块继承 {@link TntBlock}**（见 {@link #tntBlockOf}）。
-     *    这一条是六百〇五 补的：模组 TNT 的注册名常常根本不含 tnt（ProjectE 的爆破新星 =
-     *    {@code projecte:nova_catalyst}），光按名字判会整片漏掉；方块的血统才是可靠证据。
-     *
-     * 【为什么不看显示名 / 中文名】那是本地化文本（中文客户端里它根本不叫 tnt），按它判会随
-     * 语言变、还会误伤名字里恰好带 tnt 的别的物品；注册名 + 方块血统才是稳定的那两份身份。
-     * 【边界】判据只看"名字 / 血统"，不看"这一件能不能放"——所以像 {@code minecraft:tnt_minecart}
-     * 这种名字里带 tnt 的也算数（它没有对应方块，扔出去的还是一枚原版引信 TNT，见 {@link #primeTnt}）。
-     */
-    private static boolean isTnt(ItemStack stack) {
-        if (stack == null || stack.m_41619_()) {
-            return false;
-        }
-        if (isStack(stack, ID_TNT)) {
-            return true; // 原版那一件：注册表查询万一失手也照认
-        }
-        if (tntBlockOf(stack) != null) {
-            return true; // v1.2.2 实测六百〇五：方块继承 TntBlock 的（模组 TNT 多半名字里没有 tnt）
-        }
-        return idOf(stack).toLowerCase(java.util.Locale.ROOT).contains("tnt");
-    }
-
-    /**
-     * 这一件如果是"方块本身就是 {@link TntBlock}（含子类）"的物品，返回那个方块；否则 null。
-     *
-     * v1.2.2 实测六百〇五：这是 {@link #isTnt} 的第二条判据，也是 {@link #primeTnt} 决定
-     * "要不要问它自己"的那把钥匙——拿到的**不是** {@code TntBlock} 本身（{@code tb.getClass()}
-     * 不等于 {@code TntBlock.class}）就说明这是模组自己写的 TNT 方块，投放时走它自己的点火钩子。
-     */
-    private static TntBlock tntBlockOf(ItemStack stack) {
-        try {
-            if (stack == null || stack.m_41619_() || !(stack.m_41720_() instanceof BlockItem bi)) {
-                return null;
-            }
-            return bi.m_40614_() instanceof TntBlock tb ? tb : null;
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    /** 手上（主手/副手）+ 女仆背包里有没有这个东西 */
-    private static boolean has(EntityMaid maid, String... ids) {
-        if (maid == null) {
-            return false;
-        }
-        try {
-            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            for (int i = 0; i < hands.getSlots(); i++) {
-                if (matchAny(hands.getStackInSlot(i), ids)) {
-                    return true;
-                }
-            }
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                if (matchAny(inv.getStackInSlot(i), ids)) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    private static boolean hasBed(EntityMaid maid) {
-        return maid != null && !takeFirstMatch(maid, MaidBombing::isBed, true).m_41619_();
-    }
-
-    /** TNT：v1.2.2 实测六百〇四/六百〇五 起判据放宽（注册名带 tnt 的、方块继承 TntBlock 的，见 {@link #isTnt}） */
-    private static boolean hasTnt(EntityMaid maid) {
-        return !takeFirstMatch(maid, MaidBombing::isTnt, true).m_41619_();
-    }
-
-    /** 取 1 个（手 → 背包）；取不到返回空。dryRun=true 时只探测不抽取（内部用） */
-    private static ItemStack takeOne(EntityMaid maid, String... ids) {
-        return takeFirst(maid, ids, false);
-    }
-
-    private static ItemStack takeOneBed(EntityMaid maid) {
-        return takeFirst(maid, null, false);
-    }
-
-    /** 取 1 个 TNT（同样是放宽后的判据）——v1.2.2 实测六百〇四 */
-    private static ItemStack takeOneTnt(EntityMaid maid) {
-        return takeFirstMatch(maid, MaidBombing::isTnt, false);
-    }
-
-    /** 按注册名取：ids == null 表示"任意床"（照旧的特例），否则按注册名逐个匹配 */
-    private static ItemStack takeFirst(EntityMaid maid, String[] ids, boolean dryRun) {
-        return takeFirstMatch(maid, ids == null ? MaidBombing::isBed : s -> matchAny(s, ids), dryRun);
-    }
-
-    /**
-     * 唯一的取料实现（v1.2.2 实测六百〇四改成**按判据取**）：手上 → 背包里第一个满足 match
-     * 的那一件。dryRun=true 只回答"有没有"（hasBed / hasTnt 用），一个物品都不动。
-     *
-     * 【为什么改收判据】旧版收的是注册名数组，再外挂一个"ids == null 表示任意床"的特例；
-     * TNT 那条放宽规则（"注册名里带 tnt"，不是一个固定 id）用注册名数组表达不出来，
-     * 所以改成收 {@link java.util.function.Predicate}——床 / 固定注册名 / TNT 各自把判据传进来。
-     */
-    private static ItemStack takeFirstMatch(EntityMaid maid,
-                                            java.util.function.Predicate<ItemStack> match, boolean dryRun) {
-        if (maid == null) {
-            return ItemStack.f_41583_;
-        }
-        try {
-            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            for (int i = 0; i < hands.getSlots(); i++) {
-                ItemStack s = hands.getStackInSlot(i);
-                if (match.test(s)) {
-                    return dryRun ? s : hands.extractItem(i, 1, false);
-                }
-            }
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (match.test(s)) {
-                    return dryRun ? s : inv.extractItem(i, 1, false);
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return ItemStack.f_41583_;
-    }
-
-    /**
-     * 用不掉就还回去（背包满则丢在脚下）。
-     *
-     * v1.2.2 实测五百九十五【不再吞装备】：旧版是"找第一个空格 → `insertItem` →
-     * 不看返回值直接 return"——那一格被规则拒收（TLM 女仆背包的禁放规则
-     * `MaidBackpackHandler.isItemValid`、模组背包的槽位限制）或那一栈放不下时，
-     * `insertItem` 会把**整栈原样退回来**，旧版拿到就丢 = 物品凭空消失。
-     * 现在统一走 {@link com.maidsmart.tool.MaidGiveBack}：堆叠插入，塞不下的落地。
-     */
-    private static void giveBack(EntityMaid maid, ItemStack stack) {
-        com.maidsmart.tool.MaidGiveBack.give(maid, stack, "轰炸用不掉的材料");
-    }
-
-    /**
-     * v1.2.2 实测五百九十一【打火石不再被吞】+ 实测六百〇五【按"类"认、按"有没有耐久"用掉】：
-     * **就地**给她手上/背包里的那一件扣 1 点耐久，没坏就**放回原槽**。
-     *
-     * 反馈原文（五百九十一）："我发现扔 TNT 的时候会直接把打火石吞掉，而不是消耗打火石的耐久。"
-     * 反馈原文（六百〇五）："点燃 tnt 的消耗品走消耗，道具走自己的耐久机制。"
-     *
-     * 旧版走的是 takeOne(...)：把整件打火石从背包里**取出来**（= 从背包消失），只对取出来的那一份
-     * 扣耐久——于是背包里那一件凭空没了，玩家看到的就是"被吞掉"。现在从**同一格**取出、扣耐久、
-     * 再塞回**同一格**：耐久条正常走，耐久见底才真的少一件（原版口径）。
-     *
-     * 【六百〇五 的两条放宽】哪一件算"点火料"由判据给（{@link #isFlintLike} / {@link #isChargeLike}），
-     * 而"怎么用掉"完全看这一件**有没有耐久**（{@code getMaxDamage() > 0}）：
-     * 有耐久 = 道具 → 扣 1 点耐久、本体放回原槽；没耐久 = 消耗品 → 整件消耗。
-     * 于是打火石与火焰弹各走各的，模组自加的点火料也不用再打补丁（见 {@link #useIgniter}）。
-     */
-    private static ItemStack useIgniterIn(IItemHandler inv, EntityMaid maid,
-                                         java.util.function.Predicate<ItemStack> match) {
-        try {
-            for (int i = 0; i < inv.getSlots(); i++) {
-                if (!match.test(inv.getStackInSlot(i))) {
-                    continue;
-                }
-                ItemStack one = inv.extractItem(i, 1, false);
-                if (one.m_41619_()) {
-                    continue;
-                }
-                if (one.m_41776_() <= 0) {
-                    return one; // 消耗品（没有耐久）：整件消耗——取出来的这一件就是"刚用掉的那一件"
-                }
-                ItemStack display = one.m_41777_(); // 给动作亮的快照（与槽里那一件不共用对象）
-                try {
-                    // 道具（有耐久）：原版口径——点一次掉 1 点耐久（1.20.1：hurtAndBreak(1, 实体, 损坏回调)）
-                    one.m_41622_(1, maid, m -> m.m_21166_(EquipmentSlot.MAINHAND));
-                } catch (Throwable ignored) {
-                }
-                if (!one.m_41619_()) {
-                    ItemStack left = inv.insertItem(i, one, false); // 先放回原槽（那一格刚被我们腾出来）
-                    if (!left.m_41619_()) {
-                        giveBack(maid, left);
-                    }
-                }
-                return display;
-            }
-        } catch (Throwable ignored) {
-        }
-        return ItemStack.f_41583_;
-    }
-
-    /**
-     * v1.2.2 实测六百〇五【点火料按"类"认】：**类打火石**——{@code FlintAndSteelItem} 的子类都算
-     * （模组自加的打火石 / 点火棒走的正是这条路），原版那一件与"只改了注册名"的变体由注册名兜底。
-     */
-    private static boolean isFlintLike(ItemStack stack) {
-        try {
-            if (stack == null || stack.m_41619_()) {
-                return false;
-            }
-            if (stack.m_41720_() instanceof FlintAndSteelItem) {
-                return true;
-            }
-        } catch (Throwable ignored) {
-        }
-        return isStack(stack, ID_FLINT_AND_STEEL);
-    }
-
-    /**
-     * v1.2.2 实测六百〇五：**类火焰弹**——{@code FireChargeItem} 的子类都算
-     * （原版火焰弹就是它，模组自加的火种多半也继承它），原版那一件由注册名兜底。
-     */
-    private static boolean isChargeLike(ItemStack stack) {
-        try {
-            if (stack == null || stack.m_41619_()) {
-                return false;
-            }
-            if (stack.m_41720_() instanceof FireChargeItem) {
-                return true;
-            }
-        } catch (Throwable ignored) {
-        }
-        return isStack(stack, ID_FIRE_CHARGE);
-    }
-
-    /** 点火料：类打火石 或 类火焰弹——v1.2.2 实测六百〇五 */
-    private static boolean isIgniter(ItemStack stack) {
-        return isFlintLike(stack) || isChargeLike(stack);
-    }
-
-    /**
-     * v1.2.2 实测六百〇三【点火料：打火石 或 烈焰弹】＋ 实测六百〇五【按"类"认】。
-     *
-     * 需求原文（六百〇三）："女仆包内有烈焰弹的时候也可以触发投掷 tnt 效果是消耗一个烈焰弹。
-     * 优先用打火石。"
-     * 需求原文（六百〇五）："类打火石/火焰弹识别；即可以……点燃 tnt 的消耗品走消耗，
-     * 道具走自己的耐久机制。"
-     * ——手上 / 背包里只要有一件**类打火石**或**类火焰弹**就算有料；两样都有时打火石那一类优先。
-     */
-    private static boolean hasIgniter(EntityMaid maid) {
-        return !takeFirstMatch(maid, MaidBombing::isIgniter, true).m_41619_();
-    }
-
-    /**
-     * 用掉一份点火料，返回"刚用掉的那一件"（给 {@link BombPose} 做动作：副手亮一下）；
-     * 空 = 一件都没有（这一发别投）。
-     *
-     * ① 打火石那一类优先（有耐久 → 就地扣 1 点耐久、放回原槽）；
-     * ② 没有才轮到火焰弹那一类（没耐久 → 整件消耗掉）。
-     * 每一类都是"手 → 背包"（hand 先看，与旧版一致）；怎么用掉由 {@link #useIgniterIn} 按
-     * "有没有耐久"决定，不写死名字——v1.2.2 实测六百〇五。
-     */
-    private static ItemStack useIgniter(EntityMaid maid) {
-        if (maid == null) {
-            return ItemStack.f_41583_;
-        }
-        try {
-            IItemHandler hands = (IItemHandler) maid.getHandsInvWrapper();
-            IItemHandler inv = maid.getMaidInv();
-            ItemStack used = useIgniterIn(hands, maid, MaidBombing::isFlintLike);
-            if (used.m_41619_()) {
-                used = useIgniterIn(inv, maid, MaidBombing::isFlintLike);
-            }
-            if (used.m_41619_()) {
-                used = useIgniterIn(hands, maid, MaidBombing::isChargeLike);
-            }
-            if (used.m_41619_()) {
-                used = useIgniterIn(inv, maid, MaidBombing::isChargeLike);
-            }
-            return used;
-        } catch (Throwable ignored) {
-            return ItemStack.f_41583_;
-        }
-    }
-
-    private static SoundEvent sound(String id) {
-        try {
-            return ForgeRegistries.SOUND_EVENTS.getValue(new net.minecraft.resources.ResourceLocation(id));
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
 
     /* ==================== 状态 ==================== */
 
     /** 四类炸弹的爆炸参数（同一批原版反编译数字） */
-    private enum Kind {
+    enum Kind {
         CRYSTAL("末地水晶", 6.0F, false),
         ANCHOR("重生锚", 5.0F, true),
         BED("床", 5.0F, true),
@@ -736,7 +259,7 @@ public final class MaidBombing {
     }
 
     /** 近战轰炸的分步相位（step 0 放方块 / step 1 放水晶或充能 → 交还链路） */
-    private static final class Phase {
+    static final class Phase {
         final Kind kind;
         final EntityMaid maid;
         /** v1.2.2 实测五百九十二：相位改由服务端 tick 统一驱动 → 自己记住维度与目标 */
@@ -771,7 +294,7 @@ public final class MaidBombing {
     }
 
     /** 待起爆的一发 */
-    private static final class Bomb {
+    static final class Bomb {
         final ServerLevel level;
         final EntityMaid maid;
         final Entity entity;
@@ -808,7 +331,7 @@ public final class MaidBombing {
      * {@link #TRACK_TURN_DEG} 度——反馈"太鬼畜、运动很不自然"就是因为旧版每 tick 把方向**硬掰**
      * 到正指目标；现在是离手后一小段平滑弧线，只为小幅修准，到点即撒手（按当前方向直飞）。
      */
-    private static final class Homing {
+    static final class Homing {
         final ServerLevel level;
         final PrimedTnt tnt;
         final LivingEntity target;
@@ -852,14 +375,14 @@ public final class MaidBombing {
      * 而是变成物品**塞回女仆背包**（{@link #returnBlockItem}）；
      * v1.2.2 实测五百九十三：背包满时改为**掉在她脚下**（掉落物），与挖矿 / 搭路同一口径。
      */
-    private static void scheduleReclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos,
+    static void scheduleReclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos,
                                        List<Block> block) {
         if (level == null || pos == null || block == null || pos.isEmpty()) {
             return;
         }
-        int seconds = Math.max(0, cfgReclaimSeconds());
+        int seconds = Math.max(0, BombConfig.cfgReclaimSeconds());
         if (seconds <= 0) {
-            removePlaced(level, pos, block, maid);
+            BombPlacement.removePlaced(level, pos, block, maid);
             return;
         }
         if (RECLAIMS.size() < MAX_PENDING) {
@@ -877,8 +400,8 @@ public final class MaidBombing {
      * 两者可以同时启动。"）。现在一条链路一个相位、各走各的步骤与间隔，
      * 同一次攻击里**材料齐的几段可以同时起手**（最多三段）。
      */
-    private static final Map<UUID, EnumMap<Kind, Phase>> PHASE = new HashMap<>();
-    private static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
+    static final Map<UUID, EnumMap<Kind, Phase>> PHASE = new HashMap<>();
+    static final Map<UUID, Long> TNT_NEXT = new HashMap<>();
     /**
      * v1.2.2 实测五百九十二：整条轰炸链路的最短间隔下限（女仆 → 链路 → 下次可起手的 gameTime）。
      *
@@ -886,70 +409,37 @@ public final class MaidBombing {
      * 若还共用一条下限，先起手的把下限顶掉就等于又把其它两段吞了（正好是要修的那个毛病）。
      */
     private static final Map<UUID, EnumMap<Kind, Long>> BOMB_NEXT = new HashMap<>();
-    private static final List<Bomb> PENDING = new ArrayList<>();
+    static final List<Bomb> PENDING = new ArrayList<>();
     /** v1.2.2 实测五百九十：攻击链路收尾登记的「待投放」（女仆 UUID → 登记时刻） */
-    private static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
+    static final Map<UUID, Long> TNT_ARMED = new HashMap<>();
     /** 上一次扫描时她是否处于攻击冷却（无 → 有的跳变 = 刚打完一记） */
-    private static final Map<UUID, Boolean> COOLDOWN_SEEN = new HashMap<>();
+    static final Map<UUID, Boolean> COOLDOWN_SEEN = new HashMap<>();
     /** 追踪中的 TNT（引信期间每 tick 把方向掰向目标；只改方向、不改速度） */
-    private static final List<Homing> HOMING = new ArrayList<>();
+    static final List<Homing> HOMING = new ArrayList<>();
     /** 「待投放」的有效期（tick）：挂这么久还没投出去就作废，免得留一发陈年老弹 */
-    private static final long ARMED_TIMEOUT = 200L;
+    static final long ARMED_TIMEOUT = 200L;
     /** v1.2.2 实测五百九十一：追踪时每 tick 最多转这么多度（限转角 = 平滑弧线，不是瞬间折向） */
     private static final double TRACK_TURN_DEG = 5.0;
     /** 同上（弧度） */
-    private static final double TRACK_TURN_RAD = Math.toRadians(TRACK_TURN_DEG);
+    static final double TRACK_TURN_RAD = Math.toRadians(TRACK_TURN_DEG);
     /** 动作姿势：副手举起那件东西的时长（tick）——放置/充能/投掷 10（0.5 秒） */
-    private static final int BOMB_POSE_TICKS = 10;
+    static final int BOMB_POSE_TICKS = 10;
     /** 动作姿势：起爆那一记挥臂的时长（tick） */
-    private static final int BLAST_POSE_TICKS = 8;
+    static final int BLAST_POSE_TICKS = 8;
     /** 相位最长存活（tick）：超了当陈旧状态丢掉（防"打到一半目标没了"留下的尾巴） */
     private static final long PHASE_TIMEOUT = 100L;
-    private static final int MAX_PENDING = 256;
+    static final int MAX_PENDING = 256;
     /** 待起爆列表里一条最长挂多久（tick）：跨过这个数还没炸（区块没加载等）就丢掉，防泄漏 */
-    private static final long BOMB_TIMEOUT = 1200L;
+    static final long BOMB_TIMEOUT = 1200L;
 
-    /** "原版模式"窗口：这一瞬间的爆炸不归因女仆，风免让位（见类注释的爆炸口径） */
-    private static volatile boolean vanillaBlast = false;
+    /** 供 {@link FriendlyWindGuard} 查询：此刻女仆的炸弹是不是"原版模式"（玩家照震） —— 实现见 BombExplosion.inVanillaBlast（v1.2.4 拆分）。 */
+    public static boolean inVanillaBlast() { return BombExplosion.inVanillaBlast(); }
 
-    /** 供 {@link FriendlyWindGuard} 查询：此刻女仆的炸弹是不是"原版模式"（玩家照震） */
-    public static boolean inVanillaBlast() {
-        return vanillaBlast;
-    }
+    /** 供 {@link FriendlyWindGuard} 查询：此刻这一下爆炸的风，对放炸弹的女仆本人是否也不生效 —— 实现见 BombExplosion.isSelfImmuneBlast（v1.2.4 拆分）。 */
+    public static boolean isSelfImmuneBlast() { return BombExplosion.isSelfImmuneBlast(); }
 
-    /**
-     * v1.2.2 实测五百八十八【自爆风免窗口】：这一下爆炸的**风对"放它的女仆本人"也不生效**。
-     *
-     * 需求原文："此处爆炸机制与重锤不同，通过这种方式产生的风暴对释放的女仆自己也不生效。"
-     * ——重锤的风爆会把包括她在内的所有人一起掀飞；我们这条链路做的炸弹不一样：
-     * 她自己不会被打退（伤害本来就被友伤守卫拦掉了，这里连击退一起免）。
-     */
-    private static volatile boolean selfImmuneBlast = false;
-
-    /** 供 {@link FriendlyWindGuard} 查询：此刻这一下爆炸的风，对放炸弹的女仆本人是否也不生效 */
-    public static boolean isSelfImmuneBlast() {
-        return selfImmuneBlast;
-    }
-
-    /** 窗口期内"放这一发炸弹的女仆"UUID（按人认，避免误免别人） */
-    private static volatile java.util.UUID selfImmuneMaidId = null;
-
-    /**
-     * 这一下要施加在 {@code victim} 身上的风，是不是"放炸弹的她本人"该免掉的。
-     * 只有"窗口开着 + 受害者的 UUID 正是这只女仆"才返回 true——这样窗口期内
-     * 恰好最后一个 tick 的别的实体、或另一只女仆自己的法术，都不会被误免。
-     */
-    public static boolean isSelfImmuneBlastFor(Entity victim) {
-        if (!selfImmuneBlast || victim == null) {
-            return false;
-        }
-        try {
-            java.util.UUID caster = selfImmuneMaidId;
-            return caster != null && caster.equals(victim.m_20148_());
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
+    /** 这一下要施加在 {@code victim} 身上的风，是不是"放炸弹的她本人"该免掉的 —— 实现见 BombExplosion.isSelfImmuneBlastFor（v1.2.4 拆分）。 */
+    public static boolean isSelfImmuneBlastFor(Entity victim) { return BombExplosion.isSelfImmuneBlastFor(victim); }
 
     /** 本轮结束/女仆消失时清掉相位（待起爆的那几发照旧自己炸，不跟着清） */
     public static void forget(UUID maidId) {
@@ -1002,14 +492,14 @@ public final class MaidBombing {
         for (Phase ph : map.values()) {
             if (ph != null && ph.level != null) {
                 try {
-                    rollback(ph.level, ph);
+                    BombPlacement.rollback(ph.level, ph);
                 } catch (Throwable ignored) {
                 }
             }
         }
     }
 
-    private static void log(String msg) {
+    static void log(String msg) {
         com.maidsmart.tool.PromaidLog.log("空袭轰炸", msg);
     }
 
@@ -1025,7 +515,7 @@ public final class MaidBombing {
      */
     public static boolean tryStartMelee(ServerLevel level, EntityMaid maid, LivingEntity target) {
         try {
-            if (level == null || maid == null || target == null || !cfgMelee()) {
+            if (level == null || maid == null || target == null || !BombConfig.cfgMelee()) {
                 return false;
             }
 
@@ -1064,7 +554,7 @@ public final class MaidBombing {
                 }
                 PHASE.computeIfAbsent(id, k -> new EnumMap<>(Kind.class))
                         .put(kind, new Phase(kind, maid, level, target, now));
-                next.put(kind, now + cfgBombInterval());
+                next.put(kind, now + BombConfig.cfgBombInterval());
                 started = true;
             }
             return started;
@@ -1086,13 +576,13 @@ public final class MaidBombing {
         List<Kind> out = new ArrayList<>(3);
         EnumMap<Kind, Long> next = BOMB_NEXT.get(id);
         // ① 末地水晶（黑曜石 / 基岩底座）
-        if (has(maid, ID_END_CRYSTAL) && has(maid, ID_OBSIDIAN, ID_BEDROCK)
+        if (BombItems.has(maid, BombItems.ID_END_CRYSTAL) && BombItems.has(maid, BombItems.ID_OBSIDIAN, BombItems.ID_BEDROCK)
                 && !onCooldown(next, Kind.CRYSTAL, now)) {
             out.add(Kind.CRYSTAL);
         }
         // ② 重生锚（需要 1 颗萤石当引信；维度闸见 explodesHere）
-        boolean anchorReady = explodesHere(level, Kind.ANCHOR) && has(maid, ID_RESPAWN_ANCHOR)
-                && (!cfgAnchorNeedsGlowstone() || has(maid, ID_GLOWSTONE));
+        boolean anchorReady = explodesHere(level, Kind.ANCHOR) && BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)
+                && (!BombConfig.cfgAnchorNeedsGlowstone() || BombItems.has(maid, BombItems.ID_GLOWSTONE));
         if (anchorReady && !onCooldown(next, Kind.ANCHOR, now)) {
             out.add(Kind.ANCHOR);
         } else if (!anchorReady) {
@@ -1104,7 +594,7 @@ public final class MaidBombing {
             hintAnchorSkip(level, maid);
         }
         // ③ 床（同样走维度闸：主世界 = bedWorks 为 true = 不开放）
-        if (explodesHere(level, Kind.BED) && hasBed(maid) && !onCooldown(next, Kind.BED, now)) {
+        if (explodesHere(level, Kind.BED) && BombItems.hasBed(maid) && !onCooldown(next, Kind.BED, now)) {
             out.add(Kind.BED);
         }
         if (out.isEmpty() && (running == null || running.isEmpty())) {
@@ -1136,10 +626,10 @@ public final class MaidBombing {
     /** 材料齐但没有可用链路时的限频诊断（每 10 秒最多一条/女仆；她什么都没带就静默） */
     private static void diagSkip(ServerLevel level, EntityMaid maid) {
         try {
-            boolean crystal = has(maid, ID_END_CRYSTAL);
-            boolean base = has(maid, ID_OBSIDIAN) || has(maid, ID_BEDROCK);
-            boolean anchor = has(maid, ID_RESPAWN_ANCHOR);
-            boolean bed = hasBed(maid);
+            boolean crystal = BombItems.has(maid, BombItems.ID_END_CRYSTAL);
+            boolean base = BombItems.has(maid, BombItems.ID_OBSIDIAN) || BombItems.has(maid, BombItems.ID_BEDROCK);
+            boolean anchor = BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR);
+            boolean bed = BombItems.hasBed(maid);
             if (!crystal && !anchor && !bed) {
                 return; // 她什么都没带：正常跳过，不刷日志
             }
@@ -1154,7 +644,7 @@ public final class MaidBombing {
                 sb.append("水晶链路缺").append(base ? "末地水晶" : "黑曜石/基岩").append("；");
             }
             if (anchor) {
-                sb.append("重生锚：").append(!has(maid, ID_GLOWSTONE) && cfgAnchorNeedsGlowstone()
+                sb.append("重生锚：").append(!BombItems.has(maid, BombItems.ID_GLOWSTONE) && BombConfig.cfgAnchorNeedsGlowstone()
                         ? "缺萤石；"
                         : (anchorWorks(level) ? "本维度不炸（维度闸关，" + dimKey(level) + "）；" : "可选；"));
             }
@@ -1173,7 +663,6 @@ public final class MaidBombing {
         } catch (Throwable ignored) {
         }
     }
-
 
     /* ============ v1.2.2 实测五百九十四起：把"为什么没用重生锚/床"写进日志（五百九十五撤掉气泡） ============ */
 
@@ -1209,12 +698,12 @@ public final class MaidBombing {
      * 链路是开着的时候**不记**（真的起手失败另有日志，见 stepBlock 的"放不下"）。
      */
     private static void hintAnchorSkip(ServerLevel level, EntityMaid maid) {
-        if (level == null || maid == null || !has(maid, ID_RESPAWN_ANCHOR)) {
+        if (level == null || maid == null || !BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)) {
             return;
         }
         if (!explodesHere(level, Kind.ANCHOR)) {
             hint(level, maid, HINT_ANCHOR_DIM);
-        } else if (cfgAnchorNeedsGlowstone() && !has(maid, ID_GLOWSTONE)) {
+        } else if (BombConfig.cfgAnchorNeedsGlowstone() && !BombItems.has(maid, BombItems.ID_GLOWSTONE)) {
             hint(level, maid, HINT_ANCHOR_GLOW);
         }
     }
@@ -1269,7 +758,7 @@ public final class MaidBombing {
         if (level == null) {
             return false;
         }
-        if (!cfgDimensionGuard()) {
+        if (!BombConfig.cfgDimensionGuard()) {
             return true;
         }
         try {
@@ -1323,7 +812,7 @@ public final class MaidBombing {
         EntityMaid maid = ph.maid;
         long gameTime = level.m_46467_();
         if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
-            rollback(level, ph);
+            BombPlacement.rollback(level, ph);
             return Result.ABORT;
         }
         try {
@@ -1334,14 +823,14 @@ public final class MaidBombing {
             // 现在：目标死了**不中止**，改用"它最后站的那一格"把这一轮走完（炸弹落在原地），
             // 只有"从没拿到过目标位置"或超时才回滚。
             if (ph.targetPos == null || gameTime - ph.start > PHASE_TIMEOUT) {
-                rollback(level, ph);
+                BombPlacement.rollback(level, ph);
                 return Result.ABORT;
             }
             if (ph.target != null && ph.target.m_6084_()) {
                 ph.targetPos = ph.target.m_20183_(); // 目标活着 → 跟着它走
             }
             if (ph.step == 0) {
-                if (!stepBlock(level, maid, ph.targetPos, ph)) {
+                if (!BombPlacement.stepBlock(level, maid, ph.targetPos, ph)) {
                     return Result.ABORT; // 放不下：这一段放弃（其它段各走各的，不受影响）
                 }
                 ph.step = 1;
@@ -1350,17 +839,17 @@ public final class MaidBombing {
             }
             // v1.2.2 实测五百九十一【看得出间隔】：放下方块与"挂水晶 / 充能"之间留一段可见停顿——
             // 反馈："黑曜石和末地水晶几乎是同时放置的，根本看不出间隔"。默认 10 tick = 0.5 秒。
-            if (gameTime - ph.stepAt < cfgPlaceGap()) {
+            if (gameTime - ph.stepAt < BombConfig.cfgPlaceGap()) {
                 return Result.CONTINUE;
             }
-            if (!stepPayload(level, maid, ph, gameTime)) {
-                rollback(level, ph);
+            if (!BombPlacement.stepPayload(level, maid, ph, gameTime)) {
+                BombPlacement.rollback(level, ph);
                 return Result.ABORT;
             }
             return Result.DONE; // 交还链路：她接着放烟花起飞，0.5 秒后那边起爆
         } catch (Throwable t) {
             log("执行异常：" + t);
-            rollback(level, ph);
+            BombPlacement.rollback(level, ph);
             return Result.ABORT;
         }
     }
@@ -1421,7 +910,7 @@ public final class MaidBombing {
                 for (Phase ph : new ArrayList<>(map.values())) {
                     if (ph == null || ph.level == null || ph.maid == null || !ph.maid.m_6084_()) {
                         if (ph != null && ph.level != null) {
-                            rollback(ph.level, ph); // 她没了：已放下的方块撤掉（不掉落）
+                            BombPlacement.rollback(ph.level, ph); // 她没了：已放下的方块撤掉（不掉落）
                         }
                         if (ph != null) {
                             map.remove(ph.kind);
@@ -1442,7 +931,7 @@ public final class MaidBombing {
                     if (anyDone && maid != null && maid.m_6084_()) {
                         // v1.2.2 实测五百九十【TNT 挂链路最末】：所有段都放完了 = 这一次攻击链路收尾，
                         // TNT 挂在最后（有料就扔，缺料静默跳过；最短间隔只当下限，见 flushTnt）
-                        flushTnt(maid.m_9236_() instanceof ServerLevel sl ? sl : null, maid, target, id,
+                        BombTntTick.flushTnt(maid.m_9236_() instanceof ServerLevel sl ? sl : null, maid, target, id,
                                 maid.m_9236_().m_46467_());
                     }
                 }
@@ -1454,1063 +943,20 @@ public final class MaidBombing {
         }
     }
 
-    /** step 0：把黑曜石/重生锚/床放到目标脚边那一格（走原版 BlockItem.place，两格床也由它铺） */
-    private static boolean stepBlock(ServerLevel level, EntityMaid maid, BlockPos targetPos, Phase ph) {
-        ItemStack stack;
-        if (ph.kind == Kind.BED) {
-            stack = takeOneBed(maid);
-        } else if (ph.kind == Kind.CRYSTAL) {
-            stack = takeOne(maid, has(maid, ID_OBSIDIAN) ? ID_OBSIDIAN : ID_BEDROCK);
-        } else {
-            stack = takeOne(maid, ID_RESPAWN_ANCHOR);
-        }
-        if (stack.m_41619_()) {
-            return false;
-        }
-        // v1.2.2 实测五百九十一【动作】：放置会把这 1 件消耗掉（place 内部 shrink）→ **先留快照**，
-        // 拿它当"她手上正举着的那件东西"做动作（副手短暂亮一下，见 BombPose）
-        ItemStack display = stack.m_41777_();
-        display.m_41764_(1);
-        ph.display = display;
-        BlockPos spot = placeOnSupport(level, maid, targetPos, stack, ph.target);
-        if (spot == null) {
-            giveBack(maid, stack);
-            log(ph.kind.cn + " 放不下（目标脚边 4 邻 / 她正下方 16 格 / 空中强制="
-                    + (cfgAirPlace() ? "开" : "关") + " / 后门悬空投弹="
-                    + (cfgAirDrop() ? "开" : "关") + " 都没成）→ 本次放弃轰炸");
-            return false;
-        }
-        ph.spot = spot;
-        Block placed = placedBlockOf(level, spot, stack);
-        Direction facing = maid.m_6350_();
-        for (BlockPos p : new BlockPos[]{spot, spot.m_121945_(facing)}) {
-            if (placed != null && level.m_8055_(p).m_60734_() == placed) {
-                ph.placed.add(p);
-                ph.placedBlock.add(placed);
-            }
-        }
-        maid.m_6674_(InteractionHand.MAIN_HAND);
-        pose(maid, ph.display, BOMB_POSE_TICKS);
-        log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放下 " + ph.kind.cn
-                + " @" + spot.m_123341_() + "," + spot.m_123342_() + "," + spot.m_123343_());
-        return true;
-    }
-
-    /** step 1：水晶挂上去 / 重生锚用萤石充 1 级 → 排起爆 */
-    private static boolean stepPayload(ServerLevel level, EntityMaid maid, Phase ph, long gameTime) {
-        BlockPos base = ph.spot;
-        if (base == null) {
-            return false;
-        }
-        Entity spawned = null;
-        if (ph.kind == Kind.CRYSTAL) {
-            ItemStack crystal = takeOne(maid, ID_END_CRYSTAL);
-            if (crystal.m_41619_()) {
-                log("末地水晶取不到 → 放弃轰炸");
-                return false;
-            }
-            EndCrystal ec = new EndCrystal(level, base.m_123341_() + 0.5, base.m_123342_() + 1.0, base.m_123343_() + 0.5);
-            // 原版"拿末地水晶物品放在黑曜石上"就是 setShowBottom(false)（EndCrystalItem 反编译实证），
-            // 不是末地柱子上那种带底座的形态——按玩家反馈改成普通放置的样子。
-            ec.m_31056_(false);
-            if (!level.m_7967_(ec)) {
-                log("末地水晶生成失败 → 放弃轰炸");
-                return false;
-            }
-            spawned = ec;
-            // 起爆那一刻副手亮的是水晶（"好像真的打了一下末影水晶"）
-            ph.display = crystal.m_41777_();
-            ph.display.m_41764_(1);
-            maid.m_6674_(InteractionHand.MAIN_HAND);
-            pose(maid, ph.display, BOMB_POSE_TICKS);
-        } else if (ph.kind == Kind.ANCHOR) {
-            // ── v1.2.2 实测五百九十二：这一段的动作照需求原话走 ──
-            // "攻击→副手换成重生锚，放置重生锚（摆臂）→副手换成萤石，拿一颗萤石充能（摆臂动画）
-            //  →继续切换回飞行。0.5 秒后再挥一次手臂。正好对上重生锚自爆"
-            // step 0 已经放好重生锚（副手举的是它，见 stepBlock）；这里换萤石、充能、摆臂，
-            // 副手这一下亮的是萤石；ph.display 不覆盖，起爆那一刻亮的仍是重生锚。
-            ItemStack glow = ItemStack.f_41583_;
-            if (cfgAnchorNeedsGlowstone()) {
-                glow = takeOne(maid, ID_GLOWSTONE);
-                if (glow.m_41619_()) {
-                    log("萤石取不到（重生锚要有 1 级充能才会炸）→ 放弃轰炸");
-                    return false;
-                }
-                pose(maid, glow, BOMB_POSE_TICKS); // 副手这时换成的就是萤石
-            }
-            // 照原版 charge：音效 + 充能等级 +1（等级只决定"炸不炸"，1 级足够；< 4 只是防越界）
-            try {
-                BlockState cur = level.m_8055_(base);
-                if (cur.m_60734_() instanceof net.minecraft.world.level.block.RespawnAnchorBlock
-                        && cur.m_61143_(net.minecraft.world.level.block.RespawnAnchorBlock.f_55833_) < 4) {
-                    net.minecraft.world.level.block.RespawnAnchorBlock.m_269573_(maid, level, base, cur);
-                }
-            } catch (Throwable ignored) {
-            }
-            maid.m_6674_(InteractionHand.MAIN_HAND);
-            if (glow.m_41619_()) {
-                pose(maid, ph.display, BOMB_POSE_TICKS); // 没消耗萤石（开关关掉）→ 亮重生锚
-            }
-        }
-        List<BlockPos> posList = ph.placed.isEmpty() ? null : new ArrayList<>(ph.placed);
-        List<Block> blockList = ph.placedBlock.isEmpty() ? null : new ArrayList<>(ph.placedBlock);
-        if (PENDING.size() < MAX_PENDING) {
-            PENDING.add(new Bomb(level, maid, spawned, base, posList, blockList, ph.kind,
-                    gameTime + cfgFuse(), ph.display));
-        }
-        if (cfgPinkMark()) {
-            if (spawned != null) {
-                BombMarkNetworking.send(maid, 1, spawned.m_19879_(), null, cfgFuse() + 20);
-            } else {
-                BombMarkNetworking.send(maid, 0, 0, base, cfgFuse() + 20);
-            }
-        }
-        log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + ph.kind.cn + " 就位，"
-                + cfgFuse() + " tick 后起爆（威力 " + ph.kind.power + (ph.kind.fire ? "，带火" : "") + "）");
-        return true;
-    }
-
-    /**
-     * 撤掉女仆自己放下的那几块。
-     *
-     * v1.2.2 实测五百九十一：`returnTo` 非空 = 这几块**变成物品还进她的背包**（实测：
-     * "黑曜石的回收是回收到女仆的背包里"）——相位中途失败回滚时传她本人，于是"放不下
-     * 又撤回"不会白丢她一件材料；起爆后的回收也走这里（带她）。传 null = 只撤不还
-     *（重生锚 / 床：它们由自己那一炸消耗掉，还回去等于白送炸药）。
-     */
-    private static void rollback(ServerLevel level, Phase ph) {
-        removePlaced(level, ph.placed, ph.placedBlock, ph.maid);
-        ph.placed.clear();
-        ph.placedBlock.clear();
-    }
-
-    private static void removePlaced(ServerLevel level, List<BlockPos> posList, List<Block> blockList,
-                                     EntityMaid returnTo) {
-        if (level == null || posList == null || blockList == null) {
-            return;
-        }
-        for (int i = 0; i < posList.size() && i < blockList.size(); i++) {
-            BlockPos p = posList.get(i);
-            Block want = blockList.get(i);
-            BlockState st = level.m_8055_(p);
-            if (st.m_60734_() != want) {
-                continue; // 已经被别人换掉/炸掉 → 别动
-            }
-            if (st.m_60734_() instanceof BedBlock) {
-                // 床是两格：带"抑制形状更新"的标志位拆，否则另一格会按原版逻辑掉一张床（白送材料）
-                level.m_7731_(p, Blocks.f_49990_.m_49966_(), 2 | 16);
-            } else {
-                level.m_7471_(p, false); // 单体方块：removeBlock 不掉落
-            }
-            if (returnTo != null) {
-                returnBlockItem(returnTo, want);
-            }
-        }
-    }
-
-    /**
-     * v1.2.2 实测五百九十一：把撤下来的一块变成物品**塞回女仆背包**。
-     *
-     * v1.2.2 实测五百九十三【背包满就落地】：反馈"应该变成掉落物"——塞不进背包的那一份
-     * **掉在她脚下**（`spawnAtLocation`），与挖矿 / 搭路的方块回收是**完全同一口径**。
-     */
-    private static void returnBlockItem(EntityMaid maid, Block block) {
-        if (maid == null || block == null) {
-            return;
-        }
-        try {
-            ItemStack st = new ItemStack(block.m_5456_());
-            if (st.m_41619_()) {
-                return; // 没有对应物品（空气之类）→ 不还原
-            }
-            ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
-                    maid.getMaidInv(), st, false);
-            if (!left.m_41619_()) {
-                maid.m_5552_(left, 0.5f); // 背包满 → 掉在她脚下（实测五百九十三）
-                log("回收的炸弹底座塞不进背包（背包满）→ 掉在她脚下");
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
     /* ==================== 放置 ==================== */
 
-    /** 空中"往下找落点"的扫描深度（格）——空袭时她一直在飞，落点在正下方 */
-    private static final int AIR_SCAN_DROP = 16;
-
-    /**
-     * 找一个能放下的落点并放下去（v1.2.2 实测五百八十九重写）：
-     *
-     * ① **目标脚边**那四个水平邻居（离她最近的优先）——贴脸放，水晶正好贴在怪身侧；
-     * ② **她正下方**一路往下扫（最多 {@link #AIR_SCAN_DROP} 格）——这是玩家反馈的那条：
-     *    "放重生锚会因为一直在空中飞，导致没地方放……落点位于自己下方可放置方块的区域"；
-     * ③ ①② 都要求**实心支撑面**；都没有且开了「空中强制放置」时，就在她正下方取第一格
-     *    可替换的位置**直接悬空放下**——原版放置本身就允许悬空（`BlockItem.place` 只看
-     *    点击位置能不能被替换），只是玩家手点不到空气，我们用构造出来的放置上下文可以。
-     *
-     * v1.2.2 实测六百〇三【走后门：悬空也放得下】：上面三级都失败（典型就是**目标悬空**——
-     * 蝙蝠 / 恶魂 / 半空中的怪：它脚边那四格全是空气、原版又以"那一格站着实体"为由拒绝）
-     * 时，再走 {@link #tryPlaceAirDrop}——落点直接取在目标头顶 / 目标自己那一格上。
-     */
-    private static BlockPos placeOnSupport(ServerLevel level, EntityMaid maid, BlockPos tp, ItemStack stack,
-                                          LivingEntity target) {
-        BlockPos maidFeet = maid.m_20183_();
-        BlockPos maidHead = maidFeet.m_7494_();
-        List<BlockPos> near = new ArrayList<>(4);
-        for (Direction d : new Direction[]{Direction.NORTH, Direction.EAST, Direction.SOUTH, Direction.WEST}) {
-            near.add(tp.m_121945_(d));
-        }
-        sortByDistToMaid(near, maid);
-        List<BlockPos> below = new ArrayList<>(AIR_SCAN_DROP);
-        for (int dy = 1; dy <= AIR_SCAN_DROP; dy++) {
-            below.add(maidFeet.m_5484_(Direction.DOWN, dy));
-        }
-        BlockPos spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, true);
-        if (spot != null) {
-            return spot;
-        }
-        spot = tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, true);
-        if (spot != null) {
-            return spot;
-        }
-        if (cfgAirPlace()) {
-            // 空中强制放置（不要求支撑面）
-            spot = tryPlaceAll(level, maid, stack, near, maidFeet, maidHead, false);
-            if (spot != null) {
-                return spot;
-            }
-            spot = tryPlaceAll(level, maid, stack, below, maidFeet, maidHead, false);
-            if (spot != null) {
-                return spot;
-            }
-        }
-        // v1.2.2 实测六百〇三【走后门】：最后一级——目标头顶 / 目标自己那一格，悬空也认
-        return cfgAirDrop() ? tryPlaceAirDrop(level, maid, stack, tp, target, maidFeet, maidHead) : null;
-    }
-
-    /**
-     * v1.2.2 实测六百〇三【走后门：悬空也放得下】。
-     *
-     * 需求原文："现在将重生锚之类的放置也加入到远程空袭，同时走后门让它在空中也可以放置。"
-     *
-     * 【为什么需要它】远程空袭她一直在天上盘旋，目标还常常**自己就悬空**（蝙蝠 / 恶魂 /
-     * 被击飞到半空中的怪 / 站在水里的怪）：目标脚边那四个邻居全是空气、她正下方也没有地面时，
-     * 前四级要么找不到支撑面、要么被原版以"那一格站着实体"（{@code isUnobstructed}）拒掉，
-     * 于是整段放弃——玩家看到的就是"她带着重生锚却从来不放"。
-     *
-     * 【走后门怎么走】落点直接取**目标头顶那一格 → 目标自己那一格**：不要求支撑面、
-     * 也不要求那一格没站着目标自己（原版拒绝之后由 {@code tryPlaceAll} 的兜底强制放下接手，
-     * 那一格可替换就 setBlock），于是底座可以**悬在空中**、正好贴在目标身上，0.5 秒后原地开花。
-     * 唯一保留的避让是"**第三方生物**"：那一格里若站着除目标以外的任何活物就跳过，
-     * 免得把路过的友军 / 主人埋进黑曜石里（`occupiedByThirdParty`）。
-     */
-    private static BlockPos tryPlaceAirDrop(ServerLevel level, EntityMaid maid, ItemStack stack, BlockPos tp,
-                                           LivingEntity target, BlockPos maidFeet, BlockPos maidHead) {
-        List<BlockPos> cand = new ArrayList<>(2);
-        BlockPos aboveTarget = tp.m_7494_();
-        if (!occupiedByThirdParty(level, aboveTarget, target)) {
-            cand.add(aboveTarget); // ① 目标头顶那一格（最自然：像"照头砸下来"）
-        }
-        if (!occupiedByThirdParty(level, tp, target)) {
-            cand.add(tp);          // ② 目标自己那一格（贴脸）
-        }
-        if (cand.isEmpty()) {
-            return null;
-        }
-        BlockPos spot = tryPlaceAll(level, maid, stack, cand, maidFeet, maidHead, false);
-        if (spot != null) {
-            log("走后门：目标那一格 / 头顶那一格悬空放下 @" + spot.m_123341_() + ","
-                    + spot.m_123342_() + "," + spot.m_123343_() + "（落点无支撑面也算数）");
-        }
-        return spot;
-    }
-
-    /**
-     * 这一格里是不是站着**除 {@code allowed} 以外**的活物（走后门落点的唯一避让，见
-     * {@link #tryPlaceAirDrop}）。
-     */
-    private static boolean occupiedByThirdParty(ServerLevel level, BlockPos p, LivingEntity allowed) {
-        if (level == null || p == null) {
-            return true;
-        }
-        try {
-            for (LivingEntity le : level.m_6443_(LivingEntity.class,
-                    new net.minecraft.world.phys.AABB(p), e -> true)) {
-                if (le != allowed) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    /** 按"离女仆的 3D 距离"排序（贴脸放优先） */
-    private static void sortByDistToMaid(List<BlockPos> list, EntityMaid maid) {
-        final double mx = maid.m_20185_();
-        final double my = maid.m_20186_();
-        final double mz = maid.m_20189_();
-        list.sort(Comparator.comparingDouble(p -> {
-            double dx = p.m_123341_() + 0.5 - mx;
-            double dy = p.m_123342_() + 0.5 - my;
-            double dz = p.m_123343_() + 0.5 - mz;
-            return dx * dx + dy * dy + dz * dz;
-        }));
-    }
-
-    /**
-     * 依次试放（第一格成功就返回实际落点）。requireSupport=true 时跳过悬空格；
-     * false 时对着那格空气本身点（= 悬空强制放置）。
-     */
-    private static BlockPos tryPlaceAll(ServerLevel level, EntityMaid maid, ItemStack stack, List<BlockPos> cand,
-                                       BlockPos maidFeet, BlockPos maidHead, boolean requireSupport) {
-        for (BlockPos p : cand) {
-            if (p.equals(maidFeet) || p.equals(maidHead)) {
-                continue; // 别把自己埋了
-            }
-            if (claimedByOtherPhase(maid, p)) {
-                continue; // 她**另一段**链路已经占了这一格（实测六百：三段并行时各占各的落点）
-            }
-            BlockPos support = p.m_7495_();
-            boolean supported = level.m_8055_(support).m_60783_(level, support, Direction.UP);
-            if (requireSupport && !supported) {
-                continue;
-            }
-            // 有支撑：贴在支撑面顶上放；无支撑：直接对着这一格放（悬空强制）
-            BlockHitResult hit = supported
-                    ? new BlockHitResult(new Vec3(p.m_123341_() + 0.5, p.m_123342_(), p.m_123343_() + 0.5),
-                            Direction.UP, support, false)
-                    : new BlockHitResult(new Vec3(p.m_123341_() + 0.5, p.m_123342_() + 0.5, p.m_123343_() + 0.5),
-                            Direction.UP, p, false);
-            BlockPlaceContext ctx = new MaidPlaceContext(level, maid, InteractionHand.MAIN_HAND, stack, hit);
-            try {
-                InteractionResult r = ((BlockItem) stack.m_41720_()).m_40576_(ctx);
-                if (r != null && r.m_19077_()) {
-                    return ctx.m_8083_();
-                }
-                // v1.2.2 实测五百九十三【兜底强制放置】：原版 place() 会拒绝一些它认为不合法的
-                // 落点——最典型的是"那一格里站着实体"（BlockItem.canPlace 里的 isUnobstructed），
-                // 而我们的落点恰恰常常在**目标脚边**（反馈："重生锚还是放不下来"）。这里在它拒绝
-                // 之后补一手：那一格确实**可替换**（空气 / 草 / 水…）且不是床（床是两格，强制单格
-                // 会留下半张床）→ 直接 setBlock 放下去。只多做这一步，别的判定一概不动。
-                if (level.m_8055_(p).m_60629_(ctx)) {
-                    Block bi = ((BlockItem) stack.m_41720_()).m_40614_();
-                    if (bi != null && !(bi instanceof BedBlock)
-                            && level.m_7731_(p, bi.m_49966_(), 3)) {
-                        log("原版拒绝了落点，已强制放下（那一格站着实体或形状不合规）");
-                        return p;
-                    }
-                }
-            } catch (Throwable t) {
-                log("放置异常：" + t);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * 这一格是不是被她**另一段**轰炸链路占了（实测六百：三段并行时各占各的落点）。
-     *
-     * 同一 tick 起手的几段会各自去挑"目标脚边 / 她正下方"的落点，候选表是同一个——
-     * 没有这道闸时第二段会挑到第一段刚放下的那一格（原版 place 会拒绝，但拒绝走的是
-     * "这一段放弃"那条路，等于把没抢到落点的那段整段吞掉，正是要修的现象）。
-     */
-    private static boolean claimedByOtherPhase(EntityMaid maid, BlockPos p) {
-        try {
-            EnumMap<Kind, Phase> map = PHASE.get(maid.m_20148_());
-            if (map == null || p == null) {
-                return false;
-            }
-            for (Phase ph : map.values()) {
-                if (ph == null) {
-                    continue;
-                }
-                if (p.equals(ph.spot) || ph.placed.contains(p)) {
-                    return true;
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return false;
-    }
-
-    /** 放完之后那一格的方块（用于后面精确撤除） */
-    private static Block placedBlockOf(ServerLevel level, BlockPos spot, ItemStack stack) {
-        try {
-            if (stack.m_41720_() instanceof BlockItem bi) {
-                return bi.m_40614_();
-            }
-        } catch (Throwable ignored) {
-        }
-        return level.m_8055_(spot).m_60734_();
-    }
-
-    /**
-     * 女仆用的放置上下文：**玩家位留 null**（原版 BlockItem.place 因此只做"放方块 + 扣物品"，
-     * 不碰玩家专属逻辑），"朝向类"取值改用她本人——床的朝向由此与她的朝向一致。
-     * 基类带 Level 的那个构造器是 protected，所以只能用一个内部类接下来。
-     */
-    private static final class MaidPlaceContext extends BlockPlaceContext {
-        private final Entity placer;
-
-        MaidPlaceContext(Level level, Entity placer, InteractionHand hand, ItemStack stack, BlockHitResult hit) {
-            super(level, null, hand, stack, hit);
-            this.placer = placer;
-        }
-
-        @Override
-        public Direction m_8125_() {
-            return this.placer.m_6350_();
-        }
-
-        @Override
-        public float m_7074_() {
-            return this.placer.m_146908_();
-        }
-
-        @Override
-        public Direction m_7820_() {
-            return Direction.m_122382_(this.placer)[0];
-        }
-
-        @Override
-        public Direction m_151260_() {
-            return Direction.m_175357_(this.placer, Direction.Axis.Y);
-        }
-
-        @Override
-        public Direction[] m_6232_() {
-            Direction[] dirs = Direction.m_122382_(this.placer);
-            if (this.f_43628_) {
-                return dirs;
-            }
-            Direction face = this.m_43719_().m_122424_();
-            Direction[] out = dirs.clone();
-            int i = 0;
-            while (i < out.length && out[i] != face) {
-                i++;
-            }
-            if (i > 0) {
-                System.arraycopy(out, 0, out, 1, i);
-                out[0] = face;
-            }
-            return out;
-        }
-    }
-
     /* ==================== 远程空袭：投掷 TNT ==================== */
+    /** 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：调用点在{@code fireRanged} 之后 = 这一次开火打完，于是直接走"攻击 —— 实现见 BombTntTick.tickRangedTnt（v1.2.4 拆分）。 */
+    public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) { BombTntTick.tickRangedTnt(level, maid, target, id, gameTime); }
 
-    /**
-     * 远程空袭盘旋期间的投掷入口（"女仆会在天上盘旋期间额外发射 tnt"）：调用点在
-     * {@code fireRanged} 之后 = 这一次开火打完，于是直接走"攻击链路收尾"（
-     * {@link #onAttackChainEnd}）。与下面"所有战斗模式"那条共用同一套最短间隔，不会重复扔。
-     *
-     * v1.2.2 实测六百〇三【远程空袭也放炸弹】：这一步的顺序改成与近战猛击那条路**完全对称**——
-     * 需求原文："现在将重生锚之类的放置也加入到远程空袭"。先试 {@link #tryStartMelee}
-     * （末地水晶 / 重生锚 + 萤石 / 床；材料齐才起手、放不下就整段跳过），起手成功就交给相位，
-     * **TNT 由相位收尾那一步投**（{@link #tickPhases} → {@link #flushTnt}），所以这里直接返回
-     * （免得同一记打完既放了炸弹又立刻多扔一发）；没起手才就地投 TNT。
-     */
-    public static void tickRangedTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        try {
-            if (level == null || maid == null || target == null || (!cfgTnt() && !cfgMelee())) {
-                return;
-            }
-            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
-                return; // 傀儡模式（第三方玩法）期间不介入
-            }
-            // v1.2.2 实测五百九十【改挂攻击链路】：本方法由空袭远程链路在 fireRanged
-            // **之后**调用 = 「这一次开火打完」，所以直接走链路收尾（最短间隔只当下限）
-            if (cfgMelee() && tryStartMelee(level, maid, target)) {
-                return; // 起手成功：TNT 归相位收尾（与猛击那条路一致）
-            }
-            onAttackChainEnd(level, maid, target);
-        } catch (Throwable t) {
-            log("投掷异常：" + t);
-        }
-    }
-
-    /**
-     * v1.2.2 实测五百八十八【推广到所有有战斗标签的模式】：不再只在远程空袭的盘旋里扔。
-     *
-     * 口径（对照女仆生存 MaidTntInteractionController 的做法，自己实现）：
-     * ① 任务必须是战斗类——{@code MaidWorkTags.isCombatTask}（IAttackTask 接口判定 + UID 兜底），
-     *    于是近战/弓弩/三叉戟/弹幕/枪械，以及本模组两种空袭与第三方战斗任务全部覆盖；
-     * ② 有 TNT + 点火料（类打火石 或 类火焰弹，见 {@link #hasIgniter}；缺料静默跳过，不占用间隔）；
-     *    TNT 的判据 v1.2.2 实测六百〇四 起放宽成"注册名里带 tnt 的都算"、实测六百〇五 再加
-     *    "方块继承 TntBlock 的都算"（{@link #isTnt}），投放时放出去的是**它自己的 TNT 形式**
-     *    （{@link #primeTnt}），
-     * ③ **打完一记之后才扔**（v1.2.2 实测五百九十改）：攻击冷却记忆由无到有 = 刚完成一次
-     *    攻击链路收尾 → 登记待投放；距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
-     *    挂着等下一记——最短间隔只当下限，不再是驱动本身（详见 {@link #onAttackChainEnd}）；
-     * ④ 半径内有**合法敌对目标**（优先用她记忆里的攻击目标，不合法再按半径找）；
-     * ⑤ 防误伤：目标先过 {@link FriendlyFireGuard#isFriendly}（主人 / 同主女仆 / 友军一律不打），
-     *    再过任务自己的 {@code IAttackTask.canAttack}（与 TLM 的索敌口径一致）；
-     * ⑥ 女仆自己残血（≤ 阈值）时**连投**数发，横向散开——照女仆生存那套"低血量爆发"思路。
-     * ⑦ 傀儡模式（第三方玩法）期间整段不介入。
-     * ⑧ v1.2.2 实测五百九十二：这一记打完**先试轰炸起手**（末地水晶 / 重生锚 + 萤石 / 床，
-     *    见 {@link #tryStartMelee}）——材料齐就整段交给轰炸相位，相位收尾自己会投 TNT；
-     *    v1.2.2 实测六百〇三：**远程空袭也一视同仁**（旧版这里有一道
-     *    {@code !MaidFlightKit.isRangedTask} 的闸，是 实测五百九十二 按当时的理解加的；
-     *    现在放开，落点悬空那一档由 {@link #tryPlaceAirDrop} 兜住）。
-     *
-     * 附：本方法只跑【她自己的战斗链路】——TNT 由 TLM 的攻击行为自己触发（近战挥砍/远程开火
-     * 都会写攻击冷却记忆），我们只负责"这一记打完的收尾动作"，不额外替她索敌开火。
-     */
-    public static void tickCombatTnt(ServerLevel level, EntityMaid maid) {
-        try {
-            // v1.2.2 实测五百九十二：这条扫描现在同时负责【轰炸起手】与【TNT 投放】，所以只要
-            // 两个开关里有一个开着就得跑（各自的部分再各自判开关）
-            if (level == null || maid == null || (!cfgTnt() && !cfgMelee())) {
-                return;
-            }
-            // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间不介入
-            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
-                return;
-            }
-            if (!com.maidsmart.task.MaidWorkTags.isCombatTask(maid)) {
-                return; // 非战斗任务不扔（干活/待机/跟随都不打扰）
-            }
-            if (!maid.m_6084_() || maid.m_213877_()) {
-                return;
-            }
-            UUID id = maid.m_20148_();
-            long gameTime = level.m_46467_();
-            // ① 目标先解出来（轰炸与 TNT 共用同一套目标口径：记忆优先、不合法再按半径找）
-            LivingEntity target = null;
-            try {
-                target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
-            } catch (Throwable ignored) {
-            }
-            if (!legalThrowTarget(maid, target)) {
-                target = findThrowTarget(level, maid); // 记忆里的目标不合法（友军/非敌人）再按半径找
-            }
-            // ② 攻击链路完成检测：攻击冷却记忆【由无到有】= 她刚打完一记（TLM 近战与远程
-            //    攻击都会写这个记忆）——轰炸与 TNT 都挂在「打完这一记」后面
-            boolean cooling = maid.m_6274_().m_21952_(MemoryModuleType.f_26373_).isPresent();
-            Boolean prev = COOLDOWN_SEEN.put(id, cooling);
-            if (cooling && (prev == null || !prev)) {
-                TNT_ARMED.put(id, gameTime);
-                // ③ v1.2.2 实测五百九十二【轰炸推广到所有攻击模式】：这一记打完 → 先试轰炸起手
-                //    （黑曜石+末地水晶 / 重生锚+萤石 / 床）。起手成功则整段交给轰炸相位，
-                //    相位收尾自己会投 TNT（见 tick 末尾的 flushTnt）——所以这里直接返回。
-                //    v1.2.2 实测六百〇三：远程空袭那道闸**删掉**（需求："将重生锚之类的放置
-                //    也加入到远程空袭"）——她飞在天上也照放，落点是目标脚边 / 她正下方 /
-                //    悬空 / 最后走 tryPlaceAirDrop 的后门。
-                if (cfgMelee() && tryStartMelee(level, maid, target)) {
-                    return;
-                }
-            }
-            // ④ 剩下的才是 TNT 那一发
-            if (!cfgTnt()) {
-                return;
-            }
-            Long armedAt = TNT_ARMED.get(id);
-            if (armedAt == null) {
-                return;
-            }
-            if (gameTime - armedAt > ARMED_TIMEOUT) {
-                TNT_ARMED.remove(id); // 挂太久：作废
-                return;
-            }
-            if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
-                return; // 最短间隔（默认 200 tick = 10 秒）没到：挂着，等下一记
-            }
-            flushTnt(level, maid, target, id, gameTime);
-        } catch (Throwable t) {
-            log("战斗投掷异常：" + t);
-        }
-    }
+    /** v1.2.2 实测五百八十八【推广到所有有战斗标签的模式】：不再只在远程空袭的盘旋里扔 —— 实现见 BombTntTick.tickCombatTnt（v1.2.4 拆分）。 */
+    public static void tickCombatTnt(ServerLevel level, EntityMaid maid) { BombTntTick.tickCombatTnt(level, maid); }
 
     /* ==================== v1.2.2 实测五百九十：TNT 挂进攻击链路 ==================== */
-
-    /**
-     * 【为什么要改】反馈原文：「投掷 TNT 这个功能最好是跟末影水晶一样放在攻击链条的某个部分，
-     * 我的建议是适当的正常攻击链路走完之后加到最后。而不是一个固定的 Cd，CD 仅作为最小释放，
-     * 间隔 10 秒左右。」
-     *
-     * 于是把「冷却到点就扔」换成「打完一记之后才扔」：
-     * ① 攻击链路收尾时登记一发待投放（{@link #TNT_ARMED}）；
-     * ② 投放只在【登记过之后】发生，且距上次投放不足最短间隔（默认 200 tick = 10 秒）就继续
-     *    挂着等下一记——最短间隔只当下限，不再是驱动本身；
-     * ③ 挂太久（{@link #ARMED_TIMEOUT}）自动作废，免得留一发陈年老弹。
-     *
-     * 登记点（三种链路，见各自的调用处）：
-     * - 近战空袭：猛击命中那一记打完 → 轰炸相位（黑曜石/水晶、重生锚、床）走完 → 链路最末投；
-     * - 远程空袭：盘旋期间每次开火之后（{@link #tickRangedTnt}）；
-     * - 其余战斗任务：扫描里发现她的攻击冷却记忆【由无到有】= 刚打完一记（<b>共用一个最短
-     *   间隔，不会两边各扔一发</b>）。
-     */
-    public static void onAttackChainEnd(ServerLevel level, EntityMaid maid, LivingEntity target) {
-        try {
-            if (level == null || maid == null || !cfgTnt()) {
-                return;
-            }
-            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
-                return; // 傀儡模式（第三方玩法）期间不介入
-            }
-            UUID id = maid.m_20148_();
-            long gameTime = level.m_46467_();
-            TNT_ARMED.put(id, gameTime);
-            flushTnt(level, maid, target, id, gameTime);
-        } catch (Throwable t) {
-            log("链路投掷异常：" + t);
-        }
-    }
-
-    /**
-     * 链路末段真正投放：过了最短间隔 + 有料 + 目标合法才扔；扔成功才清「待投放」。
-     * 放在这里的好处：缺料那一下不会白等一个间隔（下一记只要料齐了立刻投）。
-     */
-    private static void flushTnt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        try {
-            if (level == null || maid == null || !cfgTnt()) {
-                return;
-            }
-            if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
-                return;
-            }
-            if (!legalThrowTarget(maid, target)) {
-                return; // 没目标（或目标不合法）：挂着等下一记
-            }
-            if (gameTime < TNT_NEXT.getOrDefault(id, 0L)) {
-                return; // 最短间隔没到
-            }
-            if (!hasTnt(maid) || !hasIgniter(maid)) {
-                return; // 不刚需：缺料直接跳过（不占用间隔）——v1.2.2 实测六百〇三：点火料 = 打火石 或 烈焰弹；
-                        // 实测六百〇四：TNT 判据放宽，注册名里带 tnt 的模组 TNT 也算（见 isTnt）；
-                        // 实测六百〇五：判据再加"方块继承 TntBlock"那条，且放出的是它自己那一枚（见 primeTnt）
-            }
-            if (throwTntAt(level, maid, target, id, gameTime) > 0) {
-                TNT_ARMED.remove(id);
-            }
-        } catch (Throwable t) {
-            log("投放异常：" + t);
-        }
-    }
-
-    /**
-     * 追踪弹每 tick 一次（在实体 tick 之前调用，于是这一 tick 的原版物理按「新方向」走）。
-     *
-     * ── v1.2.2 实测五百九十一：改「限时 + 限转角」的小幅修准 ──
-     * 反馈原文："追踪这个功能还是太鬼畜了，tnt 运动很不自然。追踪的时间最好控制在 0.5 秒左右。
-     * 0.5 秒之后不再追踪。相当于仅仅是稍微提升一下提升准度。（时间可调）"
-     *
-     * 旧版每 tick 把速度方向**硬掰**成"正指目标"（还带竖直补偿），于是它一离手就折线乱拐。
-     * 现在两条限制：① 只在离手后的 cfgTntTrackTicks（默认 10 tick = 0.5 秒）内修正；
-     * ② 每 tick 最多转 {@link #TRACK_TURN_DEG} 度——把"当前方向"朝"目标方向"按角度插值，
-     * 再按原来的速度大小放回去：观感是一段平滑的小弧线，而不是瞬间转向。
-     * 到点 / 贴脸 / 目标没了 / 炸了 → 摘掉条目（剩下按当前方向直飞），绝不留悬挂引用。
-     */
-    private static void tickHoming() {
-        for (Iterator<Homing> it = HOMING.iterator(); it.hasNext(); ) {
-            Homing h = it.next();
-            try {
-                if (h.tnt == null || h.tnt.m_213877_()) {
-                    it.remove(); // 已经炸了 / 被清掉了
-                    continue;
-                }
-                if (h.level.m_46467_() >= h.until) {
-                    it.remove(); // v1.2.2 实测五百九十一：追踪时间到 → 撒手，按当前方向直飞
-                    continue;
-                }
-                if (h.target == null || !h.target.m_6084_() || h.target.m_213877_()
-                        || h.target.m_9236_() != h.level) {
-                    it.remove(); // 目标没了 / 换维度了 → 这一发按当前朝向直飞
-                    continue;
-                }
-                double dx = h.target.m_20185_() - h.tnt.m_20185_();
-                double dy = (h.target.m_20186_() + h.target.m_20192_() * 0.5) - h.tnt.m_20186_();
-                double dz = h.target.m_20189_() - h.tnt.m_20189_();
-                double len = Math.sqrt(dx * dx + dy * dy + dz * dz);
-                if (len < 1.0) {
-                    continue; // 已经贴脸：交给原版物理自然落点（不再硬掰，免得绕着目标打转）
-                }
-                double nx = dx / len;
-                // 补一点抬升抵消 TNT 每 tick 的 −0.04 重力，方向才是真的指向目标
-                double ny = dy / len + 0.04 / h.speed;
-                double nz = dz / len;
-                double nl = Math.sqrt(nx * nx + ny * ny + nz * nz);
-                if (nl < 1.0E-6) {
-                    continue;
-                }
-                nx /= nl;
-                ny /= nl;
-                nz /= nl;
-                // 它现在朝着哪：这一 tick 的原速度方向
-                Vec3 mv = h.tnt.m_20184_();
-                double mx = mv.f_82479_;
-                double my = mv.f_82480_;
-                double mz = mv.f_82481_;
-                double ml = Math.sqrt(mx * mx + my * my + mz * mz);
-                if (ml < 1.0E-4) {
-                    continue; // 速度没了（卡住了）→ 不插手
-                }
-                mx /= ml;
-                my /= ml;
-                mz /= ml;
-                // 限转角：夹角在阈值内就直接到位，否则只走这一小步（两向量线性插值后归一化）
-                double dot = Math.max(-1.0, Math.min(1.0, mx * nx + my * ny + mz * nz));
-                double ang = Math.acos(dot);
-                double t = ang <= TRACK_TURN_RAD ? 1.0 : TRACK_TURN_RAD / ang;
-                double sx = mx + (nx - mx) * t;
-                double sy = my + (ny - my) * t;
-                double sz = mz + (nz - mz) * t;
-                double sl = Math.sqrt(sx * sx + sy * sy + sz * sz);
-                if (sl < 1.0E-6) {
-                    continue;
-                }
-                // 只改方向、不改速度大小（需求原话）
-                h.tnt.m_20256_(new Vec3(sx / sl * h.speed, sy / sl * h.speed, sz / sl * h.speed));
-            } catch (Throwable ignored) {
-            }
-        }
-    }
-
-    /** 该实体能不能当投掷目标（防误伤 + 「她的任务认的敌人」两道，与 findThrowTarget 同口径） */
-    private static boolean legalThrowTarget(EntityMaid maid, LivingEntity le) {
-        try {
-            if (le == null || le == maid || !le.m_6084_()) {
-                return false;
-            }
-            if (FriendlyFireGuard.isFriendly(maid, le)) {
-                return false; // 防误伤：主人 / 同主女仆 / 友军不扔
-            }
-            return maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask at
-                    && at.canAttack(maid, le); // 只打「她的任务认的敌人」（与 TLM 索敌同口径）
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** 半径内最近的**合法敌对**目标（防误伤口径见 {@link #tickCombatTnt} 的注释） */
-    private static LivingEntity findThrowTarget(ServerLevel level, EntityMaid maid) {
-        double r = Math.max(2.0, cfgTntRange());
-        LivingEntity best = null;
-        double bestSqr = Double.MAX_VALUE;
-        for (LivingEntity le : level.m_6443_(LivingEntity.class, maid.m_20191_().m_82400_(r), e -> true)) {
-            try {
-                if (le == maid || !le.m_6084_()) {
-                    continue;
-                }
-                if (FriendlyFireGuard.isFriendly(maid, le)) {
-                    continue; // 防误伤：主人 / 同主女仆 / 友军不扔
-                }
-                if (!(maid.getTask() instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask at)
-                        || !at.canAttack(maid, le)) {
-                    continue; // 只打"她的任务认的敌人"（与 TLM 索敌同口径）
-                }
-                double d = maid.m_20280_(le);
-                if (d < bestSqr) {
-                    bestSqr = d;
-                    best = le;
-                }
-            } catch (Throwable ignored) {
-            }
-        }
-        return best;
-    }
-
-    /**
-     * 水平距离 dh、水平初速 vx0 时飞完全程需要的 tick 数。
-     * 水平位移是等比级数之和：x_n = vx0·(1−0.98^n)/0.02 → 反解 n = ln(1 − 0.02·dh/vx0)/ln 0.98。
-     * 阻尼决定了水平极限射程 ≈ 49·vx0 格，超出就只能给个上限（落点会偏短，属于物理上够不着）。
-     */
-    private static double flightTicks(double dh, double vx0) {
-        if (dh <= 1.0E-4 || vx0 <= 1.0E-6) {
-            return 1.0;
-        }
-        double base = 1.0 - 0.02 * dh / vx0;
-        if (base <= 0.02) {
-            return 200.0;
-        }
-        double n = Math.log(base) / Math.log(0.98);
-        return Math.max(1.0, Math.min(200.0, n));
-    }
-
-    /** 解竖直初速：让 TNT 飞完 n tick 时正好落在目标高度上（闭式，见 {@link #flightTicks} 的注释） */
-    private static double requiredVy(double dh, double dy, double vx0) {
-        double n = flightTicks(dh, vx0);
-        double a = (1.0 - Math.pow(0.98, n)) / 0.02;
-        double b = (n - a) / 0.02;
-        double vy = (dy + 0.04 * b) / Math.max(1.0E-6, a) + 0.04;
-        return Mth.m_14008_(vy, -1.5, 1.5);
-    }
-
-    /** 这一发要扔几枚：残血（≤ 阈值）连投，否则 1 枚 */
-    private static int throwCount(EntityMaid maid) {
-        try {
-            float max = maid.m_21233_();
-            if (max > 0.0f && maid.m_21223_() / max <= cfgTntBurstRatio()) {
-                return Math.max(1, cfgTntBurstCount());
-            }
-        } catch (Throwable ignored) {
-        }
-        return 1;
-    }
-
-    /**
-     * 共用的投掷实现（远程空袭盘旋 + 所有战斗模式两条入口都走这里）。
-     * 手法照"女仆生存"那套思路自己实现：水平单位向量 × 初速 + 竖直补偿（按 TNT 重力估飞行时间），
-     * 落点按目标中心算；连投时按序号横向散开，避免三枚叠在一条线上。
-     *
-     * v1.2.2 实测六百〇五：放出去的是**这一件自己的 TNT 形式**（见 {@link #primeTnt}）——
-     * 模组自己写的 TNT 方块走它自己的点火钩子，它那一炸本模组不接管。
-     */
-    private static int throwTntAt(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        int want = throwCount(maid);
-        int thrown = 0;
-        // v1.2.2 实测六百〇四：扔的到底是哪一件（模组 TNT 也认之后，日志里得说清，排查不用猜）
-        String usedId = "";
-        // v1.2.2 实测六百〇五：放出来的到底是哪一枚（它自己那一枚 / 模组方块放的是原版引信 TNT）
-        String usedNote = "";
-        for (int i = 0; i < want; i++) {
-            if (!hasTnt(maid) || !hasIgniter(maid)) {
-                break;
-            }
-            ItemStack tntStack = takeOneTnt(maid);
-            if (tntStack.m_41619_()) {
-                break;
-            }
-            usedId = idOf(tntStack);
-            // v1.2.2 实测五百九十一【打火石不再被吞】：从**原槽**取出 → 扣 1 点耐久 → 放回**原槽**
-            //（旧版是整件取出、只对取出来的那份扣耐久 = 玩家看到的"直接把打火石吞掉"）
-            // v1.2.2 实测六百〇三：没有打火石时用 **1 个烈焰弹**（真的消耗掉）——返回的是"刚用掉的
-            // 那一件"，下面拿它做副手动作（亮打火石 / 亮烈焰弹，各亮各的）
-            ItemStack igniter = useIgniter(maid);
-            if (igniter.m_41619_()) {
-                giveBack(maid, tntStack);
-                break;
-            }
-            double sx = maid.m_20185_();
-            double sy = maid.m_20186_() + maid.m_20192_() * 0.75;
-            double sz = maid.m_20189_();
-            double tx = target.m_20185_();
-            double ty = target.m_20186_() + target.m_20192_() * 0.5;
-            double tz = target.m_20189_();
-            // ── v1.2.2 实测五百八十九【准度】──
-            // 旧版是"飞行时间 ≈ 水平距离 / 水平速度，再补一点落差"——忽略了 0.98/tick 的水平阻尼
-            // （水平射程因此是有限的等比级数），目标一动就偏。现在两处一起改：
-            // ① 目标带提前量（按它的速度外推预计飞行时间，迭代两轮）；
-            // ② 用反编译实证的 TNT 物理做**闭式解**：每 tick 先 −0.04 重力、再位移、最后整体 ×0.98，
-            //    于是水平位移 = vx0·A_n、竖直位移 = (vy0−0.04)·A_n − 0.04·B_n
-            //    （A_n=(1−0.98^n)/0.02、B_n=(n−A_n)/0.02）：先由水平距离解出飞行时间 n，再解出 vy0。
-            double speed = Math.max(0.2, cfgTntSpeed());
-            double aimX = tx;
-            double aimZ = tz;
-            double aimY = ty;
-            Vec3 tv = target.m_20184_();
-            for (int it = 0; it < 2; it++) {
-                double ddx = aimX - sx;
-                double ddz = aimZ - sz;
-                double flight = flightTicks(Math.sqrt(ddx * ddx + ddz * ddz), speed);
-                aimX = tx + tv.f_82479_ * flight;
-                aimZ = tz + tv.f_82481_ * flight;
-                aimY = ty + tv.f_82480_ * flight * 0.5;
-            }
-            double dx = aimX - sx;
-            double dy = aimY - sy;
-            double dz = aimZ - sz;
-            double dh = Math.sqrt(dx * dx + dz * dz);
-            double vx = 0.0;
-            double vz = 0.0;
-            if (dh > 1.0E-4) {
-                vx = dx / dh * speed;
-                vz = dz / dh * speed;
-                if (want > 1) {
-                    double spread = (i - (want - 1) * 0.5) * 0.18;
-                    double sx2 = -vz / speed * spread;
-                    double sz2 = vx / speed * spread;
-                    vx += sx2;
-                    vz += sz2;
-                }
-            }
-            double vy = requiredVy(dh, dy, speed);
-            // ── v1.2.2 实测六百〇五【认出来的 TNT，就放它自己那一枚】──
-            // 旧版（含实测六百〇四）不论手上拿的是哪一件，扔出去的都是这里 new 出来的**原版**引信 TNT
-            // ——模组 TNT 的威力 / 破不破方块 / 带不带火全被抹掉。现在先问那一件自己：方块继承
-            // TntBlock 吗？继承就走它自己的点火钩子（onCaughtFire），放出来的是它自己的 TNT 形式。
-            TntOut primed = primeTnt(level, maid, tntStack, sx, sy, sz);
-            if (primed == null) {
-                giveBack(maid, tntStack);
-                break;
-            }
-            Entity bomb = primed.entity;
-            bomb.m_6034_(sx, sy, sz); // 模组钩子按"方块中心"放，挪回她手上那一格（抛物线才算得准）
-            bomb.m_20256_(new Vec3(vx, vy, vz));
-            PrimedTnt tnt = bomb instanceof PrimedTnt pt ? pt : null;
-            if (tnt != null) {
-                tnt.m_32085_(cfgTntFuse());
-            }
-            if (!primed.added && !level.m_7967_(bomb)) {
-                giveBack(maid, tntStack);
-                break;
-            }
-            if (!primed.note.isEmpty()) {
-                usedNote = primed.note;
-            }
-
-            // v1.2.2 实测五百九十【追踪】/ 实测五百九十一【限时】：登记这一发——只在离手后的
-            // cfgTntTrackTicks（默认 10 tick = 0.5 秒）内朝目标修正方向，之后按当时方向直飞
-            //（模组自己的 TNT 实体也继承 PrimedTnt，追踪照旧生效）
-            if (tnt != null && cfgTntTrack() && cfgTntTrackTicks() > 0 && HOMING.size() < MAX_PENDING) {
-                HOMING.add(new Homing(level, tnt, target, Math.sqrt(vx * vx + vy * vy + vz * vz),
-                        gameTime + cfgTntTrackTicks()));
-            }
-            SoundEvent snd = sound(ID_TNT_PRIMED_SOUND);
-            if (snd != null) {
-                level.m_5594_(null, maid.m_20183_(), snd, SoundSource.BLOCKS, 1.0f, 1.0f);
-            }
-            maid.m_6674_(InteractionHand.MAIN_HAND);
-            // 投掷那一记的动作：副手举的是**点火的那一件**（实测五百九十四）——旧版亮的是刚扔出去的
-            // 那枚 TNT，反馈要的是"点火的那只手"：扔 TNT 的时候副手切换成打火石；
-            // 实测六百〇三起没有打火石就用烈焰弹，这时副手亮的自然是那枚烈焰弹。
-            pose(maid, igniter.m_41619_() ? tntStack : igniter, BOMB_POSE_TICKS);
-            // ── v1.2.2 实测六百〇五【那一炸归谁】──
-            // 只有"原版那一枚"才登记进 PENDING（本模组接管那一炸 = 默认不破坏方块 / 不伤友军）；
-            // 模组自己的 TNT 形式**一律不登记**：它自己那一炸该多大、破不破方块、带不带火，
-            // 全归它自己——本模组不替换、不拦截（伤害的友军豁免仍由 FriendlyFireGuard /
-            // FriendlyWindGuard 按"爆炸来源是女仆"那条既有判据兜住）。
-            if (primed.vanilla && tnt != null && PENDING.size() < MAX_PENDING) {
-                PENDING.add(new Bomb(level, maid, tnt, bomb.m_20183_(), null, null,
-                        Kind.TNT, gameTime + cfgTntFuse() + BOMB_TIMEOUT / 2, tntStack));
-            }
-            thrown++;
-            if (cfgPinkMark()) {
-                BombMarkNetworking.send(maid, 1, bomb.m_19879_(), null, cfgTntFuse() + 40);
-            }
-        }
-        if (thrown > 0) {
-            TNT_NEXT.put(id, gameTime + cfgTntInterval());
-            log(com.maidsmart.tool.PromaidLog.nameOf(maid) + " 投掷 TNT ×" + thrown
-                    + "（" + (usedId.isEmpty() ? "未知物品" : usedId) + "，引信 " + cfgTntFuse() + " tick"
-                    + (usedNote.isEmpty() ? "" : "，" + usedNote) + "）");
-        }
-        return thrown;
-    }
+    /** 【为什么要改】反馈原文：「投掷 TNT 这个功能最好是跟末影水晶一样放在攻击链条的某个部分，我的建议是适当的正常攻击链路走完之后加到最后 —— 实现见 BombTntTick.onAttackChainEnd（v1.2.4 拆分）。 */
+    public static void onAttackChainEnd(ServerLevel level, EntityMaid maid, LivingEntity target) { BombTntTick.onAttackChainEnd(level, maid, target); }
 
     /* ==================== v1.2.2 实测六百〇五：放出"它自己的 TNT 形式" ==================== */
-
-    /**
-     * 投出去的那一枚：{@link #primeTnt} 的结果。
-     *
-     * @param entity  放进世界的那一枚（原版引信 TNT，或模组自己的 TNT 实体）
-     * @param added   true = 是模组钩子自己加进世界的（我们不能再 addFreshEntity 一次）
-     * @param vanilla true = 它就是原版引信 TNT（本模组接管那一炸的老口径）
-     * @param note    日志后缀（点名放出来的是哪一枚；原版那条路为空串 = 日志照旧）
-     */
-    private static final class TntOut {
-        final Entity entity;
-        final boolean added;
-        final boolean vanilla;
-        final String note;
-
-        TntOut(Entity entity, boolean added, boolean vanilla, String note) {
-            this.entity = entity;
-            this.added = added;
-            this.vanilla = vanilla;
-            this.note = note;
-        }
-    }
-
-    /**
-     * 把手上这一件 TNT 放进世界，返回"放进世界的那一枚"（放不出去 = null）。
-     *
-     * ── 怎么判断"有没有对应的 TNT 形式" ──
-     * ① 这一件的方块**继承 {@link TntBlock} 而且不是 TntBlock 本身**（= 模组自己写的 TNT 方块）：
-     *    调它自己的点火钩子 {@code onCaughtFire(state, level, pos, face, 她)}——原版
-     *    {@code TntBlock.use}（拿打火石点 TNT）走的正是这一步，模组要放自己那一枚就在这里放
-     *    （ProjectE 的爆破新星在这一步 new 出来的是它自己的 {@code EntityNovaCatalystPrimed}）。
-     *    钩子是"先放后报"、没有返回值，所以我们在调用前后各扫一遍那一小块里的实体，
-     *    **多出来的那一枚**就是它的 TNT 形式（引信 TNT 那一类优先）。
-     * ② 没有钩子可走（原版那一件、或模组的方块没改点火路径）：自己造一枚原版引信 TNT
-     *    （与旧版逐字相同）。
-     *
-     * ── 为什么不把方块真放下去再点 ──
-     * 原版 use() 里那一块本来就在地上；我们是在半空中扔炸弹，落点可能是别人家的红石。
-     * 放下去会触发邻居更新（{@code TntBlock.onPlace} 还会自己检查红石信号）、放完还得再拆掉，
-     * 得不偿失。钩子本身不需要方块在位（ProjectE 只用坐标）。
-     */
-    private static TntOut primeTnt(ServerLevel level, EntityMaid maid, ItemStack stack,
-                                   double sx, double sy, double sz) {
-        try {
-            TntBlock tb = tntBlockOf(stack);
-            if (tb != null && tb.getClass() != TntBlock.class) {
-                Entity made = igniteByBlock(level, maid, tb, sx, sy, sz);
-                if (made != null) {
-                    // 放出来的是引信 TNT 的子类 = 模组自己的 TNT 形式（那一炸归它自己）；
-                    // 放出来的就是原版 PrimedTnt = 这个方块没改点火路径，照原版 TNT 的老口径接管
-                    boolean plain = made.getClass() == PrimedTnt.class;
-                    if (!plain) {
-                        // v1.2.2 实测六百〇七【模组 TNT 也受「不破坏方块」管辖】：把这一枚登记给
-                        // MaidTntBlastGuard —— 它的爆炸不经过我们的出口（威力/带火归它自己），
-                        // 所以"破不破方块"得靠那一层在爆炸事件里收走。登记带过期时间，见那类注释。
-                        MaidTntBlastGuard.rememberTnt(made, maid,
-                                level.m_46467_() + MaidTntBlastGuard.TRACK_TTL);
-                    }
-                    return new TntOut(made, true, plain, plain
-                            ? "模组方块放的是原版引信 TNT"
-                            : "它自己那一枚 " + entityIdOf(made));
-                }
-                // 钩子什么也没放出来（这个方块压根不是 TNT 那种用法）→ 回落到原版那一枚
-            }
-        } catch (Throwable t) {
-            log("模组 TNT 点火失败：" + t);
-        }
-        return new TntOut(new PrimedTnt(level, sx, sy, sz, maid), false, true, "");
-    }
-
-    /**
-     * 让方块自己点火：调 {@code onCaughtFire}，返回它当场放出来的那一枚实体（没放出来 = null）。
-     * 判据是**实体 id 差集**（调用前那一小块里的 id 集合 vs 调用后），不看类型、不看位置，
-     * 免得模组把实体放在别处或者放的是不继承 PrimedTnt 的自家类型。
-     */
-    private static Entity igniteByBlock(ServerLevel level, EntityMaid maid, TntBlock tb,
-                                       double sx, double sy, double sz) {
-        BlockPos pos = BlockPos.m_274561_(sx, sy, sz);
-        net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(pos).m_82377_(2.0, 2.0, 2.0);
-        java.util.Set<Integer> before = new java.util.HashSet<>();
-        for (Entity e : level.m_45976_(Entity.class, box)) {
-            before.add(e.m_19879_());
-        }
-        try {
-            // 点火者就是她——原版拿它当这一炸的"造成者"（见 MaidTntBlastGuard 类注释与实测六百一十），
-            // 主人/友军免伤正是靠这条认人；模组不记它时由那张登记表兜底。
-            tb.onCaughtFire(tb.m_49966_(), level, pos, Direction.UP, maid);
-        } catch (Throwable t) {
-            log("模组 TNT 点火钩子异常：" + t);
-        }
-        Entity pick = null;
-        for (Entity e : level.m_45976_(Entity.class, box)) {
-            if (before.contains(e.m_19879_())) {
-                continue;
-            }
-            if (e instanceof PrimedTnt) {
-                return e; // 引信 TNT 那一类优先
-            }
-            if (pick == null) {
-                pick = e;
-            }
-        }
-        return pick;
-    }
-
-    /** 实体的注册名（拿不到就类名）——实测六百〇五 的日志点名用 */
-    private static String entityIdOf(Entity e) {
-        try {
-            net.minecraft.resources.ResourceLocation rl =
-                    net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.m_6095_());
-            if (rl != null) {
-                return rl.toString();
-            }
-        } catch (Throwable ignored) {
-        }
-        try {
-            return e.getClass().getSimpleName();
-        } catch (Throwable ignored) {
-            return "未知实体";
-        }
-    }
 
     /* ==================== 起爆 ==================== */
 
@@ -2522,7 +968,7 @@ public final class MaidBombing {
         try {
             // v1.2.2 实测五百八十九：到期回收（起爆后保留 10 秒的黑曜石/重生锚/床）
             // v1.2.2 实测五百九十：追踪弹每 tick 修正一次朝向（在实体 tick 之前）
-            tickHoming();
+            BombThrow.tickHoming();
             // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
             tickPhases();
             for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
@@ -2539,7 +985,7 @@ public final class MaidBombing {
                     continue;
                 }
                 ri.remove();
-                removePlaced(r.level, r.pos, r.block, r.maid);
+                BombPlacement.removePlaced(r.level, r.pos, r.block, r.maid);
             }
             Iterator<Bomb> it = PENDING.iterator();
             while (it.hasNext()) {
@@ -2572,7 +1018,7 @@ public final class MaidBombing {
                     continue;
                 }
                 it.remove();
-                detonate(b);
+                BombExplosion.detonate(b);
             }
         } catch (Throwable t) {
             log("起爆异常：" + t);
@@ -2607,127 +1053,6 @@ public final class MaidBombing {
             }
         } catch (Throwable ignored) {
         }
-    }
-
-    private static void detonate(Bomb b) {
-        ServerLevel level = b.level;
-        EntityMaid maid = b.maid;
-        double x;
-        double y;
-        double z;
-        if (b.entity != null) {
-            x = b.entity.m_20185_();
-            y = b.entity.m_20186_();
-            z = b.entity.m_20189_();
-        } else {
-            Vec3 c = b.pos.m_252807_();
-            x = c.f_82479_;
-            y = c.f_82480_;
-            z = c.f_82481_;
-        }
-        // ① v1.2.2 实测五百八十九【保留黑曜石】：起爆这一刻**不再立刻撤掉**水晶底座——
-        //    黑曜石留在原地（水晶就是放在它上面的那副样子，爆炸不破坏方块时尤其明显），
-        //    过 cfgReclaimSeconds() 秒（默认 10）再由我们回收。配置填 0 就起爆即回收。
-        // ② v1.2.2 实测五百九十一【回收口径按种类分】：
-        //    · 水晶链路：底座（黑曜石/基岩）**留着 → 到期回收到她背包**（绝不落地）；
-        //    · 重生锚 / 床：它们**自己那一炸就把方块消耗掉了**（javap 实证：原版 use() 里先
-        //      `removeBlock(pos, false)` 再 explode）——所以我们起爆这一刻直接撤掉、不进回收表、
-        //      也不回背包（回背包 = 放一次白拿一个重生锚，那是白送炸药）。
-        if (b.kind == Kind.CRYSTAL) {
-            scheduleReclaim(level, maid, b.placedPos, b.placedBlock);
-        } else if (b.placedPos != null) {
-            removePlaced(level, b.placedPos, b.placedBlock, null);
-        }
-        // ③ 炸弹实体本身清掉（不能走 kill()——末地水晶的 kill 会触发原版那一炸）
-        if (b.entity != null && b.entity.m_6084_()) {
-            b.entity.m_142687_(Entity.RemovalReason.DISCARDED);
-        }
-        // ④ v1.2.2 实测五百九十一【起爆那一记挥臂】：反馈"放置完重生锚/末地水晶后 0.5s 也会有一个
-        //    挥臂的动作（好像真的打了一下末影水晶/重生锚）"——只有她还在近处（8 格内）才做，
-        //    副手亮的是当时用的那一件（水晶 / 重生锚 / 床 / TNT）。
-        if (b.display != null && maid != null && maid.m_6084_()) {
-            double ddx = maid.m_20185_() - x;
-            double ddy = maid.m_20186_() - y;
-            double ddz = maid.m_20189_() - z;
-            if (ddx * ddx + ddy * ddy + ddz * ddz <= 64.0) {
-                maid.m_6674_(InteractionHand.MAIN_HAND);
-                pose(maid, b.display, BLAST_POSE_TICKS);
-            }
-        }
-        explode(level, maid, x, y, z, b.kind.power, b.kind.fire);
-    }
-
-    /**
-     * 统一的爆炸出口：**默认保护口径**（不破坏方块 / 不伤主人友军 / 主人友军不被震），
-     * 全部按配置可切。归因给女仆时三条既有护栏自动生效（见类注释）。
-     */
-    private static void explode(ServerLevel level, EntityMaid maid, double x, double y, double z, float power, boolean fire) {
-        Level.ExplosionInteraction mode = cfgBreakBlocks()
-                ? Level.ExplosionInteraction.BLOCK
-                : Level.ExplosionInteraction.NONE;
-        // v1.2.2 实测五百九十七【粉色火焰】：原版这一炸会**自己点火**——javap 实证
-        // （Explosion.finalizeExplosion）着火那段在 `interactsWithBlocks()` 之外，只看 fire=true，
-        // 所以哪怕我们默认"不破坏方块"（ExplosionInteraction.NONE → BlockInteraction.KEEP），
-        // 重生锚 / 床那一炸照样在地上留下原版橙色火（末地水晶 / TNT 原版 fire=false，不留火）。
-        // v1.2.2 实测五百九十八【改法换代】：旧版是"爆炸后按盒子把新出现的原版火换成粉色"，
-        // 而原版点火的那些格子是**射线**扫出来的（空气阻力 0 → 射线能跑二十格开外），盒子永远
-        // 罩不住 → 实测"又粉又橙"。现在换成"边点边换"：爆炸期间开着点火窗口，原版点火那一刻
-        // 拿到手的就是粉色火（见 PinkFireBlock.beginWindow 与 BaseFireBlockPinkMixin）。
-        boolean pinkWindow = fire && cfgPinkFire();
-        if (pinkWindow) {
-            PinkFireBlock.beginWindow();
-        }
-        // v1.2.2 实测五百九十三【特效对齐原版】：反馈"爆炸的特效太小了，比正常生成的末地水晶和
-        // TNT 要小很多"。javap 实证原因就在这个模式上——原版 {@code Explosion.finalizeExplosion}
-        // 选粒子是"半径 ≥ 2 且 interactsWithBlocks()"才用大粒子 EXPLOSION_EMITTER，否则用小的
-        // EXPLOSION；而 ExplosionInteraction.NONE 的 interactsWithBlocks() **恒为 false**
-        //（我们默认不破坏方块），于是永远走小粒子分支。修法：不破坏方块时**自己补发一枚大粒子**
-        //（服务端广播给附近玩家）；只补视觉，伤害 / 击退 / 地形一概不动。
-        if (!cfgBreakBlocks()) {
-            try {
-                level.m_8767_(net.minecraft.core.particles.ParticleTypes.f_123812_,
-                        x, y, z, 1, 0.0, 0.0, 0.0, 0.0);
-            } catch (Throwable ignored) {
-            }
-        }
-        // v1.2.2 实测五百八十八：整个爆炸期间挂"自爆风免"窗口——这个机制的风对放炸弹的她本人
-        // 也不生效（与重锤风爆不同）。窗口是同步的，explode() 返回即关。
-        selfImmuneBlast = true;
-        selfImmuneMaidId = maid == null ? null : maid.m_20148_();
-        try {
-            if (!cfgHurtFriendly()) {
-                // 默认口径：**把女仆当爆炸来源**（伤害源交给原版按来源实体自己构造）。
-                // 于是 damageSource.getEntity() == 女仆 → FriendlyFireGuard 取消主人/同主女仆/友军的
-                // 伤害；Explosion 的来源实体同样是她 → FriendlyWindGuard 的击退豁免也一并生效。
-                level.m_254951_(maid, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
-            } else {
-                // 原版口径：来源实体留空 = 完全不归因（主人/友军照掉血照被炸飞），
-                // 并用 vanillaBlast 让风免在这一瞬间让位，避免"血掉了、人没飞"。
-                vanillaBlast = true;
-                try {
-                    level.m_254951_(null, null, null, new net.minecraft.world.phys.Vec3(x, y, z), power, fire, mode);
-                } finally {
-                    vanillaBlast = false;
-                }
-            }
-        } finally {
-            selfImmuneBlast = false;
-            selfImmuneMaidId = null;
-            // 关窗口（若开着）：这一炸点着的每一格都已经是粉色火，这里只把条数取出来写日志
-            // v1.2.2 实测六百〇一【范围收回】：旧版这里顺手把场地里既有的原版火也扫成粉色，
-            // 反馈"你这样等于直接开挂了呀"——那些火不是她点的，本模组一概不碰，已删掉那一步。
-            if (pinkWindow) {
-                int pink = PinkFireBlock.endWindow();
-                if (pink > 0) {
-                    log("粉色火焰：这一炸点着的 " + pink + " 格火直接生成为粉色火");
-                }
-            }
-        }
-    }
-
-    /** v1.2.2 实测五百九十七：爆炸火焰改粉色的总开关 */
-    private static boolean cfgPinkFire() {
-        return MaidSmartConfig.COMBAT_BOMBING_PINK_FIRE.get();
     }
 
 }
