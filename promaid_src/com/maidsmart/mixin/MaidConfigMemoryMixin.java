@@ -143,7 +143,7 @@ public abstract class MaidConfigMemoryMixin {
             // 查询，缓存过期时按钮显示旧值"开"，玩家一点反而又开）
             String uid = maid.m_20148_().toString();
             com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                    new com.maidsmart.build.BlueprintBookNetworking.MemoryStateQueryPacket(uid));
+                    new com.maidsmart.build.BlueprintBookEntityPackets.MemoryStateQueryPacket(uid));
             com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton btn =
                     new com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton(
                             w - 174, 8,
@@ -159,7 +159,7 @@ public abstract class MaidConfigMemoryMixin {
                                 boolean next = !AiMemoryManager.isEnabled(maid);
                                 b.setValue(Component.m_237113_(next ? "\u00a7a开" : "\u00a77关"));
                                 com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                                        new com.maidsmart.build.BlueprintBookNetworking.AiMemoryTogglePacket(
+                                        new com.maidsmart.build.BlueprintBookEntityPackets.AiMemoryTogglePacket(
                                                 uid, next));
                             });
             this.maidsmart$memoryBtn = btn;

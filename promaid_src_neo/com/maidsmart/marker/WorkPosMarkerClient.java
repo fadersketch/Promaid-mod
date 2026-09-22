@@ -56,7 +56,7 @@ public final class WorkPosMarkerClient {
         }
         event.setCanceled(true); // 潜行+中键是我们的标记手势，原版取方块不生效
         net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                new com.maidsmart.schedule.ScheduleNetworking.MarkWorkPosPacket(
+                new com.maidsmart.schedule.SchedulePacketsMaid.MarkWorkPosPacket(
                         pos.getX(), pos.getY(), pos.getZ()));
         mc.player.displayClientMessage(net.minecraft.network.chat.Component.literal(
                 "\u00a7a工位标记已发送（" + pos.getX() + ", " + pos.getY() + ", "

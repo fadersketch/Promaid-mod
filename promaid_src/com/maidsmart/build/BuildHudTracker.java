@@ -49,7 +49,7 @@ public final class BuildHudTracker {
                     lastHadEntries = false;
                     BlueprintBookNetworking.CHANNEL.send(
                             net.minecraftforge.network.PacketDistributor.ALL.noArg(),
-                            new BlueprintBookNetworking.BuildHudPacket(new java.util.ArrayList<>()));
+                            new BlueprintBookBuildPackets.BuildHudPacket(new java.util.ArrayList<>()));
                 }
                 return;
             }
@@ -102,7 +102,7 @@ public final class BuildHudTracker {
                 lastHadEntries = true;
                 BlueprintBookNetworking.CHANNEL.send(
                         net.minecraftforge.network.PacketDistributor.ALL.noArg(),
-                        new BlueprintBookNetworking.BuildHudPacket(entries));
+                        new BlueprintBookBuildPackets.BuildHudPacket(entries));
             }
         } catch (Exception ignored) {
             // HUD 广播失败不影响建造

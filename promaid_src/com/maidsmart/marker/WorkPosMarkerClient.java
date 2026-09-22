@@ -56,7 +56,7 @@ public final class WorkPosMarkerClient {
         }
         event.setCanceled(true); // 潜行+中键是我们的标记手势，原版取方块不生效
         com.maidsmart.schedule.ScheduleNetworking.CHANNEL.sendToServer(
-                new com.maidsmart.schedule.ScheduleNetworking.MarkWorkPosPacket(
+                new com.maidsmart.schedule.SchedulePacketsMaid.MarkWorkPosPacket(
                         pos.m_123341_(), pos.m_123342_(), pos.m_123343_()));
         mc.f_91074_.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                 "\u00a7a工位标记已发送（" + pos.m_123341_() + ", " + pos.m_123342_() + ", "

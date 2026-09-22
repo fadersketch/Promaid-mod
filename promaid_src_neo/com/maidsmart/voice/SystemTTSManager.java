@@ -236,7 +236,7 @@ public final class SystemTTSManager {
     private static void sendJarVoice(ServerPlayer owner, EntityMaid maid, String file) {
         try {
             net.neoforged.neoforge.network.PacketDistributor.sendToPlayer(owner,
-                    new com.maidsmart.build.BlueprintBookNetworking.PlayJarVoicePacket(
+                    new com.maidsmart.build.BlueprintBookBuildPackets.PlayJarVoicePacket(
                             maid.getId(), file));
         } catch (Exception ignored) {
         }

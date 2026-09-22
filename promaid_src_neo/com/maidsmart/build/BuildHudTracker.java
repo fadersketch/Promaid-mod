@@ -51,7 +51,7 @@ public final class BuildHudTracker {
                 if (lastHadEntries) {
                     lastHadEntries = false;
                     PacketDistributor.sendToAllPlayers(
-                            new BlueprintBookNetworking.BuildHudPacket(new java.util.ArrayList<>()));
+                            new BlueprintBookBuildPackets.BuildHudPacket(new java.util.ArrayList<>()));
                 }
                 return;
             }
@@ -102,7 +102,7 @@ public final class BuildHudTracker {
             TOTAL.keySet().removeIf(k -> !alive.contains(k));
             if (!entries.isEmpty()) {
                 lastHadEntries = true;
-                PacketDistributor.sendToAllPlayers(new BlueprintBookNetworking.BuildHudPacket(entries));
+                PacketDistributor.sendToAllPlayers(new BlueprintBookBuildPackets.BuildHudPacket(entries));
             }
         } catch (Exception ignored) {
             // HUD 广播失败不影响建造

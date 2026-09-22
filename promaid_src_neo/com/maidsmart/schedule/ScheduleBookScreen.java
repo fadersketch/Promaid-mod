@@ -295,7 +295,7 @@ public class ScheduleBookScreen extends Screen {
                         Component.literal("\u00a7e全员模式：" + MODE_NAMES[Math.max(0, Math.min(2, this.batchMode))]),
                         b -> {
                             this.batchMode = (this.batchMode + 1) % 3;
-                            PacketDistributor.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                            PacketDistributor.sendToServer(new SchedulePacketsPlan.BatchApplyPacket(
                                     this.batchMode, ""));
                             this.init();
                         })
@@ -321,7 +321,7 @@ public class ScheduleBookScreen extends Screen {
                     // 空串 → 当作 touhou_little_maid:idle（TLM 空闲任务）发送。
                     String uid = this.batchTask.isEmpty()
                             ? "touhou_little_maid:idle" : this.batchTask;
-                    PacketDistributor.sendToServer(new ScheduleNetworking.BatchApplyPacket(
+                    PacketDistributor.sendToServer(new SchedulePacketsPlan.BatchApplyPacket(
                             -1, uid));
                 })
                 .bounds(bx0 + 212, h - 68, 80, 18).build());
@@ -347,7 +347,7 @@ public class ScheduleBookScreen extends Screen {
         }
         // 一键集合（跨维度传送全部在场女仆到身边；实测六十）+ 关闭
         this.addRenderableWidget(Button.builder(Component.literal("\u00a7d\u2691 一键集合"), b ->
-                        PacketDistributor.sendToServer(new ScheduleNetworking.SummonPacket()))
+                        PacketDistributor.sendToServer(new SchedulePacketsMaid.SummonPacket()))
                 .bounds(Math.max(8, cx - 145), h - 24, 90, 20).build());
         this.addRenderableWidget(Button.builder(Component.literal("\u00a7c关闭"), b -> this.onClose())
                 .bounds(cx - 50, h - 24, 100, 20).build());
@@ -394,7 +394,7 @@ public class ScheduleBookScreen extends Screen {
                                 if (ti == 1 && !this.schedDirty) {
                                     this.waiting = true;
                                     PacketDistributor.sendToServer(
-                                            new ScheduleNetworking.SchedLoadRequestPacket(this.selUuid));
+                                            new SchedulePacketsPlan.SchedLoadRequestPacket(this.selUuid));
                                 }
                                 this.init();
                             })
@@ -405,7 +405,7 @@ public class ScheduleBookScreen extends Screen {
         this.addRenderableWidget(Button.builder(
                         Component.literal(on ? "\u00a7a排班：开" : "\u00a77排班：关"),
                         b -> {
-                            PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                     this.selUuid, -1, "", on ? 0 : 1));
                             this.loadedOn = !on;
                             if (sel != null) {
@@ -445,7 +445,7 @@ public class ScheduleBookScreen extends Screen {
                         return; // 硬性锁定：先关右上角的排班
                     }
                     int mode = (curMode + 2) % 3; // 上一个（-1 取模）
-                    PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                    PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                             this.selUuid, mode, "", -1));
                     if (sel != null) {
                         sel[3] = String.valueOf(mode);
@@ -461,7 +461,7 @@ public class ScheduleBookScreen extends Screen {
                                 return; // 硬性锁定：先关右上角的排班
                             }
                             int mode = (curMode + 1) % 3;
-                            PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                            PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                     this.selUuid, mode, "", -1));
                             if (sel != null) {
                                 sel[3] = String.valueOf(mode);
@@ -474,7 +474,7 @@ public class ScheduleBookScreen extends Screen {
                         return; // 硬性锁定：先关右上角的排班
                     }
                     int mode = (curMode + 1) % 3; // 下一个
-                    PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                    PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                             this.selUuid, mode, "", -1));
                     if (sel != null) {
                         sel[3] = String.valueOf(mode);
@@ -498,7 +498,7 @@ public class ScheduleBookScreen extends Screen {
                         int cur = this.taskUids.indexOf(curTask);
                         int prev = (cur - 1 + this.taskUids.size()) % this.taskUids.size();
                         String uid = this.taskUids.get(prev);
-                        PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                        PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                 this.selUuid, -1, uid, -1));
                         if (sel != null) {
                             sel[2] = uid;
@@ -529,7 +529,7 @@ public class ScheduleBookScreen extends Screen {
                         }
                         int next = (this.taskUids.indexOf(curTask) + 1) % this.taskUids.size();
                         String uid = this.taskUids.get(next);
-                        PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                        PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                 this.selUuid, -1, uid, -1));
                         if (sel != null) {
                             sel[2] = uid;
@@ -553,7 +553,7 @@ public class ScheduleBookScreen extends Screen {
                             }
                             boolean next = !homeOn;
                             PacketDistributor.sendToServer(
-                                    new ScheduleNetworking.HomeTogglePacket(this.selUuid, next));
+                                    new SchedulePacketsPlan.HomeTogglePacket(this.selUuid, next));
                             if (sel != null) {
                                 sel[8] = next ? "1" : "0";
                             }
@@ -576,7 +576,7 @@ public class ScheduleBookScreen extends Screen {
                         b -> {
                             if (canSummon) {
                                 PacketDistributor.sendToServer(
-                                        new ScheduleNetworking.MaidSummonPacket(this.selUuid));
+                                        new SchedulePacketsMaid.MaidSummonPacket(this.selUuid));
                             }
                         })
                 .bounds(qx, y, halfW, 20).build());
@@ -587,7 +587,7 @@ public class ScheduleBookScreen extends Screen {
                         b -> {
                             if (canSummon) {
                                 PacketDistributor.sendToServer(
-                                        new ScheduleNetworking.MaidTeleportToPacket(this.selUuid));
+                                        new SchedulePacketsMaid.MaidTeleportToPacket(this.selUuid));
                             }
                         })
                 .bounds(qx + halfW + 6, y, halfW, 20).build());
@@ -600,7 +600,7 @@ public class ScheduleBookScreen extends Screen {
         nameBox.setTextColor(0xFFFFFF);
         this.addRenderableWidget(nameBox);
         this.addRenderableWidget(Button.builder(Component.literal("改名"), b ->
-                        PacketDistributor.sendToServer(new ScheduleNetworking.RenameMaidPacket(
+                        PacketDistributor.sendToServer(new SchedulePacketsMaid.RenameMaidPacket(
                                 this.selUuid, nameBox.getValue())))
                 .bounds(qx + qw - 92, y, 92, 20).build());
     }
@@ -722,7 +722,7 @@ public class ScheduleBookScreen extends Screen {
         this.addRenderableWidget(Button.builder(Component.literal(
                         quick ? "\u00a77空闲（让她不做事）" : "\u00a77空闲（清空）"), b -> {
                     if (quick) {
-                        PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                        PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                 this.selUuid, -1, "touhou_little_maid:idle", -1));
                         String[] sel = this.findSel();
                         if (sel != null) {
@@ -761,7 +761,7 @@ public class ScheduleBookScreen extends Screen {
                             b -> {
                                 if (quick) {
                                     // 快捷页：选中即立即生效，服务端 QuickApply 后回快捷页
-                                    PacketDistributor.sendToServer(new ScheduleNetworking.QuickApplyPacket(
+                                    PacketDistributor.sendToServer(new SchedulePacketsPlan.QuickApplyPacket(
                                             this.selUuid, -1, uid, -1));
                                     String[] sel = this.findSel();
                                     if (sel != null) {
@@ -835,7 +835,7 @@ public class ScheduleBookScreen extends Screen {
                 sel[4] = "1";
             }
         }
-        PacketDistributor.sendToServer(new ScheduleNetworking.SchedSavePacket(
+        PacketDistributor.sendToServer(new SchedulePacketsPlan.SchedSavePacket(
                 this.selUuid, this.loadedOn, segs));
         this.schedDirty = false;
         this.chat("\u00a7a日程已保存：工作时间均分 6 份，跨时间段自动切换；休息时间由作息睡觉");
@@ -1125,7 +1125,7 @@ public void render(GuiGraphics g, int mx, int my, float pt) {
         }
         this.coordTick = 20; // 20 tick = 1 秒
         PacketDistributor.sendToServer(
-                new ScheduleNetworking.MaidCoordRequestPacket(this.selUuid));
+                new SchedulePacketsMaid.MaidCoordRequestPacket(this.selUuid));
     }
 
     @Override

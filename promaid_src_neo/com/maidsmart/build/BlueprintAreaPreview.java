@@ -273,7 +273,7 @@ public final class BlueprintAreaPreview {
         try {
             LOGGER.info("projection: request {} q={}", id, Math.floorMod(quarters, 4));
             PacketDistributor.sendToServer(
-                    new BlueprintBookNetworking.ProjectionRequestPacket(id, quarters));
+                    new BlueprintBookBuildPackets.ProjectionRequestPacket(id, quarters));
         } catch (Exception e) {
             REQUESTED.remove(key);
         }

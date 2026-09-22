@@ -1367,7 +1367,7 @@ public class PromaidConfigScreen extends Screen {
         this.m_142416_(Button.m_253074_(Component.m_237113_("📋 女仆管理"),
                         b -> {
                             com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                                    new com.maidsmart.build.BlueprintBookNetworking.OpenBookRequestPacket(2));
+                                    new com.maidsmart.build.BlueprintBookBuildPackets.OpenBookRequestPacket(2));
                             this.m_7379_(); // 关配置面板（手册包到达后自动打开）
                         })
                 .m_252987_(w - 148, h - 34, 132, 20).m_253136_());
@@ -2242,7 +2242,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new TextRow("导入路径", "", s -> {
             if (s != null && !s.trim().isEmpty()) {
                 com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                        new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(s.trim()));
+                        new com.maidsmart.build.BlueprintBookEntityPackets.VoicePackImportPacket(s.trim()));
             }
             return true;
         }, "语音包 zip 或文件夹的绝对路径；填写后保存即自动导入并生效"));
@@ -2274,7 +2274,7 @@ public class PromaidConfigScreen extends Screen {
                                             "\u00a7e[maid_smart] \u6b63\u5728\u5bfc\u5165\u8bed\u97f3\u5305: " + path));
                                 }
                                 com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                                        new com.maidsmart.build.BlueprintBookNetworking.VoicePackImportPacket(path));
+                                        new com.maidsmart.build.BlueprintBookEntityPackets.VoicePackImportPacket(path));
                             });
                         } catch (Exception ignored) {
                         }
@@ -2291,7 +2291,7 @@ public class PromaidConfigScreen extends Screen {
                                 "\u00a7e[maid_smart] 已请求重新加载语音包，结果请看聊天框"));
                     }
                     com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                            new com.maidsmart.build.BlueprintBookNetworking.VoicePackQueryPacket("reload"));
+                            new com.maidsmart.build.BlueprintBookEntityPackets.VoicePackQueryPacket("reload"));
                 },
                 "从磁盘重新读取 manifest（手动改文件后点此生效）"));
         this.rows.add(new BtnRow("查看语音包状态", "查看状态", () -> {
@@ -2301,7 +2301,7 @@ public class PromaidConfigScreen extends Screen {
                                 "\u00a7e[maid_smart] 已请求查看语音包状态，结果请看聊天框"));
                     }
                     com.maidsmart.build.BlueprintBookNetworking.CHANNEL.sendToServer(
-                            new com.maidsmart.build.BlueprintBookNetworking.VoicePackQueryPacket("status"));
+                            new com.maidsmart.build.BlueprintBookEntityPackets.VoicePackQueryPacket("status"));
                 },
                 "查看当前已加载的文本映射条数与 TTS 语音缓存文件数"));
         this.rows.add(new NumRow("缓存上限（个）", String.valueOf(MaidSmartConfig.TTS_CACHE_MAX_FILES.get()),
