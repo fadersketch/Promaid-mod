@@ -15,12 +15,14 @@
 | `build/BlueprintBookNetworking.java` | 2618 | **854** | 2 |
 | `guide/GuideContent.java` | 2090 | **194** | 5 |
 | `schedule/ScheduleNetworking.java` | 1265 | **约 350** | 2 |
+| `combat/AutoCombatSwitch.java` | 2000 | **783** | 2 |
 
 - **`BlueprintLib` → 14 个类**：`BlueprintBlockData`（方块分类表）、`BlueprintLegacyIds`（旧版数字 id 兼容层）、`BlueprintStructureCodec`（litematic/schem/schematic 解码）、`BlueprintFileIo`（外部文件扫描与导入）、`BlueprintWorldExtract`（从 .mca 提取建筑）、`BlueprintCatalog`（目录与描述）、`BlueprintStepMath`（步骤几何运算与缓存）、`BlueprintBlockTraits`（形状/材质族判定）、`BlueprintMaterials`（材料统计与交付）、`BlueprintMachineDetect`（机器识别与流体流水）、`BlueprintLooseMatching`（宽松替代与等价族）、`BlueprintNames`（中文名表）、`BlueprintMachineFinish`（机器收尾）、`BlueprintPlacement`（放置与场地处理）；
 - **`MaidBombing` → 6 个类**：`BombConfig` / `BombItems` / `BombExplosion` / `BombPlacement` / `BombThrow` / `BombTntTick`（状态模型 `Kind`/`Phase`/`Bomb`/`Homing` 与各张 UUID 表仍留在原类，它们是「谁在炸」的唯一真相）；
 - **`BlueprintBookNetworking` → 2 个包容器**：`BlueprintBookBuildPackets`（建造/目录/投影/区域）、`BlueprintBookEntityPackets`（AI 记忆/调试/导入/语音）；
 - **`GuideContent` → 5 个章节文件**：`GuideChaptersBasics` / `Work` / `Combat` / `Flight` / `System`（手册正文**逐字未改**，只是按主题分开写）；
 - **`ScheduleNetworking` → 2 个包容器**：`SchedulePacketsPlan`（排班数据）、`SchedulePacketsMaid`（女仆个体操作）。
+- **`AutoCombatSwitch` → 2 个类**：`AutoCombatTargeting`（谁算威胁 / 接触时间戳 / 被袭击女仆接战 / 威胁详情）、`AutoCombatPools`（任务池组池抽签 / 战术重调 / 武器就绪 / 标记清理 / 战后恢复原任务）——**事件回调与 342 行的 `onServerTick` 留在原类**（它们绑 `this` 与实例节流字段，是「谁在参战」的入口）。
 
 **搬运的四条硬约束**（保证外部调用点一行都不用改）：
 
@@ -38,7 +40,7 @@
 ### ④ 验证
 
 - 两树 `gen_compile` + `javac` **全量重编：0 错误**（forge 295 → 309 个源文件，neo 297 → 311）；
-- 两个 jar 重新打包：`verify_jar_classes` OK、语言文件 JSON OK、mixins 类齐全，条目数 forge 747 → **772**、neo 749 → **774**；
+- 两个 jar 重新打包：`verify_jar_classes` OK、语言文件 JSON OK、mixins 类齐全，条目数 forge 747 → **776**、neo 749 → **778**；
 - **本条不重新发布**：GitHub 上的 v1.2.3 附件保持原样，只提交推送源码；游戏内行为与 v1.2.3 完全一致。
 
 ### ⑤ 没拆的（以及为什么）

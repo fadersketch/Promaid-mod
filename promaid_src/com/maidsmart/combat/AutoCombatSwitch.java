@@ -65,34 +65,34 @@ public class AutoCombatSwitch {
     /** v1.1.0 实测一百零四：战斗激活布尔标记——PREV_TASK_TAG 存的是字符串（前任务
      *  UID），getBoolean 对字符串标签永远返回 false → 恢复逻辑永远不触发。新增独立
      *  布尔标记解决此问题。 */
-    private static final String COMBAT_ACTIVE_TAG = "maid_smart_combat_active";
+    static final String COMBAT_ACTIVE_TAG = "maid_smart_combat_active";
     /** 战斗前原任务 UID（persistentData，切战斗时写入，还原时读取） */
-    private static final String PREV_TASK_TAG = "maid_smart_combat_prev_task";
+    static final String PREV_TASK_TAG = "maid_smart_combat_prev_task";
     /** 最近一次看到威胁的 gameTime（还原延迟计时基准） */
-    private static final String LAST_THREAT_TAG = "maid_smart_combat_last_threat";
+    static final String LAST_THREAT_TAG = "maid_smart_combat_last_threat";
     /** 本系统指派的战斗任务 UID（还原时校验任务没被玩家换过——换过=玩家接管，只清标记退出） */
-    private static final String ASSIGNED_TAG = "maid_smart_combat_task";
+    static final String ASSIGNED_TAG = "maid_smart_combat_task";
     /** v1.1.0 实测八十四：最近一次与敌对生物有伤害往来的 gameTime（僵局逃逸阀计时——
      *  威胁在半径内但双方久无接触 = 够不着的死局，不再无限续杯安全计时） */
-    private static final String LAST_CONTACT_TAG = "maid_smart_combat_last_contact";
+    static final String LAST_CONTACT_TAG = "maid_smart_combat_last_contact";
     /** v1.1.0 实测八十五：最近伤害来源（动态威胁圈）——uuid + 登记时刻。
      *  还原扫描时该生物若仍存活且在扩展窗口内，威胁圈自动放大把它包含进来 */
-    private static final String ATTACKER_UUID_TAG = "maid_smart_combat_attacker";
-    private static final String ATTACKER_TIME_TAG = "maid_smart_combat_attacker_time";
+    static final String ATTACKER_UUID_TAG = "maid_smart_combat_attacker";
+    static final String ATTACKER_TIME_TAG = "maid_smart_combat_attacker_time";
     /** v1.1.0 实测一百四十九（参考 tlm_beyond_space 会话快照 RegularRescueSupport）：
      *  战斗前的 home 模式——还原时一并恢复（"切回之前的模式"闭环：任务+home+作息） */
-    private static final String COMBAT_PREV_HOME_TAG = "maid_smart_combat_prev_home";
+    static final String COMBAT_PREV_HOME_TAG = "maid_smart_combat_prev_home";
     /** 战斗前的作息（MaidSchedule.name；空 = 未记录） */
-    private static final String COMBAT_PREV_SCHEDULE_TAG = "maid_smart_combat_prev_schedule";
+    static final String COMBAT_PREV_SCHEDULE_TAG = "maid_smart_combat_prev_schedule";
     /** v1.1.0 实测一百六十二：战斗会话开始时间（tick）——硬性超时还原兜底的计时基准 */
-    private static final String COMBAT_START_TAG = "maid_smart_combat_start";
+    static final String COMBAT_START_TAG = "maid_smart_combat_start";
     /** v1.1.0 实测一百六十二：战斗会话硬性超时（tick，90 秒）——超过仍未还原就强制
      *  切回，杜绝任何门（威胁判定/安全计时/僵局阀失效）把女仆永久卡在战斗态。 */
     private static final long COMBAT_HARD_DEADLINE_TICKS = 1800L;
     /** 僵局日志节流（每女仆 30 秒一条，latest.log 搜 "auto-combat stale"） */
     private static final java.util.Map<java.util.UUID, Long> STALE_LOG =
             new java.util.HashMap<>();
-    private static final Random RNG = new Random();
+    static final Random RNG = new Random();
     /** 还原扫描节流（每 20 tick = 1 秒一次） */
     private int restoreThrottle = 0;
     /** v1.1.0 实测一百七十二：还原扫描心跳（每 10 秒一条，latest.log 搜 "auto-combat
@@ -102,11 +102,11 @@ public class AutoCombatSwitch {
     /** v1.1.0 实测一百六十四：还原扫描诊断节流（maidId → 上次诊断 tick）——定位
      *  "还原扫描卡在哪个门"（追问：为什么卡住，不能只加超时兜底）。每 10 秒/女仆
      *  一条 latest.log（搜 "restore-scan"）。 */
-    private static final java.util.Map<java.util.UUID, Long> RESTORE_DIAG_SINCE = new java.util.HashMap<>();
+    static final java.util.Map<java.util.UUID, Long> RESTORE_DIAG_SINCE = new java.util.HashMap<>();
     /** v1.1.0 实测一百六十九：候选池诊断节流（maidId → 上次诊断 tick）——确认模组
      *  武器任务有没有进战斗候选池（反馈："女仆仍然不会使用模组的武器"）。每 5 秒/
      *  女仆一条 latest.log（搜 "combat pools"）。 */
-    private static final java.util.Map<java.util.UUID, Long> POOL_DIAG_SINCE = new java.util.HashMap<>();
+    static final java.util.Map<java.util.UUID, Long> POOL_DIAG_SINCE = new java.util.HashMap<>();
 
     /** 主人被攻击（任意来源）→ 附近女仆切战斗
      *  v1.1.0 实测二十：旧版只认敌对生物攻击（Enemy）——玩家互打/PVP、其他模组的
@@ -241,9 +241,9 @@ public class AutoCombatSwitch {
         // 记仇状态未就位（模组生物用自有仇恨系统、isAngry 不写）也算交战对象
         net.minecraft.world.entity.Entity victimEnt = event.getEntity();
         if (!(victimEnt instanceof net.minecraft.world.entity.monster.Enemy)
-                && !isAngryNeutralAt(victimEnt, attacker)
-                && !isAngryTamedAt(victimEnt, attacker)
-                && !isTargetingAnyoneOf(victimEnt, attacker)) {
+                && !AutoCombatTargeting.isAngryNeutralAt(victimEnt, attacker)
+                && !AutoCombatTargeting.isAngryTamedAt(victimEnt, attacker)
+                && !AutoCombatTargeting.isTargetingAnyoneOf(victimEnt, attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -267,9 +267,9 @@ public class AutoCombatSwitch {
         // v1.1.0 实测三百四十六：行为化口径（同 onOwnerAttack——锁定主人/
         // 女仆的生物即使 isAngry 未就位也算）
         if (!(event.getEntity() instanceof net.minecraft.world.entity.monster.Enemy)
-                && !isAngryNeutralAt(event.getEntity(), attacker)
-                && !isAngryTamedAt(event.getEntity(), attacker)
-                && !isTargetingAnyoneOf(event.getEntity(), attacker)) {
+                && !AutoCombatTargeting.isAngryNeutralAt(event.getEntity(), attacker)
+                && !AutoCombatTargeting.isAngryTamedAt(event.getEntity(), attacker)
+                && !AutoCombatTargeting.isTargetingAnyoneOf(event.getEntity(), attacker)) {
             return;
         }
         if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
@@ -291,7 +291,7 @@ public class AutoCombatSwitch {
             if (maid.m_269323_() != player) {
                 continue; // 只响应主人自己的女仆
             }
-            int result = tryEngageMaid(maid);
+            int result = AutoCombatTargeting.tryEngageMaid(maid);
             if (result == 1) {
                 switched++;
             } else if (result == 2) {
@@ -308,77 +308,11 @@ public class AutoCombatSwitch {
     }
 
     /* ==================== v1.1.0 实测五十八：女仆被怪打 → 自主参战 ==================== */
+    /** v1.1.0 实测三百四十四：对外触发单只女仆参战评估（NeutralThreatDriver 用）——扫到"锁定主人/女仆为目标"的魔改/中立生物时补触发（主 —— 实现见 AutoCombatTargeting.tryEngagePublic（v1.2.4 拆分）。 */
+    static void tryEngagePublic(EntityMaid maid) { AutoCombatTargeting.tryEngagePublic(maid); }
 
-    /** v1.1.0 实测三百四十四：对外触发单只女仆参战评估（NeutralThreatDriver 用）——
-     *  扫到"锁定主人/女仆为目标"的魔改/中立生物时补触发（主人打狼时事件在狼记仇
-     *  状态设置之前发，isAngry 判定恒 false 漏触发；这里 0.5 秒后 getTarget 已就位，
-     *  补上迟到的参战）。内部自带排班/自保/幼年让位与 COMBAT_ACTIVE 去重。 */
-    static void tryEngagePublic(EntityMaid maid) {
-        try {
-            if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
-                return;
-            }
-            tryEngageMaid(maid);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * v1.1.0 实测三百四十四（反馈："有一部分 mod 会魔改原版被动生物，让被动生物
-     * 都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"）：
-     * 【行为化威胁判定】——该生物是否正在锁定（getTarget）主人或女仆本人。
-     * 与类型判定（Enemy/NeutralMob/Tamable）互补：类型接口是原版体系，模组魔改
-     * 的"被动变中立"生物不实现任何一个是常态；getTarget 是 Mob 基类字段，
-     * 所有敌对/中立/魔改生物 AI 攻击前都会写它——狼发狂咬人的瞬间 target==主人，
-     * 模组改的"攻击性奶牛"冲锋时同样写 target。这是最普适的威胁信号。
-     */
-    static boolean isTargetingOurSide(net.minecraft.world.entity.Entity e,
-                                       net.minecraft.world.entity.LivingEntity owner,
-                                       net.minecraft.world.entity.LivingEntity maid) {
-        try {
-            if (!(e instanceof net.minecraft.world.entity.Mob mob) || !mob.m_6084_()) {
-                return false;
-            }
-            // 女仆之间不打（同主人姐妹/其他玩家的女仆都不是威胁）
-            if (mob instanceof EntityMaid) {
-                return false;
-            }
-            net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
-            return t == maid || (owner != null && t == owner);
-        } catch (Throwable ex) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.1.0 实测三百四十六（反馈："不论是哪种生物，只要是 target=主人/女仆的
-     * 都会被额外列入威胁并当做敌对威胁处理"）：普适行为化判定——该生物是否
-     * 正在锁定【指定主人的任意女仆或主人本人】。不限定 NeutralMob/Tamable 类型
-     * （模组魔改生物不实现原版接口是常态），只看 getTarget 行为信号。
-     * 主人开火判定用（被打生物可能锁定的是主人身边的女仆而非主人本人）。
-     */
-    private static boolean isTargetingAnyoneOf(net.minecraft.world.entity.Entity e,
-                                                net.minecraft.world.entity.LivingEntity owner) {
-        try {
-            if (!(e instanceof net.minecraft.world.entity.Mob mob) || !mob.m_6084_()) {
-                return false;
-            }
-            if (mob instanceof EntityMaid) {
-                return false; // 女仆之间不打
-            }
-            net.minecraft.world.entity.LivingEntity t = mob.m_5448_(); // getTarget
-            if (t == null) {
-                return false;
-            }
-            if (t == owner) {
-                return true;
-            }
-            // 锁定的是主人的任意女仆
-            return t instanceof EntityMaid tm && tm.m_269323_() == owner;
-        } catch (Throwable ex) {
-            return false;
-        }
-    }
+    /** v1.1.0 实测三百四十四（反馈："有一部分 mod 会魔改原版被动生物，让被动生物都会变成像狼这样的中立生物，所以我觉得这方面的判定需要加强"） —— 实现见 AutoCombatTargeting.isTargetingOurSide（v1.2.4 拆分）。 */
+    static boolean isTargetingOurSide(net.minecraft.world.entity.Entity e, net.minecraft.world.entity.LivingEntity owner, net.minecraft.world.entity.LivingEntity maid) { return AutoCombatTargeting.isTargetingOurSide(e, owner, maid); }
 
     /**
      * 女仆被怪物攻击（近身拍打/远程弹射物——弹射物伤害来源=射击者）→ 她【本人】
@@ -397,8 +331,8 @@ public class AutoCombatSwitch {
         if (event.getEntity().m_9236_().m_5776_()) {
             return;
         }
-        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
+        if (AutoCombatTargeting.maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            AutoCombatTargeting.touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -408,8 +342,8 @@ public class AutoCombatSwitch {
         if (event.getEntity().m_9236_().m_5776_()) {
             return;
         }
-        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
+        if (AutoCombatTargeting.maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            AutoCombatTargeting.touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
@@ -419,54 +353,14 @@ public class AutoCombatSwitch {
         if (event.getEntity().m_9236_().m_5776_()) {
             return;
         }
-        if (maidVictimOfMonster(event.getEntity(), event.getSource())) {
-            touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
+        if (AutoCombatTargeting.maidVictimOfMonster(event.getEntity(), event.getSource())) {
+            AutoCombatTargeting.touchContactFromSource((EntityMaid) event.getEntity(), event.getSource());
             this.engageAttackedMaid((EntityMaid) event.getEntity());
         }
     }
 
-    /** 实测三百四十五：对外记录一次战斗接触（NeutralThreatDriver 直接挥砍成功时
-     *  调用——还原扫描的僵局逃逸阀以"最近伤害往来"计时，我方补刀也算往来） */
-    static void touchContactPublic(EntityMaid maid) {
-        touchContact(maid);
-    }
-
-    /**
-     * v1.1.0 实测八十四：记录一次与敌对生物的真实接触（任意方向伤害）。
-     * v1.1.0 实测八十五：挨打侧同时登记【伤害来源生物】（uuid + 时刻）——
-     * 动态威胁圈的放大依据（hasThreatNearby 按需把半径扩到包含它）。
-     */
-    private static void touchContact(EntityMaid maid) {
-        try {
-            maid.getPersistentData().m_128356_(LAST_CONTACT_TAG, maid.m_9236_().m_46467_());
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static void touchContactFromSource(EntityMaid maid,
-                                               net.minecraft.world.damagesource.DamageSource source) {
-        touchContact(maid);
-        try {
-            net.minecraft.world.entity.Entity attacker = source != null ? source.m_7640_() : null;
-            if (!(attacker instanceof net.minecraft.world.entity.monster.Enemy)
-                    && !isAngryNeutralAt(attacker, maid)
-                    && !isAngryTamedAt(attacker, maid.m_269323_())
-                    && !isTargetingOurSide(attacker, maid.m_269323_(), maid)) {
-                attacker = source != null ? source.m_7639_() : null;
-            }
-            // v1.1.0 实测八十七：登记口径 = Enemy 或 记仇女仆的中立生物
-            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算（狼记仇主人、咬女仆）
-            // v1.1.0 实测三百四十六：锁定主人/女仆的任意生物也算圈来源（普适行为化口径）
-            if (attacker instanceof net.minecraft.world.entity.monster.Enemy
-                    || isAngryNeutralAt(attacker, maid)
-                    || isAngryTamedAt(attacker, maid.m_269323_())
-                    || isTargetingOurSide(attacker, maid.m_269323_(), maid)) {
-                maid.getPersistentData().m_128359_(ATTACKER_UUID_TAG, attacker.m_20148_().toString());
-                maid.getPersistentData().m_128356_(ATTACKER_TIME_TAG, maid.m_9236_().m_46467_());
-            }
-        } catch (Exception ignored) {
-        }
-    }
+    /** 实测三百四十五：对外记录一次战斗接触（NeutralThreatDriver 直接挥砍成功时调用——还原扫描的僵局逃逸阀以"最近伤害往来"计时，我方补刀也算往来 —— 实现见 AutoCombatTargeting.touchContactPublic（v1.2.4 拆分）。 */
+    static void touchContactPublic(EntityMaid maid) { AutoCombatTargeting.touchContactPublic(maid); }
 
     /**
      * v1.1.0 实测八十四：女仆【打到】敌对生物也算一次战斗接触——僵局逃逸阀的
@@ -494,104 +388,7 @@ public class AutoCombatSwitch {
                 ((EntityMaid) event.getSource().m_7640_()).m_269323_(), maid)) {
             return;
         }
-        touchContact(maid);
-    }
-
-    /** 受害者是女仆、来源是怪物（与护主触发同款总开关门控）
-     *  v1.1.0 实测六十五：Monster -> Enemy——史莱姆/岩浆怪等敌对生物不实现
-     *  Monster 但实现 Enemy 接口，旧判定被它们打了不参战。
-     *  v1.1.0 实测八十五：补弹射物口径——骷髅放箭时【直接实体】(m_7639_)是箭矢、
-     *  【造成者】(m_7640_)才是骷髅，旧版只查直接实体 → 远程怪放风筝女仆永不参战；
-     *  现在两侧任一是 Enemy 即算。
-     *  v1.1.0 实测八十七：中立激怒口径——蜜蜂/北极熊/狼等 NeutralMob 平时不算
-     *  敌意来源，但【正在记仇女仆】的（isAngryAt 命中）按敌对处理。 */
-    private static boolean maidVictimOfMonster(Entity victim, net.minecraft.world.damagesource.DamageSource source) {
-        if (!(victim instanceof EntityMaid)) {
-            return false;
-        }
-        if (!com.maidsmart.tool.MaidScope.owned(victim)) {
-            return false; // v1.2.2 实测六百：无主女仆不参战（整合包自己的仇恨体系接管）
-        }
-        if (!MaidSmartConfig.COMBAT_AUTO_SWITCH.get()) {
-            return false;
-        }
-        if (source == null) {
-            return false;
-        }
-        net.minecraft.world.entity.Entity cause = source.m_7640_();
-        if (cause instanceof net.minecraft.world.entity.monster.Enemy) {
-            return true;
-        }
-        net.minecraft.world.entity.Entity direct = source.m_7639_();
-        if (direct instanceof net.minecraft.world.entity.monster.Enemy) {
-            return true;
-        }
-        // v1.1.0 实测八十七：中立生物激怒即通行证
-        // v1.1.0 实测三百一十八：驯服宠物记仇【主人】也算——狼记仇的是主人不是
-        // 女仆，isAngryAt(女仆) 恒 false → 女仆被发狂驯服狼咬不参战（反馈："狼打我
-        // 女仆一点反应都没"）。记仇主人的驯服宠物咬女仆 = 真实威胁，帮打合理。
-        // v1.1.0 实测三百四十四【行为化兜底】：魔改生物不实现 NeutralMob/Tamable
-        // 接口（类型判定恒 false），但攻击前必写 getTarget——正在锁定【受害女仆
-        // 或其主人】的任意 Mob 都算真实威胁（与 isTargetingOurSide 同口径）。
-        // 野狼咬女仆时 getTarget 可能仍指向主人（记仇主人但顺手咬近身的女仆），
-        // 两侧都查。
-        EntityMaid vm = (EntityMaid) victim;
-        if (isTargetingOurSide(cause, vm.m_269323_(), vm)
-                || isTargetingOurSide(direct, vm.m_269323_(), vm)) {
-            return true;
-        }
-        return isAngryNeutralAt(cause, victim) || isAngryNeutralAt(direct, victim)
-                || isAngryTamedAt(cause, victim) || isAngryTamedAt(direct, victim);
-    }
-
-    /**
-     * v1.1.0 实测八十七：该实体是否为【正在记仇 target 的中立生物】。
-     * m_21674_ = NeutralMob.isAngryAt(LivingEntity)（字节码实证默认实现：
-     * canAnger 门 → 玩家通用怒火规则 → 持久仇恨 UUID 匹配）。
-     */
-    private static boolean isAngryNeutralAt(net.minecraft.world.entity.Entity e,
-                                            net.minecraft.world.entity.Entity target) {
-        try {
-            return e instanceof net.minecraft.world.entity.NeutralMob nm
-                    && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.1.0 实测三百一十八（反馈："遇到发狂的狼，我打狼或是狼打我，女仆一点反应
-     * 都没"）：驯服宠物（狼/猫等 TamableAnimal）记仇【target】也算交战对象/威胁。
-     * 旧版只认 NeutralMob.isAngryAt——驯服狼记仇主人时：① 主人打狼的 LivingHurtEvent
-     * 在狼记仇状态设置【之前】触发，isAngryAt 恒 false → 主动开火不参战；② 狼咬
-     * 女仆时记仇的是主人不是女仆，isAngryAt(女仆) 恒 false → 女仆被咬也不参战；
-     * ③ 发狂驯服狼在附近不算威胁，还原被它打断又拉回。驯服宠物记仇主人 = 真实
-     * 威胁，女仆帮打合理。m_21824_ = TamableAnimal.isTame（javap 实证）。
-     */
-    private static boolean isAngryTamedAt(net.minecraft.world.entity.Entity e,
-                                          net.minecraft.world.entity.Entity target) {
-        try {
-            // m_21674_ 是 NeutralMob 接口方法（TamableAnimal 类没有）——驯服狼
-            // 同时实现 NeutralMob + TamableAnimal，两个 instanceof 都成立
-            return e instanceof net.minecraft.world.entity.TamableAnimal t
-                    && t.m_21824_()
-                    && e instanceof net.minecraft.world.entity.NeutralMob nm
-                    && nm.m_21674_((net.minecraft.world.entity.LivingEntity) target);
-        } catch (Exception ex) {
-            return false;
-        }
-    }
-
-    /**
-     * v1.1.0 实测八十七b：isAngry（m_21660_，剩余记仇时间>0）防御封装——
-     * 模组 NeutralMob 实现的 getter 抛异常只按"不记仇"处理，绝不炸 tick。
-     */
-    private static boolean neutralAngry(net.minecraft.world.entity.NeutralMob nm) {
-        try {
-            return nm.m_21660_();
-        } catch (Exception e) {
-            return false;
-        }
+        AutoCombatTargeting.touchContact(maid);
     }
 
     /** 被打女仆 + 周围同主人姐妹一起参战（三事件 20 tick 去重，与护主触发同口径） */
@@ -602,7 +399,7 @@ public class AutoCombatSwitch {
             return;
         }
         this.triggerThrottle.put(victim.m_20148_(), now);
-        this.tryEngageMaid(victim); // 挨打的本人在哪都响应
+        AutoCombatTargeting.tryEngageMaid(victim); // 挨打的本人在哪都响应
         double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get();
         for (EntityMaid maid : victim.m_9236_().m_45976_(EntityMaid.class,
                 victim.m_20191_().m_82400_(r))) {
@@ -612,144 +409,11 @@ public class AutoCombatSwitch {
             if (maid.m_269323_() == null || maid.m_269323_() != victim.m_269323_()) {
                 continue; // 只带同主人的姐妹（无主野女仆不卷入）
             }
-            this.tryEngageMaid(maid);
+            AutoCombatTargeting.tryEngageMaid(maid);
         }
         com.mojang.logging.LogUtils.getLogger().info(
                 "auto-combat: maid attacked -> engage self + sisters (victim={})",
                 victim.m_5446_() != null ? victim.m_5446_().getString() : victim.m_20148_());
-    }
-
-    /**
-     * 单只女仆参战评估（护主扫描 / 女仆被怪打 共用）。
-     * 返回：1=已切换战斗 0=不参战（自保中/已参战刷新威胁/无匹配任务）2=已是战斗任务跳过
-     */
-    private static int tryEngageMaid(EntityMaid maid) {
-        if (!maid.m_6084_() || maid.m_6162_()) {
-            return 0; // 死亡/幼年不参战
-        }
-        // v1.2.0：飞行作战（近战/远战）下【自主战斗不介入】——模式自己负责索敌/攻击/换装，
-        // 自主战斗不得把她切走、不得换战术、不得还原（返回 2 = "已是战斗任务，跳过"）
-        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
-            return 2;
-        }
-        // v1.2.2 实测五百九十：傀儡模式（第三方玩法）下【自主作战不介入】——不切走、
-        // 不换战术、不还原（返回 2 = 「已是战斗任务，跳过」；她由玩家安排着玩那个玩法）
-        if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
-            return 2;
-        }
-        // v1.1.0 实测一百六十三（反馈："退而求其次——让排班拥有更高的优先级。排班
-        // 状态下不触发自主战斗，也不会响应"）：排班开启的女仆【不参与自主战斗】——
-        // 任务/模式全由日程表管理，杜绝战斗让位/还原链与排班互相拉扯（8月28日起
-        // "排班不切换、女仆一直跟随主人"的根因就是战斗 COMBAT_ACTIVE 残留把排班
-        // 让位挡死）。想让她打 → 排班段任务直接配攻击任务（日程表驱动战斗），或
-        // 关闭该女仆排班。
-        if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
-            return 0;
-        }
-        // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
-        if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
-            return 0;
-        }
-        // 已被本系统切过：还在指派的战斗任务上 → 只刷新威胁计时；任务已被
-        // 玩家/排班/LLM 换走 → 玩家接管，清标记后按"当前任务"重新评估参战
-        // v1.1.0 终审修复落地（实测十六）：判定必须走 getBoolean（m_128471_）——
-        // 此前代码用 contains（m_128441_），而 clearMarkers 是 putBoolean(false)
-        // 不删键 → 打过一仗后 contains 永远 true：排班调度器对她永久让位
-        // （排班再也不生效）+ 还原扫描每秒对每只退役女仆做 3 次无效 NBT 写
-        if (maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
-            IMaidTask curTask = maid.getTask();
-            // v1.1.0 实测一百六十二【主动攻击被吞根治】：旧版把 idle 读数（战斗早已
-            // 结束、任务已回落 idle）也当"已在战斗"直接 return 0——老女仆身上残留的
-            // COMBAT_ACTIVE 永远清不掉，参战被永久吞掉（新女仆没残留所以正常触发）。
-            // 现在只有【真实还在战斗任务】（指派或任意攻击任务）才吞；idle 读数
-            // = 残留标记 → 清掉后继续走参战评估；被外部换走的任务同样清标记后重评。
-            if (isAssignedOrCombatTask(maid, curTask)) {
-                // v1.1.0 实测八十四b：续杯安全计时只在【真实存在敌对威胁】时进行
-                if (hasThreatNearby(maid)) {
-                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-                }
-                return 0; // 真在战斗：只续威胁计时，不重复参战
-            }
-            // v1.1.0 实测一百七十一【参战重选抖动根治】：刚参战 3 秒内读到 idle =
-            // DATA_TASK 同步抖动（setTask 还没同步到 getTask），不是真残留——不清
-            // 标记、不重选。否则每次触发都走"自愈+重选"，随机数落回原版武器（日志
-            // 实证 00:59:19 先选 true_power_of_maid:slashblade_attack、10 毫秒后重选
-            // 成原版 attack = "不会拿出拔刀剑"的直接原因）。
-            long combatStart = maid.getPersistentData().m_128454_(COMBAT_START_TAG);
-            long nowT = maid.m_9236_().m_46467_();
-            if (isIdleReadingTask(curTask) && combatStart > 0 && nowT - combatStart < 60L) {
-                if (hasThreatNearby(maid)) {
-                    maid.getPersistentData().m_128356_(LAST_THREAT_TAG, nowT);
-                }
-                return 0; // 刚参战，抖动读数——保持当前切换，不重选
-            }
-            clearMarkers(maid);
-            // v1.1.0 实测一百四十九：任务被外部接管 → 尊重新任务不动它，但 home/作息还原
-            restorePrevMode(maid);
-            if (isIdleReadingTask(curTask)) {
-                com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 残留战斗标记自愈（当前 idle），重新评估参战");
-            } else {
-                com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 战斗中任务被接管（当前 " + (curTask != null ? curTask.getUid() : "null")
-                        + " 非攻击任务），清标记退出");
-            }
-            // 不 return——清完标记继续走下面的参战评估
-        }
-        // 已是攻击类任务（IAttackTask：玩家手动安排的近战/弓/弹幕，或万法皆通/
-        // 史诗战斗等第三方攻击任务）→ 她本来就能打，尊重现状不切换不记录
-        if (MaidWorkTags.isCombatTask(maid)) {
-            // v1.1.0 实测一百四十八：当前战斗任务【已无可用武器】（模组武器被
-            // 玩家拿走）→ 不视为"已在战斗"，继续走重选——否则永远 return 2，
-            // 主动战斗再也不触发（"塞入模组武器后即使再拿出来也不触发"的根因之一）
-            if (hasWeaponForTask(maid, maid.getTask())) {
-                return 2;
-            }
-            com.maidsmart.tool.PromaidLog.log("战斗",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 当前战斗任务 " + maid.getTask().getUid()
-                            + " 无可用武器（模组武器被拿走？），重新选择参战任务");
-        }
-        IMaidTask combat = pickCombatTask(maid);
-        if (combat == null) {
-            return 0; // 单只找不到任务不连坐（此前 return 会跳过同半径的其他女仆）
-        }
-        // v1.1.0 实测一百四十八（参考 tlm_beyond_space TaskSwitchService）：切任务前
-        // 预检 + 自动装备——onFunctionCallSwitch 默认实现 = 主手无武器则从背包装备，
-        // 装不上返回 MISSING_REQUIRED_ITEM。预检失败就不切入：不会把女仆卡在打不出
-        // 伤害的战斗任务上（武器被拿走/任务要求特殊物品）
-        if (CombatTaskCompat.prepareSwitch(maid, combat)
-                == FunctionCallSwitchResult.MISSING_REQUIRED_ITEM) {
-            com.maidsmart.tool.PromaidLog.log("战斗",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid)
-                            + " 参战预检失败：" + combat.getUid() + " 无可装备武器，不参战");
-            return 0;
-        }
-        String prevUid = resolvePrevTaskUid(maid);
-        maid.getPersistentData().m_128359_(PREV_TASK_TAG, prevUid);
-        maid.getPersistentData().m_128359_(ASSIGNED_TAG, combat.getUid().toString());
-        maid.getPersistentData().m_128356_(LAST_THREAT_TAG, maid.m_9236_().m_46467_());
-        maid.getPersistentData().m_128379_(COMBAT_ACTIVE_TAG, true);
-        // v1.1.0 实测一百六十二：记录战斗开始时间（硬性超时还原兜底）
-        maid.getPersistentData().m_128356_(COMBAT_START_TAG, maid.m_9236_().m_46467_());
-        // v1.1.0 实测一百四十九（参考 tlm_beyond_space RegularRescueSupport）：参战瞬间
-        // 快照 home 模式与作息——还原时一并恢复（"切回之前的模式"的完整状态闭环）
-        maid.getPersistentData().m_128379_(COMBAT_PREV_HOME_TAG, maid.isHomeModeEnable());
-        try {
-            maid.getPersistentData().m_128359_(COMBAT_PREV_SCHEDULE_TAG,
-                    maid.getSchedule() == null ? "" : maid.getSchedule().name());
-        } catch (Throwable ignored) {
-        }
-        // v1.1.0 实测八十四：参战即视为一次接触（僵局逃逸阀计时起点刷新）
-        touchContact(maid);
-        // v1.1.0 实测一百三十六：主动战斗是【自动系统】——setTask 打内部标记，
-        // 排班守卫 mixin 据此放行（否则排班中的女仆会连战斗切换都被拦）
-        com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(),
-                combat.getUid(), () -> maid.setTask(combat));
-        // v1.1.0 实测九十四：运行日志
-        com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                + " 参战：" + prevUid + " -> " + combat.getUid());
-        return 1;
     }
 
     /**
@@ -795,13 +459,13 @@ public class AutoCombatSwitch {
                 // v1.2.2 实测五百九十：傀儡模式（第三方玩法）期间【不还原、不干预】——
                 // 只清掉残留的战斗标记就退出（她的任务由玩家管，本模组战术全体让位）
                 if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
-                    clearMarkers(maid);
+                    AutoCombatPools.clearMarkers(maid);
                     continue;
                 }
                 // v1.1.0 实测一百六十三：排班开启的女仆不参与自主战斗——残留的战斗
                 // 标记直接清掉（她的任务/模式由日程表管理，战斗还原链不再适用）
                 if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
-                    clearMarkers(maid);
+                    AutoCombatPools.clearMarkers(maid);
                     schedCleared++;
                     continue;
                 }
@@ -831,16 +495,16 @@ public class AutoCombatSwitch {
                             curTask != null && curTask.getUid() != null ? curTask.getUid() : "null",
                             maid.getPersistentData().m_128461_(ASSIGNED_TAG),
                             (diagNow - maid.getPersistentData().m_128454_(LAST_THREAT_TAG)) / 20,
-                            threatDetail(maid),
+                            AutoCombatTargeting.threatDetail(maid),
                             maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG),
                             com.maidsmart.schedule.ScheduleData.isOn(maid));
                 }
-                if (!isAssignedOrCombatTask(maid, curTask) && !isIdleReadingTask(curTask)) {
-                    clearMarkers(maid);
+                if (!AutoCombatPools.isAssignedOrCombatTask(maid, curTask) && !AutoCombatPools.isIdleReadingTask(curTask)) {
+                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
                     // 任务被外部接管 → 尊重新任务不动它，但 home/作息还原到战斗前
                     //（"切回之前的模式"兜底，不再只有"清标记"半途而废）
-                    restorePrevMode(maid);
+                    AutoCombatPools.restorePrevMode(maid);
                     // v1.1.0 实测九十四：运行日志
                     com.maidsmart.tool.PromaidLog.log("战斗",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 战斗中任务被接管（玩家/排班/LLM），清标记退出");
@@ -854,7 +518,7 @@ public class AutoCombatSwitch {
                 // （跳过威胁刷新与安全时长等待），还原后她有武器时再正常参战。
                 boolean weaponless = curTask != null
                         && curTask instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask
-                        && !hasWeaponForTask(maid, curTask);
+                        && !AutoCombatPools.hasWeaponForTask(maid, curTask);
                 // v1.1.0 实测一百六十二【硬性兜底】：战斗会话超过 90 秒仍未还原——
                 // 无论威胁是否仍在、安全计时是否被续杯、僵局阀是否失效，都强制切回。
                 // 保证任何门都卡不死女仆（反馈："怎么都没法还原"）。
@@ -866,7 +530,7 @@ public class AutoCombatSwitch {
                 boolean staleMarker = combatStart <= 0
                         && !(curTask instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask);
                 boolean forceRestore = weaponless || hardDeadline || staleMarker;
-                boolean threatNearby = forceRestore ? false : hasThreatNearby(maid);
+                boolean threatNearby = forceRestore ? false : AutoCombatTargeting.hasThreatNearby(maid);
                 if (forceRestore) {
                     com.maidsmart.tool.PromaidLog.log("战斗",
                             com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -903,7 +567,7 @@ public class AutoCombatSwitch {
                 if (threatNearby) {
                     maid.getPersistentData().m_128356_(LAST_THREAT_TAG, now);
                     // v1.1.0 实测五十七：威胁仍在 → 每秒评估一次近/远程是否该互换
-                    retuneCombatTactics(maid);
+                    AutoCombatPools.retuneCombatTactics(maid);
                     continue;
                 }
                 // v1.1.0 实测一百一十五【距离切换武器落实】：威胁圈（8 格）外但仍在
@@ -912,13 +576,13 @@ public class AutoCombatSwitch {
                 // 在 8~16 格出现空洞）。现在远处敌人先尝试按距离切远程：切成功
                 // （近战→远程）或已是远程 → 维持战斗继续射；切不动（背包没有远程
                 // 武器）→ 落回正常还原（10 秒安全期后退出）。
-                double farDist = nearestThreatDist(maid);
+                double farDist = AutoCombatTargeting.nearestThreatDist(maid);
                 // v1.1.0 实测一百四十八：武器已被拿走时跳过"远处切远程"分支——
                 // 该分支切成功会续杯 LAST_THREAT 并 continue（继续战斗），与上面的
                 // 强制还原冲突（武器没了还留在战斗里 = 卡死）
-                if (!forceRestore && farDist > JUMP_UNREACHABLE_DIST && farDist <= TARGETING_RANGE) {
+                if (!forceRestore && farDist > AutoCombatPools.JUMP_UNREACHABLE_DIST && farDist <= AutoCombatPools.TARGETING_RANGE) {
                     String beforeTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
-                    retuneCombatTactics(maid);
+                    AutoCombatPools.retuneCombatTactics(maid);
                     String afterTask = maid.getTask() != null ? maid.getTask().getUid().toString() : "";
                     boolean canRanged = !afterTask.equals(beforeTask)
                             || (maid.getTask() != null && isRangedTask(maid.getTask()));
@@ -993,9 +657,9 @@ public class AutoCombatSwitch {
                         }
                     }
                     if (fallbackDone) {
-                        clearMarkers(maid);
+                        AutoCombatPools.clearMarkers(maid);
                         // v1.1.0 实测一百四十九：兜底还原同样恢复 home/作息（排班关闭时）
-                        restorePrevMode(maid);
+                        AutoCombatPools.restorePrevMode(maid);
                     } else {
                         com.maidsmart.tool.PromaidLog.log("战斗",
                                 com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -1056,11 +720,11 @@ public class AutoCombatSwitch {
                 // v1.1.0 实测一百五十：还原成功（或排班接管成功）才清标记——参考项目
                 // "先还原后清会话"；还原失败保留标记，下轮扫描继续重试（不会丢还原链）
                 if (restored || !stillOnCombat) {
-                    clearMarkers(maid);
+                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
                     // 还原 home 模式与作息（排班关闭时）——"切回之前的模式"完整闭环；
                     // 排班开启时作息由日程表管理（调度器每秒重断言），此处不覆盖
-                    restorePrevMode(maid);
+                    AutoCombatPools.restorePrevMode(maid);
                     // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
                     // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
                     // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查
@@ -1095,906 +759,25 @@ public class AutoCombatSwitch {
         }
     }
 
-    /**
-     * 女仆周围（还原威胁半径，默认 8——独立配置，不复用 16 格响应半径）是否有活的
-     * 敌对生物。v1.1.0 审查：旧版复用响应半径，刷怪频繁的整合包里远处怪一直"续杯"，
-     * 女仆永远等不满 20 秒安全期，卡在战斗任务回不了岗。
-     *
-     * v1.1.0 实测八十五【动态威胁圈】（玩家设计："威胁圈会自然放大，直至包含检索到
-     * 伤害来源的那个生物"）：固定圆与参战触发的口径不对称——骷髅站在 10 多格外放
-     * 风筝时，固定 8 格扫不到它 → 还原计时照走 → 还原 10 秒后又中一箭再参战，反复
-     * 横跳。现在挨打时登记伤害来源生物（uuid + 时刻），还原扫描发现该生物仍存活、
-     * 距离不超过硬上限（32 格）、且还在扩展窗口（默认 10 秒）内 → 威胁圈自然放大把
-     * 它包进来：被压着打期间保持战斗态还击；怪死/走远/超窗后圈回落到固定半径。
-     */
-    private static boolean hasThreatNearby(EntityMaid maid) {
-        double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
-        // v1.1.0 实测六十八：Monster -> Enemy（与参战判定同口径——史莱姆等
-        // 敌对生物也算威胁，否则还原后立刻被再次触发、反复横跳）。
-        // Enemy 是接口，getEntitiesOfClass 不收——按 Entity 扫描再过滤。
-        // v1.1.0 实测八十七：中立激怒口径——记仇状态（isAngry）的中立动物
-        // （蜜蜂/北极熊/狼等）也是真实威胁，还原不再被它们打断又拉回。
-        for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
-                net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
-            if (!e.m_6084_()) {
-                continue;
-            }
-            if (e instanceof net.minecraft.world.entity.monster.Enemy) {
-                return true;
-            }
-            // v1.1.0 实测八十七b：经防御封装调用——模组 NeutralMob 实现的记仇时间
-            // getter 若抛异常，不能顺着每秒一次的还原扫描炸穿服务端 tick
-            if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
-                return true; // isAngry：记仇时间未清零 = 现役威胁
-            }
-            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算威胁（发狂的驯服狼在附近
-            // 不还原——否则还原后立刻被咬又拉回，反复横跳）
-            if (isAngryTamedAt(e, maid.m_269323_())) {
-                return true;
-            }
-            // v1.1.0 实测三百四十四【行为化口径】：正在锁定主人/本女仆的任意 Mob
-            // 都是现役威胁（魔改生物不实现 NeutralMob/Tamable——类型判定漏掉的
-            // 全靠 getTarget 兜住；发狂的狼 getTarget==主人）。否则还原后立刻又被
-            // 咬回战斗态，反复横跳。
-            if (isTargetingOurSide(e, maid.m_269323_(), maid)) {
-                return true;
-            }
-        }
-        // ---- 动态威胁圈 ----
-        int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
-        if (sec <= 0) {
-            return false; // 关闭：只用固定半径
-        }
-        try {
-            long now = maid.m_9236_().m_46467_();
-            long marked = maid.getPersistentData().m_128454_(ATTACKER_TIME_TAG);
-            if (now - marked > sec * 20L) {
-                return false; // 扩展窗口已过
-            }
-            String uuidStr = maid.getPersistentData().m_128461_(ATTACKER_UUID_TAG);
-            if (uuidStr.isEmpty()) {
-                return false;
-            }
-            net.minecraft.world.entity.Entity attacker =
-                    ((net.minecraft.server.level.ServerLevel) maid.m_9236_())
-                            .m_8791_(java.util.UUID.fromString(uuidStr));
-            if (!attacker.m_6084_()) {
-                return false; // 来源已死/已移除
-            }
-            // v1.1.0 实测八十七：圈来源口径放宽——Enemy 或 记仇中的中立生物
-            // v1.1.0 实测三百一十八：驯服宠物记仇主人也算圈来源（同固定圈口径）
-            // v1.1.0 实测三百四十六：锁定主人/女仆的任意生物也算（普适行为化口径）
-            boolean ringSource = attacker instanceof net.minecraft.world.entity.monster.Enemy
-                    || (attacker instanceof net.minecraft.world.entity.NeutralMob nm
-                    && neutralAngry(nm))
-                    || isAngryTamedAt(attacker, maid.m_269323_())
-                    || isTargetingOurSide(attacker, maid.m_269323_(), maid);
-            if (!ringSource) {
-                return false;
-            }
-            // 硬上限 32 格：防跨基地区域的荒谬放大
-            return maid.m_20238_(attacker.m_20182_()) <= 32.0 * 32.0;
-        } catch (Exception ignored) {
-            return false;
-        }
-    }
+    /** v1.1.0 实测三十八：任务武器类型分类——true=远程，false=近战 —— 实现见 AutoCombatPools.isRangedTask（v1.2.4 拆分）。 */
+    public static boolean isRangedTask(IMaidTask task) { return AutoCombatPools.isRangedTask(task); }
 
-    /**
-     * v1.1.0 实测二十：选战斗任务——武器等权随机（原版武器降权重）。
-     *
-     * v1.1.0 实测三十八（反馈："选武器不再单纯随机，加距离判定——史诗战斗/拔刀剑
-     * 算近战、枪械等算远程；近战远程都有时按距离选"）：改为【距离感知的两段选择】：
-     * ① 候选任务按武器类型分近战/远程两池（分类规则见 classifyTask）；
-     * ② 只有一类有候选 → 该类内按原加权随机；
-     * ③ 两类都有 → 看最近敌人距离：≤ meleeRange（默认 5 格）用近战池，
-     *    > meleeRange 用远程池（池内仍按原权重随机——同池内不退化成固定顺序）。
-     * 找不到敌人（威胁已消失的边缘场景）→ 按远程优先（安全距离输出）。
-     */
-    private static IMaidTask pickCombatTask(EntityMaid maid) {
-        TaskPools pools = buildPools(maid);
-        // 两类都有 → 按最近敌人距离+偏好权重选池；只有一类 → 直接用
-        if (!pools.meleePool().isEmpty() && !pools.rangedPool().isEmpty()) {
-            double dist = nearestThreatDist(maid);
-            boolean useMelee;
-            if (dist >= 0 && dist <= MELEE_RANGE) {
-                // v1.1.0 实测五十八：近身两池皆可用 → 按 近战:远程 偏好权重随机选池
-                //（默认 3:1 ≈ 75% 近战；某类权重 0 = 永不主动选该类；双 0 → 远程兜底）
-                double mw = Math.max(0, MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get());
-                double rw = Math.max(0, MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get());
-                useMelee = mw + rw > 0 && RNG.nextDouble() * (mw + rw) < mw;
-            } else {
-                // 远距离（近战够不着）/ 找不到敌人（威胁消失边缘）→ 远程（实测三十八口径）
-                useMelee = false;
-            }
-            com.mojang.logging.LogUtils.getLogger().info(
-                    "auto-combat pick: maid={} both-pools dist={} -> {}",
-                    maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                    String.format("%.1f", dist), useMelee ? "melee" : "ranged");
-            return useMelee
-                    ? weightedPick(pools.meleePool(), pools.meleeWeights())
-                    : weightedPick(pools.rangedPool(), pools.rangedWeights());
-        }
-        if (!pools.meleePool().isEmpty()) {
-            return weightedPick(pools.meleePool(), pools.meleeWeights());
-        }
-        if (!pools.rangedPool().isEmpty()) {
-            return weightedPick(pools.rangedPool(), pools.rangedWeights());
-        }
-        // v1.1.0 实测六十七（反馈："手上完全没有攻击性物品的女仆，就不应该触发自主
-        // 战斗，应该维持原任务"）：两池全空 = 主手/背包没有任何攻击任务认的武器
-        // → 不参战（返回 null，tryEngageMaid 跳过、维持原任务）；
-        // 开关关闭时保留旧行为（空手近战兜底）
-        if (!MaidSmartConfig.COMBAT_UNARMED_SKIP.get()) {
-            return TaskManager.findTask(ResourceLocation.parse("touhou_little_maid:attack")).orElse(null);
-        }
-        return null;
-    }
+    /** 内置的近远分类规则（分类表没写这个任务时用）——原 isRangedTask 的主体，一字未改：判定口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远 —— 实现见 AutoCombatPools.defaultRangedByUid（v1.2.4 拆分）。 */
+    public static boolean defaultRangedByUid(IMaidTask task) { return AutoCombatPools.defaultRangedByUid(task); }
 
-    /** v1.1.0 实测五十七：候选池结构（近战/远程两池 + 各自权重）——
-     *  入战选任务（pickCombatTask）与战中换战术（retuneCombatTactics）共用 */
-    private record TaskPools(List<IMaidTask> meleePool, List<Double> meleeWeights,
-                             List<IMaidTask> rangedPool, List<Double> rangedWeights) {
-    }
+    /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） —— 实现见 AutoCombatPools.isAutoCombatActive（v1.2.4 拆分）。 */
+    public static boolean isAutoCombatActive(EntityMaid maid) { return AutoCombatPools.isAutoCombatActive(maid); }
 
-    /** 扫描全部攻击类任务 → 按武器匹配 + 类型分池（入战/战中共用，逻辑同旧 pickCombatTask） */
-    private static TaskPools buildPools(EntityMaid maid) {
-        List<IMaidTask> meleePool = new ArrayList<>();
-        List<Double> meleeWeights = new ArrayList<>();
-        List<IMaidTask> rangedPool = new ArrayList<>();
-        List<Double> rangedWeights = new ArrayList<>();
-        // v1.2.2 实测六百二十一：分类表里**点名**写过分类的任务（近战/远程）——这些
-        // 不受"模组任务优先让位"影响（玩家点名优先于自动让位，见 CombatModeTable）
-        java.util.Set<String> pinnedUids = new java.util.HashSet<>();
-        String vanillaNs = "touhou_little_maid";
-        double vanillaW = MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get();
-        double modW = MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get();
-        for (IMaidTask task : TaskManager.getTaskIndex()) {
-            if (!(task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask attack)) {
-                continue; // 只认攻击类任务
-            }
-            // v1.1.0 实测一百七十一：排除【非战斗】的 IAttackTask——TLM 喂动物任务
-            // （touhou_little_maid:feed_animal）也实现了 IAttackTask，但喂动物不是
-            // 战斗：混进候选池会让女仆战斗中随机切去喂动物（打怪变喂鸡）、还稀释
-            // 模组武器权重（"不会拿出拔刀剑"的间接因素）
-            try {
-                if (task.getUid() != null
-                        && "touhou_little_maid:feed_animal".equals(task.getUid().toString())) {
-                    continue;
-                }
-            } catch (Throwable ignored) {
-            }
-            // v1.2.2 实测五百九十【第三方玩法模式黑名单】：傀儡师（傀儡装配 Modular
-            // Golems）不是本模组该碰的战斗模式——自主参战/战中换战术都永不切进去
-            //（玩家手动切过去不受影响；届时本模组战术全体让位，见 MaidModeCompat）
-            if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(task)) {
-                continue;
-            }
-            // v1.2.2 实测六百二十一【分类表·不参与】：玩家在「战斗模式分类表」里点名
-            // 写了「不参与」的任务，入战选任务与战中换战术（两者共用本池）都永不选它。
-            // 只影响**自动切换**——玩家在 TLM 面板手动把她切过去完全不受影响。
-            // 位置在黑名单之后：黑名单是"本模组不该碰的模式"（第三方玩法优先），
-            // 表里写"参与"也进不来，两者不冲突。
-            String modeUid = task.getUid() == null ? null : task.getUid().toString();
-            if (CombatModeTable.blocksAutoSwitch(modeUid)) {
-                continue;
-            }
-            try {
-                if (task.isHidden(maid)) { // isHidden——隐藏任务不进候选（接口方法名编译期已实证（TLM jar 未混淆该方法））
-                    continue;
-                }
-            } catch (Throwable ignored) {
-            }
-            // 背包/主手有该任务认的武器才算候选（isWeapon 是 IAttackTask 的默认方法：
-            // 原版任务按武器类型判；模组任务自定义判定——法书/史诗武器等）
-            if (!hasWeaponForTask(maid, attack)) {
-                continue;
-            }
-            // v1.2.0 实测五百五十九【法术任务进池收紧】：万法皆通的法术任务 isWeapon 恒 true
-            // （javap 实证），旧版只要求"背包里有任意一件非原版物品"就让它们进池
-            //（实测三百七十九的兜底）——那等于"带个模组食物也算会用魔法"。现在要求她
-            // **真的带着法术装备**（法术书/法器在主手、副手、背包或饰品栏，或者附属数据里
-            // 已经有她的法术书）才允许进池；不满足 → 这个任务不进任何池。
-            if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(attack)
-                    && !com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
-                continue;
-            }
-            // v1.2.0：飞行作战【不参与自主切换】——入战选任务时永远不进池，
-            // 玩家手动指定的飞行作战不会被自主切换顶掉。
-            if (com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {
-                continue;
-            }
-            // v1.1.0 实测三百七十九【模组物品背书】（反馈："为啥自主战斗老喜欢切换
-            // 到魔法？明明我只给了原版武器"）：万法皆通 SpellCombatMeleeTask.isWeapon
-            // 恒 true（javap 反汇编实证）——背包里任何物品（原版剑/食物都行）都被
-            // 认作"魔法武器" → 模组任务凭空进池 + 模组让位规则（实测一百八十一）
-            // 把原版任务挤掉 → 只给原版武器的女仆在远距离被切去 spell_combat_far。
-            // 修：模组任务必须匹配到【非原版物品】才进池（拔刀剑/史诗战斗武器本就
-            // 是模组物品，不受影响；女仆持有万法皆通物品时也照常参与）；配置关 =
-            // 模组任务完全不参与自主切换。
-            String taskNs = task.getUid().m_135827_();
-            if (!vanillaNs.equals(taskNs)) {
-                if (!MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.get()) {
-                    continue;
-                }
-                if (!hasNonVanillaWeaponForTask(maid, attack)) {
-                    continue;
-                }
-            }
-            // v1.1.0 实测一百二十①【枪械弹药闸】：枪械任务进池必须弹药可用——
-            // TLM TaskGunAttack.isWeapon 只查 isGun（javap 实证），有枪没子弹也会
-            // 进池被切到 gun_attack → TLM 换弹失败原地干等。hasGunAndAmmo 判定
-            // （背包有枪+任意弹药；卓越前线能量武器免弹药），不满足 → 枪械任务
-            // 不进任何池（参战选任务/距离切换都不会把她切到打不出伤害的模式）。
-            if ("touhou_little_maid:gun_attack".equals(task.getUid().toString())
-                    && !com.maidsmart.combat.GunCompat.hasGunAndAmmo(maid)) {
-                continue;
-            }
-            // v1.1.0 实测二十一：权重可配置（原版/模组各一条）——模组默认 2.0 优先、
-            // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
-            double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
-            w = Math.max(0.01, w);
-            // v1.2.2 实测六百二十一：分类表点名写过分类的 → 记进 pinned（不被让位挤掉）
-            if (CombatModeTable.modeOf(modeUid) != null && modeUid != null) {
-                pinnedUids.add(modeUid);
-            }
-            if (isRangedTask(task)) {
-                rangedPool.add(task);
-                rangedWeights.add(w);
-            } else {
-                meleePool.add(task);
-                meleeWeights.add(w);
-            }
-        }
-        // v1.1.0 实测一百八十一（反馈："女仆有概率在拿到拔刀剑的时候选择攻击模式，
-        // 而不是选择拔刀剑专属的拔刀剑模式。其他模组武器也有可能会出现这样的问题"）：
-        // 同池"模组专属任务 vs 原版通用任务"不再加权随机——旧版拔刀剑同时被原版
-        // attack 认作武器（拔刀剑物品继承剑类）→ 两任务同池按 原版:模组=1:2 权重
-        // 随机 → 1/3 概率落到原版攻击（= 拿着拔刀剑切普通攻击模式的来源；战中
-        // 换战术同池随机同理会把拔刀剑换出）。修复：池内有模组任务时原版通用任务
-        // 整体让位（模组武器 → 模组模式确定性生效）；原版任务退化为【无模组武器】
-        // 时的兜底。权重随机保留在多个模组任务之间（同为专属任务，随机选不退化）。
-        // v1.2.2 实测六百二十一【让位改成可控】：①配置里可以整体关掉（关 = 原版与模组
-        // 同池纯按权重随机，原版/模组两条权重照旧生效）②分类表里**点名写过分类**的
-        // 任务不参与让位（玩家点名优先于自动让位——否则"我把这个模组任务写成远程"
-        // 会被让位规则反手踢掉，等于表没用）。
-        if (CombatModeTable.vanillaYieldToMod()) {
-            vanillaYieldToMod(meleePool, meleeWeights, vanillaNs, pinnedUids);
-            vanillaYieldToMod(rangedPool, rangedWeights, vanillaNs, pinnedUids);
-        }
-        // v1.1.0 实测一百六十九：候选池内容诊断（每 5 秒/女仆一条，latest.log 搜
-        // "combat pools"）——确认模组武器任务（ef_tlm/拔刀剑/truepower 等）有没有进池；
-        // 池里只有原版任务 = 模组武器没被 isWeapon 认到；池里有模组任务 = 权重随机问题
-        try {
-            long nowT = maid.m_9236_().m_46467_();
-            Long poolLast = POOL_DIAG_SINCE.get(maid.m_20148_());
-            if (poolLast == null || nowT - poolLast >= 100L) {
-                POOL_DIAG_SINCE.put(maid.m_20148_(), nowT);
-                StringBuilder mp = new StringBuilder();
-                for (IMaidTask t : meleePool) {
-                    mp.append(t.getUid()).append(',');
-                }
-                StringBuilder rp = new StringBuilder();
-                for (IMaidTask t : rangedPool) {
-                    rp.append(t.getUid()).append(',');
-                }
-                com.mojang.logging.LogUtils.getLogger().info(
-                        "combat pools: maid={} melee=[{}] ranged=[{}]",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid), mp, rp);
-            }
-        } catch (Throwable ignored) {
-        }
-        return new TaskPools(meleePool, meleeWeights, rangedPool, rangedWeights);
-    }
+    /** v1.1.0 实测三百八十：当前任务是否为【本系统自动指派】（ASSIGNED_TAG 与当前任务一致） —— 实现见 AutoCombatPools.isTaskAutoAssigned（v1.2.4 拆分）。 */
+    public static boolean isTaskAutoAssigned(EntityMaid maid) { return AutoCombatPools.isTaskAutoAssigned(maid); }
 
-    /**
-     * v1.1.0 实测一百八十一：同池存在模组专属任务时，原版通用任务让位（就地移除）。
-     * 原版任务（touhou_little_maid 命名空间）是通用兜底——模组专属任务认了同一件
-     * 武器时（拔刀剑继承剑类、史诗武器带攻击力属性），通用任务与专属任务同池
-     * 加权随机会随机落到通用模式上；专属模式才吃得干这件武器的机制。
-     * 入战选任务（pickCombatTask）与战中换战术（retuneCombatTactics）共用
-     * buildPools——此处让位对两条路径同时生效。
-     * v1.2.2 实测六百二十一：**点名优先**——{@code pinned} 里是玩家在「战斗模式分类表」
-     * 里亲手写过分类的任务 UID，它们不参与让位（否则玩家把某个模组任务特意写成远程，
-     * 又会被这条自动规则反手踢掉）；整条让位规则本身也有开关
-     * （{@code COMBAT_VANILLA_YIELD_TO_MOD}，见 buildPools 的调用点）。
-     */
-    private static void vanillaYieldToMod(List<IMaidTask> pool, List<Double> weights, String vanillaNs,
-                                          java.util.Set<String> pinned) {
-        boolean hasMod = false;
-        for (IMaidTask t : pool) {
-            if (t.getUid() != null && !vanillaNs.equals(t.getUid().m_135827_())) {
-                hasMod = true;
-                break;
-            }
-        }
-        if (!hasMod) {
-            return;
-        }
-        for (int i = pool.size() - 1; i >= 0; i--) {
-            IMaidTask t = pool.get(i);
-            if (t.getUid() == null || vanillaNs.equals(t.getUid().m_135827_())) {
-                // v1.2.2 实测六百二十一：表里点过名的不踢（点名优先）
-                if (t.getUid() != null && pinned.contains(t.getUid().toString())) {
-                    continue;
-                }
-                pool.remove(i);
-                weights.remove(i);
-            }
-        }
-    }
+    /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务（或仍在本系统指派的战斗任务上） —— 实现见 AutoCombatPools.isReallyCombatActive（v1.2.4 拆分）。 */
+    public static boolean isReallyCombatActive(EntityMaid maid) { return AutoCombatPools.isReallyCombatActive(maid); }
 
-    /** v1.1.0 实测五十七：近战"够不着"阈值（格）——女仆跳跃横距约 3~4 格，敌人比这
-     *  还远 = "大跳都跳不过去"，近战状态继续追只会被远程怪风筝 */
-    private static final double JUMP_UNREACHABLE_DIST = 6.0;
-    /** v1.1.0 实测五十七：索敌范围上限（格）——超过不切远程（超出弓/弩/枪械有效输出） */
-    private static final double TARGETING_RANGE = 16.0;
+    /** v1.1.0 实测二百六十五/二百六十六：供外部系统（批量应用等）处理战斗标记——返回 true = 【真本系统战斗】（ASSIGNED 匹配当前任务，应跳过— —— 实现见 AutoCombatPools.isRealCombatActive（v1.2.4 拆分）。 */
+    public static boolean isRealCombatActive(EntityMaid maid) { return AutoCombatPools.isRealCombatActive(maid); }
 
-    /**
-     * v1.1.0 实测六十一（借鉴 TLM-Sincerely 防抖三件套）：战中换战术稳定状态。
-     * lastSwitchTick=上次切换时刻；holdUntil=最短持有到期；cooldownUntil=反向横跳冷却到期；
-     * fromUid=上次切换来源任务（反向判定用）。内存态——女仆下线/参战标记清掉时一并清除，
-     * 最坏情况（重进后状态丢失）只是多做一次切换，无害。
-     */
-    private record TacticState(long lastSwitchTick, long holdUntil, long cooldownUntil, String fromUid) {
-    }
+    /** v1.1.0 实测二百六十五：供外部系统（批量应用等）清理【残留】战斗标记——调用方已确认标记残留（当前任务非攻击任务），直接清全部标记 + 还原 home/作 —— 实现见 AutoCombatPools.clearMarkersForExternal（v1.2.4 拆分）。 */
+    public static void clearMarkersForExternal(EntityMaid maid) { AutoCombatPools.clearMarkersForExternal(maid); }
 
-    private static final java.util.Map<java.util.UUID, TacticState> TACTIC_STATE = new java.util.HashMap<>();
-
-    /**
-     * v1.1.0 实测五十七：战斗中近远程动态换战术（每秒评估一次——仅本系统指派的
-     * 战斗女仆、威胁仍在、任务没被玩家/排班接管时）。
-     *
-     * - 战术一（远程被近身 → 切近战）：当前是远程任务、最近敌人 ≤ MELEE_RANGE，
-     *   背包/主手有近战类武器（含模组——史诗战斗/拔刀剑等，走 isWeapon 匹配）→
-     *   切近战池（池内仍按原版/模组权重随机）。
-     * - 战术二（近战够不着 → 切远程）：当前是近战任务、最近敌人 > JUMP_UNREACHABLE_DIST
-     *   （大跳都跳不过去）且 ≤ TARGETING_RANGE（仍在索敌范围）→ 有远程武器切远程池。
-     * - 5~6 格滞回带防横跳：远程→近战门槛 5、近战→远程门槛 6，两门槛错开 1 格，
-     *   敌人在 5~6 格徘徊时不会每秒来回换任务（换任务 = 重建 brain，代价高）。
-     * - 池空不切：被近身但没近战武器 → 保持远程硬打（近身反击击退机制兜底）；
-     *   够不着但没远程武器 → 保持近战追击。
-     *
-     * 【兼容关键】切换后同步 ASSIGNED_TAG——还原链路用它判断"任务是否被玩家/排班
-     * 换过"（换过=接管，只清标记不还原）。不同步的话战中一换任务就被当成接管，
-     * 威胁消失后永不还原 = 卡死在战斗任务。PREV_TASK_TAG（战斗前原任务）不动，
-     * 还原流程零改动；LAST_THREAT_TAG 由外层照常刷新，威胁消失计时不受影响。
-     *
-     * 【模组参与】v1.1.0 实测八十六的"模组隔离（模组任务永不被换出）"在实测
-     * 一百零七已作废：旧版只允许 touhou_little_maid 命名空间任务参与近远程切换，
-     * 模组任务（拔刀剑/弹幕/御币等）永远被排除；一百零七改为任意 IAttackTask
-     * 均可参与——模组任务现在【双向参与】：可被切入（池内含模组候选，火力保留）
-     * 也可被换出（当前是模组任务时按距离分类照常评估）。与 pickCombatTask/
-     * buildPools 同口径；本门是纯提前返回、不写任何状态——参战触发/还原/僵局阀/
-     * 动态圈零影响。
-     */
-    private static void retuneCombatTactics(EntityMaid maid) {
-        IMaidTask cur = maid.getTask();
-        if (cur == null) {
-            return;
-        }
-        // v1.2.0：飞行作战【不参与战中换战术】——她的战斗节奏（放烟花/滑翔/收翅猛击）
-        // 由 MaidFlightCombatBehavior 独占，换到别的近远战任务只会把整个链路打断。
-        if (com.maidsmart.combat.MaidFlightKit.isFlightUid(cur.getUid())) {
-            return;
-        }
-        // v1.1.0 实测一百零七（反馈："女仆不会自己的近远战切换"）：旧版只允许
-        // touhou_little_maid 命名空间任务参与近远程切换，模组任务（拔刀剑/弹幕/御币等）
-        // 永远被排除——即使女仆拿着弓站在远处也只会傻站着近战。修复：改为
-        // IAttackTask 实例即可参与切换（与 pickCombatTask/buildPools 同口径）。
-        if (!(cur instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask)) {
-            return;
-        }
-        // v1.1.0 实测六十一：最短持有 / 反向横跳冷却（防抖三件套之二）
-        long now = maid.m_9236_().m_46467_();
-        TacticState st = TACTIC_STATE.get(maid.m_20148_());
-        if (st != null) {
-            if (now < st.holdUntil()) {
-                return; // 刚换过战术，持有期内不再评估
-            }
-            if (now < st.cooldownUntil()) {
-                return; // 横跳冷却中，保持当前战术硬打
-            }
-        }
-        boolean curRanged = isRangedTask(cur);
-        double dist = nearestThreatDist(maid);
-        if (dist < 0) {
-            return; // 扫不到敌人（威胁半径外的残余判定），不动
-        }
-        boolean wantMelee;
-        if (curRanged) {
-            if (dist > MELEE_RANGE) {
-                return; // 还没被近身，远程继续输出
-            }
-            // v1.1.0 实测五十八：近战偏好权重 0 = 玩家不要近战——被近身也不切，
-            // 保持远程硬打（近身反击击退机制兜底）
-            if (MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get() <= 0) {
-                return;
-            }
-            wantMelee = true;
-        } else {
-            if (dist <= JUMP_UNREACHABLE_DIST || dist > TARGETING_RANGE) {
-                return; // 追得上（跳跃+贴身可达）或超出索敌范围，维持近战
-            }
-            // v1.1.0 实测五十八：远程偏好权重 0 = 玩家不要远程——够不着也保持近战追击
-            if (MaidSmartConfig.COMBAT_PREF_RANGED_WEIGHT.get() <= 0) {
-                return;
-            }
-            wantMelee = false;
-        }
-        TaskPools pools = buildPools(maid);
-        IMaidTask next = wantMelee
-                ? (pools.meleePool().isEmpty() ? null : weightedPick(pools.meleePool(), pools.meleeWeights()))
-                : (pools.rangedPool().isEmpty() ? null : weightedPick(pools.rangedPool(), pools.rangedWeights()));
-        if (next == null || next.getUid().equals(cur.getUid())) {
-            return; // 没有对应武器的任务可换 / 选中的就是当前任务
-        }
-        // v1.1.0 实测一百四十八：换战术前预检 + 自动装备（同参战入口）——装不上
-        // （MISSING_REQUIRED_ITEM）就不切，保持现状（模组武器判定走 isWeaponCap 兼容）
-        if (CombatTaskCompat.prepareSwitch(maid, next)
-                == FunctionCallSwitchResult.MISSING_REQUIRED_ITEM) {
-            return;
-        }
-        // v1.1.0 实测六十一：反向抑制——刚从 fromUid 换到当前任务，窗口内又想换回去
-        // = 来回横跳，拒绝本次切换并进入冷却期
-        if (st != null && !st.fromUid().isEmpty() && st.fromUid().equals(next.getUid().toString())
-                && now - st.lastSwitchTick() <= MaidSmartConfig.COMBAT_REVERSE_WINDOW_TICKS.get()) {
-            long cd = MaidSmartConfig.COMBAT_REVERSE_COOLDOWN_TICKS.get();
-            if (cd > 0) {
-                TACTIC_STATE.put(maid.m_20148_(), new TacticState(st.lastSwitchTick(), 0, now + cd, ""));
-                com.mojang.logging.LogUtils.getLogger().info(
-                        "auto-combat retune: maid={} reverse {}->{} suppressed, cooldown {} ticks",
-                        maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                        cur.getUid(), next.getUid(), cd);
-            }
-            return;
-        }
-        // v1.1.0 实测一百三十六：战斗换战术是自动系统——打内部标记放行
-        com.maidsmart.schedule.ScheduleSwitchGuard.runInternal(maid.m_20148_(),
-                next.getUid(), () -> maid.setTask(next));
-        // 兼容关键：同步指派标记（见方法注释），否则还原链路误判"玩家接管"
-        maid.getPersistentData().m_128359_(ASSIGNED_TAG, next.getUid().toString());
-        // 记录稳定状态：最短持有 + 来源任务（反向判定用）
-        TACTIC_STATE.put(maid.m_20148_(), new TacticState(now,
-                now + MaidSmartConfig.COMBAT_TACTIC_HOLD_TICKS.get(), 0, cur.getUid().toString()));
-        com.mojang.logging.LogUtils.getLogger().info(
-                "auto-combat retune: maid={} {} -> {} (dist={})",
-                maid.m_5446_() != null ? maid.m_5446_().getString() : maid.m_20148_(),
-                cur.getUid(), next.getUid(), String.format("%.1f", dist));
-    }
-
-    /** v1.1.0 实测三十八：近战判定距离（格）——敌人 ≤ 此距离用近战 */
-    private static final double MELEE_RANGE = 5.0;
-
-    /** 加权随机（原逻辑抽出——同池内仍按原版/模组权重随机，不退化成固定顺序） */
-    private static IMaidTask weightedPick(List<IMaidTask> pool, List<Double> weights) {
-        double total = 0;
-        for (double w : weights) {
-            total += w;
-        }
-        double roll = RNG.nextDouble() * total;
-        for (int i = 0; i < pool.size(); i++) {
-            roll -= weights.get(i);
-            if (roll <= 0) {
-                return pool.get(i);
-            }
-        }
-        return pool.get(pool.size() - 1);
-    }
-
-    /**
-     * v1.1.0 实测三十八：任务武器类型分类——true=远程，false=近战。
-     * 判定口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
-     * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
-     * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
-     * （未知模组任务按近战兜底——冲脸总比站桩安全）。
-     * public（实测一百二十②）：MaidCombatTacticsBehavior 的走位分支据此把
-     * 法术书/法杖等非投射远程任务也当远程处理。
-     *
-     * v1.2.2 实测六百二十一：先问「战斗模式分类表」——玩家点名写过分类的任务以表为准
-     * （这才是反馈要的"能配置哪些模式算近战、哪些算远程"），表里没写的才走
-     * {@link #defaultRangedByUid} 的内置推断。
-     */
-    public static boolean isRangedTask(IMaidTask task) {
-        try {
-            Boolean override = CombatModeTable.rangedOverride(task.getUid().toString());
-            if (override != null) {
-                return override;
-            }
-        } catch (Throwable ignored) {
-        }
-        return defaultRangedByUid(task);
-    }
-
-    /**
-     * 内置的近远分类规则（分类表没写这个任务时用）——原 isRangedTask 的主体，一字未改：
-     * 判定口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
-     * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
-     * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
-     * （未知模组任务按近战兜底——冲脸总比站桩安全）。
-     * public：{@code /maid_smart combat modes} 要同时报"内置算什么"与"现在算什么"。
-     */
-    public static boolean defaultRangedByUid(IMaidTask task) {
-        String uid = task.getUid().toString();
-        // 原版远程五件套（弓/弩/三叉戟/弹幕/枪械）——近战 attack 不在表里
-        if (uid.equals("touhou_little_maid:ranged_attack")
-                || uid.equals("touhou_little_maid:crossbow_attack")
-                || uid.equals("touhou_little_maid:trident_attack")
-                || uid.equals("touhou_little_maid:danmaku_attack")
-                || uid.equals("touhou_little_maid:gun_attack")) {
-            return true;
-        }
-        String ns = task.getUid().m_135827_();
-        // v1.1.0 实测一百零七：模组远程任务识别——法术系/投射系按远程处理
-        if (ns.equals("maidspell") || ns.equals("spellbook")) {
-            return true;
-        }
-        // v1.1.0 实测一百零七：模组远程任务——UID 包含 ranged/gun/danmaku/spell 关键词
-        String uidLower = uid.toLowerCase();
-        if (uidLower.contains("ranged") || uidLower.contains("gun")
-                || uidLower.contains("danmaku") || uidLower.contains("spell")
-                || uidLower.contains("crossbow") || uidLower.contains("trident")
-                || uidLower.contains("bow")) {
-            return true;
-        }
-        // 明确的近战模组
-        if (ns.equals("ef_tlm") || ns.equals("slashblade") || ns.equals("sbr_core")
-                || ns.equals("truepower")) {
-            return false;
-        }
-        // 未知模组任务默认近战（冲脸兜底）
-        return false;
-    }
-
-    /** v1.1.0 实测三十八：女仆周围最近敌对生物距离（格）；没有敌人返回 -1 */
-    private static double nearestThreatDist(EntityMaid maid) {
-        try {
-            double best = -1;
-            // v1.1.0 实测六十八：Monster -> Enemy（同 hasThreatNearby 口径）
-            // v1.1.0 实测三百四十四：行为化口径并入——锁定主人/本女仆的魔改生物
-            // 也算敌人（换战术距离判定要追得上/够得着它们）
-            for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
-                    net.minecraft.world.entity.Entity.class,
-                    maid.m_20191_().m_82400_(24.0))) {
-                if (!e.m_6084_()) {
-                    continue;
-                }
-                boolean threat = e instanceof net.minecraft.world.entity.monster.Enemy
-                        || isTargetingOurSide(e, maid.m_269323_(), maid);
-                if (!threat) {
-                    continue;
-                }
-                double d = maid.m_20238_(e.m_20182_());
-                if (best < 0 || d < best) {
-                    best = d;
-                }
-            }
-            return best;
-        } catch (Exception e) {
-            return -1;
-        }
-    }
-
-    /**
-     * v1.1.0 实测二十：女仆是否持有该攻击任务认可的武器。
-     * v1.1.0 实测一百四十八：判定统一走 CombatTaskCompat.isWeapon——ef_tlm 的
-     * isWeapon 恒 false（未覆写，javap 实证），必须用 isWeaponCap 反射补上，
-     * 否则史诗战斗的武器永远进不了候选池/永远不被自动装备（"切换武器时不用
-     * 模组武器"）。
-     */
-    private static boolean hasWeaponForTask(EntityMaid maid, IMaidTask task) {
-        // v1.1.0 实测六十八（反馈："拿斧子的女仆被切到三叉戟模式无法攻击"）：
-        // 旧版异常兜底是【整个方法级】的——任何物品的 isWeapon 抛异常就让整个
-        // 方法 return true，该任务无凭无据进候选池（三叉戟任务就是这样混进去的，
-        // 没三叉戟的女仆切过去根本无法攻击，怪杀不掉威胁不消失也永远不还原）。
-        // 改为【逐物品】安全判定：单件物品判定异常只跳过该件，绝不放行整个任务。
-        try {
-            ItemStack main = maid.m_21205_();
-            if (!main.m_41619_() && isWeaponSafe(task, maid, main)) {
-                return true;
-            }
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && isWeaponSafe(task, maid, s)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Throwable ignored) {
-            return false; // 背包遍历本身异常 → 视为无武器（与「空手不参战」同口径）
-        }
-    }
-
-    /** 单件物品的兼容 isWeapon 判定——模组任务实现抛异常只算这件不匹配 */
-    private static boolean isWeaponSafe(IMaidTask task, EntityMaid maid, ItemStack s) {
-        return com.maidsmart.combat.CombatTaskCompat.isWeapon(maid, task, s);
-    }
-
-    /**
-     * v1.1.0 实测三百七十九：模组任务是否有【非原版物品】背书——isWeapon 匹配到的
-     * 物品至少一件来自模组注册表（命名空间 ≠ minecraft）。"万物皆武器"类任务
-     * （万法皆通 isWeapon 恒 true，javap 实证）在只给原版武器时不再进池。
-     */
-    private static boolean hasNonVanillaWeaponForTask(EntityMaid maid, IMaidTask task) {
-        try {
-            ItemStack main = maid.m_21205_();
-            if (!main.m_41619_() && isWeaponSafe(task, maid, main) && !isVanillaItem(main)) {
-                return true;
-            }
-            IItemHandler inv = maid.getMaidInv();
-            for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && isWeaponSafe(task, maid, s) && !isVanillaItem(s)) {
-                    return true;
-                }
-            }
-            return false;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** 是否原版（minecraft 命名空间）物品——原版物品不给模组任务作武器背书 */
-    private static boolean isVanillaItem(ItemStack s) {
-        try {
-            net.minecraft.resources.ResourceLocation key =
-                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_());
-            return key != null && "minecraft".equals(key.m_135827_());
-        } catch (Exception e) {
-            return false; // 注册名异常按非原版处理（模组侧自定义注册）
-        }
-    }
-
-    /** 是否带攻击力属性的物品（剑/斧/镐等——对齐 TaskAttack.isWeapon 语义，简化版） */
-    @SuppressWarnings("unused")
-    private static boolean hasAttackDamage(ItemStack stack) {
-        try {
-            return stack.m_41638_(EquipmentSlot.MAINHAND).containsKey(Attributes.f_22281_);
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** 该女仆当前处于本系统主动切换的战斗状态（排班调度器让位用——战斗还原后排班接管） */
-    public static boolean isAutoCombatActive(EntityMaid maid) {
-        return maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG);
-    }
-
-    /**
-     * v1.1.0 实测三百八十：当前任务是否为【本系统自动指派】（ASSIGNED_TAG 与当前
-     * 任务一致）。玩家手动指派的远程任务 = 战斗方式已被玩家锁定（自动切换不碰），
-     * 包里有近战武器也不会被切 → 高地狙击对这类女仆不再要求"没有近战武器"
-     * （近身只能搭塔拉开距离）。
-     */
-    public static boolean isTaskAutoAssigned(EntityMaid maid) {
-        try {
-            IMaidTask task = maid.getTask();
-            if (task == null || task.getUid() == null) {
-                return false;
-            }
-            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-            return !assigned.isEmpty() && assigned.equals(task.getUid().toString());
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** v1.1.0 实测一百六十三：是否【真实】在战斗中——标记 + 当前任务确实是攻击任务
-     *  （或仍在本系统指派的战斗任务上）。仅标记残留 true、任务已不是攻击任务
-     *  （老版本残留/战斗早已结束）→ 返回 false：排班不再被残留标记挡死（反馈：
-     *  "排班不切换、女仆一直跟随主人"——根因就是残留 COMBAT_ACTIVE 让排班永久让位）。
-     *  v1.1.0 实测二百六十一（反馈："排班开启后女仆一直保持未排班状态，锁定还解除
-     *  不了"）：判定收窄——【排班开启】的女仆不再参与自主战斗（tryEngageMaid 直接
-     *  跳过），她身上不可能有本系统指派的战斗任务；此时只要 ASSIGNED 与当前任务
-     *  不一致（含"当前是任意攻击任务"的旧兜底——玩家手动安排的攻击任务/第三方
-     *  攻击任务/残留标记）一律视为非本系统战斗，排班照常接管。否则排班女仆只要
-     *  手头是攻击类任务（玩家手动安排的近战/弓/弹幕）就被"战斗中"让位门永久挡死：
-     *  模式/任务永不切换、且守卫 mixin 拦下一切手动调整 = 排班锁死。 */
-    public static boolean isReallyCombatActive(EntityMaid maid) {
-        if (!maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
-            return false;
-        }
-        IMaidTask task = maid.getTask();
-        if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
-            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-            return !assigned.isEmpty() && task != null
-                    && assigned.equals(task.getUid().toString());
-        }
-        return isAssignedOrCombatTask(maid, task);
-    }
-
-    /** v1.1.0 实测二百六十五/二百六十六：供外部系统（批量应用等）处理战斗标记——
-     *  返回 true = 【真本系统战斗】（ASSIGNED 匹配当前任务，应跳过——防打断战斗
-     *  还原链）；false = 残留标记/玩家手动安排的攻击任务/第三方攻击任务（已清残留，
-     *  外部系统可正常应用）。旧版批量应用用 isReallyCombatActive 跳过——排班关闭时
-     *  它含 IAttackTask 兜底（当前任务是任意攻击任务即判"战斗中"），玩家手动安排
-     *  攻击任务的女仆（满血、无排班）被永久跳过 = "全员模式有时无法应用"。 */
-    public static boolean isRealCombatActive(EntityMaid maid) {
-        try {
-            if (!maid.getPersistentData().m_128471_(COMBAT_ACTIVE_TAG)) {
-                return false;
-            }
-            String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-            var task = maid.getTask();
-            boolean real = !assigned.isEmpty() && task != null
-                    && assigned.equals(task.getUid().toString());
-            if (!real) {
-                clearMarkersForExternal(maid); // 残留 → 清掉，让外部系统正常应用
-            }
-            return real;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
-
-    /** v1.1.0 实测二百六十五：供外部系统（批量应用等）清理【残留】战斗标记——
-     *  调用方已确认标记残留（当前任务非攻击任务），直接清全部标记 + 还原 home/作息
-     *  （排班关闭时），让女仆恢复可被正常操作的状态。真在战斗中的女仆不应调用。 */
-    public static void clearMarkersForExternal(EntityMaid maid) {
-        try {
-            clearMarkers(maid);
-            restorePrevMode(maid);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /** 清全部标记：一律 remove（m_128473_）——按【正确类型】清键，不留类型污染。
-     *  v1.1.0 实测一百七十三【类型污染修复】：旧版全用 putBoolean(false) 清键，
-     *  LONG 槽（LAST_THREAT/LAST_CONTACT/COMBAT_START/ATTACKER_TIME）与 STRING 槽
-     *  （PREV_TASK/ASSIGNED/ATTACKER_UUID）被塞进 Boolean 值——getLong 读 Boolean
-     *  恒 0、getString 读 Boolean 恒 ""（抖动守卫 combatStart>0 失效、超时判定
-     *  失真）。当前判定已全部走 getXxx（无 contains），remove 后读缺省值同样安全；
-     *  已加载的老残留（存档里 BYTE/STRING 混存）也会在下一轮扫描被正常处理。 */
-    private static void clearMarkers(EntityMaid maid) {
-        net.minecraft.nbt.CompoundTag nbt = maid.getPersistentData();
-        nbt.m_128473_(COMBAT_ACTIVE_TAG);
-        nbt.m_128473_(PREV_TASK_TAG);
-        nbt.m_128473_(LAST_THREAT_TAG);
-        nbt.m_128473_(ASSIGNED_TAG);
-        nbt.m_128473_(LAST_CONTACT_TAG);
-        nbt.m_128473_(COMBAT_START_TAG);
-        nbt.m_128473_(ATTACKER_UUID_TAG);
-        nbt.m_128473_(ATTACKER_TIME_TAG);
-        nbt.m_128473_(COMBAT_PREV_HOME_TAG);
-        nbt.m_128473_(COMBAT_PREV_SCHEDULE_TAG);
-        RESTORE_DIAG_SINCE.remove(maid.m_20148_());
-        TACTIC_STATE.remove(maid.m_20148_());
-    }
-
-    /** v1.1.0 实测一百六十四：威胁判定详情（诊断用）——fixed=固定半径内敌对生物距离；
-     *  ring=动态圈来源（存活/已死）；none=无威胁；err=异常。定位 hasThreatNearby 为何
-     *  一直 true（固定扫描 vs 动态圈哪个在挡还原）。 */
-    private static String threatDetail(EntityMaid maid) {
-        try {
-            double r = MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST.get();
-            for (net.minecraft.world.entity.Entity e : maid.m_9236_().m_45976_(
-                    net.minecraft.world.entity.Entity.class, maid.m_20191_().m_82400_(r))) {
-                if (!e.m_6084_()) {
-                    continue;
-                }
-                if (e instanceof net.minecraft.world.entity.monster.Enemy) {
-                    return "fixed:" + String.format("%.1f",
-                            Math.sqrt(maid.m_20238_(e.m_20182_())));
-                }
-                if (e instanceof net.minecraft.world.entity.NeutralMob nm && neutralAngry(nm)) {
-                    return "fixed-neutral:" + String.format("%.1f",
-                            Math.sqrt(maid.m_20238_(e.m_20182_())));
-                }
-                // v1.1.0 实测三百一十八：驯服宠物记仇主人（发狂驯服狼）诊断口径
-                if (isAngryTamedAt(e, maid.m_269323_())) {
-                    return "fixed-tamed:" + String.format("%.1f",
-                            Math.sqrt(maid.m_20238_(e.m_20182_())));
-                }
-                // v1.1.0 实测三百四十四：行为化威胁（锁定主人/女仆的魔改生物）
-                if (isTargetingOurSide(e, maid.m_269323_(), maid)) {
-                    return "fixed-targeting:" + String.format("%.1f",
-                            Math.sqrt(maid.m_20238_(e.m_20182_())));
-                }
-            }
-            int sec = MaidSmartConfig.COMBAT_AUTO_SWITCH_EXPAND.get();
-            if (sec > 0) {
-                long nowT = maid.m_9236_().m_46467_();
-                long marked = maid.getPersistentData().m_128454_(ATTACKER_TIME_TAG);
-                if (nowT - marked <= sec * 20L) {
-                    String uuidStr = maid.getPersistentData().m_128461_(ATTACKER_UUID_TAG);
-                    if (!uuidStr.isEmpty()) {
-                        net.minecraft.world.entity.Entity attacker =
-                                ((net.minecraft.server.level.ServerLevel) maid.m_9236_())
-                                        .m_8791_(java.util.UUID.fromString(uuidStr));
-                        if (attacker != null && attacker.m_6084_()) {
-                            return "ring:alive@" + String.format("%.1f",
-                                    Math.sqrt(maid.m_20238_(attacker.m_20182_())));
-                        }
-                        return "ring:dead";
-                    }
-                }
-            }
-            return "none";
-        } catch (Exception e) {
-            return "err:" + e.getClass().getSimpleName();
-        }
-    }
-
-    /** 女仆仍在本系统指派的战斗任务上（任务被换过 = 玩家/排班/LLM 已接管）
-     *  v1.1.0 实测一百一十四【还原失效根因】：TLM getTask() 读同步数据 DATA_TASK，
-     *  javap 实证 findTask(uid).orElse(getIdleTask())——uid 解析失败/同步抖动时
-     *  直接回落成 idle 任务；加上战中 retune 换战术、第三方模组换任务，getTask()
-     *  与 ASSIGNED 比对极易不一致 → 旧版一律判"玩家接管"→ 静默清标记 → 战斗任务
-     *  永不还原（日志实证：15 次参战零还原，每次 prev 都显示 idle）。
-     *  修复：只要当前任务仍是【攻击类任务】（IAttackTask，与 buildPools 同口径），
-     *  一律视为"本系统的战斗"继续推进还原；只有任务真被换成非攻击任务才按接管处理。
-     *  v1.1.0 实测一百四十九：改为【传入任务】的判定——同一 tick 只读一次 getTask()，
-     *  所有判定共用同一读数（DATA_TASK 同步抖动时多次读取会自相矛盾）。 */
-    private static boolean isAssignedOrCombatTask(EntityMaid maid, IMaidTask task) {
-        String assigned = maid.getPersistentData().m_128461_(ASSIGNED_TAG);
-        if (assigned.isEmpty() || task == null) {
-            return false;
-        }
-        if (assigned.equals(task.getUid().toString())) {
-            return true;
-        }
-        return task instanceof com.github.tartaricacid.touhoulittlemaid.api.task.IAttackTask;
-    }
-
-    /** v1.1.0 实测一百三十九：当前任务读数是否为"假 idle"——TLM getTask() 读同步
-     *  数据 DATA_TASK，uid 解析失败/同步抖动时回落成 idle 任务（实测一百一十四的
-     *  javap 实证）。idle 读数不代表"玩家接管"，还原链不能被它清掉。
-     *  v1.1.0 实测一百四十九：传入任务判定（单次读取，防抖动自相矛盾）。 */
-    private static boolean isIdleReadingTask(IMaidTask task) {
-        return task == null || task.getUid() == null
-                || "touhou_little_maid:idle".equals(task.getUid().toString());
-    }
-
-    /** v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore /
-     *  restoreAfterExternalTaskChange）：还原战斗前的 home 模式与作息（MaidSchedule）
-     *  ——"切回之前的模式"完整闭环（任务 + home + 作息）。只在【排班关闭】时生效：
-     *  排班开启时作息/守家由日程表管理（调度器每秒重断言），此处覆盖会与排班打架；
-     *  且 setSchedule 在排班开启时会被守卫 mixin 拦（此处仅排班关闭时调用，天然放行）。 */
-    private static void restorePrevMode(EntityMaid maid) {
-        try {
-            if (!com.maidsmart.schedule.ScheduleData.isOn(maid)) {
-                maid.setHomeModeEnable(maid.getPersistentData().m_128471_(COMBAT_PREV_HOME_TAG));
-                String sched = maid.getPersistentData().m_128461_(COMBAT_PREV_SCHEDULE_TAG);
-                if (!sched.isEmpty()) {
-                    for (MaidSchedule ms : MaidSchedule.values()) {
-                        if (ms.name().equals(sched)) {
-                            maid.setSchedule(ms);
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * v1.1.0 实测一百三十九（参考 tlm_beyond_space 的会话快照机制）：参战前原任务 UID
-     * 的【可靠】取值——日志实证旧版每次参战都录成 idle（getTask 抖动回落），还原回
-     * idle = "切不回原来模式"。取值顺序：① getTask() 真实任务（非 idle）→ 用它
-     *（玩家手动安排的任务优先）；② 排班开启且有段 → 用当前时段排班任务（排班是
-     * 权威，还原就该回排班）；③ 兜底 idle。
-     */
-    private static String resolvePrevTaskUid(EntityMaid maid) {
-        if (maid.getTask() != null && maid.getTask().getUid() != null
-                && !"touhou_little_maid:idle".equals(maid.getTask().getUid().toString())) {
-            return maid.getTask().getUid().toString();
-        }
-        try {
-            if (com.maidsmart.schedule.ScheduleData.isOn(maid)
-                    && maid.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl) {
-                var segs = com.maidsmart.schedule.ScheduleData.load(maid);
-                if (!segs.isEmpty()) {
-                    var seg = com.maidsmart.schedule.ScheduleData.segmentAt(segs,
-                            com.maidsmart.schedule.ScheduleData.currentMinute(sl));
-                    if (seg != null && seg.taskUid() != null && !seg.taskUid().isEmpty()
-                            && !"touhou_little_maid:idle".equals(seg.taskUid())) {
-                        return seg.taskUid();
-                    }
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return "touhou_little_maid:idle";
-    }
 }
