@@ -72,10 +72,9 @@ public final class ScheduleNetworking {
         // 不开排班也能让女仆守家；排班开着时 home 由排班管理，按钮锁定）
         CHANNEL.registerMessage(12, HomeTogglePacket.class,
                 HomeTogglePacket::encode, HomeTogglePacket::decode, HomeTogglePacket::handle);
-        // v1.1.0 实测三百四十三：批量调整全部女仆在家模式（列表页「全员在家」按钮，
-        // 与全员模式/批量任务同款——排班中的女仆跳过，home 由排班管理）
-        CHANNEL.registerMessage(13, BatchHomePacket.class,
-                BatchHomePacket::encode, BatchHomePacket::decode, BatchHomePacket::handle);
+        // v1.2.2 实测六百二十一：「全员在家」批量包（旧 index 13）已删除——列表页那个
+        // 按钮整条移除（玩家裁定），单只女仆的在家开关走 index 12 的 HomeTogglePacket。
+        // 索引留空不补位：注册号是双方约定的固定槽位，重排只会平白引入不一致。
         // v1.1.0 实测三百四十九（反馈："在排班表内对女仆进行改名，但是在排班表内
         // 并没有显示出来，还是原来的名字"）：改名成功 → S2C 回发新名字，GUI 同步
         // 列表行与详情页标题（旧版只改服务端，客户端列表是打开排班表那一刻的快照）
@@ -193,54 +192,6 @@ public final class ScheduleNetworking {
                         (pkt.on ? "§a已开启" : "§7已关闭") + "「"
                                 + (maid.m_5446_() != null ? maid.m_5446_().getString() : "女仆")
                                 + "」的在家模式" + (pkt.on ? "——她将守家不跟随，想召回先关闭" : "")));
-            });
-            ctx.get().setPacketHandled(true);
-        }
-    }
-
-    /** C2S 批量在家模式（实测三百四十三）：作用于主人全部已加载女仆（跨维度扫描，
-     *  与批量应用同口径）；排班中的女仆跳过（home 由排班管理）。 */
-    public static class BatchHomePacket {
-        public final boolean on;
-
-        public BatchHomePacket(boolean on) {
-            this.on = on;
-        }
-
-        public static void encode(BatchHomePacket pkt, FriendlyByteBuf buf) {
-            buf.writeBoolean(pkt.on);
-        }
-
-        public static BatchHomePacket decode(FriendlyByteBuf buf) {
-            return new BatchHomePacket(buf.readBoolean());
-        }
-
-        public static void handle(BatchHomePacket pkt, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> {
-                ServerPlayer player = ctx.get().getSender();
-                if (player == null || !(player.m_9236_() instanceof ServerLevel level)) {
-                    return;
-                }
-                int applied = 0;
-                int schedSkipped = 0;
-                for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
-                        if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
-                            continue;
-                        }
-                        // 排班中 home 由排班管理（开排班自动 home、关排班解除）——跳过
-                        if (ScheduleData.isOn(m)) {
-                            schedSkipped++;
-                            continue;
-                        }
-                        m.setHomeModeEnable(pkt.on);
-                        applied++;
-                    }
-                }
-                player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                        (pkt.on ? "§a已开启 " : "§7已关闭 ") + applied + " 名女仆的在家模式"
-                                + (schedSkipped > 0 ? "§7（" + schedSkipped
-                                + " 名排班中保持原样——先关闭她们的排班才能一键更改）" : "")));
             });
             ctx.get().setPacketHandled(true);
         }

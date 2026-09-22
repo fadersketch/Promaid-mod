@@ -152,7 +152,12 @@ public final class MaidArmyCommand {
                                                 net.minecraft.commands.arguments.EntityArgument.entity())
                                         .executes(ctx -> combatCheck(ctx.getSource(),
                                                 net.minecraft.commands.arguments.EntityArgument
-                                                        .getEntity(ctx, "maid"))))))
+                                                        .getEntity(ctx, "maid")))))
+                        // v1.2.2 实测六百二十一：分类表查询（只读）——把当前所有攻击类任务
+                        // 列出来，好让玩家知道该往「模式分类表」里写什么 UID（表是
+                        // uid=近战/远程/不参与，玩家不该去翻 jar 找注册名）
+                        .then(net.minecraft.commands.Commands.literal("modes")
+                                .executes(ctx -> combatModes(ctx.getSource()))))
                 // v1.2.2 实测六百一十六【压缩盒的诊断入口】——只读，不改任何东西。
                 // 【为什么要有】"她到底看没看见盒子里那十万个石头"是这一档最容易让人困惑的地方：
                 // 盒子在她背包里、开关也开着，但她一次只拿 64（大堆不许漏进她的存档，理由见
@@ -212,6 +217,32 @@ public final class MaidArmyCommand {
         for (Component line : lines) {
             source.sendSuccess(() -> line, false);
             com.maidsmart.tool.PromaidLog.log(com.maidsmart.task.MaidStrollCheck.CAT, line.getString());
+        }
+        return lines.size();
+    }
+
+    /**
+     * v1.2.2 实测六百二十一：{@code /maid_smart combat modes} —— 列出服务器上**所有攻击类
+     * 任务**以及它们在「战斗模式分类表」两种口径下的分类与参与情况（只读，不改任何东西）。
+     *
+     * 【为什么要有】分类表要玩家手写任务 UID（{@code 某模组:某个任务=远程}），而 UID 在
+     * 游戏里没有任何地方能直接看到——没有这条命令，玩家只能去翻 jar 或日志里的
+     * "combat pools" 行。这条把 uid / 内置算什么 / 现在算什么 / 参不参与列成一张表，
+     * 抄一行改一改就是表项（{@link com.maidsmart.combat.CombatModeTable}）。
+     */
+    private static int combatModes(net.minecraft.commands.CommandSourceStack source) {
+        java.util.List<Component> lines = new java.util.ArrayList<>();
+        lines.add(Component.literal("\u00a76【战斗模式分类表】\u00a77当前所有攻击类任务（"
+                + "内置 = 表没写时的推断，现在 = 表生效后）。写进配置：主动参战 → 模式分类表，"
+                + "格式 \u00a7f任务UID=近战/远程/不参与\u00a77；一只女仆实际会不会被切到某个任务，"
+                + "还看她背包里有没有那个任务认的武器/弹药/法术装备"));
+        for (String row : com.maidsmart.combat.CombatModeTable.report()) {
+            lines.add(Component.literal("\u00a77· \u00a7f" + row));
+        }
+        for (Component line : lines) {
+            source.sendSuccess(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log(
+                    com.maidsmart.combat.CombatModeTable.CAT, line.getString());
         }
         return lines.size();
     }

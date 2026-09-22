@@ -41,6 +41,11 @@ import java.util.Random;
  *   权重 1.0（模组武器普遍更强，降半权但不绝对排除）
  * - 全都匹配不上（无任何攻击物品）→ 不参战维持原任务（实测六十七；
  *   「空手不参战」开关可关回旧的空手近战兜底）
+ * - v1.2.2 实测六百二十一【战斗模式分类表】：上面那套"谁能参与、算近战还是远程、
+ *   模组任务是否优先"原本全是写死的推断（反馈："这个逻辑太笼统了"），现在可以在
+ *   主动参战面板里逐任务点名（{@code CombatModeTable}，配置 {@code combat.taskModes}
+ *   + {@code combat.vanillaYieldToMod}）——写「不参与」的任务两条路都不选它，
+ *   写「近战/远程」的任务分类以表为准且不被"模组优先让位"挤掉。空表 = 旧行为。
  *
  * 还原：威胁（周围敌对生物，独立小半径）消失持续 N tick（默认 400 = 20 秒）→ 切回
  * 战斗前原任务；有排班表的女仆还原时直接交给排班当前段（排班在主动战斗之上）。
@@ -1237,6 +1242,9 @@ public class AutoCombatSwitch {
         List<Double> meleeWeights = new ArrayList<>();
         List<IMaidTask> rangedPool = new ArrayList<>();
         List<Double> rangedWeights = new ArrayList<>();
+        // v1.2.2 实测六百二十一：分类表里**点名**写过分类的任务（近战/远程）——这些
+        // 不受"模组任务优先让位"影响（玩家点名优先于自动让位，见 CombatModeTable）
+        java.util.Set<String> pinnedUids = new java.util.HashSet<>();
         String vanillaNs = "touhou_little_maid";
         double vanillaW = MaidSmartConfig.COMBAT_AUTO_SWITCH_VANILLA_WEIGHT.get();
         double modW = MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get();
@@ -1259,6 +1267,15 @@ public class AutoCombatSwitch {
             // Golems）不是本模组该碰的战斗模式——自主参战/战中换战术都永不切进去
             //（玩家手动切过去不受影响；届时本模组战术全体让位，见 MaidModeCompat）
             if (com.maidsmart.compat.MaidModeCompat.isBlacklisted(task)) {
+                continue;
+            }
+            // v1.2.2 实测六百二十一【分类表·不参与】：玩家在「战斗模式分类表」里点名
+            // 写了「不参与」的任务，入战选任务与战中换战术（两者共用本池）都永不选它。
+            // 只影响**自动切换**——玩家在 TLM 面板手动把她切过去完全不受影响。
+            // 位置在黑名单之后：黑名单是"本模组不该碰的模式"（第三方玩法优先），
+            // 表里写"参与"也进不来，两者不冲突。
+            String modeUid = task.getUid() == null ? null : task.getUid().toString();
+            if (CombatModeTable.blocksAutoSwitch(modeUid)) {
                 continue;
             }
             try {
@@ -1316,6 +1333,10 @@ public class AutoCombatSwitch {
             // 原版默认 1.0 降半；两条都是权重值（>0），比例决定被选概率
             double w = vanillaNs.equals(task.getUid().m_135827_()) ? vanillaW : modW;
             w = Math.max(0.01, w);
+            // v1.2.2 实测六百二十一：分类表点名写过分类的 → 记进 pinned（不被让位挤掉）
+            if (CombatModeTable.modeOf(modeUid) != null && modeUid != null) {
+                pinnedUids.add(modeUid);
+            }
             if (isRangedTask(task)) {
                 rangedPool.add(task);
                 rangedWeights.add(w);
@@ -1332,8 +1353,14 @@ public class AutoCombatSwitch {
         // 换战术同池随机同理会把拔刀剑换出）。修复：池内有模组任务时原版通用任务
         // 整体让位（模组武器 → 模组模式确定性生效）；原版任务退化为【无模组武器】
         // 时的兜底。权重随机保留在多个模组任务之间（同为专属任务，随机选不退化）。
-        vanillaYieldToMod(meleePool, meleeWeights, vanillaNs);
-        vanillaYieldToMod(rangedPool, rangedWeights, vanillaNs);
+        // v1.2.2 实测六百二十一【让位改成可控】：①配置里可以整体关掉（关 = 原版与模组
+        // 同池纯按权重随机，原版/模组两条权重照旧生效）②分类表里**点名写过分类**的
+        // 任务不参与让位（玩家点名优先于自动让位——否则"我把这个模组任务写成远程"
+        // 会被让位规则反手踢掉，等于表没用）。
+        if (CombatModeTable.vanillaYieldToMod()) {
+            vanillaYieldToMod(meleePool, meleeWeights, vanillaNs, pinnedUids);
+            vanillaYieldToMod(rangedPool, rangedWeights, vanillaNs, pinnedUids);
+        }
         // v1.1.0 实测一百六十九：候选池内容诊断（每 5 秒/女仆一条，latest.log 搜
         // "combat pools"）——确认模组武器任务（ef_tlm/拔刀剑/truepower 等）有没有进池；
         // 池里只有原版任务 = 模组武器没被 isWeapon 认到；池里有模组任务 = 权重随机问题
@@ -1366,8 +1393,13 @@ public class AutoCombatSwitch {
      * 加权随机会随机落到通用模式上；专属模式才吃得干这件武器的机制。
      * 入战选任务（pickCombatTask）与战中换战术（retuneCombatTactics）共用
      * buildPools——此处让位对两条路径同时生效。
+     * v1.2.2 实测六百二十一：**点名优先**——{@code pinned} 里是玩家在「战斗模式分类表」
+     * 里亲手写过分类的任务 UID，它们不参与让位（否则玩家把某个模组任务特意写成远程，
+     * 又会被这条自动规则反手踢掉）；整条让位规则本身也有开关
+     * （{@code COMBAT_VANILLA_YIELD_TO_MOD}，见 buildPools 的调用点）。
      */
-    private static void vanillaYieldToMod(List<IMaidTask> pool, List<Double> weights, String vanillaNs) {
+    private static void vanillaYieldToMod(List<IMaidTask> pool, List<Double> weights, String vanillaNs,
+                                          java.util.Set<String> pinned) {
         boolean hasMod = false;
         for (IMaidTask t : pool) {
             if (t.getUid() != null && !vanillaNs.equals(t.getUid().m_135827_())) {
@@ -1379,7 +1411,12 @@ public class AutoCombatSwitch {
             return;
         }
         for (int i = pool.size() - 1; i >= 0; i--) {
-            if (pool.get(i).getUid() == null || vanillaNs.equals(pool.get(i).getUid().m_135827_())) {
+            IMaidTask t = pool.get(i);
+            if (t.getUid() == null || vanillaNs.equals(t.getUid().m_135827_())) {
+                // v1.2.2 实测六百二十一：表里点过名的不踢（点名优先）
+                if (t.getUid() != null && pinned.contains(t.getUid().toString())) {
+                    continue;
+                }
                 pool.remove(i);
                 weights.remove(i);
             }
@@ -1552,8 +1589,31 @@ public class AutoCombatSwitch {
      * （未知模组任务按近战兜底——冲脸总比站桩安全）。
      * public（实测一百二十②）：MaidCombatTacticsBehavior 的走位分支据此把
      * 法术书/法杖等非投射远程任务也当远程处理。
+     *
+     * v1.2.2 实测六百二十一：先问「战斗模式分类表」——玩家点名写过分类的任务以表为准
+     * （这才是反馈要的"能配置哪些模式算近战、哪些算远程"），表里没写的才走
+     * {@link #defaultRangedByUid} 的内置推断。
      */
     public static boolean isRangedTask(IMaidTask task) {
+        try {
+            Boolean override = CombatModeTable.rangedOverride(task.getUid().toString());
+            if (override != null) {
+                return override;
+            }
+        } catch (Throwable ignored) {
+        }
+        return defaultRangedByUid(task);
+    }
+
+    /**
+     * 内置的近远分类规则（分类表没写这个任务时用）——原 isRangedTask 的主体，一字未改：
+     * 判定口径：史诗战斗/拔刀剑算近战；枪械/弓/弩/三叉戟/弹幕算远程。
+     * 判定顺序：任务 UID 白名单（原版五件套 + 枪械）→ 命名空间推断
+     * （ef_tlm=史诗战斗、slashblade=拔刀剑 → 近战）→ 默认近战
+     * （未知模组任务按近战兜底——冲脸总比站桩安全）。
+     * public：{@code /maid_smart combat modes} 要同时报"内置算什么"与"现在算什么"。
+     */
+    public static boolean defaultRangedByUid(IMaidTask task) {
         String uid = task.getUid().toString();
         // 原版远程五件套（弓/弩/三叉戟/弹幕/枪械）——近战 attack 不在表里
         if (uid.equals("touhou_little_maid:ranged_attack")

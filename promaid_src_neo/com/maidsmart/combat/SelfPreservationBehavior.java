@@ -478,9 +478,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private int detourTicks = 0;
     /** v1.5.21：药水尝试间隔 */
     /** v1.5.252g7【按药水种类记 CD】：key = 药水注册名（minecraft:long_swiftness
-     *  等）或固定名（honey/golden_apple）。同种药水 CD = 该药水最长效果时长，
-     *  CD 内【同种不再喝、其他种照喝】；瞬间治疗短 CD（40 tick）可连喝。
-     *  旧版单一 potionCooldown：喝一种药水后所有药水都不能喝（浪费） */
+     *  等，经 {@link #potionKey} 归一——long_/strong_ 前缀与形态不计）或固定名
+     *  （honey/milk）。同种药水 CD = 该药水最长效果时长，CD 内【同种不再喝、
+     *  其他种照喝】；瞬间治疗短 CD（40 tick）可连喝。
+     *  旧版单一 potionCooldown：喝一种药水后所有药水都不能喝（浪费）
+     *  v1.2.2 实测六百二十一：这里原先还写着 golden_apple——那张表**从来没人读过**
+     *  （实测六百一十九的 javap/grep 实证），着火连吃那是这么来的。金苹果现在不在
+     *  这张表里：它走 {@link #goldenAppleReady} / {@link #markGoldenAppleUsed} 的
+     *  持久化冷却（吃它和着火吃它两条路共用一条门）。为什么不并回来：本表是
+     *  **实例字段**，而脑重建（切任务/排班切段/战斗参战）会连冷却一起丢掉，
+     *  偏偏"她正烧着"就是切任务的时刻（详见 GOLDEN_APPLE_CD_TAG 的注释）。 */
     private final java.util.Map<String, Long> potionCds = new java.util.HashMap<>();
 
     private boolean potionReady(String key, long now) {

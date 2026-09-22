@@ -325,53 +325,25 @@ public class ScheduleBookScreen extends Screen {
                             -1, uid));
                 })
                 .bounds(bx0 + 212, h - 68, 80, 18).build());
-        // v1.1.0 实测三百四十三（反馈："它的调整方式应该跟工作模式和任务是一样的。
-        // 都可以统一对所有女仆进行调控，或者对单一女仆进行调控"）：批量行下方新增
-        // 「全员在家」按钮（点击循环 开/关，与全员模式同款交互）——统一调控全部
-        // 女仆的在家模式；排班中的女仆跳过（home 由排班管理，服务端同样兜底）。
-        // 翻页按钮右移到 cx+40/cx+90，给全员在家让出左侧空间。
-        int homeCount = 0;
-        int freeCount = 0;
-        for (String[] m : this.maids) {
-            if (!"1".equals(m[4])) { // 非排班女仆
-                freeCount++;
-                if (m.length > 8 && "1".equals(m[8])) {
-                    homeCount++;
-                }
-            }
-        }
-        boolean allHome = freeCount > 0 && homeCount == freeCount;
-        this.addRenderableWidget(Button.builder(
-                        Component.literal("\u00a7d全员在家：" + (allHome ? "开" : "关")
-                                + " \u00a77(" + homeCount + "/" + freeCount + ")"),
-                        b -> {
-                            boolean next = !allHome;
-                            PacketDistributor.sendToServer(
-                                    new ScheduleNetworking.BatchHomePacket(next));
-                            // 本地同步行数据（非排班女仆）
-                            for (String[] m : this.maids) {
-                                if (!"1".equals(m[4])) {
-                                    m[8] = next ? "1" : "0";
-                                }
-                            }
-                            this.init();
-                        })
-                .bounds(bx0, h - 46, 100, 18).build());
-        // 翻页（◀ 页码 ▶ 居中一行，位于底区；实测三百四十三：右移到 cx+40/cx+90
-        // 给「全员在家」让出左侧空间）
+        // v1.2.2 实测六百二十一【删除「全员在家」】：批量行下方那个「全员在家：开/关 (n/m)」
+        // 按钮整条移除（玩家裁定——批量改在家模式这个入口太容易误伤：一键把全队留在家
+        // 里不跟随，出问题时很难联想到是这里点的）。在家模式本身照旧：详情页里对单只
+        // 女仆的开关（实测三百四十二）保留不动。
+        // 翻页按钮随之回到下方中间（实测三百四十三 曾为「全员在家」把它们右移到
+        // cx+40/cx+90，现在左边空出来了）。
         if (this.page > 0) {
             this.addRenderableWidget(Button.builder(Component.literal("\u00a77◀"), b -> {
                         this.page--;
                         this.init();
                     })
-                    .bounds(cx + 40, h - 46, 20, 18).build());
+                    .bounds(cx - 20, h - 46, 20, 18).build());
         }
         if (this.page < totalPages - 1) {
             this.addRenderableWidget(Button.builder(Component.literal("\u00a77▶"), b -> {
                         this.page++;
                         this.init();
                     })
-                    .bounds(cx + 90, h - 46, 20, 18).build());
+                    .bounds(cx + 30, h - 46, 20, 18).build());
         }
         // 一键集合（跨维度传送全部在场女仆到身边；实测六十）+ 关闭
         this.addRenderableWidget(Button.builder(Component.literal("\u00a7d\u2691 一键集合"), b ->
