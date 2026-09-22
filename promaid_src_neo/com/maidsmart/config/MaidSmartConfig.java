@@ -275,6 +275,10 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.DoubleValue COMBAT_AUTO_SWITCH_MOD_WEIGHT;
     // v1.1.0 实测三百七十九：模组任务参与自主切换（模组物品背书 / 可全关）
     public static final ModConfigSpec.BooleanValue COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS;
+    /** v1.2.2 实测六百二十一：战斗模式分类表（uid=近战/远程/不参与）——分类 + 参与权 */
+    public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_TASK_MODES;
+    /** v1.2.2 实测六百二十一：模组任务优先（池内有模组专属任务时原版通用任务整体让位） */
+    public static final ModConfigSpec.BooleanValue COMBAT_VANILLA_YIELD_TO_MOD;
     // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
     public static final ModConfigSpec.IntValue COMBAT_PREF_MELEE_WEIGHT;
     public static final ModConfigSpec.IntValue COMBAT_PREF_RANGED_WEIGHT;
@@ -1812,6 +1816,23 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // （实测一百八十一）把原版任务挤掉 → 只给原版武器也会被切去魔法。
         COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS = BUILDER.comment("模组任务参与自主切换（默认开）：开 = 模组攻击任务（万法皆通魔法/史诗战斗/拔刀剑等）在女仆持有【非原版物品】时才参与切换；关 = 自主战斗只用原版任务（近战/弓/弩/三叉戟/弹幕/枪械），模组任务一律不自动切入")
                 .translation("config.promaid.combat.autoSwitchAllowModTasks").define("autoSwitchAllowModTasks", true);
+        // v1.2.2 实测六百二十一（反馈原文："可以配置哪些模式属于近战或者远程，然后确认
+        // 这些模式哪些参与自主切换，目前是默认都能参与，模组优先。有人认为这个逻辑太
+        // 笼统了"）：把「谁能参与、算近战还是远程」从写死的推断改成一张**逐任务的表**。
+        // 一行一条「任务UID=近战/远程/不参与」（也认中文写法），UID 用
+        // /maid_smart combat modes 抄。表里没写 = 照旧：内置推断（UID 关键词 + 命名空间）
+        // 定近远，既有的参与门（模组物品背书/枪械弹药/法术装备/黑名单）照常拦。
+        // 表里点名写死的：①分类以表为准（进近战池还是远程池）②写「不参与」= 自主参战
+        // 与战中换战术都永不选它 ③不再被下面那条「模组任务优先」整体让位挤掉
+        //（玩家点名优先于自动让位）。空表 = 与旧版一字不差的行为。
+        COMBAT_TASK_MODES = BUILDER.comment("战斗模式分类表（默认空 = 全部按内置规则参与）：一行一条「任务UID=近战/远程/不参与」，逗号或换行分隔，例如 touhou_little_maid:gun_attack=远程, maidspell:spell_combat_melee=近战, some_mod:weird_task=不参与。\n\n不写 = 与旧版一字不差（内置规则推断近远、既有参与门照常拦）；写了 = 分类以表为准，写「不参与」的任务自主参战与战中换战术都永不选它。\n\nUID 从 /maid_smart combat modes 抄（那条命令把当前所有攻击类任务、内置算什么、表里写了什么、参不参与列成一张表）。表里点名的任务不受「模组任务优先让位」影响——你点名的优先。")
+                .translation("config.promaid.combat.taskModes")
+                .defineList("taskModes", java.util.List.of(), o -> o instanceof String s && !s.isBlank());
+        // v1.2.2 实测六百二十一：把实测一百八十一的「模组任务优先」做成开关
+        //（旧行为默认开）——有人觉得"池里有模组任务就把原版通用任务整体踢掉"太笼统，
+        // 关掉即纯按权重随机（原版/模组两条权重照旧生效）。
+        COMBAT_VANILLA_YIELD_TO_MOD = BUILDER.comment("模组任务优先让位（默认开）：开 = 候选池里只要有模组专属攻击任务，原版通用五件套（近战/弓/弩/三叉戟/弹幕）就整体让位（实测一百八十一的行为——拔刀剑同时被原版攻击任务认作武器，旧版 1:2 权重随机会有 1/3 概率落到原版攻击上）；关 = 不整体让位，原版与模组同池纯按权重随机。\n\n「战斗模式分类表」里点名写过的任务两条路都不受本项影响（点名优先）。")
+                .translation("config.promaid.combat.vanillaYieldToMod").define("vanillaYieldToMod", true);
         // v1.1.0 实测五十八：近战/远程偏好权重——两者皆可用（近战远程任务池都有候选）
         // 且敌人在近身距离（≤5 格）时按权重随机选池；同时是战中换战术（实测五十七）
         // 的开关量：某类权重 0 = 永不主动选/切向该类

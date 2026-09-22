@@ -53,7 +53,8 @@ public final class ScheduleNetworking {
         r.playToServer(MaidSummonPacket.TYPE, StreamCodec.ofMember(MaidSummonPacket::encode, MaidSummonPacket::decode), MaidSummonPacket::handle);
         r.playToClient(MaidStateSyncPacket.TYPE, StreamCodec.ofMember(MaidStateSyncPacket::encode, MaidStateSyncPacket::decode), MaidStateSyncPacket::handle);
         r.playToServer(HomeTogglePacket.TYPE, StreamCodec.ofMember(HomeTogglePacket::encode, HomeTogglePacket::decode), HomeTogglePacket::handle);
-        r.playToServer(BatchHomePacket.TYPE, StreamCodec.ofMember(BatchHomePacket::encode, BatchHomePacket::decode), BatchHomePacket::handle);
+        // v1.2.2 实测六百二十一：BatchHomePacket（列表页「全员在家」批量包）已整条删除——
+        // 按钮与包一起移除（玩家裁定），单只女仆的在家开关走上面那条 HomeTogglePacket。
         r.playToClient(MaidRenameSyncPacket.TYPE, StreamCodec.ofMember(MaidRenameSyncPacket::encode, MaidRenameSyncPacket::decode), MaidRenameSyncPacket::handle);
         // v1.2.0：快捷设置页显示女仆当前坐标 + 「去她身边」——坐标由服务端回（客户端
         // 只拿到打开排班表那一刻的快照，女仆走动后就不准了，所以每秒问一次）
@@ -245,57 +246,6 @@ public final class ScheduleNetworking {
                         (pkt.on ? "§a已开启" : "§7已关闭") + "「"
                                 + (maid.getDisplayName() != null ? maid.getDisplayName().getString() : "女仆")
                                 + "」的在家模式" + (pkt.on ? "——她将守家不跟随，想召回先关闭" : "")));
-            });
-            
-        }
-        @Override
-        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
-    }
-
-    /** C2S 批量在家模式（实测三百四十三）：作用于主人全部已加载女仆（跨维度扫描，
-     *  与批量应用同口径）；排班中的女仆跳过（home 由排班管理）。 */
-    public static class BatchHomePacket implements CustomPacketPayload {
-        public static final CustomPacketPayload.Type<BatchHomePacket> TYPE = new CustomPacketPayload.Type<>(net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "batch_home"));
-        public final boolean on;
-
-        public BatchHomePacket(boolean on) {
-            this.on = on;
-        }
-
-        public static void encode(BatchHomePacket pkt, FriendlyByteBuf buf) {
-            buf.writeBoolean(pkt.on);
-        }
-
-        public static BatchHomePacket decode(FriendlyByteBuf buf) {
-            return new BatchHomePacket(buf.readBoolean());
-        }
-
-        public static void handle(BatchHomePacket pkt, IPayloadContext ctx) {
-            ctx.enqueueWork(() -> {
-                ServerPlayer player = (ServerPlayer) ctx.player();
-                if (player == null || !(player.level() instanceof ServerLevel level)) {
-                    return;
-                }
-                int applied = 0;
-                int schedSkipped = 0;
-                for (ServerLevel lvl : player.level().getServer().getAllLevels()) {
-                    for (net.minecraft.world.entity.Entity e : lvl.getAllEntities()) {
-                        if (!(e instanceof EntityMaid m) || !m.isAlive() || !m.isOwnedBy(player)) {
-                            continue;
-                        }
-                        // 排班中 home 由排班管理（开排班自动 home、关排班解除）——跳过
-                        if (ScheduleData.isOn(m)) {
-                            schedSkipped++;
-                            continue;
-                        }
-                        m.setHomeModeEnable(pkt.on);
-                        applied++;
-                    }
-                }
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
-                        (pkt.on ? "§a已开启 " : "§7已关闭 ") + applied + " 名女仆的在家模式"
-                                + (schedSkipped > 0 ? "§7（" + schedSkipped
-                                + " 名排班中保持原样——先关闭她们的排班才能一键更改）" : "")));
             });
             
         }

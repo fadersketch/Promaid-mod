@@ -2820,6 +2820,25 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0 实测三百七十九：模组任务参与自主切换（模组物品背书 / 可全关）
         this.rows.add(new BoolRow("模组任务参与切换", MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.get(),
                 v -> MaidSmartConfig.COMBAT_AUTO_SWITCH_ALLOW_MOD_TASKS.set(v), "模组任务参与自主切换（默认开）：开 = 模组攻击任务（万法皆通魔法/史诗战斗/拔刀剑等）在女仆持有【非原版物品】时才参与切换——万法皆通\"万物皆武器\"的判定（isWeapon 恒真）不再把只给了原版武器的女仆切进魔法任务；关 = 自主战斗只用原版任务（近战/弓/弩/三叉戟/弹幕/枪械）"));
+        // v1.2.2 实测六百二十一（反馈原文："可以配置哪些模式属于近战或者远程，然后确认
+        // 这些模式哪些参与自主切换，目前是默认都能参与，模组优先。有人认为这个逻辑太
+        // 笼统了"）：把「谁能参与、算近战还是远程」从写死的推断改成逐任务的表
+        this.rows.add(new BoolRow("模组任务优先让位", MaidSmartConfig.COMBAT_VANILLA_YIELD_TO_MOD.get(),
+                v -> MaidSmartConfig.COMBAT_VANILLA_YIELD_TO_MOD.set(v),
+                "模组任务优先让位（默认开）：开 = 候选池里只要有模组专属攻击任务，原版通用五件套（近战/弓/弩/三叉戟/弹幕）就整体让位——这是旧行为（拿着拔刀剑不会被 1/3 概率随机回原版攻击模式）；"
+                        + "关 = 不整体让位，原版与模组同池纯按权重随机（上面两条权重照旧生效）。觉得「模组优先」太笼统就关掉它，再在下面那张表里逐个点名"));
+        this.rows.add(new TextRow("模式分类表", com.maidsmart.combat.CombatModeTable.prettyAll(),
+                s -> {
+                    java.util.List<String> out = com.maidsmart.combat.CombatModeTable.normalizeAll(s);
+                    if (out == null) {
+                        return false; // 有非法行（缺 =/缺命名空间/取值不认）：整串拒收，保留旧值
+                    }
+                    MaidSmartConfig.COMBAT_TASK_MODES.set(out);
+                    return true;
+                },
+                "战斗模式分类表（默认空 = 全部按内置规则参与）：一行一条「任务UID=近战/远程/不参与」，逗号分隔，例如 touhou_little_maid:gun_attack=远程, maidspell:spell_combat_melee=近战, 某模组:某个任务=不参与。"
+                        + "不写 = 与旧版一字不差（内置规则按 UID 关键词/命名空间推断近远）；写了 = 分类以表为准，写「不参与」的任务自主参战与战中换战术都永不选它（想让它只在手动指派时上场就用这档）。"
+                        + "表里点名的任务不受上面那条「模组任务优先让位」影响——你点名的优先。UID 从命令 /maid_smart combat modes 抄（它会把当前所有攻击类任务、内置算什么、表里写了什么列成一张表）"));
         // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
         this.rows.add(new NumRow("近战偏好权重", String.valueOf(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_PREF_MELEE_WEIGHT, s), "近战偏好权重（默认 3）：近战远程武器都有、敌人在近身距离（≤5 格）时按 近战:远程 权重随机选——3 配远程 1 ≈ 75% 选近战；设 0 = 永不主动选近战（战中也不会切近战，近身只靠反击击退）"));
