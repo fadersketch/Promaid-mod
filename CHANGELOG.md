@@ -1,4 +1,100 @@
-﻿## 实测六百二十四【内部大扫除：把「巨型石山」文件拆开、删掉死代码（玩家可见行为零变化，不重新发布）】
+﻿## 实测六百二十六【更正手册里一句过头话：「女仆喂食繁殖不再有任何击杀行为」——繁殖模式里本体自己的「超过上限就杀」仍在（本模组一行代码未改，不重新发布）】
+
+### ① 反馈
+
+用户看着女仆界面「繁殖动物」任务的提示问：**「繁殖动物界面还是带上了老版本的宰杀文本描述」**——提示第二行是「主手持有攻击性武器（用于杀死超过上限的动物）」。
+
+### ② 查证：那条提示不是旧版残留，它现在依然成立，而且不是本模组的文本
+
+- 该提示属于**车万女仆本体**（`assets/touhou_little_maid/lang/zh_cn.json` 的 `task.touhou_little_maid.feed_animal.condition.assault_weapon`），1.20.1 与 1.21.1 两版本体的键与文本一字不差；本模组从未定义过这个键，也没有混入本体的提示；
+- 本体 `hasAssaultWeapon(maid)` = 主手物品带攻击伤害属性（javap：取 `getMainHandItem().getAttributeModifiers(MAINHAND).containsKey(ATTACK_DAMAGE)`）——就是提示里那半句的字面实现；
+- 本体 `findFirstValidAttackTarget(maid)` 统计附近同种动物，**数量顶到「繁殖动物的最大数量」（`FEED_ANIMAL_MAX_NUMBER`）−2 时才返回一只目标**（字节码：`if (count < max - 2) return Optional.empty();`），再按距离等条件 `findFirst()` 挑一只；
+- 这个方法是**在线**的：`javap -v` 的 BootstrapMethods 实证，`createBrainTasks` 里 `StartAttacking` 的目标查找器正是 `REF_invokeVirtual TaskFeedAnimal.findFirstValidAttackTarget`，配套 `MaidMeleeAttack.create(20)` 与 `StopAttackingIfTargetInvalid`（判据 = 手里有武器且目标不远）执行击杀。
+
+⇒ **本体繁殖模式确实会杀超过上限的动物，提示写得没错。**
+
+### ③ 真正过时的是我们自己手册里那一句
+
+工作章原文：
+
+> 早期版本的「畜牧数量控制（杀幼保成）」已在 v1.5.291 整体移除——女仆喂食繁殖不再有任何击杀行为，动物数量交给玩家自己管理。
+
+前半句是对的（我们当年确实把自己的 `MaidFeedAnimalCapMixin`——连同击杀半径/统计口径/配置项/面板行——整体删了）；**后半句「不再有任何击杀行为」是过头话**：我们删掉的是**我们自己的加码**，删掉之后露出来的正是本体本来就有的「超上限就杀」。
+
+已按两树同步改成：本模组不再碰繁殖模式，但本体自己的「超过上限就杀」还在（提示里那条是真事、不是残留），不想让她动手就别往她主手放武器、或者把「繁殖动物的最大数量」调高。
+
+### ④ 本模组一行代码未改；也没有去改本体文本
+
+`mixins.promaid.json` 里没有畜牧相关 mixin、配置里也没有 `animalCap*` 项（v1.5.291 已删干净，本次复核确认）——繁殖模式的击杀行为完全由本体决定，本模组既没有加码、也没有关掉它。**不改本体那行文本**：它是本体的准确说明，藏掉或改写反而会让玩家以为她不会动手（要"她永远不动手"得拦本体的 `findFirstValidAttackTarget`，那是行为改动，等用户定）。
+
+### ⑤ 验证
+
+两树 `javac` **0 错误**，两个 jar 重新打包校验通过（类齐全 / 语言文件正常 / mixins 齐全）。**本条不重新发布**：GitHub 附件仍是 v1.2.3 原样。
+
+## 实测六百二十五【修：只给了把拔刀剑的女仆被自主战斗切进「法术模式」——「她会用法术」的判定排掉拔刀剑 / 弹幕（本条不重新发布）】
+
+### ① 反馈原文
+
+粉丝转来的一条（回复 @Observecontrol）：
+
+> 我私信你一下，包里没有法术书却仍然显示法术类的切换选项，可以确定包里主手副手是完全没有任何魔法类道具的。而那个自主战斗切到法术是真的。
+
+拆成两件事逐条查证：**第一件不是我们的，第二件是我们的，已修**。
+
+### ② 第一件：「没有法术书也能看到近战法术 / 远程法术选项」——附属自己的开关，本模组无关，不改
+
+那两个法术任务（`maidspell:spell_combat_melee` / `maidspell:spell_combat_far`）是《车万女仆：万法皆通》（touhou_little_maid_spell，1.20.1 侧 1.8.2 / 1.21.1 侧 1.8.4）注册的。把它的类反汇编（javap）看，四处实证：
+
+- `SpellCombatMeleeTask.isEnable(EntityMaid)` 的方法体**只有** `iconst_1; ireturn` —— **恒返回 true**；
+- 它自己那个 `hasSpellBook(EntityMaid)`（包级私有）同样是 `iconst_1; ireturn` —— **根本没查背包**（作者本来想用来卡这件事，发布版里是空壳）；
+- 同一个类 `isWeapon(maid, stack)` 也是恒 true（实测三百七十九 就记录过这条）；
+- TLM 的女仆界面列任务走 `TaskManager.getNotHiddenTaskList(maid)`（调用方反编译出来是 `client/gui/entity/maid/AbstractMaidContainerGui`），**只按 `isHidden` 过滤**，而这两个任务没有覆写 `isHidden`。
+
+结论：**装了那个附属，这两项就一直显示**，背包里有没有法术书完全不影响；本模组也**没有**去过滤 TLM 的任务列表——按既有口径，我们**从不拦玩家手动切换任务**，只拦"自主战斗要不要自动切过去"。所以这一条我们不改（要改就得替第三方附属去藏它的任务项，且那个界面在客户端侧、拿不到她背包的可靠内容）。已在手册「战斗与自保」章第十一节把这句原话写清楚，免得下一个人再查一遍。
+
+### ③ 第二件：「自主战斗切到法术是真的」——我们的闸门漏了，已修
+
+实测五百五十九 给法术任务加过一道闸门（`AutoCombatPools.buildPools`）：
+
+```java
+if (MaidSpellCompat.isSpellTask(attack) && !MaidSpellCompat.maidHasSpells(maid)) { continue; }
+```
+
+`maidHasSpells` = ①主手/副手/背包/饰品栏里有"法术装备"，或 ②附属自己的数据里已经有她的法术书。**问题出在①的口径**：我们问的是附属各前置 provider 自己的 `ISpellBookProvider.isSpellBook`，而这八个 provider 里**有两个认的"法术装备"本身就是武器**（javap 逐个反汇编实证）：
+
+| provider（= 前置模组 modId） | `isSpellBook` 认什么 |
+| --- | --- |
+| `irons_spellbooks` | `ISpellContainer.isSpellContainer`（法术书 / 卷轴） |
+| `ars_nouveau` | `ICasterTool`（施法法器） |
+| `ebwizardry` | `WandItem` / `SpellBookItem` |
+| `goety` | `FocusBag` |
+| `mna` | `ICanContainSpell` |
+| `psi` | `ICAD` |
+| **`slashblade`** | **`mods.flammpfeil.slashblade.item.ItemSlashBlade` —— 拔刀剑** |
+| **`youkaishomecoming`** | **`DanmakuItem` / `LaserItem` / 符卡 —— 弹幕 / 激光** |
+
+于是整条链是：**背包里有把拔刀剑 ⇒ 她被判"带着法术书" ⇒ 法术任务进候选池 ⇒ 「模组任务优先让位」（实测一百八十一）再把原版通用任务整体挤掉 ⇒ 她就被切进了法术模式**。这正是 **实测三百七十九**（"为啥自主战斗老喜欢切换到魔法？明明我只给了原版武器"）的**第二次**——上次修的是"模组物品背书"这一层，这次漏的是"什么算法术装备"这一层。
+
+### ④ 改法（两树同步）
+
+- **新增配置 `combat.spellGearIgnore`**，默认 `slashblade, youkaishomecoming`：列在里面的 provider 认的物品**不再算"她会用法术"**。留空 = 还原旧口径（附属说什么就是什么）。写法是逗号或空白分隔的 provider id（就是对应前置模组的 modId，见上表）；
+- **面板一行**：「战斗与自保 → 主动参战 → **法术装备忽略表**」（文本行，逗号分隔；实测六百二十二 修好的字符串行渲染，这次直接是带标签与说明的）；
+- **诊断**：候选池里出现法术任务时，`latest.log` 的 `combat pools` 那条日志末尾会附 `spellGear=`，直接点名是哪件东西放行的——形如 `slashblade:slashblade:slashblade`，或 `addon-data`（随身没有、但附属数据里存着她的法术书）。下次再有同类反馈，一眼就能看出是谁放行的；
+- **手册**：「战斗与自保」章新增第十一节（那两项选项为什么一直显示）与第十二节（什么叫"她真的会用法术"、忽略表怎么用、怎么排查）。
+
+**只影响这一处**：法术任务能否被**自主切换**选中。手动切换、空袭顺带施法、位移法术、友军风免等既有链路一个字都没动；忽略了 `slashblade` 之后，拿着拔刀剑的女仆照旧会走她自己的（拔刀剑）战斗模式，只是不再被拉去法术模式。
+
+### ⑤ 验证
+
+两树全量重编 **0 错误**，两个 jar 重新打包校验通过（类齐全 / 语言文件 JSON 正常 / mixins 齐全）。**本条不重新发布**：GitHub 上的下载附件仍是 v1.2.3 原样，游戏内行为除"拔刀剑/弹幕不再放行法术任务"这一条外与 v1.2.3 一致。
+
+### ⑥ 没做的
+
+- **不改 TLM 任务列表**（②的理由）；
+- **不动已发布的 jar**、不重新发版（按用户要求）；
+- **未跑游戏内实测**（按既有约定，测试留给用户）：建议复看两条——①给女仆背包放一把拔刀剑 + 不装法术书，开自主参战贴脸打怪，`latest.log` 搜 `combat pools`，`ranged=[...]` 里应当**没有** `maidspell:spell_combat_*`，她应当留在拔刀剑模式；②给她一本铁魔法法术书（或把 `combat.spellGearIgnore` 留空还原旧口径）后，法术任务应当照旧能被切进去。
+
+## 实测六百二十四【内部大扫除：把「巨型石山」文件拆开、删掉死代码（玩家可见行为零变化，不重新发布）】
 
 ### ① 为什么做
 
