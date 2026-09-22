@@ -103,7 +103,7 @@ public final class TwilightFanKit {
             return maid.m_21206_();
         }
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (isFan(inv.getStackInSlot(i))) {
                     return inv.getStackInSlot(i);

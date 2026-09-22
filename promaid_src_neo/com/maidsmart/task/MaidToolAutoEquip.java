@@ -200,7 +200,7 @@ public final class MaidToolAutoEquip {
         long curScore = (!cur.isEmpty() && need.test(cur) && !isNearlyBroken(cur))
                 ? scorer.applyAsLong(cur) : Long.MIN_VALUE;
         // 背包里挑：评分最高的一把（战斗按 DPS>附魔>耐久、镐按 等级对标/质量>附魔>耐久）
-        IItemHandlerModifiable inv = maid.getMaidInv();
+        IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -248,7 +248,7 @@ public final class MaidToolAutoEquip {
         if (isPickaxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
             return true; // 手中够用且未即将用坏，不换
         }
-        IItemHandlerModifiable inv = maid.getMaidInv();
+        IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -281,7 +281,7 @@ public final class MaidToolAutoEquip {
             if (isPickaxe(cur) && canHarvest(cur, target)) {
                 return true;
             }
-            IItemHandlerModifiable inv = maid.getMaidInv();
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.isEmpty() && isPickaxe(s) && canHarvest(s, target)) {
@@ -311,7 +311,7 @@ public final class MaidToolAutoEquip {
      *  （真正的可用性判定在 GunCompat.hasGunAndAmmo，那边才做"箱对得上枪"的精判） */
     private static boolean gunHasAmmoInBackpack(EntityMaid maid) {
         try {
-            IItemHandlerModifiable inv = maid.getMaidInv();
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.isEmpty() && (com.maidsmart.combat.GunCompat.isAmmo(s)
@@ -332,7 +332,7 @@ public final class MaidToolAutoEquip {
             if (isAxe(cur) && canHarvest(cur, target)) {
                 return true;
             }
-            IItemHandlerModifiable inv = maid.getMaidInv();
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.isEmpty() && isAxe(s) && canHarvest(s, target)) {
@@ -372,7 +372,7 @@ public final class MaidToolAutoEquip {
         if (isAxe(cur) && !isNearlyBroken(cur)) {
             return true;
         }
-        IItemHandlerModifiable inv = maid.getMaidInv();
+        IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -405,7 +405,7 @@ public final class MaidToolAutoEquip {
         if (isAxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
             return true; // 手中够用且未即将用坏，不换
         }
-        IItemHandlerModifiable inv = maid.getMaidInv();
+        IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
         for (int i = 0; i < inv.getSlots(); i++) {
@@ -730,7 +730,7 @@ public final class MaidToolAutoEquip {
             if (!cur.isEmpty() && !(cur.getItem() instanceof net.minecraft.world.item.ShieldItem)) {
                 return; // 副手已有非盾物品 → 不动（尊重搭配）
             }
-            IItemHandlerModifiable inv = maid.getMaidInv();
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int best = -1;
             long bestScore = Long.MIN_VALUE;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -788,7 +788,7 @@ public final class MaidToolAutoEquip {
             if (isHoe(cur) && !isNearlyBroken(cur)) {
                 return true; // 手中已有锄头且未即将用坏 → 不换
             }
-            IItemHandlerModifiable inv = maid.getMaidInv();
+            IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             long bestScore = Long.MIN_VALUE;
             for (int i = 0; i < inv.getSlots(); i++) {

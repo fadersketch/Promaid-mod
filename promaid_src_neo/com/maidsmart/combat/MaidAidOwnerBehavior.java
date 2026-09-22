@@ -443,7 +443,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     private String feedSisterMilkOrHoney(EntityMaid maid, EntityMaid sister) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             net.minecraft.world.item.Item milk = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
             if (milk != null) {
@@ -538,7 +538,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测三十二：返回值 boolean → String（动作描述），补吃苹果音效 */
     private String useGoldenAppleOn(EntityMaid maid, EntityMaid sister) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             boolean enchanted = false;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -579,7 +579,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测三十二：返回值 boolean → String（动作描述，系统字幕用） */
     private String feedSisterFood(EntityMaid maid, EntityMaid sister) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             double bestSat = -1.0;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -690,7 +690,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private String feedDrinkablePotionTo(EntityMaid maid, EntityMaid sister,
                                          java.util.Set<String> potionNames, String label, boolean useCd) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.isEmpty() || !(stack.getItem() instanceof net.minecraft.world.item.PotionItem)) {
@@ -749,7 +749,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                               net.minecraft.world.entity.LivingEntity target,
                               java.util.Set<String> potionNames, String label, boolean useCd) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             int bestScore = -1;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -904,7 +904,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             int bestScore = -1;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -1059,7 +1059,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private int giveDrinkablePotion(EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.isEmpty() || !(stack.getItem() instanceof net.minecraft.world.item.PotionItem)) {
@@ -1123,7 +1123,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             if (item == null) {
                 return false;
             }
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (stack.isEmpty() || stack.getItem() != item) {
@@ -1277,7 +1277,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private static int countHealPotions(EntityMaid maid) {
         int n = 0;
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.isEmpty()) {
@@ -1300,7 +1300,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private static int countFoods(EntityMaid maid) {
         int n = 0;
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s)) {
@@ -1317,7 +1317,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  喂空气"（预检硬门槛，与各分支的"摸到才播报"构成双保险）。 */
     private static boolean hasAidItemAtAll(EntityMaid maid) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (isAidItem(inv.getStackInSlot(i))) {
                     return true;
@@ -1365,7 +1365,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     private boolean useGoldenApple(EntityMaid maid, ServerPlayer owner) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             boolean enchanted = false;
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -1440,7 +1440,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return false;
         }
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             double bestSat = -1.0;
             // v1.5.299：手持食物参与选优（同 giveFoodToOwner——旧版只扫背包，
@@ -1539,7 +1539,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  主人装备/饰品带永久增益时旧版永远不满足"无增益"，中毒/凋零也不解。 */
     private boolean feedMilkOrHoneyDirect(EntityMaid maid, ServerPlayer owner) {
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             net.minecraft.world.item.Item milk = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
             net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.HONEY_BOTTLE;
@@ -1691,7 +1691,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
             return false; // 白名单留空 = 明确不喂水
         }
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             // 手持（主手 → 副手）与背包同扫，取评分最高的一杯（同喂食链的选优结构）
             int handPick = -1;    // -1 无 / -2 主手 / -3 副手（喂食链同款哨兵）
             double handScore = 0.0;

@@ -314,7 +314,7 @@ public class WaterClutchBehavior extends Behavior<EntityMaid> {
         if (item == null) {
             return false;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (!stack.isEmpty() && stack.getItem() == item) {

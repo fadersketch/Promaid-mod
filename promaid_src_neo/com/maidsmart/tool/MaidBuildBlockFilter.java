@@ -31,6 +31,10 @@ import net.neoforged.neoforge.items.IItemHandler;
  * 世界坐标风险大）——退而求其次用方块默认状态的碰撞形状（getOcclusionShape getShape 无
  * Level 参与的默认形状；火把等默认形状也为空，判定成立）。为稳妥起见两个口径
  * 都检查：默认 shape 为空 或 REPLACEABLE tag 命中 → 一律拒绝。
+ *
+ * v1.2.4【issue #19·搭路刷物品】：取材这一侧再加一条口径——**取值区间不许包含"被动作表现
+ * 借走的副手"**（见 {@link #takeBuildBlock(IItemHandler, IItemHandler, Level, BlockPos, boolean)}）。
+ * 判定器只管"哪种方块能垫"，"哪一格算材料"由调用方按此口径传参。
  */
 public final class MaidBuildBlockFilter {
 
@@ -43,6 +47,16 @@ public final class MaidBuildBlockFilter {
             "minecraft:sweet_berry_bush", "minecraft:campfire", "minecraft:soul_campfire",
             "minecraft:fire", "minecraft:soul_fire", "minecraft:powder_snow"
     );
+
+    /**
+     * 手部栏里【副手】的槽位号（v1.2.4：取材跳过被借走的副手用）。
+     *
+     * 口径证据（EntityHandsInvWrapper = LivingEntity 的双手，0=主手、1=副手）：
+     * {@code MaidTorchPlacerBehavior} 写的是 {@code isTorchItem(主手) ? 0 : 1}；
+     * {@code MaidPlanting.restoreNow} 把"副手暂存的原物品"放回主手时读的正是槽 1；
+     * 本工程探针 {@code probeHands} 的注释也是"slot0=主手 / slot1=副手"。
+     */
+    public static final int OFFHAND_HAND_SLOT = 1;
 
     /**
      * 该物品栈是否是【可用于垫脚的实心方块】。
@@ -162,6 +176,25 @@ public final class MaidBuildBlockFilter {
     }
 
     public static Item takeBuildBlock(IItemHandler inv, IItemHandler hands, Level level, BlockPos pos) {
+        return takeBuildBlock(inv, hands, level, pos, false);
+    }
+
+    /**
+     * v1.2.4【搭路刷物品·issue #19】{@code skipBorrowedOffhand = true} = **这一下不许把副手
+     * 当材料**（计数与扣取都跳过副手槽）。
+     *
+     * 为什么必须有这个口径：动作表现（{@link com.maidsmart.combat.BombPose}）把"她这一下正在
+     * 用的那件"以**复制品**写进**真实副手槽**举 10 tick。搭路节奏默认 4 tick（BRIDGE_STEP_COOLDOWN）、
+     * 展示 10 tick —— 于是下一次取材时那件复制品还在副手上，而本方法旧口径"计数含双手、先扣手"
+     * 正好把它当材料扣走；扣完 `showGated` 又补一件新的。净效果：**真料一次都不掉**，但方块到期
+     * 回收按方块 id 逐格还一件真物品（{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}）
+     * ——实测「给 1 个铁块、走了 128 格桥」，回收 128 件，凭空多 127 件。
+     *
+     * 调用侧一律传 {@code BombPose.offhandBorrowed(maid)}：**借走期间副手不算材料**；没被借走时
+     * 照旧（玩家把方块挂她副手是正常用法）。主手不跳——那格是她自己真握着的。
+     */
+    public static Item takeBuildBlock(IItemHandler inv, IItemHandler hands, Level level, BlockPos pos,
+                                      boolean skipBorrowedOffhand) {
         java.util.Map<Item, Integer> counts = new java.util.HashMap<>();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
@@ -175,6 +208,9 @@ public final class MaidBuildBlockFilter {
         }
         if (hands != null) {
             for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                if (skipBorrowedOffhand && i == OFFHAND_HAND_SLOT) {
+                    continue; // 副手正被动作表现借去展示——那件不是材料
+                }
                 ItemStack stack = hands.getStackInSlot(i);
                 if (stack.isEmpty() || !(stack.getItem() instanceof BlockItem bi)) {
                     continue;
@@ -199,6 +235,9 @@ public final class MaidBuildBlockFilter {
         // 优先扣手部栏（主→副），再扣背包（与计数口径一致，见类注释）
         if (hands != null) {
             for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+                if (skipBorrowedOffhand && i == OFFHAND_HAND_SLOT) {
+                    continue; // 同上：被借走的副手既不算材料、也不许从这里扣
+                }
                 ItemStack stack = hands.getStackInSlot(i);
                 if (!stack.isEmpty() && stack.getItem() == best) {
                     ItemStack taken = hands.extractItem(i, 1, false);
@@ -219,4 +258,78 @@ public final class MaidBuildBlockFilter {
         }
         return null;
     }
+
+    /* ==================== v1.2.3-dbg 探针取值助手（查完删掉整段） ==================== */
+
+    /** 探针：inv + hands 里所有【方块物品】的 "id x 总数" 统计串（按 id 排序，可直接比字符串）。 */
+    public static String probeCounts(IItemHandler inv, IItemHandler hands) {
+        java.util.TreeMap<String, Integer> m = new java.util.TreeMap<>();
+        probeCollect(m, inv);
+        probeCollect(m, hands);
+        StringBuilder sb = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : m.entrySet()) {
+            if (sb.length() > 0) {
+                sb.append(',');
+            }
+            sb.append(e.getKey()).append('x').append(e.getValue());
+        }
+        return sb.toString();
+    }
+
+    private static void probeCollect(java.util.Map<String, Integer> m, IItemHandler h) {
+        if (h == null) {
+            return;
+        }
+        for (int i = 0; i < h.getSlots(); i++) {
+            ItemStack s = h.getStackInSlot(i);
+            if (s == null || s.isEmpty() || !(s.getItem() instanceof BlockItem)) {
+                continue;
+            }
+            ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
+            m.merge(id == null ? "?" : id.toString(), s.getCount(), Integer::sum);
+        }
+    }
+
+    /** 探针：手部栏逐槽内容（slot0=主手 / slot1=副手）——用来看副手上那件"展示品"。 */
+    public static String probeHands(IItemHandler hands) {
+        if (hands == null) {
+            return "-";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+            if (sb.length() > 0) {
+                sb.append(' ');
+            }
+            sb.append(i).append(':').append(probeStack(hands.getStackInSlot(i)));
+        }
+        return sb.toString();
+    }
+
+    /** 探针：单个物品栈的 "id x 数量"（空栈 → "-"）。 */
+    public static String probeStack(ItemStack s) {
+        if (s == null || s.isEmpty()) {
+            return "-";
+        }
+        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
+        return (id == null ? "?" : id.toString()) + "x" + s.getCount();
+    }
+
+    /** 探针：单个物品（取料返回值）的 id；null（没取到）→ null。 */
+    public static String probeItem(Item item) {
+        if (item == null) {
+            return null;
+        }
+        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(item);
+        return id == null ? "?" : id.toString();
+    }
+
+    /** 探针：方块注册名。 */
+    public static String probeBlock(Block block) {
+        if (block == null) {
+            return "-";
+        }
+        ResourceLocation id = net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(block);
+        return id == null ? "?" : id.toString();
+    }
+
 }

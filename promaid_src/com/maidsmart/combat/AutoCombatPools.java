@@ -444,7 +444,7 @@ public final class AutoCombatPools {
             if (!main.m_41619_() && isWeaponSafe(task, maid, main)) {
                 return true;
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && isWeaponSafe(task, maid, s)) {
@@ -467,7 +467,7 @@ public final class AutoCombatPools {
             if (!main.m_41619_() && isWeaponSafe(task, maid, main) && !isVanillaItem(main)) {
                 return true;
             }
-            IItemHandler inv = maid.getMaidInv();
+            IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && isWeaponSafe(task, maid, s) && !isVanillaItem(s)) {

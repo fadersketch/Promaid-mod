@@ -215,13 +215,15 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
      * 返回要放置的方块；无任何材料返回 null。
      */
     private static Block resolveMaterial(ServerLevel level, EntityMaid maid, BlockPos target) {
+        // v1.2.4【issue #19】：取材一律跳过"被动作表现借走的副手"（详见过滤器五参重载）
+        boolean borrowed = com.maidsmart.combat.BombPose.offhandBorrowed(maid);
         Item it = MaidBuildBlockFilter.takeBuildBlock(
-                maid.getMaidInv(), maid.getHandsInvWrapper(), level, target);
+                maid.getAvailableBackpackInv(), maid.getHandsInvWrapper(), level, target, borrowed);
         if (it == null) {
             Player owner = maid.m_269323_() instanceof Player p ? p : null;
             if (pullFromOwner(owner, maid)) {
                 it = MaidBuildBlockFilter.takeBuildBlock(
-                        maid.getMaidInv(), maid.getHandsInvWrapper(), level, target);
+                        maid.getAvailableBackpackInv(), maid.getHandsInvWrapper(), level, target, borrowed);
             }
             if (it == null && owner != null && BlueprintLib.isCreative(owner)) {
                 Block b = pickOwnerBlock(owner);
@@ -328,6 +330,14 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
                 BlockPos below = target.m_7918_(0, -1, 0);
                 if (level.m_46749_(below) && level.m_8055_(below).m_60795_()
                         && takeOneFor(maid, level, below, block)) {
+                    // v1.2.4【补支撑那一格也要过压人闸门】——调用方只判了 target，
+                    // 而 below 是**另一格**：主人（或别的女仆）站在 below 的下一格时，
+                    // 他的头部格正好是 below → 补支撑等于往他脑袋里塞方块。
+                    // 其余三家（挖矿/伐木/搭路的 fill/support）与蓝图建造（supPos/below）
+                    // 都是逐格判的，只有这条漏了，补上同一口径。
+                    if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, below)) {
+                        return false;
+                    }
                     level.m_7731_(below, st, 3);
                     level.m_7731_(target, st, 3);
                 }
@@ -346,7 +356,7 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
     /** 为补支撑再取一块【指定的】同种材料（女仆背包 → 主人背包）；取不到返回 false */
     private static boolean takeOneFor(EntityMaid maid, ServerLevel level, BlockPos pos, Block block) {
         Item item = block.m_5456_();
-        net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack st = inv.getStackInSlot(i);
             if (!st.m_41619_() && st.m_41720_() == item) {
@@ -357,7 +367,13 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
             }
         }
         net.minecraftforge.items.IItemHandler hands = maid.getHandsInvWrapper();
+        // v1.2.4【issue #19 同族】补支撑这一格同样不许从"被动作表现借走的副手"取料：
+        // 那件是展示件复制品，取它 = 白放一块（本链虽不回收，但放出来的方块照样是真的）。
+        boolean borrowed = com.maidsmart.combat.BombPose.offhandBorrowed(maid);
         for (int i = 0; i < Math.min(2, hands.getSlots()); i++) {
+            if (borrowed && i == MaidBuildBlockFilter.OFFHAND_HAND_SLOT) {
+                continue;
+            }
             ItemStack st = hands.getStackInSlot(i);
             if (!st.m_41619_() && st.m_41720_() == item) {
                 ItemStack taken = hands.extractItem(i, 1, false);

@@ -91,7 +91,7 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
         // 旧逻辑只比"相对最高"，烂盾也往主人手里塞——给了等于没给还占背包）
         int bestSlot = -1;
         int bestDura = 0;
-        net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.ShieldItem)) {
@@ -132,7 +132,7 @@ public class MaidShieldShareBehavior extends Behavior<EntityMaid> {
     private static int countShields(EntityMaid maid) {
         int n = 0;
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.m_41619_() && s.m_41720_() instanceof net.minecraft.world.item.ShieldItem) {

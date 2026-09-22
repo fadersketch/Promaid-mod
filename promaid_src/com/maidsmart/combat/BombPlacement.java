@@ -206,7 +206,7 @@ public final class BombPlacement {
                 return; // 没有对应物品（空气之类）→ 不还原
             }
             ItemStack left = net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
-                    maid.getMaidInv(), st, false);
+                    maid.getAvailableBackpackInv(), st, false);
             if (!left.m_41619_()) {
                 maid.m_5552_(left, 0.5f); // 背包满 → 掉在她脚下（实测五百九十三）
                 MaidBombing.log("回收的炸弹底座塞不进背包（背包满）→ 掉在她脚下");

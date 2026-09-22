@@ -621,7 +621,7 @@ public final class BlueprintBookNetworking {
             int invSlots = 0;
             int invUsed = 0;
             try {
-                net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+                net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 if (inv != null) {
                     invSlots = inv.getSlots();
                     for (int i = 0; i < invSlots; i++) {

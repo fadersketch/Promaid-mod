@@ -249,6 +249,28 @@ public final class BombPose {
     }
 
     /**
+     * v1.2.4【搭路刷物品·issue #19】：副手此刻是不是被"动作表现"借去展示了——**取材方必须先
+     * 问这里，借走期间一律不许把副手那件当材料**。
+     *
+     * 起因就是本类 {@link #show} 把展示件写进的是**真实副手槽**（复制品，但货真价实、能被
+     * {@code extractItem} 扣走），而类注释里"不进背包、不参与任何判定"这句在**扫双手取材**的
+     * 链路上并不成立：搭路节奏默认 4 tick、展示 10 tick，下一次取材时展示件还在副手上，
+     * 于是取材扣的是它、扣完这里又补一件 —— 真料永不减少，可方块到期回收是逐格还一件真物品
+     * （{@link com.maidsmart.task.PlacedBlockTracker#reclaimDrops}）。实测：给 1 个铁块，
+     * 铺了 128 格桥并全部回收 → 净多 127 个（GitHub issue #19 同源）。
+     *
+     * 起飞烟花姿势（{@link FlightFireworkPose}）同样借副手，一并算进来；两边都归还干净后
+     * 本判定自然回到 false，取材恢复正常（副手挂方块是玩家的正常用法，不受影响）。
+     */
+    public static boolean offhandBorrowed(EntityMaid maid) {
+        try {
+            return maid != null && (isShowing(maid) || FlightFireworkPose.isShowing(maid));
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * v1.2.2 实测六百〇九：**我们借走的那件副手物品**的只读查询（没借走就返回空栈）。
      *
      * 【为什么必须有】展示窗口里那件东西**不在任何槽位里**——它就是本类 {@code State.original}
