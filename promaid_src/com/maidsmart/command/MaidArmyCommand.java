@@ -113,6 +113,19 @@ public final class MaidArmyCommand {
                                                                 com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "z"),
                                                                 net.minecraft.commands.arguments.EntityArgument
                                                                         .m_91452_(ctx, "maid"))))))))
+                // v1.2.2 实测六百一十九【战斗感知的诊断入口】——只读（摆出来的场景用完复原）。
+                // 【为什么要有】本批两条改的都是**判据**（"被方块挡住的怪算不算威胁"、
+                // "接战时工作圈多大"），而这两条都要求**在线主人在场**（专用服务器上没有玩家、
+                // 结构上触发不了）。照 实测五百四十五/六百〇八 的先例：把场景摆出来、调真方法、
+                // 把判据的取值打日志（细则见 CombatSenseCheck）。
+                .then(net.minecraft.commands.Commands.m_82127_("combat")
+                        .then(net.minecraft.commands.Commands.m_82127_("check")
+                                .executes(ctx -> combatCheck(ctx.getSource(), null))
+                                .then(net.minecraft.commands.Commands.m_82129_("maid", // argument
+                                                net.minecraft.commands.arguments.EntityArgument.m_91449_())
+                                        .executes(ctx -> combatCheck(ctx.getSource(),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .m_91452_(ctx, "maid"))))))
                 // v1.2.2 实测六百一十六【压缩盒的诊断入口】——只读，不改任何东西。
                 // 【为什么要有】"她到底看没看见盒子里那十万个石头"是这一档最容易让人困惑的地方：
                 // 盒子在她背包里、开关也开着，但她一次只拿 64（大堆不许漏进她的存档，理由见
@@ -134,6 +147,22 @@ public final class MaidArmyCommand {
                                 .executes(ctx -> boxReport(ctx.getSource(),
                                         net.minecraft.commands.arguments.EntityArgument
                                                 .m_91452_(ctx, "maid"))))));
+    }
+
+    /** v1.2.2 实测六百一十九：{@code /maid_smart combat check [女仆]} —— 战斗感知自检 */
+    private static int combatCheck(net.minecraft.commands.CommandSourceStack source,
+                                  net.minecraft.world.entity.Entity entity) {
+        com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
+                entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        ? m : null;
+        java.util.List<Component> lines =
+                com.maidsmart.combat.CombatSenseCheck.run(source.m_81372_(), maid);
+        for (Component line : lines) {
+            source.m_288197_(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log(
+                    com.maidsmart.combat.CombatSenseCheck.CAT, line.getString());
+        }
+        return lines.size();
     }
 
     /** v1.2.2 实测六百一十七：{@code /maid_smart box check [女仆]} —— 压缩盒自检 */
