@@ -29,6 +29,12 @@ import java.util.List;
  * </ul>
  * 还有个副产物：她捡到的东西（{@code insertItemStacked} 那条路）也会优先并进
  * 盒子——「背包的延伸」就该是双向的。
+ *
+ * ── 存什么（v1.2.2 实测六百二十）──
+ * 压缩盒本身、带附魔的物品（附魔书/附魔武器等）、配置禁入清单里的物品**都不许进盒子**，
+ * 判据统一在 {@link CompressionBoxFilter}（{@link #isItemValid} /
+ * {@link #setStackInSlot} / {@link CompressionBoxData#mergeInto} 三处同一套）。
+ * 玩家界面、她自己的取放、溢出回退全部走这几处，所以「什么地方能放什么」只有一份口径。
  */
 public final class CompressionBoxMaidInv extends ItemStackHandler {
 
@@ -174,6 +180,9 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             if (CompressionBoxData.isBox(stack)) {
                 return; // 盒子不装盒子（与 isItemValid / mergeInto 同一个口径）
             }
+            if (!CompressionBoxFilter.canStore(stack)) {
+                return; // 六百二十：带附魔的物品 / 配置禁入清单（同上，纸面上写不进去）
+            }
             ItemStack copy = stack.m_41777_();
             // copyWithCount（javap 实证 m_255036_）：这里是"设数量"，不能用 m_41769_（那是 grow，
             // 会让数量整体 +1——实测六百一十七在 CompressionBoxData.fromTag 上就踩过这一脚）
@@ -236,8 +245,11 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
         if (slot < n) {
             return this.backing.isItemValid(slot, stack);
         }
-        // 盒子里不套盒子（套进去她也只看得见外层那一层，白占一格）
-        return !CompressionBoxData.isBox(stack);
+        // 盒子里不套盒子（套进去她也只看得见外层那一层，白占一格）；
+        // 六百二十起带附魔的物品 / 配置禁入清单里的东西同样不放行——判据统一在
+        // CompressionBoxFilter（她的「顺手塞进盒子」走的是 ItemHandlerHelper.insertItemStacked，
+        // 那一路会逐格问 isItemValid，所以挡在这里她就根本不会往盒子里放这类东西）
+        return CompressionBoxFilter.canStore(stack);
     }
 
     /** 序列化仍走她真正的背包（本类只是加了一层「读得到盒子」的视图） */

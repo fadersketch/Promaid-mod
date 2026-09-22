@@ -113,6 +113,33 @@ public final class MaidArmyCommand {
                                                                 com.mojang.brigadier.arguments.DoubleArgumentType.getDouble(ctx, "z"),
                                                                 net.minecraft.commands.arguments.EntityArgument
                                                                         .m_91452_(ctx, "maid"))))))))
+                // v1.2.2 实测六百二十【散步速度的诊断/调试入口】——反馈：「女仆空闲散步移动速度
+                // 调不了，0.1 倍速都跟快步跑一样」。根因是**倍率乘在女仆基础移速属性 0.7 上**
+                // （javap 实证：MaidMoveControl 走的就是原版 setSpeed(speedModifier × MOVEMENT_SPEED)，
+                // 而 TLM 没动过这个属性），配置下限又卡在 0.3 —— 想调慢的人怎么写都慢不下来。
+                // 所以这一档给三件事：check 念换算表（倍率→实际速度）与她当前的门禁/目标、
+                // go 用当前倍率走一次 12 格直线、speed 当场改倍率并落盘。细则见 MaidStrollCheck。
+                .then(net.minecraft.commands.Commands.m_82127_("stroll")
+                        .then(net.minecraft.commands.Commands.m_82127_("check")
+                                .executes(ctx -> strollCheck(ctx.getSource(), null))
+                                .then(net.minecraft.commands.Commands.m_82129_("maid", // argument
+                                                net.minecraft.commands.arguments.EntityArgument.m_91449_())
+                                        .executes(ctx -> strollCheck(ctx.getSource(),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .m_91452_(ctx, "maid")))))
+                        .then(net.minecraft.commands.Commands.m_82127_("go")
+                                .executes(ctx -> strollGo(ctx.getSource(), null))
+                                .then(net.minecraft.commands.Commands.m_82129_("maid", // argument
+                                                net.minecraft.commands.arguments.EntityArgument.m_91449_())
+                                        .executes(ctx -> strollGo(ctx.getSource(),
+                                                net.minecraft.commands.arguments.EntityArgument
+                                                        .m_91452_(ctx, "maid")))))
+                        .then(net.minecraft.commands.Commands.m_82127_("speed")
+                                .then(net.minecraft.commands.Commands.m_82129_("value", // argument
+                                                com.mojang.brigadier.arguments.DoubleArgumentType.doubleArg(0.0, 5.0))
+                                        .executes(ctx -> strollSpeed(ctx.getSource(),
+                                                com.mojang.brigadier.arguments.DoubleArgumentType
+                                                        .getDouble(ctx, "value"))))))
                 // v1.2.2 实测六百一十九【战斗感知的诊断入口】——只读（摆出来的场景用完复原）。
                 // 【为什么要有】本批两条改的都是**判据**（"被方块挡住的怪算不算威胁"、
                 // "接战时工作圈多大"），而这两条都要求**在线主人在场**（专用服务器上没有玩家、
@@ -147,6 +174,46 @@ public final class MaidArmyCommand {
                                 .executes(ctx -> boxReport(ctx.getSource(),
                                         net.minecraft.commands.arguments.EntityArgument
                                                 .m_91452_(ctx, "maid"))))));
+    }
+
+    /** v1.2.2 实测六百二十：{@code /maid_smart stroll check [女仆]} —— 散步速度/门禁自检 */
+    private static int strollCheck(net.minecraft.commands.CommandSourceStack source,
+                                   net.minecraft.world.entity.Entity entity) {
+        com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
+                entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        ? m : null;
+        java.util.List<Component> lines =
+                com.maidsmart.task.MaidStrollCheck.run(source.m_81372_(), maid);
+        for (Component line : lines) {
+            source.m_288197_(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log(com.maidsmart.task.MaidStrollCheck.CAT, line.getString());
+        }
+        return lines.size();
+    }
+
+    /** v1.2.2 实测六百二十：{@code /maid_smart stroll go [女仆]} —— 用当前倍率走一次 12 格直线（量速度） */
+    private static int strollGo(net.minecraft.commands.CommandSourceStack source,
+                                net.minecraft.world.entity.Entity entity) {
+        com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid =
+                entity instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        ? m : null;
+        java.util.List<Component> lines =
+                com.maidsmart.task.MaidStrollCheck.go(source.m_81372_(), maid);
+        for (Component line : lines) {
+            source.m_288197_(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log(com.maidsmart.task.MaidStrollCheck.CAT, line.getString());
+        }
+        return lines.size();
+    }
+
+    /** v1.2.2 实测六百二十：{@code /maid_smart stroll speed <值>} —— 当场改散步速度倍率并落盘 */
+    private static int strollSpeed(net.minecraft.commands.CommandSourceStack source, double value) {
+        java.util.List<Component> lines = com.maidsmart.task.MaidStrollCheck.setSpeed(value);
+        for (Component line : lines) {
+            source.m_288197_(() -> line, false);
+            com.maidsmart.tool.PromaidLog.log(com.maidsmart.task.MaidStrollCheck.CAT, line.getString());
+        }
+        return lines.size();
     }
 
     /** v1.2.2 实测六百一十九：{@code /maid_smart combat check [女仆]} —— 战斗感知自检 */

@@ -239,9 +239,14 @@ public final class CompressionBoxData {
      * 界面里 Shift+点自己那一格，服务端会先把它从背包取出来再写标签，于是**整个盒子
      * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法：
      * 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。
+     *
+     * <b>六百二十起这一道交给 {@link CompressionBoxFilter}</b>：除了压缩盒本身，
+     * 带附魔的物品（附魔书/附魔武器等）与配置禁入清单里的物品也在这里被原样退回。
+     * 判据还是只有一处——全库任何一条「往盒子里放东西」的路都得先过它。
      */
     public static ItemStack mergeInto(List<ItemStack> items, int slot, ItemStack in) {
-        if (slot < 0 || slot >= items.size() || in.m_41619_() || isBox(in)) {
+        if (slot < 0 || slot >= items.size() || in.m_41619_()
+                || !CompressionBoxFilter.canStore(in)) {
             return in;
         }
         ItemStack cur = items.get(slot);

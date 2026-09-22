@@ -183,6 +183,30 @@ public class ProMaidMod {
                     com.maidsmart.config.MaidSmartConfig.SCHEDULE_ACTIVITY_RANGE.set(12);
                 }
             }
+            // v1.2.2 实测六百二十：散步速度倍率默认 0.7 → 0.4。
+            // 【为什么必须迁】反馈是"空闲散步速度快得跟快步跑一样"——实测 0.7 档 ≈8 格/秒，
+            // 比玩家跑步（5.61）还快，正是玩家看到的那个数。只改 defineInRange 的默认值
+            // **对老档毫无作用**（老 toml 里已经写着 0.7，Forge 不会再取默认值），
+            // 所以这里照 五百六十二 的办法用一次性标记迁一次：只有还停在旧默认 0.7 的会动，
+            // 标记落盘之后玩家想写回 0.7（或任何值）都随便。
+            if (!com.maidsmart.config.MaidSmartConfig.STROLL_SPEED_MIGRATED.get()) {
+                // 先读再写：读失败（配置还没挂上）就别动标记，下次启动还能再迁
+                double before = -1.0;
+                try {
+                    before = com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.STROLL_SPEED_MIGRATED.set(true);
+                changed = true;
+                if (before == 0.7) {
+                    com.maidsmart.config.MaidSmartConfig.MISC_STROLL_SPEED.set(0.4);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "散步速度倍率迁移：0.7 → 0.4（旧档里留下的老默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "散步速度倍率不需要迁移（现值 " + before + "）");
+                }
+            }
             changed |= migrateOreTable();
         } catch (Exception ignored) {
         }

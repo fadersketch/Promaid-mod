@@ -2942,7 +2942,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
         this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s), "散步移动速度倍率（默认 0.7；1.0 = 全速走路，突然冲刺又急停看着鬼畜——一百九十一按实测调低；TLM 原生散步只有 0.3 倍速）"));
+                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s),
+                "散步移动速度倍率（默认 0.4，范围 0.05~2.5）——**女仆基础移动速度的几成**（她的基础移速属性是 0.7，玩家只有 0.1），倍率乘在它上面。"
+                        + "实测下来实际格/秒不是线性的（慢到一定程度她会一步一顿），六百二十 在专用服务器上量的「走一段路的平均速度」："
+                        + "0.1~0.2 → 0.1（几乎不走，像卡住）｜0.3 → 1.9｜0.4 → 3.3（默认）｜0.5 → 4.9（≈玩家走路 4.32）｜0.6 → 6｜0.7 → 8（比玩家跑步 5.61 还快）｜1.0 → 14（鬼畜）——同一档换地形会有约 ±20% 波动。"
+                        + "【六百二十 改了两处】默认 0.7 → 0.4（老默认实测 ≈8 格/秒，正是反馈里说的「跟快步跑一样」）；下限 0.3 → 0.05（老下限就是能调到的最慢值，想调慢的人被卡住了）。"
+                        + "游戏里 /maid_smart stroll speed <值> 可当场改，/maid_smart stroll check 打出她自己属性与实测参考表，stroll go 让她走一次 24 格直线再 check 看实测格/秒"));
         // v1.5.129：原生任务呆滞修复 + 干活不被打断
         this.rows.add(new BoolRow("原生任务流畅化", MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get(),
                 v -> MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.set(v), "TLM 原生任务（种田/挤奶/钓鱼等）呆滞修复：任务行为不再每 3 秒重启、随机散步不再覆盖任务目标、走路少刹车、检查节流减半"));
@@ -3075,6 +3080,30 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.COMPRESSION_BOX_MAX_STACK, s),
                 "压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里每一格能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；往下调不会删已有的东西（已存的堆只在下次写入时被夹到新上限）。"
                         + "放进女仆背包时她仍然一次只拿 64（原版堆叠口径）"));
+        // v1.2.2 实测六百二十【用户要的黑名单】
+        this.rows.add(new BoolRow("禁入带附魔的物品", MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.get(),
+                v -> MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(v),
+                "压缩盒·禁入带附魔的物品（默认开）：开 = 附魔书/附魔武器（含附魔工具、盔甲）既放不进盒子，在界面里也拿不起来，会给你一句提示；关 = 只有「压缩盒本身」和下面的禁入清单还拦着。"
+                        + "为什么默认拦：盒子只有 5 格，而附魔物品不可堆叠（不同附魔组合不是同一件东西，一格只能放一种），很快就满——盒子是「大批材料的压缩仓」不是装备库；"
+                        + "另外 六百一十八 之前报的「附魔类物品存进去会消失」正出在这一类上（盒子的自定义数量与原版堆叠上限 1 对不上，多出来的那份被当返回值丢掉）"));
+        this.rows.add(new TextRow("禁入清单", String.join(", ", MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.get()),
+                s -> {
+                    java.util.List<String> out = new java.util.ArrayList<>();
+                    for (String part : s.split("[,，]")) {
+                        String id = part.trim();
+                        if (id.isEmpty()) {
+                            continue;
+                        }
+                        if (!id.contains(":")) {
+                            return false; // 缺命名空间：拒绝提交，保留旧值
+                        }
+                        out.add(id);
+                    }
+                    MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(out);
+                    return true;
+                },
+                "压缩盒·禁入清单（完整注册名，逗号分隔，如 minecraft:gunpowder, minecraft:tnt；留空 = 只拦压缩盒与带附魔的物品）："
+                        + "额外点名不许放进盒子的物品——放不进、界面里给提示，女仆那一侧也不会把这类东西顺手塞进盒子"));
     }
 
 

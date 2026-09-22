@@ -21,6 +21,8 @@ public final class MaidSmartConfig {
 public static final ForgeConfigSpec.BooleanValue BUILD_SPEED_MIGRATED;
 /** v1.2.2 实测五百六十二：排班活动半径默认迁移标记（内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
+/** v1.2.2 实测六百二十：散步速度倍率默认迁移标记（0.7 → 0.4，内部，一次性） */
+public static final ForgeConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_FORCE_CHUNKS;
     public static final ForgeConfigSpec.IntValue BUILD_MAX_BLOCKS;
@@ -644,6 +646,16 @@ public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
 public static final ForgeConfigSpec.BooleanValue COMPRESSION_BOX_MAID_EXTENSION;
 /** 压缩盒每格上限（默认 114514 = 用户点名的那个数；范围 64~1000000——低于 64 会让「一格顶一叠」这件事失去意义，故下限锁 64） */
 public static final ForgeConfigSpec.IntValue COMPRESSION_BOX_MAX_STACK;
+/**
+ * v1.2.2 实测六百二十：压缩盒禁入「带附魔的物品」（附魔书/附魔武器等，默认开）。
+ *
+ * 判据在 {@code CompressionBoxFilter.isEnchantedItem}：附魔书看物品类型
+ * （附魔存在 StoredEnchantments 里，{@code ItemStack.isEnchanted()} 看不见它），
+ * 其余看 {@code isEnchanted()}。关掉 = 只拦「压缩盒本身」与禁入清单。
+ */
+public static final ForgeConfigSpec.BooleanValue COMPRESSION_BOX_REFUSE_ENCHANTED;
+/** v1.2.2 实测六百二十：压缩盒禁入清单（完整注册名，逗号分隔；默认空 = 只拦压缩盒与附魔物品） */
+public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> COMPRESSION_BOX_REFUSE_LIST;
 /** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
 public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
@@ -878,6 +890,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 老档 toml 里，只凭值分不出"旧默认"和"玩家就要 32"，用标记钉死只迁一次
         SCHEDULE_RANGE_MIGRATED = BUILDER.comment("内部标记：排班活动半径默认迁移（32→12）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.misc.scheduleRangeMigrated").define("scheduleRangeMigrated", false);
+        // v1.2.2 实测六百二十：散步速度倍率默认 0.7 → 0.4。
+        // 【为什么用一次性标记，而不是"值 == 0.7 就迁"】老档 toml 里都写着 0.7，只凭值分不出
+        // "旧默认留下的"和"玩家自己就要 0.7"——用标记钉死只迁一次，之后玩家想写回 0.7 随便写。
+        STROLL_SPEED_MIGRATED = BUILDER.comment("内部标记：散步速度倍率默认迁移（0.7→0.4）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.misc.strollSpeedMigrated").define("strollSpeedMigrated", false);
         BUILD_GLOBAL_QUOTA = BUILDER.comment("全局放置配额（每秒方块数上限，性能敏感）")
                 .translation("config.promaid.build.globalQuota")
                 .defineInRange("globalQuota", 350, 50, 1500);
@@ -2085,6 +2102,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.compressionBox.maidExtension").define("maidExtension", true);
         COMPRESSION_BOX_MAX_STACK = BUILDER.comment("压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里**每一格**能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；**往下调不会删已有的东西**（已存的堆只在下次写入时被夹到新上限）。\n\n放进女仆背包时她仍然一次只拿 64（原版堆叠口径，见上一条）。")
                 .translation("config.promaid.compressionBox.maxStack").defineInRange("maxStack", 114514, 64, 1000000);
+        // v1.2.2 实测六百二十【用户要的黑名单】：附魔书/附魔武器与压缩盒不许放进盒子里
+        COMPRESSION_BOX_REFUSE_ENCHANTED = BUILDER.comment("压缩盒·禁入带附魔的物品（默认开）：开 = 带附魔的东西（附魔书、附魔武器/工具/盔甲……）既放不进盒子、在界面里也拿不起来会给你一句提示；关 = 只有『压缩盒本身』和下面的禁入清单还拦着。\n\n为什么默认拦：①盒子的格数只有 5，而附魔物品是**不可堆叠**的（不同附魔组合互相不是同一件东西，一格只能放一种组合），很快就满——这个盒子的定位是『大批材料的压缩仓』，不是装备库；②六十百一十八之前用户报的『附魔类物品存进去会消失』正出在这一类上（盒子的自定义数量与原版 getMaxStackSize()=1 对不上，多出来的那份被原版当返回值丢掉，而 TLM 那一侧几十处调用点大多不看返回值）。\n\n附魔书是单独判的：它的附魔存在 StoredEnchantments 里，ItemStack.isEnchanted() 看不见它。")
+                .translation("config.promaid.compressionBox.refuseEnchanted").define("refuseEnchanted", true);
+        COMPRESSION_BOX_REFUSE_LIST = BUILDER.comment("压缩盒·禁入清单（完整注册名，逗号分隔；默认空）：额外点名不许放进盒子的物品，例如 minecraft:gunpowder, minecraft:tnt。命中的物品与上面带附魔的一视同仁——放不进、界面里也会给提示；女仆那一侧同样看不见它（她不会把这类东西顺手塞进盒子）。")
+                .translation("config.promaid.compressionBox.refuseList")
+                .defineList("refuseList", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
         BUILDER.pop();
 
         // ---- 杂项 ----
@@ -2110,8 +2133,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
         MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
-        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.7；1.0 = 全速走路会显得鬼畜——突然冲刺又急停，TLM 原生散步原本只有 0.3 倍速；试过 1.0 后按实测调低）")
-                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.7, 0.3, 2.5);
+        MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.4；范围 0.05~2.5）：这是**女仆基础移动速度的几成**——女仆的基础移动速度属性是 0.7（原版 LivingEntity 的默认值，玩家是 0.1），倍率就乘在它上面。\n\n【六百二十 实测的对照表】实际格/秒不是线性的（慢到一定程度她会一步一顿，寻路每格重新判定），下面这些数是本模组在专用服务器上量出来的「走一段路的平均速度」（玩家走路 4.32 格/秒、跑步 5.61）：\n  0.1~0.2 → 0.1（几乎不走，像卡住）\n  0.3 → 1.9　0.4 → 3.3（默认）　0.5 → 4.9（≈玩家走路）\n  0.6 → 6　0.7 → 8（比玩家跑步还快）　1.0 → 14（鬼畜）\n（同一档换地形/机器会有大约 ±20% 波动）\n\n【六百二十 改了两处】①默认 0.7 → 0.4：老的默认实测约 8 格/秒、比玩家跑步（5.61）还快，用户反馈的「0.1 倍速都跟快步跑一样」看到的就是这个数；②下限 0.3 → 0.05：老下限把想调慢的人卡死了（0.3 就是能调到的最慢值）。注意 0.2 以下实测几乎不走，好用的慢档是 0.3~0.4。\n\n游戏里可以用 /maid_smart stroll speed <值> 当场改，/maid_smart stroll check 会把她**自己**的基础移速属性、实测参考表和当前门禁打出来，/maid_smart stroll go 让她走一次 24 格直线再 check 就能看到实测格/秒。")
+                .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.4, 0.05, 2.5);
         // 实测四百一十八：床铺互通（女仆睡原版床 / 玩家睡女仆床）
         MISC_BED_INTEROP = BUILDER.comment("床铺互通（默认开）：女仆能睡原版床（16 色床，TLM 原生只认女仆床），玩家也能睡女仆床（并可把女仆床设为重生点）——两个方向互开；关掉恢复 TLM 原版行为（女仆只睡女仆床、玩家不能睡女仆床）")
                 .translation("config.promaid.misc.bedInterop").define("bedInterop", true);

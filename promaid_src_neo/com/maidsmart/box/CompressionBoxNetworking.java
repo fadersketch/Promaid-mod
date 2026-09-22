@@ -37,6 +37,10 @@ import java.util.List;
  * 当成别的包读，直接错位。协议号从 "1" 提到 "2"，版本对不上的客户端连不进来
  * ——这正是 NeoForge 这套 {@code PayloadRegistrar} 校验存在的意义。
  *
+ * 【 600 二十 又提到 "3"】{@link BoxStatePacket} 末尾多了一段「这次为什么没成」
+ * （{@link CompressionBoxService#noticeOf}）：禁入清单是服务端才说了算的判据，
+ * 玩家得在界面上看见那句话。老客户端少读一段 = 内容错位，所以同样要提号。
+ *
  * 客户端侧的类（{@code CompressionBoxScreen}）只在 S2C 的 enqueueWork 里被加载，
  * 专用服务器不会碰到它（与排班表/药剂手册同款约定）。
  */
@@ -48,7 +52,7 @@ public final class CompressionBoxNetworking {
 
     @SubscribeEvent
     public static void register(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar r = event.registrar("2");
+        PayloadRegistrar r = event.registrar("3");
         r.playToClient(BoxStatePacket.TYPE,
                 StreamCodec.ofMember(BoxStatePacket::encode, BoxStatePacket::decode),
                 BoxStatePacket::handle);
@@ -61,7 +65,8 @@ public final class CompressionBoxNetworking {
     public static void openFor(ServerPlayer player, InteractionHand hand, List<ItemStack> items) {
         try {
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(hand.ordinal(), items,
-                    CompressionBoxService.carryOf(player), true));
+                    CompressionBoxService.carryOf(player),
+                    CompressionBoxService.noticeOf(player), true));
         } catch (Throwable ignored) {
         }
     }
@@ -70,17 +75,19 @@ public final class CompressionBoxNetworking {
     public static void syncTo(ServerPlayer player, int handOrdinal, List<ItemStack> items) {
         try {
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(handOrdinal, items,
-                    CompressionBoxService.carryOf(player), false));
+                    CompressionBoxService.carryOf(player),
+                    CompressionBoxService.noticeOf(player), false));
         } catch (Throwable ignored) {
         }
     }
 
-    /** 服务端：那一叠变了也要推一次（手上拿起来了、放下去了一部分） */
+    /** 服务端：那一叠变了、或者「这次为什么没成」变了，都要推一次 */
     public static void syncCarry(ServerPlayer player, int handOrdinal) {
         try {
             ItemStack box = player.getItemInHand(CompressionBoxService.handOf(handOrdinal));
             PacketDistributor.sendToPlayer(player, new BoxStatePacket(handOrdinal,
-                    CompressionBoxData.read(box), CompressionBoxService.carryOf(player), false));
+                    CompressionBoxData.read(box), CompressionBoxService.carryOf(player),
+                    CompressionBoxService.noticeOf(player), false));
         } catch (Throwable ignored) {
         }
     }
@@ -155,9 +162,18 @@ public final class CompressionBoxNetworking {
         public final List<ItemStack> items;
         /** 鼠标上挂着的那一叠（服务端说了算；空 = 没挂着） */
         public final ItemStack carry;
+        /**
+         * 「这次为什么没成」——服务端拒绝的原因（v1.2.2 实测六百二十；空串 = 这次没被拒）。
+         *
+         * 界面上那几行红字是**客户端自己算的**（写死的那两条判据），而禁入清单是
+         * 服务端配置说了算——被它拒的时候只有服务端说得清为什么，所以让服务端把
+         * 那句话带过来，界面照原样画出来（见 {@code CompressionBoxScreen}）。
+         */
+        public final String notice;
         public final boolean open;
 
-        public BoxStatePacket(int hand, List<ItemStack> items, ItemStack carry, boolean open) {
+        public BoxStatePacket(int hand, List<ItemStack> items, ItemStack carry, String notice,
+                              boolean open) {
             List<ItemStack> copy = CompressionBoxData.empty();
             for (int i = 0; i < copy.size() && i < items.size(); i++) {
                 copy.set(i, items.get(i).copy());
@@ -165,6 +181,7 @@ public final class CompressionBoxNetworking {
             this.hand = hand;
             this.items = copy;
             this.carry = carry == null ? ItemStack.EMPTY : carry.copy();
+            this.notice = notice == null ? "" : notice;
             this.open = open;
         }
 
@@ -173,13 +190,15 @@ public final class CompressionBoxNetworking {
             buf.writeByte(pkt.open ? 1 : 0);
             writeItems(buf, pkt.items);
             writeStack(buf, pkt.carry);
+            buf.writeUtf(pkt.notice);
         }
 
         public static BoxStatePacket decode(RegistryFriendlyByteBuf buf) {
             int hand = buf.readByte();
             boolean open = buf.readByte() != 0;
             List<ItemStack> items = readItems(buf);
-            return new BoxStatePacket(hand, items, readStack(buf), open);
+            ItemStack carry = readStack(buf);
+            return new BoxStatePacket(hand, items, carry, buf.readUtf(), open);
         }
 
         public static void handle(BoxStatePacket pkt, IPayloadContext ctx) {
@@ -189,7 +208,7 @@ public final class CompressionBoxNetworking {
                 return;
             }
             ctx.enqueueWork(() -> com.maidsmart.client.CompressionBoxScreen.accept(
-                    pkt.hand, pkt.items, pkt.carry, pkt.open));
+                    pkt.hand, pkt.items, pkt.carry, pkt.notice, pkt.open));
         }
 
         @Override
@@ -255,11 +274,12 @@ public final class CompressionBoxNetworking {
                 if (!(ctx.player() instanceof ServerPlayer player)) {
                     return;
                 }
-                if (CompressionBoxService.handle(player, pkt.hand, pkt.action, pkt.index,
-                        pkt.button, pkt.shift)) {
-                    // 回一份新内容（含鼠标上那一叠）——手上拿起来/放下去也要让界面跟上
-                    syncCarry(player, pkt.hand);
-                }
+                // 不论成没成都要回一份内容：成了 = 界面上那一叠/那几格跟上；
+                // 没成 = 把「这次为什么没成」那句话带给界面（六百二十：禁入清单
+                // 是服务端配置说了算，客户端自己算不出来）
+                CompressionBoxService.handle(player, pkt.hand, pkt.action, pkt.index,
+                        pkt.button, pkt.shift);
+                syncCarry(player, pkt.hand);
             });
         }
 
