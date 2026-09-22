@@ -313,6 +313,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_STALE;
     /** v1.1.0 实测八十五：动态威胁圈——最近伤害来源在扩展窗口内则圈自动放大包含它 */
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_EXPAND;
+    /** v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式的工作范围圈，见 CombatWorkRange） */
+    public static final ModConfigSpec.IntValue COMBAT_WORK_RANGE;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ModConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -1823,6 +1825,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测八十五：动态威胁圈——远程风筝怪不再引发"还原又中箭"反复横跳
         COMBAT_AUTO_SWITCH_EXPAND = BUILDER.comment("动态威胁圈（秒，默认 10）：最近伤害过女仆的敌对生物即使站在还原半径（8 格）之外，只要它还活着、距离不超过 32 格、且这个时间内有过接触，还原判定的威胁圈就自动放大把它包含进来——被远程怪压着打期间保持战斗态还击，不再'刚还原又中箭反复横跳'；怪死/走远/超窗后圈回落。0 = 关闭（只用固定半径）")
                 .translation("config.promaid.combat.autoSwitchThreatExpandSeconds").defineInRange("autoSwitchThreatExpandSeconds", 10, 0, 120);
+        // v1.2.2 实测六百一十九（反馈："近战战斗时由于超出工作范围而被传送回来，然后就这么
+        // 来回循环"）：home 模式的工作范围圈在接战期间临时放大到这个值——TLM 的
+        // SchedulePos.tick 每 40 tick 一次"超出 (int)半径 + 4 格就直接传送回工位"，
+        // 追怪的近战女仆被反复拽回原地，仗永远打不完（见 CombatWorkRange 的根因）
+        COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 32，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
+                .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 32, 0, 512);
         BUILDER.pop();
 
 

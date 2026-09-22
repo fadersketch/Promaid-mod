@@ -500,6 +500,75 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.potionCds.put(key, now + Math.max(40, cd));
     }
 
+    /* ==================== 金苹果自己的冷却（实测六百一十九） ==================== */
+
+    /**
+     * v1.2.2 实测六百一十九【金苹果的冷却失效——着火时连吃到背包空】。
+     *
+     * ── 反馈原文（GitHub issue #17）──
+     * "女仆一旦着火，背包里的金苹果会在几秒内被全部吃完（一整组、几十个，瞬间清空）……
+     *  定位：是 {@code eatGoldenAppleForFire()} 的冷却检查失效。"
+     *
+     * ── 根因（与反馈的定位一致）──
+     * 着火链路每 tick 调一次 {@link #eatGoldenAppleForFire}，它只问了一句
+     * {@code MaidMealBridge.onFeedCooldown}——而那张表**只在"物品没被消耗"时才写**
+     * （遗物类食物），普通金苹果是 {@code isEdible} 的普通食物，{@code consumed == 1}
+     * → 永远不写 → 每 tick 都答"没有冷却"→ 一口气吃到背包空。
+     * 同一族问题还有一条更隐蔽的：{@link #useGoldenApple}（低血回血阶梯/即时回血）
+     * 里写的 {@code markPotionUsed("golden_apple", …, 40)} **从来没有人读过**
+     * （{@code potionReady("golden_apple")} 在全类里 0 处调用，javap/grep 实证），
+     * 所以那条路也是敞开吃——反馈里说"平时低血回血是正常的"只是因为吸收心不给血量、
+     * 她往往先吃到别的东西；真到"只有金苹果"的时候一样会连吃。
+     *
+     * ── 修法：一条冷却，两条路共用 ──
+     * 冷却值就按这类东西**自己给的效果时长**（类文档里 {@code potionCds} 声明的口径，
+     * 也是反馈建议的第 ① 条）：普通金苹果 = 吸收 2 分钟（2400 tick），附魔金苹果 =
+     * 抗性/抗火 5 分钟（6000 tick，见 {@link #applyGoldenAppleEffects} 的数值）。
+     * 于是"吸收耗尽时才会再吃下一个"，而不是"每 tick 一个"。
+     *
+     * ── 为什么存 {@code getPersistentData} 而不是 {@code potionCds} ──
+     * 本行为是 per-maid 实例（{@code ProMaidExtension.getCoreBehaviors} 里 new 的那个，
+     * 女仆生成/脑重建时被调用一次），**脑重建（切任务、排班切段、强制 refreshBrain）
+     * 会换一个新实例、实例字段全丢**。而"着火"往往正伴随着切战斗任务——冷却若存实例
+     * 字段，最需要它的那一刻恰好会归零。存实体的持久数据则跟着她走，直到她自己消失。
+     * （{@code potionCds} 那一套是既有口径、这次不动它，只是金苹果这条路改走持久数据。）
+     */
+    private static final String GOLDEN_APPLE_CD_TAG = "maid_smart_golden_apple_cd";
+
+    /** 金苹果现在能不能吃（冷却没过 = 不能） */
+    private static boolean goldenAppleReady(EntityMaid maid) {
+        try {
+            long now = maid.m_9236_().m_46467_();
+            return maid.getPersistentData().m_128454_(GOLDEN_APPLE_CD_TAG) <= now;
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /** 吃下一个金苹果：记一笔"到某某 tick 之前都不许再吃"（CD = 它自己给的效果时长） */
+    private static void markGoldenAppleUsed(EntityMaid maid, boolean enchanted) {
+        try {
+            long now = maid.m_9236_().m_46467_();
+            maid.getPersistentData().m_128356_(GOLDEN_APPLE_CD_TAG, now + (enchanted ? 6000L : 2400L));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 金苹果冷却还剩多少 tick（0 = 没在冷却：没吃过或已过期）。
+     *
+     * 只给诊断用（{@code /maid_smart combat check} 把这一行打进日志，test_apple619.py
+     * 在"点着烧一段"之后断言它 &gt; 0——修好前这个键根本不存在，永远是 0）。
+     */
+    public static long goldenAppleCdTicksLeft(EntityMaid maid) {
+        try {
+            long until = maid.getPersistentData().m_128454_(GOLDEN_APPLE_CD_TAG);
+            return Math.max(0L, until - maid.m_9236_().m_46467_());
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
     /** 药水【效果种类】key（如 minecraft:swiftness）——"同一种药水" CD 的 key。
      *  v1.5.252g9：long_/strong_ 前缀与形态（饮用/喷溅/滞留）不计——同效果不同
      *  变体视为同种（否则普通/延长/喷溅/滞留抗火各是一个 key，跳岩浆会把每种
@@ -2901,6 +2970,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      *  抗性——直接免疫岩浆）；普通金苹果（吸收 + 再生）撑血游出。返回 false = 没有。 */
     private boolean eatGoldenAppleForFire(EntityMaid maid) {
         try {
+            // 实测六百一十九：冷却门放在最前面——连着吃会吃到背包空（见 markGoldenAppleUsed 的说明）
+            if (!goldenAppleReady(maid)) {
+                return false;
+            }
             net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
             int slot = -1;
             boolean enchanted = false;
@@ -2934,6 +3007,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 return false;
             }
             maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            // 实测六百一十九：吃完记冷却（= 它自己给的效果时长），否则下一个 tick 又是一颗
+            markGoldenAppleUsed(maid, enchanted);
             this.resourceUsed = true; // v1.5.232：用过自救资源
             return true;
         } catch (Exception ignored) {
@@ -4070,6 +4145,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private boolean useGoldenApple(EntityMaid maid) {
         try {
+            // 实测六百一十九：同一条冷却门（旧版这里写的 markPotionUsed("golden_apple", …, 40)
+            // 从来没人读过——potionReady("golden_apple") 全类 0 处调用，等于敞开吃）
+            if (!goldenAppleReady(maid)) {
+                return false;
+            }
             IItemHandler inv = maid.getMaidInv();
             int bestSlot = -1;
             boolean enchanted = false;
@@ -4093,8 +4173,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             inv.extractItem(bestSlot, 1, false);
             applyGoldenAppleEffects(maid, enchanted);
-            // v1.5.252g7：金苹果短 CD（40 tick，可连吃）
-            this.markPotionUsed("golden_apple", maid.m_9236_().m_46467_(), 40);
+            // 实测六百一十九：旧版这里写 potionCds 的"金苹果短 CD（40 tick，可连吃）"，
+            // 但没有任何地方读那个键（死写）——改成两条路共用的持久化冷却（= 效果时长）
+            markGoldenAppleUsed(maid, enchanted);
             return true;
         } catch (Exception ignored) {
             return false;

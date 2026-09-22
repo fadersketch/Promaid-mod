@@ -1,4 +1,69 @@
-﻿## 实测六百一十八【压缩盒：她终于吃盒子里的饭 + 附魔物品不再消失 + 界面改成箱子式鼠标取放 + 常驻附魔光效】
+﻿## 实测六百一十九【索敌：隔着方块的怪不再算威胁 + 战斗时临时扩圈 + 着火的金苹果不再吃到背包空】
+
+### ① 需求原文（用户）
+
+"1.用了几天感觉索敌还是有一点点问题 在地面下面有空洞里面有僵尸 酒狐隔着方块就感知到了 但是因为没有可以下去的入口所以就会开始原地打转 或许改成有方块遮挡的怪不能被感知到会好一些？还有近战战斗时由于超出工作范围而被传送回来然后就这么来回循环 感觉可以改成战斗状态临时扩圈把范围改大些回到常态在用正常设置的工作范围[颂乐人偶_眯眼笑]
+2.https://github.com/fadersketch/Promaid-mod/issues/17反馈的问题"
+
+（issue #17 标题：「[1.2.2] 女仆着火时会把背包里的金苹果瞬间全部吃完（eatGoldenAppleForFire 的冷却对普通食物失效）」）
+
+### ② 三件事各自的根因
+
+**1. 隔着方块感知 → 原地打转**（两树反编译 + javap 实证）
+
+- 本模组的 `NeutralThreatDriver`（实测三百四十四起）每 0.5 秒扫 16 格内「`getTarget()` 正是主人或本女仆」的怪，写进女仆 brain 的 `ATTACK_TARGET`。它此前**只看距离与锁定关系，没有视线门**。
+- 而原版 `Sensor.m_26803_`（所有"这个实体我可见吗"的判据）是「**如果它就是我的 ATTACK_TARGET → 跳过视线判定**（`TargetingConditions.forCombat().ignoreLineOfSight()`），否则才走带 `hasLineOfSight` 的 forCombat」。
+- 于是**我们自己写进去的那个目标，在下游全部链路里都变成"看得见"**：TLM 的 `SetWalkTargetFromAttackTargetIfTargetOutOfReach`（一路追）、`MaidMeleeAttack` 的 `nearestVisibleLivingEntities.contains(target)`（隔着墙挥刀——实测五百零五修的是**我们自己**那条直调挥刀，TLM 自己那条一直被这个绕过）。
+- 追不到的怪（地下空洞、墙那头的怪）→ 原地打转。用户这句"隔着方块就感知到了……没有入口就原地打转"与这条一一对应。
+- **修法**：威胁候选加一条视线门（复用项目现成的 `SelfPreservationBehavior.hasSight`，与原版 `Entity.hasLineOfSight` 同口径：只挡 COLLIDER 方块、不看流体）。被方块挡住的怪**根本不会进 ATTACK_TARGET**，上面那条绕过链从源头断开。
+
+**2. 战斗时被传送回工位 → 来回循环**（TLM 1.5.2/1.5.3 两树 `SchedulePos.tick` 反编译实证，逻辑逐行一致）
+
+```java
+restrictTo(maid);                                          // 每 40 tick 按活动刷圈心/半径
+if (maid.isWithinRestriction()) return;
+int minTeleportDistance = (int) maid.getRestrictRadius() + 4;   // ← 就是这一条
+if (distanceSqr > minTeleportDistance² && !sameWithRestrictCenter(maid)) {
+    teleport(maid);                                        // TeleportHelper.teleportToRestrictCenter
+} else {
+    BehaviorUtils.setWalkAndLookTarget(maid, center, 0.7f, 3);
+}
+```
+
+- home 模式（不跟随 = 排班/在家干活）下圈的半径来自 TLM 的 MAID_WORK/IDLE/SLEEP_RANGE（本模组另有 `scheduleActivityRange` 抬下限）。女仆接战后追怪，一跑出"半径 + 4"就被**直接传送回工位** → "追出去 → 传送回来 → 再追出去"，仗永远打不完。
+- **修法**：新增 `CombatWorkRange` + `CombatWorkRangeMixin`，挂在 `EntityMaid.getRestrictRadius`（SRG `m_21535_`）的出口上：**正在接战时**返回 `max(常态半径, combatWorkRange)`（新配置项，默认 32 格，0 = 关闭），其余时候原样返回。TLM 那一整套判据（`isWithinRestriction` 的圈内判定、寻路 `MaidNodeEvaluator`、上面那条传送阈值、各任务"离家多远该回去"）**全都读这一个值**，一处改完全线一致；**战斗结束（目标清掉 / 挨打后 5 秒）自动落回常态半径**——"回到常态再用正常设置的工作范围"，不需要任何收尾代码。
+- 取 `max` 而不是直接改大：玩家把 `scheduleActivityRange` 调得比它大时不该被**缩小**；只改读数不动任何存储（活动切段的 `restrictTo` 照常覆盖半径）；客户端恒返回常态值（那边的圈靠同步数据画，而"在不在接战"依赖 Brain 记忆与攻击时间戳，客户端拿不到）。
+
+**3. 着火把一整叠金苹果吃光（issue #17）**——与反馈者的定位一致
+
+- 着火链路每 tick 调一次 `eatGoldenAppleForFire`，它只问了 `MaidMealBridge.onFeedCooldown`；而那张表**只在"物品没被消耗"时才写**（遗物类食物）。普通金苹果是 `isEdible` 的普通食物，`consumed == 1` → 永远不写 → 每 tick 都答"没有冷却" → 一口气吃到背包空。
+- 同一族还有一条反馈者没点到的：`useGoldenApple`（低血回血阶梯 / 威胁中即时回血）里写的 `markPotionUsed("golden_apple", …, 40)` **全类 0 处读**（`potionReady("golden_apple")` grep 零命中）= 死写，那条路同样是敞开吃。
+- **修法**：两条路共用一条冷却，CD = **它自己给的效果时长**（普通金苹果 2400 tick = 吸收 2 分钟；附魔 6000 tick = 抗性/抗火 5 分钟；反馈建议的第 ① 条，也正是类里 `potionCds` 注释声明的口径）。冷却存**实体持久数据**（`maid_smart_golden_apple_cd`），不存行为实例字段——行为是 per-maid 实例，**脑重建（切任务/排班切段/强制 refreshBrain）会换一个新实例、实例字段全丢**，而"着火"往往正伴随着切战斗任务。
+
+### ③ 顺手查出的两处
+
+- `useGoldenApple` 里那个"金苹果短 CD（40 tick）"从来没被任何地方读过（死写）；这次并把冷却换成两条路共用的持久化冷却。
+- 用户第一条里"隔着墙挥刀"的那半个毛病：实测五百零五只修了**我们自己**的挥刀路径，TLM 自己那条同样被我们写进去的 ATTACK_TARGET 绕过视线判定——本批从源头（不再写它）一并断开。
+
+### ④ 验证（全部在专用服务器实测）
+
+**新增自检入口** `/maid_smart combat check [女仆]`（只读，摆出来的场景用完复原：方块逐格复位、僵尸 discard、圈心/半径/home 模式/两层目标记忆全部还原；细则见 `CombatSenseCheck`）——两条新判据都要求在线主人在场，专用服务器上没有玩家、结构上触发不了，所以照 实测五百四十五/六百〇八 的先例把真场景摆出来、调真方法、把取值打进日志。
+
+1. **金苹果（issue #17）**：`test_apple619.py` 双服。给她 16 个金苹果、点着烧 12 秒，只看"她身上还剩几个"（背包 + 双手一起数）——
+   - **修之前**（用本批构建前的同一个 jar 跑）：点火 1 秒后**16 → 0**，对照组（没点着的那只，同一套命令、同一段时间）16 个一个不少。用户报的"几秒内全部吃完"原样复现。
+   - **修之后**（两服都过）：16 → **15**（只吃掉 1 个），窗口内没再吃；对照组 16 个不动；自检读数「金苹果冷却剩余 **2056** tick」（2400 − 已过去的 344）——**内部状态与外部现象对上了**。
+   - 【验证方法上的坑，写清楚】TLM 自己的进餐任务（`MaidHealSelfTask`/`MaidWorkMealTask`/`MaidHomeMealTask`，javap 实证都调 `setItemInHand`）会把背包里**一整叠**食物拿到主手去吃（实测：召出来 2 秒内 16 个金苹果整叠跑到主手、还少了一个）。两条路混在一起，"背包里还剩几个"就什么都说明不了，所以用例把金苹果加进 TLM 的三张餐食黑名单（`MaidWorkMealsBlockList`/`MaidHomeMealsBlockList`/`MaidHealMealsBlockList`，测完原样还原），让**唯一的消费者**就是我们要验的那条着火链路。
+   - 【第二个坑】NeoForge 那台一开始"点了两次火、Fire 全程 0"——**下雨会当场把她身上的火浇灭**（原版 `Entity.tick`：头顶下雨就灭火，连带把火方块冲掉）。用例加上 `weather clear` + `doWeatherCycle false` 之后就点着了。
+   - 【第三个坑】1.21 的物品 NBT 是 `count`（小写、数据组件时代），写 `Count:16b` **不报错、静默按 1 个装载**（第一版 neo 那台读回来是 `{count: 1, ...}`，整条用例会变成"她只吃 1 个"的假绿）；用例按版本给了两种写法。
+2. **索敌/扩圈**：`test_target619.py` 双服（两台服的自检输出逐字相同），逐条断言——
+   - 遮挡那条：墙在 → `hasSight=false` + `perceivable=false` + 扫描不选它；**拆墙 → 同一只僵尸立刻翻成看得见 + 算威胁 + 扫描选中它**（证明判据不是恒 false）；
+   - 对照：看得见但没锁定我方 → 仍不算威胁（判据是合取）；锁定我方但远在 40 格外 → 扫描不选（16 格搜索门没被放宽）；
+   - 扩圈那条：常态圈设 8 格 → 半径读数 **8.0**、离圈心 10 格在圈外（接战判据=无）；**脑里真写一条 ATTACK_TARGET（模拟接战）** → 半径读数 **32.0**（= max(8, 配置 32)）、10 格进圈、TLM 的传送阈值（(int)半径 + 4）从 **12 格抬到 36 格**；**清掉目标 → 立刻落回 8.0 / 10 格又出圈**。
+3. **回归**：`run_reg619.py` 一串（本批四条 + 六百一十八 的压缩盒两台 + 空袭/赶路/飞行跟随/飞行/服务器/女仆装载共 15 条）。首轮 13 绿 2 红，两条红都是**抖动**、单独重跑均绿：
+   - `box618_neo1211`：那一次召唤出来的女仆背包里**没有**盒子（她的视图是 36 格原版背包）——自检本身 28 条全 PASS、只是"女仆那一条"被 SKIP。事后单独探针（同一套 NBT 单独召唤）确认盒子在两台上都装得进去，重跑该用例 PASS。**与本次改动无关**（本次没碰盒子/背包代码）。
+   - `flight612_1201`：A 轮观察窗口内她没走完一趟（"带距离的结束行 0 / 解除矢量 0"），重跑该用例 PASS（结束距离 4.6、解除那一刻水平速度 0.000）。
+
+## 实测六百一十八【压缩盒：她终于吃盒子里的饭 + 附魔物品不再消失 + 界面改成箱子式鼠标取放 + 常驻附魔光效】
 
 ### ① 需求原文（用户）
 

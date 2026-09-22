@@ -353,30 +353,37 @@ public final class NeutralThreatDriver {
      * Mob 基类字段（所有敌对/中立/魔改生物 AI 都写它），狼发狂咬人的瞬间
      * target==主人；模组把牛/羊改成中立攻击性生物，攻击时同样写 target。
      * 不认 Enemy/NeutralMob/Tamable 接口 = 不依赖原版类型体系。
+     *
+     * ── 实测六百一十九【看得见才算威胁】（用户反馈）──
+     * 原文："在地面下面有空洞里面有僵尸，酒狐隔着方块就感知到了，但是因为没有可以
+     * 下去的入口，所以就会开始原地打转。或许改成有方块遮挡的怪不能被感知到会好一些？"
+     *
+     * 【根因：写进 ATTACK_TARGET 会把"看不见"这件事永久变成"看得见"】原版
+     * {@code Sensor.m_26803_}（= 所有"这个实体我可见吗"的判据，javap 实证）是
+     * "**如果它就是我的 ATTACK_TARGET，就跳过视线判定**，否则才走
+     * TargetingConditions.forCombat（含 hasLineOfSight）"。本驱动此前只按
+     * "距离 + getTarget 锁定" 就写 ATTACK_TARGET——一旦写进去，它自己、TLM 的
+     * 走位（SetWalkTargetFromAttackTargetIfTargetOutOfReach）、AidTask 的
+     * {@code nearestVisibleLivingEntities.contains(target)} 全线都当那只怪
+     * 看得见：隔着墙也追、隔着墙也挥刀（实测五百零五修的是**我们自己的**挥刀那条，
+     * TLM 自己那条一直被这个绕过）。追不到的怪 → 原地打转。
+     *
+     * 【修法】威胁候选加一条视线门（复用项目现成的 raycast，不新造轮子）：
+     * 被方块挡住的怪**不当威胁**，于是根本不会被写进 ATTACK_TARGET——上面那条
+     * 绕过链从源头断开。判据本身与原版同口径（{@code Entity.hasLineOfSight} 也是
+     * COLLIDER + 不看流体，见 {@link SelfPreservationBehavior#hasSight}）。
+     * 为了可测/可读，这一条单独留成 {@link #perceivable}，扫描与自检共用同一份，
+     * 不允许各写一份。
      */
-    private static Mob findThreateningMob(EntityMaid maid, LivingEntity owner) {
+    public static Mob findThreateningMob(EntityMaid maid, LivingEntity owner) {
         Mob best = null;
         double bestDist = Double.MAX_VALUE;
         for (Entity e : maid.m_9236_().m_45976_(net.minecraft.world.entity.Mob.class,
                 maid.m_20191_().m_82400_(SEARCH_RADIUS))) {
-            if (!(e instanceof Mob mob) || !mob.m_6084_() || mob == maid) {
+            if (!perceivable(maid, owner, e)) {
                 continue;
             }
-            // 自己姐妹/主人的其他女仆不算（女仆之间不打）
-            if (mob instanceof EntityMaid) {
-                continue;
-            }
-            LivingEntity t;
-            try {
-                t = mob.m_5448_(); // getTarget——行为化锁定的核心信号
-            } catch (Throwable ex) {
-                continue;
-            }
-            if (t != maid && t != owner) {
-                continue; // 没锁定我方人员（含未锁定）→ 不算威胁
-            }
-            // 主人自己的驯服宠物记仇主人（发狂驯服狼）也在此列——getTarget==主人
-            // 即真实威胁（TLM MaidMeleeAttack 打它没有心理负担：狼已对主人兵刃相向）
+            Mob mob = (Mob) e;
             double d = maid.m_20270_(mob);
             if (d < bestDist) {
                 bestDist = d;
@@ -384,6 +391,38 @@ public final class NeutralThreatDriver {
             }
         }
         return best;
+    }
+
+    /**
+     * 这只怪算不算"她感知得到的威胁"（实测六百一十九）。
+     *
+     * 三个条件缺一不可，顺序按"便宜的先算"（前两条是一次字段读，第三条是 raycast）：
+     * <ol>
+     *   <li>是 Mob、活着、不是她自己、不是别的女仆（姐妹之间不打）；</li>
+     *   <li>它的 {@code getTarget()} 正是主人或本女仆（行为化锁定，不看类型）；</li>
+     *   <li><b>她真的看得见它</b>——被方块挡住的怪不算威胁（本次修的就是这条）。</li>
+     * </ol>
+     * 任何一条读抛异常 → 按"不算威胁"处理（宁可少一次主动出手，也不要把一个
+     * 够不着的目标写进她脑子里）。
+     */
+    public static boolean perceivable(EntityMaid maid, LivingEntity owner, Entity candidate) {
+        try {
+            if (!(candidate instanceof Mob mob) || !mob.m_6084_() || mob == maid) {
+                return false;
+            }
+            if (mob instanceof EntityMaid) {
+                return false;
+            }
+            LivingEntity t = mob.m_5448_(); // getTarget——行为化锁定的核心信号
+            if (t != maid && t != owner) {
+                return false;
+            }
+            // 主人自己的驯服宠物记仇主人（发狂驯服狼）也在此列——getTarget==主人
+            // 即真实威胁（TLM MaidMeleeAttack 打它没有心理负担：狼已对主人兵刃相向）
+            return com.maidsmart.combat.SelfPreservationBehavior.hasSight(maid, mob);
+        } catch (Throwable ex) {
+            return false;
+        }
     }
 
     /** 实测三百四十四：查询本驱动为该女仆登记的目标（还原扫描/诊断用） */
