@@ -6,6 +6,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.meal.MaidMealManager;
 import com.github.tartaricacid.touhoulittlemaid.util.ItemsUtil;
 import com.maidsmart.ProMaidMod;
+import com.maidsmart.config.MaidSmartConfig;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -77,6 +78,7 @@ public final class CompressionBoxCheck {
             stackSafety(out);
             playerClicks(out, level);
             mouseDrag(out, level);
+            refuseList(out, level, maid);
             if (maid == null) {
                 out.add(skip("女仆那一条没跑（带上女仆才会跑：/maid_smart box check <女仆>）"));
             } else {
@@ -86,6 +88,33 @@ public final class CompressionBoxCheck {
             out.add(fail("自检自己抛异常了：" + t));
         }
         return out;
+    }
+
+    /**
+     * 临时把「禁入带附魔的物品」关掉跑一段，跑完还原（v1.2.2 实测六百二十）。
+     *
+     * 【为什么需要】六百一十八那几条回归（「一格里的附魔书她只看得见 1 个」「组件过一圈
+     * 原样还在」）都拿附魔书当**不可堆叠物品**的探针——六百二十 起这类东西默认进不去盒子了，
+     * 那几条会全部变红，红得没意义（口径变了，不是坏了）。{@code stackSafety} /
+     * {@code unstackableView} 走这里：把开关按回旧口径跑一遍，证明「就算玩家把开关关掉，
+     * 六百一十八 修的那个『附魔物品消失』也依然是修好的」——而新口径本身由
+     * {@link #refuseList} 专门验。
+     */
+    private static void withEnchantedAllowed(Runnable body) {
+        boolean old = true;
+        try {
+            old = MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.get();
+            MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(false);
+        } catch (Throwable ignored) {
+        }
+        try {
+            body.run();
+        } finally {
+            try {
+                MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(old);
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     /* ==================== ① 数据层：盒子不许进盒子 ==================== */
@@ -149,6 +178,16 @@ public final class CompressionBoxCheck {
             out.add(skip("附魔那条：这台机器上没有 minecraft:enchanted_book，跳过"));
             return;
         }
+        // 【注意】这一行是**说明**不是 SKIP：用例按"自检里不许出现 SKIP"卡着
+        // （SKIP = 有东西没验到），这儿只是把"下面几条按旧口径跑"讲清楚
+        out.add(Component.literal("\u00a78说明：附魔那条以下几条按**旧口径**跑"
+                + "（临时把「禁入带附魔的物品」关掉）——验的是 六百一十八 修好的"
+                + "「附魔物品过一个格子的堆不会消失」：玩家把开关关掉时它必须还是好的；"
+                + "六百二十 的新口径在「禁入清单」那一段验"));
+        withEnchantedAllowed(() -> stackSafetyBody(out, book));
+    }
+
+    private static void stackSafetyBody(List<Component> out, ItemStack book) {
         // 一格存两个（同一份组件 → 会并到同一格）
         List<ItemStack> items = CompressionBoxData.empty();
         items.set(0, book.copy());
@@ -304,34 +343,67 @@ public final class CompressionBoxCheck {
                 : fail("鼠标取放④：快速移动不对（changed=" + c4 + "，背包里石头 " + moved
                 + " 个，盒子第 1 格 " + name(inBox4.get(0)) + "）"));
 
-        // ⑤ 鼠标上拿着一个压缩盒去点盒子格 —— 新入口下的"盒子装盒子"，必须被拒
+        // ⑤ 六百二十【用户要的「压缩盒在这个界面内无法被鼠标选中」】：左键点背包里的压缩盒
+        //    → 拿不起来（鼠标仍然空着、那一格还是盒子），并且服务端留下一句提示
         inv.setStackInSlot(15, boxWith(1));
-        CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
-                CompressionBoxData.SLOTS + 15, 0, false); // 先把它拿到鼠标上
+        boolean c5 = CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
+                CompressionBoxData.SLOTS + 15, 0, false); // 想把它拿到鼠标上
         ItemStack carry5 = CompressionBoxService.carryOf(fp);
-        boolean c5 = CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK, 2, 0, false);
+        boolean boxStillThere = CompressionBoxData.isBox(inv.getStackInSlot(15));
+        String notice5 = CompressionBoxService.noticeOf(fp);
+        out.add(!c5 && carry5.isEmpty() && boxStillThere
+                && CompressionBoxFilter.MSG_BOX.equals(notice5)
+                ? pass("鼠标取放⑤（六百二十，用户要的那条）：左键点背包里的压缩盒（第 15 格）"
+                + " → **拿不起来**（鼠标仍空、那一格还是盒子），服务端回了一句「" + notice5 + "」"
+                + "—— 这个界面里鼠标选不中压缩盒")
+                : fail("鼠标取放⑤：压缩盒还是被拿到鼠标上了（changed=" + c5 + "，鼠标上 "
+                + name(carry5) + "，第 15 格 " + name(inv.getStackInSlot(15))
+                + "，提示=" + notice5 + "）"));
+
+        // ⑤b 鼠标上先挂着别的东西，再去点它 —— 走的是「交换」那一路，同样不许把盒子顶到鼠标上
+        CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
+                CompressionBoxData.SLOTS + 14, 0, false); // 先把第 14 格那 5 个圆石拿起来
+        ItemStack carryB = CompressionBoxService.carryOf(fp);
+        boolean c5b = CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
+                CompressionBoxData.SLOTS + 15, 0, false); // 手上拿着圆石去点压缩盒那一格
+        ItemStack carryB2 = CompressionBoxService.carryOf(fp);
+        out.add(!c5b && carryB.getCount() == 5 && carryB2.getCount() == 5
+                && CompressionBoxData.isBox(inv.getStackInSlot(15))
+                ? pass("鼠标取放⑤b：鼠标上挂着 5 个圆石再去点压缩盒那一格 → 也不换"
+                + "（鼠标上还是那 5 个圆石、压缩盒还在原地）——「交换」那条路同样选不中它")
+                : fail("鼠标取放⑤b：交换那一路把压缩盒顶到鼠标上了（changed=" + c5b
+                + "，鼠标上 " + name(carryB2) + "，第 15 格 " + name(inv.getStackInSlot(15)) + "）"));
+
+        // ⑤c 对照：同一叠圆石放进**盒子格**必须没问题（别为了拦压缩盒把正常搬运一起堵死）
+        boolean c5c = CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK, 2, 0, false);
         List<ItemStack> inBox5 = CompressionBoxData.read(fp.getItemInHand(InteractionHand.MAIN_HAND));
-        out.add(CompressionBoxData.isBox(carry5) && !c5 && inBox5.get(2).isEmpty()
-                ? pass("鼠标取放⑤：鼠标上拿着一个压缩盒去点盒子第 3 格 → **被拒**，"
-                + "那格还是空的、盒子还在鼠标上（用户报过的「盒子装盒子」在这个新入口下也挡住了）")
-                : fail("鼠标取放⑤：压缩盒被放进了盒子（changed=" + c5 + "，鼠标上 " + name(carry5)
-                + "，第 3 格 " + name(inBox5.get(2)) + "）"));
+        out.add(c5c && CompressionBoxService.carryOf(fp).isEmpty() && inBox5.get(2).getCount() == 5
+                ? pass("对照：同一叠圆石点盒子第 3 格 → 正常放下（那里现在 " + name(inBox5.get(2)) + "）")
+                : fail("对照失败：普通物品都放不进去了（changed=" + c5c + "，鼠标上 "
+                + name(CompressionBoxService.carryOf(fp)) + "，第 3 格 " + name(inBox5.get(2)) + "）"));
 
         // ⑥ 手上那一叠还回去：点空白处 / 关界面走的就是这条
+        inv.setStackInSlot(16, stack("minecraft:dirt", 3));
+        CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
+                CompressionBoxData.SLOTS + 16, 0, false); // 拿起 3 个土
         boolean before = !CompressionBoxService.carryOf(fp).isEmpty();
         CompressionBoxService.handle(fp, 0, CompressionBoxService.CARRY_DROP, 0, 0, false);
         boolean c6 = CompressionBoxService.carryOf(fp).isEmpty();
-        // 数一数背包里有几个盒子：手上那个 + 刚才被拿到鼠标上、收手后应当回来的那个 = 2
+        int backDirt = 0;
+        // 数一数背包里有几个盒子：手上那个 + 第 15 格那个 = 2
         int boxes = 0;
         for (int i = 0; i < inv.getSlots(); i++) {
-            if (CompressionBoxData.isBox(inv.getStackInSlot(i))) {
+            ItemStack s = inv.getStackInSlot(i);
+            if (CompressionBoxData.isBox(s)) {
                 boxes++;
             }
+            if (isId(s, "minecraft:dirt")) {
+                backDirt += s.getCount();
+            }
         }
-        out.add(before && c6 && boxes == 2
-                ? pass("鼠标取放⑥：挂着一叠时收手（关界面/ESC 走的那条）→ 东西回到背包（背包里 "
-                + boxes + " 个盒子：手上那个 + 刚收回来的）、鼠标空了"
-                + "（**任何路径都不许把它弄丢**）")
+        out.add(before && c6 && boxes == 2 && backDirt == 3
+                ? pass("鼠标取放⑥：挂着一叠时收手（关界面/ESC 走的那条）→ 东西回到背包（3 个土一件不少，"
+                + "背包里 " + boxes + " 个盒子）、鼠标空了（**任何路径都不许把它弄丢**）")
                 : fail("鼠标取放⑥：收手没还回去（收手前挂着=" + before + "，收手后鼠标空=" + c6
                 + "，背包里盒子数=" + boxes + "，应为 2）"));
 
@@ -510,6 +582,12 @@ public final class CompressionBoxCheck {
             out.add(skip("附魔书那条：这台机器上没有 minecraft:enchanted_book，跳过"));
             return;
         }
+        // 同上：按旧口径跑（临时关掉「禁入带附魔的物品」）——验的是"给原版的堆必须合法"
+        withEnchantedAllowed(() -> unstackableViewBody(out, view, free, cell, book));
+    }
+
+    private static void unstackableViewBody(List<Component> out, CompressionBoxMaidInv view, int free,
+                                            int cell, ItemStack book) {
         view.insertItem(free, book.copy(), false);
         view.insertItem(free, book.copy(), false);
         ItemStack seen = view.getStackInSlot(free);
@@ -524,6 +602,141 @@ public final class CompressionBoxCheck {
                 + "手里永远不会出现非法堆")
                 : fail("附魔书那条：一次拿出了 ×" + got.getCount() + " 个附魔书（应为 1）"));
         view.setStackInSlot(free, ItemStack.EMPTY);
+    }
+
+    /* ==================== ⑥ 禁入清单（六百二十） ==================== */
+
+    /**
+     * 用户那条：「加一个黑名单，在压缩盒界面内无法放入附魔书/附魔武器和压缩盒，
+     * 压缩盒在这个界面内无法被鼠标选中，并再次提示玩家不能把压缩盒放进压缩袋里」。
+     *
+     * 界面本身在专用服务器上点不了（没有客户端），但**界面每一次点击真正执行的方法**
+     * 就是这里调的 {@link CompressionBoxService#handle}，所以这一条能把「放进不去」和
+     * 「选不中」都验到；提示那一半看 {@link CompressionBoxService#noticeOf}
+     * （随内容同步发给客户端画成红字，服务端这一侧只存那句话）。
+     */
+    private static void refuseList(List<Component> out, ServerLevel level, EntityMaid maid) {
+        ItemStack book = probeBook();
+        ItemStack stone = stack("minecraft:stone", 1);
+        ItemStack box = boxWith(2);
+
+        // ① 判据本身：三种拒绝 + 一条放行
+        if (book.isEmpty()) {
+            out.add(skip("禁入清单①：这台机器上没有 minecraft:enchanted_book，跳过附魔那两条"));
+        } else {
+            String whyBook = CompressionBoxFilter.reason(book);
+            out.add(CompressionBoxFilter.MSG_ENCHANT.equals(whyBook)
+                    ? pass("禁入清单①：附魔书（1.21.1 的 isEnchanted() 只看 ENCHANTMENTS 组件，"
+                    + "附魔书在 STORED_ENCHANTMENTS 里——所以按物品类型判）→ 拒绝：「" + whyBook + "」")
+                    : fail("禁入清单①：附魔书没被拒（reason=" + whyBook + "）"));
+        }
+        out.add(CompressionBoxFilter.MSG_BOX.equals(CompressionBoxFilter.reason(box))
+                ? pass("禁入清单①：压缩盒 → 拒绝：「" + CompressionBoxFilter.MSG_BOX + "」")
+                : fail("禁入清单①：压缩盒没被拒（reason=" + CompressionBoxFilter.reason(box) + "）"));
+        out.add(CompressionBoxFilter.reason(stone) == null
+                ? pass("禁入清单①：对照——普通物品（石头）放行（reason=null）")
+                : fail("禁入清单①：石头竟被拒了（reason=" + CompressionBoxFilter.reason(stone) + "）"));
+
+        // ② 数据层：附魔物品进盒子被原样退回（这里是所有入口的最后一关）
+        List<ItemStack> items = CompressionBoxData.empty();
+        if (!book.isEmpty()) {
+            ItemStack left = CompressionBoxData.mergeInto(items, 0, book.copy());
+            out.add(left.getCount() == 1 && items.get(0).isEmpty()
+                    ? pass("禁入清单②：数据层 mergeInto 收附魔书 → 原样退回（第 1 格仍是空的）"
+                    + "—— 界面、女仆、溢出回退三条路都要过这一关")
+                    : fail("禁入清单②：附魔书被塞进盒子了（退回 " + name(left) + "，第 1 格 "
+                    + name(items.get(0)) + "）"));
+        }
+        ItemStack left2 = CompressionBoxData.mergeInto(items, 0, stone.copy());
+        out.add(left2.isEmpty() && items.get(0).getCount() == 1
+                ? pass("禁入清单②对照：同一方法收石头 → 正常进格（第 1 格 " + name(items.get(0)) + "）")
+                : fail("禁入清单②对照失败：石头都进不去（退回 " + name(left2) + "）"));
+        if (!book.isEmpty()) {
+            ItemStack left3 = CompressionBoxData.merge(items, book.copy());
+            out.add(left3.getCount() == 1 && CompressionBoxData.totalCount(items) == 1
+                    ? pass("禁入清单②：数据层 merge 收附魔书 → 一件都没进（盒子里仍是 1 个石头）")
+                    : fail("禁入清单②：merge 把附魔书收进去了（退回 " + name(left3)
+                    + "，盒子现在 " + CompressionBoxData.totalCount(items) + " 件）"));
+        }
+
+        // ③ 界面点击那条路（假玩家）：Shift+左键点背包里的附魔书 → 被拒 + 一句提示
+        FakePlayer fp = FakePlayerFactory.getMinecraft(level);
+        IItemHandlerModifiable inv = new PlayerMainInvWrapper(fp.getInventory());
+        clear(fp, inv);
+        ItemStack handBox = boxWith(3);
+        fp.setItemInHand(InteractionHand.MAIN_HAND, handBox);
+        if (!book.isEmpty()) {
+            inv.setStackInSlot(13, book.copy());
+            boolean changed = CompressionBoxService.handle(fp, 0, CompressionBoxService.SLOT_CLICK,
+                    CompressionBoxData.SLOTS + 13, 0, true); // Shift+左键 = 整叠存进去
+            String notice = CompressionBoxService.noticeOf(fp);
+            boolean still = !inv.getStackInSlot(13).isEmpty();
+            out.add(!changed && still && CompressionBoxFilter.MSG_ENCHANT.equals(notice)
+                    && content(handBox) == 3
+                    ? pass("禁入清单③（界面那条路）：Shift+左键点背包里的附魔书 → 被拒、书还在背包里、"
+                    + "盒子里还是 3 个，服务端回了「" + notice + "」")
+                    : fail("禁入清单③：附魔书被 Shift 存进去了（changed=" + changed
+                    + "，第 13 格 " + name(inv.getStackInSlot(13)) + "，盒子 " + content(handBox)
+                    + " 件，提示=" + notice + "）"));
+        } else {
+            out.add(skip("禁入清单③：没有附魔书可用，跳过（界面那条路已由 ⑤/⑤b 覆盖压缩盒）"));
+        }
+
+        // ④ 配置禁入清单：当场加一条圆石 → 拒；清掉 → 又能进（对照）。跑完还原原值
+        java.util.List<? extends String> old = MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.get();
+        try {
+            MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(java.util.List.of("minecraft:cobblestone"));
+            String why = CompressionBoxFilter.reason(stack("minecraft:cobblestone", 1));
+            MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(java.util.List.of());
+            String after = CompressionBoxFilter.reason(stack("minecraft:cobblestone", 1));
+            out.add(CompressionBoxFilter.MSG_LIST.equals(why) && after == null
+                    ? pass("禁入清单④：配置清单里加上 minecraft:cobblestone → 拒绝：「" + why
+                    + "」；清空清单 → 又放行（对照）——清单是活的，改完立刻生效")
+                    : fail("禁入清单④：配置清单没生效（加了之后 reason=" + why
+                    + "，清空之后 reason=" + after + "）"));
+        } catch (Throwable t) {
+            out.add(fail("禁入清单④：配置清单读写失败：" + t));
+        } finally {
+            try {
+                MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(old);
+            } catch (Throwable ignored) {
+            }
+        }
+
+        // ⑤ 女仆那一侧：往她背包里的盒子插附魔书 → 原样退回（她也不会把这类东西顺手塞进盒子）
+        if (maid == null) {
+            out.add(skip("禁入清单⑤：没给女仆，跳过（带上女仆才会跑）"));
+        } else if (book.isEmpty()) {
+            out.add(skip("禁入清单⑤：没有附魔书可用，跳过"));
+        } else {
+            IItemHandler minv = maid.getMaidInv();
+            if (!(minv instanceof CompressionBoxMaidInv view) || view.boxCount() <= 0) {
+                out.add(skip("禁入清单⑤：她背包里没有压缩盒（或女仆延伸关着），跳过"));
+            } else {
+                int base = view.baseSlots();
+                int free = -1;
+                for (int i = base; i < view.getSlots(); i++) {
+                    if (view.getStackInSlot(i).isEmpty()) {
+                        free = i;
+                        break;
+                    }
+                }
+                if (free < 0) {
+                    out.add(skip("禁入清单⑤：她盒子里 5 格全满，跳过"));
+                } else {
+                    ItemStack left = view.insertItem(free, book.copy(), false);
+                    boolean ok = left.getCount() == 1 && view.getStackInSlot(free).isEmpty()
+                            && !view.isItemValid(free, book.copy());
+                    out.add(ok ? pass("禁入清单⑤（女仆那一侧）：往她盒子第 " + (free - base + 1)
+                            + " 格插附魔书 → 原样退回、那格还是空的（isItemValid 也判 false）"
+                            + "—— 她捡到附魔书不会顺手塞进盒子")
+                            : fail("禁入清单⑤：女仆那一侧收下了附魔书（退回 " + name(left)
+                            + "，那格现在 " + name(view.getStackInSlot(free)) + "）"));
+                    view.setStackInSlot(free, ItemStack.EMPTY); // 自检不留痕
+                }
+            }
+        }
+        clear(fp, inv);
     }
 
     /* ==================== 小工具 ==================== */

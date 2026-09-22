@@ -1,6 +1,7 @@
 package com.maidsmart.client;
 
 import com.maidsmart.box.CompressionBoxData;
+import com.maidsmart.box.CompressionBoxFilter;
 import com.maidsmart.box.CompressionBoxNetworking;
 import com.maidsmart.box.CompressionBoxService;
 import net.minecraft.client.Minecraft;
@@ -48,6 +49,12 @@ import java.util.List;
  * 数量与耐久条都调原版那套装饰绘制（{@code renderItemDecorations}），所以这一片看起来
  * 和生存模式按 E 打开的物品栏一模一样。盒子那 5 格只借用它的**耐久条**（数量文字传空串），
  * 大堆的数量仍画在格子下方；悬停说明也不再只认盒子格（见 {@link #buildTip}）。
+ *
+ * ── 禁入清单（v1.2.2 实测六百二十）──
+ * 用户要的「界面内无法放入附魔书/附魔武器和压缩盒，压缩盒在这个界面内无法被鼠标
+ * 选中，并提示不能把压缩盒放进去」：判据统一在 {@link CompressionBoxFilter}，
+ * 界面这一层只负责**把理由画出来**（红字提示 + 悬停说明里的一行），真正裁决仍在服务端。
+ * 可以放进盒子里的东西一点没变（对照见自检 {@code CompressionBoxCheck}）。
  */
 public class CompressionBoxScreen extends Screen {
 
@@ -91,7 +98,8 @@ public class CompressionBoxScreen extends Screen {
     }
 
     /** S2C 到达：开屏 / 刷新（只认同一只手，防止把另一只手的盒子内容画进来） */
-    public static void accept(int hand, List<ItemStack> items, ItemStack carry, boolean open) {
+    public static void accept(int hand, List<ItemStack> items, ItemStack carry, String notice,
+                              boolean open) {
         try {
             Minecraft mc = Minecraft.getInstance();
             if (mc == null) {
@@ -104,20 +112,38 @@ public class CompressionBoxScreen extends Screen {
                     // （重开会走一遍 removed()，白白多发一次「手上东西还回去」）
                     box.items = items;
                     box.carry = carry == null ? ItemStack.EMPTY : carry;
+                    box.acceptNotice(notice);
                     return;
                 }
                 if (cur instanceof CompressionBoxScreen old) {
                     old.replacing = true;
                 }
-                mc.setScreen(new CompressionBoxScreen(hand, items, carry));
+                CompressionBoxScreen fresh = new CompressionBoxScreen(hand, items, carry);
+                fresh.acceptNotice(notice);
+                mc.setScreen(fresh);
                 return;
             }
             Screen cur = mc.screen;
             if (cur instanceof CompressionBoxScreen box && box.hand == hand) {
                 box.items = items;
                 box.carry = carry == null ? ItemStack.EMPTY : carry;
+                box.acceptNotice(notice);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 服务端说「这一次为什么没成」（v1.2.2 实测六百二十）。
+     *
+     * 【为什么要专门接这一条】界面上那几行红字是**本地算的**——只能覆盖写死的那两条
+     * 判据（压缩盒 / 附魔物品）。配置里的禁入清单只有服务端读得到自己那份配置，
+     * 被它拒的时候客户端算不出原因，看着就是「点了没反应」。所以服务端随内容同步
+     * 把这句话带过来，这里照原样画成同一行红字。
+     */
+    private void acceptNotice(String notice) {
+        if (notice != null && !notice.isEmpty()) {
+            hint(notice);
         }
     }
 
@@ -247,7 +273,10 @@ public class CompressionBoxScreen extends Screen {
             boolean shift = hasShiftDown();
             int boxSlot = boxSlotAt(mx, my);
             if (boxSlot >= 0) {
-                if (!noteIfRefused(true, boxSlot, button, shift)) {
+                String why = refusal(true, boxSlot, shift);
+                if (why != null) {
+                    hint(why);
+                } else {
                     CompressionBoxNetworking.BoxActionPacket.send(
                             this.hand, CompressionBoxService.SLOT_CLICK, boxSlot, button, shift);
                 }
@@ -255,9 +284,14 @@ public class CompressionBoxScreen extends Screen {
             }
             int invSlot = invSlotAt(mx, my);
             if (invSlot >= 0) {
-                CompressionBoxNetworking.BoxActionPacket.send(this.hand,
-                        CompressionBoxService.SLOT_CLICK,
-                        CompressionBoxData.SLOTS + invSlot, button, shift);
+                String why = refusal(false, invSlot, shift);
+                if (why != null) {
+                    hint(why);
+                } else {
+                    CompressionBoxNetworking.BoxActionPacket.send(this.hand,
+                            CompressionBoxService.SLOT_CLICK,
+                            CompressionBoxData.SLOTS + invSlot, button, shift);
+                }
                 return true;
             }
             if (!this.carry.isEmpty()) {
@@ -272,30 +306,56 @@ public class CompressionBoxScreen extends Screen {
     }
 
     /**
-     * 本地先算一遍「这一次点得下去吗」，点不下去就给一行红字提示（并发给服务端去裁决）。
+     * 本地先算一遍「这一次点得下去吗」，点不下去就给一行红字提示（服务端那道判据
+     * **一分都不会少**——它照样会拒，并且把它自己的理由回包过来，见
+     * {@link #acceptNotice}）。
      *
      * 【为什么要先说一声】服务端拒了就什么都不发生，玩家只看得到「点了没反应」——
-     * 那正是用户抱怨的「跟玩家的认知不太一样」。这里把服务端那几条判据（盒子不装盒子、
-     * 那一格是别的物品）在界面上先讲一遍。服务端那道判据**一分都不会少**。
+     * 那正是用户抱怨的「跟玩家的认知不太一样」。这里把服务端那几条判据在界面上先讲一遍。
      *
-     * @return true = 已知点不下去（不用发包了，发了也是白跑）
+     * 六百二十起判据统一走 {@link CompressionBoxFilter}（与数据层/女仆那一侧同一个
+     * 方法），并且在原来两条（盒子不装盒子、那一格是别的物品）之外补了三条：
+     * <ul>
+     *   <li>往盒子格里放**禁入清单**上的东西（带附魔的物品 / 配置清单）；</li>
+     *   <li>Shift+左键（= 整叠存进盒子）那一格装的是禁入清单上的东西；</li>
+     *   <li><b>鼠标不许选中压缩盒</b>（用户要的那条）：背包格上放着压缩盒时，
+     *       点击既不拿起、也不和手上的东西交换，只回一句「压缩盒不能装进压缩盒」。
+     *       服务端那条路上同样挡着（{@code CompressionBoxService.clickInv}）。</li>
+     * </ul>
+     *
+     * @return 非 null = 已知点不下去（不用发包了，发了也是白跑），值就是给玩家的那句话
      */
-    private boolean noteIfRefused(boolean inBox, int slot, int button, boolean shift) {
-        if (this.carry.isEmpty() || shift) {
-            return false; // 手上空着 = 拿起，shift = 快速移动，这两条不会因为「装不下」被拒
-        }
+    private String refusal(boolean inBox, int slot, boolean shift) {
         if (inBox) {
-            if (CompressionBoxData.isBox(this.carry)) {
-                hint("\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2");
-                return true; // 这条服务端一定拒，连包都不发（与 六百一十七 同一口径）
+            if (this.carry.isEmpty() || shift) {
+                return null; // 手上空着 = 拿起；shift = 快速移动到背包（都是往外拿）
+            }
+            String why = CompressionBoxFilter.reason(this.carry);
+            if (why != null) {
+                return why; // 压缩盒 / 带附魔的物品 / 配置禁入清单
             }
             ItemStack cur = slotOf(this.items, slot);
             if (!cur.isEmpty() && !ItemStack.isSameItemSameComponents(cur, this.carry)) {
-                hint("\u8fd9\u4e00\u683c\u5df2\u7ecf\u662f\u522b\u7684\u7269\u54c1");
-                return true;
+                return "\u8fd9\u4e00\u683c\u5df2\u7ecf\u662f\u522b\u7684\u7269\u54c1";
             }
+            return null;
         }
-        return false;
+        // 背包格：只有「会把东西搬进盒子」的动作才看禁入清单（shift+左键 = 整叠存进去）；
+        // 另外，压缩盒本身在这个界面里鼠标一律选不中（用户要的那条）
+        ItemStack cur = playerStack(slot);
+        if (shift) {
+            return CompressionBoxFilter.reason(cur);
+        }
+        if (CompressionBoxData.isBox(cur)) {
+            return CompressionBoxFilter.MSG_BOX;
+        }
+        return null;
+    }
+
+    /** 背包那一格的东西（客户端这份是实时的） */
+    private ItemStack playerStack(int slot) {
+        IItemHandler inv = playerInv();
+        return inv == null ? ItemStack.EMPTY : inv.getStackInSlot(slot);
     }
 
     private void hint(String text) {
@@ -424,9 +484,12 @@ public class CompressionBoxScreen extends Screen {
     }
 
     /**
-     * 悬停说明的几行：名称 / 数量 / 耐久 /（按着 Shift 时的）那一行。
+     * 悬停说明的几行：名称 / 数量 / 耐久 /（按着 Shift 时的）那一行 / 禁入说明。
      * 用户要的「有多少个、耐久还剩多少」就在这里——数量 1 的原版不写，这里跟着不写（盒子格除外，
      * 盒子里 1 个也可能是关键的一格）；耐久只有能坏的物品有，掉到三分之一以下改成红字。
+     *
+     * 六百二十起：背包格上凡是**放不进盒子**的东西（压缩盒 / 带附魔的物品 / 配置禁入清单）
+     * 都直接把理由写在说明里——不用先点一下才知道不行。
      */
     private Tip buildTip(ItemStack s, boolean inBox, boolean shift) {
         Tip tip = new Tip();
@@ -442,10 +505,14 @@ public class CompressionBoxScreen extends Screen {
             int left = max - s.getDamageValue();
             tip.add("\u8010\u4e45 " + left + " / " + max, left * 3 <= max ? C_WARN : C_DIM);
         }
-        if (shift && !inBox) {
-            if (CompressionBoxData.isBox(s)) {
-                tip.add("\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2", C_WARN);
-            } else {
+        if (!inBox) {
+            String why = CompressionBoxFilter.reason(s);
+            if (why != null) {
+                tip.add(why, C_WARN);
+                if (CompressionBoxData.isBox(s)) {
+                    tip.add("\u8fd9\u4e2a\u754c\u9762\u91cc\u9f20\u6807\u9009\u4e0d\u4e2d\u5b83", C_DIM);
+                }
+            } else if (shift) {
                 tip.add("Shift+\u5de6\u952e\uff1a\u6574\u53e0\u5b58\u8fdb\u538b\u7f29\u76d2", C_DIM);
             }
         } else if (shift) {
