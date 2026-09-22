@@ -109,6 +109,11 @@ public final class MaidSpellCompat {
     /**
      * 这件物品是不是"法术装备"（附属各 provider 认的法术书/法器）。
      * 附属没装 / 反射失败 / 命中的 provider 在忽略表里 → false。
+     *
+     * v1.2.4 实测六百三十二 起**没有任何调用方**，别把它接回主手：法术任务的自动换武器
+     * 已整个停用（见 {@code MaidToolAutoEquip.ensureForTask}）。原因正是这个口径本身
+     * ——附属认的"法术书"里有一类根本不是武器（Goety 的聚晶袋就是袋子），
+     * 按它换主手等于把玩家放的剑每 tick 换走。保留此方法只作口径定义与诊断用。
      */
     public static boolean isSpellWeapon(ItemStack stack) {
         return spellProviderOf(stack) != null;

@@ -132,21 +132,45 @@ public final class MaidToolAutoEquip {
                     }
                 }
             } else if (com.maidsmart.combat.MaidSpellCompat.isSpellTask(maid)) {
-                // v1.2.0 实测五百五十九【法术模式自动换武器收紧】：
-                // 万法皆通的两个法术任务（近战法术/远程法术）isWeapon **恒 true**（javap 实证:
-                // 方法体只有 iconst_1; ireturn）——走"任务自带判据"对我们等于"万物皆武器"，
-                // 旧路径会把背包里最高 DPS 的冷兵器（剑/斧）塞进法术模式的主手。
-                // 现在收紧为两条：
-                //   ① 她得**真的带着法术装备**（会用）才开放切换——没带 → 一次都不换，
-                //      不往法术模式塞冷兵器；
-                //   ② 换也只换**法术装备**（附属 provider 认的法术书/法器）——mod 武器优先。
-                if (!com.maidsmart.combat.MaidSpellCompat.maidHasSpells(maid)) {
-                    return false;
-                }
-                need = com.maidsmart.combat.MaidSpellCompat::isSpellWeapon;
-                // 法术装备没有攻击力属性 → weaponScore 落到"附魔词条 > 剩余耐久"段，
-                // 与其它无攻击力武器（弓/弩）同一口径，不会与冷兵器混在一起比 DPS
-                scorer = MaidToolAutoEquip::weaponScore;
+                // v1.2.0 实测五百五十九 → v1.2.4 实测六百三十二【法术任务下完全不动主手】。
+                //
+                // 【五百五十九当时改了什么】万法皆通的两个法术任务（近战法术/远程法术）
+                // isWeapon **恒 true**（javap 实证: 方法体只有 iconst_1; ireturn）——走"任务自带
+                // 判据"对我们等于"万物皆武器"，旧路径会把背包里最高 DPS 的冷兵器（剑/斧）塞进
+                // 法术模式的主手。当时收紧为两条：① 她得**真的带着法术装备**才开放切换；
+                // ② 换也只换**法术装备**（附属 provider 认的法术书/法器）。
+                //
+                // 【六百三十二：② 这一条本身就是干涉】反馈原文：「法术战斗模式会把诡厄巫法的
+                // 聚晶袋当作主武器，把剑放主手他会自己换成聚晶袋」。聚晶袋（Goety `FocusBag`）
+                // 正是附属 `GoetyProvider` 认的"法术书"（反编译实证：`isSpellBook = item
+                // instanceof FocusBag`）——于是"只换法术装备"落到 Goety 上就是"每 tick 把玩家的
+                // 剑换成袋子"。为什么这只有坏处：
+                //   ① 施法**不需要**她主手拿东西：Goety 走附属自己的数据
+                //      （`MaidGoetySpellData.getSpellBook()/getCurrentStaff()/getCurrentFocus()`）
+                //      + `FocusBagItemHandler` 读袋内容，法杖由 `findSpellStaff` 扫
+                //      `maid.getAvailableInv(true)` 得到，附属还有 `WandUtilMixin` 把 Goety 的
+                //      `findWand/findFocus` 直接替换成她数据里那两件；ISS 那条我们更早就实证
+                //      "不看主手"（法术书放饰品栏照样放）。⇒ 把袋子塞进主手是**零收益**动作。
+                //   ② 主手却是"近战那一半"的伤害来源：`SimplifiedSpellCaster.executeCombat`
+                //      （近战法术任务每 tick 的入口）施法之后紧跟着 `doHurtTarget` +
+                //      `swing(MAIN_HAND)`——主手拿什么就打什么伤害。换成聚晶袋 = 她的近战掉到
+                //      拳头级，玩家放剑的意图被每 tick 抹掉。
+                //   ③ 主手还是某些 provider 的**施法前提**：`SlashBladeProvider
+                //      .processContinuousCasting` 取 `maid.getMainHandItem()`，不是拔刀剑就直接
+                //      return（现场日志 "continuous aborted: mainHand is not slashblade"），
+                //      `initiateCasting` 也拿主手那把刀做连段。而拔刀剑默认在
+                //      `combat.spellGearIgnore` 里 → 它不符合我们的"法术装备"词条 → 只要她背包里
+                //      还有**别的** provider 的装备，我们就会把刀从她手里换走 → 附属吟唱当场断。
+                //   ④ 附属从不写她的手：整个 jar `setItemInHand` 零引用，只有 4 处**读**主手
+                //      （SlashBladeProvider ×3、SimplifiedSpellCaster ×1）——"主手拿什么"是玩家
+                //      与附属的事，不是我们的。
+                //
+                // 【所以】法术任务下本方法一律返回 false：不换武器、也不介入她的换装节奏。
+                // 这个分支**必须显式留着**——法术任务实现了 `IAttackTask`（`IRangedAttackTask`），
+                // 少了它就会落到下面的"模组战斗任务"分支，走附属恒真的 `isWeapon` → 又变成
+                // "万物皆武器"（五百五十九 之前的老毛病）。`maidHasSpells` 仍由自主参战闸门
+                // （`AutoCombatPools`）使用，不因本条失去消费者。
+                return false;
             } else {
                 // v1.1.0 实测一百零三：模组战斗任务（拔刀剑/slashblade/ef_tlm/truepower
                 // 等）自动装备武器——旧版只处理 touhou_little_maid 命名空间，模组任务
