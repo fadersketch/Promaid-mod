@@ -285,7 +285,7 @@ public final class MaidArmyCommand {
             source.m_243053_(Component.m_237113_("\u00a7c那不是女仆。"));
             return 0;
         }
-        net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+        net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         java.util.List<Component> lines =
                 inv instanceof com.maidsmart.box.CompressionBoxMaidInv ext
                         ? ext.describe()

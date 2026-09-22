@@ -44,7 +44,7 @@ public final class MaidGiveBack {
         }
         ItemStack rest;
         try {
-            rest = ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), stack, false);
+            rest = ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), stack, false);
         } catch (Throwable t) {
             // 插入过程本身抛异常：无法判断已经塞进去多少，整栈落地（宁可多一件也绝不吞）
             rest = stack;

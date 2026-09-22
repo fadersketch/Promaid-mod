@@ -578,7 +578,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         }
         try {
             java.util.function.Predicate<ItemStack> supported = pwi.getAllSupportedProjectiles();
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.isEmpty() && supported.test(s) && s.getItem() instanceof ArrowItem) {
@@ -588,7 +588,7 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
         } catch (Throwable ignored) {
         }
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (!s.isEmpty() && s.getItem() instanceof ArrowItem) {

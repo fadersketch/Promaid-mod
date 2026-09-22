@@ -182,7 +182,7 @@ public final class MaidPlanting {
             int handCount = 0;
             int scanCount = 0;
             try {
-                net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+                net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     if (isSaplingItem(inv.getStackInSlot(i))) {
                         bagCount += inv.getStackInSlot(i).getCount();
@@ -211,7 +211,7 @@ public final class MaidPlanting {
                 sapling = handSlot == 0 ? maid.getMainHandItem() : maid.getOffhandItem();
             } else {
                 try {
-                    net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+                    net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
                         if (isSaplingItem(stack)) {
@@ -226,7 +226,7 @@ public final class MaidPlanting {
             if (sapling == null) {
                 pickupNearbySaplings(level, maid, maid.blockPosition());
                 try {
-                    net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+                    net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
                         if (isSaplingItem(stack)) {
@@ -293,7 +293,7 @@ public final class MaidPlanting {
                 }
             }
             if (bagSlot >= 0) {
-                ItemStack taken = maid.getMaidInv().extractItem(bagSlot, 1, false);
+                ItemStack taken = maid.getAvailableBackpackInv().extractItem(bagSlot, 1, false);
                 if (!taken.isEmpty()) {
                     return true;
                 }
@@ -310,7 +310,7 @@ public final class MaidPlanting {
                     return true;
                 }
             }
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 if (!isSaplingItem(inv.getStackInSlot(i))) {
                     continue;
@@ -569,7 +569,7 @@ public final class MaidPlanting {
             if (!off.isEmpty() && off.getItem() == boneMeal) {
                 boneStack = off;
             } else {
-                net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+                net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack st = inv.getStackInSlot(i);
                     if (!st.isEmpty() && st.getItem() == boneMeal) {
@@ -584,7 +584,7 @@ public final class MaidPlanting {
             }
             ItemStack pulled = boneStack == off
                     ? hands.extractItem(1, boneStack.getCount(), false)
-                    : maid.getMaidInv().extractItem(boneSlot, boneStack.getCount(), false);
+                    : maid.getAvailableBackpackInv().extractItem(boneSlot, boneStack.getCount(), false);
             if (pulled.isEmpty()) {
                 return false;
             }
@@ -595,7 +595,7 @@ public final class MaidPlanting {
                 // 换手存续中（原物品在副手）：主手是第三方顶进来的工具 → 收背包
                 if (!curMain.isEmpty()) {
                     ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), curMain, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), curMain, false);
                     if (!left.isEmpty()) {
                         maid.spawnAtLocation(left, 0.5f);
                     }
@@ -607,7 +607,7 @@ public final class MaidPlanting {
                 hands.setStackInSlot(1, ItemStack.EMPTY);
                 if (!offOld.isEmpty()) {
                     ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), offOld, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), offOld, false);
                     if (!left.isEmpty()) {
                         maid.spawnAtLocation(left, 0.5f);
                     }
@@ -659,7 +659,7 @@ public final class MaidPlanting {
                 // 手上还是我们的骨粉 → 收回背包（满则掉在脚下），防丢
                 hands.setStackInSlot(0, ItemStack.EMPTY);
                 ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper
-                        .insertItemStacked(maid.getMaidInv(), cur, false);
+                        .insertItemStacked(maid.getAvailableBackpackInv(), cur, false);
                 if (!left.isEmpty()) {
                     maid.spawnAtLocation(left, 0.5f);
                 }
@@ -672,7 +672,7 @@ public final class MaidPlanting {
                     hands.setStackInSlot(0, held);
                 } else {
                     ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper
-                            .insertItemStacked(maid.getMaidInv(), held, false);
+                            .insertItemStacked(maid.getAvailableBackpackInv(), held, false);
                     if (!left.isEmpty()) {
                         maid.spawnAtLocation(left, 0.5f);
                     }

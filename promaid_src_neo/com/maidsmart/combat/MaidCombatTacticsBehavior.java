@@ -864,7 +864,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         ItemStack best = ItemStack.EMPTY;
         float bestDmg = 0;
         try {
-            net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+            net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.isEmpty()) {

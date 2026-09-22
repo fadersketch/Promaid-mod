@@ -846,7 +846,7 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         ItemStack best = ItemStack.f_41583_;
         float bestDmg = 0;
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
                 if (s.m_41619_()) {

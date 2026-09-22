@@ -80,10 +80,10 @@ public abstract class MaidBaubleTotemMixin {
             // 背包查找即全覆盖
             int invSlot = findTotemSlotInInv(maid);
             if (invSlot >= 0) {
-                ItemStack invStack = maid.getMaidInv().getStackInSlot(invSlot);
+                ItemStack invStack = maid.getAvailableBackpackInv().getStackInSlot(invSlot);
                 revive(maid, invStack);
                 playTotemFeedback(maid);
-                consumeTotem(maid.getMaidInv(), invSlot);
+                consumeTotem(maid.getAvailableBackpackInv(), invSlot);
                 maid.getChatBubbleManager().addTextChatBubble("不死图腾救了我一命！");
                 cir.setReturnValue(true);
             }
@@ -102,7 +102,7 @@ public abstract class MaidBaubleTotemMixin {
                         int invSlot2 = findTotemSlotInInv(m);
                         int baubleSlot2 = -1;
                         ItemStack totem = invSlot2 >= 0
-                                ? m.getMaidInv().getStackInSlot(invSlot2) : ItemStack.f_41583_;
+                                ? m.getAvailableBackpackInv().getStackInSlot(invSlot2) : ItemStack.f_41583_;
                         if (totem.m_41619_()) {
                             baubleSlot2 = findTotemSlotInBauble(m);
                             totem = baubleSlot2 >= 0
@@ -112,7 +112,7 @@ public abstract class MaidBaubleTotemMixin {
                             continue;
                         }
                         if (invSlot2 >= 0) {
-                            consumeTotem(m.getMaidInv(), invSlot2);
+                            consumeTotem(m.getAvailableBackpackInv(), invSlot2);
                         } else {
                             consumeTotem(m.getMaidBauble(), baubleSlot2);
                         }
@@ -152,7 +152,7 @@ public abstract class MaidBaubleTotemMixin {
             // 背包优先（m_20158_ = getAllSlots 全部装备+背包），再饰品栏
             int invSlot = findTotemSlotInInv(m);
             int baubleSlot = -1;
-            ItemStack totem = invSlot >= 0 ? m.getMaidInv().getStackInSlot(invSlot) : ItemStack.f_41583_;
+            ItemStack totem = invSlot >= 0 ? m.getAvailableBackpackInv().getStackInSlot(invSlot) : ItemStack.f_41583_;
             if (totem.m_41619_()) {
                 baubleSlot = findTotemSlotInBauble(m);
                 totem = baubleSlot >= 0 ? m.getMaidBauble().getStackInSlot(baubleSlot) : ItemStack.f_41583_;
@@ -164,7 +164,7 @@ public abstract class MaidBaubleTotemMixin {
             // 封装 handler 若返回副本则扣不掉 → 主人无限复活。extractItem 直接
             // 操作存储，必定扣减
             if (invSlot >= 0) {
-                consumeTotem(m.getMaidInv(), invSlot);
+                consumeTotem(m.getAvailableBackpackInv(), invSlot);
             } else {
                 consumeTotem(m.getMaidBauble(), baubleSlot);
             }
@@ -237,7 +237,7 @@ public abstract class MaidBaubleTotemMixin {
     /** v1.5.204：女仆背包（getMaidInv）里第一个不死图腾的槽位；无则 -1 */
     private static int findTotemSlotInInv(EntityMaid maid) {
         try {
-            net.minecraftforge.items.IItemHandler inv = maid.getMaidInv();
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack stack = inv.getStackInSlot(i);
                 if (!stack.m_41619_() && stack.m_150930_(Items.f_42747_)) {

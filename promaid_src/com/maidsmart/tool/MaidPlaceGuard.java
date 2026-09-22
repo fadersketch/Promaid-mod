@@ -157,6 +157,15 @@ public final class MaidPlaceGuard {
      *
      * 【不管她自己】女仆自身所在格依然照搭——`placeStep` 把块垫在自己脚下、
      * 蓝图以她脚下为原点先垫自己那块，均是设计意图（不改）。
+     *
+     * 【v1.2.4 追加：其他女仆也不许压】需求原文："除了不能搭到主人的脑袋上，
+     * 也不应该搭到其他女仆的脑袋上，但是对于自己不需要有这个判定。"
+     * 所以同一个判据扩到【她以外的每一只女仆】（字段/别的玩家的女仆一视同仁——
+     * 判据是"格子里有没有活人的碰撞箱"，与归属无关）：目标格撞到别的女仆
+     * 碰撞箱 → 不搭。她自己那一格仍然照搭（下面的 other == maid 直接跳过）；
+     * 这样"垫自己脚下往上爬"和"两只女仆挤在一起时别互相埋了"两件事都成立。
+     * 判据与主人那条完全同款（整格 AABB 相交 = 身体/头部格，相切不算），
+     * 所以"别的女仆站在某块方块上"不会挡住她在那块【下方】施工。
      */
     public static boolean blockedAtOwner(EntityMaid maid, BlockPos pos) {
         try {
@@ -164,11 +173,22 @@ public final class MaidPlaceGuard {
                     || !com.maidsmart.config.MaidSmartConfig.MISC_NO_PLACE_ON_OWNER.get()) {
                 return false;
             }
+            net.minecraft.world.phys.AABB cell = new net.minecraft.world.phys.AABB(pos);
             net.minecraft.world.entity.LivingEntity owner = maid.m_269323_();
-            if (owner == null || !owner.m_6084_() || owner.m_9236_() != maid.m_9236_()) {
-                return false;
+            if (owner != null && owner.m_6084_() && owner.m_9236_() == maid.m_9236_()
+                    && cell.m_82381_(owner.m_20191_())) {
+                return true;
             }
-            return new net.minecraft.world.phys.AABB(pos).m_82381_(owner.m_20191_());
+            // v1.2.4：其他女仆（不含她自己）——碰撞箱探进目标格就不搭
+            for (EntityMaid other : maid.m_9236_().m_45976_(EntityMaid.class, cell.m_82400_(1.0))) {
+                if (other == null || other == maid || !other.m_6084_()) {
+                    continue; // 她自己那格照搭（设计意图，见上面的【不管她自己】）
+                }
+                if (cell.m_82381_(other.m_20191_())) {
+                    return true;
+                }
+            }
+            return false;
         } catch (Throwable ignored) {
             return false;
         }

@@ -251,7 +251,7 @@ public final class MaidSpellCompat {
             if (hit != null) {
                 return hit;
             }
-            var inv = maid.getMaidInv();
+            var inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 hit = weaponDetail(inv.getStackInSlot(i));
                 if (hit != null) {

@@ -194,7 +194,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         if (maid.getMainHandItem().is(Items.MACE) || maid.getOffhandItem().is(Items.MACE)) {
             return true;
         }
-        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (inv.getStackInSlot(i).is(Items.MACE)) {
                 return true;
@@ -211,7 +211,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         if (maid.getOffhandItem().is(Items.WIND_CHARGE)) {
             n++;
         }
-        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (inv.getStackInSlot(i).is(Items.WIND_CHARGE)) {
                 n += inv.getStackInSlot(i).getCount();
@@ -436,7 +436,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
         if (maid.getOffhandItem().is(Items.WIND_CHARGE)) {
             return true;
         }
-        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (inv.getStackInSlot(i).is(Items.WIND_CHARGE)) {
                 return true;
@@ -451,7 +451,7 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
      * hasWindCharge=false（根本不触发）或消耗失败（白起跳），都是误判。
      */
     private static boolean consumeWindCharge(EntityMaid maid) {
-        net.neoforged.neoforge.items.IItemHandler inv = maid.getMaidInv();
+        net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             if (inv.getStackInSlot(i).is(Items.WIND_CHARGE)) {
                 inv.extractItem(i, 1, false);

@@ -218,7 +218,7 @@ public final class BlueprintCatalog {
                 if (!(e instanceof EntityMaid m) || BuildPlan.getBoundPlanId(m) == null) {
                     continue;
                 }
-                net.minecraftforge.items.IItemHandler inv = m.getMaidInv();
+                net.minecraftforge.items.IItemHandler inv = m.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack s = inv.getStackInSlot(i);
                     if (s.m_41619_()) {

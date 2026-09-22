@@ -274,7 +274,7 @@ public final class BlueprintMaterials {
                 continue;
             }
             ItemStack taken = whole.copyWithCount(take);
-            ItemStack left = ItemHandlerHelper.insertItemStacked(maid.getMaidInv(), taken, false);
+            ItemStack left = ItemHandlerHelper.insertItemStacked(maid.getAvailableBackpackInv(), taken, false);
             moved += take - left.getCount();
             // 审计1.5.385修复：旧版 back 公式把 left（女仆背包放不下的部分）计入，
             // 但 whole.split(back) 最多只能分出 whole 剩余（n-take）——left 直接
@@ -299,7 +299,7 @@ public final class BlueprintMaterials {
     public static int countMaterial(EntityMaid maid, String blockId) {
         Set<String> group = BlueprintLooseMatching.equivalentGroup(blockId);
         int count = 0;
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (stack.isEmpty()) {
@@ -353,14 +353,14 @@ public final class BlueprintMaterials {
         if ("minecraft:lava".equals(blockId)) {
             Item lavaBucket = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(
                     net.minecraft.resources.ResourceLocation.parse("minecraft:lava_bucket"));
-            ItemStack taken = extractExact(maid.getMaidInv(), lavaBucket, 1);
+            ItemStack taken = extractExact(maid.getAvailableBackpackInv(), lavaBucket, 1);
             if (!taken.isEmpty()) {
                 return lavaBucket; // 已从女仆背包取走 1 岩浆桶
             }
             return null; // 调用方会尝试主人背包（tryTakeFromOwner）
         }
         Item item = itemForBlock(blockId);
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         // 1. 精确匹配优先
         if (item != null) {
             ItemStack taken = extractExact(inv, item, 1);
@@ -524,7 +524,7 @@ public final class BlueprintMaterials {
         if (bucket == null) {
             return false;
         }
-        IItemHandler inv = maid.getMaidInv();
+        IItemHandler inv = maid.getAvailableBackpackInv();
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
             if (!s.isEmpty() && s.getItem() == bucket) {
@@ -560,7 +560,7 @@ public final class BlueprintMaterials {
             }
         }
         ItemStack left = net.neoforged.neoforge.items.ItemHandlerHelper.insertItemStacked(
-                maid.getMaidInv(), bucketStack, false);
+                maid.getAvailableBackpackInv(), bucketStack, false);
         if (left.isEmpty()) {
             return; // 放入女仆背包
         }
