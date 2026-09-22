@@ -48,6 +48,26 @@ public class CompressionBoxItem extends Item {
         return !stack.m_41619_() && stack.m_41720_() instanceof CompressionBoxItem;
     }
 
+    /**
+     * 常驻附魔光效（v1.2.2 实测六百一十八，用户要求「给压缩盒打上附魔的特效，
+     * 排班表里已经做过了，直接照搬」）。
+     *
+     * 【为什么是重写 isFoil 而不是给它真加个附魔】原版渲染层判断「要不要画那层流光」
+     * 只问 {@code ItemStack.hasFoil()} → {@code Item.isFoil(stack)}，默认实现是
+     * {@code stack.isEnchanted()}。所以「恒 true」这一条就够了，物品本身不带任何附魔
+     * （附魔会影响铁砧/村民交易/经验修补那些判定，用户要的只是**外观**）。
+     * 这一条与 {@code ScheduleBookItem}（排班表）和 {@code BlueprintBookItem}（手册）
+     * **逐字同源**——那两件东西上跑了好几个版本没出过问题（实测五十五纠正过
+     * 「isFoil 恒 true 会崩」的旧结论：那是误诊，手册一直是这么干的）。
+     *
+     * 【为什么压缩盒要让它亮】它装的东西玩家看不见（一格能塞 114514 个），
+     * 手上/背包里有个一眼能认出来的记号更省事。
+     */
+    @Override
+    public boolean m_5812_(ItemStack stack) {
+        return true;
+    }
+
     /** 右键：服务端发开屏包（内容一起带过去），客户端只负责挥手 */
     @Override
     public InteractionResultHolder<ItemStack> m_7203_(Level level, Player player, InteractionHand hand) {

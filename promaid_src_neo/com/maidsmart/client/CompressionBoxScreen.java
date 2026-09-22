@@ -14,7 +14,7 @@ import net.neoforged.neoforge.items.wrapper.PlayerMainInvWrapper;
 import java.util.List;
 
 /**
- * 压缩盒界面（v1.2.2 实测六百一十六）——**自制界面，不是原版容器界面**。
+ * 压缩盒界面（v1.2.2 实测六百一十六；六百一十八改成箱子式鼠标取放）。
  *
  * ── 为什么不用原版 Menu/Slot ──
  * 这个盒子一格能装 114514 个，而原版整套槽位协议按「一格最多 64」写死，数量字段
@@ -23,22 +23,31 @@ import java.util.List;
  * 会变成 82）。所以这里自己做：服务端算账（{@link CompressionBoxService}）、
  * 客户端只画和发点击，大堆的数量走我们自己的 int。
  *
- * ── 交互（没有「光标上那一叠」，所以不走拖拽）──
+ * ── 交互（六百一十八：与「往箱子里存东西」对齐）──
+ * 用户的原话是「可以像往箱子存东西一样，玩家可以通过用鼠标的方式将物品拖进去」。
+ * 六百一十六那版是「Shift+点背包格 = 存入」，玩家得先知道这条规矩才行——所以这一版
+ * 换成原版那套**鼠标上挂着一叠**的手法：
  * <ul>
- *   <li>左键点盒子格 = 取 64 个进背包；右键 = 取 1 个；Shift+左键 = 整格取（装不下就停）；</li>
- *   <li>Shift+左键点背包格 = 把那一叠存进盒子；Shift+右键 = 只存 1 个；</li>
- *   <li>背包格本身不搬动（这不是背包整理界面），背包满时多出来的部分掉在脚边。</li>
+ *   <li>左键点背包格 = **拿起**整叠（挂在鼠标上）；再左键点盒子格 = **放下**
+ *       （能塞多少塞多少，塞不下的还挂在手上）；</li>
+ *   <li>右键 = 拿 1 个 / 放 1 个（背包格上按原版拿一半）；</li>
+ *   <li>Shift+左键 = **快速移动**：背包格 → 盒子（整叠存进去）、盒子格 → 背包（最多 64）；</li>
+ *   <li>手上有东西时点背包格 = 放下/合并，那一格是别的物品则**交换**（原版同款）；</li>
+ *   <li>点界面空白处 = 手上的东西**还回背包**（原版是丢出去；这里保守一点，
+ *       免得玩家手一滑把东西丢在地上）。</li>
  * </ul>
+ * 那一叠的真身在**服务端**（{@code CompressionBoxService.CARRIES}），客户端这份只是
+ * 服务端告诉它的样子——客户端自己记账等于送物品。关界面（ESC / 被别的界面顶掉 /
+ * 掉线）时服务端会把它放回背包，装不下才掉在脚边（见
+ * {@link CompressionBoxService#returnCarry}）。
+ *
  * 布局全部是纯色块（{@code fill}）+ 物品图标，与本模组其它几个界面同款——
  * 不额外塞 GUI 贴图。数量画在格子下方（6 位数字也放得下，不会被截成「114.5k」）。
  *
  * ── 背包那 36 格按**原版口径**画（v1.2.2 实测六百一十七）──
- * 数量与耐久条都调原版那套装饰绘制（{@code renderItemDecorations}，javap 实证它就是
- * 把「非 1 的数量写在右下角 + 底部耐久条」画出来的那个方法），所以这一片看起来和
- * 生存模式按 E 打开的物品栏一模一样：一叠是多少、工具还剩多少耐久都在。盒子那 5 格
- * 只借用它的**耐久条**（数量文字传空串，因为 6 位数字会糊住 16 像素的图标，大堆的
- * 数量仍画在格子下方）。悬停说明也不再只认盒子格——背包格悬停同样有名字/数量/耐久
- * （见 {@link #buildTip}）。
+ * 数量与耐久条都调原版那套装饰绘制（{@code renderItemDecorations}），所以这一片看起来
+ * 和生存模式按 E 打开的物品栏一模一样。盒子那 5 格只借用它的**耐久条**（数量文字传空串），
+ * 大堆的数量仍画在格子下方；悬停说明也不再只认盒子格（见 {@link #buildTip}）。
  */
 public class CompressionBoxScreen extends Screen {
 
@@ -51,7 +60,8 @@ public class CompressionBoxScreen extends Screen {
     private static final int COUNT_Y = BOX_Y + 20;   // 数量文字 y
     private static final int INV_Y = COUNT_Y + 14;   // 玩家背包第一行图标 y
     private static final int HOTBAR_Y = INV_Y + 3 * 18 + 4;
-    private static final int PANEL_H = HOTBAR_Y + 18 + 10;
+    private static final int HINT2_Y = HOTBAR_Y + 18 + 7; // 「放不下」这类即时提示
+    private static final int PANEL_H = HINT2_Y + 10;
 
     private static final int C_TEXT = 0xFFE8E8E8;
     private static final int C_DIM = 0xFF9A9A9A;
@@ -63,29 +73,49 @@ public class CompressionBoxScreen extends Screen {
 
     private final int hand;
     private List<ItemStack> items;
+    /** 鼠标上挂着的那一叠（服务端告诉我们的；空 = 没挂着） */
+    private ItemStack carry = ItemStack.EMPTY;
     private int left;
     private int top;
+    /** 「这一次点不了」的即时提示（本地算的，纯提示；真正裁决在服务端）+ 到期时刻 */
+    private String hint;
+    private long hintUntil;
+    /** 这一屏是被「再开一次」顶掉的还是玩家关的（见 {@link #removed}） */
+    private boolean replacing;
 
-    public CompressionBoxScreen(int hand, List<ItemStack> items) {
+    public CompressionBoxScreen(int hand, List<ItemStack> items, ItemStack carry) {
         super(Component.literal("\u538b\u7f29\u76d2"));
         this.hand = hand;
         this.items = items;
+        this.carry = carry == null ? ItemStack.EMPTY : carry;
     }
 
     /** S2C 到达：开屏 / 刷新（只认同一只手，防止把另一只手的盒子内容画进来） */
-    public static void accept(int hand, List<ItemStack> items, boolean open) {
+    public static void accept(int hand, List<ItemStack> items, ItemStack carry, boolean open) {
         try {
             Minecraft mc = Minecraft.getInstance();
             if (mc == null) {
                 return;
             }
             if (open) {
-                mc.setScreen(new CompressionBoxScreen(hand, items));
+                Screen cur = mc.screen;
+                if (cur instanceof CompressionBoxScreen box && box.hand == hand) {
+                    // 同一只手的界面已经开着：只刷新内容，别再 setScreen 一次
+                    // （重开会走一遍 removed()，白白多发一次「手上东西还回去」）
+                    box.items = items;
+                    box.carry = carry == null ? ItemStack.EMPTY : carry;
+                    return;
+                }
+                if (cur instanceof CompressionBoxScreen old) {
+                    old.replacing = true;
+                }
+                mc.setScreen(new CompressionBoxScreen(hand, items, carry));
                 return;
             }
             Screen cur = mc.screen;
             if (cur instanceof CompressionBoxScreen box && box.hand == hand) {
                 box.items = items;
+                box.carry = carry == null ? ItemStack.EMPTY : carry;
             }
         } catch (Throwable ignored) {
         }
@@ -109,6 +139,39 @@ public class CompressionBoxScreen extends Screen {
             return true;
         }
         return true; // 界面开着时吞掉其它按键（别顺手把背包/快捷栏也开了）
+    }
+
+    /**
+     * 吞掉滚轮（v1.2.2 实测六百一十八）。
+     *
+     * 【为什么必须自己接】原版 {@code Screen} 不接滚轮，于是事件会漏到
+     * {@code MouseHandler} 的「滚轮切快捷栏」分支上：界面开着，玩家滚一下鼠标，
+     * **手上那件就不是打开着的那个盒子了**（换成了隔壁格的东西）——之后每一次点击
+     * 都会被服务端的「那只手里还是不是压缩盒」判据挡掉，看着像界面坏了。
+     */
+    @Override
+    public boolean mouseScrolled(double mx, double my, double deltaX, double deltaY) {
+        return true;
+    }
+
+    @Override
+    public void onClose() {
+        sendCarryDrop();
+        super.onClose();
+    }
+
+    @Override
+    public void removed() {
+        if (!this.replacing) {
+            sendCarryDrop(); // 被别的界面顶掉 / 退出世界时也要把手上的东西还回去
+        }
+        super.removed();
+    }
+
+    /** 告诉服务端「手上的东西还回去」——服务端自己决定进背包还是掉脚边 */
+    private void sendCarryDrop() {
+        CompressionBoxNetworking.BoxActionPacket.send(
+                this.hand, CompressionBoxService.CARRY_DROP, 0, 0, false);
     }
 
     /** 自带底纹：不调 super（1.21.1 默认那层模糊+菜单底纹会盖住后画的内容） */
@@ -181,37 +244,63 @@ public class CompressionBoxScreen extends Screen {
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
         try {
+            boolean shift = hasShiftDown();
             int boxSlot = boxSlotAt(mx, my);
             if (boxSlot >= 0) {
-                int action = -1;
-                if (button == 1) {
-                    action = CompressionBoxService.TAKE_ONE;
-                } else if (button == 0 && hasShiftDown()) {
-                    action = CompressionBoxService.TAKE_ALL;
-                } else if (button == 0) {
-                    action = CompressionBoxService.TAKE_STACK;
-                }
-                if (action >= 0) {
-                    CompressionBoxNetworking.BoxActionPacket.send(this.hand, action, boxSlot);
+                if (!noteIfRefused(true, boxSlot, button, shift)) {
+                    CompressionBoxNetworking.BoxActionPacket.send(
+                            this.hand, CompressionBoxService.SLOT_CLICK, boxSlot, button, shift);
                 }
                 return true;
             }
             int invSlot = invSlotAt(mx, my);
-            if (invSlot >= 0 && hasShiftDown()) { // Shift+点背包格 = 存入
-                IItemHandler pinv = playerInv();
-                ItemStack from = pinv == null ? ItemStack.EMPTY : pinv.getStackInSlot(invSlot);
-                if (from.isEmpty() || CompressionBoxData.isBox(from)) {
-                    // 空格子没什么可存；压缩盒不许装压缩盒（服务端也会拒，这里连包都不发）
-                    return true;
-                }
-                int action = button == 1 ? CompressionBoxService.DEPOSIT_ONE
-                        : CompressionBoxService.DEPOSIT_STACK;
-                CompressionBoxNetworking.BoxActionPacket.send(this.hand, action, invSlot);
+            if (invSlot >= 0) {
+                CompressionBoxNetworking.BoxActionPacket.send(this.hand,
+                        CompressionBoxService.SLOT_CLICK,
+                        CompressionBoxData.SLOTS + invSlot, button, shift);
+                return true;
+            }
+            if (!this.carry.isEmpty()) {
+                // 点空白处：手上的东西还回背包（原版是丢出去——这里保守一点）
+                sendCarryDrop();
+                hint("\u624b\u4e0a\u7684\u4e1c\u897f\u5df2\u8fd8\u56de\u80cc\u5305");
                 return true;
             }
         } catch (Throwable ignored) {
         }
         return super.mouseClicked(mx, my, button);
+    }
+
+    /**
+     * 本地先算一遍「这一次点得下去吗」，点不下去就给一行红字提示（并发给服务端去裁决）。
+     *
+     * 【为什么要先说一声】服务端拒了就什么都不发生，玩家只看得到「点了没反应」——
+     * 那正是用户抱怨的「跟玩家的认知不太一样」。这里把服务端那几条判据（盒子不装盒子、
+     * 那一格是别的物品）在界面上先讲一遍。服务端那道判据**一分都不会少**。
+     *
+     * @return true = 已知点不下去（不用发包了，发了也是白跑）
+     */
+    private boolean noteIfRefused(boolean inBox, int slot, int button, boolean shift) {
+        if (this.carry.isEmpty() || shift) {
+            return false; // 手上空着 = 拿起，shift = 快速移动，这两条不会因为「装不下」被拒
+        }
+        if (inBox) {
+            if (CompressionBoxData.isBox(this.carry)) {
+                hint("\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2");
+                return true; // 这条服务端一定拒，连包都不发（与 六百一十七 同一口径）
+            }
+            ItemStack cur = slotOf(this.items, slot);
+            if (!cur.isEmpty() && !ItemStack.isSameItemSameComponents(cur, this.carry)) {
+                hint("\u8fd9\u4e00\u683c\u5df2\u7ecf\u662f\u522b\u7684\u7269\u54c1");
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void hint(String text) {
+        this.hint = text;
+        this.hintUntil = System.currentTimeMillis() + 1600L;
     }
 
     /* ==================== 绘制 ==================== */
@@ -234,8 +323,8 @@ public class CompressionBoxScreen extends Screen {
         int cx = (x0 + x1) / 2;
         g.drawCenteredString(this.font, Component.literal("\u538b\u7f29\u76d2"), cx, y0 + TITLE_Y, C_BIG);
         g.drawCenteredString(this.font, Component.literal(
-                        "\u5de6\u952e\u53d6 64 \u00b7 \u53f3\u952e\u53d6 1 \u00b7 Shift+\u5de6\u952e\u6574\u683c\u53d6"
-                                + " \u00b7 Shift+\u70b9\u80cc\u5305\u5b58\u5165"),
+                        "\u5de6\u952e\u62ff\u8d77/\u653e\u4e0b \u00b7 \u53f3\u952e\u62ff 1/\u653e 1"
+                                + " \u00b7 Shift+\u5de6\u952e\u5feb\u901f\u79fb\u52a8"),
                 cx, y0 + HINT_Y, C_DIM);
         g.drawCenteredString(this.font, Component.literal(infoLine()), cx, y0 + INFO_Y, C_TEXT);
 
@@ -283,6 +372,16 @@ public class CompressionBoxScreen extends Screen {
             }
         }
 
+        // 即时提示（本地算的「这一下点不了」，1.6 秒）
+        if (this.hint != null && System.currentTimeMillis() < this.hintUntil) {
+            g.drawCenteredString(this.font, Component.literal(this.hint), cx, y0 + HINT2_Y, C_WARN);
+        } else if (!this.carry.isEmpty()) {
+            g.drawCenteredString(this.font, Component.literal(
+                            "\u9f20\u6807\u4e0a\uff1a" + this.carry.getHoverName().getString()
+                                    + " \u00d7" + this.carry.getCount()),
+                    cx, y0 + HINT2_Y, C_TEXT);
+        }
+
         // 悬停说明：名称 + 数量 + 耐久（背包格也画，跟原版一样）
         ItemStack hover = hovered(hoverBox, hoverInv, inv);
         if (!hover.isEmpty()) {
@@ -301,6 +400,15 @@ public class CompressionBoxScreen extends Screen {
             }
         } else if (hoverBox >= 0) {
             g.drawString(this.font, "\u7a7a\u683c\u5b50", mx + 8, my - 6, C_DIM, true);
+        }
+
+        // 鼠标上那一叠画在**最后**（要盖住所有格子）。数量/耐久交给原版装饰，
+        // 所以手上那一叠看起来和原版箱子上挂着的那一叠一模一样。
+        if (!this.carry.isEmpty()) {
+            int ix = mx - 8;
+            int iy = my - 8;
+            g.renderItem(this.carry, ix, iy);
+            g.renderItemDecorations(this.font, this.carry, ix, iy);
         }
     }
 
@@ -338,8 +446,10 @@ public class CompressionBoxScreen extends Screen {
             if (CompressionBoxData.isBox(s)) {
                 tip.add("\u538b\u7f29\u76d2\u4e0d\u80fd\u88c5\u8fdb\u538b\u7f29\u76d2", C_WARN);
             } else {
-                tip.add("Shift+\u5de6\u952e\u5b58\u5165\u538b\u7f29\u76d2", C_DIM);
+                tip.add("Shift+\u5de6\u952e\uff1a\u6574\u53e0\u5b58\u8fdb\u538b\u7f29\u76d2", C_DIM);
             }
+        } else if (shift) {
+            tip.add("Shift+\u5de6\u952e\uff1a\u5feb\u901f\u79fb\u52a8\u5230\u80cc\u5305", C_DIM);
         }
         return tip;
     }
@@ -351,10 +461,6 @@ public class CompressionBoxScreen extends Screen {
         return "\u5df2\u88c5 " + total + " \u4e2a \u00b7 \u5360 " + used + "/"
                 + CompressionBoxData.SLOTS + " \u683c \u00b7 \u6bcf\u683c\u4e0a\u9650 "
                 + CompressionBoxData.maxStack();
-    }
-
-    private static ItemStack slotOf(List<ItemStack> list, int i) {
-        return list != null && i >= 0 && i < list.size() ? list.get(i) : ItemStack.EMPTY;
     }
 
     /** 悬停说明的一小块：几行字 + 每行自己的颜色（行由 {@link #buildTip} 拼） */
@@ -370,5 +476,9 @@ public class CompressionBoxScreen extends Screen {
         int size() {
             return this.lines.size();
         }
+    }
+
+    private static ItemStack slotOf(List<ItemStack> list, int i) {
+        return list != null && i >= 0 && i < list.size() ? list.get(i) : ItemStack.EMPTY;
     }
 }
