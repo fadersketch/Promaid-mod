@@ -549,6 +549,9 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_TASK_MODES;
     /** v1.2.2 实测六百二十一：模组任务优先（池内有模组专属任务时原版通用任务整体让位） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_VANILLA_YIELD_TO_MOD;
+    // v1.2.4 实测六百二十五：法术装备判定的附属 provider 忽略表（拔刀剑/弹幕这类
+    // "本身就是武器"的 provider 不算她会用法术——见 MaidSpellCompat.spellProviderOf）
+    public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_SPELL_GEAR_IGNORE;
     // v1.1.0 实测五十八：近战/远程偏好权重（两者皆可用时选池倾向 + 战中换战术开关量）
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_MELEE_WEIGHT;
     public static final ForgeConfigSpec.IntValue COMBAT_PREF_RANGED_WEIGHT;
@@ -1804,6 +1807,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 关掉即纯按权重随机（原版/模组两条权重照旧生效）。
         COMBAT_VANILLA_YIELD_TO_MOD = BUILDER.comment("模组任务优先让位（默认开）：开 = 候选池里只要有模组专属攻击任务，原版通用五件套（近战/弓/弩/三叉戟/弹幕）就整体让位（实测一百八十一的行为——拔刀剑同时被原版攻击任务认作武器，旧版 1:2 权重随机会有 1/3 概率落到原版攻击上）；关 = 不整体让位，原版与模组同池纯按权重随机。\n\n「战斗模式分类表」里点名写过的任务两条路都不受本项影响（点名优先）。")
                 .translation("config.promaid.combat.vanillaYieldToMod").define("vanillaYieldToMod", true);
+        // v1.2.4 实测六百二十五（反馈："包里没有法术书却仍然显示法术类的切换选项…而那个
+        // 自主战斗切到法术是真的"）：附属把"法术装备"的定义交给各前置附属的 provider，
+        // 其中两个认的"法术装备"**本身就是武器**——拔刀剑（slashblade：item instanceof
+        // ItemSlashBlade）与妖怪归乡的弹幕/激光/符卡（youkaishomecoming；TLM 原版任务里
+        // 就有 danmaku_attack），两者在 TLM 侧都已有专属战斗模式。旧口径等于"背包里有把
+        // 拔刀剑＝她带着法术书"→ 法术任务进候选池 + 让位规则挤掉原版任务 → 她就被切去法术。
+        COMBAT_SPELL_GEAR_IGNORE = BUILDER.comment("法术装备忽略表（默认 slashblade, youkaishomecoming）：万法皆通判断「她会不会用法术」时，会逐个问各前置附属的 provider「这件物品算不算法术书」，而其中两个 provider 认的「法术装备」本身就是武器/投掷物——slashblade 认拔刀剑、youkaishomecoming 认弹幕/激光/符卡，它们在 TLM 侧都已有专属战斗模式。列在这里 = 这些物品不再算「她会用法术」：只拿了拔刀剑的女仆不会被自主战斗切进法术模式（你仍可以在 TLM 面板手动把她切过去——本模组从不拦手动切换）。写 provider id（= 对应前置模组的 modId：irons_spellbooks / ars_nouveau / ebwizardry / goety / mna / psi / slashblade / youkaishomecoming），逗号或空白分隔；留空 = 旧口径（附属说什么就是什么）。\n\nlatest.log 搜 combat pools：池里有法术任务时会附一行 spellGear=，直接点名是哪件东西放行的（形如 slashblade:slashblade:slashblade，或 addon-data = 附属数据里存着她的法术书）。")
+                .translation("config.promaid.combat.spellGearIgnore")
+                .defineList("spellGearIgnore", java.util.List.of("slashblade", "youkaishomecoming"), o -> o instanceof String s && !s.isBlank());
         // v1.1.0 实测五十八：近战/远程偏好权重——两者皆可用（近战远程任务池都有候选）
         // 且敌人在近身距离（≤5 格）时按权重随机选池；同时是战中换战术（实测五十七）
         // 的开关量：某类权重 0 = 永不主动选/切向该类
