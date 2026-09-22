@@ -2861,7 +2861,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST, s), "还原威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算威胁消失、开始还原计时——比响应半径小（远处怪不该让她一直卡在战斗里回不了岗）；战斗中玩家手动给她换的任务不会被还原翻回去"));
         // v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式工作范围圈，见 CombatWorkRange）
         this.rows.add(new NumRow("战斗时临时扩圈（格）", String.valueOf(MaidSmartConfig.COMBAT_WORK_RANGE.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 32，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
+                s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
     }
 
     private void selfTacticsRows() {

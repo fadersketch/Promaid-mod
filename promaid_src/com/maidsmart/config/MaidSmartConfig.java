@@ -1839,8 +1839,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 来回循环"）：home 模式的工作范围圈在接战期间临时放大到这个值——TLM 的
         // SchedulePos.tick 每 40 tick 一次"超出 (int)半径 + 4 格就直接传送回工位"，
         // 追怪的近战女仆被反复拽回原地，仗永远打不完（见 CombatWorkRange 的根因）
-        COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 32，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
-                .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 32, 0, 512);
+        COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
+                .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
         BUILDER.pop();
 
 
