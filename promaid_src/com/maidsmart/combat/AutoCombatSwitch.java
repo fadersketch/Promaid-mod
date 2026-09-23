@@ -500,11 +500,13 @@ public class AutoCombatSwitch {
                             com.maidsmart.schedule.ScheduleData.isOn(maid));
                 }
                 if (!AutoCombatPools.isAssignedOrCombatTask(maid, curTask) && !AutoCombatPools.isIdleReadingTask(curTask)) {
-                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测一百四十九（参考 tlm_beyond_space restoreAfterExternalTaskChange）：
                     // 任务被外部接管 → 尊重新任务不动它，但 home/作息还原到战斗前
                     //（"切回之前的模式"兜底，不再只有"清标记"半途而废）
+                    // v1.2.4 实测六百四十六：顺序必须先还原后清标记（快照属于 clearMarkers
+                    // 的清理对象，反了就等于没还原——issue #22 第二条）
                     AutoCombatPools.restorePrevMode(maid);
+                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测九十四：运行日志
                     com.maidsmart.tool.PromaidLog.log("战斗",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 战斗中任务被接管（玩家/排班/LLM），清标记退出");
@@ -657,9 +659,10 @@ public class AutoCombatSwitch {
                         }
                     }
                     if (fallbackDone) {
-                        AutoCombatPools.clearMarkers(maid);
                         // v1.1.0 实测一百四十九：兜底还原同样恢复 home/作息（排班关闭时）
+                        // v1.2.4 实测六百四十六：先还原后清标记（同 503 行那处）
                         AutoCombatPools.restorePrevMode(maid);
+                        AutoCombatPools.clearMarkers(maid);
                     } else {
                         com.maidsmart.tool.PromaidLog.log("战斗",
                                 com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -720,11 +723,14 @@ public class AutoCombatSwitch {
                 // v1.1.0 实测一百五十：还原成功（或排班接管成功）才清标记——参考项目
                 // "先还原后清会话"；还原失败保留标记，下轮扫描继续重试（不会丢还原链）
                 if (restored || !stillOnCombat) {
-                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测一百四十九（参考 tlm_beyond_space TaskSwitchService.restore）：
                     // 还原 home 模式与作息（排班关闭时）——"切回之前的模式"完整闭环；
                     // 排班开启时作息由日程表管理（调度器每秒重断言），此处不覆盖
+                    // v1.2.4 实测六百四十六：**先还原后清标记**——快照是 clearMarkers 的
+                    // 清理对象，旧版先清后还原 = 快照被删在读取之前，home 被写成 false
+                    //（issue #22 第二条"打完怪变跟随、回不去 home"）
                     AutoCombatPools.restorePrevMode(maid);
+                    AutoCombatPools.clearMarkers(maid);
                     // v1.1.0 实测六十一：还原宽限——还原后先让她干战斗前的原任务一段时间，
                     // 排班调度宽限期满后再接管当前段（防威胁闪烁导致战斗/还原/排班反复拉扯）。
                     // 宽限期写在女仆 persistentData（ScheduleData.GRACE_TAG），ScheduleManager.applyNow 入口检查

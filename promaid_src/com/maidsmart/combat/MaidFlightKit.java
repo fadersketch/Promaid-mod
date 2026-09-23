@@ -260,9 +260,39 @@ public final class MaidFlightKit {
         }
     }
 
-    /** 本任务口径的"武器位"判据（远战认远程武器，近战认近战武器） */
+    /**
+     * 本任务口径的"武器位"判据（远战认远程武器，近战认近战武器）。
+     *
+     * 【刻意**不**在这里放行激流三叉戟（v1.2.4 实测六百四十一）】这个判据还喂给
+     * {@link #equip}（换主手武器）与 {@code resolveRangedWeapon}（找一个远程武器去数弹药）——
+     * 在这里放行会同时把"远程空袭的主手换成三叉戟"和"三叉戟算远程武器"两件事一起带进来，
+     * 那是玩家做不到的事（三叉戟投不出去，见 {@link #isRangedWeapon} 的 五百三十二 那段）。
+     * "远程空袭也认这把武器能起飞"这件事单独由 {@link #hasWeaponForFlightTask} 承担。
+     */
     public static boolean isWeaponForTask(EntityMaid maid, ItemStack stack) {
         return isRangedTask(maid) ? isRangedWeapon(stack) : isMeleeWeapon(stack);
+    }
+
+    /**
+     * v1.2.4 实测六百四十一【三件套里的"武器位"：远程空袭也认激流三叉戟】。
+     *
+     * 反馈原文："远程空袭不认这把武器能够起飞。"
+     *
+     * 【为什么原本不认】实测五百三十二 把激流三叉戟归成"近战武器"（当时是用户自己的口径：
+     * "理论上激流三叉戟应被判定为近战武器"），于是远程任务里 {@link #isWeaponForTask} 直接把它
+     * 排除 → {@link #hasWeapon} 为假 → {@link #isModeActive} 直接不成立 → 她**连模式都进不去**，
+     * 更别提起飞（缺件提示还会报"远程武器"）。
+     *
+     * 【现在的口径】远程任务下**优先远程武器**（背包里真有弓/弩/枪械时一切照旧：自动装备换的
+     * 还是那把远程武器，主手不会莫名变成三叉戟）；她**没有任何远程武器**时，那把激流三叉戟顶替
+     * 武器位——放行的只是"能起飞"（它不能开火：远程空袭的开火那一支 {@code hasUsableRangedWeapon}
+     * 判据一字未动，她拿不出远程武器时就只是不开火，不做玩家做不到的事）。
+     */
+    public static boolean hasWeaponForFlightTask(EntityMaid maid) {
+        if (hasWeapon(maid)) {
+            return true;
+        }
+        return isRangedTask(maid) && hasRiptide(maid);
     }
 
     /** 近战武器判据：与自动装备同一口径（镐/弓/弩/御币排除，其余带攻击力属性的都算） */
@@ -460,6 +490,98 @@ public final class MaidFlightKit {
     }
 
     /**
+     * v1.2.4 实测六百三十三【激流三叉戟也能当飞行推进剂】：找她身上的激流三叉戟（没有则 EMPTY）。
+     *
+     * 【找哪三处】**主手 → 副手 → 背包**（与 六百三十三 的原始口径一致）。实测六百三十八
+     * 曾把这里收成"只认背包"（当时的理由是"主手那件是玩家的武器，不该被当成燃料"），
+     * **实测六百四十 按玩家要求改回来了**——玩家原话：「从"主手 → 副手 → 背包"改成只扫背包，
+     * 改回去」。手里举着激流三叉戟时她照样要能用它起飞/推进，否则"只带一把戟、正好拿在手上"
+     * 的存档会被判成没有推进剂；两侧（判定与取用）现在是同一口径。
+     *
+     * 【耐久扣在谁身上】找到哪一件就用哪一件（{@code hurtAndBreak} 就在那一件 stack 上，
+     * 见 {@code MaidTridentSpinBehavior#boostForFlight} 与 {@code MaidRiptideBoost#ignite}）——
+     * 也就是说"拿在手上用的就是手上那把、装包里用的就是包里那把"，不会有歧义。
+     *
+     * 【近战突进仍只看主手】{@link MaidTridentSpinBehavior#spinWeapon} 要求的"主手举着激流三叉戟"
+     * 一条没动：那是攻击起手（与原版一致），不走本方法。
+     *
+     * 【额外容器】这三处都没有时，用 {@link #fetchRiptide} 再问一次精妙背包 / 旅行者背包
+     * （TLM 的额外容器体系，见 {@link com.maidsmart.tool.MaidExtraContainer}）。
+     */
+    public static ItemStack findRiptide(EntityMaid maid) {
+        if (maid == null) {
+            return ItemStack.f_41583_;
+        }
+        try {
+            if (isRiptide(maid.m_21205_())) {
+                return maid.m_21205_(); // 主手
+            }
+            if (isRiptide(maid.m_21206_())) {
+                return maid.m_21206_(); // 副手
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (isRiptide(inv.getStackInSlot(i))) {
+                    return inv.getStackInSlot(i);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /**
+     * v1.2.4 实测六百三十九【先判背包，再判精妙背包】：**真要动手推一口时**调这个。
+     * 主手/副手/背包里有 → 直接用；都没有 → 请 TLM 的额外容器系统（精妙背包 **或旅行者背包**）
+     * 把激流三叉戟搬进她的背包，然后再找一次（{@link com.maidsmart.tool.MaidExtraContainer#pull}）。
+     *
+     * 【与 findRiptide 的分工】findRiptide 是纯读取（判定/气泡/日志都用它，不许有副作用）；
+     * 本方法会真的搬东西，所以只在"已经决定要用"的那几处（空袭抬升/俯冲、起飞与飞行跟随）
+     * 调用。搬进来的三叉戟落在她背包里，扣的还是它自己的耐久。
+     *
+     * 【额外容器是"两个 mod 一套代码"】TLM 的额外容器体系里，精妙背包（{@code SBackpackSlotRef}）
+     * 与旅行者背包（{@code TBackpackSlotRef}）是**同一个接口下的两个实现**（javap 实证：
+     * 两者都 extends {@code CuriosSlotRef}、都按 {@code ForgeCapabilities.ITEM_HANDLER} 操作
+     * 饰品栏里那件背包），而本方法走的是 TLM 自己的容器列表——所以**旅行者背包与精妙背包
+     * 从第一天起就是同一条路**，不需要各写一份。
+     */
+    public static ItemStack fetchRiptide(EntityMaid maid) {
+        ItemStack own = findRiptide(maid);
+        if (!own.m_41619_()) {
+            return own;
+        }
+        if (com.maidsmart.tool.MaidExtraContainer.pull(maid, MaidFlightKit::isRiptide, 1)) {
+            return findRiptide(maid);
+        }
+        return ItemStack.f_41583_;
+    }
+
+    /** 身上是否有激流三叉戟。
+     *  v1.2.4 实测六百三十三：**"在身上"包含被我们自己的动作表现借走的那件副手物品**
+     *  ——与 {@link #hasFan} 同款（见 {@link #borrowedOffhand}）。
+     *  v1.2.4 实测六百四十：**主手/副手也算**（findRiptide 恢复三处都找，见那里的注释），
+     *  于是"能不能起飞/有没有燃料"的判定与取用两侧完全同口径。
+     *  开关（`combat.riptideDash`）判在**这里**、与位移法术那一支（{@link #hasClimbSpell} 里判
+     *  `combat.flightDashClimb`）同一口径：关掉它，这一条腿既不算"能飞的道具"、也不会真去推
+     *  ——否则会出现"判定说她能飞、她却不飞"的分裂（气泡说齐了、人不动，正是本模组吃过亏的那类）。 */
+    public static boolean hasRiptide(EntityMaid maid) {
+        if (maid == null || !com.maidsmart.config.MaidSmartConfig.RIPTIDE_DASH_ENABLE.get()) {
+            return false;
+        }
+        if (!findRiptide(maid).m_41619_()) {
+            return true;
+        }
+        // v1.2.4 实测六百三十九：精妙背包/旅行者背包里的也算"她身上有"（只读探针，不搬动）
+        if (com.maidsmart.tool.MaidExtraContainer.contains(maid, MaidFlightKit::isRiptide)) {
+            return true;
+        }
+        return isRiptide(borrowedOffhand(maid));
+    }
+
+    /**
      * 实测五百六十三：飞行燃料 = 烟花火箭 <b>或</b> 暮色森林孔雀羽扇。
      * 三件套的"燃料件"从单一烟花扩为二选一——有扇先用扇（推进照搬扇子自己的
      * 公式、每挥一次按扇子自己的口径扣耐久），没扇才烧烟花。
@@ -485,10 +607,17 @@ public final class MaidFlightKit {
      * 只认烟花/羽扇，两处口径依然一致（不需要再开一个新开关）。
      *
      * 【与 {@link #hasFlightFuel} 的区别】那个是"有没有可燃的道具"（烟花/羽扇，补推要扣它）；
-     * 这个是"能不能飞起来"（含不消耗物资的法术）。要判断"能不能起飞"一律用这一个。
+     * 这个是"能不能飞起来"（含不消耗物资的法术与只扣三叉戟耐久的激流）。要判断"能不能起飞"
+     * 一律用这一个。
+     *
+     * v1.2.4 实测六百三十三【第四条腿 = 激流三叉戟】：推进剂再添一件——**带激流附魔的三叉戟**
+     * 也能把她推起来（沿视线推原版那一口 `3.0 × (1 + 等级) / 4`，见
+     * {@code MaidTridentSpinBehavior#boostForFlight}），于是"只带一把激流三叉戟、没有烟花/
+     * 羽扇/法术"的女仆也能起飞、也能启动飞行跟随。开关沿用 `combat.riptideDash`
+     * （激流三叉戟旋转突进，默认开）——**不新增配置项**，关掉它这一条腿也一起退回。
      */
     public static boolean hasFlightPropellant(EntityMaid maid) {
-        return hasFlightFuel(maid) || hasClimbSpell(maid);
+        return hasFlightFuel(maid) || hasClimbSpell(maid) || hasRiptide(maid);
     }
 
     /* v1.2.0 实测五百三十三：原 `hasExplosiveFirework`（只认带爆炸的烟花）已删除——
@@ -559,11 +688,47 @@ public final class MaidFlightKit {
     public static boolean isModeActive(EntityMaid maid) {
         // v1.2.0 实测五百七十二：推进剂 = 烟花 / 羽扇（hasFlightFuel）**或**能上天的位移法术——
         // 后者是"平地起飞"能成立的前提（没有烟花时模式必须照样激活，否则那条分支永远走不到）
-        if (!(hasElytra(maid) && hasWeapon(maid)
-                && (hasFlightFuel(maid) || hasClimbSpell(maid)))) {
+        // v1.2.4 实测六百三十三：改成直接调 hasFlightPropellant——原来这里把"两选一"又抄了一遍，
+        // 添第四条腿（激流三叉戟）时正是"抄第二遍"最容易漏的地方（本就该只有一份口径）。
+        if (!(hasElytra(maid) && hasWeaponForFlightTask(maid) && hasFlightPropellant(maid))) {
             return false;
         }
-        return !isRangedTask(maid) || hasAmmoForRanged(maid);
+        return rangedAmmoOk(maid);
+    }
+
+    /**
+     * v1.2.4 实测六百四十一【远程空袭的弹药门禁：只有"真拿得出远程武器"时才要求弹药】。
+     *
+     * 反馈原文："远程空袭不认这把武器能够起飞。"旧版这里是直白的
+     * {@code !isRangedTask(maid) || hasAmmoForRanged(maid)}，而 {@code hasAmmoForRanged} 在
+     * "背包里没有远程武器"时恒为假——于是"只带一把激流三叉戟"的远程空袭**模式都激活不了**
+     * （{@link #hasWeaponForFlightTask} 那一头 六百四十一 已经放行三叉戟顶武器位，这一头必须
+     * 跟着放行，否则两头口径打架、她的表现仍是"不认这把武器"）。
+     *
+     * 口径：有远程武器 → 按老规矩要弹药（缺箭/缺子弹照旧不放行，提示照报）；**没有远程武器、
+     * 武器位由激流三叉戟顶着** → 不吃弹药（它本来就不耗弹药，见 {@link #hasAmmoForRanged} 的
+     * 三类划分）。两者都没有 → 仍然不放行。
+     */
+    public static boolean rangedAmmoOk(EntityMaid maid) {
+        if (!isRangedTask(maid)) {
+            return true;
+        }
+        if (hasAmmoForRanged(maid)) {
+            return true;
+        }
+        // 兜底那一支：她拿不出远程武器（所以"没有弹药"这件事无从谈起），而武器位由三叉戟顶着
+        return !hasRangedWeaponOnly(maid) && hasRiptide(maid);
+    }
+
+    /** "她到底有没有远程武器"——只看 {@link #isRangedWeapon}，不看 六百四十一 的顶替口径 */
+    private static boolean hasRangedWeaponOnly(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        if (hasInHandsOrBorrowed(maid, MaidFlightKit::isRangedWeapon)) {
+            return true;
+        }
+        return hasInBackpack(maid, MaidFlightKit::isRangedWeapon);
     }
 
     /**
@@ -583,7 +748,7 @@ public final class MaidFlightKit {
         if (!hasElytra(maid)) {
             sb.append("鞘翅");
         }
-        if (!hasWeapon(maid)) {
+        if (!hasWeaponForFlightTask(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
@@ -604,8 +769,10 @@ public final class MaidFlightKit {
         }
         // v1.2.0 实测四百九十五：远程空袭还要报"缺弹药"（否则玩家只看到"三件齐了却没起飞"，
         // 完全不知道为什么——这正是本次需求要修的可观测性问题）。
-        if (isRangedTask(maid) && hasElytra(maid) && hasWeapon(maid)
-                && hasFlightPropellant(maid) && !hasAmmoForRanged(maid)) {
+        // v1.2.4 实测六百四十一：判据换成 rangedAmmoOk——"武器位由激流三叉戟顶着、身上没有远程
+        // 武器"这一档不该报缺弹药（那本来就不吃弹药，见 {@link #rangedAmmoOk}）。
+        if (isRangedTask(maid) && hasElytra(maid) && hasWeaponForFlightTask(maid)
+                && hasFlightPropellant(maid) && !rangedAmmoOk(maid)) {
             if (sb.length() > 0) {
                 sb.append("、");
             }
@@ -960,7 +1127,7 @@ public final class MaidFlightKit {
 
     /**
      * v1.2.2 实测六百〇九【排查用诊断】：一行说清"飞行燃料判定为什么不过"——
-     * 主手 / 副手各是什么、背包里有没有烟花和羽扇、她会不会"能上天的位移法术"。
+     * 主手 / 副手各是什么、背包里有没有烟花 / 羽扇 / 激流三叉戟、她会不会"能上天的位移法术"。
      *
      * 与 {@link #elytraDiagnostic} 同一用途、同一节流（由 {@code notifyNotReady} 落盘，
      * 最多 15 秒一行）。
@@ -974,10 +1141,20 @@ public final class MaidFlightKit {
         if (maid == null) {
             return "燃料判定: 女仆为空";
         }
+        // 实测六百四十：`身上激流三叉戟`（主手/副手/背包）与 `额外容器激流三叉戟`
+        // （精妙背包 / 旅行者背包）分开报——"那两个背包里的到底认没认出来"从此一眼可见
+        //（额外容器那一项走只读探针，取出 1 个立刻放回，见 MaidExtraContainer.contains）。
+        boolean extra = false;
+        try {
+            extra = com.maidsmart.tool.MaidExtraContainer.contains(maid, MaidFlightKit::isRiptide);
+        } catch (Throwable ignored) {
+        }
         return "燃料判定: 主手=" + describeStack(maid.m_21205_())
                 + " 副手=" + describeStack(maid.m_21206_())
                 + " 背包烟花=" + hasInBackpack(maid, MaidFlightKit::isFirework)
                 + " 背包羽扇=" + hasInBackpack(maid, TwilightFanKit::isFan)
+                + " 身上激流三叉戟=" + !findRiptide(maid).m_41619_()
+                + " 额外容器激流三叉戟=" + extra
                 + " 位移法术=" + hasClimbSpell(maid);
     }
 
@@ -1171,12 +1348,16 @@ public final class MaidFlightKit {
             }
         } catch (Throwable ignored) {
         }
-        return false;
+        // v1.2.4 实测六百三十九：她自己的背包没有 → 再看精妙背包/旅行者背包（只读探针）
+        return com.maidsmart.tool.MaidExtraContainer.contains(maid, filter::test);
     }
 
     /** 从背包整叠取出（换装语义） */
     private static ItemStack takeFromBackpack(EntityMaid maid, StackFilter filter) {
         try {
+            // v1.2.4 实测六百三十九：先判背包，再判精妙背包——自己背包里没有就先让 TLM
+            // 的额外容器系统把匹配物搬进来（整组），下面照原样扫一遍就能拿到
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, filter::test, -1);
             IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
@@ -1192,6 +1373,8 @@ public final class MaidFlightKit {
     /** 从背包只抽走 1 个（烟花消耗专用） */
     private static ItemStack takeOneFromBackpack(EntityMaid maid, StackFilter filter) {
         try {
+            // v1.2.4 实测六百三十九：同上（烟花火箭——她背包里没有就翻精妙背包要一个）
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, filter::test, 1);
             IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);

@@ -349,6 +349,9 @@ public class AiMemoryManager {
         com.maidsmart.combat.MaidTridentSpinBehavior.forget(maidUuid);
         // v1.2.2 实测六百〇八：飞行跟随同理——它还会替她换胸甲，收不到 stop() 就永远不还。
         com.maidsmart.combat.MaidFlightFollowBehavior.forget(maidUuid);
+        // v1.2.4 实测六百四十（六百四十一 起口径不变）：激流推进剂窗口（MaidRiptideBoost 的）也照
+        // 这条办——窗口只在飞行链路的每 tick 里被驱动，人走了就该摘掉，否则表里留一条陈旧的 UUID。
+        com.maidsmart.combat.MaidRiptideBoost.forget(maidUuid);
         com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
     }
 

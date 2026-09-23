@@ -23,8 +23,9 @@
      去问她那两条"可用背包"（`getAvailableBackpackInv` / `getAvailableInv`）里找不找得到
      盒子里的食物。女仆自己吃饭走的就是前者，而六百一十六只注入了 `getMaidInv()`——
      所以她只认走自己那条路的弹药/TNT、不认饭。配一条"盒子里没有的东西必须找不到"的对照。
-  ⓑ **附魔那条（用户第 2 条）**：不可堆叠的东西（附魔书）一格存 2 个时，交给她/原版的
-     必须是**合法堆**（≤ getMaxStackSize）；另加一条"过一圈盒子整个 NBT 还在"的往返。
+  ⓑ **不可堆叠那条（用户第 2 条）**：不可堆叠的东西（探针是一把没附魔的钻石剑——
+     六百四十五 起附魔物品一律进不去盒子了）一格存 2 个时，交给她/原版的必须是**合法堆**
+     （≤ getMaxStackSize）；另加一条"过一圈盒子整个 NBT 还在"的往返。
   ⓒ **鼠标取放（用户第 3 条）**：左键拿起 → 点盒子格放下 → 再拿回来 → Shift+左键快速移动，
      以及"鼠标上拿着一个盒子去点盒子格必须被拒"（盒子装盒子在新入口下也得挡住）。
   ⓓ **手上那一叠不许丢**：挂着一叠时收手（关界面/ESC 那条）→ 回到背包、一件不少。
@@ -50,8 +51,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.3.jar',
-        'modname': 'promaid-1.2.3.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.4.jar',
+        'modname': 'promaid-1.2.4.jar',
     },
     'neoforge1211': {
         'dir': r'C:/Users/Sketch/mc_server_test/neoforge1211',
@@ -59,8 +60,8 @@ TARGETS = {
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
         'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/'
-               r'promaid-1.2.3-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.3-neoforge-1.21.1.jar',
+               r'promaid-1.2.4-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.4-neoforge-1.21.1.jar',
     },
 }
 
@@ -471,13 +472,13 @@ if not any('食物那条（用户第 1 条）' in l for l in passes):
 # 对照：盒子里没有的东西必须扫不到（否则上面那条等于"扫啥都有"）
 if not any('食物对照' in l for l in passes):
     fails.append('缺少"盒子里没有的东西扫不到"的对照（食物那条就成了空断言）')
-# ⓑ 用户第 2 条：附魔（不可堆叠）物品的合法堆 + NBT 往返
-for need in ('附魔那条：两个同款附魔书并进一格',
-             '附魔那条：这格的「视野上限」= 1',
-             '附魔那条：附魔书过一圈盒子',
-             '附魔书那条（她那一侧）'):
+# ⓑ 用户第 2 条：不可堆叠（探针=没附魔的钻石剑）物品的合法堆 + NBT 往返
+for need in ('不可堆叠那条：两个同款钻石剑并进一格',
+             '不可堆叠那条：这格的「视野上限」= 1',
+             '不可堆叠那条：钻石剑过一圈盒子',
+             '不可堆叠那条（她那一侧）'):
     if not any(need in l for l in passes):
-        fails.append('缺少附魔条：%s' % need)
+        fails.append('缺少不可堆叠条：%s' % need)
 # ⓒ 用户第 3 条：箱子式鼠标取放（拿起/放下/搬回来/快速移动）
 for need in ('鼠标取放①', '鼠标取放②', '鼠标取放③', '鼠标取放④'):
     if not any(need in l for l in passes):
@@ -535,7 +536,7 @@ if fails:
 print('VERDICT: PASS —— 四条都验到了：① 盒子对她吃饭那条路可见（拿 TLM 自己的判据扫得到），'
       + ('且打伤后她自己吃掉盒子里的饭（A 段：熟牛肉变少、血量回来）'
          if STRICT_EAT else '（行为面那一条在 1201 上验，这台只作参考）')
-      + '；② 不可堆叠物品交给她/原版的永远是合法堆、NBT 原样过一圈；'
+      + '；② 不可堆叠物品（探针=没附魔的钻石剑）交给她/原版的永远是合法堆、NBT 原样过一圈；'
       '③ 箱子式鼠标取放（拿起/放下/搬回来/快速移动 + 盒子装盒子被拒）；'
       '④ 挂着一叠收手不丢；六百一十七的"盒子不许装盒子"回归也还在')
 raise SystemExit(0)

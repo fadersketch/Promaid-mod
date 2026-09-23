@@ -722,6 +722,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
                 ItemStack remain = net.neoforged.neoforge.items.ItemHandlerHelper
                         .insertItemStacked(inv, stack, false);
                 if (!remain.isEmpty()) {
+                    // v1.2.4 实测六百三十六：她自己的背包满了，先试她身上的"额外容器"
+                    // （饰品栏里的精妙背包 / 旅行者背包，见 MaidExtraContainer）
+                    remain = com.maidsmart.tool.MaidExtraContainer.overflow(maid, remain);
+                }
+                if (!remain.isEmpty()) {
                     Block.popResource(level, pos, remain); // 背包满：落地（原版 popResource）
                 }
             }
@@ -2155,6 +2160,11 @@ public class MaidWoodBehavior extends Behavior<EntityMaid> {
             return null;
         }
         // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：她自己背包里没有可用垫脚方块时，
+        // 先请 TLM 的额外容器系统从精妙背包/旅行者背包搬一组进来（pull 先扫她自己的背包，
+        // 找到就什么都不做——零副作用）。与 issue #19/#21 的"搭路取材"共用同一份口径。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null), -1);
         // ---- v1.2.3-dbg 探针：取料前后真实库存对照（查完删掉） ----
         net.neoforged.neoforge.items.IItemHandler __inv = maid.getAvailableBackpackInv();
         net.neoforged.neoforge.items.IItemHandler __hands = maid.getHandsInvWrapper();

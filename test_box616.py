@@ -44,8 +44,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.6.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.3.jar',
-        'modname': 'promaid-1.2.3.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.4.jar',
+        'modname': 'promaid-1.2.4.jar',
         'maxhp_attr': 'generic.max_health',
     },
 }

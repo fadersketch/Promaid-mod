@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
-"""实测六百二十（其二）压缩盒禁入清单：附魔书/附魔武器与压缩盒放不进盒子、鼠标选不中压缩盒。
+"""实测六百二十（其二）压缩盒禁入判据：附魔书/附魔武器与压缩盒放不进盒子、鼠标选不中压缩盒。
+（实测六百四十五 起：口径写死——附魔物品一律禁入，「禁入带附魔的物品」开关与「禁入清单」
+  两个配置项已删除；本用例的第 ④ 条因此改成「验那两个配置字段确实已经不存在」。）
 
 用法:
     python test_box620.py [1201|neoforge1211] [jar路径]
@@ -11,13 +13,13 @@
 【为什么这条跑的是"自检"而不是"真去点界面"】界面每一次点击真正执行的就是
 CompressionBoxService.handle —— 界面那一层（光标画在哪、点了哪个像素）在专用服务器上
 根本跑不起来（没有客户端），所以照 六百一十七/六百一十八 的先例：用**假玩家**把这条路
-原样走一遍，把判据的取值打日志，这里逐条断言（细则见 CompressionBoxCheck.refuseList）。
+原样走一遍，把判据的取值打日志，这里逐条断言（细则见 CompressionBoxCheck.refuseGate）。
 
 验到的（每条都配反向对照）：
   · 判据层：附魔书 / 压缩盒 → 拒绝（文案对得上）；石头 → 放行（对照）；
   · 数据层：mergeInto / merge 收附魔书 → 原样退回（界面、女仆、溢出回退三条路的总闸）；
   · 界面那条路：Shift+左键点背包里的附魔书 → 被拒 + 书还在 + 服务端回了一句提示；
-  · 配置清单：当场加 minecraft:cobblestone → 立刻拒；清空 → 又放行（对照）；
+  · 口径写死：那两个配置字段（REFUSE_ENCHANTED / REFUSE_LIST）必须已经不存在（反射取不到）；
   · 鼠标选不中压缩盒：左键点它拿不起来；鼠标上挂着东西去点它也不交换（两条路都要堵）；
   · 对照：同一叠圆石放进盒子格 → 必须成功（别为了拦它把正常搬运一起堵死）；
   · 女仆那一侧：往她背包里的盒子插附魔书 → 原样退回（isItemValid 也判 false）。
@@ -38,8 +40,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.3.jar',
-        'modname': 'promaid-1.2.3.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.4.jar',
+        'modname': 'promaid-1.2.4.jar',
     },
     'neoforge1211': {
         'dir': r'C:/Users/Sketch/mc_server_test/neoforge1211',
@@ -47,8 +49,8 @@ TARGETS = {
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/neoforged/neoforge/21.1.250/win_args.txt', 'nogui'],
         'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/'
-               r'promaid-1.2.3-neoforge-1.21.1.jar',
-        'modname': 'promaid-1.2.3-neoforge-1.21.1.jar',
+               r'promaid-1.2.4-neoforge-1.21.1.jar',
+        'modname': 'promaid-1.2.4-neoforge-1.21.1.jar',
     },
 }
 
@@ -247,15 +249,15 @@ else:
     if skips:
         fails.append('自检里有 SKIP：%s' % skips[0][:220])
     need = [
-        ('禁入清单①：附魔书', '附魔书被拒（判据层）'),
-        ('禁入清单①：压缩盒 → 拒绝', '压缩盒被拒（判据层）'),
-        ('禁入清单①：对照——普通物品（石头）放行', '石头必须放行（对照）'),
-        ('禁入清单②：数据层 mergeInto 收附魔书 → 原样退回', '数据层 mergeInto 退回附魔书'),
-        ('禁入清单②对照：同一方法收石头 → 正常进格', '数据层对照：石头正常进格'),
-        ('禁入清单②：数据层 merge 收附魔书 → 一件都没进', '数据层 merge 退回附魔书'),
-        ('禁入清单③（界面那条路）：Shift+左键点背包里的附魔书 → 被拒', '界面那条路拒绝附魔书'),
-        ('禁入清单④：配置清单里加上 minecraft:cobblestone → 拒绝', '配置禁入清单立刻生效'),
-        ('禁入清单⑤（女仆那一侧）：往她盒子第', '女仆那一侧拒绝附魔书'),
+        ('禁入判据①：附魔书', '附魔书被拒（判据层）'),
+        ('禁入判据①：压缩盒 → 拒绝', '压缩盒被拒（判据层）'),
+        ('禁入判据①：对照——普通物品（石头）放行', '石头必须放行（对照）'),
+        ('禁入判据②：数据层 mergeInto 收附魔书 → 原样退回', '数据层 mergeInto 退回附魔书'),
+        ('禁入判据②对照：同一方法收石头 → 正常进格', '数据层对照：石头正常进格'),
+        ('禁入判据②：数据层 merge 收附魔书 → 一件都没进', '数据层 merge 退回附魔书'),
+        ('禁入判据③（界面那条路）：Shift+左键点背包里的附魔书 → 被拒', '界面那条路拒绝附魔书'),
+        ('禁入判据④：口径写死', '那两个配置字段已经删掉（附魔禁入写死）'),
+        ('禁入判据⑤（女仆那一侧）：往她盒子第', '女仆那一侧拒绝附魔书'),
         ('鼠标取放⑤（六百二十，用户要的那条）', '鼠标选不中压缩盒（拿起那条路）'),
         ('鼠标取放⑤b：鼠标上挂着 5 个圆石再去点压缩盒那一格 → 也不换', '鼠标选不中压缩盒（交换那条路）'),
         ('对照：同一叠圆石点盒子第 3 格 → 正常放下', '对照：普通物品照旧放得进盒子'),
@@ -271,13 +273,14 @@ else:
     if not re.search(r'服务端回了「带附魔的物品不能放进压缩盒」', joined):
         fails.append('提示文案不对：附魔物品那句应当是「带附魔的物品不能放进压缩盒」')
 
-# 配置文件：两条新选项的默认值必须落下来；自检跑完禁入清单必须是空的（它临时加过一条）
+# 配置文件：压缩盒那一节只剩两条可调的（六百四十五 起 refuseEnchanted / refuseList 已删）；
+# 老配置里即使残留那两行也不再被读取，所以这里**只**验还在的两条 + 散步迁移（不再断言它们）
 try:
     cfg_text = open(CONFIG, encoding='utf-8', errors='replace').read()
-    if not re.search(r'^\s*refuseEnchanted\s*=\s*true\s*$', cfg_text, re.M):
-        fails.append('配置里没有 refuseEnchanted = true（默认值没落盘）')
-    if not re.search(r'^\s*refuseList\s*=\s*\[\s*\]\s*$', cfg_text, re.M):
-        fails.append('配置里 refuseList 不是空的（自检临时加的那条没还原？）')
+    if not re.search(r'^\s*maidExtension\s*=\s*true\s*$', cfg_text, re.M):
+        fails.append('配置里没有 maidExtension = true（压缩盒那一节没落盘？）')
+    if not re.search(r'^\s*maxStack\s*=\s*114514\s*$', cfg_text, re.M):
+        fails.append('配置里没有 maxStack = 114514（压缩盒那一节没落盘？）')
     if not re.search(r'^\s*strollSpeed\s*=\s*0\.4\s*$', cfg_text, re.M):
         fails.append('老档的 strollSpeed 没有被迁到 0.4（默认值改动对老档无效？）')
     if not re.search(r'^\s*strollSpeedMigrated\s*=\s*true\s*$', cfg_text, re.M):
@@ -294,7 +297,7 @@ if fails:
     for f in fails:
         print('  -', f)
     raise SystemExit(1)
-print('VERDICT: PASS —— 附魔书/附魔武器与压缩盒都放不进盒子（判据/数据层/界面/配置清单/女仆五条路），'
+print('VERDICT: PASS —— 附魔书/附魔武器与压缩盒都放不进盒子（判据/数据层/界面/口径写死/女仆五条路），'
       '鼠标在界面里选不中压缩盒（拿起与交换两条路都堵），提示文案与之一致；'
       '对照：普通物品照旧正常搬运')
 raise SystemExit(0)

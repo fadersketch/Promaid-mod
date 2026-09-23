@@ -351,6 +351,11 @@ public final class PlacedBlockTracker {
                     ItemStack remain = net.neoforged.neoforge.items.ItemHandlerHelper
                             .insertItemStacked(inv, stack, false);
                     if (!remain.isEmpty()) {
+                        // v1.2.4 实测六百三十六：她自己的背包满了，先试她身上的"额外容器"
+                        // （饰品栏里的精妙背包 / 旅行者背包，见 MaidExtraContainer）
+                        remain = com.maidsmart.tool.MaidExtraContainer.overflow(owner, remain);
+                    }
+                    if (!remain.isEmpty()) {
                         // 背包满：落地（原版 popResource）
                         Block.popResource(level, pos, remain);
                     }

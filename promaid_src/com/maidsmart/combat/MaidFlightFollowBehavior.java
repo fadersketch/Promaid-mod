@@ -150,6 +150,44 @@ import java.util.WeakHashMap;
  * 判定链本身一字未改，仍是：开关打开 → 目标存在且同维度 → **3D 距离 > 起手距离（25）** →
  * 有可用鞘翅 + 能飞的道具 → 与目标之间没有方块阻挡视线 → 威胁半径内没有敌对生物。
  *
+ * ── 六百四十 改的三件事（用户反馈原文）──
+ * <pre>
+ *   ①"女仆使用三叉戟起飞/飞行的时候飞行格数异常，一下子就能飞100多格。激流3"
+ *   ②"飞行跟随没有不消耗三叉戟耐久的开关。而且三叉戟没有减少矢量的相关措施。"
+ *   ③"使用激流三叉戟替代烟花的时候准度等各方面都出现了异常。产生了极大的违和感。"
+ * </pre>
+ * <ol>
+ *   <li><b>新开关 {@code flightFollow.trident}</b>（默认开 = 照原版扣 1 点耐久，②）：与
+ *       {@code flightFollow.firework} / {@code flightFollow.elytra} 同一档。**只管这一条链路**
+ *       ——空袭的起飞/抬升/俯冲是战斗动作，照旧扣耐久（那边没有这个开关）。</li>
+ *   <li><b>收手时把推进剂窗口也收掉</b>（{@link #releaseThrust}）：推进剂与那枚挂载火箭是
+ *       同一件事（都在持续改她的速度），只清速度不收窗口的话下一 tick 就被它拉回去——
+ *       与 六百一十二 对火箭踩过的坑同一个形状。六百四十一 起这条尤其要紧，见下。</li>
+ * </ol>
+ *
+ * ── 六百四十一 改的两件事（用户反馈原文）──
+ * <pre>
+ *   ④"在飞行跟随状态下三叉戟的朝向似乎并不是主人。并且没有像烟花那样子的一旦主人在判定圈内
+ *     就把矢量删去。"
+ *   ①"实测下来，起飞的时候女仆还是会飞的特别高。尤其是在配合到重锤的弹射起跳的时候，
+ *     还是会轻松飞出100格。"（这一半是推进剂的账，见 MaidRiptideBoost）
+ * </pre>
+ * <ol>
+ *   <li><b>④ 的"朝向不是主人"</b>：④ 腿点火前那一句原本是 {@code faceToward(aim, true)}
+ *       ——{@code true} 会把俯仰**至少抬到 20° 朝上**（起跳那一下的抬头），主人比她低时这一句
+ *       就把视线从主人身上顶开了，而推进剂**每 tick 都按视线推**，于是"三叉戟朝着天上飞"。
+ *       现在改成 {@code faceToward(aim, false)}（就是本链路每 tick 摆在主人身上的那个角度——
+ *       与烟花那一枚完全同口径）。</li>
+ *   <li><b>④ 的"没有像烟花那样把矢量删去"</b>：推进剂改成"拟真烟花"之后，它与那枚挂载火箭
+ *       **就是同一个东西**（每 tick 都在拉她的速度、都要先被收掉、清零才有意义）——所以
+ *       {@link #releaseThrust} 里那两句（收窗口 + 速度归零）现在与烟花那一支完全同构，
+ *       日志也从"收掉激流衰减窗口"改成"收掉激流推进剂"。</li>
+ * </ol>
+ * 顺带补两处口径：{@link #fuelLabel} 认出了第四条腿（六百三十三 起只带激流三叉戟的女仆
+ * 会被报成"位移法术"，与取用顺序不符），起飞那行日志多了 {@code 激流耐久=照原版扣/不消耗}。
+ * 推进剂本身的数值（六百四十 的"雨里那一记" → 六百四十一 的"拟真烟花 + 水里那一记"）
+ * 全部记在 {@link com.maidsmart.combat.MaidRiptideBoost} 的类文档里。
+ *
  * ── 触发位置（为什么卡在"搭路"这一档）──
  * 作者给的口径："开启开关之后，女仆在判定使用搭路时，发现主人离自己太远且自己跟主人之间
  * 没有方块阻拦，自己包里面还有鞘翅和烟花的时候，target=主人，执行飞行（跟空袭模式的起飞
@@ -221,19 +259,22 @@ import java.util.WeakHashMap;
  * 空袭那边一字不变（它本来就滑翔），跟着飞的她从此也认；判据取**同步过的滑翔位**，所以多人下
  * 客户端不需要服务端那张 {@link #FOLLOWING} 表也认得出。
  *
- * ── 两个"省料"开关（作者要求"可以调整是否消耗烟花和鞘翅耐久"）──
+ * ── 三个"省料"开关（作者要求"可以调整是否消耗烟花和鞘翅耐久"；六百四十 添第三个）──
  * <ul>
      *   <li>{@code flightFollow.firework}（默认**开** = 真消耗）：关掉之后**照旧需要包里有
      *       能飞的道具**（烟花火箭 **或** 孔雀羽扇 **或** 能上天的位移法术，它是"她能飞"的凭证；
      *       六百一十三 起法术也在这一列），但每次补推不再从背包扣那一枚
  *       ——纯观赏档，适合"只想看她跟着飞"的存档。**背包里有羽扇时走扇子那条**（不烧烟花，
  *       照羽扇自己的口径扣耐久），这条开关只管烟花那一支。</li>
- *   <li>{@code flightFollow.elytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
- *       由 {@link com.maidsmart.mixin.ElytraWearGuardMixin} 在
- *       {@code ElytraItem.elytraFlightTick} 入口拦掉那次 {@code hurtAndBreak}
- *       （**注意**：只认原版 {@code ElytraItem} 及其子类；模组"内置鞘翅的护甲"走它自己的
- *       钩子，这里拦不到——边界写在手册里）。</li>
- * </ul>
+     *   <li>{@code flightFollow.elytra}（默认**开** = 照原版扣）：关掉之后滑翔不再啃鞘翅耐久，
+     *       由 {@link com.maidsmart.mixin.ElytraWearGuardMixin} 在
+     *       {@code ElytraItem.elytraFlightTick} 入口拦掉那次 {@code hurtAndBreak}
+     *       （**注意**：只认原版 {@code ElytraItem} 及其子类；模组"内置鞘翅的护甲"走它自己的
+     *       钩子，这里拦不到——边界写在手册里）。</li>
+     *   <li>{@code flightFollow.trident}（默认**开** = 照原版扣，v1.2.4 实测六百四十）：关掉之后
+     *       用激流三叉戟推进不再扣它的耐久（只影响这一条链路；空袭那边照旧扣）。
+     *       它与上面两条一样**只管消耗**：燃料门禁照旧（背包里得有激流三叉戟才能走这一支）。</li>
+     * </ul>
  *
  * ── 与其它链路的关系（全部是"让位"，不是"抢") ──
  * <ul>
@@ -423,6 +464,23 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     private static boolean cfgElytra() {
         return MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get();
+    }
+
+    /**
+     * v1.2.4 实测六百四十：**飞行跟随的激流三叉戟要不要扣耐久**（默认开 = 照原版扣）。
+     *
+     * 需求原文："飞行跟随没有不消耗三叉戟耐久的开关。" 与 {@code flightFollow.firework}
+     * （消耗烟花）、{@code flightFollow.elytra}（消耗鞘翅耐久）凑成同一档三个省料开关。
+     * 只管**飞行跟随**这一条链路：空袭的起飞/抬升/俯冲是战斗动作，照旧扣耐久（那边没有、
+     * 也不该有这个开关）。她包里有烟花时依旧先烧烟花（顺序不变），所以这个开关对
+     * "有烟花可烧"的存档没有任何影响。
+     */
+    private static boolean cfgTrident() {
+        try {
+            return MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get();
+        } catch (Throwable ignored) {
+            return true; // 读不到配置时按"照原版扣"处理（与默认值一致，绝不放纵）
+        }
     }
 
     /**
@@ -645,9 +703,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 // 六百一十三：再加第三条腿——**能上天的位移法术**（与空袭三件套的第三条同一份
                 // 定义，同一个开关 combat.flightDashClimb 管），于是"只带法术书、不带烟花"的
                 // 女仆也能起飞。措辞沿用实测五百七十四 的口径「可以飞行的道具」，
-                // 三种是哪三种在日志里展开（手册/气泡那边仍然只说「可以飞行的道具」）。
+                // 几种是哪几种在日志里展开（手册/气泡那边仍然只说「可以飞行的道具」）；
+                // 六百三十三：第四条腿 = **激流三叉戟**（带上它就也能起飞，见 boost ④）。
                 return skip(maid, now, "背包里没有「可以飞行的道具」"
-                        + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）");
+                        + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术 / 激流三叉戟，四选一）");
             }
             if (!sightOk(maid, aim)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
@@ -700,7 +759,8 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 + "，背上鞘翅追过去（燃料=" + fuelLabel(maid)
                 + "，烟花=" + (cfgFirework() ? "消耗" : "不消耗")
                 + "，位移法术=" + (cfgClimbSpell() ? "开" : "关")
-                + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗") + "）");
+                + "，鞘翅耐久=" + (cfgElytra() ? "照原版扣" : "不消耗")
+                + "，激流耐久=" + (cfgTrident() ? "照原版扣" : "不消耗") + "）");
     }
 
     /**
@@ -721,7 +781,16 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 六百一十三：只剩法术书的女仆（她没有烟花也没有羽扇，门禁是靠法术过的）
             String spell = MaidSpellCastCompat.findClimbSpellIgnoringCooldown(
                     maid, MaidSpellCastCompat.climbSpellIds());
-            return spell != null ? "位移法术（" + spell + "）" : "位移法术";
+            if (spell != null) {
+                return "位移法术（" + spell + "）";
+            }
+            // v1.2.4 实测六百四十：第四条腿——**激流三叉戟**。六百三十三 起 boost() 就有这一支，
+            // 但这一行当时漏了它：只带一把激流三叉戟的女仆会被报成"位移法术"，与实际取用顺序
+            // 不符（本文件反复强调的红线：日志口径必须与取用顺序同序，不能各写各的）。
+            if (MaidFlightKit.hasRiptide(maid)) {
+                return "激流三叉戟（不烧烟花）";
+            }
+            return "位移法术";
         } catch (Throwable ignored) {
             return "烟花火箭";
         }
@@ -764,6 +833,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             return;
         }
         faceToward(maid, aim, false);
+        // v1.2.4 实测六百四十一：激流推进剂的每 tick 维持（拟真烟花——把整个速度矢量往
+        // "视线 × 当前力度"上拉，力度照玩家在水里那一记再 ×1.3 并按水阻力 ×0.80 递减，直到掉回滑翔常态）。
+        // 放在这里是因为**推进剂每 tick 都按她的视线推**：上面那一句刚把视线钉在主人身上，
+        // 这一句就顺着这个方向推她（④ 的"朝向不是主人"就是在这一前一后对齐之后才成立的）。
+        // 没有窗口时这里只是一次 Map 查询，零开销。
+        com.maidsmart.combat.MaidRiptideBoost.tick(maid);
         if (shouldBoost(maid, aim, gameTime)) {
             boost(level, maid, id, gameTime, aim);
         }
@@ -832,6 +907,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             releaseThrust(level, maid, id, gameTime);
         } else {
             BOOST_ROCKET.remove(id); // 别的收手理由（威胁/超时/缺料）：保持动量自然滑翔，只丢引用
+            // v1.2.4 实测六百四十一：激流推进剂同理——它只在链路的每 tick 里被驱动（见
+            // MaidRiptideBoost.tick 的注释），链路一停就该摘掉；**已给的速度同样不动**。
+            com.maidsmart.combat.MaidRiptideBoost.clear(maid);
         }
         // 【绝不在空中摘鞘翅——它和"空中清滑翔位"是同一件事】原版 updateFallFlying 每 tick 都要
         // 看胸甲槽里那件鞘翅能不能飞（{@code ItemStack.canElytraFly} + {@code elytraFlightTick}）：
@@ -899,7 +977,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 【实测六百一十二】进到主人身边 → **解除烟花（/羽扇）给的推进矢量**。
+     * 【实测六百一十二】进到主人身边 → **解除烟花（/羽扇/激流三叉戟）给的推进矢量**。
      *
      * 用户口径："在距离内检测到主人之后解除烟花带来的矢量（之前空袭状态下是不解除，在此模式下
      * 改为解除）。" 两件事一起做，缺一不可：
@@ -922,6 +1000,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      *       那套，六百一十一 已整段删除）**不是一回事**：那套是"主动减速但仍然朝你飞"，
      *       这一条是"把推进整份解掉"。</li>
      * </ol>
+     *
+     * 【六百四十一：激流三叉戟的推进剂与那枚火箭**完全同构**】用户的 ④ 就是"没有像烟花那样子
+     * 的一旦主人在判定圈内就把矢量删去"——推进剂变成"拟真烟花"（{@link com.maidsmart.combat.MaidRiptideBoost}
+     * 每 tick 把整个速度矢量往"视线 × 当前力度"上拉）之后，它同样**必须被收掉**，
+     * 否则下面那句清零下一 tick 就被它拉回来。所以上面那两句之外多了 {@code MaidRiptideBoost.clear}
+     * ——三支（烟花火箭 / 激流推进剂 / 位移法术）到此在"进圈 → 推进整份归零"这个语义下完全统一。
      *
      * 【六百一十三：位移法术给的那一份也一并解掉】法术是**瞬发**改速度（没有烟花那种"活着期间
      * 每 tick 都推"的残留），所以下面那句"速度归零"天然把法术给的那一份也解掉了——这点与烟花
@@ -952,9 +1036,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             Vec3 v = maid.m_20184_();
             double speed = Math.sqrt(v.f_82479_ * v.f_82479_ + v.f_82481_ * v.f_82481_);
             maid.m_20256_(Vec3.f_82478_); // Vec3.ZERO
+            // v1.2.4 实测六百四十一：**激流的推进剂窗口也要一起收**——它和那枚火箭是同一件事
+            // （每 tick 都在拉她的速度），只清速度不收窗口的话下一 tick 它又把速度拉回来，
+            // 清零等于白清。用户 ④ 的原话就是"没有像烟花那样子的一旦主人在判定圈内就把矢量删去"
+            // ——这一句之后，两支（收火箭 / 收推进剂）在语义与顺序上完全同构。
+            boolean hadRiptide = com.maidsmart.combat.MaidRiptideBoost.clear(maid);
             logState(RELEASE_LOG, maid, id, gameTime, "进到" + (isGoto(maid) ? "目标点" : "主人") + " "
                     + fmtDist(maid, aimOf(maid, level))
-                    + " 格内，解除火箭推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
+                    + " 格内，解除推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
+                    + (hadRiptide ? "收掉激流推进剂，" : "")
                     + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
         } catch (Throwable ignored) {
         }
@@ -1050,7 +1140,32 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 没放成（异常/世界拒绝）——继续往下试法术，别因为一次异常白丢这一口推进
         }
         // ③ 位移法术（六百一十三）：扇子不在、烟花也拿不出来时的第三条腿
-        castClimbSpell(maid, aim, id, gameTime);
+        if (castClimbSpell(maid, aim, id, gameTime)) {
+            return;
+        }
+        // ④ 激流三叉戟（v1.2.4 实测六百三十三）：第四条腿——扇子不在、烟花拿不出来、法术也没有
+        //    （或不带法术书）时的最后一件。与羽扇那一支同款：只借它的**动作与消耗**（旋转 20 tick +
+        //    原版音效 + 耐久 −1）。**推的方向 = 她这一 tick 的视线**（v1.2.4 实测六百四十一：
+        //    拟真烟花，每 tick 都把整个速度矢量往"视线 × 当前力度"上拉），而本链路每 tick 都把
+        //    视线摆在"朝着主人"（见 {@link #faceToward}）——所以这一记天然是朝主人的。
+        //    排在最末是刻意的：不改变任何"有烟花/羽扇/法术"存档的补推节奏
+        //    （顺序仍是 扇子 → 烟花 → 法术 → 激流）。
+        if (MaidFlightKit.hasRiptide(maid)) {
+            // 朝向：**就是主人**（takeoff = false，与烟花那一枚同口径）。
+            // 【v1.2.4 实测六百四十一 改的就是这一句】旧版这里写的是 faceToward(aim, true)，
+            // 而 true 会把俯仰**至少抬到 20° 朝上**（那是"起跳那一下先抬头"用的）。主人比她低时，
+            // 这一句就把视线从主人身上顶开了——而推进剂**每 tick 都按视线推**，于是现场就是用户
+            // ④ 说的"三叉戟的朝向似乎并不是主人"。现在与上一行的 faceToward(aim, false) 同一口径
+            // （m_6725_ 每 tick 已经把视线钉在主人身上，这里只是再确认一次，幂等）。
+            // 耐久开关：flightFollow.trident。
+            faceToward(maid, aim, false);
+            if (com.maidsmart.combat.MaidTridentSpinBehavior.boostForFlight(level, maid, cfgTrident())) {
+                MaidFlightKit.setGliding(maid, true); // 滑翔位每 tick 都要站住（同扇子/法术那两条）
+                BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
+                logThrottled(maid, id, gameTime, "挥激流三叉戟追主人（耐久="
+                        + (cfgTrident() ? "照原版扣" : "不消耗") + "）");
+            }
+        }
     }
 
     /**

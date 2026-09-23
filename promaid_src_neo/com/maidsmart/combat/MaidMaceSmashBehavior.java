@@ -245,6 +245,20 @@ public class MaidMaceSmashBehavior extends Behavior<EntityMaid> {
             noteGate(maid, "睡觉/骑乘/鞘翅中", level.getGameTime());
             return false;
         }
+        // v1.2.4 实测六百四十一【空袭进行中：地面猛击让位给空袭起飞】。
+        // 反馈原文："再配合三叉戟和重锤的时候女仆会在还没起飞的时候开始就打出一次风暴。"
+        // 根因：本行为是**与空袭任务无关的全局 core 行为**（优先级 235，远高于空袭那一条），
+        // 唯一空中门只有上面那句 isFallFlying——她站在地上、目标进 3 格时，它会在同一 tick
+        // **抢在空袭起飞之前**起跳（GUST + WIND_CHARGE_BURST），贴地那一帧 smashHit 再甩出一发
+        // 重锤风爆（她自己的风爆刻意不被风免拦，见 FriendlyWindGuard），于是"还没起飞就先炸一次
+        // 风暴"，那一下的击退还会给她叠上竖直速度（① 的"配合重锤弹射起跳飞出 100 格"）。
+        // 现在：**空袭任务 + 三件套齐**（= 她本来就要起飞）时本行为不抢跑，那一轮的重锤猛击交给
+        // 空袭自己的收翅俯冲（{@code MaidFlightCombatBehavior.hitOne} 会强制写 fallDistance，
+        // 风爆照炸、伤害照算）。三件套不齐（她飞不了）时一切照旧，猛击仍是她在地面上的战斗手段。
+        if (MaidFlightKit.isFlightTask(maid) && MaidFlightKit.isModeActive(maid)) {
+            noteGate(maid, "空袭任务进行中（让位给空袭起飞/俯冲猛击）", level.getGameTime());
+            return false;
+        }
         if (!maid.onGround() || maid.isInWater()) {
             noteGate(maid, "不在实地（空中/水里）", level.getGameTime());
             return false; // 必须站在实地才能起跳

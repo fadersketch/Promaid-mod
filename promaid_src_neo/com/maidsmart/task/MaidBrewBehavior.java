@@ -74,6 +74,8 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private int cooldown = 0;
     /** 目标扫描节流：找不到酿造台时每 20 tick 才扫一次 */
     private int scanCooldown = 0;
+    /** 闲逛点节流（v1.2.4 实测六百三十七）：每 40 tick（2 秒）换一个闲逛点 */
+    private int wanderCooldown = 0;
 
     /** v1.1.0 实测二百九十一：酿造台占用表（维度|坐标 → 占用女仆 UUID）——
      *  与熔炉同款（MaidCookBehavior.FURNACE_USERS）：多个女仆同时在场时各自
@@ -269,14 +271,20 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         if (this.standPos == null) {
-            // v1.5.24：找不到酿造台时站桩等待（不乱跑），节流扫描
-            MaidWorkTags.setStill(maid, true);
+            // v1.2.4 实测六百三十七【不再"没台子就把自己钉死"】：旧版这里 setStill(true)
+            // 站桩等待，而 WORK_STILL 经 MaidMoveSuppressMixin 是**彻底静止**（每 tick
+            // 清走位 + 停导航 + 取消 MoveToTargetSink）——"酿造任务 + 附近没有酿造台"
+            // 就是永久不动。现在改为一心两用（与烧制/宰杀同一套）：放行移动，
+            // 每 2 秒挑个闲逛点，边走边扫台子。
+            MaidWorkTags.setStill(maid, false);
             if (this.scanCooldown-- > 0) {
+                this.wander(maid);
                 return;
             }
             this.scanCooldown = 20;
             this.standPos = this.findBrewingStand(level, maid);
             if (this.standPos == null) {
+                this.wander(maid);
                 return;
             }
             // v1.1.0 实测二百九十一：绑定成功 → 登记占用（多女仆分散）
@@ -287,7 +295,9 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
             this.standPos = null;
             this.releaseBrew(); // v1.1.0 实测二百九十一：台子没了 → 释放占用
             this.standUp(maid); // v1.5.252：酿造台没了恢复站立
-            MaidWorkTags.setStill(maid, true); // 酿造台没了：继续站桩等扫描
+            // 台子没了：不站桩（下一 tick 走上面的"找台子"分支，边走边找）
+            MaidWorkTags.setStill(maid, false);
+            this.wander(maid);
             return;
         }
         double distSq = maid.distanceToSqr(this.standPos.getX() + 0.5, this.standPos.getY() + 0.5, this.standPos.getZ() + 0.5);
@@ -345,6 +355,35 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
                 maid.setPose(net.minecraft.world.entity.Pose.STANDING);
             }
         } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.2.4 实测六百三十七：**没台子可酿时的闲逛**（"别把自己冻在原地"）——
+     * 与 {@code MaidCookBehavior.wander} 一字同款（那边有完整来龙去脉）：
+     * WORK_STILL 是"彻底静止"（MaidMoveSuppressMixin 每 tick 停导航），
+     * 而本任务关了 TLM 随机散步、外部三条驱动也都不管她，所以旧版的
+     * "站桩等待"实际等于永久冻结。现在每 40 tick（2 秒）在她周围 8 格内挑个
+     * 闲逛点（受 {@link com.maidsmart.follow.WorkAreaClamp#allows} 钳制，
+     * home 模式不逛出限制圈），边走边扫酿造台。
+     */
+    private void wander(EntityMaid maid) {
+        if (this.wanderCooldown-- > 0) {
+            return;
+        }
+        this.wanderCooldown = 40; // 2 秒换一个闲逛点
+        int r = 8;
+        int dx = maid.getRandom().nextInt(r * 2 + 1) - r;
+        int dz = maid.getRandom().nextInt(r * 2 + 1) - r;
+        BlockPos base = maid.blockPosition();
+        BlockPos spot = new BlockPos(base.getX() + dx, base.getY(), base.getZ() + dz);
+        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+            return; // 本轮不闲逛（下轮再选），绝不逛出工作圈
+        }
+        try {
+            maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
+                    new WalkTarget(new BlockPosTracker(spot), 0.7f, 1));
+        } catch (Throwable ignored) {
         }
     }
 
@@ -910,6 +949,19 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
     private ItemStack extractFromMaidExcept(EntityMaid maid, IItemHandler maidInv,
                                             Set<String> whitelistIds, String excludeId, int count) {
         String last = LAST_INGREDIENT.get(maid.getUUID());
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包/双手里没有白名单材料 →
+        // 先请 TLM 从精妙背包/旅行者背包搬一组进来（谓词与下面 extractFromExcept 的白名单
+        // 判定同口径：注册名在白名单里、且不是被排除的那一种）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> {
+            if (s == null || s.isEmpty() || s.getItem() == null) {
+                return false;
+            }
+            net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
+            if (key == null || !whitelistIds.contains(key.toString())) {
+                return false;
+            }
+            return excludeId == null || !excludeId.equals(key.toString());
+        }, count);
         // 先扫"与上次不同"的材料（双手 + 背包）
         ItemStack fromHands = this.extractFromExcept(maid.getHandsInvWrapper(),
                 whitelistIds, excludeId, last, count);
@@ -962,6 +1014,12 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测二百九十七：主副手优先——先扫双手（getHandsInvWrapper），
      *  再扫背包（反馈："酿药物品不识别主副手，只识别背包"）。 */
     private ItemStack extractWaterBottle(EntityMaid maid, IItemHandler inv) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包/双手里没有水瓶 →
+        // 先请 TLM 从精妙背包/旅行者背包搬一瓶进来。这里用**粗谓词**（只要是药水）：
+        // 细判（只认饮用型水瓶）仍由下面的 extractWaterBottleFrom 做——搬进来的本来就是
+        // 她自己的药水，多搬一瓶不会出错，总比"因为细判口径写第二遍而分叉"安全。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.PotionItem, 1);
         ItemStack fromHands = this.extractWaterBottleFrom(maid.getHandsInvWrapper());
         if (!fromHands.isEmpty()) {
             return fromHands;
@@ -1001,6 +1059,10 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
      *  对定向配置不成立（定向的强化/形态由链决定，cfg.enhance/form 可能都是默认值）。 */
     private ItemStack extractBrewableBase(EntityMaid maid, IItemHandler inv,
                                           com.maidsmart.brew.BrewConfig cfg) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（粗谓词 = 药水；
+        // "这瓶还能不能继续推进"的细判仍在 extractBrewableBaseFrom 里，只有一份）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && s.getItem() instanceof net.minecraft.world.item.PotionItem, 1);
         ItemStack fromHands = this.extractBrewableBaseFrom((net.minecraft.server.level.ServerLevel) maid.level(), maid.getHandsInvWrapper(), cfg);
         if (!fromHands.isEmpty()) {
             return fromHands;
@@ -1072,6 +1134,9 @@ public class MaidBrewBehavior extends Behavior<EntityMaid> {
         if (item == null) {
             return ItemStack.EMPTY;
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包/双手里没有这件材料 →
+        // 先请 TLM 从精妙背包/旅行者背包搬一组进来（下界疣/烈焰粉/红石/萤石/火药……都走这里）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> !s.isEmpty() && s.getItem() == item, count);
         ItemStack fromHands = this.extractItemFrom(maid.getHandsInvWrapper(), item, count);
         if (!fromHands.isEmpty()) {
             return fromHands;

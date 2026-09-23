@@ -177,7 +177,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
                 return; // 盒子不装盒子（与 isItemValid / mergeInto 同一个口径）
             }
             if (!CompressionBoxFilter.canStore(stack)) {
-                return; // 六百二十：带附魔的物品 / 配置禁入清单（同上，纸面上写不进去）
+                return; // 六百二十：带附魔的物品（同上，纸面上写不进去）
             }
             ItemStack copy = stack.copy();
             copy.setCount(Math.min(copy.getCount(), CompressionBoxData.maxStack()));
@@ -240,7 +240,7 @@ public final class CompressionBoxMaidInv extends ItemStackHandler {
             return this.backing.isItemValid(slot, stack);
         }
         // 盒子里不套盒子（套进去她也只看得见外层那一层，白占一格）；
-        // 六百二十起带附魔的物品 / 配置禁入清单里的东西同样不放行——判据统一在
+        // 六百二十起带附魔的物品同样不放行——判据统一在
         // CompressionBoxFilter（她的「顺手塞进盒子」走的是 ItemHandlerHelper.insertItemStacked，
         // 那一路会逐格问 isItemValid，所以挡在这里她就根本不会往盒子里放这类东西）
         return CompressionBoxFilter.canStore(stack);

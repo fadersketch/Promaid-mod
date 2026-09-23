@@ -35,8 +35,8 @@ import java.util.function.Supplier;
  * 这正是 Forge 这套 {@code NetworkRegistry} 校验存在的意义。
  *
  * 【 600 二十 又提到 "3"】{@link BoxStatePacket} 末尾多了一段「这次为什么没成」
- * （{@link CompressionBoxService#noticeOf}）：禁入清单是服务端才说了算的判据，
- * 玩家得在界面上看见那句话。老客户端少读一段 = 内容错位，所以同样要提号。
+ * （{@link CompressionBoxService#noticeOf}）：裁决在服务端，玩家得在界面上看见
+ * 那句话。老客户端少读一段 = 内容错位，所以同样要提号。
  *
  * 客户端侧的类（{@code CompressionBoxScreen}）只在 S2C 的 enqueueWork 里被加载，
  * 专用服务器不会碰到它（与排班表/药剂手册同款约定）。
@@ -168,9 +168,9 @@ public final class CompressionBoxNetworking {
         /**
          * 「这次为什么没成」——服务端拒绝的原因（v1.2.2 实测六百二十；空串 = 这次没被拒）。
          *
-         * 界面上那几行红字是**客户端自己算的**（写死的那两条判据），而禁入清单是
-         * 服务端配置说了算——被它拒的时候只有服务端说得清为什么，所以让服务端把
-         * 那句话带过来，界面照原样画出来（见 {@code CompressionBoxScreen}）。
+         * 界面上那几行红字是**客户端自己算的**（即写死的那两条判据），但裁决始终在
+         * 服务端——被拒的时候只有服务端说得清为什么，所以让服务端把那句话带过来，
+         * 界面照原样画出来（见 {@code CompressionBoxScreen}）。
          */
         public final String notice;
         public final boolean open;
@@ -271,8 +271,8 @@ public final class CompressionBoxNetworking {
                     return;
                 }
                 // 不论成没成都要回一份内容：成了 = 界面上那一叠/那几格跟上；
-                // 没成 = 把「这次为什么没成」那句话带给界面（六百二十：禁入清单
-                // 是服务端配置说了算，客户端自己算不出来）
+                // 没成 = 把「这次为什么没成」那句话带给界面（六百二十：裁决在服务端，
+                // 客户端自己那份只是"先说一声"）
                 CompressionBoxService.handle(player, pkt.hand, pkt.action, pkt.index,
                         pkt.button, pkt.shift);
                 syncCarry(player, pkt.hand);

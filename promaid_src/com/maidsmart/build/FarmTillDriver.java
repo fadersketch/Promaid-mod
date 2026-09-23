@@ -125,6 +125,18 @@ public final class FarmTillDriver {
     }
 
     /**
+     * v1.2.4 实测六百四十六：女仆脑内当前是否有移动目标（WALK_TARGET）——有 =
+     * TLM 农场任务正带她去某一格（收/种），或本模组某驱动正在走位。锄地让路用。
+     */
+    private static boolean hasWalkTarget(EntityMaid maid) {
+        try {
+            return maid.m_6274_().m_21952_(MemoryModuleType.f_26370_).isPresent();
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
      * v1.1.0 实测三百五十五（反馈："将同样的逻辑引入到农场给农作物施肥里面，
      * 配置界面也是如此"）：农场作物骨粉催熟——与树苗催熟同款逻辑：
      * ① 找骨粉 主手 → 副手 → 背包（equipBoneMeal 复用，施肥时主手换持骨粉，
@@ -352,9 +364,16 @@ public final class FarmTillDriver {
             double distSq = maid.m_20275_(tillTarget.m_123341_() + 0.5,
                     tillTarget.m_123342_() + 0.5, tillTarget.m_123343_() + 0.5);
             if (distSq > 9.0) {
-                maid.m_21573_().m_26519_(tillTarget.m_123341_() + 0.5,
-                        tillTarget.m_123342_(), tillTarget.m_123343_() + 0.5, 0.8f);
-                return true; // 正在走过去锄 = 耕地工作中
+                // v1.2.4 实测六百四十六（issue #22 第一条"home 农场到处乱转"）：女仆脑内
+                // 【已有移动目标】时让路——那说明 TLM 农场任务正带她去收/种某一格（或本模组
+                // 别的驱动在走位）。这里走的是直连导航（m_26519_，会直接换掉当前路径），
+                // 每 0.5 秒硬插一次目标就会与那条路径互相覆盖 = 农场上的"快速乱转"。
+                // 让路后：只在"站定/没有目标"的间隙锄——频次略降，轨迹干净。
+                if (!hasWalkTarget(maid)) {
+                    maid.m_21573_().m_26519_(tillTarget.m_123341_() + 0.5,
+                            tillTarget.m_123342_(), tillTarget.m_123343_() + 0.5, 0.8f);
+                }
+                return true; // 正在走过去锄 = 耕地工作中（主手优先口径不变）
             }
             // 锄成耕地（与 HoeItem 静态表同目标：dirt/grass_block → farmland）
             world.m_7731_(tillTarget, net.minecraft.world.level.block.Blocks.f_50093_.m_49966_(), 3);

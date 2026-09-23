@@ -73,9 +73,10 @@ public final class CompressionBoxService {
      * 「这一下为什么没成」——最近一次被拒的原因文案（v1.2.2 实测六百二十）。
      *
      * 【为什么要有】六百一十八起界面点击的裁决在服务端，而服务端拒了就什么都不发生：
-     * 玩家只看得到「点了没反应」。界面上那几条红字是**客户端自己算的**，只能覆盖
-     * 写死的那几条判据（压缩盒/附魔）；配置禁入清单这种「服务端才知道」的判据，
-     * 只有服务端说得清。所以这里记一句人话，随下一次内容同步发给客户端画出来
+     * 玩家只看得到「点了没反应」。界面上那几条红字是**客户端自己算的**（压缩盒/附魔
+     * 这两条写死的判据，客户端读得到同一份 {@link CompressionBoxFilter}）；但真正的
+     * 裁决在服务端，只有它说得清「这一次为什么没成」。所以这里记一句人话，
+     * 随下一次内容同步发给客户端画出来
      * （{@link CompressionBoxNetworking.BoxStatePacket} 的 notice 字段）。
      * 与 {@link #CARRIES} 一样：所有访问都在服务端主线程，用普通 HashMap。
      */
@@ -320,7 +321,7 @@ public final class CompressionBoxService {
         if (from.m_41619_()) {
             return false;
         }
-        // 六百二十：压缩盒 / 带附魔的物品 / 配置禁入清单——一律不往盒子里放，
+        // 六百二十：压缩盒 / 带附魔的物品——一律不往盒子里放，
         // 并且把「为什么」留给界面（notice → 客户端画一行红字）
         String why = CompressionBoxFilter.reason(from);
         if (why != null) {
@@ -373,7 +374,7 @@ public final class CompressionBoxService {
         }
         Carry c = carry(player, handOrdinal);
         if (inBox) {
-            // 六百二十：手上这一叠先过禁入清单（压缩盒/附魔物品/配置清单）。
+            // 六百二十：手上这一叠先过禁入判据（压缩盒/附魔物品）。
             // 挡在这里而不是 clickBox 里——clickBox 拿不到玩家，说不清「为什么」。
             String why = CompressionBoxFilter.reason(c.stack);
             if (why != null) {
@@ -410,7 +411,7 @@ public final class CompressionBoxService {
         want = Math.min(want, c.stack.m_41613_());
         ItemStack put = c.stack.m_255036_(want);
         if (!CompressionBoxFilter.canStore(put)) {
-            return false; // 禁入清单（mergeInto 里还有一道，这里先挡以便界面给提示）
+            return false; // 禁入判据（mergeInto 里还有一道，这里先挡以便界面给提示）
         }
         ItemStack left = CompressionBoxData.mergeInto(items, slot, put);
         int moved = want - left.m_41613_();
@@ -521,7 +522,7 @@ public final class CompressionBoxService {
             if (from.m_41619_()) {
                 return false; // 空的没得存
             }
-            // 六百二十：Shift+点这一格 = 「整叠存进去」，同样要过禁入清单
+            // 六百二十：Shift+点这一格 = 「整叠存进去」，同样要过禁入判据
             // （压缩盒不许装压缩盒是用户报过的那个 bug；附魔物品是这一批新加的口径）
             String why = CompressionBoxFilter.reason(from);
             if (why != null) {

@@ -442,6 +442,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      * 具体动作描述（系统字幕"女仆支援了姐妹：喂了牛奶"用）。
      */
     private String feedSisterMilkOrHoney(EntityMaid maid, EntityMaid sister) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：牛奶/蜂蜜
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42787_
+                        || "minecraft:milk_bucket".equals(String.valueOf(
+                                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_()))), -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
@@ -536,6 +540,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测八：金苹果给姐妹（附魔优先；效果同 useGoldenApple，目标换人）
      *  v1.1.0 实测三十二：返回值 boolean → String（动作描述），补吃苹果音效 */
     private String useGoldenAppleOn(EntityMaid maid, EntityMaid sister) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：金苹果/附魔金苹果
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42436_
+                        || s.m_41720_() == net.minecraft.world.item.Items.f_42437_, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -577,6 +584,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测八：喂姐妹治疗食物（按饱和度择优，手持也认——同主人链）
      *  v1.1.0 实测三十二：返回值 boolean → String（动作描述，系统字幕用） */
     private String feedSisterFood(EntityMaid maid, EntityMaid sister) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：可投喂食物
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, com.maidsmart.action.EmotionalActionExecutor::isFeedableFood, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -688,6 +697,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     private String feedDrinkablePotionTo(EntityMaid maid, EntityMaid sister,
                                          java.util.Set<String> potionNames, String label, boolean useCd) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：饮用型药水
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -747,6 +758,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
     private int throwPotionTo(ServerLevel level, EntityMaid maid,
                               net.minecraft.world.entity.LivingEntity target,
                               java.util.Set<String> potionNames, String label, boolean useCd) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：投掷型药水
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
+                        || s.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -902,6 +916,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      */
     private int throwPotionToOwner(ServerLevel level, EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：投掷型药水
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.SplashPotionItem
+                        || s.m_41720_() instanceof net.minecraft.world.item.LingeringPotionItem, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -1058,6 +1075,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.5.252g13：useCd=false（着火/溺水情境）不走 CD——效果判定在调用处 */
     private int giveDrinkablePotion(EntityMaid maid, ServerPlayer owner,
                                     java.util.Set<String> potionNames, String label, boolean useCd) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：饮用型药水
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
@@ -1323,7 +1342,12 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
-            return isAidItem(maid.m_21205_()) || isAidItem(maid.m_21206_());
+            return isAidItem(maid.m_21205_()) || isAidItem(maid.m_21206_())
+                    // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：背包/双手没有 → 再看精妙
+                    // 背包/旅行者背包（只读探针）。这个预检是整轮的硬门槛，不放宽的话"物资全在
+                    // 精妙背包里"的女仆会一声不吭（各分支里的 pull 根本没机会跑）。
+                    || com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                            MaidAidOwnerBehavior::isAidItem);
         } catch (Exception ignored) {
             return false;
         }
@@ -1364,6 +1388,9 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      * （效果更强）。背包无则返回 false。
      */
     private boolean useGoldenApple(EntityMaid maid, ServerPlayer owner) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：金苹果/附魔金苹果
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42436_
+                        || s.m_41720_() == net.minecraft.world.item.Items.f_42437_, -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
@@ -1435,6 +1462,8 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.1.0【满饱食不再喂食物】：主人饱食度满（=20）时直接返回——满饥饿低血时
      *  食物回血既慢又浪费，且原版满饥饿本就吃不下；药水/金苹果等给 buff 的不走这里。 */
     private boolean feedHealingFood(EntityMaid maid, ServerPlayer owner) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：可投喂食物
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, com.maidsmart.action.EmotionalActionExecutor::isFeedableFood, -1);
         if (owner.m_36324_().m_38702_() >= 20) {
             return false;
         }
@@ -1537,6 +1566,10 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测一百五十二：MISC_MILK_FEED_WITH_BUFF 开启时无视增益照喂——
      *  主人装备/饰品带永久增益时旧版永远不满足"无增益"，中毒/凋零也不解。 */
     private boolean feedMilkOrHoneyDirect(EntityMaid maid, ServerPlayer owner) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：牛奶/蜂蜜
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42787_
+                        || "minecraft:milk_bucket".equals(String.valueOf(
+                                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_()))), -1);
         try {
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
