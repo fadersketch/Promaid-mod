@@ -383,21 +383,16 @@ public static final ModConfigSpec.DoubleValue FLIGHT_FOLLOW_END_DIST;
 public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_FIREWORK;
 /** 飞行跟随是否消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1）：关 = 只对她飞行跟随期间的鞘翅免掉 */
 public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
+/** 飞行跟随是否消耗激流三叉戟耐久（默认开 = 照原版扣 1 点；v1.2.4 实测六百四十 新增）：关 = 用激流三叉戟追主人时不扣它的耐久（只管这一条链路，空袭那边的起飞/抬升/俯冲照旧扣） */
+public static final ModConfigSpec.BooleanValue FLIGHT_FOLLOW_TRIDENT;
 /** 压缩盒·放进女仆背包时是否算她背包的延伸（默认开；关 = 只当普通收纳道具用，她的取物代码看不见盒子里的东西） */
 public static final ModConfigSpec.BooleanValue COMPRESSION_BOX_MAID_EXTENSION;
 /** 压缩盒每格上限（默认 114514 = 用户点名的那个数；范围 64~1000000——低于 64 会让「一格顶一叠」这件事失去意义，故下限锁 64） */
 public static final ModConfigSpec.IntValue COMPRESSION_BOX_MAX_STACK;
-/**
- * v1.2.2 实测六百二十：压缩盒禁入「带附魔的物品」（附魔书/附魔武器等，默认开）。
- *
- * 判据在 {@code CompressionBoxFilter.isEnchantedItem}：附魔书看物品类型
- * （1.21.1 的 {@code isEnchanted()} 只看 ENCHANTMENTS 组件，附魔书在
- * STORED_ENCHANTMENTS 里，它看不见），其余看 {@code isEnchanted()}。
- * 关掉 = 只拦「压缩盒本身」与禁入清单。
- */
-public static final ModConfigSpec.BooleanValue COMPRESSION_BOX_REFUSE_ENCHANTED;
-/** v1.2.2 实测六百二十：压缩盒禁入清单（完整注册名，逗号分隔；默认空 = 只拦压缩盒与附魔物品） */
-public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> COMPRESSION_BOX_REFUSE_LIST;
+// v1.2.4 实测六百四十五：这里原本是两个配置项——「禁入带附魔的物品」开关
+//（COMPRESSION_BOX_REFUSE_ENCHANTED）与「禁入清单」（COMPRESSION_BOX_REFUSE_LIST）。
+// 两者已删除：附魔物品**一律禁入**（判据写死在 CompressionBoxFilter，配置不再参与），
+// 老配置文件里残留的 refuseEnchanted / refuseList 两行不再被读取。
 /** v1.1.0 实测十七：战斗搭方块（自保搭高/翻墙/搭桥/封头盖帽）清理时间（秒，默认 60） */
 public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     // v1.5.102：自保/落地水/避让剩余数值（原硬编码常量全部面板化）
@@ -464,6 +459,32 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      * 这个附魔存在的意义，关掉等于把她手里的激流三叉戟降级成普通三叉戟。
      */
     public static final ModConfigSpec.BooleanValue RIPTIDE_DASH_ENABLE;
+    /**
+     * v1.2.4 实测六百四十一 / 六百四十二【激流三叉戟当"推进剂"时的力度倍数】（默认 **1.0 = 不打折**）。
+     *
+     * 用户反馈原文："女仆使用三叉戟起飞/飞行的时候飞行格数异常，一下子就能飞100多格。激流3"
+     * ＋"而且三叉戟没有减少矢量的相关措施。"＋（第二版改完之后）"实测下来，起飞的时候女仆还是
+     * 会飞的特别高……还是会轻松飞出100格。"＋（设计决定）"将激流三叉戟在起飞/俯冲/飞行突进的
+     * 链路改为拟真烟花……数值跟玩家在水中使用三叉戟（还要判定附魔等级）一致。"
+     *
+     * 【结论：力度照玩家在水里那一记、再整体 ×1.3，不打折；形状走烟花】力度 = 原版
+     * {@code 3.0×(1+等级)/4 × 1.3}（I 1.95 / II 2.93 / III 3.90 格/tick，判附魔等级），按**玩家在水里的
+     * 阻力 ×0.80/tick** 递减——行程（按递推式逐 tick 累加）I 7.6 / II 12.5 / III 17.3 格，
+     * 与玩家在水里放同一把三叉戟同量级。本项默认 **1.0**（一分不打折）：六百四十二 实测"照搬玩家
+     * 那一记偏慢（激流三甚至比俯冲自己飞还慢）"，所以**基线本身已经乘了 1.3**，本项是在那个基线
+     * **之上**再乘；逐 tick 的推进形状（烟花式递推、竖直也一起管、整份可删）见
+     * {@code MaidRiptideBoost}。
+     *
+     * 【为什么上一版按"雨里"算还是不对】六百四十 照的是"玩家在**雨**里那一记"（空气阻力 0.91
+     * → 行程 17/25/33 格），而且只压**水平**速度——竖直分量没人管，而鞘翅滑翔对竖直几乎不衰减
+     * （×0.98/tick），于是起飞就是"一路窜高"。六百四十一 起：数值换成"**水里**那一记"、
+     * 形状换成烟花（每 tick 把整个速度矢量钉在视线方向上），两个毛病一起治。
+     *
+     * 【什么时候调小 / 调大】想更省更稳（只拿它当"轻推一把"、或嫌耐久掉得快）往 0.1 调；
+     * 想回到六百四十一 的手感调到 {@code 1 / 1.3 ≈ 0.77}；还想更猛可以往 2.0 调（上限）。
+     * 调到最小仍是原版力度的十分之一，不会变成"没有推力"。
+     */
+    public static final ModConfigSpec.DoubleValue COMBAT_RIPTIDE_FLIGHT_SCALE;
     /**
      * v1.2.0 实测五百三十五：弩是否可以用**普通烟花**（无爆炸组件）当弹药（默认开）。
      *
@@ -655,6 +676,10 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue AIR_RAID_DIVE_BOOST_FIREWORK_SCALE;
     /** v1.2.2 实测六百〇六：俯冲段是否把羽扇当加速手段（默认关——原式那份竖直升力会把俯冲顶成平飞） */
     public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_FAN;
+    /** 俯冲段冲刺·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：方向不变（她此刻的视线 = 朝下扎），力度照原版矢量 */
+    public static final ModConfigSpec.BooleanValue AIR_RAID_DIVE_BOOST_RIPTIDE;
+    /** 掉高补推·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：**先把机头抬到补推仰角**再沿视线推原版矢量——PvP 玩家的"激流抬升" */
+    public static final ModConfigSpec.BooleanValue AIR_RAID_RANGED_BOOST_RIPTIDE;
     // ================= 空袭轰炸（v1.2.2 实测五百八十七：近战空袭打完放炸弹 + 远程空袭投掷 TNT。
     //   配置面板：战斗与自保 → 空袭数值 → ⑦ 空袭轰炸；口径与反编译实证见 com.maidsmart.combat.MaidBombing） =================
     /** 近战空袭轰炸总开关（默认开） */
@@ -859,6 +884,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.5.161：农场连锁收获 / 收获物自动收集（默认关闭）
     public static final ModConfigSpec.BooleanValue MISC_CHAIN_HARVEST;
     public static final ModConfigSpec.BooleanValue MISC_AUTO_COLLECT;
+    /** v1.2.4 实测六百三十六【精妙背包适配】：自己的背包满了之后，再试她身上的"额外容器"
+     *  （饰品栏里的精妙背包 / 旅行者背包，TLM 的 compat.extracontainer 体系，见
+     *  {@code com.maidsmart.tool.MaidExtraContainer}）——默认开 */
+    public static final ModConfigSpec.BooleanValue MISC_BACKPACK_OVERFLOW;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -1103,7 +1132,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.mine.pillarCooldown")
                 .defineInRange("pillarCooldown", 4, 1, 20);
         // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
-        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘中禁止搭方块（默认开）：女仆骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘也照常搭）")
+        MINE_RIDE_NO_PILLAR = BUILDER.comment("骑乘/坐下中禁止搭方块（默认开；v1.2.4 实测六百三十五 起对**所有**搭方块行为生效）：女仆骑乘中（扫帚等载具、TLM 的椅子）**或坐下**时，挖矿垫脚 / 伐木垫脚 / 搭路 / 自保搭高全部不再放方块——这两种形态下她根本挪不动，垫方块只会留一堆残渣；关闭 = 旧行为（骑乘/坐下也照常搭）。蓝图建造与指标石建造不受影响（她本来就是坐着施工的）")
                 .translation("config.promaid.mine.rideNoPillar").define("rideNoPillar", true);
         MINE_JUNK_CHECK_INTERVAL = BUILDER.comment("废石清理检查间隔（tick）")
                 .translation("config.promaid.mine.junkCheckInterval")
@@ -1663,6 +1692,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 被这条链路取代（TLM 原生近战不再出手）。
         RIPTIDE_DASH_ENABLE = BUILDER.comment("激流三叉戟旋转冲击（默认开）：攻击模式 / 空袭下主手拿着【激流】三叉戟时，**她原本那一记普通挥砍会被换成旋转冲击**——近身 4 格内替换（地面要站在地上；空袭的**收翅俯冲那一记在空中也替换**：那一下本来就在空中、实战价值更大），旋转 16 tick（与玩家同款：平躺 + 高速自转），撞到谁就结算一次伤害（攻击力 + 附魔，同一目标每次突进只打一下；空中旋转期间不自我摔伤）；触发时机就是她的攻击时机，走路、索敌、排班等一律不变。默认开——这才是激流这个附魔存在的意义；关闭 = 激流三叉戟只当普通三叉戟挥砍")
                 .translation("config.promaid.combat.riptideDash").define("riptideDash", true);
+        // v1.2.4 实测六百四十一 / 六百四十二：激流推进剂的力度倍数（用户反馈：飞行格数异常 100+ 格 / 起飞
+        // 特别高（配合重锤弹射起跳时轻松 100 格）→ 设计决定"改为拟真烟花，数值跟玩家在水中使用
+        // 三叉戟（还要判定附魔等级）一致"）。结论：力度照搬玩家在**水里**那一记（默认 1.0 不打折）、
+        // 形状走烟花式递推（竖直也一起管）——推导见字段声明处与 MaidRiptideBoost 的类文档。
+        // v1.2.4 实测六百四十二：实测"激流三甚至还没有俯冲飞行自己飞得快，缺乏实战价值"，于是把
+        // **力度**整体 ×1.3（基线写死在 MaidRiptideBoost.PLAY_SCALE，本项在那个基线之上再乘），
+        // 语义从"折扣"改成"倍数"、范围放宽到 0.1~2.0。
+        COMBAT_RIPTIDE_FLIGHT_SCALE = BUILDER.comment("激流三叉戟·推进剂力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟当【推进剂】时（起飞 / 飞行跟随补推 / 空袭的掉高抬升与俯冲冲刺），力度 = 原版 `3.0×(1+等级)/4` × **1.3**（实测六百四十二 的调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。\n\n【行为形状走烟花】推进剂不是「一次性冲量」，而是像挂载烟花那样**每 tick 把整个速度矢量**往「视线 × 当前力度」上拉（`v ← v×0.5 + 视线×(力度/2)`，与原版挂载烟花同形）——所以**竖直分量也归推进管**（旧版只压水平，竖直没人管，起飞就会一路窜高）。\n\n【数值取水里的那一记】当前力度按**玩家在水里的阻力 ×0.80/tick** 递减，掉到滑翔常态（0.35 格/tick）即收手。行程按递推式逐 tick 累加：I ≈ 7.6 格 / II ≈ 12.5 格 / III ≈ 17.3 格（闭式 力度 ÷ (1 − 0.80) = 9.75 / 14.6 / 19.5 是理想上限）。六百四十一 照搬玩家那一记（III 级 12.9 格）实测偏慢——「激流三甚至还没有俯冲飞行自己飞得快」——所以六百四十二 起基线 ×1.3。\n\n【什么时候调小 / 调大】想更省更稳往 0.1 调；想回到六百四十一 的手感调到 1÷1.3 ≈ 0.77；想更猛可以往 2.0 调。0.1 仍是原版力度的十分之一。\n\n【只管推进剂】近战那一记「朝目标的旋转冲击」（combat.riptideDash）照旧用原版矢量，不受本项影响")
+                .translation("config.promaid.combat.riptideFlightScale").defineInRange("riptideFlightScale", 1.0, 0.1, 2.0);
         // v1.2.0 实测五百三十五：普通烟花能否当弩弹药（用户要求"加一下开关"）
         // v1.2.0 实测五百三十七：默认改为【关】。用户实测"烟花火箭竟然一点伤害都没有"，
         // 取证结论：这不是版本差异、也不是他哪里出错，而是原版机制——`FireworkRocketEntity`
@@ -1951,7 +1989,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_RANGED_HOLD_BIAS = BUILDER.comment("高度修正偏置（格，默认 1.0）：给高度误差加一点正偏置，让她略微偏高于期望高度（留余量）")
                 .translation("config.promaid.airRaid.rangedHoldBias")
                 .defineInRange("rangedHoldBias", 1.0, -20.0, 20.0);
-        AIR_RAID_RANGED_BOOST_DROP = BUILDER.comment("掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补一口推（烟花 / 位移法术），实测五百七十八由 3.0 收到 0.5")
+        AIR_RAID_RANGED_BOOST_DROP = BUILDER.comment("掉高容差（格，默认 0.5）：掉出期望高度带这么多格就补一口推（法术 / 激流三叉戟 / 扇子 / 烟花），实测五百七十八由 3.0 收到 0.5")
                 .translation("config.promaid.airRaid.rangedBoostDrop")
                 .defineInRange("rangedBoostDrop", 0.5, 0.0, 20.0);
         AIR_RAID_RANGED_ORBIT_UP_MAX = BUILDER.comment("盘旋抬头上限（度，默认 45）：高度修正抬头时的角度上限")
@@ -1960,13 +1998,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_RANGED_ORBIT_DOWN_MAX = BUILDER.comment("盘旋低头上限（度，默认 35）：高度修正低头时的角度上限（低头会掉速掉高，所以比抬头上限小）")
                 .translation("config.promaid.airRaid.rangedOrbitDownMax")
                 .defineInRange("rangedOrbitDownMax", 35.0, 0.0, 89.0);
-        AIR_RAID_RANGED_BOOST_INTERVAL = BUILDER.comment("掉高补推间隔（tick，默认 100 = 5 秒）：两次补推（烟花 / 位移法术）之间的最短间隔")
+        AIR_RAID_RANGED_BOOST_INTERVAL = BUILDER.comment("掉高补推间隔（tick，默认 100 = 5 秒）：两次补推（法术 / 激流三叉戟 / 扇子 / 烟花）之间的最短间隔")
                 .translation("config.promaid.airRaid.rangedBoostInterval")
                 .defineInRange("rangedBoostInterval", 100, 0, 1200);
         AIR_RAID_RANGED_BOOST_AIM_TICKS = BUILDER.comment("补推抬头窗口（tick，默认 10 = 0.5 秒）：补推成功后就按「抬头朝目标」维持这么久，把推力吃满才会回到盘旋朝向")
                 .translation("config.promaid.airRaid.rangedBoostAimTicks")
                 .defineInRange("rangedBoostAimTicks", 10, 1, 100);
-        AIR_RAID_RANGED_BOOST_PITCH = BUILDER.comment("补推仰角（度，默认 -45 = 抬头 45°）：掉高窗口里朝目标抬头的角度（烟花与位移法术共用同一口径）")
+        AIR_RAID_RANGED_BOOST_PITCH = BUILDER.comment("补推仰角（度，默认 -45 = 抬头 45°）：掉高窗口里朝目标抬头的角度（法术 / 激流三叉戟 / 扇子 / 烟花共用同一口径）")
                 .translation("config.promaid.airRaid.rangedBoostPitch")
                 .defineInRange("rangedBoostPitch", -45.0, -89.0, 0.0);
         AIR_RAID_RANGED_SHOT_COOLDOWN = BUILDER.comment("远程开火基础间隔（tick，默认 20 = 1 秒）：弓弩的基础射击间隔；快速装填附魔会按比例缩短（最低 4 tick、不超过本值）")
@@ -1999,7 +2037,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // "向下朝着敌人俯冲"= 阶段二那一段（滑翔中、朝目标压低机头扎下去）——所以烟花在那里
         // **点得着**（推力沿视线 = 朝着敌人，方向不变）；扇子的推力则带 +1.25 竖直升力，
         // 会把俯冲顶成平飞，所以扇子这一路只借动作与消耗。
-        AIR_RAID_DIVE_BOOST = BUILDER.comment("俯冲段冲刺加速（默认开）：近战空袭【朝目标压低机头、一路滑翔扎下去】那一段（= 用户说的「向下朝着敌人俯冲」）按节奏补一口推进，**方向不变**（方向 = 她此刻的朝向 = 朝着敌人）——目的：缩短一轮「起飞→俯冲」的周期 = 提高周期 DPS。\n\n【为什么以前没有】这一段旧版只有一处位移法术的冲刺，烟花与扇子都不参与；而烟花其实在这段**点得着**（滑翔中，原版推力沿视线生效，方向天然不变）。现在把三者收进同一条链路排序：法术 → 烟花 → 羽扇（见面板下两条）")
+        AIR_RAID_DIVE_BOOST = BUILDER.comment("俯冲段冲刺加速（默认开）：近战空袭【朝目标压低机头、一路滑翔扎下去】那一段（= 用户说的「向下朝着敌人俯冲」）按节奏补一口推进，**方向不变**（方向 = 她此刻的朝向 = 朝着敌人）——目的：缩短一轮「起飞→俯冲」的周期 = 提高周期 DPS。\n\n【为什么以前没有】这一段旧版只有一处位移法术的冲刺，烟花与扇子都不参与；而烟花其实在这段**点得着**（滑翔中，原版推力沿视线生效，方向天然不变）。现在把四者收进同一条链路排序：法术 → 激流三叉戟 → 烟花 → 羽扇（见面板下三条）")
                 .translation("config.promaid.airRaid.diveBoost").define("diveBoost", true);
         AIR_RAID_DIVE_BOOST_INTERVAL = BUILDER.comment("俯冲段冲刺间隔（tick，默认 30 = 1.5 秒）：两次冲刺之间的最短间隔（与烟花冷却同量级）。俯冲段本身只有 1 秒上下，所以一轮通常吃得到一口；调小 = 一轮能吃几口、冲得更猛（更费烟花）")
                 .translation("config.promaid.airRaid.diveBoostInterval").defineInRange("diveBoostInterval", 30, 5, 600);
@@ -2013,8 +2051,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.airRaid.diveBoostFirework").define("diveBoostFirework", true);
         AIR_RAID_DIVE_BOOST_FIREWORK_SCALE = BUILDER.comment("俯冲段冲刺·烟花力度倍数（默认 1.4，v1.2.2 实测六百一十五 新增）：用户原话「我发现加强力度太小，加速效果不明显。还耗了一颗烟花，没啥用。这边建议这个烟花加速力度效果乘以1.4倍」。\n\n【这一条到底乘的是什么（字节码实证，两版本一致）】原版挂载烟花每 tick 做的是 v = v×0.5 + 视线×0.85（1.20.1 FireworkRocketEntity.tick / 1.21.1 同名方法：`look×0.1 + (look×1.5 − v)×0.5`），即**把速度往「1.7 倍视线」这个不动点上拉**。本模组给俯冲段点的那一枚挂载烟花**额外补一份沿视线的推力**，大小 = 0.85 ×(倍数 − 1)，于是不动点从 1.7 变成 1.7×倍数——默认 1.4 就是「俯冲时那枚烟花把速度拉到 2.38 倍视线」，而不是只把速度改得快一点。\n\n【为什么不是「多发一枚」】用户要的是「这一枚更狠」，不是「烧得更快」：倍数只改推力大小，**不额外消耗烟花**（仍然一发一枚）。范围 1.0~3.0：1.0 = 完全照原版（与旧版一字不差），调大 = 俯冲更猛。\n\n【只影响俯冲那一段】起飞/爬升/盘旋用的是原版烟花（倍数 1.0），行为一字未改。")
                 .translation("config.promaid.airRaid.diveBoostFireworkScale").defineInRange("diveBoostFireworkScale", 1.4, 1.0, 3.0);
-        AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是实测里「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 烟花 → 羽扇：法术不消耗物资、最省，有可用法术时先走法术")
+        AIR_RAID_DIVE_BOOST_FAN = BUILDER.comment("俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但**不用它那一式推力**（它自带 +1.25 竖直升力、还会把速度往视线×2 收敛，在朝下扎的俯冲里等于把她顶成平飞——这正是实测里「孔雀羽扇好像不行」的由来）。速度改由本模组按「俯冲段冲刺·一口速度」给，方向不变。\n\n【燃料优先级】法术 → 激流三叉戟 → 烟花 → 羽扇：法术不消耗物资、激流只扣三叉戟耐久，两者都在烟花（真的要烧掉一枚）之前")
                 .translation("config.promaid.airRaid.diveBoostFan").define("diveBoostFan", false);
+        AIR_RAID_DIVE_BOOST_RIPTIDE = BUILDER.comment("俯冲段冲刺·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：俯冲途中挥一次激流三叉戟换一口加速——**方向不变**（那一段她的视线已经被钉在敌人身上，所以这一口天然是「朝下扎得更快」），力度照原版 `3.0 × (1 + 激流等级) / 4` 再整体 ×1.3（实测六百四十二；I 1.95 / II 2.93 / III 3.90 格/tick），动作也是原版那一记（旋转 20 tick + 按等级的音效），只扣 1 点耐久、**不消耗任何物资**。\n\n【为什么排在烟花之前】烟花是消耗品、这一条只扣耐久，所以有激流三叉戟时先用它，把玩家的烟花省下来。\n\n【总开关】`combat.riptideDash`（激流三叉戟旋转突进）关掉时，这一条也一起退回")
+                .translation("config.promaid.airRaid.diveBoostRiptide").define("diveBoostRiptide", true);
+        AIR_RAID_RANGED_BOOST_RIPTIDE = BUILDER.comment("掉高补推·用激流三叉戟（默认开，v1.2.4 实测六百三十四）：远程空袭盘旋中掉出高度带时，**先把机头抬到「补推仰角」再沿视线推**原版那一口——这就是 PvP 玩家用激流「向上抬升飞行」的做法（原版激流的方向就是视线，抬头才升得起来）。仰角与其他补推手段共用 `rangedBoostPitch`（默认 -45°，抬头 45°），并照旧开同一个抬头窗口。\n\n【为什么不能照搬起飞那一记】盘旋期她的视线是「绕圈切线」（faceOrbit 摆的），沿它推只在圈上窜一下、抬不起来——所以这一路必须自己摆机头，这也是它单独写一套的原因（见 MaidRiptideBoost）。\n\n【总开关】`combat.riptideDash` 关掉时，这一条也一起退回")
+                .translation("config.promaid.airRaid.rangedBoostRiptide").define("rangedBoostRiptide", true);
         BUILDER.pop();
 
         // ---- 空袭轰炸（v1.2.2 实测五百八十七）----
@@ -2151,6 +2193,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.flightFollow.firework").define("firework", true);
         FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
                 .translation("config.promaid.flightFollow.elytra").define("elytra", true);
+        // v1.2.4 实测六百四十：第三个省料开关（需求原文"飞行跟随没有不消耗三叉戟耐久的开关"）
+        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 实测六百四十 新增）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
+                .translation("config.promaid.flightFollow.trident").define("trident", true);
         BUILDER.pop();
 
 // ---- v1.2.2 实测六百一十六【压缩盒：一格 114514 个，放进女仆背包算她背包的延伸】----
@@ -2164,12 +2209,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.compressionBox.maidExtension").define("maidExtension", true);
         COMPRESSION_BOX_MAX_STACK = BUILDER.comment("压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里**每一格**能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；**往下调不会删已有的东西**（已存的堆只在下次写入时被夹到新上限）。\n\n放进女仆背包时她仍然一次只拿 64（原版堆叠口径，见上一条）。")
                 .translation("config.promaid.compressionBox.maxStack").defineInRange("maxStack", 114514, 64, 1000000);
-        // v1.2.2 实测六百二十【用户要的黑名单】：附魔书/附魔武器与压缩盒不许放进盒子里
-        COMPRESSION_BOX_REFUSE_ENCHANTED = BUILDER.comment("压缩盒·禁入带附魔的物品（默认开）：开 = 带附魔的东西（附魔书、附魔武器/工具/盔甲……）既放不进盒子、在界面里也拿不起来会给你一句提示；关 = 只有『压缩盒本身』和下面的禁入清单还拦着。\n\n为什么默认拦：①盒子的格数只有 5，而附魔物品是**不可堆叠**的（不同附魔组合互相不是同一件东西，一格只能放一种组合），很快就满——这个盒子的定位是『大批材料的压缩仓』，不是装备库；②六十百一十八之前用户报的『附魔类物品存进去会消失』正出在这一类上（盒子的自定义数量与原版 getMaxStackSize()=1 对不上，多出来的那份被原版当返回值丢掉，而 TLM 那一侧几十处调用点大多不看返回值）。\n\n附魔书是单独判的：1.21.1 的 ItemStack.isEnchanted() 只看 ENCHANTMENTS 数据组件，而附魔书的附魔在 STORED_ENCHANTMENTS 里。")
-                .translation("config.promaid.compressionBox.refuseEnchanted").define("refuseEnchanted", true);
-        COMPRESSION_BOX_REFUSE_LIST = BUILDER.comment("压缩盒·禁入清单（完整注册名，逗号分隔；默认空）：额外点名不许放进盒子的物品，例如 minecraft:gunpowder, minecraft:tnt。命中的物品与上面带附魔的一视同仁——放不进、界面里也会给提示；女仆那一侧同样看不见它（她不会把这类东西顺手塞进盒子）。")
-                .translation("config.promaid.compressionBox.refuseList")
-                .defineList("refuseList", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
         BUILDER.pop();
 
         // ---- 杂项 ----
@@ -2214,7 +2253,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_NO_PLACE_ON_OWNER = BUILDER.comment("不得搭在主人身上（默认开）：目标格被主人碰撞箱占着时不搭方块——防把主人挤住、卡住或盖住头部。覆盖四个自主搭块模块（自保搭高/搭路/挖矿垫脚/伐木垫脚）、插火把、AI 工具 smart_place，以及蓝图建造与碑石建造；蓝图类遇到该情形是【延后】而非跳过——主人让开后自动续建。判据用碰撞箱真正交叠（严格不等式），所以主人站在方块上时不会误判他脚下那格。关掉 = 恢复旧行为（允许搭在主人身上）")
                 .translation("config.promaid.misc.noPlaceOnOwner").define("noPlaceOnOwner", true);
         // 实测四百四十八：蛋糕可食用开关（兜底逃生通道）
-        MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）")
+        MISC_CAKE_EDIBLE = BUILDER.comment("蛋糕可食用（默认开）：让女仆把蛋糕当食物（女仆吃整块蛋糕回复 14 点生命并 +10 好感，玩家用蛋糕右击自己的女仆也会触发投喂）。关闭后蛋糕恢复原版行为（只能放置、不能被女仆当食物），「女仆吃蛋糕」相关功能全部停用——这是与第三方模组冲突时的逃生通道（某些模组会把「可食用物品」判定为投喂目标，从而抢走野生女仆的驯服交互）\n\n【1.21.1 侧特有】这个开关在**模组加载时**一次性生效（1.21.1 的食物是数据组件，给 minecraft:cake 挂 FOOD 组件那一步在加载期做完）：关掉后玩家投喂立刻停，但「女仆把蛋糕当食物」要**重启游戏**才回到原版")
                 .translation("config.promaid.misc.cakeEdible").define("cakeEdible", true);
         // v1.1.0 实测一百五十八：兼容高炉/烟熏炉
         MISC_COOK_SMOKER_BLAST = BUILDER.comment("兼容高炉/烟熏炉（默认开）：烧制任务不只操作熔炉——高炉按高炉配方喂料（矿石/粗金属等）、烟熏炉按烟熏配方喂料（生食），成品/燃料逻辑照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物，关掉后高炉只收成品/补燃料不喂料）；关闭 = 只操作熔炉（旧行为）")
@@ -2312,6 +2351,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
             .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
     MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
             .translation("config.promaid.misc.autoCollect").define("autoCollect", false);
+    // v1.2.4 实测六百三十六：精妙背包适配（issue #20）——"发现自己背包满了之后，再检索一下
+    // 有没有精妙背包。有的话就装进去。" 走 TLM 现成的额外容器 API（javap 实证两版本签名一致），
+    // 不自己去反射精妙背包（它给的是 CapabilityBackpackWrapper，不是 ITEM_HANDLER）
+    MISC_BACKPACK_OVERFLOW = BUILDER.comment("背包满时装进精妙背包（默认开，v1.2.4 实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的\"额外容器\"——饰品栏里的精妙背包 / 旅行者背包（TLM 本体的 compat.extracontainer 体系，精妙背包坐 curios 的 back 槽）。\n\n【生效条件】需要 Curios 在场 + TLM 的「女仆饰品」功能开启 + 背包真的戴在她饰品栏里（拿在手上/放在别处不算，TLM 也不认）；一件都不满足时行为与旧版一字不差。\n\n【绝不吞物品】额外容器再塞不下才落地——最坏情况仍是「掉在地上」")
+            .translation("config.promaid.misc.backpackOverflow").define("backpackOverflow", true);
     // v1.5.163：农场连锁收获数量上限可自定义
     MISC_CHAIN_HARVEST_LIMIT = BUILDER.comment("农场连锁收获上限（格）：一次连锁收割的最大格数（默认 24，大农田多轮清完）")
             .translation("config.promaid.misc.chainHarvestLimit").defineInRange("chainHarvestLimit", 24, 4, 96);

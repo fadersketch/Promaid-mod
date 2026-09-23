@@ -209,6 +209,11 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
      */
     private static int findTorch(EntityMaid maid) {
         try {
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有火把 →
+            // 先请 TLM 从精妙背包/旅行者背包搬一把进来（谓词 = 本类自己的火把清单，
+            // 与下面逐档匹配同一份 TORCH_IDS；搬进来后照原样返回背包槽位，调用方无需改）
+            com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                    s -> !s.isEmpty() && isTorchItem(s), 1);
             net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (String torchId : TORCH_IDS) {
                 Item torchItem = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(torchId));

@@ -167,7 +167,43 @@ public abstract class FarmSweepMixin {
                 world.m_45976_(net.minecraft.world.entity.item.ItemEntity.class, box)) {
             if (e.m_6084_()) {
                 maid.pickupItem(e, false);
+                // v1.2.4 实测六百三十六：连锁收割一次收一片，掉落物很容易超过她自己的背包
+                // 容量——issue #20 报的正是这里："超出来的以掉落物的形式掉在地上"。她的拾取
+                // （含 TLM 自己的额外容器链路）没收完的那一份，再走一次我们的额外容器兜底。
+                maidsmart$overflowRest(maid, e);
             }
+        }
+    }
+
+    /**
+     * v1.2.4 实测六百三十六：拾取之后仍留在地上的那一份，再试一次"额外容器"
+     * （精妙背包 / 旅行者背包，见 {@code MaidExtraContainer}）；收下多少就从掉落物里扣多少。
+     *
+     * 【为什么还留着 TLM 那一层】{@code maid.pickupItem} 走的是 TLM 的拾取事件，那里
+     * 已经有它自己的额外容器处理（{@code ExtraContainerPickupHandler}）——但那条链路要求
+     * Curios 在场且背包真的戴在她饰品栏里；这里再兜一次，是因为 issue 报的现场就是"
+     * 收不完的那部分落地"，多这一层只会在"确实有额外容器"时才有动作，其余情况是空操作。
+     */
+    private static void maidsmart$overflowRest(EntityMaid maid,
+                                               net.minecraft.world.entity.item.ItemEntity e) {
+        try {
+            net.minecraft.world.item.ItemStack before = e.m_32055_();
+            if (before == null || before.m_41619_()) {
+                return;
+            }
+            int n0 = before.m_41613_();
+            net.minecraft.world.item.ItemStack rest =
+                    com.maidsmart.tool.MaidExtraContainer.overflow(maid, before.m_41777_());
+            int left = rest == null ? n0 : rest.m_41613_();
+            if (left >= n0) {
+                return; // 一件都没收下：保持原样
+            }
+            if (left <= 0) {
+                e.m_146870_(); // 全收下：掉落物消失（等价于被捡走）
+            } else {
+                e.m_32045_(rest);
+            }
+        } catch (Throwable ignored) {
         }
     }
 

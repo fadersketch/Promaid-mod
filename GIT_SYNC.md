@@ -27,7 +27,7 @@
 
 | 项目 | 镜像仓库 | 分支 | 当前版本 |
 | --- | --- | --- | --- |
-| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.3 |
+| Promaid | `C:\Users\Sketch\.zcode\workspace\default\promaid-mod` | `main`（当前线） | v1.2.4 |
 | Heartfelt-connection | `C:\Users\Sketch\.zcode\workspace\default\heartfelt-mod` | `main` | v1.0.2 |
 
 - `promaid-mod` 另有分支 `experimental/memory-port`，**停在 v1.1.0、不含 `promaid_src_neo`**，

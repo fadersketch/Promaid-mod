@@ -690,6 +690,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 ItemStack remain = net.minecraftforge.items.ItemHandlerHelper
                         .insertItemStacked(inv, stack, false);
                 if (!remain.m_41619_()) {
+                    // v1.2.4 实测六百三十六：她自己的背包满了，先试她身上的"额外容器"
+                    // （饰品栏里的精妙背包 / 旅行者背包，见 MaidExtraContainer）
+                    remain = com.maidsmart.tool.MaidExtraContainer.overflow(maid, remain);
+                }
+                if (!remain.m_41619_()) {
                     Block.m_49840_(level, pos, remain); // 背包满：落地（原版 popResource）
                 }
             }
@@ -1736,7 +1741,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     private boolean pillarUpStep(ServerLevel level, EntityMaid maid) {
         // v1.1.0 实测一百五十六：骑乘中（扫帚等载具）不搭方块——移动由载具控制，
         // 垫方块只会留一堆残渣（反馈："和女仆在扫帚上挖矿时女仆会搭方块"）
-        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
+        if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
             return false;
         }
         if (this.pillarCooldown > 0) {
@@ -1821,8 +1826,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 反复垫直到够得着。前方脚下是平地（不悬空）→ 不需要垫，直接走过去即可。
      */
     private boolean slopeStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
-        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
-            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
+            return false; // 骑乘/坐下中不搭方块（v1.1.0 实测一百五十六；v1.2.4 实测六百三十五 并入统一闸口）
         }
         if (this.pillarCooldown > 0) {
             this.pillarCooldown--;
@@ -1876,8 +1881,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 只垫"该垫"的一格，不破坏任何既有方块；危险格（岩浆/火等）不垫不踩。
      */
     private boolean descendStep(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
-        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
-            return false; // 骑乘中不搭方块（与 slopeStep 同口径）
+        if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
+            return false; // 骑乘/坐下中不搭方块（实测六百三十五：统一闸口，与 slopeStep 同口径）
         }
         if (hDist < 1.0) {
             return false;
@@ -1935,8 +1940,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
      * 只垫"该垫"的位置，不破坏任何方块；垫一块后重算（下 tick 再评估/走）。
      */
     private boolean bridgeToOre(ServerLevel level, EntityMaid maid, double hx, double hz, double hDist) {
-        if (com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get() && maid.m_20159_()) {
-            return false; // v1.1.0 实测一百五十六：骑乘中不搭方块
+        if (com.maidsmart.tool.MaidPlaceGuard.seatedBlocked(maid)) {
+            return false; // 骑乘/坐下中不搭方块（v1.1.0 实测一百五十六；v1.2.4 实测六百三十五 并入统一闸口）
         }
         if (hDist < 1.0) {
             return false;
@@ -2034,6 +2039,11 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             return null;
         }
         // v1.1.0 实测七：统一走 MaidBuildBlockFilter——火把等无碰撞方块不再入选
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：她自己背包里没有可用垫脚方块时，
+        // 先请 TLM 的额外容器系统从精妙背包/旅行者背包搬一组进来（pull 先扫她自己的背包，
+        // 找到就什么都不做——零副作用）。与 issue #19/#21 的"搭路取材"共用同一份口径。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null), -1);
         // ---- v1.2.3-dbg 探针：取料前后真实库存对照（查完删掉） ----
         net.minecraftforge.items.IItemHandler __inv = maid.getAvailableBackpackInv();
         net.minecraftforge.items.IItemHandler __hands = maid.getHandsInvWrapper();

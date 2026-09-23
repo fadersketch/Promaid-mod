@@ -239,6 +239,71 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private static final java.util.Map<java.util.UUID, AttackerRecord> LAST_ATTACKERS =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /* ===================== v1.2.4 实测六百四十七：窒息伤害台账 ===================== */
+
+    /**
+     * 「我卡住了，快喘不过气了！」的播报台账——累计【真的吃到的窒息伤害】。
+     *
+     * 用户口径（实测六百四十七 原话）：「我觉得触发这句话，至少要真受到超过 4 点的
+     * 窒息伤害才可以说」。旧版只按几何判定（{@code headInSolid}：头部那一格不是空气、
+     * 且形状够实）就播报——她挤过窄缝、被自己/别人放的方块顶一下、上下坡抬头都能
+     * 瞬时命中这个几何条件，**一点血都没掉也照样喊"喘不过气"**；再叠加"每次自保
+     * 会话进场都会重置播报标记"（{@code sessionEnter} 里 {@code announcedEnv=false}），
+     * 就成了"老不停说自己窒息了"。
+     *
+     * 现在改成：**先记账、再开口**——只有 {@code in_wall}（原版窒息伤害，见
+     * {@code data/minecraft/damage_type/in_wall.json}，1.20.1 与 1.21.1 都是
+     * {@code "message_id": "inWall"}）累计超过 4 点才播报。原版活体是"每 tick 卡在
+     * 可窒息方块里吃 1 点"（{@code LivingEntity.baseTick} 实证），所以真被闷住时
+     * 0.25 秒就能到门槛；反过来，几何命中但没掉血就一个字都不说。
+     */
+    private static final java.util.Map<java.util.UUID, SuffocateRecord> SUFFOCATE_DAMAGE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 台账累计窗口（tick，5 秒）——超过这么久没有新的窒息伤害就当清零 */
+    private static final long SUFFOCATE_WINDOW_TICKS = 100L;
+
+    /** 播报门槛（点）——用户口径"超过 4 点" */
+    private static final float SUFFOCATE_ANNOUNCE_MIN = 4.0f;
+
+    /** 诊断日志限频（tick，30 秒/女仆） */
+    private static final long SUFFOCATE_DIAG_INTERVAL = 600L;
+
+    private record SuffocateRecord(float amount, long tick) {
+    }
+
+    private static final java.util.Map<java.util.UUID, Long> SUFFOCATE_DIAG_SINCE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 原版 in_wall 的 message_id（跨版本一致）；顺手兼容 snake_case 写法 */
+    private static boolean isSuffocateMsgId(String msgId) {
+        return msgId != null && "inwall".equals(
+                msgId.toLowerCase(java.util.Locale.ROOT).replace("_", ""));
+    }
+
+    /** 最近 5 秒内累计吃到的窒息伤害（没吃过 / 超窗口 → 0） */
+    private static float recentSuffocateDamage(EntityMaid maid) {
+        SuffocateRecord rec = SUFFOCATE_DAMAGE.get(maid.getUUID());
+        if (rec == null) {
+            return 0.0f;
+        }
+        if (maid.level().getGameTime() - rec.tick() > SUFFOCATE_WINDOW_TICKS) {
+            SUFFOCATE_DAMAGE.remove(maid.getUUID());
+            return 0.0f;
+        }
+        return rec.amount();
+    }
+
+    /** 诊断日志限频（30 秒/女仆）——返回 true = 这一轮该落日志 */
+    private static boolean suffocateDiagDue(EntityMaid maid, long now) {
+        Long last = SUFFOCATE_DIAG_SINCE.get(maid.getUUID());
+        if (last != null && now - last < SUFFOCATE_DIAG_INTERVAL) {
+            return false;
+        }
+        SUFFOCATE_DIAG_SINCE.put(maid.getUUID(), now);
+        return true;
+    }
+
     /** v1.5.135：女仆被攻击 → 记录攻击者（5 秒内视为威胁）。主人误伤不记。 */
     @net.neoforged.bus.api.SubscribeEvent
     public static void onMaidHurt(net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent event) {
@@ -280,6 +345,23 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                         event.getAmount(),
                         maid.getX(), maid.getY(), maid.getZ(),
                         maid.blockPosition().getY()));
+            }
+        } catch (Throwable ignored) {
+        }
+        // v1.2.4 实测六百四十七：窒息伤害入账（「我卡住了，快喘不过气了！」的播报门槛，
+        // 见 SUFFOCATE_DAMAGE 的注释）——只记真的走伤害结算的 in_wall，不记几何判定
+        try {
+            net.minecraft.world.damagesource.DamageSource srcS = event.getSource();
+            if (srcS != null && isSuffocateMsgId(srcS.getMsgId())) {
+                long nowS = maid.level().getGameTime();
+                java.util.UUID idS = maid.getUUID();
+                SuffocateRecord recS = SUFFOCATE_DAMAGE.get(idS);
+                float sum = (recS == null || nowS - recS.tick() > SUFFOCATE_WINDOW_TICKS)
+                        ? 0.0f : recS.amount();
+                SUFFOCATE_DAMAGE.put(idS, new SuffocateRecord(sum + event.getAmount(), nowS));
+                if (SUFFOCATE_DAMAGE.size() > 256) {
+                    SUFFOCATE_DAMAGE.entrySet().removeIf(e -> nowS - e.getValue().tick() > 1200L);
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -2632,9 +2714,26 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 实测仍偶发 30 tick 后误报"卡住"（掉进岩浆里还说自己卡住了，语义矛盾）
         long nowTick = maid.level().getGameTime();
         boolean lavaContext = nowTick - this.lastInLavaTick <= 100;
+        // v1.2.4 实测六百四十七（反馈：「女仆老不停的说自己窒息了，喘不过气」）：
+        // 这句话的门槛从"头部几何命中实心方块"改成【真的吃到超过 4 点窒息伤害】。
+        // 几何命中 ≠ 受伤：她挤过窄缝、被方块顶一下、上下坡抬头都能瞬时命中，
+        // 一点血没掉也照喊"喘不过气"；而每次自保会话进场都会重置播报标记
+        //（sessionEnter → announcedEnv=false），于是就成了反复说。
+        // 现在：没掉血 → 一句话不说（挪位置/顶出照旧，逃生行为一个字没动）；
+        // 说出口 → 记一行「窒息」日志（累计伤害可对账）。
         if (!lavaContext && !this.announcedEnv) {
-            this.announcedEnv = true;
-            maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
+            float suffocate = recentSuffocateDamage(maid);
+            if (suffocate > SUFFOCATE_ANNOUNCE_MIN) {
+                this.announcedEnv = true;
+                maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
+                com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 卡在方块里且已真吃到 " + String.format("%.1f", suffocate)
+                        + " 点窒息伤害 → 播报");
+            } else if (suffocateDiagDue(maid, nowTick)) {
+                com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 头部几何命中实心方块，但累计窒息伤害 "
+                        + String.format("%.1f", suffocate) + " 点（门槛 >4.0）→ 不播报，只挪位置顶出");
+            }
         }
         BlockPos air = this.findAirSpot(maid);
         if (air != null) {
@@ -2986,6 +3085,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!goldenAppleReady(maid)) {
                 return false;
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有金苹果 →
+            // 先请 TLM 从精妙背包/旅行者背包搬一个进来（pull 先扫她自己的背包，有就什么都不做）
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, SelfPreservationBehavior::isGoldenAppleStack, 1);
             net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             int slot = -1;
             boolean enchanted = false;
@@ -3619,6 +3721,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                     return true;
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有垫脚方块/末影珍珠 →
+            // 再看精妙背包/旅行者背包（只读探针）。这条决定"要不要走传送兜底"，口径放宽才不会
+            // 出现"精妙背包里一堆方块却判定弹尽粮绝、直接传送回来"。
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null))) {
+                return true;
+            }
+            if (pearl != null && com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> s.getItem() == pearl)) {
+                return true;
+            }
         } catch (Exception ignored) {
         }
         return false;
@@ -3648,9 +3760,16 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private boolean hasBuildBlock(EntityMaid maid) {
         try {
-            return com.maidsmart.tool.MaidBuildBlockFilter.hasBuildBlock(
+            if (com.maidsmart.tool.MaidBuildBlockFilter.hasBuildBlock(
                     com.maidsmart.tool.MaidBuildBlockFilter.view(maid.getAvailableBackpackInv()),
-                    maid.level(), maid.blockPosition());
+                    maid.level(), maid.blockPosition())) {
+                return true;
+            }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包没有 → 再看精妙背包/
+            // 旅行者背包（只读探针，不搬动物品；真取料时由 takeBuildBlock 里的 pull 搬进来）。
+            // 这个门禁必须跟着放宽——否则"背包空、精妙背包里一堆方块"的女仆连试都不试。
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null));
         } catch (Throwable ignored) {
             return false;
         }
@@ -3680,29 +3799,64 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         try {
             IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
-                ItemStack s = inv.getStackInSlot(i);
-                if (s.isEmpty()) {
-                    continue;
-                }
-                if (s.getItem() instanceof net.minecraft.world.item.PotionItem) {
-                    return net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem()).toString();
-                }
-                String id = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem()).toString();
-                if (id.equals("minecraft:golden_apple")
-                        || id.equals("minecraft:enchanted_golden_apple")) {
+                String id = healResourceName(inv.getStackInSlot(i));
+                if (id != null) {
                     return id;
-                }
-                // 实测五百五十二：通用食物判定（模组食物/金胡萝卜等同样算）
-                if (com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s)) {
-                    return id;
-                }
-                for (String food : HEAL_FOODS) {
-                    if (id.equals(food)) {
-                        return id;
-                    }
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有 → 再看精妙背包/
+            // 旅行者背包（只读探针）。返回一句人话而不是注册名——这个方法同时是日志里的
+            // "回血资源=…"证据，写成"（精妙背包/旅行者背包）"比编一个假 id 诚实。
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid, s -> healResourceName(s) != null)) {
+                return "（精妙背包/旅行者背包）";
+            }
         } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * v1.2.4 实测六百三十九：金苹果/附魔金苹果——"着火吃"（{@link #eatGoldenAppleForFire}）与
+     * "低血吃"（{@link #useGoldenApple}）两条消耗路径、以及"从精妙背包取物"的谓词共用这一份判定
+     * （口径分叉是本模组吃过亏的地方）。
+     */
+    private static boolean isGoldenAppleStack(ItemStack s) {
+        if (s == null || s.isEmpty() || s.getItem() == null) {
+            return false;
+        }
+        return s.getItem() == net.minecraft.world.item.Items.GOLDEN_APPLE    // golden_apple
+                || s.getItem() == net.minecraft.world.item.Items.ENCHANTED_GOLDEN_APPLE; // enchanted_golden_apple
+    }
+
+    /**
+     * 单件物品算不算"回血资源"（返回它被认出来的注册名，不算则 null）——
+     * v1.2.4 实测六百三十九：从 {@link #healResourceId} 抽出来，好让"她自己背包"
+     * 与"精妙背包/旅行者背包"两条判定**共用同一份口径**（口径分叉是本模组吃过亏的地方）。
+     */
+    private static String healResourceName(ItemStack s) {
+        if (s == null || s.isEmpty() || s.getItem() == null) {
+            return null;
+        }
+        net.minecraft.resources.ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(s.getItem());
+        if (key == null) {
+            return null;
+        }
+        String id = key.toString();
+        if (s.getItem() instanceof net.minecraft.world.item.PotionItem) {
+            return id;
+        }
+        if (id.equals("minecraft:golden_apple")
+                || id.equals("minecraft:enchanted_golden_apple")) {
+            return id;
+        }
+        // 实测五百五十二：通用食物判定（模组食物/金胡萝卜等同样算）
+        if (com.maidsmart.action.EmotionalActionExecutor.isFeedableFood(s)) {
+            return id;
+        }
+        for (String food : HEAL_FOODS) {
+            if (id.equals(food)) {
+                return id;
+            }
         }
         return null;
     }
@@ -4166,6 +4320,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      */
     private boolean useGoldenApple(EntityMaid maid) {
         try {
+            // 实测六百一十九：同一条冷却门（本树这条路上原先漏了这一步——着火那条路有，
+            // 低血这条没有 → "只有金苹果"时会连吃；本树这次补齐，与 forge 树一致）
+            if (!goldenAppleReady(maid)) {
+                return false;
+            }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有金苹果 →
+            // 先请 TLM 从精妙背包/旅行者背包搬一个进来（pull 先扫她自己的背包，有就什么都不做）
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, SelfPreservationBehavior::isGoldenAppleStack, 1);
             IItemHandler inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             boolean enchanted = false;
@@ -4369,6 +4531,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测七：选材统一走 MaidBuildBlockFilter——火把等无碰撞方块、
         // 可替换方块（草/雪片）一律不再入选（旧 isSafeBuildBlock 的本地逻辑
         // 并入工具类，本类保留壳调用）。返回 Block（自保内部用 Block 放置）。
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有可用垫脚方块 →
+        // 先请 TLM 从精妙背包/旅行者背包搬一组进来（pull 先扫她自己的背包，找到就什么都不做）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> com.maidsmart.tool.MaidBuildBlockFilter.isUsableBuildStack(s, null, null), -1);
         net.minecraft.world.item.Item item = com.maidsmart.tool.MaidBuildBlockFilter
                 .takeBuildBlock(maid.getAvailableBackpackInv(), maid.level(), maid.blockPosition());
         if (item == null) {

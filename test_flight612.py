@@ -68,8 +68,8 @@ TARGETS = {
         'java': r'C:/Users/Sketch/AppData/Roaming/.minecraft/runtime/java-runtime-beta/bin/java.exe',
         'args': ['@user_jvm_args.txt',
                  '@libraries/net/minecraftforge/forge/1.20.1-47.4.23/win_args.txt', 'nogui'],
-        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.3.jar',
-        'modname': 'promaid-1.2.3.jar',
+        'jar': r'C:/Users/Sketch/.zcode/workspace/default/promaid-mod/patched/promaid-1.2.4.jar',
+        'modname': 'promaid-1.2.4.jar',
         'elytra': 'id:"minecraft:elytra",Count:1b',
         'firework': 'id:"minecraft:firework_rocket",Count:64b',
         'maxhp_attr': 'generic.max_health',
@@ -103,7 +103,7 @@ cfg = TARGETS.get(which)
 if not cfg:
     print('usage: python test_flight612.py [1201] [--jar <path>]')
     sys.exit(2)
-# --jar：红轮要跑**旧 jar**（改造前那份）。不指定就用 patched/promaid-1.2.3.jar（绿轮）。
+# --jar：红轮要跑**旧 jar**（改造前那份）。不指定就用 patched/promaid-1.2.4.jar（绿轮）。
 if '--jar' in sys.argv:
     cfg = dict(cfg)
     cfg['jar'] = sys.argv[sys.argv.index('--jar') + 1]

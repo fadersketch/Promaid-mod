@@ -1,7 +1,7 @@
 # Promaid 上传 CurseForge / Modrinth 发布指南
 
 > 本文是**操作手册**，回答"点哪里、填什么"。两个平台都是**先提交、再人工审核**，新项目第一次提交会进审核队列（CurseForge 常见几小时到 3 天，Modrinth 常见 1~2 天，周末更慢）。
-> 版本：v1.2.3 · 对应 jar：`patched/promaid-1.2.3.jar`（Forge）与 `patched/promaid-1.2.3-neoforge-1.21.1.jar`（NeoForge）
+> 版本：v1.2.4 · 对应 jar：`patched/promaid-1.2.4.jar`（Forge）与 `patched/promaid-1.2.4-neoforge-1.21.1.jar`（NeoForge）
 
 ---
 
@@ -68,21 +68,21 @@
 
 ### 2.2 传版本（左侧 Versions → Create version）
 
-**要传两次**（同一个 1.2.3，两个加载器）：
+**要传两次**（同一个 1.2.4，两个加载器）：
 
 | 字段 | 第 1 次（Forge） | 第 2 次（NeoForge） |
 | --- | --- | --- |
-| Version name | `v1.2.3 (Forge 1.20.1)` | `v1.2.3 (NeoForge 1.21.1)` |
-| Version number | `1.2.3` | `1.2.3` |
+| Version name | `v1.2.4 (Forge 1.20.1)` | `v1.2.4 (NeoForge 1.21.1)` |
+| Version number | `1.2.4` | `1.2.4` |
 | Release channel | `Release` | `Release` |
 | Loaders | **只勾 Forge** | **只勾 NeoForge** |
 | Game versions | **只勾 1.20.1** | **只勾 1.21.1** |
-| File | `promaid-1.2.3.jar` | `promaid-1.2.3-neoforge-1.21.1.jar` |
+| File | `promaid-1.2.4.jar` | `promaid-1.2.4-neoforge-1.21.1.jar` |
 | Dependencies | 添加 **Required** → `Touhou Little Maid` | 同上 |
 | Changelog | 贴第 4.3 节 | 贴第 4.3 节 |
 
 > 千万别一个文件勾两个加载器——Forge 包放进 NeoForge 环境会直接启动失败，这是投诉最多的来源。
-> 文件名建议改成 `promaid-1.2.3-forge-1.20.1.jar` / `promaid-1.2.3-neoforge-1.21.1.jar` 再传（纯为了下载者一眼能分辨，不影响加载）。
+> 文件名建议改成 `promaid-1.2.4-forge-1.20.1.jar` / `promaid-1.2.4-neoforge-1.21.1.jar` 再传（纯为了下载者一眼能分辨，不影响加载）。
 
 ### 2.3 提交审核
 
@@ -115,8 +115,8 @@
 
 | 字段 | 第 1 次 | 第 2 次 |
 | --- | --- | --- |
-| File | `promaid-1.2.3.jar` | `promaid-1.2.3-neoforge-1.21.1.jar` |
-| Display name | `Promaid 1.2.3 — Forge 1.20.1` | `Promaid 1.2.3 — NeoForge 1.21.1` |
+| File | `promaid-1.2.4.jar` | `promaid-1.2.4-neoforge-1.21.1.jar` |
+| Display name | `Promaid 1.2.4 — Forge 1.20.1` | `Promaid 1.2.4 — NeoForge 1.21.1` |
 | Release type | **Release** | **Release** |
 | Game version | `1.20.1` | `1.21.1` |
 | Modloader | **Forge** | **NeoForge** |
@@ -255,37 +255,33 @@ A Touhou Little Maid addon: flying air-raid combat, blueprint building, mining, 
 **MIT** —— 源码与问题反馈：<https://github.com/fadersketch/Promaid-mod>
 ````
 
-### 4.3 v1.2.3 版本更新说明（填到"该版本的 changelog"字段）
+### 4.3 v1.2.4 版本更新说明（填到"该版本的 changelog"字段）
 
 ```markdown
-## ⚠ 这是一次加急更新：先修「收放魂符丢血量上限与装备」，再带上攒下的新功能（相对 v1.2.2）
+## v1.2.4：三叉戟当燃料、精妙背包适配、守家模式两条修复（相对 v1.2.3）
 
-**为什么加急**：B 站用户 lawte 反馈「女仆由好感度升阶带来的血量上限加成、以及身上穿的装备，会因为收放魂符被卡掉」，GitHub issue #18（P1aneZ）也报了同一条（魂符放出后从她背包/装备栏取物会丢失）。这是会**吃掉玩家存档里实打实物品**的严重 bug。这两条的根因与修复其实早已提交（实测五百九十五 / 五百九十六），但 **v1.2.2 的 release 附件比它们早约 12 小时上传**，所以从 release 下到 v1.2.2 的玩家仍会踩到——这次一并发出。
-
-**修复**
-- **收放魂符后血量上限掉回 20**：好感升阶给的 80 血上限会来回横跳（我们自己的「入世界自动补包」没补属性表）
-- **收放魂符后从她背包/装备栏拖东西，第一件直接消失**（同一条补包把客户端那只女仆销毁重建，容器还指着已被删掉的那只）
-- **着火会把背包里的金苹果连着吃到背包空**（issue #17）
-- 法术自身冷却被多乘 20 倍（issue #16）；图纸三条（issue #12 / #14 / #15）；回收方块"整体还她"（萤石不再变粉）；「拿着羽扇却报缺飞行道具」的假提示；坐下还在搭路；无主女仆一概不碰；面板「字符串输入行」一直没画标签与说明
+**一句话**：三叉戟不止能捅人——激流三叉戟现在可以当「飞行推进剂」；同时修掉 1.21.1 上最要命的一条（右键蛋糕崩服），以及守家（home）模式的两条老毛病。
 
 **新功能**
-- **战斗模式分类表**：逐任务点名「近战 / 远程 / 不参与」，配 `/maid_smart combat modes` 查询与「模组任务优先让位」开关（留空 = 与旧版一字不差）
-- **压缩盒**：5 格 × 每格 114514，放进女仆背包 = 她背包的延伸（她会取料、也会吃里面的饭）；禁入清单（附魔物 / 压缩盒）+ 箱子式鼠标取放 + 常驻附魔光效
-- **空袭轰炸**：末地水晶 / 重生锚 / 床 / 投掷 TNT，三段并行；默认不动地形、不伤主人与友军、爆炸火改粉色且不烧玩家与女仆
-- **飞行跟随**：主人自己飞走了，她背上鞘翅追过来（默认关，起手 25 格 / 收手 5 格）
-- **散步速度终于调得动**：默认 0.7 → 0.4、下限 0.3 → 0.05，配 `/maid_smart stroll check|go|speed` 现场量速
-- **索敌两处调整**：隔着方块的怪不再算威胁；战斗时工作范围临时扩圈（打完自动落回常态）
-- 副手动作表现推广到全链路；空袭 34 项数值可调、俯冲段冲刺加速
+- **激流三叉戟当「飞行推进剂」**：起飞 / 空袭的盘旋抬升与俯冲下扎 / 飞行跟随四条链路都能烧；力度照「玩家在水里放激流那一记」并按附魔等级放大（I / II / III 行程约 17 / 25 / 33 格）；取材范围主手 → 副手 → 背包，耐久扣在真正用到的那一件上；飞行跟随新增省料开关 `flightFollow.trident`
+- **精妙背包 / 旅行者背包适配**（issue #20）：她自己的背包满了，多出来的那一份装进身上那件「额外容器」；反过来取料时也先去那里面找（走 TLM 自己的容器 API，不反射第三方模组）
+
+**修复**
+- **右键蛋糕掉线 / 崩服（1.21.1 专属）**：移植「蛋糕可食用」时注错了方法（返回值类型不符），改用 1.21.1 的数据组件在加载期挂 FOOD
+- **守家（home）模式下农场女仆「在田里到处乱转」**（issue #22 第一条）：我们自己的"随机巡逻"每 0.25 秒改一次导航目标，覆盖掉了原版农场任务正在走的路径——现在农场完全交回原版（平常站着/散步，作物成熟了才走过去收），锄地也不再抢路
+- **打完怪「驻守」变成「跟随」、回不去**（issue #22 第二条）：战后还原把"战斗前模式快照"删在了读取之前（读不到键 → 当成"关掉驻守"），现在先还原后清标记，且没有快照就完全不动她的设置
+- **「我卡住了，快喘不过气了」不再当口头禅**：原来只要"头部那一格形状够实"就喊（一点血没掉也喊），现在只有真吃到超过 4 点窒息伤害（原版 `in_wall`，5 秒窗口累计）才说；自救动作照旧，运行日志分类「窒息」可查
+- **远程空袭「拿着枪一枪不放」**（两处病根 + 新增「远程开火」诊断行）
+- **烧制 / 酿造没有目标时不再把自己冻在原地**；**骑乘或坐下时禁止搭方块**（护栏统一到全部搭方块行为）
+- v1.2.3 三次重传里的修复（issue #12 ~ #19 那一批）**全部收进本版新版本号**，不会再出现"同名不同内容"
 
 **这一版的行为变化（装之前看一眼）**
-- 空闲散步默认变慢（0.7 → 0.4，老存档自动迁移一次；注意 0.2 以下实测几乎不走，好用的慢档是 0.3~0.4）
-- 排班表「全员在家」整条移除（单只女仆的在家开关照旧）
-- 压缩盒默认不许放带附魔的物品；轰炸默认不动地形、不伤主人与友军
-- 战斗模式分类表留空 = 与旧版一字不差；「模组任务优先让位」默认仍开着
+- **压缩盒：带附魔的物品一律禁入**——「禁入带附魔的物品」开关与「禁入清单」（`refuseList`）两个配置项**已删除**，配置面板原位留了一条只读说明；老配置里残留的两行不再被读取、也不影响启动；压缩盒那一页现在只剩「女仆背包延伸」与「每格上限」两条可调
+- 激流三叉戟的取材范围是「主手 → 副手 → 背包」三处（曾有一版收成"只认背包"，已按反馈改回）
+- 原有口径不变：接战时工作范围临时扩圈、散步默认速度 0.4、压缩盒与轰炸的默认保护等
 
 **完整逐条更新日志**见仓库 `CHANGELOG.md`。
 ```
-
 ---
 
 ## 5. 审核会被卡住的点（照着自查）
@@ -303,4 +299,133 @@ A Touhou Little Maid addon: flying air-raid combat, blueprint building, mining, 
 
 1. 把两个平台的项目链接加回仓库：`README.md` 顶部已留了"仓库"一行，可再加 CurseForge / Modrinth 徽章；
 2. 之后每次发版：**先**在本地重新构建两个 jar（`build_promaid.py` / `build_promaid_neo.py`）→ 部署本地 → 传两个平台的新版本 → 再在 GitHub 发 Release（顺序反了会出现"平台上的包和仓库里的不一致"）；
-3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.2.3`）。
+3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.2.4`）。
+
+---
+
+## 附录 A：Modrinth 实操记录（2026-09-22 已提交审核）
+
+**结果**：项目已用 API 全流程提交，`status=processing`（审核队列中）。项目 id `13TCcQi2`，slug `promaid`（没被别人占），地址将是 `modrinth.com/mod/promaid`。前置《车万女仆》在 Modrinth 的 project id 是 `R0bDWFAW`（同时挂 forge + neoforge、1.20.1 + 1.21.1），依赖填 required 即可。
+
+商店文案与图标已归档到仓库 `store/`（见 `store/README.txt`），发布工具是 `publish_modrinth.py`；`PUBLISH_GUIDE.md` 第 2 节那些"点哪里"的网页操作说明，从此只在网页端改版时才需要。
+
+### A.1 凭据
+
+Modrinth → Settings → **Personal access tokens** → Create token（权限全勾）。令牌写到 `_tmp_pub/mr_pat.txt`（该目录被 `/_tmp_*/` 忽略，**不要提交**）；脚本只回显前 8 位用于确认身份，从不打印完整令牌。
+
+### A.2 接口的坑（全部实测，容易白折腾）
+
+| 环节 | 正确做法 | 走错时的报错 |
+| --- | --- | --- |
+| 建项目 `POST /v2/project` | **multipart，单个字段 `data` = 整包 JSON** | 直接发 JSON → `ContentTypeIncompatible`；逐字段发 → `expected value at line 1 column 1` |
+| 建项目的必填字段 | 已废弃的 `initial_versions` / `gallery_items` / `donation_urls` **都必须给**（给空数组） | 缺 `initial_versions` → `missing field initial_versions` |
+| 分类 | `categories` **最多 3 个**，其余的放 `additional_categories` | `Field categories failed validation with error: length` |
+| 图标 | `PATCH /v2/project/{id}/icon?ext=jpg`，**裸二进制体**；上限 **256 KiB** | 原来的 512px 图有 338 KiB，传不上去 |
+| 截图 | `POST /v2/project/{id}/gallery?ext=png&featured=true&title=…`，**裸二进制体 + `Content-Type: image/png`** | 用 multipart 传 → `The image format could not be determined` |
+| 删截图 | `DELETE /v2/project/{id}/gallery?url=<图片 url>`（url 从 `GET /project/{id}` 的 `gallery[].url` 取） | 重传前不删 → 同一张图变两张 |
+| 传版本 `POST /v2/version` | 反而要 multipart：字段 `data`（JSON）+ 文件字段，`file_parts` 里写字段名 | — |
+| **提交审核** | `PATCH /v2/project/{id}`，body **`{"status":"processing"}`** | 设 `"approved"` → `401 You don't have permission to set this status!`；设 `requested_status` 只改那一列，**不会进队列**（草稿项目创建时 `requested_status` 默认就是 `approved`，所以看着像成功其实没提交） |
+
+提交审核的判定依据是 labrinth 源码 `apps/labrinth/src/routes/v3/projects/mod.rs`：
+`submit_for_review = new_project.status == Some(ProjectStatus::Processing) && !user.role.is_mod()`，
+且该分支会顺带写 `queued = NOW()`。而草稿项目只允许被设成 `processing`（`!is_approved() && status == Processing`），所以给 `approved` 一定 401。
+
+### A.3 提交前的必填校验（nags）
+
+`GET /v3/project/{id}/validate`（**只有 v3 路径有，v2 是 404**）返回未满足项。我们当初卡在三条：
+
+1. `project_summary_non_english`【必填】——简介必须判定为英文；
+2. `project_description_non_english`【必填】——正文里英文段落按字符占比 **≥ 20%**（`MIN_DESCRIPTION_ENGLISH_PROPORTION = 0.2`，按 markdown 标题/段落切块、用 lingua 判语种、去掉代码块）；
+3. `check_disclosures`【建议】——内容披露。
+
+第 2 条与其说"必须英文"，不如说"英文不能太少（不到两成）"。我们整节英文说明放最前、中文顺延，占比约 68%，一次过。
+
+### A.4 内容披露（`PATCH /v3/project/{id}/disclosures`）
+
+body = `{"set":[…],"remove":[]}`，我们声明了两条：
+
+- `ai_content`，`uses: ["code","assets"]` —— 代码用 AI 辅助编写、图标与宣传图为生成式 AI 制作；
+- `ai_functionality` —— 可选 AI 功能会调用玩家自填的 OpenAI 兼容站点，不填不请求。
+
+### A.5 上传的文件与 GitHub 附件逐字节一致
+
+| 版本名 | 加载器 | MC | 文件 | sha256 前 8 / 后 6 |
+| --- | --- | --- | --- | --- |
+| v1.2.4 (Forge 1.20.1) | forge | 1.20.1 | `promaid-1.2.4.jar` | `168050e0` … `303e84` |
+| v1.2.4 (NeoForge 1.21.1) | neoforge | 1.21.1 | `promaid-1.2.4-neoforge-1.21.1.jar` | `147fa669` … `92c6cc` |
+
+两个 sha256 与 GitHub release 上的附件完全相同（v1.2.4 起，GitHub 与两个平台传的是**同一个文件**）。**一个文件只勾一个加载器**，这点不能错。
+
+### A.6 以后发新版要做的三步
+
+1. 本地构建两个 jar（`build_promaid.py` / `build_promaid_neo.py`）；
+2. 改 `store/version_changelog.md`（新版本的更新说明）、必要时改 `store/description_*.md` 与 `summary_en.txt`，跑 `publish_modrinth.py assemble`；
+3. `python publish_modrinth.py versions` 传两个新版本 → `python publish_modrinth.py text` 更新文案 → `python publish_modrinth.py validate` 自查（必须返回"没有未满足的校验项"）。
+   新版本可直接发（不必再走审核），只有**新项目**或改动了被平台管的字段才需要提交审核。
+
+### A.7 本次截图取材与取舍
+
+取自 `C:\Users\Sketch\Pictures\Screenshots` 里 2026-09-22 18:33~18:36 那 9 张，全部用上：
+
+| 商店顺序 | 源文件时间戳 | 标题 |
+| --- | --- | --- |
+| 1（封面） | 183331 | 空袭轰炸与友军火力 |
+| 2 | 183434 | 空袭飞行 |
+| 3 | 183346 | 枪械远程扫射 |
+| 4 | 183419 | 夜间遭遇战 |
+| 5 | 183613 | 蓝图选址与区块预览 |
+| 6 | 183633 | 建造进度 |
+| 7 | 183556 | 指标石搭建过程 |
+| 8 | 183541 | 排班表 |
+| 9 | 183644 | 手册首页与配置入口 |
+
+这批图是**窗口模式**截的，只有 967×560；商店展示宽度差不多就是这个量级，所以够用，但**下次换全屏截图（F1 关 HUD，再 F2）会更清楚**。另外注意：`D:\.minecraft\versions\1.20.1-Forge_47.4.21\screenshots` 里那批旧图全带 F3 调试信息，**不能直接当商店图**。
+
+---
+
+## 附录 B：PCL 2 / HMCL 需不需要单独"上架"？（2026-09-21 查证）
+
+**结论：不需要，也没有这样的入口。** 国内这两大启动器的「资源下载 → Mod」只有一个数据来源——CurseForge 与 Modrinth 的公开搜索接口。**在 CF / Modrinth 上通过审核并公开，就等于进了 PCL 的列表**，作者这边不用再做任何事。
+
+证据来自 PCL2 源码（仓库 `Hex-Dragon/PCL2`，分支 `master`）：
+
+- `Plain Craft Launcher 2/Modules/Resource/ResourceSearcher.vb` 里只有两条检索 URL：`https://api.curseforge.com/v1/mods/search?gameId=432&classId=6…` 与 `https://api.modrinth.com/v2/search…`；界面上那个「来源」下拉也只有 全部 / CurseForge / Modrinth 三项，结果按 CF 在前合并。
+- 资源类型靠 `classId` 区分：`6` Mod、`4471` 整合包、`6945` 数据包、`6552` 光影、`12` 材质包。
+- 文件下载走 `edge.forgecdn.net` / `cdn.modrinth.com`（可被镜像 `mod.mcimirror.top` 顶替）；**BMCLAPI 只镜像游戏本体与加载器，不参与 Mod 检索**。
+- 全仓库没有作者投稿表单 / QQ 群 / Discord / JSON 索引之类的通道。
+
+因此「上架 PCL」的完整条件就是三件事，全都在既有计划里：
+
+1. CF / Modrinth 项目审核通过、状态公开（PCL 只显示平台搜索接口返回的结果，草稿与 processing 不进列表）；
+2. 每个文件勾对加载器与游戏版本——PCL 会按用户选的版本 + 加载器过滤，**没有对应版本的文件就不会出现在结果里**；
+3. 若还想被**整合包**收录（PCL 的整合包区走同一套机制，只是换 `classId`），CF 项目的第三方分发开关必须保持允许（详见 00_填写清单 的【许可证与分发】一节）。
+
+### B.1 唯一和 PCL 有关、且我们能影响的：中文名映射表
+
+PCL2 内置一份「平台 slug → 中文名 → MC 百科条目」的映射表 `PCLCS/Resource/WikiEntries.txt`，**随启动器一起发布，不是联网拉的**。实测开头几行原文：
+
+```
+industrial-craft@|工业时代2 (Industrial Craft 2)
+buildcraft@|建筑 (BuildCraft)
+touhou-little-maid@|车万女仆*
+```
+
+`|` 左边是平台 slug（`@` 前缀 = Modrinth slug，无前缀 = CurseForge slug，`@` 夹在中间 = 两者都有），右边是显示名，`*` 表示自动补上英文名。代码里 `TranslatedName` 的逻辑就是「命中这张表用中文名，否则用平台原始英文名」，匹配键是 **slug**。
+
+这张表由 MC 百科数据生成，作者无法直接投稿，能做的只有两件：
+
+1. **MC 百科条目里的 CF ID 与 Modrinth ID 填对**（我们已填 `1707246` / `13TCcQi2`）——这正是生成映射的依据，所以这两个字段**不能清空**；
+2. 等启动器发新版（官方更新日志里写作「更新 Mod 中文名与 MC 百科映射数据库」）。
+
+查证时的实测结果：表里已经有 `touhou-little-maid@|车万女仆*`（我们的前置 TLM），**没有 promaid**——符合预期，条目还在审核中，而且这张表只随启动器版本刷新。
+
+### B.2 由此得到的两个实际影响
+
+- **英文搜索审核一过就能用**：在 PCL 里搜 `Promaid` 即可搜到（描述显示平台原文，目前是英文）；
+- **中文搜索要等映射表更新**：在那之前搜「更智能的车万女仆」搜不到。PCL 对中文关键词只查本地映射表，查不到会提示"请尝试搜索其英文名称"——这是设计如此，不是故障，也不必去反馈。
+
+顺带一提：即使进了映射表，PCL 显示的是 MC 百科的**主要名称**原文，也就是 `Promaid（更智能的车万女仆）`（表里其余条目多为「中文名 (英文名)」的写法，我们这种嵌在括号里的会原样显示，不影响检索）。
+
+### B.3 HMCL 对比
+
+HMCL 同样只有 CurseForge / Modrinth 两个来源（多一层 `LocalizedRemoteModRepository` 做中文名包装），同样没有独立投稿入口，BMCLAPI 同样只镜像游戏本体。结论一致：**不必为启动器额外做任何事**。

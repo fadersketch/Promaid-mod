@@ -20,8 +20,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * 修复：对蛋糕物品（注册名 minecraft:cake）两个方法返回食物属性（营养 14、
  * 饱和度 0.6——整块蛋糕=7切片×2，一次吃完吃掉整块）。getUseAnimation（m_6164_）
  * = isEdible ? EAT : NONE、使用时长（m_8105_）也由 isEdible 派生 → 自动获得正常
- * 进食动作/音效/粒子，无需额外处理。玩家右键蛋糕仍是放方块（BlockItem.use 未改），
- * 不受影响。
+ * 进食动作/音效/粒子，无需额外处理。
+ *
+ * 【玩家侧到底变没变（六百四十四 更正）】放置路径不变：BlockItem 只覆写 m_6225_
+ *（useOn），方块放置先于物品使用，所以对着方块右键照旧放蛋糕。但「右键空气」那条
+ * 路径会走到 Item.m_7203_（use），它读的正是 getFoodProperties → 现在会开始吃手上
+ * 那块蛋糕（吃不下的场合给一次「吃不了」的提示）。旧注释写「玩家不受影响」是错的。
+ *
+ * 【与 1.21.1 树的分工】这条 mixin 只有 1.20.1 用得上：1.21.1 的食物是数据组件，
+ * Item 上已无 isEdible/getFoodProperties，那边是在加载期用 NeoForge 的
+ * ModifyDefaultComponentsEvent 给 minecraft:cake 挂 FOOD 组件
+ *（见该树 MaidCakeEatHandler.onModifyDefaultComponents）。
  */
 @Mixin(Item.class)
 public abstract class MaidCakeEdibleMixin {

@@ -48,6 +48,7 @@ import java.util.Set;
  *   （原木/木板/树苗/竹等）默认黑名单不烧（开关 misc.cookBurnWood，默认关）
  * - 处理间隔 100 tick（5 秒），不瞬间完成烹饪（炉子自身进度驱动）
  * - v1.5.252：绑定炉子并到达后立刻坐下不动；行为停止/炉子丢失恢复站立
+ * - v1.2.4 实测六百三十七【没炉子可烧时不再"把自己冻住"】：见 {@link #wander}
  */
 public class MaidCookBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测一百六十一：诊断日志（latest.log 搜 "cook "）——定位"炉子就在
@@ -93,6 +94,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     private int cooldown = 0;
     /** 目标扫描节流：找不到熔炉时每 20 tick 才扫一次 */
     private int scanCooldown = 0;
+    /** 闲逛点节流（v1.2.4 实测六百三十七）：每 40 tick（2 秒）换一个闲逛点 */
+    private int wanderCooldown = 0;
     /** v1.1.0 实测一百六十八：炉子占用表（维度|坐标 → 占用女仆 UUID）——多个女仆同时
      *  在场时各自绑定不同炉子，避免全挤到第一个炉子上（反馈："两个女仆三个炉子，
      *  只有一个炉子工作"）。占用者死亡/换维/停行为时释放（stop + 扫描时懒清理）。 */
@@ -176,15 +179,26 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         if (this.furnacePos == null) {
-            // v1.5.24：找不到熔炉时站桩等待（不乱跑），节流扫描防每 tick 全量查询
-            MaidWorkTags.setStill(maid, true);
+            // v1.2.4 实测六百三十七【不再"没炉子就把自己钉死"】：旧版这里
+            // setStill(true) 站桩等待，而 WORK_STILL 经 MaidMoveSuppressMixin 是
+            // **彻底静止**（每 tick 清走位 + 停导航 + 取消 MoveToTargetSink），
+            // 于是"烧制任务 + home 模式 + 附近没有可用的炉子"= 永远不动。
+            // 玩家日志实证（latest.log 13:54 起）：反复 `cook start: maid=… furnace=null`
+            // 之后再没挪过一步；反馈原文「不进入我们自己写的烧制且处于 home 状态
+            // 这个模式的时候会直接卡在原地不动」。
+            // 现在改为一心两用：放行移动（不站桩），每 2 秒在附近挑个闲逛点
+            // ——与宰杀"没有牲畜就四处闲逛"（实测三百四十）同一套口径，
+            // 边走边扫炉子，找得到就绑定、找不到也不冻人。
+            MaidWorkTags.setStill(maid, false);
             this.standUp(maid);
             if (this.scanCooldown-- > 0) {
+                this.wander(maid);
                 return;
             }
             this.scanCooldown = 20;
             this.furnacePos = this.findFurnace(level, maid);
             if (this.furnacePos == null) {
+                this.wander(maid);
                 return;
             }
             // v1.1.0 实测一百六十八：绑定成功 → 登记炉子占用（多女仆分散）
@@ -195,7 +209,9 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             this.furnacePos = null;
             this.releaseFurnace(); // v1.1.0 实测一百六十八：炉子没了 → 释放占用
             this.standUp(maid);
-            MaidWorkTags.setStill(maid, true); // 熔炉没了：继续站桩等扫描
+            // 炉子没了：不站桩（下一 tick 走上面的"找炉子"分支，边走边找）
+            MaidWorkTags.setStill(maid, false);
+            this.wander(maid);
             return;
         }
         // v1.1.0 实测三百（反馈："如果女仆发现自己包中没有可以对应的物品，那么会将
@@ -205,7 +221,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             this.furnacePos = null;
             this.releaseFurnace();
             this.standUp(maid);
-            MaidWorkTags.setStill(maid, true);
+            // v1.2.4 实测六百三十七：背包里没有这型炉子能烧的东西 → 解绑重找，
+            // 并且**不站桩**（旧版这里 setStill(true)，配上"每 20 tick 又扫回同一个
+            // 不匹配的炉子"就是永久冻结）；边走边找，换个炉型就有得烧了。
+            MaidWorkTags.setStill(maid, false);
+            this.wander(maid);
             return;
         }
         double distSq = maid.distanceToSqr(this.furnacePos.getX() + 0.5, this.furnacePos.getY() + 0.5, this.furnacePos.getZ() + 0.5);
@@ -277,6 +297,52 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * v1.2.4 实测六百三十七：**没炉子可烧时的闲逛**（"别把自己冻在原地"）。
+     *
+     * ── 为什么要有这一段 ──
+     * 旧版在"找不到熔炉 / 炉子被拆 / 背包里没有这型炉子能烧的东西"三个分支里都是
+     * {@code setStill(true)} = 站桩等待。单看是"不乱跑"的美意，实际效果是**永久静止**：
+     * <ul>
+     *   <li>WORK_STILL 由 {@code MaidMoveSuppressMixin} 在 MoveToTargetSink 入口整段取消
+     *       ——不仅拦 WALK_TARGET，还会**每 tick 调 stopNavigation**，所以连直连导航
+     *       （m_26519_ moveTo）这种"绕开 MoveToTargetSink"的通道也会被立刻掐掉；</li>
+     *   <li>本任务 {@code enableLookAndRandomWalk=false}（不给 TLM 随机散步），
+     *       {@code HomeWorkMovementDriver} 只认农场/宰杀，{@code HomePatrolHandler}
+     *       跳过"非战斗干活中"——三条外部驱动全都不管她。</li>
+     * </ul>
+     * 三个条件叠加 → 玩家看到的就是"卡在原地不动"（日志实证：反复
+     * {@code cook start: maid=… furnace=null} 之后再没移动过）。
+     *
+     * ── 口径 ──
+     * 与宰杀（实测三百四十"没有需要宰杀的动物就四处闲逛"）**完全同一套**：
+     * 每 40 tick（2 秒）在她周围 8 格内随机取一点设 WALK_TARGET
+     * （{@code BlockPosTracker} 固定点，MoveToTargetSink 消费驱动寻路），
+     * 走位期间不站桩；闲逛点同样受工作圈钳制（{@link com.maidsmart.follow.WorkAreaClamp#allows}
+     * ——home 模式不逛出限制圈，跟随模式不逛离主人）。扫描照旧每 20 tick 一次
+     * （{@code findFurnace} 是以她当前位置为中心扫的），所以"边走边找炉子"，
+     * 一旦扫到就绑定并走过去坐下干活。
+     */
+    private void wander(EntityMaid maid) {
+        if (this.wanderCooldown-- > 0) {
+            return;
+        }
+        this.wanderCooldown = 40; // 2 秒换一个闲逛点
+        int r = 8;
+        int dx = maid.getRandom().nextInt(r * 2 + 1) - r;
+        int dz = maid.getRandom().nextInt(r * 2 + 1) - r;
+        BlockPos base = maid.blockPosition();
+        BlockPos spot = new BlockPos(base.getX() + dx, base.getY(), base.getZ() + dz);
+        if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, spot)) {
+            return; // 本轮不闲逛（下轮再选），绝不逛出工作圈
+        }
+        try {
+            maid.getBrain().setMemory(MemoryModuleType.WALK_TARGET,
+                    new WalkTarget(new BlockPosTracker(spot), 0.7f, 1));
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** v1.1.0 实测一百八十六：轮次日志状态迁移式——同状态只记一次（旧版每处理轮
      *  一条，绑定炉子无料可喂时日志被刷爆）。喂料成功/收成品（状态变化）后重记，
      *  完整反映"有料→无料→再喂上"的真实迁移。 */
@@ -311,22 +377,22 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (furnace.getItem(0).isEmpty()) {
             ItemStack input = ItemStack.EMPTY;
             if (be instanceof FurnaceBlockEntity) {
-                input = this.extractFromMaid(maidInv, FOODS, 1);
+                input = this.extractFromMaid(maid, maidInv, FOODS, 1);
                 if (input.isEmpty()) {
                     // v1.1.0 实测一百五十七：没有食材时兼容矿物类可烧制物
                     //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
-                    input = this.extractOreFromMaid(level, maidInv);
+                    input = this.extractOreFromMaid(level, maid, maidInv);
                 }
                 if (input.isEmpty()) {
                     // v1.1.0 实测一百八十二：仍没有 → 通用可烧制物回退——凡当前世界
                     // 有熔炉配方且非装备类的物品都喂（沙子/圆石/原木/模组食材/无矿物
                     // 标签的模组粗矿等）。旧版白名单+矿物标签不认的东西卡死补料，
                     // 表现为"只投一次燃料就再也不喂"（实测第 2 只女仆）
-                    input = this.extractAnySmeltable(level, maidInv);
+                    input = this.extractAnySmeltable(level, maid, maidInv);
                 }
             } else {
                 // v1.1.0 实测一百五十八：烟熏炉/高炉——按各自配方类型取可烧制物
-                input = this.extractForFurnaceType(level, maidInv, be);
+                input = this.extractForFurnaceType(level, maid, maidInv, be);
             }
             if (!input.isEmpty()) {
                 furnace.setItem(0, input);
@@ -344,14 +410,18 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // v1.1.0 实测二百四十一：纯燃料优先（燃烧时长评分，煤炭/木炭/烈焰棒等），
         // 没有纯燃料才退而选可烧制燃料（原木/木板）——不再"用木头烧木头"
         if (furnace.getItem(1).isEmpty()) {
-            ItemStack fuel = this.extractBestFuel(level, maidInv);
+            ItemStack fuel = this.extractBestFuel(level, maid, maidInv);
             if (!fuel.isEmpty()) {
                 furnace.setItem(1, fuel);
             }
         }
     }
 
-    private ItemStack extractFromMaid(IItemHandler maidInv, Set<Item> whitelist, int count) {
+    private ItemStack extractFromMaid(EntityMaid maid, IItemHandler maidInv, Set<Item> whitelist, int count) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有 → 先请 TLM 从
+        // 精妙背包/旅行者背包把食材搬一组进来（pull 先扫她自己的背包，有就什么都不做）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && whitelist.contains(s.getItem()), count);
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (!stack.isEmpty() && whitelist.contains(stack.getItem())) {
@@ -419,16 +489,16 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     /** v1.1.0 实测一百五十八：烟熏炉/高炉按各自配方类型取料——
      *  烟熏炉 = 有烟熏配方的物品（生食）；高炉 = 有高炉配方的物品（矿石/粗金属，
      *  受「熔炉烧矿物」开关约束——高炉只烧矿物，开关关掉时高炉只收成品/补燃料）。 */
-    private ItemStack extractForFurnaceType(ServerLevel level, IItemHandler maidInv, BlockEntity be) {
+    private ItemStack extractForFurnaceType(ServerLevel level, EntityMaid maid, IItemHandler maidInv, BlockEntity be) {
         if (be instanceof net.minecraft.world.level.block.entity.SmokerBlockEntity) {
-            return this.extractByRecipe(level, maidInv,
+            return this.extractByRecipe(level, maid, maidInv,
                     net.minecraft.world.item.crafting.RecipeType.SMOKING);
         }
         if (be instanceof net.minecraft.world.level.block.entity.BlastFurnaceBlockEntity) {
             if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()) {
                 return ItemStack.EMPTY;
             }
-            return this.extractByRecipe(level, maidInv,
+            return this.extractByRecipe(level, maid, maidInv,
                     net.minecraft.world.item.crafting.RecipeType.BLASTING);
         }
         return ItemStack.EMPTY;
@@ -436,8 +506,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
 
     /** v1.1.0 实测一百五十八：从女仆背包取 1 个有指定炉子配方的物品。 */
     private <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
-    ItemStack extractByRecipe(ServerLevel level, IItemHandler maidInv,
+    ItemStack extractByRecipe(ServerLevel level, EntityMaid maid, IItemHandler maidInv,
                               net.minecraft.world.item.crafting.RecipeType<T> type) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（烟熏炉/高炉那条路）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && isSafeToFeed(s) && hasRecipe(level, s, type), 1);
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.isEmpty() || !isSafeToFeed(stack)) {
@@ -452,10 +525,14 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
 
     /** v1.1.0 实测一百五十七：从女仆背包取 1 个矿物类可烧制物（带矿物标签且
      *  有熔炉配方）。食材优先顺序由调用侧保证（先 FOODS 后本方法）。 */
-    private ItemStack extractOreFromMaid(ServerLevel level, IItemHandler maidInv) {
+    private ItemStack extractOreFromMaid(ServerLevel level, EntityMaid maid, IItemHandler maidInv) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()) {
             return ItemStack.EMPTY;
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（矿物类可烧制物）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                        && hasOreTag(s.getItem()) && isSmeltable(level, s), 1);
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
             if (stack.isEmpty() || !isSafeToFeed(stack) || FOODS.contains(stack.getItem())) {
@@ -476,10 +553,18 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      * 铁金钻石质工具盔甲在原版有"烧成粒"配方，绝不能把女仆自己的装备熔掉。
      * 开关 misc.cookSmeltAny（默认开）；关闭 = 一百五十七旧行为。
      */
-    private ItemStack extractAnySmeltable(ServerLevel level, IItemHandler maidInv) {
+    private ItemStack extractAnySmeltable(ServerLevel level, EntityMaid maid, IItemHandler maidInv) {
         if (!com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ANY.get()) {
             return ItemStack.EMPTY;
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（通用可烧制物回退）
+        com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                        && !(s.getItem() instanceof net.minecraft.world.item.TieredItem)
+                        && !(s.getItem() instanceof net.minecraft.world.item.ArmorItem)
+                        && !(s.getItem() instanceof net.minecraft.world.item.TridentItem)
+                        && !(s.getItem() instanceof net.minecraft.world.item.ShieldItem)
+                        && isSmeltable(level, s), 1);
         // v1.1.0 实测二百九十九（反馈："仍然会出现拿木材烧木头的情况，而不是优先
         // 先烧别的物品"）：可烧制物里【不可燃烧的优先】（圆石/沙子/矿石等——烧它们
         // 不会抢燃料），可烧制燃料（原木/木板/树苗——既是原料又是燃料）最后兜底。
@@ -561,7 +646,16 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  v1.1.0 实测三百零一：曾按要求改为"按物品栏摆放顺序取第一个"，实测后
      *  玩家改回评分制（"还是改回按燃烧时长/数量评分吧"）。木材黑名单只拦"当原料
      *  烧"，当燃料不受影响（原木/木板照常可烧炉子）。 */
-    private ItemStack extractBestFuel(ServerLevel level, IItemHandler maidInv) {
+    private ItemStack extractBestFuel(ServerLevel level, EntityMaid maid, IItemHandler maidInv) {
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有可烧的东西 →
+        // 先请 TLM 从精妙背包/旅行者背包搬一组燃料进来（pull 先扫她自己的背包）
+        try {
+            com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                    s -> !s.isEmpty() && isSafeToFeed(s)
+                            && net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+                            .isFuel(s), -1);
+        } catch (Throwable ignored) {
+        }
         Map<Item, Integer> burnTicks = new HashMap<>();
         Map<Item, Integer> counts = new HashMap<>();
         for (int i = 0; i < maidInv.getSlots(); i++) {
@@ -707,6 +801,33 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     anySmeltable = true; // 仅熔炉可烧物（圆石/沙子等）
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里判断不出炉型时再看
+            // 精妙背包/旅行者背包（只读探针）。这一步不能省——否则"背包空、精妙背包里一堆生肉"
+            // 的女仆会判成 NONE → 连炉子都不去找 → 站桩（也就永远走不到"取物"那一步）。
+            // 口径与上面的循环逐条对齐（食材 → 高炉矿物 → 熔炉通用物）。
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && FOODS.contains(s.getItem()))) {
+                return FurnaceKind.FOOD;
+            }
+            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                            && !(s.getItem() instanceof net.minecraft.world.item.TieredItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ArmorItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.TridentItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ShieldItem)
+                            && !isWood(s.getItem())
+                            && hasRecipe(level, s, net.minecraft.world.item.crafting.RecipeType.BLASTING))) {
+                return FurnaceKind.ORE;
+            }
+            if (!anySmeltable && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                            && !(s.getItem() instanceof net.minecraft.world.item.TieredItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ArmorItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.TridentItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ShieldItem)
+                            && !isWood(s.getItem()) && isSmeltable(level, s))) {
+                anySmeltable = true;
+            }
             return anySmeltable ? FurnaceKind.ANY : FurnaceKind.NONE;
         } catch (Throwable ignored) {
             return FurnaceKind.NONE;
@@ -768,6 +889,36 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 if (isSmeltable(level, stack)) {
                     return true; // 熔炉：任一可烧制物
                 }
+            }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有这型炉子能烧的
+            // 东西 → 再看精妙背包/旅行者背包（只读探针）。不跟着放宽的话，会出现"背包空、
+            // 精妙背包里有料"时她反复解绑炉子重新找（bind/unbind 空转），一路站桩。
+            // 口径与上面的循环逐条对齐：烟熏炉/熔炉 ← 食材；高炉 ← 高炉配方；熔炉 ← 任一可烧物。
+            boolean smokerOrFurnace = bs.getBlock() instanceof net.minecraft.world.level.block.SmokerBlock
+                    || bs.getBlock() instanceof net.minecraft.world.level.block.FurnaceBlock;
+            boolean blast = bs.getBlock() instanceof net.minecraft.world.level.block.BlastFurnaceBlock;
+            if (smokerOrFurnace && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && FOODS.contains(s.getItem()))) {
+                return true;
+            }
+            if (blast && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                            && !(s.getItem() instanceof net.minecraft.world.item.TieredItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ArmorItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.TridentItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ShieldItem)
+                            && !isWood(s.getItem())
+                            && hasRecipe(level, s, net.minecraft.world.item.crafting.RecipeType.BLASTING))) {
+                return true;
+            }
+            if (!blast && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> !s.isEmpty() && isSafeToFeed(s) && !FOODS.contains(s.getItem())
+                            && !(s.getItem() instanceof net.minecraft.world.item.TieredItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ArmorItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.TridentItem)
+                            && !(s.getItem() instanceof net.minecraft.world.item.ShieldItem)
+                            && !isWood(s.getItem()) && isSmeltable(level, s))) {
+                return true;
             }
         } catch (Throwable ignored) {
         }

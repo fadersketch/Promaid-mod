@@ -62,6 +62,8 @@
   "config.promaid.combat.flightNoWallDamage": "Flight: Immune to Elytra Wall Impact",
   "config.promaid.combat.flightNoFallDamage": "Air Raid: Immune to Fall Damage",
   "config.promaid.combat.riptideDash": "Riptide Trident Dash",
+  "config.promaid.combat.riptideFlightScale": "Riptide Thrust Scale (as propellant)",
+  "config.promaid.flightFollow.trident": "Flight Follow: Trident Durability",
   "config.promaid.combat.crossbowPlainFirework": "Crossbow: Plain Fireworks as Ammo",
   "config.promaid.combat.flightRangedPush": "Ranged Air Raid: Close-Range Push-Away",
   "config.promaid.combat.flightRecallDistance": "Air Raid Leash (blocks)",

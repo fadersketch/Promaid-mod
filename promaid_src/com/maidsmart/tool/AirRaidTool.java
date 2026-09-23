@@ -140,7 +140,7 @@ public class AirRaidTool implements ITool<AirRaidTool.Result> {
                         + "（鞘翅 / 武器 / 「可以飞行的道具」= 烟花·孔雀羽扇·位移类法术任一），"
                         + "请先补给她或让玩家知道");
             }
-            if (ranged && !com.maidsmart.combat.MaidFlightKit.hasAmmoForRanged(maid)) {
+            if (ranged && !com.maidsmart.combat.MaidFlightKit.rangedAmmoOk(maid)) {
                 sb.append("；另外没有远程弹药（箭/枪弹/副手烟花）");
             }
         } catch (Throwable ignored) {

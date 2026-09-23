@@ -172,6 +172,9 @@ public class ProMaidExtension implements ILittleMaid {
                 // v1.2.2 实测六百〇八：飞行跟随的表同理（也是 core 行为，被强杀时走不到 stop()），
                 // 而且她还可能正穿着我们替她换上的鞘翅 —— 收不到 stop 就永远还不回去了。
                 com.maidsmart.combat.MaidFlightFollowBehavior.forget(maid.m_20148_());
+                // v1.2.4 实测六百四十（六百四十一 起口径不变）：激流推进剂窗口同理（只在飞行链路的
+                // 每 tick 里被驱动，强杀时没人摘得掉它，留着就是表里一条陈旧 UUID）。
+                com.maidsmart.combat.MaidRiptideBoost.forget(maid.m_20148_());
                 com.maidsmart.combat.MaidFlightKit.setGliding(maid, false);
             }
         }
@@ -179,6 +182,7 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.combat.MaidFlightCombatBehavior.clearAll();
         com.maidsmart.combat.MaidTridentSpinBehavior.clearAll();
         com.maidsmart.combat.MaidFlightFollowBehavior.clearAll(); // v1.2.2 实测六百〇八
+        com.maidsmart.combat.MaidRiptideBoost.clearAll();         // v1.2.4 实测六百四十
     }
 
     @net.minecraftforge.eventbus.api.SubscribeEvent

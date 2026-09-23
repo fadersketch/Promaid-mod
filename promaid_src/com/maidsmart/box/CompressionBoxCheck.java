@@ -6,7 +6,6 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.github.tartaricacid.touhoulittlemaid.entity.task.meal.MaidMealManager;
 import com.github.tartaricacid.touhoulittlemaid.util.ItemsUtil;
 import com.maidsmart.ProMaidMod;
-import com.maidsmart.config.MaidSmartConfig;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -55,6 +54,13 @@ import java.util.List;
  * </ol>
  * 女仆那几条（给了女仆才跑）在**她真实的背包视图**上走，最后把试出来的东西清干净
  * ——自检不在任何人的背包里留东西。
+ *
+ * ── 六百四十五 起的一处口径变化（自检侧）──
+ * 「带附魔的物品」再没有能放行的开关了（{@code compressionBox.refuseEnchanted} 与
+ * {@code compressionBox.refuseList} 两个配置项已删除），所以 {@link #stackSafety} /
+ * {@link #unstackableView} 的**不可堆叠探针**从附魔书换成一把没附魔的钻石剑
+ * （{@link #unstackableProbe}）——验的还是「交给原版的堆必须合法」；附魔那条口径本身
+ * 由 {@link #refuseGate} 逐条验，其中 ④ 专门验「那两个配置字段确实已经不存在」。
  */
 public final class CompressionBoxCheck {
 
@@ -69,7 +75,7 @@ public final class CompressionBoxCheck {
             stackSafety(out);
             playerClicks(out, level);
             mouseDrag(out, level);
-            refuseList(out, level, maid);
+            refuseGate(out, level, maid);
             if (maid == null) {
                 out.add(skip("女仆那一条没跑（带上女仆才会跑：/maid_smart box check <女仆>）"));
             } else {
@@ -82,30 +88,26 @@ public final class CompressionBoxCheck {
     }
 
     /**
-     * 临时把「禁入带附魔的物品」关掉跑一段，跑完还原（v1.2.2 实测六百二十）。
+     * 「不可堆叠」这一类（原版堆叠上限 = 1）的探针：一把**没附魔**的钻石剑 + 一段自定义 NBT
+     * （v1.2.4 实测六百四十五）。
      *
-     * 【为什么需要】六百一十八那几条回归（「一格里的附魔书她只看得见 1 个」「NBT 过一圈
-     * 原样还在」）都拿附魔书当**不可堆叠物品**的探针——六百二十 起这类东西默认进不去盒子了，
-     * 那几条会全部变红，红得没意义（口径变了，不是坏了）。@code stackSafety} /
-     * {@code unstackableView} 走这里：把开关按回旧口径跑一遍，证明「就算玩家把开关关掉，
-     * 六百一十八 修的那个『附魔物品消失』也依然是修好的」——而新口径本身由
-     * {@link #refuseList} 专门验。
+     * 【为什么不再是附魔书】六百二十 ~ 六百四十四 之间这里的探针是一本附魔书，靠一个临时
+     * 开关（{@code compressionBox.refuseEnchanted}）把它放进盒子跑那段回归。六百四十五 起
+     * 附魔物品**一律禁入**、开关已删，附魔书再也进不去盒子，所以换成同样不可堆叠、同样能挂
+     * 自定义标签的钻石剑——验的还是那一件事：**交给原版的堆必须合法**（盒子的自定义数量与
+     * 原版 {@code getMaxStackSize()=1} 对不上时，多出来的那份会被原版当返回值丢掉，而
+     * 调用点大多不看返回值）。
      */
-    private static void withEnchantedAllowed(Runnable body) {
-        boolean old = true;
+    private static ItemStack unstackableProbe() {
+        ItemStack probe = stack("minecraft:diamond_sword", 1);
+        if (probe.m_41619_()) {
+            return ItemStack.f_41583_;
+        }
         try {
-            old = MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.get();
-            MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(false);
+            probe.m_41698_("PromaidCheck").m_128405_("probe", 645);
         } catch (Throwable ignored) {
         }
-        try {
-            body.run();
-        } finally {
-            try {
-                MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(old);
-            } catch (Throwable ignored) {
-            }
-        }
+        return probe;
     }
 
     /* ==================== ① 数据层：盒子不许进盒子 ==================== */
@@ -145,66 +147,63 @@ public final class CompressionBoxCheck {
                 + CompressionBoxData.totalCount(items) + " 个，应为 " + (before + 5) + "）"));
     }
 
-    /* ==================== ② 附魔/不可堆叠：交给原版的必须是合法堆 ==================== */
+    /* ==================== ② 不可堆叠：交给原版的必须是合法堆 ==================== */
 
     /**
      * 六百一十八【用户报的「附魔类物品存进去会消失」】。
      *
-     * 根因不是"存"这一步，而是**读出去**那一步：盒子一格能堆 114514 个，两个同名同附魔的
-     * 附魔书存进同一格，那一格的堆就是 {@code ×2}；而附魔书的原版堆叠上限是 **1**。
+     * 根因不是"存"这一步，而是**读出去**那一步：盒子一格能堆 114514 个，两件同名（附魔书
+     * 则是同附魔）的东西存进同一格，那一格的堆就是 {@code ×2}；而它们的原版堆叠上限是 **1**。
      * 六百一十六起女仆那一侧的视野封顶写死 64，于是原版拿到了一个「2 个的附魔书」这种
      * **非法堆**——原版任何一处「插进背包/手里」都会按上限 1 收下 1 个、把剩下的当返回值
      * 退回，而 TLM 那几十处调用点大多不看返回值（正常世界里它们的入参永远装得下）：
      * 多出来的那个就这样没了。所以这里验两件事：
      * <ul>
-     *   <li>不可堆叠的东西过一圈盒子，附魔与自定义标签**原样还在**（{@code isSameItemSameTags}
+     *   <li>不可堆叠的东西过一圈盒子，自定义标签**原样还在**（{@code isSameItemSameTags}
      *       判的是整个 NBT，不是只看 id）；</li>
-     *   <li>一格里有 2 个附魔书时，{@link CompressionBoxData#viewCap} 只放 1 个出去
+     *   <li>一格里有 2 个时，{@link CompressionBoxData#viewCap} 只放 1 个出去
      *       ——**交给原版的堆永远合法**。</li>
      * </ul>
+     *
+     * 【探针为什么是钻石剑】见 {@link #unstackableProbe}：六百四十五 起附魔物品一律禁入，
+     * 附魔书再也进不去盒子，探针换成一把没附魔的钻石剑（同样不可堆叠）。
      */
     private static void stackSafety(List<Component> out) {
-        ItemStack book = enchantedBook();
-        if (book.m_41619_() || book.m_41783_() == null || !book.m_41783_().m_128425_("Enchantments", 9)) {
-            out.add(skip("附魔那条：这台机器上没有 minecraft:enchanted_book（或加不上附魔），跳过"));
+        ItemStack probe = unstackableProbe();
+        if (probe.m_41619_() || probe.m_41783_() == null) {
+            out.add(skip("不可堆叠那条：这台机器上没有 minecraft:diamond_sword，跳过"));
             return;
         }
-        // 【注意】这一行是**说明**不是 SKIP：用例按"自检里不许出现 SKIP"卡着
-        // （SKIP = 有东西没验到），这儿只是把"下面几条按旧口径跑"讲清楚
-        out.add(Component.m_237113_("\u00a78说明：附魔那条以下几条按**旧口径**跑"
-                + "（临时把「禁入带附魔的物品」关掉）——验的是 六百一十八 修好的"
-                + "「附魔物品过一个格子的堆不会消失」：玩家把开关关掉时它必须还是好的；"
-                + "六百二十 的新口径在「禁入清单」那一段验"));
-        withEnchantedAllowed(() -> stackSafetyBody(out, book));
+        stackSafetyBody(out, probe);
     }
 
-    private static void stackSafetyBody(List<Component> out, ItemStack book) {
+    private static void stackSafetyBody(List<Component> out, ItemStack probe) {
         // 一格存两个（同一份 NBT → 会并到同一格）
         List<ItemStack> items = CompressionBoxData.empty();
-        items.set(0, book.m_41777_());
-        ItemStack left = CompressionBoxData.merge(items, book.m_41777_());
+        items.set(0, probe.m_41777_());
+        ItemStack left = CompressionBoxData.merge(items, probe.m_41777_());
         out.add(left.m_41619_() && items.get(0).m_41613_() == 2
-                ? pass("附魔那条：两个同款附魔书并进一格，盒子里那格 = ×2（真实数量 2，"
+                ? pass("不可堆叠那条：两个同款钻石剑并进一格，盒子里那格 = ×2（真实数量 2，"
                 + "这一层大数量只活在盒子的 NBT 里）")
-                : fail("附魔那条：并格不对（退回 " + name(left) + "，那格 "
+                : fail("不可堆叠那条：并格不对（退回 " + name(left) + "，那格 "
                 + name(items.get(0)) + "）"));
 
         int cap = CompressionBoxData.viewCap(items.get(0));
         out.add(cap == 1
-                ? pass("附魔那条：这格的「视野上限」= 1（= 附魔书自己的堆叠上限，"
+                ? pass("不可堆叠那条：这格的「视野上限」= 1（= 钻石剑自己的堆叠上限，"
                 + "原版口径 getMaxStackSize）——交给原版的堆合法，不会再被退回一半丢掉")
-                : fail("附魔那条：视野上限算成 " + cap + "，应该是 1（附魔书不可堆叠）"));
+                : fail("不可堆叠那条：视野上限算成 " + cap + "，应该是 1（钻石剑不可堆叠）"));
 
-        // 存进盒子再读回来：整个 NBT 必须一模一样（附魔 + 自定义标签都在）
+        // 存进盒子再读回来：整个 NBT 必须一模一样（那一段自定义标签也在）
         ItemStack box = new ItemStack(ProMaidMod.COMPRESSION_BOX.get());
         List<ItemStack> one = CompressionBoxData.empty();
-        one.set(2, book.m_41777_());
+        one.set(2, probe.m_41777_());
         CompressionBoxData.write(box, one);
         ItemStack back = CompressionBoxData.read(box).get(2);
-        out.add(ItemStack.m_150942_(back, book)
-                ? pass("附魔那条：附魔书过一圈盒子（写标签→读回来）NBT 一模一样"
-                + "（isSameItemSameTags 判的是附魔与自定义标签整个 NBT）")
-                : fail("附魔那条：附魔书过一圈盒子 NBT 就变了：进去 " + nbt(book)
+        out.add(ItemStack.m_150942_(back, probe)
+                ? pass("不可堆叠那条：钻石剑过一圈盒子（写标签→读回来）NBT 一模一样"
+                + "（isSameItemSameTags 判的是整份 NBT，不是只看 id）")
+                : fail("不可堆叠那条：钻石剑过一圈盒子 NBT 就变了：进去 " + nbt(probe)
                 + "，出来 " + nbt(back)));
 
         // 对照组：普通物品的视野上限仍是 64（别为了修附魔把大堆的口径一起改小）
@@ -404,7 +403,7 @@ public final class CompressionBoxCheck {
         clear(fp, inv);
     }
 
-    /* ==================== ⑥ 禁入清单（六百二十） ==================== */
+    /* ==================== ⑥ 禁入判据（六百二十；六百四十五 收敛为写死的两条） ==================== */
 
     /**
      * 用户那条：「加一个黑名单，在压缩盒界面内无法放入附魔书/附魔武器和压缩盒，
@@ -414,48 +413,52 @@ public final class CompressionBoxCheck {
      * 就是这里调的 {@link CompressionBoxService#handle}，所以这一条能把「放进不去」和
      * 「选不中」都验到；提示那一半看 {@link CompressionBoxService#noticeOf}
      * （随内容同步发给客户端画成红字，服务端这一侧只存那句话）。
+     *
+     * 六百四十五 起这里多验一条（④）：那两个配置项（「禁入带附魔的物品」开关与
+     * 「禁入清单」）**必须已经从 {@code MaidSmartConfig} 上删掉**——口径写死，玩家
+     * 再没有能把它关掉的入口。
      */
-    private static void refuseList(List<Component> out, ServerLevel level, EntityMaid maid) {
+    private static void refuseGate(List<Component> out, ServerLevel level, EntityMaid maid) {
         ItemStack book = enchantedBook();
         ItemStack stone = stack("minecraft:stone", 1);
         ItemStack box = boxWith(2);
 
-        // ① 判据本身：三种拒绝 + 一条放行
+        // ① 判据本身：两种拒绝 + 一条放行
         if (book.m_41619_()) {
-            out.add(skip("禁入清单①：这台机器上没有 minecraft:enchanted_book，跳过附魔那两条"));
+            out.add(skip("禁入判据①：这台机器上没有 minecraft:enchanted_book，跳过附魔那两条"));
         } else {
             String whyBook = CompressionBoxFilter.reason(book);
             out.add(CompressionBoxFilter.MSG_ENCHANT.equals(whyBook)
-                    ? pass("禁入清单①：附魔书（附魔在 StoredEnchantments 里，"
+                    ? pass("禁入判据①：附魔书（附魔在 StoredEnchantments 里，"
                     + "ItemStack.isEnchanted() 看不见它——所以按物品类型判）→ 拒绝：「" + whyBook + "」")
-                    : fail("禁入清单①：附魔书没被拒（reason=" + whyBook + "）"));
+                    : fail("禁入判据①：附魔书没被拒（reason=" + whyBook + "）"));
         }
         out.add(CompressionBoxFilter.MSG_BOX.equals(CompressionBoxFilter.reason(box))
-                ? pass("禁入清单①：压缩盒 → 拒绝：「" + CompressionBoxFilter.MSG_BOX + "」")
-                : fail("禁入清单①：压缩盒没被拒（reason=" + CompressionBoxFilter.reason(box) + "）"));
+                ? pass("禁入判据①：压缩盒 → 拒绝：「" + CompressionBoxFilter.MSG_BOX + "」")
+                : fail("禁入判据①：压缩盒没被拒（reason=" + CompressionBoxFilter.reason(box) + "）"));
         out.add(CompressionBoxFilter.reason(stone) == null
-                ? pass("禁入清单①：对照——普通物品（石头）放行（reason=null）")
-                : fail("禁入清单①：石头竟被拒了（reason=" + CompressionBoxFilter.reason(stone) + "）"));
+                ? pass("禁入判据①：对照——普通物品（石头）放行（reason=null）")
+                : fail("禁入判据①：石头竟被拒了（reason=" + CompressionBoxFilter.reason(stone) + "）"));
 
         // ② 数据层：附魔物品进盒子被原样退回（这里是所有入口的最后一关）
         List<ItemStack> items = CompressionBoxData.empty();
         if (!book.m_41619_()) {
             ItemStack left = CompressionBoxData.mergeInto(items, 0, book.m_41777_());
             out.add(left.m_41613_() == 1 && items.get(0).m_41619_()
-                    ? pass("禁入清单②：数据层 mergeInto 收附魔书 → 原样退回（第 1 格仍是空的）"
+                    ? pass("禁入判据②：数据层 mergeInto 收附魔书 → 原样退回（第 1 格仍是空的）"
                     + "—— 界面、女仆、溢出回退三条路都要过这一关")
-                    : fail("禁入清单②：附魔书被塞进盒子了（退回 " + name(left) + "，第 1 格 "
+                    : fail("禁入判据②：附魔书被塞进盒子了（退回 " + name(left) + "，第 1 格 "
                     + name(items.get(0)) + "）"));
         }
         ItemStack left2 = CompressionBoxData.mergeInto(items, 0, stone.m_41777_());
         out.add(left2.m_41619_() && items.get(0).m_41613_() == 1
-                ? pass("禁入清单②对照：同一方法收石头 → 正常进格（第 1 格 " + name(items.get(0)) + "）")
-                : fail("禁入清单②对照失败：石头都进不去（退回 " + name(left2) + "）"));
+                ? pass("禁入判据②对照：同一方法收石头 → 正常进格（第 1 格 " + name(items.get(0)) + "）")
+                : fail("禁入判据②对照失败：石头都进不去（退回 " + name(left2) + "）"));
         if (!book.m_41619_()) {
             ItemStack left3 = CompressionBoxData.merge(items, book.m_41777_());
             out.add(left3.m_41613_() == 1 && CompressionBoxData.totalCount(items) == 1
-                    ? pass("禁入清单②：数据层 merge 收附魔书 → 一件都没进（盒子里仍是 1 个石头）")
-                    : fail("禁入清单②：merge 把附魔书收进去了（退回 " + name(left3)
+                    ? pass("禁入判据②：数据层 merge 收附魔书 → 一件都没进（盒子里仍是 1 个石头）")
+                    : fail("禁入判据②：merge 把附魔书收进去了（退回 " + name(left3)
                     + "，盒子现在 " + CompressionBoxData.totalCount(items) + " 件）"));
         }
 
@@ -473,45 +476,37 @@ public final class CompressionBoxCheck {
             boolean still = !inv.getStackInSlot(13).m_41619_();
             out.add(!changed && still && CompressionBoxFilter.MSG_ENCHANT.equals(notice)
                     && content(handBox) == 3
-                    ? pass("禁入清单③（界面那条路）：Shift+左键点背包里的附魔书 → 被拒、书还在背包里、"
+                    ? pass("禁入判据③（界面那条路）：Shift+左键点背包里的附魔书 → 被拒、书还在背包里、"
                     + "盒子里还是 3 个，服务端回了「" + notice + "」")
-                    : fail("禁入清单③：附魔书被 Shift 存进去了（changed=" + changed
+                    : fail("禁入判据③：附魔书被 Shift 存进去了（changed=" + changed
                     + "，第 13 格 " + name(inv.getStackInSlot(13)) + "，盒子 " + content(handBox)
                     + " 件，提示=" + notice + "）"));
         } else {
-            out.add(skip("禁入清单③：没有附魔书可用，跳过（界面那条路已由 ⑤/⑤b 覆盖压缩盒）"));
+            out.add(skip("禁入判据③：没有附魔书可用，跳过（界面那条路已由 ⑤/⑤b 覆盖压缩盒）"));
         }
 
-        // ④ 配置禁入清单：当场加一条圆石 → 拒；清掉 → 又能进（对照）。跑完还原原值
-        java.util.List<? extends String> old = MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.get();
-        try {
-            MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(java.util.List.of("minecraft:cobblestone"));
-            String why = CompressionBoxFilter.reason(stack("minecraft:cobblestone", 1));
-            MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(java.util.List.of());
-            String after = CompressionBoxFilter.reason(stack("minecraft:cobblestone", 1));
-            out.add(CompressionBoxFilter.MSG_LIST.equals(why) && after == null
-                    ? pass("禁入清单④：配置清单里加上 minecraft:cobblestone → 拒绝：「" + why
-                    + "」；清空清单 → 又放行（对照）——清单是活的，改完立刻生效")
-                    : fail("禁入清单④：配置清单没生效（加了之后 reason=" + why
-                    + "，清空之后 reason=" + after + "）"));
-        } catch (Throwable t) {
-            out.add(fail("禁入清单④：配置清单读写失败：" + t));
-        } finally {
-            try {
-                MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(old);
-            } catch (Throwable ignored) {
-            }
-        }
+        // ④ 六百四十五【用户要求：开关与自定义清单都删掉】——那两个配置字段必须已经
+        //    从 MaidSmartConfig 上消失（反射取不到 = 删干净了）。用户原话：「把压缩盒
+        //    禁止加入附魔物品的开关和选项关掉，我们始终不允许附魔物品装进压缩盒。
+        //    随后是自定义哪个不允许装进去这个功能给删掉了。」
+        boolean noSwitch = fieldGone("COMPRESSION_BOX_REFUSE_ENCHANTED");
+        boolean noList = fieldGone("COMPRESSION_BOX_REFUSE_LIST");
+        out.add(noSwitch && noList
+                ? pass("禁入判据④：口径写死——配置里那两个字段"
+                + "（COMPRESSION_BOX_REFUSE_ENCHANTED 开关 / COMPRESSION_BOX_REFUSE_LIST 清单）"
+                + "都已经不存在（反射取不到），玩家没有能关掉「附魔禁入」的入口")
+                : fail("禁入判据④：配置字段还在（开关=" + (noSwitch ? "已删" : "仍在")
+                + "，清单=" + (noList ? "已删" : "仍在") + "）——附魔禁入必须是写死的"));
 
         // ⑤ 女仆那一侧：往她背包里的盒子插附魔书 → 原样退回（她也不会把这类东西顺手塞进盒子）
         if (maid == null) {
-            out.add(skip("禁入清单⑤：没给女仆，跳过（带上女仆才会跑）"));
+            out.add(skip("禁入判据⑤：没给女仆，跳过（带上女仆才会跑）"));
         } else if (book.m_41619_()) {
-            out.add(skip("禁入清单⑤：没有附魔书可用，跳过"));
+            out.add(skip("禁入判据⑤：没有附魔书可用，跳过"));
         } else {
             IItemHandler minv = maid.getMaidInv();
             if (!(minv instanceof CompressionBoxMaidInv view) || view.boxCount() <= 0) {
-                out.add(skip("禁入清单⑤：她背包里没有压缩盒（或女仆延伸关着），跳过"));
+                out.add(skip("禁入判据⑤：她背包里没有压缩盒（或女仆延伸关着），跳过"));
             } else {
                 int base = view.baseSlots();
                 int free = -1;
@@ -522,21 +517,33 @@ public final class CompressionBoxCheck {
                     }
                 }
                 if (free < 0) {
-                    out.add(skip("禁入清单⑤：她盒子里 5 格全满，跳过"));
+                    out.add(skip("禁入判据⑤：她盒子里 5 格全满，跳过"));
                 } else {
                     ItemStack left = view.insertItem(free, book.m_41777_(), false);
                     boolean ok = left.m_41613_() == 1 && view.getStackInSlot(free).m_41619_()
                             && !view.isItemValid(free, book.m_41777_());
-                    out.add(ok ? pass("禁入清单⑤（女仆那一侧）：往她盒子第 " + (free - base + 1)
+                    out.add(ok ? pass("禁入判据⑤（女仆那一侧）：往她盒子第 " + (free - base + 1)
                             + " 格插附魔书 → 原样退回、那格还是空的（isItemValid 也判 false）"
                             + "—— 她捡到附魔书不会顺手塞进盒子")
-                            : fail("禁入清单⑤：女仆那一侧收下了附魔书（退回 " + name(left)
+                            : fail("禁入判据⑤：女仆那一侧收下了附魔书（退回 " + name(left)
                             + "，那格现在 " + name(view.getStackInSlot(free)) + "）"));
                     view.setStackInSlot(free, ItemStack.f_41583_); // 自检不留痕
                 }
             }
         }
         clear(fp, inv);
+    }
+
+    /** 这个配置字段是不是已经从 {@code MaidSmartConfig} 上删掉了（六百四十五 的反射探针） */
+    private static boolean fieldGone(String name) {
+        try {
+            com.maidsmart.config.MaidSmartConfig.class.getField(name);
+            return false;
+        } catch (NoSuchFieldException e) {
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /* ==================== ⑤ 女仆那一侧的背包视图 ==================== */
@@ -697,39 +704,40 @@ public final class CompressionBoxCheck {
     }
 
     /**
-     * 用户第 2 条的**产出侧**：盒子里一格存了 2 个不可堆叠的东西（附魔书）时，
-     * 她那一侧「看得见」和「拿得走」的都必须**只有 1 个**（原版堆叠上限）。
+     * 用户第 2 条的**产出侧**：盒子里一格存了 2 个不可堆叠的东西时，她那一侧
+     * 「看得见」和「拿得走」的都必须**只有 1 个**（原版堆叠上限）。
      *
      * 【为什么在这条上较真】给原版一个「2 个的附魔书」这种非法堆，原版按上限 1 收下 1 个、
      * 把另一个作为返回值退回；TLM 那几十处调用点大多不看返回值（正常世界不可能装不下）
      * ——那一个就凭空没了 = 用户报的「附魔物品存进去会消失」。
+     *
+     * 探针自 六百四十五 起换成没附魔的钻石剑（附魔书已一律禁入，见 {@link #unstackableProbe}）。
      */
     private static void unstackableView(List<Component> out, CompressionBoxMaidInv view, int free,
                                         int cell) {
-        ItemStack book = enchantedBook();
-        if (book.m_41619_()) {
-            out.add(skip("附魔书那条：这台机器上没有 minecraft:enchanted_book，跳过"));
+        ItemStack probe = unstackableProbe();
+        if (probe.m_41619_()) {
+            out.add(skip("不可堆叠那条：这台机器上没有 minecraft:diamond_sword，跳过"));
             return;
         }
-        // 同上：按旧口径跑（临时关掉「禁入带附魔的物品」）——验的是"给原版的堆必须合法"
-        withEnchantedAllowed(() -> unstackableViewBody(out, view, free, cell, book));
+        unstackableViewBody(out, view, free, cell, probe);
     }
 
     private static void unstackableViewBody(List<Component> out, CompressionBoxMaidInv view, int free,
-                                            int cell, ItemStack book) {
-        view.insertItem(free, book.m_41777_(), false);
-        view.insertItem(free, book.m_41777_(), false);
+                                            int cell, ItemStack probe) {
+        view.insertItem(free, probe.m_41777_(), false);
+        view.insertItem(free, probe.m_41777_(), false);
         ItemStack seen = view.getStackInSlot(free);
         out.add(seen.m_41613_() == 1
-                ? pass("附魔书那条（她那一侧）：往盒子第 " + cell + " 格插 2 个同款附魔书 → "
-                + "她**只看得见 1 个**（原版堆叠上限 1，交给原版的堆合法，不会退一半丢掉）")
-                : fail("附魔书那条：她看见的是 ×" + seen.m_41613_() + " 的附魔书（非法堆，"
-                + "原版只会收下 1 个、剩下的丢掉）"));
+                ? pass("不可堆叠那条（她那一侧）：往盒子第 " + cell + " 格插 2 把同款钻石剑 → "
+                + "她**只看得见 1 把**（原版堆叠上限 1，交给原版的堆合法，不会退一半丢掉）")
+                : fail("不可堆叠那条：她看见的是 ×" + seen.m_41613_() + " 的钻石剑（非法堆，"
+                + "原版只会收下 1 把、剩下的丢掉）"));
         ItemStack got = view.extractItem(free, 64, false);
         out.add(got.m_41613_() == 1
-                ? pass("附魔书那条（她那一侧）：一次「拿整格」（要 64）也只给 1 个 —— "
+                ? pass("不可堆叠那条（她那一侧）：一次「拿整格」（要 64）也只给 1 把 —— "
                 + "手里永远不会出现非法堆")
-                : fail("附魔书那条：一次拿出了 ×" + got.m_41613_() + " 个附魔书（应为 1）"));
+                : fail("不可堆叠那条：一次拿出了 ×" + got.m_41613_() + " 把钻石剑（应为 1）"));
         view.setStackInSlot(free, ItemStack.f_41583_);
     }
 
@@ -744,7 +752,13 @@ public final class CompressionBoxCheck {
         return box;
     }
 
-    /** 一本带附魔、还带一段自定义标签的附魔书（"整个 NBT 原样过一圈"的探针） */
+    /**
+     * 一本带附魔、还带一段自定义标签的附魔书。
+     *
+     * 六百四十五 起它**只用来验拒绝**（{@link #refuseGate}：带附魔的物品进不去盒子）；
+     * 六百二十 ~ 六百四十四 之间它还兼任「不可堆叠探针」，那个角色已交给
+     * {@link #unstackableProbe}（没附魔的钻石剑）。
+     */
     private static ItemStack enchantedBook() {
         ItemStack book = stack("minecraft:enchanted_book", 1);
         if (book.m_41619_()) {

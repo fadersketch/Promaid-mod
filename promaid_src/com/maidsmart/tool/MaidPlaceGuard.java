@@ -55,6 +55,63 @@ public final class MaidPlaceGuard {
     }
 
     /**
+     * v1.2.4 实测六百三十五【骑乘/坐下中禁止搭方块：对所有搭方块行为生效】。
+     *
+     * ── 需求原文 ──
+     * 「「骑乘/坐下中禁止搭方块」对所有搭方块行为生效」——在 v1.1.0 实测一百五十六 那一批里，
+     * 这条护栏**只做在挖矿里**（{@code mine.rideNoPillar}，且只判 {@code isPassenger}）；
+     * 实测五百九十七 又给搭路单独补了一份（坐姿两种形态都拦）。于是同一件事散在三处、
+     * 口径还不一样（挖矿不认"坐下"、伐木一处都没有），用户直接点名要它统一。
+     *
+     * ── 现在这一条是什么 ──
+     * 两个形态都算：<b>①骑乘</b>（{@code isPassenger}——扫帚等载具、或坐在 TLM 的椅子里）
+     * **②坐下**（{@code isMaidInSittingPose}——TLM 自己的坐下姿态，玩家右键让她坐）。
+     * 为什么坐下也要拦：坐着的女仆**挪不动**（passenger 由载具驱动、坐下姿态由 TLM 锁住），
+     * 而搭方块（搭高/搭桥/垫脚）都是"边挪边垫"的行为——动不了就只会原地堆方块，纯浪费材料。
+     *
+     * ── 开关 ──
+     * {@code mine.rideNoPillar}（面板：挖矿 → 骑乘中禁止搭方块，默认开）。**沿用旧键**：
+     * 老存档关掉过它的人设置不变，现在只是"作用范围从挖矿扩到全部"。关掉 = 旧行为。
+     * 与「悬空禁搭方块」（{@code misc.noPlaceInAir}）是两个独立开关：那个管"她在空中乱搭"、
+     * 这个管"她根本动不了的时候乱搭"，所以 {@link #blocked} 里先判这一条、再判那条。
+     *
+     * ── 覆盖谁 / 不覆盖谁 ──
+     * 四个自主搭块模块全都经 {@link #blocked}（自保搭高 / 搭路 / 挖矿垫脚 / 伐木垫脚），
+     * 挖矿那四处原有的独立判据也一并换成调用本方法（于是它们也认得"坐下"了）。
+     * **不覆盖**：蓝图建造与指标石建造（{@code MaidBuildBehavior} / {@code IndexStoneBuildBehavior}
+     * ——它们本来就要求她坐下施工，拦了就是自废武功）、插火把（{@code MaidTorchPlacerBehavior}）、
+     * AI 工具 {@code smart_place}（玩家的显式指令）、落地水/细雪（保命机制）
+     * ——与 {@link #blocked} 那套"不拦"名单同一份口径，理由见类注释。
+     */
+    public static boolean seatedBlocked(EntityMaid maid) {
+        try {
+            if (maid == null || !com.maidsmart.config.MaidSmartConfig.MINE_RIDE_NO_PILLAR.get()) {
+                return false;
+            }
+            return isSeated(maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 她是不是"挪不动"的两种形态之一：骑乘（passenger，含坐在 TLM 椅子上）或 TLM 的坐下姿态。
+     *
+     * 【为什么不合并进 {@link #seatedBlocked}】开关只管"拦不拦"，形态判据是纯粹的事实判断——
+     * 分开之后，气泡/日志这类"要说明白为什么不动"的地方可以引用它而不用管开关。
+     */
+    public static boolean isSeated(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            return maid.m_20159_() || maid.isMaidInSittingPose();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * 实测五百五十【悬空禁搭把"她自己一跳"也算成悬空——自保搭高整条被掐死】
      *
      * ── 现象 ──
@@ -74,10 +131,23 @@ public final class MaidPlaceGuard {
      *    "脚下 3 格内无地"天然覆盖"3~5 格的浅坠"（离地超过 3 格即判悬空）。
      * 上升段本来就放行，浅跳/被击飞/搭高自身下沉也不再被误判。
      *
-     * 三处放行（未落地也不禁）：水里、岩浆里（实测五百零九）、骑乘中。 */
+     * 三处放行（未落地也不禁）：水里、岩浆里（实测五百零九）、骑乘中——最后的"骑乘中"只在
+     * **上面那个坐姿开关关掉时**才走得到（默认开 = 骑乘/坐下就先被 {@link #seatedBlocked} 拦了，
+     * 见 v1.2.4 实测六百三十五）。 */
     public static boolean blocked(EntityMaid maid) {
         try {
-            if (maid == null || !com.maidsmart.config.MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get()) {
+            if (maid == null) {
+                return false;
+            }
+            // 【骑乘/坐下：独立开关，先判】v1.2.4 实测六百三十五：原来这条护栏只在挖矿里
+            // （{@code MINE_RIDE_NO_PILLAR}，且只判 isPassenger），用户要求"对所有搭方块行为生效"
+            // ——现在下沉到本闸口，四个自主搭块模块一并吃到（挖矿/伐木/搭路/自保搭高）。
+            // 它**不受**「悬空禁搭方块」那个开关影响（那是另一件事：一个管"她在空中乱搭"、
+            // 这个管"她根本动不了的时候乱搭"），所以判在下面那个 early-return 之前。
+            if (seatedBlocked(maid)) {
+                return true;
+            }
+            if (!com.maidsmart.config.MaidSmartConfig.MISC_NO_PLACE_IN_AIR.get()) {
                 return false;
             }
             // SRG（javap 实证更正）：m_20096_=onGround m_20069_=isInWater
@@ -95,6 +165,9 @@ public final class MaidPlaceGuard {
             // 岩浆不会像水那样把 fallDistance 清零，只每 tick 减半（Entity.baseTick 里
             // `f_19789_ *= 0.5f`），所以下沉时它稳定停在一个小正数——旧版"≥6 格"的阈值
             // 恰好放行，而四百九十八收紧成">0"之后就必然误伤。这是那次收紧引入的回归。
+            // 【实测六百三十五】本行里的 m_20159_()（骑乘）现在只在"坐姿开关关掉"时才有效：
+            // 默认开时她已经在函数开头被 seatedBlocked 拦下了——保留它是为了"关掉开关 = 旧行为"
+            // （骑乘继续按"放行"处理，即只受悬空那条约束）。
             if (maid.m_20096_() || maid.m_20071_() || maid.m_20069_() || maid.m_20077_()
                     || maid.m_20159_()) {
                 return false;

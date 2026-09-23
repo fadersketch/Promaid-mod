@@ -3,12 +3,15 @@ package com.maidsmart.task;
 import com.github.tartaricacid.touhoulittlemaid.entity.chatbubble.implement.TextChatBubbleData;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.ChatFormatting;
+import net.minecraft.core.component.DataComponents;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.food.FoodProperties;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
+import net.neoforged.neoforge.event.ModifyDefaultComponentsEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.bus.api.SubscribeEvent;
 
@@ -24,13 +27,63 @@ import net.neoforged.bus.api.SubscribeEvent;
  * 注意：气泡走 addChatBubble 直发而非 addTextChatBubble——后者会被
  * ChatBubbleLimitMixin 统一染成青色（§b）且受 5 秒限频；投喂是玩家主动操作，
  * 需要蓝色（§9）即时反馈，故绕过。
+ *
+ * ── v1.2.4 实测六百四十四：1.21.1 的「蛋糕可食用」挂法（崩服修复）──
+ * 1.20.1 那条 MaidCakeEdibleMixin 注入的是 Item.m_41472_ / m_41473_
+ *（isEdible / getFoodProperties，javap 实证返回值就是 boolean / FoodProperties）。
+ * 1.21.1 的食物**已经全面数据组件化**：Item 上这两个方法都不存在了，一切改读
+ * {@code DataComponents.FOOD}——javap 实证 Item.use 读 FOOD（有就 startUsingItem +
+ * consume）、Item.getUseAnimation = has(FOOD) ? EAT : NONE、Item.getUseDuration =
+ * food.eatDurationTicks()，物品提示也读它。
+ * 移植时那条 mixin 却被写成注入 {@code Item.use} 与 {@code Item.finishUsingItem}，
+ * handler 却是 CallbackInfoReturnable<Boolean> / <FoodProperties>——
+ * 右键蛋糕（手上那块；或对着地上已放好的蛋糕、而当时又吃不下的那一路）会走到
+ * Item.use，它的真实返回值是 InteractionResultHolder，于是 Boolean 强转
+ * InteractionResultHolder 当场崩服：粉丝回报的「右键蛋糕直接被踢出世界」
+ *（1.2.0~1.2.3 都一样）。
+ *
+ * 【现在】改走 NeoForge 的 ModifyDefaultComponentsEvent：模组加载时给
+ * {@code minecraft:cake} 补一个 FOOD 组件——与任何原版食物同一挂法，上面那串
+ * 派生行为全部自动成立，一条 mixin 都不需要。
  */
 public class MaidCakeEatHandler {
     /** 每次吃完一块蛋糕的好感加成 */
     public static final int CAKE_FAVOR_POINTS = 10;
 
-    /** 是否为蛋糕物品（与 MaidCakeEdibleMixin 同一判定口径：注册名 minecraft:cake）
-     *  实测四百四十八：misc.cakeEdible 关掉后本功能整体停用（与 mixin 同口径）。 */
+    /** 蛋糕食物属性（营养 14 = 7 切片 × 2、饱和度 0.6——整块蛋糕一次吃完的量）；
+     *  eatSeconds 留 1.21.1 的默认 1.6 秒（= 32 tick，与原版食物同量级）。
+     *  与 1.20.1 那条 mixin 的 CAKE_FOOD 同口径——两树的蛋糕营养/回复量必须一致。 */
+    public static final FoodProperties CAKE_FOOD = new FoodProperties.Builder()
+            .nutrition(14).saturationModifier(0.6f).build();
+
+    /**
+     * v1.2.4 实测六百四十四：模组加载时给 {@code minecraft:cake} 挂上 FOOD 组件
+     *（NeoForge 的「改默认数据组件」事件——1.21.1 里食物就是这么定义的了）。
+     * 挂上之后：女仆的工作餐/家餐判定（TLM 读 ItemStack.getFoodProperties）、
+     * 进食动画与时长、物品提示全部自动成立。
+     *
+     * 【一次性】只在加载期跑一次：改 misc.cakeEdible 开关要**重启游戏**才完全生效
+     *（投喂那条走 isCake，运行时立刻停）。关掉开关 = 组件不挂，蛋糕恢复原版不可食。
+     */
+    public static void onModifyDefaultComponents(ModifyDefaultComponentsEvent event) {
+        boolean enabled;
+        try {
+            enabled = com.maidsmart.config.MaidSmartConfig.MISC_CAKE_EDIBLE.get();
+        } catch (Throwable ignored) {
+            enabled = true; // 配置尚未挂上 → 按默认（开）走
+        }
+        if (!enabled) {
+            return;
+        }
+        event.modify(Items.CAKE, builder -> builder.set(DataComponents.FOOD, CAKE_FOOD));
+        com.maidsmart.tool.PromaidLog.log("蛋糕可食用",
+                "已给 minecraft:cake 挂上 FOOD 组件（营养 14 / 饱和 0.6 / 1.6 秒）"
+                        + "——女仆把它当食物，玩家右键也能吃");
+    }
+
+    /** 是否为蛋糕物品（判定口径：注册名 minecraft:cake——与上方
+     *  onModifyDefaultComponents 挂 FOOD 组件同一口径）
+     *  实测四百四十八：misc.cakeEdible 关掉后本功能整体停用（组件也不再挂）。 */
     public static boolean isCake(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
             return false;
@@ -43,8 +96,8 @@ public class MaidCakeEatHandler {
         return key != null && "minecraft:cake".equals(key.toString());
     }
 
-    /** 吃完一整块蛋糕回血量（= 蛋糕营养 14，与 MaidCakeEdibleMixin 的 CAKE_FOOD
-     *  同口径）——女仆不是 Player 没有 FoodData，喂蛋糕要走 heal（heal）直接回血，
+    /** 吃完一整块蛋糕回血量（= 蛋糕营养 14，与上方 CAKE_FOOD 同口径）——女仆不是
+     *  Player 没有 FoodData，喂蛋糕要直接 heal 回血，
      *  否则右键喂食只加好感不回复生命（实测一百二十八反馈） */
     private static final float CAKE_HEAL = 14.0F;
 

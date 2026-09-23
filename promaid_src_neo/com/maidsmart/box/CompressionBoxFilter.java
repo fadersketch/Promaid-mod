@@ -1,20 +1,15 @@
 package com.maidsmart.box;
 
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.item.EnchantedBookItem;
 import net.minecraft.world.item.ItemStack;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 /**
- * 压缩盒的禁入清单（v1.2.2 实测六百二十）——用户反馈「在压缩盒界面内无法放入
- * 附魔书/附魔武器和压缩盒，压缩盒在这个界面内无法被鼠标选中，并再次提示玩家
- * 不能把压缩盒放进压缩袋里」。
+ * 压缩盒的禁入清单（v1.2.2 实测六百二十；v1.2.4 实测六百四十五 收敛为写死的两条）——
+ * 用户反馈「在压缩盒界面内无法放入附魔书/附魔武器和压缩盒，压缩盒在这个界面内无法被
+ * 鼠标选中，并再次提示玩家不能把压缩盒放进压缩袋里」。
  *
  * ── 为什么要有这道门 ──
- * 三条判据、三个理由，都指向同一件事：**放进去一定出事或者一定亏**。
+ * 两条判据、两个理由，都指向同一件事：**放进去一定出事或者一定亏**。
  * <ol>
  *   <li><b>压缩盒本身</b>（六百一十七修过的那个 bug）：盒子套盒子，玩家看不见里层，
  *       还能把自己装进去——界面开着时 Shift+点手上那一格，服务端先把它从背包取出来
@@ -30,10 +25,22 @@ import java.util.Set;
  *       索性把这一类挡在外面，比事后补更省心。附魔书要单独判：1.21.1 的
  *       {@code ItemStack.isEnchanted()} 只看 {@code DataComponents.ENCHANTMENTS}，
  *       而附魔书的附魔在 {@code STORED_ENCHANTMENTS} 里，它看不见；</li>
- *   <li><b>配置里的禁入清单</b>：上面两条是写死的口径，这一条留给玩家/整合包自己加
- *       （比如「火药别进盒子」）。表里写完整注册名，见配置项
- *       {@code compressionBox.refuseList}。</li>
  * </ol>
+ *
+ * ── v1.2.4 实测六百四十五：为什么把「开关 + 自定义清单」删掉 ──
+ * 六百二十 那版把第 2 条做成了配置开关（{@code compressionBox.refuseEnchanted}），
+ * 另配一张自定义禁入清单（{@code compressionBox.refuseList}，默认空）。实际用法说明
+ * 这两条都不该存在：
+ * <ul>
+ *   <li>开关关掉之后，上面第 2 条理由**一个字都没变**（附魔物品照样不可堆叠、照样是
+ *       「存进去会消失」的那一类），只是把已经堵上的坑重新打开——那不是可选项；</li>
+ *   <li>自定义清单要求玩家手写**完整注册名**（{@code minecraft:gunpowder} 这种），而它
+ *       唯一的效果是"让女仆看不见某样东西"。玩家真正想挡的东西（附魔物）已经写死了，
+ *       留一张要手写注册名的表只会变成"填了没生效"的咨询来源。</li>
+ * </ul>
+ * 这一版把判据收敛成**写死的两条**：盒子本身、带附魔的物品。配置里那两行一并删除
+ * （老配置文件里残留的 {@code refuseEnchanted} / {@code refuseList} 不再被读取，
+ * 不影响启动）。
  *
  * ── 为什么是一个方法给三处用 ──
  * 「能不能放进去」这个问题有**四个**入口：界面点击（{@link CompressionBoxService}）、
@@ -52,9 +59,6 @@ public final class CompressionBoxFilter {
     /** 带附魔的物品（附魔书/附魔武器等） */
     public static final String MSG_ENCHANT =
             "\u5e26\u9644\u9b54\u7684\u7269\u54c1\u4e0d\u80fd\u653e\u8fdb\u538b\u7f29\u76d2";
-    /** 配置的禁入清单命中 */
-    public static final String MSG_LIST =
-            "\u8fd9\u4e2a\u7269\u54c1\u5728\u538b\u7f29\u76d2\u7684\u7981\u5165\u6e05\u5355\u91cc";
 
     private CompressionBoxFilter() {
     }
@@ -72,11 +76,8 @@ public final class CompressionBoxFilter {
         if (CompressionBoxData.isBox(stack)) {
             return MSG_BOX;
         }
-        if (blockEnchanted() && isEnchantedItem(stack)) {
+        if (isEnchantedItem(stack)) {
             return MSG_ENCHANT;
-        }
-        if (inRefuseList(stack)) {
-            return MSG_LIST;
         }
         return null;
     }
@@ -89,10 +90,7 @@ public final class CompressionBoxFilter {
         if (CompressionBoxData.isBox(stack)) {
             return false;
         }
-        if (blockEnchanted() && isEnchantedItem(stack)) {
-            return false;
-        }
-        return !inRefuseList(stack);
+        return !isEnchantedItem(stack);
     }
 
     /**
@@ -115,51 +113,6 @@ public final class CompressionBoxFilter {
             return stack.isEnchanted();
         } catch (Throwable ignored) {
             return false;
-        }
-    }
-
-    /** 配置里的禁入清单（完整注册名；表本身在 {@code compressionBox.refuseList}） */
-    public static boolean inRefuseList(ItemStack stack) {
-        Set<String> ids = refuseSet();
-        if (ids.isEmpty()) {
-            return false;
-        }
-        String id = idOf(stack);
-        return id != null && ids.contains(id);
-    }
-
-    /** 这个堆的注册名（拿不到就 null） */
-    public static String idOf(ItemStack stack) {
-        try {
-            net.minecraft.resources.ResourceLocation key =
-                    BuiltInRegistries.ITEM.getKey(stack.getItem());
-            return key == null ? null : key.toString();
-        } catch (Throwable ignored) {
-            return null;
-        }
-    }
-
-    /** 禁入清单 → Set（配置每次读都重新建：表很小，读一次比维护缓存失效省事） */
-    private static Set<String> refuseSet() {
-        Set<String> out = new HashSet<>();
-        try {
-            List<? extends String> raw = com.maidsmart.config.MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.get();
-            for (String s : raw) {
-                if (s != null && !s.isBlank()) {
-                    out.add(s.trim());
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        return out;
-    }
-
-    /** 「带附魔物品」这条总开关（配置可关——关了就只有压缩盒与禁入清单还拦着） */
-    public static boolean blockEnchanted() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.get();
-        } catch (Throwable ignored) {
-            return true;
         }
     }
 }

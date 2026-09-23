@@ -240,9 +240,10 @@ public final class CompressionBoxData {
      * （连里面的东西）**就这样从世界里消失了。拒绝点放在这里（所有入口都走这个方法：
      * 玩家界面存入、女仆背包插入、溢出回退），比在每个调用点各写一遍可靠。
      *
-     * <b>六百二十起这一道交给 {@link CompressionBoxFilter}</b>：除了压缩盒本身，
-     * 带附魔的物品（附魔书/附魔武器等）与配置禁入清单里的物品也在这里被原样退回。
-     * 判据还是只有一处——全库任何一条「往盒子里放东西」的路都得先过它。
+     * <b>六百二十起这一道交给 {@link CompressionBoxFilter}</b>：压缩盒本身与带附魔的
+     * 物品（附魔书/附魔武器等）都在这里被原样退回（v1.2.4 实测六百四十五 起这两条写死，
+     * 不再有配置开关与自定义清单）。判据还是只有一处——全库任何一条「往盒子里放东西」
+     * 的路都得先过它。
      */
     public static ItemStack mergeInto(List<ItemStack> items, int slot, ItemStack in) {
         if (slot < 0 || slot >= items.size() || in.m_41619_()

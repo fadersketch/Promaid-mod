@@ -548,8 +548,11 @@ public final class AutoCombatPools {
 
     public static void clearMarkersForExternal(EntityMaid maid) {
         try {
-            clearMarkers(maid);
+            // v1.2.4 实测六百四十六：顺序必须是【先还原、后清标记】——clearMarkers 会把
+            // COMBAT_PREV_HOME / COMBAT_PREV_SCHEDULE 两份快照一并删掉，旧版先清后还原 =
+            // 还原时永远读不到快照，把 home 强行写成 false（issue #22 第二条）。
             restorePrevMode(maid);
+            clearMarkers(maid);
         } catch (Throwable ignored) {
         }
     }
@@ -564,6 +567,9 @@ public final class AutoCombatPools {
         nbt.m_128473_(AutoCombatSwitch.COMBAT_START_TAG);
         nbt.m_128473_(AutoCombatSwitch.ATTACKER_UUID_TAG);
         nbt.m_128473_(AutoCombatSwitch.ATTACKER_TIME_TAG);
+        // v1.2.4 实测六百四十六：这两份"战斗前模式"快照由 restorePrevMode 消费——
+        // 调用方务必【先 restorePrevMode 再 clearMarkers】；顺序反了就是"快照被删在
+        // 读取之前"，home 模式会在每次战斗结束时被强行写成 false。
         nbt.m_128473_(AutoCombatSwitch.COMBAT_PREV_HOME_TAG);
         nbt.m_128473_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG);
         AutoCombatSwitch.RESTORE_DIAG_SINCE.remove(maid.m_20148_());
@@ -586,20 +592,44 @@ public final class AutoCombatPools {
                 || "touhou_little_maid:idle".equals(task.getUid().toString());
     }
 
+    /**
+     * v1.1.0 实测一百四十九：战斗还原时把 home 模式与作息还原到战斗前。
+     *
+     * v1.2.4 实测六百四十六（issue #22 第二条"打完怪变成跟随、回不去 home"）：
+     * <ul>
+     *   <li>**没有快照就什么都不做**。旧版无条件 {@code setHomeModeEnable(getBoolean(快照))}——
+     *       快照不存在时 {@code getBoolean} 返回 false，等于"没记录也照样把 home 关掉"：
+     *       老版本升级上来的残留标记、以及没走过参战快照的清理路径，都会把玩家的
+     *       驻守（home）设置吃掉。</li>
+     *   <li>**所有调用点都必须先本方法、后 {@code clearMarkers}**：快照属于
+     *       {@code clearMarkers} 的清理对象，顺序反了就是"删在读取之前"。</li>
+     *   <li>排班开着时作息与模式由日程表管理，不覆盖（快照照旧由 clearMarkers 清掉）。</li>
+     * </ul>
+     */
     static void restorePrevMode(EntityMaid maid) {
         try {
-            if (!com.maidsmart.schedule.ScheduleData.isOn(maid)) {
-                maid.setHomeModeEnable(maid.getPersistentData().m_128471_(AutoCombatSwitch.COMBAT_PREV_HOME_TAG));
-                String sched = maid.getPersistentData().m_128461_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG);
-                if (!sched.isEmpty()) {
-                    for (MaidSchedule ms : MaidSchedule.values()) {
-                        if (ms.name().equals(sched)) {
-                            maid.setSchedule(ms);
-                            break;
-                        }
+            net.minecraft.nbt.CompoundTag nbt = maid.getPersistentData();
+            if (!nbt.m_128441_(AutoCombatSwitch.COMBAT_PREV_HOME_TAG)) {
+                return; // 无快照 = 本次战斗没记过战斗前模式 → 绝不改她的 home/作息
+            }
+            if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
+                return; // 排班接管中：模式交给日程表（快照由 clearMarkers 清掉）
+            }
+            maid.setHomeModeEnable(nbt.m_128471_(AutoCombatSwitch.COMBAT_PREV_HOME_TAG));
+            String sched = nbt.m_128461_(AutoCombatSwitch.COMBAT_PREV_SCHEDULE_TAG);
+            if (!sched.isEmpty()) {
+                for (MaidSchedule ms : MaidSchedule.values()) {
+                    if (ms.name().equals(sched)) {
+                        maid.setSchedule(ms);
+                        break;
                     }
                 }
             }
+            // 实测六百四十六：还原做成可对账的一行——Latest.log / 运行日志「战斗」类
+            // 搜「战斗前模式已还原」就能确认 home 到底回没回来
+            com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 战斗前模式已还原：驻守（home）=" + (maid.isHomeModeEnable() ? "开" : "跟随")
+                    + (sched.isEmpty() ? "" : "，作息=" + sched));
         } catch (Throwable ignored) {
         }
     }

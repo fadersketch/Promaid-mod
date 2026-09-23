@@ -214,6 +214,10 @@ public final class MaidPlanting {
                 sapling = handSlot == 0 ? maid.m_21205_() : maid.m_21206_();
             } else {
                 try {
+                    // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：双手/背包里没有树苗 →
+                    // 先请 TLM 从精妙背包/旅行者背包搬一棵进来（搬到了下面的扫描自然拿到）
+                    com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                            s -> !s.m_41619_() && isSaplingItem(s), 1);
                     net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                     for (int i = 0; i < inv.getSlots(); i++) {
                         ItemStack stack = inv.getStackInSlot(i);
@@ -574,6 +578,10 @@ public final class MaidPlanting {
             if (!off.m_41619_() && off.m_41720_() == boneMeal) {
                 boneStack = off;
             } else {
+                // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：副手/背包里没有骨粉 →
+                // 先请 TLM 从精妙背包/旅行者背包搬一份进来
+                com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                        s -> !s.m_41619_() && s.m_41720_() == boneMeal, -1);
                 net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack st = inv.getStackInSlot(i);

@@ -57,6 +57,13 @@ public class ProMaidMod {
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);
+        // v1.2.4 实测六百四十四：蛋糕变可食用——1.21.1 的食物是数据组件（Item 上已无
+        // isEdible/getFoodProperties），所以用 NeoForge 的「改默认数据组件」事件给
+        // minecraft:cake 补上 FOOD 组件。旧版这里挂的是一条注错方法的 mixin
+        //（MaidCakeEdibleMixin 注入 Item.use 却把返回值写成 Boolean），右键蛋糕直接崩服。
+        // 注意这是 mod 总线事件（IModBusEvent），必须挂 container.getEventBus()。
+        modBus.addListener(net.neoforged.neoforge.event.ModifyDefaultComponentsEvent.class,
+                com.maidsmart.task.MaidCakeEatHandler::onModifyDefaultComponents);
         // v1.2.2 实测六百〇二：粉火"一定会灭"的兜底层（登记表到期抹除 + 区块加载清理）
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(com.maidsmart.combat.PinkFireSweep.class);
         // v1.2.2 实测五百九十七：粉色火焰方块（maid_smart:pink_fire）——爆炸火焰改粉色的载体

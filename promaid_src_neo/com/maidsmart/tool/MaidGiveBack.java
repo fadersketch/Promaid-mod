@@ -54,6 +54,12 @@ public final class MaidGiveBack {
         if (rest == null || rest.isEmpty()) {
             return;
         }
+        // v1.2.4 实测六百三十六【精妙背包适配】：她自己的背包塞不下时，先问问她身上的
+        // "额外容器"（饰品栏里的精妙背包 / 旅行者背包）——见 MaidExtraContainer
+        rest = MaidExtraContainer.overflow(maid, rest);
+        if (rest == null || rest.isEmpty()) {
+            return;
+        }
         try {
             maid.spawnAtLocation(rest, 0.5f);
         } catch (Throwable ignored) {
