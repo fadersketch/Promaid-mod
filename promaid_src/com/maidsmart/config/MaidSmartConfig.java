@@ -2323,7 +2323,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // v1.1.0 实测二百二十七（反馈："所有连锁采集默认为开启"）：默认值保持开并注明
     MISC_CHAIN_HARVEST = BUILDER.comment("农场连锁收获（默认开：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物）")
             .translation("config.promaid.misc.chainHarvest").define("chainHarvest", true);
-    MISC_AUTO_COLLECT = BUILDER.comment("收获物自动收集（收割产物——作物/种子等直接进女仆背包，不落地）")
+    // v1.2.4 实测六百四十九（issue #22 第三条）：旧注释"收货产物直接进背包，不落地"不准确——
+    // TLM 本体 TaskNormalFarm.harvest 走 EntityMaid.dropResourcesToMaidInv，**产物本来就进背包**；
+    // 本开关管的是"我们连锁收割时要不要顺手把地上的掉落物也立即拾取掉"（默认关 = 让她路过再捡）
+    MISC_AUTO_COLLECT = BUILDER.comment("农场掉落物立即拾取（默认关）：我们做连锁/整片收割时，顺手把收割点附近的掉落物直接拾取进她背包。注意：车万女仆本体收割时产物本来就进女仆背包（不落地），本项只影响\"散落在地上的掉落物要不要立刻捡\"；背包放不下的那份仍会掉地")
             .translation("config.promaid.misc.autoCollect").define("autoCollect", false);
     // v1.2.4 实测六百三十六：精妙背包适配（issue #20）——"发现自己背包满了之后，再检索一下
     // 有没有精妙背包。有的话就装进去。" 走 TLM 现成的额外容器 API（javap 实证两版本签名一致），

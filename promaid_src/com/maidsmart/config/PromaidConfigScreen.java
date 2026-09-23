@@ -2943,8 +2943,17 @@ public class PromaidConfigScreen extends Screen {
         // v1.5.161：农场连锁收获 / 收获物自动收集（v1.5.189：连锁默认开启）
         this.rows.add(new BoolRow("农场连锁收获", MaidSmartConfig.MISC_CHAIN_HARVEST.get(),
                 v -> MaidSmartConfig.MISC_CHAIN_HARVEST.set(v), "农场连锁收获：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物（大农田多轮清完）；默认开启"));
-        this.rows.add(new BoolRow("收获物自动收集", MaidSmartConfig.MISC_AUTO_COLLECT.get(),
-                v -> MaidSmartConfig.MISC_AUTO_COLLECT.set(v), "收获物自动收集：收割产物（作物/种子等）直接进女仆背包，不落地；默认关闭"));
+        // v1.2.4 实测六百四十九（issue #22 第三条）：这一行的旧名"收获物自动收集"会让人
+        // 以为"关掉 = 产物留在地上等人捡"，而 TLM 本体的 TaskNormalFarm.harvest 走的是
+        // EntityMaid.dropResourcesToMaidInv——**收割产物本来就进女仆背包**（javap 实证）。
+        // 本开关真正管的是"我们的连锁/整片收割要不要顺手把地上的掉落物直接拾取掉"，
+        // 所以改成如实描述，避免与本体行为对不上。
+        this.rows.add(new BoolRow("农场掉落物立即拾取", MaidSmartConfig.MISC_AUTO_COLLECT.get(),
+                v -> MaidSmartConfig.MISC_AUTO_COLLECT.set(v),
+                "农场掉落物立即拾取：我们做连锁收割/整片收割时，顺手把收割点附近的掉落物直接拾取进她背包（默认关闭）。"
+                        + "【注意】车万女仆本体收割时本来就把产物直接放进女仆背包（产物不落地），所以这一行看不出差别；"
+                        + "它真正的作用是把「散落在收割点旁的掉落物」也立即捡掉，而不是等她路过再捡——打开会更快装满背包；"
+                        + "锁链/连锁收割一次收一片时更容易溢出，溢出那份才掉地（有精妙背包/旅行者背包会再接一层）"));
         this.rows.add(new BoolRow("背包满时装进精妙背包", MaidSmartConfig.MISC_BACKPACK_OVERFLOW.get(),
                 v -> MaidSmartConfig.MISC_BACKPACK_OVERFLOW.set(v),
                 "背包满时装进精妙背包（默认开，实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的「额外容器」——饰品栏里的精妙背包 / 旅行者背包。需要 Curios 在场 + TLM「女仆饰品」开启 + 背包真的戴在她饰品栏里；额外容器再塞不下才落地（绝不吞物品）"));
