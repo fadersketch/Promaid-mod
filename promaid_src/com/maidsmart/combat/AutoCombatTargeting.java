@@ -252,9 +252,11 @@ public final class AutoCombatTargeting {
                 }
                 return 0; // 刚参战，抖动读数——保持当前切换，不重选
             }
+            // v1.2.4 实测六百四十六：先还原后清标记（快照属于 clearMarkers 的清理对象，
+            // 顺序反了 = 没还原；issue #22 第二条）
+            AutoCombatPools.restorePrevMode(maid);
             AutoCombatPools.clearMarkers(maid);
             // v1.1.0 实测一百四十九：任务被外部接管 → 尊重新任务不动它，但 home/作息还原
-            AutoCombatPools.restorePrevMode(maid);
             if (AutoCombatPools.isIdleReadingTask(curTask)) {
                 com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 残留战斗标记自愈（当前 idle），重新评估参战");

@@ -224,6 +224,11 @@ public final class MaidToolAutoEquip {
         long curScore = (!cur.m_41619_() && need.test(cur) && !isNearlyBroken(cur))
                 ? scorer.applyAsLong(cur) : Long.MIN_VALUE;
         // 背包里挑：评分最高的一把（战斗按 DPS>附魔>耐久、镐按 等级对标/质量>附魔>耐久）
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】（issue #20 的正题：自动选取
+        // 武器/工具与精妙背包的适配）——她自己的背包里没有符合词条的 → 先请 TLM 的额外容器
+        // 系统从精妙背包/旅行者背包搬一组进来（pull 先扫她自己的背包，有就什么都不做）。
+        // 没装在饰品栏/没开女仆饰品时不产生任何行为（extraContainers 返回 null 直接早退）。
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, need, -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -272,6 +277,8 @@ public final class MaidToolAutoEquip {
         if (isPickaxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
             return true; // 手中够用且未即将用坏，不换
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上——换镐前先问一次精妙背包
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isPickaxe(s) && canHarvest(s, target), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -312,6 +319,10 @@ public final class MaidToolAutoEquip {
                     return true;
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有能挖的镐 →
+            // 再看精妙背包/旅行者背包（只读探针，不搬动；真换镐时由 ensureForTarget 搬）
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> isPickaxe(s) && canHarvest(s, target));
         } catch (Exception ignored) {
         }
         return false;
@@ -343,6 +354,11 @@ public final class MaidToolAutoEquip {
                     return true;
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：弹药也认精妙背包里的
+            //（同一套口径——"她带了多少弹药"不该因为装在精妙背包里就归零）
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> com.maidsmart.combat.GunCompat.isAmmo(s)
+                            || com.maidsmart.combat.GunCompat.isAmmoBox(s));
         } catch (Exception ignored) {
         }
         return false;
@@ -363,6 +379,9 @@ public final class MaidToolAutoEquip {
                     return true;
                 }
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：同上（斧）
+            return com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                    s -> isAxe(s) && canHarvest(s, target));
         } catch (Exception ignored) {
         }
         return false;
@@ -396,6 +415,8 @@ public final class MaidToolAutoEquip {
         if (isAxe(cur) && !isNearlyBroken(cur)) {
             return true;
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：换斧前先问一次精妙背包
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && !isNearlyBroken(s), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -429,6 +450,8 @@ public final class MaidToolAutoEquip {
         if (isAxe(cur) && canHarvest(cur, target) && !isNearlyBroken(cur)) {
             return true; // 手中够用且未即将用坏，不换
         }
+        // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：换斧前先问一次精妙背包
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isAxe(s) && canHarvest(s, target), -1);
         IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
         int bestSlot = -1;
         long bestScore = Long.MIN_VALUE;
@@ -752,6 +775,10 @@ public final class MaidToolAutoEquip {
             if (!cur.m_41619_() && !(cur.m_41720_() instanceof net.minecraft.world.item.ShieldItem)) {
                 return; // 副手已有非盾物品 → 不动（尊重搭配）
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：盾牌也认精妙背包/旅行者背包
+            //（副手本来就没盾才走到这里，所以这一问不会打断玩家自己的搭配）
+            com.maidsmart.tool.MaidExtraContainer.pull(maid,
+                    s -> s.m_41720_() instanceof net.minecraft.world.item.ShieldItem, -1);
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int best = -1;
             long bestScore = Long.MIN_VALUE;
@@ -810,6 +837,8 @@ public final class MaidToolAutoEquip {
             if (isHoe(cur) && !isNearlyBroken(cur)) {
                 return true; // 手中已有锄头且未即将用坏 → 不换
             }
+            // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：锄头也认精妙背包/旅行者背包
+            com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isHoe(s) && !isNearlyBroken(s), -1);
             IItemHandlerModifiable inv = maid.getAvailableBackpackInv();
             int bestSlot = -1;
             long bestScore = Long.MIN_VALUE;

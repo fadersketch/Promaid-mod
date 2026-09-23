@@ -1821,8 +1821,8 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("搭方块冷却（tick）", String.valueOf(MaidSmartConfig.MINE_PILLAR_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.MINE_PILLAR_COOLDOWN, s), "搭方块冷却（tick，垫脚下/搭路节奏）"));
         // v1.1.0 实测一百五十六：骑乘中禁止搭方块
-        this.rows.add(new BoolRow("骑乘中禁止搭方块", MaidSmartConfig.MINE_RIDE_NO_PILLAR.get(),
-                v -> MaidSmartConfig.MINE_RIDE_NO_PILLAR.set(v), "骑乘中（扫帚等载具）执行挖矿模式时不再垫方块搭高/搭桥——骑乘移动由载具控制，垫方块只会留残渣；关闭 = 旧行为（骑乘也照常搭）"));
+        this.rows.add(new BoolRow("骑乘/坐下中禁止搭方块", MaidSmartConfig.MINE_RIDE_NO_PILLAR.get(),
+                v -> MaidSmartConfig.MINE_RIDE_NO_PILLAR.set(v), "骑乘（扫帚等载具/TLM 椅子）或坐下时，挖矿垫脚 / 伐木垫脚 / 搭路 / 自保搭高全部不再放方块——这两种形态下她挪不动，垫方块只会留残渣；关闭 = 旧行为。蓝图/指标石建造不受影响"));
         this.rows.add(new NumRow("废石清理间隔（tick）", String.valueOf(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL.get()),
                 s -> setInt(MaidSmartConfig.MINE_JUNK_CHECK_INTERVAL, s), "废石清理间隔（tick，20=1 秒）：多久检查一次背包废石是否超量，调小清理更及时、略耗性能"));
         this.rows.add(new NumRow("播报限频（tick）", String.valueOf(MaidSmartConfig.MINE_SKIP_REPORT_INTERVAL.get()),
@@ -2390,6 +2390,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_BOOST_AIM_TICKS, s), "补推抬头窗口（tick，默认 10 = 0.5 秒）：补推后维持抬头朝目标这么久，推力吃完才回盘旋朝向"));
         this.rows.add(new NumRow("补推仰角（度）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_BOOST_PITCH.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_BOOST_PITCH, s), "补推仰角（度，默认 -45 = 抬头 45°）：掉高时朝目标抬头多少——负数表示抬头"));
+        this.rows.add(new BoolRow("掉高补推·用激流三叉戟", MaidSmartConfig.AIR_RAID_RANGED_BOOST_RIPTIDE.get(),
+                v -> MaidSmartConfig.AIR_RAID_RANGED_BOOST_RIPTIDE.set(v),
+                "掉高补推·用激流三叉戟（默认开，实测六百三十四）：盘旋中掉出高度带时，先把机头抬到上面的「补推仰角」再沿视线推原版那一口——这就是 PvP 玩家用激流「向上抬升飞行」的做法（原版激流的方向就是视线，抬头才升得起来）。只扣 1 点三叉戟耐久、不消耗物资，所以排在烟花之前；总开关是「激流三叉戟旋转突进」（关掉它这一条也退回）"));
         this.rows.add(new SectionRow("④ 远程开火", true));
         this.rows.add(new NumRow("远程开火基础间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN.get()),
                 s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN, s), "远程开火基础间隔（tick，默认 20 = 1 秒）：弓弩的基础射速（快速装填会按比例缩短）；枪械用枪械模组自己的射速"));
@@ -2426,7 +2429,11 @@ public class PromaidConfigScreen extends Screen {
                 "俯冲段冲刺·用烟花（默认开）：俯冲途中真的点一枚挂载烟花——消耗 1 枚，推力由原版给（滑翔中生效、沿视线 = 朝着敌人，方向不变），并照旧让副手亮一下烟花模型、放点火音效"));
         this.rows.add(new BoolRow("俯冲段冲刺·用羽扇", MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.get(),
                 v -> MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.set(v),
-                "俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但不用它那一式推力（带 +1.25 竖直升力，会把俯冲顶成平飞）；速度改由本模组按「一口速度」给。燃料优先级：法术 → 烟花 → 羽扇"));        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
+                "俯冲段冲刺·用羽扇（默认关）：挥一次扇子换一口加速——挥臂动作 / 音效 / 扇风盒推开贴脸怪 / 原版扣耐久全部照旧，但不用它那一式推力（带 +1.25 竖直升力，会把俯冲顶成平飞）；速度改由本模组按「一口速度」给。燃料优先级：法术 → 激流三叉戟 → 烟花 → 羽扇"));
+        this.rows.add(new BoolRow("俯冲段冲刺·用激流三叉戟", MaidSmartConfig.AIR_RAID_DIVE_BOOST_RIPTIDE.get(),
+                v -> MaidSmartConfig.AIR_RAID_DIVE_BOOST_RIPTIDE.set(v),
+                "俯冲段冲刺·用激流三叉戟（默认开，实测六百三十四）：俯冲途中挥一次激流三叉戟换一口加速——方向不变（那一段视线已被钉在敌人身上，所以这一口天然是「朝下扎得更快」），力度照原版 3.0×(1+激流等级)/4 再整体 ×1.3（实测六百四十二），动作也是原版那一记（旋转 20 tick + 按等级的音效），只扣 1 点耐久、不消耗物资，所以排在烟花之前；总开关是「激流三叉戟旋转突进」"));
+        this.rows.add(new SectionRow("⑦ 空袭轰炸（实测五百八十七）", true));
         this.rows.add(new SectionRow("近战空袭：打完那一记之后、再次起飞之前放炸弹", false));
         this.rows.add(new BoolRow("战斗模式轰炸", MaidSmartConfig.COMBAT_BOMBING_MELEE.get(),
                 v -> MaidSmartConfig.COMBAT_BOMBING_MELEE.set(v),
@@ -2542,6 +2549,9 @@ public class PromaidConfigScreen extends Screen {
                 MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
                 v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),
                 "激流三叉戟旋转冲击（默认开）：攻击模式 / 空袭下主手拿着【激流】三叉戟时，她原本那一记普通挥砍会被换成旋转冲击——近身 4 格内替换（地面要站在地上；空袭的收翅俯冲那一记在空中也替换，那一下本来就在空中、实战价值更大），旋转 16 tick（平躺 + 高速自转，与玩家同款），撞到就结算一次伤害（攻击力 + 附魔，同一目标每次突进只打一下；空中旋转期间不自我摔伤）；触发时机就是她的攻击时机，走路/索敌/排班不变。关闭 = 激流三叉戟只当普通三叉戟挥砍。"));
+        this.rows.add(new NumRow("激流推进·力度倍数", String.valueOf(MaidSmartConfig.COMBAT_RIPTIDE_FLIGHT_SCALE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIPTIDE_FLIGHT_SCALE, s),
+                "激流三叉戟当推进剂时的力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟【起飞 / 飞行跟随补推 / 空袭掉高抬升 / 俯冲冲刺】时，力度 = 原版 3.0×(1+等级)/4 × 1.3（实测六百四十二 的调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。**行为形状走烟花**：不是「一次性冲量」，而是像挂载烟花那样每 tick 把整个速度矢量往「视线 × 当前力度」上拉（v ← v×0.5 + 视线×(力度/2)）——所以**竖直分量也归推进管**（旧版只压水平、竖直没人管，起飞就会一路窜高）。**数值取水里那一记再 ×1.3**（六百四十二 实测「激流三甚至还没有俯冲飞行自己飞得快」，照搬那一记偏慢）：当前力度按玩家在水里的阻力 ×0.80/tick 递减，掉到滑翔常态（0.35 格/tick）即收手——行程 ≈ I 7.6 / II 12.5 / III 17.3 格（按递推式逐 tick 累加；理想闭式 9.75 / 14.6 / 19.5 是上限）。想回到六百四十一 的手感调到 0.77（= 1÷1.3）、想更省更稳往 0.1 调、想更猛往 2.0 调。近战那一记「旋转冲击」不受本项影响（照旧原版矢量）"));
         this.rows.add(new BoolRow("远程空袭近身弹开",
                 MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.set(v),
@@ -2640,6 +2650,8 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 位移法术任一，它是「她能飞」的凭证），但每次补推不再从背包扣那一枚——纯观赏档。羽扇按它自己的口径扣耐久、位移法术不消耗物资，这条只管烟花"));
         this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get(),
                 v -> MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
+        this.rows.add(new BoolRow("飞行跟随·消耗三叉戟耐久", MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get(),
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(v), "飞行跟随消耗激流三叉戟耐久（默认开 = 照原版每次推进扣 1 点）：关掉之后这一趟里用激流三叉戟追你不再扣它的耐久，与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。只管飞行跟随这一条链路——空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久。顺序不变：背包里有烟花时依旧先烧烟花，所以对「有烟花可烧」的存档没有影响"));
     }
 
     private void reviveRows() {
@@ -2933,6 +2945,9 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_CHAIN_HARVEST.set(v), "农场连锁收获：收割时以目标格为中心蔓延连锁收割相连农田里的成熟作物（大农田多轮清完）；默认开启"));
         this.rows.add(new BoolRow("收获物自动收集", MaidSmartConfig.MISC_AUTO_COLLECT.get(),
                 v -> MaidSmartConfig.MISC_AUTO_COLLECT.set(v), "收获物自动收集：收割产物（作物/种子等）直接进女仆背包，不落地；默认关闭"));
+        this.rows.add(new BoolRow("背包满时装进精妙背包", MaidSmartConfig.MISC_BACKPACK_OVERFLOW.get(),
+                v -> MaidSmartConfig.MISC_BACKPACK_OVERFLOW.set(v),
+                "背包满时装进精妙背包（默认开，实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的「额外容器」——饰品栏里的精妙背包 / 旅行者背包。需要 Curios 在场 + TLM「女仆饰品」开启 + 背包真的戴在她饰品栏里；额外容器再塞不下才落地（绝不吞物品）"));
         // v1.5.163：农场连锁收获上限可自定义
         this.rows.add(new NumRow("连锁收获上限（格）", String.valueOf(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT, s), "农场连锁收获上限（格）：一次连锁收割的最大格数（4~96，默认 24）"));
@@ -3084,8 +3099,12 @@ public class PromaidConfigScreen extends Screen {
     /**
      * v1.2.2 实测六百一十六【压缩盒】——新道具/新方块那一档的参数。
      *
-     * 这一页只有两条（格数固定 5、界面交互固定，不开放）：盒子放进女仆背包算不算
+     * 可调的只有两条（格数固定 5、界面交互固定，不开放）：盒子放进女仆背包算不算
      * 她背包的延伸，以及每格能堆多少（默认 114514）。
+     *
+     * v1.2.4 实测六百四十五：原来还有两条——「禁入带附魔的物品」开关与「禁入清单」，
+     * 都已删除（附魔物品一律禁入，判据写死在 {@code CompressionBoxFilter}）。
+     * 这里保留一条**只读**的「禁入规则」说明行，让原位置仍然看得见口径。
      */
     private void compressionBoxRows() {
         this.rows.add(new BoolRow("女仆背包延伸", MaidSmartConfig.COMPRESSION_BOX_MAID_EXTENSION.get(),
@@ -3096,30 +3115,16 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMPRESSION_BOX_MAX_STACK, s),
                 "压缩盒·每格上限（默认 114514 = 用户点名的那个数，范围 64~1000000）：盒子里每一格能堆多少个。写小一点（比如 1000）更符合直觉，写大一点纯粹是为了那个梗；往下调不会删已有的东西（已存的堆只在下次写入时被夹到新上限）。"
                         + "放进女仆背包时她仍然一次只拿 64（原版堆叠口径）"));
-        // v1.2.2 实测六百二十【用户要的黑名单】
-        this.rows.add(new BoolRow("禁入带附魔的物品", MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.get(),
-                v -> MaidSmartConfig.COMPRESSION_BOX_REFUSE_ENCHANTED.set(v),
-                "压缩盒·禁入带附魔的物品（默认开）：开 = 附魔书/附魔武器（含附魔工具、盔甲）既放不进盒子，在界面里也拿不起来，会给你一句提示；关 = 只有「压缩盒本身」和下面的禁入清单还拦着。"
-                        + "为什么默认拦：盒子只有 5 格，而附魔物品不可堆叠（不同附魔组合不是同一件东西，一格只能放一种），很快就满——盒子是「大批材料的压缩仓」不是装备库；"
-                        + "另外 六百一十八 之前报的「附魔类物品存进去会消失」正出在这一类上（盒子的自定义数量与原版堆叠上限 1 对不上，多出来的那份被当返回值丢掉）"));
-        this.rows.add(new TextRow("禁入清单", String.join(", ", MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.get()),
-                s -> {
-                    java.util.List<String> out = new java.util.ArrayList<>();
-                    for (String part : s.split("[,，]")) {
-                        String id = part.trim();
-                        if (id.isEmpty()) {
-                            continue;
-                        }
-                        if (!id.contains(":")) {
-                            return false; // 缺命名空间：拒绝提交，保留旧值
-                        }
-                        out.add(id);
-                    }
-                    MaidSmartConfig.COMPRESSION_BOX_REFUSE_LIST.set(out);
-                    return true;
-                },
-                "压缩盒·禁入清单（完整注册名，逗号分隔，如 minecraft:gunpowder, minecraft:tnt；留空 = 只拦压缩盒与带附魔的物品）："
-                        + "额外点名不许放进盒子的物品——放不进、界面里给提示，女仆那一侧也不会把这类东西顺手塞进盒子"));
+        // v1.2.4 实测六百四十五：这一行原来是 BoolRow「禁入带附魔的物品」+ TextRow「禁入清单」，
+        // 两个配置项都已删除（附魔物品**一律禁入**）。原位换成一条只读说明——玩家在这一页
+        // 还能看到口径是什么、以及为什么不再给开关。
+        this.rows.add(new InfoRow("禁入规则", "\u00a7c压缩盒本身 与 带附魔的物品 一律不能放入\u00a7r",
+                "v1.2.4 实测六百四十五：「禁入带附魔的物品」开关与「禁入清单」两个配置项已删除，口径写死、不再提供开关。"
+                        + "为什么：①盒子只有 5 格，而附魔物品不可堆叠（不同附魔组合互相不是同一件东西，一格只能放一种组合），很快就满——"
+                        + "它是「大批材料的压缩仓」而不是装备库；"
+                        + "②六十百一十八 之前报的「附魔类物品存进去会消失」正出在这一类上（盒子的自定义数量与原版堆叠上限 1 对不上，"
+                        + "多出来的那份被当返回值丢掉），把开关关掉等于把这些坑重新打开。"
+                        + "老配置文件里残留的 refuseEnchanted / refuseList 两行不再被读取（不影响启动）"));
     }
 
 

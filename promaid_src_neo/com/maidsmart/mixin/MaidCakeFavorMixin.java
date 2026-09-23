@@ -14,7 +14,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * 实测一百二十五：女仆吃完蛋糕好感 +10（工作餐/家餐都算）。
  *
  * 背景：TLM 原版 DefaultMaidWorkMeal/HomeMeal.onMaidEat 只按食物营养随机给
- * 0~1 点好感，蛋糕（经 MaidCakeEdibleMixin 变为可吃物品）没有额外价值。
+ * 0~1 点好感，蛋糕（经 MaidCakeEatHandler 在加载期挂上 FOOD 组件后变为可吃物品）没有额外价值。
  * 这里在 onMaidEat 返回后检测到是蛋糕（注册名 minecraft:cake）就补 +10——
  * 与玩家投喂（MaidCakeEatHandler）同口径：每吃一整块蛋糕 = +10。
  *

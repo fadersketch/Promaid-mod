@@ -37,7 +37,7 @@ import java.util.List;
  *   <li>点界面空白处 = 手上的东西**还回背包**（原版是丢出去；这里保守一点，
  *       免得玩家手一滑把东西丢在地上）。</li>
  * </ul>
- * ── 禁入清单（v1.2.2 实测六百二十）──
+ * ── 禁入判据（v1.2.2 实测六百二十；v1.2.4 实测六百四十五 收敛为写死的两条）──
  * 用户要的「界面内无法放入附魔书/附魔武器和压缩盒，压缩盒在这个界面内无法被鼠标
  * 选中，并提示不能把压缩盒放进去」：判据统一在 {@link CompressionBoxFilter}，
  * 界面这一层只负责**把理由画出来**（红字提示 + 悬停说明里的一行），真正裁决仍在服务端。
@@ -138,10 +138,10 @@ public class CompressionBoxScreen extends Screen {
     /**
      * 服务端说「这一次为什么没成」（v1.2.2 实测六百二十）。
      *
-     * 【为什么要专门接这一条】界面上那几行红字是**本地算的**——只能覆盖写死的那两条
-     * 判据（压缩盒 / 附魔物品）。配置里的禁入清单只有服务端读得到自己那份配置，
-     * 被它拒的时候客户端算不出原因，看着就是「点了没反应」。所以服务端随内容同步
-     * 把这句话带过来，这里照原样画成同一行红字。
+     * 【为什么要专门接这一条】界面上那几行红字是**本地算的**（压缩盒 / 附魔物品这
+     * 两条写死的判据）。但裁决在服务端，两边口径万一不一致（或者以后又加判据），
+     * 客户端算不出原因，看着就是「点了没反应」。所以服务端随内容同步把这句话带过来，
+     * 这里照原样画成同一行红字。
      */
     private void acceptNotice(String notice) {
         if (notice != null && !notice.isEmpty()) {
@@ -312,8 +312,8 @@ public class CompressionBoxScreen extends Screen {
      * 六百二十起判据统一走 {@link CompressionBoxFilter}（与数据层/女仆那一侧同一个
      * 方法），并且在原来两条（盒子不装盒子、那一格是别的物品）之外补了三条：
      * <ul>
-     *   <li>往盒子格里放**禁入清单**上的东西（带附魔的物品 / 配置清单）；</li>
-     *   <li>Shift+左键（= 整叠存进盒子）那一格装的是禁入清单上的东西；</li>
+     *   <li>往盒子格里放**带附魔的物品**（附魔书 / 附魔武器 / 附魔工具与盔甲）；</li>
+     *   <li>Shift+左键（= 整叠存进盒子）那一格装的是带附魔的物品；</li>
      *   <li><b>鼠标不许选中压缩盒</b>（用户要的那条）：背包格上放着压缩盒时，
      *       点击既不拿起、也不和手上的东西交换，只回一句「压缩盒不能装进压缩盒」。
      *       服务端那条路上同样挡着（{@code CompressionBoxService.clickInv}）。</li>
@@ -328,7 +328,7 @@ public class CompressionBoxScreen extends Screen {
             }
             String why = CompressionBoxFilter.reason(this.carry);
             if (why != null) {
-                return why; // 压缩盒 / 带附魔的物品 / 配置禁入清单
+                return why; // 压缩盒 / 带附魔的物品
             }
             ItemStack cur = slotOf(this.items, slot);
             if (!cur.m_41619_() && !ItemStack.m_150942_(cur, this.carry)) {
@@ -336,7 +336,7 @@ public class CompressionBoxScreen extends Screen {
             }
             return null;
         }
-        // 背包格：只有「会把东西搬进盒子」的动作才看禁入清单（shift+左键 = 整叠存进去）；
+        // 背包格：只有「会把东西搬进盒子」的动作才看禁入判据（shift+左键 = 整叠存进去）；
         // 另外，压缩盒本身在这个界面里鼠标一律选不中（用户要的那条）
         ItemStack cur = playerStack(slot);
         if (shift) {
@@ -488,7 +488,7 @@ public class CompressionBoxScreen extends Screen {
      * 用户要的「有多少个、耐久还剩多少」就在这里——数量 1 的原版不写，这里跟着不写（盒子格除外，
      * 盒子里 1 个也可能是关键的一格）；耐久只有能坏的物品有，掉到三分之一以下改成红字。
      *
-     * 六百二十起：背包格上凡是**放不进盒子**的东西（压缩盒 / 带附魔的物品 / 配置禁入清单）
+     * 六百二十起：背包格上凡是**放不进盒子**的东西（压缩盒 / 带附魔的物品）
      * 都直接把理由写在说明里——不用先点一下才知道不行。
      */
     private Tip buildTip(ItemStack s, boolean inBox, boolean shift) {

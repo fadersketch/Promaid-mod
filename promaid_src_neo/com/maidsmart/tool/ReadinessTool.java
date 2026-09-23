@@ -92,7 +92,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
         // ---- 空袭三件套（口径复用她自己的判定）----
         try {
             boolean elytra = com.maidsmart.combat.MaidFlightKit.hasElytra(maid);
-            boolean weapon = com.maidsmart.combat.MaidFlightKit.hasWeapon(maid);
+            boolean weapon = com.maidsmart.combat.MaidFlightKit.hasWeaponForFlightTask(maid);
             boolean firework = com.maidsmart.combat.MaidFlightKit.hasFirework(maid);
             boolean fan = com.maidsmart.combat.MaidFlightKit.hasFan(maid);
             boolean spell = com.maidsmart.combat.MaidFlightKit.hasClimbSpell(maid);
@@ -108,7 +108,7 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
                 sb.append(" → ⚠ 缺「").append(missing).append("」，缺件时空袭会退回地面战斗");
             }
             if (ranged) {
-                sb.append("\n远程弹药：").append(yn(com.maidsmart.combat.MaidFlightKit.hasAmmoForRanged(maid)));
+                sb.append("\n远程弹药：").append(yn(com.maidsmart.combat.MaidFlightKit.rangedAmmoOk(maid)));
             }
             if (!elytra) {
                 String diag = com.maidsmart.combat.MaidFlightKit.elytraDiagnostic(maid);

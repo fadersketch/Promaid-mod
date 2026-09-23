@@ -36,7 +36,6 @@
     "MaidShieldTimingMixin",
     "MaidSweepMixin",
     "MaidBaubleTotemMixin",
-    "MaidCakeEdibleMixin",
     "MaidCakeFavorMixin",
     "MaidTaskScheduleGuardMixin",
     "BuildActivityForceMixin",

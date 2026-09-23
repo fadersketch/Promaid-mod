@@ -219,6 +219,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
         RANGED_GUN_CD.remove(maidId);
+        RANGED_FIRE_LAST_LOG.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
         GROUND_READY.remove(maidId);
@@ -272,6 +273,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
         RANGED_GUN_CD.remove(maidId);
+        RANGED_FIRE_LAST_LOG.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
         GROUND_READY.remove(maidId);
@@ -295,6 +297,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.clear();
         RANGED_NEXT_SHOT.clear();
         RANGED_GUN_CD.clear();
+        RANGED_FIRE_LAST_LOG.clear();
         RANGED_PUSH_LEFT.clear();
         RANGED_PUSH_LAST_LOG.clear();
         GROUND_READY.clear();
@@ -536,10 +539,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                         com.maidsmart.tool.PromaidLog.nameOf(maid)
                                 + " 缺可以飞行的道具（" + MaidFlightKit.fuelDiagnostic(maid) + "）");
             }
-            // 实测五百七十四：措辞按缺件内容分流——缺"可以飞行的道具"时把三种手段点出来
+            // 实测五百七十四：措辞按缺件内容分流——缺"可以飞行的道具"时把几种手段点出来
             // （烟花火箭 / 孔雀羽扇 / 能上天的位移类法术任一即可），免得玩家以为只能用烟花。
+            // v1.2.4 实测六百三十三：再添一件——带激流附魔的三叉戟。
             String hint = missing.contains("可以飞行的道具")
-                    ? "（烟花火箭 / 孔雀羽扇 / 位移类法术任一）" : "";
+                    ? "（烟花火箭 / 孔雀羽扇 / 位移类法术 / 激流三叉戟任一）" : "";
             maid.getChatBubbleManager().addTextChatBubble(
                     "空战装备不齐，没有" + missing + hint + "，先按普通战斗来");
         } catch (Throwable ignored) {
@@ -563,6 +567,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      */
     private static void endFlightSafely(EntityMaid maid, UUID id) {
         pauseRound(id);
+        // v1.2.4 实测六百四十（六百四十一 起口径不变）：这一轮既然收了，激流推进剂窗口也一起
+        // 摘掉（它只在 m_6725_ 里被驱动，链路走不到这里就没人再推）——留着只是表里的陈旧项。
+        // **注意**：这里只丢窗口引用，不作任何减速（"保持动量自然滑翔"那一档的语义，同 BOOST_ROCKET）。
+        com.maidsmart.combat.MaidRiptideBoost.clear(maid);
         if (maid.m_20096_()) {
             MaidFlightKit.setGliding(maid, false);
         }
@@ -625,6 +633,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             suppressVanillaMelee(maid);
             return;
         }
+
+        // ── v1.2.4 实测六百四十一：激流推进剂的每 tick 维持（拟真烟花）──
+        // 起飞/掉高抬升/俯冲冲刺点着的这一记是"烟花式的持续推力"：每 tick 把**整个速度矢量**
+        // 往"视线 × 当前力度"上拉（v ← v×0.5 + 视线×(力度/2)，照原版挂载烟花的递推形状），
+        // 力度 = 玩家在水里那一记的 3.0×(1+等级)/4 再 ×1.3（六百四十二），按水阻力 ×0.80/tick 递减到滑翔常态为止。
+        // 旧版（六百四十）是"一次性冲量 + 只压水平"，竖直分量谁也管不住（滑翔对竖直只有 ×0.98），
+        // 于是起飞特别高（用户 ①）。现在由**本行为每 tick 驱动一次**；链路一收手就没人再调它。
+        // 位置：放在突进让位**之后**（那十几 tick 的速度归突进，且突进起手时已经把它撤掉了）、
+        // 各相位派发**之前**（每一个空中相位都该继续推；收翅猛击那一段由窗口自己的
+        // "只在滑翔时生效"那条门挡掉）。没有窗口时这里只是一次 Map 查询。
+        MaidRiptideBoost.tick(maid);
 
         // ── 第 0 步：起跳滑翔（离地后立刻放烟花，才吃得到烟花推力）──
         Integer jumpLeft = JUMP_LEFT.get(id);
@@ -718,8 +737,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                 // 飞行远战：落地就重新起飞恢复盘旋（开火由 performRangedAttack 通道负责）；
                 // 真的一点飞行手段都没有（烟花/羽扇/位移法术全缺）才站着，目标会在原地继续被远程打
                 if (distH <= launchRange() && canTakeOff(maid, gameTime)) {
-                    if (canLaunch(maid, gameTime)) {
-                        jumpForLaunch(maid, target, id); // 起跳滑翔 + 空中放烟花/挥扇
+                    if (canJumpToLaunch(maid, gameTime)) {
+                        jumpForLaunch(maid, target, id); // 起跳滑翔 + 空中放烟花/挥扇/点火激流
                         return;
                     }
                     // 实测五百七十二（五百七十四并入总判定）：烟花不可用（用完/冷却）→
@@ -729,10 +748,18 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     }
                 }
                 MaidFlightKit.setGliding(maid, false);
+                // ── v1.2.4 实测六百四十三：站在地上也要打 ──
+                // 开火那一句原先**只**写在 tickRangedAir（空中盘旋相位）里，地面这条分支一路
+                // return 到底——于是"落地、等重新起飞"的那几秒她举着枪一枪不放。实测日志实证
+                // （2026-09-23 17:15，监守者）：距敌 2.6 格、主手 tacz:modern_kinetic_gun、
+                // 背包里有 tacz:ammo_box，站桩被打死，全程零开火。
+                // 这里补一次同样的开火：弓弩走 performRangedAttack（本任务的回调），枪械走 TLM
+                // 枪械通道；节奏由 fireRanged 内部的冷却表管，不会连发。
+                fireRanged(maid, target, id, gameTime);
                 return;
             }
             if (distH <= launchRange() && canTakeOff(maid, gameTime)) {
-                if (canLaunch(maid, gameTime)) {
+                if (canJumpToLaunch(maid, gameTime)) {
                     jumpForLaunch(maid, target, id);
                     return;
                 }
@@ -820,7 +847,38 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * "有烟花先走烟花链路、没有才用位移法术"，旧手感一字不变。
      */
     private static boolean canTakeOff(EntityMaid maid, long gameTime) {
-        return canLaunch(maid, gameTime) || MaidFlightKit.hasClimbSpell(maid);
+        // v1.2.4 实测六百三十三：再添一件——带激流附魔的三叉戟（"强抬一下激流三叉戟"）。
+        // 与 hasClimbSpell 同一口径（不看它的收招硬直/冷却，只看"她有没有这件能起飞的东西"）。
+        return canLaunch(maid, gameTime) || MaidFlightKit.hasClimbSpell(maid)
+                || MaidFlightKit.hasRiptide(maid);
+    }
+
+    /**
+     * v1.2.4 实测六百四十一【地面"起跳"这一步的判据：烟花/羽扇 **或** 手里的激流三叉戟】。
+     *
+     * 反馈原文："单纯使用激流三叉戟进行近战空袭的时候，女仆会在落地之后愣一下再起飞。
+     * 这一点对于实战是致命的。"
+     *
+     * 【旧版为什么"愣一下"】地面分支只认 {@link #canLaunch}（烟花/羽扇）才肯 {@link #jumpForLaunch}，
+     * 而 {@link #canTakeOff} 里那个 {@code hasRiptide} 在地面上是**空判**——激流那条腿写在
+     * {@link #tryLaunch} 里，而 {@code tryLaunch} 只有**空中**那两个入口（离地后的第 0 步、
+     * 猛击收尾后的再点火）会调。于是"只带激流三叉戟"的她落地后**再等多久都起不来**，
+     * 只能等地面近战那一记旋转突进把她弹起来（那条还要吃 20 tick 收招硬直 + 20 tick 地面冷却，
+     * 实测就是"愣一下"）。
+     *
+     * 【现在的口径】起跳这一步与烟花**完全同路**：判据放宽成"有烟花/羽扇，或有激流三叉戟"，
+     * 点火仍由空中那一 tick 的 {@link #tryLaunch} 完成（顺序一字不动：扇子 → 烟花 → 激流）
+     * ——这正是用户设计决定里要的"启动走烟花的路线"。有烟花/羽扇的存档一字不变
+     * （它们的判据本来就更宽的那一支先命中）。
+     *
+     * 【为什么要连内置冷却一起判】激流那一口**复用烟花的冷却表**（`FIREWORK_READY`，写回的是
+     * {@code fanCooldown} = 20 tick），而 {@link #tryLaunch} 的开头也**先查这张表**——若这里不看
+     * 冷却就起跳，她会在"主手有重锤/烟花但正在冷却"时**跳起来却点不着任何东西**，落地再跳，
+     * 现场表现就是原地一蹦一蹦。所以判据收成"冷却已过 且（烟花/羽扇 或 激流三叉戟）"。
+     */
+    private static boolean canJumpToLaunch(EntityMaid maid, long gameTime) {
+        return !onFireworkCooldown(maid, gameTime)
+                && (MaidFlightKit.hasFlightFuel(maid) || MaidFlightKit.hasRiptide(maid));
     }
 
     private boolean tryLaunch(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
@@ -843,6 +901,25 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         ItemStack fw = MaidFlightKit.takeFirework(maid);
         if (fw.m_41619_()) {
+            // v1.2.4 实测六百三十三【第四条腿：激流三叉戟】——扇子不在、烟花也拿不出来的最后一试。
+            // 排在这个位置是刻意的：**不改变任何"有烟花/羽扇"存档的起飞手感与烧料节奏**
+            // （顺序仍是 扇子 → 烟花 → 激流），只有真拿不出前两样时才轮到它。
+            if (MaidFlightKit.hasRiptide(maid)) {
+                // 朝向必须先摆好：原版玩家是自己抬头瞄着放，而这一记**每 tick 都按她的视线推**
+                // （v1.2.4 实测六百四十一：烟花式递推、力度照玩家在水里那一记再 ×1.3、按水阻力递减——
+                // 所以"照搬该相位该有的朝向"是必须的；"之后视线回到目标"也不再是问题，那正是准度）。
+                // 见 MaidRiptideBoost。
+                faceLaunchDirection(maid, target);
+                if (MaidTridentSpinBehavior.boostForFlight(level, maid)) {
+                    MaidFlightKit.setGliding(maid, true); // 与烟花/扇子同通道：滑翔每 tick 吃朝向
+                    LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
+                    WAIT_LAUNCH.remove(id);
+                    FIREWORK_READY.put(id, gameTime + fanCooldown()); // 与羽扇共用同一个间隔
+                    com.maidsmart.tool.PromaidLog.log("飞行作战",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 激流三叉戟起飞");
+                    return true;
+                }
+            }
             return false;
         }
         launchFirework(level, maid, fw, false);
@@ -1044,10 +1121,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *       本改动把它收进这条链路统一排序，不再各说各话。</li>
      * </ul>
      *
-     * ── 燃料优先级：法术 → 烟花 → 羽扇 ──
-     * 法术不消耗任何物资、最省，所以有可用法术时先走法术；没有才轮到烟花（**真的消耗 1 枚**、
-     * 推力由原版给、并照旧让副手亮一下）；最后才是羽扇（面板默认关）。一件都没有 → 静默跳过
-     * （与全模组"缺料跳过"的口径一致，不占间隔）。
+     * ── 燃料优先级：法术 → 激流三叉戟 → 烟花 → 羽扇 ──
+     * 法术不消耗任何物资、最省，所以有可用法术时先走法术；其次是**激流三叉戟**（v1.2.4 实测
+     * 六百三十四：只扣耐久、不是消耗品，所以排在那枚**真的要烧掉**的烟花之前，见
+     * {@link MaidRiptideBoost}）；没有才轮到烟花（**真的消耗 1 枚**、推力由原版给、并照旧让
+     * 副手亮一下）；最后才是羽扇（面板默认关）。一件都没有 → 静默跳过（与全模组"缺料跳过"
+     * 的口径一致，不占间隔）。
      *
      * ── 烟花这一路的力度倍数（v1.2.2 实测六百一十五）──
      * 用户反馈"加强力度太小，加速效果不明显，还耗了一颗烟花没啥用"，所以俯冲段点的那一枚
@@ -1082,6 +1161,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             // ① 法术（不消耗物资；它自带冲量、沿视线冲刺——成功即算这一口）
             if (MaidSpellCastCompat.dashUsable() && tryDashBoost(maid, target, id, gameTime)) {
                 what = "位移法术";
+            }
+            // ①·5 激流三叉戟（v1.2.4 实测六百三十四）：第二条腿——**只扣耐久、不是消耗品**，
+            //      所以排在那枚真的要烧掉的烟花之前。方向取她**此刻的视线**（本方法由
+            //      tickDiveBoost 在 faceTarget 之后调用，视线已经被钉在敌人身上 = 朝下扎）。
+            //      v1.2.4 实测六百四十一：这一记现在是**拟真烟花**——每 tick 把整个速度矢量往
+            //      "视线 × 当前力度"上拉（力度 = 玩家在水里那一记的 3.0×(1+等级)/4 × 1.3，按水阻力
+            //      ×0.80/tick 递减）——所以俯冲是"扎得又快、又不会一路飘出去"
+            //      （III 级总行程约 17 格，与玩家在水里同一把三叉戟同量级）。见 MaidRiptideBoost。
+            //      普通旋转突进（近战那一条）没跑时它才用——那一条自己有 16 tick 的速度权。
+            if (what == null && cfgDiveBoostRiptide() && MaidRiptideBoost.diveDash(level, maid)) {
+                what = "激流三叉戟";
             }
             // ② 烟花：真的点一枚（原版推力沿视线生效，方向不变），并让副手亮一下
             //     六百一十五：这一枚走 **DiveBoostRocket**——原版推力之外再补一份
@@ -1150,6 +1240,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
     private static boolean cfgDiveBoostFan() {
         return MaidSmartConfig.AIR_RAID_DIVE_BOOST_FAN.get();
+    }
+    /** 俯冲段冲刺·用激流三叉戟（v1.2.4 实测六百三十四，默认开） */
+    private static boolean cfgDiveBoostRiptide() {
+        return MaidSmartConfig.AIR_RAID_DIVE_BOOST_RIPTIDE.get();
+    }
+    /** 掉高补推·用激流三叉戟（v1.2.4 实测六百三十四，默认开） */
+    private static boolean cfgRangedBoostRiptide() {
+        return MaidSmartConfig.AIR_RAID_RANGED_BOOST_RIPTIDE.get();
     }
 
     /**
@@ -1772,6 +1870,30 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** v1.2.0 实测四百六十八：枪械开火冷却（tick）——由 performGunAttack 的返回值驱动 */
     private static final Map<UUID, Integer> RANGED_GUN_CD = new HashMap<>();
+    /** v1.2.4 实测六百四十三：远程开火诊断节流（每 2 秒一条，latest.log 搜「远程开火」） */
+    private static final Map<UUID, Long> RANGED_FIRE_LAST_LOG = new HashMap<>();
+    private static final long RANGED_FIRE_LOG_INTERVAL = 40L;
+
+    /**
+     * 远程开火诊断行（节流：同一只女仆最多 2 秒一行）。
+     *
+     * 【为什么必须有】实测六百四十三 之前，"她拿着枪 / 弓在空袭里一枪不放"这件事在日志里
+     * **完全查不到**——只有一条"空战装备不齐，没有弹药"的气泡，而真正的闸门（TLM 的枪型
+     * 距离档）连一行都不写，现场只能靠猜。现在每一档不出手的原因（超出射程 / 视线被挡 /
+     * 等冷却 / TLM 返回值）都会印出来，与「空袭索敌」「空袭装备」同一风格，直接 grep 复核。
+     */
+    private static void logFireThrottled(EntityMaid maid, UUID id, long gameTime, String msg) {
+        try {
+            Long last = RANGED_FIRE_LAST_LOG.get(id);
+            if (last != null && gameTime - last < RANGED_FIRE_LOG_INTERVAL) {
+                return;
+            }
+            RANGED_FIRE_LAST_LOG.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("远程开火",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
+        } catch (Throwable ignored) {
+        }
+    }
     /** 退出模式时交给 TLM 收枪用的一次性 task 实例（见 stopGunAim） */
     private static final com.github.tartaricacid.touhoulittlemaid.compat.gun.common.ai.GunShootTargetTask
             GUN_STOP_TASK = new com.github.tartaricacid.touhoulittlemaid.compat.gun.common.ai.GunShootTargetTask();
@@ -1801,6 +1923,24 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             // "能像玩家那样持续飞很久"就落在这一条上；它成功时会自己开同一个抬头窗口。
             if (tryDashHold(maid, target, id, gameTime)) {
                 boostLeft = RANGED_BOOST_LEFT.getOrDefault(id, 0);
+            } else if (cfgRangedBoostRiptide()
+                    && MaidRiptideBoost.liftForRanged(level, maid, target, rangedBoostPitch())) {
+                // v1.2.4 实测六百三十四【激流抬升】：第二条腿——**先抬头再推**这一口才能抬升
+                // （射线方向就是这一口的矢量方向：盘旋期她的视线是"绕圈切线"，照它推只在圈上
+                // 窜一下、抬不起来；那是 六百三十三 不做这一路的真实原因，也是这里必须自己
+                // 摆机头的原因）。仰角与烟花/法术共用 airRaid.rangedBoostPitch，并照旧开同一个
+                // 抬头窗口——她吃到推力后的 0.5 秒仍按这个角度抬着飞，这一口才吃得满。
+                // v1.2.4 实测六百四十一：这一记现在是**拟真烟花**——先抬头把视线摆好，之后每 tick
+                // 把整个速度矢量往"视线 × 当前力度"上拉（力度照玩家在水里那一记再 ×1.3，按水阻力
+                // ×0.80 递减），所以抬升这一口依旧有力（抬 45° 就是 PvP 玩家用激流抬升的做法），
+                // 而竖直分量**也被钉在视线方向上**、随力度一起收敛——不再"一口气顶到 100 格外"
+                // （III 级行程约 17 格）。位置排在烟花/羽扇**之前**：它只扣三叉戟耐久，
+                // 而烟花是真的要烧掉一枚。
+                RANGED_NEXT_BOOST.put(id, gameTime + rangedBoostInterval());
+                RANGED_BOOST_LEFT.put(id, rangedBoostAimTicks());
+                boostLeft = rangedBoostAimTicks();
+                com.maidsmart.tool.PromaidLog.log("远程空袭",
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 掉高挥激流三叉戟");
             } else if (canLaunch(maid, gameTime)) {
                 // 实测五百六十三：扇子优先——掉高时挥羽扇维持高度（推进/扣耐久照搬扇子
                 // 自己，节奏 20t），没扇才烧烟花
@@ -2370,22 +2510,31 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
         double dist = maid.m_20270_(target);
         if (dist > range) {
+            // v1.2.4 实测六百四十三：不出手的每一档都留一行（节流 2 秒）。
+            // 以前"她拿着枪为什么不射"在日志里完全查不到，现场只能靠猜。
+            logFireThrottled(maid, id, gameTime, "主手=" + itemName(main) + " 距敌 "
+                    + fmt2(dist) + " 格 > 射程 " + fmt2(range) + " 格 → 不出手");
             return;
         }
         // v1.2.0 实测五百二十七【出手要看方块阻隔】：弓弩这一路原先不看视线（箭矢自己
-        // 撞墙是另一回事——先扣冷却、白放一箭，还可能隔着树叶对着墙射）。枪械那一路
-        // 本来就有 canSeeGunTarget，这里补齐弓弩，两条枪口口径一致。
+        // 撞墙是另一回事——先扣冷却、白放一箭，还可能隔着树叶对着墙射）。
+        // v1.2.4 实测六百四十三：枪械那一路原先另有一道"枪口口径"判据（canSeeGunTarget），
+        // 现按 TLM 自家 GunShootTargetTask 的口径统一成**这一条视线**——理由见 tickGunFire。
         if (!SelfPreservationBehavior.hasSight(maid, target)) {
+            logFireThrottled(maid, id, gameTime, "主手=" + itemName(main) + " 距敌 "
+                    + fmt2(dist) + " 格 但视线被挡 → 不出手");
             return;
         }
         if (gun) {
-            tickGunFire(maid, target, id);
+            tickGunFire(maid, target, id, gameTime);
             return;
         }
         if (gameTime >= RANGED_NEXT_SHOT.getOrDefault(id, 0L)) {
             try {
                 maid.m_6504_(target, 1.0f);
                 RANGED_NEXT_SHOT.put(id, gameTime + rangedShotCooldown(main));
+                logFireThrottled(maid, id, gameTime, "主手=" + itemName(main) + " 距敌 "
+                        + fmt2(dist) + " 格 → 开火");
             } catch (Throwable ignored) {
             }
         }
@@ -2394,11 +2543,44 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /**
      * 枪械开火——照搬 TLM `GunShootTargetTask.tick` 的开火段（字节码实证）：
      * ①`GunCommonUtil.tick` 负责换弹 / 上膛（每 tick 都要调）；
-     * ②冷却结束且能看到目标时 `performGunAttack` 开火，返回值就是下一发冷却；
+     * ②冷却结束时 `performGunAttack` 开火，返回值就是下一发冷却；
      * ③冷却再按女仆的 `MAID_GUN_ATTACK_SPEED` 属性缩放（TLM 同款）。
      * 开火失败（没子弹 / 没拉栓）它自己会返回一个大冷却，所以不必在这里额外判弹药。
+     *
+     * ── v1.2.4 实测六百四十三【她为什么"在天上一枪不放"】──
+     * 旧版这里还挂着一道 {@code canSeeGunTarget(maid, target)} = TLM 的
+     * {@code GunCommonUtil.canSee}。它在 TACZ 侧的实现在 `TacInnerCompat.canSee`（javap 实证）：
+     * <pre>
+     *   IGun gun = IGun.getIGunOrNull(stack);
+     *   if (gun == null) return BehaviorUtils.canSee(maid, target);
+     *   return TimelessAPI.getCommonGunIndex(gun.getGunId(stack)).map(index -&gt; {
+     *       String type = index.getType();
+     *       if ("sniper".equals(type))                       // 狙击枪
+     *           return IRangedAttackTask.targetConditionsTest(maid, target, MAID_GUN_LONG_DISTANCE);
+     *       if ("shotgun"/"pistol"/"smg".equals(type))       // 霰弹 / 手枪 / 冲锋枪
+     *           return IRangedAttackTask.targetConditionsTest(maid, target, MAID_GUN_NEAR_DISTANCE);
+     *       return IRangedAttackTask.targetConditionsTest(maid, target, MAID_GUN_MEDIUM_DISTANCE);
+     *   }).orElse(BehaviorUtils.canSee(maid, target));
+     * </pre>
+     * 而 {@code targetConditionsTest} 只是"把 {@code TargetingConditions.range(N)} 设成那一档、
+     * 再做一次 {@code test}"（同一份 javap）——**那是 TLM 地面枪械任务用来挑/留目标的"交战
+     * 距离带"**（TLM 自己的注释原文：near = "Suitable for pistols and shotguns"），
+     * **不是**"这一发能不能打出去"的合法性判据。TLM 自家的 `GunShootTargetTask.tick` 里，
+     * 开火前用的**只有** {@code maid.canSee(target)}（普通射线视线）＋ seeTime 迟滞，
+     * 那道档位判据一次都没出现在开火条件里。
+     *
+     * 【现场表现】空袭是"绕着目标盘旋"（半径 {@code airRaid.orbitRadius} 默认 10 格）
+     * **且停在她上方**（高度带 {@code airRaid.rangedHoldHeight}），3D 距离天生落在那些带外
+     * （手枪/霰弹/冲锋枪那一档更近），于是 {@code canSee} 每 tick 都是 false、
+     * {@code performGunAttack} 一次都没被调到 —— 实测日志（2026-09-23 17:15，监守者）：
+     * 她带着 `tacz:modern_kinetic_gun` + 背包弹药箱在天上盘旋 26 秒，每 2 秒一条
+     * "我方选中=minecraft:warden@11.4~20.3 我方有视线=1"，**一枪未放**。
+     *
+     * 【现在的口径】与 TLM 自家逐条对齐：**视线由上层 {@link #fireRanged} 统一判**
+     * （{@link SelfPreservationBehavior#hasSight}，两条枪口同一个口径），这里只看冷却。
+     * 返回值仍然照旧驱动冷却——它的读法见下面那一行注释。
      */
-    private void tickGunFire(EntityMaid maid, LivingEntity target, UUID id) {
+    private void tickGunFire(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack gun = maid.m_21205_();
         try {
             com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
@@ -2406,28 +2588,134 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         } catch (Throwable ignored) {
         }
         int cd = RANGED_GUN_CD.getOrDefault(id, 0) - 1;
-        if (cd <= 0 && canSeeGunTarget(maid, target)) {
-            try {
-                cd = com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
-                        .performGunAttack(maid, target, gun);
-                net.minecraft.world.entity.ai.attributes.AttributeInstance attr = maid.m_21051_(
-                        com.github.tartaricacid.touhoulittlemaid.init.InitAttribute.MAID_GUN_ATTACK_SPEED.get());
-                if (attr != null && attr.m_22135_() > 0.0) {
-                    cd = (int) (cd / attr.m_22135_());
-                }
-            } catch (Throwable ignored) {
-                cd = 100;
+        if (cd > 0) {
+            // 【冷却必须真的走完——这里曾经是本条的笔误】v1.2.4 实测六百四十三 第一版在这一支
+            // 直接 return 而**没有把递减后的值写回**，于是冷却永远停在 performGunAttack 返回的
+            // 那一刻：现场日志（2026-09-23 17:30）是「17:30:47 返回 7 tick」，之后每 2 秒一条
+            // 「枪械冷却剩 6 tick」直到日志结束——**任何飞行道具都再也开不了火**（比改之前更糟）。
+            // 现在与改动前的写法一致：无论走哪一支，最后都把"递减后的冷却"写回。
+            RANGED_GUN_CD.put(id, cd);
+            logFireThrottled(maid, id, gameTime, "主手=" + itemName(gun) + " 距敌 "
+                    + fmt2(maid.m_20270_(target)) + " 格 → 枪械冷却剩 " + cd + " tick");
+            return;
+        }
+        try {
+            cd = com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
+                    .performGunAttack(maid, target, gun);
+            int raw = cd; // 属性缩放**之前**的原始返回值——判"这一发出去没有"要看它
+            net.minecraft.world.entity.ai.attributes.AttributeInstance attr = maid.m_21051_(
+                    com.github.tartaricacid.touhoulittlemaid.init.InitAttribute.MAID_GUN_ATTACK_SPEED.get());
+            if (attr != null && attr.m_22135_() > 0.0) {
+                cd = (int) (cd / attr.m_22135_());
             }
+            // 返回值读法（TLM `TacInnerCompat.performGunAttack` 字节码逐支对照）：
+            //   2 / 10~14          = 这一发真的打出去了（AUTO / SEMI|BURST）
+            //   >= 20              = 还在开镜 / 抽枪 / 拉栓 / 换弹，没打出去
+            //   100                = 枪械不可用（IGun 或枪包数据缺失）
+            //
+            // 【这一档不节流成 2 秒】它的频率本来就由冷却决定（每次尝试之间隔着 N tick），
+            // 连起来看就是"每一发到底怎么了"。三个现场量一起印：
+            //   开镜  = TACZ 的 synIsAiming（反射读；TLM 的 performGunAttack 里有一档
+            //           "距离 > 她的活动半径且没开镜 → 先开镜、返回 aimTime×20+2"——
+            //           那个返回值看着像小冷却、其实**没打出去**，有这个字段才能区分）
+            //   TLM档 = 旧版那道"枪型距离带"判据（**现在只记录、不再当开火门禁**，见方法注释）
+            //   推进  = 此刻挂着哪一路飞行推进剂（激流窗口在不在）——用它回答"为什么三叉戟不行"
+            com.maidsmart.tool.PromaidLog.log("远程开火", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 主手=" + itemName(gun) + " 距敌 " + fmt2(maid.m_20270_(target)) + " 格"
+                    + " 开镜=" + gunAiming(maid) + " TLM档=" + gunBandOk(maid, target)
+                    + " 推进=" + propellant(maid)
+                    + " → 枪械开火返回 " + cd + " tick（原始 " + raw
+                    + (raw >= 20 ? "；原始≥20 = 装填/开镜/抽枪/拉栓，没打出去" : "") + "）");
+        } catch (Throwable ignored) {
+            cd = 100;
+            logFireThrottled(maid, id, gameTime, "主手=" + itemName(gun)
+                    + " → 枪械开火抛异常（按 100 tick 冷却处理）");
         }
         RANGED_GUN_CD.put(id, cd);
     }
 
-    private static boolean canSeeGunTarget(EntityMaid maid, LivingEntity target) {
+    /** 物品注册名（日志用；空栈给「空」） */
+    private static String itemName(ItemStack stack) {
+        try {
+            if (stack == null || stack.m_41619_()) {
+                return "空";
+            }
+            // 1.20.1：物品注册表走 ForgeRegistries.ITEMS（BuiltInRegistries.ITEM 在 SRG 环境里
+            // 是 f_122959_，直接写字面名编译不过——与 MaidArmyCommand 同一处理）
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            return key == null ? String.valueOf(stack.m_41720_()) : key.toString();
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    /** 日志里的两位小数（Locale.ROOT 定点，免得不同 JVM 打出科学计数法） */
+    private static String fmt2(double d) {
+        return String.format(java.util.Locale.ROOT, "%.2f", d);
+    }
+
+    /* ==================== 枪械开火诊断（v1.2.4 实测六百四十三；只读，不改任何行为） ==================== */
+
+    /** TACZ `IGunOperator` 的惰性反射句柄：[0]=类，[1]=fromLivingEntity(LivingEntity)，
+     *  [2]=getSynIsAiming()。空数组 = TACZ 不在场 / 解析失败（一律返回 false）。
+     *  做法与 {@code GunCompat} 读 TACZ 弹药箱完全一致——TACZ 不在编译期类路径上。 */
+    private static volatile Object[] TACZ_OP_API;
+    private static final Object TACZ_OP_LOCK = new Object();
+
+    private static Object[] taczOpApi() {
+        Object[] api = TACZ_OP_API;
+        if (api != null) {
+            return api;
+        }
+        synchronized (TACZ_OP_LOCK) {
+            if (TACZ_OP_API == null) {
+                try {
+                    Class<?> cls = Class.forName("com.tacz.guns.api.entity.IGunOperator");
+                    TACZ_OP_API = new Object[]{cls,
+                            cls.getMethod("fromLivingEntity", net.minecraft.world.entity.LivingEntity.class),
+                            cls.getMethod("getSynIsAiming")};
+                } catch (Throwable ignored) {
+                    TACZ_OP_API = new Object[0];
+                }
+            }
+            return TACZ_OP_API;
+        }
+    }
+
+    /** TACZ 此刻是否"已开镜"（只读，日志用；TACZ 不在场或读失败一律 false） */
+    private static boolean gunAiming(EntityMaid maid) {
+        try {
+            Object[] api = taczOpApi();
+            if (api.length == 0) {
+                return false;
+            }
+            Object op = ((java.lang.reflect.Method) api[1]).invoke(null, maid);
+            return op != null && (Boolean) ((java.lang.reflect.Method) api[2]).invoke(op);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 旧版那道「枪型距离带」判据（TLM `GunCommonUtil.canSee`）——**现在只记录，不再当开火门禁**。
+     * 留着它是为了让同一行日志能回答两件事：这一发为什么没出去、以及旧版那道门当时开没开。
+     */
+    private static boolean gunBandOk(EntityMaid maid, LivingEntity target) {
         try {
             return com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                     .canSee(maid, target).orElse(false);
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /** 此刻挂着哪一路飞行推进剂（日志用；激流推进剂窗口在不在见 MaidRiptideBoost） */
+    private static String propellant(EntityMaid maid) {
+        try {
+            return MaidRiptideBoost.isThrusting(maid) ? "激流推进中" : "-";
+        } catch (Throwable ignored) {
+            return "?";
         }
     }
 

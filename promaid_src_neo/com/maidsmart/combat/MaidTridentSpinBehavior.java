@@ -132,6 +132,12 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
 
     /** 一次旋转的持续 tick（原版是 20；这里收到 16，收招更快、不显得"卡在原地转"） */
     private static final int SPIN_TICKS = 16;
+    /**
+     * v1.2.4 实测六百三十三 曾在这里写过一个 {@code FLIGHT_SPIN_TICKS = 20}（"飞行推进那一记"的
+     * 旋转时长，照原版 `startAutoSpinAttack(20)`）。**实测六百四十 起删掉**：推进剂那一整套
+     * （动作时长、推力窗口、力度）都搬进了 {@link MaidRiptideBoost}（{@code AIR_SPIN_TICKS = 20}，
+     * 同一个数），这里再留一份就成了"两处口径"——本文件反复吃过那个亏。
+     */
     /** 收招硬直（tick）——原版靠武器冷却，女仆用这条防止原地连转 */
     private static final int RECOVER_TICKS = 20;
     /**
@@ -303,6 +309,83 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
         }
         launch(level, maid, target, weapon, airborne);
         return true;
+    }
+
+    /**
+     * v1.2.4 实测六百三十三【激流三叉戟当"飞行推进剂"：起飞 / 启动飞行跟随】。
+     *
+     * 需求原文："强抬一下激流三叉戟，这个也可以用来起飞/启动飞行跟随，大致代码和孔雀羽扇差不多
+     * （只是需要注意一下动作以及还原该激流等级下的矢量）。"
+     *
+     * 【这一记是什么（v1.2.4 实测六百四十一 起：拟真烟花）】**启动与行为效果走烟花那条路，
+     * 数值照玩家在水里放同一把三叉戟**（用户口径原文："将激流三叉戟在起飞/俯冲/飞行突进的链路
+     * 改为拟真烟花，也就是实际上的启动和行为效果走烟花的路线，数值跟玩家在水中使用三叉戟
+     * （还要判定附魔等级）一致。但是动作会变成三叉戟的动作，并且对途中敌人造成对应的伤害。"）：
+     * 点火之后的每一 tick，把**整个速度矢量**往"视线 × 当前力度"上拉
+     * （{@code v ← v×0.5 + 视线×(力度/2)}——原版挂载烟花的递推形状），力度
+     * {@code 3.0×(1+等级)/4 × 1.3}（六百四十二 的力度调参；I 1.95 / II 2.93 / III 3.90 格/tick）
+     * 按**玩家在水里的阻力** ×0.80/tick 递减到滑翔常态为止 ⇒ 行程（按递推式逐 tick 累加）
+     * I ≈ 7.6 / II ≈ 12.5 / III ≈ 17.3 格。
+     * 同时把原版那一记**旋转动作**摆出来（置标志位 4 + 20 tick 的旋转计数，画面由 Gecko 去重
+     * mixin 负责）、按等级放原版音效（`TRIDENT_RIPTIDE_1/2/3`）、耐久 −1（与投掷共用那一条）；
+     * 途中撞到的敌人由 {@link #onSpinTouch} 按原版口径结算伤害。
+     * 实现整份搬到了 {@link MaidRiptideBoost#ignite}（四条腿共用一份，不再各写各的），
+     * 本方法只剩"取用口径 + 开关"这一层。
+     *
+     * 【六百四十/六百四十一 为什么改了两版】六百四十 第一版把这一记写成"隐形烟花"
+     * （照原版挂载烟花的递推式、力度打 0.6 折）；用户追问「不应该照搬玩家在雨中飞行的速度嘛？」
+     * 之后改成"力度一分不打折 + 补上玩家的空气阻力"（行程 17/25/33 格）。实测仍然
+     * "起飞特别高、轻松飞出 100 格"——因为那一版**竖直分量不衰减**（只压水平 ×0.92，
+     * {@code v.y} 原样写回），而鞘翅滑翔对竖直几乎不设防（×0.98/tick）。六百四十一 起按用户的
+     * 设计决定重做：形状回到烟花（每 tick 拉着走、整份可删），数值与阻力都换成"水里"，
+     * 竖直也被钉在视线方向上；六百四十二 又按实测把**力度**整体 ×1.3
+     * （"激流三甚至还没有俯冲飞行自己飞得快"）。完整推导见 {@link MaidRiptideBoost} 的类文档。
+     *
+     * 【为什么不能直接复用 {@link #tryStartDash}】那条是"**朝目标的近战突进**"：方向取她→目标、
+     * 速度由本链路每 tick 按比例顶着（撞到就收）、带伤害去重与收招硬直，还要登记 {@link #DASH}。
+     * 拿它当推进剂会把飞行跟随的速度接管过去（每 tick 被按 30% 拽慢，等于原地转圈）。
+     * 这里**只借动作与力度**：不登记 DASH、不接管寻路、也不进硬直——所以它对空袭状态机是
+     * "透明"的，不需要那边让位。（反过来，突进起手时会把衰减窗口撤掉——那十几 tick 的速度归突进，
+     * 见 {@link #launch}。）
+     *
+     * 【朝向由调用方负责】原版是玩家自己抬头瞄着放（位移法术同理，见
+     * {@code MaidSpellCastCompat} 里"起飞那一枪会被掰平"的坑）。这里照搬"那个相位该用的朝向"
+     * ——空袭起飞用 {@code faceLaunchDirection}（抬头 62°/45°）、飞行跟随用 {@code faceToward}
+     * ——本方法**不动她的朝向**。<b>六百四十一 起这条尤其要紧</b>：推进剂每 tick 都按视线拉，
+     * 所以"调用方把视线摆在哪儿，她就往哪儿飞"；旧版飞行跟随那一支在点火前多摆了一次
+     * "至少抬头 20°"（`faceToward(aim, true)`），实测就是用户 ④ 说的"三叉戟的朝向并不是主人"。
+     *
+     * 【旋转撞到实体】不登记 DASH 时，原版 `checkAutoSpinAttack` 撞到实体就会自己收招
+     * （清标志位），那一记伤害由 {@code MaidSpinAttackTouchMixin} 按原版口径结算
+     * ——与玩家"激流冲过去扫到怪"完全一致，不是新增行为。
+     *
+     * @return true = 这一口已经点着（调用方按"这一口推进已发生"处理并记自己的冷却）
+     */
+    public static boolean boostForFlight(ServerLevel level, EntityMaid maid) {
+        return boostForFlight(level, maid, true);
+    }
+
+    /**
+     * 同 {@link #boostForFlight(ServerLevel, EntityMaid)}，但可指定**这一口要不要扣三叉戟耐久**。
+     *
+     * 【为什么有这个参数（v1.2.4 实测六百四十）】飞行跟随那边加了"不消耗三叉戟耐久"的省料开关
+     * （{@code flightFollow.trident}，与 {@code flightFollow.firework} / {@code flightFollow.elytra}
+     * 同一档，需求原文"飞行跟随没有不消耗三叉戟耐久的开关"）。空袭的起飞/抬升/俯冲一律传 true：
+     * 那是战斗动作，该扣就扣（那边没有这个开关，也不该有）。
+     */
+    public static boolean boostForFlight(ServerLevel level, EntityMaid maid, boolean consumeDurability) {
+        try {
+            if (maid == null || level == null
+                    || !com.maidsmart.config.MaidSmartConfig.RIPTIDE_DASH_ENABLE.get()) {
+                return false; // 开关沿用「激流三叉戟旋转突进」——关掉它这一条腿也一起退回
+            }
+            // v1.2.4 实测六百三十八/六百三十九：主手/副手/背包都没有时，问精妙背包/旅行者背包要
+            // （ignite 内部走 fetchRiptide = 先看身上，再问额外容器）。实测六百四十 起主手与副手
+            // 重新算数——见 MaidFlightKit.findRiptide 的那段来龙去脉。
+            return MaidRiptideBoost.ignite(level, maid, "激流起飞", "激流推进", null, consumeDurability);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /**
@@ -489,6 +572,12 @@ public class MaidTridentSpinBehavior extends Behavior<EntityMaid> {
         double vy = uy * power;
         double vz = uzh * power;
         maid.push(vx, vy, vz); // ④ push = 加在速度上
+
+        // v1.2.4 实测六百四十，六百四十一 起口径不变：这一记的速度归突进——把还在跑的
+        // **激流推进剂窗口**撤掉。两条腿可能同时在场（背包里一把激流三叉戟当推进剂、主手又是
+        // 一把激流三叉戟），而推进剂每 tick 都会把整个速度矢量往"视线 × 当前力度"上拉
+        // （六百四十一 起是烟花式递推）：不撤掉的话突进刚指定的速度会被它当场拽偏，突进就冲不出去。
+        MaidRiptideBoost.clear(maid);
 
         // ⑤ 置 tick 数 + 标志位 4
         LivingEntitySpinAccessor spin = (LivingEntitySpinAccessor) (Object) maid;
