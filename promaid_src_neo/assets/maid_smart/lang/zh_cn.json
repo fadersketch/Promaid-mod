@@ -323,5 +323,9 @@
   "config.promaid.bombing.airPlace": "空中强制放置",
   "config.promaid.bombing.tntTrack": "TNT 追踪飞行",
   "config.promaid.compat": "第三方兼容",
-  "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）"
+  "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）",
+  "config.promaid.misc.freeFlight": "仿创造飞行（默认关）",
+  "config.promaid.misc.freeFlightItems": "仿创造飞行·资格物品表",
+  "config.promaid.misc.freeFlightEffects": "仿创造飞行·资格效果表",
+  "config.promaid.misc.freeFlightGravity": "仿创造飞行·重力归零也算资格"
 }

@@ -181,5 +181,9 @@
   "config.promaid.bombing.airPlace": "Force Place in Air",
   "config.promaid.bombing.tntTrack": "TNT Homing",
   "config.promaid.compat": "Third-party Compat",
-  "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)"
+  "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)",
+  "config.promaid.misc.freeFlight": "Free Flight (Creative-style, default off)",
+  "config.promaid.misc.freeFlightItems": "Free Flight: Qualifying Items",
+  "config.promaid.misc.freeFlightEffects": "Free Flight: Qualifying Effects",
+  "config.promaid.misc.freeFlightGravity": "Free Flight: Zero Gravity Counts"
 }

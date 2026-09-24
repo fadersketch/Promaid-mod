@@ -3202,6 +3202,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
         this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
                 v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
+        // v1.2.5 实测六百五十六：仿创造飞行（默认关）
+        this.rows.add(new BoolRow("仿创造飞行", MaidSmartConfig.MISC_FREE_FLIGHT.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT.set(v), "默认关：打开后，有资格的女仆会悬浮并自由升降（创造模式飞行的手感）。资格三路：下面的物品表 / 效果表 / 她的重力属性≈0（通用启发式）。收工若在半空会先软着陆再交还重力"));
+        this.rows.add(new TextRow("仿创造飞行·资格物品表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。写完整 id（modid:item）或 #命名空间:标签。扫描范围：双手/护甲/背包/饰品栏/额外容器。例：allthearcanistgear:thread_flight"));
+        this.rows.add(new TextRow("仿创造飞行·资格效果表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS, s), "命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）"));
+        this.rows.add(new BoolRow("仿创造飞行·重力归零也算资格", MaidSmartConfig.MISC_FREE_FLIGHT_GRAVITY.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_GRAVITY.set(v), "默认开：她的重力属性 ≈ 0 时自动获得资格——通用启发式，覆盖任何「重力归零」型来源，不必点名模组"));
         this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
         // v1.1.0 实测一百八十八：Y 轴拉回门槛（反馈："传送机制不检测 Y 轴"）

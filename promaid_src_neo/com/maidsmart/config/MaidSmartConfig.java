@@ -942,6 +942,17 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
      *  （饰品栏里的精妙背包 / 旅行者背包，TLM 的 compat.extracontainer 体系，见
      *  {@code com.maidsmart.tool.MaidExtraContainer}）——默认开 */
     public static final ModConfigSpec.BooleanValue MISC_BACKPACK_OVERFLOW;
+
+    /* ---------------- v1.2.5 实测六百五十六：仿创造飞行（给"创造飞行类物品"的女仆版） ---------------- */
+
+    /** 仿创造飞行总开关（默认关，可选功能） */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT;
+    /** 资格物品表：命中的物品让她能飞（支持 #命名空间:标签） */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_ITEMS;
+    /** 资格效果表：命中的药水效果让她能飞 */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_EFFECTS;
+    /** 通用启发式：她的重力属性 ≈ 0 也算资格（覆盖任何"重力归零"型来源） */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_GRAVITY;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -2437,6 +2448,16 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_MAID_SAME_DIM_VERTICAL = BUILDER.comment("Y 轴拉回门槛（格，默认 16）：女仆与主人同维度、水平距离没超上一条阈值但【垂直高度差】超过本值时——若主人旁边 16 格内有安全落点（findStand）就传送过来；没有安全落点则不传（等有落点/再试）。旧版只有 48 格 3D 距离阈值，水平贴身、竖直搭高 30 格的女仆永远不触发（骑到你头顶挂机）；守家/坐姿/骑乘/干活中同样不拉")
                 .translation("config.promaid.misc.maidSameDimVertical").defineInRange("maidSameDimVertical", 16, 4, 128);
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
+        MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关，v1.2.5 实测六百五十六）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果/重力归零类法术），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表/重力归零）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格三路】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）③重力属性 ≈ 0（通用启发式，覆盖所有重力归零型来源，不需要点名模组）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
+                .translation("config.promaid.misc.freeFlight").define("freeFlight", false);
+        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。可写完整 id（如 modid:item），也可写 #命名空间:标签 认整条标签。扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
+                .translation("config.promaid.misc.freeFlightItems")
+                .defineListAllowEmpty("freeFlightItems", List.of(), () -> "", o -> o instanceof String);
+        MISC_FREE_FLIGHT_EFFECTS = BUILDER.comment("仿创造飞行·资格效果表（默认空）：命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）。")
+                .translation("config.promaid.misc.freeFlightEffects")
+                .defineListAllowEmpty("freeFlightEffects", List.of(), () -> "", o -> o instanceof String);
+        MISC_FREE_FLIGHT_GRAVITY = BUILDER.comment("仿创造飞行·重力归零也算资格（默认开）：她的重力属性 ≈ 0 时自动获得飞行资格——通用启发式，覆盖任何「重力归零」型来源（不需要点名模组）。她本来就在飘，我们只是把飘变成可控飞行。")
+                .translation("config.promaid.misc.freeFlightGravity").define("freeFlightGravity", true);
         MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
         // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）

@@ -104,6 +104,8 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
         // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
         NeoForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
+        // v1.2.5 实测六百五十六：仿创造飞行（事件驱动，见类注释）
+        NeoForge.EVENT_BUS.register(new com.maidsmart.flight.MaidFreeFlightHandler());
         // v1.1.0 实测二百三十三：随手种树任务级驱动注册（模块自监听 ServerTick，
         // 扫"任务=伐木"的女仆——触发=伐木模式，与行为运行窗口无关）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -349,6 +351,8 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
         // v1.2.0 实测五百五十五：客户端重同步（修"服务端活着、客户端连实体都没有"）
         com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
+        // v1.2.5 实测六百五十六：仿创造飞行手动触发（/maid_smart freeflight_goto）
+        com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
     }
 
     /**
@@ -702,6 +706,9 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior()),
                         // v1.1.0 实测一百八十三：空闲散步（反馈："增加女仆散步的频率和速度"）
                         //——低于 TLM core 最高 99 与上面全部行为，只在真正空闲时生效
+                        // 注：仿创造飞行（实测六百五十六）**不走 brain 行为**——core 行为被实例化了
+                        // 却从不被咨询（原因待作者确认），改用 MaidTickEvent 事件驱动，
+                        // 见 com.maidsmart.flight.MaidFreeFlightController。
                         Pair.of(50, new com.maidsmart.task.MaidStrollBehavior()),
                         // v1.1.0 实测四百一十：排班贴身气泡（情绪价值彩蛋）——主人靠近
                         // 排班中的女仆时冒一句贴身对话（30 条池，30 秒/只 CD）；战斗/自保/
