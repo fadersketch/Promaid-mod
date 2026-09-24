@@ -152,6 +152,11 @@ public class PromaidConfigScreen extends Screen {
     private boolean waterTable = false;
     private EditBox waterInput;
     private WaterList waterList;
+    /** v1.2.5 实测六百五十二：烧制清单子页（四张名单共用一套「模式按钮 + 搜索网格 + 清单」交互） */
+    private boolean cookTable = false;
+    private int cookTableMode = 0;
+    private EditBox cookInput;
+    private CookList cookList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -519,6 +524,10 @@ public class PromaidConfigScreen extends Screen {
         }
         if (this.waterTable) {
             this.waterTableButtons(w, h, cx);
+            return;
+        }
+        if (this.cookTable) {
+            this.cookTableButtons(w, h, cx);
             return;
         }
         this.sectionButtons(w, h, cx);
@@ -2931,6 +2940,20 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烧制任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
         this.rows.add(new NumRow("任务垂直范围", String.valueOf(MaidSmartConfig.MISC_VERTICAL_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MISC_VERTICAL_RANGE, s), "任务垂直范围（格）：烹饪/酿造在上/下多少格内搜索容器"));
+        // v1.2.5 实测六百五十二：烧制清单（四张面板可编辑名单——想"只烧铁矿石""别拿我的钻石去烧""只用煤炭当柴"不用再改代码）
+        this.rows.add(new BtnRow("烧制清单",
+                "管理 →（只烧 " + countCookList(0) + " · 禁止 " + countCookList(1)
+                        + " · 燃料 " + countCookList(2) + " · 禁燃 " + countCookList(3) + "）",
+                () -> {
+                    this.cookTable = true;
+                    this.cookTableMode = 0;
+                    this.m_7856_();
+                },
+                "四张名单，默认全空 = 保持自动判定（装上就是老手感）：①只烧这些——非空时只把清单里的物品当原料（仍要求真有炉子配方：清单只缩小范围，不会让烧不动的东西变得能烧）；②禁止烧制——永不放炉子，优先级最高；③只用这些燃料——非空时只在这些里按燃烧时长挑；④禁用燃料——永不当柴烧。点物品图标加入/再点移出，也可在下面手填注册名。禁止类优先于允许类"));
+        // v1.2.5 实测六百五十二：顺手补上「烧木材」开关——它一直只写在 toml 里，面板漏了这一行
+        this.rows.add(new BoolRow("烧木材", MaidSmartConfig.MISC_COOK_BURN_WOOD.get(),
+                v -> MaidSmartConfig.MISC_COOK_BURN_WOOD.set(v),
+                "烧木材（默认关）：木材类（原木/木板/树苗/竹等）默认进黑名单，不当**原料**烧（避免「用木头烧木头」）；勾选后木材类照常可烧（仍受「烧任何可烧制物」与烧制清单约束）。注意这只是**原料**黑名单——当燃料不受它管，要禁燃料请用清单④"));
     }
 
     private void farmRows() {
@@ -3419,6 +3442,388 @@ public class PromaidConfigScreen extends Screen {
             this.minableList.rebuild();
         }
     }
+
+
+    /* ==================== v1.2.5 实测六百五十二：烧制清单子页（四张名单） ==================== */
+
+    /** 四张名单的标题（cookTableMode 0..3）——与配置键一一对应 */
+    private static final String[] COOK_LIST_NAMES = {
+            "只烧这些", "禁止烧制", "只用这些燃料", "禁用燃料"};
+
+    /** 读第 mode 张名单（返回可改副本；照 altListFor 的写法） */
+    private List<String> cookListFor(int mode) {
+        switch (mode) {
+            case 0: return new ArrayList<>(MaidSmartConfig.MISC_COOK_SMELT_ALLOW.get());
+            case 1: return new ArrayList<>(MaidSmartConfig.MISC_COOK_SMELT_DENY.get());
+            case 2: return new ArrayList<>(MaidSmartConfig.MISC_COOK_FUEL_ALLOW.get());
+            default: return new ArrayList<>(MaidSmartConfig.MISC_COOK_FUEL_DENY.get());
+        }
+    }
+
+    private void cookListSet(int mode, List<String> list) {
+        switch (mode) {
+            case 0: MaidSmartConfig.MISC_COOK_SMELT_ALLOW.set(list); break;
+            case 1: MaidSmartConfig.MISC_COOK_SMELT_DENY.set(list); break;
+            case 2: MaidSmartConfig.MISC_COOK_FUEL_ALLOW.set(list); break;
+            default: MaidSmartConfig.MISC_COOK_FUEL_DENY.set(list); break;
+        }
+    }
+
+    /** 第 mode 张名单里有没有这个 id */
+    private boolean isInCookList(int mode, String id) {
+        try {
+            return cookListFor(mode).contains(id);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 入口按钮上的计数（四张各几个） */
+    private int countCookList(int mode) {
+        try {
+            return cookListFor(mode).size();
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 网格点一下 → 在当前那张名单里加入/移出（照 toggleFoodChecked 写） */
+    private void toggleCookChecked(String id) {
+        if (id == null || id.isEmpty()) {
+            return;
+        }
+        List<String> list = cookListFor(this.cookTableMode);
+        if (list.contains(id)) {
+            list.remove(id);
+        } else {
+            list.add(id);
+        }
+        cookListSet(this.cookTableMode, list);
+        if (this.cookList != null) {
+            this.cookList.rebuild();
+        }
+    }
+
+    /** 手填注册名加进当前那张名单（支持省略 minecraft: 前缀） */
+    private void addCookList() {
+        if (this.cookInput == null) {
+            return;
+        }
+        String text = this.cookInput.m_94155_().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        if (!text.contains(":")) {
+            text = "minecraft:" + text;
+        }
+        net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                .getValue(net.minecraft.resources.ResourceLocation.parse(text));
+        if (item == null) {
+            return;
+        }
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item);
+        if (key == null) {
+            return;
+        }
+        String id = key.toString();
+        List<String> list = cookListFor(this.cookTableMode);
+        if (!list.contains(id)) {
+            list.add(id);
+            cookListSet(this.cookTableMode, list);
+        }
+        this.cookInput.m_94144_("");
+        if (this.cookList != null) {
+            this.cookList.rebuild();
+        }
+    }
+
+    /** 底部清单每行的「移出」按钮 */
+    private void removeCookList(String id) {
+        List<String> list = cookListFor(this.cookTableMode);
+        list.remove(id);
+        cookListSet(this.cookTableMode, list);
+        if (this.cookList != null) {
+            this.cookList.rebuild();
+        }
+    }
+
+    /**
+     * 重建烧制清单的候选网格（全物品 + 中英文搜索；与 rebuildCreative 同款，
+     * 但**不按类别过滤**——四张名单什么都能填，真正"能不能烧"由女仆那边的配方判定管）。
+     */
+    private void rebuildCookCreative() {
+        this.creativeItems.clear();
+        ensureCreativeCache();
+        String q = this.creativeQuery == null ? "" : this.creativeQuery.trim().toLowerCase(java.util.Locale.ROOT);
+        for (String[] entry : creativeCache) {
+            String id = entry[0];
+            String cn = entry[1];
+            if (!q.isEmpty() && !(id.contains(q) || (cn != null && cn.contains(q)))) {
+                continue;
+            }
+            net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                    .getValue(new net.minecraft.resources.ResourceLocation(id));
+            if (item != null) {
+                this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+            }
+        }
+        this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
+    }
+
+    /**
+     * v1.2.5 实测六百五十二：烧制清单子页——顶部四个模式按钮（当前档黄色 ●）+ 搜索框 +
+     * 物品网格（点图标加入/移出）+ 手填 id + 底部当前那张名单。交互与矿表 / 替代品 / 喂食子页同款。
+     */
+    private void cookTableButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int tgY = 24;
+        for (int i = 0; i < COOK_LIST_NAMES.length; i++) {
+            final int mi = i;
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_((this.cookTableMode == mi ? "\u00a7e\u25cf " : "\u00a77") + COOK_LIST_NAMES[i]),
+                            b -> {
+                                this.cookTableMode = mi;
+                                this.m_7856_();
+                            })
+                    .m_252987_(left + i * 100, tgY, 96, 18).m_253136_());
+        }
+        this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
+                Component.m_237113_("搜索物品（中英文皆可）"));
+        this.creativeInput.m_94199_(64);
+        this.creativeInput.m_94144_(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.m_94151_(s -> {
+            this.creativeQuery = s;
+            this.rebuildCookCreative();
+        });
+        this.m_142416_(this.creativeInput);
+        int gridTop = 66;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildCookCreative();
+        int pageY = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25c0"), b -> {
+                this.creativePage--;
+                this.m_7856_();
+            }).m_252987_(cx - 40, pageY, 20, 16).m_253136_());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25b6"), b -> {
+                this.creativePage++;
+                this.m_7856_();
+            }).m_252987_(cx + 20, pageY, 20, 16).m_253136_());
+        }
+        int inputY = gridBottom + 24;
+        this.cookInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116, 18,
+                Component.m_237113_("填注册名加进当前名单"));
+        this.cookInput.m_94199_(64);
+        this.cookInput.m_257771_(Component.m_237113_("minecraft:coal"));
+        this.m_142416_(this.cookInput);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("加进当前名单"), b -> this.addCookList())
+                .m_252987_(left + panelWidth - 96, inputY, 80, 18).m_253136_());
+        int listTop = inputY + 24;
+        int listH = Math.max(24, Math.min(h - 78 - listTop - 4, h - listTop - 36));
+        this.cookList = new CookList(this.f_96547_, left, listTop, panelWidth - 20, listH);
+        this.cookList.m_93507_(left);
+        this.m_142416_(this.cookList);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 返回参数"), b -> {
+            this.cookTable = false;
+            this.m_7856_();
+        }).m_252987_(12, h - 34, 100, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 烧制清单子页的网格渲染（自绘，与矿表/替代品子页同款；✔ = 已在当前那张名单里） */
+    private void renderCookGrid(GuiGraphics g, int mouseX, int mouseY, int w, int h, int cx) {
+        String cur = COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0), 3)];
+        String title = "\u00a7e" + cur + "——点击物品图标加入（再点取消）";
+        g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridTop = GRID_TOP;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        g.m_280509_(panelLeft + 8, gridTop - 4, panelLeft + panelWidth - 8, gridBottom, 0x80101010);
+        int perPage = GRID_COLS * this.gridRows;
+        int start = this.creativePage * perPage;
+        int end = Math.min(this.creativeItems.size(), start + perPage);
+        int hoverIdx = -1;
+        for (int i = start; i < end; i++) {
+            int col = (i - start) % GRID_COLS;
+            int row = (i - start) / GRID_COLS;
+            int x = left + col * GRID_CELL;
+            int y = gridTop + row * GRID_CELL;
+            net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            String id = key == null ? "" : key.toString();
+            if (this.isInCookList(this.cookTableMode, id)) {
+                g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
+                g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFFFFFF);
+            }
+            g.m_280480_(stack, x, y);
+            if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                hoverIdx = i;
+                g.m_280509_(x - 2, y - 2, x + 18, y + 18, 0x80FFD700);
+            }
+        }
+        int infoX = left + GRID_COLS * GRID_CELL + 12;
+        int infoY = gridTop + 2;
+        if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
+            net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            String hover = key == null ? "?" : key.toString();
+            String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+            g.m_280614_(this.f_96547_,
+                    Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                    infoX, infoY, 0xFFFFFF, false);
+            g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                    infoX, infoY + 10, 0xAAAAAA, false);
+        } else {
+            int pages = this.creativePages();
+            if (pages > 1) {
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("第 " + (this.creativePage + 1) + "/" + pages + " 页"),
+                        infoX, infoY, 0x888888, false);
+            }
+        }
+        String hint = "\u00a77✓ = 已加入「" + cur + "」，再点一次取消；禁止类优先于允许类与自动判定";
+        g.m_280653_(this.f_96547_, Component.m_237113_(hint),
+                this.clampCenterX(hint, cx), this.f_96544_ - 50, 0x888888);
+    }
+
+    /** 烧制清单子页的网格点击 → 在当前那张名单里加入/移出 */
+    private boolean clickCookGrid(double mouseX, double mouseY, int button) {
+        if (button != 0) {
+            return false;
+        }
+        int cx = this.f_96543_ / 2;
+        int left = Math.max(8, cx - 280) + 10;
+        int gridTop = GRID_TOP;
+        int gridRowsNow = this.f_96544_ < 215 ? 2 : GRID_ROWS;
+        if (mouseX < left || mouseX >= left + GRID_COLS * GRID_CELL
+                || mouseY < gridTop || mouseY >= gridTop + gridRowsNow * GRID_CELL) {
+            return false;
+        }
+        int perPage = GRID_COLS * this.gridRows;
+        int start = this.creativePage * perPage;
+        int col = (int) ((mouseX - left) / GRID_CELL);
+        int row = (int) ((mouseY - gridTop) / GRID_CELL);
+        int idx = start + row * GRID_COLS + col;
+        if (idx < 0 || idx >= this.creativeItems.size()) {
+            return false;
+        }
+        net.minecraft.resources.ResourceLocation key =
+                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(this.creativeItems.get(idx).m_41720_());
+        if (key != null) {
+            this.toggleCookChecked(key.toString());
+        }
+        return true;
+    }
+
+    /**
+     * v1.2.5 实测六百五十二：烧制清单列表（底部）——每行物品图标 + 中文名 + 「移出」按钮。
+     * 四张名单共用这一个控件，按 cookTableMode 切表（同 AltList 按 altTableMode 切表）。
+     */
+    private class CookList extends ObjectSelectionList<CookList.CookEntry> {
+        private final List<String> entries = new ArrayList<>();
+
+        CookList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.m_91087_(), width, height, top, top + height, 22);
+            this.m_93507_(x);
+            this.m_93488_(false);
+            this.m_93496_(false);
+            this.f_93390_ = width; // 行宽 = 列表宽（同 FoodList / WaterList）
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.m_93516_();
+            this.entries.clear();
+            try {
+                this.entries.addAll(PromaidConfigScreen.this.cookListFor(PromaidConfigScreen.this.cookTableMode));
+            } catch (Throwable ignored) {
+            }
+            for (String e : this.entries) {
+                this.m_7085_(new CookEntry(e));
+            }
+        }
+
+        @Override
+        public int m_5759_() {
+            return Math.max(this.f_93390_, 120);
+        }
+
+        /** 同 FoodList / WaterList：滚动条覆盖为低调样式 */
+        @Override
+        protected void m_238964_(GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        /** 单行：物品图标 + 中文名 + 「移出」按钮 */
+        private class CookEntry extends ObjectSelectionList.Entry<CookList.CookEntry> {
+            private final String id;
+            private final Button removeButton;
+
+            CookEntry(String id) {
+                this.id = id;
+                this.removeButton = Button.m_253074_(Component.m_237113_("移出"),
+                                b -> PromaidConfigScreen.this.removeCookList(this.id))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
+            }
+
+            @Override
+            public void m_6311_(GuiGraphics g, int index, int top, int left, int width, int height,
+                                int mouseX, int mouseY, boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                net.minecraft.world.item.Item item = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                if (item != null) {
+                    g.m_280480_(new net.minecraft.world.item.ItemStack(item), x, y - 2);
+                    x += 20;
+                }
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_("\u00a7f" + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                        x, y, 0xFFAAAAAA, false);
+                this.removeButton.m_252865_(left + CookList.this.m_5759_() - 62);
+                this.removeButton.m_253211_(top + 1);
+                this.removeButton.m_88315_(g, mouseX, mouseY, partialTick);
+            }
+
+            @Override
+            public boolean m_6375_(double mx, double my, int button) {
+                if (button == 0 && this.removeButton.m_5953_(mx, my)) {
+                    this.removeButton.m_6375_(mx, my, 0);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component m_142172_() {
+                return Component.m_237113_(this.id);
+            }
+        }
+    }
+
 
     /** 实测五百七十三：白名单列表（底部）——每行物品图标 + 中文名 + 「不喂了」按钮 */
     private class WaterList extends ObjectSelectionList<WaterList.WaterEntry> {
@@ -3953,7 +4358,7 @@ public class PromaidConfigScreen extends Screen {
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
         // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
-        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable) {
+        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable && !this.cookTable) {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
@@ -4321,6 +4726,8 @@ public class PromaidConfigScreen extends Screen {
                     + "），缺料时女仆按序使用，再点一次取消";
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
+        } else if (this.cookTable) {
+            this.renderCookGrid(g, mouseX, mouseY, w, h, cx);
         } else {
             // v1.1.0 实测二十四修复：标签 x 从硬编码 20 改为 panelLeft+10——
             // 旧版标签固定 x=20，面板和控件居中（panelLeft=Math.max(8,cx-280)），
@@ -4532,6 +4939,10 @@ public class PromaidConfigScreen extends Screen {
                 }
             }
         }
+        // v1.2.5 实测六百五十二：烧制清单子页网格点击 → 在当前那张名单里加入/移出
+        if (this.cookTable) {
+            return this.clickCookGrid(mouseX, mouseY, button);
+        }
         return super.m_6375_(mouseX, mouseY, button);
     }
 
@@ -4605,6 +5016,7 @@ public class PromaidConfigScreen extends Screen {
         MaidSmartConfig.SPEC.save();
         com.maidsmart.task.MaidMineBehavior.loadCustomOres();
         com.maidsmart.task.MaidWoodBehavior.loadCustomWoods();
+        com.maidsmart.task.MaidCookBehavior.loadCookLists();
         Minecraft.m_91087_().m_91152_(this.parent);
     }
     /** 实测四百二十三：大类页的一句话说明。 */
