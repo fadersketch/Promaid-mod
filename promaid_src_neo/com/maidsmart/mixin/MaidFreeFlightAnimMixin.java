@@ -28,6 +28,10 @@ public abstract class MaidFreeFlightAnimMixin {
     @Inject(method = "registerAnimationState", at = @At("TAIL"))
     private static void promaid$registerFreeFlightState(CallbackInfo ci) {
         try {
+            // 先注册 elytra_fly：滑翔档（配置打开时）——与 fly 同为 priority 1，
+            // 同优先级内取先注册者，所以它排在前面（滑翔与自由飞行两种状态互斥，不会打架）
+            MaidFreeFlightAnimInvoker.promaid$registerState("elytra_fly", 1,
+                    (maid, event) -> MaidFreeFlightAnimState.shouldPlayElytraFly(maid));
             MaidFreeFlightAnimInvoker.promaid$registerState("fly", 1,
                     (maid, event) -> MaidFreeFlightAnimState.shouldPlayFly(maid));
         } catch (Throwable ignored) {

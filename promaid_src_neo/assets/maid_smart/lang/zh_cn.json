@@ -327,5 +327,6 @@
   "config.promaid.misc.freeFlight": "仿创造飞行（默认关）",
   "config.promaid.misc.freeFlightItems": "仿创造飞行·资格物品表",
   "config.promaid.misc.freeFlightEffects": "仿创造飞行·资格效果表",
-  "config.promaid.misc.freeFlightGravity": "仿创造飞行·重力归零也算资格"
+  "config.promaid.misc.freeFlightGravity": "仿创造飞行·重力归零也算资格",
+  "config.promaid.misc.glideElytraAnimation": "滑翔时用鞘翅动画（默认关=用游泳动作）"
 }

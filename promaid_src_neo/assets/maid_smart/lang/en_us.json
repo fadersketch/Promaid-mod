@@ -185,5 +185,6 @@
   "config.promaid.misc.freeFlight": "Free Flight (Creative-style, default off)",
   "config.promaid.misc.freeFlightItems": "Free Flight: Qualifying Items",
   "config.promaid.misc.freeFlightEffects": "Free Flight: Qualifying Effects",
-  "config.promaid.misc.freeFlightGravity": "Free Flight: Zero Gravity Counts"
+  "config.promaid.misc.freeFlightGravity": "Free Flight: Zero Gravity Counts",
+  "config.promaid.misc.glideElytraAnimation": "Glide Animation: Use Model elytra_fly (default off = swim)"
 }

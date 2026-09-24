@@ -953,6 +953,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_EFFECTS;
     /** 通用启发式：她的重力属性 ≈ 0 也算资格（覆盖任何"重力归零"型来源） */
     public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_GRAVITY;
+    /** 滑翔时改用模型自己的鞘翅动画（默认关 = 沿用作者的游泳动画） */
+    public static final ModConfigSpec.BooleanValue MISC_GLIDE_ELYTRA_ANIM;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -2458,6 +2460,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineListAllowEmpty("freeFlightEffects", List.of(), () -> "", o -> o instanceof String);
         MISC_FREE_FLIGHT_GRAVITY = BUILDER.comment("仿创造飞行·重力归零也算资格（默认开）：她的重力属性 ≈ 0 时自动获得飞行资格——通用启发式，覆盖任何「重力归零」型来源（不需要点名模组）。她本来就在飘，我们只是把飘变成可控飞行。")
                 .translation("config.promaid.misc.freeFlightGravity").define("freeFlightGravity", true);
+        MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关，v1.2.5 实测六百五十八）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
+                .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
         MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
         // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）

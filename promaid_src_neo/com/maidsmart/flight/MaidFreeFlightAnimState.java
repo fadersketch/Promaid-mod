@@ -18,6 +18,23 @@ public final class MaidFreeFlightAnimState {
     private MaidFreeFlightAnimState() {
     }
 
+    /**
+     * v1.2.5 实测六百五十八【滑翔档】：该不该播模型自己的 {@code elytra_fly} 动画？
+     *
+     * 只看两件事：配置打开了「滑翔时用鞘翅动画」+ 她正在滑翔（共享标志位第 7 位 = 已同步，
+     * 多人下客户端也认得出）。默认关时这一路恒 false，游泳动作照旧由 MaidSwimGlideMixin 顶。
+     */
+    public static boolean shouldPlayElytraFly(IMaid maid) {
+        try {
+            if (maid == null || !MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.get()) {
+                return false;
+            }
+            return maid.asEntity() instanceof EntityMaid m && m.isFallFlying();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** TLM 每 tick 问一次：她该播 fly 吗 */
     public static boolean shouldPlayFly(IMaid maid) {
         try {
