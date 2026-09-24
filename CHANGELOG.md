@@ -1,4 +1,61 @@
-﻿## 实测六百六十一【扫帚模式收尾：牵引绳「连人带扫帚」、守家时绕工作范围盘旋、独占配置板块、骑乘只留主手武器、烹饪清单收成一个勾】
+﻿## 实测六百六十二【修死机：玩家一进世界服务端就崩——mixin 包里的「鸭子接口」没登记（v1.3.5 起就带着）】
+
+### ① 现象：v1.3.6 进世界必崩（不是概率，是必现）
+
+实测日志（`latest.log` + `crash-reports/crash-…-server.txt`）：
+
+> `org.spongepowered.asm.mixin.transformer.throwables.IllegalClassLoadError:`
+> `com.maidsmart.mixin.RemoteTrackBridge is in a defined mixin package com.maidsmart.mixin.*`
+> `owned by mixins.promaid.json and cannot be referenced directly`
+
+Description = `Exception in server tick loop`。触发链很短：玩家登录 → `ServerLevel.addPlayer`
+→ `ChunkMap.addEntity` 造 `TrackedEntity` → JVM 解析它新挂上的接口 → 加载本接口 → 抛。
+
+### ② 根因：Mixin 对「mixin 包」的规矩，我们踩了
+
+`mixins.promaid.json` 里的 `"package": "com.maidsmart.mixin"` 等于**把整个包声明成 mixin 包**：
+这个包里**没有登记在配置清单里**的类，只要被普通代码加载（JVM 解析某个类的接口表也算），Mixin 就拒绝。
+
+`RemoteTrackBridge` 是 v1.3.5 引入的「鸭子接口」——它**不是** mixin，只是让普通代码能 cast 到
+`ChunkMap$TrackedEntity`（那个包私有内部类）的一座桥，所以它本来就不该、也不能登记进 config；
+唯一正确的做法是**别让它住在 mixin 包**。它偏偏住在那里，于是：
+
+- 编译期 javac 一点事没有（javac 不知道 Mixin 的规矩）；
+- 打包闸门也没事（类都在 jar 里、数量对得上）；
+- 只有**真进游戏、真的解析到这个接口**时才炸——所以 v1.3.5 起它一直随包发布，直到这次实测。
+
+对照（同一只 jar 里的活证据）：`EntityFlagInvoker` / `LivingEntitySpinAccessor` 也住那个包、
+也被包外的普通代码 cast，但它们**登记在清单里**（是 accessor / invoker mixin），所以从来没出过事。
+「登记与否」就是这条规矩的全部。
+
+### ③ 修法
+
+- 搬家：`com.maidsmart.mixin.RemoteTrackBridge` → **`com.maidsmart.schedule.RemoteTrackBridge`**
+  （与唯一使用者 `RemoteMaidGui` 同包）。两树都搬，正文除包名与本段说明外逐字节相同。
+- `ChunkMapTrackRemoteMixin` 补一条 import（它 `implements` 这座桥）；`RemoteMaidGui` 删掉那条
+  import（已同包，不再需要）。
+- **顺手把这条规矩做成打包闸门**：`verify_jar_classes.py` 新增一节——读 jar 里的
+  `mixins.promaid.json`，把 `com/maidsmart/mixin/` 下每个顶层 class（不算 `$` 内部类）与清单比对，
+  **有未登记的类就 FATAL、打包失败**。以后这类错误在 `python build_promaid.py` 那一步就被挡住，
+  不会再到玩家手里才炸。
+
+### ④ 边界
+
+- 只动了这一个类的位置与两条 import，**没有任何行为变化**：远程开界面的「强制同步」逻辑一个字没改。
+- 两树编译输出目录里那份**旧的** `com/maidsmart/mixin/RemoteTrackBridge.class` 已删——它就躺在
+  编译输出目录里，不删会被原样打进 jar（打包闸门里的 `STALE_IN_JAR` 那一栏盯的就是这种残留）。
+- 这个坑与 Windows/Linux、forge/Neo 都无关，是 Mixin 的通用规矩；两树同样处理。
+
+### ⑤ 验证
+
+两树 `javac` **0 错误**（60 个警告全是原有的过时 API 提醒）；只读核对 `_vt662.py` **50/50 全过**
+（搬动落地 / 编译清单跟随 / 两处引用 / **mixin 包登记审计** / 两树 import 区镜像 / 版本号）；
+打包闸门全过并**新增**「mixin 包登记 OK」一栏（forge 72 个类、neo 71 个，全部登记）；
+出 `promaid-1.3.7-forge-1.20.1.jar` / `promaid-1.3.7-neoforge-1.21.1.jar`；部署三处（旧 1.3.6 件已清）。
+
+**本条尚未发版**——仍等你实测（这次请**先看一眼能不能进世界**）。
+
+## 实测六百六十一【扫帚模式收尾：牵引绳「连人带扫帚」、守家时绕工作范围盘旋、独占配置板块、骑乘只留主手武器、烹饪清单收成一个勾】
 
 ### ① 玩家这一批提了五件事
 

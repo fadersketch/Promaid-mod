@@ -1,9 +1,23 @@
-package com.maidsmart.mixin;
+package com.maidsmart.schedule;
 
 import net.minecraft.server.level.ServerPlayer;
 
 /**
- * v1.3.5 实测六百六十：{@code ChunkMap$TrackedEntity} 上的「强制配对」桥（本模组内部接口）。
+ * v1.3.5 实测六百六十 / v1.3.7 实测六百六十二：{@code ChunkMap$TrackedEntity} 上的「强制配对」桥（本模组内部接口）。
+ *
+ * ── v1.3.7 实测六百六十二：这座桥为什么必须搬出 com.maidsmart.mixin 包 ──
+ * mixin 配置里 {@code "package"} 声明的那个包，被 Mixin 整体当作「mixin 包」：包里**没有登记在
+ * 配置清单里**的类，只要被普通代码加载（JVM 解析某个类的接口表时也算），Mixin 就抛
+ * {@code IllegalClassLoadError: … is in a defined mixin package com.maidsmart.mixin.*
+ * owned by mixins.promaid.json and cannot be referenced directly}。
+ * v1.3.5 起本接口正躺在那个包、又没有登记（它不是 mixin，只是一个「鸭子接口」），后果是
+ * **玩家一进世界服务端就崩**：{@code ChunkMap.addEntity} 造出 {@code TrackedEntity}
+ * → 解析它新加上的接口 → 加载本接口 → 抛异常（crash-reports 里 Description 是
+ * "Exception in server tick loop"）。修法只有一条：把它搬出 mixin 包。现在它与唯一的
+ * 使用者 {@link RemoteMaidGui} 同包（{@code com.maidsmart.schedule}）。
+ * 对照：{@code EntityFlagInvoker} / {@code LivingEntitySpinAccessor} 也住那个包、也被包外的
+ * 普通代码 cast，但它们**在配置清单里登记过**（是 accessor mixin），所以从来没出过事
+ * ——这条差别正是“登记与否”的活证据。
  *
  * ── 为什么需要一座桥 ──
  * 「客户端到底认不认得这个实体」的唯一开关，是原版 {@code ChunkMap.TrackedEntity} 里那个
