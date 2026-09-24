@@ -536,15 +536,20 @@ BlockPos stand = findStand(newLevel,
                 // 集合拽走（排班自动 home 的同理：想召回先关排班）
                 // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可被召回
                 //（召回后瞬移回工地继续建，见 isBuildingMaid 注释）
-                if (md.isMaidInSittingPose() || md.isPassenger()
-                        || (md.isHomeModeEnable() && !isBuildingMaid(md))) {
+                // v1.3.6 实测六百六十一：骑扫帚的女仆**不再按"骑乘中"豁免**——她永远是乘客，
+                // 旧口径会把她永远留在原地（玩家原话：「否则隔的太远女仆就找不回来了」）。
+                // 她走连人带扫帚那条路（见 recallBroomRider）；其余豁免口径一字不改。
+                boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
+                if (!broomRider && (md.isMaidInSittingPose() || md.isPassenger()
+                        || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
                     kept++;
                     continue;
                 }
                 if (lvl == player.level() && md.position().distanceTo(player.position()) < 25.0) {
                     continue; // 已在身边 5 格内
                 }
-                if (summonMaidTo(md, player)) {
+                boolean ok = broomRider ? recallBroomRider(md, player) : summonMaidTo(md, player);
+                if (ok) {
                     summoned++;
                 } else {
                     failStand++;
@@ -630,7 +635,9 @@ BlockPos stand = findStand(newLevel,
             for (Entity e : lvl.getAllEntities()) {
                 if (e instanceof EntityMaid md && en.getKey().equals(md.getUUID())
                         && md.isOwnedBy(owner)) {
-                    if (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.isPassenger()) {
+                    // v1.3.6：骑扫帚的照传（连人带扫帚，见 recallBroomRider）——不能因为「她是乘客」就把她的强载票收掉
+                    boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
+                    if (!broomRider && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.isPassenger())) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
                         // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
@@ -658,7 +665,7 @@ BlockPos stand = findStand(newLevel,
                         it.remove();
                         break;
                     }
-                    boolean ok = summonMaidTo(md, owner);
+                    boolean ok = broomRider ? recallBroomRider(md, owner) : summonMaidTo(md, owner);
                     String name = md.getDisplayName() != null ? md.getDisplayName().getString() : "女仆";
                     try {
                         owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(ok
@@ -871,10 +878,18 @@ BlockPos stand = findStand(newLevel,
             if (!maid.isOwnedBy(player)) {
                 return 0; // 非主人的女仆（安全兜底）
             }
-            if (maid.isRemoved() || maid.isDeadOrDying() || maid.isPassenger()
-                    || maid.isMaidInSittingPose()
+            if (maid.isRemoved() || maid.isDeadOrDying()) {
+                return 3; // 死亡/已移除——与一键集合同口径
+            }
+            // v1.3.6 实测六百六十一：骑扫帚的女仆**不再被"骑乘中"顶回去**——她本来就是乘客，
+            // 旧口径会让她永远召不回（玩家原话：「否则隔的太远女仆就找不回来了」）。
+            // 走连人带扫帚那条路：能一起搬就一起搬，搬不动就"就地收工 → 传她 → 她自己骑上"。
+            if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
+                return recallBroomRider(maid, player) ? 1 : 2;
+            }
+            if (maid.isPassenger() || maid.isMaidInSittingPose()
                     || (maid.isHomeModeEnable() && !isBuildingMaid(maid))) {
-                return 3; // 状态豁免（坐/骑/家/死亡——与一键集合同口径；建造女仆可召回）
+                return 3; // 状态豁免（坐/骑/家——与一键集合同口径；建造女仆可召回）
             }
             return teleportCore(maid, player, true) ? 1 : 2;
         } catch (Exception e) {
@@ -895,8 +910,15 @@ BlockPos stand = findStand(newLevel,
     public static boolean summonMaidTo(EntityMaid maid, LivingEntity owner) {
         // 咽喉点判定（实测七十八）：home（在家）模式不被任何传送打扰——守家钉死；
         // 主人非存活不传（防传到死亡点/基岩顶）
-        if (maid.isRemoved() || maid.isDeadOrDying() || maid.isPassenger()) {
-            return false; // 已移除/死亡/骑乘中
+        if (maid.isRemoved() || maid.isDeadOrDying()) {
+            return false; // 已移除 / 死亡
+        }
+        // v1.3.6 实测六百六十一：骑扫帚的走"连人带扫帚"那条（她永远是乘客，旧口径 = 永久豁免）
+        if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
+            return owner.isAlive() && recallBroomRider(maid, owner);
+        }
+        if (maid.isPassenger()) {
+            return false; // 骑乘中（别的载具：船/矿车/椅子——玩家明确停放，不拉）
         }
         // v1.1.0 实测二百七十五：建造女仆可召回（建造强制 home 但召回豁免）
         if ((maid.isHomeModeEnable() && !isBuildingMaid(maid)) || !owner.isAlive()) {
@@ -932,6 +954,99 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
+     * v1.3.6 实测六百六十一【连人带扫帚的传送】：把骑着扫帚的女仆送到主人身边，**扫帚跟着一起走**。
+     *
+     * <p>玩家原话：「这个东西应该也要有一个飞行牵引绳。如果隔的太远的话会连人带扫帚一起传送送回来。
+     * 但是如果在代码上碰到了什么硬骨头。我们在触发此传送的时候，就先将女仆从扫帚模式切换到空闲模式，
+     * 然后将扫帚和女仆传送过来，然后再切换成扫帚模式。」排班表那条同理：「如果能一起传送就一起传送。
+     * 不能一起传送，就用上面这个来。而不是直接反馈，没有办法传送。」
+     *
+     * <p>── 为什么不能"直接传送她" ──
+     * {@code Entity.teleportTo(ServerLevel, …)}（{@link #teleportCore} 用的那一支）内部第一件事就是
+     * {@code unRide()}：她当场被从扫帚上踹下来，扫帚留在原地漂着、人落到主人身边——玩家看到的是
+     * "传送一下扫帚就没了"（那把扫帚还记在 {@code MaidBroomDrive} 的欠账表里，要等收工才回背包）。
+     * 所以顺序必须是四步：**解开乘客关系 → 搬扫帚 → 搬她 → 重新落座**，四步在同一个 tick 内做完
+     * （中间不 tick，客户端只看到一次瞬移）。
+     *
+     * <p>── 一起搬不动时（跨维度 / 落座失败）──
+     * 玩家给的那条兜底正好派上用场：**就地收工**（{@code MaidBroomDrive.dismount(maid)} 把扫帚精确
+     * 还回她背包）→ 只传送她一个人 → 下一 tick 扫帚模式自己再从背包里取出来骑上。任务**始终不换**
+     * （所以玩家设想的"先切空闲、搬完再切回来"并不需要：换任务会重建 brain、还会把扫帚收进背包，
+     * 而这条兜底路径已经天然做出了那件事的结果）。这一段与「一键集合」对普通女仆的口径一致：
+     * 先尽力，实在不行也要把人弄回来——绝不回一句"没办法传送"。
+     *
+     * @return true = 她已经（连扫帚或收工后）落在主人身边
+     */
+    public static boolean recallBroomRider(EntityMaid maid, LivingEntity owner) {
+        if (maid == null || owner == null || !owner.isAlive()) {
+            return false;
+        }
+        try {
+            if (!(owner.level() instanceof ServerLevel dest)) {
+                return false;
+            }
+            BlockPos stand = standSpot(dest, owner, true); // 人工/兜底：一律强制落点（可空中）
+            if (stand == null) {
+                return false;
+            }
+            com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom broom =
+                    com.maidsmart.combat.MaidBroomKit.ridingBroom(maid);
+            if (broom != null) {
+                try {
+                    // 先解开乘客关系：teleportTo 内部也会 unRide，但"先搬扫帚"这一步做完时
+                    // 她已经不是乘客了，才轮得到"重新落座"那一步有一个干净的前提
+                    maid.stopRiding();
+                } catch (Throwable ignored) {
+                }
+                try {
+                    // 扫帚先走。跨维度这一下会让旧实体退场、新实体入场（同 UUID）——
+                    // 下面按 UUID 重新取回，所以同维度/跨维度走的是同一段代码
+                    broom.teleportTo(dest, stand.getX() + 0.5, stand.getY(),
+                            stand.getZ() + 0.5, java.util.Collections.emptySet(),
+                            broom.getYRot(), broom.getXRot());
+                } catch (Throwable ignored) {
+                }
+            }
+            if (!teleportCoreTo(maid, dest, stand, owner.getYRot(), owner.getXRot())) {
+                return false;
+            }
+            if (broom != null) {
+                com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom at =
+                        broomAt(dest, broom.getUUID());
+                if (at != null) {
+                    try {
+                        at.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO); // 落点静止：别带着旧速度飞出去
+                        com.maidsmart.combat.MaidBroomDrive.clearIntent(at);
+                        // force 落座：与 MaidBroomDrive.ensureMounted 同一支（跳过 canRide 判定）
+                        maid.startRiding(at, true);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 扫帚传送后按 UUID 把它取回来：同维度就是原来那个实体；跨维度是 {@code changeDimension}
+     * 造出来的新实例（同 UUID、新对象），所以一律按 UUID 查——不缓存旧引用。
+     */
+    private static com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom
+    broomAt(ServerLevel dest, java.util.UUID id) {
+        try {
+            net.minecraft.world.entity.Entity e = dest.getEntity(id);
+            if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom b
+                    && b.isAlive()) {
+                return b;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
      * v1.1.0 实测七十九：传送本体（不含豁免判定）——救援路径复用。受困女仆即使是
      * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
      *
@@ -947,21 +1062,47 @@ BlockPos stand = findStand(newLevel,
             if (!(owner.level() instanceof ServerLevel dest)) {
                 return false;
             }
-            BlockPos stand = findStand(dest,
-                    new BlockPos((int) Math.floor(owner.getX()),
-                            (int) Math.floor(owner.getY()),
-                            (int) Math.floor(owner.getZ())));
+            BlockPos stand = standSpot(dest, owner, force);
             if (stand == null) {
-                if (!force) {
-                    return false; // 主人身边 16 格内无可站立点（非强制路径：宁可不传）
-                }
-                // 强制落点 = 主人所在格。可能悬空（主人正在飞/悬在虚空边），这正是
-                // "无视地块、可以空中传送"的意思：她要出现在主人身边，而不是被留在原地。
-                stand = owner.blockPosition();
+                return false; // 非强制路径：主人身边 16 格内无可站立点 → 宁可不传
             }
+            return teleportCoreTo(maid, dest, stand, owner.getYRot(), owner.getXRot());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 落点：主人身边 16 格内找可站立的格子；找不到时 {@code force=true} 退到「主人所在格」，
+     * {@code force=false} 返回 null（宁可不传）。
+     *
+     * <p>【为什么从 teleportCore 里抽出来】v1.3.6 的「连人带扫帚」那条路（{@link #recallBroomRider}）
+     * 必须把**扫帚和她放在同一个落点**上——各算各的会出现"人在主人脚边、扫帚在 3 格外"，
+     * 落座后那一下瞬移比不传还难看。落点口径只有一处，两条路共用。
+     */
+    private static BlockPos standSpot(ServerLevel dest, LivingEntity owner, boolean force) {
+        net.minecraft.core.BlockPos ownerPos = new net.minecraft.core.BlockPos(
+                (int) Math.floor(owner.getX()),
+                (int) Math.floor(owner.getY()),
+                (int) Math.floor(owner.getZ()));
+        BlockPos stand = findStand(dest, ownerPos);
+        if (stand == null && force) {
+            // 强制落点 = 主人所在格。可能悬空（主人正在飞/悬在虚空边），这正是
+            // "无视地块、可以空中传送"的意思：她要出现在主人身边，而不是被留在原地。
+            stand = owner.blockPosition();
+        }
+        return stand;
+    }
+
+    /**
+     * 传送本体（落点已定）：清摔落 / 停导航 / 清速度 + 末影人音效。
+     * 与 {@link #teleportCore} 同一个实现——别处不要再抄第三份（扫帚那条路也走这里）。
+     */
+    private static boolean teleportCoreTo(EntityMaid maid, ServerLevel dest, BlockPos stand,
+                                          float yRot, float xRot) {
+        try {
             maid.teleportTo(dest, stand.getX() + 0.5, stand.getY(),
-                    stand.getZ() + 0.5, java.util.Collections.emptySet(),
-                    owner.getYRot(), owner.getXRot());
+                    stand.getZ() + 0.5, java.util.Collections.emptySet(), yRot, xRot);
             maid.fallDistance = 0.0f;
             maid.getNavigation().recomputePath();
             maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);

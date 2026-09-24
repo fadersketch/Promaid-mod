@@ -65,6 +65,7 @@ public final class GuideContent {
                 GuideChaptersFlight.passiveGuide(),
                 GuideChaptersFlight.autoResurrectGuide(),
                 GuideChaptersFlight.bedInteropGuide(),
+                GuideChaptersFlight.broomGuide(),
                 GuideChaptersCombat.aidGuide(),
                 GuideChaptersCombat.tacticsGuide(),
                 GuideChaptersCombat.weaponEquipGuide(),
@@ -176,6 +177,8 @@ public final class GuideContent {
             {"AI 工具", "AI:AITOOLS"},
             {"语音系统", "UI:VOICE"},
             {"压缩盒", "SYSTEM:COMPRESSION_BOX"},
+            // v1.3.6 实测六百六十一：扫帚模式（配置板块此时在「移动与行为」下）
+            {"扫帚", "MOVE:BROOM"},
     };
 
     /** 实测四百二十四：取该章的配置跳转目标；null = 不附加链接。 */

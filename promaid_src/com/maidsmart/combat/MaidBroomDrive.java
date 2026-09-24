@@ -105,6 +105,13 @@ public final class MaidBroomDrive {
     private static final Map<UUID, ItemStack> DEBT = new HashMap<>();
     /** 女仆 UUID → 战斗盘旋的方位角（弧度），每 tick 缓慢增长 → "绕着她打" */
     private static final Map<UUID, Double> ORBIT = new HashMap<>();
+    /**
+     * 女仆 UUID → **工作范围盘旋**的方位角（弧度）：守家（home）时她沿工作范围那个圈转的相位。
+     * <p>
+     * 与 {@link #ORBIT}（绕着**敌人**转）分开存：接敌用敌人那一份、平时用这一份。共用同一个
+     * 角度变量会让两边轮流加角度——表现为"刚打完忽然跳半个圈"。
+     */
+    private static final Map<UUID, Double> HOME_ORBIT = new HashMap<>();
     /** 女仆 UUID → 当前爬升相位（起飞 / 接敌） */
     private static final Map<UUID, Climb> CLIMB = new HashMap<>();
     /**
@@ -522,6 +529,20 @@ public final class MaidBroomDrive {
         return THRUST.remove(broom.m_20148_());
     }
 
+    /**
+     * 丢掉这把扫帚**这一 tick 的推进意图**（传送落地后必调，v1.3.6 实测六百六十一）。
+     *
+     * <p>不碰 {@link #DEBT}：那把扫帚还「欠着」她当初那一件物品，收工时照还不误——这里若图省事
+     * 走 {@link #forget}，「传送回来的下一秒收工」就会把她的扫帚吞掉（forget 连 DEBT 一起清）。
+     */
+    public static void clearIntent(EntityBroom broom) {
+        if (broom == null) {
+            return;
+        }
+        THRUST.remove(broom.m_20148_());
+        YAW.remove(broom.m_20148_());
+    }
+
     /** mixin 取朝向（保留最后写入的那个，悬停时朝向不抖） */
     public static float yaw(EntityBroom broom) {
         if (broom == null) {
@@ -583,6 +604,46 @@ public final class MaidBroomDrive {
         return new Vec3(owner.m_20185_() + Math.cos(ang) * FOLLOW_DIST,
                 owner.m_20186_() + FOLLOW_HOVER,
                 owner.m_20189_() + Math.sin(ang) * FOLLOW_DIST);
+    }
+
+    /**
+     * 守家（工作范围）时的目标点：**沿着工作范围那个圈的边缘慢慢盘旋**（v1.3.6 实测六百六十一）。
+     *
+     * <p>【玩家原话】「如果我在扫把模式下开启鸿蒙，那个女仆正常就会在工作范围内对着工作范围
+     * 那个圈进行盘旋，直到接敌。」旧版 home 对扫帚模式只剩「把目标点夹进圈里」这一条，
+     * 于是开着 home 她也只是跟着主人悬停——看不出「守家」。现在平时（没有敌人）改成绕圈巡逻。
+     *
+     * <p>【高度不动】只改水平（x/z 沿圆周走，y 保持扫帚当前高度）。理由：工作范围在 TLM 里
+     * 本来就是个**水平**圆（{@code getRestrictCenter()} 是 BlockPos、半径是个 float），
+     * 没有任何纵向语义；而扫帚模式的高度由起飞/接敌两段决定，这里再插一脚只会变成
+     * "贴着地面爬"或"顶在树上"。她原来多高就多高，接敌时照旧走爬升相位。
+     *
+     * <p>【半径取「半径 − 余量」】圈内判定是「离圈心 ≤ 半径」，而她的座位在朝向后方半格
+     * （见 {@link #hoverInPlace} 那段因果）——贴着边缘飞容易在边界上反复进出；退 1.5 格留余量，
+     * 视觉上仍然是「贴着圈在转」。
+     *
+     * <p>【转速】与战斗盘旋共用 {@link #ORBIT_SPEED}（恒定**线**速度）：圈大圈小都是同样的
+     * 格/秒，不会出现「圈一大就看起来钉在原地」。
+     *
+     * @return 期望位置；没有工作范围（圈心无效）时返回 null，调用方退回跟主人 / 原地悬停
+     */
+    public static Vec3 homeOrbitPoint(EntityMaid maid) {
+        try {
+            net.minecraft.core.BlockPos c = com.maidsmart.follow.WorkAreaClamp.circleCenter(maid);
+            if (c == null) {
+                return null;
+            }
+            UUID id = maid.m_20148_();
+            double r = Math.max(2.0, maid.m_21535_() - 1.5);
+            double ang = HOME_ORBIT.getOrDefault(id, 0.0) + ORBIT_SPEED / r;
+            HOME_ORBIT.put(id, ang);
+            Vec3 p = broomPos(maid);
+            return new Vec3(c.m_123341_() + 0.5 + Math.cos(ang) * r,
+                    p.f_82480_,
+                    c.m_123343_() + 0.5 + Math.sin(ang) * r);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /* ==================== 原地悬停 / 垂直爬升：一律用**扫帚自己的坐标** ==================== */
@@ -926,6 +987,7 @@ public final class MaidBroomDrive {
             return;
         }
         ORBIT.remove(maidId);
+        HOME_ORBIT.remove(maidId);
         CLIMB.remove(maidId);
         COMBAT_ALT.remove(maidId);
         HUNTING.remove(maidId);
@@ -938,6 +1000,7 @@ public final class MaidBroomDrive {
         YAW.clear();
         DEBT.clear();
         ORBIT.clear();
+        HOME_ORBIT.clear();
         CLIMB.clear();
         COMBAT_ALT.clear();
         HUNTING.clear();

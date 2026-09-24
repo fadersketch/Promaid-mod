@@ -27,7 +27,9 @@ import java.util.WeakHashMap;
  *   ③.5 起飞相位 → 原地往上抬 1 格（头顶顶住就悬停在此处）
  *   ④ 接敌      → 先爬到**敌上 8 格**（顶住就按实际高度），并把"这一场遭遇的盘旋高度"
  *                    定下来（v1.3.3：以前爬升与盘旋两套高度不接，才会"升上去又掉下来"）
- *   ⑤ 平时      → 按"飞行跟随"同款的起手/收手距离跟主人（默认开；扫帚没耐久）
+ *   ⓪ 牵引绳    → 离主人超过配置距离（默认 100 格，按 3D 算）→ 连人带扫帚传送回主人身边
+ *   ⑤ 平时      → 守家（工作范围）生效时沿工作范围那个圈盘旋巡逻；否则按"飞行跟随"同款的
+ *                 起手/收手距离跟主人（默认开；扫帚没耐久）；都没有就原地悬停
  * </pre>
  * 两个爬升相位与"怎么飞"全部在 {@link MaidBroomDrive}（速度公式照搬 TLM 给玩家驾驶写的
  * {@code PlayerBroomControl}，一分不加）。
@@ -98,6 +100,12 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         if (maid == null || !maid.isAlive()) {
+            return;
+        }
+        // ⓪【v1.3.6 实测六百六十一】牵引绳：她骑在扫帚上离主人太远（含「飞太高」）→ 立刻
+        //    连人带扫帚一起传回主人身边，并就此打住——传送刚落地时写推进意图只会把她从落点上推走。
+        //    口径与「空袭牵引绳」同源（她自己走了回不来的兜底），见 MaidBroomRecall。
+        if (MaidBroomRecall.tick(maid)) {
             return;
         }
         // ① 总开关关掉 → 整段不激活（与旧版一致：下扫帚 + 报缺件；连缺件气泡都照旧，
@@ -182,8 +190,23 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
 
-        // ⑥ 没目标 → 平时：悬停在主人身边（配置可关；关掉就原地悬停待命）
+        // ⑥ 没目标 → 平时。三档，按优先级走：
+        //    ①【v1.3.6 实测六百六十一】守家（工作范围）生效 → **沿着工作范围那个圈盘旋巡逻**，
+        //       直到接敌。玩家原话：「如果我在扫把模式下开启鸿蒙，那个女仆正常就会在工作范围内
+        //       对着工作范围那个圈进行盘旋，直到接敌。」旧版 home 对扫帚模式只剩"夹取目标点"，
+        //       看不出守家——这一档就是补上"守家该有的样子"。
+        //    ② 否则跟随主人（配置可关）
+        //    ③ 都没有 → 原地悬停待命
         MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
+        if (MaidBroomKit.homeRestricted(maid)) {
+            net.minecraft.world.phys.Vec3 patrol = MaidBroomDrive.homeOrbitPoint(maid);
+            if (patrol != null) {
+                MaidBroomDrive.steerTo(maid, patrol);
+                // 朝向交给 steerTo 写的"速度方向"（= 圆周切线）——绕圈巡逻本来就该朝着前进方向。
+                // 这里刻意**不**调 faceYawTo：那会让她横着飘，看着像侧滑。
+                return;
+            }
+        }
         LivingEntity owner = ownerOf(maid);
         if (followEnabled() && owner != null && owner.isAlive() && owner.level() == level) {
             faceTarget(maid, owner);

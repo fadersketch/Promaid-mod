@@ -382,6 +382,10 @@ public class PromaidConfigScreen extends Screen {
         // v1.2.2 实测六百一十五：飞行跟随从「搭路」里拎出来，与搭路平级（用户原话："把飞行跟随这个
         // 板块单独拎出来，不要放在搭路板块的里面，而是改成跟搭路平行的一个板块"）
         FLIGHT_FOLLOW("飞行跟随", Group.MOVE),
+        // v1.3.6 实测六百六十一：扫帚模式自己的数值板块（用户原话：「在模组详细配置飞行跟随中
+        // 后面加入对于扫帚模式的各项数值调整面板」）——原先那五行散在「战斗与自保 → 单兵战术」尾部，
+        // 现在与「飞行跟随」平级、位置就在它后面（同一个「移动与行为」大类）。
+        BROOM("扫帚模式", Group.MOVE),
         REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
         SAFETY("女仆安全与区块", Group.SURVIVAL),
         FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
@@ -661,6 +665,7 @@ public class PromaidConfigScreen extends Screen {
             case FALL_GUARD -> this.fallGuardRows();
             case BRIDGE -> this.bridgeRows();
             case FLIGHT_FOLLOW -> this.flightFollowRows();
+            case BROOM -> this.broomRows();
             case REVIVE -> this.reviveRows();
             case ESCAPE -> this.escapeRows();
             case SAFETY -> this.safetyRows();
@@ -2663,6 +2668,47 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(v), "飞行跟随消耗激流三叉戟耐久（默认开 = 照原版每次推进扣 1 点）：关掉之后这一趟里用激流三叉戟追你不再扣它的耐久，与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。只管飞行跟随这一条链路——空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久。顺序不变：背包里有烟花时依旧先烧烟花，所以对「有烟花可烧」的存档没有影响"));
     }
 
+    /**
+     * v1.3.6 实测六百六十一【扫帚模式自己的数值板块】——原先这五行散在「战斗与自保 → 单兵战术」
+     * 的尾部，玩家要求把它们挪到「飞行跟随」后面单独成板（见 {@code Section.BROOM}）。
+     * 另外补上这一批新增的「牵引绳距离」。
+     */
+    private void broomRows() {
+        this.rows.add(new SectionRow("—— 扫帚模式（TLM 任务：maid_smart:broom）——", false));
+        this.rows.add(new BoolRow("扫帚模式·总开关", MaidSmartConfig.COMBAT_BROOM_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_ENABLE.set(v),
+                "扫帚模式（默认开）：给女仆装上扫帚 + 任意远程武器（弓/弩/御币/三叉戟/枪械）后，"
+                        + "把她的任务切成「扫帚模式」，她会取出扫帚、在脚下放一把并骑上去飞起来，用远程武器打。"
+                        + "缺件时她原地待命并在头顶报缺什么（不硬撑着乱跑）。本模式**不参与自主切换**"
+                        + "——只有你手动指定才会进，被袭击时不会自己换上扫帚"));
+        this.rows.add(new NumRow("扫帚·盘旋距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_RANGE, s),
+                "战斗盘旋距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，"
+                        + "它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）"));
+        this.rows.add(new NumRow("扫帚·悬停高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_HOVER.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_HOVER, s),
+                "悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪"
+                        + "（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）"));
+        this.rows.add(new NumRow("扫帚·牵引绳距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE, s),
+                "扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，"
+                        + "所以「飞太高」本身也会触发）就立刻连人带扫帚传送回你身边，免得飞太远回不来。"
+                        + "与「空袭牵引绳」同一套口径，区别是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；"
+                        + "她已经落地时不管（那种距离交给「同维度远距拉回」那套更保守的规则）"));
+        this.rows.add(new BoolRow("扫帚·平时跟随主人", MaidSmartConfig.COMBAT_BROOM_FOLLOW.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_FOLLOW.set(v),
+                "平时（没有敌人时）跟随主人（默认开）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；"
+                        + "关掉则原地悬停待命，只在接敌时才动。"
+                        + "注意「守家时绕工作范围盘旋」优先级更高——开着守家就不跟主人，而是在工作范围里巡逻"));
+        this.rows.add(new BoolRow("扫帚·守家时绕工作范围盘旋", MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.set(v),
+                "受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束"
+                        + "整条失效（她成了乘客，canBrainMoving 为 false，往哪飞只听我们的），所以「守家」这件事"
+                        + "由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**"
+                        + "（高度保持不变），直到接敌；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。"
+                        + "关掉 = 自由飞：平时跟主人，为了追怪/跟主人可以越界"));
+    }
+
     private void reviveRows() {
         this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
                 v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
@@ -2883,23 +2929,6 @@ public class PromaidConfigScreen extends Screen {
         // v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式工作范围圈，见 CombatWorkRange）
         this.rows.add(new NumRow("战斗时临时扩圈（格）", String.valueOf(MaidSmartConfig.COMBAT_WORK_RANGE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
-        // v1.3.0「扫帚模式」：她取出扫帚、在脚下放一把骑上去飞起来，用远程武器打
-        // （开火链路整条复用远程空袭）。默认值 = 装上就能用的样子。
-        this.rows.add(new BoolRow("扫帚模式·总开关", MaidSmartConfig.COMBAT_BROOM_ENABLE.get(),
-                v -> MaidSmartConfig.COMBAT_BROOM_ENABLE.set(v),
-                "扫帚模式（默认开）：给女仆装上扫帚 + 任意远程武器（弓/弩/御币/三叉戟/枪械）后，把她的任务切成「扫帚模式」，她会取出扫帚、在脚下放一把并骑上去飞起来，用远程武器打。缺件时她原地待命并在头顶报缺什么（不硬撑着乱跑）。本模式**不参与自主切换**——只有你手动指定才会进，被袭击时不会自己换上扫帚"));
-        this.rows.add(new NumRow("扫帚·盘旋距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RANGE.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_RANGE, s),
-                "战斗盘旋距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）"));
-        this.rows.add(new NumRow("扫帚·悬停高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_HOVER.get()),
-                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_HOVER, s),
-                "悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）"));
-        this.rows.add(new BoolRow("扫帚·平时跟随主人", MaidSmartConfig.COMBAT_BROOM_FOLLOW.get(),
-                v -> MaidSmartConfig.COMBAT_BROOM_FOLLOW.set(v),
-                "平时（没有敌人时）跟随主人（默认开）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动"));
-        this.rows.add(new BoolRow("扫帚·受活动范围约束", MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get(),
-                v -> MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.set(v),
-                "受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后，车万女仆自身的范围约束整条失效（她成了乘客，canBrainMoving 为 false，往哪飞只听我们的），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）"));
         // v1.3.3 防刷怪：发现刷怪笼就去插火把（玩家建议；home 工作区里不执行）
         this.rows.add(new BoolRow("防刷怪·发现刷怪笼就去插火把", MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.get(),
                 v -> MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.set(v),
@@ -2964,16 +2993,19 @@ public class PromaidConfigScreen extends Screen {
                 v -> MaidSmartConfig.MISC_COOK_SMOKER_BLAST.set(v), "烧制任务不只操作熔炉：高炉按高炉配方喂料（矿石/粗金属）、烟熏炉按烟熏配方喂料（生食），成品/燃料照常；高炉喂料受「熔炉烧矿物」开关约束（高炉只烧矿物）；关闭 = 只操作熔炉"));
         this.rows.add(new NumRow("任务垂直范围", String.valueOf(MaidSmartConfig.MISC_VERTICAL_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MISC_VERTICAL_RANGE, s), "任务垂直范围（格）：烹饪/酿造在上/下多少格内搜索容器"));
-        // v1.2.5 实测六百五十二：烧制清单（四张面板可编辑名单——想"只烧铁矿石""别拿我的钻石去烧""只用煤炭当柴"不用再改代码）
-        this.rows.add(new BtnRow("烧制清单",
-                "管理 →（只烧 " + countCookList(0) + " · 禁止 " + countCookList(1)
-                        + " · 燃料 " + countCookList(2) + " · 禁燃 " + countCookList(3) + "）",
+        // v1.2.5 实测六百五十二 / v1.3.6 实测六百六十一：烧制与燃料勾选（两个科目、每项一个勾）
+        this.rows.add(new BtnRow("烧制/燃料勾选",
+                "打开 →（烧制 " + cookSummary(0) + " · 燃料 " + cookSummary(1) + "）",
                 () -> {
                     this.cookTable = true;
                     this.cookTableMode = 0;
                     this.m_7856_();
                 },
-                "四张名单，默认全空 = 保持自动判定（装上就是老手感）：①只烧这些——非空时只把清单里的物品当原料（仍要求真有炉子配方：清单只缩小范围，不会让烧不动的东西变得能烧）；②禁止烧制——永不放炉子，优先级最高；③只用这些燃料——非空时只在这些里按燃烧时长挑；④禁用燃料——永不当柴烧。点物品图标加入/再点移出，也可在下面手填注册名。禁止类优先于允许类。候选网格按档位过滤：①②只列当前世界真有炉子配方的物品，③④只列能当柴烧的物品（v1.3.2 起；旧版是全物品，所以显得乱）"));
+                "两个科目各一页，每个物品**一个勾**：勾上 = 可以（当原料进炉子 / 当柴烧），取消 = 不可以。"
+                        + "默认两张表都是空的 = 保持自动判定（装上就是老手感）。点物品图标即切换、也可在下面手填注册名，"
+                        + "底部列出当前表里的条目、点一下就能改回来。候选网格按科目过滤：烧制只列当前世界真有炉子配方的物品，"
+                        + "燃料只列原版能当柴烧的物品。底层仍是原来那四个配置键（只烧这些/禁止烧制/只用这些燃料/禁用燃料），"
+                        + "所以老名单不会丢——当「允许清单」非空时这一页会切成白名单模式（页顶有写）"));
         // v1.2.5 实测六百五十二：顺手补上「烧木材」开关——它一直只写在 toml 里，面板漏了这一行
         this.rows.add(new BoolRow("烧木材", MaidSmartConfig.MISC_COOK_BURN_WOOD.get(),
                 v -> MaidSmartConfig.MISC_COOK_BURN_WOOD.set(v),
@@ -3468,67 +3500,136 @@ public class PromaidConfigScreen extends Screen {
     }
 
 
-    /* ==================== v1.2.5 实测六百五十二：烧制清单子页（四张名单） ==================== */
+    /* ==================== v1.2.5 实测六百五十二：烧制清单子页 ====================
+     * v1.3.6 实测六百六十一【面板改造】玩家原话：「烹饪和酿造那个配置面板不好用。明明只需要改的
+     * 像喂食面板一样，在那个面板勾选了就能烧、没勾选就不能烧就行了，现在偏要把烧跟没烧分别做成
+     * 两个面板分开搞反而麻烦了很多。」
+     * 于是：四张名单（只烧这些 / 禁止烧制 / 只用这些燃料 / 禁用燃料）收成**两个科目**
+     * （烧制物品 / 燃料），每个科目一页、每个物品**一个勾**——勾上 = 可以，取消 = 不可以，
+     * 交互与「投喂食物勾选」那张面板同款（绿 ✔ / 红 ✖）。
+     *
+     * <p>底层存储**没换**：仍然是原来那四个配置键，所以老存档里填好的名单一个字都不丢。
+     * 折算规则（与 MaidCookBehavior.smeltListed / fuelListed 的判定**逐字一致**）：
+     * <ul>
+     *   <li>「允许清单」为空（默认、也是绝大多数人的状态）→ 这一页编辑的是**禁止清单**：
+     *       勾 = 不在禁止清单里；取消 = 加进禁止清单；</li>
+     *   <li>「允许清单」非空（旧版的「只烧这些」模式）→ 这一页编辑的是**允许清单**：
+     *       只有清单里的勾着；勾 = 加进允许清单，取消 = 从允许清单移出（于是它就是"不可以"）。</li>
+     * </ul>
+     * 当前是哪一种，页顶那句话会写明白（黑名单 / 白名单）——不会出现「看到的勾与她真的会做的
+     * 不是一回事」。
+     */
 
-    /** 四张名单的标题（cookTableMode 0..3）——与配置键一一对应 */
-    private static final String[] COOK_LIST_NAMES = {
-            "只烧这些", "禁止烧制", "只用这些燃料", "禁用燃料"};
+    /** 两个科目（cookTableMode 0/1，与配置键一一对应：0 = 烧制，1 = 燃料） */
+    private static final String[] COOK_LIST_NAMES = {"烧制物品", "燃料"};
 
-    /** 读第 mode 张名单（返回可改副本；照 altListFor 的写法） */
-    private List<String> cookListFor(int mode) {
-        switch (mode) {
-            case 0: return new ArrayList<>(MaidSmartConfig.MISC_COOK_SMELT_ALLOW.get());
-            case 1: return new ArrayList<>(MaidSmartConfig.MISC_COOK_SMELT_DENY.get());
-            case 2: return new ArrayList<>(MaidSmartConfig.MISC_COOK_FUEL_ALLOW.get());
-            default: return new ArrayList<>(MaidSmartConfig.MISC_COOK_FUEL_DENY.get());
+    /** 该科目的「允许清单」（旧版「只烧这些」/「只用这些燃料」；返回可改副本） */
+    private List<String> cookAllowFor(int mode) {
+        return new ArrayList<>(mode == 0
+                ? MaidSmartConfig.MISC_COOK_SMELT_ALLOW.get()
+                : MaidSmartConfig.MISC_COOK_FUEL_ALLOW.get());
+    }
+
+    /** 该科目的「禁止清单」（返回可改副本） */
+    private List<String> cookDenyFor(int mode) {
+        return new ArrayList<>(mode == 0
+                ? MaidSmartConfig.MISC_COOK_SMELT_DENY.get()
+                : MaidSmartConfig.MISC_COOK_FUEL_DENY.get());
+    }
+
+    private void cookAllowSet(int mode, List<String> list) {
+        if (mode == 0) {
+            MaidSmartConfig.MISC_COOK_SMELT_ALLOW.set(list);
+        } else {
+            MaidSmartConfig.MISC_COOK_FUEL_ALLOW.set(list);
         }
     }
 
-    private void cookListSet(int mode, List<String> list) {
-        switch (mode) {
-            case 0: MaidSmartConfig.MISC_COOK_SMELT_ALLOW.set(list); break;
-            case 1: MaidSmartConfig.MISC_COOK_SMELT_DENY.set(list); break;
-            case 2: MaidSmartConfig.MISC_COOK_FUEL_ALLOW.set(list); break;
-            default: MaidSmartConfig.MISC_COOK_FUEL_DENY.set(list); break;
+    private void cookDenySet(int mode, List<String> list) {
+        if (mode == 0) {
+            MaidSmartConfig.MISC_COOK_SMELT_DENY.set(list);
+        } else {
+            MaidSmartConfig.MISC_COOK_FUEL_DENY.set(list);
         }
     }
 
-    /** 第 mode 张名单里有没有这个 id */
-    private boolean isInCookList(int mode, String id) {
+    /** 这个科目此刻用的是「允许清单」（= 旧版白名单模式；非空即生效） */
+    private boolean cookWhitelistMode(int mode) {
         try {
-            return cookListFor(mode).contains(id);
+            return !cookAllowFor(mode).isEmpty();
         } catch (Throwable ignored) {
             return false;
         }
     }
 
-    /** 入口按钮上的计数（四张各几个） */
-    private int countCookList(int mode) {
+    /** 勾选 = 可以（与 MaidCookBehavior 同口径：禁止优先；允许清单非空则只认允许清单） */
+    private boolean isCookChecked(int mode, String id) {
         try {
-            return cookListFor(mode).size();
+            if (cookDenyFor(mode).contains(id)) {
+                return false;
+            }
+            List<String> allow = cookAllowFor(mode);
+            return allow.isEmpty() || allow.contains(id);
         } catch (Throwable ignored) {
-            return 0;
+            return true;
         }
     }
 
-    /** 网格点一下 → 在当前那张名单里加入/移出（照 toggleFoodChecked 写） */
-    private void toggleCookChecked(String id) {
+    /** 底部名单显示哪张表：白名单模式显示允许清单，否则显示禁止清单（表里的都点一下就能改回来） */
+    private List<String> cookListFor(int mode) {
+        return cookWhitelistMode(mode) ? cookAllowFor(mode) : cookDenyFor(mode);
+    }
+
+    /** 页顶那句话：说清这一页此刻是黑名单还是白名单 */
+    private String cookModeHint(int mode) {
+        return cookWhitelistMode(mode)
+                ? "\u00a7e白名单：只有勾上的可以\u00a7r\u00a77（允许清单非空 = 只认这份清单）"
+                : "\u00a7e黑名单：勾上的可以、取消就不可以\u00a7r\u00a77（允许清单为空 = 一张禁止清单）";
+    }
+
+    /** 入口按钮上的摘要：白名单写「只认 N 项」，否则写「禁止 N 项」 */
+    private String cookSummary(int mode) {
+        try {
+            return cookWhitelistMode(mode)
+                    ? "只认 " + cookAllowFor(mode).size() + " 项"
+                    : "禁止 " + cookDenyFor(mode).size() + " 项";
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    /** 网格点一下 → 在「可以 / 不可以」之间切（照 toggleFoodChecked 写） */
+    private void toggleCookChecked(int mode, String id) {
         if (id == null || id.isEmpty()) {
             return;
         }
-        List<String> list = cookListFor(this.cookTableMode);
-        if (list.contains(id)) {
-            list.remove(id);
+        List<String> allow = cookAllowFor(mode);
+        List<String> deny = cookDenyFor(mode);
+        if (cookWhitelistMode(mode)) {
+            // 白名单模式：勾 = 进允许清单，取消 = 从允许清单移出（于是它就是"不可以"了）
+            if (allow.contains(id)) {
+                allow.remove(id);
+            } else {
+                allow.add(id);
+            }
+            deny.remove(id);
+            cookAllowSet(mode, allow);
+            cookDenySet(mode, deny);
         } else {
-            list.add(id);
+            // 默认（黑名单）模式：取消 = 进禁止清单，勾上 = 从禁止清单移出
+            if (deny.contains(id)) {
+                deny.remove(id);
+            } else {
+                deny.add(id);
+            }
+            cookDenySet(mode, deny);
         }
-        cookListSet(this.cookTableMode, list);
         if (this.cookList != null) {
             this.cookList.rebuild();
         }
     }
 
-    /** 手填注册名加进当前那张名单（支持省略 minecraft: 前缀） */
+    /** 手填注册名 → 按当前模式写进对应的那张表（支持省略 minecraft: 前缀） */
     private void addCookList() {
         if (this.cookInput == null) {
             return;
@@ -3550,11 +3651,11 @@ public class PromaidConfigScreen extends Screen {
         if (key == null) {
             return;
         }
+        int mode = this.cookTableMode;
         String id = key.toString();
-        List<String> list = cookListFor(this.cookTableMode);
-        if (!list.contains(id)) {
-            list.add(id);
-            cookListSet(this.cookTableMode, list);
+        // 手填的语义 = 「让它可以」——直接走点一下那条路（该写哪张表由模式决定，一处定义）
+        if (!this.isCookChecked(mode, id)) {
+            this.toggleCookChecked(mode, id);
         }
         this.cookInput.m_94144_("");
         if (this.cookList != null) {
@@ -3562,11 +3663,16 @@ public class PromaidConfigScreen extends Screen {
         }
     }
 
-    /** 底部清单每行的「移出」按钮 */
+    /** 底部清单每行的按钮：黑名单模式 = 「改为可以」，白名单模式 = 「移出」 */
     private void removeCookList(String id) {
-        List<String> list = cookListFor(this.cookTableMode);
+        int mode = this.cookTableMode;
+        List<String> list = cookListFor(mode);
         list.remove(id);
-        cookListSet(this.cookTableMode, list);
+        if (cookWhitelistMode(mode)) {
+            cookAllowSet(mode, list);
+        } else {
+            cookDenySet(mode, list);
+        }
         if (this.cookList != null) {
             this.cookList.rebuild();
         }
@@ -3592,7 +3698,7 @@ public class PromaidConfigScreen extends Screen {
     private void rebuildCookCreative() {
         this.creativeItems.clear();
         ensureCreativeCache();
-        boolean fuelMode = this.cookTableMode >= 2;
+        boolean fuelMode = this.cookTableMode >= 1;
         net.minecraft.world.level.Level level =
                 net.minecraft.client.Minecraft.m_91087_().f_91073_;
         String q = this.creativeQuery == null ? "" : this.creativeQuery.trim().toLowerCase(java.util.Locale.ROOT);
@@ -3660,7 +3766,8 @@ public class PromaidConfigScreen extends Screen {
             }
             com.maidsmart.tool.PromaidLog.log("烧制清单",
                     "候选网格 " + this.creativeItems.size() + " 件 | 档位="
-                            + COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0), 3)]
+                            + COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0),
+                                    COOK_LIST_NAMES.length - 1)]
                             + " | 世界=" + (level == null ? "读不到（网格会退回全物品）" : "有")
                             + " | 代表物品=" + sb);
         } catch (Throwable ignored) {
@@ -3668,8 +3775,12 @@ public class PromaidConfigScreen extends Screen {
     }
 
     /**
-     * v1.2.5 实测六百五十二：烧制清单子页——顶部四个模式按钮（当前档黄色 ●）+ 搜索框 +
-     * 物品网格（点图标加入/移出）+ 手填 id + 底部当前那张名单。交互与矿表 / 替代品 / 喂食子页同款。
+     * v1.2.5 实测六百五十二：烧制清单子页。
+     *
+     * <p>v1.3.6 实测六百六十一：顶部从**四个模式按钮**收成**两个科目按钮**（烧制物品 / 燃料，
+     * 当前档黄色 ●），每个科目一页、网格上「一个勾」表达可以/不可以——玩家原话见
+     * {@link #COOK_LIST_NAMES} 上方那段。其余（搜索 / 手填 id / 底部名单）与矿表 / 替代品 /
+     * 喂食子页同款。
      */
     private void cookTableButtons(int w, int h, int cx) {
         int panelLeft = Math.max(8, cx - 280);
@@ -3733,14 +3844,15 @@ public class PromaidConfigScreen extends Screen {
         this.bottomButtons(w, h, cx);
     }
 
-    /** 烧制清单子页的网格渲染（自绘，与矿表/替代品子页同款；✔ = 已在当前那张名单里） */
+    /** 烧制清单子页的网格渲染（自绘，与「投喂食物勾选」同款：绿 ✔ = 可以 / 红 ✖ = 不可以） */
     private void renderCookGrid(GuiGraphics g, int mouseX, int mouseY, int w, int h, int cx) {
-        String cur = COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0), 3)];
+        int mode = this.cookTableMode;
+        boolean fuelMode = mode >= 1;
+        String subject = COOK_LIST_NAMES[fuelMode ? 1 : 0];
         // v1.3.2 实测六百五十六：标题里直接写明网格列的是什么——旧版不给任何说明，
         // 玩家看到"一整注册表"只会得出"这张表乱填"的结论（那是旧版真的乱列）。
-        boolean fuelMode = this.cookTableMode >= 2;
         String src = fuelMode ? "可当燃料的物品" : "当前世界真有炉子配方的物品";
-        String title = "\u00a7e" + cur + "\u00a77（只列" + src + "）\u00a7e——点击加入（再点取消）";
+        String title = "\u00a7e" + subject + "\u00a77（只列" + src + "）\u00a7e——点图标切换「可以 / 不可以」";
         g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
         int panelLeft = Math.max(8, cx - 280);
         int panelWidth = Math.min(560, w - 16);
@@ -3762,9 +3874,14 @@ public class PromaidConfigScreen extends Screen {
             net.minecraft.resources.ResourceLocation key =
                     net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
             String id = key == null ? "" : key.toString();
-            if (this.isInCookList(this.cookTableMode, id)) {
+            // v1.3.6：一个勾表达"可以/不可以"——与「投喂食物勾选」的绿勾红叉同款
+            if (this.isCookChecked(mode, id)) {
                 g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22);
                 g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFFFFFF);
+            } else {
+                g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x80CC2222);
+                g.m_280614_(this.f_96547_, Component.m_237113_("\u00a7c\u2716"),
+                        x + 12, y + 12, 0xFF5555, false);
             }
             g.m_280480_(stack, x, y);
             if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
@@ -3793,7 +3910,7 @@ public class PromaidConfigScreen extends Screen {
                         infoX, infoY, 0x888888, false);
             }
         }
-        String hint = "\u00a77✓ = 已加入「" + cur + "」，再点一次取消；禁止类优先于允许类与自动判定";
+        String hint = "\u00a77✓ = " + subject + "可以、✖ = 不可以（点一下切换）；" + this.cookModeHint(mode);
         g.m_280653_(this.f_96547_, Component.m_237113_(hint),
                 this.clampCenterX(hint, cx), this.f_96544_ - 50, 0x888888);
     }
@@ -3822,7 +3939,7 @@ public class PromaidConfigScreen extends Screen {
         net.minecraft.resources.ResourceLocation key =
                 net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(this.creativeItems.get(idx).m_41720_());
         if (key != null) {
-            this.toggleCookChecked(key.toString());
+            this.toggleCookChecked(this.cookTableMode, key.toString());
         }
         return true;
     }
@@ -3884,7 +4001,12 @@ public class PromaidConfigScreen extends Screen {
 
             CookEntry(String id) {
                 this.id = id;
-                this.removeButton = Button.m_253074_(Component.m_237113_("移出"),
+                // v1.3.6：黑名单模式这一行是"不可以"的条目 → 按钮叫「改为可以」；
+                // 白名单模式显示的是允许清单 → 按钮就是原来的「移出」
+                boolean wl = PromaidConfigScreen.this.cookWhitelistMode(
+                        PromaidConfigScreen.this.cookTableMode);
+                this.removeButton = Button.m_253074_(
+                                Component.m_237113_(wl ? "移出" : "改为可以"),
                                 b -> PromaidConfigScreen.this.removeCookList(this.id))
                         .m_252987_(0, 0, 56, 18).m_253136_();
             }
@@ -5134,7 +5256,7 @@ public class PromaidConfigScreen extends Screen {
             case AI -> "\u00a77记忆 / 对话 / 感知 / 情绪 / AI 工具";
             case COMBAT -> "\u00a77自保 / 战术 / 主动参战 / 贴身辅助 / 玩家伤害 / 空袭数值";
             case SURVIVAL -> "\u00a77落地缓冲 / 死亡复活 / 传送逃生 / 安全保载";
-            case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路 / 飞行跟随";
+            case MOVE -> "\u00a77跟随 / 空闲流畅 / 搭路 / 飞行跟随 / 扫帚模式";
             case UI -> "\u00a77语音 TTS / 显示与气泡";
             case SYSTEM -> "\u00a77交互杂项 / 运行日志 / 压缩盒";
         };

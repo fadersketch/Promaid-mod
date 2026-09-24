@@ -274,4 +274,41 @@ public final class MaidBroomKit {
             return false;
         }
     }
+
+    /**
+     * 「守家 / 工作区」此刻是否真的生效——也就是「平时该沿着工作范围那个圈盘旋」。
+     *
+     * <p>三件都要成立：总开关（{@code combat.broom.clampHome}）开着、她确实处在 home 模式
+     * （{@code hasRestriction()}）、且圈心有效（{@link com.maidsmart.follow.WorkAreaClamp#circleCenter}
+     * 已经把「从未 restrictTo 过」那种挡成 null）。
+     *
+     * <p>【为什么单独成一个判据】它同时被两处消费：「飞行目标点夹取」（{@link #clampToHome}）
+     * 与「平时沿圈盘旋」（{@code MaidBroomDrive.homeOrbitPoint}）。口径只留一处，
+     * 免得出现"夹了圈却不盘旋"或"盘旋了却不夹"这种半开状态。
+     */
+    public static boolean homeRestricted(EntityMaid maid) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get()) {
+                return false;
+            }
+            return maid != null && maid.hasRestriction()
+                    && com.maidsmart.follow.WorkAreaClamp.circleCenter(maid) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 扫帚模式下**禁止放置类战术**（TNT / 末地水晶 / 重生锚 / 床）——她骑在扫帚上，只该用
+     * 主手武器打。判据就是「她的任务是扫帚模式」（**不看有没有正骑着**）：骑不骑都是这一种
+     * 打法，不该出现"刚下扫帚去找扫帚的那两秒顺手扔了个 TNT"。
+     *
+     * <p>【为什么是加闸，而不是只在手册里声明】放置那条链路（{@code MaidBombing} 的相位机与
+     * {@code BombTntTick} 的战斗投掷扫描）**只看任务是不是战斗类**，全程没有
+     * {@code isPassenger} 判定——她骑在扫帚上照样会起手放水晶 / 重生锚 / 床（源码实证）。
+     * 所以"手册里那句声明"要成立，就必须在这里真拦一道（现在三处：起手、投掷扫描、相位推进）。
+     */
+    public static boolean forbidsBombing(EntityMaid maid) {
+        return isBroomTask(maid);
+    }
 }
