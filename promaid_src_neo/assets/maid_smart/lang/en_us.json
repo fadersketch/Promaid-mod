@@ -1,4 +1,5 @@
 ﻿{
+  "config.promaid.combat.assistRadius": "Assist radius (blocks)",
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",
   "task.maid_smart.woodcut": "Woodcutting",
