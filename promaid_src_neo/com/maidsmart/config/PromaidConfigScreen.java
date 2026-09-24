@@ -2706,6 +2706,18 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**"
                         + "（高度保持不变），直到接敌；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。"
                         + "关掉 = 自由飞：平时跟主人，为了追怪/跟主人可以越界"));
+        this.rows.add(new NumRow("扫帚·跟随起手距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_FOLLOW_START.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_FOLLOW_START, s),
+                "主人比她远过这个 3D 距离，她（平时没有敌人时）才飞过去跟；更近就原地悬停。"
+                        + "这一对**只管扫帚模式**（「飞行跟随」那一对只管鞘翅飞行跟随）。默认 25，2~128"));
+        this.rows.add(new NumRow("扫帚·跟随收手距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_FOLLOW_END.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_FOLLOW_END, s),
+                "主人进到这么近（3D 距离）就中断这一趟、原地悬停。必须比起手距离小——"
+                        + "写成大于等于起手距离时会被自动压到「起手距离 − 1」以内。默认 5，1~64"));
+        this.rows.add(new BoolRow("扫帚·卡墙脱困", MaidSmartConfig.COMBAT_BROOM_UNSTICK.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_UNSTICK.set(v),
+                "撞到方块顶住不动超过 0.6 秒 → **先飘到最近的空气格**再续原链路（只挑让她离目标更近、"
+                        + "上下两格都空的那个）。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」"));
     }
 
     private void reviveRows() {
@@ -2946,6 +2958,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("防刷怪·搜索半径（格）", String.valueOf(MaidSmartConfig.COMBAT_SPAWNER_TORCH_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_SPAWNER_TORCH_RADIUS, s),
                 "搜索半径（格，默认 12，4~32）：她每隔 4 秒在自己周围这个水平半径、上下各 4 格里找一次刷怪笼（一次只处理最近的那一个）。调大能提前发现远处的，但每次扫描要读的方块数按半径平方涨，12 已经够覆盖一般地下矿道/地牢的视野"));
+        this.rows.add(new BoolRow("防刷怪·优先去插（打断当前活儿）", MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.get(),
+                v -> MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.set(v),
+                "发现刷怪笼后**放下手上的活**先把它哑掉：这段时间她独占走位（取消 MoveToTargetSink 的"
+                        + "WALK_TARGET 执行 + 掐掉挖矿/伐木/农活驱动发起的直连寻路），插上再回去干活。"
+                        + "关掉 = 照旧会去插，但正在干活时那几条驱动会一路把她按在工位上。"
+                        + "打架/自保/骑乘/坐着时这条闸自动让位（战斗永远优先）"));
     }
 
     private void selfTacticsRows() {
@@ -3861,7 +3879,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         String subject = COOK_LIST_NAMES[fuelMode ? 1 : 0];
         // v1.3.2 实测六百五十六：标题里直接写明网格列的是什么——旧版不给任何说明，
         // 玩家看到"一整注册表"只会得出"这张表乱填"的结论（那是旧版真的乱列）。
-        String src = fuelMode ? "可当燃料的物品" : "当前世界真有炉子配方的物品";
+        // v1.3.0(beta) 实测六百六十四：把第 7 条反馈（「烧制物品面板为什么只有矿物没有食物」）
+        // 写进标题——食物与矿物**本来就是同一张清单**（吃的都在里面：beef / porkchop / potato…），
+        // 这张表只列"当前世界真有炉子配方"的东西；清单留空 = 自动判定（**先食材后矿物**）。
+        String src = fuelMode ? "可当燃料的物品"
+                : "烧制物（食物与矿物都在这一格：搜 beef / potato / iron_ore；留空 = 自动，先食材后矿物）";
         String title = "\u00a7e" + subject + "\u00a77（只列" + src + "）\u00a7e——点图标切换「可以 / 不可以」";
         g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
         int panelLeft = Math.max(8, cx - 280);

@@ -946,6 +946,7 @@ public final class MaidBroomDrive {
         if (aim == null) {
             return;
         }
+        aim = unstick(maid, broom, aim); // v1.3.0(beta) 实测六百六十四：卡墙脱困
         Vec3 cur = broom.m_20184_();
         double dx = aim.f_82479_ - broom.m_20185_();
         double dy = aim.f_82480_ - broom.m_20186_();
@@ -967,6 +968,177 @@ public final class MaidBroomDrive {
         // 朝向 = 速度方向（纯垂直位移时不改朝向）
         float yaw = horiz > 0.15 ? (float) (-Math.atan2(dx, dz) * DEG) : yaw(broom);
         setThrust(broom, nv, yaw);
+    }
+
+    /* ==================== 卡墙脱困（v1.3.0(beta) 实测六百六十四） ==================== */
+
+    /** 女仆 UUID → 卡墙检测状态（只读她自己，逐 tick 更新，异常一律吞掉） */
+    private static final Map<UUID, Stuck> STUCK = new HashMap<>();
+    /** 连续这么多 tick 位移 < {@link #STILL_EPS} 且还没到点 → 判"被方块顶住了"（12 tick = 0.6 秒） */
+    private static final int STUCK_TICKS = 12;
+    /** "没动"的位移阈值（格）：低于它就算这一 tick 没走成 */
+    private static final double STILL_EPS = 0.06;
+    /** 一次脱困最多走这么多 tick（2 秒）；到点或超时都回到原链路 */
+    private static final int ESCAPE_TICKS = 40;
+    /** 脱困取点的水平扫描半径（格）——玩家原话是"最近的空气方块"，所以扫小一点、取最近的 */
+    private static final int ESCAPE_R = 3;
+    /** 同一只女仆的「卡墙」日志最短间隔（毫秒）= 5 秒，防刷屏 */
+    private static final long UNSTICK_LOG_GAP_MS = 5000L;
+
+    private static final class Stuck {
+        double px = Double.NaN;
+        double py;
+        double pz;
+        /** 连续"没动"的 tick 数 */
+        int still;
+        /** 剩余脱困 tick（>0 = 正在脱困） */
+        int escape;
+        double ex;
+        double ey;
+        double ez;
+        long lastLog;
+    }
+
+    /**
+     * 卡墙脱困：朝目标直飞、**被方块顶住原地不动**时，先飘到最近的空气格，再续原来的链路。
+     *
+     * <p>【玩家原话】「女仆在 home 模式进行盘旋飞行的时候，显得很不聪明。如果他被方块挡住了，
+     * 那他就会一直盯着那个方块飞，也不知道换路线，我觉得如果他在飞行中撞到了阻挡的方块，
+     * 那么应该先尝试往最近的空气方块进行移动。然后再继续执行原有的扫帚链路」。
+     *
+     * <p>【为什么必然发生】她的位移是"目标速度包络 + 阻尼"算出来的一阶矢量（见 {@link #steerTo}），
+     * 撞上方块时 {@code Entity.move(MoverType.SELF, …)} 只是在碰撞面上滑一下，**速度意图一个字
+     * 都不变**——下一 tick 照旧朝那个点推。表现就是"盯着那块方块飞"。
+     *
+     * <p>【判据】连 {@link #STUCK_TICKS} tick（0.6 秒）位移小于 {@link #STILL_EPS} 且离目标还远
+     * （&gt; {@link #ARRIVE}）→ 判卡住；悬停/到点/玩家驾驶都不会误判（到点那一支 {@code dist < ARRIVE}）。
+     * 取点：她身边 ±{@link #ESCAPE_R} 格里的**空气格**，要求**上面一格也是空气**（她连扫帚差不多
+     * 两格高）且**离目标比她现在更近**（否则就是原地打转），取最近的那个。走到它（1 格内）或
+     * {@link #ESCAPE_TICKS} 用完就清除脱困状态、回到原链路——**脱困只是绕一步，不改变去哪**。
+     *
+     * <p>异常一律当"没卡"（这个函数在每 tick 的驱动路径上，绝不能抛）。配置
+     * {@code combat.broom.unstick} 可整条关掉（默认开）。
+     */
+    private static Vec3 unstick(EntityMaid maid, EntityBroom broom, Vec3 aim) {
+        if (!unstickCfg()) {
+            STUCK.remove(maid.m_20148_());
+            return aim;
+        }
+        try {
+            UUID id = maid.m_20148_();
+            Stuck st = STUCK.get(id);
+            if (st == null) {
+                st = new Stuck();
+                STUCK.put(id, st);
+            }
+            double bx = broom.m_20185_();
+            double by = broom.m_20186_();
+            double bz = broom.m_20189_();
+            double toAim = Math.sqrt((aim.f_82479_ - bx) * (aim.f_82479_ - bx)
+                    + (aim.f_82480_ - by) * (aim.f_82480_ - by)
+                    + (aim.f_82481_ - bz) * (aim.f_82481_ - bz));
+            if (Double.isNaN(st.px)) {
+                st.px = bx;
+                st.py = by;
+                st.pz = bz;
+            }
+            double moved = Math.sqrt((bx - st.px) * (bx - st.px) + (by - st.py) * (by - st.py)
+                    + (bz - st.pz) * (bz - st.pz));
+            st.px = bx;
+            st.py = by;
+            st.pz = bz;
+            // ① 正在脱困：继续朝那个空气格走；到了 / 超时就收工回原链路
+            if (st.escape > 0) {
+                st.escape--;
+                double toEsc = Math.sqrt((st.ex - bx) * (st.ex - bx) + (st.ey - by) * (st.ey - by)
+                        + (st.ez - bz) * (st.ez - bz));
+                if (toEsc <= 1.0 || st.escape <= 0) {
+                    st.escape = 0;
+                    st.still = 0;
+                    return aim;
+                }
+                return new Vec3(st.ex, st.ey, st.ez);
+            }
+            // ② 还没到点却一动不动 → 记一笔；动起来了（或被推/被撞飞）→ 清零
+            if (toAim > ARRIVE && moved < STILL_EPS) {
+                st.still++;
+            } else if (moved >= STILL_EPS) {
+                st.still = 0;
+            }
+            // ③ 判出卡住 → 找最近的空气格，进脱困相位
+            if (st.still >= STUCK_TICKS) {
+                st.still = 0;
+                net.minecraft.core.BlockPos air = nearestAirAhead(broom, aim);
+                if (air != null) {
+                    st.ex = air.m_123341_() + 0.5;
+                    st.ey = air.m_123342_() + 0.5;
+                    st.ez = air.m_123343_() + 0.5;
+                    st.escape = ESCAPE_TICKS;
+                    long now = System.currentTimeMillis();
+                    if (now - st.lastLog >= UNSTICK_LOG_GAP_MS) {
+                        st.lastLog = now;
+                        com.maidsmart.tool.PromaidLog.log("扫帚卡墙",
+                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 被方块顶住不动了 → 先飘到最近的空气格 ("
+                                        + air.m_123341_() + ", " + air.m_123342_() + ", " + air.m_123343_()
+                                        + ")，到了再续原链路");
+                    }
+                    return new Vec3(st.ex, st.ey, st.ez);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return aim;
+    }
+
+    /**
+     * 她身边最近的、**能容下她**的空气格：水平 ±{@link #ESCAPE_R}、上下 ±2。
+     *
+     * <p>三条件缺一不可：这一格是空气、**上面一格也是空气**（她连扫帚差不多两格高，只空一格会卡住）、
+     * 且**离目标比现在更近**（只挑"往目标那一侧"的格子，否则脱困就变成原地打转）。
+     * 取"离她最近"的那个——玩家原话就是"最近的空气方块"。
+     */
+    private static net.minecraft.core.BlockPos nearestAirAhead(EntityBroom broom, Vec3 aim) {
+        try {
+            net.minecraft.server.level.ServerLevel level = (net.minecraft.server.level.ServerLevel) broom.m_9236_();
+            net.minecraft.core.BlockPos base = broom.m_20183_();
+            net.minecraft.core.BlockPos goal = new net.minecraft.core.BlockPos(
+                    (int) Math.floor(aim.f_82479_), base.m_123342_(), (int) Math.floor(aim.f_82481_));
+            double here = base.m_123331_(goal);
+            double best = Double.MAX_VALUE;
+            net.minecraft.core.BlockPos bestPos = null;
+            for (int dx = -ESCAPE_R; dx <= ESCAPE_R; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    for (int dz = -ESCAPE_R; dz <= ESCAPE_R; dz++) {
+                        if (dx == 0 && dy == 0 && dz == 0) {
+                            continue;
+                        }
+                        net.minecraft.core.BlockPos p = base.m_7918_(dx, dy, dz);
+                        if (!level.m_8055_(p).m_60795_() || !level.m_8055_(p.m_7494_()).m_60795_()) {
+                            continue;
+                        }
+                        if (p.m_123331_(goal) >= here) {
+                            continue; // 不比现在更靠近目标 → 不选（防原地打转）
+                        }
+                        double d = dx * dx + dy * dy + dz * dz;
+                        if (d < best) {
+                            best = d;
+                            bestPos = p;
+                        }
+                    }
+                }
+            }
+            return bestPos;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static boolean unstickCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_UNSTICK.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
     }
 
     /* ==================== 清理 ==================== */
@@ -992,6 +1164,7 @@ public final class MaidBroomDrive {
         COMBAT_ALT.remove(maidId);
         HUNTING.remove(maidId);
         HUNT_COOLDOWN.remove(maidId);
+        STUCK.remove(maidId);
     }
 
     /** 服务端停止：整表清空 */
@@ -1005,6 +1178,7 @@ public final class MaidBroomDrive {
         COMBAT_ALT.clear();
         HUNTING.clear();
         HUNT_COOLDOWN.clear();
+        STUCK.clear();
     }
 
     /* ==================== 内部工具 ==================== */

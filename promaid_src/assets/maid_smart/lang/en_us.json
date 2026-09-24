@@ -1,4 +1,8 @@
 ﻿{
+  "config.promaid.spawnerTorch.priority": "Spawner torch: go first (interrupt current work)",
+  "config.promaid.broom.unstick": "Broom: unstick when blocked",
+  "config.promaid.broom.followEnd": "Broom: follow stop distance (blocks)",
+  "config.promaid.broom.followStart": "Broom: follow start distance (blocks)",
   "config.promaid.combat.assistRadius": "Assist radius (blocks)",
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",

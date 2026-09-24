@@ -30,8 +30,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class SchedulePosTickMixin {
     @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noPeriodicPullbackWhileWorking(EntityMaid maid, CallbackInfo ci) {
-        if (com.maidsmart.config.MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get()
-                && MaidWorkTags.isNonCombatWork(maid)) {
+        // 【v1.3.0(beta) 实测六百六十四：扫帚模式一起豁免】玩家原话：「开着 home 的扫帚模式，
+        //  女仆不应该响应排班表的传送」。她骑在扫帚上时 TLM 的 SchedulePos.tick 本来就传不动她
+        //  （canBrainMoving() 为 false：乘客/坐着/睡觉/被拴），但**下扫帚那几拍**（缺件待命、
+        //  刚落地）会照常被"出圈就传送回工位"抓走，而她要飞来飞去，被拽回圈心一次就得重新起飞。
+        //  所以扫帚模式整段按"干活不打断"处理：圈心照常刷新，传送/走回一律跳过。
+        if ((com.maidsmart.config.MaidSmartConfig.MISC_WORK_UNINTERRUPTED.get()
+                && MaidWorkTags.isNonCombatWork(maid))
+                || com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
             // 与原版 tick 同节奏：每 2 秒刷新一次限制圈（圈心随当前活动对齐锚点）
             if (maid.tickCount % 40 == 0) {
                 try {

@@ -1,6 +1,7 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.task.MaidWorkTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
@@ -119,6 +120,55 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         long skipLogged;
     }
 
+
+    /* ==================== 走位所有权（v1.3.0(beta) 实测六百六十四） ==================== */
+
+    /**
+     * "这一发 moveTo 是我们自己发的"——{@code SpawnerTorchNavGuardMixin} 据此放行。
+     *
+     * <p>【为什么用这种窄门】让位闸要掐掉**别的驱动**发起的直连寻路，可它们与本类调的是
+     * 同一个 {@code PathNavigation.moveTo}，只看参数分不出谁是谁。于是本类在自己那一发外面
+     * 夹一层自标记：服务端单线程、调用是同步的，闸看到标记就让路。try/finally 保证异常时
+     * 一定摘掉（否则那一 tick 之后她自己的寻路也会被自己掐掉）。
+     */
+    private static volatile boolean SELF_NAV = false;
+
+    /** 闸的询问口：true = 现在这一发是插火把这条链自己发的 */
+    public static boolean selfNav() {
+        return SELF_NAV;
+    }
+
+    /** 直连导航（换掉当前路径，不走 MoveToTargetSink）——外面包一层自标记，让让位闸放行 */
+    private static void navTo(EntityMaid maid, BlockPos pos, float speed) {
+        try {
+            SELF_NAV = true;
+            maid.m_21573_().m_26519_(pos.m_123341_() + 0.5, pos.m_123342_() + 0.5,
+                    pos.m_123343_() + 0.5, speed);
+        } catch (Throwable ignored) {
+        } finally {
+            SELF_NAV = false;
+        }
+    }
+
+    /**
+     * 「她为什么没去插火把」的留痕（30 秒一条上限，与"工作区里不碰"共用同一个限频字段）。
+     *
+     * <p>【为什么需要】"附近没扫到刷怪笼""手上一件灯都没有"这两条此前是**静默 return**——
+     * 玩家只能看到"她没去插"，分不清是没找到、没灯、还是被工作区挡住了（那一条本来就打日志）。
+     */
+    private static void noteIdle(Aim aim, EntityMaid maid, long gameTime, String why) {
+        try {
+            if (gameTime - aim.skipLogged < SKIP_LOG_GAP) {
+                return;
+            }
+            aim.skipLogged = gameTime;
+            com.maidsmart.tool.PromaidLog.log("刷怪笼", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " " + why + "（搜索半径 " + (int) Math.round(radiusCfg())
+                    + " 格、上下各 " + SCAN_DY + " 格）");
+        } catch (Throwable ignored) {
+        }
+    }
+
     /* ==================== 生命周期 ==================== */
 
     /**
@@ -159,6 +209,13 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         return true;
     }
 
+    /** v1.3.0(beta)：行为停下（换任务/被移除）时一定要把走位所有权交还 */
+    @Override
+    protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
+        MaidWorkTags.setSpawnerTorch(maid, false);
+        super.m_6732_(level, maid, gameTime);
+    }
+
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         if (maid == null || !maid.m_6084_()) {
@@ -172,15 +229,24 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 AIM.put(maid, aim);
             }
         }
+        // ⓪【v1.3.0(beta) 实测六百六十四】脑里出现攻击目标 → 立刻清目标 + 摘掉走位所有权标记
+        //    （战斗永远优先；标记不清的话她会被"走去插火把"那面闸按住手脚）
+        if (maid.m_5448_() != null) {
+            if (aim.spawner != null) {
+                MaidWorkTags.setSpawnerTorch(maid, false);
+                clearTarget(maid, aim);
+            }
+            return;
+        }
         // ① 手上已经有目标 → 继续推进它（走过去 / 放下 / 判定不用放了）
         if (aim.spawner != null) {
             if (!stillNeedsTorch(level, aim.spawner)) {
-                clearTarget(aim);
+                clearTarget(maid, aim);
             } else if (!walkAndPlace(level, maid, aim, gameTime)) {
                 // 放弃 / 插完了：记冷却，清目标
                 aim.coolPos = aim.spawner;
                 aim.coolUntil = gameTime + RETRY_COOLDOWN;
-                clearTarget(aim);
+                clearTarget(maid, aim);
             }
             return;
         }
@@ -190,10 +256,12 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         }
         aim.lastScan = gameTime;
         if (!hasLightItem(maid)) {
+            noteIdle(aim, maid, gameTime, "手上/背包里一件能当灯的东西都没有 → 这条链路不启动");
             return; // 手上一件灯都没有：整条链路不启动（玩家原话是"如果手上有火把"）
         }
         BlockPos found = scan(level, maid);
         if (found == null) {
+            noteIdle(aim, maid, gameTime, "附近没扫到刷怪笼");
             return;
         }
         if (found.equals(aim.coolPos) && gameTime < aim.coolUntil) {
@@ -213,13 +281,15 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
         }
         aim.spawner = found;
         aim.since = gameTime;
+        MaidWorkTags.setSpawnerTorch(maid, true); // v1.3.0(beta)：这段时间她独占走位
         com.maidsmart.tool.PromaidLog.log("刷怪笼", com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 发现刷怪笼 " + pos(found) + " → 过去插火把防刷怪（手上/背包里有灯）");
     }
 
-    private static void clearTarget(Aim aim) {
+    private static void clearTarget(EntityMaid maid, Aim aim) {
         aim.spawner = null;
         aim.since = 0L;
+        MaidWorkTags.setSpawnerTorch(maid, false); // v1.3.0(beta)：走位所有权一并交还
     }
 
     /* ==================== 三件事：判断 / 走过去 / 放下 ==================== */
@@ -263,11 +333,14 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
                 spawner.m_123342_() + 0.5, spawner.m_123343_() + 0.5);
         if (d2 > PLACE_RANGE * PLACE_RANGE) {
             // 还没到：每 tick 重写一次寻路目标（与其它行为同款；真正的移动由 TLM 导航执行）
+            // 【v1.3.0(beta) 实测六百六十四：走位所有权】清 WALK_TARGET（那面闸会把
+            //  MoveToTargetSink 一并取消）+ 直连导航；挖矿/伐木/农活驱动发起的寻路会被
+            //  SpawnerTorchNavGuardMixin 掐掉，于是"走去插火把"这段路上谁都抢不走她的路。
             try {
-                net.minecraft.world.entity.ai.behavior.BehaviorUtils.m_22617_(
-                        maid, spawner, WALK_SPEED, 2);
+                maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
             } catch (Throwable ignored) {
             }
+            navTo(maid, spawner, WALK_SPEED);
             return true;
         }
         // 到了：按候选位顺序找一个"能站住"的位置把灯放下
