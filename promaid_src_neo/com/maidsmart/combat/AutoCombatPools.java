@@ -125,7 +125,7 @@ public final class AutoCombatPools {
             // 路径（它们共用本池）。按 UID 精确排除。
             try {
                 if (task.getUid() != null
-                        && com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {
+                        && com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(task.getUid())) {
                     continue;
                 }
             } catch (Throwable ignored) {
@@ -301,7 +301,7 @@ public final class AutoCombatPools {
         // 选择顶掉，且滑翔状态会被 setTask 打断。彻底不评估（buildPools 的排除只
         // 挡住"切进来"，挡不住"从这里切出去"，必须在此显式提前返回）。
         try {
-            if (com.maidsmart.combat.MaidFlightKit.isFlightUid(cur.getUid())) {
+            if (com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(cur.getUid())) {
                 return;
             }
         } catch (Throwable ignored) {

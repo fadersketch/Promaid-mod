@@ -141,7 +141,7 @@ public final class AutoCombatPools {
             }
             // v1.2.0：飞行作战【不参与自主切换】——入战选任务时永远不进池，
             // 玩家手动指定的飞行作战不会被自主切换顶掉。
-            if (com.maidsmart.combat.MaidFlightKit.isFlightUid(task.getUid())) {
+            if (com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(task.getUid())) {
                 continue;
             }
             // v1.1.0 实测三百七十九【模组物品背书】（反馈："为啥自主战斗老喜欢切换
@@ -285,7 +285,7 @@ public final class AutoCombatPools {
         }
         // v1.2.0：飞行作战【不参与战中换战术】——她的战斗节奏（放烟花/滑翔/收翅猛击）
         // 由 MaidFlightCombatBehavior 独占，换到别的近远战任务只会把整个链路打断。
-        if (com.maidsmart.combat.MaidFlightKit.isFlightUid(cur.getUid())) {
+        if (com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(cur.getUid())) {
             return;
         }
         // v1.1.0 实测一百零七（反馈："女仆不会自己的近远战切换"）：旧版只允许

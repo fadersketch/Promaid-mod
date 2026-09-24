@@ -427,7 +427,8 @@ public final class MaidChunkLoadManager {
                         "重锤跃起中，跨维度跟随不传——猛击落地后自然恢复")) {
                     return;
                 }
-            } else if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            } else if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+                    || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 if (!crossDimAir || !airDeferAllows(maid, "flight-air-cross",
                         "飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复")) {
                     return;
@@ -1070,7 +1071,8 @@ BlockPos stand = findStand(newLevel,
                         + " 正在背鞘翅追主人（飞行跟随），不拉回——追上/超时后自然结束");
                 return;
             }
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+                    || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 // v1.2.0 实测五百五十四：这里距离已经确认"确实该拉"（上面两道距离判定
                 // 都过了），所以让位必须有界——超时即强拉，理由与跨维度那两处同源。
                 if (!airDeferAllows(maid, "flight-air-samedim",

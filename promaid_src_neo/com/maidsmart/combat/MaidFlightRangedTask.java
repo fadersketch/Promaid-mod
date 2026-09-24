@@ -149,6 +149,20 @@ public class MaidFlightRangedTask implements IRangedAttackTask {
      */
     @Override
     public void performRangedAttack(EntityMaid shooter, LivingEntity target, float power) {
+        // v1.3.0：本体在 fireRangedWeapon——扫帚模式（MaidBroomTask）与远程空袭共用同一份
+        fireRangedWeapon(shooter, target, power);
+    }
+
+    /**
+     * v1.3.0「扫帚模式」复用入口——上面那段开火口径的**唯一实现**，飞行远战与扫帚模式共用。
+     *
+     * 【为什么把入口开在这里，而不是把整段搬进单独的 RangedFireSupport】纯粹是风险取舍：
+     * 这一整套分支（枪械排除 / 三叉戟 / 御币弹幕 / 弩射烟花 / 弩装配 / 弓造箭）口径很细，
+     * 并且已经在两棵树里逐行 SRG 化、随 v1.2.x 发过版；整段搬移到新类只会引入"搬错一行"
+     * 的风险，收益仅是类名好看。开一个公共入口只改几行、javac 就能证明行为不变。
+     * 真要改名，留到下一次专门的重构里做。
+     */
+    public static void fireRangedWeapon(EntityMaid shooter, LivingEntity target, float power) {
         try {
             ItemStack weapon = shooter.getMainHandItem();
             // 枪械不走箭矢通道（由 MaidFlightCombatBehavior#tickGunFire 调 TLM 枪械接口开火）
