@@ -8,7 +8,9 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -106,6 +108,22 @@ public final class MaidBroomDrive {
     /** 女仆 UUID → 当前爬升相位（起飞 / 接敌） */
     private static final Map<UUID, Climb> CLIMB = new HashMap<>();
 
+    /* ==================== 诊断留痕（只写日志，不参与任何判定） ==================== */
+
+    /**
+     * 已经记过"她本来就骑着一把扫帚（不是我们放的）"的女仆——每只一次。
+     * <p>
+     * 【为什么要有这条】实测里最容易误判的一件事：日志里没有「取出扫帚骑上」时，到底是
+     * ①"没扫帚没骑上"还是②"她已经在扫帚上了"？旧版这两种情况的日志**长得一模一样**
+     * （都是什么都不打，因为缺件气泡那边看到"扫帚物品在"也不会报）。现在②会留痕，
+     * 配合「扫帚接管」（mixin 那侧）能一眼看出驱动链路通没通。
+     */
+    private static final Set<UUID> ADOPTED_LOGGED = new HashSet<>();
+    /** 已经记过"想飞却没骑上"的女仆 → 上次记的时间（毫秒），只用于日志限频 */
+    private static final Map<UUID, Long> NO_DRIVE_LOGGED = new HashMap<>();
+    /** 诊断日志的最小间隔（毫秒）：同一只女仆 5 秒最多一条（纯观感，与游戏逻辑无关） */
+    private static final long LOG_GAP_MS = 5000L;
+
     /* ==================== 物理常量（全部照搬 PlayerBroomControl，见类注释） ==================== */
 
     /**
@@ -192,11 +210,17 @@ public final class MaidBroomDrive {
         }
         EntityBroom riding = MaidBroomKit.ridingBroom(maid);
         if (riding != null) {
+            noteAdopted(maid);
             return riding;
         }
         ItemStack taken = takeBroomItem(maid);
         if (taken.m_41619_()) {
             return null;
+        }
+        net.minecraft.world.entity.Entity prev = null;
+        try {
+            prev = maid.m_20202_(); // force 骑乘会把她从这上面叫下来，先记着是谁（日志用）
+        } catch (Throwable ignored) {
         }
         EntityBroom broom = null;
         try {
@@ -210,11 +234,23 @@ public final class MaidBroomDrive {
                 giveBack(maid, taken);
                 return null;
             }
-            if (!maid.m_20329_(broom)) {
-                // 骑不上（例如她已经在骑别的东西）：把扫帚收掉、物品还她，不留孤儿实体
+            // 【force = true】实测六百五十七：不 force 的 startRiding 要求她**此刻不是任何载具的
+            // 乘客**（原版 `canRide` = `!isPassenger() && …`），而她会坐在椅子（我们自己的钓鱼椅
+            // 就是靠 `startRiding(chair, true)` 让她坐上去的）或别的载具上——那样这里恒返回 false，
+            // 于是**每 tick 取出一把扫帚、骑不上、再还回去**：面板上看不到任何报错（缺件判据看到
+            // "扫帚物品在"就不报），她却永远上不去。与本模组其它上座点（FishingChairService）同款：
+            // 要她上去就 force。
+            if (!maid.m_7998_(broom, true)) {
+                // 连 force 都骑不上：把扫帚收掉、物品还她，不留孤儿实体（并且一定要留痕）
+                com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 骑不上扫帚：startRiding(force) 返回 false（当前载具=" + entityName(maid) + "）→ 扫帚收回背包");
                 broom.m_6075_();
                 giveBack(maid, taken);
                 return null;
+            }
+            if (prev != null && prev != broom) {
+                com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 她本来在 " + entityName(prev) + " 上 → 强制换到扫帚（那把载具本身不动）");
             }
         } catch (Throwable t) {
             if (broom != null) {
@@ -309,13 +345,20 @@ public final class MaidBroomDrive {
             // 与 steerTo 的"到点"用同一个阈值：它在距目标 ARRIVE 格时收干悬停，所以这里
             // 也用 ARRIVE 判定完成——阈值写小了会出现"她已经停住、相位却永远不结束"。
             c.done = true;
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 爬升到位（y " + fmt(c.startY) + " → " + fmt(y) + "，想抬 " + fmt(c.lift)
+                    + " 格）");
             return null;
         }
         c.observe(y);
         if (c.stalled()) {
             c.done = true;
+            // 【日志要能分辨两种"顶头"】真被方块顶住 vs 驱动根本没生效。两者在旧日志里都是
+            // 一句"头顶被顶住"，但处置完全不同（前者正常、后者是 bug）。所以这里把起止高度、
+            // 实际抬了多少格一起写出来：抬了 0 格 = 驱动没生效；抬了一半 = 真的撞到东西了。
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 头顶被顶住 → 就地悬停（爬升相位结束）");
+                    + " 头顶被顶住 → 就地悬停（y " + fmt(c.startY) + " → " + fmt(y) + "，"
+                    + STALL_TICKS + " tick 没长高、整段只抬了 " + fmt(y - c.startY) + " 格）");
             return null;
         }
         return c.targetY;
@@ -325,6 +368,10 @@ public final class MaidBroomDrive {
     private static final class Climb {
         final Object key;
         final double targetY;
+        /** 相位开始时的 y（日志用：起止一对比就知道是真顶头还是驱动没生效） */
+        final double startY;
+        /** 想抬的格数（= targetY - startY，含 {@link #CLIMB_LEAD} 余量；日志用） */
+        final double lift;
         /** 相位是否已经做完——**留在表里**，否则下一 tick 会被当成新相位重新爬 */
         boolean done;
         private double lastY;
@@ -333,6 +380,8 @@ public final class MaidBroomDrive {
         Climb(Object key, double targetY, double startY) {
             this.key = key;
             this.targetY = targetY;
+            this.startY = startY;
+            this.lift = targetY - startY;
             this.lastY = startY;
         }
 
@@ -479,6 +528,10 @@ public final class MaidBroomDrive {
         }
         EntityBroom broom = MaidBroomKit.ridingBroom(maid);
         if (broom == null) {
+            // 【绝不能静默】旧版这里直接 return：只要"没骑上"，她整段飞行都是"什么都不发生"，
+            // 而缺件气泡那边看到"扫帚物品还在"也不会报——玩家只能看到"女仆站在原地不动"。
+            // 实测六百五十七就吃过这个亏（日志里只有"顶头"、没有原因）。现在留痕（5 秒一条上限）。
+            noteNoDrive(maid);
             return;
         }
         Vec3 aim = MaidBroomKit.clampToHome(maid, desired);
@@ -574,6 +627,95 @@ public final class MaidBroomDrive {
 
     private static void giveBack(EntityMaid maid, ItemStack stack) {
         com.maidsmart.tool.MaidGiveBack.give(maid, stack, "扫帚模式");
+    }
+
+    /**
+     * 这把扫帚上有没有**玩家在驾驶**。
+     * <p>
+     * TLM 的驾驶权判据就是 `getControllingPassenger()`（只有第一乘客是 Player 时才非空，
+     * 字节码实证），而 mixin 那边同样"有玩家在驾驶就一个字不改"。行为侧问这一条只是为了让
+     * **日志和相位干净**：玩家开着的时候我们既不该开爬升相位（会每 tick 判"顶头"刷日志），
+     * 也不该写推进意图（写了也没人用）——只负责开火。
+     */
+    public static boolean drivenByPlayer(EntityBroom broom) {
+        try {
+            return broom != null
+                    && broom.m_6688_() instanceof net.minecraft.world.entity.player.Player;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 她已经在扫帚上了（不是我们放的）——每只女仆记一次，让"没取出扫帚"不再等于"没骑上" */
+    private static void noteAdopted(EntityMaid maid) {
+        try {
+            UUID id = maid.m_20148_();
+            synchronized (ADOPTED_LOGGED) {
+                if (!ADOPTED_LOGGED.add(id)) {
+                    return;
+                }
+                if (ADOPTED_LOGGED.size() > 256) {
+                    ADOPTED_LOGGED.clear();
+                    ADOPTED_LOGGED.add(id);
+                }
+            }
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 她已经在一把扫帚上了（不是本模组放出去的）→ 直接接管驱动，收工时不会回收它");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** "想飞却没骑上"——5 秒一条上限（这是异常路径，出现就说明有东西挡着） */
+    private static void noteNoDrive(EntityMaid maid) {
+        try {
+            UUID id = maid.m_20148_();
+            long now = System.currentTimeMillis();
+            synchronized (NO_DRIVE_LOGGED) {
+                Long last = NO_DRIVE_LOGGED.get(id);
+                if (last != null && now - last < LOG_GAP_MS) {
+                    return;
+                }
+                if (NO_DRIVE_LOGGED.size() > 256) {
+                    NO_DRIVE_LOGGED.clear();
+                }
+                NO_DRIVE_LOGGED.put(id, now);
+            }
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 想飞却没骑上扫帚（ridingBroom=null；当前载具=" + entityName(maid) + "）→ 这一拍不动");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 日志用的实体名 = 实体类型（`EntityType.toString()` 就是注册名，如 `minecraft:boat` /
+     * `touhou_little_maid:chair`，原版实现就是查注册表键）。
+     * <p>
+     * 刻意**不用** `BuiltInRegistries.ENTITY_TYPE.getKey(...)`：那是注册表字段，
+     * 两树的写法不同，写它等于给镜像多一处映射风险；`toString()` 两树一字不差。
+     */
+    private static String entityName(net.minecraft.world.entity.Entity e) {
+        if (e == null) {
+            return "无";
+        }
+        try {
+            return String.valueOf(e.m_6095_());
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    /** 女仆当前载具的注册名（没有载具 = "无"） */
+    private static String entityName(EntityMaid maid) {
+        try {
+            return entityName(maid.m_20202_());
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    /** 日志用的两位小数（固定 Locale：避免某些语言把小数点写成逗号） */
+    private static String fmt(double v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
     }
 
     /** 战斗盘旋距离（格） */

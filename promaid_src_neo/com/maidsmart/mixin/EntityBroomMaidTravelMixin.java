@@ -55,6 +55,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * 【转向为什么在这儿】没有 Player 时 {@code tickRidden} 根本不会被调用（它只由
  * "控制乘客是 Player"的那条链路触发），所以朝向也没人管了——由这里按驱动给的 yaw 设。
+ *
+ * ── 【v1.3.2 修正：只让服务端驱动】客户端也会被 {@code aiStep} 调到 travel（实证）──
+ * 1.21.1 {@code LivingEntity.aiStep} 里那次 travel 调用**没有 {@code isControlledByLocalInstance}
+ * 门槛**：{@code getControllingPassenger() instanceof Player ? travelRidden(...) : travel(...)}
+ * ——是"谁在控制"二选一，不是"哪一侧说了算"。对比一下原版 {@code travelRidden} 内部：
+ * 它把 {@code setSpeed + travel} 那一对**包在 {@code if (this.isControlledByLocalInstance())} 里**，
+ * 也就是说"玩家驾驶"这条路上，原版**刻意只让一侧真正施加位移**。
+ * 我们旧版没有这个门槛，于是**客户端和服务端各驱动一次**，而推进意图是"取走即清"的一格
+ * 队列（{@link com.maidsmart.combat.MaidBroomDrive#takeThrust}）——两边抢同一份意图，
+ * 谁先读到谁动，另一侧读到空 → 归零悬停。表现就是实测反馈的那三条：
+ * 「原地左右鬼畜晃动（客户端动了、服务端同步又把它拽回来）」「被反复拉回」「没有上升高度」。
+ * 现在跟原版同款口径：**客户端一律不驱动，位置等服务端权威同步下来**。
  */
 @Mixin(EntityBroom.class)
 public abstract class EntityBroomMaidTravelMixin {
@@ -73,6 +85,12 @@ public abstract class EntityBroomMaidTravelMixin {
         if (self.getControllingPassenger() instanceof Player) {
             return; // 有玩家在驾驶：驾驶权归玩家与 TLM 自己的 IBroomControl，我们一个字不改
         }
+        if (self.level().isClientSide()) {
+            // v1.3.2 修正：客户端也走这条 travel（见类注释）——谁动都行，但"意图队列"只有一份，
+            // 两边都读就谁都动不了。客户端一律让位，等服务端的权威位置同步。
+            return;
+        }
+        maidsmart$noteTakeover(self, maid);
         try {
             Vec3 thrust = com.maidsmart.combat.MaidBroomDrive.takeThrust(self);
             Vec3 v = thrust == null ? Vec3.ZERO : thrust;
@@ -95,6 +113,35 @@ public abstract class EntityBroomMaidTravelMixin {
             return self.getPassengers().get(0) instanceof EntityMaid m ? m : null;
         } catch (Throwable ignored) {
             return null;
+        }
+    }
+
+    /* ==================== 接管留痕（每把扫帚一次，便于实测验收） ==================== */
+
+    private static final java.util.Set<java.util.UUID> NOTED = new java.util.HashSet<>();
+    private static final int NOTE_CAP = 256;
+
+    /**
+     * 第一次真正接管这把扫帚时记一条——**只在服务端**（客户端在上面就 return 了）。
+     * 用途：实测时一眼分辨"驱动链路到底通没通"。日志里搜「扫帚接管」。
+     */
+    private static void maidsmart$noteTakeover(EntityBroom broom, EntityMaid maid) {
+        try {
+            java.util.UUID id = broom.getUUID();
+            synchronized (NOTED) {
+                if (!NOTED.add(id)) {
+                    return;
+                }
+                if (NOTED.size() > NOTE_CAP) {
+                    NOTED.clear();
+                    NOTED.add(id);
+                }
+            }
+            com.maidsmart.tool.PromaidLog.log("扫帚接管",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 服务端开始接管扫帚驱动（车上 "
+                            + broom.getPassengers().size() + " 人，无玩家驾驶；y="
+                            + String.format(java.util.Locale.ROOT, "%.2f", broom.getY()) + "）");
+        } catch (Throwable ignored) {
         }
     }
 }
