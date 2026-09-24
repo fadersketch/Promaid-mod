@@ -5,7 +5,7 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 STAGING = os.path.join(BASE, 'staging_promaid_neo')
 OUT = os.path.join(BASE, 'out_promaid_neo')
 SRC = os.path.join(BASE, 'promaid_src_neo')
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.2.4-neoforge-1.21.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.2.5-neoforge-1.21.1.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
@@ -108,3 +108,10 @@ with zipfile.ZipFile(JAR_OUT) as z:
     print('MISSING: none')
     print('TOTAL entries:', len(names))
 print('BUILT:', JAR_OUT, os.path.getsize(JAR_OUT), 'bytes')
+
+# v1.2.5 实测六百五十三：与 forge 侧同口径的「jar vs out」一致性闸门
+# （编译了却没进 jar 的内部类 = 客户端 ClassNotFoundException；这里卡死）
+import subprocess, sys
+rc = subprocess.call([sys.executable, os.path.join(BASE, 'verify_jar_classes.py'), JAR_OUT, OUT])
+if rc != 0:
+    raise SystemExit('FATAL: jar 与 out 目录内容不一致（缺 class，发布前必须修）')
