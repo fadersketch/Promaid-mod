@@ -6,7 +6,7 @@ STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
 # 命名规范（v1.2.4 起）：promaid-<版本>-<加载器>-<游戏版本>.jar
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.6-forge-1.20.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.7-forge-1.20.1.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:

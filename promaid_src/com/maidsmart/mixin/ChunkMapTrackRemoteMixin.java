@@ -2,6 +2,7 @@ package com.maidsmart.mixin;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.schedule.RemoteMaidGui;
+import com.maidsmart.schedule.RemoteTrackBridge;
 import net.minecraft.server.level.ServerEntity;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.ServerPlayerConnection;
