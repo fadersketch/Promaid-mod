@@ -102,6 +102,9 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     private int scanCooldown = 0;
     /** 闲逛点节流（v1.2.4 实测六百三十七）：每 40 tick（2 秒）换一个闲逛点 */
     private int wanderCooldown = 0;
+    /** v1.2.5 实测六百五十三：绑定炉子后【最后一次有效动作】的世界时刻——看门狗用。
+     *  有效动作 = 收了成品 / 喂进料 / 补了柴 / 取回了烧不动的东西。 */
+    private long lastProgressGameTime = 0L;
     /** v1.1.0 实测一百六十八：炉子占用表（维度|坐标 → 占用女仆 UUID）——多个女仆同时
      *  在场时各自绑定不同炉子，避免全挤到第一个炉子上（反馈："两个女仆三个炉子，
      *  只有一个炉子工作"）。占用者死亡/换维/停行为时释放（m_6732_ + 扫描时懒清理）。 */
@@ -178,6 +181,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             this.claimFurnace(level, maid, this.furnacePos);
         }
         this.cooldown = 0;
+        this.lastProgressGameTime = gameTime; // v1.2.5 实测六百五十三：看门狗计时起点
         LOGGER.info("cook start: maid={} furnace={}",
                 com.maidsmart.tool.PromaidLog.nameOf(maid), this.furnacePos);
     }
@@ -209,6 +213,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             }
             // v1.1.0 实测一百六十八：绑定成功 → 登记炉子占用（多女仆分散）
             this.claimFurnace(level, maid, this.furnacePos);
+            this.lastProgressGameTime = gameTime; // v1.2.5 实测六百五十三：换炉子重新计时
         }
         BlockState state = level.m_8055_(this.furnacePos);
         if (!(state.m_60734_() instanceof AbstractFurnaceBlock)) {
@@ -252,6 +257,25 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (!maid.isMaidInSittingPose()) {
             maid.m_20124_(net.minecraft.world.entity.Pose.SITTING);
         }
+        // v1.2.5 实测六百五十三【看门狗：最后一道保险】——绑定 + 站桩，却在 60 秒里一次
+        // 有效动作都没有（不喂料、不收成品、不补柴、也没把卡住的东西取回）→ 解绑走人，
+        // 绝不"坐在炉子前永久不动"。有它兜底，三种炉子（含模组炉）任何"匹配得上却喂不进、
+        // 烧不动"的死角都不会再表现成玩家看到的"站在原卡死"。正常烧制时每 2 秒一轮必有
+        // 动作，而原版最长的炉子配方也就 200 tick（10 秒），60 秒（1200 tick）留了 6 倍余量，
+        // 不会误触发（真遇到超慢模组配方：她先走开、成品好了再回来收，不会丢东西）。
+        if (this.lastProgressGameTime <= 0L) {
+            this.lastProgressGameTime = gameTime; // 兜底初始化（start/绑定时已设）
+        }
+        if (gameTime - this.lastProgressGameTime > 1200L) {
+            this.furnacePos = null;
+            this.releaseFurnace();
+            this.standUp(maid);
+            MaidWorkTags.setStill(maid, false);
+            LOGGER.info("cook watchdog: maid={} 绑定炉子 60 秒零进展（喂不进/烧不动）→ 解绑重新找",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid));
+            this.wander(maid);
+            return;
+        }
         if (this.cooldown-- > 0) {
             return;
         }
@@ -262,7 +286,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (be instanceof net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
                 && (be instanceof FurnaceBlockEntity
                         || com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMOKER_BLAST.get())) {
-            this.processFurnace(level, maid, (Container) be, be);
+            // v1.2.5 实测六百五十三：这一轮有有效动作 → 刷新看门狗计时
+            if (this.processFurnace(level, maid, (Container) be, be)) {
+                this.lastProgressGameTime = gameTime;
+            }
         } else {
             // v1.1.0 实测一百六十一：诊断——门控未过（BE 类型不对/开关关），不该发生
             LOGGER.info("cook gate-blocked: maid={} be={} switch={} furnace={} distSq={}",
@@ -366,9 +393,11 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         return true;
     }
 
-    private void processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
+    private boolean processFurnace(ServerLevel level, EntityMaid maid, Container furnace, BlockEntity be) {
         IItemHandler maidInv = maid.getAvailableBackpackInv();
         String beName = be == null ? "null" : be.getClass().getSimpleName();
+        // v1.2.5 实测六百五十三：这一轮有没有"有效动作"（给看门狗计时用）
+        boolean changed = false;
         // 1. 收取成品
         ItemStack result = furnace.m_8020_(2);
         if (!result.m_41619_()) {
@@ -378,9 +407,34 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 furnace.m_6836_(2, left);
             }
             this.logRound(maid, beName, "output", "tookOutput=" + taken);
+            changed = true;
         }
-        // 2. 补食材（槽 0 空）
+        // 2. 补燃料（槽 1 空）——v1.2.5 实测六百五十三：从"最后一步"挪到"喂料之前"。
+        //    旧顺序（先喂料、后补柴）留了一个死法：她背包里有料、却一根柴都没有 →
+        //    料被喂进槽 0、柴补不上、炉子点不着、槽 0 从此非空 → 之后每一轮都跳过喂料
+        //    → 她绑着炉子坐下、永久不动（玩家看到的就是"站在原地卡死"）。
+        //    先补柴，就能在喂之前先知道"有没有柴"：没柴就不喂，料留在她背包里，
+        //    不会变成炉子里的路障。
+        //    v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
+        //    v1.1.0 实测二百四十一：纯燃料优先（燃烧时长评分，煤炭/木炭/烈焰棒等），
+        //    没有纯燃料才退而选可烧制燃料（原木/木板）——不再"用木头烧木头"
+        if (furnace.m_8020_(1).m_41619_()) {
+            ItemStack fuel = this.extractBestFuel(level, maid, maidInv);
+            if (!fuel.m_41619_()) {
+                furnace.m_6836_(1, fuel);
+                changed = true;
+            }
+        }
+        // 3. 补食材（槽 0 空）
         if (furnace.m_8020_(0).m_41619_()) {
+            if (furnace.m_8020_(1).m_41619_()) {
+                // v1.2.5 实测六百五十三：没柴可添 = 喂进去也点不着 → 不喂
+                if (this.logRound(maid, beName, "nofuel",
+                        "槽0空但无柴可添（背包里没有能烧的燃料）——不喂，避免料卡在炉子里")) {
+                    this.dumpInvOnNoFeed(level, maid, maidInv, beName);
+                }
+                return changed;
+            }
             ItemStack input = ItemStack.f_41583_;
             if (be instanceof FurnaceBlockEntity) {
                 // v1.2.5 实测六百五十一：改成**查配方**的白名单提取——旧版这里只按
@@ -406,6 +460,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             if (!input.m_41619_()) {
                 furnace.m_6836_(0, input);
                 this.logRound(maid, beName, "fed", "fedSlot0=" + input);
+                changed = true;
             } else {
                 // v1.1.0 实测一百八十六：迁移式记录（同状态只打一条，防刷屏）——
                 // 进入"无料可喂"状态时记一条 + 背包 dump（30 秒限频）
@@ -414,16 +469,51 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     this.dumpInvOnNoFeed(level, maid, maidInv, beName);
                 }
             }
+            return changed;
         }
-        // 3. 补燃料（槽 1 空）——v1.5.252：不限于煤炭，选背包中数量最多的可燃烧物品
-        // v1.1.0 实测二百四十一：纯燃料优先（燃烧时长评分，煤炭/木炭/烈焰棒等），
-        // 没有纯燃料才退而选可烧制燃料（原木/木板）——不再"用木头烧木头"
-        if (furnace.m_8020_(1).m_41619_()) {
-            ItemStack fuel = this.extractBestFuel(level, maid, maidInv);
-            if (!fuel.m_41619_()) {
-                furnace.m_6836_(1, fuel);
+        // 4. 槽 0 有东西，但这型炉子根本烧不动它 → 取回（v1.2.5 实测六百五十三）
+        //    这正是玩家 1.21.1 实测卡死的那一格：旧版把胡萝卜喂进了熔炉（胡萝卜在原版
+        //    没有任何炉子配方），炉子永远不会消耗它 → 槽 0 从此非空 → 每一轮都跳过喂料
+        //    → 女仆绑着炉子坐下、永久不动（日志实证：喂进胡萝卜后再没出现过第二轮）。
+        //    实测六百五十一只治了"不再喂胡萝卜"，治不了"已经躺在炉子里的"——所以这里
+        //    必须能把烧不动的东西拿回来，否则老存档里那口炉子会继续毒死她。
+        //    判据用 hasRecipeRaw（**不看**玩家那四张清单）：这里问的是"炉子能不能消化
+        //    它"，不是"我准不准放它"——玩家自己放进去正常烧的矿石不能被误取回。
+        ItemStack stuck = furnace.m_8020_(0);
+        if (!canSmeltHere(level, be, stuck)) {
+            ItemStack taken = furnace.m_8016_(0);
+            ItemStack left = ItemHandlerHelper.insertItemStacked(maidInv, taken, false);
+            if (!left.m_41619_() && this.furnacePos != null) {
+                net.minecraft.world.level.block.Block.m_49840_(level, this.furnacePos, left);
             }
+            this.logRound(maid, beName, "evict", "槽0取出烧不动的东西=" + taken);
+            changed = true;
         }
+        return changed;
+    }
+
+    /** v1.2.5 实测六百五十三：这型炉子自己能不能消化这件东西——只看配方，既不看玩家的
+     *  四张清单，也不看那几个开关（都是"炉子能不能烧"的事实问题，不是"我允不允许"）。 */
+    private static boolean canSmeltHere(ServerLevel level, BlockEntity be, ItemStack stack) {
+        if (stack == null || stack.m_41619_()) {
+            return true; // 空槽不算"卡住"
+        }
+        if (be instanceof net.minecraft.world.level.block.entity.BlastFurnaceBlockEntity) {
+            return hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_);
+        }
+        if (be instanceof net.minecraft.world.level.block.entity.SmokerBlockEntity) {
+            return hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44110_);
+        }
+        return hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44108_);
+    }
+
+    /** v1.2.5 实测六百五十三：通用可烧制物（圆石/沙子/模组粗矿等）现在还留着喂料通道吗——
+     *  「熔炉烧矿物」或「烧任何可烧制物」任一开着即可（前者管矿物标签那一档，后者管通用
+     *  回退那一档）。两个都关掉时，选炉/匹配探针就不该再把这些东西算成"有活干"：否则她
+     *  会绑上炉子，而喂料路径全被开关挡住 → 坐在炉前干等（玩家视角同样是"卡死"）。 */
+    private static boolean smeltAnyAllowed() {
+        return com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()
+                || com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ANY.get();
     }
 
     /** v1.2.5 实测六百五十一：从女仆背包取 1 件**真能在这个世界烧**的白名单食材
@@ -973,10 +1063,13 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 if (isWood(it)) {
                     continue; // 木材黑名单（默认不烧，开关开启才烧）
                 }
-                if (hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
+                // v1.2.5 实测六百五十三：「熔炉烧矿物」关掉时高炉喂料路径也是关的
+                // （extractForFurnaceType 里那道门）——探针就别再算它，免得绑上高炉干坐
+                if (com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()
+                        && hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
                     return FurnaceKind.ORE; // 有高炉配方（矿物/粗金属）→ 高炉优先
                 }
-                if (isSmeltable(level, stack)) {
+                if (smeltAnyAllowed() && isSmeltable(level, stack)) {
                     anySmeltable = true; // 仅熔炉可烧物（圆石/沙子等）
                 }
             }
@@ -988,7 +1081,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     s -> isCookFood(level, s))) {
                 return FurnaceKind.FOOD;
             }
-            if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
+            if (com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()
+                    && com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> !s.m_41619_() && isSafeToFeed(s) && !FOODS.contains(s.m_41720_())
                             && !(s.m_41720_() instanceof net.minecraft.world.item.TieredItem)
                             && !(s.m_41720_() instanceof net.minecraft.world.item.ArmorItem)
@@ -998,7 +1092,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                             && hasRecipe(level, s, net.minecraft.world.item.crafting.RecipeType.f_44109_))) {
                 return FurnaceKind.ORE;
             }
-            if (!anySmeltable && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+            if (!anySmeltable && smeltAnyAllowed()
+                    && com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> !s.m_41619_() && isSafeToFeed(s) && !FOODS.contains(s.m_41720_())
                             && !(s.m_41720_() instanceof net.minecraft.world.item.TieredItem)
                             && !(s.m_41720_() instanceof net.minecraft.world.item.ArmorItem)
@@ -1060,12 +1155,14 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     continue; // 木材黑名单
                 }
                 if (bs.m_60734_() instanceof net.minecraft.world.level.block.BlastFurnaceBlock) {
-                    if (hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
+                    // v1.2.5 实测六百五十三：「熔炉烧矿物」关掉 = 高炉喂料门也关（与喂料侧同口径）
+                    if (com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()
+                            && hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.f_44109_)) {
                         return true; // 高炉：有高炉配方可烧物
                     }
                     continue;
                 }
-                if (isSmeltable(level, stack)) {
+                if (smeltAnyAllowed() && isSmeltable(level, stack)) {
                     return true; // 熔炉：任一可烧制物
                 }
             }
@@ -1080,7 +1177,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     s -> isCookFood(level, s))) {
                 return true;
             }
-            if (blast && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+            if (blast && com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ORES.get()
+                    && com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> !s.m_41619_() && isSafeToFeed(s) && !FOODS.contains(s.m_41720_())
                             && !(s.m_41720_() instanceof net.minecraft.world.item.TieredItem)
                             && !(s.m_41720_() instanceof net.minecraft.world.item.ArmorItem)
@@ -1090,7 +1188,8 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                             && hasRecipe(level, s, net.minecraft.world.item.crafting.RecipeType.f_44109_))) {
                 return true;
             }
-            if (!blast && com.maidsmart.tool.MaidExtraContainer.contains(maid,
+            if (!blast && smeltAnyAllowed()
+                    && com.maidsmart.tool.MaidExtraContainer.contains(maid,
                     s -> !s.m_41619_() && isSafeToFeed(s) && !FOODS.contains(s.m_41720_())
                             && !(s.m_41720_() instanceof net.minecraft.world.item.TieredItem)
                             && !(s.m_41720_() instanceof net.minecraft.world.item.ArmorItem)

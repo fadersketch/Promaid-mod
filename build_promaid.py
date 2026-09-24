@@ -6,7 +6,7 @@ STAGING = os.path.join(BASE, 'staging_promaid')
 OUT = os.path.join(BASE, 'out_promaid')
 SRC = os.path.join(BASE, 'promaid_src')
 # 命名规范（v1.2.4 起）：promaid-<版本>-<加载器>-<游戏版本>.jar
-JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.2.4-forge-1.20.1.jar')
+JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.2.5-forge-1.20.1.jar')
 
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
@@ -114,9 +114,9 @@ print('BUILT:', JAR_OUT, os.path.getsize(JAR_OUT), 'bytes')
 # v1.5.283閿涙碍鐎鍝勬倵閼奉亜濮╅妴鎰蓟閸氭垵鍙忛柌蹇嬧偓鎴︾崣鐠?jar vs out閿涘牊妫悧?verify_jar_classes.py 閸欘亝鐓?# 6 娑擃亝瀵氱€规氨琚?閳?SelfPreservationBehavior$BlockCheck 缂傚搫銇戞禒搴㈡弓鐞氼偄褰傞悳?閳?鏉╂劘顢戦弮?findWater
 # 閹虫帒濮炴潪?ClassNotFoundException 瀹曗晜绨濋敍娑氬箛閸?out 閸忋劑鍎?.class 韫囧懘銆忕€涙ê婀稉鏂挎惐鐢奔绔撮懛杈剧礆
 import subprocess, sys
-rc = subprocess.call([sys.executable, os.path.join(BASE, 'verify_jar_classes.py')])
+rc = subprocess.call([sys.executable, os.path.join(BASE, 'verify_jar_classes.py'), JAR_OUT, OUT])
 if rc != 0:
-    raise SystemExit('FATAL: jar 娑?out 閸欏苯鎮滈崗銊╁櫤妤犲矁鐦夐張顏堚偓姘崇箖')
+    raise SystemExit('FATAL: jar 与 out 目录内容不一致（缺 class，发布前必须修）')
 
 
 
