@@ -118,7 +118,7 @@ public final class MaidBroomDrive {
      * （{@link #combatClimbTarget} 完成时把它记在这里），盘旋照这个高度飞，掉不下来。
      */
     private static final Map<UUID, Double> COMBAT_ALT = new HashMap<>();
-    /** 女仆 UUID → 正在去找的那把扫帚（"+扫帚优先"用）→ 这一轮"找扫帚"的起算毫秒 */
+    /** 女仆 UUID → 这一轮"找扫帚"的起算毫秒（去找世界里放着的那把 / 地上掉的那件） */
     private static final Map<UUID, Long> HUNTING = new HashMap<>();
     /** 女仆 UUID → 放弃找扫帚后的冷却到期毫秒（卡墙/够不着时别每 tick 重试） */
     private static final Map<UUID, Long> HUNT_COOLDOWN = new HashMap<>();
@@ -203,14 +203,29 @@ public final class MaidBroomDrive {
     /* ==================== "找扫帚"（扫帚模式的第一优先级） ==================== */
 
     /**
-     * 找扫帚时的搜索半径（格）：她身上没有扫帚时会看这么远内**掉在地上的**扫帚物品。
+     * 找扫帚时的搜索半径（格）：她身上没有扫帚时会看这么远内的**扫帚**。
      * <p>
-     * 【为什么只认"地上的物品"】她背包/精妙背包里的扫帚由 {@link #ensureMounted} 直接取（那
-     * 不叫"找"，叫"取"）；"找"这个字兑现的是玩家把扫帚丢在地上/从箱子里拿出来扔给她之后，
-     * 她自己过去捡。放出的扫帚实体（世界里立着的那把）不归这里管——原版
-     * {@code EntityBroom.m_6138_} 自己会把走到旁边的主人女仆拽上鞍位，我们不去抢玩家的扫帚。
+     * 【"找"的两档（v1.3.4 实测六百五十九，玩家原话："让她去骑世界里已经放着的那把扫帚实体"）】
+     * <pre>
+     *   ① 世界里**已经放着**的那把扫帚实体（{@code EntityBroom}）——走过去骑上（首选）；
+     *   ② 地上掉着的那把扫帚**物品**——走过去收进背包（次选：收进来之后由
+     *      {@link #ensureMounted} 照 v1.3.0 的老规矩放出来骑）。
+     * </pre>
+     * 两档都排在"跟随主人"之前——没扫帚时她不会先去跟主人（见 {@link #seekBroom}）。
+     * <p>
+     * 【哪些扫帚不碰】背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted}
+     * 直接抽出来放骑，这里不重复；**已经有乘客的扫帚不抢**（玩家正骑着的那把，或别的女仆
+     * 已经骑上的那把）——只认空着的那种。
      */
     private static final double HUNT_RADIUS = 16.0;
+    /**
+     * 骑上判定（格）：走到这么近就直接上鞍。
+     * <p>
+     * 比 {@link #PICKUP_RANGE} 稍微放宽一点：扫帚实体的碰撞箱只有一格多，而"走到底"这件事
+     * 是 TLM 的导航在做的（{@code MoveToTargetSink} 的到点精度本身就有余量）；2.5 格既够
+     * 判"她已经走到它跟前了"，又不会让她站在两格外就凭空瞬移上去。
+     */
+    private static final double MOUNT_RANGE = 2.5;
     /** 捡起判定（格）：走到这么近就直接收进背包（不必等原版拾取） */
     private static final double PICKUP_RANGE = 2.0;
     /** 找扫帚的耐心（毫秒）：这么久还没走到（卡墙/够不着）就放弃这一轮，改报缺件 */
@@ -642,15 +657,15 @@ public final class MaidBroomDrive {
     /**
      * 她身上没有扫帚时：**去找一把**——玩家原话"扫帚模式应该优先找扫帚，而不是优先跟随主人"。
      *
-     * <p>【"找"指什么】只看**掉在地上的扫帚物品**（{@code ItemEntity} +
-     * {@link MaidBroomKit#isBroomItem}）。背包/精妙背包里躺着的那不叫"找"叫"取"——归
-     * {@link #ensureMounted} 直接抽出来放骑，这里不重复。世界里**已经放出来的扫帚实体**
-     * 也不去抢：原版 {@code EntityBroom.m_6138_}（它自己 tick 里的那一段）本来就会把走到
-     * 旁边的主人女仆拽上鞍位——我们要做的就是"让她走过去"，而不是替她把玩家的扫帚骑走。
+     * <p>【"找"指什么（v1.3.4 实测六百五十九，玩家原话："让她去骑世界里已经放着的那把扫帚实体"）】
+     * 按玩家点名的那一档来：<b>世界里已经放着的那把扫帚实体</b>（{@code EntityBroom}）——
+     * 她会走过去骑上它，见 {@link #rideWorldBroom}。实在没有实体可骑，才退一步找
+     * **地上掉的扫帚物品**（v1.3.3 的老规矩：收进背包之后由 {@link #ensureMounted} 放出来骑）。
+     * 背包/精妙背包里躺着的那不叫"找"叫"取"——归 {@link #ensureMounted} 直接抽出来放骑。
      *
-     * <p>【怎么找】近了（{@link #PICKUP_RANGE}）直接收进背包；远了就把原版寻路目标指向它、
-     * 每 tick 重写一次（与其它行为同款：真正执行的是 TLM 的 {@code MoveToTargetSink}）。
-     * 超过 {@link #HUNT_GIVE_UP_MS} 还没到（卡墙、在水里、够不着）就放弃这一轮并进
+     * <p>【怎么找】近了直接上鞍 / 直接收进背包；远了就把原版寻路目标指向它、每 tick 重写一次
+     * （与其它行为同款：真正执行的是 TLM 的 {@code MoveToTargetSink}）。超过
+     * {@link #HUNT_GIVE_UP_MS} 还没到（卡墙、在水里、够不着）就放弃这一轮并进
      * {@link #HUNT_COOLDOWN} 冷却——免得她对着一个拿不到的扫帚走到天荒地老。
      *
      * @return true = 这一 tick 正在为"找扫帚"做事（调用方这 tick 先别管跟随/战斗）
@@ -659,17 +674,21 @@ public final class MaidBroomDrive {
         if (level == null || maid == null) {
             return false;
         }
+        UUID id = maid.m_20148_();
         if (MaidBroomKit.hasBroomItem(maid) || MaidBroomKit.ridingBroom(maid) != null) {
-            HUNTING.remove(maid.m_20148_()); // 已经有了：交给 ensureMounted 去"取出来骑上"
+            HUNTING.remove(id); // 已经有了：交给 ensureMounted 去"取出来骑上"
             return false;
         }
-        net.minecraft.world.entity.item.ItemEntity drop = nearestDroppedBroom(level, maid);
-        if (drop == null) {
-            HUNTING.remove(maid.m_20148_());
+        // ① 世界里放着的那把（首选）→ ② 地上掉的那件（次选）。每 tick 重选一次最近的，
+        //    所以走着走着她旁边又出现一把更近的，她会自然改道（与旧版同一个口径）。
+        EntityBroom world = nearestWorldBroom(level, maid);
+        net.minecraft.world.entity.item.ItemEntity drop =
+                world == null ? nearestDroppedBroom(level, maid) : null;
+        if (world == null && drop == null) {
+            HUNTING.remove(id);
             return false;
         }
         long now = System.currentTimeMillis();
-        UUID id = maid.m_20148_();
         Long cool = HUNT_COOLDOWN.get(id);
         if (cool != null) {
             if (cool > now) {
@@ -677,8 +696,14 @@ public final class MaidBroomDrive {
             }
             HUNT_COOLDOWN.remove(id);
         }
-        double d = maid.m_20270_(drop);
-        if (d <= PICKUP_RANGE) {
+        net.minecraft.world.entity.Entity goal = world != null ? world : drop;
+        double d = maid.m_20270_(goal);
+        if (world != null) {
+            if (d <= MOUNT_RANGE) {
+                HUNTING.remove(id);
+                return rideWorldBroom(maid, world);
+            }
+        } else if (d <= PICKUP_RANGE) {
             HUNTING.remove(id);
             return pickUpBroom(maid, drop);
         }
@@ -686,8 +711,10 @@ public final class MaidBroomDrive {
         if (since == null) {
             HUNTING.put(id, now);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 身上没有扫帚 → 发现掉在地上的扫帚（" + fmt(Math.sqrt(maid.m_20280_(drop)))
-                    + " 格外），过去捡（这就是「扫帚优先」那一档）");
+                    + " 身上没有扫帚 → 发现" + (world != null
+                            ? "世界里放着的那把扫帚（" + fmt(Math.sqrt(maid.m_20280_(world))) + " 格外），过去骑"
+                            : "掉在地上的扫帚（" + fmt(Math.sqrt(maid.m_20280_(drop))) + " 格外），过去捡")
+                    + "——这就是「扫帚优先」那一档");
         } else if (now - since > HUNT_GIVE_UP_MS) {
             HUNTING.remove(id);
             HUNT_COOLDOWN.put(id, now + HUNT_GIVE_UP_MS);
@@ -698,11 +725,77 @@ public final class MaidBroomDrive {
         }
         try {
             // 每 tick 重写寻路目标（与其它行为同款；真正的移动由 TLM 的导航执行）
-            net.minecraft.world.entity.ai.behavior.BehaviorUtils.m_22617_(maid, drop.m_20183_(),
+            net.minecraft.world.entity.ai.behavior.BehaviorUtils.m_22617_(maid, goal.m_20183_(),
                     HUNT_SPEED, 1);
         } catch (Throwable ignored) {
         }
         return true;
+    }
+
+    /**
+     * 她附近**世界里放着的**扫帚实体（{@code EntityBroom}，按距离取最近的一把；没有则 null）。
+     *
+     * <p>【为什么"空着的"才算】TLM 的扫帚最多两个乘客：玩家驾驶时玩家在第一乘客位，TLM 还会
+     * 把主人的女仆拽上第二乘客位；别的女仆也可能是自己骑上去的。这两种都不该被抢——她是去找
+     * "没人用的那把"。判据就用原版自己的 {@code getPassengers().isEmpty()}，不另立一套。
+     */
+    private static EntityBroom nearestWorldBroom(ServerLevel level, EntityMaid maid) {
+        try {
+            Vec3 p = maid.m_20182_();
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    p.f_82479_ - HUNT_RADIUS, p.f_82480_ - HUNT_RADIUS, p.f_82481_ - HUNT_RADIUS,
+                    p.f_82479_ + HUNT_RADIUS, p.f_82480_ + HUNT_RADIUS, p.f_82481_ + HUNT_RADIUS);
+            EntityBroom best = null;
+            double bestD = Double.MAX_VALUE;
+            for (EntityBroom b : level.m_6443_(EntityBroom.class, box,
+                    x -> x.m_6084_() && x.m_20197_().isEmpty())) {
+                double d = maid.m_20280_(b);
+                if (d < bestD) {
+                    bestD = d;
+                    best = b;
+                }
+            }
+            return best;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 骑上世界里放着的那把扫帚。
+     * <p>
+     * 【与 {@link #ensureMounted} 的区别】那把**不是我们放出去的**：所以不进 {@link #DEBT}
+     * ——收工时只下鞍、扫帚原样留在世界里（见 {@link #dismount} 里 {@code debt == null} 那一支），
+     * 也就不会把它收进背包、更不会删掉它。
+     * <p>
+     * 【骑上即起"起飞相位"】与"取出自己那把"同款：玩家要求"拿到扫帚就原地往上飞 1 格"
+     * （见 {@link #takeoffTarget}）——不管扫帚是买的还是捡的，拿到手都该腾空。
+     */
+    private static boolean rideWorldBroom(EntityMaid maid, EntityBroom broom) {
+        try {
+            if (broom == null || maid == null || !broom.m_6084_()) {
+                return false;
+            }
+            if (!broom.m_20197_().isEmpty()) {
+                return false; // 这一 tick 刚有人骑上去：让给它，下一 tick 再看别的/再看它
+            }
+            if (broom.m_9236_() != maid.m_9236_()) {
+                return false;
+            }
+            // force = true：与 ensureMounted 同款（原版不带 force 的 startRiding 要求她此刻
+            // 不是任何载具的乘客，坐椅子/坐别的载具时恒返回 false，那就永远上不去）
+            if (!maid.m_7998_(broom, true)) {
+                return false;
+            }
+            ORBIT.remove(maid.m_20148_());
+            startClimb(maid, TAKEOFF, maid.m_20186_() + RISE_BLOCKS + CLIMB_LEAD);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 骑上了世界里放着的那把扫帚（不是我们放的：收工只下鞍、扫帚留在原地）"
+                    + " → 原地抬起 " + RISE_BLOCKS + " 格");
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 她附近掉在地上的扫帚物品（按距离取最近的一把；没有则 null） */
