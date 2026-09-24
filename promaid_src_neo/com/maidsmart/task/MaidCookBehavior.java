@@ -463,13 +463,112 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /* ==================== v1.2.5 实测六百五十二：烧制清单（面板可编辑的四张名单） ==================== */
+
+    /**
+     * 四张清单（默认全空 = 行为与旧版**一字不变**）：
+     * 只烧这些 / 禁止烧制 / 只用这些燃料 / 禁用燃料。
+     *
+     * ── 为什么要有 ──
+     * 以前"她该烧什么、该拿什么当柴"全写在代码里（食材白名单 + 矿物标签 + 通用回退 + 按燃烧时长
+     * 自动评分），玩家想"别拿我的钻石去烧""只许用煤炭当柴"只能改代码。挖矿/伐木/喂食都有
+     * 面板可编辑名单，烧制独缺一套——这四张表把它补齐（面板：生产与工作 → 烹饪与酿造 → 烧制清单）。
+     *
+     * ── 语义（一条说清）──
+     * **禁止永远优先**；**允许清单非空 = 只在这些里挑**，留空 = 自动（旧行为）。
+     *
+     * ── 一条硬约束：允许清单只"缩小"，绝不"放开" ──
+     * 判定挂在 {@link #hasRecipeRaw} **之上**（见 {@link #hasRecipe}），所以清单里就算写了一个
+     * 原版根本烧不动的物品，也不会让她把炉子占住——那正是实测六百五十一 刚修掉的毛病
+     *（"抱着一个烧不动的炉子卡死不动"）。清单改的是"挑哪些"，不是"能不能烧"。
+     *
+     * ── 生效时机 ──
+     * 与挖矿矿表/伐木木材表同一套路：面板保存时 {@link #loadCookLists()} 重建，
+     * 首次用到时懒加载（配置在静态初始化期读不到）。手改 toml 文件后需重开面板或重启游戏。
+     */
+    private static final java.util.Set<Item> SMELT_ALLOW = new java.util.HashSet<>();
+    private static final java.util.Set<Item> SMELT_DENY = new java.util.HashSet<>();
+    private static final java.util.Set<Item> FUEL_ALLOW = new java.util.HashSet<>();
+    private static final java.util.Set<Item> FUEL_DENY = new java.util.HashSet<>();
+    /** 是否已装载（照 MaidMineBehavior.ensureCustomOres 的懒加载套路） */
+    private static boolean cookListsLoaded = false;
+
+    /** 面板保存时调用：清空并按注册名重建四张清单（与挖矿 loadCustomOres / 伐木 loadCustomWoods 同一套路） */
+    public static void loadCookLists() {
+        try {
+            SMELT_ALLOW.clear();
+            SMELT_DENY.clear();
+            FUEL_ALLOW.clear();
+            FUEL_DENY.clear();
+            fillCookList(SMELT_ALLOW, com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_ALLOW::get);
+            fillCookList(SMELT_DENY, com.maidsmart.config.MaidSmartConfig.MISC_COOK_SMELT_DENY::get);
+            fillCookList(FUEL_ALLOW, com.maidsmart.config.MaidSmartConfig.MISC_COOK_FUEL_ALLOW::get);
+            fillCookList(FUEL_DENY, com.maidsmart.config.MaidSmartConfig.MISC_COOK_FUEL_DENY::get);
+            cookListsLoaded = true;
+        } catch (Throwable ignored) {
+            // 配置尚未就绪：四张表保持空（= 全自动判定），下次用到再试
+        }
+    }
+
+    private static void ensureCookLists() {
+        if (!cookListsLoaded) {
+            loadCookLists();
+        }
+    }
+
+    /** 把配置里的 id 清单解析成 Item 集合（解析不出来的条目静默跳过，与挖矿矿表同口径） */
+    private static void fillCookList(java.util.Set<Item> out,
+                                     java.util.function.Supplier<java.util.List<? extends String>> cfg) {
+        try {
+            for (String id : cfg.get()) {
+                if (id == null || id.isBlank()) {
+                    continue;
+                }
+                Item it = net.minecraft.core.registries.BuiltInRegistries.ITEM.get(ResourceLocation.parse(id.trim()));
+                if (it != null) {
+                    out.add(it);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 该物品是否允许当**原料**进炉子（禁止优先；允许清单非空 = 只认清单） */
+    private static boolean smeltListed(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        ensureCookLists();
+        Item it = stack.getItem();
+        if (SMELT_DENY.contains(it)) {
+            return false;
+        }
+        return SMELT_ALLOW.isEmpty() || SMELT_ALLOW.contains(it);
+    }
+
+    /** 该物品是否允许当**燃料**（禁止优先；允许清单非空 = 只认清单） */
+    private static boolean fuelListed(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        ensureCookLists();
+        Item it = stack.getItem();
+        if (FUEL_DENY.contains(it)) {
+            return false;
+        }
+        return FUEL_ALLOW.isEmpty() || FUEL_ALLOW.contains(it);
+    }
+
     /** v1.1.0 实测一百五十七：当前世界是否有该物品的指定类型炉子配方（熔炉/高炉/
-     *  烟熏炉，用配方管理器查询，模组自定义配方同样生效）。probe 声明为 Container
-     *  类型——getRecipeFor 的泛型 C 按实参静态类型推断，SimpleContainer 推不出
-     *  Recipe<Container> 的约束。 */
+     *  烟熏炉，用配方管理器查询，模组自定义配方同样生效）。
+     *
+     *  v1.2.5 实测六百五十二：这是**不看烧制清单**的原始判定——只有燃料那条路
+     *  （判断"它本来算不算可烧制燃料"）用它：那里问的是"它自己能不能熔"，
+     *  不该被玩家的原料白名单/黑名单改写，否则"把木材列进禁止烧制"会反过来
+     *  把它算成"纯燃料"优先烧掉，与玩家意图正好相反。 */
     private static <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
-    boolean hasRecipe(ServerLevel level, ItemStack stack,
-                      net.minecraft.world.item.crafting.RecipeType<T> type) {
+    boolean hasRecipeRaw(ServerLevel level, ItemStack stack,
+                         net.minecraft.world.item.crafting.RecipeType<T> type) {
         try {
             return level.getRecipeManager()
                     .getRecipeFor(type, new net.minecraft.world.item.crafting.SingleRecipeInput(stack), level)
@@ -477,6 +576,16 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         } catch (Exception ignored) {
             return false;
         }
+    }
+
+    /** v1.2.5 实测六百五十二：**原料判定总闸** = 烧制清单 + 原始配方。
+     *  所有"她能不能把这个放进炉子"的路径最终都落到这里（食材/矿物/通用回退/烟熏炉/高炉，
+     *  以及选炉型与绑定成立性那几处探针），所以清单只作用于**原料侧**；
+     *  燃料侧另有 {@link #fuelListed}，两条线互不干扰。 */
+    private static <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
+    boolean hasRecipe(ServerLevel level, ItemStack stack,
+                      net.minecraft.world.item.crafting.RecipeType<T> type) {
+        return smeltListed(stack) && hasRecipeRaw(level, stack, type);
     }
 
     private static boolean isSmeltable(ServerLevel level, ItemStack stack) {
@@ -714,7 +823,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         // 先请 TLM 从精妙背包/旅行者背包搬一组燃料进来（pull 先扫她自己的背包）
         try {
             com.maidsmart.tool.MaidExtraContainer.pull(maid,
-                    s -> !s.isEmpty() && isSafeToFeed(s)
+                    s -> !s.isEmpty() && isSafeToFeed(s) && fuelListed(s)
                             && net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
                             .isFuel(s), -1);
         } catch (Throwable ignored) {
@@ -725,7 +834,9 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             ItemStack stack = maidInv.getStackInSlot(i);
             // v1.1.0 实测三百四十九：燃料侧同拦——附魔物品（经验修补的装备/附魔书/
             // 药水箭等）和用旧的耐久物品绝不当柴火烧
-            if (stack.isEmpty() || !isSafeToFeed(stack) || !net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
+            // v1.2.5 实测六百五十二：再过一层烧制清单（禁用燃料永远优先；指定燃料非空则只认清单）
+            if (stack.isEmpty() || !isSafeToFeed(stack) || !fuelListed(stack)
+                    || !net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity
                     .isFuel(stack)) {
                 continue;
             }
@@ -741,7 +852,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         int bestScore = Integer.MIN_VALUE;
         // 第一轮：纯燃料（可燃烧且不可烧制）——煤炭/木炭/烈焰棒/干海带块/熔岩桶
         for (Item it : counts.keySet()) {
-            if (isSmeltable(level, new ItemStack(it))) {
+            // v1.2.5 实测六百五十二：这里问的是"它自己能不能熔"，走**不看清单**的原始判定——
+            // 否则"把木材列入禁止烧制"会把它算成纯燃料反而优先烧掉，与玩家意图相反
+            if (hasRecipeRaw(level, new ItemStack(it),
+                    net.minecraft.world.item.crafting.RecipeType.SMELTING)) {
                 continue; // 可烧制燃料（原木/木板/树苗）留到第二轮兜底
             }
             int score = burnTicks.getOrDefault(it, 0) * 100000 + counts.get(it);
