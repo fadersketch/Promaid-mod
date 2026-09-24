@@ -5,7 +5,6 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.behavior.Behavior;
-import net.minecraft.world.phys.Vec3;
 
 import java.util.Collections;
 import java.util.Map;
@@ -15,15 +14,20 @@ import java.util.WeakHashMap;
 /**
  * v1.3.0「扫帚模式」的行为（两树镜像）——骑扫帚、起飞悬停、接敌爬升、盘旋、照搬远程空袭开火。
  *
- * ── 每 tick 的相位（实测六百五十六，按玩家原话定的顺序）──
+ * ── 每 tick 的相位（实测六百五十六定的顺序，v1.3.3 把"找扫帚"提到最前）──
  * <pre>
- *   ① 缺件        → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
- *   ② 骑上        → 从她背包取一把扫帚放出来骑上（已骑着就跳过；她坐在椅子上也能换过来，
+ *   ① 总开关关  → 下扫帚 + 气泡（与旧版一致）
+ *   ①.5 扫帚优先 → 身上没扫帚也没骑着：**先去找**（地上掉的那把，MaidBroomDrive.seekBroom）；
+ *                    找不到才报缺件待命。这一档排在"跟随主人"之前——玩家原话
+ *                    "扫帚模式应该优先找扫帚，而不是优先跟随主人"。
+ *   ② 缺件      → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
+ *   ③ 骑上      → 从她背包取一把扫帚放出来骑上（已骑着就跳过；她坐在椅子上也能换过来，
  *                    走 force 骑乘——实测六百五十七）
- *   ②.4 玩家在开  → 让位：只开火，不写推进意图、不开爬升相位（驾驶权在玩家，见 drivenByPlayer）
- *   ②.5 起飞相位  → 原地往上抬 1 格（头顶顶住就悬停在此处）
- *   ③ 接敌        → 先向上爬 8 格（顶住就悬停在此处）→ 再绕着她盘旋 + 开火
- *   ④ 平时        → 按"飞行跟随"同款的起手/收手距离跟主人（默认开；扫帚没耐久）
+ *   ③.4 玩家在开 → 让位：只开火，不写推进意图、不开爬升相位（驾驶权在玩家，见 drivenByPlayer）
+ *   ③.5 起飞相位 → 原地往上抬 1 格（头顶顶住就悬停在此处）
+ *   ④ 接敌      → 先爬到**敌上 8 格**（顶住就按实际高度），并把"这一场遭遇的盘旋高度"
+ *                    定下来（v1.3.3：以前爬升与盘旋两套高度不接，才会"升上去又掉下来"）
+ *   ⑤ 平时      → 按"飞行跟随"同款的起手/收手距离跟主人（默认开；扫帚没耐久）
  * </pre>
  * 两个爬升相位与"怎么飞"全部在 {@link MaidBroomDrive}（速度公式照搬 TLM 给玩家驾驶写的
  * {@code PlayerBroomControl}，一分不加）。
@@ -96,13 +100,34 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         if (maid == null || !maid.isAlive()) {
             return;
         }
-        // ① 未激活（缺扫帚 / 缺远程武器 / 缺弹药 / 总开关关了）→ 下来、报缺件
+        // ① 总开关关掉 → 整段不激活（与旧版一致：下扫帚 + 报缺件；连缺件气泡都照旧，
+        //   免得"关掉开关她还在喊缺件"这种状态变化引入新的困惑）
+        if (!MaidBroomKit.enabled()) {
+            MaidBroomDrive.dismount(maid);
+            notifyNotReady(maid, gameTime);
+            return;
+        }
+        // ②【扫帚优先·v1.3.3】她身上没有扫帚、也没骑着 → **先去找一把**，再谈别的。
+        // 玩家原话："扫帚模式应该优先找扫帚，而不是优先跟随主人。" 所以这一条排在
+        // ③骑上、④接敌、⑤跟随**全部**之前：没扫帚时她不会去跟主人（那一段根本走不到），
+        // 而是走过去把地上掉的那把扫帚捡起来（见 MaidBroomDrive.seekBroom：
+        // 主手/副手/背包/精妙背包里的由 ensureMounted 直接取，这里只兑现"找"——
+        // 地上掉着的扫帚）。找不到（或找了很久够不着）才报缺件待命。
+        if (!MaidBroomKit.hasBroomItem(maid) && !MaidBroomKit.isRidingBroom(maid)) {
+            MaidBroomDrive.dismount(maid);
+            if (MaidBroomDrive.seekBroom(level, maid)) {
+                return; // 这一 tick 正在去找/刚捡起来——本 tick 不做别的
+            }
+            notifyNotReady(maid, gameTime);
+            return;
+        }
+        // ③ 未激活（缺远程武器 / 缺弹药）→ 下来、报缺件
         if (!MaidBroomKit.isModeActive(maid)) {
             MaidBroomDrive.dismount(maid);
             notifyNotReady(maid, gameTime);
             return;
         }
-        // ② 骑上（身上有扫帚物品就取出来放一把；已经骑着就原样返回）
+        // ④ 骑上（身上有扫帚物品就取出来放一把；已经骑着就原样返回）
         EntityBroom broom = MaidBroomDrive.ensureMounted(level, maid);
         if (broom == null) {
             notifyNotReady(maid, gameTime);
@@ -110,61 +135,73 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
         clearNotReady(maid, gameTime);
 
-        // ②.4 玩家在开这把扫帚 → 我们只开火，不碰飞行（见 drivenByPlayer 的注释：
+        // ④.4 玩家在开这把扫帚 → 我们只开火，不碰飞行（见 drivenByPlayer 的注释：
         // mixin 那边"有玩家驾驶就一个字不改"，这里跟着让位，否则每 tick 都会写一份没人用的
         // 推进意图、还会把爬升相位开起来每 tick 判"顶头"刷日志）
         if (MaidBroomDrive.drivenByPlayer(broom)) {
             MaidBroomDrive.clearClimb(maid);
             LivingEntity driven = currentTarget(maid);
             if (driven != null && driven.isAlive() && driven.level() == level) {
-                MaidBroomDrive.faceYaw(broom, yawTo(maid, driven));
+                MaidBroomDrive.faceYawTo(broom, driven);
                 MaidFlightCombatBehavior.fireRanged(maid, driven, maid.getUUID(), gameTime);
             }
             notePlayerDriving(maid, gameTime);
             return;
         }
 
-        // ②.5 起飞相位：原地往上抬 1 格再到别的地方去（玩家原话"如果拿到了扫帚，原地往上飞 1 格
+        // ④.5 起飞相位：原地往上抬 1 格再到别的地方去（玩家原话"如果拿到了扫帚，原地往上飞 1 格
         // 悬停（头顶如果被顶住了那就悬停在此处）"）。这一段不转向、不开火——就是那一下"腾空"。
+        // 【v1.3.3：走 steerVerticalTo（扫帚坐标），不再拿她的坐标当目标点】见 Drive 里那段因果。
         Double riseY = MaidBroomDrive.takeoffTarget(maid);
         if (riseY != null) {
-            MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), riseY, maid.getZ()));
+            MaidBroomDrive.steerVerticalTo(maid, riseY);
             return;
         }
 
-        // ③ 有目标 → 先向上爬 8 格（顶头即就地悬停）→ 再绕着敌人盘旋 + 照搬远程空袭开火
+        // ⑤ 有目标 → 先爬到它上方 8 格（顶头即就地悬停，并按实际高度定下本场盘旋高度）
+        //    → 再绕着敌人盘旋 + 照搬远程空袭开火
         LivingEntity target = currentTarget(maid);
         if (target != null && target.isAlive() && target.level() == level) {
             faceTarget(maid, target);
-            // 朝向改成"看着目标"而不是"朝着速度方向"：她在绕着目标侧移，脸得对着它才像在射击
-            MaidBroomDrive.faceYaw(broom, yawTo(maid, target));
             Double climbY = MaidBroomDrive.combatClimbTarget(maid, target);
             if (climbY != null) {
-                MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), climbY, maid.getZ()));
+                MaidBroomDrive.steerVerticalTo(maid, climbY);
+                // 朝向放在 steerTo **之后**（steerTo 会用"速度方向"覆盖朝向；爬升是纯垂直、
+                // 本来不改朝向，但顺序摆对了以后"不朝向目标"这一类 bug 不会再回来）
+                MaidBroomDrive.faceYawTo(broom, target);
                 MaidFlightCombatBehavior.fireRanged(maid, target, maid.getUUID(), gameTime);
                 return;
             }
             MaidBroomDrive.steerTo(maid, MaidBroomDrive.combatPoint(maid, target));
-            MaidBroomDrive.faceYaw(broom, yawTo(maid, target));
+            // 朝向改成"看着目标"而不是"朝着速度方向"：她在绕着目标侧移，脸得对着它才像在射击。
+            // **必须在 steerTo 之后**（前面那一版只有盘旋这一支摆对了位置，跟随那一支摆反了，
+            // 于是每 tick 被速度方向盖掉 —— 见下面 ⑥ 的注释）。
+            MaidBroomDrive.faceYawTo(broom, target);
             MaidFlightCombatBehavior.fireRanged(maid, target, maid.getUUID(), gameTime);
             return;
         }
 
-        // ④ 没目标 → 平时：悬停在主人身边（配置可关；关掉就原地悬停待命）
-        MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位作废，下次接敌重新爬
+        // ⑥ 没目标 → 平时：悬停在主人身边（配置可关；关掉就原地悬停待命）
+        MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
         LivingEntity owner = ownerOf(maid);
         if (followEnabled() && owner != null && owner.isAlive() && owner.level() == level) {
             faceTarget(maid, owner);
-            MaidBroomDrive.faceYaw(broom, yawTo(maid, owner));
             if (shouldFollow(maid, owner)) {
                 MaidBroomDrive.steerTo(maid, MaidBroomDrive.followPoint(maid, owner));
             } else {
-                // 迟滞带内：留在原地悬停（不必为了贴住主人一直微调位置）
-                MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), maid.getY(), maid.getZ()));
+                // 迟滞带内：**留在原地悬停**。v1.3.3：目标点取扫帚自己的位置
+                // （hoverInPlace），不是她的——她是乘客、座位在朝向后方 0.5 格，
+                // 用她的坐标会永远差半格、被一路推着走（玩家反馈的"主人在旁边时
+                // 她在空中不停地旋转"就是这个回路，详见 MaidBroomDrive.hoverInPlace）。
+                MaidBroomDrive.hoverInPlace(maid);
             }
+            // 【顺序】朝向必须写在 steerTo **之后**：写在前面会被 steerTo 里的
+            // "朝向 = 速度方向"整条盖掉，而"速度方向"对"原地悬停"那一支恰好是背对主人的
+            // ——每 tick 翻 180°（那个"打转"的另一半原因）。
+            MaidBroomDrive.faceYawTo(broom, owner);
         } else {
-            // 原地悬停：目标点就是当前位置 → steerTo 走到"到点"那一支，速度收干
-            MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), maid.getY(), maid.getZ()));
+            // 原地悬停：目标点就是扫帚当前位置 → steerTo 走到"到点"那一支，速度收干
+            MaidBroomDrive.hoverInPlace(maid);
         }
     }
 
@@ -252,20 +289,18 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * MC 的 yaw 约定：朝向 (dx, dz) 的偏航角 = {@code -atan2(dx, dz)} 换算成度——
-     * 与凋灵那行 {@code setYRot(-(float)Mth.atan2(d.x, d.z) * 57.295776F)} 同一个公式。
-     */
-    private static float yawTo(EntityMaid maid, LivingEntity target) {
-        return (float) (-Math.atan2(target.getX() - maid.getX(), target.getZ() - maid.getZ()) * 57.295776F);
-    }
-
-    /**
      * 让她**看着**目标（纯表现：子弹方向一直是按坐标算的，不看她的朝哪）。
      *
      * 【为什么两只都设】她骑在扫帚上，而 {@code EntityBroom} 本身是 {@code LivingEntity}——
      * MC 对"载具是 LivingEntity 的乘客"有一套"身体朝向跟着载具"的逻辑，所以光设她的 yRot
-     * 可能每 tick 被覆写回去。**载具的朝向**由 {@link MaidBroomDrive#faceYaw} 设（那一份是稳的），
+     * 可能每 tick 被覆写回去。**载具的朝向**由 {@link MaidBroomDrive#faceYawTo} 设（那一份是稳的），
      * 这里再补她的偏航与俯仰：俯仰（抬头/低头看目标）只有她自己的 XRot 能表达。
+     *
+     * <p>【v1.3.3：扫帚的朝向不在本类算了】原先这里另有一个 {@code yawTo(maid, target)}
+     * 负责扫帚的偏航（从**她的**位置算）。现在扫帚的朝向统一走
+     * {@link MaidBroomDrive#faceYawTo}（从**扫帚的**位置算）——"从她的位置算朝向"会把
+     * "她动→朝向动→她再动"连成一个自引用回路，那正是"主人在旁边她就不停打转"的一半原因。
+     * 同一份口径只留一处。
      */
     private static void faceTarget(EntityMaid maid, LivingEntity target) {
         try {

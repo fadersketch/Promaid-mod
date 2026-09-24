@@ -687,6 +687,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                         // 战斗/自保，高于施工区避让；自动喂食治疗主人 / 黑暗插火把 / 共享盾牌
                         Pair.of(190, new com.maidsmart.combat.MaidAidOwnerBehavior()),
                         Pair.of(185, new com.maidsmart.combat.MaidTorchPlacerBehavior()),
+                        // v1.3.3【防刷怪：发现刷怪笼就插火把】——比被动插火把（185）高一位：
+                        // 玩家原话里的"优先"落在这一格上（她发现刷怪笼会先过去把它按哑，再回去
+                        // 干自己的活）。比自动装备（200）低、比战斗/自保那一群更低——打架和逃命
+                        // 永远排在插火把前面。开关 combat.spawnerTorch.enable，半径同板块可配。
+                        Pair.of(186, new com.maidsmart.combat.MaidSpawnerTorchBehavior()),
                         Pair.of(180, new com.maidsmart.combat.MaidShieldShareBehavior()),
                         // v1.1.0 实测一百八十三：空闲散步（反馈："增加女仆散步的频率和速度"）
                         //——低于 TLM core 最高 99 与上面全部行为，只在真正空闲时生效

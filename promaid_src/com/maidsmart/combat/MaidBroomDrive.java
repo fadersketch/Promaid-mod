@@ -107,6 +107,21 @@ public final class MaidBroomDrive {
     private static final Map<UUID, Double> ORBIT = new HashMap<>();
     /** 女仆 UUID → 当前爬升相位（起飞 / 接敌） */
     private static final Map<UUID, Climb> CLIMB = new HashMap<>();
+    /**
+     * 女仆 UUID → **这一场遭遇的盘旋高度**（相对敌人脚底的格数）。
+     *
+     * <p>【为什么需要它（v1.3.3 实测六百五十八，玩家原话："遇到敌人的时候会先上升 8 个，
+     * 但是随后又慢慢掉下来了，那这样子的意义在哪里？"）】旧版 {@link #combatPoint} 的高度
+     * 写死成 {@code 目标脚底 + combat.broomHover}（默认 2），而接敌爬升是"在她自己脚下 +8"——
+     * 两处对高度的口径不一样，于是"先爬 8 格、再滑回敌上 2 格"，爬升白爬。
+     * 现在把两处接起来：**爬升相位的唯一职责就是决定这一场遭遇的盘旋高度**
+     * （{@link #combatClimbTarget} 完成时把它记在这里），盘旋照这个高度飞，掉不下来。
+     */
+    private static final Map<UUID, Double> COMBAT_ALT = new HashMap<>();
+    /** 女仆 UUID → 正在去找的那把扫帚（"+扫帚优先"用）→ 这一轮"找扫帚"的起算毫秒 */
+    private static final Map<UUID, Long> HUNTING = new HashMap<>();
+    /** 女仆 UUID → 放弃找扫帚后的冷却到期毫秒（卡墙/够不着时别每 tick 重试） */
+    private static final Map<UUID, Long> HUNT_COOLDOWN = new HashMap<>();
 
     /* ==================== 诊断留痕（只写日志，不参与任何判定） ==================== */
 
@@ -184,6 +199,24 @@ public final class MaidBroomDrive {
     private static final double FOLLOW_DIST = 3.5;
     /** 平时跟随的高度（格，相对主人脚下） */
     private static final double FOLLOW_HOVER = 2.0;
+
+    /* ==================== "找扫帚"（扫帚模式的第一优先级） ==================== */
+
+    /**
+     * 找扫帚时的搜索半径（格）：她身上没有扫帚时会看这么远内**掉在地上的**扫帚物品。
+     * <p>
+     * 【为什么只认"地上的物品"】她背包/精妙背包里的扫帚由 {@link #ensureMounted} 直接取（那
+     * 不叫"找"，叫"取"）；"找"这个字兑现的是玩家把扫帚丢在地上/从箱子里拿出来扔给她之后，
+     * 她自己过去捡。放出的扫帚实体（世界里立着的那把）不归这里管——原版
+     * {@code EntityBroom.m_6138_} 自己会把走到旁边的主人女仆拽上鞍位，我们不去抢玩家的扫帚。
+     */
+    private static final double HUNT_RADIUS = 16.0;
+    /** 捡起判定（格）：走到这么近就直接收进背包（不必等原版拾取） */
+    private static final double PICKUP_RANGE = 2.0;
+    /** 找扫帚的耐心（毫秒）：这么久还没走到（卡墙/够不着）就放弃这一轮，改报缺件 */
+    private static final long HUNT_GIVE_UP_MS = 20000L;
+    /** 找扫帚时的移动速度倍率（TLM 默认走路 1.0；给个正常的步行速度，不冲刺） */
+    private static final float HUNT_SPEED = 1.0F;
 
     /* ==================== 骑上 / 下来 ==================== */
 
@@ -293,7 +326,15 @@ public final class MaidBroomDrive {
      * 调用方转去 {@link #combatPoint} 盘旋。丢目标时由 {@link #clearClimb} 清掉，
      * 于是下一次接敌会重新爬。
      *
-     * @param target 当前敌人（只取它的 UUID 当相位的 key）
+     * <p>── v1.3.3【"先升 8 格又慢慢掉下来"的修正】──
+     * 旧版这里的目标 Y 是 {@code 她自己脚下 + 8}，而盘旋高度是 {@code 目标脚底 + broomHover}：
+     * 两处口径不同 → 爬完 8 格立刻按另一套高度往回落，玩家看到的正是"升上去又掉下来"，
+     * 爬升毫无意义。现在爬升的 Y 改成 **{@code 目标脚底 + 8}**（相对敌人，与盘旋同一个参照系），
+     * 并在相位收尾（到位 / 顶头）那一刻把**这一场遭遇的盘旋高度**记进 {@link #COMBAT_ALT}
+     * （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 8 格"不是在演一段
+     * 动画，而是在**决定盘旋高度**：升到敌上 8 格，就一直在敌上 8 格打。
+     *
+     * @param target 当前敌人（取它的 UUID 当相位的 key、取它的脚底当高度参照）
      */
     public static Double combatClimbTarget(EntityMaid maid, LivingEntity target) {
         if (maid == null || target == null) {
@@ -302,22 +343,38 @@ public final class MaidBroomDrive {
         Object key = target.m_20148_();
         Climb c = CLIMB.get(maid.m_20148_());
         if (c == null || !c.key.equals(key)) {
-            double to = maid.m_20186_() + CLIMB_BLOCKS + CLIMB_LEAD;
+            // 【相对敌人】目标脚底 + 8（另加 ARRIVE 余量，见 CLIMB_LEAD）
+            double to = target.m_20186_() + CLIMB_BLOCKS + CLIMB_LEAD;
             startClimb(maid, key, to);
+            COMBAT_ALT.remove(maid.m_20148_()); // 新遭遇 → 高度重新由这一次爬升决定
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 接敌 → 先向上爬 " + CLIMB_BLOCKS + " 格再盘旋");
+                    + " 接敌 → 先爬到它上方 " + CLIMB_BLOCKS + " 格（高度从这以后一直保持）");
             return to;
         }
         if (c.done) {
             return null; // 这一场遭遇已经爬过了，直接盘旋
         }
-        return climbTarget(maid, key);
+        Double y = climbTarget(maid, key);
+        if (y == null) {
+            // 相位刚刚收尾（到位 / 头顶被顶住）→ 把这一场遭遇的盘旋高度定下来：
+            // 取"她此刻相对敌人的高度"，夹进 [broomHover, CLIMB_BLOCKS]——
+            // 顶头只抬到 3 格就按 3 格飞（不会为了够那个够不到的高度一直往上顶），
+            // 但也绝不比原来的悬停高度更低。
+            double alt = maid.m_20186_() - target.m_20186_();
+            double fixed = Math.max(hoverCfg(), Math.min(CLIMB_BLOCKS, alt));
+            COMBAT_ALT.put(maid.m_20148_(), fixed);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 本场盘旋高度 = 敌人上方 " + fmt(fixed) + " 格（想 " + CLIMB_BLOCKS
+                    + "，实际 " + fmt(alt) + " 格）→ 以后一直保持这个高度");
+        }
+        return y;
     }
 
-    /** 结束爬升相位（没目标了 / 收了工） */
+    /** 结束爬升相位（没目标了 / 收了工）——顺带作废这一场遭遇的盘旋高度 */
     public static void clearClimb(EntityMaid maid) {
         if (maid != null) {
             CLIMB.remove(maid.m_20148_());
+            COMBAT_ALT.remove(maid.m_20148_());
         }
     }
 
@@ -480,6 +537,11 @@ public final class MaidBroomDrive {
      * （贴脸会被近战反打），所以这里把"目标点"取成目标周围的**圆周上一点**，
      * 方位角每 tick 转 {@link #ORBIT_SPEED} 换算出来的那一步——表现就是"绕着她转圈打"。
      *
+     * 【高度 = 这一场遭遇爬上来的那个高度（v1.3.3）】由 {@link #combatClimbTarget} 在爬升
+     * 收尾时写进 {@link #COMBAT_ALT}（默认想抬 8 格、顶头按实际、下限 {@link #hoverCfg}）。
+     * 没有记录（理论上只在爬升还没做完时）才退回配置的悬停高度——**绝不出现"爬到 8 格
+     * 又被另一套高度拽回来"**（那正是玩家反馈的"升上去又慢慢掉下来"）。
+     *
      * @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
      */
     public static Vec3 combatPoint(EntityMaid maid, LivingEntity target) {
@@ -488,8 +550,9 @@ public final class MaidBroomDrive {
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         double ang = ORBIT.getOrDefault(id, 0.0) + ORBIT_SPEED / r;
         ORBIT.put(id, ang);
+        double alt = COMBAT_ALT.getOrDefault(id, hoverCfg());
         return new Vec3(target.m_20185_() + Math.cos(ang) * r,
-                target.m_20186_() + hoverCfg(),
+                target.m_20186_() + alt,
                 target.m_20189_() + Math.sin(ang) * r);
     }
 
@@ -505,6 +568,197 @@ public final class MaidBroomDrive {
         return new Vec3(owner.m_20185_() + Math.cos(ang) * FOLLOW_DIST,
                 owner.m_20186_() + FOLLOW_HOVER,
                 owner.m_20189_() + Math.sin(ang) * FOLLOW_DIST);
+    }
+
+    /* ==================== 原地悬停 / 垂直爬升：一律用**扫帚自己的坐标** ==================== */
+
+    /** 这把扫帚（载具）现在在哪；没骑着就退回她自己的位置（调用方只在骑着时用） */
+    private static Vec3 broomPos(EntityMaid maid) {
+        EntityBroom broom = MaidBroomKit.ridingBroom(maid);
+        return broom == null
+                ? new Vec3(maid.m_20185_(), maid.m_20186_(), maid.m_20189_())
+                : broom.m_20182_();
+    }
+
+    /**
+     * 原地悬停：目标点 = **扫帚自己现在的位置**。
+     *
+     * <p>【为什么不能用她的坐标（v1.3.3 实测六百五十八，玩家原话："现在女仆在骑着扫帚的
+     * 时候，如果主人就在旁边呢，它会在空中不停的旋转"）】她是**乘客**：原版
+     * {@code EntityBroom.m_19956_}（positionRider）把她的座位摆在她朝向的**后方 0.5 格**
+     * （再叠一个骑乘高度差）——也就是说"扫帚的位置"与"她的位置"永远差着一段固定偏移。
+     * 旧版拿**她的**坐标当"原地不动"的目标点，而 {@link #steerTo} 里那句"到点了吗"比的是
+     * **扫帚**到目标点的距离：恒差那 0.5 格，于是永远到不了点、每 tick 被给一个速度，
+     * 方向又正好是背对朝向那一侧。与此同时 {@code faceYaw} 写进去的"朝向主人"是用
+     * **她的**位置算的——她的位置随朝向动，朝向又随她的位置动。两处互相引用，就成了
+     * 每 tick 翻 180° 的回路；客户端对 yRot 做插值，看起来就是"在空中不停地打转"。
+     * 换成扫帚自己的坐标：这一支真的"到点 → 速度乘 0.75 收干"，静止悬停，回路断掉。
+     */
+    public static void hoverInPlace(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        steerTo(maid, broomPos(maid));
+    }
+
+    /**
+     * 只爬高、水平不动：目标点 = **扫帚当前的 x/z** + 指定的 y。
+     * <p>
+     * 起飞相位（原地抬 1 格）与接敌爬升走这一支。旧版用她的 x/z，同样会被座位偏移拖成
+     * 一条"边升边漂"的小斜线（见 {@link #hoverInPlace} 的说明）。
+     */
+    public static void steerVerticalTo(EntityMaid maid, double y) {
+        if (maid == null) {
+            return;
+        }
+        Vec3 p = broomPos(maid);
+        steerTo(maid, new Vec3(p.f_82479_, y, p.f_82481_));
+    }
+
+    /**
+     * 让**扫帚**朝着某个目标（纯表现：弹道一直按坐标算，不看朝向）。
+     *
+     * <p>与 {@link #faceYaw} 只差一处、但很关键：这里的偏航是**从扫帚自己的位置**算出来的，
+     * 不是从她的位置算。她是乘客、座位在她朝向的后方 0.5 格；用她的位置算"朝向主人"会
+     * 让"她动 → 朝向动 → 她再动"自引用成环（见 {@link #hoverInPlace} 里那段因果）。
+     * 从扫帚出发就没有这一环。
+     *
+     * <p>调用约定同 {@link #faceYaw}：**必须在 {@link #steerTo} 之后调**，
+     * 否则会被 steerTo 写进去的"速度方向"盖掉。
+     */
+    public static void faceYawTo(EntityBroom broom, net.minecraft.world.entity.Entity target) {
+        if (broom == null || target == null) {
+            return;
+        }
+        try {
+            faceYaw(broom, (float) (-Math.atan2(target.m_20185_() - broom.m_20185_(),
+                    target.m_20189_() - broom.m_20189_()) * DEG));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ==================== 找扫帚（扫帚模式里排在"跟随主人"之前的第一优先级） ==================== */
+
+    /**
+     * 她身上没有扫帚时：**去找一把**——玩家原话"扫帚模式应该优先找扫帚，而不是优先跟随主人"。
+     *
+     * <p>【"找"指什么】只看**掉在地上的扫帚物品**（{@code ItemEntity} +
+     * {@link MaidBroomKit#isBroomItem}）。背包/精妙背包里躺着的那不叫"找"叫"取"——归
+     * {@link #ensureMounted} 直接抽出来放骑，这里不重复。世界里**已经放出来的扫帚实体**
+     * 也不去抢：原版 {@code EntityBroom.m_6138_}（它自己 tick 里的那一段）本来就会把走到
+     * 旁边的主人女仆拽上鞍位——我们要做的就是"让她走过去"，而不是替她把玩家的扫帚骑走。
+     *
+     * <p>【怎么找】近了（{@link #PICKUP_RANGE}）直接收进背包；远了就把原版寻路目标指向它、
+     * 每 tick 重写一次（与其它行为同款：真正执行的是 TLM 的 {@code MoveToTargetSink}）。
+     * 超过 {@link #HUNT_GIVE_UP_MS} 还没到（卡墙、在水里、够不着）就放弃这一轮并进
+     * {@link #HUNT_COOLDOWN} 冷却——免得她对着一个拿不到的扫帚走到天荒地老。
+     *
+     * @return true = 这一 tick 正在为"找扫帚"做事（调用方这 tick 先别管跟随/战斗）
+     */
+    public static boolean seekBroom(ServerLevel level, EntityMaid maid) {
+        if (level == null || maid == null) {
+            return false;
+        }
+        if (MaidBroomKit.hasBroomItem(maid) || MaidBroomKit.ridingBroom(maid) != null) {
+            HUNTING.remove(maid.m_20148_()); // 已经有了：交给 ensureMounted 去"取出来骑上"
+            return false;
+        }
+        net.minecraft.world.entity.item.ItemEntity drop = nearestDroppedBroom(level, maid);
+        if (drop == null) {
+            HUNTING.remove(maid.m_20148_());
+            return false;
+        }
+        long now = System.currentTimeMillis();
+        UUID id = maid.m_20148_();
+        Long cool = HUNT_COOLDOWN.get(id);
+        if (cool != null) {
+            if (cool > now) {
+                return false; // 冷却中（同一把够不着的扫帚，别每 tick 重试）
+            }
+            HUNT_COOLDOWN.remove(id);
+        }
+        double d = maid.m_20270_(drop);
+        if (d <= PICKUP_RANGE) {
+            HUNTING.remove(id);
+            return pickUpBroom(maid, drop);
+        }
+        Long since = HUNTING.get(id);
+        if (since == null) {
+            HUNTING.put(id, now);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 身上没有扫帚 → 发现掉在地上的扫帚（" + fmt(Math.sqrt(maid.m_20280_(drop)))
+                    + " 格外），过去捡（这就是「扫帚优先」那一档）");
+        } else if (now - since > HUNT_GIVE_UP_MS) {
+            HUNTING.remove(id);
+            HUNT_COOLDOWN.put(id, now + HUNT_GIVE_UP_MS);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 那把扫帚走了 " + (HUNT_GIVE_UP_MS / 1000) + " 秒也没够到 → 先放下"
+                    + "（缺件待命，过一会儿再试）");
+            return false;
+        }
+        try {
+            // 每 tick 重写寻路目标（与其它行为同款；真正的移动由 TLM 的导航执行）
+            net.minecraft.world.entity.ai.behavior.BehaviorUtils.m_22617_(maid, drop.m_20183_(),
+                    HUNT_SPEED, 1);
+        } catch (Throwable ignored) {
+        }
+        return true;
+    }
+
+    /** 她附近掉在地上的扫帚物品（按距离取最近的一把；没有则 null） */
+    private static net.minecraft.world.entity.item.ItemEntity nearestDroppedBroom(ServerLevel level,
+                                                                                 EntityMaid maid) {
+        try {
+            Vec3 p = maid.m_20182_();
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    p.f_82479_ - HUNT_RADIUS, p.f_82480_ - HUNT_RADIUS, p.f_82481_ - HUNT_RADIUS,
+                    p.f_82479_ + HUNT_RADIUS, p.f_82480_ + HUNT_RADIUS, p.f_82481_ + HUNT_RADIUS);
+            net.minecraft.world.entity.item.ItemEntity best = null;
+            double bestD = Double.MAX_VALUE;
+            for (net.minecraft.world.entity.item.ItemEntity e
+                    : level.m_6443_(net.minecraft.world.entity.item.ItemEntity.class, box,
+                            x -> MaidBroomKit.isBroomItem(x.m_32055_()))) {
+                double d = maid.m_20280_(e);
+                if (d < bestD) {
+                    bestD = d;
+                    best = e;
+                }
+            }
+            return best;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 把地上那把扫帚收进她的背包。
+     * <p>
+     * 【塞不下就不动】返回 false 时物品**原样留在地上**——绝不能"捡不起来还把实体删了"，
+     * 那是把玩家的东西弄没了。收成之后 {@code kill()} 掉实体（不走原版掉落：物品已经进了
+     * 背包，再走掉落会掉两份）。
+     */
+    private static boolean pickUpBroom(EntityMaid maid, net.minecraft.world.entity.item.ItemEntity drop) {
+        try {
+            ItemStack stack = drop.m_32055_();
+            if (stack.m_41619_()) {
+                return false;
+            }
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            ItemStack rest = stack.m_41777_();
+            for (int i = 0; i < inv.getSlots() && !rest.m_41619_(); i++) {
+                rest = inv.insertItem(i, rest, false);
+            }
+            if (!rest.m_41619_()) {
+                return false; // 背包满：留在地上
+            }
+            drop.m_6075_();
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 把地上的扫帚捡进背包了（" + stack.m_41613_() + "x "
+                    + stack.m_41786_().getString() + "）");
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /**
@@ -573,13 +827,16 @@ public final class MaidBroomDrive {
         DEBT.remove(broomId);
     }
 
-    /** 这只女仆下线/卸载：清掉她的盘旋相位、爬升相位与跟随迟滞 */
+    /** 这只女仆下线/卸载：清掉她的盘旋相位、爬升相位、本场盘旋高度、找扫帚状态与跟随迟滞 */
     public static void forgetMaid(UUID maidId) {
         if (maidId == null) {
             return;
         }
         ORBIT.remove(maidId);
         CLIMB.remove(maidId);
+        COMBAT_ALT.remove(maidId);
+        HUNTING.remove(maidId);
+        HUNT_COOLDOWN.remove(maidId);
     }
 
     /** 服务端停止：整表清空 */
@@ -589,6 +846,9 @@ public final class MaidBroomDrive {
         DEBT.clear();
         ORBIT.clear();
         CLIMB.clear();
+        COMBAT_ALT.clear();
+        HUNTING.clear();
+        HUNT_COOLDOWN.clear();
     }
 
     /* ==================== 内部工具 ==================== */
