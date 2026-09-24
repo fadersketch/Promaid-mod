@@ -636,6 +636,17 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_FOLLOW;
     /** 是否受「守家/工作区」活动范围约束（关掉 = 自由飞，会跟主人越界） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_CLAMP_HOME;
+    /**
+     * v1.3.6 实测六百六十一【扫帚牵引绳】：她骑在扫帚上离主人超过这么多格（3D 距离，
+     * 所以「飞太高」也算）就立刻**连人带扫帚**传送回主人身边。0 = 关闭。
+     *
+     * 与「空袭牵引绳」（{@code COMBAT_FLIGHT_RECALL_DISTANCE}）同源同口径：都是
+     * 「她自己走了回不来」的兜底；区别只在她还骑着一把扫帚——所以这一条走
+     * {@code MaidChunkLoadManager.recallBroomRider}（**把扫帚一起搬**），
+     * 而不是普通女仆那条传送。完整口径见 {@code com.maidsmart.combat.MaidBroomRecall}。
+     */
+    public static final ForgeConfigSpec.IntValue COMBAT_BROOM_RECALL_DISTANCE;
+
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
     /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
@@ -1930,8 +1941,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
         COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
-        COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）")
+        COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
                 .translation("config.promaid.broom.clampHome").define("clampHome", true);
+
+        COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回你身边，免得飞太远回不来。0 = 关闭。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
+                .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----
