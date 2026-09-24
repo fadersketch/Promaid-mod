@@ -13,7 +13,18 @@ import java.util.UUID;
 import java.util.WeakHashMap;
 
 /**
- * v1.3.0「扫帚模式」的行为（两树镜像）——骑扫帚、悬停、凋灵式盘旋、照搬远程空袭开火。
+ * v1.3.0「扫帚模式」的行为（两树镜像）——骑扫帚、起飞悬停、接敌爬升、盘旋、照搬远程空袭开火。
+ *
+ * ── 每 tick 的相位（实测六百五十六，按玩家原话定的顺序）──
+ * <pre>
+ *   ① 缺件        → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
+ *   ② 骑上        → 从她背包取一把扫帚放出来骑上（已骑着就跳过）
+ *   ②.5 起飞相位  → 原地往上抬 1 格（头顶顶住就悬停在此处）
+ *   ③ 接敌        → 先向上爬 8 格（顶住就悬停在此处）→ 再绕着她盘旋 + 开火
+ *   ④ 平时        → 按"飞行跟随"同款的起手/收手距离跟主人（默认开；扫帚没耐久）
+ * </pre>
+ * 两个爬升相位与"怎么飞"全部在 {@link MaidBroomDrive}（速度公式照搬 TLM 给玩家驾驶写的
+ * {@code PlayerBroomControl}，一分不加）。
  *
  * ── 一件必须说清的事：她**不会**退化成地面近战 ──
  * 空袭在缺件时会退回"和普通攻击模式一致"的地面近战（那是空袭的既有设计）。扫帚模式
@@ -74,6 +85,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // 换任务 / 行为结束 / 她死了：一定要下来并把这件扫帚还回去，绝不能留一把孤儿扫帚漂在天上
         MaidBroomDrive.dismount(maid);
         MaidBroomDrive.forgetMaid(maid.getUUID());
+        FOLLOWING.remove(maid);
     }
 
     @Override
@@ -95,34 +107,95 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
         clearNotReady(maid, gameTime);
 
-        // ②.5 起飞相位：先垂直抬起 1 格（玩家原话"女仆会立刻用扫帚飞起来 1 格"），
-        // 抬到位再开始"去哪"。这一段不转向、不开火——就是那一下"腾空"的动作。
-        Double riseY = MaidBroomDrive.riseTarget(broom, maid.getY());
+        // ②.5 起飞相位：原地往上抬 1 格再到别的地方去（玩家原话"如果拿到了扫帚，原地往上飞 1 格
+        // 悬停（头顶如果被顶住了那就悬停在此处）"）。这一段不转向、不开火——就是那一下"腾空"。
+        Double riseY = MaidBroomDrive.takeoffTarget(maid);
         if (riseY != null) {
             MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), riseY, maid.getZ()));
             return;
         }
 
-        // ③ 有目标 → 凋灵式盘旋 + 照搬远程空袭开火
+        // ③ 有目标 → 先向上爬 8 格（顶头即就地悬停）→ 再绕着敌人盘旋 + 照搬远程空袭开火
         LivingEntity target = currentTarget(maid);
         if (target != null && target.isAlive() && target.level() == level) {
             faceTarget(maid, target);
-            MaidBroomDrive.steerTo(maid, MaidBroomDrive.combatPoint(maid, target));
             // 朝向改成"看着目标"而不是"朝着速度方向"：她在绕着目标侧移，脸得对着它才像在射击
+            MaidBroomDrive.faceYaw(broom, yawTo(maid, target));
+            Double climbY = MaidBroomDrive.combatClimbTarget(maid, target);
+            if (climbY != null) {
+                MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), climbY, maid.getZ()));
+                MaidFlightCombatBehavior.fireRanged(maid, target, maid.getUUID(), gameTime);
+                return;
+            }
+            MaidBroomDrive.steerTo(maid, MaidBroomDrive.combatPoint(maid, target));
             MaidBroomDrive.faceYaw(broom, yawTo(maid, target));
             MaidFlightCombatBehavior.fireRanged(maid, target, maid.getUUID(), gameTime);
             return;
         }
 
         // ④ 没目标 → 平时：悬停在主人身边（配置可关；关掉就原地悬停待命）
+        MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位作废，下次接敌重新爬
         LivingEntity owner = ownerOf(maid);
         if (followEnabled() && owner != null && owner.isAlive() && owner.level() == level) {
             faceTarget(maid, owner);
-            MaidBroomDrive.steerTo(maid, MaidBroomDrive.followPoint(maid, owner));
             MaidBroomDrive.faceYaw(broom, yawTo(maid, owner));
+            if (shouldFollow(maid, owner)) {
+                MaidBroomDrive.steerTo(maid, MaidBroomDrive.followPoint(maid, owner));
+            } else {
+                // 迟滞带内：留在原地悬停（不必为了贴住主人一直微调位置）
+                MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), maid.getY(), maid.getZ()));
+            }
         } else {
-            // 原地悬停：目标点就是当前位置 → steerTo 走到"到点阻尼"那一支，速度很快收干
+            // 原地悬停：目标点就是当前位置 → steerTo 走到"到点"那一支，速度收干
             MaidBroomDrive.steerTo(maid, new Vec3(maid.getX(), maid.getY(), maid.getZ()));
+        }
+    }
+
+    /* ==================== 平时跟随：与"飞行跟随"同款的起手/收手迟滞 ==================== */
+
+    /** 这只女仆当前是否处于"跟随主人这一趟"里（迟滞带内不再起飞） */
+    private static final Map<EntityMaid, Boolean> FOLLOWING =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    /**
+     * 平时要不要飞过去跟主人——**照飞行跟随的同款机制**（玩家原话："引用飞行跟随的逻辑以及
+     * 同款机制来决定是否启动跟随（这个是默认开启的，因为扫帚没有耐久）"）。
+     *
+     * <p>同款机制 = 那一对**起手 / 收手距离**（{@code flightFollow.start / end}，默认 25 / 5）：
+     * 主人远过起手距离才开始跟，进到收手距离内就停下悬停。起手与收手是两个不同的球，
+     * 中间那段就是迟滞带——没有它她会在阈值上"动一下停一下"地抖。
+     * 这里**直接读同一对配置**，不另开一套数字：口径只有一处（本模组反复强调的红线）。
+     *
+     * <p>与飞行跟随的区别只剩"谁来飞"：那边要鞘翅 + 烟花且默认关（会烧料、磨耐久），
+     * 这边是扫帚、没有耐久，所以开关是 {@code combat.broomFollow}（默认开）。
+     */
+    private static boolean shouldFollow(EntityMaid maid, LivingEntity owner) {
+        double d = maid.distanceTo(owner);
+        double start = followDistCfg();
+        double end = Math.min(followEndDistCfg(), Math.max(1.0, start - 1.0));
+        boolean following = Boolean.TRUE.equals(FOLLOWING.get(maid));
+        if (!following && d > start) {
+            following = true;
+        } else if (following && d <= end) {
+            following = false;
+        }
+        FOLLOWING.put(maid, following);
+        return following;
+    }
+
+    private static double followDistCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_DIST.get();
+        } catch (Throwable ignored) {
+            return 25.0;
+        }
+    }
+
+    private static double followEndDistCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get();
+        } catch (Throwable ignored) {
+            return 5.0;
         }
     }
 

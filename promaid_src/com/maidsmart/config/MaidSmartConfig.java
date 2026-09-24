@@ -1916,13 +1916,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、平时跟随主人、
         // 受活动范围约束（守家女仆不会为了跟主人越界）。
         BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
-        COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件")
+        COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【v1.3.2 实测六百五十六 的飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**")
                 .translation("config.promaid.broom.enable").define("enable", true);
         COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）")
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
-        COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开）：开启时她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动")
+        COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）")
                 .translation("config.promaid.broom.clampHome").define("clampHome", true);
