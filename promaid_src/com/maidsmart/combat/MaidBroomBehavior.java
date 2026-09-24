@@ -198,6 +198,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //    ② 否则跟随主人（配置可关）
         //    ③ 都没有 → 原地悬停待命
         MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
+        noteHome(maid, gameTime); // v1.3.0(beta) 实测六百六十四：守家诊断（低频）
         if (MaidBroomKit.homeRestricted(maid)) {
             net.minecraft.world.phys.Vec3 patrol = MaidBroomDrive.homeOrbitPoint(maid);
             if (patrol != null) {
@@ -261,9 +262,19 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         return following;
     }
 
+    /**
+     * v1.3.0(beta) 实测六百六十四【扫帚模式自己的跟随距离】——玩家原话：「它没有一个像飞行跟随
+     * 一样的调试跟随启动半径的选项（飞行跟随默认主人飞出了 20 格且没有视线阻拦以后再进行飞行。
+     * 扫帚模式好像照搬了这个，但是没有任何程度上的调试面板。）」
+     *
+     * <p>旧版直接读 {@code [flightFollow]} 那一对（同一份数字管两件事），现在扫帚模式有自己的
+     * 一对 {@code combat.broom.followStart / followEnd}（默认同为 25 / 5，面板「扫帚模式」板块可调）
+     * ——口径分家是玩家点名要的"调试面板"；两条链路的物理照旧完全不同（那边烧烟花磨鞘翅，这边
+     * 骑扫帚飞）。
+     */
     private static double followDistCfg() {
         try {
-            return com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_DIST.get();
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_START.get();
         } catch (Throwable ignored) {
             return 25.0;
         }
@@ -271,11 +282,48 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     private static double followEndDistCfg() {
         try {
-            return com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get();
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_END.get();
         } catch (Throwable ignored) {
             return 5.0;
         }
     }
+
+    /* ==================== 守家诊断（v1.3.0(beta) 实测六百六十四） ==================== */
+
+    /**
+     * 「她现在的圈是怎么回事」——一行日志（状态变了马上打，否则 20 秒一条上限）。
+     *
+     * <p>【为什么必须有这一条】玩家反馈：「我刚刚用河童的罗盘画了一个圈，但女仆却不照着那个飞，
+     * 而是绕着一个我根本就不知道的范围在飞行」。那个"圈"= {@code getRestrictCenter()} +
+     * {@code getRestrictRadius()}，而圈心**按当前活动档（工作/休闲/睡眠）从 SchedulePos 的三个
+     * 锚点里取**、半径按 TLM 配置取（本模组只抬高下限）——所以"圈在哪儿"取决于时刻与她身上的
+     * 锚点，光看游戏里那一圈看不出是哪一档。这一行把 home 开关 / 活动档 / 圈心 / 圈心来源 / 半径 /
+     * 三个锚点全打出来（{@link com.maidsmart.follow.WorkAreaClamp#describe}），一条日志就能定位。
+     */
+    private static void noteHome(EntityMaid maid, long gameTime) {
+        try {
+            String why = MaidBroomKit.homeRestricted(maid) ? "沿工作范围盘旋" : "不守家（跟主人/原地悬停）";
+            String now = why + " || " + com.maidsmart.follow.WorkAreaClamp.describe(maid);
+            if (now.equals(HOME_STATE.get(maid))) {
+                Long t = HOME_LOGGED.get(maid);
+                if (t != null && gameTime - t < HOME_LOG_GAP) {
+                    return;
+                }
+            }
+            HOME_STATE.put(maid, now);
+            HOME_LOGGED.put(maid, gameTime);
+            com.maidsmart.tool.PromaidLog.log("扫帚守家",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + now);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 同一条守家日志的最短间隔（tick）= 20 秒 */
+    private static final long HOME_LOG_GAP = 400;
+    private static final Map<EntityMaid, String> HOME_STATE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    private static final Map<EntityMaid, Long> HOME_LOGGED =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     /* ==================== 目标 / 朝向 ==================== */
 

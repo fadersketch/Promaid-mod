@@ -692,6 +692,55 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      * 装备类（工具/盔甲/三叉戟/盾）与附魔/用旧的物品按 {@link #isSafeToFeed} 一并排除：
      * 她永不喂这些（它们有"烧成粒"配方），网格就不该鼓动玩家把它们填进清单。
      */
+    /**
+     * v1.3.0(beta) 实测六百六十五【面板「只看食物 / 填入原版食物」的唯一数据源】——
+     * 内置食材清单的注册名（只列**当前世界真有炉子配方**的那些，与行为侧 {@code isCookFood}
+     * 同一套判据；level 为 null 时不筛）。
+     *
+     * <p>为什么要走这里而不是面板自己再写一张表：内置食材清单只有一份（{@link #FOODS}），
+     * 面板若自己抄一遍，迟早出现"面板说能烧、她却不烧"（本模组反复强调的红线）。
+     */
+    public static java.util.List<String> builtinFoodIds(net.minecraft.world.level.Level level) {
+        java.util.List<String> out = new java.util.ArrayList<>();
+        for (Item it : FOODS) {
+            try {
+                ResourceLocation key = net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(it);
+                if (key == null) {
+                    continue;
+                }
+                if (level != null && !smeltableForPicker(level, new ItemStack(it))) {
+                    continue; // 当前世界没配方 → 不进面板（也不该被填进名单）
+                }
+                out.add(key.toString());
+            } catch (Throwable ignored) {
+            }
+        }
+        java.util.Collections.sort(out);
+        return out;
+    }
+
+    /** 这件东西在不在**内置食材白名单**里（面板「只看食物」用；判据与行为侧同一张表） */
+    public static boolean isBuiltinFood(ItemStack stack) {
+        try {
+            return stack != null && !stack.isEmpty() && FOODS.contains(stack.getItem());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 面板「只看矿物」的判据：当前世界**有高炉配方**（矿石 / 粗金属这一族）。
+     * 与行为侧选炉型用的那一条（{@code blastable}）同一个配方查询，只是把它开到面板上。
+     */
+    public static boolean blastableForPicker(net.minecraft.world.level.Level level, ItemStack stack) {
+        try {
+            return level != null && hasRecipeRaw(level, stack,
+                    net.minecraft.world.item.crafting.RecipeType.BLASTING);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     public static boolean smeltableForPicker(net.minecraft.world.level.Level level, ItemStack stack) {
         if (level == null || !isSafeToFeed(stack)) {
             return false;

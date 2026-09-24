@@ -139,4 +139,57 @@ public final class MaidWorkTags {
         return "build".equals(maid.getTask().getUid().m_135815_())
                 && "maid_smart".equals(maid.getTask().getUid().m_135827_());
     }
+    /**
+     * 刷怪笼插火把·**走位所有权**标记（v1.3.0(beta) 实测六百六十四）。
+     *
+     * <p>【为什么需要它】玩家反馈：「女仆优先往刷怪笼上插一根火把这个操作没能实现」。
+     * 那个「优先」在代码里原本只落在行为优先级 186 上——而 1.20.1 的 Brain 里
+     * **CORE 与当前活动（WORK）是两套并发的行为表、互不阻断**：她去插火把的同时，
+     * 挖矿/伐木/农活那几条驱动照样每 tick 发自己的寻路（直连 {@code moveTo}），
+     * 谁最后写谁说了算 → 她被一路按在工位上，"优先"名存实亡。
+     *
+     * <p>【怎么用】{@code MaidSpawnerTorchBehavior} 只在"有目标、正在走过去"这段时间置上它：
+     * <ul>
+     *   <li>{@code MaidMoveSuppressMixin}：清 WALK_TARGET + 取消 MoveToTargetSink
+     *       （TLM 原生任务、跟随、远程走位写的 WALK_TARGET 一律不执行）；</li>
+     *   <li>{@code SpawnerTorchNavGuardMixin}：掐掉**别的驱动**发起的直连 {@code moveTo}
+     *       （她自己的那一发走"自标记放行"的窄门）；</li>
+     *   <li>挖矿/伐木/农活驱动不必逐个改——它们的寻路在上面那面闸前就被拦下了。</li>
+     * </ul>
+     *
+     * <p>【什么时候自动让位】打架（攻击类任务）、被骑、坐着、或玩家把
+     * {@code combat.spawnerTorch.priority} 关掉时，本判据恒为 false——**战斗永远优先**，
+     * 而且行为自己在"脑里出现攻击目标"的那一 tick 就会清标记。
+     */
+    public static final String SPAWNER_TORCH_TAG = "maid_smart_spawner_torch";
+
+    /** 是否处于"正走去插火把"的走位独占期（标记 + 若干让位判据，双保险防残留冻结） */
+    public static boolean isSpawnerTorchRun(EntityMaid maid) {
+        try {
+            if (!maid.getPersistentData().m_128471_(SPAWNER_TORCH_TAG)) {
+                return false;
+            }
+            if (maid.getTask() == null) {
+                return false;
+            }
+            if (isAttackTask(maid)) {
+                return false; // 打架：她的走位归战斗，谁都不许挡
+            }
+            if (maid.isMaidInSittingPose() || maid.m_20159_()) {
+                return false; // 坐着 / 乘客：本来就走不动
+            }
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_SPAWNER_TORCH_PRIORITY.get();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 置/清走位所有权标记（由 {@code MaidSpawnerTorchBehavior} 维护） */
+    public static void setSpawnerTorch(EntityMaid maid, boolean on) {
+        try {
+            maid.getPersistentData().m_128379_(SPAWNER_TORCH_TAG, on);
+        } catch (Throwable ignored) {
+        }
+    }
+
 }

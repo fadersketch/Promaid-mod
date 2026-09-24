@@ -109,8 +109,11 @@ public final class MaidToolAutoEquip {
                         need = com.maidsmart.combat.GunCompat::isGun;
                         scorer = stack -> {
                             long base = weaponScore(stack);
-                            boolean ready = com.maidsmart.combat.GunCompat.isEnergyGun(stack)
-                                    || gunHasAmmoInBackpack(gunMaid);
+                            // v1.3.0 实测六百六十六：改成**按这把枪**判"喂得上弹吗"（旧版是
+                            // "背包里有任意弹药就算"——于是对得上弹的那把和对不上的那把同分，
+                            // 甚至装了打不响的那把，见 GunCompat.canFeed 的类注释；
+                            // 能量武器的免检由枪械 mod 自己的判定回答，不再这里另写一份）
+                            boolean ready = com.maidsmart.combat.GunCompat.canFeed(gunMaid, stack);
                             return base + (ready ? 1_000_000L : 0L);
                         };
                     }

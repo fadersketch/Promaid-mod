@@ -340,6 +340,13 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue COMBAT_BROOM_FOLLOW;
     /** 是否受「守家/工作区」活动范围约束（关掉 = 自由飞，会跟主人越界） */
     public static final ModConfigSpec.BooleanValue COMBAT_BROOM_CLAMP_HOME;
+    /** v1.3.0(beta) 实测六百六十四【扫帚模式自己的跟随距离】——此前直接复用「飞行跟随」那一对
+     *  （玩家原话：「扫帚模式好像照搬了这个，但是没有任何程度上的调试面板」），现在扫帚模式有
+     *  自己的一对，面板「移动与行为 → 扫帚模式」里可调；[flightFollow] 那一对只管飞行跟随。 */
+    public static final ModConfigSpec.DoubleValue COMBAT_BROOM_FOLLOW_START;
+    public static final ModConfigSpec.DoubleValue COMBAT_BROOM_FOLLOW_END;
+    /** 卡墙脱困（默认开）：朝目标直飞被方块顶住（原地不动 ≥ 0.6 秒）→ 先飘到最近的空气格再续链路 */
+    public static final ModConfigSpec.BooleanValue COMBAT_BROOM_UNSTICK;
     /**
      * v1.3.6 实测六百六十一【扫帚牵引绳】：她骑在扫帚上离主人超过这么多格（3D 距离，
      * 所以「飞太高」也算）就立刻**连人带扫帚**传送回主人身边。0 = 关闭。
@@ -357,6 +364,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_TORCH_ENABLE;
     /** 刷怪笼的搜索半径（格）。数值与判据见 {@code com.maidsmart.combat.MaidSpawnerTorchBehavior} */
     public static final ModConfigSpec.DoubleValue COMBAT_SPAWNER_TORCH_RADIUS;
+    /** v1.3.0(beta) 实测六百六十四【"优先"落到走位所有权上】——玩家原话：「女仆优先往刷怪笼上
+     *  插一根火把这个操作没能实现」。发现目标后这段时间她独占走位（见 MaidWorkTags.SPAWNER_TORCH_TAG）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_SPAWNER_TORCH_PRIORITY;
 
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ModConfigSpec.BooleanValue BRIDGE_ENABLED;
@@ -1977,6 +1987,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
                 .translation("config.promaid.broom.clampHome").define("clampHome", true);
+        COMBAT_BROOM_FOLLOW_START = BUILDER.comment("扫帚·跟随起手距离（格，默认 25，2~128）：主人比她远过这个 3D 距离，她（平时没有敌人时）才飞过去跟；更近就原地悬停——扫帚没有耐久，但\"主人挪一步她也动一下\"看着烦，所以留一条迟滞。这一对**只管扫帚模式**（「移动与行为 → 飞行跟随」那一对只管鞘翅飞行跟随，两边互不影响）")
+                .translation("config.promaid.broom.followStart").defineInRange("followStart", 25.0, 2.0, 128.0);
+        COMBAT_BROOM_FOLLOW_END = BUILDER.comment("扫帚·跟随收手距离（格，默认 5，1~64）：主人进到这么近（3D 距离）就中断这一趟、原地悬停。**必须比起手距离小**——写成大于等于起手距离时她会\"一起飞就收手\"、一次都飞不起来，所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值）")
+                .translation("config.promaid.broom.followEnd").defineInRange("followEnd", 5.0, 1.0, 64.0);
+        COMBAT_BROOM_UNSTICK = BUILDER.comment("卡墙脱困（默认开）：她朝目标直飞、被方块顶住原地不动超过 0.6 秒时，**先飘到最近的空气格**（只挑让她离目标更近、且上下两格都空的那个），到了再接着飞原来的链路——玩家原话：「如果撞到了阻挡的方块，那么应该先尝试往最近的空气方块进行移动，然后再继续执行原有的扫帚链路」。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」")
+                .translation("config.promaid.broom.unstick").define("unstick", true);
 
         COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回你身边，免得飞太远回不来。0 = 关闭。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
@@ -1993,6 +2009,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.spawnerTorch.enable").define("enable", true);
         COMBAT_SPAWNER_TORCH_RADIUS = BUILDER.comment("搜索半径（格，默认 12，4~32）：她每隔 4 秒在自己周围这个水平半径、上下各 4 格里找一次刷怪笼（只找最近的这一个）。调大能提前发现远处的，但每次扫描要读的方块数按半径平方涨——12 已经覆盖一般地下矿道/地牢的视野，没必要太大")
                 .translation("config.promaid.spawnerTorch.radius").defineInRange("radius", 12.0, 4.0, 32.0);
+        COMBAT_SPAWNER_TORCH_PRIORITY = BUILDER.comment("优先去插（默认开，v1.3.0(beta) 实测六百六十四）：发现刷怪笼之后，她**放下手上的活**先把它哑掉——这段时间她的走位独占（取消 MoveToTargetSink 的 WALK_TARGET 执行、并掐掉挖矿/伐木等驱动发起的直连寻路），走过去插上再回去干活。关掉 = 她照旧会去插，但**不抢走位**：正在挖矿/伐木时那几条驱动会一路把她按在工位上（玩家反馈的\"没能实现\"多半就是这一条）。打架/自保/骑乘/坐着时这条闸自动让位（战斗永远优先）")
+                .translation("config.promaid.spawnerTorch.priority").define("priority", true);
         BUILDER.pop();
 
 
@@ -2302,9 +2320,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 概率 0.001×0.09²≈平均一两小时才走一次）
         MISC_STROLL_ENABLED = BUILDER.comment("空闲散步（默认开）：女仆空闲时按间隔主动散步——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、概率约每两小时才触发一次）；战斗/自保/站桩工作/有移动目标时不打扰")
                 .translation("config.promaid.misc.strollEnabled").define("strollEnabled", true);
-        MISC_STROLL_INTERVAL = BUILDER.comment("散步间隔（tick，默认 200=10 秒）：空闲女仆每隔这么久散步一次（找得到落点就走，找不到顺延）")
-                .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
-        MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
+        // v1.3.0 实测六百六十六：上限 24000 → 1728000（24 小时）。旧上限只有 20 分钟，玩家
+        // 想"基本别乱跑"就得填更大的数——而 ModConfigSpec.set() **不做范围校验**（javap 实证：
+        // 它只把值写进 nightconfig，范围是**下次加载读文件时**才被 correct() 钳的），于是
+        // "填 4000000、看着像写进去了、重进游戏变成上限（或根本没生效）"，玩家只会觉得
+        // "这个数调不动"。现在上限放到 24 小时，面板侧也补了越界红字与钳位提示
+        // （见 PromaidConfigScreen.setIntInRange 的注释）。
+        MISC_STROLL_INTERVAL = BUILDER.comment("散步间隔（tick，默认 200=10 秒，范围 20~1728000）：空闲女仆每隔这么久散步一次（找得到落点就走，找不到顺延）。想让她基本不散步就填大值（1728000 tick = 24 小时），或直接把「空闲散步」开关关掉")
+                .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 1728000);
+        MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16，范围 4~128）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
         MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.4；范围 0.05~2.5）：这是**女仆基础移动速度的几成**——女仆的基础移动速度属性是 0.7（原版 LivingEntity 的默认值，玩家是 0.1），倍率就乘在它上面。\n\n【六百二十 实测的对照表】实际格/秒不是线性的（慢到一定程度她会一步一顿，寻路每格重新判定），下面这些数是本模组在专用服务器上量出来的「走一段路的平均速度」（玩家走路 4.32 格/秒、跑步 5.61）：\n  0.1~0.2 → 0.1（几乎不走，像卡住）\n  0.3 → 1.9　0.4 → 3.3（默认）　0.5 → 4.9（≈玩家走路）\n  0.6 → 6　0.7 → 8（比玩家跑步还快）　1.0 → 14（鬼畜）\n（同一档换地形/机器会有大约 ±20% 波动）\n\n【六百二十 改了两处】①默认 0.7 → 0.4：老的默认实测约 8 格/秒、比玩家跑步（5.61）还快，用户反馈的「0.1 倍速都跟快步跑一样」看到的就是这个数；②下限 0.3 → 0.05：老下限把想调慢的人卡死了（0.3 就是能调到的最慢值）。注意 0.2 以下实测几乎不走，好用的慢档是 0.3~0.4。\n\n游戏里可以用 /maid_smart stroll speed <值> 当场改，/maid_smart stroll check 会把她**自己**的基础移速属性、实测参考表和当前门禁打出来，/maid_smart stroll go 让她走一次 24 格直线再 check 就能看到实测格/秒。")
                 .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.4, 0.05, 2.5);
