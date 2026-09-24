@@ -212,17 +212,18 @@ public class ScheduleBookScreen extends Screen {
 
     /**
      * v1.1.0 实测六十（借鉴 Maid_Roster 军队管理，不学"绑定点名册"——我们直接
-     * 列出全部女仆且跨维度）：搜索框按名字过滤 / 行内血量+维度状态 / 批量应用
+     * 列出全部女仆且跨维度）：搜索框按名字过滤 / 行内状态 / 批量应用
      * 工作模式与任务 / 一键集合（跨维度传送回身边）。
+     * v1.3.3：行内状态 = 当前任务 + 工作模式 + 排班 + 维度 + 在家（血量百分比已去掉）。
      * 纵向：搜索框 32..50，行区 52 起（rowsPerPage = (h-124)/22），批量行 h-68，
      * 翻页 h-46，集合+关闭 h-24——240 高最小窗口零重叠（实测五十六口径）。
      */
     private void listButtons(int w, int h) {
         int cx = w / 2;
         int bw = Math.min(300, w - 16);
-        // 搜索框（按名字过滤，输入即刷）
+        // 搜索框（按名字/任务名过滤，输入即刷）
         EditBox search = new EditBox(this.font, cx - bw / 2, 32, bw, 18,
-                Component.literal("搜索名字…"));
+                Component.literal("搜索名字/任务…"));
         search.setMaxLength(20);
         search.setValue(this.searchQuery);
         // 实测六十二（自查修复）：setValue 只把【旧框】的光标夹到新文本长度，而击键
@@ -237,11 +238,13 @@ public class ScheduleBookScreen extends Screen {
         this.addRenderableWidget(search);
         this.activeBox = search; // 默认聚焦：打开即打字过滤
         search.setFocused(true);
-        // 过滤（名字包含匹配，大小写不敏感）
+        // 过滤（名字包含匹配，大小写不敏感；v1.3.3 起也匹配【当前任务的中文名】——"她叫什么"
+        // 与"她在干什么"两个都能搜，列表行显示的也正是这两个）
         String q = this.searchQuery == null ? "" : this.searchQuery.trim().toLowerCase();
         java.util.List<String[]> shown = new ArrayList<>();
         for (String[] m : this.maids) {
-            if (!q.isEmpty() && !m[1].toLowerCase().contains(q)) {
+            if (!q.isEmpty() && !m[1].toLowerCase().contains(q)
+                    && !taskCn(m[2]).toLowerCase().contains(q)) {
                 continue;
             }
             shown.add(m);
@@ -256,13 +259,18 @@ public class ScheduleBookScreen extends Screen {
         int y = 52;
         for (int i = start; i < end; i++) {
             String[] m = shown.get(i);
-            // 行标签：名字 + 血量% + 维度标签（跨维度才显示）+ 排班状态（实测六十）
-            // v1.1.0 实测三百四十二：追加在家模式状态（m[8]="1" 显示「在家」）
+            // v1.3.3【列表行改版：显示状态、去掉血量百分比】——玩家反馈"这个界面里最好显示女仆
+            // 的一些基本状态：目前处于什么模式、是不是在家、有没有排班；把原来的血量百分比去掉"。
+            // 现在的行 = 名字 + 当前任务 + 工作模式 + 排班(+段数) + 维度 + 在家。
+            // 任务名走 taskCn（翻译键 task.<ns>.<path>），工作模式就是 TLM 的早班/晚班/全天
+            // （MODE_NAMES，与详情页、批量行同一个数组）。
             String sched = "1".equals(m[4])
-                    ? "\u00a7a排班开\u00a77（" + m[5] + " 段）" : "\u00a77排班关";
+                    ? "\u00a7a排班" + (safeInt(m[5], 0) > 0 ? "\u00a77(" + safeInt(m[5], 0) + ")" : "")
+                    : "\u00a78排班关";
             String home = m.length > 8 && "1".equals(m[8])
                     ? " \u00a7d在家" : "";
-            String label = "\u00a7e" + fitName(m[1]) + " \u00a7f" + m[6] + "% "
+            String label = "\u00a7e" + fitName(m[1]) + " \u00a7f" + fitTask(m[2]) + " "
+                    + "\u00a7b" + MODE_NAMES[Math.max(0, Math.min(2, safeInt(m[3], 2)))] + " "
                     + (m[7].isEmpty() ? "" : "\u00a79" + m[7] + " ") + sched + home;
             final String uuid = m[0];
             final String name = m[1];

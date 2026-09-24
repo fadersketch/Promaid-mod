@@ -2900,6 +2900,13 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("扫帚·受活动范围约束", MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get(),
                 v -> MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.set(v),
                 "受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后，车万女仆自身的范围约束整条失效（她成了乘客，canBrainMoving 为 false，往哪飞只听我们的），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）"));
+        // v1.3.3 防刷怪：发现刷怪笼就去插火把（玩家建议；home 工作区里不执行）
+        this.rows.add(new BoolRow("防刷怪·发现刷怪笼就去插火把", MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.set(v),
+                "总开关（默认开）：她扫到附近有刷怪笼、且身上/背包里有能当灯的东西（火把/灵魂火把/灯笼/萤石/海晶灯/蛙明灯/南瓜灯/末地烛/篝火…判据是放下之后方块自身发光 ≥ 8）时，会走过去在刷怪笼紧挨着的格子里放一个把它哑掉——优先插在刷怪笼顶上，站不住就退到同层四邻、再退到四邻的上一层；九个位置都放不了才放过它。原版刷怪笼要求生成位置亮度 ≤ 7，一个发光 14 的火把守着它，整个 8×3×8 生成区都在门限之上（红石火把只有 7，不够，所以不在清单里）。刷怪笼落在她「在家模式/工作区」圈里（河童的罗盘标记的那一片）时一律不碰——那可能是你故意留的刷怪塔。日志搜「刷怪笼」看全过程"));
+        this.rows.add(new NumRow("防刷怪·搜索半径（格）", String.valueOf(MaidSmartConfig.COMBAT_SPAWNER_TORCH_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_SPAWNER_TORCH_RADIUS, s),
+                "搜索半径（格，默认 12，4~32）：她每隔 4 秒在自己周围这个水平半径、上下各 4 格里找一次刷怪笼（一次只处理最近的那一个）。调大能提前发现远处的，但每次扫描要读的方块数按半径平方涨，12 已经够覆盖一般地下矿道/地牢的视野"));
     }
 
     private void selfTacticsRows() {

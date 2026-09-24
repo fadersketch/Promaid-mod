@@ -462,6 +462,17 @@ public final class SchedulePacketsMaid {
                             "§7没找到她——可能已被收进魂符或不在已加载区块"));
                     return;
                 }
+                // v1.3.3【"离得远时点女仆配置：进去一下立刻被踢出来"的根因】——TLM 的女仆容器
+                // 每 tick 都要过一遍 AbstractMaidContainer.m_6875_（= stillValid）：
+                //     maid 非空 → isOwnedBy(player) → isAlive() 且 !isSleeping() → player.canReach(maid, 3.0)
+                // 其中最后一条是**3 格**（字节码实证）。不满足时服务端下一 tick 就 closeContainer，
+                // 客户端看到的就是"打开了、然后立刻闪退"。所以开门前先把同一套判据问一遍：
+                // 不满足就**不开**，并直接告诉她为什么——宁可一句明白话，也不要一闪而过的空界面。
+                String blocked = openBlockedReason(player, maid);
+                if (blocked != null) {
+                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(blocked));
+                    return;
+                }
                 // 与右键女仆同一个入口。她在别的维度、骑着扫帚、正在干活都照开
                 //（界面是玩家的，关掉之后她照旧在原地干自己的事）
                 if (!maid.openMaidGui(player)) {
@@ -471,6 +482,36 @@ public final class SchedulePacketsMaid {
                 }
             });
             ctx.get().setPacketHandled(true);
+        }
+
+        /**
+         * 现在开她的配置界面会不会"开了就关"——会的话返回给玩家看的那句话，不会则 null。
+         *
+         * <p>判据逐条照抄 {@code AbstractMaidContainer.m_6875_}（TLM 的 stillValid），
+         * **顺序也照抄**：容器那边是"越靠前的条件先否掉"，我们按同一个顺序给理由，
+         * 玩家看到的就一定是真正的那个原因。这是本模组那条铁律的又一次应用：
+         * 同一个口径只有一处实现——这里是**客户端表现**那一侧的同一份口径，
+         * 改了 TLM 的判据我们也得跟着改，所以注释里把出处写死。
+         */
+        private static String openBlockedReason(ServerPlayer player, EntityMaid maid) {
+            if (!maid.m_6084_()) {
+                return "§7她已经不在了（被收回 / 已死亡），打不开配置界面";
+            }
+            if (maid.m_5803_()) {
+                return "§7她正在睡觉——醒了再开配置界面（睡觉中开会被原版立刻关掉）";
+            }
+            // 原版的判据是"玩家到她碰撞箱中心的距离不超过一个很近的常数"，且**两版数值不同**：
+            // 1.20.1 是 {@code Player.canReach(maid, 3.0)}、1.21.1 是
+            // {@code Player.canInteractWithEntity(maid, 4.0)}（都从 TLM 的
+            // {@code AbstractMaidContainer.stillValid} 字节码里读出来的）。所以这里直接调
+            // **这一版 TLM 实际用的那个方法**，不自己拼距离比较——哪天它再改数值，
+            // 也只是这一行跟着改一次，不会出现"我们以为够近、TLM 说不够"的错位。
+            if (!player.m_19950_(maid, 3.0)) {
+                return "§7她离你 " + String.format(java.util.Locale.ROOT, "%.1f", player.m_20270_(maid))
+                        + " 格——打开她的配置界面得站在她身边（原版限制，很近）。先走近她，"
+                        + "或者用「召她过来」/「去她身边」";
+            }
+            return null;
         }
     }
 }
