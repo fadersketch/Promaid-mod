@@ -18,7 +18,9 @@ import java.util.WeakHashMap;
  * ── 每 tick 的相位（实测六百五十六，按玩家原话定的顺序）──
  * <pre>
  *   ① 缺件        → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
- *   ② 骑上        → 从她背包取一把扫帚放出来骑上（已骑着就跳过）
+ *   ② 骑上        → 从她背包取一把扫帚放出来骑上（已骑着就跳过；她坐在椅子上也能换过来，
+ *                    走 force 骑乘——实测六百五十七）
+ *   ②.4 玩家在开  → 让位：只开火，不写推进意图、不开爬升相位（驾驶权在玩家，见 drivenByPlayer）
  *   ②.5 起飞相位  → 原地往上抬 1 格（头顶顶住就悬停在此处）
  *   ③ 接敌        → 先向上爬 8 格（顶住就悬停在此处）→ 再绕着她盘旋 + 开火
  *   ④ 平时        → 按"飞行跟随"同款的起手/收手距离跟主人（默认开；扫帚没耐久）
@@ -86,6 +88,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         MaidBroomDrive.dismount(maid);
         MaidBroomDrive.forgetMaid(maid.m_20148_());
         FOLLOWING.remove(maid);
+        PLAYER_DRIVE_LOGGED.remove(maid);
     }
 
     @Override
@@ -106,6 +109,20 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
         clearNotReady(maid, gameTime);
+
+        // ②.4 玩家在开这把扫帚 → 我们只开火，不碰飞行（见 drivenByPlayer 的注释：
+        // mixin 那边"有玩家驾驶就一个字不改"，这里跟着让位，否则每 tick 都会写一份没人用的
+        // 推进意图、还会把爬升相位开起来每 tick 判"顶头"刷日志）
+        if (MaidBroomDrive.drivenByPlayer(broom)) {
+            MaidBroomDrive.clearClimb(maid);
+            LivingEntity driven = currentTarget(maid);
+            if (driven != null && driven.m_6084_() && driven.m_9236_() == level) {
+                MaidBroomDrive.faceYaw(broom, yawTo(maid, driven));
+                MaidFlightCombatBehavior.fireRanged(maid, driven, maid.m_20148_(), gameTime);
+            }
+            notePlayerDriving(maid, gameTime);
+            return;
+        }
 
         // ②.5 起飞相位：原地往上抬 1 格再到别的地方去（玩家原话"如果拿到了扫帚，原地往上飞 1 格
         // 悬停（头顶如果被顶住了那就悬停在此处）"）。这一段不转向、不开火——就是那一下"腾空"。
@@ -320,6 +337,30 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     private static void clearNotReady(EntityMaid maid, long gameTime) {
         MISSING_SINCE.remove(maid);
     }
+
+    /**
+     * 玩家在开这把扫帚 → 15 秒最多一条日志（同 {@link #NOTIFY_COOLDOWN} 的节奏）。
+     * <p>
+     * 这是**必须能看见**的一种状态：此时她会正常开火，但**永远不会自己飞**（驾驶权在玩家），
+     * 玩家看到的却是"女仆骑在扫帚上却不跟着我飞/不升空"。旧版这种情况一个字都不打，
+     * 只能靠猜。现在留痕：日志搜「玩家在驾驶」。
+     */
+    private static void notePlayerDriving(EntityMaid maid, long gameTime) {
+        try {
+            Long ready = PLAYER_DRIVE_LOGGED.get(maid);
+            if (ready != null && gameTime < ready) {
+                return;
+            }
+            PLAYER_DRIVE_LOGGED.put(maid, gameTime + NOTIFY_COOLDOWN);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 玩家在驾驶这把扫帚 → 扫帚模式只负责开火、不接管飞行（想让她自己飞，请让玩家下扫帚）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 女仆 → 「玩家在驾驶」这条日志的下次可打时间（tick） */
+    private static final Map<EntityMaid, Long> PLAYER_DRIVE_LOGGED =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     private static boolean followEnabled() {
         try {

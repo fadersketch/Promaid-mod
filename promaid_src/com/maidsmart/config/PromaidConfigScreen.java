@@ -3612,6 +3612,52 @@ public class PromaidConfigScreen extends Screen {
             this.creativeItems.add(probe);
         }
         this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
+        logCookGridDiag(level, fuelMode);
+    }
+
+    /** 本屏已经记过诊断的档位（-1 = 还没记；换档位/重开这一页都会再记一次） */
+    private int cookDiagMode = -1;
+
+    /**
+     * v1.3.3 实测六百五十七【"烧制清单里为什么没有食物"】——把这一页的**事实**打出来。
+     *
+     * <p>背景：候选网格从 v1.3.2 起按"当前世界真有炉子配方"过滤。反馈说"没有食物"，而按代码
+     * 食物**应该**在（生肉/土豆/海带在原版都有 smelting + smoking 配方）——所以要么是这套判据
+     * 在你那个环境里拿不到配方（客户端没有配方表 / 整合包把食物配方改掉了），要么是过滤链里
+     * 还有别的东西在挡。这两种原因**在游戏里长得一模一样**（都是"这一格里没有食物"），
+     * 只能靠事实分辨——所以这里每次进某一档记一条，附一组代表物品的判定结果（真 = 会进网格）。
+     * 实测时把这一行发过来即可定位。日志里搜「烧制清单」。
+     */
+    private void logCookGridDiag(net.minecraft.world.level.Level level, boolean fuelMode) {
+        try {
+            if (this.cookDiagMode == this.cookTableMode) {
+                return; // 同一档不重复记（搜索框每敲一个字都会重建，不挡就是刷屏）
+            }
+            this.cookDiagMode = this.cookTableMode;
+            String[] probes = {"minecraft:beef", "minecraft:porkchop", "minecraft:chicken",
+                    "minecraft:potato", "minecraft:kelp", "minecraft:iron_ore",
+                    "minecraft:sand", "minecraft:cobblestone", "minecraft:bread"};
+            StringBuilder sb = new StringBuilder();
+            for (String id : probes) {
+                net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(new net.minecraft.resources.ResourceLocation(id));
+                if (it == null) {
+                    sb.append(' ').append(id).append("=无此物品");
+                    continue;
+                }
+                net.minecraft.world.item.ItemStack probe = new net.minecraft.world.item.ItemStack(it);
+                boolean keep = level != null && (fuelMode
+                        ? com.maidsmart.task.MaidCookBehavior.fuelForPicker(probe)
+                        : com.maidsmart.task.MaidCookBehavior.smeltableForPicker(level, probe));
+                sb.append(' ').append(id).append('=').append(keep ? "真" : "假");
+            }
+            com.maidsmart.tool.PromaidLog.log("烧制清单",
+                    "候选网格 " + this.creativeItems.size() + " 件 | 档位="
+                            + COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0), 3)]
+                            + " | 世界=" + (level == null ? "读不到（网格会退回全物品）" : "有")
+                            + " | 代表物品=" + sb);
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
