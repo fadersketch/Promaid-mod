@@ -1077,8 +1077,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 永久让位。放在岩浆扫描之前：空中不需要岩浆避让，顺带省掉方块扫描。
         // 注意只拦"自保会话"，不放宽真实伤害：飞行中照样掉血/被击落，
         // 只是不再由自保系统接管（要不要保命由飞行模式自己的逻辑与玩家决定）。
-        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
-            // 无条件清标记：飞行任务下 PRESERVE_TAG 永远不该为 true——
+        // v1.3.2 实测六百五十六：**骑扫帚飞行**与飞行作战同等对待——她骑上去就是乘客，
+        // 而本行为整条链路都是为"两条腿站在地上"的她写的（垫高/逃跑/瞬移到主人身边/
+        // setPos 微调 20 多处）。乘客的位置由扫帚每 tick 覆写（Entity.rideTick 里
+        // "先 tick 她自己、再 positionRider 按回鞍位"），于是自保把她往东挪、扫帚把她
+        // 拉回来，每 tick 重演一次——玩家看到的「乘坐扫帚时反复被拉回」有它一份；
+        // 更糟的是 teleportTo(...) 会直接 unRide() 把她从扫帚上踹下来。
+        // 判定与飞行那一条同源（MaidBroomKit.isBroomAirborne = 扫帚任务 + 正骑着）。
+        boolean airborne = com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)
+                || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid);
+        if (airborne) {
+            // 无条件清标记：飞行/骑扫帚时 PRESERVE_TAG 永远不该为 true——
             // 既覆盖"刚切进来还带着会话"的上升沿，也覆盖"重载后 sessionActive
             // 归零、标记残留在存档里"的情况（那种情况下方会话外自愈分支跑不到，
             // 不在这里清就会永久让位排班/参战/搭方块）。
@@ -1095,7 +1104,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 maid.getPersistentData().m_128379_(PRESERVE_TAG, false);
                 MOVING_SURVIVE.remove(maid.m_20148_());
                 com.maidsmart.tool.PromaidLog.log("自保",
-                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 切飞行作战 → 自保中止（飞行模式不触发自保）");
+                        com.maidsmart.tool.PromaidLog.nameOf(maid) + " 切飞行/骑扫帚 → 自保中止（空中不触发自保）");
             }
             // 会话外的常驻轻量逻辑照常保留：负面效果自清（喝蜂蜜/牛奶解毒）——
             // 与保命无关，属于"顺手治病"，飞行中中毒也该喝。

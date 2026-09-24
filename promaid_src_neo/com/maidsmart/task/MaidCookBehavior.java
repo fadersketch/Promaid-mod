@@ -657,13 +657,71 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
      *  不该被玩家的原料白名单/黑名单改写，否则"把木材列进禁止烧制"会反过来
      *  把它算成"纯燃料"优先烧掉，与玩家意图正好相反。 */
     private static <T extends net.minecraft.world.item.crafting.AbstractCookingRecipe>
-    boolean hasRecipeRaw(ServerLevel level, ItemStack stack,
+    boolean hasRecipeRaw(net.minecraft.world.level.Level level, ItemStack stack,
                          net.minecraft.world.item.crafting.RecipeType<T> type) {
         try {
             return level.getRecipeManager()
                     .getRecipeFor(type, new net.minecraft.world.item.crafting.SingleRecipeInput(stack), level)
                     .isPresent();
         } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /* ==================== v1.3.2 实测六百五十六：面板候选网格的判据 ==================== */
+
+    /**
+     * 面板「烧制清单」候选网格用：这件物品在当前世界**真的有炉子配方**吗——熔炉 / 烟熏炉 /
+     * 高炉任一。
+     *
+     * <p>── 实测六百五十六【"网格里全是烧不动的东西"】──
+     * 旧版网格是**全物品**（把注册表里所有 item 铺出来），理由写在旧注释里："真正能不能烧
+     * 由女仆那边的配方判定管"。结果玩家打开这一页看到的是几千个物品：绝大多数根本没有炉子
+     * 配方（钻石、石头、面包、工具……），而真正能烧的生肉/矿石/沙子要翻页＋搜索才找得到
+     * ——反馈原文「那些不可烧东西都进这张表了，原本可以烧制的食物和物品反而不在里面」。
+     * 现在网格只列**真的有配方**的：判据就在这里，与行为侧同源，所以"面板上看得见的"
+     * 和"她真的会烧的"不会再是两套东西。
+     *
+     * <p>── 两条刻意的"不" ──
+     * <ul>
+     *   <li>**不看**玩家的四张清单（{@link #smeltListed}）：网格正是用来填清单的，再套一层
+     *       清单过滤会变成"只有已经在清单里的才显示"，自己把自己锁死；</li>
+     *   <li>**不看**开关（「烧任何可烧制物」「熔炉烧矿物」）：那是"我允不允许她烧"，
+     *       而"这东西能不能烧"是事实问题——面板该展示事实，开关在行为侧把关。</li>
+     * </ul>
+     * 装备类（工具/盔甲/三叉戟/盾）与附魔/用旧的物品按 {@link #isSafeToFeed} 一并排除：
+     * 她永不喂这些（它们有"烧成粒"配方），网格就不该鼓动玩家把它们填进清单。
+     */
+    public static boolean smeltableForPicker(net.minecraft.world.level.Level level, ItemStack stack) {
+        if (level == null || !isSafeToFeed(stack)) {
+            return false;
+        }
+        Item it = stack.getItem();
+        if (it instanceof net.minecraft.world.item.TieredItem
+                || it instanceof net.minecraft.world.item.ArmorItem
+                || it instanceof net.minecraft.world.item.TridentItem
+                || it instanceof net.minecraft.world.item.ShieldItem) {
+            return false;
+        }
+        return hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.SMELTING)
+                || hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.SMOKING)
+                || hasRecipeRaw(level, stack, net.minecraft.world.item.crafting.RecipeType.BLASTING);
+    }
+
+    /**
+     * 面板「烧制清单」的**燃料**两档（只用这些燃料 / 禁用燃料）用的候选判据：原版能不能
+     * 当柴烧（{@code AbstractFurnaceBlockEntity.isFuel}，与行为侧 {@link #extractBestFuel} 同源）。
+     *
+     * <p>燃料两档和原料两档要展示的东西完全不同——把几千个物品铺给"只用这些燃料"，
+     * 玩家同样没法用（旧版就是这样）。同一个网格按当前档位换判据。
+     */
+    public static boolean fuelForPicker(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        try {
+            return net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity.isFuel(stack);
+        } catch (Throwable ignored) {
             return false;
         }
     }
