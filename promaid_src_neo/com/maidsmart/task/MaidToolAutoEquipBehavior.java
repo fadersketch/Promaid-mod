@@ -37,12 +37,23 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return false;
         }
-        // v1.3.0「扫帚模式」：同样【不自动切换武器/盾】——玩家指定什么就是什么（换装由她自己
-        // 的激活判定负责"有没有远程武器"，不做主手择优替换）。
+        // v1.3.0「扫帚模式」：**照远程空袭一样自己换武器**。
+        //
+        // 【为什么必须自动换】玩家实测反馈："女仆虽然可以骑上扫帚，但是没有办法给她更换武器，
+        // 毕竟一个右击就坐上去了"——她骑在扫帚上时玩家右键就是上/下扫帚，打不开她的背包界面，
+        // 于是"自动换装"成了骑乘期间唯一的主手武器入口。玩家原话："走跟远程空袭一样能自己换武器"。
+        //
+        // 【怎么换】只调 MaidToolAutoEquip.ensureForTask：扫帚任务的 UID 不在它的特殊表里，
+        // 于是落到末尾那条"实现了 IAttackTask 的模组战斗任务 → 用任务自带的 isWeapon 匹配"
+        // 分支，而 MaidBroomTask.isWeapon 就是 MaidFlightKit.isRangedWeapon —— 即"从背包里挑
+        // 一把远程武器换到主手"，与远程空袭同一口径、同一份实现（不是抄一份）。
+        // 顺带把主手那把扫帚腾出来（她掏出扫帚物品时主手会空，换装再从背包取武器）。
+        //
         // **刻意不并进下面那个飞行分支**：那个分支会给她穿鞘翅、跑空袭索敌探针与牵引绳
         // （equip / FlightTargetProbe / MaidFlightRecall / notifyNotReady），而扫帚模式
-        // 既不背鞘翅也不滑翔——并进去等于凭空给她长出翅膀。这里只要"不换装"这一件事。
+        // 既不背鞘翅也不滑翔——并进去等于凭空给她长出翅膀。这里只做"换武器"这一件事。
         if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+            MaidToolAutoEquip.ensureForTask(maid);
             return false;
         }
         // v1.2.0：飞行作战（近战/远战）下【不自动切换武器/盾】——玩家指定什么就是什么；

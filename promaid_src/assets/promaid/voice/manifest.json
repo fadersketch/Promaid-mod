@@ -6,6 +6,11 @@
       "mode": "contains"
     },
     {
+      "text": "扫帚模式还差",
+      "file": "broom_not_ready.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "建好啦！来看看我搭的",
       "file": "build_done.ogg",
       "mode": "contains"
@@ -48,6 +53,11 @@
     {
       "text": "主人饿了吧，给你带了吃的",
       "file": "aid_food.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "蛋糕真好吃",
+      "file": "cake_eat.ogg",
       "mode": "contains"
     },
     {

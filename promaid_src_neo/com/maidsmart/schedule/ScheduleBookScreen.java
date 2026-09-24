@@ -603,6 +603,25 @@ public class ScheduleBookScreen extends Screen {
                         PacketDistributor.sendToServer(new SchedulePacketsMaid.RenameMaidPacket(
                                 this.selUuid, nameBox.getValue())))
                 .bounds(qx + qw - 92, y, 92, 20).build());
+        // v1.3.0 实测六百五十五（反馈原文："排班表快捷模式里加一个功能。可以直接打开这个女仆
+        // 内部的配置页面。（就跟正常右击女仆打开的效果一样）"）：
+        // 放在**底部按钮行**（h-24）的右侧——快捷页在这条线上只有左下角的「← 女仆列表」，
+        // 右边整片空着。为什么不占正文行：正文第 5 行（改名）已经排到 y=182，而 240 高
+        // 最小窗口的内容下沿是 h-56=184，再插一行会压住底部提示文字（同一段注释在
+        // 「去她身边」那行已经记过一次）。右侧对齐、离右下角按钮位只有快捷页占用。
+        this.addRenderableWidget(Button.builder(
+                        Component.literal(canSummon
+                                ? "\u00a7b\u2699 女仆配置"
+                                : "\u00a77\u2699 女仆配置"),
+                        b -> {
+                            if (canSummon) {
+                                // 服务端替玩家开（openMaidGui 只对 ServerPlayer 生效）——
+                                // 与右键女仆是同一个入口：背包 / 外观 / 行为设置
+                                PacketDistributor.sendToServer(
+                                        new SchedulePacketsMaid.OpenMaidConfigPacket(this.selUuid));
+                            }
+                        })
+                .bounds(Math.max(4, w - 102), h - 24, 90, 20).build());
     }
 
     /**

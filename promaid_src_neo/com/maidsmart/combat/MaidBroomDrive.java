@@ -53,10 +53,18 @@ import java.util.UUID;
  *       wither.setYRot(-((float) Mth.atan2(d.x, d.z)) * 57.295776F);       // ← 朝向 = 速度方向
  *   }
  * </pre>
- * 本类**照搬这三条**（0.05 推进 / 0.5 到点阻尼 / {@code -atan2(dx,dz)} 取朝向），只改一处：
- * 站位距离从凋灵的"碰撞箱大小"（近战贴脸）换成可配的 {@code combat.broomRange}（默认 8 格）
- * ——她要拿远程武器打，贴脸没意义。另加两条凋灵没有的：**水平/垂直分别限速**（凋灵靠
- * MoveControl 自己收，我们没有那一层）与**方位角缓慢旋转**（见 {@link #combatPoint}）。
+ * 本类保留这三条的**观感**（朝目标点飞 / 到点收干 / {@code -atan2(dx,dz)} 取朝向），两处改动：
+ * <ol>
+ *   <li>站位距离从凋灵的"碰撞箱大小"（近战贴脸）换成可配的 {@code combat.broomRange}
+ *       （默认 8 格）——她要拿远程武器打，贴脸没意义；</li>
+ *   <li><b>推进方式：增量累加 → 速度直接由距离决定。</b>凋灵那句
+ *       {@code delta += d.scale(speed*0.05/len)} 之所以稳定，靠的是原版 {@code travel}
+ *       每 tick 给速度乘一次空气阻力（0.91）；本模式的扫帚走的是 mixin 接管、**travel 被
+ *       cancel**，没有那层阻力 → 增量式退化成无阻尼振荡器（空中上下摆动，实测六百五十五）。
+ *       详见 {@link #steerTo}。</li>
+ * </ol>
+ * 另加两条凋灵没有的：**水平/垂直分别限速**与**起飞相位**（骑上先垂直抬起 1 格，
+ * 见 {@link #riseTarget}）与**方位角缓慢旋转**（见 {@link #combatPoint}）。
  */
 public final class MaidBroomDrive {
 
@@ -77,23 +85,37 @@ public final class MaidBroomDrive {
     private static final Map<UUID, ItemStack> DEBT = new HashMap<>();
     /** 女仆 UUID → 战斗盘旋的方位角（弧度），每 tick 缓慢增长 → "绕着她打" */
     private static final Map<UUID, Double> ORBIT = new HashMap<>();
+    /** 扫帚 UUID → 起飞相位要爬到的 Y（骑上那一刻的 Y + {@link #RISE_BLOCKS}） */
+    private static final Map<UUID, Double> RISE = new HashMap<>();
 
-    /** 起飞/爬升的瞬时抬升速度（"立刻用扫帚飞起来 1 格"）：0.42 与飞行跟随的起跳同一档 */
-    private static final double RISE_VELOCITY = 0.42;
-    /** 到达判定（格）：与凋灵的"碰撞箱大小"同一量级 */
-    private static final double ARRIVE = 0.4;
-    /** 凋灵 MoveControl 的推进系数（`delta.add(d.scale(speed * 0.05 / len))` 里的 0.05） */
-    private static final double WITHER_ACCEL = 0.05;
-    /** 到点后的阻尼（凋灵 `delta.scale(0.5)`） */
-    private static final double ARRIVE_DAMP = 0.5;
+    /** 起飞相位的高度（格）——玩家要求"女仆会立刻用扫帚飞起来 1 格" */
+    private static final double RISE_BLOCKS = 1.0;
+    /** 到达判定（格）：进入这个距离视为"已到位"，速度直接清零悬停 */
+    private static final double ARRIVE = 0.35;
+    /**
+     * 到点减速带（格）：距离小于此值开始线性降速（速度 ∝ 距离），到点自然收干不冲过头。
+     * <p>
+     * 这一条**取代**了凋灵 MoveControl 那句 `delta.add(d.scale(speed * 0.05 / len))` 的
+     * 增量式推进——原因见 {@link #steerTo} 的长注释（实测六百五十五 的真凶：
+     * 增量式在"我们接管了 travel"的场景里是一个**无阻尼振荡器**）。
+     */
+    private static final double ARRIVE_RAMP = 1.5;
     /** 弧度→度（凋灵那行 `* 57.295776F`） */
     private static final float DEG = 57.295776F;
     /** 水平限速（格/tick）：0.35 ≈ 7 格/秒，比玩家冲刺略快、不至于甩掉主人 */
     private static final double MAX_H_SPEED = 0.35;
     /** 垂直限速（格/tick）：比水平更慢，免得上下猛蹿看着像抽搐 */
-    private static final double MAX_V_SPEED = 0.28;
-    /** 盘旋角速度（弧度/tick）：0.09 ≈ 一圈 70 tick（3.5 秒），肉眼能看出"在绕" */
-    private static final double ORBIT_STEP = 0.09;
+    private static final double MAX_V_SPEED = 0.22;
+    /**
+     * 战斗盘旋的**线速度**（格/tick）：0.14 ≈ 2.8 格/秒。
+     * <p>
+     * 取"线速度恒定"而不是"角速度恒定"，是因为盘旋半径可配（默认 8 格）：角速度固定时
+     * 半径越大、目标点的圆周线速度越大（8 格半径 + 0.09 rad/tick = 0.72 格/tick，
+     * 是 {@link #MAX_H_SPEED} 的两倍多）——她永远追不上那个点，表现成"绕不动、
+     * 只在原地抖"。按线速度换算（{@code step = ORBIT_SPEED / 半径}）后，
+     * 任何半径下她都能稳稳跟上。
+     */
+    private static final double ORBIT_SPEED = 0.14;
     /** 平时跟随的水平距离（格） */
     private static final double FOLLOW_DIST = 3.5;
     /** 平时跟随的高度（格，相对主人脚下） */
@@ -158,12 +180,34 @@ public final class MaidBroomDrive {
         }
         DEBT.put(broom.getUUID(), taken);
         ORBIT.remove(maid.getUUID());
-        // 用户要求："女仆会立刻用扫帚飞起来 1 格"——骑上来的第一 tick 直接给一个向上的速度
-        setThrust(broom, new Vec3(0.0, RISE_VELOCITY, 0.0), maid.getYRot());
+        // 玩家要求："女仆会立刻用扫帚飞起来 1 格"——记下起飞相位（爬到她脚下 +1 格），
+        // 由 MaidBroomBehavior 先垂直抬起来、抬到位再开始"去哪"的正常逻辑。
+        // 原来这里直接塞一个向上的瞬时速度是不行的：同一 tick 里紧跟的 steerTo 会把它覆盖掉，
+        // 而且"给一次速度"在没有 travel 阻尼的情况下根本不会停在 1 格处（见 steerTo 的长注释）。
+        RISE.put(broom.getUUID(), maid.getY() + RISE_BLOCKS);
         com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 取出扫帚骑上并起飞（消耗 " + taken.getCount() + "x "
                 + taken.getHoverName().getString() + "，收工时原物归还）");
         return broom;
+    }
+
+    /**
+     * 起飞相位的目标高度：还没爬到位就返回那个 Y（调用方应直奔它、先别管去哪打）；
+     * 已经到位（或根本没有起飞记录）返回 null 并把记录清掉。
+     */
+    public static Double riseTarget(EntityBroom broom, double currentY) {
+        if (broom == null) {
+            return null;
+        }
+        Double to = RISE.get(broom.getUUID());
+        if (to == null) {
+            return null;
+        }
+        if (currentY >= to - 0.05) {
+            RISE.remove(broom.getUUID());
+            return null;
+        }
+        return to;
     }
 
     /** 收工：下扫帚 + 把当初那件扫帚**精确**还回她背包（背包塞不下就落脚下，走 MaidGiveBack） */
@@ -244,15 +288,17 @@ public final class MaidBroomDrive {
      * 【为什么要绕而不是直线怼过去】原版凋灵是近战 boss，它的 MoveControl 只是"朝目标点飞"；
      * 那个目标点由 AI 每拍重设。而远程女仆必须**持续把距离拉开**才有输出窗口（贴脸会被近战
      * 反打），所以这里把"目标点"取成目标周围的**圆周上一点**，方位角每 tick 转
-     * {@link #ORBIT_STEP} —— 表现就是"绕着她转圈打"，这正是玩家说的"同凋灵"的观感。
+     * {@link #ORBIT_SPEED} 换算出来的那一步 —— 表现就是"绕着她转圈打"，这正是玩家说的
+     * "同凋灵"的观感。
      *
      * @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
      */
     public static Vec3 combatPoint(EntityMaid maid, LivingEntity target) {
         UUID id = maid.getUUID();
-        double ang = ORBIT.getOrDefault(id, 0.0) + ORBIT_STEP;
+        double r = Math.max(1.0, rangeCfg());
+        // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
+        double ang = ORBIT.getOrDefault(id, 0.0) + ORBIT_SPEED / r;
         ORBIT.put(id, ang);
-        double r = rangeCfg();
         return new Vec3(target.getX() + Math.cos(ang) * r,
                 target.getY() + hoverCfg(),
                 target.getZ() + Math.sin(ang) * r);
@@ -273,10 +319,26 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 把"想去哪"变成一个速度脉冲写进意图表——**推进公式照搬凋灵 MoveControl**（见类文档）。
+     * 把"想去哪"变成一个速度脉冲写进意图表——推进公式照搬凋灵 MoveControl 的**形状**
+     * （朝目标点推进、到点收干、朝向 = 速度方向），但推进方式由"增量累加"改成"直接给速度"。
      *
-     * 目标点先过 {@link MaidBroomKit#clampToHome}：这是"移动逻辑与 home 模式"那条账的落点
+     * <p>目标点先过 {@link MaidBroomKit#clampToHome}：这是"移动逻辑与 home 模式"那条账的落点
      * ——她骑上扫帚后 TLM 自身的范围约束整条失效，圈内这件事只剩这里把关。
+     *
+     * <p>── 实测六百五十五【"空中上下摆动、不朝主人/敌人飞"的真凶】──
+     * 凋灵那套是 `delta = delta + d.scale(speed*0.05/len)`，**每一拍在上一拍的速度上再加一点**。
+     * 它之所以在凋灵身上稳定，是因为凋灵走原版 {@code travel}——那里每 tick 会给 delta 乘一次
+     * 空气阻力（0.91），"加一点 + 乘 0.91"配起来正好是一阶收敛：速度∝距离，到点自然收干。
+     * <p>而本模式的扫帚**由 mixin 在 HEAD 处 cancel 掉 travel**（见
+     * {@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}）——阻力那一层没了。于是
+     * `delta += d*k` 变成一个**无阻尼的谐振子**：她冲向目标点、速度不收、冲过去、反向加速、
+     * 再冲回来……振幅 = 初始偏差、永不衰减。玩家看到的就是
+     * "她升到空中以后在那儿上下摆动（鬼畜状态），脸朝着主人但不会朝主人飞"——因为垂直方向的
+     * 偏差（悬停高 2 格）正好把它喂成了一个 1.4 秒周期的上下振荡，而水平方向她本来就
+     * 站在跟随圈上，偏差≈0，所以"看不出在飞"。
+     * <p>修法：**速度直接由距离决定**（比例导引 + 到点减速带），不做任何累加。
+     * 这样"位移 → 速度 → 位移"是一阶系统，数学上不可能振荡；同时保留玩家要的凋灵观感：
+     * 朝目标点飞、到点停住悬停、朝向 = 速度方向。
      */
     public static void steerTo(EntityMaid maid, Vec3 desired) {
         if (maid == null || desired == null) {
@@ -295,28 +357,17 @@ public final class MaidBroomDrive {
         double dz = aim.z - broom.getZ();
         double dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double horiz = Math.sqrt(dx * dx + dz * dz);
-        Vec3 v = broom.getDeltaMovement();
-        if (v == null) {
-            v = Vec3.ZERO;
-        }
         if (dist < ARRIVE) {
-            // 到点：阻尼（凋灵 `delta.scale(0.5)`）；朝向保持上一拍，免得原地打转
-            setThrust(broom, v.scale(ARRIVE_DAMP), yaw(broom));
+            // 到点：速度清零原地悬停（mixin 拿到零矢量就是"零速悬停"，不会自由落体）
+            setThrust(broom, Vec3.ZERO, yaw(broom));
             return;
         }
+        // 到点减速带：远处全速、近了按距离线性收干（分子分母同量纲，dist→0 时速度→0）
+        double speed = Math.min(1.0, dist / ARRIVE_RAMP);
         double inv = 1.0 / dist;
-        Vec3 nv = v.add(new Vec3(dx * inv * WITHER_ACCEL, dy * inv * WITHER_ACCEL, dz * inv * WITHER_ACCEL));
-        // 限速：凋灵有 MoveControl 那一层替它收，我们没有，必须自己夹
-        double hs = Math.sqrt(nv.x * nv.x + nv.z * nv.z);
-        if (hs > MAX_H_SPEED && hs > 1.0E-6) {
-            double k = MAX_H_SPEED / hs;
-            nv = new Vec3(nv.x * k, nv.y, nv.z * k);
-        }
-        if (nv.y > MAX_V_SPEED) {
-            nv = new Vec3(nv.x, MAX_V_SPEED, nv.z);
-        } else if (nv.y < -MAX_V_SPEED) {
-            nv = new Vec3(nv.x, -MAX_V_SPEED, nv.z);
-        }
+        Vec3 nv = new Vec3(dx * inv * MAX_H_SPEED * speed,
+                dy * inv * MAX_V_SPEED * speed,
+                dz * inv * MAX_H_SPEED * speed);
         // 朝向 = 速度方向（凋灵 `-atan2(d.x, d.z) * 57.295776`）；纯垂直位移时不改朝向
         float yaw = horiz > 0.15 ? (float) (-Math.atan2(dx, dz) * DEG) : yaw(broom);
         setThrust(broom, nv, yaw);
@@ -332,6 +383,7 @@ public final class MaidBroomDrive {
         THRUST.remove(broomId);
         YAW.remove(broomId);
         DEBT.remove(broomId);
+        RISE.remove(broomId);
     }
 
     /** 这只女仆下线/卸载：清掉她的盘旋相位与欠账（她骑的那把扫帚随后自然落地） */
@@ -348,6 +400,7 @@ public final class MaidBroomDrive {
         YAW.clear();
         DEBT.clear();
         ORBIT.clear();
+        RISE.clear();
     }
 
     /* ==================== 内部工具 ==================== */

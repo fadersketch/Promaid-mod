@@ -7,6 +7,7 @@
 用法：
   python _voice_emo2.py check    只校验覆盖度/参考音频存在
   python _voice_emo2.py run     合成到 _voice_new2/
+  python _voice_emo2.py run a.ogg b.ogg   只补合成这两个文件（新增台词时不必全量重跑）
 """
 import io
 import json
@@ -50,10 +51,14 @@ STYLE_OF = {
     'care': ['aid_food', 'aid_sister_help', 'aid_potion_incoming', 'aid_potion_given',
              'aid_bag_full', 'aid_eat_something', 'aid_honey_poison', 'aid_milk_debuff',
              'resurrect_back', 'death_teleport', 'owner_looking',
-             'aid_golden_apple', 'aid_enchanted_apple'],
+             'aid_golden_apple', 'aid_enchanted_apple',
+             # v1.3.0 实测六百五十五：投喂蛋糕（玩家主动投喂的温柔场合）
+             'cake_eat'],
     'plead': ['build_missing_material', 'bridge_no_block', 'brew_missing',
               'mine_no_block_high', 'wood_no_block_high', 'wood_no_axe', 'no_food_left',
-              'work_no_pickaxe', 'work_ridden'],
+              'work_no_pickaxe', 'work_ridden',
+              # v1.3.0 实测六百五十五：扫帚模式缺件（"还差…先待着不动"，为难）
+              'broom_not_ready'],
     'work': ['build_done', 'build_substitute', 'build_skip_bedrock', 'build_skip_unloaded',
              'build_skip_noitem', 'build_skip_float', 'build_blocked', 'schedule_locked',
              'bridge_cant_climb', 'work_distracted', 'mine_blocked_area', 'wood_blocked_area',
@@ -143,6 +148,9 @@ JP = {
     'work_ridden.ogg': '誰かに乗られてて、動けないの',
     'aid_golden_apple.ogg': 'ご主人様、金のリンゴをあげる！',
     'aid_enchanted_apple.ogg': 'ご主人様、エンチャントされた金のリンゴをあげる！',
+    # -------- 补漏（实测六百五十五：投喂蛋糕 + 扫帚模式缺件） --------
+    'cake_eat.ogg': 'ケーキ、すごくおいしい…ご主人様の気持ち、ちゃんと届いたよ〜',
+    'broom_not_ready.ogg': '箒モード、まだ足りない物があるみたい…ちょっと待っててね',
     # -------- 排班闲聊 49 条 --------
     'sched_01.ogg': 'あら、ご主人様来たの？ちゃんとシフト通り働いてるよ、サボってないの！',
     'sched_02.ogg': 'うんうん、この時間はこれって決まってるの、すぐ終わるよ〜',
@@ -222,11 +230,16 @@ def main():
     print('REF_A:', os.path.isfile(REF_A), ' REF_B:', os.path.isfile(REF_B))
     if len(sys.argv) < 2 or sys.argv[1] != 'run':
         return
+    # v1.3.0 实测六百五十五：可选过滤——`run cake_eat.ogg broom_not_ready.ogg`
+    # 只合成列出的这几个文件（补一两句新台词时不必把 124 条全量重跑一遍，省十几分钟）
+    only = set(sys.argv[2:])
     import urllib.request
     os.makedirs(OUT, exist_ok=True)
     done = 0
     for e in entries:
         f = e['file']
+        if only and f not in only:
+            continue
         st = style_of(f)
         s = STYLES[st]
         payload = {
@@ -251,7 +264,7 @@ def main():
                 print('SHORT/FAIL %-8s %s' % (st, f))
         except Exception as ex:
             print('ERR %-8s %s -> %r' % (st, f, ex))
-    print('generated', done, 'of', len(entries))
+    print('generated', done, 'of', (len(only) if only else len(entries)))
 
 
 if __name__ == '__main__':

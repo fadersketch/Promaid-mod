@@ -95,6 +95,14 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
         clearNotReady(maid, gameTime);
 
+        // ②.5 起飞相位：先垂直抬起 1 格（玩家原话"女仆会立刻用扫帚飞起来 1 格"），
+        // 抬到位再开始"去哪"。这一段不转向、不开火——就是那一下"腾空"的动作。
+        Double riseY = MaidBroomDrive.riseTarget(broom, maid.m_20186_());
+        if (riseY != null) {
+            MaidBroomDrive.steerTo(maid, new Vec3(maid.m_20185_(), riseY, maid.m_20189_()));
+            return;
+        }
+
         // ③ 有目标 → 凋灵式盘旋 + 照搬远程空袭开火
         LivingEntity target = currentTarget(maid);
         if (target != null && target.m_6084_() && target.m_9236_() == level) {
