@@ -81,6 +81,11 @@ public final class BombTntTick {
             if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
                 return;
             }
+            // v1.3.6 实测六百六十一：扫帚模式不放放置类战术（TNT / 末地水晶 / 重生锚 / 床），
+            // 只留主手武器输出。这一条是**所有战斗任务**的入口，所以闸放在这里最省事也最全。
+            if (com.maidsmart.combat.MaidBroomKit.forbidsBombing(maid)) {
+                return;
+            }
             if (!com.maidsmart.task.MaidWorkTags.isCombatTask(maid)) {
                 return; // 非战斗任务不扔（干活/待机/跟随都不打扰）
             }

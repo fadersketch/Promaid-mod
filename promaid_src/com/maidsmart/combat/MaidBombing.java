@@ -524,6 +524,15 @@ public final class MaidBombing {
             if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
                 return false;
             }
+
+            // v1.3.6 实测六百六十一【扫帚模式：不放放置类战术】她骑在扫帚上，只有主手武器在打。
+            // 放置那条链路（本方法 / BombTntTick 的战斗扫描 / 相位机）只看"任务是不是战斗类"，
+            // 全程没有 isPassenger 判定——她飞在天上照样会起手放水晶/重生锚/床（源码实证）。
+            // 手册里那句「扫帚模式下不能放 TNT / 末地水晶 / 重生锚 / 床」要成立，就必须真拦一道。
+            // 判据在 MaidBroomKit.forbidsBombing（= 任务是扫帚模式），一处定义、三处调用。
+            if (com.maidsmart.combat.MaidBroomKit.forbidsBombing(maid)) {
+                return false;
+            }
             UUID id = maid.m_20148_();
             long now = level.m_46467_();
             EnumMap<Kind, Phase> running = PHASE.get(id);
@@ -812,6 +821,13 @@ public final class MaidBombing {
         EntityMaid maid = ph.maid;
         long gameTime = level.m_46467_();
         if (com.maidsmart.compat.MaidModeCompat.isSuspended(maid)) {
+            BombPlacement.rollback(level, ph);
+            return Result.ABORT;
+        }
+        // v1.3.6 实测六百六十一：扫帚模式不放放置类战术（她骑在扫帚上只能主手武器输出）。
+        // 这一档管的是"相位已经在飞"的情况：她刚被换成扫帚模式时，在飞的那一段当场作废，
+        // 已经放下的方块回滚进背包——否则手册里那句声明在切换的那几秒里会是假的。
+        if (com.maidsmart.combat.MaidBroomKit.forbidsBombing(maid)) {
             BombPlacement.rollback(level, ph);
             return Result.ABORT;
         }
