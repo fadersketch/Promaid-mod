@@ -462,28 +462,27 @@ public final class SchedulePacketsMaid {
                             "§7没找到她——可能已被收进魂符或不在已加载区块"));
                     return;
                 }
-                // v1.3.4【真正的远程开界面】（实测六百五十九，玩家原话："我想要真正的远程开界面"）
-                // 上一版（实测六百五十八）在这里做的是"离得远就**不开**、回一句明白话"——那是止血，
-                // 不是玩家要的东西。真正的根因是 TLM 的 AbstractMaidContainer.m_6875_（= stillValid）
-                // 每 tick 都要问一遍「玩家到她 ≤ 3 格」（字节码实证），人一站远服务端下一 tick 就
-                // closeContainer，客户端看到的就是"点进去一下、立刻闪退"。
-                // 现在改成**真的开**：先把这一对（玩家, 她）登记进 RemoteMaidGui，容器那条距离判据
-                // 由 MaidContainerRemoteOpenMixin 对这一对放行；界面关掉时授权自动收回。
+                // v1.3.4 实测六百五十九 / v1.3.5 实测六百六十【真正的远程开界面】
+                // （玩家原话：「我想要真正的远程开界面」）两条修缺一不可：
+                // ① 容器侧：TLM 的 AbstractMaidContainer.m_6875_（= stillValid）**每 tick** 都要问
+                //    一遍「玩家到她 ≤ 3 格」（字节码实证），人一站远服务端下一 tick 就 closeContainer，
+                //    客户端看到的就是"点进去一下、立刻闪退"。这一条由 MaidContainerRemoteOpenMixin
+                //    对**登记过的**这一对（玩家, 她）整条放行。
+                // ② 客户端侧：TLM 的容器是按实体的**网络 id** 在客户端找她的（字节码实证：
+                //    AbstractMaidContainer 构造里 level.getEntity(int) + cast EntityMaid，
+                //    「玩家背包那一片槽位」只在 maid != null 时才建）——客户端根本不认识她时，
+                //    打开的就是个残界面。这一条由 ChunkMapTrackRemoteMixin **强制同步**解决：
+                //    把这一对塞进原版 seenBy 并调原版 addPairing（spawn + 元数据 + 属性一起发），
+                //    客户端由此真的拿到她，与"走近时原版自己配上的"完全一致。
+                // 所以这里**不再有任何距离阈值**——几十格、几百格、几千格都是同一套流程。
+                // 真正的动作在 RemoteMaidGui.pump（挂在 ChunkMap.tick 尾部，每 tick 一次），
+                // 顺序是「先强制配对、再把界面开出来」：两条包同一条连接按序到达，不会抢跑。
                 String blocked = openBlockedReason(player, maid);
                 if (blocked != null) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(blocked));
                     return;
                 }
-                RemoteMaidGui.enable(player, maid);
-                // 与右键女仆同一个入口。她在别的维度、骑着扫帚、正在干活都照开
-                //（界面是玩家的，关掉之后她照旧在原地干自己的事）
-                if (!maid.openMaidGui(player)) {
-                    // 没开成：把刚登记的授权收回，别留一份"她那边没有界面、我们这边还认这个远程"的悬空登记
-                    RemoteMaidGui.disable(player, maid);
-                    player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
-                            "§7没能打开「" + (maid.m_5446_() == null
-                                    ? "女仆" : maid.m_5446_().getString()) + "」的配置界面"));
-                }
+                RemoteMaidGui.request(player, maid);
             });
             ctx.get().setPacketHandled(true);
         }
@@ -496,17 +495,26 @@ public final class SchedulePacketsMaid {
          * 仍是本模组那条铁律的又一次应用：同一个口径只有一处实现——这里是**客户端表现**那一侧的
          * 同一份口径，改了 TLM 的判据我们也得跟着改，所以注释里把出处写死。
          *
-         * <p>【v1.3.4 实测六百五十九：距离那一条不在这里拦了】玩家原话"我想要真正的远程开界面"。
-         * 「离她 ≤ 3 格」那一条改由 {@code MaidContainerRemoteOpenMixin} 对**登记过的**这一对
-         * （玩家, 她）整条放行——那是 TLM 每 tick 关界面的唯一原因。留在这里的只剩两项：
+         * <p>【v1.3.4 实测六百五十九：距离那一条不在这里拦了】
+         * 「离她 ≤ 3 格」由 {@code MaidContainerRemoteOpenMixin} 对**登记过的**这一对整条放行
+         * ——那是 TLM 每 tick 关界面的唯一原因。
+         *
+         * <p>【v1.3.5 实测六百六十：连"离得太远、客户端看不见她"也不拦了】
+         * 上一版在这里挡了一条写死的距离上限（怕客户端没同步到她、开出来是残界面），做法是"不让开"。
+         * 玩家问：「不是有过一个女仆区块强制加载吗？难道解决不了这样的问题吗？」
+         * ——区块票据确实解决不了这一条：它管的是"她在服务端还在不在、动不动"，
+         * 与"客户端认不认得她"是两条独立管线（同步门在 ChunkMap$TrackedEntity.m_140497_ 里，
+         * 只有距离 + 可见性，与票据无关）。但"把同步真做出来"做得到：ChunkMapTrackRemoteMixin
+         * 就是干这个的。所以那个距离阈值整个删掉了，这里只剩三条"开了也会立刻被原版关掉"的：
          * <ol>
-         *   <li>她死了 / 正在睡——这两条是 stillValid 里"距离之前"的条件，**照旧拦**
-         *       （不然服务端下一 tick 还是关，玩家只会看到闪退而不是原因）；</li>
-         *   <li>**客户端根本看不到她**——TLM 的容器是按实体的网络 id 在客户端找她的
-         *       （字节码实证：{@code AbstractMaidContainer} 构造里
-         *       {@code level.getEntity(int)} + {@code checkcast EntityMaid}），而"玩家背包那一片
-         *       槽位"只在 {@code maid != null} 时才建——客户端没同步到这个实体时打开的是残界面。
-         *       边界取**原版自己的实体同步距离**（{@link RemoteMaidGui#remoteRange}），不是我们拍一个数。</li>
+         *   <li>她已经不在了（被收回 / 死亡）；</li>
+         *   <li>她正在睡觉——TLM 的 openMaidGui 自己就拒绝（字节码实证：里面只有
+         *       {@code isSleeping()} 一道判据）；</li>
+         *   <li>她在别的维度——跨维度时玩家的客户端在另一个维度，
+         *       {@code AbstractMaidContainer} 构造里那个 {@code level.getEntity(int)} 找的是
+         *       **玩家所在维度**，永远找不到她；而且强制同步也做不了（她在那一维度的实体跟踪表里，
+         *       玩家不在那一维度）。{@code ScheduleNetworking.findMaid} 是**遍历所有维度**找她的
+         *       （字节码实证），所以这一条必须我们自己拦。</li>
          * </ol>
          */
         private static String openBlockedReason(ServerPlayer player, EntityMaid maid) {
@@ -516,12 +524,9 @@ public final class SchedulePacketsMaid {
             if (maid.m_5803_()) {
                 return "§7她正在睡觉——醒了再开配置界面（睡觉中开会被原版立刻关掉）";
             }
-            double far = RemoteMaidGui.remoteRange(maid);
-            if (player.m_20270_(maid) > far) {
-                return "§7她离你 " + String.format(java.util.Locale.ROOT, "%.1f", player.m_20270_(maid))
-                        + " 格——超出客户端能看到她的距离（约 " + ((int) far)
-                        + " 格，原版的实体同步距离），那种距离界面打开也是残的。"
-                        + "走近到 " + ((int) far) + " 格以内再点；只想让她过来就用「召她过来」/「去她身边」";
+            if (maid.m_9236_() != player.m_9236_()) {
+                return "§7她在别的维度——你的客户端在另一个维度里，找不着她，界面开不出来。"
+                        + "先用「召她过来」/「传送到我身边」把她叫过来（或者你自己过去）再开";
             }
             return null;
         }
