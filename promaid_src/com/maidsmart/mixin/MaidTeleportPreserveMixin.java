@@ -60,6 +60,14 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // 【v1.3.0(beta) 实测六百六十四：扫帚模式补上同一道闸】滑翔那条早就豁免了，扫帚漏了
+            //  ——原版 teleportToOwner 走 {@code Entity.teleportTo}，而它第一件事就是 unRide()：
+            //  把她从扫帚上踹下来再传回主人身边，一趟飞行当场白费（她只有 20 血，摔下来更糟）。
+            //  玩家原话「开着 home 的扫帚模式，女仆不应该响应排班表的传送」在这里落地。
+            if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

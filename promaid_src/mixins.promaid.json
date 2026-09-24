@@ -9,6 +9,7 @@
     "MaidTeleportPreserveMixin",
     "MaidDangerPathMixin",
     "MaidMoveSuppressMixin",
+    "SpawnerTorchNavGuardMixin",
     "MaidStationaryMixin",
     "ChunkFreezeMixin",
     "LeavesBlockMixin",

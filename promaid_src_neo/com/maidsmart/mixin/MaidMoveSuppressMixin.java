@@ -60,6 +60,12 @@ public abstract class MaidMoveSuppressMixin {
             // 战术行为直连导航独占（TLM 战斗走位写的 WALK_TARGET 不执行）
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             ci.cancel();
+        } else if (com.maidsmart.task.MaidWorkTags.isSpawnerTorchRun(maid)) {
+            // v1.3.0(beta) 实测六百六十四【刷怪笼插火把的"优先"】：走去插火把期间她独占移动
+            // ——清 WALK_TARGET + 取消本 tick（TLM 原生任务/跟随/远程走位写的走位目标一律不
+            // 执行）；直连寻路那一侧由 SpawnerTorchNavGuardMixin 掐。
+            maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            ci.cancel();
         }
     }
 }
