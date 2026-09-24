@@ -1,10 +1,13 @@
 # -*- coding: utf-8 -*-
-"""Deploy the fixed jars to all local instances (single UAC elevation).
+"""Deploy the fixed jars to all local instances.
 
-1.21.1 NeoForge instance  : patched/promaid-1.2.4-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.21      : patched/promaid-1.2.4-forge-1.20.1.jar   (user's main modpack)
-1.20.1 Forge 47.4.23      : patched/promaid-1.2.4-forge-1.20.1.jar   (test instance)
+1.21.1 NeoForge 21.1.250  : patched/promaid-1.2.5-neoforge-1.21.1.jar
+1.20.1 Forge 47.4.21      : patched/promaid-1.2.5-forge-1.20.1.jar   (user's main modpack)
+1.20.1 server pack1201    : patched/promaid-1.2.5-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+
+v1.2.5 实测六百五十三：先试【直接复制】（不需要 UAC）；只有直接复制被拒（权限不够）时
+才退回原来的提权 PowerShell 通道。旧版是无条件提权 → 会弹 UAC 卡住等人点。
 """
 import os
 import shutil
@@ -16,12 +19,12 @@ sys.stdout.reconfigure(encoding='utf-8')
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 JOBS = [
-    (os.path.join(BASE, 'patched', 'promaid-1.2.4-neoforge-1.21.1.jar'),
-     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.2.4-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.2.4-forge-1.20.1.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.2.4-forge-1.20.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.2.4-forge-1.20.1.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.2.4-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.5-neoforge-1.21.1.jar'),
+     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.2.5-neoforge-1.21.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.5-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.2.5-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.5-forge-1.20.1.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.2.5-forge-1.20.1.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)
@@ -55,7 +58,21 @@ for src, dst in JOBS:
         except Exception as e:
             print('backup failed (continuing):', e)
 
-# stage to temp (ASCII paths, elevation copies from there)
+
+def drop_other_versions(dst):
+    """同一 modId 的旧包留在 mods 目录会与新包冲突导致启动失败 → 只删本模组的旧包
+    （保留本次要写的那一个文件名），不动别人的 jar。"""
+    d, keep = os.path.dirname(dst), os.path.basename(dst)
+    for f in os.listdir(d):
+        if f.startswith('promaid-') and f.endswith('.jar') and f != keep:
+            try:
+                os.remove(os.path.join(d, f))
+                print('  removed old jar:', os.path.join(d, f))
+            except Exception as e:
+                print('  remove failed:', f, e)
+
+
+# stage to temp (ASCII path) then copy
 staged = []
 for src, dst in JOBS:
     tmp = os.path.join(tempfile.gettempdir(), 'promaid_deploy_' + os.path.basename(dst))
@@ -63,24 +80,32 @@ for src, dst in JOBS:
     staged.append((tmp, dst, os.path.getsize(src)))
     print('staged:', tmp, os.path.getsize(tmp))
 
-inner_parts = []
+need_elevation = []
 for tmp, dst, size in staged:
-    inner_parts.append("Copy-Item -LiteralPath '%s' -Destination '%s' -Force" % (tmp, dst))
-# v1.2.2：同一 modId 的旧包若留在 mods 目录会与新包冲突导致启动失败，所以在同一次提权里把
-# 目标目录下本模组的旧版本包一并删掉——过滤器用通用的 promaid-*.jar，
-# 只删本模组的包，且删的是"除本次要写入的那个文件名"以外的旧包（换版本号不用再改这里）。
+    try:
+        shutil.copyfile(tmp, dst)
+        print('copied (no UAC):', dst)
+    except Exception as e:
+        print('direct copy failed, will try elevated:', dst, e)
+        need_elevation.append((tmp, dst))
+
+if need_elevation:
+    inner_parts = ["Copy-Item -LiteralPath '%s' -Destination '%s' -Force" % (t, d)
+                   for t, d in need_elevation]
+    for t, d in need_elevation:
+        inner_parts.append("Get-ChildItem -LiteralPath '%s' -Filter 'promaid-*.jar' "
+                           "-ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '%s' } "
+                           "| Remove-Item -Force" % (os.path.dirname(d), os.path.basename(d)))
+    inner = '; '.join(inner_parts)
+    cmd = ['powershell', '-NoProfile', '-Command',
+           "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command',"
+           "'__INNER__'".replace('__INNER__', inner.replace("'", "''"))]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    print('elevated rc:', r.returncode, (r.stdout or '').strip()[:200], (r.stderr or '').strip()[:200])
+
 for src, dst in JOBS:
-    d = os.path.dirname(dst)
-    keep = os.path.basename(dst)
-    inner_parts.append("Get-ChildItem -LiteralPath '%s' -Filter 'promaid-*.jar' "
-                       "-ErrorAction SilentlyContinue | Where-Object { $_.Name -ne '%s' } "
-                       "| Remove-Item -Force" % (d, keep))
-inner = '; '.join(inner_parts)
-cmd = ['powershell', '-NoProfile', '-Command',
-       "Start-Process powershell -Verb RunAs -Wait -ArgumentList '-NoProfile','-Command',"
-       "'__INNER__'".replace('__INNER__', inner.replace("'", "''"))]
-r = subprocess.run(cmd, capture_output=True, text=True)
-print('elevated rc:', r.returncode, (r.stdout or '').strip()[:200], (r.stderr or '').strip()[:200])
+    if os.path.isdir(os.path.dirname(dst)):
+        drop_other_versions(dst)
 
 ok = True
 for tmp, dst, size in staged:
@@ -92,4 +117,8 @@ for tmp, dst, size in staged:
     else:
         ok = False
         print('MISSING after deploy:', dst)
+    try:
+        os.remove(tmp)
+    except Exception:
+        pass
 sys.exit(0 if ok else 3)
