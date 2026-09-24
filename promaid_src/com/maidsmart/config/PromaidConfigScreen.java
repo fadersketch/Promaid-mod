@@ -4957,8 +4957,16 @@ public class PromaidConfigScreen extends Screen {
             }
         }
         // v1.2.5 实测六百五十二：烧制清单子页网格点击 → 在当前那张名单里加入/移出
-        if (this.cookTable) {
-            return this.clickCookGrid(mouseX, mouseY, button);
+        // v1.3.0 实测六百五十五【子页上所有按钮都是死按键】：
+        // 原来这里写的是 `return this.clickCookGrid(...)` —— clickCookGrid 只在命中物品格时
+        // 返回 true，其余一律 false，而这个 false **被直接 return 出去**，于是
+        // super.mouseClicked 永远不会执行 → 子页上每一个子控件（四张名单的模式按钮、
+        // 搜索框、加进当前名单、名单行的「移出」、← 返回参数）全部收不到点击，
+        // 看着就是"面板上的按键按了没用"，整个子页只能按 ESC 退出。
+        // 对照同机制能用的几个子页（挖矿/伐木、投喂、喂水、替代品）：它们都是
+        // "命中网格就 return true，否则**落到** super.m_6375_" —— 这里改成同构写法。
+        if (this.cookTable && this.clickCookGrid(mouseX, mouseY, button)) {
+            return true;
         }
         return super.m_6375_(mouseX, mouseY, button);
     }
