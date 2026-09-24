@@ -124,6 +124,17 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return false;
         }
+        // v1.3.2 实测六百五十六【"骑扫帚时反复被拉回"的真凶之一】：她骑在扫帚上时
+        // **战术全体让位**（与上面傀儡模式同一条总闸的同一个理由）。
+        // 地面走位（navigateAway/navigateTo/navigateOrbit 那一整套）是给"两条腿站在
+        // 地上"的她写的：她骑上扫帚后是**乘客**，Entity.rideTick 每 tick 会先让她自己
+        // tick（含 aiStep/travel 与这些导航产生的位移），**紧接着**再由扫帚
+        // positionRider 把她按回鞍位（见 EntityBroomMaidTravelMixin 的注释）。
+        // 于是"她要往东走、扫帚把她拽回来"每 tick 重演一次——玩家看到的就是
+        // 「女仆在乘坐扫帚的时候会反复被拉回」。飞行期间往哪飞由 MaidBroomDrive 全权决定。
+        if (MaidBroomKit.isBroomAirborne(maid)) {
+            return false;
+        }
         return com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS.get();
     }
 

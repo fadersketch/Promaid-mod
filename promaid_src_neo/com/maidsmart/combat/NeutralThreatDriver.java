@@ -303,6 +303,13 @@ if (++this.throttle < 10) {
         if (com.maidsmart.combat.MaidCombatTacticsBehavior.isActive(maid)) {
             return;
         }
+        // v1.3.2 实测六百五十六：骑扫帚飞行期间不导航——她是乘客，导航产生的位移每 tick
+        // 会被扫帚的 positionRider 按回鞍位（"反复被拉回"的同一根因），位置由
+        // MaidBroomDrive 全权决定。战术那条闸（isActive）此时已经是 false（战术让位），
+        // 所以这里必须自己再拦一道。
+        if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
+            return;
+        }
         maid.getNavigation().moveTo(threat.getX(), threat.getY(), threat.getZ(), CHASE_SPEED);
     }
 

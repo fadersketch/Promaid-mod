@@ -2974,7 +2974,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                     this.cookTableMode = 0;
                     this.rebuildWidgets();
                 },
-                "四张名单，默认全空 = 保持自动判定（装上就是老手感）：①只烧这些——非空时只把清单里的物品当原料（仍要求真有炉子配方：清单只缩小范围，不会让烧不动的东西变得能烧）；②禁止烧制——永不放炉子，优先级最高；③只用这些燃料——非空时只在这些里按燃烧时长挑；④禁用燃料——永不当柴烧。点物品图标加入/再点移出，也可在下面手填注册名。禁止类优先于允许类"));
+                "四张名单，默认全空 = 保持自动判定（装上就是老手感）：①只烧这些——非空时只把清单里的物品当原料（仍要求真有炉子配方：清单只缩小范围，不会让烧不动的东西变得能烧）；②禁止烧制——永不放炉子，优先级最高；③只用这些燃料——非空时只在这些里按燃烧时长挑；④禁用燃料——永不当柴烧。点物品图标加入/再点移出，也可在下面手填注册名。禁止类优先于允许类。候选网格按档位过滤：①②只列当前世界真有炉子配方的物品，③④只列能当柴烧的物品（v1.3.2 起；旧版是全物品，所以显得乱）"));
         // v1.2.5 实测六百五十二：顺手补上「烧木材」开关——它一直只写在 toml 里，面板漏了这一行
         this.rows.add(new BoolRow("烧木材", MaidSmartConfig.MISC_COOK_BURN_WOOD.get(),
                 v -> MaidSmartConfig.MISC_COOK_BURN_WOOD.set(v),
@@ -3574,12 +3574,28 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     }
 
     /**
-     * 重建烧制清单的候选网格（全物品 + 中英文搜索；与 rebuildCreative 同款，
-     * 但**不按类别过滤**——四张名单什么都能填，真正"能不能烧"由女仆那边的配方判定管）。
+     * 重建烧制清单的候选网格（中英文搜索；与 rebuildCreative 同款）。
+     *
+     * v1.3.2 实测六百五十六【"这张表乱填"】：旧版这里是**全物品**，玩家打开「只烧这些」
+     * 看到的是一整注册表的物品——绝大多数根本没有炉子配方，而真正能烧的生肉/矿石/沙子在
+     * 第 N 页。反馈原文「那些不可烧东西都进这张表了，原本可以烧制的食物和物品反而不在里面」。
+     * 现在按**当前档位**过滤候选：
+     * <ul>
+     *   <li>「只烧这些」/「禁止烧制」（0/1）→ 只列当前世界**真的有炉子配方**的物品
+     *       （{@link com.maidsmart.task.MaidCookBehavior#smeltableForPicker}）；</li>
+     *   <li>「只用这些燃料」/「禁用燃料」（2/3）→ 只列原版**能当柴烧**的物品
+     *       （{@link com.maidsmart.task.MaidCookBehavior#fuelForPicker}）。</li>
+     * </ul>
+     * 判据都在 {@code MaidCookBehavior} 里（一处实现），所以"面板上看得见的"与"她真的会烧的"
+     * 不会是两套东西。客户端拿不到世界（理论上不会：面板是游戏内开的）时退回全物品，
+     * 至少不把人挡在门外。
      */
     private void rebuildCookCreative() {
         this.creativeItems.clear();
         ensureCreativeCache();
+        boolean fuelMode = this.cookTableMode >= 2;
+        net.minecraft.world.level.Level level =
+                net.minecraft.client.Minecraft.getInstance().level;
         String q = this.creativeQuery == null ? "" : this.creativeQuery.trim().toLowerCase(java.util.Locale.ROOT);
         for (String[] entry : creativeCache) {
             String id = entry[0];
@@ -3589,9 +3605,19 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
             }
             net.minecraft.world.item.Item item = net.minecraft.core.registries.BuiltInRegistries.ITEM
                     .get(net.minecraft.resources.ResourceLocation.parse(id));
-            if (item != null) {
-                this.creativeItems.add(new net.minecraft.world.item.ItemStack(item));
+            if (item == null) {
+                continue;
             }
+            net.minecraft.world.item.ItemStack probe = new net.minecraft.world.item.ItemStack(item);
+            if (level != null) {
+                boolean keep = fuelMode
+                        ? com.maidsmart.task.MaidCookBehavior.fuelForPicker(probe)
+                        : com.maidsmart.task.MaidCookBehavior.smeltableForPicker(level, probe);
+                if (!keep) {
+                    continue;
+                }
+            }
+            this.creativeItems.add(probe);
         }
         this.creativePage = Math.min(this.creativePage, Math.max(0, this.creativePages() - 1));
     }
@@ -3665,7 +3691,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
     /** 烧制清单子页的网格渲染（自绘，与矿表/替代品子页同款；✔ = 已在当前那张名单里） */
     private void renderCookGrid(GuiGraphics g, int mouseX, int mouseY, int w, int h, int cx) {
         String cur = COOK_LIST_NAMES[Math.min(Math.max(this.cookTableMode, 0), 3)];
-        String title = "\u00a7e" + cur + "——点击物品图标加入（再点取消）";
+        // v1.3.2 实测六百五十六：标题里直接写明网格列的是什么——旧版不给任何说明，
+        // 玩家看到"一整注册表"只会得出"这张表乱填"的结论（那是旧版真的乱列）。
+        boolean fuelMode = this.cookTableMode >= 2;
+        String src = fuelMode ? "可当燃料的物品" : "当前世界真有炉子配方的物品";
+        String title = "\u00a7e" + cur + "\u00a77（只列" + src + "）\u00a7e——点击加入（再点取消）";
         g.drawCenteredString(this.font, Component.literal(title), cx, 10, 0xFFFFFF);
         int panelLeft = Math.max(8, cx - 280);
         int panelWidth = Math.min(560, w - 16);
