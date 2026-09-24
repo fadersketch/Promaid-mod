@@ -37,6 +37,14 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.compat.MaidModeCompat.isPuppetMode(maid)) {
             return false;
         }
+        // v1.3.0「扫帚模式」：同样【不自动切换武器/盾】——玩家指定什么就是什么（换装由她自己
+        // 的激活判定负责"有没有远程武器"，不做主手择优替换）。
+        // **刻意不并进下面那个飞行分支**：那个分支会给她穿鞘翅、跑空袭索敌探针与牵引绳
+        // （equip / FlightTargetProbe / MaidFlightRecall / notifyNotReady），而扫帚模式
+        // 既不背鞘翅也不滑翔——并进去等于凭空给她长出翅膀。这里只要"不换装"这一件事。
+        if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+            return false;
+        }
         // v1.2.0：飞行作战（近战/远战）下【不自动切换武器/盾】——玩家指定什么就是什么；
         // 换装只由 MaidFlightKit.equip 负责"补齐三件套"，不做主手武器择优替换
         if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {

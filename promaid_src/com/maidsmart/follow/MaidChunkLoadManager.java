@@ -417,7 +417,8 @@ public final class MaidChunkLoadManager {
                         && maid.m_9236_() != airOwner.m_9236_();
             } catch (Throwable ignored) {
             }
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+                    || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 if (!crossDimAir || !airDeferAllows(maid, "flight-air-cross",
                         "飞行作战进行中（滑翔/扑击），跨维度跟随不传——本轮攻击结束后自然恢复")) {
                     return;
@@ -1043,7 +1044,8 @@ BlockPos stand = findStand(newLevel,
                         + " 正在背鞘翅追主人（飞行跟随），不拉回——追上/超时后自然结束");
                 return;
             }
-            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)) {
+            if (com.maidsmart.combat.MaidFlightKit.isFlightAirborne(maid)
+                    || com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 if (!shouldPull) {
                     throttledSkipLog(maid, "flight-air-samedim", name
                             + " 飞行作战进行中（滑翔/扑击），不拉回——本轮攻击结束后自然恢复");

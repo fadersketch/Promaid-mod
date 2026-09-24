@@ -2504,7 +2504,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 实现的 `performRangedAttack`（箭矢通道）。射程分口径：枪械用 TLM 的枪械中距离
      * 配置（`GunCompat.gunMaxRange`），弓弩用 {@link #rangedAttackRange()}。
      */
-    private void fireRanged(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+    // v1.3.0「扫帚模式」复用：改成 public static，扫帚行为（MaidBroomBehavior）走**同一个入口**
+    // 开火——"手上武器的运作直接照搬远程空袭"就是字面意义上的照搬：射程、视线、冷却、枪械
+    // 换弹/瞄准全部同款，不抄第二份。它读写的 RANGED_NEXT_SHOT / RANGED_GUN_CD 都是静态表、
+    // 按女仆 UUID 分键，而她同一时刻只可能处在一个任务里，所以两个模式共用这两张表不会互相污染。
+    public static void fireRanged(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack main = maid.m_21205_();
         boolean gun = GunCompat.isGun(main);
         double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
@@ -2580,7 +2584,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * （{@link SelfPreservationBehavior#hasSight}，两条枪口同一个口径），这里只看冷却。
      * 返回值仍然照旧驱动冷却——它的读法见下面那一行注释。
      */
-    private void tickGunFire(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+    // v1.3.0：改成 public static 供「扫帚模式」复用（同 fireRanged，见那里的说明）
+    public static void tickGunFire(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack gun = maid.m_21205_();
         try {
             com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil

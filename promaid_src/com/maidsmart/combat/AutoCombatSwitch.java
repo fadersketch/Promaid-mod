@@ -676,7 +676,7 @@ public class AutoCombatSwitch {
                 // 旧版只认 ASSIGNED 完全一致，换过战术/任务被第三方改过的战斗女仆
                 // 永不还原（"威胁解除后回不了原任务"）。
                 boolean stillOnCombat = maid.getTask() != null
-                        && !com.maidsmart.combat.MaidFlightKit.isFlightUid(maid.getTask().getUid())
+                        && !com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(maid.getTask().getUid())
                         && (maid.getTask().getUid().toString().equals(assignedUid)
                         || MaidWorkTags.isCombatTask(maid));
                 if (stillOnCombat

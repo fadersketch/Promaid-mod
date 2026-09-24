@@ -188,6 +188,28 @@ public final class MaidFlightKit {
         return UID.equals(uid) || UID_RANGED.equals(uid);
     }
 
+    /**
+     * v1.3.0：「**只能由玩家手动指定**、不参与自主切换」的作战模式 UID = 两种空袭 + 扫帚模式。
+     *
+     * 【为什么收成一个判据】自主战斗系统对这类模式有**三处**接入（入池候选 / 换战术 /
+     * 还原链），空袭当初就是三处各写一遍 {@code isFlightUid}。再加一个手动模式（扫帚）
+     * 若也照抄三遍，下一次加模式就要改六处——本模组已经反复吃过"同一个口径散落多处"的亏。
+     * 现在三处统一问这一个方法，加模式只需改这一行。
+     */
+    public static boolean isManualOnlyCombatUid(ResourceLocation uid) {
+        return isFlightUid(uid) || com.maidsmart.combat.MaidBroomKit.isBroomUid(uid);
+    }
+
+    /** 同上，实体版（给她自己判"我在不在一个手动专属的作战模式里"） */
+    public static boolean isManualOnlyCombatTask(EntityMaid maid) {
+        try {
+            return maid != null && maid.getTask() != null
+                    && isManualOnlyCombatUid(maid.getTask().getUid());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 当前任务是否飞行**远战**（武器位 = 远程武器） */
     public static boolean isRangedTask(EntityMaid maid) {
         try {
@@ -331,9 +353,20 @@ public final class MaidFlightKit {
         if (maid == null) {
             return false;
         }
+        return hasAmmoForWeapon(maid, resolveRangedWeapon(maid));
+    }
+
+    /**
+     * v1.3.0「扫帚模式」共用的弹药口径——**唯一实现**：上面那个入口与扫帚模式只是"找哪一把武器"
+     * 不同（一个按任务分流、一个按任务无关的远程判据），弹药本身的判据共用这一份，
+     * 不再抄第二份（本模组反复强调的红线：同一个口径只能有一处实现）。
+     */
+    public static boolean hasAmmoForWeapon(EntityMaid maid, ItemStack weapon) {
+        if (maid == null) {
+            return false;
+        }
         try {
-            ItemStack weapon = resolveRangedWeapon(maid);
-            if (weapon.m_41619_()) {
+            if (weapon == null || weapon.m_41619_()) {
                 return false;
             }
             // 枪械：走 GunCompat（内部已处理"能量武器不吃常规弹药"）
@@ -412,14 +445,31 @@ public final class MaidFlightKit {
      * 这里照抄同一条规则。
      */
     private static ItemStack resolveRangedWeapon(EntityMaid maid) {
-        if (isWeaponForTask(maid, maid.m_21205_())) {
-            return maid.m_21205_();
+        return resolveWeapon(maid, s -> isWeaponForTask(maid, s));
+    }
+
+    /**
+     * v1.3.0「扫帚模式」：按**任务无关**的口径解析"她实际会用的那把远程武器"——与上面那个共用
+     * 同一份实现（{@link #resolveWeapon}），只是判据换成 {@link #isRangedWeapon}。扫帚模式不是
+     * 飞行任务，{@code isWeaponForTask} 会按"近战"分流，用它必然解析不出远程武器。
+     */
+    public static ItemStack resolveRangedWeaponAny(EntityMaid maid) {
+        return resolveWeapon(maid, MaidFlightKit::isRangedWeapon);
+    }
+
+    /** 找武器的**唯一实现**（主手优先，其次背包按槽序）——上面两个入口共用。 */
+    private static ItemStack resolveWeapon(EntityMaid maid, StackFilter filter) {
+        if (maid == null) {
+            return ItemStack.f_41583_;
         }
         try {
+            if (filter.test(maid.m_21205_())) {
+                return maid.m_21205_();
+            }
             net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (!s.m_41619_() && isWeaponForTask(maid, s)) {
+                if (!s.m_41619_() && filter.test(s)) {
                     return s;
                 }
             }
@@ -721,7 +771,9 @@ public final class MaidFlightKit {
     }
 
     /** "她到底有没有远程武器"——只看 {@link #isRangedWeapon}，不看 六百四十一 的顶替口径 */
-    private static boolean hasRangedWeaponOnly(EntityMaid maid) {
+    // v1.3.0：改成 public——「扫帚模式」的"有没有远程武器"判据直接复用这一条（任务无关），
+    // 不再另写一份（见 MaidBroomKit.hasRangedWeapon）。
+    public static boolean hasRangedWeaponOnly(EntityMaid maid) {
         if (maid == null) {
             return false;
         }

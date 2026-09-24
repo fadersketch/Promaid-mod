@@ -2891,6 +2891,23 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式工作范围圈，见 CombatWorkRange）
         this.rows.add(new NumRow("战斗时临时扩圈（格）", String.valueOf(MaidSmartConfig.COMBAT_WORK_RANGE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
+        // v1.3.0「扫帚模式」：她取出扫帚、在脚下放一把骑上去飞起来，用远程武器打
+        // （开火链路整条复用远程空袭）。默认值 = 装上就能用的样子。
+        this.rows.add(new BoolRow("扫帚模式·总开关", MaidSmartConfig.COMBAT_BROOM_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_ENABLE.set(v),
+                "扫帚模式（默认开）：给女仆装上扫帚 + 任意远程武器（弓/弩/御币/三叉戟/枪械）后，把她的任务切成「扫帚模式」，她会取出扫帚、在脚下放一把并骑上去飞起来，用远程武器打。缺件时她原地待命并在头顶报缺什么（不硬撑着乱跑）。本模式**不参与自主切换**——只有你手动指定才会进，被袭击时不会自己换上扫帚"));
+        this.rows.add(new NumRow("扫帚·盘旋距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_RANGE, s),
+                "战斗盘旋距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）"));
+        this.rows.add(new NumRow("扫帚·悬停高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_HOVER.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_HOVER, s),
+                "悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）"));
+        this.rows.add(new BoolRow("扫帚·平时跟随主人", MaidSmartConfig.COMBAT_BROOM_FOLLOW.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_FOLLOW.set(v),
+                "平时（没有敌人时）跟随主人（默认开）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动"));
+        this.rows.add(new BoolRow("扫帚·受活动范围约束", MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get(),
+                v -> MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.set(v),
+                "受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后，车万女仆自身的范围约束整条失效（她成了乘客，canBrainMoving 为 false，往哪飞只听我们的），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）"));
     }
 
     private void selfTacticsRows() {
