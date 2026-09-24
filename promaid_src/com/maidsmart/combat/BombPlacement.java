@@ -186,7 +186,12 @@ public final class BombPlacement {
             }
             if (st.m_60734_() instanceof BedBlock) {
                 // 床是两格：带"抑制形状更新"的标志位拆，否则另一格会按原版逻辑掉一张床（白送材料）
-                level.m_7731_(p, Blocks.f_49990_.m_49966_(), 2 | 16);
+                // v1.2.5 修复：这里原写 Blocks.f_49990_，那是 **water**（1.20.1 SRG 实证；
+                // 本工程 SelfPreservationBehavior 也拿它当水用）——于是女仆放的床一炸，
+                // 原处留下的是一格水而不是空气（实测反馈："放床爆炸不产生火而是水"：
+                // 水把那一格占了，原版点火的判据正是"那一格是空气"→ 火自然也点不着）。
+                // 空气的 SRG 名是 f_50016_（同一份 Blocks 实证，本工程其余 30 余处都写它）。
+                level.m_7731_(p, Blocks.f_50016_.m_49966_(), 2 | 16);
             } else {
                 level.m_7471_(p, false); // 单体方块：removeBlock 不掉落
             }
