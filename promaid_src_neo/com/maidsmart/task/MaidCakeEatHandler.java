@@ -128,6 +128,13 @@ public class MaidCakeEatHandler {
         }
         maid.getChatBubbleManager().addChatBubble(
                 TextChatBubbleData.type2(Component.literal(text).withStyle(ChatFormatting.BLUE)));
+        // v1.3.0 实测六百五十五【"投喂蛋糕没有语音"】：全模组只有两个语音入口，一个在
+        // ChatBubbleLimitMixin（拦的是 addTextChatBubble），另一个在排班闲聊行为——而本方法
+        // 刻意走**直发 addChatBubble**（为了保住蓝色、跳过 5 秒限频，见类注释），于是它
+        // 从来就没进过语音链路。这里显式补一次 speak()：气泡的颜色与限频行为一个字不动，
+        // 语音照走内置语音包（manifest 里 cake_eat 那条）。speak 内部自带开关/冷却，
+        // 即使和别处的播报撞上也不会重复出声。
+        com.maidsmart.voice.SystemTTSManager.speak(maid, text);
     }
 
     /** 玩家蛋糕右击自己的女仆：取消原交互（不开 GUI）→ 玩家蛋糕消失 → 女仆立刻吃 */

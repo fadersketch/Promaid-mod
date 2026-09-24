@@ -91,6 +91,11 @@ public final class ScheduleNetworking {
         // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
         CHANNEL.registerMessage(18, SchedulePacketsMaid.MarkWorkPosPacket.class,
                 SchedulePacketsMaid.MarkWorkPosPacket::encode, SchedulePacketsMaid.MarkWorkPosPacket::decode, SchedulePacketsMaid.MarkWorkPosPacket::handle);
+        // v1.3.0 实测六百五十五：快捷设置页「女仆配置」按钮 → 服务端替玩家打开她的原版女仆界面
+        //（排班表挡着右键不到她；她骑上扫帚后右键又变成"上/下扫帚"——两条路都断了，
+        // 只能让服务端开）。索引 19 取的是本条新槽位，13 依旧空着不补位（见上面那段注释）。
+        CHANNEL.registerMessage(19, SchedulePacketsMaid.OpenMaidConfigPacket.class,
+                SchedulePacketsMaid.OpenMaidConfigPacket::encode, SchedulePacketsMaid.OpenMaidConfigPacket::decode, SchedulePacketsMaid.OpenMaidConfigPacket::handle);
     }
 
     /* ==================== 排班生效 → GUI 状态同步 ==================== */

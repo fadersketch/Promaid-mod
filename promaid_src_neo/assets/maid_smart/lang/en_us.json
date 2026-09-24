@@ -1,6 +1,8 @@
 ﻿{
   "task.maid_smart.mine": "Mining",
   "task.maid_smart.mine.desc": "Find ores nearby and mine them with a pickaxe",
+  "task.maid_smart.woodcut": "Woodcutting",
+  "task.maid_smart.woodcut.desc": "Find trees automatically, chop them with an axe, and fell connected logs in a chain; leaves do not block the view",
   "task.maid_smart.organize": "Organize Chests",
   "task.maid_smart.organize.desc": "Store backpack items into nearby chests",
   "task.maid_smart.cook": "Smelting",
@@ -63,6 +65,8 @@
   "task.maid_smart.flight_combat.desc": "Melee Air Raid: elytra + any melee weapon + firework rocket; jump-glide, launch a firework away+up, fly at the enemy after 1.5s, cancel gliding within 3.5 blocks to free-fall into a critical melee hit, then re-glide and repeat",
   "task.maid_smart.flight_ranged": "Ranged Air Raid",
   "task.maid_smart.flight_ranged.desc": "Ranged Air Raid: elytra + any ranged weapon + firework rocket; launches like Melee Air Raid, then circles in the sky and shoots enemies within range with the held ranged weapon, refreshing a firework every 5s; lands after the enemy dies",
+  "task.maid_smart.broom": "Broom",
+  "task.maid_smart.broom.desc": "Broom: the maid takes a TLM broom out of her inventory, rides it herself (no player driver needed) and shoots with her held ranged weapon; when idle she hovers and follows her owner, bounded by the home/work area. Needs a broom + ranged weapon + ammo; if something is missing she waits in place and reports what is missing. Not used by auto task switching",
   "config.promaid.combat.flightNoWallDamage": "Flight: Immune to Elytra Wall Impact",
   "config.promaid.combat.flightNoFallDamage": "Air Raid: Immune to Fall Damage",
   "config.promaid.combat.riptideDash": "Riptide Trident Dash",

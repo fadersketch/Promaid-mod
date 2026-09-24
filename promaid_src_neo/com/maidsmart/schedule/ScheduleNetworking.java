@@ -63,6 +63,10 @@ public final class ScheduleNetworking {
         r.playToServer(SchedulePacketsMaid.MaidTeleportToPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MaidTeleportToPacket::encode, SchedulePacketsMaid.MaidTeleportToPacket::decode), SchedulePacketsMaid.MaidTeleportToPacket::handle);
         // 实测五百六十二：潜行+中键 工位标记（把身边 home 女仆的工作区域锚点标过去）
         r.playToServer(SchedulePacketsMaid.MarkWorkPosPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.MarkWorkPosPacket::encode, SchedulePacketsMaid.MarkWorkPosPacket::decode), SchedulePacketsMaid.MarkWorkPosPacket::handle);
+        // v1.3.0 实测六百五十五：快捷设置页「女仆配置」按钮 → 服务端替玩家打开她的原版女仆界面
+        //（排班表挡着右键不到她；她骑上扫帚后右键又变成"上/下扫帚"——两条路都断了，
+        // 只能让服务端开）
+        r.playToServer(SchedulePacketsMaid.OpenMaidConfigPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.OpenMaidConfigPacket::encode, SchedulePacketsMaid.OpenMaidConfigPacket::decode), SchedulePacketsMaid.OpenMaidConfigPacket::handle);
     }
 
     /* ==================== 实测五百六十二：潜行+中键 工位标记 ==================== */

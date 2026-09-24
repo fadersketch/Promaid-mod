@@ -451,4 +451,59 @@ public final class SchedulePacketsMaid {
         @Override
         public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
+
+    /**
+     * v1.3.0 实测六百五十五：快捷设置页的「女仆配置」按钮——**直接打开她的原版女仆界面**
+     * （与玩家右键女仆同款：背包 / 外观 / 行为设置，即 {@code openMaidGui} 的 index 0 那页）。
+     *
+     * 【为什么需要这个包】排班表界面挡着，右键点不到女仆；而她把扫帚骑上以后，玩家右键
+     * 是"上/下扫帚"、同样打不开界面——两条路都断了。"想给骑在扫帚上的她换件武器/看眼背包"
+     * 就成了死路，所以由服务端替玩家开一次。
+     *
+     * 【为什么必须服务端开】{@code EntityMaid.openMaidGui} 内部只对 {@code ServerPlayer} 生效
+     * （字节码实证：走 {@code NetworkHooks.openScreen(serverPlayer, provider, buf)}），
+     * 客户端单方面调用没有任何效果——所以这一发必须是 C2S。
+     */
+    public static class OpenMaidConfigPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<OpenMaidConfigPacket> TYPE = new CustomPacketPayload.Type<>(
+                net.minecraft.resources.ResourceLocation.fromNamespaceAndPath("maid_smart", "open_maid_config"));
+        public final String uuid;
+
+        public OpenMaidConfigPacket(String uuid) {
+            this.uuid = uuid == null ? "" : uuid;
+        }
+
+        public static void encode(OpenMaidConfigPacket pkt, FriendlyByteBuf buf) {
+            buf.writeUtf(pkt.uuid, 64);
+        }
+
+        public static OpenMaidConfigPacket decode(FriendlyByteBuf buf) {
+            return new OpenMaidConfigPacket(buf.readUtf(64));
+        }
+
+        public static void handle(OpenMaidConfigPacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                ServerPlayer player = (ServerPlayer) ctx.player();
+                if (player == null) {
+                    return;
+                }
+                EntityMaid maid = ScheduleNetworking.findMaid((ServerLevel) player.level(), pkt.uuid);
+                if (maid == null || !ScheduleNetworking.allowed(player, maid)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§7没找到她——可能已被收进魂符或不在已加载区块"));
+                    return;
+                }
+                // 与右键女仆同一个入口。她在别的维度、骑着扫帚、正在干活都照开
+                //（界面是玩家的，关掉之后她照旧在原地干自己的事）
+                if (!maid.openMaidGui(player)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal(
+                            "§7没能打开「" + (maid.getDisplayName() == null
+                                    ? "女仆" : maid.getDisplayName().getString()) + "」的配置界面"));
+                }
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
 }
