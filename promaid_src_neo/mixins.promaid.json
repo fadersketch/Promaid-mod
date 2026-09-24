@@ -59,7 +59,8 @@
     "BehaviorOwnerlessGateMixin",
     "PuppetModeLlmGuardMixin",
     "ElytraWearGuardMixin",
-    "MaidCompressionBoxMixin"
+    "MaidCompressionBoxMixin",
+    "EntityBroomMaidTravelMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",

@@ -683,7 +683,8 @@ if (++this.restoreThrottle < 20) {
                 // "玩家已接管"处理：不动她的任务，只清我们的战斗簿记（走下面
                 // !stillOnCombat 分支：clearMarkers + restorePrevMode）。
                 if (stillOnCombat && maid.getTask() != null
-                        && com.maidsmart.combat.MaidFlightKit.isFlightUid(maid.getTask().getUid())) {
+                        && com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatUid(
+                                maid.getTask().getUid())) {
                     stillOnCombat = false;
                     com.maidsmart.tool.PromaidLog.log("战斗", com.maidsmart.tool.PromaidLog.nameOf(maid)
                             + " 当前为飞行作战（玩家手动指定），还原链不动任务，仅清战斗标记");

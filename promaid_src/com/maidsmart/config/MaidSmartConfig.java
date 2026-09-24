@@ -625,6 +625,18 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式的工作范围圈，见 CombatWorkRange） */
     public static final ForgeConfigSpec.IntValue COMBAT_WORK_RANGE;
 
+    // ---- v1.3.0「扫帚模式」----
+    /** 扫帚模式总开关（默认开）。关掉 = 该任务整段不激活，她原地待命并报缺件 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_ENABLE;
+    /** 战斗盘旋时的站立距离（格）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_RANGE;
+    /** 悬停高度（格，相对目标脚底）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_HOVER;
+    /** 平时（没有敌人）是否悬停跟随主人 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_FOLLOW;
+    /** 是否受「守家/工作区」活动范围约束（关掉 = 自由飞，会跟主人越界） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_CLAMP_HOME;
+
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
 public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
@@ -1897,6 +1909,23 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 追怪的近战女仆被反复拽回原地，仗永远打不完（见 CombatWorkRange 的根因）
         COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
                 .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
+        BUILDER.pop();
+
+        // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----
+        // 新功能：女仆取出扫帚放出来骑上飞起来，用远程武器打（开火链路整条复用远程空袭）。
+        // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、平时跟随主人、
+        // 受活动范围约束（守家女仆不会为了跟主人越界）。
+        BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
+        COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件")
+                .translation("config.promaid.broom.enable").define("enable", true);
+        COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）")
+                .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
+        COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
+                .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
+        COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开）：开启时她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动")
+                .translation("config.promaid.broom.follow").define("follow", true);
+        COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）")
+                .translation("config.promaid.broom.clampHome").define("clampHome", true);
         BUILDER.pop();
 
 

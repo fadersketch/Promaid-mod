@@ -198,7 +198,9 @@ public final class AutoCombatTargeting {
         }
         // v1.2.0：飞行作战（近战/远战）下【自主战斗不介入】——模式自己负责索敌/攻击/换装，
         // 自主战斗不得把她切走、不得换战术、不得还原（返回 2 = "已是战斗任务，跳过"）
-        if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+        // v1.3.0：这一条从 isFlightTask 换成 isManualOnlyCombatTask（= 两种空袭 **+ 扫帚模式**）
+        // ——扫帚模式同样"模式自己负责索敌/攻击/换装"，自主战斗不得把她切走或换战术。
+        if (com.maidsmart.combat.MaidFlightKit.isManualOnlyCombatTask(maid)) {
             return 2;
         }
         // v1.2.2 实测五百九十：傀儡模式（第三方玩法）下【自主作战不介入】——不切走、

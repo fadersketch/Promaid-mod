@@ -596,6 +596,9 @@ public class ProMaidExtension implements ILittleMaid {
         manager.add(new com.maidsmart.combat.MaidFlightCombatTask());
         // v1.2.0：飞行远战（空中盘旋如幻翼 + 每 5 秒补烟花 + 手持远程武器开火）
         manager.add(new com.maidsmart.combat.MaidFlightRangedTask());
+        // v1.3.0：扫帚模式（骑 TLM 的扫帚实体飞起来 + 远程武器开火 + 平时悬停跟随主人）——
+        // 同样不响应自主切换（AutoCombatPools 按 UID 显式排除），只有玩家手动指定 / 指令切换才进
+        manager.add(new com.maidsmart.combat.MaidBroomTask());
     }
 
     @Override

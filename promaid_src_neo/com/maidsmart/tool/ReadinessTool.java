@@ -123,6 +123,21 @@ public class ReadinessTool implements ITool<ReadinessTool.Result> {
         } catch (Throwable ignored) {
         }
 
+        // ---- v1.3.0 扫帚模式（同样复用她自己的判定口径，不另写一份）----
+        try {
+            if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
+                sb.append("\n扫帚模式：骑扫帚=").append(yn(com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid)))
+                        .append("、身上扫帚=").append(yn(com.maidsmart.combat.MaidBroomKit.hasBroomItem(maid)))
+                        .append("、远程武器=").append(yn(com.maidsmart.combat.MaidBroomKit.hasRangedWeapon(maid)))
+                        .append("、弹药=").append(yn(com.maidsmart.combat.MaidBroomKit.ammoOk(maid)));
+                String bMissing = com.maidsmart.combat.MaidBroomKit.missingParts(maid);
+                sb.append(bMissing == null || bMissing.isEmpty()
+                        ? " → 齐了，可以骑扫帚开打"
+                        : " → ⚠ 缺「" + bMissing + "」，缺件时她原地待命（不硬撑着乱跑）");
+            }
+        } catch (Throwable ignored) {
+        }
+
         // ---- 驻守 / 排班 / 工作锚点 ----
         try {
             sb.append("\n驻守（home 模式）=").append(maid.isHomeModeEnable() ? "开" : "关（跟随中）");
