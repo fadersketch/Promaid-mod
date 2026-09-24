@@ -140,7 +140,7 @@ public final class ScheduleNetworking {
         if (!(player.m_9236_() instanceof ServerLevel level)) {
             return;
         }
-        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数, 血量%, 维度标签, 在家模式"1"/"0"}
+        // 女仆列表：{uuid, 名字, 任务UID, 工作模式(0早/1晚/2全), 排班开"1"/"0", 段数, 已停用, 维度标签, 在家模式"1"/"0"}
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
         for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
@@ -154,12 +154,13 @@ public final class ScheduleNetworking {
                 String taskUid = m.getTask() == null ? "touhou_little_maid:idle"
                         : m.getTask().getUid().toString();
                 int mode = m.getSchedule() == null ? 2 : m.getSchedule().ordinal();
-                // v1.2.0【血量百分比公式修正】：旧版写成 getMaxHealth / getHealth——取反了。
-                // m_21233_ = getMaxHealth（读 MAX_HEALTH 属性）、m_21223_ = getHealth（读同步器
-                // 当前血量），字节码实证。满血时恰好 100% 所以一直没被发现；一旦掉血，数字会
-                // 往上涨（15/20 显示 133%、10/20 显示 200%、1/20 显示 2000%）。改为与其它
-                // 8 处一致的【当前/最大】：掉血就显示 75%、50%、5%。
-                int hp = (int) Math.round(m.m_21223_() / Math.max(1.0f, m.m_21233_()) * 100.0f);
+                // v1.3.3【字段 6 停用：血量百分比 → 列表行改版】：玩家反馈"列表行最好显示女仆的
+                // 基本状态（当前什么模式 / 在不在家 / 有没有排班），把血量百分比去掉"。列表行现在
+                // 显示【任务名 + 工作模式 + 排班 + 在家】（任务名由客户端按 UID 查翻译键，见
+                // ScheduleBookScreen 的 taskCn），血量百分比没有任何消费方了。
+                // 【为什么保留字段位而不删】协议形状不变（客户端仍按 0..8 读下标），少一处
+                // "服务端发 9 个、客户端读 8 个"的错位风险。v1.2.0 那条"血量公式取反"的账
+                // 随字段一起作废——那个值已经不显示了。
                 String dimTag = "";
                 if (lvl != level) {
                     dimTag = switch (lvl.m_46472_().m_135782_().m_135815_()) {
@@ -173,7 +174,7 @@ public final class ScheduleNetworking {
                         taskUid, String.valueOf(mode),
                         ScheduleData.isOn(m) ? "1" : "0",
                         String.valueOf(ScheduleData.load(m).size()),
-                        String.valueOf(hp), dimTag,
+                        "", dimTag,
                         m.isHomeModeEnable() ? "1" : "0"});
                 // 任务清单：用第一只女仆生成（隐藏任务因女仆而异，取代表）
                 if (taskUids.isEmpty()) {

@@ -637,6 +637,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 是否受「守家/工作区」活动范围约束（关掉 = 自由飞，会跟主人越界） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_CLAMP_HOME;
 
+    // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
+    /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SPAWNER_TORCH_ENABLE;
+    /** 刷怪笼的搜索半径（格）。数值与判据见 {@code com.maidsmart.combat.MaidSpawnerTorchBehavior} */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_SPAWNER_TORCH_RADIUS;
+
     // ================= 搭路（v1.1.0，主人在上方时垫方块靠近，默认关） =================
     public static final ForgeConfigSpec.BooleanValue BRIDGE_ENABLED;
 public static final ForgeConfigSpec.IntValue BRIDGE_MAX_DIST;
@@ -1926,6 +1932,19 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞（会为了追怪/跟主人越界）")
                 .translation("config.promaid.broom.clampHome").define("clampHome", true);
+        BUILDER.pop();
+
+        // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----
+        // 玩家建议原文：「女仆在发现刷怪笼以后如果手上有火把会优先在刷怪笼上插火把（用来防止
+        // 刷怪，当然可能涉及我的知识盲区，如果有和火把一样功效的东西，那么一样可以接受判定）。
+        // 如果这一块区域被判定为 Home 模式工作区域（河童的罗盘标记的那一块）则不执行这个链路。」
+        // 判据与"为什么光就够了"整段写在 MaidSpawnerTorchBehavior 的类注释里。
+        BUILDER.comment("防刷怪：发现刷怪笼就去插火把（配置面板：战斗与自保 → 防刷怪插火把）")
+                .translation("config.promaid.spawnerTorch").push("spawnerTorch");
+        COMBAT_SPAWNER_TORCH_ENABLE = BUILDER.comment("总开关（默认开）：她扫到自己附近有刷怪笼、且身上/背包里有能当灯的东西（火把/灵魂火把/灯笼/萤石/海晶灯/蛙明灯/南瓜灯/末地烛/篝火…判据是**放下之后方块自身发光 ≥ 8**）时，会走过去在刷怪笼紧挨着的格子里放一个，把它哑掉。\n\n【为什么发光 ≥ 8 就够】原版刷怪笼生成要求目标位置亮度 ≤ 7（Monster.isDarkEnoughToSpawn，字节码实证），而它的生成区是以自己为中心的 8×3×8、光照每格 -1——一个发光 14 的火把放在它身上/旁边，整个生成区最远那格也还有 10，全部在门限之上。红石火把只有 7，不够，所以不在清单里。\n\n【不碰的情况】① 刷怪笼落在她「在家模式/工作区」圈里（河童的罗盘标记的那一片）——那可能是你故意留的刷怪塔，一律不动；② 她手上一件灯都没有；③ 她正在打架/自保/骑乘/坐着/睡觉。\n\n【她会插哪儿】优先插在**刷怪笼顶上**（原话「在刷怪笼上插火把」），站不住就退到它同层的东南西北四邻、再退到四邻的上一层；九个位置全占满才放过它。\n\n【日志】搜「刷怪笼」：发现 / 放下 / 在工作区里不插 / 走了 20 秒没够到 / 九个位置都放不了")
+                .translation("config.promaid.spawnerTorch.enable").define("enable", true);
+        COMBAT_SPAWNER_TORCH_RADIUS = BUILDER.comment("搜索半径（格，默认 12，4~32）：她每隔 4 秒在自己周围这个水平半径、上下各 4 格里找一次刷怪笼（只找最近的这一个）。调大能提前发现远处的，但每次扫描要读的方块数按半径平方涨——12 已经覆盖一般地下矿道/地牢的视野，没必要太大")
+                .translation("config.promaid.spawnerTorch.radius").defineInRange("radius", 12.0, 4.0, 32.0);
         BUILDER.pop();
 
 
