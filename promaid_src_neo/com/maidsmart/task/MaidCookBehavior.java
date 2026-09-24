@@ -63,7 +63,17 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         return com.maidsmart.config.MaidSmartConfig.MISC_PROCESS_COOLDOWN.get();
     }
 
-    /** 可烹饪食材白名单（原版熔炉可烧食物） */
+    /** 可烹饪食材白名单（原版熔炉可烧食物）
+     *
+     *  v1.2.5 实测六百五十一【删掉五个"根本烧不了"的条目】：旧清单里
+     *  {@code beetroot / carrot / brown_mushroom / cactus / dried_kelp} 在原版
+     *  **没有任何炉子配方**——两份客户端 jar 的 {@code data/minecraft/recipes}
+     *  逐个查过（smelting / smoking / blasting 全找遍）：这五个一条都没有，
+     *  而同清单里的 potato / kelp / 生肉 / 鱼都查得到。
+     *  清单里多这五个的直接后果是"女仆会烧胡萝卜"（玩家反馈）。
+     *  删掉之后：模组/数据包**自己给这些物品补了配方**时照样能烧——那条路走
+     *  {@link #extractAnySmeltable} 与 {@link #pickFurnaceKind} 的通用分支，
+     *  它们查的是真实配方而不是这张表，所以这里是"白名单说法变准"，不是"功能变少"。 */
     private static final Set<Item> FOODS = new HashSet<>();
 
     static {
@@ -76,11 +86,6 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         addItem(FOODS, "minecraft:salmon");
         addItem(FOODS, "minecraft:potato");
         addItem(FOODS, "minecraft:kelp");
-        addItem(FOODS, "minecraft:beetroot");
-        addItem(FOODS, "minecraft:carrot");
-        addItem(FOODS, "minecraft:brown_mushroom");
-        addItem(FOODS, "minecraft:cactus");
-        addItem(FOODS, "minecraft:dried_kelp");
     }
 
     private static void addItem(Set<Item> set, String id) {
@@ -377,7 +382,10 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (furnace.getItem(0).isEmpty()) {
             ItemStack input = ItemStack.EMPTY;
             if (be instanceof FurnaceBlockEntity) {
-                input = this.extractFromMaid(maid, maidInv, FOODS, 1);
+                // v1.2.5 实测六百五十一：改成**查配方**的白名单提取——旧版这里只按
+                // FOODS.contains 取第一件，于是背包里"胡萝卜在生牛排前面"时喂进去的
+                // 就是胡萝卜（炉子永远烧不动它）。
+                input = this.extractCookFood(level, maid, maidInv);
                 if (input.isEmpty()) {
                     // v1.1.0 实测一百五十七：没有食材时兼容矿物类可烧制物
                     //（带矿物/原料标签且当前世界有熔炉配方：铁矿石/粗铁/金矿石等）
@@ -417,26 +425,37 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    private ItemStack extractFromMaid(EntityMaid maid, IItemHandler maidInv, Set<Item> whitelist, int count) {
+    /** v1.2.5 实测六百五十一：从女仆背包取 1 件**真能在这个世界烧**的白名单食材
+     *  （{@link #isCookFood} = 在白名单里 且 有烟熏或熔炉配方）。
+     *  旧版是"白名单里有就取"，见 isCookFood 的注释——胡萝卜就是这么被喂进炉子的。 */
+    private ItemStack extractCookFood(ServerLevel level, EntityMaid maid, IItemHandler maidInv) {
         // v1.2.4 实测六百三十九【先判背包，再判精妙背包】：自己背包里没有 → 先请 TLM 从
         // 精妙背包/旅行者背包把食材搬一组进来（pull 先扫她自己的背包，有就什么都不做）
-        com.maidsmart.tool.MaidExtraContainer.pull(maid,
-                s -> !s.isEmpty() && whitelist.contains(s.getItem()), count);
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> isCookFood(level, s), 1);
         for (int i = 0; i < maidInv.getSlots(); i++) {
             ItemStack stack = maidInv.getStackInSlot(i);
-            if (!stack.isEmpty() && whitelist.contains(stack.getItem())) {
-                return maidInv.extractItem(i, count, false);
+            if (isCookFood(level, stack)) {
+                return maidInv.extractItem(i, 1, false);
             }
         }
         return ItemStack.EMPTY;
     }
 
     /** v1.1.0 实测一百五十七：物品是否带矿物/原料标签——标签路径含 ores 或
-     *  raw_materials（forge:ores、forge:ores/*、minecraft:*_ores、forge:raw_materials 等）。 */
+     *  raw_materials（forge:ores、forge:ores/*、minecraft:*_ores、forge:raw_materials 等）。
+     *
+     *  v1.2.5 实测六百五十一【顺手修掉：一直查错字段】：官方映射+tsrg 链式实证
+     *  {@code m_135827_ = getNamespace}、{@code m_135815_ = getPath}。旧版（1.20.1 树
+     *  也一样）取的是**命名空间**（forge / minecraft / 模组 id），而 "ores" /
+     *  "raw_materials" 住在**路径**里（{@code forge:ores/iron} 的 path 是
+     *  {@code ores/iron}）——命名空间永远不含这两个词，于是本方法**恒返回 false**：
+     *  矿物永远判不出来。后果只是"矿物优先"失效（回退到通用可烧制物那条路照样能
+     *  烧矿石），所以一直没被发现；既然在改这个文件就一并按注释的原意修回来。
+     */
     private static boolean hasOreTag(Item item) {
         try {
             return item.builtInRegistryHolder().tags().anyMatch(t -> {
-                String path = t.location().getNamespace();
+                String path = t.location().getPath();
                 return path.contains("ores") || path.contains("raw_materials");
             });
         } catch (Exception ignored) {
@@ -465,13 +484,57 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * v1.2.5 实测六百五十一【"女仆会烧胡萝卜" + "抱着炉子卡死不动"的根因】：
+     * 白名单食材必须**真在当前世界有炉子配方**才算"可烹饪"。
+     *
+     * 旧版所有"她有没有吃的可烧"的判据都只查 {@code FOODS.contains(item)}——把
+     * 硬编码清单当成事实断言。而清单里的
+     * {@code carrot / beetroot / brown_mushroom / cactus / dried_kelp} 在原版
+     * **没有任何炉子配方**（两份客户端 jar 的 {@code data/minecraft/recipes} 实证：
+     * 这五个既无 smelting 也无 smoking；对比 potato/kelp/生肉/鱼都查得到）。
+     * 后果是一条链上的两个现象：
+     * <ul>
+     *   <li>{@link #pickFurnaceKind} 见到胡萝卜就判成 FOOD → 她去占烟熏炉/熔炉；</li>
+     *   <li>{@link #processFurnace} 把胡萝卜塞进原料槽（提取路径也不查配方）；</li>
+     *   <li>{@link #furnaceMatchesInv} 用的是**同一个**白名单判据 → 恒为真 →
+     *       她永远不解绑，抱着一个烧不动的炉子坐到底 = 玩家看到的"卡死不动"。</li>
+     * </ul>
+     * 实测六百三十七 只治了"附近**找不到**炉子"那条冻结路径；这条"炉子找到了、
+     * 但里面根本没有能烧的东西"是另一条，两条都会冻人。
+     *
+     * 现在白名单只当**优先项**、不当**事实**：要有烟熏或熔炉配方才算数。
+     * 模组给这些物品补了配方时照样认（走的都是同一个配方管理器）。
+     */
+    private static boolean isCookFood(ServerLevel level, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) {
+            return false;
+        }
+        if (!FOODS.contains(stack.getItem())) {
+            return false;
+        }
+        return hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.SMOKING)
+                || hasRecipe(level, stack, net.minecraft.world.item.crafting.RecipeType.SMELTING);
+    }
+
+    /**
      * v1.1.0 实测三百四十九（反馈："女仆在进行烧制的时候，会把附魔的物品拿去
      * 烧掉"）：可烧制 ≠ 可以喂——带附魔（经验修补/耐久/时运等，哪怕只有 1 条）
      * 或耐久未满（用旧过的工具/武器/盔甲）的物品一律不进炉子。三类取料路径
      * （食材白名单外的矿物回退 extractOreFromMaid / 通用可烧制物回退
      * extractAnySmeltable / 烟熏炉·高炉 extractByRecipe）统一在入口拦截。
      * isEnchanted = isEnchanted（附魔表非空，javap 实证查 NBT Enchantments 列表），
-     * isStackable = isDamaged（当前耐久 < 最大）。
+     * isDamaged = 当前耐久 &lt; 最大、getMaxDamage = 最大耐久。
+     *
+     * v1.2.5 实测六百五十一【这一条以前**从来没生效过**】：旧版写的是
+     * {@code isStackable() && getDamageValue() > 0}，而按官方映射（obf→Mojmap）+ tsrg
+     * 链式实证：{@code m_41753_ = isStackable}（不是 isDamaged）、
+     * {@code m_41773_ = getDamageValue}（不是 getMaxDamage）——1.20.1 树同样写错了，
+     * 这一行是照它逐字搬过来的。
+     * {@code isStackable() && getDamageValue() > 0} 在原版几乎恒为假——
+     * 能堆叠的物品根本不吃耐久，吃耐久的（工具/盔甲）又都是单件不可堆叠，
+     * 于是"用旧的耐久物品不熔"这道闸等于不存在：**她会把自己用过的铁剑之类
+     * 直接丢进炉子**（实测三百四十九 报的是附魔物品，附魔那半条由 isEnchanted
+     * 挡住了，这半条一直漏着）。现在照注释的原意写回来。
      */
     private static boolean isSafeToFeed(ItemStack stack) {
         if (stack == null || stack.isEmpty()) {
@@ -480,7 +543,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
         if (stack.isEnchanted()) {
             return false; // 附魔物品永不熔（原版/模组配方都可能烧掉它）
         }
-        if (stack.isStackable() && stack.getDamageValue() > 0) {
+        if (stack.isDamaged() && stack.getMaxDamage() > 0) {
             return false; // 用旧过的耐久物品不熔（最大耐久 > 0 才算耐久物品）
         }
         return true;
@@ -782,7 +845,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 Item it = stack.getItem();
-                if (FOODS.contains(it)) {
+                if (isCookFood(level, stack)) {
                     return FurnaceKind.FOOD;
                 }
                 if (it instanceof net.minecraft.world.item.TieredItem
@@ -806,7 +869,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
             // 的女仆会判成 NONE → 连炉子都不去找 → 站桩（也就永远走不到"取物"那一步）。
             // 口径与上面的循环逐条对齐（食材 → 高炉矿物 → 熔炉通用物）。
             if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
-                    s -> !s.isEmpty() && FOODS.contains(s.getItem()))) {
+                    s -> isCookFood(level, s))) {
                 return FurnaceKind.FOOD;
             }
             if (com.maidsmart.tool.MaidExtraContainer.contains(maid,
@@ -864,7 +927,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     continue;
                 }
                 Item it = stack.getItem();
-                if (FOODS.contains(it)) {
+                if (isCookFood(level, stack)) {
                     if (bs.getBlock() instanceof net.minecraft.world.level.block.SmokerBlock
                             || bs.getBlock() instanceof net.minecraft.world.level.block.FurnaceBlock) {
                         return true;
@@ -898,7 +961,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                     || bs.getBlock() instanceof net.minecraft.world.level.block.FurnaceBlock;
             boolean blast = bs.getBlock() instanceof net.minecraft.world.level.block.BlastFurnaceBlock;
             if (smokerOrFurnace && com.maidsmart.tool.MaidExtraContainer.contains(maid,
-                    s -> !s.isEmpty() && FOODS.contains(s.getItem()))) {
+                    s -> isCookFood(level, s))) {
                 return true;
             }
             if (blast && com.maidsmart.tool.MaidExtraContainer.contains(maid,
