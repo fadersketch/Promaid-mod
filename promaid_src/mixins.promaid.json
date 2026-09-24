@@ -61,7 +61,8 @@
     "PuppetModeLlmGuardMixin",
     "ElytraWearGuardMixin",
     "MaidCompressionBoxMixin",
-    "EntityBroomMaidTravelMixin"
+    "EntityBroomMaidTravelMixin",
+    "MaidContainerRemoteOpenMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",

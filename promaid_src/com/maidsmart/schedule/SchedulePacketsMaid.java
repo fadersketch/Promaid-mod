@@ -462,20 +462,24 @@ public final class SchedulePacketsMaid {
                             "§7没找到她——可能已被收进魂符或不在已加载区块"));
                     return;
                 }
-                // v1.3.3【"离得远时点女仆配置：进去一下立刻被踢出来"的根因】——TLM 的女仆容器
-                // 每 tick 都要过一遍 AbstractMaidContainer.m_6875_（= stillValid）：
-                //     maid 非空 → isOwnedBy(player) → isAlive() 且 !isSleeping() → player.canReach(maid, 3.0)
-                // 其中最后一条是**3 格**（字节码实证）。不满足时服务端下一 tick 就 closeContainer，
-                // 客户端看到的就是"打开了、然后立刻闪退"。所以开门前先把同一套判据问一遍：
-                // 不满足就**不开**，并直接告诉她为什么——宁可一句明白话，也不要一闪而过的空界面。
+                // v1.3.4【真正的远程开界面】（实测六百五十九，玩家原话："我想要真正的远程开界面"）
+                // 上一版（实测六百五十八）在这里做的是"离得远就**不开**、回一句明白话"——那是止血，
+                // 不是玩家要的东西。真正的根因是 TLM 的 AbstractMaidContainer.m_6875_（= stillValid）
+                // 每 tick 都要问一遍「玩家到她 ≤ 3 格」（字节码实证），人一站远服务端下一 tick 就
+                // closeContainer，客户端看到的就是"点进去一下、立刻闪退"。
+                // 现在改成**真的开**：先把这一对（玩家, 她）登记进 RemoteMaidGui，容器那条距离判据
+                // 由 MaidContainerRemoteOpenMixin 对这一对放行；界面关掉时授权自动收回。
                 String blocked = openBlockedReason(player, maid);
                 if (blocked != null) {
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(blocked));
                     return;
                 }
+                RemoteMaidGui.enable(player, maid);
                 // 与右键女仆同一个入口。她在别的维度、骑着扫帚、正在干活都照开
                 //（界面是玩家的，关掉之后她照旧在原地干自己的事）
                 if (!maid.openMaidGui(player)) {
+                    // 没开成：把刚登记的授权收回，别留一份"她那边没有界面、我们这边还认这个远程"的悬空登记
+                    RemoteMaidGui.disable(player, maid);
                     player.m_213846_(net.minecraft.network.chat.Component.m_237113_(
                             "§7没能打开「" + (maid.m_5446_() == null
                                     ? "女仆" : maid.m_5446_().getString()) + "」的配置界面"));
@@ -485,13 +489,25 @@ public final class SchedulePacketsMaid {
         }
 
         /**
-         * 现在开她的配置界面会不会"开了就关"——会的话返回给玩家看的那句话，不会则 null。
+         * 这次开她的配置界面会不会"开了就关"——会的话返回给玩家看的那句话，不会则 null。
          *
-         * <p>判据逐条照抄 {@code AbstractMaidContainer.m_6875_}（TLM 的 stillValid），
-         * **顺序也照抄**：容器那边是"越靠前的条件先否掉"，我们按同一个顺序给理由，
-         * 玩家看到的就一定是真正的那个原因。这是本模组那条铁律的又一次应用：
-         * 同一个口径只有一处实现——这里是**客户端表现**那一侧的同一份口径，
-         * 改了 TLM 的判据我们也得跟着改，所以注释里把出处写死。
+         * <p>判据的顺序照抄 {@code AbstractMaidContainer.m_6875_}（TLM 的 stillValid）：
+         * 容器那边是"越靠前的条件先否掉"，我们按同一个顺序给理由，玩家看到的就是真正的那个原因。
+         * 仍是本模组那条铁律的又一次应用：同一个口径只有一处实现——这里是**客户端表现**那一侧的
+         * 同一份口径，改了 TLM 的判据我们也得跟着改，所以注释里把出处写死。
+         *
+         * <p>【v1.3.4 实测六百五十九：距离那一条不在这里拦了】玩家原话"我想要真正的远程开界面"。
+         * 「离她 ≤ 3 格」那一条改由 {@code MaidContainerRemoteOpenMixin} 对**登记过的**这一对
+         * （玩家, 她）整条放行——那是 TLM 每 tick 关界面的唯一原因。留在这里的只剩两项：
+         * <ol>
+         *   <li>她死了 / 正在睡——这两条是 stillValid 里"距离之前"的条件，**照旧拦**
+         *       （不然服务端下一 tick 还是关，玩家只会看到闪退而不是原因）；</li>
+         *   <li>**客户端根本看不到她**——TLM 的容器是按实体的网络 id 在客户端找她的
+         *       （字节码实证：{@code AbstractMaidContainer} 构造里
+         *       {@code level.getEntity(int)} + {@code checkcast EntityMaid}），而"玩家背包那一片
+         *       槽位"只在 {@code maid != null} 时才建——客户端没同步到这个实体时打开的是残界面。
+         *       边界取**原版自己的实体同步距离**（{@link RemoteMaidGui#remoteRange}），不是我们拍一个数。</li>
+         * </ol>
          */
         private static String openBlockedReason(ServerPlayer player, EntityMaid maid) {
             if (!maid.m_6084_()) {
@@ -500,16 +516,12 @@ public final class SchedulePacketsMaid {
             if (maid.m_5803_()) {
                 return "§7她正在睡觉——醒了再开配置界面（睡觉中开会被原版立刻关掉）";
             }
-            // 原版的判据是"玩家到她碰撞箱中心的距离不超过一个很近的常数"，且**两版数值不同**：
-            // 1.20.1 是 {@code Player.canReach(maid, 3.0)}、1.21.1 是
-            // {@code Player.canInteractWithEntity(maid, 4.0)}（都从 TLM 的
-            // {@code AbstractMaidContainer.stillValid} 字节码里读出来的）。所以这里直接调
-            // **这一版 TLM 实际用的那个方法**，不自己拼距离比较——哪天它再改数值，
-            // 也只是这一行跟着改一次，不会出现"我们以为够近、TLM 说不够"的错位。
-            if (!player.m_19950_(maid, 3.0)) {
+            double far = RemoteMaidGui.remoteRange(maid);
+            if (player.m_20270_(maid) > far) {
                 return "§7她离你 " + String.format(java.util.Locale.ROOT, "%.1f", player.m_20270_(maid))
-                        + " 格——打开她的配置界面得站在她身边（原版限制，很近）。先走近她，"
-                        + "或者用「召她过来」/「去她身边」";
+                        + " 格——超出客户端能看到她的距离（约 " + ((int) far)
+                        + " 格，原版的实体同步距离），那种距离界面打开也是残的。"
+                        + "走近到 " + ((int) far) + " 格以内再点；只想让她过来就用「召她过来」/「去她身边」";
             }
             return null;
         }
