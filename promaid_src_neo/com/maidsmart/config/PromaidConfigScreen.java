@@ -2878,6 +2878,8 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 "飞行作战：新的作战模式（图标=鞘翅），女仆身上【鞘翅+重锤+烟花火箭】三件齐备时激活——进入后自己在胸甲穿鞘翅、主手换重锤（烟花不必拿在手上，副手留给你放盾牌/食物），照搬 JerotesWarehouse「类玩家单位穿鞘翅用长矛」那一套：目标升空/自身坠落时张开鞘翅滑翔、烟花火箭推进接近，到目标上方后收翅俯冲用重锤猛砸（重锤下落加成要求不在滑翔状态，所以必须先收翅），落地后仍有烟花则继续起飞。三件缺任意一件 = 模式不激活，行为与普通攻击模式一致（地面近战）。本模式不响应自主切换；滑翔/俯冲全程禁止传送。关闭 = 该模式完全不工作"));
         this.rows.add(new NumRow("响应半径（格）", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RADIUS, s), "响应半径（格）：主人受伤或开火时，此半径内的女仆才会响应切换"));
+        this.rows.add(new NumRow("援护半径（格）", String.valueOf(MaidSmartConfig.COMBAT_ASSIST_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_ASSIST_RADIUS, s), "援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3）：① 她没有目标时优先打「主人最近的仇人」（最近打主人的人 → 主人最近打的人，5 秒窗口内）；② 目标离她和她主人都超过这个半径就松手——不再追已经跑掉的怪（那是「追出去→被圈拽回来」的循环源头）。对象还要看得见、在她工作圈内、且非友军才生效"));
         // v1.1.0 实测二十一：武器权重可配置（选任务时加权随机——模组/原版各一条）
         this.rows.add(new NumRow("模组武器权重", String.valueOf(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_AUTO_SWITCH_MOD_WEIGHT, s), "模组武器权重（默认 2.0）：万法皆通/史诗战斗/真正的力量/枪械等模组攻击任务的加权随机权重——模组武器普遍更强故默认优先（2:1 约被选 67%）"));
