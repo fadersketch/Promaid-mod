@@ -62,7 +62,9 @@
     "ElytraWearGuardMixin",
     "MaidCompressionBoxMixin",
     "EntityBroomMaidTravelMixin",
-    "MaidContainerRemoteOpenMixin"
+    "MaidContainerRemoteOpenMixin",
+    "ChunkMapTrackRemoteMixin",
+    "ChunkMapRemotePumpMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
