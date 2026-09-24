@@ -819,6 +819,11 @@ public static final ForgeConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_SMOKER_BLAST;
     // v1.1.0 实测三百：烧木材开关（默认关——木材类默认黑名单不烧，勾选后才烧）
     public static final ForgeConfigSpec.BooleanValue MISC_COOK_BURN_WOOD;
+    // v1.2.5 实测六百五十二：烧制清单——四张面板可编辑的名单（默认全空 = 行为与旧版一字不变）
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_COOK_SMELT_ALLOW;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_COOK_SMELT_DENY;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_COOK_FUEL_ALLOW;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_COOK_FUEL_DENY;
     // v1.1.0 实测三百一十一：宰杀任务阈值（同种牲畜超过此数才杀，默认 5）
     public static final ForgeConfigSpec.IntValue MISC_SLAUGHTER_COUNT;
     // v1.1.0 实测三百一十八：宰杀扫描半径（默认 16，旧版硬编码 5×5 扫不到远处牲畜）
@@ -2235,6 +2240,22 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测三百：木材黑名单开关
         MISC_COOK_BURN_WOOD = BUILDER.comment("烧木材（默认关）：木材类（原木/木板/树苗/竹等）默认进黑名单不烧——女仆不会拿木材当原料烧（避免「用木头烧木头」）；勾选后木材类照常可烧（仍受「烧任何可烧制物」开关约束）")
                 .translation("config.promaid.misc.cookBurnWood").define("cookBurnWood", false);
+        // v1.2.5 实测六百五十二：烧制清单——四张可编辑名单（面板「生产与工作 → 烹饪与酿造 → 烧制清单」）。
+        // 【语义，三张表共用一条】禁止永远优先；允许清单非空 = 只在这些里挑，留空 = 自动（旧行为）。
+        // 【一条硬约束】允许清单只**缩小**范围，绝不绕过配方：物品仍要当前世界真有炉子配方才会进炉子——
+        // 否则又会变成"把烧不动的东西塞进炉子、抱着炉子卡死"（实测六百五十一 刚修掉的那个毛病）。
+        MISC_COOK_SMELT_ALLOW = BUILDER.comment("烧制清单·只烧这些（默认空 = 按自动判定）：非空时女仆只把清单里的物品当原料放进炉子（仍要求当前世界真有炉子配方——清单只缩小范围，不会让烧不动的东西变成可烧）；留空 = 自动判定（食材白名单 + 矿物标签 + 通用可烧制物回退）。面板：生产与工作 → 烹饪与酿造 → 烧制清单")
+                .translation("config.promaid.misc.cookSmeltAllow")
+                .defineList("cookSmeltAllow", List.of(), o -> o instanceof String s && !s.isBlank());
+        MISC_COOK_SMELT_DENY = BUILDER.comment("烧制清单·禁止烧制（默认空）：清单里的物品永不被放进炉子（优先级高于「只烧这些」与自动判定）。用途：别让她烧你的钻石/下界合金/收藏品。面板同上")
+                .translation("config.promaid.misc.cookSmeltDeny")
+                .defineList("cookSmeltDeny", List.of(), o -> o instanceof String s && !s.isBlank());
+        MISC_COOK_FUEL_ALLOW = BUILDER.comment("烧制清单·只用这些燃料（默认空 = 按燃烧时长自动挑）：非空时只从清单里选燃料（仍在其中按燃烧时长评分，时长一样才比数量）；留空 = 自动（纯燃料优先，没有纯燃料才退而用可烧制燃料）。面板同上")
+                .translation("config.promaid.misc.cookFuelAllow")
+                .defineList("cookFuelAllow", List.of(), o -> o instanceof String s && !s.isBlank());
+        MISC_COOK_FUEL_DENY = BUILDER.comment("烧制清单·禁用燃料（默认空）：清单里的物品永不当燃料（优先级高于「只用这些燃料」与自动评分）。用途：别拿你的木板/原木当柴烧。面板同上")
+                .translation("config.promaid.misc.cookFuelDeny")
+                .defineList("cookFuelDeny", List.of(), o -> o instanceof String s && !s.isBlank());
         // v1.1.0 实测三百一十一：宰杀任务阈值
         MISC_SLAUGHTER_COUNT = BUILDER.comment("宰杀数量阈值（默认 5）：宰杀任务女仆检测周围同种牲畜（牛/猪/羊/鸡/兔等按类型分组）的数量，某组超过此数 → 每 3 秒随机宰杀一只该组牲畜（播放动画）；≤ 阈值不动")
                 .translation("config.promaid.misc.slaughterCount").defineInRange("slaughterCount", 5, 2, 64);
