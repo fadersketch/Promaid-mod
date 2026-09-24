@@ -142,7 +142,15 @@ public final class NeutralThreatDriver {
                 com.maidsmart.combat.SelfPreservationBehavior.PRESERVE_TAG)) {
             return;
         }
-        Mob threat = findThreateningMob(maid, owner);
+        // ★ v1.3.8 新增（借自别人改过的 TLM 1.5.3 的 shouldAbandonTarget）：目标跑远
+        //    就撒手——只松手、不加戏，所以放在"主动参战"总开关的判定之前
+        abandonFarTarget(maid, owner);
+        // ★ v1.3.8 新增（借自 findOwnerPriorityAttackTarget）：主人最近的仇人优先，
+        //    没有再退回原来的"谁锁定了主人/女仆"扫描
+        Mob threat = ownerEnemy(maid, owner);
+        if (threat == null) {
+            threat = findThreateningMob(maid, owner);
+        }
         if (threat == null) {
             // 威胁解除：清登记（ATTACK_TARGET 的清理交给 TLM StopAttacking/
             // 传感器时效，这里只清自己的冷却登记，防 Map 膨胀）
@@ -382,6 +390,143 @@ public final class NeutralThreatDriver {
      * 为了可测/可读，这一条单独留成 {@link #perceivable}，扫描与自检共用同一份，
      * 不允许各写一份。
      */
+    // ───────────────────────────────────────────────────────────────────────
+    // v1.3.8 实测六百六十三【借来的两条：援护主人的仇人 + 目标跑远就撒手】
+    //
+    // 出处：别人改过的 TLM 1.5.3（拿它与官方 1.5.3 逐类 javap 对比后实证）：
+    //   · IAttackTask.findOwnerPriorityAttackTarget —— 优先打「主人最近的仇人」；
+    //   · IAttackTask.shouldAbandonTarget / isWithinAttackRange —— 目标离她和主人都
+    //     超过半径就撒手（两条判据互为反面、共用同一个半径）；
+    //   · 新配置 MaidCombatRange（默认 16，范围 8~48，"Temporary expanded assist
+    //     radius when combat is detected in Non-Home mode"）。
+    // 他们是【改 TLM 源码重编译】，我们是【外挂模组】——所以照搬的是判据与阈值，
+    // 不是类结构；落点选在本类，因为本类本来就是"往 ATTACK_TARGET 写目标"的那一处。
+    //
+    // 照搬时故意改了两点（照搬不照抄）：
+    //  ① 他们读主人的 getLastHurtByMob / getLastHurtMob **不看时间**：原版这两个字段
+    //     一旦写上就不再清空，于是"主人十分钟前打过的那只怪"永远算主人的仇人、永远
+    //     被优先。我们按本模组既有的"最近交手窗口"口径（见 {@link CombatWorkRange#inCombat}）
+    //     一并查时间戳，超出 {@link #OWNER_COMBAT_TICKS} 不算。
+    //  ② 他们那边还有一条"够不到就放弃"（MaidClearStaleAttackTarget，读
+    //     CANT_REACH_WALK_TARGET_SINCE 记忆）。**这一条没有照搬**：他们的实现是
+    //     {@code 记忆值 > 100}——记忆里存的是"走不到那一刻的 gameTime 绝对值"，拿它跟
+    //     常量 100 比，在任何跑了 5 秒以上的世界里恒真（实际效果 = 只要出现过一次
+    //     "走不到"就立刻放弃，与他们自己那个 CANT_REACH_GIVE_UP_TICKS = 100 的意图
+    //     不符）。要照搬必须先改成 {@code now - since > 100}，那是一条独立行为，
+    //     等实测反馈再定——本类 ③ 的兜底导航/挥砍与战术行为（230）已经能兜住这种情况。
+    // ───────────────────────────────────────────────────────────────────────
+
+    /** 援护半径（格）：主人的仇人算不算"该去帮"、"跑多远算撒手"。0 = 这两条一起关 */
+    private static int assistRadius() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_ASSIST_RADIUS.get();
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 主人"最近交手"的窗口（tick）——与 {@link CombatWorkRange#inCombat} 同口径（5 秒） */
+    private static final int OWNER_COMBAT_TICKS = 100;
+
+    /**
+     * 主人此刻的仇人：优先"最近打主人的人"（最该反击的那个），其次"主人最近打的人"。
+     * 两个字段都带时间戳，超过窗口不算（见类内注释 ①；时间戳初值 0 的头 5 秒一并挡掉，
+     * 与 {@link CombatWorkRange} 里"初生女仆不算刚交过手"同一条护栏）。
+     * 返回 null = 主人这段时间没交手，或那个对象过不了 {@link #legalAssist} 的合法性链。
+     */
+    private static Mob ownerEnemy(EntityMaid maid, LivingEntity owner) {
+        try {
+            int now = owner.f_19797_; // tickCount
+            if (now < OWNER_COMBAT_TICKS) {
+                return null;
+            }
+            LivingEntity by = owner.m_21188_(); // getLastHurtByMob（最近打主人的人）
+            if (by != null && now - owner.m_21213_() < OWNER_COMBAT_TICKS) {
+                Mob m = legalAssist(maid, owner, by);
+                if (m != null) {
+                    return m;
+                }
+            }
+            LivingEntity at = owner.m_21214_(); // getLastHurtMob（主人最近打的人）
+            if (at != null && now - owner.m_21215_() < OWNER_COMBAT_TICKS) {
+                return legalAssist(maid, owner, at);
+            }
+            return null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 援护对象的合法性——他们那两条判据逐条换成本模组现成的实现，不另写一份：
+     * <ol>
+     *   <li><b>她认它是敌人</b>：{@code BombThrow.legalThrowTarget}（"她的任务认的敌人
+     *       + 非友军"，与轰炸投掷同一条口径）；</li>
+     *   <li><b>看得见</b>：{@link #perceivable}——实测六百一十九 的视线门；看不见就写
+     *       目标 = 她会隔着墙原地打转，这条不能省；</li>
+     *   <li><b>在圈里</b>：{@code WorkAreaClamp.allows}（home/排班模式的"工作区域"，
+     *       非 home 恒放行）——对应他们的 {@code isWithinRestriction(目标位置)}；</li>
+     *   <li><b>距离</b>：主人离它、或她自己离它 ≤ 援护半径（他们的
+     *       {@code isWithinAttackRange} 就是"两者取近"这条口径）。</li>
+     * </ol>
+     */
+    private static Mob legalAssist(EntityMaid maid, LivingEntity owner, LivingEntity le) {
+        try {
+            if (!(le instanceof Mob mob)) {
+                return null; // 本类后面要拿它导航/挥砍，兜底通道只认 Mob
+            }
+            if (!BombThrow.legalThrowTarget(maid, mob)) {
+                return null;
+            }
+            if (!perceivable(maid, owner, mob)) {
+                return null;
+            }
+            if (!com.maidsmart.follow.WorkAreaClamp.allows(maid, mob.m_20183_())) {
+                return null;
+            }
+            int r = assistRadius();
+            return (owner.m_20270_(mob) <= r || maid.m_20270_(mob) <= r) ? mob : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 目标跑远就撒手（对应他们的 shouldAbandonTarget）：她的目标离**她**和**主人**都
+     * 超过援护半径 → 清目标。清的三条记忆与他们 clearAttackMemories 一致
+     * （ATTACK_TARGET / CANT_REACH_WALK_TARGET_SINCE / WALK_TARGET），另加本模组自己
+     * 写过的 LOOK_TARGET——目标都松手了，视线还锁着它没有意义。
+     *
+     * 为什么这一条不受"主动参战"总开关管：它只做减法（松手），不做加法（不会让她去打谁）。
+     * 追一个已经跑掉的目标本身就是"追出去→被圈拽回来"的循环源头之一——她还在追、战斗
+     * 判定还在，圈就一直大着；松手之后战斗判定自然回落，她该回岗回岗。整条想关就把
+     * 援护半径设 0。
+     */
+    private static void abandonFarTarget(EntityMaid maid, LivingEntity owner) {
+        int r = assistRadius();
+        if (r <= 0) {
+            return;
+        }
+        try {
+            LivingEntity cur = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_).orElse(null);
+            if (cur == null || !cur.m_6084_()) {
+                return;
+            }
+            if (maid.m_20270_(cur) <= r || owner.m_20270_(cur) <= r) {
+                return; // 任一方还在半径内 → 留着
+            }
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26372_); // ATTACK_TARGET
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26371_); // LOOK_TARGET
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26326_); // CANT_REACH_WALK_TARGET_SINCE
+            maid.m_6274_().m_21936_(MemoryModuleType.f_26370_); // WALK_TARGET
+            java.util.UUID id = maid.m_20148_();
+            ASSIGNED_TARGETS.remove(id);
+            ATTACK_CDS.remove(id);
+            com.maidsmart.tool.PromaidLog.log("援护", "目标跑出 " + r + " 格（她与主人都超）→ 松手");
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static Mob findThreateningMob(EntityMaid maid, LivingEntity owner) {
         Mob best = null;
         double bestDist = Double.MAX_VALUE;

@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
 """Deploy the fixed jars to all local instances.
 
-1.21.1 NeoForge 21.1.250  : patched/promaid-1.3.7-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.21      : patched/promaid-1.3.7-forge-1.20.1.jar   (user's main modpack)
-1.20.1 server pack1201    : patched/promaid-1.3.7-forge-1.20.1.jar
+1.21.1 NeoForge 21.1.250  : patched/promaid-1.3.8-neoforge-1.21.1.jar
+1.20.1 Forge 47.4.21      : patched/promaid-1.3.8-forge-1.20.1.jar   (user's main modpack)
+1.20.1 server pack1201    : patched/promaid-1.3.8-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
 v1.3.0 实测六百五十四（扫帚模式）+ 实测六百五十三（烧制卡死）+ v1.3.1 实测六百五十五（扫帚实测六条）
@@ -14,6 +14,7 @@ v1.3.0 实测六百五十四（扫帚模式）+ 实测六百五十三（烧制�
 + v1.3.5 实测六百六十（女仆配置改「强制同步」：区块加载解决不了客户端同步，新增 ChunkMap$TrackedEntity 强制配对 + 每 tick 同步泵，距离上限取消）：
 + v1.3.6 实测六百六十一（扫帚模式收尾：牵引绳「连人带扫帚」传送、守家时绕工作范围盘旋、独占配置板块、骑乘限制只留主手武器、烹饪清单面板收成一个勾）：
 + v1.3.7 实测六百六十二（修死机：RemoteTrackBridge 这个「鸭子接口」躺在 mixin 包里又没登记，玩家一进世界服务端就崩 IllegalClassLoadError——搬到 com.maidsmart.schedule）：
++ v1.3.8 实测六百六十三（借自别人改过的 TLM 1.5.3：援护主人的仇人 + 目标跑远就撒手，新配置「援护半径」combat.assistRadius 默认 16）：
 先试【直接复制】（不需要 UAC）；只有直接复制被拒（权限不够）时
 才退回原来的提权 PowerShell 通道。旧版是无条件提权 → 会弹 UAC 卡住等人点。
 """
@@ -27,12 +28,12 @@ sys.stdout.reconfigure(encoding='utf-8')
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 JOBS = [
-    (os.path.join(BASE, 'patched', 'promaid-1.3.7-neoforge-1.21.1.jar'),
-     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.7-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.7-forge-1.20.1.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.3.7-forge-1.20.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.3.7-forge-1.20.1.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.7-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.8-neoforge-1.21.1.jar'),
+     r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.8-neoforge-1.21.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.8-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.3.8-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.3.8-forge-1.20.1.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.3.8-forge-1.20.1.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)

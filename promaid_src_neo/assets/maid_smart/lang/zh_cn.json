@@ -1,4 +1,5 @@
 ﻿{
+  "config.promaid.combat.assistRadius": "援护半径（格）",
   "task.maid_smart.mine": "挖矿",
   "task.maid_smart.mine.desc": "在附近寻找矿石，手持镐开采",
   "task.maid_smart.woodcut": "伐木",

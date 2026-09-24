@@ -324,6 +324,10 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.IntValue COMBAT_AUTO_SWITCH_EXPAND;
     /** v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式的工作范围圈，见 CombatWorkRange） */
     public static final ModConfigSpec.IntValue COMBAT_WORK_RANGE;
+    /** v1.3.8 实测六百六十三【援护半径】——借自别人改过的 TLM 1.5.3 的 MaidCombatRange：
+     *  ① 她没有目标时优先打「主人最近的仇人」（最近打主人的人 → 主人最近打的人，5 秒窗口）；
+     *  ② 目标离她和主人都超过这个半径就松手（不再追已经跑掉的怪）。0 = 两条一起关。 */
+    public static final ModConfigSpec.IntValue COMBAT_ASSIST_RADIUS;
 
     // ---- v1.3.0「扫帚模式」----
     /** 扫帚模式总开关（默认开）。关掉 = 该任务整段不激活，她原地待命并报缺件 */
@@ -1954,6 +1958,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 追怪的近战女仆被反复拽回原地，仗永远打不完（见 CombatWorkRange 的根因）
         COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
                 .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
+        COMBAT_ASSIST_RADIUS = BUILDER.comment("援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3）：两条一起管——①【援护】她的战斗任务没有目标时，优先把「主人最近的仇人」（最近打主人的人，其次主人最近打的人，都只在 5 秒窗口内）当成目标去帮；②【撒手】她的目标离她**和**主人都超过这个半径时松开目标（追一个已经跑掉的怪正是「追出去→被圈拽回来」的循环源头）。援护对象必须过完整合法性链：她的任务认它是敌人 + 非友军 + 看得见（隔着墙不写目标）+ 在她工作圈内；工作圈随「战斗时临时扩圈」一起放大。0 = 两条一起关（0~64）")
+                .translation("config.promaid.combat.assistRadius").defineInRange("assistRadius", 16, 0, 64);
         BUILDER.pop();
 
         // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----

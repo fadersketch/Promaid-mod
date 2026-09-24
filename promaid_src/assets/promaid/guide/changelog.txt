@@ -1,4 +1,73 @@
-﻿## 实测六百六十二【修死机：玩家一进世界服务端就崩——mixin 包里的「鸭子接口」没登记（v1.3.5 起就带着）】
+﻿## 实测六百六十三【从别人改过的 TLM 里借两条：援护主人的仇人 + 目标跑远就撒手（新配置「援护半径」）】
+
+### ① 这份东西是什么
+
+有人给了一份**改过的 TLM 1.5.3**（`touhoulittlemaid-1.5.3-modified-all.jar`）。拿它跟官方 1.5.3
+逐类比对：**4522 → 4524 条目，只动了 21 个类、加了 2 个、删了 0 个，且全部是战斗相关**——
+`IAttackTask` / `IRangedAttackTask`（新增一批静态索敌判据）、新增 `MaidStartAttacking` 与
+`MaidClearStaleAttackTarget`、`TaskAttack` 与五个远程任务、`MaidBrain`、`MaidFollowOwnerTask`、
+`DefaultMonsterType`、`MaidConfig`。改的是同一件事：**女仆打谁、追多远、什么时候放手**。
+
+### ② 他那边「大小圈」是怎么做的（字节码解码）
+
+- **小圈 = 她自己的活动圈**：近战目标必须过 `maid.isWithinRestriction(目标位置)`
+  （home / 排班模式那个工作圈）；
+- **大圈 = 一个独立的「援护半径」**：`IAttackTask.getAssistRadius(maid)`——守家 → 取工作圈半径；
+  非守家 → 平时 `MAID_NON_HOME_RANGE`(8)，**一旦判定「在战斗中」就换成新配置
+  `MAID_COMBAT_RANGE`（默认 16，范围 8~48）**，注释原文 "Temporary expanded assist radius
+  when combat is detected in Non-Home mode"；
+- **「在战斗中」怎么判**（`isInCombatMode`）：有攻击目标 **或** 主人最近被谁打了
+  （`owner.getLastHurtByMob`）**或** 主人最近打了谁（`owner.getLastHurtMob`）**或** 她自己最近被谁打；
+- **目标优先级**（`findPriorityAttackTarget`）：主人的仇人 → 当前目标（还合法就留着）→ 最近的可见敌人；
+- **放手**（`shouldAbandonTarget`）：目标离**她**和**主人**「都」超过援护半径——与
+  `isWithinAttackRange` 的「两者取近」互为反面。
+
+### ③ 对比：我们本来有什么
+
+| 能力 | 他那边 | 我们 |
+| --- | --- | --- |
+| 战斗时扩圈 | 只放大他自己的「援护半径」读数 | ✅ 更彻底：`combatWorkRange`（默认 15）直接放大**真实的圈**——连寻路与 TLM「出圈就传送回工位」那条阈值一起，战斗结束自动落回 |
+| 目标必须在圈里 | ✅ 近战目标判据 | 只有空袭链路有（`FlightTargeting` 那两处 `isWithinRestriction`） |
+| 打不到就撒手 | ✅ 两条（跑远了 / 走不到） | ❌ 一条都没有 |
+| 主人打了谁 → 她去帮 | ✅ 主人的仇人优先级最高 | ⚠️ 只有「主人被打/打人 → 切战斗任务」（`AutoCombatSwitch`），**选目标**那一步仍由 TLM 的「最近的怪」决定；只有手工工具 `SmartAttackTool` 用到 `owner.getLastHurtMob()` |
+
+### ④ 照搬了什么（本版新增）
+
+**新配置「援护半径」（`combat.assistRadius`，默认 16 格，0 = 关；面板：战斗与自保 → 主动参战）**，
+一条配置管两件事，落点在 `NeutralThreatDriver`——本模组本来就是「往 `ATTACK_TARGET` 写目标」的那一处：
+
+1. **援护主人的仇人**：她（战斗任务）没有目标时，优先把「主人最近的仇人」当目标——最近打主人的人
+   优先、其次主人最近打的人；然后才退回原来的「谁锁定了主人/女仆」扫描。
+2. **目标跑远就撒手**：她的目标离她**和**主人都超过这个半径 → 清目标（`ATTACK_TARGET` /
+   `LOOK_TARGET` / `CANT_REACH_WALK_TARGET_SINCE` / `WALK_TARGET`）。追一个已经跑掉的怪，正是
+   「追出去 → 被圈拽回来」的循环源头之一。
+
+两条都**逐条换成本模组现成的实现**（一条判据一处）：合法性用 `BombThrow.legalThrowTarget`
+（「她的任务认的敌人 + 非友军」）、视线用 `NeutralThreatDriver.perceivable`（实测六百一十九 的
+隔墙门，看不见就不写目标）、圈用 `WorkAreaClamp.allows`、时间窗沿用 `CombatWorkRange` 的 100 tick 口径。
+「撒手」只做减法（松手）不做加法，所以刻意放在「主动参战」总开关之前——整条想关就把援护半径设 0。
+
+### ⑤ 照搬时改掉的两点（照搬不照抄）
+
+- 他读主人的 `getLastHurtByMob` / `getLastHurtMob` **不看时间**：原版这两个字段一旦写上就不再清空，
+  于是「主人十分钟前打过的那只怪」永远算仇人、永远被优先。我们加了 5 秒窗口（时间戳初值 0 的头
+  5 秒也一并挡掉，与扩圈那条护栏同款）。
+- 他还写了一条「够不到就放弃」（`MaidClearStaleAttackTarget`，读 `CANT_REACH_WALK_TARGET_SINCE`）。
+  **这条没有照搬**：他的实现是 `记忆值 > 100`，而记忆里存的是「走不到那一刻的 gameTime 绝对值」，
+  拿它跟常量 100 比，在任何跑了 5 秒以上的世界里恒真——实际效果是「只要出现过一次走不到就立刻
+  放弃」，与他自己那个 `CANT_REACH_GIVE_UP_TICKS = 100` 的意图不符。要照搬得先改成
+  `now - since > 100`，那是一条独立行为，等你实测反馈（本模组 ③ 的兜底导航/挥砍与战术行为
+  本来就兜着这种情况）。
+
+### ⑥ 验证
+
+两树 `javac` **0 错误**；只读核对 `_vt663.py` **39/39 全过**（配置 / 面板 / 接线 / **两树新增块
+归一化后 130 行逐行一致** / SRG 与官方名双向无残留 / 四份 lang）；打包闸门全过（含 mixin 包登记
+那一栏）；出 `promaid-1.3.8-forge-1.20.1.jar` / `promaid-1.3.8-neoforge-1.21.1.jar`；部署三处。
+
+**本条尚未发版**——与上一版的崩修复一起测。援护半径不想要就把「援护半径（格）」设 0。
+
+## 实测六百六十二【修死机：玩家一进世界服务端就崩——mixin 包里的「鸭子接口」没登记（v1.3.5 起就带着）】
 
 ### ① 现象：v1.3.6 进世界必崩（不是概率，是必现）
 
