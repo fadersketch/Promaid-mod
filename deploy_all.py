@@ -2,8 +2,8 @@
 """Deploy the fixed jars to all local instances (single UAC elevation).
 
 1.21.1 NeoForge instance  : patched/promaid-1.2.4-neoforge-1.21.1.jar
-1.20.1 Forge 47.4.21      : patched/promaid-1.2.4.jar   (user's main modpack)
-1.20.1 Forge 47.4.23      : patched/promaid-1.2.4.jar   (test instance)
+1.20.1 Forge 47.4.21      : patched/promaid-1.2.4-forge-1.20.1.jar   (user's main modpack)
+1.20.1 Forge 47.4.23      : patched/promaid-1.2.4-forge-1.20.1.jar   (test instance)
 Old jars are backed up under patched/backup_old/ first.
 """
 import os
@@ -18,10 +18,10 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 JOBS = [
     (os.path.join(BASE, 'patched', 'promaid-1.2.4-neoforge-1.21.1.jar'),
      r'D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.2.4-neoforge-1.21.1.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.2.4.jar'),
-     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.2.4.jar'),
-    (os.path.join(BASE, 'patched', 'promaid-1.2.4.jar'),
-     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.2.4.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.4-forge-1.20.1.jar'),
+     r'D:\.minecraft\versions\1.20.1-Forge_47.4.21\mods\promaid-1.2.4-forge-1.20.1.jar'),
+    (os.path.join(BASE, 'patched', 'promaid-1.2.4-forge-1.20.1.jar'),
+     r'C:\Users\Sketch\mc_server_test\pack1201\mods\promaid-1.2.4-forge-1.20.1.jar'),
 ]
 
 # refuse while any java/javaw runs (game or server open)
