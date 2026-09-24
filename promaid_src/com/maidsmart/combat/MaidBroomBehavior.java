@@ -107,16 +107,17 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             notifyNotReady(maid, gameTime);
             return;
         }
-        // ②【扫帚优先·v1.3.3】她身上没有扫帚、也没骑着 → **先去找一把**，再谈别的。
+        // ②【扫帚优先·v1.3.4】她身上没有扫帚、也没骑着 → **先去找一把**，再谈别的。
         // 玩家原话："扫帚模式应该优先找扫帚，而不是优先跟随主人。" 所以这一条排在
         // ③骑上、④接敌、⑤跟随**全部**之前：没扫帚时她不会去跟主人（那一段根本走不到），
-        // 而是走过去把地上掉的那把扫帚捡起来（见 MaidBroomDrive.seekBroom：
-        // 主手/副手/背包/精妙背包里的由 ensureMounted 直接取，这里只兑现"找"——
-        // 地上掉着的扫帚）。找不到（或找了很久够不着）才报缺件待命。
+        // 而是去找扫帚（见 MaidBroomDrive.seekBroom）——**首选拔世界里已经放着的那把扫帚实体，
+        // 走过去骑上它**（玩家原话："让她去骑世界里已经放着的那把扫帚实体"）；
+        // 没有实体可骑，才退一步捡地上掉的那件（主手/副手/背包/精妙背包里的由 ensureMounted
+        // 直接取，那不叫"找"叫"取"）。找不到（或找了很久够不着）才报缺件待命。
         if (!MaidBroomKit.hasBroomItem(maid) && !MaidBroomKit.isRidingBroom(maid)) {
             MaidBroomDrive.dismount(maid);
             if (MaidBroomDrive.seekBroom(level, maid)) {
-                return; // 这一 tick 正在去找/刚捡起来——本 tick 不做别的
+                return; // 这一 tick 正在去找/刚骑上——本 tick 不做别的
             }
             notifyNotReady(maid, gameTime);
             return;
