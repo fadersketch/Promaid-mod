@@ -199,6 +199,17 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //    ③ 都没有 → 原地悬停待命
         MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
         noteHome(maid, gameTime); // v1.3.0(beta) 实测六百六十四：守家诊断（低频）
+        // ⑥.0【实测六百六十九：武装拴绳 = 直升机悬停】有人挂在扫帚下面时，**不再跟随/盘旋**：
+        // 目标点改成"离她脚下地面 tetherHover() 格"那个定点，然后停在那儿。
+        // 玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。
+        // 这边应该改为就默认上升到离地面 3 格，然后悬停，接敌不变（走女仆索敌）。"
+        // 接敌那一档（⑤）在上面，一个字没动——所以"接敌不变"是字面意思。
+        // 锚点传**扫帚**（不是她）：座位偏移的老问题，见 GunnerTetherManager.tetherHoldPos 的注释。
+        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+            MaidBroomDrive.steerTo(maid,
+                    com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(broom));
+            return;
+        }
         if (MaidBroomKit.homeRestricted(maid)) {
             net.minecraft.world.phys.Vec3 patrol = MaidBroomDrive.homeOrbitPoint(maid);
             if (patrol != null) {

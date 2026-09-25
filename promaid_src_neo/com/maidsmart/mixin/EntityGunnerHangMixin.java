@@ -64,10 +64,33 @@ public abstract class EntityGunnerHangMixin {
                 return;
             }
             double hang = com.maidsmart.combat.GunnerTetherManager.hangOffset();
+            double ty = self.getY() - hang;
+            // 【实测六百六十九：下方没空间就退回原版头顶位】玩家原话："（不要）像扫帚一样强制搬到
+            // 女仆的下面，那样子很容易导致玩家在地面里面窒息"。她刚被挂上还没升起来、或贴着地面/
+            // 树冠飞时，悬挂点会落在方块里——这一拍就别改定位，让玩家照原版站在她身上，等她自己
+            // 升到离地 tetherHover() 格（GunnerTetherManager 的绑定后悬停）再吊下去。
+            if (!maidsmart$roomFor(passenger, self.getX(), ty, self.getZ())) {
+                return;
+            }
             // 玩家脚底 = 女仆脚底 − 悬挂距离；水平贴她的中心（跟原版同款，不前后偏移）
-            fn.accept(passenger, self.getX(), self.getY() - hang, self.getZ());
+            fn.accept(passenger, self.getX(), ty, self.getZ());
             ci.cancel();
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 悬挂点（玩家脚底那一格 + 头顶那一格）有没有空间——两格都不是空气就认为"会把人按进方块里"。
+     * 判不了（异常）时返回 true：宁可照旧吊着，也不要因为一次判定失败把机制卡死。
+     */
+    private boolean maidsmart$roomFor(Entity passenger, double x, double y, double z) {
+        try {
+            net.minecraft.world.level.Level lvl = passenger.level();
+            net.minecraft.core.BlockPos feet = new net.minecraft.core.BlockPos(
+                    (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            return lvl.getBlockState(feet).isAir() && lvl.getBlockState(feet.above()).isAir();
+        } catch (Throwable t) {
+            return true;
         }
     }
 }
