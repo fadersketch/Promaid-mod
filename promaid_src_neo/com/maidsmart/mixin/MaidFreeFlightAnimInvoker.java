@@ -9,7 +9,7 @@ import org.spongepowered.asm.mixin.gen.Invoker;
 import java.util.function.BiPredicate;
 
 /**
- * v1.2.5 实测六百五十七【仿创造飞行 · 让模型播 fly 动画】——把 TLM 唯一的注册入口暴露出来。
+ * 实测六百七十四【仿创造飞行 · 让模型播 fly 动画】——把 TLM 唯一的注册入口暴露出来。
  *
  * 【为什么需要】TLM 的动画状态机是**Java 硬编码**的（`AnimationRegister.register(name, priority, predicate)`，
  * 状态按 priority 0..4 顺序取第一个命中者），里面**没有 fly / elytra_fly 这两档**——而模型包

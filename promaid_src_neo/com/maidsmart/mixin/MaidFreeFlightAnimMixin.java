@@ -8,7 +8,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * v1.2.5 实测六百五十七【仿创造飞行 · 注册 fly 状态】——让模型包自己的 `fly` 动画能在女仆身上播放。
+ * 实测六百七十四【仿创造飞行 · 注册 fly 状态】——让模型包自己的 `fly` 动画能在女仆身上播放。
  *
  * 注入 TLM 客户端初始化时的 `registerAnimationState()` 尾部，把我们自己的状态挂上去：
  * <ul>

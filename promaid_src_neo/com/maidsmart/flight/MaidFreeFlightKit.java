@@ -14,7 +14,7 @@ import net.minecraft.world.item.ItemStack;
 import java.util.List;
 
 /**
- * v1.2.5 实测六百五十六【仿创造飞行 · 能力探测】——判断"她身上有什么东西让她能飞"。
+ * 实测六百七十三【仿创造飞行 · 能力探测】——判断"她身上有什么东西让她能飞"。
  *
  * 【为什么需要这一层】1.21.1 里"能不能飞"对**玩家**是 {@code Player#getAbilities().mayfly}
  * （NBT 里就是 abilities:{mayfly,flying}），而**女仆没有这套 Abilities**（全仓 grep：TLM 本体
@@ -170,7 +170,7 @@ public final class MaidFreeFlightKit {
     /* ---------------- 列表匹配 ---------------- */
 
     /**
-     * 物品栈是否命中资格表。条目语法（v1.2.5 实测六百五十九 起支持第 3/4 种）：
+     * 物品栈是否命中资格表。条目语法（实测六百七十六 起支持第 3/4 种）：
      * <ul>
      *   <li>{@code modid:item} —— 物品 id；</li>
      *   <li>{@code #命名空间:标签} —— 物品标签；</li>
@@ -179,7 +179,7 @@ public final class MaidFreeFlightKit {
      *       （例：{@code @apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight}）。</li>
      * </ul>
      *
-     * 【为什么需要组件那两路（实测六百五十九）】很多整合包用**数据组件**授予能力，
+     * 【为什么需要组件那两路（实测六百七十六）】很多整合包用**数据组件**授予能力，
      * 而不是换一件物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给一件胸甲挂
      * {@code neoforge:creative_flight} 修饰符——物品 id 没变、物品标签也匹配不到
      * （{@code #neoforge:creative_flight} 是**修饰符 id**，不是物品标签），

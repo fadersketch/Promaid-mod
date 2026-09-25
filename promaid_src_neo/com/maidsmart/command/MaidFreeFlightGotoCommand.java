@@ -14,7 +14,7 @@ import net.minecraft.world.phys.Vec3;
 import java.util.List;
 
 /**
- * v1.2.5 实测六百五十六【仿创造飞行 · 手动触发】：
+ * 实测六百七十三【仿创造飞行 · 手动触发】：
  * {@code /maid_smart freeflight_goto <x> <y> <z> [女仆选择器]}——让有资格的女仆飞过去（悬停 + 自由升降）。
  *
  * 【为什么要有它】一是排查（无头测试服没有真玩家、也就没有"主人"可跟，自动触发的那一路测不到），
