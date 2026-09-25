@@ -378,6 +378,12 @@ public class ProMaidExtension implements ILittleMaid {
             }
         } catch (Throwable ignored) {
         }
+        // 【实测六百七十五】武装拴绳：女仆重新入世界（魂符放出的**最后一步** / 区块重载 / 跨维度）
+        //  —— 他还挂在她身上就把链路当场重建，否则把残留的金色描边标记与拴绳键清掉。
+        //  玩家原话："再讲这个女仆收进魂符再放出来…那个像光灵箭一样的效果会仍然存在，但是效果却没了。
+        //  在把他从魂符放出来之后的最后一步应该就是将她身上已有的此类边框先清掉。" 放在这里
+        //  （事件链的最末）而不是魂符自己的流程里，正是因为"最后一步最安全"。
+        com.maidsmart.combat.GunnerTetherManager.onMaidJoin(maid);
     }
 
     /**

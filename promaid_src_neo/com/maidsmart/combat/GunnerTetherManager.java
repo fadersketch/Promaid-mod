@@ -78,6 +78,22 @@ import java.util.UUID;
  *   <li><b>③ 被拴绳选中 = 金色描边</b>（原版发光标记 + 客户端金边，同光灵箭的渲染），她**正式起飞**（牵绳 → 悬挂）的那一刻解除。</li>
  * </ul>
  *
+ * ── 【实测六百七十五：一只绳子只牵一只 + 魂符残留 + 扫帚档下沉】──
+ * <ul>
+ *   <li><b>① 换绑先松旧的</b>：牵绳档玩家**不是**乘客，所以理论上能同时牵好几只女仆（绳子会画好几根、
+ *       她一起飞就打架）。现在 {@link #attach} 第一件事就是把这位玩家**已有的那条链路**先解除
+ *       （连带她的金色标记、绳子、以及"他还骑在她身上"的话把他放下来），再绑新的。玩家原话：
+ *       "如果同时用武装拴绳绑定了多个女仆，怎么办？…如果标记了第2个女仆。那么会自动把第1个女仆
+ *       相关的标记先清掉。"</li>
+ *   <li><b>② 魂符收放的残留</b>：金边标记（{@code Glowing}）是写进女仆 NBT 的，收进魂符再放出来
+ *       会跟着回来，但拴绳链路不会——旧版于是"边框还在、效果却没了"。现在女仆**重新入世界**
+ *       就走 {@link #onMaidJoin}：人还挂在她身上（区块重载/跨维度）就当场把链路重建；否则把标记
+ *       与残留键一起清掉。这一枪挂在放出的**最后一步**（EntityJoinLevelEvent），不碰魂符本身的流程。</li>
+ *   <li><b>③ 扫帚档再往下让 0.3 格</b>：扫帚模式下她是骑在扫帚上的，扫帚模型比她的脚底更低，
+ *       只按悬挂距离吊着还是会有少量重叠——{@link #hangFor} 在扫帚档把绳长加长
+ *       {@code combat.tether.broomExtra}（默认 0.3，面板可调）。</li>
+ * </ul>
+ *
  * ── 安全网（都做进 tick 校验）──
  * 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 /
  * 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）；
@@ -172,6 +188,37 @@ public final class GunnerTetherManager {
         } catch (Throwable t) {
             return 2.6; // 【实测六百七十二】与配置默认值对齐（671 把默认改成 2.6，这里忘了跟）
         }
+    }
+
+    /** 【实测六百七十五】扫帚档额外下沉（格，默认 0.3）：扫帚模型比她的脚底更低，得再让一点 */
+    private static double broomExtra() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_BROOM_EXTRA.get();
+        } catch (Throwable t) {
+            return 0.3;
+        }
+    }
+
+    /**
+     * 【实测六百七十五】这位乘客实际要吊多深 = 悬挂距离 + 扫帚档的额外下沉。
+     *
+     * <p>玩家原话："扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。"
+     * 扫帚模式下她是**骑在扫帚上**的，扫帚模型比她的脚底更低，所以同一个悬挂距离在扫帚档会显得
+     * 偏浅。判据用 {@link #isBroomRelated}（任务在扫帚模式，或此刻正骑着世界里的扫帚）——
+     * 与"这一档永远保持悬挂、不参与牵绳翻档"是同一个口径。
+     *
+     * <p>{@link com.maidsmart.mixin.EntityGunnerHangMixin} 走这一个入口，别再自己拼算式
+     * （"口径只有一处"）。
+     */
+    public static double hangFor(EntityMaid maid) {
+        double h = hangOffset();
+        try {
+            if (isBroomRelated(maid)) {
+                h += broomExtra();
+            }
+        } catch (Throwable ignored) {
+        }
+        return h;
     }
 
     /**
@@ -464,6 +511,10 @@ public final class GunnerTetherManager {
      */
     private static void markLeash(EntityMaid maid) {
         try {
+            // 【实测六百七十五】开关关掉 = 完全不发光（连标记位都不写），见 COMBAT_TETHER_GLOW_MARK
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_GLOW_MARK.get()) {
+                return;
+            }
             maid.setGlowingTag(true);
             maid.getPersistentData().putString(TAG_LEASH_MARK, "1");
             com.maidsmart.tool.PromaidLog.log("武装拴绳", "标记：女仆="
@@ -505,6 +556,13 @@ public final class GunnerTetherManager {
             deny(maid, "已经有人挂在我身上了～");
             return;
         }
+        // 【实测六百七十五：一只绳子只牵一只女仆】玩家原话："如果同时用武装拴绳绑定了多个女仆，
+        //  怎么办？那不炸了吗？…如果标记了第2个女仆。那么会自动把第1个女仆相关的标记先清掉。"
+        //  为什么真的能"同时绑两只"：牵绳档（空袭的女仆还没起飞）玩家**不是**乘客，所以既不占
+        //  座位、也不互相顶；于是两条绳子会同时画、她俩一起飞时抢座位。这一枪在这里把这位玩家
+        //  已有的链路全部解除（连带金色标记、绳子、以及"他还吊在她下面"的话把他放下来），
+        //  再挂新的——就是"换绑"。
+        releaseOtherLinks(player, maid);
         // 【实测六百七十二：乘坐扫帚时右击要能绑定（= 换到二号位）】玩家原话："玩家在乘坐扫帚的时候
         //  拿着武装拴绳右击还是没能切换成绑定模式。" 671 只放宽了"**女仆**骑着扫帚"那一档，没放宽
         //  "**玩家**骑着扫帚"这一档，所以这个场景必然被这道门拒掉（气泡「主人先从坐骑上下来再抓绳子」）。
@@ -620,11 +678,52 @@ public final class GunnerTetherManager {
         }
         if (!natural) {
             bubble(maid, "换座".equals(why) ? "回扫帚上坐好，我接着飞～"
-                    : "牵绳".equals(why) ? "绳子收好啦，我在这儿等着～" : "到站啦，小心落地～");
+                    : "牵绳".equals(why) ? "绳子收好啦，我在这儿等着～"
+                    // 【实测六百七十五】换绑：这句话直接复用上面那句牵绳台词——台词包是按"包含"
+                    // 匹配的，复用既有文本才有对应的语音（新写一句会说不出话）。
+                    : "换绑".equals(why) ? "绳子收好啦，我在这儿等着～" : "到站啦，小心落地～");
         }
         com.maidsmart.tool.PromaidLog.log("武装拴绳", "解除(" + why + ")：女仆="
                 + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 玩家=" + (player == null ? "?" : playerName(player)));
+    }
+
+    /**
+     * 【实测六百七十五】把这位玩家**已经有的**拴绳链路全部解除（{@code except} 那一只除外）。
+     *
+     * <p>玩家原话："如果同时用武装拴绳绑定了多个女仆，怎么办？那不炸了吗？这边采用一个机制，
+     * 如果标记了第2个女仆。那么会自动把第1个女仆相关的标记先清掉。"
+     *
+     * <p>为什么真能"同时绑两只"：牵绳档（空袭的女仆还没起飞）玩家**不是**她的乘客，所以既不占
+     * 座位也不互相顶开——旧版于是会同时存在两条链路：两根绳子一起画、她俩一起飞的时候抢座位
+     * （谁先 startRiding 谁赢，另一条下一拍被"玩家离鞍"判掉）。现在绑第二只之前先把第一只**完整
+     * 松开**：走 {@link #detach}（撤金色标记、清 persistentData、清相位包、把他从她身上放下来、
+     * 空中给 5 秒摔伤豁免），日志里写一行"换绑"。
+     *
+     * <p>只认"链路里的玩家 == 这位玩家"：别人牵着别人的女仆，一根都不动。
+     * 先收集再解除（{@code detach} 会改 {@code LINKS}，边走边删会炸迭代器）。
+     */
+    private static void releaseOtherLinks(ServerPlayer player, EntityMaid except) {
+        try {
+            java.util.List<EntityMaid> others = new java.util.ArrayList<>();
+            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
+                Link link = e.getValue();
+                EntityMaid m = link.maid.get();
+                if (m == null || m == except) {
+                    continue;
+                }
+                ServerPlayer p = link.player.get();
+                if (p != null && p.getUUID().equals(player.getUUID())) {
+                    others.add(m);
+                }
+            }
+            for (EntityMaid m : others) {
+                detach(m, false, "换绑");
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "换绑：先松开女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（主人=" + playerName(player) + "）");
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 玩家显示名（PromaidLog.nameOf 只收 EntityMaid，玩家这里自己取） */
@@ -900,6 +999,75 @@ public final class GunnerTetherManager {
             if (++restoreTimer >= 300) {
                 restoreTimer = 0;
                 restore(server);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百七十五】女仆**重新入世界**（魂符收放 / 区块重载 / 跨维度传送）时的收尾。
+     *
+     * <p>玩家原话："如果成功用武装拴绳绑定了一个女仆，然后再将这个女仆收进魂符再放出来，
+     * 那么那个像光灵箭一样的效果会仍然存在，但是效果却没了。在把他从魂符放出来之后的**最后一步**
+     * 应该就是将她身上已有的此类边框先清掉。（为什么不是第1步？如果可以的话，当然第1部最好了。
+     * 但是我怕又出现像上次那样子的，重新放置之后又出现更加严重的bug.）"
+     *
+     * <p>根因：金色描边标记是**原版发光位**（{@code Glowing} 写进女仆 NBT），收进魂符会被一起
+     * 保存、放出时一起带回来；而拴绳链路（{@code LINKS}）只活在内存里，收符那一刻就没了。旧版
+     * 只有 30 秒一次的 {@link #restore} 兜底，而且它要求"主人此刻在线"——所以经常看到"边框还在、
+     * 效果却没了"。这一枪挂在**入世界事件**上（对魂符放出而言就是最后一步，魂符本身的流程一个字
+     * 不动），分两支：
+     * <ul>
+     *   <li><b>骑乘关系还在</b>（区块重载 / 跨维度：她 NBT 里的主人还在、而且他确实还乘客在她身上）
+     *       → 当场把悬挂档链路重建，别等那 30 秒（绳子不会有一段时间消失）；</li>
+     *   <li><b>其余情况</b>（魂符收放 / 真解除了）→ 把金色标记与两个残留键一起清掉。</li>
+     * </ul>
+     * 清理动作只在"她真的带着我们的标记位"（{@link #TAG_LEASH_MARK}，只在真的打了发光标记时写）
+     * 时才动手，所以绝不会去动一只"单纯中了光灵箭"的女仆的发光状态。
+     */
+    public static void onMaidJoin(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        try {
+            if (LINKS.containsKey(maid.getUUID())) {
+                return; // 链路还在（同维度内被重新加回）：什么都不用动
+            }
+            ServerPlayer p = null;
+            String pid = maid.getPersistentData().getString(TAG_GUNNER);
+            if (pid != null && !pid.isEmpty()) {
+                try {
+                    net.minecraft.server.MinecraftServer srv = maid.level().getServer();
+                    p = srv == null ? null : srv.getPlayerList().getPlayer(UUID.fromString(pid));
+                } catch (Throwable ignored) {
+                }
+            }
+            // 她 NBT 里带着"我们打过发光标记"的证据——下面所有清理动作都以它为准，
+            // 绝不因为"她此刻在发光"就去动发光位（光灵箭的发光与本模组无关）。
+            boolean hadMark = maid.getPersistentData().contains(TAG_LEASH_MARK);
+            if (p != null && maid.hasPassenger(p)) {
+                // 区块重载 / 跨维度：人还挂在她身上 → 当场重建悬挂档（相位包也补一发，客户端立刻认得）
+                LINKS.put(maid.getUUID(), new Link(maid, p));
+                MODE_TICKS.remove(maid.getUUID());
+                GROUND_TICKS.remove(maid.getUUID());
+                if (hadMark) {
+                    unmarkLeash(maid); // 重建出来的是悬挂档，本来就不该亮
+                }
+                sync(maid);
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "入世界重建：女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（他仍挂在她身上）");
+                return;
+            }
+            // 魂符收放的"最后一步"：拴绳早就没了、标记却跟着 NBT 回来 → 清干净
+            if (hadMark) {
+                unmarkLeash(maid);
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "入世界清理：女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + "（拴绳已不在，撤掉残留的金色描边标记）");
+            }
+            try {
+                maid.getPersistentData().remove(TAG_GUNNER);
+            } catch (Throwable ignored) {
             }
         } catch (Throwable ignored) {
         }
