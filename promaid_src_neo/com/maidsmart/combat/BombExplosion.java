@@ -102,11 +102,9 @@ public final class BombExplosion {
         //    · 重生锚 / 床：它们**自己那一炸就把方块消耗掉了**（javap 实证：原版 use() 里先
         //      `removeBlock(pos, false)` 再 explode）——所以我们起爆这一刻直接撤掉、不进回收表、
         //      也不回背包（回背包 = 放一次白拿一个重生锚，那是白送炸药）。
-        if (b.kind == MaidBombing.Kind.CRYSTAL) {
-            MaidBombing.scheduleReclaim(level, maid, b.placedPos, b.placedBlock);
-        } else if (b.placedPos != null) {
-            BombPlacement.removePlaced(level, b.placedPos, b.placedBlock, null);
-        }
+        // v1.3.8 实测六百七十：两种收尾搬进 MaidBombing.settleBase（口径只有一处）——
+        // 这里（起爆那一刻）与"炸弹半路作废"那三条路现在共用同一份定义。
+        MaidBombing.settleBase(b);
         // ③ 炸弹实体本身清掉（不能走 kill()——末地水晶的 kill 会触发原版那一炸）
         if (b.entity != null && b.entity.isAlive()) {
             b.entity.discard();
