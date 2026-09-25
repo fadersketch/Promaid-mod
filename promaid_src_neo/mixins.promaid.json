@@ -74,6 +74,7 @@
     "LivingEntityRendererAddLayerInvoker",
     "MaidElytraLayerMixin",
     "MaidElytraLayerGeckoMixin",
+    "MaidGhostTetherMixin",
     "MaidFlightDiveTiltMixin",
     "MaidGeckoSpinDedupMixin",
     "MaidSpinLiftMixin",
