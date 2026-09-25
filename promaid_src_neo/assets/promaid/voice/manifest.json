@@ -1,6 +1,51 @@
 {
   "entries": [
     {
+      "text": "上来吧！抓好绳子",
+      "file": "leash_on.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "到站啦，小心落地",
+      "file": "leash_off.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这不是我的主人",
+      "file": "leash_not_owner.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "已经有人挂在我身上了",
+      "file": "leash_busy.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "主人先从坐骑上下来",
+      "file": "leash_dismount_first.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "等我飞起来再右击我",
+      "file": "leash_need_fly.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "扫帚或空袭模式时再抓绳子吧",
+      "file": "leash_need_mode.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "绳子没扣上",
+      "file": "leash_fail.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "绳子只听主人和挂着的那位的话",
+      "file": "leash_denied.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "空战装备不齐",
       "file": "flight_not_ready.ogg",
       "mode": "contains"

@@ -76,7 +76,9 @@ public abstract class ChatBubbleLimitMixin {
         // v1.5.193：敌袭状态特殊颜色——周围 12 格有存活敌对生物时，气泡以
         // 红色 §c + [警示] 前缀同步（"危险提示"该醒目）
         // v1.5.194：所有女仆【系统对话】（addTextChatBubble = 感知/工作/自保/投喂/
-        // 建好啦等全部规则气泡 + TLM 内建气泡）统一青色 §b——区别于 LLM 主动对话
+        // 建好啦等全部规则气泡 + TLM 内建气泡）统一粉色 §d（实测六百六十九 玩家要求：
+        // "有语音的文本能不用蓝色，而用粉色字来代替吗"——这条通道正是全部会送去 TTS 的文本）
+        // ——区别于 LLM 主动对话
         // 的 TLM 原生灰色 `<名字> 文本`（addLLMChatText 独立方法，mixin 不拦截）
         if (this.maid != null
                 && this.maid.getOwner() instanceof net.minecraft.server.level.ServerPlayer owner) {
@@ -85,7 +87,7 @@ public abstract class ChatBubbleLimitMixin {
             owner.sendSystemMessage(net.minecraft.network.chat.Component.literal(
                     danger
                             ? "\u00a7c[\u8b66\u793a]\u00a7c[" + this.maid.getDisplayName().getString() + "] \u00a7c" + text
-                            : "\u00a7b[" + this.maid.getDisplayName().getString() + "] \u00a7b" + text));
+                            : "\u00a7d[" + this.maid.getDisplayName().getString() + "] \u00a7d" + text));
         }
     }
 
@@ -99,7 +101,7 @@ public abstract class ChatBubbleLimitMixin {
     }
 
     /**
-     * v1.5.194：世界内气泡也变色——所有系统对话气泡统一青色（敌袭红色）。
+     * v1.5.194：世界内气泡也变色——所有系统对话气泡统一粉色（敌袭红色）。
      * addTextChatBubble 内部先 addChatBubble 生成 TextChatBubbleData，这里在
      * RETURN 后取回刚加的气泡，改写文本颜色并 forceUpdateChatBubble 同步客户端。
      * LLM 主动对话（addLLMChatText）走独立方法，不受影响（世界内白/聊天框灰）。
@@ -123,7 +125,7 @@ public abstract class ChatBubbleLimitMixin {
                 t.setText(net.minecraft.network.chat.Component.translatable(text)
                         .withStyle(danger
                                 ? net.minecraft.ChatFormatting.RED
-                                : net.minecraft.ChatFormatting.AQUA));
+                                : net.minecraft.ChatFormatting.LIGHT_PURPLE));
                 mgr.forceUpdateChatBubble();
             }
         } catch (Exception ignored) {

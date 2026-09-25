@@ -167,15 +167,41 @@ public final class BombPlacement {
     }
 
     static void rollback(ServerLevel level, MaidBombing.Phase ph) {
-        removePlaced(level, ph.placed, ph.placedBlock, ph.maid);
+        removePlaced(level, ph.placed, ph.placedBlock, ph.maid, false);
         ph.placed.clear();
         ph.placedBlock.clear();
     }
 
-    static void removePlaced(ServerLevel level, List<BlockPos> posList, List<Block> blockList,
-                                     EntityMaid returnTo) {
+    /**
+     * 撤掉这一批"女仆放的方块"并按口径归还（床走抑制形状更新那一路，其余单体方块走
+     * {@code removeBlock(pos, false)} 不掉落，再按方块 id 合成物品还她）。
+     *
+     * v1.3.8 实测六百七十：为了"她飞远之后那块黑曜石也收得回来"，这里多了两样东西——
+     * <ul>
+     *   <li><b>{@code requireLoaded}</b>：true = 只在<b>已经加载</b>的区块里动手；只要有一个
+     *       格子躺在没加载的区块里就<b>整批不动</b>、直接返回 false。旧版无条件读
+     *       {@code level.getBlockState(pos)}，而它会走 {@code Level.getChunkAt(pos)} →
+     *       {@code getChunk(x, z, FULL, requireChunk=true)}（javap 实证：{@code LevelReader
+     *       .m_46819_} 里就是 {@code iconst_1}）：轻则在 tick 里<b>同步强制加载一片地形</b>，
+     *       重则加载失败抛 {@code IllegalStateException}（失败分支见
+     *       {@code ServerChunkCache.m_8421_}），把调用者的回收条目连着一起带走。</li>
+     *   <li><b>返回值</b>：true = 这一批处理完了（该撤的撤了 / 那格早就不是我们放的东西）；
+     *       false = 还没处理（区块没加载）→ 调用方留着条目下一 tick 再试。</li>
+     * </ul>
+     * 起爆那一刻（重生锚 / 床那一炸）与相位回滚仍传 false：它们都跑在"她本人就在旁边"的
+     * 近距场景里，行为与改动前一字不变。
+     */
+    static boolean removePlaced(ServerLevel level, List<BlockPos> posList, List<Block> blockList,
+                                EntityMaid returnTo, boolean requireLoaded) {
         if (level == null || posList == null || blockList == null) {
-            return;
+            return true; // 没东西可撤
+        }
+        if (requireLoaded) {
+            for (BlockPos p : posList) {
+                if (p != null && !level.isLoaded(p)) {
+                    return false; // 还有格子躺在没加载的区块里 → 整批留着，下一 tick 再试
+                }
+            }
         }
         for (int i = 0; i < posList.size() && i < blockList.size(); i++) {
             BlockPos p = posList.get(i);
@@ -194,6 +220,7 @@ public final class BombPlacement {
                 returnBlockItem(returnTo, want);
             }
         }
+        return true;
     }
 
     private static void returnBlockItem(EntityMaid maid, Block block) {

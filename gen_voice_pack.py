@@ -53,12 +53,22 @@ STYLE_OF = {
              'resurrect_back', 'death_teleport', 'owner_looking',
              'aid_golden_apple', 'aid_enchanted_apple',
              # v1.3.0 实测六百五十五：投喂蛋糕（玩家主动投喂的温柔场合）
-             'cake_eat'],
+             'cake_eat',
+             # v1.3.0 实测六百六十九：武装拴绳·解除（「到站啦」——放下人时温柔叮嘱）
+             'leash_off'],
     'plead': ['build_missing_material', 'bridge_no_block', 'brew_missing',
               'mine_no_block_high', 'wood_no_block_high', 'wood_no_axe', 'no_food_left',
               'work_no_pickaxe', 'work_ridden',
               # v1.3.0 实测六百五十五：扫帚模式缺件（"还差…先待着不动"，为难）
-              'broom_not_ready'],
+              'broom_not_ready',
+              # v1.3.0 实测六百六十九：武装拴绳·各种「现在还不行」的为难场合
+              'leash_not_owner',
+              'leash_busy',
+              'leash_dismount_first',
+              'leash_need_fly',
+              'leash_need_mode',
+              'leash_fail',
+              'leash_denied'],
     'work': ['build_done', 'build_substitute', 'build_skip_bedrock', 'build_skip_unloaded',
              'build_skip_noitem', 'build_skip_float', 'build_blocked', 'schedule_locked',
              'bridge_cant_climb', 'work_distracted', 'mine_blocked_area', 'wood_blocked_area',
@@ -69,6 +79,16 @@ STYLE_OF = {
 
 # 日语台词（按中文 key 的情境重写；sched_* 是排班闲聊，走俏皮档）
 JP = {
+    # -------- 武装拴绳（实测六百六十九：玩家要求把这些新文本也训练语音）--------
+    'leash_on.ogg': 'さあ来て！ロープをしっかり掴んで、一緒に飛ぼう～',
+    'leash_off.ogg': '着いたよ、足元に気をつけて降りてね～',
+    'leash_not_owner.ogg': 'あなたはご主人様じゃないから、このロープは渡さないよ',
+    'leash_busy.ogg': 'もう誰かがぶら下がってるよ～',
+    'leash_dismount_first.ogg': 'ご主人様、先に乗り物から降りてからにしてね',
+    'leash_need_fly.ogg': '飛んだらまた右クリックしてね。それまでロープを握ってて',
+    'leash_need_mode.ogg': 'ほうきか空襲モードのときにロープを掴んでね～',
+    'leash_fail.ogg': 'あれ、ロープが掛からなかった……もう一回やってみる？',
+    'leash_denied.ogg': 'このロープはご主人様と、ぶら下がってる人の言うことだけ聞くよ～',
     # -------- work --------
     'build_done.ogg': 'できたよ！見て見て、私が建てたの！',
     'build_substitute.ogg': '代わりので代用するね',
