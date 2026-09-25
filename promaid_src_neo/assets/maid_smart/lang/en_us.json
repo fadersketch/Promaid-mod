@@ -186,5 +186,9 @@
   "config.promaid.misc.freeFlightItems": "Free Flight: Qualifying Items",
   "config.promaid.misc.freeFlightEffects": "Free Flight: Qualifying Effects",
   "config.promaid.misc.freeFlightGravity": "Free Flight: Zero Gravity Counts",
-  "config.promaid.misc.glideElytraAnimation": "Glide Animation: Use Model elytra_fly (default off = swim)"
+  "config.promaid.misc.glideElytraAnimation": "Glide Animation: Use Model elytra_fly (default off = swim)",
+  "key.promaid.free_flight_toggle": "Toggle Maid Free Flight (aim at her)",
+  "config.promaid.misc.freeFlightIdle": "Free Flight: Smart Standby (land beside owner when he stops)",
+  "config.promaid.misc.freeFlightIdleSeconds": "Free Flight: Seconds of Owner Stillness Before Landing",
+  "config.promaid.misc.freeFlightNearDist": "Free Flight: Standby Distance (blocks)"
 }

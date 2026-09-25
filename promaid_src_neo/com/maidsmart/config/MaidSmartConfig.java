@@ -955,6 +955,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_GRAVITY;
     /** 滑翔时改用模型自己的鞘翅动画（默认关 = 沿用作者的游泳动画） */
     public static final ModConfigSpec.BooleanValue MISC_GLIDE_ELYTRA_ANIM;
+    /** 智能待命（默认开）：主人停下就落地站到脚边，而不是一直悬着 */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_IDLE;
+    /** 主人静止多少秒后落地待命（默认 3） */
+    public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_IDLE_SECONDS;
+    /** 落地待命的贴近距离（格，默认 2）——交互（喂食/摸头）需要她在 3 格内 */
+    public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_NEAR_DIST;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -2460,6 +2466,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineListAllowEmpty("freeFlightEffects", List.of(), () -> "", o -> o instanceof String);
         MISC_FREE_FLIGHT_GRAVITY = BUILDER.comment("仿创造飞行·重力归零也算资格（默认开）：她的重力属性 ≈ 0 时自动获得飞行资格——通用启发式，覆盖任何「重力归零」型来源（不需要点名模组）。她本来就在飘，我们只是把飘变成可控飞行。")
                 .translation("config.promaid.misc.freeFlightGravity").define("freeFlightGravity", true);
+        MISC_FREE_FLIGHT_IDLE = BUILDER.comment("仿创造飞行·智能待命（默认开，实测六百七十八）：主人停下不动满【下面那条秒数】后，她**软着陆到你脚边站好**（同高度、约 2 格），你再一动她自动重新起飞。\n\n【为什么需要】原来的行为是「够资格就一直悬在主人身后 3.5 格 + 高 2 格」（≈4 格），而**原版实体交互距离只有 3 格**——喂金苹果/药水、TLM 的摸头/抱抱（G/H）、右键交互全都会打不到。智能待命让她「赶路时飞、你停下来时落到你身边待命」。\n\n关掉 = 始终悬停（旧行为：够资格就一直飘着）。")
+                .translation("config.promaid.misc.freeFlightIdle").define("freeFlightIdle", true);
+        MISC_FREE_FLIGHT_IDLE_SECONDS = BUILDER.comment("仿创造飞行·主人静止多久后落地待命（秒，默认 3）：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消。")
+                .translation("config.promaid.misc.freeFlightIdleSeconds")
+                .defineInRange("freeFlightIdleSeconds", 3, 1, 30);
+        MISC_FREE_FLIGHT_NEAR_DIST = BUILDER.comment("仿创造飞行·落地待命的贴近距离（格，默认 2）：软着陆时机头对着主人漂过去，最终停在他身边这个距离内——留 1 格余量给原版 3 格交互距离。")
+                .translation("config.promaid.misc.freeFlightNearDist")
+                .defineInRange("freeFlightNearDist", 2, 1, 6);
         MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关，实测六百七十五）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
                 .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
         MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")

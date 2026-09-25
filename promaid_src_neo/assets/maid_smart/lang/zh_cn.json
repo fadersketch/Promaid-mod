@@ -328,5 +328,9 @@
   "config.promaid.misc.freeFlightItems": "仿创造飞行·资格物品表",
   "config.promaid.misc.freeFlightEffects": "仿创造飞行·资格效果表",
   "config.promaid.misc.freeFlightGravity": "仿创造飞行·重力归零也算资格",
-  "config.promaid.misc.glideElytraAnimation": "滑翔时用鞘翅动画（默认关=用游泳动作）"
+  "config.promaid.misc.glideElytraAnimation": "滑翔时用鞘翅动画（默认关=用游泳动作）",
+  "key.promaid.free_flight_toggle": "切换女仆仿创造飞行（准星对准她）",
+  "config.promaid.misc.freeFlightIdle": "仿创造飞行·智能待命（主人停下就落地站到脚边）",
+  "config.promaid.misc.freeFlightIdleSeconds": "仿创造飞行·主人静止多久后落地待命（秒）",
+  "config.promaid.misc.freeFlightNearDist": "仿创造飞行·落地待命的贴近距离（格）"
 }
