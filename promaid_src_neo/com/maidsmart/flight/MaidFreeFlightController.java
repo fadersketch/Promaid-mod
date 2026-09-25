@@ -55,6 +55,19 @@ public final class MaidFreeFlightController {
     /** 软着陆下降速度（格/tick）：0.12 ≈ 2.4 格/秒，稳稳落地 */
     private static final double SOFT_LAND_SPEED = 0.12;
 
+    /* ---------------- v1.2.5 实测六百六十【朝向：倒退着飞 + 延迟转身 + 平滑转体】 ---------------- */
+
+    /** 当前平滑后的朝向（UUID → yaw）——转体是逐 tick 转出来的，不是瞬切 */
+    private static final Map<UUID, Float> YAW = new HashMap<>();
+    /** 持续"背对主人倒退"的计时（UUID → tick）——攒够 {@link #RETREAT_FLIP_TICKS} 才转身朝前 */
+    private static final Map<UUID, Integer> RETREAT = new HashMap<>();
+    /** 每 tick 最多转多少度：12° → 180° 用 15 tick（0.75 秒）转完 */
+    private static final float YAW_STEP = 12.0f;
+    /** 倒退多少 tick 之后才转身朝前（60 = 3 秒） */
+    private static final int RETREAT_FLIP_TICKS = 60;
+    /** 悬停判定的水平速度（格/tick）：低于它视为"停着"，面向主人 */
+    private static final double HOVER_SPEED = 0.055;
+
     /* ---------------- 手动触发 ---------------- */
 
     public static void setDebugTarget(EntityMaid maid, Vec3 pos) {
@@ -153,11 +166,15 @@ public final class MaidFreeFlightController {
             }
             // ④ 正常飞行：选目标点 → 一阶转向 → 保持无重力 → 抢移动
             Vec3 aim = pickAim(maid);
-            steer(maid, aim, true);
+            Vec3 dbg = DEBUG_TARGET.get(id);
+            // 跟随主人的那一档才启用"社交朝向"（倒退/面向主人）；坐标档与软着陆不参与
+            LivingEntity owner = maid.getOwner();
+            Vec3 ownerPos = (dbg == null && owner != null && owner.isAlive() && maid.level() == owner.level())
+                    ? owner.position() : null;
+            steer(maid, aim, true, ownerPos);
             maid.setNoGravity(true);
             suppressWalk(maid);
             // 调试目标到达即收工
-            Vec3 dbg = DEBUG_TARGET.get(id);
             if (dbg != null && maid.position().distanceTo(dbg) <= 1.0) {
                 beginSoftLanding(maid, "已到指定坐标");
             }
@@ -195,6 +212,8 @@ public final class MaidFreeFlightController {
             boolean was = FLYING.remove(id) != null;
             SOFT_LAND_START.remove(id);
             DEBUG_TARGET.remove(id);
+            YAW.remove(id);
+            RETREAT.remove(id);
             if (maid.isAlive()) {
                 maid.setNoGravity(false);
             }
@@ -229,7 +248,7 @@ public final class MaidFreeFlightController {
     }
 
     /** 一阶转向：速度 = 方向 × 距离决定的速率，绝不累加 */
-    private static void steer(EntityMaid maid, Vec3 desired, boolean vertical) {
+    private static void steer(EntityMaid maid, Vec3 desired, boolean vertical, Vec3 ownerPos) {
         try {
             double dx = desired.x - maid.getX();
             double dy = vertical ? desired.y - maid.getY() : 0.0;
@@ -248,16 +267,66 @@ public final class MaidFreeFlightController {
             maid.setDeltaMovement(vel);
             maid.hasImpulse = true;
             maid.hurtMarked = true;
-            double horiz = Math.sqrt(dx * dx + dz * dz);
-            if (horiz > 0.15) {
-                float yaw = (float) (-Math.atan2(dx, dz) * MaidFreeFlightKit.DEG);
-                maid.setYRot(yaw);
-                maid.yRotO = yaw;
-                maid.setYHeadRot(yaw);
-                maid.setYBodyRot(yaw);
+
+            // ── 朝向（实测六百六十）：不再"永远等于速度方向" ──
+            // 旧版两个问题：①她站在主人前面、主人向前走时，她会瞬间从"面朝主人"翻成"背朝主人"，
+            // 而且主人的移动带随机抖动，这个 180° 来回翻特别突兀；②旧代码连 yRotO 一起拍成新值，
+            // 等于把客户端的逐 tick 插值也掐死了——转体永远是硬切。
+            // 现在：悬停/慢速 → 面向主人（陪伴感）；迎着主人飞 → 面朝前进方向；
+            // 退着飞（主人在她身后推进）→ 先**面向主人倒退**，持续 3 秒才转身朝前；
+            // 转身本身逐 tick 转（每 tick 最多 12°，180° 用 0.75 秒），不再碰 yRotO。
+            UUID id = maid.getUUID();
+            float cur = YAW.getOrDefault(id, maid.getYRot());
+            double hSpeed = Math.sqrt(vel.x * vel.x + vel.z * vel.z);
+            float target;
+            if (ownerPos != null) {
+                float toOwner = (float) (-Math.atan2(ownerPos.x - maid.getX(),
+                        ownerPos.z - maid.getZ()) * MaidFreeFlightKit.DEG);
+                if (hSpeed < HOVER_SPEED) {
+                    target = toOwner;                    // 悬停：面向主人
+                    RETREAT.remove(id);
+                } else {
+                    float travel = (float) (-Math.atan2(vel.x, vel.z) * MaidFreeFlightKit.DEG);
+                    boolean towardOwner = vel.x * (ownerPos.x - maid.getX())
+                            + vel.z * (ownerPos.z - maid.getZ()) > 0;
+                    if (towardOwner) {
+                        target = travel;                 // 迎着主人飞：面朝前进方向
+                        RETREAT.remove(id);
+                    } else {
+                        // 退着飞：先面向主人倒退，攒够 3 秒才转身朝前
+                        int r = RETREAT.merge(id, 1, Integer::sum);
+                        target = r < RETREAT_FLIP_TICKS ? toOwner : travel;
+                    }
+                }
+            } else {
+                // 坐标档：面朝前进方向；停着就保持当前朝向
+                target = hSpeed > 0.02
+                        ? (float) (-Math.atan2(vel.x, vel.z) * MaidFreeFlightKit.DEG)
+                        : cur;
+                RETREAT.remove(id);
             }
+            float next = rotateToward(cur, target);
+            YAW.put(id, next);
+            maid.setYRot(next);
+            maid.setYHeadRot(next);
+            maid.setYBodyRot(next);
+            // 刻意不写 yRotO/yBodyRotO：让原版逐 tick 同步 + 客户端插值接手，转体才是平滑的。
+            // 把"期望点"一并交给 LookControl，免得它拿残留的旧目标把头拧回去（实测五百二十九 同款坑）
+            double fx = -Math.sin(Math.toRadians(next));
+            double fz = Math.cos(Math.toRadians(next));
+            maid.getLookControl().setLookAt(maid.getX() + fx * 4.0, maid.getEyeY(),
+                    maid.getZ() + fz * 4.0, 360.0f, 360.0f);
         } catch (Throwable ignored) {
         }
+    }
+
+    /** 每 tick 最多转 {@link #YAW_STEP} 度，走最短弧 */
+    private static float rotateToward(float cur, float target) {
+        float diff = net.minecraft.util.Mth.wrapDegrees(target - cur);
+        if (Math.abs(diff) <= YAW_STEP) {
+            return target;
+        }
+        return net.minecraft.util.Mth.wrapDegrees(cur + Math.signum(diff) * YAW_STEP);
     }
 
     /** 抢移动：清走路目标 + 停导航（她不是乘客，TLM 的寻路仍在跑） */
