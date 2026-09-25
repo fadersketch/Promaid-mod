@@ -8,6 +8,19 @@ SRC = os.path.join(BASE, 'promaid_src')
 # 命名规范（v1.2.4 起）：promaid-<版本>-<加载器>-<游戏版本>.jar
 JAR_OUT = os.path.join(BASE, 'patched', 'promaid-1.3.0-forge-1.20.1.jar')
 
+# 实测六百六十八：mixin 注入点审计闸门（只读）——javac 只保证注解字符串是合法 Java，**不保证
+# "目标类真的自己声明了这个方法"**；那种错要等游戏启动时 Mixin 才报，直接崩在 Bootstrap
+# （667 的武装拴绳就是这么把游戏搞开不起来的）。审计脚本 _mixchk.py 按本仓库惯例不入库
+# （helper 一律 _* ），所以缺了只告警不拦路。
+_mixchk = os.path.join(BASE, '_mixchk.py')
+if os.path.isfile(_mixchk):
+    import subprocess as _sp
+    import sys as _sys
+    if _sp.call([_sys.executable, _mixchk]) != 0:
+        raise SystemExit('FATAL: mixin 注入点审计不通过（详见 _out_mixchk.txt）——拒绝打包')
+else:
+    print('WARN: 未找到 _mixchk.py，跳过 mixin 注入点审计（该脚本不入库）')
+
 # 1. clean staging
 for d in ['com', 'assets', 'data']:
     p = os.path.join(STAGING, d)
