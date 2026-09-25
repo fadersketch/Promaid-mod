@@ -1206,11 +1206,52 @@ public final class GunnerTetherManager {
         }
         EntityMaid maid = maidOnMyBroom(player);
         if (maid == null) {
+            // 【实测六百七十六：悬挂档补的这一档】玩家此刻骑的**就是她本人**（吊在她下方 hang 格）。
+            //  详见 {@link #linkedMaidImRiding}：这一档里准星射线打不到她（她在头顶上方），
+            //  于是右击既不是 EntityInteract、也不满足上面"骑着载着她女仆的扫帚"，
+            //  旧版就是**什么都不做**——"绑定态右击坐回扫帚"时灵时不灵里的那个"不灵"。
+            maid = linkedMaidImRiding(player);
+            if (maid != null) {
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "右击（悬挂档，射线没打到她）：按「骑着的女仆」"
+                        + "解析 → 走同一个切换：女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid));
+            }
+        }
+        if (maid == null) {
             return;
         }
         event.setCanceled(true);
         player.m_6674_(event.getHand());
         toggle(player, maid);
+    }
+
+    /**
+     * 【实测六百七十六】玩家此刻骑的**就是**"他自己拴着的那只女仆"吗（悬挂档：他吊在她下方）。
+     *
+     * <p>为什么不靠准星射线：悬挂档里她在玩家**头顶上方** hang 格（默认 2.6，扫帚档 2.9），
+     * 玩家的视线基本是水平的（还常在往下看地形）——射线根本扫不到她的碰撞箱，客户端发的是
+     * {@code ServerboundUseItemPacket}（落到 {@code RightClickItem}），而不是打到实体的
+     * {@code EntityInteract}。旧版这一档只认"骑着载着她女仆的扫帚"，于是悬挂档这一下右击是**空的**：
+     * 实测日志里能看到"挂载 2.9 格 → 十几秒后 解除(玩家离鞍)"，中间**既没有「换座」也没有
+     * 「解除(右击)」**——那一下右击我们的 handler 压根没跑到（玩家最后是潜跳下鞍下来的）。
+     * 六百七十二 那条"坐回扫帚"本身是对的，问题一直在于**它有时候根本不会被触发**。
+     *
+     * <p>认人规则：他骑的实体是女仆 + 挂载表里这一对正好是"她 ↔ 他"。别人拴的女仆、别人的乘客
+     * 一律不认；射线打中方块时走的是 {@code RightClickBlock} 那一档，本项目没接（那一档要动方块
+     * 交互，风险比收益大）。
+     */
+    private static EntityMaid linkedMaidImRiding(ServerPlayer player) {
+        try {
+            if (!(player.m_20202_() instanceof EntityMaid maid)) {
+                return null;
+            }
+            Link link = LINKS.get(maid.m_20148_());
+            ServerPlayer rider = link == null ? null : link.player.get();
+            if (rider != null && rider.m_20148_().equals(player.m_20148_())) {
+                return maid;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     /** 玩家此刻骑的那把扫帚上有没有"他的"女仆（换座态：他在驾驶位、她在第二乘客） */

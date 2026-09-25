@@ -371,6 +371,10 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 【实测六百七十五】扫帚档的额外下沉（格，默认 0.3）：扫帚模式下她骑在扫帚上，扫帚模型
      *  本来就比她的脚底更低，所以在「悬挂距离」之上再往下让这么多，才不跟扫帚建模重叠。 */
     public static final ModConfigSpec.DoubleValue COMBAT_TETHER_BROOM_EXTRA;
+    /** 【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：1.20.1 没有重锤，那边没有这一项）。
+     *  开 = 吊在她下方时，玩家自己手里的重锤按"她这一段俯冲的下落高度"吃下落加成（见
+     *  {@code GunnerTetherManager.consumeRideFall} + {@code PlayerMaceRideFallMixin}）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_TETHER_MACE_SMASH;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -2027,6 +2031,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.tether.glowMark").define("glowMark", true);
         COMBAT_TETHER_BROOM_EXTRA = BUILDER.comment("【实测六百七十五】扫帚档的额外下沉（格，默认 0.3，0.0~2.0）。\n\n需求原文：\"扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。\"\n\n扫帚模式下她是**骑在扫帚上**的，而扫帚模型比她的脚底还低——只按「悬挂距离」吊在你下面时，你的人和扫帚会叠在一起。这一项就是在悬挂距离之上**再往下让这么多**（只在扫帚档生效：任务在扫帚模式、或她此刻正骑着世界里的扫帚）。0 = 关掉这个补偿。")
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
+        COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n玩家原话：\"我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\"\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（照原版 checkSlowFallDistance 的 0.5 格/tick 口径钳回 1.0，免得慢慢飘着也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
+                .translation("config.promaid.tether.maceSmash").define("maceSmash", true);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----
