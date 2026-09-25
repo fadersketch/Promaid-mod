@@ -352,15 +352,23 @@ public final class MaidBombing {
 
     private static final class Reclaim {
         final ServerLevel level;
-        /** 回收进谁的背包（实测五百九十一：底座变成物品还给她；她自己没了则这一块就地消失） */
-        final EntityMaid maid;
+        /**
+         * 回收进谁的背包（实测五百九十一：底座变成物品还给她）。**存 UUID、不存实体**：
+         * v1.3.8 实测六百七十——旧版抓着 10 秒前那个 {@code EntityMaid} 引用，她若在这 10 秒里
+         * 被卸载重载 / 收进魂符再放出（都是**另一个对象**），回收的物品就塞进一个已经不在
+         * 世界里的旧对象里 = 凭空消失。现在每次回收按 UUID 重新解析（口径同
+         * {@code PlacedBlockTracker.findMaid}）。null = 没记到人 → 那一块就地撤掉、不回背包。
+         */
+        final UUID maidId;
         final List<BlockPos> pos;
         final List<Block> block;
         final long due;
+        /** "这一条还在等"只记一条日志（区块没加载 / 她不在世界里），不刷屏 */
+        boolean noted;
 
-        Reclaim(ServerLevel level, EntityMaid maid, List<BlockPos> pos, List<Block> block, long due) {
+        Reclaim(ServerLevel level, UUID maidId, List<BlockPos> pos, List<Block> block, long due) {
             this.level = level;
-            this.maid = maid;
+            this.maidId = maidId;
             this.pos = pos;
             this.block = block;
             this.due = due;
@@ -381,12 +389,15 @@ public final class MaidBombing {
         }
         int seconds = Math.max(0, BombConfig.cfgReclaimSeconds());
         if (seconds <= 0) {
-            BombPlacement.removePlaced(level, pos, block, maid);
+            BombPlacement.removePlaced(level, pos, block, maid, false);
             return;
         }
-        if (RECLAIMS.size() < MAX_PENDING) {
-            RECLAIMS.add(new Reclaim(level, maid, pos, block, level.getGameTime() + seconds * 20L));
+        if (RECLAIMS.size() >= MAX_RECLAIMS) {
+            log("底座回收表已满（" + MAX_RECLAIMS + " 条）→ 这一块不再登记，它会留在世界里");
+            return;
         }
+        RECLAIMS.add(new Reclaim(level, maid == null ? null : maid.getUUID(), pos, block,
+                level.getGameTime() + seconds * 20L));
     }
 
     /**
@@ -428,6 +439,10 @@ public final class MaidBombing {
     /** 相位最长存活（tick）：超了当陈旧状态丢掉（防"打到一半目标没了"留下的尾巴） */
     private static final long PHASE_TIMEOUT = 100L;
     static final int MAX_PENDING = 256;
+    /** 到期回收表上限（条，v1.3.8 实测六百七十）：旧版与待起爆共用 {@link #MAX_PENDING}（256），
+     *  满了就**静默丢弃**——那一块底座从此不回收、物品也不还她；而"她飞远、区块卸载"会让条目
+     *  留得比较久。单给一档，并且溢出时说话（见 {@link #scheduleReclaim}）。 */
+    static final int MAX_RECLAIMS = 1024;
     /** 待起爆列表里一条最长挂多久（tick）：跨过这个数还没炸（区块没加载等）就丢掉，防泄漏 */
     static final long BOMB_TIMEOUT = 1200L;
 
@@ -490,6 +505,125 @@ public final class MaidBombing {
                 } catch (Throwable ignored) {
                 }
             }
+        }
+    }
+
+    /**
+     * v1.3.8 实测六百七十【飞远了也要收得回来】：到期回收逐条推进。
+     *
+     * 旧版这一段有三个坑，症状是同一条——"她飞远之后那块黑曜石就收不回来了"：
+     * <ol>
+     *   <li><b>先删条目、后干活</b>：{@code ri.remove()} 写在 {@code removePlaced} <b>之前</b>，
+     *       而整段只有一个 try/catch。飞远之后那块底座所在的区块早已卸载（她的区块票跟着她
+     *       本人飞走），{@code level.getBlockState(pos)} 于是走
+     *       {@code Level.getChunkAt} → {@code getChunk(…, requireChunk=true)}（javap 实证：
+     *       {@code LevelReader.m_46819_} 里就是 {@code iconst_1}）——轻则在 tick 里<b>同步强制
+     *       加载一片地形</b>，重则加载失败直接抛 {@code IllegalStateException}
+     *       （{@code ServerChunkCache.m_8421_} 的失败分支 / "No chunk holder after ticket has
+     *       been added"）。一旦抛了，条目已经没了 → 这一块<b>永久失收</b>、物品也回不到她背包；
+     *       同一次异常还会连带跳过<b>同一个 tick 后面的起爆处理</b>。</li>
+     *   <li><b>抓着 10 秒前的实体引用</b>：见 {@link Reclaim#maidId}。</li>
+     *   <li><b>登记表满了静默丢</b>：见 {@link #MAX_RECLAIMS}。</li>
+     * </ol>
+     * 现在的口径：<b>那块底座所在的区块还没加载 / 她不在世界里的任何维度 → 这一条留着、
+     * 下一 tick 再试</b>（不在 tick 里强制加载地形，也不把物品塞给一个已经不在世界里的旧
+     * 对象）；真的动手了才把条目撤掉；每条各自 try/catch，一条出问题不牵连同 tick 的起爆
+     * 与邻条。日志搜「底座回收再等等」/「回收底座」。
+     */
+    private static void tickReclaims() {
+        for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
+            Reclaim r = ri.next();
+            if (r.level == null) {
+                ri.remove();
+                continue;
+            }
+            long now;
+            try {
+                now = r.level.getGameTime();
+            } catch (Throwable ignored) {
+                ri.remove(); // 关卡对象已经不可用，这一条没意义了
+                continue;
+            }
+            if (now < r.due) {
+                continue;
+            }
+            try {
+                EntityMaid maid = findMaid(r.level, r.maidId);
+                if (r.maidId != null && maid == null) {
+                    noteWaiting(r, "她不在世界里的任何维度（魂符收起 / 区块卸载）→ 留着，等她回来再还她背包");
+                    continue;
+                }
+                if (!BombPlacement.removePlaced(r.level, r.pos, r.block, maid, true)) {
+                    noteWaiting(r, "那块底座所在的区块还没加载 → 留着，等它加载了再收（不在 tick 里强制加载地形）");
+                    continue;
+                }
+                ri.remove();
+                log("回收底座 " + r.pos.size() + " 格 → " + (maid == null
+                        ? "就地撤掉（没记到人，不回背包）"
+                        : "还回 " + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 的背包"));
+            } catch (Throwable t) {
+                log("回收底座异常（这一条留到下一 tick 再试）：" + t);
+            }
+        }
+    }
+
+    /** "这一条还在等"只记一条日志（第一句已经把原因说清，够排查了；同一块底座不刷屏） */
+    private static void noteWaiting(Reclaim r, String why) {
+        if (!r.noted) {
+            r.noted = true;
+            log("底座回收再等等：" + why);
+        }
+    }
+
+    /**
+     * v1.3.8 实测六百七十：按 UUID 找这只女仆（先同一维度，再跨维度——她可能已经换了维度）。
+     *
+     * 口径同 {@code PlacedBlockTracker.findMaid}：<b>任何维度在线且活着即算</b>；找不到
+     * （被魂符收起 / 区块卸载 / 已删除）返回 null，调用方据此把回收<b>留着</b>——绝不把
+     * 物品塞给一个已经不在世界里的旧对象（那等于物品凭空消失）。
+     */
+    private static EntityMaid findMaid(ServerLevel level, UUID id) {
+        if (level == null || id == null) {
+            return null;
+        }
+        try {
+            if (level.getEntity(id) instanceof EntityMaid m && m.isAlive()) {
+                return m;
+            }
+            net.minecraft.server.MinecraftServer server = level.getServer();
+            if (server != null) {
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    if (lvl == level) {
+                        continue;
+                    }
+                    if (lvl.getEntity(id) instanceof EntityMaid m2 && m2.isAlive()) {
+                        return m2;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * v1.3.8 实测六百七十【炸弹半路作废，底座也要还她】：把这一发已经放进世界的底座按口径收尾。
+     *
+     * 起爆那一刻（{@link BombExplosion#detonate}）与"这一发作废"的那三条路共用这一份定义。
+     * 旧版那三条路（炸弹放下去之后：她死了 / 水晶实体没了 / 迟迟炸不了）只把这一发丢掉，
+     * <b>那块已经放进世界的黑曜石就永远留在地上了</b>——既不回收、也不还她。
+     *
+     * 口径照 detonate 那一处：水晶链路 → 登记到期回收（回她背包）；重生锚 / 床 → 直接撤掉
+     * （它们自己那一炸就把方块消耗掉了，回背包等于放一次白拿一个重生锚）。
+     */
+    static void settleBase(Bomb b) {
+        if (b == null || b.placedPos == null || b.placedBlock == null) {
+            return;
+        }
+        if (b.kind == Kind.CRYSTAL) {
+            scheduleReclaim(b.level, b.maid, b.placedPos, b.placedBlock);
+        } else {
+            BombPlacement.removePlaced(b.level, b.placedPos, b.placedBlock, null, false);
         }
     }
 
@@ -980,31 +1114,18 @@ public final class MaidBombing {
             BombThrow.tickHoming();
             // v1.2.2 实测五百九十二：轰炸相位也由服务端统一驱动（所有攻击模式共用同一台机器）
             tickPhases();
-            for (Iterator<Reclaim> ri = RECLAIMS.iterator(); ri.hasNext(); ) {
-                Reclaim r = ri.next();
-                if (r.level == null) {
-                    ri.remove();
-                    continue;
-                }
-                long now = r.level.getGameTime();
-                if (now < r.due) {
-                    if (now > r.due + BOMB_TIMEOUT) {
-                        ri.remove();
-                    }
-                    continue;
-                }
-                ri.remove();
-                BombPlacement.removePlaced(r.level, r.pos, r.block, r.maid);
-            }
+            tickReclaims();
             Iterator<Bomb> it = PENDING.iterator();
             while (it.hasNext()) {
                 Bomb b = it.next();
                 if (b.level == null || b.maid == null || !b.maid.isAlive()) {
+                    settleBase(b); // v1.3.8：这一发作废，已经放进世界的那块底座也要还她
                     dropEntity(b);
                     it.remove();
                     continue;
                 }
                 if (b.entity != null && !b.entity.isAlive()) {
+                    settleBase(b); // v1.3.8：同上——旧版这里只丢炸弹，黑曜石就永远留在地上
                     it.remove(); // 炸弹实体中途没了（被 /kill 之类）→ 这一发作废
                     continue;
                 }
@@ -1021,6 +1142,7 @@ public final class MaidBombing {
                     if (gameTime > b.due + BOMB_TIMEOUT) {
                         // 迟迟炸不了（区块没加载等）→ 连同实体一起丢掉：**必须 discard**，
                         // 否则它将来会按原版自己炸（会破坏方块，与"不破坏方块"的默认口径冲突）
+                        settleBase(b); // v1.3.8：同上——这一发作废，底座不能白留在地上
                         dropEntity(b);
                         it.remove();
                     }

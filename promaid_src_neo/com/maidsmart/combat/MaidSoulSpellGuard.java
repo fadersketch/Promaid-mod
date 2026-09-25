@@ -44,7 +44,7 @@ public final class MaidSoulSpellGuard {
     private static final String FORGE_DATA_TAG = "NeoForgeData";
 
     private static final net.minecraft.network.chat.Component SUCCESS_MESSAGE =
-            net.minecraft.network.chat.Component.literal("你的女仆生命值过低，已回到魂符中。");
+            net.minecraft.network.chat.Component.literal("你的女仆受到致命伤害，已回到魂符中。");
 
     private MaidSoulSpellGuard() {
     }
@@ -200,7 +200,7 @@ public final class MaidSoulSpellGuard {
             int cdSec = com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get();
             player.displayClientMessage(cdSec > 0
                     ? net.minecraft.network.chat.Component.literal(
-                    "你的女仆生命值过低，已回到魂符中。（存在CD，CD为 " + cdSec + " 秒）")
+                    "你的女仆受到致命伤害，已回到魂符中。（存在CD，CD为 " + cdSec + " 秒）")
                     : SUCCESS_MESSAGE, false);
             player.addEffect(new net.minecraft.world.effect.MobEffectInstance(
                     net.minecraft.world.effect.MobEffects.UNLUCK,
