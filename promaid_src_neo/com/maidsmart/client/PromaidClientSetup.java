@@ -42,6 +42,8 @@ public final class PromaidClientSetup {
     public static void registerIndexStoneHooks() {
         com.maidsmart.build.IndexStonePreviewClient.ensureRegistered();        // v1.2.2 实测五百八十七：女仆放置物的淡粉色标记（纯客户端渲染）
         com.maidsmart.client.BombMarkClient.ensureRegistered();
+        // v1.3.7 实测六百六十七：武装拴绳的绳子（S2C 状态 → LINES 管线，与 BombMark 同源）
+        com.maidsmart.client.GunnerTetherClient.ensureRegistered();
     }
 
     /** 实测五百六十二：潜行+中键 工位标记的客户端手势识别（仅客户端注册） */

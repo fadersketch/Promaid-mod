@@ -46,6 +46,10 @@ public class ProMaidMod {
     public static final RegistryObject<Item> COMPRESSION_BOX = ITEMS.register("compression_box",
             () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties()));
 
+    /** 武装拴绳（v1.3.7 实测六百六十七）：右击飞行中的女仆把自己挂到她下方（直升机二号位），再右击解除 */
+    public static final RegistryObject<Item> COMBAT_LEASH = ITEMS.register("combat_leash",
+            () -> new com.maidsmart.combat.CombatLeashItem(new Item.Properties()));
+
     /** v1.2.2 实测五百六十一：官方注册的那个 ModConfig（配置事件里记下来；只读引用，事件里不写盘） */
     public static net.minecraftforge.fml.config.ModConfig COMMON_CONFIG;
 
@@ -61,6 +65,8 @@ public class ProMaidMod {
         // v1.2.0：指标石网络层（C2S 锁定请求 + S2C 会话状态）
         com.maidsmart.build.IndexStoneNetworking.register();        // v1.2.2 实测五百八十七：轰炸标记（S2C）
         com.maidsmart.combat.BombMarkNetworking.register();
+        // v1.3.7 实测六百六十七：武装拴绳网络层（S2C：谁是她的二号位枪手）
+        com.maidsmart.combat.GunnerTetherNetworking.register();
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();

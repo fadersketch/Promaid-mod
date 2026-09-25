@@ -62,6 +62,7 @@
     "ElytraWearGuardMixin",
     "MaidCompressionBoxMixin",
     "EntityBroomMaidTravelMixin",
+    "EntityGunnerHangMixin",
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",
     "ChunkMapRemotePumpMixin"

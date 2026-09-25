@@ -39,6 +39,8 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.SCHEDULE_BOOK);
             // v1.1.0 实测二百七十七：女仆药剂手册（管理道具，只进工具页）
             event.accept(ProMaidMod.BREW_MANUAL);
+            // v1.3.7 实测六百六十七：武装拴绳（管理道具，只进工具页）
+            event.accept(ProMaidMod.COMBAT_LEASH);
         }
     }
 }
