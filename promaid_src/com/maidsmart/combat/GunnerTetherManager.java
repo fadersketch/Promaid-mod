@@ -30,8 +30,9 @@ import java.util.UUID;
  * 女仆就行。解除也是同样的方式。"
  *
  * ── 实现口径（为什么是"真乘客 + positionRider 定位"，而不是绳子拉力模拟）──
- * 把玩家 startRiding(force) 上女仆（她当载具），再在 {@link com.maidsmart.mixin.EntityMaidGunnerMixin}
- * 里把乘客定位从"骑在头顶"改成"悬挂在下方 hang 格"。选这个方案是因为：
+ * 把玩家 startRiding(force) 上女仆（她当载具），再在 {@link com.maidsmart.mixin.EntityGunnerHangMixin}
+ * 里把乘客定位从"骑在头顶"改成"悬挂在下方 hang 格"（那个 mixin 注入的是 **Entity** 的
+ * positionRider，不是 EntityMaid 的——理由见它的类注释：继承方法 @Inject 匹配不到，667 就是这么炸的）。选这个方案是因为：
  * <ul>
  *   <li>**位移零仿真**：乘客跟着载具走是原版机制（客户端插值、多人同步、俯冲/爬升/烟花加速
  *       全部自动正确），自己写"弹簧拉力"会跟玩家本地输入打架（橡皮筋 + 抖动）；</li>
