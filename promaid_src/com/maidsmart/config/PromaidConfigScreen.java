@@ -5465,13 +5465,14 @@ public class PromaidConfigScreen extends Screen {
             if (e.getValue().trim().isEmpty() && !EMPTY_ALLOWED.contains(setter)) {
                 continue;
             }
-            boolean ok = false;
+            // 文本行（名单类）写失败**不拦面板**：它们的口径本来就是"解析为空 = 不改"
+            // （见 setStringList），拦住只会让玩家莫名其妙关不掉面板；这里只留一条日志。
             try {
-                ok = Boolean.TRUE.equals(setter.apply(e.getValue()));
+                if (!Boolean.TRUE.equals(setter.apply(e.getValue()))) {
+                    com.maidsmart.tool.PromaidLog.log("配置面板",
+                            "这一行没改（内容解析为空）：" + shortLabel(e.getKey()));
+                }
             } catch (Exception ignored) {
-            }
-            if (!ok) {
-                failed.add(shortLabel(e.getKey()));
             }
         }
         return failed;
