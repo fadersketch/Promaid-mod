@@ -629,7 +629,7 @@ public final class GunnerTetherManager {
         com.maidsmart.tool.PromaidLog.log("武装拴绳", (leash ? "牵绳：" : "挂载：") + "主人="
                 + playerName(player) + " 女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + (leash ? "（她还没起飞：你自由活动、她跟着走；她一起飞就挂到二号位）"
-                         : "（悬挂 " + hangOffset() + " 格，二号位开火）"));
+                         : "（悬挂 " + hangFor(maid) + " 格，二号位开火）"));
         // 【实测六百七十四】牵绳档 = 还没正式起飞 → 打金色标记；已经悬挂档 → 清掉上一轮的残留
         if (leash) {
             markLeash(maid);
@@ -878,7 +878,7 @@ public final class GunnerTetherManager {
         bubble(maid, "起飞啦！抓好绳子～");
         com.maidsmart.tool.PromaidLog.log("武装拴绳", "起飞挂载：主人=" + playerName(player)
                 + " 女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
-                + "（从牵绳翻成二号位，悬挂 " + hangOffset() + " 格）");
+                + "（从牵绳翻成二号位，悬挂 " + hangFor(maid) + " 格）");
     }
 
     /** 【实测六百七十三】悬挂档的她落地够久了 → 把玩家放下来、恢复"牵着她走"（空袭档专用）。 */
