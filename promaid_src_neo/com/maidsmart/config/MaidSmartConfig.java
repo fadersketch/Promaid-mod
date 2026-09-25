@@ -358,6 +358,12 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ModConfigSpec.IntValue COMBAT_BROOM_RECALL_DISTANCE;
 
+    // ---- v1.3.7「武装拴绳」----
+    /** 总开关（默认开）：关掉 = 右击女仆不再触发挂载，绳子渲染也不画 */
+    public static final ModConfigSpec.BooleanValue COMBAT_TETHER_ENABLE;
+    /** 悬挂距离（格）：玩家脚底 = 女仆脚底 − 这个值；mixin positionRider 定位用 */
+    public static final ModConfigSpec.DoubleValue COMBAT_TETHER_HANG;
+
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
     /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
@@ -1996,6 +2002,14 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回你身边，免得飞太远回不来。0 = 关闭。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
+        BUILDER.pop();
+
+        // ---- v1.3.7「武装拴绳」（配置面板：战斗与自保 → 扫帚模式板块末尾）----
+        BUILDER.comment("武装拴绳（直升机二号位；配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.tether").push("tether");
+        COMBAT_TETHER_ENABLE = BUILDER.comment("武装拴绳总开关（默认开）：手持武装拴绳右击【飞行中的】女仆，把自己挂到她下方（默认 1.8 格，像武装直升机的二号位枪手）——她照常飞、照常用远程武器开火，你也一样；再右击一次（或按潜跳）解除。她落地/入水超过 0.6 秒会自动把你放下；解除瞬间人在空中给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。\n\n【规则】只认主人；一只女仆同时只挂一人；必须她飞起来时才挂得上去（地面挂着会把人拖进地里）。她本人对你的伤害本来就被「主人/友军免伤总闸」拦着，挂多紧都不会被她自己打中。\n\n【二号位开火】挂着时照常射击（弓/弩/枪械都行）——她打她的目标，你打你瞄的，各自独立。合成：拴绳 + 铁锭×2。日志搜「武装拴绳」")
+                .translation("config.promaid.tether.enable").define("enable", true);
+        COMBAT_TETHER_HANG = BUILDER.comment("悬挂距离（格，默认 1.8，0.5~4.0）：玩家脚底到女仆脚底的垂直距离。1.8 ≈ 玩家身高，头顶正好齐她的脚底、绳子约一格（粉丝原话「长度只有一格的拴绳」）；调小 = 人贴在她身上，调大 = 吊得更低（视野更好、更像吊机）")
+                .translation("config.promaid.tether.hang").defineInRange("hang", 1.8, 0.5, 4.0);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----

@@ -2754,6 +2754,20 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.COMBAT_BROOM_UNSTICK.set(v),
                 "撞到方块顶住不动超过 0.6 秒 → **先飘到最近的空气格**再续原链路（只挑让她离目标更近、"
                         + "上下两格都空的那个）。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」"));
+        // v1.3.7 实测六百六十七【武装拴绳】——粉丝点单的"直升机二号位"（挂在飞行女仆下方一同开火）
+        this.rows.add(new SectionRow("—— 武装拴绳（拴住飞行女仆 = 武装直升机二号位）——", false));
+        this.rows.add(new BoolRow("武装拴绳·总开关", MaidSmartConfig.COMBAT_TETHER_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_TETHER_ENABLE.set(v),
+                "武装拴绳（默认开）：手持【武装拴绳】右击飞行中的女仆 = 把自己挂到她下方（默认 1.8 格，"
+                        + "像武装直升机的二号位枪手）；她照常飞、照常开火，你也照常开火，互相不打架。"
+                        + "再右击一次（或按潜跳）解除；她落地/入水超过 0.6 秒自动放人；解除瞬间在空中"
+                        + "给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。只认主人、一只女仆挂一人。"
+                        + "合成：拴绳 + 铁锭×2。日志搜「武装拴绳」"));
+        this.rows.add(new NumRow("武装拴绳·悬挂距离（格）", String.valueOf(MaidSmartConfig.COMBAT_TETHER_HANG.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_TETHER_HANG, "武装拴绳·悬挂距离", 0.5, 4.0),
+                "玩家脚底到她脚底的垂直距离（默认 1.8，0.5~4.0）：1.8 ≈ 玩家身高，头顶齐她的脚底、"
+                        + "绳子约一格（「长度只有一格的拴绳」）；调小 = 人贴在她身上，调大 = 吊得更低",
+                0.5, 4.0));
     }
 
     private void reviveRows() {

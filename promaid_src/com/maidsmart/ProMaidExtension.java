@@ -61,6 +61,8 @@ public class ProMaidExtension implements ILittleMaid {
     private int seatWalkTimer = 0;
     /** v1.5.332：幼儿女儿武器禁持轮询节流计数（每 20 tick = 1 秒一次） */
     private int weaponGuardTimer = 0;
+    /** v1.3.7 实测六百六十七：武装拴绳挂载校验（2 tick 一次；无挂载对时零开销） */
+    private int tetherTimer = 0;
 
     public ProMaidExtension() {
         MinecraftForge.EVENT_BUS.register(new ProactiveDialogueManager());
@@ -298,6 +300,11 @@ public class ProMaidExtension implements ILittleMaid {
                 }
             } catch (Exception ignored) {
             }
+        }
+        // v1.3.7 实测六百六十七：武装拴绳——挂载状态校验/自动解除/存档恢复（2 tick 一次）
+        if (++this.tetherTimer >= 2) {
+            this.tetherTimer = 0;
+            com.maidsmart.combat.GunnerTetherManager.tick(server);
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
     }
