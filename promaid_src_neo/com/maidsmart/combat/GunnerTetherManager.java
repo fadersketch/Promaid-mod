@@ -153,18 +153,112 @@ public final class GunnerTetherManager {
             int bz = (int) Math.floor(z);
             int by = (int) Math.floor(anchor.getY());
             net.minecraft.world.level.Level lvl = anchor.level();
-            double ground = anchor.getY();
-            for (int i = 0; i < 24; i++) { // 往下找第一块"不是空气"的方块（顶面 = 地面）
+            for (int i = 0; i < 64; i++) { // 往下找第一块"不是空气"的方块（顶面 = 地面）
                 net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(bx, by - i, bz);
-                net.minecraft.world.level.block.state.BlockState st = lvl.getBlockState(p);
-                if (!st.isAir()) {
-                    ground = p.getY() + 1;
+                // 【670 的教训】区块没加载时不去 getBlockState（那是 requireChunk 那条会加载/抛异常的路）
+                if (!lvl.isLoaded(p)) {
                     break;
                 }
+                net.minecraft.world.level.block.state.BlockState st = lvl.getBlockState(p);
+                if (!st.isAir()) {
+                    return new Vec3(x, p.getY() + 1 + tetherHover(), z);
+                }
             }
-            return new Vec3(x, ground + tetherHover(), z);
+            // 【实测六百七十一：修"女仆的位置不断上升"（实测反馈②的后半）】旧版这里 `ground` 还等于
+            // **锚点自己的 Y**，于是"往下找不到地面"时返回 `她自己 Y + tetherHover()`——目标永远是
+            // "比她现在高 3 格"：空袭那边每 tick 抬 0.30 格（vy 上限）、扫帚那边 steerTo 的到达判定
+            // 永远不成立，两条链路都变成无限爬升，而且目标跟着她一起抬，永远追不上。
+            // 现在改成：往下 64 格都没有地面（高空 / 虚空 / 末地上空）→ **保持她自己现在的高度**。
+            return new Vec3(x, anchor.getY(), z);
         } catch (Throwable t) {
-            return new Vec3(anchor.getX(), anchor.getY() + tetherHover(), anchor.getZ());
+            return new Vec3(anchor.getX(), anchor.getY(), anchor.getZ());
+        }
+    }
+
+    /* ==================== 悬挂定位（实测六百七十一） ==================== */
+
+    /**
+     * 【为什么需要"滑变"】旧版（668/669）的定位是二值判定：下方那一格没空间就**这一拍不改定位**、
+     * 退回原版"站在她身上"，下一拍地形变了又吊回 hang 格下面——两个位置之间每 tick 直跳。玩家原话：
+     * "被绑定以后，玩家会在女仆的上下反复横跳"。根因就是**两个相差 2 格以上的位置之间没有插值**
+     * （不是碰撞：javap 实证原版 {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免）。
+     *
+     * <p>现在拆成两步：{@link #hangTarget} 只挑"这一拍最合适的偏移"，{@link #hangCurrent} 把**当前
+     * 实际偏移**朝它滑过去。地形起伏时看到的是平滑升降（像船随浪），被埋的极端情况也不会把人按进方块。
+     *
+     * <p>两侧各存一份（mixin 服务端/客户端都会跑同一个算式）：键是**玩家 UUID**、值是"当前偏移"。
+     * 包不参与同步——滑变只是观感，两侧各自算出来的差别在 0.4 格以内。
+     */
+    private static final Map<UUID, Double> HANG_NOW = new HashMap<>();
+
+    /** 每 tick 允许的偏移变化：**上升快、下降慢**。上升（她压下来/地形顶上来）慢了就把玩家按进方块里；
+     *  下降（地形让开）快了就是那个"上下横跳"。所以一个 1.5、一个 0.35。 */
+    private static final double HANG_RISE_PER_TICK = 1.5;
+    private static final double HANG_FALL_PER_TICK = 0.35;
+
+    /** 悬挂点（玩家脚底那一格 + 头顶那一格）有没有空间——判不了（异常）时返回 true：宁可照旧吊着 */
+    private static boolean roomFor(Entity passenger, double x, double y, double z) {
+        try {
+            net.minecraft.world.level.Level lvl = passenger.level();
+            net.minecraft.core.BlockPos feet = new net.minecraft.core.BlockPos(
+                    (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            // 【670 的教训】区块没加载时**不要**去 getBlockState——它走的是 requireChunk 那条路
+            //（会同步加载地形、或者直接抛异常）。isLoaded 是只读判据。
+            if (!lvl.isLoaded(feet)) {
+                return true;
+            }
+            return lvl.getBlockState(feet).isAir() && lvl.getBlockState(feet.above()).isAir();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /** 这一拍最合适的偏移：有空间就用满 hang；没空间就沿她身体往上收（永不超过 0 = 她脚底那一层） */
+    public static double hangTarget(EntityMaid maid, Entity passenger, double hang) {
+        try {
+            double h = Math.max(0.0, hang);
+            for (double o = h; o > 0.0; o -= 0.5) {
+                if (roomFor(passenger, maid.getX(), maid.getY() - o, maid.getZ())) {
+                    return o; // 从最远往近处找：第一个有空的就是"这一拍能吊多远"
+                }
+            }
+            return 0.0; // 贴着她脚底都没空间（钻进方块里飞）：用 0 兜底，绝不再退回原版头顶位（那会横跳）
+        } catch (Throwable t) {
+            return Math.max(0.0, hang);
+        }
+    }
+
+    /** 把当前偏移朝目标滑一步，返回这一步该用的偏移（上升/下降各自限速，见上面两个常量） */
+    public static double hangCurrent(Entity passenger, double target) {
+        try {
+            UUID id = passenger.getUUID();
+            Double prev = HANG_NOW.get(id);
+            double cur = prev == null ? target : prev.doubleValue();
+            double diff = target - cur;
+            if (diff > HANG_FALL_PER_TICK) {
+                cur += HANG_FALL_PER_TICK;        // 要往下放：慢慢放（这半条就是"别横跳"）
+            } else if (diff < -HANG_RISE_PER_TICK) {
+                cur -= HANG_RISE_PER_TICK;        // 要往上收：立刻收（慢了就是把玩家按进方块）
+            } else {
+                cur = target;
+            }
+            if (prev == null && HANG_NOW.size() > 256) {
+                HANG_NOW.clear(); // 兜底：正常解绑会 forgetHang 清；人不多，清一次也无所谓
+            }
+            HANG_NOW.put(id, cur);
+            return cur;
+        } catch (Throwable t) {
+            return target;
+        }
+    }
+
+    /** 解绑时把滑变状态清掉（下一趟从目标值重新起步） */
+    public static void forgetHang(Entity passenger) {
+        try {
+            if (passenger != null) {
+                HANG_NOW.remove(passenger.getUUID());
+            }
+        } catch (Throwable ignored) {
         }
     }
 
@@ -211,14 +305,20 @@ public final class GunnerTetherManager {
         //  但是如果女仆处于空袭摸式下，也是可以直接绑定的。"
         //  · 扫帚模式：**必须已经飞在空中**（地面上挂上去 = 她会把人拖进地里；她本来也要先起飞）
         //  · 空袭模式（flight_combat / flight_ranged）：照玩家要求**随时能挂**——地面上也安全，
-        //    因为①下方没空间时 mixin 会先用原版头顶位（EntityGunnerHangMixin 的空间判定），
-        //    ②绑定后她会自己升到离地 tetherHover() 格悬停（见 isTethered 那套悬停逻辑）
+        //    因为①悬挂点没空间时 mixin 会沿她身体往上收（EntityGunnerHangMixin 的滑变定位），
+        //    ②滑变是平滑的，既不会把玩家按进方块里、也不会上下横跳
+        // 【实测六百七十一：扫帚这一档放宽到"她真的骑在扫帚上"】玩家反馈"扫帚状态下右击要能绑定"。
+        //  她低空掠地/刚起飞时 onGround() 为真，旧版那一道"等我飞起来再右击我"会把人挡在门外。
+        //  现在：只要她**已经骑在扫帚上**（isRidingBroom）就放行，不再要求此刻不在她面上；
+        //  "扫帚模式但还没骑上、又站在地上"这一档仍然拒绝（那种情况下挂上去就是把人拖进地里）。
+        //  另外她骑着**世界里的扫帚**（任务不是扫帚模式）时也认——"在乘坐扫帚状态下"就算数。
         boolean broomMode = com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
-        if (broomMode && maid.onGround()) {
+        boolean ridingBroom = com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid);
+        if (broomMode && !ridingBroom && maid.onGround()) {
             deny(maid, "等我飞起来再右击我，你先抓好绳子～");
             return;
         }
-        if (!broomMode && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+        if (!broomMode && !ridingBroom && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
             deny(maid, "扫帚或空袭模式时再抓绳子吧～");
             return;
         }
@@ -252,6 +352,7 @@ public final class GunnerTetherManager {
         }
         ServerPlayer player = link == null ? null : link.player.get();
         GunnerTetherNetworking.send(maid, false);
+        forgetHang(player); // 【实测六百七十一】滑变状态跟着解绑一起清
         if (player != null) {
             if (!player.onGround()) {
                 // 空中松手：5 秒摔伤豁免（"不会扯断"的绳子不负责防摔死，但也不至于秒摔没）
@@ -316,6 +417,7 @@ public final class GunnerTetherManager {
                 if (maid == null || player == null || !maid.isAlive() || !player.isAlive()
                         || maid.level() != player.level()) {
                     it.remove();
+                    forgetHang(player); // 【实测六百七十一】一方没了/跨维度：滑变状态一起清
                     if (maid != null) {
                         try {
                             maid.getPersistentData().remove(TAG_GUNNER);
@@ -328,6 +430,7 @@ public final class GunnerTetherManager {
                 // ② 玩家自己潜跳下鞍 / 被别的模组拽下去 → 解除 + 空中给摔伤豁免
                 if (!maid.hasPassenger(player)) {
                     it.remove();
+                    forgetHang(player); // 【实测六百七十一】玩家离鞍：滑变状态一起清
                     try {
                         maid.getPersistentData().remove(TAG_GUNNER);
                     } catch (Throwable ignored) {
@@ -341,10 +444,13 @@ public final class GunnerTetherManager {
                             + com.maidsmart.tool.PromaidLog.nameOf(maid));
                     continue;
                 }
-                // ③ 她落地/入水（连续 0.6 秒）→ 稳稳放下，别把人拖进地里/水里
-                if (maid.onGround() || maid.isInWater()) {
-                    int grounded = GROUND_TICKS.merge(maid.getUUID(), 2, Integer::sum);
-                    if (grounded >= GROUND_DISMOUNT_TICKS) {
+                // ③【实测六百七十一：绳子不会自己断】**地面那一档删掉了**——玩家原话"那个拴绳…
+                //    并且不会断掉"。旧版她落地累计 0.6 秒就把人放下，等于绳子会自己断。
+                //    只留入水：她还吊在下方 hang 格，落水会跟着进水，溺水是致命的（这一档留着救命）。
+                //    （GROUND_TICKS/GROUND_DISMOUNT_TICKS 沿用旧称，671 起数的是"连续泡在水里的 tick"。）
+                if (maid.isInWater()) {
+                    int soaked = GROUND_TICKS.merge(maid.getUUID(), 2, Integer::sum);
+                    if (soaked >= GROUND_DISMOUNT_TICKS) {
                         detach(maid, true);
                     }
                 } else {
@@ -430,8 +536,14 @@ public final class GunnerTetherManager {
             if (target instanceof EntityMaid m) {
                 return m;
             }
-            if (target instanceof EntityBroom broom && broom.getFirstPassenger() instanceof EntityMaid m2) {
-                return m2;
+            // 【实测六百七十一】扫她**全部的**乘客，不再只看第一个：她坐在扫帚上时客户端射线命中的是
+            // 载具（扫帚实体），而"第一个乘客"未必就是她（玩家同乘 / 别的模组往车里塞了乘客时）。
+            if (target instanceof EntityBroom broom) {
+                for (Entity p : broom.getPassengers()) {
+                    if (p instanceof EntityMaid m2) {
+                        return m2;
+                    }
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -492,8 +604,13 @@ public final class GunnerTetherManager {
         try {
             String msgId = source.getMsgId();
             // ① 挂着：卡墙(inWall)/挤在一起(cramming) 全免——贴着树冠飞是常态
+            // ①【实测六百七十一】挂着期间给"和女仆同款"的豁免：卡墙(inWall)/挤墙(cramming) 之外，
+            //   再免摔落(fall)与撞墙飞(flyIntoWall)——与 MaidFlightWallGuard 对女仆那两条**同 msgId**
+            //   （那一处是 FLY_INTO_WALL / FALL 两个常量），口径只有一处。
+            //   玩家原话："会获得和女仆一样的同款免疫摔落伤害"。
             if (isRidingAsGunner(player)) {
-                return "inWall".equals(msgId) || "cramming".equals(msgId);
+                return "inWall".equals(msgId) || "cramming".equals(msgId)
+                        || "fall".equals(msgId) || "flyIntoWall".equals(msgId);
             }
             // ② 刚解除：摔伤豁免（到期由 tick 清理）
             Long until = DISMOUNT_GRACE.get(player.getUUID());
@@ -522,6 +639,10 @@ public final class GunnerTetherManager {
             return;
         }
         DENY_LOG.put(maid.getUUID(), now);
+        // 【实测六百七十一】拒绝原因也写日志：玩家反馈"右击不灵"时，日志里要能**直接看出卡在哪一道门**
+        //（气泡只显示几秒、还会被 4 秒节流吞掉，光靠它查不出是哪一条判据拦的）。
+        com.maidsmart.tool.PromaidLog.log("武装拴绳", "拒绝：" + msg + "（女仆="
+                + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
         bubble(maid, msg);
     }
 

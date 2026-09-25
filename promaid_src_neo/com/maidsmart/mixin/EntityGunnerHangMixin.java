@@ -10,7 +10,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * v1.3.0 实测六百六十八（修 667 的启动崩溃）【武装拴绳】：拴绳挂载的玩家定位在女仆【下方】
- * hang 格（默认 1.8），而不是原版的"骑在头顶"。
+ * hang 格（默认 2.6，配置面板可调），而不是原版的"骑在头顶"。
+ *
+ * ── 【实测六百七十一：定位改成"挑目标 + 滑变"】──
+ * 玩家实测反馈："被绑定以后，玩家会在女仆的上下反复横跳"。根因不是碰撞（javap 实证：原版
+ * {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免——1.20.1 走 m_20365_、1.21.1 走
+ * isPassengerOfSameVehicle），而是旧版这里**二值回退且无插值**。现在统一由
+ * {@code GunnerTetherManager.hangTarget / hangCurrent} 给出偏移，见那两个方法的注释。
  *
  * ── 【为什么是 {@code @Mixin(Entity.class)} 而不是 EntityMaid —— 667 让游戏开不起来的根因】──
  * Mixin 的 {@code @Inject} 只在【目标类自己声明】的方法里找注入点，**继承来的方法一律匹配不到**。
@@ -64,33 +70,22 @@ public abstract class EntityGunnerHangMixin {
                 return;
             }
             double hang = com.maidsmart.combat.GunnerTetherManager.hangOffset();
-            double ty = self.getY() - hang;
-            // 【实测六百六十九：下方没空间就退回原版头顶位】玩家原话："（不要）像扫帚一样强制搬到
-            // 女仆的下面，那样子很容易导致玩家在地面里面窒息"。她刚被挂上还没升起来、或贴着地面/
-            // 树冠飞时，悬挂点会落在方块里——这一拍就别改定位，让玩家照原版站在她身上，等她自己
-            // 升到离地 tetherHover() 格（GunnerTetherManager 的绑定后悬停）再吊下去。
-            if (!maidsmart$roomFor(passenger, self.getX(), ty, self.getZ())) {
-                return;
-            }
-            // 玩家脚底 = 女仆脚底 − 悬挂距离；水平贴她的中心（跟原版同款，不前后偏移）
+            // 【实测六百七十一：悬挂定位稳定化】旧版是"下方没空间就这一拍不改定位、退回原版头顶位"——
+            // 两个相差 2 格以上的位置之间每 tick 直跳，玩家看到的就是"上下反复横跳"（实测反馈②）。
+            // 现在拆成两步：先挑"这一拍最合适的偏移"，再把**当前实际偏移**朝它滑过去。
+            //   ① 目标 = 有空间就用满 hang；没空间就沿她身体往上收（收到第一个有空间的位置）。
+            //   ② 滑变上升快、下降慢（见 GunnerTetherManager 的两个常量注释）。
+            // 于是地形起伏时是平滑升降（像船随浪），被埋的极端情况也不会把人按进方块里。
+            double target = com.maidsmart.combat.GunnerTetherManager.hangTarget(self, passenger, hang);
+            double cur = com.maidsmart.combat.GunnerTetherManager.hangCurrent(passenger, target);
+            double ty = self.getY() - cur;
+            // 玩家脚底 = 女仆脚底 − 当前偏移；水平贴她的中心（跟原版同款，不前后偏移）
             fn.accept(passenger, self.getX(), ty, self.getZ());
             ci.cancel();
         } catch (Throwable ignored) {
         }
     }
 
-    /**
-     * 悬挂点（玩家脚底那一格 + 头顶那一格）有没有空间——两格都不是空气就认为"会把人按进方块里"。
-     * 判不了（异常）时返回 true：宁可照旧吊着，也不要因为一次判定失败把机制卡死。
-     */
-    private boolean maidsmart$roomFor(Entity passenger, double x, double y, double z) {
-        try {
-            net.minecraft.world.level.Level lvl = passenger.level();
-            net.minecraft.core.BlockPos feet = new net.minecraft.core.BlockPos(
-                    (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
-            return lvl.getBlockState(feet).isAir() && lvl.getBlockState(feet.above()).isAir();
-        } catch (Throwable t) {
-            return true;
-        }
-    }
+    // 【实测六百七十一】空间判定搬到了 GunnerTetherManager.roomFor：它现在同时被"挑目标偏移"
+    // 与"滑变"两条链路使用，留在这里就会出现第二份口径（本项目"口径只有一处"的铁律）。
 }

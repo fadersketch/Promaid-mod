@@ -2758,16 +2758,18 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new SectionRow("—— 武装拴绳（拴住飞行女仆 = 武装直升机二号位）——", false));
         this.rows.add(new BoolRow("武装拴绳·总开关", MaidSmartConfig.COMBAT_TETHER_ENABLE.get(),
                 v -> MaidSmartConfig.COMBAT_TETHER_ENABLE.set(v),
-                "武装拴绳（默认开）：手持【武装拴绳】右击飞行中的女仆 = 把自己挂到她下方（默认 1.8 格，"
+                "武装拴绳（默认开）：手持【武装拴绳】右击飞行中的女仆 = 把自己挂到她下方（默认 2.6 格，"
                         + "像武装直升机的二号位枪手）；她照常飞、照常开火，你也照常开火，互相不打架。"
-                        + "再右击一次（或按潜跳）解除；她落地/入水超过 0.6 秒自动放人；解除瞬间在空中"
-                        + "给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。只认主人、一只女仆挂一人。"
+                        + "再右击一次（或按潜跳）解除；**绳子不会自己断**（地面不再自动放人，只有落水会）；"
+                        + "解除瞬间在空中给 5 秒摔伤豁免；挂着时**和女仆同款**：卡墙/挤墙/摔落/撞墙伤全免。"
+                        + "只认主人、一只女仆挂一人。"
                         + "合成：拴绳 + 铁锭×2。日志搜「武装拴绳」"));
         this.rows.add(new NumRow("武装拴绳·悬挂距离（格）", String.valueOf(MaidSmartConfig.COMBAT_TETHER_HANG.get()),
-                this.setDoubleInRange(MaidSmartConfig.COMBAT_TETHER_HANG, "武装拴绳·悬挂距离", 0.5, 4.0),
-                "玩家脚底到她脚底的垂直距离（默认 1.8，0.5~4.0）：1.8 ≈ 玩家身高，头顶齐她的脚底、"
-                        + "绳子约一格（「长度只有一格的拴绳」）；调小 = 人贴在她身上，调大 = 吊得更低",
-                0.5, 4.0));
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_TETHER_HANG, "武装拴绳·悬挂距离", 0.5, 6.0),
+                "玩家脚底到她脚底的垂直距离，也就是那根「不会断」的绳子的长度（默认 2.6，0.5~6.0）："
+                        + "2.6 = 她的脚底高过你的视线，前方视野让开；调小 = 人贴在她身上、调大 = 吊得更低；"
+                        + "定位是平滑滑变的，不会上下横跳",
+                0.5, 6.0));
     }
 
     private void reviveRows() {

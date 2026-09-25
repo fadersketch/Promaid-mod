@@ -1444,7 +1444,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      */
     private static Aim aimOf(EntityMaid maid, net.minecraft.world.level.Level level) {
         try {
-            // 【实测六百六十九】拴绳悬停：这一趟的"目标点"不是主人，而是那个离地 N 格的定点
+            // 【实测六百六十九 / 六百七十一】拴绳期间的目标点仍是那个"离地 N 格"的定点；671 把
+            // tetherHoldPos 的"找不到地面就自相对"兜底修掉了（现在退回她自己的高度），所以这里取的
+            // 值不会再把她往上带；而真正驱动飞行的 tick 那一支已经不再读它（见 maidsmart$tetherHold）。
             if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
                 return Aim.ofPos(com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(maid));
             }
@@ -1473,9 +1475,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * （玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。这边应该改为
      * 就默认上升到离地面 3 格，然后悬停，接敌不变"）。
      *
-     * <p>空袭这边是**滑翔物理**（不像扫帚那样有意图队列），所以直接每 tick 写速度：水平按 0.72 收干、
-     * 竖直朝目标高度修正（每 tick 上限 ±0.30 格），并把**俯仰摆平**——低头滑翔会被原版物理一路往地里拽。
-     * 站在地上时照搬本类起飞那一支（0.42 上抬 + 滑翔位）。
+     * <p>【实测六百七十一：空袭不再"悬空起程"】玩家原话："不要套用像在扫帚模式一样的悬空起程，
+     * 空袭就注定了不适合这样"。旧版这里把目标高度定在"离地 3 格"那个定点上（{@code tetherHoldPos}），
+     * 而它一旦找不到地面就变成"比她自己高 3 格"——于是每 tick 抬 0.30 格、无限爬升（实测反馈②）。
+     *
+     * <p>现在这里**一个高度都不写**：只把俯仰摆平（低头滑翔会被原版物理一路往地里拽）+ 水平按 0.72
+     * 收干，竖直速度原样留着——她爬升/俯冲由她自己的空袭链路决定，绳子只负责"把主人吊在下面"。
      *
      * <p>**接敌不受影响**：有威胁时 {@code canContinue} 就把控制权交回空袭链路（threatNearby /
      * ownFlightBusy 都排在它前面），所以她该打还是打——"接敌不变"是字面意思。
@@ -1483,17 +1488,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     private static void maidsmart$tetherHold(EntityMaid maid) {
         try {
             MaidFlightKit.setGliding(maid, true);
-            if (maid.m_20096_()) {
-                Vec3 dm = maid.m_20184_();
-                maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
-                return;
-            }
             maid.m_146926_(0.0f); // 俯仰摆平（setXRot）：低着头滑翔会被原版物理往地里拽
-            Vec3 aim = com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(maid);
-            double dy = aim.f_82480_ - maid.m_20186_();
             Vec3 cur = maid.m_20184_();
-            double vy = Math.max(-0.30, Math.min(0.30, dy * 0.35));
-            maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, vy, cur.f_82481_ * 0.72));
+            maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, cur.f_82480_, cur.f_82481_ * 0.72));
         } catch (Throwable ignored) {
         }
     }
