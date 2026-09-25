@@ -265,6 +265,7 @@ public final class MaidBroomDrive {
         }
         EntityBroom riding = MaidBroomKit.ridingBroom(maid);
         if (riding != null) {
+            clearBroomless(maid); // 【实测六百七十二】骑着就说明"有扫帚"，把没扫帚的计时清掉
             noteAdopted(maid);
             return riding;
         }
@@ -319,13 +320,15 @@ public final class MaidBroomDrive {
         }
         DEBT.put(broom.m_20148_(), taken);
         ORBIT.remove(maid.m_20148_());
+        clearBroomless(maid); // 【实测六百七十二】取出来骑上了 → 没扫帚的计时清零
         // 玩家要求："女仆会立刻用扫帚飞起来 1 格"——登记起飞相位（她脚下 +1 格，另加
         // 到点判定的余量，见 CLIMB_LEAD），由行为先垂直抬起来、抬到位再开始"去哪"的正常逻辑。
-        startClimb(maid, TAKEOFF, maid.m_20186_() + RISE_BLOCKS + CLIMB_LEAD);
-        com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                + " 取出扫帚骑上（消耗 " + taken.m_41613_() + "x "
-                + taken.m_41786_().getString() + "，收工时原物归还）→ 原地抬起 "
-                + RISE_BLOCKS + " 格");
+        // 【实测六百七十二】走 startTakeoff：5 秒内已经起过一次就**不再重复抬**
+        //（反复上/下扫帚时，每一轮都抬一格就是那个"不断攀升"的棘轮）。
+        boolean lifted = startTakeoff(maid);
+        mountLog(maid, "取出扫帚骑上（消耗 " + taken.m_41613_() + "x "
+                + taken.m_41786_().getString() + "，收工时原物归还）→ "
+                + (lifted ? "原地抬起 " + RISE_BLOCKS + " 格" : "5 秒内刚起过一次，不重复抬高度"));
         return broom;
     }
 
@@ -481,6 +484,18 @@ public final class MaidBroomDrive {
 
     /** 收工：下扫帚 + 把当初那件扫帚**精确**还回她背包（背包塞不下就落脚下，走 MaidGiveBack） */
     public static void dismount(EntityMaid maid) {
+        dismount(maid, "收工");
+    }
+
+    /**
+     * 收工（{@code why} 只进日志）：下扫帚 + 把当初那件扫帚**精确**还回她背包。
+     *
+     * <p>【实测六百七十二：为什么要带理由】上扫帚每次都留痕，下扫帚却只在"要还扫帚物品"那一支
+     * 写日志——世界扫帚那一支下鞍后直接 {@code return}，一个字节都不打。于是实测里"她什么时候、
+     * 为什么下的扫帚"完全查不到，而排查"上一秒骑上、下一秒又下"那个高频循环恰恰只要这一个答案。
+     * 现在四个调用点（总开关关 / 手上没扫帚 / 缺件 / 行为结束换任务）各自报出理由，5 秒一条上限。
+     */
+    public static void dismount(EntityMaid maid, String why) {
         if (maid == null) {
             return;
         }
@@ -494,6 +509,7 @@ public final class MaidBroomDrive {
             maid.m_8127_();
         } catch (Throwable ignored) {
         }
+        noteDismount(maid, why, debt != null);
         if (debt == null) {
             // 不是我们放出去的扫帚（玩家自己放的 / 别的模组）：一个字都不动，留给玩家
             return;
@@ -510,6 +526,24 @@ public final class MaidBroomDrive {
         com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 收工下扫帚，扫帚已放回背包");
     }
+
+    /** 下扫帚留痕（{@code hadDebt} = 这把是不是我们放出去的）：同一只女仆 5 秒一条上限 */
+    private static void noteDismount(EntityMaid maid, String why, boolean hadDebt) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = DISMOUNT_LOGGED.get(maid.m_20148_());
+            if (last != null && now - last < MOUNT_LOG_GAP_MS) {
+                return;
+            }
+            DISMOUNT_LOGGED.put(maid.m_20148_(), Long.valueOf(now));
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 下扫帚（理由=" + why + "，这把是"
+                    + (hadDebt ? "本模组放的，扫帚收进背包" : "世界里那把，原地留着") + "）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static final Map<UUID, Long> DISMOUNT_LOGGED = new HashMap<>();
 
     /* ==================== 意图：写 / 读 ==================== */
 
@@ -849,10 +883,14 @@ public final class MaidBroomDrive {
                 return false;
             }
             ORBIT.remove(maid.m_20148_());
-            startClimb(maid, TAKEOFF, maid.m_20186_() + RISE_BLOCKS + CLIMB_LEAD);
-            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 骑上了世界里放着的那把扫帚（不是我们放的：收工只下鞍、扫帚留在原地）"
-                    + " → 原地抬起 " + RISE_BLOCKS + " 格");
+            clearBroomless(maid); // 【实测六百七十二】骑上了 → 没扫帚的计时清零
+            // 【实测六百七十二】起飞相位去抖 + 日志节流：这一句旧版是**无节流、无去抖**的，
+            //  而它恰好是"反复上下扫帚"那个循环里被刷的那一行（实测 5~11 次/秒），
+            //  每刷一次就重开一次起飞相位 = 每轮 +1 格。
+            boolean lifted = startTakeoff(maid);
+            mountLog(maid, "骑上了世界里放着的那把扫帚（不是我们放的：收工只下鞍、扫帚留在原地）"
+                    + " → " + (lifted ? "原地抬起 " + RISE_BLOCKS + " 格"
+                                      : "5 秒内刚起过一次，不重复抬高度"));
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -1233,6 +1271,90 @@ public final class MaidBroomDrive {
                     && broom.m_6688_() instanceof net.minecraft.world.entity.player.Player;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /* ==================== 上/下扫帚的去抖与留痕（实测六百七十二） ==================== */
+
+    /**
+     * 每只女仆上一次"起飞相位"开始的 gameTime。
+     *
+     * <p>【为什么必须去抖】起飞相位（原地抬 1 格）的目标是**相对她当前高度**算的
+     * （{@link #startClimb} 收 {@code 她当前 y + RISE_BLOCKS}），所以"上一秒骑上、下一秒又下"
+     * 这种循环里，每一轮都会再抬一格——实测日志里她就是这样从 y −60.00 一路升到 +3.67 的
+     * （「爬升到位」记的 y 依次是 −58.94 → −9.14 → −53.60 → +3.67，中间还夹着 5~11 次/秒的
+     * 「骑上了世界里放着的那把扫帚」）。玩家原话："扫帚模式下反复横跳这个问题还是没有解决，
+     * 依然会不断的攀升。" 5 秒内已经起过一次就不再起，棘轮就断了。
+     */
+    private static final Map<UUID, Long> TAKEOFF_AT = new HashMap<>();
+    /** 起飞相位去抖窗口（tick）= 5 秒 */
+    private static final long TAKEOFF_DEBOUNCE = 100L;
+
+    /**
+     * 登记"起飞相位"（原地抬 1 格）——同一只女仆 {@link #TAKEOFF_DEBOUNCE} 内只登一次。
+     *
+     * @return true = 这次真的登记了（调用方可以报"原地抬起 1 格"）；false = 5 秒内刚起过，跳过
+     */
+    private static boolean startTakeoff(EntityMaid maid) {
+        try {
+            long now = maid.m_9236_().m_46467_();
+            Long last = TAKEOFF_AT.get(maid.m_20148_());
+            if (last != null && now - last < TAKEOFF_DEBOUNCE) {
+                return false;
+            }
+            TAKEOFF_AT.put(maid.m_20148_(), Long.valueOf(now));
+            startClimb(maid, TAKEOFF, maid.m_20186_() + RISE_BLOCKS + CLIMB_LEAD);
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /* ---- 「刚才已经上过一次扫帚」这类日志的节流：5 秒一条，防高频上下扫帚刷屏 ---- */
+
+    private static final Map<UUID, Long> MOUNT_LOGGED = new HashMap<>();
+    private static final long MOUNT_LOG_GAP_MS = 5000L;
+
+    /** 上扫帚/起飞这类**可能高频**的日志走这里：同一只女仆 5 秒最多一条 */
+    private static void mountLog(EntityMaid maid, String msg) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = MOUNT_LOGGED.get(maid.m_20148_());
+            if (last != null && now - last < MOUNT_LOG_GAP_MS) {
+                return;
+            }
+            MOUNT_LOGGED.put(maid.m_20148_(), Long.valueOf(now));
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ---- "她没扫帚"这件事要连续成立多久才真去找（去抖，见 MaidBroomBehavior ②） ---- */
+
+    private static final Map<UUID, Long> BROOMLESS_SINCE = new HashMap<>();
+    /** "没扫帚"要连续这么久（tick）= 1 秒 */
+    private static final long BROOMLESS_DEBOUNCE = 20L;
+
+    /** 她已经连续"没扫帚"够久了吗（第一次调用只记时间、返回 false） */
+    public static boolean broomlessLongEnough(EntityMaid maid, long gameTime) {
+        try {
+            UUID id = maid.m_20148_();
+            Long since = BROOMLESS_SINCE.get(id);
+            if (since == null) {
+                BROOMLESS_SINCE.put(id, Long.valueOf(gameTime));
+                return false;
+            }
+            return gameTime - since.longValue() >= BROOMLESS_DEBOUNCE;
+        } catch (Throwable t) {
+            return true; // 判不了就按旧行为（立刻去找）
+        }
+    }
+
+    /** 她又有扫帚了（骑上/取出来）→ 清掉"没扫帚"的计时，下一次缺扫帚重新计 1 秒 */
+    private static void clearBroomless(EntityMaid maid) {
+        try {
+            BROOMLESS_SINCE.remove(maid.m_20148_());
+        } catch (Throwable ignored) {
         }
     }
 

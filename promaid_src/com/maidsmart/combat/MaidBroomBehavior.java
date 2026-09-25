@@ -91,7 +91,9 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     @Override
     protected void m_6732_(ServerLevel level, EntityMaid maid, long gameTime) {
         // 换任务 / 行为结束 / 她死了：一定要下来并把这件扫帚还回去，绝不能留一把孤儿扫帚漂在天上
-        MaidBroomDrive.dismount(maid);
+        // 【实测六百七十二】理由带出去：这条是"她为什么突然下扫帚"的四个可能来源之一，
+        //  旧日志里四个来源长得一模一样（一个字节都不打），排查高频上下扫帚时全靠猜。
+        MaidBroomDrive.dismount(maid, "行为结束/换任务");
         MaidBroomDrive.forgetMaid(maid.m_20148_());
         FOLLOWING.remove(maid);
         PLAYER_DRIVE_LOGGED.remove(maid);
@@ -111,7 +113,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // ① 总开关关掉 → 整段不激活（与旧版一致：下扫帚 + 报缺件；连缺件气泡都照旧，
         //   免得"关掉开关她还在喊缺件"这种状态变化引入新的困惑）
         if (!MaidBroomKit.enabled()) {
-            MaidBroomDrive.dismount(maid);
+            MaidBroomDrive.dismount(maid, "扫帚模式总开关关着");
             notifyNotReady(maid, gameTime);
             return;
         }
@@ -123,7 +125,15 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // 没有实体可骑，才退一步捡地上掉的那件（主手/副手/背包/精妙背包里的由 ensureMounted
         // 直接取，那不叫"找"叫"取"）。找不到（或找了很久够不着）才报缺件待命。
         if (!MaidBroomKit.hasBroomItem(maid) && !MaidBroomKit.isRidingBroom(maid)) {
-            MaidBroomDrive.dismount(maid);
+            MaidBroomDrive.dismount(maid, "手上没扫帚");
+            // 【实测六百七十二：去抖】旧版这里一旦"没扫帚"就立刻去找/骑，于是"上一秒骑上、下一秒
+            //  又下"时变成 5~11 次/秒的高频循环（实测日志 13:48:55 / 13:49:09 / 13:49:21 三次各
+            //  5~11 行「骑上了世界里放着的那把扫帚」），而**每次重新骑上都会重开一次起飞相位**
+            //  （+1.35 格）——那就是玩家看到的"女仆不断攀升"。现在要求"连续 1 秒都没有扫帚"才真的
+            //  去找：正常玩法感觉不到（她本来也要走两步），抖动/循环时不会来回抽搐。
+            if (!MaidBroomDrive.broomlessLongEnough(maid, gameTime)) {
+                return;
+            }
             if (MaidBroomDrive.seekBroom(level, maid)) {
                 return; // 这一 tick 正在去找/刚骑上——本 tick 不做别的
             }
@@ -132,7 +142,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         }
         // ③ 未激活（缺远程武器 / 缺弹药）→ 下来、报缺件
         if (!MaidBroomKit.isModeActive(maid)) {
-            MaidBroomDrive.dismount(maid);
+            MaidBroomDrive.dismount(maid, "缺远程武器/弹药");
             notifyNotReady(maid, gameTime);
             return;
         }
@@ -199,17 +209,16 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //    ③ 都没有 → 原地悬停待命
         MaidBroomDrive.clearClimb(maid); // 打完/丢目标 → 爬升相位与本场盘旋高度一起作废
         noteHome(maid, gameTime); // v1.3.0(beta) 实测六百六十四：守家诊断（低频）
-        // ⑥.0【实测六百六十九：武装拴绳 = 直升机悬停】有人挂在扫帚下面时，**不再跟随/盘旋**：
-        // 目标点改成"离她脚下地面 tetherHover() 格"那个定点，然后停在那儿。
-        // 【实测六百七十一】这一档按玩家要求**保留**（只有空袭那条改成不改高度）；但 tetherHoldPos 的
-        // "找不到地面就自相对"兜底修掉了——高空/虚空时现在是**保持她自己现在的高度**，不再无限爬升。
-        // 玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。
-        // 这边应该改为就默认上升到离地面 3 格，然后悬停，接敌不变（走女仆索敌）。"
-        // 接敌那一档（⑤）在上面，一个字没动——所以"接敌不变"是字面意思。
-        // 锚点传**扫帚**（不是她）：座位偏移的老问题，见 GunnerTetherManager.tetherHoldPos 的注释。
+        // ⑥.0【实测六百六十九 → 六百七十二：武装拴绳只负责"绑住人"，不再给她定高度】
+        //  669 原本是"绑上以后升到离地 tetherHover() 格悬停"，671 修掉了"找不到地面就自相对"的
+        //  兜底，但"给她定一个绝对高度"这件事本身还在。实测反馈㊀："扫帚模式下反复横跳这个问题
+        //  还是没有解决，依然会不断的攀升。" 空袭那一条（MaidFlightFollowBehavior.maidsmart$tetherHold）
+        //  已经改成"只保持她自己当前高度"，扫帚这边现在**跟它同一个口径**：
+        //  目标点 = 扫帚自己现在的位置 → 她原地悬停，高度一个字不改（steerTo 到点那一支会把速度
+        //  乘 IDLE_DECAY 收干，绝不会掉下去）。"去哪"仍然由她自己的链路决定——接敌那一档（⑤）
+        //  在这些之前，一个字没动，所以"接敌不变"照旧是字面意思。
         if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
-            MaidBroomDrive.steerTo(maid,
-                    com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(broom));
+            MaidBroomDrive.hoverInPlace(maid);
             return;
         }
         if (MaidBroomKit.homeRestricted(maid)) {

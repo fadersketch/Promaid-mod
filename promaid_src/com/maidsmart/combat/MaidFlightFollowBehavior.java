@@ -1444,11 +1444,13 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      */
     private static Aim aimOf(EntityMaid maid, net.minecraft.world.level.Level level) {
         try {
-            // 【实测六百六十九 / 六百七十一】拴绳期间的目标点仍是那个"离地 N 格"的定点；671 把
-            // tetherHoldPos 的"找不到地面就自相对"兜底修掉了（现在退回她自己的高度），所以这里取的
-            // 值不会再把她往上带；而真正驱动飞行的 tick 那一支已经不再读它（见 maidsmart$tetherHold）。
+            // 【实测六百六十九 → 六百七十二】拴绳期间这个"目标点"就是**她自己现在的位置**：
+            // 672 起拴绳不再给她定任何高度（tetherHoldPos 整个删了），所以"想去哪"在拴着的时候
+            // 只有一个答案——原地不动。它现在只喂给两处：canContinue 的"有没有目标"判空
+            //（拴着时那一条直接 return true，见它上面的拴绳分支）与 stop() 那两条日志；
+            // 真正每 tick 驱动飞行的是 maidsmart$tetherHold，它也只保持她自己当前高度——口径一致。
             if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
-                return Aim.ofPos(com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(maid));
+                return Aim.ofPos(new Vec3(maid.m_20185_(), maid.m_20186_(), maid.m_20189_()));
             }
             UUID id = maid.m_20148_();
             Vec3 pos = GOTO.get(id);

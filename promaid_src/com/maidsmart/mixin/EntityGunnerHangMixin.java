@@ -12,11 +12,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * v1.3.0 实测六百六十八（修 667 的启动崩溃）【武装拴绳】：拴绳挂载的玩家定位在女仆【下方】
  * hang 格（默认 2.6，配置面板可调），而不是原版的"骑在头顶"。
  *
- * ── 【实测六百七十一：定位改成"挑目标 + 滑变"】──
- * 玩家实测反馈："被绑定以后，玩家会在女仆的上下反复横跳"。根因不是碰撞（javap 实证：原版
- * {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免——1.20.1 走 m_20365_、1.21.1 走
- * isPassengerOfSameVehicle），而是旧版这里**二值回退且无插值**。现在统一由
- * {@code GunnerTetherManager.hangTarget / hangCurrent} 给出偏移，见那两个方法的注释。
+ * ── 【实测六百七十一 / 六百七十二：定位改成"挑偏移 + 滑变"，并分「悬挂 / 并肩」两档】──
+ * 玩家实测反馈："被绑定以后，玩家会在女仆的上下反复横跳"（㊁），以及"平时待命没有起飞的时候，
+ * 直接跟女仆的建模完全重叠看起来真的太难绷了。应该要跟女仆拉开一定程度上的距离的"（㊁后半）。
+ * 根因不是碰撞（javap 实证：原版 {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免——
+ * 1.20.1 走 m_20365_、1.21.1 走 isPassengerOfSameVehicle），而是旧版这里**二值回退且无插值**，
+ * 而"回退"的那一头又恰好是 0（= 玩家站在她脚底，两个建模完全重叠）。
+ * 现在统一由 {@code GunnerTetherManager.seatOffset} 给出偏移：下方有空间就吊在下方 hang 格、
+ * 下方没空间就水平拉开并肩站，两档之间还有粘滞。见那个方法的说明。
  *
  * ── 【为什么是 {@code @Mixin(Entity.class)} 而不是 EntityMaid —— 667 让游戏开不起来的根因】──
  * Mixin 的 {@code @Inject} 只在【目标类自己声明】的方法里找注入点，**继承来的方法一律匹配不到**。
@@ -69,22 +72,20 @@ public abstract class EntityGunnerHangMixin {
                 return;
             }
             double hang = com.maidsmart.combat.GunnerTetherManager.hangOffset();
-            // 【实测六百七十一：悬挂定位稳定化】旧版是"下方没空间就这一拍不改定位、退回原版头顶位"——
-            // 两个相差 2 格以上的位置之间每 tick 直跳，玩家看到的就是"上下反复横跳"（实测反馈②）。
-            // 现在拆成两步：先挑"这一拍最合适的偏移"，再把**当前实际偏移**朝它滑过去。
-            //   ① 目标 = 有空间就用满 hang；没空间就沿她身体往上收（收到第一个有空间的位置）。
-            //   ② 滑变上升快、下降慢（见 GunnerTetherManager 的两个常量注释）。
-            // 于是地形起伏时是平滑升降（像船随浪），被埋的极端情况也不会把人按进方块里。
-            double target = com.maidsmart.combat.GunnerTetherManager.hangTarget(self, passenger, hang);
-            double cur = com.maidsmart.combat.GunnerTetherManager.hangCurrent(passenger, target);
-            double ty = self.m_20186_() - cur;
-            // 玩家脚底 = 女仆脚底 − 当前偏移；水平贴她的中心（跟原版同款，不前后偏移）
-            fn.m_20372_(passenger, self.m_20185_(), ty, self.m_20189_());
+            // 【实测六百七十二：定位改成"挑偏移 + 滑变"，并且分「悬挂 / 并肩」两档】
+            //   她在飞（下方有空间）→ 吊在她脚底下方 hang 格，偏移平滑滑变（地形起伏像船随浪）；
+            //   她站在地上 / 贴着地形滑飞（下方一点空间都没有）→ **水平拉开**并肩站着：
+            //   实测反馈㊁"平时待命没有起飞的时候，直接跟女仆的建模完全重叠看起来真的太难绷了"。
+            // 两档的规则、粘滞、每一档为什么这么定，全在 GunnerTetherManager.seatOffset 的说明里。
+            net.minecraft.world.phys.Vec3 off =
+                    com.maidsmart.combat.GunnerTetherManager.seatOffset(self, passenger, hang);
+            fn.m_20372_(passenger, self.m_20185_() + off.f_82479_, self.m_20186_() + off.f_82480_, self.m_20189_() + off.f_82481_);
             ci.cancel();
         } catch (Throwable ignored) {
         }
     }
 
-    // 【实测六百七十一】空间判定搬到了 GunnerTetherManager.roomFor：它现在同时被"挑目标偏移"
-    // 与"滑变"两条链路使用，留在这里就会出现第二份口径（本项目"口径只有一处"的铁律）。
+    // 【实测六百七十一 / 六百七十二】空间判定与整套定位算式都搬到了 GunnerTetherManager：
+    // roomFor（有没有空间）、hangTarget（下方能吊多远）、seatOffset（这一拍该在哪，含滑变与
+    // 悬挂/并肩两档）。留在这里就会变成第二份口径（本项目"口径只有一处"的铁律）。
 }
