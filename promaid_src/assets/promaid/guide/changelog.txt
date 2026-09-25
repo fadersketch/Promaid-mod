@@ -1,4 +1,76 @@
-﻿## 实测六百六十七【武装拴绳：挂在飞行女仆下方开火（版本号不变，仍是 v1.3.0 beta）】
+﻿## 实测六百六十八【紧急修复：实测六百六十七 的「武装拴绳」会让游戏开不起来（版本号不变，仍是 v1.3.0 beta）】
+
+### 一、症状：装上 667 的包，游戏在 Bootstrap 阶段就崩，连主菜单都到不了
+
+NeoForge 1.21.1 的日志原文（玩家反馈）：
+
+```
+Mixin apply for mod promaid failed mixins.promaid.json:EntityMaidGunnerMixin from mod promaid
+  -> com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid:
+org.spongepowered.asm.mixin.injection.throwables.InvalidInjectionException Critical injection failure:
+@Inject annotation on maidsmart$hangGunnerBelow could not find any targets matching 'positionRider'
+in com/github/tartaricacid/touhoulittlemaid/entity/passive/EntityMaid. No refMap loaded.
+```
+
+**这个错误是我们的，而且 1.20.1 那一份有同一个毛病**（只是你先在 1.21.1 上撞到）。
+
+### 二、根因：mixin 的注入点写在了"继承来的方法"上
+
+「武装拴绳」要把挂着的玩家摆在女仆**下方**，做法是拦原版那个"把乘客摆到载具身上"的方法
+（`positionRider`）。问题出在**我们把这个注入点写在了女仆身上**：
+
+- Mixin 的 `@Inject` **只在目标类自己声明的方法里找注入点**，继承来的方法一律找不到；
+- `positionRider` 只在原版 `Entity`（一切实体的基类）里声明，TLM 的女仆
+  （`EntityMaid extends TamableAnimal`，整条继承链 javap 逐个查过）**没有任何一处覆写它**；
+- 于是 Mixin 在女仆身上找不到 `positionRider` → 判定这份 mixin 配置失败 → **启动期直接崩**。
+
+说白了：**能编译 ≠ 能加载**。javac 只检查你写的注解字符串是不是合法 Java，不会去问
+"目标类到底有没有这个方法"；这个检查是 Mixin 在**游戏启动时**做的，做不过就是崩，
+而且崩在 Bootstrap——比崩在游戏里更糟，玩家连界面都看不到。
+
+### 三、改法：注入到"真正声明它的那个类"，再加一句守卫
+
+改成 `@Mixin(Entity.class)`（`positionRider` 真正的声明处），处理器第一行加
+「这只载具必须是女仆」的判断——世界上**别的所有载具**（船 / 矿车 / 马 / 别的模组的坐骑）
+走完原版逻辑，我们一个字都不碰；只有"拴绳挂载的那位玩家 + 女仆当载具"这一种组合会被改定位。
+
+顺带把两树的**运行时名字口径**写死并加注（这是本项目手工编译、没有 refmap 的必然要求——
+日志里那句 `No refMap loaded` 就是这个意思，注解里的方法名会**逐字**拿去匹配运行时名字）：
+
+| | 1.20.1 Forge | 1.21.1 NeoForge |
+|---|---|---|
+| 运行时方法名 | SRG 名 `m_19956_` | 官方名 `positionRider` |
+| 摆位置的回调 | `MoveFunction.m_20372_` | `MoveFunction.accept` |
+
+（两树的名字各自都对，这次崩的不是名字，是"找错了类"。另外 1.21.1 的 `positionRider`
+有 1 参/2 参两个重载，所以现在连**完整方法描述符**一起写上，不给歧义留空间。
+这条实证也写进了 mixin 的类注释，免得以后有人"顺手改回女仆"。）
+
+### 四、防复发：新增一道**注入点审计**闸门（这次就靠它查干净了）
+
+既然 javac 管不了这件事，我们补了一个只读检查脚本，把**两树 74 个 mixin 的每一个注入点**
+都拿去对照 javap：**目标类是不是真的自己声明了这个方法**（拿两个版本的真实客户端 jar +
+TLM jar 当依据，名字口径也按各自的运行时名核对）。
+
+本次全量结果：**158 项注入点全部通过，唯一的两个失败就是崩掉的那个 mixin**（两树各一份）——
+也就是说这次事故之外，**没有别的埋雷**（同一类问题不会在下一个版本再炸一次）。
+这个脚本以后每次打包前都会跑。
+
+### 五、拴绳功能本身的口径没变（等你测）
+
+- 手持**武装拴绳**右击**正在飞行**的女仆 = 挂上去（她必须已经在空中，地上她会提醒你）；
+- 再右击 = 解除；你潜跳自行下鞍、或她落地/入水超过 0.6 秒，也会自动把你稳稳放下；
+- 悬挂距离默认 **1.8 格**，面板里可调 0.5~4.0；
+- 挂着的时候卡墙/挤墙伤害全免（贴着树冠飞是常态）；空中松手有 **5 秒摔伤豁免**；
+- 她照常飞、照常开火（她不会因为背上驮了人就被抢走驾驶权）；绳子是我们自己画的，
+  女仆腰部到你手之间那条（不会扯断，也不用真的物理绳）。
+
+**验证**：两树 `javac` 0 错误；注入点审计 0 FAIL；打包门禁全过；出
+`promaid-1.3.0-forge-1.20.1.jar` / `promaid-1.3.0-neoforge-1.21.1.jar`（**同名覆盖**，
+版本号仍是 1.3.0）；部署三处（两个客户端实例 + 服务器整合包）。
+**本条尚未发版**——等你实测。
+
+## 实测六百六十七【武装拴绳：挂在飞行女仆下方开火（版本号不变，仍是 v1.3.0 beta）】
 
 ### 粉丝点单：「酒狐在空中飞的时候，可以让玩家挂在酒狐下方吗？」——武装直升机二号位
 
