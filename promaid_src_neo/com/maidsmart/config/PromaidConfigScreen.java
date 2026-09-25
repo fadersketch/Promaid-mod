@@ -2866,6 +2866,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "一次下落只换一锤（同原版：猛击成功后下落距离清零）；悬停 / 慢慢飘着不算"
                         + "（照原版 0.5 格/tick 的口径），所以想砸重锤就得真跟着她俯冲一次；她落地 = 清零。\n"
                         + "关掉 = 完全恢复原版（挂着时砸不出猛击）。"));
+        this.rows.add(new BoolRow("武装拴绳·拉扯（像原版拴绳一样）", MaidSmartConfig.COMBAT_TETHER_PULL.get(),
+                v -> MaidSmartConfig.COMBAT_TETHER_PULL.set(v),
+                "**实测六百七十七 新增**（默认开）：绳子绷紧时**真的拉她**——"
+                        + "分档照搬原版拴绳（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，"
+                        + "两版字面量一模一样）：> 6 格照抄原版那一记 0.4·方向² 的冲量（把你俩拽回去），"
+                        + "2~6 格补\"朝主人的速度上限\"= 走到离你 2 格为止（原版那里是每 tick 重算 A* 寻路，"
+                        + "我们只补速度、不碰导航）；原版 > 10 格会撒手掉拴绳，我们的绳子**不会断**，照旧拉。"
+                        + "只在**牵绳档**（她还没起飞、你牵着她在走）生效——悬挂档你吊在她身下、由骑乘定位"
+                        + "刚性控制，绳子不受力。关掉 = 绳子只画不使劲（她自己的跟随链路照旧）。"));
     }
 
     private void reviveRows() {

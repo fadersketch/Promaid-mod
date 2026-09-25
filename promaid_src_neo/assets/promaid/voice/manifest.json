@@ -1,6 +1,11 @@
 {
   "entries": [
     {
+      "text": "我已经准备好了",
+      "file": "ready_dual.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "先跟着我走，等你起飞我再挂上去～",
       "file": "leash_follow.ogg",
       "mode": "contains"

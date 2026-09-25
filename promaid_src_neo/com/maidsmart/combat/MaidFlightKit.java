@@ -753,6 +753,33 @@ public final class MaidFlightKit {
     }
 
     /**
+     * 【实测六百七十七】**任务无关**的"空袭三件套齐"——给"扫帚模式的女仆也能报出这一句"用。
+     *
+     * <p>玩家原话："当空袭模式处于激活状态（集齐三件套或者其他的，已达成激活的条件），
+     * 扫帚模式条件满足（自己已经坐到了扫帚上，并且手中拿有远程武器）的时候，会说一句，
+     * 自己已经准备好了。"
+     *
+     * <p>【为什么不能直接用 {@link #isModeActive}】那一条里的"武器位"是**按当前任务分流**的
+     * （{@link #hasWeaponForFlightTask} → {@link #isWeaponForTask}：远程任务要远程武器、
+     * 其余任务要近战武器）。而这一句的触发场合是**扫帚模式**——她的任务是扫帚、不是飞行任务，
+     * 于是同一个背包会被 {@code isModeActive} 判成"缺武器"（它转头去数近战武器了）。
+     * 所以她能不能空袭这件事必须按**任务无关**的口径问：鞘翅 / 远程武器 / 推进剂 / 弹药。
+     * 四件**全部复用既有判据**（{@link #hasElytra}、{@link #hasRangedWeaponOnly}、
+     * {@link #hasFlightPropellant}、{@link #hasAmmoForWeapon}），不新写第二份"什么算鞘翅"——
+     * 弹药那两行与 {@link MaidBroomKit#ammoOk} 是同一份口径（本模组"同一个口径只有一处"）。
+     */
+    public static boolean airAssaultReady(EntityMaid maid) {
+        try {
+            if (!(hasElytra(maid) && hasRangedWeaponOnly(maid) && hasFlightPropellant(maid))) {
+                return false;
+            }
+            return hasAmmoForWeapon(maid, resolveRangedWeaponAny(maid));
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
      * v1.2.4 实测六百四十一【远程空袭的弹药门禁：只有"真拿得出远程武器"时才要求弹药】。
      *
      * 反馈原文："远程空袭不认这把武器能够起飞。"旧版这里是直白的
