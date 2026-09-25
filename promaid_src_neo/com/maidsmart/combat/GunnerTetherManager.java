@@ -9,6 +9,7 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -145,6 +146,17 @@ public final class GunnerTetherManager {
     private static final Map<UUID, Long> DENY_LOG = new HashMap<>();
     /** 恢复扫描计时（ProMaidExtension 每 2 tick 调一次 tick()，这里再分流） */
     private static int restoreTimer = 0;
+
+    /* ---- 【实测六百七十六】二号位重锤猛击：见 trackRideFall / consumeRideFall 的说明 ---- */
+
+    /** "她这一段俯冲，吊在下面的他跟着下落了多少格"（玩家 UUID → 格数） */
+    private static final Map<UUID, Float> RIDE_FALL = new HashMap<>();
+    /** 上一拍采样的玩家 Y（算下降量用；tick 每 2 tick 跑一次） */
+    private static final Map<UUID, Double> RIDE_LAST_Y = new HashMap<>();
+    /** 单次采样（2 tick）下降少于此值就不算"真在下坠"：把累计钳回 1.0（≈原版 0.5 格/tick） */
+    private static final float RIDE_SLOW_MIN = 1.0f;
+    /** 能用猛击的最低下落格数：原版 {@code MaceItem.SMASH_ATTACK_FALL_THRESHOLD}（= 1.5） */
+    private static final float RIDE_SMASH_MIN = 1.5f;
 
     private static final class Link {
         final java.lang.ref.WeakReference<EntityMaid> maid;
@@ -425,6 +437,10 @@ public final class GunnerTetherManager {
             if (passenger != null) {
                 SEAT_NOW.remove(passenger.getUUID());
                 SEAT_SIDE.remove(passenger.getUUID());
+                // 【实测六百七十六】重锤那笔"已下落格数"也跟着解绑一起清：
+                //  人都下来了，别让他下一趟一上手就还揣着上一趟俯冲攒的加成
+                RIDE_FALL.remove(passenger.getUUID());
+                RIDE_LAST_Y.remove(passenger.getUUID());
             }
         } catch (Throwable ignored) {
         }
@@ -905,6 +921,116 @@ public final class GunnerTetherManager {
                 + " → 恢复牵绳（她再起飞会重新挂上去）");
     }
 
+    /* ==================== 实测六百七十六：二号位重锤猛击 ==================== */
+
+    /**
+     * 【实测六百七十六】替他记"她这一段俯冲，吊在下面的他跟着下落了多少格"。
+     *
+     * <p>玩家原话："我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。
+     * 那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个
+     * 状态影响。"
+     *
+     * <p><b>【为什么原来吃不到：反编译实证（1.21.1）】</b>重锤的下落加成只读
+     * {@code LivingEntity.fallDistance} 这一个字段：
+     * <ul>
+     *   <li>{@code MaceItem.getAttackDamageBonus} → {@code canSmashAttack(entity)} =
+     *       {@code entity.fallDistance > 1.5f && !entity.isFallFlying()}，然后按 4f / 12+2(f-3) /
+     *       22+(f-8) 三段算加成；</li>
+     *   <li>{@code Player.attack} 里唯一那次读取：{@code $$1 += this.getWeaponItem()
+     *       .getAttackDamageBonus(target, $$1, source)}（1.21.1 {@code Player.java} 第 209 行），
+     *       猛击命中后 {@code MaceItem.hurtEnemy} 还会放音效 / 周围击退 / 免摔
+     *       （{@code setIgnoreFallDamageFromCurrentImpulse}），{@code postHurtEnemy} 再
+     *       {@code resetFallDistance()}；</li>
+     *   <li>而 {@code fallDistance} 只在 {@code Entity.move}（{@code Entity.java} 第 656 行）→
+     *       {@code Entity.checkFallDamage(dy, onGround, ...)}（第 1135 行）里累加/清零。
+     *       <b>乘客根本不走 {@code move}</b>：{@code Entity.rideTick} 先把
+     *       {@code deltaMovement} 清零、再由载具的 {@code positionRider} 直接
+     *       {@code setPos}（我们的 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 也正是这么
+     *       定位的）→ 所以吊在她下面的你 {@code fallDistance} 恒为 0，一锤都砸不出猛击。</li>
+     * </ul>
+     *
+     * <p><b>【现在怎么算】</b>既然真正在动的是她，就按**玩家的实际下降**替他记一份
+     * （{@code y} 的下降量，只累加不抵消），再到 {@code Player.attack} 的 HEAD 把这份值写回
+     * {@code player.fallDistance}（{@link com.maidsmart.mixin.PlayerMaceRideFallMixin}）——
+     * 之后原版那整套自己就跑通了。
+     *
+     * <p><b>三条口径</b>：
+     * <ul>
+     *   <li><b>她落地 = 清零</b>：与 {@code Entity.checkFallDamage} 里 {@code onGround} 那一支
+     *       （{@code fallOn} + {@code resetFallDistance}）同一个时机；</li>
+     *   <li><b>慢降/悬停不计</b>：单次采样下降不足 {@link #RIDE_SLOW_MIN}（≈原版 0.5 格/tick）
+     *       就把累计钳回 1.0 —— 照抄原版 {@code Entity.checkSlowFallDistance} 的口径（滑翔时它把
+     *       {@code fallDistance} 钳在 1.0，低于 1.5 门槛 = 原版就不给猛击），免得慢慢飘着也攒出
+     *       超重击；</li>
+     *   <li><b>一次下落只换一锤</b>：{@link #consumeRideFall} 取用即清零。</li>
+     * </ul>
+     *
+     * <p>参数 {@code maid} 只用来判"她是不是落地了"；异常一律静默（最坏 = 这一趟吃不到加成，
+     * 绝不影响挂载本身）。
+     */
+    private static void trackRideFall(ServerPlayer player, EntityMaid maid) {
+        try {
+            UUID id = player.getUUID();
+            double nowY = player.getY();
+            Double prev = RIDE_LAST_Y.get(id);
+            RIDE_LAST_Y.put(id, nowY);
+            if (maid.onGround()) {
+                // 载具落地 → 原版 resetFallDistance 的时机
+                RIDE_FALL.remove(id);
+                return;
+            }
+            if (prev == null) {
+                return; // 刚挂上：这一拍还没有上一拍可比
+            }
+            float acc = RIDE_FALL.containsKey(id) ? RIDE_FALL.get(id) : 0.0f;
+            double dy = prev - nowY;
+            if (dy > (double) RIDE_SLOW_MIN) {
+                acc += (float) dy; // 真在下坠：累计（2 tick 采一次，所以门槛按 2 tick 折算）
+            } else if (acc > 1.0f) {
+                acc = 1.0f; // 悬停/慢降：钳回 1.0（< 1.5 → 打不出猛击，同原版滑翔那一档）
+            }
+            RIDE_FALL.put(id, acc);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百七十六】攻击那一刻取用（由
+     * {@link com.maidsmart.mixin.PlayerMaceRideFallMixin} 在 {@code Player.attack} 的 HEAD 调）：
+     * 返回"这一段俯冲已下落格数"，并把它**花掉**。
+     *
+     * <p>取用即清零的理由与 {@code MaceItem.postHurtEnemy} 的 {@code resetFallDistance()} 一致：
+     * 这一下下落已经被兑换成猛击了，想再来一锤就得再俯冲一次。
+     * 不在二号位（挂载表里没有他）时恒返回 0 → 原版行为一个字不改。
+     */
+    public static float consumeRideFall(Player player) {
+        try {
+            if (!(player instanceof ServerPlayer sp)) {
+                return 0.0f; // 客户端预测不算（伤害/音效本来就是服务端算的）
+            }
+            UUID id = sp.getUUID();
+            Float v = RIDE_FALL.remove(id);
+            RIDE_LAST_Y.put(id, sp.getY());
+            return v == null ? 0.0f : v;
+        } catch (Throwable t) {
+            return 0.0f;
+        }
+    }
+
+    /** 能用猛击的最低下落格数（= 原版 {@code MaceItem.SMASH_ATTACK_FALL_THRESHOLD}，供混入比对） */
+    public static float rideSmashMin() {
+        return RIDE_SMASH_MIN;
+    }
+
+    /** 【实测六百七十六】这条开关的开/关（配置没挂上时按"开"走，与本项默认值一致） */
+    public static boolean maceSmashWhileRiding() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_MACE_SMASH.get();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
     /* ==================== 每 tick 校验（ProMaidExtension 每 2 tick 调） ==================== */
 
     public static void tick(MinecraftServer server) {
@@ -962,6 +1088,10 @@ public final class GunnerTetherManager {
                             + com.maidsmart.tool.PromaidLog.nameOf(maid));
                     continue;
                 }
+                // ⑤【实测六百七十六】二号位重锤猛击：替他记"这一段俯冲下落了多少格"。
+                //    走到这儿说明他确实还乘客在她身上（② 已经把那几种断链处理掉了）。
+                //    为什么乘客要别人替他记，见 RIDE_FALL 的说明（乘客不走 Entity.move）。
+                trackRideFall(player, maid);
                 // ③【实测六百七十一：绳子不会自己断】**地面那一档删掉了**——玩家原话"那个拴绳…
                 //    并且不会断掉"。旧版她落地累计 0.6 秒就把人放下，等于绳子会自己断。
                 //    只留入水：她还吊在下方 hang 格，落水会跟着进水，溺水是致命的（这一档留着救命）。
@@ -1202,11 +1332,52 @@ public final class GunnerTetherManager {
         }
         EntityMaid maid = maidOnMyBroom(player);
         if (maid == null) {
+            // 【实测六百七十六：悬挂档补的这一档】玩家此刻骑的**就是她本人**（吊在她下方 hang 格）。
+            //  详见 {@link #linkedMaidImRiding}：这一档里准星射线打不到她（她在头顶上方），
+            //  于是右击既不是 EntityInteract、也不满足上面"骑着载着她女仆的扫帚"，
+            //  旧版就是**什么都不做**——"绑定态右击坐回扫帚"时灵时不灵里的那个"不灵"。
+            maid = linkedMaidImRiding(player);
+            if (maid != null) {
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "右击（悬挂档，射线没打到她）：按「骑着的女仆」"
+                        + "解析 → 走同一个切换：女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid));
+            }
+        }
+        if (maid == null) {
             return;
         }
         event.setCanceled(true);
         player.swing(event.getHand());
         toggle(player, maid);
+    }
+
+    /**
+     * 【实测六百七十六】玩家此刻骑的**就是**"他自己拴着的那只女仆"吗（悬挂档：他吊在她下方）。
+     *
+     * <p>为什么不靠准星射线：悬挂档里她在玩家**头顶上方** hang 格（默认 2.6，扫帚档 2.9），
+     * 玩家的视线基本是水平的（还常在往下看地形）——射线根本扫不到她的碰撞箱，客户端发的是
+     * {@code ServerboundUseItemPacket}（落到 {@code RightClickItem}），而不是打到实体的
+     * {@code EntityInteract}。旧版这一档只认"骑着载着她女仆的扫帚"，于是悬挂档这一下右击是**空的**：
+     * 实测日志里能看到"挂载 2.9 格 → 十几秒后 解除(玩家离鞍)"，中间**既没有「换座」也没有
+     * 「解除(右击)」**——那一下右击我们的 handler 压根没跑到（玩家最后是潜跳下鞍下来的）。
+     * 六百七十二 那条"坐回扫帚"本身是对的，问题一直在于**它有时候根本不会被触发**。
+     *
+     * <p>认人规则：他骑的实体是女仆 + 挂载表里这一对正好是"她 ↔ 他"。别人拴的女仆、别人的乘客
+     * 一律不认；射线打中方块时走的是 {@code RightClickBlock} 那一档，本项目没接（那一档要动方块
+     * 交互，风险比收益大）。
+     */
+    private static EntityMaid linkedMaidImRiding(ServerPlayer player) {
+        try {
+            if (!(player.getVehicle() instanceof EntityMaid maid)) {
+                return null;
+            }
+            Link link = LINKS.get(maid.getUUID());
+            ServerPlayer rider = link == null ? null : link.player.get();
+            if (rider != null && rider.getUUID().equals(player.getUUID())) {
+                return maid;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 
     /** 玩家此刻骑的那把扫帚上有没有"他的"女仆（换座态：他在驾驶位、她在第二乘客） */
