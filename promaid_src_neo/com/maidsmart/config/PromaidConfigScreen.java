@@ -2772,6 +2772,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "2.6 = 她的脚底高过你的视线，前方视野让开；调小 = 人贴在她身上、调大 = 吊得更低；"
                         + "定位是平滑滑变的，不会上下横跳；拴着时她只原地悬停、不再改高度",
                 0.5, 6.0));
+        this.rows.add(new NumRow("武装拴绳·第一人称半透明（0~1）",
+                String.valueOf(MaidSmartConfig.COMBAT_TETHER_GHOST_ALPHA.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_TETHER_GHOST_ALPHA, "武装拴绳·第一人称半透明", 0.0, 1.0),
+                "绑定玩家在第一人称下看挂着自己那只女仆：她的模型半透明到什么程度（默认 0.35；"
+                        + "**填 1.0 = 关掉**，照旧不透明）。只对你挂着的那只女仆 + 你的第一人称生效"
+                        + "（第三人称、别的玩家不动）。实测六百七十三"));
     }
 
     private void reviveRows() {

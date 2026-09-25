@@ -678,7 +678,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 【实测六百六十九：武装拴绳】主人挂在女仆下面时，"离主人几格"永远小得起手距离（默认 25），
             // 旧版于是完全不起飞——而拴绳要的是"把她按在离地 N 格的悬停位上"。拴绳状态不看距离放行；
             // 睡/骑/坐、守家、自保、任务占用这些闸门都排在它前面（照旧优先）。
-            if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+            // 【实测六百七十三】改用 isHanging：牵绳档（空袭的女仆还没起飞）不算"人在下面"，
+            //  她这时候该照常跟着主人走，而不是被按在原地悬停。
+            if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
                 if (!MaidFlightKit.hasElytra(maid)) {
                     return skip(maid, now, "拴绳悬停：没有可用鞘翅");
                 }
@@ -820,7 +822,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.getUUID();
         // 【实测六百六十九：武装拴绳】挂在下面的主人要的是"直升机悬停"，不是"追着主人转圈"
-        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+        if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
             maidsmart$tetherHold(maid);
             return;
         }
@@ -874,7 +876,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 .getBoolean(SelfPreservationBehavior.PRESERVE_TAG)) {
             return false;
         }
-        if (!com.maidsmart.combat.GunnerTetherManager.isTethered(maid)
+        if (!com.maidsmart.combat.GunnerTetherManager.isHanging(maid)
                 && gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
             return false; // 超时收手（拴绳悬停不设超时：玩家要她一直悬在那儿）
         }
@@ -892,7 +894,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 她保持滑翔，空袭那一套会自己接上（它的 canUse 只看目标，不看谁在飞）。
             return false;
         }
-        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+        if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
             // 拴绳悬停的"目标点"就是那个定点，到了也不能收手（收手 = 不再驱动 = 她会滑下去）
             return true;
         }
@@ -1445,7 +1447,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 只有一个答案——原地不动。它现在只喂给两处：canContinue 的"有没有目标"判空
             //（拴着时那一条直接 return true，见它上面的拴绳分支）与 stop() 那两条日志；
             // 真正每 tick 驱动飞行的是 maidsmart$tetherHold，它也只保持她自己当前高度——口径一致。
-            if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+            if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
                 return Aim.ofPos(new Vec3(maid.getX(), maid.getY(), maid.getZ()));
             }
             UUID id = maid.getUUID();
