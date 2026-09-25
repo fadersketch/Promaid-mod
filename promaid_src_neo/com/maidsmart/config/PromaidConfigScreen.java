@@ -3208,7 +3208,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("滑翔时用鞘翅动画", MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.get(),
                 v -> MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.set(v), "默认关=沿用游泳动作（作者口径，官方包与第三方包普遍都有 swim）。打开后不再顶游泳位，改用模型包里同名的 elytra_fly——做了这条动画的模型（如圣女酒狐）滑翔时会播它；没做的模型会落到站立姿态，所以确认你的包有这条动画再开"));
         this.rows.add(new TextRow("仿创造飞行·资格物品表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get()),
-                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。写完整 id（modid:item）或 #命名空间:标签。扫描范围：双手/护甲/背包/饰品栏/额外容器。例：allthearcanistgear:thread_flight"));
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。四种写法：①物品 id（modid:item）②#命名空间:标签 ③@命名空间:组件（有该组件就算）④@命名空间:组件~文本（组件值里含这段文本，例如神化用命令挂的飞行：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight）。扫描范围：双手/护甲/背包/饰品栏/额外容器"));
         this.rows.add(new TextRow("仿创造飞行·资格效果表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get()),
                 s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS, s), "命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）"));
         this.rows.add(new BoolRow("仿创造飞行·重力归零也算资格", MaidSmartConfig.MISC_FREE_FLIGHT_GRAVITY.get(),

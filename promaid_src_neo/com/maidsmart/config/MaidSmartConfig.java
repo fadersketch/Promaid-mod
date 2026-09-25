@@ -2452,7 +2452,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
         MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关，v1.2.5 实测六百五十六）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果/重力归零类法术），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表/重力归零）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格三路】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）③重力属性 ≈ 0（通用启发式，覆盖所有重力归零型来源，不需要点名模组）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
                 .translation("config.promaid.misc.freeFlight").define("freeFlight", false);
-        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。可写完整 id（如 modid:item），也可写 #命名空间:标签 认整条标签。扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
+        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。\n\n四种写法：① 物品 id（如 modid:item）② #命名空间:标签 认整条物品标签 ③ @命名空间:组件 有该数据组件就算格 ④ @命名空间:组件~文本 组件值里含这段文本才算格（还有一种 @*~文本 = 任意组件含该文本，最宽）。\n\n【为什么要有组件那两路（实测六百五十九）】很多整合包用数据组件授予能力而不是换物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给胸甲挂 neoforge:creative_flight 修饰符——物品 id 没变、物品标签也匹配不到（#neoforge:creative_flight 是修饰符 id 不是物品标签）。这种就写：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight\n\n扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
                 .translation("config.promaid.misc.freeFlightItems")
                 .defineListAllowEmpty("freeFlightItems", List.of(), () -> "", o -> o instanceof String);
         MISC_FREE_FLIGHT_EFFECTS = BUILDER.comment("仿创造飞行·资格效果表（默认空）：命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）。")

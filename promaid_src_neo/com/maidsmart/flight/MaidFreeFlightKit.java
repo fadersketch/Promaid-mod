@@ -159,7 +159,7 @@ public final class MaidFreeFlightKit {
     /** 一行可读的"现在算不算能飞"诊断（日志/排错用） */
     public static String diag(EntityMaid maid) {
         try {
-            return "物品=" + hasFlightItem(maid) + " 效果=" + hasFlightEffect(maid)
+            return "物品/组件=" + hasFlightItem(maid) + " 效果=" + hasFlightEffect(maid)
                     + " 重力=" + String.format("%.3f", maid.getAttributeValue(Attributes.GRAVITY))
                     + " 判定=" + gravityFreed(maid);
         } catch (Throwable t) {
@@ -169,7 +169,22 @@ public final class MaidFreeFlightKit {
 
     /* ---------------- 列表匹配 ---------------- */
 
-    /** 物品栈是否命中 id 列表（支持 {@code #命名空间:标签}） */
+    /**
+     * 物品栈是否命中资格表。条目语法（v1.2.5 实测六百五十九 起支持第 3/4 种）：
+     * <ul>
+     *   <li>{@code modid:item} —— 物品 id；</li>
+     *   <li>{@code #命名空间:标签} —— 物品标签；</li>
+     *   <li>{@code @命名空间:组件} —— **有该数据组件**就算格；</li>
+     *   <li>{@code @命名空间:组件~文本} —— 该组件的值里包含这段文本才算格
+     *       （例：{@code @apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight}）。</li>
+     * </ul>
+     *
+     * 【为什么需要组件那两路（实测六百五十九）】很多整合包用**数据组件**授予能力，
+     * 而不是换一件物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给一件胸甲挂
+     * {@code neoforge:creative_flight} 修饰符——物品 id 没变、物品标签也匹配不到
+     * （{@code #neoforge:creative_flight} 是**修饰符 id**，不是物品标签），
+     * 只能按"组件存在 + 组件值含某段文本"来认。
+     */
     public static boolean matchesAny(ItemStack stack, List<String> ids) {
         try {
             if (stack == null || stack.isEmpty()) {
@@ -188,11 +203,51 @@ public final class MaidFreeFlightKit {
                     if (stack.is(tag)) {
                         return true;
                     }
+                } else if (s.startsWith("@")) {
+                    if (matchesComponent(stack, s.substring(1))) {
+                        return true;
+                    }
                 } else if (s.equals(id)) {
                     return true;
                 }
             }
             return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * {@code @组件} / {@code @组件~文本} 的判定。
+     *
+     * 实现口径：按 id 从**数据组件注册表**取到类型 → {@code stack.has(type)} 判存在 →
+     * 需要文本时把**该组件自己的值**（不是整个组件包的文本）转成字符串再找子串。
+     * 只取该组件自己的值可以避免"别的组件里出现同一个词"造成的误判。
+     */
+    private static boolean matchesComponent(ItemStack stack, String spec) {
+        try {
+            if (spec == null || spec.isBlank()) {
+                return false;
+            }
+            int tilde = spec.indexOf('~');
+            String compId = tilde >= 0 ? spec.substring(0, tilde).trim() : spec.trim();
+            String needle = tilde >= 0 ? spec.substring(tilde + 1).trim() : null;
+            if ("*".equals(compId)) {
+                // @*~文本：任意组件命中即可（更宽——用它要心里有数）
+                if (needle == null || needle.isBlank()) {
+                    return !stack.getComponents().isEmpty();
+                }
+                return String.valueOf(stack.getComponents()).contains(needle);
+            }
+            net.minecraft.core.component.DataComponentType<?> type =
+                    BuiltInRegistries.DATA_COMPONENT_TYPE.get(ResourceLocation.parse(compId));
+            if (type == null || !stack.has(type)) {
+                return false;
+            }
+            if (needle == null || needle.isBlank()) {
+                return true;   // 只要求"有这个组件"
+            }
+            return String.valueOf(stack.get(type)).contains(needle);
         } catch (Throwable ignored) {
             return false;
         }
