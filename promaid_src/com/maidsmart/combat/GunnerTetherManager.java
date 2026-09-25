@@ -72,6 +72,13 @@ import java.util.UUID;
  *       （{@code com.maidsmart.client.MaidGhostRender}，透明度可配）。服务端一行都不用改。</li>
  * </ul>
  *
+ * ── 【实测六百七十四：三点修正 + 一层金边标记】──
+ * <ul>
+ *   <li><b>① 半透明默认 0.35 → 0.1</b>，而且**扫帚本体**也一起半透明（{@code MaidGhostRender} / {@code MaidGhostBroomMixin}）。</li>
+ *   <li><b>② 修「玩家坐到空袭女仆头上」</b>：牵绳 → 起飞挂载时**没重发相位包**，客户端不认这个枪手 → 悬挂定位不生效、人被原版摆在**她头顶**；现在相位变一次发一次（{@code sync}）。</li>
+ *   <li><b>③ 被拴绳选中 = 金色描边</b>（原版发光标记 + 客户端金边，同光灵箭的渲染），她**正式起飞**（牵绳 → 悬挂）的那一刻解除。</li>
+ * </ul>
+ *
  * ── 安全网（都做进 tick 校验）──
  * 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 /
  * 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）；
@@ -396,6 +403,93 @@ public final class GunnerTetherManager {
         }
     }
 
+    /* ==================== 实测六百七十四：相位同步 / 牵绳标记 ==================== */
+
+    /** 挂载相位（S2C 只发这个数）：0 = 没挂；1 = 牵绳档（没骑她，牵着走）；2 = 悬挂档（吊在她下面） */
+    public static final int ST_NONE = 0;
+    public static final int ST_LEASH = 1;
+    public static final int ST_HANG = 2;
+    /** 牵绳档的挂载对（**客户端视角**）：只由 S2C 包写。与 SYNCED_PAIRS 的区别是"他人没骑她但绳子照画"，
+     *  用于绳子渲染跳过"必须是她乘客"那道门（悬挂档仍然要求乘客）。 */
+    public static final java.util.Set<Integer> SYNCED_LEASH = new java.util.HashSet<>();
+
+    /** 牵绳标记落在女仆 persistentData 上的键（只为"崩了/重载后清掉我们加的那圈光"这一件事） */
+    private static final String TAG_LEASH_MARK = "maid_smart_leash_mark";
+
+    /** 这只女仆当前的相位（客户端拿不到 LINKS，这正是 S2C 要发的东西） */
+    public static int phaseOf(EntityMaid maid) {
+        try {
+            Link link = maid == null ? null : LINKS.get(maid.m_20148_());
+            return link == null ? ST_NONE : (link.leash ? ST_LEASH : ST_HANG);
+        } catch (Throwable t) {
+            return ST_NONE;
+        }
+    }
+
+    /** 链路里的那位玩家（**牵绳档他不是乘客**，所以不能问 getFirstPassenger——那正是六百七十四的根因） */
+    private static int riderIdOf(EntityMaid maid) {
+        try {
+            Link link = maid == null ? null : LINKS.get(maid.m_20148_());
+            ServerPlayer p = link == null ? null : link.player.get();
+            return p == null ? -1 : p.m_19879_();
+        } catch (Throwable t) {
+            return -1;
+        }
+    }
+
+    /**
+     * 【实测六百七十四】把当前相位广播出去——**一个出口**（挂载 / 翻档 / 解除 / 恢复全走它）。
+     *
+     * <p>为什么必须补这一发：六百七十三的「牵绳 → 起飞挂载」是在 tick 里 startRiding 的，
+     * 而当时发的还是 {@code attach} 那一刻的包——**那一刻玩家还不是她的乘客**，于是
+     * {@code getFirstPassenger()} 为 null、riderId 记 -1，客户端收到就把这一对清掉了。
+     * 结果：客户端不认"他是她的枪手"→ {@code EntityGunnerHangMixin} 不生效 → 玩家被原版摆在
+     * **她头顶**（不是吊在身下），牵绳档的绳子也画不出来。玩家原话："此机制没有引用到空袭状态，
+     * 而且现在玩家会直接坐到空袭女仆的头上。明明说好的是挂在身下的。"
+     * 现在相位每变一次就重发一次（riderId 从链路里取，不看乘客关系）。
+     */
+    private static void sync(EntityMaid maid) {
+        try {
+            GunnerTetherNetworking.send(maid, phaseOf(maid), riderIdOf(maid));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百七十四】给"被拴绳选中、还没正式起飞"的女仆打上发光标记。
+     *
+     * <p>用的是原版自己的发光标记（{@code setGlowingTag(true)}：写共享标志位 6，自动同步给所有
+     * 玩家）——渲染管线与"光灵箭射中敌人"完全同一条，穿墙可见的描边；描边颜色由客户端
+     * {@code MaidGlowGoldMixin} 改成金色。玩家原话："对被武装拴绳选中的女仆加一层标记效果。
+     * 效果同光灵箭射中敌人时的渲染，但是将光边改为金色。正式起飞时解除该标记效果。"
+     */
+    private static void markLeash(EntityMaid maid) {
+        try {
+            maid.m_146915_(true);
+            maid.getPersistentData().m_128359_(TAG_LEASH_MARK, "1");
+            com.maidsmart.tool.PromaidLog.log("武装拴绳", "标记：女仆="
+                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + "（金色描边，她正式起飞时解除）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 撤掉发光标记（正式起飞 / 解绑 / 她没了的清理）。
+     *
+     * <p>{@code setGlowingTag(false)} 是**安全**的：它内部会重新求值 {@code isCurrentlyGlowing()}，
+     * 所以她要是真中了光灵箭（GLOWING 效果还在），标志位不会被这一下清掉。
+     */
+    private static void unmarkLeash(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return;
+            }
+            maid.m_146915_(false);
+            maid.getPersistentData().m_128473_(TAG_LEASH_MARK);
+        } catch (Throwable ignored) {
+        }
+    }
+
     /* ==================== 挂载 / 解除 ==================== */
 
     /** 手持武装拴绳右击自己的女仆：挂载（已在挂 → 由 handler 走解除分支） */
@@ -474,12 +568,18 @@ public final class GunnerTetherManager {
             maid.getPersistentData().m_128359_(TAG_GUNNER, player.m_20148_().toString());
         } catch (Throwable ignored) {
         }
-        GunnerTetherNetworking.send(maid, true);
+        sync(maid);
         bubble(maid, leash ? "先跟着我走，等你起飞我再挂上去～" : "上来吧！抓好绳子，我们一起飞～");
         com.maidsmart.tool.PromaidLog.log("武装拴绳", (leash ? "牵绳：" : "挂载：") + "主人="
                 + playerName(player) + " 女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + (leash ? "（她还没起飞：你自由活动、她跟着走；她一起飞就挂到二号位）"
                          : "（悬挂 " + hangOffset() + " 格，二号位开火）"));
+        // 【实测六百七十四】牵绳档 = 还没正式起飞 → 打金色标记；已经悬挂档 → 清掉上一轮的残留
+        if (leash) {
+            markLeash(maid);
+        } else {
+            unmarkLeash(maid);
+        }
     }
 
     /** 解除（natural=true 是自动解除而不是右击） */
@@ -496,6 +596,8 @@ public final class GunnerTetherManager {
      */
     public static void detach(EntityMaid maid, boolean natural, String why) {
         Link link = LINKS.remove(maid.m_20148_());
+        // 【实测六百七十四】解绑 = 撤掉金色描边（她本来没标记时这一下是空操作）
+        unmarkLeash(maid);
         GROUND_TICKS.remove(maid.m_20148_());
         MODE_TICKS.remove(maid.m_20148_());
         try {
@@ -503,7 +605,7 @@ public final class GunnerTetherManager {
         } catch (Throwable ignored) {
         }
         ServerPlayer player = link == null ? null : link.player.get();
-        GunnerTetherNetworking.send(maid, false);
+        sync(maid);
         forgetHang(player); // 【实测六百七十一】滑变状态跟着解绑一起清
         if (player != null) {
             if (!player.m_20096_()) {
@@ -670,6 +772,11 @@ public final class GunnerTetherManager {
             return;
         }
         link.leash = false;
+        // 【实测六百七十四】她正式起飞了：撤掉金色标记，并且**把新相位重发一遍**——
+        //  没有这一发，客户端仍以为「这对挂载不存在」（attach 时 riderId 记的是 -1），
+        //  悬挂定位 mixin 就不生效，玩家会被原版摆在**她头顶**。
+        unmarkLeash(maid);
+        sync(maid);
         GROUND_TICKS.remove(maid.m_20148_());
         bubble(maid, "起飞啦！抓好绳子～");
         com.maidsmart.tool.PromaidLog.log("武装拴绳", "起飞挂载：主人=" + playerName(player)
@@ -681,6 +788,9 @@ public final class GunnerTetherManager {
     private static void switchToLeash(ServerPlayer player, EntityMaid maid, Link link) {
         MODE_TICKS.remove(maid.m_20148_());
         link.leash = true;
+        // 【实测六百七十四】她落地放人了 → 又回到「还没起飞」：标记重新打上，相位重发
+        markLeash(maid);
+        sync(maid);
         try {
             if (player.m_20202_() == maid) {
                 player.m_8127_();
@@ -718,7 +828,7 @@ public final class GunnerTetherManager {
                             maid.getPersistentData().m_128473_(TAG_GUNNER);
                         } catch (Throwable ignored) {
                         }
-                        GunnerTetherNetworking.send(maid, false);
+                        sync(maid);
                     }
                     continue;
                 }
@@ -750,7 +860,7 @@ public final class GunnerTetherManager {
                                 player.m_9236_().m_46467_() + DISMOUNT_GRACE_TICKS);
                     }
                     MODE_TICKS.remove(maid.m_20148_());
-                    GunnerTetherNetworking.send(maid, false);
+                    sync(maid);
                     com.maidsmart.tool.PromaidLog.log("武装拴绳", "解除(玩家离鞍)：女仆="
                             + com.maidsmart.tool.PromaidLog.nameOf(maid));
                     continue;
@@ -828,10 +938,13 @@ public final class GunnerTetherManager {
                 }
                 if (maid.m_20363_(p)) {
                     LINKS.put(maid.m_20148_(), new Link(maid, p));
-                    GunnerTetherNetworking.send(maid, true);
+                    sync(maid);
                     com.maidsmart.tool.PromaidLog.log("武装拴绳", "存档重载恢复：女仆="
                             + com.maidsmart.tool.PromaidLog.nameOf(maid));
                 } else {
+                    // 【实测六百七十四】这一支也要撤金色标记：牵绳档的人不是乘客、存档重载后
+                    //  链路本来就重建不出来，而标记（Glowing 是写进 NBT 的）不撤就会一直亮着。
+                    unmarkLeash(maid);
                     // 骑乘关系没被存档带回来（被拽下去等）——标记清掉，别每 30 秒白扫
                     try {
                         maid.getPersistentData().m_128473_(TAG_GUNNER);
@@ -961,7 +1074,7 @@ public final class GunnerTetherManager {
         }
         Link link = LINKS.get(maid.m_20148_());
         ServerPlayer rider = link == null ? null : link.player.get();
-        GunnerTetherNetworking.sendTo(watcher, maid.m_19879_(), rider == null ? -1 : rider.m_19879_());
+        GunnerTetherNetworking.sendTo(watcher, maid.m_19879_(), rider == null ? -1 : rider.m_19879_(), phaseOf(maid));
     }
 
     /** ① 受击事件：挂着时卡墙/挤墙伤全免；刚解除 5 秒内摔伤豁免 */
