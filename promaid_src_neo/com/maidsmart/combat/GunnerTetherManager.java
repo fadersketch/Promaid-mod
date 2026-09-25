@@ -45,6 +45,16 @@ import java.util.UUID;
  *   <li>**"长度只有一格"**：默认悬挂距离 1.8 格（可调 0.5~4.0），绳子画在女仆腰部与玩家手之间。</li>
  * </ul>
  *
+ * ── 【实测六百七十二：座位是"两半"的，且她不再替你定高度】──
+ * 扫帚上的换座是**一对互逆**的动作，都在右击这一次里完成（不依赖 TLM 的事件泄漏）：
+ * <ul>
+ *   <li>玩家**骑在扫帚驾驶位**上右击她 → 下扫帚、挂到她身上（换到二号位）；</li>
+ *   <li>**绑定态**右击她（她在扫帚上）→ 解除拴绳 + 玩家坐回扫帚**驾驶位**（她在第二乘客）。</li>
+ * </ul>
+ * 另外，拴着的时候她**不再被指定高度**：空袭（671）与扫帚（672）都改成"保持她自己当前高度 /
+ * 原地悬停"——去哪个高度由她自己的战斗链路决定，拴绳只负责"绑住人"。玩家在地面时改为并肩站位，
+ * 见 {@link #seatOffset}。
+ *
  * ── 安全网（都做进 tick 校验）──
  * 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 /
  * 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）；
@@ -115,7 +125,7 @@ public final class GunnerTetherManager {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_HANG.get();
         } catch (Throwable t) {
-            return 1.8;
+            return 2.6; // 【实测六百七十二】与配置默认值对齐（671 把默认改成 2.6，这里忘了跟）
         }
     }
 
@@ -132,50 +142,17 @@ public final class GunnerTetherManager {
         }
     }
 
-    /** 绑定后的悬停高度（格）：玩家原话「默认上升到离地面 3 格，然后悬停」——想调就改这一个数 */
-    public static double tetherHover() {
-        return 3.0;
-    }
-
-    /**
-     * 绑定后的悬停点：**锚点自己**的 x/z + 它脚下地面的高度 + {@link #tetherHover()} 格。
+    /* 【实测六百七十二：tetherHoldPos() / tetherHover() 整段删掉】——拴绳不再给女仆定高度。
+     *  671 已经把空袭那一条改成"只保持她自己当前高度"（MaidFlightFollowBehavior.maidsmart$tetherHold），
+     *  672 把扫帚那一条也改成同一个口径（MaidBroomBehavior ⑥.0 → MaidBroomDrive.hoverInPlace）。
+     *  于是"离地 3 格悬停"这个**绝对高度目标**彻底没有消费方了。留着一个没人调、又带着一整套
+     *  "往下扫地面"逻辑的方法，等于给下一个人准备好第二份高度口径（本项目"口径只有一处"的铁律），
+     *  所以连 javadoc 一起删干净——"她该多高"这件事现在只有一个答案：她原来多高就多高。
      *
-     * <p>【为什么锚点当参数，而不是一律用女仆】扫帚链路必须传**扫帚**——她是乘客、座位在扫帚朝向的
-     * 后方 0.5 格，拿她的坐标当定点会永远差半格（那个"在空中不停旋转"的老回路，详见
-     * {@code MaidBroomDrive.hoverInPlace} 的注释）；空袭链路她没骑东西，传她自己即可。
-     * 两条链路共用这一处，免得"离地几格"出现第二份口径。
-     */
-    public static Vec3 tetherHoldPos(Entity anchor) {
-        try {
-            double x = anchor.getX();
-            double z = anchor.getZ();
-            int bx = (int) Math.floor(x);
-            int bz = (int) Math.floor(z);
-            int by = (int) Math.floor(anchor.getY());
-            net.minecraft.world.level.Level lvl = anchor.level();
-            for (int i = 0; i < 64; i++) { // 往下找第一块"不是空气"的方块（顶面 = 地面）
-                net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(bx, by - i, bz);
-                // 【670 的教训】区块没加载时不去 getBlockState（那是 requireChunk 那条会加载/抛异常的路）
-                if (!lvl.isLoaded(p)) {
-                    break;
-                }
-                net.minecraft.world.level.block.state.BlockState st = lvl.getBlockState(p);
-                if (!st.isAir()) {
-                    return new Vec3(x, p.getY() + 1 + tetherHover(), z);
-                }
-            }
-            // 【实测六百七十一：修"女仆的位置不断上升"（实测反馈②的后半）】旧版这里 `ground` 还等于
-            // **锚点自己的 Y**，于是"往下找不到地面"时返回 `她自己 Y + tetherHover()`——目标永远是
-            // "比她现在高 3 格"：空袭那边每 tick 抬 0.30 格（vy 上限）、扫帚那边 steerTo 的到达判定
-            // 永远不成立，两条链路都变成无限爬升，而且目标跟着她一起抬，永远追不上。
-            // 现在改成：往下 64 格都没有地面（高空 / 虚空 / 末地上空）→ **保持她自己现在的高度**。
-            return new Vec3(x, anchor.getY(), z);
-        } catch (Throwable t) {
-            return new Vec3(anchor.getX(), anchor.getY(), anchor.getZ());
-        }
-    }
+     *  （树上的证据：实测日志里"不断攀升"那一段，她的高度来自**反复上/下扫帚时每次重开的起飞相位**，
+     *   以及这条绝对高度目标；672 两处都处理了，见 MaidBroomDrive.startTakeoff / broomlessLongEnough。） */
 
-    /* ==================== 悬挂定位（实测六百七十一） ==================== */
+    /* ==================== 悬挂 / 并肩定位（实测六百七十一 → 六百七十二） ==================== */
 
     /**
      * 【为什么需要"滑变"】旧版（668/669）的定位是二值判定：下方那一格没空间就**这一拍不改定位**、
@@ -183,18 +160,38 @@ public final class GunnerTetherManager {
      * "被绑定以后，玩家会在女仆的上下反复横跳"。根因就是**两个相差 2 格以上的位置之间没有插值**
      * （不是碰撞：javap 实证原版 {@code Entity.push} 对"载具与其自身乘客"本来就互推豁免）。
      *
-     * <p>现在拆成两步：{@link #hangTarget} 只挑"这一拍最合适的偏移"，{@link #hangCurrent} 把**当前
-     * 实际偏移**朝它滑过去。地形起伏时看到的是平滑升降（像船随浪），被埋的极端情况也不会把人按进方块。
+     * <p>【实测六百七十二：多加一档"并肩"，并把"回到 0"这条死路堵掉】只把"跳到 0"改成"滑到 0"
+     * 还不够——**0 就是玩家站在她脚底**，两个建模完全重叠。玩家原话："平时待命没有起飞的时候，
+     * 直接跟女仆的建模完全重叠看起来真的太难绷了。应该要跟女仆拉开一定程度上的距离的。女仆在地上
+     * 应该是跟原版拴绳一样的逻辑才对。" 所以现在分两档，用**下方有没有空间**当判据（不再看
+     * {@code onGround}：几何自己就说明了状态，而且"贴着地面滑飞"也不会漏）：
+     * <ul>
+     *   <li><b>悬挂</b>（下方有空间 = 她在飞）：吊在她脚底下方 hang 格（老规矩）；</li>
+     *   <li><b>并肩</b>（下方一点空间都没有 = 她站在地上 / 贴着地形）：沿"她 → 玩家上一拍位置"
+     *       的方向**水平拉开**绳长，高度贴她脚底——两个建模并排站着、绳子看得见，就是被拴着伴走
+     *       的样子（玩家要的"原版拴绳逻辑"）。方向取自玩家上一拍在哪、而不是她的朝向：她转身时
+     *       玩家不会绕着她荡一圈，而且这是个收敛的不动点（她往前走 = 玩家自然跟在后头）。</li>
+     * </ul>
      *
-     * <p>两侧各存一份（mixin 服务端/客户端都会跑同一个算式）：键是**玩家 UUID**、值是"当前偏移"。
-     * 包不参与同步——滑变只是观感，两侧各自算出来的差别在 0.4 格以内。
+     * <p>两档之间**有粘滞**（{@link #SEAT_SIDE}）：进"并肩"要真的没空间，回"悬挂"要有满 0.5 格
+     * 余量——中间那条带就是"别在 0 和 hang 之间来回跳"的迟滞，也就是实测反馈㊁"反复横跳"的解药。
+     *
+     * <p>两侧各存一份（mixin 服务端/客户端都会跑同一个算式）：键是**玩家 UUID**、值是"当前偏移
+     * 向量"。包不参与同步——滑变只是观感，两侧各自算出来的差别在半格以内。
      */
-    private static final Map<UUID, Double> HANG_NOW = new HashMap<>();
+    private static final Map<UUID, Vec3> SEAT_NOW = new HashMap<>();
+    /** 「并肩」这一档的粘滞标记：键是玩家 UUID、值是"这一拍是不是并肩那一档" */
+    private static final Map<UUID, Boolean> SEAT_SIDE = new HashMap<>();
 
-    /** 每 tick 允许的偏移变化：**上升快、下降慢**。上升（她压下来/地形顶上来）慢了就把玩家按进方块里；
-     *  下降（地形让开）快了就是那个"上下横跳"。所以一个 1.5、一个 0.35。 */
-    private static final double HANG_RISE_PER_TICK = 1.5;
-    private static final double HANG_FALL_PER_TICK = 0.35;
+    /** 每 tick 允许的位移：竖直**上升快、下降慢**（上升慢了就把玩家按进方块里；下降快了就是那个
+     *  "上下横跳"）、水平统一 0.5 格——两档之间换档时走的就是这条水平限速，看着像绳子荡过去。 */
+    private static final double SEAT_H_STEP = 0.5;
+    private static final double SEAT_UP_STEP = 1.5;
+    private static final double SEAT_DOWN_STEP = 0.35;
+    /** 并肩时拉开的水平距离（格）：绳长就是"拉开多远"，但夹在 1.2~3.0 之间——比 1.2 近两个建模
+     *  还会重叠，比 3.0 远就像根棍子把她拽着，都不像"被拴着伴走" */
+    private static final double SIDE_MIN = 1.2;
+    private static final double SIDE_MAX = 3.0;
 
     /** 悬挂点（玩家脚底那一格 + 头顶那一格）有没有空间——判不了（异常）时返回 true：宁可照旧吊着 */
     private static boolean roomFor(Entity passenger, double x, double y, double z) {
@@ -228,35 +225,94 @@ public final class GunnerTetherManager {
         }
     }
 
-    /** 把当前偏移朝目标滑一步，返回这一步该用的偏移（上升/下降各自限速，见上面两个常量） */
-    public static double hangCurrent(Entity passenger, double target) {
+    /**
+     * 这一拍乘客相对**女仆脚底**该在的偏移（已经过滑变；mixin 直接加到她坐标上）。
+     * 两档的规则与粘滞见上面那段说明，逐拍算出来的就是这两步：
+     * <pre>
+     *   ① 挑档：这一拍下方能吊多远（{@link #hangTarget}，0 = 一点空间都没有）
+     *           → 没空间就"并肩"、有余量就回"悬挂"，中间 0~0.5 那条带保持上一拍的选择（迟滞）
+     *   ② 滑变：把**当前**偏移朝这一拍的目标偏移挪一步（各分量限速）
+     * </pre>
+     */
+    public static Vec3 seatOffset(EntityMaid maid, Entity passenger, double hang) {
         try {
             UUID id = passenger.getUUID();
-            Double prev = HANG_NOW.get(id);
-            double cur = prev == null ? target : prev.doubleValue();
-            double diff = target - cur;
-            if (diff > HANG_FALL_PER_TICK) {
-                cur += HANG_FALL_PER_TICK;        // 要往下放：慢慢放（这半条就是"别横跳"）
-            } else if (diff < -HANG_RISE_PER_TICK) {
-                cur -= HANG_RISE_PER_TICK;        // 要往上收：立刻收（慢了就是把玩家按进方块）
-            } else {
-                cur = target;
+            double h = Math.max(0.0, hang);
+            boolean side = Boolean.TRUE.equals(SEAT_SIDE.get(id));
+            double below = hangTarget(maid, passenger, h); // 这一拍下方能吊多远（0 = 一点空间都没有）
+            if (!side && below <= 0.05) {
+                side = true;                              // 进"并肩"：下方真的一点空间都没有
+            } else if (side && below >= Math.min(h, 0.5)) {
+                side = false;                             // 回"悬挂"：要有余量才回（迟滞的另一半）
             }
-            if (prev == null && HANG_NOW.size() > 256) {
-                HANG_NOW.clear(); // 兜底：正常解绑会 forgetHang 清；人不多，清一次也无所谓
+            SEAT_SIDE.put(id, Boolean.valueOf(side));
+            Vec3 target = side ? sideTarget(maid, passenger, h) : new Vec3(0.0, -below, 0.0);
+            Vec3 prev = SEAT_NOW.get(id);
+            Vec3 cur = prev == null ? target : stepTo(prev, target);
+            if (prev == null && SEAT_NOW.size() > 256) {
+                SEAT_NOW.clear(); // 兜底：正常解绑会 forgetHang 清；人不多，清一次也无所谓
             }
-            HANG_NOW.put(id, cur);
+            SEAT_NOW.put(id, cur);
             return cur;
         } catch (Throwable t) {
-            return target;
+            return new Vec3(0.0, -Math.max(0.0, hang), 0.0);
         }
     }
 
-    /** 解绑时把滑变状态清掉（下一趟从目标值重新起步） */
+    /**
+     * 「并肩」那一档的目标偏移：沿"她 → 玩家上一拍位置"的方向水平拉开，高度贴她脚底。
+     *
+     * <p>方向为什么取"玩家上一拍在哪"而不是她的朝向：取朝向的话她一转身玩家就得绕着她荡半圈；
+     * 取上一拍位置则是收敛的——她往前走，玩家自然被留在后头（就是被拴着伴走的样子）。
+     * 只有"刚绑上那一拍玩家还在她身上"（长度≈0，没有方向可言）才退化成朝她**背后**拉开
+     * （MC 偏航约定：面朝 {@code (-sin, cos)}，所以背后是 {@code (sin, -cos)}）。
+     *
+     * <p>距离取绳长、夹在 1.2~3.0；拉开的那一格也被 {@link #roomFor} 检一遍，堵住了就沿同一方向
+     * 收到 0.6 / 0.35 倍（窄过道里仍然并排站着，而不是把玩家塞进墙里）。连贴身位都没空间
+     * （1×1 竖井）才退回 0——那种地方本来也没法"拉开"。
+     */
+    private static Vec3 sideTarget(EntityMaid maid, Entity passenger, double hang) {
+        double d = Math.max(SIDE_MIN, Math.min(hang, SIDE_MAX));
+        double dx = passenger.getX() - maid.getX();
+        double dz = passenger.getZ() - maid.getZ();
+        double len = Math.sqrt(dx * dx + dz * dz);
+        if (len < 0.05) {
+            double r = Math.toRadians(maid.getYRot());
+            dx = Math.sin(r);
+            dz = -Math.cos(r);
+        } else {
+            dx /= len;
+            dz /= len;
+        }
+        for (double k : new double[] { 1.0, 0.6, 0.35 }) {
+            double o = d * k;
+            if (roomFor(passenger, maid.getX() + dx * o, maid.getY(), maid.getZ() + dz * o)) {
+                return new Vec3(dx * o, 0.0, dz * o);
+            }
+        }
+        return Vec3.ZERO; // 连贴身位都没空间（1×1 竖井）：只能重叠，交给滑变慢慢收
+    }
+
+    /** 把当前偏移朝目标滑一步（各分量限速，见上面那三个常量） */
+    private static Vec3 stepTo(Vec3 cur, Vec3 target) {
+        return new Vec3(
+                cur.x + clampStep(target.x - cur.x, SEAT_H_STEP),
+                cur.y + clampStep(target.y - cur.y,
+                        target.y > cur.y ? SEAT_UP_STEP : SEAT_DOWN_STEP),
+                cur.z + clampStep(target.z - cur.z, SEAT_H_STEP));
+    }
+
+    /** 每 tick 最多挪这么多格（正负对称）：给滑变限速用 */
+    private static double clampStep(double d, double max) {
+        return d > max ? max : (d < -max ? -max : d);
+    }
+
+    /** 解绑时把滑变/并肩状态一起清掉（下一趟从目标值重新起步） */
     public static void forgetHang(Entity passenger) {
         try {
             if (passenger != null) {
-                HANG_NOW.remove(passenger.getUUID());
+                SEAT_NOW.remove(passenger.getUUID());
+                SEAT_SIDE.remove(passenger.getUUID());
             }
         } catch (Throwable ignored) {
         }
@@ -297,7 +353,15 @@ public final class GunnerTetherManager {
             deny(maid, "已经有人挂在我身上了～");
             return;
         }
-        if (player.isPassenger()) {
+        // 【实测六百七十二：乘坐扫帚时右击要能绑定（= 换到二号位）】玩家原话："玩家在乘坐扫帚的时候
+        //  拿着武装拴绳右击还是没能切换成绑定模式。" 671 只放宽了"**女仆**骑着扫帚"那一档，没放宽
+        //  "**玩家**骑着扫帚"这一档，所以这个场景必然被这道门拒掉（气泡「主人先从坐骑上下来再抓绳子」）。
+        //  现在：玩家骑的正好是**这只女仆的扫帚**时放行——先下扫帚、再挂到她身上，正好是
+        //  "绑定态右击 = 坐回扫帚"（{@link #seatBackOnBroom}）的逆操作。
+        //  其它坐骑（船 / 矿车 / 别人的扫帚 / 别人的女仆）照旧拒绝。
+        EntityBroom herBroom = MaidBroomKit.ridingBroom(maid);
+        boolean onHerBroom = herBroom != null && player.getVehicle() == herBroom;
+        if (player.isPassenger() && !onHerBroom) {
             deny(maid, "主人先从坐骑上下来再抓绳子～");
             return;
         }
@@ -322,6 +386,10 @@ public final class GunnerTetherManager {
             deny(maid, "扫帚或空袭模式时再抓绳子吧～");
             return;
         }
+        if (onHerBroom) {
+            // 从扫帚驾驶位下来（扫帚留给她）→ 下面 startRiding(女仆) 才挂得上（实测六百七十二）
+            player.stopRiding();
+        }
         // force = true（实测六百五十七同款）：原版不带 force 的 startRiding 要求
         // 双方"此刻互相没骑"之外还要过 canAddPassenger/canRide——force 一并跳过，
         // 我们只挂自己的主人，这两道门本来也不是给"绑人"用的
@@ -344,6 +412,17 @@ public final class GunnerTetherManager {
 
     /** 解除（natural=true 是自动解除而不是右击） */
     public static void detach(EntityMaid maid, boolean natural) {
+        detach(maid, natural, natural ? "自动" : "右击");
+    }
+
+    /**
+     * 解除（{@code why} 只进日志与气泡：右击 / 自动 / 换座）。
+     *
+     * <p>【实测六百七十二：为什么要带理由】日志里"绳子是怎么松的"必须一眼看得出——"右击解除"、
+     * "玩家离鞍"、"落水自动"、"换座"，四种完全不同的原因在旧日志里只有前两种能分辨。
+     * 排查"绑定态右击到底走没走坐回扫帚那条路"时，就靠这一行。
+     */
+    public static void detach(EntityMaid maid, boolean natural, String why) {
         Link link = LINKS.remove(maid.getUUID());
         GROUND_TICKS.remove(maid.getUUID());
         try {
@@ -367,9 +446,9 @@ public final class GunnerTetherManager {
             }
         }
         if (!natural) {
-            bubble(maid, "到站啦，小心落地～");
+            bubble(maid, "换座".equals(why) ? "回扫帚上坐好，我接着飞～" : "到站啦，小心落地～");
         }
-        com.maidsmart.tool.PromaidLog.log("武装拴绳", "解除(" + (natural ? "自动" : "右击") + ")：女仆="
+        com.maidsmart.tool.PromaidLog.log("武装拴绳", "解除(" + why + ")：女仆="
                 + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 玩家=" + (player == null ? "?" : playerName(player)));
     }
@@ -396,11 +475,78 @@ public final class GunnerTetherManager {
                 deny(maid, "绳子只听主人和挂着的那位的话～");
                 return true;
             }
-            detach(maid, false);
+            // 【实测六百七十二】绑定态右击：她在扫帚上 → "坐回扫帚"；否则照旧只是解除
+            if (!seatBackOnBroom(player, maid)) {
+                detach(maid, false);
+            }
             return true;
         }
         attach(player, maid);
         return true;
+    }
+
+    /**
+     * 【实测六百七十二：绑定态右击 = 坐回扫帚】玩家原话："在绑定模式下拿着绳子进行右击就等于是
+     * 坐回扫帚。上一版是正确的。这一版反而改错了。玩家直接掉了下去。"
+     *
+     * <p>旧版之所以"能坐回去"，靠的其实是一个**副作用**：旧 {@link #resolveMaid} 在目标是扫帚时
+     * 只看第一个乘客，解析不出女仆 → 这次右击**没被取消** → 落到 TLM 自己的
+     * {@code EntityBroom.interact} 上把玩家接上扫帚（javap 实证它的门是
+     * {@code !isDiscrete && !isPassenger && !(getControllingPassenger instanceof Player)} 且
+     * 乘客数 ≤1 → {@code player.startRiding(this)}），我们随后的 tick 看到"玩家离鞍"才把挂载表清掉。
+     * 671 把 {@code resolveMaid} 改成"扫全部乘客"之后，右击扫帚**总能**解析到女仆，于是稳定走解除
+     * 分支 = 人直接掉下去（实测日志 13:48:55 / 13:49:09 的「解除(右击)」）。
+     *
+     * <p>靠"别取消事件、让 TLM 接人"来换座位是**撞运气**——同一版里的 13:49:21 就变成了"接上扫帚"
+     * （因为那一瞬间她恰好不在扫帚上）。所以这里改成**显式**换座，不依赖任何副作用：
+     * 先解除拴绳，再把她请下扫帚、玩家坐进**驾驶位**（第一乘客），最后把她放回第二乘客。
+     *
+     * <p>座位顺序是有意义的：TLM 的 {@code getControllingPassenger()} 只在**第一乘客是玩家**时
+     * 才非空，而"玩家驾驶"那条链路（{@code PlayerBroomControl}）与我们 mixin 的"有玩家驾驶就
+     * 一个字不改"都看它。玩家坐第一乘客 = 他开、她开火，与"玩家自己放一把扫帚再让她上"的天然
+     * 顺序完全一致（实测旧日志里那句「玩家在驾驶这把扫帚」就是这个状态）。
+     *
+     * <p>整段包在 try 里：任何意外都返回 false，调用方退回"普通解除"——绝不让一次换座把绳子卡住。
+     *
+     * @return true = 已按"坐回扫帚"处理完（挂载表已清）；false = 她没骑扫帚 / 绑的不是他 → 走普通解除
+     */
+    private static boolean seatBackOnBroom(ServerPlayer player, EntityMaid maid) {
+        try {
+            if (!isGunner(maid, player)) {
+                return false; // 挂着的是别人：照旧"右击解除"，不替人换座
+            }
+            EntityBroom broom = MaidBroomKit.ridingBroom(maid);
+            if (broom == null) {
+                return false; // 没骑扫帚：没有"坐回去"这回事
+            }
+            detach(maid, false, "换座");
+            java.util.List<Entity> was = new java.util.ArrayList<>(broom.getPassengers());
+            for (Entity e : was) {
+                try {
+                    e.stopRiding();
+                } catch (Throwable ignored) {
+                }
+            }
+            boolean ok = player.startRiding(broom, true); // 玩家先上 = 驾驶位
+            if (!ok) {
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "换座失败：玩家上不了扫帚（女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
+                return true;
+            }
+            for (Entity e : was) {
+                if (e != player && e.isAlive()) {
+                    try {
+                        e.startRiding(broom, true); // 再把她放回第二乘客
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            com.maidsmart.tool.PromaidLog.log("武装拴绳", "换座：玩家=" + playerName(player)
+                    + " 坐回扫帚驾驶位，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 在第二乘客");
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
     }
 
     /* ==================== 每 tick 校验（ProMaidExtension 每 2 tick 调） ==================== */
