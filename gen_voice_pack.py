@@ -49,6 +49,7 @@ STYLE_OF = {
                'preserve_lava_near', 'preserve_no_heal', 'clutch_snow', 'clutch_water',
                # v1.3.0 实测六百七十四：武装拴绳·新加气泡（battle 档）
              'leash_liftoff',
+             'ready_dual',
                'totem_peer', 'totem_self', 'totem_give', 'attack_ok'],
     'care': ['aid_food', 'aid_sister_help', 'aid_potion_incoming', 'aid_potion_given',
              'aid_bag_full', 'aid_eat_something', 'aid_honey_poison', 'aid_milk_debuff',
@@ -100,6 +101,7 @@ JP = {
     'leash_landed.ogg': 'ちょっと着地して休むね。ロープを握って、飛び立つのを待ってて～',
     'leash_seatback.ogg': '箒に戻って座ってね、このまま飛び続けるよ～',
     'leash_packup.ogg': 'ロープしまったよ～ここで待ってるね',
+    'ready_dual.ogg': '空襲も箒も準備できたよ、いつでもいけるよ！',
     # -------- work --------
     'build_done.ogg': 'できたよ！見て見て、私が建てたの！',
     'build_substitute.ogg': '代わりので代用するね',
