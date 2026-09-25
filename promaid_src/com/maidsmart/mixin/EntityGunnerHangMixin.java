@@ -71,12 +71,14 @@ public abstract class EntityGunnerHangMixin {
             if (!com.maidsmart.combat.GunnerTetherManager.isGunner(self, passenger)) {
                 return;
             }
-            double hang = com.maidsmart.combat.GunnerTetherManager.hangOffset();
+            double hang = com.maidsmart.combat.GunnerTetherManager.hangFor(self);
             // 【实测六百七十二：定位改成"挑偏移 + 滑变"，并且分「悬挂 / 并肩」两档】
             //   她在飞（下方有空间）→ 吊在她脚底下方 hang 格，偏移平滑滑变（地形起伏像船随浪）；
             //   她站在地上 / 贴着地形滑飞（下方一点空间都没有）→ **水平拉开**并肩站着：
             //   实测反馈㊁"平时待命没有起飞的时候，直接跟女仆的建模完全重叠看起来真的太难绷了"。
             // 两档的规则、粘滞、每一档为什么这么定，全在 GunnerTetherManager.seatOffset 的说明里。
+            // 【实测六百七十五】hang 改由 hangFor(她) 给：扫帚档会自动再加 0.3 格
+            //（扫帚模型比她的脚底低，只按悬挂距离吊着还会重叠）。
             net.minecraft.world.phys.Vec3 off =
                     com.maidsmart.combat.GunnerTetherManager.seatOffset(self, passenger, hang);
             fn.m_20372_(passenger, self.m_20185_() + off.f_82479_, self.m_20186_() + off.f_82480_, self.m_20189_() + off.f_82481_);
