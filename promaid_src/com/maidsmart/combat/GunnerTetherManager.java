@@ -119,6 +119,38 @@ public final class GunnerTetherManager {
     /** 拒绝提示节流（ms） */
     private static final long DENY_INTERVAL_MS = 4000L;
 
+    /* ==================== 实测六百七十七：拉扯（原版拴绳同款分档） ==================== */
+
+    /**
+     * 原版拴绳的"绷紧"距离（1.21.1 {@code Leashable.LEASH_ELASTIC_DIST}；1.20.1 是
+     * {@code PathfinderMob.m_6119_} 里同一个字面量 6.0f——两版逐字相同，对着反编译源码核过）。
+     */
+    private static final double PULL_ELASTIC = 6.0;
+    /**
+     * 原版拴绳的"太远"距离（{@code LEASH_TOO_FAR_DIST} = 10.0）——**原版在这里直接撒手掉拴绳**。
+     * 我们的绳子是"不会断的绳"（玩家原话，实测六百七十一），所以这一档不撒手：照旧按弹性档拉，
+     * 再远由她自己的牵引绳链路（{@code MaidFlightRecall} / {@code MaidBroomRecall}）连人带扫帚传回来。
+     */
+    private static final double PULL_TOO_FAR = 10.0;
+    /** 原版那一记冲量的系数（{@code legacyElasticRangeLeashBehaviour}：每轴 {@code copySign(d²×0.4, d)}） */
+    private static final double PULL_IMPULSE = 0.4;
+    /** 原版"闭区间"里的余量（{@code PathfinderMob} 里那个 {@code float $$5 = 2.0f}：走到离持有者 2 格处就够） */
+    private static final double PULL_SLACK = 2.0;
+    /**
+     * "闭区间"朝主人的**接近速度上限**（格/tick）：0.215 ≈ 原版 {@code followLeashSpeed} 那个量级
+     * （普通生物的行走速度属性 0.25 ≈ 4.3 格/秒，与玩家的行走速度同档）。
+     *
+     * <p>【为什么不是原版那行 {@code navigation.moveTo}】原版在 2~6 格这一档是**每 tick 重新算一条
+     * A* 路径**（被拴的牛就是这么走的）。女仆一多，每 tick 一次寻路就是服务器灾难；而且她本来就有
+     * 自己的跟随链路在算路（{@code MaidFlightFollowBehavior}）。所以我们只补**速度**、不碰导航：
+     * 朝主人的水平速度不足"走到离你 2 格"所需时补到那个上限，够快就一个字不改（不去跟她的链路打架）。
+     */
+    private static final double PULL_WALK_SPEED = 0.215;
+    /** "太远了"那条日志的节流（tick）：每只女仆 5 秒最多一行 */
+    private static final int PULL_LOG_COOLDOWN = 100;
+    /** 拉扯日志的节流表：maid UUID → 上次日志 game tick */
+    private static final Map<UUID, Long> PULL_LOGGED = new HashMap<>();
+
     /** 服务端权威挂载表：maid UUID → 挂载记录（弱引用：女仆/玩家没了自动失效） */
     private static final Map<UUID, Link> LINKS = new HashMap<>();
     /**
@@ -659,6 +691,7 @@ public final class GunnerTetherManager {
         unmarkLeash(maid);
         GROUND_TICKS.remove(maid.m_20148_());
         MODE_TICKS.remove(maid.m_20148_());
+        PULL_LOGGED.remove(maid.m_20148_()); // 【实测六百七十七】拉力日志节流跟着解绑一起清
         try {
             maid.getPersistentData().m_128473_(TAG_GUNNER);
         } catch (Throwable ignored) {
@@ -925,6 +958,7 @@ public final class GunnerTetherManager {
                     it.remove();
                     forgetHang(player); // 【实测六百七十一】一方没了/跨维度：滑变状态一起清
                     if (maid != null) {
+                        PULL_LOGGED.remove(maid.m_20148_()); // 【实测六百七十七】拉力日志节流一起清
                         try {
                             maid.getPersistentData().m_128473_(TAG_GUNNER);
                         } catch (Throwable ignored) {
@@ -1156,6 +1190,136 @@ public final class GunnerTetherManager {
     }
 
     /* ==================== 事件 ==================== */
+
+    /**
+     * 【实测六百七十七】拉扯：每 tick（在她的 tick **之前**）把原版拴绳那套力学作用在她身上。
+     *
+     * <p>玩家原话："我要的拉扯感是可以拉着女仆走，像原版拴绳一样。"
+     *
+     * <p>【为什么挂在 {@code MaidTickEvent} 上，而不是本类那个每 2 tick 的 {@link #tick}】
+     * 两个理由，都是字节码实证：
+     * <ol>
+     *   <li><b>时机</b>：TLM 的 {@code EntityMaid.tick()} 第一件事就是 post 这个事件，然后才
+     *       {@code super.tick()}（1.20.1 / 1.21.1 两版 javap 都是这个顺序）。原版拴绳的拉力
+     *       也正是在"她自己的这一拍里、{@code travel()} 之前"给的——写在这里，速度才会真的
+     *       走进这一 tick 的位移；写在 {@code tick()}（= 服务端 tick 末）那只会在下一 tick 被她
+     *       自己的飞行控制覆盖掉。</li>
+     *   <li><b>频率</b>：原版那记冲量是**每 tick**一次的量级，2 tick 一次等于把拉力砍半。</li>
+     * </ol>
+     * <p>事件两侧都会发（{@code tick()} 在客户端也会跑），所以这里先挡客户端：拉力只由服务端给
+     * （{@code LINKS} 本来也只有服务端有）。
+     *
+     * <p>【为什么跳过"他正骑着她"】悬挂档里玩家就吊在她身下 hang 格（默认 2.6，扫帚档 2.9），
+     * 那个位置是 {@link com.maidsmart.mixin.EntityGunnerHangMixin} 每拍刚性摆出来的：对绳子使劲
+     * 只会跟骑乘定位打架（而且悬挂距离最大可配到 6.3 格，一过 6 格就会变成"每 tick 朝自己乘客
+     * 加速"的荒唐场景）。**受力的是牵绳档**——玩家原话"原版的拴绳逻辑是玩家牵着女仆走
+     * （不影响自己的活动）"，那一档你**不是**她的乘客、能自由走动，绳子才受得上力。
+     */
+    @SubscribeEvent
+    public static void onMaidTick(com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent event) {
+        try {
+            if (!isEnabled() || !pullEnabled()) {
+                return;
+            }
+            EntityMaid maid = event.getMaid();
+            if (maid == null || maid.m_9236_().m_5776_()) {
+                return; // 客户端那半不发使劲（LINKS 也只活在服务端）
+            }
+            Link link = LINKS.get(maid.m_20148_());
+            ServerPlayer player = link == null ? null : link.player.get();
+            if (player == null || !player.m_6084_() || maid.m_9236_() != player.m_9236_()) {
+                return;
+            }
+            if (player.m_20202_() == maid) {
+                return; // 悬挂档：他吊在她身下、由骑乘定位刚性控制（见上面那段）
+            }
+            pullTick(maid, player);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 拉扯开关（配置没挂上时按"开"——它只是让绳子更有手感，不该因为读不到配置就静默失效） */
+    private static boolean pullEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_PULL.get();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    /**
+     * 原版拴绳力学的两档（第三档">10 格撒手"按本项目的"不会断的绳"改成继续拉）。
+     *
+     * <p>分档与字面量逐条对着两版反编译源码核过（1.21.1 {@code Leashable.tickLeash} 调
+     * {@code elasticRangeLeashBehaviour} / {@code closeRangeLeashBehaviour}；1.20.1 是
+     * {@code PathfinderMob.m_6119_} 里那一段 if-else 链，两边一模一样）：
+     * <pre>
+     *   dist &gt; 6  → 每轴 {@code copySign(d²×0.4, d)} 的冲量（原版"拽"的那一下）
+     *   dist ≤ 6  → 走到离持有者 2 格处（原版是寻路，我们是速度补足，见 PULL_WALK_SPEED）
+     * </pre>
+     * <p>距离取的是原版那个 **3D 中心距**（{@code Entity.distanceTo}），不是水平距——原版也是这么量的。
+     */
+    private static void pullTick(EntityMaid maid, ServerPlayer player) {
+        try {
+            double dist = maid.m_20270_(player);
+            if (dist > PULL_ELASTIC) {
+                // ── 弹性档：原版那一记冲量，逐字照抄（含 copySign：分量为负要把冲量也翻过来）──
+                double k = 1.0 / dist;
+                double dx = (player.m_20185_() - maid.m_20185_()) * k;
+                double dy = (player.m_20186_() - maid.m_20186_()) * k;
+                double dz = (player.m_20189_() - maid.m_20189_()) * k;
+                maid.m_20256_(maid.m_20184_().m_82520_(
+                        Math.copySign(dx * dx * PULL_IMPULSE, dx),
+                        Math.copySign(dy * dy * PULL_IMPULSE, dy),
+                        Math.copySign(dz * dz * PULL_IMPULSE, dz)));
+                maid.m_245125_(); // 原版紧跟着的 hasImpulse = true（告诉服务端"这一拍要重发位置"）
+                if (dist > PULL_TOO_FAR) {
+                    logPullTooFar(maid, player, dist);
+                }
+                return;
+            }
+            PULL_LOGGED.remove(maid.m_20148_());
+            if (dist <= PULL_SLACK) {
+                return; // 已经在"离你 2 格"以内：原版这一档也是走到这儿就停
+            }
+            double hx = player.m_20185_() - maid.m_20185_();
+            double hz = player.m_20189_() - maid.m_20189_();
+            double hl = Math.sqrt(hx * hx + hz * hz);
+            if (hl < 0.05) {
+                return; // 她正上方/正下方：没有水平方向可拉（这一档垂直差由她自己的飞行处理）
+            }
+            hx /= hl;
+            hz /= hl;
+            // 想要的接近速度：离得越远越快，但封顶在"走得跟你一样快"（原版 followLeashSpeed 的量级）
+            double want = Math.min(dist - PULL_SLACK, 1.0) * PULL_WALK_SPEED;
+            Vec3 dm = maid.m_20184_();
+            double have = dm.f_82479_ * hx + dm.f_82481_ * hz; // 她此刻朝主人的水平速度（投影）
+            if (have >= want) {
+                return; // 她自己已经在靠近（或比这更快）：不插手，免得两条链路打架
+            }
+            double add = want - have;
+            maid.m_20256_(new Vec3(dm.f_82479_ + hx * add, dm.f_82480_, dm.f_82481_ + hz * add));
+            maid.m_245125_();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** "她离得太远"这一条每 5 秒最多写一行（原版到这儿就撒手了，我们继续拉——日志里要能看见） */
+    private static void logPullTooFar(EntityMaid maid, ServerPlayer player, double dist) {
+        try {
+            long now = player.m_9236_().m_46467_();
+            Long last = PULL_LOGGED.get(maid.m_20148_());
+            if (last != null && now - last < PULL_LOG_COOLDOWN) {
+                return;
+            }
+            PULL_LOGGED.put(maid.m_20148_(), now);
+            com.maidsmart.tool.PromaidLog.log("武装拴绳", "拉扯：女仆="
+                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 离主人 " + String.format("%.1f", dist)
+                    + " 格（原版拴绳到 10 格就撒手，我们的绳子不撒手：照旧按原版那一记冲量拉，"
+                    + "再远由她自己的牵引绳连人带扫帚传回来）");
+        } catch (Throwable ignored) {
+        }
+    }
 
     /** 手持武装拴绳右击女仆 = 挂载/解除（骨架同 IndexStoneInteractHandler） */
     @SubscribeEvent

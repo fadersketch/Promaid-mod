@@ -82,6 +82,19 @@ import java.util.Map;
  * 再做帧间平滑与限幅）。效果：她加速/转向时绳子被拖在后面，悬停时自己收直。
  * 这不是原版的东西、是为了"像绳子"刻意加的，独立一层，一眼能认出来。
  *
+ * ── 【实测六百七十七：把"拉扯"做成真的 ──
+ * 玩家原话："我要的拉扯感是可以拉着女仆走，像原版拴绳一样。" 也就是六百七十六 那一层
+ * **只是画面上的弯曲**，物理上并没有任何东西在拉她。这一批两件事一起做：
+ * <ul>
+ *   <li><b>真的拉</b>：服务端每 tick 按原版拴绳那套分档把冲量给到她本人
+ *       （{@code GunnerTetherManager.onMaidTick} / {@code pullTick}：&gt;6 格照抄原版
+ *       {@code copySign(d²×0.4, d)}，2~6 格补"朝主人的速度上限"）——**同一份口径只有一处实现**，
+ *       客户端这边一个字都没改力学，只有下面这条观感。</li>
+ *   <li><b>绷紧的绳子是直线</b>：拖曳弯曲从"她的绝对速度"改成"相对这位玩家的速度"（一起飞就不该弯），
+ *       再乘一个<b>松弛度</b>（两端距离 ≥ 绳长 = 绷紧 = 零弧度；短于绳长才按松了多少给弧度）。
+ *       玩家要的"拉扯感"本来就是"绳子绷直了在拽她"，所以这一层现在只在**绳松**的时候出现。</li>
+ * </ul>
+ *
  * 【实测六百七十三 / 六百七十四 两处修正】
  * <ul>
  *   <li>牵绳档（空袭的女仆还没起飞、玩家在地面牵着她走）里玩家**不是**她的乘客，
@@ -121,6 +134,13 @@ public final class GunnerTetherClient {
     private static final float ROPE_DRAG_MAX = 0.8f;
     /** 拖曳弯曲的帧间平滑（0~1，越小越"软"） */
     private static final float ROPE_DRAG_SMOOTH = 0.25f;
+    /**
+     * 【实测六百七十七】牵绳档的"绳长"（格）：原版拴绳闭区间那个余量
+     * （{@code PathfinderMob} 里 {@code float $$5 = 2.0f}——被拴的生物走到离持有者 2 格处就算到位）。
+     * 用来判"这根绳此刻是绷紧的还是松的"：<b>绷紧 = 直线</b>（拉扯感就来自那个"绷直"），
+     * 松弛了才允许中段被拖出弧度。悬挂档的绳长就是悬挂距离本身（{@code hangFor}）。
+     */
+    private static final double ROPE_LEASH_REST = 2.0;
 
     /** 每根绳子的拖曳偏移（女仆实体 id → {x,z}）；她不在挂载表里就清掉 */
     private static final Map<Integer, float[]> DRAG = new HashMap<>();
@@ -204,7 +224,7 @@ public final class GunnerTetherClient {
                 if (maid.distanceToSqr(rider.position()) > STALE_STATE_SQR) {
                     continue;
                 }
-                drawRope(pose, buffers, camera, maid, rider, pt);
+                drawRope(pose, buffers, camera, (EntityMaid) maid, rider, pt, leash);
             }
             // 已经不在挂载表里的拖曳状态一并清掉（别按实体 id 一直囤）
             if (DRAG.size() > com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.size()) {
@@ -225,9 +245,13 @@ public final class GunnerTetherClient {
      *
      * <p>【实测六百七十六】两端都按帧插值（{@code Mth.lerp(partialTick, xo, getX())}，同原版），
      * 宽度方向与拖曳弯曲见类注释那三条根因。
+     *
+     * <p>【实测六百七十七】拖曳弯曲加了"绷紧度"这一层：<b>绷紧的绳子是直线</b>（玩家要的拉扯感
+     * 就是"绳子绷直了在拽她"），只有松弛时中段才被拖出弧度；拖曳的来源也从"她的绝对速度"改成
+     * "她相对这位玩家的速度"——两个人一起飞的时候绳子不该弯（旧版那一条是物理上错的）。
      */
     private static void drawRope(PoseStack pose, MultiBufferSource buffers, Vec3 camera,
-                                Entity maid, Entity rider, float pt) {
+                                EntityMaid maid, Entity rider, float pt, boolean leash) {
         Vec3 a = new Vec3(lerp(maid.xo, maid.getX(), pt), lerp(maid.yo, maid.getY(), pt) + 0.75,
                 lerp(maid.zo, maid.getZ(), pt));
         Vec3 b = new Vec3(lerp(rider.xo, rider.getX(), pt),
@@ -236,7 +260,9 @@ public final class GunnerTetherClient {
         float dx = (float) (b.x - a.x);
         float dy = (float) (b.y - a.y);
         float dz = (float) (b.z - a.z);
-        float[] drag = dragFor(maid);
+        // 两端锚点的实际距离（格）：直接由三个差值算，不依赖任何版本的 Vec3.distanceTo 名字
+        float dist = (float) Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
+        float[] drag = dragFor(maid, rider, leash, dist);
         pose.pushPose();
         try {
             pose.translate(a.x - camera.x, a.y - camera.y, a.z - camera.z);
@@ -303,23 +329,45 @@ public final class GunnerTetherClient {
     }
 
     /**
-     * 【实测六百七十六】她这一帧的水平速度 → 绳子中段的拖曳偏移，帧间平滑 + 限幅。
+     * 【实测六百七十六 → 六百七十七】绳子中段的拖曳偏移，帧间平滑 + 限幅。
      *
-     * <p>目标值 = {@code (xo - getX(), zo - getZ()) × ROPE_DRAG_K}：她朝哪边走，绳子中段就被拖到
+     * <p>【六百七十六】目标值 = 她的水平位移 × {@link #ROPE_DRAG_K}：她朝哪边走，绳子中段就被拖到
      * 反方向去（同"绳被拽着走"）。她悬停时目标归零，绳子靠平滑自己收直。
+     *
+     * <p>【六百七十七 两处修正】
+     * <ol>
+     *   <li><b>改用相对速度</b>（她 − 这位玩家）：两个人一起飞的时候相对速度为 0，
+     *       绳子不该弯。旧版用她的绝对速度，于是"你俩并排飞"也会把绳子拽弯——物理上是错的。</li>
+     *   <li><b>乘上"松弛度"</b>：绳长 {@code rest} 见 {@link #ROPE_LEASH_REST}（牵绳档 2 格、
+     *       悬挂档 = 悬挂距离）。两端实际距离 ≥ 绳长 = <b>绷紧 → 直线</b>（玩家要的拉扯感就是
+     *       "绷直"），只有距离短于绳长（绳松了）才按剩多少松弛给多少弧度。</li>
+     * </ol>
+     *
+     * @param dist 两端锚点的实际距离（格，已按帧插值的两个点）
      */
-    private static float[] dragFor(Entity maid) {
+    private static float[] dragFor(Entity maid, Entity rider, boolean leash, float dist) {
         int id = maid.getId();
         float[] cur = DRAG.get(id);
         if (cur == null) {
             cur = new float[] {0.0f, 0.0f};
             DRAG.put(id, cur);
         }
-        float tx = clamp((float) (maid.xo - maid.getX()) * ROPE_DRAG_K, ROPE_DRAG_MAX);
-        float tz = clamp((float) (maid.zo - maid.getZ()) * ROPE_DRAG_K, ROPE_DRAG_MAX);
+        double rest = leash ? ROPE_LEASH_REST
+                : Math.max(0.1, com.maidsmart.combat.GunnerTetherManager.hangFor((EntityMaid) maid));
+        float slack = (float) clamp((rest - dist) / rest, 0.0, 1.0); // 1 = 完全松弛、0 = 绷紧
+        float k = ROPE_DRAG_K * slack;
+        float vx = (float) ((maid.xo - maid.getX()) - (rider.xo - rider.getX()));
+        float vz = (float) ((maid.zo - maid.getZ()) - (rider.zo - rider.getZ()));
+        float tx = clamp(vx * k, ROPE_DRAG_MAX);
+        float tz = clamp(vz * k, ROPE_DRAG_MAX);
         cur[0] += (tx - cur[0]) * ROPE_DRAG_SMOOTH;
         cur[1] += (tz - cur[1]) * ROPE_DRAG_SMOOTH;
         return cur;
+    }
+
+    /** 把 v 夹进 [lo, hi]（实测六百七十七：松弛度那一处用） */
+    private static double clamp(double v, double lo, double hi) {
+        return v < lo ? lo : (v > hi ? hi : v);
     }
 
     private static float clamp(float v, float lim) {

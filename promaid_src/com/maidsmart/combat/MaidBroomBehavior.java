@@ -76,6 +76,25 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     private static final Map<EntityMaid, Long> NOTIFY_READY =
             Collections.synchronizedMap(new WeakHashMap<>());
 
+    /* ==================== 双就绪播报（实测六百七十七） ==================== */
+
+    /**
+     * 「空袭和扫帚都齐了」**已经说过一次**的锁存（值 = 说出口时的 gameTime，只为日志里能对上时间）。
+     *
+     * <p>玩家原话："会说一句，自己已经准备好了。（附带语音）这个只说一次。除非再次被解除，
+     * 此文本CD才会刷新。" 所以这里是一道**闩**而不是冷却计时：说一次就一直闩着，
+     * 直到"扫帚模式条件不成立"（她下扫帚 / 缺件 / 退出扫帚任务）才拔掉——拔掉之后她再满足
+     * 就会再说一次。
+     */
+    private static final Map<EntityMaid, Long> DUAL_ANNOUNCED =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    /** 双就绪条件刚成立的 tick（齐备也要**连续**站满 {@link #STABLE_TICKS} 才播，防抖动） */
+    private static final Map<EntityMaid, Long> DUAL_READY_SINCE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    /** 双就绪条件刚断开的 tick（断开也要连续站满 {@link #STABLE_TICKS} 才**拔闩**，防抖动） */
+    private static final Map<EntityMaid, Long> DUAL_BROKEN_SINCE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
     /* ==================== 行为生命周期 ==================== */
 
     @Override
@@ -97,6 +116,9 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         MaidBroomDrive.forgetMaid(maid.m_20148_());
         FOLLOWING.remove(maid);
         PLAYER_DRIVE_LOGGED.remove(maid);
+        // 【实测六百七十七】退出扫帚任务 = 玩家说的"再一次被解除"：双就绪的闩拔掉，
+        //   下一轮进扫帚模式再满足条件时她会重新说一次。
+        resetDualReady(maid, "退出扫帚任务");
     }
 
     @Override
@@ -153,6 +175,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
         clearNotReady(maid, gameTime);
+        // 【实测六百七十七】走到这里 = 扫帚那一半已经齐了（她正骑在扫帚上 + 远程武器 + 弹药）：
+        //   再看一眼"空袭那一半齐不齐"（鞘翅 + 远程武器 + 推进剂 + 弹药，任务无关口径）
+        //   → 两套都齐就说一句「我已经准备好了」（带语音），**只说一次**。
+        //   ④.4 之前，因为玩家自己开着这把扫帚时也要报（那一档同样满足玩家给的两个条件）。
+        announceDualReady(maid, gameTime);
 
         // ④.4 玩家在开这把扫帚 → 我们只开火，不碰飞行（见 drivenByPlayer 的注释：
         // mixin 那边"有玩家驾驶就一个字不改"，这里跟着让位，否则每 tick 都会写一份没人用的
@@ -420,6 +447,10 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
      */
     private static void notifyNotReady(EntityMaid maid, long gameTime) {
         try {
+            // 【实测六百七十七】"缺件"分支一律先拔掉双就绪的闩：玩家给的两个条件里"扫帚那一半"
+            //   已经不成立了（她没骑上 / 缺远程武器 / 缺弹药），这就是玩家说的"再一次被解除"。
+            //   拔闩与它自己的 15 秒气泡冷却无关，所以放在最前面、也不受任何 return 影响。
+            resetDualReady(maid, "扫帚条件不成立");
             String missing = MaidBroomKit.missingParts(maid);
             if (missing == null) {
                 // 判定竞态：其实是齐的 → 不误报（并让"齐备"重新计时）
@@ -465,6 +496,80 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     /** 齐备了：清缺件计时（冷却的清零走 notifyNotReady 里"齐备也要站稳"那条） */
     private static void clearNotReady(EntityMaid maid, long gameTime) {
         MISSING_SINCE.remove(maid);
+    }
+
+    /* ==================== 双就绪播报（实测六百七十七） ==================== */
+
+    /**
+     * 两套都齐了就报一句「我已经准备好了」（带语音），**只说一次**；条件一解除就拔闩、下次再说。
+     *
+     * <p>玩家原话："当空袭模式处于激活状态（集齐三件套或者其他的，已达成激活的条件），扫帚模式
+     * 条件满足（自己已经坐到了扫帚上，并且手中拿有远程武器）的时候，会说一句，自己已经准备好了。
+     * （附带语音）这个只说一次。除非再次被解除，此文本CD才会刷新。"
+     *
+     * <p>【调用点为什么只有一处】本方法只在"扫帚那一半已经成立"的那条路上被调（
+     * {@link #m_6725_} 里 {@code clearNotReady} 之后）——她**正骑着扫帚** + 远程武器 + 弹药，
+     * 这三件正是玩家列出的扫帚条件，判据直接复用 {@link MaidBroomKit#isModeActive}（口径只有一处）。
+     * 这里只需要再问空袭那一半：{@link MaidFlightKit#airAssaultReady}（**任务无关**口径，
+     * 理由见那个方法的注释——扫帚模式的任务不是飞行任务，用 {@code isModeActive} 会误判成缺武器）。
+     *
+     * <p>【闩的两种拔法】① 上面 {@code notifyNotReady}（缺件 / 没骑上 / 总开关关掉）；
+     * ② 本方法里"条件连续断掉 2 秒"（她还在扫帚模式，但空袭那一半没了：鞘翅飞坏、烟花烧完…）。
+     * ③ 退出扫帚任务走 {@link #m_6732_}。三处都只在**真的说过**时才写日志，不会刷屏。
+     */
+    private static void announceDualReady(EntityMaid maid, long gameTime) {
+        try {
+            if (!MaidFlightKit.airAssaultReady(maid)) {
+                // 空袭那一半不齐：连续断开 2 秒才拔闩（防"烟花烧掉一拍的抖动"把闩抖掉）
+                DUAL_READY_SINCE.remove(maid);
+                if (DUAL_ANNOUNCED.containsKey(maid)) {
+                    Long broken = DUAL_BROKEN_SINCE.get(maid);
+                    if (broken == null) {
+                        DUAL_BROKEN_SINCE.put(maid, gameTime);
+                    } else if (gameTime - broken >= STABLE_TICKS) {
+                        resetDualReady(maid, "空袭条件断开");
+                    }
+                }
+                return;
+            }
+            DUAL_BROKEN_SINCE.remove(maid);
+            if (DUAL_ANNOUNCED.containsKey(maid)) {
+                return; // 这一轮已经说过了（闩着，等解除才刷新）
+            }
+            Long since = DUAL_READY_SINCE.get(maid);
+            if (since == null) {
+                DUAL_READY_SINCE.put(maid, gameTime);
+                return; // 第一拍只记时间，站稳 2 秒再报（与缺件播报同一套"防抖动"口径）
+            }
+            if (gameTime - since < STABLE_TICKS) {
+                return;
+            }
+            DUAL_ANNOUNCED.put(maid, gameTime);
+            DUAL_READY_SINCE.remove(maid);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 双就绪：空袭三件套齐 + 已骑扫帚持远程武器 → 播报「我已经准备好了」（本轮只说一次，"
+                    + "扫帚条件解除或空袭条件断开后才会再说）");
+            maid.getChatBubbleManager().addTextChatBubble("空袭和扫帚都齐了，我已经准备好了！");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 拔掉双就绪的闩（= 文本 CD 刷新）：下次两套都齐时她还会再说一次。
+     *
+     * <p>只在**真的播报过**时写日志/清表，所以"从没说过"的女仆身上这一下是完全无声的空操作。
+     * {@code why} 只进日志——排查"她为什么又说了一遍"时，日志里能直接看到是哪一处解除的。
+     */
+    private static void resetDualReady(EntityMaid maid, String why) {
+        try {
+            DUAL_READY_SINCE.remove(maid);
+            DUAL_BROKEN_SINCE.remove(maid);
+            if (DUAL_ANNOUNCED.remove(maid) != null) {
+                com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 双就绪解除（" + why + "）→ 文本 CD 已刷新，下次两套都齐时她会再说一次");
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**

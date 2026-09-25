@@ -2851,6 +2851,15 @@ public class PromaidConfigScreen extends Screen {
                         + "（原版发光标记，同光灵箭射中敌人的渲染，光边改成金色；穿墙可见），"
                         + "她正式起飞（牵绳 → 二号位）那一刻解除。关掉 = 完全不发光（连标记位都不写），"
                         + "挂载本身照旧。收进魂符再放出来的残留标记会自动清掉。"));
+        this.rows.add(new BoolRow("武装拴绳·拉扯（像原版拴绳一样）", MaidSmartConfig.COMBAT_TETHER_PULL.get(),
+                v -> MaidSmartConfig.COMBAT_TETHER_PULL.set(v),
+                "**实测六百七十七 新增**（默认开）：绳子绷紧时**真的拉她**——"
+                        + "分档照搬原版拴绳（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，"
+                        + "两版字面量一模一样）：> 6 格照抄原版那一记 0.4·方向² 的冲量（把你俩拽回去），"
+                        + "2~6 格补\"朝主人的速度上限\"= 走到离你 2 格为止（原版那里是每 tick 重算 A* 寻路，"
+                        + "我们只补速度、不碰导航）；原版 > 10 格会撒手掉拴绳，我们的绳子**不会断**，照旧拉。"
+                        + "只在**牵绳档**（她还没起飞、你牵着她在走）生效——悬挂档你吊在她身下、由骑乘定位"
+                        + "刚性控制，绳子不受力。关掉 = 绳子只画不使劲（她自己的跟随链路照旧）。"));
     }
 
     private void reviveRows() {

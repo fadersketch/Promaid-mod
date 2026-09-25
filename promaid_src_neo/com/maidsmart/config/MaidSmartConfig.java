@@ -375,6 +375,9 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      *  开 = 吊在她下方时，玩家自己手里的重锤按"她这一段俯冲的下落高度"吃下落加成（见
      *  {@code GunnerTetherManager.consumeRideFall} + {@code PlayerMaceRideFallMixin}）。 */
     public static final ModConfigSpec.BooleanValue COMBAT_TETHER_MACE_SMASH;
+    /** 【实测六百七十七】"拉扯"开关（默认开）：绳子绷紧时像原版拴绳一样把她拽过来。
+     *  关掉 = 绳子只画不使劲（她已经有的跟随链路照旧，只是没有那记额外的拉力）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_TETHER_PULL;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -2033,6 +2036,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
         COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n玩家原话：\"我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\"\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（照原版 checkSlowFallDistance 的 0.5 格/tick 口径钳回 1.0，免得慢慢飘着也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
                 .translation("config.promaid.tether.maceSmash").define("maceSmash", true);
+        COMBAT_TETHER_PULL = BUILDER.comment("【实测六百七十七】拉扯：绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求原文：\"我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\"\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，玩家原话\"原版的拴绳逻辑是玩家牵着女仆走\"）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
+                .translation("config.promaid.tether.pull").define("pull", true);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----

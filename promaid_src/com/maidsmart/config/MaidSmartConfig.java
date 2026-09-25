@@ -671,6 +671,9 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 【实测六百七十五】扫帚档的额外下沉（格，默认 0.3）：扫帚模式下她骑在扫帚上，扫帚模型
      *  本来就比她的脚底更低，所以在「悬挂距离」之上再往下让这么多，才不跟扫帚建模重叠。 */
     public static final ForgeConfigSpec.DoubleValue COMBAT_TETHER_BROOM_EXTRA;
+    /** 【实测六百七十七】"拉扯"开关（默认开）：绳子绷紧时像原版拴绳一样把她拽过来。
+     *  关掉 = 绳子只画不使劲（她已经有的跟随链路照旧，只是没有那记额外的拉力）。 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_TETHER_PULL;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -1998,6 +2001,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.tether.glowMark").define("glowMark", true);
         COMBAT_TETHER_BROOM_EXTRA = BUILDER.comment("【实测六百七十五】扫帚档的额外下沉（格，默认 0.3，0.0~2.0）。\n\n需求原文：\"扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。\"\n\n扫帚模式下她是**骑在扫帚上**的，而扫帚模型比她的脚底还低——只按「悬挂距离」吊在你下面时，你的人和扫帚会叠在一起。这一项就是在悬挂距离之上**再往下让这么多**（只在扫帚档生效：任务在扫帚模式、或她此刻正骑着世界里的扫帚）。0 = 关掉这个补偿。")
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
+        COMBAT_TETHER_PULL = BUILDER.comment("【实测六百七十七】拉扯：绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求原文：\"我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\"\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，玩家原话\"原版的拴绳逻辑是玩家牵着女仆走\"）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
+                .translation("config.promaid.tether.pull").define("pull", true);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----

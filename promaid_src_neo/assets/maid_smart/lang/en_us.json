@@ -115,6 +115,7 @@
   "config.promaid.tether.broomExtra": "Combat Leash - extra sink on broom (blocks)",
   "config.promaid.tether.glowMark": "Combat Leash - gold outline marker",
   "config.promaid.tether.maceSmash": "Combat Leash - gunner-seat mace smash (1.21.1)",
+  "config.promaid.tether.pull": "Combat Leash - pull (drag the maid like a vanilla lead)",
   "config.promaid.spawnerTorch": "Anti-Spawner Torches",
   "config.promaid.spawnerTorch.enable": "Torch mob spawners",
   "config.promaid.spawnerTorch.radius": "Spawner search radius (blocks)",
