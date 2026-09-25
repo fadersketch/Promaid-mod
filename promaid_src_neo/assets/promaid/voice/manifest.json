@@ -1,6 +1,31 @@
 {
   "entries": [
     {
+      "text": "先跟着我走，等你起飞我再挂上去～",
+      "file": "leash_follow.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "起飞啦！抓好绳子～",
+      "file": "leash_liftoff.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "先落地歇会儿，你牵着绳子等我起飞～",
+      "file": "leash_landed.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "回扫帚上坐好，我接着飞～",
+      "file": "leash_seatback.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "绳子收好啦，我在这儿等着～",
+      "file": "leash_packup.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "上来吧！抓好绳子",
       "file": "leash_on.ogg",
       "mode": "contains"

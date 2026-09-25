@@ -6,7 +6,6 @@ import net.minecraft.network.codec.StreamCodec;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -22,6 +21,17 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
  * 原版同步的乘客关系，但分不清这个乘客是拴绳挂的、TLM 的可骑还是别的模组干的）——
  * {@link GunnerTetherManager#SYNCED_PAIRS} 供 mixin 定位（挂下方）与绳子渲染，
  * 只能由服务端说了算。
+ *
+ * 【实测六百七十四：包里多了 state（相位）】玩家原话："此机制没有引用到空袭状态，而且现在玩家
+ * 会直接坐到空袭女仆的头上。明明说好的是挂在身下的。" 根因是**牵绳 → 起飞挂载**那一跳没重发包
+ * （发的是 attach 时刻的，那时玩家还不是乘客 → riderId 记 -1 → 客户端把这一对清掉），
+ * 于是客户端不认那个枪手、悬挂定位 mixin 不生效。现在：
+ * <ul>
+ *   <li>{@code state} 0 = 没挂 / 1 = 牵绳档（没骑她）/ 2 = 悬挂档（吊在她下面）；</li>
+ *   <li>{@code riderId} 由**链路**给出（{@link GunnerTetherManager#phaseOf}），不再问
+ *       {@code getFirstPassenger}——牵绳档他不是乘客；</li>
+ *   <li>服务端每次相位变化都重发一遍（{@code GunnerTetherManager.sync}）。</li>
+ * </ul>
  *
  * 【发谁】挂载/解除发"正在追踪这只女仆的玩家 + 她自己背上的枪手"
  * （sendToPlayersTrackingEntityAndSelf——枪手骑着女仆，一定在追踪她，但为保险并入 self）；
@@ -41,27 +51,25 @@ public final class GunnerTetherNetworking {
                 SyncPacket::handle);
     }
 
-    /** 向"追踪这只女仆的玩家 + 背上的枪手"广播当前挂载（attach=false = 解除，riderId 记 -1） */
-    public static void send(EntityMaid maid, boolean attach) {
+    /** 向"追踪这只女仆的玩家 + 背上的枪手"广播当前相位（state=0 = 解除） */
+    public static void send(EntityMaid maid, int state, int riderId) {
         if (maid == null) {
             return;
         }
-        Entity rider = maid.getFirstPassenger();
-        int riderId = attach && rider != null ? rider.getId() : -1;
         try {
             PacketDistributor.sendToPlayersTrackingEntityAndSelf(maid,
-                    new SyncPacket(maid.getId(), riderId));
+                    new SyncPacket(maid.getId(), riderId, state));
         } catch (Throwable ignored) {
         }
     }
 
     /** 发给指定玩家（StartTracking 补发用；watcher 由调用方保证非空） */
-    public static void sendTo(ServerPlayer watcher, int maidId, int riderId) {
+    public static void sendTo(ServerPlayer watcher, int maidId, int riderId, int state) {
         if (watcher == null) {
             return;
         }
         try {
-            PacketDistributor.sendToPlayer(watcher, new SyncPacket(maidId, riderId));
+            PacketDistributor.sendToPlayer(watcher, new SyncPacket(maidId, riderId, state));
         } catch (Throwable ignored) {
         }
     }
@@ -73,24 +81,28 @@ public final class GunnerTetherNetworking {
 
         public final int maidId;
         public final int riderId;
+        /** 相位：0 没挂 / 1 牵绳档 / 2 悬挂档（见 {@link GunnerTetherManager#ST_LEASH}） */
+        public final int state;
 
-        public SyncPacket(int maidId, int riderId) {
+        public SyncPacket(int maidId, int riderId, int state) {
             this.maidId = maidId;
             this.riderId = riderId;
+            this.state = state;
         }
 
         public static void encode(SyncPacket pkt, FriendlyByteBuf buf) {
             buf.writeInt(pkt.maidId);
             buf.writeInt(pkt.riderId);
+            buf.writeInt(pkt.state);
         }
 
         public static SyncPacket decode(FriendlyByteBuf buf) {
-            return new SyncPacket(buf.readInt(), buf.readInt());
+            return new SyncPacket(buf.readInt(), buf.readInt(), buf.readInt());
         }
 
         public static void handle(SyncPacket pkt, IPayloadContext ctx) {
             ctx.enqueueWork(() ->
-                    com.maidsmart.client.GunnerTetherClient.onSync(pkt.maidId, pkt.riderId));
+                    com.maidsmart.client.GunnerTetherClient.onSync(pkt.maidId, pkt.riderId, pkt.state));
         }
 
         @Override

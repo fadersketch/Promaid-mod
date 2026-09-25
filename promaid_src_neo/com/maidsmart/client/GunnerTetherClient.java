@@ -24,8 +24,18 @@ import java.util.Map;
  * 代码长期使用零崩溃）。分两段 + 中点下垂 0.12 格，静止时贴得近看不出、她机动时绳子
  * 有"绷住"的感觉。
  *
- * 【生命周期】退出世界清空（{@link #clear()}）；对端实体不在/已下鞍（原版乘客同步已断）
- * 则跳过绘制，等下一次解除/挂载包修正。
+ * 【实测六百七十三 / 六百七十四 两处修正】
+ * <ul>
+ *   <li>牵绳档（空袭的女仆还没起飞、玩家在地面牵着她走）里玩家**不是**她的乘客，
+ *       而那正是最需要看到绳子的时候——旧版要求"必须是她乘客"，于是这一档什么都看不到
+ *       （forge 树六百七十三 已改，1.21.1 树漏了，本批补齐）；现在由服务端相位
+ *       （{@link com.maidsmart.combat.GunnerTetherManager#ST_LEASH}）说了算。</li>
+ *   <li>相位每变一次服务端重发一次包（挂载 / 起飞翻档 / 落地回牵绳 / 解除），
+ *       所以绳子不会留在过期状态上。</li>
+ * </ul>
+ *
+ * 【生命周期】退出世界清空（{@link #clear()}）；对端实体不在 / 悬挂档已下鞍（原版乘客同步已断）
+ * 则跳过绘制，等下一次相位包修正。
  */
 @net.neoforged.api.distmarker.OnlyIn(net.neoforged.api.distmarker.Dist.CLIENT)
 public final class GunnerTetherClient {
@@ -50,17 +60,25 @@ public final class GunnerTetherClient {
 
     /* ---------------- 服务端状态入口（由 GunnerTetherNetworking 调用） ---------------- */
 
-    public static void onSync(int maidId, int riderId) {
+    /** 相位同步（{@code state} 见 {@code GunnerTetherManager.ST_*}；riderId &lt; 0 = 没挂） */
+    public static void onSync(int maidId, int riderId, int state) {
         ensureRegistered();
         if (riderId < 0) {
             com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.remove(maidId);
+            com.maidsmart.combat.GunnerTetherManager.SYNCED_LEASH.remove(maidId);
         } else {
             com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.put(maidId, riderId);
+            if (state == com.maidsmart.combat.GunnerTetherManager.ST_LEASH) {
+                com.maidsmart.combat.GunnerTetherManager.SYNCED_LEASH.add(maidId);
+            } else {
+                com.maidsmart.combat.GunnerTetherManager.SYNCED_LEASH.remove(maidId);
+            }
         }
     }
 
     public static void clear() {
         com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.clear();
+        com.maidsmart.combat.GunnerTetherManager.SYNCED_LEASH.clear();
     }
 
     /* ---------------- 事件 ---------------- */
@@ -97,11 +115,15 @@ public final class GunnerTetherClient {
                 if (!(maid instanceof EntityMaid) || !(rider instanceof Player)) {
                     continue;
                 }
-                // 【实测六百七十三】不再要求"玩家是她的乘客"：牵绳档（空袭的女仆还没起飞、
-                //  玩家在地面牵着她走）里玩家**不是**乘客，而那正是最需要看到绳子的时候。
-                //  解绑时 S2C 包会把这一对清掉，所以不会留下残影；
-                //  下面那道 8 格距离判据本身就把"过期状态"挡在外面了。
-                if (maid.distanceToSqr(rider) > MAX_ROPE_DISTANCE_SQR) {
+                // 【实测六百七十三 / 六百七十四】牵绳档玩家不是乘客（那正是最该看到绳子的时候）；
+                //  悬挂档必须是乘客（不是 = 原版乘客同步已断，等下一次相位包修正）。
+                //  判据来自服务端相位，不猜；解绑/翻档都会重发包，所以不会留残影，
+                //  下面那道 8 格距离判据本身也把过期状态挡在外面。
+                boolean leash = com.maidsmart.combat.GunnerTetherManager.SYNCED_LEASH.contains(e.getKey());
+                if (!leash && !maid.hasPassenger(rider)) {
+                    continue;
+                }
+                if (maid.distanceToSqr(rider.position()) > MAX_ROPE_DISTANCE_SQR) {
                     continue;
                 }
                 drawRope(pose, buf, camera, maid, rider);
