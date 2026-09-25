@@ -219,6 +219,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
         RANGED_GUN_CD.remove(maidId);
+        GUN_STATE_TICKED.remove(maidId);
         RANGED_FIRE_LAST_LOG.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
@@ -273,6 +274,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.remove(maidId);
         RANGED_NEXT_SHOT.remove(maidId);
         RANGED_GUN_CD.remove(maidId);
+        GUN_STATE_TICKED.remove(maidId);
         RANGED_FIRE_LAST_LOG.remove(maidId);
         RANGED_PUSH_LEFT.remove(maidId);
         RANGED_PUSH_LAST_LOG.remove(maidId);
@@ -297,6 +299,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         RANGED_NEXT_BOOST.clear();
         RANGED_NEXT_SHOT.clear();
         RANGED_GUN_CD.clear();
+        GUN_STATE_TICKED.clear();
         RANGED_FIRE_LAST_LOG.clear();
         RANGED_PUSH_LEFT.clear();
         RANGED_PUSH_LAST_LOG.clear();
@@ -1870,6 +1873,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** v1.2.0 实测四百六十八：枪械开火冷却（tick）——由 performGunAttack 的返回值驱动 */
     private static final Map<UUID, Integer> RANGED_GUN_CD = new HashMap<>();
+    /** v1.3.0 实测六百六十六：枪械状态机本 tick 是否已推进过（见 {@link #tickGunState} 的幂等说明） */
+    private static final Map<UUID, Long> GUN_STATE_TICKED = new HashMap<>();
     /** v1.2.4 实测六百四十三：远程开火诊断节流（每 2 秒一条，latest.log 搜「远程开火」） */
     private static final Map<UUID, Long> RANGED_FIRE_LAST_LOG = new HashMap<>();
     private static final long RANGED_FIRE_LOG_INTERVAL = 40L;
@@ -2511,6 +2516,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     public static void fireRanged(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack main = maid.m_21205_();
         boolean gun = GunCompat.isGun(main);
+        if (gun) {
+            // v1.3.0 实测六百六十六：枪械状态机**必须在下面所有门之前**推进，而且每 tick 一次
+            // （理由见 tickGunState：旧版放在冷却门之后 = 卓越前线的充能/换弹永远走不完 → 哑火）
+            tickGunState(maid, target, id, gameTime);
+        }
         double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
         double dist = maid.m_20270_(target);
         if (dist > range) {
@@ -2587,11 +2597,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     // v1.3.0：改成 public static 供「扫帚模式」复用（同 fireRanged，见那里的说明）
     public static void tickGunFire(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
         ItemStack gun = maid.m_21205_();
-        try {
-            com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
-                    .tick(maid, target, gun);
-        } catch (Throwable ignored) {
-        }
+        // v1.3.0 实测六百六十六：`GunCommonUtil.tick` **不在这里了**——它是卓越前线枪械状态机
+        // （充能/换弹/拉栓/散热）的唯一推进者，写在这里等于"只有轮到她开火的那一拍才推进"
+        // （射程/视线/冷却三道门都会提前 return）。现在由 {@link #tickGunState} 在
+        // {@link #fireRanged} 的**所有门之前**推进，每 tick 恰好一次（幂等）。
         int cd = RANGED_GUN_CD.getOrDefault(id, 0) - 1;
         if (cd > 0) {
             // 【冷却必须真的走完——这里曾经是本条的笔误】v1.2.4 实测六百四十三 第一版在这一支
@@ -2629,14 +2638,66 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     + " 主手=" + itemName(gun) + " 距敌 " + fmt2(maid.m_20270_(target)) + " 格"
                     + " 开镜=" + gunAiming(maid) + " TLM档=" + gunBandOk(maid, target)
                     + " 推进=" + propellant(maid)
+                    + " 弹=" + (GunCompat.canFeed(maid, gun) ? "有" : "无")
                     + " → 枪械开火返回 " + cd + " tick（原始 " + raw
-                    + (raw >= 20 ? "；原始≥20 = 装填/开镜/抽枪/拉栓，没打出去" : "") + "）");
+                    + (raw >= 20 ? (GunCompat.isSbwGun(gun)
+                            ? "；SBW：50=canShoot 假（没打出去）100=不是枪 5=换弹/拉栓 10/20=开镜"
+                            : "；TACZ：≥20 = 装填/开镜/抽枪/拉栓，没打出去")
+                            : "") + "）");
         } catch (Throwable ignored) {
             cd = 100;
             logFireThrottled(maid, id, gameTime, "主手=" + itemName(gun)
                     + " → 枪械开火抛异常（按 100 tick 冷却处理）");
         }
         RANGED_GUN_CD.put(id, cd);
+    }
+
+    /**
+     * v1.3.0 实测六百六十六【枪械状态机每 tick 推进一步】——粉丝反馈「远程鞘翅模式下对蓄力枪械
+     * 和重型武器的判定有点问题，通常打个几发就会"哑火"，女仆会一直绕圈但不射击，如果在地面
+     * 则会挨揍」里，"哑火"那一半的根因。
+     *
+     * 【根因（javap 实证：TLM 1.5.3 + TACZ 1.1.8-hotfix + SBW 0.8.9.1）】`GunCommonUtil.tick`
+     * 在 TACZ 那一支**是空操作**（TACZ 自己的 LivingEntityMixin 给所有 LivingEntity 每 tick
+     * 推进换弹/拉栓/散热），在卓越前线那一支则是
+     * {@code GunData.tick(maid, true)}——**SBW 枪械充能 / 换弹 / 拉栓 / 散热计时器的唯一推进者**。
+     * 旧版这一句写在 {@link #tickGunFire} 里，而 tickGunFire 又在 {@link #fireRanged} 的三道门
+     * 之后（射程 → 视线 → 冷却）：**只有"轮到她开火的那一拍"，状态机才走一步**。
+     *
+     * 而 SBW 的 `GunItem.canShoot`（javap 实证）要求
+     * {@code 弹数>0 && !overHeat && 热量够 && !reloading() && !charging() && !bolt.needed && 弹药够}，
+     * 其中充能 / 换弹 / 拉栓的剩余时间**只在 GunData.tick 里递减**。于是：
+     * 冷却 40 tick 的重武器装一发 40 tick 的弹要 40×40 = 1600 tick（80 秒）；
+     * 蓄力枪更直接——**充能永远走不完** → canShoot 恒假 → TLM 的卓越前线分支返回 50
+     * （只扔一颗手雷就完事）→ 她把弹匣里那几发打光后就再也不会响。**"打个几发就会哑火"**。
+     *
+     * 【口径】每 tick **恰好一次**：
+     * <ul>
+     *   <li>**幂等**——同一个 gameTime 只推进一次。fireRanged 在空中盘旋 / 爬升 / 地面三条支路
+     *       各会调一次（不设防会以 2~3 倍速推进 SBW 的计时器）；</li>
+     *   <li>**在所有门之前**（调用点见 fireRanged 开头）——充能看到一半不该因为敌人绕到墙后
+     *       或超出射程就冻结；</li>
+     *   <li>主手不是枪就直接返回（TACZ 那一支本来就是空操作，白调无意义）。</li>
+     * </ul>
+     */
+    public static void tickGunState(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
+        if (maid == null || id == null) {
+            return;
+        }
+        ItemStack main = maid.m_21205_();
+        if (!GunCompat.isGun(main)) {
+            return;
+        }
+        Long last = GUN_STATE_TICKED.get(id);
+        if (last != null && last == gameTime) {
+            return;
+        }
+        GUN_STATE_TICKED.put(id, gameTime);
+        try {
+            com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
+                    .tick(maid, target, main);
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 物品注册名（日志用；空栈给「空」） */

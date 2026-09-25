@@ -76,6 +76,14 @@ public class PromaidConfigScreen extends Screen {
      * 用【行标签】做键：分页重建后输入不丢（重建时按标签恢复文本）。
      */
     private final java.util.Map<String, String> pendingText = new java.util.HashMap<>();
+    /**
+     * v1.3.0 实测六百六十六：保存时的提示（越界被钳 / 没写成功）——画在底部按钮行上方。
+     * 玩家反馈「散步间隔填了 4000000 却一点用没有，是不是不可调」：旧版越界值被**静默**
+     * 写进文件（下次加载才钳）或静默丢弃，面板上一个字都不提示。
+     */
+    private String saveHint = null;
+    /** v1.3.0 实测六百六十六：被钳到边界的那些行（"散步间隔 超出 20~1728000，已按 1728000 生效"） */
+    private final java.util.List<String> numNotices = new java.util.ArrayList<>();
     /** 行标签 → 配置写入函数（创建 NumRow 时登记，保存时统一调用） */
     private final java.util.Map<String, Function<String, Boolean>> numSetters = new java.util.HashMap<>();
     /** v1.5.127：文本行写入函数（无数字校验，保存时统一调用） */
@@ -432,10 +440,20 @@ public class PromaidConfigScreen extends Screen {
                             Consumer<String> onChange, String comment) implements RowDef {
     }
 
-    /** 数值输入行（数字过滤，即时写入配置；v1.5.103：onChange 返回 Boolean = 是否设置成功，
-     *  失败（非数字/越界）时输入框红字提示；v1.5.110：末位 comment = 该项说明注释） */
+    /**
+     * 数值输入行（v1.5.103：onChange 返回 Boolean = 是否设置成功，失败时输入框红字提示；
+     * v1.5.110：末位 comment = 该项说明注释）。
+     *
+     * v1.3.0 实测六百六十六【可选范围】：min/max 非空时，输入越界**当场红字**，保存时钳到
+     * 边界并提示（"已按 X 生效"）。为什么必须由面板自己判范围——见 {@code setIntInRange}
+     * 的注释（Forge 的 set() 不校验范围，越界值要等下次加载才被静默钳掉）。
+     * 四参构造器保持原样：绝大多数行不声明范围，行为与旧版一字不差。
+     */
     private record NumRow(String label, String value, Function<String, Boolean> onChange,
-                          String comment) implements RowDef {
+                          String comment, Double min, Double max) implements RowDef {
+        NumRow(String label, String value, Function<String, Boolean> onChange, String comment) {
+            this(label, value, onChange, comment, null, null);
+        }
     }
 
     /** 开关行（开/关循环按钮） */
@@ -483,6 +501,15 @@ public class PromaidConfigScreen extends Screen {
             scr.inGroup = true;
         }
         scr.focusLabel = (rowLabel == null || rowLabel.isEmpty()) ? null : rowLabel;
+        // v1.3.0 实测六百六十六：跳转前先把**当前面板**里未提交的输入写进配置。
+        // 旧版只有「保存并返回」/Esc 会走 m_7379_（延迟提交的统一入口），而用目录/板块/
+        // 手册跳转离开是直接 setScreen——输入框里刚填的数整段丢掉，玩家看到的还是"填了没用"。
+        try {
+            if (net.minecraft.client.Minecraft.getInstance().screen instanceof PromaidConfigScreen cur) {
+                cur.applyPending();
+            }
+        } catch (Throwable ignored) {
+        }
         net.minecraft.client.Minecraft.getInstance().setScreen(scr);
     }
 
@@ -772,9 +799,14 @@ public class PromaidConfigScreen extends Screen {
                 // setCursorPosition→responder 无限递归 → StackOverflowError
                 // （被 KeyboardHandler 包装捕获 → "输入卡一下、永远打不进字"，
                 // 崩溃日志实证 EditBox.moveCursorTo↔lambda$sectionButtons$1 循环）
+                // v1.3.0 实测六百六十六：范围也当场判（旧版只判"是不是数字"，越界还是白字
+                // ——玩家填 4000000 看着完全正常，保存后却什么也没发生，这就是"不可调"的观感）
+                final Double rMin = nr.min();
+                final Double rMax = nr.max();
                 box.setResponder(s -> {
                     this.pendingText.put(rowKey, s);
-                    box.setTextColor(validNumText(s) ? 0xFFFFFF : 0xFFFF5555);
+                    box.setTextColor(validNumText(s) && inRangeOrUnbounded(s, rMin, rMax)
+                            ? 0xFFFFFF : 0xFFFF5555);
                 });
                 this.numSetters.put(rowKey, nr.onChange());
                 this.addRenderableWidget(box);
@@ -3088,17 +3120,25 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0 实测一百八十三：空闲散步——治 TLM 原生散步又少又慢又近
         this.rows.add(new BoolRow("空闲散步", MaidSmartConfig.MISC_STROLL_ENABLED.get(),
                 v -> MaidSmartConfig.MISC_STROLL_ENABLED.set(v), "女仆空闲时按间隔主动散步（默认开）——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、平均一两小时才走一次）；战斗/自保/站桩工作/有移动目标时不打扰"));
+        // v1.3.0 实测六百六十六：这三行补上**合法范围**（旧版一个字都没写，玩家当然不知道
+        // 有上限——填了 4000000 就是越界，然后被静默吞掉），并改用带范围的 setter：
+        // 越界当场红字、保存时钳到边界并提示，不再出现"填了没反应"
         this.rows.add(new NumRow("散步间隔（tick）", String.valueOf(MaidSmartConfig.MISC_STROLL_INTERVAL.get()),
-                s -> setInt(MaidSmartConfig.MISC_STROLL_INTERVAL, s), "空闲女仆每隔这么久散步一次（默认 200=10 秒，TLM 原生平均一两小时才走一次）；找得到落点就走，找不到顺延"));
+                this.setIntInRange(MaidSmartConfig.MISC_STROLL_INTERVAL, "散步间隔", 20, 1728000),
+                "空闲女仆每隔这么久散步一次（默认 200=10 秒，范围 20~1728000；TLM 原生平均一两小时才走一次）；找得到落点就走，找不到顺延。想让她基本别乱跑就填大值（1728000 tick = 24 小时），或直接关掉上面的「空闲散步」开关",
+                20.0, 1728000.0));
         this.rows.add(new NumRow("散步半径（格）", String.valueOf(MaidSmartConfig.MISC_STROLL_RADIUS.get()),
-                s -> setInt(MaidSmartConfig.MISC_STROLL_RADIUS, s), "每次散步在周围这个半径内随机选点（默认 16；排班/在家模式下不会超出「排班活动半径」）"));
+                this.setIntInRange(MaidSmartConfig.MISC_STROLL_RADIUS, "散步半径", 4, 128),
+                "每次散步在周围这个半径内随机选点（默认 16，范围 4~128；排班/在家模式下不会超出「排班活动半径」）",
+                4.0, 128.0));
         this.rows.add(new NumRow("散步速度倍率", String.valueOf(MaidSmartConfig.MISC_STROLL_SPEED.get()),
-                s -> setDouble(MaidSmartConfig.MISC_STROLL_SPEED, s),
+                this.setDoubleInRange(MaidSmartConfig.MISC_STROLL_SPEED, "散步速度倍率", 0.05, 2.5),
                 "散步移动速度倍率（默认 0.4，范围 0.05~2.5）——**女仆基础移动速度的几成**（她的基础移速属性是 0.7，玩家只有 0.1），倍率乘在它上面。"
                         + "实测下来实际格/秒不是线性的（慢到一定程度她会一步一顿），六百二十 在专用服务器上量的「走一段路的平均速度」："
                         + "0.1~0.2 → 0.1（几乎不走，像卡住）｜0.3 → 1.9｜0.4 → 3.3（默认）｜0.5 → 4.9（≈玩家走路 4.32）｜0.6 → 6｜0.7 → 8（比玩家跑步 5.61 还快）｜1.0 → 14（鬼畜）——同一档换地形会有约 ±20% 波动。"
                         + "【六百二十 改了两处】默认 0.7 → 0.4（老默认实测 ≈8 格/秒，正是反馈里说的「跟快步跑一样」）；下限 0.3 → 0.05（老下限就是能调到的最慢值，想调慢的人被卡住了）。"
-                        + "游戏里 /maid_smart stroll speed <值> 可当场改，/maid_smart stroll check 打出她自己属性与实测参考表，stroll go 让她走一次 24 格直线再 check 看实测格/秒"));
+                        + "游戏里 /maid_smart stroll speed <值> 可当场改，/maid_smart stroll check 打出她自己属性与实测参考表，stroll go 让她走一次 24 格直线再 check 看实测格/秒",
+                0.05, 2.5));
         // v1.5.129：原生任务呆滞修复 + 干活不被打断
         this.rows.add(new BoolRow("原生任务流畅化", MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.get(),
                 v -> MaidSmartConfig.MISC_NATIVE_TASK_SMOOTH.set(v), "TLM 原生任务（种田/挤奶/钓鱼等）呆滞修复：任务行为不再每 3 秒重启、随机散步不再覆盖任务目标、走路少刹车、检查节流减半"));
@@ -4504,6 +4544,74 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         }
     }
 
+    /**
+     * v1.3.0 实测六百六十六：**带范围的整数行 setter**——越界钳到边界，并记一条给玩家看的提示。
+     *
+     * 【为什么范围必须由面板自己判】ModConfigSpec.set() 完全不做范围校验：javap 实证它的
+     * 方法体就是 {@code Preconditions.checkNotNull(...)} 两行 + {@code childConfig.set(path, value)}
+     * + {@code cachedValue = value}——**范围只在"读配置文件"时由 correct() 钳**。
+     * 于是旧版"散步间隔填 4000000"会：输入框白字（只校验了"是不是数字"）→ 写进文件 →
+     * **下次加载被静默钳成上限（24000）**；玩家看到的现象就是"这个数填了没用、调不动"。
+     * 现在：越界当场红字（{@link #inRangeOrUnbounded}）+ 保存时钳到边界 + 明确告诉玩家按多少生效。
+     */
+    private Function<String, Boolean> setIntInRange(ModConfigSpec.IntValue value, String label,
+                                                    double min, double max) {
+        return s -> {
+            try {
+                double v = Double.parseDouble(s.trim());
+                double c = Math.max(min, Math.min(max, v));
+                value.set((int) c);
+                if (c != v) {
+                    this.numNotices.add(label + "（" + fmtNum(min) + "~" + fmtNum(max)
+                            + "）超出范围，已按 " + fmtNum(c) + " 生效");
+                }
+                return true;
+            } catch (Exception ignored) {
+                return false;
+            }
+        };
+    }
+
+    /** 带范围的小数行 setter（同上，见 {@link #setIntInRange} 的注释） */
+    private Function<String, Boolean> setDoubleInRange(ModConfigSpec.DoubleValue value, String label,
+                                                       double min, double max) {
+        return s -> {
+            try {
+                double v = Double.parseDouble(s.trim());
+                double c = Math.max(min, Math.min(max, v));
+                value.set(c);
+                if (c != v) {
+                    this.numNotices.add(label + "（" + fmtNum(min) + "~" + fmtNum(max)
+                            + "）超出范围，已按 " + fmtNum(c) + " 生效");
+                }
+                return true;
+            } catch (Exception ignored) {
+                return false;
+            }
+        };
+    }
+
+    /** 提示里的数字：整数不带小数点（0.05~2.5 这种照常带） */
+    private static String fmtNum(double d) {
+        if (!Double.isInfinite(d) && !Double.isNaN(d) && d == Math.floor(d)) {
+            return String.valueOf((long) d);
+        }
+        return String.valueOf(d);
+    }
+
+    /** v1.3.0 实测六百六十六：行内范围校验（min/max 都为 null = 不判范围，与旧版一致） */
+    private static boolean inRangeOrUnbounded(String s, Double min, Double max) {
+        if (min == null && max == null) {
+            return true;
+        }
+        try {
+            double v = Double.parseDouble(s.trim());
+            return (min == null || v >= min) && (max == null || v <= max);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
     private static boolean setString(ModConfigSpec.ConfigValue<String> value, String s) {
         String v = s.trim();
         if (v.equals("x1") || v.equals("x1.5") || v.equals("x3")) {
@@ -5128,6 +5236,11 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         cx, h - 62, 0xAAAAAA);
             }
         }
+        // v1.3.0 实测六百六十六：保存提示（越界被钳 / 没写成功）——画在底部按钮行上方，
+        // 只在有内容时出现；下一次成功的保存会把它清掉
+        if (this.saveHint != null && !this.saveHint.isEmpty()) {
+            g.drawCenteredString(this.font, Component.literal(this.saveHint), cx, h - 48, 0xFFFF5555);
+        }
         super.render(g, mouseX, mouseY, partialTick);
     }
 
@@ -5323,30 +5436,85 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         return super.isValidCharacterForName(text, codePoint, modifiers);
     }
 
-    @Override
-    public void onClose() {
-        // v1.5.124：延迟提交——把各输入框当前文本统一写入配置
-        //（空文本/非法文本跳过，保留原值；输入过程零配置写入 = 不卡输入）
+    /**
+     * 把输入框里未提交的文本统一写进配置（v1.5.124 延迟提交的**唯一**入口）。
+     *
+     * v1.3.0 实测六百六十六【不再静默丢输入】——玩家反馈「散步间隔填了 4000000，
+     * 是不是不可调」。旧版这里 {@code setter.apply(...)} 的返回值被直接忽略：写失败
+     * （格式非法 / 写入异常）就一声不响地丢掉，而输入框只标"不是数字"、不标"超出范围"，
+     * 玩家完全看不出为什么没生效。现在把没写成功的行名带回去，由 {@link #m_7379_}
+     * 画在面板上（并且**不关面板**，让玩家当场改）。
+     *
+     * @return 没写成功的行标签列表（空 = 全部写成功）
+     */
+    private java.util.List<String> applyPending() {
+        java.util.List<String> failed = new java.util.ArrayList<>();
         for (java.util.Map.Entry<String, String> e : this.pendingText.entrySet()) {
             Function<String, Boolean> setter = this.numSetters.get(e.getKey());
-            if (setter == null || !validNumText(e.getValue())) {
-                continue;
+            if (setter == null) {
+                continue; // 文本行在下面那一轮
             }
+            String text = e.getValue() == null ? "" : e.getValue().trim();
+            if (text.isEmpty()) {
+                continue; // 空文本 = 没动过这一行（保留原值）
+            }
+            boolean ok = false;
             try {
-                setter.apply(e.getValue());
+                ok = Boolean.TRUE.equals(setter.apply(text));
             } catch (Exception ignored) {
+            }
+            if (!ok) {
+                failed.add(shortLabel(e.getKey()));
             }
         }
         // v1.5.127：文本行（保留/垃圾物品 id 列表）——非空即写入
         // v1.5.198：记忆 API 字段允许空值写入（清空 = 回退 TLM 配置）
         for (java.util.Map.Entry<String, String> e : this.pendingText.entrySet()) {
             Function<String, Boolean> setter = this.textSetters.get(e.getKey());
-            if (setter != null && (!e.getValue().trim().isEmpty() || EMPTY_ALLOWED.contains(setter))) {
-                try {
-                    setter.apply(e.getValue());
-                } catch (Exception ignored) {
-                }
+            if (setter == null) {
+                continue;
             }
+            if (e.getValue().trim().isEmpty() && !EMPTY_ALLOWED.contains(setter)) {
+                continue;
+            }
+            boolean ok = false;
+            try {
+                ok = Boolean.TRUE.equals(setter.apply(e.getValue()));
+            } catch (Exception ignored) {
+            }
+            if (!ok) {
+                failed.add(shortLabel(e.getKey()));
+            }
+        }
+        return failed;
+    }
+
+    /** 行键（"板块:标签"）→ 只留标签（写给玩家看的短名） */
+    private static String shortLabel(String rowKey) {
+        if (rowKey == null) {
+            return "?";
+        }
+        int i = rowKey.indexOf(':');
+        return i < 0 ? rowKey : rowKey.substring(i + 1);
+    }
+
+    @Override
+    public void onClose() {
+        this.saveHint = null;
+        this.numNotices.clear();
+        java.util.List<String> failed = this.applyPending();
+        if (!failed.isEmpty()) {
+            // 有行没写成功：报出来 + **不关面板**（旧版：静默丢掉然后照样关闭，
+            // 玩家只会觉得"面板调不动"）
+            this.saveHint = "\u00a7c这几行没保存（不是数字或写不进去）：" + String.join("、", failed)
+                    + "（改好后再点「保存并返回」）";
+            com.maidsmart.tool.PromaidLog.log("配置面板", "未保存的行：" + String.join("、", failed));
+            return;
+        }
+        if (!this.numNotices.isEmpty()) {
+            // 越界被钳到边界：明确告诉玩家按多少生效（旧版是静默钳，重进游戏才发现数变了）
+            this.saveHint = "\u00a7e" + String.join("；", this.numNotices);
+            com.maidsmart.tool.PromaidLog.log("配置面板", String.join("；", this.numNotices));
         }
         MaidSmartConfig.SPEC.save();
         com.maidsmart.task.MaidMineBehavior.loadCustomOres();

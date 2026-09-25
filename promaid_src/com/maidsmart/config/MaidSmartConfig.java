@@ -2293,9 +2293,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 概率 0.001×0.09²≈平均一两小时才走一次）
         MISC_STROLL_ENABLED = BUILDER.comment("空闲散步（默认开）：女仆空闲时按间隔主动散步——替代 TLM 原生散步（原生只有 0.3 倍速、5 格半径、概率约每两小时才触发一次）；战斗/自保/站桩工作/有移动目标时不打扰")
                 .translation("config.promaid.misc.strollEnabled").define("strollEnabled", true);
-        MISC_STROLL_INTERVAL = BUILDER.comment("散步间隔（tick，默认 200=10 秒）：空闲女仆每隔这么久散步一次（找得到落点就走，找不到顺延）")
-                .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 24000);
-        MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
+        // v1.3.0 实测六百六十六：上限 24000 → 1728000（24 小时）。旧上限只有 20 分钟，玩家
+        // 想"基本别乱跑"就得填更大的数——而 ForgeConfigSpec.set() **不做范围校验**（javap 实证：
+        // 它只把值写进 nightconfig，范围是**下次加载读文件时**才被 correct() 钳的），于是
+        // "填 4000000、看着像写进去了、重进游戏变成上限（或根本没生效）"，玩家只会觉得
+        // "这个数调不动"。现在上限放到 24 小时，面板侧也补了越界红字与钳位提示
+        // （见 PromaidConfigScreen.setIntInRange 的注释）。
+        MISC_STROLL_INTERVAL = BUILDER.comment("散步间隔（tick，默认 200=10 秒，范围 20~1728000）：空闲女仆每隔这么久散步一次（找得到落点就走，找不到顺延）。想让她基本不散步就填大值（1728000 tick = 24 小时），或直接把「空闲散步」开关关掉")
+                .translation("config.promaid.misc.strollInterval").defineInRange("strollInterval", 200, 20, 1728000);
+        MISC_STROLL_RADIUS = BUILDER.comment("散步半径（格，默认 16，范围 4~128）：每次散步在周围这个半径内随机选点（排班/在家模式下不会超出「排班活动半径」）")
                 .translation("config.promaid.misc.strollRadius").defineInRange("strollRadius", 16, 4, 128);
         MISC_STROLL_SPEED = BUILDER.comment("散步速度倍率（默认 0.4；范围 0.05~2.5）：这是**女仆基础移动速度的几成**——女仆的基础移动速度属性是 0.7（原版 LivingEntity 的默认值，玩家是 0.1），倍率就乘在它上面。\n\n【六百二十 实测的对照表】实际格/秒不是线性的（慢到一定程度她会一步一顿，寻路每格重新判定），下面这些数是本模组在专用服务器上量出来的「走一段路的平均速度」（玩家走路 4.32 格/秒、跑步 5.61）：\n  0.1~0.2 → 0.1（几乎不走，像卡住）\n  0.3 → 1.9　0.4 → 3.3（默认）　0.5 → 4.9（≈玩家走路）\n  0.6 → 6　0.7 → 8（比玩家跑步还快）　1.0 → 14（鬼畜）\n（同一档换地形/机器会有大约 ±20% 波动）\n\n【六百二十 改了两处】①默认 0.7 → 0.4：老的默认实测约 8 格/秒、比玩家跑步（5.61）还快，用户反馈的「0.1 倍速都跟快步跑一样」看到的就是这个数；②下限 0.3 → 0.05：老下限把想调慢的人卡死了（0.3 就是能调到的最慢值）。注意 0.2 以下实测几乎不走，好用的慢档是 0.3~0.4。\n\n游戏里可以用 /maid_smart stroll speed <值> 当场改，/maid_smart stroll check 会把她**自己**的基础移速属性、实测参考表和当前门禁打出来，/maid_smart stroll go 让她走一次 24 格直线再 check 就能看到实测格/秒。")
                 .translation("config.promaid.misc.strollSpeed").defineInRange("strollSpeed", 0.4, 0.05, 2.5);

@@ -377,9 +377,12 @@ public final class MaidFlightKit {
             if (weapon == null || weapon.isEmpty()) {
                 return false;
             }
-            // 枪械：走 GunCompat（内部已处理"能量武器不吃常规弹药"）
+            // 枪械：走 GunCompat（口径由枪械 mod 自己回答，见 GunCompat.canFeed 的类注释）
+            // v1.3.0 实测六百六十六：改成**按这把枪**问——旧版是"她身上任意一把枪有弹就算"，
+            // 于是"手里是喂不上弹的重武器/蓄力枪、背包里另有一把能用的手枪"时模式照样激活，
+            // 她就一直绕圈不开火（粉丝反馈"一直绕圈但不射击"的成因；开火用的就是这把枪）
             if (GunCompat.isGun(weapon)) {
-                return GunCompat.hasGunAndAmmo(maid);
+                return GunCompat.canFeed(maid, weapon);
             }
             // v1.2.0 实测五百零一【御币被误判缺弹药】：御币 **不消耗弹药**（弹幕用武器本体），
             // 但它是 `ProjectileWeaponItem` 的子类（`ItemHakureiGohei extends ProjectileWeaponItem`，
