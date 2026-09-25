@@ -132,6 +132,48 @@ public final class MaidFreeFlightController {
     private static final Map<UUID, double[]> OWNER_LAST = new HashMap<>();
     /** 主人已连续静止的 tick 数 */
     private static final Map<UUID, Integer> OWNER_STILL = new HashMap<>();
+    /**
+     * 替代主人（专用服务器验收入口）——照上游「飞行跟随」的 {@code /maid_smart flyfollow} 先例。
+     *
+     * 【为什么需要】这条链的目标是**在线主人实体**：TLM 的 {@code getOwner()} 走
+     * {@code server.getPlayerList().getPlayer(uuid)}，专用服务器上没有玩家就恒为 null，整条
+     * "静止→落地待命→再起飞"**结构上无法端到端触发**。挂一个替代主人（僵尸/盔甲架都行）就能
+     * 走**同一套**判定与飞行链路，只替换目标来源。键用弱引用，女仆卸载即回收。
+     */
+    private static final Map<EntityMaid, LivingEntity> SUB_OWNER =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    public static void setSubstituteOwner(EntityMaid maid, LivingEntity target) {
+        if (maid != null && target != null) {
+            SUB_OWNER.put(maid, target);
+            OWNER_STILL.remove(maid.getUUID());
+            OWNER_LAST.remove(maid.getUUID());
+        }
+    }
+
+    public static void clearSubstituteOwner(EntityMaid maid) {
+        if (maid != null) {
+            SUB_OWNER.remove(maid);
+        }
+    }
+
+    /** 目标来源：替代主人优先，否则她的真主人 */
+    private static LivingEntity resolveOwner(EntityMaid maid) {
+        try {
+            LivingEntity sub = SUB_OWNER.get(maid);
+            if (sub != null && sub.isAlive() && sub.level() == maid.level()) {
+                return sub;
+            }
+        } catch (Throwable ignored) {
+        }
+        return maid.getOwner();
+    }
+
+    /** 进入"落地待命"的时刻（tick）——落地后留一秒落稳宽限，避免刚站住就被判"她在半空"再次起飞 */
+    private static final Map<UUID, Long> STANDBY_SINCE = new HashMap<>();
+    /** "为什么还没落地"的诊断限频 */
+    private static final Map<UUID, String> NO_LAND_LAST = new HashMap<>();
+    private static final Map<UUID, Long> NO_LAND_AT = new HashMap<>();
 
     private static final int ST_OFF = 0;
     private static final int ST_FLYING = 1;
@@ -148,7 +190,7 @@ public final class MaidFreeFlightController {
                 return;
             }
             int st = STATE.getOrDefault(id, ST_OFF);
-            LivingEntity owner = maid.getOwner();
+            LivingEntity owner = resolveOwner(maid);
             boolean ownerHere = owner != null && owner.isAlive() && maid.level() == owner.level();
             boolean ownerMoving = ownerHere && trackOwnerMoving(maid, owner);
             boolean allowed = canFly(maid);
@@ -204,9 +246,60 @@ public final class MaidFreeFlightController {
             STATE.put(maid.getUUID(), ST_FLYING);
             maid.setNoGravity(true);
             PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid) + " " + why
-                    + "（" + MaidFreeFlightKit.diag(maid) + "）");
+                    + "（" + takeOffReason(maid) + "；" + MaidFreeFlightKit.diag(maid) + "）");
         } catch (Throwable ignored) {
         }
+    }
+
+    /** 诊断：这一 tick 是**哪一条**起飞条件成立的（"她怎么又起飞了"的唯一自查手段） */
+    private static String takeOffReason(EntityMaid maid) {
+        try {
+            if (!idleMode()) {
+                return "始终悬停档";
+            }
+            if (DEBUG_TARGET.containsKey(maid.getUUID())) {
+                return "坐标档";
+            }
+            LivingEntity owner = resolveOwner(maid);
+            if (owner == null) {
+                return "没有主人";
+            }
+            Long since = STANDBY_SINCE.get(maid.getUUID());
+            if (since != null && maid.tickCount - since < 20) {
+                return "（宽限内）";
+            }
+            if (!maid.onGround() && (maid.fallDistance > 0.5 || maid.getDeltaMovement().y < -0.12)) {
+                return "她在下坠 fall=" + String.format("%.2f", maid.fallDistance)
+                        + " vy=" + String.format("%.3f", maid.getDeltaMovement().y);
+            }
+            if (!maid.onGround()) {
+                return "她在半空但没在下坠（onGround=false vy=" + String.format("%.3f", maid.getDeltaMovement().y) + "）";
+            }
+            if (OWNER_LAST.containsKey(maid.getUUID())
+                    && trackOwnerMovingSnapshot(maid, owner)) {
+                return "主人在动";
+            }
+            if (horizontalDist(maid, owner) > 4.0) {
+                return "离主人 > 4 格";
+            }
+            if (Math.abs(maid.getY() - owner.getY()) > 2.0) {
+                return "高差 " + String.format("%.1f", Math.abs(maid.getY() - owner.getY())) + " > 2";
+            }
+            return "主人可能在空中";
+        } catch (Throwable ignored) {
+            return "诊断异常";
+        }
+    }
+
+    /** 只读版的主人移动判定（诊断用，不更新状态表） */
+    private static boolean trackOwnerMovingSnapshot(EntityMaid maid, LivingEntity owner) {
+        double[] last = OWNER_LAST.get(maid.getUUID());
+        if (last == null) {
+            return false;
+        }
+        double dx = owner.getX() - last[0];
+        double dz = owner.getZ() - last[1];
+        return Math.sqrt(dx * dx + dz * dz) > OWNER_MOVE_EPS;
     }
 
     /** 飞行中的每 tick：选目标点 → 一阶转向 → 保持无重力 → 抢移动 */
@@ -239,6 +332,7 @@ public final class MaidFreeFlightController {
             LAND_GOAL.remove(id);
             if (goal == ST_STANDBY && canFly(maid)) {
                 STATE.put(id, ST_STANDBY);
+                STANDBY_SINCE.put(id, (long) maid.tickCount);
                 maid.setNoGravity(false);
                 maid.setDeltaMovement(0.0, Math.min(0.0, maid.getDeltaMovement().y), 0.0);
                 YAW.remove(id);
@@ -250,20 +344,30 @@ public final class MaidFreeFlightController {
             }
             return;
         }
-        double vx = 0.0;
-        double vz = 0.0;
+        // 【实测六百七十八 修起落抖动】两段式进场：**先飞到他身边**（用飞行速度），
+        // 贴近了才垂直下降。旧版是"边下降边慢漂"（漂移上限 0.15 格/tick + 下降 2.4 格/秒），
+        // 从 8 格外根本来不及漂到，于是她落在 5 格开外 → 又触发"离主人 > 4 格"的起飞判据
+        // → 起飞 → 再落 → 起落抖动（诊断日志实测："重新起飞（离主人 5.4 格 > 4）"）。
         if (owner != null) {
-            double dx = owner.getX() - maid.getX();
-            double dz = owner.getZ() - maid.getZ();
-            double len = Math.sqrt(dx * dx + dz * dz);
-            if (len > nearDist()) {
-                double k = Math.min(0.15, len * 0.06);   // 慢慢漂过去，别冲过头
-                vx = dx / len * k;
-                vz = dz / len * k;
+            double dh = horizontalDist(maid, owner);
+            if (dh > nearDist() + 0.5) {
+                double dx = owner.getX() - maid.getX();
+                double dz = owner.getZ() - maid.getZ();
+                double len = Math.max(1.0E-4, Math.sqrt(dx * dx + dz * dz));
+                // 目标点 = 主人身边 nearDist 处、与他同高略上（这样不会一头扎进他身体里）
+                Vec3 aim = new Vec3(owner.getX() - dx / len * nearDist(),
+                        owner.getY() + 1.0,
+                        owner.getZ() - dz / len * nearDist());
+                steer(maid, aim, true, owner.position());   // 社交朝向：面向主人倒退着过去
+                maid.setNoGravity(true);
+                maid.resetFallDistance();
+                suppressWalk(maid);
+                return;
             }
         }
+        // 贴近了 → 恒速垂直下降（保持无重力 + 每 tick 清零坠落距离，保证"软"到底）
         maid.setNoGravity(true);
-        maid.setDeltaMovement(vx, -SOFT_LAND_SPEED, vz);
+        maid.setDeltaMovement(0.0, -SOFT_LAND_SPEED, 0.0);
         maid.hasImpulse = true;
         maid.hurtMarked = true;
         maid.resetFallDistance();
@@ -287,8 +391,15 @@ public final class MaidFreeFlightController {
         if (owner == null) {
             return true;                                  // 没主人（单人调试/无主）：保持原地悬停
         }
-        if (!maid.onGround()) {
-            return true;                                  // 她在半空（没落地）→ 接管，别让她掉
+        // 【实测六百七十八 修抖动】旧版这里只看 `!onGround()`：她刚落地那一瞬 onGround 还是 false
+        // ⇒ 立刻被判"她在半空"→ 重新起飞 → 再落 → 起落抖动（实测日志里 1 秒内往复多轮）。
+        // 现在两条一起用：**落地后 1 秒宽限** + 只有"真的在下坠"（坠落距离/垂直速度）才算半空。
+        Long since = STANDBY_SINCE.get(maid.getUUID());
+        if (since != null && maid.tickCount - since < 20) {
+            return false;                                 // 刚落稳，先站着
+        }
+        if (!maid.onGround() && (maid.fallDistance > 0.5 || maid.getDeltaMovement().y < -0.12)) {
+            return true;                                  // 她在往下掉（被推下悬崖/脚下被挖空）→ 接管
         }
         if (ownerMoving) {
             return true;                                  // 主人在走
@@ -302,21 +413,24 @@ public final class MaidFreeFlightController {
         return ownerAirborne(owner);                      // 主人在滑翔/创造飞行 → 跟上去
     }
 
-    /** 该不该落地待命：主人静止够久 + 已经贴近 + 落点安全（且他没在天上） */
+    /**
+     * 该不该落地待命——判定与"为什么没落地"共用 {@link #noLandReason}（单一事实源，
+     * 免得判定与日志各写一套、排查时对不上）。
+     *
+     * 【离主人的距离门槛已放宽到 8 格】旧版要求"已经贴近到 3.5 格内"才允许落，
+     * 而她悬停的位置正好就在 3.5 格边缘（跟随圈半径）⇒ 判定在临界值上抖 ✗。
+     * 现在只要"主人身边 8 格内"就落，**靠近的动作由软着陆的漂移负责**（≤0.15 格/tick 漂到 2 格内）。
+     */
     private static boolean shouldLandAndWait(EntityMaid maid, LivingEntity owner, boolean ownerMoving) {
-        if (!idleMode() || owner == null || DEBUG_TARGET.containsKey(maid.getUUID())) {
-            return false;
+        String reason = noLandReason(maid, owner, ownerMoving);
+        if (reason == null) {
+            return true;
         }
-        if (ownerMoving || OWNER_STILL.getOrDefault(maid.getUUID(), 0) < idleSeconds() * 20) {
-            return false;
+        // 只在"主人其实已经停下来很久了"这种情况才记日志（避免正常跟随时刷屏）
+        if (!ownerMoving && OWNER_STILL.getOrDefault(maid.getUUID(), 0) >= idleSeconds() * 20) {
+            logNoLand(maid, reason);
         }
-        if (ownerAirborne(owner) || maid.isInWater() || maid.isInLava()) {
-            return false;
-        }
-        if (horizontalDist(maid, owner) > nearDist() + 1.5) {
-            return false;                                 // 还没贴近：先漂过去再说（由 tickSoftLand 漂移）
-        }
-        return safeStandingSpot(maid, owner);
+        return false;
     }
 
     private static boolean ownerAirborne(LivingEntity owner) {
@@ -330,27 +444,122 @@ public final class MaidFreeFlightController {
         }
     }
 
-    /** 落点安全：她脚下与主人脚下都得是"实心地面 + 上方两格空"（别往岩浆/水里/虚空落） */
-    private static boolean safeStandingSpot(EntityMaid maid, LivingEntity owner) {
+    /**
+     * 落点安全（实测六百七十八 修）：**从她当前位置往下找**落点，而不是查"她脚下有没有方块"。
+     *
+     * 【旧版的致命 bug】第一版写成 `solidGround(maid.blockPosition())`——她**正悬在半空**，
+     * 脚下本来就是空气 ⇒ 恒为 false ⇒ "落点安全"永远判不过 ⇒ **永远落不下来**
+     * （用户实测：静止等了约 10 分钟她依然悬着）。正确的问法是"她往下落会落在哪、那里安全吗"。
+     */
+    private static String noLandReason(EntityMaid maid, LivingEntity owner, boolean ownerMoving) {
         try {
-            return solidGround(maid.level(), maid.blockPosition())
-                    && solidGround(maid.level(), owner.blockPosition());
+            if (!idleMode()) {
+                return "智能待命关着（配置里可开）";
+            }
+            if (owner == null) {
+                return "没有在线主人（专用服务器上 getOwner 恒为 null）";
+            }
+            if (DEBUG_TARGET.containsKey(maid.getUUID())) {
+                return "坐标档进行中";
+            }
+            if (ownerMoving) {
+                return "主人还在动";
+            }
+            int still = OWNER_STILL.getOrDefault(maid.getUUID(), 0);
+            if (still < idleSeconds() * 20) {
+                return "主人静止 " + (still / 20) + "s（需 " + idleSeconds() + "s）";
+            }
+            if (ownerAirborne(owner)) {
+                return "主人在空中（滑翔/创造飞行）";
+            }
+            if (maid.isInWater() || maid.isInLava()) {
+                return "她在水里/岩浆里";
+            }
+            double d = horizontalDist(maid, owner);
+            if (d > 8.0) {
+                // 不把距离写进字符串：否则每接近 1 格就变成"新理由"、绕过限频刷屏
+                return "离主人太远（> 8 格，正在飞过去）";
+            }
+            if (!solidGround(maid.level(), owner.blockPosition())) {
+                return "主人脚下不是实地";
+            }
+            net.minecraft.core.BlockPos landing = findGroundBelow(maid.level(), maid.blockPosition(), 32);
+            if (landing == null) {
+                return "她下方 32 格内没有安全落点（虚空/水/岩浆/顶上被堵？）";
+            }
+            if (landing.getY() < owner.blockPosition().getY() - 4) {
+                return "落点比主人低太多（他在高处/她悬在悬崖外）";
+            }
+            return null;   // 可以落
+        } catch (Throwable ignored) {
+            return "判定异常";
+        }
+    }
+
+    /** pos 脚下是不是实心地面（且不是水/岩浆）——判断"主人是不是站在地上" */
+    private static boolean solidGround(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+        try {
+            var below = level.getBlockState(pos.below());
+            if (below.isAir()
+                    || below.is(net.minecraft.world.level.block.Blocks.WATER)
+                    || below.is(net.minecraft.world.level.block.Blocks.LAVA)) {
+                return false;
+            }
+            return !below.getCollisionShape(level, pos.below()).isEmpty();
         } catch (Throwable ignored) {
             return false;
         }
     }
 
-    private static boolean solidGround(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos pos) {
+    /** 从 from 往下找第一个可以站的位置（≤maxDown 格）；找不到返回 null */
+    private static net.minecraft.core.BlockPos findGroundBelow(net.minecraft.world.level.Level level,
+                                                               net.minecraft.core.BlockPos from, int maxDown) {
         try {
-            var below = level.getBlockState(pos.below());
-            if (below.isAir() || below.is(net.minecraft.world.level.block.Blocks.WATER)
-                    || below.is(net.minecraft.world.level.block.Blocks.LAVA)) {
-                return false;
+            net.minecraft.core.BlockPos.MutableBlockPos p = from.mutable();
+            for (int i = 0; i <= maxDown; i++) {
+                var here = level.getBlockState(p);
+                if (!here.getCollisionShape(level, p).isEmpty()) {
+                    net.minecraft.core.BlockPos spot = p.above();
+                    var s0 = level.getBlockState(spot);
+                    var s1 = level.getBlockState(spot.above());
+                    if (s0.is(net.minecraft.world.level.block.Blocks.WATER)
+                            || s0.is(net.minecraft.world.level.block.Blocks.LAVA)
+                            || s0.is(net.minecraft.world.level.block.Blocks.FIRE)) {
+                        return null;
+                    }
+                    boolean free = s0.getCollisionShape(level, spot).isEmpty()
+                            && s1.getCollisionShape(level, spot.above()).isEmpty();
+                    return free ? spot : null;
+                }
+                if (here.is(net.minecraft.world.level.block.Blocks.WATER)
+                        || here.is(net.minecraft.world.level.block.Blocks.LAVA)) {
+                    return null;   // 水面/岩浆面：不落
+                }
+                p.move(0, -1, 0);
             }
-            return level.getBlockState(pos).getCollisionShape(level, pos).isEmpty()
-                    && level.getBlockState(pos.above()).getCollisionShape(level, pos.above()).isEmpty();
+            return null;
         } catch (Throwable ignored) {
-            return false;
+            return null;
+        }
+    }
+
+    /** 为什么没落地（同理由限频记一条，便于实机排查）——`noLandReason` 的日志壳 */
+    private static void logNoLand(EntityMaid maid, String reason) {
+        try {
+            if (reason == null) {
+                return;
+            }
+            UUID id = maid.getUUID();
+            String last = NO_LAND_LAST.get(id);
+            Long at = NO_LAND_AT.get(id);
+            long t = maid.tickCount;
+            if (reason.equals(last) && at != null && t - at < 600) {
+                return;
+            }
+            NO_LAND_LAST.put(id, reason);
+            NO_LAND_AT.put(id, t);
+            PromaidLog.log("仿创造飞行·待命", PromaidLog.nameOf(maid) + " 还没落地：" + reason);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -430,6 +639,7 @@ public final class MaidFreeFlightController {
             SOFT_LAND_START.remove(id);
             OWNER_LAST.remove(id);
             OWNER_STILL.remove(id);
+            STANDBY_SINCE.remove(id);
             YAW.remove(id);
             RETREAT.remove(id);
             DEBUG_TARGET.remove(id);
@@ -465,7 +675,7 @@ public final class MaidFreeFlightController {
         if (dbg != null) {
             return dbg;
         }
-        LivingEntity owner = maid.getOwner();
+        LivingEntity owner = resolveOwner(maid);
         if (owner != null && owner.isAlive() && maid.level() == owner.level()) {
             double dx = maid.getX() - owner.getX();
             double dz = maid.getZ() - owner.getZ();
