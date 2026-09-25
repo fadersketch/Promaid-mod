@@ -63,6 +63,7 @@
     "MaidCompressionBoxMixin",
     "EntityBroomMaidTravelMixin",
     "EntityGunnerHangMixin",
+    "MaidGlowGoldMixin",
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",
     "ChunkMapRemotePumpMixin"
@@ -75,6 +76,7 @@
     "MaidElytraLayerMixin",
     "MaidElytraLayerGeckoMixin",
     "MaidGhostTetherMixin",
+    "MaidGhostBroomMixin",
     "MaidFlightDiveTiltMixin",
     "MaidGeckoSpinDedupMixin",
     "MaidSpinLiftMixin",

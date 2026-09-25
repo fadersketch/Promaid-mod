@@ -47,6 +47,8 @@ STYLE_OF = {
                'shield_share', 'preserve_wary', 'preserve_no_block', 'preserve_no_escape',
                'preserve_return', 'preserve_lava_fall', 'preserve_drown', 'preserve_stuck',
                'preserve_lava_near', 'preserve_no_heal', 'clutch_snow', 'clutch_water',
+               # v1.3.0 实测六百七十四：武装拴绳·新加气泡（battle 档）
+             'leash_liftoff',
                'totem_peer', 'totem_self', 'totem_give', 'attack_ok'],
     'care': ['aid_food', 'aid_sister_help', 'aid_potion_incoming', 'aid_potion_given',
              'aid_bag_full', 'aid_eat_something', 'aid_honey_poison', 'aid_milk_debuff',
@@ -55,6 +57,8 @@ STYLE_OF = {
              # v1.3.0 实测六百五十五：投喂蛋糕（玩家主动投喂的温柔场合）
              'cake_eat',
              # v1.3.0 实测六百六十九：武装拴绳·解除（「到站啦」——放下人时温柔叮嘱）
+             # v1.3.0 实测六百七十四：武装拴绳·新加气泡（care 档）
+             'leash_landed',
              'leash_off'],
     'plead': ['build_missing_material', 'bridge_no_block', 'brew_missing',
               'mine_no_block_high', 'wood_no_block_high', 'wood_no_axe', 'no_food_left',
@@ -74,6 +78,8 @@ STYLE_OF = {
              'bridge_cant_climb', 'work_distracted', 'mine_blocked_area', 'wood_blocked_area',
              'blocked_ore_report', 'found_something', 'ahead_of_you',
              'fallback_missing', 'fallback_something',
+             # v1.3.0 实测六百七十四：武装拴绳·新加气泡（work 档）
+             'leash_seatback',
              'mine_no_ore', 'farm_no_work'],
 }
 
@@ -89,6 +95,11 @@ JP = {
     'leash_need_mode.ogg': 'ほうきか空襲モードのときにロープを掴んでね～',
     'leash_fail.ogg': 'あれ、ロープが掛からなかった……もう一回やってみる？',
     'leash_denied.ogg': 'このロープはご主人様と、ぶら下がってる人の言うことだけ聞くよ～',
+    'leash_follow.ogg': 'ご主人様について行くね。飛んだら、ぶら下がるから～',
+    'leash_liftoff.ogg': '飛ぶよ！ロープをしっかり掴んでてね～',
+    'leash_landed.ogg': 'ちょっと着地して休むね。ロープを握って、飛び立つのを待ってて～',
+    'leash_seatback.ogg': '箒に戻って座ってね、このまま飛び続けるよ～',
+    'leash_packup.ogg': 'ロープしまったよ～ここで待ってるね',
     # -------- work --------
     'build_done.ogg': 'できたよ！見て見て、私が建てたの！',
     'build_substitute.ogg': '代わりので代用するね',
