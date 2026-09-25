@@ -66,6 +66,10 @@ public final class GuideContent {
                 GuideChaptersFlight.autoResurrectGuide(),
                 GuideChaptersFlight.bedInteropGuide(),
                 GuideChaptersFlight.broomGuide(),
+                // 【实测六百七十五】武装拴绳：从六百六十七 起一直只有更新日志提过它，
+                //  手册正文没有章节——玩家反馈"最近新添加的这些功能…都没有详细介绍的相关面板"。
+                //  位置紧跟扫帚模式（与配置面板里「扫帚模式 → 武装拴绳（二号位）」的相邻顺序一致）。
+                GuideChaptersCombat.tetherGuide(),
                 GuideChaptersCombat.aidGuide(),
                 GuideChaptersCombat.tacticsGuide(),
                 GuideChaptersCombat.weaponEquipGuide(),
@@ -179,6 +183,10 @@ public final class GuideContent {
             {"压缩盒", "SYSTEM:COMPRESSION_BOX"},
             // v1.3.6 实测六百六十一：扫帚模式（配置板块此时在「移动与行为」下）
             {"扫帚", "MOVE:BROOM"},
+            // 【实测六百七十五】武装拴绳（自己的板块；带行标签 = 打开就落在那一行上）。
+            //  注意顺序：本表按顺序取**第一个**命中的关键词，所以这条要放在不会误伤的后面
+            //  （它的标题里不含"扫帚/战斗"等词，放在这里也安全）。
+            {"武装拴绳", "MOVE:TETHER:武装拴绳·总开关"},
     };
 
     /** 实测四百二十四：取该章的配置跳转目标；null = 不附加链接。 */

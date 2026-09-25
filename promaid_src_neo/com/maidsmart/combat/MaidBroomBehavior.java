@@ -298,7 +298,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_START.get();
         } catch (Throwable ignored) {
-            return 25.0;
+            return 6.0; // 【实测六百七十五】与配置默认值对齐（默认 25 → 6，这个兜底也得跟）
         }
     }
 
@@ -306,7 +306,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_FOLLOW_END.get();
         } catch (Throwable ignored) {
-            return 5.0;
+            return 3.0; // 【实测六百七十五】同上（默认 5 → 3）
         }
     }
 
