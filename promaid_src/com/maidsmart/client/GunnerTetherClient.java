@@ -96,10 +96,10 @@ public final class GunnerTetherClient {
                 if (!(maid instanceof EntityMaid) || !(rider instanceof Player)) {
                     continue;
                 }
-                // 原版乘客同步已断（她落地自动放人/解除包还没到）→ 不画
-                if (!maid.m_20363_(rider)) {
-                    continue;
-                }
+                // 【实测六百七十三】不再要求"玩家是她的乘客"：牵绳档（空袭的女仆还没起飞、
+                //  玩家在地面牵着她走）里玩家**不是**乘客，而那正是最需要看到绳子的时候。
+                //  解绑时 S2C 包会把这一对清掉，所以不会留下残影；
+                //  下面那道 8 格距离判据本身就把"过期状态"挡在外面了。
                 if (maid.m_20238_(rider.m_20182_()) > MAX_ROPE_DISTANCE_SQR) {
                     continue;
                 }
