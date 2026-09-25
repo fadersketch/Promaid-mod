@@ -155,6 +155,10 @@ public class PromaidConfigScreen extends Screen {
     /** v1.2.5 实测六百五十二：烧制清单子页（四张名单共用一套「模式按钮 + 搜索网格 + 清单」交互） */
     private boolean cookTable = false;
     private int cookTableMode = 0;
+    /** v1.3.0(beta) 实测六百六十五：烧制物品列表的筛选（0 = 全部 / 1 = 只看食物 / 2 = 只看矿物）。
+     *  玩家反馈「确实看不到食物」——判定没错（日志实证 beef/potato 都是"真"），是 148 个候选要翻
+     *  4 页又没有分类入口；这一档只作用于「烧制物品」，燃料那一档不看它。 */
+    private int cookGridFilter = 0;
     private EditBox cookInput;
     private CookList cookList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
@@ -3715,6 +3719,48 @@ public class PromaidConfigScreen extends Screen {
      * 不会是两套东西。客户端拿不到世界（理论上不会：面板是游戏内开的）时退回全物品，
      * 至少不把人挡在门外。
      */
+    /** 当前筛选取条件是否放行这件候选（只作用于「烧制物品」档；燃料档不看它） */
+    private boolean cookFilterKeeps(net.minecraft.world.item.ItemStack probe) {
+        if (this.cookGridFilter == 1) {
+            return com.maidsmart.task.MaidCookBehavior.isBuiltinFood(probe);
+        }
+        if (this.cookGridFilter == 2) {
+            return com.maidsmart.task.MaidCookBehavior.blastableForPicker(
+                    net.minecraft.client.Minecraft.m_91087_().f_91073_, probe);
+        }
+        return true;
+    }
+
+    /**
+     * 一键把**内置食材清单**（当前世界真有炉子配方的那几件）填进「烧制物品」名单
+     * —— 玩家问「我应该怎么配置怎么烧食物」：点这一下就是"只烧食物"。
+     *
+     * <p>【说清语义】名单留空 = 自动判定，而自动判定本来就**先食材后矿物**（见
+     * {@code pickFurnaceKind} / {@code extractAnySmeltable}），所以这一步是「钉死成只烧食物」，
+     * 不是「否则烧不了」。想回到自动就把名单清空。
+     */
+    private void fillBuiltinFood() {
+        try {
+            java.util.List<String> ids = com.maidsmart.task.MaidCookBehavior.builtinFoodIds(
+                    net.minecraft.client.Minecraft.m_91087_().f_91073_);
+            java.util.List<String> cur = new java.util.ArrayList<>(MaidSmartConfig.MISC_COOK_SMELT_ALLOW.get());
+            int added = 0;
+            for (String id : ids) {
+                if (!cur.contains(id)) {
+                    cur.add(id);
+                    added++;
+                }
+            }
+            MaidSmartConfig.MISC_COOK_SMELT_ALLOW.set(cur);
+            this.cookDiagMode = -1; // 名单变了：让「烧制清单」诊断重记一次
+            this.rebuildCookCreative();
+            com.maidsmart.tool.PromaidLog.log("烧制清单",
+                    "已把 " + added + " 件原版食物填进「烧制物品」名单（当前共 " + cur.size()
+                            + " 条）——她现在只烧这些；想恢复自动判定就把这张名单清空");
+        } catch (Throwable ignored) {
+        }
+    }
+
     private void rebuildCookCreative() {
         this.creativeItems.clear();
         ensureCreativeCache();
@@ -3741,6 +3787,9 @@ public class PromaidConfigScreen extends Screen {
                 if (!keep) {
                     continue;
                 }
+            }
+            if (!fuelMode && !cookFilterKeeps(probe)) {
+                continue;
             }
             this.creativeItems.add(probe);
         }
@@ -3817,6 +3866,26 @@ public class PromaidConfigScreen extends Screen {
                                 this.m_7856_();
                             })
                     .m_252987_(left + i * 100, tgY, 96, 18).m_253136_());
+        }
+        // v1.3.0(beta) 实测六百六十五【面板看不到食物】——只给「烧制物品」档加分类入口与一键填入
+        //（燃料那一档的候选语义不同，不加）。三个筛选按钮共用一个 cookGridFilter，点一下重排列表。
+        if (this.cookTableMode == 0) {
+            String[] filters = {"全部", "只看食物", "只看矿物"};
+            for (int k = 0; k < filters.length; k++) {
+                final int fk = k;
+                this.m_142416_(Button.m_253074_(
+                                Component.m_237113_((this.cookGridFilter == fk ? "\u00a7e\u25cf " : "\u00a77")
+                                        + filters[k]),
+                                b -> {
+                                    this.cookGridFilter = fk;
+                                    this.creativePage = 0;
+                                    this.m_7856_();
+                                })
+                        .m_252987_(left + 200 + k * 72, tgY, 68, 18).m_253136_());
+            }
+            this.m_142416_(Button.m_253074_(Component.m_237113_("填入原版食物"),
+                            b -> this.fillBuiltinFood())
+                    .m_252987_(left + 418, tgY, 118, 18).m_253136_());
         }
         this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
                 Component.m_237113_("搜索物品（中英文皆可）"));
