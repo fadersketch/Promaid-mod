@@ -1,5 +1,6 @@
 package com.maidsmart.combat;
 
+import com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -9,6 +10,7 @@ import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.entity.living.LivingAttackEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
@@ -118,6 +120,55 @@ public final class GunnerTetherManager {
         }
     }
 
+    /**
+     * 【实测六百六十九】这只女仆此刻是否被武装拴绳绑着（服务端口径：LINKS 里有她）。
+     * 用途：「绑定后别再追主人、改成离地悬停」——扫帚链路（{@code MaidBroomBehavior}）与空袭链路
+     * （{@code MaidFlightFollowBehavior}）都用这一个判据，口径只有一处。
+     */
+    public static boolean isTethered(EntityMaid maid) {
+        try {
+            return maid != null && LINKS.containsKey(maid.m_20148_());
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 绑定后的悬停高度（格）：玩家原话「默认上升到离地面 3 格，然后悬停」——想调就改这一个数 */
+    public static double tetherHover() {
+        return 3.0;
+    }
+
+    /**
+     * 绑定后的悬停点：**锚点自己**的 x/z + 它脚下地面的高度 + {@link #tetherHover()} 格。
+     *
+     * <p>【为什么锚点当参数，而不是一律用女仆】扫帚链路必须传**扫帚**——她是乘客、座位在扫帚朝向的
+     * 后方 0.5 格，拿她的坐标当定点会永远差半格（那个"在空中不停旋转"的老回路，详见
+     * {@code MaidBroomDrive.hoverInPlace} 的注释）；空袭链路她没骑东西，传她自己即可。
+     * 两条链路共用这一处，免得"离地几格"出现第二份口径。
+     */
+    public static Vec3 tetherHoldPos(Entity anchor) {
+        try {
+            double x = anchor.m_20185_();
+            double z = anchor.m_20189_();
+            int bx = (int) Math.floor(x);
+            int bz = (int) Math.floor(z);
+            int by = (int) Math.floor(anchor.m_20186_());
+            net.minecraft.world.level.Level lvl = anchor.m_9236_();
+            double ground = anchor.m_20186_();
+            for (int i = 0; i < 24; i++) { // 往下找第一块"不是空气"的方块（顶面 = 地面）
+                net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(bx, by - i, bz);
+                net.minecraft.world.level.block.state.BlockState st = lvl.m_8055_(p);
+                if (!st.m_60795_()) {
+                    ground = p.m_123342_() + 1;
+                    break;
+                }
+            }
+            return new Vec3(x, ground + tetherHover(), z);
+        } catch (Throwable t) {
+            return new Vec3(anchor.m_20185_(), anchor.m_20186_() + tetherHover(), anchor.m_20189_());
+        }
+    }
+
     /** 这位乘客是不是她的拴绳枪手（mixin 两侧行为统一入口：服务端看 LINKS / 客户端看 SYNCED_PAIRS） */
     public static boolean isGunner(EntityMaid maid, Entity passenger) {
         if (maid == null || passenger == null) {
@@ -157,9 +208,19 @@ public final class GunnerTetherManager {
             deny(maid, "主人先从坐骑上下来再抓绳子～");
             return;
         }
-        // 地面挂着会把人拖进地里——必须她飞起来时挂
-        if (maid.m_20096_()) {
+        // 【实测六百六十九：门槛按模式分两档】玩家原话："扫帚必须要飞在空中才能绑定，这个没问题。
+        //  但是如果女仆处于空袭摸式下，也是可以直接绑定的。"
+        //  · 扫帚模式：**必须已经飞在空中**（地面上挂上去 = 她会把人拖进地里；她本来也要先起飞）
+        //  · 空袭模式（flight_combat / flight_ranged）：照玩家要求**随时能挂**——地面上也安全，
+        //    因为①下方没空间时 mixin 会先用原版头顶位（EntityGunnerHangMixin 的空间判定），
+        //    ②绑定后她会自己升到离地 tetherHover() 格悬停（见 isTethered 那套悬停逻辑）
+        boolean broomMode = com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
+        if (broomMode && maid.m_20096_()) {
             deny(maid, "等我飞起来再右击我，你先抓好绳子～");
+            return;
+        }
+        if (!broomMode && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+            deny(maid, "扫帚或空袭模式时再抓绳子吧～");
             return;
         }
         // force = true（实测六百五十七同款）：原版不带 force 的 startRiding 要求
@@ -355,6 +416,30 @@ public final class GunnerTetherManager {
         }
     }
 
+    /**
+     * 【实测六百六十九：修"手持拴绳右击骑着扫帚的女仆 → 变成骑上扫帚"】
+     * 玩家原话："判定上有一点反直觉。如果拿着武装拴绳去右击坐在扫帚上的女仆，很容易直接乘上
+     * 扫帚而不是走道具链路。这边应该要有个判定优先级的，手持武装拴绳的时候，右击应该是优先绑定。"
+     *
+     * <p>根因**不是**事件优先级不够：本 handler 在 TLM 的 {@code EntityBroom.interact} 之前就会跑到，
+     * cancel 掉就能挡住那次 {@code startRiding}。真正的问题是**目标认错了人**——她骑着扫帚时，
+     * 客户端射线命中的是**载具（扫帚实体）**，{@code event.getTarget()} 拿到的是 {@code EntityBroom}，
+     * 旧版 {@code instanceof EntityMaid} 直接不成立就 return，交互于是落到 TLM 那边去骑乘了。
+     * 这里把"目标是扫帚"也解析成它背上的女仆 → 手持拴绳右击 = 绑定优先于骑乘。
+     */
+    private static EntityMaid resolveMaid(Entity target) {
+        try {
+            if (target instanceof EntityMaid m) {
+                return m;
+            }
+            if (target instanceof EntityBroom broom && broom.m_146895_() instanceof EntityMaid m2) {
+                return m2;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
     /* ==================== 事件 ==================== */
 
     /** 手持武装拴绳右击女仆 = 挂载/解除（骨架同 IndexStoneInteractHandler） */
@@ -363,8 +448,11 @@ public final class GunnerTetherManager {
         if (!isEnabled()) {
             return;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)
-                || !(event.getTarget() instanceof EntityMaid maid)) {
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        EntityMaid maid = resolveMaid(event.getTarget());
+        if (maid == null) {
             return;
         }
         InteractionHand hand = event.getHand();

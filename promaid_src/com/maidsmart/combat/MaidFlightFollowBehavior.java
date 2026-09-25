@@ -676,6 +676,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (com.maidsmart.task.BridgeUpBehavior.isTaskOccupied(maid)) {
                 return skip(maid, now, "任务占用中（在干活/正在接战）");
             }
+            // 【实测六百六十九：武装拴绳】主人挂在女仆下面时，"离主人几格"永远小得起手距离（默认 25），
+            // 旧版于是完全不起飞——而拴绳要的是"把她按在离地 N 格的悬停位上"。拴绳状态不看距离放行；
+            // 睡/骑/坐、守家、自保、任务占用这些闸门都排在它前面（照旧优先）。
+            if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+                if (!MaidFlightKit.hasElytra(maid)) {
+                    return skip(maid, now, "拴绳悬停：没有可用鞘翅");
+                }
+                return true;
+            }
             Aim aim = aimOf(maid, level);
             if (aim == null) {
                 return skip(maid, now, isGoto(maid)
@@ -811,6 +820,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
+        // 【实测六百六十九：武装拴绳】挂在下面的主人要的是"直升机悬停"，不是"追着主人转圈"
+        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+            maidsmart$tetherHold(maid);
+            return;
+        }
         Aim aim = aimOf(maid, level);
         if (aim == null) {
             return; // canContinue 会收手
@@ -860,8 +874,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)) {
             return false;
         }
-        if (gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
-            return false; // 超时收手
+        if (!com.maidsmart.combat.GunnerTetherManager.isTethered(maid)
+                && gameTime - STARTED_AT.getOrDefault(id, gameTime) > MAX_TICKS) {
+            return false; // 超时收手（拴绳悬停不设超时：玩家要她一直悬在那儿）
         }
         if (!MaidFlightKit.hasElytra(maid) || !MaidFlightKit.hasFlightPropellant(maid)) {
             // 鞘翅飞坏了 / 能飞的道具没了（烟花烧完、没羽扇、法术书也丢了）→ 落地走
@@ -876,6 +891,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 接管"的另一半：起飞时挡（canUse），飞到一半也要让。让了之后她保持滑翔，
             // 空袭那一套会自己接上（它的 canUse 只看目标，不看谁在飞）。
             return false;
+        }
+        if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+            // 拴绳悬停的"目标点"就是那个定点，到了也不能收手（收手 = 不再驱动 = 她会滑下去）
+            return true;
         }
         if (aim.dist(maid) > endRadius()) {
             return true; // 还没进到收手半径内 → 本趟继续
@@ -1425,6 +1444,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      */
     private static Aim aimOf(EntityMaid maid, net.minecraft.world.level.Level level) {
         try {
+            // 【实测六百六十九】拴绳悬停：这一趟的"目标点"不是主人，而是那个离地 N 格的定点
+            if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
+                return Aim.ofPos(com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(maid));
+            }
             UUID id = maid.m_20148_();
             Vec3 pos = GOTO.get(id);
             if (pos != null) {
@@ -1445,6 +1468,36 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     }
 
     /** 与目标点之间没有方块阻拦（实体档走原签名；坐标档走实测六百一十四 新增的坐标重载） */
+    /**
+     * 【实测六百六十九：武装拴绳 = 直升机悬停】挂在女仆下面的主人要的是"悬停"，不是"追着主人转圈圈"
+     * （玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。这边应该改为
+     * 就默认上升到离地面 3 格，然后悬停，接敌不变"）。
+     *
+     * <p>空袭这边是**滑翔物理**（不像扫帚那样有意图队列），所以直接每 tick 写速度：水平按 0.72 收干、
+     * 竖直朝目标高度修正（每 tick 上限 ±0.30 格），并把**俯仰摆平**——低头滑翔会被原版物理一路往地里拽。
+     * 站在地上时照搬本类起飞那一支（0.42 上抬 + 滑翔位）。
+     *
+     * <p>**接敌不受影响**：有威胁时 {@code canContinue} 就把控制权交回空袭链路（threatNearby /
+     * ownFlightBusy 都排在它前面），所以她该打还是打——"接敌不变"是字面意思。
+     */
+    private static void maidsmart$tetherHold(EntityMaid maid) {
+        try {
+            MaidFlightKit.setGliding(maid, true);
+            if (maid.m_20096_()) {
+                Vec3 dm = maid.m_20184_();
+                maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
+                return;
+            }
+            maid.m_146926_(0.0f); // 俯仰摆平（setXRot）：低着头滑翔会被原版物理往地里拽
+            Vec3 aim = com.maidsmart.combat.GunnerTetherManager.tetherHoldPos(maid);
+            double dy = aim.f_82480_ - maid.m_20186_();
+            Vec3 cur = maid.m_20184_();
+            double vy = Math.max(-0.30, Math.min(0.30, dy * 0.35));
+            maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, vy, cur.f_82481_ * 0.72));
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static boolean sightOk(EntityMaid maid, Aim aim) {
         try {
             if (aim.entity != null) {

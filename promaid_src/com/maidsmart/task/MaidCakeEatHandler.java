@@ -71,10 +71,10 @@ public class MaidCakeEatHandler {
         String name = maid.m_5446_().getString();
         String text = "蛋糕真好吃，主人的心意我收到啦～";
         if (maid.m_269323_() instanceof ServerPlayer owner) {
-            owner.m_213846_(Component.m_237113_("\u00a79" + name + "\uff1a" + text));
+            owner.m_213846_(Component.m_237113_("\u00a7d" + name + "\uff1a" + text));
         }
         maid.getChatBubbleManager().addChatBubble(
-                TextChatBubbleData.type2(Component.m_237113_(text).m_130940_(ChatFormatting.BLUE)));
+                TextChatBubbleData.type2(Component.m_237113_(text).m_130940_(ChatFormatting.LIGHT_PURPLE)));
         // v1.3.0 实测六百五十五【"投喂蛋糕没有语音"】：全模组只有两个语音入口，一个在
         // ChatBubbleLimitMixin（拦的是 addTextChatBubble），另一个在排班闲聊行为——而本方法
         // 刻意走**直发 addChatBubble**（为了保住蓝色、跳过 5 秒限频，见类注释），于是它
