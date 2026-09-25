@@ -392,11 +392,18 @@ public final class MaidBombing {
             BombPlacement.removePlaced(level, pos, block, maid, false);
             return;
         }
+        if (maid == null) {
+            // v1.3.8 实测六百七十：没记到人就不登记——回收的最后一步是"把方块变成物品还她"，
+            // 没有她这一块**就地撤掉 = 材料凭空消失**（旧版这条路上是"方块留在世界里"）。
+            // 宁可留着让人捡，也不静默吃掉。日志里说清楚，便于排查。
+            log("底座回收没记到人（找不到她）→ 这一块留在世界里，不撤也不还");
+            return;
+        }
         if (RECLAIMS.size() >= MAX_RECLAIMS) {
             log("底座回收表已满（" + MAX_RECLAIMS + " 条）→ 这一块不再登记，它会留在世界里");
             return;
         }
-        RECLAIMS.add(new Reclaim(level, maid == null ? null : maid.getUUID(), pos, block,
+        RECLAIMS.add(new Reclaim(level, maid.getUUID(), pos, block,
                 level.getGameTime() + seconds * 20L));
     }
 
@@ -558,9 +565,10 @@ public final class MaidBombing {
                     continue;
                 }
                 ri.remove();
-                log("回收底座 " + r.pos.size() + " 格 → " + (maid == null
-                        ? "就地撤掉（没记到人，不回背包）"
-                        : "还回 " + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 的背包"));
+                // 走到这里 maid 一定不是 null（上一条路已经拦掉"没记到人"），仍留一手防御
+                String who = maid == null ? "世界（没记到人）"
+                        : com.maidsmart.tool.PromaidLog.nameOf(maid) + " 的背包";
+                log("回收底座 " + r.pos.size() + " 格 → 还回 " + who);
             } catch (Throwable t) {
                 log("回收底座异常（这一条留到下一 tick 再试）：" + t);
             }
