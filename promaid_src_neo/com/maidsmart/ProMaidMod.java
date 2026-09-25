@@ -54,6 +54,10 @@ public class ProMaidMod {
     public static final DeferredItem<Item> COMPRESSION_BOX = ITEMS.register("compression_box",
             () -> new com.maidsmart.box.CompressionBoxItem(new Item.Properties()));
 
+    /** 武装拴绳（v1.3.7 实测六百六十七）：右击飞行中的女仆把自己挂到她下方（直升机二号位），再右击解除 */
+    public static final DeferredItem<Item> COMBAT_LEASH = ITEMS.register("combat_leash",
+            () -> new com.maidsmart.combat.CombatLeashItem(new Item.Properties()));
+
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);
