@@ -114,6 +114,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //  旧日志里四个来源长得一模一样（一个字节都不打），排查高频上下扫帚时全靠猜。
         MaidBroomDrive.dismount(maid, "行为结束/换任务");
         MaidBroomDrive.forgetMaid(maid.getUUID());
+        // 【实测六百八十五】扫帚的索敌锁定跟着一起清（与空袭那边 MaidFlightCombatBehavior.forget
+        //   同一分工：硬清 = 换任务/她没了；"打起来的目标先留着"由 FlightTargeting 自己的
+        //   HOLD_RANGE 负责，不靠清表实现）。不清的话：她切回地面任务后本表还抱着旧目标，
+        //   虽然 resolve 的入口守卫下次会顺手清（非飞行/扫帚任务），但那要等下一次有人调用它。
+        FlightTargeting.forget(maid.getUUID());
         FOLLOWING.remove(maid);
         PLAYER_DRIVE_LOGGED.remove(maid);
         // 【实测六百七十七】退出扫帚任务 = 玩家说的"再一次被解除"：双就绪的闩拔掉，
@@ -186,7 +191,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // 推进意图、还会把爬升相位开起来每 tick 判"顶头"刷日志）
         if (MaidBroomDrive.drivenByPlayer(broom)) {
             MaidBroomDrive.clearClimb(maid);
-            LivingEntity driven = currentTarget(maid);
+            LivingEntity driven = aimTarget(maid);
             if (driven != null && driven.isAlive() && driven.level() == level) {
                 MaidBroomDrive.faceYawTo(broom, driven);
                 MaidFlightCombatBehavior.fireRanged(maid, driven, maid.getUUID(), gameTime);
@@ -206,7 +211,10 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
         // ⑤ 有目标 → 先爬到它上方 8 格（顶头即就地悬停，并按实际高度定下本场盘旋高度）
         //    → 再绕着敌人盘旋 + 照搬远程空袭开火
-        LivingEntity target = currentTarget(maid);
+        //    【实测六百八十五】目标改问 aimTarget（= 本模组自己的索敌器 FlightTargeting，
+        //    与空袭同一个）：TLM 那条链按 16/8 格援护半径丢目标，boss 一掉下去她就再也拿不回来，
+        //    随后落进 ⑥ 的拴绳分支原地悬停——用户报的"骑在扫帚上不动"就是这个。
+        LivingEntity target = aimTarget(maid);
         if (target != null && target.isAlive() && target.level() == level) {
             faceTarget(maid, target);
             Double climbY = MaidBroomDrive.combatClimbTarget(maid, target);
@@ -376,7 +384,40 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
 
     /* ==================== 目标 / 朝向 ==================== */
 
-    /** 当前攻击目标：优先脑里的 ATTACK_TARGET（TLM 攻击任务与我们的行为都写这一条），其次实体层 target */
+    /**
+     * 【实测六百八十五】她的"该打谁"——**先问本模组自己的索敌器**（{@link FlightTargeting}，
+     * 与两种空袭同一个），问不到才退回 TLM 那条链（{@link #currentTarget}）。
+     *
+     * <p>为什么必须加这一层（用户原话）："处于扫帚模式（下面还挂着主人）状态下的女仆容易
+     * 出现丢失锁敌的情况……boss 飞上来、boss 掉下去，然后女仆就会骑着扫帚悬停在那边，一动不动。"
+     * 而空袭没这个毛病。差别就是空袭有自己的索敌器、扫帚没有：TLM 那条链维持目标的判据是
+     * 援护半径（WORK 16 格 / 其余 8 格）与按排班分流的传感器盒子（非 WORK 时段垂直只有 4 格），
+     * boss 一掉下去就过线、作废且再也拿不回来（细节与取证见 {@link FlightTargeting} 类注释）。
+     *
+     * <p>【为什么不是"直接换掉"】先问 {@code resolve}、失败再退回原来那条链：今天能锁到的目标
+     * 一个都不会因为这次改动而丢（{@code resolve} ② 那一步本身也会接管 brain 里已有的合法目标），
+     * 而 {@code resolve} 多给的正是原来没有的两样——**128 格维持半径**（不再按 16/8 丢）与
+     * **无视排班盒子的 50 格球**（boss 掉到下方、竖直拉开也照样看得见）。
+     *
+     * <p>【代价与边界】{@code resolve} 的判据里有 {@code isWithinRestriction}：她不会为了追敌
+     * 越出守家/工作范围（与空袭同一条红线，也比 TLM 那条链更严一点——TLM 只在"重挑"时看它）。
+     * 越界的目标仍然是"打不着"，丢掉是对的。
+     */
+    private static LivingEntity aimTarget(EntityMaid maid) {
+        LivingEntity locked = FlightTargeting.resolve(maid);
+        if (locked != null && locked.isAlive()) {
+            return locked;
+        }
+        return currentTarget(maid);
+    }
+
+    /**
+     * 当前攻击目标：优先脑里的 ATTACK_TARGET（TLM 攻击任务与我们的行为都写这一条），其次实体层 target。
+     *
+     * <p>【实测六百八十五】本方法现在只是 {@link #aimTarget} 的**兜底**（索敌器问不到时才走到
+     * 这里）。要拿"该打谁"请一律用 {@code aimTarget}——直接调本方法就回到了"按 TLM 的 16/8 格
+     * 援护半径丢目标"的老毛病上。
+     */
     private static LivingEntity currentTarget(EntityMaid maid) {
         try {
             var brain = maid.getBrain();
