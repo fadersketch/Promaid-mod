@@ -747,7 +747,7 @@ public final class IndexStoneService {
         if (level == null) {
             return null;
         }
-        for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
             if (e instanceof EntityMaid m && m.m_20148_().equals(maidId)) {
                 return m;
             }

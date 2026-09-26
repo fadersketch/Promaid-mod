@@ -115,7 +115,7 @@ public final class ScheduleNetworking {
         List<String[]> maids = new ArrayList<>();
         List<String> taskUids = new ArrayList<>();
         for (ServerLevel lvl : player.level().getServer().getAllLevels()) {
-            for (net.minecraft.world.entity.Entity e : lvl.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                 if (!(e instanceof EntityMaid m) || !m.isAlive()) {
                     continue;
                 }

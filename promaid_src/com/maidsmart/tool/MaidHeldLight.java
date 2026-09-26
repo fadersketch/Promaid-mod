@@ -108,7 +108,7 @@ public final class MaidHeldLight {
                 if (level == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }

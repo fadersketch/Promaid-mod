@@ -87,7 +87,7 @@ public final class MaidResyncCommand {
             label = "UUID " + arg;
         } else {
             for (ServerLevel lvl : server.m_129785_()) {
-                for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof EntityMaid m) || !m.m_6084_()) {
                         continue;
                     }

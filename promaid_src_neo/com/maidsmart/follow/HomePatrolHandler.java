@@ -57,7 +57,7 @@ if (++throttle < 80) {
             // 未预建 EntityMaid 桶的 section 被整段跳过，home 女仆单独站的 section
             // 扫不到 → 巡逻驱动失效（"home 女仆呆立"的另一重根因）
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (e instanceof EntityMaid maid) {
                     patrol(maid);
                 }

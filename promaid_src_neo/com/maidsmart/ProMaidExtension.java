@@ -159,7 +159,7 @@ public class ProMaidExtension implements ILittleMaid {
             // level.getAllEntities()——超大 AABB 会被 Sable 直接拒绝（Aborting entity get
             // → 返回空列表 + 每次附完整堆栈刷日志），getAllEntities() 不传 AABB，
             // 同时绕开桶 bug 与 ±∞ 经 blockToSection 溢出两个老坑。
-            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
                     continue;
                 }
@@ -250,9 +250,16 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             // 摆设（配置+面板都在，followIfCrossDimension 却从未被任何代码调用）。
             // 开关开启时每 5 秒扫描全服女仆，异维度跟随者自动传送到主人身边；
             // home/坐姿/骑乘/主人非存活/同维度等豁免在 followIfCrossDimension 内自判。
+            // 实测六百九十【玩家崩溃报告·肇因就在下面这一层 for】：这里必须走
+            // EntitySnapshot.of(lvl) 取快照——老版直接 for (Entity en : lvl.getAllEntities())，
+            // 而 getAllEntities() 是原版实体表的活视图（Int2ObjectLinkedOpenHashMap + Guava
+            // unmodifiableIterable，javap 实证）。循环体里的 followIfCrossDimension 会对
+            // 女仆做跨维度 teleportTo = 从本维度 byId 里删实体，同一个迭代器接着读
+            // link[槽位] 就越界：玩家那局报的就是 Index 877 / length 513
+            // →「Exception in server tick loop」整合服务端崩回桌面。详见 EntitySnapshot。
             if (com.maidsmart.config.MaidSmartConfig.MISC_DIMENSION_FOLLOW.get()) {
                 for (net.minecraft.server.level.ServerLevel lvl : server.getAllLevels()) {
-                    for (net.minecraft.world.entity.Entity en : lvl.getAllEntities()) {
+                    for (net.minecraft.world.entity.Entity en : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                         if (en instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid fm) {
                             com.maidsmart.follow.MaidChunkLoadManager.followIfCrossDimension(fm);
                         }
@@ -294,7 +301,7 @@ net.minecraft.server.MinecraftServer server = event.getServer();
                 for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
                     // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                     // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                    for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                         if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
                                 && m.isAlive()) {
                             com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);

@@ -111,7 +111,7 @@ public final class MaidPlanting {
                 if (lvl == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
                             || !maid.m_6084_()) {
                         continue;

@@ -132,7 +132,7 @@ public final class ScheduleManager {
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
             // 未预建 EntityMaid 桶的 section 被整段跳过，排班扫描扫不到该 section
             // 里的女仆 → 任务不随时间段切换
-            for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()
                         || !ScheduleData.isOn(maid)) {
                     continue;
