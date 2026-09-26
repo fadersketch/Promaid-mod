@@ -24,7 +24,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * 1. 女仆死亡时 TLM 会创建墓碑并 post MaidTombstoneEvent——本类监听该事件，
  *    把【女仆完整存档 NBT】（saveWithoutId，与魂符/TLM 取回同源）连同主人 UUID、
  *    到期刻、墓碑 UUID 快照进 SavedData 持久化（防重启/区块卸载丢失）；
- * 2. 延迟到期（默认 10 秒）→ 自动让墓碑消失（discard，走 TLM 的 remove 钩子同步
+ * 2. 延迟到期（默认 60 秒）→ 自动让墓碑消失（discard，走 TLM 的 remove 钩子同步
  *    清理 MaidWorldData 的墓碑记录）→ 在【主人重生点】复活女仆（床/重生锚，无则
  *    主世界出生点；复用 MasterDeathTeleportHandler 的解析与安全落点）。
  *

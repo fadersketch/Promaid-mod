@@ -192,7 +192,7 @@ public final class CombatSenseCheck {
         } catch (Throwable ignored) {
         }
         BlockPos center = maid.m_20183_();
-        BlockPos outside = center.m_7918_(10, 0, 0); // 常态 8 格圈外、落在扩圈半径（配置值，默认 32）之内的取样点
+        BlockPos outside = center.m_7918_(10, 0, 0); // 常态 8 格圈外、落在扩圈半径（配置值，默认 15）之内的取样点
         try {
             // 【先把她从"接战"里摘出来再量常态】否则常态读数会是扩圈值——neo 那台第一次跑
             // 就是这么红的：上一段（遮挡那条）把一只锁定了她的僵尸摆在她 4 格外，

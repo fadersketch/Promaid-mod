@@ -120,10 +120,9 @@ public class ProMaidMod {
     public static boolean runConfigMigration() {
         boolean changed = false;
         try {
-            if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 22) {
-                com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(6);
-                changed = true;
-            }
+            // 【实测六百八十一】这里原来有一条「22 → 6」的**强制**迁移：声明的默认值那时是
+            // 22、迁移一启动就把它改成 6，于是"声明 22"永远看不到。默认值已表态为 22，
+            // 这条迁移也跟着撤掉——留着它等于玩家永远拿不到默认值。
             if (com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.get() == 30) {
                 com.maidsmart.config.MaidSmartConfig.WOOD_STUCK_RESET_SECONDS.set(8);
                 changed = true;
@@ -141,10 +140,8 @@ public class ProMaidMod {
                 com.maidsmart.config.MaidSmartConfig.BRIDGE_PLACED_LIFETIME.set(2);
                 changed = true;
             }
-            if (com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
-                com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(false);
-                changed = true;
-            }
+            // 【实测六百八十一】同上：原来这里**无条件**把可用性检测关成 false，与声明默认
+            // 值 true 打架。撤掉，让声明值说了算。
             // v1.2.0：落地水触发高度默认 6 → 4 格（旧档存的旧默认自动迁移；手改过的不动）
             // v1.2.2 实测五百八十九：投掷 TNT 间隔默认 120 → 40（玩家反馈"CD 太长"）
             // 只迁移"还是旧默认值"的配置，玩家自己调过的值不动
@@ -210,6 +207,65 @@ public class ProMaidMod {
                     com.maidsmart.tool.PromaidLog.log("配置迁移",
                             "散步速度倍率不需要迁移（现值 " + before + "）");
                 }
+            }
+            // v1.3.0(beta) 实测六百八十一：把 679 误当作默认值的 12 项搬回真默认（一次性）。
+            // 【为什么要有这条】679 把"玩家 1.21.1 实例当前值"写成了默认值，本批已撤回；
+            // 但老 toml 里的值不会自己变。只搬还停在旧值上的键——谁自己调过就别动谁。
+            if (!com.maidsmart.config.MaidSmartConfig.DEFAULT_REPAIR_MIGRATED.get()) {
+                com.maidsmart.config.MaidSmartConfig.DEFAULT_REPAIR_MIGRATED.set(true);
+                changed = true;
+                int repaired = 0;
+                if (com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.get() == 6) {
+                    com.maidsmart.config.MaidSmartConfig.MINE_BREAK_BUDGET.set(22);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.get() == 1) {
+                    com.maidsmart.config.MaidSmartConfig.SOUL_SPELL_COOLDOWN_SECONDS.set(60);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get() == 10) {
+                    com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.set(60);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.get() == 3) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_WATER_LANDING_SCAN.set(2);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.AID_THIRST_THRESHOLD != null
+                        && com.maidsmart.config.MaidSmartConfig.AID_THIRST_THRESHOLD.get() == 20) {
+                    com.maidsmart.config.MaidSmartConfig.AID_THIRST_THRESHOLD.set(15);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.PLAYER_DAMAGE_MODE.get() == 2) {
+                    com.maidsmart.config.MaidSmartConfig.PLAYER_DAMAGE_MODE.set(4);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.COMBAT_WORK_RANGE.get() == 32) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_WORK_RANGE.set(15);
+                    repaired++;
+                }
+                if (!com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.get()) {
+                    com.maidsmart.config.MaidSmartConfig.MISC_SCHEDULE_AVAILABILITY_CHECK.set(true);
+                    repaired++;
+                }
+                if (com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get()) {
+                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(false);
+                    repaired++;
+                }
+                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get()) {
+                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(true);
+                    repaired++;
+                }
+                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get()) {
+                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(true);
+                    repaired++;
+                }
+                if (!com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get()) {
+                    com.maidsmart.config.MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(true);
+                    repaired++;
+                }
+                com.maidsmart.tool.PromaidLog.log("配置迁移",
+                        "实测六百八十一 默认值修复：把 679 误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
             }
             changed |= migrateOreTable();
         } catch (Exception ignored) {
