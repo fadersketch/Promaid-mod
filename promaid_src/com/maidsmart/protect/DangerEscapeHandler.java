@@ -81,7 +81,7 @@ public class DangerEscapeHandler {
         for (ServerLevel level : server.m_129785_()) {
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()
                         || maid.m_269323_() == null) {
                     continue; // 无主不处理

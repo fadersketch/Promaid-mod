@@ -58,7 +58,7 @@ public final class HomePatrolHandler {
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）：
             // 未预建 EntityMaid 桶的 section 被整段跳过，home 女仆单独站的 section
             // 扫不到 → 巡逻驱动失效（"home 女仆呆立"的另一重根因）
-            for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (e instanceof EntityMaid maid) {
                     patrol(maid);
                 }

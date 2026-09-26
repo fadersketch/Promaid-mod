@@ -109,7 +109,7 @@ public final class NeutralThreatDriver {
             // 有限 AABB 全图扫描（Entity.class 全量 + instanceof——ClassInstanceMultiMap
             // 桶 bug 与 ±∞ 溢出均已绕开，HomeWorkMovementDriver 同款口径）
             for (ServerLevel level : server.m_129785_()) {
-                for (Entity e : level.m_8583_()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityMaid maid) {
                         try {
                             drive(level, maid);

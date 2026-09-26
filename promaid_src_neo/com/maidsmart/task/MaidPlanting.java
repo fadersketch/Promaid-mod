@@ -108,7 +108,7 @@ public final class MaidPlanting {
                 if (lvl == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : lvl.getAllEntities()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
                             || !maid.isAlive()) {
                         continue;

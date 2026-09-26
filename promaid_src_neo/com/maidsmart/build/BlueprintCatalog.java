@@ -213,7 +213,7 @@ public final class BlueprintCatalog {
             // ——旧版的原点高度盒扫不到远处的女仆，Sable 也不会拒查它
             // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
             // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-            for (net.minecraft.world.entity.Entity e : sl.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(sl)) {
                 if (!(e instanceof EntityMaid m) || BuildPlan.getBoundPlanId(m) == null) {
                     continue;
                 }

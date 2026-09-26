@@ -63,7 +63,7 @@ if (++this.throttle < 10) {
             return;
         }
         for (ServerLevel level : event.getServer().getAllLevels()) {
-            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive() || maid.getRemainingFireTicks() <= 0) {
                     continue; // 只看烧着的女仆
                 }

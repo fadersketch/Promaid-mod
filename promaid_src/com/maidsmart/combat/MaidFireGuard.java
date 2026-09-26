@@ -66,7 +66,7 @@ public class MaidFireGuard {
             return;
         }
         for (ServerLevel level : event.getServer().m_129785_()) {
-            for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_() || maid.m_20094_() <= 0) {
                     continue; // 只看烧着的女仆
                 }

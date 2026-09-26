@@ -168,7 +168,7 @@ public final class BlueprintBookNetworking {
         java.nio.file.Path memRoot = com.maidsmart.memory.AiMemoryExtractor.memoryRoot(level.m_7654_());
         // v1.5.180：绑定显示名按【女仆绑定的区块】查（多区块共存）
         java.util.Map<String, Integer> counts = nameCounts(level.m_7654_());
-        for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+        for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
             if (!(e instanceof EntityMaid m) || !m.m_6084_()) {
                 continue;
             }

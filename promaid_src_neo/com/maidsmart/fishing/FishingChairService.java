@@ -356,7 +356,7 @@ public final class FishingChairService {
     /** 删除该女仆名下所有旧标记坐垫（生成新坐垫前调用，防堆积） */
     private static void removeOldChairs(ServerLevel level, EntityMaid maid) {
         String uid = maid.getUUID().toString();
-        for (Entity e : level.getAllEntities()) {
+        for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
             if (e instanceof EntityChair c && isAutoChair(c)
                     && uid.equals(((net.neoforged.neoforge.common.extensions.IEntityExtension) c).getPersistentData().getString(TAG_MAID))) {
                 if (!c.getPassengers().isEmpty()) {
@@ -379,7 +379,7 @@ public final class FishingChairService {
             // 全维度收集存活女仆（跨维度判定任务）
             Map<String, EntityMaid> allMaids = new HashMap<>();
             for (ServerLevel level : server.getAllLevels()) {
-                for (Entity e : level.getAllEntities()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityMaid m && m.isAlive()) {
                         allMaids.put(m.getUUID().toString(), m);
                     }
@@ -387,7 +387,7 @@ public final class FishingChairService {
             }
             for (ServerLevel level : server.getAllLevels()) {
                 List<EntityChair> chairs = new ArrayList<>();
-                for (Entity e : level.getAllEntities()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityChair c && isAutoChair(c)) {
                         chairs.add(c);
                     }

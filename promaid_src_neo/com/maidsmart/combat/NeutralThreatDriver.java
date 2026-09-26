@@ -108,7 +108,7 @@ if (++this.throttle < 10) {
             // 桶 bug 与 ±∞ 溢出均已绕开，HomeWorkMovementDriver 同款口径）
             for (ServerLevel level : server.getAllLevels()) {
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (Entity e : level.getAllEntities()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityMaid maid) {
                         try {
                             drive(level, maid);

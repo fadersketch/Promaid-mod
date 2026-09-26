@@ -106,7 +106,7 @@ if (!com.maidsmart.config.MaidSmartConfig.MISC_HELD_LIGHT_ENABLED.get()) {
                 if (level == null) {
                     continue;
                 }
-                for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }

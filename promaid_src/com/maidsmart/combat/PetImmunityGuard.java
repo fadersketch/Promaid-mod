@@ -69,7 +69,7 @@ public final class PetImmunityGuard {
             for (net.minecraft.server.level.ServerLevel lvl : server.m_129785_()) {
                 // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                 // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }

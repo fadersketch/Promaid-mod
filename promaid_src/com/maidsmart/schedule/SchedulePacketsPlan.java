@@ -508,7 +508,7 @@ public final class SchedulePacketsPlan {
                 int applied = 0;
                 int schedSkipped = 0; // v1.1.0 实测七十：排班中被跳过的数量
                 for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : lvl.m_8583_()) {
+                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                         if (!(e instanceof EntityMaid m) || !m.m_6084_() || !m.m_21830_(player)) {
                             continue;
                         }

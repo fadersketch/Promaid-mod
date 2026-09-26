@@ -93,7 +93,7 @@ if (++this.throttle < 10) {
                 // section 被 TLM 感知系统预建了 EntityMaid 桶 → 能扫到 → 会锄地；
                 // home 女仆单独站的 section 没预建 → 空桶 → 永远找不到 → 不锄地。
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive() || !isFarmTask(maid)) {
                         continue;
                     }

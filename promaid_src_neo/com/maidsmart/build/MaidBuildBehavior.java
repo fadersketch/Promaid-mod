@@ -293,7 +293,7 @@ public class MaidBuildBehavior extends Behavior<EntityMaid> {
         ACTIVE_MAIDS.clear();
         for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
             int c = 0;
-            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
                         && BlueprintBuildExecutor.isBuildingTask(m)) {
                     c++;
