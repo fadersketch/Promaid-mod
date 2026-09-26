@@ -233,6 +233,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         MaidBombing.forget(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
+        // 【实测六百九十三】锁敌后的随机环绕参数（半径比例 / 重掷节拍）随她一起丢
+        CombatOrbit.forget(maidId);
         // v1.2.0 实测五百一十一：这里【不】清 FlightFireworkPose 的表——它的归还要靠
         // **实体引用**，而 forget 只有 UUID。清表会让"原副手物品"快照被丢掉、盾牌/食物
         // 永久留在烟花状态。归还统一由 core 行为 MaidToolAutoEquipBehavior 每 tick 调用的
@@ -315,6 +317,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
         FlightFireworkPose.clearAll();
+        // 【实测六百九十三】锁敌后的随机环绕表（扫帚那条链路也用同一张，见 CombatOrbit）
+        CombatOrbit.clearAll();
     }
 
     /**
@@ -2867,7 +2871,23 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /** 绕目标盘旋 + 高度保持：切向视线绕圈，俯仰由"与期望高度的偏差"决定
-     *  v1.2.0 实测四百八十一：立即写角度（理由同 faceAwayAndUp）。 */
+     *  v1.2.0 实测四百八十一：立即写角度（理由同 faceAwayAndUp）。
+     *
+     *  <p>【实测六百九十三：半径与旋向都改成随机 + 一条硬上界】玩家原话：「可以把环绕型攻击方式
+     *  更改一下……敌人如果攻击的是第一只的话，会攻击到后面的，锁敌之后攻击敌人的飞行路径改成
+     *  随机吧，然后设一个锁敌之后离敌的最远距离。」旧版切向恒为 {@code (-uz, ux)}、径向恒朝
+     *  {@link #orbitRadius()}：**所有**女仆同一个圆、同一个高度、同一个旋向，敌人一条射线就能
+     *  串到对面那只。现在：
+     *  <ul>
+     *    <li>旋向 {@link CombatOrbit#direction}（UUID 派生，一半逆时针一半顺时针）；</li>
+     *    <li>半径 {@link CombatOrbit#radius}（区间 {@code [orbitRadius × 0.75, orbitMax]}，
+     *        每 4 秒缓动重掷）——不在同一个圆上，且不是死圈；</li>
+     *    <li>{@code orbitMax}（配置 {@code airRaid.orbitMax}）是玩家要的那条「离敌最远距离」：
+     *        它既是随机区间的顶点，也是**硬牵引**——一旦水平距离越过它，径向修正的增益从 0.5
+     *        提到 1.0（双倍往回带），所以她不会借着"随机"飘出这条线。</li>
+     *  </ul>
+     *  高度一个字没动（仍是 {@code holdY} + 俯仰增益），理由见 {@link CombatOrbit} 的类注释。
+     */
     private void faceOrbit(EntityMaid maid, LivingEntity target, double holdY) {
         double dx = maid.m_20185_() - target.m_20185_();
         double dz = maid.m_20189_() - target.m_20189_();
@@ -2879,9 +2899,26 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         double ux = dx / r;
         double uz = dz / r;
-        double radial = (r - orbitRadius()) * 0.5;
-        double ox = -uz - ux * radial;
-        double oz = ux - uz * radial;
+        // 【实测六百九十三】这一拍的随机环绕：半径区间顶点 = 「离敌最远距离」（硬上界），
+        // 近端 = 基础盘旋半径的 75%（但绝不越过顶点）；旋向每只女仆恒定、彼此对半。
+        UUID oid = maid.m_20148_();
+        double base = Math.max(2.0, orbitRadius());
+        double orbMax = Math.max(2.0, orbitMaxCfg());
+        double orbLo = Math.min(orbMax, Math.max(2.0, base * 0.75));
+        double wantR = Math.max(1.0, CombatOrbit.radius(oid, orbLo, orbMax));
+        double dir = CombatOrbit.direction(oid);
+        if (CombatOrbit.entering(oid)) {
+            com.maidsmart.tool.PromaidLog.log("远程空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 随机环绕：半径 " + fmt2(wantR)
+                            + " 格（区间 " + fmt2(orbLo) + "~" + fmt2(orbMax) + "，上界=airRaid.orbitMax "
+                            + fmt2(orbitMaxCfg()) + "），旋向 " + (dir > 0 ? "逆时针" : "顺时针"));
+        }
+        double tx = dir * -uz;
+        double tz = dir * ux;
+        // 径向修正：太远往回带、太近往外推；越过「最远距离」时增益加倍（硬牵引，不许借随机飘出去）
+        double radial = r > orbMax ? (r - orbMax) * 1.0 : (r - wantR) * 0.5;
+        double ox = tx - ux * radial;
+        double oz = tz - uz * radial;
         // 高度保持：低于期望高度就抬头（速度换高度），高了就低头（高度换速度）
         double err = (holdY - maid.m_20186_()) + rangedHoldBias();
         double pitch = -err * rangedHoldGain();
@@ -2896,6 +2933,20 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     maid.m_20189_() + oz,
                     360.0f, 360.0f);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百九十三】锁敌之后离敌的**最远距离**（格）：配置 {@code airRaid.orbitMax}，
+     * 默认 12（= 基础盘旋半径 10 的 1.2 倍，均值仍落在 10 附近）。它同时是随机环绕区间的顶点
+     * 与硬牵引的界（见 {@link #faceOrbit}）。配置没挂上时退回 12——与配置里的默认值对齐
+     * （本项目的老规矩：兜底值必须跟着默认值走）。
+     */
+    private static double orbitMaxCfg() {
+        try {
+            return MaidSmartConfig.AIR_RAID_ORBIT_MAX.get();
+        } catch (Throwable ignored) {
+            return 12.0;
         }
     }
 }
