@@ -406,9 +406,11 @@ public class ProMaidExtension implements ILittleMaid {
             return;
         }
         try {
+            // 实测六百九十七：带上实体网络 id——它与"入世界/重同步"那几行的 id 对起来，
+            // 就能一眼看出"离场的是刚复活进来的那一只，还是旧的那一只"（幽灵状态的正主）。
             com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 离开世界（reason=" + maid.m_146911_() + "，维度="
-                    + maid.m_9236_().m_46472_().m_135782_() + "）");
+                    + " 离开世界（id " + maid.m_19879_() + "，reason=" + maid.m_146911_()
+                    + "，维度=" + maid.m_9236_().m_46472_().m_135782_() + "）");
         } catch (Throwable ignored) {
         }
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);

@@ -2875,6 +2875,10 @@ public class PromaidConfigScreen extends Screen {
                 MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_NO_FALL_DAMAGE.set(v),
                 "空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪保护（与重锤同款特殊落地缓冲）"));
+        this.rows.add(new BoolRow("飞行危险环境避让",
+                MaidSmartConfig.COMBAT_FLIGHT_DANGER_AVOID.get(),
+                v -> MaidSmartConfig.COMBAT_FLIGHT_DANGER_AVOID.set(v),
+                "飞行危险环境避让（默认开）：扫帚模式 / 空袭 / 飞行跟随的飞行途中，把危险方块表（misc.dangerBlocks：岩浆/火/岩浆块/仙人掌等）视为不可靠近——掠过的航段会穿进危险格时自动侧向绕开（绕不开就抬升爬过去），滑翔下沉到危险格上方时把竖直速度抬平、不往格里沉。攻击动作不受影响（空袭的收翅俯冲/俯冲助推照旧朝目标冲）。危险表与判据与地面那套同一份，改 misc.dangerBlocks 两侧一起生效。关闭 = 飞行完全不看危险方块（旧行为）"));
         this.rows.add(new BoolRow("激流三叉戟旋转冲击",
                 MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
                 v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),

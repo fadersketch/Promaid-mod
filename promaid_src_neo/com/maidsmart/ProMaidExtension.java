@@ -387,9 +387,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
             return;
         }
         try {
+            // 实测六百九十七：带上实体网络 id——它与"入世界/重同步"那几行的 id 对起来，
+            // 就能一眼看出"离场的是刚复活进来的那一只，还是旧的那一只"（幽灵状态的正主）。
             com.maidsmart.tool.PromaidLog.log("离场", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 离开世界（reason=" + maid.getRemovalReason() + "，维度="
-                    + maid.level().dimension().location() + "）——法术模组会据此通知客户端删掉她的实体");
+                    + " 离开世界（id " + maid.getId() + "，reason=" + maid.getRemovalReason()
+                    + "，维度=" + maid.level().dimension().location() + "）");
         } catch (Throwable ignored) {
         }
         // v1.2.0 实测五百五十七：**离场也登记一次补包**。

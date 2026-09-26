@@ -219,6 +219,7 @@
   "task.maid_smart.broom.desc": "扫帚模式：女仆自己取出 TLM 的扫帚骑上去飞起来（无需玩家驾驶），用主手的远程武器开火；平时悬停在主人身边跟随，守家（工作范围）时改成沿着工作范围那个圈盘旋巡逻。需要扫帚 + 远程武器 + 弹药（弹药要喂得上手里那把枪——口径由枪械 mod 自己判：TACZ / 卓越前线都一样），缺件时原地待命并播报缺什么；不响应自主切换。因为是骑乘状态，这个模式下她**不能施法、也不能放 TNT/末地水晶/重生锚/床**，只有主手武器在打",
   "config.promaid.combat.flightNoWallDamage": "飞行作战免疫鞘翅撞击伤害",
   "config.promaid.combat.flightNoFallDamage": "空袭免疫摔落伤害",
+  "config.promaid.combat.flightDangerAvoid": "飞行危险环境避让",
   "config.promaid.combat.riptideDash": "激流三叉戟旋转突进",
   "config.promaid.combat.riptideFlightScale": "激流推进·力度倍数",
   "config.promaid.combat.crossbowPlainFirework": "弩可用普通烟花当弹药",

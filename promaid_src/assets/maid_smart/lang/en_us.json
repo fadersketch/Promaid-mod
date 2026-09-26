@@ -65,6 +65,7 @@
   "config.promaid.voice.jarPackMuteNative": "Mute native sound pack while playing",
   "config.promaid.combat.flightNoWallDamage": "Flight: Immune to Elytra Wall Impact",
   "config.promaid.combat.flightNoFallDamage": "Air Raid: Immune to Fall Damage",
+  "config.promaid.combat.flightDangerAvoid": "Flight: Avoid Dangerous Terrain",
   "config.promaid.combat.riptideDash": "Riptide Trident Dash",
   "config.promaid.combat.riptideFlightScale": "Riptide Thrust Scale (as propellant)",
   "config.promaid.flightFollow.trident": "Flight Follow: Trident Durability",

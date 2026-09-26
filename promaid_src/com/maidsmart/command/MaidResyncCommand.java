@@ -218,6 +218,7 @@ public final class MaidResyncCommand {
 
     /** 由 ProMaidExtension 的 ServerTick 每 tick 调一次（空队列零开销） */
     public static void tickAutoResync(net.minecraft.server.MinecraftServer server) {
+        tickForcedResync(server); // 实测六百九十七：复活后那几枪（空表零开销）
         if (PENDING_AUTO.isEmpty()) {
             return;
         }
@@ -264,6 +265,112 @@ public final class MaidResyncCommand {
                     }
                 }
             } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    // ================= v1.3.0(beta) 实测六百九十七：复活后强制补包 =================
+
+    /**
+     * v1.3.0(beta) 实测六百九十七【自动复活之后，客户端实体再重建三枪】。
+     *
+     * 【为什么需要 —— 日志实证】2026-09-27 那场游戏里，每一次自动复活都是同一个形状：
+     * <pre>
+     *   03:57:43.510  法术模组 Creating new SpellBookManager for maid 2c8b… ← 新实体入世界
+     *   03:57:43.511  [promaid/重同步] 补包跳过：她是新实体（id 6→10260）     ← 实测五百九十六 放行
+     *   03:57:43.513  [promaid/自动复活] 已在主人重生点复活
+     *   03:57:43.589  法术模组 Removed SpellBookManager for maid 2c8b…       ← 刚加进来那只又离场了
+     *   03:57:43.590  [promaid/离场] 圣女酒狐 离开世界（reason=null）
+     * </pre>
+     * 复活用的是**同一个 UUID、新的实体 id**（复用 UUID 是刻意的：记忆/灵魂目录按 UUID 索引），
+     * 而那条「离场」正是本项目注释里早写明的那条链的另一半——**法术模组对没带锚核的女仆
+     * 在离场时会让客户端把她的实体删掉**（这些女仆确实没有锚核：法术模组自己打了
+     * 「does not have anchor_core, allowing removal」）。实测五百九十六 又刻意规定
+     * 「新实体不补包」，于是**没有任何一方**在那个删包之后把她补回来：客户端把她删了、
+     * 服务端她还在照常开火——玩家看到的就是「建模被卡掉、变成幽灵状态」。
+     *
+     * 【改法】不再赌"谁应该补"：复活成功后我们自己定时补三枪，且**绕开 五百九十六 的分流**
+     * （那条规矩是为魂符放出的"新实体"写的，与"复活后客户端可能已被拆掉"是两回事）。
+     * 时点：+2 秒 / 再 +5 秒 / 再 +5 秒（{@link #FORCED_FIRST_DELAY} / {@link #FORCED_GAP} ×
+     * {@link #FORCED_SHOTS_TOTAL}）——复活后头十秒正是上面那条「入世界 → 离场」来回最密的窗口。
+     * 补包用既有的 {@link #resyncTo}（删 + 生成 + 全量同步数据 + 属性 + 装备 + 饰品），
+     * 客户端本来就有她时也只是一次看不见的瞬时重建（见 resyncTo 的注释）。
+     *
+     * 【她的界面开着时不补】与 实测五百九十五 同一条理由：玩家正开着她的物品栏/装备栏时
+     * 重建客户端实体，TLM 的容器槽位会抓着一只已被删掉的实体。遇到这一档就顺延到下一枪。
+     *
+     * 【开销】只有"刚复活过"的 UUID 在表里、最多十秒；平时一个空 map 判断。
+     */
+    private static final java.util.Map<UUID, Integer> PENDING_FORCED =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<UUID, Integer> FORCED_SHOTS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 第一枪延迟（tick）= 2 秒 */
+    private static final int FORCED_FIRST_DELAY = 40;
+    /** 两枪之间再等（tick）= 5 秒 */
+    private static final int FORCED_GAP = 100;
+    /** 一共补几枪 */
+    private static final int FORCED_SHOTS_TOTAL = 3;
+
+    /** 由 {@code MaidAutoResurrect.resurrect} 在复活成功后调用（登记三枪补包） */
+    public static void scheduleForcedResync(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        UUID id = maid.m_20148_();
+        PENDING_FORCED.put(id, FORCED_FIRST_DELAY);
+        FORCED_SHOTS.put(id, FORCED_SHOTS_TOTAL);
+        PromaidLog.log("重同步", PromaidLog.nameOf(maid) + " 复活后补包已登记（+"
+                + (FORCED_FIRST_DELAY / 20) + " 秒起共 " + FORCED_SHOTS_TOTAL
+                + " 枪，治「复活后客户端实体被拆、建模卡掉」）");
+    }
+
+    private static void tickForcedResync(net.minecraft.server.MinecraftServer server) {
+        if (PENDING_FORCED.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<java.util.Map.Entry<UUID, Integer>> it = PENDING_FORCED.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<UUID, Integer> e = it.next();
+            int left = e.getValue() - 1;
+            if (left > 0) {
+                e.setValue(left);
+                continue;
+            }
+            UUID id = e.getKey();
+            int shots = FORCED_SHOTS.getOrDefault(id, 0) - 1;
+            boolean fired = false;
+            try {
+                for (ServerLevel lvl : server.m_129785_()) {
+                    net.minecraft.world.entity.Entity ent = lvl.m_8791_(id);
+                    if (ent instanceof EntityMaid maid && maid.m_6084_()
+                            && maid.m_269323_() instanceof ServerPlayer owner
+                            && owner.m_9236_() == maid.m_9236_()) {
+                        if (maid.guiOpening) {
+                            break; // 她的界面开着：这一枪顺延（理由见类注释）
+                        }
+                        resyncTo(owner, maid);
+                        fired = true;
+                        PromaidLog.log("重同步", PromaidLog.nameOf(maid)
+                                + " 复活后补包：已重建主人客户端的实体（防「建模卡掉」）");
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+            if (fired && shots > 0) {
+                FORCED_SHOTS.put(id, shots);
+                e.setValue(FORCED_GAP);
+            } else if (fired) {
+                FORCED_SHOTS.remove(id);
+                it.remove();
+            } else {
+                // 没打成（界面开着 / 主人不在同维度 / 暂时找不到她）→ 顺延，别把枪数吃掉
+                e.setValue(FORCED_GAP);
+                if (shots <= 0) {
+                    FORCED_SHOTS.remove(id);
+                    it.remove();
+                }
             }
         }
     }

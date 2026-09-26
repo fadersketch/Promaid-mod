@@ -2046,6 +2046,13 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         } else {
             faceOrbit(maid, target, holdY);
         }
+
+        // ⑤ v1.3.0(beta) 实测六百九十六【飞行危险环境避让】：盘旋/掉高这一段若正朝着
+        //    岩浆/火/危险方块沉下去，就把竖直分量抬平（脚下或正前方那格是危险方块时）。
+        //    放在最后：姿态与速度都摆完之后这一句才有最终话语权；它**只动竖直分量**，
+        //    不改朝向、不碰攻击动作（收翅俯冲/俯冲助推那些"朝目标去"的段落各自 return，
+        //    走不到这里）。
+        MaidFlightHazardGuard.antiSink(maid);
     }
 
     /**

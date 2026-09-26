@@ -288,6 +288,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_NO_FALL_DAMAGE;
     /**
+     * v1.3.0(beta) 实测六百九十六：飞行时也把危险方块（岩浆/火/岩浆块…）当"不可靠近"。
+     * 危险表与判据复用地面的 {@code misc.dangerBlocks} + {@code DangerBlocks}，本项只是
+     * 飞行这一侧的开关；详见 {@code MaidFlightHazardGuard} 的类注释。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_FLIGHT_DANGER_AVOID;
+    /**
      * v1.2.0 实测五百三十四：激流三叉戟的**旋转突进**（默认开）。
      *
      * 需求原文："能不能想办法把玩家一的代码套到女仆身上呢？当处于攻击模式/近战空袭且
@@ -1884,6 +1890,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 她只有 20 血——那属于"机制没接住"，不该由玩家承担。想按原版吃摔伤随时可关。
         COMBAT_FLIGHT_NO_FALL_DAMAGE = BUILDER.comment("空袭免疫摔落伤害（默认开）：开启后两种空袭模式（近战空袭/远程空袭）下的女仆完全不受摔落伤害——空袭常态是高空盘旋与收翅俯冲，落地水/雪万一没接住（背包没桶、落点被占、被打断）就是十几点伤害甚至摔死；开启本项即彻底免摔。关闭 = 恢复按落地水/雪（与重锤同款特殊落地缓冲）保护")
                 .translation("config.promaid.combat.flightNoFallDamage").define("flightNoFallDamage", true);
+        // v1.3.0(beta) 实测六百九十六：飞行时也把危险方块当"不可靠近"（玩家原话见
+        // MaidFlightHazardGuard 的类注释）。危险表与判据与地面那套**同一份**（misc.dangerBlocks
+        // + DangerBlocks.cellDangerous），本项只是"飞行这一侧要不要看它"的开关。
+        COMBAT_FLIGHT_DANGER_AVOID = BUILDER.comment("飞行危险环境避让（默认开）：扫帚模式 / 空袭 / 飞行跟随的**飞行途中**，把危险方块表（misc.dangerBlocks：岩浆/火/岩浆块/仙人掌等）视为不可靠近——① 掠过的航段会穿进危险格时自动侧向绕开（绕不开就抬升爬过去），② 滑翔下沉到危险格上方时把竖直速度抬平、不往格里沉。**攻击动作不受影响**（空袭的收翅俯冲/俯冲推助推照旧朝目标冲）。关闭 = 飞行完全不看危险方块（旧行为）")
+                .translation("config.promaid.combat.flightDangerAvoid").define("flightDangerAvoid", true);
         // v1.2.0 实测五百三十四：激流三叉戟的旋转突进（用户点名"把玩家的代码套到女仆身上"）
         // v1.2.0 实测五百三十八：从"偶尔多打一下"改成"她的攻击就是旋转冲击"——
         // 触发距离 5 → 10 格（原来 III 级 3 格/tick 只要 2 tick 就撞上，旋转根本看不见）、

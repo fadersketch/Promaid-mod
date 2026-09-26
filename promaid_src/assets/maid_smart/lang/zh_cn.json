@@ -215,6 +215,7 @@
   "config.promaid.voice.jarPackMuteNative": "播放时暂压原生语音包",
   "config.promaid.combat.flightNoWallDamage": "飞行作战免疫鞘翅撞击伤害",
   "config.promaid.combat.flightNoFallDamage": "空袭免疫摔落伤害",
+  "config.promaid.combat.flightDangerAvoid": "飞行危险环境避让",
   "config.promaid.combat.riptideDash": "激流三叉戟旋转突进",
   "config.promaid.combat.riptideFlightScale": "激流推进·力度倍数",
   "config.promaid.combat.crossbowPlainFirework": "弩可用普通烟花当弹药",

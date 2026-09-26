@@ -1,4 +1,62 @@
-﻿## 实测六百九十四【模式门禁的「有弹药」这一条改成问 TACZ 自己：远程空袭 / 扫帚的「有弹药」不再只是“有远程武器 + 任意弹药”，而是原样调用 TACZ 的 AbstractGunItem.canReload（口径必须对上这把枪、弹药箱照认、坏枪与满匣顺带否掉）】（版本号不变，仍是 v1.3.0 beta）
+﻿## 实测六百九十五【卓越前线的「有弹药」这一条也交给它自己：远程空袭 / 扫帚的换弹门现在两家枪各问各的（TACZ 的 AbstractGunItem.canReload + 卓越前线的 GunData.shouldStartReloading——与 TLM 自己的卓越前线换弹链路用的是同一个方法）；顺带把「激活条件」那几处文案改成新口径】（版本号不变，仍是 v1.3.0 beta）
+
+> 玩家原话：「现在我把卓越前线也下过来了，你也改一改吧。顺便改一下激活状态对应文本。」
+
+### 一、还有一半没交出去（实测六百九十四 的尾巴）
+
+实测六百九十四 只把 **TACZ** 那一半的「换得上弹」交给了它自己（`AbstractGunItem.canReload`）。卓越前线（SBW）当时本机未装、无法 javap 实证，所以它对 SBW 枪仍走老的 `looseAmmoScan`——**「任意 5 类 SBW 弹药之一都算」、同样不看口径**。同一个缺口，只是换了一家枪。
+
+现在两台实例的卓越前线 0.8.9.1 都装上了（1.20.1 `hotfix-993063bed-all` / 1.21.1 `final-5b92ebe1`），`javap` 实证到位，这一半也交出去。
+
+### 二、改法（两树镜像）：卓越前线的「换得上弹」
+
+`GunCompat.canReload` 现在这样分流：
+
+- **卓越前线枪** → 原样调用 `GunData.shouldStartReloading(Entity)`；
+- **TACZ 枪** → 原样调用 `AbstractGunItem.canReload(shooter, gun)`（实测六百九十四，一字未改）；
+- **能量武器**（二次灾变 / 超级星星炮，不吃常规弹药、内部充能）→ 照旧**直接放行**；
+- 两家都**反射不可用**（没装 / 版本改名）才回退 `looseAmmoScan`（老口径，行为与旧版一字不差）。
+
+`javap` 实证（1.20.1 与 1.21.1 两版签名一致、字节码逐句相同）：
+
+```
+GunData.shouldStartReloading(entity)
+      = !reloading() && !useBackpackAmmo() && !hasEnoughAmmoToShoot(entity)
+        && hasBackupAmmo(entity)
+
+GunData.hasBackupAmmo(entity) = countBackupAmmo(entity) > 0
+GunData.countBackupAmmo(entity):
+      创造玩家 / 创造弹药箱  → Integer.MAX_VALUE（无限，永远换得上）
+      否则                  → countBackupAmmoItem(entity) × AmmoConsumer.getLoadAmount()
+                              + virtualAmmo
+其中 countBackupAmmoItem → 该枪 selectedAmmoConsumer().count(gunData, entity)：
+      **只数这把枪自己认的那一类弹药**（口径必须对得上），纯只读计数、不扣物品。
+```
+
+**为什么用它、而不是裸的 `hasBackupAmmo`**：它与 TACZ 侧的 `AbstractGunItem.canReload` 是同一个角色——**开火链路真正会去用的那个判定**。TLM 自己的卓越前线换弹链路 `SWarfareCompatInner.doGunReload(女仆, gunData)` 查的就是 `shouldStartReloading`（真 → `startReload()`；否则 `shouldStartBolt()` → `startBolt()`）。「门禁说能换弹」与「TLM 真的会去换弹」必须是同一句话，否则又会出现「判她齐备、她却永远在重装」。
+
+新增反射句柄 `SBW_RELOAD_API` / `sbwReloadApi()` / `sbwCanReload()`；`looseAmmoScan` 保留为兜底。
+
+**为什么不回退 实测六百九十二 / 六百九十四**：① `useBackpackAmmo()`（弹匣容量 ≤ 0、直接从背包吃弹的枪）那一支 `shouldStartReloading` 返回 false，但那些枪的「打得响」本来就把背包弹算进去（`currentAvailableAmmo` = `countBackupAmmo`），`canFeed` 已覆盖；② 弹匣满时它返回 false，而那一拍 `canFeed` 为真，「打得响 **或** 换得上」的或门照旧过；③ 创造弹药箱在 `countBackupAmmo` 里读作 `MAX_VALUE`，照旧无限。
+
+### 三、顺带改的「激活条件」文案（两树镜像）
+
+这次把**描述激活条件的地方**统一到新口径——原文案还写着「TACZ 自己判」，现在两家枪各问各的：
+
+- **语言文件的任务说明**（中 / 英，两树各两份）：`task.maid_smart.broom.desc`（扫帚模式）与 `task.maid_smart.flight_ranged.desc`（远程空袭）——点明「枪械的子弹要**喂得上手里那把枪**，口径由枪械 mod 自己判」。
+- **手册**（两树 `GuideChaptersFlight`）四处：「远程空袭还额外需要弹药」、「怎么算『齐备』」（扫帚那三条）、「『有弹药』这一条现在由枪械 mod 自己判」（标题与正文，并新增「卓越前线也照办」一条）、「双就绪」那一条的 ②。
+- **手册**（两树 `GuideChaptersCombat`）一处：枪械弹药箱那一条的「六百九十四 起……交给 TACZ 自己判」→「交给枪械 mod 自己判（TACZ 与卓越前线各问各的）」。
+
+### 四、验证与边界
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=171 SKIP=9 FAIL=0**（本批没有新增 mixin 注入点）；打包门禁（`verify_jar_classes.py` + mixin 包登记 + lang json）全过；出 `promaid-1.3.0-forge-1.20.1.jar`（10,900,245 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,979,047 B），**同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）并逐处核对 md5。
+- `_vt695.py` 只读核对：两树 `GunCompat` 镜像（`sbwCanReload` / `SBW_RELOAD_API` / `shouldStartReloading` 都在、`canReload` 已按 SBW/TACZ 分流、能量枪先放行、旧的「`if (!isSbwGun(gun))` 只问 TACZ」写法已消失）；两树 `MaidFlightKit` 注释同步；lang 四条（两树 × 中英）都含新文案；手册两树 4+1 处都改到；旧的「由 TACZ 自己判」标题已不存在。
+- `_jarchk695.py` jar 内容核对：两个 jar 的 `.class` 里都能搜到 `shouldStartReloading`、`com/atsuishio/superbwarfare/data/gun/GunData`，且旧行为不会出现。
+- **边界如实写**：① 这一批只改「换得上弹」这一半，`canFeed`（打得响那一半）**一个字没动**；② 照旧是**只读查询**——SBW 自己给 `countBackupAmmo` 带了 10 tick 的记忆缓存，每 tick 问它不贵；③ 能量武器照旧免检，绝不因为换 API 把她们判成缺弹药；④ 卓越前线没有 TACZ 那种「散装弹药箱」物品，它的「无限」只有创造弹药箱一条，读作 `MAX_VALUE`。
+- **最终仍要凭实测验收**：手里是卓越前线的步枪 / 狙击枪、背包里只有对不上口径的弹药时，远程空袭 / 扫帚模式**不再激活**并报缺弹药；背包里有对得上的散装弹（或创造弹药箱）时照旧激活。
+
+
+## 实测六百九十四【模式门禁的「有弹药」这一条改成问 TACZ 自己：远程空袭 / 扫帚的「有弹药」不再只是“有远程武器 + 任意弹药”，而是原样调用 TACZ 的 AbstractGunItem.canReload（口径必须对上这把枪、弹药箱照认、坏枪与满匣顺带否掉）】（版本号不变，仍是 v1.3.0 beta）
 
 > 玩家原话：「现在关于远程空袭模式和扫帚模式枪械的判定还是tacz原版能够开火的判定吗？我想的是现在对于允许激活的判定，不应该是单纯的远程武器加弹药（很简单，因为像冲锋枪跟狙击枪并不是只要有远程武器和弹药就行的），最好是走TACZ的API，发现手持武器对应的TACC端允许开火，那么就判定为武器和弹药方面为可通过的。」
 
