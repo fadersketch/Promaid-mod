@@ -194,6 +194,9 @@ public final class MaidFreeFlightController {
             boolean ownerHere = owner != null && owner.isAlive() && maid.level() == owner.level();
             boolean ownerMoving = ownerHere && trackOwnerMoving(maid, owner);
             boolean allowed = canFly(maid);
+            // 【实测六百七十九】战斗意图优先：有敌人时不要把她往主人身边拉（那正是用户报的冲突）
+            LivingEntity enemy = allowed ? combatTarget(maid) : null;
+            boolean enemyTooFar = enemy != null && horizontalDist(maid, enemy) > 4.0;
 
             // ① 软着陆相位：恒速下降（保持无重力）
             if (st == ST_SOFT_LAND) {
@@ -204,6 +207,10 @@ public final class MaidFreeFlightController {
             if (st == ST_STANDBY) {
                 if (!allowed) {
                     forget(maid);
+                    return;
+                }
+                if (enemyTooFar) {
+                    takeOff(maid, "起飞追击敌人");   // 待命时敌人来了且够不着 → 飞过去打
                     return;
                 }
                 if (shouldTakeOff(maid, ownerHere ? owner : null, ownerMoving)) {
@@ -217,6 +224,11 @@ public final class MaidFreeFlightController {
                     beginSoftLanding(maid, maid.isInWater() || maid.isInLava() ? "落水/岩浆" : "能力消失或状态变化", ST_OFF);
                     return;
                 }
+                // 战斗意图优先：有敌人就飞去打（**不**落地待命——那是"回到主人身边"的逻辑）
+                if (enemy != null) {
+                    combatFly(maid, enemy);
+                    return;
+                }
                 if (shouldLandAndWait(maid, ownerHere ? owner : null, ownerMoving)) {
                     beginSoftLanding(maid, "主人停下来了，落地待命", ST_STANDBY);
                     return;
@@ -224,9 +236,9 @@ public final class MaidFreeFlightController {
                 flyTick(maid, id, ownerHere ? owner : null);
                 return;
             }
-            // ④ 未接管：够资格 + 该起飞 → 起飞
-            if (allowed && shouldTakeOff(maid, ownerHere ? owner : null, ownerMoving)) {
-                takeOff(maid, "起飞");
+            // ④ 未接管：够资格 + （要追敌人 或 该起飞）→ 起飞
+            if (allowed && (enemyTooFar || shouldTakeOff(maid, ownerHere ? owner : null, ownerMoving))) {
+                takeOff(maid, enemyTooFar ? "起飞追击敌人" : "起飞");
             }
         } catch (Throwable t) {
             // 异常兜底：只在"飞行中"才强行保持悬停；落地待命时就当她不存在（别让她飘起来）
@@ -665,6 +677,78 @@ public final class MaidFreeFlightController {
             if (was || reason != null && !"她没了".equals(reason)) {
                 PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid) + " 收工（" + reason + "）");
             }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 她当前要打的敌人（TLM 攻击任务写在 brain 的 {@code ATTACK_TARGET}；兜底认 {@code Mob#getTarget}）。
+     *
+     * 【为什么要认它（实测六百七十九）】用户实机反馈的**冲突 bug**：一般战斗模式下她**想在地面
+     * 走向敌人并攻击**，而创造飞行却要求她**飞向主人**——两套逻辑打架（这也是"飞行时会强制保持
+     * 与主人的距离/高差"的直接后果）。正确姿态是：**飞行是她的"移动层"，要跟着她的意图走**——
+     * 有敌人就飞去打，没敌人再回到主人身边/落地待命。
+     * （用户对两种飞行的定位也很清楚：鞘翅＝战斗机、靠高速与爬升俯冲拿优势，作者的"空袭"就是围着
+     * 它设计的；创造飞行＝直升机、慢而稳而灵活，是"配合其他工作"的万金油移动层——两者重合很少。）
+     */
+    private static LivingEntity combatTarget(EntityMaid maid) {
+        try {
+            LivingEntity sub = SUB_ENEMY.get(maid);
+            if (sub != null && sub.isAlive() && sub.level() == maid.level()) {
+                return sub;   // 验收用替代敌人优先
+            }
+            LivingEntity t = null;
+            var mem = maid.getBrain().getMemory(MemoryModuleType.ATTACK_TARGET);
+            if (mem != null && mem.isPresent()) {
+                t = mem.get();
+            }
+            if (t == null) {
+                t = maid.getTarget();
+            }
+            if (t != null && t.isAlive() && t.level() == maid.level()) {
+                return t;
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * 替代敌人（无头/专用服验收入口，同"替代主人"的思路）：主链路仍读 brain 的 ATTACK_TARGET，
+     * 这里只是为"没有真主人⇒TLM 战斗 AI 不跑⇒拿不到攻击目标"的场景留一个可验收的口子
+     * （实测：无主女仆的 {@code Brain.memories} 是空的，攻击任务压根不启动）。
+     */
+    private static final Map<EntityMaid, LivingEntity> SUB_ENEMY =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    public static void setSubstituteEnemy(EntityMaid maid, LivingEntity target) {
+        if (maid != null && target != null) {
+            SUB_ENEMY.put(maid, target);
+        }
+    }
+
+    public static void clearSubstituteEnemy(EntityMaid maid) {
+        if (maid != null) {
+            SUB_ENEMY.remove(maid);
+        }
+    }
+
+    /** 战斗档：飞向敌人（保持"够得着"的间距），悬停时面朝敌人 */
+    private static void combatFly(EntityMaid maid, LivingEntity enemy) {
+        try {
+            // 站定距离：近战够得着（原版近战距离约 3 格）、又不至于撞进它身体里
+            double standoff = 2.2;
+            double dx = maid.getX() - enemy.getX();
+            double dz = maid.getZ() - enemy.getZ();
+            double len = Math.max(1.0E-4, Math.sqrt(dx * dx + dz * dz));
+            // 目标点：贴着敌人的水平 standoff 处、抬到它身体中段略上（避免蹭地/卡进方块）
+            Vec3 aim = new Vec3(enemy.getX() + dx / len * standoff,
+                    enemy.getY() + enemy.getBbHeight() * 0.5 + 0.5,
+                    enemy.getZ() + dz / len * standoff);
+            // 面向锚点传敌人 → 沿用 steer 里的社交朝向规则（悬停时面向它）
+            steer(maid, aim, true, enemy.position());
+            maid.setNoGravity(true);
+            suppressWalk(maid);
         } catch (Throwable ignored) {
         }
     }
