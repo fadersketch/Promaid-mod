@@ -648,18 +648,6 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return;
         }
 
-        // ── 实测六百八十七【空袭爬升上限】──────────────────────────────────
-        // 需求方原话："有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气
-        // 直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌。"
-        // 空袭的高度判据此前只有 onTargetAltitude（相对**目标**的 Y，没有绝对上限）：目标自己会飞/
-        // 会上升时她就跟着一路上，再叠上烟花/激流/羽扇/位移法术几路推力，几百格是顺理成章的。
-        // 这里补一条"不许高过目标 maxAlt 格"，并把已经攒出来的上升速度削掉。
-        if (overCeiling(maid, target)) {
-            applyCeiling(maid, target, id, gameTime);
-            LAUNCH_LEFT.remove(id);
-            CLIMB_BOOST.remove(id);
-        }
-
         // ── 实测五百四十四：激流旋转突进期间让位（**只让那十几 tick 的速度与滑翔权**）──
         // 【为什么必须让】突进是"这一 tick 的速度由我指定"的打法；空袭这边同一 tick 会
         // ①放烟花（推力沿她的视线方向）②开滑翔（`travel` 的滑翔分支每 tick 把水平速度往
@@ -731,8 +719,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 【实测五百二十八】"够高"不再是唯一的留守条件：本相位点着的这枚烟花
         // 推力还没烧完也不许走。原因见 tickClimbToAltitude 的注释——一到高度就切走，
         // 剩下的推力会被后一段"瞄准敌人"的朝向摊到水平方向，她永远攒不出"在它头上"。
-        // 实测六百八十七：上限之上不再爬（否则会继续在顶上白烧烟花）
-        boolean needClimb = !onTargetAltitude(maid, target) && !overCeiling(maid, target);
+        boolean needClimb = !onTargetAltitude(maid, target);
         boolean holdingBoost = !maid.onGround() && CLIMB_BOOST.contains(id)
                 && LAUNCH_LEFT.getOrDefault(id, 0) > 0;
         if (!maid.onGround() && (needClimb || holdingBoost)) {
@@ -1571,72 +1558,6 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      */
     private static boolean onTargetAltitude(EntityMaid maid, LivingEntity target) {
         return maid.getY() >= target.getY() - altitudeTolerance();
-    }
-
-    /* ---------------- 实测六百八十七：空袭爬升上限 ---------------- */
-
-    /**
-     * 【实测六百八十七】爬升上限（格，相对目标；0 = 不限）——配置读取，配置没挂上时退回 48。
-     *
-     * <p>为什么是"相对目标"而不是绝对高度：空袭的整套高度体系都是相对目标的
-     * （{@link #onTargetAltitude} 用的是 {@code target.getY() - altitudeTolerance()}，
-     * 远程盘旋用 {@code target.getY() + rangedHoldHeight()}）。打一只会飞的 boss 时
-     * "绝对高度上限"会把她的正常爬升也一起掐掉；而"目标上方多少格"在任何地形、任何目标上都成立。
-     */
-    private static double maxAlt() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.AIR_RAID_MAX_ALT.get();
-        } catch (Throwable ignored) {
-            return 48.0;
-        }
-    }
-
-    /** 她是不是已经超过"目标上方 maxAlt 格"（0 = 不限 / 没目标 = 不判） */
-    private static boolean overCeiling(EntityMaid maid, LivingEntity target) {
-        try {
-            double cap = maxAlt();
-            if (cap <= 0.0 || target == null) {
-                return false;
-            }
-            return maid.getY() > target.getY() + cap;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    /** "顶到上限"那条日志的限频（UUID → 上次记的刻）：同一只 5 秒最多一条 */
-    private static final java.util.Map<UUID, Long> CEILING_AT = new java.util.HashMap<>();
-
-    /**
-     * 【实测六百八十七】顶到爬升上限时的收手动作。
-     *
-     * <p>光"不再爬"是不够的：烟花 / 激流三叉戟 / 孔雀羽扇 / 位移法术那几路推力是**实打实加在
-     * 速度上的**，已经攒出来的上升速度不会自己消失。所以这里做三件事：
-     * <ol>
-     *   <li>把向上的速度削掉（只削向上那一半，向下的俯冲照旧——那是空袭的进攻动作）；</li>
-     *   <li>压机头（低头滑翔），让原版滑翔物理自然把她带下来；</li>
-     *   <li>日志（限频）——玩家从日志一眼能看出"她顶上限了"，而不是"她怎么又飞那么高"。</li>
-     * </ol>
-     * 另外调用点会顺手撤掉"起飞段抬头吃推力"与"爬升补推"两个窗口的标记，免得在顶上白烧烟花。
-     */
-    private static void applyCeiling(EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        try {
-            if (maid.getXRot() < 20.0f) {
-                maid.setXRot((float) Math.min(maxPitchDown(), 40.0));
-            }
-            Vec3 dm = maid.getDeltaMovement();
-            if (dm.y > 0.0) {
-                maid.setDeltaMovement(dm.x, 0.0, dm.z);
-            }
-            Long at = CEILING_AT.get(id);
-            if (at == null || gameTime - at >= 100) {
-                CEILING_AT.put(id, gameTime);
-                com.maidsmart.tool.PromaidLog.log("空袭", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 顶到爬升上限（目标上方 " + String.format("%.0f", maxAlt()) + " 格）"
-                        + "，压机头滑翔下来（要调见配置「空袭·爬升上限」）");
-            }
-        } catch (Throwable ignored) {
-        }
     }
 
     /**

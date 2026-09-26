@@ -187,6 +187,5 @@
   "config.promaid.bombing.tntTrack": "TNT Homing",
   "config.promaid.compat": "Third-party Compat",
   "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)",
-  "config.promaid.airRaid.maxAlt": "Air Raid: Max Climb Above Target (blocks, 0 = unlimited)",
   "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)"
 }

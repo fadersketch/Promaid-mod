@@ -205,7 +205,8 @@
   "config.promaid.misc.freeFlightIdle": "Free Flight: Smart Standby (land beside owner when he stops)",
   "config.promaid.misc.freeFlightIdleSeconds": "Free Flight: Seconds of Owner Stillness Before Landing",
   "config.promaid.misc.freeFlightNearDist": "Free Flight: Standby Distance (blocks)",
+  "config.promaid.misc.freeFlightTravel": "Free Flight: Fly Instead of Walking to Work",
+  "config.promaid.misc.freeFlightTravelDist": "Free Flight: Fly If Farther Than (blocks)",
   "key.promaid.free_flight_toggle": "Toggle Maid Free Flight (aim at her)",
-  "config.promaid.airRaid.maxAlt": "Air Raid: Max Climb Above Target (blocks, 0 = unlimited)",
   "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)"
 }

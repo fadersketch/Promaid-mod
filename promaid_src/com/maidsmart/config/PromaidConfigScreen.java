@@ -2668,9 +2668,6 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.AIR_RAID_LAUNCH_RANGE, s), "地面重新起飞的最大水平距离（格，默认 20）：超出先跑近再起飞（防越炸越远）。只算水平距离——敌人站在高处不影响这条"));
         this.rows.add(new NumRow("占位高度容差（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE, s), "占位高度容差（格，默认 10）：她比目标低不超过这么多格就算「已经到位」，直接开打不再爬高。这个值同时也是起飞朝向的判据"));
-        // 实测六百八十七：空袭爬升上限（需求方：几路推力叠加能一口气飞到 300 多格）
-        this.rows.add(new NumRow("空袭·爬升上限（格，0=不限）", String.valueOf(MaidSmartConfig.AIR_RAID_MAX_ALT.get()),
-                s -> setDouble(MaidSmartConfig.AIR_RAID_MAX_ALT, s), "默认 48：她不许飞到「目标上方这么多格」以上——到了就不再爬、也不再点烟花/激流/羽扇往上顶，改为压机头滑翔下来。0 = 不限（回到旧行为）。只压向上，俯冲不受影响"));
         this.rows.add(new NumRow("起跳等待上限（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_JUMP_TICKS.get()),
                 s -> setInt(MaidSmartConfig.AIR_RAID_JUMP_TICKS, s), "起跳等待上限（tick，默认 3）：起跳失败（头顶有方块 / 低矮空间）超过这么久就放弃本轮空袭"));
         this.rows.add(new NumRow("烟花最小间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_FIREWORK_COOLDOWN.get()),

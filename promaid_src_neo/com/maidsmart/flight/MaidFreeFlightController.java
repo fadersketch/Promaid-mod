@@ -173,6 +173,269 @@ public final class MaidFreeFlightController {
         }
     }
 
+    /* ---------------- 实测六百八十八：本来要走过去的活，交给飞 ---------------- */
+
+    /**
+     * 走位请求表（UUID → {x, y, z, 记下的世界刻}）——由 {@link #takeOverWalk} 写入，
+     * 由 {@link #travelAim} 读取（过期即摘）。
+     */
+    private static final Map<UUID, double[]> TRAVEL = new HashMap<>();
+    /**
+     * 这趟飞行是"赶去干活"而不是"跟主人"（UUID 集合）。
+     *
+     * <p>两个用处：①她在飞的时候，后续的走位请求**一律继续接管**（否则最后 8 格会掉回走路判据，
+     * 她半路上被跟随逻辑拽走）；②走位请求断了之后要按"赶路结束"收尾（落地交还任务），
+     * 而不是掉回"回主人身边"。
+     */
+    private static final java.util.Set<UUID> TRAVEL_FLIGHT = new java.util.HashSet<>();
+    /** 「赶路」那条日志的限频（UUID → 上次记的世界刻）：同一只 5 秒最多一条 */
+    private static final Map<UUID, Long> TRAVEL_LOGGED = new HashMap<>();
+    /** 走位请求的新鲜期（tick）：这么久没有新请求 = 她不再需要移动（到地方了 / 改主意了） */
+    private static final int TRAVEL_TTL = 20;
+    /**
+     * 竖直差超过这么多格也算"走过去费劲"（上坡 / 上天 / 跨沟）。
+     * 取 2.0 是刻意与跟随那条的老口径对齐（{@code shouldTakeOff} 里"高差 > 2 就起飞"）：
+     * 同一个判断在两条链路上不该有两个数。
+     */
+    private static final double TRAVEL_RISE = 2.0;
+    /** 计入"到了"的水平 / 竖直半径（格）：进了它就落下去干活 */
+    private static final double TRAVEL_ARRIVE = 1.5;
+    /** 落地前要求目标格下方这么多格内有实地（没有就**完全不接管**，让她照旧自己想办法） */
+    private static final int TRAVEL_LANDING_SCAN = 24;
+    /** "在主人身边干活"的水平半径（格）：在这以内不做跟随起飞（见 {@link #workingNearOwner}） */
+    private static final double WORK_NEAR_OWNER = 16.0;
+    /** "在主人身边干活"的竖直上限（格）：他上天了就不算"在身边"，照旧跟上去 */
+    private static final double WORK_NEAR_OWNER_Y = 8.0;
+
+    /**
+     * 【实测六百八十八】"本来要走路过去的活"也交给仿创造飞行。
+     *
+     * <p>需求方口径（原话）："本来就走过去应该交给创造。"上一批已经按同一句话把**搭路**
+     * （{@code BridgeUpBehavior}，垫方块过沟/上坡）整段让位了——这一条是它的对偶面：
+     * **不搭路，也不绕路**，要过去就直接飞过去。
+     *
+     * <p>调用点：{@code FreeFlightWalkGuardMixin}（{@code PathNavigation.moveTo(DDDD)Z} 的 HEAD，
+     * = 挖矿 / 伐木 / 农活这类**直连寻路**）。返回 true = 这一发地面寻路被接管（调用方把返回值改成
+     * false，她不会走），我们已经记下了那一格，接下来每 tick 由 {@link #flyTravel} 把她送过去。
+     *
+     * <p>接管条件（四条全中）：
+     * <ol>
+     *   <li>她此刻**有飞行资格**（{@link #canFly}：总闸 + 没被单独关掉 + 资格物品/效果/重力其一，
+     *       且没坐着/没被骑/没在守家/不是空袭或扫帚任务）；</li>
+     *   <li>开关开着（{@code misc.freeFlightTravel}）且她**在非战斗的工作任务上**
+     *       （{@link #walkTravelAllowed}：挖矿/伐木/农活这类，见那里的排除清单）；</li>
+     *   <li>这一格确实够"费劲"：水平超过 {@code freeFlightTravelDist}（默认 8 格）
+     *       **或**高差超过 {@link #TRAVEL_RISE}（2 格）——近处挪一步照旧走路；</li>
+     *   <li>那一格**底下落得下去**（{@link #landableAt}：沟上 / 虚空上 / 水面上方不接管）。</li>
+     * </ol>
+     *
+     * <p>【为什么"接管的阈值"和"结束的阈值"不是同一个】接管看"够不够远"（8 格），结束看"到没到"
+     * （1.5 格）；中间那段靠 {@link #TRAVEL_FLIGHT} 这条"这趟已经在赶路"的标记继续接管，
+     * 所以她是一路飞到底、不是飞 8 格再走最后一段。
+     */
+    public static boolean takeOverWalk(EntityMaid maid, double x, double y, double z) {
+        try {
+            if (maid == null || maid.level().isClientSide()) {
+                return false;
+            }
+            if (!walkTravelOn() || !canFly(maid) || !walkTravelAllowed(maid)) {
+                return false;
+            }
+            UUID id = maid.getUUID();
+            double dx = x - maid.getX();
+            double dz = z - maid.getZ();
+            double hd = Math.sqrt(dx * dx + dz * dz);
+            double vd = Math.abs(y - maid.getY());
+            // 近处、同层：这是"挪一步"（走到隔壁的矿 / 箱子 / 站位），照旧交给她自己走——
+            // 飞过去既慢又吵。只有"远"或者"要上下"才值得起飞（已经在赶路的那趟除外，见类注释）。
+            if (!TRAVEL_FLIGHT.contains(id) && hd <= walkTravelDist() && vd <= TRAVEL_RISE) {
+                return false;
+            }
+            if (!landableAt(maid, x, y, z)) {
+                return false;
+            }
+            TRAVEL.put(id, new double[]{x, y, z, (double) maid.level().getGameTime()});
+            logTravel(maid, hd, vd);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean walkTravelOn() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.get();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static double walkTravelDist() {
+        try {
+            return Math.max(0.0, com.maidsmart.config.MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST.get());
+        } catch (Throwable ignored) {
+            return 8.0;
+        }
+    }
+
+    /**
+     * 这只女仆的直连寻路该不该被我们接管——**只认"本来走过去干活"这一类**。
+     *
+     * <p>直连寻路（{@code moveTo(DDDD)Z}）还有几张别的面孔，各有各的语义，一律不碰：
+     * <ol>
+     *   <li><b>自保逃跑</b>：它的落点是"安全点 / 岸边 / 水面"（贴着地面逃的语义），
+     *       被我们吊到空中会毁掉那条链的判据；</li>
+     *   <li><b>战斗类任务的战术走位</b>（{@code MaidCombatTacticsBehavior}）：交战中的走位是打斗的
+     *       一部分，交给战斗链路；</li>
+     *   <li><b>刷怪笼插火把</b>：那条链自己拥有走位所有权（实测六百六十四，见
+     *       {@code SpawnerTorchNavGuardMixin}）；</li>
+     *   <li><b>站桩工作</b>（建筑 / 烹饪 / 酿造）：她该原地不动，不该被吊起来；</li>
+     *   <li><b>idle / 跟随</b>（{@code isNonCombatWork} 为假）：跟随有它自己那套飞行跟随，
+     *       散步 / 闲逛更不该变成飞。</li>
+     * </ol>
+     */
+    private static boolean walkTravelAllowed(EntityMaid maid) {
+        try {
+            if (com.maidsmart.combat.SelfPreservationBehavior.isSelfPreserving(maid)) {
+                return false;
+            }
+            if (com.maidsmart.task.MaidWorkTags.isAttackTask(maid)) {
+                return false;
+            }
+            if (!com.maidsmart.task.MaidWorkTags.isNonCombatWork(maid)) {
+                return false;
+            }
+            if (com.maidsmart.task.MaidWorkTags.isSpawnerTorchRun(maid)) {
+                return false;
+            }
+            return !com.maidsmart.task.MaidWorkTags.isStill(maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 那一格底下有没有能站的地方（水 / 岩浆 / 虚空上方都不算）——复用既有的"往下找落点"判据，
+     * 只是把起点换成目标格：{@code y} 是地面寻路给的高度，往下扫 {@link #TRAVEL_LANDING_SCAN} 格。
+     *
+     * <p>【为什么要查】飞到一个落不下去的地方 = 把"她自己会想办法"变成"我们把她悬在半空"。
+     * 查不过就**不接管**：那条路她原来怎么走（搭高 / 垫台阶 / 绕路 / 放弃），现在还是怎么走。
+     */
+    private static boolean landableAt(EntityMaid maid, double x, double y, double z) {
+        try {
+            net.minecraft.core.BlockPos from = net.minecraft.core.BlockPos.containing(x, y + 1.0, z);
+            return findGroundBelow(maid.level(), from, TRAVEL_LANDING_SCAN) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 这只的走位请求还新鲜吗（不清理、只读——给 {@link #travelAim} 与诊断用） */
+    private static boolean travelFresh(EntityMaid maid) {
+        double[] t = TRAVEL.get(maid.getUUID());
+        if (t == null) {
+            return false;
+        }
+        try {
+            return maid.level().getGameTime() - (long) t[3] <= TRAVEL_TTL;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 当前这一拍要飞过去的走位目标（过期即摘并返回 null） */
+    private static Vec3 travelAim(EntityMaid maid) {
+        double[] t = TRAVEL.get(maid.getUUID());
+        if (t == null) {
+            return null;
+        }
+        if (!travelFresh(maid)) {
+            TRAVEL.remove(maid.getUUID());
+            return null;
+        }
+        return new Vec3(t[0], t[1], t[2]);
+    }
+
+    /** 赶路这一趟作废（落水 / 能力没了 / 已到达） */
+    private static void travelDone(EntityMaid maid) {
+        try {
+            UUID id = maid.getUUID();
+            TRAVEL.remove(id);
+            TRAVEL_FLIGHT.remove(id);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 因为"要去干活"而起飞（标记这趟的身份，见 {@link #TRAVEL_FLIGHT}） */
+    private static void takeOffTravel(EntityMaid maid) {
+        TRAVEL_FLIGHT.add(maid.getUUID());
+        takeOff(maid, "起飞赶去干活的地方");
+    }
+
+    /**
+     * 【实测六百八十八】赶路飞行的每 tick：朝她自己的走位目标飞，到了就落下去把活还给她。
+     *
+     * <p>与跟随飞行的两点不同：①{@code ownerPos = null}（不做"面向主人 / 倒退着飞"那套社交朝向，
+     * 面朝前进方向就行——她这趟是去干活，不是陪你）；②到位判据用 {@link #TRAVEL_ARRIVE}，
+     * 到了就**软着陆 + 释放**（{@code ST_OFF} = 落地即收工、把重力与控制权交回 TLM 的任务链）。
+     *
+     * <p>落点安全在接管那一刻已经查过（{@link #landableAt}），所以这里不再重复判一次。
+     */
+    private static void flyTravel(EntityMaid maid, UUID id, Vec3 aim) {
+        double dx = aim.x - maid.getX();
+        double dz = aim.z - maid.getZ();
+        double hd = Math.sqrt(dx * dx + dz * dz);
+        double vd = Math.abs(aim.y - maid.getY());
+        if (hd <= TRAVEL_ARRIVE && vd <= TRAVEL_ARRIVE) {
+            travelDone(maid);
+            beginSoftLanding(maid, "到地方了，落下来干活", ST_OFF);
+            return;
+        }
+        steer(maid, aim, true, null);
+        maid.setNoGravity(true);
+        suppressWalk(maid);
+    }
+
+    private static void logTravel(EntityMaid maid, double hd, double vd) {
+        try {
+            UUID id = maid.getUUID();
+            long now = maid.level().getGameTime();
+            Long at = TRAVEL_LOGGED.get(id);
+            if (at != null && now - at < 100) {
+                return;
+            }
+            TRAVEL_LOGGED.put(id, now);
+            PromaidLog.log("仿创造飞行", PromaidLog.nameOf(maid)
+                    + " 赶路：飞去她本来要走过去的地方（直线 " + String.format("%.1f", hd)
+                    + " 格 / 高差 " + String.format("%.1f", vd) + " 格）——有飞行能力就不走路、也不搭路");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百八十八】"她正在主人身边干活"——这时候飞行层只负责把她送到活上，
+     * **不负责把她拽向主人**。
+     *
+     * <p>【不这么判会怎样】落到工位（{@code ST_OFF}）之后，主人的移动会让 {@code shouldTakeOff} 的
+     * "主人在动"成立 → 她起飞去追 → 挖矿驱动发现她不在工位、又发一发远距离寻路 → 我们又把她飞回
+     * 工位……往复。干活的地方本来就在主人附近（TLM 的工作范围就是围着他划的），所以
+     * "在岗 + 主人在旁边" ⇔ "她该在这儿干活"。
+     *
+     * <p>他真走远了（水平 > {@link #WORK_NEAR_OWNER} 格）或者上天了（高差 >
+     * {@link #WORK_NEAR_OWNER_Y} 格）就不算"在身边"，照旧跟上去——那也正是 TLM 换任务的时机。
+     */
+    private static boolean workingNearOwner(EntityMaid maid, LivingEntity owner) {
+        try {
+            if (owner == null || !com.maidsmart.task.MaidWorkTags.isNonCombatWork(maid)) {
+                return false;
+            }
+            return horizontalDist(maid, owner) <= WORK_NEAR_OWNER
+                    && Math.abs(maid.getY() - owner.getY()) <= WORK_NEAR_OWNER_Y;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ---------------- 主循环（MaidTickEvent） ---------------- */
 
     /* ---------------- 状态机（实测六百七十八：加"落地待命"与智能待命判定） ---------------- */
@@ -282,6 +545,9 @@ public final class MaidFreeFlightController {
                 YAW.remove(id);
                 RETREAT.remove(id);
                 DEBUG_TARGET.remove(id);
+                TRAVEL.remove(id);
+                TRAVEL_FLIGHT.remove(id);
+                TRAVEL_LOGGED.remove(id);
             }
         } catch (Throwable ignored) {
         }
@@ -370,10 +636,16 @@ public final class MaidFreeFlightController {
             if (!allowed) {
                 OWNER_LAST.remove(id);
                 OWNER_STILL.remove(id);
+                // 【实测六百八十八】资格没了，赶路这一趟也一起作废
+                TRAVEL.remove(id);
+                TRAVEL_FLIGHT.remove(id);
             }
             // 【实测六百七十九】战斗意图优先：有敌人时不要把她往主人身边拉（那正是用户报的冲突）
             LivingEntity enemy = allowed ? combatTarget(maid) : null;
             boolean enemyTooFar = enemy != null && horizontalDist(maid, enemy) > 6.0;
+            // 【实测六百八十八】她自己的走位请求（= 本来要走路过去的活）：有就直接飞过去。
+            // 过期即摘（见 travelAim）——"她不再需要移动了"这件事由请求断供本身来表达。
+            Vec3 travel = allowed ? travelAim(maid) : null;
 
             // ① 软着陆相位：恒速下降（保持无重力）
             if (st == ST_SOFT_LAND) {
@@ -390,6 +662,10 @@ public final class MaidFreeFlightController {
                     takeOff(maid, "起飞追击敌人");   // 待命时敌人来了且够不着 → 飞过去打
                     return;
                 }
+                if (travel != null) {
+                    takeOffTravel(maid);   // 【实测六百八十八】有活要过去（本来得走过去的）→ 起飞
+                    return;
+                }
                 if (shouldTakeOff(maid, ownerHere ? owner : null, ownerMoving)) {
                     takeOff(maid, "重新起飞");
                 }
@@ -398,12 +674,25 @@ public final class MaidFreeFlightController {
             // ③ 飞行中
             if (st == ST_FLYING) {
                 if (!allowed || maid.isInWater() || maid.isInLava()) {
+                    travelDone(maid);   // 赶路这趟一起作废（落水 / 能力没了）
                     beginSoftLanding(maid, maid.isInWater() || maid.isInLava() ? "落水/岩浆" : "能力消失或状态变化", ST_OFF);
                     return;
                 }
                 // 战斗意图优先：有敌人就飞去打（**不**落地待命——那是"回到主人身边"的逻辑）
                 if (enemy != null) {
                     combatFly(maid, enemy);
+                    return;
+                }
+                // 【实测六百八十八】"赶去干活"排在"落地待命 / 回主人身边"之前：她自己的走位请求
+                // 就是这一趟的意图（与 combatTarget 那条"飞行是移动层、要跟着她的意图走"同一个道理）。
+                if (travel != null) {
+                    flyTravel(maid, id, travel);
+                    return;
+                }
+                if (TRAVEL_FLIGHT.remove(id)) {
+                    // 走位请求断了（到地方了 / 那块矿没了 / 她改主意了）→ 落下来把控制权还给她自己的任务。
+                    // 不这么收尾的话，她会带着"这趟是赶路"的身份掉回跟随逻辑、被拽回主人身边。
+                    beginSoftLanding(maid, "赶路结束（她不再要移动了）", ST_OFF);
                     return;
                 }
                 if (shouldLandAndWait(maid, ownerHere ? owner : null, ownerMoving)) {
@@ -413,7 +702,11 @@ public final class MaidFreeFlightController {
                 flyTick(maid, id, ownerHere ? owner : null);
                 return;
             }
-            // ④ 未接管：够资格 + （要追敌人 或 该起飞）→ 起飞
+            // ④ 未接管：够资格 + （要追敌人 / 要去干活 / 该起飞）→ 起飞
+            if (allowed && travel != null) {
+                takeOffTravel(maid);   // 【实测六百八十八】本来要走过去的活：直接飞过去
+                return;
+            }
             if (allowed && (enemyTooFar || shouldTakeOff(maid, ownerHere ? owner : null, ownerMoving))) {
                 takeOff(maid, enemyTooFar ? "起飞追击敌人" : "起飞");
             }
@@ -601,6 +894,11 @@ public final class MaidFreeFlightController {
         }
         if (!maid.onGround() && (maid.fallDistance > 0.5 || maid.getDeltaMovement().y < -0.12)) {
             return true;                                  // 她在往下掉（被推下悬崖/脚下被挖空）→ 接管
+        }
+        // 【实测六百八十八】"在主人身边干活"时不做**跟随**起飞：否则会出现「落到工位 → 主人走两步
+        // 她起飞去追 → 挖矿驱动又把她飞回工位」的往复。判据见 workingNearOwner（主人真走远 / 上天了照旧跟）。
+        if (workingNearOwner(maid, owner)) {
+            return false;
         }
         if (ownerMoving) {
             return true;                                  // 主人在走
@@ -870,6 +1168,9 @@ public final class MaidFreeFlightController {
             YAW.remove(id);
             RETREAT.remove(id);
             DEBUG_TARGET.remove(id);
+            TRAVEL.remove(id);
+            TRAVEL_FLIGHT.remove(id);
+            TRAVEL_LOGGED.remove(id);
             SUB_OWNER.remove(maid);
             markAirborne(maid, false);
             maid.setNoGravity(false);
@@ -895,6 +1196,10 @@ public final class MaidFreeFlightController {
             NO_LAND_LAST.remove(id);
             NO_LAND_AT.remove(id);
             FAST_LOGGED.remove(id);
+            // 【实测六百八十八】赶路那三张表同理（TRAVEL_FLIGHT 留着会让下一次接管误判成"还在赶路"）
+            TRAVEL.remove(id);
+            TRAVEL_FLIGHT.remove(id);
+            TRAVEL_LOGGED.remove(id);
             markAirborne(maid, false);
             if (maid.isAlive()) {
                 maid.setNoGravity(false);
