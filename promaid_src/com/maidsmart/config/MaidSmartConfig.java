@@ -742,11 +742,11 @@ public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_ENABLED;
 public static final ForgeConfigSpec.DoubleValue FLIGHT_FOLLOW_DIST;
 /** 飞行跟随收手距离（格，默认 5；v1.2.2 实测六百一十五 新增）：主人进到这么近就中断本趟并解除推进矢量——与起手半径是两个不同的球（默认 25 进 / 5 出，中间 20 格迟滞） */
 public static final ForgeConfigSpec.DoubleValue FLIGHT_FOLLOW_END_DIST;
-/** 飞行跟随是否消耗烟花（默认开）：关 = 照旧要求背包里有能飞的道具（烟花/羽扇/能上天的位移法术任一），但每次补推不扣那一枚（纯观赏档；位移法术本来就不消耗物资，不受这条管） */
+/** 飞行跟随是否消耗烟花（默认关）：关 = 照旧要求背包里有能飞的道具（烟花/羽扇/能上天的位移法术任一），但每次补推不扣那一枚（纯观赏档；位移法术本来就不消耗物资，不受这条管） */
 public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_FIREWORK;
-/** 飞行跟随是否消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1）：关 = 只对她飞行跟随期间的鞘翅免掉 */
+/** 飞行跟随是否消耗鞘翅耐久（默认关 = 不啃）：开 = 照原版每 20 tick 扣 1 点，只对她飞行跟随期间的鞘翅生效 */
 public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_ELYTRA;
-/** 飞行跟随是否消耗激流三叉戟耐久（默认开 = 照原版扣 1 点；v1.2.4 实测六百四十 新增）：关 = 用激流三叉戟追主人时不扣它的耐久（只管这一条链路，空袭那边的起飞/抬升/俯冲照旧扣） */
+/** 飞行跟随是否消耗激流三叉戟耐久（默认关 = 不扣；v1.2.4 实测六百四十 新增）：开 = 用激流三叉戟追主人时照原版扣 1 点（只管这一条链路，空袭那边的起飞/抬升/俯冲照旧扣） */
 public static final ForgeConfigSpec.BooleanValue FLIGHT_FOLLOW_TRIDENT;
 /** 压缩盒·放进女仆背包时是否算她背包的延伸（默认开；关 = 只当普通方块用，她的取物代码看不见盒子里的东西） */
 public static final ForgeConfigSpec.BooleanValue COMPRESSION_BOX_MAID_EXTENSION;
@@ -1137,8 +1137,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.1.0 实测七十二（反馈："矿洞里一直往下打洞"）：预算重新计入实心
         // 可开路方块（石头/泥土），曾把默认从 22 降为 6；二百零六 按玩家当前配置
         // 同步回 22（玩家实值）
-        MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 22）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道，调小=只挑眼前暴露的矿")
-                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 22, 0, 64);
+        // 【实测六百七十九：默认 22 → 6（按玩家当前配置同步）】他 toml 里写的就是 6；runConfigMigration 那条 22→6 的迁移本来也一直在替所有人改这一项（声明成 22 不诚实）。迁移段保留：它管的是老档，幂等。
+        MINE_BREAK_BUDGET = BUILDER.comment("穿透预算（默认 6）：选矿时统计女仆到矿之间要穿过多少层实心方块（含石头/泥土等可开路的），超过预算的矿不选——走近了会重新评估；调大=更爱穿墙打隧道，调小=只挑眼前暴露的矿")
+                .translation("config.promaid.mine.breakBudget").defineInRange("breakBudget", 6, 0, 64);
         MINE_VALUE_WEIGHT = BUILDER.comment("价值权重（高价值矿优先程度）")
                 .translation("config.promaid.mine.valueWeight")
                 .defineInRange("valueWeight", 2.0, 0.5, 5.0);
@@ -1630,16 +1631,18 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         SOUL_SPELL_OWNER_RADIUS = BUILDER.comment("主人收符半径（格，默认 24）：女仆与主人距离超过此值不自动收符（太远收不了，魂符在主人背包）")
                 .translation("config.promaid.combat.soulSpellOwnerRadius")
                 .defineInRange("soulSpellOwnerRadius", 24.0, 1.0, 256.0);
-        SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 60）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
+        // 【实测六百七十九：默认 60 → 1（按玩家当前配置同步）】他 toml 里写的就是 1 秒。
+        SOUL_SPELL_COOLDOWN_SECONDS = BUILDER.comment("收符冷却（秒，默认 1）：收符后冷却期内不再触发（防\"放出即死→又收又放\"抖振）——实测四百零四：冷却从【释放时刻】重新起算（旧版沿用收符时刻，释放时剩 175 秒导致第二次作战必死不收）")
                 .translation("config.promaid.combat.soulSpellCooldownSeconds")
-                .defineInRange("soulSpellCooldownSeconds", 60, 0, 86400);
+                .defineInRange("soulSpellCooldownSeconds", 1, 0, 86400);
         // 实测四百一十六：女仆自动复活（反馈："女仆死亡后 60 秒那个墓碑就会自己消失掉，
         // 然后在主人的出生点复活，也是 60 秒的 CD"）
         AUTO_RESURRECT_ENABLE = BUILDER.comment("女仆自动复活（默认开）：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚）满血或按比例复活——不再需要手动去墓碑处取回；**重生点不可用**（床被拆/重生锚没电/维度不允许/从没设过）时直接在**主人所在位置**复活（强制生效、不看地形，主人在高空/岩浆边也照落）；关掉恢复 TLM 原版死亡流程")
                 .translation("config.promaid.combat.autoResurrectEnable").define("autoResurrectEnable", true);
-        AUTO_RESURRECT_DELAY_SECONDS = BUILDER.comment("复活延迟（秒，默认 60）：死亡后墓碑存在这么久才自动消失并复活女仆（也是墓碑存在的时长）")
+        // 【实测六百七十九：默认 60 → 10（按玩家当前配置同步）】他 toml 里写的就是 10。
+        AUTO_RESURRECT_DELAY_SECONDS = BUILDER.comment("复活延迟（秒，默认 10）：死亡后墓碑存在这么久才自动消失并复活女仆（也是墓碑存在的时长）")
                 .translation("config.promaid.combat.autoResurrectDelaySeconds")
-                .defineInRange("autoResurrectDelaySeconds", 60, 1, 86400);
+                .defineInRange("autoResurrectDelaySeconds", 10, 1, 86400);
         AUTO_RESURRECT_HEALTH_RATIO = BUILDER.comment("复活血量比（默认 1.0 = 满血）：复活时女仆恢复的血量比例（0.35 = 35%）")
                 .translation("config.promaid.combat.autoResurrectHealthRatio")
                 .defineInRange("autoResurrectHealthRatio", 1.0, 0.05, 1.0);
@@ -1679,9 +1682,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_WATER_HOLD = BUILDER.comment("落地水保持时长（tick）")
                 .translation("config.promaid.combat.waterHold")
                 .defineInRange("waterHold", 5, 5, 100);
+        // 【实测六百七十九：默认 2 → 3（按玩家当前配置同步）】他 toml 里写的就是 3。
         COMBAT_WATER_LANDING_SCAN = BUILDER.comment("落地水下探格数（提前放水检测）")
                 .translation("config.promaid.combat.waterLandingScan")
-                .defineInRange("waterLandingScan", 2, 2, 16);
+                .defineInRange("waterLandingScan", 3, 2, 16);
         // v1.1.0：落地雪——细雪桶版落地水（下界水会蒸发细雪不会；细雪接触 7 秒才开始
         // 冻伤，保持时长上限 100 tick 远低于冻伤线 140 tick）
         COMBAT_SNOW_CLUTCH = BUILDER.comment("落地雪（细雪桶版落地水，默认开）：高空坠落时在【落点平面】铺 1×1 细雪垫接住她并收回（桶不消耗）——细雪不流动、落点必须正好是雪：1×1 无容错，能否接住全靠坠落途中逐 tick 跟着落点补垫（落点预测偏一格即空摔，追求稳请用水桶）；绝不在高处拦她减速（出雪后剩下的路照样摔）；下界也能用（水会瞬间蒸发、细雪不会）；触发高度/保持时长/下探格数各自独立可调（见下方三项），两者都有桶时优先用水")
@@ -1765,8 +1769,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 构建期判定：模组在 → 注册；不在 → 保持 null。面板（贴身辅助小节）同步按
         // ThirstCompat.available() 条件渲染，toml 里也不会出现这两项。
         if (thirstModLoaded()) {
+            // 【实测六百七十九：默认 15 → 20（按玩家当前配置同步）】他 toml 里写的就是 20（上限）。
             AID_THIRST_THRESHOLD = BUILDER.comment("投喂触发口渴度（4-20：主人口渴值低于此值自动喂水；需装「口渴」Thirst Was Taken。判定位点 = 口渴值，效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还都走原版喝的路径）")
-                    .translation("config.promaid.combat.aidThirstThreshold").defineInRange("aidThirstThreshold", 15, 4, 20);
+                    .translation("config.promaid.combat.aidThirstThreshold").defineInRange("aidThirstThreshold", 20, 4, 20);
             AID_DRINK_MIN_PURITY = BUILDER.comment("喂水最低水质（0-3，默认 2=可接受的）：喂水时【装水容器】必须达到这个水质等级——口渴模组自己的四档：0 肮脏 / 1 有点脏 / 2 可接受的 / 3 纯净。反馈：如果女仆给玩家喂脏水那么反而会耽误玩家，所以默认只喂可接受的及以上；只对装水容器生效（果汁/牛奶这类没有水质概念的饮品不受影响）；填 0 = 脏水也喂")
                 .translation("config.promaid.combat.aidDrinkMinPurity")
                 .defineInRange("aidDrinkMinPurity", 2, 0, 3);
@@ -1800,8 +1805,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 看起来打不到、高伤武器（如更好的战斗）能打出 2 点），玩家可自选策略
         // v1.5.252h：defineInRange 上限 3 → 4——旧版面板第 5 档"仅一点伤害"（值 4）
         // 超出范围保存不进去（货不对板：mixin 支持 0~4 但配置只收 0~3）
+        // 【实测六百七十九：默认 4 → 2（按玩家当前配置同步）】他 toml 里写的就是 2 = 玩家伤害无限制。
         PLAYER_DAMAGE_MODE = BUILDER.comment("玩家对女仆伤害模式（0=TLM原版压制÷5封顶2点、1=玩家伤害完全免疫、2=玩家伤害无限制、3=玩家伤害有上限（比例见 playerDamageMaidCap）、4=仅受到一点伤害（单次上限1点，被打有反馈但不疼））")
-                .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 4, 0, 4);
+                .translation("config.promaid.combat.playerDamageMode").defineInRange("playerDamageMode", 2, 0, 4);
         PLAYER_DAMAGE_MAID_CAP = BUILDER.comment("玩家伤害上限比例（0-1：模式 3 时单次伤害 = 女仆最大生命 × 此比例；默认 0.1 = 10%）")
                 .translation("config.promaid.combat.playerDamageMaidCap").defineInRange("playerDamageMaidCap", 0.1, 0.01, 0.5);
         // v1.1.0：主动切换战斗模式——主人被敌对生物攻击时，附近非自保女仆无论什么任务
@@ -1962,8 +1968,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 来回循环"）：home 模式的工作范围圈在接战期间临时放大到这个值——TLM 的
         // SchedulePos.tick 每 40 tick 一次"超出 (int)半径 + 4 格就直接传送回工位"，
         // 追怪的近战女仆被反复拽回原地，仗永远打不完（见 CombatWorkRange 的根因）
-        COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
-                .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 15, 0, 512);
+        // 【实测六百七十九：默认 15 → 32（按玩家当前配置同步）】他 toml 里写的就是 32。
+        COMBAT_WORK_RANGE = BUILDER.comment("战斗时临时扩圈（格，默认 32，0 = 关闭）：排班/在家模式（home）下女仆的「工作范围」圈在她接战期间临时放大到这个半径——TLM 原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；本项取 max(本值, 当前半径) 生效，战斗结束自动落回正常的工作范围（威胁消失 / 目标清掉 / 挨打后 5 秒）。想让她追得更远就调大（8~512）")
+                .translation("config.promaid.combat.combatWorkRange").defineInRange("combatWorkRange", 32, 0, 512);
         COMBAT_ASSIST_RADIUS = BUILDER.comment("援护半径（格，默认 16，0 = 关闭；借自别人改过的 TLM 1.5.3）：两条一起管——①【援护】她的战斗任务没有目标时，优先把「主人最近的仇人」（最近打主人的人，其次主人最近打的人，都只在 5 秒窗口内）当成目标去帮；②【撒手】她的目标离她**和**主人都超过这个半径时松开目标（追一个已经跑掉的怪正是「追出去→被圈拽回来」的循环源头）。援护对象必须过完整合法性链：她的任务认它是敌人 + 非友军 + 看得见（隔着墙不写目标）+ 在她工作圈内；工作圈随「战斗时临时扩圈」一起放大。0 = 两条一起关（0~64）")
                 .translation("config.promaid.combat.assistRadius").defineInRange("assistRadius", 16, 0, 64);
         BUILDER.pop();
@@ -2290,19 +2297,23 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // **不再生效**（Forge 不会替你把值搬过来）——要沿用旧设置请手动搬进 [flightFollow]；
         // 面板上它也从「移动与行为 → 搭路」搬到了平级的「移动与行为 → 飞行跟随」。
         BUILDER.comment("飞行跟随设置").translation("config.promaid.flightFollow").push("flightFollow");
-        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认关，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三 / 六百一十五）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。默认关闭：这条链路会烧烟花/磨鞘翅耐久，属于观赏玩法，想玩再开。两个省料开关见下面两条。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
-                .translation("config.promaid.flightFollow.enabled").define("enabled", false);
+        // 【实测六百七十九：默认 false → true（按玩家当前配置同步）】他 toml 里写的就是开着的。
+        FLIGHT_FOLLOW_ENABLED = BUILDER.comment("飞行跟随（默认开，v1.2.2 实测六百〇八 / 六百一十一 / 六百一十二 / 六百一十三 / 六百一十五）：开启后，她本来要【搭路】追你的时候（同一档判定）——只要你离她超过下面那条【起手距离】、你俩之间【没有方块阻挡视线】、她包里又有【鞘翅 + 能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）】、威胁半径内也没有敌对生物，她就不铺方块改穿鞘翅飞过来（起飞与推进跟空袭一模一样，只是目标换成了你）。你进到【收手距离】（见下面那条，默认 5 格）内就收手交回普通跟随——进半径时**解除烟花给的推进矢量**（收掉还挂着的助推烟花 + 速度归零），之后自然滑翔、落地还回胸甲，与空袭打完一波同款；你飞远了会再飞一趟。**所有任务模式通用**（两个空袭任务**未接敌**时也照飞；真在打/真有活干才让位）。六百一十三 起**位移法术也算「可以飞行的道具」**——只带法术书、不带烟花的女仆照样起飞（用法术那一支沿用空袭的「位移法术·起飞/补高」开关；它不消耗物资，所以下面那条「消耗烟花」管不到它）。【实测六百七十九】默认值改为**开**（玩家当前配置就是开着的）；下面三条省料开关默认全关（不消耗烟花 / 鞘翅耐久 / 三叉戟耐久），想烧料自己打开。六百一十四【坐标档】：`/maid_smart elytra_goto <x> <y> <z> [女仆]` 可以让指定的女仆**飞向一个坐标**（走的就是这条链路，判定/起飞/补推/收手完全同款；到点/超时 60 秒/出现威胁即收手，之后交回普通跟随）——来源是粉丝 Roderick32 的「鞘翅赶路」分支，我们只取了他那份实现里「目标可以是一个坐标」这一件本链路没有的能力")
+                .translation("config.promaid.flightFollow.enabled").define("enabled", true);
         FLIGHT_FOLLOW_DIST = BUILDER.comment("飞行跟随·起手距离（格，默认 25，v1.2.2 实测六百一十五 由 5 改大）：你离她超过这个 3D 距离才起飞追——**更近的距离走路/搭路本来就够得着**，犯不上烧烟花（旧默认 5 太灵敏：她稍微走出去一点就起飞）。范围 3~128。\n\n【起手与收手是两个不同的球】用户原话「开始跟结束两个半点的球大小应该不一样，默认值就是我说的那两个（25 / 5）」。 旧版只有**一个**判定球（收手半径由起手距离减 1 推导），于是「起飞门槛」与「收手门槛」绑死——迟滞只有 1 格，她在边界上来回起降。现在起手 = 这一条（默认 25），收手 = 下面那条（默认 5），默认档留 20 格迟滞。\n\n注意：老存档的配置文件里若已写着 dist = 5，Forge 不会替你改大，想用新默认请删掉那一行或手动改成 25")
                 .translation("config.promaid.flightFollow.dist").defineInRange("dist", 25.0, 3.0, 128.0);
         FLIGHT_FOLLOW_END_DIST = BUILDER.comment("飞行跟随·收手距离（格，默认 5，v1.2.2 实测六百一十五 新增）：你进到这么近（3D 距离）就中断本趟、交回普通跟随，并**解除烟花给的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。范围 1~64。\n\n【必须比起手距离小】写成大于等于起手距离时，她会「一起飞就已经在收手半径内」= 起飞即刻收手、一次都飞不起来。所以本模组会自动把它压到「起手距离 − 1」以内（面板/日志里生效的那个值才是实际值；默认 25 / 5 用不到这条兜底）")
                 .translation("config.promaid.flightFollow.endDist").defineInRange("endDist", 5.0, 1.0, 64.0);
-        FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认开）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
-                .translation("config.promaid.flightFollow.firework").define("firework", true);
-        FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
-                .translation("config.promaid.flightFollow.elytra").define("elytra", true);
+        // 【实测六百七十九：默认 true → false（按玩家当前配置同步）】他 toml 里写的就是关（不消耗烟花）。
+        FLIGHT_FOLLOW_FIREWORK = BUILDER.comment("飞行跟随·消耗烟花（默认关）：开 = 每次补推真从她背包扣 1 枚烟花；关 = **照旧要求背包里有能飞的道具**（烟花 / 孔雀羽扇 / 能上天的位移法术任一，它是她能飞的凭证），但补推不再扣那一枚——纯观赏档，适合只想看她跟着飞的存档。(背包里同时有羽扇时走扇子那条：挥扇推进、按扇子自己的口径扣耐久；这条开关只管烟花——位移法术不消耗物资，开与关都一样，它按自己的冷却放)")
+                .translation("config.promaid.flightFollow.firework").define("firework", false);
+        // 【实测六百七十九：默认 true → false（按玩家当前配置同步）】他 toml 里写的就是关（不啃鞘翅耐久）。
+        FLIGHT_FOLLOW_ELYTRA = BUILDER.comment("飞行跟随·消耗鞘翅耐久（默认关 = 这一段飞行不啃耐久）：关 = 这段飞行里不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，拦不到）")
+                .translation("config.promaid.flightFollow.elytra").define("elytra", false);
         // v1.2.4 实测六百四十：第三个省料开关（需求原文"飞行跟随没有不消耗三叉戟耐久的开关"）
-        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认开 = 照原版每次推进扣 1 点，v1.2.4 实测六百四十 新增）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
-                .translation("config.promaid.flightFollow.trident").define("trident", true);
+        // 【实测六百七十九：默认 true → false（按玩家当前配置同步）】他 toml 里写的就是关（不扣三叉戟耐久）。
+        FLIGHT_FOLLOW_TRIDENT = BUILDER.comment("飞行跟随·消耗三叉戟耐久（默认关 = 不扣耐久，v1.2.4 实测六百四十 新增）：关 = 这一趟里用激流三叉戟推进不再扣它的耐久——与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。\n\n【只管飞行跟随】空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久（那边没有、也不该有这个开关）。\n\n【顺序不变】她背包里有烟花时依旧先烧烟花（有羽扇先挥扇），所以这个开关对「有烟花可烧」的存档没有任何影响——它只在真轮到激流三叉戟推进时才起作用（见 MaidRiptideBoost 与 MaidFlightFollowBehavior.boost 的取用顺序）")
+                .translation("config.promaid.flightFollow.trident").define("trident", false);
         BUILDER.pop();
 
         // ---- v1.2.2 实测六百一十六【压缩盒：一格 114514 个，放进女仆背包算她背包的延伸】----
@@ -2514,8 +2525,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     MISC_SCHEDULE_RESTORE_GRACE = BUILDER.comment("战斗还原后排班宽限（tick，默认 60=3 秒）：主动战斗结束还原原任务后，排班调度等待这么久才接管（期间她继续干战斗前的任务）——防威胁闪烁导致战斗/还原/排班反复拉扯；0 = 还原立即交排班")
             .translation("config.promaid.misc.scheduleRestoreGrace").defineInRange("scheduleRestoreGrace", 60, 0, 400);
     // v1.1.0 实测一百三十三：切换前可用性检测 + 反向抑制三件套
-    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认开，实测二百零二同步为你当前配置值）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭 = 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（实测一百七十档案：旧默认的\"没活不切\"曾把女仆钉死在原地、任务不随段切换——若发现排班任务不切换，先把本项关掉）")
-            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", true);
+    // 【实测六百七十九：默认 true → false（按玩家当前配置同步）】他 toml 里写的就是 false；而且 runConfigMigration 本来就**无条件**把 true 改成 false——声明 true 是说一套做一套。
+    MISC_SCHEDULE_AVAILABILITY_CHECK = BUILDER.comment("排班切换前完整可用性检测（默认关，实测六百七十九 同步为你当前配置值）：开启时段任务应用前还检查目标任务附近有没有活干（挖矿有无矿/伐木有无树/烧制有无炉子/酿造有无酿造台/农场有无作物）——没活不切、保持当前任务；关闭 = 只查任务自己的可用开关（isEnable），任务状态跟着时间段落真实切换（实测一百七十档案：旧默认的\"没活不切\"曾把女仆钉死在原地、任务不随段切换——若发现排班任务不切换，先把本项关掉）")
+            .translation("config.promaid.misc.scheduleAvailabilityCheck").define("scheduleAvailabilityCheck", false);
     MISC_SCHEDULE_REVERSE_WINDOW_TICKS = BUILDER.comment("排班反向切换窗口（tick，默认 200=10 秒）：两次任务切换间隔在此窗口内才可能被判为 A→B→A 反向横跳；正常时段切换相隔约 2000 tick，天然不会被误判")
             .translation("config.promaid.misc.scheduleReverseWindowTicks").defineInRange("scheduleReverseWindowTicks", 200, 20, 1200);
     MISC_SCHEDULE_REVERSE_THRESHOLD = BUILDER.comment("排班反向切换阈值（默认 2）：窗口内累计反向次数达到该值即压制本次切换")
