@@ -104,6 +104,7 @@
   "config.promaid.broom.clampHome": "Patrol the work area in home mode",
   "config.promaid.broom.recallDistance": "Broom leash distance (blocks)",
   "config.promaid.broom.climbMigrated": "Internal: broom combat climb height migration done",
+  "config.promaid.broom.climb12Migrated": "Internal: broom combat climb height 2nd migration (15 to 12) done",
   "config.promaid.tether": "Combat Leash (gunner seat)",
   "config.promaid.tether.enable": "Combat Leash - master switch",
   "config.promaid.tether.hang": "Combat Leash - hang distance (blocks)",

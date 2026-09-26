@@ -290,6 +290,26 @@ public class ProMaidMod {
                             "扫帚接敌爬升高度不需要迁移（现值 " + broomClimbBefore + "）");
                 }
             }
+            // v1.3.0(beta) 实测六百八十六：同一项**第二次**改默认（15 → 12，一次性标记）。
+            // 【为什么必须换标记】上面那个 BROOM_CLIMB_MIGRATED 在老档里已经是 true，复用它
+            // 就等于"迁过了"——判据与 682 同款：只搬还停在旧默认 15 的那些，别的值一律不碰。
+            if (!com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_12_MIGRATED.get()) {
+                double broomClimb12Before = -1.0;
+                try {
+                    broomClimb12Before = com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_12_MIGRATED.set(true);
+                changed = true;
+                if (broomClimb12Before == 15.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.set(12.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "扫帚接敌爬升高度迁移：15 → 12（旧档里留下的上一版默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "扫帚接敌爬升高度不需要第二次迁移（现值 " + broomClimb12Before + "）");
+                }
+            }
             changed |= migrateOreTable();
         } catch (Exception ignored) {
         }
