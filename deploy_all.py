@@ -6,6 +6,14 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测六百九十四（v1.3.0 beta，同名覆盖，未发版）：模式门禁的「有弹药」这一条改成问 TACZ 自己——
+远程空袭 / 扫帚共用的那道弹药门（MaidFlightKit.hasAmmoForWeapon）里，「这一拍打得响」那半
+早已交给 TACZ（实测六百六十六 的 canFeed），但「换得上弹」那半还是口径不敏感的宽松扫描
+（任意 tacz:ammo 都算）——玩家指出「像冲锋枪跟狙击枪并不是只要有远程武器和弹药就行」。
+现在 GunCompat.canReload 对 TACZ 枪原样调用 AbstractGunItem.canReload(shooter, gun)：
+弹药型号必须对得上这把枪、弹药箱照认、坏枪与满匣顺带否掉；它是纯只读查询（javap 实证），
+每 tick 调用无副作用。反射不可用时回退旧宽松口径。SBW 无对应公开查询，仍走宽松扫描。
+
 实测六百九十三（v1.3.0 beta，同名覆盖，未发版）：锁敌后的「随机环绕路径」——
 盘旋半径不再固定，改成每只女仆在 [基础盘旋距离 × 0.75, 「离敌最远距离」] 里各自缓动
 （每 4 秒重掷一次、每 tick 只挪一小步，是「飘」不是「抽搐」），旋向按 UUID 对半分
