@@ -242,6 +242,7 @@
   "config.promaid.broom.enable": "扫帚模式·总开关",
   "config.promaid.broom.range": "战斗盘旋距离（格）",
   "config.promaid.broom.hover": "悬停高度（格）",
+  "config.promaid.broom.climb": "接敌爬升高度（格）",
   "config.promaid.broom.follow": "平时跟随主人",
   "config.promaid.broom.clampHome": "守家时绕工作范围盘旋（并受范围约束）",
   "config.promaid.broom.recallDistance": "扫帚牵引绳（格）",

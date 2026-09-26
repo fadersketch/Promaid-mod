@@ -96,6 +96,7 @@
   "config.promaid.broom.enable": "Broom Mode (master switch)",
   "config.promaid.broom.range": "Combat orbit distance (blocks)",
   "config.promaid.broom.hover": "Hover height (blocks)",
+  "config.promaid.broom.climb": "Combat climb height (blocks)",
   "config.promaid.broom.follow": "Follow owner when idle",
   "config.promaid.broom.clampHome": "Patrol the work area in home mode",
   "config.promaid.broom.recallDistance": "Broom leash distance (blocks)",

@@ -23,6 +23,14 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * 冷却
  *   复活 · 小玉    0:42
  *   回魂符 · 小玉  0:18 / 1:00
+ *
+ * ── 【实测六百七十八：这一块还顺带显示武装拴绳的"绑定中"】──
+ * 玩家原话："在进入绑定状态下，最好是在左上角用蓝色字体显示一下玩家现在处于绑定状态。
+ * （渲染机制同冷却计时）"——就是**复用本类**：服务端在同一个快照包里多塞一条
+ * {@code kind = "bound"}（见 {@code CooldownHudTracker.broadcast}），于是位置、字体、行高、
+ * "三秒没数据自动清空"、"打开界面 / F3 时整体隐藏"全套行为**一行都不用新写**。
+ * 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。
+ * 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。
  */
 @EventBusSubscriber(modid = "promaid", value = Dist.CLIENT)
 public final class CooldownHudRenderer {
@@ -112,13 +120,35 @@ public final class CooldownHudRenderer {
     }
 
     private static long remainOf(String[] e) {
+        // 【实测六百七十八】"绑定中"那条没有倒计时（它不是冷却，是个状态指示）→ 永远排最上
+        if (isBound(e)) {
+            return Long.MIN_VALUE;
+        }
         return e != null && e.length > 2 ? parse(e[2]) : Long.MAX_VALUE;
     }
 
-    /** 一行：{kind, name, remain, total} → 彩色文案（名字截断防超宽） */
+    /** 这一条是不是"武装拴绳·绑定中"（服务端 kind = "bound"） */
+    private static boolean isBound(String[] e) {
+        return e != null && e.length > 0 && "bound".equals(e[0]);
+    }
+
+    /**
+     * 一行 → 彩色文案（名字截断防超宽）。
+     *
+     * <p>【实测六百七十八 新增一档】{@code kind = "bound"}：武装拴绳的"绑定中"指示。
+     * 玩家原话："在进入绑定状态下，最好是在左上角用蓝色字体显示一下玩家现在处于绑定状态。
+     * （渲染机制同冷却计时）"——渲染机制**就是这一套**（同一个包、同一个左上角竖直串、
+     * 同一条带阴影的文字、同样三秒没数据自动清空），只是这一段的字是**蓝色**（{@code §9}）。
+     * 第二格是女仆名，第三格是相位（{@code leash} = 牵绳档，其它 = 二号位悬挂），
+     * 两档在文案上直接写清楚——你一眼能看出"我现在是牵着还是在下面挂着"。
+     */
     private static String format(String[] e) {
         if (e == null || e.length < 4) {
             return "";
+        }
+        if (isBound(e)) {
+            return "\u00a79\u25c6 \u7ed1\u5b9a\u4e2d \u00a7b" + trim(e[1])
+                    + " \u00a79" + ("leash".equals(e[2]) ? "\u7275\u7ef3" : "\u4e8c\u53f7\u4f4d");
         }
         boolean revive = "revive".equals(e[0]);
         String name = trim(e[1]);
