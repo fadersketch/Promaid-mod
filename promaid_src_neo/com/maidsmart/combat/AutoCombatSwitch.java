@@ -448,7 +448,7 @@ if (++this.restoreThrottle < 20) {
             // 未预建 EntityMaid 桶的 section 被整段跳过，还原扫描扫不到该 section
             // 里的战斗女仆 → 战斗还原永不触发
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity ent : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity ent : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(ent instanceof EntityMaid maid) || !maid.isAlive()
                         || !((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(COMBAT_ACTIVE_TAG)) {
                     continue;

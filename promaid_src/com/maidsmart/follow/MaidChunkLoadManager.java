@@ -116,8 +116,11 @@ public final class MaidChunkLoadManager {
     public static void tick(MinecraftServer server) {
         // v1.1.0 实测七十：登记全部在场有主女仆的最后出现位置（不受下方开关限制
         // ——这是"一键集合召回未加载区块女仆"的唯一线索）
+        // 实测六百九十：这一层同样必须走 EntitySnapshot——循环体里的救援
+        // teleportCore 会把女仆跨维度搬走（从本维度实体表里删实体），老版直接遍历
+        // lvl.m_8583_() 这个活视图就会把 fastutil 迭代器的槽位号读越界（同一颗雷）。
         for (ServerLevel lvl : server.m_129785_()) {
-            for (Entity e : lvl.m_8583_()) {
+            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                     continue;
                 }
@@ -177,7 +180,7 @@ public final class MaidChunkLoadManager {
         // 关掉她的排班为止；普通跟随女仆维持会话票（玩家在就加载，够用）。
         java.util.Map<UUID, TicketKey> wantedPersistent = new java.util.HashMap<>();
         for (ServerLevel level : server.m_129785_()) {
-            for (Entity e : level.m_8583_()) {
+            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                     continue;
                 }
@@ -517,7 +520,7 @@ BlockPos stand = findStand(newLevel,
         java.util.Set<UUID> seen = new java.util.HashSet<>();
         java.util.UUID pid = player.m_20148_();
         for (ServerLevel lvl : player.m_9236_().m_7654_().m_129785_()) {
-            for (Entity e : lvl.m_8583_()) {
+            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                 if (!(e instanceof EntityMaid md) || !md.m_6084_() || !md.m_21830_(player)) {
                     continue;
                 }
@@ -622,7 +625,7 @@ BlockPos stand = findStand(newLevel,
                 it.remove();
                 continue;
             }
-            for (Entity e : lvl.m_8583_()) {
+            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                 if (e instanceof EntityMaid md && en.getKey().equals(md.m_20148_())
                         && md.m_21830_(owner)) {
                     // v1.3.6：骑扫帚的照传（连人带扫帚，见 recallBroomRider）——不能因为「她是乘客」就把她的强载票收掉

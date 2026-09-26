@@ -129,7 +129,7 @@ public final class FriendlyFireGuard {
             for (ServerLevel lvl : server.m_129785_()) {
                 // 实测五百六十四（PR #9 移植）：全世界 AABB → getAllEntities()——
                 // Sable 会拒查超大 AABB 并静默返回空
-                for (Entity e : lvl.m_8583_()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.m_6084_()) {
                         continue;
                     }

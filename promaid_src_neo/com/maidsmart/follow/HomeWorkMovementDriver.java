@@ -77,7 +77,7 @@ if (++this.throttle < 5) {
             // 有限 AABB（±∞ 经 blockToSection 溢出收敛 → 扫描恒空，实测三百三十二）
             for (ServerLevel level : server.getAllLevels()) {
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityMaid maid) {
                         drive(level, maid);
                     }

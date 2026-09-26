@@ -130,7 +130,7 @@ public final class ScheduleManager {
             // 未预建 EntityMaid 桶的 section 被整段跳过，排班扫描扫不到该 section
             // 里的女仆 → 任务不随时间段切换
             // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-            for (net.minecraft.world.entity.Entity e : level.getAllEntities()) {
+            for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()
                         || !ScheduleData.isOn(maid)) {
                     continue;

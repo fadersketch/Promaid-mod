@@ -1168,7 +1168,7 @@ public final class MaidBombing {
                 net.minecraft.server.MinecraftServer server = event.getServer();
                 if (server != null) {
                     for (ServerLevel lvl : server.getAllLevels()) {
-                        for (Entity e : lvl.getAllEntities()) {
+                        for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                             if (e instanceof EntityMaid m) {
                                 tickCombatTnt(lvl, m);
                             }

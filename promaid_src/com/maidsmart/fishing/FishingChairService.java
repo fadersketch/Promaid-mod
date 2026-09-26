@@ -356,7 +356,7 @@ public final class FishingChairService {
     /** 删除该女仆名下所有旧标记坐垫（生成新坐垫前调用，防堆积） */
     private static void removeOldChairs(ServerLevel level, EntityMaid maid) {
         String uid = maid.m_20148_().toString();
-        for (Entity e : level.m_8583_()) {
+        for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
             if (e instanceof EntityChair c && isAutoChair(c)
                     && uid.equals(c.getPersistentData().m_128461_(TAG_MAID))) {
                 if (!c.m_20197_().isEmpty()) {
@@ -379,7 +379,7 @@ public final class FishingChairService {
             // 全维度收集存活女仆（跨维度判定任务）
             Map<String, EntityMaid> allMaids = new HashMap<>();
             for (ServerLevel level : server.m_129785_()) {
-                for (Entity e : level.m_8583_()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityMaid m && m.m_6084_()) {
                         allMaids.put(m.m_20148_().toString(), m);
                     }
@@ -387,7 +387,7 @@ public final class FishingChairService {
             }
             for (ServerLevel level : server.m_129785_()) {
                 List<EntityChair> chairs = new ArrayList<>();
-                for (Entity e : level.m_8583_()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                     if (e instanceof EntityChair c && isAutoChair(c)) {
                         chairs.add(c);
                     }

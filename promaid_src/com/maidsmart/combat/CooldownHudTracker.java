@@ -55,7 +55,7 @@ public final class CooldownHudTracker {
             Map<UUID, List<String[]>> soulByOwner = new HashMap<>();
             if (soulScanWanted()) {
                 for (ServerLevel level : server.m_129785_()) {
-                    for (net.minecraft.world.entity.Entity e : level.m_8583_()) {
+                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
                         if (!(e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)
                                 || !maid.m_6084_()) {
                             continue;

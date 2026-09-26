@@ -1534,7 +1534,7 @@ public final class GunnerTetherManager {
     /** 存档重载/玩家重进后，从女仆 persistentData 的标记重建挂载（必须真的还骑着才恢复） */
     private static void restore(MinecraftServer server) {
         for (ServerLevel lvl : server.getAllLevels()) {
-            for (Entity e : lvl.getAllEntities()) {
+            for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                 if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                     continue;
                 }

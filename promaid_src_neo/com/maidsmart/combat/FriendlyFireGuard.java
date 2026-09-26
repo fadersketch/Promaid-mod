@@ -112,7 +112,7 @@ public final class FriendlyFireGuard {
                 return;
             }
             for (ServerLevel lvl : server.getAllLevels()) {
-                for (Entity e : lvl.getAllEntities()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }

@@ -67,7 +67,7 @@ if (++scanCounter < 40) {
                 // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
                 // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
                 // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB → getAllEntities()（超大 AABB 被 Sable 拒查并且每次刷一份堆栈日志）
-                for (net.minecraft.world.entity.Entity e : lvl.getAllEntities()) {
+                for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(lvl)) {
                     if (!(e instanceof EntityMaid maid) || !maid.isAlive()) {
                         continue;
                     }
