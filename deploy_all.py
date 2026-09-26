@@ -15,6 +15,23 @@ doGunReload）用的是同一个方法：只数这把枪自己认的那一类弹
 几处文案（任务说明中英 + 手册两树）从「TACZ 自己判」统一成「枪械 mod 自己判（TACZ /
 卓越前线各问各的）」。
 
+实测六百九十七（v1.3.0 beta，同名覆盖，未发版）：自动复活之后自己补三枪实体包，治
+「复活后建模被卡掉、变成幽灵状态」。日志实证：每一次自动复活都是"新实体入世界 →
+（实测五百九十六）补包跳过 → 法术模组把刚加进来那只的离场当离场处理 → 客户端实体被删"，
+而 596 又规定"新实体不补包"，于是没人把她补回来。现在 MaidAutoResurrect 在
+addFreshEntity 成功后登记 MaidResyncCommand.scheduleForcedResync：+2 秒 / +5 秒 / +10 秒
+共三枪 resyncTo（删 + 生成 + 全量数据 + 属性 + 装备 + 饰品），绕开 596 的 id 分流；
+她界面开着（guiOpening）那一枪顺延。「离场」与「自动复活」两行日志都带上实体网络 id。
+
+实测六百九十六（v1.3.0 beta，同名覆盖，未发版）：飞行危险环境避让——扫帚 / 空袭 /
+飞行跟随的**飞行途中**也把 misc.dangerBlocks 那张表（岩浆 / 火 / 岩浆块…）当"不可靠近"。
+新增 com.maidsmart.combat.MaidFlightHazardGuard：detour（航段会穿进危险格就按
+±35/±70/±110 度侧向绕开、带 3 秒粘滞，全堵死就抬升 2 格爬过去）接进
+MaidBroomDrive.steerTo 与 MaidFlightFollowBehavior.faceToward；antiSink（滑翔下沉到
+危险格上方时把竖直分量抬平）接进 MaidFlightCombatBehavior.tickRangedAir 末尾。
+攻击动作（收翅俯冲 / 俯冲助推）不避让。新配置键 combat.flightDangerAvoid（默认开）+
+面板行 + 中英 lang。
+
 实测六百九十四（v1.3.0 beta，同名覆盖，未发版）：模式门禁的「有弹药」这一条改成问 TACZ 自己——
 远程空袭 / 扫帚共用的那道弹药门（MaidFlightKit.hasAmmoForWeapon）里，「这一拍打得响」那半
 早已交给 TACZ（实测六百六十六 的 canFeed），但「换得上弹」那半还是口径不敏感的宽松扫描

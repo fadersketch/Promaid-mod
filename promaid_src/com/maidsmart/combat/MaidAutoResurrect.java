@@ -298,6 +298,11 @@ public final class MaidAutoResurrect {
         // 不补包"，于是没人把她补回来，玩家看到的就是"建模被卡掉、幽灵状态"。
         // 这里登记三枪强制补包，把客户端那只实体重新建出来（数据/属性/装备/饰品全量）。
         com.maidsmart.command.MaidResyncCommand.scheduleForcedResync(maid);
+        // 实测六百九十八【复活落点立刻补区块票】：她是在**重生点**醒来的，那儿多半不在主人
+        // 当前的 tick 范围里；而持票表每 5 秒才重新对账一次——中间这段她落在"没票的区块"里，
+        // 服务端不 tick 她、原版也不会把她同步给客户端（就是玩家看到的"复活之后建模被卡掉"）。
+        // 这里当场把票挪到她脚下，5 秒的窗口直接抹掉。
+        com.maidsmart.follow.MaidChunkLoadManager.ensureTicketNow(maid);
         // 复活提示：女仆自己的话语气泡 + 主人的系统消息（带名字，不怕气泡被错过）
         String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
         maid.getChatBubbleManager().addTextChatBubble("主人，我回来啦！让你担心了～");

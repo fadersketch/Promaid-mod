@@ -60,5 +60,11 @@ public abstract class ChunkMapRemotePumpMixin {
         } catch (Throwable ignored) {
             // 远程开界面是"锦上添花"的功能：这里出任何问题都不该影响真正在跑的区块 tick
         }
+        // 实测六百九十八【可见性自愈】：同一个注入点顺手做一次"主人客户端认不认得她"的巡检
+        // （只扫本模组持票的那几只女仆，空表零成本）——见 MaidVisibilityGuard 的类注释。
+        try {
+            com.maidsmart.follow.MaidChunkLoadManager.visibilitySweep(f_140133_, f_140150_);
+        } catch (Throwable ignored) {
+        }
     }
 }

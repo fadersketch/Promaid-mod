@@ -309,6 +309,11 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             faceTarget(maid, owner);
             if (shouldFollow(maid, owner)) {
                 MaidBroomDrive.steerTo(maid, MaidBroomDrive.followPoint(maid, owner));
+            } else if (owner.onGround()) {
+                // 【实测六百九十八】迟滞带内 + 主人自己踩在地上 → **落回地面待命**，别在她头顶
+                // 上挂着（玩家原话：「女仆骑上扫帚，结果在空中悬空的状态」）。
+                // 主人在飞/在水里/在坐骑上时不落地：那时"贴着他悬停"才是对的样子。
+                MaidBroomDrive.parkIdle(maid);
             } else {
                 // 迟滞带内：**留在原地悬停**。v1.3.3：目标点取扫帚自己的位置
                 // （hoverInPlace），不是她的——她是乘客、座位在朝向后方 0.5 格，
@@ -321,8 +326,9 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             // ——每 tick 翻 180°（那个"打转"的另一半原因）。
             MaidBroomDrive.faceYawTo(broom, owner);
         } else {
-            // 原地悬停：目标点就是扫帚当前位置 → steerTo 走到"到点"那一支，速度收干
-            MaidBroomDrive.hoverInPlace(maid);
+            // 【实测六百九十八】没有可跟的主人（不在线/死亡/别的维度/跟随开关关着）→ 落回地面
+            // 待命（旧版是原地悬停 = 玩家看到的"骑上扫帚就在半空挂着"）。
+            MaidBroomDrive.parkIdle(maid);
         }
     }
 

@@ -34,9 +34,39 @@ public final class BuildShieldGuard {
     private BuildShieldGuard() {
     }
 
-    /** 是否处于建造任务（与 tickBuildSit / BlueprintBuildExecutor 同口径） */
+    /** 建造任务的 UID（与 {@link BlueprintBuildExecutor#isBuildingTask} 同一份口径） */
+    private static final String BUILD_TASK_UID = "maid_smart:build";
+
+    /**
+     * 是否处于建造任务（与 tickBuildSit / BlueprintBuildExecutor 同口径）。
+     *
+     * <p>【实测六百九十八 建造女仆被打死】护盾原先只认**当前**任务是不是建造——于是
+     * 本模组自己的「主动参战」把她切成 {@code touhou_little_maid:attack} 的那一瞬间，
+     * 护盾当场失效（{@code tickShield} 走 else 支把抗性 V 摘掉、受击取消也不再拦），
+     * 她成了一个穿着建筑工衣服的普通战斗女仆。玩家原话：「之前提到过，建造模式下的
+     * 女仆应该是有5级的抗性的，但她却仍然被打死了。」日志实证（2026-09-27 整合包
+     * latest.log）：04:38:24.856 「战斗 参战：maid_smart:build -> touhou_little_maid:attack」
+     * → 04:38:26.762 「森近霖之助被下界合金巨兽杀死了」（2 秒）；更早一次 04:35:25.021
+     * 参战 → 04:35:25.056 被 genericKill 打中（当晚靠魂符收走才没死）。
+     *
+     * <p>修法：护盾跟着**「她是建造女仆」这件事**走，不跟着"这一拍的任务字段"走——
+     * 处于本模组主动参战会话中（{@code COMBAT_ACTIVE_TAG}）且战前任务（{@code PREV_TASK_TAG}）
+     * 就是建造 → 照样算建造中。战斗结束还原后标记被清，自动回到常规判定。
+     */
     public static boolean isBuilding(EntityMaid maid) {
-        return maid != null && maid.m_6084_() && BlueprintBuildExecutor.isBuildingTask(maid);
+        if (maid == null || !maid.m_6084_()) {
+            return false;
+        }
+        if (BlueprintBuildExecutor.isBuildingTask(maid)) {
+            return true;
+        }
+        try {
+            net.minecraft.nbt.CompoundTag nbt = maid.getPersistentData();
+            return nbt.m_128471_(AutoCombatSwitch.COMBAT_ACTIVE_TAG)
+                    && BUILD_TASK_UID.equals(nbt.m_128461_(AutoCombatSwitch.PREV_TASK_TAG));
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** v1.1.0 实测二百七十四（反馈："建造模式屏蔽除了建造以外的其他所有系统信息

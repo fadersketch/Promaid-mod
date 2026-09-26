@@ -217,6 +217,16 @@ public final class AutoCombatTargeting {
         if (com.maidsmart.schedule.ScheduleData.isOn(maid)) {
             return 0;
         }
+        // 【实测六百九十八】建造女仆默认【不参战】——她那一档的玩法是「无限抗性 V + 受击取消 +
+        // 仇恨拦截」（实测二百七十三），把她拖进战斗只会让她放下工地，而且会把建造护盾的判据
+        // （"当前任务是不是建造"）当场打断——玩家报的「建造模式女仆应该有无敌抗性却被怪打死」
+        // 就是这么来的（日志实证见 BuildShieldGuard.isBuilding 的注释）。
+        // 想在"战斗模式分类表"里点名「maid_smart:build=近战/远程」即可恢复旧行为（表优先，
+        // 与所有其它任务同一条口径）；建造护盾本身也已独立加固，两处互不依赖。
+        if (com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)
+                && CombatModeTable.modeOf("maid_smart:build") == null) {
+            return 0;
+        }
         // 自保中让位（自保优先，血量恢复后自然退出再正常参与）
         if (((net.neoforged.neoforge.common.extensions.IEntityExtension) maid).getPersistentData().getBoolean(SelfPreservationBehavior.PRESERVE_TAG)) {
             return 0;

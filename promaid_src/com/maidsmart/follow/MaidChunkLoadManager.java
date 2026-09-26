@@ -286,6 +286,109 @@ public final class MaidChunkLoadManager {
         }
     }
 
+    /**
+     * 【实测六百九十八 幽灵建模 / 骑扫帚悬空】持票"**即时跟人**"——票原先只在
+     * {@link #tick} 里每 100 tick（5 秒）重新对账一次，于是她**飞着换了区块、或被复活/
+     * 召回落到别的区块**之后，最长 5 秒里她的新区块是"没有票"的。落在那 5 秒里的区块只
+     * 按玩家视距加载（{@code Visibility.TRACKED}，即"已加载但没在 entity-ticking"）：
+     * <ul>
+     *   <li>服务端这边她**不 tick** —— 客户端眼里她就是"骑在扫帚上定在空中不动"；</li>
+     *   <li>一旦那一档继续掉到 {@code HIDDEN}（区块卸载），原版 {@code ChunkMap.removeEntity}
+     *       会给客户端发删包，而"新实体不补包"（实测五百九十六）又拦着我们自己补
+     *       —— 客户端永远没有她 = 玩家说的「建模被卡掉、变成幽灵状态」。</li>
+     * </ul>
+     * 修法：每 tick 拿我们**自己持票表里的 UUID**（量很小）去 {@code level.getEntity(uuid)}
+     * 问一句"她现在还在不在这个区块"，换了就当场撤旧票、挂新票。全量扫描（LAST_SEEN/
+     * 受困救援/持久票）仍然留在 {@link #tick} 的 5 秒节奏里，一个字节没动。
+     * <p>空表直接返回，平时零成本。
+     */
+    public static void followTickets(MinecraftServer server) {
+        if (ACTIVE_TICKETS.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
+            TicketKey cur = e.getValue();
+            ServerLevel level = server.m_129880_(cur.dim());
+            if (level == null) {
+                continue;
+            }
+            net.minecraft.world.entity.Entity en;
+            try {
+                en = level.m_8791_(e.getKey());
+            } catch (Throwable ignored) {
+                continue;
+            }
+            if (!(en instanceof EntityMaid maid) || !maid.m_6084_() || maid.m_213877_()) {
+                continue;
+            }
+            long now = new ChunkPos(maid.m_20183_()).m_45588_();
+            if (now == cur.chunk()) {
+                continue; // 区块没变：什么都不做（绝大多数 tick 走这一支）
+            }
+            try {
+                ServerChunkCache cache = level.m_7726_();
+                cache.m_8438_(MAID_TICKET, new ChunkPos(cur.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+                cache.m_8387_(MAID_TICKET, new ChunkPos(now), TICKET_LEVEL, Unit.INSTANCE);
+                ACTIVE_TICKETS.put(e.getKey(), new TicketKey(cur.dim(), now));
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /**
+     * 【实测六百九十八】立刻把票挪到"她现在脚下这个区块"（不等 {@link #tick} 的 5 秒对账）。
+     * 两个调用者：① 可见性自愈（她的区块没在 entity-ticking 时当场补票）；
+     * ② 复活/召回/跨维把她**放到别处**之后立刻补票（那几处都是一次性事件，等下个 5 秒
+     * 窗口的代价就是"她在外面那几秒是个没票的女仆"）。
+     * <p>只动会话票（ACTIVE_TICKETS）；排班的持久票由 {@link #tick} 的 3b 段管。
+     */
+    public static void ensureTicketNow(EntityMaid maid) {
+        try {
+            if (maid == null || !maid.m_6084_()
+                    || !(maid.m_9236_() instanceof ServerLevel level)) {
+                return;
+            }
+            long now = new ChunkPos(maid.m_20183_()).m_45588_();
+            TicketKey cur = ACTIVE_TICKETS.get(maid.m_20148_());
+            if (cur != null && cur.chunk() == now && cur.dim().equals(level.m_46472_())) {
+                return; // 票已经指对地方了
+            }
+            ServerChunkCache cache = level.m_7726_();
+            if (cur != null && cur.dim().equals(level.m_46472_())) {
+                cache.m_8438_(MAID_TICKET, new ChunkPos(cur.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+            }
+            cache.m_8387_(MAID_TICKET, new ChunkPos(now), TICKET_LEVEL, Unit.INSTANCE);
+            ACTIVE_TICKETS.put(maid.m_20148_(), new TicketKey(level.m_46472_(), now));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测六百九十八】可见性自愈的**入口**（由 {@code ChunkMap.m_140421_} 尾巴上的 mixin
+     * 每 tick 调一次）：只遍历"本维度持票的女仆"这一张小表，交给
+     * {@link MaidVisibilityGuard#check} 判"主人客户端认不认得她"。
+     * <p>为什么不遍历全实体：那一层是每 tick 的，必须零成本——持票表通常只有个位数条目；
+     * 空表直接返回（没人被保载时一个字节都不做）。
+     */
+    public static void visibilitySweep(ServerLevel level,
+                                       it.unimi.dsi.fastutil.ints.Int2ObjectMap<Object> entityMap) {
+        if (ACTIVE_TICKETS.isEmpty()) {
+            return;
+        }
+        try {
+            for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
+                if (!e.getValue().dim().equals(level.m_46472_())) {
+                    continue;
+                }
+                net.minecraft.world.entity.Entity en = level.m_8791_(e.getKey());
+                if (en instanceof EntityMaid maid) {
+                    MaidVisibilityGuard.check(level, entityMap, maid);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static void removeTicket(MinecraftServer server, UUID id, TicketKey key) {
         ServerLevel level = server.m_129880_(key.dim());
         if (level != null) {
