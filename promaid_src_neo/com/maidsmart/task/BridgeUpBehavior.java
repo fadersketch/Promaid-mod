@@ -284,6 +284,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
             return false;
         }
+        // 实测六百八十七【有创造飞行能力就禁用搭路】（需求方口径：创造飞行是搭方块的上位替代）：
+        // 只要她此刻具备仿创造飞行的能力（总开关开 + 没被单独关掉 + 资格物品/效果/重力其一），
+        // 搭路整段让位——她过地形直接起飞，垫方块既慢又跟飞行抢移动。
+        // 注意与作者原来那道 isControlling 的区别：那道只管"正在飞 / 正在软着陆"；
+        // 需求方要的是"有能力就别搭"，所以落地待命档同样不搭（她一动就会起飞）。
+        if (com.maidsmart.flight.MaidFreeFlightController.bridgeDisabled(maid)) {
+            return false;
+        }
         LivingEntity owner = maid.getOwner();
         if (owner == null || !owner.isAlive() || owner.level() != level) {
             return false;
@@ -821,6 +829,14 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         // v1.2.2 实测六百〇八：飞行跟随中（哪怕搭到一半才切进飞行）立刻交出控制权
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+            return false;
+        }
+        // 实测六百八十七【有创造飞行能力就禁用搭路】（需求方口径：创造飞行是搭方块的上位替代）：
+        // 只要她此刻具备仿创造飞行的能力（总开关开 + 没被单独关掉 + 资格物品/效果/重力其一），
+        // 搭路整段让位——她过地形直接起飞，垫方块既慢又跟飞行抢移动。
+        // 注意与作者原来那道 isControlling 的区别：那道只管"正在飞 / 正在软着陆"；
+        // 需求方要的是"有能力就别搭"，所以落地待命档同样不搭（她一动就会起飞）。
+        if (com.maidsmart.flight.MaidFreeFlightController.bridgeDisabled(maid)) {
             return false;
         }
         LivingEntity owner = maid.getOwner();

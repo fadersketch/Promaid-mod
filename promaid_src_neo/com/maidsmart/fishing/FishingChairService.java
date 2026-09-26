@@ -167,6 +167,7 @@ public final class FishingChairService {
                 return;
             }
             LAST_NO_WATER_WARN.put(key, now);
+            com.maidsmart.tool.StateTables.cap("FishingChairService.LAST_NO_WATER_WARN", LAST_NO_WATER_WARN);
             // v1.5.257：判定链路统计（失败日志显示卡在哪一步：区块未加载/无液体/
             // 上方被占/岸边不合法）
             int[] stats = new int[3];
@@ -184,6 +185,7 @@ public final class FishingChairService {
             far = true;
         }
         LAST_SPAWN.put(key, now);
+        com.maidsmart.tool.StateTables.cap("FishingChairService.LAST_SPAWN", LAST_SPAWN);
         removeOldChairs(world, maid); // 先清掉这只女仆的旧标记坐垫（防岸边堆积）
         EntityChair chair = spawnChair(world, maid, stand);
         if (chair == null) {

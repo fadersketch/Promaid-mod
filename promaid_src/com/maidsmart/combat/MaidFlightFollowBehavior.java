@@ -922,6 +922,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         BOOST_READY.remove(id);
         STARTED_AT.remove(id);
         LAST_LOG.remove(id);
+        TETHER_STEER.remove(id);   // 实测六百八十七：本趟结束，操控日志的"一次性"标记跟着清
         // 【实测六百一十二】本趟若是"主人进到收手半径内"才停的，**这一 tick** 就解除推进矢量
         // （收掉还挂着的助推火箭 + 速度归零；为什么不能在 tick() 里做，见 RELEASE_ON_STOP 注释）
         if (RELEASE_ON_STOP.remove(id)) {
@@ -1489,12 +1490,84 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
      * <p>**接敌不受影响**：有威胁时 {@code canContinue} 就把控制权交回空袭链路（threatNearby /
      * ownFlightBusy 都排在它前面），所以她该打还是打——"接敌不变"是字面意思。
      */
+
+    /* ---------------- 实测六百八十七：拴绳操控方向（仅空袭档） ---------------- */
+
+    /** 操控速度（格/tick）：0.30 ≈ 6 格/秒，与扫帚 / 仿创造飞行同量级 */
+    private static final double TETHER_STEER_SPEED = 0.30;
+    /** 没人操控时的上飘封顶（格/tick）：丢锁敌之后不许继续一路往上飘 */
+    private static final double TETHER_MAX_RISE = 0.10;
+    /** "操控进行中"的 UUID 集：只用来保证进入时记一条日志（退出 / 本趟结束即移除） */
+    private static final java.util.Set<UUID> TETHER_STEER = new java.util.HashSet<>();
+
+    /**
+     * 【实测六百八十七】拴绳操控：**她丢了锁敌之后，你手上那根绳子就是操纵杆**（仅空袭档）。
+     *
+     * <p>需求方原话："绑定空袭状态进行接敌的时候，有的时候玩家行为再加上女仆自身的冲锋行为等各方面
+     * 叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌，而玩家只能任由
+     * 其在空中自由滑行，一点办法都没有。扫帚模式可以因为玩家可以接管扫帚而进行补救。"
+     *
+     * <p>【为什么挂在这里就够】{@code tick()} 第一件事就是"挂着 → tetherHold 然后 return"，而
+     * {@code canStillUse} 里 {@code threatNearby} / {@code ownFlightBusy} 都排在前面——**有敌人时
+     * 本行为整个不跑**（控制权交回空袭链路）。所以她走到这里 ⇔ 她此刻没有目标：这正是需求方说的
+     * "失去锁敌"。这里刻意不再去问一次目标（问了要动 brain 的记忆，而且结构上已经保证了）。
+     *
+     * <p>【怎么操控】你的视线就是她的机头：水平方向跟你的朝向、高低跟你的俯仰（±60° 封顶，免得
+     * 一低头就垂直扎下去）。速度固定 {@link #TETHER_STEER_SPEED} 格/tick——**平视 = 平飞不掉高**
+     * （每 tick 直接写速度，原版滑翔物理只负责这一 tick 的位移），抬头 = 爬升、低头 = 下降。
+     *
+     * <p>【边界】①必须手持武装拴绳（不在手上就只悬停，不会误触）；②只在空袭档（扫帚档玩家本来
+     * 就在驾驶位）；③配置 {@code COMBAT_TETHER_LEASH_STEER} 可关。
+     */
+    private static boolean maidsmart$steerByRider(EntityMaid maid) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TETHER_LEASH_STEER.get()) {
+                return false;
+            }
+            if (!"flight".equals(com.maidsmart.combat.GunnerTetherManager.modeKind(maid))) {
+                return false;   // 只在空袭档
+            }
+            net.minecraft.server.level.ServerPlayer rider =
+                    com.maidsmart.combat.GunnerTetherManager.hangingPlayer(maid);
+            if (rider == null || !com.maidsmart.combat.GunnerTetherManager.holdingLeash(rider)) {
+                return false;   // 没人挂着 / 手上没那根绳子
+            }
+            float pitch = (float) net.minecraft.util.Mth.m_14008_((double) rider.m_146909_(), -60.0, 60.0);
+            float yaw = rider.m_146908_();
+            MaidFlightKit.setGliding(maid, true);
+            maid.m_146922_(yaw);
+            maid.m_146926_(pitch);
+            double rad = Math.toRadians(yaw);
+            double horizontal = Math.cos(Math.toRadians(pitch)) * TETHER_STEER_SPEED;
+            double vy = -Math.sin(Math.toRadians(pitch)) * TETHER_STEER_SPEED;
+            maid.m_20256_(new Vec3(-Math.sin(rad) * horizontal, vy, Math.cos(rad) * horizontal));
+            if (TETHER_STEER.add(maid.m_20148_())) {
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 拴绳操控：她此刻没有目标，方向交给绳子另一头的 "
+                        + rider.m_7755_().getString() + "（抬头=爬升、低头=下降、平视=平飞）");
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private static void maidsmart$tetherHold(EntityMaid maid) {
         try {
+            // 【实测六百八十七】先问"绳子另一头的人有没有举着绳子"——举着就由他操控方向。
+            // 这条只在**她没目标**时才会走到（有敌人时本行为整个不跑，见 steerByRider 的注释）。
+            if (maidsmart$steerByRider(maid)) {
+                return;
+            }
+            TETHER_STEER.remove(maid.m_20148_());
             MaidFlightKit.setGliding(maid, true);
             maid.m_146926_(0.0f); // 俯仰摆平（setXRot）：低着头滑翔会被原版物理往地里拽
             Vec3 cur = maid.m_20184_();
-            maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, cur.f_82480_, cur.f_82481_ * 0.72));
+            // 【实测六百八十七】再补一道"不让她继续往上飘"的小闸：需求方报的"一口气飞到 300 多格"
+            // 里有一截就是"丢了目标之后还带着推力惯性一路往上"。上飘速度按 TETHER_MAX_RISE 封顶
+            //（想爬？把绳子举起来抬头看——那才是你要的爬升）。向下的滑翔一个字都不动。
+            double up = Math.min(cur.f_82480_, TETHER_MAX_RISE);
+            maid.m_20256_(new Vec3(cur.f_82479_ * 0.72, up, cur.f_82481_ * 0.72));
         } catch (Throwable ignored) {
         }
     }

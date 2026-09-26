@@ -333,5 +333,7 @@
   "config.promaid.bombing.airPlace": "空中强制放置",
   "config.promaid.bombing.tntTrack": "TNT 追踪飞行",
   "config.promaid.compat": "第三方兼容",
-  "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）"
+  "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）",
+  "config.promaid.airRaid.maxAlt": "空袭·相对目标的爬升上限（格，0 = 不限）",
+  "config.promaid.combat.tetherLeashSteer": "二号位·悬挂时用武装拴绳操控方向（仅空袭）"
 }

@@ -161,6 +161,7 @@ public class ScheduleBubbleBehavior extends Behavior<EntityMaid> {
         } catch (Throwable ignored) {
         }
         NEXT_ALLOWED.put(maid.getUUID(), gameTime + COOLDOWN_TICKS);
+        com.maidsmart.tool.StateTables.cap("ScheduleBubbleBehavior.NEXT_ALLOWED", NEXT_ALLOWED);
         // 懒清理：条目数失控时全表过期清扫（低频行为，代价可忽略）
         if (NEXT_ALLOWED.size() > 512) {
             NEXT_ALLOWED.values().removeIf(t -> t < gameTime);
