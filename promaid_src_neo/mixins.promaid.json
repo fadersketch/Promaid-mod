@@ -82,6 +82,9 @@
     "MaidGeckoSpinDedupMixin",
     "MaidSpinLiftMixin",
     "ElytraModelAccessor",
+        "MaidFreeFlightAnimMixin",
+        "MaidConfigFreeFlightMixin",
+        "MaidFreeFlightAnimInvoker",
     "MaidModelPackSortMixin"
   ],
   "injectors": {

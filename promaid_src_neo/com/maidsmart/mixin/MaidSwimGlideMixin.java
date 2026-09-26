@@ -46,7 +46,10 @@ public abstract class MaidSwimGlideMixin {
         EntityMaid maid = (EntityMaid) (Object) this;
         // 六百一十一：只看"在不在滑翔"，不再要求"是飞行任务"——原因见类注释
         // （飞行跟随不是飞行任务；且 TLM 里读这个方法的只有 3 个客户端动画类）
-        if (maid.isFallFlying()) {
+        // 实测六百七十五：滑翔动画二选一——默认沿用游泳动作（作者口径，兼容性最好），
+        // 打开「滑翔时用鞘翅动画」后**不再顶游泳位**，改由 MaidFreeFlightAnimMixin 注册的
+        // elytra_fly 状态接管（模型包做了那条动画才有效果）。
+        if (maid.isFallFlying() && !com.maidsmart.config.MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.get()) {
             cir.setReturnValue(true);
         }
     }

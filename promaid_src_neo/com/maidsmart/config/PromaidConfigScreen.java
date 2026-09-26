@@ -3602,6 +3602,23 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
         this.rows.add(new BoolRow("跟随收紧", MaidSmartConfig.MISC_FOLLOW_TIGHTEN.get(),
                 v -> MaidSmartConfig.MISC_FOLLOW_TIGHTEN.set(v), "跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑（参考改版 TLM jar 的每 tick 驱动设计；关闭 = 官方 1.5.3 原版行为）"));
+        // 实测六百七十三：仿创造飞行（默认关）
+        this.rows.add(new BoolRow("仿创造飞行", MaidSmartConfig.MISC_FREE_FLIGHT.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT.set(v), "默认关：打开后，有资格的女仆会悬浮并自由升降（创造模式飞行的手感）。资格三路：下面的物品表 / 效果表 / 她的重力属性≈0（通用启发式）。收工若在半空会先软着陆再交还重力"));
+        this.rows.add(new BoolRow("滑翔时用鞘翅动画", MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.get(),
+                v -> MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.set(v), "默认关=沿用游泳动作（作者口径，官方包与第三方包普遍都有 swim）。打开后不再顶游泳位，改用模型包里同名的 elytra_fly——做了这条动画的模型（如圣女酒狐）滑翔时会播它；没做的模型会落到站立姿态，所以确认你的包有这条动画再开"));
+        this.rows.add(new BoolRow("仿创造飞行·智能待命", MaidSmartConfig.MISC_FREE_FLIGHT_IDLE.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_IDLE.set(v), "默认开：主人停下不动满下面的秒数后，她软着陆到你脚边站好（同高度、约 2 格），你再一动她自动重新起飞。原来的行为是「够资格就一直悬在你身后 3.5 格 + 高 2 格」，而原版实体交互距离只有 3 格——喂金苹果/药水、摸头/抱抱都会够不到。关掉 = 始终悬停（旧行为）"));
+        this.rows.add(new NumRow("仿创造飞行·静止多久落地（秒）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS, s), "默认 3 秒：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消"));
+        this.rows.add(new NumRow("仿创造飞行·落地贴近距离（格）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST.get()),
+                s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST, s), "默认 2 格：软着陆时朝主人漂过去，最终停在他身边这个距离内（留 1 格余量给原版 3 格交互距离）"));
+        this.rows.add(new TextRow("仿创造飞行·资格物品表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。四种写法：①物品 id（modid:item）②#命名空间:标签 ③@命名空间:组件（有该组件就算）④@命名空间:组件~文本（组件值里含这段文本，例如神化用命令挂的飞行：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight）。扫描范围：双手/护甲/背包/饰品栏/额外容器"));
+        this.rows.add(new TextRow("仿创造飞行·资格效果表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS, s), "命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）"));
+        this.rows.add(new BoolRow("仿创造飞行·重力归零也算资格", MaidSmartConfig.MISC_FREE_FLIGHT_GRAVITY.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_GRAVITY.set(v), "默认开：她的重力属性 ≈ 0 时自动获得资格——通用启发式，覆盖任何「重力归零」型来源，不必点名模组"));
         this.rows.add(new NumRow("同维度拉回距离（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_DIST, s), "女仆与主人同维度且距离超过此值才拉回（默认 48 格）：低于此值靠走路/跟随，不打扰她"));
         // v1.1.0 实测一百八十八：Y 轴拉回门槛（反馈："传送机制不检测 Y 轴"）

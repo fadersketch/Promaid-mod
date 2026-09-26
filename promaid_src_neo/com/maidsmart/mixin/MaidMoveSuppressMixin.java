@@ -60,6 +60,16 @@ public abstract class MaidMoveSuppressMixin {
             // 战术行为直连导航独占（TLM 战斗走位写的 WALK_TARGET 不执行）
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
             ci.cancel();
+        } else if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {
+            // 实测六百八十【创造飞行接管移动】：用户反馈"她创造飞行跟上玩家时依然会搭路，
+            // 而移动是搭路的逻辑，于是影响移动速度"。根子比搭路更深一层——
+            // **我们的飞行速度是在 MaidTickEvent 里写的，而它跑在大脑之前**：大脑随后写下的
+            // WALK_TARGET 会被 MoveToTargetSink 变成寻路，再由 MaidMoveControl 在"我们写速度之后"
+            // 执行并覆盖掉 ✗。所以这里从源头掐：清 WALK_TARGET + 停导航 + 取消本 tick。
+            // （搭路那侧另有一道让位：BridgeUpBehavior 的 checkExtraStartConditions/canStillUse。）
+            maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            maid.getNavigationManager().resetNavigation();
+            ci.cancel();
         } else if (com.maidsmart.task.MaidWorkTags.isSpawnerTorchRun(maid)) {
             // v1.3.0(beta) 实测六百六十四【刷怪笼插火把的"优先"】：走去插火把期间她独占移动
             // ——清 WALK_TARGET + 取消本 tick（TLM 原生任务/跟随/远程走位写的走位目标一律不

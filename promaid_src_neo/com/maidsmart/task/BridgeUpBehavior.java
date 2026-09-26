@@ -284,6 +284,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
             return false;
         }
+        // 实测六百八十【给创造飞行让位（同款写法）】：用户反馈"她创造飞行跟上玩家时依然会搭路，
+        // 而移动是搭路的逻辑，于是影响移动速度"。创造飞行档下她由我们托着飞、每 tick 自己写速度，
+        // 垫方块既没意义、又会把飞行抢成走路。只在**飞行中/软着陆中**让位；落地待命档照常搭路。
+        if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {
+            return false;
+        }
         LivingEntity owner = maid.getOwner();
         if (owner == null || !owner.isAlive() || owner.level() != level) {
             return false;
@@ -821,6 +827,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         // v1.2.2 实测六百〇八：飞行跟随中（哪怕搭到一半才切进飞行）立刻交出控制权
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+            return false;
+        }
+        // 实测六百八十【给创造飞行让位（同款写法）】：用户反馈"她创造飞行跟上玩家时依然会搭路，
+        // 而移动是搭路的逻辑，于是影响移动速度"。创造飞行档下她由我们托着飞、每 tick 自己写速度，
+        // 垫方块既没意义、又会把飞行抢成走路。只在**飞行中/软着陆中**让位；落地待命档照常搭路。
+        if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {
             return false;
         }
         LivingEntity owner = maid.getOwner();
