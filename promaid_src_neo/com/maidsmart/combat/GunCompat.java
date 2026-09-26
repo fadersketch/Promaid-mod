@@ -53,6 +53,47 @@ import net.minecraft.world.item.ItemStack;
  *         用背包弹的枪的背包弹，都由它自己算，本模组不再猜。
  * 反射不可用（没装 / 版本改名）时退回旧版宽松判据（{@link #looseAmmoScan}），行为与旧版
  * 一字不差——绝不因为兼容层异常就判她"没弹"、把模式踢掉。
+ *
+ * ============ v1.3.0 实测六百九十四【模式门禁的「换得上弹」那一半也交给 TACZ 自己】 ============
+ *
+ * 【玩家原话】「现在关于远程空袭模式和扫帚模式枪械的判定还是 tacz 原版能够开火的判定吗？我想的
+ * 是现在对于允许激活的判定，不应该是单纯的远程武器加弹药（很简单，因为像冲锋枪跟狙击枪并不是
+ * 只要有远程武器和弹药就行的），最好是走 TACZ 的 API，发现手持武器对应的 TACZ 端允许开火，那么
+ * 就判定为武器和弹药方面为可通过的。」
+ *
+ * 【玩家说的没错：缺口正好在「换得上弹」那一半】实测六百六十六 只把「此刻扣扳机打得响吗」
+ * （{@link #canFeed}）交给了 TACZ；实测六百九十二 为了让打空弹匣的女仆不从扫帚上掉下来，又给
+ * 模式门禁配了一个「现在打不响但换得上吗」的宽松档（当时的 {@link #canReload}）——那一档用的是
+ * {@link #looseAmmoScan}，**任意 {@code tacz:ammo} 都算，不看口径**。于是「她背着一包步枪弹、
+ * 手里却是狙击枪 / 重机枪 / 蓄力枪」这种**口径对不上**的局面照样判「备弹通过」：模式激活、
+ * 气泡不报缺件、她就一直绕圈不开火。这正是玩家说的「并不是只要有远程武器和弹药就行」。
+ *
+ * 【现在的口径：原样调用 TACZ 的 {@code AbstractGunItem.canReload}】它就是 TACZ 自己那句
+ * 「这把枪换得上弹吗」（javap 实证：1.20.1 与 1.21.1 两版 1.1.8 签名一致、字节码逐句相同）：
+ * <pre>
+ *   canReload(LivingEntity shooter, ItemStack gun):
+ *     ① getCommonGunIndex(getGunId(gun)) 为空          → false  ← 枪包数据缺失（坏枪），直接否
+ *     ② getCurrentAmmoCount(gun) &gt;= 弹匣上限（含配件） → false  ← 弹匣是满的（那一拍 canFeed 已为真）
+ *     ③ useInventoryAmmo(gun)                          → false  ← 这类枪不吃弹匣，归 canFeed 的
+ *                                                                  hasInventoryAmmo 那一支管
+ *     ④ getReloadData().isInfinite()                   → true   ← 无限弹的枪永远换得上
+ *     ⑤ useDummyAmmo(gun)                              → getDummyAmmoAmount(gun) &gt; 0
+ *     ⑥ 否则扫 shooter 的 ITEM_HANDLER（女仆 = 护甲 + 双手 + 背包 + 饰品四合一，
+ *        EntityMaid.getCapability 反编译实证）：
+ *            IAmmo.isAmmoOfGun(gun, stack)          ← **口径必须对上这把枪**
+ *        或  IAmmoBox.isAmmoBoxOfGun(gun, stack)   ← 弹药箱也算（与原版换弹同一条）
+ * </pre>
+ * 第 ⑥ 步的扫法（{@code lambda$canReload$1}，javap 实证）与 {@code hasInventoryAmmo} 的扫法**逐句
+ * 相同**，是纯只读的 {@code getStackInSlot} 循环——不 extract、不改 NBT，所以每 tick 问它没有副作用。
+ *
+ * 【为什么这不回退 实测六百九十二（弹匣空了别把她摔下扫帚）】第 ⑥ 步**同时认弹药箱**，而玩家后勤的
+ * 主流形态就是 {@code tacz:ammo_box}（实测五百六十八 起的老口径）——「只带弹药箱」的女仆照旧通过；
+ * 而被挡掉的只有「带的是对不上口径的弹药」这一种，那本来就不该让她起飞（起了也打不响）。
+ * 弹匣满时 canReload 为 false，但那一拍 {@link #canFeed} 为真，「打得响 **或** 换得上」的或门照旧过。
+ *
+ * 反射不可用（没装 TACZ / 版本改名）时退回 {@link #looseAmmoScan}，行为与旧版一字不差。
+ * 卓越前线（SBW）没有对应的公开查询方法（本机未装、无法 javap 实证，且实测六百六十六 已用它的
+ * {@code hasEnoughAmmoToShoot} 管「打得响」那一半）→ 它的「换得上」仍走 looseAmmoScan。
  */
 public final class GunCompat {
     private GunCompat() {
@@ -158,6 +199,55 @@ public final class GunCompat {
                 }
             }
             return TACZ_FEED_API;
+        }
+    }
+
+    /* ---------------- v1.3.0 实测六百九十四：TACZ 自己的「这把枪换得上弹吗」 ----------------
+     *
+     * {@code AbstractGunItem.canReload(LivingEntity, ItemStack)} ——见类注释那一节的字节码摘录。
+     * 公开实例方法（挂在枪物品上），两版签名一致，照旧走反射（TACZ 不在编译类路径上）。
+     */
+    /** TACZ 反射句柄：[0]=AbstractGunItem 类，[1]=canReload(LivingEntity, ItemStack)；空数组 = 不可用 */
+    private static volatile Object[] TACZ_RELOAD_API;
+    private static final Object TACZ_RELOAD_LOCK = new Object();
+
+    private static Object[] taczReloadApi() {
+        Object[] api = TACZ_RELOAD_API;
+        if (api != null) {
+            return api;
+        }
+        synchronized (TACZ_RELOAD_LOCK) {
+            if (TACZ_RELOAD_API == null) {
+                try {
+                    Class<?> cls = Class.forName("com.tacz.guns.api.item.gun.AbstractGunItem");
+                    TACZ_RELOAD_API = new Object[]{
+                            cls,
+                            cls.getMethod("canReload",
+                                    net.minecraft.world.entity.LivingEntity.class,
+                                    ItemStack.class)};
+                } catch (Throwable ignored) {
+                    TACZ_RELOAD_API = new Object[0];
+                }
+            }
+            return TACZ_RELOAD_API;
+        }
+    }
+
+    /**
+     * v1.3.0 实测六百九十四：**这把枪**此刻换得上弹吗（null = 反射不可用，交回旧判据）。
+     * 原样调用 TACZ 的 {@code AbstractGunItem.canReload}——口径比对、弹药箱识别、无限弹/假弹
+     * 全由它自己算，本模组不再猜。它是纯只读查询（见类注释的 lambda 实证），可每 tick 调用。
+     */
+    private static Boolean taczCanReload(EntityMaid maid, ItemStack gun) {
+        Object[] api = taczReloadApi();
+        if (api.length == 0) {
+            return null;
+        }
+        try {
+            Object item = ((Class<?>) api[0]).cast(gun.getItem());
+            return (Boolean) ((java.lang.reflect.Method) api[1]).invoke(item, maid, gun);
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 
@@ -359,6 +449,9 @@ public final class GunCompat {
     /**
      * 【实测六百九十二】"现在这一拍打不响，但**换得上弹**吗"——背包里有这把枪认的弹药（或对得上的弹药箱）。
      *
+     * <p>【实测六百九十四 起这条由 TACZ 自己回答】旧版名义上这么写、实际用的是口径不敏感的宽松扫描
+     * （任意 tacz:ammo 都算），见下面【口径】那一段。
+     *
      * <p>【为什么要跟 {@link #canFeed} 分开】两者回答的是两个不同的问题：
      * <ul>
      *   <li>{@link #canFeed} = **此刻扣扳机能打响吗**（弹匣里 / 弹膛里有弹）→ 开火链路的诊断日志用它；</li>
@@ -372,14 +465,31 @@ public final class GunCompat {
      * 而她的背包里明明有 {@code tacz:ammo_box}——TLM 自己的开火链路（{@code performGunAttack}）
      * 下一发就会拉栓/换弹。
      *
-     * <p>【口径】就是实测五百六十八 那条老判据 {@link #looseAmmoScan}（主手/背包里有 tacz:ammo 或
-     * 对得上这把枪的弹药箱；SBW 能量武器不消耗常规弹药、直接放行）。它**宽松**（任意 tacz:ammo 都
-     * 算，不校验口径），但这一档要的正是"别把她摔下去"——宁可按"换得上"放行，也不要在空中误判。
-     * 反射不可用（没装枪械 mod 等）时 {@code looseAmmoScan} 自己也是同一份扫描，不存在第三份口径。
+     * <p>【口径】v1.3.0 实测六百九十四 之前是 实测五百六十八 那条老判据 {@link #looseAmmoScan}
+     * （主手/背包里有**任意** tacz:ammo 就算，不校验口径）——玩家反馈「像冲锋枪跟狙击枪并不是只要
+     * 有远程武器和弹药就行」，指的就是这里。**现在改成原样调用 TACZ 自己的
+     * {@code AbstractGunItem.canReload}**（{@link #taczCanReload}，见类注释那一节）：它按口径认
+     * 散装弹、也认对得上的弹药箱，还顺带否掉弹匣已满 / 枪包数据缺失（坏枪）这几种情形。
+     * 反射不可用（没装枪械 mod 等）时才回到 {@link #looseAmmoScan}——仍然是「宽进」的老口径，
+     * 绝不在空中误判把她摔下去。
      */
     public static boolean canReload(EntityMaid maid, ItemStack gun) {
         if (maid == null || gun == null || gun.isEmpty() || !isGun(gun)) {
             return false;
+        }
+        // v1.3.0 实测六百九十四：TACZ 枪改问 TACZ 自己（口径比对 + 认弹药箱）。
+        // 只有"反射不可用"（返回 null）才回退宽松扫描；TACZ 明确回答 false（口径对不上）时
+        // **必须**照它说的算 false，绝不能回退——那正是玩家要挡掉的那种局面。
+        if (!isSbwGun(gun)) {
+            Boolean r;
+            try {
+                r = taczCanReload(maid, gun);
+            } catch (Throwable ignored) {
+                r = null;
+            }
+            if (r != null) {
+                return r;
+            }
         }
         return looseAmmoScan(maid, gun);
     }

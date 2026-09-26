@@ -459,6 +459,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_MAX_PITCH_DOWN;
     /** 盘旋半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_ORBIT_RADIUS;
+    /** 【实测六百九十三】锁敌后离敌的最远距离（格）。数值口径见 MaidFlightCombatBehavior.orbitMaxCfg */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_ORBIT_MAX;
     /** 期望盘旋高度（目标上方格数）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_HEIGHT;
     /** 高度修正增益。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -647,6 +649,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_ENABLE;
     /** 战斗盘旋时的站立距离（格）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_RANGE;
+    /** 【实测六百九十三】锁敌后离敌的最远距离（格）。数值口径见 MaidBroomDrive.orbitMaxCfg */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_ORBIT_MAX;
     /** 悬停高度（格，相对目标脚底）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_HOVER;
     /**
@@ -2034,8 +2038,10 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
         COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【v1.3.2 实测六百五十六 的飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**\n\n【v1.3.3 两条实测修正】①「坐上去之后原地左右乱晃、被反复拉回、不上升」的根因是**客户端也在驱动扫帚**，与服务端的「取走即清」意图队列抢同一份数据（原版 travelRidden 是从 isControlledByLocalInstance 那一侧才施加位移的，我们漏了这道闸）；现在只让服务端驱动。②她坐在椅子/别的载具上时原来的 startRiding 恒失败（原版要求「当前不是乘客」），现在走 force 骑乘把她换过来。\n\n【排查留痕】日志搜「扫帚模式」和「扫帚接管」：取出扫帚骑上（这把是我们放的）、扫帚接管（服务端真的开始驱动）、爬升到位 与 头顶被顶住（带起止高度与「整段只抬了几格」）、想飞却没骑上扫帚（骑不上时不再静默）。你自己骑在这把扫帚上时她只开火、不接管飞行，日志写「玩家在驾驶这把扫帚」")
                 .translation("config.promaid.broom.enable").define("enable", true);
-        COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）")
+        COMBAT_BROOM_RANGE = BUILDER.comment("战斗盘旋的站立距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）\n\n【实测六百九十三：这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），所以两只一起上也不会落在同一个圆上被一条射线串到。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
+        COMBAT_BROOM_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 10，1~48）：她绕着目标打的时候**不会被拉出这个半径之外**（越过它径向修正会加倍往回带）。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 站立距离 × 0.75), 本值] 里缓动。默认 10 = 站立距离 8 的 1.25 倍，所以均值仍落在 8 上（观感与旧版同一条圈），只是半径会在 6~10 之间飘、每只女仆还不一样。\n\n调小它 = 把她整体拉近并收紧随机范围（越近越容易被近战摸到，但越不容易被\"串\"）；调大它 = 允许她在更宽的一圈里机动（远程更安全，但枪械命中率会随距离下降）。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
+                .translation("config.promaid.broom.orbitMax").defineInRange("orbitMax", 10.0, 1.0, 48.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
         COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十六：默认 15 → 12】玩家原话：\"把扫帚盘旋的默认配置高度改为12格。\"——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
@@ -2158,9 +2164,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_MAX_PITCH_DOWN = BUILDER.comment("阶段二俯仰限幅·低头（度，默认 70）：飞向目标时低头不超过这个角度（90 = 垂直扎下去）")
                 .translation("config.promaid.airRaid.maxPitchDown")
                 .defineInRange("maxPitchDown", 70.0, 0.0, 89.0);
-        AIR_RAID_ORBIT_RADIUS = BUILDER.comment("远程空袭的盘旋半径（格，默认 10）：以目标为圆心维持的水平距离，靠径向修正拉回圈上")
+        AIR_RAID_ORBIT_RADIUS = BUILDER.comment("远程空袭的盘旋半径（格，默认 10）：以目标为圆心维持的水平距离，靠径向修正拉回圈上\n\n【实测六百九十三：这个数现在是「区间的近端」而不是固定值】接敌后她的盘旋半径在这个数与下面「离敌最远距离」之间**随机缓动**（每只女仆各不相同、每 4 秒重掷一次），并额外按 UUID 决定旋向（一半顺时针一半逆时针）——旧版所有女仆同一个圆、同一个旋向，敌人一条射线就能串到对面那只。实际区间 = [min(最远距离, 本值 × 0.75), 最远距离]")
                 .translation("config.promaid.airRaid.orbitRadius")
                 .defineInRange("orbitRadius", 10.0, 2.0, 48.0);
+        AIR_RAID_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 12，2~64）：远程空袭盘旋时**不会被拉出这个半径之外**——越过它径向修正的增益从 0.5 提到 1.0（双倍往回带），所以\"随机环绕\"不会变成\"越飞越远\"。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里缓动。默认 12 = 盘旋半径 10 的 1.2 倍，所以均值仍落在 10 附近（观感与旧版同一条圈）。\n\n注意它**不是**「有效开火距离」：开火那一道门是 airRaid.rangedFireRange（默认 24，超出就不扣扳机、先盘旋拉近），本值只决定\"她绕在哪一圈上\"，一般应当小于等于开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
+                .translation("config.promaid.airRaid.orbitMax")
+                .defineInRange("orbitMax", 12.0, 2.0, 64.0);
         AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，实测五百七十九由 3.5 提到 10")
                 .translation("config.promaid.airRaid.rangedHoldHeight")
                 .defineInRange("rangedHoldHeight", 10.0, 0.0, 64.0);
