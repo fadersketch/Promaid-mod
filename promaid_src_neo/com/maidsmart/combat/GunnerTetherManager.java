@@ -258,6 +258,26 @@ public final class GunnerTetherManager {
         }
     }
 
+
+    /**
+     * 【实测六百八十七】本类那十张 UUID 表都是"只在 tick 到当事人才清"的：玩家退服、女仆被收走/
+     * 区块卸载之后键就留在那儿。单机无所谓，服务器跑几天就是几千个永不回收的键（见
+     * {@link com.maidsmart.tool.StateTables}）。这里每 tick 只做一次 size() 比较，超上限才清。
+     * 注意**不含 {@code LINKS}**：那张表必须精确，它本来就有 detach / onMaidJoin 两条清理链路。
+     */
+    private static void capTables() {
+        com.maidsmart.tool.StateTables.cap("拴绳.PULL_LOGGED", PULL_LOGGED);
+        com.maidsmart.tool.StateTables.cap("拴绳.GROUND_TICKS", GROUND_TICKS);
+        com.maidsmart.tool.StateTables.cap("拴绳.MODE_TICKS", MODE_TICKS);
+        com.maidsmart.tool.StateTables.cap("拴绳.DISMOUNT_GRACE", DISMOUNT_GRACE);
+        com.maidsmart.tool.StateTables.cap("拴绳.KIND_TICKS", KIND_TICKS);
+        com.maidsmart.tool.StateTables.cap("拴绳.DENY_LOG", DENY_LOG);
+        com.maidsmart.tool.StateTables.cap("拴绳.RIDE_FALL", RIDE_FALL);
+        com.maidsmart.tool.StateTables.cap("拴绳.RIDE_LAST_Y", RIDE_LAST_Y);
+        com.maidsmart.tool.StateTables.cap("拴绳.SEAT_NOW", SEAT_NOW);
+        com.maidsmart.tool.StateTables.cap("拴绳.SEAT_SIDE", SEAT_SIDE);
+    }
+
     /**
      * 【实测六百八十二】这只女仆此刻的"战斗模式档"——只用来判"绑定期间她换模式了没有"。
      *
@@ -366,6 +386,47 @@ public final class GunnerTetherManager {
             }
             Link link = LINKS.get(maid.getUUID());
             return link != null && !link.leash;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测六百八十七】挂在女仆下面的那位玩家（没有链路 / 还在牵绳档 / 玩家没了 → null）。
+     *
+     * <p>给"丢锁敌之后用绳子操控方向"那条链路用：{@code LINKS} 只活服务端，而外部需要"这只女仆
+     * 此刻被谁挂着"时一直缺一个入口（{@code linkedMaidImRiding} 是反过来的，而且是 private）。
+     */
+    public static net.minecraft.server.level.ServerPlayer hangingPlayer(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            Link link = LINKS.get(maid.getUUID());
+            if (link == null || link.leash) {
+                return null;   // 没链路，或还在"牵绳档"（玩家根本没骑在她身上）
+            }
+            net.minecraft.server.level.ServerPlayer p = link.player.get();
+            return p != null && p.isAlive() ? p : null;
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 【实测六百八十七】玩家手里（主手或副手）有没有那根武装拴绳。
+     *
+     * <p>需求方口径是"手持此拴绳且处于绑定状态下"才接管方向，所以"什么叫拿着绳子"的口径
+     * 只有这一处（物品常量也只在本类里引用一次）。
+     */
+    public static boolean holdingLeash(net.minecraft.world.entity.player.Player player) {
+        try {
+            if (player == null) {
+                return false;
+            }
+            net.minecraft.world.item.Item leash = com.maidsmart.ProMaidMod.COMBAT_LEASH.get();
+            return leash != null
+                    && (player.getMainHandItem().is(leash) || player.getOffhandItem().is(leash));
         } catch (Throwable t) {
             return false;
         }
@@ -1253,6 +1314,7 @@ public final class GunnerTetherManager {
     /* ==================== 每 tick 校验（ProMaidExtension 每 2 tick 调） ==================== */
 
     public static void tick(MinecraftServer server) {
+        capTables();
         try {
             long gt = server.getAllLevels().iterator().next().getGameTime();
             // 【实测六百八十二：要"解除"的先攒起来，等这一轮走完再解】

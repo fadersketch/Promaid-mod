@@ -771,6 +771,7 @@ public final class MaidBroomDrive {
                 return;
             }
             DISMOUNT_LOGGED.put(maid.m_20148_(), Long.valueOf(now));
+            com.maidsmart.tool.StateTables.cap("扫帚.DISMOUNT_LOGGED", DISMOUNT_LOGGED);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 下扫帚（理由=" + why + "，这把是"
                     + (hadDebt ? "本模组放的，扫帚收进背包" : "世界里那把，原地留着") + "）");
@@ -1543,6 +1544,7 @@ public final class MaidBroomDrive {
                 return false;
             }
             TAKEOFF_AT.put(maid.m_20148_(), Long.valueOf(now));
+            com.maidsmart.tool.StateTables.cap("扫帚.TAKEOFF_AT", TAKEOFF_AT);
             startClimb(maid, TAKEOFF, maid.m_20186_() + RISE_BLOCKS + CLIMB_LEAD);
             return true;
         } catch (Throwable t) {
@@ -1564,6 +1566,7 @@ public final class MaidBroomDrive {
                 return;
             }
             MOUNT_LOGGED.put(maid.m_20148_(), Long.valueOf(now));
+            com.maidsmart.tool.StateTables.cap("扫帚.MOUNT_LOGGED", MOUNT_LOGGED);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid) + " " + msg);
         } catch (Throwable ignored) {
         }

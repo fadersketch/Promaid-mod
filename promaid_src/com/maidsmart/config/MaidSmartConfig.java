@@ -432,6 +432,11 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_LAUNCH_RANGE;
     /** 占位高度容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_ALTITUDE_TOLERANCE;
+
+    /** 【实测六百八十七】空袭爬升上限（格，默认 48，0 = 不限）：她不许飞到"目标上方这么多格"以上。
+     *  需求方原话："有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接
+     *  飞到天上300多格。"上限只约束**向上**；被顶到上限时改压机头滑翔下来。 */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_MAX_ALT;
     /** 起跳等待上限（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.IntValue AIR_RAID_JUMP_TICKS;
     /** 烟花最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -689,6 +694,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 【实测六百七十七】"拉扯"开关（默认开）：绳子绷紧时像原版拴绳一样把她拽过来。
      *  关掉 = 绳子只画不使劲（她已经有的跟随链路照旧，只是没有那记额外的拉力）。 */
     public static final ForgeConfigSpec.BooleanValue COMBAT_TETHER_PULL;
+
+    /** 【实测六百八十七】二号位·悬挂时的"拴绳操控方向"（默认开，**仅空袭档**）。
+     *  挂在她下面时，若她**此刻没有目标**（丢锁敌 / 本来就没敌人），把手里那根武装拴绳
+     *  举着看哪儿她就往哪儿飞（水平跟你的朝向、高低跟你的俯仰）——她一口气蹿上天之后
+     *  玩家不再是"一点办法都没有"。详细口径见 {@code MaidFlightFollowBehavior.maidsmart$tetherHold}。 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_TETHER_LEASH_STEER;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -2038,6 +2049,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("武装拴绳（直升机二号位；配置面板：移动与行为 → 武装拴绳（二号位））").translation("config.promaid.tether").push("tether");
         COMBAT_TETHER_ENABLE = BUILDER.comment("武装拴绳总开关（默认开）：手持武装拴绳右击【飞行中的】女仆，把自己挂到她下方（像武装直升机的二号位枪手；**在扫帚上右击她 = 换到二号位**，绑定态右击 = 坐回扫帚驾驶位）——她照常飞、照常用远程武器开火，你也一样；再右击一次（或按潜跳）解除。**地面不再自动解除**（「绳子不会自己断」，实测六百七十一）；**她不替你定高度、也不替你定座位**（实测六百七十二：拴着的时候她只原地悬停、一个高度数字都不写，接敌照旧；她站在地上时改成水平拉开并肩站，不再和你建模重叠）；只有落水超过 0.6 秒会把你放下（溺水是致命的）；解除瞬间人在空中给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。\n\n【规则】只认主人；一只女仆同时只挂一人；扫帚模式必须她已经飞在空中（地面挂着会把人拖进地里），空袭模式（flight_combat / flight_ranged）随时可挂；绑定后**空袭不再改她的高度**（「不要套用悬空起程」：她照常自己爬升/俯冲，绳子只负责把你吊在下面），扫帚仍是原地悬停（不再绕着你转圈），接敌照旧；挂着期间你和女仆同款免摔落/卡墙/挤墙/撞墙伤。她本人对你的伤害本来就被「主人/友军免伤总闸」拦着，挂多紧都不会被她自己打中。\n\n【实测六百七十三】三条「可以优化」落地：①「坐在扫帚上右击切不到绑定模式」已修（换座态准星前方没有实体，右击走的是 RightClickItem，旧版只监听 EntityInteract）；②空袭档多一档**牵绳**——绑定空袭模式的女仆时她还没起飞就**先不挂人**，你自由活动、她跟着走（原版拴绳观感），她真起飞才把你挂到二号位，落地满 2 秒再放下来；③挂在下面时被她的模型挡视野 → 改成**渲染层面**解决：只对你（挂着的那位）+第一人称把她画成半透明，透明度见下一项。\n\n【二号位开火】挂着时照常射击（弓/弩/枪械都行）——她打她的目标，你打你瞄的，各自独立。合成：拴绳 + 铁锭×2。日志搜「武装拴绳」\n\n【实测六百七十四】四点落地：①半透明默认 0.35 → **0.1**，而且**扫帚本体**也一起半透明（自己骑扫帚时扫帚模型就挡在视野里）；②修好空袭档的**「玩家坐到她头上」**——牵绳档转「起飞挂载」时没重发 S2C 相位包，客户端不认那个枪手，悬挂定位于是不生效、人被原版摆在**她头顶**（现在每次相位变化都重发）；③被拴绳选中的女仆加**金色描边标记**（同光灵箭的发光渲染，光边改成金色），她**正式起飞**（牵绳 → 悬挂）时解除；④牵绳档的绳子在客户端也照画（旧版 1.21.1 树还留着「必须是她乘客」那道门）。")
                 .translation("config.promaid.tether.enable").define("enable", true);
+        COMBAT_TETHER_LEASH_STEER = BUILDER.comment("二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档）：挂在她下方时，若她此刻没有目标（丢锁敌、或本来就没敌人），把手里那根武装拴绳举着——**你看哪儿她就往哪儿飞**（水平跟你的朝向、高低跟你的俯仰，抬头=爬升、低头=下降）。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌，而玩家只能任由其在空中自由滑行，一点办法都没有。扫帚模式可以因为玩家可以接管扫帚而进行补救。\"——扫帚能接管是因为玩家骑在扫帚上，空袭档的补救手段就是这条：把绳子当操纵杆。\n\n【边界】只在**她没目标**时生效（有敌人时方向归她的空袭链路，绳子不抢手）；只在空袭档生效（扫帚档玩家本来就在驾驶位）；**必须手持武装拴绳**（不在手上 = 只悬停，不会误触）。")
+                .translation("config.promaid.combat.tetherLeashSteer").define("tetherLeashSteer", true);
         COMBAT_TETHER_HANG = BUILDER.comment("悬挂距离（格，默认 2.6，0.5~6.0）：玩家脚底到女仆脚底的垂直距离，也就是那根「不会断」的绳子的长度（**她站在地上/贴着地形时改成「水平拉开这么远」**——实测六百七十二 玩家反馈「平时待命没有起飞的时候，直接跟女仆的建模完全重叠」，那一档两个建模并排站着，像被拴着伴走）。默认 2.6 = 她的脚底高过你的视线（眼高约 1.62 格），前方视野让开（实测六百七十一 玩家反馈「视线会被女仆的建模挡住」）；调小 = 人贴在她身上（1.8 以下两个碰撞箱会重叠），调大 = 吊得更低（更像吊机）。定位是平滑滑变的，不会上下横跳")
                 .translation("config.promaid.tether.hang").defineInRange("hang", 2.6, 0.5, 6.0);
         COMBAT_TETHER_GHOST_ALPHA = BUILDER.comment("【实测六百七十三 / 六百七十四】第一人称下的透明度（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明）。玩家原话：「有的时候还是会被女仆的模型挡到视野。而如果继续降低模型高度会导致玩家的高度太低容易被打中。渲染的话最好是改成半透明状态。而且仅限绑定玩家的第 1 视角会展示半透明状态。」\n\n【实测六百七十四 起：生效范围有两档】① **你挂着的那只女仆**（吊在她下面 / 骑着她，空袭档与扫帚档都算）；② **你骑的那把扫帚本体**（自己驾驶扫帚时扫帚模型就在视野里；吊在骑扫帚的女仆下面时也算）。都只对**你的第一人称**生效（第三人称、别的玩家、别人骑别的女仆/扫帚一律不动）。实现是把她的渲染类型换成原版「幽灵渲染」那一档（itemEntityTranslucentCull，同贴图）+ 顶点 alpha 乘这个系数——只压 alpha 没用，cutout 那一档**根本没开混合**（javap 实证）。她的模型本体与各图层一起变半透明，绳子照旧画。纯客户端，服务端不用改；异常时按不透明走，绝不因为渲染崩游戏")
@@ -2090,6 +2103,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_ALTITUDE_TOLERANCE = BUILDER.comment("占位高度容差（格，默认 10）：她比目标低不超过这么多格就视为已占位、直接走原链路（近战俯冲 / 远程盘旋）；同时也是起飞朝向的判据（容差内起飞走「背离 + 抬头」）")
                 .translation("config.promaid.airRaid.altitudeTolerance")
                 .defineInRange("altitudeTolerance", 10.0, 0.0, 64.0);
+        AIR_RAID_MAX_ALT = BUILDER.comment("空袭·相对目标的爬升上限（格，默认 48，0 = 不限）：她不许飞到「目标上方这么多格」以上——到了就**不再爬、也不再点烟花/激流/羽扇往上顶**，改为压机头滑翔下来。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌\"。空袭的高度判据原本只有一个 `onTargetAltitude`（相对**目标**的 Y，没有绝对上限），而目标本身会飞/会上升时，她就跟着一路往上，几路推力叠加就是几百格。\n\n【口径】判据取**目标**（当前锁定的敌人）的 Y + 本值；0 = 关掉这条约束（回到旧行为）。只压\"向上\"：她仍然可以往下俯冲（那是空袭的进攻动作）。")
+                .translation("config.promaid.airRaid.maxAlt")
+                .defineInRange("maxAlt", 48.0, 0.0, 256.0);
         AIR_RAID_JUMP_TICKS = BUILDER.comment("起跳等待上限（tick，默认 3）：先跳一下离地、下一 tick 再放烟花才吃得到推力；这么久还没离地（低矮空间）就放弃本轮")
                 .translation("config.promaid.airRaid.jumpTicks")
                 .defineInRange("jumpTicks", 3, 0, 20);

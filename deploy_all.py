@@ -5,6 +5,10 @@
 1.20.1 Forge 47.4.21      : patched/promaid-1.3.0-forge-1.20.1.jar   (user's main modpack)
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+v1.3.0 实测六百八十七（仿创造飞行并入 neo 树 = PR #24 本地修复版 + 有飞行能力禁用搭路
++ 空袭爬升上限与「丢锁敌后拴绳当操纵杆」+ 绑定 HUD 两行 + 服务端一轮审计）：
+patched/promaid-1.3.0-neoforge-1.21.1.jar 与 patched/promaid-1.3.0-forge-1.20.1.jar 同名覆盖，
+前面那条 686 说明照旧适用。
 
 v1.3.0 实测六百五十四（扫帚模式）+ 实测六百五十三（烧制卡死）+ v1.3.1 实测六百五十五（扫帚实测六条）
 + v1.3.2 实测六百五十六（烧制清单网格乱列 / 骑扫帚反复被拉回 / 移动照搬原版 / 起飞 1 格与接敌升 8 格 / 跟随同款）

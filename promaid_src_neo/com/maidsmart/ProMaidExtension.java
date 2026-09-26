@@ -104,6 +104,8 @@ public class ProMaidExtension implements ILittleMaid {
         // v1.1.0 实测一百二十五：蛋糕投喂（女仆吃完蛋糕 +10 好感；玩家蛋糕右击
         // 自己的女仆 = 立刻吃 + 消耗蛋糕 + 蓝色系统消息/气泡）
         NeoForge.EVENT_BUS.register(new com.maidsmart.task.MaidCakeEatHandler());
+        // 实测六百七十三：仿创造飞行（事件驱动：core 行为被实例化了却从不被咨询，见控制器类注释）
+        NeoForge.EVENT_BUS.register(new com.maidsmart.flight.MaidFreeFlightHandler());
         // v1.1.0 实测二百三十三：随手种树任务级驱动注册（模块自监听 ServerTick，
         // 扫"任务=伐木"的女仆——触发=伐木模式，与行为运行窗口无关）
         com.maidsmart.task.MaidPlanting.ensureRegistered();
@@ -349,6 +351,9 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
         // v1.2.0 实测五百五十五：客户端重同步（修"服务端活着、客户端连实体都没有"）
         com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
+        // 实测六百七十三：仿创造飞行手动触发（/maid_smart freeflight_goto / freeflight_follow /
+        // freeflight_enemy：坐标档与两个专用服务器验收入口）
+        com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
     }
 
     /**
