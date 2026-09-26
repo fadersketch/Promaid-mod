@@ -80,6 +80,25 @@ public final class MaidFreeFlightController {
         return maid != null && STATE.getOrDefault(maid.getUUID(), ST_OFF) == ST_FLYING;
     }
 
+    /**
+     * 我们此刻是否**正在控制她的移动**（飞行中 / 软着陆中）。
+     *
+     * 【给"走位型"链路让位用（实测六百八十）】用户反馈："她创造飞行跟上玩家的时候依然会进行搭路
+     * ——因为移动是搭路的逻辑，所以会影响移动速度。" 搭路（{@code BridgeUpBehavior}，core 245）
+     * 是一边铺方块一边用走路的 move 驱动她，与我们的飞行抢移动。作者给"飞行跟随"已经加过同款
+     * 让位（见 {@code BridgeUpBehavior} 里对 {@code MaidFlightFollowBehavior.isFollowing} 的两处检查），
+     * 这里照同一套写法给创造飞行补上。
+     *
+     * 注意**不含"落地待命"档**（STANDBY）：那一档她已经落地、由 TLM 正常跟随，搭路该照常工作。
+     */
+    public static boolean isControlling(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        int st = STATE.getOrDefault(maid.getUUID(), ST_OFF);
+        return st == ST_FLYING || st == ST_SOFT_LAND;
+    }
+
     /** 能不能飞（命令校验与主循环共用同一口径） */
     public static boolean canFly(EntityMaid maid) {
         try {
@@ -179,6 +198,11 @@ public final class MaidFreeFlightController {
     private static final int ST_FLYING = 1;
     private static final int ST_SOFT_LAND = 2;
     private static final int ST_STANDBY = 3;
+    /**
+     * 起飞判定用的"被拉开"距离（格）。与落地判定的 8 格形成**滞回**：
+     * 落地后她若被 TLM 的跟随带着溜达出 6 格才需要重新起飞，避免刚落地就起起落落。
+     */
+    private static final double TAKEOFF_DIST = 6.0;
     /** 判定"主人在动"的水平位移阈值（格/tick）：0.03 ≈ 0.6 格/秒 */
     private static final double OWNER_MOVE_EPS = 0.03;
 
@@ -196,7 +220,7 @@ public final class MaidFreeFlightController {
             boolean allowed = canFly(maid);
             // 【实测六百七十九】战斗意图优先：有敌人时不要把她往主人身边拉（那正是用户报的冲突）
             LivingEntity enemy = allowed ? combatTarget(maid) : null;
-            boolean enemyTooFar = enemy != null && horizontalDist(maid, enemy) > 4.0;
+            boolean enemyTooFar = enemy != null && horizontalDist(maid, enemy) > 6.0;
 
             // ① 软着陆相位：恒速下降（保持无重力）
             if (st == ST_SOFT_LAND) {
@@ -291,8 +315,8 @@ public final class MaidFreeFlightController {
                     && trackOwnerMovingSnapshot(maid, owner)) {
                 return "主人在动";
             }
-            if (horizontalDist(maid, owner) > 4.0) {
-                return "离主人 > 4 格";
+            if (horizontalDist(maid, owner) > TAKEOFF_DIST) {
+                return "离主人 > " + (int) TAKEOFF_DIST + " 格";
             }
             if (Math.abs(maid.getY() - owner.getY()) > 2.0) {
                 return "高差 " + String.format("%.1f", Math.abs(maid.getY() - owner.getY())) + " > 2";
@@ -416,8 +440,8 @@ public final class MaidFreeFlightController {
         if (ownerMoving) {
             return true;                                  // 主人在走
         }
-        if (horizontalDist(maid, owner) > 4.0) {
-            return true;                                  // 被拉开
+        if (horizontalDist(maid, owner) > TAKEOFF_DIST) {
+            return true;                                  // 被拉开（阈值与"落地即 >8 格"形成滞回，防抖）
         }
         if (Math.abs(maid.getY() - owner.getY()) > 2.0) {
             return true;                                  // 高差（他上坡/爬塔/上天）
