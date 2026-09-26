@@ -311,6 +311,12 @@ public final class MaidFlightKit {
         if (hasInHandsOrBorrowed(maid, s -> isElytraLike(s, maid))) {
             return true;
         }
+        // v1.3.0(beta) 实测六百八十【饰品栏（Curios）里的鞘翅也算】玩家原话："在饰品栏里面的鞘翅
+        // 应该也可以作为启动我们的空袭的激活条件之一"——Curios 不在场/她没饰品栏槽位时这条恒 false
+        //（全反射软兼容，见 CuriosElytraCompat），行为与旧版一字不差。
+        if (CuriosElytraCompat.findElytra(maid, s -> isElytraLike(s, maid)) != null) {
+            return true;
+        }
         return hasInBackpack(maid, s -> isElytraLike(s, maid));
     }
 
@@ -909,6 +915,22 @@ public final class MaidFlightKit {
                         ely = h.extractItem(slot, 1, false);
                     }
                 }
+                // v1.3.0(beta) 实测六百八十【第三来源：饰品栏（Curios）】：玩家原话"在饰品栏里面的
+                // 鞘翅应该也可以作为启动我们的空袭的激活条件之一，并且等效消耗耐久"——把她饰品栏里
+                // 那件鞘翅**取出来穿到胸甲槽**：原版滑翔闸门（updateFallFlying）只认胸甲槽的鞘翅，
+                // 穿上之后耐久就由原版"滑翔每 20 tick 扣 1 点"照常扣——与从背包翻出一件穿上
+                // **同一条路**，所以说"等效"。取用优先级排在背包/双手之后（不强抢她手上正拿的）。
+                if (ely.isEmpty()) {
+                    ItemStack fromCurios = CuriosElytraCompat.takeElytra(maid,
+                            s -> isElytraLike(s, maid) && isArmorElytra(s), ItemStack.EMPTY);
+                    if (fromCurios == null) {
+                        fromCurios = CuriosElytraCompat.takeElytra(maid,
+                                s -> isElytraLike(s, maid), ItemStack.EMPTY);
+                    }
+                    if (fromCurios != null) {
+                        ely = fromCurios;
+                    }
+                }
             }
             if (!ely.isEmpty()) {
                 ItemStack old = maid.getItemBySlot(EquipmentSlot.CHEST);
@@ -1189,7 +1211,8 @@ public final class MaidFlightKit {
         }
         return "鞘翅判定: 胸甲=" + describeElytraCandidate(maid.getItemBySlot(EquipmentSlot.CHEST), maid, owner)
                 + " 主手=" + describeElytraCandidate(maid.getMainHandItem(), maid, owner)
-                + " 副手=" + describeElytraCandidate(maid.getOffhandItem(), maid, owner);
+                + " 副手=" + describeElytraCandidate(maid.getOffhandItem(), maid, owner)
+                + " 饰品栏=" + CuriosElytraCompat.describe(maid, s -> isElytraLike(s, maid));
     }
 
     private static String describeElytraCandidate(ItemStack stack, net.minecraft.world.entity.LivingEntity entity,
@@ -1371,6 +1394,17 @@ public final class MaidFlightKit {
                 if (isElytraLike(h.getStackInSlot(slot), maid)) {
                     return h.extractItem(slot, 1, false);
                 }
+            }
+            // v1.3.0(beta) 实测六百八十：最后再问一次她的饰品栏（Curios）——与 equip 同一取舍次序
+            //（先带护甲的"鞘翅胸甲"，再普通鞘翅）。飞行跟随会记下换下来的原胸甲并在收手时还回去。
+            ItemStack fromCurios = CuriosElytraCompat.takeElytra(maid,
+                    s -> isElytraLike(s, maid) && isArmorElytra(s), ItemStack.EMPTY);
+            if (fromCurios == null) {
+                fromCurios = CuriosElytraCompat.takeElytra(maid,
+                        s -> isElytraLike(s, maid), ItemStack.EMPTY);
+            }
+            if (fromCurios != null) {
+                return fromCurios;
             }
         } catch (Throwable ignored) {
         }
