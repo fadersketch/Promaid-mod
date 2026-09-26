@@ -57,6 +57,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *
  * <p>本模组手工编译、无 refmap，{@code method} 按**运行时名**逐字匹配；1.21.1 运行时是官方名，
  * 所以这里写 {@code attack}（1.20.1 那边没有重锤，本混入不进那棵树）。
+ *
+ * <p>── 实测六百八十六【扫帚那一档不开这个后门】──
+ * 玩家原话：「我说的重锤是指女仆在使用近战空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击。
+ * 这个时候会不会吃到重锤的加成效果以及附魔呢？不行的话，把这边的后门开了，扫帚模式不要开。」
+ * 实际生效范围由 {@link GunnerTetherManager#consumeRideFall} 决定：**近战空袭那一档**照旧记账
+ * （她驮着你收翅俯冲时，这一锤按你跟着下落了多少格算，增伤与密度/破甲/风爆一并生效），
+ * **扫帚那一档恒返回 0** → 这里 {@code ride = 0} → 不写 {@code fallDistance} → 原版猛击要的下落
+ * 距离在乘客身上本来就不累积，等于"扫帚档完全恢复原版"。日志（「玩家=…」那一行）同理只在空袭档出现。
  */
 @Mixin(Player.class)
 public abstract class PlayerMaceRideFallMixin {

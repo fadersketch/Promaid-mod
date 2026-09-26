@@ -24,7 +24,9 @@ public static final ModConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
 /** v1.2.2 实测六百二十：散步速度倍率默认迁移标记（0.7 → 0.4，内部，一次性） */
 public static final ModConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
 /** v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认迁移标记（10 → 15，内部，一次性） */
-public static final ModConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
+    public static final ModConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
+    /** 【实测六百八十六】接敌爬升高度默认 15 → 12 的一次性迁移标记 */
+    public static final ModConfigSpec.BooleanValue BROOM_CLIMB_12_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ModConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ModConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -2034,8 +2036,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
-        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 15，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
-                .translation("config.promaid.broom.climb").defineInRange("climb", 15.0, 2.0, 32.0);
+        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十六：默认 15 → 12】玩家原话：\"把扫帚盘旋的默认配置高度改为12格。\"——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
+                .translation("config.promaid.broom.climb").defineInRange("climb", 12.0, 2.0, 32.0);
         COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
@@ -2054,6 +2056,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // "旧默认留下的"和"玩家自己就要 10"——用标记钉死只迁一次，之后玩家想写回 10 随便写。
         BROOM_CLIMB_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（10→15）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.broom.climbMigrated").define("climbMigrated", false);
+        // v1.3.0(beta) 实测六百八十六：同一项**第二次**改默认（15 → 12）的一次性标记。
+        // 【为什么必须换一个新标记】上面那个在老档里早就落盘为 true（都迁过一回了），复用它
+        // 等于"已经迁过了" → 一个字节都不会动。判据与 682 同款：**只有还停在旧默认 15 的档**才搬，
+        // 玩家自己调过的值一律不碰。
+        BROOM_CLIMB_12_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（15→12）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.broom.climb12Migrated").define("climb12Migrated", false);
         BUILDER.pop();
 
         // ---- v1.3.7「武装拴绳」（配置面板：战斗与自保 → 扫帚模式板块末尾）----
@@ -2071,7 +2079,7 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.tether.glowMark").define("glowMark", true);
         COMBAT_TETHER_BROOM_EXTRA = BUILDER.comment("【实测六百七十五】扫帚档的额外下沉（格，默认 0.3，0.0~2.0）。\n\n需求原文：\"扫帚飞行的时候再把玩家的高度再往下调个0.3格左右吧。现在还是会有少量的重叠。\"\n\n扫帚模式下她是**骑在扫帚上**的，而扫帚模型比她的脚底还低——只按「悬挂距离」吊在你下面时，你的人和扫帚会叠在一起。这一项就是在悬挂距离之上**再往下让这么多**（只在扫帚档生效：任务在扫帚模式、或她此刻正骑着世界里的扫帚）。0 = 关掉这个补偿。")
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
-        COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n玩家原话：\"我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\"\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（照原版 checkSlowFallDistance 的 0.5 格/tick 口径钳回 1.0，免得慢慢飘着也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
+        COMBAT_TETHER_MACE_SMASH = BUILDER.comment("【实测六百七十六】二号位重锤猛击（默认开，**1.21.1 专属**：重锤是 1.21 才有的东西，1.20.1 那边没有这一项）。\n\n玩家原话：\"我刚刚在运行游戏的时候，让女仆进行了近战空袭，然后我手里面也拿了个重锤。那么我可以正常触发这个重锤的增伤等效果吗？我更希望玩家可以吃到这些效果。而不受坐下这个状态影响。\"\n\n【为什么原来吃不到】重锤的下落加成全部读 fallDistance 这一个字段（MaceItem.canSmashAttack = fallDistance > 1.5 && !isFallFlying()，伤害再按 4f / 12+2(f-3) / 22+(f-8) 三段算），而这个字段只在 Entity.move → Entity.checkFallDamage 里累加——**乘客不走 move**（rideTick 先清零速度，再由载具的 positionRider 直接 setPos，我们的悬挂定位也是这么做的），所以吊在她下面的你 fallDistance 恒为 0，一锤都砸不出猛击。\n\n【实测六百八十六：只对空袭那一档生效】玩家原话：\"我说的重锤是指女仆在使用近战空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击……把这边的后门开了，扫帚模式不要开。\" 所以**近战空袭驮着你俯冲时照旧按下落算**，而**扫帚档一个字都不记**——扫帚是运输、不是俯冲，挂着扫帚平飞慢慢降两三格不该换来一记猛击（实测六百八十四 把门槛调低之后扫帚那种慢降也能攒得出来，本批按玩家要求收回去）。扫帚档也不会打「重锤门 玩家=」那一行。\n\n【现在怎么算】既然动的是她，就按**你的实际下降**替你记一份：她这一段俯冲下落了多少格，你的这一锤就按多少格算（原版那套音效、周围击退、增伤全都会自己跑通）。一次下落只换一锤（取用即清零，同原版猛击成功后 resetFallDistance）；悬停/慢降不计（单次 2 tick 采样下降不足 0.2 格 = 0.1 格/tick 就把累计钳回 1.0，免得悬停时的漂移也攒出超重击）；她落地 = 清零。\n\n关掉 = 完全恢复原版（挂着时砸不出猛击）。")
                 .translation("config.promaid.tether.maceSmash").define("maceSmash", true);
         COMBAT_TETHER_PULL = BUILDER.comment("【实测六百七十七】拉扯：绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求原文：\"我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\"\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，玩家原话\"原版的拴绳逻辑是玩家牵着女仆走\"）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
                 .translation("config.promaid.tether.pull").define("pull", true);
