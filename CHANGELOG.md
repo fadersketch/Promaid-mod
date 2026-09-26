@@ -1,4 +1,36 @@
-﻿## 实测六百八十九【面板排版三修：武装拴绳那条 1000+ 字介绍拆成 4 条短行（旧版窄窗口下比一页还高，把第 1 页挤成只剩板块标题、正文压住翻页/保存按钮）+ 注释绘制加下界兜底 + markdown 星号不再原样画在界面上（版本号不变，仍是 v1.3.0 beta）】
+﻿## 实测六百九十【玩家崩溃报告修复：跨维度跟随扫描「边遍历原版实体表、边把女仆跨维度传送」= fastutil 迭代器槽位越界 → 整合服务端「Exception in server tick loop」整个崩回桌面（版本号不变，仍是 v1.3.0 beta）】
+
+> 玩家发来的崩溃报告（`crash-2026-09-26_23.00.29-server.txt`，2026-09-26 23:00:29，跑的是已发布的 **1.2.3**）：
+> `java.lang.ArrayIndexOutOfBoundsException: Index 877 out of bounds for length 513` → `it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap$MapIterator.nextEntry` → `…$ValueIterator.next` → `com.google.common.collect.Iterators$1.next` → `com.maidsmart.ProMaidExtension.onServerTick(ProMaidExtension.java:248)` → 「Exception in server tick loop」。同一 tick 里还有一条 `Index 544 out of bounds for length 513`，来自第三方模组 maidbeacon 挂在同名事件上的处理器（下面第三节说清它为什么没崩）。
+
+### 一、根因（javap 反编译实证，不是推测）
+
+- **那一层 for 遍历的是一张"活视图"，不是拷贝**：`onServerTick` 里 `for (Entity en : lvl.m_8583_())`（1.21.1 侧 `getAllEntities()`）——`ServerLevel.m_8583_()` 的字节码是 `LevelEntityGetterAdapter.getAll()` → `EntityLookup.getAllEntities()` = **`Iterables.unmodifiableIterable(byId.values())`**，而那个 `byId` 就是 `it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap`。**1.20.1 与 1.21.1 两版实现逐句一致（两版都核过 javap）**：也就是说，遍历期间原版实体表里加一个/删一个实体，手上那个迭代器就与表对不上了。
+- **为什么会"越界"而不是"少看几个"**：fastutil 链式表的迭代器不按下标数组走，而是按**槽位号**在 `long[] link` 上跳——反编译 `MapIterator.nextEntry()` 的第一句就是 `next = (int) link[curr]`。实体表被结构性改动（增实体 / 删实体 / 换维度）之后，迭代器手里那个槽位与 link 里的链指针就跟当前数组对不上，下一跳直接落到数组长度之外：玩家这份报的是 `link[877]`，而当时那张表只有 513 个槽（`877 > 512`，是另一套表状态里的编号）。
+- **触发它的是我们自己**：那一层循环体里调用的 `MaidChunkLoadManager.followIfCrossDimension(fm)` 在主人换了维度时会对女仆做**跨维度 `teleportTo`**——传送会把她从**本维度**的 `byId` 里删掉（日志同一毫秒就有「[promaid/离场] … reason=CHANGED_DIMENSION」），并顺带触发 `EntityLeaveLevelEvent` 事件链。**同一个迭代器紧接着往下读 → 越界 → 异常从 `onServerTick` 抛出去（那一层循环外面没有任何 try）→ 服务器 tick 循环整个崩掉**。
+- **为什么以前没炸**：这条扫描每 5 秒才跑一次，而且只有「主人与女仆确实不在同一维度 + 主人身边有可站立点」时才真的传送。玩家那局一直在跨维度：22:59:54 还在刷「跨维度跟随：主人身边 16 格内无可站立点（高空/虚空）——等落地后再传」，23:00:29 落点一出现，传送立刻发生——正好落在遍历中间。
+- **一个实证细节**：同一份日志里，事件总线把 `Index 877` 那条也记了一遍「Exception caught during firing event」；而 `Index 544` 那条（第三方模组的）之所以没带走服务器，是因为它被 `followIfCrossDimension` 自己的兜底 `catch (Exception ignored)` 吞掉了——**这恰好说明当时那次传送内部已经出过一次同样的越界**，我们只是"运气好"没抛出去。
+
+### 二、改了什么（两树镜像；一处工具类 + 66 处调用）
+
+- **新增 `com.maidsmart.tool.EntitySnapshot`（两树各一份，逐字一致，只差访问器名）**：`EntitySnapshot.of(ServerLevel)` 先把实体表**拷一份**再交给调用方遍历。语义是"这一趟看到的是这一趟开始时就在场的那批实体"——这正是本模组所有全量扫描循环原本的假设（下一趟扫描自然看到新出现的实体）；代价是一次 O(实体数) 的引用复制（微秒级，而这些循环本来就是 O(实体数) 的全量扫描，大多还是几十 tick 才跑一次）。工具类的 javadoc 里写全了上面第一节那套证据链。
+- **两树各 33 处直接遍历全部换成快照（共 66 处）**：本模组**不再有任何一处**直接 `for (…)` 遍历原版实体活视图——覆盖 `ProMaidExtension`（3 处，含崩溃点）、`MaidChunkLoadManager`（4 处）、`AutoCombatSwitch`（302/314 行的大循环）、`GunnerTetherManager`、`FishingChairService`、`SchedulePacketsPlan`、`MaidPlanting`、`MaidHeldLight` 等 26 个文件。**不只修"看起来会增删实体"的那几处**：循环体里调用的任何代码都可能顺手改动实体表（我们自己的跨维传送 / 一键集合召回 / 掉物品清理，车万女仆的任务与 AI，其他模组挂在事件上的回调），靠逐处判断"我这条安不安全"是判不完的——所以口径统一成一句：**遍历实体表 = 先取快照**。
+- **崩溃点①**（`ProMaidExtension.onServerTick` 的跨维跟随扫描）与**崩溃点②**（`MaidChunkLoadManager.tick` 的受困救援扫描，那里同样在循环里 `teleportCore` 跨维度搬人）都在代码里写明原因与本批编号，免得以后有人"顺手改回直接遍历"。
+- **没有做**（如实写边界）：没动 `followIfCrossDimension` 里那个兜底 `catch (Exception ignored)`（吞异常不好，但改成不吞会让跨维跟随的每一种失败都变成崩服；那是另一件事，不在本批）；没动排班/召回/区块加载的触发时机与判据（本批只改"怎么遍历"，不改"什么时候传送"）；也没给第三方模组打补丁。
+
+### 三、第三方那一半（maidbeacon），以及玩家可能还会看到的日志
+
+- `Index 544 out of bounds for length 513` 的栈是 `maidbeacon@1.0.1-bugfix` → `com.mastermarisa.maidbeacon.event.MaidTracker.onEntityLeave` → `Iterables$UnmodifiableIterable.forEach` → 同一个 fastutil `nextEntry`：**它也在"实体离开维度"事件里遍历同一张活视图**，而那一刻正是我们这次传送把它删出本维度的时候。它的异常被 Forge 事件总线接住、只打了一条 ERROR（然后又落进我们的兜底 catch），**没有带走服务器**。
+- **本批不改它、也不绕它**：那是它自己仓库里同一类问题的修法（同样"先取快照"就行）。修完本批之后玩家日志里**可能仍会看到那一条 maidbeacon 的 ERROR**——它只打日志、不会崩游戏；要不要报给那个模组的作者，由你决定。
+
+### 四、验证
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=171 SKIP=9 FAIL=0**（本批没有新增注入点）；打包门禁（`verify_jar_classes.py` + mixin 包登记 + lang json）全过；出 `promaid-1.3.0-forge-1.20.1.jar`（10,873,808 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,952,230 B），**同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）并逐处核对。
+- `_vt690.py` 只读核对 **PASS=21 FAIL=0**：两树工具类逐字一致、两树除工具类外**零处**直接遍历实体活视图、两树各 33 处快照、两个崩溃点都走快照且写明原因、`out_*` 里有 `EntitySnapshot.class`。
+- `_jarchk690.py` jar 内容核对 **PASS=16 FAIL=0**：两个 jar 里都有 `EntitySnapshot.class`；**`javap` 直接看进包字节码**——`ProMaidExtension.onServerTick` 里有 `EntitySnapshot.of` 调用、**且不再直接调 `m_8583_`/`getAllEntities`**，`MaidChunkLoadManager.tick` 同样；26 个调用类（含内部类）都引用了新工具类；jar 内 changelog 与源码那份逐字节一致。
+- 两个专用服（1.20.1 Forge / 1.21.1 NeoForge）启动实测 **PASS**（`Done` 后再盯 30 秒无异常）。
+
+## 实测六百八十九【面板排版三修：武装拴绳那条 1000+ 字介绍拆成 4 条短行（旧版窄窗口下比一页还高，把第 1 页挤成只剩板块标题、正文压住翻页/保存按钮）+ 注释绘制加下界兜底 + markdown 星号不再原样画在界面上（版本号不变，仍是 v1.3.0 beta）】
 
 > 玩家原话：「现在已经相当完善了，唯一一个不好的就是手册的这几个页面的排版不行，首先一个是介绍过多，直接撑满了整个屏幕，需要精简化，然后就是一个屏幕太空了，里面啥东西都没有。」
 
