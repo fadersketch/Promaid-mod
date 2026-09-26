@@ -92,8 +92,46 @@ import net.minecraft.world.item.ItemStack;
  * 弹匣满时 canReload 为 false，但那一拍 {@link #canFeed} 为真，「打得响 **或** 换得上」的或门照旧过。
  *
  * 反射不可用（没装 TACZ / 版本改名）时退回 {@link #looseAmmoScan}，行为与旧版一字不差。
- * 卓越前线（SBW）没有对应的公开查询方法（本机未装、无法 javap 实证，且实测六百六十六 已用它的
- * {@code hasEnoughAmmoToShoot} 管「打得响」那一半）→ 它的「换得上」仍走 looseAmmoScan。
+ *
+ * ============ v1.3.0 实测六百九十五【卓越前线的「换得上弹」那一半也交给它自己】 ============
+ *
+ * 【玩家原话】「现在我把卓越前线也下过来了，你也改一改吧。」——实测六百九十四 只把 TACZ 那一半
+ * 交给它自己；卓越前线当时本机未装、无法 javap 实证，仍在走 {@link #looseAmmoScan} 的老口径
+ * （「任意 5 类 SBW 弹药之一都算」、不看口径）。现在 SBW 0.8.9.1 两版 jar 都装上了，实证到位。
+ *
+ * 【现在：原样调用 SBW 的 {@code GunData.shouldStartReloading(Entity)}】它就是 TLM 自己的卓越前线
+ * 开火链路里那句「该换弹了吗」（javap 实证，1.20.1 与 1.21.1 两版字节码逐句相同）：
+ * <pre>
+ *   TLM SWarfareCompatInner.doGunReload(女仆, gunData):
+ *         gunData.shouldStartReloading(女仆) ? gunData.startReload()
+ *                                          : (gunData.shouldStartBolt() ? gunData.startBolt() : …)
+ *
+ *   GunData.shouldStartReloading(entity)
+ *         = !reloading() &amp;&amp; !useBackpackAmmo() &amp;&amp; !hasEnoughAmmoToShoot(entity)
+ *           &amp;&amp; hasBackupAmmo(entity)
+ *
+ *   GunData.hasBackupAmmo(entity) = countBackupAmmo(entity) &gt; 0
+ *   GunData.countBackupAmmo(entity):
+ *         创造玩家 / 创造弹药箱            → Integer.MAX_VALUE（无限，永远换得上）
+ *         否则                            → countBackupAmmoItem(entity)
+ *                                           × AmmoConsumer.getLoadAmount() + virtualAmmo
+ *   其中 countBackupAmmoItem → 该枪 selectedAmmoConsumer().count(gunData, entity)：
+ *         **只数这把枪自己认的那一类弹药**（口径必须对得上），纯只读计数、不扣物品。
+ * </pre>
+ * 两条边界与 TACZ 侧是同一个道理：① {@code useBackpackAmmo()}（弹匣容量 ≤ 0、直接从背包吃弹的枪）
+ * 那一支返回 false，但那些枪的「打得响」本来就把背包弹算进去（{@code currentAvailableAmmo} =
+ * {@code countBackupAmmo}），{@link #canFeed} 已覆盖；② 弹匣满时它返回 false，而那一拍
+ * {@link #canFeed} 为真，「打得响 **或** 换得上」的或门照旧过。
+ *
+ * 【为什么用 shouldStartReloading 而不是裸的 hasBackupAmmo】这一条与 TACZ 侧的
+ * {@code AbstractGunItem.canReload} 是同一个角色：**开火链路真正会去用的那个判定**。
+ * 「门禁说能换弹」与「TLM 真的会去换弹」必须是同一句话，否则又会出现「判她齐备、她却永远在重装」。
+ *
+ * 【能量武器照旧免检】卓越前线的二次灾变 / 超级星星炮不吃常规弹药（内部 ForgeEnergy 充能，
+ * 实测六百六十六 起的老口径：「弹药判定对它们恒空」）——无论走 shouldStartReloading 的哪一支
+ * 都会判否，所以 {@link #canReload} 里对能量武器**先放行**，绝不因为换了个 API 把她们判成缺弹药。
+ *
+ * 反射不可用（没装 SBW / 版本改名）时同样退回 {@link #looseAmmoScan}，行为与旧版一字不差。
  */
 public final class GunCompat {
     private GunCompat() {
@@ -322,6 +360,60 @@ public final class GunCompat {
         }
     }
 
+    /* ---------------- v1.3.0 实测六百九十五：卓越前线自己的「这把枪换得上弹吗」 ----------------
+     *
+     * {@code GunData.shouldStartReloading(Entity)} ——见类注释那一节的字节码摘录。它就是 TLM 自己的
+     * 卓越前线开火链路（{@code SWarfareCompatInner.doGunReload}）用的同一个方法：口径比对
+     * （只数这把枪认的那类弹）、「创造弹药箱 = 无限」全由 SBW 自己算。公开实例方法（挂在从枪读出来的
+     * {@code GunData} 上，先用静态 {@code from(ItemStack)} 取），两版签名一致，照旧走反射。
+     */
+    /** SBW 反射句柄：[0]=GunData 类，[1]=from(IS)（静态），[2]=shouldStartReloading(Entity)；
+     *  空数组 = 不可用 */
+    private static volatile Object[] SBW_RELOAD_API;
+    private static final Object SBW_RELOAD_LOCK = new Object();
+
+    private static Object[] sbwReloadApi() {
+        Object[] api = SBW_RELOAD_API;
+        if (api != null) {
+            return api;
+        }
+        synchronized (SBW_RELOAD_LOCK) {
+            if (SBW_RELOAD_API == null) {
+                try {
+                    Class<?> cls = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                    SBW_RELOAD_API = new Object[]{
+                            cls,
+                            cls.getMethod("from", ItemStack.class),
+                            cls.getMethod("shouldStartReloading",
+                                    net.minecraft.world.entity.Entity.class)};
+                } catch (Throwable ignored) {
+                    SBW_RELOAD_API = new Object[0];
+                }
+            }
+            return SBW_RELOAD_API;
+        }
+    }
+
+    /**
+     * v1.3.0 实测六百九十五：**这把枪**此刻换得上弹吗（null = 反射不可用，交回旧判据）。
+     * 与 TLM 自己的卓越前线换弹链路用的是**同一个方法**（{@code GunData.shouldStartReloading}）。
+     */
+    private static Boolean sbwCanReload(EntityMaid maid, ItemStack gun) {
+        Object[] api = sbwReloadApi();
+        if (api.length == 0) {
+            return null;
+        }
+        try {
+            Object data = ((java.lang.reflect.Method) api[1]).invoke(null, gun);
+            if (data == null) {
+                return Boolean.FALSE; // GunData 读不出来 = 没有枪包数据（同 canShoot 的 100）
+            }
+            return (Boolean) ((java.lang.reflect.Method) api[2]).invoke(data, maid);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     /** 该物品是否 TACZ 弹药箱（实现 IAmmoBox 接口；TACZ 不在场恒 false） */
     public static boolean isAmmoBox(ItemStack stack) {
         if (stack == null || stack.m_41619_()) {
@@ -467,9 +559,11 @@ public final class GunCompat {
      *
      * <p>【口径】v1.3.0 实测六百九十四 之前是 实测五百六十八 那条老判据 {@link #looseAmmoScan}
      * （主手/背包里有**任意** tacz:ammo 就算，不校验口径）——玩家反馈「像冲锋枪跟狙击枪并不是只要
-     * 有远程武器和弹药就行」，指的就是这里。**现在改成原样调用 TACZ 自己的
-     * {@code AbstractGunItem.canReload}**（{@link #taczCanReload}，见类注释那一节）：它按口径认
-     * 散装弹、也认对得上的弹药箱，还顺带否掉弹匣已满 / 枪包数据缺失（坏枪）这几种情形。
+     * 有远程武器和弹药就行」，指的就是这里。**现在改成两家枪各自问自己**：TACZ 原样调用
+     * {@code AbstractGunItem.canReload}（{@link #taczCanReload}，实测六百九十四）；卓越前线原样
+     * 调用 {@code GunData.shouldStartReloading}（{@link #sbwCanReload}，实测六百九十五，与 TLM
+     * 自己的 SBW 换弹链路用的是同一个方法）。两者都按口径认弹、也认弹药箱，TACZ 那支还顺带否掉
+     * 弹匣已满 / 枪包数据缺失（坏枪）这几种情形；能量武器照旧免检（见方法体）。
      * 反射不可用（没装枪械 mod 等）时才回到 {@link #looseAmmoScan}——仍然是「宽进」的老口径，
      * 绝不在空中误判把她摔下去。
      */
@@ -477,19 +571,24 @@ public final class GunCompat {
         if (maid == null || gun == null || gun.m_41619_() || !isGun(gun)) {
             return false;
         }
-        // v1.3.0 实测六百九十四：TACZ 枪改问 TACZ 自己（口径比对 + 认弹药箱）。
-        // 只有"反射不可用"（返回 null）才回退宽松扫描；TACZ 明确回答 false（口径对不上）时
+        // 能量武器（二次灾变 / 超级星星炮）：不吃常规弹药、弹量由内部能量池给——SBW 的常规换弹
+        // 判定对它们恒否（实测六百六十六 的老口径：「弹药判定对它们恒空」），照旧直接放行，
+        // 绝不因为换了个 API 就把她们判成缺弹药。
+        if (isEnergyGun(gun)) {
+            return true;
+        }
+        // v1.3.0 实测六百九十四 / 六百九十五：两家枪各自问自己（TACZ canReload / SBW
+        // shouldStartReloading）——口径比对、弹药箱识别全由它自己算。
+        // 只有"反射不可用"（返回 null）才回退宽松扫描；它明确回答 false（口径对不上）时
         // **必须**照它说的算 false，绝不能回退——那正是玩家要挡掉的那种局面。
-        if (!isSbwGun(gun)) {
-            Boolean r;
-            try {
-                r = taczCanReload(maid, gun);
-            } catch (Throwable ignored) {
-                r = null;
-            }
-            if (r != null) {
-                return r;
-            }
+        Boolean r;
+        try {
+            r = isSbwGun(gun) ? sbwCanReload(maid, gun) : taczCanReload(maid, gun);
+        } catch (Throwable ignored) {
+            r = null;
+        }
+        if (r != null) {
+            return r;
         }
         return looseAmmoScan(maid, gun);
     }
