@@ -6,6 +6,21 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测六百九十八（v1.3.0 beta，同名覆盖，未发版）：三件事——
+① 建造女仆不再被打死：日志实证（2026-09-27 latest.log）森近霖之助两次出事都是同一形状——
+   「主动参战」把他从 maid_smart:build 切成 touhou_little_maid:attack 的那一拍，建造护盾
+   （实测二百七十三）按「当前任务是不是建造」判定当场失效，2 秒后被下界合金巨兽打死。
+   修法两处互不依赖：建造女仆默认不参战（战斗模式分类表点名 maid_smart:build=近战/远程
+   可恢复旧行为）+ 护盾跟「建造女仆」走（参战会话中战前任务=建造也算建造中，整场不掉）。
+② 幽灵建模的真正机制（原版字节码实证）：EntityLeaveLevelEvent = onTrackingEnd，区块视线
+   档位降到 HIDDEN 时逐实体发（此刻 setRemoved 未执行 → reason=null）；副作用
+   ChunkMap.removeEntity 给所有看过她的玩家发删包。三道门：持票即时跟人（followTickets
+   每 tick 对账，旧版 5 秒）、复活落点当场补票（ensureTicketNow）、可见性自愈看门狗
+   （ChunkMap.tick TAIL 上查"主人客户端认不认得她"，认不得当场重建，96 格内才管）。
+③ 扫帚待命落地：⑥.③"没目标也没在跟"那一档从 hoverInPlace 改成降回地面待命
+   （脚下探地 24 格，找不到地照旧悬停绝不往下扎；主人飞在天上也不落地）。
+   新配置键 combat.broom.idleLand（默认开）。
+
 实测六百九十五（v1.3.0 beta，同名覆盖，未发版）：卓越前线的「有弹药」这一条也交给它自己——
 实测六百九十四 只交了 TACZ 那一半（当时卓越前线本机未装、无法 javap 实证，仍走口径不敏感的
 宽松扫描）。现在两台实例的 SBW 0.8.9.1 都装上了，GunCompat.canReload 对卓越前线枪原样调用
