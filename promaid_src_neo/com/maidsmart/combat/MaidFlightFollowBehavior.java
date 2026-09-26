@@ -1281,10 +1281,16 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
 
     /** 把视线钉在目标点上（滑翔的操纵杆就是视线）；takeoff=true 时至少抬头 TAKEOFF_PITCH 度 */
     private static void faceToward(EntityMaid maid, Aim aim, boolean takeoff) {
-        double dx = aim.x - maid.getX();
-        double dz = aim.z - maid.getZ();
+        // 【v1.3.0(beta) 实测六百九十六：飞行危险环境避让】她这一路要"飞向"的那个点先过一遍
+        // 危险方块表（MaidFlightHazardGuard）：航段会穿进岩浆/火/危险方块就侧向绕开、绕不开
+        // 就抬升，机头跟着让开——滑翔的操纵杆就是视线，所以"改视线方向"就是飞行避让。
+        // LookControl 仍指向**原目标**（下面 applyRotation 传的还是 aim），
+        // 只在"这一 tick 往哪看"这一件事上换成让开后的点；盘旋/跟随各自的逻辑一个字没动。
+        Vec3 p = MaidFlightHazardGuard.detour(maid, maid.position(), aim.pos());
+        double dx = p.x - maid.getX();
+        double dz = p.z - maid.getZ();
         double dh = Math.sqrt(dx * dx + dz * dz);
-        double eyeT = aim.centerY();
+        double eyeT = p.y + aim.height * 0.5;
         double eyeM = maid.getY() + maid.getBbHeight() * 0.5;
         float yaw = (float) (Math.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
         float pitch = (float) (-(Math.atan2(eyeT - eyeM, Math.max(1.0E-4, dh)) * (180.0 / Math.PI)));

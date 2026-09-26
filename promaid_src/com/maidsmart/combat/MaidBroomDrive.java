@@ -1490,6 +1490,12 @@ public final class MaidBroomDrive {
             return;
         }
         aim = unstick(maid, broom, aim); // v1.3.0(beta) 实测六百六十四：卡墙脱困
+        // 【v1.3.0(beta) 实测六百九十六：飞行危险环境避让】"想去哪"里若那一段会穿进
+        // 危险方块（岩浆/火/岩浆块…），侧向绕开或抬升爬过去——飞行一侧本来完全没有这道
+        // （地面的危险方块避让全挂在寻路上，空中那份被显式跳过）。放在最后：脱困（顶出
+        // 方块）优先于绕行；夹取仍在本方法下游（clampToHome 已经先跑过一遍，这里的修正
+        // 是"别进危险格"的局部小位移，不改圈心规矩）。
+        aim = MaidFlightHazardGuard.detour(maid, broom.m_20182_(), aim);
         Vec3 cur = broom.m_20184_();
         double dx = aim.f_82479_ - broom.m_20185_();
         double dy = aim.f_82480_ - broom.m_20186_();

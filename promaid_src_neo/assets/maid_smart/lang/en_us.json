@@ -74,6 +74,7 @@
   "task.maid_smart.broom.desc": "Broom: the maid takes a TLM broom out of her inventory, rides it herself (no player driver needed) and shoots with her held ranged weapon; when idle she hovers and follows her owner, and in home mode she patrols in a circle around the work area instead. Needs a broom + ranged weapon + ammo (for guns the ammo must fit the held gun - the gun mod itself decides, TACZ or Superb Warfare); if something is missing she waits in place and reports what is missing. Not used by auto task switching. While riding she can NOT cast magic or place TNT/end crystals/respawn anchors/beds - only her held weapon attacks",
   "config.promaid.combat.flightNoWallDamage": "Flight: Immune to Elytra Wall Impact",
   "config.promaid.combat.flightNoFallDamage": "Air Raid: Immune to Fall Damage",
+  "config.promaid.combat.flightDangerAvoid": "Flight: Avoid Dangerous Terrain",
   "config.promaid.combat.riptideDash": "Riptide Trident Dash",
   "config.promaid.combat.riptideFlightScale": "Riptide Thrust Scale (as propellant)",
   "config.promaid.flightFollow.trident": "Flight Follow: Trident Durability",
