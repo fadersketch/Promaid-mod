@@ -101,6 +101,30 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             new Anchor("Root", 1.8596f, 0.2022f),           // 根（28/28 必有，最后兜底）
     };
 
+    /**
+     * 【实测六百八十四】YSM 等"非 Gecko 渲染器"用的固定挂点（格，骨骼空间 Y 朝上）。
+     *
+     * <p>取的就是 {@link #ANCHORS} 里 {@code Root} 那一档的补偿量——它本来就是
+     * "从根骨骼到肩线"的平均偏移（n=17 个模型统计出来的），而 YSM 那边我们**连根骨骼都查不到**
+     * （没有 TLM 的骨骼表），于是直接把它当成"根在原点"来用：原点在脚下（+Y 朝上），
+     * 1.86 格正好落在肩线上，与 Gecko 那一路的落点同一个高度。
+     *
+     * <p>数不能拍：1.8596 = 17 个模型 {@code Elytra/ElytraLocator.pivot - Root.pivot} 的平均值
+     * /16（px → 格），数据见 changelog 实测四百八十。
+     */
+    private static final float FALLBACK_DY = 1.8596f;
+    private static final float FALLBACK_DZ = 0.2022f;
+    /** 【实测六百八十四】"走了固定挂点这条路"只报一次（免得 YSM 下每帧一行） */
+    private static final AtomicBoolean NO_BONE_PATH_LOGGED = new AtomicBoolean(false);
+
+    private static void noteNoBonePath() {
+        if (NO_BONE_PATH_LOGGED.compareAndSet(false, true)) {
+            com.maidsmart.tool.PromaidLog.log("鞘翅渲染",
+                    "当前渲染器不是 TLM 的 Gecko 女仆渲染器（YSM 等）→ 鞘翅挂点改用固定身体偏移"
+                            + "（肩线 +" + FALLBACK_DY + " 格），不再跳过整个图层");
+        }
+    }
+
     /** 锚定失败只报一次，避免刷日志（也便于实测时确认是否真的没找到骨骼） */
     private static final AtomicBoolean ANCHOR_WARNED = new AtomicBoolean(false);
 
@@ -141,13 +165,18 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         // （资源重载被中止、实体渲染器没建起来）→ 黑屏。现在 R 放宽为公共上界
         // IGeoEntityRenderer<Mob>，桥接方法不再强转。
         //
-        // 【为什么在 YSM 下直接跳过】本层的挂点逻辑依赖 Gecko 骨骼表
-        // （AnimatedGeoModel.bones() 里的 ElytraLocator/Elytra/UpperBody/Root），
-        // YSM 模型没有这套骨骼，硬画只会把翅膀堆在原点。女仆的背部物品/鞘翅在 YSM
-        // 那条链上由 TLM 自己的图层负责。
-        if (!(getRenderer() instanceof GeckoEntityMaidRenderer)) {
-            return;
-        }
+        // 【为什么在 YSM 下曾经直接跳过 —— 实测六百八十四 起不再跳过】
+        // 本层的挂点逻辑原先依赖 Gecko 骨骼表（AnimatedGeoModel.bones() 里的
+        // ElytraLocator/Elytra/UpperBody/Root），而 YSM 的女仆模型不是 TLM 那套骨骼表，硬查只会
+        // 落空 → 五百四十八 当时干脆整层跳过（"宁可不画，也不把翅膀堆在原点"）。
+        //
+        // 现在改成**两档**：Gecko 渲染器照旧走骨骼挂点；其它渲染器（YSM 等）走**固定身体偏移**
+        // （见 FALLBACK_* 与 anchorToBackBone）。依据是 实测六百八十三 的实证：YSM 的女仆渲染器
+        // 调图层的那一段与 TLM 的 GeoReplacedEntityRenderer **同构**——push → setupRotations →
+        // translate(0, 0.01, 0) → 画模型 → 图层循环 → pop。也就是说这一层拿到的 poseStack 与
+        // Gecko 那边是**同一套空间**（格、Y 朝上、原点在脚下），那圈激流特效就是这么画对的
+        // （玩家实测已确认），翅膀自然也能用同一套坐标落在同一个地方。
+        boolean geckoRenderer = getRenderer() instanceof GeckoEntityMaidRenderer;
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
@@ -157,7 +186,12 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
-        if (!MaidFlightKit.isUsableElytra(chest)) {
+        if (!MaidFlightKit.isWingRenderable(chest, maid)) {
+            // 【实测六百八十四】"能滑翔、但本身是护甲"（鞘翅胸甲这类）会走到这里：它自己就有
+            //  护甲外观，我们不叠翅膀。留一行痕（40 tick 节流），免得日后把它当成渲染链路故障。
+            if (MaidFlightKit.isElytraLike(chest, maid)) {
+                MaidFlightKit.noteWingSkipped(maid, chest);
+            }
             return;
         }
         // v1.2.0 实测五百零四：绑定 TLM 的「显示背部物品」（女仆配置页那一项，
@@ -181,8 +215,15 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
 
         poseStack.m_85836_();
         try {
-            // ① 锚到骨骼（含通用兜底骨骼 + 统计补偿偏移），坐标系 = 格、Y 朝上
-            anchorToBackBone(poseStack, mob);
+            // ① 锚到"背部挂点"（两种渲染器两条路，见 render 里的说明）：
+            //    Gecko 渲染器 → 骨骼（含通用兜底骨骼 + 统计补偿偏移），坐标系 = 格、Y 朝上；
+            //    其它（YSM）→ 固定身体偏移（没有骨骼表可查，用 480 那批统计出来的肩线位置）。
+            if (geckoRenderer) {
+                anchorToBackBone(poseStack, mob);
+            } else {
+                poseStack.m_252880_(0.0f, FALLBACK_DY, FALLBACK_DZ);
+                noteNoBonePath();
+            }
             // ② 骨骼空间（Y 朝上、X 已镜像）→ 原版 ElytraModel 期望的"Y 朝下、X 镜像"
             poseStack.m_85841_(-1.0f, -1.0f, 1.0f);
             // ③ 用户要求：整体上移 0.7 格（四百八十曾是 1.0 格）。

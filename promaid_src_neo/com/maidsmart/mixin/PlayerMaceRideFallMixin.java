@@ -45,6 +45,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * （{@code isClientSide} 直接返回）——伤害、音效、击退本来就是服务端算的。
  * {@code HEAD} 注入保证"写在那一次读取之前"。
  *
+ * <p>── 实测六百八十四【补留痕】──
+ * 玩家原话："我希望玩家在挂在女仆下面的时候重锤以及类似可以触发它对应的附魔。而且你可以扫一下
+ * 刚刚的游戏日志，有没有触发重锤的增伤效果。"
+ * <p>查了 2026-09-26 那一局（<b>promaid.log</b> 里 {@code [重锤门]} 共 1295 行、{@code 触发}
+ * 1295 次**全部**是 {@code 不触发}）：那些行**全是女仆那一侧**的判定（{@code 主手=…} 是她手里的
+ * 东西），玩家这一侧旧版**一个字节都不打**——"他有没有吃到猛击"在日志里根本无从查起。
+ * 现在这里补一行 {@code [重锤门] 玩家=…（挂在女仆下面）}：写回成功写"写回 fallDistance=N 格"，
+ * 没到门槛写"不到门槛"，一眼就能分辨。只在"他确实挂在下面"（
+ * {@link GunnerTetherManager#isHangRiding}）时打，免得他在平地上挥锤也刷一行。
+ *
  * <p>本模组手工编译、无 refmap，{@code method} 按**运行时名**逐字匹配；1.21.1 运行时是官方名，
  * 所以这里写 {@code attack}（1.20.1 那边没有重锤，本混入不进那棵树）。
  */
@@ -68,10 +78,39 @@ public abstract class PlayerMaceRideFallMixin {
                 return; // 与 canSmashAttack 的第二道门同口径
             }
             float ride = GunnerTetherManager.consumeRideFall(self);
-            if (ride > GunnerTetherManager.rideSmashMin() && self.fallDistance < ride) {
+            float min = GunnerTetherManager.rideSmashMin();
+            boolean smash = ride > min;
+            if (smash && self.fallDistance < ride) {
                 self.fallDistance = ride;
             }
+            noteSmash(self, ride, min, smash);
         } catch (Throwable ignored) {
         }
+    }
+
+    /** 【实测六百八十四】一行留痕：这一锤到底有没有吃到下落加成（只在"他挂着"时打） */
+    private static void noteSmash(Player self, float ride, float min, boolean smash) {
+        try {
+            if (!GunnerTetherManager.isHangRiding(self)) {
+                return; // 没挂在女仆下面 → 这是他自己在地面上的普通一锤，与本功能无关
+            }
+            String name;
+            try {
+                name = self.getName().getString();
+            } catch (Throwable t) {
+                name = "?";
+            }
+            com.maidsmart.tool.PromaidLog.log("重锤门", "玩家=" + name + "（挂在女仆下面）主手=重锤 "
+                    + "这一段下落 " + f(ride) + " 格（原版猛击门槛 " + f(min) + "）→ "
+                    + (smash
+                            ? "写回 fallDistance=" + f(ride) + " 格：这一锤按猛击算，"
+                                    + "增伤与下落类附魔（密度/破甲/风爆）都按这个数生效"
+                            : "不到门槛 → 这一锤只是普通挥击，没有猛击增伤"));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String f(float v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
     }
 }
