@@ -169,6 +169,9 @@ public class PromaidConfigScreen extends Screen {
     private int cookGridFilter = 0;
     private EditBox cookInput;
     private CookList cookList;
+    /** v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）——点一下切换"禁止/允许" */
+    private boolean buildBlackTable = false;
+    private BuildBlackList buildBlackList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -575,6 +578,10 @@ public class PromaidConfigScreen extends Screen {
             this.cookTableButtons(w, h, cx);
             return;
         }
+        if (this.buildBlackTable) {
+            this.buildBlackTableButtons(w, h, cx);
+            return;
+        }
         this.sectionButtons(w, h, cx);
     }
 
@@ -631,6 +638,7 @@ public class PromaidConfigScreen extends Screen {
                 this.foodTable = false;
                 this.waterTable = false;
                 this.inGroup = false;
+                this.buildBlackTable = false;
                 this.m_7856_();
             };
         }
@@ -1433,6 +1441,257 @@ public class PromaidConfigScreen extends Screen {
                         })
                 .m_252987_(w - 148, h - 34, 132, 20).m_253136_());
         this.bottomButtons(w, h, cx);
+    }
+
+    /**
+     * v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）。
+     *
+     * 布局与交互照搬替代品/投喂子页（同一套 creativeInput 搜索框 + creativeItems 网格 + 翻页）：
+     * 顶部一行是【默认规则开关】与【清空名单】，中间网格点一下切换该方块的禁止/允许，底部列表只列
+     * 【玩家自己改过的】条目（点「移除」回到默认规则）。渲染与点击两处状态都问
+     * {@link com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock}——**与女仆实际取材
+     * 用的是同一个方法**，所以面板上看到的红绿框就是她真会/真不会用的，不会出现"面板说允许、
+     * 她仍然不搭"这种口径分裂。
+     */
+    private void buildBlackTableButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int tgY = 24;
+        // 默认规则开关（本页的主开关；与其它板块的 BoolRow 同义，只是这里用按钮切换）
+        boolean onlyNatural = MaidSmartConfig.BRIDGE_BUILD_ONLY_NATURAL.get();
+        this.m_142416_(Button.m_253074_(Component.m_237113_((onlyNatural ? "\u00a7a\u25cf " : "\u00a78\u25cb ")
+                                + "默认只许原版天然方块"),
+                        b -> {
+                            MaidSmartConfig.BRIDGE_BUILD_ONLY_NATURAL.set(
+                                    !MaidSmartConfig.BRIDGE_BUILD_ONLY_NATURAL.get());
+                            this.m_7856_();
+                        })
+                .m_252987_(left, tgY, 210, 18).m_253136_());
+        // 清空两张显式名单（回到"完全按默认规则"的状态）
+        this.m_142416_(Button.m_253074_(Component.m_237113_("清空名单"),
+                        b -> {
+                            MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.set(new ArrayList<String>());
+                            MaidSmartConfig.BRIDGE_BUILD_ALLOWED.set(new ArrayList<String>());
+                            this.m_7856_();
+                        })
+                .m_252987_(left + 218, tgY, 80, 18).m_253136_());
+        this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
+                Component.m_237113_("搜索方块（中英文皆可）"));
+        this.creativeInput.m_94199_(64);
+        this.creativeInput.m_94144_(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.m_94151_(s -> {
+            this.creativeQuery = s;
+            this.rebuildCreative();
+        });
+        this.m_142416_(this.creativeInput);
+        int gridTop = GRID_TOP;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildCreative();
+        int py = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25c0"),
+                            b -> {
+                                this.creativePage--;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx - 40, py, 20, 16).m_253136_());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25b6"),
+                            b -> {
+                                this.creativePage++;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx + 20, py, 20, 16).m_253136_());
+        }
+        int listTop = gridBottom + 24;
+        int listH = Math.max(24, Math.min((h - 78) - listTop - 4, h - listTop - 36));
+        this.buildBlackList = new BuildBlackList(this.f_96547_, panelLeft + 10, listTop,
+                panelWidth - 20, listH);
+        this.buildBlackList.m_93507_(panelLeft + 10);
+        this.m_142416_(this.buildBlackList);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 返回参数"),
+                        b -> {
+                            this.buildBlackTable = false;
+                            this.m_7856_();
+                        })
+                .m_252987_(12, h - 34, 100, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /** 该方块（物品栈）此刻是否被玩家名单禁止——渲染与点击**共用这一处**，口径 = 女仆取材那一处。 */
+    private boolean isBuildBlockForbidden(net.minecraft.world.item.ItemStack stack) {
+        try {
+            if (stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi) {
+                return com.maidsmart.tool.MaidBuildBlockFilter.isBlacklistedBuildBlock(bi.m_40614_());
+            }
+        } catch (Throwable ignored) {
+        }
+        return true; // 认不出对应方块 → 按"禁止"画（别让玩家以为她能用）
+    }
+
+    /** 点一下切换：当前禁止 → 记进「放宽名单」；当前允许 → 记进「禁用名单」。
+     *  两份名单都按**规范化完整注册名**存，与 MaidBuildBlockFilter.containsId 的匹配口径一致。 */
+    private void toggleBuildBlack(net.minecraft.world.item.ItemStack stack) {
+        try {
+            if (!(stack.m_41720_() instanceof net.minecraft.world.item.BlockItem bi)) {
+                return;
+            }
+            net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(bi.m_40614_());
+            if (key == null) {
+                return;
+            }
+            String norm = com.maidsmart.tool.NaturalBlocks.normalize(key.toString());
+            boolean forbidden =
+                    com.maidsmart.tool.MaidBuildBlockFilter.isBlacklistedBuildBlock(bi.m_40614_());
+            List<String> allow = new ArrayList<>(MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get());
+            List<String> forbid = new ArrayList<>(MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get());
+            allow.removeIf(s -> com.maidsmart.tool.NaturalBlocks.normalize(s).equals(norm));
+            forbid.removeIf(s -> com.maidsmart.tool.NaturalBlocks.normalize(s).equals(norm));
+            if (forbidden) {
+                allow.add(norm); // 面板上原本"红框✖" → 放开
+            } else {
+                forbid.add(norm); // 面板上原本"绿框✔" → 禁止
+            }
+            MaidSmartConfig.BRIDGE_BUILD_ALLOWED.set(allow);
+            MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.set(forbid);
+            if (this.buildBlackList != null) {
+                this.buildBlackList.rebuild();
+            }
+        } catch (Throwable t) {
+            // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
+            com.maidsmart.tool.PromaidLog.log("搭方块名单", "写名单失败：" + t);
+        }
+    }
+
+    /** 从名单里移掉一条（列表上的「移除」）——回到该方块的默认规则状态。 */
+    private void removeBuildBlack(String id) {
+        try {
+            String norm = com.maidsmart.tool.NaturalBlocks.normalize(id);
+            List<String> allow = new ArrayList<>(MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get());
+            List<String> forbid = new ArrayList<>(MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get());
+            allow.removeIf(s -> com.maidsmart.tool.NaturalBlocks.normalize(s).equals(norm));
+            forbid.removeIf(s -> com.maidsmart.tool.NaturalBlocks.normalize(s).equals(norm));
+            MaidSmartConfig.BRIDGE_BUILD_ALLOWED.set(allow);
+            MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.set(forbid);
+            if (this.buildBlackList != null) {
+                this.buildBlackList.rebuild();
+            }
+        } catch (Throwable t) {
+            // 写配置失败不能静默：面板上会"点了没反应"，日志里必须留痕（本工程惯例）
+            com.maidsmart.tool.PromaidLog.log("搭方块名单", "写名单失败：" + t);
+        }
+    }
+
+    /** 玩家改过的条目（{id, "allow"/"forbid"}）——列表先列禁用、再列放宽。 */
+    private List<String[]> buildBlackEntries() {
+        List<String[]> out = new ArrayList<>();
+        try {
+            for (String s : MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get()) {
+                out.add(new String[]{s, "forbid"});
+            }
+            for (String s : MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get()) {
+                out.add(new String[]{s, "allow"});
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** v1.3.0(beta) 实测六百八十：搭方块禁用名单子页的底部列表（只列玩家自己改过的条目）。 */
+    private class BuildBlackList extends ObjectSelectionList<BuildBlackList.BuildBlackEntry> {
+        private final List<String[]> entries = new ArrayList<>();
+
+        BuildBlackList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.m_91087_(), width, height, top, top + height, 22);
+            this.m_93507_(x);
+            this.m_93488_(false);
+            this.m_93496_(false);
+            this.f_93390_ = width; // 行宽=列表宽（同 MinableList / AltList）
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.m_93516_();
+            this.entries.clear();
+            this.entries.addAll(buildBlackEntries());
+            for (String[] e : this.entries) {
+                this.m_7085_(new BuildBlackEntry(e[0], "allow".equals(e[1])));
+            }
+        }
+
+        @Override
+        public int m_5759_() {
+            return Math.max(this.f_93390_, 120); // rowWidth（构造时已设为列表宽）
+        }
+
+        /** 同 MinableList / AltList：默认滚动条覆盖为低调样式 */
+        @Override
+        protected void m_238964_(net.minecraft.client.gui.GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        private class BuildBlackEntry extends ObjectSelectionList.Entry<BuildBlackList.BuildBlackEntry> {
+            private final String id;
+            private final boolean allow;
+            private final net.minecraft.client.gui.components.Button delButton;
+
+            BuildBlackEntry(String id, boolean allow) {
+                this.id = id;
+                this.allow = allow;
+                this.delButton = Button.m_253074_(Component.m_237113_("移除"),
+                                b -> PromaidConfigScreen.this.removeBuildBlack(this.id))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
+            }
+
+            @Override
+            public void m_6311_(net.minecraft.client.gui.GuiGraphics g, int index, int top,
+                                      int left, int width, int height, int mouseX, int mouseY,
+                                      boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                net.minecraft.world.item.Item it = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(net.minecraft.resources.ResourceLocation.parse(this.id));
+                if (it != null) {
+                    g.m_280480_(new net.minecraft.world.item.ItemStack(it), x, y - 2);
+                    x += 20;
+                }
+                String mark = this.allow ? "\u00a7a\u2714 \u00a7f" : "\u00a7c\u2716 \u00a77";
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_(mark + com.maidsmart.build.BlueprintLib.cnName(this.id)),
+                        x, y, LABEL_COLOR, false);
+                this.delButton.m_252865_(left + BuildBlackList.this.m_5759_() - 62);
+                this.delButton.m_253211_(top + 1);
+                this.delButton.m_88315_(g, mouseX, mouseY, partialTick);
+            }
+
+            @Override
+            public boolean m_6375_(double mouseX, double mouseY, int button) {
+                if (button == 0 && this.delButton.m_5953_(mouseX, mouseY)) {
+                    this.delButton.m_6375_(mouseX, mouseY, 0);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component m_142172_() {
+                return Component.m_237113_(this.id);
+            }
+        }
     }
 
     /** 当前替代品名单（按 altTableMode）
@@ -2688,6 +2947,21 @@ public class PromaidConfigScreen extends Screen {
                 s -> setInt(MaidSmartConfig.COMBAT_PLACED_LIFETIME, s), "战斗搭方块清理时间（秒，默认 60）：自保行为（搭高/翻墙/搭桥/封头盖帽）搭的方块 N 秒后自动回收——战斗节奏多变比挖矿/搭路的 10 秒长；女仆踩着时刷新计时，不会把她摔下去"));
         this.rows.add(new BoolRow("垫脚方块回收进背包", MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.get(),
                 v -> MaidSmartConfig.BRIDGE_RECLAIM_TO_MAID.set(v), "搭路垫脚方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的垫脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地成掉落物"));
+
+        // v1.3.0(beta) 实测六百八十【搭方块禁用名单】（玩家原话："加一个额外的配置界面（类似于挖矿的
+        // 配置面板），是一个黑名单面板，选择方即让女仆禁止使用哪个东西来搭方块……默认禁止搭建的为
+        // 所有非的原版自然生成方块"）。四个生效链路（自保搭高/挖矿/伐木/搭路）与那条默认规则都只在
+        // com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock **一处**。
+        this.rows.add(new BtnRow("搭方块禁用名单",
+                "管理 →（禁 " + MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get().size()
+                        + " · 放 " + MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get().size() + "）",
+                () -> {
+                    this.buildBlackTable = true;
+                    this.creativeQuery = "";
+                    this.creativePage = 0;
+                    this.m_7856_();
+                },
+                "搭方块禁用名单（默认：只许原版天然方块，模组方块默认全禁）：点开是一整页全方块面板——红框✖ = 禁止她拿来垫脚/搭高/搭桥，绿框✔ = 允许（再点一次切换）。对【自保搭高 / 挖矿 / 伐木 / 搭路】四条链路同时生效；沙子/沙砾这类下落方块与仙人掌/岩浆块这类伤害方块本来就不许搭，不受这里影响。想让她用某个模组方块搭 → 在面板里把它点成绿框✔（写进 buildWhitelist）"));
     }
 
     /**
@@ -4898,7 +5172,7 @@ public class PromaidConfigScreen extends Screen {
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
         // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
-        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable && !this.cookTable) {
+        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable && !this.cookTable && !this.buildBlackTable) {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
@@ -5269,6 +5543,74 @@ public class PromaidConfigScreen extends Screen {
                     + "），缺料时女仆按序使用，再点一次取消";
             g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
+        } else if (this.buildBlackTable) {
+            // v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）
+            String title = "\u00a7e搭方块禁用名单——点击方块图标切换（\u00a7c\u2716 禁止\u00a7e / "
+                    + "\u00a7a\u2714 允许\u00a7e）";
+            g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
+            int panelLeft = Math.max(8, cx - 280);
+            int panelWidth = Math.min(560, w - 16);
+            int left = panelLeft + 10;
+            int gridTop = GRID_TOP;
+            int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+            int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+            g.m_280509_(panelLeft + 8, gridTop - 4, panelLeft + panelWidth - 8, gridBottom, 0x80101010);
+            int perPage = GRID_COLS * this.gridRows;
+            int start = this.creativePage * perPage;
+            int end = Math.min(this.creativeItems.size(), start + perPage);
+            int hoverIdx = -1;
+            for (int i = start; i < end; i++) {
+                int col = (i - start) % GRID_COLS;
+                int row = (i - start) / GRID_COLS;
+                int x = left + col * GRID_CELL;
+                int y = gridTop + row * GRID_CELL;
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+                if (this.isBuildBlockForbidden(stack)) {
+                    g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x80CC2222); // 红框 = 禁止
+                    g.m_280653_(this.f_96547_, Component.m_237113_("\u2716"), x + 12, y + 12, 0xFFFF8080);
+                } else {
+                    g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC44); // 绿框 = 允许
+                    g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"), x + 12, y + 12, 0xFF80FF80);
+                }
+                g.m_280480_(stack, x, y); // 物品图标
+                if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                    hoverIdx = i;
+                }
+            }
+            // 悬停名/页码放网格右侧空白（同矿表/替代品子页）
+            int infoX = left + GRID_COLS * GRID_CELL + 12;
+            int infoY = gridTop + 2;
+            boolean onlyNat = MaidSmartConfig.BRIDGE_BUILD_ONLY_NATURAL.get();
+            if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
+                net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
+                net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+                String hover = key == null ? "?" : key.toString();
+                String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                        infoX, infoY, 0xFFFFFF, false);
+                g.m_280614_(this.f_96547_,
+                        Component.m_237113_("\u00a77" + hover
+                                + (com.maidsmart.tool.NaturalBlocks.contains(hover)
+                                        ? " \u00a7a(原版天然)" : " \u00a7c(非天然)")),
+                        infoX, infoY + 10, 0xAAAAAA, false);
+            } else {
+                int pages = this.creativePages();
+                if (pages > 1) {
+                    String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                    g.m_280614_(this.f_96547_, Component.m_237113_(pg), infoX, infoY, 0x888888, false);
+                }
+            }
+            String chkHint = "\u00a7c\u2716\u00a77 = 禁止（"
+                    + MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get().size()
+                    + " 项）· \u00a7a\u2714\u00a77 = 允许（"
+                    + MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get().size()
+                    + " 项）；点一下切换。默认规则（" + (onlyNat ? "\u00a7a开" : "\u00a78关") + "\u00a77）："
+                    + (onlyNat ? "只许原版天然方块（共 " + com.maidsmart.tool.NaturalBlocks.size()
+                            + " 种），模组方块默认全禁"
+                            : "除禁用名单外都放行——想恢复默认把上面那条点回开的");
+            g.m_280653_(this.f_96547_, Component.m_237113_(chkHint),
+                    this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
         } else if (this.cookTable) {
             this.renderCookGrid(g, mouseX, mouseY, w, h, cx);
         } else {
@@ -5459,6 +5801,27 @@ public class PromaidConfigScreen extends Screen {
                     // 实测五百八十：切换的是"这一档剩余次数"（不是整个物品）
                     this.toggleWaterChecked(
                             com.maidsmart.action.ItemUses.key(this.creativeItems.get(idx)));
+                    return true;
+                }
+            }
+        }
+        // v1.3.0(beta) 实测六百八十：搭方块禁用名单子页——点方块图标切换"禁止/允许"
+        if (this.buildBlackTable && button == 0) {
+            int cx = this.f_96543_ / 2;
+            int panelLeft = Math.max(8, cx - 280);
+            int left = panelLeft + 10;
+            int gridTop = GRID_TOP;
+            int gridRowsNow = this.f_96544_ < 215 ? 2 : GRID_ROWS;
+            int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+            if (mouseX >= left && mouseX < left + GRID_COLS * GRID_CELL
+                    && mouseY >= gridTop && mouseY < gridBottom) {
+                int perPage = GRID_COLS * this.gridRows;
+                int start = this.creativePage * perPage;
+                int col = (int) ((mouseX - left) / GRID_CELL);
+                int row = (int) ((mouseY - gridTop) / GRID_CELL);
+                int idx = start + row * GRID_COLS + col;
+                if (idx >= 0 && idx < this.creativeItems.size()) {
+                    this.toggleBuildBlack(this.creativeItems.get(idx));
                     return true;
                 }
             }

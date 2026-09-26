@@ -1,5 +1,6 @@
 package com.maidsmart.tool;
 
+import com.maidsmart.config.MaidSmartConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.item.BlockItem;
@@ -95,6 +96,12 @@ public final class MaidBuildBlockFilter {
             if (DangerBlocks.isDanger(block)) {
                 return false;
             }
+            // v1.3.0(beta) 实测六百八十：玩家自己那张「搭方块禁用名单」（面板「移动与行为 →
+            // 搭路 → 搭方块禁用名单」）——本方法就是四个消费方（自保搭高/挖矿/伐木/搭路）
+            // 的公共入口，所以这一条天然覆盖玩家要求的全部四个链路（口径只有一处）。
+            if (isBlacklistedBuildBlock(sid)) {
+                return false;
+            }
             var state = block.m_49966_();
             // 可替换方块（火把/草/雪片/水——玩家右键能直接顶掉的那些）绝不能垫脚
             //（f_278394_ = BlockTags.REPLACEABLE，字节码实证）
@@ -130,6 +137,74 @@ public final class MaidBuildBlockFilter {
         } catch (Exception e) {
             return false; // 查询异常（怪异模组方块）——保守拒绝
         }
+    }
+
+    /* ==================== v1.3.0(beta) 实测六百八十：玩家那张「搭方块禁用名单」 ==================== */
+
+    /**
+     * 该方块是否被【玩家自己那张搭方块禁用名单】拦住——本模组对"哪种方块能垫脚"的第四条判定
+     * （前三条：安全黑名单 / dangerBlocks 危险表 / 碰撞形状），也是玩家能直接改的那一条。
+     *
+     * <p>判定顺序（**优先级从高到低**，与配置面板上显示的状态完全同源——面板画的就是这个方法）：
+     * <ol>
+     *   <li><b>放宽名单</b>（{@code bridge.buildWhitelist}）里有 → <b>允许</b>：面板上被取消勾选
+     *       （绿框✔）的那些，含玩家想用的<b>模组方块</b>；</li>
+     *   <li><b>禁用名单</b>（{@code bridge.buildBlacklist}）里有 → <b>禁止</b>：面板上点成红框✖ 的；</li>
+     *   <li><b>「只用原版天然方块」</b>开着（默认）→ 不在 {@link NaturalBlocks} 表里就 <b>禁止</b>
+     *       ——于是<b>全部模组方块默认都被这一条拦住</b>（玩家要的默认）；</li>
+     *   <li>以上都不适用 → 放行，交给前面那三条判定（沙子/沙砾这类下落方块照样过不去，
+     *       所以「现有的那些在黑名单里的仍然是不允许的，比如沙子」这句原话是自洽的）。</li>
+     * </ol>
+     *
+     * <p>匹配用完整注册名（也认裸 path：写 {@code sand} 等于 {@code minecraft:sand}），
+     * 与 {@code dangerBlocks} / 投喂黑名单同一套键口径。任何异常一律返回 false（放行）——
+     * 最坏情况是"这张玩家名单没生效、退回旧行为"，绝不会因为一次异常把搭路整条掐死。
+     */
+    public static boolean isBlacklistedBuildBlock(Block block) {
+        if (block == null) {
+            return false;
+        }
+        try {
+            ResourceLocation id = ForgeRegistries.BLOCKS.getKey(block);
+            return id != null && isBlacklistedBuildBlock(id.toString());
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 同一个口径的字符串版（{@link #isUsableBuildBlock} 内部已经算好注册名，不必再查一次注册表）。 */
+    public static boolean isBlacklistedBuildBlock(String blockId) {
+        try {
+            String full = NaturalBlocks.normalize(blockId);
+            if (full.isEmpty()) {
+                return false;
+            }
+            if (containsId(MaidSmartConfig.BRIDGE_BUILD_ALLOWED.get(), full)) {
+                return false; // ① 玩家放开的例外（含模组方块）
+            }
+            if (containsId(MaidSmartConfig.BRIDGE_BUILD_FORBIDDEN.get(), full)) {
+                return true; // ② 玩家显式禁用
+            }
+            if (MaidSmartConfig.BRIDGE_BUILD_ONLY_NATURAL.get()) {
+                return !NaturalBlocks.contains(full); // ③ 默认：非原版天然方块一律不许搭
+            }
+            return false;
+        } catch (Throwable t) {
+            return false; // 配置未加载等异常 → 放行（退回旧行为，不掐死链路）
+        }
+    }
+
+    /** 名单里有没有这个注册名（两侧都规范化，大小写不敏感）。 */
+    private static boolean containsId(java.util.List<? extends String> list, String fullId) {
+        if (list == null || list.isEmpty()) {
+            return false;
+        }
+        for (String raw : list) {
+            if (NaturalBlocks.normalize(raw).equals(fullId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
