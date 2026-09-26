@@ -2691,7 +2691,9 @@ public class PromaidConfigScreen extends Screen {
                 s -> setDouble(MaidSmartConfig.AIR_RAID_MAX_PITCH_DOWN, s), "俯仰限幅·低头（度，默认 70）：最多低头多少，接近 90 = 允许垂直扎下去"));
         this.rows.add(new SectionRow("③ 盘旋与补高（远程空袭）", true));
         this.rows.add(new NumRow("盘旋半径（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS.get()),
-                s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS, s), "远程空袭的盘旋半径（格，默认 10）：以目标为圆心保持的距离，也是高度修正环的基准圈"));
+                s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS, s), "远程空袭的盘旋半径（格，默认 10）：以目标为圆心保持的距离，也是高度修正环的基准圈。**实测六百九十三** 起它是随机区间的**近端**——接敌后半径在它与下面那条「离敌最远距离」之间缓动，每只女仆还不一样"));
+        this.rows.add(new NumRow("离敌最远距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ORBIT_MAX.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_MAX, s), "**实测六百九十三 新增**（默认 12，2~64）：锁敌之后离敌的**最远距离**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里随机缓动（每只女仆各不相同、每 4 秒重掷），越过本值径向修正会加倍往回带。玩家原话：\"设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。\"它**不是**「有效开火距离」（那个是下面 ④ 里那一条），一般应当 ≤ 开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向"));
         this.rows.add(new NumRow("期望盘旋高度（目标上方格数）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT, s), "期望盘旋高度（目标上方格数，默认 10）：低于这条带就补高度——远程空袭要的就是脚不沾地，掉下去就是被贴脸"));
         this.rows.add(new NumRow("高度修正增益", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_GAIN.get()),
@@ -3013,7 +3015,18 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("扫帚·盘旋距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BROOM_RANGE, s),
                 "战斗盘旋距离（格，默认 8）：她绕着目标转圈时保持的水平距离。原版凋灵是近战 boss，"
-                        + "它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）"));
+                        + "它的距离只有「碰撞箱大小」（贴脸）；她拿的是远程武器，必须把距离拉开才有输出窗口（1~32）。"
+                        + "**实测六百九十三** 起它是随机区间的**近端**（不再是固定值）——接敌后半径在它与下面那条"
+                        + "「离敌最远距离」之间缓动，每只女仆还不一样"));
+        this.rows.add(new NumRow("扫帚·离敌最远距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX, s),
+                "**实测六百九十三 新增**（默认 10，1~48）：锁敌之后离敌的**最远距离**——盘旋半径在"
+                        + "[min(本值, 盘旋距离 × 0.75), 本值] 里随机缓动（每只女仆各不相同、每 4 秒重掷），"
+                        + "越过本值径向修正会加倍往回带。玩家原话：\"设一个锁敌之后离敌的最远距离，"
+                        + "狐狐被击中的概率或许就降低不少。\"**为什么要随机**：旧版所有女仆同一个半径、"
+                        + "同一个旋向，敌人朝第一只射一箭会串到后面的；现在半径各不相同、旋向一半顺一半逆"
+                        + "（按 UUID 定），是在圆上**对穿**而不是首尾相接。默认 10 = 盘旋距离 8 的 1.25 倍，"
+                        + "均值仍落在 8 上。日志搜「随机环绕」"));
         this.rows.add(new NumRow("扫帚·悬停高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_HOVER.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_BROOM_HOVER, s),
                 "悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪"

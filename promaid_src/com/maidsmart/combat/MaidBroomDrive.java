@@ -883,15 +883,40 @@ public final class MaidBroomDrive {
      * 但只要她头顶一开阔（她自己飞到高处 / 房间变高），{@link #combatClimbTarget} 会重试
      * 爬升并把这个数改回 {@code climb}。所以这一格不会像旧版那样把一整场遭遇钉在地板上。
      *
+     * <p>【实测六百九十三：半径与旋向都改成随机】玩家原话：「可以把环绕型攻击方式更改一下，
+     * 这样环绕的话会增加被击中的概率……敌人如果攻击的是第一只的话，会攻击到后面的，锁敌之后
+     * 攻击敌人的飞行路径改成随机吧，然后设一个锁敌之后离敌的最远距离。」
+     * 旧版这一格是 {@code Math.max(1.0, rangeCfg())}：**所有**女仆永远同一个半径（8 格），
+     * 切向又是同一个固定方向（{@link #ORBIT_SPEED} / 半径，恒 +）——691 的相位错开只让她们
+     * **起点**不同，跑起来仍然在同一个圆上同向转，敌人一条射线就能串到对面那只。
+     * 现在半径交给 {@link CombatOrbit#radius}（每只女仆各自一个、每 4 秒缓动的比例，区间
+     * {@code [基础距离 × 0.75, orbitMax]}）、旋向交给 {@link CombatOrbit#direction}（UUID 派生，
+     * 一半逆时针一半顺时针）——两只女仆是在圆上**对穿**，不再首尾相接。
+     * {@code orbitMax}（配置 {@code combat.broom.orbitMax}）就是玩家要的那条「离敌最远距离」，
+     * 它同时是随机区间的顶点，所以"随机"不会变成"越飞越远"。
+     *
      * @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
      */
     public static Vec3 combatPoint(EntityMaid maid, LivingEntity target) {
         UUID id = maid.m_20148_();
-        double r = Math.max(1.0, rangeCfg());
+        // 【实测六百九十三】随机环绕的区间：顶点 = 配置的「离敌最远距离」（硬上界），
+        // 近端 = 基础盘旋距离的 75%（但绝不越过顶点——玩家把上限调得比基础距离还小时，
+        // 就该听那个更小的数，所以她实际是"贴着上限飞"）。
+        double base = Math.max(1.0, rangeCfg());
+        double hi = Math.max(1.0, orbitMaxCfg());
+        double lo = Math.min(hi, Math.max(1.0, base * 0.75));
+        double r = Math.max(0.5, CombatOrbit.radius(id, lo, hi));
+        double dir = CombatOrbit.direction(id);
+        if (CombatOrbit.entering(id)) {
+            mountLog(maid, "随机环绕：半径 " + fmt(r) + " 格（区间 " + fmt(lo) + "~" + fmt(hi)
+                    + "，上界=combat.broom.orbitMax " + fmt(orbitMaxCfg()) + "），旋向 "
+                    + (dir > 0 ? "逆时针" : "顺时针"));
+        }
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，
         // 绕着同一个敌人、同一个半径、同一个角速度 → 目标点逐 tick 完全重合，正是玩家说的"叠罗汉"。
-        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + ORBIT_SPEED / r;
+        // 【实测六百九十三】步长再乘上她自己那个旋向 dir：一半女仆顺时针、一半逆时针。
+        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * ORBIT_SPEED / r;
         ORBIT.put(id, ang);
         double alt = COMBAT_ALT.getOrDefault(id, hoverCfg());
         return new Vec3(target.m_20185_() + Math.cos(ang) * r,
@@ -1889,6 +1914,8 @@ public final class MaidBroomDrive {
         HUNTING.remove(maidId);
         HUNT_COOLDOWN.remove(maidId);
         STUCK.remove(maidId);
+        // 【实测六百九十三】随机环绕参数（半径比例 / 旋向节奏）也归她所有，下线一并丢
+        CombatOrbit.forget(maidId);
     }
 
     /** 服务端停止：整表清空 */
@@ -1904,6 +1931,8 @@ public final class MaidBroomDrive {
         HUNTING.clear();
         HUNT_COOLDOWN.clear();
         STUCK.clear();
+        // 【实测六百九十三】随机环绕参数
+        CombatOrbit.clearAll();
     }
 
     /* ==================== 内部工具 ==================== */
@@ -2125,6 +2154,21 @@ public final class MaidBroomDrive {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_RANGE.get();
         } catch (Throwable ignored) {
             return 8.0;
+        }
+    }
+
+    /**
+     * 【实测六百九十三】锁敌之后离敌的**最远距离**（格）：配置 {@code combat.broom.orbitMax}，
+     * 默认 10（= 基础盘旋距离 8 的 1.25 倍，均值仍落在 8 上）。它同时是随机环绕区间的顶点
+     * （见 {@link #combatPoint}），所以调小它 = 把她整体拉近 + 收紧随机范围，调大 = 允许她在
+     * 更宽的一圈里飘。配置没挂上时退回 10——与配置里的默认值对齐（本项目的老规矩：兜底值必须
+     * 跟着默认值走）。
+     */
+    private static double orbitMaxCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX.get();
+        } catch (Throwable ignored) {
+            return 10.0;
         }
     }
 
