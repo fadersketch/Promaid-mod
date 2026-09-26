@@ -2668,9 +2668,6 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.AIR_RAID_LAUNCH_RANGE, s), "地面重新起飞的最大水平距离（格，默认 20）：超出先跑近再起飞（防越炸越远）。只算水平距离——敌人站在高处不影响这条"));
         this.rows.add(new NumRow("占位高度容差（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_ALTITUDE_TOLERANCE, s), "占位高度容差（格，默认 10）：她比目标低不超过这么多格就算「已经到位」，直接开打不再爬高。这个值同时也是起飞朝向的判据"));
-        // 实测六百八十七：空袭爬升上限（需求方：几路推力叠加能一口气飞到 300 多格）
-        this.rows.add(new NumRow("空袭·爬升上限（格，0=不限）", String.valueOf(MaidSmartConfig.AIR_RAID_MAX_ALT.get()),
-                s -> setDouble(MaidSmartConfig.AIR_RAID_MAX_ALT, s), "默认 48：她不许飞到「目标上方这么多格」以上——到了就不再爬、也不再点烟花/激流/羽扇往上顶，改为压机头滑翔下来。0 = 不限（回到旧行为）。只压向上，俯冲不受影响"));
         this.rows.add(new NumRow("起跳等待上限（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_JUMP_TICKS.get()),
                 s -> setInt(MaidSmartConfig.AIR_RAID_JUMP_TICKS, s), "起跳等待上限（tick，默认 3）：起跳失败（头顶有方块 / 低矮空间）超过这么久就放弃本轮空袭"));
         this.rows.add(new NumRow("烟花最小间隔（tick）", String.valueOf(MaidSmartConfig.AIR_RAID_FIREWORK_COOLDOWN.get()),
@@ -3617,6 +3614,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS, s), "默认 3 秒：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消"));
         this.rows.add(new NumRow("仿创造飞行·落地贴近距离（格）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST.get()),
                 s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST, s), "默认 2 格：软着陆时朝主人漂过去，最终停在他身边这个距离内（留 1 格余量给原版 3 格交互距离）"));
+        this.rows.add(new BoolRow("仿创造飞行·走路的活也交给飞", MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.set(v), "默认开：本来要走过去的活（挖矿 / 伐木 / 农活这些直连寻路的目标）够远或要上下就直接飞过去，落地干活——不搭路、也不绕路。近处挪一步照旧走路；自保逃跑 / 战斗走位 / 插火把 / 站桩工作 / 跟随不接管，目标格底下落不下去也不接管"));
+        this.rows.add(new NumRow("仿创造飞行·超过多远就改飞（格）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST.get()),
+                s -> setDouble(MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST, s), "默认 8 格：直连寻路的目标与她水平距离超过它就起飞；调大 = 更多路用走的（32 = 只有跨半个工作区才飞）"));
         this.rows.add(new TextRow("仿创造飞行·资格物品表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get()),
                 s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。四种写法：①物品 id（modid:item）②#命名空间:标签 ③@命名空间:组件（有该组件就算）④@命名空间:组件~文本（组件值里含这段文本，例如神化用命令挂的飞行：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight）。扫描范围：双手/护甲/背包/饰品栏/额外容器"));
         this.rows.add(new TextRow("仿创造飞行·资格效果表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get()),

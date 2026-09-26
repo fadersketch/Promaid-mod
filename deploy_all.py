@@ -5,8 +5,10 @@
 1.20.1 Forge 47.4.21      : patched/promaid-1.3.0-forge-1.20.1.jar   (user's main modpack)
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+v1.3.0 实测六百八十八（撤掉空袭爬升封顶与拴绳上飘 0.10 封顶 + 「本来要走过去的活」也交给
+仿创造飞行 = PR #24 设计问题的答复 + 在主人身边干活时不再做跟随起飞）：
 v1.3.0 实测六百八十七（仿创造飞行并入 neo 树 = PR #24 本地修复版 + 有飞行能力禁用搭路
-+ 空袭爬升上限与「丢锁敌后拴绳当操纵杆」+ 绑定 HUD 两行 + 服务端一轮审计）：
++ 「丢锁敌后拴绳当操纵杆」+ 绑定 HUD 两行 + 服务端一轮审计）：
 patched/promaid-1.3.0-neoforge-1.21.1.jar 与 patched/promaid-1.3.0-forge-1.20.1.jar 同名覆盖，
 前面那条 686 说明照旧适用。
 

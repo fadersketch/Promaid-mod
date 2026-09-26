@@ -347,7 +347,8 @@
   "config.promaid.misc.freeFlightIdle": "仿创造飞行·智能待命（主人停下就落地站到脚边）",
   "config.promaid.misc.freeFlightIdleSeconds": "仿创造飞行·主人静止多久后落地待命（秒）",
   "config.promaid.misc.freeFlightNearDist": "仿创造飞行·落地待命的贴近距离（格）",
+  "config.promaid.misc.freeFlightTravel": "仿创造飞行·走路的活也交给飞",
+  "config.promaid.misc.freeFlightTravelDist": "仿创造飞行·超过多远就改飞（格）",
   "key.promaid.free_flight_toggle": "切换女仆仿创造飞行（准星对准她）",
-  "config.promaid.airRaid.maxAlt": "空袭·相对目标的爬升上限（格，0 = 不限）",
   "config.promaid.combat.tetherLeashSteer": "二号位·悬挂时用武装拴绳操控方向（仅空袭）"
 }

@@ -699,10 +699,6 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     /** 占位高度容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.DoubleValue AIR_RAID_ALTITUDE_TOLERANCE;
 
-    /** 【实测六百八十七】空袭爬升上限（格，默认 48，0 = 不限）：她不许飞到"目标上方这么多格"以上。
-     *  需求方原话："有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接
-     *  飞到天上300多格。"上限只约束**向上**；被顶到上限时改压机头滑翔下来。 */
-    public static final ModConfigSpec.DoubleValue AIR_RAID_MAX_ALT;
     /** 起跳等待上限（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.IntValue AIR_RAID_JUMP_TICKS;
     /** 烟花最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -1012,6 +1008,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_IDLE_SECONDS;
     /** 落地待命的贴近距离（格，默认 2）——交互（喂食/摸头）需要她在 3 格内 */
     public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_NEAR_DIST;
+    /** 【实测六百八十八】仿创造飞行·走路的活也交给飞（默认开）：够远 / 要上下的走位改成飞过去 */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_TRAVEL;
+    /** 【实测六百八十八】仿创造飞行·超过这么远就改飞（格，默认 8） */
+    public static final ModConfigSpec.DoubleValue MISC_FREE_FLIGHT_TRAVEL_DIST;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -2156,9 +2156,6 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_ALTITUDE_TOLERANCE = BUILDER.comment("占位高度容差（格，默认 10）：她比目标低不超过这么多格就视为已占位、直接走原链路（近战俯冲 / 远程盘旋）；同时也是起飞朝向的判据（容差内起飞走「背离 + 抬头」）")
                 .translation("config.promaid.airRaid.altitudeTolerance")
                 .defineInRange("altitudeTolerance", 10.0, 0.0, 64.0);
-        AIR_RAID_MAX_ALT = BUILDER.comment("空袭·相对目标的爬升上限（格，默认 48，0 = 不限）：她不许飞到「目标上方这么多格」以上——到了就**不再爬、也不再点烟花/激流/羽扇往上顶**，改为压机头滑翔下来。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌\"。空袭的高度判据原本只有一个 `onTargetAltitude`（相对**目标**的 Y，没有绝对上限），而目标本身会飞/会上升时，她就跟着一路往上，几路推力叠加就是几百格。\n\n【口径】判据取**目标**（当前锁定的敌人）的 Y + 本值；0 = 关掉这条约束（回到旧行为）。只压\"向上\"：她仍然可以往下俯冲（那是空袭的进攻动作）。")
-                .translation("config.promaid.airRaid.maxAlt")
-                .defineInRange("maxAlt", 48.0, 0.0, 256.0);
         AIR_RAID_JUMP_TICKS = BUILDER.comment("起跳等待上限（tick，默认 3）：先跳一下离地、下一 tick 再放烟花才吃得到推力；这么久还没离地（低矮空间）就放弃本轮")
                 .translation("config.promaid.airRaid.jumpTicks")
                 .defineInRange("jumpTicks", 3, 0, 20);
@@ -2595,6 +2592,11 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_FREE_FLIGHT_NEAR_DIST = BUILDER.comment("仿创造飞行·落地待命的贴近距离（格，默认 2）：软着陆时机头对着主人漂过去，最终停在他身边这个距离内——留 1 格余量给原版 3 格交互距离。")
                 .translation("config.promaid.misc.freeFlightNearDist")
                 .defineInRange("freeFlightNearDist", 2, 1, 6);
+        MISC_FREE_FLIGHT_TRAVEL = BUILDER.comment("仿创造飞行·走路的活也交给飞（默认开，实测六百八十八）\n\n【需求方口径】\"本来就走过去应该交给创造\"——她已经会飞了，那些**本来要走路过去**的活（挖矿 / 伐木 / 农活这些直连寻路的目标）就不该再靠两条腿：够远或者要上下，就直接飞过去，落地干活，到地方把控制权交还给她自己的任务。上一批已经把**搭路**（垫方块过沟 / 上坡）整段让位，这一条是它的对偶面：**不搭路，也不绕路**。\n\n【接管条件】她的直连寻路目标与她之间：水平超过下面那条距离，或者高差超过 2 格；且她此刻**在非战斗的工作任务上**。近处挪一步照旧走路（飞过去又慢又吵）。\n\n【不接管的情况】自保逃跑（它的落点是贴着地面的安全点）、战斗走位、刷怪笼插火把（那条链自己拥有走位）、站桩工作（建筑 / 烹饪 / 酿造）、idle / 跟随（跟随有它自己那套飞行跟随）；目标格底下落不下去（沟上 / 虚空上 / 水面上方）也不接管——那种路她原来怎么走现在还怎么走。\n\n【顺带修掉的一个往复】\"在主人身边干活\"时不再做跟随起飞（否则会「落到工位 → 主人走两步她起飞去追 → 挖矿驱动又把她飞回工位」来回摆）；主人真走远（> 16 格）或上天（高差 > 8 格）照旧跟。\n\n注意：只有 1.21.1 树有这一条（仿创造飞行本身只有那边的实现）。日志搜「赶路」。")
+                .translation("config.promaid.misc.freeFlightTravel").define("freeFlightTravel", true);
+        MISC_FREE_FLIGHT_TRAVEL_DIST = BUILDER.comment("仿创造飞行·超过多远就改飞（格，默认 8）：直连寻路的目标与她水平距离超过这个值 → 起飞飞过去；调大 = 更多路用走的（比如 32：只有跨半个工作区才飞），0 = 只要不是同一格就飞（不建议）。")
+                .translation("config.promaid.misc.freeFlightTravelDist")
+                .defineInRange("freeFlightTravelDist", 8.0, 0.0, 64.0);
         MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关，实测六百七十五）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
                 .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
     MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")

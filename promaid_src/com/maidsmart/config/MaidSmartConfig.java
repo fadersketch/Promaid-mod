@@ -433,10 +433,6 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 占位高度容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_ALTITUDE_TOLERANCE;
 
-    /** 【实测六百八十七】空袭爬升上限（格，默认 48，0 = 不限）：她不许飞到"目标上方这么多格"以上。
-     *  需求方原话："有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接
-     *  飞到天上300多格。"上限只约束**向上**；被顶到上限时改压机头滑翔下来。 */
-    public static final ForgeConfigSpec.DoubleValue AIR_RAID_MAX_ALT;
     /** 起跳等待上限（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.IntValue AIR_RAID_JUMP_TICKS;
     /** 烟花最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -2103,9 +2099,6 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_ALTITUDE_TOLERANCE = BUILDER.comment("占位高度容差（格，默认 10）：她比目标低不超过这么多格就视为已占位、直接走原链路（近战俯冲 / 远程盘旋）；同时也是起飞朝向的判据（容差内起飞走「背离 + 抬头」）")
                 .translation("config.promaid.airRaid.altitudeTolerance")
                 .defineInRange("altitudeTolerance", 10.0, 0.0, 64.0);
-        AIR_RAID_MAX_ALT = BUILDER.comment("空袭·相对目标的爬升上限（格，默认 48，0 = 不限）：她不许飞到「目标上方这么多格」以上——到了就**不再爬、也不再点烟花/激流/羽扇往上顶**，改为压机头滑翔下来。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌\"。空袭的高度判据原本只有一个 `onTargetAltitude`（相对**目标**的 Y，没有绝对上限），而目标本身会飞/会上升时，她就跟着一路往上，几路推力叠加就是几百格。\n\n【口径】判据取**目标**（当前锁定的敌人）的 Y + 本值；0 = 关掉这条约束（回到旧行为）。只压\"向上\"：她仍然可以往下俯冲（那是空袭的进攻动作）。")
-                .translation("config.promaid.airRaid.maxAlt")
-                .defineInRange("maxAlt", 48.0, 0.0, 256.0);
         AIR_RAID_JUMP_TICKS = BUILDER.comment("起跳等待上限（tick，默认 3）：先跳一下离地、下一 tick 再放烟花才吃得到推力；这么久还没离地（低矮空间）就放弃本轮")
                 .translation("config.promaid.airRaid.jumpTicks")
                 .defineInRange("jumpTicks", 3, 0, 20);
