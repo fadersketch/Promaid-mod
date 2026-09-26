@@ -2102,7 +2102,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("垂直向上范围", String.valueOf(MaidSmartConfig.MINE_UP_RANGE.get()),
                 s -> setInt(MaidSmartConfig.MINE_UP_RANGE, s), "垂直向上范围（格）：找头顶多高的矿（悬崖/天花板矿脉）；调大能发现高处矿"));
         this.rows.add(new NumRow("穿透预算", String.valueOf(MaidSmartConfig.MINE_BREAK_BUDGET.get()),
-                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算（默认 6）：选矿时统计到矿之间要穿过的实心方块层数（含石头/泥土），超过预算的矿不选、走近再看；调大=爱穿墙打隧道，调小=只挑暴露的矿"));
+                s -> setInt(MaidSmartConfig.MINE_BREAK_BUDGET, s), "穿透预算（默认 22）：选矿时统计到矿之间要穿过的实心方块层数（含石头/泥土），超过预算的矿不选、走近再看；调大=爱穿墙打隧道，调小=只挑暴露的矿"));
         this.rows.add(new NumRow("价值权重", String.valueOf(MaidSmartConfig.MINE_VALUE_WEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.MINE_VALUE_WEIGHT, s), "价值权重：矿石价值对选矿的加成——钻石/绿宝石 500 分、铁/金 250、煤 100；权重越高高价值矿越优先（哪怕更远）"));
         this.rows.add(new NumRow("深度惩罚", String.valueOf(MaidSmartConfig.MINE_DEPTH_PENALTY.get()),
@@ -2976,17 +2976,17 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.2.2 实测六百一十三：启动的"能飞的道具"两选一 → 三选一（加能上天的位移法术，与空袭三件套同一口径）
         // v1.2.2 实测六百一十五：起手球 25 / 收手球 5 拆成两个配置 + 整块搬到本小节
         this.rows.add(new BoolRow("飞行跟随（鞘翅追主人）", MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(v), "飞行跟随（默认开）：开启后，主人离她超过【起手距离】、你俩之间没有方块挡住视线、她背包里有能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）、周围又没怪，她就背上鞘翅飞过来（动作与空袭那套一样）；进到【收手距离】内就收手交回普通跟随，并当场消掉烟花给的推进矢量。【实测六百七十九】默认开；下面是三条省料开关，默认全关（不消耗烟花 / 鞘翅耐久 / 三叉戟耐久）。完整判定、调试入口与「位移法术也算能飞的道具」这类细则见手册的「跟随」一章。升级注意：本小节已从「搭路」搬到独立的 [flightFollow]，老配置文件 [bridge] 下那四行不再生效，重开一次开关即可"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_ENABLED.set(v), "飞行跟随（默认关）：开启后，主人离她超过【起手距离】、你俩之间没有方块挡住视线、她背包里有能飞的道具（烟花火箭 / 孔雀羽扇 / 能上天的位移法术，三选一）、周围又没怪，她就背上鞘翅飞过来（动作与空袭那套一样）；进到【收手距离】内就收手交回普通跟随，并当场消掉烟花给的推进矢量。属于观赏玩法（会烧烟花、啃鞘翅耐久），想省料看下面两条。完整判定、调试入口与「位移法术也算能飞的道具」这类细则见手册的「跟随」一章。升级注意：本小节已从「搭路」搬到独立的 [flightFollow]，老配置文件 [bridge] 下那四行不再生效，重开一次开关即可"));
         this.rows.add(new NumRow("起手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_DIST.get()),
                 s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_DIST, s), "飞行跟随·起手距离（格，默认 25，范围 3~128）：主人与她【3D 距离】超过这个值才起飞追——更近的距离走路/搭路本来就够了，犯不上烧烟花（旧默认 5 太灵敏，她稍微走出去一点就起飞）。与下面那条【收手距离】是**两个不同的球**，两者之差就是迟滞带；想更早起飞就把它调小。老配置文件里若写着 dist = 5，请手动改成 25（模组不会替你改）"));
         this.rows.add(new NumRow("收手距离（格）", String.valueOf(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST.get()),
                 s -> setDouble(MaidSmartConfig.FLIGHT_FOLLOW_END_DIST, s), "飞行跟随·收手距离（格，默认 5，范围 1~64）：主人进到这么近（3D 距离）就中断本趟、交回普通跟随，并**消掉烟花的推进矢量**（收掉还挂着的助推火箭 + 速度归零——不然她会带着 1.7 格/tick 的动量从你身边冲过去）。**必须比起手距离小**：写成大于等于起手距离时她会「起飞即收手」，模组会自动把它压到「起手距离 − 1」"));
         this.rows.add(new BoolRow("飞行跟随·消耗烟花", MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认关 = 不消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 位移法术任一，它是「她能飞」的凭证），但每次补推不再从背包扣那一枚——纯观赏档。羽扇按它自己的口径扣耐久、位移法术不消耗物资，这条只管烟花"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_FIREWORK.set(v), "飞行跟随消耗烟花（默认开 = 真消耗）：关掉之后【照旧要求背包里有能飞的道具】（烟花 / 孔雀羽扇 / 位移法术任一，它是「她能飞」的凭证），但每次补推不再从背包扣那一枚——纯观赏档。羽扇按它自己的口径扣耐久、位移法术不消耗物资，这条只管烟花"));
         this.rows.add(new BoolRow("飞行跟随·消耗鞘翅耐久", MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认关 = 不啃耐久）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_ELYTRA.set(v), "飞行跟随消耗鞘翅耐久（默认开 = 照原版每 20 tick 扣 1 点）：关掉之后这一趟飞行不啃鞘翅耐久（只认原版鞘翅及其子类；模组那种自带滑翔钩子的护甲走它自己的实现，这里拦不到）"));
         this.rows.add(new BoolRow("飞行跟随·消耗三叉戟耐久", MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.get(),
-                v -> MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(v), "飞行跟随消耗激流三叉戟耐久（默认关 = 不扣耐久）：关掉之后这一趟里用激流三叉戟追你不再扣它的耐久，与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。只管飞行跟随这一条链路——空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久。顺序不变：背包里有烟花时依旧先烧烟花，所以对「有烟花可烧」的存档没有影响"));
+                v -> MaidSmartConfig.FLIGHT_FOLLOW_TRIDENT.set(v), "飞行跟随消耗激流三叉戟耐久（默认开 = 照原版每次推进扣 1 点）：关掉之后这一趟里用激流三叉戟追你不再扣它的耐久，与上面两条（消耗烟花 / 消耗鞘翅耐久）同一档的省料开关。只管飞行跟随这一条链路——空袭的起飞/掉高抬升/俯冲冲刺是战斗动作，照旧扣耐久。顺序不变：背包里有烟花时依旧先烧烟花，所以对「有烟花可烧」的存档没有影响"));
     }
 
     /**
@@ -3168,7 +3168,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("主人死亡传送", MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.get(),
                 v -> MaidSmartConfig.COMBAT_MASTER_DEATH_TELEPORT.set(v), "主人死亡强制传送（无视战斗/距离）"));
         this.rows.add(new BoolRow("致死伤害自动回魂符", MaidSmartConfig.SOUL_SPELL_ENABLE.get(),
-                v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 1 秒，从释放时刻起算）"));
+                v -> MaidSmartConfig.SOUL_SPELL_ENABLE.set(v), "致死伤害自动回魂符：女仆受到一击必杀的伤害且没有保命物品（绀珠之药/不死图腾）时，自动收进主人背包里的空魂符（TLM 魂符）——免去神龛复活；主人需同维度且在半径内、背包有空魂符；成功收符后进入冷却（默认 60 秒，从释放时刻起算）"));
         this.rows.add(new BoolRow("致死伤害保护", MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.get(),
                 v -> MaidSmartConfig.SOUL_SPELL_LETHAL_GUARD.set(v), "致死伤害保护：受到一击必杀的伤害时立即尝试收魂符（成功则取消伤害）——比死亡强；有保命物品时让保命物品生效，不抢收"));
         this.rows.add(new NumRow("主人收符半径（格）", String.valueOf(MaidSmartConfig.SOUL_SPELL_OWNER_RADIUS.get()),
@@ -3176,7 +3176,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("女仆自动复活", MaidSmartConfig.AUTO_RESURRECT_ENABLE.get(),
                 v -> MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(v), "女仆自动复活：女仆死亡后墓碑在延迟时间到期时自动消失，女仆在主人重生点（床/重生锚）按比例复活——不用再手动去墓碑处取回；重生点不可用（床被拆/重生锚没电/维度不允许/从没设过）时直接在主人所在位置复活（强制、不看地形，主人在高空/岩浆边也照落）；关掉恢复 TLM 原版死亡流程"));
         this.rows.add(new NumRow("复活延迟（秒）", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get()),
-                s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 10，也是墓碑存在的时长）"));
+                s -> setInt(MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS, s), "复活延迟（秒）：死亡后墓碑存在这么久才自动消失并复活女仆（默认 60，也是墓碑存在的时长）"));
         this.rows.add(new NumRow("复活血量比", String.valueOf(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get()),
                 s -> setDouble(MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO, s), "复活血量比：复活时女仆恢复的血量比例（1.0 = 满血，0.35 = 35%）"));
         // 实测四百二十六：复活时机（照驯养革新宠物床：可选次日黎明；右键墓碑随时可立即复活）
@@ -3244,7 +3244,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // 实测五百七十一：喂水（软联动「口渴」Thirst Was Taken）——模组不在场时这两项不出现
         if (com.maidsmart.action.ThirstCompat.available() && MaidSmartConfig.AID_THIRST_THRESHOLD != null) {
             this.rows.add(new NumRow("投喂触发口渴度", String.valueOf(MaidSmartConfig.AID_THIRST_THRESHOLD.get()),
-                    s -> setInt(MaidSmartConfig.AID_THIRST_THRESHOLD, s), "投喂触发口渴度（4-20）：主人口渴值（Thirst Was Taken，0-20）低于此值自动喂水（默认 20）。判定位点 = 口渴值；效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还全走原版喝的路径；未装该模组时本页没有这两项"));
+                    s -> setInt(MaidSmartConfig.AID_THIRST_THRESHOLD, s), "投喂触发口渴度（4-20）：主人口渴值（Thirst Was Taken，0-20）低于此值自动喂水（默认 15）。判定位点 = 口渴值；效果与玩家自己喝一致——模组的口渴/纯度结算与玻璃瓶等容器返还全走原版喝的路径；未装该模组时本页没有这两项"));
             // 实测五百七十三：与「投喂食物勾选」同款的图形化勾选子页（用户要求照搬喂食那套）
             this.rows.add(new NumRow("喂水最低水质（0-3）",
                     String.valueOf(MaidSmartConfig.AID_DRINK_MIN_PURITY.get()),
@@ -3394,7 +3394,7 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.COMBAT_AUTO_SWITCH_RESTORE_THREAT_DIST, s), "还原威胁半径（格，默认 8）：女仆周围此范围内无敌对生物才算威胁消失、开始还原计时——比响应半径小（远处怪不该让她一直卡在战斗里回不了岗）；战斗中玩家手动给她换的任务不会被还原翻回去"));
         // v1.2.2 实测六百一十九：战斗时临时扩圈（home 模式工作范围圈，见 CombatWorkRange）
         this.rows.add(new NumRow("战斗时临时扩圈（格）", String.valueOf(MaidSmartConfig.COMBAT_WORK_RANGE.get()),
-                s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 32，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
+                s -> setInt(MaidSmartConfig.COMBAT_WORK_RANGE, s), "战斗时临时扩圈（格，默认 15，0 = 关闭）：排班/在家模式（不跟随）下女仆的「工作范围」圈在她接战时临时放大到这个半径——原版每 40 tick 检查一次「离圈心超过 (半径+4) 格就直接传送回工位」，追怪的近战女仆因此被反复拽回去（追出去→传送回来→再追出去）；取 max(本值, 当前半径)，战斗结束自动落回正常的工作范围"));
         // v1.3.3 防刷怪：发现刷怪笼就去插火把（玩家建议；home 工作区里不执行）
         this.rows.add(new BoolRow("防刷怪·发现刷怪笼就去插火把", MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.get(),
                 v -> MaidSmartConfig.COMBAT_SPAWNER_TORCH_ENABLE.set(v),
