@@ -384,9 +384,11 @@ public final class MaidFlightKit {
             // 拉栓换弹）。门禁取"打得响 **或** 换得上"——旧版只认前者，于是弹匣打空的那一拍
             // 模式就判"缺弹药"，扫帚模式当场把她从空中放下来（玩家报的"冲锋枪/狙击枪飞着飞着
             // 就掉下来"），空袭那边同理。口径只在 GunCompat 一处，别处不重写。
-            // 【实测六百九十四：两档现在都由枪械 mod 自己回答】canFeed 问 TACZ 的 NO_AMMO 门
-            // （实测六百六十六），canReload 问 TACZ 的 AbstractGunItem.canReload（口径比对 +
-            // 认弹药箱 + 否掉坏枪，实测六百九十四）——**不再是"任意远程武器 + 任意弹药"**。
+            // 【实测六百九十四 / 六百九十五：两档现在都由枪械 mod 自己回答】canFeed 问两家各自的
+            // 「打得响吗」（TACZ 的 NO_AMMO 门 = 实测六百六十六；卓越前线的 hasEnoughAmmoToShoot），
+            // canReload 问两家各自的「换得上弹吗」（TACZ 的 AbstractGunItem.canReload = 实测六百九十四；
+            // 卓越前线的 GunData.shouldStartReloading——与 TLM 自己的 SBW 换弹链路同一个方法 = 实测六百九十五）
+            // ——**不再是"任意远程武器 + 任意弹药"**。
             // 玩家原话：「像冲锋枪跟狙击枪并不是只要有远程武器和弹药就行」。
             if (GunCompat.isGun(weapon)) {
                 return GunCompat.canFeed(maid, weapon) || GunCompat.canReload(maid, weapon);

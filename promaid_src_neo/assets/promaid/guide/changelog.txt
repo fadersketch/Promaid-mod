@@ -1,4 +1,35 @@
-﻿## 实测六百九十三【锁敌后的「随机环绕路径」：盘旋半径改成每只女仆各自随机缓动 + 旋向按 UUID 对半（一半顺一半逆）+ 新增「离敌最远距离」硬上界——扫帚模式与远程空袭两条环绕链路同时改（版本号不变，仍是 v1.3.0 beta）】
+﻿## 实测六百九十四【模式门禁的「有弹药」这一条改成问 TACZ 自己：远程空袭 / 扫帚的「有弹药」不再只是“有远程武器 + 任意弹药”，而是原样调用 TACZ 的 AbstractGunItem.canReload（口径必须对上这把枪、弹药箱照认、坏枪与满匣顺带否掉）】（版本号不变，仍是 v1.3.0 beta）
+
+> 玩家原话：「现在关于远程空袭模式和扫帚模式枪械的判定还是tacz原版能够开火的判定吗？我想的是现在对于允许激活的判定，不应该是单纯的远程武器加弹药（很简单，因为像冲锋枪跟狙击枪并不是只要有远程武器和弹药就行的），最好是走TACZ的API，发现手持武器对应的TACC端允许开火，那么就判定为武器和弹药方面为可通过的。」
+
+### 一、问的就是这个缺口，而且它确实存在
+
+「允许激活的判定」就是两模式共用的那道弹药门：`MaidFlightKit.hasAmmoForWeapon`（远程空袭走 `hasAmmoForRanged`、扫帚走 `MaidBroomKit.ammoOk`，两边都汇到这一处）。它是两半的或门：
+
+- **已经是 TACZ 的那一半**：`GunCompat.canFeed`（实测六百六十六）——逐句拄 TACZ `LivingEntityShoot.shoot` 的 NO_AMMO 门（`useInventoryAmmo` / `hasInventoryAmmo(…, true)` / `getCurrentAmmoCount` / `hasBulletInBarrel`），问的是「**这一拍**扣执机打得响吗」。
+- **还不是的那一半**：`GunCompat.canReload`（实测六百九十二 为了“弹匣空了别把她摇下扫帚”而加的）——它用的是 `looseAmmoScan`：主手 / 背包里有**任意** `tacz:ammo`（或对得上的弹药箱）就算，**不看口径**。这正是玩家说的「只要有远程武器和弹药就行」。
+- **后果**：她背着一包步枪弹、手里却是狙击枪 / 重机枪 / 蓄力枪 → 判「备弹通过」→ 空袭 / 扫帚模式激活、气泡不报缺件、而**她一直绕圈不开火**（与 666 修过的「一直绕圈但不射击」同一类，只是从另一道门进来）。
+
+### 二、改法（两树镜像）：把「换得上弹」交给 TACZ
+
+- `GunCompat.canReload` 改成：TACZ 枪 → 原样调用 `AbstractGunItem.canReload(shooter, gun)`；只有**反射不可用**（返回 null）才回退 `looseAmmoScan`。TACZ 明确回答 false（口径对不上）时**必须**算 false，绝不回退。
+- javap 实证（1.20.1 与 1.21.1 两版 1.1.8，签名一致、字节码逐句相同）它查的是：① `getCommonGunIndex(getGunId(gun))` 为空 → false（坏枪 / 枪包数据缺失）；② 弹匣已满（`getCurrentAmmoCount >= 附件加成后的上限`）→ false（那一拍 canFeed 已为真）；③ `useInventoryAmmo` → false（那类枪归 canFeed 的 hasInventoryAmmo 管）；④ `reloadData.isInfinite()` → true；⑤ 假弹 `getDummyAmmoAmount > 0`；⑥ 否则扫 shooter 的 ITEM_HANDLER（女仆 = 护甲 + 双手 + 背包 + 饰品 四合一）：`IAmmo.isAmmoOfGun(gun, stack)` **或** `IAmmoBox.isAmmoBoxOfGun(gun, stack)`。
+- 第 ⑥ 步的 lambda（`lambda$canReload$1`）与 `hasInventoryAmmo` 的扫法**逐句相同**，是纯只读的 `getStackInSlot` 循环（不 extract、不改 NBT）——**每 tick 调用无副作用**（javap 实证）。
+- 新增反射句柄 `TACZ_RELOAD_API` / `taczReloadApi()` / `taczCanReload()`；`looseAmmoScan` 保留为兜底（没装 TACZ / 版本改名时行为与旧版一字不差）。SBW 没有对应的公开查询方法（本机未装、无法 javap 实证）→ 仍走 looseAmmoScan，其「打得响」那一半仍由 666 的 `hasEnoughAmmoToShoot` 管。
+
+### 三、为什么这不回退 实测六百九十二
+
+692 的诉求是「弹匣打空的那一拍别把她从扫帚上摔下来」。`canReload` 第 ⑥ 步**同时认弹药箱**（`tacz:ammo_box`，玩家后勤主流形态），且弹匣满时那一拍 `canFeed` 为真——「打得响 **或** 换得上」的或门照旧过。被新口径挡掉的只有「带的是对不上口径的弹药」，那本来就不该让她起飞（起了也打不响）。
+
+### 四、验证与边界
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=171 SKIP=9 FAIL=0**（本批没有新增注入点）；打包门禁（`verify_jar_classes.py` + mixin 包登记 + lang json）全过；出 `promaid-1.3.0-forge-1.20.1.jar` / `promaid-1.3.0-neoforge-1.21.1.jar`，**同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）并逐处核对 md5。
+- `_vt694.py` 只读核对：新增反射段两树**逐字镜像**；`canReload` 真的调 `taczCanReload`，且「TACZ 明确 false 不回退」；neo 新块零 SRG 残留、forge 新块零官方名；javap 复验两版 tacz jar 里 `canReload(LE,IS)` 都在；门禁调用点仍是 `canFeed || canReload`；此外 CJK 注释行两树逐行一致（GunCompat 172/172）。
+- `_jarchk694.py` jar 内容核对：两个 jar 里都能搜到新符号与新文案（`AbstractGunItem` / `TACZ_RELOAD_API` / `taczCanReload` / `canReload`），且旧行为残留（`canReload` 函数体里只剩一处 `looseAmmoScan` 兜底）。
+- **边界如实写**：① 这一批只改「有弹药」这一条判据，弓 / 鸢（数箭 / 烟花）与御币 / 三叉戟（免检）一个字没动；② 「这一拍打得响」那半（`canFeed`）仍是 666 的口径，未动；③ 自主战斗切枪械池的闸（`hasGunAndAmmo`）**故意仍只认 canFeed**（进池 = 当场打得响），未纳入本批；④ 没装 TACZ / 反射取不到 `canReload` 时整条回退旧口径，不会因为兼容层异常把模式踢掉。
+- **最终仍要凭实测验收**：她手里是冲锋枪 / 狙击枪、背包里只有「对不上口径」的弹药时，模式应当**不再激活**并报缺弹药；背包里有对得上口径的弹药或弹药箱时，照旧激活。
+
+## 实测六百九十三【锁敌后的「随机环绕路径」：盘旋半径改成每只女仆各自随机缓动 + 旋向按 UUID 对半（一半顺一半逆）+ 新增「离敌最远距离」硬上界——扫帚模式与远程空袭两条环绕链路同时改（版本号不变，仍是 v1.3.0 beta）】
 
 > 玩家原话：「可以把环绕型攻击方式更改一下，这样环绕的话会增加被击中的概率，会导致消耗量增加，敌人如果攻击的是第一只的话，会攻击到后面的，锁敌之后攻击敌人的飞行路径改成随机吧，然后设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」
 
