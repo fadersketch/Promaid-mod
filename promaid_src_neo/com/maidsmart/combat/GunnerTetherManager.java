@@ -209,8 +209,19 @@ public final class GunnerTetherManager {
     private static final Map<UUID, Float> RIDE_FALL = new HashMap<>();
     /** 上一拍采样的玩家 Y（算下降量用；tick 每 2 tick 跑一次） */
     private static final Map<UUID, Double> RIDE_LAST_Y = new HashMap<>();
-    /** 单次采样（2 tick）下降少于此值就不算"真在下坠"：把累计钳回 1.0（≈原版 0.5 格/tick） */
-    private static final float RIDE_SLOW_MIN = 1.0f;
+    /**
+     * 单次采样（2 tick）下降少于此值就不算"真在下坠"：把累计钳回 1.0。
+     *
+     * <p>【实测六百八十四】1.0 → 0.2：这条门槛原先照抄原版 {@code checkSlowFallDistance}
+     * 的"0.5 格/tick"口径，但**扫帚根本飞不到那个下降率**——{@code MaidBroomDrive.MAX_V_SPEED}
+     * 把竖直速度封在 0.30 格/tick（6 格/秒），一次 2 tick 采样最多 0.6 格，永远小于 1.0，
+     * 于是永远被判成"慢降"、累计被钳在 1.0（低于原版 1.5 的猛击门槛）→ **挂在扫帚下面
+     * 一锤猛击都砸不出来**（玩家原话："我希望玩家在挂在女仆下面的时候重锤以及类似可以触发
+     * 它对应的附魔"）。改成 0.2（= 0.1 格/tick ≈ 2 格/秒）之后：扫帚一次正经的下降
+     * （满速 0.30 格/tick）稳稳过线，而"悬停时那点漂移"（到点那一支把速度乘 0.75 收干，
+     * 实际 dy≈0）照样被滤掉，不至于慢慢飘着也攒出超重击。
+     */
+    private static final float RIDE_SLOW_MIN = 0.2f;
     /** 能用猛击的最低下落格数：原版 {@code MaceItem.SMASH_ATTACK_FALL_THRESHOLD}（= 1.5） */
     private static final float RIDE_SMASH_MIN = 1.5f;
 
@@ -1175,10 +1186,29 @@ public final class GunnerTetherManager {
             }
             UUID id = sp.getUUID();
             Float v = RIDE_FALL.remove(id);
-            RIDE_LAST_Y.put(id, sp.getY());
+            // 【实测六百八十四】只在"本来就在记"的时候续上基准：旧版无条件 put，于是一个普通
+            //  玩家在地面挥一锤就会凭空多出一条 RIDE_LAST_Y 记录，{@link #isHangRiding} 那个
+            //  "他此刻挂着吗"的判据（日志用）从此永远为真。
+            if (RIDE_LAST_Y.containsKey(id)) {
+                RIDE_LAST_Y.put(id, sp.getY());
+            }
             return v == null ? 0.0f : v;
         } catch (Throwable t) {
             return 0.0f;
+        }
+    }
+
+    /**
+     * 【实测六百八十四】这位玩家此刻是不是"挂在女仆下面"（= 我们正在替他记这一段下落）。
+     *
+     * <p>只服务日志：没有它，"这一段下落 0.00 格"这条会在他每次在地面上挥重锤时都打一行，
+     * 看着像本模组出了故障，其实只是他没挂着。
+     */
+    public static boolean isHangRiding(Player player) {
+        try {
+            return player instanceof ServerPlayer sp && RIDE_LAST_Y.containsKey(sp.getUUID());
+        } catch (Throwable t) {
+            return false;
         }
     }
 

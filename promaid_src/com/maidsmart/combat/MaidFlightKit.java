@@ -1138,6 +1138,69 @@ public final class MaidFlightKit {
         return !stack.m_41619_() && stack.m_41720_() instanceof net.minecraft.world.item.ArmorItem;
     }
 
+    /**
+     * 【实测六百八十四】"该不该给她画我们那一对翅膀"——{@link #isUsableElytra} 的**通用版**。
+     *
+     * <p><b>玩家原话</b>："目前只有鞘翅会渲染出来，那其他模组的鞘翅装备能不能渲染出来呢？
+     * 有没有一个通用代码可以写出来？？"
+     *
+     * <p><b>通用判据就是 {@link #isElytraLike} 那一条</b>（{@code ItemStack.canElytraFly}）：
+     * 原版滑翔的闸门读它，所以"她能不能滑翔"与"我们认不认这件装备"是同一个口径——模组只要
+     * 让自己的装备能滑翔，翅膀就跟着出来，**不需要为本模组做任何适配**。
+     *
+     * <p><b>唯一的例外：这件装备自己就是护甲。</b>{@link #isArmorElytra}（鞘翅胸甲这类）在胸甲
+     * 槽本来就画着自己的护甲模型，再叠一层原版翅膀 = 穿模。原版自己的
+     * {@code ElytraLayer.m_6494_} 同样只服务 {@code Items.ELYTRA}——而原版鞘翅恰好是世上唯一
+     * 一件"能滑翔但不是护甲"的装备，所以这条规则不是我们发明的，只是把原版那条隐含规则写明。
+     *
+     * <p><b>贴图</b>：模组装备没有通用 API 告诉别人"我的翅膀长什么样"，这一类一律用原版
+     * {@code textures/entity/elytra.png}（与原版 {@code ElytraLayer.getElytraTexture} 的默认
+     * 返回值同一个文件）。
+     *
+     * @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时只认原版鞘翅
+     */
+    public static boolean isWingRenderable(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
+        if (isUsableElytra(stack)) {
+            return true;
+        }
+        if (!isElytraLike(stack, entity)) {
+            return false;
+        }
+        return !isArmorElytra(stack);
+    }
+
+    /** 【实测六百八十四】"能滑翔但被跳过（它是护甲、自带外观）"的留痕节流表 */
+    private static final java.util.Map<EntityMaid, Long> WING_SKIP_LOG =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    /**
+     * 【实测六百八十四】胸甲槽是一件"模组护甲型鞘翅"时的留痕（40 tick 节流）。
+     *
+     * <p>玩家问"其他模组的鞘翅装备能不能渲染出来"——答案是"能滑翔的会画翅膀；**但当它是护甲时
+     * 我们不画**，因为那件护甲自己就有外观"。这一行就是那句话的运行期证据：日志里看到它，
+     * 说明"她确实穿着能滑翔的装备、只是我们有意没叠翅膀"，而不是渲染链路趴了。
+     */
+    public static void noteWingSkipped(EntityMaid maid, ItemStack chest) {
+        try {
+            long t = maid.m_9236_().m_46467_();
+            Long last = WING_SKIP_LOG.get(maid);
+            if (last != null && t - last < 40L) {
+                return;
+            }
+            WING_SKIP_LOG.put(maid, t);
+            String id;
+            try {
+                id = String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(chest.m_41720_()));
+            } catch (Throwable ignored) {
+                id = chest.m_41720_().toString();
+            }
+            com.maidsmart.tool.PromaidLog.log("鞘翅渲染", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 胸甲槽=" + id + "：它能滑翔、但本身是护甲（自带外观）→ 不叠我们的翅膀"
+                    + "（要翅膀就换原版鞘翅 / 非护甲的滑翔装备）");
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 实测五百五十五补充：胸甲槽换装写一行运行日志（40 tick 节流，防模组拒绝穿戴时刷屏）。
      *  用来回答"鞘翅飞坏了会不会自己换下一件"——换了就有这行，包里没得换就不会有。 */
     private static final java.util.Map<EntityMaid, Long> ELYTRA_SWAP_LOG =

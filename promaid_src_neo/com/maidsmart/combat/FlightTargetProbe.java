@@ -42,9 +42,15 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
  * （`javap` 实证），不等于"有视线"——旧日志把它标成"有视线"，一度把排查带偏，现在明确标注。
  *
  * 日志每女仆每 `LOG_INTERVAL` tick 最多一条（默认 40 = 2 秒），且只在
- * **空袭任务且当前没有攻击目标**时打印——正是"锁不到"的现场。有目标或非空袭
+ * **空袭 / 扫帚任务且当前没有攻击目标**时打印——正是"锁不到"的现场。有目标或其它
  * 任务一律静默，零刷屏。走 {@link com.maidsmart.tool.PromaidLog}（受运行日志总开关
  * 控制、同时写 logs/promaid.log 与 latest.log），搜关键词 {@code 空袭索敌}。
+ *
+ * 【实测六百八十五：扫帚也纳进来】扫帚模式原来没有自己的索敌器（只有 TLM 那条链），
+ * 所以"她为什么丢目标"在扫帚上一句话都查不到；六百八十五 把扫帚并进
+ * {@link FlightTargeting} 之后，本探针的逐环计数对**扫帚同样成立**（两边用的是同一个
+ * `scan`）。用户报的"骑着扫帚悬停、一动不动"如果再现，搜 `空袭索敌` 就能看出是
+ * "50 格球里真的没有可打的"（picked=- 且前六环都有数）还是"看见了却被某一环滤掉"。
  *
  * 【纯只读】本类不写任何 brain 记忆、不改任何状态、不参与任何战斗决策——
  * 只是一次扫描 + 计数 + 落盘。
@@ -62,16 +68,20 @@ public final class FlightTargetProbe {
     }
 
     /**
-     * 每 tick 由 core 行为调用（仅空袭任务、且无目标时才真正扫描）。
+     * 每 tick 由 core 行为调用（仅空袭 / 扫帚任务、且无目标时才真正扫描）。
      *
-     * @param maid 空袭女仆
+     * 【实测六百八十五】判据从"空袭任务"放宽到"空袭 **或** 扫帚任务"：扫帚那边的索敌
+     * 现在也是 {@link FlightTargeting}（同一把尺），所以这一串逐环计数对扫帚同样是他真正
+     * 走的那条链——用户报的"骑着扫帚悬停不动"就靠它在日志里定位。
+     *
+     * @param maid 空袭 / 扫帚女仆
      */
     public static void tick(EntityMaid maid) {
         if (maid == null) {
             return;
         }
         try {
-            if (!MaidFlightKit.isFlightTask(maid)) {
+            if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)) {
                 return;
             }
             long now = maid.level().getGameTime();

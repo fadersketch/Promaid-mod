@@ -71,7 +71,30 @@ import net.minecraft.world.entity.ai.memory.MemoryModuleType;
  * </ol>
  *
  * 【纯服务端】不写网络、不碰渲染。状态表由 {@code MaidFlightCombatBehavior.forget/clearAll/pauseRound}
- * 在女仆移除、服务器停止、以及行为中途停止时清理。
+ * 与 {@code MaidBroomBehavior.stop} 在女仆移除、服务器停止、换任务、以及行为中途停止时清理。
+ *
+ * ── v1.3.0(beta) 实测六百八十五：扫帚模式也并入本索敌器 ──
+ * 【用户原话】"目前的女仆不像空袭状态下不那么容易丢失锁敌。处于扫帚模式（下面还挂着主人）
+ * 状态下的女仆容易出现丢失锁敌的情况。大致就是飞到了空中，然后 boss 也飞上来，boss 掉下去。
+ * 然后女仆就会骑着扫帚悬停在那边，一动不动。"
+ *
+ * 【为什么偏偏是扫帚】差别只有一条：**空袭有自己的索敌器（本类），扫帚没有**。扫帚那边
+ * （{@code MaidBroomBehavior.currentTarget}）读的是 TLM 那条链，而那条链的"维持"判据是
+ * 援护半径（WORK 活动 16 格、其余时段 8 格）+ 传感器盒子（非 WORK 时段垂直硬编码 4 格）：
+ * boss 一掉下去、距离一过线，目标当场作废；TLM 每 tick 重挑时既没有 128 格兜底、盒子也
+ * 够不着 → 再也拿不回来。扫帚行为随后落进"没目标"那一档，而**挂着主人时那一档的出口正是
+ * 原地悬停**（{@code MaidBroomBehavior} ⑥ 的拴绳分支）——"骑在扫帚上悬停、一动不动"就是它。
+ * 这也解释了为什么空袭没事而扫帚有事：空袭的 canStillUse 要求"有目标"，目标一丢它自己就
+ * 停下来收尾（不会僵在原地），扫帚则是**一直在跑、只是每 tick 都走悬停那一支**。
+ *
+ * 【现在的口径】扫帚任务一并纳入本类：发现 50 格 / 维持 128 格 / 每 tick 回写
+ * {@code ATTACK_TARGET} 与 {@code LOOK_TARGET}，与空袭**同一套数字、同一套判据**（用户要的
+ * "像空袭那样不容易丢"就是字面意思——同一个索敌器）。扫帚侧新增的两个接入点是
+ * {@code MaidBroomBehavior.aimTarget()}（先问本类、问不到才退回 TLM 链，所以今天能锁到的
+ * 目标一个都不会丢）与它 {@code stop()} 里的 {@link #forget}。
+ *
+ * 【为什么不新建一套"扫帚索敌器"】那会有两份"什么算有效目标"的判据，将来必然漂移——本模组
+ * 反复强调的红线是"口径只有一处"（见 {@code MaidBroomDrive} 对扫帚/空袭同款公式的说明）。
  */
 public final class FlightTargeting {
 
@@ -185,9 +208,10 @@ public final class FlightTargeting {
         }
         try {
             java.util.UUID id = maid.m_20148_();
-            if (!MaidFlightKit.isFlightTask(maid)) {
-                // 只有两个空袭任务走本索敌器，其它任务不受影响；顺手清掉残留（切走任务时
-                // 不该继续抱着旧目标，否则她切回地面任务后我们还会往 brain 里写空战目标）
+            if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)) {
+                // 只有两个空袭任务与扫帚任务走本索敌器（扫帚见类注释 实测六百八十五），
+                // 其它任务不受影响；顺手清掉残留（切走任务时不该继续抱着旧目标，否则她切回
+                // 地面任务后我们还会往 brain 里写空战目标）
                 LOCKED.remove(id);
                 NEXT_SCAN.remove(id);
                 RESOLVED_TICK.remove(id);

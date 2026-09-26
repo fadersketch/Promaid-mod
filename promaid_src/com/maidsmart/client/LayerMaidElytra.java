@@ -85,7 +85,12 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
-        if (!MaidFlightKit.isUsableElytra(chest)) {
+        if (!MaidFlightKit.isWingRenderable(chest, maid)) {
+            // 【实测六百八十四】"能滑翔、但本身是护甲"（鞘翅胸甲这类）会走到这里：它自己就有
+            //  护甲外观，我们不叠翅膀。留一行痕（40 tick 节流），免得日后把它当成渲染链路故障。
+            if (MaidFlightKit.isElytraLike(chest, maid)) {
+                MaidFlightKit.noteWingSkipped(maid, chest);
+            }
             return;
         }
         // v1.2.0 实测五百零四：绑定 TLM 的「显示背部物品」（maid 配置页那一项，
