@@ -187,6 +187,17 @@ public final class GunnerTetherManager {
     private static final int LAND_DETECT_TICKS = 40;
     /** 解除后的摔伤豁免：player UUID → 到期 game tick */
     private static final Map<UUID, Long> DISMOUNT_GRACE = new HashMap<>();
+    /**
+     * 【实测六百八十二】"她换模式了"这个判定的去抖计数：maid UUID → 连续不符的 tick 数
+     * （{@link #tick} 每 2 tick 调一次，所以每次 +2）。够久才真的松手，见 {@link #KIND_SWITCH_TICKS}。
+     */
+    private static final Map<UUID, Integer> KIND_TICKS = new HashMap<>();
+    /**
+     * 换模式去抖门槛（tick）：新模式**连续**站满 1 秒才算数。
+     * <p>为什么不是"一拍就算"：TLM 换任务时 {@code getTask()} 可能有一两拍读不到（新旧交接），
+     * 只凭一拍就松手会误伤正常玩法；绑定本来就以几十秒计，晚一秒松开感觉不到。
+     */
+    private static final int KIND_SWITCH_TICKS = 20;
     /** 拒绝提示节流：maid UUID → 上次提示 ms */
     private static final Map<UUID, Long> DENY_LOG = new HashMap<>();
     /** 恢复扫描计时（ProMaidExtension 每 2 tick 调一次 tick()，这里再分流） */
@@ -213,6 +224,14 @@ public final class GunnerTetherManager {
          * 落地够久再翻回 true。扫帚那一档永远是 false（要挂就挂、要换座就换座）。
          */
         boolean leash;
+        /**
+         * 【实测六百八十二】挂上那一刻她的"战斗模式档"（{@link #modeKind}：broom / flight / none）。
+         * 绑定期间她换了模式（空袭 ⇄ 扫帚，或干脆退出这两个模式）→ 这条链路自动松开一次，
+         * 见 {@link #tick} 的 ⑤。玩家原话："如果玩家绑定了一个空袭状态的女仆。这个时候再把女仆
+         * 切换到扫帚模式，那个标记仍然在，但是却是显示一个无效的效果……那反正，设定成女仆，
+         * 在切换模式的时候会自动将标记和绑定消除一次就行了。"
+         */
+        String kind;
 
         Link(EntityMaid m, ServerPlayer p) {
             this(m, p, false);
@@ -222,7 +241,35 @@ public final class GunnerTetherManager {
             this.maid = new java.lang.ref.WeakReference<>(m);
             this.player = new java.lang.ref.WeakReference<>(p);
             this.leash = leash;
+            this.kind = modeKind(m);
         }
+    }
+
+    /**
+     * 【实测六百八十二】这只女仆此刻的"战斗模式档"——只用来判"绑定期间她换模式了没有"。
+     *
+     * <p>{@code broom} = 任务在扫帚模式**或**此刻正骑着世界里的扫帚（{@link #isBroomRelated} 同款口径）；
+     * {@code flight} = 任务在空袭（近战 / 远战）；{@code none} = 都不是（换成了别的任务）。
+     *
+     * <p>为什么"骑着扫帚"也算 broom：玩家反馈的那个场景是"她骑着扫帚但任务是空袭"——
+     * 那时她已经被 {@link #isBroomRelated} 归到扫帚档（悬挂距离也按扫帚算），链路本来就不该
+     * 还停在"牵绳"上。
+     */
+    public static String modeKind(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return "none";
+            }
+            if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)
+                    || com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid)) {
+                return "broom";
+            }
+            if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+                return "flight";
+            }
+        } catch (Throwable ignored) {
+        }
+        return "none";
     }
 
     private GunnerTetherManager() {
@@ -311,40 +358,12 @@ public final class GunnerTetherManager {
         }
     }
 
-    /**
-     * 【实测六百七十九】"武装拴绳这条链路此刻算不算在用"——**扫帚驱动接管的唯一判据**
-     * （玩家原话："最好不要整体改骑扫帚的链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品
-     * 进行判定（即只有玩家手持武装拴绳才走此链路，不拿则走原版）"）。
-     *
-     * <p>两种"在用"都算，缺一条就会把既有玩法掐断：
-     * <ol>
-     *   <li>她的主人手上正握着武装拴绳（主手 / 副手任一）——玩家说的字面口径；</li>
-     *   <li>或她此刻正被武装拴绳绑着（{@link #isTethered}：牵绳档 / 二号位）。
-     *       <b>这一条不能省</b>：二号位里玩家吊在她下方、手上拿的是枪或重锤（实测六百七十六 的
-     *       重锤猛击就是这么用的），"不拿绳子"是常态——只认 ① 的话，他一放下绳子就断掉她的飞行，
-     *       两个人一起掉下去。</li>
-     * </ol>
-     * 消费方：{@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}（扫帚驱动的接管闸）。
-     * 只读 + 异常兜底 false（读不到就按"没在用"→ 原版，宁可少干预）。
-     */
-    public static boolean leashChainActive(EntityMaid maid) {
-        try {
-            if (maid == null) {
-                return false;
-            }
-            if (isTethered(maid)) {
-                return true;
-            }
-            net.minecraft.world.entity.LivingEntity owner = maid.getOwner();
-            if (!(owner instanceof net.minecraft.world.entity.player.Player p)) {
-                return false;
-            }
-            return p.getMainHandItem().getItem() instanceof CombatLeashItem
-                    || p.getOffhandItem().getItem() instanceof CombatLeashItem;
-        } catch (Throwable t) {
-            return false;
-        }
-    }
+    /* 【实测六百八十二：679 的 leashChainActive() 整段删掉】——它唯一的消费方是
+     *  EntityBroomMaidTravelMixin 里那道"武装拴绳没在用就让位"的闸，而那道闸在 实测六百八十二
+     *  撤掉了（它让扫帚模式在没拿绳子时整段失效 = 玩家看到的"坐着扫帚掉在地上动也不动"）。
+     *  一个没人调、名字又很像"该怎么飞"的方法留着，只会给下一个人准备第二份口径
+     *  （本项目"口径只有一处"的老规矩：672 删 tetherHoldPos 用的是同一条理由）。
+     *  扫帚驱动现在的判据就是 mixin 里那三条：第一乘客是她 / 她的任务就是扫帚模式 / 没有玩家驾驶。 */
 
     /* 【实测六百七十二：tetherHoldPos() / tetherHover() 整段删掉】——拴绳不再给女仆定高度。
      *  671 已经把空袭那一条改成"只保持她自己当前高度"（MaidFlightFollowBehavior.maidsmart$tetherHold），
@@ -789,6 +808,7 @@ public final class GunnerTetherManager {
         unmarkLeash(maid);
         GROUND_TICKS.remove(maid.getUUID());
         MODE_TICKS.remove(maid.getUUID());
+        KIND_TICKS.remove(maid.getUUID()); // 【实测六百八十二】换模式去抖计数跟着解绑一起清
         PULL_LOGGED.remove(maid.getUUID()); // 【实测六百七十七】拉力日志节流跟着解绑一起清
         try {
             maid.getPersistentData().remove(TAG_GUNNER);
@@ -812,7 +832,7 @@ public final class GunnerTetherManager {
         }
         if (!natural) {
             bubble(maid, "换座".equals(why) ? "回扫帚上坐好，我接着飞～"
-                    : "牵绳".equals(why) ? "绳子收好啦，我在这儿等着～"
+                    : "牵绳".equals(why) || "切模式".equals(why) ? "绳子收好啦，我在这儿等着～"
                     // 【实测六百七十五】换绑：这句话直接复用上面那句牵绳台词——台词包是按"包含"
                     // 匹配的，复用既有文本才有对应的语音（新写一句会说不出话）。
                     : "换绑".equals(why) ? "绳子收好啦，我在这儿等着～" : "到站啦，小心落地～");
@@ -1181,6 +1201,12 @@ public final class GunnerTetherManager {
     public static void tick(MinecraftServer server) {
         try {
             long gt = server.getAllLevels().iterator().next().getGameTime();
+            // 【实测六百八十二：要"解除"的先攒起来，等这一轮走完再解】
+            //  detach() 自己会改 LINKS，而在迭代器里改 map 会让下一个 it.next() 抛
+            //  ConcurrentModificationException——整段 tick 被最外层 catch 吞掉，于是**本 tick
+            //  剩下的女仆全部漏检**（旧版 ③ 落水那一支就有这个毛病，只是被吞得无声无息）。
+            //  现在统一：这一支只登记，循环结束后再逐个 detach（键是女仆，值是理由）。
+            java.util.LinkedHashMap<EntityMaid, String> deferredDetach = new java.util.LinkedHashMap<>();
             Iterator<Map.Entry<UUID, Link>> it = LINKS.entrySet().iterator();
             while (it.hasNext()) {
                 Link link = it.next().getValue();
@@ -1193,6 +1219,7 @@ public final class GunnerTetherManager {
                     forgetHang(player); // 【实测六百七十一】一方没了/跨维度：滑变状态一起清
                     if (maid != null) {
                         PULL_LOGGED.remove(maid.getUUID()); // 【实测六百七十七】拉力日志节流一起清
+                        KIND_TICKS.remove(maid.getUUID()); // 【实测六百八十二】去抖计数一起清
                         try {
                             maid.getPersistentData().remove(TAG_GUNNER);
                         } catch (Throwable ignored) {
@@ -1201,6 +1228,24 @@ public final class GunnerTetherManager {
                     }
                     continue;
                 }
+                // 【实测六百八十二】绑定期间她换了模式 → 自动松开（连带金色标记、绳子、相位的清理）
+                //    玩家原话："如果玩家绑定了一个空袭状态的女仆。这个时候再把女仆切换到扫帚模式，
+                //    那个标记仍然在，但是却是显示一个无效的效果……设定成女仆，在切换模式的时候会
+                //    自动将标记和绑定消除一次就行了。"
+                //    【为什么要去抖】换任务那一两拍 `getTask()` 可能瞬间读不到（新旧任务交接），
+                //    只凭一拍就松手会误伤正常玩法。这里要新模式**连续**站满 1 秒才算数——
+                //    绑定本来就是几十秒以上的事，晚一秒松开感觉不到。
+                String kindNow = modeKind(maid);
+                if (!kindNow.equals(link.kind)) {
+                    int n = KIND_TICKS.merge(maid.getUUID(), 2, Integer::sum);
+                    if (n >= KIND_SWITCH_TICKS) {
+                        deferredDetach.put(maid, "切模式");
+                        KIND_TICKS.remove(maid.getUUID());
+                    }
+                    // 去抖期间**不做别的**：这一拍她的模式正在变，翻档/放人都没有意义
+                    continue;
+                }
+                KIND_TICKS.remove(maid.getUUID());
                 // 【实测六百七十三：两档分开走】牵绳档（link.leash）玩家**根本没骑在她身上**
                 //   （"不影响自己的活动"），所以下面那条"玩家离鞍 → 解除"不适用；这一档只看
                 //   "她起飞了没"：连续 10 tick 真的在空中滑翔 / 出空袭手（flyingNow）才算起飞，
@@ -1245,7 +1290,10 @@ public final class GunnerTetherManager {
                 if (maid.isInWater()) {
                     int soaked = GROUND_TICKS.merge(maid.getUUID(), 2, Integer::sum);
                     if (soaked >= GROUND_DISMOUNT_TICKS) {
-                        detach(maid, true);
+                        // 【实测六百八十二】改成"攒起来等这一轮走完再解"：detach() 会改 LINKS，
+                        //  在迭代器里改 map 会让下一拍 it.next() 抛异常、把本 tick 剩下的女仆全漏掉
+                        //  （旧版这里直接 detach，被最外层 catch 吞了，无声无息）。
+                        deferredDetach.put(maid, "落水自动");
                     }
                 } else {
                     GROUND_TICKS.remove(maid.getUUID());
@@ -1261,6 +1309,24 @@ public final class GunnerTetherManager {
                 } else {
                     MODE_TICKS.remove(maid.getUUID());
                 }
+            }
+            // 【实测六百八十二】这一轮攒下来的"自动解除"在这里统一执行（理由见 tick 开头）：
+            //  ① 落水自动：早就在做，只是从"边走边解"改成"走完再解"；
+            //  ② 切模式：绑定期间她换了战斗模式 → 松开 + 撤金色标记（detach 全套）。
+            for (Map.Entry<EntityMaid, String> e : deferredDetach.entrySet()) {
+                EntityMaid m = e.getKey();
+                String why = e.getValue();
+                if (m == null) {
+                    continue;
+                }
+                // 切模式给她一句气泡（复用 675 那句"绳子收好啦"的既有台词：台词包按"包含"匹配，
+                // 复用才有语音）；落水那一档照旧静默（本来就是紧急放人，不额外说话）。
+                boolean natural = !"切模式".equals(why);
+                detach(m, natural, why);
+                com.maidsmart.tool.PromaidLog.log("武装拴绳", "自动解除(" + why + ")：女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(m)
+                        + ("切模式".equals(why)
+                                ? "（她换成了 " + modeKind(m) + " 那一档，原链路的效果已经无效）" : ""));
             }
             // 豁免表过期清理
             if (!DISMOUNT_GRACE.isEmpty()) {

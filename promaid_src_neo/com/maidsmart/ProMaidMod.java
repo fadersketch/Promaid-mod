@@ -267,6 +267,27 @@ public class ProMaidMod {
                 com.maidsmart.tool.PromaidLog.log("配置迁移",
                         "实测六百八十一 默认值修复：把 679 误当默认的 12 项搬回真默认，本次改了 " + repaired + " 项");
             }
+            // v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认 10 → 15（一次性标记）。
+            // 【为什么必须迁】只改 defineInRange 的默认值对老档毫无作用（老 toml 里已经写着 10）；
+            // 用一次性标记钉死只迁一次——还停在旧默认 10 的会动，玩家自己调过的其它值一律不碰。
+            if (!com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_MIGRATED.get()) {
+                // 先读再写：读失败（配置还没挂上）就别动标记，下次启动还能再迁
+                double broomClimbBefore = -1.0;
+                try {
+                    broomClimbBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.BROOM_CLIMB_MIGRATED.set(true);
+                changed = true;
+                if (broomClimbBefore == 10.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.set(15.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "扫帚接敌爬升高度迁移：10 → 15（旧档里留下的老默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "扫帚接敌爬升高度不需要迁移（现值 " + broomClimbBefore + "）");
+                }
+            }
             changed |= migrateOreTable();
         } catch (Exception ignored) {
         }

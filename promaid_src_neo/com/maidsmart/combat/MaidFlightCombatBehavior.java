@@ -740,6 +740,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         int left = LAUNCH_LEFT.getOrDefault(id, 0);
         if (left > 0) {
             LAUNCH_LEFT.put(id, left - 1);
+            // 【实测六百八十二：远战这一段也开火】旧版这一整段（远战 20 tick = 1 秒）一枪不放——
+            //  每一轮"落地 → 重新起飞"都要白丢 1 秒输出，正是玩家反馈的"女仆开枪的频率相比于正常的
+            //  枪械模式要低了很多"里的固定一截。玩家原话："而且似乎某些行为会阻止女仆开枪。"
+            //  【顺序：开火在前、摆朝向在后】枪械开火（TLM 的 performGunAttack）会自己把她的身体拧向
+            //  目标；下面 faceLaunchDirection 紧随其后把朝向摆回"背离/朝目标 + 抬头"。烟花的推力方向
+            //  取的是她**当拍**的视线，每 tick 现算，所以这一口的推力方向一个字都没变
+            //  （与 tickRangedAir 里"开火必须早于朝向"是同一条规矩）。近战不调（它本来也不开火）。
+            if (this.ranged) {
+                fireRanged(maid, target, id, gameTime);
+            }
             faceLaunchDirection(maid, target);
             MaidFlightKit.setGliding(maid, !maid.onGround());
             suppressVanillaMelee(maid);
@@ -1813,6 +1823,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     }
 
     /**
+     * 【实测六百八十二】有效开火距离（格；0 = 不限）：超出它就不扣扳机，改为继续盘旋把她拉近。
+     *
+     * <p>需求原文："远程空袭状态下……女仆在此状态下飞的太远后打枪的准度特别的低。"
+     * 取值口径（为什么默认 24）见配置项 {@code airRaid.rangedFireRange} 的注释；读不到配置时
+     * 退回 24（与默认值对齐——本项目的老规矩：兜底值必须跟着默认值走）。
+     */
+    private static double rangedFireRange() {
+        try {
+            return MaidSmartConfig.AIR_RAID_RANGED_FIRE_RANGE.get();
+        } catch (Throwable ignored) {
+            return 24.0;
+        }
+    }
+
+    /**
      * v1.2.0 实测五百零三【远程空袭的"近身弹开"】：怪物贴到这么近就给她一个**远离怪物**
      * 的速度矢量，防止她在远程攻击时仍然往敌人身上飞、下落途中被贴脸打死。
      *
@@ -2549,12 +2574,24 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             tickGunState(maid, target, id, gameTime);
         }
         double range = gun ? GunCompat.gunMaxRange() : rangedAttackRange();
+        // 【实测六百八十二】再叠一道"有效开火距离"：枪械模组自己的射程（实测现场 48 格）比弓弩的
+        // 24 大一倍，旧版于是会在 40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的 boss
+        // 基本打不中（玩家原话："飞的太远后打枪的准度特别的低"）。超出这条就**不扣扳机**，
+        // 改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。0 = 关掉这条门。
+        double fireCap = rangedFireRange();
+        boolean cappedByFireRange = false;
+        if (fireCap > 0.0 && fireCap < range) {
+            range = fireCap;
+            cappedByFireRange = true;
+        }
         double dist = Math.sqrt(maid.distanceToSqr(target));
         if (dist > range) {
             // v1.2.4 实测六百四十三：不出手的每一档都留一行（节流 2 秒）。
             // 以前"她拿着枪为什么不射"在日志里完全查不到，现场只能靠猜。
             logFireThrottled(maid, id, gameTime, "主手=" + itemName(main) + " 距敌 "
-                    + fmt2(dist) + " 格 > 射程 " + fmt2(range) + " 格 → 不出手");
+                    + fmt2(dist) + " 格 > " + (cappedByFireRange ? "有效开火距离 " : "射程 ")
+                    + fmt2(range) + " 格 → 不出手"
+                    + (cappedByFireRange ? "（先拉近再打；调 airRaid.rangedFireRange 可放宽，0 = 不限）" : ""));
             return;
         }
         // v1.2.0 实测五百二十七【出手要看方块阻隔】：弓弩这一路原先不看视线（箭矢自己
@@ -2628,14 +2665,12 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // （充能/换弹/拉栓/散热）的唯一推进者，写在这里等于"只有轮到她开火的那一拍才推进"
         // （射程/视线/冷却三道门都会提前 return）。现在由 {@link #tickGunState} 在
         // {@link #fireRanged} 的**所有门之前**推进，每 tick 恰好一次（幂等）。
-        int cd = RANGED_GUN_CD.getOrDefault(id, 0) - 1;
+        // v1.3.0(beta) 实测六百八十二：**冷却的递减也搬到 tickGunState 去了**（同一个理由）。
+        // 旧版递减写在下面（也就是"射程门 + 视线门之后"），于是"她飞得太远 / 视线被挡"的那几拍
+        // 冷却**冻住不动**——落地枪械模式里 TLM 自己的冷却每 tick 都走，两边一比就是玩家反馈的
+        // "女仆开枪的频率相比于正常的枪械模式要低了很多"。现在这里只读、只开火。
+        int cd = RANGED_GUN_CD.getOrDefault(id, 0);
         if (cd > 0) {
-            // 【冷却必须真的走完——这里曾经是本条的笔误】v1.2.4 实测六百四十三 第一版在这一支
-            // 直接 return 而**没有把递减后的值写回**，于是冷却永远停在 performGunAttack 返回的
-            // 那一刻：现场日志（2026-09-23 17:30）是「17:30:47 返回 7 tick」，之后每 2 秒一条
-            // 「枪械冷却剩 6 tick」直到日志结束——**任何飞行道具都再也开不了火**（比改之前更糟）。
-            // 现在与改动前的写法一致：无论走哪一支，最后都把"递减后的冷却"写回。
-            RANGED_GUN_CD.put(id, cd);
             logFireThrottled(maid, id, gameTime, "主手=" + itemName(gun) + " 距敌 "
                     + fmt2(maid.distanceTo(target)) + " 格 → 枪械冷却剩 " + cd + " tick");
             return;
@@ -2724,6 +2759,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             com.github.tartaricacid.touhoulittlemaid.compat.gun.common.GunCommonUtil
                     .tick(maid, target, main);
         } catch (Throwable ignored) {
+        }
+        // 【实测六百八十二：枪械冷却也在这里走一步】与上面 GunCommonUtil.tick 同一条理由——
+        // 这里在 fireRanged 的**所有门之前**（射程 / 视线 / 冷却），而且是幂等的（同一个 gameTime
+        // 只走一次）。旧版递减写在 tickGunFire 里，于是"她飞得太远 / 视线被挡"的那几拍冷却冻住不动，
+        // 开火频率比地面枪械模式低——玩家反馈的"女仆开枪的频率相比于正常的枪械模式要低了很多"。
+        int cd = RANGED_GUN_CD.getOrDefault(id, 0);
+        if (cd > 0) {
+            RANGED_GUN_CD.put(id, cd - 1);
         }
     }
 

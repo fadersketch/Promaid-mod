@@ -31,6 +31,10 @@ import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
  * "三秒没数据自动清空"、"打开界面 / F3 时整体隐藏"全套行为**一行都不用新写**。
  * 区别只有两处：① 那一段的字是**蓝色**（{@code §9}）；② 它没有倒计时，永远排在**最上**一行。
  * 它**不受"冷却 HUD"开关影响**（那是两件事；见服务端 {@code soulScanWanted()}）。
+ *
+ * <p>【实测六百八十二：它下面再多一行操作提示】玩家原话："目前在那个处于绑定状态下的HUD再加
+ * 一句提示，提醒一下，玩家可以通过右击战术拴绳的方式切换为主动骑乘。"——见 {@link #HINT}：
+ * 只在这条"绑定中"存在时画，灰字、缩进 4 像素，仍然受"放不下就不画"的边界保护。
  */
 @EventBusSubscriber(modid = "promaid", value = Dist.CLIENT)
 public final class CooldownHudRenderer {
@@ -109,8 +113,24 @@ public final class CooldownHudRenderer {
             }
             gg.drawString(font, format(e), x, y, 0xFFFFFF, true);
             y += LINE_H;
+            // 【实测六百八十二】"绑定中"那条下面再补一行操作提示。
+            // 玩家原话："目前在那个处于绑定状态下的HUD再加一句提示，提醒一下，玩家可以通过右击
+            // 战术拴绳的方式切换为主动骑乘。"——文案与右击的真实行为对齐（见
+            // GunnerTetherManager.toggle / seatBackOnBroom）：她骑着扫帚时那一下右击 = 你坐回
+            // 扫帚驾驶位（主动骑乘）；她没骑扫帚（空袭）时那一下右击 = 纯解除，所以这行两句都写。
+            if (isBound(e)) {
+                if (y > h - LINE_H - 2) {
+                    return; // 提示行放不下就只留主行，绝不顶出屏幕
+                }
+                gg.drawString(font, HINT, x + 4, y, 0xFFFFFF, true);
+                y += LINE_H;
+            }
         }
     }
+
+    /** 「绑定中」下面那行操作提示（灰字；太长会在小窗口里换不出去，所以刻意压到一句之内） */
+    private static final String HINT = "\u00a77\u53f3\u51fb\u5979\uff1a\u89e3\u9664\uff1b"
+            + "\u5979\u9a91\u626b\u5e1a\u65f6\u6539\u4e3a\u4e3b\u52a8\u9a91\u4e58";
 
     /** 按剩余秒升序（参考 HeartPact 分娩倒计时：最紧急的排最上） */
     private static java.util.List<String[]> sorted() {
