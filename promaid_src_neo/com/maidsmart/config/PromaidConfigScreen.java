@@ -2718,6 +2718,14 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setInt(MaidSmartConfig.AIR_RAID_RANGED_SHOT_COOLDOWN, s), "远程开火基础间隔（tick，默认 20 = 1 秒）：弓弩的基础射速（快速装填会按比例缩短）；枪械用枪械模组自己的射速"));
         this.rows.add(new NumRow("远程射程（格，弓弩）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_ATTACK_RANGE.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_ATTACK_RANGE, s), "远程射程（格，默认 24）：弓弩的射程与锁敌上限（枪械走枪械模组自己的射程）"));
+        this.rows.add(new NumRow("有效开火距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_FIRE_RANGE.get()),
+                s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_FIRE_RANGE, s),
+                "**实测六百八十二 新增**（默认 **24**，0 = 不限）：只有她到目标的 3D 距离小于这一条"
+                        + "才扣扳机，超出就**不开火**、改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。"
+                        + "**为什么要有它**：枪械模组自己的射程（实测现场 48 格）比弓弩的 24 大一倍，旧版于是会在"
+                        + "40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的 boss 基本打不中，"
+                        + "玩家看到的就是\"打得挺远、准度极低\"。**锁敌没变**（50 格索敌是\"看不看得见该打的怪\"，"
+                        + "这条只管\"打得到才算数\"）。默认 24 对弓弩一字未改（它本来就只有 24）。"));
         this.rows.add(new SectionRow("⑤ 近身弹开", true));
         this.rows.add(new NumRow("弹开触发半径（格）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_PUSH_RADIUS.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_PUSH_RADIUS, s), "弹开触发半径（格，默认 3）：怪物贴到这么近就触发近身弹开（总开关在「落地缓冲」页）"));
@@ -3012,15 +3020,17 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）"));
         this.rows.add(new NumRow("扫帚·接敌爬升高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_CLIMB.get()),
                 this.setDoubleInRange(MaidSmartConfig.COMBAT_BROOM_CLIMB, "扫帚·接敌爬升高度", 2.0, 32.0),
-                "**实测六百七十八 新增**（默认 **10**，2~32；旧版写死 8）：遇到敌人时先爬到**它上方**"
-                        + "这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**"
-                        + "（爬完就一直保持在那个高度打，打完/丢目标才作废）。"
-                        + "**为什么调高**（玩家原话：\"考虑到现在加入了这个模式，那么女仆需要飞的再高一点，"
-                        + "默认应该是10格的高度。（之前的扫帚模式盘旋是8格）\"）——\"这个模式\"指武装拴绳二号位："
-                        + "你吊在她下方 2.6~2.9 格，她飞高一点，你脚下才有余量、不会一路蹭着树冠和地面。"
+                "**实测六百七十八 新增**（实测六百八十二 默认 10 → **15**，2~32；旧版写死 8）："
+                        + "遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定"
+                        + "**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废）。"
+                        + "**为什么是 15**（玩家原话：\"就算真的飞起来了打敌人，飞起来的高度仍然很低，"
+                        + "起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"）："
+                        + "本批同时撤掉了 679 那道\"没拿武装拴绳就不驱动扫帚\"的闸——那道闸让扫帚模式在没拿绳子时"
+                        + "**整段失效**（就是\"坐在扫帚上动也不动\"），链路通了以后这个数字才真的等于她飞多高。"
+                        + "旧存档里写死的 10 会由一次性迁移搬到 15（玩家自己设过的其它值一律不动）。"
                         + "头顶被方块顶住时按**实际抬到的高度**记（但绝不低于上面那条「悬停高度」），"
-                        + "所以低天花板地形不会为了够 10 格一直往上顶。"
-                        + "日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」；旧存档里写死的 8 不会自动变。",
+                        + "所以低天花板地形不会为了够 15 格一直往上顶。"
+                        + "日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」。",
                 2.0, 32.0));
         this.rows.add(new NumRow("扫帚·牵引绳距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE, s),

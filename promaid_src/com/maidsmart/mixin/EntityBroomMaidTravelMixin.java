@@ -39,18 +39,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * `getControllingPassenger()` 是 null，扫帚直接自由落体。所以"女仆无需玩家独立骑扫把"
  * 只能在这一处接管。
  *
- * ── 接管条件（**四条**全中才动，任何一条不中都是原版行为一字不改）──
+ * ── 接管条件（**三条**全中才动，任何一条不中都是原版行为一字不改）──
  * <ol>
  *   <li>{@code getPassengers().get(0)} 是 {@code EntityMaid}——注意这同时排除了
  *       "玩家当第一乘客"（那样第一乘客是 Player，这里直接返回 null）；</li>
  *   <li>该女仆是**本模组所有**（{@code MaidScope.owned}，无主女仆一律不干预）且当前任务
  *       就是扫帚模式（{@code maid_smart:broom}）——别的任务骑在扫帚上时照旧原版；</li>
  *   <li>{@code getControllingPassenger() == null}（没有玩家在驾驶）——双保险，语义自证；</li>
- *   <li>【实测六百七十九 新增】**武装拴绳在用**——{@code GunnerTetherManager.leashChainActive(maid)}：
- *       主人手上握着武装拴绳（主手/副手任一），或她此刻正被拴着。玩家原话：「最好不要整体改骑扫帚的
- *       链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品进行判定（即只有玩家手持武装拴绳才走
- *       此链路，不拿则走原版）」。不满足 → 原版（TLM 与别的 mod 说了算）。</li>
  * </ol>
+ * 【实测六百八十二】679 曾加过第四条"武装拴绳在用（主人握着绳子 / 她正被拴着）"，
+ * 本批撤掉：那条闸让扫帚模式在"没拿绳子"时**整段失效**（原版对"女仆单骑"只有自由落体，
+ * 见上），玩家实测就是"有时正常、有时坐着扫帚掉在地上动也不动"。防冲突的目的一直由
+ * 上面这三条保证——不满足就一个字节都不动。
  *
  * ── 接管后做什么 ──
  * 读本 tick 的推进意图（{@link com.maidsmart.combat.MaidBroomDrive} 写的）→ 写进
@@ -94,14 +94,17 @@ public abstract class EntityBroomMaidTravelMixin {
             // 两边都读就谁都动不了。客户端一律让位，等服务端的权威位置同步。
             return;
         }
-        // 【实测六百七十九】玩家要求：这条自研链路只在"武装拴绳在用"时才接管扫帚驱动——
-        //   不拿绳子 / 没被拴着时**一个字都不改**，让 TLM 与别的 mod 自己说了算（防冲突）。
-        //   判据只有一处（本项目"口径只有一处"）：GunnerTetherManager.leashChainActive。
-        if (!com.maidsmart.combat.GunnerTetherManager.leashChainActive(maid)) {
-            com.maidsmart.combat.MaidBroomDrive.clearIntent(self); // 这次没人消费的意图别留到下次
-            maidsmart$noteStandDown(self, maid);
-            return;
-        }
+        // 【实测六百八十二：679 那道「武装拴绳没在用就让位」的闸**撤掉了**】
+        //  玩家原话：「现版本女仆在扫帚模式下很奇怪，有的时候会正常起飞和跟随主人，但有的时候
+        //  就会直接坐着扫帚掉在地上，动也不动。」——那道闸的门槛是"主人手上握着武装拴绳，或她
+        //  正被拴着"，不满足就 `travel` 走原版。而**原版对"女仆单独骑扫帚"根本没有驱动**
+        //  （见类注释：`getControllingPassenger()` 对女仆恒为 null → 原版那支是自由落体），
+        //  于是不拿着绳子时她必然"坐着扫帚掉在地上、动也不动"。
+        //  实测日志（1.21.1，2026-09-26）里那两行「扫帚让位」正好落在玩家反馈那两段时间里
+        //  （14:39:27、14:50:37），中间 40 多秒没有任何「扫帚模式」的飞行/爬升日志。
+        //  玩家当初那句"不拿则走原版"的本意是不想让我们**改写 TLM 的扫帚链路**（防别的 mod
+        //  冲突）——这一条由上面的三道接管条件（第一乘客是她 / 她的任务就是扫帚模式 /
+        //  没有玩家在驾驶）已经严格保证：不满足就一个字节都不动。所以这里恢复 679 之前的口径。
         maidsmart$noteTakeover(self, maid);
         try {
             Vec3 thrust = com.maidsmart.combat.MaidBroomDrive.takeThrust(self);
@@ -157,31 +160,9 @@ public abstract class EntityBroomMaidTravelMixin {
         }
     }
 
-    /* ==================== 让位留痕（每把扫帚一次，便于实测验收） ==================== */
-
-    private static final java.util.Set<java.util.UUID> STAND_DOWN = new java.util.HashSet<>();
-
-    /**
-     * 第一次因为"武装拴绳没在用"而让位时记一条——**只在服务端**（客户端在上面就 return 了）。
-     * 实测时一眼分辨"她在扫帚上是不是因为没拿绳子而被判回原版"。日志里搜「扫帚让位」。
-     */
-    private static void maidsmart$noteStandDown(EntityBroom broom, EntityMaid maid) {
-        try {
-            java.util.UUID id = broom.m_20148_();
-            synchronized (STAND_DOWN) {
-                if (!STAND_DOWN.add(id)) {
-                    return;
-                }
-                if (STAND_DOWN.size() > NOTE_CAP) {
-                    STAND_DOWN.clear();
-                    STAND_DOWN.add(id);
-                }
-            }
-            com.maidsmart.tool.PromaidLog.log("扫帚让位",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 在扫帚上，但武装拴绳没在用"
-                            + "（主人没握着绳子、她也没被拴着）→ 本 tick 起走原版，自研驱动不接管");
-        } catch (Throwable ignored) {
-        }
-    }
+    /* ==================== 让位留痕（679 起、682 止） ==================== */
+    // 【实测六百八十二】679 的 `maidsmart$noteStandDown`（"武装拴绳没在用 → 让位"那条留痕）
+    // 随那道闸一起删掉了：本类现在只在"她是扫帚模式 + 无玩家驾驶"时接管，不再有"让位"这一档。
+    // 留着它等于给下一个人准备一条永远打不出来的日志（本项目"口径只有一处"的同类洁癖）。
 
 }
