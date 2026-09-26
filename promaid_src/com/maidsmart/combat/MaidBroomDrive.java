@@ -859,7 +859,9 @@ public final class MaidBroomDrive {
         UUID id = maid.m_20148_();
         double r = Math.max(1.0, rangeCfg());
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
-        double ang = ORBIT.getOrDefault(id, 0.0) + ORBIT_SPEED / r;
+        // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，
+        // 绕着同一个敌人、同一个半径、同一个角速度 → 目标点逐 tick 完全重合，正是玩家说的"叠罗汉"。
+        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + ORBIT_SPEED / r;
         ORBIT.put(id, ang);
         double alt = COMBAT_ALT.getOrDefault(id, hoverCfg());
         return new Vec3(target.m_20185_() + Math.cos(ang) * r,
@@ -876,9 +878,12 @@ public final class MaidBroomDrive {
         double dx = maid.m_20185_() - owner.m_20185_();
         double dz = maid.m_20189_() - owner.m_20189_();
         double ang = (Math.abs(dx) + Math.abs(dz) < 0.05) ? 0.0 : Math.atan2(dz, dx);
-        return new Vec3(owner.m_20185_() + Math.cos(ang) * FOLLOW_DIST,
-                owner.m_20186_() + FOLLOW_HOVER,
-                owner.m_20189_() + Math.sin(ang) * FOLLOW_DIST);
+        double x = owner.m_20185_() + Math.cos(ang) * FOLLOW_DIST;
+        double z = owner.m_20189_() + Math.sin(ang) * FOLLOW_DIST;
+        // 【实测六百九十一】高度过 safeY：主人头顶有天花板时，不再把"主人上方 2 格"那个
+        // 在方块里的点硬塞给她（她会一路顶上去、人嵌进方块扣窒息伤害——与脱困那一档同一个病根）。
+        double y = safeY(maid, x, z, owner.m_20186_() + FOLLOW_HOVER, maid.m_20186_());
+        return new Vec3(x, y, z);
     }
 
     /**
@@ -888,10 +893,12 @@ public final class MaidBroomDrive {
      * 那个圈进行盘旋，直到接敌。」旧版 home 对扫帚模式只剩「把目标点夹进圈里」这一条，
      * 于是开着 home 她也只是跟着主人悬停——看不出「守家」。现在平时（没有敌人）改成绕圈巡逻。
      *
-     * <p>【高度不动】只改水平（x/z 沿圆周走，y 保持扫帚当前高度）。理由：工作范围在 TLM 里
-     * 本来就是个**水平**圆（{@code getRestrictCenter()} 是 BlockPos、半径是个 float），
-     * 没有任何纵向语义；而扫帚模式的高度由起飞/接敌两段决定，这里再插一脚只会变成
-     * "贴着地面爬"或"顶在树上"。她原来多高就多高，接敌时照旧走爬升相位。
+     * <p>【高度：离地 patrolAlt 格，实测六百九十一改】旧版这一条**不碰高度**（y 取扫帚当前
+     * 高度），理由是"工作范围是个水平圆、没有纵向语义"。但起飞相位只抬 {@link #RISE_BLOCKS} 格，
+     * 于是她整场守家巡逻都贴着地面飞——玩家原话：「女仆很喜欢贴地飞行。这个观感太差了。」
+     * 现在高度改成"**她脚下那块地之上 {@code combat.broom.homeAlt} 格**（默认 8）"，
+     * 再由 {@link #safeY} 兜住天花板：{@code want} 太高（头顶有顶）就取放得下的最高一格，
+     * 一格都放不下就留在现在的高度。参照物仍是水平的那个圈，只把"多高"这一项补齐。
      *
      * <p>【半径取「半径 − 余量」】圈内判定是「离圈心 ≤ 半径」，而她的座位在朝向后方半格
      * （见 {@link #hoverInPlace} 那段因果）——贴着边缘飞容易在边界上反复进出；退 1.5 格留余量，
@@ -910,15 +917,186 @@ public final class MaidBroomDrive {
             }
             UUID id = maid.m_20148_();
             double r = Math.max(2.0, maid.m_21535_() - 1.5);
-            double ang = HOME_ORBIT.getOrDefault(id, 0.0) + ORBIT_SPEED / r;
+            // 【实测六百九十一】起点换成"她自己那个相位"：旧版从 0 起，多只女仆绕同一个圈
+            // 就永远停在同一格上（"叠罗汉"最稳定的一种）。
+            double ang = HOME_ORBIT.getOrDefault(id, phaseOf(maid)) + ORBIT_SPEED / r;
             HOME_ORBIT.put(id, ang);
             Vec3 p = broomPos(maid);
-            return new Vec3(c.m_123341_() + 0.5 + Math.cos(ang) * r,
-                    p.f_82480_,
-                    c.m_123343_() + 0.5 + Math.sin(ang) * r);
+            double x = c.m_123341_() + 0.5 + Math.cos(ang) * r;
+            double z = c.m_123343_() + 0.5 + Math.sin(ang) * r;
+            // 【实测六百九十一】高度：她脚下那块地 + 配置的"离地格数"，再压到放得下的高度
+            // （旧版这一格是 p.f_82480_ = 扫帚当前高度 → 贴地飞）。
+            double wantY = groundY(maid, x, z, p.f_82480_) + homeAltCfg();
+            return new Vec3(x, safeY(maid, x, z, wantY, p.f_82480_), z);
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    /* ==================== 「别叠罗汉」：相位错开 + 邻近互斥（实测六百九十一） ==================== */
+
+    /**
+     * 每只女仆一个**稳定的盘旋相位**（弧度，0~2π）：从她的 UUID 派生，同一只女仆永远同一个值。
+     *
+     * <p>【为什么必须有它（玩家原话：「多个女仆乘着扫帚飞行的时候，很容易出现叠罗汉的情况」）】
+     * 旧版两个盘旋相位表（{@link #ORBIT} 绕敌人 / {@link #HOME_ORBIT} 绕工作范围）**起点都是
+     * 0.0**，而角速度又是同一个 {@link #ORBIT_SPEED} / 半径——于是同一时刻进场、半径相同的两只
+     * 女仆目标点**逐 tick 完全重合**：绕着同一个圆心、永远是同一个点，看起来就是叠在一起飞。
+     * 现在起点换成"她自己那个相位"，同一批女仆天然错开一整圈；再叠一层 {@link #separate} 兜住
+     * "从两处飞过来撞到一起"的情况。
+     *
+     * <p>【为什么从 UUID 派生、而不是随机】随机会在每次重进世界时换相位（她会在你眼前跳一下），
+     * 而 UUID 是稳定的：同一只女仆在同一个圆上的位置永远一样。
+     */
+    private static double phaseOf(EntityMaid maid) {
+        try {
+            return ((maid.m_20148_().hashCode() & 0xFFFF) / 65536.0) * (Math.PI * 2.0);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /** 两只"载着女仆的扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位 */
+    private static final double SEP_R = 2.0;
+    /** 一次让位最多挪出去多少格（封顶：互斥只做修正，绝不把"去哪"整条盖掉） */
+    private static final double SEP_MAX = 1.5;
+
+    /**
+     * **邻近互斥**：目标点附近有别的"载着女仆的扫帚"时，把目标点朝远离她的方向推出去一点。
+     *
+     * <p>【为什么写在推进这一层】"别叠罗汉"是横跨跟随 / 战斗盘旋 / 守家盘旋 / 原地悬停四种目标点
+     * 的**同一条口径**，写在 {@link #steerTo} 里只此一处；相位错开（{@link #phaseOf}）只解决
+     * "同一起点"，互斥负责"追同一个位置 / 半路撞上"。
+     *
+     * <p>【只避让"载着女仆的扫帚"】空着的扫帚是她的**目标**（她正要过去骑），玩家自己骑的那把
+     * 也不是她要叠的东西；只把"别的女仆正骑着的扫帚"当障碍，正好就是玩家说的"叠罗汉"。
+     *
+     * <p>【只推水平】"叠罗汉"要的是水平方向错开；竖直那一份交给起飞/接敌两个爬升相位，
+     * 互斥插一脚只会让爬升抖动。
+     *
+     * <p>【顺序】互斥作用在"原始目标点"上、**在 {@link MaidBroomKit#clampToHome} 之前**：
+     * 夹取仍有最终话语权（不会被推出工作范围），互斥那点偏置在圈边被夹掉也只是"这一边推不动"。
+     */
+    private static Vec3 separate(EntityMaid maid, EntityBroom broom, Vec3 aim) {
+        if (aim == null || broom == null) {
+            return aim;
+        }
+        try {
+            if (!(broom.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
+                return aim;
+            }
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    aim.f_82479_ - SEP_R, aim.f_82480_ - SEP_R, aim.f_82481_ - SEP_R,
+                    aim.f_82479_ + SEP_R, aim.f_82480_ + SEP_R, aim.f_82481_ + SEP_R);
+            double ox = 0.0;
+            double oz = 0.0;
+            for (EntityBroom other : level.m_6443_(EntityBroom.class, box,
+                    b -> b != broom && b.m_6084_() && carriesMaid(b))) {
+                double dx = aim.f_82479_ - other.m_20185_();
+                double dz = aim.f_82481_ - other.m_20189_();
+                double d = Math.sqrt(dx * dx + dz * dz);
+                if (d >= SEP_R) {
+                    continue;
+                }
+                if (d < 0.05) {
+                    // 水平方向完全叠在一起（"叠罗汉"最难看的那一档）：用她自己的相位当
+                    // "往哪边让"的方向——必须是确定的，不能每次算出来不一样（否则她会原地抖）。
+                    double a = phaseOf(maid);
+                    ox += Math.cos(a) * SEP_R * 0.5;
+                    oz += Math.sin(a) * SEP_R * 0.5;
+                    continue;
+                }
+                double push = (SEP_R - d) / d;
+                ox += dx * push;
+                oz += dz * push;
+            }
+            double len = Math.sqrt(ox * ox + oz * oz);
+            if (len < 1.0E-4) {
+                return aim;
+            }
+            double k = Math.min(1.0, SEP_MAX / len);
+            return new Vec3(aim.f_82479_ + ox * k, aim.f_82480_, aim.f_82481_ + oz * k);
+        } catch (Throwable ignored) {
+            return aim;
+        }
+    }
+
+    /** 这把扫帚上坐着女仆吗（{@link #separate} 只把"女仆骑着的扫帚"当障碍） */
+    private static boolean carriesMaid(EntityBroom broom) {
+        try {
+            for (net.minecraft.world.entity.Entity p : broom.m_20197_()) {
+                if (p instanceof EntityMaid) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /* ==================== 「别把目标点设在方块里」：高度兜底（实测六百九十一） ==================== */
+
+    /**
+     * 【实测六百九十一】把"想去的高度"压到**她真的放得下**的高度：顶头就低一点，绝不硬塞。
+     *
+     * <p>【为什么需要】玩家反馈「home 模式下女仆会进行飞行盘旋巡逻……但是女仆很喜欢贴地飞行。
+     * 这个观感太差了」——旧版守家盘旋的高度是**扫帚当前高度**（{@code p.f_82480_}），而起飞相位
+     * 只抬 {@link #RISE_BLOCKS} 格，于是她整场巡逻都贴着地面飞。现在改成"地面之上
+     * {@code combat.broom.homeAlt} 格"（见 {@link #homeOrbitPoint}），但**不能直接给一个绝对
+     * 高度**：头顶有天花板时那个点在方块里，她会一路顶上去——而她是被原版 {@code positionRider}
+     * 直接摆到座位点的**乘客**，会嵌在方块里扣窒息伤害（与脱困那一档同一个病根）。
+     * 所以这里从"想要的高度"往下找第一个她放得下的高度。
+     *
+     * <p>【判据】她连扫帚要占的 {@code y} 与 {@code y+1} 两格都是空气（她的碰撞箱宽 0.6 / 高 1.5，
+     * 见 {@link #MAID_HALF_W} 那一组常量）。一格都放不下（她头顶就是一格厚的地板）→ 返回
+     * {@code fromY}（她现在的高度 = 原地悬停），不硬抬。
+     */
+    private static double safeY(EntityMaid maid, double x, double z, double wantY, double fromY) {
+        try {
+            if (!(wantY > fromY)) {
+                return wantY; // 往下走不存在"顶头"
+            }
+            net.minecraft.world.level.Level level = maid.m_9236_();
+            int bx = (int) Math.floor(x);
+            int bz = (int) Math.floor(z);
+            int bottom = (int) Math.floor(fromY) + 1;
+            for (int y = (int) Math.floor(wantY); y >= bottom; y--) {
+                if (isAirAt(level, new net.minecraft.core.BlockPos(bx, y, bz))
+                        && isAirAt(level, new net.minecraft.core.BlockPos(bx, y + 1, bz))) {
+                    return y + 0.5;
+                }
+            }
+        } catch (Throwable ignored) {
+            // 读不到方块（异常）→ 按想要的高度走（与旧行为一致，不新增坑）
+        }
+        return wantY;
+    }
+
+    /**
+     * 【实测六百九十一】她脚下（沿着 x/z 往下最多 {@link #GROUND_SCAN} 格）第一块"非空气"方块
+     * **之上那一格**的高度 = "离地"的基准。
+     *
+     * <p>【为什么不用原版高度图】{@code Level.getHeight} 在 1.20.1 与 1.21.1 的名字不一样
+     * （SRG / Mojmap），而"从她当前位置往下找第一块地"既不需要多一个两树要映射的名字、
+     * 又天然覆盖"她此刻在一个洞里 / 屋里 / 树冠上"这些情况。
+     *
+     * <p>【找不到就不动】脚下连着 {@link #GROUND_SCAN} 格全是空气（虚空 / 悬在世界之上）→ 返回
+     * {@code fromY}：绝不能给出一个"往下几十格"的目标，那会让她一头扎下去。
+     */
+    private static double groundY(EntityMaid maid, double x, double z, double fromY) {
+        try {
+            net.minecraft.world.level.Level level = maid.m_9236_();
+            net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(
+                    (int) Math.floor(x), (int) Math.floor(fromY), (int) Math.floor(z));
+            for (int i = 0; i <= GROUND_SCAN; i++) {
+                if (!isAirAt(level, p)) {
+                    return p.m_123342_() + 1; // 这一格是地 → 上面那一格就是"地面"
+                }
+                p = p.m_7495_();
+            }
+        } catch (Throwable ignored) {
+        }
+        return fromY;
     }
 
     /* ==================== 原地悬停 / 垂直爬升：一律用**扫帚自己的坐标** ==================== */
@@ -1221,7 +1399,9 @@ public final class MaidBroomDrive {
             noteNoDrive(maid);
             return;
         }
-        Vec3 aim = MaidBroomKit.clampToHome(maid, desired);
+        // 【实测六百九十一】先把她推离"别的女仆正骑着的扫帚"（别叠罗汉），再夹进工作范围
+        // （夹取有最终话语权，见 separate 的注释），最后才是卡墙脱困。
+        Vec3 aim = MaidBroomKit.clampToHome(maid, separate(maid, broom, desired));
         if (aim == null) {
             return;
         }
@@ -1261,6 +1441,30 @@ public final class MaidBroomDrive {
     private static final int ESCAPE_TICKS = 40;
     /** 脱困取点的水平扫描半径（格）——玩家原话是"最近的空气方块"，所以扫小一点、取最近的 */
     private static final int ESCAPE_R = 3;
+    /**
+     * 【实测六百九十一】她（作为乘客）相对扫帚的座位偏移与体型——**原版字节码实证**：
+     * <pre>
+     *   水平：{@code -0.5} 格，沿扫帚朝向旋转 →【朝向的后方半格】
+     *         （1.20.1 {@code EntityBroom.m_19956_} / 1.21.1 {@code EntityBroom.getPassengerAttachmentPoint}
+     *          两份字节码都是这个数：女仆乘客 -0.5，其它乘客 0，两人时改 ±0.35）
+     *   竖直：1.21.1 是 {@code -0.3125}；1.20.1 取 {@code m_6048_() + 乘客.m_6049_()}，
+     *         而 {@code EntityBroom.m_6048_()} 反汇编就是 {@code return 0.0}、女仆也没覆写 m_6049_
+     *         → 0.0。**两个版本都落在同一格**（差 0.31 格不会跨格），所以这里取 -0.3125 这一侧。
+     *   体型：女仆的 {@code EntityType.sized(0.6f, 1.5f)}（宽 0.6 / 高 1.5）
+     * </pre>
+     * 这三个数只服务于一条判据：**"她身体压着的那几格是不是空气"**（见 {@link #bodyFits}）。
+     */
+    private static final double SEAT_BACK = 0.5;
+    private static final double SEAT_DOWN = 0.3125;
+    private static final double MAID_HALF_W = 0.3;
+    private static final double MAID_HEIGHT = 1.5;
+    /**
+     * 【实测六百九十一】"刚去过"的记忆时长（tick）= 5 秒——玩家点名的时间：
+     * 「刚刚寻路并且到达过的空气方块在5秒之内就不应该再次登进去了」。
+     */
+    private static final long ESCAPE_MEMORY_TICKS = 100L;
+    /** 【实测六百九十一】"往下找地面"最多扫这么多格（找不到就当她悬在虚空上，原地不动） */
+    private static final int GROUND_SCAN = 24;
     /** 同一只女仆的「卡墙」日志最短间隔（毫秒）= 5 秒，防刷屏 */
     private static final long UNSTICK_LOG_GAP_MS = 5000L;
 
@@ -1276,6 +1480,43 @@ public final class MaidBroomDrive {
         double ey;
         double ez;
         long lastLog;
+        /**
+         * 【实测六百九十一】最近"寻路进去过"的空气格 → 到期 gameTime（tick）。
+         * <p>玩家原话：「刚刚寻路并且到达过的空气方块在5秒之内就不应该再次登进去了。防止女仆在
+         * 两个空气格子之间来回反复横跳。」过期时刻用 {@link #ESCAPE_MEMORY_TICKS} 现算，
+         * 不另起一套计时；只在这一只女仆身上，她下扫帚/换任务时随 {@link #STUCK} 一起清。
+         */
+        private final java.util.Map<Long, Long> visited = new java.util.HashMap<>();
+
+        /** 这一格 5 秒内去过没有（只查表，不做清理——清理在 {@link #remember} 里顺手做） */
+        boolean recentlyVisited(net.minecraft.core.BlockPos p, long now) {
+            Long until = this.visited.get(Long.valueOf(keyOf(p)));
+            return until != null && until.longValue() > now;
+        }
+
+        /**
+         * 记下"这一格刚去过"。
+         * <p>到达（{@code toEsc <= 1.0}）与超时（够不着）**都记**：前者是玩家点名的"到达过的
+         * 空气方块 5 秒内不再登入"，后者是"这一格她压根到不了"——两种都不该在下一拍原样再撞一次
+         * （否则就是玩家说的"卡死 / 反复横跳"）。
+         */
+        void remember(net.minecraft.core.BlockPos p, long now) {
+            if (this.visited.size() > 32) {
+                long t = now;
+                this.visited.values().removeIf(v -> v.longValue() <= t);
+            }
+            if (this.visited.size() > 64) {
+                this.visited.clear(); // 极端情况下宁可全忘（最坏 = 旧行为），也不让这张表长起来
+            }
+            this.visited.put(Long.valueOf(keyOf(p)), Long.valueOf(now + ESCAPE_MEMORY_TICKS));
+        }
+    }
+
+    /** 方块坐标 → long 键（脱困"刚去过"名单用；不用 {@code BlockPos.asLong} 免得再多一个要映射的名字） */
+    private static long keyOf(net.minecraft.core.BlockPos p) {
+        return ((long) p.m_123341_() & 0x3FFFFFFL) << 38
+                | ((long) p.m_123342_() & 0xFFFL) << 26
+                | ((long) p.m_123343_() & 0x3FFFFFFL);
     }
 
     /**
@@ -1332,6 +1573,12 @@ public final class MaidBroomDrive {
                 double toEsc = Math.sqrt((st.ex - bx) * (st.ex - bx) + (st.ey - by) * (st.ey - by)
                         + (st.ez - bz) * (st.ez - bz));
                 if (toEsc <= 1.0 || st.escape <= 0) {
+                    // 【实测六百九十一】这一趟脱困的收尾：把目标格记进"刚去过"名单（5 秒内不再选它）。
+                    // 到了也算、超时没到也算（理由见 Stuck.remember）——这就是玩家点名的
+                    // "刚刚寻路并且到达过的空气方块在5秒之内不应该再次登入"，用来掐掉两个格子之间的反复横跳。
+                    st.remember(new net.minecraft.core.BlockPos(
+                            (int) Math.floor(st.ex), (int) Math.floor(st.ey), (int) Math.floor(st.ez)),
+                            gameTimeOf(maid));
                     st.escape = 0;
                     st.still = 0;
                     return aim;
@@ -1347,7 +1594,7 @@ public final class MaidBroomDrive {
             // ③ 判出卡住 → 找最近的空气格，进脱困相位
             if (st.still >= STUCK_TICKS) {
                 st.still = 0;
-                net.minecraft.core.BlockPos air = nearestAirAhead(broom, aim);
+                net.minecraft.core.BlockPos air = nearestEscapeCell(broom, maid, aim, st);
                 if (air != null) {
                     st.ex = air.m_123341_() + 0.5;
                     st.ey = air.m_123342_() + 0.5;
@@ -1363,6 +1610,15 @@ public final class MaidBroomDrive {
                     }
                     return new Vec3(st.ex, st.ey, st.ez);
                 }
+                // 【实测六百九十一】一个合格的格子都没有（附近全是"一格死洞"，或者都在 5 秒
+                // 名单里）→ **原地不动**，绝不再往死洞里按她（那正是玩家看到的"钻进去然后窒息"）。
+                long now2 = System.currentTimeMillis();
+                if (now2 - st.lastLog >= UNSTICK_LOG_GAP_MS) {
+                    st.lastLog = now2;
+                    com.maidsmart.tool.PromaidLog.log("扫帚卡墙",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                    + " 被方块顶住，但附近没有能容下她的空气格（一格死洞 / 5 秒内刚去过）→ 原地不动等下一轮");
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -1370,19 +1626,39 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 她身边最近的、**能容下她**的空气格：水平 ±{@link #ESCAPE_R}、上下 ±2。
+     * 她身边最近的、**能容下她整个人**的空气格：水平 ±{@link #ESCAPE_R}、上下 ±2。
      *
-     * <p>三条件缺一不可：这一格是空气、**上面一格也是空气**（她连扫帚差不多两格高，只空一格会卡住）、
-     * 且**离目标比现在更近**（只挑"往目标那一侧"的格子，否则脱困就变成原地打转）。
-     * 取"离她最近"的那个——玩家原话就是"最近的空气方块"。
+     * <p>【实测六百九十一：玩家原话「女仆的扫帚模式对于空气的寻路不行，很多时候只往一格里面钻，
+     * 导致女仆窒息。应该要加一些额外条件的，而不是单纯的拿一格来进行判定，就算要拿一格判定，
+     * 也是拿那个窒息的那个格子来判定」】旧版只判**两件事**：候选格是空气、它**上面一格**也是空气。
+     * 而那两格是"**扫帚**那一格"的上下——**窒息的是她、不是扫帚**：她是乘客，原版
+     * {@code positionRider} 把她的座位摆在扫帚**朝向的后方 0.5 格**（{@link #SEAT_BACK} 那段
+     * 字节码实证），她身体压的格子与扫帚那一格**差半格**；而乘客的位置是直接摆上去的、
+     * 不走碰撞——扫帚能停在那格、她却被按进邻格/上格的方块里扣窒息伤害，就是这么来的。
+     *
+     * <p>【现在的四个条件（缺一不可）】
+     * <ol>
+     *   <li>候选格与它上面一格是空气（扫帚那一格：扫帚的碰撞箱 {@code 1.375 × 0.5625}，扁但宽）；</li>
+     *   <li><b>她身体的每一格都是空气</b>（{@link #bodyFits}）：按座位偏移把她的碰撞箱
+     *       （宽 0.6 / 高 1.5）铺进方块网格逐格判——**这就是"拿那个窒息的那个格子来判定"**。
+     *      这一条同时挡住了"钻一格"：她离格边界正好半格，身体会**同时压住候选格与来路那一格**，
+     *      所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li>
+     *   <li>**不是死洞**（{@link #isPocket}）：候选格两层、东南西北四邻全是方块 → 进去就出不来，不去；</li>
+     *   <li>**5 秒内没去过**（{@link Stuck#recentlyVisited}）：刚寻路到过的空气格不再选，
+     *      免得她在两个格子之间反复横跳（玩家原话「防止女仆在两个空气格子之间来回反复横跳」）。</li>
+     * </ol>
+     * 剩下的照旧：**离目标比现在更近**（否则脱困变成原地打转）、取最近的那个。
+     * 一条都不合格 → 返回 null，**宁可原地不动也不把她按进方块里**（调用方会留一行日志）。
      */
-    private static net.minecraft.core.BlockPos nearestAirAhead(EntityBroom broom, Vec3 aim) {
+    private static net.minecraft.core.BlockPos nearestEscapeCell(EntityBroom broom, EntityMaid maid,
+                                                                Vec3 aim, Stuck st) {
         try {
-            net.minecraft.server.level.ServerLevel level = (net.minecraft.server.level.ServerLevel) broom.m_9236_();
+            net.minecraft.world.level.Level level = broom.m_9236_();
             net.minecraft.core.BlockPos base = broom.m_20183_();
             net.minecraft.core.BlockPos goal = new net.minecraft.core.BlockPos(
                     (int) Math.floor(aim.f_82479_), base.m_123342_(), (int) Math.floor(aim.f_82481_));
             double here = base.m_123331_(goal);
+            long now = gameTimeOf(maid);
             double best = Double.MAX_VALUE;
             net.minecraft.core.BlockPos bestPos = null;
             for (int dx = -ESCAPE_R; dx <= ESCAPE_R; dx++) {
@@ -1392,11 +1668,20 @@ public final class MaidBroomDrive {
                             continue;
                         }
                         net.minecraft.core.BlockPos p = base.m_7918_(dx, dy, dz);
-                        if (!level.m_8055_(p).m_60795_() || !level.m_8055_(p.m_7494_()).m_60795_()) {
-                            continue;
+                        if (!isAirAt(level, p) || !isAirAt(level, p.m_7494_())) {
+                            continue; // ① 扫帚那一格（扁但是宽，照旧要两格）
                         }
                         if (p.m_123331_(goal) >= here) {
                             continue; // 不比现在更靠近目标 → 不选（防原地打转）
+                        }
+                        if (st.recentlyVisited(p, now)) {
+                            continue; // ④ 5 秒内到过 → 不再进（防两个空气格之间反复横跳）
+                        }
+                        if (!bodyFits(level, broom, p)) {
+                            continue; // ② 她身体那几格（"窒息的那个格子"）
+                        }
+                        if (isPocket(level, p)) {
+                            continue; // ③ 一格死洞：进去了也出不来
                         }
                         double d = dx * dx + dy * dy + dz * dz;
                         if (d < best) {
@@ -1410,6 +1695,83 @@ public final class MaidBroomDrive {
         } catch (Throwable ignored) {
             return null;
         }
+    }
+
+    /** 这一格是不是空气（纯读；读不到一律当"不是"，宁可少选一格也不把她按进方块里） */
+    private static boolean isAirAt(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos p) {
+        try {
+            return level.m_8055_(p).m_60795_();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 她（**作为乘客**）在"扫帚停在 {@code p} 那一格"时，身体压着的每一格是不是都是空气。
+     *
+     * <p>座位偏移与体型见 {@link #SEAT_BACK} 那一组常量（原版字节码实证）。这里把它落成一条算式：
+     * <pre>
+     *   她身体中心 = 候选格中心 − 0.5 × 单位方向(从扫帚现在的位置 → 候选格)   ← 水平（朝向的后方）
+     *   她的脚     = 候选格中心 − 0.3125                                   ← 竖直
+     *   碰撞箱     = 宽 0.6 / 高 1.5 → 铺进方块网格逐格查空气
+     * </pre>
+     * 方向取"从她现在的位置到候选格"，是因为 {@link #steerTo} 把朝向写成速度方向（飞过去就是那个朝向）。
+     */
+    private static boolean bodyFits(net.minecraft.world.level.Level level, EntityBroom broom,
+                                    net.minecraft.core.BlockPos p) {
+        double ux = (p.m_123341_() + 0.5) - broom.m_20185_();
+        double uz = (p.m_123343_() + 0.5) - broom.m_20189_();
+        double h = Math.sqrt(ux * ux + uz * uz);
+        if (h < 1.0E-4) {
+            ux = 0.0;
+            uz = 0.0;
+        } else {
+            ux /= h;
+            uz /= h;
+        }
+        double cx = p.m_123341_() + 0.5 - SEAT_BACK * ux;
+        double cz = p.m_123343_() + 0.5 - SEAT_BACK * uz;
+        double feet = p.m_123342_() + 0.5 - SEAT_DOWN;
+        return cellsAir(level, cx - MAID_HALF_W, cz - MAID_HALF_W, feet,
+                cx + MAID_HALF_W, cz + MAID_HALF_W, feet + MAID_HEIGHT);
+    }
+
+    /** 一个碰撞箱（水平 center ± half、竖直 feet→top）覆盖到的每一格是不是都是空气 */
+    private static boolean cellsAir(net.minecraft.world.level.Level level,
+                                    double x0, double z0, double feet,
+                                    double x1, double z1, double top) {
+        int bx0 = (int) Math.floor(Math.min(x0, x1));
+        int bx1 = (int) Math.floor(Math.max(x0, x1));
+        int bz0 = (int) Math.floor(Math.min(z0, z1));
+        int bz1 = (int) Math.floor(Math.max(z0, z1));
+        int by0 = (int) Math.floor(feet + 0.02);
+        int by1 = (int) Math.floor(top - 0.02);
+        for (int bx = bx0; bx <= bx1; bx++) {
+            for (int by = by0; by <= by1; by++) {
+                for (int bz = bz0; bz <= bz1; bz++) {
+                    if (!isAirAt(level, new net.minecraft.core.BlockPos(bx, by, bz))) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 是不是"一格死洞"：候选格与她身体那两层、东南西北四邻**全是方块** → 进去了就出不来的
+     * 单格空腔。这种格子再近也不去（玩家原话「不要只往一格里面钻」＋「防止女仆卡死」）。
+     * 一格宽的**通道**不算死洞（两侧有空气），照旧能走。
+     */
+    private static boolean isPocket(net.minecraft.world.level.Level level, net.minecraft.core.BlockPos p) {
+        for (int dy = 0; dy <= 1; dy++) {
+            net.minecraft.core.BlockPos q = p.m_7918_(0, dy, 0);
+            if (isAirAt(level, q.m_7918_(1, 0, 0)) || isAirAt(level, q.m_7918_(-1, 0, 0))
+                    || isAirAt(level, q.m_7918_(0, 0, 1)) || isAirAt(level, q.m_7918_(0, 0, -1))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static boolean unstickCfg() {
@@ -1702,6 +2064,36 @@ public final class MaidBroomDrive {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOVER.get();
         } catch (Throwable ignored) {
             return 2.0;
+        }
+    }
+
+    /**
+     * 【实测六百九十一】守家盘旋高度（格，**离地**）：配置 {@code combat.broom.homeAlt}，默认 8。
+     *
+     * <p>玩家原话：「home 模式下女仆会进行飞行盘旋巡逻……但是女仆很喜欢贴地飞行。这个观感太差了。」
+     * 旧版守家盘旋的目标高度是"扫帚当前高度"（起飞只抬 {@link #RISE_BLOCKS} 格 → 整场贴地飞），
+     * 现在改成"她脚下那块地之上这么多格"，再由 {@link #safeY} 兜住天花板。
+     * 这一项只影响**守家巡逻**这一档，接敌照旧走 {@code combat.broom.climb}。
+     *
+     * <p>【为什么不复用「接敌爬升高度」】那个数是"相对敌人"（没有敌人时根本没有那个参照物），
+     * 这个数是"离地"，两个参照系不同；合成一个数只会让其中一边永远不对。
+     *
+     * <p>配置没挂上时退回 8——与配置里的默认值对齐（本项目的老规矩：兜底值必须跟着默认值走）。
+     */
+    private static double homeAltCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOME_ALT.get();
+        } catch (Throwable ignored) {
+            return 8.0;
+        }
+    }
+
+    /** 世界游戏刻（拿不到就 0）——脱困"刚去过"名单的过期判据（与 {@code Climb.retryDue} 同一个口径） */
+    private static long gameTimeOf(EntityMaid maid) {
+        try {
+            return maid.m_9236_().m_46467_();
+        } catch (Throwable ignored) {
+            return 0L;
         }
     }
 }

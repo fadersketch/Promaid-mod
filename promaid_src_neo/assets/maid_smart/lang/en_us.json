@@ -111,6 +111,7 @@
   "config.promaid.broom.climb": "Combat climb height (blocks)",
   "config.promaid.broom.follow": "Follow owner when idle",
   "config.promaid.broom.clampHome": "Patrol the work area in home mode",
+  "config.promaid.broom.homeAlt": "Home patrol altitude above ground (blocks)",
   "config.promaid.broom.recallDistance": "Broom leash distance (blocks)",
   "config.promaid.broom.climbMigrated": "Internal: broom combat climb height migration done",
   "config.promaid.broom.climb12Migrated": "Internal: broom combat climb height 2nd migration (15 to 12) done",
