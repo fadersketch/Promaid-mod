@@ -122,15 +122,30 @@ public final class CooldownHudRenderer {
                 if (y > h - LINE_H - 2) {
                     return; // 提示行放不下就只留主行，绝不顶出屏幕
                 }
-                gg.drawString(font, HINT, x + 4, y, 0xFFFFFF, true);
+                // 实测六百八十七：拆成两行，第一行强调"必须手持武装拴绳"（旧版没写，玩家会误解）
+                gg.drawString(font, HINT1, x + 4, y, 0xFFFFFF, true);
+                y += LINE_H;
+                if (y > h - LINE_H - 2) {
+                    return; // 第二行放不下就只留第一行，绝不顶出屏幕
+                }
+                gg.drawString(font, HINT2, x + 4, y, 0xFFFFFF, true);
                 y += LINE_H;
             }
         }
     }
 
-    /** 「绑定中」下面那行操作提示（灰字；太长会在小窗口里换不出去，所以刻意压到一句之内） */
-    private static final String HINT = "\u00a77\u53f3\u51fb\u5979\uff1a\u89e3\u9664\uff1b"
-            + "\u5979\u9a91\u626b\u5e1a\u65f6\u6539\u4e3a\u4e3b\u52a8\u9a91\u4e58";
+    /**
+     * 【实测六百八十七】「绑定中」下面那两行操作提示（灰字）。
+     *
+     * <p>需求方原话："扫帚模式玩家绑定时HUD写详细一点。现在的就仅仅告诉你，右击之后可以进行
+     * 切换，但是没有强调，是拿了武装拴绳右击之后才行。这个会让玩家产生误解。"
+     * 旧版只有一句"右击她：解除；她骑扫帚时改为主动骑乘"——没写**手里得拿着那根武装拴绳**，
+     * 玩家空手右击发现没反应（或以为随便什么物品都行）。现在拆两行：第一行把"手持武装拴绳"
+     * 摆在开头，第二行再写那一下右击在两种情形下各自是什么。
+     */
+    private static final String HINT1 = "§7手持【武装拴绳】右击女仆 = 绑定 / 解除（空手右击无效）";
+    private static final String HINT2 = "§8她骑扫帚时那一击 = 坐回驾驶位（主动骑乘）；空袭二号位时 = 解除";
+
 
     /** 按剩余秒升序（参考 HeartPact 分娩倒计时：最紧急的排最上） */
     private static java.util.List<String[]> sorted() {

@@ -991,6 +991,7 @@ public class MaidCookBehavior extends Behavior<EntityMaid> {
                 return;
             }
             NO_FEED_DUMP_SINCE.put(maid.m_20148_(), now);
+            com.maidsmart.tool.StateTables.cap("MaidCookBehavior.NO_FEED_DUMP_SINCE", NO_FEED_DUMP_SINCE);
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < maidInv.getSlots(); i++) {
                 ItemStack st = maidInv.getStackInSlot(i);

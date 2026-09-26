@@ -198,6 +198,7 @@ public final class MaidStrollCheck {
             r.attr = attribute(maid);
             r.target = target;
             RUNS.put(maid.m_20148_(), r);
+            com.maidsmart.tool.StateTables.cap("MaidStrollCheck.RUNS", RUNS);
 
             net.minecraft.world.entity.ai.behavior.BlockPosTracker tracker =
                     new net.minecraft.world.entity.ai.behavior.BlockPosTracker(target);

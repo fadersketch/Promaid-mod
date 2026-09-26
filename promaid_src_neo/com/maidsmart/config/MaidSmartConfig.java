@@ -392,6 +392,12 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      *  关掉 = 绳子只画不使劲（她已经有的跟随链路照旧，只是没有那记额外的拉力）。 */
     public static final ModConfigSpec.BooleanValue COMBAT_TETHER_PULL;
 
+    /** 【实测六百八十七】二号位·悬挂时的"拴绳操控方向"（默认开，**仅空袭档**）。
+     *  挂在她下面时，若她**此刻没有目标**（丢锁敌 / 本来就没敌人），把手里那根武装拴绳
+     *  举着看哪儿她就往哪儿飞（水平跟你的朝向、高低跟你的俯仰）——她一口气蹿上天之后
+     *  玩家不再是"一点办法都没有"。详细口径见 {@code MaidFlightFollowBehavior.maidsmart$tetherHold}。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_TETHER_LEASH_STEER;
+
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
     /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
@@ -692,6 +698,11 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue AIR_RAID_LAUNCH_RANGE;
     /** 占位高度容差（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.DoubleValue AIR_RAID_ALTITUDE_TOLERANCE;
+
+    /** 【实测六百八十七】空袭爬升上限（格，默认 48，0 = 不限）：她不许飞到"目标上方这么多格"以上。
+     *  需求方原话："有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接
+     *  飞到天上300多格。"上限只约束**向上**；被顶到上限时改压机头滑翔下来。 */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_MAX_ALT;
     /** 起跳等待上限（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.IntValue AIR_RAID_JUMP_TICKS;
     /** 烟花最小间隔（tick）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -983,6 +994,24 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
      *  （饰品栏里的精妙背包 / 旅行者背包，TLM 的 compat.extracontainer 体系，见
      *  {@code com.maidsmart.tool.MaidExtraContainer}）——默认开 */
     public static final ModConfigSpec.BooleanValue MISC_BACKPACK_OVERFLOW;
+    /* ---------------- 实测六百七十三：仿创造飞行（给"创造飞行类物品"的女仆版） ---------------- */
+
+    /** 仿创造飞行总开关（默认关，可选功能） */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT;
+    /** 资格物品表：命中的物品让她能飞（支持 #命名空间:标签） */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_ITEMS;
+    /** 资格效果表：命中的药水效果让她能飞 */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_EFFECTS;
+    /** 通用启发式：她的重力属性 ≈ 0 也算资格（覆盖任何"重力归零"型来源） */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_GRAVITY;
+    /** 滑翔时改用模型自己的鞘翅动画（默认关 = 沿用作者的游泳动画） */
+    public static final ModConfigSpec.BooleanValue MISC_GLIDE_ELYTRA_ANIM;
+    /** 智能待命（默认开）：主人停下就落地站到脚边，而不是一直悬着 */
+    public static final ModConfigSpec.BooleanValue MISC_FREE_FLIGHT_IDLE;
+    /** 主人静止多少秒后落地待命（默认 3） */
+    public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_IDLE_SECONDS;
+    /** 落地待命的贴近距离（格，默认 2）——交互（喂食/摸头）需要她在 3 格内 */
+    public static final ModConfigSpec.IntValue MISC_FREE_FLIGHT_NEAR_DIST;
     // v1.5.163：农场连锁收获数量上限
     public static final ModConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -2071,6 +2100,8 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BUILDER.comment("武装拴绳（直升机二号位；配置面板：移动与行为 → 武装拴绳（二号位））").translation("config.promaid.tether").push("tether");
         COMBAT_TETHER_ENABLE = BUILDER.comment("武装拴绳总开关（默认开）：手持武装拴绳右击【飞行中的】女仆，把自己挂到她下方（像武装直升机的二号位枪手；**在扫帚上右击她 = 换到二号位**，绑定态右击 = 坐回扫帚驾驶位）——她照常飞、照常用远程武器开火，你也一样；再右击一次（或按潜跳）解除。**地面不再自动解除**（「绳子不会自己断」，实测六百七十一）；**她不替你定高度、也不替你定座位**（实测六百七十二：拴着的时候她只原地悬停、一个高度数字都不写，接敌照旧；她站在地上时改成水平拉开并肩站，不再和你建模重叠）；只有落水超过 0.6 秒会把你放下（溺水是致命的）；解除瞬间人在空中给 5 秒摔伤豁免；挂着时卡墙/挤墙伤全免。\n\n【规则】只认主人；一只女仆同时只挂一人；扫帚模式必须她已经飞在空中（地面挂着会把人拖进地里），空袭模式（flight_combat / flight_ranged）随时可挂；绑定后**空袭不再改她的高度**（「不要套用悬空起程」：她照常自己爬升/俯冲，绳子只负责把你吊在下面），扫帚仍是原地悬停（不再绕着你转圈），接敌照旧；挂着期间你和女仆同款免摔落/卡墙/挤墙/撞墙伤。她本人对你的伤害本来就被「主人/友军免伤总闸」拦着，挂多紧都不会被她自己打中。\n\n【实测六百七十三】三条「可以优化」落地：①「坐在扫帚上右击切不到绑定模式」已修（换座态准星前方没有实体，右击走的是 RightClickItem，旧版只监听 EntityInteract）；②空袭档多一档**牵绳**——绑定空袭模式的女仆时她还没起飞就**先不挂人**，你自由活动、她跟着走（原版拴绳观感），她真起飞才把你挂到二号位，落地满 2 秒再放下来；③挂在下面时被她的模型挡视野 → 改成**渲染层面**解决：只对你（挂着的那位）+第一人称把她画成半透明，透明度见下一项。\n\n【二号位开火】挂着时照常射击（弓/弩/枪械都行）——她打她的目标，你打你瞄的，各自独立。合成：拴绳 + 铁锭×2。日志搜「武装拴绳」\n\n【实测六百七十四】四点落地：①半透明默认 0.35 → **0.1**，而且**扫帚本体**也一起半透明（自己骑扫帚时扫帚模型就挡在视野里）；②修好空袭档的**「玩家坐到她头上」**——牵绳档转「起飞挂载」时没重发 S2C 相位包，客户端不认那个枪手，悬挂定位于是不生效、人被原版摆在**她头顶**（现在每次相位变化都重发）；③被拴绳选中的女仆加**金色描边标记**（同光灵箭的发光渲染，光边改成金色），她**正式起飞**（牵绳 → 悬挂）时解除；④牵绳档的绳子在客户端也照画（旧版 1.21.1 树还留着「必须是她乘客」那道门）。")
                 .translation("config.promaid.tether.enable").define("enable", true);
+        COMBAT_TETHER_LEASH_STEER = BUILDER.comment("二号位·悬挂时用武装拴绳操控方向（默认开，仅空袭档）：挂在她下方时，若她此刻没有目标（丢锁敌、或本来就没敌人），把手里那根武装拴绳举着——**你看哪儿她就往哪儿飞**（水平跟你的朝向、高低跟你的俯仰，抬头=爬升、低头=下降）。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌，而玩家只能任由其在空中自由滑行，一点办法都没有。扫帚模式可以因为玩家可以接管扫帚而进行补救。\"——扫帚能接管是因为玩家骑在扫帚上，空袭档的补救手段就是这条：把绳子当操纵杆。\n\n【边界】只在**她没目标**时生效（有敌人时方向归她的空袭链路，绳子不抢手）；只在空袭档生效（扫帚档玩家本来就在驾驶位）；**必须手持武装拴绳**（不在手上 = 只悬停，不会误触）。")
+                .translation("config.promaid.combat.tetherLeashSteer").define("tetherLeashSteer", true);
         COMBAT_TETHER_HANG = BUILDER.comment("悬挂距离（格，默认 2.6，0.5~6.0）：玩家脚底到女仆脚底的垂直距离，也就是那根「不会断」的绳子的长度（**她站在地上/贴着地形时改成「水平拉开这么远」**——实测六百七十二 玩家反馈「平时待命没有起飞的时候，直接跟女仆的建模完全重叠」，那一档两个建模并排站着，像被拴着伴走）。默认 2.6 = 她的脚底高过你的视线（眼高约 1.62 格），前方视野让开（实测六百七十一 玩家反馈「视线会被女仆的建模挡住」）；调小 = 人贴在她身上（1.8 以下两个碰撞箱会重叠），调大 = 吊得更低（更像吊机）。定位是平滑滑变的，不会上下横跳")
                 .translation("config.promaid.tether.hang").defineInRange("hang", 2.6, 0.5, 6.0);
         COMBAT_TETHER_GHOST_ALPHA = BUILDER.comment("【实测六百七十三 / 六百七十四】第一人称下的透明度（默认 0.1，0.0~1.0；**设 1.0 = 关掉这个功能**，照旧不透明）。玩家原话：「有的时候还是会被女仆的模型挡到视野。而如果继续降低模型高度会导致玩家的高度太低容易被打中。渲染的话最好是改成半透明状态。而且仅限绑定玩家的第 1 视角会展示半透明状态。」\n\n【实测六百七十四 起：生效范围有两档】① **你挂着的那只女仆**（吊在她下面 / 骑着她，空袭档与扫帚档都算）；② **你骑的那把扫帚本体**（自己驾驶扫帚时扫帚模型就在视野里；吊在骑扫帚的女仆下面时也算）。都只对**你的第一人称**生效（第三人称、别的玩家、别人骑别的女仆/扫帚一律不动）。实现是把她的渲染类型换成原版「幽灵渲染」那一档（itemEntityTranslucentCull，同贴图）+ 顶点 alpha 乘这个系数——只压 alpha 没用，cutout 那一档**根本没开混合**（javap 实证）。她的模型本体与各图层一起变半透明，绳子照旧画。纯客户端，服务端不用改；异常时按不透明走，绝不因为渲染崩游戏")
@@ -2125,6 +2156,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_ALTITUDE_TOLERANCE = BUILDER.comment("占位高度容差（格，默认 10）：她比目标低不超过这么多格就视为已占位、直接走原链路（近战俯冲 / 远程盘旋）；同时也是起飞朝向的判据（容差内起飞走「背离 + 抬头」）")
                 .translation("config.promaid.airRaid.altitudeTolerance")
                 .defineInRange("altitudeTolerance", 10.0, 0.0, 64.0);
+        AIR_RAID_MAX_ALT = BUILDER.comment("空袭·相对目标的爬升上限（格，默认 48，0 = 不限）：她不许飞到「目标上方这么多格」以上——到了就**不再爬、也不再点烟花/激流/羽扇往上顶**，改为压机头滑翔下来。\n\n【为什么要有它（需求方原话）】\"有的时候玩家行为再加上女仆自身的冲锋行为等各方面叠加，会导致女仆一口气直接飞到天上300多格。然后导致女仆飞在空中直接失去索敌\"。空袭的高度判据原本只有一个 `onTargetAltitude`（相对**目标**的 Y，没有绝对上限），而目标本身会飞/会上升时，她就跟着一路往上，几路推力叠加就是几百格。\n\n【口径】判据取**目标**（当前锁定的敌人）的 Y + 本值；0 = 关掉这条约束（回到旧行为）。只压\"向上\"：她仍然可以往下俯冲（那是空袭的进攻动作）。")
+                .translation("config.promaid.airRaid.maxAlt")
+                .defineInRange("maxAlt", 48.0, 0.0, 256.0);
         AIR_RAID_JUMP_TICKS = BUILDER.comment("起跳等待上限（tick，默认 3）：先跳一下离地、下一 tick 再放烟花才吃得到推力；这么久还没离地（低矮空间）就放弃本轮")
                 .translation("config.promaid.airRaid.jumpTicks")
                 .defineInRange("jumpTicks", 3, 0, 20);
@@ -2543,7 +2577,27 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         MISC_MAID_SAME_DIM_VERTICAL = BUILDER.comment("Y 轴拉回门槛（格，默认 16）：女仆与主人同维度、水平距离没超上一条阈值但【垂直高度差】超过本值时——若主人旁边 16 格内有安全落点（findStand）就传送过来；没有安全落点则不传（等有落点/再试）。旧版只有 48 格 3D 距离阈值，水平贴身、竖直搭高 30 格的女仆永远不触发（骑到你头顶挂机）；守家/坐姿/骑乘/干活中同样不拉")
                 .translation("config.promaid.misc.maidSameDimVertical").defineInRange("maidSameDimVertical", 16, 4, 128);
         // v1.1.0 实测一百五十一：跟随收紧（参考改版 TLM jar——每 tick 重断言跟随目标）
-        MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
+            MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关，实测六百七十三）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果/重力归零类法术），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表/重力归零）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格三路】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）③重力属性 ≈ 0（通用启发式，覆盖所有重力归零型来源，不需要点名模组）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
+                .translation("config.promaid.misc.freeFlight").define("freeFlight", false);
+        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。\n\n四种写法：① 物品 id（如 modid:item）② #命名空间:标签 认整条物品标签 ③ @命名空间:组件 有该数据组件就算格 ④ @命名空间:组件~文本 组件值里含这段文本才算格（还有一种 @*~文本 = 任意组件含该文本，最宽）。\n\n【为什么要有组件那两路（实测六百七十六）】很多整合包用数据组件授予能力而不是换物品：例如神化（Apotheosis）的 Apothic Attributes 用命令给胸甲挂 neoforge:creative_flight 修饰符——物品 id 没变、物品标签也匹配不到（#neoforge:creative_flight 是修饰符 id 不是物品标签）。这种就写：@apothic_attributes:bonus_stack_attribute_modifiers~neoforge:creative_flight\n\n扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。")
+                .translation("config.promaid.misc.freeFlightItems")
+                .defineListAllowEmpty("freeFlightItems", List.of(), () -> "", o -> o instanceof String);
+        MISC_FREE_FLIGHT_EFFECTS = BUILDER.comment("仿创造飞行·资格效果表（默认空）：命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）。")
+                .translation("config.promaid.misc.freeFlightEffects")
+                .defineListAllowEmpty("freeFlightEffects", List.of(), () -> "", o -> o instanceof String);
+        MISC_FREE_FLIGHT_GRAVITY = BUILDER.comment("仿创造飞行·重力归零也算资格（默认开）：她的重力属性 ≈ 0 时自动获得飞行资格——通用启发式，覆盖任何「重力归零」型来源（不需要点名模组）。她本来就在飘，我们只是把飘变成可控飞行。")
+                .translation("config.promaid.misc.freeFlightGravity").define("freeFlightGravity", true);
+        MISC_FREE_FLIGHT_IDLE = BUILDER.comment("仿创造飞行·智能待命（默认开，实测六百七十八）：主人停下不动满【下面那条秒数】后，她**软着陆到你脚边站好**（同高度、约 2 格），你再一动她自动重新起飞。\n\n【为什么需要】原来的行为是「够资格就一直悬在主人身后 3.5 格 + 高 2 格」（≈4 格），而**原版实体交互距离只有 3 格**——喂金苹果/药水、TLM 的摸头/抱抱（G/H）、右键交互全都会打不到。智能待命让她「赶路时飞、你停下来时落到你身边待命」。\n\n关掉 = 始终悬停（旧行为：够资格就一直飘着）。")
+                .translation("config.promaid.misc.freeFlightIdle").define("freeFlightIdle", true);
+        MISC_FREE_FLIGHT_IDLE_SECONDS = BUILDER.comment("仿创造飞行·主人静止多久后落地待命（秒，默认 3）：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消。")
+                .translation("config.promaid.misc.freeFlightIdleSeconds")
+                .defineInRange("freeFlightIdleSeconds", 3, 1, 30);
+        MISC_FREE_FLIGHT_NEAR_DIST = BUILDER.comment("仿创造飞行·落地待命的贴近距离（格，默认 2）：软着陆时机头对着主人漂过去，最终停在他身边这个距离内——留 1 格余量给原版 3 格交互距离。")
+                .translation("config.promaid.misc.freeFlightNearDist")
+                .defineInRange("freeFlightNearDist", 2, 1, 6);
+        MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关，实测六百七十五）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
+                .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
+    MISC_FOLLOW_TIGHTEN = BUILDER.comment("跟随收紧（默认开，参考改版 TLM jar 设计）：跟随模式的女仆每 tick 重新断言跟随目标——平常跟随在 4 格以内，被其他行为/寻路刹车干扰走远时立即拉回，不再走走停停/乱跑；关闭 = 官方 1.5.3 原版行为（只在跟随行为启动时设一次目标）")
                 .translation("config.promaid.misc.followTighten").define("followTighten", true);
         // v1.1.0 实测一百五十二：有增益也喂牛奶（装备/饰品永久增益不再阻止解负面）
         MISC_MILK_FEED_WITH_BUFF = BUILDER.comment("有增益也喂牛奶（默认开）：女仆自己喝牛奶解负面 / 给主人喂牛奶解负面时，身上有增益效果（很多装备/饰品带永久增益，旧版\"无增益才喂\"导致中毒/凋零也不解）也照喂——牛奶会连增益一起清掉；关闭 = 有增益时不喂牛奶（只喂蜂蜜解中毒）")
