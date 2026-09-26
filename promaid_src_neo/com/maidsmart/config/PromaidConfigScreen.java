@@ -2735,6 +2735,18 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.COMBAT_BROOM_HOVER, s),
                 "悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪"
                         + "（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）"));
+        this.rows.add(new NumRow("扫帚·接敌爬升高度（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_CLIMB.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_BROOM_CLIMB, "扫帚·接敌爬升高度", 2.0, 32.0),
+                "**实测六百七十八 新增**（默认 **10**，2~32；旧版写死 8）：遇到敌人时先爬到**它上方**"
+                        + "这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**"
+                        + "（爬完就一直保持在那个高度打，打完/丢目标才作废）。"
+                        + "**为什么调高**（玩家原话：\"考虑到现在加入了这个模式，那么女仆需要飞的再高一点，"
+                        + "默认应该是10格的高度。（之前的扫帚模式盘旋是8格）\"）——\"这个模式\"指武装拴绳二号位："
+                        + "你吊在她下方 2.6~2.9 格，她飞高一点，你脚下才有余量、不会一路蹭着树冠和地面。"
+                        + "头顶被方块顶住时按**实际抬到的高度**记（但绝不低于上面那条「悬停高度」），"
+                        + "所以低天花板地形不会为了够 10 格一直往上顶。"
+                        + "日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」；旧存档里写死的 8 不会自动变。",
+                2.0, 32.0));
         this.rows.add(new NumRow("扫帚·牵引绳距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE, s),
                 "扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，"

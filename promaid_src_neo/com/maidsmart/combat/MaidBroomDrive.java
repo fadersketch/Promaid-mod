@@ -177,13 +177,16 @@ public final class MaidBroomDrive {
 
     /** 起飞相位要抬的高度（格）——玩家要求"女仆会立刻用扫帚飞起来 1 格" */
     private static final double RISE_BLOCKS = 1.0;
-    /** 接敌爬升的高度（格）——玩家要求"先向上飞 8 格" */
-    private static final double CLIMB_BLOCKS = 8.0;
+    // 【实测六百七十八】接敌爬升的高度**不再写死 8 格**：改成配置项 {@code combat.broom.climb}
+    //  （默认 10，2~32，面板「移动与行为 → 扫帚模式 → 接敌爬升高度」可调），见下面的 climbCfg()。
+    //  玩家原话："考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。
+    //  （之前的扫帚模式盘旋是8格）"——"这个模式"指武装拴绳二号位：你吊在她下方 2.6~2.9 格，
+    //  她飞高一点，你脚下才有余量、不会一路蹭着树冠/地面。旧存档里写死的 8 不会自动变。
     /**
      * 爬升相位的目标 Y 写在"想抬的高度 + 这个余量"处（{@link #ARRIVE} 格）。
      * <p>
      * 为什么要这个余量：她到位的方式是 {@link #steerTo} 的比例导引，而那一支在距目标
-     * {@link #ARRIVE} 格时就判定"到点、收干悬停"——所以想让她**真的抬满 1 / 8 格**，
+     * {@link #ARRIVE} 格时就判定"到点、收干悬停"——所以想让她**真的抬满 1 / 10 格**，
      * 目标就得写在"到点线"之上 {@link #ARRIVE} 格处。两边共用同一个常量，改一处两边一起动。
      */
     private static final double CLIMB_LEAD = ARRIVE;
@@ -342,21 +345,23 @@ public final class MaidBroomDrive {
     }
 
     /**
-     * 接敌爬升相位的目标 Y：「遇到敌人之后，先向上飞 8 格，然后绕着敌人盘旋」。
+     * 接敌爬升相位的目标 Y：「遇到敌人之后，先向上飞 N 格，然后绕着敌人盘旋」——
+     * N = 配置 {@code combat.broom.climb}（**实测六百七十八 起默认 10**，面板可调 2~32；
+     * 六百七十八 之前是写死的 8）。
      *
-     * <p>**以目标（敌人）为单位起相位**：换了一个敌人就重新爬一次 8 格（同一场遭遇里
+     * <p>**以目标（敌人）为单位起相位**：换了一个敌人就重新爬一次（同一场遭遇里
      * 只爬一次——所以相位做完是**留在表里打 done 标记**而不是删掉，删掉的话下一 tick
      * 又会当"新相位"从头爬，变成无限上蹿）。相位结束（到位 / 顶头）后返回 null，
      * 调用方转去 {@link #combatPoint} 盘旋。丢目标时由 {@link #clearClimb} 清掉，
      * 于是下一次接敌会重新爬。
      *
      * <p>── v1.3.3【"先升 8 格又慢慢掉下来"的修正】──
-     * 旧版这里的目标 Y 是 {@code 她自己脚下 + 8}，而盘旋高度是 {@code 目标脚底 + broomHover}：
-     * 两处口径不同 → 爬完 8 格立刻按另一套高度往回落，玩家看到的正是"升上去又掉下来"，
-     * 爬升毫无意义。现在爬升的 Y 改成 **{@code 目标脚底 + 8}**（相对敌人，与盘旋同一个参照系），
+     * 旧版这里的目标 Y 是 {@code 她自己脚下 + N}，而盘旋高度是 {@code 目标脚底 + broomHover}：
+     * 两处口径不同 → 爬完 N 格立刻按另一套高度往回落，玩家看到的正是"升上去又掉下来"，
+     * 爬升毫无意义。现在爬升的 Y 改成 **{@code 目标脚底 + N}**（相对敌人，与盘旋同一个参照系），
      * 并在相位收尾（到位 / 顶头）那一刻把**这一场遭遇的盘旋高度**记进 {@link #COMBAT_ALT}
-     * （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 8 格"不是在演一段
-     * 动画，而是在**决定盘旋高度**：升到敌上 8 格，就一直在敌上 8 格打。
+     * （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 N 格"不是在演一段
+     * 动画，而是在**决定盘旋高度**：升到敌上 N 格，就一直在敌上 N 格打。
      *
      * @param target 当前敌人（取它的 UUID 当相位的 key、取它的脚底当高度参照）
      */
@@ -364,15 +369,16 @@ public final class MaidBroomDrive {
         if (maid == null || target == null) {
             return null;
         }
+        double climb = climbCfg(); // 【实测六百七十八】配置项：默认 10（旧版写死 8）
         Object key = target.getUUID();
         Climb c = CLIMB.get(maid.getUUID());
         if (c == null || !c.key.equals(key)) {
-            // 【相对敌人】目标脚底 + 8（另加 ARRIVE 余量，见 CLIMB_LEAD）
-            double to = target.getY() + CLIMB_BLOCKS + CLIMB_LEAD;
+            // 【相对敌人】目标脚底 + climb（另加 ARRIVE 余量，见 CLIMB_LEAD）
+            double to = target.getY() + climb + CLIMB_LEAD;
             startClimb(maid, key, to);
             COMBAT_ALT.remove(maid.getUUID()); // 新遭遇 → 高度重新由这一次爬升决定
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 接敌 → 先爬到它上方 " + CLIMB_BLOCKS + " 格（高度从这以后一直保持）");
+                    + " 接敌 → 先爬到它上方 " + climb + " 格（高度从这以后一直保持）");
             return to;
         }
         if (c.done) {
@@ -381,14 +387,14 @@ public final class MaidBroomDrive {
         Double y = climbTarget(maid, key);
         if (y == null) {
             // 相位刚刚收尾（到位 / 头顶被顶住）→ 把这一场遭遇的盘旋高度定下来：
-            // 取"她此刻相对敌人的高度"，夹进 [broomHover, CLIMB_BLOCKS]——
+            // 取"她此刻相对敌人的高度"，夹进 [broomHover, climb]——
             // 顶头只抬到 3 格就按 3 格飞（不会为了够那个够不到的高度一直往上顶），
             // 但也绝不比原来的悬停高度更低。
             double alt = maid.getY() - target.getY();
-            double fixed = Math.max(hoverCfg(), Math.min(CLIMB_BLOCKS, alt));
+            double fixed = Math.max(hoverCfg(), Math.min(climb, alt));
             COMBAT_ALT.put(maid.getUUID(), fixed);
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 本场盘旋高度 = 敌人上方 " + fmt(fixed) + " 格（想 " + CLIMB_BLOCKS
+                    + " 本场盘旋高度 = 敌人上方 " + fmt(fixed) + " 格（想 " + climb
                     + "，实际 " + fmt(alt) + " 格）→ 以后一直保持这个高度");
         }
         return y;
@@ -1444,6 +1450,19 @@ public final class MaidBroomDrive {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOVER.get();
         } catch (Throwable ignored) {
             return 2.0;
+        }
+    }
+
+    /**
+     * 【实测六百七十八】接敌爬升高度（格，相对敌人脚底）：配置 {@code combat.broom.climb}，
+     * 默认 10（旧版写死 8），面板「移动与行为 → 扫帚模式 → 接敌爬升高度」可调 2~32。
+     * 配置没挂上时退回 10——与配置里的默认值对齐（本项目的老规矩：兜底值必须跟着默认值走）。
+     */
+    private static double climbCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLIMB.get();
+        } catch (Throwable ignored) {
+            return 10.0;
         }
     }
 }
