@@ -2888,7 +2888,7 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new NumRow("空袭牵引绳（格）",
                 String.valueOf(MaidSmartConfig.COMBAT_FLIGHT_RECALL_DISTANCE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_FLIGHT_RECALL_DISTANCE, s),
-                "空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到主人】（3D 距离，水平+竖直一起算）时，立刻把她传送到主人身边——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则，所以不会把守家站桩的空袭女仆拽走；主人跨维度时也不抢（那一路由跨维度跟随在本轮攻击结束后处理）。触发时会给主人发一条系统消息（10 秒最多一条）。"));
+                "空袭牵引绳（格，默认 100，0=关闭）：空袭期间以女仆为圆心、半径这么大范围内【找不到参照点】（3D 距离，水平+竖直一起算）时，立刻把她传送回去——与排班表的人工传送同一条链路（强制生效、无视地块、可以空中传送）。防的是「她放烟花冲上天、打完目标后主人早已不在脚下，自己回不来」。参照点是【非守家=主人；守家(home)=她的工作区圈心】（**实测六百九十二**：守家时主人走多远都不再把她拽走，拉回来的是家/岗位）。只在【她确实在空中】时生效：落回地面后交给同维度拉回那套更保守的规则；主人跨维度时也不抢（那一路由跨维度跟随在本轮攻击结束后处理）。触发时会给主人发一条系统消息（10 秒最多一条）。"));
         this.rows.add(new BoolRow("弩用普通烟花当弹药",
                 MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.get(),
                 v -> MaidSmartConfig.COMBAT_CROSSBOW_PLAIN_FIREWORK.set(v),
@@ -3034,8 +3034,11 @@ public class PromaidConfigScreen extends Screen {
                 2.0, 32.0));
         this.rows.add(new NumRow("扫帚·牵引绳距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE.get()),
                 s -> setInt(MaidSmartConfig.COMBAT_BROOM_RECALL_DISTANCE, s),
-                "扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，"
-                        + "所以「飞太高」本身也会触发）就立刻连人带扫帚传送回你身边，免得飞太远回不来。"
+                "扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，"
+                        + "所以「飞太高」本身也会触发）就立刻连人带扫帚传送回参照点，免得飞太远回不来。"
+                        + "参照点是【非守家=你；守家(home)=她的工作区圈心】——**实测六百九十二**：守家时你"
+                        + "走多远都不再把她拽走，拉回来的是家/岗位（玩家原话：\"Home模式下，空袭牵引绳还在"
+                        + "发力。女仆离了主人100格之后，还是会被传送回来\"）。"
                         + "与「空袭牵引绳」同一套口径，区别是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；"
                         + "她已经落地时不管（那种距离交给「同维度远距拉回」那套更保守的规则）"));
         this.rows.add(new BoolRow("扫帚·平时跟随主人", MaidSmartConfig.COMBAT_BROOM_FOLLOW.get(),
@@ -3057,7 +3060,11 @@ public class PromaidConfigScreen extends Screen {
                         + "这么多格**。旧版这一档**不碰高度**（用扫帚当前高度），而起飞只抬 1 格 → 她整场守家"
                         + "都贴着地面飞（玩家原话：\"女仆很喜欢贴地飞行。这个观感太差了\"）。"
                         + "这一项只影响守家巡逻：接敌走「扫帚·接敌爬升高度」，跟主人是\"主人上方 2 格\"。"
-                        + "头顶有天花板时本模组会自动压低到放得下的最高一格，一格都放不下就留在原高度（绝不硬顶）。",
+                        + "头顶有天花板时本模组会自动压低到放得下的最高一格，一格都放不下就留在原高度（绝不硬顶）。"
+                        + "**实测六百九十二**：这个数是\"巡逻高度\"，躲建筑只是暂时偏离——脚下**找不到地面**时"
+                        + "（虚空 / 她比地形高 24 格以上）目标高度只降不升，卡墙脱困挑空气格也不许超过它 +3 格"
+                        + "（玩家原话：\"防止女仆在躲避其他建筑物的时候越飞越高。如果女仆飞得太高了……之后的攻击、"
+                        + "链路等方面就都不会触发了\"）。",
                 1.0, 32.0));
         this.rows.add(new NumRow("扫帚·跟随起手距离（格）", String.valueOf(MaidSmartConfig.COMBAT_BROOM_FOLLOW_START.get()),
                 this.setDoubleInRange(MaidSmartConfig.COMBAT_BROOM_FOLLOW_START, "扫帚·跟随起手距离", 2.0, 128.0),

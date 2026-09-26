@@ -21,6 +21,8 @@ import java.util.WeakHashMap;
  *                    找不到才报缺件待命。这一档排在"跟随主人"之前——玩家原话
  *                    "扫帚模式应该优先找扫帚，而不是优先跟随主人"。
  *   ② 缺件      → 下扫帚 + 气泡报缺什么（原地待命，不退化成地面近战，见下）
+ *                    【实测六百九十二】"缺件"只剩**缺远程武器**（且要连续 2 秒才算）；
+ *                    **弹匣打空不再下鞍**——那只是"这一拍打不响"，详见 ③ 那一段。
  *   ③ 骑上      → 从她背包取一把扫帚放出来骑上（已骑着就跳过；她坐在椅子上也能换过来，
  *                    走 force 骑乘——实测六百五十七）
  *   ③.4 玩家在开 → 让位：只开火，不写推进意图、不开爬升相位（驾驶权在玩家，见 drivenByPlayer）
@@ -121,6 +123,9 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         FlightTargeting.forget(maid.getUUID());
         FOLLOWING.remove(maid);
         PLAYER_DRIVE_LOGGED.remove(maid);
+        // 【实测六百九十二】"没武器"去抖计时与"弹匣空了"日志节流跟着换任务一起清
+        WEAPONLESS_SINCE.remove(maid);
+        DRY_LOGGED.remove(maid);
         // 【实测六百七十七】退出扫帚任务 = 玩家说的"再一次被解除"：双就绪的闩拔掉，
         //   下一轮进扫帚模式再满足条件时她会重新说一次。
         resetDualReady(maid, "退出扫帚任务");
@@ -168,10 +173,44 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             return;
         }
         // ③ 未激活（缺远程武器 / 缺弹药）→ 下来、报缺件
-        if (!MaidBroomKit.isModeActive(maid)) {
+        //   【实测六百九十二：下鞍理由只剩"真的没得打"】玩家原话：「扫帚模式如果女仆持有的是
+        //   冲锋枪或者狙击枪，这两类枪械很容易飞着飞着就突然从扫帚上掉下来。」根因就是这里：
+        //   旧版拿 isModeActive（= 扫帚 + 武器 + **弹药**）当逐 tick 的下鞍判据，而弹药那条对
+        //   TACZ 枪问的是"**这一拍**弹匣里还有没有弹"（GunCompat.canFeed → 弹匣/弹膛）——
+        //   冲锋枪打空一梭子、狙击枪栓动打完那一发，都会撞上"弹=无"的一拍，于是当场下鞍。
+        //   实测日志 2026-09-27 01:38:09 逐行实证：`[远程开火] …弹=无` 紧跟着
+        //   `[扫帚模式] …下扫帚（理由=缺远程武器/弹药）`；那一分钟里 7 次「骑上 → 下」循环。
+        //   现在分三档：
+        //     ① 真的没有远程武器 → 下来（但要连续 2 秒都缺，见 weaponlessLongEnough——
+        //        手上的武器被换走一两拍不该把她摔下去）；
+        //     ② 还没骑上 + 缺弹药 → 不下鞍、照旧"没弹药不必起飞"（实测四百九十五 的口径）；
+        //     ③ 已经骑在扫帚上 + 缺弹药 → **留在扫帚上**：换弹是开火链路自己会做的事
+        //        （TLM performGunAttack 的 NO_AMMO → IGunOperator.reload 那一支，javap 实证），
+        //        我们只留一行限频日志说明"她为什么这一会儿不开火"。
+        boolean ridingNow = MaidBroomKit.isRidingBroom(maid);
+        if (!MaidBroomKit.canStayMounted(maid) && !ridingNow) {
             MaidBroomDrive.dismount(maid, "缺远程武器/弹药");
             notifyNotReady(maid, gameTime);
             return;
+        }
+        if (!MaidBroomKit.hasRangedWeapon(maid)) {
+            // 骑在扫帚上却没武器：先给 2 秒去抖，真的一直没有才下来
+            if (weaponlessLongEnough(maid, gameTime)) {
+                MaidBroomDrive.dismount(maid, "缺远程武器");
+                notifyNotReady(maid, gameTime);
+                return;
+            }
+        } else {
+            WEAPONLESS_SINCE.remove(maid); // 武器回来了：去抖计时清零（下次再丢要重新站满 2 秒）
+            if (!MaidBroomKit.ammoOk(maid)) {
+                if (!ridingNow) {
+                    // 还没起飞就发现弹匣/背包都空了：照旧"没弹药不必起飞"
+                    MaidBroomDrive.dismount(maid, "缺远程武器/弹药");
+                    notifyNotReady(maid, gameTime);
+                    return;
+                }
+                noteOutOfAmmo(maid, gameTime);
+            }
         }
         // ④ 骑上（身上有扫帚物品就取出来放一把；已经骑着就原样返回）
         EntityBroom broom = MaidBroomDrive.ensureMounted(level, maid);
@@ -537,6 +576,55 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
     /** 齐备了：清缺件计时（冷却的清零走 notifyNotReady 里"齐备也要站稳"那条） */
     private static void clearNotReady(EntityMaid maid, long gameTime) {
         MISSING_SINCE.remove(maid);
+    }
+
+    /* ==================== 实测六百九十二：没武器才下鞍 / 弹匣空了只记一行 ==================== */
+
+    /** 「手上真的没有远程武器」的起始 tick（连续站满 {@link #STABLE_TICKS} 才真的下鞍） */
+    private static final Map<EntityMaid, Long> WEAPONLESS_SINCE =
+            Collections.synchronizedMap(new WeakHashMap<>());
+    /** 「弹匣空了但还骑着」这条日志的下次可打时间（tick）——与缺件播报同一个 15 秒节奏 */
+    private static final Map<EntityMaid, Long> DRY_LOGGED =
+            Collections.synchronizedMap(new WeakHashMap<>());
+
+    /**
+     * 【实测六百九十二】她"没有远程武器"这件事是否**连续**站满了 {@link #STABLE_TICKS}（2 秒）。
+     *
+     * <p>为什么要去抖：下鞍 = 从空中掉下去，代价是实打实的摔伤；而"她手上那把武器"会被好几条
+     * 链路短暂借走/换走（本模组自己的自动装备、开火链路临时借副手），一拍读不到远程武器不代表
+     * 她真的没得打了。缺件**播报**那边早就是"连续 2 秒才报"的同一口径（{@code MISSING_SINCE}），
+     * 这里只是把同一个耐心用到"要不要把她摔下去"上。
+     */
+    private static boolean weaponlessLongEnough(EntityMaid maid, long gameTime) {
+        Long since = WEAPONLESS_SINCE.get(maid);
+        if (since == null) {
+            WEAPONLESS_SINCE.put(maid, gameTime);
+            return false;
+        }
+        return gameTime - since >= STABLE_TICKS;
+    }
+
+    /**
+     * 【实测六百九十二】"弹匣空了但还骑着"——限频一行，**不下鞍**。
+     *
+     * <p>这一档必须留痕：玩家看到的是"她骑在扫帚上不开火"，而日志里一个字都没有的话，
+     * 只能靠猜（与 {@code notePlayerDriving} 同一个理由）。换弹是开火链路自己会做的事
+     * （TLM {@code performGunAttack} 的 {@code NO_AMMO → reload} 那一支），所以正常情况下
+     * 这一行只会零星出现；连续出现就说明**背包里也没有对得上的弹药**了（那时候
+     * {@code ammoOk} 为假，她照旧飞、照旧不开火——想让她落地就自己收工换模式）。
+     */
+    private static void noteOutOfAmmo(EntityMaid maid, long gameTime) {
+        try {
+            Long ready = DRY_LOGGED.get(maid);
+            if (ready != null && gameTime < ready) {
+                return;
+            }
+            DRY_LOGGED.put(maid, gameTime + NOTIFY_COOLDOWN);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 这一拍弹匣里没弹（缺件：" + MaidBroomKit.missingParts(maid)
+                    + "）→ **不下鞍**，留在扫帚上等换弹（换弹由开火链路自己触发）");
+        } catch (Throwable ignored) {
+        }
     }
 
     /* ==================== 双就绪播报（实测六百七十七） ==================== */

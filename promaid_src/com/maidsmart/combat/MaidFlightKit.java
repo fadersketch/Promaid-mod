@@ -379,8 +379,13 @@ public final class MaidFlightKit {
             // v1.3.0 实测六百六十六：改成**按这把枪**问——旧版是"她身上任意一把枪有弹就算"，
             // 于是"手里是喂不上弹的重武器/蓄力枪、背包里另有一把能用的手枪"时模式照样激活，
             // 她就一直绕圈不开火（粉丝反馈"一直绕圈但不射击"的成因；开火用的就是这把枪）
+            // 【实测六百九十二："喂得上弹"分两档】canFeed = 这一拍**打得响**（弹匣/弹膛里有），
+            // canReload = 现在打不响但**换得上**（背包里有这把枪认的弹药/弹药箱，开火链路自己会
+            // 拉栓换弹）。门禁取"打得响 **或** 换得上"——旧版只认前者，于是弹匣打空的那一拍
+            // 模式就判"缺弹药"，扫帚模式当场把她从空中放下来（玩家报的"冲锋枪/狙击枪飞着飞着
+            // 就掉下来"），空袭那边同理。口径只在 GunCompat 一处，别处不重写。
             if (GunCompat.isGun(weapon)) {
-                return GunCompat.canFeed(maid, weapon);
+                return GunCompat.canFeed(maid, weapon) || GunCompat.canReload(maid, weapon);
             }
             // v1.2.0 实测五百零一【御币被误判缺弹药】：御币 **不消耗弹药**（弹幕用武器本体），
             // 但它是 `ProjectileWeaponItem` 的子类（`ItemHakureiGohei extends ProjectileWeaponItem`，

@@ -11,7 +11,8 @@ import java.util.WeakHashMap;
 
 /**
  * v1.2.0 实测五百四十七【空袭牵引绳】：空袭期间，以女仆为圆心、半径 N 格（默认 100，可配）
- * 的球内找不到主人 → 立刻把她传送回主人身边（等效排班表的那次人工传送）。
+ * 的球内找不到**参照点** → 立刻把她传送回参照点（等效排班表的那次人工传送）：
+ * **非守家时参照点 = 主人；守家时参照点与落点都是她的工作区圈心**（实测六百九十二）。
  *
  * 需求原文："空袭期间加个机制，如果以自身为圆心，半径100格范围内没有发现主人。
  * 立即执行一次传送到主人身边（等效拿排班表的传送）。防止女仆飞太高把目标打死后，
@@ -34,20 +35,24 @@ import java.util.WeakHashMap;
  *   <li>空中 = 空袭正在进行，这正是本条要管的窗口。地面上的距离问题交给
  *       {@code trySameDimPull}（48 格，且守家/坐姿/骑乘/干活都有豁免）那套更保守的规则，
  *       不在这里抢——否则"主人出门 100 格、空袭女仆守家站着不动"会被无条件拽走；</li>
- *   <li>正因为有"空中"这道门，本入口**不查 home（在家）模式**（见
- *       {@code MaidChunkLoadManager.recallFromFlight}）：停放的语义已经被"她飞起来了"
- *       这件事本身打破；而我们的排班表会自动给女仆锚定 home，照抄那道门的结果恰恰是
- *       "用了排班的女仆永远召不回"——正是用户报的场景；</li>
+ *   <li><b>【实测六百九十二】守家时把「参照点」换成她的工作区</b>：玩家原话「Home模式下，
+ *       空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」——旧版正是"不查 home"
+ *       才会这样：守家的她只要飞在空中，主人一走远就被拽到主人那边（扫帚那一侧有实测日志
+ *       ：01:32:22 她正 home=true 沿工作范围盘旋，被搬到主人那边 100 格外后 5 分钟回不到圈里）。
+ *       现在守家期间**距离基准与落点都用圈心**（{@code WorkAreaClamp.homeAnchor}）：
+ *       防"回不来"的初衷照旧成立（拉回家），而"主人走远"不再是理由。
+ *       旧版担心的"排班表自动锚定 home → 排班女仆永远召不回"也一并解决——她会被召回**岗位**；</li>
  *   <li>主人跨维度时不抢：那一路上有 {@code followIfCrossDimension}（本轮攻击结束即传），
- *       在这里立刻抢会重演实测四百八十七"猛击被传送打断"的老问题。</li>
+ *       在这里立刻抢会重演实测四百八十七"猛击被传送打断"的老问题。守家那一档不看主人维度
+ *       （落点是自家圈心，与主人在哪个维度无关）。</li>
  * </ul>
  *
- * 【距离口径】3D 距离（水平 + 竖直一起算）。所以"飞太高"本身就会触发：她爬升到主人
- * 头顶 100 格以上时，主人仍在她的球外——那正是"飞太高回不来"的字面含义。
+ * 【距离口径】3D 距离（水平 + 竖直一起算）。所以"飞太高"本身就会触发：她爬升到参照点
+ * 100 格以上时，参照点仍在她的球外——那正是"飞太高回不来"的字面含义。
  *
- * 【落点】与排班表的人工传送同一条链路：{@code recallFromFlight} →
- * {@code teleportCore(force = true)}——强制（主人身边找不到可站立格就直接落在主人所在格）
- * + 无视地块 + 可空中。
+ * 【落点】与排班表的人工传送同一条链路：{@code recallFromFlight} /
+ * {@code recallFromFlightTo} → {@code teleportCore(force = true)} / {@code standSpotAt}——
+ * 强制（参照点边找不到可站立格就直接落在参照点所在格）+ 无视地块 + 可空中。
  *
  * 【调用点】挂在 {@code MaidToolAutoEquipBehavior.checkExtraStartConditions} 的飞行任务
  * 分支（core 行为，任何 activity、每 tick 一次）。挂那里的另一个好处：本模组给所有有主
@@ -98,13 +103,27 @@ public final class MaidFlightRecall {
                 return; // 已落地：交给 trySameDimPull 的保守口径（它查 home/坐姿/干活豁免）
             }
             LivingEntity owner = maid.m_269323_();
-            if (owner == null || !owner.m_6084_()) {
-                return; // 主人不在已加载世界 / 已死——没有可传的目标
+            // 【实测六百九十二：守家的时候拉回的是「她的工作区」，不是主人】
+            //  玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+            //  旧版那段注释（"不看 home 模式"）的理由是"排班表会自动给女仆锚定 home，照抄那道门会变成
+            //  用了排班的女仆永远召不回"——那条担心的解法不是"无视 home"，而是**把落点从主人换成家**：
+            //  守家期间距离基准与落点都用工作区圈心（WorkAreaClamp.homeAnchor，口径只此一处），
+            //  主人走多远都不再是把守家女仆拽走的理由，而"她飞太远回不来"照旧由这条绳兜住（拉回家）。
+            //  实测日志实证（2026-09-27 01:32:22，扫帚那一侧同一条病）：她正「home=true 沿工作范围
+            //  盘旋」，主人跑出 100 格就被搬到主人那边 100 格外，随后 5 分钟回不到圈里。
+            net.minecraft.core.BlockPos home = com.maidsmart.follow.WorkAreaClamp.homeAnchor(maid);
+            if (home == null) {
+                if (owner == null || !owner.m_6084_()) {
+                    return; // 主人不在已加载世界 / 已死——没有可传的目标
+                }
+                if (owner.m_9236_() != level) {
+                    return; // 跨维度不抢（本轮攻击结束后由跨维度跟随处理）
+                }
             }
-            if (owner.m_9236_() != level) {
-                return; // 跨维度不抢（本轮攻击结束后由跨维度跟随处理）
-            }
-            double dSq = maid.m_20275_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_());
+            double refX = home != null ? home.m_123341_() + 0.5 : owner.m_20185_();
+            double refY = home != null ? home.m_123342_() + 0.5 : owner.m_20186_();
+            double refZ = home != null ? home.m_123343_() + 0.5 : owner.m_20189_();
+            double dSq = maid.m_20275_(refX, refY, refZ);
             if (dSq <= (double) radius * radius) {
                 RETRY_READY.remove(maid); // 回到半径内 → 清失败冷却
                 return;
@@ -114,24 +133,30 @@ public final class MaidFlightRecall {
             if (ready != null && now < ready) {
                 return;
             }
-            if (!com.maidsmart.follow.MaidChunkLoadManager.recallFromFlight(maid, owner)) {
+            boolean ok = (home != null)
+                    ? com.maidsmart.follow.MaidChunkLoadManager.recallFromFlightTo(maid, home)
+                    : com.maidsmart.follow.MaidChunkLoadManager.recallFromFlight(maid, owner);
+            if (!ok) {
                 RETRY_READY.put(maid, now + RETRY_COOLDOWN);
                 return;
             }
             RETRY_READY.remove(maid);
             int blocks = (int) Math.sqrt(dSq);
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
-            com.maidsmart.tool.PromaidLog.log("空袭牵引绳", name + " 距主人 " + blocks
-                    + " 格（> " + radius + " 格），已传送回主人身边");
+            com.maidsmart.tool.PromaidLog.log("空袭牵引绳", name + (home != null ? " 距工作区 " : " 距主人 ")
+                    + blocks + " 格（> " + radius + " 格），已传送回"
+                    + (home != null ? "工作岗位" : "主人身边"));
             // 系统消息只发给"主人是玩家"的那一档（女仆的主人本来就是玩家，这里只是类型上
             // 站得住脚——LivingEntity 没有 displayClientMessage，必须落到 Player 上）
             if (owner instanceof net.minecraft.world.entity.player.Player player) {
                 Long msgReady = MESSAGE_READY.get(maid);
                 if (msgReady == null || now >= msgReady) {
                     MESSAGE_READY.put(maid, now + MESSAGE_COOLDOWN);
-                    player.m_5661_(Component.m_237113_("§e✦ §f你的女仆 §b" + name
-                            + "§f 飞出了 §e" + blocks + " §f格（空袭牵引绳），"
-                            + "已先回到你身边。"), false);
+                    player.m_5661_(Component.m_237113_(home != null
+                            ? "§e✦ §f你的女仆 §b" + name + "§f 飞离工作区 §e" + blocks
+                              + " §f格（空袭牵引绳），已先回到岗位上。"
+                            : "§e✦ §f你的女仆 §b" + name + "§f 飞出了 §e" + blocks
+                              + " §f格（空袭牵引绳），已先回到你身边。"), false);
                 }
             }
         } catch (Throwable ignored) {
