@@ -39,13 +39,17 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * `getControllingPassenger()` 是 null，扫帚直接自由落体。所以"女仆无需玩家独立骑扫把"
  * 只能在这一处接管。
  *
- * ── 接管条件（三条全中才动，任何一条不中都是原版行为一字不改）──
+ * ── 接管条件（**四条**全中才动，任何一条不中都是原版行为一字不改）──
  * <ol>
  *   <li>{@code getPassengers().get(0)} 是 {@code EntityMaid}——注意这同时排除了
  *       "玩家当第一乘客"（那样第一乘客是 Player，这里直接返回 null）；</li>
  *   <li>该女仆是**本模组所有**（{@code MaidScope.owned}，无主女仆一律不干预）且当前任务
  *       就是扫帚模式（{@code maid_smart:broom}）——别的任务骑在扫帚上时照旧原版；</li>
- *   <li>{@code getControllingPassenger() == null}（没有玩家在驾驶）——双保险，语义自证。</li>
+ *   <li>{@code getControllingPassenger() == null}（没有玩家在驾驶）——双保险，语义自证；</li>
+ *   <li>【实测六百七十九 新增】**武装拴绳在用**——{@code GunnerTetherManager.leashChainActive(maid)}：
+ *       主人手上握着武装拴绳（主手/副手任一），或她此刻正被拴着。玩家原话：「最好不要整体改骑扫帚的
+ *       链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品进行判定（即只有玩家手持武装拴绳才走
+ *       此链路，不拿则走原版）」。不满足 → 原版（TLM 与别的 mod 说了算）。</li>
  * </ol>
  *
  * ── 接管后做什么 ──
@@ -88,6 +92,14 @@ public abstract class EntityBroomMaidTravelMixin {
         if (self.m_9236_().f_46443_) {
             // v1.3.2 修正：客户端也走这条 travel（见类注释）——谁动都行，但"意图队列"只有一份，
             // 两边都读就谁都动不了。客户端一律让位，等服务端的权威位置同步。
+            return;
+        }
+        // 【实测六百七十九】玩家要求：这条自研链路只在"武装拴绳在用"时才接管扫帚驱动——
+        //   不拿绳子 / 没被拴着时**一个字都不改**，让 TLM 与别的 mod 自己说了算（防冲突）。
+        //   判据只有一处（本项目"口径只有一处"）：GunnerTetherManager.leashChainActive。
+        if (!com.maidsmart.combat.GunnerTetherManager.leashChainActive(maid)) {
+            com.maidsmart.combat.MaidBroomDrive.clearIntent(self); // 这次没人消费的意图别留到下次
+            maidsmart$noteStandDown(self, maid);
             return;
         }
         maidsmart$noteTakeover(self, maid);
@@ -144,4 +156,32 @@ public abstract class EntityBroomMaidTravelMixin {
         } catch (Throwable ignored) {
         }
     }
+
+    /* ==================== 让位留痕（每把扫帚一次，便于实测验收） ==================== */
+
+    private static final java.util.Set<java.util.UUID> STAND_DOWN = new java.util.HashSet<>();
+
+    /**
+     * 第一次因为"武装拴绳没在用"而让位时记一条——**只在服务端**（客户端在上面就 return 了）。
+     * 实测时一眼分辨"她在扫帚上是不是因为没拿绳子而被判回原版"。日志里搜「扫帚让位」。
+     */
+    private static void maidsmart$noteStandDown(EntityBroom broom, EntityMaid maid) {
+        try {
+            java.util.UUID id = broom.m_20148_();
+            synchronized (STAND_DOWN) {
+                if (!STAND_DOWN.add(id)) {
+                    return;
+                }
+                if (STAND_DOWN.size() > NOTE_CAP) {
+                    STAND_DOWN.clear();
+                    STAND_DOWN.add(id);
+                }
+            }
+            com.maidsmart.tool.PromaidLog.log("扫帚让位",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 在扫帚上，但武装拴绳没在用"
+                            + "（主人没握着绳子、她也没被拴着）→ 本 tick 起走原版，自研驱动不接管");
+        } catch (Throwable ignored) {
+        }
+    }
+
 }

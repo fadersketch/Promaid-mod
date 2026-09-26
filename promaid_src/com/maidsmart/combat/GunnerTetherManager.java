@@ -300,6 +300,41 @@ public final class GunnerTetherManager {
         }
     }
 
+    /**
+     * 【实测六百七十九】"武装拴绳这条链路此刻算不算在用"——**扫帚驱动接管的唯一判据**
+     * （玩家原话："最好不要整体改骑扫帚的链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品
+     * 进行判定（即只有玩家手持武装拴绳才走此链路，不拿则走原版）"）。
+     *
+     * <p>两种"在用"都算，缺一条就会把既有玩法掐断：
+     * <ol>
+     *   <li>她的主人手上正握着武装拴绳（主手 / 副手任一）——玩家说的字面口径；</li>
+     *   <li>或她此刻正被武装拴绳绑着（{@link #isTethered}：牵绳档 / 二号位）。
+     *       <b>这一条不能省</b>：二号位里玩家吊在她下方、手上拿的是枪或重锤（实测六百七十六 的
+     *       重锤猛击就是这么用的），"不拿绳子"是常态——只认 ① 的话，他一放下绳子就断掉她的飞行，
+     *       两个人一起掉下去。</li>
+     * </ol>
+     * 消费方：{@link com.maidsmart.mixin.EntityBroomMaidTravelMixin}（扫帚驱动的接管闸）。
+     * 只读 + 异常兜底 false（读不到就按"没在用"→ 原版，宁可少干预）。
+     */
+    public static boolean leashChainActive(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            if (isTethered(maid)) {
+                return true;
+            }
+            net.minecraft.world.entity.LivingEntity owner = maid.m_269323_();
+            if (!(owner instanceof net.minecraft.world.entity.player.Player p)) {
+                return false;
+            }
+            return p.m_21205_().m_41720_() instanceof CombatLeashItem
+                    || p.m_21206_().m_41720_() instanceof CombatLeashItem;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     /* 【实测六百七十二：tetherHoldPos() / tetherHover() 整段删掉】——拴绳不再给女仆定高度。
      *  671 已经把空袭那一条改成"只保持她自己当前高度"（MaidFlightFollowBehavior.maidsmart$tetherHold），
      *  672 把扫帚那一条也改成同一个口径（MaidBroomBehavior ⑥.0 → MaidBroomDrive.hoverInPlace）。

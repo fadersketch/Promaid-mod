@@ -1,4 +1,70 @@
-﻿## 实测六百七十八【换座不再把她摔下去 + 扫帚接敌爬升 8 → 10 + 左上角「绑定中」（版本号不变，仍是 v1.3.0 beta）】
+﻿## 实测六百七十九【骑扫帚链路收窄成「武装拴绳在用才接管」+ 把玩家当前配置值同步成默认值（版本号不变，仍是 v1.3.0 beta）】
+
+> 五条：① 「最好不要整体改骑扫帚的链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品进行判定（即只有玩家手持武装拴绳才走此链路，不拿则走原版）」；② 调研空袭施法链路（结论见下，**无代码改动**）；③ 调研空袭开枪判定（结论见下，**无代码改动**）；④ 「将我现在修改的值改成默认值」——按他 1.21.1 实例的当前配置同步 **12 项**默认值；⑤ 取消三平台状态定时检查（已删）。
+
+### 一、扫帚驱动接管：只有「武装拴绳在用」才走自研链路（改）
+
+- 玩家原话：「最好不要整体改骑扫帚的链路，防止其他mod对骑扫帚进行改动导致冲突。而是对物品进行判定（即只有玩家手持武装拴绳才走此链路，不拿则走原版）」
+- 本模组改动 TLM 扫帚飞行的**唯一**地方是 `EntityBroomMaidTravelMixin`：它在 `EntityBroom.travel` 的
+  `HEAD` 上直接 `cancel` 掉原版、再写自己的速度与朝向。它不是"加一层"，而是**整条接管**——别的 mod
+  对扫帚骑乘 / 飞行的改动会在这一档被整体绕开。玩家的担心是对的，所以这一批把它收窄。
+- 新增唯一判据 `GunnerTetherManager.leashChainActive(maid)`（本项目"口径只有一处"），满足其一才接管：
+  ① 她的主人手上正握着武装拴绳（主手 / 副手任一）；② 她此刻正被武装拴绳拴着（牵绳档 / 二号位）。
+- **为什么 ② 也算「在用」**：二号位里玩家吊在她下方，手上拿的是枪或重锤（实测六百七十六 的重锤猛击
+  就是这么用的），"不拿绳子"是常态——只认 ① 的话，他一放下绳子就断掉她的飞行，两个人一起掉下去。
+- 不满足时**一个字都不改**：这一 tick 起 `travel` 走原版（TLM 与别的 mod 说了算），并顺手清掉这一 tick
+  没人消费的推进意图（免得下次接管时突然来一记陈旧的推力）。日志搜「扫帚让位」能看到第一次让位。
+- **副作用说明（重要）**：没有玩家驾驶的扫帚在 TLM 原版里是**自由落体**。所以"没在用拴绳"时她在空中
+  会掉下去——这正是"走原版"的字面含义。要收绳子，请先让她落地。
+
+### 二、配置默认值同步 12 项（改；按玩家 1.21.1 实例的当前配置）
+
+| 配置键 | 旧默认 | 新默认 |
+|---|---|---|
+| `mine.breakBudget` 穿透预算 | 22 | **6** |
+| `combat.soulSpellCooldownSeconds` 收符冷却（秒） | 60 | **1** |
+| `combat.waterLandingScan` 落地水下探格数 | 2 | **3** |
+| `combat.playerDamageMode` 玩家对女仆伤害模式 | 4（仅一点伤害） | **2（无限制）** |
+| `combat.autoResurrectDelaySeconds` 复活延迟（秒） | 60 | **10** |
+| `combat.aidThirstThreshold` 投喂触发口渴度 | 15 | **20** |
+| `combat.combatWorkRange` 战斗时临时扩圈（格） | 15 | **32** |
+| `misc.scheduleAvailabilityCheck` 排班切换前可用性检测 | 开 | **关** |
+| `flightFollow.enabled` 飞行跟随 | 关 | **开** |
+| `flightFollow.firework` 飞行跟随·消耗烟花 | 开 | **关** |
+| `flightFollow.elytra` 飞行跟随·消耗鞘翅耐久 | 开 | **关** |
+| `flightFollow.trident` 飞行跟随·消耗三叉戟耐久 | 开 | **关** |
+
+- 只改**声明默认值**：Forge / NeoForge 都不会替已有 toml 改值，**老存档里的现有配置一个字节都不动**
+  （想用新默认请删掉那一行，或整个文件删掉重开）。
+- `mine.breakBudget` 与 `misc.scheduleAvailabilityCheck` 两项本来就由 `ProMaidMod.runConfigMigration`
+  在每次启动时强制改（22→6、true→false）——声明值与实际行为现在终于一致了；迁移段照旧保留（它管老档）。
+- 面板描述与手册里写死旧默认的数字文案一并改掉了（穿透预算 / 复活延迟 / 投喂触发口渴度 /
+  战斗时临时扩圈 / 回魂符冷却 / 飞行跟随那三条省料开关）。
+
+### 三、两条调研结论（**无代码改动**，供决策）
+
+- **② 空袭施法**：不是独立自研链路，也**不是**"搬的万法皆通"。实际是**两层**：
+  ① 通用的「顺带施法」确实**复用万法皆通**（`touhou_little_maid_spell`）的公开 API
+     （`SpellBookManager.getOrCreateManager` → `ISpellBookProvider.castSpell`），promaid 只负责
+     "何时发起 + 目标同步 + 距离 / 间隔闸门"；
+  ② 位移法术（起飞 / 补高 / 俯冲冲刺那三处"指定法术"）是 promaid 自己写的反射包**直连 Iron's
+     Spells**（`SpellRegistry.getSpell` → `MagicData.initiateCast` → `AbstractSpell.onCast`），
+     因为万法皆通**没有公开的"指定法术施法"API**（它自己那套在同 jar 的私有
+     `MaidSpellCommand$IronSpellHelper` 里，类 package-private、方法 private static）。书单 / 等级 /
+     冷却仍读万法皆通的 `IMaidSpellData`。两条链路的判定都在 `MaidSpellCastCompat`。
+- **③ 空袭开枪**：是**接的原版（TLM 自家）枪械通道**。开火这一下走
+  `GunCommonUtil.performGunAttack(maid, target, gun)`，TLM 内部再转 TACZ 的
+  `IGunOperator.fromLivingEntity(maid).shoot(...)`；promaid 自己只写了外层三道门
+  （视线 `SelfPreservationBehavior.hasSight`、冷却 `RANGED_GUN_CD`、弹药 `GunCompat.canFeed`），
+  **没有任何** `IGun.shoot`、也没有任何碰枪械类的 mixin。空袭与地面远程共用同一份
+  `fireRanged` / `tickGunFire`。
+
+**验证**：两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=167 SKIP=8 FAIL=0**；打包门禁
+（`verify_jar_classes.py` + `mixin 包登记` + `lang json`）全过；出
+`promaid-1.3.0-forge-1.20.1.jar`（10,813,668 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,837,727 B），
+**同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）。
+
+## 实测六百七十八【换座不再把她摔下去 + 扫帚接敌爬升 8 → 10 + 左上角「绑定中」（版本号不变，仍是 v1.3.0 beta）】
 
 > 三条实测反馈：① 「当玩家坐在扫帚上，女仆处于扫帚模式时，玩家拿着武装拴绳对着女仆进行右击的时候，不应该把女仆的骑乘状态也解除掉。这样子可能会导致失控。」② 「考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。（之前的扫帚模式盘旋是8格）」③ 「在进入绑定状态下，最好是在左上角用蓝色字体显示一下玩家现在处于绑定状态。（渲染机制同冷却计时）」
 
@@ -90,7 +156,7 @@
 "玩家插队"分支、`getPassengers()` 返回的是 `ImmutableList` 因而只能靠原版那条规则换座）；
 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=167 SKIP=8 FAIL=0**；打包门禁
 （`verify_jar_classes.py` + `mixin 包登记` + `lang json`）全过；出
-`promaid-1.3.0-forge-1.20.1.jar`（SIZE_FORGE B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（SIZE_NEO B），
+`promaid-1.3.0-forge-1.20.1.jar`（10,810,631 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,834,698 B），
 **同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）。
 ## 实测六百七十七【两套都齐说一句「我已经准备好了」+ 拴绳的拉扯做成真的（版本号不变，仍是 v1.3.0 beta）】
 
