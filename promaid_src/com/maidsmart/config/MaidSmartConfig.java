@@ -23,6 +23,8 @@ public static final ForgeConfigSpec.BooleanValue BUILD_SPEED_MIGRATED;
 public static final ForgeConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
 /** v1.2.2 实测六百二十：散步速度倍率默认迁移标记（0.7 → 0.4，内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
+/** v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认迁移标记（10 → 15，内部，一次性） */
+public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -472,6 +474,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.IntValue AIR_RAID_RANGED_SHOT_COOLDOWN;
     /** 远程射程（格，弓弩）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_RANGED_ATTACK_RANGE;
+    /** 【实测六百八十二】空袭·有效开火距离（格；0 = 不限）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_RANGED_FIRE_RANGE;
     /** 弹开触发半径（格）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_RANGED_PUSH_RADIUS;
     /** 弹开水平速度。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -639,7 +643,7 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 悬停高度（格，相对目标脚底）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_HOVER;
     /**
-     * 【实测六百七十八】接敌爬升高度（格，相对敌人脚底，默认 10）：「遇到敌人先爬到它上方几格」
+     * 【实测六百八十二】接敌爬升高度（格，相对敌人脚底，默认 15）：「遇到敌人先爬到它上方几格」
      * ——这一个数字同时**决定这一场遭遇的盘旋高度**（爬完就一直保持在那儿打）。
      * 玩家原话："考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。
      * （之前的扫帚模式盘旋是8格）"
@@ -1989,7 +1993,7 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----
         // 新功能：女仆取出扫帚放出来骑上飞起来，用远程武器打（开火链路整条复用远程空袭）。
-        // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、接敌爬升 10 格（实测六百七十八）、
+        // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、接敌爬升 15 格（实测六百八十二）、
         // 平时跟随主人、受活动范围约束（守家女仆不会为了跟主人越界）。
         BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
         COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【v1.3.2 实测六百五十六 的飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**\n\n【v1.3.3 两条实测修正】①「坐上去之后原地左右乱晃、被反复拉回、不上升」的根因是**客户端也在驱动扫帚**，与服务端的「取走即清」意图队列抢同一份数据（原版 travelRidden 是从 isControlledByLocalInstance 那一侧才施加位移的，我们漏了这道闸）；现在只让服务端驱动。②她坐在椅子/别的载具上时原来的 startRiding 恒失败（原版要求「当前不是乘客」），现在走 force 骑乘把她换过来。\n\n【排查留痕】日志搜「扫帚模式」和「扫帚接管」：取出扫帚骑上（这把是我们放的）、扫帚接管（服务端真的开始驱动）、爬升到位 与 头顶被顶住（带起止高度与「整段只抬了几格」）、想飞却没骑上扫帚（骑不上时不再静默）。你自己骑在这把扫帚上时她只开火、不接管飞行，日志写「玩家在驾驶这把扫帚」")
@@ -1998,8 +2002,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
-        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 10，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百七十八：默认 8 → 10】玩家原话：\"考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。（之前的扫帚模式盘旋是8格）\"——\"这个模式\"指武装拴绳二号位：你吊在她下方 2.6~2.9 格，她飞高一点，你脚下才有余量、不会一路蹭着树冠和地面。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 10 格一直往上顶。\n\n**旧存档里的 8 不会自动变**（配置文件里写死的值优先），想跟着新默认走就把这一行改掉或删掉重开。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
-                .translation("config.promaid.broom.climb").defineInRange("climb", 10.0, 2.0, 32.0);
+        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 15，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
+                .translation("config.promaid.broom.climb").defineInRange("climb", 15.0, 2.0, 32.0);
         COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
@@ -2013,6 +2017,11 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离你超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回你身边，免得飞太远回不来。0 = 关闭。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
+        // v1.3.0(beta) 实测六百八十二：上面「接敌爬升高度」默认 10 → 15 的一次性迁移标记。
+        // 【为什么用标记，而不是"值 == 10 就迁"】老档 toml 里都写着 10，只凭值分不出
+        // "旧默认留下的"和"玩家自己就要 10"——用标记钉死只迁一次，之后玩家想写回 10 随便写。
+        BROOM_CLIMB_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（10→15）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.broom.climbMigrated").define("climbMigrated", false);
         BUILDER.pop();
 
         // ---- v1.3.7「武装拴绳」（配置面板：移动与行为 → 武装拴绳（二号位）；实测六百七十五 起
@@ -2139,6 +2148,20 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_RANGED_ATTACK_RANGE = BUILDER.comment("远程射程（格，默认 24）：弓弩的 3D 距离射程（枪械用枪械模组自己的射程）；也是远程空袭锁敌的上限")
                 .translation("config.promaid.airRaid.rangedAttackRange")
                 .defineInRange("rangedAttackRange", 24.0, 4.0, 64.0);
+        // 【实测六百八十二】空袭·有效开火距离：**只有在这个距离以内才扣扳机**。
+        // 反馈原文："远程空袭状态下……女仆在此状态下飞的太远后打枪的准度特别的低。而且似乎某些
+        // 行为会阻止女仆开枪。女仆开枪的频率相比于正常的枪械模式要低了很多。"
+        // 【为什么不改锁敌】锁敌半径是玩家在 实测五百一十三 点名要的 50 格（FlightTargeting.RANGE），
+        // 它是"看不看得见她该打的怪"；这里管的是**打得到才算数**——两者是两件事，各留各的口径。
+        // 【为什么默认与弓弩射程同一个数】枪械自己的射程（GunCompat.gunMaxRange，现场日志里是 48）
+        // 比弓弩的 24 大一倍，于是她在 40+ 格外一路点射：TACZ 的子弹是**有飞行时间的实体**，
+        // 40 格外打一个一直在动的 boss 基本打不中，实测日志里那一段全是"距敌 39.14 / 43.89 格"。
+        // 默认取 24 = 和「远程射程」同一个量级（TLM 自家枪械任务的中距离带也在这一档），
+        // 超出就不扣扳机、让盘旋的径向修正把她拉回圈上（盘旋半径默认 10）再打。
+        // 弓弩那一档本来就只有 24，所以**默认对弓弩一字未改**。0 = 关掉这条门（用武器自己的射程）。
+        AIR_RAID_RANGED_FIRE_RANGE = BUILDER.comment("空袭·有效开火距离（格，默认 24，0 = 不限）：只有在她到目标的 3D 距离小于这一条时才扣扳机。\n\n【为什么要有它】枪械模组自己的射程（实测现场 48 格）比弓弩的 24 大一倍，旧版于是会在 40 格开外一路点射——子弹是有飞行时间的实体，打一直在动的敌人基本打不中，玩家看到的是「打得很远、准度极低」。超出这条距离她**不开火**，改为继续盘旋（盘旋的径向修正会把她拉回半径 10 的圈上）再打。\n\n【锁敌没变】50 格索敌是「看不看得见该打的怪」，这条只管「打得到才算数」。\n\n0 = 关掉这条门（回到「用武器自己的射程」的旧口径）。弓弩的射程本来就是 24，所以默认值对弓弩一字未改。")
+                .translation("config.promaid.airRaid.rangedFireRange")
+                .defineInRange("rangedFireRange", 24.0, 0.0, 128.0);
         AIR_RAID_RANGED_PUSH_RADIUS = BUILDER.comment("弹开触发半径（格，默认 3）：怪物贴到这么近就触发「近身弹开」（开关在落地缓冲那页）")
                 .translation("config.promaid.airRaid.rangedPushRadius")
                 .defineInRange("rangedPushRadius", 3.0, 0.0, 16.0);
