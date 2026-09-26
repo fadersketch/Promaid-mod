@@ -252,6 +252,7 @@
   "config.promaid.broom.climb": "接敌爬升高度（格）",
   "config.promaid.broom.follow": "平时跟随主人",
   "config.promaid.broom.clampHome": "守家时绕工作范围盘旋（并受范围约束）",
+  "config.promaid.broom.homeAlt": "守家盘旋高度（格）",
   "config.promaid.broom.recallDistance": "扫帚牵引绳（格）",
   "config.promaid.broom.climbMigrated": "内部标记：扫帚接敌爬升高度默认迁移（10→15）",
   "config.promaid.broom.climb12Migrated": "内部标记：扫帚接敌爬升高度默认迁移（15→12）",
