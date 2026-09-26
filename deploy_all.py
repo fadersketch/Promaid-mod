@@ -5,6 +5,9 @@
 1.20.1 Forge 47.4.21      : patched/promaid-1.3.0-forge-1.20.1.jar   (user's main modpack)
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+v1.3.0 实测六百九十（玩家崩溃报告：跨维度跟随扫描边遍历原版实体表边跨维传送女仆 = 
+fastutil 迭代器槽位越界 → 「Exception in server tick loop」整合服务端崩回桌面；
+新增 com.maidsmart.tool.EntitySnapshot，两树各 33 处「遍历全部实体」改成先取快照）：
 v1.3.0 实测六百八十九（面板排版三修：武装拴绳那条 1000+ 字介绍拆成 4 条短行【旧版窄窗口下比一页
 还高，把第 1 页挤成只剩板块标题、正文压住翻页/保存按钮】+ 注释绘制加下界兜底 + markdown 星号不再
 原样画在界面上 + 顺带把「实测六百八十六」标题被顶到第一行的历史遗留归位）：
