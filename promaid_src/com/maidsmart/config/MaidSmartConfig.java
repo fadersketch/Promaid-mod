@@ -695,6 +695,9 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_FOLLOW_END;
     /** 卡墙脱困（默认开）：朝目标直飞被方块顶住（原地不动 ≥ 0.6 秒）→ 先飘到最近的空气格再续链路 */
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_UNSTICK;
+    /** 实测六百九十八【扫帚待命落地】（默认开）：没目标也没在跟主人跑那一档降回地面待命，
+     *  不再原地悬停在半空（关掉 = 旧行为：原地悬停） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_IDLE_LAND;
     /**
      * v1.3.6 实测六百六十一【扫帚牵引绳】：她骑在扫帚上离主人超过这么多格（3D 距离，
      * 所以「飞太高」也算）就立刻**连人带扫帚**传送回主人身边。0 = 关闭。
@@ -2069,6 +2072,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.followEnd").defineInRange("followEnd", 3.0, 1.0, 64.0);
         COMBAT_BROOM_UNSTICK = BUILDER.comment("卡墙脱困（默认开）：她朝目标直飞、被方块顶住原地不动超过 0.6 秒时，**先飘到最近的空气格**（只挑让她离目标更近、且上下两格都空的那个），到了再接着飞原来的链路——玩家原话：「如果撞到了阻挡的方块，那么应该先尝试往最近的空气方块进行移动，然后再继续执行原有的扫帚链路」。关掉 = 旧行为（一直顶着墙飞）。日志搜「扫帚卡墙」")
                 .translation("config.promaid.broom.unstick").define("unstick", true);
+        COMBAT_BROOM_IDLE_LAND = BUILDER.comment("扫帚待命落地（默认开）：扫帚模式里\"没有敌人、也没在跟主人这一趟\"那一档（起飞抬 1 格之后、打完一仗之后、主人在别的维度/跟随关着时）**降回地面待命**，而不是原地挂在半空——玩家原话：「还会出现女仆骑上扫帚，结果在空中悬空的状态」。做法：顺着她脚下探地（最多 24 格），找到就降到\"地面之上 1.6 格\"；**探不到地就照旧原地悬停，绝不往下扎**（虚空 / 她比地形高出 24 格以上）；已经贴地时也照旧悬停（不再上下抖）。**接敌与跟随一个字都不受影响**（那两档在它前面）；主人自己飞在天上时也不落地（那时贴着他悬停才是对的）。关掉 = 旧行为（原地悬停，可能一直挂在半空）。日志搜「待命 → 降回地面」")
+                .translation("config.promaid.broom.idleLand").define("idleLand", true);
 
         COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（实测六百九十二：守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);

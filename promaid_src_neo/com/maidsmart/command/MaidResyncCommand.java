@@ -385,6 +385,24 @@ public final class MaidResyncCommand {
     }
 
     /**
+     * 【实测六百九十八】给「可见性自愈」用的单发入口：立刻把这一对（主人, 她）在客户端
+     * 重建一次（就是既有的 {@link #resyncTo}：删 → 生成 → 全量数据 → 属性 → 装备 → 饰品）。
+     * <p>她的界面开着时返回 false 让调用方下一轮再试——与 实测五百九十五 同一条理由
+     * （重建客户端实体时 TLM 的容器槽位会抓着一只已被删掉的实体）。
+     */
+    public static boolean resyncToOwner(ServerPlayer owner, EntityMaid maid) {
+        if (owner == null || maid == null || maid.guiOpening) {
+            return false;
+        }
+        try {
+            resyncTo(owner, maid);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * 服务端侧"强制重同步"：删 → 生成 → 数据 → 装备。
      * 不改服务端任何状态（不动追踪表、不动实体），纯粹把客户端缺的那几包补齐；
      * 如果客户端本来就有她，删+加也只是一次可见的瞬时重建，无害。

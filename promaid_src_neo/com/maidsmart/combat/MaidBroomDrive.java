@@ -1213,6 +1213,79 @@ public final class MaidBroomDrive {
         steerTo(maid, broomPos(maid));
     }
 
+    /** 实测六百九十八：待命落地的悬停高度——离地一格半（扫帚自己还有厚度，贴地会穿模） */
+    private static final double PARK_ABOVE_GROUND = 1.6;
+    /** 她高于目标这么多格才值得往下走（再低就就地悬停，免得贴着地面上下抖） */
+    private static final double PARK_MIN_LIFT = 2.5;
+    /** 待命落地日志限频（女仆 UUID → 上次毫秒），20 秒一条 */
+    private static final java.util.Map<java.util.UUID, Long> PARK_LOGGED =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long PARK_LOG_MS = 20_000L;
+
+    /**
+     * 实测六百九十八【待命不许挂在天上】——玩家原话：「还会出现女仆骑上扫帚，结果在空中
+     * 悬空的状态」。
+     *
+     * <p>扫帚模式"没目标、也没在跟主人这一趟"那一档（{@link MaidBroomBehavior} 的 ⑥.③）
+     * 原先一律 {@link #hoverInPlace}：**目标点就是她现在的坐标**，速度收干 → 她挂在半空
+     * 一动不动。她为什么会挂在半空？起飞相位本来就要"原地往上抬 1 格"（实测六百七十七 的
+     * 玩家要求），打完一仗也停在高处，主人在别的维度/离得远时更没人管她——于是"骑上扫帚
+     * 就浮在那儿"成了常态。
+     *
+     * <p>现在改成**降回地面待命**：顺着她脚下探地（{@link #groundYOrNaN}，最多 24 格），
+     * 找到就降到"地面之上 {@link #PARK_ABOVE_GROUND} 格"；探不到地（悬在虚空 / 比地形高出
+     * 24 格以上）就照旧原地悬停——**绝不往下扎**。已经贴地了也照旧悬停（不再上下抖）。
+     * 开关 = 配置 {@code combat.broom.idleLand}（默认开）。
+     */
+    public static void parkIdle(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        if (!idleLandEnabled()) {
+            hoverInPlace(maid); // 关掉开关 = 旧行为（原地悬停）
+            return;
+        }
+        try {
+            Vec3 p = broomPos(maid);
+            double ground = groundYOrNaN(maid, p.x, p.z, p.y);
+            if (Double.isNaN(ground)) {
+                hoverInPlace(maid); // 脚下没地：原地悬停，绝不往下扎
+                return;
+            }
+            double target = ground + PARK_ABOVE_GROUND;
+            if (p.y - target < PARK_MIN_LIFT) {
+                hoverInPlace(maid); // 已经贴地：就地悬停
+                return;
+            }
+            logPark(maid, p.y, target);
+            steerVerticalTo(maid, target);
+        } catch (Throwable ignored) {
+            hoverInPlace(maid);
+        }
+    }
+
+    private static void logPark(EntityMaid maid, double fromY, double toY) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = PARK_LOGGED.get(maid.getUUID());
+            if (last != null && now - last < PARK_LOG_MS) {
+                return;
+            }
+            PARK_LOGGED.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 待命 → 降回地面（y " + fmt(fromY) + " → " + fmt(toY) + "）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static boolean idleLandEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_IDLE_LAND.get();
+        } catch (Throwable ignored) {
+            return true; // 读不到配置（早期加载）→ 按默认开
+        }
+    }
+
     /**
      * 只爬高、水平不动：目标点 = **扫帚当前的 x/z** + 指定的 y。
      * <p>
