@@ -1,6 +1,7 @@
 ﻿{
   "config.promaid.spawnerTorch.priority": "Spawner torch: go first (interrupt current work)",
   "config.promaid.broom.unstick": "Broom: unstick when blocked",
+  "config.promaid.broom.idleLand": "Broom: land when idle",
   "config.promaid.broom.followEnd": "Broom: follow stop distance (blocks)",
   "config.promaid.broom.followStart": "Broom: follow start distance (blocks)",
   "config.promaid.combat.assistRadius": "Assist radius (blocks)",

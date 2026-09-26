@@ -1,6 +1,7 @@
 ﻿{
   "config.promaid.spawnerTorch.priority": "防刷怪·优先去插（打断当前活儿）",
   "config.promaid.broom.unstick": "扫帚·卡墙脱困",
+  "config.promaid.broom.idleLand": "扫帚·待命落地",
   "config.promaid.broom.followEnd": "扫帚·跟随收手距离（格）",
   "config.promaid.broom.followStart": "扫帚·跟随起手距离（格）",
   "config.promaid.combat.assistRadius": "援护半径（格）",

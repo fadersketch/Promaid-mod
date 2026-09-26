@@ -269,6 +269,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         }
         // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
         com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
+        // 实测六百九十八：持票"即时跟人"——她飞着换区块/被复活落到别的区块后，票当场
+        // 跟过去（旧版要等下面那条 5 秒扫描，中间那段她就是"没票区块里的女仆"：
+        // 服务端不 tick（客户端看她在空中定住）+ 区块一卸载原版就发删包（幽灵建模）。
+        // 空表直接返回，平时零成本。
+        com.maidsmart.follow.MaidChunkLoadManager.followTickets(server);
         // v1.2.0 实测五百五十六：入世界自动补包队列（空队列零开销）
         com.maidsmart.command.MaidResyncCommand.tickAutoResync(server);
         // v1.5.332：幼儿女儿武器禁持（1 秒轮询——婴儿/幼年女儿手上出现武器
@@ -402,6 +407,15 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 出现频率下降了，但没归零）；离场这一枪把窗口两头都盖住：
         // 队列按 UUID 在全部维度里找她，只有"她还活着 + 主人同维度"时才真的补包。
         com.maidsmart.command.MaidResyncCommand.scheduleAutoResync(maid);
+        // 实测六百九十八【幽灵建模的第二道门】：**她活着**却离场 = 这不是死亡，是区块被拆
+        // （reason=null 那一档：区块掉出 entity-ticking / 被卸载）。原版这一刻会给客户端
+        // 发一次删包（ChunkMap.removeEntity），而"新实体不补包"（实测五百九十六）又拦着
+        // 我们按 id 分流去补 —— 结果就是"服务端还活着、客户端永远没有她"。
+        // 这里对**存活**离场直接登记一次强制补包（三枪，绕开 596 的 id 分流）；队列自己会
+        // 顺延到"她又能被找到 + 主人同维度"那一拍再打，所以早登记不算浪费。
+        if (maid.isAlive()) {
+            com.maidsmart.command.MaidResyncCommand.scheduleForcedResync(maid);
+        }
     }
 
     /** 实测五百九十六：装备离开限频表（女仆 UUID → 上次记录毫秒） */
