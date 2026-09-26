@@ -542,13 +542,14 @@ public final class MaidBroomDrive {
          * 顶住的那一档才有重试可言（见 {@link #retryDue}）。
          */
         boolean blocked;
-        /** 顶住之后过了多少 tick（只在 done 且 blocked 的分支里累加） */
+        /** 顶住之后过了多少 tick（由 gameTime 差值现算，见 retryDue） */
         int sinceBlocked;
         /** 【实测六百八十四】这一场遭遇里已经重试过几次（退避翻倍用，见 retryDue） */
         int retries;
-        /** 被顶住时她在哪儿（重试判据之一：挪开了就立刻再试一次） */
+        /** 被顶住时她在哪儿 + 那是哪一 tick（重试判据与日志都用它） */
         private double bx;
         private double bz;
+        private long blockedAt;
         private double lastY;
         private int stall;
 
@@ -574,12 +575,14 @@ public final class MaidBroomDrive {
             return this.stall >= STALL_TICKS;
         }
 
-        /** 【实测六百八十四】记下"在哪儿被顶住的"（重试的两个判据都用它） */
+        /** 【实测六百八十四】记下"在哪儿、哪一 tick 被顶住的"（重试的判据与日志都用它） */
         void noteBlocked(EntityMaid maid) {
             try {
                 this.bx = maid.m_20185_();
                 this.bz = maid.m_20189_();
+                this.blockedAt = maid.m_9236_().m_46467_();
             } catch (Throwable ignored) {
+                this.blockedAt = 0L;
             }
             this.sinceBlocked = 0;
         }
@@ -610,7 +613,16 @@ public final class MaidBroomDrive {
             if (!this.blocked) {
                 return false;
             }
-            this.sinceBlocked += 2; // 本表由每 2 tick 的行为调一次
+            // 【为什么用 gameTime 差值而不是自己 +1】不知道调用方每 tick 调一次还是每 2 tick 调一次
+            //  （空袭那边的同类表就是 2 tick 一次），自己数就会有 2 倍误差——直接读游戏时间，
+            //  常量 CLIMB_RETRY_TICKS = 100 就真的是"5 秒"。
+            long now;
+            try {
+                now = maid.m_9236_().m_46467_();
+            } catch (Throwable ignored) {
+                now = this.blockedAt;
+            }
+            this.sinceBlocked = (int) Math.max(0L, now - this.blockedAt);
             long wait = (long) CLIMB_RETRY_TICKS << Math.min(this.retries, 8);
             if (wait > CLIMB_RETRY_MAX_TICKS) {
                 wait = CLIMB_RETRY_MAX_TICKS;
