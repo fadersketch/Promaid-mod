@@ -636,6 +636,13 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_RANGE;
     /** 悬停高度（格，相对目标脚底）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_HOVER;
+    /**
+     * 【实测六百七十八】接敌爬升高度（格，相对敌人脚底，默认 10）：「遇到敌人先爬到它上方几格」
+     * ——这一个数字同时**决定这一场遭遇的盘旋高度**（爬完就一直保持在那儿打）。
+     * 玩家原话："考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。
+     * （之前的扫帚模式盘旋是8格）"
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_CLIMB;
     /** 平时（没有敌人）是否悬停跟随主人 */
     public static final ForgeConfigSpec.BooleanValue COMBAT_BROOM_FOLLOW;
     /** 是否受「守家/工作区」活动范围约束（关掉 = 自由飞，会跟主人越界） */
@@ -1963,8 +1970,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
 
         // ---- v1.3.0「扫帚模式」（配置面板：战斗与自保 → 扫帚模式）----
         // 新功能：女仆取出扫帚放出来骑上飞起来，用远程武器打（开火链路整条复用远程空袭）。
-        // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、平时跟随主人、
-        // 受活动范围约束（守家女仆不会为了跟主人越界）。
+        // 默认值刻意"装上就是能用的样子"：总开关开、盘旋 8 格、悬停 2 格、接敌爬升 10 格（实测六百七十八）、
+        // 平时跟随主人、受活动范围约束（守家女仆不会为了跟主人越界）。
         BUILDER.comment("扫帚模式（配置面板：战斗与自保 → 扫帚模式）").translation("config.promaid.broom").push("broom");
         COMBAT_BROOM_ENABLE = BUILDER.comment("扫帚模式总开关（默认开）：女仆取出扫帚、在脚下放一把并骑上去飞起来，用**远程武器**打（开火链路与远程空袭完全同一套）。关掉它 = 这个任务整段不激活，她原地待命并在头顶报缺件。\n\n【v1.3.2 实测六百五十六 的飞行顺序】骑上 → **原地往上抬 1 格悬停**（头顶被顶住就地悬停）→ 没敌人时按下面那条【跟随主人】飞 → 遇到敌人先**向上爬 8 格**（顶住就就地悬停）→ 再绕着敌人盘旋开火。两个高度是代码里的常量（RISE_BLOCKS / CLIMB_BLOCKS）。\n\n【移动速度照搬原版】速度、阻尼、无输入时的衰减全部取自 TLM 给玩家驾驶写的 PlayerBroomControl：水平上限 0.75 格/tick、竖直 0.30（原版跳跃键那一档是 0.5，这里刻意收一半），**只慢不快**\n\n【v1.3.3 两条实测修正】①「坐上去之后原地左右乱晃、被反复拉回、不上升」的根因是**客户端也在驱动扫帚**，与服务端的「取走即清」意图队列抢同一份数据（原版 travelRidden 是从 isControlledByLocalInstance 那一侧才施加位移的，我们漏了这道闸）；现在只让服务端驱动。②她坐在椅子/别的载具上时原来的 startRiding 恒失败（原版要求「当前不是乘客」），现在走 force 骑乘把她换过来。\n\n【排查留痕】日志搜「扫帚模式」和「扫帚接管」：取出扫帚骑上（这把是我们放的）、扫帚接管（服务端真的开始驱动）、爬升到位 与 头顶被顶住（带起止高度与「整段只抬了几格」）、想飞却没骑上扫帚（骑不上时不再静默）。你自己骑在这把扫帚上时她只开火、不接管飞行，日志写「玩家在驾驶这把扫帚」")
                 .translation("config.promaid.broom.enable").define("enable", true);
@@ -1972,6 +1979,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
+        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 10，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百七十八：默认 8 → 10】玩家原话：\"考虑到现在加入了这个模式，那么女仆需要飞的再高一点，默认应该是10格的高度。（之前的扫帚模式盘旋是8格）\"——\"这个模式\"指武装拴绳二号位：你吊在她下方 2.6~2.9 格，她飞高一点，你脚下才有余量、不会一路蹭着树冠和地面。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 10 格一直往上顶。\n\n**旧存档里的 8 不会自动变**（配置文件里写死的值优先），想跟着新默认走就把这一行改掉或删掉重开。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
+                .translation("config.promaid.broom.climb").defineInRange("climb", 10.0, 2.0, 32.0);
         COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")

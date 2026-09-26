@@ -95,6 +95,19 @@ import java.util.UUID;
  *       {@code combat.tether.broomExtra}（默认 0.3，面板可调）。</li>
  * </ul>
  *
+ * ── 【实测六百七十八：换座不再把她请下扫帚 + 左上角"绑定中"】──
+ * <ul>
+ *   <li><b>① 换座全程不下鞍</b>：玩家原话"当玩家坐在扫帚上，女仆处于扫帚模式时，玩家拿着武装拴绳
+ *       对着女仆进行右击的时候，不应该把女仆的骑乘状态也解除掉。这样子可能会导致失控。"
+ *       旧版换座会先把所有人请下扫帚再逐个放回去，她**真的被下过一次鞍**，而且第二下失败就把她
+ *       留在空中。现在改用原版 {@code Entity.addPassenger} 自带的"玩家插队"规则（玩家插到第 0 位
+ *       = 驾驶位）——她的骑乘关系一个字节都不动，见 {@link #seatBackOnBroom}。</li>
+ *   <li><b>② 左上角蓝色"绑定中"</b>：玩家原话"在进入绑定状态下，最好是在左上角用蓝色字体显示一下
+ *       玩家现在处于绑定状态。（渲染机制同冷却计时）"。走的是**同一条链路**（同一个包 →
+ *       {@code CooldownHudRenderer}，左上角同一条竖直串、同样的带阴影文字），只是配色改成蓝色；
+ *       数据由 {@link #hudBound} 提供，冷却 HUD 关掉也照常显示（那是两件事）。</li>
+ * </ul>
+ *
  * ── 安全网（都做进 tick 校验）──
  * 她落地/入水超过 0.6 秒 → 自动把玩家放下（免得挂着拖地闷在水里）；玩家潜跳自行下鞍 /
  * 被别的模组拽下去 → 下一次校验自动解除；解除瞬间人在空中 → 5 秒摔伤豁免（不搞"刚松手就摔死"）；
@@ -532,6 +545,43 @@ public final class GunnerTetherManager {
     }
 
     /**
+     * 【实测六百七十八】左上角"绑定中"指示要的那一行数据：{@code {女仆名, 相位}}——
+     * 相位是 {@code "leash"}（牵绳档：你自由活动、她跟着走）或 {@code "hang"}（二号位：你吊在她下面）。
+     * 这位玩家此刻没拴着任何一只 → {@code null}。
+     *
+     * <p>玩家原话："在进入绑定状态下，最好是在左上角用蓝色字体显示一下玩家现在处于绑定状态。
+     * （渲染机制同冷却计时）"。渲染那一半**一个字节都没新写**：数据塞进冷却 HUD 那个包
+     * （{@code CooldownHudPacket} → {@code com.maidsmart.client.CooldownHudRenderer}），
+     * 于是左上角的位置、字体、行高、三秒无数据自动清空全套行为都与冷却计时完全一致，
+     * 只是那一段的配色是蓝色。口径只有一处：谁在拴着谁，只有 {@link #LINKS} 一个来源。
+     *
+     * <p>一趟线性扫描（链路表本来就只有"一位玩家 ↔ 她"的规模），异常一律吞掉——HUD 永远不该
+     * 影响游戏逻辑。
+     */
+    public static String[] hudBound(ServerPlayer player) {
+        try {
+            if (player == null) {
+                return null;
+            }
+            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
+                Link link = e.getValue();
+                ServerPlayer p = link.player.get();
+                if (p == null || !p.getUUID().equals(player.getUUID())) {
+                    continue;
+                }
+                EntityMaid m = link.maid.get();
+                if (m == null || !m.isAlive()) {
+                    continue;
+                }
+                return new String[] { com.maidsmart.tool.PromaidLog.nameOf(m),
+                        link.leash ? "leash" : "hang" };
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
      * 【实测六百七十四】把当前相位广播出去——**一个出口**（挂载 / 翻档 / 解除 / 恢复全走它）。
      *
      * <p>为什么必须补这一发：六百七十三的「牵绳 → 起飞挂载」是在 tick 里 startRiding 的，
@@ -826,15 +876,34 @@ public final class GunnerTetherManager {
      * 分支 = 人直接掉下去（实测日志 13:48:55 / 13:49:09 的「解除(右击)」）。
      *
      * <p>靠"别取消事件、让 TLM 接人"来换座位是**撞运气**——同一版里的 13:49:21 就变成了"接上扫帚"
-     * （因为那一瞬间她恰好不在扫帚上）。所以这里改成**显式**换座，不依赖任何副作用：
-     * 先解除拴绳，再把她请下扫帚、玩家坐进**驾驶位**（第一乘客），最后把她放回第二乘客。
+     * （因为那一瞬间她恰好不在扫帚上）。所以这里改成**显式**换座，不依赖任何副作用。
      *
      * <p>座位顺序是有意义的：TLM 的 {@code getControllingPassenger()} 只在**第一乘客是玩家**时
      * 才非空，而"玩家驾驶"那条链路（{@code PlayerBroomControl}）与我们 mixin 的"有玩家驾驶就
      * 一个字不改"都看它。玩家坐第一乘客 = 他开、她开火，与"玩家自己放一把扫帚再让她上"的天然
      * 顺序完全一致（实测旧日志里那句「玩家在驾驶这把扫帚」就是这个状态）。
      *
+     * ── 【实测六百七十八：换座不再把她请下扫帚】玩家原话 ──
+     * "当玩家坐在扫帚上，女仆处于扫帚模式时，玩家拿着武装拴绳对着女仆进行右击的时候，不应该把
+     * 女仆的骑乘状态也解除掉。这样子可能会导致失控。"
+     *
+     * <p>旧版（672-677）的换座是"先把**所有人**请下扫帚 → 玩家坐进第一乘客 → 再把她放回第二乘客"
+     * ——她真的被 {@code stopRiding()} 过一次，而且那两下如果第二下失败（她没上得去 / 那只扫帚已经
+     * 不可用），她就**留在扫帚外面**：她只有 20 血，从空中掉下去就是死。这就是玩家说的"失控"。
+     *
+     * <p>现在**一次都不用叫她下鞍**——原版 {@code Entity.addPassenger} 自己就有"玩家插队"这条规则
+     * （javap 实证，1.21.1 {@code Entity.addPassenger} 与 1.20.1 {@code Entity.m_20348_} 字节码逐条
+     * 同形）：新乘客是 {@code Player}、且**第一乘客不是** {@code Player} 时，走
+     * {@code List.add(0, passenger)} 插到**第 0 位**（否则才 append）。她的扫帚上第一乘客正是她
+     * 自己（女仆）→ 玩家一上鞍就自动坐进驾驶位，她的座次原地不动（还是第一/唯一那位，只是往后
+     * 挪了一格变成第二乘客），骑乘关系、载具引用、碰撞位置全程一个字节都没变。
+     *
+     * <p>顺带把 672 那句"靠副作用撞运气"彻底了结：这里仍然是**显式**调用
+     * {@code startRiding(broom, force)}，只是不再需要那段"请所有人下鞍"的舞蹈。
+     *
      * <p>整段包在 try 里：任何意外都返回 false，调用方退回"普通解除"——绝不让一次换座把绳子卡住。
+     * 玩家上不去扫帚时**她也照旧好好骑在扫帚上**（旧版会把两个人一起丢在空中），只是这一下换座
+     * 没成功、绳子照常解除。
      *
      * @return true = 已按"坐回扫帚"处理完（挂载表已清）；false = 她没骑扫帚 / 绑的不是他 → 走普通解除
      */
@@ -848,33 +917,41 @@ public final class GunnerTetherManager {
                 return false; // 没骑扫帚：没有"坐回去"这回事
             }
             detach(maid, false, "换座");
-            java.util.List<Entity> was = new java.util.ArrayList<>(broom.getPassengers());
-            for (Entity e : was) {
-                try {
-                    e.stopRiding();
-                } catch (Throwable ignored) {
-                }
-            }
-            boolean ok = player.startRiding(broom, true); // 玩家先上 = 驾驶位
-            if (!ok) {
+            // 玩家上鞍 = 自己坐进第一乘客（驾驶位），她**全程不下鞍**（原版 addPassenger 的插队规则）
+            if (!player.startRiding(broom, true)) {
                 com.maidsmart.tool.PromaidLog.log("武装拴绳", "换座失败：玩家上不了扫帚（女仆="
-                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 仍安全骑在扫帚上）→ 绳子已解除，她继续自己飞");
                 return true;
             }
-            for (Entity e : was) {
-                if (e != player && e.isAlive()) {
-                    try {
-                        e.startRiding(broom, true); // 再把她放回第二乘客
-                    } catch (Throwable ignored) {
-                    }
+            String order = "";
+            try {
+                for (Entity e : broom.getPassengers()) {
+                    order = order.isEmpty() ? entityKind(e) : (order + "," + entityKind(e));
                 }
+            } catch (Throwable ignored) {
             }
             com.maidsmart.tool.PromaidLog.log("武装拴绳", "换座：玩家=" + playerName(player)
-                    + " 坐回扫帚驾驶位，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 在第二乘客");
+                    + " 坐回扫帚驾驶位，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 在第二乘客（她全程没下鞍；乘客顺序=" + order + "）");
             return true;
         } catch (Throwable t) {
             return false;
         }
+    }
+
+    /** 日志用的乘客身份（只区分玩家 / 女仆 / 其它，不带任何客户端类型） */
+    private static String entityKind(Entity e) {
+        try {
+            if (e instanceof ServerPlayer) {
+                return "玩家";
+            }
+            if (e instanceof EntityMaid) {
+                return "女仆";
+            }
+        } catch (Throwable ignored) {
+        }
+        return "其它";
     }
 
     /* ==================== 实测六百七十三：牵绳 ⇄ 悬挂 的两个方向 ==================== */
