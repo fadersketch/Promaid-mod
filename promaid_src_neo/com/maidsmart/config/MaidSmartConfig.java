@@ -408,6 +408,17 @@ public static final ModConfigSpec.IntValue BRIDGE_MIN_DY;
     public static final ModConfigSpec.IntValue BRIDGE_STEP_COOLDOWN;
     public static final ModConfigSpec.IntValue BRIDGE_PLACED_LIFETIME;
 public static final ModConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
+    /**
+     * v1.3.0(beta) 实测六百八十【搭方块禁用名单·总开关】——玩家原话：「默认禁止搭建的为所有
+     * 非的原版自然生成方块」。开 = 只许用 {@link com.maidsmart.tool.NaturalBlocks} 那张原版
+     * 天然方块表里的方块搭（**模组方块一律默认禁**，想放开去面板里点一下）；关 = 除了显式
+     * 禁用名单（{@link #BRIDGE_BUILD_FORBIDDEN}）以外都放行。
+     */
+    public static final ModConfigSpec.BooleanValue BRIDGE_BUILD_ONLY_NATURAL;
+    /** v1.3.0(beta) 实测六百八十：显式禁用名单（完整注册名）——面板上「红框✖」的那些。 */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> BRIDGE_BUILD_FORBIDDEN;
+    /** v1.3.0(beta) 实测六百八十：放宽名单（完整注册名）——面板上被玩家取消勾选的例外（含模组方块）。 */
+    public static final ModConfigSpec.ConfigValue<List<? extends String>> BRIDGE_BUILD_ALLOWED;
 /**
  * v1.2.2 实测六百〇八 / 六百一十一【飞行跟随】：主人自己飞走了，她也能背上鞘翅追过来（默认关，观赏玩法）。
  *
@@ -2314,6 +2325,25 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.bridge.placedLifetime").defineInRange("placedLifetime", 3, 1, 60);
         BRIDGE_RECLAIM_TO_MAID = BUILDER.comment("搭路方块回收进背包（默认开，全局开关——搭路/挖矿/伐木/战斗搭方块一切女仆搭的垫脚方块都适用）：开启后到期/被摧毁的搭脚方块不掉落地面，直接塞回附近女仆（8 格内最近者）的背包——背包满/附近没女仆才落地；关闭则恢复掉落物落地")
                 .translation("config.promaid.bridge.reclaimToMaid").define("reclaimToMaid", true);
+        // ---- v1.3.0(beta) 实测六百八十【搭方块禁用名单】玩家原话：「加一个额外的配置界面
+        //（类似于挖矿的配置面板），是一个黑名单面板，选择方即让女仆禁止使用哪个东西来搭方块
+        //（此配置对于自保搭高、挖矿、伐木、搭路都生效），默认禁止搭建的为所有非的原版自然生成
+        // 方块（当然现有的那些在黑名单里的仍然是不允许的，比如沙子），不包含模组方块。但是玩家
+        // 如果想要让他用模组方块搭，那还是可以的。只要在这个配置面板里面把模组物品取消掉就行了。」
+        //
+        // 单一口径在 com.maidsmart.tool.MaidBuildBlockFilter#isBlacklistedBuildBlock（四个消费方
+        // 全走 MaidBuildBlockFilter.isUsableBuildBlock，所以这条规则天然覆盖
+        // 自保搭高 / 挖矿 / 伐木 / 搭路）；"什么算原版天然"那张表在 com.maidsmart.tool.NaturalBlocks。
+        // 【实测六百八十：默认 true（玩家要的默认）】想用模组方块搭 → 面板里把它取消勾选（进
+        // BRIDGE_BUILD_ALLOWED），重启配置后照旧生效。
+        BRIDGE_BUILD_ONLY_NATURAL = BUILDER.comment("搭方块只用原版天然方块（默认开）：开 = 女仆垫脚/搭高/搭桥只能用【原版天然方块】（石头/圆石/泥土/沙砾/原木/矿石/下界岩这类从地形里挖得到的；表见 NaturalBlocks，共一百多项）——合成品（木板/玻璃/石砖/羊毛/混凝土…）与【全部模组方块】默认都不许用，防她把你的建材和模组方块当垫脚石糟蹋；关 = 除下面「禁用名单」外都放行。无论开关如何，沙子/沙砾这类下落方块、仙人掌/岩浆块这类伤害方块本来就一直不许搭（那是另外几条判定，不受本开关影响）")
+                .translation("config.promaid.bridge.buildOnlyNatural").define("buildOnlyNatural", true);
+        BRIDGE_BUILD_FORBIDDEN = BUILDER.comment("搭方块禁用名单（完整注册名，逗号分隔；默认空）：面板「移动与行为 → 搭路 → 搭方块禁用名单」里点成【红框✖】的方块都记在这里——被记下的方块女仆绝不拿来垫脚/搭高/搭桥（自保搭高/挖矿/伐木/搭路四个链路同时生效）。这是「显式禁用」，优先级最高：即使它本来在天然方块表里也会被禁（例如把 minecraft:cobblestone 写进来 = 连圆石都不许搭）。带不带 minecraft: 前缀都认；留空 = 没有额外禁用")
+                .translation("config.promaid.bridge.buildBlacklist")
+                .defineList("buildBlacklist", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
+        BRIDGE_BUILD_ALLOWED = BUILDER.comment("搭方块放宽名单（完整注册名，逗号分隔；默认空）：面板里被【取消勾选（绿框✔ = 允许）】的方块记在这里，是「默认禁止」的例外——最典型的用法就是在面板里把想让她用的模组方块点成允许（玩家原话：「如果想要让他用模组方块搭，那还是可以的。只要在这个配置面板里面把模组物品取消掉就行了」）。优先级高于「禁用名单」，也高于「只用原版天然方块」那条默认规则；带不带 minecraft: 前缀都认")
+                .translation("config.promaid.bridge.buildWhitelist")
+                .defineList("buildWhitelist", java.util.List.of(), o -> o instanceof String s && !s.isEmpty());
         // v1.1.0 实测十七：战斗方块清理时间（默认 60 秒——战斗节奏多变女仆可能在
         // 塔上待一阵，比挖矿/搭路的 10 秒长；实测十八：女仆踩着时刷新计时，走开后
         // 每块还有完整寿命缓冲，不会整塔瞬间塌）
