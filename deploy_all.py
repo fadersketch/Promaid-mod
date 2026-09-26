@@ -5,6 +5,11 @@
 1.20.1 Forge 47.4.21      : patched/promaid-1.3.0-forge-1.20.1.jar   (user's main modpack)
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
+v1.3.0 实测六百九十一（扫帚三修：① 空中寻路不再「钻一格窒息」——脱困选格改按她
+（乘客，座位在扫帚朝向后方半格）0.6×1.5 的碰撞箱逐格判 + 一格死洞不选 + 刚去过的格子
+5 秒内不再进，一条都不合格就原地不动；② 多女仆不再叠罗汉——绕圈相位按 UUID 错开 +
+steerTo 里"载着女仆的扫帚"邻近互斥；③ 守家盘旋不再贴地——新增配置 combat.broom.homeAlt
+（默认离地 8 格）+ safeY 兜住天花板，followPoint 一并过 safeY）：
 v1.3.0 实测六百九十（玩家崩溃报告：跨维度跟随扫描边遍历原版实体表边跨维传送女仆 = 
 fastutil 迭代器槽位越界 → 「Exception in server tick loop」整合服务端崩回桌面；
 新增 com.maidsmart.tool.EntitySnapshot，两树各 33 处「遍历全部实体」改成先取快照）：

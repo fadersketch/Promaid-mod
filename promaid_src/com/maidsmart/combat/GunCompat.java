@@ -357,6 +357,34 @@ public final class GunCompat {
     }
 
     /**
+     * 【实测六百九十二】"现在这一拍打不响，但**换得上弹**吗"——背包里有这把枪认的弹药（或对得上的弹药箱）。
+     *
+     * <p>【为什么要跟 {@link #canFeed} 分开】两者回答的是两个不同的问题：
+     * <ul>
+     *   <li>{@link #canFeed} = **此刻扣扳机能打响吗**（弹匣里 / 弹膛里有弹）→ 开火链路的诊断日志用它；</li>
+     *   <li>本方法 = **喂得进这把枪吗**（打空了也没关系，换弹就能继续）→ **模式门禁**用它。</li>
+     * </ul>
+     * 玩家原话：「扫帚模式如果女仆持有的是冲锋枪或者狙击枪，这两类枪械很容易飞着飞着就突然从
+     * 扫帚上掉下来。」根因就是模式门禁拿 {@code canFeed} 判弹药：TACZ 弹匣枪的
+     * {@code taczCanFeed} 只看"弹匣里这一拍还有没有弹"（{@code useInventoryAmmo=false} →
+     * {@code getCurrentAmmoCount>0 || hasBulletInBarrel}），于是**弹匣打空的那一拍 = 判定缺弹药**，
+     * 她就被从扫帚上请下来（实测日志 01:38:09「弹=无」紧跟着「下扫帚（理由=缺远程武器/弹药）」）。
+     * 而她的背包里明明有 {@code tacz:ammo_box}——TLM 自己的开火链路（{@code performGunAttack}）
+     * 下一发就会拉栓/换弹。
+     *
+     * <p>【口径】就是实测五百六十八 那条老判据 {@link #looseAmmoScan}（主手/背包里有 tacz:ammo 或
+     * 对得上这把枪的弹药箱；SBW 能量武器不消耗常规弹药、直接放行）。它**宽松**（任意 tacz:ammo 都
+     * 算，不校验口径），但这一档要的正是"别把她摔下去"——宁可按"换得上"放行，也不要在空中误判。
+     * 反射不可用（没装枪械 mod 等）时 {@code looseAmmoScan} 自己也是同一份扫描，不存在第三份口径。
+     */
+    public static boolean canReload(EntityMaid maid, ItemStack gun) {
+        if (maid == null || gun == null || gun.m_41619_() || !isGun(gun)) {
+            return false;
+        }
+        return looseAmmoScan(maid, gun);
+    }
+
+    /**
      * 旧版宽松判据（实测五百六十八 的口径）——**现在只在反射不可用时兜底**：
      * 主手 / 背包里有任意 tacz:ammo（或 SBW 5 类弹药之一）、或对得上这把枪的 TACZ 弹药箱；
      * 卓越前线能量武器直接放行（v1.1.0 终审二的老口径）。

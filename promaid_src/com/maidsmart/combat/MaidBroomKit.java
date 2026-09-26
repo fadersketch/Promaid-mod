@@ -172,6 +172,36 @@ public final class MaidBroomKit {
     }
 
     /**
+     * 【实测六百九十二】她此刻有没有资格**待在扫帚上** = 扫帚（身上有物品 **或** 正骑着）+ 远程武器。
+     *
+     * <p>与 {@link #isModeActive} 的**唯一**差别：**弹药不算**。旧版把弹药也算进"未激活"，于是
+     * 冲锋枪 / 狙击枪打空弹匣的那一拍就当场上 {@code dismount} —— 她是扫帚的乘客，下鞍 = 从空中
+     * 掉下去。玩家原话：「扫帚模式如果女仆持有的是冲锋枪或者狙击枪，这两类枪械很容易飞着飞着就
+     * 突然从扫帚上掉下来。」实测日志逐行实证（2026-09-27 01:38:09，她正骑在扫帚上开火）：
+     * <pre>
+     *   [远程开火] …主手=tacz:modern_kinetic_gun 距敌 14.93 格 开镜=true TLM档=true 弹=无
+     *   [扫帚模式] …下扫帚（理由=缺远程武器/弹药，这把是世界里那把，原地留着）
+     * </pre>
+     * 落地后 TLM 自己的枪械链路又给她换弹 → 判定"齐备" → 再骑上 → 约 5 秒一循环（同一分钟里 7 次）。
+     * 冲锋枪（射速高，一梭子秒空）与狙击枪（弹匣小 + 栓动）最先撞上这一拍，其它枪种只是晚一点。
+     *
+     * <p>【为什么"弹匣空了"不该下鞍】那是"这一拍打不响"，不是"她没必要待在扫帚上"：TLM 的
+     * {@code GunCommonUtil.performGunAttack} 自己就有 {@code ShootResult.NO_AMMO →
+     * IGunOperator.reload()} 那一支（javap 实证，那是我们开火链路每一步都在调的方法），
+     * 换完弹她照打。所以弹药只该决定"要不要起飞"（{@link #isModeActive}，实测四百九十五 的口径
+     * 一字不改），不该决定"要不要把她摔下去"。
+     */
+    public static boolean canStayMounted(EntityMaid maid) {
+        if (maid == null || !enabled()) {
+            return false;
+        }
+        if (!(hasBroomItem(maid) || isRidingBroom(maid))) {
+            return false;
+        }
+        return hasRangedWeapon(maid);
+    }
+
+    /**
      * 未激活时缺哪一件的**可读原因**（气泡用）。{@code null} = 齐备（不该调用）。
      * 顺序固定（扫帚 → 远程武器 → 弹药），与 {@link #isModeActive} 的判定口径完全一致
      * ——与 {@link MaidFlightKit#missingParts} 同一个写法、同一个理由（"只说未激活没用"）。

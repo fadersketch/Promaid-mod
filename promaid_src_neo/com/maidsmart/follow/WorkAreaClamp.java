@@ -78,6 +78,29 @@ public final class WorkAreaClamp {
     }
 
     /**
+     * 【实测六百九十二】这只女仆的「家」= 守家锚点（home 模式且圈心有效时返回圈心，否则 null）。
+     *
+     * <p>口径就是 {@link #circleCenter}（连"排班锚点兜底"那一层一起），只是把"她此刻是不是在守家"
+     * 也一起判掉——两条牵引绳（空袭 {@code MaidFlightRecall} / 扫帚 {@code MaidBroomRecall}）
+     * 用它回答"该把她拉回哪儿"。
+     *
+     * <p>【为什么必须有这一条】玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，
+     * 还是会被传送回来。」守家的语义是"待在家里"，所以守家期间那两条绳的距离基准与落点都该是
+     * **工作区圈心**，而不是主人：主人跑多远都不该把守家女仆拽走；而"她飞太远回不来"这个原始
+     * 问题照旧解决——拉回来的是家。口径只留一处，别在两条绳里各写一遍。
+     */
+    public static BlockPos homeAnchor(EntityMaid maid) {
+        try {
+            if (maid == null || !maid.hasRestriction()) { // hasRestriction——TLM 重写为 isHomeModeEnable
+                return null;
+            }
+            return circleCenter(maid);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
      * 一行话说清"她现在的圈是怎么回事"（诊断用，日志里搜「扫帚守家」）。
      *
      * <p>【为什么要有它】玩家反馈「女仆绕着一个我根本就不知道的范围在飞行」，而"圈在哪儿"取决于

@@ -12,8 +12,8 @@ import java.util.WeakHashMap;
 
 /**
  * v1.3.6 实测六百六十一【扫帚牵引绳】：扫帚模式期间，以她为圆心、半径 N 格（默认 100，
- * 配置 {@code combat.broom.recallDistance}，0 = 关闭）的球内找不到主人 → 立刻**连人带扫帚**
- * 传送回主人身边。
+ * 配置 {@code combat.broom.recallDistance}，0 = 关闭）的球内找不到**参照点** → 立刻**连人带扫帚**
+ * 传送回参照点：非守家时参照点 = 主人；**守家时参照点与落点都是她的工作区圈心**（实测六百九十二）。
  *
  * <p>玩家原话：「这个东西应该也要有一个飞行牵引绳。如果隔的太远的话会连人带扫帚一起传送送回来。
  * 但是如果在代码上碰到了什么硬骨头。我们在触发此传送的时候，就先将女仆从扫帚模式切换到空闲模式，
@@ -45,10 +45,13 @@ import java.util.WeakHashMap;
  *   <li><b>主人跨维度时不抢</b>：那种情况由 {@code followIfCrossDimension} 那一路负责，
  *       在这里立刻抢会与"另一条链路正在处理"打架。要跨维度叫她回来，用排班表的
  *       「召她过来」/「一键集合」——那条路已经认识扫帚了（见 {@code recallBroomRider}）；</li>
- *   <li><b>不看 home 模式</b>：与「空袭牵引绳」同一取舍（{@code MaidChunkLoadManager.recallFromFlight}
- *       的注释里那段因果）——骑着扫帚本身就是"离开原地"的状态，而玩家的排班表会自动给女仆锚定
- *       home，照抄那道门的结果就会变成"用了排班的女仆永远拉不回来"。想让她守家别追，把
- *       {@code combat.broom.recallDistance} 设 0（或关掉她排班里的 home），而不是靠这条兜底。</li>
+ *   <li><b>【实测六百九十二】守家时拉回的是「家」，不是主人</b>：玩家原话「Home模式下，空袭牵引绳
+ *       还在发力。女仆离了主人100格之后，还是会被传送回来。」——她正沿工作范围盘旋（home=true），
+ *       主人跑出 100 格就被连人带扫帚搬到主人那边，随后几分钟回不到圈里（实测日志 01:32:22 那一串
+ *       「被方块顶住 → 飘到最近的空气格」）。守家的语义是"待在家里"，所以守家期间**距离基准与落点
+ *       都换成工作区圈心**（{@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}）：主人走多远
+ *       都不再是把守家女仆拽走的理由，而"飞太远回不来"照旧由这条绳兜住——拉回家。
+ *       非守家（跟随）时仍按主人算，口径一字未改。想彻底关掉就 {@code combat.broom.recallDistance}=0。</li>
  * </ul>
  *
  * <h2>调用点</h2>
@@ -103,14 +106,28 @@ public final class MaidBroomRecall {
             if (broom == null) {
                 return false; // 没骑着扫帚：交给同维度拉回那套更保守的规则（本类只管"她在天上"这一段）
             }
+            // 【实测六百九十二：守家的时候拉回的是「她的工作区」，不是主人】
+            //  玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+            //  实测日志实证（2026-09-27 01:32:22）：她正「home=true 沿工作范围盘旋」，主人跑出 100 格
+            //  → 这条绳当场把连人带扫帚的她搬到主人那边 100 格外，随后整整 5 分钟回不到圈里
+            //  （一路「被方块顶住 → 飘到最近的空气格」，高度从 y=15 一路被垫到 40 多）。
+            //  守家的语义就是"待在家里"，所以这一档：**距离基准 = 圈心、落点 = 圈心**，
+            //  主人走多远都不再是把守家女仆拽走的理由；"她飞太远回不来"照旧由这条绳兜住，只是拉回家。
+            //  口径复用 WorkAreaClamp.homeAnchor（= home 模式 + 圈心有效），别在这里重写一份。
+            net.minecraft.core.BlockPos home = com.maidsmart.follow.WorkAreaClamp.homeAnchor(maid);
             LivingEntity owner = maid.getOwner();
-            if (owner == null || !owner.isAlive()) {
-                return false; // 主人不在已加载世界 / 已死——没有可传的目标
+            if (home == null) {
+                if (owner == null || !owner.isAlive()) {
+                    return false; // 主人不在已加载世界 / 已死——没有可传的目标
+                }
+                if (owner.level() != level) {
+                    return false; // 跨维度不抢（那种情况走 followIfCrossDimension / 排班表人工传送）
+                }
             }
-            if (owner.level() != level) {
-                return false; // 跨维度不抢（那种情况走 followIfCrossDimension / 排班表人工传送）
-            }
-            double dSq = maid.distanceToSqr(owner.getX(), owner.getY(), owner.getZ());
+            double refX = home != null ? home.getX() + 0.5 : owner.getX();
+            double refY = home != null ? home.getY() + 0.5 : owner.getY();
+            double refZ = home != null ? home.getZ() + 0.5 : owner.getZ();
+            double dSq = maid.distanceToSqr(refX, refY, refZ);
             if (dSq <= (double) radius * radius) {
                 RETRY_READY.remove(maid); // 回到半径内 → 清失败冷却
                 return false;
@@ -120,24 +137,30 @@ public final class MaidBroomRecall {
             if (ready != null && now < ready) {
                 return false;
             }
-            if (!com.maidsmart.follow.MaidChunkLoadManager.recallBroomRider(maid, owner)) {
+            boolean ok = (home != null)
+                    ? com.maidsmart.follow.MaidChunkLoadManager.recallBroomRiderTo(maid, home)
+                    : com.maidsmart.follow.MaidChunkLoadManager.recallBroomRider(maid, owner);
+            if (!ok) {
                 RETRY_READY.put(maid, now + RETRY_COOLDOWN);
                 return false;
             }
             RETRY_READY.remove(maid);
             int blocks = (int) Math.sqrt(dSq);
             String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
-            com.maidsmart.tool.PromaidLog.log("扫帚牵引绳", name + " 距主人 " + blocks
-                    + " 格（> " + radius + " 格），已连人带扫帚传送回主人身边");
+            com.maidsmart.tool.PromaidLog.log("扫帚牵引绳", name + (home != null ? " 距工作区 " : " 距主人 ")
+                    + blocks + " 格（> " + radius + " 格），已连人带扫帚传送回"
+                    + (home != null ? "工作岗位" : "主人身边"));
             // 系统消息只发给"主人是玩家"的那一档（女仆的主人本来就是玩家，这里只是类型上
             // 站得住脚——LivingEntity 没有 displayClientMessage，必须落到 Player 上）
             if (owner instanceof net.minecraft.world.entity.player.Player player) {
                 Long msgReady = MESSAGE_READY.get(maid);
                 if (msgReady == null || now >= msgReady) {
                     MESSAGE_READY.put(maid, now + MESSAGE_COOLDOWN);
-                    player.displayClientMessage(Component.literal("§e✦ §f你的女仆 §b" + name
-                            + "§f 骑着扫帚跑出了 §e" + blocks + " §f格（扫帚牵引绳），"
-                            + "已连人带扫帚回到你身边。"), false);
+                    player.displayClientMessage(Component.literal(home != null
+                            ? "§e✦ §f你的女仆 §b" + name + "§f 骑着扫帚飞离工作区 §e" + blocks
+                              + " §f格（扫帚牵引绳），已连人带扫帚回到岗位上。"
+                            : "§e✦ §f你的女仆 §b" + name + "§f 骑着扫帚跑出了 §e" + blocks
+                              + " §f格（扫帚牵引绳），已连人带扫帚回到你身边。"), false);
                 }
             }
             return true;
