@@ -1470,29 +1470,10 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /** 与目标点之间没有方块阻拦（实体档走原签名；坐标档走实测六百一十四 新增的坐标重载） */
-    /**
-     * 【实测六百六十九：武装拴绳 = 直升机悬停】挂在女仆下面的主人要的是"悬停"，不是"追着主人转圈圈"
-     * （玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。这边应该改为
-     * 就默认上升到离地面 3 格，然后悬停，接敌不变"）。
-     *
-     * <p>【实测六百七十一：空袭不再"悬空起程"】玩家原话："不要套用像在扫帚模式一样的悬空起程，
-     * 空袭就注定了不适合这样"。旧版这里把目标高度定在"离地 3 格"那个定点上（{@code tetherHoldPos}），
-     * 而它一旦找不到地面就变成"比她自己高 3 格"——于是每 tick 抬 0.30 格、无限爬升（实测反馈②）。
-     *
-     * <p>现在这里**一个高度都不写**：只把俯仰摆平（低头滑翔会被原版物理一路往地里拽）+ 水平按 0.72
-     * 收干，竖直速度原样留着——她爬升/俯冲由她自己的空袭链路决定，绳子只负责"把主人吊在下面"。
-     *
-     * <p>**接敌不受影响**：有威胁时 {@code canContinue} 就把控制权交回空袭链路（threatNearby /
-     * ownFlightBusy 都排在它前面），所以她该打还是打——"接敌不变"是字面意思。
-     */
-
     /* ---------------- 实测六百八十七：拴绳操控方向（仅空袭档） ---------------- */
 
     /** 操控速度（格/tick）：0.30 ≈ 6 格/秒，与扫帚 / 仿创造飞行同量级 */
     private static final double TETHER_STEER_SPEED = 0.30;
-    /** 没人操控时的上飘封顶（格/tick）：丢锁敌之后不许继续一路往上飘 */
-    private static final double TETHER_MAX_RISE = 0.10;
     /** "操控进行中"的 UUID 集：只用来保证进入时记一条日志（退出 / 本趟结束即移除） */
     private static final java.util.Set<UUID> TETHER_STEER = new java.util.HashSet<>();
 
@@ -1548,6 +1529,21 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * 【实测六百六十九：武装拴绳 = 直升机悬停】挂在女仆下面的主人要的是"悬停"，不是"追着主人转圈圈"
+     * （玩家原话："绑定以后原有的跟随主人的逻辑并没有变化。会导致女仆一直在空中转圈圈。这边应该改为
+     * 就默认上升到离地面 3 格，然后悬停，接敌不变"）。
+     *
+     * <p>【实测六百七十一：空袭不再"悬空起程"】玩家原话："不要套用像在扫帚模式一样的悬空起程，
+     * 空袭就注定了不适合这样"。旧版这里把目标高度定在"离地 3 格"那个定点上（{@code tetherHoldPos}），
+     * 而它一旦找不到地面就变成"比她自己高 3 格"——于是每 tick 抬 0.30 格、无限爬升（实测反馈②）。
+     *
+     * <p>现在这里**一个高度都不写**：只把俯仰摆平（低头滑翔会被原版物理一路往地里拽）+ 水平按 0.72
+     * 收干，竖直速度原样留着——她爬升/俯冲由她自己的空袭链路决定，绳子只负责"把主人吊在下面"。
+     *
+     * <p>**接敌不受影响**：有威胁时 {@code canContinue} 就把控制权交回空袭链路（threatNearby /
+     * ownFlightBusy 都排在它前面），所以她该打还是打——"接敌不变"是字面意思。
+     */
     private static void maidsmart$tetherHold(EntityMaid maid) {
         try {
             // 【实测六百八十七】先问"绳子另一头的人有没有举着绳子"——举着就由他操控方向。
@@ -1559,15 +1555,12 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             MaidFlightKit.setGliding(maid, true);
             maid.setXRot(0.0f); // 俯仰摆平（setXRot）：低着头滑翔会被原版物理往地里拽
             Vec3 cur = maid.getDeltaMovement();
-            // 【实测六百八十七】再补一道"不让她继续往上飘"的小闸：需求方报的"一口气飞到 300 多格"
-            // 里有一截就是"丢了目标之后还带着推力惯性一路往上"。上飘速度按 TETHER_MAX_RISE 封顶
-            //（想爬？把绳子举起来抬头看——那才是你要的爬升）。向下的滑翔一个字都不动。
-            double up = Math.min(cur.y, TETHER_MAX_RISE);
-            maid.setDeltaMovement(new Vec3(cur.x * 0.72, up, cur.z * 0.72));
+            maid.setDeltaMovement(new Vec3(cur.x * 0.72, cur.y, cur.z * 0.72));
         } catch (Throwable ignored) {
         }
     }
 
+    /** 与目标点之间没有方块阻拦（实体档走原签名；坐标档走实测六百一十四 新增的坐标重载） */
     private static boolean sightOk(EntityMaid maid, Aim aim) {
         try {
             if (aim.entity != null) {

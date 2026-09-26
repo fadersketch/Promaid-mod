@@ -54,6 +54,7 @@
     "MaidMeleeRiptideMixin",
     "MaidSwimGlideMixin",
     "EntityTickBlameMixin",
+    "FreeFlightWalkGuardMixin",
     "EntitySetDeltaMovementMixin",
     "ExplosionWindGuardMixin",
     "BaseFireBlockPinkMixin",

@@ -169,3 +169,25 @@ handle 只在客户端执行，服务端只做编码；dist 审计（audit_dist.
 
 专用服务器实测是本节的最终判据（`python test_server.py 1201`：日志出现 `Done (` = PASS）。
 本轮已跑，结果写在实测六百八十七 的 changelog 里。
+
+## 九、实测六百八十八：本批的服务端视角（新注入点落在全服热路径上）
+
+这一批新加的那个注入点（`FreeFlightWalkGuardMixin`）目标是 `PathNavigation.moveTo(DDDD)Z`——
+**它不只是女仆在走**：全服每一个 `Mob`（僵尸、村民、动物、第三方模组的怪）的直连寻路都从这个方法进。
+所以这里按服务端的口径记三件事：
+
+| 关注点 | 本批的做法 |
+| --- | --- |
+| 注入点第一句 | `if (!(this.mob instanceof EntityMaid maid)) return;`——非女仆**一次 instanceof 就返回**，不改返回值、不碰任何字段。与 实测六百六十四 的 `SpawnerTorchNavGuardMixin` 同一个形状（同一个注入点、同一道早退）。 |
+| 会不会多算路径 | 相反：命中时**直接返回 false（不做这次 A*）**。她的直连寻路（挖矿 / 伐木 / 农活）改成飞，省掉的正是这条链最贵的那一步（`PathNavigation.createPath`）。 |
+| 状态表寿命 | 新增 3 张（`TRAVEL` / `TRAVEL_FLIGHT` / `TRAVEL_LOGGED`）：`release()` / `forget()` / `purge()` 三处都清；`TRAVEL` 另有 20 tick 的新鲜期（请求一断就摘，不等清扫）。`TRAVEL_LOGGED` 是 5 秒限频（同一只最多一条日志）。 |
+
+**顺带修掉的一处往复**（既是行为问题、也是服务端开销问题）：原来"她落到工位 → 主人一动她就起飞去追 →
+挖矿驱动又发一发远距离寻路 → 我们再把她飞回工位"会在**站着干活的主人**周围一直摆。现在
+"在非战斗工作任务上 + 主人水平 16 格内 + 高差 8 格内"时不做跟随起飞（`workingNearOwner`）；
+主人真走远或上天照旧跟。
+
+**回归与复核**：两树 `javac` 0 错误；`_mixchk.py` PASS=171 FAIL=0（新注入点由目标类自己声明）；
+`_srv687b.py` 对这版编译产物重跑——forge 568 / neo 585 个类，成员描述符带客户端类型 **0 命中**；
+两个专用服务器（Forge 47.4.23 / NeoForge 21.1.250）启动实测 PASS（`Done (3.097s)` / `Done (1.093s)`，
+之后各盯 30 秒）。上一节"查出来但没动的"那三条（`getAllEntities()` 每 3 tick 等）**这一批照旧没动**。
