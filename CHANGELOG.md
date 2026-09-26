@@ -33,7 +33,7 @@
 
 **验证**：两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=167 SKIP=8 FAIL=0**；打包门禁
 （`verify_jar_classes.py` + `mixin 包登记` + `lang json`）全过；出
-`promaid-1.3.0-forge-1.20.1.jar`（10,850,107 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,875,583 B），
+`promaid-1.3.0-forge-1.20.1.jar`（10,850,223 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,875,704 B），
 **同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）并逐处核对 md5。
 
 ## 实测六百八十三【YSM 模型的女仆重新有那圈激流旋转特效：把 548 顺手写下的「本层只在 Gecko 渲染器下绘制」撤掉（那句限制只对鞘翅成立）+ 顺带查清"烈焰冲锋时的那个模型"是谁的（版本号不变，仍是 v1.3.0 beta）】
