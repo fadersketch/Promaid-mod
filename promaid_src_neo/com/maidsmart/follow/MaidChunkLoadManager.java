@@ -957,6 +957,36 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
+     * 【实测六百九十二】"把她送回**她的工作区**"那一档（守家时的空袭牵引绳）。
+     *
+     * <p>玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     * 守家的语义是"待在家里"，所以守家期间这条绳的距离基准与落点都换成她的工作区圈心
+     * （口径 = {@code com.maidsmart.follow.WorkAreaClamp.homeAnchor}），主人走多远都不再是
+     * 把守家女仆拽走的理由。落点算法与 {@link #recallFromFlight} 完全同一支（{@link #standSpotAt}），
+     * 只是锚点从"主人"换成"圈心"。
+     *
+     * <p>在这里**不查主人存活性**：这一档根本不需要主人——圈心是实体数据里的坐标，
+     * 主人死了/下线了，守家的她也该回到岗位上（旧版那一句 {@code owner.isAlive()} 是给
+     * "传到主人身边"把关的，对"传回岗位"没有意义）。
+     */
+    public static boolean recallFromFlightTo(EntityMaid maid, BlockPos anchor) {
+        if (maid == null || anchor == null) {
+            return false;
+        }
+        if (maid.isRemoved() || maid.isDeadOrDying() || maid.isPassenger()) {
+            return false; // 已移除 / 死亡 / 骑乘中
+        }
+        if (!(maid.level() instanceof ServerLevel dest)) {
+            return false;
+        }
+        BlockPos stand = standSpotAt(dest, anchor, true);
+        if (stand == null) {
+            return false;
+        }
+        return teleportCoreTo(maid, dest, stand, maid.getYRot(), maid.getXRot());
+    }
+
+    /**
      * v1.3.6 实测六百六十一【连人带扫帚的传送】：把骑着扫帚的女仆送到主人身边，**扫帚跟着一起走**。
      *
      * <p>玩家原话：「这个东西应该也要有一个飞行牵引绳。如果隔的太远的话会连人带扫帚一起传送送回来。
@@ -992,6 +1022,48 @@ BlockPos stand = findStand(newLevel,
             if (stand == null) {
                 return false;
             }
+            return broomRiderTo(maid, dest, stand, owner.getYRot(), owner.getXRot());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测六百九十二】"连人带扫帚送回**她的工作区**"那一档（守家时的扫帚牵引绳）。
+     *
+     * <p>玩家原话：「Home模式下，空袭牵引绳还在发力。女仆离了主人100格之后，还是会被传送回来。」
+     * 与 {@link #recallFromFlightTo} 同一取舍：守家的语义是"待在家里"，所以守家期间这条绳
+     * 的距离基准与落点都换成她的工作区圈心。四步搬运（解开乘客关系 → 搬扫帚 → 搬她 →
+     * 重新落座）与 {@link #recallBroomRider} **同一段代码**（{@link #broomRiderTo}），
+     * 只有落点算的锚点不同。
+     *
+     * @return true = 她已经（连扫帚）落在工作区里
+     */
+    public static boolean recallBroomRiderTo(EntityMaid maid, BlockPos anchor) {
+        if (maid == null || anchor == null) {
+            return false;
+        }
+        try {
+            if (!(maid.level() instanceof ServerLevel dest)) {
+                return false;
+            }
+            BlockPos stand = standSpotAt(dest, anchor, true);
+            if (stand == null) {
+                return false;
+            }
+            return broomRiderTo(maid, dest, stand, maid.getYRot(), maid.getXRot());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 搬运本体（落点已定）：「解开乘客关系 → 搬扫帚 → 搬她 → 重新落座」，四步在同一个 tick 内做完。
+     * 两条扫帚牵引绳（主人 / 工作区）共用这一份——别处不要再抄第二份。
+     */
+    private static boolean broomRiderTo(EntityMaid maid, ServerLevel dest, BlockPos stand,
+                                        float yRot, float xRot) {
+        try {
             com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom broom =
                     com.maidsmart.combat.MaidBroomKit.ridingBroom(maid);
             if (broom != null) {
@@ -1010,7 +1082,7 @@ BlockPos stand = findStand(newLevel,
                 } catch (Throwable ignored) {
                 }
             }
-            if (!teleportCoreTo(maid, dest, stand, owner.getYRot(), owner.getXRot())) {
+            if (!teleportCoreTo(maid, dest, stand, yRot, xRot)) {
                 return false;
             }
             if (broom != null) {
@@ -1088,11 +1160,27 @@ BlockPos stand = findStand(newLevel,
                 (int) Math.floor(owner.getX()),
                 (int) Math.floor(owner.getY()),
                 (int) Math.floor(owner.getZ()));
-        BlockPos stand = findStand(dest, ownerPos);
+        return standSpotAt(dest, ownerPos, force);
+    }
+
+    /**
+     * 【实测六百九十二】落点口径的"按坐标"版本：主人身边那一条（{@link #standSpot}）现在直接委托到这里。
+     *
+     * <p>为什么需要它：守家女仆的两条牵引绳（空袭 / 扫帚）拉回来的**不是她主人、是她的工作区**
+     * （见 {@code MaidBroomRecall.tick} / {@code MaidFlightRecall.tick} 里那段因果），而工作区圈心
+     * 是个 {@code BlockPos}、没有实体可以问。落点算法一个字没变（{@link #findStand} 找一个可站立的
+     * 格子，找不到且允许强制时就落在锚点本身那一格），只是把"锚点从哪来"这一层抽出来——
+     * 免得为工作区再抄第二份落点判定。
+     */
+    private static BlockPos standSpotAt(ServerLevel dest, BlockPos anchor, boolean force) {
+        if (anchor == null) {
+            return null;
+        }
+        BlockPos stand = findStand(dest, anchor);
         if (stand == null && force) {
-            // 强制落点 = 主人所在格。可能悬空（主人正在飞/悬在虚空边），这正是
-            // "无视地块、可以空中传送"的意思：她要出现在主人身边，而不是被留在原地。
-            stand = owner.blockPosition();
+            // 强制落点 = 锚点所在格。可能悬空（主人在飞 / 圈心在虚空边），这正是
+            // "无视地块、可以空中传送"的意思：她要出现在锚点旁边，而不是被留在原地。
+            stand = anchor;
         }
         return stand;
     }

@@ -125,6 +125,36 @@ public final class MaidBroomDrive {
      * （{@link #combatClimbTarget} 完成时把它记在这里），盘旋照这个高度飞，掉不下来。
      */
     private static final Map<UUID, Double> COMBAT_ALT = new HashMap<>();
+    /**
+     * 【实测六百九十二】女仆 UUID → **她这场守家巡逻的高度**（绝对 Y + 当时那个圈心）。
+     *
+     * <p>玩家原话：「女仆在处于 home 模式的状态下最好还是要尝试让自己的高度尽可能保持启动盘旋的
+     * 高度（躲建筑只是暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高。如果女仆飞得太高了，
+     * 那么虽然会在那个位置上盘旋，但是之后的攻击、链路等方面就都不会触发了。」
+     *
+     * <p>它是 {@link #homeOrbitPoint} 在"**脚下找不到地**"时的唯一参照：{@link #groundYOrNaN} 找不到
+     * 地面（虚空 / 她比地形高出 {@link #GROUND_SCAN} 格以上）时，目标高度取
+     * {@code min(她当前高度, 这份记忆)} —— **只降不升**。旧版那一档是 {@code fromY + homeAlt}
+     * （"没找到地就当她悬在虚空上原地不动" + 离地偏移），于是在地形之上每拍都 +8 格 = 无上限爬升，
+     * 正是玩家说的"躲避建筑物的时候越飞越高"。
+     *
+     * <p>只在"能算出地面高度"的时候刷新（并记下当时的圈心：换了一个工作区就不认旧记忆）；
+     * 圈心对不上 / 还没巡逻过 → 记忆为空，那一档退化成"停在现在的高度"（不升也不降）。
+     */
+    private static final Map<UUID, PatrolAlt> HOME_ALT = new HashMap<>();
+
+    /** {@link #HOME_ALT} 的一项：那一场巡逻的高度 + 它属于哪个圈心 */
+    private static final class PatrolAlt {
+        final double cx;
+        final double cz;
+        final double y;
+
+        PatrolAlt(double cx, double cz, double y) {
+            this.cx = cx;
+            this.cz = cz;
+            this.y = y;
+        }
+    }
     /** 女仆 UUID → 这一轮"找扫帚"的起算毫秒（去找世界里放着的那把 / 地上掉的那件） */
     private static final Map<UUID, Long> HUNTING = new HashMap<>();
     /** 女仆 UUID → 放弃找扫帚后的冷却到期毫秒（卡墙/够不着时别每 tick 重试） */
@@ -892,12 +922,18 @@ public final class MaidBroomDrive {
      * 那个圈进行盘旋，直到接敌。」旧版 home 对扫帚模式只剩「把目标点夹进圈里」这一条，
      * 于是开着 home 她也只是跟着主人悬停——看不出「守家」。现在平时（没有敌人）改成绕圈巡逻。
      *
-     * <p>【高度：离地 patrolAlt 格，实测六百九十一改】旧版这一条**不碰高度**（y 取扫帚当前
-     * 高度），理由是"工作范围是个水平圆、没有纵向语义"。但起飞相位只抬 {@link #RISE_BLOCKS} 格，
-     * 于是她整场守家巡逻都贴着地面飞——玩家原话：「女仆很喜欢贴地飞行。这个观感太差了。」
-     * 现在高度改成"**她脚下那块地之上 {@code combat.broom.homeAlt} 格**（默认 8）"，
-     * 再由 {@link #safeY} 兜住天花板：{@code want} 太高（头顶有顶）就取放得下的最高一格，
-     * 一格都放不下就留在现在的高度。参照物仍是水平的那个圈，只把"多高"这一项补齐。
+     * <p>【高度：离地 patrolAlt 格，实测六百九十一改；**找不到地时只降不升**，实测六百九十二】
+     * 旧版这一条**不碰高度**（y 取扫帚当前高度），理由是"工作范围是个水平圆、没有纵向语义"。
+     * 但起飞相位只抬 {@link #RISE_BLOCKS} 格，于是她整场守家巡逻都贴着地面飞——玩家原话：
+     * 「女仆很喜欢贴地飞行。这个观感太差了。」现在高度改成"**她脚下那块地之上
+     * {@code combat.broom.homeAlt} 格**（默认 8）"，再由 {@link #safeY} 兜住天花板：{@code want}
+     * 太高（头顶有顶）就取放得下的最高一格，一格都放不下就留在现在的高度。参照物仍是水平的那个圈，
+     * 只把"多高"这一项补齐。
+     *
+     * <p>【实测六百九十二："躲建筑不许越躲越高"】玩家原话：「尽可能保持启动盘旋的高度（躲建筑只是
+     * 暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高。」所以 {@link #groundYOrNaN} 找不到
+     * 地面时**不再加那个离地偏移**（旧版等于每拍 +8 格 = 无上限爬升），而是取
+     * {@code min(她当前高度, 这场巡逻的高度记忆)}——只准降回那个高度，绝不再往上加。
      *
      * <p>【半径取「半径 − 余量」】圈内判定是「离圈心 ≤ 半径」，而她的座位在朝向后方半格
      * （见 {@link #hoverInPlace} 那段因果）——贴着边缘飞容易在边界上反复进出；退 1.5 格留余量，
@@ -925,7 +961,27 @@ public final class MaidBroomDrive {
             double z = c.getZ() + 0.5 + Math.sin(ang) * r;
             // 【实测六百九十一】高度：她脚下那块地 + 配置的"离地格数"，再压到放得下的高度
             // （旧版这一格是 p.y = 扫帚当前高度 → 贴地飞）。
-            double wantY = groundY(maid, x, z, p.y) + homeAltCfg();
+            // 【实测六百九十二：找不到地时**只降不升**】玩家原话「防止女仆在躲避其他建筑物的时候
+            //  越飞越高……尽可能保持启动盘旋的高度（躲建筑只是暂时调整高度）」。
+            //  旧版这一句是 `groundY(...) + homeAltCfg()`，而 groundY 找不到地面时返回的正是
+            //  **她当前的高度** → 每拍在她现在的高度上再加 8 格 = 无上限爬升（地形在她脚下 24 格
+            //  以外、或她悬在虚空上时必然发生）。现在：找得到地 → 地 + 离地格数（并记进
+            //  HOME_ALT 当"这场巡逻的高度"）；找不到地 → 取 min(她当前高度, 那份记忆)，
+            //  也就是**只准往那个高度降回去，绝不再往上加**。记忆为空（没巡逻过 / 换了圈心）
+            //  就停在现在的高度。
+            double cx = c.getX() + 0.5;
+            double cz = c.getZ() + 0.5;
+            double g = groundYOrNaN(maid, x, z, p.y);
+            double wantY;
+            if (Double.isNaN(g)) {
+                PatrolAlt memo = HOME_ALT.get(id);
+                wantY = (memo != null && memo.cx == cx && memo.cz == cz)
+                        ? Math.min(p.y, memo.y)
+                        : p.y;
+            } else {
+                wantY = g + homeAltCfg();
+                HOME_ALT.put(id, new PatrolAlt(cx, cz, wantY));
+            }
             return new Vec3(x, safeY(maid, x, z, wantY, p.y), z);
         } catch (Throwable ignored) {
             return null;
@@ -1073,16 +1129,19 @@ public final class MaidBroomDrive {
 
     /**
      * 【实测六百九十一】她脚下（沿着 x/z 往下最多 {@link #GROUND_SCAN} 格）第一块"非空气"方块
-     * **之上那一格**的高度 = "离地"的基准。
+     * **之上那一格**的高度 = "离地"的基准；**找不到就返回 {@code NaN}**。
      *
      * <p>【为什么不用原版高度图】{@code Level.getHeight} 在 1.20.1 与 1.21.1 的名字不一样
      * （SRG / Mojmap），而"从她当前位置往下找第一块地"既不需要多一个两树要映射的名字、
      * 又天然覆盖"她此刻在一个洞里 / 屋里 / 树冠上"这些情况。
      *
-     * <p>【找不到就不动】脚下连着 {@link #GROUND_SCAN} 格全是空气（虚空 / 悬在世界之上）→ 返回
-     * {@code fromY}：绝不能给出一个"往下几十格"的目标，那会让她一头扎下去。
+     * <p>【实测六百九十二：找不到地必须是"找不到"，不能是"她当前高度"】旧版返回 {@code fromY}
+     * 兜底，而调用方（{@link #homeOrbitPoint}）紧接着就 {@code + homeAltCfg()} —— 于是"她比地形
+     * 高出 24 格以上 / 悬在虚空上"这条路上，每 tick 的目标高度 = **她自己 + 8 格**：无上限爬升
+     * （玩家原话「躲避其他建筑物的时候越飞越高」）。现在改成 {@code NaN} 明确表达"没找到"，
+     * 由调用方决定怎么办（守家盘旋那一档：只降不升，见 {@link #HOME_ALT}）。
      */
-    private static double groundY(EntityMaid maid, double x, double z, double fromY) {
+    private static double groundYOrNaN(EntityMaid maid, double x, double z, double fromY) {
         try {
             net.minecraft.world.level.Level level = maid.level();
             net.minecraft.core.BlockPos p = new net.minecraft.core.BlockPos(
@@ -1095,7 +1154,7 @@ public final class MaidBroomDrive {
             }
         } catch (Throwable ignored) {
         }
-        return fromY;
+        return Double.NaN;
     }
 
     /* ==================== 原地悬停 / 垂直爬升：一律用**扫帚自己的坐标** ==================== */
@@ -1464,6 +1523,22 @@ public final class MaidBroomDrive {
     private static final long ESCAPE_MEMORY_TICKS = 100L;
     /** 【实测六百九十一】"往下找地面"最多扫这么多格（找不到就当她悬在虚空上，原地不动） */
     private static final int GROUND_SCAN = 24;
+    /**
+     * 【实测六百九十二】脱困取格时允许**高出目标点多远**（格）——躲建筑只是暂时调整高度。
+     *
+     * <p>玩家原话：「女仆在处于 home 模式的状态下最好还是要尝试让自己的高度尽可能保持启动盘旋的
+     * 高度（躲建筑只是暂时调整高度）。防止女仆在躲避其他建筑物的时候越飞越高。」
+     *
+     * <p>【为什么必须有这个上限】脱困的取格判据里"离目标更近"用的是 3D 距离，而 {@code goal} 的
+     * Y 取的是**她当前那一格**（见 {@link #nearestEscapeCell}）——所以"往上挪"与"往旁边挪"在
+     * 距离上等价，楼里横向全被堵死时就只剩"往上"可选。一次脱困最多 +2 格，但**每次卡住都会再来
+     * 一次**：实测日志里她在地形之上被一路从 y=15 垫到 40 多（01:32:26 → 01:32:58 那一串
+     * 「被方块顶住 → 先飘到最近的空气格」，Y 一格一格往上走）。现在候选格必须落在
+     * {@code 目标高度 + 本上限} 以下：翻一道坎够用，但**永远爬不过目标高度**——
+     * 一旦越过去，"越飞越高"就会把攻击与链路一起飞没（玩家原话：飞太高之后"攻击、链路等方面
+     * 就都不会触发了"）。
+     */
+    private static final int ESCAPE_UP_MAX = 3;
     /** 同一只女仆的「卡墙」日志最短间隔（毫秒）= 5 秒，防刷屏 */
     private static final long UNSTICK_LOG_GAP_MS = 5000L;
 
@@ -1635,16 +1710,18 @@ public final class MaidBroomDrive {
      * 字节码实证），她身体压的格子与扫帚那一格**差半格**；而乘客的位置是直接摆上去的、
      * 不走碰撞——扫帚能停在那格、她却被按进邻格/上格的方块里扣窒息伤害，就是这么来的。
      *
-     * <p>【现在的四个条件（缺一不可）】
+     * <p>【现在的五个条件（缺一不可）】
      * <ol>
      *   <li>候选格与它上面一格是空气（扫帚那一格：扫帚的碰撞箱 {@code 1.375 × 0.5625}，扁但宽）；</li>
      *   <li><b>她身体的每一格都是空气</b>（{@link #bodyFits}）：按座位偏移把她的碰撞箱
      *       （宽 0.6 / 高 1.5）铺进方块网格逐格判——**这就是"拿那个窒息的那个格子来判定"**。
-     *      这一条同时挡住了"钻一格"：她离格边界正好半格，身体会**同时压住候选格与来路那一格**，
-     *      所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li>
+     *       这一条同时挡住了"钻一格"：她离格边界正好半格，身体会**同时压住候选格与来路那一格**，
+     *       所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li>
      *   <li>**不是死洞**（{@link #isPocket}）：候选格两层、东南西北四邻全是方块 → 进去就出不来，不去；</li>
      *   <li>**5 秒内没去过**（{@link Stuck#recentlyVisited}）：刚寻路到过的空气格不再选，
-     *      免得她在两个格子之间反复横跳（玩家原话「防止女仆在两个空气格子之间来回反复横跳」）。</li>
+     *       免得她在两个格子之间反复横跳（玩家原话「防止女仆在两个空气格子之间来回反复横跳」）；</li>
+     *   <li>【实测六百九十二】**不比目标点高过 {@link #ESCAPE_UP_MAX} 格**：躲建筑只是暂时调整
+     *       高度，越躲越高会把攻击与链路一起飞没（那一段因果见 {@link #ESCAPE_UP_MAX}）。</li>
      * </ol>
      * 剩下的照旧：**离目标比现在更近**（否则脱困变成原地打转）、取最近的那个。
      * 一条都不合格 → 返回 null，**宁可原地不动也不把她按进方块里**（调用方会留一行日志）。
@@ -1658,6 +1735,8 @@ public final class MaidBroomDrive {
                     (int) Math.floor(aim.x), base.getY(), (int) Math.floor(aim.z));
             double here = base.distSqr(goal);
             long now = gameTimeOf(maid);
+            // 【实测六百九十二】躲建筑不许爬过目标高度（见 ESCAPE_UP_MAX 那段因果）
+            double upCap = aim.y + ESCAPE_UP_MAX;
             double best = Double.MAX_VALUE;
             net.minecraft.core.BlockPos bestPos = null;
             for (int dx = -ESCAPE_R; dx <= ESCAPE_R; dx++) {
@@ -1667,6 +1746,9 @@ public final class MaidBroomDrive {
                             continue;
                         }
                         net.minecraft.core.BlockPos p = base.offset(dx, dy, dz);
+                        if (p.getY() > upCap) {
+                            continue; // ⑤ 比目标高度还高 → 不选（"越躲越高"就是这么来的）
+                        }
                         if (!isAirAt(level, p) || !isAirAt(level, p.above())) {
                             continue; // ① 扫帚那一格（扁但是宽，照旧要两格）
                         }
@@ -1793,7 +1875,7 @@ public final class MaidBroomDrive {
         DEBT.remove(broomId);
     }
 
-    /** 这只女仆下线/卸载：清掉她的盘旋相位、爬升相位、本场盘旋高度、找扫帚状态与跟随迟滞 */
+    /** 这只女仆下线/卸载：清掉她的盘旋相位、爬升相位、本场盘旋高度、守家巡逻高度、找扫帚状态与跟随迟滞 */
     public static void forgetMaid(UUID maidId) {
         if (maidId == null) {
             return;
@@ -1802,6 +1884,7 @@ public final class MaidBroomDrive {
         HOME_ORBIT.remove(maidId);
         CLIMB.remove(maidId);
         COMBAT_ALT.remove(maidId);
+        HOME_ALT.remove(maidId); // 【实测六百九十二】守家巡逻高度记忆
         HUNTING.remove(maidId);
         HUNT_COOLDOWN.remove(maidId);
         STUCK.remove(maidId);
@@ -1816,6 +1899,7 @@ public final class MaidBroomDrive {
         HOME_ORBIT.clear();
         CLIMB.clear();
         COMBAT_ALT.clear();
+        HOME_ALT.clear(); // 【实测六百九十二】守家巡逻高度记忆
         HUNTING.clear();
         HUNT_COOLDOWN.clear();
         STUCK.clear();
