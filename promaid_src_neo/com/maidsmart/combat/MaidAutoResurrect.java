@@ -270,6 +270,12 @@ public final class MaidAutoResurrect {
         if (!dest.addFreshEntity(maid)) {
             return false;
         }
+        // v1.3.0(beta) 实测六百九十七【复活后补包】：复活用的是"同 UUID、新实体 id"，
+        // 而法术模组在离场时会让客户端删掉没带锚核的女仆的实体（日志实证见
+        // MaidResyncCommand.scheduleForcedResync 的注释）——实测五百九十六 又规定"新实体
+        // 不补包"，于是没人把她补回来，玩家看到的就是"建模被卡掉、幽灵状态"。
+        // 这里登记三枪强制补包，把客户端那只实体重新建出来（数据/属性/装备/饰品全量）。
+        com.maidsmart.command.MaidResyncCommand.scheduleForcedResync(maid);
         // 复活提示：女仆自己的话语气泡 + 主人的系统消息（带名字，不怕气泡被错过）
         String name = com.maidsmart.tool.PromaidLog.nameOf(maid);
         maid.getChatBubbleManager().addTextChatBubble("主人，我回来啦！让你担心了～");
@@ -283,7 +289,10 @@ public final class MaidAutoResurrect {
                         + "\u00a7f 已复活，正在主人重生点等你。"));
         com.maidsmart.tool.PromaidLog.log("自动复活", name + (forced
                 ? " 的重生点不可用 → 已在主人所在位置强制复活"
-                : " 已在主人重生点复活"));
+                : " 已在主人重生点复活")
+                // 实测六百九十七：把新实体的网络 id 写进日志——"复活后客户端被拆"那一场
+                // 就是靠 "id 6→10260" 这条线串起来的，以后一条 grep 就够。
+                + "（新实体 id " + maid.getId() + "）");
         return true;
     }
 
