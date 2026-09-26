@@ -25,6 +25,8 @@ public static final ForgeConfigSpec.BooleanValue SCHEDULE_RANGE_MIGRATED;
 public static final ForgeConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
 /** v1.3.0(beta) 实测六百八十二：扫帚接敌爬升高度默认迁移标记（10 → 15，内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
+    /** 【实测六百八十六】接敌爬升高度默认 15 → 12 的一次性迁移标记 */
+    public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_12_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -2002,8 +2004,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
-        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 15，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
-                .translation("config.promaid.broom.climb").defineInRange("climb", 15.0, 2.0, 32.0);
+        COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十六：默认 15 → 12】玩家原话：\"把扫帚盘旋的默认配置高度改为12格。\"——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")
+                .translation("config.promaid.broom.climb").defineInRange("climb", 12.0, 2.0, 32.0);
         COMBAT_BROOM_FOLLOW = BUILDER.comment("平时（没有敌人时）跟随主人（默认开，v1.3.2 实测六百五十六）：她悬停在主人身边（水平约 3.5 格、高 2 格）跟着飞；关掉则原地悬停待命，只在接敌时才动。\n\n【要不要起飞去跟，判定与「飞行跟随」同款】直接复用飞行跟随那一对【起手距离 / 收手距离】（默认 25 / 5，见 [flightFollow] 小节）：主人远过起手距离才飞过去，进到收手距离内就停下悬停——中间那段是迟滞带，避免她在阈值上「动一下停一下」。想更黏人就调小起手距离（那一条同时管飞行跟随，两边口径只有一处）。\n\n【与飞行跟随的区别只剩谁来飞】那边要鞘翅 + 烟花且默认关（会烧料、磨耐久）；这边是扫帚、没有耐久，所以默认开")
                 .translation("config.promaid.broom.follow").define("follow", true);
         COMBAT_BROOM_CLAMP_HOME = BUILDER.comment("受「守家/工作区」活动范围约束 + 沿工作范围盘旋（默认开）：她骑上扫帚后 TLM 自身的范围约束整条失效（她是乘客，canBrainMoving 为 false），所以「守家」这件事由本模组自己把关——① 平时（没有敌人）她**沿着「工作范围」那个圈的边缘慢慢盘旋巡逻**，直到接敌，而不是跟着主人跑；② 所有飞行目标点都夹进活动范围内，敌人在圈外就不追。关掉 = 自由飞：平时跟主人、为了追怪/跟主人可以越界")
@@ -2022,6 +2024,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // "旧默认留下的"和"玩家自己就要 10"——用标记钉死只迁一次，之后玩家想写回 10 随便写。
         BROOM_CLIMB_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（10→15）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.broom.climbMigrated").define("climbMigrated", false);
+        // v1.3.0(beta) 实测六百八十六：同一项**第二次**改默认（15 → 12）的一次性标记。
+        // 【为什么必须换一个新标记】上面那个在老档里早就落盘为 true（都迁过一回了），复用它
+        // 等于"已经迁过了" → 一个字节都不会动。判据与 682 同款：**只有还停在旧默认 15 的档**才搬，
+        // 玩家自己调过的值一律不碰。
+        BROOM_CLIMB_12_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（15→12）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.broom.climb12Migrated").define("climb12Migrated", false);
         BUILDER.pop();
 
         // ---- v1.3.7「武装拴绳」（配置面板：移动与行为 → 武装拴绳（二号位）；实测六百七十五 起

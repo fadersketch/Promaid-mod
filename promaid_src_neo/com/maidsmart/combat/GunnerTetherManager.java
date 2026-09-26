@@ -212,14 +212,16 @@ public final class GunnerTetherManager {
     /**
      * 单次采样（2 tick）下降少于此值就不算"真在下坠"：把累计钳回 1.0。
      *
-     * <p>【实测六百八十四】1.0 → 0.2：这条门槛原先照抄原版 {@code checkSlowFallDistance}
-     * 的"0.5 格/tick"口径，但**扫帚根本飞不到那个下降率**——{@code MaidBroomDrive.MAX_V_SPEED}
-     * 把竖直速度封在 0.30 格/tick（6 格/秒），一次 2 tick 采样最多 0.6 格，永远小于 1.0，
-     * 于是永远被判成"慢降"、累计被钳在 1.0（低于原版 1.5 的猛击门槛）→ **挂在扫帚下面
-     * 一锤猛击都砸不出来**（玩家原话："我希望玩家在挂在女仆下面的时候重锤以及类似可以触发
-     * 它对应的附魔"）。改成 0.2（= 0.1 格/tick ≈ 2 格/秒）之后：扫帚一次正经的下降
-     * （满速 0.30 格/tick）稳稳过线，而"悬停时那点漂移"（到点那一支把速度乘 0.75 收干，
-     * 实际 dy≈0）照样被滤掉，不至于慢慢飘着也攒出超重击。
+     * <p>【实测六百八十四】1.0 → 0.2（= 0.1 格/tick ≈ 2 格/秒）。旧值照抄原版
+     * {@code checkSlowFallDistance} 那条"0.5 格/tick"口径，但本模组的飞行器**都飞不到那个下降率**
+     * （扫帚竖直上限 0.30 格/tick，空袭收翅俯冲前那几拍也常在 0.3 以下），一次 2 tick 采样最多
+     * 0.6 格 &lt; 1.0 → 永远被判"慢降"、累计被钳在 1.0（低于原版 1.5 的猛击门槛）→ 一锤猛击都
+     * 砸不出来（玩家原话：「我希望玩家在挂在女仆下面的时候重锤以及类似可以触发它对应的附魔」）。
+     * 而"悬停时那点漂移"（到点那一支把速度乘 0.75 收干，实际 dy≈0）照样被这一档滤掉，
+     * 不至于慢慢飘着也攒出超重击。
+     *
+     * <p>【实测六百八十六】这一档现在**只服务空袭**（见 {@link #trackRideFall} 开头那道闸）：
+     * 扫帚档不记账，所以这个阈值调多少都不再影响扫帚。
      */
     private static final float RIDE_SLOW_MIN = 0.2f;
     /** 能用猛击的最低下落格数：原版 {@code MaceItem.SMASH_ATTACK_FALL_THRESHOLD}（= 1.5） */
@@ -1143,10 +1145,28 @@ public final class GunnerTetherManager {
      *
      * <p>参数 {@code maid} 只用来判"她是不是落地了"；异常一律静默（最坏 = 这一趟吃不到加成，
      * 绝不影响挂载本身）。
+     *
+     * <p><b>【实测六百八十六：只对空袭那一档生效】</b>玩家原话：「我说的重锤是指女仆在使用近战
+     * 空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击……把这边的后门开了，扫帚模式不要开。」
+     * 判据就是开头那句 {@link #isBroomRelated}：扫帚档（任务在扫帚模式、或此刻正骑着扫帚）不记账，
+     * 空袭档照旧。近战空袭那条链本身也正好是"收翅俯冲"（{@code MaidFlightCombatBehavior.hitOne}
+     * 那一侧同样按下落格数结算），所以这一档按下落算是有来由的；扫帚是运输、平飞慢降不该换来猛击。
      */
     private static void trackRideFall(ServerPlayer player, EntityMaid maid) {
         try {
             UUID id = player.getUUID();
+            // 【实测六百八十六：扫帚那一档不开这个后门】玩家原话：「我说的重锤是指女仆在使用近战
+            //   空袭的时候，同时带着玩家，玩家这个时候拿重锤进行砸击……把这边的后门开了，
+            //   扫帚模式不要开。」——所以这里只对**空袭那一档**记账；扫帚（任务在扫帚模式、或此刻
+            //   正骑着扫帚）一个字都不记：RIDE_FALL 里没有他 → {@link #consumeRideFall} 恒返回 0
+            //   → 混入不写 fallDistance → 原版猛击在乘客身上本来就不成立 = 完全原版行为。
+            //   （实测六百八十四 曾把 RIDE_SLOW_MIN 降到 0.2 专门让扫帚那点下降也算数——扫帚是运输、
+            //    不是俯冲，本批按玩家要求收回去。扫帚档也因此不会打出「重锤门 玩家=」那一行。）
+            if (isBroomRelated(maid)) {
+                RIDE_FALL.remove(id);
+                RIDE_LAST_Y.remove(id);
+                return;
+            }
             double nowY = player.getY();
             Double prev = RIDE_LAST_Y.get(id);
             RIDE_LAST_Y.put(id, nowY);
@@ -1178,6 +1198,10 @@ public final class GunnerTetherManager {
      * <p>取用即清零的理由与 {@code MaceItem.postHurtEnemy} 的 {@code resetFallDistance()} 一致：
      * 这一下下落已经被兑换成猛击了，想再来一锤就得再俯冲一次。
      * 不在二号位（挂载表里没有他）时恒返回 0 → 原版行为一个字不改。
+     *
+     * <p>【实测六百八十六】扫帚档**不记账**（见 {@link #trackRideFall} 开头那道闸），所以他挂在
+     * 扫帚下面时这里恒返回 0 → 混入什么都不写 → 等于"扫帚档完全恢复原版"（玩家口径：
+     * 「把这边的后门开了，扫帚模式不要开」）。
      */
     public static float consumeRideFall(Player player) {
         try {
