@@ -195,8 +195,31 @@ public final class MaidBroomDrive {
 
     /** 弧度→度（MC 的 yaw 约定：朝向 (dx,dz) 的偏航角 = {@code -atan2(dx, dz)} 换成度） */
     private static final float DEG = 57.295776F;
-    /** 爬升相位的"升不动"判定：连续这么多 tick 没有长高就算头顶被顶住（见 Climb.stalled） */
-    private static final int STALL_TICKS = 4;
+    /**
+     * 爬升相位的"升不动"判定：连续这么多 tick 没有长高就算头顶被顶住（见 {@link Climb#stalled}）。
+     *
+     * <p>【实测六百八十四】4 → 10。4 tick（0.2 秒）比"起手加速"还短：{@link #BLEND} 那一支从
+     * 零起步的第一拍只涨 0.075 格，只要有一次方块角/叶子的擦碰把这一拍抹平，本场遭遇的盘旋高度
+     * 就被钉在地板上（实测日志里 2.00 / 2.93 / 3.66 格就是这么来的）。0.5 秒的确认对"她是不是
+     * 真升不上去"零损失——正常爬满 15 格要走 3 秒。
+     */
+    private static final int STALL_TICKS = 10;
+    /**
+     * 【实测六百八十四】头顶被顶住之后，最多隔这么久再试一次爬升（tick，100 = 5 秒）。
+     *
+     * <p>旧版是"一场遭遇只爬一次"，于是她只要在低矮房间里挨过第一次爬升，**整场**都按那几格飞，
+     * 走进开阔地也升不回去（实测日志：16:46:15 钉在 3.66 格 →「以后一直保持这个高度」）。
+     * 重试还要过一个"头顶现在是不是空气"的探针（见 {@link Climb#roomNow}）：房间里照样是顶的
+     * 时候一次都不试，她不会为了够一个够不到的高度在原地一抽一抽。
+     */
+    private static final int CLIMB_RETRY_TICKS = 100;
+    /**
+     * 【实测六百八十四】连续重试失败时的退避上限（tick，1200 = 60 秒）：
+     * 每失败一次等待翻倍（100 → 200 → …），封顶在这里。理由：真被天花板压着的房间里，
+     * 每 5 秒试一次、每次都失败、每次都写两行日志——既没用又刷屏。退避到一分钟一次之后，
+     * 她在同一个房间里打十分钟也只有十来行。
+     */
+    private static final int CLIMB_RETRY_MAX_TICKS = 1200;
     /**
      * 战斗盘旋的**线速度**（格/tick）：0.14 ≈ 2.8 格/秒。
      * <p>
@@ -364,6 +387,18 @@ public final class MaidBroomDrive {
      * （顶头了就记实际抬到的高度，但至少 {@code broomHover}）——于是"爬 N 格"不是在演一段
      * 动画，而是在**决定盘旋高度**：升到敌上 N 格，就一直在敌上 N 格打。
      *
+     * <p>── 实测六百八十四【"只比敌人高三格"的两个来源，都在这一个方法里】──
+     * 玩家原话："扫帚模式绕着敌人盘旋射击似乎默认高出的高度仍然不够，实际测试下来差不多只比
+     * 敌人高了三格左右……可能是某些配置没有生效。" 配置没有失效（日志实证：`combat.broom.climb`
+     * 读出来就是 15.0，开阔处「爬升到位（y -58.81 → -44.93）→ 本场盘旋高度 = 敌人上方 15.00 格」
+     * 一模一样地兑现）。问题在**这个相位把降下来的高度钉死了一整场遭遇**，加上换目标就重爬：
+     * <pre>
+     *   ① 目标来回换 → 重爬 → 谁在被顶住的高度低，就按谁的高度钉住（15 ↔ 3.66 来回跳）；
+     *   ② 钉住之后不再重试 → 走进开阔地也升不回去（她只能一直"敌人上方 3 格"）。
+     * </pre>
+     * 现在改成：本场遭遇只爬一次、换目标只改写 key（①）；被顶住的高度照旧先按它飞，但每
+     * {@link #CLIMB_RETRY_TICKS} 一次、且**头顶探针说现在有空间**时才重试爬升（②）。
+     *
      * @param target 当前敌人（取它的 UUID 当相位的 key、取它的脚底当高度参照）
      */
     public static Double combatClimbTarget(EntityMaid maid, LivingEntity target) {
@@ -372,17 +407,43 @@ public final class MaidBroomDrive {
         }
         double climb = climbCfg(); // 【实测六百七十八】配置项：默认 10（旧版写死 8）
         Object key = target.m_20148_();
-        Climb c = CLIMB.get(maid.m_20148_());
-        if (c == null || !c.key.equals(key)) {
+        java.util.UUID id = maid.m_20148_();
+        Climb c = CLIMB.get(id);
+        if (c == null) {
             // 【相对敌人】目标脚底 + climb（另加 ARRIVE 余量，见 CLIMB_LEAD）
             double to = target.m_20186_() + climb + CLIMB_LEAD;
             startClimb(maid, key, to);
-            COMBAT_ALT.remove(maid.m_20148_()); // 新遭遇 → 高度重新由这一次爬升决定
+            COMBAT_ALT.remove(id); // 新遭遇 → 高度重新由这一次爬升决定
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 接敌 → 先爬到它上方 " + climb + " 格（高度从这以后一直保持）");
+                    + " 接敌 → 先爬到它上方 " + fmt(climb) + " 格（高度从这以后一直保持）");
             return to;
         }
         if (c.done) {
+            // 【实测六百八十四：这一场遭遇的高度已经定下来了】
+            //  ① 换目标**不重爬**。旧版把"相位 key = 敌人 UUID"同时当成"换敌人就重爬一次"，
+            //     而 TLM 每 tick 重挑 ATTACK_TARGET —— 两个敌人轮流被选中时，她就在
+            //     "爬到 15 格" 与 "爬到 3 格" 之间来回切（实测日志 16:46:15 与 16:46:18
+            //     各一次，只隔 3 秒）。她现在的高度由 {@link #COMBAT_ALT} 全权决定，
+            //     换目标只需把相位记的 key 改写成新敌人，一个字节的高度都不动。
+            //  ② 被顶住过 → 过一会儿（或头顶开了）再试一次，试成了就爬满。
+            if (!c.key.equals(key)) {
+                c.key = key;
+            }
+            if (c.retryDue(maid)) {
+                double to = target.m_20186_() + climb + CLIMB_LEAD;
+                int tries = c.retries + 1;
+                startClimb(maid, key, to);
+                Climb fresh = CLIMB.get(id);
+                if (fresh != null) {
+                    // 退避计数跟着走：startClimb 建的是新相位，不带上它就等于每次都"第一次"重试
+                    fresh.retries = tries;
+                }
+                com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 重试爬升（第 " + tries + " 次）：头顶现在有空间了（上次被顶住后隔了 "
+                        + c.sinceBlocked + " tick、挪了 " + fmt(c.movedSince(maid))
+                        + " 格）→ 再爬一次 " + fmt(climb) + " 格");
+                return to;
+            }
             return null; // 这一场遭遇已经爬过了，直接盘旋
         }
         Double y = climbTarget(maid, key);
@@ -393,10 +454,16 @@ public final class MaidBroomDrive {
             // 但也绝不比原来的悬停高度更低。
             double alt = maid.m_20186_() - target.m_20186_();
             double fixed = Math.max(hoverCfg(), Math.min(climb, alt));
-            COMBAT_ALT.put(maid.m_20148_(), fixed);
+            COMBAT_ALT.put(id, fixed);
+            Climb now = CLIMB.get(id);
+            boolean blocked = now != null && now.blocked;
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 本场盘旋高度 = 敌人上方 " + fmt(fixed) + " 格（想 " + climb
-                    + "，实际 " + fmt(alt) + " 格）→ 以后一直保持这个高度");
+                    + " 本场盘旋高度 = 敌人上方 " + fmt(fixed) + " 格（想 " + fmt(climb)
+                    + "，实际 " + fmt(alt) + " 格）"
+                    + (blocked
+                            ? "→ 头顶被顶住，先按这个高度飞；头顶一开阔就再爬一次（每 "
+                                    + (CLIMB_RETRY_TICKS / 20) + " 秒最多试一次）"
+                            : "→ 以后一直保持这个高度"));
         }
         return y;
     }
@@ -433,6 +500,7 @@ public final class MaidBroomDrive {
             // 与 steerTo 的"到点"用同一个阈值：它在距目标 ARRIVE 格时收干悬停，所以这里
             // 也用 ARRIVE 判定完成——阈值写小了会出现"她已经停住、相位却永远不结束"。
             c.done = true;
+            c.blocked = false; // 【实测六百八十四】这一档是"爬到位"，没有重试可言
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 爬升到位（y " + fmt(c.startY) + " → " + fmt(y) + "，想抬 " + fmt(c.lift)
                     + " 格）");
@@ -441,12 +509,18 @@ public final class MaidBroomDrive {
         c.observe(y);
         if (c.stalled()) {
             c.done = true;
+            // 【实测六百八十四】记成"被顶住"（而不是"这个高度就是本场的定论"）：她换到开阔处
+            //  之后会重试爬升，见 combatClimbTarget 的 ② 与 Climb.retryDue。
+            c.blocked = true;
+            c.noteBlocked(maid);
             // 【日志要能分辨两种"顶头"】真被方块顶住 vs 驱动根本没生效。两者在旧日志里都是
             // 一句"头顶被顶住"，但处置完全不同（前者正常、后者是 bug）。所以这里把起止高度、
-            // 实际抬了多少格一起写出来：抬了 0 格 = 驱动没生效；抬了一半 = 真的撞到东西了。
+            // 实际抬了多少格、**头顶那三格到底是什么**一起写出来：
+            // 抬了 0 格 + 头顶全是空气 = 驱动没生效（该查驱动）；头顶是方块 = 真撞到东西了。
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 头顶被顶住 → 就地悬停（y " + fmt(c.startY) + " → " + fmt(y) + "，"
-                    + STALL_TICKS + " tick 没长高、整段只抬了 " + fmt(y - c.startY) + " 格）");
+                    + STALL_TICKS + " tick 没长高、整段只抬了 " + fmt(y - c.startY) + " 格）"
+                    + " 头顶：" + c.headBlocks(maid));
             return null;
         }
         return c.targetY;
@@ -454,7 +528,8 @@ public final class MaidBroomDrive {
 
     /** 一个爬升相位：key = 谁要的（起飞哨兵 / 敌人 UUID），targetY = 想爬到的 Y */
     private static final class Climb {
-        final Object key;
+        /** 【实测六百八十四】不再 final：换目标只改写它（不重开相位，见 combatClimbTarget） */
+        Object key;
         final double targetY;
         /** 相位开始时的 y（日志用：起止一对比就知道是真顶头还是驱动没生效） */
         final double startY;
@@ -462,6 +537,18 @@ public final class MaidBroomDrive {
         final double lift;
         /** 相位是否已经做完——**留在表里**，否则下一 tick 会被当成新相位重新爬 */
         boolean done;
+        /**
+         * 【实测六百八十四】这一次收尾是"真的被方块顶住"（true）还是"爬到位"（false）。
+         * 顶住的那一档才有重试可言（见 {@link #retryDue}）。
+         */
+        boolean blocked;
+        /** 顶住之后过了多少 tick（只在 done 且 blocked 的分支里累加） */
+        int sinceBlocked;
+        /** 【实测六百八十四】这一场遭遇里已经重试过几次（退避翻倍用，见 retryDue） */
+        int retries;
+        /** 被顶住时她在哪儿（重试判据之一：挪开了就立刻再试一次） */
+        private double bx;
+        private double bz;
         private double lastY;
         private int stall;
 
@@ -485,6 +572,95 @@ public final class MaidBroomDrive {
 
         boolean stalled() {
             return this.stall >= STALL_TICKS;
+        }
+
+        /** 【实测六百八十四】记下"在哪儿被顶住的"（重试的两个判据都用它） */
+        void noteBlocked(EntityMaid maid) {
+            try {
+                this.bx = maid.m_20185_();
+                this.bz = maid.m_20189_();
+            } catch (Throwable ignored) {
+            }
+            this.sinceBlocked = 0;
+        }
+
+        /** 从被顶住那一点挪开了多远（格，只看水平） */
+        double movedSince(EntityMaid maid) {
+            try {
+                double dx = maid.m_20185_() - this.bx;
+                double dz = maid.m_20189_() - this.bz;
+                return Math.sqrt(dx * dx + dz * dz);
+            } catch (Throwable ignored) {
+                return 0.0;
+            }
+        }
+
+        /**
+         * 【实测六百八十四】这一拍该不该重试爬升——两个前提都要满足：
+         * <pre>
+         *   ① 隔够了这一次的等待时间（{@link #CLIMB_RETRY_TICKS} 起、每失败一次翻倍、
+         *      {@link #CLIMB_RETRY_MAX_TICKS} 封顶）；
+         *   ② {@link #roomNow}：她头顶现在是空气（真有地方可以上去）。
+         * </pre>
+         * ②是防抖动的那一半：低矮房间里头顶一直是方块，条件永不成立 → 一次都不重试，
+         * 她照常绕着敌人盘旋（不做"每 5 秒原地一抽"）。等她自己飞进高一点的地方，②立刻成立，
+         * 到点就重爬。读不到方块时按"可以试"处理（最坏 = 多试几次，绝不会把高度钉死）。
+         */
+        boolean retryDue(EntityMaid maid) {
+            if (!this.blocked) {
+                return false;
+            }
+            this.sinceBlocked += 2; // 本表由每 2 tick 的行为调一次
+            long wait = (long) CLIMB_RETRY_TICKS << Math.min(this.retries, 8);
+            if (wait > CLIMB_RETRY_MAX_TICKS) {
+                wait = CLIMB_RETRY_MAX_TICKS;
+            }
+            return this.sinceBlocked >= wait && roomNow(maid);
+        }
+
+        /** 她脚底往上 1~3 格是不是空气（纯读，只服务重试判据） */
+        private boolean roomNow(EntityMaid maid) {
+            try {
+                net.minecraft.world.level.Level level = maid.m_9236_();
+                net.minecraft.core.BlockPos base = maid.m_20183_();
+                for (int dy = 1; dy <= 3; dy++) {
+                    if (!level.m_8055_(base.m_7918_(0, dy, 0)).m_60795_()) {
+                        return false;
+                    }
+                }
+                return true;
+            } catch (Throwable ignored) {
+                return true;
+            }
+        }
+
+        /** 【实测六百八十四】诊断用：头顶那几格是什么方块（分清"真被顶住"和"驱动没生效"） */
+        String headBlocks(EntityMaid maid) {
+            try {
+                net.minecraft.world.level.Level level = maid.m_9236_();
+                net.minecraft.core.BlockPos base = maid.m_20183_();
+                StringBuilder sb = new StringBuilder();
+                for (int dy = 1; dy <= 3; dy++) {
+                    if (dy > 1) {
+                        sb.append(" / ");
+                    }
+                    net.minecraft.world.level.block.state.BlockState st = level.m_8055_(base.m_7918_(0, dy, 0));
+                    sb.append("+").append(dy).append("=").append(st.m_60795_() ? "空气" : blockName(st));
+                }
+                return sb.toString();
+            } catch (Throwable ignored) {
+                return "（读不到）";
+            }
+        }
+
+        private static String blockName(net.minecraft.world.level.block.state.BlockState st) {
+            try {
+                net.minecraft.resources.ResourceLocation rl =
+                        net.minecraftforge.registries.ForgeRegistries.BLOCKS.getKey(st.m_60734_());
+                return rl == null ? String.valueOf(st.m_60734_()) : rl.toString();
+            } catch (Throwable ignored) {
+                return "?";
+            }
         }
     }
 
@@ -617,6 +793,10 @@ public final class MaidBroomDrive {
      * 收尾时写进 {@link #COMBAT_ALT}（默认想抬 8 格、顶头按实际、下限 {@link #hoverCfg}）。
      * 没有记录（理论上只在爬升还没做完时）才退回配置的悬停高度——**绝不出现"爬到 8 格
      * 又被另一套高度拽回来"**（那正是玩家反馈的"升上去又慢慢掉下来"）。
+     *
+     * <p>【实测六百八十四 补充】"顶头按实际"是**暂时的**：被顶住那一次按实际高度飞，
+     * 但只要她头顶一开阔（她自己飞到高处 / 房间变高），{@link #combatClimbTarget} 会重试
+     * 爬升并把这个数改回 {@code climb}。所以这一格不会像旧版那样把一整场遭遇钉在地板上。
      *
      * @return 期望位置（已过 {@link MaidBroomKit#clampToHome} 夹取，见 {@link #steerTo}）
      */
