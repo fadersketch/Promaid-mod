@@ -1,4 +1,34 @@
-﻿## 实测六百八十二【扫帚模式「坐着扫帚掉在地上动也不动」修复（撤掉 679 那道「没拿绳子就不驱动」的闸）+ 接敌爬升默认 10→15 + 绑定的女仆换模式时自动解除一次 + 远程空袭开枪频率与超远距离准度 + 绑定 HUD 加一行操作提示（版本号不变，仍是 v1.3.0 beta）】
+﻿## 实测六百八十三【YSM 模型的女仆重新有那圈激流旋转特效：把 548 顺手写下的「本层只在 Gecko 渲染器下绘制」撤掉（那句限制只对鞘翅成立）+ 顺带查清"烈焰冲锋时的那个模型"是谁的（版本号不变，仍是 v1.3.0 beta）】
+
+> 起因：实测五百四十八（修 YSM 黑屏 CCE 那一批）在文档与 README 里留下一句「鞘翅**与激流旋转特效**在 YSM 模型上不会绘制」。玩家这轮想起它，并提了个替代方案：「我们可以直接套用万法皆通的女仆使用烈焰冲锋时的模型。」两边的源码都翻过之后的结论是：**那句限制对鞘翅成立、对激流特效却是我们自己多关的一道门**（撤掉即可）；而"烈焰冲锋时那个模型"并不属于万法皆通，也搬不过来（见第二节）。
+
+### 一、"YSM 下不绘制"是我们的守卫，不是 YSM 的限制（撤掉这一句）
+
+- **链路**：那圈特效是我们的图层 `LayerMaidSpinAttackGecko`（几何逐行照抄原版 `SpinAttackEffectLayer`，收在 `MaidSpinAttackEffect`）。它在 `MaidElytraLayerGeckoMixin` 里挂到 `GeckoEntityMaidRenderer`，而 TLM 的 `EntityMaidRenderer.initYsmModelRenderer` 会把这些 Geo 图层逐个 `copy` 到 YSM 渲染器——**YSM 下图层照样会被调用**（548 修的 CCE 就发生在这一步）。
+- **卡在哪**：`render()` 第一句 `if (!(getRenderer() instanceof GeckoEntityMaidRenderer)) return;`——走 YSM 时自己返回。而门槛 `MaidSpinAttackEffect.shouldRender` = `maid.isAutoSpinAttack()`（我们置的活体标志位 4），与渲染器类型无关。
+- **为什么这句多余**：548 写下它的理由是"本层挂点依赖 Gecko 骨骼表（ElytraLocator / Elytra / UpperBody / Root）"——那是**鞘翅图层** `LayerMaidElytraGecko` 的情况，**鞘翅那条守卫一字未动**；激流层一根骨骼都不用，只在图层入口那个 poseStack 上按固定偏移画三层方块。
+- **YSM 那边的坐标系与 TLM 同构（反编译实证）**：YSM 的女仆渲染器（混淆包 `com.elfmcys.*`，实现 TLM 的 `IGeoEntityRenderer`）继承的基类里，流程是 `push → setupRotations → translate(0, 0.01, 0) → 画模型 → 图层循环 → pop`，与 TLM 的 `GeoReplacedEntityRenderer` 同一段代码形状——图层拿到的仍是"格、Y 朝上、原点在脚下"那一套（且仍在 `setupRotations` 之后），下面 `scale(-1,-1,1)` 的换算照样成立。
+- **改法（两树）**：守卫整句删掉（连 `GeckoEntityMaidRenderer` 的 import），激流特效对任何 `IGeoEntityRenderer` 都画。**鞘翅那条不动**（它真的要骨骼；YSM 链上女仆的背部物品/鞘翅由 TLM 自己的图层负责）。
+
+### 二、顺带查清："烈焰冲锋时的那个模型"是谁的（结论：不是万法皆通的，也借不过来）
+
+- **烈焰冲锋 = 铁魔法（ISS）的 `irons_spellbooks:burning_dash`**。它的 `onCast` 只做一件事：`setSpinAttackType(SpinAttackType.FIRE)`（外加位移 / 20 tick 无敌 / 燃烧效果）。
+- **那圈火色激流是 ISS 自己画的**：它用 mixin 换掉原版 `SpinAttackEffectLayer` 的贴图（`fire_riptide.png`，全亮）——也就是说"玩家版的蓝激流"与"烈焰冲锋的火色版"是**同一个几何、换一张贴图**；对**它自家的法师怪**才另走一套：`GeoSpinAttackLayer` + `irons_spellbooks:geo/spin_attack_model.geo.json`（三层堆叠的独立 geo 模型，不挂骨骼）。
+- **万法皆通的职责只有一条**：让女仆能施 ISS 的法术（`IMagicCastingAnimationProvider` 把 ISS 的 `cast_start` / `cast_finish` 动画名映射成模型里的 `iss:xxx` 动画）。
+- **你在大正女仆身上看到的那套施法动作，来源是 YSM 模型包**：YSM 内置 `default` 包带一份 `iss.animation.json`（19 个 `iss:` 动画）；1.20.1 那份万法皆通 1.8.2 里根本没有模型包（带 `winefox_*.iss.animation.json` 的是 1.21.1 的 1.8.4）。**"从外面给 YSM 模型补动画"我们做不到**——动画归模型包的 `animations/*.json` 与 YSM 的 controller。
+- **顺带一条对你有用的**：YSM 把同一个旋转标志位暴露成 molang 变量 `is_riptide`，内置 `default` 包的 `main.animation.json` 里就有一个 `riptide`（0.25 秒里 `AllBody` 自转 0° → -360° 再躺平）——"她身体转不转"归模型包管，标志位我们早就置上了。你的「大正女仆酒狐」（YSM 内置 `wine_fox/01_taisho_maid`，lang 里就是这个名字）自己那 49 个动画里**没有** `riptide`（同族的 `08_sta / 09_hailuo / 10_zhiban / 17_mini` 有）；`default` 那份会不会兜底合并进它，混淆代码里定不下来。
+
+### 边界（如实说明）
+
+- 这次动的是"我们自己那道守卫"，**画不画得出来、落点对不对必须进游戏看**：装 YSM → 给女仆套一个 YSM 模型（如「大正女仆酒狐」）→ 主手给带激流附魔的三叉戟 → 攻击模式 → 看那一秒里有没有那圈白色斜纹特效。若真错位（说明 YSM 图层空间与我们的推断不符），退路是 ISS 那套做法：自带一份三层堆叠的独立 geo 模型、走渲染器自己的模型管线画，彻底不依赖骨骼与图层空间。
+- 文档同步：README「与其他模组共存」与 `PUBLISH_GUIDE.md` 里那句改成只留鞘翅。
+
+**验证**：两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=167 SKIP=8 FAIL=0**；打包门禁
+（`verify_jar_classes.py` + `mixin 包登记` + `lang json`）全过；出
+`promaid-1.3.0-forge-1.20.1.jar`（10,843,542 B）/ `promaid-1.3.0-neoforge-1.21.1.jar`（10,867,746 B），
+**同名覆盖**，版本号仍是 1.3.0；部署三处（两个客户端 versions 的 mods + 服务端 pack1201）并逐处核对 md5。
+
+## 实测六百八十二【扫帚模式「坐着扫帚掉在地上动也不动」修复（撤掉 679 那道「没拿绳子就不驱动」的闸）+ 接敌爬升默认 10→15 + 绑定的女仆换模式时自动解除一次 + 远程空袭开枪频率与超远距离准度 + 绑定 HUD 加一行操作提示（版本号不变，仍是 v1.3.0 beta）】
 
 > 四条：① 「如果玩家绑定了一个空袭状态的女仆。这个时候再把女仆切换到扫帚模式，那个标记仍然在，但是却是显示一个无效的效果……设定成女仆，在切换模式的时候会自动将标记和绑定消除一次就行了。……简单来说，一个玩家一次只能绑定一个女仆，绑定了下一个就会把上一个清掉。（无论是空袭还是扫帚。）」② 「现版本女仆在扫帚模式下很奇怪，有的时候会正常起飞和跟随主人，但有的时候就会直接坐着扫帚掉在地上，动也不动。而且就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。顺便帮我检查一下刚刚游戏的运行，看看为什么会出现这样的问题。」③ 「远程空袭状态下，可能是因为我们把视线判定关了的问题，导致女仆在此状态下飞的太远后打枪的准度特别的低。而且似乎某些行为会阻止女仆开枪。女仆开枪的频率相比于正常的枪械模式要低了很多。」④ 「目前在那个处于绑定状态下的HUD再加一句提示，提醒一下，玩家可以通过右击战术拴绳的方式切换为主动骑乘。」
 
