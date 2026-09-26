@@ -510,6 +510,14 @@ if (++this.throttle < 10) {
             if (cur == null || !cur.isAlive()) {
                 return;
             }
+            // 【实测六百八十五】扫帚模式的她**带着主人一起在追**——本条判据的前提（她自己跑远了、
+            //   主人还在原地）在扫帚上根本不成立：主人就挂在她下面。所以扫帚空中一律让位，追到
+            //   哪儿去由扫帚自己的接敌链路决定（目标维持已交给 FlightTargeting 的 128 格）。
+            //   不加这一条的话：她一边正确地追着 boss，这里一边每 10 tick 擦掉 ATTACK_TARGET
+            //   并打一行"目标跑出 N 格→松手"，日志看着像故障，brain 里的目标也一直在闪。
+            if (MaidBroomKit.isBroomAirborne(maid)) {
+                return;
+            }
             if (maid.distanceTo(cur) <= r || owner.distanceTo(cur) <= r) {
                 return; // 任一方还在半径内 → 留着
             }
