@@ -249,6 +249,7 @@
   "config.promaid.broom.enable": "扫帚模式·总开关",
   "config.promaid.broom.range": "战斗盘旋距离（格）",
   "config.promaid.broom.orbitMax": "离敌最远距离（格）",
+  "config.promaid.broom.minStandoff": "离敌最近距离（格）",
   "config.promaid.broom.hover": "悬停高度（格）",
   "config.promaid.broom.climb": "接敌爬升高度（格）",
   "config.promaid.broom.follow": "平时跟随主人",

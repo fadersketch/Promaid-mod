@@ -279,6 +279,16 @@ public final class MaidBroomDrive {
      * 按线速度换算（{@code step = ORBIT_SPEED / 半径}）后，任何半径下她都能稳稳跟上。
      */
     private static final double ORBIT_SPEED = 0.14;
+    /**
+     * 【实测七百零一】接敌后**离敌的最小距离**（格）的**兜底默认值**（配置
+     * {@code combat.broom.minStandoff} 读不到时用它，见 {@link #minStandoffCfg}）。
+     *
+     * <p>玩家原话：「应该要保证至少与怪物拉开多少距离」。旧版的环绕近端由"基础盘旋距离 × 0.75"
+     * 现算（默认 8 × 0.75 = 6 格），**没有独立的下限**——玩家把「离敌最远距离」调小到 4，
+     * 近端就塌到 3 格，她正好飘进近战怪的攻击范围。现在近端取
+     * {@code max(区间近端, 本值)}：随机只发生在这条线之外，"拉开距离"这件事不再随另一个旋钮塌陷。
+     */
+    private static final double MIN_STANDOFF = 6.0;
     /** 平时跟随的水平距离（格） */
     private static final double FOLLOW_DIST = 3.5;
     /** 平时跟随的高度（格，相对主人脚下） */
@@ -904,18 +914,36 @@ public final class MaidBroomDrive {
         double base = Math.max(1.0, rangeCfg());
         double hi = Math.max(1.0, orbitMaxCfg());
         double lo = Math.min(hi, Math.max(1.0, base * 0.75));
+        // 【实测七百零一】近端再兜一条**硬下限**：无论如何不许贴到比这个距离更近。
+        //  玩家原话：「应该要保证至少与怪物拉开多少距离」。旧版的近端 = base × 0.75
+        //  （默认 8 × 0.75 = 6 格），而 orbitMax 被调小时近端还会跟着塌下去——玩家把
+        //  「离敌最远距离」调到 4，她就可能绕到 3 格，正好进近战怪的攻击范围。
+        //  现在近端取 max(区间近端, 本值)：随机只发生在这条线之外。
+        double standoff = minStandoffCfg();
+        lo = Math.max(lo, standoff);
+        // 区间退化（硬下限已越过顶点）时以顶点为准并夹住——绝不能出现 lo > hi 的倒挂
+        // （那会让 CombatOrbit.radius 的插值把半径算到区间外，正是"随机变成乱飞"的来源）。
+        if (lo > hi) {
+            lo = hi;
+        }
         double r = Math.max(0.5, CombatOrbit.radius(id, lo, hi));
         double dir = CombatOrbit.direction(id);
+        // 【实测七百零一】绕圈的**快慢**也在飘（见 CombatOrbit.speedScale）：半径决定圆多大、
+        // 速度决定她转多快，两者节拍错开（4 秒 / 3 秒），合成出来的轨迹才不可预测。
+        double spd = CombatOrbit.speedScale(id);
         if (CombatOrbit.entering(id)) {
             mountLog(maid, "随机环绕：半径 " + fmt(r) + " 格（区间 " + fmt(lo) + "~" + fmt(hi)
-                    + "，上界=combat.broom.orbitMax " + fmt(orbitMaxCfg()) + "），旋向 "
-                    + (dir > 0 ? "逆时针" : "顺时针"));
+                    + "，上界=combat.broom.orbitMax " + fmt(orbitMaxCfg()) + "，下限=combat.broom.minStandoff "
+                    + fmt(standoff) + "），旋向 " + (dir > 0 ? "逆时针" : "顺时针")
+                    + "，速度 " + fmt(spd) + "×（区间 " + fmt(CombatOrbit.speedLo()) + "~"
+                    + fmt(CombatOrbit.speedHi()) + "×，每 3 秒重掷）");
         }
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，
         // 绕着同一个敌人、同一个半径、同一个角速度 → 目标点逐 tick 完全重合，正是玩家说的"叠罗汉"。
         // 【实测六百九十三】步长再乘上她自己那个旋向 dir：一半女仆顺时针、一半逆时针。
-        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * ORBIT_SPEED / r;
+        // 【实测七百零一】再乘上速度倍率 spd：绕圈速度本身也随时间游走。
+        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * ORBIT_SPEED * spd / r;
         ORBIT.put(id, ang);
         double alt = COMBAT_ALT.getOrDefault(id, hoverCfg());
         return new Vec3(target.getX() + Math.cos(ang) * r,
@@ -1038,8 +1066,26 @@ public final class MaidBroomDrive {
 
     /** 两只"载着女仆的扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位 */
     private static final double SEP_R = 2.0;
+    /**
+     * 【实测七百零一】**接敌期间**的最小水平间距（格）——比平时的 {@link #SEP_R} 大一档。
+     *
+     * <p>玩家原话：「同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」。
+     * 平时跟主人/守家盘旋时，2 格是"别撞在一起"的观感下限；而**接敌**时两只女仆靠得近
+     * 就是活靶子：敌人一箭穿过前面那只还会打到后面那只（正是 实测六百九十三 玩家说的"串"）。
+     * 所以接敌档把间距放宽到 4 格——半径随机（6~10）+ 旋向对半（{@link CombatOrbit#direction}）
+     * + 这条间距，三层一起保证"她与同伴不在同一条射线上"。
+     *
+     * <p>【只推水平、只在接敌】与 {@link #SEP_R} 同一套做法（见 {@link #separate}）。
+     */
+    private static final double SEP_R_COMBAT = 4.0;
     /** 一次让位最多挪出去多少格（封顶：互斥只做修正，绝不把"去哪"整条盖掉） */
     private static final double SEP_MAX = 1.5;
+    /**
+     * 【实测七百零一】接敌让位的**更大封顶**（格）：间距要求放宽到 {@link #SEP_R_COMBAT} 之后，
+     * 原来 1.5 格的封顶会让"推出去"永远追不上要求（差值 4−d 经常大于 1.5），互斥等于白设。
+     * 放大到 2.5 格——仍只是修正（真正"去哪"由 {@link #combatPoint} 决定），但够把两只分开。
+     */
+    private static final double SEP_MAX_COMBAT = 2.5;
 
     /**
      * **邻近互斥**：目标点附近有别的"载着女仆的扫帚"时，把目标点朝远离她的方向推出去一点。
@@ -1056,18 +1102,24 @@ public final class MaidBroomDrive {
      *
      * <p>【顺序】互斥作用在"原始目标点"上、**在 {@link MaidBroomKit#clampToHome} 之前**：
      * 夹取仍有最终话语权（不会被推出工作范围），互斥那点偏置在圈边被夹掉也只是"这一边推不动"。
+     *
+     * <p>【实测七百零一：接敌档间距放宽到 {@link #SEP_R_COMBAT}】玩家原话「同时与其他的女仆
+     * 拉开距离（这些机制仅在扫帚模式接敌以后才启用）」——所以间距与封顶都由调用方按"这一拍
+     * 是不是在接敌"传进来（口径只有一处：{@code combat} 为真时用那一对更大的数）。
      */
-    private static Vec3 separate(EntityMaid maid, EntityBroom broom, Vec3 aim) {
+    private static Vec3 separate(EntityMaid maid, EntityBroom broom, Vec3 aim, boolean combat) {
         if (aim == null || broom == null) {
             return aim;
         }
+        final double sepR = combat ? SEP_R_COMBAT : SEP_R;
+        final double sepMax = combat ? SEP_MAX_COMBAT : SEP_MAX;
         try {
             if (!(broom.level() instanceof net.minecraft.server.level.ServerLevel level)) {
                 return aim;
             }
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
-                    aim.x - SEP_R, aim.y - SEP_R, aim.z - SEP_R,
-                    aim.x + SEP_R, aim.y + SEP_R, aim.z + SEP_R);
+                    aim.x - sepR, aim.y - sepR, aim.z - sepR,
+                    aim.x + sepR, aim.y + sepR, aim.z + sepR);
             double ox = 0.0;
             double oz = 0.0;
             for (EntityBroom other : level.getEntitiesOfClass(EntityBroom.class, box,
@@ -1075,18 +1127,18 @@ public final class MaidBroomDrive {
                 double dx = aim.x - other.getX();
                 double dz = aim.z - other.getZ();
                 double d = Math.sqrt(dx * dx + dz * dz);
-                if (d >= SEP_R) {
+                if (d >= sepR) {
                     continue;
                 }
                 if (d < 0.05) {
                     // 水平方向完全叠在一起（"叠罗汉"最难看的那一档）：用她自己的相位当
                     // "往哪边让"的方向——必须是确定的，不能每次算出来不一样（否则她会原地抖）。
                     double a = phaseOf(maid);
-                    ox += Math.cos(a) * SEP_R * 0.5;
-                    oz += Math.sin(a) * SEP_R * 0.5;
+                    ox += Math.cos(a) * sepR * 0.5;
+                    oz += Math.sin(a) * sepR * 0.5;
                     continue;
                 }
-                double push = (SEP_R - d) / d;
+                double push = (sepR - d) / d;
                 ox += dx * push;
                 oz += dz * push;
             }
@@ -1094,7 +1146,7 @@ public final class MaidBroomDrive {
             if (len < 1.0E-4) {
                 return aim;
             }
-            double k = Math.min(1.0, SEP_MAX / len);
+            double k = Math.min(1.0, sepMax / len);
             return new Vec3(aim.x + ox * k, aim.y, aim.z + oz * k);
         } catch (Throwable ignored) {
             return aim;
@@ -1544,6 +1596,18 @@ public final class MaidBroomDrive {
      * 系数与原版逐字相同，观感也就是原版那把扫帚。**速度上限只到原版全速，一分不加**。
      */
     public static void steerTo(EntityMaid maid, Vec3 desired) {
+        steerTo(maid, desired, false);
+    }
+
+    /**
+     * 【实测七百零一】带 {@code combat} 标记的推进入口：接敌那一档传 {@code true}，
+     * 让 {@link #separate} 用更大的同伴间距（{@link #SEP_R_COMBAT}）。
+     *
+     * <p>玩家原话：「同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」——
+     * 所以"要不要拉开"由调用方（{@link MaidBroomBehavior} 的接敌分支）传进来，
+     * 平时跟随/守家仍走原来那 2 格（观感上的"别撞在一起"就够）。
+     */
+    public static void steerTo(EntityMaid maid, Vec3 desired, boolean combat) {
         if (maid == null || desired == null) {
             return;
         }
@@ -1557,7 +1621,8 @@ public final class MaidBroomDrive {
         }
         // 【实测六百九十一】先把她推离"别的女仆正骑着的扫帚"（别叠罗汉），再夹进工作范围
         // （夹取有最终话语权，见 separate 的注释），最后才是卡墙脱困。
-        Vec3 aim = MaidBroomKit.clampToHome(maid, separate(maid, broom, desired));
+        // 【实测七百零一】接敌档（combat=true）用更大的间距，见 separate 的注释。
+        Vec3 aim = MaidBroomKit.clampToHome(maid, separate(maid, broom, desired, combat));
         if (aim == null) {
             return;
         }
@@ -2247,6 +2312,20 @@ public final class MaidBroomDrive {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX.get();
         } catch (Throwable ignored) {
             return 10.0;
+        }
+    }
+
+    /**
+     * 【实测七百零一】接敌后离敌的**最小距离**（格）：配置 {@code combat.broom.minStandoff}，
+     * 默认 6（= 基础盘旋距离 8 × 0.75，与实测六百九十三 那套区间的近端同值——加这一项是把它
+     * 从"跟着另一个旋钮现算"变成"独立的一条线"）。配置没挂上时退回 6——与配置里的默认值对齐
+     * （本项目的老规矩：兜底值必须跟着默认值走）。
+     */
+    private static double minStandoffCfg() {
+        try {
+            return Math.max(1.0, com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_MIN_STANDOFF.get());
+        } catch (Throwable ignored) {
+            return MIN_STANDOFF;
         }
     }
 
