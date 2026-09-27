@@ -206,6 +206,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.build.BlueprintLib.setServer(null);
         // v1.1.0 实测四十四：撤掉全部女仆区块强制加载票（防票残留锁区块）
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
+        // 实测六百九十九：登记表会话复位（内存清空、落盘保留——下次启动再灌回来）
+        com.maidsmart.follow.MaidChunkLoadManager.resetSeenSession();
     }
 
     /**
