@@ -231,6 +231,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DIVE_NEXT.remove(maidId);
         DIVE_LAST_LOG.remove(maidId);
         STANDOFF_LAST_LOG.remove(maidId); // 【实测七百〇四】"拉开距离"日志节流
+        STANDOFF_TICKS.remove(maidId);    // 【实测七百〇四】"拉开距离"每轮预算
         MaidBombing.forget(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
         FlightTargeting.forget(maidId);
@@ -317,6 +318,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DIVE_NEXT.clear();
         DIVE_LAST_LOG.clear();
         STANDOFF_LAST_LOG.clear(); // 【实测七百〇四】"拉开距离"日志节流
+        STANDOFF_TICKS.clear();    // 【实测七百〇四】"拉开距离"每轮预算
         MaidBombing.clearAll();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
         FlightTargeting.clearAll();
@@ -833,13 +835,23 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             double dxh0 = maid.m_20185_() - target.m_20185_();
             double dzh0 = maid.m_20189_() - target.m_20189_();
             double distH0 = Math.sqrt(dxh0 * dxh0 + dzh0 * dzh0);
-            if (distH0 < airMinStandoffCfg() && !WAIT_LAUNCH.contains(id)) {
+            // 【必须有界】她要是在墙角里 / 追一个跟她同速的飞行目标，"拉开距离"永远拉不开——
+            //  无界的话她会一直平飞、一轮都不俯冲（从"贴脸硬碰"变成"永远不打"）。给一段预算
+            //  （{@link #STANDOFF_MAX_TICKS} = 2 秒），用完就照常俯冲；距离一旦够就清零重来。
+            int pulled = STANDOFF_TICKS.getOrDefault(id, 0);
+            boolean wantPull = distH0 < airMinStandoffCfg() && !WAIT_LAUNCH.contains(id)
+                    && pulled < STANDOFF_MAX_TICKS;
+            if (wantPull) {
+                STANDOFF_TICKS.put(id, pulled + 1);
                 // 背离敌人 + **平飞**（不抬头：高度已经占好了，抬头会掉速、还把她顶得更高）。
                 // 与 faceAwayAndUp 同一套抗 LookControl 归零做法，否则下一 tick 会被 xRot 归零抹平。
                 faceAwayFlat(maid, target);
                 suppressVanillaMelee(maid);
                 logStandoff(maid, distH0);
                 return;
+            }
+            if (pulled > 0) {
+                STANDOFF_TICKS.remove(id); // 够了 / 预算用完 → 这一轮的拉开到此为止
             }
         }
 
@@ -1666,6 +1678,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** 「拉开距离」日志限频（每只女仆 5 秒至多一条）——它是每 tick 可能命中的常态段，不节流会刷屏 */
     private static final Map<UUID, Long> STANDOFF_LAST_LOG = new HashMap<>();
+
+    /**
+     * 【实测七百〇四】"先拉开距离"这一段的**每轮预算**（tick，= 2 秒）——见 {@code m_6725_} 近战那一支。
+     *
+     * <p>没有这道上限，她在墙角 / 追同速飞行目标时会一直平飞、永远不俯冲（把"贴脸硬碰"变成"永远不打"）。
+     * 用完预算就照常俯冲；距离一旦拉够就清零，下一轮重新有 2 秒。
+     */
+    private static final int STANDOFF_MAX_TICKS = 40;
+    /** 女仆 UUID → 本场遭遇"拉开距离"已经走了多少 tick（够距离/预算用完即清） */
+    private static final Map<UUID, Integer> STANDOFF_TICKS = new HashMap<>();
 
     private void logStandoff(EntityMaid maid, double distH) {
         try {
