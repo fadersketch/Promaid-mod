@@ -6,6 +6,21 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百零一（v1.3.0 beta，同名覆盖，未发版）：三件事（两树镜像）——
+① 复活女仆「身体停在原地、扫帚照飞」的根因是**客户端那只女仆没有载具**：本模组的补包方法
+   resyncTo 只补了"她载着谁"（getPassengers 非空 → SetPassengersPacket(她)），**漏了
+   "她骑着谁"**。原版 ServerEntity.sendPairingData 两个方向都发（if (!getPassengers().isEmpty())
+   ... ; if (isPassenger()) SetPassengersPacket(getVehicle())）；而原版对乘客不发它自己的位置包
+   （sendChanges 的 isPassenger 那一支只用载具坐标），所以客户端把她钉在 AddEntity 那一拍的
+   落点上不动、服务端的扫帚照飞。只有复活过的女仆会中招：入世界补包对"新实体"刻意放过
+   （实测五百九十六），复活正是"同 UUID、新 id"；只剩 697 那三枪，而载具侧的 lastPassengers
+   早已记着"她在车上"、不会重发。修法：resyncTo 补发 SetPassengersPacket(maid.getVehicle())。
+② 扫帚接敌随机机动二期：新增配置 combat.broom.minStandoff（默认 6，1~32，面板「离敌最近距离」）
+   —— 盘旋半径近端改成 max(盘旋距离 × 0.75, 本值)，不再跟着「离敌最远距离」一起塌；
+   CombatOrbit 新增 speedScale（绕圈速度 0.6~1.5 倍、每 3 秒重掷，与半径的 4 秒节拍错开）；
+   接敌档与同伴最小间距 2 → 4 格（推力封顶 1.5 → 2.5）。
+③ 粉丝日志答疑（FML/Forge/Flywheel 三行是正常版本行、不是报错；本模组是 Java 版、手机装不了）。
+
 实测七百（v1.3.0 beta，同名覆盖，未发版）：仿创造飞行·跟随时速度被拽的源头抑制补档（neo 树）——
 PR #24 复核中贡献者指出他的「飞行接管」档没随合入进 main。反编译 1.21.1 定论缺口真实：
 原版 MoveToTargetSink.start() 走 moveTo(Path,double)（路径由 createPath 造），两条都不在

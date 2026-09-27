@@ -28,6 +28,10 @@ import java.util.UUID;
  *   <li><b>半径</b>（{@link #radius}）：不再固定取上界，而是在 {@code [lo, hi]} 区间里取一个
  *       由 UUID 起手、每 {@link #REROLL_TICKS} 重掷一次、按 {@link #DRIFT_STEP} 缓动的比例。
  *       多只女仆的半径天然不同（不在一个圆上），同一只女仆的半径还会随时间飘（不是死圈）。</li>
+ *   <li><b>速度</b>（{@link #speedScale}，实测七百零一）：绕圈的**快慢**也在飘——由 UUID 起手、
+ *       每 {@link #SPEED_REROLL_TICKS}（3 秒，与半径的 4 秒刻意错开）重掷一次，返回一个乘在
+ *       基准线速度上的倍率 {@code [0.6, 1.5]}。只有半径随机时，她绕圈的**角速度**是确定的，
+ *       敌人看过两秒就能算准提前量；速度也飘之后相位推进速率才不可预测。</li>
  *   <li><b>上界</b>：{@code hi} 就是配置里那条"锁敌之后离敌的最远距离"，它同时是随机区间的
  *       **顶点**（调用方还会拿它做硬牵引），所以"随机"绝不会变成"越飞越远"。</li>
  * </ul>
@@ -57,7 +61,40 @@ public final class CombatOrbit {
     /** 一次重掷相对当前比例的最大跳变（0.35）：保证是"飘"，不是"瞬移" */
     private static final double REROLL_SPAN = 0.35;
 
+    /**
+     * 【实测七百零一】环线**速度**倍率的重掷间隔（tick，默认 60 = 3 秒）。
+     *
+     * <p>刻意与半径的 {@link #REROLL_TICKS}（4 秒）**错开**：两者同拍重掷的话，她会在同一瞬间
+     * 既换半径又换速度，看起来像"打了一下摆子"；错开之后半径与速度各自漂移，合成出来的轨迹
+     * 才像"在机动"而不是"在按节拍换档"。玩家原话：「剩下的运动的绕圈速度以及半径要每隔一小段
+     * 时间就变化一下。」
+     */
+    private static final int SPEED_REROLL_TICKS = 60;
+    /** 速度倍率的滑动步长（0.006 ⇒ 走满 0.9 量程约 2.5 秒）——比半径稍快，机动感更明显 */
+    private static final double SPEED_DRIFT_STEP = 0.006;
+    /** 一次速度重掷相对当前值的最大跳变（0.30） */
+    private static final double SPEED_REROLL_SPAN = 0.30;
+    /**
+     * 速度倍率的区间：{@code [0.6, 1.5]}。
+     *
+     * <p>下限 0.6 是"慢下来看目标/稳枪口"，上限 1.5 是"快速切位"——两者的乘积区间
+     * {@code [0.084, 0.21]} 格/tick 都落在扫帚的水平速度包络（{@code MAX_H_SPEED = 0.75}）之内，
+     * 所以"速度随机"绝不会变成"她突然追不上目标点"或"她快得像另一架飞行器"。
+     */
+    private static final double SPEED_SCALE_LO = 0.6;
+    private static final double SPEED_SCALE_HI = 1.5;
+
     private static final Map<UUID, State> STATE = new HashMap<>();
+    /**
+     * 【实测七百零一】女仆 UUID → 当前的**环绕速度倍率**漂移状态。
+     *
+     * <p>【为什么与 {@link #STATE} 分开两张表】它俩的重掷节拍不同（{@link #REROLL_TICKS} 4 秒 /
+     * {@link #SPEED_REROLL_TICKS} 3 秒）。塞进同一个 {@code State} 就只有一套 {@code ticks}
+     * 计数，两者被迫同拍——那正是上面说的"打摆子"。分表之后各自独立推进，且 {@link #radius}
+     * 的既有行为（含远程空袭那一侧）一个字节都不动。
+     */
+    private static final Map<UUID, SpeedState> SPEED = new HashMap<>();
+
 
     private CombatOrbit() {
     }
@@ -68,6 +105,15 @@ public final class CombatOrbit {
         double targetFrac;          // 目标比例
         int ticks;                  // 本状态走过的拍数（重掷节拍与随机盐都用它，不依赖 gameTime）
         boolean fresh;              // 本次 radius() 是否为"这一轮第一次"（供调用方写一行日志）
+    }
+
+    /**
+     * 【实测七百零一】一只女仆的**环绕速度倍率**漂移状态（与 {@link State} 同形，理由见 {@link #SPEED}）。
+     */
+    private static final class SpeedState {
+        double frac = Double.NaN;   // 当前倍率比例（0~1），NaN = 还没起手
+        double targetFrac;          // 目标比例
+        int ticks;                  // 本状态走过的拍数（重掷节拍与随机盐都用它）
     }
 
     /**
@@ -142,20 +188,88 @@ public final class CombatOrbit {
         return s != null && s.fresh;
     }
 
+    /**
+     * 【实测七百零一】推进并返回这一拍的**环绕速度倍率**（乘在基准线速度上，见
+     * {@link MaidBroomDrive#ORBIT_SPEED}）。
+     *
+     * <p>── 玩家原话 ──
+     * 「目前在扫帚模式下的参战以后随机运动随机性不够强。应该要保证至少与怪物拉开多少距离，
+     * 然后剩下的运动的绕圈速度以及半径要每隔一小段时间就变化一下。」
+     *
+     * <p>── 为什么"半径随机"之外还要"速度随机" ──
+     * 实测六百九十三 只随机化了**半径与旋向**：她绕的那个圆会在 6~10 格之间飘。但**绕圈的快慢**
+     * 仍是恒定的线速度 0.14 格/tick（{@code ORBIT_SPEED}）——于是她的运动方程里"角速度"这一项
+     * 完全确定：敌人只要看过两秒就能预测她下一拍在哪。把速度也做成缓慢游走之后，同一个圆上
+     * 她的**相位推进速率**也在飘，"提前量"就没那么好算了。
+     *
+     * <p>── 与 600 秒级/每 tick 随机的区别（同 {@link #radius} 的取舍）──
+     * 每 tick 掷骰子 = 目标点每拍跳一次，她的朝向会被这份噪声抖散（枪口永远摆不稳），看着像故障。
+     * 这里取"每 3 秒重掷 + 每 tick 只挪 0.6% 量程"：转速是**飘**的，不是"抽"的。
+     *
+     * <p>── 取值范围 ──
+     * {@code [}{@link #SPEED_SCALE_LO}{@code , }{@link #SPEED_SCALE_HI}{@code ]} = {@code [0.6, 1.5]}。
+     * 下限让"稳枪口"有得选，上限让"快速切位"有得选；两者都留在扫帚自己的速度包络内（见常量注释），
+     * 所以这一项**不会**让她冲出原有手感。
+     *
+     * @param id 女仆 UUID（null 时退化为 1.0 = 基准速度，不记账）
+     */
+    public static double speedScale(UUID id) {
+        if (id == null) {
+            return 1.0;
+        }
+        SpeedState s = SPEED.computeIfAbsent(id, k -> new SpeedState());
+        if (Double.isNaN(s.frac)) {
+            s.frac = rand01(id, SPEED_SALT);
+            s.targetFrac = s.frac;
+        }
+        s.ticks++;
+        if (s.ticks % SPEED_REROLL_TICKS == 0) {
+            double delta = (rand01(id, s.ticks + SPEED_SALT) * 2.0 - 1.0) * SPEED_REROLL_SPAN;
+            s.targetFrac = clamp01(s.frac + delta);
+        }
+        if (s.frac < s.targetFrac) {
+            s.frac = Math.min(s.targetFrac, s.frac + SPEED_DRIFT_STEP);
+        } else if (s.frac > s.targetFrac) {
+            s.frac = Math.max(s.targetFrac, s.frac - SPEED_DRIFT_STEP);
+        }
+        return SPEED_SCALE_LO + (SPEED_SCALE_HI - SPEED_SCALE_LO) * s.frac;
+    }
+
+    /** 速度倍率的下限（供调用方把区间写进日志；口径只有一处，见 {@link #SPEED_SCALE_LO}） */
+    public static double speedLo() {
+        return SPEED_SCALE_LO;
+    }
+
+    /** 速度倍率的上限（同上，见 {@link #SPEED_SCALE_HI}） */
+    public static double speedHi() {
+        return SPEED_SCALE_HI;
+    }
+
     /** 这只女仆下线/卸载（或这一轮打完）：丢掉她的环绕参数，下次接敌重新起手 */
     public static void forget(UUID id) {
         if (id == null) {
             return;
         }
         STATE.remove(id);
+        SPEED.remove(id);
     }
 
     /** 服务端停止 / 重载：整表清空 */
     public static void clearAll() {
         STATE.clear();
+        SPEED.clear();
     }
 
     /* ==================== 内部：稳定随机 ==================== */
+
+    /**
+     * 【实测七百零一】速度那一路的随机盐偏移。
+     *
+     * <p>与半径那一路（起手 0、重掷用拍数）共用 {@link #rand01}，但把盐整体挪到这个常量之后，
+     * 两条链抽到的序列在统计上互不相关——否则"半径飘大"与"速度变快"会同步发生，看起来像
+     * 一个被编排好的动作，而不是两份独立的随机。
+     */
+    private static final long SPEED_SALT = 0x50D1A17L;
 
     /** 0~1 的稳定随机：由 UUID 与"盐"（起手用 0、重掷用拍数）派生，同一输入永远同一输出 */
     private static double rand01(UUID id, long salt) {
