@@ -941,6 +941,20 @@ public final class MaidBroomDrive {
         }
         double r = Math.max(0.5, CombatOrbit.radius(id, lo, hi));
         double dir = CombatOrbit.direction(id);
+        // 【实测七百〇五】旋向不再是"一辈子恒定"：每 8 秒对半概率决定"继续原方向 / 翻过来"
+        //  （见 CombatOrbit.flipSign）。乘在基准 dir 上，所以一半女仆以逆时针起手、一半以顺时针，
+        //  但每个都会随机掉头——玩家原话「不要一直顺时针或者逆时针……差不多 8 秒钟一个周期」。
+        //  掉头只改角速度符号、位置连续，不需要插值（见 CombatOrbit.DIR_FLIP_TICKS 的注释）。
+        double dflip = CombatOrbit.flipSign(id);
+        dir *= dflip;
+        if (CombatOrbit.flipped(id)) {
+            // 掉头那一刻记一行（每 8 秒判定一次、真翻才写，不刷屏）——方便实测核对"是不是真在掉头"。
+            // 直写日志（不走 mountLog）：它和「随机环绕」同属"这一轮的关键事件"，不该被 5 秒节流吞掉。
+            com.maidsmart.tool.PromaidLog.log("扫帚模式",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 反向环绕：旋向翻转为 "
+                            + (dir > 0 ? "逆时针" : "顺时针")
+                            + "（每 " + (CombatOrbit.flipTicks() / 20) + " 秒对半概率决定是否掉头）");
+        }
         // 【实测七百〇一】绕圈的**快慢**也在飘（见 CombatOrbit.speedScale）：半径决定圆多大、
         // 速度决定她转多快，两者节拍错开（4 秒 / 3 秒），合成出来的轨迹才不可预测。
         double spd = CombatOrbit.speedScale(id);
@@ -973,13 +987,18 @@ public final class MaidBroomDrive {
         //  这一行被静默丢掉。玩家反馈「打了那么多场都一直在用环绕」，一半原因就是它压根没打出来
         //  （另一半是状态没随遭遇重置，见 clearClimb）。这里改成直写日志：它本来就是每场遭遇一行，
         //  频次与「爬升到位」同档，不需要那 5 秒闸。
-        if (maneuverOn && CombatManeuver.ticks(id) == 1) {
+        if (maneuverOn && CombatManeuver.entering(id)) {
             CombatManeuver.Kind mk = CombatManeuver.kind(id);
+            int seg = CombatManeuver.segment(id);
             com.maidsmart.tool.PromaidLog.log("扫帚模式",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 接敌机动："
                             + (mk == null ? "环绕" : mk.cn)
-                            + "（每场遭遇抽一种；高悠悠幅度 combat.maneuver.yoyoAmp "
-                            + fmt(yoyoAmpCfg()) + " 格，只加不减）");
+                            + (seg == 0
+                                    ? "（本场遭遇开场；每 " + (CombatManeuver.segmentTicks() / 20)
+                                            + " 秒换一种，高悠悠幅度 combat.maneuver.yoyoAmp "
+                                            + fmt(yoyoAmpCfg()) + " 格，只加不减）"
+                                    : "（本场遭遇第 " + (seg + 1) + " 段·换打法；每 "
+                                            + (CombatManeuver.segmentTicks() / 20) + " 秒换一种）"));
         }
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，

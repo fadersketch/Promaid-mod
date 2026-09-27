@@ -117,18 +117,76 @@ public final class CombatOrbit {
     }
 
     /**
-     * 这次环绕的**旋向**：{@code +1.0} = 逆时针、{@code -1.0} = 顺时针（俯视图），由 UUID 派生、
-     * 同一只女仆恒定。
+     * 这次环绕的**旋向**：{@code +1.0} = 逆时针、{@code -1.0} = 顺时针（俯视图），由 UUID 派生。
      *
      * <p>【为什么必须一半一半】半径随机只解决了"不在同一个圆上"，但如果旋向仍然一致，"半径接近
      * 的两只"依然会一前一后跟着走。旋向对半拆开之后，两只女仆在圆上的相对运动是**对穿**的——
      * 敌人那条射线想穿过两只，得同时穿过两个不同半径、不同旋向的点，几何上不成立。
+     *
+     * <p>【实测七百〇五：这个值是基准，不再是"一辈子不变"】它的返回值仍由 UUID 恒定（一半逆/一半顺），
+     * 但**实际旋向**要再乘 {@link #flipSign}——那个才是会每 8 秒随机掉头的那一项。调用方照旧写
+     * {@code direction(id) * flipSign(id)} 即可（本方法不参与逐拍推进，flipSign 才推）。
      */
     public static double direction(UUID id) {
         if (id == null) {
             return 1.0;
         }
         return ((id.hashCode() >>> 16) & 1) == 0 ? 1.0 : -1.0;
+    }
+
+    /**
+     * 【实测七百〇五】推进并返回这一拍的**旋向翻转**符号（{@code ±1}），乘在 {@link #direction} 上。
+     *
+     * <p>每 {@link #DIR_FLIP_TICKS}（默认 8 秒）判定一次：**对半概率**决定继续原方向还是翻过来
+     * （玩家原话「随机选择继续顺时针或者逆时针」）。返回值全程 ±1、位置连续（见 {@link #DIR_FLIP_TICKS}
+     * 里"为什么不跳变"那一段），所以调用方**不需要**任何插值。
+     *
+     * <p>调用方每 tick 调一次（与 {@link #speedScale} 同款：边推进边读数）。
+     */
+    public static double flipSign(UUID id) {
+        if (id == null) {
+            return 1.0;
+        }
+        DirState d = DIR.computeIfAbsent(id, k -> new DirState());
+        if (d.ticks == 0 && d.flips == 0) {
+            // 起手：基准方向由 direction 决定，这里只给"没翻过"的初值（sign=+1 ⇒ 不改变基准）
+            d.sign = 1.0;
+        }
+        d.fresh = false;
+        d.ticks++;
+        if (d.ticks >= DIR_FLIP_TICKS) {
+            d.ticks = 0;
+            d.flips++;
+            // 对半：rand01 的一半样本翻、一半不翻（不是"每 8 秒必翻"——玩家要的是"随机选择"）
+            if (rand01(id, DIR_SALT + d.flips) < 0.5) {
+                d.sign = -d.sign;
+            }
+            d.fresh = true;
+        }
+        return d.sign;
+    }
+
+    /** 【实测七百〇五】这一拍是不是"刚翻转旋向"（调用方据此写一行「反向环绕」日志，不刷屏） */
+    public static boolean flipped(UUID id) {
+        if (id == null) {
+            return false;
+        }
+        DirState d = DIR.get(id);
+        return d != null && d.fresh;
+    }
+
+    /** 【实测七百〇五】当前的旋向翻转符号（不推进；供日志/调试） */
+    public static double flipSignNow(UUID id) {
+        if (id == null) {
+            return 1.0;
+        }
+        DirState d = DIR.get(id);
+        return d == null ? 1.0 : d.sign;
+    }
+
+    /** 旋向翻转的周期（tick）——供调用方写进日志（口径只有一处，见 {@link #DIR_FLIP_TICKS}） */
+    public static int flipTicks() {
+        return DIR_FLIP_TICKS;
     }
 
     /**
@@ -245,6 +303,45 @@ public final class CombatOrbit {
         return SPEED_SCALE_HI;
     }
 
+    /* ==================== 旋向翻转（实测七百〇五） ==================== */
+
+    /**
+     * 旋向翻转的周期（tick，默认 160 = 8 秒）。
+     *
+     * <p>── 玩家原话 ──
+     * 「我希望女仆环绕飞行不要一直进行顺时针飞或者逆时针飞。可以在中途突然顺时针飞转变为
+     *  逆时针飞。差不多 8 秒钟一个周期吧。随机选择继续顺时针或者逆时针。」
+     *
+     * <p>── 这一条补的是什么 ──
+     * {@link #direction} 从 六百九十三 起是"UUID 派生、同一只女仆**恒定**"：一半女仆永远逆时针、
+     * 一半永远顺时针。它解决了"多只女仆排队绕同一个圆"，但单看一只女仆，她**一辈子只朝一个方向转**
+     * ——敌人（或玩家）看两圈就能预判她下一拍在半圆的哪一侧。现在每 {@link #DIR_FLIP_TICKS} 拍
+     * 掷一次骰子：**随机决定继续原方向还是翻过来**（对半），所以她的旋向是"一段一段的"，
+     * 而不是一条可以外推的匀速圆。
+     *
+     * <p>── 为什么不需要插值 ──
+     * 翻转只改**角速度的符号**，目标点仍是 {@code (cos(ang), sin(ang))} 上的连续点——{@code ang}
+     * 本身连续，只是这一拍起开始往回走。所以位置**没有跳变**，是"她在圆上掉头"，不是"她瞬移到对面"。
+     * 玩家的原话也是「突然……转变」，掉头本来就是这一档想要的样子。
+     */
+    private static final int DIR_FLIP_TICKS = 160;
+
+    /**
+     * 旋向翻转的随机盐（与半径、速度两条链刻意不同，三条链条的随机互不相关）。
+     */
+    private static final long DIR_SALT = 0x7A21C3L;
+
+    /** 女仆 UUID → 当前的**旋向翻转**状态（与 {@link #STATE}、{@link #SPEED} 分开表，节拍各不相同） */
+    private static final Map<UUID, DirState> DIR = new HashMap<>();
+
+    /** 一只女仆的旋向状态（当前符号 ±1 / 已走拍数 / 是否刚翻过——供日志） */
+    private static final class DirState {
+        double sign = 1.0;   // +1 逆时针、-1 顺时针
+        int ticks;           // 距离上次判定走了多少拍
+        int flips;           // 翻过几次（随机盐用，保证可复现）
+        boolean fresh;       // 这一拍是不是"刚翻过"
+    }
+
     /** 这只女仆下线/卸载（或这一轮打完）：丢掉她的环绕参数，下次接敌重新起手 */
     public static void forget(UUID id) {
         if (id == null) {
@@ -252,12 +349,14 @@ public final class CombatOrbit {
         }
         STATE.remove(id);
         SPEED.remove(id);
+        DIR.remove(id);
     }
 
     /** 服务端停止 / 重载：整表清空 */
     public static void clearAll() {
         STATE.clear();
         SPEED.clear();
+        DIR.clear();
     }
 
     /* ==================== 内部：稳定随机 ==================== */
