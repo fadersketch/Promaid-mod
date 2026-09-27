@@ -241,6 +241,35 @@ public final class MaidGoetyCompat {
         return out;
     }
 
+    /**
+     * 她身上**有没有这个聚晶**（保真门禁）：法杖当前槽 / 聚晶包里 / 任意容器里的物品。
+     *
+     * <p>【为什么要门禁】飞行聚晶是**道具**驱动的能力——不查她有没有，就等于"凭空给她装了个
+     * 推进器"，与我们做仿创造飞行时定的口径（不绕过物品/燃料）冲突。所以这条判据是
+     * 「她真的有这件聚晶」而不是「法术调得通」。
+     */
+    public static boolean hasFocus(EntityMaid maid, String focusId) {
+        if (maid == null || focusId == null || focusId.isEmpty()) {
+            return false;
+        }
+        for (ItemStack staff : staffs(maid).values()) {
+            if (focusId.equals(itemId(focusOf(staff)))) {
+                return true;
+            }
+        }
+        for (ItemStack s : bagStacks(maid)) {
+            if (focusId.equals(itemId(s))) {
+                return true;
+            }
+        }
+        for (ItemStack s : containers(maid).values()) {
+            if (focusId.equals(itemId(s))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** 这只女仆身上所有可用的聚晶 id（法杖当前槽 + 聚晶包里的存货）。 */
     public static List<String> focusIds(EntityMaid maid) {
         List<String> out = new ArrayList<>();

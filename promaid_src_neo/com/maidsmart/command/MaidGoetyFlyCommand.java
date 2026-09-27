@@ -74,11 +74,11 @@ public final class MaidGoetyFlyCommand {
             src.sendFailure(Component.literal("没找到女仆"));
             return 0;
         }
-        if (!MaidGoetyCompat.available()) {
-            src.sendFailure(Component.literal("这台服务器没装 Goety（或版本反射路径不符）"));
+        String bad = MaidGoetyFlight.flyTo(maid, new Vec3(x, y, z));
+        if (bad != null) {
+            src.sendFailure(Component.literal(bad));
             return 0;
         }
-        MaidGoetyFlight.flyTo(maid, new Vec3(x, y, z));
         String msg = "开始用飞行聚晶飞往 " + fmt(new Vec3(x, y, z));
         src.sendSuccess(() -> Component.literal(msg), true);
         PromaidLog.log("Goety推进", maid.getName().getString() + " " + msg);
@@ -91,11 +91,11 @@ public final class MaidGoetyFlyCommand {
             src.sendFailure(Component.literal("没找到女仆或目标"));
             return 0;
         }
-        if (!MaidGoetyCompat.available()) {
-            src.sendFailure(Component.literal("这台服务器没装 Goety（或版本反射路径不符）"));
+        String bad = MaidGoetyFlight.follow(maid, target);
+        if (bad != null) {
+            src.sendFailure(Component.literal(bad));
             return 0;
         }
-        MaidGoetyFlight.follow(maid, target);
         String msg = "开始用飞行聚晶跟随 " + target.getName().getString();
         src.sendSuccess(() -> Component.literal(msg), true);
         PromaidLog.log("Goety推进", maid.getName().getString() + " " + msg);

@@ -100,16 +100,41 @@ public final class MaidGoetyFlight {
         return maid != null && TASKS.containsKey(maid.getUUID());
     }
 
-    /** 飞到某个坐标（一次性：巡航 → 下降 → 收手）。 */
-    public static void flyTo(EntityMaid maid, Vec3 point) {
-        TASKS.put(maid.getUUID(), new Task(false, null, point, pickStaff(maid), Phase.CRUISE,
-                maid.level().getGameTime()));
+    /**
+     * 【保真门禁】她身上必须**真的带着飞行聚晶**（{@code goety:flying_focus}）——
+     * 法杖当前槽 / 聚晶包里 / 任意容器里都算。返回 null 表示可以起飞，否则返回拒绝原因。
+     */
+    public static String requireFocus(EntityMaid maid) {
+        if (!MaidGoetyCompat.available()) {
+            return "服务器没装 Goety（或版本反射路径不符）";
+        }
+        if (!MaidGoetyCompat.hasFocus(maid, MaidGoetyCompat.FOCUS_FLYING)) {
+            return "她身上没有飞行聚晶（" + MaidGoetyCompat.FOCUS_FLYING + "）——"
+                    + "把聚晶放进风之魔杖插到她身上/背包/饰品栏，或放进聚晶包";
+        }
+        return null;
     }
 
-    /** 跟着某个实体飞（远了直追、近了绕圈伴飞）。 */
-    public static void follow(EntityMaid maid, Entity target) {
+    /** 飞到某个坐标（一次性：巡航 → 下降 → 收手）。返回 null 表示已开始，否则是拒绝原因。 */
+    public static String flyTo(EntityMaid maid, Vec3 point) {
+        String bad = requireFocus(maid);
+        if (bad != null) {
+            return bad;
+        }
+        TASKS.put(maid.getUUID(), new Task(false, null, point, pickStaff(maid), Phase.CRUISE,
+                maid.level().getGameTime()));
+        return null;
+    }
+
+    /** 跟着某个实体飞（远了直追、近了绕圈伴飞）。返回 null 表示已开始，否则是拒绝原因。 */
+    public static String follow(EntityMaid maid, Entity target) {
+        String bad = requireFocus(maid);
+        if (bad != null) {
+            return bad;
+        }
         TASKS.put(maid.getUUID(), new Task(true, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
                 maid.level().getGameTime()));
+        return null;
     }
 
     /** 收手（交还控制权，不再放法术）。 */
