@@ -1,4 +1,21 @@
-﻿## 实测六百九十九【排班表全量显示 + 一键召回真正可用 + 复活落点隐身根治】（版本号不变，仍是 v1.3.0 beta）
+﻿## 实测七百【仿创造飞行·跟随时速度被拽的源头抑制补档】（版本号不变，仍是 v1.3.0 beta）
+
+> 背景：PR #24（仿创造飞行）复核中贡献者指出——他在 PR 里给 `MaidMoveSuppressMixin` 加的「飞行接管」档没有随合入进 main，并担心「跟随时 TLM 跟随写下的 WALK_TARGET 会把飞行速度拽下去」。反编译定论后确认缺口真实，本批在 main 侧补上（PR 侧无需再改）。
+
+### 一、缺口为什么是真的（原版字节码实证）
+
+- 反编译 1.21.1 原版 `MoveToTargetSink`：`start()` 调的是 `getNavigation().moveTo(Path, double)`，路径由 `tryComputePath` 里的 `createPath` 造——**两条都不在 `FreeFlightWalkGuardMixin`（只拦 `moveTo(x,y,z,speed)` 直连档）的射程里**。
+- 我们的飞行速度写在 `MaidTickEvent`（brain tick 之前），控制器每 tick 的 `suppressWalk` 清 WALK_TARGET 也跑在 brain 之前——但 TLM 跟随在**同一个 tick 的 brain 阶段**重新写入 WALK_TARGET → `MoveToTargetSink` 造路径 → `MaidMoveControl` 在「我们写速度之后」执行 → 她被自己的寻路拽着、速度发飘。
+
+### 二、改法（neo 树；1.20.1 树没有仿创造飞行，不动）
+
+`MaidMoveSuppressMixin`（同一个注入点 `MoveToTargetSink.tick` HEAD，**不新增注入点**）加一档：`MaidFreeFlightController.isControlling(maid)`（= 飞行中 / 软着陆中）→ 清 `WALK_TARGET` + 停导航 + 取消本 tick。**落地待命（ST_STANDBY）不拦**——她落地站着，TLM 跟随照常工作（与搭路让位的口径同源）。
+
+### 三、验证
+
+neo `javac` **0 错误**；mixchk **PASS=171 SKIP=9 FAIL=0**（注入点计数不变——加的是同一注入点内的分支）；打包门禁全过；jar 内核对 `isControlling` 档在场；出 `promaid-1.3.0-forge-1.20.1.jar` / `promaid-1.3.0-neoforge-1.21.1.jar`（**同名覆盖**，版本号仍是 1.3.0）；部署三处。
+
+## 实测六百九十九【排班表全量显示 + 一键召回真正可用 + 复活落点隐身根治】（版本号不变，仍是 v1.3.0 beta）
 
 > 玩家原话：「排班表无法显示所有的女仆，如果一个玩家的女仆死亡，回到了玩家的重生点，但是玩家的重生点离玩家当前位置又太远，那么排班表上就不会显示这个女仆的资料和信息。会造成缺失。此时如果使用一键召回会显示无法召回。」
 

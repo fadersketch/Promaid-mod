@@ -34,6 +34,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  *   WALK_TARGET + 取消本 tick，战术行为的直连导航独占移动（TLM 战斗走位行为
  *   SetWalkTargetFromAttackTargetIfTargetOutOfReach / MaidRangedWalkToTarget
  *   写的 WALK_TARGET 一律不执行，防绕圈/拉扯时被拽回直线追脸）。
+ * - 仿创造飞行（v1.3.0(beta) 实测七百 MaidFreeFlightController.isControlling）：
+ *   清 WALK_TARGET + 停导航 + 取消本 tick——飞行速度写在 brain 之前，而
+ *   MoveToTargetSink 的寻路（反编译 1.21.1 实证：start() 走 moveTo(Path,double)，
+ *   路径由 createPath 造）会在 brain 阶段把她拽住、速度发飘；落地待命
+ *   （ST_STANDBY）不在 isControlling 里，TLM 跟随照常工作。
  */
 @Mixin(net.minecraft.world.entity.ai.behavior.MoveToTargetSink.class)
 public abstract class MaidMoveSuppressMixin {
@@ -65,6 +70,19 @@ public abstract class MaidMoveSuppressMixin {
             // ——清 WALK_TARGET + 取消本 tick（TLM 原生任务/跟随/远程走位写的走位目标一律不
             // 执行）；直连寻路那一侧由 SpawnerTorchNavGuardMixin 掐。
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            ci.cancel();
+        } else if (com.maidsmart.flight.MaidFreeFlightController.isControlling(maid)) {
+            // v1.3.0(beta) 实测七百【仿创造飞行接管移动】：清 WALK_TARGET + 停导航 + 取消本 tick。
+            // 【为什么必须有这一档】飞行速度写在 MaidTickEvent（brain tick 之前），而 brain
+            // 随后写下的 WALK_TARGET 会被 MoveToTargetSink 变成寻路——反编译 1.21.1 实证它的
+            // start() 走的是 moveTo(Path, double)、路径由 createPath 造，两条都不在
+            // FreeFlightWalkGuardMixin（moveTo(DDDD)Z 直连档）的射程里；MaidMoveControl 又在
+            // "我们写速度之后"执行 ⇒ 跟随时她被自己的寻路拽着、速度发飘。控制器每 tick
+            // suppressWalk 清记忆跑在 brain 之前，拦不住同 tick 的重写——必须在 brain 阶段
+            // 源头取消。落地待命（ST_STANDBY）不在 isControlling 里：她落地站着，TLM 跟随
+            // 该照常工作（搭路让位口径同源：BridgeUpBehavior 只对 FLYING/SOFT_LAND 让）。
+            maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
+            maid.getNavigation().stop();
             ci.cancel();
         }
     }
