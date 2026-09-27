@@ -152,6 +152,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     private static final Map<UUID, Integer> LAUNCH_LEFT = new HashMap<>();
     private static final Map<UUID, Integer> JUMP_LEFT = new HashMap<>();
+    /** 【实测七百〇七】"起飞受阻"（起跳窗走完仍未离地）日志限频：每只女仆 5 秒一条 */
+    private static final Map<UUID, Long> LAUNCH_STUCK_LOG = new HashMap<>();
+    private static final long LAUNCH_STUCK_LOG_INTERVAL = 100L;
     private static final Set<UUID> SMASH = new HashSet<>();
     private static final Map<UUID, Integer> SMASH_TICKS = new HashMap<>();
     private static final Set<UUID> WAIT_LAUNCH = new HashSet<>();
@@ -231,6 +234,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DIVE_NEXT.remove(maidId);
         DIVE_LAST_LOG.remove(maidId);
         STANDOFF_LAST_LOG.remove(maidId); // 【实测七百〇四】"拉开距离"日志节流
+        LAUNCH_STUCK_LOG.remove(maidId);  // 【实测七百〇七】"起飞受阻"日志节流
         STANDOFF_TICKS.remove(maidId);    // 【实测七百〇四】"拉开距离"每轮预算
         STANDOFF_DONE.remove(maidId);     // 【实测七百〇六】"本轮已拉开过"标记
         FLOOR_LAST_LOG.remove(maidId);    // 【实测七百〇六】"高度地板"日志节流
@@ -678,13 +682,22 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (maid.m_20096_()) {
                 if (jumpLeft <= 1) {
                     JUMP_LEFT.remove(id);
+                    // 【实测七百〇七】起跳窗走完仍未离地：留痕（每只女仆 5 秒一条）。
+                    // 需求原文："女仆一旦执行这个起飞的链路，一定要成功执行，而不是在原地浪费。"
+                    // 正常情况这里一次都不该打出来——打出来就说明那一跳被同 tick 的移动源吃掉了。
+                    logLaunchStuck(maid, gameTime);
                 } else {
                     // 实测五百七十：离地前的每一 tick 都补一跳。旧版重试只摆头不补跳——
                     // 第一跳被同 tick 的 AI 走位/贴墙吃掉时，整个窗口她都离不了地，
                     // 烟花点不着、落地、再来一轮，观感就是"有时候触发起飞有点困难"。
-                    // 补跳与 jumpForLaunch 同一冲量（0.42），离地后照旧走原流程。
-                    Vec3 dm = maid.m_20184_();
-                    maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
+                    //
+                    // 【实测七百〇七：补跳必须"独占"这一 tick 的竖直运动】旧版只写 0.42，
+                    // 而同 tick 里 TLM/战术/自保的 WALK_TARGET + 导航会立刻把她按回地面
+                    // （MoveToTargetSink 的寻路在同一 brain 阶段重写位移），0.42 被摊平 ⇒
+                    // 原地蹦好几下却离不了地；被敌人打中那一下不属于"女仆方的移动意图"，
+                    // 反而把她顶离了地，于是"挨打后才起飞"。修法见 {@link #kickOffGround}：
+                    // 掐掉同 tick 抢移动的意图 + 重给竖直冲量 + 置 hasImpulse（服务端权威重发）。
+                    kickOffGround(maid);
                     JUMP_LEFT.put(id, jumpLeft - 1);
                     faceLaunchDirection(maid, target);
                     return;
@@ -917,10 +930,72 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** 第 0 步：跳一下离地（落地时 updateFallFlying 会清滑翔位，必须先离地） */
     private void jumpForLaunch(EntityMaid maid, LivingEntity target, UUID id) {
         faceLaunchDirection(maid, target);
-        Vec3 dm = maid.m_20184_();
-        maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
+        kickOffGround(maid);
         MaidFlightKit.setGliding(maid, true);
         JUMP_LEFT.put(id, jumpTicks());
+    }
+
+    /**
+     * 【实测七百〇七：起飞链路"一定要成功"】把这一 tick 的竖直运动**独占**给起跳冲量。
+     *
+     * <p>需求原文："女仆一旦执行这个起飞的链路，一定要成功执行，而不是在原地浪费。"
+     *
+     * <p>【旧版为什么"蹦好几下却离不了地"】起跳只是一句
+     * {@code setDeltaMovement(x, 0.42, z)}，而这一 tick 里与她抢"移动"的还有好几路，
+     * 全部写在 brain 阶段、且都在本行为之后：
+     * <ul>
+     *   <li>TLM {@code MaidMoveControl} 在水里/想游泳时**直接施加速度矢量**（绕过 WALK_TARGET）；</li>
+     *   <li>本模组战术行为（{@code MaidCombatTacticsBehavior.meleeTick}）的跳劈/贴身绕走
+     *       与自保（{@code SelfPreservationBehavior}）的垫高/逃跑都会重写位移；</li>
+     *   <li>TLM 跟随/战斗走位写下的 {@code WALK_TARGET} 会被 {@code MoveToTargetSink}
+     *       变成寻路（除非已被抑制）。</li>
+     * </ul>
+     * 0.42 这一口被摊平后她就"原地蹦"；而**挨打那一下不属于女仆方的移动意图**，
+     * 反而干净地把她顶离了地——这正是玩家观察到的"被敌人打中以后反而可以起飞"。
+     *
+     * <p>【修法：与 {@code MaidMoveSuppressMixin} 同一套"清意图"口径，就地做一遍】
+     * <ol>
+     *   <li>清 {@code WALK_TARGET} + 停导航——同 tick 不再有人把她往地面拽；</li>
+     *   <li>重给竖直冲量 {@code 0.42}（与 {@code jumpForLaunch} 同一数值）；</li>
+     *   <li>置 {@code hasImpulse}（SRG {@code m_245125_}）——原版 {@code ServerGamePacketListenerImpl}
+     *       对"有冲量"的实体重发位置包，否则客户端本地还会按旧速度把她画在原地。</li>
+     * </ol>
+     * 全程 {@code try/catch}：任何意外都退回"只写速度"的老行为，绝不拖垮 brain tick。
+     */
+    private static void kickOffGround(EntityMaid maid) {
+        try {
+            maid.m_6274_().m_21936_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_); // WALK_TARGET
+            maid.m_21573_().m_26573_(); // 导航 stop()
+        } catch (Throwable ignored) {
+        }
+        try {
+            Vec3 dm = maid.m_20184_();
+            maid.m_20256_(new Vec3(dm.f_82479_, 0.42, dm.f_82481_));
+        } catch (Throwable ignored) {
+        }
+        try {
+            maid.m_245125_(); // Entity.hasImpulse = true（服务端权威重发位置）
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百〇七】起跳窗耗尽仍未离地：留痕（每只女仆 5 秒一条，搜「起飞受阻」）。 */
+    private static void logLaunchStuck(EntityMaid maid, long gameTime) {
+        try {
+            UUID id = maid.m_20148_();
+            Long last = LAUNCH_STUCK_LOG.get(id);
+            if (last != null && gameTime - last < LAUNCH_STUCK_LOG_INTERVAL) {
+                return;
+            }
+            if (LAUNCH_STUCK_LOG.size() > 512) {
+                LAUNCH_STUCK_LOG.clear();
+            }
+            LAUNCH_STUCK_LOG.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("起飞受阻",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 起跳窗走完仍未离地（低矮空间 / 被同 tick 移动源吃掉），本轮起跳放弃");
+        } catch (Throwable ignored) {
+        }
     }
 
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
