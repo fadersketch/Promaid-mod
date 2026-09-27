@@ -411,6 +411,10 @@ public class PromaidConfigScreen extends Screen {
         // 哪个功能在哪配置。"——六百六十七 时它只能寄居在「扫帚模式」那一页的末尾（要点进扫帚、
         // 再往下滚才看得到），现在与扫帚平级、紧跟在它后面，页内第一条就是"这个功能是什么"的详解。
         TETHER("武装拴绳（二号位）", Group.MOVE),
+        // v1.3.0(beta) 实测七百〇三：接敌机动——**两条链路共有**的一件事（扫帚接敌 + 鞘翅空袭），
+        // 所以单独成板而不是塞进任一边（塞进去另一边的人会找不到）。挂在「战斗与自保」下、
+        // 紧跟在「空袭数值」之后（顺序 = 本枚举声明顺序）。
+        MANEUVER("接敌机动", Group.COMBAT),
         REVIVE("死亡与复活", Group.SURVIVAL), ESCAPE("传送与逃生", Group.SURVIVAL),
         SAFETY("女仆安全与区块", Group.SURVIVAL),
         FOLLOW("移动与跟随", Group.MOVE), IDLE("空闲与流畅", Group.MOVE),
@@ -712,6 +716,7 @@ public class PromaidConfigScreen extends Screen {
             case AID -> this.aidRows();
             case PLAYER_DAMAGE -> this.playerDamageRows();
             case AIR_RAID -> this.airRaidRows();
+            case MANEUVER -> this.maneuverRows();
             case FALL_GUARD -> this.fallGuardRows();
             case BRIDGE -> this.bridgeRows();
             case FLIGHT_FOLLOW -> this.flightFollowRows();
@@ -2837,6 +2842,51 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.COMPAT_PUPPET_BLACKLIST.set(v),
                 "傀儡模式黑名单（默认开）：检测到《傀儡装配》Modular Golems 的女仆模式「傀儡师」时自动列入——自主参战/LLM 自主切换永不切进去；玩家手动切进去后本模组战术（走位/跳劈/举盾/投弹/自动换装/排班换段）全体让位，只留那个模组自己的玩法，切回来即恢复（保命动作不受影响）"));
 
+    }
+
+    /**
+     * 【实测七百〇三】接敌机动——**扫帚接敌 + 鞘翅空袭两条链路共有**的一件事，所以单独成板。
+     *
+     * <p>【为什么单独一页】玩家原话：「在女仆扫帚模式接敌的情况下随机性能不能稍微高一点？
+     * 我是说现在全都是保持盘旋状态的，战斗方式有些过于单一了。……女仆接敌之后，会从这多种
+     * 飞行方式中选择一个进行执行。而不全是统一绕圈。」它管的是两条链路，塞进 [扫帚] 页或
+     * [空袭数值] 页都会让另一边的人找不到（面板改革时玩家抱怨过"很难精准定位到哪个功能在哪配置"）。
+     */
+    private void maneuverRows() {
+        this.rows.add(new SectionRow("—— 接敌机动（扫帚接敌 + 鞘翅空袭 共用）——", false));
+        this.rows.add(new InfoRow("接敌机动 · 是什么", "\u00a7a每只女仆每场遭遇各抽一种飞行方式\u00a7r",
+                "五种：环绕（34%，基线）/ 蛇形（22%）/ 高悠悠（18%）/ 脱离再进（14%）/ 8 字横切（12%）。"
+                        + "抽签由「UUID + 这是她第几场遭遇」派生——同一份存档重放出来同一种，而她**下一场会换一种**；"
+                        + "同场多只女仆各抽各的，所以不会再出现「一群人在同一个圆上转」。日志搜「接敌机动」。"));
+        this.rows.add(new InfoRow("接敌机动 · 两条硬保证", "\u00a7e高度只升不降 / 半径仍被硬上界夹住\u00a7r",
+                "① 任何机动都不会把她压到「你设的基础盘旋高度」以下（高悠悠只在基准**之上**加 0~幅度格的慢波）——"
+                        + "玩家那条「基础比敌人高多少格这一点还是要的」原样成立；"
+                        + "② 半径倍率与角速度倍率都在 ±20% 以内，最终半径仍夹在「离敌最近距离」与「离敌最远距离」之间，"
+                        + "所以\"随机\"绝不会变成\"越飞越远\"或\"贴脸\"。"));
+        this.rows.add(new BoolRow("接敌机动·总开关", MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_MANEUVER_ENABLE.set(v),
+                "接敌机动总开关（默认开）：接敌后每只女仆**每场遭遇各抽一种飞行方式**，而不是所有女仆都只会绕圈。"
+                        + "关掉 = 退回旧行为（永远环绕；半径 / 旋向 / 快慢的随机照旧保留——那是实测六百九十三 / 七百零一 的成果）。"));
+        this.rows.add(new NumRow("接敌机动·高悠悠幅度（格）", String.valueOf(MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP, "接敌机动·高悠悠幅度", 0.0, 16.0),
+                "**只给「高悠悠」这一种机动用**（默认 4，0~16）：在你设的基础盘旋高度**之上**再多爬这么多格"
+                        + "（0~幅度 的 8 秒慢波），并且**高处转得慢、低处转得快**——真实 yo-yo 拿速度换高度那一套。"
+                        + "**它只会把高度加上去，绝不会压到基准高度以下**。0 = 这一档退化成普通环绕。",
+                0.0, 16.0));
+        this.rows.add(new BoolRow("空袭·空中防叠罗汉", MaidSmartConfig.COMBAT_AIR_SEPARATION.get(),
+                v -> MaidSmartConfig.COMBAT_AIR_SEPARATION.set(v),
+                "空袭·空中防叠罗汉（默认开）：多只女仆同时接同一个敌人时，鞘翅空袭（近战 / 远程）**原本一点分离机制都没有**"
+                        + "——远程空袭的盘旋半径虽已各自随机，但起点没有错开；近战空袭更直接：\"背离敌人抬头爬升\"那 1.5 秒"
+                        + "她们飞的是**同一条直线**。打开后：① 远程的盘旋半径各带一份稳定偏置；"
+                        + "② 近战空袭的**爬升方位**各偏 ±12°（**俯冲的瞄准一个字不改**——偏置只作用在不需要精度的爬升段，"
+                        + "这个模组在命中率上专门修过两轮）。扫帚链路本来就有一套（相位错开 + 邻近互斥），这一条是补上鞘翅缺的那一半。"
+                        + "关掉 = 旧行为（空袭的她们可能叠在一条线上，敌人一条射线串两只）。"));
+        this.rows.add(new NumRow("空袭·半径偏置强度（格）", String.valueOf(MaidSmartConfig.COMBAT_AIR_SEPARATION_RADIUS.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_AIR_SEPARATION_RADIUS, "空袭·半径偏置强度", 0.0, 8.0),
+                "给每只女仆的盘旋半径各自加减这么多格（默认 2.0，0~8）——它只把她们的圈叉开，"
+                        + "最终半径仍夹在「离敌最近距离」与「离敌最远距离」之间（那条硬上界由调用方夹取，本值改不动它）。"
+                        + "0 = 半径不错开（只保留近战爬升方位的错开）。",
+                0.0, 8.0));
     }
 
     private void fallGuardRows() {

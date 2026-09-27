@@ -205,5 +205,10 @@
   "config.promaid.misc.freeFlightNearDist": "Free Flight: Landing Near Distance (blocks)",
   "config.promaid.misc.freeFlightTravel": "Free Flight: Flying Instead of Walking",
   "config.promaid.misc.freeFlightTravelDist": "Free Flight: Fly Beyond Distance (blocks)",
-  "config.promaid.misc.glideElytraAnimation": "Use Elytra Animation While Gliding"
+  "config.promaid.misc.glideElytraAnimation": "Use Elytra Animation While Gliding",
+  "config.promaid.maneuver": "Combat Maneuvers",
+  "config.promaid.maneuver.enable": "Combat Maneuvers (master switch)",
+  "config.promaid.maneuver.yoyoAmp": "Maneuver: Yo-Yo Height Amplitude (blocks)",
+  "config.promaid.airSeparation": "Air Raid: Anti-Stacking in the Air",
+  "config.promaid.airSeparationRadius": "Air Raid: Radius Spread (blocks)"
 }
