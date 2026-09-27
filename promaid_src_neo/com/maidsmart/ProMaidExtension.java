@@ -368,6 +368,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 实测六百七十三：仿创造飞行手动触发（/maid_smart freeflight_goto / freeflight_follow /
         // freeflight_enemy：坐标档与两个专用服务器验收入口）
         com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
+        // 实测七百〇四：Goety（诡厄巫法）兼容的诊断探针（只读扫描 + 手动放聚晶，
+        // 用来在无头服回答「女仆的 travel 会不会吃掉 Goety 写进去的速度」）
+        com.maidsmart.command.MaidGoetyProbeCommand.register(event.getDispatcher());
+        // 实测七百〇四：第三种飞行「外部持续推进」（Goety 飞行聚晶：推力由法术给，我们只瞄准）
+        com.maidsmart.command.MaidGoetyFlyCommand.register(event.getDispatcher());
     }
 
     /**
