@@ -931,6 +931,20 @@ public final class MaidBroomDrive {
         // 【实测七百零一】绕圈的**快慢**也在飘（见 CombatOrbit.speedScale）：半径决定圆多大、
         // 速度决定她转多快，两者节拍错开（4 秒 / 3 秒），合成出来的轨迹才不可预测。
         double spd = CombatOrbit.speedScale(id);
+        // 【实测七百〇三】再叠一层**接敌机动**（见 CombatManeuver）：六百九十三/七百〇一 只把
+        //  "同一张圆"拆开了（半径/旋向/快慢各自随机），但"打法"仍然只有绕圈一种——多只女仆观感
+        //  上还是"一群人在转"。机动层给这一段加**波形调制**：半径倍率（蛇形 / 脱离再进）、
+        //  角速度倍率（脱离再进 / 高悠悠）、高度增量（高悠悠，只加不减）、旋向翻转（8 字横切）。
+        boolean maneuverOn = maneuverEnabled();
+        if (maneuverOn) {
+            CombatManeuver.begin(id);
+            CombatManeuver.tick(id);
+        } else {
+            CombatManeuver.forget(id);
+        }
+        if (maneuverOn) {
+            r = Math.max(lo, Math.min(hi, r * CombatManeuver.radiusScale(id)));
+        }
         if (CombatOrbit.entering(id)) {
             mountLog(maid, "随机环绕：半径 " + fmt(r) + " 格（区间 " + fmt(lo) + "~" + fmt(hi)
                     + "，上界=combat.broom.orbitMax " + fmt(orbitMaxCfg()) + "，下限=combat.broom.minStandoff "
@@ -938,14 +952,29 @@ public final class MaidBroomDrive {
                     + "，速度 " + fmt(spd) + "×（区间 " + fmt(CombatOrbit.speedLo()) + "~"
                     + fmt(CombatOrbit.speedHi()) + "×，每 3 秒重掷）");
         }
+        // 【实测七百〇三】开场只写一行「接敌机动」（每场遭遇一只女仆一行，不刷屏）
+        if (maneuverOn && CombatManeuver.ticks(id) == 1) {
+            CombatManeuver.Kind mk = CombatManeuver.kind(id);
+            mountLog(maid, "接敌机动：" + (mk == null ? "环绕" : mk.cn)
+                    + "（每场遭遇抽一种；高悠悠幅度 combat.maneuver.yoyoAmp "
+                    + fmt(yoyoAmpCfg()) + " 格，只加不减）");
+        }
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，
         // 绕着同一个敌人、同一个半径、同一个角速度 → 目标点逐 tick 完全重合，正是玩家说的"叠罗汉"。
         // 【实测六百九十三】步长再乘上她自己那个旋向 dir：一半女仆顺时针、一半逆时针。
         // 【实测七百零一】再乘上速度倍率 spd：绕圈速度本身也随时间游走。
-        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * ORBIT_SPEED * spd / r;
+        // 【实测七百〇三】再乘上机动给的两个倍率：角速度倍率（脱离再进 / 高悠悠）× 旋向翻转（8 字横切）。
+        double mAngle = maneuverOn ? CombatManeuver.angleScale(id) : 1.0;
+        double mRev = maneuverOn ? CombatManeuver.reversal(id) : 1.0;
+        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * mRev * ORBIT_SPEED * spd * mAngle / r;
         ORBIT.put(id, ang);
         double alt = COMBAT_ALT.getOrDefault(id, hoverCfg());
+        // 【实测七百〇三】高悠悠的高度增量：**只加**在玩家设的那条基准高度上（0~amp 的慢波），
+        //  所以"基础比敌人高多少格"在任何机动下都成立（绝不会被压到基准以下）。
+        if (maneuverOn) {
+            alt += CombatManeuver.heightAdd(id, yoyoAmpCfg());
+        }
         return new Vec3(target.getX() + Math.cos(ang) * r,
                 target.getY() + alt,
                 target.getZ() + Math.sin(ang) * r);
@@ -2059,6 +2088,9 @@ public final class MaidBroomDrive {
         STUCK.remove(maidId);
         // 【实测六百九十三】随机环绕参数（半径比例 / 旋向节奏）也归她所有，下线一并丢
         CombatOrbit.forget(maidId);
+        // 【实测七百〇三】接敌机动（这一场抽到的那一种 + 波形相位）同样归她所有；
+        //  SERIAL（她打过几场）刻意保留在 CombatManeuver 内部——下一场要抽到不一样的
+        CombatManeuver.forget(maidId);
     }
 
     /** 服务端停止：整表清空 */
@@ -2076,6 +2108,8 @@ public final class MaidBroomDrive {
         STUCK.clear();
         // 【实测六百九十三】随机环绕参数
         CombatOrbit.clearAll();
+        // 【实测七百〇三】接敌机动（含"这是她第几场遭遇"的序列）
+        CombatManeuver.clearAll();
     }
 
     /* ==================== 内部工具 ==================== */
@@ -2335,6 +2369,31 @@ public final class MaidBroomDrive {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_HOVER.get();
         } catch (Throwable ignored) {
             return 2.0;
+        }
+    }
+
+    /**
+     * 【实测七百〇三】接敌机动总开关：配置 {@code combat.maneuver.enable}，默认开。
+     * 配置没挂上时退回 **true**——与配置里的默认值对齐（本项目的老规矩：兜底值跟着默认值走）。
+     * 关掉 = 退回旧行为（永远环绕；半径 / 旋向 / 快慢的随机照旧保留）。
+     */
+    private static boolean maneuverEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /**
+     * 【实测七百〇三】高悠悠的高度波幅度（格）：配置 {@code combat.maneuver.yoyoAmp}，默认 4。
+     * 配置没挂上时退回 4——同一条老规矩。
+     */
+    private static double yoyoAmpCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
+        } catch (Throwable ignored) {
+            return 4.0;
         }
     }
 

@@ -261,6 +261,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         FlightTargeting.forget(maidId);
         // 【实测六百九十三】锁敌后的随机环绕参数（半径比例 / 重掷节拍）随她一起丢
         CombatOrbit.forget(maidId);
+        // 【实测七百〇三】接敌机动（这一场抽到的那一种 + 波形相位）随她一起丢
+        CombatManeuver.forget(maidId);
         // v1.2.0 实测五百一十一：这里【不】清 FlightFireworkPose 的表——它的归还要靠
         // **实体引用**，而 forget 只有 UUID。清表会让"原副手物品"快照被丢掉、盾牌/食物
         // 永久留在烟花状态。归还统一由 core 行为 MaidToolAutoEquipBehavior 每 tick 调用的
@@ -345,6 +347,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         FlightFireworkPose.clearAll();
         // 【实测六百九十三】锁敌后的随机环绕表（扫帚那条链路也用同一张，见 CombatOrbit）
         CombatOrbit.clearAll();
+        // 【实测七百〇三】接敌机动表（含"这是她第几场遭遇"的序列）
+        CombatManeuver.clearAll();
     }
 
     /**
@@ -1590,7 +1594,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     /** 阶段一/起跳：朝向 = 敌人反方向的水平朝向 + 向上（近战 62° / 远战 45°）
      *  ——推力与滑翔都吃这个朝向。实测四百七十二：两种模式必须分开取值，
-     *  共用远战那套 45°/20t 会让近战爬升腰斩、贴地摔死。 */
+     *  共用远战那套 45°/20t 会让近战爬升腰斩、贴地摔死。
+     *
+     *  <p>【实测七百〇三：空中防叠罗汉——只偏**爬升**方位】多只女仆同时接同一个敌人时，
+     *  这一段（背离敌人抬头爬升，近战 30 tick = 1.5 秒）原本飞的是**同一条直线**——
+     *  那就是玩家说的"叠罗汉"在近战空袭这边的形态。给每只女仆一个只跟 UUID 有关的
+     *  稳定偏置（±12°）之后，她们的爬升线天然叉开。
+     *  【为什么只在这里偏】俯冲那一记的朝向由 {@link #faceTarget} 给（瞄准方向），偏一点点
+     *  都会掉命中率——这个模组在 实测四百七十三 / 四百八十三 上专门修过两轮，不会为了好看
+     *  毁掉它。爬升朝向本来就是"背离敌人"这种不需要精度的方向，偏十几度没有任何代价。 */
     private void faceAwayAndUp(EntityMaid maid, LivingEntity target) {
         double climbTan = this.ranged ? launchClimbTanRanged() : launchClimbTanMelee();
         double dx = maid.getX() - target.getX();
@@ -1604,15 +1616,30 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         double ux = dx / dh;
         double uz = dz / dh;
-        float yaw = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
+        // 只给近战那一档偏：远程的爬升期同时也在开火（实测六百八十二），偏了会影响输出。
+        double spreadDeg = (!this.ranged && airSeparationEnabled())
+                ? CombatManeuver.azimuthSpread(maid.getUUID(), CLIMB_SPREAD_DEG) : 0.0;
+        float yaw = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f + (float) spreadDeg;
         float pitch = (float) (-Math.toDegrees(Math.atan(climbTan)));
         applyRotation(maid, yaw, pitch);
+        // 【偏置也要过 LookControl】否则"期望角度"每 tick 把偏置拉回 0，实机看不到任何错开。
         try {
+            double yawRad = Math.toRadians(yaw + 90.0);
             maid.getLookControl().setLookAt(
-                    maid.getX() + ux, maid.getEyeY() + climbTan, maid.getZ() + uz, 360.0f, 360.0f);
+                    maid.getX() + Math.cos(yawRad), maid.getEyeY() + climbTan,
+                    maid.getZ() + Math.sin(yawRad), 360.0f, 360.0f);
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百〇三】近战空袭爬升方位的最大偏置（度，±12）。
+     *
+     * <p>取 12° 的理由：① 它足够把两只女仆在 1.5 秒爬升里的水平距离拉开 1~2 格，肉眼可见、
+     * 又不至于让她们"各飞各的"；② 再大就会让"背离敌人"变成"侧着飞"，爬升效率下降
+     * （近战那一档的 62° 仰角是 实测四百七十二 调出来的，水平分量不能随便变大）。
+     */
+    private static final double CLIMB_SPREAD_DEG = 12.0;
 
     /**
      * v1.2.0 实测四百七十三【命中率】：目标是否在本 tick 的**位移线段**范围内。
@@ -2933,6 +2960,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      *        提到 1.0（双倍往回带），所以她不会借着"随机"飘出这条线。</li>
      *  </ul>
      *  高度一个字没动（仍是 {@code holdY} + 俯仰增益），理由见 {@link CombatOrbit} 的类注释。
+     *
+     *  <p>【实测七百〇三：加"接敌机动" + "空中防叠罗汉"】同 1.20.1 树那一侧：机动层给半径/角速度
+     *  加波形调制、给高度加只增不减的慢波（高悠悠），并给旋向加翻转（8 字横切）。防叠罗汉这一条
+     *  是**空袭这边原本完全没有的**（扫帚那边 六百九十一 就有相位错开 + 邻近互斥）。
      */
     private void faceOrbit(EntityMaid maid, LivingEntity target, double holdY) {
         double dx = maid.getX() - target.getX();
@@ -2953,22 +2984,49 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double orbLo = Math.min(orbMax, Math.max(2.0, base * 0.75));
         double wantR = Math.max(1.0, CombatOrbit.radius(oid, orbLo, orbMax));
         double dir = CombatOrbit.direction(oid);
+        // 【实测七百〇三】接敌机动（见 CombatManeuver）：开场抽一次（幂等），之后每 tick 推进波形。
+        boolean maneuverOn = maneuverEnabled();
+        if (maneuverOn) {
+            CombatManeuver.begin(oid);
+            CombatManeuver.tick(oid);
+        } else {
+            CombatManeuver.forget(oid);
+        }
+        // 【实测七百〇三】空中防叠罗汉：给半径一份**稳定的**偏置（UUID 派生，同扫帚那条 phaseOf 的思路）。
+        //  它只把她们的圈叉开，最终仍夹进 [orbLo, orbMax]——玩家的「离敌最远距离」一个字节不让。
+        double sepR = airSeparationEnabled() ? separationRadius(oid) : 0.0;
+        wantR += sepR;
+        // 机动给的半径倍率（蛇形 / 脱离再进）：同样夹回区间
+        if (maneuverOn) {
+            wantR *= CombatManeuver.radiusScale(oid);
+        }
+        wantR = Math.max(orbLo, Math.min(orbMax, wantR));
+        double mAngle = maneuverOn ? CombatManeuver.angleScale(oid) : 1.0;
+        double mRev = maneuverOn ? CombatManeuver.reversal(oid) : 1.0;
         if (CombatOrbit.entering(oid)) {
             com.maidsmart.tool.PromaidLog.log("远程空袭",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 随机环绕：半径 " + fmt2(wantR)
                             + " 格（区间 " + fmt2(orbLo) + "~" + fmt2(orbMax) + "，上界=airRaid.orbitMax "
                             + fmt2(orbitMaxCfg()) + "），旋向 " + (dir > 0 ? "逆时针" : "顺时针"));
         }
-        double tx = dir * -uz; // 切向（绕圈；dir 决定顺/逆）
-        double tz = dir * ux;
+        if (maneuverOn && CombatManeuver.ticks(oid) == 1) {
+            CombatManeuver.Kind mk = CombatManeuver.kind(oid);
+            com.maidsmart.tool.PromaidLog.log("远程空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 接敌机动："
+                            + (mk == null ? "环绕" : mk.cn) + "（每场遭遇抽一种）");
+        }
+        double tx = dir * mRev * -uz; // 切向（绕圈；dir 决定顺/逆，8 字横切还会翻）
+        double tz = dir * mRev * ux;
         // 径向修正：太远往回带、太近往外推；越过「最远距离」时增益加倍（硬牵引，不许借随机飘出去）
         double radial = r > orbMax ? (r - orbMax) * 1.0 : (r - wantR) * 0.5;
-        double ox = tx - ux * radial;
-        double oz = tz - uz * radial;
+        double ox = tx * mAngle - ux * radial;
+        double oz = tz * mAngle - uz * radial;
         double h = Math.sqrt(ox * ox + oz * oz);
         float yaw = (float) (Mth.atan2(oz, ox) * (180.0 / Math.PI)) - 90.0f;
         // 高度保持：低于期望高度就抬头（速度换高度），高了就低头（高度换速度）
-        double err = (holdY - maid.getY()) + rangedHoldBias();
+        // 【实测七百〇三】高悠悠的增量**只加**在 holdY 上（0~amp 的慢波），所以"基础比敌人高多少格"永远成立。
+        double effHold = holdY + (maneuverOn ? CombatManeuver.heightAdd(oid, yoyoAmpCfg()) : 0.0);
+        double err = (effHold - maid.getY()) + rangedHoldBias();
         float pitch = (float) (-err * rangedHoldGain());
         pitch = Mth.clamp(pitch, -rangedOrbitUpMax(), rangedOrbitDownMax());
         applyRotation(maid, yaw, pitch);
@@ -2981,6 +3039,58 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     maid.getZ() + oz,
                     360.0f, 360.0f);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百〇三】空袭的**半径偏置**（格，可正可负）：由 UUID 派生、同一只女仆恒定——
+     * 与扫帚那条 {@code MaidBroomDrive.phaseOf} 同一个思路（那条错的是**相位**，这条错的是**半径**）。
+     *
+     * <p>【它不会越界】返回值是 {@code ±sepRadius}，最终半径由 {@link #faceOrbit} 夹进
+     * {@code [orbLo, orbMax]}，所以"离敌最远距离"这条硬上界一个字节不让。
+     */
+    private static double separationRadius(UUID id) {
+        if (id == null) {
+            return 0.0;
+        }
+        long h = id.getMostSignificantBits() ^ Long.rotateLeft(id.getLeastSignificantBits(), 23);
+        double u = ((h >>> 9) & 0xFFFFL) / 65535.0;
+        return (u * 2.0 - 1.0) * airSeparationRadiusCfg();
+    }
+
+    /** 【实测七百〇三】空袭防叠罗汉开关：配置 {@code combat.airSeparation}，默认开（兜底跟着默认值） */
+    private static boolean airSeparationEnabled() {
+        try {
+            return MaidSmartConfig.COMBAT_AIR_SEPARATION.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /** 【实测七百〇三】空袭半径偏置强度（格）：配置 {@code combat.airSeparationRadius}，默认 2.0 */
+    private static double airSeparationRadiusCfg() {
+        try {
+            return MaidSmartConfig.COMBAT_AIR_SEPARATION_RADIUS.get();
+        } catch (Throwable ignored) {
+            return 2.0;
+        }
+    }
+
+    /** 【实测七百〇三】接敌机动总开关：配置 {@code combat.maneuver.enable}，默认开 */
+    private static boolean maneuverEnabled() {
+        try {
+            return MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /** 【实测七百〇三】高悠悠高度幅度（格）：配置 {@code combat.maneuver.yoyoAmp}，默认 4.0 */
+    private static double yoyoAmpCfg() {
+        try {
+            return MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
+        } catch (Throwable ignored) {
+            return 4.0;
         }
     }
 
