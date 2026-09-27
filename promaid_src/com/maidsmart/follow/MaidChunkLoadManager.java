@@ -2,6 +2,7 @@ package com.maidsmart.follow;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.core.BlockPos;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerChunkCache;
@@ -73,6 +74,16 @@ public final class MaidChunkLoadManager {
     /** 当前持有的票：maidUuid → (dimension, chunkX, chunkZ) */
     private static final Map<UUID, TicketKey> ACTIVE_TICKETS = new ConcurrentHashMap<>();
 
+    /**
+     * 实测六百九十九：票龄表（uuid → 挂票时刻，overworld gameTime）。5 秒对账撤票前
+     * 先看一眼：**刚挂的票（<100 tick）不撤**。护栏来自复活落点那场事故——
+     * {@code addFreshEntity} 往未加载区块放实体时，她【不在实体表里】
+     * （PersistentEntitySectionManager 反编译实证：区块可见性不可达就不 startTracking），
+     * 要等区块异步载完才现身；这 5 秒对账扫不到她就会把刚挂的票当"无人要"撤掉，
+     * 区块放弃加载 → 她【永远】进不了实体表——排班表看不见、召回找不到。
+     */
+    private static final Map<UUID, Long> TICKET_BORN = new ConcurrentHashMap<>();
+
     /** v1.1.0 实测三百四十九：排班女仆的持久化强制区块票表（会话内存账——
      *  真实票在 ForcedChunksSavedData 里，重启后由 Forge 自动重挂，这里只用来
      *  判断"要不要调 forceChunk 换票"，重启后第一次 tick 会与实际票对齐） */
@@ -86,12 +97,204 @@ public final class MaidChunkLoadManager {
      *  每 5 秒覆盖写，天然最新；召回失败时丢弃该条（多半已被魂符收回/死亡）。
      *  v1.1.0 实测八十七c：快照 stayPut 三态豁免（home/坐姿/骑乘）——未加载区块里
      *  读不到 persistentData，没有这份快照就无法在集合时跳过她们，导致白挂强载票 +
-     *  静默收队（玩家视角="点了集合却石沉大海"）。 */
-    private record LastSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
-                            UUID ownerId, long seenAt, boolean stayPut) {
+     *  静默收队（玩家视角="点了集合却石沉大海"）。
+     *
+     * 【v1.3.0(beta) 实测六百九十九：登记表升格为落盘 + 加名字】玩家原话：「排班表无法
+     * 显示所有的女仆，如果一个玩家的女仆死亡，回到了玩家的重生点，但是玩家的重生点离玩家
+     * 当前位置又太远，那么排班表上就不会显示这个女仆的资料和信息。会造成缺失。此时如果
+     * 使用一键召回会显示无法召回。」——这张表从【会话内存】升格为【SavedData 落盘】
+     * （{@link MaidSeenStore}，存主世界）：重启/重进后，远处未加载的女仆依然有迹可循
+     * ——排班表照常列她（「⚑ 未加载」行 + 最后出现位置），一键集合照常强载召回。
+     * 名字也一并记下（列表行要用，不能等她加载出来再取）。 */
+    public record MaidSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
+                           UUID ownerId, long seenAt, boolean stayPut, String name) {
     }
 
-    private static final Map<UUID, LastSeen> LAST_SEEN = new ConcurrentHashMap<>();
+    private static final Map<UUID, MaidSeen> LAST_SEEN = new ConcurrentHashMap<>();
+
+    /** 实测六百九十九：本会话是否已从 SavedData 灌过水——integrated server 重启
+     *  是同一个 JVM，静态表会带上个会话的残留：每次 server 启动都清空重灌 */
+    private static volatile boolean SEEN_LOADED = false;
+
+    /** 实测六百九十九：写穿——内存表与 SavedData 同步落（put 也顺手把 markDirty 落下） */
+    private static void seenPut(UUID maidId, MaidSeen seen, MinecraftServer server) {
+        LAST_SEEN.put(maidId, seen);
+        try {
+            ServerLevel ow = server.m_129783_();
+            if (ow != null) {
+                MaidSeenStore.get(ow).put(maidId, seen);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 实测六百九十九：删除（内存 + 落盘）——死亡/待召回超时都走这里 */
+    private static void seenRemove(UUID maidId) {
+        LAST_SEEN.remove(maidId);
+        try {
+            MinecraftServer server = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            ServerLevel ow = server == null ? null : server.m_129783_();
+            if (ow != null) {
+                MaidSeenStore.get(ow).remove(maidId);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 实测六百九十九：首次访问时把 SavedData 灌进内存（清空重灌，防跨会话残留） */
+    private static void ensureSeenLoaded(MinecraftServer server) {
+        if (SEEN_LOADED) {
+            return;
+        }
+        SEEN_LOADED = true;
+        try {
+            ServerLevel ow = server.m_129783_();
+            if (ow != null) {
+                LAST_SEEN.clear();
+                LAST_SEEN.putAll(MaidSeenStore.get(ow).snapshot());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 实测六百九十九：死亡时清掉她的登记（MaidAutoResurrect.onMaidDeath 调用）——
+     * 死了的女仆最后出现位置已经没有召回价值（她会在主人重生点复活，不是原地）；
+     * 不清的话一键集合会对着死亡点白挂 15 秒强载票然后报「没能等到」。
+     */
+    public static void forgetMaid(UUID maidId) {
+        if (maidId == null) {
+            return;
+        }
+        seenRemove(maidId);
+    }
+
+    /** 实测六百九十九：排班表 openFor 用——某主人的全部登记（含上个会话落盘的）。
+     *  顺手做一次懒灌水：排班表可能在开服 5 秒内被打开（tick 里那次灌水还没跑）。 */
+    public static java.util.List<java.util.Map.Entry<UUID, MaidSeen>> seenForOwner(UUID ownerId) {
+        if (!SEEN_LOADED) {
+            MinecraftServer srv = net.minecraftforge.server.ServerLifecycleHooks.getCurrentServer();
+            if (srv != null) {
+                ensureSeenLoaded(srv);
+            }
+        }
+        java.util.List<java.util.Map.Entry<UUID, MaidSeen>> out = new java.util.ArrayList<>();
+        if (ownerId == null) {
+            return out;
+        }
+        for (java.util.Map.Entry<UUID, MaidSeen> en : LAST_SEEN.entrySet()) {
+            if (ownerId.equals(en.getValue().ownerId())) {
+                out.add(en);
+            }
+        }
+        return out;
+    }
+
+    /** 实测六百九十九：单独召回的后备路径——她不在实体表里，按登记位置强载 + 进待召回队列。
+     *  @return 0=没有登记/不是主人的；1=已入队；2=登记是停放态（home/坐/骑，召回豁免）；3=已在队列 */
+    public static int queuePendingSummon(net.minecraft.server.level.ServerPlayer player, UUID maidId) {
+        if (player == null || maidId == null
+                || !(player.m_9236_() instanceof ServerLevel level)) {
+            return 0;
+        }
+        ensureSeenLoaded(level.m_7654_());
+        MaidSeen ls = LAST_SEEN.get(maidId);
+        if (ls == null || !ls.ownerId().equals(player.m_20148_())) {
+            return 0;
+        }
+        if (ls.stayPut()) {
+            return 2;
+        }
+        if (PENDING_SUMMON.containsKey(maidId)) {
+            return 3;
+        }
+        ServerLevel lvl = level.m_7654_().m_129880_(ls.dim());
+        if (lvl == null) {
+            return 0;
+        }
+        net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(ls.pos());
+        lvl.m_7726_().m_8387_(MAID_TICKET, cp, TICKET_LEVEL, Unit.INSTANCE);
+        PENDING_SUMMON.put(maidId, new PendingSummon(ls.dim(), cp, player,
+                lvl.m_46467_() + 300L));
+        com.maidsmart.tool.PromaidLog.log("集合", "单独召回：登记表按最后出现位置强载区块 @"
+                + cp.f_45578_ + "," + cp.f_45579_ + " dim=" + ls.dim().m_135782_().m_135815_());
+        return 1;
+    }
+
+    /**
+     * 实测六百九十九：登记表的 SavedData（存主世界，跨维度共享，跨重启存活）。
+     * 结构与 {@code MaidAutoResurrect.AutoResurrectStore} 同款：内存为正本，
+     * 写穿落盘，启动时灌回。
+     */
+    public static final class MaidSeenStore extends net.minecraft.world.level.saveddata.SavedData {
+        private final ConcurrentHashMap<UUID, MaidSeen> seen = new ConcurrentHashMap<>();
+
+        public MaidSeenStore() {
+        }
+
+        public MaidSeenStore(CompoundTag tag) {
+            net.minecraft.nbt.ListTag list = tag.m_128437_("seen", 10);
+            for (int i = 0; i < list.size(); i++) {
+                CompoundTag c = list.m_128728_(i);
+                try {
+                    UUID maidId = c.m_128342_("maid");
+                    ResourceKey<net.minecraft.world.level.Level> dim = net.minecraft.resources.ResourceKey.m_135785_(
+                            net.minecraft.core.registries.Registries.f_256858_,
+                            new net.minecraft.resources.ResourceLocation(c.m_128461_("dim")));
+                    BlockPos pos = new BlockPos(c.m_128451_("x"), c.m_128451_("y"), c.m_128451_("z"));
+                    UUID ownerId = c.m_128342_("owner");
+                    long at = c.m_128454_("at");
+                    boolean stay = c.m_128471_("stay");
+                    String name = c.m_128461_("name");
+                    if (maidId != null && ownerId != null) {
+                        seen.put(maidId, new MaidSeen(dim, pos, ownerId, at, stay, name));
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+
+        public static MaidSeenStore get(ServerLevel level) {
+            return level.m_8895_().m_164861_(MaidSeenStore::new, MaidSeenStore::new,
+                    "maid_smart_maid_seen");
+        }
+
+        public void put(UUID maidId, MaidSeen s) {
+            seen.put(maidId, s);
+            m_77762_();
+        }
+
+        public void remove(UUID maidId) {
+            if (seen.remove(maidId) != null) {
+                m_77762_();
+            }
+        }
+
+        public java.util.Map<UUID, MaidSeen> snapshot() {
+            return new java.util.HashMap<>(seen);
+        }
+
+        @Override
+        public CompoundTag m_7176_(CompoundTag tag) {
+            net.minecraft.nbt.ListTag list = new net.minecraft.nbt.ListTag();
+            for (java.util.Map.Entry<UUID, MaidSeen> e : seen.entrySet()) {
+                MaidSeen s = e.getValue();
+                CompoundTag c = new CompoundTag();
+                c.m_128362_("maid", e.getKey());
+                c.m_128359_("dim", s.dim().m_135782_().toString());
+                c.m_128405_("x", s.pos().m_123341_());
+                c.m_128405_("y", s.pos().m_123342_());
+                c.m_128405_("z", s.pos().m_123343_());
+                c.m_128362_("owner", s.ownerId());
+                c.m_128356_("at", s.seenAt());
+                c.m_128379_("stay", s.stayPut());
+                c.m_128359_("name", s.name() == null ? "" : s.name());
+                list.add(c);
+            }
+            tag.m_128365_("seen", list);
+            return tag;
+        }
+    }
 
     /** v1.1.0 实测七十：待召回队列（uuid → 状态）——持有强载票直到实体出现/超时 */
     private record PendingSummon(ResourceKey<net.minecraft.world.level.Level> dim,
@@ -114,6 +317,8 @@ public final class MaidChunkLoadManager {
     }
 
     public static void tick(MinecraftServer server) {
+        // 实测六百九十九：会话首拍把登记表从 SavedData 灌回来（排班表/召回跨重启可用）
+        ensureSeenLoaded(server);
         // v1.1.0 实测七十：登记全部在场有主女仆的最后出现位置（不受下方开关限制
         // ——这是"一键集合召回未加载区块女仆"的唯一线索）
         // 实测六百九十：这一层同样必须走 EntitySnapshot——循环体里的救援
@@ -130,8 +335,10 @@ public final class MaidChunkLoadManager {
                     // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
                     boolean stayPut = (maid.isHomeModeEnable() && !isBuildingMaid(maid))
                             || maid.isMaidInSittingPose() || maid.m_20159_();
-                    LAST_SEEN.put(maid.m_20148_(), new LastSeen(lvl.m_46472_(),
-                            maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_(), stayPut));
+                    // 实测六百九十九：写穿落盘 + 记下名字（排班表「⚑ 未加载」行要用）
+                    seenPut(maid.m_20148_(), new MaidSeen(lvl.m_46472_(),
+                            maid.m_20183_().m_7949_(), ow.m_20148_(), lvl.m_46467_(),
+                            stayPut, com.maidsmart.tool.PromaidLog.nameOf(maid)), server);
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
                     // v1.1.0 实测三百零七（反馈："地狱基岩层猪人塔女仆传送不受控制，
@@ -209,12 +416,18 @@ public final class MaidChunkLoadManager {
             }
         }
         // 2. 对比持票表：不再需要的撤票 / 位置变了的换票
+        // 实测六百九十九：刚挂的票（<100 tick）先不撤——护栏见 TICKET_BORN 注释
+        long nowTick = server.m_129783_() != null ? server.m_129783_().m_46467_() : 0L;
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             UUID id = e.getKey();
             TicketKey cur = e.getValue();
             TicketKey want = wanted.get(id);
             if (want != null && want.equals(cur)) {
                 continue; // 票不变
+            }
+            Long born = TICKET_BORN.get(id);
+            if (want == null && born != null && nowTick - born < 100L) {
+                continue; // 票是刚挂的：实体可能还在异步加载的路上，这拍先不撤
             }
             removeTicket(server, id, cur);
         }
@@ -232,6 +445,7 @@ public final class MaidChunkLoadManager {
             ServerChunkCache cache = level.m_7726_();
             cache.m_8387_(MAID_TICKET, new ChunkPos(want.chunk()), TICKET_LEVEL, Unit.INSTANCE);
             ACTIVE_TICKETS.put(e.getKey(), want);
+            TICKET_BORN.put(e.getKey(), nowTick);
         }
         // 3b. 实测三百四十九：排班女仆的持久化强制区块（换区块/关排班自动撤；
         // forceChunk 幂等——同参数重复调用无害，区块没变就跳过）
@@ -359,6 +573,7 @@ public final class MaidChunkLoadManager {
             }
             cache.m_8387_(MAID_TICKET, new ChunkPos(now), TICKET_LEVEL, Unit.INSTANCE);
             ACTIVE_TICKETS.put(maid.m_20148_(), new TicketKey(level.m_46472_(), now));
+            TICKET_BORN.put(maid.m_20148_(), level.m_46467_());
         } catch (Throwable ignored) {
         }
     }
@@ -399,6 +614,7 @@ public final class MaidChunkLoadManager {
             }
         }
         ACTIVE_TICKETS.remove(id);
+        TICKET_BORN.remove(id);
     }
 
     /** 服务器停止/开关关闭：撤掉全部票（ProMaidExtension ServerStoppingEvent 调用）
@@ -418,6 +634,7 @@ public final class MaidChunkLoadManager {
             }
         }
         PENDING_SUMMON.clear();
+        TICKET_BORN.clear();     // 实测六百九十九：票龄表一并清场
         AIR_DEFER_SINCE.clear(); // 实测五百六十五（PR #10）：滞空计时一并清场
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             TicketKey key = e.getValue();
@@ -432,6 +649,17 @@ public final class MaidChunkLoadManager {
         }
         ACTIVE_TICKETS.clear();
         PERSISTENT_TICKETS.clear(); // 内存账清空（持久票留在 chunks.dat，重启后 3b/3c 与实际对齐）
+    }
+
+    /**
+     * 实测六百九十九：server 停止时的登记表会话复位（ProMaidExtension.onServerStopping
+     * 调用）——内存表清空 + 灌水标记复位；【落盘的 SavedData 不动】：它就是为跨重启
+     * 而落盘的，下次 server 启动第一拍 {@link #ensureSeenLoaded} 再灌回来。
+     * （integrated server 重启是同一个 JVM，静态表不清会把上个会话的残留带过去。）
+     */
+    public static void resetSeenSession() {
+        LAST_SEEN.clear();
+        SEEN_LOADED = false;
     }
 
     /**
@@ -653,12 +881,20 @@ BlockPos stand = findStand(newLevel,
             }
         }
         // 未加载区块里的：按最后出现位置挂强载票 + 进待召回队列
+        // 实测六百九十九：登记表已落盘——重启/重进后远处的女仆这里依然找得到
         int pending = 0;
+        int reviving = 0;
         MinecraftServer server = player.m_9236_().m_7654_();
+        ensureSeenLoaded(server);
         long now = player.m_9236_().m_46467_();
-        for (Map.Entry<UUID, LastSeen> en : LAST_SEEN.entrySet()) {
-            LastSeen ls = en.getValue();
+        for (Map.Entry<UUID, MaidSeen> en : LAST_SEEN.entrySet()) {
+            MaidSeen ls = en.getValue();
             if (!ls.ownerId().equals(pid) || seen.contains(en.getKey())) {
+                continue;
+            }
+            // 实测六百九十九：她已阵亡（待自动复活）——死亡时登记已清，这里是护栏：
+            // 不对死者挂强载票（她的下一站是主人重生点，不是最后出现的位置）
+            if (com.maidsmart.combat.MaidAutoResurrect.isPendingResurrect(en.getKey())) {
                 continue;
             }
             // v1.1.0 实测八十七c：快照为 home/坐/骑 → 不强载、不建队，计入保持原位
@@ -682,11 +918,18 @@ BlockPos stand = findStand(newLevel,
                     new PendingSummon(ls.dim(), cp, player, now + 300L));
             pending++;
         }
-        return new SummonReport(summoned, kept, failStand, pending);
+        // 实测六百九十九：已阵亡、正在等自动复活的女仆——照实报数（一键集合的
+        // 播报把"无法召回"变成"她什么时候回来"）
+        for (UUID rid : com.maidsmart.combat.MaidAutoResurrect.pendingIdsOwnedBy(pid)) {
+            if (!seen.contains(rid)) {
+                reviving++;
+            }
+        }
+        return new SummonReport(summoned, kept, failStand, pending, reviving);
     }
 
-    /** 集合结果汇总（聊天栏播报用） */
-    public record SummonReport(int summoned, int kept, int failStand, int pending) {
+    /** 集合结果汇总（聊天栏播报用）；reviving = 实测六百九十九：已阵亡待复活数 */
+    public record SummonReport(int summoned, int kept, int failStand, int pending, int reviving) {
     }
 
     /**
@@ -716,7 +959,7 @@ BlockPos stand = findStand(newLevel,
                                 "§7【集合】有一名女仆没能等到（可能已被魂符收回或不在了）"));
                     } catch (Exception ignored) {
                     }
-                    LAST_SEEN.remove(en.getKey()); // 位置多半失效，别再拿它召回
+                    seenRemove(en.getKey()); // 实测六百九十九：位置多半失效，别再拿它召回（写穿落盘）
                 }
                 it.remove();
                 continue;
@@ -951,8 +1194,9 @@ BlockPos stand = findStand(newLevel,
      * 在家模式（排班自动 home）保持原位——想强制召回先关闭她的排班；玩家主动操作
      * 不受"干活中不拉/搭路中不拉"等自动拉回限制（人工意图优先）。
      *
-     * @return 0=不在已加载区块/不是主人的女仆；1=已传回；2=主人身边无可站立点；
-     *         3=状态豁免（坐/骑/家/死亡）
+     * @return 0=不在已加载区块且无登记/不是主人的女仆；1=已传回；2=主人身边无可站立点；
+     *         3=状态豁免（坐/骑/家/死亡）；4=她已阵亡待自动复活（实测六百九十九）；
+     *         5=已按登记位置强载区块进待召回队列（实测六百九十九）
      */
     public static int summonOne(ServerPlayer player, String uuid) {
         try {
@@ -969,6 +1213,19 @@ BlockPos stand = findStand(newLevel,
                 }
             }
             if (maid == null) {
+                // 实测六百九十九：她不在实体表里——①先问是不是"待复活"（死亡窗口照实报）；
+                // ②再按登记的最后出现位置强载区块 + 进待召回队列（一键召回从此对"复活在
+                // 重生点的远处女仆/重启后未加载的女仆"都真正可用）
+                if (com.maidsmart.combat.MaidAutoResurrect.isPendingResurrect(uid)) {
+                    return 4;
+                }
+                int q = queuePendingSummon(player, uid);
+                if (q == 1 || q == 3) {
+                    return 5;
+                }
+                if (q == 2) {
+                    return 3; // 登记是停放态（home/坐/骑）——与在场女仆同口径
+                }
                 return 0;
             }
             if (!maid.m_21830_(player)) {

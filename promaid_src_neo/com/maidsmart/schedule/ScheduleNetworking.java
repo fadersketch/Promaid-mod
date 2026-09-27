@@ -164,6 +164,51 @@ public final class ScheduleNetworking {
                 break;
             }
         }
+        // ==================== 实测六百九十九：她不在实体表里也照常入列 ====================
+        // 玩家原话：「排班表无法显示所有的女仆，如果一个玩家的女仆死亡，回到了玩家的
+        // 重生点，但是玩家的重生点离玩家当前位置又太远，那么排班表上就不会显示这个女仆
+        // 的资料和信息。会造成缺失。此时如果使用一键召回会显示无法召回。」
+        // 两类"实体表里没有她"的女仆，现在从服务端的两本账里补进列表：
+        // ① 已阵亡、等待自动复活的（MaidAutoResurrect 登记表）→ 任务列显示「✚ 复活中」；
+        // ② 不在已加载区块的（MaidChunkLoadManager 最后出现位置登记，跨重启落盘）
+        //    → 任务列显示「⚑ 未加载」，详情页能查到她的最后出现位置。
+        // 行协议不变（9 字段）：taskUid 用本模组的伪任务名，客户端 taskCn 查不到
+        // 翻译键时回退 path 段——lang 里补了 task.maid_smart.reviving / away 两键。
+        java.util.Set<String> listed = new java.util.HashSet<>();
+        for (String[] m : maids) {
+            listed.add(m[0]);
+        }
+        java.util.UUID ownerId = player.getUUID();
+        for (java.util.UUID rid : com.maidsmart.combat.MaidAutoResurrect.pendingIdsOwnedBy(ownerId)) {
+            if (maids.size() >= 200 || listed.contains(rid.toString())) {
+                continue;
+            }
+            listed.add(rid.toString());
+            maids.add(new String[]{rid.toString(),
+                    com.maidsmart.combat.MaidAutoResurrect.pendingName(rid),
+                    "maid_smart:reviving", "2", "0", "0", "", "", "0"});
+        }
+        for (java.util.Map.Entry<java.util.UUID, com.maidsmart.follow.MaidChunkLoadManager.MaidSeen> en
+                : com.maidsmart.follow.MaidChunkLoadManager.seenForOwner(ownerId)) {
+            if (maids.size() >= 200 || listed.contains(en.getKey().toString())
+                    || com.maidsmart.combat.MaidAutoResurrect.isPendingResurrect(en.getKey())) {
+                continue; // 已阵亡的由上面那条「复活中」行负责
+            }
+            listed.add(en.getKey().toString());
+            com.maidsmart.follow.MaidChunkLoadManager.MaidSeen seen = en.getValue();
+            String dimTag = "";
+            if (!seen.dim().equals(level.dimension())) {
+                dimTag = switch (seen.dim().location().getPath()) {
+                    case "overworld" -> "主世界";
+                    case "the_nether" -> "下界";
+                    case "the_end" -> "末地";
+                    default -> seen.dim().location().getPath();
+                };
+            }
+            maids.add(new String[]{en.getKey().toString(),
+                    seen.name() == null || seen.name().isEmpty() ? "女仆" : seen.name(),
+                    "maid_smart:away", "2", "0", "0", "", dimTag, "0"});
+        }
         maids.sort(java.util.Comparator.comparing(a -> a[1]));
         PacketDistributor.sendToPlayer(player, new SchedulePacketsPlan.OpenSchedulePacket(maids, taskUids));
     }

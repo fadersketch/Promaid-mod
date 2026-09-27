@@ -71,6 +71,13 @@ public final class MaidAutoResurrect {
 
     @SubscribeEvent
     public static void onMaidDeath(com.github.tartaricacid.touhoulittlemaid.api.event.MaidDeathEvent event) {
+        // 实测六百九十九：死者的"最后出现位置"登记立刻作废（无条件，不受下方开关影响）
+        // ——她下一站是主人重生点，不是原地；留着只会让一键集合对死亡点白挂 15 秒强载票
+        // 然后报「没能等到」（正是玩家报的"一键召回显示无法召回"的来源之一）。
+        try {
+            com.maidsmart.follow.MaidChunkLoadManager.forgetMaid(event.getMaid().m_20148_());
+        } catch (Throwable ignored) {
+        }
         if (!com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get()) {
             return;
         }
@@ -245,6 +252,16 @@ public final class MaidAutoResurrect {
         double[] safe;
         boolean forced;
         if (respawnUsable) {
+            // 实测六百九十九【先把重生点区块同步加载到 FULL，再算落点、再放人】：
+            // PersistentEntitySectionManager 反编译实证——往【未加载区块】addFreshEntity
+            // 的实体不在实体表里（区块可见性默认 HIDDEN，不可达就不 startTracking），
+            // 要等区块异步载完才"现身"；而 5 秒持票对账可能在载完之前扫不到她、把
+            // ensureTicketNow 刚挂的票撤掉 → 区块放弃加载 → 她【永远】不进实体表：
+            // 排班表不显示她、getEntity 找不到她、一键集合召不回（玩家原话：「重生点
+            // 离玩家当前位置又太远，那么排班表上就不会显示这个女仆……一键召回会显示
+            // 无法召回」）。同步加载这格区块后，addFreshEntity 当场入表，票也稳了；
+            // respawnLanding 的落点计算从此也看得到真实地形。
+            dest.m_6325_(respawn.m_123341_() >> 4, respawn.m_123343_() >> 4);
             // v1.2.0【复活原地摔死根因修复】：落点改用原版等效站位——床/重生锚走
             // findStandUpPosition（与玩家复活站的那一格完全一致），而不是自己柱状扫描。
             // 旧版的 findSafeLanding 高度上下界取反（getHeight 当成最低建筑高度），
@@ -328,6 +345,83 @@ public final class MaidAutoResurrect {
             return null;
         }
         return AutoResurrectStore.get(level);
+    }
+
+    // ================== 实测六百九十九：待复活查询接口（排班表/一键召回用） ==================
+    //
+    // 玩家原话：「排班表无法显示所有的女仆……此时如果使用一键召回会显示无法召回。」
+    // 死亡→复活的 60 秒窗口里她不是实体——排班表查不到、召回找不到、播报只会说
+    // "没能等到"。这组只读接口让排班表照常列她（「✚ 复活中」行），
+    // 召回/集合的播报从"失败"变成"她什么时候回来"。
+
+    /** 她（按 UUID）是否还在等自动复活 */
+    public static boolean isPendingResurrect(UUID maidId) {
+        if (maidId == null) {
+            return false;
+        }
+        try {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            AutoResurrectStore data = store(server == null ? null : server.m_129783_());
+            return data != null && data.get(maidId) != null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 某主人的全部待复活女仆 UUID（排班表列「复活中」行、一键集合报数用） */
+    public static java.util.List<UUID> pendingIdsOwnedBy(UUID ownerId) {
+        java.util.List<UUID> out = new ArrayList<>();
+        if (ownerId == null) {
+            return out;
+        }
+        try {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            AutoResurrectStore data = store(server == null ? null : server.m_129783_());
+            if (data == null) {
+                return out;
+            }
+            for (java.util.Map.Entry<UUID, Pending> e : data.entries()) {
+                if (ownerId.equals(e.getValue().ownerId)) {
+                    out.add(e.getKey());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 待复活女仆的名字（列表行显示；旧存档无名字时回退「女仆」） */
+    public static String pendingName(UUID maidId) {
+        if (maidId == null) {
+            return "女仆";
+        }
+        try {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            AutoResurrectStore data = store(server == null ? null : server.m_129783_());
+            Pending p = data == null ? null : data.get(maidId);
+            return p == null || p.maidName == null || p.maidName.isEmpty() ? "女仆" : p.maidName;
+        } catch (Throwable ignored) {
+            return "女仆";
+        }
+    }
+
+    /** 距自动复活还剩多少秒（取不到时返回 -1） */
+    public static int pendingRemainSeconds(UUID maidId) {
+        if (maidId == null) {
+            return -1;
+        }
+        try {
+            MinecraftServer server = ServerLifecycleHooks.getCurrentServer();
+            AutoResurrectStore data = store(server == null ? null : server.m_129783_());
+            Pending p = data == null ? null : data.get(maidId);
+            ServerLevel ow = server == null ? null : server.m_129783_();
+            if (p == null || ow == null) {
+                return -1;
+            }
+            return (int) Math.max(0L, (p.dueTick - ow.m_46467_() + 19L) / 20L);
+        } catch (Throwable ignored) {
+            return -1;
+        }
     }
 
     // ================== HUD 查询（实测四百二十一） ==================
