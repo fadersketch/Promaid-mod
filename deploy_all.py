@@ -6,6 +6,27 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百〇四（v1.3.0 beta，同名覆盖，未发版）：四条（两树镜像）——
+① 接敌机动「每场遭遇抽一种」**原先根本没生效**（实测日志实证：整场 21554 行里 `接敌机动` 只出现
+   1 次）：`CombatManeuver.begin` 幂等、而"遭遇收尾"（`MaidBroomDrive.clearClimb` /
+   `MaidFlightCombatBehavior.endFlightSafely`）**不清它的状态**，只有换任务/下线才清 → 一次抽签
+   用一整天（第一场抽到环绕就一直环绕）；且扫帚那条用 `mountLog`（5 秒节流）写日志，
+   与同 tick 的「随机环绕」抢名额、`接敌机动` 那行被静默丢掉。修：两处收尾各加
+   `CombatOrbit.forget` + `CombatManeuver.forget`；扫帚改成直写日志。
+② 岩浆判定按「她的身位」算：新增 `DangerBlocks.cellDangerousBoxed`（水平 ±ceil(宽/2) 格，
+   只加宽不加高）+ `boxRadius`；`MaidFlightHazardGuard` 的 dangerousAt/detour/up/pathBlocked/
+   antiSink 全带上碰撞箱半径。顺带修两个真 bug：`SelfPreservationBehavior.avoidLavaMovement`
+   原先探**眼高**那格（岩浆贴地、眼高恒空气 → 避让对"走进浅岩浆"完全失效），改探脚底那一层；
+   `MaidBroomDrive.parkIdle`（待命降回地面）原先不认岩浆（只问"是不是空气"）→ 落点是危险格就
+   原地悬停。飞行跟随那一支补 `antiSink`（原先只有航段绕开、没有下沉抬平）。
+③ 空袭「拉开距离」：新增 `AIR_RAID_MIN_STANDOFF`（airRaid.minStandoff，默认 6.0，0=关）——
+   远程盘旋半径硬下限 + 近战"先背离平飞拉开再俯冲"（新增 `faceAwayFlat`，俯冲的瞄准与命中判定
+   一个字不改）。
+④ 等价交换（ProjectE）适配结论：**走「资格物品表」那一路即可**（`misc.freeFlightItems =
+   ["projecte:gem_boots","projecte:arcana_ring"]`）——javap 实证 ProjectE 的飞行是
+   `ServerPlayer` 绑定 capability（`IFlightProvider.canProvideFlight(ItemStack, ServerPlayer)`），
+   女仆天然不适用；SWRG 本版本 `canProvideFlight` 恒 false，别填。
+
 实测七百〇三（v1.3.0 beta，同名覆盖，未发版）：接敌机动（五种飞行方式）+ 空袭空中防叠罗汉（两树镜像）——
 玩家原话「全是保持盘旋状态的，战斗方式过于单一……接敌之后从多种飞行方式里选一个执行，而不全是统一
 绕圈……基础比敌人高多少格这一点还是要的」。新增 com.maidsmart.combat.CombatManeuver（两树字节一致，

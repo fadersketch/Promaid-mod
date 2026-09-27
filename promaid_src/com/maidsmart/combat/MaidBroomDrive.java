@@ -547,11 +547,23 @@ public final class MaidBroomDrive {
         return y;
     }
 
-    /** 结束爬升相位（没目标了 / 收了工）——顺带作废这一场遭遇的盘旋高度 */
+    /**
+     * 结束爬升相位（没目标了 / 收了工）——顺带作废这一场遭遇的盘旋高度。
+     *
+     * <p>【实测七百〇四：顺手把随机环绕与接敌机动也丢干净】玩家反馈「打了那么多场都一直在用环绕」，
+     * 根因就在这一格：{@link CombatOrbit} 与 {@link CombatManeuver} 的状态**只在换任务/下线时**
+     * （{@link #forgetMaid}）才清，而"一场遭遇结束"（丢目标、下鞍、玩家接管）走的是本方法——
+     * 于是 {@code CombatManeuver.begin} 的幂等语义变成了"一次抽签用一整天"：她第一场抽到环绕，
+     * 之后每一场都还是环绕。本方法现在是**这一场遭遇的收尾点**，两套随机都从这里重掷，
+     * 「每场遭遇抽一种」才真的成立（下一场一定看得见换打法）。
+     */
     public static void clearClimb(EntityMaid maid) {
         if (maid != null) {
             CLIMB.remove(maid.m_20148_());
             COMBAT_ALT.remove(maid.m_20148_());
+            // 【实测七百〇四】这一场遭遇结束 = 两套随机都作废，下一场重抽（含"随机环绕"那一行日志）
+            CombatOrbit.forget(maid.m_20148_());
+            CombatManeuver.forget(maid.m_20148_());
         }
     }
 
@@ -956,11 +968,18 @@ public final class MaidBroomDrive {
                     + fmt(CombatOrbit.speedHi()) + "×，每 3 秒重掷）");
         }
         // 【实测七百〇三】开场只写一行「接敌机动」（每场遭遇一只女仆一行，不刷屏）
-        if (maneuverOn && CombatManeuver.active(id) && CombatManeuver.ticks(id) == 1) {
+        // 【实测七百〇四：**不能走 mountLog**】它和上面那行「随机环绕」在同一 tick 起手，
+        //  而 mountLog 是"同一只女仆 5 秒最多一条"的节流——先进去的「随机环绕」占掉名额，
+        //  这一行被静默丢掉。玩家反馈「打了那么多场都一直在用环绕」，一半原因就是它压根没打出来
+        //  （另一半是状态没随遭遇重置，见 clearClimb）。这里改成直写日志：它本来就是每场遭遇一行，
+        //  频次与「爬升到位」同档，不需要那 5 秒闸。
+        if (maneuverOn && CombatManeuver.ticks(id) == 1) {
             CombatManeuver.Kind mk = CombatManeuver.kind(id);
-            mountLog(maid, "接敌机动：" + (mk == null ? "环绕" : mk.cn)
-                    + "（每场遭遇抽一种；高悠悠幅度 combat.maneuver.yoyoAmp "
-                    + fmt(yoyoAmpCfg()) + " 格，只加不减）");
+            com.maidsmart.tool.PromaidLog.log("扫帚模式",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 接敌机动："
+                            + (mk == null ? "环绕" : mk.cn)
+                            + "（每场遭遇抽一种；高悠悠幅度 combat.maneuver.yoyoAmp "
+                            + fmt(yoyoAmpCfg()) + " 格，只加不减）");
         }
         // 角速度由固定线速度换算（见 ORBIT_SPEED 的注释）：任何半径下她都能跟上这个点
         // 【实测六百九十一】起点不是 0 而是"她自己那个相位"（见 phaseOf）：旧版所有女仆都从 0 起，
@@ -1333,6 +1352,19 @@ public final class MaidBroomDrive {
             double ground = groundYOrNaN(maid, p.f_82479_, p.f_82481_, p.f_82480_);
             if (Double.isNaN(ground)) {
                 hoverInPlace(maid); // 脚下没地：原地悬停，绝不往下扎
+                return;
+            }
+            // 【实测七百〇四：脚下那块地是岩浆/火就不落过去】玩家反馈「女仆有的时候还是会飞进
+            //  岩浆里面（在空袭和扫帚里面都有这种问题）」。{@link #groundYOrNaN} 只问"这一格是不是
+            //  空气"，而岩浆**不是空气**——于是"岩浆湖面"在她眼里与"地面"一模一样，待命降落会
+            //  直直落到岩浆面上。这一档是她**主动下降**（唯一一条自己往低处走的路径），所以按
+            //  {@link com.maidsmart.tool.DangerBlocks#cellDangerousBoxed} 判一下"落点是不是危险格"
+            //  （含她的碰撞箱宽度），是就照旧原地悬停——宁可挂在半空，也不落进岩浆。
+            int gy = (int) Math.floor(ground);
+            if (com.maidsmart.tool.DangerBlocks.cellDangerousBoxed(maid.m_9236_(),
+                    (int) Math.floor(p.f_82479_), gy, (int) Math.floor(p.f_82481_),
+                    com.maidsmart.tool.DangerBlocks.boxRadius(maid.m_20205_()))) {
+                hoverInPlace(maid); // 落点是危险格（岩浆/火/岩浆块…）→ 不落，原地悬停
                 return;
             }
             double target = ground + PARK_ABOVE_GROUND;

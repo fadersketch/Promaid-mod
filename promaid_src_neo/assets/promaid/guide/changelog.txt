@@ -1,4 +1,140 @@
-﻿## 实测七百〇三【接敌机动：五种飞行方式 + 空袭空中防叠罗汉】
+﻿## 实测七百〇四【接敌机动真的每场换 + 岩浆判定按她的身位 + 空袭也拉开距离】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话（四条）
+
+> 「1. 就是对于岩浆这种危险环境的寻路还是差点意思，导致女仆有的时候还是会飞进岩浆里面
+> （在空袭和扫帚里面都有这种问题），自己寻路时，对于危险环境的判定也有点问题，导致有的时候
+> 还是会踩上去。
+> 2. 看一下刚才运行的游戏日志，是我的错觉吗？我怎么感觉打了那么多场都一直在用环绕啊。
+> 到底是调用上出了问题还是说就是战术设计的不明显？
+> 3. 其实近远程空袭的女仆也是需要有一个拉开距离的
+> 4. 我在 1.20.1 部署了一个等价交换。里面有一些物品可以帮助玩家飞行，你看看能不能那个 PR 里
+> 做的防创造飞行能不能适配？」
+>
+> 「对于岩浆这种危险环境的判定，可能需要把女仆自身的碰撞伤害算进去。尽可能的让她规避岩浆。」
+
+### 二、第 2 条：不是错觉，是两个真 bug（已实测日志实证）
+
+**证据**：`D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\logs\promaid.log` 整场
+21554 行里，`接敌机动` 只出现 **1 次**（21:54:32 远程空袭·高悠悠），而 `随机环绕` 出现 6 次、
+`扫帚模式 接敌 → 先爬到它上方` 出现 20+ 次。扫帚那条链路 `接敌机动` **一次都没打出来**。
+
+两个独立缺陷，缺一个都会造成"永远在环绕"：
+
+**缺陷 A：抽签状态没随「遭遇」重置（真正的根因）**
+`CombatManeuver.begin()` 是幂等的（有状态就原样返回），而"一场遭遇结束"（丢目标、下鞍、
+玩家接管）走的是 `MaidBroomDrive.clearClimb` / `MaidFlightCombatBehavior.endFlightSafely`，
+**这两处原先都不清 `CombatManeuver` / `CombatOrbit` 的状态**——只有换任务/下线（`forgetMaid` /
+`forget`）才清。于是"每场遭遇抽一种"变成"一次抽签用一整天"：第一场抽到环绕（34% 概率，不低），
+之后每一场都还是环绕。**修法**：在这两个"遭遇收尾点"各加一行
+`CombatOrbit.forget(id)` + `CombatManeuver.forget(id)`，让下一场真的重抽
+（`forget` 刻意不清 `SERIAL`，所以是"换一种"而不是"抽第一签"）。
+
+**缺陷 B：扫帚的日志被节流吃掉（为什么日志里看不到）**
+扫帚那条链路用 `mountLog()` 写日志，而它是"同一只女仆 5 秒最多一条"的**节流**——
+`随机环绕` 与 `接敌机动` 在**同一 tick** 起手，先进去的 `随机环绕` 占掉名额，`接敌机动` 被静默丢弃。
+空袭那条用的是直写日志，所以只有它打得出来（这也是日志里唯一那 1 条是远程空袭的原因）。
+**修法**：扫帚的 `接敌机动` 改成直写 `PromaidLog.log`（它本来就是每场遭遇一行，频次同"爬升到位"档）。
+
+> 一句话：**不是战术设计不明显，是它真的几乎没被抽到、而且打出来的那一行还被日志节流吞了。**
+
+### 三、第 1 条：岩浆判定按「她的身位」算（`DangerBlocks.cellDangerousBoxed`）
+
+**玩家原话**：「可能需要把女仆自身的碰撞伤害算进去」。旧判据 `cellDangerous` 只看
+**一个格**（站立格 / 脚下 / 头顶灼烧型），而女仆碰撞箱是 `0.6 × 1.8`——她**横跨两格宽**。
+"她自己那一格安全、隔壁就是岩浆"时判**安全**，于是她贴着岩浆边缘走/飞，被自己的碰撞箱推进去。
+
+新增 `DangerBlocks.cellDangerousBoxed(level,x,y,z,radius)`：把判据从「脚底那一格」扩到
+「她的整个身位」（水平 ±`ceil(宽/2)` 格，默认 0.6 宽 → ±1 格 / 3×3）。
+**只加宽不加高**（竖直仍只算站立格/脚下/头顶灼烧型）——把整个 1.8 格高都算上会让"站在深坑边"
+也误判，那不是"她会掉进去"。
+
+同时修了两个**真 bug**（都是"她真的会走/飞进岩浆"的直接来源）：
+
+1. **地面「附近岩浆避让」探的是眼高那一格**（`floor(m_20188_)` = 脚底往上 1.62 格）。
+   而岩浆是流体、贴着地面那一层：她站在地面上时脚下那格才是岩浆面，眼高那格是**空气**
+   → 这个避让**恒判干净**，对"贴着地走/走进浅岩浆"几乎完全失效。
+   现在改成探**脚底那一层**（`floor(m_20186_)`），并按碰撞箱横扩。
+2. **扫帚「待命降回地面」不认岩浆**（`parkIdle` → `groundYOrNaN` 只问"这格是不是空气"，
+   而岩浆**不是空气**）——"岩浆湖面"在她眼里与"地面"一模一样，待命降落会直直落到岩浆面上。
+   现在落点是危险格就照旧**原地悬停**、绝不落过去（宁可挂在半空）。
+
+配套：飞行跟随那一档原先只有 `detour`（"要飞向的点"会穿进危险格才让开）、**没有** `antiSink`
+——它在岩浆湖上方平飞时视线是水平的（detour 判干净），可滑翔的重力还在把她往下拽。
+现在 `MaidFlightFollowBehavior` 的空中那一支末尾也调 `MaidFlightHazardGuard.antiSink`，
+与远程空袭 `tickRangedAir` 同款（只抬竖直分量、不碰朝向；地面起跳与"进收手半径"都在它之前 return，
+落地下降不受影响）。
+
+### 四、第 3 条：空袭也「拉开距离」（`airRaid.minStandoff`，默认 6.0，0 = 关）
+
+**玩家原话**：「其实近远程空袭的女仆也是需要有一个拉开距离的」。新配置管三件事：
+
+1. **远程空袭盘旋半径的硬下限**：半径区间近端取 `max(盘旋半径 × 0.75, 本值)`。
+   旧版近端是"盘旋半径 × 0.75"现算的——把「离敌最远距离」调小时近端会跟着塌，
+   她可能绕到 3 格、正好进近战怪的攻击范围。
+2. **近战空袭「先把距离拉开再俯冲」**：已占好高度但水平距离没到这条线时，
+   她先**背离敌人平飞**一小段（新增 `faceAwayFlat`：俯仰 0，不抬头——高度已占好，
+   抬头会掉水平速度还把她顶更高），拉开了才压低机头。
+3. 贴身怪把她推到这条线以内时，她**不继续压着敌人绕**。
+
+**近战那一档不会因此打不中**：这条线只作用在「俯冲之前」；俯冲一旦开始，
+瞄准（`faceTarget`）与命中判定（`sweepWithin` / `smashHit`）**一个字不改**
+（这个模组在命中率上专门修过两轮）。日志搜「拉开距离」看每次触发时的水平距离。
+
+### 五、第 4 条：等价交换（ProjectE）能不能适配「仿创造飞行」
+
+**能，但只能走「资格物品表」那一路，不能走「能力」那一路。** 实证（`javap` 反编译 ProjectE 1.0.1）：
+
+- ProjectE 的飞行是一个 **`ServerPlayer` 绑定的 capability**（`IFlightProvider.canProvideFlight(
+  ItemStack, ServerPlayer)`，调用方 `InternalAbilities.shouldPlayerFly(ServerPlayer)`）——
+  **签名就要求玩家**，女仆没有 `Player` 身份、也没有 `Abilities`，这条路对女仆**天然不适用**。
+- 真正提供飞行的物品只有三件（`IFlightProvider` 的实现者）：
+  - `projecte:gem_boots`（Gem Boots）——`canProvideFlight` = "这双鞋穿在脚上"（`FEET` 槽 == 该栈）；
+  - `projecte:arcana_ring`（Ring of Arcana，**mode = Zero 时**）——`canProvideFlight` 恒 `true`
+    （是否真飞由 Zero 模式门控）；
+  - `projecte:swiftwolf_rending_gale`（SWRG）——本版本 `canProvideFlight` 恒 `false`（**不给飞**）。
+- 而我们的「仿创造飞行」**本来就不复刻物品物理**：它是"她有资格（物品表命中）我们就托住她"
+  （`setNoGravity` + 每 tick 直接给速度）。所以**只要把物品 id 填进 `misc.freeFlightItems`
+  就能直接生效**，不需要写任何适配代码：
+
+  ```
+  freeFlight = true
+  freeFlightItems = ["projecte:gem_boots", "projecte:arcana_ring"]
+  ```
+
+  （1.20.1 那个实例的配置就是 `D:\.minecraft\versions\1.20.1-Forge_47.4.21\config\promaid-common.toml`。）
+
+  说明：SWRG **别填**（本版本它自己不给飞，填了等于凭空给飞）；`gem_boots` 在本机制下
+  按"身上有这件装备"认（我们的物品表扫护甲槽，不要求她真的穿在脚上——但为了观感一致，
+  建议就让她穿着）。
+
+### 六、改动清单（两树镜像）
+
+| 文件 | 改什么 |
+|---|---|
+| `combat/MaidBroomDrive.java` | `clearClimb` 清两套随机（缺陷 A）；`接敌机动` 日志改直写（缺陷 B）；`parkIdle` 落点危险则不落 |
+| `combat/MaidFlightCombatBehavior.java` | `endFlightSafely` 清两套随机（缺陷 A）；远程盘旋半径硬下限；近战 `faceAwayFlat` 拉开门槛；新增 `airMinStandoffCfg`/`logStandoff`/`STANDOFF_LAST_LOG` |
+| `combat/MaidFlightFollowBehavior.java` | 空中那一支末尾补 `antiSink` |
+| `combat/SelfPreservationBehavior.java` | `avoidLavaMovement` 改探脚底那一层 + 按碰撞箱横扩 |
+| `combat/MaidFlightHazardGuard.java` | `dangerousAt` 加碰撞箱半径重载；`detour`/`up`/`pathBlocked`/`antiSink` 全部带上 |
+| `tool/DangerBlocks.java` | 新增 `cellDangerousBoxed` + `boxRadius` |
+| `config/MaidSmartConfig.java` | 新增 `AIR_RAID_MIN_STANDOFF`（`airRaid.minStandoff`，默认 6.0） |
+| `config/PromaidConfigScreen.java` | 空袭那一板新增「离敌最近距离（格）」一行 |
+| `assets/maid_smart/lang/{zh_cn,en_us}.json` | 新键 `config.promaid.airRaid.minStandoff` |
+| `guide/GuideChaptersSystem.java` | 岩浆判定那一节扩写（她的身位 / 两个真 bug） |
+| `guide/GuideChaptersFlight.java` | 新增「空袭也拉开距离」一节 |
+
+### 七、验证
+
+- 两树 `javac` **0 错误**（仅既有 deprecation 警告）。
+- 两树 `GuideChaptersSystem.java` 逐字节一致；`GuideChaptersFlight.java` 新增块逐字节一致。
+- 四份 lang JSON 解析通过（键数 360/213/366/224）。
+- jar 内 `CombatManeuver` / 新日志关键字 / 新配置键核对通过；`_mixchk.py` 注入点审计通过。
+- 部署三处（两个客户端 `versions\*\mods` + 服务端 `pack1201\mods`）逐处 md5 一致。
+## 实测七百〇三【接敌机动：五种飞行方式 + 空袭空中防叠罗汉】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

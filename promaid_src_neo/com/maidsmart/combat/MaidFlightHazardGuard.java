@@ -84,19 +84,49 @@ public final class MaidFlightHazardGuard {
 
     /** 该坐标所在的格（连同脚下一格、头顶灼烧格）是不是危险格——口径同地面那套 */
     public static boolean dangerousAt(Level level, double x, double y, double z) {
+        return dangerousAt(level, x, y, z, 0);
+    }
+
+    /**
+     * 【实测七百〇四：带上她的碰撞箱宽度】同 {@link #dangerousAt(Level, double, double, double)}，
+     * 但把**她整个身位**（碰撞箱覆盖的水平格）都算进来——见
+     * {@link DangerBlocks#cellDangerousBoxed}。
+     *
+     * <p>玩家反馈「对于岩浆这种危险环境的判定，可能需要把女仆自身的碰撞伤害算进去」：
+     * 旧判据只探中轴那一条线/那一格，而她宽 0.6 格、横跨两列——"中轴安全、隔壁是岩浆"时
+     * 判安全，于是她擦着岩浆边缘飞/走，碰撞箱自己把她推进去。
+     *
+     * @param radius 水平扩展半径（格）：0 = 旧行为（只判中轴那一格）。
+     *               调用方按 {@link DangerBlocks#boxRadius} 从她的碰撞箱算。
+     */
+    public static boolean dangerousAt(Level level, double x, double y, double z, int radius) {
         if (level == null) {
             return false;
         }
         try {
-            return DangerBlocks.cellDangerous(level,
-                    (int) Math.floor(x), (int) Math.floor(y), (int) Math.floor(z));
+            int bx = (int) Math.floor(x);
+            int by = (int) Math.floor(y);
+            int bz = (int) Math.floor(z);
+            if (radius <= 0) {
+                return DangerBlocks.cellDangerous(level, bx, by, bz);
+            }
+            return DangerBlocks.cellDangerousBoxed(level, bx, by, bz, radius);
         } catch (Throwable t) {
             return false; // 判不出来就当她能过（宁可漏一次，不误杀飞行）
         }
     }
 
+    /** 这只女仆碰撞箱对应的危险判定半径（0.6 宽 → 1）——见 {@link DangerBlocks#boxRadius} */
+    private static int boxRadius(EntityMaid maid) {
+        try {
+            return DangerBlocks.boxRadius(maid.getBbWidth());
+        } catch (Throwable t) {
+            return 1; // 读不到宽度就按女仆的常规宽度保守取 1（多判一格，不会误放行）
+        }
+    }
+
     /** from → to 这一段（最多 {@link #REACH} 格）会不会穿进危险格（起点本身不算） */
-    private static boolean pathBlocked(Level level, Vec3 from, Vec3 to) {
+    private static boolean pathBlocked(Level level, Vec3 from, Vec3 to, int radius) {
         try {
             double dx = to.x - from.x;
             double dy = to.y - from.y;
@@ -110,7 +140,7 @@ public final class MaidFlightHazardGuard {
             for (int i = 1; i <= steps; i++) {
                 double t = Math.min(1.0, (i * STEP) / len);
                 if (dangerousAt(level,
-                        from.x + dx * t, from.y + dy * t, from.z + dz * t)) {
+                        from.x + dx * t, from.y + dy * t, from.z + dz * t, radius)) {
                     return true;
                 }
             }
@@ -137,10 +167,11 @@ public final class MaidFlightHazardGuard {
                 return desired;
             }
             // 已经身处危险格里：不在这一档抢活（自保的岩浆逃生/卡墙顶出在管）
-            if (dangerousAt(level, from.x, from.y, from.z)) {
+            int rad = boxRadius(maid);
+            if (dangerousAt(level, from.x, from.y, from.z, rad)) {
                 return desired;
             }
-            if (!pathBlocked(level, from, desired)) {
+            if (!pathBlocked(level, from, desired, rad)) {
                 stickyClear(maid);
                 return desired; // 快路：这一段干净，一个数都不改
             }
@@ -149,7 +180,7 @@ public final class MaidFlightHazardGuard {
             double horiz = Math.sqrt(dx * dx + dz * dz);
             if (horiz < 0.25) {
                 // 目的地几乎在正上/正下方：没有可偏的侧向，只能竖直处理
-                return up(level, from, desired);
+                return up(level, from, desired, rad);
             }
             double baseYaw = Math.atan2(dz, dx);
             int stick = stickySide(maid);
@@ -162,8 +193,8 @@ public final class MaidFlightHazardGuard {
                             from.x + Math.cos(yaw) * DETOUR_STEP,
                             Math.max(desired.y, from.y), // 不往低处钻
                             from.z + Math.sin(yaw) * DETOUR_STEP);
-                    if (!dangerousAt(level, cand.x, cand.y, cand.z)
-                            && !pathBlocked(level, from, cand)) {
+                    if (!dangerousAt(level, cand.x, cand.y, cand.z, rad)
+                            && !pathBlocked(level, from, cand, rad)) {
                         stickySet(maid, sign);
                         return cand;
                     }
@@ -171,16 +202,16 @@ public final class MaidFlightHazardGuard {
             }
             // 两侧全被堵死：爬过去（这是"不可靠近"的最后一道）
             stickyClear(maid);
-            return up(level, from, desired);
+            return up(level, from, desired, rad);
         } catch (Throwable t) {
             return desired;
         }
     }
 
     /** 目的地几乎不可侧偏、或两侧都堵死时的"向上让开"（抬不动就退回原目标） */
-    private static Vec3 up(Level level, Vec3 from, Vec3 desired) {
+    private static Vec3 up(Level level, Vec3 from, Vec3 desired, int radius) {
         Vec3 cand = new Vec3(from.x, from.y + CLEAR, from.z);
-        if (dangerousAt(level, cand.x, cand.y, cand.z)) {
+        if (dangerousAt(level, cand.x, cand.y, cand.z, radius)) {
             return desired;
         }
         return cand;
@@ -190,6 +221,9 @@ public final class MaidFlightHazardGuard {
      * 不往危险格里沉：她此刻若正在下沉、而脚下或正前方那格是危险方块，就把竖直分量抬平。
      * 由 {@code MaidFlightCombatBehavior.tickRangedAir} 每 tick 在**最后**调一次
      * （姿态/速度都摆完之后，所以这一句有最终话语权）。
+     *
+     * <p>【实测七百〇四】脚下那一格与"正前方"都按她的碰撞箱宽度判（见 {@link DangerBlocks#cellDangerousBoxed}）
+     * ——旧版只探中轴一格，她擦着岩浆湖边缘下沉时判不出来。
      */
     public static void antiSink(EntityMaid maid) {
         try {
@@ -205,14 +239,15 @@ public final class MaidFlightHazardGuard {
                 return; // 没在往下掉
             }
             Vec3 p = maid.position();
-            boolean below = dangerousAt(level, p.x, p.y - 1.0, p.z);
+            int rad = boxRadius(maid);
+            boolean below = dangerousAt(level, p.x, p.y - 1.0, p.z, rad);
             if (!below) {
                 double len = Math.sqrt(v.x * v.x + v.y * v.y
                         + v.z * v.z);
                 if (len > 1.0E-4) {
                     double k = 1.5 / len;
                     below = dangerousAt(level, p.x + v.x * k,
-                            p.y + v.y * k, p.z + v.z * k);
+                            p.y + v.y * k, p.z + v.z * k, rad);
                 }
             }
             if (!below) {
