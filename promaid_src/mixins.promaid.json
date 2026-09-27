@@ -10,6 +10,7 @@
     "MaidDangerPathMixin",
     "MaidMoveSuppressMixin",
     "SpawnerTorchNavGuardMixin",
+    "FreeFlightWalkGuardMixin",
     "MaidStationaryMixin",
     "ChunkFreezeMixin",
     "LeavesBlockMixin",
@@ -82,7 +83,10 @@
     "MaidGeckoSpinDedupMixin",
     "MaidSpinLiftMixin",
     "ElytraModelAccessor",
-    "MaidModelPackSortMixin"
+    "MaidModelPackSortMixin",
+    "MaidConfigFreeFlightMixin",
+    "MaidFreeFlightAnimInvoker",
+    "MaidFreeFlightAnimMixin"
   ],
   "injectors": {
     "defaultRequire": 1
