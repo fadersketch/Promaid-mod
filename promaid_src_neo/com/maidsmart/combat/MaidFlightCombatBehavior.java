@@ -154,6 +154,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static final Map<UUID, Integer> LAUNCH_LEFT = new HashMap<>();
     /** 起跳滑翔等待剩余 tick */
     private static final Map<UUID, Integer> JUMP_LEFT = new HashMap<>();
+    /** 【实测七百〇七】"起飞受阻"（起跳窗走完仍未离地）日志限频：每只女仆 5 秒一条 */
+    private static final Map<UUID, Long> LAUNCH_STUCK_LOG = new HashMap<>();
+    private static final long LAUNCH_STUCK_LOG_INTERVAL = 100L;
     /** 猛击段（已收翅、自由落体中） */
     private static final Set<UUID> SMASH = new HashSet<>();
     /** 猛击段已持续 tick */
@@ -256,7 +259,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DIVE_NEXT.remove(maidId);
         DIVE_LAST_LOG.remove(maidId);
         STANDOFF_LAST_LOG.remove(maidId); // 【实测七百〇四】"拉开距离"日志节流
+        LAUNCH_STUCK_LOG.remove(maidId);  // 【实测七百〇七】"起飞受阻"日志节流
         STANDOFF_TICKS.remove(maidId);    // 【实测七百〇四】"拉开距离"每轮预算
+        STANDOFF_DONE.remove(maidId);     // 【实测七百〇六】"本轮已拉开过"标记
+        FLOOR_LAST_LOG.remove(maidId);    // 【实测七百〇六】"高度地板"日志节流
         MaidBombing.forget(maidId);
         MAX_Y.remove(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
@@ -344,6 +350,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DIVE_LAST_LOG.clear();
         STANDOFF_LAST_LOG.clear(); // 【实测七百〇四】"拉开距离"日志节流
         STANDOFF_TICKS.clear();    // 【实测七百〇四】"拉开距离"每轮预算
+        STANDOFF_DONE.clear();     // 【实测七百〇六】"本轮已拉开过"标记
+        FLOOR_LAST_LOG.clear();    // 【实测七百〇六】"高度地板"日志节流
         MaidBombing.clearAll();
         MAX_Y.clear();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
@@ -701,14 +709,20 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (maid.onGround()) {
                 if (jumpLeft <= 1) {
                     JUMP_LEFT.remove(id); // 起跳失败（低矮空间），放弃，走常规逻辑
+                    // 【实测七百〇七】起跳窗走完仍未离地：留痕（每只女仆 5 秒一条）。
+                    // 需求原文："女仆一旦执行这个起飞的链路，一定要成功执行，而不是在原地浪费。"
+                    logLaunchStuck(maid, gameTime);
                 } else {
                     // 实测五百七十：离地前的每一 tick 都补一跳。旧版重试只摆头不补跳——
                     // 第一跳被同 tick 的 AI 走位/贴墙吃掉时，整个窗口她都离不了地，
                     // 烟花点不着、落地、再来一轮，观感就是"有时候触发起飞有点困难"。
-                    // 补跳与 jumpForLaunch 同一冲量（0.42），离地后照旧走原流程。
-                    Vec3 dm = maid.getDeltaMovement();
-                    maid.setDeltaMovement(dm.x, 0.42, dm.z);
-                    maid.hurtMarked = true;
+                    //
+                    // 【实测七百〇七：补跳必须"独占"这一 tick 的竖直运动】旧版只写 0.42，
+                    // 而同 tick 里 TLM/战术/自保的 WALK_TARGET + 导航会立刻把她按回地面
+                    // （MoveToTargetSink 的寻路在同一 brain 阶段重写位移），0.42 被摊平 ⇒
+                    // 原地蹦好几下却离不了地；被敌人打中那一下不属于"女仆方的移动意图"，
+                    // 反而把她顶离了地，于是"挨打后才起飞"。修法见 {@link #kickOffGround}。
+                    kickOffGround(maid);
                     JUMP_LEFT.put(id, jumpLeft - 1);
                     faceLaunchDirection(maid, target);
                     return;
@@ -848,34 +862,59 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见 tryCastSpell 的注释。
         tryCastSpell(maid, target, id, gameTime);
 
-        // 【实测七百〇四：近战也先拉开距离再俯冲】玩家原话：「其实近远程空袭的女仆也是需要有
-        //  一个拉开距离的」。近战空袭原先是"占好高度 → 直接压低机头俯冲"，中间**没有**任何
-        // 距离门槛：怪物贴在她正下方时她原地俯冲，一轮接一轮地贴着打（20 血的她近战反击下
-        // 存活率差）。现在在俯冲之前加一段：**水平距离还没拉开到 {@code airRaid.minStandoff}
-        //  时，先背离敌人平飞一小段**（借滑翔的自然位移拉开，不俯冲、不烧额外燃料）。
-        //  【为什么不会掉命中率】这一段只在"还没开始俯冲"时生效；一旦距离够了，下面那句
-        //  dist <= smashRange() 的俯冲判定、瞄准、命中判定（sweepWithin / smashHit）**一个字不改**
-        //  ——拉开的是"进场距离"，不是"瞄准精度"。
+        // 【实测七百〇四 → 实测七百〇六：近战也先拉开距离再俯冲】玩家原话：「其实近远程空袭的
+        //  女仆也是需要有一个拉开距离的」。近战空袭原先是"占好高度 → 直接压低机头俯冲"，
+        //  中间**没有**任何距离门槛：怪物贴在她正下方时她原地俯冲，一轮接一轮地贴着打
+        //  （20 血的她近战反击下存活率差）。现在在俯冲之前加一段：**距离还没拉开到
+        //  {@code airRaid.minStandoff} 时，先背离敌人平飞一小段**（借滑翔的自然位移拉开，
+        //  不俯冲、不烧额外燃料）。
+        //
+        //  【实测七百〇六：这一段曾把近战空袭整个打废——玩家原话「这一个版本的近战空袭基本上
+        //   就失效了……导致女仆基本上碰不到敌人」】三个缺陷叠在一起：
+        //   (a) **判据用水平距离，而"进入俯冲"用 3D 距离**。俯冲的闸门是 `3D ≤ smashRange()`
+        //       （见下面那句），而"拉开"的判据是 `水平 < minStandoff`。因为 `3D ≥ 水平`，所以
+        //       **凡是想俯冲的那一 tick，水平必然也 < minStandoff = 6**——"拉开"判据在每一次
+        //       俯冲的门前都成立，于是它先 `return`、俯冲被反复掐断，她只能在 6 格那条线上来回抖。
+        //       日志实证：27 行「拉开距离」（水平 0.78~5.99 格）、全程没压下去过一次。
+        //       修：两条判据统一成 **3D 距离**——贴脸只发生在同一高度层，她高悬于敌人头顶时
+        //       水平近是正常进场姿态。
+        //   (b) **预算是自复位的**：`pulled` 计满 {@link #STANDOFF_MAX_TICKS}(40) 后下一 tick
+        //       就被归零 → "拉开 40 tick、放开 1 tick、再拉开 40 tick"，就算尺子统一了，
+        //       6 格线以内的那一段进场路也永远走不完。修：**一轮只拉开一次**——本轮一旦"够远"
+        //       或"预算用完"就记进 {@link #STANDOFF_DONE}，此后本轮一律放行俯冲，直到下一轮
+        //       （{@code endSmash} 之后的新一轮）才重新评估。
+        //   (c) 猛击收尾后的"等待再起飞"（{@link #WAIT_LAUNCH}）期间一律不拉开，让"再起飞"不被横飞打断。
+        //
+        //  【为什么不会掉命中率】下面那句 dist <= smashRange() 的俯冲判定、瞄准、命中判定
+        //  （sweepWithin / smashHit）**一个字不改**——拉开的是"进场距离"，不是"瞄准精度"。
         if (!ranged) {
-            double dxh0 = maid.getX() - target.getX();
-            double dzh0 = maid.getZ() - target.getZ();
-            double distH0 = Math.sqrt(dxh0 * dxh0 + dzh0 * dzh0);
-            // 【必须有界】她要是在墙角里 / 追一个跟她同速的飞行目标，"拉开距离"永远拉不开——
-            //  无界的话她会一直平飞、一轮都不俯冲（从"贴脸硬碰"变成"永远不打"）。给一段预算
-            //  （{@link #STANDOFF_MAX_TICKS} = 2 秒），用完就照常俯冲；距离一旦够就清零重来。
-            int pulled = STANDOFF_TICKS.getOrDefault(id, 0);
-            boolean wantPull = distH0 < airMinStandoffCfg() && !WAIT_LAUNCH.contains(id)
-                    && pulled < STANDOFF_MAX_TICKS;
-            if (wantPull) {
-                STANDOFF_TICKS.put(id, pulled + 1);
-                // 背离敌人 + **平飞**（不抬头：高度已经占好了，抬头会掉速、还把她顶得更高）。
-                faceAwayFlat(maid, target);
-                suppressVanillaMelee(maid);
-                logStandoff(maid, distH0);
-                return;
-            }
-            if (pulled > 0) {
-                STANDOFF_TICKS.remove(id); // 够了 / 预算用完 → 这一轮的拉开到此为止
+            double dist3 = maid.distanceTo(target); // 【七百〇六】3D 距离（旧版"拉开"用水平距离，见上）
+            if (WAIT_LAUNCH.contains(id)) {
+                // (c) 猛击收尾后的"等待再起飞"：不拉开
+                STANDOFF_TICKS.remove(id);
+            } else if (STANDOFF_DONE.contains(id) || dist3 <= smashRange()) {
+                // 本轮已经拉开过 / 已经进收翅线：放行俯冲，不再拉开
+                STANDOFF_TICKS.remove(id);
+            } else if (dist3 >= airMinStandoffCfg()) {
+                // 已经够远 → 本轮"拉开"到此为止，接下来一路放行俯冲（(b) 的关键一步：
+                //  她接下来往回压的那一段必然穿过 6 格线以内，若不留这个标记就会在线上无限抖动）
+                STANDOFF_DONE.add(id);
+                STANDOFF_TICKS.remove(id);
+            } else {
+                int pulled = STANDOFF_TICKS.getOrDefault(id, 0);
+                if (pulled < STANDOFF_MAX_TICKS) {
+                    STANDOFF_TICKS.put(id, pulled + 1);
+                    // 背离敌人 + **平飞**（不抬头：高度已经占好了，抬头会掉速、还把她顶得更高）。
+                    faceAwayFlat(maid, target);
+                    suppressVanillaMelee(maid);
+                    logStandoff(maid, dist3);
+                    return;
+                }
+                // 预算用完还拉不开（墙角 / 敌人同速追 / 她本来就在敌人正上方）→ 本轮放弃拉开、直接俯冲。
+                //  旧版这里只把预算归零，于是下一 tick 又从头拉开——一轮都不俯冲。
+                STANDOFF_DONE.add(id);
+                STANDOFF_TICKS.remove(id);
+                logStandoffGiveUp(maid, dist3);
             }
         }
 
@@ -915,11 +954,71 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** 第 0 步：跳一下离地（`updateFallFlying` 会在落地时清滑翔位，必须先离地） */
     private void jumpForLaunch(EntityMaid maid, LivingEntity target, UUID id) {
         faceLaunchDirection(maid, target);
-        Vec3 dm = maid.getDeltaMovement();
-        maid.setDeltaMovement(dm.x, 0.42, dm.z);
-        maid.hurtMarked = true;
+        kickOffGround(maid);
         MaidFlightKit.setGliding(maid, true);
         JUMP_LEFT.put(id, jumpTicks());
+    }
+
+    /**
+     * 【实测七百〇七：起飞链路"一定要成功"】把这一 tick 的竖直运动**独占**给起跳冲量。
+     *
+     * <p>需求原文："女仆一旦执行这个起飞的链路，一定要成功执行，而不是在原地浪费。"
+     *
+     * <p>【旧版为什么"蹦好几下却离不了地"】起跳只是一句 {@code setDeltaMovement(x, 0.42, z)}，
+     * 而这一 tick 里与她抢"移动"的还有好几路，全部写在 brain 阶段、且都在本行为之后：
+     * <ul>
+     *   <li>TLM {@code MaidMoveControl} 在水里/想游泳时**直接施加速度矢量**（绕过 WALK_TARGET）；</li>
+     *   <li>本模组战术行为（{@code MaidCombatTacticsBehavior.meleeTick}）的跳劈/贴身绕走
+     *       与自保（{@code SelfPreservationBehavior}）的垫高/逃跑都会重写位移；</li>
+     *   <li>TLM 跟随/战斗走位写下的 {@code WALK_TARGET} 会被 {@code MoveToTargetSink}
+     *       变成寻路（除非已被抑制）。</li>
+     * </ul>
+     * 0.42 这一口被摊平后她就"原地蹦"；而**挨打那一下不属于女仆方的移动意图**，
+     * 反而干净地把她顶离了地——这正是玩家观察到的"被敌人打中以后反而可以起飞"。
+     *
+     * <p>【修法：与 {@code MaidMoveSuppressMixin} 同一套"清意图"口径，就地做一遍】
+     * <ol>
+     *   <li>清 {@code WALK_TARGET} + 停导航——同 tick 不再有人把她往地面拽；</li>
+     *   <li>重给竖直冲量 {@code 0.42}（与 {@code jumpForLaunch} 同一数值）；</li>
+     *   <li>置 {@code hasImpulse = true}——原版 {@code ServerGamePacketListenerImpl}
+     *       对"有冲量"的实体重发位置包，否则客户端本地还会按旧速度把她画在原地。</li>
+     * </ol>
+     * 全程 {@code try/catch}：任何意外都退回"只写速度"的老行为，绝不拖垮 brain tick。
+     */
+    private static void kickOffGround(EntityMaid maid) {
+        try {
+            maid.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+            maid.getNavigation().stop();
+        } catch (Throwable ignored) {
+        }
+        try {
+            Vec3 dm = maid.getDeltaMovement();
+            maid.setDeltaMovement(dm.x, 0.42, dm.z);
+        } catch (Throwable ignored) {
+        }
+        try {
+            maid.hasImpulse = true;
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百〇七】起跳窗耗尽仍未离地：留痕（每只女仆 5 秒一条，搜「起飞受阻」）。 */
+    private static void logLaunchStuck(EntityMaid maid, long gameTime) {
+        try {
+            UUID id = maid.getUUID();
+            Long last = LAUNCH_STUCK_LOG.get(id);
+            if (last != null && gameTime - last < LAUNCH_STUCK_LOG_INTERVAL) {
+                return;
+            }
+            if (LAUNCH_STUCK_LOG.size() > 512) {
+                LAUNCH_STUCK_LOG.clear();
+            }
+            LAUNCH_STUCK_LOG.put(id, gameTime);
+            com.maidsmart.tool.PromaidLog.log("起飞受阻",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " 起跳窗走完仍未离地（低矮空间 / 被同 tick 移动源吃掉），本轮起跳放弃");
+        } catch (Throwable ignored) {
+        }
     }
 
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
@@ -1189,6 +1288,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         SMASH.remove(id);
         SMASH_TICKS.remove(id);
         WAIT_LAUNCH.add(id);
+        // 【实测七百〇六】一轮俯冲走完 = 下一轮可以重新评估"要不要先拉开距离"（见 STANDOFF_DONE）
+        STANDOFF_DONE.remove(id);
         // 实测五百四十四：这一记被换成了激流旋转冲击时**先别开滑翔**——滑翔的 `travel` 会
         // 每 tick 把水平速度往视线方向拽并限速，正好把突进速度磨掉。突进结束后空袭自然回到
         // 本状态机，那时再开滑翔（阶段二那一条），中间只差十几 tick。
@@ -1711,17 +1812,46 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     /** 「拉开距离」日志限频（每只女仆 5 秒至多一条）——它是每 tick 可能命中的常态段，不节流会刷屏 */
     private static final Map<UUID, Long> STANDOFF_LAST_LOG = new HashMap<>();
 
+    /** 「高度地板」日志限频（每只女仆 5 秒至多一条）——低于地板时每 tick 都会命中，不节流会刷屏 */
+    private static final Map<UUID, Long> FLOOR_LAST_LOG = new HashMap<>();
+
+    /** 【实测七百〇六】低于「离敌最低高度」→ 写一行「高度地板」（节流 5 秒），供实机核对。 */
+    private void logHeightFloor(EntityMaid maid, double above) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = FLOOR_LAST_LOG.get(maid.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            FLOOR_LAST_LOG.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("远程空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 高度地板：只比敌人高 " + fmt2(above)
+                            + " 格 < airRaid.minAboveHeight " + fmt2(airMinAboveHeightCfg())
+                            + " 格 → 俯仰钉成最大抬头并立即补推（不再继续下沉）");
+        } catch (Throwable ignored) {
+        }
+    }
+
     /**
      * 【实测七百〇四】"先拉开距离"这一段的**每轮预算**（tick，= 2 秒）——见近战那一支。
      *
      * <p>没有这道上限，她在墙角 / 追同速飞行目标时会一直平飞、永远不俯冲（把"贴脸硬碰"变成"永远不打"）。
-     * 用完预算就照常俯冲；距离一旦拉够就清零，下一轮重新有 2 秒。
      */
     private static final int STANDOFF_MAX_TICKS = 40;
-    /** 女仆 UUID → 本场遭遇"拉开距离"已经走了多少 tick（够距离/预算用完即清） */
+    /** 女仆 UUID → 本场遭遇"拉开距离"已经走了多少 tick */
     private static final Map<UUID, Integer> STANDOFF_TICKS = new HashMap<>();
+    /**
+     * 【实测七百〇六】本场遭遇**已经拉开过**、接下来一律放行俯冲的女仆。
+     *
+     * <p>这是把"拉开距离"从**每 tick 复评**改成**每场遭遇一次**的那道闸。旧版的毛病（见近战那一支的
+     * 注释 (a)(b)）是：拉开判据用水平距离、而俯冲闸门用 3D 距离，且预算用完就归零 → 她永远停在
+     * 6 格线上抖动、一次都压不下去（日志实证：27 行「拉开距离」、0 行猛击）。现在"够远"或
+     * "预算用完"就置位 {@code STANDOFF_DONE}，本轮余下的时间全部让给俯冲；由 {@link #endSmash}
+     * （一轮的收尾）摘掉这个标记，所以**下一轮**照样能重新拉开。
+     */
+    private static final Set<UUID> STANDOFF_DONE = new HashSet<>();
 
-    private void logStandoff(EntityMaid maid, double distH) {
+    private void logStandoff(EntityMaid maid, double dist) {
         try {
             long now = System.currentTimeMillis();
             Long last = STANDOFF_LAST_LOG.get(maid.getUUID());
@@ -1730,9 +1860,25 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             }
             STANDOFF_LAST_LOG.put(maid.getUUID(), now);
             com.maidsmart.tool.PromaidLog.log("近战空袭",
-                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拉开距离：水平 " + fmt2(distH)
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拉开距离：距敌 " + fmt2(dist)
                             + " 格 < airRaid.minStandoff " + fmt2(airMinStandoffCfg())
-                            + " 格 → 先背离平飞，拉开了再俯冲（瞄准与命中判定不变）");
+                            + " 格 → 先背离平飞，拉开了再俯冲（本轮只拉开这一次；瞄准与命中判定不变）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百〇六】"拉开"预算用完（墙角 / 敌人同速追）→ 本轮放弃拉开、直接俯冲，写一行说明。 */
+    private void logStandoffGiveUp(EntityMaid maid, double dist) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = STANDOFF_LAST_LOG.get(maid.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            STANDOFF_LAST_LOG.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("近战空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 放弃拉开：拉开这么久仍只有 "
+                            + fmt2(dist) + " 格（墙角 / 目标同速）→ 本轮直接俯冲，不再横飞");
         } catch (Throwable ignored) {
         }
     }
@@ -2091,9 +2237,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 期望盘旋高度（目标上方 rangedHoldHeight() 格）
         double holdY = target.getY() + rangedHoldHeight();
 
+        // 【实测七百〇六：高度地板】玩家原话：「远程空袭的时候，不管是处于哪一种飞行状态，
+        //  那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」
+        //  旧版只有"软回正"（按高度误差给俯仰）+ "掉高补推 5 秒冷却"——三段叠加让高度在带内
+        //  持续锯齿、偶尔探到 8 格以下甚至只剩一两格。这里加一条**硬地板** `floorY`：
+        //  ① 低于它就算"掉高"（不必等掉出 10 格带），补推的冷却一好就补；
+        //  ② 盘旋俯仰直接钉成最大抬头（见下面 ④），于是她立刻转入爬升、绝不会继续往下滑。
+        double floorY = target.getY() + airMinAboveHeightCfg();
+        boolean belowFloor = airMinAboveHeightCfg() > 0.0 && maid.getY() < floorY;
+        if (belowFloor) {
+            logHeightFloor(maid, maid.getY() - target.getY());
+        }
+
         // ① 按需补推：只在真的掉出高度带时才补（5 秒间隔只是下限）
         int boostLeft = RANGED_BOOST_LEFT.getOrDefault(id, 0);
-        boolean tooLow = maid.getY() < holdY - rangedBoostDrop();
+        boolean tooLow = belowFloor || maid.getY() < holdY - rangedBoostDrop();
         if (boostLeft <= 0 && tooLow && gameTime >= RANGED_NEXT_BOOST.getOrDefault(id, 0L)) {
             // 实测五百七十八【A 方案】第一顺位是**位移法术**：不消耗燃料、也不占烟花冷却，
             // "能像玩家那样持续飞很久"就落在这一条上；它成功时会自己开同一个抬头窗口。
@@ -3158,7 +3316,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double effHold = holdY + (maneuverOn ? CombatManeuver.heightAdd(oid, yoyoAmpCfg()) : 0.0);
         double err = (effHold - maid.getY()) + rangedHoldBias();
         float pitch = (float) (-err * rangedHoldGain());
-        pitch = Mth.clamp(pitch, -rangedOrbitUpMax(), rangedOrbitDownMax());
+        // 【实测七百〇六：高度硬地板】低于「离敌最低高度」时**不走增益**，直接把俯仰钉成最大抬头
+        //  ——软增益在死区附近给出的角度太小、救不回高度（这正是"飞着飞着只剩一点高度"的由来）。
+        //  硬钉最大抬头让她立刻转入爬升；地板之上的行为一个字不改。
+        double floorOff = airMinAboveHeightCfg();
+        boolean belowFloor = floorOff > 0.0 && maid.getY() < target.getY() + floorOff;
+        if (belowFloor) {
+            pitch = -rangedOrbitUpMax();
+        } else {
+            pitch = Mth.clamp(pitch, -rangedOrbitUpMax(), rangedOrbitDownMax());
+        }
         applyRotation(maid, yaw, pitch);
         // 实测五百二十九：同 faceUpForward——只写 applyRotation 会被本 tick 后手执行的
         // `LookControl.tick()` 把俯仰归零（还可能被残留期望点带偏），必须两手都上。
@@ -3221,6 +3388,23 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
         } catch (Throwable ignored) {
             return 4.0;
+        }
+    }
+
+    /**
+     * 【实测七百〇六】空袭的**离敌最低高度**（格）：配置 {@code airRaid.minAboveHeight}，默认 8.0。
+     *
+     * <p>它是远程空袭盘旋时的**硬地板**（见 {@link #faceOrbit} 与 {@link #tickRangedAir}）：
+     * 高度差低于它就把俯仰钉成最大抬头 + 把"掉高补推"的触发门槛提到它。玩家原话：
+     * 「至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」
+     * 配置没挂上时退回 8.0——与配置里的默认值对齐（本项目的老规矩：兜底值必须跟着默认值走）。
+     * 0 = 关闭（退回旧行为）。
+     */
+    private static double airMinAboveHeightCfg() {
+        try {
+            return MaidSmartConfig.AIR_RAID_MIN_ABOVE_HEIGHT.get();
+        } catch (Throwable ignored) {
+            return 8.0;
         }
     }
 
