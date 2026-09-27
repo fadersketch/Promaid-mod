@@ -352,5 +352,10 @@
   "config.promaid.misc.freeFlightNearDist": "仿创造飞行·落地贴近距离（格）",
   "config.promaid.misc.freeFlightTravel": "仿创造飞行·走路的活也交给飞",
   "config.promaid.misc.freeFlightTravelDist": "仿创造飞行·超过多远就改飞（格）",
-  "config.promaid.misc.glideElytraAnimation": "滑翔时用鞘翅动画"
+  "config.promaid.misc.glideElytraAnimation": "滑翔时用鞘翅动画",
+  "config.promaid.maneuver": "接敌机动",
+  "config.promaid.maneuver.enable": "接敌机动·总开关",
+  "config.promaid.maneuver.yoyoAmp": "接敌机动·高悠悠幅度（格）",
+  "config.promaid.airSeparation": "空袭·空中防叠罗汉",
+  "config.promaid.airSeparationRadius": "空袭·半径偏置强度（格）"
 }
