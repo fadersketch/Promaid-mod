@@ -857,6 +857,15 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         if (shouldBoost(maid, aim, gameTime)) {
             boost(level, maid, id, gameTime, aim);
         }
+        // 【v1.3.0(beta) 实测七百〇四：跟随这一路补上"不往危险格里沉"】本条链路原先只有
+        // faceToward → detour 那一层（"要飞向的那个点"会穿进危险格才让开），**没有** antiSink——
+        // 而滑翔的物理是"重力持续把她往下拽"：她在岩浆湖上方平飞/掉高时，视线是水平的、
+        // detour 判"这一段干净"（它只看从她到目标点那条线），可她每 tick 还在往下沉，
+        // 几秒后一头扎进去。玩家反馈「女仆有的时候还是会飞进岩浆里面」里，飞行跟随这一档
+        // 就是这一条。放在**最后**（推进剂之后）才有最终话语权；只抬竖直分量、不碰朝向，
+        // 与空袭 tickRangedAir 那一句同款。**只在空中这一支调**：地面起跳与"进收手半径"
+        // 都在上面 return，落地的正常下降不受影响。
+        MaidFlightHazardGuard.antiSink(maid);
     }
 
     @Override

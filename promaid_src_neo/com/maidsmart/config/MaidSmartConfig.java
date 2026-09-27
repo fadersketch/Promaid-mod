@@ -797,6 +797,8 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.DoubleValue AIR_RAID_ORBIT_RADIUS;
     /** 【实测六百九十三】锁敌后离敌的最远距离（格）。数值口径见 MaidFlightCombatBehavior.orbitMaxCfg */
     public static final ModConfigSpec.DoubleValue AIR_RAID_ORBIT_MAX;
+    /** 【实测七百〇四】空袭离敌最小距离（格）——盘旋半径硬下限 + 近战俯冲前的拉开门槛。见 MaidFlightCombatBehavior.airMinStandoffCfg */
+    public static final ModConfigSpec.DoubleValue AIR_RAID_MIN_STANDOFF;
     /** 期望盘旋高度（目标上方格数）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ModConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_HEIGHT;
     /** 高度修正增益。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -2300,6 +2302,9 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 12，2~64）：远程空袭盘旋时**不会被拉出这个半径之外**——越过它径向修正的增益从 0.5 提到 1.0（双倍往回带），所以\"随机环绕\"不会变成\"越飞越远\"。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里缓动。默认 12 = 盘旋半径 10 的 1.2 倍，所以均值仍落在 10 附近（观感与旧版同一条圈）。\n\n注意它**不是**「有效开火距离」：开火那一道门是 airRaid.rangedFireRange（默认 24，超出就不扣扳机、先盘旋拉近），本值只决定\"她绕在哪一圈上\"，一般应当小于等于开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
                 .translation("config.promaid.airRaid.orbitMax")
                 .defineInRange("orbitMax", 12.0, 2.0, 64.0);
+        AIR_RAID_MIN_STANDOFF = BUILDER.comment("空袭·离敌最小距离（格，默认 6.0，0~32；0 = 关闭）：「拉开距离」在空袭这边的落地。\n\n【实测七百〇四：玩家点名要的那个数】原话：「其实近远程空袭的女仆也是需要有一个拉开距离的」。\n\n【它管三件事】① **远程空袭盘旋半径的硬下限**——盘旋半径的区间近端取 max(盘旋半径 × 0.75, 本值)，所以她绕的那个圈**绝不会**比这条线更近（旧版近端是\"盘旋半径 × 0.75\"现算的，把「离敌最远距离」调小、近端就跟着塌下去，她可能绕到 3 格、正好进近战怪的攻击范围）；② **近战空袭的\"先把距离拉开再俯冲\"**——已占好高度但水平距离还没拉开到这条线时，先背离敌人平飞一小段（不俯冲），拉开了才压低机头；③ 同一条线也兜住\"被贴脸\"：贴身怪把她推到这条线以内时，她不会继续压着敌人绕。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道命中率会随距离下降、也可能超出某些武器射程（一般应当 ≤「有效开火距离」airRaid.rangedFireRange）；调小 = 更贴脸。**近战那一档不会因此打不中**：这条线只作用在\"俯冲之前\"那一段，俯冲一旦开始，瞄准与命中判定一个字不改（这个模组在命中率上专门修过两轮）。被本值顶到超过「离敌最远距离」时以后者为准（区间不会倒挂）。日志搜「拉开距离」")
+                .translation("config.promaid.airRaid.minStandoff")
+                .defineInRange("minStandoff", 6.0, 0.0, 32.0);
         AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，实测五百七十九由 3.5 提到 10")
                 .translation("config.promaid.airRaid.rangedHoldHeight")
                 .defineInRange("rangedHoldHeight", 10.0, 0.0, 64.0);

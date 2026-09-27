@@ -255,6 +255,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DASH_LAST_LOG.remove(maidId);
         DIVE_NEXT.remove(maidId);
         DIVE_LAST_LOG.remove(maidId);
+        STANDOFF_LAST_LOG.remove(maidId); // 【实测七百〇四】"拉开距离"日志节流
         MaidBombing.forget(maidId);
         MAX_Y.remove(maidId);
         // v1.2.0 实测五百二十一：空袭专用索敌器的锁定/限频也一并清（见 FlightTargeting）
@@ -340,6 +341,7 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         DASH_LAST_LOG.clear();
         DIVE_NEXT.clear();
         DIVE_LAST_LOG.clear();
+        STANDOFF_LAST_LOG.clear(); // 【实测七百〇四】"拉开距离"日志节流
         MaidBombing.clearAll();
         MAX_Y.clear();
         // v1.2.0 实测五百二十一：索敌器状态全清（服务器停止 / 重新加载时）
@@ -607,6 +609,14 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 摘掉（它只在 tick 里被驱动，链路走不到这里就没人再推）——留着只是表里的陈旧项。
         // **注意**：这里只丢窗口引用，不作任何减速（"保持动量自然滑翔"那一档的语义，同 BOOST_ROCKET）。
         com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+        // 【实测七百〇四：这一轮到此为止，两套随机作废、下一轮重抽】玩家反馈「打了那么多场都一直
+        //  在用环绕」——根因同扫帚那一侧：{@link CombatOrbit} / {@link CombatManeuver} 的状态原先
+        //  只在换任务/下线（{@code forget}）时清，而"丢目标/这一轮收手"走的是本方法（它调的是
+        //  pauseRound，**不清这两张表**）。于是 begin 的幂等语义变成"一次抽签用一整天"。
+        //  本方法是空袭唯一的"这一轮结束"漏斗（pauseRound 是轮内短暂停，刻意不动这两张表），
+        //  所以重抽放在这里：她的下一场遭遇一定看得见换打法。
+        CombatOrbit.forget(id);
+        CombatManeuver.forget(id);
         if (maid.onGround()) {
             MaidFlightKit.setGliding(maid, false);
         }
@@ -835,6 +845,27 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 放在 faceTarget 之前，让本 tick 的朝向仍以空袭的为准（吟唱抢朝向发生在下一 tick）。
         // 爬升相位（tickClimbToAltitude）与猛击段刻意不调用，理由见 tryCastSpell 的注释。
         tryCastSpell(maid, target, id, gameTime);
+
+        // 【实测七百〇四：近战也先拉开距离再俯冲】玩家原话：「其实近远程空袭的女仆也是需要有
+        //  一个拉开距离的」。近战空袭原先是"占好高度 → 直接压低机头俯冲"，中间**没有**任何
+        // 距离门槛：怪物贴在她正下方时她原地俯冲，一轮接一轮地贴着打（20 血的她近战反击下
+        // 存活率差）。现在在俯冲之前加一段：**水平距离还没拉开到 {@code airRaid.minStandoff}
+        //  时，先背离敌人平飞一小段**（借滑翔的自然位移拉开，不俯冲、不烧额外燃料）。
+        //  【为什么不会掉命中率】这一段只在"还没开始俯冲"时生效；一旦距离够了，下面那句
+        //  dist <= smashRange() 的俯冲判定、瞄准、命中判定（sweepWithin / smashHit）**一个字不改**
+        //  ——拉开的是"进场距离"，不是"瞄准精度"。
+        if (!ranged) {
+            double dxh0 = maid.getX() - target.getX();
+            double dzh0 = maid.getZ() - target.getZ();
+            double distH0 = Math.sqrt(dxh0 * dxh0 + dzh0 * dzh0);
+            if (distH0 < airMinStandoffCfg() && !WAIT_LAUNCH.contains(id)) {
+                // 背离敌人 + **平飞**（不抬头：高度已经占好了，抬头会掉速、还把她顶得更高）。
+                faceAwayFlat(maid, target);
+                suppressVanillaMelee(maid);
+                logStandoff(maid, distH0);
+                return;
+            }
+        }
 
         suppressVanillaMelee(maid);
         faceTarget(maid, target);
@@ -1628,6 +1659,58 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             maid.getLookControl().setLookAt(
                     maid.getX() + Math.cos(yawRad), maid.getEyeY() + climbTan,
                     maid.getZ() + Math.sin(yawRad), 360.0f, 360.0f);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百〇四】近战空袭"先拉开距离"那一段的朝向：**背离敌人 + 水平**（俯仰 0）。
+     *
+     * <p>与 {@link #faceAwayAndUp} 的差别只有俯仰：那一条是"爬升"用的（62° 抬头，拿速度换高度，
+     * 实测四百七十二 调出来的），这一条是**已经在高度上占好位、只想把水平距离拉出去**时用的——
+     * 抬头会掉水平速度、还把她顶得更高（更高就更容易掉出空袭的高度判据，也会拖长俯冲行程）。
+     *
+     * <p>【为什么平飞就能拉开】滑翔的物理里视线就是操纵杆（原版 {@code travel} 的滑翔分支
+     * 沿视线加速并做水平速度对齐）——把视线摆成"敌人反方向的水平向量"，她自然朝那个方向滑走；
+     * 这一段不点火、不额外烧燃料，纯借已有的滑翔动量与高度势能。
+     */
+    private void faceAwayFlat(EntityMaid maid, LivingEntity target) {
+        double dx = maid.getX() - target.getX();
+        double dz = maid.getZ() - target.getZ();
+        double dh = Math.sqrt(dx * dx + dz * dz);
+        if (dh < 1.0E-4) {
+            float yawRad = maid.getYRot() * ((float) Math.PI / 180.0F);
+            dx = Mth.sin(yawRad);
+            dz = -Mth.cos(yawRad);
+            dh = 1.0;
+        }
+        float yaw = (float) (Mth.atan2(dz, dx) * (180.0 / Math.PI)) - 90.0f;
+        applyRotation(maid, yaw, 0.0f);
+        // 抗 LookControl 归零（与 faceAwayAndUp 同款）
+        try {
+            double yawRad = Math.toRadians(yaw + 90.0);
+            maid.getLookControl().setLookAt(
+                    maid.getX() + Math.cos(yawRad), maid.getEyeY(),
+                    maid.getZ() + Math.sin(yawRad), 360.0f, 360.0f);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「拉开距离」日志限频（每只女仆 5 秒至多一条）——它是每 tick 可能命中的常态段，不节流会刷屏 */
+    private static final Map<UUID, Long> STANDOFF_LAST_LOG = new HashMap<>();
+
+    private void logStandoff(EntityMaid maid, double distH) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = STANDOFF_LAST_LOG.get(maid.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            STANDOFF_LAST_LOG.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("近战空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 拉开距离：水平 " + fmt2(distH)
+                            + " 格 < airRaid.minStandoff " + fmt2(airMinStandoffCfg())
+                            + " 格 → 先背离平飞，拉开了再俯冲（瞄准与命中判定不变）");
         } catch (Throwable ignored) {
         }
     }
@@ -2982,6 +3065,15 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         double base = Math.max(2.0, orbitRadius());
         double orbMax = Math.max(2.0, orbitMaxCfg());
         double orbLo = Math.min(orbMax, Math.max(2.0, base * 0.75));
+        // 【实测七百〇四：拉开距离——盘旋半径的硬下限】玩家原话：「其实近远程空袭的女仆也是
+        //  需要有一个拉开距离的」。旧版近端只是"盘旋半径 × 0.75"现算的：玩家把「离敌最远距离」
+        //  （airRaid.orbitMax）调小时近端跟着一起塌，她可能绕到 3 格、正好进近战怪的攻击范围。
+        //  现在近端取 max(区间近端, airRaid.minStandoff)：随机环绕只发生在这条线之外。
+        orbLo = Math.max(orbLo, airMinStandoffCfg());
+        // 区间退化（硬下限越过顶点）时以顶点为准——绝不能出现 lo > hi 的倒挂
+        if (orbLo > orbMax) {
+            orbLo = orbMax;
+        }
         double wantR = Math.max(1.0, CombatOrbit.radius(oid, orbLo, orbMax));
         double dir = CombatOrbit.direction(oid);
         // 【实测七百〇三】接敌机动（见 CombatManeuver）：开场抽一次（幂等），之后每 tick 推进波形。
@@ -3091,6 +3183,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             return MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
         } catch (Throwable ignored) {
             return 4.0;
+        }
+    }
+
+    /**
+     * 【实测七百〇四】空袭的**离敌最小距离**（格）：配置 {@code airRaid.minStandoff}，默认 6.0。
+     *
+     * <p>它同时是远程空袭盘旋半径的**硬下限**（见 {@link #faceOrbit}）与近战空袭"先拉开距离
+     * 再俯冲"的门槛（见 {@code tick} 近战那一支）。配置没挂上时退回 6.0——与配置里的默认值
+     * 对齐（本项目的老规矩：兜底值必须跟着默认值走）。0 = 关闭（退回旧行为）。
+     */
+    private static double airMinStandoffCfg() {
+        try {
+            return MaidSmartConfig.AIR_RAID_MIN_STANDOFF.get();
+        } catch (Throwable ignored) {
+            return 6.0;
         }
     }
 

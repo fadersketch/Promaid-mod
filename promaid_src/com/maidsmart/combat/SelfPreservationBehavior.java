@@ -3245,7 +3245,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.232：会话外岩浆避让（仅影响移动方向及速度，不影响其他行为）——
      *  附近有岩浆且无抗火时：若女仆当前水平移动方向 3 格内会踩进岩浆格，
      *  改道离岩浆最远的安全点（cachedFleeSpot，找不到则不动）；方向干净则
-     *  完全不干预——建造/跟随/插火把照常，不再进危险态、不打断任何行为。 */
+     *  完全不干预——建造/跟随/插火把照常，不再进危险态、不打断任何行为。
+     *
+     *  <p>【实测七百〇四：探的格子改对了——脚底那一层 + 她的整个身位】玩家原话：
+     *  「对于岩浆这种危险环境的判定，可能需要把女仆自身的碰撞伤害算进去。尽可能的让她规避岩浆。」
+     *  旧版探的是 {@code floor(m_20188_)}（**眼高**，脚底往上约 1.62 格）——那正好是"她脚下那一格
+     *  之上"的空气格。而岩浆是**流体方块**，贴着地面那一层；她站在地面上时脚下那格才是岩浆面，
+     *  眼高那格是空气 → **恒判干净**，于是这个避让对"贴着地走/走进浅岩浆"几乎完全失效
+     *  （这就是"自己寻路时对危险环境的判定也有点问题，有的时候还是会踩上去"的根因）。
+     *  现在改成探**脚底那一层**（{@code floor(m_20186_)}，与 {@link com.maidsmart.tool.DangerBlocks}
+     *  的站立格口径一致：本体格 + 脚下一格），并按她的碰撞箱宽度横扩（0.6 宽 → ±1 格），
+     *  所以她"擦着岩浆边缘走"时也会被判到。 */
     private void avoidLavaMovement(EntityMaid maid) {
         if (this.cachedNearLava == null || hasFireResist(maid) || maid.m_20077_()) {
             return;
@@ -3258,15 +3268,19 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         double hx = vel.f_82479_ / hSpeed;
         double hz = vel.f_82481_ / hSpeed;
         net.minecraft.world.level.Level level = maid.m_9236_();
+        // 【实测七百〇四】脚底那一层（不是眼高）+ 按碰撞箱横扩——见方法注释
+        int feetY = (int) Math.floor(maid.m_20186_());
+        int rad = com.maidsmart.tool.DangerBlocks.boxRadius(maid.m_20205_());
         for (int step = 1; step <= 3; step++) {
             BlockPos p = new BlockPos((int) Math.floor(maid.m_20185_() + hx * step),
-                    (int) Math.floor(maid.m_20188_()),
+                    feetY,
                     (int) Math.floor(maid.m_20189_() + hz * step));
             if (!level.m_46749_(p)) {
                 return; // 出了已加载区块就不预判
             }
-            if (isLavaBlock(level.m_8055_(p).m_60734_())) {
-                // 再往前走会踩进岩浆 → 改道离岩浆最远的安全点（仅移动）
+            if (com.maidsmart.tool.DangerBlocks.cellDangerousBoxed(
+                    level, p.m_123341_(), p.m_123342_(), p.m_123343_(), rad)) {
+                // 再往前走会踩进危险格 → 改道离岩浆最远的安全点（仅移动）
                 if (this.cachedFleeSpot != null) {
                     maid.m_21573_().m_26519_(this.cachedFleeSpot.m_123341_() + 0.5,
                             this.cachedFleeSpot.m_123342_(), this.cachedFleeSpot.m_123343_() + 0.5, 1.1f);
