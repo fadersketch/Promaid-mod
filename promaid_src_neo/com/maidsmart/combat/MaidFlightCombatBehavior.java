@@ -3098,6 +3098,16 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         }
         double wantR = Math.max(1.0, CombatOrbit.radius(oid, orbLo, orbMax));
         double dir = CombatOrbit.direction(oid);
+        // 【实测七百〇五】旋向每 8 秒对半概率掉头（与扫帚那条同一处口径，见 CombatOrbit.flipSign）。
+        //  位置连续（只改角速度符号），不需要插值；掉头那一刻写一行「反向环绕」。
+        double dflip = CombatOrbit.flipSign(oid);
+        dir *= dflip;
+        if (CombatOrbit.flipped(oid)) {
+            com.maidsmart.tool.PromaidLog.log("远程空袭",
+                    com.maidsmart.tool.PromaidLog.nameOf(maid) + " 反向环绕：旋向翻转为 "
+                            + (dir > 0 ? "逆时针" : "顺时针") + "（每 "
+                            + (CombatOrbit.flipTicks() / 20) + " 秒对半概率决定是否掉头）");
+        }
         // 【实测七百〇三】接敌机动（见 CombatManeuver）：开场抽一次（幂等），之后每 tick 推进波形。
         boolean maneuverOn = maneuverEnabled();
         if (maneuverOn) {
@@ -3123,11 +3133,17 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                             + " 格（区间 " + fmt2(orbLo) + "~" + fmt2(orbMax) + "，上界=airRaid.orbitMax "
                             + fmt2(orbitMaxCfg()) + "），旋向 " + (dir > 0 ? "逆时针" : "顺时针"));
         }
-        if (maneuverOn && CombatManeuver.ticks(oid) == 1) {
+        if (maneuverOn && CombatManeuver.entering(oid)) {
             CombatManeuver.Kind mk = CombatManeuver.kind(oid);
+            int seg = CombatManeuver.segment(oid);
             com.maidsmart.tool.PromaidLog.log("远程空袭",
                     com.maidsmart.tool.PromaidLog.nameOf(maid) + " 接敌机动："
-                            + (mk == null ? "环绕" : mk.cn) + "（每场遭遇抽一种）");
+                            + (mk == null ? "环绕" : mk.cn)
+                            + (seg == 0
+                                    ? "（本场遭遇开场；每 " + (CombatManeuver.segmentTicks() / 20)
+                                            + " 秒换一种）"
+                                    : "（本场遭遇第 " + (seg + 1) + " 段·换打法；每 "
+                                            + (CombatManeuver.segmentTicks() / 20) + " 秒换一种）"));
         }
         double tx = dir * mRev * -uz; // 切向（绕圈；dir 决定顺/逆，8 字横切还会翻）
         double tz = dir * mRev * ux;
