@@ -657,6 +657,8 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_RANGE;
     /** 【实测六百九十三】锁敌后离敌的最远距离（格）。数值口径见 MaidBroomDrive.orbitMaxCfg */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_ORBIT_MAX;
+    /** 【实测七百零一】锁敌后离敌的最小距离（格）。数值口径见 MaidBroomDrive.MIN_STANDOFF 那段 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_MIN_STANDOFF;
     /** 悬停高度（格，相对目标脚底）。数值口径见 {@code com.maidsmart.combat.MaidBroomDrive} */
     public static final ForgeConfigSpec.DoubleValue COMBAT_BROOM_HOVER;
     /**
@@ -2056,6 +2058,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.broom.range").defineInRange("range", 8.0, 1.0, 32.0);
         COMBAT_BROOM_ORBIT_MAX = BUILDER.comment("锁敌之后离敌的最远距离（格，默认 10，1~48）：她绕着目标打的时候**不会被拉出这个半径之外**（越过它径向修正会加倍往回带）。\n\n【实测六百九十三：玩家点名要的那个数】原话：「设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。」它同时是随机环绕区间的**顶点**——盘旋半径在 [min(本值, 站立距离 × 0.75), 本值] 里缓动。默认 10 = 站立距离 8 的 1.25 倍，所以均值仍落在 8 上（观感与旧版同一条圈），只是半径会在 6~10 之间飘、每只女仆还不一样。\n\n调小它 = 把她整体拉近并收紧随机范围（越近越容易被近战摸到，但越不容易被\"串\"）；调大它 = 允许她在更宽的一圈里机动（远程更安全，但枪械命中率会随距离下降）。日志搜「随机环绕」看每一轮实际抽到的半径与旋向")
                 .translation("config.promaid.broom.orbitMax").defineInRange("orbitMax", 10.0, 1.0, 48.0);
+        COMBAT_BROOM_MIN_STANDOFF = BUILDER.comment("锁敌之后离敌的**最小距离**（格，默认 6，1~32）：接敌后她绕圈时**绝不会**比这个距离更近——近战怪摸不到她，才有稳定的远程输出窗口。\n\n【实测七百零一：玩家点名要的那个数】原话：「应该要保证至少与怪物拉开多少距离」+「剩下的运动的绕圈速度以及半径要每隔一小段时间就变化一下。同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」。\n\n【它管什么】盘旋半径的**近端**取 max(基础盘旋距离 × 0.75, 本值)：随机环绕只发生在这条线之外。旧版的近端是\"基础距离 × 0.75\"现算的——把「离敌最远距离」调到 4，近端就塌到 3 格、她正好飘进近战范围；现在这条下限独立存在，不受另一个旋钮拖动。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道的命中率会随距离下降、也可能超出某些武器的射程；调小 = 更贴脸（1 格会让她几乎贴着怪，不建议）。近端被本值顶到超过「离敌最远距离」时以「离敌最远距离」为准（区间不会倒挂）")
+                .translation("config.promaid.broom.minStandoff").defineInRange("minStandoff", 6.0, 1.0, 32.0);
         COMBAT_BROOM_HOVER = BUILDER.comment("悬停高度（格，默认 2，相对目标脚底）：她比目标高出的格数。调太高会够不到地面怪（弹道与射程都会跟着变苛刻），0 = 与目标同高（0~16）")
                 .translation("config.promaid.broom.hover").defineInRange("hover", 2.0, 0.0, 16.0);
         COMBAT_BROOM_CLIMB = BUILDER.comment("接敌爬升高度（格，默认 12，2~32）：遇到敌人时先爬到**它上方**这么多格，再开始绕着它盘旋。这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那个高度打，打完/丢目标才作废），所以它既是\"爬多高\"也是\"在敌上多高打\"。\n\n【实测六百八十六：默认 15 → 12】玩家原话：\"把扫帚盘旋的默认配置高度改为12格。\"——旧档里写着 15 的会由一次性迁移搬到 12（**只有值等于 15 才搬**，玩家自己调过的其它值一律不碰，标记 broomClimb12Migrated）。\n\n【实测六百八十二：默认 10 → 15】玩家原话：\"现版本女仆在扫帚模式下……就算真的飞起来了打敌人，飞起来的高度仍然很低，起不到实战效果。目前大概要在原有的基础上至少再往上飞5格左右。默认值上调5格。\"（10 是 实测六百七十八 定的：\"这个模式\"指武装拴绳二号位——你吊在她下方 2.6~2.9 格，她飞高一点你脚下才有余量、不会一路蹭着树冠和地面。）\n\n【为什么真的会变高】本批同时去掉了 679 那道\"武装拴绳没在用就不驱动扫帚\"的闸（那道闸让扫帚模式在没拿绳子时**整段失效**，正是玩家看到的\"坐在扫帚上动也不动\"）——高度这条链路通了之后，这个数字才真的等于她飞多高。\n\n【旧存档里的 10 会自己变】本批带了一次性迁移（值 == 10 就搬到 15，标记 `broomClimbMigrated` 落盘后不再碰），玩家自己设过的其它值一律不动。\n\n【会和别的数字打架吗】不会：盘旋那一条（上面「悬停高度」）只在\"这一场遭遇还没爬完\"时兜底，爬到位那一刻就用爬升的实际高度覆盖它。头顶被方块顶住时按**实际抬到的高度**记（但绝不低于「悬停高度」），所以低天花板地形不会为了够 15 格一直往上顶。日志搜「接敌 → 先爬到它上方」与「本场盘旋高度」")

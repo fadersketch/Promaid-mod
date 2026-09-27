@@ -436,6 +436,32 @@ public final class MaidResyncCommand {
                 viewer.f_8906_.m_9829_(
                         new net.minecraft.network.protocol.game.ClientboundSetPassengersPacket(maid));
             }
+            // v1.3.0(beta) 实测七百零一【补"她是乘客"那一方向】——原版 {@code ServerEntity#m_9824_}
+            // （= sendPairingData，1.20.1 SRG）两个方向都发：
+            // <pre>
+            //   if (!entity.m_20197_().isEmpty()) accept(new ClientboundSetPassengersPacket(entity));
+            //   if (entity.m_20152_())          accept(new ClientboundSetPassengersPacket(entity.m_20202_()));
+            // </pre>
+            // 旧版本方法只发了前者（她载着谁），**漏了后者（她骑着谁）**。于是"死后在重生点复活、
+            // 又骑上扫帚"的女仆在客户端是一具**没有载具的孤儿实体**：服务端她是扫帚的乘客，
+            // 而原版对乘客**不发她自己的位置包**（{@code ServerEntity#sendChanges} 的 isPassenger
+            // 那一支只用载具坐标），于是客户端把她钉在 AddEntity 那一拍的落点上不动，
+            // 扫帚（服务端驱动）照飞 —— 玩家原话：「重生以后的女仆在坐上扫帚以后有的时候会做着
+            // 做着自己身体就停了下来，停在原地，但是扫帚在进行飞行。」
+            //
+            // 【为什么只有复活过的女仆会中招】本方法只在两条链路上被调：① 复活后那三枪强制补包
+            // （{@link #scheduleForcedResync}，实测六百九十七）；② 入世界自动补包。而 ② 对"新实体"
+            // 是**刻意放过**的（实测五百九十六：新 id = 原版追踪会自己发全套包），复活走的正是
+            // "同 UUID、新 id" ⇒ 那一路不发。所以只剩 ① 这一枪——它把客户端那只女仆删了又建，
+            // 而**载具那侧的 {@code lastPassengers} 早已记着"她在车上"、不会再重发**
+            // （{@code ServerEntity#sendChanges} 只在乘客表**变化**时发 SetPassengers）⇒ 这一枪之后
+            // 谁都不会再把她"挂"回扫帚上。补上这一条即闭环（与 ② 的"删+生成"顺序天然安全：
+            // AddEntity 与 SetPassengers 走同一条连接、按序处理，到客户端时两边实体都已存在）。
+            if (maid.m_20202_() != null) {
+                viewer.f_8906_.m_9829_(
+                        new net.minecraft.network.protocol.game.ClientboundSetPassengersPacket(
+                                maid.m_20202_()));
+            }
             List<com.mojang.datafixers.util.Pair<EquipmentSlot, net.minecraft.world.item.ItemStack>> eq =
                     new ArrayList<>();
             eq.add(com.mojang.datafixers.util.Pair.of(EquipmentSlot.MAINHAND, maid.m_21205_()));

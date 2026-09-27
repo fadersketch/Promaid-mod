@@ -265,7 +265,7 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
                 MaidFlightCombatBehavior.fireRanged(maid, target, maid.m_20148_(), gameTime);
                 return;
             }
-            MaidBroomDrive.steerTo(maid, MaidBroomDrive.combatPoint(maid, target));
+            MaidBroomDrive.steerTo(maid, MaidBroomDrive.combatPoint(maid, target), true);
             // 朝向改成"看着目标"而不是"朝着速度方向"：她在绕着目标侧移，脸得对着它才像在射击。
             // **必须在 steerTo 之后**（前面那一版只有盘旋这一支摆对了位置，跟随那一支摆反了，
             // 于是每 tick 被速度方向盖掉 —— 见下面 ⑥ 的注释）。
