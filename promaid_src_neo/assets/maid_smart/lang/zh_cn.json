@@ -292,6 +292,7 @@
   "config.promaid.airRaid.maxPitchDown": "俯仰限幅·低头（度）",
   "config.promaid.airRaid.orbitRadius": "盘旋半径（格）",
   "config.promaid.airRaid.orbitMax": "离敌最远距离（格）",
+  "config.promaid.airRaid.minStandoff": "离敌最近距离（格）",
   "config.promaid.airRaid.rangedHoldHeight": "期望盘旋高度（目标上方格数）",
   "config.promaid.airRaid.rangedHoldGain": "高度修正增益",
   "config.promaid.airRaid.rangedHoldBias": "高度修正偏置（格）",

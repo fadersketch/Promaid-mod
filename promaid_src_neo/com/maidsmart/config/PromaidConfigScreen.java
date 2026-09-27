@@ -2699,6 +2699,8 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_RADIUS, s), "远程空袭的盘旋半径（格，默认 10）：以目标为圆心保持的距离，也是高度修正环的基准圈。**实测六百九十三** 起它是随机区间的**近端**——接敌后半径在它与下面那条「离敌最远距离」之间缓动，每只女仆还不一样"));
         this.rows.add(new NumRow("离敌最远距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_ORBIT_MAX.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_ORBIT_MAX, s), "**实测六百九十三 新增**（默认 12，2~64）：锁敌之后离敌的**最远距离**——盘旋半径在 [min(本值, 盘旋半径 × 0.75), 本值] 里随机缓动（每只女仆各不相同、每 4 秒重掷），越过本值径向修正会加倍往回带。玩家原话：\"设一个锁敌之后离敌的最远距离，狐狐被击中的概率或许就降低不少。\"它**不是**「有效开火距离」（那个是下面 ④ 里那一条），一般应当 ≤ 开火距离。日志搜「随机环绕」看每一轮实际抽到的半径与旋向"));
+        this.rows.add(new NumRow("离敌最近距离（格）", String.valueOf(MaidSmartConfig.AIR_RAID_MIN_STANDOFF.get()),
+                this.setDoubleInRange(MaidSmartConfig.AIR_RAID_MIN_STANDOFF, "离敌最近距离", 0.0, 32.0), "**实测七百〇四 新增**（默认 6.0，0~32，0 = 关闭）：玩家原话「其实近远程空袭的女仆也是需要有一个拉开距离的」。① 远程空袭盘旋半径的**硬下限**——盘旋半径区间近端取 max(盘旋半径 × 0.75, 本值)，所以她绕的圈绝不会比这条线更近（旧版把「离敌最远距离」调小时近端会跟着塌，可能绕到 3 格、正好进近战范围）；② **近战空袭**\"先把距离拉开再俯冲\"——已占好高度但水平距离没到这条线时先背离平飞，拉开了才压低机头（俯冲的瞄准与命中判定一个字不改）；③ 贴身怪把她推到这个范围内时也不继续压着绕。调大更安全但枪械命中率随距离下降，一般应 ≤「有效开火距离」。日志搜「拉开距离」"));
         this.rows.add(new NumRow("期望盘旋高度（目标上方格数）", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT.get()),
                 s -> setDouble(MaidSmartConfig.AIR_RAID_RANGED_HOLD_HEIGHT, s), "期望盘旋高度（目标上方格数，默认 10）：低于这条带就补高度——远程空袭要的就是脚不沾地，掉下去就是被贴脸"));
         this.rows.add(new NumRow("高度修正增益", String.valueOf(MaidSmartConfig.AIR_RAID_RANGED_HOLD_GAIN.get()),
