@@ -5,6 +5,7 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.tool.PromaidLog;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.memory.MemoryModuleType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
@@ -16,73 +17,102 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * 实测七百〇四【第三种飞行：外部持续推进（Goety 飞行聚晶）】。
+ * 实测 G-1/G-2/G-3【外部持续推进：把 Goety 的飞行聚晶当第三种飞行】。
  *
- * <h2>它和另外两种飞行的分工</h2>
+ * <h2>它在三种飞行里的位置</h2>
  * <ul>
- *   <li><b>鞘翅</b>＝战斗机（高速、要配机动武器）；<b>仿创造飞行</b>＝直升机（慢、稳、灵活）；</li>
- *   <li><b>本档＝喷气式</b>：推力**由外部法术给**（飞行聚晶每 tick 把速度覆盖成
- *       视线方向 × 0.5~1.0 格/tick），我们**一个速度都不写**，只做三件事：
- *       <b>瞄准 → 续放 → 到地方收手</b>。</li>
+ *   <li><b>鞘翅</b>＝战斗机（高速、要配机动武器，空袭体系围着它设计）；</li>
+ *   <li><b>仿创造飞行</b>＝直升机（慢、稳、灵活，万金油移动层）；</li>
+ *   <li><b>本档＝喷气式</b>：推力**由外部法术给**（飞行聚晶每 tick 把速度覆盖成视线方向 ×
+ *       0.5~1.0 格/tick），我们**不改威力**，只管三件事：**瞄准 → 续放 → 到地方收手**。</li>
  * </ul>
  *
- * <h2>为什么"瞄准就是驾驶"</h2>
- * Goety 的飞行聚晶（{@code FlyingSpell}）每次施放的唯一效果是
- * {@code caster.setDeltaMovement(getLookAngle() × d0)}（d0 = 0.5，风之魔杖 1.0）。
- * 所以**她的视线方向就是推力方向**——转向 = 改她的 yaw/pitch，别的一概不用管。
- *
- * <h2>无头实测（2026-09-27，本工程第一次用真 Goety 跑通）</h2>
+ * <h2>三种任务（G-3 加的第三档就是"接敌机动"）</h2>
  * <pre>
- *   每 tick 放一发 → 位置 (0.5, -60.000, 15.5→55.5)、速度恒为 (0, -0.000, 0.500)、
- *   NoGravity 始终 false、着地 false；停下后立刻 (0, -0.078, 0.455)（重力 + 0.91 阻力）。
+ *   ARRIVE  ／goety_fly      —— 飞坐标：巡航 → 下降 → 落地收手（一次性，必然终止）
+ *   FOLLOW  ／goety_follow   —— 跟实体：远了直追、近了绕圈伴飞
+ *   COMBAT  ／goety_combat   —— 打盘旋：**每 tick 取上游算好的盘旋点**（见下），绕着打
  * </pre>
- * 三条结论：①**恒速不衰减**（每 tick 覆盖）；②**不掉高**（每 tick 覆盖把重力压住，
- * 而 Goety 自己**不设** NoGravity）；③**女仆的 travel/MoveControl 不会吃掉它**
- * （这一条本来是最大的未知——Goety 玩家版不用管，女仆是 Mob，`aiStep` 阶段会改速度）。
  *
- * <h2>为什么这里可以"硬着陆"而不用软着陆</h2>
- * {@code FlyingSpell.SpellResult} 里有一句 {@code caster.fallDistance = 0}——**施法期间坠落
- * 距离永远归零**。所以降落只要"保持施法、把头压下去"，落到贴地再收手（最后那 1 格之内
- * 的坠落距离摔不动她）。这一点与仿创造飞行相反：那边没有这一句，所以必须自己写软着陆。
+ * <h2>为什么战斗档能直接复用上游的"接敌机动"</h2>
+ * 上游把接敌机动抽成了可插的两层：{@code CombatOrbit}（圆：半径/旋向/相位随机）+
+ * {@code CombatManeuver}（五种打法：环绕/蛇形/高悠悠/脱离再进/8 字）。消费它们的是**飞行后端**——
+ * 现在只有鞘翅空战与扫帚两个。而 {@code MaidBroomDrive.combatPoint(maid, target)} 是**公开静态**、
+ * 一次调用就把半径/旋向/相位/高度基准/最近距离/回家夹取全折好 ⇒ 我们**只调它、不改它**，
+ * 于是 Goety 推进等于零改动地成了**第三个后端**，五种机动照跑。
  *
- * <h2>与上游的边界</h2>
- * 本文件**独立成档**：不碰 {@code MaidFreeFlightController}（那是上游接手的文件），
- * 只用公开的 TLM 事件与自己的状态表。将来要并给作者时，删掉这个包就是"没有 Goety 兼容"。
+ * <h2>实测教训（都写在注释里，别再踩）</h2>
+ * <ol>
+ *   <li><b>G-1 恒定速度是真的</b>：每 tick 放一发，速度恒为 0.500 格/tick、高度零漂移、
+ *       {@code NoGravity} 始终 false；停手立刻 (0,-0.078,0.455)（重力 + 0.91 阻力）
+ *       ⇒ 必须每 tick 续放，且**落地前那一下要提前收手**。</li>
+ *   <li><b>G-1 落体伤害不用管</b>：{@code FlyingSpell.SpellResult} 里有 {@code fallDistance = 0}，
+ *       施法期间坠落距离永远归零 ⇒ 可以"硬着陆"（不像仿创造飞行那样必须写软着陆）。</li>
+ *   <li><b>G-2 方向必须我们说了算</b>：飞行聚晶取的是 {@code caster.getLookAngle()}，而
+ *       **有主人的女仆**会被 TLM 的跟随/闲逛持续下行走目标 ⇒ 原版 {@code MoveControl} 每 tick
+ *       把她的 yaw 掰向那个目标 ⇒ 她绕着主人画圈（实机撞到过）。所以：①新增
+ *       {@code MaidGoetyMoveSuppressMixin} 在推进期间从源头掐掉走路目标；②放完法术后**再按我们
+ *       算出来的瞄准方向重写一遍速度**（大小仍取自聚晶）。</li>
+ *   <li><b>G-2 推力器会卡在坑里</b>：贴地/撞墙时水平推力全被碰撞吃掉，判据命中就短暂抬头拔高。</li>
+ * </ol>
  */
 public final class MaidGoetyFlight {
 
     /** 发射所用法术键（{@link MaidGoetyCompat#cast} 的口径）。 */
     private static final String SPELL_FLYING = "flying";
+    /** 加力所用法术键（发射聚晶：一次性冲量）。 */
+    private static final String SPELL_LAUNCH = "launch";
 
     /** 巡航时的转向速度（度/tick）——比仿创造飞行快（那边 12°，因为它是"悬停微调"）。 */
     private static final float YAW_STEP = 18.0F;
     /** 俯仰转向速度（度/tick）。 */
     private static final float PITCH_STEP = 12.0F;
-    /** 巡航俯仰限幅（度）：别让她一直往上/往下扎。 */
+    /** 巡航俯仰限幅（度）。 */
     private static final float PITCH_LIMIT = 55.0F;
 
     /** 水平到位半径（格）：进了这个圈就转下降。 */
     private static final double ARRIVE_H = 2.2;
-    /** 跟随时"够近"的距离（格）：近了就绕圈伴飞，不再直冲。 */
+    /** 跟随时"够近"的距离（格）。 */
     private static final double FOLLOW_HOLD = 4.0;
-    /** 下落阶段瞄的"下方偏移"（格）：越小越陡。6 格前 + 3 格下 ≈ -27° → 约 4.6 格/秒。 */
+    /** 下落阶段瞄的"下方偏移"（格）：6 格前 + 3 格下 ≈ -27° → 约 4.6 格/秒。 */
     private static final double DESCEND_AHEAD = 6.0;
     private static final double DESCEND_DOWN = 3.0;
     /** 离地这么近就收手（格）。 */
     private static final double GROUND_STOP = 1.2;
-    /** 单个任务的最长时长（tick）——30 秒。 */
+    /** 一次性任务（坐标/跟随）的最长时长（tick）——30 秒；按 10 格/秒算够飞 300 格。 */
     private static final long MAX_TICKS = 600L;
+    /** 战斗档的最长时长（tick）——5 分钟（一场遭遇的上限，正常由"丢目标"结束）。 */
+    private static final long MAX_TICKS_COMBAT = 6000L;
+
+    /** 加力的自管冷却（tick）：Goety 的发射聚晶是 20 tick，但**怪物施法路径不进冷却**，
+     *  所以冷却必须我们自己管，否则会变成无限连发。 */
+    private static final long BOOST_COOLDOWN = 20L;
+    /** 加力的抬升角（度）：脱离时略微上扬，顺带脱离近战怪的攻击面。 */
+    private static final double BOOST_PITCH_UP = 20.0;
+    /**
+     * 【G-3 实测发现】加力窗口（tick）：点着加力之后，**这一段时间内不再续放飞行聚晶**——
+     * 否则冲量会在下一 tick 被"恒速巡航"覆盖掉（实测：放完瞬间速度 1.50，0.4 秒后已回到 0.38）。
+     * 真实加力就是"点着推一段、然后滑行"，这里照抄那个手感：1.5 秒的窗口 ≈ 多飞 15~20 格。
+     * 窗口内保留 {@code fallDistance = 0}（与飞行聚晶自己的做法一致）与瞄准转向，
+     * 窗口结束自动回到正常巡航。
+     */
+    private static final long BOOST_WINDOW = 30L;
+
+    private enum Mode { ARRIVE, FOLLOW, COMBAT }
 
     private enum Phase { CRUISE, DESCEND }
 
     /** 一个"持续推进"任务。 */
-    private record Task(boolean follow, UUID targetId, Vec3 point, ItemStack staff, Phase phase, long start) {
+    private record Task(Mode mode, UUID targetId, Vec3 point, ItemStack staff, Phase phase, long start) {
     }
 
     private static final Map<UUID, Task> TASKS = new LinkedHashMap<>();
-    /** 临时诊断计数（每 5 tick 打一行）。 */
-    private static int DBG;
+    private static final Map<UUID, Long> LAST_BOOST = new LinkedHashMap<>();
+    /** 加力窗口：她在这个 tick 之前不续放巡航推力（让冲量自己滑）。 */
+    private static final Map<UUID, Long> BOOST_UNTIL = new LinkedHashMap<>();
     private static boolean hooked;
+    /** 临时诊断计数（每 20 tick 打一行）。 */
+    private static int DBG;
 
     private MaidGoetyFlight() {
     }
@@ -100,40 +130,107 @@ public final class MaidGoetyFlight {
         return maid != null && TASKS.containsKey(maid.getUUID());
     }
 
+    /** 当前任务档位名（日志/命令用）。 */
+    public static String describe(EntityMaid maid) {
+        Task t = maid == null ? null : TASKS.get(maid.getUUID());
+        return t == null ? "无" : t.mode().name();
+    }
+
     /**
-     * 【保真门禁】她身上必须**真的带着飞行聚晶**（{@code goety:flying_focus}）——
-     * 法杖当前槽 / 聚晶包里 / 任意容器里都算。返回 null 表示可以起飞，否则返回拒绝原因。
+     * 【保真门禁】她身上必须**真的带着这个聚晶**（法杖当前槽 / 聚晶包里 / 任意容器里都算）。
+     * 返回 null 表示放行，否则返回拒绝原因。
      */
-    public static String requireFocus(EntityMaid maid) {
+    public static String requireFocus(EntityMaid maid, String focusId, String what) {
         if (!MaidGoetyCompat.available()) {
             return "服务器没装 Goety（或版本反射路径不符）";
         }
-        if (!MaidGoetyCompat.hasFocus(maid, MaidGoetyCompat.FOCUS_FLYING)) {
-            return "她身上没有飞行聚晶（" + MaidGoetyCompat.FOCUS_FLYING + "）——"
-                    + "把聚晶放进风之魔杖插到她身上/背包/饰品栏，或放进聚晶包";
+        if (!MaidGoetyCompat.hasFocus(maid, focusId)) {
+            return "她身上没有" + what + "（" + focusId + "）——把聚晶放进法杖插到她身上/背包/饰品栏，或放进聚晶包";
         }
         return null;
     }
 
     /** 飞到某个坐标（一次性：巡航 → 下降 → 收手）。返回 null 表示已开始，否则是拒绝原因。 */
     public static String flyTo(EntityMaid maid, Vec3 point) {
-        String bad = requireFocus(maid);
+        String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_FLYING, "飞行聚晶");
         if (bad != null) {
             return bad;
         }
-        TASKS.put(maid.getUUID(), new Task(false, null, point, pickStaff(maid), Phase.CRUISE,
+        TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, point, pickStaff(maid), Phase.CRUISE,
                 maid.level().getGameTime()));
         return null;
     }
 
     /** 跟着某个实体飞（远了直追、近了绕圈伴飞）。返回 null 表示已开始，否则是拒绝原因。 */
     public static String follow(EntityMaid maid, Entity target) {
-        String bad = requireFocus(maid);
+        String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_FLYING, "飞行聚晶");
         if (bad != null) {
             return bad;
         }
-        TASKS.put(maid.getUUID(), new Task(true, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
+        TASKS.put(maid.getUUID(), new Task(Mode.FOLLOW, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
                 maid.level().getGameTime()));
+        return null;
+    }
+
+    /**
+     * 【G-3 战斗档】绕着目标打盘旋：每 tick 取 {@code MaidBroomDrive.combatPoint}（上游那套
+     * 接敌机动的几何层），朝它推。丢目标/超时都会**转成下降**（而不是直接收手——高空撒手会摔）。
+     */
+    public static String combat(EntityMaid maid, LivingEntity target) {
+        String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_FLYING, "飞行聚晶");
+        if (bad != null) {
+            return bad;
+        }
+        if (target == null) {
+            return "没有目标";
+        }
+        TASKS.put(maid.getUUID(), new Task(Mode.COMBAT, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
+                maid.level().getGameTime()));
+        return null;
+    }
+
+    /**
+     * 【G-3 加力档】放一发**发射聚晶**（一次性冲量：基准 1.5、风之魔杖 2.5 格/tick ≈ 50 格/秒）。
+     * 方向：给了 {@code awayFrom} 就**朝背离它**的方向并略抬 20°（脱离用）；否则用她当前视线。
+     * 冷却由我们自己管（怪物施法路径不进 Goety 冷却表）。返回 null 表示已放，否则是拒绝原因。
+     */
+    public static String boost(EntityMaid maid, Entity awayFrom) {
+        String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_LAUNCH, "发射聚晶");
+        if (bad != null) {
+            return bad;
+        }
+        long now = maid.level().getGameTime();
+        Long last = LAST_BOOST.get(maid.getUUID());
+        if (last != null && now - last < BOOST_COOLDOWN) {
+            return "加力还在冷却（还剩 " + (BOOST_COOLDOWN - (now - last)) + " tick）";
+        }
+        if (awayFrom != null) {
+            Vec3 flat = maid.position().subtract(awayFrom.position()).multiply(1, 0, 1);
+            if (flat.lengthSqr() < 1.0E-4) {
+                flat = new Vec3(1, 0, 0);
+            }
+            flat = flat.normalize();
+            double p = Math.toRadians(BOOST_PITCH_UP);
+            Vec3 look = new Vec3(flat.x * Math.cos(p), Math.sin(p), flat.z * Math.cos(p)).normalize();
+            float yaw = (float) Math.toDegrees(Math.atan2(-look.x, look.z));
+            float pitch = (float) (-Math.toDegrees(Math.asin(Math.max(-1.0, Math.min(1.0, look.y)))));
+            maid.setYRot(yaw);
+            maid.setXRot(pitch);
+            maid.yRotO = yaw;
+            maid.xRotO = pitch;
+        }
+        String err = MaidGoetyCompat.castDiag(maid, SPELL_LAUNCH, pickStaff(maid));
+        if (err != null) {
+            return "施放失败：" + err;
+        }
+        LAST_BOOST.put(maid.getUUID(), now);
+        BOOST_UNTIL.put(maid.getUUID(), now + BOOST_WINDOW);   // 让冲量自己滑一段，别被巡航覆盖
+        if (LAST_BOOST.size() > 64) {
+            LAST_BOOST.entrySet().removeIf(e -> now - e.getValue() > 1200L);   // 一分钟没用的清掉
+        }
+        PromaidLog.log("Goety加力", maid.getName().getString() + " 加力（发射聚晶）视线 pitch="
+                + String.format(java.util.Locale.ROOT, "%.1f", maid.getXRot())
+                + (awayFrom == null ? "" : " 背离 " + awayFrom.getName().getString()));
         return null;
     }
 
@@ -147,7 +244,7 @@ public final class MaidGoetyFlight {
 
     private static ItemStack pickStaff(EntityMaid maid) {
         for (ItemStack s : MaidGoetyCompat.staffs(maid).values()) {
-            return s;   // 风之魔杖 → 威力翻倍；没有就空栈（基准 0.5 格/tick = 10 格/秒）
+            return s;   // 同系法杖（风之魔杖）→ 威力翻倍；没有就空栈（基准 0.5 格/tick = 10 格/秒）
         }
         return ItemStack.EMPTY;
     }
@@ -169,16 +266,27 @@ public final class MaidGoetyFlight {
             return;
         }
         long now = maid.level().getGameTime();
-        if (now - task.start() > MAX_TICKS) {
-            stop(maid, "超时");
+        long limit = task.mode() == Mode.COMBAT ? MAX_TICKS_COMBAT : MAX_TICKS;
+        if (now - task.start() > limit) {
+            stopIfGroundedOrTooLong(maid, task, "超时");
             return;
         }
 
-        // 目标点：跟随档每 tick 重取（目标会动），坐标档固定
+        // 目标点：跟随/战斗档每 tick 重取（目标会动），坐标档固定
         Vec3 goal = task.point();
-        if (task.follow()) {
-            Entity t = maid.level() instanceof net.minecraft.server.level.ServerLevel sl
-                    ? sl.getEntity(task.targetId()) : null;
+        if (task.mode() == Mode.COMBAT) {
+            Entity t = lookup(maid, task.targetId());
+            if (!(t instanceof LivingEntity living) || !living.isAlive()) {
+                // 丢目标：不要在高空直接撒手（会摔），转成"原地下降"
+                TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, maid.position(), task.staff(),
+                        Phase.DESCEND, task.start()));
+                PromaidLog.log("Goety推进", maid.getName().getString() + " 丢目标 → 原地下降收手");
+                return;
+            }
+            // ★ 上游的接敌机动几何层：半径/旋向/相位/高度基准/最近距离/回家夹取，全在这一句里
+            goal = com.maidsmart.combat.MaidBroomDrive.combatPoint(maid, living);
+        } else if (task.mode() == Mode.FOLLOW) {
+            Entity t = lookup(maid, task.targetId());
             if (t == null || !t.isAlive()) {
                 stop(maid, "目标没了");
                 return;
@@ -196,23 +304,26 @@ public final class MaidGoetyFlight {
         Vec3 aim;
         Phase phase = task.phase();
         if (phase == Phase.CRUISE) {
-            // 【实测七百〇四 修】到达判定必须**水平与垂直都到**：
-            // 旧写法只对跟随档看 dv，于是"目标在头顶 20 格、她水平已进 2.2 格圈"会被判成到位
-            // → 直接进 DESCEND → 看到贴地就收手（实测现场：飞往 (0.5,-40,0.5) 一秒后"收手（落地）"）。
-            boolean arrived = dh < (task.follow() ? FOLLOW_HOLD : ARRIVE_H)
-                    && Math.abs(dv) < (task.follow() ? 2.5 : 2.0);
-            if (arrived) {
-                if (task.follow()) {
-                    // 跟随档不降落：绕圈伴飞（推力恒定 ⇒ 悬停不了，绕圈是最自然的"待命"）
-                    double ang = Math.atan2(maid.getZ() - goal.z, maid.getX() - goal.x) + 0.9;
-                    aim = new Vec3(goal.x + Math.cos(ang) * FOLLOW_HOLD, goal.y + 1.0,
-                            goal.z + Math.sin(ang) * FOLLOW_HOLD);
-                } else {
-                    phase = Phase.DESCEND;
-                    aim = descendAim(maid, goal);
-                }
+            if (task.mode() == Mode.COMBAT) {
+                aim = goal;   // 盘旋点一直在动，不需要"到位"判定——绕着打就是她的宿命
             } else {
-                aim = goal;
+                // 【G-1 修】到达判定必须**水平与垂直都到**：旧写法只对跟随档看 dv，于是"目标在
+                // 头顶 20 格、她水平已进 2.2 格圈"会被判成到位 → 直接下降 → 贴地就收手。
+                boolean arrived = dh < (task.mode() == Mode.FOLLOW ? FOLLOW_HOLD : ARRIVE_H)
+                        && Math.abs(dv) < (task.mode() == Mode.FOLLOW ? 2.5 : 2.0);
+                if (arrived) {
+                    if (task.mode() == Mode.FOLLOW) {
+                        // 跟随档不降落：绕圈伴飞（推力恒定 ⇒ 悬停不了，绕圈是最自然的"待命"）
+                        double ang = Math.atan2(maid.getZ() - goal.z, maid.getX() - goal.x) + 0.9;
+                        aim = new Vec3(goal.x + Math.cos(ang) * FOLLOW_HOLD, goal.y + 1.0,
+                                goal.z + Math.sin(ang) * FOLLOW_HOLD);
+                    } else {
+                        phase = Phase.DESCEND;
+                        aim = descendAim(maid, goal);
+                    }
+                } else {
+                    aim = goal;
+                }
             }
         } else {
             aim = descendAim(maid, goal);
@@ -222,33 +333,46 @@ public final class MaidGoetyFlight {
             }
         }
 
-        // 【实测七百〇四 修 2：卡在坑里抠出来】推力飞行器最典型的坑——
-        // 落在 1 格深的坑/贴墙时，水平方向的推力全被碰撞吃掉（现场：位置一动不动、
-        // 速度只剩重力、法术却在正常施放），于是永远出不来。判据用「贴地 或 撞墙」，
-        // 命中就短暂抬头拔高（相当于给旋翼加总距），出了坑自然回到正常瞄准。
+        // 【G-2 修 2：卡在坑里抠出来】推力飞行器落在 1 格深的坑/贴墙时，水平推力全被碰撞吃掉
+        // （位置一动不动、速度只剩重力、法术却在正常施放），于是永远出不来。判据命中就短暂抬头。
         if (phase == Phase.CRUISE && (maid.onGround() || maid.horizontalCollision)) {
             Vec3 flat = new Vec3(goal.x - maid.getX(), 0, goal.z - maid.getZ());
             if (flat.length() < 1.0E-4) {
                 flat = new Vec3(maid.getLookAngle().x, 0, maid.getLookAngle().z);
             }
-            flat = flat.normalize().scale(3.0);
-            aim = maid.position().add(flat).add(0, 4.0, 0);
+            aim = maid.position().add(flat.normalize().scale(3.0)).add(0, 4.0, 0);
         }
+
         steer(maid, aim, phase);
-        // 她自己写的走路目标与导航会跟"每 tick 覆盖速度"抢移动——从源头掐掉（与仿创造飞行同口径）
+        // 她自己写的走路目标与导航会跟"每 tick 覆盖速度"抢方向盘——从源头掐掉
+        // （同口径的 mixin 还有 MaidGoetyMoveSuppressMixin，那道更彻底）
         maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET);
         try {
             maid.getNavigation().stop();
         } catch (Throwable ignored) {
         }
+
+        Long boostUntil = BOOST_UNTIL.get(maid.getUUID());
+        if (boostUntil != null && now < boostUntil) {
+            // 加力窗口内：只保留瞄准与"清零坠落距离"，**不续放巡航推力**（否则冲量下一 tick 就没了）
+            maid.fallDistance = 0.0F;
+            if (DBG % 20 == 0) {
+                PromaidLog.log("Goety推进", maid.getName().getString() + " 加力滑行中 位置 "
+                        + fmt(maid.position()) + " 速度 " + fmt(maid.getDeltaMovement())
+                        + " 剩余 " + (boostUntil - now) + " tick");
+            }
+            DBG++;
+            TASKS.put(maid.getUUID(), new Task(task.mode(), task.targetId(), task.point(), task.staff(),
+                    phase, task.start()));
+            return;
+        }
+        if (boostUntil != null) {
+            BOOST_UNTIL.remove(maid.getUUID());
+        }
+
         String err = MaidGoetyCompat.castDiag(maid, SPELL_FLYING, task.staff());
         if (err == null) {
-            // 【实测 G-2 修：方向由我们定，威力仍由聚晶给】
-            // 实机现场：她不去目标，而是绕着主人画不规则但重复的圈；日志里 err=无、俯仰也对，
-            // 只有水平方向在乱。根因是飞行聚晶取 caster.getLookAngle()，而**有主人的女仆**会被
-            // TLM 的跟随/闲逛持续下行走目标 ⇒ 原版 MoveControl 每 tick 把她 yaw 掰向那个目标。
-            // 所以这里放完法术（粒子/音效/姿态/坠距归零照旧由 Goety 完成）之后，**再按我们算出来的
-            // 瞄准方向把速度重写一遍**——速度大小仍然取自聚晶（rightStaff/附魔加成），只是方向不被抢。
+            // 【G-2 修 1：方向由我们定，威力仍由聚晶给】见类注释第 3 条。
             Vec3 dir = aim.subtract(maid.getEyePosition());
             if (dir.lengthSqr() > 1.0E-6) {
                 double d0 = MaidGoetyCompat.thrustPower(maid, task.staff());
@@ -256,23 +380,36 @@ public final class MaidGoetyFlight {
                 maid.hasImpulse = true;
                 maid.fallDistance = 0.0F;
             }
-        }
-        // 【临时诊断】每 5 tick 打一行：法术放没放出去、放完那一瞬间速度是多少。
-        // 用来分清"法术没生效"与"速度被别的东西抹掉"——两者现场长得一模一样（都只剩重力）。
-        if (err != null) {
-            // 法术放不出去是"致命的静默失败"（现场只剩重力、却看不出原因）——一定要留痕
+        } else {
             PromaidLog.log("Goety推进", maid.getName().getString() + " 施放失败：" + err);
-        } else if (DBG % 20 == 0 || maid.onGround() || maid.horizontalCollision) {
+        }
+        if (DBG % 20 == 0 || maid.onGround() || maid.horizontalCollision) {
             PromaidLog.log("Goety推进", maid.getName().getString()
-                    + " dbg 位置 " + fmt(maid.position())
-                    + " 放后速度 " + fmt(maid.getDeltaMovement())
-                    + " pitch=" + String.format(java.util.Locale.ROOT, "%.1f", maid.getXRot())
-                    + " 着地=" + maid.onGround()
-                    + " err=" + (err == null ? "无" : err.substring(0, Math.min(220, err.length()))));
+                    + " t=" + task.mode().name() + "/" + phase.name()
+                    + " 位置 " + fmt(maid.position()) + " 速度 " + fmt(maid.getDeltaMovement())
+                    + " 目标 " + fmt(goal) + " 着地=" + maid.onGround());
         }
         DBG++;
-        TASKS.put(maid.getUUID(), new Task(task.follow(), task.targetId(), task.point(), task.staff(),
+        TASKS.put(maid.getUUID(), new Task(task.mode(), task.targetId(), task.point(), task.staff(),
                 phase, task.start()));
+    }
+
+    /** 超时处理：已经贴地就直接收手，还在空中就转成下降（别高空撒手）。 */
+    private static void stopIfGroundedOrTooLong(EntityMaid maid, Task task, String why) {
+        if (maid.onGround() || nearGround(maid)) {
+            stop(maid, why);
+            return;
+        }
+        TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, maid.position(), task.staff(),
+                Phase.DESCEND, maid.level().getGameTime()));
+        PromaidLog.log("Goety推进", maid.getName().getString() + " " + why + " → 原地下降收手");
+    }
+
+    private static Entity lookup(EntityMaid maid, UUID id) {
+        if (id == null) {
+            return null;
+        }
+        return maid.level() instanceof net.minecraft.server.level.ServerLevel sl ? sl.getEntity(id) : null;
     }
 
     /** 下落阶段的瞄准点：往前 6 格、往下 3 格（约 -27°）——边往目标漂边降。 */
@@ -286,7 +423,7 @@ public final class MaidGoetyFlight {
     }
 
     /**
-     * 转向：**限速**把她的 yaw/pitch 转过去。
+     * 转向：限速把她的 yaw/pitch 转过去。
      * 同时写 {@code setLookAt}——TLM 的 {@code LookControl.tick()} 每 tick 都会把俯仰掰回去，
      * 只写旋转会被它吃掉（这是本工程做鞘翅赶路时踩过的坑：单写 rotation 无效）。
      */
