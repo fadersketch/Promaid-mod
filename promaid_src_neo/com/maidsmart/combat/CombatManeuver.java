@@ -49,16 +49,18 @@ import java.util.UUID;
  *       观感是"她在换位置"，不是"她在抽搐"，也不会像换了一架飞行器。</li>
  * </ol>
  *
- * <p>── 为什么"每场遭遇抽一种"而不是"每 tick 抽" ──
- * 每 tick 换打法 = 轨迹没有一段是完整的，看着像故障。这里按**遭遇**（锁敌 → 丢敌/打完为一轮）
- * 抽一次，一只女仆在一场仗里从头到尾打同一种机动；换了敌人 / 打完再打才重抽。抽签由
- * UUID + 「第几次遭遇」派生——同一份存档重放出来的选择一样（可复现，日志对得上），而**同场
- * 多只女仆各抽各的**（这正是玩家要的"不要全都是同一种"）。
+ * <p>── 为什么"分段抽"而不是"每 tick 抽"、也不是"一场只抽一次" ──
+ * 每 tick 换打法 = 轨迹没有一段是完整的，看着像故障（排除）。而**一场只抽一次**在 700 实测里
+ * 被证明也不对：2026-09-28 的日志里那一仗打了 163 秒，一次抽到环绕她就环绕到底——玩家说的
+ * "打那么多场都一直在用环绕"有一半来自这里。折中是 {@link #SEGMENT_MAX_TICKS}（默认 20 秒）
+ * 一段：同一场遭遇内每段重抽一次、且**保证换到不一样的那一种**。抽签由
+ * UUID + 「第几次遭遇」+「第几段」派生——同一份存档重放出来的选择一样（可复现，日志对得上），
+ * 而**同场多只女仆各抽各的**（这正是玩家要的"不要全都是同一种"）。
  *
  * <p>── 与 {@link CombatOrbit} 的分工（口径只有一处）──
- * {@code CombatOrbit} 管"圆多大、往哪边绕、绕多快"；本类管"在这一圈上怎么个走法"。
- * 两者都不碰高度基准与硬边界——那些在各自的调用方（扫帚 {@code MaidBroomDrive.combatPoint}、
- * 空袭 {@code MaidFlightCombatBehavior.faceOrbit}）。
+ * {@code CombatOrbit} 管"圆多大、往哪边绕、绕多快"（含实测七百〇五 起每 8 秒随机掉头的旋向）；
+ * 本类管"在这一圈上怎么个走法"。两者都不碰高度基准与硬边界——那些在各自的调用方
+ * （扫帚 {@code MaidBroomDrive.combatPoint}、空袭 {@code MaidFlightCombatBehavior.faceOrbit}）。
  */
 public final class CombatManeuver {
 
@@ -81,24 +83,39 @@ public final class CombatManeuver {
     /* ==================== 抽签权重 ==================== */
 
     /**
-     * 环绕的权重（最高）——它是基线打法，也是玩家点名"真选到绕圈也要有随机性"的那一档；
-     * 给最高权重保证"多数情况下看起来还是那只熟悉的绕圈女仆"，其余四种是点缀而不是换人。
+     * 环绕的权重。
+     *
+     * <p>【实测七百〇五：0.34 → 0.24】玩家反馈「感觉打了那么多场都一直在用环绕」——除了下面那条
+     * "一场遭遇太长得靠段上限拆开"（{@link #SEGMENT_MAX_TICKS}）之外，0.34 这个"最高权重"本身也
+     * 让环绕占了三分之一强。现在环绕与蛇形同为 0.24——环绕仍是并列第一（它确实是基线打法、
+     * 也是玩家点名"真选到绕圈也要有随机性"的那一档），但不再是一眼望去"全都在绕"。
      */
-    private static final double W_ORBIT = 0.34;
-    /** 蛇形（远程最实用的一种：距离持续滑动，却始终在射程带里） */
-    private static final double W_WEAVE = 0.22;
+    private static final double W_ORBIT = 0.24;
+    /** 蛇形（远程最实用的一种：距离持续滑动，却始终在射程带里）——实测七百〇五 起与环绕并列第一 */
+    private static final double W_WEAVE = 0.24;
     /** 高悠悠（高度慢波 + 高处转得慢） */
     private static final double W_YOYO = 0.18;
     /** 脱离再进（周期性拉远再切回，最省血） */
-    private static final double W_EXTEND = 0.14;
-    // 8 字横切 = 剩下的 0.12（最后兜底，不单独写常量，免得四个权重加起来不是 1 时出空洞）
+    private static final double W_EXTEND = 0.17;
+    /** 8 字横切（正面来回横穿；实测七百〇五 起单独写常量，五个权重之和恰为 1.00） */
+    private static final double W_FIGURE8 = 0.17;
+
+    /** 抽签用的权重表（顺序必须与 {@link Kind} 的枚举顺序一致，改动会改变随机序列） */
+    private static final double[] WEIGHTS = {W_ORBIT, W_WEAVE, W_YOYO, W_EXTEND, W_FIGURE8};
 
     /* ==================== 波形参数 ==================== */
 
     /** 蛇形径向波周期（tick，默认 100 = 5 秒）——比半径重掷的 4 秒略慢，才叠得出"飘"的观感 */
     private static final int WEAVE_PERIOD = 100;
-    /** 蛇形径向幅度（半径的 ±15%） */
-    private static final double WEAVE_RADIUS_AMP = 0.15;
+    /**
+     * 蛇形径向幅度（半径的 ±22%）。
+     *
+     * <p>【实测七百〇五：0.15 → 0.22】玩家反馈「女仆似乎扫帚模式还是只会环绕」——除了"一场只抽一次"
+     * 那个真 bug，还有一部分是**观感**：±15% 的径向进出在 8~10 格的圈上只有 ±1.2~1.5 格，远看确实
+     * 跟匀速绕圈分不出来。±22% 让它在 8~10 格的圈上是 ±1.8~2.2 格——"她这一拍明显比上一拍远"
+     * 才看得出来。仍然夹回 {@code [近端, 最远距离]}（调用方负责），所以这不会变成"越飞越远"。
+     */
+    private static final double WEAVE_RADIUS_AMP = 0.22;
 
     /**
      * 高悠悠的高度波周期（tick，默认 160 = 8 秒）。
@@ -131,6 +148,24 @@ public final class CombatManeuver {
     /** 抽签与波形用的随机盐（与 {@link CombatOrbit} 的盐刻意不同，两条链条的随机互不相关） */
     private static final long PICK_SALT = 0x6D4E5556L;
 
+    /**
+     * 【实测七百〇五】一场遭遇里**换打法的上限**（tick，默认 400 = 20 秒）。
+     *
+     * <p>── 为什么必须加这一条 ──
+     * 玩家反馈「感觉打了那么多场都一直在用环绕」。2026-09-28 的实机日志给出了根因的另一半：
+     * 她那一仗从 00:00:28 一直打到 00:03:11 还没停（163 秒）——**一整场遭遇只有一次抽签**，
+     * 一次抽到环绕，那么这 163 秒里她就一直是环绕。旧注释里"一场遭遇抽一种"的假设是
+     * "一场遭遇也就十几秒"，而实战里一个 boss 能打两分钟以上。
+     *
+     * <p>现在改成**分段**执行：同一场遭遇内，每满 {@code 20} 秒重抽一次，且**保证与上一段不同**
+     * （见 {@link #pick}）——所以一场两分钟的仗里她至少会换 5~8 种打法，而不是一种到底。
+     * 抽签仍然是"每段一次、不是每 tick 一次"，所以轨迹依然有完整的一段，不会抖成故障。
+     *
+     * <p>【为什么是 20 秒】比环绕的旋向翻转（8 秒）长、比"打完一场再换"（可能两分钟以上）短：
+     * 观感上是"她换了个打法继续打"，而不是"她每一拍都在换姿势"。
+     */
+    private static final int SEGMENT_MAX_TICKS = 400;
+
     /* ==================== 状态 ==================== */
 
     /** 女仆 UUID → 本场遭遇的机动状态 */
@@ -141,7 +176,9 @@ public final class CombatManeuver {
     /** 一只女仆这一场遭遇的机动（种类 / 已走拍数 / 这一拍的波形值） */
     private static final class State {
         Kind kind = Kind.ORBIT;
-        int ticks;                  // 本场遭遇走了多少 tick（波形的自变量）
+        int ticks;                  // 本段走了多少 tick（波形的自变量；换段时归零重数）
+        int segment;                // 本场遭遇打到第几段（0 起；每满 SEGMENT_MAX_TICKS +1）
+        boolean fresh = true;       // 这一段是否为"刚抽完签、还没走过一拍"（供调用方写日志）
         // 每 tick 刷新的波形值（tick() 里算一次，四个 accessor 直接读，避免重复计算/重复推进）
         double radiusScale = 1.0;
         double angleScale = 1.0;
@@ -172,7 +209,10 @@ public final class CombatManeuver {
         int serial = SERIAL.getOrDefault(id, 0);
         SERIAL.put(id, serial + 1);
         s = new State();
-        s.kind = pick(id, serial);
+        s.kind = pick(id, serial, null);
+        s.segment = 0;
+        s.ticks = 0;
+        s.fresh = true;
         STATE.put(id, s);
         return s.kind;
     }
@@ -198,6 +238,38 @@ public final class CombatManeuver {
         }
         State s = STATE.get(id);
         return s == null ? 0 : s.ticks;
+    }
+
+    /**
+     * 【实测七百〇五】本场遭遇打到第几段（0 起；每满 {@link #SEGMENT_MAX_TICKS} 换一段并重抽机动）。
+     *
+     * <p>调用方可以拿它判断"这一场已经换过几次打法了"，或者按段号做日志——不必自己去数拍子。
+     */
+    public static int segment(UUID id) {
+        if (id == null) {
+            return 0;
+        }
+        State s = STATE.get(id);
+        return s == null ? 0 : s.segment;
+    }
+
+    /**
+     * 【实测七百〇五】这一段是否为"刚抽完签的那一拍"（调用方据此只写一次日志）。
+     *
+     * <p>与 {@link CombatOrbit#entering} 同形：换段那一拍返回 true，之后每拍 false。调用方用
+     * {@code ticks(id) == 1} 也行，但直接问本方法更清楚，也不会被"ticks 在换段时归零"绕进去。
+     */
+    public static boolean entering(UUID id) {
+        if (id == null) {
+            return false;
+        }
+        State s = STATE.get(id);
+        return s != null && s.fresh;
+    }
+
+    /** 本段的段长上限（tick）——供调用方写进日志（口径只有一处，见 {@link #SEGMENT_MAX_TICKS}） */
+    public static int segmentTicks() {
+        return SEGMENT_MAX_TICKS;
     }
 
     /** 这一场遭遇结束（丢敌 / 打完 / 下了鞍）：丢掉状态，下次接敌重抽（序列继续往后走） */
@@ -232,6 +304,18 @@ public final class CombatManeuver {
             return;
         }
         s.ticks++;
+        // 【实测七百〇五】段上限：一场遭遇打久了要换打法，否则一抽定一整场（见 SEGMENT_MAX_TICKS）。
+        //  换段时**保证与上一段不同**（pick(..., avoid)），波形自变量 ticks 归零——波形从头走一遍，
+        //  所以每个机动都是完整的一段（不是从半路接上）。
+        if (s.ticks > SEGMENT_MAX_TICKS) {
+            s.segment++;
+            s.ticks = 1;
+            s.kind = pick(id, SERIAL.getOrDefault(id, 1) * 131 + s.segment, s.kind);
+            s.fresh = true;
+        } else {
+            // 每段的第一拍（含 begin 之后的第一拍）才是"刚抽完签那一拍"，之后都是 false
+            s.fresh = s.ticks == 1;
+        }
         int t = s.ticks;
         // 先全部归位（ORBIT 与"这一档没用到的量"都保持中性）
         s.radiusScale = 1.0;
@@ -325,29 +409,41 @@ public final class CombatManeuver {
     /* ==================== 内部：抽签 ==================== */
 
     /**
-     * 按权重抽一种机动：由 UUID + 第几次遭遇派生，同一输入永远同一输出。
+     * 按权重抽一种机动：由 UUID + 盐派生，同一输入永远同一输出。
      *
-     * <p>【为什么不是真随机】真随机会在每次重进世界时换（她当着你的面换打法），而"UUID + 遭遇序号"
+     * <p>【为什么不是真随机】真随机会在每次重进世界时换（她当着你的面换打法），而"UUID + 盐"
      * 是稳定的：同一份存档、同一场仗，重放出来还是同一种机动。日志与实测才能对上号。
+     *
+     * @param avoid 上一段的机动：本段要**保证与它不同**（实测七百〇五：一场遭遇打久了要换打法，
+     *              换到同一种等于没换）；{@code null} = 不约束（开一场新遭遇时用）。
      */
-    private static Kind pick(UUID id, int serial) {
-        double r = rand01(id, serial);
-        if (r < W_ORBIT) {
-            return Kind.ORBIT;
+    private static Kind pick(UUID id, int salt, Kind avoid) {
+        Kind k = pickByWeights(id, salt);
+        if (avoid == null || k != avoid) {
+            return k;
         }
-        r -= W_ORBIT;
-        if (r < W_WEAVE) {
-            return Kind.WEAVE;
+        // 抽到了跟上一段一样的：换个盐再抽一次（仍按权重），还一样就顺次取下一个——
+        // 保证"换段一定换打法"，同时不破坏权重的整体分布（重抽只发生在 1/4 左右的情形）。
+        Kind k2 = pickByWeights(id, salt ^ 0x5BD1E995);
+        if (k2 != avoid) {
+            return k2;
         }
-        r -= W_WEAVE;
-        if (r < W_YOYO) {
-            return Kind.YOYO;
+        Kind[] all = Kind.values();
+        return all[(avoid.ordinal() + 1) % all.length];
+    }
+
+    /** 纯按权重抽（不做"必须不同"的处理），供 {@link #pick} 调用两次 */
+    private static Kind pickByWeights(UUID id, int salt) {
+        double r = rand01(id, salt);
+        double acc = 0.0;
+        Kind[] all = Kind.values();
+        for (int i = 0; i < all.length; i++) {
+            acc += WEIGHTS[i];
+            if (r < acc) {
+                return all[i];
+            }
         }
-        r -= W_YOYO;
-        if (r < W_EXTEND) {
-            return Kind.EXTEND;
-        }
-        return Kind.FIGURE8;
+        return all[all.length - 1];
     }
 
     /** 0~1 的稳定随机：由 UUID 与"第几次遭遇"派生（同 {@link CombatOrbit} 的混洗形状） */
