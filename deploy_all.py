@@ -6,6 +6,18 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百〇二（v1.3.0 beta，同名覆盖，未发版）：仿创造飞行移植到 1.20.1（精简版）——
+把 1.21.1 树的「仿创造飞行」按 PR #24 跟帖里定下的边界搬到 Forge 树（只有 forge 树变，
+neo 树本轮只跟着换 guide changelog）。资格探测**只留两路**（物品表 + 效果表）：重力归零
+启发式砍掉（javap 实证 1.20.1 的 Attributes 里没有 GRAVITY 字段）、数据组件两路 @组件 /
+@组件~文本 砍掉（1.20.5+ 才有）。动画注册一行没改（register 两版签名逐字相同，实证）。
+搬过来的：状态机 / 一阶飞行力学 / 朝向 QoL / 智能待命 / 战斗档 / 赶路档 / 状态表寿命回收 /
+遗留无重力交还。1.20.1 侧按本树现有范式补的：SimpleChannel 网络层、配置面板那一行开关、
+快捷键（默认不绑定）、/maid_smart freeflight_goto|_follow|_enemy（仅 OP）、搭路整段让位 +
+MaidMoveSuppressMixin 的 isControlling 档。SRG 名全部 javap 实证（几处反直觉：isAir =
+m_60795_、getCollisionShape 在 BlockStateBase 是 m_60742_ 且要传 CollisionContext、
+Vec3 分量字段 f_82479_/f_82480_/f_82481_、setDeltaMovement(DDD) = m_20334_）。
+
 实测七百零一（v1.3.0 beta，同名覆盖，未发版）：三件事（两树镜像）——
 ① 复活女仆「身体停在原地、扫帚照飞」的根因是**客户端那只女仆没有载具**：本模组的补包方法
    resyncTo 只补了"她载着谁"（getPassengers 非空 → SetPassengersPacket(她)），**漏了

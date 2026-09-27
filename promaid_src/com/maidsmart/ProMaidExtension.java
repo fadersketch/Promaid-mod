@@ -363,6 +363,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.command.MaidArmyCommand.register(event.getDispatcher());
         // 实测五百六十五（PR #10 移植）：客户端实体重同步（修"服务端活着、客户端连实体都没有"）
         com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
+        // v1.3.0(beta) 实测七百〇二：仿创造飞行手动触发（/maid_smart freeflight_goto / freeflight_follow / freeflight_enemy）
+        com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
     }
 
     /**

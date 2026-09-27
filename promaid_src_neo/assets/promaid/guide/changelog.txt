@@ -1,4 +1,41 @@
-﻿## 实测七百零一【扫帚接敌随机机动二期 + 复活女仆"身体停在原地、扫帚照飞"根治】（版本号不变，仍是 v1.3.0 beta）
+﻿## 实测七百〇二【仿创造飞行移植到 1.20.1（精简版）+ 贡献者调研点名】
+
+> 版本号不变，仍是 v1.3.0(beta)。这一批是**把 1.21.1 树的「仿创造飞行」按既定边界移植到 1.20.1（Forge）**——
+> 方向是上一条 PR #24 跟帖里定下的：**做，做成精简版，由我们这边落**（不让贡献者为此单开分支）。
+> 同时把贡献者这段调研（资格三路 + 两条版本边界的核实）在 CHANGELOG 里点名。
+
+### 一、资格探测：1.20.1 只留两路（这是"精简"的全部含义）
+
+`javap` 对着两份 SRG jar（`client-1.20.1-20230612.114412-srg` 与 1.21.1 那份）逐条核过，砍掉的是**在 1.20.1 物理上没有落点的两路**：
+
+- **重力归零启发式（砍）**：`Attributes.GRAVITY` 在 1.20.1 的 `Attributes` 里**根本没有这个字段**（1.21.1 有）。
+- **数据组件两路 `@组件` / `@组件~文本`（砍）**：数据组件（`DataComponentType` / `stack.getComponents()`）是 1.20.5+ 的机制；1.20.1 的 `ItemStack` 还是 NBT。勉强改写成 NBT 判据不划算（NBT 里"哪个键代表能力"毫无统一约定）。
+- **保留的两路**：①资格物品表（双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器），支持 `modid:item` 与 `#命名空间:标签` 两种写法；②资格效果表（药水效果挂在实体上，这一路对女仆天然有效）。
+- 顺带一条**好消息**：动画注册**一行都不用改**——`AnimationRegister.register` 的两个重载签名在两版 TLM jar 里**逐字相同**，`@Invoker` 暴露 `register` + 客户端 mixin 在 `registerAnimationState()` 尾部挂 `fly` / `elytra_fly` 这一套可以原样搬。
+
+### 二、搬过来的整条链路（与 1.21.1 树逐字一致的部分）
+
+状态机（飞行中 / 软着陆 / 落地待命）、一阶飞行力学（速度直接由距离算，绝不累加——增量式推进在接管 travel 后会变成无阻尼谐振子）、朝向 QoL（倒退着飞 + 延迟转身 + 逐 tick 平滑转体）、智能待命（主人停下 3 秒后落到他脚边站好）、战斗档（有敌人就飞去打，飞行是"移动层"跟着她的意图走）、赶路档（本来要走过去的活也交给飞）、"在主人身边干活"不做跟随起飞、状态表 5 分钟寿命回收、遗留无重力交还（`persistentData` 标记）。这些全是纯数学与事件驱动，不碰版本差异。
+
+### 三、1.20.1 侧按仓库现有范式补的部分
+
+- **网络层**：1.21.1 用 NeoForge 的 `CustomPacketPayload` + `PayloadRegistrar`；1.20.1/Forge 是 `SimpleChannel`（本树已有 8 处同样写法）——照抄其中之一，语义一字不改。
+- **配置面板那一行开关**：`MaidConfigContainerGui.initAdditionWidgets()` 两版都是 `protected`、连 lambda 编号都对得上，挂法原样搬。
+- **快捷键**：照 `EmotionKeysClient` / `BuildKeysClient` 的写法（`RegisterKeyMappingsEvent` + 客户端 tick 轮询 `consumeClick`）。默认**不绑定**，玩家自己在按键设置里绑。
+- **命令**：`/maid_smart freeflight_goto` / `freeflight_follow` / `freeflight_enemy`（仅 OP；后两条是专用服务器验收入口——挂"替代主人 / 替代敌人"，因为 TLM 的 `getOwner()` 在专用服务器上恒为 null）。
+- **给"走位型"链路让位**：搭路（`BridgeUpBehavior`）在"她具备飞行能力"时整段让位（`bridgeDisabled`）；`MaidMoveSuppressMixin` 补上 `isControlling` 那一档（飞行速度写在 brain 之前，而 brain 随后写的 `WALK_TARGET` 会被 `MoveToTargetSink` 变成寻路、把她的速度拽飘——必须在 brain 阶段源头取消）。
+
+### 四、SRG 命名的实证（本树手工编译、无 refmap）
+
+原版成员一律用运行时名（`m_xxxxx_` / `f_xxxxx_`），TLM 自己的方法保持可读名（如 `isMaidInSittingPose`）。本轮新用到的名字全部 `javap` 实证过，包括几处**反直觉**的：`isAir` = `m_60795_`（不是 `m_60713_`，后者是 `is(Block)`）、`getCollisionShape` 在 `BlockStateBase` 上是 `m_60742_` 且**要传 `CollisionContext`**（没有两参重载）、`Vec3` 的分量字段是 `f_82479_/f_82480_/f_82481_`、`setDeltaMovement(DDD)` 是 `m_20334_`（`m_20256_` 只接 Vec3）、`FriendlyByteBuf` 的 UTF 是 `m_130070_`/`m_130277_`、`Entity.hasPermissions` 是 `m_20310_`。
+
+### 五、刻意不做的事
+
+不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料推进**的装备：它们的推力逻辑绑在玩家身上，我们"仿创造飞行"等于凭空绕过它的燃料，算作弊。想用请自己往物品表里加，并明白这一点。
+
+---
+
+## 实测七百零一【扫帚接敌随机机动二期 + 复活女仆"身体停在原地、扫帚照飞"根治】（版本号不变，仍是 v1.3.0 beta）
 
 > 玩家原话三件：①「重生以后的女仆在坐上扫帚以后有的时候会做着做着自己身体就停了下来，停在原地，但是扫帚在进行飞行。」②「目前在扫帚模式下的参战以后随机运动随机性不够强。应该要保证至少与怪物拉开多少距离，然后剩下的运动的绕圈速度以及半径要每隔一小段时间就变化一下。同时与其他的女仆拉开距离（这些机制仅在扫帚模式接敌以后才启用）」③（粉丝日志答疑，见文末）。
 

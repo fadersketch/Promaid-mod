@@ -3648,6 +3648,25 @@ public class PromaidConfigScreen extends Screen {
         // v1.1.0 实测一百八十八：Y 轴拉回门槛（反馈："传送机制不检测 Y 轴"）
         this.rows.add(new NumRow("Y 轴拉回门槛（格）", String.valueOf(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL.get()),
                 s -> setInt(MaidSmartConfig.MISC_MAID_SAME_DIM_VERTICAL, s), "女仆与主人同维度、距离没超上一条但【垂直高度差】超本值时——主人旁边 16 格内有安全落点就传送过来，没有则不传（默认 16 格；旧版只按 48 格 3D 距离判定，水平贴身、竖直搭高 30 格的女仆永远不触发）"));
+        // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版——资格两路：物品表 + 效果表）
+        this.rows.add(new BoolRow("仿创造飞行", MaidSmartConfig.MISC_FREE_FLIGHT.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT.set(v), "默认关：打开后，有资格的女仆会悬浮并自由升降（创造模式飞行的手感）。资格两路：下面的物品表 / 效果表。收工若在半空会先软着陆再交还重力。1.20.1 精简版不含重力归零启发式与数据组件判据（那两个依赖 1.20.5+ 的机制）"));
+        this.rows.add(new BoolRow("滑翔时用鞘翅动画", MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.get(),
+                v -> MaidSmartConfig.MISC_GLIDE_ELYTRA_ANIM.set(v), "默认关 = 沿用游泳动作（兼容性最好：官方包与第三方包普遍都有 swim）。打开后不再顶游泳位，改用模型包里同名的 elytra_fly——做了这条动画的模型（如圣女酒狐）滑翔时会播它；没做的模型会落到站立姿态，所以确认你的包有这条动画再开"));
+        this.rows.add(new BoolRow("仿创造飞行·智能待命", MaidSmartConfig.MISC_FREE_FLIGHT_IDLE.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_IDLE.set(v), "默认开：主人停下不动满下面的秒数后，她软着陆到你脚边站好（同高度、约 2 格），你再一动她自动重新起飞。原来的行为是「够资格就一直悬在你身后 3.5 格 + 高 2 格」，而原版实体交互距离只有 3 格——喂金苹果/药水、摸头/抱抱都会够不到。关掉 = 始终悬停（旧行为）"));
+        this.rows.add(new NumRow("仿创造飞行·静止多久落地（秒）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS.get()),
+                s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_IDLE_SECONDS, s), "默认 3 秒：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消"));
+        this.rows.add(new NumRow("仿创造飞行·落地贴近距离（格）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST.get()),
+                s -> setInt(MaidSmartConfig.MISC_FREE_FLIGHT_NEAR_DIST, s), "默认 2 格：软着陆时朝主人漂过去，最终停在他身边这个距离内（留 1 格余量给原版 3 格交互距离）"));
+        this.rows.add(new BoolRow("仿创造飞行·走路的活也交给飞", MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.get(),
+                v -> MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL.set(v), "默认开：本来要走过去的活（挖矿 / 伐木 / 农活这些直连寻路的目标）够远或要上下就直接飞过去，落地干活——不搭路、也不绕路。近处挪一步照旧走路；自保逃跑 / 战斗走位 / 插火把 / 站桩工作 / 跟随不接管，目标格底下落不下去也不接管"));
+        this.rows.add(new NumRow("仿创造飞行·超过多远就改飞（格）", String.valueOf(MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST.get()),
+                s -> setDouble(MaidSmartConfig.MISC_FREE_FLIGHT_TRAVEL_DIST, s), "默认 8 格：直连寻路的目标与她水平距离超过它就起飞；调大 = 更多路用走的（32 = 只有跨半个工作区才飞）"));
+        this.rows.add(new TextRow("仿创造飞行·资格物品表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_ITEMS, s), "命中的物品让她获得飞行资格。两种写法：①物品 id（modid:item）②#命名空间:标签。扫描范围：双手/护甲/背包/饰品栏/额外容器。（1.21.1 的 @组件 两路依赖数据组件、1.20.1 不支持）"));
+        this.rows.add(new TextRow("仿创造飞行·资格效果表", String.join(",", (List<String>) MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS.get()),
+                s -> setStringList(MaidSmartConfig.MISC_FREE_FLIGHT_EFFECTS, s), "命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）"));
     }
 
     private void safetyRows() {

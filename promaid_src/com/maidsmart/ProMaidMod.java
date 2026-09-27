@@ -67,6 +67,11 @@ public class ProMaidMod {
         com.maidsmart.combat.BombMarkNetworking.register();
         // v1.3.7 实测六百六十七：武装拴绳网络层（S2C：谁是她的二号位枪手）
         com.maidsmart.combat.GunnerTetherNetworking.register();
+        // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版）——per-maid 开关的 C2S/S2C 两个包
+        com.maidsmart.flight.MaidFreeFlightNetworking.register();
+        // v1.3.0(beta) 实测七百〇二：仿创造飞行控制器挂在 MaidTickEvent 上（两侧都发，控制器自己挡客户端）
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.flight.MaidFreeFlightHandler());
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();

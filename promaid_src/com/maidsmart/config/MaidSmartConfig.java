@@ -993,6 +993,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     public static final ForgeConfigSpec.BooleanValue MISC_FOLLOW_TIGHTEN;
     // v1.1.0 实测一百五十二：有增益也喂牛奶（很多装备/饰品带永久增益，旧版"无增益才喝"导致中毒/凋零也不解）
     public static final ForgeConfigSpec.BooleanValue MISC_MILK_FEED_WITH_BUFF;
+    // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版——资格探测只留物品表 + 效果表两路）
+    public static final ForgeConfigSpec.BooleanValue MISC_FREE_FLIGHT;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_ITEMS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> MISC_FREE_FLIGHT_EFFECTS;
+    public static final ForgeConfigSpec.BooleanValue MISC_FREE_FLIGHT_IDLE;
+    public static final ForgeConfigSpec.IntValue MISC_FREE_FLIGHT_IDLE_SECONDS;
+    public static final ForgeConfigSpec.IntValue MISC_FREE_FLIGHT_NEAR_DIST;
+    public static final ForgeConfigSpec.BooleanValue MISC_FREE_FLIGHT_TRAVEL;
+    public static final ForgeConfigSpec.DoubleValue MISC_FREE_FLIGHT_TRAVEL_DIST;
+    // v1.3.0(beta) 实测七百〇二：滑翔时改用模型自己的鞘翅动画（默认关——模型包做了 elytra_fly 才有效）
+    public static final ForgeConfigSpec.BooleanValue MISC_GLIDE_ELYTRA_ANIM;
     /** v1.1.0 实测八十九：寻路危险方块避让（女仆寻路绕开岩浆/火等） */
     public static final ForgeConfigSpec.BooleanValue MISC_DANGER_AVOID;
     /** v1.1.0 实测八十九：危险方块表（注册名列表，可增删） */
@@ -2702,6 +2713,30 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineInRange("jarPackMinIntervalS", 5, 0, 60);
         TTS_JAR_PACK_MUTE_NATIVE = BUILDER.comment("播放时暂压原生语音包（默认开）：内置语音播放期间，TLM 原生语音包（女仆音效/语音）暂时静音，播放结束自动解除——避免两套语音重叠")
                 .translation("config.promaid.voice.jarPackMuteNative").define("jarPackMuteNative", true);
+        // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版）
+        MISC_FREE_FLIGHT = BUILDER.comment("仿创造飞行（默认关，1.20.1 精简版）：让女仆悬浮并自由升降——创造模式飞行的手感。\n\n【为什么需要】整合包里给飞的物品千奇百怪（饰品/护甲套装/药水效果），而它们几乎全部**只对玩家生效**（写死 instanceof Player），女仆装着它们一字不动。本功能不复刻每个物品的物理，而是：**她有资格（下表/效果表）我们就托住她**——setNoGravity + 每 tick 直接给速度，形成悬停与平滑位移。\n\n【资格两路（1.20.1 精简版）】①物品表（双手/护甲/背包/饰品栏/额外容器）②效果表（药水效果对女仆天然有效）。\n\n【1.20.1 相比 1.21.1 砍掉的两路】重力归零启发式（1.20.1 没有 Attributes.GRAVITY 这个属性）与数据组件两路 @组件/@组件~文本（数据组件是 1.20.5+ 才有的机制）。\n\n【刻意不做】不识别 Iron Jetpacks / 柴油喷气背包这类**自带燃料**的装备：它们的推力绑在玩家身上，我们仿创造飞行等于凭空绕过燃料，算作弊——想用请自己加进物品表。\n\n【安全】收工时若她还在半空会先软着陆（保持无重力缓慢下降）再交还重力，不会把她从高空扔下去。")
+                .translation("config.promaid.misc.freeFlight").define("freeFlight", false);
+        MISC_FREE_FLIGHT_ITEMS = BUILDER.comment("仿创造飞行·资格物品表（默认空）：命中的物品让她获得飞行资格。\n\n两种写法：① 物品 id（如 modid:item）② #命名空间:标签 认整条物品标签。\n\n扫描范围：双手 / 护甲 / 背包 / TLM 饰品栏 / 额外容器（精妙背包等）。\n\n【1.20.1 说明】1.21.1 那版还支持 @命名空间:组件 与 @命名空间:组件~文本 两路——它们依赖数据组件（1.20.5+），本树不支持。")
+                .translation("config.promaid.misc.freeFlightItems")
+                .defineList("freeFlightItems", List.of(), o -> o instanceof String s && !s.isBlank());
+        MISC_FREE_FLIGHT_EFFECTS = BUILDER.comment("仿创造飞行·资格效果表（默认空）：命中的药水效果让她获得飞行资格（效果挂在实体上，这一路对女仆天然有效）。")
+                .translation("config.promaid.misc.freeFlightEffects")
+                .defineList("freeFlightEffects", List.of(), o -> o instanceof String s && !s.isBlank());
+        MISC_FREE_FLIGHT_IDLE = BUILDER.comment("仿创造飞行·智能待命（默认开）：主人停下不动满【下面那条秒数】后，她**软着陆到你脚边站好**（同高度、约 2 格），你再一动她自动重新起飞。\n\n【为什么需要】原来的行为是「够资格就一直悬在主人身后 3.5 格 + 高 2 格」（≈4 格），而**原版实体交互距离只有 3 格**——喂金苹果/药水、TLM 的摸头/抱抱（G/H）、右键交互全都会打不到。智能待命让她「赶路时飞、你停下来时落到你身边待命」。\n\n关掉 = 始终悬停（旧行为：够资格就一直飘着）。")
+                .translation("config.promaid.misc.freeFlightIdle").define("freeFlightIdle", true);
+        MISC_FREE_FLIGHT_IDLE_SECONDS = BUILDER.comment("仿创造飞行·主人静止多久后落地待命（秒，默认 3）：主人的水平移动速度低于阈值并持续这么久 → 软着陆；期间主人一动就取消。")
+                .translation("config.promaid.misc.freeFlightIdleSeconds")
+                .defineInRange("freeFlightIdleSeconds", 3, 1, 30);
+        MISC_FREE_FLIGHT_NEAR_DIST = BUILDER.comment("仿创造飞行·落地待命的贴近距离（格，默认 2）：软着陆时机头对着主人漂过去，最终停在他身边这个距离内——留 1 格余量给原版 3 格交互距离。")
+                .translation("config.promaid.misc.freeFlightNearDist")
+                .defineInRange("freeFlightNearDist", 2, 1, 6);
+        MISC_FREE_FLIGHT_TRAVEL = BUILDER.comment("仿创造飞行·走路的活也交给飞（默认开）\n\n【需求方口径】\"本来就走过去应该交给创造\"——她已经会飞了，那些**本来要走路过去**的活（挖矿 / 伐木 / 农活这些直连寻路的目标）就不该再靠两条腿：够远或者要上下，就直接飞过去，落地干活，到地方把控制权交还给她自己的任务。\n\n【接管条件】她的直连寻路目标与她之间：水平超过下面那条距离，或者高差超过 2 格；且她此刻**在非战斗的工作任务上**。近处挪一步照旧走路。\n\n【不接管的情况】自保逃跑、战斗走位、刷怪笼插火把、站桩工作（建筑/烹饪/酿造）、idle/跟随；目标格底下落不下去（沟上 / 虚空上 / 水面上方）也不接管。\n\n日志搜「赶路」。")
+                .translation("config.promaid.misc.freeFlightTravel").define("freeFlightTravel", true);
+        MISC_FREE_FLIGHT_TRAVEL_DIST = BUILDER.comment("仿创造飞行·超过多远就改飞（格，默认 8）：直连寻路的目标与她水平距离超过这个值 → 起飞飞过去；调大 = 更多路用走的（比如 32：只有跨半个工作区才飞），0 = 只要不是同一格就飞（不建议）。")
+                .translation("config.promaid.misc.freeFlightTravelDist")
+                .defineInRange("freeFlightTravelDist", 8.0, 0.0, 64.0);
+        MISC_GLIDE_ELYTRA_ANIM = BUILDER.comment("滑翔时改用模型自己的鞘翅动画（默认关）：\n\n【背景】作者给滑翔套的是**游泳动作**——TLM 的 swim 状态只认 isVisuallySwimming()，而作者用一个 mixin 在滑翔时把它顶成 true（兼容性最好：官方包与第三方包普遍都有 swim，但**几乎没有 elytra_fly**）。\n\n【这一项做什么】打开后不再顶游泳位，改为注册一个与模型包/YSM 同名的 elytra_fly 状态——模型包里做了这条动画（如圣女酒狐）的女仆滑翔时就会播它。\n\n注意：模型包**没做** elytra_fly 时，这一档会落到下一档（没有则回到站立/待机姿态）——所以默认关，只有确认你的模型包有这条动画时再打开。")
+                .translation("config.promaid.misc.glideElytraAnimation").define("glideElytraAnimation", false);
         BUILDER.pop();
 
         SPEC = BUILDER.build();
