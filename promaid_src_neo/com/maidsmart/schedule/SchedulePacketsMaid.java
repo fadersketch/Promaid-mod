@@ -136,6 +136,11 @@ public final class SchedulePacketsMaid {
                     parts.add("§e另有 " + r.pending()
                             + " 名不在已加载区块——正在按最后出现位置强载区块并自动召回（稍候几秒，无需再点）");
                 }
+                if (r.reviving() > 0) {
+                    // 实测六百九十九：死者的"召回"照实播报——不是失败，是倒计时
+                    parts.add("§e另有 " + r.reviving()
+                            + " 名女仆已阵亡——正在自动复活，会在你的重生点醒来（稍候排班表里就能看到她们）");
+                }
                 if (r.failStand() > 0) {
                     // v1.2.0 实测五百四十六：集合已改强制 + 无视地块，这条不再是"无可站立点"
                     parts.add("§7" + r.failStand() + " 名传送失败（状态异常，稍后再试）");
@@ -194,6 +199,17 @@ public final class SchedulePacketsMaid {
                     msg = "§7女仆没有传送：她当前状态异常，稍后再试一次";
                 } else if (r == 3) {
                     msg = "§7她坐着/骑乘/在家模式（排班中）保持原位——想强制召回先关闭排班/解除坐姿";
+                } else if (r == 4) {
+                    // 实测六百九十九：死亡窗口——照实说"她什么时候回来"，不再说"没找到"
+                    int sec = com.maidsmart.combat.MaidAutoResurrect.pendingRemainSeconds(
+                            java.util.UUID.fromString(pkt.uuid));
+                    msg = sec >= 0
+                            ? "§e她已阵亡——自动复活还有约 " + sec + " 秒，将在你的重生点醒来（复活后排班表里就能看到她）"
+                            : "§e她已阵亡——正在自动复活，将在你的重生点醒来";
+                } else if (r == 5) {
+                    // 实测六百九十九：不在已加载区块但有登记——当场按最后出现位置强载召回
+                    msg = "§e她不在已加载区块——已按最后出现位置强载区块召回，"
+                            + "她一出现就自动传回你身边（稍候几秒，无需再点）";
                 } else {
                     msg = "§7没找到她——不在已加载区块/不是你的女仆（试试列表页「⚑ 一键集合」，会自动强载区块召回）";
                 }
@@ -321,6 +337,39 @@ public final class SchedulePacketsMaid {
                 }
                 EntityMaid maid = ScheduleNetworking.findMaid(level, pkt.uuid);
                 if (maid == null || !ScheduleNetworking.allowed(player, maid)) {
+                    // 实测六百九十九：她不在实体表里——不再直接回"不在场"，先查两本账：
+                    // ① 待自动复活 → 回报复活倒计时与复活落点（重生点/主人身边）；
+                    // ② 最后出现位置登记 → 回报"最后见到她的地方"（维度后缀「·未加载」）。
+                    // 两本账都没有（收进魂符/真不在了）才回"不在场"，界面停止刷新。
+                    try {
+                        java.util.UUID uid = java.util.UUID.fromString(pkt.uuid);
+                        if (com.maidsmart.combat.MaidAutoResurrect.isPendingResurrect(uid)) {
+                            int sec = com.maidsmart.combat.MaidAutoResurrect.pendingRemainSeconds(uid);
+                            net.minecraft.core.BlockPos rp = player.getRespawnPosition();
+                            boolean rpOk = rp != null
+                                    && level.getServer().getLevel(player.getRespawnDimension()) != null;
+                            net.minecraft.core.BlockPos at = rpOk ? rp : player.blockPosition();
+                            PacketDistributor.sendToPlayer(player, new MaidCoordPacket(pkt.uuid, false,
+                                    "复活中·剩" + (sec >= 0 ? sec : "?") + "秒"
+                                            + (rpOk ? "" : "·将落在你身边"),
+                                    at.getX(), at.getY(), at.getZ()));
+                            return;
+                        }
+                        var seen = com.maidsmart.follow.MaidChunkLoadManager.seenForOwner(player.getUUID());
+                        for (var en : seen) {
+                            if (en.getKey().equals(uid)) {
+                                ServerLevel seenLvl = level.getServer().getLevel(en.getValue().dim());
+                                PacketDistributor.sendToPlayer(player, new MaidCoordPacket(pkt.uuid, false,
+                                        ScheduleNetworking.dimName(seenLvl == null ? level : seenLvl)
+                                                + "·未加载",
+                                        en.getValue().pos().getX(), en.getValue().pos().getY(),
+                                        en.getValue().pos().getZ()));
+                                return;
+                            }
+                        }
+                    } catch (IllegalArgumentException ignored) {
+                        // 非 UUID——走原"不在场"回复
+                    }
                     // 不在了（被收进魂符/换维度加载不到）——回一个空标记让界面停止刷新
                     PacketDistributor.sendToPlayer(player,
                             new MaidCoordPacket(pkt.uuid, true, "", 0, 0, 0));
