@@ -6,6 +6,14 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百（v1.3.0 beta，同名覆盖，未发版）：仿创造飞行·跟随时速度被拽的源头抑制补档（neo 树）——
+PR #24 复核中贡献者指出他的「飞行接管」档没随合入进 main。反编译 1.21.1 定论缺口真实：
+原版 MoveToTargetSink.start() 走 moveTo(Path,double)（路径由 createPath 造），两条都不在
+FreeFlightWalkGuardMixin（moveTo(DDDD)Z）射程里；飞行速度写在 MaidTickEvent（brain 之前），
+而跟随在同一个 tick 的 brain 阶段重写 WALK_TARGET → 造路径 → MaidMoveControl 在我们写速度
+之后执行 ⇒ 拖速度。修法：MaidMoveSuppressMixin 同一注入点加一档 isControlling（飞行/软着陆）
+→ 清 WALK_TARGET + 停导航 + 取消；落地待命不拦。
+
 实测六百九十九（v1.3.0 beta，同名覆盖，未发版）：排班表全量显示 + 一键召回真正可用——
 ① 根因（原版字节码实证）：往未加载区块 addFreshEntity 的实体不在实体表里（区块可见性
    默认 HIDDEN 就不 startTracking），而 697 的 5 秒持票对账扫的恰恰是实体表——她还没
