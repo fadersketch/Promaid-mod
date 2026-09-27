@@ -242,6 +242,21 @@ public final class MaidGoetyFlight {
         } catch (Throwable ignored) {
         }
         String err = MaidGoetyCompat.castDiag(maid, SPELL_FLYING, task.staff());
+        if (err == null) {
+            // 【实测 G-2 修：方向由我们定，威力仍由聚晶给】
+            // 实机现场：她不去目标，而是绕着主人画不规则但重复的圈；日志里 err=无、俯仰也对，
+            // 只有水平方向在乱。根因是飞行聚晶取 caster.getLookAngle()，而**有主人的女仆**会被
+            // TLM 的跟随/闲逛持续下行走目标 ⇒ 原版 MoveControl 每 tick 把她 yaw 掰向那个目标。
+            // 所以这里放完法术（粒子/音效/姿态/坠距归零照旧由 Goety 完成）之后，**再按我们算出来的
+            // 瞄准方向把速度重写一遍**——速度大小仍然取自聚晶（rightStaff/附魔加成），只是方向不被抢。
+            Vec3 dir = aim.subtract(maid.getEyePosition());
+            if (dir.lengthSqr() > 1.0E-6) {
+                double d0 = MaidGoetyCompat.thrustPower(maid, task.staff());
+                maid.setDeltaMovement(dir.normalize().scale(d0));
+                maid.hasImpulse = true;
+                maid.fallDistance = 0.0F;
+            }
+        }
         // 【临时诊断】每 5 tick 打一行：法术放没放出去、放完那一瞬间速度是多少。
         // 用来分清"法术没生效"与"速度被别的东西抹掉"——两者现场长得一模一样（都只剩重力）。
         if (err != null) {

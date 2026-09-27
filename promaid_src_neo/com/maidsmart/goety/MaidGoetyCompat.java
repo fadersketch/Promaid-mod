@@ -75,6 +75,10 @@ public final class MaidGoetyCompat {
     private static boolean inited;
     private static boolean ok;
     private static Method mGetFocus;        // IWand.getFocus(ItemStack) : static
+    private static Method mRightStaff;      // Spell.rightStaff(ItemStack) : 威力是否翻倍
+    private static Method mGetStats;        // WandUtil.getStats(LivingEntity, ISpell) : static
+    private static Method mGetPotency;      // SpellStat.getPotency()
+    private static Object flyingProto;      // 一个复用的 FlyingSpell 实例（只用来查询，不施放）
     private static Method mMobSpellResult;  // Spell.mobSpellResult(LivingEntity, ItemStack)
     private static Class<?> cFlyingSpell;
     private static Class<?> cLaunchSpell;
@@ -315,6 +319,48 @@ public final class MaidGoetyCompat {
         } catch (Throwable ignored) {
         }
         return out;
+    }
+
+    /**
+     * 这一发飞行聚晶的**基准速率**（格/tick）：Goety 的公式是
+     * {@code d0 = power + potency / 2}，其中 {@code power = rightStaff ? 1.0 : 0.5}
+     * （{@code rightStaff} = 手里的杖与法术同系，例如风系聚晶 + 风之魔杖）。
+     * 我们不改威力，只是把它读出来——"速度由聚晶给"这条语义保持不变。
+     */
+    public static double thrustPower(EntityMaid maid, ItemStack staff) {
+        init();
+        if (!ok) {
+            return 0.5;
+        }
+        try {
+            if (flyingProto == null) {
+                flyingProto = cFlyingSpell.getDeclaredConstructor().newInstance();
+            }
+            if (mRightStaff == null) {
+                mRightStaff = cFlyingSpell.getMethod("rightStaff", ItemStack.class);
+            }
+            ItemStack use = staff == null ? ItemStack.EMPTY : staff;
+            double power = Boolean.TRUE.equals(mRightStaff.invoke(flyingProto, use)) ? 1.0 : 0.5;
+            double potency = 0.0;
+            try {
+                if (mGetStats == null) {
+                    mGetStats = Class.forName("com.Polarice3.Goety.utils.WandUtil")
+                            .getMethod("getStats", LivingEntity.class, Class.forName("com.Polarice3.Goety.api.magic.ISpell"));
+                }
+                Object stat = mGetStats.invoke(null, maid, flyingProto);
+                if (stat != null) {
+                    if (mGetPotency == null) {
+                        mGetPotency = stat.getClass().getMethod("getPotency");
+                    }
+                    potency = ((Number) mGetPotency.invoke(stat)).doubleValue() / 2.0;   // 与 Goety 一致：整数除法后转 double
+                }
+            } catch (Throwable ignored) {
+                // 拿不到加成就算 0（基准速度），不影响方向
+            }
+            return power + potency;
+        } catch (Throwable t) {
+            return 0.5;
+        }
     }
 
     /**
