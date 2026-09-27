@@ -5,7 +5,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
@@ -71,18 +70,41 @@ public final class MaidChunkLoadManager {
     /** 加载等级：2 = 实体正常 ticking（玩家同级；4 只是区块加载不 tick 实体） */
     private static final int TICKET_LEVEL = 2;
 
-    /** 当前持有的票：maidUuid → (dimension, chunkX, chunkZ) */
+    /** 当前持有的票（女仆的"意图表"）：maidUuid → (dimension, chunkX, chunkZ)。
+     *  真实票不直接挂在这张表上——见 {@link #CHUNK_WANTERS} 的引用计数。 */
     private static final Map<UUID, TicketKey> ACTIVE_TICKETS = new ConcurrentHashMap<>();
 
     /**
-     * 实测六百九十九：票龄表（uuid → 挂票时刻，overworld gameTime）。5 秒对账撤票前
-     * 先看一眼：**刚挂的票（<100 tick）不撤**。护栏来自复活落点那场事故——
-     * {@code addFreshEntity} 往未加载区块放实体时，她【不在实体表里】
-     * （PersistentEntitySectionManager 反编译实证：区块可见性不可达就不 startTracking），
-     * 要等区块异步载完才现身；这 5 秒对账扫不到她就会把刚挂的票当"无人要"撤掉，
-     * 区块放弃加载 → 她【永远】进不了实体表——排班表看不见、召回找不到。
+     * 实测七百〇八【共享票引用计数——修"同区块邻居撤票把她的加载一起撤掉"】。
+     *
+     * <p>原版 {@code addRegionTicket} 对"同类型 + 同等级"的票会**去重**：{@code Ticket}
+     * 的 {@code compareTo} 只比等级/类型/比较器，而 {@code MAID_TICKET} 的比较器恒为 0，
+     * 于是两只女仆落在**同一区块**时，实际只有【一张】票。旧版撤票却是**按女仆逐个撤**
+     * （{@code m_8438_} → {@code remove}）：撤掉 A 的那张 = 撤掉共用的那张 → **B 的区块
+     * 当场卸载** → 下一轮 5 秒扫描里 B 已不在实体表 → B 也被判"不要票" → 她从此没有任何
+     * 东西在加载她：排班表看不见、一键集合召不回（玩家症状）。且症状"时好时坏、找不到
+     * 规律"正因为触发条件是"同区块的邻居先走一步"，不是距离。
+     *
+     * <p>修法：票的**挂/撤全部过这一层引用计数**——只有【最后一个想要它的女仆】走了才真正
+     * 撤票。这同时就是"覆盖重叠不重复挂载"的优化：多只女仆的覆盖落在同一区块时自动合并成
+     * 一张票，开销是覆盖范围的**并集**，不是"每只女仆各开一片"。
+     *
+     * <p>两个 {@code MAID_TICKET} 的消费者（女仆会话票 + 待召回强载票）共用同一张区块网格，
+     * 所以必须一起计数，否则又会互相撤票——持有者标识见 {@link #ownerKey}。
      */
-    private static final Map<UUID, Long> TICKET_BORN = new ConcurrentHashMap<>();
+    private static final Map<TicketKey, java.util.Set<String>> CHUNK_WANTERS = new ConcurrentHashMap<>();
+
+    /**
+     * 实测七百〇八：票龄表（区块 → 首挂时刻，overworld gameTime）。5 秒对账撤票前先看一眼：
+     * **刚挂的票（<100 tick）不撤**。护栏来自复活落点那场事故——{@code addFreshEntity} 往
+     * 未加载区块放实体时，她【不在实体表里】（PersistentEntitySectionManager 反编译实证：
+     * 区块可见性不可达就不 startTracking），要等区块异步载完才现身；这 5 秒对账扫不到她就会
+     * 把刚挂的票当"无人要"撤掉，区块放弃加载 → 她【永远】进不了实体表。
+     *
+     * <p>实测七百〇八：护栏从"按女仆记"改成"按区块记"——票是**区块级**资源，撤不撤要看这张票
+     * 自己挂了多久，而不是某个女仆挂了多久。
+     */
+    private static final Map<TicketKey, Long> CHUNK_TICKET_BORN = new ConcurrentHashMap<>();
 
     /** v1.1.0 实测三百四十九：排班女仆的持久化强制区块票表（会话内存账——
      *  真实票在 ForcedChunksSavedData 里，重启后由 Forge 自动重挂，这里只用来
@@ -91,6 +113,90 @@ public final class MaidChunkLoadManager {
 
     private record TicketKey(ResourceKey<net.minecraft.world.level.Level> dim, long chunk) {
     }
+
+    /* ==================== 实测七百〇八：共享票池（引用计数） ====================
+     *
+     * 三个消费者共用同一张 MAID_TICKET 网络，全部走下面这一层，绝不直接 add/remove：
+     *   ① 跟随女仆会话票   ownerKey = "m:" + maidUuid
+     *   ② 待召回强载票     ownerKey = "s:" + maidUuid
+     *   ③ （预留）范围票   同一 owner 可对多个区块各持一份
+     * 只有某区块的最后一位持有者释放时才真正 removeRegionTicket。
+     */
+
+    /** 持有者标识：同一只女仆的会话票/强载票用不同前缀（避免互相抵消） */
+    private static String ownerKey(String kind, UUID maidId) {
+        return kind + ":" + maidId;
+    }
+
+    /**
+     * 申请一张票（引用计数 +1）。**只有从 0 → 1 时才真正 {@code addRegionTicket}**，
+     * 所以同区块的第二个申请者是零成本的（这正是"覆盖重叠不重复挂载"）。
+     */
+    private static void acquireTicket(MinecraftServer server, TicketKey key, String owner) {
+        if (server == null || key == null || owner == null) {
+            return;
+        }
+        java.util.Set<String> wanters = CHUNK_WANTERS.computeIfAbsent(key,
+                k -> java.util.concurrent.ConcurrentHashMap.newKeySet());
+        boolean first = wanters.isEmpty();
+        wanters.add(owner);
+        if (!first) {
+            return; // 已有人挂着这张票：什么都不做（共享）
+        }
+        ServerLevel level = server.m_129880_(key.dim());
+        if (level == null) {
+            wanters.remove(owner); // 维度没了：回退这次申请，别留孤儿计数
+            if (wanters.isEmpty()) {
+                CHUNK_WANTERS.remove(key, wanters);
+            }
+            return;
+        }
+        try {
+            level.m_7726_().m_8387_(MAID_TICKET, new ChunkPos(key.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+            CHUNK_TICKET_BORN.put(key, level.m_46467_());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 释放一张票（引用计数 -1）。**只有最后一位持有者走时才真正
+     * {@code removeRegionTicket}**——这就是"同区块邻居撤票不再误伤她"的修复。
+     */
+    private static void releaseTicket(MinecraftServer server, TicketKey key, String owner) {
+        if (key == null || owner == null) {
+            return;
+        }
+        java.util.Set<String> wanters = CHUNK_WANTERS.get(key);
+        if (wanters == null) {
+            return; // 这张票已经不在了（换维度/关服清场）
+        }
+        wanters.remove(owner);
+        if (!wanters.isEmpty()) {
+            return; // 还有人要它：票必须留下
+        }
+        CHUNK_WANTERS.remove(key, wanters);
+        CHUNK_TICKET_BORN.remove(key);
+        if (server == null) {
+            return;
+        }
+        ServerLevel level = server.m_129880_(key.dim());
+        if (level != null) {
+            try {
+                level.m_7726_().m_8438_(MAID_TICKET, new ChunkPos(key.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 该区块的票是否"刚挂的"（<100 tick）——刚挂的票先不撤（异步加载窗口） */
+    private static boolean ticketFresh(TicketKey key, long nowTick) {
+        Long born = CHUNK_TICKET_BORN.get(key);
+        return born != null && nowTick - born < 100L;
+    }
+
+    /** 持有者标识前缀：跟随女仆会话票 / 待召回强载票（两者共用票网格，必须分开计数） */
+    private static final String OWNER_MAID = "m:";
+    private static final String OWNER_SUMMON = "s:";
 
     /** v1.1.0 实测七十：最后出现位置登记——一键集合对"未加载区块里的女仆"的
      *  唯一线索（卸载后实体不在任何列表里，只能靠最后见到的位置去强载区块）。
@@ -213,7 +319,10 @@ public final class MaidChunkLoadManager {
             return 0;
         }
         net.minecraft.world.level.ChunkPos cp = new net.minecraft.world.level.ChunkPos(ls.pos());
-        lvl.m_7726_().m_8387_(MAID_TICKET, cp, TICKET_LEVEL, Unit.INSTANCE);
+        // 实测七百〇八：强载票也进共享池（owner 前缀 s:）——与跟随票共用票网格，
+        // 必须分开计数，否则她"一边被强载、一边被会话票保载"时两边会互相撤票
+        acquireTicket(level.m_7654_(), new TicketKey(ls.dim(), cp.m_45588_()),
+                ownerKey(OWNER_SUMMON, maidId));
         PENDING_SUMMON.put(maidId, new PendingSummon(ls.dim(), cp, player,
                 lvl.m_46467_() + 300L));
         com.maidsmart.tool.PromaidLog.log("集合", "单独召回：登记表按最后出现位置强载区块 @"
@@ -416,7 +525,9 @@ public final class MaidChunkLoadManager {
             }
         }
         // 2. 对比持票表：不再需要的撤票 / 位置变了的换票
-        // 实测六百九十九：刚挂的票（<100 tick）先不撤——护栏见 TICKET_BORN 注释
+        // 实测六百九十九：刚挂的票（<100 tick）先不撤——护栏见 CHUNK_TICKET_BORN 注释
+        // 实测七百〇八：票龄护栏改判"这张【区块票】自己挂了多久"（票是区块级资源）；
+        // 撤票走 releaseTicket —— 同区块还有别人要就【不撤】，这是邻居误伤那个 bug 的修复
         long nowTick = server.m_129783_() != null ? server.m_129783_().m_46467_() : 0L;
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             UUID id = e.getKey();
@@ -425,11 +536,11 @@ public final class MaidChunkLoadManager {
             if (want != null && want.equals(cur)) {
                 continue; // 票不变
             }
-            Long born = TICKET_BORN.get(id);
-            if (want == null && born != null && nowTick - born < 100L) {
-                continue; // 票是刚挂的：实体可能还在异步加载的路上，这拍先不撤
+            if (want == null && ticketFresh(cur, nowTick)) {
+                continue; // 这张区块票是刚挂的：实体可能还在异步加载的路上，这拍先不撤
             }
-            removeTicket(server, id, cur);
+            releaseTicket(server, cur, ownerKey(OWNER_MAID, id));
+            ACTIVE_TICKETS.remove(id);
         }
         // 3. 挂新票（m_8387_ = addRegionTicket，withRadius=false 版本在 Forge 专有）
         for (Map.Entry<UUID, TicketKey> e : wanted.entrySet()) {
@@ -438,14 +549,12 @@ public final class MaidChunkLoadManager {
             if (want.equals(cur)) {
                 continue;
             }
-            ServerLevel level = server.m_129880_(want.dim());
-            if (level == null) {
-                continue;
+            // 实测七百〇八：先释放旧区块的持有（换区块/换维度），再申请新票
+            if (cur != null) {
+                releaseTicket(server, cur, ownerKey(OWNER_MAID, e.getKey()));
             }
-            ServerChunkCache cache = level.m_7726_();
-            cache.m_8387_(MAID_TICKET, new ChunkPos(want.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+            acquireTicket(server, want, ownerKey(OWNER_MAID, e.getKey()));
             ACTIVE_TICKETS.put(e.getKey(), want);
-            TICKET_BORN.put(e.getKey(), nowTick);
         }
         // 3b. 实测三百四十九：排班女仆的持久化强制区块（换区块/关排班自动撤；
         // forceChunk 幂等——同参数重复调用无害，区块没变就跳过）
@@ -540,10 +649,11 @@ public final class MaidChunkLoadManager {
                 continue; // 区块没变：什么都不做（绝大多数 tick 走这一支）
             }
             try {
-                ServerChunkCache cache = level.m_7726_();
-                cache.m_8438_(MAID_TICKET, new ChunkPos(cur.chunk()), TICKET_LEVEL, Unit.INSTANCE);
-                cache.m_8387_(MAID_TICKET, new ChunkPos(now), TICKET_LEVEL, Unit.INSTANCE);
-                ACTIVE_TICKETS.put(e.getKey(), new TicketKey(cur.dim(), now));
+                // 实测七百〇八：换区块 = 释放旧持有 + 申请新票（引用计数，不直接 add/remove）
+                releaseTicket(server, cur, ownerKey(OWNER_MAID, e.getKey()));
+                TicketKey next = new TicketKey(cur.dim(), now);
+                acquireTicket(server, next, ownerKey(OWNER_MAID, e.getKey()));
+                ACTIVE_TICKETS.put(e.getKey(), next);
             } catch (Throwable ignored) {
             }
         }
@@ -567,13 +677,13 @@ public final class MaidChunkLoadManager {
             if (cur != null && cur.chunk() == now && cur.dim().equals(level.m_46472_())) {
                 return; // 票已经指对地方了
             }
-            ServerChunkCache cache = level.m_7726_();
-            if (cur != null && cur.dim().equals(level.m_46472_())) {
-                cache.m_8438_(MAID_TICKET, new ChunkPos(cur.chunk()), TICKET_LEVEL, Unit.INSTANCE);
+            // 实测七百〇八：换区块/换维度 = 释放旧持有 + 申请新票（引用计数）
+            if (cur != null) {
+                releaseTicket(level.m_7654_(), cur, ownerKey(OWNER_MAID, maid.m_20148_()));
             }
-            cache.m_8387_(MAID_TICKET, new ChunkPos(now), TICKET_LEVEL, Unit.INSTANCE);
-            ACTIVE_TICKETS.put(maid.m_20148_(), new TicketKey(level.m_46472_(), now));
-            TICKET_BORN.put(maid.m_20148_(), level.m_46467_());
+            TicketKey next = new TicketKey(level.m_46472_(), now);
+            acquireTicket(level.m_7654_(), next, ownerKey(OWNER_MAID, maid.m_20148_()));
+            ACTIVE_TICKETS.put(maid.m_20148_(), next);
         } catch (Throwable ignored) {
         }
     }
@@ -604,24 +714,13 @@ public final class MaidChunkLoadManager {
         }
     }
 
-    private static void removeTicket(MinecraftServer server, UUID id, TicketKey key) {
-        ServerLevel level = server.m_129880_(key.dim());
-        if (level != null) {
-            try {
-                level.m_7726_().m_8438_(MAID_TICKET,
-                        new ChunkPos(key.chunk()), TICKET_LEVEL, Unit.INSTANCE);
-            } catch (Exception ignored) {
-            }
-        }
-        ACTIVE_TICKETS.remove(id);
-        TICKET_BORN.remove(id);
-    }
-
     /** 服务器停止/开关关闭：撤掉全部票（ProMaidExtension ServerStoppingEvent 调用）
      *  v1.1.0 实测三百四十九：持久化强制区块【不在这里撤】——它要的就是跨会话
      *  存活（关游戏重进她还在守家），Forge 会把 chunks.dat 里的票自动重挂；
      *  排班关闭时 3c 段会撤。开关关闭（MISC_MAID_CHUNK_LOAD）也只停会话票：
-     *  持久化票的语义是"玩家排班让她驻守"，不是"区块加载器开关"。 */
+     *  持久化票的语义是"玩家排班让她驻守"，不是"区块加载器开关"。
+     *  实测七百〇八：本方法只在**关服/关开关**时调用（整张票网格一律作废），所以
+     *  直接清池即可；运行期的撤票一律走 {@link #releaseTicket}（引用计数）。 */
     public static void releaseAll(MinecraftServer server) {
         // v1.1.0 实测七十：待召回队列一并清场
         for (PendingSummon p : PENDING_SUMMON.values()) {
@@ -634,7 +733,8 @@ public final class MaidChunkLoadManager {
             }
         }
         PENDING_SUMMON.clear();
-        TICKET_BORN.clear();     // 实测六百九十九：票龄表一并清场
+        CHUNK_WANTERS.clear();      // 实测七百〇八：共享票池一并清场（下同）
+        CHUNK_TICKET_BORN.clear();
         AIR_DEFER_SINCE.clear(); // 实测五百六十五（PR #10）：滞空计时一并清场
         for (Map.Entry<UUID, TicketKey> e : ACTIVE_TICKETS.entrySet()) {
             TicketKey key = e.getValue();
@@ -913,7 +1013,9 @@ BlockPos stand = findStand(newLevel,
             }
             net.minecraft.world.level.ChunkPos cp =
                     new net.minecraft.world.level.ChunkPos(ls.pos());
-            lvl.m_7726_().m_8387_(MAID_TICKET, cp, TICKET_LEVEL, Unit.INSTANCE);
+            // 实测七百〇八：强载票进共享池（owner 前缀 s:，与跟随票分开计数）
+            acquireTicket(server, new TicketKey(ls.dim(), cp.m_45588_()),
+                    ownerKey(OWNER_SUMMON, en.getKey()));
             PENDING_SUMMON.put(en.getKey(),
                     new PendingSummon(ls.dim(), cp, player, now + 300L));
             pending++;
@@ -952,7 +1054,7 @@ BlockPos stand = findStand(newLevel,
                     || !(owner.m_9236_() instanceof ServerLevel);
             long now = ownerGone ? 0 : ((ServerLevel) owner.m_9236_()).m_46467_();
             if (ownerGone || now > p.expireGameTime()) {
-                releasePendingTicket(server, p);
+                releasePendingTicket(server, p, en.getKey());
                 if (!ownerGone && now > p.expireGameTime()) {
                     try {
                         owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(
@@ -967,7 +1069,7 @@ BlockPos stand = findStand(newLevel,
             // 只扫目标维度（区块刚被我们强载，实体出现就在那里）
             ServerLevel lvl = server.m_129880_(p.dim());
             if (lvl == null) {
-                releasePendingTicket(server, p);
+                releasePendingTicket(server, p, en.getKey());
                 it.remove();
                 continue;
             }
@@ -989,7 +1091,7 @@ BlockPos stand = findStand(newLevel,
                                         : "§c【集合】" + name2 + " 传送失败（状态异常，稍后再试）"));
                             } catch (Exception ignored) {
                             }
-                            releasePendingTicket(server, p);
+                            releasePendingTicket(server, p, en.getKey());
                             it.remove();
                             break;
                         }
@@ -1000,7 +1102,7 @@ BlockPos stand = findStand(newLevel,
                                     "§7【集合】" + name + " 在家模式/坐姿中，保持原位（想召回先解除她的排班/在家模式）"));
                         } catch (Exception ignored) {
                         }
-                        releasePendingTicket(server, p);
+                        releasePendingTicket(server, p, en.getKey());
                         it.remove();
                         break;
                     }
@@ -1012,7 +1114,7 @@ BlockPos stand = findStand(newLevel,
                                 : "§c【集合】" + name + " 传送失败（状态异常，稍后再试）"));
                     } catch (Exception ignored) {
                     }
-                    releasePendingTicket(server, p);
+                    releasePendingTicket(server, p, en.getKey());
                     it.remove();
                     break;
                 }
@@ -1020,15 +1122,10 @@ BlockPos stand = findStand(newLevel,
         }
     }
 
-    /** 撤掉待召回条目持有的强载票 */
-    private static void releasePendingTicket(MinecraftServer server, PendingSummon p) {
-        ServerLevel lvl = server.m_129880_(p.dim());
-        if (lvl != null) {
-            try {
-                lvl.m_7726_().m_8438_(MAID_TICKET, p.chunk(), TICKET_LEVEL, Unit.INSTANCE);
-            } catch (Exception ignored) {
-            }
-        }
+    /** 撤掉待召回条目持有的强载票（实测七百〇八起走引用计数：owner 前缀 s:） */
+    private static void releasePendingTicket(MinecraftServer server, PendingSummon p, UUID maidId) {
+        releaseTicket(server, new TicketKey(p.dim(), p.chunk().m_45588_()),
+                ownerKey(OWNER_SUMMON, maidId));
     }
 
     /**
