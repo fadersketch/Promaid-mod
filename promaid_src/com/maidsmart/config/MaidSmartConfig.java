@@ -473,6 +473,13 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 「其实近远程空袭的女仆也是需要有一个拉开距离的」。
      */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_MIN_STANDOFF;
+    /**
+     * 【实测七百〇六】空袭·**离敌最低高度**（格）：远程空袭盘旋时的**硬地板**——她与目标的
+     * 高度差任何时候都不得低于本值。玩家原话：「远程空袭的时候，不管是处于哪一种飞行状态，
+     * 那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」
+     * 0 = 关闭（退回旧行为）。
+     */
+    public static final ForgeConfigSpec.DoubleValue AIR_RAID_MIN_ABOVE_HEIGHT;
     /** 期望盘旋高度（目标上方格数）。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
     public static final ForgeConfigSpec.DoubleValue AIR_RAID_RANGED_HOLD_HEIGHT;
     /** 高度修正增益。数值口径见 {@code com.maidsmart.combat.MaidFlightCombatBehavior} 里的同名访问器 */
@@ -2263,6 +2270,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         AIR_RAID_MIN_STANDOFF = BUILDER.comment("空袭·离敌最小距离（格，默认 6.0，0~32；0 = 关闭）：「拉开距离」在空袭这边的落地。\n\n【实测七百〇四：玩家点名要的那个数】原话：「其实近远程空袭的女仆也是需要有一个拉开距离的」。\n\n【它管三件事】① **远程空袭盘旋半径的硬下限**——盘旋半径的区间近端取 max(盘旋半径 × 0.75, 本值)，所以她绕的那个圈**绝不会**比这条线更近（旧版近端是\"盘旋半径 × 0.75\"现算的，把「离敌最远距离」调小、近端就跟着塌下去，她可能绕到 3 格、正好进近战怪的攻击范围）；② **近战空袭的\"先把距离拉开再俯冲\"**——已占好高度但水平距离还没拉开到这条线时，先背离敌人平飞一小段（不俯冲），拉开了才压低机头；③ 同一条线也兜住\"被贴脸\"：贴身怪把她推到这条线以内时，她不会继续压着敌人绕。\n\n【怎么调】调大 = 她离得更远、更安全，但枪械/弹道命中率会随距离下降、也可能超出某些武器射程（一般应当 ≤「有效开火距离」airRaid.rangedFireRange）；调小 = 更贴脸。**近战那一档不会因此打不中**：这条线只作用在\"俯冲之前\"那一段，俯冲一旦开始，瞄准与命中判定一个字不改（这个模组在命中率上专门修过两轮）。被本值顶到超过「离敌最远距离」时以后者为准（区间不会倒挂）。日志搜「拉开距离」")
                 .translation("config.promaid.airRaid.minStandoff")
                 .defineInRange("minStandoff", 6.0, 0.0, 32.0);
+        AIR_RAID_MIN_ABOVE_HEIGHT = BUILDER.comment("空袭·离敌最低高度（格，默认 8.0，0~64；0 = 关闭）：**远程空袭盘旋时的硬地板**——她与目标的**高度差**任何时候都不得低于本值。\n\n【实测七百〇六：玩家点名要的那个数】原话：「远程空袭的时候，不管是处于哪一种飞行状态，那么至少那个比敌人高上 8 格不能有太大的偏差，而不是飞着飞着又只比敌人高一点点了。」\n\n【为什么旧版会\"飞着飞着只剩一点高度\"】旧版只有一条软约束：`期望盘旋高度 10 格 + 俯仰增益按误差回正`。俯仰有死区、滑翔每 tick 都在掉高、而\"掉高补推\"有 5 秒冷却——三段叠加的结果是高度在 [8, 11] 之间持续锯齿，偶尔探到 8 格以下、甚至只剩一两格（那时她的俯仰才刚开始往回抬，但要好几秒才能补回来）。\n\n【本值怎么管】它是一条**硬地板**，与上面那条软回正并存、优先级更高：只要高度差低于本值，就把盘旋俯仰**直接钉成最大抬头**（不管误差算出来的角度是多少），于是她立刻转入爬升、绝不会继续往下滑；同时把\"掉高补推\"的触发门槛也提到本值（低于它就算掉高，不必等掉出 10 格带），冷却一好就补推。\n\n【怎么调】调大 = 她更贴着\"始终比敌人高这么多\"、更安全、但更费燃料（补推更频繁）；0 = 关掉地板，退回旧版\"软回正 + 5 秒补推\"。默认 8 与「期望盘旋高度 10」配成\"目标带 10、地板 8\"——正常时在 10 附近飘，最坏也不低于 8。日志搜「高度地板」")
+                .translation("config.promaid.airRaid.minAboveHeight")
+                .defineInRange("minAboveHeight", 8.0, 0.0, 64.0);
         AIR_RAID_RANGED_HOLD_HEIGHT = BUILDER.comment("期望盘旋高度（目标上方格数，默认 10）：低于这条高度带就补推——远程空袭的核心是「脚不沾地」，实测五百七十九由 3.5 提到 10")
                 .translation("config.promaid.airRaid.rangedHoldHeight")
                 .defineInRange("rangedHoldHeight", 10.0, 0.0, 64.0);
