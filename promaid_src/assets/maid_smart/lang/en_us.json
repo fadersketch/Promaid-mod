@@ -142,6 +142,7 @@
   "config.promaid.airRaid.orbitRadius": "Orbit Radius",
   "config.promaid.airRaid.orbitMax": "Max orbit distance after lock-on (blocks)",
   "config.promaid.airRaid.minStandoff": "Min standoff distance (blocks)",
+  "config.promaid.airRaid.minAboveHeight": "Min altitude above target (blocks)",
   "config.promaid.airRaid.rangedHoldHeight": "Ranged Hold Height",
   "config.promaid.airRaid.rangedHoldGain": "Altitude Correction Gain",
   "config.promaid.airRaid.rangedHoldBias": "Altitude Correction Bias",
