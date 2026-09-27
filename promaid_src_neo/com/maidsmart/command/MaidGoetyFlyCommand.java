@@ -1,6 +1,7 @@
 package com.maidsmart.command;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import com.maidsmart.goety.MaidGoetyAuto;
 import com.maidsmart.goety.MaidGoetyCompat;
 import com.maidsmart.goety.MaidGoetyFlight;
 import com.maidsmart.tool.PromaidLog;
@@ -37,6 +38,7 @@ public final class MaidGoetyFlyCommand {
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         MaidGoetyFlight.ensureHooked();
+        MaidGoetyAuto.ensureHooked();
         dispatcher.register(Commands.literal("maid_smart")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("goety_fly")
@@ -83,6 +85,14 @@ public final class MaidGoetyFlyCommand {
                         .then(Commands.argument("maid", EntityArgument.entities())
                                 .executes(ctx -> stop(ctx.getSource(),
                                         EntityArgument.getEntities(ctx, "maid").iterator().next()))))
+                .then(Commands.literal("goety_auto")
+                        .then(Commands.argument("on", com.mojang.brigadier.arguments.BoolArgumentType.bool())
+                                .executes(ctx -> auto(ctx.getSource(), null,
+                                        com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "on")))
+                                .then(Commands.argument("maid", EntityArgument.entities())
+                                        .executes(ctx -> auto(ctx.getSource(),
+                                                EntityArgument.getEntities(ctx, "maid").iterator().next(),
+                                                com.mojang.brigadier.arguments.BoolArgumentType.getBool(ctx, "on"))))))
                 .then(Commands.literal("goety_status")
                         .executes(ctx -> status(ctx.getSource(), null))
                         .then(Commands.argument("maid", EntityArgument.entities())
@@ -159,6 +169,19 @@ public final class MaidGoetyFlyCommand {
         return 1;
     }
 
+    /** 【G-4 自动档】开/关"她自己判断要不要飞"（默认关；存 persistentData）。 */
+    private static int auto(CommandSourceStack src, Entity picked, boolean on) {
+        EntityMaid maid = asMaid(src, picked);
+        if (maid == null) {
+            src.sendFailure(Component.literal("没找到女仆"));
+            return 0;
+        }
+        MaidGoetyAuto.setAuto(maid, on);
+        src.sendSuccess(() -> Component.literal("自动推进已" + (on ? "开启" : "关闭")
+                + "（她会在主人拉开 " + (int) 16 + " 格以上时用飞行聚晶追，追到 6 格内落地交还跟随）"), true);
+        return 1;
+    }
+
     private static int stop(CommandSourceStack src, Entity picked) {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
@@ -177,6 +200,7 @@ public final class MaidGoetyFlyCommand {
             return 0;
         }
         String line = "推进中=" + MaidGoetyFlight.isActive(maid) + " 档位=" + MaidGoetyFlight.describe(maid)
+                + " 自动=" + MaidGoetyAuto.isAuto(maid)
                 + " Goety=" + MaidGoetyCompat.available()
                 + " 法杖=" + MaidGoetyCompat.staffs(maid)
                 + " 位置=" + fmt(maid.position())

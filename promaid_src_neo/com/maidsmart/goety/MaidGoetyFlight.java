@@ -102,8 +102,15 @@ public final class MaidGoetyFlight {
 
     private enum Phase { CRUISE, DESCEND }
 
-    /** 一个"持续推进"任务。 */
-    private record Task(Mode mode, UUID targetId, Vec3 point, ItemStack staff, Phase phase, long start) {
+    /**
+     * 一个"持续推进"任务。
+     *
+     * @param auto 这个任务是**自动层自己下发**的（true）还是**玩家命令**下发的（false）。
+     *             自动层只允许撤销/覆盖自己下发的任务——实测发现过：少了这个标记，
+     *             自动层在"她暂时没有主人"时会把玩家刚下的 {@code goety_fly} 一并掐掉。
+     */
+    private record Task(Mode mode, UUID targetId, Vec3 point, ItemStack staff, Phase phase, long start,
+                        boolean auto) {
     }
 
     private static final Map<UUID, Task> TASKS = new LinkedHashMap<>();
@@ -152,13 +159,30 @@ public final class MaidGoetyFlight {
 
     /** 飞到某个坐标（一次性：巡航 → 下降 → 收手）。返回 null 表示已开始，否则是拒绝原因。 */
     public static String flyTo(EntityMaid maid, Vec3 point) {
+        return flyTo(maid, point, false);
+    }
+
+    /** 同上，但可标记为"自动层下发"（自动层只撤销自己下发的任务）。 */
+    public static String flyTo(EntityMaid maid, Vec3 point, boolean auto) {
         String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_FLYING, "飞行聚晶");
         if (bad != null) {
             return bad;
         }
         TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, point, pickStaff(maid), Phase.CRUISE,
-                maid.level().getGameTime()));
+                maid.level().getGameTime(), auto));
         return null;
+    }
+
+    /** 当前任务是不是**玩家命令**下发的（自动层必须让路）。 */
+    public static boolean isManual(EntityMaid maid) {
+        Task t = maid == null ? null : TASKS.get(maid.getUUID());
+        return t != null && !t.auto();
+    }
+
+    /** 当前任务是不是自动层下发的。 */
+    public static boolean isAutoTask(EntityMaid maid) {
+        Task t = maid == null ? null : TASKS.get(maid.getUUID());
+        return t != null && t.auto();
     }
 
     /** 跟着某个实体飞（远了直追、近了绕圈伴飞）。返回 null 表示已开始，否则是拒绝原因。 */
@@ -168,7 +192,7 @@ public final class MaidGoetyFlight {
             return bad;
         }
         TASKS.put(maid.getUUID(), new Task(Mode.FOLLOW, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
-                maid.level().getGameTime()));
+                maid.level().getGameTime(), false));
         return null;
     }
 
@@ -177,6 +201,11 @@ public final class MaidGoetyFlight {
      * 接敌机动的几何层），朝它推。丢目标/超时都会**转成下降**（而不是直接收手——高空撒手会摔）。
      */
     public static String combat(EntityMaid maid, LivingEntity target) {
+        return combat(maid, target, false);
+    }
+
+    /** 同上，但可标记为"自动层下发"。 */
+    public static String combat(EntityMaid maid, LivingEntity target, boolean auto) {
         String bad = requireFocus(maid, MaidGoetyCompat.FOCUS_FLYING, "飞行聚晶");
         if (bad != null) {
             return bad;
@@ -185,7 +214,7 @@ public final class MaidGoetyFlight {
             return "没有目标";
         }
         TASKS.put(maid.getUUID(), new Task(Mode.COMBAT, target.getUUID(), null, pickStaff(maid), Phase.CRUISE,
-                maid.level().getGameTime()));
+                maid.level().getGameTime(), auto));
         return null;
     }
 
@@ -236,7 +265,7 @@ public final class MaidGoetyFlight {
 
     /** 收手（交还控制权，不再放法术）。 */
     public static void stop(EntityMaid maid, String why) {
-        if (maid != null && TASKS.remove(maid.getUUID()) != null) {
+        if (maid != null && TASKS.remove(maid.getUUID()) != null) {   // 玩家命令与自动层都可以收手
             PromaidLog.log("Goety推进", maid.getName().getString() + " 收手（" + why + "）当前位置 "
                     + fmt(maid.position()));
         }
@@ -279,7 +308,7 @@ public final class MaidGoetyFlight {
             if (!(t instanceof LivingEntity living) || !living.isAlive()) {
                 // 丢目标：不要在高空直接撒手（会摔），转成"原地下降"
                 TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, maid.position(), task.staff(),
-                        Phase.DESCEND, task.start()));
+                        Phase.DESCEND, task.start(), task.auto()));
                 PromaidLog.log("Goety推进", maid.getName().getString() + " 丢目标 → 原地下降收手");
                 return;
             }
@@ -331,6 +360,11 @@ public final class MaidGoetyFlight {
                 stop(maid, "落地");
                 return;
             }
+            // 虚空保护：掉到世界底部以下就放手（那里再松重力也摔不死，反之会一直往下降）
+            if (maid.getY() < maid.level().getMinBuildHeight() + 1) {
+                stop(maid, "到世界底部了");
+                return;
+            }
         }
 
         // 【G-2 修 2：卡在坑里抠出来】推力飞行器落在 1 格深的坑/贴墙时，水平推力全被碰撞吃掉
@@ -363,7 +397,7 @@ public final class MaidGoetyFlight {
             }
             DBG++;
             TASKS.put(maid.getUUID(), new Task(task.mode(), task.targetId(), task.point(), task.staff(),
-                    phase, task.start()));
+                    phase, task.start(), task.auto()));
             return;
         }
         if (boostUntil != null) {
@@ -391,7 +425,7 @@ public final class MaidGoetyFlight {
         }
         DBG++;
         TASKS.put(maid.getUUID(), new Task(task.mode(), task.targetId(), task.point(), task.staff(),
-                phase, task.start()));
+                phase, task.start(), task.auto()));
     }
 
     /** 超时处理：已经贴地就直接收手，还在空中就转成下降（别高空撒手）。 */
@@ -401,7 +435,7 @@ public final class MaidGoetyFlight {
             return;
         }
         TASKS.put(maid.getUUID(), new Task(Mode.ARRIVE, null, maid.position(), task.staff(),
-                Phase.DESCEND, maid.level().getGameTime()));
+                Phase.DESCEND, maid.level().getGameTime(), task.auto()));
         PromaidLog.log("Goety推进", maid.getName().getString() + " " + why + " → 原地下降收手");
     }
 
