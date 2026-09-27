@@ -285,6 +285,12 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
             return false;
         }
+        // v1.3.0(beta) 实测七百〇二【有创造飞行能力就不搭路（需求方口径）】：搭路是"一边铺方块一边用
+        // 走路驱动她"，而有飞行能力的女仆根本不需要那一套——要过沟、要上坡、要跟上主人，直接起飞就是。
+        // 与作者原那道 isControlling 的区别：那道只管"正在飞/正在转着降"，这道管"具备能力"（含落地待命档）。
+        if (com.maidsmart.flight.MaidFreeFlightController.bridgeDisabled(maid)) {
+            return false;
+        }
         LivingEntity owner = maid.m_269323_();
         if (owner == null || !owner.m_6084_() || owner.m_9236_() != level) {
             return false;
@@ -821,6 +827,10 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         // v1.2.2 实测六百〇八：飞行跟随中（哪怕搭到一半才切进飞行）立刻交出控制权
         if (com.maidsmart.combat.MaidFlightFollowBehavior.isFollowing(maid)) {
+            return false;
+        }
+        // v1.3.0(beta) 实测七百〇二【有创造飞行能力就不搭路】：搭到一半才发现她有飞行能力 → 立刻让位
+        if (com.maidsmart.flight.MaidFreeFlightController.bridgeDisabled(maid)) {
             return false;
         }
         LivingEntity owner = maid.m_269323_();

@@ -195,5 +195,15 @@
   "config.promaid.bombing.tntTrack": "TNT Homing",
   "config.promaid.compat": "Third-party Compat",
   "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)",
-  "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)"
+  "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)",
+  "key.promaid.free_flight_toggle": "Toggle Maid Free Flight (aim at maid, unbound by default)",
+  "config.promaid.misc.freeFlight": "Free Flight (Creative-style)",
+  "config.promaid.misc.freeFlightItems": "Free Flight: Qualifying Items",
+  "config.promaid.misc.freeFlightEffects": "Free Flight: Qualifying Effects",
+  "config.promaid.misc.freeFlightIdle": "Free Flight: Smart Standby",
+  "config.promaid.misc.freeFlightIdleSeconds": "Free Flight: Standby After Owner Still (s)",
+  "config.promaid.misc.freeFlightNearDist": "Free Flight: Landing Near Distance (blocks)",
+  "config.promaid.misc.freeFlightTravel": "Free Flight: Flying Instead of Walking",
+  "config.promaid.misc.freeFlightTravelDist": "Free Flight: Fly Beyond Distance (blocks)",
+  "config.promaid.misc.glideElytraAnimation": "Use Elytra Animation While Gliding"
 }
