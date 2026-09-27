@@ -6,6 +6,18 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测六百九十九（v1.3.0 beta，同名覆盖，未发版）：排班表全量显示 + 一键召回真正可用——
+① 根因（原版字节码实证）：往未加载区块 addFreshEntity 的实体不在实体表里（区块可见性
+   默认 HIDDEN 就不 startTracking），而 697 的 5 秒持票对账扫的恰恰是实体表——她还没
+   "现身"就把刚挂的票撤掉 → 区块放弃加载 → 她【永远】进不了实体表：排班表不列她、
+   按 UUID 找不到她、一键集合只能对死亡点白挂 15 秒票然后报「没能等到」。死亡→复活
+   的 60 秒窗口里她更不是实体。
+② 修法：复活前先把重生点区块同步加载到 FULL（addFreshEntity 当场入表）；TICKET_BORN
+   票龄护栏（刚挂 <100 tick 的票对账不撤）；LAST_SEEN 登记表升格 SavedData（重启后
+   远处女仆仍有迹可循，顺带记名字）；排班表补「✚ 复活中 / ⚑ 未加载」两类行；单独
+   召回对死者报复活倒计时、对未加载者当场强载召回；一键集合照实报 reviving 数；
+   死亡瞬间登记作废（forgetMaid）。
+
 实测六百九十八（v1.3.0 beta，同名覆盖，未发版）：三件事——
 ① 建造女仆不再被打死：日志实证（2026-09-27 latest.log）森近霖之助两次出事都是同一形状——
    「主动参战」把他从 maid_smart:build 切成 touhou_little_maid:attack 的那一拍，建造护盾
