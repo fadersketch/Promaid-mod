@@ -359,7 +359,9 @@ public final class MaidFlightKit {
         if (maid == null) {
             return false;
         }
-        return hasAmmoForWeapon(maid, resolveRangedWeapon(maid));
+        // 实测七百一十二：主手那把打不响（弹药/能量耗尽）时，**背包里还有能接着打的**也算齐备
+        // ——门禁口径与 {@link #ensureUsableRangedWeapon} 的换装口径同源（见那个方法的注释）。
+        return hasAmmoForWeapon(maid, resolveRangedWeapon(maid)) || hasUsableRangedWeaponAny(maid);
     }
 
     /**
@@ -496,6 +498,134 @@ public final class MaidFlightKit {
         } catch (Throwable ignored) {
         }
         return ItemStack.f_41583_;
+    }
+
+    /* ---------------- 实测七百一十二：主手打不响 → 先翻背包换一把能接着打的 ---------------- */
+
+    /**
+     * 【实测七百一十二】"主手那把打不响，但背包里还有能接着打的"——**模式门禁要认这一条**。
+     *
+     * <p>玩家原话：「如果女仆发现手中的枪已经没有了对应子弹，第一步不应该是报错。应该是继续
+     * 检查一下包内有没有其他的物品符合继续战斗的需求（这个好像就是直接套用的自主切换武器吧，
+     * 同时优先模组武器）。」
+     *
+     * <p>【为什么必须在门禁这里判】门禁原先只看"她**会用的那一把**"
+     * （{@link #resolveRangedWeapon}：主手优先）——主手那把干打不响就直接判缺弹药、把模式关掉，
+     * **根本不给她翻背包的机会**；空袭那边更狠：{@code isModeActive} 在 {@code equip}
+     * **之前**判假就 {@code endFlightSafely} 了。所以门禁必须改成"**她身上有没有一把能接着打的**"
+     * ——只要背包里还有一把喂得上弹/能量没空的，就算齐备；真正把它换到主手由
+     * {@link #ensureUsableRangedWeapon} 在同一次 tick 完成（**口径只有一处**：门禁与换装共用本方法）。
+     */
+    public static boolean hasUsableRangedWeaponAny(EntityMaid maid) {
+        return hasUsableRangedWeapon(maid, MaidFlightKit::isRangedWeapon);
+    }
+
+    /** {@link #hasUsableRangedWeaponAny} 的任务分流版：远战任务用本任务的武器口径 */
+    private static boolean hasUsableRangedWeapon(EntityMaid maid, StackFilter filter) {
+        if (maid == null) {
+            return false;
+        }
+        try {
+            if (filter.test(maid.m_21205_()) && hasAmmoForWeapon(maid, maid.m_21205_())) {
+                return true;
+            }
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack s = inv.getStackInSlot(i);
+                if (!s.m_41619_() && filter.test(s) && hasAmmoForWeapon(maid, s)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 【实测七百一十二】把主手换成"能接着打"的那把——**只在主手那把打不响时才动手**
+     * （打不响 = 合法远程武器、但 {@link #hasAmmoForWeapon} 为假，也就是弹药/能量耗尽）。
+     *
+     * <p>挑选顺序（玩家要求"优先模组武器"）：**模组武器优先于原版武器**，同档取先扫到的
+     * （背包槽序）。找不到能用的就**保持现状**——绝不因为"换不到更好的"把玩家给的武器换掉。
+     *
+     * <p>调用点：空袭 {@link #equip}（主手那一档）与扫帚模式
+     * （{@code MaidToolAutoEquipBehavior} 的扫帚分支）——两条链路共用本方法，不各写一份。
+     *
+     * @return 主手此刻是否有一把能用的远程武器
+     */
+    public static boolean ensureUsableRangedWeapon(EntityMaid maid) {
+        if (maid == null) {
+            return false;
+        }
+        try {
+            IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+            ItemStack main = maid.m_21205_();
+            if (isRangedWeapon(main) && hasAmmoForWeapon(maid, main)) {
+                return true; // 主手这把就能打 → 尊重玩家/模组的搭配，一个字不改
+            }
+            // 主手不合法、或合法但打不响 → 翻背包找能接着打的（模组武器优先）
+            ItemStack swap = takeUsableRangedFromBackpack(maid, true);
+            if (swap.m_41619_()) {
+                swap = takeUsableRangedFromBackpack(maid, false);
+            }
+            if (!swap.m_41619_()) {
+                hands.setStackInSlot(0, swap);
+                if (!main.m_41619_()) {
+                    giveBack(maid, main);
+                }
+                logWeaponSwap(maid, swap, main);
+                return true;
+            }
+            // 背包也没有能用的：保持现状（主手仍是那把打不响的 → 缺件提示照旧报）
+            return isRangedWeapon(main) && hasAmmoForWeapon(maid, main);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 从背包取一把"远程武器且打得响"的（moddedOnly=true 时只要模组武器） */
+    private static ItemStack takeUsableRangedFromBackpack(EntityMaid maid, boolean moddedOnly) {
+        return takeFromBackpack(maid, s -> isRangedWeapon(s) && hasAmmoForWeapon(maid, s)
+                && (!moddedOnly || !isVanillaStack(s)));
+    }
+
+    /** 该物品是否原版命名空间（"模组武器优先"的区分依据） */
+    private static boolean isVanillaStack(ItemStack s) {
+        try {
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_());
+            return key != null && "minecraft".equals(key.m_135827_());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 实测七百一十二：主手换武器写一行运行日志（40 tick 节流，防每 tick 刷屏） */
+    private static final java.util.Map<EntityMaid, Long> WEAPON_SWAP_LOG =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    private static void logWeaponSwap(EntityMaid maid, ItemStack now, ItemStack old) {
+        try {
+            long t = maid.m_9236_().m_46467_();
+            Long last = WEAPON_SWAP_LOG.get(maid);
+            if (last != null && t - last < 40L) {
+                return;
+            }
+            WEAPON_SWAP_LOG.put(maid, t);
+            String nowId = itemIdOf(now);
+            String oldId = old.m_41619_() ? "空" : itemIdOf(old);
+            com.maidsmart.tool.PromaidLog.log("空袭装备", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + " 主手换武器（原 " + oldId + " 打不响）→ " + nowId);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static String itemIdOf(ItemStack stack) {
+        try {
+            return String.valueOf(net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_()));
+        } catch (Throwable ignored) {
+            return String.valueOf(stack.m_41720_());
+        }
     }
 
     /**
@@ -796,7 +926,7 @@ public final class MaidFlightKit {
             if (!(hasElytra(maid) && hasRangedWeaponOnly(maid) && hasFlightPropellant(maid))) {
                 return false;
             }
-            return hasAmmoForWeapon(maid, resolveRangedWeaponAny(maid));
+            return hasAmmoForWeapon(maid, resolveRangedWeaponAny(maid)) || hasUsableRangedWeaponAny(maid);
         } catch (Throwable t) {
             return false;
         }
@@ -961,6 +1091,14 @@ public final class MaidFlightKit {
         }
         // 主手：任意近战武器；主手已有近战武器时【不换】——尊重玩家/模组的搭配
         IItemHandlerModifiable hands = (IItemHandlerModifiable) maid.getHandsInvWrapper();
+        // 【实测七百一十二】远战：主手那把"打不响"（弹药/能量耗尽）时**先翻背包换一把能接着打的**
+        // ——玩家原话「如果女仆发现手中的枪已经没有了对应子弹，第一步不应该是报错。应该是继续
+        // 检查一下包内有没有其他的物品符合继续战斗的需求（……同时优先模组武器）。」
+        // 近战那一档不受影响：近战武器没有"打不响"这回事（耐久见底由别的链路管），仍是
+        // "主手已是合法武器就不换"。换装口径与门禁口径同源（{@link #hasUsableRangedWeaponAny}）。
+        if (isRangedTask(maid)) {
+            ensureUsableRangedWeapon(maid);
+        }
         if (!isWeaponForTask(maid, maid.m_21205_())) {
             // 近战才有「重锤优先」这种偏好；远战直接找远程武器（弓/枪）
             ItemStack weapon = takeFromBackpack(maid, s -> isWeaponForTask(maid, s));

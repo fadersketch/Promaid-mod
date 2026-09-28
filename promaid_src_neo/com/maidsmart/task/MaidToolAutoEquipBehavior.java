@@ -54,6 +54,12 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
         // 既不背鞘翅也不滑翔——并进去等于凭空给她长出翅膀。这里只做"换武器"这一件事。
         if (com.maidsmart.combat.MaidBroomKit.isBroomTask(maid)) {
             MaidToolAutoEquip.ensureForTask(maid);
+            // 【实测七百一十二】主手那把打不响（弹药/能量耗尽）时**先翻背包换一把能接着打的**
+            // ——玩家原话「如果女仆发现手中的枪已经没有了对应子弹，第一步不应该是报错。应该是
+            // 继续检查一下包内有没有其他的物品符合继续战斗的需求（……同时优先模组武器）。」
+            // 上面 ensureForTask 只按武器评分挑"最好的一把"（不看弹药）；这一行补上"打得响"
+            // 这一条，与空袭 equip() 走的是**同一个方法**（口径只有一处）。
+            com.maidsmart.combat.MaidFlightKit.ensureUsableRangedWeapon(maid);
             return false;
         }
         // v1.2.0：飞行作战（近战/远战）下【不自动切换武器/盾】——玩家指定什么就是什么；
