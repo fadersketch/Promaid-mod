@@ -92,6 +92,71 @@ public final class MaidRideKit {
         }
     }
 
+    /* ==================== 家具类坐骑黑名单 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单后门】。
+     *
+     * <p>玩家原话：「我们需要给原版 tlm 的椅子这些道具开一个后门，他们虽然是家具类物品，
+     * 但是从某种意义上，他们也算坐骑，需要开一个额外的黑名单，保证女仆坐在这个上面的时候，
+     * 我们所做的所有骑乘更改全都不生效。」
+     *
+     * <p>TLM 的椅子（{@code EntityChair}）/坐垫（{@code EntitySit}）都让女仆变成"乘客"
+     * （{@code isPassenger()} = true，javap 实证 {@code AbstractEntityFromItem} 那条链），
+     * 于是它们天然落进本链路的几个"乘客"判据里：指挥棒把她当成"骑在一只 Saddleable 上"、
+     * {@link #isDriven} 会去抑制载具闲逛、传送链路会想着"连坐骑一起搬"。可它们根本不是坐骑，
+     * 是家具——玩家明确把她安放在那儿的。默认名单 = {@code touhou_little_maid:chair} /
+     * {@code touhou_little_maid:sit}；别的模组的可坐家具只要往配置里填一行实体 id 即可。
+     *
+     * <p>判据是**实体类型注册名**（不写死类引用，1.20.1 / 1.21.1 两树的 TLM 各自类名不同也能共用）。
+     */
+    public static boolean isFurniture(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            java.util.List<? extends String> list;
+            try {
+                list = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_FURNITURE_BLACKLIST.get();
+            } catch (Throwable ignored) {
+                return false;
+            }
+            if (list == null || list.isEmpty()) {
+                return false;
+            }
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES.getKey(e.m_6095_());
+            if (key == null) {
+                return false;
+            }
+            String id = key.toString();
+            for (String s : list) {
+                if (s == null) {
+                    continue;
+                }
+                String t = s.trim();
+                if (!t.isEmpty() && t.equalsIgnoreCase(id)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 她此刻是不是正坐在黑名单化的家具上（= 本模组所有骑乘改动对她一律不生效） */
+    public static boolean isOnFurniture(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            Entity v = maid.m_20202_();
+            return v != null && isFurniture(v);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ==================== 能力探测 ==================== */
 
     /**
@@ -109,6 +174,9 @@ public final class MaidRideKit {
             if (e instanceof EntityMaid) {
                 return false; // 女仆骑女仆不在本链路范围内
             }
+            if (isFurniture(e)) {
+                return false; // 实测七百一十七：家具（椅子/坐垫）不是坐骑——本链路一律不碰
+            }
             if (!(e instanceof Saddleable saddle) || !saddle.m_6254_()) {
                 return false; // 没上鞍：原版语义不许骑（我们不替她装鞍）
             }
@@ -123,6 +191,9 @@ public final class MaidRideKit {
         try {
             if (!(e instanceof Mob) || e == maid || e instanceof EntityMaid) {
                 return "这个不能当坐骑～";
+            }
+            if (isFurniture(e)) {
+                return "这是家具，不是坐骑～"; // 实测七百一十七：椅子/坐垫等黑名单家具
             }
             if (!e.m_6084_()) {
                 return "它已经不在了……";
@@ -181,14 +252,20 @@ public final class MaidRideKit {
 
     /* ==================== 骑乘关系 ==================== */
 
-    /** 她此刻骑着的那只坐骑（没骑返回 null） */
+    /** 她此刻骑着的那只坐骑（没骑返回 null；坐在黑名单家具上也算"没骑坐骑"） */
     public static Entity ridingMount(EntityMaid maid) {
         try {
             if (maid == null) {
                 return null;
             }
             Entity v = maid.m_20202_();
-            return v instanceof EntityMaid ? null : v;
+            if (v instanceof EntityMaid) {
+                return null;
+            }
+            if (isFurniture(v)) {
+                return null; // 实测七百一十七：家具（椅子/坐垫）不算坐骑——本链路一律不碰
+            }
+            return v;
         } catch (Throwable ignored) {
             return null;
         }
@@ -284,6 +361,9 @@ public final class MaidRideKit {
      */
     public static boolean isDriven(Entity mount) {
         try {
+            if (isFurniture(mount)) {
+                return false; // 实测七百一十七：家具（椅子/坐垫）不抑制闲逛、不施加任何骑乘改动
+            }
             EntityMaid m = riderOf(mount);
             if (m == null) {
                 return false;

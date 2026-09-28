@@ -170,6 +170,8 @@ public final class MaidHeatEscape {
             maid.m_20256_(Vec3.f_82478_);
             level.m_5594_(null, cell, net.minecraft.sounds.SoundEvents.f_11852_,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            // 实测七百一十七【issue #27】：跨维传送后补属性表包（客户端血上限只来自那一包）
+            com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
             return true;
         } catch (Throwable ignored) {
             return false;

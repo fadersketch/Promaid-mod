@@ -173,6 +173,8 @@ public final class MaidHeatEscape {
             maid.setDeltaMovement(Vec3.ZERO);
             level.playSound(null, cell, net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            // 实测七百一十七【issue #27】：跨维传送后补属性表包（客户端血上限只来自那一包）
+            com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
             return true;
         } catch (Throwable ignored) {
             return false;

@@ -964,6 +964,8 @@ BlockPos stand = findStand(newLevel,
             com.maidsmart.tool.PromaidLog.log("跨维", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 跟随主人跨维传送至 "
                     + stand.getX() + "," + stand.getY() + "," + stand.getZ());
+            // v1.3.0(beta) 实测七百一十七【issue #27】：跨维传送后补属性表包（治血上限掉回 20）
+            com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
         } catch (Exception ignored) {
         }
     }
@@ -1812,6 +1814,12 @@ BlockPos stand = findStand(newLevel,
             maid.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
             dest.playSound(null, stand, net.minecraft.sounds.SoundEvents.ENDERMAN_TELEPORT,
                     net.minecraft.sounds.SoundSource.PLAYERS, 1.0f, 1.0f);
+            // v1.3.0(beta) 实测七百一十七【issue #27：远距/跨维传送后血上限掉回 20】：
+            // 客户端可见的 MAX_HEALTH 只来自 ClientboundUpdateAttributesPacket，而传送
+            // 这条路（同维 = 纯 moveTo 不重追踪；跨维 = 删+生成但新实体在未载区块里追踪
+            // 起不来）都可能一包都不发，客户端就一直显示 TLM 默认的 20。这里登记下一 tick
+            // 补一枪属性表（不重建实体，只补那一包）。见 MaidResyncCommand.scheduleAttributeResend。
+            com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
             return true;
         } catch (Exception e) {
             return false;

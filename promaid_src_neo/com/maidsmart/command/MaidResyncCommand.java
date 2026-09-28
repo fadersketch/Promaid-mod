@@ -228,6 +228,7 @@ public final class MaidResyncCommand {
     /** 由 ProMaidExtension 的 ServerTick 每 tick 调一次（空队列零开销） */
     public static void tickAutoResync(net.minecraft.server.MinecraftServer server) {
         tickForcedResync(server); // 实测六百九十七：复活后那几枪（空表零开销）
+        tickAttributeResend(server); // 实测七百一十七：传送后补属性表（治血上限掉回 20）
         if (PENDING_AUTO.isEmpty()) {
             return;
         }
@@ -399,6 +400,93 @@ public final class MaidResyncCommand {
             return true;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百一十七【issue #27：远距/跨维传送后血上限掉回 20】。
+     *
+     * 只补**属性表**这一包（{@code ClientboundUpdateAttributesPacket}），不做"删+生成"。
+     *
+     * <p>【为什么传送那条路需要它】客户端可见的 MAX_HEALTH 只来自这一包：原版在
+     * ①开始追踪（{@code ServerEntity.sendPairingData}）与 ②属性变脏
+     * （{@code ServerEntity.sendChanges} 里 dirty 非空）时才发。而我们的传送：
+     * <ul>
+     *   <li><b>同维度远距</b>：走 {@code Entity.teleportTo} 的**同维度分支** = 纯
+     *       {@code moveTo}，没有删/生成、没有重新追踪，属性包自然一个都不发；落点区块
+     *       若刚被卸载过（玩家报的"传送到不加载的区块"），客户端那只实体的属性表就一直是
+     *       默认值（TLM 女仆默认 20）；</li>
+     *   <li><b>跨维度</b>：走的是"删+生成"（新网络 id），{@code scheduleAutoResync} 又刻意
+     *       对"新实体"放行（实测五百九十六），赌原版追踪会补全套——可目的地区块没载完时
+     *       新实体停在 HIDDEN、追踪起不来，属性包依然没发。</li>
+     * </ul>
+     * 报告口径正好对上：「只有远距离传送和跨界传送会出现，收放魂符似乎不会」——魂符那条
+     * 路有 {@code MaidAutoResurrect.scheduleForcedResync} 兜着（它走 {@link #resyncTo}、
+     * 里面本来就补属性表），传送这条路没人管。
+     *
+     * <p>【为什么不是直接 scheduleForcedResync】那一套是"删+生成"三枪，用在传送后会把
+     * 客户端实体整个重建——她正骑着的东西（扫帚/坐骑）、容器槽位、追踪关系都要重新对齐，
+     * 成本与风险都不对等。这里只需要把**属性表**补回去：轻、幂等、随原版追踪口径一字不差。
+     *
+     * <p>【时机】传送当 tick 就发往往还没重新追踪上（客户端可能先收到属性包、后收到实体包，
+     * 或实体包在下一 tick 才到），所以登记一张"下一 tick 补一枪"的小表，由
+     * {@code tickAutoResync} 顺带驱动。
+     */
+    private static final java.util.Map<UUID, Integer> PENDING_ATTR =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 传送链路调用：下 1 tick 给她补一次属性表包 */
+    public static void scheduleAttributeResend(EntityMaid maid) {
+        if (maid == null) {
+            return;
+        }
+        try {
+            PENDING_ATTR.put(maid.getUUID(), 1);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void tickAttributeResend(net.minecraft.server.MinecraftServer server) {
+        if (PENDING_ATTR.isEmpty()) {
+            return;
+        }
+        java.util.Iterator<java.util.Map.Entry<UUID, Integer>> it = PENDING_ATTR.entrySet().iterator();
+        while (it.hasNext()) {
+            java.util.Map.Entry<UUID, Integer> e = it.next();
+            int left = e.getValue() - 1;
+            if (left > 0) {
+                e.setValue(left);
+                continue;
+            }
+            it.remove();
+            try {
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    net.minecraft.world.entity.Entity ent = lvl.getEntity(e.getKey());
+                    if (ent instanceof EntityMaid maid && maid.isAlive()) {
+                        resendAttributes(maid);
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /** 给所有追踪着她的玩家各补一包属性表（口径与 {@link #resyncTo} 里的那一处完全一致） */
+    public static void resendAttributes(EntityMaid maid) {
+        try {
+            if (!(maid.level() instanceof ServerLevel sl)) {
+                return;
+            }
+            java.util.Collection<net.minecraft.world.entity.ai.attributes.AttributeInstance> attrs =
+                    maid.getAttributes().getSyncableAttributes();
+            if (attrs.isEmpty()) {
+                return;
+            }
+            sl.getChunkSource().broadcastAndSend(maid,
+                    new net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket(
+                            maid.getId(), attrs));
+        } catch (Throwable ignored) {
         }
     }
 

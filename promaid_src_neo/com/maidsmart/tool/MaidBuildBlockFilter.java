@@ -315,8 +315,7 @@ public final class MaidBuildBlockFilter {
                 }
                 ItemStack stack = hands.getStackInSlot(i);
                 if (!stack.isEmpty() && stack.getItem() == best) {
-                    ItemStack taken = hands.extractItem(i, 1, false);
-                    if (!taken.isEmpty()) {
+                    if (extractOneHonest(hands, i)) {
                         return best;
                     }
                 }
@@ -325,13 +324,56 @@ public final class MaidBuildBlockFilter {
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
             if (!stack.isEmpty() && stack.getItem() == best) {
-                ItemStack taken = inv.extractItem(i, 1, false);
-                if (!taken.isEmpty()) {
+                if (extractOneHonest(inv, i)) {
                     return best;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百一十七【issue #19：搭路方块长期缓慢泄漏】。
+     *
+     * 从 {@code slot} 扣 1 件，并且**核对真的扣掉了**：返回 true = 真扣到（该槽位总数确实减 1）。
+     *
+     * <p>【为什么要核对】旧写法只看 {@code extractItem} 的返回值非空就当作"取到了"。
+     * 但本项目自己的注释早就记过这条坑（见 {@code MaidTorchPlacerBehavior}：「handler 返回副本时
+     * 扣不掉（无限插火把刷方块）」）：某些 {@link IItemHandler} 包装层（额外容器/第三方背包的
+     * 适配层）的 {@code extractItem} 会**返回一份副本却不真正扣减**底层库存。此时搭路照常放置、
+     * 到期照常归还 1 件（{@link PlacedBlockTracker#reclaimDrops}）——一进一出就是净 +1，而且只在
+     * 恰好选中那个坏槽位时才发生，所以表现为"改善了很多、但长期使用仍缓慢增加"（issue #19 的
+     * 最新报告正是这个形状）。
+     *
+     * <p>核对口径刻意只用"槽位总数变化"这一个绝对事实（不猜实现）：
+     * 真扣 → after == before-1（正常包装全部通过）；返回副本没扣 → after == before → 判定为
+     * 没取到，试下一槽；全都不真扣 → 返回 null，「取材失败」——**宁可这次不搭，也不凭空造料**。
+     */
+    private static boolean extractOneHonest(IItemHandler handler, int slot) {
+        int before;
+        try {
+            before = handler.getStackInSlot(slot).getCount();
+        } catch (Throwable ignored) {
+            return false;
+        }
+        if (before <= 0) {
+            return false;
+        }
+        try {
+            ItemStack taken = handler.extractItem(slot, 1, false);
+            if (taken.isEmpty()) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        int after;
+        try {
+            after = handler.getStackInSlot(slot).getCount();
+        } catch (Throwable ignored) {
+            return true; // 查不到复核值时按原口径放行（不做更坏的假设）
+        }
+        return after == before - 1;
     }
 
     /* ==================== v1.2.3-dbg 探针取值助手（查完删掉整段） ==================== */

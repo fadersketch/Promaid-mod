@@ -706,6 +706,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     private boolean announcedThreat = false;
     /** v1.5.199：本次自保是否已播报过环境提示（岩浆/溺水/卡墙，每场一次） */
     private boolean announcedEnv = false;
+    /**
+     * v1.3.0(beta) 实测七百一十七【issue #30：窒息提示被"环境提示"那一个闩一起闩死】。
+     *
+     * {@code announcedEnv} 是**岩浆/着火/溺水/卡墙/岩浆避让**五条提示共用的一枚"每场一次"闩。
+     * 而"她垫块脱离岩浆"这条路（{@code lavaStepUp}）正是把自己垫进方块里的那条——
+     * 它先喊"掉进岩浆里了！我垫上来！"并把 {@code announcedEnv} 置真，然后 {@code return}，
+     * 根本走不到下面的卡墙那一档。于是她被自己垫的方块闷住、真吃着 {@code in_wall} 伤害，
+     * 卡墙那句"我卡住了，快喘不过气了！"却因为闩已经关上而**整场一个字都不说**——
+     * 而且 {@code announcedEnv} 只在 {@code sessionEnter} 复位，她的头一直卡着、危险不解除，
+     * 这场自保就不会退出重进，闩也就一直关着。玩家报的"大于 5 秒、又掉血又吃食物回血、
+     * 始终不提示"正是这个形状。
+     *
+     * 现在给卡墙单独一枚闩：与其它环境提示互不干扰，谁先谁后都能各喊一次。
+     */
+    private boolean announcedSuffocate = false;
     /** v1.5.232：本次自保是否已播报过"包里什么都没有，我没招了！救救我！"
      *  （岩浆/着火链路全失败提示，每场一次） */
     private boolean announcedNoResource = false;
@@ -864,6 +879,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         this.meleeCooldown = 0;
         this.announcedThreat = false;
         this.announcedEnv = false;
+        this.announcedSuffocate = false;
         this.announcedNoMaterial = false;
         this.announcedNoResource = false;
         this.resourceUsed = false;
@@ -1854,6 +1870,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             maid.fallDistance = 0.0f;
             this.lastTeleportTime = now;
             this.lastTeleportSuccessTime = now; // 实测三百六十二：成功传送记长冷却
+            // 实测七百一十七【issue #27】：跨维传送后补属性表包（客户端血上限只来自那一包）
+            com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
             // v1.5.227：播报 60 秒限频——5 秒传送冷却会反复触发"回到身边"播报刷屏
             if (now - this.lastHomeAnnounceTick >= 1200) {
                 this.lastHomeAnnounceTick = now;
@@ -2717,12 +2735,12 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
         // 4. 卡墙窒息：最近空气格；找不到靠 antiSuffocate 强制上移兜底
         // v1.5.216：岩浆上下文保护——30 tick 内泡过岩浆（垫高脱离瞬间位移滞后
-        // headInSolid 误报，"被岩浆烫到却说被卡住了"的根因）→ 静默兜底不播报，
-        // 交给 antiSuffocate 顶出即可；真卡墙（无岩浆上下文）才播报提示
-        // v1.5.236：窗口 30 → 100 tick（5 秒）——垫块顶出后坑沿压头/岩浆坑场景
-        // 实测仍偶发 30 tick 后误报"卡住"（掉进岩浆里还说自己卡住了，语义矛盾）
+        // headInSolid 误报，"被岩浆烫到却说被卡住了"的根因）→ 静默兜底不播报
+        // v1.5.236：窗口 30 → 100 tick（5 秒）
+        // v1.3.0(beta) 实测七百一十七【issue #30】：这条"岩浆免报"撤掉了——判据改成
+        // "真的吃到 in_wall 伤害"（见下），而伤害是实打实的，不需要岩浆再给它让路；
+        // 反而是它一直续期把真被闷住的场景也一起堵上了。
         long nowTick = maid.level().getGameTime();
-        boolean lavaContext = nowTick - this.lastInLavaTick <= 100;
         // v1.2.4 实测六百四十七（反馈：「女仆老不停的说自己窒息了，喘不过气」）：
         // 这句话的门槛从"头部几何命中实心方块"改成【真的吃到超过 4 点窒息伤害】。
         // 几何命中 ≠ 受伤：她挤过窄缝、被方块顶一下、上下坡抬头都能瞬时命中，
@@ -2730,10 +2748,21 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         //（sessionEnter → announcedEnv=false），于是就成了反复说。
         // 现在：没掉血 → 一句话不说（挪位置/顶出照旧，逃生行为一个字没动）；
         // 说出口 → 记一行「窒息」日志（累计伤害可对账）。
-        if (!lavaContext && !this.announcedEnv) {
+        //
+        // v1.3.0(beta) 实测七百一十七【issue #30】两处修正：
+        // ① 用自己的闩 announcedSuffocate，不再与岩浆/着火/溺水的 announcedEnv 抢——
+        //    她垫块脱离岩浆后被自己垫的方块闷住时，岩浆那句已经把 announcedEnv 关上了，
+        //    旧写法一辈子都不会再开口；
+        // ② 不再看 lavaContext：那本是"刚泡过岩浆、位移滞后导致 headInSolid 误报"的
+        //    免报窗口（v1.5.216/236），可它每次接触岩浆都续 5 秒——垫块脱困后她往往还在
+        //    岩浆坑边反复蹭到岩浆，窗口就一直续着，真被闷住也不说。现在免报只看
+        //    【本 tick 有没有真的在挨窒息伤害的几何】：伤害是实打实的（in_wall 走伤害
+        //    结算），无需再让岩浆给它让路。
+        // ③ 阈值口径改 >= ：注释与玩家口径都是"累计 4 点以上"，旧写法 `> 4.0` 要 5 点才喊。
+        if (!this.announcedSuffocate) {
             float suffocate = recentSuffocateDamage(maid);
-            if (suffocate > SUFFOCATE_ANNOUNCE_MIN) {
-                this.announcedEnv = true;
+            if (suffocate >= SUFFOCATE_ANNOUNCE_MIN) {
+                this.announcedSuffocate = true;
                 maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
                 com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 卡在方块里且已真吃到 " + String.format("%.1f", suffocate)
@@ -2741,7 +2770,7 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             } else if (suffocateDiagDue(maid, nowTick)) {
                 com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 头部几何命中实心方块，但累计窒息伤害 "
-                        + String.format("%.1f", suffocate) + " 点（门槛 >4.0）→ 不播报，只挪位置顶出");
+                        + String.format("%.1f", suffocate) + " 点（门槛 4.0）→ 不播报，只挪位置顶出");
             }
         }
         BlockPos air = this.findAirSpot(maid);
@@ -3984,6 +4013,8 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         maid.fallDistance = 0.0f;
         this.lastTeleportTime = now;
         this.lastTeleportSuccessTime = now; // 实测三百六十二：成功传送记长冷却
+        // 实测七百一十七【issue #27】：跨维传送后补属性表包（客户端血上限只来自那一包）
+        com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
         // v1.5.158：真传送成功播报（不暗示"绝对安全"，与可能紧接着的"情况不妙"
         // 语义连贯："撤了" → "回到主人身边"）
         // v1.5.227：播报 60 秒限频——传送冷却 5 秒时会反复连传连喊（实测刷屏）

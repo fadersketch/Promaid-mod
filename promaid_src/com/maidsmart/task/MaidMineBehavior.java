@@ -1252,7 +1252,10 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /**
      * v1.5.172：连锁采集【同时破坏】——把 refillChainQueue 填好的队列（相连同族矿）
      * 一次性全部破坏：掉落物直接进女仆背包（放不下落地，与单块自动收集一致），
-     * 音效/粒子只在目标矿播（连锁块静默，防 16 连爆音刷屏），镐耐久只扣目标矿一次。
+     * 音效/粒子只在目标矿播（连锁块静默，防 16 连爆音刷屏）。
+     * <p>【耐久口径】历史上"镐耐久只扣目标矿一次"（本方法不扣，由单块那一处扣 1 点）。
+     * v1.3.0(beta) 实测七百一十七【issue #29】加了开关 {@code mine.chainFullDurability}：
+     * 打开后这里**每破坏一块也扣 1 点**（并沿用单块那套"碎裂清主手槽"回调），关着时一字不动。
      * 破坏后队列自然清空（下一 tick 取队列时 isOre 校验失败被 poll 掉，不残留）。
      */
     private void chainBreakAll(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
@@ -1261,6 +1264,7 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             this.chainQueue.clear();
             return;
         }
+        boolean fullDur = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_FULL_DURABILITY.get();
         int broken = 0;
         int limit = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_LIMIT.get();
         while (!this.chainQueue.isEmpty() && broken < limit) {
@@ -1280,11 +1284,38 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             insertIntoMaidInventory(maid, level, drops, pos);
             level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
             broken++;
+            // 实测七百一十七：开关打开时连锁块也逐块扣耐久（碎裂即停，别拿碎镐继续连锁）
+            if (fullDur && damageMainHandForChain(maid, mainHand)) {
+                break;
+            }
         }
         if (broken > 0) {
             LOGGER.info("mine chain burst: maid={} block={} broken={}",
                     maid.m_20148_(), ForgeRegistries.BLOCKS.getKey(this.chainBlock), broken);
         }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百一十七【issue #29】：连锁块逐块扣耐久（只在开关打开时调用）。
+     *
+     * <p>沿用单块挖掘那一处完全相同的口径（{@code mainHand} 主手那把、
+     * {@code hurtAndBreak} 归零时广播破坏事件 + 清主手槽，下一 tick 自动换装备用镐）。
+     * 返回 true = 这一下把镐挖碎了（调用方应停止本次连锁，避免拿碎镐继续）。
+     */
+    private static boolean damageMainHandForChain(EntityMaid maid, ItemStack mainHand) {
+        if (mainHand == null || mainHand.m_41619_()) {
+            return true; // 已经空手（上一块挖碎了）→ 别继续
+        }
+        final ItemStack damaged = mainHand;
+        damaged.m_41622_(1, maid, brokenItem -> {
+            maid.m_6674_(InteractionHand.MAIN_HAND);
+            try {
+                ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
+                        .setStackInSlot(0, ItemStack.f_41583_);
+            } catch (Exception ignored) {
+            }
+        });
+        return damaged.m_41619_();
     }
 
     /** v1.5.102e：向周围玩家广播挖掘裂纹（ClientboundBlockDestructionPacket）——
@@ -1696,13 +1727,15 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     }
 
     /** 实测二百二十四：障碍物连锁【同时破坏】——与 chainBreakAll 同款：掉落直接进
-     *  背包（放不下落地）、连锁块静默、不额外扣镐耐久（只由主目标扣一次）。 */
+     *  背包（放不下落地）、连锁块静默。耐久口径与 chainBreakAll 一致：历史"只由主目标扣
+     *  一次"，{@code mine.chainFullDurability} 打开后逐块扣（实测七百一十七·issue #29）。 */
     private void obstacleChainBreakAll(ServerLevel level, EntityMaid maid, ItemStack mainHand) {
         if (!com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_MINING.get()
                 || this.chainBlock == null) {
             this.chainQueue.clear();
             return;
         }
+        boolean fullDur = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_FULL_DURABILITY.get();
         int broken = 0;
         int limit = com.maidsmart.config.MaidSmartConfig.MINE_CHAIN_LIMIT.get();
         while (!this.chainQueue.isEmpty() && broken < limit) {
@@ -1725,6 +1758,9 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             insertIntoMaidInventory(maid, level, drops, pos);
             level.m_7731_(pos, Blocks.f_50016_.m_49966_(), 3);
             broken++;
+            if (fullDur && damageMainHandForChain(maid, mainHand)) {
+                break;
+            }
         }
         if (broken > 0) {
             LOGGER.info("mine chain burst (blocking): maid={} block={} broken={}",

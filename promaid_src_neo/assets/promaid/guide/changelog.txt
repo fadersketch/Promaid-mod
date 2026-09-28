@@ -1,4 +1,134 @@
-﻿## 实测七百一十六【骑乘指挥棒·四改：独占换绑 / 1:1 还原走位 / 选中即亮光标 / 连坐骑传送】
+﻿## 实测七百一十七【六个 issues 修复 + 家具类坐骑黑名单：XP 暴涨 / 窒息提示 / 连锁耐久 / home 死亡传送 / 传送后血上限 / 搭路缓慢泄漏】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+「1.https://github.com/fadersketch/Promaid-mod/issues那边积累了六个issues，帮我诊断一下这些
+问题都出在哪里，并且将它们修复。……除了我已经回复的内容以外，你都给他回复一下。先修复bug。
+2.https://github.com/fadersketch/Promaid-mod/pulls提供者更新了有关诡异巫法模组的适配。帮我
+看一下有没有什么问题，能否直接合并？
+3.我们需要给原版tlm的椅子这些道具开一个后门，他们虽然是家具类物品，但是从某种意义上，他们
+也算坐骑，需要开一个额外的黑名单，保证女仆坐在这个上面的时候，我们所做的所有骑乘更改全都
+不生效。」
+
+### 二、issue #32：女仆击杀后玩家经验暴涨（一次 150 级）——根因与修法
+
+**根因**：TLM 的女仆是**永远掉经验**实体（`EntityMaid.isAlwaysExperienceDropper()` 恒 true、
+`getBaseExperienceReward()` 直接返回她累积的**全部女仆经验**）。所以她一死，原版
+`LivingEntity.dropExperience` 就把这一整笔按 2477/球拆成一堆经验球撒在倒地处；而我们的
+**自动复活**紧接着用死亡快照（含 `MaidExperience`）把她原样复活——**她的经验一点没少，地上
+那堆球还在**，谁站旁边谁就白捡一份。玩家口径完全对上：「每次女仆死了重生之后就会出现一次
+经验暴涨」「像是和某个数值成比例」——比例正是她累积的女仆经验。
+
+**修法**：自动复活开着时（我们本来就会把经验原样还她），让她这一死**根本不掉经验球**——用
+原版现成的闸 `LivingEntity.skipDropExperience()`（1.20.1 SRG `m_217045_`，javap 实证；
+`dropExperience` 第一句就是 `!wasExperienceConsumed()`）。时机安全：TLM 的 `EntityMaid.die`
+先 post `MaidDeathEvent`（我们此刻取快照），之后才走 `super.die → dropAllDeathLoot →
+dropExperience`。**关掉自动复活时一个字不动**（走 TLM 原版：掉球、不复活）。
+
+### 三、issue #30：被自己垫的方块闷住，却始终不提示「喘不过气」
+
+**根因不是"血量差"，是播报闩被占死**：`announcedEnv` 是岩浆/着火/溺水/卡墙/岩浆避让**五条
+提示共用**的"每场一次"闩。而"垫块脱离岩浆"这条路正是把自己垫进方块里的那条——它先喊
+「掉进岩浆里了！我垫上来！」并把 `announcedEnv` 置真，然后 `return`，**根本走不到卡墙那一档**。
+她的头一直卡着、危险不解除，这场自保就不会退出重进，闩也就一直关着 —— 卡墙那句整场一个字
+都不说。再叠加那条 `lavaContext`（泡过岩浆后 5 秒免报）在她反复蹭岩浆时一直续期，更听不见。
+
+**修法**：① 给卡墙单独一枚闩 `announcedSuffocate`（与其它环境提示互不干扰）；② 撤离
+`lavaContext` 那道免报——判据已经是"真的吃到 `in_wall` 伤害"这个绝对事实，不需要岩浆再让它
+让路；③ 阈值口径 `> 4.0` → `>= 4.0`（注释与你的口径都是"4 点以上"，旧写法要 5 点才喊）。
+**玩家报的"又掉血又吃食物回血、大于 5 秒始终不提示"正是这个形状**。
+
+### 四、issue #29：连锁采集耐久只扣一次 —— 按你的回话加开关
+
+历史设计就是"连锁那最多 16 块只由目标矿扣 1 点耐久"（`chainBreakAll` 原注释明写）。按你
+上一条回复的口径「下个版本加个开关」新增配置 **`mine.chainFullDurability`（连锁每块耗耐久，
+默认关）**：打开后连锁破坏的**每一块**都扣 1 点（含障碍物连锁），并沿用单块那套"碎裂清主手槽、
+下一 tick 自动换装备用镐"的口径；镐碎了就地停止本次连锁。关闭 = 与今天一字不差。
+
+### 五、issue #28：home 工作女仆被死亡传送拽走后「卡」在重生点
+
+**根因**：`MasterDeathTeleportHandler.shouldStayPut` 是**唯一**没有豁免 home 模式的传送链路
+（`MaidChunkLoadManager` 的 summon / pull / rescue 早就统一豁免 `isHomeModeEnable() && !建造`）。
+她被拽到 home 圈外之后：TLM 的回家走位被 `SchedulePosTickMixin` 对"干活中女仆"整段 cancel，
+我们自己的 home 巡逻/工作驱动又明确跳过非战斗工作（农场）→ **既回不去、也够不到圈外的作物**，
+原地呆站。对照：钓鱼女仆坐在坐垫上（`isMaidInSittingPose()`）本来就免传，所以只有农场那种
+"站着干活"的会中招。
+
+**修法**：`shouldStayPut` 对齐其它传送链路的同一条口径 —— home（非建造）女仆 = 玩家明确停放，
+死亡也不拽；建造女仆仍照旧可召。
+
+### 六、issue #27：远距 / 跨界传送后血上限掉回 20
+
+**根因**：客户端可见的 MAX_HEALTH 只来自 `ClientboundUpdateAttributesPacket`，原版只在
+①开始追踪、②属性变脏时发。而同维远距传送是纯 `moveTo`（不重追踪）、跨维传送是"删+生成"
+（新区块没载完时新实体停在 HIDDEN、追踪起不来）——**两条路都可能一包都不发**，客户端就一直
+显示 TLM 默认的 20。魂符那条路有自动复活的强制补包兜着，所以只有传送这条路中招 —— 与玩家
+「只有远距离传送和跨界传送会出现，收放魂符似乎不会」完全吻合。
+
+**修法**：新增 `MaidResyncCommand.scheduleAttributeResend`（**只补属性表那一包**，不重建实体），
+接进**每一条**传送链路：`teleportCoreTo`（同维/跨维兜底）、跨维跟随、死亡传送、烫伤逃生、
+自保归位（两处）。下一 tick 补一枪，轻、幂等、随原版口径一字不差。
+
+### 七、issue #19：搭路方块长期"缓慢"泄漏 —— 取材侧补一道真实扣减核对
+
+上一版（实测六百三十六一带）已修掉「副手展示件被当材料」那条主因（改善明显），但你最新报告
+"长期使用仍缓慢增加"指向另一条独立的缝：**某些 `IItemHandler` 包装层的 `extractItem` 会返回
+一份副本却不真正扣减底层库存**（本工程自己的注释早记过这条坑，见 `MaidTorchPlacerBehavior`：
+「handler 返回副本时扣不掉（无限插火把刷方块）」）。此时搭路照常放置、到期照常归还 1 件
+—— 一进一出就是净 +1，且只在恰好选中那个坏槽位时发生（所以"缓慢"）。
+
+**修法**：取材改走 `extractOneHonest` —— 扣 1 件后**核对槽位总数真的减 1**（只用"总数变化"
+这一个绝对事实，不猜实现）。真扣 → 照常；返回副本没扣 → 判"没取到"，试下一槽；全都不真扣 →
+取材失败。**宁可这次不搭，也不凭空造料**。口径统一在 `MaidBuildBlockFilter` 那一个 choke point，
+搭路/挖矿/伐木/索引石支撑/战斗放置全部受益。
+
+### 八、点3：家具类坐骑黑名单后门（椅子 / 坐垫）
+
+TLM 的椅子（`EntityChair`）/坐垫（`EntitySit`）都让女仆变成"乘客"，于是它们天然落进本链路
+的几个"乘客"判据里（指挥棒把她当成"骑在坐骑上"、闲逛抑制会去管载具、传送会想"连坐骑一起搬"）。
+新增配置 **`ride.furnitureBlacklist`（家具类坐骑黑名单）**，默认两项
+`touhou_little_maid:chair` / `touhou_little_maid:sit`。**她坐在黑名单家具上时，本模组所有骑乘
+改动一律不生效**：`isRideableMount` / `denyReason` / `ridingMount` / `isRideableMount` 一律
+排除、`isDriven` 不抑制闲逛、传送走原版乘客规则（不"连坐骑一起搬"）。判据是**实体类型注册名**，
+别的模组的可坐家具填一行 id 即可，代码不用动；两树共用同一份 id。
+
+### 九、PR #26（诡异巫法 / Goety 位移聚晶）审查结论：**不直接合并**
+
+PR 本身 `mergeable_state=clean`，Goety 那半边工程质量不错（分侧守卫、命令权限、mixin 作用域
+都合规），但**不能原样合**，三条硬伤：
+
+1. **未声明的第二块功能**：diff 里除了描述的 `goety/`，还带一整套没写进描述的 `bd/` 包
+   （`MaidBdCompat` / `MaidBdDeposit` / `MaidBdOverflow` / `MaidBdProbeCommand`，+1030 行）
+   —— 超越维度（BeyondDimensions）的**从女仆背包往主人网络搬东西 / 把地上掉落塞进主人网络**。
+   它**没有任何配置文件开关**（只有 per-maid 的 persistentData 布尔），且**没有复用**仓库既有
+   的 `MaidExtraContainer` + 开关 `misc.backpackOverflow` 那条受门控的溢出链，属于"第三个溢出层
+   且绕过门控"。这一条**单凭"未声明范围"就足以请他拆成独立 PR** 再谈。
+2. **静态表不清理**：`MaidBdDeposit.COUNTER` / `MaidGoetyAuto.COUNTER` 只增不减；`MaidGoetyFlight`
+   的 `TASKS` 在 maid 中途卸载/死亡时不落清扫，`stop()` 不清 `BOOST_UNTIL` —— 与仓库既有的
+   "5 分钟 `getGameTime()` 清扫"惯例不一致，长时间开服会缓慢泄漏。
+3. **抑制可被卡死 + 逐 tick 打全栈**：`MaidGoetyFlight.onMaidTick` 吞掉所有异常，若 `tick()` 在
+   `stop()` 之前抛，`isActive` 恒真、`MaidGoetyMoveSuppressMixin` 会**无限期取消她的
+   `MoveToTargetSink`**（她彻底走不动），而 `MAX_TICKS` 超时只在 tick 正常跑时生效；另有
+   `castDiag` 把**完整堆栈**逐 tick 写日志。两条都要收。
+
+另有两条次要：`MaidBdCompat.init` 是"全有全无"解析（包含一个**从未使用**的 `mExtractTag`，
+缺它就把整包 compat 关掉）、`MaidGoetyCompat.thrustPower` 里硬编码了另一套根包名。**建议**：
+请他把 `bd/` 拆出单独 PR（并补配置文件开关 + 复用 `MaidExtraContainer`），Goety 那半边按上面
+五条修一轮；本轮我们**不动这个 PR**（不关、不合，等他回复）。
+
+### 十、验证与交付（沿用本项目铁律）
+
+两树 `javac` **0 错误** → `_mixchk.py` 注入点审计 **PASS=177 FAIL=0** → 打包
+（Forge 609 class / Neo 611 class，mixin 82 全登记，lang OK，MISSING: none）→ 只读核对
+`_vt717.py` **FAIL=0 / 86 项**（覆盖六条修复的源码点 + 包内常量 + 点3 黑名单 + 两树镜像）→
+部署三处 **match=True**（NeoForge 1.21.1 / Forge 1.20.1 客户端 / pack1201 服务端）。
+**未发任何平台**（沿用约定）。辅助件一律 `_*.py` / `_*.txt`（gitignore 内）。
+
+
+## 实测七百一十六【骑乘指挥棒·四改：独占换绑 / 1:1 还原走位 / 选中即亮光标 / 连坐骑传送】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。
