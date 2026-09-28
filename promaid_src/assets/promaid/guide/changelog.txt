@@ -1,4 +1,106 @@
-﻿## 实测七百〇九【扫帚模式两修：① 真正被方块闷住时立刻脱离（不再等"卡住"0.6 秒、选格规则为保命让位）② 起飞判定与远程空袭完全对齐（补上"弹药"这一条）】
+﻿## 实测七百一十【自推鞘翅：不靠烟花也能飞的那一类模组鞘翅（伊卡洛斯之翼 / 神秘遗物+）】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+> 「我现在又安装了伊卡洛斯之翼和神秘遗物+，加完模组之后有两种鞘翅不需要烟花也可以起飞。
+> 我觉得需要做相关的兼容，如果装配了这些物品，相当于同时满足了烟花以及推进物品的要求。
+> 然后同时也需要考虑一下他们的运动逻辑是怎么样的，看看怎么安排在女仆身上。
+> 之后其他的类似物品看有没有一个通解通法。」
+
+### 二、先摸清这两家加了什么（反编译实证）
+
+**伊卡洛斯之翼**（1.21.1，`locusazzurro_icaruswings-1.21-0.7.0`）：
+- `feather_wings` / `colored_feather_wings` / `golden_feather_wings` / `paper_wings` /
+  `magic_wings` / `flandre_magic_wings` —— 普通 `ElytraItem`，**没有任何自推**，只是耐久不同；
+- `ikaros_wings` / `nymph_wings` / `astraea_wings` / `chaos_wings` / `hiyori_wings` /
+  `melan_wings` —— `SynapseWings`，**自推**：`FlyingEventsHandler.onPlayerTick`
+  （`PlayerTickEvent.Pre`）里只要她在滑翔就每 tick 加一份推力
+  `v += (look·d + (look·i − v)·t) · c`，**不需要按跳跃键**。
+
+**神秘遗物 / 神秘遗物+**：
+- 1.21.1（`enigmaticlegacyplus-1.21.1-1.1.2`）：`majestic_elytra`（壮丽鞘翅）与
+  `chaos_elytra`（混沌之傲）继承 `BaseElytraItem`，它把 `canElytraFly` 直接写成 `true`
+  （**不看是不是玩家**）→ 女仆穿得上、滑得起来。自推在 `flyingBoost(player)`：
+  **按住跳跃键**时 `v = v×0.48 + look×0.64`（壮丽）/ `v = v×0.5 + look×k`（混沌，默认 0.8）。
+- 1.20.1（`EnigmaticLegacy-2.30.1` / `enigmaticaddons-1.2.6`）：**不可用**——
+  两件的 `canElytraFly` 都写死 `entity instanceof Player && ...`
+  （`EnigmaticElytra.java:204`、`ChaosElytra.java:312`），女仆**连滑翔都做不到**，
+  穿上去就是件普通胸甲。
+
+### 三、关键障碍：三家的自推**全都只推玩家**
+
+上面所有自推入口都挂在 `PlayerTickEvent` / `instanceof ServerPlayer` / 客户端跳跃键包上。
+**女仆不是 Player，一点推力都收不到。** 所以只"认物品"的结果是——她跳起来、展开滑翔、
+然后**一路往下沉**。这次真正的活是**由本模组替她施加推力**。
+
+### 四、通解通法：同一个形状、各自的小数
+
+三家的推力公式其实是**同一个形状**（每 tick 把速度往视线方向拉一档）：
+
+```
+v ← v×gain + look×add          // 原版挂载烟花也是这一条：v ← v×0.5 + look×0.85
+```
+
+所以通解 = **一张表**（物品 id → 这条公式的两个系数）+ **一个窗口**（每 tick 推一下、到期交还滑翔）
++ **一条接入链**（空袭与飞行跟随各一处调用）。以后再有同类模组，只要往
+`combat.selfWingsItems` 里加一行 id —— 认不出型号就走通用兜底模型
+（`v ← v×0.5 + look×0.5`），**不需要改代码**。
+
+### 五、特性怎么展现：逐条照抄各自数值
+
+| 鞘翅 | 公式（gain / add） | 收敛巡航速度 |
+|---|---|---|
+| 伊卡洛斯·双重可变翼 ikaros | 0.5 / 0.35 | 0.70 格/tick |
+| 伊卡洛斯·反逆可变翼 melan | 0.5 / 0.35 | 0.70 |
+| 伊卡洛斯·缓滞时空羽翼 hiyori | 0.5 / 0.63 | 1.26 |
+| 伊卡洛斯·混沌进化之翼 chaos | 0.5 / 0.64 | 1.28 |
+| 伊卡洛斯·电子战用隐秘翼 nymph | 0.5 / 0.68 | 1.36 |
+| 伊卡洛斯·超加速型羽翼 astraea | 0.5 / 1.10 | **2.20（最快）** |
+| 神秘遗物+·壮丽鞘翅 | 0.48 / 0.64 | 1.23 |
+| 神秘遗物+·混沌之傲 | 0.5 / 0.80 | 1.60 |
+
+**不统一成一个数**——不同鞘翅的特性就是它自己的特性（astraea 起步猛、nymph/hiyori 较缓、
+混沌之傲上限高）。数值硬编码而非反射（不怕对方改名、1.20.1 树不必 import 1.21.1 的类）；
+全局倍数旋钮 `combat.selfWingsScale`（默认 1.0）可整体缩放。
+
+### 六、改动清单（两树镜像）
+
+| 文件 | 改动 |
+|---|---|
+| `combat/MaidSelfPropelledWings.java`（两树，**新增**） | 资格判定（只看配置表 + `#标签`）、内置参数表、推力窗口 `ignite/tick/clear`、诊断 `diag`、手册文本 |
+| `config/MaidSmartConfig.java`（两树） | 新增 `combat.selfWings` / `selfWingsItems` / `selfWingsScale` 三项 |
+| `config/PromaidConfigScreen.java`（两树） | 面板加三行 |
+| `combat/MaidFlightKit.java`（两树） | `hasFlightPropellant` 加第五条腿；`equip()` 末尾就绪判据放宽 |
+| `combat/MaidFlightCombatBehavior.java`（两树） | `canLaunch`/`canJumpToLaunch` 放行（**不吃烟花冷却**）、`canTakeOff` 不必重写、`tryLaunch` 末尾加第五条腿、每 tick `tick()`、`endFlightSafely` 收窗、缺件诊断与文案 |
+| `combat/MaidFlightFollowBehavior.java`（两树） | 每 tick `tick()`、启动门禁（`hasFlightPropellant` 自动跟随）、补推链第⑤条腿、`fuelLabel`、`releaseThrust` 与收手清理、跳过文案 |
+| `guide/GuideChaptersFlight.java`（两树） | 空袭章节第三节由「四选一」改「五选一」+ 新增自推鞘翅说明；飞行跟随节选择清单同步 |
+| `assets/maid_smart/lang/zh_cn.json` / `en_us.json`（两树） | 各 +3 键 |
+
+### 七、刻意做的三件事（边界）
+
+1. **不消耗、不扣额外耐久**：模组对玩家自推是**额外扣耐久**的（伊卡洛斯每 20 tick、
+   神秘遗物每 5 tick），女仆这边**只按原版滑翔的节奏扣**（`updateFallFlying` 每 20 tick 扣 1）
+   ——前四条腿是"借它的动作"，这一条只借它的**物理**，不该替它扣钱。
+2. **排在补推链最末**：扇子 → 烟花 → 法术 → 激流 → **自推鞘翅**。前四样存在的存档手感一字不变。
+3. **窗口收敛、不会飞走**：公式本身收敛，窗口开着时速度往不动点收敛；40 tick 到期交还滑翔，
+   掉高了按同一个判据（速度 < 0.35）再补一次。
+
+### 八、1.20.1 侧的说明（写进手册与面板）
+
+那边的神秘遗物把「能不能滑翔」写死了 `instanceof Player`，女仆连滑翔都做不到，
+所以本功能**实际在 1.21.1 生效**；1.20.1 树的代码照镜像、表里留着 id，
+等那边装上同类模组即用（**不做 hack 去强改别人的类**）。
+
+### 九、与「仿创造飞行」（实测七百〇二）的分工
+
+那个是另一个功能（给女仆创造模式飞行：悬浮 + 自由升降，不需要鞘翅、也不是滑翔）。
+本类走的是**鞘翅滑翔**这条物理（原版滑翔位 + 滑翔阻力），两者互不干涉，
+资格物品表也各自独立，可以同时开。
+
+## 实测七百〇九【扫帚模式两修：① 真正被方块闷住时立刻脱离（不再等"卡住"0.6 秒、选格规则为保命让位）② 起飞判定与远程空袭完全对齐（补上"弹药"这一条）】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

@@ -717,7 +717,7 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 // 几种是哪几种在日志里展开（手册/气泡那边仍然只说「可以飞行的道具」）；
                 // 六百三十三：第四条腿 = **激流三叉戟**（带上它就也能起飞，见 boost ④）。
                 return skip(maid, now, "背包里没有「可以飞行的道具」"
-                        + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术 / 激流三叉戟，四选一）");
+                        + "（烟花火箭 / 孔雀羽扇 / 能上天的位移法术 / 激流三叉戟 / 自推鞘翅，五选一）");
             }
             if (!sightOk(maid, aim)) {
                 return skip(maid, now, "与目标之间被方块挡住视线"); // 让她自己绕（搭路/走路）
@@ -801,6 +801,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             if (MaidFlightKit.hasRiptide(maid)) {
                 return "激流三叉戟（不烧烟花）";
             }
+            // v1.3.0(beta) 实测七百一十：第五条腿——**自推鞘翅**（它自己会推，由我们施加）。
+            // 与 boost() 的取用顺序**严格同序**，否则这一行会撒谎（本文件反复强调的红线）。
+            if (com.maidsmart.combat.MaidSelfPropelledWings.hasWings(maid)) {
+                return "自推鞘翅（不烧烟花）";
+            }
             return "位移法术";
         } catch (Throwable ignored) {
             return "烟花火箭";
@@ -855,6 +860,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
         // 这一句就顺着这个方向推她（④ 的"朝向不是主人"就是在这一前一后对齐之后才成立的）。
         // 没有窗口时这里只是一次 Map 查询，零开销。
         com.maidsmart.combat.MaidRiptideBoost.tick(maid);
+        // 【实测七百一十】自推鞘翅的每 tick 推力：与上一行同一个约定（视线刚被钉在主人身上，
+        // 这一句就顺着这个方向推她）——只在她滑翔时生效、没有窗口时零开销。
+        com.maidsmart.combat.MaidSelfPropelledWings.tick(maid);
         if (shouldBoost(maid, aim, gameTime)) {
             boost(level, maid, id, gameTime, aim);
         }
@@ -941,6 +949,9 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // v1.2.4 实测六百四十一：激流推进剂同理——它只在链路的每 tick 里被驱动（见
             // MaidRiptideBoost.tick 的注释），链路一停就该摘掉；**已给的速度同样不动**。
             com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+            // 【实测七百一十】自推鞘翅同理：只在链路的每 tick 里被驱动，链路一停就该摘掉
+            //（**已给的速度同样不动**——保持动量自然滑翔那一档的语义）。
+            com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
         }
         // 【绝不在空中摘鞘翅——它和"空中清滑翔位"是同一件事】原版 updateFallFlying 每 tick 都要
         // 看胸甲槽里那件鞘翅能不能飞（{@code ItemStack.canElytraFly} + {@code elytraFlightTick}）：
@@ -1072,10 +1083,14 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
             // 清零等于白清。用户 ④ 的原话就是"没有像烟花那样子的一旦主人在判定圈内就把矢量删去"
             // ——这一句之后，两支（收火箭 / 收推进剂）在语义与顺序上完全同构。
             boolean hadRiptide = com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+            // 【实测七百一十】自推鞘翅的推力窗同理（它也是"每 tick 都在拉"）——不一起收，
+            // 上面那句清零下一 tick 就被它拉回来。
+            boolean hadSelfWings = com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
             logState(RELEASE_LOG, maid, id, gameTime, "进到" + (isGoto(maid) ? "目标点" : "主人") + " "
                     + fmtDist(maid, aimOf(maid, level))
                     + " 格内，解除推进矢量（" + (dropped ? "收掉还挂着的烟花，" : "")
                     + (hadRiptide ? "收掉激流推进剂，" : "")
+                    + (hadSelfWings ? "收掉自推鞘翅推力，" : "")
                     + "水平速度 " + String.format("%.2f", speed) + " → 0），改自然滑翔");
         } catch (Throwable ignored) {
         }
@@ -1195,6 +1210,20 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
                 BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
                 logThrottled(maid, id, gameTime, "挥激流三叉戟追主人（耐久="
                         + (cfgTrident() ? "照原版扣" : "不消耗") + "）");
+            }
+        }
+        // ⑤ 自推鞘翅（v1.3.0(beta) 实测七百一十）：第五条腿——扇子/烟花/法术/激流都没有时的
+        //    最后一件，也是**唯一一件不消耗任何物资**的（它只是"那件鞘翅自己会推"，
+        //    由我们替她施加）。与④同款：方向 = 她这一 tick 的视线（上面 faceToward 已经
+        //    把视线钉在主人身上），开一扇推力窗，窗内每 tick 由 tick() 推。
+        //    排在最末是刻意的：不改变任何"有烟花/羽扇/法术/激流"存档的补推节奏
+        //    （顺序仍是 扇子 → 烟花 → 法术 → 激流 → 自推鞘翅）。
+        if (com.maidsmart.combat.MaidSelfPropelledWings.hasWings(maid)) {
+            faceToward(maid, aim, false);
+            MaidFlightKit.setGliding(maid, true); // 滑翔位每 tick 都要站住（同上面那几条腿）
+            if (com.maidsmart.combat.MaidSelfPropelledWings.ignite(maid)) {
+                BOOST_READY.put(id, gameTime + BOOST_INTERVAL);
+                logThrottled(maid, id, gameTime, "自推鞘翅追主人（那件鞘翅自己会推，不烧烟花）");
             }
         }
     }

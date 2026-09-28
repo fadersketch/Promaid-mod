@@ -2949,6 +2949,16 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new NumRow("激流推进·力度倍数", String.valueOf(MaidSmartConfig.COMBAT_RIPTIDE_FLIGHT_SCALE.get()),
                 s -> setDouble(MaidSmartConfig.COMBAT_RIPTIDE_FLIGHT_SCALE, s),
                 "激流三叉戟当推进剂时的力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟【起飞 / 飞行跟随补推 / 空袭掉高抬升 / 俯冲冲刺】时，力度 = 原版 3.0×(1+等级)/4 × 1.3（实测六百四十二 的调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。**行为形状走烟花**：不是「一次性冲量」，而是像挂载烟花那样每 tick 把整个速度矢量往「视线 × 当前力度」上拉（v ← v×0.5 + 视线×(力度/2)）——所以**竖直分量也归推进管**（旧版只压水平、竖直没人管，起飞就会一路窜高）。**数值取水里那一记再 ×1.3**（六百四十二 实测「激流三甚至还没有俯冲飞行自己飞得快」，照搬那一记偏慢）：当前力度按玩家在水里的阻力 ×0.80/tick 递减，掉到滑翔常态（0.35 格/tick）即收手——行程 ≈ I 7.6 / II 12.5 / III 17.3 格（按递推式逐 tick 累加；理想闭式 9.75 / 14.6 / 19.5 是上限）。想回到六百四十一 的手感调到 0.77（= 1÷1.3）、想更省更稳往 0.1 调、想更猛往 2.0 调。近战那一记「旋转冲击」不受本项影响（照旧原版矢量）"));
+        // v1.3.0(beta) 实测七百一十【自推鞘翅】：三件套的"推进剂"第五条腿
+        this.rows.add(new BoolRow("自推鞘翅", MaidSmartConfig.COMBAT_SELF_WINGS.get(),
+                v -> MaidSmartConfig.COMBAT_SELF_WINGS.set(v),
+                "自推鞘翅（默认开）：胸甲槽穿着这一类模组鞘翅的女仆**不需要烟花**就能起飞/巡航——它们同时算作「推进剂」（缺件提示、空袭激活、飞行跟随启动全部放行），并由本模组替她施加那件鞘翅自己的推力。默认认「自己会推玩家」的那一类：伊卡洛斯之翼的**空域系**羽翼（ikaros/nymph/astraea/chaos/hiyori/melan_wings，滑着就加速、不用按键）与神秘遗物+ 的壮丽鞘翅 / 混沌之傲（按住跳跃键加速）；伊卡洛斯的羽毛系/纸翼/魔法翼只是普通鞘翅，**不在表里**。**为什么需要本模组替她推**：这些模组的自推逻辑全部挂在 PlayerTickEvent / instanceof ServerPlayer 上，女仆不是玩家、一点推力都收不到——只「认物品」的结果是她展开滑翔后一路往下沉。**1.20.1 说明**：那边的神秘遗物把 canElytraFly 写死了 instanceof Player，女仆连滑翔都做不到，所以本功能实际在 1.21.1 生效。关闭 = 这类物品退回「只是件会滑翔的胸甲」"));
+        this.rows.add(new TextRow("自推鞘翅·资格物品表", String.join(",", (List<String>) MaidSmartConfig.COMBAT_SELF_WINGS_ITEMS.get()),
+                s -> setStringList(MaidSmartConfig.COMBAT_SELF_WINGS_ITEMS, s),
+                "自推鞘翅的资格物品表（默认见上）：一行/逗号一条物品 id（modid:item），也认 #命名空间:标签。**只认胸甲槽**——原版滑翔闸门只认胸甲槽那一件，背包里有而她没穿，她根本滑不起来。认不出具体型号的物品走通用推力模型（v←v×0.5 + 视线×0.5），所以以后再加同类鞘翅只要往这里填一行 id、不需要改代码"));
+        this.rows.add(new NumRow("自推鞘翅·推力倍数", String.valueOf(MaidSmartConfig.COMBAT_SELF_WINGS_SCALE.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_SELF_WINGS_SCALE, s),
+                "自推鞘翅的推力倍数（默认 1.0，范围 0.2~3.0）：乘在「沿视线那一份」上（v←v×gain + 视线×(add×本项)）。1.0 = 照抄各件自己的数值（伊卡洛斯空域系 6 件与神秘遗物+ 两件，逐条反编译抄来、各不相同：最慢约 0.70、最快约 2.20 格/tick 巡航）。调小 = 推得慢更省、调大 = 更快更远，巡航速度随之线性变化。**只管这一条腿**：烟花 / 孔雀羽扇 / 位移法术 / 激流三叉戟那几条腿的数值不受本项影响"));
         this.rows.add(new BoolRow("远程空袭近身弹开",
                 MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_RANGED_PUSH.set(v),

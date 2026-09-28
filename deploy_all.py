@@ -6,6 +6,32 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百一十（v1.3.0 beta，同名覆盖，未发版）：**自推鞘翅——不靠烟花也能飞的那一类模组鞘翅**
+（伊卡洛斯之翼 / 神秘遗物+，两树镜像）——玩家原话「加完模组之后有两种鞘翅不需要烟花也可以起飞。
+我觉得需要做相关的兼容，如果装配了这些物品，相当于同时满足了烟花以及推进物品的要求。然后同时
+也需要考虑一下他们的运动逻辑是怎么样的，看看怎么安排在女仆身上。之后其他的类似物品看有没有
+一个通解通法。」
+① 反编译摸清两家：伊卡洛斯之翼的**空域系**（`SynapseWings`：ikaros/nymph/astraea/chaos/
+   hiyori/melan_wings）滑着就自推（`PlayerTickEvent`，`v += (look·d + (look·i − v)·t)·c`，
+   **不用按键**）；羽毛系/纸翼/魔法翼只是普通 `ElytraItem`（无自推，不列）。神秘遗物+（1.21.1）
+   的 `majestic_elytra`/`chaos_elytra` 继承 `BaseElytraItem`（`canElytraFly` 恒 true → 女仆可用），
+   **按住跳跃键**自推（`v = v×0.48 + look×0.64` / `v = v×0.5 + look×k`）。1.20.1 的神秘遗物
+   （EnigmaticLegacy / enigmaticaddons）把 `canElytraFly` 写死 `instanceof Player`，女仆连滑翔
+   都做不到 → 那边用不了（不做 hack）；代码照镜像、表里留 id 备用。
+② 关键障碍：三家自推**全都只推玩家**（挂在 `PlayerTickEvent` / `ServerPlayer` / 客户端跳跃键上），
+   女仆收不到 → 只"认物品"她会展开滑翔后一路往下沉。所以真正的活是**由本模组替她施加推力**。
+③ 通解通法：三家公式是**同一个形状** `v ← v×gain + look×add`（原版挂载烟花也是这一条）→
+   一张表（物品 id → gain/add）+ 一个收敛推力窗口（`ignite/tick/clear`，40 tick 到期交还滑翔）
+   + 两条接入链（空袭 / 飞行跟随各一处）。**逐条照抄各自数值**（巡航 0.70~2.20 格/tick 各不相同，
+   特性即其自身），认不出型号走兜底 `0.5/0.5`；以后同类鞘翅只填 `combat.selfWingsItems` 一行 id、
+   不改代码。全局倍数 `combat.selfWingsScale`（默认 1.0）。
+④ 接线（两树镜像）：`hasFlightPropellant` 加第五条腿 + `equip()` 就绪判据放宽；`canLaunch` /
+   `canJumpToLaunch` 对该条腿放行（**不吃烟花冷却**——它不消耗物资，那张表只该闸住要烧东西的腿）；
+   `tryLaunch` 末尾加该分支（排序仍是 扇子 → 烟花 → 法术 → 激流 → 自推鞘翅，前四样手感一字不变）；
+   两条飞行链每 tick `tick()` 推、收手时 `clear()`。**不消耗、不额外扣耐久**（只按原版滑翔
+   每 20 tick 扣 1）：前四条腿是"借它的动作"，这一条只借它的**物理**。面板三行 + 四份 lang + 两树手册。
+   日志搜「空袭·自推鞘翅」；缺件诊断那一行同时印出"自推鞘翅认没认出来、型号/巡航多少"。
+
 实测七百〇九（v1.3.0 beta，同名覆盖，未发版）：扫帚模式两修（两树镜像）——
 玩家原话 ①「扫把模式的窒息判定还是有问题。仍然会导致女仆窒息。被方块挡住的只能是扫帚。
 而女仆在扫帚上似乎又没有碰撞箱，导致会陷进去窒息。」②「扫帚的启动链路还是比较落后，

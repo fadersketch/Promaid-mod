@@ -332,6 +332,37 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ForgeConfigSpec.DoubleValue COMBAT_RIPTIDE_FLIGHT_SCALE;
     /**
+     * v1.3.0(beta) 实测七百一十【自推鞘翅】：总开关（默认开）。
+     *
+     * 需求原文："加完模组之后有两种鞘翅不需要烟花也可以起飞。我觉得需要做相关的兼容，
+     * 如果装配了这些物品，相当于同时满足了烟花以及推进物品的要求。"
+     *
+     * 开 = 胸甲槽穿着「自推鞘翅」（见 {@link #COMBAT_SELF_WINGS_ITEMS}）的女仆：
+     * ① 它算作推进剂（缺件提示 / 空袭激活 / 飞行跟随启动全部放行，**不需要烟花**）；
+     * ② 我们替她施加那件鞘翅自己的推力（模组的推力只挂在玩家事件上，女仆收不到）。
+     * 关 = 这一类物品退回"只是件会滑翔的胸甲"，空袭仍照旧要烟花/羽扇/法术/激流。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_SELF_WINGS;
+    /**
+     * v1.3.0(beta) 实测七百一十【自推鞘翅】·资格物品表。
+     *
+     * 默认 = 真正"不靠烟花也能飞"的那 8 件（伊卡洛斯之翼空域系 6 件 + 神秘遗物+ 两件）。
+     * 两种写法：`modid:item`、`#命名空间:标签`。**注意只认胸甲槽**——原版滑翔闸门只认胸甲槽
+     * 那一件，背包里有、胸甲不穿，她根本滑不起来（判据与"能滑翔"必须同口径）。
+     *
+     * 认不出具体型号的物品走通用模型（{@code v←v×0.5 + 视线×0.5}），所以"以后再加同类鞘翅"
+     * 只要往这里填一行 id，不需要改代码——这就是本次要的通解通法。
+     */
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> COMBAT_SELF_WINGS_ITEMS;
+    /**
+     * v1.3.0(beta) 实测七百一十【自推鞘翅】·推力倍数（默认 1.0，范围 0.2~3.0）。
+     *
+     * 乘在"沿视线那一份"上（{@code v ← v×gain + 视线×(add×本项)}）。1.0 = 照抄各件自己的数值
+     * （伊卡洛斯空域系 / 神秘遗物壮丽·混沌，逐条反编译抄来）；调小 = 推得慢、更省；
+     * 调大 = 更快更远。收敛速度（巡航）随之线性变化。
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_SELF_WINGS_SCALE;
+    /**
      * v1.2.0 实测五百三十五：弩是否可以用**普通烟花**（无爆炸组件）当弹药（默认开）。
      *
      * 默认开 = 任意烟花都能当弩弹药，与原版 `CrossbowItem` 的弹药谓词一致
@@ -1974,6 +2005,26 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 语义从"折扣"改成"倍数"、范围放宽到 0.1~2.0。
         COMBAT_RIPTIDE_FLIGHT_SCALE = BUILDER.comment("激流三叉戟·推进剂力度倍数（默认 1.0 = 不打折，范围 0.1~2.0）：用激流三叉戟当【推进剂】时（起飞 / 飞行跟随补推 / 空袭的掉高抬升与俯冲冲刺），力度 = 原版 `3.0×(1+等级)/4` × **1.3**（实测六百四十二 的调参基线） × 本项（判附魔等级：I 1.95 / II 2.93 / III 3.90 格/tick）。\n\n【行为形状走烟花】推进剂不是「一次性冲量」，而是像挂载烟花那样**每 tick 把整个速度矢量**往「视线 × 当前力度」上拉（`v ← v×0.5 + 视线×(力度/2)`，与原版挂载烟花同形）——所以**竖直分量也归推进管**（旧版只压水平，竖直没人管，起飞就会一路窜高）。\n\n【数值取水里的那一记】当前力度按**玩家在水里的阻力 ×0.80/tick** 递减，掉到滑翔常态（0.35 格/tick）即收手。行程按递推式逐 tick 累加：I ≈ 7.6 格 / II ≈ 12.5 格 / III ≈ 17.3 格（闭式 力度 ÷ (1 − 0.80) = 9.75 / 14.6 / 19.5 是理想上限）。六百四十一 照搬玩家那一记（III 级 12.9 格）实测偏慢——「激流三甚至还没有俯冲飞行自己飞得快」——所以六百四十二 起基线 ×1.3。\n\n【什么时候调小 / 调大】想更省更稳往 0.1 调；想回到六百四十一 的手感调到 1÷1.3 ≈ 0.77；想更猛可以往 2.0 调。0.1 仍是原版力度的十分之一。\n\n【只管推进剂】近战那一记「朝目标的旋转冲击」（combat.riptideDash）照旧用原版矢量，不受本项影响")
                 .translation("config.promaid.combat.riptideFlightScale").defineInRange("riptideFlightScale", 1.0, 0.1, 2.0);
+        // v1.3.0(beta) 实测七百一十【自推鞘翅】：不靠烟花也能飞的那一类模组鞘翅（三件套的"推进剂"
+        // 再多一条腿）。默认表 = 伊卡洛斯之翼空域系 6 件 + 神秘遗物+ 两件（逐条反编译确认它们
+        // 自己会推玩家；羽毛系/纸翼/魔法翼只是普通鞘翅，**没列**）。推力由本模组替她施加
+        // （模组的推力只挂在 PlayerTickEvent 上，女仆收不到），公式与数值逐条照抄各件自己。
+        COMBAT_SELF_WINGS = BUILDER.comment("自推鞘翅（默认开）：胸甲槽穿着这一类模组鞘翅的女仆，**不需要烟花**就能起飞/巡航——它们同时算作「推进剂」（缺件提示、空袭激活、飞行跟随启动全部放行），并由本模组替她施加那件鞘翅自己的推力。默认认这几件（都是「自己会推玩家」的那一类：伊卡洛斯之翼的**空域系**羽翼 ikaros/nymph/astraea/chaos/hiyori/melan_wings，与神秘遗物+ 的 majestic_elytra/chaos_elytra；伊卡洛斯的羽毛系/纸翼/魔法翼只是普通鞘翅，**不在表里**）。\n\n【为什么需要本模组替她推】这些模组的自推逻辑全部挂在 PlayerTickEvent / instanceof ServerPlayer 上，**女仆不是玩家、一点推力都收不到**——只「认物品」的结果是她展开滑翔后一路往下沉。\n\n【1.20.1 说明】那边的神秘遗物（EnigmaticLegacy / enigmaticaddons）把 canElytraFly 写死了 instanceof Player，**女仆连滑翔都做不到**，所以本功能实际在 1.21.1 生效；表填了也不会误判成「她能飞」。\n\n关闭 = 这类物品退回「只是件会滑翔的胸甲」，空袭照旧要烟花/羽扇/位移法术/激流三叉戟。")
+                .translation("config.promaid.combat.selfWings").define("selfWings", true);
+        COMBAT_SELF_WINGS_ITEMS = BUILDER.comment("自推鞘翅·资格物品表（默认见上）：一行/逗号一条物品 id（modid:item），也认 #命名空间:标签 的标签写法。**只认胸甲槽**——原版滑翔闸门只认胸甲槽那一件，背包里有而她没穿，她根本滑不起来（判定必须与「能滑翔」同口径）。认不出具体型号的物品走通用推力模型（v←v×0.5 + 视线×0.5），所以以后再加同类鞘翅只要往这里填一行 id、不需要改代码")
+                .translation("config.promaid.combat.selfWingsItems")
+                .defineList("selfWingsItems",
+                        List.of("locusazzurro_icaruswings:ikaros_wings",
+                                "locusazzurro_icaruswings:nymph_wings",
+                                "locusazzurro_icaruswings:astraea_wings",
+                                "locusazzurro_icaruswings:chaos_wings",
+                                "locusazzurro_icaruswings:hiyori_wings",
+                                "locusazzurro_icaruswings:melan_wings",
+                                "enigmaticlegacyplus:majestic_elytra",
+                                "enigmaticlegacyplus:chaos_elytra"),
+                        o -> o instanceof String s && !s.isBlank());
+        COMBAT_SELF_WINGS_SCALE = BUILDER.comment("自推鞘翅·推力倍数（默认 1.0，范围 0.2~3.0）：乘在「沿视线那一份」上（v←v×gain + 视线×(add×本项)）。1.0 = 照抄各件自己的数值（伊卡洛斯空域系 6 件与神秘遗物+ 两件，逐条反编译抄来，各不相同：最慢约 0.70、最快约 2.20 格/tick 巡航）。调小 = 推得慢更省、调大 = 更快更远，巡航速度随之线性变化。\n\n【只管这一条腿】烟花 / 孔雀羽扇 / 位移法术 / 激流三叉戟那几条腿的数值不受本项影响")
+                .translation("config.promaid.combat.selfWingsScale").defineInRange("selfWingsScale", 1.0, 0.2, 3.0);
         // v1.2.0 实测五百三十五：普通烟花能否当弩弹药（用户要求"加一下开关"）
         // v1.2.0 实测五百三十七：默认改为【关】。用户实测"烟花火箭竟然一点伤害都没有"，
         // 取证结论：这不是版本差异、也不是他哪里出错，而是原版机制——`FireworkRocketEntity`

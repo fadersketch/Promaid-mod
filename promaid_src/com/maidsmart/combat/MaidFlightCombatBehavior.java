@@ -560,13 +560,19 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
             if (missing.contains("可以飞行的道具")) {
                 com.maidsmart.tool.PromaidLog.log("空袭装备",
                         com.maidsmart.tool.PromaidLog.nameOf(maid)
-                                + " 缺可以飞行的道具（" + MaidFlightKit.fuelDiagnostic(maid) + "）");
+                                + " 缺可以飞行的道具（" + MaidFlightKit.fuelDiagnostic(maid)
+                                // 【实测七百一十】把"自推鞘翅"那一路也印在同一行：现场"她明明
+                                // 穿着伊卡洛斯/神秘遗物的鞘翅却不飞"时，这一行能直接分开
+                                // "我们没认它"与"那件东西没让她滑起来"（同节流，最多 15 秒一行）。
+                                + "；" + com.maidsmart.combat.MaidSelfPropelledWings.diag(maid) + "）");
             }
             // 实测五百七十四：措辞按缺件内容分流——缺"可以飞行的道具"时把几种手段点出来
             // （烟花火箭 / 孔雀羽扇 / 能上天的位移类法术任一即可），免得玩家以为只能用烟花。
             // v1.2.4 实测六百三十三：再添一件——带激流附魔的三叉戟。
+            // v1.3.0(beta) 实测七百一十：再添第五件——"自推鞘翅"（伊卡洛斯之翼空域系 /
+            // 神秘遗物+ 的壮丽·混沌）：穿着它就不需要烟花（推力由本模组替她施加）。
             String hint = missing.contains("可以飞行的道具")
-                    ? "（烟花火箭 / 孔雀羽扇 / 位移类法术 / 激流三叉戟任一）" : "";
+                    ? "（烟花火箭 / 孔雀羽扇 / 位移类法术 / 激流三叉戟 / 自推鞘翅任一）" : "";
             maid.getChatBubbleManager().addTextChatBubble(
                     "空战装备不齐，没有" + missing + hint + "，先按普通战斗来");
         } catch (Throwable ignored) {
@@ -594,6 +600,9 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 摘掉（它只在 m_6725_ 里被驱动，链路走不到这里就没人再推）——留着只是表里的陈旧项。
         // **注意**：这里只丢窗口引用，不作任何减速（"保持动量自然滑翔"那一档的语义，同 BOOST_ROCKET）。
         com.maidsmart.combat.MaidRiptideBoost.clear(maid);
+        // 【实测七百一十】自推鞘翅的推力窗同理：它只在 m_6725_ 里被驱动，链路一停就该摘掉
+        //（**已给的速度同样不动**——保持动量自然滑翔那一档的语义，同 BOOST_ROCKET）。
+        com.maidsmart.combat.MaidSelfPropelledWings.clear(maid);
         // 【实测七百〇四：这一轮到此为止，两套随机作废、下一轮重抽】玩家反馈「打了那么多场都一直
         //  在用环绕」——根因同扫帚那一侧：{@link CombatOrbit} / {@link CombatManeuver} 的状态原先
         //  只在换任务/下线（{@code forget}）时清，而"丢目标/这一轮收手"走的是本方法（它调的是
@@ -675,6 +684,10 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
         // 各相位派发**之前**（每一个空中相位都该继续推；收翅猛击那一段由窗口自己的
         // "只在滑翔时生效"那条门挡掉）。没有窗口时这里只是一次 Map 查询。
         MaidRiptideBoost.tick(maid);
+        // 【实测七百一十】自推鞘翅的每 tick 推力：与上一行同一个位置、同一个约定
+        //（各相位派发**之前**、只在她滑翔时生效）。窗口由 {@code tryLaunch} 的第五条腿 /
+        // 飞行跟随的补推开，这里只负责"窗开着就推一下"。没有窗口时这只是一次 Map 查询。
+        MaidSelfPropelledWings.tick(maid);
 
         // ── 第 0 步：起跳滑翔（离地后立刻放烟花，才吃得到烟花推力）──
         Integer jumpLeft = JUMP_LEFT.get(id);
@@ -1000,6 +1013,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
 
     private static boolean canLaunch(EntityMaid maid, long gameTime) {
         // 实测五百六十三：燃料口径 = 烟花 或 孔雀羽扇（扇子优先，见 tryLaunch）
+        // 【实测七百一十】自推鞘翅（伊卡洛斯空域系 / 神秘遗物+）**不吃烟花的冷却**——
+        // 它不消耗物资、也不是"一记"，所以那条闸只该闸住要烧东西的那几条腿（见 tryLaunch）。
+        if (MaidSelfPropelledWings.hasWings(maid)) {
+            return true;
+        }
         return !onFireworkCooldown(maid, gameTime) && MaidFlightKit.hasFlightFuel(maid);
     }
 
@@ -1018,6 +1036,8 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     private static boolean canTakeOff(EntityMaid maid, long gameTime) {
         // v1.2.4 实测六百三十三：再添一件——带激流附魔的三叉戟（"强抬一下激流三叉戟"）。
         // 与 hasClimbSpell 同一口径（不看它的收招硬直/冷却，只看"她有没有这件能起飞的东西"）。
+        // 【实测七百一十】自推鞘翅那一条腿由 canLaunch 直接放行（它不吃烟花冷却），
+        // 所以这里不必再写第二遍——同一个口径只留一处。
         return canLaunch(maid, gameTime) || MaidFlightKit.hasClimbSpell(maid)
                 || MaidFlightKit.hasRiptide(maid);
     }
@@ -1046,12 +1066,21 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
      * 现场表现就是原地一蹦一蹦。所以判据收成"冷却已过 且（烟花/羽扇 或 激流三叉戟）"。
      */
     private static boolean canJumpToLaunch(EntityMaid maid, long gameTime) {
+        // 【实测七百一十】自推鞘翅不吃烟花冷却（见 canLaunch），单独放行。
+        if (MaidSelfPropelledWings.hasWings(maid)) {
+            return true;
+        }
         return !onFireworkCooldown(maid, gameTime)
                 && (MaidFlightKit.hasFlightFuel(maid) || MaidFlightKit.hasRiptide(maid));
     }
 
     private boolean tryLaunch(ServerLevel level, EntityMaid maid, LivingEntity target, UUID id, long gameTime) {
-        if (onFireworkCooldown(maid, gameTime)) {
+        // 【实测七百一十】这张冷却表管的是"刚点过一记要烧/要消耗的推进"（扇子/烟花/激流共用它）。
+        // 自推鞘翅**不消耗任何物资**，不该被它挡住——所以只有"她身上确实还有那几件消耗品"时
+        // 才吃这道闸；只带自推鞘翅的她直接往下走（否则"烟花刚烧完的那 30 tick 里她推不动"）。
+        if (onFireworkCooldown(maid, gameTime)
+                && (TwilightFanKit.hasFan(maid) || MaidFlightKit.hasFirework(maid)
+                        || MaidFlightKit.hasRiptide(maid))) {
             return false;
         }
         // 实测五百六十三【扇子优先】：有暮色森林孔雀羽扇就挥扇起飞——推进公式、
@@ -1086,6 +1115,25 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
                     FIREWORK_READY.put(id, gameTime + fanCooldown()); // 与羽扇共用同一个间隔
                     com.maidsmart.tool.PromaidLog.log("飞行作战",
                             com.maidsmart.tool.PromaidLog.nameOf(maid) + " 激流三叉戟起飞");
+                    return true;
+                }
+            }
+            // v1.3.0(beta) 实测七百一十【第五条腿：自推鞘翅】——扇子不在、烟花拿不出来、
+            // 也没有激流三叉戟时的最后一试。**它不给一次性冲量**（那几件是"点火一记"），
+            // 而是开一扇推力窗：那件鞘翅本身会持续推（公式与数值照抄它自己，见
+            // MaidSelfPropelledWings），方向由她这一 tick 的视线决定——所以先摆朝向
+            // （与烟花/激流同一条纪律：视线朝哪，推力就朝哪）。
+            // 排在最末是刻意的：**不改变任何"有烟花/羽扇/法术/激流"存档的起飞手感**。
+            if (MaidSelfPropelledWings.hasWings(maid)) {
+                faceLaunchDirection(maid, target);
+                MaidFlightKit.setGliding(maid, true); // 与烟花/扇子同通道：滑翔每 tick 吃朝向
+                if (MaidSelfPropelledWings.ignite(maid)) {
+                    LAUNCH_LEFT.put(id, this.ranged ? launchTicksRanged() : launchTicksMelee());
+                    WAIT_LAUNCH.remove(id);
+                    // 不写 FIREWORK_READY：它不吃那张冷却（见本方法开头），写进去反而会
+                    // 连带把同一张表上的扇子/烟花那几条腿也一起冻住（它们共用这一张表）。
+                    com.maidsmart.tool.PromaidLog.log("飞行作战",
+                            com.maidsmart.tool.PromaidLog.nameOf(maid) + " 自推鞘翅起飞");
                     return true;
                 }
             }
