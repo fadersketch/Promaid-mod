@@ -91,12 +91,16 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
         if (!MaidFlightKit.isWingRenderable(chest, maid)) {
-            // 【实测六百八十四】"能滑翔、但本身是护甲"（鞘翅胸甲这类）会走到这里：它自己就有
-            //  护甲外观，我们不叠翅膀。留一行痕（40 tick 节流），免得日后把它当成渲染链路故障。
-            if (MaidFlightKit.isElytraLike(chest, maid)) {
-                MaidFlightKit.noteWingSkipped(maid, chest);
-            }
             return;
+        }
+        // 【本轮修订】能滑翔就会画翅膀（含护甲型滑翔装备，见 MaidFlightKit.isWingRenderable 的说明）；
+        // 但"外观是不是那件装备自己的"要三段式解析查（MaidWingSkins）。**原版鞘翅不在留痕范围内**
+        // （它用原版贴图天经地义）；只有"模组滑翔装备但查不到自有贴图"才留一行痕（40 tick 节流），
+        // 免得日后把这句"外观是原版的"误当成渲染故障。
+        if (MaidFlightKit.isElytraLike(chest, maid)
+                && !MaidWingSkins.isVanillaElytra(chest)
+                && !MaidWingSkins.hasOwnTexture(chest, maid)) {
+            MaidFlightKit.noteWingVanillaFallback(maid, chest);
         }
         // v1.2.0 实测五百零四：绑定 TLM 的「显示背部物品」（maid 配置页那一项，
         // `gui.touhou_little_maid.maid_config.show_back_item`）——鞘翅画在女仆背上，

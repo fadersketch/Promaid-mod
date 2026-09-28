@@ -1314,55 +1314,57 @@ public final class MaidFlightKit {
     }
 
     /**
-     * 【实测六百八十四】"该不该给她画我们那一对翅膀"——{@link #isUsableElytra} 的**通用版**。
+     * 【实测六百八十四 / 本轮修订】"该不该给她画我们那一对翅膀"——判据就是
+     * {@link #isElytraLike}（{@code ItemStack.canElytraFly}）。
      *
      * <p><b>玩家原话</b>："目前只有鞘翅会渲染出来，那其他模组的鞘翅装备能不能渲染出来呢？
-     * 有没有一个通用代码可以写出来？？"
+     * 有没有一个通用代码可以写出来？？"以及后来："我希望这种渲染是一种**通解通法**，
+     * 而不是一些专门的适配。尽可能规避去专门适配的情况。"
      *
-     * <p><b>通用判据就是 {@link #isElytraLike} 那一条</b>（{@code ItemStack.canElytraFly}）：
-     * 原版滑翔的闸门读它，所以"她能不能滑翔"与"我们认不认这件装备"是同一个口径——模组只要
-     * 让自己的装备能滑翔，翅膀就跟着出来，**不需要为本模组做任何适配**。
+     * <p><b>本轮删掉了"护甲型滑翔装备一律不画"这条例外。</b>那条规则在 实测六百八十四 时的
+     * 理由是"这件装备自己就有护甲外观，再叠一层翅膀会穿模"——但那个理由**建立在一个错误前提上**：
+     * 实测（javap + jar 全量扫描，1.20.1 与 1.21.1 两个 TLM 版本都一样）表明
+     * <b>TLM 根本不给女仆画任何护甲</b>——{@code EntityMaidRenderer} 只挂了
+     * Held/Head/Backpack/BackItem/Banner 五层，全 jar 对 {@code HumanoidArmorLayer} /
+     * {@code models/armor} / {@code textures/models/armor} 的引用数**都是 0**，也没有任何护甲贴图资源。
+     * 所以"鞘翅胸甲这类"穿在女仆身上**本来什么都不显示**，把它们从翅膀渲染里排除掉 =
+     * 穿了个寂寞；叠一层翅膀既不会穿模，还正好补上"她穿着滑翔胸甲"应有的观感。
+     * 原版 {@code ElytraLayer} 只认 {@code Items.ELYTRA} 是因为**原版玩家会画护甲**、
+     * 那件护甲自己就有外观；女仆这边没有这个前提，照抄那条限制反而是错的。
      *
-     * <p><b>唯一的例外：这件装备自己就是护甲。</b>{@link #isArmorElytra}（鞘翅胸甲这类）在胸甲
-     * 槽本来就画着自己的护甲模型，再叠一层原版翅膀 = 穿模。原版自己的 {@code ElytraLayer} 同样
-     * 只服务 {@code Items.ELYTRA}——而原版鞘翅恰好是世上唯一一件"能滑翔但不是护甲"的装备，
-     * 所以这条规则不是我们发明的，只是把原版那条隐含规则写明。
-     *
-     * <p><b>贴图</b>：模组装备没有通用 API 告诉别人"我的翅膀长什么样"，这一类一律用原版
-     * {@code textures/entity/elytra.png}（与原版 {@code ElytraLayer.getElytraTexture} 的默认
-     * 返回值同一个文件）。
+     * <p><b>贴图</b>：由 {@link com.maidsmart.client.MaidWingSkins#textureFor} 三段式解析
+     * （先反射模组自己公开的取值口 → 再查静态表 → 退回原版）。所以"能画出来"是通用的，
+     * "画成它自己的样子"对公开了取值口的模组是零适配的。
      *
      * @param entity 判据要的实体（模组实现可能按穿着者判定）；null 时只认原版鞘翅
      */
     public static boolean isWingRenderable(ItemStack stack, net.minecraft.world.entity.LivingEntity entity) {
-        if (isUsableElytra(stack)) {
-            return true;
-        }
-        if (!isElytraLike(stack, entity)) {
-            return false;
-        }
-        return !isArmorElytra(stack);
+        // 通用口径：能滑翔就画翅膀（含护甲型滑翔装备——见上方"本轮删掉…"那段）。
+        // 原版鞘翅当然也在这里面（isElytraLike 第一句就认它）。
+        return isElytraLike(stack, entity);
     }
 
-    /** 【实测六百八十四】"能滑翔但被跳过（它是护甲、自带外观）"的留痕节流表 */
-    private static final java.util.Map<EntityMaid, Long> WING_SKIP_LOG =
+    /** 【本轮修订】"能滑翔、但我们没能查到它自己的贴图、只好用原版贴图"的留痕节流表 */
+    private static final java.util.Map<EntityMaid, Long> WING_VANILLA_LOG =
             java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
 
     /**
-     * 【实测六百八十四】胸甲槽是一件"模组护甲型鞘翅"时的留痕（40 tick 节流）。
+     * 【本轮修订】胸甲槽是一件"模组滑翔装备、但我们没能查到它自己的翅膀贴图"时的留痕（40 tick 节流）。
      *
-     * <p>玩家问"其他模组的鞘翅装备能不能渲染出来"——答案是"能滑翔的会画翅膀；**但当它是护甲时
-     * 我们不画**，因为那件护甲自己就有外观"。这一行就是那句话的运行期证据：日志里看到它，
-     * 说明"她确实穿着能滑翔的装备、只是我们有意没叠翅膀"，而不是渲染链路趴了。
+     * <p>玩家问"其他模组的鞘翅装备能不能渲染出来"——答案是"能滑翔的都会画翅膀；但**外观**要么
+     * 是它自己公开/被收录的贴图，要么退回原版"。这一行就是后一种情况的运行期证据：日志里看到它，
+     * 说明"她确实穿着能滑翔的装备、我们给她画了翅膀、只是外观用的是原版鞘翅贴图"，而不是渲染链路趴了。
+     * 要它自己的样子：模组公开了取值口（如伊卡洛斯 {@code getType().getTexture()}）就自动画对，
+     * 否则往 {@code MaidWingSkins} 那张静态表补一行即可。
      */
-    public static void noteWingSkipped(EntityMaid maid, ItemStack chest) {
+    public static void noteWingVanillaFallback(EntityMaid maid, ItemStack chest) {
         try {
             long t = maid.level().getGameTime();
-            Long last = WING_SKIP_LOG.get(maid);
+            Long last = WING_VANILLA_LOG.get(maid);
             if (last != null && t - last < 40L) {
                 return;
             }
-            WING_SKIP_LOG.put(maid, t);
+            WING_VANILLA_LOG.put(maid, t);
             String id;
             try {
                 id = String.valueOf(net.minecraft.core.registries.BuiltInRegistries.ITEM.getKey(chest.getItem()));
@@ -1370,8 +1372,9 @@ public final class MaidFlightKit {
                 id = chest.getItem().toString();
             }
             com.maidsmart.tool.PromaidLog.log("鞘翅渲染", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                    + " 胸甲槽=" + id + "：它能滑翔、但本身是护甲（自带外观）→ 不叠我们的翅膀"
-                    + "（要翅膀就换原版鞘翅 / 非护甲的滑翔装备）");
+                    + " 胸甲槽=" + id + "：它能滑翔，但我们没能查到它自己的翅膀贴图 → 用原版"
+                    + " textures/entity/elytra.png（要它自己的样子：该模组公开 getType().getTexture() / "
+                    + "getElytraTexture() 就自动画对，否则往 MaidWingSkins 静态表补一行）");
         } catch (Throwable ignored) {
         }
     }
