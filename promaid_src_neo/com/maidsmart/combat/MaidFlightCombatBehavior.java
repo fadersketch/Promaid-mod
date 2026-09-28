@@ -645,6 +645,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     @Override
     protected void tick(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.getUUID();
+        // 【实测七百一十一】烫伤脱困：空袭途中她真泡进岩浆/着火了 → 立刻传送出去，本 tick 就此
+        // 打住（刚传送完再走相位会把她从落点上推走）。判据见 MaidHeatEscape。
+        if (MaidHeatEscape.tick(maid)) {
+            return;
+        }
         // v1.2.0 实测四百七十七：每 tick 记录本轮最高点（重锤下落加成按"最高点→当前"算）
         MAX_Y.merge(id, maid.getY(), Math::max);
         LivingEntity target = currentTarget(maid);

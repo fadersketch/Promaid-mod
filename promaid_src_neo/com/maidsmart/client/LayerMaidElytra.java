@@ -12,7 +12,6 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
@@ -36,8 +35,9 @@ import net.minecraft.world.item.ItemStack;
  */
 public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
 
-    private static final ResourceLocation WINGS =
-            ResourceLocation.withDefaultNamespace("textures/entity/elytra.png");
+    // 【实测七百一十一】贴图不再是固定常量——改由 {@link MaidWingSkins#textureFor} 按胸甲槽
+    // 那件鞘翅的物品 id 给出它自己的外观（伊卡洛斯之翼 / 神秘遗物+ 逐条收录；认不出则回原版
+    // textures/entity/elytra.png）。
 
     /** 原版 `PlayerRenderer.scale`：抵消模型缩放后乘它 = 与玩家鞘翅等大 */
     private static final float VANILLA_PLAYER_SCALE = 0.9375f;
@@ -72,9 +72,10 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!(mob instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
             return;
         }
-        if (maid.isInvisible() || !MaidFlightKit.isFlightVisual(maid)) {
-            // 六百一十一：判据加上"正在滑翔"——飞行跟随的女仆不是飞行任务，旧判据看不见她
-            // （与 Gecko 那层同一口径，见 MaidFlightKit.isFlightVisual）
+        if (maid.isInvisible() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
+            // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」
+            // ——玩家原话「同时在所有模式下渲染」：她站着/走路时背上也有一对**折叠**的翅膀
+            // （张合仍由滑翔位决定，见下方 forceSpread）。与其他三层同一口径；开关关闭退回旧判据。
             return;
         }
         // v1.2.0 实测五百零七：取出胸甲槽的鞘翅栈——既用于下方的光泽判定
@@ -135,7 +136,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             // 只有真附魔过的鞘翅才有光泽。
             // equip() 只把鞘翅原样搬进 CHEST 槽（setItemSlot），不改写 NBT，判定不会被污染。
             var vc = ItemRenderer.getArmorFoilBuffer(buffer,
-                    RenderType.armorCutoutNoCull(WINGS), chest.hasFoil());
+                    RenderType.armorCutoutNoCull(MaidWingSkins.textureFor(chest, maid)), chest.hasFoil());
             this.elytraModel.renderToBuffer(poseStack, vc, light, OverlayTexture.NO_OVERLAY);
         } catch (Throwable ignored) {
         } finally {

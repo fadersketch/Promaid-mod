@@ -827,6 +827,11 @@ public class MaidFlightFollowBehavior extends Behavior<EntityMaid> {
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
+        // 【实测七百一十一】烫伤脱困优先：她真泡进岩浆/着火了 → 立刻传送出去，本 tick 就此打住
+        //（刚传送完再写推进意图会把她从落点上推走）。判据见 MaidHeatEscape（原版 isInLava/isOnFire）。
+        if (com.maidsmart.combat.MaidHeatEscape.tick(maid)) {
+            return;
+        }
         // 【实测六百六十九：武装拴绳】挂在下面的主人要的是"直升机悬停"，不是"追着主人转圈"
         if (com.maidsmart.combat.GunnerTetherManager.isHanging(maid)) {
             maidsmart$tetherHold(maid);

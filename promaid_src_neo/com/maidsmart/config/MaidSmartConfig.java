@@ -612,6 +612,24 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
      */
     public static final ModConfigSpec.BooleanValue COMBAT_FLIGHT_DANGER_AVOID;
     /**
+     * v1.3.0(beta) 实测七百一十一【烫伤脱困】：飞行中（扫帚 / 空袭 / 飞行跟随）她**真的**
+     * 泡进岩浆/着火了 → 立刻传送到最近的空气格（骑扫帚时连人带扫帚一起搬）。
+     *
+     * <p>与"飞行危险环境避让"（{@link #COMBAT_FLIGHT_DANGER_AVOID}）是**两层**：那一条是
+     * **预测式**（还没进去就绕开/抬平），本项是**已经在里面了就出来**。为什么飞行一侧原先
+     * 一条逃生都没有：地面那套危险方块处理把"乘客"整类豁免掉了，而扫帚模式的女仆永远是乘客。
+     * 详见 {@code MaidHeatEscape} 的类注释。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_HEAT_ESCAPE;
+    /**
+     * v1.3.0(beta) 实测七百一十一【鞘翅渲染】：所有模式下都画鞘翅 + 用那件鞘翅**自己的外观**。
+     *
+     * <p>玩家原话：「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，
+     * 能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」关闭 = 旧行为（只在
+     * 飞行任务/滑翔时画、且一律原版贴图）。贴图表见 {@code MaidWingSkins}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_WING_RENDER;
+    /**
      * v1.2.0 实测五百三十四：激流三叉戟的**旋转突进**（默认开）。
      *
      * 需求原文："能不能想办法把玩家一的代码套到女仆身上呢？当处于攻击模式/近战空袭且
@@ -1926,6 +1944,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // + DangerBlocks.cellDangerous），本项只是"飞行这一侧要不要看它"的开关。
         COMBAT_FLIGHT_DANGER_AVOID = BUILDER.comment("飞行危险环境避让（默认开）：扫帚模式 / 空袭 / 飞行跟随的**飞行途中**，把危险方块表（misc.dangerBlocks：岩浆/火/岩浆块/仙人掌等）视为不可靠近——① 掠过的航段会穿进危险格时自动侧向绕开（绕不开就抬升爬过去），② 滑翔下沉到危险格上方时把竖直速度抬平、不往格里沉。**攻击动作不受影响**（空袭的收翅俯冲/俯冲推助推照旧朝目标冲）。关闭 = 飞行完全不看危险方块（旧行为）")
                 .translation("config.promaid.combat.flightDangerAvoid").define("flightDangerAvoid", true);
+        // v1.3.0(beta) 实测七百一十一【烫伤脱困】：她**真的**被烫到（泡岩浆/着火）就立刻传送出去。
+        // 与上面那条「飞行危险环境避让」是两层——那条预测式（还没进去就绕开），这条是
+        // 已经在里面了就出来。为什么飞行一侧原先一条逃生都没有：地面的危险方块处理把
+        // "乘客"整类豁免（扫帚模式的女仆永远是乘客）。详见 MaidHeatEscape 的类注释。
+        COMBAT_HEAT_ESCAPE = BUILDER.comment("烫伤脱困（默认开）：扫帚模式 / 空袭 / 飞行跟随途中，女仆**真的**泡进岩浆或被点着时，立刻（本 tick 内）传送到最近的空气格——骑扫帚时【连人带扫帚一起搬】（与「扫帚牵引绳」同一段搬运代码，直接传她会被从扫帚上踹下来）。\n\n【与「飞行危险环境避让」是两层】那一条是**预测式**：她还没进去时侧向绕开 / 抬平不往格里沉；本项是**已经在里面了就出来**——被击退、被地形挤、烟花推偏都可能让她真贴上去，光靠预测挡不住。\n\n【为什么飞行一侧原先一条逃生都没有】地面的危险方块处理（险境脱离）明确豁免了「乘客」：扫帚模式的女仆**永远**是乘客（她骑的就是扫帚），空袭/飞行跟随又整天在空中——于是这三个模式里一条逃生都没有。\n\n【判据用原版那一个】isInLava / isOnFire，正是「这一 tick 原版要不要烧她」——与「窒息脱困用 isInWall」同源。泡在水里不算（水会浇灭火）；烫不疼的不算（抗火药水 / TLM 火焰保护饰品，那两样本就是泡岩浆不掉血）。\n\n【传送而非飘过去】岩浆每秒 4 点、她只有 20 血——等不起扫帚那种有时长的转向脱困，所以直接传送（清摔落 / 清速度）。落点 = 最近的、她放得下的空气格（站立格 + 头顶格都空气，且自身/脚下不是危险方块）；一圈都找不到就退一步只要能容下她（先脱离流体最重要）。1 秒冷却防抖。日志搜「烫伤脱困」。\n\n关闭 = 飞行中不再有这道保命传送（只剩预测式避让）")
+                .translation("config.promaid.combat.heatEscape").define("heatEscape", true);
+        // v1.3.0(beta) 实测七百一十一【鞘翅渲染】：所有模式都画 + 用那件鞘翅自己的外观。
+        COMBAT_WING_RENDER = BUILDER.comment("鞘翅外观（默认开）：玩家原话「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」开启后两件事一起做——\n\n【① 所有模式下渲染】女仆只要胸甲槽穿着鞘翅（含能滑翔的模组鞘翅）就画那一对翅膀：站着挖矿 / 走路 / 跟随 / 空闲时背上都有一对**折叠**的翅膀，飞起来（滑翔）才张开——与原版玩家「穿着鞘翅背上就有翅膀」完全同款（旧版只在飞行任务或正在滑翔时才画）。\n\n【② 用那件鞘翅自己的外观】按物品 id 逐条收录了贴图：伊卡洛斯之翼的羽毛系 feather/colored_feather/golden_feather_wings、纸翼 paper_wings、魔法翼 magic_wings、贤者之石翼 flandre_magic_wings（→philosopher_stone_wings），以及空域系 6 件 ikaros/nymph/astraea/chaos/hiyori/melan_wings（它们滑翔时另有 _reversed 反向贴图，模组本来就切，我们照抄）；神秘遗物+ 的壮丽鞘翅 / 混沌之傲。**认不出型号的**（其它模组的滑翔装备）退回原版 textures/entity/elytra.png——不会画错，只是外观还是原版的；要它自己的样子，往 MaidWingSkins 那张表补一行 id → 贴图即可。\n\n【与「自推鞘翅」是两件事】能不能自己飞由「自推鞘翅·资格物品表」管；长什么样由本项这张贴图表管——一件普通鞘翅（羽毛系）也能有自己的外观，只是它不会自推。\n\n关闭 = 旧行为（只在飞行任务/滑翔时画、且一律原版贴图）")
+                .translation("config.promaid.combat.wingRender").define("wingRender", true);
         // v1.2.0 实测五百三十四：激流三叉戟的旋转突进（用户点名"把玩家的代码套到女仆身上"）
         // v1.2.0 实测五百三十八：从"偶尔多打一下"改成"她的攻击就是旋转冲击"——
         // 触发距离 5 → 10 格（原来 III 级 3 格/tick 只要 2 tick 就撞上，旋转根本看不见）、

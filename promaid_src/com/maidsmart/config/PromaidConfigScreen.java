@@ -2942,6 +2942,14 @@ public class PromaidConfigScreen extends Screen {
                 MaidSmartConfig.COMBAT_FLIGHT_DANGER_AVOID.get(),
                 v -> MaidSmartConfig.COMBAT_FLIGHT_DANGER_AVOID.set(v),
                 "飞行危险环境避让（默认开）：扫帚模式 / 空袭 / 飞行跟随的飞行途中，把危险方块表（misc.dangerBlocks：岩浆/火/岩浆块/仙人掌等）视为不可靠近——掠过的航段会穿进危险格时自动侧向绕开（绕不开就抬升爬过去），滑翔下沉到危险格上方时把竖直速度抬平、不往格里沉。攻击动作不受影响（空袭的收翅俯冲/俯冲助推照旧朝目标冲）。危险表与判据与地面那套同一份，改 misc.dangerBlocks 两侧一起生效。关闭 = 飞行完全不看危险方块（旧行为）"));
+        this.rows.add(new BoolRow("烫伤脱困",
+                MaidSmartConfig.COMBAT_HEAT_ESCAPE.get(),
+                v -> MaidSmartConfig.COMBAT_HEAT_ESCAPE.set(v),
+                "烫伤脱困（默认开）：扫帚模式 / 空袭 / 飞行跟随途中，女仆真的泡进岩浆或被点着时，立刻传送到最近的空气格——骑扫帚时连人带扫帚一起搬（与「扫帚牵引绳」同一段搬运代码，直接传她会被从扫帚上踹下来）。与「飞行危险环境避让」是两层：那条是预测式（还没进去就绕开/抬平），本项是已经在里面了就出来（被击退/被地形挤/烟花推偏都可能让她真贴上去）。判据用原版那一个（isInLava / isOnFire），与「窒息脱困用 isInWall」同源；泡在水里不算（水会浇灭火），烫不疼的不算（抗火药水 / TLM 火焰保护饰品）。落点 = 最近的、她放得下的空气格；1 秒冷却防抖。日志搜「烫伤脱困」。关闭 = 飞行中不再有这道保命传送"));
+        this.rows.add(new BoolRow("鞘翅外观",
+                MaidSmartConfig.COMBAT_WING_RENDER.get(),
+                v -> MaidSmartConfig.COMBAT_WING_RENDER.set(v),
+                "鞘翅外观（默认开）：① 所有模式下渲染——女仆只要胸甲槽穿着鞘翅（含能滑翔的模组鞘翅）就画那一对翅膀：站着/走路/跟随/空闲时是折叠态，飞起来（滑翔）才张开，与原版玩家「穿着鞘翅背上就有翅膀」同款（旧版只在飞行任务或正在滑翔时才画）。② 用那件鞘翅自己的外观——按物品 id 收录了伊卡洛斯之翼（羽毛系/纸翼/魔法翼/贤者之石翼 + 空域系 6 件，滑翔时另有反向贴图）与神秘遗物+（壮丽鞘翅/混沌之傲）的贴图；认不出型号的退回原版鞘翅贴图（不会画错，只是外观还是原版的）。与「自推鞘翅」是两件事：能不能自己飞由资格物品表管，长什么样由本项这张贴图表管。关闭 = 旧行为（只在飞行/滑翔时画、且一律原版贴图）"));
         this.rows.add(new BoolRow("激流三叉戟旋转冲击",
                 MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
                 v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),

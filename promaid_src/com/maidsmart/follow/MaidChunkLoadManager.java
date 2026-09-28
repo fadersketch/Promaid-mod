@@ -1505,6 +1505,27 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
+     * 【实测七百一十一】把（连人带扫帚）搬到**指定格**——烫伤脱困用。
+     *
+     * <p>与 {@link #recallBroomRiderTo} 的唯一区别：落点**已由调用方算好**（"最近的空气格"），
+     * 不再走 {@code standSpotAt → findStand}——那会从锚点向下扫最多 16 格、把她拽到更远的
+     * 地面上去，而不是"最近的那一格"。四步搬运复用 {@link #broomRiderTo}，不另抄一份。
+     */
+    public static boolean relocateBroomRiderToCell(EntityMaid maid, BlockPos cell) {
+        if (maid == null || cell == null) {
+            return false;
+        }
+        try {
+            if (!(maid.m_9236_() instanceof ServerLevel dest)) {
+                return false;
+            }
+            return broomRiderTo(maid, dest, cell, maid.m_146908_(), maid.m_146909_());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
      * 搬运本体（落点已定）：「解开乘客关系 → 搬扫帚 → 搬她 → 重新落座」，四步在同一个 tick 内做完。
      * 两条扫帚牵引绳（主人 / 工作区）共用这一份——别处不要再抄第二份。
      */
