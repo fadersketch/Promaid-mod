@@ -108,6 +108,8 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue MINE_AUTO_COLLECT;
     // v1.5.163：连锁采集数量上限
     public static final ModConfigSpec.IntValue MINE_CHAIN_LIMIT;
+    /** v1.3.0(beta) 实测七百一十七【issue #29】：连锁采集每块都消耗耐久（默认关=整串只扣 1 点） */
+    public static final ModConfigSpec.BooleanValue MINE_CHAIN_FULL_DURABILITY;
     // v1.1.0 实测一百五十六：骑乘中禁止搭方块（扫帚上挖矿不再垫方块）
     public static final ModConfigSpec.BooleanValue MINE_RIDE_NO_PILLAR;
 
@@ -475,6 +477,12 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_FOLLOW_DIST;
     /** 速度总倍率（默认 1.0）：乘在"载具速度与女仆速度取最大"之上 */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_SPEED_SCALE;
+    /**
+     * v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】。列在这里的实体类型被当作"家具"：
+     * 女仆坐在上面时，本模组**所有**骑乘改动（指挥棒绑定 / 驱动 / 连坐骑传送 / 闲逛抑制）
+     * 一律不生效——它们只是"能坐的家具"，不是本链路意义上的坐骑。
+     */
+    public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_RIDE_FURNITURE_BLACKLIST;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -1436,6 +1444,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.5.163：连锁采集数量上限可自定义
         MINE_CHAIN_LIMIT = BUILDER.comment("连锁采集上限（块）：一次连锁挖掘的最大方块数（默认 16）")
                 .translation("config.promaid.mine.chainLimit").defineInRange("chainLimit", 16, 4, 64);
+        // v1.3.0(beta) 实测七百一十七【issue #29：连锁采集耐久只扣一次】：
+        // 玩家报告"女仆挖同样多的矿，镐子消耗极少"，正是这条历史设计——连锁那
+        // {@code chainLimit} 块（默认最多 16 块）全部只由目标矿扣 1 点耐久
+        //（见 {@code MineBehavior.chainBreakAll} 的注释"镐耐久只扣目标矿一次"）。
+        // 这里给一个开关：打开后连锁破坏的**每一块**都扣 1 点，贴近手工挖矿的手感。
+        // 默认关 = 保留历史行为（不改变现玩家的手感与工具寿命）。
+        MINE_CHAIN_FULL_DURABILITY = BUILDER.comment("连锁采集每块都消耗耐久（默认关）：关闭时整串连锁只扣 1 点耐久（历史行为）；开启后连锁破坏的每一块都扣 1 点，更贴近手工挖矿，但镐子会明显更快磨损")
+                .translation("config.promaid.mine.chainFullDurability")
+                .define("chainFullDurability", false);
         // v1.1.0 实测六十九：发呆看门狗——零进展且原地不动超时自动重置状态
         MINE_STUCK_WATCHDOG = BUILDER.comment("发呆看门狗（默认开）：挖矿期间连续 N 秒既没挖掉任何方块、位置也没挪动（原地发呆/内部状态卡死）时，自动整体重置该女仆的挖矿状态——锚点/扫描缓存/排除表/目标全部清空重新开始，等效收回魂符再放下去，不用玩家手动救；走路赶路、垫方块搭路都算进展，不会误触发")
                 .translation("config.promaid.mine.stuckWatchdog").define("stuckWatchdog", true);
@@ -2350,6 +2367,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.followDist").defineInRange("followDist", 5.0, 1.0, 16.0);
         COMBAT_RIDE_SPEED_SCALE = BUILDER.comment("速度总倍率（默认 1.0，0.2~3.0）：乘在「坐骑速度与女仆速度取最大」之上。1.0 = 严格按原话取最大值；嫌慢（比如骑驴/猪跟着跑跟不上）可以调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。它不会突破载具自己的寻路安全上限，只是把目标速度按比例缩放")
                 .translation("config.promaid.ride.speedScale").defineInRange("speedScale", 1.0, 0.2, 3.0);
+        // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】——玩家原话："我们需要给原版 tlm 的
+        // 椅子这些道具开一个后门，他们虽然是家具类物品，但是从某种意义上，他们也算坐骑，
+        // 需要开一个额外的黑名单，保证女仆坐在这个上面的时候，我们所做的所有骑乘更改全都不生效。"
+        // 默认两项 = TLM 自带的椅子与坐垫。模组家具只要在这里填一行实体类型 id 即可，代码不用动。
+        COMBAT_RIDE_FURNITURE_BLACKLIST = BUILDER.comment("家具类坐骑黑名单（女仆坐上去时，本模组所有骑乘改动一律不生效）：一行/逗号一条实体类型 id（modid:entity）。默认 = TLM 自带的椅子 chair 与坐垫 sit——它们只是「能坐的家具」，不该被当成可驾车/可传送的坐骑。她正坐在黑名单里的家具上时：骑乘指挥棒不绑她、驱动不喂目标、传送不「连坐骑一起搬」（走原版乘客规则）、也不抑制载具闲逛")
+                .translation("config.promaid.ride.furnitureBlacklist")
+                .defineList("furnitureBlacklist",
+                        java.util.List.of("touhou_little_maid:chair", "touhou_little_maid:sit"),
+                        o -> o instanceof String s && !s.isBlank());
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----

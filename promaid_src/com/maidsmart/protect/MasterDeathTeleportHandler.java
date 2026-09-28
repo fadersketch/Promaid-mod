@@ -305,10 +305,31 @@ public class MasterDeathTeleportHandler {
      * 排班中的女仆（含排班自动 home 的守家女仆）重新纳入豁免——她们驻守在
      * 排班锚点（农场/熔炉/看家），主人死亡把守家女仆全部拽到重生点 = 守家
      * 空窗。想召回走排班表「传送到我身边」（先关她的排班，与一键集合同口径）。
+     *
+     * v1.3.0(beta) 实测七百一十七【issue #28：home 女仆被拽走后卡死】：
+     * 上面那次反转只把**排班**女仆纳回了豁免，**普通 Home 模式**（玩家 GUI 里
+     * 手动开 home，没走排班表）仍会被拽。报告：「农场工作、Home 模式的女仆，
+     * 玩家死亡复活后立即被传到身边，之后一直保持 Home 却停在复活点不再离开」。
+     * 根因是拽走之后的**死锁**：她被传到 home 圈外 → TLM 的回家走位被
+     * {@code SchedulePosTickMixin} 对"干活中女仆"整段 cancel、我们自己的
+     * home 巡逻/工作驱动又明确跳过非战斗工作（农场）→ 她既回不去、也够不到
+     * 圈外的作物 → 原地呆站。对照：同一份代码里**所有其它传送链路**
+     *（{@code MaidChunkLoadManager} 的 summon/pull/rescue）早就统一豁免
+     * {@code isHomeModeEnable() && !isBuildingMaid}，只有本处理器没跟上。
+     * 现在对齐同一条口径：home（非建造）女仆 = 玩家明确停放，死亡也不拽。
+     * 建造女仆仍照旧可拽（建造强制 home，但它属"可召回"那一类）。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
         if (maid.isMaidInSittingPose() || maid.m_20159_()) {
             return true;
+        }
+        // v1.3.0(beta) 实测七百一十七：home（非建造）与其它传送链路同口径豁免
+        try {
+            if (maid.isHomeModeEnable()
+                    && !com.maidsmart.build.BlueprintBuildExecutor.isBuildingTask(maid)) {
+                return true;
+            }
+        } catch (Throwable ignored) {
         }
         try {
             return com.maidsmart.schedule.ScheduleData.isOn(maid);
@@ -331,6 +352,9 @@ public class MasterDeathTeleportHandler {
         maid.f_19789_ = 0.0f;
         // v1.5.227：清速度——传送后残留的移动向量会让女仆继续飘/冲进地形
         maid.m_20256_(net.minecraft.world.phys.Vec3.f_82478_); // Vec3.ZERO
+        // v1.3.0(beta) 实测七百一十七【issue #27】：传送后下一 tick 补一枪属性表包
+        //（客户端血上限只来自那一包；不重建实体，见 MaidResyncCommand.scheduleAttributeResend）
+        com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend(maid);
     }
 
     /**

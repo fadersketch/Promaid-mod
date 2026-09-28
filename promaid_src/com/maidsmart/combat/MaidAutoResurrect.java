@@ -86,6 +86,25 @@ public final class MaidAutoResurrect {
             if (maid.m_9236_().f_46443_ || maid.m_269323_() == null) {
                 return; // 客户端 / 无主女仆
             }
+            // v1.3.0(beta) 实测七百一十七【issue #32：主人/玩家经验暴涨（一次 150 级）】。
+            //
+            // 【根因】TLM 的女仆是"永远掉经验"实体：{@code EntityMaid.isAlwaysExperienceDropper()}
+            // 恒 true、{@code getBaseExperienceReward()} 返回 {@code getExperience()}——也就是她
+            // **累积的全部女仆经验**（挖矿/打怪一路攒下来的，可以很大）。于是她一死，
+            // {@code LivingEntity.dropExperience} 就把这一整笔按 2477/球拆成一堆经验球撒在她
+            // 倒地的地方。而本类马上又用死亡快照（含 {@code MaidExperience}）把她**原样复活**——
+            // 她的经验一点没少，可地上那堆球还在：谁站在旁边谁就白捡一份。
+            // 玩家口径正好对上：「每次女仆死了重生之后就会出现一次经验暴涨」「像是和某个数值
+            // 成比例」（比例 = 她累积的女仆经验）。
+            //
+            // 【修法】自动复活开着时（= 我们本来就会把她的经验原样还她），让这一笔**根本不掉**：
+            // 原版现成的闸 {@code LivingEntity.skipDropExperience()}（1.20.1 SRG {@code m_217045_}，
+            // javap 实证；{@code dropExperience} 的第一句就是 {@code !wasExperienceConsumed()}）。
+            // 时机安全：TLM 的 {@code EntityMaid.die} 先 post {@code MaidDeathEvent}（本处理器
+            // 在这一刻取快照），之后才调 {@code super.die → dropAllDeathLoot → dropExperience}
+            //（字节码实证），所以这里置闸一定早于掉落判定。
+            // 关掉自动复活时一个字不动（走 TLM 原版：掉球、不复活）——不改变既有语义。
+            maid.m_217045_(); // skipDropExperience：这一死不再把她的女仆经验撒成球
             CompoundTag nbt = new CompoundTag();
             maid.m_20240_(nbt); // saveWithoutId：此时背包/饰品完整
             DEATH_NBT.put(maid.m_20148_(), nbt);

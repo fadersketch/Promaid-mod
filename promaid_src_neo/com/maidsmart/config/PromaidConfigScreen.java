@@ -2137,6 +2137,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.5.163：连锁采集上限可自定义
         this.rows.add(new NumRow("连锁采集上限（块）", String.valueOf(MaidSmartConfig.MINE_CHAIN_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MINE_CHAIN_LIMIT, s), "连锁采集上限（块）：一次连锁挖掘的最大方块数（4~64，默认 16）"));
+        // v1.3.0(beta) 实测七百一十七【issue #29】
+        this.rows.add(new BoolRow("连锁每块耗耐久", MaidSmartConfig.MINE_CHAIN_FULL_DURABILITY.get(),
+                v -> MaidSmartConfig.MINE_CHAIN_FULL_DURABILITY.set(v), "连锁采集每块都消耗耐久：关闭（默认）时整串连锁只扣 1 点耐久（历史行为）；开启后连锁破坏的每一块都扣 1 点，更贴近手工挖矿，但镐子会明显更快磨损"));
         this.rows.add(new SectionRow("目标与节奏", true));
         this.rows.add(new NumRow("挖掘距离（格）", String.valueOf(MaidSmartConfig.MINE_REACH.get()),
                 s -> setDouble(MaidSmartConfig.MINE_REACH, s), "挖掘距离（格）：女仆伸手够得到目标方块的距离，默认 4.5 接近玩家手长；调大能隔空挖更远但观感变怪"));
@@ -3360,6 +3363,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 "默认 1.0，范围 0.2~3.0。乘在「坐骑速度与女仆速度取最大」之上（1.0 = 严格按玩家原话取最大值）。"
                         + "嫌慢（骑驴/猪跟着跑跟不上）调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。"
                         + "不会突破载具自己寻路的安全上限，只是把目标速度按比例缩放"));
+        // v1.3.0(beta) 实测七百一十七【家具类坐骑黑名单】
+        this.rows.add(new TextRow("骑乘·家具类坐骑黑名单", String.join(",", (List<String>) MaidSmartConfig.COMBAT_RIDE_FURNITURE_BLACKLIST.get()),
+                s -> setStringList(MaidSmartConfig.COMBAT_RIDE_FURNITURE_BLACKLIST, s),
+                "一行/逗号一条实体类型 id（modid:entity）。列在这里的实体被当作「家具」：女仆坐在上面时，"
+                        + "本模组所有骑乘改动一律不生效（指挥棒不绑她、驱动不喂目标、传送不连坐骑一起搬、也不抑制载具闲逛）。"
+                        + "默认两项 = TLM 自带的椅子 touhou_little_maid:chair 与坐垫 touhou_little_maid:sit——"
+                        + "它们只是「能坐的家具」，不该被当成可驾车/可传送的坐骑。别的模组的可坐家具填一行 id 即可"));
     }
 
     private void reviveRows() {
