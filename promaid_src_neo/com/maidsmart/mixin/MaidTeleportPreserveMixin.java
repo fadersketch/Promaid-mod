@@ -77,6 +77,10 @@ public abstract class MaidTeleportPreserveMixin {
                 cir.setReturnValue(false);
                 return;
             }
+            // 【v1.3.0(beta) 实测七百一十六·点4】骑坐骑的女仆不必在这里再补一道：她一定是乘客
+            //  （isRideRider 要求 getVehicle() 非空），上面 isPassenger() 那道闸已经拦住原版
+            //  teleportToOwner。玩家要的"她们也可以被传送过来"走本模组自己那条"连人带坐骑一起搬"
+            //  （MaidChunkLoadManager.recallRideRider，内部先 stopRiding 再落座），不经过这一支。
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

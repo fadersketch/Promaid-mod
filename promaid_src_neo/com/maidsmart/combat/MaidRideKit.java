@@ -169,6 +169,60 @@ public final class MaidRideKit {
         return ridingMount(maid) != null;
     }
 
+    /**
+     * 【实测七百一十六·点4】她此刻是不是"被棍子绑上坐骑、需要连坐骑一起搬运"的骑乘女仆。
+     * 判据自洽（不查链路表）：正骑着一只非女仆的 {@link Saddleable} 已上鞍生物，且身上带着
+     * {@link #TAG_RIDE_MOUNT}（绑定成功时写的持久化痕迹）。服务端重启/区块重载后、链路表
+     * 还没重建时照样认得出她——与扫帚那边 {@code MaidBroomKit.isBroomAirborne} 同口径。
+     *
+     * <p>为什么传送要单独问她：她一旦是乘客，原版 {@code teleportTo} 内部会先 {@code unRide()}
+     * ——直接传她就等于"把坐骑扔在原地、人掉到主人身边"。所以传送链路必须先认出来她，改走
+     * "连坐骑一起搬"（见 {@code MaidChunkLoadManager.recallRideRider}）。
+     */
+    public static boolean isRideRider(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            Entity v = ridingMount(maid);
+            if (v == null || !(v instanceof Mob)) {
+                return false;
+            }
+            if (!(v instanceof Saddleable saddle) || !saddle.isSaddled()) {
+                return false; // 现在骑的不是"已上鞍的坐骑"（船/矿车/别人的椅子一律不算）
+            }
+            String tag = maid.getPersistentData().getString(TAG_RIDE_MOUNT);
+            return tag != null && !tag.isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百一十六·点2】她自己此刻**想去的地方**——读她自己的 {@code PathNavigation}
+     * 的目标点（"她的两条腿本来打算怎么走"）。这就是玩家说的"1:1 还原女仆原有的走路逻辑"：
+     * 骑上坐骑后她的走位意图并没有消失（我们的单兵战术 core 230 与 TLM 跟随 core 3 都照常
+     * 在她自己的导航上写目的地），只是位移被"她是乘客、位置由载具决定"吃掉而已。把这个目标点
+     * 原样转达给坐骑的导航，坐骑就按她原本的走位跑（马这种只会跑的坐骑由此 1:1 复现）。
+     */    public static Vec3 ownNavigationTarget(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            PathNavigation nav = maid.getNavigation();
+            if (nav == null || nav.isDone()) {
+                return null;
+            }
+            net.minecraft.core.BlockPos p = nav.getTargetPos();
+            if (p == null) {
+                return null;
+            }
+            return new Vec3(p.getX() + 0.5, p.getY(), p.getZ() + 0.5);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     public static EntityMaid riderOf(Entity mount) {
         try {
             for (Entity p : mount.getPassengers()) {
@@ -214,22 +268,44 @@ public final class MaidRideKit {
         }
     }
 
+    /**
+     * 给载具喂"去这里"（【实测七百一十六·点2】分两个渠道）。
+     *
+     * <p>玩家原话："至少对于像马这种只会跑步的应该要 1:1 还原女仆原有的走路逻辑，其他模组的
+     * 生物同理。如果他不只是会跑路，那么再另开一个渠道。"
+     * <ul>
+     *   <li><b>渠道一（{@code GroundPathNavigation}）＝只会跑的坐骑</b>：把目标点喂进它自己的
+     *       寻路——它按地面寻路跑过去，上下坡/绕障/跳跃交给它，这就是"1:1 还原她两条腿的走位"
+     *       （走位点由她的导航给出，见 {@link #ownNavigationTarget}）。</li>
+     *   <li><b>渠道二（非地面寻路：飞行/两栖/别的模组坐骑）＝不只是会跑路的</b>：地面寻路表达
+     *       不了她的意图，改**直连操纵**（{@code MoveControl#setWantedPosition}）——不重新规划
+     *       路径，直接朝目标点给操纵意图。与渠道一互斥。</li>
+     * </ul>
+     */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier) {
         try {
             if (!(mount instanceof Mob mob)) {
                 return;
             }
-            PathNavigation nav = mob.getNavigation();
-            nav.moveTo(target.x, target.y, target.z, modifier);
+            if (mob.getNavigation() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation) {
+                // 渠道一：只会跑的坐骑 —— 1:1 走位（喂它自己的地面寻路）
+                mob.getNavigation().moveTo(target.x, target.y, target.z, modifier);
+            } else {
+                // 渠道二：不只是会跑路的坐骑 —— 直连操纵，不依赖地面寻路
+                mob.getMoveControl().setWantedPosition(target.x, target.y, target.z, modifier);
+            }
         } catch (Throwable ignored) {
         }
     }
 
+    /** 停下载具（她下鞍 / 找不到主人时用）——两个渠道都要收手 */
     public static void stopNavigation(Entity mount) {
         try {
-            if (mount instanceof Mob mob) {
-                mob.getNavigation().stop();
+            if (!(mount instanceof Mob mob)) {
+                return;
             }
+            mob.getNavigation().stop();
+            mob.getMoveControl().setWantedPosition(mob.getX(), mob.getY(), mob.getZ(), 0.0);
         } catch (Throwable ignored) {
         }
     }

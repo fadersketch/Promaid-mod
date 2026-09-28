@@ -199,6 +199,69 @@ public final class MaidRideKit {
         return ridingMount(maid) != null;
     }
 
+    /**
+     * 【实测七百一十六·点4】她此刻是不是"被棍子绑上坐骑、需要连坐骑一起搬运"的骑乘女仆。
+     *
+     * <p>判据是**自洽的**（不查链路表）：正骑着一只非女仆的 {@link Saddleable} 已上鞍生物，
+     * 且身上带着 {@link #TAG_RIDE_MOUNT}（棍子绑定成功时写的那道痕迹，随存档持久化）。
+     * 这样服务端重启/区块重载后、链路表还没重建时，传送入口照样认得出她——与扫帚那边
+     * {@code MaidBroomKit.isBroomAirborne} 的口径一致（那个也不查表，只看"任务+真的骑着扫帚"）。
+     *
+     * <p>为什么传送要单独问她：她一旦是乘客，原版 {@code teleportTo} 内部会先 {@code unRide()}
+     * ——直接传她就等于"把坐骑扔在原地、人掉到主人身边"。所以传送链路必须先认出来她，改走
+     * "连坐骑一起搬"（见 {@code MaidChunkLoadManager.recallRideRider}）。
+     */
+    public static boolean isRideRider(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            Entity v = ridingMount(maid);
+            if (v == null || !(v instanceof Mob)) {
+                return false;
+            }
+            if (!(v instanceof Saddleable saddle) || !saddle.m_6254_()) {
+                return false; // 现在骑的不是"已上鞍的坐骑"（船/矿车/别人的椅子一律不算）
+            }
+            String tag = maid.getPersistentData().m_128461_(TAG_RIDE_MOUNT);
+            return tag != null && !tag.isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百一十六·点2】她自己此刻**想去的地方**——读的是她自己的 {@code PathNavigation}
+     * 的目标点，也就是"她的两条腿本来打算怎么走"。
+     *
+     * <p>这就是玩家说的"1:1 还原女仆原有的走路逻辑"：她骑上坐骑以后，走位意图**并没有消失**
+     * ——我们的单兵战术（core 优先级 230）与 TLM 的跟随（core 3）都照常在她自己的导航上
+     * 写目的地，只是那些位移被"她是乘客、位置由载具决定"这一条吃掉，所以她原地不动、
+     * 看起来"近战/远程走位全废了"。把这个目标点原样转达给坐骑的导航，坐骑就按她原本的
+     * 走位逻辑跑——马这种只会跑的坐骑由此 1:1 复现她两条腿的走位；会飞/会跳的坐骑
+     * 属于"不只是会跑路"的另一种渠道，不在这一档里。
+     *
+     * <p>路径已走完（{@code isDone}）或没有目标 → 返回 null（= 她没有前进意图，交给下一优先级）。
+     */
+    public static Vec3 ownNavigationTarget(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            PathNavigation nav = maid.m_21573_();
+            if (nav == null || nav.m_26571_()) {
+                return null;
+            }
+            net.minecraft.core.BlockPos p = nav.m_26567_();
+            if (p == null) {
+                return null;
+            }
+            return new Vec3(p.m_123341_() + 0.5, p.m_123342_(), p.m_123343_() + 0.5);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     /** 这只坐骑背上是不是正驮着本模组的女仆（{@link #isDriven} 的前半） */
     public static EntityMaid riderOf(Entity mount) {
         try {
@@ -253,24 +316,46 @@ public final class MaidRideKit {
         }
     }
 
-    /** 给载具喂"去这里"（水平面；y 用主人脚底，载具自己的寻路会处理地面） */
+    /**
+     * 给载具喂"去这里"（【实测七百一十六·点2】分两个渠道）。
+     *
+     * <p>玩家原话："至少对于像马这种只会跑步的应该要 1:1 还原女仆原有的走路逻辑，其他模组的
+     * 生物同理。如果他不只是会跑路，那么再另开一个渠道。"
+     * <ul>
+     *   <li><b>渠道一（{@link GroundPathNavigation}）＝只会跑的坐骑</b>（马/驴/骡/骆驼/猪等）：
+     *       把目标点喂进它自己的寻路——它按自己的地面寻路跑过去，上下坡/绕障/跳跃全交给它，
+     *       这就是"1:1 还原她两条腿的走位"（走位点由她的导航给出，见
+     *       {@link #ownNavigationTarget}）。</li>
+     *   <li><b>渠道二（非地面寻路：飞行/两栖/别的模组坐骑）＝不只是会跑路的</b>：
+     *       地面寻路表达不了她的意图，改**直连操纵**（{@link MoveControl#m_6849_}）——不重新
+     *       规划路径，直接朝目标点给操纵意图。这是"另开的一个渠道"，与渠道一互斥。</li>
+     * </ul>
+     */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier) {
         try {
             if (!(mount instanceof Mob mob)) {
                 return;
             }
-            PathNavigation nav = mob.m_21573_();
-            nav.m_26519_(target.f_82479_, target.f_82480_, target.f_82481_, modifier);
+            if (mob.m_21573_() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation) {
+                // 渠道一：只会跑的坐骑 —— 1:1 走位（喂它自己的地面寻路）
+                mob.m_21573_().m_26519_(target.f_82479_, target.f_82480_, target.f_82481_, modifier);
+            } else {
+                // 渠道二：不只是会跑路的坐骑 —— 直连操纵，不依赖地面寻路
+                mob.m_21566_().m_6849_(target.f_82479_, target.f_82480_, target.f_82481_, modifier);
+            }
         } catch (Throwable ignored) {
         }
     }
 
-    /** 停下载具的寻路（她下鞍 / 找不到主人时用） */
+    /** 停下载具（她下鞍 / 找不到主人时用）——两个渠道都要收手 */
     public static void stopNavigation(Entity mount) {
         try {
-            if (mount instanceof Mob mob) {
-                mob.m_21573_().m_26573_();
+            if (!(mount instanceof Mob mob)) {
+                return;
             }
+            mob.m_21573_().m_26573_();
+            // 渠道二：把操纵目标设成它自己脚下，操纵层立即失去推力（否则会保持上一拍的方向）
+            mob.m_21566_().m_6849_(mob.m_20185_(), mob.m_20186_(), mob.m_20189_(), 0.0);
         } catch (Throwable ignored) {
         }
     }
