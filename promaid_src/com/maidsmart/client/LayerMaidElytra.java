@@ -13,7 +13,6 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
@@ -46,7 +45,9 @@ import net.minecraftforge.api.distmarker.OnlyIn;
 @OnlyIn(Dist.CLIENT)
 public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
 
-    private static final ResourceLocation WINGS = new ResourceLocation("textures/entity/elytra.png");
+    // 【实测七百一十一】贴图不再是固定常量——改由 {@link MaidWingSkins#textureFor} 按胸甲槽
+    // 那件鞘翅的物品 id 给出它自己的外观（伊卡洛斯之翼 / 神秘遗物+ 逐条收录；认不出则回原版
+    // textures/entity/elytra.png）。
 
     /** 原版 `PlayerRenderer.m_7546_`：抵消模型缩放后乘它 = 与玩家鞘翅等大 */
     private static final float VANILLA_PLAYER_SCALE = 0.9375f;
@@ -81,7 +82,11 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
-        if (maid.m_20145_() || !MaidFlightKit.isFlightVisual(maid)) {
+        // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」——
+        // 玩家原话「同时在所有模式下渲染」。于是她站着挖矿/走路时背上也有一对**折叠**的翅膀
+        // （张合仍由滑翔位决定，见下方 forceSpread），与原版玩家"穿着鞘翅背上就有翅膀"同款。
+        // 开关关闭时退回旧判据（只在飞行任务/滑翔时画）。
+        if (maid.m_20145_() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
@@ -126,7 +131,8 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             float k = SIZE_FACTOR * VANILLA_PLAYER_SCALE / modelScale;
             poseStack.m_85841_(k, k, k);
             this.elytraModel.m_6973_(mob, limbSwing, limbSwingAmount, ageInTicks, netHeadYaw, headPitch);
-            // v1.2.0：飞行任务且离地就强制展翅（原版按下落速度收拢，同步间隙也会露出折叠态）
+            // 展翅：飞行任务或正在滑翔、且离地就强制展翅（原版按下落速度收拢翅膀，同步间隙会露出折叠态）。
+            // 其余情况（站着/走路）交给原版按下落速度收拢 = 背上是一对折叠的翅膀。
             com.maidsmart.client.ElytraSpread.forceSpread(this.elytraModel,
                     MaidFlightKit.isFlightVisual(maid) && !maid.m_20096_());
             // v1.2.0 实测五百零七【改回按附魔判定】：`m_115184_` 的第 4 参就是原版的
@@ -138,7 +144,7 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
             // 已确认 equip() 只把鞘翅原样搬进 CHEST 槽（m_8061_/setItemSlot），不改写 NBT，
             // 所以这个判定不会被本模组污染。
             var vc = ItemRenderer.m_115184_(buffer,
-                    RenderType.m_110431_(WINGS), false, chest.m_41790_());
+                    RenderType.m_110431_(MaidWingSkins.textureFor(chest, maid)), false, chest.m_41790_());
             this.elytraModel.m_7695_(poseStack, vc, light, OverlayTexture.f_118083_,
                     1.0f, 1.0f, 1.0f, 1.0f);
         } catch (Throwable ignored) {

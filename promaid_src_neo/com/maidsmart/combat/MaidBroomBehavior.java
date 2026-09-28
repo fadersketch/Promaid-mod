@@ -142,6 +142,13 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         if (MaidBroomRecall.tick(maid)) {
             return;
         }
+        // ⓪.5【v1.3.0(beta) 实测七百一十一】烫伤脱困：她**真的**泡进岩浆/着火了 → 立刻传送出
+        //    去（骑扫帚时连人带扫帚一起搬）。与上面那条牵引绳同一个约定：刚传送完就 return，
+        //    别再写推进意图把她从落点上推走。口径与"窒息（isInWall）"那档同源——用原版那道
+        //    "这一 tick 要不要烧她"的判据，不自己写几何。见 MaidHeatEscape。
+        if (com.maidsmart.combat.MaidHeatEscape.tick(maid)) {
+            return;
+        }
         // ① 总开关关掉 → 整段不激活（与旧版一致：下扫帚 + 报缺件；连缺件气泡都照旧，
         //   免得"关掉开关她还在喊缺件"这种状态变化引入新的困惑）
         if (!MaidBroomKit.enabled()) {

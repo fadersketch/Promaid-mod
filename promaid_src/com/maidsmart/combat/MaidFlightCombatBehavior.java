@@ -619,6 +619,11 @@ public class MaidFlightCombatBehavior extends Behavior<EntityMaid> {
     @Override
     protected void m_6725_(ServerLevel level, EntityMaid maid, long gameTime) {
         UUID id = maid.m_20148_();
+        // 【实测七百一十一】烫伤脱困：空袭途中她真泡进岩浆/着火了 → 立刻传送出去，本 tick 就此
+        // 打住（刚传送完再走相位会把她从落点上推走）。判据见 MaidHeatEscape。
+        if (MaidHeatEscape.tick(maid)) {
+            return;
+        }
         LivingEntity target = currentTarget(maid);
         // v1.2.2 实测六百〇二【轰炸改判为"附加链路"，不再占用原链路】：这里原本有一道
         // `if (MaidBombing.isBombing(maid)) return;`——轰炸相位在飞的那十几 tick 里，本行为

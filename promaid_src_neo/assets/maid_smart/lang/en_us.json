@@ -226,5 +226,7 @@
   "config.promaid.maneuver.enable": "Combat Maneuvers (master switch)",
   "config.promaid.maneuver.yoyoAmp": "Maneuver: Yo-Yo Height Amplitude (blocks)",
   "config.promaid.airSeparation": "Air Raid: Anti-Stacking in the Air",
-  "config.promaid.airSeparationRadius": "Air Raid: Radius Spread (blocks)"
+  "config.promaid.airSeparationRadius": "Air Raid: Radius Spread (blocks)",
+  "config.promaid.combat.heatEscape": "Heat escape",
+  "config.promaid.combat.wingRender": "Wing appearance"
 }

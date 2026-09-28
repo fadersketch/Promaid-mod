@@ -2953,6 +2953,24 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         return hasBaubleItem(maid, "touhou_little_maid:fire_protect_bauble");
     }
 
+    /**
+     * 【实测七百一十一】她此刻**烫不疼**吗——抗火药水（剩余 ≥30 秒）或 TLM 火焰保护饰品。
+     *
+     * <p>从 {@code hasFireResist} / {@code hasFireProtectBauble} 收口成一条**对外**判据，
+     * 给「烫伤脱困」（{@link MaidHeatEscape}）用：泡在岩浆里但两样占其一的她**本来就不掉血**，
+     * 不该被当成"正被烫到"而惊慌传送。口径与自保那边逐字一致（
+     * {@code envDangerCritical} / {@code envDangerSoft} 用的就是这两条），没有第二套。
+     */
+    public static boolean fireImmune(EntityMaid maid) {
+        try {
+            return hasFireResist(maid)
+                    || (com.maidsmart.config.MaidSmartConfig.COMBAT_FIRE_PROTECT_BAUBLE.get()
+                            && hasFireProtectBauble(maid));
+        } catch (Throwable ignored) {
+            return false; // 判不出来当"会疼"——宁可多救一次，也不让她在岩浆里白挨
+        }
+    }
+
     private static boolean hasDrownProtectBauble(EntityMaid maid) {
         return hasBaubleItem(maid, "touhou_little_maid:drown_protect_bauble");
     }

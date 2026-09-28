@@ -362,5 +362,7 @@
   "config.promaid.maneuver.enable": "接敌机动·总开关",
   "config.promaid.maneuver.yoyoAmp": "接敌机动·高悠悠幅度（格）",
   "config.promaid.airSeparation": "空袭·空中防叠罗汉",
-  "config.promaid.airSeparationRadius": "空袭·半径偏置强度（格）"
+  "config.promaid.airSeparationRadius": "空袭·半径偏置强度（格）",
+  "config.promaid.combat.heatEscape": "烫伤脱困",
+  "config.promaid.combat.wingRender": "鞘翅外观"
 }

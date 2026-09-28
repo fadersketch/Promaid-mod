@@ -18,7 +18,6 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import net.minecraft.client.renderer.entity.ItemRenderer;
 import net.minecraft.client.renderer.texture.OverlayTexture;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.item.ItemStack;
@@ -72,7 +71,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @OnlyIn(Dist.CLIENT)
 public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRenderer<Mob>> {
 
-    private static final ResourceLocation WINGS = new ResourceLocation("textures/entity/elytra.png");
+    // 【实测七百一十一】贴图不再是固定常量——改由 {@link MaidWingSkins#textureFor} 按胸甲槽
+    // 那件鞘翅的物品 id 给出它自己的外观（伊卡洛斯之翼 / 神秘遗物+ 逐条收录；认不出则回原版
+    // textures/entity/elytra.png）。
 
     /** 原版 `PlayerRenderer.m_7546_` 的值：抵消模型缩放后乘它 = 与玩家鞘翅等大 */
     private static final float VANILLA_PLAYER_SCALE = 0.9375f;
@@ -180,9 +181,11 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         if (!(mob instanceof EntityMaid maid)) {
             return;
         }
-        if (maid.m_20145_() || !MaidFlightKit.isFlightVisual(maid)) {
-            // 六百一十一：判据加上"正在滑翔"——飞行跟随的女仆不是飞行任务，旧判据看不见她
-            // （与 Bedrock 那层同一口径，见 MaidFlightKit.isFlightVisual）
+        if (maid.m_20145_() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
+            // 【实测七百一十一】闸门从「飞行任务 或 正在滑翔」放宽为「胸甲槽穿着可渲染的鞘翅」
+            // ——玩家原话「同时在所有模式下渲染」：她站着/走路时背上也有一对**折叠**的翅膀
+            // （张合仍由滑翔位决定，见下方 forceSpread）。与 Bedrock 那层同一口径；
+            // 开关关闭时退回旧判据。
             return;
         }
         ItemStack chest = maid.m_6844_(EquipmentSlot.CHEST);
@@ -252,7 +255,7 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
             // 与原版 ElytraLayer 完全同款：只有真附魔过的鞘翅才有光泽。
             // equip() 只把鞘翅原样搬进 CHEST 槽，不改写 NBT，判定不会被污染。
             var vc = ItemRenderer.m_115184_(buffer,
-                    RenderType.m_110431_(WINGS), false, chest.m_41790_());
+                    RenderType.m_110431_(MaidWingSkins.textureFor(chest, maid)), false, chest.m_41790_());
             this.elytraModel.m_7695_(poseStack, vc, light, OverlayTexture.f_118083_,
                     1.0f, 1.0f, 1.0f, 1.0f);
         } catch (Throwable ignored) {

@@ -1,4 +1,88 @@
-﻿## 实测七百一十【自推鞘翅：不靠烟花也能飞的那一类模组鞘翅（伊卡洛斯之翼 / 神秘遗物+）】
+﻿## 实测七百一十一【烫伤脱困（真的被烫到就立刻传送出去）+ 鞘翅外观（所有模式都画、且用那件鞘翅自己的样子）】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+1. 「扫帚和空袭模式下有关岩浆的寻路还是不太聪明。好像是跟之前那个窒息的问题同一个问题，
+   用同样的方法解决就行。同时再加一个如果被烫到了立刻传送到最近的空气方块。」
+2. 「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，
+   能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」
+
+### 二、① 烫伤脱困：飞行中真的被烫到 → 立刻传送出去
+
+**确实与窒息同一个根**：地面的危险方块处理（险境脱离 `DangerEscapeHandler`）写明了
+豁免「乘客」——`if (isMaidInSittingPose() || isPassenger()) continue;`，理由是「坐姿由椅子管、
+骑乘由载具负责」。而**扫帚模式的女仆永远是她那把扫帚的乘客**，空袭 / 飞行跟随又整天在空中：
+于是这三个模式里**危险方块一条逃生都没有**，只剩「预测式避让」
+（`MaidFlightHazardGuard` 的 detour / antiSink：只在她**还没进去**时绕开 / 抬平）。
+一旦真贴上去（被击退、被地形挤、烟花推偏），没有任何「已经在里面了就出来」的机制——
+这就是玩家说的「跟窒息同一个问题」：**豁免挂错了对象**。
+
+- 新增 `com.maidsmart.combat.MaidHeatEscape`：她**真的**泡进岩浆（`isInLava`）或被点着
+  （`isOnFire`）时，**本 tick 内立刻传送**到最近的空气格。
+- **判据就用原版那一个**（与窒息那档用 `isInWall()` 同源）：不自己写几何判定，
+  就不会出现「看着泡在岩浆里、其实没掉血」的误触发。泡在水里不算（水会把火浇灭）；
+  **烫不疼的不算**——抗火药水（剩余 ≥30 秒）/ TLM 火焰保护饰品，那两样本就是泡岩浆不掉血，
+  不该惊慌（判据收口成 `SelfPreservationBehavior.fireImmune`，与自保那边逐字一致）。
+- **为什么是传送而不是飘过去**：岩浆每秒 4 点、她只有 20 血——等不起扫帚那种有时长的转向脱困。
+  直接走原版 `Entity.teleportTo`（清摔落 / 清速度 + 末影人音效）；
+  **骑扫帚时连人带扫帚一起搬**（走 `MaidChunkLoadManager.relocateBroomRiderToCell`，
+  与「扫帚牵引绳」同一个四步搬运 `broomRiderTo`——直接传她会被 `unRide` 从扫帚上踹下来）。
+- **落点**：最近的、她放得下的空气格（站立格 + 头顶格都空气，且自身 / 脚下不是危险方块，
+  免得下一拍又踩回去）；一圈都找不到「脚下安全」的就退一步只要求两格空气——先脱离流体最重要。
+  水平 ±3、竖直 -2~+3，取最近的；1 秒冷却防抖。
+- **调用点**：三个飞行行为各自 tick 的**最前面**（`MaidBroomBehavior` / `MaidFlightCombatBehavior` /
+  `MaidFlightFollowBehavior`），返回 true 时调用方就此打住——刚传送完再写推进意图会把她从落点上推走
+  （与「扫帚牵引绳」同一条约定）。日志搜「烫伤脱困」。
+- **开关**「烫伤脱困」（`combat.heatEscape`，默认开）。与「飞行危险环境避让」
+  （`combat.flightDangerAvoid`）是**两层**：那条预测式，这条已经在里面了就出来。
+
+### 三、② 鞘翅外观：所有模式下渲染 + 用那件鞘翅自己的样子
+
+**原来「全是原版鞘翅」的原因**：我们的图层（Bedrock / Gecko 两套，共四个文件）一直用原版
+`ElytraModel` + 原版贴图——它只管「给她画一对翅膀」，完全不知道模组鞘翅长什么样。
+实测六百八十四 当时写「模组装备没有通用 API 告诉别人我的翅膀长什么样」——那句话对**通用**判据成立，
+但**已知的那几件**不成立：它们的贴图路径就写在那几个模组的图层类里，逐条反编译抄过来即可。
+
+- **① 所有模式下渲染**：图层的闸门从 `MaidFlightKit.isFlightVisual`（飞行任务 **或** 正在滑翔）
+  放宽为「**胸甲槽穿着可渲染的鞘翅**」——她站着挖矿 / 走路 / 跟随 / 空闲时背上也有一对**折叠**的翅膀，
+  **飞起来（滑翔）才张开**（展翅仍由 `isFlightVisual && !onGround` 决定）。
+  与原版玩家「穿着鞘翅背上就有翅膀」完全同款。四个图层文件（forge / neo 的 Bedrock + Gecko）同改。
+- **② 用那件鞘翅自己的外观**：新增 `com.maidsmart.client.MaidWingSkins`，按物品 id 给出贴图——
+  伊卡洛斯之翼（`locusazzurro_icaruswings`，`textures/entity/<名字>_wings.png`）：
+  羽毛系 `feather` / `colored_feather` / `golden_feather_wings`、纸翼 `paper_wings`、魔法翼 `magic_wings`、
+  贤者之石翼 `flandre_magic_wings`（→ `philosopher_stone_wings.png`），与**空域系 6 件**
+  `ikaros` / `nymph` / `astraea` / `chaos` / `hiyori` / `melan_wings`（它们**滑翔时另有 `_reversed` 反向贴图**，
+  模组 `WingsLayer.getElytraTexture` 本来就切，我们照抄这条）；
+  神秘遗物+（`enigmaticlegacyplus`，`textures/models/misc/`）：`majestic_elytra.png` / `chaos_elytra.png`
+  （模组自己的 `EnigmaticElytraLayer.TEXTURE_MAP` 就是这两条）。**逐条反编译核实**。
+- **认不出型号的**（其它模组的滑翔装备）退回原版 `textures/entity/elytra.png`——不会画错，
+  只是外观还是原版的；要它自己的样子往 `MaidWingSkins.TEXTURE` 补一行 id → 贴图即可。
+- **与「自推鞘翅」是两件事**：能不能自己飞由「自推鞘翅·资格物品表」管；长什么样由这张贴图表管——
+  一件普通鞘翅（羽毛系）也能有自己的外观，只是它不会自推。
+- **开关**「鞘翅外观」（`combat.wingRender`，默认开）；关掉 = 旧行为（只在飞行 / 滑翔时画、
+  且一律原版贴图）。
+
+### 四、改动文件（两树镜像）
+
+- 新增：`combat/MaidHeatEscape.java`、`client/MaidWingSkins.java`；
+- `combat/SelfPreservationBehavior.java`（`fireImmune` 对外判据）、`combat/MaidBroomBehavior.java`、
+  `combat/MaidFlightCombatBehavior.java`、`combat/MaidFlightFollowBehavior.java`（烫伤脱困调用点）、
+  `follow/MaidChunkLoadManager.java`（`relocateBroomRiderToCell`）、
+- `client/LayerMaidElytra.java`、`client/LayerMaidElytraGecko.java`（两树共四个图层：闸门放宽 + 贴图改查表）、
+- `config/MaidSmartConfig.java`（+`combat.heatEscape`、+`combat.wingRender`）、
+  `config/PromaidConfigScreen.java`（+两行）、四份 `lang`（+两键）、两树手册 `GuideChaptersFlight.java`。
+
+### 五、验证
+
+两树 `javac` 0 错误；`_mixchk.py` 注入点审计 PASS=175 SKIP=10 UNRES=0 FAIL=0；
+打包 `verify_jar_classes.py` 全通过（forge 871 项 / neo 873 项）；新类与两键均在 jar 内；
+部署三处（1.20.1 Forge 主整合 / 1.20.1 服务器 / 1.21.1 NeoForge）。
+
+---
+## 实测七百一十【自推鞘翅：不靠烟花也能飞的那一类模组鞘翅（伊卡洛斯之翼 / 神秘遗物+）】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。
