@@ -58,6 +58,10 @@ public class ProMaidMod {
     public static final DeferredItem<Item> COMBAT_LEASH = ITEMS.register("combat_leash",
             () -> new com.maidsmart.combat.CombatLeashItem(new Item.Properties()));
 
+    /** 骑乘指挥棒（v1.3.0(beta)）：右击已上鞍的坐骑与自己的女仆各一次 = 配对，她骑上去跟着主人走 */
+    public static final DeferredItem<Item> RIDE_BATON = ITEMS.register("ride_baton",
+            () -> new com.maidsmart.combat.RideBatonItem(new Item.Properties()));
+
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);

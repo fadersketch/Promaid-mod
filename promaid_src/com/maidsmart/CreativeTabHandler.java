@@ -41,6 +41,8 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.BREW_MANUAL);
             // v1.3.7 实测六百六十七：武装拴绳（管理道具，只进工具页）
             event.accept(ProMaidMod.COMBAT_LEASH);
+            // v1.3.0(beta)：骑乘指挥棒（管理道具，只进工具页）
+            event.accept(ProMaidMod.RIDE_BATON);
         }
     }
 }

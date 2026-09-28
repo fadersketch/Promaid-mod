@@ -122,6 +122,7 @@
   "config.promaid.memory.conflictOverride": "冲突覆盖",
   "config.promaid.memory.coreFold": "摘要折叠",
   "config.promaid.memory.workingNote": "工作笔记注入",
+  "config.promaid.memory.openEvents": "未完成的事注入（移植自 Sphantosis）",
   "config.promaid.memory.indexEnable": "多级记忆索引（日/3日/周/月日记）",
   "config.promaid.memory.indexOnSleep": "睡一觉自动处理记忆",
   "config.promaid.memory.indexOnLogout": "登出会话收尾归档",
@@ -231,6 +232,10 @@
   "item.maid_smart.combat_leash": "武装拴绳",
   "item.maid_smart.combat_leash.desc1": "§7右击【飞行中的】女仆：把自己挂到她下方（直升机二号位），她照常飞、你也可以照常开火",
   "item.maid_smart.combat_leash.desc2": "§7再右击一次或按§f潜跳§7解除；她落地/入水会自动放人；合成：拴绳 + 铁锭×2",
+  "item.maid_smart.ride_baton": "骑乘指挥棒",
+  "item.maid_smart.ride_baton.desc1": "§7右击一只§f已上鞍§7的坐骑（马/驴/骡/猪/炽足兽/骆驼…）选中它，再右击自己的女仆即可配对",
+  "item.maid_smart.ride_baton.desc2": "§7顺序随意：先选女仆再选坐骑也行；被选中的会亮起金色描边（光标）",
+  "item.maid_smart.ride_baton.desc3": "§7绑定后她骑着坐骑跟着你走；§f潜行+右击§7即可让她下来；合成：拴绳 + 木棍",
   "config.promaid.compressionBox": "压缩盒设置",
   "config.promaid.compressionBox.maidExtension": "女仆背包延伸",
   "config.promaid.compressionBox.maxStack": "每格上限",
@@ -268,6 +273,10 @@
   "config.promaid.tether.broomExtra": "武装拴绳·扫帚额外下沉（格）",
   "config.promaid.tether.glowMark": "武装拴绳·金色描边标记",
   "config.promaid.tether.pull": "武装拴绳·拉扯（像原版拴绳一样）",
+  "config.promaid.ride": "骑乘指挥棒（原版生物骑乘）",
+  "config.promaid.ride.enable": "骑乘指挥棒·总开关",
+  "config.promaid.ride.followDist": "骑乘·跟随停下距离（格）",
+  "config.promaid.ride.speedScale": "骑乘·速度总倍率",
   "config.promaid.spawnerTorch": "防刷怪：发现刷怪笼就去插火把",
   "config.promaid.spawnerTorch.enable": "防刷怪·发现刷怪笼就去插火把",
   "config.promaid.spawnerTorch.radius": "防刷怪·搜索半径（格）",
@@ -364,5 +373,6 @@
   "config.promaid.airSeparation": "空袭·空中防叠罗汉",
   "config.promaid.airSeparationRadius": "空袭·半径偏置强度（格）",
   "config.promaid.combat.heatEscape": "烫伤脱困",
-  "config.promaid.combat.wingRender": "鞘翅外观"
+  "config.promaid.combat.wingRender": "鞘翅外观",
+  "config.promaid.combat.wingYsmYield": "鞘翅外观·YSM 让位"
 }

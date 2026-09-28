@@ -70,6 +70,8 @@ public final class GuideContent {
                 //  手册正文没有章节——玩家反馈"最近新添加的这些功能…都没有详细介绍的相关面板"。
                 //  位置紧跟扫帚模式（与配置面板里「扫帚模式 → 武装拴绳（二号位）」的相邻顺序一致）。
                 GuideChaptersCombat.tetherGuide(),
+                // v1.3.0(beta) 实测七百一十四：骑乘指挥棒（原版生物骑乘）——与武装拴绳相邻
+                GuideChaptersCombat.rideGuide(),
                 GuideChaptersCombat.aidGuide(),
                 GuideChaptersCombat.tacticsGuide(),
                 GuideChaptersCombat.weaponEquipGuide(),

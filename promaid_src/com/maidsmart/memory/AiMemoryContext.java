@@ -148,6 +148,23 @@ public class AiMemoryContext extends AbstractMaidContext {
                 sb.append("工作笔记：").append(note);
             }
         }
+        // 5b. 未完成的事（v1.3.0(beta)·移植自 Sphantosis 的事件「终止:0」标记）：
+        //     提取时把"主人说要去做某事 / 在等一个结果 / 计划还没落地"这类事件打上 open:1，
+        //     这里把它们单独拎出来——让女仆能主动接上"上次那件事怎么样了"，
+        //     而不是等主人自己再提。只取最近 2 条，且与「相关记忆」去重不会重复啰嗦。
+        if (com.maidsmart.config.MaidSmartConfig.MEMORY_OPEN_EVENTS.get()) {
+            List<AiMemoryModels.Paragraph> open = new ArrayList<>();
+            for (AiMemoryModels.Paragraph p : paragraphs) {
+                if (AiMemoryStore.hasErrorTag(p)) {
+                    continue;
+                }
+                if (p.tags() != null && p.tags().contains("open:1")) {
+                    open.add(p);
+                }
+            }
+            open.sort(Comparator.comparingLong(AiMemoryModels.Paragraph::createdAt).reversed());
+            appendSection(sb, "她记挂着的事", open, 2, AiMemoryModels.Paragraph::content);
+        }
         // 6. 主人画像（top 3，按 updatedAt 降序——v1.5.95：画像内部已含置信度证据）
         List<AiMemoryModels.Profile> profiles = store.profiles();
         profiles.sort(Comparator.comparingLong(AiMemoryModels.Profile::updatedAt).reversed());

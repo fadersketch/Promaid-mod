@@ -65,6 +65,7 @@
     "MaidCompressionBoxMixin",
     "EntityBroomMaidTravelMixin",
     "EntityGunnerHangMixin",
+    "RandomStrollGoalRiddenMixin",
     "MaidGlowGoldMixin",
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",

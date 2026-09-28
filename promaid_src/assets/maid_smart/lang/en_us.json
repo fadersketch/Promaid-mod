@@ -38,6 +38,7 @@
   "config.promaid.memory.carePoints": "Daily care points",
   "config.promaid.memory.dualAgent": "Dual-agent extraction",
   "config.promaid.memory.personaUnify": "Persona unification",
+  "config.promaid.memory.openEvents": "Open threads injection (ported from Sphantosis)",
   "config.promaid.build.machineSmart": "Redstone machine smart build (machine order + live placement + auto-start)",
   "config.promaid.build.keepFluids": "Blueprint Fluids (water/lava)",
   "config.promaid.build.looseMaterials": "Loose Material Matching",
@@ -85,6 +86,10 @@
   "item.maid_smart.combat_leash": "Combat Leash",
   "item.maid_smart.combat_leash.desc1": "§7Use on a flying maid to hang beneath her as a gunner; she flies on, you keep shooting",
   "item.maid_smart.combat_leash.desc2": "§7Use again or sneak to release; she drops you safely on landing",
+  "item.maid_smart.ride_baton": "Ride Baton",
+  "item.maid_smart.ride_baton.desc1": "§7Use on a §fsaddled§7 mount (horse/donkey/pig/strider/camel...) to select it, then use on your maid to pair",
+  "item.maid_smart.ride_baton.desc2": "§7Order does not matter: select the maid first, then the mount. The selected one glows gold",
+  "item.maid_smart.ride_baton.desc3": "§7She rides it and follows you; §fsneak + use§7 to dismount. Craft: lead + stick",
   "config.promaid.compressionBox": "Compression Box",
   "config.promaid.compressionBox.maidExtension": "Maid backpack extension",
   "config.promaid.compressionBox.maxStack": "Max stack per slot",
@@ -122,6 +127,10 @@
   "config.promaid.tether.broomExtra": "Combat Leash - extra sink on broom (blocks)",
   "config.promaid.tether.glowMark": "Combat Leash - gold outline marker",
   "config.promaid.tether.pull": "Combat Leash - pull (drag the maid like a vanilla lead)",
+  "config.promaid.ride": "Ride Baton (vanilla mount riding)",
+  "config.promaid.ride.enable": "Ride Baton - enable",
+  "config.promaid.ride.followDist": "Riding - follow stop distance (blocks)",
+  "config.promaid.ride.speedScale": "Riding - overall speed multiplier",
   "config.promaid.spawnerTorch": "Anti-Spawner Torches",
   "config.promaid.spawnerTorch.enable": "Torch mob spawners",
   "config.promaid.spawnerTorch.radius": "Spawner search radius (blocks)",
@@ -217,5 +226,6 @@
   "config.promaid.airSeparation": "Air Raid: Anti-Stacking in the Air",
   "config.promaid.airSeparationRadius": "Air Raid: Radius Spread (blocks)",
   "config.promaid.combat.heatEscape": "Heat escape",
-  "config.promaid.combat.wingRender": "Wing appearance"
+  "config.promaid.combat.wingRender": "Wing appearance",
+  "config.promaid.combat.wingYsmYield": "Wing appearance - yield to YSM"
 }

@@ -157,6 +157,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.BooleanValue MEMORY_CONFLICT_OVERRIDE;
     public static final ForgeConfigSpec.BooleanValue MEMORY_CORE_FOLD;
     public static final ForgeConfigSpec.BooleanValue MEMORY_WORKING_NOTE;
+    /**
+     * v1.3.0(beta)【未完成的事】（默认开，移植自 Sphantosis 的事件「终止」标记）：
+     * 提取时给"明显还没完"的事件打 {@code open:1}，本项控制把这批事件单独注入对话
+     * （渲染成「她记挂着的事」那一段）——她才能主动接上"上次那件事怎么样了"。
+     */
+    public static final ForgeConfigSpec.BooleanValue MEMORY_OPEN_EVENTS;
     // v1.5.102：记忆剩余数值（调度/投影/超时/检索/衰减）
     public static final ForgeConfigSpec.IntValue MEMORY_SCAN_INTERVAL;
     public static final ForgeConfigSpec.IntValue MEMORY_PROJECTION_CHARS;
@@ -314,6 +320,19 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * （三段式：先反射模组自己的公开取值口 → 再查静态表 → 退回原版）。
      */
     public static final ForgeConfigSpec.BooleanValue COMBAT_WING_RENDER;
+    /**
+     * v1.3.0(beta)【鞘翅渲染·YSM 让位】（默认开）：装了「是，史蒂夫模型」（YSM）且该女仆用的是
+     * **YSM 模型**时，她滑翔期间**不再叠画我们那一对翅膀**——让位给 YSM 模型自己那一对。
+     *
+     * <p>为什么只有滑翔期间让位：YSM 里只有 {@code 21_saint} 那一件模型把「翅膀骨」的显隐
+     * 挂在 {@code ysm.has_elytra}（原版鞘翅判定）上、且是滑翔才张开；{@code 09_hailuo} 的
+     * {@code Elytra} 骨平时 {@code scale:0} 隐藏。二者都只在滑翔时露出来，所以站着/走路时我们画的
+     * 折叠翅膀**不会**和 YSM 打架——只有滑翔那一段会两对翅膀叠在一起。本项只在滑翔那一刻让位，
+     * 站着/走路照旧由我们画（YSM 模型此时没有翅膀），两头都不漏。
+     *
+     * <p>关闭 = 旧行为（滑翔时也照画，YSM 模型自身有翅膀时就是两对叠画）。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_WING_YSM_YIELD;
     /**
      * v1.2.0 实测五百三十四：激流三叉戟的**旋转突进**（默认开）。
      *
@@ -837,6 +856,14 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      *  举着看哪儿她就往哪儿飞（水平跟你的朝向、高低跟你的俯仰）——她一口气蹿上天之后
      *  玩家不再是"一点办法都没有"。详细口径见 {@code MaidFlightFollowBehavior.maidsmart$tetherHold}。 */
     public static final ForgeConfigSpec.BooleanValue COMBAT_TETHER_LEASH_STEER;
+
+    // ---- v1.3.0(beta)·原版生物骑乘（配置面板：移动与行为 → 骑乘指挥棒）----
+    /** 总开关（默认开）：关掉 = 骑乘指挥棒不再绑定/上鞍，坐骑也照原版自由行动 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_ENABLE;
+    /** 跟随停下距离（格，默认 5.0）：骑在坐骑上跟主人走时，离主人这么近就不再往前 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_FOLLOW_DIST;
+    /** 速度总倍率（默认 1.0）：乘在"载具速度与女仆速度取最大"之上 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_SPEED_SCALE;
 
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
@@ -1511,6 +1538,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.memory.coreFold").define("coreFold", true);
         MEMORY_WORKING_NOTE = BUILDER.comment("工作笔记（跨对话任务状态注入）")
                 .translation("config.promaid.memory.workingNote").define("workingNote", true);
+        // v1.3.0(beta)：未完成的事——移植自 Sphantosis 的事件「终止:0」标记
+        MEMORY_OPEN_EVENTS = BUILDER.comment("未完成的事（默认开，移植自 Sphantosis）：提取时给「主人说要去做某事 / 在等一个结果 / 计划还没落地」这类事件打上 open:1 标记，注入对话时渲染成「她记挂着的事」那一段——女仆才能主动接上「上次那件事怎么样了」，而不是干等主人自己再提。只取最近 2 条，宁缺毋滥（提取时拿不准一律不标）。关掉 = 提取仍照常，只是不再单独注入这一段")
+                .translation("config.promaid.memory.openEvents").define("openEvents", true);
         MEMORY_SCAN_INTERVAL = BUILDER.comment("记忆调度扫描间隔（秒）")
                 .translation("config.promaid.memory.scanInterval")
                 .defineInRange("scanInterval", 20, 5, 120);
@@ -2019,6 +2049,9 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // v1.3.0(beta) 实测七百一十一 + 七百一十三【鞘翅渲染】：所有模式都画 + 用那件鞘翅自己的外观。
         COMBAT_WING_RENDER = BUILDER.comment("鞘翅外观（默认开）：玩家原话「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」后又追加「我希望这种渲染是一种通解通法，而不是一些专门的适配。尽可能规避去专门适配的情况。」开启后两件事一起做——\n\n【① 所有模式下渲染】女仆只要胸甲槽穿着能滑翔的装备（原版鞘翅，或任何自称 canElytraFly 的模组滑翔装备，含鞘翅胸甲这类“滑翔护甲”）就画那一对翅膀：站着挖矿 / 走路 / 跟随 / 空闲时背上都有一对**折叠**的翅膀，飞起来（滑翔）才张开——与原版玩家「穿着鞘翅背上就有翅膀」完全同款（旧版只在飞行任务或正在滑翔时才画）。\n\n【② 用那件鞘翅自己的外观·三段式解析】① 先反射模组**已经公开**的取值口——只要这件物品有 getType() 且其返回对象有返回 ResourceLocation 的 getTexture()（伊卡洛斯之翼就是这样：getType().getTexture()/getTextureReversed()），或物品自身公开了 getElytraTexture(...)，就直接采信，**不写死任何类名**（该模组日后新增翅膀物品零改动即可画对）；② 问不到再查 MaidWingSkins 的静态表（只收“贴图藏在私有图层里、没有公开取值口”的模组：神秘遗物系）；③ 仍认不出退回原版 textures/entity/elytra.png——不会画错，只是外观是原版的。\n\n【为什么不能“完全不认识任何模组也画对”】Forge/NeoForge 的 IClientItemExtensions 里根本没有“告诉我你的鞘翅贴图”这个钩子（javap 实证，1.20.1 与 1.21.1 都没有），没有共享 API 就没有万能解。三段式是能达到的最通用形态：已支持模组零适配，新模组要么恰好符合第 ① 档的鸭子类型、要么加一条解析规则。\n\n【与「自推鞘翅」是两件事】能不能自己飞由「自推鞘翅·资格物品表」管；长什么样由本项这套解析器管——一件普通鞘翅（羽毛系）也能有自己的外观，只是它不会自推。\n\n关闭 = 旧行为（只在飞行任务/滑翔时画、且一律原版贴图）")
                 .translation("config.promaid.combat.wingRender").define("wingRender", true);
+        // v1.3.0(beta)【鞘翅渲染·YSM 让位】：装了 YSM 且女仆用 YSM 模型时，滑翔期间不叠画我们的翅膀。
+        COMBAT_WING_YSM_YIELD = BUILDER.comment("鞘翅外观·YSM 让位（默认开）：装了「是，史蒂夫模型」（YSM）且这只女仆用的是 **YSM 模型**时，她**滑翔期间**不再叠画我们那一对翅膀，让位给 YSM 模型自己那一对。\n\n【为什么只让滑翔这一档】YSM 内置模型里只有两件的翅膀与鞘翅有关：`21_saint` 把翅膀骨的显隐挂在 `ysm.has_elytra`（只认原版鞘翅）上、滑翔才张开；`09_hailuo` 的 `Elytra` 骨平时 `scale:0` 藏起来。也就是说**站着/走路时 YSM 模型背上没有翅膀**——那一档照旧由我们画（否则 YSM 模型下站着就没翅膀了），只有滑翔那一段两边都有、会叠在一起。本项就在那一刻让位。\n\n【对原版鞘翅才需要】YSM 只认 `minecraft:elytra`（`Items.f_42741_`，字节码实证），我们支持的模组滑翔装备（伊卡洛斯之翼 / 神秘遗物+ / 自带外观的鞘翅胸甲）YSM 一律不认——那些滑翔时照旧由我们画，本项不介入。\n\n【关了会怎样】滑翔时我们和 YSM 各画一对，若该 YSM 模型自身有翅膀就是两对重叠（`21_saint` / `09_hailuo` 这类）。关闭 = 旧行为")
+                .translation("config.promaid.combat.wingYsmYield").define("wingYsmYield", true);
         // v1.2.0 实测五百三十四：激流三叉戟的旋转突进（用户点名"把玩家的代码套到女仆身上"）
         // v1.2.0 实测五百三十八：从"偶尔多打一下"改成"她的攻击就是旋转冲击"——
         // 触发距离 5 → 10 格（原来 III 级 3 格/tick 只要 2 tick 就撞上，旋转根本看不见）、
@@ -2270,6 +2303,21 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.tether.broomExtra").defineInRange("broomExtra", 0.3, 0.0, 2.0);
         COMBAT_TETHER_PULL = BUILDER.comment("【实测六百七十七】拉扯：绳子绷紧时像原版拴绳一样把女仆拽过来（默认开）。\n\n需求原文：\"我要的拉扯感是可以拉着女仆走，像原版拴绳一样。\"\n\n【照搬的是原版拴绳自己那套分档】原版的拴绳力学只有三档（1.21.1 Leashable.tickLeash / 1.20.1 PathfinderMob.customServerAiStep，两版字面量一模一样）：距离 > 10 格**直接撒手掉拴绳**、> 6 格朝持有者来一记冲量、2~6 格**走到离持有者 2 格处**。我们的绳子\"不会断\"，所以第一档改成\"继续拉\"（走远了她自己的牵引绳会把连人带扫帚传回来）；生效的是后两档：> 6 格照抄原版那一记 0.4·方向² 的冲量，2~6 格用\"朝主人的速度上限\"（= 原版 followLeashSpeed 的口径：走到离你 2 格为止）代替原版的寻路——原版那里每 tick 会重新算一条 A* 路径，女仆一多就是服务器灾难，我们只补速度、不碰导航。\n\n【生效范围】只有**牵绳档**（她还没起飞、你牵着她在走，玩家原话\"原版的拴绳逻辑是玩家牵着女仆走\"）——那一档你**不是**她的乘客、能自由走动，绳子才受得上力。悬挂档（你已经吊在她身下）由原版骑乘定位刚性控制，不参与拉扯。\n\n【怎么关】关掉 = 绳子只画不使劲（她自己的跟随链路照旧工作，只是没有那记额外的拉力）。")
                 .translation("config.promaid.tether.pull").define("pull", true);
+        BUILDER.pop();
+
+        // ---- v1.3.0(beta)「原版生物骑乘」：骑乘指挥棒（配置面板：移动与行为 → 骑乘指挥棒）----
+        // 玩家原话：「先做原版生物乘坐坐骑吧。直接套僵尸的骑乘代码，速度上是坐骑的最大速度与女仆的
+        // 最大速度之间取最大值。……引入一个新物品，骑乘指挥棒，可以将可骑乘坐骑与女仆绑定起来，
+        // 被绑定以后会出现光标。（类似于前段时间的武装拴绳）不管是先绑女仆还是先绑可骑乘坐骑都
+        // 没问题。绑定之后，女仆就会坐到那个坐骑上。」
+        BUILDER.comment("骑乘指挥棒·原版生物骑乘（配置面板：移动与行为 → 骑乘指挥棒）")
+                .translation("config.promaid.ride").push("ride");
+        COMBAT_RIDE_ENABLE = BUILDER.comment("原版生物骑乘总开关（默认开）：手持**骑乘指挥棒**右击一只**已上鞍**的坐骑绑定、再右击自己的女仆（或反过来，顺序随意）→ 她坐上去，此后**跟着主人走**（走到离你 5 格就停）。再右击一次（潜行+右击坐骑）就下来。\n\n【套的就是原版僵尸骑鸡那套】上鞍走 {@code startRiding(force)}（跳过原版 two 道门），驱动走**坐骑自己的寻路**——原版 {@code LivingEntity.aiStep} 只在「第一乘客是玩家」时才走 travelRidden，而马/猪/炽足兽/骆驼的 {@code getControllingPassenger()} 也**只认玩家**（字节码实证），所以女仆当乘客时它们走的是**普通 travel**、导航照常推着它走。我们只把目的地（主人的位置）喂进它自己的 {@code PathNavigation}，上下坡/绕障/跳跃/原版动画全部由它自己处理——这就是「降级偷懒」。\n\n【可骑乘 = 能力探测，不写死 id】原版马/驴/骡/骷髅马/僵尸马、猪、炽足兽、骆驼都实现 {@code Saddleable}（javap 全量扫描实证），且都要**已上鞍**；模组生物只要也实现这个接口、已上鞍，零适配即可骑。\n\n【速度】玩家原话「坐骑的最大速度与女仆的最大速度之间取最大值」——换算成喂给坐骑寻路的倍率（{@code max(坐骑,女仆) / 坐骑}，因为寻路的 speed 参数是倍率、会乘上坐骑自己的移动速度属性）。\n\n【她骑着的时候照常战斗】TLM 在她是乘客时自动把大脑切到 RIDE_*（判据是 {@code isPassenger()}），女仆自己那条链路不受影响。关闭 = 指挥棒不再绑定，坐骑照原版自由行动")
+                .translation("config.promaid.ride.enable").define("enable", true);
+        COMBAT_RIDE_FOLLOW_DIST = BUILDER.comment("跟随停下距离（格，默认 5.0，1.0~16.0）：骑着坐骑跟主人走时，离主人**水平距离**在这个数以内就不再给它下移动目标——不然它会顶着主人来回蹭（坐骑转身半径大，贴太近会绕着主人打转）。调到 2~3 = 几乎贴着走；调到 8 以上 = 远远跟着（适合大坐骑）")
+                .translation("config.promaid.ride.followDist").defineInRange("followDist", 5.0, 1.0, 16.0);
+        COMBAT_RIDE_SPEED_SCALE = BUILDER.comment("速度总倍率（默认 1.0，0.2~3.0）：乘在「坐骑速度与女仆速度取最大」之上。1.0 = 严格按原话取最大值；嫌慢（比如骑驴/猪跟着跑跟不上）可以调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。它不会突破载具自己的寻路安全上限，只是把目标速度按比例缩放")
+                .translation("config.promaid.ride.speedScale").defineInRange("speedScale", 1.0, 0.2, 3.0);
         BUILDER.pop();
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----

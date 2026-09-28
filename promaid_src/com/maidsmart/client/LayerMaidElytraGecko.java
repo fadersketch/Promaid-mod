@@ -129,6 +129,28 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
     /** 锚定失败只报一次，避免刷日志（也便于实测时确认是否真的没找到骨骼） */
     private static final AtomicBoolean ANCHOR_WARNED = new AtomicBoolean(false);
 
+    /** 【本轮新增·YSM 让位】"因为让位而跳过"只报一次，免得滑翔期间每帧一行 */
+    private static final AtomicBoolean YSM_YIELD_LOGGED = new AtomicBoolean(false);
+
+    /**
+     * 本轮新增·YSM 让位：开关 + 只报一次日志。开关读取失败按「开」（与其它配置项同款兜底）。
+     */
+    private static boolean ysmYield() {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_WING_YSM_YIELD.get()) {
+                return false;
+            }
+        } catch (Throwable ignored) {
+            // 配置还没装载（极少）时按默认处理
+        }
+        if (YSM_YIELD_LOGGED.compareAndSet(false, true)) {
+            com.maidsmart.tool.PromaidLog.log("鞘翅渲染",
+                    "当前是 YSM 模型渲染器且她正在滑翔 → 鞘翅图层让位给 YSM 模型自身的翅膀"
+                            + "（站着/走路时仍由本模组绘制；可在配置里关掉「鞘翅外观·YSM 让位」）");
+        }
+        return true;
+    }
+
     private record Anchor(String bone, float dy, float dz) {
     }
 
@@ -179,6 +201,16 @@ public class LayerMaidElytraGecko extends GeoLayerRenderer<Mob, IGeoEntityRender
         // （玩家实测已确认），翅膀自然也能用同一套坐标落在同一个地方。
         boolean geckoRenderer = getRenderer() instanceof GeckoEntityMaidRenderer;
         if (!(mob instanceof EntityMaid maid)) {
+            return;
+        }
+        // 【本轮新增·YSM 让位】非 Gecko 渲染器 = TLM 把这只女仆交给了 YSM 的渲染器
+        // （`EntityMaidRenderer.initYsmModelRenderer` 那条路；TLM 在 YSM 模型下走
+        // ysmMaidRenderer.geoRender 并 return，**不会**执行 Bedrock 那条链）。这一档只在
+        // **滑翔**时让位：YSM 内置模型里只有 `21_saint`（翅膀骨显隐挂 `ysm.has_elytra`）与
+        // `09_hailuo`（`Elytra` 骨平时 scale:0）会在滑翔时露出自己的翅膀，站着/走路时它们背上
+        // 没有翅膀——那一档照旧由我们画（不然 YSM 模型下站着就没翅膀了）。开关见
+        // COMBAT_WING_YSM_YIELD；关闭 = 旧行为（滑翔时也照画，两对叠在一起）。
+        if (!geckoRenderer && MaidFlightKit.isGliding(maid) && ysmYield()) {
             return;
         }
         if (maid.m_20145_() || (!MaidWingSkins.enabled() && !MaidFlightKit.isFlightVisual(maid))) {
