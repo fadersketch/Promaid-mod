@@ -1,4 +1,182 @@
-﻿## 实测七百一十三【鞘翅外观做成"通解通法"：三段式解析 + 删掉"护甲型滑翔装备不画"这条例外】
+﻿## 实测七百一十五【记忆优化·第一档：移植 Sphantosis 的事件元数据（未完成事件 + 注意力等级）】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+「关于女仆大语言模型方面的功能已经是很老版本之前做的了，并且除了调用也没有做过相关的优化
+（比如主动会话、记忆填写等方面都是很老的代码了）。你帮忙优化一下。」并给了 Sphantosis 的两个
+分支链接，说「我了解到的一个非常强大的 AI 情感对话强化项目，包含了相当多的方面，你看看能不能
+对我们这边的记忆内容进行一个改写。」
+
+### 二、先说清现状（避免重复劳动）
+
+**上一批（实测七百一十三 之后）已经把 Sphantosis 的大部分主干移植进来了**——多级记忆索引
+（日/3日/周/月）+ 归档器 + 五路 RRF 检索 + 记忆日记注入 + PAD 情绪层 + 七阶段主动对话，
+代码里都标着「移植自 Sphantosis」。本次重新对着**远程分支**核了一遍（`main` 与
+`experimental/advanced-features-experiment`，后者比前者新 83 个提交），确认还差的是
+**事件级元数据**这一层——也就是 Sphantosis `event_extractor.txt` 里那套
+「情感八维向量 / 注意力等级 A-D / 冲击性因子 / 终止标志」。本次先取其中最有用、最省 token 的
+两条落地，其余留待后续批次。
+
+### 三、本次落地的两条（都来自 Sphantosis 的事件元数据）
+
+#### 3.1 未完成事件（Sphantosis 的「终止:0」）
+
+- **提取侧**：`EVENT` 行的格式从 `salience|content` 扩成 `salience|attention|open|content`——
+  `open=1` 表示「明显还没完」（主人说要去做某事 / 在等一个结果 / 计划尚未落地 / 悬念未揭开），
+  拿不准一律 0（宁缺毋滥，与 Sphantosis「无法确定优先标 0」同口径）。
+- **注入侧**：带 `open:1` 的事件会被单独拎出来，渲染成对话上下文里的
+  \u00a7e「她记挂着的事」\u00a7r 那一段（只取最近 2 条）。效果：**她能在下次见面时主动接上
+  「上次那件事怎么样了」**，而不是干等你再提。开关 `memory.openEvents`（默认开）。
+- **兼容**：解析器**两种格式都认**——老模型/老配置仍回两段式时按「attention=C、open=0」处理，
+  绝不因为模型没听话就丢掉整条事件。
+
+#### 3.2 注意力等级（Sphantosis 的「注意力等级 A/B/C/D」）
+
+- `attention` 字段随事件一起入库（段落 tags 加 `attention:X`），供后续批次在检索/画像里
+  按「主人当时投入了多少注意力」加权。本次先**只入库、不改变现有检索排序**
+  （零回归风险）——排序加权留到后续与「事件图谱因果边」一起做。
+
+### 四、改动清单（两树镜像）
+
+| 文件 | 改了什么 |
+|---|---|
+| `memory/AiMemoryExtractor.java` | 提取 prompt 的 EVENT 行扩成四段式（含 attention/open 的说明）；`writeEvent` 容错解析（四段/两段都认）+ 打 `attention:X` / `open:1` 标记 |
+| `memory/AiMemoryContext.java` | 新增「她记挂着的事」段（带 `open:1` 的最近 2 条） |
+| `config/MaidSmartConfig.java` | 新开关 `MEMORY_OPEN_EVENTS`（`memory.openEvents`，默认开） |
+| `assets/.../lang/{zh_cn,en_us}.json` | 新开关的中英文案 |
+
+### 五、本批**没做**的（说清楚边界）
+
+- **情感八维向量 / 冲击性因子**：我们的情绪层走的是 PAD（valence/arousal/dominance，实测
+  七百一十三 已有的 `AffectManager`），与 Sphantosis 的八维离散情感是两套体系；
+  合并需要一次「两套情绪模型怎么并」的设计决策，不塞进本批。
+- **事件图谱的因果边 + belong 树形结构**：Sphantosis 的事件是**图**（节点=事件、边=因果/belong），
+  我们的事件是**扁平段落**。改成图是一次结构性重写（要动存储、检索、注入三处），
+  风险与工作量都远超本批，需要单独一批做。
+- **DSU 实体消解 / 向量检索 / mood EMA**：同属结构级改动，继续留待后续。
+
+### 六、验证
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=177 SKIP=10 UNRES=0 FAIL=0**
+  （本批不动 mixin）。
+- 打包门禁全过（`verify_jar_classes.py` + mixin 包登记 + lang json）：forge 609 / neo 611 个 class，
+  `MISSING: none`。
+- 只读核对脚本 `_vt715.py`：确认「四段式 EVENT prompt 在场、两段兼容分支在场、
+  `open:1` / `attention:` 标记在场、`她记挂着的事` 段在场、开关默认开、两树镜像」。
+
+## 实测七百一十四【两件：① 鞘翅外观给 YSM 让位（加开关）② 原版生物骑乘——骑乘指挥棒】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+1. 「那我们先从最简单的事情来。ysm 方面就按照你的步骤来进行落实。加个开关就行。」
+2. 「先做原版生物乘坐坐骑吧。直接套僵尸的骑乘代码，速度上是坐骑的最大速度与女仆的最大速度之间
+   取最大值。乘上坐骑的女仆作为骑乘状态，我们也不做额外的豁免，同时加一个 shift 加右击可以把
+   女仆从坐骑上弄下来（跟坐在扫帚上一样）。关键就在于骑乘状态下，女仆的移动 AI 该怎么搞，
+   我觉得大概就是套我们这边已有的移动链路。引入一个新物品，骑乘指挥棒，可以将可骑乘坐骑与
+   女仆绑定起来，被绑定以后会出现光标。（类似于前段时间的武装拴绳）不管是先绑女仆还是先绑
+   可骑乘坐骑都没问题。绑定之后，女仆就会坐到那个坐骑上。」
+
+### 二、① 鞘翅外观·YSM 让位（新开关，默认开）
+
+**先说清事实（javap / 反编译实证，不是推测）**：
+
+- YSM 自己那一层鞘翅图层（`textures/entity/elytra` 那一支）把实体强转成 `Player`
+  （`Player player = (Player) ...OO00OOOOo0Ooo0oo0o0Oo0OO();`），而且**只挂在 YSM 的玩家渲染器上**
+  ——它根本不理会女仆。所以「YSM 的鞘翅图层和我们的图层打架」这件事**不存在**。
+- 真正会重叠的只有一件事：**YSM 模型自己在背上烘了一对翅膀**，而它也认原版鞘翅
+  （`has_elytra` = `EquipmentUtil.getEquippedElytraItem(...)` 非空；`getEquippedElytra` 只认
+  `Items.f_42741_` = `minecraft:elytra`，外加 `elytraslot` 那个模组）。实测扫过 YSM 内置 27 件模型：
+  - `21_saint`：`wings` 骨的 scale 挂着 `ysm.has_elytra + v.roaming.Wings == 1`（滑翔时张开）；
+  - `09_hailuo`：`Elytra` 骨平时 `scale: 0` 藏着，滑翔时露出来；
+  - 其余 25 件**没有**烘翅膀（`18_wedding` 那对 `Wing/Wing2` 是婚礼装饰、与鞘翅无关）。
+
+**做法（就是"加个开关"）**：装了 YSM、且这只女仆走的是 YSM 模型渲染器、且她**正在滑翔**时，
+我们那一层**让位**（不画）。因为上面两件模型的翅膀**都只在滑翔时露出来**——站着/走路时 YSM
+模型背上没有翅膀，那一档照旧由我们画（不然 YSM 模型下站着就没翅膀了），只有滑翔那一段会两对
+叠在一起。
+
+- 新开关 `鞘翅外观·YSM 让位`（`combat.wingYsmYield`，默认开）；关闭 = 旧行为（滑翔时两对叠画）。
+- **只对原版鞘翅有意义**：我们支持的模组滑翔装备（伊卡洛斯之翼 / 神秘遗物+ / 自带外观的鞘翅胸甲）
+  YSM 一律不认（它只认 `minecraft:elytra`）——那些滑翔时照旧由我们画，本开关不介入。
+- 两树各只改一个文件的一处 + 一个开关 + 一行日志（搜「鞘翅渲染」能看到是哪一档）。
+
+### 三、② 原版生物骑乘（骑乘指挥棒）
+
+#### 3.1 先钉死三条关键字节码事实（整条链路都建在这上面）
+
+1. **载具只在"玩家骑"时才走玩家驾驶那条路**：`LivingEntity.aiStep` 里是
+   `getControllingPassenger() instanceof Player ? travelRidden(player, ...) : travel(...)`
+   ——**二选一**。而 `AbstractHorse` / `Pig` / `Strider` 的 `getControllingPassenger()` 字节码
+   都要求「**第一乘客 `instanceof Player`**」（猪/炽足兽还额外要胡萝卜钓竿/诡异菌钓竿），
+   否则一路 `super` 回 `Entity` **恒返回 `null`**。
+   ⇒ **女仆当乘客时它返回 null**：载具走的是**普通 `travel()`**，它自己的 `PathNavigation`
+   照常把它推着走。**这就是"降级偷懒"的落点**——我们只要把目的地喂给它自己的导航即可。
+2. **它自己的随机闲逛会跟我们抢方向**：`RandomStrollGoal.canUse()` 第一句是
+   `if (mob.hasControllingPassenger()) return false;`（两版逐字相同）——原版靠它保证"玩家骑着马
+   马不自己溜达"。而按第 1 条，女仆当乘客时 `hasControllingPassenger()` 是 **false**，
+   所以载具自己的 `WaterAvoidingRandomStrollGoal` 仍会跑。
+3. **上鞍要 force**：`Entity.startRiding(target, true)` 的第二参为真时直接跳过
+   `canRide` / `canAddPassenger` 两道门（javap 实证 `iload_2 ifne` 跳过）。
+
+#### 3.2 落地方案（逐条对着玩家那几句话）
+
+- **上鞍 = 套僵尸骑鸡**：`maid.startRiding(mount, true)`（原版 `Zombie.finalizeSpawn` 里就是
+  `startRiding(chicken)` 这一记）。她成为乘客后 TLM **自己**把大脑切到 `RIDE_IDLE`/`RIDE_WORK`/
+  `RIDE_REST`（`MaidUpdateActivityFromSchedule` 判据是 `isMaidInSittingPose() || isPassenger()`），
+  我们一行都不碰。
+- **速度取最大值**：`max(坐骑 MOVEMENT_SPEED, 女仆 MOVEMENT_SPEED) × 倍率`，再换算成喂导航的
+  **倍率**（`MoveControl` 内部是 `speedModifier × 自己的 MOVEMENT_SPEED`，javap 实证），
+  即 `目标 / 坐骑速度`，夹在 0.3~4.0。玩家原话"取最大值"照办，另给一个
+  `骑乘·速度总倍率`（默认 1.0）供手感微调。
+- **移动 AI = 套已有链路**：每 2 tick 读**她脑里的 `WALK_TARGET`**（跟随/走位/任务写的都是这里），
+  把那个点转达给**坐骑自己的 `PathNavigation.moveTo`**；读不到就退回"跟主人走"（超过
+  5 格才喂主人的位置）。上下坡/绕障/跳跃/原版动画全归坐骑自己的寻路。**目的地的计算完全复用
+  现有系统**，我们只把"她走"换成"坐骑走"。
+  - 唯一动原版的一处：`RandomStrollGoalRiddenMixin` 把上面第 2 条补上——判据 =
+    `MaidRideKit.isDriven(mount)`（乘客里有**本模组有主**的、且不是扫帚模式的**女仆**）。
+    不满足就是一个字节不动（原版玩家的马、别人的坐骑、无主女仆骑的生物全部照旧）。
+- **不做额外豁免**：她的战斗/自保/落地水/险境脱困**一条都没改**（按原话）。
+- **shift + 右击下坐骑**（"跟坐在扫帚上一样"）：潜行时右击**女仆或坐骑**都行 → 解除 + `stopRiding()`，
+  她自己走回你身边。此外"绑定态再右击一次"也是解除（与武装拴绳同款手感）。
+- **新物品 = 骑乘指挥棒**（`maid_smart:ride_baton`，合成：拴绳 + 木棍）：
+  - 右击一只**已上鞍**的坐骑 → 选中它；右击自己的女仆 → 选中她；两边都有 → **当场配对**。
+  - **顺序随意**（先女仆后坐骑、先坐骑后女仆都对）——这也是原话点名的要求。
+  - **"会出现光标"**：选中的一方（以及配对后的女仆 + 坐骑双方）打**原版发光描边**，
+    描边颜色沿用武装拴绳那套客户端 `MaidGlowGoldMixin`（**金色**）。
+  - 物品**不带状态**（"已选中谁"记在服务端按玩家的瞬时表里），同一根棍子反复用。
+
+### 四、改动清单（两树镜像）
+
+| 文件 | 改了什么 |
+|---|---|
+| `client/LayerMaidElytraGecko.java` | 非 Gecko 渲染器（= YSM 那条路）**且正在滑翔**时让位；新增 `ysmYield()`（只报一次日志） |
+| `config/MaidSmartConfig.java` | `COMBAT_WING_YSM_YIELD` + 骑乘三键（`enable` / `followDist` / `speedScale`） |
+| `config/PromaidConfigScreen.java` | 鞘翅行后新增「鞘翅外观·YSM 让位」；新板块 **`RIDE`「骑乘指挥棒」**（移动与行为，紧跟武装拴绳） |
+| `combat/MaidRideKit.java`（新） | 能力探测（`Saddleable && isSaddled`）、速度换算、骑乘关系/驱动小工具 |
+| `combat/RideBatonItem.java`（新） | 物品本体（悬停说明） |
+| `combat/RideBindManager.java`（新） | 选中/配对/解除、每 2 tick 驱动与自愈、金色标记、持久化恢复 |
+| `mixin/RandomStrollGoalRiddenMixin.java`（新） | 「本模组女仆在骑 → 坐骑别自己闲逛」 |
+| `ProMaidMod.java` / `CreativeTabHandler.java` / `ProMaidExtension.java` / `mixins.promaid.json` | 注册物品 / 创造栏 / tick 挂载 / mixin 登记 |
+| `assets` + `data`（各 4 件） | 模型 json、16×16 贴图（新画）、合成配方（shapeless：lead + stick）、中英 lang |
+
+### 五、验证
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=177 SKIP=10 UNRES=0 FAIL=0**
+  （本批新增 2 个注入点，都由目标类自己声明）。
+- 打包门禁全过（`verify_jar_classes.py` + mixin 包登记 82 个类 + lang json）：
+  forge 609 个 class / neo 611 个 class，`MISSING: none`。
+- jar 内容核对：新类、新 mixin、模型/贴图/配方、两语言新键、mixin 登记 **全部在包里**。
+- 部署三处（两个客户端 `versions` 的 `mods` + 服务端 `pack1201`）并逐处核对尺寸：**match=True**。
+- 只读核对脚本 `_vt714.py`：确认「YSM 让位门在、开关默认开、两树镜像、骑乘三键在场、
+  速度取最大值算式在、闲逛抑制判据在、旧行为未被打断」。
+
+## 实测七百一十三【鞘翅外观做成"通解通法"：三段式解析 + 删掉"护甲型滑翔装备不画"这条例外】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

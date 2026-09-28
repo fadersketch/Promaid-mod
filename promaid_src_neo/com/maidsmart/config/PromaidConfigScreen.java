@@ -411,6 +411,8 @@ public class PromaidConfigScreen extends Screen {
         // 哪个功能在哪配置。"——六百六十七 时它只能寄居在「扫帚模式」那一页的末尾（要点进扫帚、
         // 再往下滚才看得到），现在与扫帚平级、紧跟在它后面，页内第一条就是"这个功能是什么"的详解。
         TETHER("武装拴绳（二号位）", Group.MOVE),
+        // v1.3.0(beta)：骑乘指挥棒（原版生物骑乘）——与"飞行三件套"同族，紧跟武装拴绳
+        RIDE("骑乘指挥棒", Group.MOVE),
         // v1.3.0(beta) 实测七百〇三：接敌机动——**两条链路共有**的一件事（扫帚接敌 + 鞘翅空袭），
         // 所以单独成板而不是塞进任一边（塞进去另一边的人会找不到）。挂在「战斗与自保」下、
         // 紧跟在「空袭数值」之后（顺序 = 本枚举声明顺序）。
@@ -722,6 +724,7 @@ public class PromaidConfigScreen extends Screen {
             case FLIGHT_FOLLOW -> this.flightFollowRows();
             case BROOM -> this.broomRows();
             case TETHER -> this.tetherRows();
+            case RIDE -> this.rideRows();
             case REVIVE -> this.reviveRows();
             case ESCAPE -> this.escapeRows();
             case SAFETY -> this.safetyRows();
@@ -2313,6 +2316,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 v -> MaidSmartConfig.MEMORY_CORE_FOLD.set(v), "摘要折叠（核心记忆常驻+扩展按需）"));
         this.rows.add(new BoolRow("工作笔记注入", MaidSmartConfig.MEMORY_WORKING_NOTE.get(),
                 v -> MaidSmartConfig.MEMORY_WORKING_NOTE.set(v), "工作笔记注入：女仆干活时的任务状态（在挖什么/缺什么料）以笔记形式跨对话注入，续上话题"));
+        // v1.3.0(beta) 实测七百一十五：未完成的事（移植自 Sphantosis 的事件「终止:0」标记）
+        this.rows.add(new BoolRow("未完成的事注入（移植自 Sphantosis）", MaidSmartConfig.MEMORY_OPEN_EVENTS.get(),
+                v -> MaidSmartConfig.MEMORY_OPEN_EVENTS.set(v),
+                "未完成的事注入（默认开，移植自 Sphantosis）：提取记忆时给「主人说要去做某事 / 在等一个结果 / 计划还没落地」"
+                        + "这类事件打上 open=1 标记，注入对话时单独渲染成**「她记挂着的事」**那一段（只取最近 2 条）——"
+                        + "女仆因此能在下次见面时主动接上「上次那件事怎么样了」，而不是干等你再提。"
+                        + "提取时拿不准一律不标（宁缺毋滥）。关掉 = 提取照常，只是不再单独注入这一段"));
         // v1.5.190：新记忆开关（防抖写盘）
         this.rows.add(new BoolRow("防抖写盘", MaidSmartConfig.MEMORY_LAZY_SAVE.get(),
                 v -> MaidSmartConfig.MEMORY_LAZY_SAVE.set(v), "记忆防抖写盘（内存累积后按扫描间隔批量落盘——减少磁盘 IO，多女仆时防止服务端卡顿；关闭=每次写入立即落盘，可靠性优先）"));
@@ -2950,6 +2960,10 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 MaidSmartConfig.COMBAT_WING_RENDER.get(),
                 v -> MaidSmartConfig.COMBAT_WING_RENDER.set(v),
                 "鞘翅外观（默认开）：① 所有模式下渲染——女仆只要胸甲槽穿着鞘翅（含能滑翔的模组鞘翅）就画那一对翅膀：站着/走路/跟随/空闲时是折叠态，飞起来（滑翔）才张开，与原版玩家「穿着鞘翅背上就有翅膀」同款（旧版只在飞行任务或正在滑翔时才画）。② 用那件鞘翅自己的外观——按物品 id 收录了伊卡洛斯之翼（羽毛系/纸翼/魔法翼/贤者之石翼 + 空域系 6 件，滑翔时另有反向贴图）与神秘遗物+（壮丽鞘翅/混沌之傲）的贴图；认不出型号的退回原版鞘翅贴图（不会画错，只是外观还是原版的）。与「自推鞘翅」是两件事：能不能自己飞由资格物品表管，长什么样由本项这张贴图表管。关闭 = 旧行为（只在飞行/滑翔时画、且一律原版贴图）"));
+        this.rows.add(new BoolRow("鞘翅外观·YSM 让位",
+                MaidSmartConfig.COMBAT_WING_YSM_YIELD.get(),
+                v -> MaidSmartConfig.COMBAT_WING_YSM_YIELD.set(v),
+                "鞘翅外观·YSM 让位（默认开）：装了「是，史蒂夫模型」（YSM）且这只女仆用的是 YSM 模型时，她**滑翔期间**不再叠画我们那一对翅膀，让位给 YSM 模型自己那一对。**为什么只让滑翔这一档**：YSM 内置模型里只有两件的翅膀与鞘翅有关（21_saint 的翅膀骨显隐挂在 ysm.has_elytra 上、09_hailuo 的 Elytra 骨平时 scale:0 藏着），二者都只在滑翔时露出来——站着/走路时 YSM 模型背上没有翅膀，那一档照旧由我们画（不然 YSM 模型下站着就没翅膀了），只有滑翔那一段两边都有、会叠在一起。**对原版鞘翅才需要**：YSM 只认 minecraft:elytra（字节码实证），我们支持的模组滑翔装备（伊卡洛斯之翼 / 神秘遗物+ / 自带外观的鞘翅胸甲）YSM 一律不认，那些滑翔时照旧由我们画。关闭 = 旧行为（滑翔时两对翅膀叠画）"));
         this.rows.add(new BoolRow("激流三叉戟旋转冲击",
                 MaidSmartConfig.RIPTIDE_DASH_ENABLE.get(),
                 v -> MaidSmartConfig.RIPTIDE_DASH_ENABLE.set(v),
@@ -3316,6 +3330,36 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "我们只补速度、不碰导航）；原版 > 10 格会撒手掉拴绳，我们的绳子**不会断**，照旧拉。"
                         + "只在**牵绳档**（她还没起飞、你牵着她在走）生效——悬挂档你吊在她身下、由骑乘定位"
                         + "刚性控制，绳子不受力。关掉 = 绳子只画不使劲（她自己的跟随链路照旧）。"));
+    }
+
+    /**
+     * v1.3.0(beta)【骑乘指挥棒·原版生物骑乘】参数页（1.21.1 版，与 1.20.1 同款）。
+     */
+    private void rideRows() {
+        this.rows.add(new SectionRow("骑乘指挥棒（原版生物骑乘）", false));
+        this.rows.add(new InfoRow("这是什么",
+                "让女仆骑上原版坐骑跟着你走",
+                "手持**骑乘指挥棒**右击一只**已上鞍**的坐骑（马/驴/骡/骷髅马/僵尸马/猪/炽足兽/骆驼…），"
+                        + "再右击自己的女仆即可配对（顺序随意：先选女仆再选坐骑也行）。被选中的会亮起**金色描边**。"
+                        + "绑定后她坐上去、跟着你走；**潜行+右击**（女仆或坐骑都行）即可让她下来。"
+                        + "合成：拴绳 + 木棍。日志搜「骑乘指挥棒」"));
+        this.rows.add(new BoolRow("骑乘指挥棒·总开关", MaidSmartConfig.COMBAT_RIDE_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_ENABLE.set(v),
+                "**默认开**。套用原版僵尸骑鸡那套机械：上鞍走 startRiding(force)，驱动走**坐骑自己的寻路**"
+                        + "（原版只在「第一乘客是玩家」时才让玩家驾驶，女仆当乘客时坐骑走普通 travel、导航照常推它走"
+                        + "——我们只把目的地喂进它自己的 PathNavigation，上下坡/绕障/跳跃/原版动画全归它）。"
+                        + "可骑乘 = **能力探测**（已上鞍的 Saddleable，不写死实体 id），所以以后装模组坐骑零适配。"
+                        + "关掉 = 指挥棒不再绑定，坐骑照原版自由行动"));
+        this.rows.add(new NumRow("骑乘·跟随停下距离（格）", String.valueOf(MaidSmartConfig.COMBAT_RIDE_FOLLOW_DIST.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_RIDE_FOLLOW_DIST, "骑乘·跟随停下距离", 1.0, 16.0),
+                "默认 5.0。骑着坐骑跟主人走时，离主人**水平距离**在这个数以内就不再给它下移动目标——"
+                        + "不然它会顶着主人来回蹭（坐骑转身半径大，贴太近会绕着主人打转）。"
+                        + "2~3 = 几乎贴着走；8 以上 = 远远跟着（适合大坐骑）"));
+        this.rows.add(new NumRow("骑乘·速度总倍率", String.valueOf(MaidSmartConfig.COMBAT_RIDE_SPEED_SCALE.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_RIDE_SPEED_SCALE, "骑乘·速度总倍率", 0.2, 3.0),
+                "默认 1.0，范围 0.2~3.0。乘在「坐骑速度与女仆速度取最大」之上（1.0 = 严格按玩家原话取最大值）。"
+                        + "嫌慢（骑驴/猪跟着跑跟不上）调到 1.5~2.0；嫌快（复杂地形上容易被甩下去）往 0.5 调。"
+                        + "不会突破载具自己寻路的安全上限，只是把目标速度按比例缩放"));
     }
 
     private void reviveRows() {

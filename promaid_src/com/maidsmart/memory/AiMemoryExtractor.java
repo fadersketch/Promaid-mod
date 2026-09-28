@@ -219,7 +219,18 @@ public final class AiMemoryExtractor {
         sb.append("TAGS: tag1,tag2（英文小写，如 relationship,preference,world）\n");
         if (includeFacts) {
             sb.append("FACT: category|key|confidence|content（每行一条；category 只能是 preference,boundary,trait,relation,promise；key 简短英文；confidence 1-5；content 中文一句话，可直接进入用户画像）\n");
-            sb.append("EVENT: salience|content（每行一条；salience 1-10；只记值得长期记住的事件/决定/情绪线索）\n\n");
+            // v1.3.0(beta)【移植自 Sphantosis 的事件元数据】EVENT 行补两个字段：
+            //   attention（注意力等级 A/B/C/D，见下）+ open（事件是否未结束 1/0）。
+            //   这两项在 Sphantosis 的 event_extractor.txt 里是「注意力等级」与「终止」，
+            //   本模组只取这两条最有用的：它们让"她记得主人还在等一个结果"成为可能。
+            sb.append("EVENT: salience|attention|open|content（每行一条；salience 1-10；"
+                    + "attention 是 A/B/C/D 单字母；open 是 1 或 0；content 中文一句话）\n\n");
+            sb.append("attention（注意力等级，只评这条事件里主人投入的关注程度，"
+                    + "与事件核心无关的内容不计入）：A=极端专注（危险操作/精密活）；"
+                    + "B=较高专注（考试、复杂活）；C=中等（写笔记、聊天反思）；D=最低（丢垃圾这类）。\n");
+            sb.append("open（这条事件是否*尚未结束*）：1=明显还没完（主人说要去做某事、在等一个结果、"
+                    + "计划尚未落地、悬念未揭开）；0=已完结或看不出（拿不准一律写 0）。"
+                    + "这条只对「有明确未完成线索」的事件写 1，宁缺毋滥。\n\n");
         }
         sb.append("规则：\n");
         sb.append("- 不要记录寒暄、临时语气词、模型自夸、无意义重复\n");
@@ -567,10 +578,17 @@ public final class AiMemoryExtractor {
         };
     }
 
-    /** EVENT 行：salience|content → 段落 + 片段 */
+    /**
+     * EVENT 行：{@code salience|content}（旧两段式）或
+     * {@code salience|attention|open|content}（v1.3.0(beta)：移植自 Sphantosis 的事件元数据）。
+     *
+     * <p>两种都认：老模型/老配置仍可能只回两段，解析到就按"attention=C、open=0"处理——
+     * 绝不因为模型没听话就丢掉整条事件。开标记 {@code open:1} 会进段落 tags，
+     * 由 {@link AiMemoryContext} 渲染成「未完成的事」那一段（"她记得主人还在等一个结果"）。
+     */
     private static void writeEvent(AiMemoryStore store, String event, List<String> tags,
                                    long now, long gameTime) {
-        String[] parts = event.split("\\|", 2);
+        String[] parts = event.split("\\|");
         if (parts.length < 2) {
             return;
         }
@@ -580,12 +598,30 @@ public final class AiMemoryExtractor {
         } catch (NumberFormatException e) {
             salience = 5;
         }
-        String content = parts[1].trim();
+        char attention = 'C';
+        boolean open = false;
+        String content;
+        if (parts.length >= 4) {
+            // salience|attention|open|content
+            String att = parts[1].trim().toUpperCase(java.util.Locale.ROOT);
+            if (!att.isEmpty() && "ABCD".indexOf(att.charAt(0)) >= 0) {
+                attention = att.charAt(0);
+            }
+            String op = parts[2].trim();
+            open = op.equals("1") || op.equalsIgnoreCase("true") || op.equals("是");
+            content = parts[3].trim();
+        } else {
+            content = parts[1].trim();
+        }
         if (content.isEmpty() || content.equalsIgnoreCase("none")) {
             return;
         }
         List<String> tagList = new ArrayList<>(tags);
         tagList.add("extracted");
+        tagList.add("attention:" + attention);
+        if (open) {
+            tagList.add("open:1");
+        }
         AiMemoryWriteStrategy.Plan plan = AiMemoryWriteStrategy.plan(AiMemoryType.EVENT, salience, tagList);
         AiMemoryModels.Paragraph p = AiMemoryModels.Paragraph.create(plan.layer(), "maid", content,
                 String.join(",", plan.tags()), plan.salience(), plan.permanent(), now, gameTime);
