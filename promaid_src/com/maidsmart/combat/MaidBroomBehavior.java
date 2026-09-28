@@ -166,6 +166,17 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
             if (!MaidBroomDrive.broomlessLongEnough(maid, gameTime)) {
                 return;
             }
+            // 【实测七百〇九：起飞判定先于"去找扫帚"】玩家原话：「扫帚的启动链路还是比较落后，
+            //  目前也只判了远程武器，没有判弹药。应该改成跟远程空袭一样的起飞判定。」
+            //  旧版这一档**什么都不判**：附近有扫帚她就走过去骑上并立刻起飞（rideWorldBroom 里
+            //  直接开起飞相位），于是"没武器 / 没弹药"的她也会腾空一次、再花 2 秒才被 ③ 放下来。
+            //  远程空袭那边（MaidFlightKit.isModeActive）**起飞前就要求三件齐 + 弹药**，
+            //  这条链路必须对齐：不武装（远程武器 + 弹药）就不出门找扫帚，原地待命报缺件。
+            //  她一旦被补上武器/弹药，下一 tick armed 为真就照旧去找——不会把她锁死。
+            if (!MaidBroomKit.armed(maid)) {
+                notifyNotReady(maid, gameTime);
+                return;
+            }
             if (MaidBroomDrive.seekBroom(level, maid)) {
                 return; // 这一 tick 正在去找/刚骑上——本 tick 不做别的
             }
@@ -242,8 +253,37 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         // ④.5 起飞相位：原地往上抬 1 格再到别的地方去（玩家原话"如果拿到了扫帚，原地往上飞 1 格
         // 悬停（头顶如果被顶住了那就悬停在此处）"）。这一段不转向、不开火——就是那一下"腾空"。
         // 【v1.3.3：走 steerVerticalTo（扫帚坐标），不再拿她的坐标当目标点】见 Drive 里那段因果。
+        //
+        // 【实测七百〇九：起飞判定改成与远程空袭同款】玩家原话：「扫帚的启动链路还是比较落后，
+        //  目前也只判了远程武器，没有判弹药。应该改成跟远程空袭一样的起飞判定。」
+        //
+        //  【旧版缺的是"弹药"这一条】进到这一档的判据是 ③ 的 {@code canStayMounted}
+        //  （= 扫帚 + 远程武器，**刻意不含弹药**——那是 实测六百九十二 为"弹匣打空别把她摔下来"
+        //  定的口径，管的是"要不要下鞍"）。于是"有武器、没弹药"的她照样会进入起飞相位、
+        //  飞上去，再靠开火链路自己换弹；而远程空袭那边（{@link MaidFlightKit#isModeActive}）
+        //  是**起飞前就要求三件齐 + 弹药**（实测四百九十五："没弹药就没必要起飞"）。
+        //  现在这一档改用同一个 {@code isModeActive}（扫帚 + 远程武器 + 弹药）——
+        //  这就是"跟远程空袭一样的起飞判定"。
+        //
+        //  【为什么闸在 takeoffTarget **之前**】起飞相位是 {@link MaidBroomDrive} 里的一张状态表
+        //  （{@code CLIMB}），而它的收尾判据之一是"连续几拍没长高 = 头顶被顶住"。若先消费相位、
+        //  再原地悬停，那几拍会被它当成"顶住了"从而**结束相位**，下一 tick 她就直接落进 ⑤/⑥
+        //  照飞不误——闸等于没关。所以先判、判假就**根本不碰相位**（相位原样留着，补齐弹药后
+        //  下一 tick 接着抬），她这一段停在原地悬停。
+        //
+        //  【为什么不与 实测六百九十二 打架】那条改的是**下鞍**判据（canStayMounted），
+        //  本档只决定"要不要抬这 1 格"：判据为假时她**留在扫帚上原地待命**（不下鞍、
+        //  不丢高度）；而且弹药那条走 {@code ammoOk} → {@code canFeed || canReload}
+        //  （实测六百九十四 / 六百九十五）："弹匣空着但背包里有对得上的弹药"算齐备，
+        //  所以冲锋枪/狙击枪那种"这一拍弹=无"不会把她钉在地面——真正被挡住的只有
+        //  "确实一点弹药都没有"这一种。
         Double riseY = MaidBroomDrive.takeoffTarget(maid);
         if (riseY != null) {
+            if (!MaidBroomKit.isModeActive(maid)) {
+                MaidBroomDrive.hoverInPlace(maid);
+                notifyNotReady(maid, gameTime);
+                return;
+            }
             MaidBroomDrive.steerVerticalTo(maid, riseY);
             return;
         }
