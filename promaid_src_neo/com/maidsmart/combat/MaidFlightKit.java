@@ -688,9 +688,17 @@ public final class MaidFlightKit {
      * {@code MaidTridentSpinBehavior#boostForFlight}），于是"只带一把激流三叉戟、没有烟花/
      * 羽扇/法术"的女仆也能起飞、也能启动飞行跟随。开关沿用 `combat.riptideDash`
      * （激流三叉戟旋转突进，默认开）——**不新增配置项**，关掉它这一条腿也一起退回。
+     *
+     * v1.3.0(beta) 实测七百一十【第五条腿 = 自推鞘翅】：再来一件——**那些"自己会推玩家"的
+     * 模组鞘翅**（伊卡洛斯之翼空域系 / 神秘遗物+ 的壮丽·混沌，见
+     * {@link MaidSelfPropelledWings}）也算推进剂：她穿着它就不需要烟花。这一条腿与前面四条的
+     * 差别在于"推力由谁给"——前面四条的推力本来就由我们调用，而这一条的**模组推力只挂在
+     * PlayerTickEvent 上、女仆收不到**，所以由 {@code MaidSelfPropelledWings.tick} 替她推。
+     * 开关 `combat.selfWings`（默认开）——关掉它这一条腿一起退回。
      */
     public static boolean hasFlightPropellant(EntityMaid maid) {
-        return hasFlightFuel(maid) || hasClimbSpell(maid) || hasRiptide(maid);
+        return hasFlightFuel(maid) || hasClimbSpell(maid) || hasRiptide(maid)
+                || MaidSelfPropelledWings.hasWings(maid);
     }
 
     /* v1.2.0 实测五百三十三：原 `hasExplosiveFirework`（只认带爆炸的烟花）已删除——
@@ -990,8 +998,13 @@ public final class MaidFlightKit {
         // 造一枚全新火箭弹体并直接入世界，从不读女仆手里的物品。所以"常驻副手"纯属多余占用。
         // 现在改为：**副手完全让出**（供盾牌/食物使用），烟花只从背包按需取用
         // （`hasFirework` / `takeFirework` 都已是"主手→副手→背包"三处覆盖，不依赖副手）。
+        //
+        // 【实测七百一十】末尾这道 "hasFirework" 就绪判据跟着 hasFlightPropellant 一起放宽：
+        // 穿着自推鞘翅的女仆**不需要烟花**——否则 equip() 会一直报"没就位"，而她的链路其实
+        // 已经能飞（本模组吃过"气泡说没齐、她却在飞"的亏，这类口径必须同源）。
         return ok && isElytraLike(maid.getItemBySlot(EquipmentSlot.CHEST), maid)
-                && isWeaponForTask(maid, maid.getMainHandItem()) && hasFirework(maid);
+                && isWeaponForTask(maid, maid.getMainHandItem())
+                && (hasFirework(maid) || MaidSelfPropelledWings.hasWings(maid));
     }
 
     /* ---------------- 烟花消耗 ---------------- */
