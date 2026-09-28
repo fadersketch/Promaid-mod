@@ -1910,6 +1910,36 @@ public final class MaidBroomDrive {
                 }
                 return new Vec3(st.ex, st.ey, st.ez);
             }
+            // ①.5【实测七百〇九】她**此刻正被方块闷住** → 立刻脱困，**不等那 0.6 秒**。
+            //
+            // 【为什么"卡住"那条判据救不了这一档】卡住看的是**位移**（连续 {@link #STUCK_TICKS}
+            // tick 移动小于 {@link #STILL_EPS}），而扫帚贴着墙"滑"的时候每一 tick 都在动——
+            // 位移不为零，`still` 永远攒不满，脱困相位一次都进不去；而**她**（乘客）已经被
+            // 按在墙的边角里，每 tick 扣一点 in_wall 伤害。玩家原话：「仍然会导致女仆窒息。
+            // 被方块挡住的只能是扫帚。而女仆在扫帚上似乎又没有碰撞箱，导致会陷进去窒息。」
+            // ——"被挡住的只能是扫帚"正是这段因果：扫帚有自己的碰撞箱，靠 {@code move()} 停在
+            // 墙外；她的座位在扫帚**朝向后方半格**（见 {@link #SEAT_BACK}），而原版
+            // {@code positionRider} 是**直接摆位、不做碰撞解算**的，没人替她挡那半格。
+            //
+            // 【判据就用原版那一个】{@link #maidSuffocating} = {@code isInWall()}，它**恰好**
+            // 是"这一 tick 原版要不要扣她 in_wall 伤害"，不比几何判定宽。
+            //
+            // 【选格规则同时放松】① 允许"不比现在更靠近目标"——从方块里退出来本身就是正确方向，
+            // 而旧规则会把唯一可行的"退出去"那一格判成"更远"、全部否掉，于是返回 null、
+            // 她原地继续闷着；② 第一趟仍尊重"5 秒内刚去过"（防两个格子之间横跳），
+            // 一趟选不出来就**放开这条防抖再来一趟**——她的命比"别来回横跳"重要。
+            if (maidSuffocating(maid)) {
+                net.minecraft.core.BlockPos air = nearestEscapeCell(broom, maid, aim, st, true, false);
+                if (air == null) {
+                    air = nearestEscapeCell(broom, maid, aim, st, true, true);
+                }
+                if (air != null) {
+                    enterEscape(maid, st, air, true);
+                    return new Vec3(st.ex, st.ey, st.ez);
+                }
+                // 附近真的一格能容下她的空气都没有（她整个人嵌在一整片实心里）→ 保持原链路；
+                // 下面"卡住"那一档还会再试一次（那一档带"更靠近目标"的约束，可能挑到别的格）。
+            }
             // ② 还没到点却一动不动 → 记一笔；动起来了（或被推/被撞飞）→ 清零
             if (toAim > ARRIVE && moved < STILL_EPS) {
                 st.still++;
@@ -1919,20 +1949,9 @@ public final class MaidBroomDrive {
             // ③ 判出卡住 → 找最近的空气格，进脱困相位
             if (st.still >= STUCK_TICKS) {
                 st.still = 0;
-                net.minecraft.core.BlockPos air = nearestEscapeCell(broom, maid, aim, st);
+                net.minecraft.core.BlockPos air = nearestEscapeCell(broom, maid, aim, st, false, false);
                 if (air != null) {
-                    st.ex = air.m_123341_() + 0.5;
-                    st.ey = air.m_123342_() + 0.5;
-                    st.ez = air.m_123343_() + 0.5;
-                    st.escape = ESCAPE_TICKS;
-                    long now = System.currentTimeMillis();
-                    if (now - st.lastLog >= UNSTICK_LOG_GAP_MS) {
-                        st.lastLog = now;
-                        com.maidsmart.tool.PromaidLog.log("扫帚卡墙",
-                                com.maidsmart.tool.PromaidLog.nameOf(maid) + " 被方块顶住不动了 → 先飘到最近的空气格 ("
-                                        + air.m_123341_() + ", " + air.m_123342_() + ", " + air.m_123343_()
-                                        + ")，到了再续原链路");
-                    }
+                    enterEscape(maid, st, air, false);
                     return new Vec3(st.ex, st.ey, st.ez);
                 }
                 // 【实测六百九十一】一个合格的格子都没有（附近全是"一格死洞"，或者都在 5 秒
@@ -1951,6 +1970,51 @@ public final class MaidBroomDrive {
     }
 
     /**
+     * 【实测七百〇九】她**此刻正被方块闷住**吗——判据就是原版那一个：{@code isInWall()}。
+     *
+     * <p>【为什么用原版这个而不是自己判几何】{@code LivingEntity.isInWall()} 正是"这一 tick
+     * 原版要不要扣她 {@code in_wall} 伤害"的那道判据（{@code LivingEntity.m_6075_} 字节码：
+     * {@code if (isInWall()) hurt(damageSources().inWall(), 1.0F)}），它按**眼位 + 0.8×宽度**
+     * 的小盒去撞方块的 {@code isSuffocating} 形状。用它 = "她真在挨窒息伤害"，不会比实伤更宽
+     * （自己另写一套几何判据容易出现"看着嵌进去了、其实没扣血"的误触发）。
+     *
+     * <p>【为什么不能靠"卡住"那条判据兜住】见 {@link #unstick} 里 ①.5 那一段：扫帚贴墙滑行时
+     * **位移一直不为零**，"连续 0.6 秒没动"永远攒不满，脱困相位一次都进不去。
+     */
+    private static boolean maidSuffocating(EntityMaid maid) {
+        try {
+            return maid.m_5830_(); // isInWall
+        } catch (Throwable t) {
+            return false; // 判不出来当"没事"：绝不能因为读不到判据把她往别处搬
+        }
+    }
+
+    /**
+     * 【实测七百〇九】进脱困相位（把"这一趟去哪"记进 {@link Stuck}），并按来源写一行日志。
+     *
+     * @param suffocating 这一趟是"正被闷住"触发的（日志口径不同：那是保命，不是绕路）
+     */
+    private static void enterEscape(EntityMaid maid, Stuck st, net.minecraft.core.BlockPos air,
+                                    boolean suffocating) {
+        st.ex = air.m_123341_() + 0.5;
+        st.ey = air.m_123342_() + 0.5;
+        st.ez = air.m_123343_() + 0.5;
+        st.escape = ESCAPE_TICKS;
+        long now = System.currentTimeMillis();
+        if (now - st.lastLog < UNSTICK_LOG_GAP_MS) {
+            return;
+        }
+        st.lastLog = now;
+        com.maidsmart.tool.PromaidLog.log("扫帚卡墙",
+                com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + (suffocating
+                                ? " 人正卡在方块里（isInWall，正在挨窒息伤害）→ 立刻退到能容下她的空气格 ("
+                                : " 被方块顶住不动了 → 先飘到最近的空气格 (")
+                        + air.m_123341_() + ", " + air.m_123342_() + ", " + air.m_123343_()
+                        + ")，到了再续原链路");
+    }
+
+    /**
      * 她身边最近的、**能容下她整个人**的空气格：水平 ±{@link #ESCAPE_R}、上下 ±2。
      *
      * <p>【实测六百九十一：玩家原话「女仆的扫帚模式对于空气的寻路不行，很多时候只往一格里面钻，
@@ -1961,7 +2025,7 @@ public final class MaidBroomDrive {
      * 字节码实证），她身体压的格子与扫帚那一格**差半格**；而乘客的位置是直接摆上去的、
      * 不走碰撞——扫帚能停在那格、她却被按进邻格/上格的方块里扣窒息伤害，就是这么来的。
      *
-     * <p>【现在的五个条件（缺一不可）】
+     * <p>【现在的条件（缺一不可）】
      * <ol>
      *   <li>候选格与它上面一格是空气（扫帚那一格：扫帚的碰撞箱 {@code 1.375 × 0.5625}，扁但宽）；</li>
      *   <li><b>她身体的每一格都是空气</b>（{@link #bodyFits}）：按座位偏移把她的碰撞箱
@@ -1970,15 +2034,26 @@ public final class MaidBroomDrive {
      *       所以一格宽的墙洞（来路那格是墙）直接不合格——那正是玩家看到的"往一格里面钻、然后窒息"；</li>
      *   <li>**不是死洞**（{@link #isPocket}）：候选格两层、东南西北四邻全是方块 → 进去就出不来，不去；</li>
      *   <li>**5 秒内没去过**（{@link Stuck#recentlyVisited}）：刚寻路到过的空气格不再选，
-     *       免得她在两个格子之间反复横跳（玩家原话「防止女仆在两个空气格子之间来回反复横跳」）；</li>
+     *       免得她在两个格子之间反复横跳（玩家原话「防止女仆在两个格子之间来回反复横跳」）；</li>
      *   <li>【实测六百九十二】**不比目标点高过 {@link #ESCAPE_UP_MAX} 格**：躲建筑只是暂时调整
      *       高度，越躲越高会把攻击与链路一起飞没（那一段因果见 {@link #ESCAPE_UP_MAX}）。</li>
      * </ol>
      * 剩下的照旧：**离目标比现在更近**（否则脱困变成原地打转）、取最近的那个。
      * 一条都不合格 → 返回 null，**宁可原地不动也不把她按进方块里**（调用方会留一行日志）。
+     *
+     * <p>【实测七百〇九：上面这两条（"更靠近目标"、"不许超过目标高度"）在**保命那一档**必须让位】
+     * 玩家原话：「仍然会导致女仆窒息。被方块挡住的只能是扫帚。而女仆在扫帚上似乎又没有碰撞箱，
+     * 导致会陷进去窒息。」场景是"扫帚贴着墙、她被按进墙的边角"——那种局面下**唯一能容下她**的格
+     * 往往在墙角外侧（= 离目标更远）或者要抬过目标高度，旧规则会把它们**全部否掉**、返回 null，
+     * 于是她原地继续挨窒息伤害。所以 {@code suffocating} 为真时：① 不再要求"更靠近目标"
+     * （从方块里退出来本身就是正确方向，方向由"哪一格放得下她"决定）；② 不再封 {@link #ESCAPE_UP_MAX}
+     * 那个高度（但仍**取最近的合格格**，所以并不会变成往上爬）；{@code desperate} 为真时
+     * 进一步放开"5 秒内刚去过"与"死洞"这两条防抖——**一趟选不出来就再来一趟**，
+     * 她的命比"别来回横跳"重要。
      */
     private static net.minecraft.core.BlockPos nearestEscapeCell(EntityBroom broom, EntityMaid maid,
-                                                                Vec3 aim, Stuck st) {
+                                                                Vec3 aim, Stuck st,
+                                                                boolean suffocating, boolean desperate) {
         try {
             net.minecraft.world.level.Level level = broom.m_9236_();
             net.minecraft.core.BlockPos base = broom.m_20183_();
@@ -1986,8 +2061,9 @@ public final class MaidBroomDrive {
                     (int) Math.floor(aim.f_82479_), base.m_123342_(), (int) Math.floor(aim.f_82481_));
             double here = base.m_123331_(goal);
             long now = gameTimeOf(maid);
-            // 【实测六百九十二】躲建筑不许爬过目标高度（见 ESCAPE_UP_MAX 那段因果）
-            double upCap = aim.f_82480_ + ESCAPE_UP_MAX;
+            // 【实测六百九十二】躲建筑不许爬过目标高度（见 ESCAPE_UP_MAX 那段因果）；
+            // 【实测七百〇九】保命那一档不封这条（墙角外侧那一格常常比目标点高）。
+            double upCap = suffocating ? Double.MAX_VALUE : aim.f_82480_ + ESCAPE_UP_MAX;
             double best = Double.MAX_VALUE;
             net.minecraft.core.BlockPos bestPos = null;
             for (int dx = -ESCAPE_R; dx <= ESCAPE_R; dx++) {
@@ -2003,16 +2079,17 @@ public final class MaidBroomDrive {
                         if (!isAirAt(level, p) || !isAirAt(level, p.m_7494_())) {
                             continue; // ① 扫帚那一格（扁但是宽，照旧要两格）
                         }
-                        if (p.m_123331_(goal) >= here) {
+                        // 【实测七百〇九】保命那一档不看"是否更靠近目标"——见方法注释末段的因果
+                        if (!suffocating && p.m_123331_(goal) >= here) {
                             continue; // 不比现在更靠近目标 → 不选（防原地打转）
                         }
-                        if (st.recentlyVisited(p, now)) {
+                        if (!desperate && st.recentlyVisited(p, now)) {
                             continue; // ④ 5 秒内到过 → 不再进（防两个空气格之间反复横跳）
                         }
                         if (!bodyFits(level, broom, p)) {
                             continue; // ② 她身体那几格（"窒息的那个格子"）
                         }
-                        if (isPocket(level, p)) {
+                        if (!desperate && isPocket(level, p)) {
                             continue; // ③ 一格死洞：进去了也出不来
                         }
                         double d = dx * dx + dy * dy + dz * dz;

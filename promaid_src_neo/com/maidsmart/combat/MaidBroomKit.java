@@ -202,6 +202,29 @@ public final class MaidBroomKit {
     }
 
     /**
+     * 【实测七百〇九】起飞判定里**除扫帚之外的那两件**：远程武器 + 弹药。
+     *
+     * <p>玩家原话：「扫帚的启动链路还是比较落后，目前也只判了远程武器，没有判弹药。
+     * 应该改成跟远程空袭一样的起飞判定。」
+     *
+     * <p>【它补的是哪条路】"她身上没有扫帚 → 去找一把"那一档（{@link com.maidsmart.combat.MaidBroomDrive#seekBroom}）
+     * 原先**什么都不判**：只要附近有扫帚/掉落的扫帚，她就走过去骑上并立刻起飞
+     * （{@link com.maidsmart.combat.MaidBroomDrive#rideWorldBroom} 里直接 {@code startTakeoff}）——
+     * 于是"没武器 / 没弹药"的她也会腾空，再花 2 秒才被缺件判据放下来。远程空袭那边
+     * （{@link MaidFlightKit#isModeActive}）**起飞前就要三件齐 + 弹药**，这条链路必须对齐。
+     *
+     * <p>【为什么单独一个方法】扫帚那一件在"去找"这一档里**必然还没到手**（她正因为没有才去找），
+     * 所以不能直接用 {@link #isModeActive}（它会因为"缺扫帚"直接为假、她永远不出门找）。
+     * 这里只判另外两件；"扫帚那件"由调用方按当前状态另外判（已经骑上/身上有 = 齐）。
+     */
+    public static boolean armed(EntityMaid maid) {
+        if (maid == null || !enabled()) {
+            return false;
+        }
+        return hasRangedWeapon(maid) && ammoOk(maid);
+    }
+
+    /**
      * 未激活时缺哪一件的**可读原因**（气泡用）。{@code null} = 齐备（不该调用）。
      * 顺序固定（扫帚 → 远程武器 → 弹药），与 {@link #isModeActive} 的判定口径完全一致
      * ——与 {@link MaidFlightKit#missingParts} 同一个写法、同一个理由（"只说未激活没用"）。
