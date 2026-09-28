@@ -127,11 +127,17 @@ import net.minecraft.world.item.ItemStack;
  * {@code AbstractGunItem.canReload} 是同一个角色：**开火链路真正会去用的那个判定**。
  * 「门禁说能换弹」与「TLM 真的会去换弹」必须是同一句话，否则又会出现「判她齐备、她却永远在重装」。
  *
- * 【能量武器照旧免检】卓越前线的二次灾变 / 超级星星炮不吃常规弹药（内部 ForgeEnergy 充能，
- * 实测六百六十六 起的老口径：「弹药判定对它们恒空」）——无论走 shouldStartReloading 的哪一支
- * 都会判否，所以 {@link #canReload} 里对能量武器**先放行**，绝不因为换了个 API 把她们判成缺弹药。
+ * 【能量武器：由 SBW 自己回答，不再"一律放行"（实测七百一十二）】二次灾变 / 超级星星炮这类
+ * 能量枪的弹量就是枪自带的 ForgeEnergy 池（`AmmoType: FE` / 混合枪另带弹匣）。旧版在
+ * {@link #canReload} 里对它们**无条件 return true**，于是能量打空后「打得响 **或** 换得上」的
+ * 或门被这条短路恒真 → 模式门禁永不关闭 → 女仆不报缺件、不下鞍、在天上一直飞（玩家原话
+ * 「枪内的能量打完了，女仆又不会下鞍，又不会报缺，只会在天上一直飞」）。
+ * 现在删掉那条短路：{@link #canFeed}（= SBW 的 hasEnoughAmmoToShoot，对纯能量枪算的就是
+ * 能量池储量）如实为假、{@link #canReload}（= SBW 的 shouldStartReloading，纯能量枪
+ * useBackpackAmmo 恒真故恒假）如实为假 → 门禁正确关闭。
  *
- * 反射不可用（没装 SBW / 版本改名）时同样退回 {@link #looseAmmoScan}，行为与旧版一字不差。
+ * 反射不可用（没装 SBW / 版本改名）时同样退回 {@link #looseAmmoScan}——**那一条里仍保留
+ * "能量武器免检"的旧口径**，绝不在兼容层异常时把她误判成缺弹药。
  */
 public final class GunCompat {
     private GunCompat() {
@@ -571,12 +577,29 @@ public final class GunCompat {
         if (maid == null || gun == null || gun.m_41619_() || !isGun(gun)) {
             return false;
         }
-        // 能量武器（二次灾变 / 超级星星炮）：不吃常规弹药、弹量由内部能量池给——SBW 的常规换弹
-        // 判定对它们恒否（实测六百六十六 的老口径：「弹药判定对它们恒空」），照旧直接放行，
-        // 绝不因为换了个 API 就把她们判成缺弹药。
-        if (isEnergyGun(gun)) {
-            return true;
-        }
+        // 【实测七百一十二：删掉"能量武器一律放行"那条短路】玩家原话：「关于扫帚模式和空袭
+        //  卓越前线的能量枪判定有一些问题，如果枪内的能量打完了，那么女仆又不会下鞍，又不会
+        //  报缺，只会在天上一直飞。」
+        //
+        // 【旧版错在哪】旧版这里对 {@link #isEnergyGun} 直接 `return true`，而模式门禁是
+        //  ``canFeed || canReload`` 的**或门**（见 {@link #canFeed} 的类注释与
+        //  {@code MaidFlightKit#hasAmmoForWeapon}）——于是能量打空以后：
+        //    ① 纯能量枪（ql_1031 等，弹药就是它的 ForgeEnergy 池）：
+        //       canFeed = hasEnoughAmmoToShoot = 能量够不够，恒**假**；
+        //       但 canReload 被这条短路恒**真** → 或门恒真 → 门禁永远不关 → 不报缺、不下鞍。
+        //    ② 混合枪（二次灾变等：弹匣 + 能量池）：弹匣打空后 canFeed 也为假，同样被短路顶住。
+        //  于是她就"一直绕圈/一直飞"，正是玩家看到的"只会在天上一直飞"。
+        //
+        // 【现在：能量武器也**交给枪械 mod 自己回答**】删掉短路后，两家枪走各自的正路
+        // （实测六百九十四 / 六百九十五，本方法下面那一段）：
+        //   · 纯能量枪 useBackpackAmmo()=true（无弹匣）→ shouldStartReloading 恒假（无从换弹），
+        //     而 canFeed = hasEnoughAmmoToShoot 算的**就是能量池**（EnergyAmmoStrategy.count →
+        //     getEnergyProvider 的储量）→ 能量打空即门禁关闭 → 报缺件 / 下鞍，与玩家预期一致；
+        //   · 混合枪 → canFeed 看弹匣、canReload 看备弹，弹匣打空且无备弹即门禁关闭。
+        // 也就是说"能不能打"这件事不再由本模组猜，而是**与枪械 mod 自己的 canShoot/canReload
+        // 逐句同口径**——这正是本模组"同一个口径只有一处"的老规矩。
+        // 反射不可用（没装 SBW 等）时才回到 {@link #looseAmmoScan} 的宽松兜底（那一条里仍保留
+        // "能量武器免检"的旧口径，绝不在兼容层异常时把她误判成缺弹药）。
         // v1.3.0 实测六百九十四 / 六百九十五：两家枪各自问自己（TACZ canReload / SBW
         // shouldStartReloading）——口径比对、弹药箱识别全由它自己算。
         // 只有"反射不可用"（返回 null）才回退宽松扫描；它明确回答 false（口径对不上）时

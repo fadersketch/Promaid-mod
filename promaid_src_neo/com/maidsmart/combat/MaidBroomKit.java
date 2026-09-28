@@ -143,7 +143,10 @@ public final class MaidBroomKit {
             if (maid == null) {
                 return false;
             }
-            return MaidFlightKit.hasAmmoForWeapon(maid, MaidFlightKit.resolveRangedWeaponAny(maid));
+            // 实测七百一十二：主手那把打不响时，**背包里还有能接着打的**也算齐备——口径与
+            // {@link MaidFlightKit#ensureUsableRangedWeapon} 的换装口径同源（门禁与换装同一句话）。
+            return MaidFlightKit.hasAmmoForWeapon(maid, MaidFlightKit.resolveRangedWeaponAny(maid))
+                    || MaidFlightKit.hasUsableRangedWeaponAny(maid);
         } catch (Throwable ignored) {
             return true; // 判据异常时放行：宁可起飞也不要卡死（与 hasAmmoForRanged 的兜底同款）
         }
