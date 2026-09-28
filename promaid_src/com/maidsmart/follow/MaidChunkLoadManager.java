@@ -829,6 +829,21 @@ public final class MaidChunkLoadManager {
             if (maid.m_213877_() || maid.m_21224_()) {
                 return; // 已移除/死亡
             }
+            // 【实测七百一十六·点4】先于"骑乘中豁免"判定：她骑的是**本模组棍子绑上的坐骑**
+            //  → 连人带坐骑一起处理（她同样是乘客，但玩家明确要她能跟过来；与扫帚那条同口径）。
+            //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
+            if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+                LivingEntity rideOwner = maid.m_269323_();
+                if (rideOwner == null || !rideOwner.m_6084_()) {
+                    return;
+                }
+                if (maid.m_9236_() != rideOwner.m_9236_()) {
+                    recallRideRider(maid, rideOwner); // 跨维度：连人带坐骑搬过去
+                } else {
+                    trySameDimPull(maid, rideOwner);  // 同维度：走远距拉回那条（含骑乘分支）
+                }
+                return;
+            }
             if (maid.m_20159_()) {
                 return; // 骑乘中（乘客跨维度跟随由载具负责，不单独拉）
             }
@@ -963,8 +978,11 @@ BlockPos stand = findStand(newLevel,
                 // v1.3.6 实测六百六十一：骑扫帚的女仆**不再按"骑乘中"豁免**——她永远是乘客，
                 // 旧口径会把她永远留在原地（玩家原话：「否则隔的太远女仆就找不回来了」）。
                 // 她走连人带扫帚那条路（见 recallBroomRider）；其余豁免口径一字不改。
+                // 【实测七百一十六·点4】同理：骑坐骑的女仆也走"连人带坐骑"那条路——
+                // 她同样是乘客，不豁免（玩家原话："她们也可以被传送过来"）。
                 boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
-                if (!broomRider && (md.isMaidInSittingPose() || md.m_20159_()
+                boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
+                if (!broomRider && !rideRider && (md.isMaidInSittingPose() || md.m_20159_()
                         || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
                     kept++;
                     continue;
@@ -972,7 +990,9 @@ BlockPos stand = findStand(newLevel,
                 if (lvl == player.m_9236_() && md.m_20238_(player.m_20182_()) < 25.0) {
                     continue; // 已在身边 5 格内
                 }
-                boolean ok = broomRider ? recallBroomRider(md, player) : summonMaidTo(md, player);
+                boolean ok = broomRider ? recallBroomRider(md, player)
+                        : rideRider ? recallRideRider(md, player)
+                        : summonMaidTo(md, player);
                 if (ok) {
                     summoned++;
                 } else {
@@ -1078,7 +1098,8 @@ BlockPos stand = findStand(newLevel,
                         && md.m_21830_(owner)) {
                     // v1.3.6：骑扫帚的照传（连人带扫帚，见 recallBroomRider）——不能因为「她是乘客」就把她的强载票收掉
                     boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
-                    if (!broomRider && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.m_20159_())) {
+                    boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
+                    if (!broomRider && !rideRider && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.m_20159_())) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
                         // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
@@ -1106,7 +1127,9 @@ BlockPos stand = findStand(newLevel,
                         it.remove();
                         break;
                     }
-                    boolean ok = broomRider ? recallBroomRider(md, owner) : summonMaidTo(md, owner);
+                    boolean ok = broomRider ? recallBroomRider(md, owner)
+                            : rideRider ? recallRideRider(md, owner)
+                            : summonMaidTo(md, owner);
                     String name = md.m_5446_() != null ? md.m_5446_().getString() : "女仆";
                     try {
                         owner.m_213846_(net.minecraft.network.chat.Component.m_237113_(ok
@@ -1337,6 +1360,10 @@ BlockPos stand = findStand(newLevel,
             if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 return recallBroomRider(maid, player) ? 1 : 2;
             }
+            // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬（"她们也可以被传送过来"）
+            if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+                return recallRideRider(maid, player) ? 1 : 2;
+            }
             if (maid.m_20159_() || maid.isMaidInSittingPose()
                     || (maid.isHomeModeEnable() && !isBuildingMaid(maid))) {
                 return 3; // 状态豁免（坐/骑/家——与一键集合同口径；建造女仆可召回）
@@ -1366,6 +1393,10 @@ BlockPos stand = findStand(newLevel,
         // v1.3.6 实测六百六十一：骑扫帚的走"连人带扫帚"那条（她永远是乘客，旧口径 = 永久豁免）
         if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
             return owner.m_6084_() && recallBroomRider(maid, owner);
+        }
+        // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬
+        if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+            return owner.m_6084_() && recallRideRider(maid, owner);
         }
         if (maid.m_20159_()) {
             return false; // 骑乘中（别的载具：船/矿车/椅子——玩家明确停放，不拉）
@@ -1590,6 +1621,112 @@ BlockPos stand = findStand(newLevel,
     }
 
     /**
+     * 【实测七百一十六·点4】"连人带坐骑一起传送"——玩家原话："这种骑上坐骑的女仆需要额外打一个
+     * 标记，她们也可以被传送过来，具体的操作可以直接照搬扫帚模式下也可以把女仆连人带扫帚一起
+     * 传送过来。"
+     *
+     * <p>结构照搬 {@link #broomRiderTo}（四步在同一个 tick 内做完）：**解开乘客关系 → 搬坐骑 →
+     * 搬她 → 重新落座**。原因与扫帚完全同一条：{@code Entity.teleportTo} 内部第一件事是
+     * {@code unRide()}——直接传她 = 她当场被从坐骑上踹下来，坐骑留在原地成孤儿。
+     *
+     * <p>与扫帚版的唯一差别：扫帚是"任务在包里/世界里"的特殊实体，这里坐骑就是**世界里一只普通
+     * 生物**——所以搬完按 UUID 重新取回它、清速度、再 {@code startRiding(force)} 落座。坐骑跨维度
+     * 会走 {@code changeDimension}（同 UUID 新实例），所以一律按 UUID 取回，不缓存旧引用。
+     */
+    public static boolean recallRideRider(EntityMaid maid, LivingEntity owner) {
+        if (maid == null || owner == null || !owner.m_6084_()) {
+            return false;
+        }
+        try {
+            if (!(owner.m_9236_() instanceof ServerLevel dest)) {
+                return false;
+            }
+            BlockPos stand = standSpot(dest, owner, true); // 人工/兜底：一律强制落点（可空中）
+            if (stand == null) {
+                return false;
+            }
+            return rideRiderTo(maid, dest, stand, owner.m_146908_(), owner.m_146909_());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百一十六·点4】"连人带坐骑送回**她的工作区**"那一档（守家时的骑乘牵引绳）。
+     * 与 {@link #recallRideRider} 同一段搬运代码（{@link #rideRiderTo}），只有落点锚点不同。
+     */
+    public static boolean recallRideRiderTo(EntityMaid maid, BlockPos anchor) {
+        if (maid == null || anchor == null) {
+            return false;
+        }
+        try {
+            if (!(maid.m_9236_() instanceof ServerLevel dest)) {
+                return false;
+            }
+            BlockPos stand = standSpotAt(dest, anchor, true);
+            if (stand == null) {
+                return false;
+            }
+            return rideRiderTo(maid, dest, stand, maid.m_146908_(), maid.m_146909_());
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 搬运本体（落点已定）：「解开乘客关系 → 搬坐骑 → 搬她 → 重新落座」，四步同一个 tick。
+     * 与 {@link #broomRiderTo} 同构——别处不要再抄第二份。
+     */
+    private static boolean rideRiderTo(EntityMaid maid, ServerLevel dest, BlockPos stand,
+                                       float yRot, float xRot) {
+        try {
+            net.minecraft.world.entity.Entity mount = maid.m_20202_();
+            if (mount == null || mount instanceof EntityMaid) {
+                return false;
+            }
+            boolean sameDim = mount.m_9236_() == dest;
+            java.util.UUID mountId = mount.m_20148_();
+            try {
+                // 先解开乘客关系：teleportTo 内部也会 unRide，但"先搬坐骑"这一步做完时
+                // 她已经不是乘客了，才轮得到"重新落座"那一步有一个干净的前提
+                maid.m_8127_();
+            } catch (Throwable ignored) {
+            }
+            try {
+                // 坐骑先走。跨维度这一下会让旧实体退场、新实体入场（同 UUID）——下面按 UUID 取回
+                mount.m_264318_(dest, stand.m_123341_() + 0.5, stand.m_123342_(),
+                        stand.m_123343_() + 0.5, java.util.Collections.emptySet(),
+                        mount.m_146908_(), mount.m_146909_());
+            } catch (Throwable ignored) {
+            }
+            if (!teleportCoreTo(maid, dest, stand, yRot, xRot)) {
+                return false;
+            }
+            net.minecraft.world.entity.Entity at = sameDim ? mount : entityAt(dest, mountId);
+            if (at != null && at.m_6084_()) {
+                try {
+                    at.m_20256_(net.minecraft.world.phys.Vec3.f_82478_); // 落点静止：别带着旧速度飞出去
+                    // force 落座：与 RideBindManager.bind 同一支（跳过 canRide 判定）
+                    maid.m_7998_(at, true);
+                } catch (Throwable ignored) {
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /** 传送后按 UUID 取回一只普通实体（跨维度是 changeDimension 造出的新实例） */
+    private static net.minecraft.world.entity.Entity entityAt(ServerLevel dest, java.util.UUID id) {
+        try {
+            return dest.m_8791_(id);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
      * v1.1.0 实测七十九：传送本体（不含豁免判定）——救援路径复用。受困女仆即使是
      * home 模式也要能被捞回来（基岩顶不是家）；主人存活性由调用方保证。
      *
@@ -1786,6 +1923,22 @@ BlockPos stand = findStand(newLevel,
             // 反馈"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
             // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
             // 不拉（与救援/一键集合同口径）。
+            // 【实测七百一十六·点4】骑坐骑的女仆：距离超线时连人带坐骑拉回（她同样是乘客，
+            //  旧口径"骑乘中不拉"会让她永远留在远处——与扫帚那条同一条理由）。
+            //  放在坐/骑豁免之前，让"坐骑"这一档优先于"乘客"那一档。
+            if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+                if (!shouldPull) {
+                    return; // 没到该拉的距离：她正常跟着，不打扰
+                }
+                if (recallRideRider(maid, owner)) {
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name
+                            + " 同维度距离 " + blocks + " 格（> " + dist + " 格），已连人带坐骑传送回主人身边");
+                } else {
+                    throttledSkipLog(maid, "ride-samedim-nostand", name
+                            + " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无安全落点——不传（有落点后再试）");
+                }
+                return;
+            }
             if (maid.isMaidInSittingPose() || maid.m_20159_()) {
                 throttledSkipLog(maid, "sam-dim-sit", name + " 同维度距离 " + blocks
                         + " 格但坐着/骑乘中，不拉（坐垫/骑乘 = 玩家明确停放）");

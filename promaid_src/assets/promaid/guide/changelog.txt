@@ -1,4 +1,92 @@
-﻿## 实测七百一十五【记忆优化·第一档：移植 Sphantosis 的事件元数据（未完成事件 + 注意力等级）】
+﻿## 实测七百一十六【骑乘指挥棒·四改：独占换绑 / 1:1 还原走位 / 选中即亮光标 / 连坐骑传送】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+「1.这边还是要采用跟武装栓绳一样的策略，如果绑定了一个女仆再绑定另一个，那么第1个会解绑，
+坐骑同理。
+2.移动逻辑方面，女仆在骑了马以后原本的那些近战和远程走位方面就失效了。这个我觉得应该是要
+还原一下的。至少对于像马这种只会跑步的应该要1:1还原女仆原有的走路逻辑，其他模组的生物同理。
+如果他不只是会跑路，那么再另开一个渠道。
+3.如果玩家用这根棒子选中了那个女仆/可骑乘坐骑，那就应该立刻显示光标，而不是坐上坐骑以后再显示。
+4.这种骑上坐骑的女仆需要额外打一个标记，她们也可以被传送过来，具体的操作可以直接照搬扫帚模式
+下也可以把女仆连人带扫帚一起传送过来。」
+
+### 二、① 独占换绑（照武装拴绳的策略）
+
+- 绑定前先**松开这位玩家名下别的**骑乘链路（口径照抄武装拴绳的 `releaseOtherLinks`：只认
+  "链路里的主人 == 这位玩家"，先收集再解除——边走边删会炸迭代器）。
+- "**坐骑同理**"再补一道：这只坐骑上若已驮着**另一位**女仆的链路，一并松开——一只坐骑同时
+  只服务一位女仆。
+- 两处都写一行日志（`换绑` / `坐骑换主`），谁被换下来了查得到。
+
+### 三、② 1:1 还原她的走位（本轮的重点）
+
+**根因（TLM 字节码实证）**：她骑上坐骑后，TLM 把她的 brain 从 WORK 活动切到 **RIDE_WORK**，
+而 `MaidBrain.registerRideWorkGoals` 里注册的任务行为来自 `IMaidTask.createRideBrainTasks`；
+TLM 的 `TaskAttack.createRideBrainTasks` 只注册了
+`StartAttacking / StopAttackingIfTargetInvalid / MaidMeleeAttack / MaidUseShield`
+—— **没有任何"走向目标"的行为**（对比同一份 jar 里 `createBrainTasks` 是有的）。所以她
+一旦成为乘客，近战/远程的**移动走位**就整条消失，看起来就是"走位全废"。
+
+**修法（套她自己的移动链路，不另造一套）**：她的走位意图其实没消失——我们的单兵战术
+（core 优先级 230）与 TLM 跟随（core 3）照常在她**自己的** `PathNavigation` 上写目的地，
+只是位移被"她是乘客、位置由载具决定"这一条吃掉。所以驱动层改成读
+`MaidRideKit.ownNavigationTarget`（她自己的导航目标点，`getTargetPos`），原样转达给坐骑：
+
+- **渠道一：只会跑的坐骑**（马/驴/骡/骆驼/猪…）—— 判据 `GroundPathNavigation`。喂它自己的
+  **地面寻路**：它按自己的寻路跑，上下坡/绕障/跳跃交给它，**完全复现她两条腿的走位**。
+- **渠道二：不只是会跑路的坐骑**（飞行/两栖/别的模组坐骑）—— 另一个渠道：**直连操纵**
+  （`MoveControl.setWantedPosition`），不重新规划路径，直接朝目标点给操纵意图。
+
+找不到她自己的走位目标时，依次退回：她脑里的 `WALK_TARGET` → 跟主人走（离主人超过
+`ride.followDist` 才喂）。速度仍是"坐骑与女仆取最大值"（见上一版的换算）。
+
+### 四、③ 选中即亮"光标"
+
+- 打标记的时机从"绑定成功"提前到"**被选中**"：棍子选中女仆或坐骑的那一刻就
+  `setGlowingTag(true)`（同光灵箭那条渲染、金色描边），并写独立的 `maid_smart_ride_pending` 留痕。
+- 撤标记的四个出口都接上：**换选**（先撤上一只）、**配对成功**、**超时/实体消失**（每 200 tick
+  的清理）、**玩家下线**。`clearPendingMark` 只撤"我们打的那一下"，且她已有正式链路标记时不熄灯
+  ——不会误清光灵箭等别的发光来源。
+- 解绑时顺手清 pending 痕迹（双保险）。
+
+### 五、④ 连坐骑一起传送（照搬扫帚那条）
+
+- 新判据 `MaidRideKit.isRideRider`：正骑着一只**已上鞍的 `Saddleable` 生物**、且身上带着
+  绑定痕迹（`maid_smart_ride_mount`）——自洽判据，不查链路表，服务端重启后也认得出。
+- 新搬运链路 `MaidChunkLoadManager.recallRideRider` / `recallRideRiderTo`：结构照搬
+  `broomRiderTo`，**四步在同一个 tick 内做完**——解开乘客关系 → 搬坐骑 → 搬她 → 重新落座
+  （跨维度按 UUID 取回坐骑，`startRiding(force)` 落座）。原因与扫帚同一条：原版 `teleportTo`
+  第一件事就是 `unRide()`，直接传她 = 坐骑扔在原地、人掉到主人身边。
+- 五个传送入口全部接上这一档（她不再被"骑乘中"顶回去）：`summonAll`（一键集合）、
+  `tickPending`（未加载区块强载召回）、`summonOne`（排班表召她过来）、`summonMaidTo`、
+  以及 `followIfCrossDimension`（跨维度跟随）与 `trySameDimPull`（同维度远距拉回）。
+- 原版 TLM 的 `teleportToOwner` 那条**不必**另补一道闸：`isRideRider` 要求 `getVehicle()` 非空，
+  她一定是乘客，既有的 `isPassenger()` 豁免已经拦住（`MaidTeleportPreserveMixin` 里写明了这一点）。
+
+### 六、动到哪几处
+
+- `combat/MaidRideKit.java`（两树）：`isRideRider`、`ownNavigationTarget`、双渠道
+  `feedNavigation` / `stopNavigation`。
+- `combat/RideBindManager.java`（两树）：`TAG_PENDING_MARK`、`releaseOtherLinks` /
+  `releaseMountLinks`、`markPending` / `clearPendingMark`、`drive()` 改读她自己的导航目标、
+  `isRideRider` 转发、`forgetPlayer` 清 pending。
+- `follow/MaidChunkLoadManager.java`（两树）：`recallRideRider` / `recallRideRiderTo` /
+  `rideRiderTo` / `entityAt` + 五个入口的接入。
+- `mixin/MaidTeleportPreserveMixin.java`（两树）：注释写明"为何不必再补一道"。
+- `guide/GuideChaptersCombat.java`（两树）：骑乘那一章补"独占换绑 / 1:1 走位（两渠道）/
+  选中即亮 / 连坐骑传送"四段。
+
+### 七、验证
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=177 / FAIL=0**；打包门禁
+  （`verify_jar_classes.py`、mixin 注册、lang）通过；部署三处目标 `match=True`。
+- 只读核对脚本 `_vt716.py`：两树镜像、四个点的关键代码都在、旧的"只读 WALK_TARGET"写法已消失。
+
+## 实测七百一十五【记忆优化·第一档：移植 Sphantosis 的事件元数据（未完成事件 + 注意力等级）】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

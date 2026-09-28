@@ -45,6 +45,8 @@ public final class RideBindManager {
     public static final String TAG_RIDE_MOUNT = MaidRideKit.TAG_RIDE_MOUNT;
     /** persistentData：这只坐骑驮的是哪位女仆——坐骑侧留痕 */
     public static final String TAG_RIDE_MAID = "maid_smart_ride_maid";
+    /** 【实测七百一十六·点3】persistentData：这只实体正被棍子"待配对"选中（金色"光标"） */
+    public static final String TAG_PENDING_MARK = "maid_smart_ride_pending";
 
     private static final int TICK_DIV = 2;
     private static final long DENY_INTERVAL_MS = 3000L;
@@ -184,6 +186,10 @@ public final class RideBindManager {
             deny(player, maid, why);
             return;
         }
+        // 【实测七百一十六·点1】独占：与武装拴绳同款——一位玩家同时只带一条骑乘链路。
+        // 玩家原话："如果绑定了一个女仆再绑定另一个，那么第1个会解绑，坐骑同理。"
+        releaseOtherLinks(player, maid);
+        releaseMountLinks(mount, maid);
         if (LINKS.containsKey(maid.getUUID())) {
             releaseMaid(maid, false, "换绑");
         }
@@ -245,10 +251,74 @@ public final class RideBindManager {
                 + (mount == null ? "" : " 坐骑=" + MaidRideKit.describe(mount)));
     }
 
+    /**
+     * 【实测七百一十六·点1】换绑 = 先松开这位玩家名下**别的**骑乘链路（口径照抄武装拴绳的
+     * {@code GunnerTetherManager.releaseOtherLinks}：只认"链路里的主人 == 这位玩家"，
+     * 先收集再解除——releaseMaid 会改 LINKS，边走边删会炸迭代器）。
+     */
+    private static void releaseOtherLinks(ServerPlayer player, EntityMaid except) {
+        try {
+            java.util.List<EntityMaid> others = new java.util.ArrayList<>();
+            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
+                Link link = e.getValue();
+                EntityMaid m = link.maid.get();
+                if (m == null || m == except) {
+                    continue;
+                }
+                ServerPlayer p = link.owner.get();
+                if (p != null && p.getUUID().equals(player.getUUID())) {
+                    others.add(m);
+                }
+            }
+            for (EntityMaid m : others) {
+                releaseMaid(m, false, "换绑");
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "换绑：先松开女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（主人=" + name(player) + "）");
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百一十六·点1】"坐骑同理"：这只坐骑上若已驮着**另一位**女仆的链路，一并松开
+     * ——一只坐骑同时只服务一位女仆（先收集再解除，理由同上）。
+     */
+    private static void releaseMountLinks(Entity mount, EntityMaid except) {
+        try {
+            java.util.List<EntityMaid> others = new java.util.ArrayList<>();
+            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
+                Link link = e.getValue();
+                EntityMaid m = link.maid.get();
+                Entity mm = link.mount.get();
+                if (m == null || m == except || mm == null) {
+                    continue;
+                }
+                if (mm.getUUID().equals(mount.getUUID())) {
+                    others.add(m);
+                }
+            }
+            for (EntityMaid m : others) {
+                releaseMaid(m, false, "坐骑换主");
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "坐骑换主：先松开女仆="
+                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（这只坐骑改配另一位）");
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /* ==================== 待配对状态 ==================== */
 
+    /**
+     * 【实测七百一十六·点3】选中即亮"光标"——玩家原话："如果玩家用这根棒子选中了那个女仆/
+     * 可骑乘坐骑，那就应该立刻显示光标，而不是坐上坐骑以后再显示。"
+     */
     private static void setPending(ServerPlayer player, Entity e) {
+        java.lang.ref.WeakReference<Entity> old = PENDING.get(player.getUUID());
+        if (old != null) {
+            clearPendingMark(old.get());
+        }
         PENDING.put(player.getUUID(), new java.lang.ref.WeakReference<>(e));
+        markPending(e);
     }
 
     private static Entity takePending(ServerPlayer player, boolean wantMaid) {
@@ -261,6 +331,7 @@ public final class RideBindManager {
             PENDING.put(player.getUUID(), new java.lang.ref.WeakReference<>(e));
             return null;
         }
+        clearPendingMark(e); // 点3：配对成功 → 撤掉"待选光标"（绑定后由 mark() 打正式标记）
         return e;
     }
 
@@ -286,13 +357,17 @@ public final class RideBindManager {
         if (ref != null) {
             Entity e = ref.get();
             if (e == null || !e.isAlive() || e.level() != sp.level()) {
+                clearPendingMark(e); // 点3：超时/消失也要撤掉"待选光标"
                 PENDING.remove(sp.getUUID());
             }
         }
     }
 
     public static void forgetPlayer(UUID playerId) {
-        PENDING.remove(playerId);
+        java.lang.ref.WeakReference<Entity> ref = PENDING.remove(playerId);
+        if (ref != null) {
+            clearPendingMark(ref.get()); // 点3：下线时撤掉"待选光标"
+        }
         DENY_LOG.remove(playerId);
     }
 
@@ -302,6 +377,11 @@ public final class RideBindManager {
             unmark(link.maid.get());
             unmark(link.mount.get());
         }
+    }
+
+    /** 点4：她是不是"被棍子绑上坐骑"的骑乘女仆（连坐骑一起搬运的判据）——给传送链路问 */
+    public static boolean isRideRider(EntityMaid maid) {
+        return MaidRideKit.isRideRider(maid);
     }
 
     /* ==================== 每 2 tick：驱动 + 校验 + 恢复 ==================== */
@@ -373,18 +453,23 @@ public final class RideBindManager {
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
             double mod = MaidRideKit.speedModifierFor(mount, maid);
-            Vec3 target = null;
-            try {
-                var wt = maid.getBrain().getMemory(
-                        net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
-                if (wt.isPresent()) {
-                    Vec3 t = wt.get().getTarget().currentPosition();
-                    if (t != null) {
-                        target = t;
+            // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源
+            Vec3 target = MaidRideKit.ownNavigationTarget(maid);
+            // ② 她的走位记忆（任务/跟随写在这里）
+            if (target == null) {
+                try {
+                    var wt = maid.getBrain().getMemory(
+                            net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+                    if (wt.isPresent()) {
+                        Vec3 t = wt.get().getTarget().currentPosition();
+                        if (t != null) {
+                            target = t;
+                        }
                     }
+                } catch (Throwable ignored) {
                 }
-            } catch (Throwable ignored) {
             }
+            // ③ 都没有 → 跟主人走（够远才喂）
             if (target == null) {
                 if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
                     target = owner.position();
@@ -464,6 +549,37 @@ public final class RideBindManager {
             return;
         }
         try {
+            e.setGlowingTag(false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百一十六·点3】"待选光标"：选中即亮（未绑定也亮），单独留痕便于"只撤我们打的那一下" */
+    private static void markPending(Entity e) {
+        if (e == null) {
+            return;
+        }
+        try {
+            e.setGlowingTag(true);
+            e.getPersistentData().putBoolean(TAG_PENDING_MARK, true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 撤掉"待选光标"：只在她身上没有正式链路标记时才熄灯（防把已绑定的标记一起撤掉） */
+    private static void clearPendingMark(Entity e) {
+        if (e == null) {
+            return;
+        }
+        try {
+            boolean pending = e.getPersistentData().getBoolean(TAG_PENDING_MARK);
+            if (!pending) {
+                return;
+            }
+            e.getPersistentData().remove(TAG_PENDING_MARK);
+            if (e instanceof EntityMaid m && LINKS.containsKey(m.getUUID())) {
+                return;
+            }
             e.setGlowingTag(false);
         } catch (Throwable ignored) {
         }
