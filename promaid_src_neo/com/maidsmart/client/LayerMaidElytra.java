@@ -81,15 +81,18 @@ public class LayerMaidElytra extends RenderLayer<Mob, BedrockModel<Mob>> {
         // v1.2.0 实测五百零七：取出胸甲槽的鞘翅栈——既用于下方的光泽判定
         // （hasFoil），也让"显示背部物品"判定与 1.20.1 侧写法保持一致。
         ItemStack chest = maid.getItemBySlot(EquipmentSlot.CHEST);
-        // 【实测六百八十四】判据从"只有原版鞘翅"放宽成 isWingRenderable（通用版）：
-        //  任何"能滑翔、且自己不是护甲"的装备都画我们的翅膀，见那个方法的说明。
+        // 【实测六百八十四 / 本轮修订】判据从"只有原版鞘翅"放宽成 isWingRenderable（通用版）：
+        //  任何"能滑翔"的装备都画我们的翅膀（含护甲型滑翔装备——TLM 不给女仆画护甲，见该方法说明）。
         if (!MaidFlightKit.isWingRenderable(chest, maid)) {
-            // "能滑翔、但本身是护甲"（鞘翅胸甲这类）会走到这里：它自己就有护甲外观，
-            // 我们不叠翅膀。留一行痕（40 tick 节流），免得日后把它当成渲染链路故障。
-            if (MaidFlightKit.isElytraLike(chest, maid)) {
-                MaidFlightKit.noteWingSkipped(maid, chest);
-            }
             return;
+        }
+        // 外观是不是那件装备自己的，要三段式解析查（MaidWingSkins）。原版鞘翅不在留痕范围内；
+        // 只有"模组滑翔装备但查不到自有贴图"才留一行痕（40 tick 节流），免得把这句"外观是原版的"
+        // 误当成渲染故障。
+        if (MaidFlightKit.isElytraLike(chest, maid)
+                && !MaidWingSkins.isVanillaElytra(chest)
+                && !MaidWingSkins.hasOwnTexture(chest, maid)) {
+            MaidFlightKit.noteWingVanillaFallback(maid, chest);
         }
         // v1.2.0 实测五百零四：绑定 TLM 的「显示背部物品」（女仆配置页那一项，
         // `gui.touhou_little_maid.maid_config.show_back_item`）——鞘翅画在女仆背上，

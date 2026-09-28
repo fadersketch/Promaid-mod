@@ -1,4 +1,97 @@
-﻿## 实测七百一十二【卓越前线能量枪打空后"一直在天上飞" + 手中枪没子弹时先翻背包换一把能接着打的】
+﻿## 实测七百一十三【鞘翅外观做成"通解通法"：三段式解析 + 删掉"护甲型滑翔装备不画"这条例外】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 一、玩家原话
+
+1. 「像鞘翅胸甲这种物品现在可以渲染出来自己的鞘翅纹理以及附魔效果吗？我希望这种渲染是一种**通解通法**，
+   而不是一些专门的适配。尽可能规避去专门适配的情况。」
+2. （更早之前）「目前鞘翅的渲染只在空袭模式下会被渲染出来。而且渲染出来的全都是原版鞘翅，
+   能不能调用那个鞘翅自己的外观呢？同时在所有模式下渲染。」
+
+### 二、结论先说
+
+- **附魔光泽本来就是通用的**——图层传的是 `ItemStack.hasFoil`（= 原版 `ElytraLayer` 同款第 4 参），
+  从实测五百零七 起就是"真附魔才发光"，与是哪件鞘翅无关。这一半不用改。
+- **翅膀贴图原来不是通用的**——靠 `MaidWingSkins` 里一张"物品 id → 贴图路径"的硬编码表（13 条），
+  认不出就退回原版贴图。**这次改成了三段式解析**（见下）。
+- **"能滑翔就画翅膀"这个闸门本来就是通用的**（判据 = 原版滑翔闸门 `ItemStack.canElytraFly`），
+  但原来多了一条"是护甲就不画"的例外，**把鞘翅胸甲这类整类排除了**。这次**删掉了这条例外**
+  （理由见第五节：那条例外建立在一个错误前提上）。
+
+### 三、三段式解析（`MaidWingSkins` 重写）
+
+```
+① 先问模组自己（反射它已经公开的取值口）
+② 问不到再查静态表（降级为覆盖/兜底）
+③ 仍认不出退回原版 textures/entity/elytra.png
+```
+
+- **① 反射**用**鸭子类型**，**不写死任何类名**：只要这件装备有一个无参 `getType()`，
+  且其返回对象有一个返回 `ResourceLocation` 的无参 `getTexture()`（伊卡洛斯之翼就是这样：
+  `AbstractWings.getType()` → `IWingsType/WingsType.getTexture()` / `getTextureReversed()`，
+  javap 实证两树都是 public），就直接采信；另探测装备自身公开的
+  `getElytraTexture(ItemStack[, LivingEntity])`。
+  - **好处**：该模组**日后新增翅膀物品，我们零改动即可画对**（静态表不用动）。
+  - 反射结果**不按类缓存**（`getElytraTexture` 允许按 ItemStack 的 NBT 给不同贴图，按类缓存会画错）；
+    只缓存"这个类有没有取值口"这一次判断。
+- **② 静态表**只保留"贴图藏在模组私有图层里、没有公开取值口"的：神秘遗物系
+  （`EnigmaticElytraLayer.TEXTURE_MAP` 是 private static，反射它等于抄实现，太脆）。
+- **③ 退回原版**——绝不画错，只是外观是原版的；留一行痕（日志搜「鞘翅渲染」）。
+
+**为什么不能做到"完全不认识任何模组也画对"**：Forge/NeoForge 的 `IClientItemExtensions` 里
+**根本没有**"告诉我你的鞘翅贴图"这个钩子（javap 实证：1.20.1 只有 getFont/getArmPose/
+applyForgeHandTransform/getHumanoidArmorModel/getGenericArmorModel/renderHelmetOverlay/
+getCustomRenderer；1.21.1 加了 setupModelAnimations/getArmorLayerTintColor/getScopeOverlayTexture/
+shouldBobAsEntity，仍然没有）。原版 1.20.1 的 `ElytraLayer` 更是把 `Items.ELYTRA` 与贴图常量写死，
+直到 1.21.1 才加了可覆写的 `getElytraTexture`——但那是**图层自己的**方法，模组物品无法从外部被问到。
+没有共享 API 就没有万能解，三段式是能达到的最通用形态。
+
+### 四、静态表顺手修正了一处真错（两树命名空间本来就不同）
+
+原静态表两树共用 `enigmaticlegacyplus:...` 的 id，但 **1.20.1 那边根本没有这个 namespace**：
+1.20.1 的神秘遗物是 `enigmaticlegacy`（壮丽鞘翅 → `textures/models/misc/elytra.png`）+
+  扩展 `enigmaticaddons`（混沌之傲 → `textures/item/3d/chaos_elytra.png`）；
+  1.21.1 才统一成 `enigmaticlegacyplus`（`textures/models/misc/majestic_elytra.png` / `chaos_elytra.png`）。
+  现在两树各写各的（逐条 javap + 字符串实证）。
+
+### 五、删掉"护甲型滑翔装备一律不画"这条例外（实测六百八十四 的规则反转）
+
+- **旧规则**：「能滑翔、但本身是护甲」的装备（鞘翅胸甲这类）**不叠**我们的翅膀，
+  理由是"它自己就有护甲外观，叠一层会穿模"。
+- **实测推翻了那个前提**：javap + jar 全量扫描 **1.20.1 与 1.21.1 两个 TLM 版本**，
+  `EntityMaidRenderer` 只挂了 Held / Head / Backpack / BackItem / Banner **五层**，
+  全 jar 对 `HumanoidArmorLayer` / `models/armor` / `textures/models/armor` 的引用数**都是 0**，
+  也没有任何护甲贴图资源（`textures/models/armor` 0 个 PNG）。→ **TLM 根本不给女仆画任何护甲。**
+- **所以**：鞘翅胸甲这类穿在女仆身上**本来什么都不显示**，把它排除在翅膀渲染之外 = 穿了个寂寞；
+  叠一层翅膀既不会穿模，还正好补上"她穿着滑翔胸甲"应有的观感。原版 `ElytraLayer` 只认
+  `Items.ELYTRA` 是因为**原版玩家会画护甲**、那件护甲自己就有外观；女仆这边没有这个前提。
+- 现在 `MaidFlightKit.isWingRenderable` = `isElytraLike`（能滑翔就画），不再看是不是护甲。
+  `isArmorElytra` 仍保留（**背包取用时优先穿带护甲那件**，那是另一件事，未动）。
+- 日志从"能滑翔、但本身是护甲 → 不叠翅膀"改成"能滑翔、但没能查到它自己的贴图 → 用原版贴图"。
+
+### 六、改动清单
+
+- `client/MaidWingSkins.java`（两树）：三段式解析器（反射鸭子类型 + 静态表 + 原版兜底）、
+  `hasOwnTexture` / `isVanillaElytra` 两个给图层用的小判据、静态表按树分命名空间。
+- `combat/MaidFlightKit.java`（两树）：`isWingRenderable` 去掉护甲例外；
+  `noteWingSkipped` → `noteWingVanillaFallback`（文案与新口径一致）。
+- `client/LayerMaidElytra.java` / `LayerMaidElytraGecko.java`（两树共 4 个）：闸门改为"能滑翔就画"，
+  并在"模组滑翔装备但查不到自有贴图"时留痕。
+- `config/MaidSmartConfig.java`（两树）：`COMBAT_WING_RENDER` 注释改成三段式口径。
+- `guide/GuideChaptersFlight.java`（两树）：第二节①（鞘翅）与第八节（鞘翅外观）文案同步。
+- 开关 `鞘翅外观`（默认开）行为不变，仍是"关掉 = 旧行为"。
+
+### 七、验证
+
+- 两树 `javac` **0 错误**（Forge 373 源 / Neo 375 源）。
+- `_mixchk.py` 注入点审计 **0 FAIL**（175 项）。
+- 反射目标逐条 javap 实证：伊卡洛斯 `getType()/getTexture()/getTextureReversed()` 两树 public；
+  `IClientItemExtensions` 两版本都无鞘翅贴图钩子。
+- TLM 护甲渲染实证：两版本 jar 对护甲图层/资源的引用数均为 0。
+
+## 实测七百一十二【卓越前线能量枪打空后"一直在天上飞" + 手中枪没子弹时先翻背包换一把能接着打的】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。
