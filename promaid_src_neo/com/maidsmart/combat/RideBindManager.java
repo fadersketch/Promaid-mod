@@ -75,17 +75,24 @@ public final class RideBindManager {
         final boolean chair;
         /** 绑上之前龙的 {@code getCommand()}（解绑时还原；非龙 / 没读到 → -1）。 */
         final int dragonCommand;
+        /**
+         * 【实测七百二十五】绑上之前她的 TLM 坐姿标志——解绑时原样还原（玩家手动让她坐下 /
+         * 原版"坐下"指令都不会被我们吃掉）。
+         */
+        final boolean prevSitting;
 
-        Link(EntityMaid m, Entity mount, ServerPlayer owner) {
-            this(m, mount, owner, false, -1);
+        Link(EntityMaid m, Entity mount, ServerPlayer owner, boolean prevSitting) {
+            this(m, mount, owner, false, -1, prevSitting);
         }
 
-        Link(EntityMaid m, Entity mount, ServerPlayer owner, boolean chair, int dragonCommand) {
+        Link(EntityMaid m, Entity mount, ServerPlayer owner, boolean chair, int dragonCommand,
+             boolean prevSitting) {
             this.maid = new java.lang.ref.WeakReference<>(m);
             this.mount = new java.lang.ref.WeakReference<>(mount);
             this.owner = new java.lang.ref.WeakReference<>(owner);
             this.chair = chair;
             this.dragonCommand = dragonCommand;
+            this.prevSitting = prevSitting;
         }
     }
 
@@ -547,6 +554,11 @@ public final class RideBindManager {
                     : "这只坐骑已经有女仆了～");
             return;
         }
+        // 【实测七百二十五·点1】绑上就是坐姿：她的**可见坐姿**只由 TLM 的坐姿标志
+        // ({@code isMaidInSittingPose}) 决定（bedrock JS 与 gecko molang 两条渲染路径都问它，
+        // 反编译实证），而骑载具/龙这条路没人替她置位 → 她一直用站立模型。
+        // 记下绑前的值，解绑时原样还原。
+        boolean prevSitting = MaidMountCompat.isSitting(maid);
         // 【实测七百二十三】冰火传说的龙走**降级方案**：不 startRiding（她不是乘客），
         // 改成"每 tick 由我们把她摆到龙的玩家鞍位上 + 无重力 + 龙置跟随档"。
         // 完整口径见 MaidMountCompat 那一节的类注释（为什么真骑这条路走不通）。
@@ -555,8 +567,10 @@ public final class RideBindManager {
         if (chair) {
             // ① 摆位 + 无重力（她不是乘客，原版没有东西托着她）
             MaidMountCompat.setGravity(maid, false);
+            MaidMountCompat.setSitting(maid, true); // 点1：先坐姿，落点才按坐姿算
             if (!MaidMountCompat.seatOnDragon(mount, maid)) {
                 MaidMountCompat.setGravity(maid, true); // 摆不上就还原，别让她飘着
+                MaidMountCompat.setSitting(maid, prevSitting);
                 deny(player, maid, "没能坐上它的鞍位……再试一次？");
                 return;
             }
@@ -572,6 +586,7 @@ public final class RideBindManager {
                 deny(player, maid, "没能坐上去……再试一次？");
                 return;
             }
+            MaidMountCompat.setSitting(maid, true); // 点1：骑上去就是坐姿
             // v1.3.0(beta) 实测七百一十九：卓越前线的引擎只认**座位 0**（getFirstPassenger）——
             // 女仆若被排到别的座位（驾驶位已被玩家占了）她能开火却开不动，这里把她挪回座位 0。
             try {
@@ -582,7 +597,7 @@ public final class RideBindManager {
             } catch (Throwable ignored) {
             }
         }
-        LINKS.put(maid.getUUID(), new Link(maid, mount, player, chair, prevCmd));
+        LINKS.put(maid.getUUID(), new Link(maid, mount, player, chair, prevCmd, prevSitting));
         try {
             maid.getPersistentData().putString(TAG_RIDE_MOUNT, maid.getUUID() + "|"
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + mount.getUUID());
@@ -618,6 +633,9 @@ public final class RideBindManager {
         }
         Link link = LINKS.remove(maid.getUUID());
         Entity mount = link == null ? null : link.mount.get();
+        // 【实测七百二十五·点1】解绑还原坐姿（绑前是站姿就还原站姿）——玩家的原版"坐下"指令 /
+        // 手动让她坐下，都不会被我们吃掉。
+        MaidMountCompat.setSitting(maid, link != null && link.prevSitting);
         // 【实测七百二十三】悬空鞍位（龙）那条：还原重力 + 还原龙的行动档。
         // 她压根不是乘客，所以下面那些"下鞍"动作对她无意义。
         if (link != null && link.chair) {
@@ -850,6 +868,10 @@ public final class RideBindManager {
                     deferred.add(maid);
                     continue;
                 }
+                // 【实测七百二十五·点1】每拍复述坐姿：TLM 的任务里有几处会 her 清回站姿
+                // （MaidBedTask/MaidJoyTask 等），一掉就变回站姿模型、看着又"站着骑"。
+                // 与龙那一档的 freezeOnSeat 同口径，只是她这条是真乘客、不需要停导航。
+                MaidMountCompat.setSitting(maid, true);
                 if (owner == null || !owner.isAlive() || owner.level() != maid.level()) {
                     MaidRideKit.stopNavigation(mount);
                     continue;
@@ -869,6 +891,8 @@ public final class RideBindManager {
     private static void releaseMaidQuiet(EntityMaid maid) {
         Link link = LINKS.remove(maid.getUUID());
         Entity mount = link == null ? null : link.mount.get();
+        // 【实测七百二十五·点1】自动解除同样要还原坐姿（与 releaseMaidImpl 同口径）。
+        MaidMountCompat.setSitting(maid, link != null && link.prevSitting);
         // 【实测七百二十四】自动解除这条以前**不还原**重力/龙的行动档（只有 releaseMaidImpl 才还原）
         // → 她永久无重力飘着、龙永久卡跟随档。这里补齐，与 releaseMaidImpl 同口径。
         if (link != null && link.chair) {
@@ -1027,7 +1051,10 @@ public final class RideBindManager {
                 }
                 LivingEntity owner = maid.getOwner();
                 if (owner instanceof ServerPlayer sp) {
-                    LINKS.put(maid.getUUID(), new Link(maid, mount, sp));
+                    // 【实测七百二十五·点1】重载后重建链路同样保持坐姿（与 bind 同口径；
+                    // 这里她是乘客，绑前值无从得知，就用"当前值"当还原目标，最保守）。
+                    LINKS.put(maid.getUUID(), new Link(maid, mount, sp, MaidMountCompat.isSitting(maid)));
+                    MaidMountCompat.setSitting(maid, true);
                     mark(maid);
                     mark(mount);
                     com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "恢复：女仆="
