@@ -132,6 +132,20 @@ public final class MaidMountCompat {
     private static Method mSetMouseSpeedY;    // setMouseMoveSpeedY(float)
     private static Method mSetHoverMode;      // setHoverMode(boolean)
     private static Method mGetHoverMode;      // getHoverMode()
+    /* 【实测七百二十六·点6】女仆自己往载具里装弹：车的枪弹从**车自己的容器**取（反编译
+     * ModCapabilities 实证：Capabilities.ItemHandler.ENTITY → getInventory()），她背包里的
+     * 子弹车看不见。这三组反射用来"读出这车要哪种子弹 + 把子弹从她背包搬进车容器"。 */
+    private static Method mGetInventory;       // getInventory() -> VehicleContainerHandler(IItemHandler)
+    private static Method mGetGunDataMap;      // getGunDataMap() -> Map<String, GunData>
+    private static Method mGunUseBackpackAmmo; // GunData.useBackpackAmmo()
+    private static Method mGunSelectedAmmo;    // GunData.selectedAmmoConsumer() -> AmmoConsumer
+    private static Method mConsumerPlayerAmmo; // AmmoConsumer.getPlayerAmmoType() -> Ammo
+    private static Method mConsumerAmmoName;   // AmmoConsumer.getAmmo() -> String
+    private static Class<?> cAmmoEnum;         // com...data.gun.Ammo
+    private static Method mAmmoGetType;        // Ammo.getType(String) -> Ammo
+    private static Class<?> cAmmoSupplierItem; // com...item.ammo.AmmoSupplierItem
+    private static Method mAmmoItemGetType;    // AmmoSupplierItem.getType() -> Ammo
+    private static Method mAmmoItemGetToAdd;   // AmmoSupplierItem.getAmmoToAdd() -> int
 
     /* ==================== 反射缓存：冰火传说 ==================== */
 
@@ -234,6 +248,44 @@ public final class MaidMountCompat {
                 mSetMouseSpeedY = null;
                 mSetHoverMode = null;
                 mGetHoverMode = null;
+            }
+            // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
+            // 每一环各自 try（缺一环只是"装弹"这一档不生效，不影响驾驶/开火）。
+            try {
+                mGetInventory = cVehicle.getMethod("getInventory");
+                mGetGunDataMap = cVehicle.getMethod("getGunDataMap");
+            } catch (Throwable ignored) {
+                mGetInventory = null;
+                mGetGunDataMap = null;
+            }
+            try {
+                Class<?> gdCls = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                mGunUseBackpackAmmo = gdCls.getMethod("useBackpackAmmo");
+                mGunSelectedAmmo = gdCls.getMethod("selectedAmmoConsumer");
+                cAmmoEnum = Class.forName("com.atsuishio.superbwarfare.data.gun.Ammo");
+                mAmmoGetType = cAmmoEnum.getMethod("getType", String.class);
+            } catch (Throwable ignored) {
+                mGunUseBackpackAmmo = null;
+                mGunSelectedAmmo = null;
+                cAmmoEnum = null;
+                mAmmoGetType = null;
+            }
+            try {
+                Class<?> acCls = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
+                mConsumerPlayerAmmo = acCls.getMethod("getPlayerAmmoType");
+                mConsumerAmmoName = acCls.getMethod("getAmmo");
+            } catch (Throwable ignored) {
+                mConsumerPlayerAmmo = null;
+                mConsumerAmmoName = null;
+            }
+            try {
+                cAmmoSupplierItem = Class.forName("com.atsuishio.superbwarfare.item.ammo.AmmoSupplierItem");
+                mAmmoItemGetType = cAmmoSupplierItem.getMethod("getType");
+                mAmmoItemGetToAdd = cAmmoSupplierItem.getMethod("getAmmoToAdd");
+            } catch (Throwable ignored) {
+                cAmmoSupplierItem = null;
+                mAmmoItemGetType = null;
+                mAmmoItemGetToAdd = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -1097,6 +1149,22 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测七百二十六·点3】这只坐骑是不是"飞行载具"（卓越前线的直升机 / 固定翼）——
+     * 空战那一档（{@link MaidAirCombat}）据此决定要不要接管"去哪"。
+     *
+     * <p>判据与 {@link #isFlyingEngine} 同源（同一个引擎名集合），只是这一条对外公开、
+     * 供 {@code RideBindManager} 问。飞艇**不算**：它的偏航/升降走位掩码，接敌盘旋那套
+     * "爬升 + 绕圈"的坐标语义对它没有意义（而且它本来也不快）。
+     */
+    public static boolean isFlyingVehicle(Entity e) {
+        try {
+            return isVehicle(e) && isFlyingEngine(engineType(e));
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * v1.3.0(beta) 实测七百二十五【女仆驾驶直升机：左右与升降都不动】。
      *
      * <h2>玩家原话</h2>
@@ -1298,6 +1366,197 @@ public final class MaidMountCompat {
      * 比引擎自己那 10°/秒 快得多（这就是"能转弯"与"顶住不动"的差别），又不至于瞬转画龙。
      */
     private static final double HEAD_STEER_MAX_DEG_PER_TICK = 12.0;
+
+    /* ==================== 实测七百二十六·点6：女仆自己把子弹搬进载具弹药容器 ==================== */
+
+    /** 装弹开关（配置 combat.ride.ammoFeed，默认开）。 */
+    public static boolean ammoFeedEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具装弹】。
+     *
+     * <h2>玩家原话</h2>
+     * 「卓越前线，如果女仆身上有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？」
+     *
+     * <h2>根因（反编译实证）</h2>
+     * 车的枪弹从 {@code GunData.countBackupAmmo(getAmmoSupplier())} / {@code withdrawAmmo} 取，
+     * 而 {@code VehicleEntity.getAmmoSupplier()} 返回的是**车自己**；车又注册了
+     * {@code Capabilities.ItemHandler.ENTITY} → {@code getInventory()}（{@code VehicleContainerHandler}，
+     * 反编译 {@code ModCapabilities$registerCapabilities$9} 实证）——也就是说车的"备用弹药"
+     * 只在**车自己的容器**里找。她背包里的子弹在**她**身上，车根本看不见（
+     * {@code InventoryTool.countAmmoItem(VehicleEntity)} 走的是车那个 capability）。
+     * 所以旧版她身上带再多对得上的子弹，也一枪都打不出来。
+     *
+     * <h2>本方法做什么</h2>
+     * 找出**这辆车当前武器实际吃的那种子弹类型**（从车里那门枪的 {@code selectedAmmoConsumer()} 的
+     * {@code getPlayerAmmoType()} 读出来，读不到就用 {@code getAmmo()} 名字反查），
+     * 然后把她背包里**属于这一种**的弹药搬进车的容器（{@code insertItem}）。
+     * 对不上的子弹一件都不动。
+     *
+     * <p>节流：调用方（{@code RideBindManager}）每 0.5 秒调一次就够——弹药消耗远慢于此。
+     *
+     * @return 这一次搬进去的**件数**（0 = 没搬 / 没有对得上的 / 车装满了）
+     */
+    public static int feedVehicleAmmo(Entity mount, EntityMaid maid) {
+        try {
+            if (!ammoFeedEnabled() || mount == null || maid == null) {
+                return 0;
+            }
+            if (!isVehicle(mount) || mGetInventory == null || mGetGunDataMap == null) {
+                return 0;
+            }
+            Object ammoType = wantedAmmoType(mount);
+            if (ammoType == null) {
+                return 0; // 这车没有任何"背包弹药"型武器 → 无事可做
+            }
+            Object container = mGetInventory.invoke(mount);
+            if (!(container instanceof net.neoforged.neoforge.items.IItemHandler inv)) {
+                return 0;
+            }
+            // 从她身上取对得上的子弹：主手 → 副手 → 背包（含精妙背包/旅行者背包，走 TLM 的
+            // getAvailableBackpackInv）。抽出来立刻塞进车容器；塞不下的原样还回她背包。
+            int moved = 0;
+            moved += moveFrom(maid.getHandsInvWrapper(), ammoType, inv);
+            moved += moveFrom(availableInv(maid), ammoType, inv);
+            if (moved > 0) {
+                logVehicleAmmo(mount, moved);
+            }
+            return moved;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /** 读出这辆车当前武器要的子弹类型（{@code Ammo} 枚举实例）；读不到 → null。 */
+    private static Object wantedAmmoType(Entity mount) {
+        try {
+            Object mapObj = mGetGunDataMap.invoke(mount);
+            if (!(mapObj instanceof java.util.Map<?, ?> map) || map.isEmpty()) {
+                return null;
+            }
+            for (Object gd : map.values()) {
+                if (gd == null || mGunUseBackpackAmmo == null || mGunSelectedAmmo == null) {
+                    continue;
+                }
+                Object useBackpack = mGunUseBackpackAmmo.invoke(gd);
+                if (!Boolean.TRUE.equals(useBackpack)) {
+                    continue; // 这把枪不吃背包弹（自带的弹匣型）→ 跳过
+                }
+                Object consumer = mGunSelectedAmmo.invoke(gd);
+                if (consumer == null) {
+                    continue;
+                }
+                // ① 首选：AmmoConsumer.getPlayerAmmoType()（SWB 直接给的枚举实例）
+                if (mConsumerPlayerAmmo != null) {
+                    Object t = mConsumerPlayerAmmo.invoke(consumer);
+                    if (t != null) {
+                        return t;
+                    }
+                }
+                // ② 兜底：用 getAmmo() 的名字反查（Ammo.getType(String)）
+                if (mConsumerAmmoName != null && mAmmoGetType != null) {
+                    Object name = mConsumerAmmoName.invoke(consumer);
+                    if (name instanceof String s && !s.isEmpty()) {
+                        Object t = mAmmoGetType.invoke(null, s);
+                        if (t != null) {
+                            return t;
+                        }
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /** 她可用于装弹的背包（含额外容器拉取）；拿不到 → null。 */
+    private static net.neoforged.neoforge.items.IItemHandler availableInv(EntityMaid maid) {
+        try {
+            return maid.getAvailableBackpackInv();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 从一个物品栏里把"属于 ammoType 的子弹"搬进车容器。命中一件就抽 1 件、立刻塞；
+     * 塞不下（{@code insertItem} 返回剩余 &gt; 0）就把它原样还回同一个格子。
+     *
+     * <p>为什么抽 1 件而不是整摞：{@code IItemHandler#insertItem} 会自己按上限合并，
+     * 抽 1 件最省事、也最难出错（一次调用只动一格）。循环上限 = 该栏格数，绝不死锁。
+     */
+    private static int moveFrom(net.neoforged.neoforge.items.IItemHandler from,
+                                Object ammoType, net.neoforged.neoforge.items.IItemHandler into) {
+        if (from == null || into == null) {
+            return 0;
+        }
+        int moved = 0;
+        try {
+            int slots = from.getSlots();
+            for (int i = 0; i < slots; i++) {
+                if (!slotIsWantedAmmo(from.getStackInSlot(i), ammoType)) {
+                    continue;
+                }
+                net.minecraft.world.item.ItemStack one = from.extractItem(i, 1, false);
+                if (one.isEmpty()) {
+                    continue;
+                }
+                // ItemHandlerHelper.insertItem 会自己找空位/合并；返回的剩余非空 = 塞不下
+                net.minecraft.world.item.ItemStack rest =
+                        net.neoforged.neoforge.items.ItemHandlerHelper.insertItem(into, one, false);
+                if (!rest.isEmpty()) {
+                    from.insertItem(i, rest, false); // 车装满了 → 原样退回，别吞她的东西
+                    break;
+                }
+                moved++;
+            }
+        } catch (Throwable ignored) {
+        }
+        return moved;
+    }
+
+    /** 这一格物品是不是"我们要的那种子弹"（{@code AmmoSupplierItem.getType() == ammoType}）。 */
+    private static boolean slotIsWantedAmmo(net.minecraft.world.item.ItemStack stack, Object ammoType) {
+        try {
+            if (stack == null || stack.isEmpty() || cAmmoSupplierItem == null || mAmmoItemGetType == null) {
+                return false;
+            }
+            if (!cAmmoSupplierItem.isInstance(stack.getItem())) {
+                return false;
+            }
+            Object t = mAmmoItemGetType.invoke(stack.getItem());
+            return t != null && t == ammoType; // Ammo 是枚举 → 引用相等即类型相同
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
+    private static void logVehicleAmmo(Entity mount, int moved) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = AFEED_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            AFEED_AT.put(mount.getUUID(), now);
+            if (AFEED_AT.size() > 512) {
+                AFEED_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·装弹", describeKind(mount)
+                    + " 女仆把对得上的子弹搬进载具弹药容器：+" + moved + " 发");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 装弹日志的独立频限表（与其它几条日志互不顶掉）。 */
+    private static final java.util.Map<java.util.UUID, Long> AFEED_AT = new java.util.concurrent.ConcurrentHashMap<>();
 
     /* ==================== 攻击：让载具/龙去打她的目标 ==================== */
 

@@ -103,7 +103,10 @@ public final class MaidHeatEscape {
             // 【实测七百二十四】悬空鞍位（龙）那条：她挂在鞍位上、由我们每拍定位，烫伤撤离的
             // teleport 会把她拽离龙背（然后链路判定"断开"）。龙背上不该有烫伤区；真遇到就交给
             // 链路自己那套（她不是乘客、isPassenger 认不出她，所以这里单独判一次）。
-            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
+            //  卓越前线载具那条她是**乘客**，而本方法**没有** isPassenger 那道闸（它本来只服务
+            //  扫帚/滑翔），旧版于是会把乘客位的她从载具上 teleport 下来。特殊载具上一律不搬。
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 return false;
             }
             if (!burning(maid)) {

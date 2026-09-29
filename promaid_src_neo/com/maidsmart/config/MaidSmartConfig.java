@@ -496,6 +496,16 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * （含 interactAt）。默认开 = 拿棍子骑不上龙/车。完整口径见 1.20.1 树同名字段。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_BATON_EXCLUSIVE;
+    /**
+     * 【实测七百二十六·点3】骑飞行载具时套用扫帚模式空战（默认开）：有目标就先爬到敌上
+     * {@link #COMBAT_RIDE_AIR_ALT} 格、再绕着敌人盘旋射击。数值口径见
+     * {@code MaidMountCompat.driveFlight} 与 {@code MaidAirCombat}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_AIR_COMBAT;
+    /** 【实测七百二十六·点3】空战·离敌高度（格，默认 15）。玩家原话「至少离敌人要高出15格左右吧」 */
+    public static final ModConfigSpec.DoubleValue COMBAT_RIDE_AIR_ALT;
+    /** 【实测七百二十六·点6】骑载具时女仆自己把对得上的子弹搬进载具弹药容器（默认开） */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_AMMO_FEED;
 
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
@@ -2418,6 +2428,26 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 由棍子吃掉（含 interactAt）。完整口径见 1.20.1 树同名字段的注释。
         COMBAT_RIDE_BATON_EXCLUSIVE = BUILDER.comment("骑乘指挥棒·独占右击（默认开）：手持**骑乘指挥棒**时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果——最直接的一条就是「拿棍子骑不上龙/车子」。\n\n【为什么要专门开这一档】冰火传说的龙是**多部件实体**：准星常常打中的是它的翅膀/尾巴/头，那些是独立的小实体，会把这一下右击**转发给龙本体**，龙本体收到就让你骑上去。旧版只认「目标本身是不是能骑的坐骑」，看到一块“部位”就放行 → 转发 → 你就骑上去了。本档把整条路堵死：只要手里是骑乘指挥棒，这一下右击一律归棍子。\n\n【也管 interactAt】客户端对实体右击是「先 interactAt、没被消费才 interact」，两个入口都拦掉才叫“不触发原本的右击效果”。\n\n【关掉 = 与上一版一字不差】只有我们认得出的目标（女仆 / 已上鞍坐骑 / 模组载具·龙 / 家具扫帚）才由棍子接管，对着别的实体挥棍子仍然放行。")
                 .translation("config.promaid.ride.batonExclusive").define("batonExclusive", true);
+        // v1.3.0(beta) 实测七百二十六·点3【武装直升机空战】——玩家原话："女仆在驾驶武装直升机的时候
+        // 总算可以跟着主人进行飞行了，但是在战斗的时候显得过于笨逼，发挥不出武装直升机的优势，
+        // 应该要套用扫帚模式运动代码和逻辑，体现出空战的优势。至少离敌人要高出15格左右吧。现在
+        // 基本上就是绕着敌人盘旋，但是总是在地上和高空5个左右跳动，敌人很容易就能打到。"
+        // 根因：直升机的航向/俯仰走鼠标通道、高度靠总距（反编译 helicopterEngine 实证），旧版
+        // driveFlight 只朝"主人跟随点"飞 —— 一有敌人它还在追主人，贴地乱窜。本档让她骑飞行载具
+        // 时改走"扫帚模式同款接敌盘旋"：先爬到敌上 N 格，再绕着敌人转着打。
+        COMBAT_RIDE_AIR_COMBAT = BUILDER.comment("骑飞行载具时空战（默认开）：女仆驾驶**飞行载具**（卓越前线的武装直升机 / 固定翼）时，一旦有攻击目标，飞行方式**改成与扫帚模式同款**——先爬到敌人上方（高度见下一项），再绕着敌人盘旋射击，而不是继续贴着主人飞、在低空乱窜。\n\n【为什么必须单独开一档】飞行载具的航向/俯仰走**鼠标通道**、高度靠**总距**（反编译 helicopterEngine 实证），与地面载具那套左右位完全不同；而旧版驱动只朝「主人的跟随点」飞——一有敌人它还在追主人，表现就是玩家说的「绕着敌人盘旋，但总是在地上和高空5个左右跳动」。\n\n关闭 = 回到旧行为（飞行载具只管跟着主人飞，不主动接敌盘旋）。地面载具（坦克/装甲车）不受本档影响，它们照旧贴地跟着主人、用车上的炮塔打。")
+                .translation("config.promaid.ride.airCombat").define("airCombat", true);
+        COMBAT_RIDE_AIR_ALT = BUILDER.comment("空战·离敌高度（格，默认 15，5~40）：骑飞行载具接敌时，先爬到敌人**上方**这么多格再开始盘旋——玩家原话「至少离敌人要高出15格左右吧」。\n\n这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那儿打，打完/丢目标才作废），与扫帚模式的「接敌爬升高度」同一个语义、只是各自一个旋钮（那个管骑扫帚，这个管骑飞行载具）。头顶被方块顶住时按实际抬到的高度记，绝不低于「悬停高度」。")
+                .translation("config.promaid.ride.airAlt")
+                .defineInRange("airAlt", 15.0, 5.0, 40.0);
+        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具里装弹】——玩家原话："卓越前线，如果女仆身上
+        // 有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？"
+        // 根因：车的枪弹从 getAmmoSupplier() = 车自己的**容器**里取（Capabilities.ItemHandler.ENTITY
+        // → VehicleContainerHandler，反编译 ModCapabilities 实证）；她背包里的子弹在**她**身上，
+        // 车根本看不见。本档把她背包里"这车这把枪对得上的子弹"搬进车的容器。
+        COMBAT_RIDE_AMMO_FEED = BUILDER.comment("骑载具时替她装弹（默认开）：女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。\n\n搬的是什么：只搬**这辆车当前武器实际吃的那种子弹**（从车里那门枪的弹药配置读出来），对不上的子弹一件不动。每 0.5 秒检查一次、按需搬，绝不一次全倒进去。\n\n关闭 = 不搬（你想手动装弹就关掉它）。只在她被骑乘指挥棒绑定时生效。")
+                .translation("config.promaid.ride.ammoFeed")
+                .define("ammoFeed", true);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的

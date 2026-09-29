@@ -461,10 +461,13 @@ public final class RideBindManager {
                     deny(player, m, "我处于扫帚模式");
                     return;
                 }
-                setPending(player, m);
-                bubble(m, "好呀，再指一只上了鞍的坐骑给我～");
-                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "选中女仆："
-                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（玩家=" + name(player) + "，等坐骑）");
+                // 【实测七百二十六·点5】绑定顺序**强制"先瞄载具、再瞄女仆"**。玩家原话：
+                // 「如果先用骑乘棒绑定女仆再绑定载具是无效的。必须要先绑定载具再绑定女仆。
+                // 也罢，咱们干脆就堵死了。描述以及代码上都要求必须要先瞄载具再瞄女仆。」
+                // 旧版这里给女仆挂"待选"光标、等玩家再指坐骑（那条"先选女仆"的链路实机里
+                // 不可靠）；现在直接拒绝并明说该怎么做——**不再给女仆挂待选**，于是
+                // "女仆先"这条路彻底不存在，只剩"先坐骑"一条。
+                deny(player, m, "先用骑乘棒右击坐骑，再来右击我～");
                 return;
             }
             EntityMaid pendingMaid = takePendingMaid(player);
@@ -632,6 +635,9 @@ public final class RideBindManager {
             return;
         }
         Link link = LINKS.remove(maid.getUUID());
+        // 【实测七百二十六·点3】下鞍 = 空战这一场遭遇结束：清掉爬升相位/盘旋高度（与扫帚 clearClimb
+        // 同口径）。不清的话她下次再骑上去会带着上一场的盘旋高度/方位角。
+        MaidAirCombat.clear(maid);
         Entity mount = link == null ? null : link.mount.get();
         // 【实测七百二十五·点1】解绑还原坐姿（绑前是站姿就还原站姿）——玩家的原版"坐下"指令 /
         // 手动让她坐下，都不会被我们吃掉。
@@ -764,6 +770,64 @@ public final class RideBindManager {
         }
     }
 
+    /**
+     * v1.3.0(beta) 实测七百二十六·点1【"特殊载具"= 卓越前线的载具 + 冰火传说的龙】。
+     *
+     * <h2>玩家原话</h2>
+     * 「对于卓越前线以及龙这两个特殊的载具……不会触发大部分传送，只有玩家手动使用排班表
+     *  进行的传送，可以将她们传送过来。不会连着载具一起传送。只会把人传送过来。并且一旦进行
+     *  传送了，那么就会立刻进行一次清除标记和解绑。也就是说，相比于原版的坐骑女仆并不会去
+     *  主动产生传送。所有的传送方面的行为必须由玩家来。」
+     *
+     * <p>所以这一档的语义与**普通原版坐骑**（马/猪/骆驼，{@link MaidRideKit#isRideRider}）**故意不同**：
+     * <ul>
+     *   <li><b>普通坐骑</b>：保留旧口径——自动/手动传送都"连人带坐骑一起搬"（玩家 716 点名要的）。</li>
+     *   <li><b>特殊载具（本档）</b>：**一切自动传送一律不生效**（跨维跟随 / 同维远距拉回 /
+     *       危险撤离 / 主人死亡归位 / TLM 原生 teleportToOwner 全部让位）；**只有玩家手动**的
+     *       排班表传送（「传送到我身边」/「一键集合」）能把人传过来，且**只传人不传载具**，
+     *       传送的同时**解除绑定、清掉光标标记**。</li>
+     * </ul>
+     *
+     * <p>判据同时认"链路表里的 chair（龙）"与"她骑的是卓越前线载具（{@code kindOf == VEHICLE}）"，
+     * 并对"服务端重启后链路表还没重建"的那一拍兜底（按 {@code TAG_RIDE_MOUNT} 痕迹 + 当前载具类型认）。
+     */
+    public static boolean isSpecialMountRider(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            Link link = LINKS.get(maid.getUUID());
+            if (link != null && link.chair) {
+                return true; // 冰火传说的龙（悬空鞍位）
+            }
+            // 卓越前线的载具：她一定是乘客（走 startRiding）；链路表未重建的那一拍按痕迹 + 类型认
+            Entity v = maid.getVehicle();
+            if (v != null && MaidMountCompat.kindOf(v) == MaidMountCompat.Kind.VEHICLE) {
+                if (link != null || MaidRideKit.isBatonBound(maid)) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百二十六·点1】玩家**手动**排班表传送特殊载具上的女仆时调用：先干净解除绑定
+     * （还原坐姿 / 重力 / 龙的行动档 + 撤掉金色标记 + 清 persistentData 痕迹），再让她被单独
+     * 传送过去（载具留在原地）。玩家原话「不会连着载具一起传送。只会把人传送过来。并且一旦
+     * 进行传送了，那么就会立刻进行一次清除标记和解绑。」
+     *
+     * <p>走的实现与 {@link #releaseMaidImpl} 同一支（{@code natural = true}：不播"我自己走"的
+     * 气泡——她是被玩家召回的，不是自己下鞍）。她若还是乘客（载具那条），解除里会
+     * {@code stopRiding()}；龙那条会还原重力与 {@code command}。
+     */
+    public static void detachForSpecialTeleport(EntityMaid maid) {
+        releaseMaidImpl(maid, true, "手动传送（只传人，解除绑定）");
+    }
+
+
     /** 这条坐骑背上"悬空鞍位"占着的那只女仆（给"右击龙提示已占用"用）；没有 → null。 */
     public static EntityMaid chairRiderOf(Entity mount) {
         try {
@@ -821,6 +885,75 @@ public final class RideBindManager {
             MaidMountCompat.setGravity(maid, false);
             MaidMountCompat.freezeOnSeat(maid);
             MaidMountCompat.seatOnDragon(mount, maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百二十六·点2【龙每拍摆位补在**龙自己 tick 之后**——治"她换位置的速度
+     * 赶不上龙飞行的速度"】。
+     *
+     * <h2>玩家原话</h2>
+     * 「目前女仆跟龙之间还是有一点点小小的错位，就是女仆换位置的速度赶不上龙飞行的速度。」
+     *
+     * <h2>根因（服务端 tick 顺序，javap 实证）</h2>
+     * {@code ServerLevel.tickNonPassenger(e)} 的顺序是
+     * {@code setOldPosAndRot → fireEntityTickPre → e.tick() → fireEntityTickPost → 摆乘客}，
+     * 而**同一 tick 内龙与女仆谁先 tick 由实体 ID 决定**。{@link #onMaidTick} 挂在
+     * {@code MaidTickEvent}（在她**自己的** {@code tick()} 里），所以：
+     * <ul>
+     *   <li>龙**先** tick：她 tick 时拿到的是龙的新位置 → 摆位正确；</li>
+     *   <li>她**先** tick：她按龙的**旧**位置摆好，随后这一 tick 龙才飞到新位置 →
+     *       她整整落后龙一帧（每拍 0.5~1 格，飞起来就是"明显的错位"）。</li>
+     * </ul>
+     * 也就是说 {@link #onMaidTick} 是"在**她**的 tick 里摆"，而真正稳的做法是"在**龙的**
+     * tick 里摆"——不管谁先谁后，{@code EntityTickEvent.Post} 对**两者**都发，谁后 tick 谁的
+     * Post 就是这一帧的最后一次摆位，天然收敛到"她的位置 = 龙这一帧的最终鞍位"。
+     *
+     * <h2>为什么用 Post 而不是 Pre</h2>
+     * Post 在 {@code e.tick()} **返回之后**发（javap 实证），龙的 {@code setPos} 已经落地——这正是
+     * 我们要的那一帧的最终位置。Pre 会拿到上一帧的位置，等于没修。
+     *
+     * <h2>成本</h2>
+     * {@code EntityTickEvent.Post} 对**每个实体每 tick** 都发，所以这里两道最便宜的守卫排在最前：
+     * ① 她（{@code EntityMaid}）或 ② 龙（{@link MaidMountCompat#isDragon}）——其余实体一次
+     * 方法调用就返回；真正的摆位只在"确实是悬空鞍位链路里的那两只之一"时才做。
+     */
+    @SubscribeEvent
+    public static void onEntityTickPost(net.neoforged.neoforge.event.tick.EntityTickEvent.Post event) {
+        try {
+            if (!isEnabled() || LINKS.isEmpty()) {
+                return;
+            }
+            Entity e = event.getEntity();
+            if (e == null || e.level().isClientSide()) {
+                return;
+            }
+            // ① 她本人 tick 完 → 按龙的当前（可能刚更新）位置摆一次
+            if (e instanceof EntityMaid maid) {
+                Link link = LINKS.get(maid.getUUID());
+                if (link == null || !link.chair) {
+                    return;
+                }
+                Entity mount = link.mount.get();
+                if (mount == null || !mount.isAlive() || mount.level() != maid.level()) {
+                    return;
+                }
+                MaidMountCompat.setGravity(maid, false);
+                MaidMountCompat.freezeOnSeat(maid);
+                MaidMountCompat.seatOnDragon(mount, maid);
+                return;
+            }
+            // ② 龙 tick 完 → 把挂在它鞍位上的她摆过来（这一帧的最后一次摆位）
+            if (MaidMountCompat.isDragon(e)) {
+                EntityMaid rider = chairRiderOf(e);
+                if (rider == null || rider.level() != e.level()) {
+                    return;
+                }
+                MaidMountCompat.setGravity(rider, false);
+                MaidMountCompat.freezeOnSeat(rider);
+                MaidMountCompat.seatOnDragon(e, rider);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -890,6 +1023,7 @@ public final class RideBindManager {
 
     private static void releaseMaidQuiet(EntityMaid maid) {
         Link link = LINKS.remove(maid.getUUID());
+        MaidAirCombat.clear(maid); // 实测七百二十六·点3：自动解除同样作废这一场遭遇
         Entity mount = link == null ? null : link.mount.get();
         // 【实测七百二十五·点1】自动解除同样要还原坐姿（与 releaseMaidImpl 同口径）。
         MaidMountCompat.setSitting(maid, link != null && link.prevSitting);
@@ -922,7 +1056,31 @@ public final class RideBindManager {
             // 实测七百一十九·点4 起这一档不再只对"模组坐骑"开——原版兽同样走一遍（它们没有
             // 目标 AI 时写了也无副作用），这样"别的模组的可骑乘战斗生物"零适配即可服从。
             MaidMountCompat.tickAttack(mount, maid);
+            // 【实测七百二十六·点6】女仆自己往载具装弹：她背包里若有**这车当前武器对得上的**
+            // 子弹，搬进车自己的弹药容器（车的枪弹是从车容器取的，见 MaidMountCompat.feedVehicleAmmo）。
+            // 节流 0.5 秒一次——弹药消耗远慢于此，每 2 拍扫一遍背包是浪费。
+            if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
+                feedAmmoThrottled(mount, maid);
+            }
             double mod = MaidRideKit.speedModifierFor(mount, maid);
+            // 【实测七百二十六·点3】飞行载具（卓越前线的直升机 / 固定翼）**有攻击目标时改走
+            // 扫帚模式同款空战**：先爬到敌上 airAltCfg() 格（默认 15），再绕着敌人盘旋射击。
+            // 玩家原话「应该要套用扫帚模式运动代码和逻辑……至少离敌人要高出15格左右吧」。
+            // 这一档**排在最前**：有敌人时不再去看"她的走位记忆/主人跟随点"（旧版正是那两者
+            // 让它贴地追主人、在低空乱窜）。无目标 / 关掉开关 / 非飞行载具 → 原样落回下面的链路。
+            if (MaidAirCombat.enabled() && MaidMountCompat.isFlyingVehicle(mount)) {
+                LivingEntity foe = targetOf(maid);
+                if (foe != null && foe.isAlive() && foe.level() == maid.level()) {
+                    Vec3 air = MaidAirCombat.combatTarget(maid, foe);
+                    if (air != null) {
+                        MaidRideKit.feedNavigation(mount, air, mod, maid);
+                        // 朝向交给驾驶层：飞行档按"目标方位 vs 机头"写鼠标 X 通道（driveFlight 里）
+                        return;
+                    }
+                } else {
+                    MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新爬
+                }
+            }
             // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源
             Vec3 target = MaidRideKit.ownNavigationTarget(maid);
             // ② 她的走位记忆（任务/跟随写在这里）
@@ -986,6 +1144,27 @@ public final class RideBindManager {
 
     /** 【实测七百二十四·点5】节流地给"骑载具的女仆"补一次主动索敌（避免每 2 tick 都扫）。 */
     private static final Map<UUID, Long> ENGAGE_AT = new HashMap<>();
+
+    /** 【实测七百二十六·点6】装弹节流表：车 UUID → 下次可搬的时间（毫秒）。 */
+    private static final Map<UUID, Long> AMMO_FEED_AT = new HashMap<>();
+    /** 装弹检查间隔（毫秒）：0.5 秒——弹药消耗远慢于此，扫太勤是纯浪费。 */
+    private static final long AMMO_FEED_INTERVAL_MS = 500L;
+
+    private static void feedAmmoThrottled(Entity mount, EntityMaid maid) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = AMMO_FEED_AT.get(mount.getUUID());
+            if (last != null && now - last < AMMO_FEED_INTERVAL_MS) {
+                return;
+            }
+            if (AMMO_FEED_AT.size() > 256) {
+                AMMO_FEED_AT.clear();
+            }
+            AMMO_FEED_AT.put(mount.getUUID(), now);
+            MaidMountCompat.feedVehicleAmmo(mount, maid);
+        } catch (Throwable ignored) {
+        }
+    }
 
     private static void tryEngageRider(EntityMaid maid) {
         try {
@@ -1191,6 +1370,8 @@ public final class RideBindManager {
             com.maidsmart.tool.StateTables.cap("骑乘.LINKS", LINKS);
             com.maidsmart.tool.StateTables.cap("骑乘.PENDING", PENDING);
             com.maidsmart.tool.StateTables.cap("骑乘.DENY_LOG", DENY_LOG);
+            com.maidsmart.tool.StateTables.cap("骑乘.ENGAGE_AT", ENGAGE_AT); // 实测七百二十六·点6
+            com.maidsmart.tool.StateTables.cap("骑乘.AMMO_FEED_AT", AMMO_FEED_AT); // 实测七百二十六·点6
         } catch (Throwable ignored) {
         }
     }

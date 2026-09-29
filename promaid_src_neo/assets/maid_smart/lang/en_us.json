@@ -96,8 +96,8 @@
   "item.maid_smart.combat_leash.desc1": "§7Use on a flying maid to hang beneath her as a gunner; she flies on, you keep shooting",
   "item.maid_smart.combat_leash.desc2": "§7Use again or sneak to release; she drops you safely on landing",
   "item.maid_smart.ride_baton": "Ride Baton",
-  "item.maid_smart.ride_baton.desc1": "§7Use on a §fsaddled§7 mount (horse/donkey/pig/strider/camel...) to select it, then use on your maid to pair",
-  "item.maid_smart.ride_baton.desc2": "§7Order does not matter: select the maid first, then the mount. The selected one glows gold",
+  "item.maid_smart.ride_baton.desc1": "§7First use on a §fsaddled§7 mount (horse/donkey/pig/strider/camel... or a mod vehicle/dragon) to select it, then use on your maid to pair",
+  "item.maid_smart.ride_baton.desc2": "§7Order is §ffixed§7: you must select the §fmount first§7, then the maid. The selected one glows gold",
   "item.maid_smart.ride_baton.desc3": "§7She rides it and follows you; §fsneak + use§7 to dismount. Craft: lead + stick",
   "config.promaid.compressionBox": "Compression Box",
   "config.promaid.compressionBox.maidExtension": "Maid backpack extension",
@@ -243,5 +243,8 @@
   "config.promaid.combat.wingYsmYield": "Wing appearance - yield to YSM",
   "config.promaid.ride.modMounts": "Mod mount support (Superb Warfare vehicles / Ice and Fire dragons)",
   "config.promaid.ride.modMountFire": "Mod mount: fire for her",
-  "config.promaid.ride.batonExclusive": "Ride Baton - exclusive right-click"
+  "config.promaid.ride.batonExclusive": "Ride Baton - exclusive right-click",
+  "config.promaid.ride.airCombat": "Flying vehicle air combat (Superb Warfare helicopter/aircraft)",
+  "config.promaid.ride.airAlt": "Air combat - altitude above target (blocks)",
+  "config.promaid.ride.ammoFeed": "Vehicle: she loads ammo for you (Superb Warfare)"
 }

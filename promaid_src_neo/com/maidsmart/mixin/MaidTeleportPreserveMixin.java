@@ -87,7 +87,13 @@ public abstract class MaidTeleportPreserveMixin {
             //  teleportToOwner 会把她从龙背鞍位上拽走，下一拍距离超线就被判定"断开链路"
             //  （玩家原话「动不动就传送和断开乘坐」）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
             //  玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。
-            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            //
+            // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
+            //  玩家原话「对于卓越前线以及龙这两个特殊的载具……并不会去主动产生传送。所有的
+            //  传送方面的行为必须由玩家来。」卓越前线的载具那条她一定是乘客（上面 isPassenger
+            //  已拦），这里把判据统一成 isSpecialMountRider，语义只有一处、将来漏判也只会漏在
+            //  这一格。TLM 原生 teleportToOwner 是"自动传送"的一种，特殊载具上一律不生效。
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                 cir.setReturnValue(false);
                 return;
             }

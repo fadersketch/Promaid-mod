@@ -238,8 +238,8 @@
   "item.maid_smart.combat_leash.desc1": "§7右击【飞行中的】女仆：把自己挂到她下方（直升机二号位），她照常飞、你也可以照常开火",
   "item.maid_smart.combat_leash.desc2": "§7再右击一次或按§f潜跳§7解除；她落地/入水会自动放人；合成：拴绳 + 铁锭×2",
   "item.maid_smart.ride_baton": "骑乘指挥棒",
-  "item.maid_smart.ride_baton.desc1": "§7右击一只§f已上鞍§7的坐骑（马/驴/骡/猪/炽足兽/骆驼…）选中它，再右击自己的女仆即可配对",
-  "item.maid_smart.ride_baton.desc2": "§7顺序随意：先选女仆再选坐骑也行；被选中的会亮起金色描边（光标）",
+  "item.maid_smart.ride_baton.desc1": "§7先右击一只§f已上鞍§7的坐骑（马/驴/骡/猪/炽足兽/骆驼…或模组载具/龙）选中它，再右击自己的女仆即可配对",
+  "item.maid_smart.ride_baton.desc2": "§7顺序§f固定§7：必须§f先瞄坐骑、再瞄女仆§7；被选中的会亮起金色描边（光标）",
   "item.maid_smart.ride_baton.desc3": "§7绑定后她骑着坐骑跟着你走；§f潜行+右击§7即可让她下来；合成：拴绳 + 木棍",
   "config.promaid.compressionBox": "压缩盒设置",
   "config.promaid.compressionBox.maidExtension": "女仆背包延伸",
@@ -386,5 +386,8 @@
   "config.promaid.combat.wingYsmYield": "鞘翅外观·YSM 让位",
   "config.promaid.ride.modMounts": "模组坐骑兼容（卓越前线载具 / 冰火传说龙）",
   "config.promaid.ride.modMountFire": "模组坐骑·代她开火",
-  "config.promaid.ride.batonExclusive": "骑乘指挥棒·独占右击"
+  "config.promaid.ride.batonExclusive": "骑乘指挥棒·独占右击",
+  "config.promaid.ride.airCombat": "骑飞行载具·空战（卓越前线直升机/固定翼）",
+  "config.promaid.ride.airAlt": "空战·离敌高度（格）",
+  "config.promaid.ride.ammoFeed": "骑载具·替她装弹（卓越前线）"
 }

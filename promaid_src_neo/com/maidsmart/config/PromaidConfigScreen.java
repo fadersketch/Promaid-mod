@@ -3392,6 +3392,32 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "翅膀/尾巴/头（那些是独立小实体，会把这一下右击**转发给龙本体**）→ 旧版放行就骑上去了。"
                         + "也管 interactAt（客户端先发它、没被消费才发 interact），两个入口都拦掉才算"
                         + "「不触发原本的右击效果」。关掉 = 只有我们认得出的目标才由棍子接管（与上一版一字不差）"));
+        // v1.3.0(beta) 实测七百二十六·点3【武装直升机空战】
+        this.rows.add(new BoolRow("骑飞行载具·空战（卓越前线直升机/固定翼）",
+                MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.set(v),
+                "**默认开**。女仆驾驶**飞行载具**（卓越前线的武装直升机/固定翼）时，一旦有攻击目标，"
+                        + "飞行方式**改成与扫帚模式同款**——先爬到敌人上方（高度见下一项），再**绕着敌人盘旋射击**，"
+                        + "而不是继续贴着主人飞、在低空乱窜。为什么必须单独一档：飞行载具的航向/俯仰走**鼠标通道**、"
+                        + "高度靠**总距**（反编译实证），与地面载具那套完全不同；旧版只朝「主人的跟随点」飞——"
+                        + "一有敌人它还在追主人，表现就是「绕着敌人盘旋，但总是在地上和高空5个左右跳动」。"
+                        + "关掉 = 回到旧行为（只管跟着主人飞、不主动接敌）。地面载具不受影响"));
+        this.rows.add(new NumRow("空战·离敌高度（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIDE_AIR_ALT, s),
+                "**默认 15**（5~40）。骑飞行载具接敌时先爬到敌人**上方**这么多格再开始盘旋"
+                        + "——玩家原话「至少离敌人要高出15格左右吧」。这一个数字同时决定**这一场遭遇的盘旋高度**"
+                        + "（爬完就一直保持在那儿打，打完/丢目标才作废），与扫帚模式的「接敌爬升高度」同一语义，"
+                        + "只是各自一个旋钮（那个管骑扫帚，这个管骑飞行载具）"));
+        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具装弹】
+        this.rows.add(new BoolRow("骑载具·替她装弹（卓越前线）",
+                MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.set(v),
+                "**默认开**。女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，"
+                        + "她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），"
+                        + "她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。只搬**这辆车当前武器实际吃的那一种**"
+                        + "子弹，对不上的不动；每 0.5 秒检查一次、按需搬，绝不一次全倒进去。"
+                        + "关掉 = 不搬（想手动装弹就关掉它）"));
         // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
         this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
                 v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),
