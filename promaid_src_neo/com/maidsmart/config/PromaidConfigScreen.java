@@ -3370,6 +3370,19 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "本模组所有骑乘改动一律不生效（指挥棒不绑她、驱动不喂目标、传送不连坐骑一起搬、也不抑制载具闲逛）。"
                         + "默认两项 = TLM 自带的椅子 touhou_little_maid:chair 与坐垫 touhou_little_maid:sit——"
                         + "它们只是「能坐的家具」，不该被当成可驾车/可传送的坐骑。别的模组的可坐家具填一行 id 即可"));
+        // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】
+        this.rows.add(new BoolRow("模组坐骑·兼容（卓越前线 / 冰火传说）", MaidSmartConfig.COMBAT_RIDE_MOD_MOUNTS.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_MOD_MOUNTS.set(v),
+                "**默认开**。让女仆能骑并**驾驶**第三方模组的载具/坐骑——当前支持 **卓越前线的载具**"
+                        + "（坦克/装甲车/直升机/固定翼/飞艇…）与 **冰火传说的龙**（普通版与社区版共用一条路径）。"
+                        + "这两类**不走原版那套**（不是 Saddleable、没有寻路），所以「通解」是**可插拔驱动**："
+                        + "探测到类型 → 派给对应驱动，每个驱动只把同一个「意图」（去某点/停下/攻击）翻译成那个模组自己的 API。"
+                        + "全程反射，没装/换版本一律不激活。关掉 = 只认原版 Saddleable 兽"));
+        this.rows.add(new BoolRow("模组坐骑·代她开火", MaidSmartConfig.COMBAT_RIDE_MOD_MOUNT_FIRE.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_MOD_MOUNT_FIRE.set(v),
+                "**默认开**。骑卓越前线载具或冰火传说龙时，把她 brain 里的攻击目标交给坐骑去打——"
+                        + "载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路，龙走吐息。"
+                        + "关闭 = 她照常驾驶但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效"));
         // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
         this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
                 v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),

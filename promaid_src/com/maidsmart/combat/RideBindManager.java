@@ -176,7 +176,7 @@ public final class RideBindManager {
                 }
                 if (com.maidsmart.combat.MaidBroomKit.isRidingBroom(m)
                         || com.maidsmart.combat.MaidBroomKit.isBroomTask(m)) {
-                    deny(player, m, "她正在骑扫帚，先让她收好扫帚～");
+                    deny(player, m, "我处于扫帚模式");
                     return;
                 }
                 setPending(player, m);
@@ -266,6 +266,15 @@ public final class RideBindManager {
         if (!ok) {
             deny(player, maid, "没能坐上去……再试一次？");
             return;
+        }
+        // v1.3.0(beta) 实测七百一十九：卓越前线的引擎只认**座位 0**（getFirstPassenger）——
+        // 女仆若被排到别的座位（驾驶位已被玩家占了）她能开火却开不动，这里把她挪回座位 0。
+        try {
+            if (!MaidMountCompat.ensureDriverSeat(mount, maid)) {
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "座位修正失败："
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 不在驾驶位（下一拍重试）");
+            }
+        } catch (Throwable ignored) {
         }
         LINKS.put(maid.m_20148_(), new Link(maid, mount, player));
         try {
@@ -556,6 +565,12 @@ public final class RideBindManager {
      */
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
+            // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：每拍把她的攻击目标交给坐骑——
+            // 卓越前线载具走内置 Mob-乘客自动开火、冰火传说龙走吐息、**其余任何 Mob 坐骑**
+            // 走通用兜底（无条件把她的 target 写下去，让它自己那套目标 AI 用它自己的攻击方式打）。
+            // 实测七百一十九·点4 起这一档不再只对"模组坐骑"开——原版兽同样走一遍（它们没有
+            // 目标 AI 时写了也无副作用），这样"别的模组的可骑乘战斗生物"零适配即可服从。
+            MaidMountCompat.tickAttack(mount, maid);
             double mod = MaidRideKit.speedModifierFor(mount, maid);
             // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源
             Vec3 target = MaidRideKit.ownNavigationTarget(maid);

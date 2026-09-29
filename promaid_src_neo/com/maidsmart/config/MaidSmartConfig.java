@@ -483,6 +483,14 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 一律不生效——它们只是"能坐的家具"，不是本链路意义上的坐骑。
      */
     public static final ModConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_RIDE_FURNITURE_BLACKLIST;
+    /**
+     * v1.3.0(beta)【骑乘指挥棒·模组坐骑通解通法】。让女仆能骑并驾驶第三方模组的载具/坐骑：
+     * 卓越前线的载具（processInput 位掩码驱动）与冰火传说的龙（flightManager 飞行目标驱动），
+     * 普通版与社区版共用一条路径。默认开。见 {@code MaidMountCompat}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_MOD_MOUNTS;
+    /** 骑模组载具/龙时要不要顺手替她开火（默认开）。 */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_MOD_MOUNT_FIRE;
 
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
@@ -2389,6 +2397,15 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .defineList("furnitureBlacklist",
                         java.util.List.of("touhou_little_maid:chair", "touhou_little_maid:sit"),
                         o -> o instanceof String s && !s.isBlank());
+        // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】——玩家原话："骑乘开始考虑兼容卓越前线的
+        // 和冰火传说的龙，这两类载具都具有攻击能力以及飞行能力，不能用通用的兼容。看看能不能给出
+        // 一个通用解。还有一件事，冰火传说有普通版和社区版。看看关于骑乘方面能不能给一个通用的兼容。"
+        // 做法：把"怎么开"抽象成可插拔驱动（MaidMountCompat），按载具类型派发；两家模组全程反射、
+        // 编译期不依赖；普通版/社区版按类名探测、同一套方法名驱动（反编译实证成员名逐字相同）。
+        COMBAT_RIDE_MOD_MOUNTS = BUILDER.comment("模组坐骑兼容（默认开）：让女仆能骑并**驾驶**第三方模组的载具/坐骑——当前支持【卓越前线（Superb Warfare）的载具】与【冰火传说（含社区版）的龙】。\n\n【为什么不能用一条通用判据】原版兽（马/猪/骆驼）能被本模组驱动，是因为原版对「女仆当乘客」走的是普通 travel + 寻路；而这两类模组载具**根本不走原版那一套**：卓越前线的座驾不是 Saddleable、也没有 PathNavigation，它自己实现了一套 processInput(short) 位掩码 + 分引擎（地面/履带/船/直升机/固定翼/飞艇）的驾驶模型；冰火传说的龙既不是 Saddleable、也没有鞍，骑乘只由「驯服 + 主人 + 阶段>2」决定，飞行由一个独立的 IafDragonFlightManager 驱动。\n\n【通解 = 可插拔驱动】探测到载具类型 → 派给对应驱动，每个驱动只把同一个「意图」（去某点 / 停下 / 攻击某目标）翻译成那个模组自己的 API：卓越前线走 processInput 位掩码（直升机前=加总距、固定翼改俯仰、飞艇用上下位升降，按引擎类型分流）+ 直接写偏航；冰火传说的龙走 flightManager.setFlightTarget（女仆骑龙时 getControllingPassenger 只认玩家 → 恒为 null → 龙自己每 tick 跟着飞行目标跑，升降/俯仰全归它自己的飞行逻辑）。\n\n【攻击】卓越前线的载具基类**本来就内置**「Mob 乘客有目标就自动瞄准开火」，所以女仆坐进武器位、把目标交给她自己即可；冰火传说的龙要显式触发吐息。开关见下一项。\n\n【普通版 vs 社区版】反编译三个 jar 对照：结构相同、只有包名不同（普通版 com.github.alexthe666.iceandfire，社区版 com.iafenvoy.iceandfire；1.21.1 上类名多了 Entity 后缀），承载骑乘/飞行/攻击的成员名四份 jar 逐字相同 → 一条代码路径通吃。\n\n【全程反射】没装 / 换版本 / 改包名 → 整条链路不激活，一个字节都不碰原版。关闭 = 只认原版 Saddleable 兽，模组载具/龙一律按原版规则（她坐上去但没人驾驶）")
+                .translation("config.promaid.ride.modMounts").define("modMounts", true);
+        COMBAT_RIDE_MOD_MOUNT_FIRE = BUILDER.comment("模组坐骑·代她开火（默认开）：把她 brain 里的攻击目标交给坐骑去打——① 卓越前线载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路；② 冰火传说龙走吐息（strike + riderShootFire，以她为控制者）；③ **其余任何 Mob 坐骑**走通用兜底：无条件把她的目标写到它的 target 上，让它自己那套目标 AI 用它自己的攻击方式打（无攻击 AI 的坐骑写了也无副作用）。关闭 = 她照常驾驶，但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效，原版/别的模组让她坐上去的场合一次都不会碰")
+                .translation("config.promaid.ride.modMountFire").define("modMountFire", true);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的
