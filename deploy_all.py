@@ -6,6 +6,40 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百二十四（v1.3.0 beta，同名覆盖，未发版）：卓越前线载具四期 + 冰火传说龙骑位五期
+**本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 723，同名 jar 覆盖——玩家六条原话
+①「女仆骑着卓越前线载具的时候没有刹车机制。导致会不断的漂移。而且坐上去绑定之后会被其他的女仆
+抢走坐骑。」②「然后就是像坦克这种超大型载具，应该要保证不撞到主人……会直接把主人撞倒。应与主人
+拉开距离才对。」③「如果一个女仆与一个载具达成了绑定。那么之后玩家再绑定第2个女仆和载具的时候，
+并不会取消第1个已经达成的乘坐。」（澄清：是"甲+载具A 不该被 乙+载具B 解绑"，不是"一车绑多仆"）
+④「转向问题还是没解决，每次拿骑乘棒右击一下载具，玩家的视角都会转一下。」⑤「骑坦克的时候攻击
+欲望太低了，也不会使用坦克上的炮弹。逻辑应该是和骑马远程攻击的运动逻辑一样。」⑥「如果是在骑龙的
+时候，女仆乘坐的位置还是会发生错误，并且会时不时的传送和断开乘坐。」
+
+① **载具真刹车**：旧版"停车"只发 `processInput(0)`（清输入），而 SWB 引擎松键只是松油门
+   （`setPower(power*0.96)`、地面摩擦系数才 0.54~0.79，`wheelEngine:250-257`/`wheelChairEngine:996-999`）
+   → 车继续滑。新增反射 `setPower`/`setDeltaRot`/`setTargetSpeed`（javap 实证同名同描述符），
+   `stopVehicle` 改成清输入 + 三件归零 + 按拍 0.45 阻尼；停车带随车速前瞻。
+② **大车不撞主人**：旧停车判据是全局固定 `STOP_SLACK=1.5`，对坦克（半宽≈2）等于顶到人身上才停。
+   现在 `stopSlackFor = max(1.5, getBbWidth()+1)`，并与 `followDist` 取大 → 坦克拉 ~3~4 格。
+③ **绑定语义修正**：`bind()` 第一句 `releaseOtherLinks(player, maid)`（"一位玩家只留一条链路"）
+   让甲被乙静默解绑（实机日志 22:08:48 绑甲TRACK → 22:08:57 绑乙同一辆，中间无"换绑"）。
+   `releaseOtherLinks`/`releaseMountLinks` 整个删除；同车已有**另一位**女仆时**拒绝乙**、绝不碰甲。
+④ **右击不再转视角**：SWB `VehicleVecUtils.setDriverAngle`（全 jar 唯一改玩家朝向处）在
+   `VehicleEntity.interact` 的 `player.startRiding` **之前**就调用（:3172/:3184）。右击前后做视角
+   快照/还原 + 客户端 4 拍"视角钉子"（放客户端专类 `client/RideBatonViewClamp`，避免客户端类型进
+   两侧都会加载的 `RideBindManager`）。
+⑤ **坦克用自己的炮弹**：Mob 乘客自动开火读的是炮塔/武器位的 **AI 目标 UUID**
+   （`getAiTurretTargetUUID()` → `turretAutoAimFromUuid`，`VehicleEntity:3751-3768` +
+   `VehicleWeaponUtils:94`）；旧版只写 `maid.setTarget`、从没写那两个 UUID → 炮塔恒无目标 → 从不开炮。
+   新增 `applyVehicleAiTargets` 同时写炮塔与武器位 AI 目标；骑载具时没目标则节流 `tryEngagePublic` 主动索敌。
+⑥ **龙：每拍摆位 + 冻结她自己 + 不再因距离断开**：(a) 摆位以前每 2 拍才一次、跟不上龙（且她是普通
+   实体、大脑每拍可能把她往外挪）→ 接 TLM `MaidTickEvent` 每拍 `setGravity(false)`+`freezeOnSeat`+`seatOnDragon`；
+   (b) 她不是乘客 ⇒ `MaidTeleportPreserveMixin`/`SelfPreservationBehavior`/`DangerEscapeHandler`/
+   `MasterDeathTeleportHandler`/`MaidHeatEscape` 的停放豁免全不认她 ⇒ 自动传送把她拽离鞍位 ⇒ 距离超线
+   "断开"，而 `releaseMaidQuiet` 不还原重力/龙的行动档。四处修：补 `isDragonChairRider` 豁免、
+   距离改"拉回鞍位"不解除、`releaseMaidQuiet` 补还原、neo 的 `recallFromFlight(To)` 补"只传她"分支。
+
 实测七百二十三（v1.3.0 beta，同名覆盖，未发版）：冰火传说龙骑位四期（降级为"悬空鞍位"）
 + 卓越前线轮椅转向 + 指挥棒右击二期（两树镜像）——玩家三条原话 ①「关于龙方面的问题，还是没能
 解决。我采用降级方案，骑龙的话，那就仅仅是把女仆挂在玩家的骑乘位上，但并没有真正的骑在龙上。

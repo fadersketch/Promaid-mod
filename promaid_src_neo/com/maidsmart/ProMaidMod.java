@@ -112,6 +112,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerIndexStoneHooks();
             // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
             com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
+            // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
+            com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
         }
     }
 

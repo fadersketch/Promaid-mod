@@ -109,6 +109,20 @@ public final class MaidMountCompat {
     private static Method mGetSeatIndex;      // getSeatIndex(Entity)
     private static Method mGetMaxPassengers;  // getMaxPassengers()
     private static Method mIsWreck;           // isWreck()
+    /* 【实测七百二十四】真刹车三件套（javap 实证 1.20.1 hotfix 与 1.21.1 同名同描述符）：
+     * processInput(0) 只是"松油门"——引擎里 power 只按 0.96 衰减、地面摩擦系数才 0.54~0.79，
+     * 车会继续滑。要真停住必须把这三个量一起写零。 */
+    private static Method mSetPower;          // setPower(float)
+    private static Method mSetDeltaRot;       // setDeltaRot(float)
+    private static Method mSetTargetSpeed;    // setTargetSpeed(double)
+    /* 【实测七百二十四】炮塔/武器位的 AI 目标（车自己那套瞄准开火读的就是这两个 UUID）。 */
+    private static Method mSetAiTurretUUID;   // setAiTurretTargetUUID(String)
+    private static Method mSetAiWeaponUUID;   // setAiPassengerWeaponTargetUUID(String)
+    private static Method mHasTurret;         // hasTurret()
+    private static Method mHasWeaponStation;  // hasPassengerWeaponStation()
+    private static Method mGetTurretCtrlIdx;  // getTurretControllerIndex()
+    private static Method mGetWeaponCtrlIdx;  // getPassengerWeaponStationControllerIndex()
+    private static Method mGetNthEntity;      // getNthEntity(int) —— 取某个座位上的乘客
 
     /* ==================== 反射缓存：冰火传说 ==================== */
 
@@ -167,6 +181,34 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
                 mGetSeatIndex = null;
                 mGetMaxPassengers = null;
+            }
+            // 【实测七百二十四】真刹车三件套 + 炮塔/武器位 AI 目标：各自单独 try，
+            // 某版本缺一个也不该让驾驶/开火整条失效。
+            try {
+                mSetPower = cVehicle.getMethod("setPower", float.class);
+                mSetDeltaRot = cVehicle.getMethod("setDeltaRot", float.class);
+                mSetTargetSpeed = cVehicle.getMethod("setTargetSpeed", double.class);
+            } catch (Throwable ignored) {
+                mSetPower = null;
+                mSetDeltaRot = null;
+                mSetTargetSpeed = null;
+            }
+            try {
+                mSetAiTurretUUID = cVehicle.getMethod("setAiTurretTargetUUID", String.class);
+                mSetAiWeaponUUID = cVehicle.getMethod("setAiPassengerWeaponTargetUUID", String.class);
+                mHasTurret = cVehicle.getMethod("hasTurret");
+                mHasWeaponStation = cVehicle.getMethod("hasPassengerWeaponStation");
+                mGetTurretCtrlIdx = cVehicle.getMethod("getTurretControllerIndex");
+                mGetWeaponCtrlIdx = cVehicle.getMethod("getPassengerWeaponStationControllerIndex");
+                mGetNthEntity = cVehicle.getMethod("getNthEntity", int.class);
+            } catch (Throwable ignored) {
+                mSetAiTurretUUID = null;
+                mSetAiWeaponUUID = null;
+                mHasTurret = null;
+                mHasWeaponStation = null;
+                mGetTurretCtrlIdx = null;
+                mGetWeaponCtrlIdx = null;
+                mGetNthEntity = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -533,6 +575,33 @@ public final class MaidMountCompat {
         }
     }
 
+    /**
+     * 【实测七百二十四】把她"钉"在鞍位上：停掉她自己那套导航与速度。
+     *
+     * <p>她是**普通实体**（不是乘客），大脑/寻路仍然活跃——每拍都可能往外走/被别的东西推开，
+     * 于是鞍位上"时不时抖一下、位置错"。723 只每 2 tick {@code setPos} 一次纠正，跟不上。
+     * 724 起每 tick 摆位 + 这一档停导航（{@code getNavigation().stop()}）+ 清速度 +
+     * 清 {@code WALK_TARGET}，她就老老实实待在鞍位上，位置与玩家骑龙时一致。
+     */
+    public static void freezeOnSeat(Entity maid) {
+        try {
+            if (maid == null) {
+                return;
+            }
+            if (maid instanceof net.minecraft.world.entity.Mob mob) {
+                try {
+                    mob.getNavigation().stop();
+                } catch (Throwable ignored) {
+                }
+            }
+            maid.setDeltaMovement(Vec3.ZERO);
+            if (maid instanceof net.minecraft.world.entity.LivingEntity le) {
+                le.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 龙当前的行动档（{@code getCommand()}：0=站 1=坐 2=跟随）；拿不到 → -1。 */
     public static int dragonCommand(Entity dragon) {
         try {
@@ -797,7 +866,7 @@ public final class MaidMountCompat {
         }
         // 前进：够远就踩油门。头朝向档**不等转向**（引擎每拍都在把车头拉过来，
         // 站着不冲就是玩家看到的"走几步就停"）
-        if (horiz > 1.5 && (headSteer || !turning || Math.abs(err) < 40.0f)) {
+        if (horiz > stopBand(mount) && (headSteer || !turning || Math.abs(err) < 40.0f)) {
             bits |= 0x004;
         }
         // 升降：只有飞艇有真正的竖直轴；其余引擎的高度归它自己的物理
@@ -814,6 +883,10 @@ public final class MaidMountCompat {
         }
         try {
             mProcessInput.invoke(mount, bits);
+            // 【实测七百二十四】进了停车带就**真刹车**（旧版只清前进位，车靠摩擦慢慢滑）。
+            if (horiz <= stopBand(mount)) {
+                brakeVehicle(mount);
+            }
             logDrive(mount, "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
                     + (headSteer ? " 头朝向=" + Math.round(desiredYaw) : "")
                     + " 距目标=" + (long) horiz + "格");
@@ -822,12 +895,129 @@ public final class MaidMountCompat {
         return true;
     }
 
+    /**
+     * 【实测七百二十四】停车带（格）：载具在离目标多远就松油门并开始刹车。
+     *
+     * <p>玩家原话：「像坦克这种超大型载具……会直接把主人撞倒。应与主人拉开距离才对。」
+     * 旧版全世界共用 {@code STOP_SLACK = 1.5} 格——对半宽 2 格上下的坦克等于"顶到人身上才停"。
+     * 这里按**车体半宽**放大：{@link #stopSlackFor} + 车速前瞻（{@code |Δ|×10}），
+     * 越快的车越早松油/刹住，大车也再不会被主人塞进车头。
+     */
+    private static double stopBand(Entity mount) {
+        double base = stopSlackFor(mount);
+        try {
+            return base + mount.getDeltaMovement().length() * 10.0;
+        } catch (Throwable ignored) {
+            return base;
+        }
+    }
+
+    /**
+     * 【实测七百二十四】跟随停下的基线距离（格）＝{@code max(1.5, 车体半宽 + 1)}。
+     * 小载具（轮椅/摩托，半宽 &lt; 0.5）仍是 1.5 格；坦克（半宽 ≈ 2）自动拉到 ~3 格。
+     * 给 {@code RideBindManager.drive} 的"够近就站住"判据共用，两处口径一致。
+     */
+    public static double stopSlackFor(Entity mount) {
+        try {
+            if (mount != null) {
+                return Math.max(1.5, (double) mount.getBbWidth() + 1.0);
+            }
+        } catch (Throwable ignored) {
+        }
+        return 1.5;
+    }
+
+    /**
+     * 【实测七百二十四】真刹车：清输入 + **油门/转向/目标速度一起归零** + 按拍阻尼当前动量。
+     *
+     * <p>为什么"清输入"不算刹车（反编译 {@code VehicleEngineUtils} 实证）：引擎里没有前进/后退
+     * 位时只做 {@code setPower(power * 0.96)}，而地面每拍的摩擦系数只有 {@code 0.54~0.79}
+     * （{@code wheelEngine:250-257}、{@code wheelChairEngine:996-999}）——power 从 1 衰减到
+     * 0.1 要 ~55 拍，deltaMovement 也一路拖着走。这正是玩家说的"没有刹车机制、不断漂移"。
+     * 把 {@code power/deltaRot/targetSpeed} 直接写零 + 每拍乘 0.45 阻尼，车就当场停住。
+     *
+     * <p>阻尼安全：SWB 的 {@code setDeltaMovement} 覆写体只在**加速**（{@code |新| > |旧|} 且
+     * 加速度 &gt; 8）时限幅，减速是直通的（反编译 {@code VehicleEntity:5474-5487}）。
+     */
+    static void brakeVehicle(Entity mount) {
+        if (mount == null) {
+            return;
+        }
+        try {
+            if (mSetPower != null) {
+                mSetPower.invoke(mount, 0.0f);
+            }
+            if (mSetDeltaRot != null) {
+                mSetDeltaRot.invoke(mount, 0.0f);
+            }
+            if (mSetTargetSpeed != null) {
+                mSetTargetSpeed.invoke(mount, 0.0d);
+            }
+            mount.setDeltaMovement(mount.getDeltaMovement().scale(0.45));
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static void stopVehicle(Entity mount) {
         try {
             if (mProcessInput != null) {
                 mProcessInput.invoke(mount, (short) 0);
             }
+            // 【实测七百二十四】停车 = 真刹车（旧版只清输入，车会继续滑）。
+            brakeVehicle(mount);
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百二十四】把她的攻击目标写进**炮塔/武器位的 AI 目标**——车自己那套瞄准开火
+     * 读的就是这两个 UUID（反编译 {@code VehicleEntity.baseTick:3751-3768} →
+     * {@code turretAutoAimFromUuid} / {@code passengerWeaponAutoAimFormUuid}）。
+     *
+     * <p>玩家原话：「骑坦克的时候攻击欲望太低了，也不会使用坦克上的炮弹。逻辑应该是和骑马远程
+     * 攻击的运动逻辑一样。」——旧版只写 {@code maid.setTarget}，而车那两条链路**从不读乘客的
+     * {@code getTarget}**：它读的是 {@code getAiTurretTargetUUID()}（炮塔控制位是 Mob 时走
+     * {@code turretAutoAimFromUuid}）与 {@code getAiPassengerWeaponTargetUUID()}（武器位同理）。
+     * 两个 UUID 一直是空 → 炮塔恒无目标 → 从不算弹道、从不开炮。这里把目标 UUID 补上。
+     *
+     * <p>有炮塔/武器位且控制位确实坐着 Mob 时才写；没人坐的那一路写 {@code ""} 清掉，
+     * 免得留在车上的旧 UUID 让空位炮塔自己乱瞄。
+     */
+    public static void applyVehicleAiTargets(Entity mount, LivingEntity target) {
+        try {
+            if (!isVehicle(mount)) {
+                return;
+            }
+            String uuid = (target == null) ? "" : target.getStringUUID();
+            if (mSetAiTurretUUID != null && isControllerMob(mount, mHasTurret, mGetTurretCtrlIdx)) {
+                mSetAiTurretUUID.invoke(mount, uuid);
+            }
+            if (mSetAiWeaponUUID != null && isControllerMob(mount, mHasWeaponStation, mGetWeaponCtrlIdx)) {
+                mSetAiWeaponUUID.invoke(mount, uuid);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 这辆车有没有这个位 / 该位上此刻坐的是不是 Mob（反编译实证：只有 Mob 控制位才走 AI 瞄准）。 */
+    private static boolean isControllerMob(Entity mount, Method hasSlot, Method ctrlIdx) {
+        try {
+            if (hasSlot == null || ctrlIdx == null) {
+                return false;
+            }
+            Object has = hasSlot.invoke(mount);
+            if (!Boolean.TRUE.equals(has)) {
+                return false;
+            }
+            Object idxObj = ctrlIdx.invoke(mount);
+            int idx = idxObj instanceof Integer i ? i : -1;
+            if (idx < 0) {
+                return false;
+            }
+            Object nth = mGetNthEntity == null ? null : mGetNthEntity.invoke(mount, idx);
+            return nth instanceof net.minecraft.world.entity.Mob;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -868,6 +1058,10 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
+                // 【实测七百二十四】再把目标写进炮塔/武器位的 **AI 目标 UUID**——车自己那套
+                // 弹道求解+开火读的是它，不是乘客的 getTarget。旧版没写 → 坦克从不开炮。
+                applyVehicleAiTargets(mount, target);
+                logVehicleFire(mount, target);
                 return;
             }
             // 【实测七百二十三】DRAGON：本类不再触发（她不是乘客/控制者）——见上面那段。
@@ -963,6 +1157,31 @@ public final class MaidMountCompat {
 
     /** 通用攻击档的日志节流表（与 {@link #LOG_AT} 分开，免得两条日志互相顶掉对方的限频）。 */
     private static final java.util.Map<java.util.UUID, Long> ATK_AT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 载具炮塔目标写入的日志节流表（第三条独立频限，避免互相顶掉）。 */
+    private static final java.util.Map<java.util.UUID, Long> VFIRE_AT = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百二十四】载具炮塔/武器位目标写入的一行留痕（节流 5 秒/只）。
+     * 日志搜「模组坐骑·炮位」就能确认坦克的炮塔有没有拿到目标（= 会不会用自己的炮弹开火）。
+     */
+    private static void logVehicleFire(Entity mount, LivingEntity target) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = VFIRE_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            VFIRE_AT.put(mount.getUUID(), now);
+            if (VFIRE_AT.size() > 512) {
+                VFIRE_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·炮位", describeKind(mount)
+                    + " 炮塔目标=" + (target == null ? "无"
+                            : String.valueOf(target.getType()).replace("entity.minecraft.", "")));
+        } catch (Throwable ignored) {
+        }
+    }
 
     /**
      * 通用档写目标时的一行留痕（节流 5 秒/只）。

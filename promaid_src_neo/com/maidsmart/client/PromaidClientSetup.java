@@ -51,6 +51,11 @@ public final class PromaidClientSetup {
         com.maidsmart.marker.WorkPosMarkerClient.register();
     }
 
+    /** 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（仅客户端注册）。 */
+    public static void registerRideViewClamp() {
+        com.maidsmart.client.RideBatonViewClamp.ensureRegistered();
+    }
+
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
         com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
     }

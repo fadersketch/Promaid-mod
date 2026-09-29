@@ -1471,6 +1471,12 @@ BlockPos stand = findStand(newLevel,
         if (!owner.isAlive()) {
             return false; // 主人非存活：没有可传的目标（防传到死亡点/基岩顶）
         }
+        // 【实测七百二十四】悬空鞍位（龙）：她**不是乘客**，上面那道 isPassenger 拦不住她。
+        // 空袭牵引绳/召回一旦把她传走，龙留在原地而她本该挂在鞍位上 → 与 followIfCrossDimension
+        // 同口径：先干净解除（还原重力 / 龙的行动档），再单独传她一个人。
+        if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            com.maidsmart.combat.RideBindManager.releaseDragonChairForTravel(maid);
+        }
         return teleportCore(maid, owner, true);
     }
 
@@ -1493,6 +1499,10 @@ BlockPos stand = findStand(newLevel,
         }
         if (maid.isRemoved() || maid.isDeadOrDying() || maid.isPassenger()) {
             return false; // 已移除 / 死亡 / 骑乘中
+        }
+        // 【实测七百二十四】悬空鞍位（龙）：同 recallFromFlight——先干净解除再单独传她。
+        if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            com.maidsmart.combat.RideBindManager.releaseDragonChairForTravel(maid);
         }
         if (!(maid.level() instanceof ServerLevel dest)) {
             return false;
