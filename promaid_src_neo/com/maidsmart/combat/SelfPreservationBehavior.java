@@ -3952,7 +3952,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 每 tick 覆写（rideTick → positionRider），而自保的 teleport 内部会先 stopRiding()
             // 把她从坐骑上踹下来——实机日志实证：绑上龙之后她吃到 inWall 伤害 → 自保启动
             // （hp=99% 也启动）→ exit teleport → 她离开龙背。完整口径见 1.20.1 树同名方法。
-            return com.maidsmart.combat.RideBindManager.isRideRider(maid);
+            if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+                return true;
+            }
+            // 【实测七百二十四】悬空鞍位（龙）那条：她**不是乘客**，上面 isRideRider 认不出她
+            //（它要求 getVehicle() 非空）——旧版于是放行，自保/救援 teleport 把她从鞍位上拽走，
+            // 下一拍距离超线就"断开链路"（玩家原话「时不时传送和断开乘坐」）。这里一并豁免。
+            return com.maidsmart.combat.RideBindManager.isDragonChairRider(maid);
         } catch (Throwable ignored) {
             return false;
         }

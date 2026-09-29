@@ -54,13 +54,9 @@ public final class RideBindManager {
     private static final long DENY_INTERVAL_MS = 3000L;
     private static final double STOP_SLACK = 1.5;
 
-    /**
-     * 【实测七百二十三】悬空鞍位（龙）容许的最大偏离（格）：她离龙超过这个距离
-     * （被别的模组拉走 / 被传送走 / 龙换维度）就解除链路——别让她在远处凭空飘着。
-     * 取 8：龙自己的跟随档 {@code DragonAIEscortGoal.canContinueToUse} 里 15 格以内
-     * 都还跟着走，正常不会甩开；一旦真的被拽走（几十格）立刻认出来。
-     */
-    private static final double CHAIR_MAX_GAP = 8.0;
+    // 【实测七百二十四】旧的 CHAIR_MAX_GAP（偏离 8 格就解除悬空鞍位链路）已删除：
+    // 距离不再是"断开"的理由——她本来就每拍被摆回鞍位；只有她/龙/主人真没了或跨维度才解除。
+    // 详见 tick() 里那段注释。
 
     private static final Map<UUID, Link> LINKS = new HashMap<>();
     private static final Map<UUID, java.lang.ref.WeakReference<Entity>> PENDING = new HashMap<>();
@@ -160,11 +156,16 @@ public final class RideBindManager {
         if (!recognized && !batonExclusive()) {
             return;
         }
+        // 【实测七百二十四】右击载具会转玩家视角：SWB 的 VehicleVecUtils.setDriverAngle 在
+        // player.startRiding 之前就调用了，而我们随后拦下 startRiding 也拦不回已经转过的视角。
+        // 所以这一下前后做"视角快照 / 还原"——只把**这一下右击**造成的转动抹掉，玩家自己转视角不受影响。
+        float[] snap = ViewSnapshot.capture(player);
         event.setCanceled(true);
         if (recognized) {
             player.swing(hand);
             handle((ServerPlayer) player, target);
         }
+        ViewSnapshot.restoreIfChanged(player, snap);
     }
 
     /**
@@ -193,11 +194,109 @@ public final class RideBindManager {
                     || MaidRideKit.isRideableMount(target, null)
                     || MaidMountCompat.kindOf(target) != null;
             if (recognized) {
+                // 【实测七百二十四】客户端本地预测那一拍：SWB 的 VehicleEntity.interact 在**客户端**
+                // 也跑，setDriverAngle 会当场把玩家转向车头。快照 + 钉住几拍把这一下抹掉。
+                ViewSnapshot.pin(player, ViewSnapshot.capture(player));
                 event.setCanceled(true);
             }
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百二十四】"右击载具不再转玩家视角"的兜底口径。
+     *
+     * <p>根因（反编译实证）：SWB {@code VehicleVecUtils.setDriverAngle(vehicle, player)} 是**全 jar
+     * 唯一**改玩家 yRot/xRot/yHeadRot 的地方，而它在 {@code VehicleEntity.interact} 里
+     * {@code player.startRiding} **之前**就被调用（:3172 / :3184）。我们虽然后面把 startRiding 拦了，
+     * 但"转视角"这一下已经发生——玩家原话「每次拿骑乘棒右击一下载具，玩家的视角都会转一下」。
+     *
+     * <p>所以右击之后**短时间内每客户端 tick 复述一次快照**（只覆盖那几拍，过期自动失效），
+     * 把 SWB 本地预测写进去的朝向抹平。玩家自己主动转视角不受影响。
+     *
+     * <p><b>客户端类型隔离</b>：本类两侧都会加载（NeoForge 专用服务器也加载），所以这里**不碰
+     * {@code net.minecraft.client.*}**——每客户端 tick 的复述放在客户端专属类
+     * {@code com.maidsmart.client.RideBatonViewClamp}（只在客户端注册，见 {@code ProMaidExtension}）。
+     * 本类只提供纯原版字段的"记录/还原"。
+     */
+    private static final class ViewSnapshot {
+        /** 玩家 UUID → [untilMillis, yRot, xRot, yHeadRot, yRotO, xRotO, yHeadRotO]（Float 位打包）。 */
+        private static final Map<UUID, long[]> PINS = new HashMap<>();
+
+        static float[] capture(Player p) {
+            try {
+                return new float[]{p.getYRot(), p.getXRot(), p.getYHeadRot(),
+                        p.yRotO, p.xRotO, p.yHeadRotO};
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+
+        static void restoreIfChanged(Player p, float[] snap) {
+            try {
+                if (snap == null) {
+                    return;
+                }
+                if (p.getYRot() != snap[0] || p.getXRot() != snap[1] || p.getYHeadRot() != snap[2]) {
+                    p.setYRot(snap[0]);
+                    p.setXRot(snap[1]);
+                    p.setYHeadRot(snap[2]);
+                    p.yRotO = snap[3];
+                    p.xRotO = snap[4];
+                    p.yHeadRotO = snap[5];
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        /** 钉住：接下来 {@link #PIN_TICKS} 个客户端 tick 内，每拍把朝向复述回快照。 */
+        static void pin(Player p, float[] snap) {
+            try {
+                if (p == null || snap == null) {
+                    return;
+                }
+                long until = System.currentTimeMillis() + PIN_TICKS * 50L;
+                PINS.put(p.getUUID(), new long[]{until,
+                        Float.floatToIntBits(snap[0]), Float.floatToIntBits(snap[1]),
+                        Float.floatToIntBits(snap[2]), Float.floatToIntBits(snap[3]),
+                        Float.floatToIntBits(snap[4]), Float.floatToIntBits(snap[5])});
+                if (PINS.size() > 64) {
+                    PINS.clear();
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    /**
+     * 【实测七百二十四】给客户端专属类调的：若这位玩家的视角还被钉着，就复述回快照（返回 true = 钉着）。
+     * 纯原版字段操作，服务端加载本类也安全。
+     */
+    public static boolean clampPinnedView(Player player) {
+        try {
+            if (player == null) {
+                return false;
+            }
+            long[] v = ViewSnapshot.PINS.get(player.getUUID());
+            if (v == null) {
+                return false;
+            }
+            if (System.currentTimeMillis() > v[0]) {
+                ViewSnapshot.PINS.remove(player.getUUID()); // 过期 → 失效
+                return false;
+            }
+            float[] snap = {Float.intBitsToFloat((int) v[1]), Float.intBitsToFloat((int) v[2]),
+                    Float.intBitsToFloat((int) v[3]), Float.intBitsToFloat((int) v[4]),
+                    Float.intBitsToFloat((int) v[5]), Float.intBitsToFloat((int) v[6])};
+            ViewSnapshot.restoreIfChanged(player, snap);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 右击之后"钉住视角"持续多少个客户端 tick（约 4 拍，足够盖住 SWB 本地预测那一拍）。 */
+    private static final int PIN_TICKS = 4;
 
     /**
      * 【实测七百二十·点2】独占档的第二道闸：{@code EntityInteractSpecific}（= 原版 {@code interactAt}）。
@@ -425,12 +524,28 @@ public final class RideBindManager {
             deny(player, maid, why);
             return;
         }
-        // 【实测七百一十六·点1】独占：与武装拴绳同款——一位玩家同时只带一条骑乘链路。
-        // 玩家原话："如果绑定了一个女仆再绑定另一个，那么第1个会解绑，坐骑同理。"
-        releaseOtherLinks(player, maid);
-        releaseMountLinks(mount, maid);
+        // 【实测七百二十四·点3：绑定语义修正】旧版这里有一句
+        //   {@code releaseOtherLinks(player, maid)}——"一位玩家名下只留一条骑乘链路"，于是
+        //   玩家给甲+载具A 绑好之后，再去给乙+载具B 配对，**甲会被静默放掉**（实机日志实证：
+        //   22:08:48 绑甲(TRACK) → 22:08:57 绑乙(同一辆 TRACK)，中间没有任何"换绑"日志）。
+        //   玩家原话：「已经达成绑定乘坐载具A的甲女仆，并不会因为玩家去绑定乙女仆乘坐B载具而解绑。」
+        //   所以整条"玩家级独占"删除——甲+载具A 完全不受乙+载具B 影响。
+        //   这里只保留"她自己再绑一次 = 换绑"那条自解绑（下面的 containsKey 判断）。
         if (LINKS.containsKey(maid.getUUID())) {
             releaseMaid(maid, false, "换绑");
+        }
+        // 【实测七百二十四·点3】同一辆坐骑只服务一位女仆：车上已有**另一位**女仆 → 拒绝乙、
+        // **绝不碰甲**（旧版是 releaseMountLinks 把甲拆掉）。龙走悬空鞍位（不是乘客），
+        // 用 chairRiderOf；普通坐骑/载具走 riderOf。
+        EntityMaid occupant = chairRiderOf(mount);
+        if (occupant == null) {
+            occupant = MaidRideKit.riderOf(mount);
+        }
+        if (occupant != null && occupant != maid) {
+            deny(player, maid, ownable(player, occupant)
+                    ? "这只坐骑已经有我的女仆了～"
+                    : "这只坐骑已经有女仆了～");
+            return;
         }
         // 【实测七百二十三】冰火传说的龙走**降级方案**：不 startRiding（她不是乘客），
         // 改成"每 tick 由我们把她摆到龙的玩家鞍位上 + 无重力 + 龙置跟随档"。
@@ -534,61 +649,6 @@ public final class RideBindManager {
         com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "解除(" + why + ")：女仆="
                 + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + (mount == null ? "" : " 坐骑=" + MaidRideKit.describe(mount)));
-    }
-
-    /**
-     * 【实测七百一十六·点1】换绑 = 先松开这位玩家名下**别的**骑乘链路（口径照抄武装拴绳的
-     * {@code GunnerTetherManager.releaseOtherLinks}：只认"链路里的主人 == 这位玩家"，
-     * 先收集再解除——releaseMaid 会改 LINKS，边走边删会炸迭代器）。
-     */
-    private static void releaseOtherLinks(ServerPlayer player, EntityMaid except) {
-        try {
-            java.util.List<EntityMaid> others = new java.util.ArrayList<>();
-            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
-                Link link = e.getValue();
-                EntityMaid m = link.maid.get();
-                if (m == null || m == except) {
-                    continue;
-                }
-                ServerPlayer p = link.owner.get();
-                if (p != null && p.getUUID().equals(player.getUUID())) {
-                    others.add(m);
-                }
-            }
-            for (EntityMaid m : others) {
-                releaseMaid(m, false, "换绑");
-                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "换绑：先松开女仆="
-                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（主人=" + name(player) + "）");
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 【实测七百一十六·点1】"坐骑同理"：这只坐骑上若已驮着**另一位**女仆的链路，一并松开
-     * ——一只坐骑同时只服务一位女仆（先收集再解除，理由同上）。
-     */
-    private static void releaseMountLinks(Entity mount, EntityMaid except) {
-        try {
-            java.util.List<EntityMaid> others = new java.util.ArrayList<>();
-            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
-                Link link = e.getValue();
-                EntityMaid m = link.maid.get();
-                Entity mm = link.mount.get();
-                if (m == null || m == except || mm == null) {
-                    continue;
-                }
-                if (mm.getUUID().equals(mount.getUUID())) {
-                    others.add(m);
-                }
-            }
-            for (EntityMaid m : others) {
-                releaseMaid(m, false, "坐骑换主");
-                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "坐骑换主：先松开女仆="
-                        + com.maidsmart.tool.PromaidLog.nameOf(m) + "（这只坐骑改配另一位）");
-            }
-        } catch (Throwable ignored) {
-        }
     }
 
     /* ==================== 待配对状态 ==================== */
@@ -712,6 +772,41 @@ public final class RideBindManager {
 
     /* ==================== 每 2 tick：驱动 + 校验 + 恢复 ==================== */
 
+    /**
+     * 【实测七百二十四】悬空鞍位（龙）的**每 tick** 摆位。
+     *
+     * <p>为什么单开这一路：723 的摆位只挂在 {@link #tick} 里（每 2 tick 一次），她跟不上龙——
+     * 龙每拍在动，她两拍才被纠正一次，玩家看到的就是"坐的位置时不时错一下"。而且她是**普通实体**，
+     * 大脑/寻路每拍都可能把她往外挪。所以这里照抄 {@code GunnerTetherManager.onMaidTick} 的做法
+     * （TLM 的 {@code MaidTickEvent}，每 tick、且在 {@code super.tick()} 之前），
+     * 每拍：无重力 + 停导航/清速度（{@link MaidMountCompat#freezeOnSeat}）+ 摆回鞍位。
+     * {@link #tick} 里那条 2 拍摆位保留作兜底（链路校验/自愈仍在那一档）。
+     */
+    @SubscribeEvent
+    public static void onMaidTick(com.github.tartaricacid.touhoulittlemaid.api.event.MaidTickEvent event) {
+        try {
+            if (!isEnabled()) {
+                return;
+            }
+            EntityMaid maid = event.getMaid();
+            if (maid == null || maid.level().isClientSide()) {
+                return; // 客户端那半不摆位（链路表只活在服务端）
+            }
+            Link link = LINKS.get(maid.getUUID());
+            if (link == null || !link.chair) {
+                return;
+            }
+            Entity mount = link.mount.get();
+            if (mount == null || !mount.isAlive() || mount.level() != maid.level()) {
+                return;
+            }
+            MaidMountCompat.setGravity(maid, false);
+            MaidMountCompat.freezeOnSeat(maid);
+            MaidMountCompat.seatOnDragon(mount, maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
     public static void tick(MinecraftServer server) {
         if (!isEnabled()) {
             return;
@@ -738,14 +833,15 @@ public final class RideBindManager {
                     deferred.add(maid);
                     continue;
                 }
-                // 【实测七百二十三】悬空鞍位（龙）：她**不是乘客**，判据换成"由我们每拍摆位"。
+                // 【实测七百二十三 / 七百二十四】悬空鞍位（龙）：她**不是乘客**，判据换成"由我们每拍摆位"。
+                // 723 的旧版这里 gap > CHAIR_MAX_GAP 就**解除链路**——但解除走的是 releaseMaidQuiet，
+                // 它不还原重力/龙的行动档（她永久无重力、龙永久卡跟随档），而且是"时不时断开"的来源：
+                // TLM 原生 teleportToOwner / 救援传送把她拽离鞍位几格就够触发。724 起：
+                // ① 距离只是"该拉回来"的信号（seatOnDragon 本来就是把她 setPos 回鞍位），不再解除；
+                // ② 只有她/龙/主人真没了或跨维度才解除（上面那两道 already）。
                 if (link.chair) {
-                    double gap = maid.position().distanceTo(mount.position());
-                    if (gap > CHAIR_MAX_GAP) {
-                        deferred.add(maid);
-                        continue;
-                    }
                     MaidMountCompat.setGravity(maid, false); // 保底：被翻回去时纠回来
+                    MaidMountCompat.freezeOnSeat(maid);      // 停她的导航/速度，别让她自己走出鞍位
                     MaidMountCompat.seatOnDragon(mount, maid);
                     // 龙自己那套飞行物理照常跑（我们只把它钉在跟随档）；攻击也不由我们触发。
                     continue;
@@ -773,6 +869,12 @@ public final class RideBindManager {
     private static void releaseMaidQuiet(EntityMaid maid) {
         Link link = LINKS.remove(maid.getUUID());
         Entity mount = link == null ? null : link.mount.get();
+        // 【实测七百二十四】自动解除这条以前**不还原**重力/龙的行动档（只有 releaseMaidImpl 才还原）
+        // → 她永久无重力飘着、龙永久卡跟随档。这里补齐，与 releaseMaidImpl 同口径。
+        if (link != null && link.chair) {
+            MaidMountCompat.setGravity(maid, true);
+            MaidMountCompat.restoreDragonCommand(mount, link.dragonCommand);
+        }
         unmark(maid);
         unmark(mount);
         try {
@@ -823,12 +925,77 @@ public final class RideBindManager {
                 MaidRideKit.stopNavigation(mount);
                 return;
             }
-            if (horizontalDist(mount, target) <= STOP_SLACK) {
+            // 【实测七百二十四·点2】停车距离按**车体尺寸**：坦克这种大车若还用旧的固定 1.5 格，
+            // 等于"顶到主人身上才停"——玩家原话「会直接把主人撞倒。应与主人拉开距离才对」。
+            // 模组载具用 stopSlackFor(车体半宽)；并与"跟随距离"取大（别比主人自己设的还近）。
+            double slack = stopSlackFor(mount);
+            if (horizontalDist(mount, target) <= slack) {
                 MaidRideKit.stopNavigation(mount);
                 return;
             }
             MaidRideKit.feedNavigation(mount, target, mod, maid);
+            // 【实测七百二十四·点5】骑载具时更主动接敌：她此刻没目标就补一次索敌评估
+            // （像骑马远程一样主动找目标），目标一有，下一秒 tickAttack 就会把炮塔 AI 目标写下去。
+            if (mount instanceof net.minecraft.world.entity.Entity
+                    && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
+                    && targetOf(maid) == null) {
+                tryEngageRider(maid);
+            }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百二十四·点2】停车距离（格）：普通坐骑沿用 {@code STOP_SLACK=1.5}；
+     * 卓越前线载具（坦克/装甲车这类大车）用 {@code max(1.5, 车体半宽 + 1)}，
+     * 再与主人的"跟随停下距离"取大——这样大车永远停在车体之外，不会把主人撞倒。
+     */
+    private static double stopSlackFor(Entity mount) {
+        try {
+            if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
+                return Math.max(MaidMountCompat.stopSlackFor(mount), MaidRideKit.followDist());
+            }
+        } catch (Throwable ignored) {
+        }
+        return STOP_SLACK;
+    }
+
+    /** 【实测七百二十四·点5】节流地给"骑载具的女仆"补一次主动索敌（避免每 2 tick 都扫）。 */
+    private static final Map<UUID, Long> ENGAGE_AT = new HashMap<>();
+
+    private static void tryEngageRider(EntityMaid maid) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = ENGAGE_AT.get(maid.getUUID());
+            if (last != null && now - last < 1000L) {
+                return; // 1 秒最多一次（索敌本身有开销，且战斗链路会自己维持目标）
+            }
+            if (ENGAGE_AT.size() > 256) {
+                ENGAGE_AT.clear();
+            }
+            ENGAGE_AT.put(maid.getUUID(), now);
+            com.maidsmart.combat.AutoCombatSwitch.tryEngagePublic(maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 女仆当前的攻击目标（brain 的 ATTACK_TARGET 优先，退回实体层 target）。 */
+    private static LivingEntity targetOf(EntityMaid maid) {
+        try {
+            java.util.Optional<LivingEntity> mem = maid.getBrain().getMemory(
+                    net.minecraft.world.entity.ai.memory.MemoryModuleType.ATTACK_TARGET);
+            if (mem != null && mem.isPresent()) {
+                LivingEntity le = mem.get();
+                if (le != null && le.isAlive()) {
+                    return le;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            return maid.getTarget();
+        } catch (Throwable ignored) {
+            return null;
         }
     }
 

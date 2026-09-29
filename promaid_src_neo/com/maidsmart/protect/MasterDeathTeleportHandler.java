@@ -314,7 +314,10 @@ if (PENDING_DEATHS.isEmpty()) {
      * 建造女仆仍照旧可拽（建造强制 home，但它属"可召回"那一类）。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
-        if (maid.isMaidInSittingPose() || maid.isPassenger()) {
+        // 【实测七百二十四】悬空鞍位（龙）：她**不是乘客**、isPassenger 认不出她——
+        // 单独判一次，免得主人死亡传送/归位把她从龙背鞍位上拽下来。
+        if (maid.isMaidInSittingPose() || maid.isPassenger()
+                || com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
             return true;
         }
         // v1.3.0(beta) 实测七百一十七：home（非建造）与其它传送链路同口径豁免

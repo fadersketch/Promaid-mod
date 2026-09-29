@@ -81,6 +81,16 @@ public abstract class MaidTeleportPreserveMixin {
             //  （isRideRider 要求 getVehicle() 非空），上面 isPassenger() 那道闸已经拦住原版
             //  teleportToOwner。玩家要的"她们也可以被传送过来"走本模组自己那条"连人带坐骑一起搬"
             //  （MaidChunkLoadManager.recallRideRider，内部先 stopRiding 再落座），不经过这一支。
+            //
+            // 【实测七百二十四】但"悬空鞍位"（冰火传说的龙）那条**必须补一道**：她**不是乘客**
+            //  （降级方案里我们不 startRiding），上面 isPassenger() 拦不住她——于是 TLM 原版
+            //  teleportToOwner 会把她从龙背鞍位上拽走，下一拍距离超线就被判定"断开链路"
+            //  （玩家原话「动不动就传送和断开乘坐」）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
+            //  玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

@@ -1,4 +1,53 @@
-﻿# 实测七百二十三【冰火传说龙骑位四期：降级为"悬空鞍位" / 卓越前线轮椅转向 / 指挥棒右击二期】
+﻿# 实测七百二十四【卓越前线载具四期 / 冰火传说龙骑位五期】
+
+> 版本号不变，仍是 v1.3.0(beta)。**本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持上一版（723），同名 jar 覆盖；**未发平台**。
+
+### 〇、玩家六条原话
+
+1. 「女仆骑着卓越前线载具的时候没有刹车机制。导致会不断的漂移。而且坐上去绑定之后会被其他的女仆抢走坐骑。」
+2. 「然后就是像坦克这种超大型载具，应该要保证不撞到主人，现在就是虽然会跟着主人移动，但是会直接把主人撞倒。应与主人拉开距离才对。」
+3. 「而且有一个语义方面的问题你似乎搞错了。如果一个女仆与一个载具达成了绑定。那么之后玩家再绑定第2个女仆和载具的时候，并不会取消第1个已经达成的乘坐。」（补充澄清：「不是说同一个载具可以绑多个女仆，而是说已经达成用绑定的方式乘坐载具A的甲女仆，并不会因为玩家去绑定乙女仆乘坐B载具而解绑。」）
+4. 「转向问题还是没解决，每次拿骑乘棒右击一下载具，玩家的视角都会转一下，这很明显不符合直觉。」
+5. 「而且骑坦克的时候攻击欲望太低了，也不会使用坦克上的炮弹。逻辑应该是和骑马远程攻击的运动逻辑一样。」
+6. 「如果是在骑龙的时候，女仆乘坐的位置还是会发生错误，并且会时不时的传送和断开乘坐。」
+
+### 一、①卓越前线载具：真刹车（不再一路漂移）
+
+**根因（反编译实证）**：旧版"停车"只发 `processInput(0)`（清输入）。而 SWB 引擎里油门只是**松手**：`setPower(power * 0.96)`、地面摩擦系数才 `0.54~0.79`（`VehicleEngineUtils.wheelEngine:250-257`、`wheelChairEngine:996-999`）——power 从 1 衰减到 0.1 要 ~55 拍，`deltaMovement` 一路拖着走。我们**从没写过刹车量**。
+
+修法：新增反射 `setPower(float)` / `setDeltaRot(float)` / `setTargetSpeed(double)`（javap 实证 1.20.1 hotfix 与 1.21.1 同名同描述符）；`stopVehicle` 改成 `processInput(0)` + **三件一起归零** + 按拍给当前动量打 0.45 阻尼（SWB 的 `setDeltaMovement` 覆写体只在**加速**时限幅，减速直通，安全）。停车带随车速前瞻（`band = 停车距离 + |Δ|×10`）。
+
+### 二、②大车不再撞主人（停车距离按车体尺寸）
+
+旧的停车判据是全局固定 `STOP_SLACK = 1.5` 格——对半宽 2 格上下的坦克等于"顶到人身上才停"。现在 `stopSlackFor(mount) = max(1.5, getBbWidth() + 1.0)`，并与主人自己设的 `followDist()` 取大：坦克自动拉到 ~3~4 格，小载具仍 1.5 格。**代价**：大车跟随主人时会停得比以前远。
+
+### 三、③绑定语义修正（甲不再被乙挤掉）
+
+旧版 `bind()` 第一句是 `releaseOtherLinks(player, maid)`——"一位玩家名下只留一条骑乘链路"，于是给甲+载具A 绑好后再配乙+载具B，**甲会被静默解绑**（实机日志实证：22:08:48 绑甲TRACK → 22:08:57 绑乙同一辆 TRACK，中间没有任何"换绑"日志）。`releaseOtherLinks` / `releaseMountLinks` 两个方法**整个删除**。现在只保留"她自己再绑一次 = 换绑"；同一辆坐骑已有**另一位**女仆时**拒绝**乙（气泡「这只坐骑已经有女仆了～」）并**绝不碰甲**。
+
+### 四、④右击载具不再转玩家视角
+
+**根因（反编译实证）**：SWB `VehicleVecUtils.setDriverAngle(vehicle, player)` 是全 jar **唯一**改玩家 yRot/xRot/yHeadRot 的地方，而它在 `VehicleEntity.interact` 里 `player.startRiding` **之前**就被调用（:3172 / :3184）——我们随后拦下登乘也拦不回已经转过的视角。
+
+修法：右击那一下前后做**视角快照 / 还原**；客户端另打一个"视角钉子"（快照 + 4 拍时效），由客户端专属类 `com.maidsmart.client.RideBatonViewClamp` 每客户端 tick 复述回去（放客户端专类是为了不让 `net.minecraft.client.*` 进两侧都会加载的 `RideBindManager`，避免专用服务器崩）。玩家自己主动转视角不受影响。
+
+### 五、⑤坦克用自己的炮弹（炮塔 AI 目标）
+
+**根因（反编译实证）**：`VehicleEntity.baseTick:3751-3768` 里，Mob 乘客的自动开火读的是炮塔/武器位的 **AI 目标 UUID**（`turretAutoAimFromUuid(getAiTurretTargetUUID(), …)` / `passengerWeaponAutoAimFormUuid(getAiPassengerWeaponTargetUUID(), …)`）。旧版只写 `maid.setTarget`，**从没写那两个 UUID** ⇒ 炮塔恒无目标 ⇒ 从不算弹道、从不开炮。
+
+修法：新增 `applyVehicleAiTargets`，把她的目标 UUID 同时写进**炮塔 AI 目标**与**武器位 AI 目标**（无人位写 `""` 清掉）；`tickAttack` 的 VEHICLE 分支接线。另：骑载具时她没目标会节流地 `AutoCombatSwitch.tryEngagePublic(maid)` **主动索敌**（对齐"骑马远程"的接敌积极性）。日志新增「模组坐骑·炮位」。
+
+### 六、⑥冰火传说龙：每拍摆位 + 冻结她自己 + 不再因距离断开
+
+两个 bug：
+- **位置错 / 抖**：摆位挂在每 2 tick 的 `tick` 里，跟不上每拍都在动的龙；且她是**普通实体**（不是乘客），大脑/寻路每拍都可能把她往外挪。现在接 TLM 的 `MaidTickEvent`（每 tick，与服务端门控，同 `GunnerTetherManager.onMaidTick` 范式）做 `setGravity(false)` + `freezeOnSeat`（停导航 + 清速度 + 清 `WALK_TARGET`）+ `seatOnDragon`；`tick` 里那条 2 拍摆位留作兜底。
+- **时不时传送 / 断开**：她不是乘客 ⇒ `MaidTeleportPreserveMixin`、`SelfPreservationBehavior.shouldSkipTeleportForParked`、`DangerEscapeHandler`、`MasterDeathTeleportHandler.shouldStayPut`、`MaidHeatEscape` 那些"停放豁免"**全都不认她** ⇒ TLM 原生 `teleportToOwner` / 救援传送把她从龙背拽走 ⇒ 下一拍距离 > `CHAIR_MAX_GAP=8` ⇒ **解除链路**；而解除走的 `releaseMaidQuiet` **不还原重力、不还原龙的行动档** ⇒ 她永久无重力、龙永久卡跟随档。修法：① 给以上所有豁免补 `isDragonChairRider` 判据；② 距离改**拉回鞍位**而非解除（只有她/龙/主人真没了或跨维度才解除）；③ `releaseMaidQuiet` 补上 `setGravity(maid,true)` + `restoreDragonCommand`；④ neo 的 `recallFromFlight` / `recallFromFlightTo` 补"只传她 + 干净解除"分支（与 `followIfCrossDimension` 同口径）。
+
+### 七、验证
+
+两树其中 **neo 树**：`javac` 0 错误；`_mixchk.py` PASS=180 SKIP=10 UNRES=0 FAIL=0；`build_promaid_neo.py` 打包通过（`verify_jar_classes.py`）；只读核对 `_vt724.py`、jar 内容核对 `_jarchk724.py`；**只部署 1.21.1 实例**。**Forge 侧零改动**（`git status` 可验：`promaid_src/**` 与 forge jar 未变）。
+
+# 实测七百二十三【冰火传说龙骑位四期：降级为"悬空鞍位" / 卓越前线轮椅转向 / 指挥棒右击二期】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），同名 jar 覆盖；**未发平台**。
 

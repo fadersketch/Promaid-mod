@@ -8,8 +8,10 @@ import tempfile
 
 sys.stdout.reconfigure(encoding="utf-8")
 BASE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(BASE, "patched", "promaid-1.2.4-neoforge-1.21.1.jar")
-DST = r"D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.2.4-neoforge-1.21.1.jar"
+# 实测七百二十四起：只部署 1.21.1 这一侧（v1.3.0 同名覆盖）。1.20.1 由 deploy_all.py 那两条负责，
+# 本脚本**从不**碰 Forge 树。部署前先确认 jar 与源树一致（build_promaid_neo.py 出包）。
+SRC = os.path.join(BASE, "patched", "promaid-1.3.0-neoforge-1.21.1.jar")
+DST = r"D:\.minecraft\versions\1.21.1-NeoForge_21.1.250\mods\promaid-1.3.0-neoforge-1.21.1.jar"
 
 # 游戏运行时拒绝部署（java/javaw 进程存在即退出，不弹 UAC）
 _probe = subprocess.run(["powershell", "-NoProfile", "-Command",
@@ -30,7 +32,7 @@ if not os.path.isfile(SRC):
     sys.exit(6)
 
 size = os.path.getsize(SRC)
-tmp = os.path.join(tempfile.gettempdir(), "promaid-1.2.4-neoforge-1.21.1.jar")
+tmp = os.path.join(tempfile.gettempdir(), "promaid-1.3.0-neoforge-1.21.1.jar")
 shutil.copyfile(SRC, tmp)
 print("staged:", tmp, os.path.getsize(tmp))
 
