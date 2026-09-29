@@ -514,6 +514,127 @@ public final class MaidMountCompat {
     /** 鞍位最多往上抬这么多格去找空气（再高就不是"鞍位"了）。 */
     private static final int SEAT_LIFT_MAX = 6;
 
+    /* ==================== 实测七百二十二：每 tick 末尾抢回鞍位 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十二【冰火传说的龙：坐骑每拍把我摆错，就每拍抢回来】
+     * （1.20.1 版）——完整根因（覆写体在 {@code super} 返回之后写位置、为什么
+     * {@code ci.cancel()} 拦不住它、SHAKEPREY 动画怎么把模型带偏）见 1.21.1 树同名方法的注释。
+     *
+     * <p>本树的差异只有名字：乘客的每 tick 入口是 {@code Entity.m_6083_()}，末尾那一刻用
+     * {@code setPos} 落座（{@code m_6034_}）。注入点见 {@code EntityDragonMaidSeatMixin}。
+     */
+    public static void enforceDragonSeat(Entity dragon, Entity passenger) {
+        try {
+            if (dragon == null || passenger == null) {
+                return;
+            }
+            if (passenger.m_20202_() != dragon) {
+                return; // 已经不在它背上了（比如刚被咬下来）→ 不硬塞
+            }
+            Vec3 seat = riderSeat(dragon);
+            if (seat == null) {
+                return;
+            }
+            stopPreyShake(dragon);
+            keepDragonAirborne(dragon);
+            double y = freeSeatY(passenger, seat.f_82479_, seat.f_82480_ + (double) passenger.m_20206_(),
+                    seat.f_82481_);
+            passenger.m_6034_(seat.f_82479_, y, seat.f_82481_);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百二十二】她骑在龙背上时把龙钉在"空中"这一档（不再落地⇄起飞互翻）。
+     * 完整口径（鞍位在两档之间差约 4 格 = 横跳的根因）见 1.21.1 树同名方法。
+     */
+    private static void keepDragonAirborne(Entity dragon) {
+        try {
+            if (mIsFlying == null || mSetFlying == null) {
+                return;
+            }
+            if (Boolean.TRUE.equals(mIsFlying.invoke(dragon))) {
+                return;
+            }
+            // 不查"趴窝"状态：龙没有"玩家让它别飞"的坐姿语义（它只有 orderedToSit 的寻路停用），
+            // 而这一档只在"她骑在它背上"时才被调到 —— 那时它本来就该在天上/悬停。
+            mSetFlying.invoke(dragon, true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ---- 甩动动画的复位（把龙从"嘴里叼着猎物"的姿态放回正常）---- */
+
+    private static boolean animInited;
+    private static Method mGetAnimation;      // EntityDragonBase.getAnimation()
+    private static Method mSetAnimation;      // EntityDragonBase.setAnimation(Animation)
+    private static Object animNone;           // IAnimatedEntity.NO_ANIMATION
+    private static Object animShakePrey;      // EntityDragonBase.ANIMATION_SHAKEPREY
+    private static Method mSetAnimationTick;  // setAnimationTick(int)，可选
+
+    private static synchronized void initAnim() {
+        if (animInited) {
+            return;
+        }
+        animInited = true;
+        try {
+            initIaf();
+            if (!iafOk || cDragon == null) {
+                return;
+            }
+            mGetAnimation = cDragon.getMethod("getAnimation");
+            Class<?> animCls = mGetAnimation.getReturnType();
+            mSetAnimation = cDragon.getMethod("setAnimation", animCls);
+            try {
+                animShakePrey = cDragon.getField("ANIMATION_SHAKEPREY").get(null);
+            } catch (Throwable ignored) {
+                animShakePrey = null;
+            }
+            // 1.20.1 的动画接口在普通版的 citadel 系包里；社区版走 uranus，两个都试
+            for (String cn : new String[]{
+                    "com.github.alexthe666.citadel.animation.IAnimatedEntity",
+                    "com.iafenvoy.uranus.animation.IAnimatedEntity"}) {
+                try {
+                    animNone = Class.forName(cn).getField("NO_ANIMATION").get(null);
+                    break;
+                } catch (Throwable ignored) {
+                    animNone = null;
+                }
+            }
+            try {
+                mSetAnimationTick = cDragon.getMethod("setAnimationTick", int.class);
+            } catch (Throwable ignored) {
+                mSetAnimationTick = null;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 龙的动画是不是"嘴里叼着猎物"（{@code ANIMATION_SHAKEPREY}）？是就复位成普通状态。
+     * 完整口径（为什么必须复位、为什么只认这一条动画）见 1.21.1 树同名方法。
+     */
+    public static void stopPreyShake(Entity dragon) {
+        try {
+            initAnim();
+            if (mGetAnimation == null || mSetAnimation == null) {
+                return;
+            }
+            Object cur = mGetAnimation.invoke(dragon);
+            if (cur == null || animShakePrey == null || !animShakePrey.equals(cur)) {
+                return; // 不是那条动画 → 一个字不碰
+            }
+            if (animNone != null) {
+                mSetAnimation.invoke(dragon, animNone);
+            }
+            if (mSetAnimationTick != null) {
+                mSetAnimationTick.invoke(dragon, 0);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /**
      * 这一格（脚位 / 头位）"她放得下"吗——判据与项目里其余落点判定**同源**
      * （{@code MaidChunkLoadManager.standableCell}）：该格的**碰撞形状为空**即算放得下

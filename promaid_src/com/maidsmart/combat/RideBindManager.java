@@ -267,6 +267,53 @@ public final class RideBindManager {
         }
     }
 
+    /**
+     * 【实测七百二十二】独占档的**唯一收口**：{@code Entity.m_7998_}（{@code startRiding}）的最前面。
+     *
+     * <h2>玩家原话（721 之后仍在）</h2>
+     * 「右击问题还是没有解决，拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
+     *
+     * <h2>为什么上面那道 {@code EntityMountEvent} 也不够（实机日志实证）</h2>
+     * 2026-09-29 16:07 那次测试的日志里，这两行**同时**打出：
+     * <pre>
+     *   16:07:10.572  [骑乘指挥棒] 绑定：… 坐骑=卓越前线载具(WHEELCHAIR)
+     *   16:07:10.573  [骑乘指挥棒] Khragg 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子）
+     * </pre>
+     * 绑定成功、闸也拦下了，玩家眼前却仍然是"自己坐上去了"：{@code EntityMountEvent} 是在
+     * {@code startRiding} **内部**发的，取消它 = "先同意上车、再撤销"。而卓越前线的载具是
+     * **客户端本地**上车的（{@code VehicleEntity.interact} → {@code player.startRiding}，
+     * 以及它自己那条"非玩家驾驶位一律清掉"的分支）——客户端那一份预测不看服务端的事件结果，
+     * 所以"坐上去"这一下照样在你屏幕上发生。
+     *
+     * <h2>所以再往下一层：拦 {@code startRiding} 本身</h2>
+     * {@code m_7998_} 是**所有**登乘路径唯一的收口，且在 HEAD 返回 false 时**什么状态都还没改**
+     * ——没有"上车再撤销"，也就没有可见的坐上去。由 {@code EntityBatonMountGateMixin} 调用。
+     * 判据保持最窄：**玩家本人 + 手里拿着指挥棒 + 独占档开着**；女仆自己坐上去、
+     * 武装拴绳（玩家拿的不是指挥棒）一律放行。关掉 {@code ride.batonExclusive} = 一字不差。
+     *
+     * @return true = 这一下不许上车
+     */
+    public static boolean denyMountForBatonHolder(Player player, Entity vehicle) {
+        try {
+            if (player == null || !isEnabled() || !batonExclusive()) {
+                return false;
+            }
+            if (!holdsBaton(player)) {
+                return false;
+            }
+            // 【边界】武装拴绳是"玩家挂到女仆/扫帚上"——主副手同时拿着指挥棒与拴绳时不该被误伤：
+            // 指挥棒独占的语义是"骑不上龙/车子"，不是"挂不上自己的女仆"。
+            if (vehicle instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid
+                    || MaidRideKit.isBroom(vehicle)) {
+                return false;
+            }
+            PlayerMountLog.throttled(player);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 独占档拦住登乘的留痕（只记服务端；节流 3 秒一位玩家，免得刷屏）。 */
     private static final class PlayerMountLog {
         private static final Map<UUID, Long> AT = new HashMap<>();

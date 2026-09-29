@@ -446,6 +446,158 @@ public final class MaidMountCompat {
     /** 鞍位最多往上抬这么多格去找空气（再高就不是"鞍位"了）。 */
     private static final int SEAT_LIFT_MAX = 6;
 
+    /* ==================== 实测七百二十二：每 tick 末尾抢回鞍位 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十二【冰火传说的龙：坐骑每拍把我摆错，就每拍抢回来】。
+     *
+     * <p><b>玩家原话</b>：「先使用指挥棒右击龙，然后再右击女仆。女仆会显示坐上去，坐上去之后，
+     * 龙的整个建模只剩下一块。其他的全部被卡掉，然后女仆就在龙的身上反复横跳。」
+     *
+     * <p><b>根因（反编译实证，社区版 1.21.1 {@code DragonBaseEntity} / 1.20.1
+     * {@code EntityDragonBase} 同形）</b>：龙**覆写了**两参 {@code positionRider}，覆写体是
+     * <pre>
+     *   positionRider(passenger, callback) {
+     *       super.positionRider(passenger, callback);          // ← 720/721 拦的就是这里
+     *       if (hasPassenger(passenger)) {
+     *           if (getControllingPassenger() == null
+     *                   || !getControllingPassenger().getUUID().equals(passenger.getUUID())) {
+     *               updatePreyInMouth(passenger);              // ← 女仆永远走这一支
+     *           } else { …玩家鞍位… }
+     *       }
+     *   }
+     * </pre>
+     * 而 {@code getControllingPassenger()} 在两头**都只认主人**（女仆不是）→
+     * {@code updatePreyInMouth} 把她按到**嘴边/脚下**、把龙的动画切成 {@code ANIMATION_SHAKEPREY}
+     * （"甩猎物"，每拍左右甩 ±8 格的曲线）→ 玩家看到的**反复横跳**；落点在方块里 → **窒息**
+     * （13:12:20 日志实证）；55 刻后**咬一口（伤害×2）再 {@code stopRiding()}** → 13:12:31
+     * 她死亡并触发自动复活（日志实证）。SHAKEPREY 那套骨骼动画同时把整个模型带偏，
+     * 就是玩家报的**「龙的建模只剩一块」**。
+     *
+     * <p>{@code ci.cancel()} 只能取消**基类那一份**位置写入 —— 覆写体在 {@code super}
+     * 返回之后照样写。所以在**乘客自己的 {@code rideTick} 末尾**（原版顺序：她 tick 完 → 载具
+     * 给她摆位）再落一次笔：这一刻坐骑所有写位置的动作都已做完，我们最后写，谁也挪不走她。
+     * 顺带把那条甩动动画复位（否则模型还是那副"撕咬中"的姿态）。
+     *
+     * <p>只对「有主女仆 + 冰火传说龙」生效；原版 / 别的模组让她坐上去的场合一次都不碰。
+     */
+    public static void enforceDragonSeat(Entity dragon, Entity passenger) {
+        try {
+            if (dragon == null || passenger == null) {
+                return;
+            }
+            if (passenger.getVehicle() != dragon) {
+                return; // 已经不在它背上了（比如刚被咬下来）→ 不硬塞
+            }
+            Vec3 seat = riderSeat(dragon);
+            if (seat == null) {
+                return;
+            }
+            stopPreyShake(dragon);
+            keepDragonAirborne(dragon);
+            double y = freeSeatY(passenger, seat.x, seat.y + (double) passenger.getBbHeight(), seat.z);
+            passenger.setPos(seat.x, y, seat.z);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百二十二】她骑在龙背上时，把龙钉在"空中"这一档上（不再落地 ⇄ 起飞互翻）。
+     *
+     * <p>为什么必须钉住：龙给乘客算的鞍位 {@code getRiderPosition()} 里有一项
+     * {@code if (isHovering() || isFlying()) extraY += 1.1*linearFactor + rideHeightBase*0.6}
+     * ——**"飞/悬停"与"站在地上"两档差约 4 格（阶段 5）**。龙自己那套逻辑（
+     * {@code IafDragonLogic.updateDragonCommon} 的 {@code doesWantToLand()} 那一支）会把她骑着的时候
+     * 把 flying/hovering 清掉，而驱动链又会把它推回空中 → 两拍之间状态互翻 → 鞍位每拍差 4 格
+     * = 玩家看到的**反复横跳**。所以每一拍末尾把她落座之后，顺手把这个状态钉住；
+     * 玩家自己坐下令（orderedToSit，趴窝不动）时不钉。
+     */
+    private static void keepDragonAirborne(Entity dragon) {
+        try {
+            if (mIsFlying == null || mSetFlying == null) {
+                return;
+            }
+            if (Boolean.TRUE.equals(mIsFlying.invoke(dragon))) {
+                return; // 已经在飞 → 一个字不动
+            }
+            // 不查"趴窝"状态：龙没有"玩家让它别飞"的坐姿语义，而这一档只在"她骑在它背上"时
+            // 才被调到 —— 那时它本来就该在天上/悬停。
+            mSetFlying.invoke(dragon, true);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ---- 甩动动画的复位（把龙从"嘴里叼着猎物"的姿态放回正常）---- */
+
+    private static boolean animInited;
+    private static Method mGetAnimation;      // EntityDragonBase.getAnimation()
+    private static Method mSetAnimation;      // EntityDragonBase.setAnimation(Animation)
+    private static Object animNone;           // IAnimatedEntity.NO_ANIMATION
+    private static Object animShakePrey;      // EntityDragonBase.ANIMATION_SHAKEPREY
+    private static Method mSetAnimationTick;  // setAnimationTick(int)，可选
+
+    private static synchronized void initAnim() {
+        if (animInited) {
+            return;
+        }
+        animInited = true;
+        try {
+            initIaf();
+            if (!iafOk || cDragon == null) {
+                return;
+            }
+            mGetAnimation = cDragon.getMethod("getAnimation");
+            Class<?> animCls = mGetAnimation.getReturnType();
+            mSetAnimation = cDragon.getMethod("setAnimation", animCls);
+            // 常量都在龙自己的类上（public static），取不到就只做位置复位
+            try {
+                animShakePrey = cDragon.getField("ANIMATION_SHAKEPREY").get(null);
+            } catch (Throwable ignored) {
+                animShakePrey = null;
+            }
+            // NO_ANIMATION 在动画接口上（uranus 库）；取不到就退回"什么都不做"
+            try {
+                Class<?> iAnim = Class.forName("com.iafenvoy.uranus.animation.IAnimatedEntity");
+                animNone = iAnim.getField("NO_ANIMATION").get(null);
+            } catch (Throwable ignored) {
+                animNone = null;
+            }
+            try {
+                mSetAnimationTick = cDragon.getMethod("setAnimationTick", int.class);
+            } catch (Throwable ignored) {
+                mSetAnimationTick = null;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 龙的动画是不是"嘴里叼着猎物"（{@code ANIMATION_SHAKEPREY}）？是就复位成普通状态。
+     *
+     * <p>为什么要做：那条动画是 {@code updatePreyInMouth} 设的，一旦设上就会一直演下去
+     * （它是循环动画），把整个模型的姿态带跑偏——玩家看到的"龙的建模只剩一块"。
+     * 位置抢回来之后动画也得跟着复位，否则"她坐对了、龙还在甩"。
+     */
+    public static void stopPreyShake(Entity dragon) {
+        try {
+            initAnim();
+            if (mGetAnimation == null || mSetAnimation == null) {
+                return;
+            }
+            Object cur = mGetAnimation.invoke(dragon);
+            if (cur == null || animShakePrey == null || !animShakePrey.equals(cur)) {
+                return; // 不是那条动画 → 一个字不碰（别的模组/它自己的攻击动画照常）
+            }
+            if (animNone != null) {
+                mSetAnimation.invoke(dragon, animNone);
+            }
+            if (mSetAnimationTick != null) {
+                mSetAnimationTick.invoke(dragon, 0);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 这一格（脚位 / 头位）"她放得下"吗——碰撞形状为空即算放得下（与 standableCell 同源）。 */
     private static boolean freeCell(net.minecraft.world.level.Level level, double x, double y, double z) {
         try {
