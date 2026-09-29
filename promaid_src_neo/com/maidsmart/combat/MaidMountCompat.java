@@ -152,6 +152,29 @@ public final class MaidMountCompat {
     private static Method mConsumerIsAmmoItem; // AmmoConsumer.isAmmoItem(ItemStack) -> boolean
     private static Method mConsumerStack;      // AmmoConsumer.stack() -> ItemStack（取代表物品）
 
+    /* 【实测七百三十一·暴力后门】玩家原话「女仆也不会使用直升机上的炮弹」「完全就停不下来了」
+     * 「多走一些后门，来强制稳定他的位移」。以下四组反射**不依赖引擎自己的判定**，直接写状态：
+     *   ① 位移：直接改 {@code deltaMovement}（水平清零/限幅）——引擎的 setDeltaMovement 只在
+     *      **加速**时限幅，减速直通，所以写小值是安全的（反编译 VehicleEntity:5474-5487）。
+     *   ② 炮弹：直接把炮塔方向**写死到目标**（{@code setTurretYRot} / {@code setTurretXRot}，
+     *      反编译 VehicleEntity:3994 的 AI 瞄准最终就落在它俩上）+ 必要时给弹匣上弹
+     *      （{@code GunData.reloadAmmo}）。
+     *   ③ 开火：直接调 {@code vehicleShoot(LivingEntity, UUID, Vec3)}——绕开引擎那道
+     *      "炮口必须在目标 4° 以内才开火"的闸（反编译 VehicleEntity:4013-4024）。 */
+    private static Method mGetTurretYRot;      // getTurretYRot() -> float
+    private static Method mSetTurretYRot;      // setTurretYRot(float)
+    private static Method mGetTurretXRot;      // getTurretXRot() -> float
+    private static Method mSetTurretXRot;      // setTurretXRot(float)
+    private static Method mSetTurretYRotLock;  // setTurretYRotLock(float)
+    private static Method mSetGunYRot;         // setGunYRot(float)  —— 武器位（直升机机炮多在驾驶位）
+    private static Method mSetGunXRot;         // setGunXRot(float)
+    private static Method mVehicleShootAt;     // vehicleShoot(LivingEntity, UUID, Vec3)
+    private static Method mGetGunDataSeat;     // getGunData(int seatIndex) -> GunData
+    private static Method mGunReloadAmmo;      // GunData.reloadAmmo(Entity, boolean)
+    private static Method mGunReloading;       // GunData.reloading() -> boolean
+    private static Method mGunCurrentAmmo;     // GunData.currentAvailableAmmo(Entity) -> int
+    private static Method mGunCanShoot;        // GunData.canShoot(Entity) -> boolean
+
     /* ==================== 反射缓存：冰火传说 ==================== */
 
     private static boolean iafInited;
@@ -287,6 +310,50 @@ public final class MaidMountCompat {
                 mConsumerStack = acCls2.getMethod("stack");
             } catch (Throwable ignored) {
                 mConsumerStack = null;
+            }
+            // 【实测七百三十一·暴力后门】炮塔朝向直写 + 直接开火 + 弹匣补弹。各自 try。
+            try {
+                mGetTurretYRot = cVehicle.getMethod("getTurretYRot");
+                mSetTurretYRot = cVehicle.getMethod("setTurretYRot", float.class);
+                mGetTurretXRot = cVehicle.getMethod("getTurretXRot");
+                mSetTurretXRot = cVehicle.getMethod("setTurretXRot", float.class);
+                mSetTurretYRotLock = cVehicle.getMethod("setTurretYRotLock", float.class);
+                // 武器位（直升机机炮常在驾驶位，走 gunYRot/gunXRot，与炮塔那对分开）。
+                mSetGunYRot = cVehicle.getMethod("setGunYRot", float.class);
+                mSetGunXRot = cVehicle.getMethod("setGunXRot", float.class);
+            } catch (Throwable ignored) {
+                mGetTurretYRot = null;
+                mSetTurretYRot = null;
+                mGetTurretXRot = null;
+                mSetTurretXRot = null;
+                mSetTurretYRotLock = null;
+                mSetGunYRot = null;
+                mSetGunXRot = null;
+            }
+            try {
+                mVehicleShootAt = cVehicle.getMethod("vehicleShoot", LivingEntity.class,
+                        java.util.UUID.class, Vec3.class);
+            } catch (Throwable ignored) {
+                mVehicleShootAt = null;
+            }
+            try {
+                mGetGunDataSeat = cVehicle.getMethod("getGunData", int.class);
+                mAmmoSupplier = cVehicle.getMethod("getAmmoSupplier");
+            } catch (Throwable ignored) {
+                mGetGunDataSeat = null;
+                mAmmoSupplier = null;
+            }
+            try {
+                Class<?> gdCls2 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                mGunReloadAmmo = gdCls2.getMethod("reloadAmmo", Entity.class, boolean.class);
+                mGunReloading = gdCls2.getMethod("reloading");
+                mGunCurrentAmmo = gdCls2.getMethod("currentAvailableAmmo", Entity.class);
+                mGunCanShoot = gdCls2.getMethod("canShoot", Entity.class);
+            } catch (Throwable ignored) {
+                mGunReloadAmmo = null;
+                mGunReloading = null;
+                mGunCurrentAmmo = null;
+                mGunCanShoot = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -1310,6 +1377,13 @@ public final class MaidMountCompat {
                 if (Math.abs(err) >= 60.0f) {
                     desired = 0.0;            // 转向优先：机头没对准目标方向就不给速度
                 }
+                // 【实测七百三十一·后门】到位就**不再给任何前倾**——期望速度归零，让内环把机头
+                // 摆平（顺带把发动机那点残余水平推力卸掉），再由下面的硬刹车抹掉动量。两者配合
+                // 才能真正停住；只刹不摆平的话，机头还压着，下一拍水平速度又长回来。
+                boolean hardBrake = shouldHardBrake(horiz, hspeed, fighting);
+                if (hardBrake) {
+                    desired = 0.0;
+                }
                 // 外环：速度误差 → 目标俯仰角（度）。机头**下压为正**（引擎里 mouseY>0 → xRot+ → 低头）。
                 float targetTilt = clamp((float) ((desired - hspeed) * FLIGHT_TILT_PER_SPEED),
                         -FLIGHT_TILT_MAX, FLIGHT_TILT_MAX);
@@ -1355,7 +1429,16 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
+                // 【实测七百三十一·暴力后门】到位就**强制把水平速度抹平**——玩家原话
+                // 「现在女仆完全就停不下来了。1 点刹车的能力都没有……悬停完之后就强制给它水平
+                // 方向的速度停下来」。实机日志实证：到点后 期望=0.00 而 水平速度 仍 0.83→1.82，
+                // 光靠俯仰权限收不住。这里不看引擎脸色，每拍把水平分量乘 HARD_BRAKE_RETAIN，
+                // 竖直分量保留（空中不能失去升力）。见 killHorizontal 的注释（减速直通是安全的）。
+                if (hardBrake) {
+                    killHorizontal(mount, HARD_BRAKE_RETAIN);
+                }
                 logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+                        + (hardBrake ? " 硬刹(水平清零)" : "")
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 鼠标X=" + Math.round(yawCmd)
@@ -1554,6 +1637,199 @@ public final class MaidMountCompat {
                 mMouseInput.invoke(mount, 0.0d, (double) v);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /* ==================== 实测七百三十一·暴力后门 ==================== */
+
+    /**
+     * 【实测七百三十一】强制刹车：**直接把水平速度抹掉**，不看引擎脸色。
+     *
+     * <h2>为什么必须走这个后门</h2>
+     * 玩家原话：「现在女仆完全就停不下来了。1 点刹车的能力都没有……比如悬停完之后就强制给它
+     * 水平方向的速度停下来。」实机日志（{@code promaid.log}）实证：到点后 {@code 期望=0.00}
+     * 而 {@code 水平速度=0.83}，下一拍又 {@code 1.82}——发动机的惯性远大于我们那点俯仰权限，
+     * 光靠"松油门 + 悬停开关"收不住。
+     *
+     * <h2>为什么直接写 {@code deltaMovement} 是安全的</h2>
+     * 反编译 {@code VehicleEntity.setDeltaMovement}（:5474-5487）只在**加速**（新速度比旧速度大
+     * 且加速度 &gt; 8）时限幅，**减速是直通**的——所以把水平分量按比例缩小、或直接置零，
+     * 引擎不会"又给你乘回去"。竖直分量**保留**（不然空中就是自由落体）。
+     *
+     * @param retain 保留系数（0 = 当场停死；0.2 = 一拍掉八成，用来做软刹）
+     */
+    static void killHorizontal(Entity mount, double retain) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            Vec3 dm = mount.getDeltaMovement();
+            mount.setDeltaMovement(dm.x * retain, dm.y, dm.z * retain);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 这一拍她是不是"该停住"（已到目标点）——停住档的判据。
+     *
+     * <p>【实测七百三十一·为什么不再看速度】旧判据还要求 {@code hspeed < 0.6}，可实机日志里
+     * 到点时 {@code 水平速度} 常在 0.7~1.8（发动机惯性），于是**闸门根本不打开**、她冲过目标点
+     * 再慢慢荡回来。玩家要的是"强制刹车"，所以这里**只看距离**：进到点就刹，多快都刹。
+     *
+     * @param fighting 她此刻在接敌盘旋——**盘旋中绝不刹**，否则每绕到胡萝卜附近就顿一下，
+     *                 圈直接顿成碎步。盘旋结束（丢目标/回到跟随）后自然会刹。
+     */
+    static boolean shouldHardBrake(double horiz, double hspeed, boolean fighting) {
+        return !fighting && horiz <= FLIGHT_ARRIVE;
+    }
+
+    /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
+    private static final double HARD_BRAKE_RETAIN = 0.25;
+
+    /**
+     * 【实测七百三十一】把炮塔**写死到目标方向**，并保证弹匣里有弹。
+     *
+     * <h2>为什么炮塔不转</h2>
+     * SWB 的 Mob 乘客自动瞄准（{@code VehicleEntity:3994 turretAutoAimFromUuid}）最终写的就是
+     * {@code turretYRot}/{@code turretXRot} 这两个字段；而它外面那道**开火闸**
+     * （{@code VehicleEntity:4013-4024}）还要求"炮口方向与目标夹角 &lt; 4°"才允许开火。
+     * 女仆在绕圈，机身一直在转，靠引擎自己那套永远追不进 4° → **一枪不放**。
+     * 这里直接算好方位角/俯仰角写进去，跳过引擎的转向速度限制。
+     *
+     * <h2>为什么还要补弹</h2>
+     * 反编译 {@code GunData}：弹匣 {@code ammo} 为空且 {@code useBackpackAmmo()} 为假时，
+     * {@code canShoot} 直接返回 false——而"从容器补弹"（{@code shouldStartReloading}→
+     * {@code reloadAmmo}）是**玩家开火键**那条链在调，女仆没有开火键。所以这里每拍检查一次：
+     * 弹匣空且车容器里有对得上的弹，就自己 {@code reloadAmmo}。
+     *
+     * @return true = 这一拍炮塔/弹匣都就绪（可以开火）
+     */
+    static boolean forceTurretOntoTarget(Entity mount, EntityMaid maid, LivingEntity target) {
+        try {
+            int seat = seatIndexOf(mount, maid);
+            if (seat < 0) {
+                return false;
+            }
+            ensureMagazineLoaded(mount, seat);
+            if (target == null) {
+                return false;
+            }
+            // 炮塔方位/俯仰：从炮口位置指向目标实体中心。写死（引擎下一拍才会自己动，我们先占位）。
+            Vec3 from = shootPosOf(mount, seat);
+            Vec3 to = new Vec3(target.getX(), target.getY() + target.getBbHeight() * 0.5, target.getZ());
+            if (from == null) {
+                from = mount.getEyePosition();
+            }
+            double dx = to.x - from.x;
+            double dz = to.z - from.z;
+            double dy = to.y - from.y;
+            double flat = Math.sqrt(dx * dx + dz * dz);
+            float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
+            float pitch = (float) (-Math.toDegrees(Math.atan2(dy, flat)));
+            if (mSetTurretYRot != null) {
+                mSetTurretYRot.invoke(mount, yaw);
+            }
+            if (mSetTurretXRot != null) {
+                mSetTurretXRot.invoke(mount, pitch);
+            }
+            if (mSetTurretYRotLock != null) {
+                mSetTurretYRotLock.invoke(mount, 0.0f);
+            }
+            // 武器位（直升机机炮在驾驶位时走这一对）——两对都写，谁的位就谁用。
+            if (mSetGunYRot != null) {
+                mSetGunYRot.invoke(mount, yaw);
+            }
+            if (mSetGunXRot != null) {
+                mSetGunXRot.invoke(mount, pitch);
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 炮口位置（{@code getShootPos(int,float)}）；拿不到就返回 null（调用方退回眼睛位置）。 */
+    private static Method mGetShootPosSeat;
+    private static Vec3 shootPosOf(Entity mount, int seat) {
+        try {
+            if (mGetShootPosSeat == null) {
+                mGetShootPosSeat = cVehicle.getMethod("getShootPos", int.class, float.class);
+            }
+            Object v = mGetShootPosSeat.invoke(mount, seat, 1.0f);
+            return v instanceof Vec3 vec ? vec : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 【实测七百三十一】弹匣补弹：弹匣空 + 车容器里有对得上的弹 → 自己装。
+     * 反编译 {@code GunData.reloadAmmo(Entity,boolean)}：从 {@code countBackupAmmo} 取、
+     * 扣容器、写 {@code ammo}。{@code Entity} 参传**车自己**（{@code getAmmoSupplier()}）。
+     */
+    private static void ensureMagazineLoaded(Entity mount, int seat) {
+        try {
+            if (mGetGunDataSeat == null || mGunReloadAmmo == null) {
+                return;
+            }
+            Object gd = mGetGunDataSeat.invoke(mount, seat);
+            if (gd == null) {
+                return;
+            }
+            if (mGunReloading != null) {
+                Object rel = mGunReloading.invoke(gd);
+                if (Boolean.TRUE.equals(rel)) {
+                    return; // 正在装填 → 别打断
+                }
+            }
+            Entity supplier = mount;
+            if (mAmmoSupplier != null) {
+                try {
+                    Object s = mAmmoSupplier.invoke(mount);
+                    if (s instanceof Entity e) {
+                        supplier = e;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            if (mGunCurrentAmmo != null) {
+                Object cur = mGunCurrentAmmo.invoke(gd, supplier);
+                if (cur instanceof Integer i && i > 0) {
+                    return; // 还有弹 → 不用补
+                }
+            }
+            mGunReloadAmmo.invoke(gd, supplier, false);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** {@code getAmmoSupplier()}（反编译：返回车自己）——补弹时作为弹药来源实体。 */
+    private static Method mAmmoSupplier;
+
+    /**
+     * 【实测七百三十一·后门】直接开火，**绕开引擎那道 4° 闸**。
+     *
+     * <p>反编译 {@code VehicleEntity:4013-4024}：内置的 Mob 乘客自动开火要求
+     * "炮口方向与目标夹角 &lt; 4°"，女仆绕圈时永远进不去 → 一枪不放。这里直接调
+     * {@code vehicleShoot(LivingEntity, UUID, Vec3)}——它**不做角度判定**，只在内部查
+     * {@code GunData.canShoot}（弹匣/弹种），并把 {@code targetPos} 交给弹道计算
+     * （反编译 {@code GunItem.shootBullet} 实证读到 {@code ShootParameters.targetPos}）。
+     *
+     * @return true = 这一拍真的把开火调用发出去了
+     */
+    static boolean forceFireAt(Entity mount, EntityMaid maid, LivingEntity target) {
+        try {
+            if (mount == null || maid == null || target == null || !target.isAlive()) {
+                return false;
+            }
+            if (mVehicleShootAt == null) {
+                return false;
+            }
+            Vec3 aim = new Vec3(target.getX(), target.getY() + target.getBbHeight() * 0.5, target.getZ());
+            mVehicleShootAt.invoke(mount, maid, target.getUUID(), aim);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -1901,6 +2177,20 @@ public final class MaidMountCompat {
                 // 弹道求解+开火读的是它（座位制武器如直升机机炮则读上面那个 getTarget）。
                 applyVehicleAiTargets(mount, target);
                 logVehicleFire(mount, target);
+                // 【实测七百三十一·暴力后门】炮弹：玩家原话「女仆也不会使用直升机上的炮弹」。
+                // 引擎内置那条"Mob 乘客自动开火"要炮口进目标 4° 才放行（反编译
+                // VehicleEntity:4013-4024），女仆绕圈时永远进不去 → 一枪不放。这里两道后门：
+                //   ① forceTurretOntoTarget：把炮塔方位/俯仰**写死**到目标，并保证弹匣有弹；
+                //   ② forceFireAt：直接调 vehicleShoot(LivingEntity,UUID,Vec3)，**不做角度判定**。
+                // 开火按 RPM 节流（反编译 vehicleWeaponRpm 的那条 20/rpm 换算，这里简化成 5 拍一次）。
+                if (target != null && isFlyingVehicle(mount)) {
+                    forceTurretOntoTarget(mount, maid, target);
+                    if (fireTickDue(mount)) {
+                        if (forceFireAt(mount, maid, target)) {
+                            logForceFire(mount, target);
+                        }
+                    }
+                }
                 return;
             }
             // 【实测七百二十三】DRAGON：本类不再触发（她不是乘客/控制者）——见上面那段。
@@ -2018,6 +2308,49 @@ public final class MaidMountCompat {
             com.maidsmart.tool.PromaidLog.log("模组坐骑·炮位", describeKind(mount)
                     + " 炮塔目标=" + (target == null ? "无"
                             : String.valueOf(target.getType()).replace("entity.minecraft.", "")));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* 【实测七百三十一·后门】直接开火的节流：按拍计数（每只车一份）。反编译那条内置链用的是
+     * {@code tickCount % ceil(20 / (rpm/60))}，这里简化成固定间隔——玩家要的是"能打出去"，
+     * 不是复刻射速。5 拍 ≈ 4 发/秒，机炮够密、又不会一帧把弹匣清空。 */
+    private static final java.util.Map<java.util.UUID, Integer> FFIRE_TICK =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int FORCE_FIRE_EVERY = 5;
+
+    private static boolean fireTickDue(Entity mount) {
+        try {
+            Integer n = FFIRE_TICK.get(mount.getUUID());
+            int v = (n == null ? 0 : n) + 1;
+            if (v >= FORCE_FIRE_EVERY) {
+                FFIRE_TICK.put(mount.getUUID(), 0);
+                return true;
+            }
+            FFIRE_TICK.put(mount.getUUID(), v);
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 【实测七百三十一·后门】直接开火的一条留痕（节流 5 秒/只）——日志搜「模组坐骑·开火」。 */
+    private static final java.util.Map<java.util.UUID, Long> FLOG_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    private static void logForceFire(Entity mount, LivingEntity target) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = FLOG_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            FLOG_AT.put(mount.getUUID(), now);
+            if (FLOG_AT.size() > 512) {
+                FLOG_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·开火", describeKind(mount)
+                    + " 直连开火 → " + String.valueOf(target.getType()).replace("entity.minecraft.", ""));
         } catch (Throwable ignored) {
         }
     }

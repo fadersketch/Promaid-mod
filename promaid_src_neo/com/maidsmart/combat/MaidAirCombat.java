@@ -233,11 +233,59 @@ public final class MaidAirCombat {
             return null;
         }
         try {
+            // 【实测七百三十一·点2】"先上升、再盘旋"——玩家原话「遇到敌人之后，先上升，然后再盘旋」。
+            // 实机日志实证（promaid.log 05:51~05:53）：接敌档里 {@code 高差} 每 5 秒就在
+            // {@code 11 → 0 → -11} 之间横跳，因为她**一边爬升一边绕圈**——绕到另一侧时目标点
+            // 的 Y 没变但她自己在动，高度环与水平环互相抢输入，永远爬不到位。
+            //
+            // 本版加**硬高度闸**：她现在离"敌上 fightAlt 格"还差得远（且不是已经飞过头）时，
+            // 水平目标点直接取**她自己当前位置的上方**——先原地爬到高度，再交给盘旋。
+            // 这样高度环独占输入、几步就位；到位后自动切回绕圈。
+            if (!altitudeReady(maid, target)) {
+                return climbPoint(maid, target);
+            }
             return orbitPoint(maid, target);
         } catch (Throwable ignored) {
             return null;
         }
     }
+
+    /** 进入盘旋前必须爬到的高度容差（格）：离"敌上 N 格"进这个带就认为高度到位、开始绕圈。 */
+    private static final double CLIMB_TOL = 2.5;
+
+    /** 她此刻是否已经爬到"敌上 {@link #fightAltCfg} 格"附近（可以开始盘旋了）。 */
+    private static boolean altitudeReady(EntityMaid maid, LivingEntity target) {
+        try {
+            double want = target.getY() + fightAltCfg();
+            return Math.abs(maid.getY() - want) <= CLIMB_TOL;
+        } catch (Throwable ignored) {
+            return true; // 拿不到就当作已就位，退回旧行为
+        }
+    }
+
+    /**
+     * 【实测七百三十一·点2】爬升点：水平**原地**、竖直指向"敌上 {@link #fightAltCfg} 格"。
+     * 每场遭遇只写一行「先爬升」留痕（搜「空战」），与盘旋那一行区分。
+     */
+    private static Vec3 climbPoint(EntityMaid maid, LivingEntity target) {
+        double y = target.getY() + fightAltCfg();
+        if (firstClimb(maid.getUUID())) {
+            log(maid, "接敌 → 先爬到敌上 " + fmt(fightAltCfg()) + " 格（到位后再开始盘旋）");
+        }
+        return new Vec3(maid.getX(), y, maid.getZ());
+    }
+
+    /** 这一场遭遇里"她是不是第一次进爬升"（每场只写一行）。 */
+    private static boolean firstClimb(UUID id) {
+        try {
+            return CLIMB_FIRST.add(id);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 本场遭遇是否已经写过"先爬升"那一行（{@link #clear} 时清）。 */
+    private static final java.util.Set<UUID> CLIMB_FIRST = new java.util.HashSet<>();
 
     /**
      * 绕着敌人转圈打（**高度 = 敌上 {@link #fightAltCfg} 格**，用总距升到位、不用俯仰）。
@@ -314,6 +362,7 @@ public final class MaidAirCombat {
         }
         UUID id = maid.getUUID();
         ORBIT_FIRST.remove(id);
+        CLIMB_FIRST.remove(id);
         // 与扫帚同口径：这一场遭遇结束 = 随机环绕的抽签也重掷（下一场看得见换旋向/换快慢）
         CombatOrbit.forget(id);
         CombatManeuver.forget(id);
