@@ -409,6 +409,54 @@ public final class MaidMountCompat {
         }
     }
 
+    /* ==================== 实测七百二十一：鞍位不许落在方块里 ==================== */
+
+    /**
+     * 【实测七百二十一】落座前把候选 Y 抬到**第一格她放得下的位置**——完整口径（为什么
+     * 需要它、实机日志实证、判据为什么与 {@code standableCell} 同源）见 1.20.1 树同名方法。
+     *
+     * <p>判据用官方名：{@code BlockPos.containing} / {@code BlockState.getCollisionShape(…,
+     * CollisionContext.empty())}。
+     *
+     * <p><b>两侧都要算</b>：乘客位置**不随包同步**，客户端每 tick 自己算一遍同一套算式——只在
+     * 服务端抬、客户端用原位，就会出现"服务端她已经站上去、你屏幕里她还卡在方块里"。所以这里
+     * **不**按 {@code isClientSide} 分叉（完整口径见 1.20.1 树同名方法）。
+     */
+    public static double freeSeatY(Entity passenger, double x, double y, double z) {
+        try {
+            if (passenger == null) {
+                return y;
+            }
+            net.minecraft.world.level.Level level = passenger.level();
+            if (level == null) {
+                return y;
+            }
+            float h = Math.max(0.9f, passenger.getBbHeight());
+            for (int dy = 0; dy <= SEAT_LIFT_MAX; dy++) {
+                double cy = y + dy;
+                if (freeCell(level, x, cy, z) && freeCell(level, x, cy + Math.min(h, 1.0), z)) {
+                    return cy;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return y;
+    }
+
+    /** 鞍位最多往上抬这么多格去找空气（再高就不是"鞍位"了）。 */
+    private static final int SEAT_LIFT_MAX = 6;
+
+    /** 这一格（脚位 / 头位）"她放得下"吗——碰撞形状为空即算放得下（与 standableCell 同源）。 */
+    private static boolean freeCell(net.minecraft.world.level.Level level, double x, double y, double z) {
+        try {
+            net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.containing(x, y, z);
+            return level.getBlockState(p).getCollisionShape(level, p,
+                    net.minecraft.world.phys.shapes.CollisionContext.empty()).isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ==================== 多部件实体的"本体"解析（实测七百二十·点2） ==================== */
 
     /**
@@ -645,9 +693,15 @@ public final class MaidMountCompat {
             if (fm == null || mSetFlightTarget == null) {
                 return false;
             }
-            // 必须先起飞：useFlyingPathFinder() 要 isFlying 为真，flightManager.update() 才会跑
+            // 【实测七百二十一】帮它起飞，但**不跟它的状态机对着干**：只在它还站在地上时
+            // 推一把（这是 useFlyingPathFinder() 为真的前提）；已经离地/悬停就交给它自己那套，
+            // 不再覆写。为什么必须这样：720 那种"只要 isFlying 为假就置真"会与龙自己的
+            // 悬停/落地判定**每 tick 互翻一次**，而 getRiderPosition() 里"悬停/飞行"比
+            // "站在地上"高一整个 1.1*linearFactor + getRideHeightBase()*0.6（阶段 5 约 4 格）
+            // ⇒ 女仆位置每 tick 跳 4 格 = 玩家看到的"反复横跳"。完整口径见 1.20.1 树同名方法。
             if (mIsFlying != null && mSetFlying != null
-                    && !Boolean.TRUE.equals(mIsFlying.invoke(mount))) {
+                    && !Boolean.TRUE.equals(mIsFlying.invoke(mount))
+                    && mount.onGround()) {
                 mSetFlying.invoke(mount, true);
             }
             mSetFlightTarget.invoke(fm, target);

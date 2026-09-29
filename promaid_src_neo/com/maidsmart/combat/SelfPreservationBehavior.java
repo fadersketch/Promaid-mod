@@ -3945,7 +3945,14 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get()) {
                 return false; // 开关关掉 → 旧行为
             }
-            return maid.isMaidInSittingPose() || maid.isShiftKeyDown(); // 坐姿 / 蹲下（Shift）
+            if (maid.isMaidInSittingPose() || maid.isShiftKeyDown()) {
+                return true; // 坐姿 / 蹲下（Shift）
+            }
+            // 【实测七百二十一】被骑乘指挥棒绑上的骑乘女仆同理：她此刻是**乘客**，位置由坐骑
+            // 每 tick 覆写（rideTick → positionRider），而自保的 teleport 内部会先 stopRiding()
+            // 把她从坐骑上踹下来——实机日志实证：绑上龙之后她吃到 inWall 伤害 → 自保启动
+            // （hp=99% 也启动）→ exit teleport → 她离开龙背。完整口径见 1.20.1 树同名方法。
+            return com.maidsmart.combat.RideBindManager.isRideRider(maid);
         } catch (Throwable ignored) {
             return false;
         }

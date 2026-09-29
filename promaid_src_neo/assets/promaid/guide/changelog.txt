@@ -1,4 +1,69 @@
-﻿# 实测七百二十【冰火传说龙的骑位修正（女仆不再被含在嘴里 / 不再被甩下）+ 骑乘指挥棒独占右击】
+﻿# 实测七百二十一【冰火传说龙骑位二期（不再横跳 / 不再陷进方块窒息）+ 骑乘指挥棒独占右击补闸】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 〇、玩家两条原话（上一版之后）
+
+1. 「现在女仆大概可以骑上龙了，但是会在背上反复横跳，甚至直接陷到地里面窒息。而且龙的建模会被
+   直接卡掉。」
+2. 「右击问题还是没有解决，拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
+
+### 一、龙背横跳 / 陷地窒息——三个根因（都有字节码或实机日志实证）
+
+**① 传送那条路绕过了上一版的漏斗。** 上一版只拦了**一参**漏斗（1.20.1 `Entity.m_7332_` /
+1.21.1 `positionRider(Entity)`，两者都是 `public final`）。但原版里还有第二个入口直接调
+**两参**的那个：`Entity.m_276804_()`（= `teleportPassengers`）：
+`getSelfAndPassengers().forEach(p -> { for (e : p.passengers) p.m_19956_(e, Entity::m_6027_); })`，
+javap 实证。也就是说**每一次传送**（`m_6021_` / `m_264318_`，含本模组「连人带坐骑送回主人身边」
+那条链路）都绕过一参漏斗、直接进龙覆写的两参漏斗 → 女仆又被当成嘴里的猎物摆到嘴边、
+55 刻后又被咬被甩。**修**：两个漏斗都拦；两参那一档用原版给的 `MoveFunction` 落座
+（传送时它是 `Entity::moveTo`，保留传送语义），再 cancel。
+
+**② 上一版硬把龙置成「飞行」，与龙自己的状态机每 tick 互翻。** `MaidMountCompat.driveDragon`
+原来写「只要 `isFlying()` 为假就置真」，而龙自己那套（`flightManager.update()` 的悬停分支 +
+`logic.updateDragonServer()` 的落地判定）会置回 hovering/false。两边互翻的后果不是"飞不起来"，
+而是**高度每 tick 跳一次**：`getRiderPosition()` 的竖直项里「悬停/飞行」那一档比「站在地上」
+那一档高整整 `1.1*linearFactor + getRideHeightBase()*0.6`（阶段 5 约 **4 格**）。
+**修**：只在「它还站在地上（`onGround()`）」时推一把（这是 `useFlyingPathFinder()` 为真的前提），
+已经离地/悬停就交给它自己那套飞行物理，不再覆写。
+
+**③ 龙在密闭空间里时鞍位落在方块里 → 每 tick 窒息 → 自保把她传送出去。** 实机日志实证：
+绑定后立刻出现一串 `[maidhurt] 圣女酒狐: 类型=inWall 位置=(…,-32,…)`（每秒 1 点、
+随后 `self preserve exit teleport`）——龙在洞里 / 天花板很低的大厅里时，它算出来的鞍位**在方块里**，
+而女仆没有把方块挤开的体格（原版只有玩家/大体积生物会被推出去），于是每 tick 吃 `in_wall` 伤害，
+接着自保把她 teleport 走（`teleportTo` 内部先 `unRide()`）＝「陷进去 / 被甩」的另一半。
+**修**：落座前过一道 `MaidMountCompat.freeSeatY`——从鞍位往上找第一格「她放得下」的位置
+（最多 6 格；判据与该模组其余落点判定同源：该格碰撞形状为空），找不到就用原位（绝不因此不落座）。
+
+**④ 自保传送不再把她从坐骑上踹下来。** 与 718 #31（坐/蹲 = 玩家明确停放）同一条口径、
+与 656（骑扫帚时自保让位）同一个理由：她此刻是**乘客**，位置由坐骑每 tick 覆写，去向归骑乘链路。
+`SelfPreservationBehavior.shouldSkipTeleportForParked` 加上「被骑乘指挥棒绑上的骑乘女仆」这一档
+（两条自保传送路径共用那道闸）。
+
+### 二、拿着棍子还是能坐上卓越前线的载具——独占档补在「登乘那一道」上
+
+上一版拦的是 `PlayerInteractEvent.EntityInteract( Specific )`——它们只由「原版那条右击链路」发出
+（服务端 `Player.m_36157_` = `interactOn`、客户端 `MultiPlayerGameMode.m_105230_/m_105226_`）。
+而**坐上载具**在更下面一层：**任何** `startRiding` 都要走 `Entity.m_7998_` →
+`ForgeEventFactory.canMountEntity` / `EventHooks.canMountEntity` → 发 `EntityMountEvent`
+（javap 实证：`Entity.m_7998_` 偏移 49 就是这次调用）。卓越前线的载具/轮椅走的是它自己那条
+客户端本地链路（`WheelChairEntity.attractEntity` 每 tick 把附近**非玩家**生物 `startRiding` 上来；
+玩家那条走 `VehicleEntity.interact` → `player.startRiding`）——**客户端本地那一下**根本不过我们
+那两个事件，所以旧闸拦不住。
+
+**修**：独占档改挂 `EntityMountEvent`（**所有**登乘路径的共同必经点，客户端与服务端各发一次）：
+手里拿着骑乘指挥棒的玩家**一律不通过任何方式登乘**；**只拦玩家本人**——女仆自己坐上去
+（棍子绑的那条 `maid.startRiding(mount, true)`）与武装拴绳（它不用 `startRiding`）完全不受影响。
+关掉 `ride.batonExclusive` = 与上一版一字不差。日志搜「不登乘」（节流 3 秒）。
+
+### 三、验证
+
+- 两树 `javac` **0 错误**；`_mixchk.py` 注入点审计 **PASS=181 FAIL=0 UNRES=0**（两个漏斗都逐字证明
+  由目标类自己声明）；打包 `verify_jar_classes` 两树全过（Forge 899 条目 / Neo 911 条目）。
+- 未改：龙对「谁是控制乘客」的判定、驾驶 / 开火链路、绑定与传送链路、面板与其余默认值。
+
+# 实测七百二十【冰火传说龙的骑位修正（女仆不再被含在嘴里 / 不再被甩下）+ 骑乘指挥棒独占右击】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

@@ -9,9 +9,11 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.event.entity.EntityMountEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -204,6 +206,91 @@ public final class RideBindManager {
             return;
         }
         event.setCanceled(true);
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百二十一【点2 补闸：独占档改在"登乘那一道"上落实】。
+     *
+     * <h2>玩家原话（720 之后仍在）</h2>
+     * 「右击问题还是没有解决，拿着骑乘棒右击卓越前线的载具会直接坐上去，而不是绑定。」
+     *
+     * <h2>720 那两道闸为什么拦不住它（字节码实证）</h2>
+     * 720 拦的是 {@code PlayerInteractEvent.EntityInteract( Specific )}——它们由
+     * {@code Player.m_36157_}（= {@code interactOn}，服务端）与
+     * {@code MultiPlayerGameMode.m_105230_/m_105226_}（客户端本地）里各发一次，**只覆盖"原版那条
+     * 右击链路"**。而"坐上载具"这件事在更下面一层：**任何** {@code startRiding} 都会走
+     * {@code Entity.m_7998_} → {@code ForgeEventFactory.canMountEntity} /
+     * {@code EventHooks.canMountEntity} → 发 {@code EntityMountEvent}（javap 实证：
+     * {@code Entity.m_7998_} 偏移 49 就是这次调用）。卓越前线的载具/轮椅走的是它自己那条
+     * 客户端本地链路（{@code WheelChairEntity.attractEntity} 每 tick 把附近的**非玩家**
+     * 生物 {@code startRiding} 上来、玩家那条走 {@code VehicleEntity.interact} →
+     * {@code player.startRiding}），**客户端本地那一下**根本不过我们那两个事件。
+     *
+     * <h2>所以补这一道（唯一收口）</h2>
+     * 独占档开着时：**手里拿着骑乘指挥棒的玩家，不通过任何方式登乘**——{@code EntityMountEvent}
+     * 是**所有**登乘路径（原版右击 / 模组自己的本地链路 / 别的模组调 {@code startRiding}）
+     * 的共同必经点，而且客户端与服务端**各发一次**（{@code canMountEntity} 在两侧的
+     * {@code m_7998_} 里都调），所以两边都拦得住。
+     *
+     * <p><b>只拦"玩家本人"</b>：女仆自己登乘（{@link #bind} 里的
+     * {@code maid.m_7998_(mount, true)}）与武装拴绳那条链路（它压根不用 {@code startRiding}）
+     * 一个字节都不受影响。关掉 {@code ride.batonExclusive} = 与今天一字不差。
+     */
+    @SubscribeEvent
+    public static void onMount(EntityMountEvent event) {
+        try {
+            if (!isEnabled() || !batonExclusive()) {
+                return; // 关掉独占 = 与今天一字不差（不碰登乘）
+            }
+            if (!event.isMounting()) {
+                return; // 下鞍不管
+            }
+            if (!(event.getEntityMounting() instanceof Player player)) {
+                return; // 不是玩家（女仆自己坐上去 / 别的生物）→ 放行，这是我们要的绑定那条路
+            }
+            if (!holdsBaton(player)) {
+                return; // 手里不是骑乘指挥棒 → 原版一字不动
+            }
+            event.setCanceled(true);
+            PlayerMountLog.throttled(player);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 玩家（主手或副手）拿着骑乘指挥棒吗。 */
+    private static boolean holdsBaton(Player player) {
+        try {
+            return player.m_21205_().m_41720_() instanceof RideBatonItem
+                    || player.m_21206_().m_41720_() instanceof RideBatonItem;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 独占档拦住登乘的留痕（只记服务端；节流 3 秒一位玩家，免得刷屏）。 */
+    private static final class PlayerMountLog {
+        private static final Map<UUID, Long> AT = new HashMap<>();
+
+        static void throttled(Player player) {
+            try {
+                if (!(player instanceof ServerPlayer sp)) {
+                    return; // 客户端那一份不记（同一件事服务端会记一次）
+                }
+                long now = System.currentTimeMillis();
+                UUID id = sp.m_20148_();
+                Long last = AT.get(id);
+                if (last != null && now - last < DENY_INTERVAL_MS) {
+                    return;
+                }
+                if (AT.size() > 512) {
+                    AT.clear();
+                }
+                AT.put(id, now);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name(sp)
+                        + " 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子）");
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     /* ==================== 选中 / 配对 / 解除 ==================== */
