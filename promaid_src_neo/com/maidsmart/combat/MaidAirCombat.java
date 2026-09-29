@@ -133,41 +133,45 @@ public final class MaidAirCombat {
     /* ==================== 悬停点（"骑上就停在这"） ==================== */
 
     /**
-     * 她此刻**该悬停在哪**（**跟随档**）——水平就是她现在的位置，竖直是「她脚下的地面 +
+     * 她此刻**该悬停在哪**（**跟随档**）——水平就是她现在的位置，竖直是「**主人高度** +
      * {@link #followAltCfg}」。
      *
-     * <p>玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」+ 728 补正「我是说跟随的时候
-     * 保持离地三格的」。所以这一条**只看地面、不看敌人**：有敌人时改走 {@link #combatTarget}
-     * （那时高度按敌上算，见 {@link #fightAltCfg}）。
+     * <p>【实测七百三十三·玩家纠正口径】原话：「我之前提到过，是离地面上高三格，但这个表述
+     * 并不明确，应该是**比主人的高度高三格**。（就跟扫帚模式一样）」——所以基准从"她脚下的地面"
+     * 改成"**主人的 Y**"。扫帚就是这么算的（{@code MaidBroomDrive.followPoint}：
+     * {@code owner.getY() + FOLLOW_HOVER}），本档与它同口径。
      *
-     * @return 悬停点；世界/异常拿不到 → {@code null}（调用方照旧按跟随链路处理）
+     * <p>为什么旧口径会出问题：实机日志 {@code 跟随档(离地3格) 高差=0 距目标=101格}——主人飞到
+     * 高处后，她按"地面 +3"算，高度差恒为 0、于是**竖着一格都不追**，只在水平面追，永远追不上。
+     *
+     * @param ownerY 主人的 Y（跟随基准）；拿不到主人时调用方传她自己的 Y（退化成原地悬停）
      */
-    public static Vec3 followTarget(EntityMaid maid) {
+    public static Vec3 followTarget(EntityMaid maid, double ownerY) {
         try {
             if (maid == null) {
                 return null;
             }
-            return hoverAt(maid, maid.getX(), maid.getZ());
+            return hoverAt(maid, maid.getX(), maid.getZ(), ownerY);
         } catch (Throwable ignored) {
             return null;
         }
     }
 
     /**
-     * 悬停在指定水平坐标的上方（高度仍是「该处地面 + {@link #followAltCfg}」）。
+     * 悬停在指定水平坐标的上方，高度 = {@code baseY + {@link #followAltCfg}}。
      *
-     * <p>{@code RideBindManager} 在没有敌人时用它做**低空跟随**：主人走远了就把目标点放在
-     * 主人正上方、高度仍锁在离地 N 格——既保留"跟着主人"，又满足"离地三格左右、不再贴地乱窜"。
+     * <p>{@code RideBindManager} 在没有敌人时用它做**跟随**：主人走远了就把目标点放在
+     * 主人正上方 **高三格**（{@code baseY = owner.getY()}），主人就在旁边则原地悬停
+     * （{@code baseY} 传她自己的 Y，等价于"保持当前高度"）。
      *
      * @return 目标点；拿不到世界 → {@code null}
      */
-    public static Vec3 hoverAt(EntityMaid maid, double x, double z) {
+    public static Vec3 hoverAt(EntityMaid maid, double x, double z, double baseY) {
         try {
             if (maid == null) {
                 return null;
             }
-            double y = groundY(maid, x, z) + followAltCfg();
-            return new Vec3(x, y, z);
+            return new Vec3(x, baseY + followAltCfg(), z);
         } catch (Throwable ignored) {
             return null;
         }
@@ -183,44 +187,6 @@ public final class MaidAirCombat {
      * <p>扫描上限 {@link #GROUND_SCAN} 格；一路扫不到（悬在虚空上）就退回她当前 Y
      * （宁可原地悬停，也不往虚空里扎）。
      */
-    private static double groundY(EntityMaid maid, double x, double z) {
-        try {
-            net.minecraft.world.level.Level level = maid.level();
-            if (level == null) {
-                return maid.getY();
-            }
-            net.minecraft.core.BlockPos.MutableBlockPos p = new net.minecraft.core.BlockPos.MutableBlockPos();
-            int bx = net.minecraft.util.Mth.floor(x);
-            int bz = net.minecraft.util.Mth.floor(z);
-            int from = net.minecraft.util.Mth.floor(maid.getY());
-            for (int dy = 0; dy <= GROUND_SCAN; dy++) {
-                int y = from - dy;
-                if (level.isOutsideBuildHeight(y)) {
-                    break;
-                }
-                p.set(bx, y, bz);
-                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(p);
-                if (st.isAir()) {
-                    continue;
-                }
-                // 该格"她站得住"= 碰撞形状非空（草丛/火把/雪这类无碰撞方块不算地面）
-                if (!st.getCollisionShape(level, p,
-                        net.minecraft.world.phys.shapes.CollisionContext.empty()).isEmpty()) {
-                    return y + 1.0; // 方块顶面
-                }
-            }
-        } catch (Throwable ignored) {
-        }
-        try {
-            return maid.getY();
-        } catch (Throwable ignored) {
-            return 0.0;
-        }
-    }
-
-    /** 往下探地形的最大格数（再深就不像"脚下"了，按原地悬停处理）。 */
-    private static final int GROUND_SCAN = 24;
-
     /* ==================== 盘旋点（水平绕圈，高度不变） ==================== */
 
     /**

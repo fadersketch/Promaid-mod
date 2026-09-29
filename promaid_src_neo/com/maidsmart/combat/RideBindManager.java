@@ -1356,11 +1356,12 @@ public final class RideBindManager {
                     air = MaidAirCombat.combatTarget(maid, foe);
                 } else {
                     MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
-                    // 低空跟随：主人够远就飞到他正上方（高度仍锁离地 N 格）；够近就原地悬停。
+                    // 跟随：主人够远就飞到他**正上方、比他高三格**（七百三十三：基准从"她脚下的
+                    // 地面"改成"主人的高度"，与扫帚模式同口径）；够近就原地悬停（保持当前高度）。
                     if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
-                        air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ());
+                        air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ(), owner.getY());
                     } else {
-                        air = MaidAirCombat.followTarget(maid);
+                        air = MaidAirCombat.followTarget(maid, maid.getY());
                     }
                 }
                 if (air != null) {
