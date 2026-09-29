@@ -56,6 +56,18 @@ public final class PromaidClientSetup {
         com.maidsmart.client.RideBatonViewClamp.ensureRegistered();
     }
 
+    /**
+     * 【实测七百二十七·点4】退出世界时清掉"悬空鞍位（龙）"的客户端镜像表。
+     *
+     * <p>为什么放在客户端专属类：事件类型 {@code ClientPlayerNetworkEvent.LoggingOut} 是
+     * 客户端类型，写在 {@code RideBindManager}（两侧都会加载）里会让专用服务器加载到客户端类。
+     */
+    public static void registerSeatSyncClear() {
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
+                        com.maidsmart.combat.RideBindManager.clearSyncedSeats());
+    }
+
     private static void onPlaySound(net.neoforged.neoforge.client.event.sound.PlaySoundEvent event) {
         com.maidsmart.voice.ClientVoicePlayback.onPlaySound(event);
     }

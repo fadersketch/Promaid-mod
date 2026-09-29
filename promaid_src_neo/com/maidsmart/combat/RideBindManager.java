@@ -62,6 +62,14 @@ public final class RideBindManager {
     private static final Map<UUID, java.lang.ref.WeakReference<Entity>> PENDING = new HashMap<>();
     private static final Map<UUID, Long> DENY_LOG = new HashMap<>();
 
+    /**
+     * 【实测七百二十七·点4】悬空鞍位（龙）配对的**客户端镜像**：女仆实体 id → 龙的实体 id。
+     *
+     * <p>客户端**没有链路表**（{@link #LINKS} 只活在服务端），所以"她挂在哪条龙上"这项知识
+     * 必须由服务端 S2C 同步（{@link MaidSeatNetworking}）。见 {@link #onSeatSync}。
+     */
+    public static final Map<Integer, Integer> SYNCED_CHAIRS = new HashMap<>();
+
     private static int tickTimer = 0;
 
     private static final class Link {
@@ -448,7 +456,13 @@ public final class RideBindManager {
                 }
                 // v1.3.0(beta) 实测七百一十八·点4：判据从 isRidingMount 收紧到 isRideRider——
                 // 她若只是原版/别的模组让她坐上去的（不是我们绑的），指挥棒不该把她拽下来。
-                if (MaidRideKit.isRideRider(m)) {
+                //
+                // 【实测七百二十七·点2】判据再放宽到 {@link #isOurRider}：**悬空鞍位（冰火传说的龙）
+                // 那条她不是乘客**，{@code MaidRideKit.isRideRider} 要求 {@code getVehicle() != null}
+                // → 对龙恒为 false，于是"右击她"落到了下面那句「先用骑乘棒右击坐骑」，她根本下不来。
+                // 玩家原话：「女仆如果坐到了龙上……除非把龙收起来，否则女仆是下不来的。这边建议将它
+                // 改成跟载具一样的，直接拿着骑乘指挥棒右击就可以让他下来。」所以这里跟载具同口径。
+                if (isOurRider(m)) {
                     releaseMaid(m, false, "再选一次");
                     return;
                 }
@@ -482,11 +496,17 @@ public final class RideBindManager {
             }
             // 【实测七百二十三】龙被"悬空鞍位"占着：玩家原话「此时玩家对龙进行右击会显示
             // 已经占用了。」——她不是乘客，按乘客找找不到她；这里按链路表 + 龙直接认出来。
+            //
+            // 【实测七百二十七·点2】改成与载具同口径：**自己的**女仆挂在上面 → 直接右击就让她
+            // 下来（旧版只回一句"潜行右击可以让我下来"，而那条路实际走不通，玩家等于下不来）。
+            // 不是自己的 → 才提示"已经有女仆了"。
             EntityMaid chairRider = chairRiderOf(target);
             if (chairRider != null) {
-                deny(player, chairRider, ownable(player, chairRider)
-                        ? "我已经在这条龙背上啦～（潜行右击可以让我下来）"
-                        : "这条龙的背上已经有女仆了～");
+                if (ownable(player, chairRider)) {
+                    releaseMaid(chairRider, false, "再选一次");
+                } else {
+                    deny(player, chairRider, "这条龙的背上已经有女仆了～");
+                }
                 return;
             }
             // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
@@ -505,7 +525,12 @@ public final class RideBindManager {
     }
 
     private static void dismountByClick(ServerPlayer player, Entity target) {
+        // 【实测七百二十七·点2】目标是她自己、或她驮的坐骑、或她挂的龙（悬空鞍位）。
+        // 龙那条她**不是乘客**，{@code riderOf} 找不到她 —— 必须补 {@link #chairRiderOf}。
         EntityMaid m = target instanceof EntityMaid mm ? mm : MaidRideKit.riderOf(target);
+        if (m == null) {
+            m = chairRiderOf(target);
+        }
         if (m == null) {
             player.displayClientMessage(Component.literal("\u00a77这只坐骑背上没有我的女仆"), false);
             return;
@@ -514,13 +539,36 @@ public final class RideBindManager {
             deny(player, m, "她不是我的女仆～");
             return;
         }
-        // 实测七百一十八·点4：只有"骑乘棒绑上去的"才由我们负责弄下来。
-        if (!MaidRideKit.isRideRider(m)) {
+        // 实测七百一十八·点4 + 实测七百二十七·点2：只有"骑乘棒绑上去的"才由我们负责弄下来。
+        // 判据用 {@link #isOurRider}（乘客档 + 悬空鞍位档，龙那条她也算）。
+        if (!isOurRider(m)) {
             player.displayClientMessage(Component.literal(
                     "\u00a77她不是用骑乘指挥棒绑上去的，我不去动她"), false);
             return;
         }
         releaseMaid(m, false, "潜行下鞍");
+    }
+
+    /**
+     * 【实测七百二十七·点2】她是不是"我们骑乘指挥棒绑上去的那位"——**两条路都要认**：
+     * <ul>
+     *   <li><b>乘客档</b>（原版兽 / 卓越前线载具）：{@link MaidRideKit#isRideRider}（它要求
+     *       她确实是乘客，见那个方法的说明）；</li>
+     *   <li><b>悬空鞍位档</b>（冰火传说的龙）：她**不是乘客**，判据只能看链路表里那条
+     *       {@code chair} 标记（{@link #isDragonChairRider}）。</li>
+     * </ul>
+     *
+     * <p>【为什么必须补第二条】玩家原话：「女仆如果坐到了龙上，虽然明面上系统消息写的是
+     * shift+右击让女仆下来。但实际上没用，导致除非把龙收起来，否则女仆是下不来的。这边建议
+     * 将它改成跟载具一样的，直接拿着骑乘指挥棒右击就可以让他下来。」——旧版这条链路每一处
+     * 都只问 {@code isRideRider}（对龙恒 false），所以她一旦上了龙就下不来。
+     */
+    private static boolean isOurRider(EntityMaid maid) {
+        try {
+            return MaidRideKit.isRideRider(maid) || isDragonChairRider(maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 配对：套僵尸骑鸡那一记 —— {@code startRiding(force)} + 写表 + 打标记 */
@@ -608,6 +656,11 @@ public final class RideBindManager {
         }
         mark(maid);
         mark(mount);
+        // 【实测七百二十七·点4】悬空鞍位（龙）那条：把"她挂在哪条龙上"同步给客户端，
+        // 客户端才能按同一个算式与她同帧摆位（见 MaidSeatNetworking 与 onClientEntityTickPost）。
+        if (chair) {
+            syncSeat(maid, mount.getId());
+        }
         bubble(maid, chair ? "我坐它背上啦，它跟着你走～" : "坐稳啦，我们出发～");
         com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "绑定：主人=" + name(player)
                 + " 女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
@@ -647,6 +700,8 @@ public final class RideBindManager {
         if (link != null && link.chair) {
             MaidMountCompat.setGravity(maid, true);
             MaidMountCompat.restoreDragonCommand(mount, link.dragonCommand);
+            // 【实测七百二十七·点4】通知客户端解除镜像（否则客户端还在按旧配对摆位）
+            syncSeat(maid, -1);
         }
         unmark(maid);
         unmark(mount);
@@ -922,11 +977,19 @@ public final class RideBindManager {
     @SubscribeEvent
     public static void onEntityTickPost(net.neoforged.neoforge.event.tick.EntityTickEvent.Post event) {
         try {
-            if (!isEnabled() || LINKS.isEmpty()) {
+            Entity e = event.getEntity();
+            if (e == null) {
                 return;
             }
-            Entity e = event.getEntity();
-            if (e == null || e.level().isClientSide()) {
+            // 【实测七百二十七·点4】客户端这一支：**悬空鞍位（龙）**那条她不是乘客、又没人摆位，
+            // 位置只能靠原版限流位置包 + 客户端 lerp 插值 → 龙一飞就"位置严重改变和错乱"。
+            // 这里用服务端同步过来的配对（{@link #SYNCED_CHAIRS}）在客户端把她按**同一个算式**
+            // 摆到龙的当前（插值后）位置上，与服务端逐字同源、且与龙同帧。见 MaidSeatNetworking。
+            if (e.level().isClientSide()) {
+                onClientEntityTickPost(e);
+                return;
+            }
+            if (!isEnabled() || LINKS.isEmpty()) {
                 return;
             }
             // ① 她本人 tick 完 → 按龙的当前（可能刚更新）位置摆一次
@@ -953,6 +1016,145 @@ public final class RideBindManager {
                 MaidMountCompat.setGravity(rider, false);
                 MaidMountCompat.freezeOnSeat(rider);
                 MaidMountCompat.seatOnDragon(e, rider);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ==================== 实测七百二十七·点4：悬空鞍位（龙）的客户端同行 ==================== */
+
+    /**
+     * 客户端那一半的摆位（{@link #onEntityTickPost} 在 {@code isClientSide()} 时转进来）。
+     *
+     * <p>【为什么必须有这一支】服务端的每拍摆位跑在服务端；客户端**没有** {@link #LINKS}
+     * （那是服务端状态），所以旧版客户端的她 = "不是乘客 + 没人摆位" = 完全由原版位置包与
+     * 客户端自身插值决定。而原版位置包**限流**（{@code ServerEntity} 每 2 tick 一次），她又
+     * 每拍被服务端拽回鞍位——这种"每拍小位移 + 限流"的组合，客户端插值最容易出偏差；
+     * 龙**是**每帧插值渲染的原版实体 → 两条插值曲线不同步 → 玩家看到的"一飞就错乱"。
+     *
+     * <p>现在客户端按服务端同步的配对（{@link #SYNCED_CHAIRS}），用**同一个**
+     * {@link MaidMountCompat#seatOnDragon} 从"龙的当前渲染位置"重算鞍位——客户端不再依赖
+     * 位置包，两者同帧。龙 / 她 tick 完各摆一次（谁后 tick 谁说了算，与服务端同口径）。
+     */
+    private static void onClientEntityTickPost(Entity e) {
+        try {
+            if (!isEnabled() || SYNCED_CHAIRS.isEmpty()) {
+                return;
+            }
+            if (e instanceof EntityMaid maid) {
+                Integer mountId = SYNCED_CHAIRS.get(maid.getId());
+                if (mountId == null) {
+                    return;
+                }
+                Entity mount = maid.level().getEntity(mountId);
+                if (mount == null || !mount.isAlive() || mount.level() != maid.level()) {
+                    return;
+                }
+                MaidMountCompat.setGravity(maid, false);
+                MaidMountCompat.freezeOnSeat(maid);
+                MaidMountCompat.seatOnDragon(mount, maid);
+                return;
+            }
+            if (MaidMountCompat.isDragon(e)) {
+                Integer maidId = null;
+                for (Map.Entry<Integer, Integer> en : SYNCED_CHAIRS.entrySet()) {
+                    if (en.getValue() != null && en.getValue() == e.getId()) {
+                        maidId = en.getKey();
+                        break;
+                    }
+                }
+                if (maidId == null) {
+                    return;
+                }
+                Entity rider = e.level().getEntity(maidId);
+                if (!(rider instanceof EntityMaid maid) || maid.level() != e.level()) {
+                    return;
+                }
+                MaidMountCompat.setGravity(maid, false);
+                MaidMountCompat.freezeOnSeat(maid);
+                MaidMountCompat.seatOnDragon(e, maid);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 服务端：把"她挂在哪条龙上"同步给客户端（{@link MaidSeatNetworking}）。{@code mountId < 0} = 解除。 */
+    private static void syncSeat(EntityMaid maid, int mountId) {
+        try {
+            if (maid == null) {
+                return;
+            }
+            MaidSeatNetworking.send(maid, mountId);
+            // 留痕（每只女仆 5 秒一条上限）：排查"龙一飞就错乱"时先看这一行有没有写出来
+            // ——有 = 配对已同步给客户端；日志搜「骑行同步」。
+            logSeatSync(maid, mountId);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 配对同步的留痕节流表（与其它几条日志互不顶掉）。 */
+    private static final Map<UUID, Long> SEAT_LOG_AT = new HashMap<>();
+
+    private static void logSeatSync(EntityMaid maid, int mountId) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = SEAT_LOG_AT.get(maid.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            if (SEAT_LOG_AT.size() > 256) {
+                SEAT_LOG_AT.clear();
+            }
+            SEAT_LOG_AT.put(maid.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("骑行同步", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                    + (mountId < 0 ? " 悬空鞍位配对解除（客户端停止同行摆位）"
+                            : " 悬空鞍位配对已同步给客户端（龙 id=" + mountId + "，客户端按同一算式同行）"));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 客户端收到配对同步：记下/清掉镜像表。由 {@link MaidSeatNetworking.SyncPacket} 调用
+     * （两侧都会加载本类，所以这里只碰纯数据）。
+     */
+    public static void onSeatSync(int maidId, int mountId) {
+        try {
+            if (mountId < 0) {
+                SYNCED_CHAIRS.remove(maidId);
+            } else {
+                SYNCED_CHAIRS.put(maidId, mountId);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 客户端退出世界清空（{@code PromaidClientSetup} 的登出钩子调）。 */
+    public static void clearSyncedSeats() {
+        try {
+            SYNCED_CHAIRS.clear();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 晚进服 / 传过来的玩家开始追踪她时补发当前配对（同 {@code GunnerTetherManager.onStartTracking}）。
+     */
+    @SubscribeEvent
+    public static void onStartTracking(
+            net.neoforged.neoforge.event.entity.player.PlayerEvent.StartTracking event) {
+        try {
+            if (!(event.getTarget() instanceof EntityMaid maid)) {
+                return;
+            }
+            if (!(event.getEntity() instanceof ServerPlayer watcher)) {
+                return;
+            }
+            Link link = LINKS.get(maid.getUUID());
+            Entity mount = link == null ? null : link.mount.get();
+            if (link != null && link.chair && mount != null) {
+                MaidSeatNetworking.sendTo(watcher, maid.getId(), mount.getId());
+            } else {
+                MaidSeatNetworking.sendTo(watcher, maid.getId(), -1);
             }
         } catch (Throwable ignored) {
         }
@@ -1032,6 +1234,8 @@ public final class RideBindManager {
         if (link != null && link.chair) {
             MaidMountCompat.setGravity(maid, true);
             MaidMountCompat.restoreDragonCommand(mount, link.dragonCommand);
+            // 【实测七百二十七·点4】自动解除（链路失效）同样要通知客户端撤掉镜像
+            syncSeat(maid, -1);
         }
         unmark(maid);
         unmark(mount);
@@ -1063,22 +1267,33 @@ public final class RideBindManager {
                 feedAmmoThrottled(mount, maid);
             }
             double mod = MaidRideKit.speedModifierFor(mount, maid);
-            // 【实测七百二十六·点3】飞行载具（卓越前线的直升机 / 固定翼）**有攻击目标时改走
-            // 扫帚模式同款空战**：先爬到敌上 airAltCfg() 格（默认 15），再绕着敌人盘旋射击。
-            // 玩家原话「应该要套用扫帚模式运动代码和逻辑……至少离敌人要高出15格左右吧」。
-            // 这一档**排在最前**：有敌人时不再去看"她的走位记忆/主人跟随点"（旧版正是那两者
-            // 让它贴地追主人、在低空乱窜）。无目标 / 关掉开关 / 非飞行载具 → 原样落回下面的链路。
+            // 【实测七百二十七·点1 = 七百二十六·点3 的返修】飞行载具（卓越前线的直升机 /
+            // 固定翼）**一律先走悬停档**：
+            //   ① **有敌人** → 绕着敌人转圈打，但高度锁定在"她脚下地面 + airAlt"（默认 3 格），
+            //      不再随敌人上下浮动、也不再"爬到敌上 15 格"（那正是上一版又大又低的原因）；
+            //   ② **没有敌人** → **低空跟随主人**：主人离得够远就把目标点放在主人正上方、
+            //      高度仍锁在离地 3 格（比旧版"追主人的跟随点"贴地乱窜强，也比"原地悬停不动"
+            //      更符合她一直跟着主人的行为）；主人就在旁边则原地悬停。
+            // 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方；高度锁死也由它
+            // 那个 FLIGHT_HOVER_DEADZONE 完成。飞艇/地面车不在这一档里。
             if (MaidAirCombat.enabled() && MaidMountCompat.isFlyingVehicle(mount)) {
                 LivingEntity foe = targetOf(maid);
+                Vec3 air;
                 if (foe != null && foe.isAlive() && foe.level() == maid.level()) {
-                    Vec3 air = MaidAirCombat.combatTarget(maid, foe);
-                    if (air != null) {
-                        MaidRideKit.feedNavigation(mount, air, mod, maid);
-                        // 朝向交给驾驶层：飞行档按"目标方位 vs 机头"写鼠标 X 通道（driveFlight 里）
-                        return;
-                    }
+                    air = MaidAirCombat.combatTarget(maid, foe);
                 } else {
-                    MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新爬
+                    MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
+                    // 低空跟随：主人够远就飞到他正上方（高度仍锁离地 N 格）；够近就原地悬停。
+                    if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
+                        air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ());
+                    } else {
+                        air = MaidAirCombat.hoverTarget(maid);
+                    }
+                }
+                if (air != null) {
+                    MaidRideKit.feedNavigation(mount, air, mod, maid);
+                    // 朝向交给驾驶层：飞行档按"目标方位 vs 机头"写鼠标 X 通道（driveFlight 里）
+                    return;
                 }
             }
             // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源

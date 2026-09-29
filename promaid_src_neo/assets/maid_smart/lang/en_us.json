@@ -244,7 +244,8 @@
   "config.promaid.ride.modMounts": "Mod mount support (Superb Warfare vehicles / Ice and Fire dragons)",
   "config.promaid.ride.modMountFire": "Mod mount: fire for her",
   "config.promaid.ride.batonExclusive": "Ride Baton - exclusive right-click",
-  "config.promaid.ride.airCombat": "Flying vehicle air combat (Superb Warfare helicopter/aircraft)",
-  "config.promaid.ride.airAlt": "Air combat - altitude above target (blocks)",
+  "config.promaid.ride.airCombat": "Flying vehicle: hover + low-altitude orbit (Superb Warfare)",
+  "config.promaid.ride.airAlt": "Hover altitude above ground (blocks)",
+  "config.promaid.ride.orbitRadius": "Orbit radius (blocks)",
   "config.promaid.ride.ammoFeed": "Vehicle: she loads ammo for you (Superb Warfare)"
 }

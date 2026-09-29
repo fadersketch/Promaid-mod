@@ -9,36 +9,43 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * v1.3.0(beta) 实测七百二十六·点3【骑飞行载具的空战：套用扫帚模式的"先爬到敌上、再绕圈打"】。
+ * v1.3.0(beta) 实测七百二十七·点1【骑飞行载具：上机即悬停、盘旋保持同一高度】。
  *
  * <h2>玩家原话</h2>
- * 「女仆在驾驶武装直升机的时候总算可以跟着主人进行飞行了，但是在战斗的时候显得过于笨逼，
- *  发挥不出武装直升机的优势，应该要套用扫帚模式运动代码和逻辑，体现出空战的优势。至少离敌人
- *  要高出15格左右吧。现在基本上就是绕着敌人盘旋，但是总是在地上和高空5个左右跳动，敌人很
- *  容易就能打到。」
+ * 「女仆似乎不会让直升机悬停。而且在打精英敌人进行绕圈的时候，总是范围绕的特别大，而且高度很低。
+ *  导致实际的命中率非常堪忧。最好是采用跟扫帚一样的机制，骑上直升机之后就进入悬停状态，离地三格
+ *  左右。随后的盘旋也是悬停在同一高度盘旋。」
  *
- * <h2>为什么旧版"贴地乱窜"（反编译实证）</h2>
- * 飞行载具（直升机/固定翼）的航向/俯仰走**鼠标通道**、高度靠**总距**（{@code helicopterEngine}），
- * 而 {@code MaidMountCompat.driveFlight} 收的"目标点"来自 {@code RideBindManager.drive}——
- * 那一格算的是"她的走位记忆 / 主人跟随点"。**一有敌人它还在追主人**，于是低空乱飞；再加上
- * 到达判据一进带就切悬停/松总距，就出现玩家说的"在地上和高空5格左右跳动"。
- *
- * <h2>本档做什么（"套用扫帚模式运动代码和逻辑"）</h2>
- * 与 {@link MaidBroomDrive} 的接敌段**同一套形状**：
+ * <h2>七百二十六 那一版错在哪（实机日志 + 反编译双实证）</h2>
  * <ol>
- *   <li><b>接敌爬升</b>：遇到敌人先爬到它上方 {@code airAlt} 格（默认 15），并把"这一场遭遇的
- *       盘旋高度"定下来（顶头按实际、本场只升不降）——见 {@link #climbTarget}；</li>
- *   <li><b>战斗盘旋</b>：绕着敌人转圈打，半径/旋向/快慢直接复用扫帚那三套状态机
- *       （{@link CombatOrbit} + {@link CombatManeuver}）——所以"同款"是**真的同一段代码**，
- *       不是另写一份近似物。</li>
+ *   <li><b>"爬到敌人上方 15 格"会把她压到地面</b>：直升机的**高度只由总距与悬停开关控制**
+ *       （反编译 {@code VehicleEngineUtils.helicopterEngine} 实证——没有竖直轴输入），而俯仰
+ *       决定她往哪飞。七百二十六 写的是"爬到敌人**上方** 15 格"，一旦敌人比她低很多
+ *       （实机日志 `高差=-24`），俯仰就把机头压向地面 → 越飞越低、贴地乱窜。</li>
+ *   <li><b>半径借了扫帚那套 → 圈特别大</b>：{@code CombatOrbit.radius} 的区间是
+ *       {@code range(8) × 0.75 ~ orbitMax(10)}，再乘 {@code CombatManeuver.radiusScale}
+ *       （蛇形/脱离再进还会放大）→ 实际能绕到 10 格以上。玩家要的是"直升机悬停着打"，
+ *       圈要小、要稳。</li>
  * </ol>
  *
- * <p>与扫帚模式的**唯一**差别是"离敌高度"读的是另一个旋钮（{@code combat.ride.airAlt}，默认 15；
- * 扫帚那个是 {@code combat.broom.climb}，默认 12）——玩家给直升机点名要的是 15。
+ * <h2>本版口径（逐条对应玩家的话）</h2>
+ * <ul>
+ *   <li><b>"骑上就进入悬停状态，离地三格左右"</b>：不在"接敌"时才管，而是**只要她骑着飞行
+ *       载具就锁定高度**——目标高度 = 她**脚下的地面** + {@code airAlt}（默认 3）。这件事由
+ *       {@link MaidMountCompat#driveFlight} 每拍用总距做（它是唯一能写总距/悬停开关的地方），
+ *       本类只提供 {@link #hoverTarget} 这个"该停在哪"的点。</li>
+ *   <li><b>"随后的盘旋也是悬停在同一高度盘旋"</b>：盘旋点的高度 = 同一个 {@link #hoverTarget}
+ *       给出的绝对 Y，**不再随敌人上下浮动**（旧版是"敌人脚底 + N"。敌人一跑高跑低，她就跟着
+ *       上下扎——正是玩家说的"在地上和高空5个左右跳动"）。</li>
+ *   <li><b>"范围绕的特别大"</b>：半径改成独立的 {@code combat.ride.orbitRadius}（默认 6），
+ *       不再乘 {@code CombatManeuver.radiusScale}；旋向/快慢仍复用 {@link CombatOrbit}
+ *       （"跟扫帚一样的机制"——同一段状态机，只是半径口径独立且不放大）。</li>
+ * </ul>
  *
- * <p>本类**只算"去哪"**（返回一个目标点），不碰任何载具 API：真正把点翻译成鼠标通道/总距的是
- * {@link MaidMountCompat#driveFlight}（它已经写好并实机验证过"能跟着主人飞"）。所以这一档的风险
- * 面只在"目标点从哪儿来"。
+ * <p><b>关于 {@code CombatManeuver}</b>：本版**不接**它（那是扫帚的"蛇形/脱离再进/8字横切"，
+ * 每一种都要求机身有真实的加速度换向能力；直升机是悬停+侧移，套上去只会让圈忽大忽小、
+ * 高度忽高忽低——正是玩家抱怨的那两件事）。{@link CombatOrbit} 的半径/旋向/快慢三件仍然用，
+ * 所以"跟扫帚一样"体现在**机制同源**，不是照抄它那套机动。
  */
 public final class MaidAirCombat {
 
@@ -47,31 +54,31 @@ public final class MaidAirCombat {
 
     /* ==================== 状态表（按女仆 UUID，异常一律吞掉） ==================== */
 
-    /** 女仆 UUID → 这一场遭遇的盘旋高度（相对敌人脚底的格数，本场只升不降） */
-    private static final Map<UUID, Double> ALT = new HashMap<>();
-    /** 女仆 UUID → 接敌爬升相位：想爬到的绝对 Y */
-    private static final Map<UUID, Double> CLIMB_TO = new HashMap<>();
-    /** 女仆 UUID → 这一次爬升的起始 Y（"有没有真的在长高"的判据 + 日志） */
-    private static final Map<UUID, Double> CLIMB_FROM = new HashMap<>();
-    /** 女仆 UUID → 连续多少拍没长高（头顶被方块顶住的判据，与扫帚同口径） */
-    private static final Map<UUID, Integer> CLIMB_STALL = new HashMap<>();
-    /** 女仆 UUID → 上一拍的高度（"这一拍涨了没有"的比较基准） */
-    private static final Map<UUID, Double> CLIMB_LAST_Y = new HashMap<>();
-    /** 女仆 UUID → 爬升相位的目标（敌人 UUID）：换敌人只改写它，不重爬（与扫帚 684 同口径） */
-    private static final Map<UUID, UUID> CLIMB_KEY = new HashMap<>();
     /** 女仆 UUID → 战斗盘旋的方位角（弧度） */
     private static final Map<UUID, Double> ORBIT = new HashMap<>();
 
-    /** 爬升到达判定（格）与"顶头"判据（与 MaidBroomDrive 同一组口径） */
-    private static final double ARRIVE = 0.35;
-    private static final int STALL_TICKS = 20;
-    private static final double STALL_MIN_PROGRESS = 0.5;
-    /** 盘旋线速度（格/tick）：照搬扫帚的 ORBIT_SPEED（0.14 ≈ 2.8 格/秒），任何半径下都能跟上 */
+    /** 盘旋线速度（格/tick）：绕圈时每拍沿切向走多远（换算成角速度见 {@link #orbitPoint}）。 */
     private static final double ORBIT_SPEED = 0.14;
 
-    /* ==================== 对外入口 ==================== */
+    /** 悬停高度（离地格数，默认 3）——玩家原话「离地三格左右」。 */
+    public static double hoverAltCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
+        } catch (Throwable ignored) {
+            return 3.0;
+        }
+    }
 
-    /** 空战开关（配置 combat.ride.airCombat，默认开）。 */
+    /** 盘旋半径（格，默认 6）——玩家反馈旧版「范围绕的特别大」，所以独立一个旋钮。 */
+    public static double orbitRadiusCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get();
+        } catch (Throwable ignored) {
+            return 6.0;
+        }
+    }
+
+    /** 悬停/盘旋总开关（配置 combat.ride.airCombat，默认开）。 */
     public static boolean enabled() {
         try {
             return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.get();
@@ -80,17 +87,101 @@ public final class MaidAirCombat {
         }
     }
 
-    /** 离敌高度（格，默认 15）。玩家原话「至少离敌人要高出15格左右吧」。 */
-    public static double airAltCfg() {
+    /* ==================== 悬停点（"骑上就停在这"） ==================== */
+
+    /**
+     * 她此刻**该悬停在哪**——水平就是她现在的位置，竖直是「她脚下的地面 + {@link #hoverAltCfg}」。
+     *
+     * <p>玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。所以这一条**不看敌人**：
+     * 没有目标时她停在自己头顶、有目标时（见 {@link #combatTarget}）也只是水平去绕圈，
+     * 高度仍是这一个数——这就是玩家要的"盘旋也是悬停在同一高度盘旋"。
+     *
+     * @return 悬停点；世界/异常拿不到 → {@code null}（调用方照旧按跟随链路处理）
+     */
+    public static Vec3 hoverTarget(EntityMaid maid) {
         try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
+            if (maid == null) {
+                return null;
+            }
+            return hoverAt(maid, maid.getX(), maid.getZ());
         } catch (Throwable ignored) {
-            return 15.0;
+            return null;
         }
     }
 
     /**
-     * 这一拍该飞去哪个点——**接敌爬升**与**战斗盘旋**的合一入口。
+     * 悬停在指定水平坐标的上方（高度仍是「该处地面 + {@link #hoverAltCfg}」）。
+     *
+     * <p>{@code RideBindManager} 在没有敌人时用它做**低空跟随**：主人走远了就把目标点放在
+     * 主人正上方、高度仍锁在离地 N 格——既保留"跟着主人"（玩家 719 起就有的行为），
+     * 又满足"离地三格左右、不再贴地乱窜"。
+     *
+     * @return 目标点；拿不到世界 → {@code null}
+     */
+    public static Vec3 hoverAt(EntityMaid maid, double x, double z) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            double y = groundY(maid, x, z) + hoverAltCfg();
+            return new Vec3(x, y, z);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 指定水平坐标**脚下**的地面高度（格）——从她当前 Y 往下探到第一个"站得住"的格子。
+     *
+     * <p>为什么不是 {@code level.getHeight}：她可能正悬在一座桥/树冠/山坡上方，也可能在山洞里
+     * （那时 {@code getHeight} 给她的是**洞顶外面**的地表高度，会把她往天花板里推）。所以这里
+     * 逐格往下扫，取第一个**碰撞形状非空**的方块顶面——她在洞里就按洞底算，在桥上也按桥面算。
+     *
+     * <p>扫描上限 {@link #GROUND_SCAN} 格；一路扫不到（悬在虚空上）就退回她当前 Y
+     * （宁可原地悬停，也不往虚空里扎）。
+     */
+    private static double groundY(EntityMaid maid, double x, double z) {
+        try {
+            net.minecraft.world.level.Level level = maid.level();
+            if (level == null) {
+                return maid.getY();
+            }
+            net.minecraft.core.BlockPos.MutableBlockPos p = new net.minecraft.core.BlockPos.MutableBlockPos();
+            int bx = net.minecraft.util.Mth.floor(x);
+            int bz = net.minecraft.util.Mth.floor(z);
+            int from = net.minecraft.util.Mth.floor(maid.getY());
+            for (int dy = 0; dy <= GROUND_SCAN; dy++) {
+                int y = from - dy;
+                if (level.isOutsideBuildHeight(y)) {
+                    break;
+                }
+                p.set(bx, y, bz);
+                net.minecraft.world.level.block.state.BlockState st = level.getBlockState(p);
+                if (st.isAir()) {
+                    continue;
+                }
+                // 该格"她站得住"= 碰撞形状非空（草丛/火把/雪这类无碰撞方块不算地面）
+                if (!st.getCollisionShape(level, p,
+                        net.minecraft.world.phys.shapes.CollisionContext.empty()).isEmpty()) {
+                    return y + 1.0; // 方块顶面
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            return maid.getY();
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /** 往下探地形的最大格数（再深就不像"脚下"了，按原地悬停处理）。 */
+    private static final int GROUND_SCAN = 24;
+
+    /* ==================== 盘旋点（水平绕圈，高度不变） ==================== */
+
+    /**
+     * 这一拍该飞去哪个点——**水平**绕着敌人转圈，**竖直**保持悬停高度。
      *
      * @return 目标点；{@code null} = 本档不管（调用方照旧按"跟随主人"处理）
      */
@@ -99,194 +190,64 @@ public final class MaidAirCombat {
             return null;
         }
         try {
-            // ① 爬升相位未完成 → 返回"爬升点"（水平仍在敌人上方，竖直是爬升目标 Y）
-            Double climb = climbTarget(maid, target);
-            if (climb != null) {
-                double dx = maid.getX() - target.getX();
-                double dz = maid.getZ() - target.getZ();
-                double horiz = Math.sqrt(dx * dx + dz * dz);
-                // 水平保持在敌人外圈一点（别垂直贴脸爬，否则机头对着敌人、总距又抬着，
-                // 表现会像"原地拔高"）；距离取"她当前水平距离"与盘旋半径的折中。
-                double r = Math.max(6.0, horiz);
-                double ang = ORBIT.getOrDefault(maid.getUUID(), phaseOf(maid));
-                return new Vec3(target.getX() + Math.cos(ang) * r, climb, target.getZ() + Math.sin(ang) * r);
-            }
-            // ② 爬升已完成 → 绕着敌人盘旋
             return orbitPoint(maid, target);
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    /** 这一场遭遇结束（丢目标 / 下鞍 / 玩家接管）→ 清掉本档所有状态，下一场重新爬。 */
+    /**
+     * 绕着敌人转圈打（**高度锁定**，不随敌人上下浮动）。
+     *
+     * <p>半径 = {@link #orbitRadiusCfg}（配置值本身带随机化的只有旋向与角速度，见下）；
+     * 旋向与快慢复用 {@link CombatOrbit} 的三套状态机（"跟扫帚一样的机制"）。
+     * <b>不乘 {@code CombatManeuver.radiusScale}</b>——那一层是扫帚的接敌机动，会把半径放大，
+     * 正是玩家说的"范围绕的特别大"。
+     */
+    private static Vec3 orbitPoint(EntityMaid maid, LivingEntity target) {
+        UUID id = maid.getUUID();
+        double r = Math.max(1.5, orbitRadiusCfg());
+        // 旋向（一半逆时针一半顺时针、每 8 秒对半概率掉头）与快慢（3 秒重掷）照旧借扫帚那套——
+        // 这两项只改"怎么绕"，不改"绕多大"，所以不会把圈放大。
+        double dir = CombatOrbit.direction(id) * CombatOrbit.flipSign(id);
+        double spd = CombatOrbit.speedScale(id);
+        // 角速度由固定线速度换算：任何半径下她都能跟上这个点（同扫帚口径）
+        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * ORBIT_SPEED * spd / r;
+        ORBIT.put(id, ang);
+        // 高度：**同一高度**，与敌人无关（玩家原话「盘旋也是悬停在同一高度盘旋」）
+        double y = groundY(maid, maid.getX(), maid.getZ()) + hoverAltCfg();
+        // 这一场遭遇起手留一行（与扫帚的「接敌机动」同款：每场一行、不走节流）；
+        // 排查时搜「空战」看的就是它。
+        if (firstOrbit(id)) {
+            log(maid, "接敌 → 绕着敌人盘旋（半径 " + fmt(r) + " 格、锁定离地 "
+                    + fmt(hoverAltCfg()) + " 格，旋向 " + (dir > 0 ? "逆时针" : "顺时针") + "）");
+        }
+        return new Vec3(target.getX() + Math.cos(ang) * r, y, target.getZ() + Math.sin(ang) * r);
+    }
+
+    /** 这一场遭遇里"她是不是第一次绕到这个圈上"（用于每场只写一行「接敌」）。 */
+    private static boolean firstOrbit(UUID id) {
+        try {
+            return ORBIT_FIRST.add(id);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 本场遭遇是否已经写过"接敌"那一行（{@link #clear} 时连同别的状态一起清）。 */
+    private static final java.util.Set<UUID> ORBIT_FIRST = new java.util.HashSet<>();
+
+    /** 这一场遭遇结束（丢目标 / 下鞍 / 玩家接管）→ 清掉本档状态。 */
     public static void clear(EntityMaid maid) {
         if (maid == null) {
             return;
         }
         UUID id = maid.getUUID();
-        ALT.remove(id);
-        CLIMB_TO.remove(id);
-        CLIMB_FROM.remove(id);
-        CLIMB_STALL.remove(id);
-        CLIMB_LAST_Y.remove(id);
-        CLIMB_KEY.remove(id);
         ORBIT.remove(id);
-        // 与扫帚同口径：这一场遭遇结束 = 随机环绕/接敌机动也重掷（下一场看得见换打法）
+        ORBIT_FIRST.remove(id);
+        // 与扫帚同口径：这一场遭遇结束 = 随机环绕的抽签也重掷（下一场看得见换旋向/换快慢）
         CombatOrbit.forget(id);
         CombatManeuver.forget(id);
-    }
-
-    /* ==================== 接敌爬升（形状照搬 MaidBroomDrive.combatClimbTarget） ==================== */
-
-    /**
-     * 爬升相位推进：返回这一拍该爬到的 Y；{@code null} = 相位已结束（到位 / 顶头）。
-     *
-     * <p>与扫帚那边的差别只有**高度来源**：这里 {@code airAlt} 默认 15（玩家点名），
-     * 那个是 {@code broom.climb} 默认 12。其余口径（相对敌人、顶头按实际、本场只升不降、
-     * 换目标不重爬）逐条一致。
-     */
-    private static Double climbTarget(EntityMaid maid, LivingEntity target) {
-        UUID id = maid.getUUID();
-        String key = target.getUUID().toString();
-        String cur = CLIMB_KEY.get(id) == null ? null : CLIMB_KEY.get(id).toString();
-        if (CLIMB_TO.containsKey(id) && key.equals(cur)) {
-            // 相位进行中：看有没有爬到 / 有没有被顶住
-            double y = maid.getY();
-            Double to = CLIMB_TO.get(id);
-            Double from = CLIMB_FROM.get(id);
-            if (to == null || from == null) {
-                CLIMB_TO.remove(id);
-                return null;
-            }
-            if (y >= to - ARRIVE) {
-                // 到位：把这一场遭遇的盘旋高度定下来，并结束相位
-                finishClimb(maid, target, from, y, "爬升到位");
-                return null;
-            }
-            // "顶头"判据：连着 STALL_TICKS 拍几乎没长高 + 整段净涨不到 STALL_MIN_PROGRESS
-            double last = CLIMB_LAST_Y.getOrDefault(id, y);
-            int stall = (y - last < 0.01) ? CLIMB_STALL.getOrDefault(id, 0) + 1 : 0;
-            CLIMB_STALL.put(id, stall);
-            CLIMB_LAST_Y.put(id, y);
-            if (stall >= STALL_TICKS && (y - from) < STALL_MIN_PROGRESS) {
-                finishClimb(maid, target, from, y, "头顶被顶住");
-                return null;
-            }
-            return to;
-        }
-        // 开场 / 换敌人：新遭遇 → 重起相位（高度重新由这一次爬升决定）
-        if (cur == null || !key.equals(cur)) {
-            double to = target.getY() + airAltCfg() + ARRIVE;
-            CLIMB_KEY.put(id, target.getUUID());
-            CLIMB_TO.put(id, to);
-            CLIMB_FROM.put(id, maid.getY());
-            CLIMB_STALL.put(id, 0);
-            CLIMB_LAST_Y.put(id, maid.getY());
-            ALT.remove(id);
-            log(maid, "接敌 → 先爬到它上方 " + fmt(airAltCfg()) + " 格（高度从这以后一直保持）");
-            return to;
-        }
-        return null;
-    }
-
-    /** 爬升相位收尾：记下"这一场遭遇的盘旋高度"（本场只升不降），清掉相位状态，留一行日志。 */
-    private static void finishClimb(EntityMaid maid, LivingEntity target,
-                                    double from, double y, String why) {
-        UUID id = maid.getUUID();
-        double fixed = Math.max(2.0, Math.min(airAltCfg(), y - target.getY()));
-        Double prev = ALT.get(id);
-        ALT.put(id, prev != null && prev > fixed ? Math.min(airAltCfg(), prev) : fixed);
-        CLIMB_TO.remove(id);
-        CLIMB_FROM.remove(id);
-        CLIMB_STALL.remove(id);
-        CLIMB_LAST_Y.remove(id);
-        log(maid, why + "（y " + fmt(from) + " → " + fmt(y) + "，敌上 " + fmt(y - target.getY())
-                + " 格）→ 本场盘旋高度 = 敌上 " + fmt(ALT.get(id)) + " 格（本场只升不降）");
-    }
-
-    /* ==================== 战斗盘旋（复用扫帚的三套状态机） ==================== */
-
-    /**
-     * 绕着敌人转圈打——**半径/旋向/快慢直接复用扫帚模式那三套状态机**（{@link CombatOrbit} 的
-     * {@code radius}/{@code direction}/{@code speedScale}/{@code flipSign} + {@link CombatManeuver}），
-     * 所以"套用扫帚模式逻辑"是字面意义的同一段抽签与缓动。
-     *
-     * <p>高度取 {@link #ALT}（本场遭遇爬到的那个高度）；没有记录时退回配置的 {@code airAlt}。
-     */
-    private static Vec3 orbitPoint(EntityMaid maid, LivingEntity target) {
-        UUID id = maid.getUUID();
-        double base = Math.max(6.0, rangeCfg());
-        double hi = Math.max(base, orbitMaxCfg());
-        double lo = Math.max(minStandoffCfg(), Math.min(hi, base * 0.75));
-        if (lo > hi) {
-            lo = hi;
-        }
-        double r = Math.max(0.5, CombatOrbit.radius(id, lo, hi));
-        double dir = CombatOrbit.direction(id) * CombatOrbit.flipSign(id);
-        double spd = CombatOrbit.speedScale(id);
-        boolean maneuverOn = maneuverEnabled();
-        if (maneuverOn) {
-            CombatManeuver.begin(id);
-            CombatManeuver.tick(id);
-        } else {
-            CombatManeuver.forget(id);
-        }
-        if (maneuverOn) {
-            r = Math.max(lo, Math.min(hi, r * CombatManeuver.radiusScale(id)));
-        }
-        double mAngle = maneuverOn ? CombatManeuver.angleScale(id) : 1.0;
-        double mRev = maneuverOn ? CombatManeuver.reversal(id) : 1.0;
-        double ang = ORBIT.getOrDefault(id, phaseOf(maid)) + dir * mRev * ORBIT_SPEED * spd * mAngle / r;
-        ORBIT.put(id, ang);
-        double alt = ALT.getOrDefault(id, airAltCfg());
-        if (maneuverOn) {
-            alt += CombatManeuver.heightAdd(id, yoyoAmpCfg());
-        }
-        return new Vec3(target.getX() + Math.cos(ang) * r,
-                target.getY() + alt,
-                target.getZ() + Math.sin(ang) * r);
-    }
-
-    /* ==================== 配置读取（异常一律给安全默认） ==================== */
-
-    private static double rangeCfg() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_RANGE.get();
-        } catch (Throwable ignored) {
-            return 8.0;
-        }
-    }
-
-    private static double orbitMaxCfg() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_ORBIT_MAX.get();
-        } catch (Throwable ignored) {
-            return 10.0;
-        }
-    }
-
-    private static double minStandoffCfg() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_MIN_STANDOFF.get();
-        } catch (Throwable ignored) {
-            return 6.0;
-        }
-    }
-
-    private static boolean maneuverEnabled() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_ENABLE.get();
-        } catch (Throwable ignored) {
-            return true;
-        }
-    }
-
-    private static double yoyoAmpCfg() {
-        try {
-            return com.maidsmart.config.MaidSmartConfig.COMBAT_MANEUVER_YOYO_AMP.get();
-        } catch (Throwable ignored) {
-            return 3.0;
-        }
     }
 
     /* ==================== 小工具 ==================== */
@@ -300,14 +261,14 @@ public final class MaidAirCombat {
         }
     }
 
-    private static String fmt(double v) {
-        return String.format(java.util.Locale.ROOT, "%.2f", v);
+    public static String fmt(double v) {
+        return String.format(java.util.Locale.ROOT, "%.1f", v);
     }
 
     /** 低频留痕（同坐骑 5 秒一条上限，与全工程一致）——日志搜「空战」。 */
     private static final Map<UUID, Long> LOG_AT = new HashMap<>();
 
-    private static void log(EntityMaid maid, String msg) {
+    static void log(EntityMaid maid, String msg) {
         try {
             long now = System.currentTimeMillis();
             Long last = LOG_AT.get(maid.getUUID());

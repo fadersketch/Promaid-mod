@@ -114,6 +114,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
             // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
             com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
+            // 【实测七百二十七·点4】退出世界清掉"悬空鞍位（龙）"的客户端镜像表
+            com.maidsmart.client.PromaidClientSetup.registerSeatSyncClear();
         }
     }
 
@@ -312,6 +314,27 @@ public class ProMaidMod {
                 } else {
                     com.maidsmart.tool.PromaidLog.log("配置迁移",
                             "扫帚接敌爬升高度不需要第二次迁移（现值 " + broomClimb12Before + "）");
+                }
+            }
+            // 【实测七百二十七·点1】骑飞行载具的 airAlt **语义**变了：726 是「爬到敌人**上方**
+            // 多少格」（默认 15），727 起是「**离地**多少格」（默认 3）。老档 toml 里存着 15，
+            // 不迁的话她会离地 15 格悬停（玩家要的是 3）。判据与扫帚那两次同款：只搬**还停在
+            // 旧默认 15** 的档，玩家自己调过的别的值一律不碰（用独立标记钉死只迁一次）。
+            if (!com.maidsmart.config.MaidSmartConfig.AIR_ALT_MIGRATED.get()) {
+                double airAltBefore = -1.0;
+                try {
+                    airAltBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.AIR_ALT_MIGRATED.set(true);
+                changed = true;
+                if (airAltBefore == 15.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.set(3.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具悬停高度迁移：15 → 3（语义由「离敌」改为「离地」，旧档里留下的老默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具悬停高度不需要迁移（现值 " + airAltBefore + "）");
                 }
             }
             changed |= migrateOreTable();

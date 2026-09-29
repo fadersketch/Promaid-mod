@@ -27,6 +27,13 @@ public static final ModConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
     public static final ModConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
     /** 【实测六百八十六】接敌爬升高度默认 15 → 12 的一次性迁移标记 */
     public static final ModConfigSpec.BooleanValue BROOM_CLIMB_12_MIGRATED;
+    /**
+     * 【实测七百二十七·点1】骑飞行载具的 airAlt 语义变更迁移标记（"爬到敌上 15 格" → "离地 3 格"）。
+     *
+     * <p>语义变了，而老档 toml 里存着的是旧默认 15——不迁的话她会离地 15 格悬停（玩家要的是 3）。
+     * 判据与扫帚那两次同款：**只有还停在旧默认 15 的档**才搬到 3，玩家自己调过的别的值一律不碰。
+     */
+    public static final ModConfigSpec.BooleanValue AIR_ALT_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ModConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ModConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -497,13 +504,26 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_BATON_EXCLUSIVE;
     /**
-     * 【实测七百二十六·点3】骑飞行载具时套用扫帚模式空战（默认开）：有目标就先爬到敌上
-     * {@link #COMBAT_RIDE_AIR_ALT} 格、再绕着敌人盘旋射击。数值口径见
+     * 【实测七百二十七·点1】骑飞行载具时**悬停 + 同高空盘旋**（默认开）。见
      * {@code MaidMountCompat.driveFlight} 与 {@code MaidAirCombat}。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_AIR_COMBAT;
-    /** 【实测七百二十六·点3】空战·离敌高度（格，默认 15）。玩家原话「至少离敌人要高出15格左右吧」 */
+    /**
+     * 【实测七百二十七·点1】悬停高度（**离地**格数，默认 3）。骑上飞行载具就进入悬停、
+     * 高度按"她脚下的地面 + 这个数"保持；盘旋也在**同一高度**。玩家原话「骑上直升机之后
+     * 就进入悬停状态，离地三格左右。随后的盘旋也是悬停在同一高度盘旋」。
+     *
+     * <p>【与七百二十六 的语义变化】那一版这一项是"爬到他**上方**多少格"（默认 15），
+     * 实机打下来玩家反馈「范围绕的特别大，而且高度很低，实际命中率非常堪忧」——所以本版
+     * 改成**相对地面**的低空悬停，并把"爬升到敌上"整段去掉。
+     */
     public static final ModConfigSpec.DoubleValue COMBAT_RIDE_AIR_ALT;
+    /**
+     * 【实测七百二十七·点1】盘旋半径（格，默认 6）。骑飞行载具接敌时绕着敌人转的圈有多大；
+     * 比扫帚那套（`combat.broom.range`/`orbitMax`）单独一个旋钮，因为直升机悬停时的速度/半径
+     * 与扫帚完全不是一套物理（玩家反馈旧版「范围绕的特别大」）。
+     */
+    public static final ModConfigSpec.DoubleValue COMBAT_RIDE_ORBIT_RADIUS;
     /** 【实测七百二十六·点6】骑载具时女仆自己把对得上的子弹搬进载具弹药容器（默认开） */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_AMMO_FEED;
 
@@ -2346,6 +2366,10 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 玩家自己调过的值一律不碰。
         BROOM_CLIMB_12_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（15→12）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.broom.climb12Migrated").define("climb12Migrated", false);
+        // 【实测七百二十七·点1】airAlt 语义变更（"爬到敌上 15 格" → "离地 3 格"）的一次性迁移标记。
+        // 见字段声明处；判据同扫帚那两次：只有还停在旧默认 15 的档才搬。
+        AIR_ALT_MIGRATED = BUILDER.comment("内部标记：骑飞行载具的悬停高度语义变更迁移（离敌 15→离地 3）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.ride.airAltMigrated").define("airAltMigrated", false);
         BUILDER.pop();
 
         // ---- v1.3.0(beta) 实测七百〇三「接敌机动」（配置面板：战斗与自保 → 接敌机动）----
@@ -2428,18 +2452,23 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 由棍子吃掉（含 interactAt）。完整口径见 1.20.1 树同名字段的注释。
         COMBAT_RIDE_BATON_EXCLUSIVE = BUILDER.comment("骑乘指挥棒·独占右击（默认开）：手持**骑乘指挥棒**时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果——最直接的一条就是「拿棍子骑不上龙/车子」。\n\n【为什么要专门开这一档】冰火传说的龙是**多部件实体**：准星常常打中的是它的翅膀/尾巴/头，那些是独立的小实体，会把这一下右击**转发给龙本体**，龙本体收到就让你骑上去。旧版只认「目标本身是不是能骑的坐骑」，看到一块“部位”就放行 → 转发 → 你就骑上去了。本档把整条路堵死：只要手里是骑乘指挥棒，这一下右击一律归棍子。\n\n【也管 interactAt】客户端对实体右击是「先 interactAt、没被消费才 interact」，两个入口都拦掉才叫“不触发原本的右击效果”。\n\n【关掉 = 与上一版一字不差】只有我们认得出的目标（女仆 / 已上鞍坐骑 / 模组载具·龙 / 家具扫帚）才由棍子接管，对着别的实体挥棍子仍然放行。")
                 .translation("config.promaid.ride.batonExclusive").define("batonExclusive", true);
-        // v1.3.0(beta) 实测七百二十六·点3【武装直升机空战】——玩家原话："女仆在驾驶武装直升机的时候
-        // 总算可以跟着主人进行飞行了，但是在战斗的时候显得过于笨逼，发挥不出武装直升机的优势，
-        // 应该要套用扫帚模式运动代码和逻辑，体现出空战的优势。至少离敌人要高出15格左右吧。现在
-        // 基本上就是绕着敌人盘旋，但是总是在地上和高空5个左右跳动，敌人很容易就能打到。"
-        // 根因：直升机的航向/俯仰走鼠标通道、高度靠总距（反编译 helicopterEngine 实证），旧版
-        // driveFlight 只朝"主人跟随点"飞 —— 一有敌人它还在追主人，贴地乱窜。本档让她骑飞行载具
-        // 时改走"扫帚模式同款接敌盘旋"：先爬到敌上 N 格，再绕着敌人转着打。
-        COMBAT_RIDE_AIR_COMBAT = BUILDER.comment("骑飞行载具时空战（默认开）：女仆驾驶**飞行载具**（卓越前线的武装直升机 / 固定翼）时，一旦有攻击目标，飞行方式**改成与扫帚模式同款**——先爬到敌人上方（高度见下一项），再绕着敌人盘旋射击，而不是继续贴着主人飞、在低空乱窜。\n\n【为什么必须单独开一档】飞行载具的航向/俯仰走**鼠标通道**、高度靠**总距**（反编译 helicopterEngine 实证），与地面载具那套左右位完全不同；而旧版驱动只朝「主人的跟随点」飞——一有敌人它还在追主人，表现就是玩家说的「绕着敌人盘旋，但总是在地上和高空5个左右跳动」。\n\n关闭 = 回到旧行为（飞行载具只管跟着主人飞，不主动接敌盘旋）。地面载具（坦克/装甲车）不受本档影响，它们照旧贴地跟着主人、用车上的炮塔打。")
+        // v1.3.0(beta) 实测七百二十七·点1【骑飞行载具：上机即悬停、盘旋同高空】——玩家原话：
+        // "女仆似乎不会让直升机悬停。而且在打精英敌人进行绕圈的时候，总是范围绕的特别大，而且
+        //  高度很低。导致实际的命中率非常堪忧。最好是采用跟扫帚一样的机制，骑上直升机之后就进入
+        //  悬停状态，离地三格左右。随后的盘旋也是悬停在同一高度盘旋。"
+        // 根因（反编译 helicopterEngine 实证）：直升机高度只有两条路——总距（前进/后退位）与悬停开关。
+        // 七百二十六 只把"爬到敌上 15 格"写进总距，一旦敌人比她低（实机日志 高差=-24），俯仰把机头
+        // 压向地面 → 贴地飞；而且半径直接借扫帚那套（8~10 格 + 机动倍率放大）→ 圈特别大。
+        // 本档改成：绑上就置**悬停**并用总距把高度锁在"脚下地面 + N 格"，盘旋半径单独一个旋钮，
+        // 全程保持这个高度（高度差进死区就不动总距），不再有"爬到敌上"那一段。
+        COMBAT_RIDE_AIR_COMBAT = BUILDER.comment("骑飞行载具时的悬停与低空盘旋（默认开）：女仆驾驶**飞行载具**（卓越前线的武装直升机 / 固定翼）时——① 一绑上就进入**悬停**状态，用总距把机身稳在「她脚下的地面 + 下一项那个格数」；② 接敌时绕着敌人盘旋射击，**全程保持这同一个高度**（不会再爬高、也不会再贴地），盘旋半径见「盘旋半径」那一项。\n\n【为什么旧版会又大又低】飞行载具的航向/俯仰走**鼠标通道**、高度只靠**总距 + 悬停开关**（反编译 helicopterEngine 实证）。七百二十六 那一版写的是「先爬到敌人**上方** 15 格」——敌人一旦在她脚下（实机日志出现高差 -24），机头就会被压向地面、越飞越低；而盘旋半径又是直接借扫帚那套（8~10 格还会被机动放大），所以圈大、命中率差。本版把「爬到敌上」这一段整个去掉，改成**离地固定高度悬停 + 独立的小半径盘旋**。\n\n关闭 = 回到旧行为（飞行载具只当成会飞的跟随载具，不做悬停/高度锁定，接敌仍按七百二十六 那套爬到敌上）。地面载具（坦克/装甲车）不受本档影响，它们照旧贴地跟着主人、用车上的炮塔打。")
                 .translation("config.promaid.ride.airCombat").define("airCombat", true);
-        COMBAT_RIDE_AIR_ALT = BUILDER.comment("空战·离敌高度（格，默认 15，5~40）：骑飞行载具接敌时，先爬到敌人**上方**这么多格再开始盘旋——玩家原话「至少离敌人要高出15格左右吧」。\n\n这一个数字同时决定**这一场遭遇的盘旋高度**（爬完就一直保持在那儿打，打完/丢目标才作废），与扫帚模式的「接敌爬升高度」同一个语义、只是各自一个旋钮（那个管骑扫帚，这个管骑飞行载具）。头顶被方块顶住时按实际抬到的高度记，绝不低于「悬停高度」。")
+        COMBAT_RIDE_AIR_ALT = BUILDER.comment("悬停高度（**离地**格数，默认 3，1~20）：骑上飞行载具后，机身稳定在「她脚下的地面 + 这么多格」——玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。\n\n【与上一版的语义变化】七百二十六 那一版这一项是「爬到敌人**上方**多少格」（默认 15）；实机打下来玩家反馈「高度很低、命中率堪忧」，本版改成**相对地面**的低空悬停。头顶被方块/天花板顶住时按实际能到的高度悬停，绝不硬顶。")
                 .translation("config.promaid.ride.airAlt")
-                .defineInRange("airAlt", 15.0, 5.0, 40.0);
+                .defineInRange("airAlt", 3.0, 1.0, 20.0);
+        COMBAT_RIDE_ORBIT_RADIUS = BUILDER.comment("盘旋半径（格，默认 6，3~24）：骑飞行载具接敌时，绕着敌人转的圈有多大。\n\n【为什么单独一个旋钮】扫帚那套半径是 `combat.broom.range` / `orbitMax`（默认 8~10，还会被接敌机动放大到更远），玩家反馈直升机用那套「范围绕的特别大」。直升机是悬停+侧移的物理，与扫帚完全不同，所以本项独立。\n\n越小 = 贴得越近、绕得越紧（命中率高但更容易挨打）；越大 = 越安全但绕得松散。")
+                .translation("config.promaid.ride.orbitRadius")
+                .defineInRange("orbitRadius", 6.0, 3.0, 24.0);
         // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具里装弹】——玩家原话："卓越前线，如果女仆身上
         // 有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？"
         // 根因：车的枪弹从 getAmmoSupplier() = 车自己的**容器**里取（Capabilities.ItemHandler.ENTITY
