@@ -463,6 +463,72 @@ public final class MaidMountCompat {
         }
     }
 
+    /* ==================== 实测七百二十一：鞍位不许落在方块里 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十一【龙背鞍位在方块里时往上抬到第一格空气】。
+     *
+     * <h2>为什么需要它（实机日志实证）</h2>
+     * 720 之后玩家反馈「会在背上反复横跳，**甚至直接陷到地里面窒息**」。日志里那一串
+     * {@code [maidhurt] … 类型=inWall 位置=(…,-32,…)} 就是它：龙在**密闭空间**里（洞里 / 天花板
+     * 很低的大厅里）时，{@code getRiderPosition()} 算出来的那个点落在方块里，而女仆
+     * **没有把方块挤开的体格**（原版只有玩家/大体积生物会被"推出去"）——她就每 tick 吃
+     * {@code in_wall} 窒息伤害（每秒 1 点），随后自保把她 teleport 走，看起来就是"陷进去"。
+     *
+     * <h2>修法</h2>
+     * 落座前把候选 Y 抬到**第一格"她放得下"的位置**：从候选点起逐格向上探（最多
+     * {@link #SEAT_LIFT_MAX} 格），第一格"该格+上一格都没有碰撞方块/流体"就用它。
+     * 一格都不合格就用原候选（**绝不因此不落座**——宁可抬不上去也不能"卡在原点"）。
+     *
+     * <p>判据只用原版一件事实：该格的**碰撞形状为空**（{@link #freeCell}）——与项目里其余落点
+     * 判定（如 {@code MaidChunkLoadManager.standableCell}）同源，不自己写几何（草丛/火把/雪这类
+     * 无碰撞方块不挡人；未加载区块读作空、等价于"用原位"）。
+     *
+     * <p><b>两侧都要算</b>（与整套定位同一条理由）：乘客位置**不随包同步**，客户端每 tick 自己算
+     * 一遍同一套算式——只在服务端抬、客户端用原位，就会出现"服务端她已经站上去、你屏幕里她还
+     * 卡在方块里"。所以这里**不**按 {@code isClientSide} 分叉。
+     *
+     * @return 落座用的 Y（拿不到世界 / 异常 → 原候选，调用方照常落座）
+     */
+    public static double freeSeatY(Entity passenger, double x, double y, double z) {
+        try {
+            if (passenger == null) {
+                return y;
+            }
+            net.minecraft.world.level.Level level = passenger.m_9236_();
+            if (level == null) {
+                return y;
+            }
+            float h = Math.max(0.9f, passenger.m_20206_());
+            for (int dy = 0; dy <= SEAT_LIFT_MAX; dy++) {
+                double cy = y + dy;
+                if (freeCell(level, x, cy, z) && freeCell(level, x, cy + Math.min(h, 1.0), z)) {
+                    return cy;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return y;
+    }
+
+    /** 鞍位最多往上抬这么多格去找空气（再高就不是"鞍位"了）。 */
+    private static final int SEAT_LIFT_MAX = 6;
+
+    /**
+     * 这一格（脚位 / 头位）"她放得下"吗——判据与项目里其余落点判定**同源**
+     * （{@code MaidChunkLoadManager.standableCell}）：该格的**碰撞形状为空**即算放得下
+     * （草丛/火把/雪这类无碰撞方块不挡人），不额外要求"必须是最纯的空气"。
+     */
+    private static boolean freeCell(net.minecraft.world.level.Level level, double x, double y, double z) {
+        try {
+            net.minecraft.core.BlockPos p = net.minecraft.core.BlockPos.m_274561_(x, y, z);
+            return level.m_8055_(p).m_60742_(level, p,
+                    net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ==================== 多部件实体的"本体"解析（实测七百二十·点2） ==================== */
 
     /**
@@ -711,9 +777,17 @@ public final class MaidMountCompat {
             if (fm == null || mSetFlightTarget == null) {
                 return false;
             }
-            // 必须先起飞：useFlyingPathFinder() 要 isFlying 为真，flightManager.update() 才会跑
+            // 【实测七百二十一】帮它起飞，但**不跟它的状态机对着干**。
+            // 720 的写法是"只要 isFlying 为假就置真"——而龙自己那套（flightManager.update 的
+            // 悬停分支 + logic.updateDragonServer 的落地判定）会置回 hovering/false，于是两边
+            // **每 tick 互翻一次**：{@code getRiderPosition()} 的竖直项里"悬停/飞行"那一档比
+            // "站在地上"那一档高一整个 {@code 1.1*linearFactor + getRideHeightBase()*0.6}
+            // （阶段 5 约 4 格）⇒ 女仆的位置每 tick 上下来回跳 4 格 = 玩家看到的「反复横跳」。
+            // 现在只在**它还站在地上**时推一把（帮它离地，这是 {@code useFlyingPathFinder()}
+            // 为真的前提）；已经离地/悬停就交给它自己那套，不再覆写。
             if (mIsFlying != null && mSetFlying != null
-                    && !Boolean.TRUE.equals(mIsFlying.invoke(mount))) {
+                    && !Boolean.TRUE.equals(mIsFlying.invoke(mount))
+                    && mount.m_20096_()) {
                 mSetFlying.invoke(mount, true);
             }
             mSetFlightTarget.invoke(fm, target);

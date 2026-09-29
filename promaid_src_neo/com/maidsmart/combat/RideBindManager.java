@@ -9,10 +9,12 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.EntityMountEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.tick.PlayerTickEvent;
 
@@ -149,6 +151,72 @@ public final class RideBindManager {
             return;
         }
         event.setCanceled(true);
+    }
+
+    /**
+     * 【实测七百二十一·点2 补闸】独占档改在"登乘那一道"上落实——完整口径（玩家原话、
+     * 720 那两道闸为什么拦不住卓越前线的载具、为什么 {@code EntityMountEvent} 是唯一收口、
+     * 为什么只拦"玩家本人"）见 1.20.1 树同名方法的注释。
+     *
+     * <p>名字换成官方名；NeoForge 的 {@code EntityMountEvent} 实现 {@code ICancellableEvent}
+     * （javap 实证），{@code setCanceled()} 同样让 {@code EventHooks.canMountEntity} 返回 false
+     * （反编译实证：它读 {@code isCanceled()} 后先把玩家摆回原位再 return 0）。
+     */
+    @SubscribeEvent
+    public static void onMount(EntityMountEvent event) {
+        try {
+            if (!isEnabled() || !batonExclusive()) {
+                return;
+            }
+            if (!event.isMounting()) {
+                return;
+            }
+            if (!(event.getEntityMounting() instanceof Player player)) {
+                return;
+            }
+            if (!holdsBaton(player)) {
+                return;
+            }
+            event.setCanceled(true);
+            PlayerMountLog.throttled(player);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 玩家（主手或副手）拿着骑乘指挥棒吗。 */
+    private static boolean holdsBaton(Player player) {
+        try {
+            return player.getMainHandItem().getItem() instanceof RideBatonItem
+                    || player.getOffhandItem().getItem() instanceof RideBatonItem;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 独占档拦住登乘的留痕（只记服务端；节流 3 秒一位玩家，免得刷屏）。 */
+    private static final class PlayerMountLog {
+        private static final Map<UUID, Long> AT = new HashMap<>();
+
+        static void throttled(Player player) {
+            try {
+                if (!(player instanceof ServerPlayer sp)) {
+                    return; // 客户端那一份不记（同一件事服务端会记一次）
+                }
+                long now = System.currentTimeMillis();
+                UUID id = sp.getUUID();
+                Long last = AT.get(id);
+                if (last != null && now - last < DENY_INTERVAL_MS) {
+                    return;
+                }
+                if (AT.size() > 512) {
+                    AT.clear();
+                }
+                AT.put(id, now);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name(sp)
+                        + " 手里拿着指挥棒 → 不登乘（独占右击：这一下只归棍子）");
+            } catch (Throwable ignored) {
+            }
+        }
     }
 
     /* ==================== 选中 / 配对 / 解除 ==================== */
