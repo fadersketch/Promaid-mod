@@ -43,8 +43,9 @@ import java.util.List;
  *       该模组）：驾驶走 {@code processInput} 位掩码 + 朝向/俯仰直接写；开火由模组自己那套
  *       "Mob 乘客有目标就自动瞄准开火"接管（反编译实证，见 {@link #driveVehicle}）。</li>
  *   <li><b>冰火传说龙（DRAGON）</b>——类名 {@code EntityDragonBase}/{@code DragonBaseEntity}
- *       （反射）：飞行走 {@code flightManager.setFlightTarget}；升降走 {@code up/down}；
- *       攻击走 {@code strike} + {@code riderShootFire}。</li>
+ *       （反射）：<b>【实测七百二十三】降级方案下本类**不驱动它、不触发攻击**</b>——女仆只是
+ *       挂在 {@code getRiderPosition()} 那个玩家鞍位上（不是乘客），龙的飞行/跟随交给它自己
+ *       那套（我们只把它置到 {@code command=2} 跟随档）。见本类"悬空鞍位"那一节。</li>
  * </ol>
  *
  * <h2>普通版 vs 社区版（同一个类，两套包名）</h2>
@@ -52,10 +53,9 @@ import java.util.List;
  * {@code iceandfire-2.1-beta.1}）：<b>结构相同、只有包名与个别内部名不同</b>——
  * 普通版 {@code com.github.alexthe666.iceandfire.entity.EntityDragonBase}、社区版
  * {@code com.iafenvoy.iceandfire.entity.EntityDragonBase}（1.21.1 上类名多了后缀：
- * {@code DragonBaseEntity}）。承载骑乘/飞行/攻击的成员名（{@code flightManager}、
- * {@code isFlying}、{@code setFlying}、{@code up}、{@code down}、{@code strike}、
- * {@code riderShootFire}）**四份 jar 逐字相同**。所以这里**按类名探测、按同一套方法名驱动**
- * ——普通版与社区版共用一条代码路径，无需分叉。
+ * {@code DragonBaseEntity}）。本类用到的成员名（{@code getRiderPosition}、
+ * {@code getDragonStage}、{@code getCommand}、{@code setCommand}）**四份 jar 逐字相同**。
+ * 所以这里**按类名探测、按同一套方法名调用**——普通版与社区版共用一条代码路径，无需分叉。
  *
  * <h2>铁律（全类通用）</h2>
  * <ul>
@@ -116,18 +116,17 @@ public final class MaidMountCompat {
     private static boolean iafInited;
     private static boolean iafOk;
     private static Class<?> cDragon;
-    private static Field fFlightManager;      // EntityDragonBase.flightManager (public)
-    private static Method mSetFlightTarget;   // IafDragonFlightManager.setFlightTarget(Vec3)
-    private static Method mGetFlightTarget;   // IafDragonFlightManager.getFlightTarget()
-    private static Method mIsFlying;          // EntityDragonBase.isFlying()
-    private static Method mSetFlying;         // EntityDragonBase.setFlying(boolean)
-    private static Method mUp;                // EntityDragonBase.up(boolean)
-    private static Method mDown;              // EntityDragonBase.down(boolean)
-    private static Method mStrike;            // EntityDragonBase.strike(boolean)
-    private static Method mRiderShootFire;    // EntityDragonBase.riderShootFire(Entity)
-    private static Method mGetDragonStage;    // EntityDragonBase.getDragonStage()
-    /** 【实测七百二十】{@code getRiderPosition()}——龙给**玩家**算的那个背上鞍位（公开方法）。 */
-    private static Method mGetRiderPosition;  // EntityDragonBase.getRiderPosition()
+    private static Method mGetDragonStage;    // getDragonStage()
+    /**
+     * 【实测七百二十】{@code getRiderPosition()}——龙给**玩家**算的那个背上鞍位（公开方法）。
+     * 【实测七百二十三】降级方案里它成了女仆的"悬空椅子"坐标。
+     */
+    private static Method mGetRiderPosition;  // getRiderPosition()
+    private static Method mStrike;            // strike(boolean)
+    private static Method mRiderShootFire;    // riderShootFire(Entity)
+    /** 【实测七百二十三】跟随档：{@code getCommand()}/{@code setCommand(int)}（0=站 1=坐 2=跟随）。 */
+    private static Method mGetCommand;
+    private static Method mSetCommand;
 
     /* ==================== 初始化（各一次，失败即"没有这个模组"） ==================== */
 
@@ -193,31 +192,22 @@ public final class MaidMountCompat {
         for (String cn : candidates) {
             try {
                 Class<?> d = Class.forName(cn);
-                Field fm = d.getField("flightManager");
-                Class<?> fmCls = fm.getType();
-                Method setTarget = fmCls.getMethod("setFlightTarget", Vec3.class);
-                Method getTarget = fmCls.getMethod("getFlightTarget");
-                Method isFly = d.getMethod("isFlying");
-                Method setFly = d.getMethod("setFlying", boolean.class);
-                Method up = d.getMethod("up", boolean.class);
-                Method down = d.getMethod("down", boolean.class);
-                Method strike = d.getMethod("strike", boolean.class);
-                Method shoot = d.getMethod("riderShootFire", Entity.class);
                 Method stage = d.getMethod("getDragonStage");
                 // 【实测七百二十】"玩家鞍位"也是公开方法，四份 jar 签名一致（返回 Vec3）
                 Method riderPos = d.getMethod("getRiderPosition");
+                // 【实测七百二十三】跟随档（0=站 1=坐 2=跟随）——四份 jar 同名
+                Method getCmd = d.getMethod("getCommand");
+                Method setCmd = d.getMethod("setCommand", int.class);
+                // 【实测七百二十三】攻击两件（吐息位 + 以某实体为控制者喷一口）——保留原样
+                Method strike = d.getMethod("strike", boolean.class);
+                Method shoot = d.getMethod("riderShootFire", Entity.class);
                 cDragon = d;
-                fFlightManager = fm;
-                mSetFlightTarget = setTarget;
-                mGetFlightTarget = getTarget;
-                mIsFlying = isFly;
-                mSetFlying = setFly;
-                mUp = up;
-                mDown = down;
-                mStrike = strike;
-                mRiderShootFire = shoot;
                 mGetDragonStage = stage;
                 mGetRiderPosition = riderPos;
+                mGetCommand = getCmd;
+                mSetCommand = setCmd;
+                mStrike = strike;
+                mRiderShootFire = shoot;
                 iafOk = true;
                 return;
             } catch (Throwable ignored) {
@@ -369,86 +359,72 @@ public final class MaidMountCompat {
         }
     }
 
-    /* ==================== 实测七百二十：女仆坐在龙背上（不是"含在嘴里"） ==================== */
+    /* ==================== 实测七百二十三：冰火传说龙 —— 悬空鞍位（降级方案） ==================== */
 
     /**
-     * v1.3.0(beta) 实测七百二十【冰火传说的龙：女仆按玩家同款鞍位落座】。
+     * v1.3.0(beta) 实测七百二十三【冰火传说的龙：不再"真骑"，改成"挂在玩家骑乘位上"】。
      *
-     * <h2>为什么需要这一档（玩家原话）</h2>
-     * 「女仆坐在龙身上的位置跟玩家不一样。而且龙会直接把女仆从背上甩下来。」两条是同一个根因的两半。
+     * <h2>玩家原话（722 之后）</h2>
+     * 「关于龙方面的问题，还是没能解决。我采用降级方案，骑龙的话，那就仅仅是把女仆挂在
+     * 玩家的骑乘位上，但并没有真正的骑在龙上。随后龙的行动逻辑自动转变为跟随玩家。玩家
+     * 手动使用日程表进行传送那也仅仅是传送女仆不传送龙。也就是说移动的逻辑仍然是龙在进行
+     * 移动。女仆相当于仅仅是坐在一把悬空的同位置的椅子上而已。这个处于是开后门的无奈之举。
+     * 先将原有的代码删除掉，然后替换成这个就行。此时玩家对龙进行右击会显示已经占用了。
+     * 阻止一下右击骑龙的行为。」
      *
-     * <h2>根因（反编译实证）</h2>
-     * 龙的乘客分两类，判据是 {@code getControllingPassenger()}——它在 1.20.1 上**只认 Player**
-     * （{@code EntityDragonBase.m_6688_()}: {@code passenger instanceof Player}），1.21.1 上
-     * 只认"主人"（{@code DragonBaseEntity.getControllingPassenger()}）。女仆两边都不满足 →
-     * 恒为 null → 龙的 {@code positionRider} 走**另一个分支**：
+     * <h2>为什么"真骑"这条路走不通（722 的结论，留档）</h2>
+     * 龙**覆写了**两参 {@code positionRider}，覆写体是「先 {@code super}、**返回之后**再判一次
+     * 乘客身份」，判据是 {@code getControllingPassenger()}——它只认"主人"（1.21.1
+     * {@code DragonBaseEntity.getControllingPassenger()}）或"玩家"（1.20.1
+     * {@code EntityDragonBase.m_6688_}）。女仆永远不满足 → 龙把她当**嘴里的猎物**：
      * <pre>
-     *   EntityDragonBase.m_19956_(passenger, fn):
-     *       if (m_20363_(passenger)) {                       // 她是乘客
-     *           if (m_6688_() == null || 不是这一位) {
-     *               this.updatePreyInMouth(passenger);        // ← 女仆走这里：摆到嘴边
-     *           } else { ... 玩家鞍位 ... }                   // ← 玩家走这里
+     *   DragonBaseEntity.positionRider(passenger, callback):
+     *       super.positionRider(passenger, callback);
+     *       if (getControllingPassenger() == null || 不是这一位) {
+     *           updatePreyInMouth(passenger);   // 摆到嘴边 + ANIMATION_SHAKEPREY（模型被带偏）
+     *                                           // animationTick > 55 → 伤害×2 + stopRiding()
      *       }
-     *   updatePreyInMouth: 置 ANIMATION_SHAKEPREY；animationTick &gt; 55 时
-     *       prey.m_6469_(…, 伤害×2) + prey.m_8127_()          // ← 咬她 + 把她甩下来
      * </pre>
-     * 所以要修的就是**定位这一处**：把她按玩家同款鞍位落座，那条猎物分支自然不再被走到
-     * （也就不再有 55 tick 后的那一咬一甩）。
+     * {@code ci.cancel()} 只取消**基类那一份**，覆写体在 {@code super} 返回之后照样写；722 试着
+     * 在乘客自己每 tick 的末尾再抢回鞍位（{@code m_6083_} / {@code rideTick} 的 TAIL），但龙的
+     * 状态机每拍都在跟她抢，结果是"横跳 / 模型只剩一块 / 被咬死"轮着来。玩家因此拍板走
+     * **降级方案**——这一档就是那个方案。
      *
-     * <h2>注入点：原版 {@code Entity} 的同名漏斗，而不是龙自己的覆写</h2>
-     * 位置每 tick 由原版算一遍（1.20.1 {@code Entity.m_6083_ → m_7332_ → m_19956_}；
-     * 1.21.1 {@code rideTick → positionRider(Entity) → positionRider(Entity, MoveFunction)}，
-     * javap 实证）。其中 {@code m_7332_} / 一参的 {@code positionRider(Entity)} 是
-     * **{@code public final}**——龙**不可能覆写**它（它只覆写了两参的那个）。
-     * 所以在原版 {@code Entity} 的这个漏斗上 HEAD 拦下并 cancel，就能**整段跳过**龙的覆写
-     * （含那条猎物分支），而我们自己按鞍位把乘客摆好。
+     * <h2>降级方案的口径（逐条对应玩家的话）</h2>
+     * <ol>
+     *   <li><b>不真骑</b>：{@code maid.startRiding(dragon)} 这一步**取消**。她不是乘客，
+     *       龙那条猎物分支**永远不会被走到**（那是 {@code positionRider} 里的代码，只有乘客
+     *       才进）——"被咬死 / 模型被带偏 / 横跳"三个症状从根上没有了。</li>
+     *   <li><b>挂在骑乘位上</b>：每 tick 由 {@link #seatOnDragon} 把她 {@code setPos} 到
+     *       {@link #riderSeat}（龙给**玩家**算的那个鞍位，含俯仰/飞行补偿）+ 她的身高，
+     *       再过一道 {@link #freeSeatY}。玩家原话"坐在一把悬空的同位置的椅子上"——位置与
+     *       玩家骑龙时**逐字相同**。</li>
+     *   <li><b>不会掉下来</b>：绑上时 {@code setNoGravity(true)}，解绑时还原。她不是乘客，
+     *       原版没有任何东西托着她，只能由我们负责——不设无重力就会被自己那一拍的重力拽下去。</li>
+     *   <li><b>移动仍然由龙进行</b>：我们**不驱动龙**（旧的 {@code driveDragon} 已删）。龙自己
+     *       那一套飞行物理照常跑。</li>
+     *   <li><b>龙的行动自动转为跟随玩家</b>：绑上时把龙置 {@code setCommand(2)}（原版语义：
+     *       {@code DragonAIEscortGoal.canUse()} 要求 {@code getCommand() == 2} 才跟着主人走）。
+     *       解绑时还原成绑定前的值。</li>
+     *   <li><b>传送只传女仆</b>：传送链路的"连人带坐骑一起搬"对龙**不再走**（她不是乘客，
+     *       原版 {@code teleportTo} 也不会 unRide 掉什么）。见 {@code RideBindManager} 里
+     *       {@code isDragonChairRider} 的分叉。</li>
+     *   <li><b>右击龙提示"已被占用"、并且骑不上</b>：指挥棒右击时由
+     *       {@code RideBindManager} 认出"这条龙正被棍子链路占着"并回一句明确提示；原版登龙
+     *       那一下由 {@code denyMountForBatonHolder} 堵死。</li>
+     * </ol>
      *
-     * <p>**为什么不像别的驱动那样 {@code @Mixin} 龙自己**：冰火传说**是可选模组**——
-     * 目标类不存在时 Mixin 只记一条 WARN 并跳过（反编译 {@code MixinInfo.getTargetClass} 实证：
-     * 仅 {@code strict}（{@code -Dmixin.debug.verify}）才抛），不崩。但本项目的只读审计
-     * {@code _mixchk.py} 会把"解析不到的目标类"记 UNRES 而拦打包，而这两家模组的 jar 不在
-     * 编译 classpath 上。注入原版 {@code Entity} 既没有"目标类可能不存在"的问题，
-     * 也让审计能逐字证明注入点存在——所以选它。
-     *
-     * <h2>"是不是我们绑的"这一条在客户端怎么判（两树同口径）</h2>
-     * 服务端有链路表（{@code RideBindManager}），但**乘客位置不随包同步**：客户端每 tick
-     * 自己用载具的权威位置算一遍乘客位置（{@code ClientLevel.tickPassenger → rideTick}，
-     * 反编译实证），所以这一档**必须客户端也生效**，否则她在你屏幕里仍是"含在嘴里"。
-     * 客户端拿不到 persistentData（那不过网），但**主人 UUID 是同步实体数据**
-     * （{@code TamableAnimal.DATA_OWNERUUID_ID} 注册在 {@code defineSynchedData} 里，
-     * javap 实证）——所以两树统一用判据
-     * **"乘客是【有主】的女仆 + 载具是冰火传说的龙"**。
-     *
-     * <p>这条放宽是**安全的、且事实上等价于"棍子绑的"**：龙的 {@code canAddPassenger} 只认
-     * "乘客数 &lt; 2" 而**登龙那条路只对玩家开放**（{@code m_6071_} 里
-     * {@code player.startRiding(this, true)}，且要求已驯服 + 阶段 &gt; 2，反编译实证）——
-     * 女仆**没有任何别的办法**爬上冰火传说的龙（她能自己上的只有原版 Saddleable 兽，而龙不是）。
-     * 所以"有主女仆 + 龙"这个组合只会由骑乘指挥棒产生。玩家本人、别的模组的生物、无主女仆
-     * 一律**一个字节都不碰**。
+     * <p><b>边界（一个字节都不碰的场合）</b>：只有 <b>有主女仆 + 冰火传说的龙 + 这一对在
+     * 链路表里</b>三者同时成立才介入。玩家本人骑龙、别的模组的生物当乘客、无主女仆——本类
+     * 一次都不会被调到（调用方 {@code RideBindManager} 就是按链路表调度的）。
      */
-    public static boolean shouldSeatMaidOnDragon(Entity vehicle, Entity passenger) {
-        try {
-            if (vehicle == null || passenger == null) {
-                return false;
-            }
-            if (!(passenger instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
-                return false; // 玩家 / 别的生物：原版一字不动
-            }
-            if (!com.maidsmart.tool.MaidScope.owned(maid)) {
-                return false; // 无主女仆：整合包规则不受本模组影响（与 MaidScope 同一条边界）
-            }
-            return isDragon(vehicle);
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
 
     /**
      * 龙背上的**玩家鞍位**（{@code getRiderPosition()}，四份 jar 成员名逐字一致）；拿不到 → null。
      *
      * <p>这是龙自己给玩家算的那个点（{@code getRiderPosition} 里含俯仰补偿、飞行/行走抬高），
-     * 我们原样借用——所以女仆坐上去的位置与玩家**逐字相同**（玩家那条路也是这个点 +
-     * {@code getBbHeight()} 的竖直补偿，见 {@code EntityDragonBase.m_19956_} 的鞍位分支）。
+     * 我们原样借用——所以她的位置与玩家骑龙时**逐字相同**（玩家那条路也是这个点 +
+     * {@code getBbHeight()} 的竖直补偿，见 {@code DragonBaseEntity.positionRider} 的鞍位分支）。
      */
     public static Vec3 riderSeat(Entity dragon) {
         try {
@@ -463,30 +439,20 @@ public final class MaidMountCompat {
         }
     }
 
-    /* ==================== 实测七百二十一：鞍位不许落在方块里 ==================== */
-
     /**
-     * v1.3.0(beta) 实测七百二十一【龙背鞍位在方块里时往上抬到第一格空气】。
+     * v1.3.0(beta) 实测七百二十一【鞍位在方块里时往上抬到第一格空气】（降级方案里同样要过）。
      *
      * <h2>为什么需要它（实机日志实证）</h2>
-     * 720 之后玩家反馈「会在背上反复横跳，**甚至直接陷到地里面窒息**」。日志里那一串
+     * 「会在背上反复横跳，**甚至直接陷到地里面窒息**」。日志里那一串
      * {@code [maidhurt] … 类型=inWall 位置=(…,-32,…)} 就是它：龙在**密闭空间**里（洞里 / 天花板
      * 很低的大厅里）时，{@code getRiderPosition()} 算出来的那个点落在方块里，而女仆
      * **没有把方块挤开的体格**（原版只有玩家/大体积生物会被"推出去"）——她就每 tick 吃
-     * {@code in_wall} 窒息伤害（每秒 1 点），随后自保把她 teleport 走，看起来就是"陷进去"。
+     * {@code in_wall} 窒息伤害（每秒 1 点）。降级方案里她不再是乘客、不受那条猎物分支管，
+     * 但**落点仍然必须过这一道**，否则还是会被摆进墙里。
      *
-     * <h2>修法</h2>
-     * 落座前把候选 Y 抬到**第一格"她放得下"的位置**：从候选点起逐格向上探（最多
+     * <p>修法：把候选 Y 抬到**第一格"她放得下"的位置**：从候选点起逐格向上探（最多
      * {@link #SEAT_LIFT_MAX} 格），第一格"该格+上一格都没有碰撞方块/流体"就用它。
      * 一格都不合格就用原候选（**绝不因此不落座**——宁可抬不上去也不能"卡在原点"）。
-     *
-     * <p>判据只用原版一件事实：该格的**碰撞形状为空**（{@link #freeCell}）——与项目里其余落点
-     * 判定（如 {@code MaidChunkLoadManager.standableCell}）同源，不自己写几何（草丛/火把/雪这类
-     * 无碰撞方块不挡人；未加载区块读作空、等价于"用原位"）。
-     *
-     * <p><b>两侧都要算</b>（与整套定位同一条理由）：乘客位置**不随包同步**，客户端每 tick 自己算
-     * 一遍同一套算式——只在服务端抬、客户端用原位，就会出现"服务端她已经站上去、你屏幕里她还
-     * 卡在方块里"。所以这里**不**按 {@code isClientSide} 分叉。
      *
      * @return 落座用的 Y（拿不到世界 / 异常 → 原候选，调用方照常落座）
      */
@@ -514,127 +480,6 @@ public final class MaidMountCompat {
     /** 鞍位最多往上抬这么多格去找空气（再高就不是"鞍位"了）。 */
     private static final int SEAT_LIFT_MAX = 6;
 
-    /* ==================== 实测七百二十二：每 tick 末尾抢回鞍位 ==================== */
-
-    /**
-     * v1.3.0(beta) 实测七百二十二【冰火传说的龙：坐骑每拍把我摆错，就每拍抢回来】
-     * （1.20.1 版）——完整根因（覆写体在 {@code super} 返回之后写位置、为什么
-     * {@code ci.cancel()} 拦不住它、SHAKEPREY 动画怎么把模型带偏）见 1.21.1 树同名方法的注释。
-     *
-     * <p>本树的差异只有名字：乘客的每 tick 入口是 {@code Entity.m_6083_()}，末尾那一刻用
-     * {@code setPos} 落座（{@code m_6034_}）。注入点见 {@code EntityDragonMaidSeatMixin}。
-     */
-    public static void enforceDragonSeat(Entity dragon, Entity passenger) {
-        try {
-            if (dragon == null || passenger == null) {
-                return;
-            }
-            if (passenger.m_20202_() != dragon) {
-                return; // 已经不在它背上了（比如刚被咬下来）→ 不硬塞
-            }
-            Vec3 seat = riderSeat(dragon);
-            if (seat == null) {
-                return;
-            }
-            stopPreyShake(dragon);
-            keepDragonAirborne(dragon);
-            double y = freeSeatY(passenger, seat.f_82479_, seat.f_82480_ + (double) passenger.m_20206_(),
-                    seat.f_82481_);
-            passenger.m_6034_(seat.f_82479_, y, seat.f_82481_);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 【实测七百二十二】她骑在龙背上时把龙钉在"空中"这一档（不再落地⇄起飞互翻）。
-     * 完整口径（鞍位在两档之间差约 4 格 = 横跳的根因）见 1.21.1 树同名方法。
-     */
-    private static void keepDragonAirborne(Entity dragon) {
-        try {
-            if (mIsFlying == null || mSetFlying == null) {
-                return;
-            }
-            if (Boolean.TRUE.equals(mIsFlying.invoke(dragon))) {
-                return;
-            }
-            // 不查"趴窝"状态：龙没有"玩家让它别飞"的坐姿语义（它只有 orderedToSit 的寻路停用），
-            // 而这一档只在"她骑在它背上"时才被调到 —— 那时它本来就该在天上/悬停。
-            mSetFlying.invoke(dragon, true);
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /* ---- 甩动动画的复位（把龙从"嘴里叼着猎物"的姿态放回正常）---- */
-
-    private static boolean animInited;
-    private static Method mGetAnimation;      // EntityDragonBase.getAnimation()
-    private static Method mSetAnimation;      // EntityDragonBase.setAnimation(Animation)
-    private static Object animNone;           // IAnimatedEntity.NO_ANIMATION
-    private static Object animShakePrey;      // EntityDragonBase.ANIMATION_SHAKEPREY
-    private static Method mSetAnimationTick;  // setAnimationTick(int)，可选
-
-    private static synchronized void initAnim() {
-        if (animInited) {
-            return;
-        }
-        animInited = true;
-        try {
-            initIaf();
-            if (!iafOk || cDragon == null) {
-                return;
-            }
-            mGetAnimation = cDragon.getMethod("getAnimation");
-            Class<?> animCls = mGetAnimation.getReturnType();
-            mSetAnimation = cDragon.getMethod("setAnimation", animCls);
-            try {
-                animShakePrey = cDragon.getField("ANIMATION_SHAKEPREY").get(null);
-            } catch (Throwable ignored) {
-                animShakePrey = null;
-            }
-            // 1.20.1 的动画接口在普通版的 citadel 系包里；社区版走 uranus，两个都试
-            for (String cn : new String[]{
-                    "com.github.alexthe666.citadel.animation.IAnimatedEntity",
-                    "com.iafenvoy.uranus.animation.IAnimatedEntity"}) {
-                try {
-                    animNone = Class.forName(cn).getField("NO_ANIMATION").get(null);
-                    break;
-                } catch (Throwable ignored) {
-                    animNone = null;
-                }
-            }
-            try {
-                mSetAnimationTick = cDragon.getMethod("setAnimationTick", int.class);
-            } catch (Throwable ignored) {
-                mSetAnimationTick = null;
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
-    /**
-     * 龙的动画是不是"嘴里叼着猎物"（{@code ANIMATION_SHAKEPREY}）？是就复位成普通状态。
-     * 完整口径（为什么必须复位、为什么只认这一条动画）见 1.21.1 树同名方法。
-     */
-    public static void stopPreyShake(Entity dragon) {
-        try {
-            initAnim();
-            if (mGetAnimation == null || mSetAnimation == null) {
-                return;
-            }
-            Object cur = mGetAnimation.invoke(dragon);
-            if (cur == null || animShakePrey == null || !animShakePrey.equals(cur)) {
-                return; // 不是那条动画 → 一个字不碰
-            }
-            if (animNone != null) {
-                mSetAnimation.invoke(dragon, animNone);
-            }
-            if (mSetAnimationTick != null) {
-                mSetAnimationTick.invoke(dragon, 0);
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
     /**
      * 这一格（脚位 / 头位）"她放得下"吗——判据与项目里其余落点判定**同源**
      * （{@code MaidChunkLoadManager.standableCell}）：该格的**碰撞形状为空**即算放得下
@@ -647,6 +492,85 @@ public final class MaidMountCompat {
                     net.minecraft.world.phys.shapes.CollisionContext.m_82749_()).m_83281_();
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /**
+     * 把她摆到龙的"玩家鞍位"上【降级方案的内核】。
+     *
+     * <p>位置与玩家骑龙时逐字相同：{@code getRiderPosition()} + {@code getBbHeight()}，再过
+     * {@link #freeSeatY}。她**不是乘客**（{@code startRiding} 那一步已取消），所以位置不由
+     * 原版 {@code positionRider} 那条链条管——由我们每 tick 写一次。她是**普通实体**，
+     * 位置照常由原版位置包同步给客户端（这正是降级方案比"当乘客"省事的地方：乘客位置要靠
+     * 乘客自己每拍算，普通实体由服务端说了算）。
+     *
+     * <p>速度一并清零：不让她把上一拍的惯性带进"椅子"，也不让重力在座位下方累积。
+     *
+     * @return true = 摆好了
+     */
+    public static boolean seatOnDragon(Entity dragon, Entity maid) {
+        try {
+            if (dragon == null || maid == null) {
+                return false;
+            }
+            Vec3 seat = riderSeat(dragon);
+            if (seat == null) {
+                return false;
+            }
+            double y = freeSeatY(maid, seat.f_82479_,
+                    seat.f_82480_ + (double) maid.m_20206_(), seat.f_82481_);
+            maid.m_6034_(seat.f_82479_, y, seat.f_82481_);
+            maid.m_20256_(Vec3.f_82478_);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 置/撤"无重力"（她不是乘客，原版没有东西托着她——绑上时必须无重力）。 */
+    public static void setGravity(Entity e, boolean gravity) {
+        try {
+            if (e != null) {
+                e.m_20242_(!gravity); // setNoGravity(!gravity)
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 龙当前的行动档（{@code getCommand()}：0=站 1=坐 2=跟随）；拿不到 → -1。 */
+    public static int dragonCommand(Entity dragon) {
+        try {
+            if (mGetCommand != null && isDragon(dragon)) {
+                Object v = mGetCommand.invoke(dragon);
+                if (v instanceof Integer i) {
+                    return i;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    /**
+     * 把龙置成"跟随主人"（{@code setCommand(2)}）——玩家原话"龙的行动逻辑自动转变为跟随玩家"。
+     * 原版语义见 {@code DragonAIEscortGoal.canUse()}：{@code getCommand() == 2} 时它跟着主人走。
+     */
+    public static void setDragonFollow(Entity dragon) {
+        try {
+            if (mSetCommand != null && isDragon(dragon)) {
+                mSetCommand.invoke(dragon, 2);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 把龙的行动档还原成绑上之前的值（解绑时用；原值 &lt; 0 = 没读到过，不动它）。 */
+    public static void restoreDragonCommand(Entity dragon, int prev) {
+        try {
+            if (mSetCommand != null && isDragon(dragon) && prev >= 0) {
+                mSetCommand.invoke(dragon, prev);
+            }
+        } catch (Throwable ignored) {
         }
     }
 
@@ -753,19 +677,24 @@ public final class MaidMountCompat {
      * 驱动一只模组坐骑朝 {@code target} 走。返回 true = 本类接管了驱动
      * （{@link MaidRideKit#feedNavigation} 据此跳过通用档）。
      *
+     * <p>【实测七百二十三】新增第三参 {@code maid}：**轮椅（WHEELCHAIR）/ TOM6 这两台引擎
+     * 不用左右位**（反编译 {@code VehicleEngineUtils.wheelChairEngine:1007} 实证：它读的是
+     * {@code getFirstPassenger().getYHeadRot() - 车头 yaw}），必须由我们**写乘客的头朝向**
+     * 才能转向。详见 {@link #driveVehicle}。
+     *
      * @param mount    坐骑（本类只处理 VEHICLE / DRAGON）
      * @param target   目的地点
      * @param modifier 速度倍率（载具档用它缩放油门）
+     * @param maid     骑在上面的女仆（写头朝向用；可为 null）
      */
-    public static boolean drive(Entity mount, Vec3 target, double modifier) {
+    public static boolean drive(Entity mount, Vec3 target, double modifier, Entity maid) {
         try {
             Kind k = kindOf(mount);
             if (k == Kind.VEHICLE) {
-                return driveVehicle(mount, target, modifier);
+                return driveVehicle(mount, target, modifier, maid);
             }
-            if (k == Kind.DRAGON) {
-                return driveDragon(mount, target);
-            }
+            // 【实测七百二十三】DRAGON 不再由本类驱动：降级方案里女仆只是"挂在龙的骑乘位
+            // 上"（不是乘客），龙自己那套飞行物理照常跑。我们**不碰**它的 flightManager。
         } catch (Throwable ignored) {
         }
         return false;
@@ -777,9 +706,8 @@ public final class MaidMountCompat {
             Kind k = kindOf(mount);
             if (k == Kind.VEHICLE) {
                 stopVehicle(mount);
-            } else if (k == Kind.DRAGON) {
-                stopDragon(mount);
             }
+            // 【实测七百二十三】DRAGON 无需"收手"：我们从没驱动过它。
         } catch (Throwable ignored) {
         }
     }
@@ -816,8 +744,43 @@ public final class MaidMountCompat {
      * 后=减总距、左右=偏航、上=悬停开关；固定翼 前=推力、上=起落架（俯仰由它自己按速度算）；
      * 飞艇 上/下=升降（{@code setLiftSpeed}）。所以只有**飞艇**用上下位表达"想更高/更低"，
      * 其余引擎把高度交给它自己的物理（地面载具本来就不该飞）。
+     *
+     * <h2>【实测七百二十三】轮椅（WHEELCHAIR）/ TOM6：左右位**不被读**，转向只听乘客的头</h2>
+     * 玩家原话：「可以把女仆绑在轮椅上了，但是女仆移动的路径完全就跟女仆应有的路径不符。
+     * 大部分情况是坐上轮椅之后，朝轮椅面朝的方向移动个几步，然后就停在那边了。为什么骑马
+     * 就不会出现这种情况呢？」——实机日志就是证据（19:15:14 起每 5 秒一行）：
+     * <pre>
+     *   位掩码=6 引擎=WHEELCHAIR 距目标=8格    6 = 0x002|0x004（右转 + 前进）
+     *   位掩码=1 引擎=WHEELCHAIR 距目标=15格   1 = 0x001（左转）—— 距目标反而涨了
+     *   位掩码=2 引擎=WHEELCHAIR 距目标=23格   2 = 0x002（右转）—— 一路涨到 23 格
+     * </pre>
+     * 我们一直在送左右位，但它**原地打转**（距目标越来越大），因为
+     * {@code VehicleEngineUtils.wheelChairEngine} 里跟方向有关的只有这一句（反编译实证）：
+     * <pre>
+     *   diffY = clamp(-90, 90, wrapDegrees(passenger0.getYHeadRot() - this.getYRot()));
+     *   this.setYRot(this.getYRot() + clamp(0.4f * diffY, -5*steeringSpeed, 5*steeringSpeed));
+     * </pre>
+     * 也就是说：**它每 tick 把车头拉向"第一位乘客的头朝向"**，而左右位只在
+     * {@code wheelEngine}（普通轮式车）里被读（{@code getHoldTick()} → {@code setDeltaRot}）——
+     * 轮椅/TOM6 这两台引擎**根本没有那段**。女仆是 Mob，头朝向由她自己的 LookControl 看着
+     * 她的走位目标决定；她一坐上车就不再走路（乘客的位移被 rideTick 吃掉），LookControl 常常
+     * 停在原地不动 → 车头永远对着同一个方向 → 走几步就顶住。**骑马不会出现**正是因为它走的是
+     * {@code GroundPathNavigation}（{@link MaidRideKit#feedNavigation} 的渠道一），完全不经过
+     * 这套引擎。
+     *
+     * <p>所以这一档**不再指望左右位**，改成两件事一起做（都是"喂给它唯一的输入源"，不是
+     * 另写一股力）：① 把目标方位角写进乘客的 {@code setYHeadRot} —— 引擎自己那
+     * {@code 0.4*diffY} 那一项就朝对的方向加；② **同时按有限速率把车头 yaw 拽向目标**
+     * ——因为引擎那一项的速率被 {@code 5*steeringSpeed} 卡住（轮椅默认 0.1 → 只有 0.5°/拍
+     * ≈ 10°/秒，太慢就是玩家看到的"走几步就顶住"），我们按 {@code HEAD_STEER_MAX_DEG_PER_TICK}
+     * 补上，快而不瞬转。两条同向叠加，不会再出现"头被钉住 → diffY=0 → 永远不转"。
+     *
+     * <p>判据：只有引擎名叫 {@code WHEELCHAIR} 走这一档（其余引擎照旧左右位）。
+     * <b>为什么不含 TOM6</b>：它的转向/油门整段写在 {@code passenger instanceof Player}
+     * 分支里（反编译实证），Mob 乘客压根进不去，写什么都不会动。引擎名拿不到（反射失败）
+     * → 照旧左右位，一个字节不变。
      */
-    private static boolean driveVehicle(Entity mount, Vec3 target, double modifier) {
+    private static boolean driveVehicle(Entity mount, Vec3 target, double modifier, Entity maid) {
         if (mProcessInput == null) {
             return false;
         }
@@ -830,14 +793,34 @@ public final class MaidMountCompat {
         float desiredYaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         float err = wrapDegrees(desiredYaw - mount.m_146908_());
 
+        // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
+        boolean headSteer = "WHEELCHAIR".equals(eng);
+        if (headSteer) {
+            if (maid != null) {
+                try {
+                    maid.m_5618_(desiredYaw);   // setYHeadRot：引擎唯一读的那个
+                    maid.m_146922_(desiredYaw); // setYRot：模型/身体跟上，免得扭着走
+                } catch (Throwable ignored) {
+                }
+            }
+            // 车头自己按有限速率朝目标转（补上引擎那一项被 steeringSpeed 卡住的速率）
+            try {
+                float step = (float) Math.max(-HEAD_STEER_MAX_DEG_PER_TICK,
+                        Math.min(HEAD_STEER_MAX_DEG_PER_TICK, err));
+                mount.m_146922_(mount.m_146908_() + step);
+            } catch (Throwable ignored) {
+            }
+        }
+
         short bits = 0;
         boolean turning = Math.abs(err) > 8.0f;
-        if (turning) {
+        if (turning && !headSteer) {
             // 与玩家按键同一条路径：左右位 → 引擎自己累积 holdTick → setDeltaRot
             bits |= (err > 0) ? 0x002 : 0x001;
         }
-        // 前进：够远就踩油门；朝向差太多时先转不冲（免得画龙）
-        if (horiz > 1.5 && (!turning || Math.abs(err) < 40.0f)) {
+        // 前进：够远就踩油门。头朝向档**不等转向**（引擎每拍都在把车头拉过来，
+        // 站着不冲就是玩家看到的"走几步就停"）
+        if (horiz > 1.5 && (headSteer || !turning || Math.abs(err) < 40.0f)) {
             bits |= 0x004;
         }
         // 升降：只有飞艇有真正的竖直轴；其余引擎的高度归它自己的物理
@@ -855,11 +838,19 @@ public final class MaidMountCompat {
         try {
             mProcessInput.invoke(mount, bits);
             logDrive(mount, "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
+                    + (headSteer ? " 头朝向=" + Math.round(desiredYaw) : "")
                     + " 距目标=" + (long) horiz + "格");
         } catch (Throwable ignored) {
         }
         return true;
     }
+
+    /**
+     * 头朝向档每拍最多把车头转多少度（{@link #driveVehicle}）。12 ≈ 240°/秒，
+     * 比引擎自己那 10°/秒 快得多（这就是"能转弯"与"顶住不动"的差别），
+     * 又不至于瞬转画龙。
+     */
+    private static final double HEAD_STEER_MAX_DEG_PER_TICK = 12.0;
 
     private static void stopVehicle(Entity mount) {
         try {
@@ -870,68 +861,6 @@ public final class MaidMountCompat {
         }
     }
 
-    /* ---------- 冰火传说：flightManager.setFlightTarget ---------- */
-
-    /**
-     * 龙的飞行由 {@code IafDragonFlightManager} 驱动（四份 jar 成员名逐字相同）。
-     *
-     * <p><b>为什么"喂目标点"就够</b>——反编译实证（{@code IceAndFireCE-1.2.7}）：
-     * <pre>
-     *   EntityDragonBase.tick():  if (useFlyingPathFinder() && !level.isClientSide) flightManager.update();
-     *   useFlyingPathFinder()  =  isFlying() && getControllingPassenger() == null;
-     * </pre>
-     * 而 {@code getControllingPassenger()} 在普通版 / 社区版 1.20.1 上**只认 Player**
-     * （{@code updateRider()} 整段都写着 {@code controllingPassenger instanceof Player}），
-     * 女仆当乘客时恒为 null ⇒ {@code useFlyingPathFinder()} 为真 ⇒ 每 tick 跑
-     * {@code flightManager.update()}，而它就是把龙朝 {@code getFlightTarget()} 带的那个
-     * MoveControl。
-     *
-     * <p><b>所以有两件事必须由我们做</b>：① 把飞行目标点写进去；② **把 {@code flying} 置真**
-     * ——否则 {@code useFlyingPathFinder()} 为假、{@code flightManager.update()} 根本不会跑
-     * （女仆骑上去时龙还站在地上）。升/降不单独表达：{@code up/down} 那两个控制位只在
-     * {@code updateRider()} 的 **Player 分支**里被读，女仆这一档读了也白读——高度全部走
-     * "目标点自己的 Y"，由 {@code flightManager} 的俯仰逻辑实现（与玩家骑乘时同一套飞行物理）。
-     */
-    private static boolean driveDragon(Entity mount, Vec3 target) {
-        try {
-            Object fm = fFlightManager.get(mount);
-            if (fm == null || mSetFlightTarget == null) {
-                return false;
-            }
-            // 【实测七百二十一】帮它起飞，但**不跟它的状态机对着干**。
-            // 720 的写法是"只要 isFlying 为假就置真"——而龙自己那套（flightManager.update 的
-            // 悬停分支 + logic.updateDragonServer 的落地判定）会置回 hovering/false，于是两边
-            // **每 tick 互翻一次**：{@code getRiderPosition()} 的竖直项里"悬停/飞行"那一档比
-            // "站在地上"那一档高一整个 {@code 1.1*linearFactor + getRideHeightBase()*0.6}
-            // （阶段 5 约 4 格）⇒ 女仆的位置每 tick 上下来回跳 4 格 = 玩家看到的「反复横跳」。
-            // 现在只在**它还站在地上**时推一把（帮它离地，这是 {@code useFlyingPathFinder()}
-            // 为真的前提）；已经离地/悬停就交给它自己那套，不再覆写。
-            if (mIsFlying != null && mSetFlying != null
-                    && !Boolean.TRUE.equals(mIsFlying.invoke(mount))
-                    && mount.m_20096_()) {
-                mSetFlying.invoke(mount, true);
-            }
-            mSetFlightTarget.invoke(fm, target);
-            logDrive(mount, "飞行目标已写（阶段=" + dragonStage(mount) + "）");
-            return true;
-        } catch (Throwable ignored) {
-            return false;
-        }
-    }
-
-    private static void stopDragon(Entity mount) {
-        try {
-            if (mStrike != null) {
-                mStrike.invoke(mount, false);
-            }
-            // 飞行目标设成它自己脚下 → 失去推力、原地悬停（与载具档"收手"同口径）
-            Object fm = fFlightManager.get(mount);
-            if (fm != null && mSetFlightTarget != null) {
-                mSetFlightTarget.invoke(fm, mount.m_20182_());
-            }
-        } catch (Throwable ignored) {
-        }
-    }
 
     /* ==================== 攻击：让载具/龙去打她的目标 ==================== */
 
@@ -944,9 +873,9 @@ public final class MaidMountCompat {
      *       {@code vehicleShoot}"那条链路（每 tick 对齐炮口、按 RPM 开火）。所以女仆只要
      *       **坐进武器位、自己的 brain 里有目标**，载具就会替她打——本类只需把她的目标
      *       传给它（{@code setTarget} 是 Mob 的公开方法，走 Entity 类型即可，无需反射）。</li>
-     *   <li><b>冰火传说的龙</b>：龙没有"自动开火"，得显式触发——{@code strike(true)} 置
-     *       吐息位、{@code riderShootFire(女仆)} 以女仆为控制者喷一口（javap 实证该方法形参是
-     *       {@code Entity}，**不要求 Player**）。</li>
+     *   <li><b>冰火传说的龙</b>：<b>【实测七百二十三】不再由本类触发吐息</b>。降级方案里女仆
+     *       不是乘客（只是挂在鞍位上），龙有自己的 AI 目标与 {@code riderShootFire} 的
+     *       "控制者"语义——她不再是控制者，硬喷只会在她旁边凭空吐火。交还原版。</li>
      * </ul>
      */
     public static void tickAttack(Entity mount, EntityMaid maid) {
@@ -966,21 +895,7 @@ public final class MaidMountCompat {
                 }
                 return;
             }
-            if (k == Kind.DRAGON) {
-                if (target == null) {
-                    if (mStrike != null) {
-                        mStrike.invoke(mount, false);
-                    }
-                    return;
-                }
-                if (mStrike != null) {
-                    mStrike.invoke(mount, true);
-                }
-                if (mRiderShootFire != null) {
-                    mRiderShootFire.invoke(mount, maid);
-                }
-                return;
-            }
+            // 【实测七百二十三】DRAGON：本类不再触发（她不是乘客/控制者）——见上面那段。
             // 【实测七百一十九·点4 通用档：任何"用正常优先级判定"的可骑乘生物】
             // 玩家原话：「理论上如果乘坐的生物是用正常的优先级来进行判定的话，应该是无条件服从
             // 女仆的 target 的。攻击方面应该是可以采用坐骑自己的攻击方式的……尽量做一个通用兼容，

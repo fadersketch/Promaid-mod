@@ -6,6 +6,38 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百二十三（v1.3.0 beta，同名覆盖，未发版）：冰火传说龙骑位四期（降级为"悬空鞍位"）
++ 卓越前线轮椅转向 + 指挥棒右击二期（两树镜像）——玩家三条原话 ①「关于龙方面的问题，还是没能
+解决。我采用降级方案，骑龙的话，那就仅仅是把女仆挂在玩家的骑乘位上，但并没有真正的骑在龙上。
+随后龙的行动逻辑自动转变为跟随玩家。玩家手动使用日程表进行传送那也仅仅是传送女仆不传送龙。
+也就是说移动的逻辑仍然是龙在进行移动。女仆相当于仅仅是坐在一把悬空的同位置的椅子上而已。
+这个处于是开后门的无奈之举。先将原有的代码删除掉，然后替换成这个就行。此时玩家对龙进行右击会
+显示已经占用了。阻止一下右击骑龙的行为。」②「关于卓越前线的载具，拿指挥棒右击之后，玩家的确
+没有坐上去，但是右击完之后玩家的位置发生了改变。似乎是坐上去秒坐下来的结果。」③「现在在进行
+一番操作之后，的确可以把女仆绑在轮椅上了，但是女仆移动的路径完全就跟女仆应有的路径不符。
+大部分情况是坐上轮椅之后，朝轮椅面朝的方向移动个几步，然后就停在那边了。为什么骑马就不会出现
+这种情况呢？」
+
+① **真骑这条路删掉，换成玩家点名的降级方案**：龙覆写了 `positionRider(乘客, 回调)`，覆写体在
+   `super` 返回之后按 `getControllingPassenger()`（只认玩家/主人）判身份，女仆永远不满足 →
+   `updatePreyInMouth`：摆到嘴边 + `ANIMATION_SHAKEPREY`（模型被带偏 = "建模只剩一块"）、
+   55 刻后伤害×2 + `stopRiding`（= "被咬死"）。`ci.cancel()` 只取消基类那一份，722 的
+   "末尾抢回鞍位"又跟龙的状态机每拍互抢。所以整文件删 `EntityDragonMaidSeatMixin`，
+   `shouldSeatMaidOnDragon`/`enforceDragonSeat`/`stopPreyShake`/`keepDragonAirborne`/
+   `driveDragon`/`stopDragon` 全移除，换成：**不 startRiding**（她不是乘客 → 猎物分支永不进入）、
+   每 2 刻 `setPos` 到 `getRiderPosition()`（玩家鞍位）+ `freeSeatY`、绑定期间无重力、
+   不驱动龙、把龙置 `setCommand(2)` 跟随档（解绑还原）、传送只传她（判据 `isDragonChairRider`
+   放在 `isRideRider` 之前）、右击被占的龙回"已被占用"且 `denyMountForBatonHolder` 堵死玩家登龙、
+   偏离 8 格自动解除。
+② **右击闸只认 ServerPlayer → 客户端那一份从来没被拦**：`PlayerInteractEvent.EntityInteract`
+   两侧都发，而 SWB 的 `VehicleEntity.interact` 客户端本地也跑（`setDriverAngle` 转玩家 +
+   把第一个非玩家乘客 `stopRiding`）。两条闸都放宽到 `Player`；客户端那份只 cancel（不做事，
+   避免双绑）。
+③ **轮椅引擎的转向只读乘客头朝向**（反编译 `wheelChairEngine`：`passenger0.getYHeadRot()`；
+   左右位只在普通 `wheelEngine` 里被读）。修：`WHEELCHAIR` 档把目标方位写进 `setYHeadRot`，
+   并按 ≤12°/拍把车头拽向目标（原来 ≈10°/秒太慢），且不再等转向、够远就踩油门。
+   （骑马走 `GroundPathNavigation` 那条渠道，压根不经过这套引擎——所以它没这毛病。）
+
 实测七百二十二（v1.3.0 beta，同名覆盖，未发版）：冰火传说龙骑位三期 + 骑乘指挥棒独占右击三期
 （两树镜像）——玩家原话 ①「先使用指挥棒右击龙，然后再右击女仆。女仆会显示坐上去，坐上去之后，
 龙的整个建模只剩下一块。其他的全部被卡掉，然后女仆就在龙的身上反复横跳。」②「卓越前线，我测试的

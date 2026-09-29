@@ -517,11 +517,24 @@ public final class MaidRideKit {
      * </ul>
      */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier) {
+        feedNavigation(mount, target, modifier, null);
+    }
+
+    /**
+     * 同上，带 {@code rider}（= 骑在上面的那只女仆）。
+     *
+     * <p>【实测七百二十三】为什么要把她传下去：卓越前线的**轮椅（WHEELCHAIR）**引擎
+     * 的转向只读 {@code getFirstPassenger().getYHeadRot()}（反编译实证），不读左右位——
+     * 所以驱动层必须拿到"她"，才能把目标方位写成她的头朝向。玩家原话
+     * 「为什么骑马就不会出现这种情况呢？」的答案也在这条链上：马走的是下面那个
+     * {@code GroundPathNavigation} 渠道，压根不经过这套引擎。
+     */
+    public static void feedNavigation(Entity mount, Vec3 target, double modifier, Entity rider) {
         try {
             // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：先问两家模组驱动
             // （卓越前线 processInput / 冰火传说 flightManager）——它们不是 Mob、没有
             // PathNavigation，下面两个渠道都表达不了，必须由各自的驱动接管。
-            if (MaidMountCompat.drive(mount, target, modifier)) {
+            if (MaidMountCompat.drive(mount, target, modifier, rider)) {
                 return;
             }
             if (!(mount instanceof Mob mob)) {
