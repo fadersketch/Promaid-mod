@@ -708,18 +708,26 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
     /** v1.5.199：本次自保是否已播报过环境提示（岩浆/溺水/卡墙，每场一次） */
     private boolean announcedEnv = false;
     /**
-     * v1.3.0(beta) 实测七百一十七【issue #30：窒息提示被"环境提示"那一个闩一起闩死】。
+     * v1.3.0(beta) 实测七百一十八【issue #30 重做：窒息播报改成常驻、与自保会话解耦】。
      *
-     * {@code announcedEnv} 是**岩浆/着火/溺水/卡墙/岩浆避让**五条提示共用的一枚"每场一次"闩。
-     * 而"她垫块脱离岩浆"这条路（{@code lavaStepUp}）正是把自己垫进方块里的那条——
-     * 它先喊"掉进岩浆里了！我垫上来！"并把 {@code announcedEnv} 置真，然后 {@code return}，
-     * 根本走不到下面的卡墙那一档。于是她被自己垫的方块闷住、真吃着 {@code in_wall} 伤害，
-     * 卡墙那句"我卡住了，快喘不过气了！"却因为闩已经关上而**整场一个字都不说**——
-     * 而且 {@code announcedEnv} 只在 {@code sessionEnter} 复位，她的头一直卡着、危险不解除，
-     * 这场自保就不会退出重进，闩也就一直关着。玩家报的"大于 5 秒、又掉血又吃食物回血、
-     * 始终不提示"正是这个形状。
+     * <p>【为什么推倒重来】v717 那版把根因写成"被岩浆那枚共用闩（{@code announcedEnv}）挡死"，
+     * 那是**推测**——反馈者（#30）从头到尾没提岩浆，他复现的是"垫脚方块把自己卡住、一直吃窒息
+     * 伤害"。按代码事实，岩浆在**没泡岩浆**时压根不参与：{@code announcedEnv} 与
+     * {@code lavaContext} 在他那种场景下本来就不会置位，所以我那个根因站不住。真正的结构性
+     * 问题是：这句播报**长在自保会话里**（{@code environmentalEscape} 的第 4 档），于是它同时
+     * 受三件与"卡住"无关的事摆布——
+     * <ol>
+     *   <li>会话得先激活（要 {@code headInSolid} 这个几何判据命中，而它是
+     *       {@code isRedstoneConductor}，与"真吃到 in_wall 伤害"不完全同一件事）；</li>
+     *   <li>得走到第 4 档（前面岩浆/着火/溺水任何一档 {@code return} 掉就轮不到它——
+     *       尤其"附近有岩浆就绕开"那一档只要半径 3 内有岩浆就抢先喊并 return）；</li>
+     *   <li>会话给了让位窗口（{@code envGiveUpTick}）时那 5 秒整条 {@code environmentalEscape} 都不跑。</li>
+     * </ol>
+     * 而反馈者要的只是一件事：**真被闷住就说话**。
      *
-     * 现在给卡墙单独一枚闩：与其它环境提示互不干扰，谁先谁后都能各喊一次。
+     * <p>现在把它提成**常驻轻量检查**（与 {@code tickCureNegativeEffects} 同一层，会话内外都跑）：
+     * 只看"最近 5 秒累计吃到的 in_wall 伤害到没到门槛"，与岩浆/会话/让位窗口全部无关。
+     * 一阵不卡了（台账清零）就复位，下一回被卡还能再喊——不是"一生一次"。
      */
     private boolean announcedSuffocate = false;
     /** v1.5.232：本次自保是否已播报过"包里什么都没有，我没招了！救救我！"
@@ -1173,6 +1181,9 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 面对中毒竟然不用蜂蜜瓶"）。蜂蜜解毒 + 牛奶清负面提升为常驻轻量逻辑
         //（每 tick 只查效果状态，有负面效果才扫背包），与自保会话完全解耦
         this.tickCureNegativeEffects(maid);
+        // v1.3.0(beta) 实测七百一十八【issue #30】：窒息播报同样提为常驻轻量检查——真吃到
+        // in_wall 伤害到门槛就开口，不再受"会话是否激活/是否轮到卡墙档/让位窗口"摆布。
+        this.checkSuffocateAnnounce(maid);
         if (!this.sessionActive) {
             if (danger || ratio < enterRatio()) {
                 this.sessionActive = true;
@@ -1817,6 +1828,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 死亡地点而不是重生点"的元凶）；home 看家钉死同样不传。
             // 复活后由跟随/一键集合链路自然归队。
             if (!owner.m_6084_() || maid.isHomeModeEnable()) {
+                return;
+            }
+            // v1.3.0(beta) 实测七百一十八【issue #31】：她自己坐下/蹲着（玩家明确停放）时
+            // 不传——与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径。
+            if (shouldSkipTeleportForParked(maid)) {
                 return;
             }
             double dx = maid.m_20185_() - owner.m_20185_();
@@ -2732,42 +2748,11 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // v1.5.216：岩浆上下文保护——30 tick 内泡过岩浆（垫高脱离瞬间位移滞后
         // headInSolid 误报，"被岩浆烫到却说被卡住了"的根因）→ 静默兜底不播报
         // v1.5.236：窗口 30 → 100 tick（5 秒）
-        // v1.3.0(beta) 实测七百一十七【issue #30】：这条"岩浆免报"撤掉了——判据改成
-        // "真的吃到 in_wall 伤害"（见下），而伤害是实打实的，不需要岩浆再给它让路；
-        // 反而是它一直续期把真被闷住的场景也一起堵上了。
-        long nowTick = maid.m_9236_().m_46467_();
-        // v1.2.4 实测六百四十七（反馈：「女仆老不停的说自己窒息了，喘不过气」）：
-        // 这句话的门槛从"头部几何命中实心方块"改成【真的吃到超过 4 点窒息伤害】。
-        // 几何命中 ≠ 受伤：她挤过窄缝、被方块顶一下、上下坡抬头都能瞬时命中，
-        // 一点血没掉也照喊"喘不过气"；而每次自保会话进场都会重置播报标记
-        //（sessionEnter → announcedEnv=false），于是就成了反复说。
-        // 现在：没掉血 → 一句话不说（挪位置/顶出照旧，逃生行为一个字没动）；
-        // 说出口 → 记一行「窒息」日志（累计伤害可对账）。
-        //
-        // v1.3.0(beta) 实测七百一十七【issue #30】两处修正：
-        // ① 用自己的闩 announcedSuffocate，不再与岩浆/着火/溺水的 announcedEnv 抢——
-        //    她垫块脱离岩浆后被自己垫的方块闷住时，岩浆那句已经把 announcedEnv 关上了，
-        //    旧写法一辈子都不会再开口；
-        // ② 不再看 lavaContext：那本是"刚泡过岩浆、位移滞后导致 headInSolid 误报"的
-        //    免报窗口（v1.5.216/236），可它每次接触岩浆都续 5 秒——垫块脱困后她往往还在
-        //    岩浆坑边反复蹭到岩浆，窗口就一直续着，真被闷住也不说。现在免报只看
-        //    【本 tick 有没有真的在挨窒息伤害的几何】：伤害是实打实的（in_wall 走伤害
-        //    结算），无需再让岩浆给它让路。
-        // ③ 阈值口径改 >= ：注释与玩家口径都是"累计 4 点以上"，旧写法 `> 4.0` 要 5 点才喊。
-        if (!this.announcedSuffocate) {
-            float suffocate = recentSuffocateDamage(maid);
-            if (suffocate >= SUFFOCATE_ANNOUNCE_MIN) {
-                this.announcedSuffocate = true;
-                maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
-                com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 卡在方块里且已真吃到 " + String.format("%.1f", suffocate)
-                        + " 点窒息伤害 → 播报");
-            } else if (suffocateDiagDue(maid, nowTick)) {
-                com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
-                        + " 头部几何命中实心方块，但累计窒息伤害 "
-                        + String.format("%.1f", suffocate) + " 点（门槛 4.0）→ 不播报，只挪位置顶出");
-            }
-        }
+        // v1.3.0(beta) 实测七百一十八【issue #30 重做】：这句播报**已从本条逃生链路里搬走**，
+        // 提到常驻轻量检查（{@code checkSuffocateAnnounce}，见 m_6725_ 里的调用点）——
+        // 因为它长在这里时会被"会话是否激活 / 是否走到第 4 档 / 让位窗口"三件与"卡住"无关的
+        // 事摆布，真被闷住也可能一个字都不说。这里只保留【挪位置/顶出】这个保命动作。
+        // 下方 findAirSpot / antiSuffocate 的行为一个字未改。
         BlockPos air = this.findAirSpot(maid);
         if (air != null) {
             maid.m_21573_().m_26519_(air.m_123341_() + 0.5, air.m_123342_(), air.m_123343_() + 0.5, 1.0f);
@@ -3936,6 +3921,30 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
      * teleportCooldown（默认 600=30 秒）——一场遭遇战最多被接走一次，根治
      * "传回家→跑回去→再传回家"的连传循环。
      */
+    /**
+     * v1.3.0(beta) 实测七百一十八【issue #31】——她自己坐下/蹲着时，自保归位传送不拉她走。
+     *
+     * <p>反馈者原话：「女仆坐下或蹲下之后，就固定在那里了，不会主动移动……残血时……即使女仆
+     * 是蹲下状态，也会瞬移到主人身边」。坐下/蹲下是玩家**明确停放**她的动作——本模组对 TLM
+     * 原版传送早就豁免了（{@code MaidTeleportPreserveMixin} 里 {@code isMaidInSittingPose() ||
+     * isShiftKeyDown()} 那道闸），但**我们自己**的自保传送没查，于是坐/蹲着也会被拉走。
+     * 这里补上同一道闸，两条自保传送路径（{@link #teleportHome} / {@link #teleportHomeOnExit}）
+     * 共用。开关 {@code combat.teleportExemptSitting} 默认开；关掉 = 旧行为。
+     *
+     * <p>【为什么不是"禁止她站起来"】受伤时 {@code onMaidHurt} 本来就会让她起身（v1.5.213），
+     * 起身后这个判据自然为假、传送恢复——玩家要的"停下就别动"与"挨打要能逃"两者不冲突。
+     */
+    private static boolean shouldSkipTeleportForParked(EntityMaid maid) {
+        try {
+            if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get()) {
+                return false; // 开关关掉 → 旧行为
+            }
+            return maid.isMaidInSittingPose() || maid.m_6040_(); // 坐姿 / 蹲下（Shift）
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private void teleportHome(EntityMaid maid) {
         // 实测三百九十（反馈：自保模式禁止传送，玩家日程表手动传送除外）：
         // 自保会话期间一切自保逃生传送停用（岩浆/血量危急/弹尽粮绝兜底也
@@ -3960,6 +3969,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 旧版会把自保中的女仆直接拽到主人尸体旁（反馈实测"女仆传到了死亡
         // 地点而不是重生点"的元凶）；home 看家钉死同样不传。
         if (!owner.m_6084_() || maid.isHomeModeEnable()) {
+            return;
+        }
+        // v1.3.0(beta) 实测七百一十八【issue #31】：她自己坐下/蹲着（玩家明确停放）时不传。
+        if (shouldSkipTeleportForParked(maid)) {
             return;
         }
         double dx = maid.m_20185_() - owner.m_20185_();
@@ -4305,6 +4318,52 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
                 && this.drinkMilkBucket(maid)) {
             this.markPotionUsed("milk", nowTick, potionCooldown());
         }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百一十八【issue #30 重做：窒息播报改成常驻、与自保会话解耦】。
+     *
+     * <p>【为什么从环境逃生链路里搬出来】那句"我卡住了，快喘不过气了！"原先长在
+     * {@code environmentalEscape} 的第 4 档（卡墙），于是它同时受三件与"卡住"无关的事摆布：
+     * ① 自保会话得先激活；② 得轮到第 4 档（前面岩浆/着火/溺水任何一档 return 掉就轮不到，
+     * 尤其"附近有岩浆就绕开"那一档只要半径 3 内有岩浆就抢先 return）；③ 会话进过让位窗口
+     * （{@code envGiveUpTick}）时那 5 秒整条逃生链路都不跑。反馈者（#30）报的正是"被自己垫的
+     * 方块闷住、又掉血又吃东西、始终不提示"——他要的只是一件事：**真被闷住就说话**。
+     *
+     * <p>所以搬到这里：常驻轻量检查（与 {@code tickCureNegativeEffects} 同层，会话内外都跑），
+     * 判据只有一个——**最近 5 秒累计吃到的 in_wall 伤害过没过门槛**。与岩浆无关、与会话无关、
+     * 与让位窗口无关。挪位置/顶出那个保命动作仍留在逃生链路里（那条只管动作、不管提示）。
+     *
+     * <p>【为什么不是"一生一次"】{@code announcedSuffocate} 在"这一阵不再吃窒息伤害、台账清零"
+     * 时复位——同一场自保里她若又卡住，还能再喊一次；喊过之后若持续被闷着（伤害一直在续账），
+     * 就只说那一次，不刷屏。
+     */
+    private void checkSuffocateAnnounce(EntityMaid maid) {
+        float suffocate = recentSuffocateDamage(maid);
+        if (suffocate < SUFFOCATE_ANNOUNCE_MIN) {
+            // 台账清零（5 秒窗口过了 / 从没吃过）→ 复位，下一回卡住还能再喊
+            if (suffocate <= 0.0f) {
+                this.announcedSuffocate = false;
+                return;
+            }
+            // 正在吃、但还没到门槛 → 低频诊断（30 秒/女仆），对账用
+            if (suffocateDiagDue(maid, maid.m_9236_().m_46467_())) {
+                com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 累计吃到 " + String.format("%.1f", suffocate)
+                        + " 点窒息伤害，未到门槛 " + String.format("%.1f", SUFFOCATE_ANNOUNCE_MIN)
+                        + " → 未播报");
+            }
+            return;
+        }
+        if (this.announcedSuffocate) {
+            return; // 这一阵已经喊过，别刷屏
+        }
+        this.announcedSuffocate = true;
+        maid.getChatBubbleManager().addTextChatBubble("我卡住了，快喘不过气了！");
+        com.maidsmart.tool.PromaidLog.log("窒息", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                + " 累计吃到 " + String.format("%.1f", suffocate)
+                + " 点窒息伤害（in_wall，门槛 " + String.format("%.1f", SUFFOCATE_ANNOUNCE_MIN)
+                + "）→ 播报（常驻检查，与自保会话/岩浆无关）");
     }
 
     /** v1.5.281：是否"无增益 + 有负面"——牛奶前提（牛奶清全部效果，

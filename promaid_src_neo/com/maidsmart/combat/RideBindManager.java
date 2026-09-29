@@ -98,7 +98,11 @@ public final class RideBindManager {
         }
         boolean maid = target instanceof EntityMaid;
         boolean mount = !maid && MaidRideKit.isRideableMount(target, null);
-        if (!maid && !mount && !(target instanceof Mob)) {
+        // v1.3.0(beta) 实测七百一十八·点4：家具（椅子/坐垫）与扫帚若不是 Mob，会在下面那句
+        // "对着别的实体挥棍子没效果"里直接 return —— 玩家看不到任何提示。这里把它们收进来，
+        // 让它们在 denyReason 里给出明确拒绝。
+        boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
+        if (!maid && !mount && !rejected && !(target instanceof Mob)) {
             return;
         }
         event.setCanceled(true);
@@ -119,7 +123,9 @@ public final class RideBindManager {
                     deny(player, m, "她不是我的女仆～");
                     return;
                 }
-                if (MaidRideKit.isRidingMount(m)) {
+                // v1.3.0(beta) 实测七百一十八·点4：判据从 isRidingMount 收紧到 isRideRider——
+                // 她若只是原版/别的模组让她坐上去的（不是我们绑的），指挥棒不该把她拽下来。
+                if (MaidRideKit.isRideRider(m)) {
                     releaseMaid(m, false, "再选一次");
                     return;
                 }
@@ -148,8 +154,9 @@ public final class RideBindManager {
                 bind(player, pendingMaid, target);
                 return;
             }
+            // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
             EntityMaid rider = MaidRideKit.riderOf(target);
-            if (rider != null && ownable(player, rider)) {
+            if (rider != null && ownable(player, rider) && MaidRideKit.isRideRider(rider)) {
                 releaseMaid(rider, false, "再选一次");
                 return;
             }
@@ -170,6 +177,12 @@ public final class RideBindManager {
         }
         if (!ownable(player, m)) {
             deny(player, m, "她不是我的女仆～");
+            return;
+        }
+        // 实测七百一十八·点4：只有"骑乘棒绑上去的"才由我们负责弄下来。
+        if (!MaidRideKit.isRideRider(m)) {
+            player.displayClientMessage(Component.literal(
+                    "\u00a77她不是用骑乘指挥棒绑上去的，我不去动她"), false);
             return;
         }
         releaseMaid(m, false, "潜行下鞍");

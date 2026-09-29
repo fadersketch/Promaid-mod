@@ -3370,6 +3370,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "本模组所有骑乘改动一律不生效（指挥棒不绑她、驱动不喂目标、传送不连坐骑一起搬、也不抑制载具闲逛）。"
                         + "默认两项 = TLM 自带的椅子 touhou_little_maid:chair 与坐垫 touhou_little_maid:sit——"
                         + "它们只是「能坐的家具」，不该被当成可驾车/可传送的坐骑。别的模组的可坐家具填一行 id 即可"));
+        // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
+        this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
+                v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),
+                "默认开。她坐下（TLM 坐姿）或蹲下（Shift）时，自保的「回到主人身边」归位传送不再把她拉走"
+                        + "——这两种姿势是玩家明确把她停放在那儿的动作（本模组对 TLM 原版传送早就豁免了，"
+                        + "这里给我们自己的自保传送补上同一道闸）。关掉 = 坐着的残血女仆也会被自保传送回主人身边。"
+                        + "她自己站起来（含受伤起身）后自然恢复传送能力"));
     }
 
     private void reviveRows() {

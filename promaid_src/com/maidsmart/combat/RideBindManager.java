@@ -133,7 +133,12 @@ public final class RideBindManager {
         }
         boolean maid = target instanceof EntityMaid;
         boolean mount = !maid && MaidRideKit.isRideableMount(target, null);
-        if (!maid && !mount && !(target instanceof Mob)) {
+        // v1.3.0(beta) 实测七百一十八·点4：家具（椅子/坐垫）与扫帚**不是 Mob**，若不单独
+        // 认出来就会在下面那句"对着别的实体挥棍子没效果"里直接 return —— 玩家看不到任何
+        // 提示。这里把它们收进来，让它们在 denyReason 里给出明确拒绝（"这是家具，不是坐骑～"
+        // / "扫帚有它自己的飞法"）。
+        boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
+        if (!maid && !mount && !rejected && !(target instanceof Mob)) {
             return; // 既不是女仆也不是生物：不接（对着别的实体挥棍子没有任何效果）
         }
         event.setCanceled(true);
@@ -156,8 +161,10 @@ public final class RideBindManager {
                     deny(player, m, "她不是我的女仆～");
                     return;
                 }
-                // 她已经骑着某只坐骑 → 再选她 = 直接下坐骑（比潜行更顺手的第二入口）
-                if (MaidRideKit.isRidingMount(m)) {
+                // 她已经骑着**我们用棍子绑的**坐骑 → 再选她 = 直接下坐骑（比潜行更顺手的第二入口）
+                // v1.3.0(beta) 实测七百一十八·点4：判据从 isRidingMount 收紧到 isRideRider——
+                // 她若只是原版/别的模组让她坐上去的（不是我们绑的），指挥棒不该把她拽下来。
+                if (MaidRideKit.isRideRider(m)) {
                     releaseMaid(m, false, "再选一次");
                     return;
                 }
@@ -189,9 +196,9 @@ public final class RideBindManager {
                 bind(player, pendingMaid, target);
                 return;
             }
-            // 这只坐骑上是不是已经驮着**我的**女仆 → 再选一次 = 解除
+            // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
             EntityMaid rider = MaidRideKit.riderOf(target);
-            if (rider != null && ownable(player, rider)) {
+            if (rider != null && ownable(player, rider) && MaidRideKit.isRideRider(rider)) {
                 releaseMaid(rider, false, "再选一次");
                 return;
             }
@@ -218,6 +225,12 @@ public final class RideBindManager {
         }
         if (!ownable(player, m)) {
             deny(player, m, "她不是我的女仆～");
+            return;
+        }
+        // 实测七百一十八·点4：只有"骑乘棒绑上去的"才由我们负责弄下来——原版/别的模组
+        // 让她坐上去的（坐船/坐矿车/别的坐骑），潜行右击不该把她拽下来，交还原版。
+        if (!MaidRideKit.isRideRider(m)) {
+            player.m_213846_(Component.m_237113_("\u00a77她不是用骑乘指挥棒绑上去的，我不去动她"));
             return;
         }
         releaseMaid(m, false, "潜行下鞍");
