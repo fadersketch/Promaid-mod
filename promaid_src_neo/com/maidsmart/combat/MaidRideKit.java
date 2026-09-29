@@ -147,6 +147,58 @@ public final class MaidRideKit {
         }
     }
 
+    /* ==================== 扫帚：不是坐骑 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百一十八【点4：指挥棒不许选中坐垫/扫帚，且只有棍子绑的才算骑乘】。
+     *
+     * <p>玩家原话：「只有拿骑乘棒让女仆进入骑乘状态才走我们的骑乘链路，且骑乘棒无法选中坐垫和扫帚」。
+     *
+     * <p>扫帚（TLM {@code EntityBroom}）让女仆也变成"乘客"（{@code isPassenger()} = true），
+     * 于是它天然落进本链路那几个"乘客"判据里。可扫帚有**自己的一整条飞行链路**
+     * （{@code MaidBroomKit}/{@code MaidBroomDrive}），把它当坐骑会打架：指挥棒点她会把
+     * 她从扫帚上拽下来（{@code releaseMaid} → {@code stopRiding}）、{@link #isDriven} 会去
+     * 抑制扫帚自己的行为、传送链路会想"连扫帚一起搬"。所以这里一刀切掉。
+     *
+     * <p>判据用**类型**（编译期盯着）而不是注册名——与 {@code MaidBroomKit.isBroomItem}
+     * 同一种写法（TLM 改 id 不会让我们静默失效）。
+     */
+    public static boolean isBroom(Entity e) {
+        try {
+            return e instanceof com.github.tartaricacid.touhoulittlemaid.entity.item.EntityBroom;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /* ==================== 「只有棍子绑的才算」 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百一十八【点4：收紧进入条件】。
+     *
+     * <p>玩家原话：「只有拿骑乘棒让女仆进入骑乘状态才走我们的骑乘链路」。
+     *
+     * <p>判据 = 她自己身上带着 {@link #TAG_RIDE_MOUNT}（绑定成功那一刻写、解绑/自然脱落时清除，
+     * 随存档持久化）。所以**不是**我们把她放上坐骑的场合——原版/别的模组让她成为乘客
+     * （坐船、坐矿车、被别的模组拽上坐骑、TLM 椅子/坐垫、扫帚）——我们的驱动、闲逛抑制、
+     * 连坐骑传送**一个字节都不生效**，完全交还原版规则。
+     *
+     * <p>【为什么判据是"她自己身上的痕迹"而不是查链路表】服务端重启/区块重载后链路表
+     * 还没重建的那一拍，传送入口也要能认出她——与 {@code MaidBroomKit.isBroomAirborne}
+     * 同口径（那个也不查表，只看"任务 + 真的骑着扫帚"）。
+     */
+    public static boolean isBatonBound(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            String tag = maid.getPersistentData().getString(TAG_RIDE_MOUNT);
+            return tag != null && !tag.isEmpty();
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /* ==================== 能力探测 ==================== */
 
     public static boolean isRideableMount(Entity e, EntityMaid maid) {
@@ -160,6 +212,9 @@ public final class MaidRideKit {
             if (isFurniture(e)) {
                 return false; // 实测七百一十七：家具（椅子/坐垫）不是坐骑——本链路一律不碰
             }
+            if (isBroom(e)) {
+                return false; // 实测七百一十八：扫帚有自己那条飞行链路，不算坐骑
+            }
             if (!(e instanceof Saddleable saddle) || !saddle.isSaddled()) {
                 return false;
             }
@@ -172,11 +227,19 @@ public final class MaidRideKit {
     /** 为什么骑不上（能骑时返回 null） */
     public static String denyReason(Entity e, EntityMaid maid) {
         try {
-            if (!(e instanceof Mob) || e == maid || e instanceof EntityMaid) {
+            if (e == null) {
                 return "这个不能当坐骑～";
             }
+            // 家具/扫帚的判据放在最前：它们不是 Mob，若先走下面那句"不是能上鞍的坐骑"
+            // 就永远说不出它们的专属理由（实测七百一十八·点4）。
             if (isFurniture(e)) {
                 return "这是家具，不是坐骑～"; // 实测七百一十七：椅子/坐垫等黑名单家具
+            }
+            if (isBroom(e)) {
+                return "扫帚有它自己的飞法，不用棍子管～"; // 实测七百一十八：指挥棒不许选中扫帚
+            }
+            if (!(e instanceof Mob) || e == maid || e instanceof EntityMaid) {
+                return "这个不能当坐骑～";
             }
             if (!e.isAlive()) {
                 return "它已经不在了……";
@@ -255,11 +318,19 @@ public final class MaidRideKit {
      * <p>为什么传送要单独问她：她一旦是乘客，原版 {@code teleportTo} 内部会先 {@code unRide()}
      * ——直接传她就等于"把坐骑扔在原地、人掉到主人身边"。所以传送链路必须先认出来她，改走
      * "连坐骑一起搬"（见 {@code MaidChunkLoadManager.recallRideRider}）。
+     *
+     * <p>【v1.3.0(beta) 实测七百一十八·点4 收紧】判据加上"必须是我们用骑乘棒绑的"
+     * （{@link #isBatonBound}）——原版/别的模组让她坐船、坐矿车、被拽上别人的坐骑，
+     * 一律不再走"连坐骑一起搬"，完全交还原版乘客规则。玩家原话：
+     * 「只有拿骑乘棒让女仆进入骑乘状态才走我们的骑乘链路」。
      */
     public static boolean isRideRider(EntityMaid maid) {
         try {
             if (maid == null) {
                 return false;
+            }
+            if (!isBatonBound(maid)) {
+                return false; // 不是骑乘棒绑的 → 与本链路无关
             }
             Entity v = ridingMount(maid);
             if (v == null || !(v instanceof Mob)) {
@@ -268,8 +339,7 @@ public final class MaidRideKit {
             if (!(v instanceof Saddleable saddle) || !saddle.isSaddled()) {
                 return false; // 现在骑的不是"已上鞍的坐骑"（船/矿车/别人的椅子一律不算）
             }
-            String tag = maid.getPersistentData().getString(TAG_RIDE_MOUNT);
-            return tag != null && !tag.isEmpty();
+            return true;
         } catch (Throwable ignored) {
             return false;
         }
@@ -317,9 +387,15 @@ public final class MaidRideKit {
             if (isFurniture(mount)) {
                 return false; // 实测七百一十七：家具（椅子/坐垫）不抑制闲逛、不施加任何骑乘改动
             }
+            if (isBroom(mount)) {
+                return false; // 实测七百一十八：扫帚另有链路，不抑制它的闲逛
+            }
             EntityMaid m = riderOf(mount);
             if (m == null) {
                 return false;
+            }
+            if (!isBatonBound(m)) {
+                return false; // 实测七百一十八·点4：不是骑乘棒绑的 → 原版规则一个字不动
             }
             if (!com.maidsmart.tool.MaidScope.owned(m)) {
                 return false;

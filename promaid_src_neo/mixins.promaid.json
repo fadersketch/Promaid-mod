@@ -69,7 +69,8 @@
     "MaidGlowGoldMixin",
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",
-    "ChunkMapRemotePumpMixin"
+    "ChunkMapRemotePumpMixin",
+    "MaidGoetyMoveSuppressMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",

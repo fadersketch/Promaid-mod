@@ -873,6 +873,22 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      */
     public static final ForgeConfigSpec.ConfigValue<java.util.List<? extends String>> COMBAT_RIDE_FURNITURE_BLACKLIST;
 
+    /**
+     * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
+     *
+     * <p>反馈者原话：「女仆坐下或蹲下之后，就固定在那里了……当残血时，女仆会说"回到主人身边，
+     * 我先缓缓"，残血情况下主人如果远离，即使女仆是蹲下状态，也会瞬移到主人身边」。
+     *
+     * <p>坐下（{@code isMaidInSittingPose}）与蹲下（{@code isShiftKeyDown}）是玩家**明确把她
+     * 停放**在那儿的动作——本模组的原版传送拦截（{@code MaidTeleportPreserveMixin}）已经豁免
+     * 这两种姿势，但我们**自己**的自保归位传送（{@code teleportHome} / {@code teleportHomeOnExit}）
+     * 没查，于是她会带着坐姿瞬移到主人身边。这个开关补上同一道闸：开着（默认）时，
+     * 坐/蹲着的女仆不被自保归位传送拉走——她自己站起来（或受伤起身）后自然恢复。
+     *
+     * <p>关掉 = 回到旧行为（坐着的残血女仆也会被自保传送回主人身边）。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_TELEPORT_EXEMPT_SITTING;
+
 
     // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」----
     /** 总开关（默认开）。关掉 = 整条链路不启动（她不会为了刷怪笼改变行程） */
@@ -2346,6 +2362,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                         java.util.List.of("touhou_little_maid:chair", "touhou_little_maid:sit"),
                         o -> o instanceof String s && !s.isBlank());
         BUILDER.pop();
+        // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
+        // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的
+        // teleportToOwner，这条管我们自己的自保传送（teleportHome / teleportHomeOnExit）。
+        // 不属于 ride 段（它是自保传送的闸），所以放在 ride 的 pop 之后、combat 根下。
+        COMBAT_TELEPORT_EXEMPT_SITTING = BUILDER.comment("坐下的女仆不被自保传送拉走（默认开）：她坐下（TLM 坐姿）或蹲下（Shift）时，自保的\"回到主人身边\"归位传送不再把她拉走——这两种姿势是玩家明确把她停放在那儿的动作，本模组对 TLM 原版传送早就豁免了，这里给我们自己的自保传送补上同一道闸。关掉 = 回到旧行为（坐着的残血女仆也会被自保传送回主人身边）。她自己站起来（含受伤起身）后自然恢复传送能力")
+                .translation("config.promaid.teleportExemptSitting")
+                .define("teleportExemptSitting", true);
 
         // ---- v1.3.3「防刷怪：发现刷怪笼就插火把」（配置面板：战斗与自保 → 防刷怪插火把）----
         // 玩家建议原文：「女仆在发现刷怪笼以后如果手上有火把会优先在刷怪笼上插火把（用来防止

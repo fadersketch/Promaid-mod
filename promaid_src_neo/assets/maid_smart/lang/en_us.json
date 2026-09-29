@@ -142,6 +142,7 @@
   "config.promaid.ride.followDist": "Riding - follow stop distance (blocks)",
   "config.promaid.ride.speedScale": "Riding - overall speed multiplier",
   "config.promaid.ride.furnitureBlacklist": "Riding - furniture vehicle blacklist",
+  "config.promaid.teleportExemptSitting": "Sitting maid not teleported by self-preservation",
   "config.promaid.spawnerTorch": "Anti-Spawner Torches",
   "config.promaid.spawnerTorch.enable": "Torch mob spawners",
   "config.promaid.spawnerTorch.radius": "Spawner search radius (blocks)",

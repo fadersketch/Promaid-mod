@@ -370,6 +370,11 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 实测六百七十三：仿创造飞行手动触发（/maid_smart freeflight_goto / freeflight_follow /
         // freeflight_enemy：坐标档与两个专用服务器验收入口）
         com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
+        // 实测七百一十八：诡厄巫法（Goety）位移聚晶兼容——第三种飞行「外部持续推进」
+        // （来源：社区 PR #26，本模组按自身架构收编其中的 Goety 部分、剔掉与本事无关的
+        //  BeyondDimensions 半截；命令入口 /maid_smart goety_* 与只读探针 goety_probe）
+        com.maidsmart.command.MaidGoetyFlyCommand.register(event.getDispatcher());
+        com.maidsmart.command.MaidGoetyProbeCommand.register(event.getDispatcher());
     }
 
     /**
