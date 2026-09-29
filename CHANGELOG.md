@@ -1,4 +1,82 @@
-﻿## 实测七百一十九【骑乘指挥棒·模组坐骑通解通法 + 通用攻击档（任何 Mob 坐骑无条件服从她的目标）+ 指挥棒气泡改口 + 13 条新语音】
+﻿## 实测七百二十【冰火传说龙的骑位修正（女仆不再被含在嘴里 / 不再被甩下）+ 骑乘指挥棒独占右击】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 〇、玩家两条原话
+
+1. 「女仆坐在龙身上的位置跟玩家不一样。而且龙会直接把女仆从背上甩下来。」
+2. 「加一个新设定，骑乘指挥棒在使用的时候不会触发原本的右击效果。只会触发骑乘棒自己的右击效果，
+   也就是说你拿骑乘棒是骑不上龙或者车子的。」
+
+### 一、issue：女仆骑冰火传说的龙，位置不对 + 被甩下来——根因与修法
+
+**两条是同一个根因的两半。** 冰火传说的龙把乘客分成两类，判据是它的「控制乘客」
+（`getControllingPassenger`）：
+- 1.20.1（社区版/普通版）：**只认 `Player`**（`EntityDragonBase.m_6688_()` 里
+  `passenger instanceof Player` + 是主人）；
+- 1.21.1（社区版 `DragonBaseEntity`）：只认「主人」。
+
+女仆两边都不满足（她不是玩家；她的主人是那位玩家而不是龙的主人身份）→ 判据恒为 `null` →
+龙走 `positionRider` 的**另一个分支** `updatePreyInMouth(passenger)`：
+把她**摆在嘴边**（这就是「位置跟玩家不一样」），并在 `animationTick > 55` 时
+**咬她一口**（`m_6469_`，伤害×2）再 `m_8127_()` ——（这就是「从背上甩下来」）。
+两半同源：只要让她走玩家那条鞍位分支，两半一起消失。
+
+**修法**：不改龙对「谁是控制乘客」的判定（那是一条同时管着驱动与开火的判据，动了会和
+`MaidMountCompat` 的 `flightManager` 驱动路线打架），而只修**定位这一处**——
+乘客位置每 tick 由原版算一遍（1.20.1 `Entity.m_6083_ → m_7332_ → m_19956_`；
+1.21.1 `rideTick → positionRider(Entity) → positionRider(Entity, MoveFunction)`，javap 实证），
+其中 `m_7332_` / 一参的 `positionRider(Entity)` 是 **`public final`**——龙**不可能覆写**它
+（它只覆写了两参的那个）。所以新增 `mixin/EntityDragonMaidSeatMixin` **注入原版 `Entity` 的这个漏斗**
+（不注入龙自己）：乘客若是【有主女仆】且载具是【冰火传说的龙】，就取龙自己的公开方法
+`getRiderPosition()`（= 它给玩家算的那个鞍位，含俯仰补偿 / 飞行抬高，四份 jar 成员名逐字一致）
+按玩家同款落座并 `cancel`——**整段跳过**龙的覆写，那条猎物分支不再被走到。
+
+**【为什么不直接 `@Mixin` 龙】** 冰火传说**是可选模组**：目标类不存在时 Mixin 只记一条 WARN 并跳过
+（反编译 `MixinInfo.getTargetClass` 实证：仅 `strict`／`-Dmixin.debug.verify` 才抛异常），
+但本项目的只读注入点审计 `_mixchk.py` 会把「javap 解析不到的目标类」记 UNRES 而拦打包——
+而那两家模组的 jar 不在编译 classpath 上。注入原版 `Entity` 既没有这个问题，也让审计能逐字证明注入点存在。
+
+**【客户端为什么也生效】** 乘客位置**不随包同步**：服务端只同步载具的位置，客户端每 tick 用载具的
+权威位置**自己算一遍**乘客位置（`ClientLevel.tickPassenger → rideTick`，反编译实证）。所以这条若不
+在客户端也生效，她在你屏幕里仍是「含在嘴里」。客户端拿不到 `persistentData`（不过网），但
+**主人 UUID 是同步实体数据**（`TamableAnimal.DATA_OWNERUUID_ID` 注册在 `defineSynchedData`，javap 实证）
+——所以两树统一判据 = **「有主女仆 + 冰火传说的龙」**。这条**事实上等价于「棍子绑的」**：
+龙的登龙那条路**只对玩家开放**（`m_6071_` 里 `player.startRiding(this, true)`，且要求已驯服 + 阶段 > 2），
+女仆没有任何别的办法爬上冰火传说的龙（她能自己上的只有原版 `Saddleable` 兽，而龙不是）——
+所以这个组合只会由骑乘指挥棒产生。玩家本人、别的模组的生物、无主女仆一律一个字节都不碰。
+
+### 二、新配置：骑乘指挥棒·独占右击（`ride.batonExclusive`，默认开）
+
+**玩家要的**：「拿骑乘棒是骑不上龙或者车子的」。
+
+**为什么旧版能骑上龙**：冰火传说的龙是**多部件实体**——准星常常打中的是它的翅膀/尾巴/头，
+那些是独立的小实体（`EntityMultipartPart`／1.21.1 `MultipartPartEntity`），
+而它们会把这一下右击**转发给龙本体**（`EntityMultipartPart.m_6096_` 里
+`getParent().m_6096_(player, hand)`，反编译实证）。指挥棒的处理器若只认「目标本身是不是坐骑」，
+看到的只是一块「部位」（既不是女仆也不是 `Mob`）→ 直接放行 → 转发到龙 → 玩家就骑上去了。
+
+**修法两件**：
+1. **认得出本体**：`MaidMountCompat.resolveMount(target)` 按类名（父类链上 `…MultipartPart` /
+   `…MultipartPartEntity`）把部位还原成本体，再交给原来的选中/配对逻辑——这样「对着龙的翅膀挥棍子」
+   依然能选中这条龙（功能不被独占档误伤）。
+2. **独占吃掉**：新增配置 **`ride.batonExclusive`（默认开）**。开着时手持指挥棒的**任何**实体右击
+   一律由棍子吃掉，不再往下走 `m_6096_`／`m_6071_`（登龙/上车都长在那里）。
+   另听一个 `EntityInteractSpecific`（= 原版 `interactAt`，Forge 在 `onInteractEntityAt` 里发）：
+   客户端对实体右击是**先 `interactAt`、未被消费才 `interact`**（`Minecraft.startUseItem` 的 ENTITY 分支，
+   反编译实证），两个入口都拦掉才算「不触发原本的右击效果」。**那个入口只 cancel、不做事**——
+   两个入口都做事会重复执行一遍绑定/解除。关掉 = 只有我们认得出的目标才由棍子接管（与 719 一字不差）。
+
+### 三、验证
+
+两树 `javac` 0 错误；`_mixchk.py` PASS=180 FAIL=0 UNRES=0（含新增的
+`EntityDragonMaidSeatMixin` → 原版 `Entity.m_7332_` / `positionRider`）；
+打包闸门全过（Forge 898 entries / Neo 910 entries，`verify_jar_classes` 无缺无多）；
+lang 两份 JSON 校验通过；新配置在配置面板有对应行、中英 lang 都有键。
+**尚未进游戏实测，尚未发版。**
+
+## 实测七百一十九【骑乘指挥棒·模组坐骑通解通法 + 通用攻击档（任何 Mob 坐骑无条件服从她的目标）+ 指挥棒气泡改口 + 13 条新语音】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

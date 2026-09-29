@@ -491,6 +491,11 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_MOD_MOUNTS;
     /** 骑模组载具/龙时要不要顺手替她开火（默认开）。 */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_MOD_MOUNT_FIRE;
+    /**
+     * v1.3.0(beta) 实测七百二十【骑乘指挥棒·独占右击】。手持骑乘指挥棒时是否吞掉原本的实体右击
+     * （含 interactAt）。默认开 = 拿棍子骑不上龙/车。完整口径见 1.20.1 树同名字段。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_BATON_EXCLUSIVE;
 
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
@@ -2406,6 +2411,13 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.modMounts").define("modMounts", true);
         COMBAT_RIDE_MOD_MOUNT_FIRE = BUILDER.comment("模组坐骑·代她开火（默认开）：把她 brain 里的攻击目标交给坐骑去打——① 卓越前线载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路；② 冰火传说龙走吐息（strike + riderShootFire，以她为控制者）；③ **其余任何 Mob 坐骑**走通用兜底：无条件把她的目标写到它的 target 上，让它自己那套目标 AI 用它自己的攻击方式打（无攻击 AI 的坐骑写了也无副作用）。关闭 = 她照常驾驶，但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效，原版/别的模组让她坐上去的场合一次都不会碰")
                 .translation("config.promaid.ride.modMountFire").define("modMountFire", true);
+        // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】——玩家原话："加一个新设定，骑乘指挥棒
+        // 在使用的时候不会触发原本的右击效果。只会触发骑乘棒自己的右击效果，也就是说你拿骑乘棒是
+        // 骑不上龙或者车子的。" 为什么旧版能骑上龙：龙是多部件实体，准星常打中的是翅膀/尾巴/头那些
+        // 部位实体，它们会把右击转发给龙本体（反编译实证）。本档 = 手持棍子时这一下实体右击一律
+        // 由棍子吃掉（含 interactAt）。完整口径见 1.20.1 树同名字段的注释。
+        COMBAT_RIDE_BATON_EXCLUSIVE = BUILDER.comment("骑乘指挥棒·独占右击（默认开）：手持**骑乘指挥棒**时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果——最直接的一条就是「拿棍子骑不上龙/车子」。\n\n【为什么要专门开这一档】冰火传说的龙是**多部件实体**：准星常常打中的是它的翅膀/尾巴/头，那些是独立的小实体，会把这一下右击**转发给龙本体**，龙本体收到就让你骑上去。旧版只认「目标本身是不是能骑的坐骑」，看到一块“部位”就放行 → 转发 → 你就骑上去了。本档把整条路堵死：只要手里是骑乘指挥棒，这一下右击一律归棍子。\n\n【也管 interactAt】客户端对实体右击是「先 interactAt、没被消费才 interact」，两个入口都拦掉才叫“不触发原本的右击效果”。\n\n【关掉 = 与上一版一字不差】只有我们认得出的目标（女仆 / 已上鞍坐骑 / 模组载具·龙 / 家具扫帚）才由棍子接管，对着别的实体挥棍子仍然放行。")
+                .translation("config.promaid.ride.batonExclusive").define("batonExclusive", true);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的
