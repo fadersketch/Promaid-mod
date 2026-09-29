@@ -1356,12 +1356,16 @@ public final class RideBindManager {
                     air = MaidAirCombat.combatTarget(maid, foe);
                 } else {
                     MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
-                    // 跟随：主人够远就飞到他**正上方、比他高三格**（七百三十三：基准从"她脚下的
-                    // 地面"改成"主人的高度"，与扫帚模式同口径）；够近就原地悬停（保持当前高度）。
+                    // 跟随：**高度基准永远是主人**（比主人高三格，七百三十三 玩家纠正口径）。
+                    // 【实测七百三十四·棘轮修正】七百三十三 这一档"够近就原地悬停"错误地把基准
+                    // 传成了**她自己的 Y**，于是目标 = 她现在的高度 + 3 ——她每贴到一次就被抬高
+                    // 3 格、目标跟着水涨船高，形成**每拍 +3 的棘轮**，几秒就窜到主人上方十几二十格
+                    // （玩家实机反馈）。两档的差别只应在**水平位置**：够远飞到他正上方，够近就守住
+                    // 当前水平位置；**竖直基准一律是主人的 Y**，任何情况下都不拿她自己的高度当参照。
                     if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
                         air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ(), owner.getY());
                     } else {
-                        air = MaidAirCombat.followTarget(maid, maid.getY());
+                        air = MaidAirCombat.hoverAt(maid, maid.getX(), maid.getZ(), owner.getY());
                     }
                 }
                 if (air != null) {
