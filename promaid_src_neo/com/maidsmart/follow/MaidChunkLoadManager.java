@@ -837,6 +837,20 @@ public final class MaidChunkLoadManager {
             // 【实测七百一十六·点4】先于"骑乘中豁免"：她骑的是**本模组棍子绑上的坐骑**
             //  → 连人带坐骑一起处理（她同样是乘客，但玩家明确要她能跟过来；与扫帚同口径）。
             //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
+            // 【实测七百二十三】冰火传说龙（悬空鞍位）先认：她**不是乘客**，跨维/同维都**只传她**，
+            // 龙留在原地自己去跟（玩家原话「仅仅是传送女仆不传送龙」）。
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                LivingEntity rideOwner = maid.getOwner();
+                if (rideOwner == null || !rideOwner.isAlive()) {
+                    return;
+                }
+                if (maid.level() != rideOwner.level()) {
+                    // 跨维度：龙过不去，先干净解除（还原她的重力 / 龙的行动档），再传她一个人
+                    com.maidsmart.combat.RideBindManager.releaseDragonChairForTravel(maid);
+                }
+                teleportCore(maid, rideOwner, false);
+                return;
+            }
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 LivingEntity rideOwner = maid.getOwner();
                 if (rideOwner == null || !rideOwner.isAlive()) {
@@ -1378,6 +1392,10 @@ BlockPos stand = findStand(newLevel,
             if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 return recallBroomRider(maid, player) ? 1 : 2;
             }
+            // 【实测七百二十三】龙（悬空鞍位）只传她一个人（龙留在原地）
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                return teleportCore(maid, player, true) ? 1 : 2;
+            }
             // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬（"她们也可以被传送过来"）
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 return recallRideRider(maid, player) ? 1 : 2;
@@ -1411,6 +1429,10 @@ BlockPos stand = findStand(newLevel,
         // v1.3.6 实测六百六十一：骑扫帚的走"连人带扫帚"那条（她永远是乘客，旧口径 = 永久豁免）
         if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
             return owner.isAlive() && recallBroomRider(maid, owner);
+        }
+        // 【实测七百二十三】龙（悬空鞍位）只传她一个人（龙留在原地自己去跟）
+        if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            return owner.isAlive() && teleportCore(maid, owner, true);
         }
         // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬
         if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
@@ -1954,6 +1976,22 @@ BlockPos stand = findStand(newLevel,
             // 反馈"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
             // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
             // 不拉（与救援/一键集合同口径）。
+            // 【实测七百二十三】龙（悬空鞍位）先认：距离超线时**只传她不传龙**
+            // （龙留在原地自己去跟；玩家原话「仅仅是传送女仆不传送龙」）。
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                if (!shouldPull) {
+                    return; // 没到该拉的距离：正常跟着
+                }
+                if (teleportCore(maid, owner, true)) {
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name
+                            + " 同维度距离 " + blocks + " 格（> " + dist
+                            + " 格），已传送回主人身边（悬空鞍位：只传她不传龙）");
+                } else {
+                    throttledSkipLog(maid, "ride-dragon-nostand", name
+                            + " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无安全落点——不传");
+                }
+                return;
+            }
             // 【实测七百一十六·点4】骑坐骑的女仆：距离超线时连人带坐骑拉回（她同样是乘客，
             //  旧口径"骑乘中不拉"会让她永远留在远处——与扫帚同一条理由）。放在坐/骑豁免之前。
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {

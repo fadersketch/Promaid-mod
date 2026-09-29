@@ -80,6 +80,14 @@ public final class RideBindManager {
     /** "离主人这么近就不喂目标"的地面余量（格）：防坐骑顶着主人打转 */
     private static final double STOP_SLACK = 1.5;
 
+    /**
+     * 【实测七百二十三】悬空鞍位（龙）容许的最大偏离（格）：她离龙超过这个距离
+     * （被别的模组拉走 / 被传送走 / 龙换维度）就解除链路——别让她在远处凭空飘着。
+     * 取 8：龙自己的跟随档 {@code DragonAIEscortGoal.canContinueToUse} 里 15 格以内
+     * 都还跟着走，正常不会甩开；一旦真的被拽走（几十格）立刻认出来。
+     */
+    private static final double CHAIR_MAX_GAP = 8.0;
+
     /** 服务端链路表：女仆 UUID → 链路（弱引用，女仆/坐骑/主人没了自动失效） */
     private static final Map<UUID, Link> LINKS = new HashMap<>();
 
@@ -95,11 +103,24 @@ public final class RideBindManager {
         final java.lang.ref.WeakReference<EntityMaid> maid;
         final java.lang.ref.WeakReference<Entity> mount;
         final java.lang.ref.WeakReference<ServerPlayer> owner;
+        /**
+         * 【实测七百二十三】冰火传说龙专用：**降级方案**里她不是乘客，只是挂在鞍位上。
+         * {@code true} = 这一对走的是"悬空鞍位"（不 {@code startRiding}、每拍由我们摆位）。
+         */
+        final boolean chair;
+        /** 绑上之前龙的 {@code getCommand()}（解绑时还原；非龙 / 没读到 → -1）。 */
+        final int dragonCommand;
 
         Link(EntityMaid m, Entity mount, ServerPlayer owner) {
+            this(m, mount, owner, false, -1);
+        }
+
+        Link(EntityMaid m, Entity mount, ServerPlayer owner, boolean chair, int dragonCommand) {
             this.maid = new java.lang.ref.WeakReference<>(m);
             this.mount = new java.lang.ref.WeakReference<>(mount);
             this.owner = new java.lang.ref.WeakReference<>(owner);
+            this.chair = chair;
+            this.dragonCommand = dragonCommand;
         }
     }
 
@@ -142,7 +163,22 @@ public final class RideBindManager {
         if (!isEnabled()) {
             return;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        // 【实测七百二十三】判据从 ServerPlayer 放宽到 Player：这个事件**两侧都发**
+        // （服务端 Player.interactOn → CommonHooks/ForgeHooks；客户端 MultiPlayerGameMode
+        // → LocalPlayer.interactOn 同一条链）。旧版只认 ServerPlayer，等于**客户端那一份
+        // 从来没被拦**——而卓越前线的 VehicleEntity.interact 是在**客户端本地**也跑的
+        // （`player.startRiding` 在 `level() instanceof ServerLevel` 之外还有本地分支），
+        // 它一跑就会 setDriverAngle（把玩家转向车头）+ 把第一个非玩家乘客 stopRiding 踢掉。
+        // 这正是玩家说的"右击完之后玩家的位置发生了改变。似乎是坐上去秒坐下来的结果"。
+        // 现在两侧都拦：客户端这一下直接被吃掉，本地预测也不会跑 SWB 那段。
+        if (!(event.getEntity() instanceof Player)) {
+            return;
+        }
+        Player player = event.getEntity();
+        if (!(player instanceof ServerPlayer)) {
+            // 客户端：只做"吞掉这一下"，**不执行业务逻辑**（绑定/解除只由服务端做一次，
+            // 否则同一个右击会在两侧各绑一次）。认得出是棍子 + 认得的目标就取消事件。
+            cancelClientBatonInteract(player, event);
             return;
         }
         InteractionHand hand = event.getHand();
@@ -175,9 +211,41 @@ public final class RideBindManager {
         event.setCanceled(true);
         if (recognized) {
             player.m_6674_(hand);
-            handle(player, target);
+            handle((ServerPlayer) player, target);
         }
         // recognized=false 且独占开着 → 只吞不做事：玩家对着无关实体挥棍子什么都不该发生
+    }
+
+    /**
+     * 【实测七百二十三】客户端那一份的右击闸：把"手里拿着指挥棒 + 面对一个我们认得出的目标"
+     * 的这一下**取消掉**，于是本地预测不会再进 {@code VehicleEntity.interact}（SWB 的
+     * {@code player.startRiding} / {@code setDriverAngle} / 把女仆 {@code stopRiding} 都在里面）。
+     *
+     * <p>为什么客户端也要拦：绑定/解除本身只由服务端那份事件做（客户端做会双绑），
+     * 但**客户端本地预测**是独立跑的——不拦它，玩家屏幕上就会出现"转了一下头 / 位置跳了一下"
+     * （玩家原话"右击完之后玩家的位置发生了改变"）。这里只 cancel，不调 {@code handle}。
+     */
+    private static void cancelClientBatonInteract(Player player, PlayerInteractEvent.EntityInteract event) {
+        try {
+            if (!batonExclusive()) {
+                return;
+            }
+            ItemStack stack = player.m_21120_(event.getHand());
+            if (!(stack.m_41720_() instanceof RideBatonItem)) {
+                return;
+            }
+            Entity target = MaidMountCompat.resolveMount(event.getTarget());
+            if (target == null) {
+                return;
+            }
+            boolean recognized = target instanceof EntityMaid || target instanceof Mob
+                    || MaidRideKit.isRideableMount(target, null)
+                    || MaidMountCompat.kindOf(target) != null;
+            if (recognized) {
+                event.setCanceled(true);
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
@@ -198,9 +266,12 @@ public final class RideBindManager {
         if (!isEnabled() || !batonExclusive()) {
             return; // 关掉独占 = 与今天一字不差（今天不碰 interactAt）
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
+        // 【实测七百二十三】与 onInteract 同款放宽到 Player：这个事件同样两侧都发，
+        // 客户端那份不拦就还会走 SWB 的本地 interactAt 分支。这里纯当闸门（只 cancel）。
+        if (!(event.getEntity() instanceof Player)) {
             return;
         }
+        Player player = event.getEntity();
         ItemStack stack = player.m_21120_(event.getHand());
         if (!(stack.m_41720_() instanceof RideBatonItem)) {
             return;
@@ -295,7 +366,18 @@ public final class RideBindManager {
      */
     public static boolean denyMountForBatonHolder(Player player, Entity vehicle) {
         try {
-            if (player == null || !isEnabled() || !batonExclusive()) {
+            if (player == null || !isEnabled()) {
+                return false;
+            }
+            // 【实测七百二十三】被"悬空鞍位"占着的龙：**谁都不许骑上去**（玩家原话
+            // 「阻止一下右击骑龙的行为」）。这一条不看手里拿什么——因为降级方案里女仆
+            // 就挂在玩家鞍位上，玩家再骑上去就会跟她重叠、而且龙会立刻把她当"非控制乘客"
+            // （原版 getControllingPassenger 只认主人）走猎物分支。放在棍子判据之前。
+            if (chairRiderOf(vehicle) != null) {
+                PlayerMountLog.throttled(player);
+                return true;
+            }
+            if (!batonExclusive()) {
                 return false;
             }
             if (!holdsBaton(player)) {
@@ -390,6 +472,16 @@ public final class RideBindManager {
                 bind(player, pendingMaid, target);
                 return;
             }
+            // 【实测七百二十三】龙被"悬空鞍位"占着：玩家原话「此时玩家对龙进行右击会显示
+            // 已经占用了。」——她不是乘客，所以下面按"乘客里有我的女仆"找不到她；这里按
+            // **链路表 + 龙**直接认出来，给一句明确提示（不再往下走"选中坐骑"）。
+            EntityMaid chairRider = chairRiderOf(target);
+            if (chairRider != null) {
+                deny(player, chairRider, ownable(player, chairRider)
+                        ? "我已经在这条龙背上啦～（潜行右击可以让我下来）"
+                        : "这条龙的背上已经有女仆了～");
+                return;
+            }
             // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
             EntityMaid rider = MaidRideKit.riderOf(target);
             if (rider != null && ownable(player, rider) && MaidRideKit.isRideRider(rider)) {
@@ -451,26 +543,43 @@ public final class RideBindManager {
         if (LINKS.containsKey(maid.m_20148_())) {
             releaseMaid(maid, false, "换绑");
         }
-        // force = true：跳过原版 canRide / canAddPassenger（javap 实证 m_7998_ 的 iload_2 ifne 直接跳门）
-        boolean ok = false;
-        try {
-            ok = maid.m_7998_(mount, true);
-        } catch (Throwable ignored) {
-        }
-        if (!ok) {
-            deny(player, maid, "没能坐上去……再试一次？");
-            return;
-        }
-        // v1.3.0(beta) 实测七百一十九：卓越前线的引擎只认**座位 0**（getFirstPassenger）——
-        // 女仆若被排到别的座位（驾驶位已被玩家占了）她能开火却开不动，这里把她挪回座位 0。
-        try {
-            if (!MaidMountCompat.ensureDriverSeat(mount, maid)) {
-                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "座位修正失败："
-                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 不在驾驶位（下一拍重试）");
+        // 【实测七百二十三】冰火传说的龙走**降级方案**：不 startRiding（她不是乘客），
+        // 改成"每 tick 由我们把她摆到龙的玩家鞍位上 + 无重力 + 龙置跟随档"。
+        // 完整口径见 MaidMountCompat 那一节的类注释（为什么真骑这条路走不通）。
+        boolean chair = MaidMountCompat.isDragon(mount);
+        int prevCmd = chair ? MaidMountCompat.dragonCommand(mount) : -1;
+        if (chair) {
+            // ① 摆位 + 无重力（她不是乘客，原版没有东西托着她）
+            MaidMountCompat.setGravity(maid, false);
+            if (!MaidMountCompat.seatOnDragon(mount, maid)) {
+                MaidMountCompat.setGravity(maid, true); // 摆不上就还原，别让她飘着
+                deny(player, maid, "没能坐上它的鞍位……再试一次？");
+                return;
             }
-        } catch (Throwable ignored) {
+            // ② 龙的行动逻辑转为"跟随玩家"（原版语义：command=2 → DragonAIEscortGoal 跟主人）
+            MaidMountCompat.setDragonFollow(mount);
+        } else {
+            // force = true：跳过原版 canRide / canAddPassenger（javap 实证 m_7998_ 的 iload_2 ifne 直接跳门）
+            boolean ok = false;
+            try {
+                ok = maid.m_7998_(mount, true);
+            } catch (Throwable ignored) {
+            }
+            if (!ok) {
+                deny(player, maid, "没能坐上去……再试一次？");
+                return;
+            }
+            // v1.3.0(beta) 实测七百一十九：卓越前线的引擎只认**座位 0**（getFirstPassenger）——
+            // 女仆若被排到别的座位（驾驶位已被玩家占了）她能开火却开不动，这里把她挪回座位 0。
+            try {
+                if (!MaidMountCompat.ensureDriverSeat(mount, maid)) {
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "座位修正失败："
+                            + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 不在驾驶位（下一拍重试）");
+                }
+            } catch (Throwable ignored) {
+            }
         }
-        LINKS.put(maid.m_20148_(), new Link(maid, mount, player));
+        LINKS.put(maid.m_20148_(), new Link(maid, mount, player, chair, prevCmd));
         try {
             maid.getPersistentData().m_128359_(TAG_RIDE_MOUNT, maid.m_20148_() + "|"
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + mount.m_20148_());
@@ -478,21 +587,41 @@ public final class RideBindManager {
         }
         mark(maid);
         mark(mount);
-        bubble(maid, "坐稳啦，我们出发～");
+        bubble(maid, chair ? "我坐它背上啦，它跟着你走～" : "坐稳啦，我们出发～");
         com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "绑定：主人=" + name(player)
                 + " 女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
                 + " 坐骑=" + MaidRideKit.describe(mount)
+                + (chair ? "（悬空鞍位降级方案：不真骑，龙置跟随档，传送只传她）" : "")
                 + "（速度倍率=" + MaidRideKit.fmt(MaidRideKit.speedModifierFor(mount, maid))
                 + "，跟随距离=" + MaidRideKit.fmt(MaidRideKit.followDist()) + " 格）");
     }
 
     /** 解除：清表 + 下鞍 + 撤标记 */
+    /** 解除：清表 + 下鞍 + 撤标记（包内用） */
     static void releaseMaid(EntityMaid maid, boolean natural, String why) {
+        releaseMaidImpl(maid, natural, why);
+    }
+
+    /**
+     * 【实测七百二十三】给传送链路用的公开入口：跨维度跟随要先把"悬空鞍位"那条链路干净解除
+     * （还原她的重力与龙的行动档），再单独传她一个人。与包内 {@code releaseMaid} 同一实现。
+     */
+    public static void releaseDragonChairForTravel(EntityMaid maid) {
+        releaseMaidImpl(maid, false, "跨维度跟随");
+    }
+
+    private static void releaseMaidImpl(EntityMaid maid, boolean natural, String why) {
         if (maid == null) {
             return;
         }
         Link link = LINKS.remove(maid.m_20148_());
         Entity mount = link == null ? null : link.mount.get();
+        // 【实测七百二十三】悬空鞍位（龙）那条：还原重力 + 还原龙的行动档。
+        // 她压根不是乘客，所以下面那些"下鞍"动作对她无意义（原版 stopRiding 也会是空操作）。
+        if (link != null && link.chair) {
+            MaidMountCompat.setGravity(maid, true);
+            MaidMountCompat.restoreDragonCommand(mount, link.dragonCommand);
+        }
         unmark(maid);
         unmark(mount);
         // 点3：解绑时顺手把"待选光标"痕迹也清掉（若还留着）
@@ -670,6 +799,48 @@ public final class RideBindManager {
         return MaidRideKit.isRideRider(maid);
     }
 
+    /**
+     * 【实测七百二十三】她是不是"坐在龙的悬空鞍位上"（**不是乘客**，由本类每拍摆位）。
+     * 传送链路据此分叉：**只传她不传龙**（玩家原话「玩家手动使用日程表进行传送那也仅仅是
+     * 传送女仆不传送龙」）。与 {@link #isRideRider} 的区别正是"她是不是真乘客"——
+     * 载具/兽那两条走 {@code startRiding}，龙这条不走。
+     */
+    public static boolean isDragonChairRider(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            Link link = LINKS.get(maid.m_20148_());
+            return link != null && link.chair;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 这条坐骑背上"悬空鞍位"占着的那只女仆（给"右击龙提示已占用"用）；没有 → null。 */
+    public static EntityMaid chairRiderOf(Entity mount) {
+        try {
+            if (mount == null) {
+                return null;
+            }
+            for (Map.Entry<UUID, Link> e : LINKS.entrySet()) {
+                Link link = e.getValue();
+                if (!link.chair) {
+                    continue;
+                }
+                Entity m = link.mount.get();
+                if (m != null && m.m_20148_().equals(mount.m_20148_())) {
+                    EntityMaid maid = link.maid.get();
+                    if (maid != null && maid.m_6084_()) {
+                        return maid;
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
     /* ==================== 每 2 tick：驱动 + 校验 + 恢复 ==================== */
 
     public static void tick(MinecraftServer server) {
@@ -696,6 +867,20 @@ public final class RideBindManager {
                 }
                 if (maid.m_9236_() != mount.m_9236_()) {
                     deferred.add(maid);
+                    continue;
+                }
+                // 【实测七百二十三】悬空鞍位（龙）：她**不是乘客**，判据换成"由我们每拍摆位"。
+                // 她若被别的模组拉走/传送走（离龙太远）→ 解除（别让她在远处凭空飘着）。
+                if (link.chair) {
+                    double gap = maid.m_20182_().m_82554_(mount.m_20182_());
+                    if (gap > CHAIR_MAX_GAP) {
+                        deferred.add(maid);
+                        continue;
+                    }
+                    MaidMountCompat.setGravity(maid, false); // 保底：别的模组/原版把它翻回去时纠回来
+                    MaidMountCompat.seatOnDragon(mount, maid);
+                    // 龙自己那套飞行物理照常跑（我们只把它钉在跟随档）；攻击也不由我们触发。
+                    // 主人不在（别的维度/离线）也不用收手——龙本来就不由我们驱动。
                     continue;
                 }
                 // 她不在它背上了（被别的模组拽下去 / 自己潜跳下鞍 / 原版把她踢下来）→ 解除
@@ -797,7 +982,7 @@ public final class RideBindManager {
                 MaidRideKit.stopNavigation(mount);
                 return;
             }
-            MaidRideKit.feedNavigation(mount, target, mod);
+            MaidRideKit.feedNavigation(mount, target, mod, maid);
         } catch (Throwable ignored) {
         }
     }

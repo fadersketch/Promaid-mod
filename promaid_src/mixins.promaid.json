@@ -65,7 +65,6 @@
     "MaidCompressionBoxMixin",
     "EntityBroomMaidTravelMixin",
     "EntityGunnerHangMixin",
-    "EntityDragonMaidSeatMixin",
     "EntityBatonMountGateMixin",
     "RandomStrollGoalRiddenMixin",
     "MaidGlowGoldMixin",

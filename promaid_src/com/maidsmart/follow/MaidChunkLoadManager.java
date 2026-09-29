@@ -832,6 +832,20 @@ public final class MaidChunkLoadManager {
             // 【实测七百一十六·点4】先于"骑乘中豁免"判定：她骑的是**本模组棍子绑上的坐骑**
             //  → 连人带坐骑一起处理（她同样是乘客，但玩家明确要她能跟过来；与扫帚那条同口径）。
             //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
+            // 【实测七百二十三】冰火传说龙（悬空鞍位）先认：她**不是乘客**，跨维/同维都**只传她**，
+            // 龙留在原地自己去跟（玩家原话「仅仅是传送女仆不传送龙」）。
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                LivingEntity rideOwner = maid.m_269323_();
+                if (rideOwner == null || !rideOwner.m_6084_()) {
+                    return;
+                }
+                if (maid.m_9236_() != rideOwner.m_9236_()) {
+                    // 跨维度：龙过不去，先干净解除（还原她的重力 / 龙的行动档），再传她一个人
+                    com.maidsmart.combat.RideBindManager.releaseDragonChairForTravel(maid);
+                }
+                teleportCore(maid, rideOwner, false);
+                return;
+            }
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 LivingEntity rideOwner = maid.m_269323_();
                 if (rideOwner == null || !rideOwner.m_6084_()) {
@@ -1934,6 +1948,23 @@ BlockPos stand = findStand(newLevel,
             // 【实测七百一十六·点4】骑坐骑的女仆：距离超线时连人带坐骑拉回（她同样是乘客，
             //  旧口径"骑乘中不拉"会让她永远留在远处——与扫帚那条同一条理由）。
             //  放在坐/骑豁免之前，让"坐骑"这一档优先于"乘客"那一档。
+            // 【实测七百二十三】冰火传说龙走的是"悬空鞍位"（她**不是乘客**）→ 传送时
+            // **只传她不传龙**（玩家原话「玩家手动使用日程表进行传送那也仅仅是传送女仆
+            // 不传送龙」）。判据在 isRideRider 之前，因为降级方案里她也带着 TAG_RIDE_MOUNT。
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+                if (!shouldPull) {
+                    return; // 没到该拉的距离：她正常跟着，不打扰
+                }
+                if (teleportCore(maid, owner, true)) {
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name
+                            + " 同维度距离 " + blocks + " 格（> " + dist
+                            + " 格），已传送回主人身边（悬空鞍位：只传她不传龙）");
+                } else {
+                    throttledSkipLog(maid, "ride-dragon-nostand", name
+                            + " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无安全落点——不传");
+                }
+                return;
+            }
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 if (!shouldPull) {
                     return; // 没到该拉的距离：她正常跟着，不打扰
