@@ -1509,7 +1509,7 @@ public final class MaidMountCompat {
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
             logDrive(mount, "飞行档 引擎=" + eng
                     + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
-                            : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                            : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                     + " 鼠标X=" + Math.round(yawCmd)
                     + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
                     + " 竖直速度=" + fmt2(verticalSpeed(mount))
