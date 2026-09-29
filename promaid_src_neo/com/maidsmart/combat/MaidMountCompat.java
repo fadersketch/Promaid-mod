@@ -984,7 +984,7 @@ public final class MaidMountCompat {
         // 【实测七百二十五】飞行载具（直升机/固定翼/飞艇）**换一整套**：它们的航向/俯仰在
         // 鼠标通道里，地面那套左右位表达不了。见 driveFlight 的注释。
         if (isFlyingEngine(eng)) {
-            return driveFlight(mount, modifier, eng, dy, horiz, err);
+            return driveFlight(mount, modifier, eng, dy, horiz, err, maid);
         }
 
         // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
@@ -1203,20 +1203,25 @@ public final class MaidMountCompat {
      * <p>写不出鼠标通道（反射失败）→ 退回地面那套位掩码（一个字节不变）。
      */
     private static boolean driveFlight(Entity mount, double modifier, String eng,
-                                       double dy, double horiz, float err) {
+                                       double dy, double horiz, float err, Entity maid) {
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false; // 探测失败 → 交回地面档
         }
         try {
             boolean heli = "HELICOPTER".equals(eng);
-            // 【实测七百二十七·点1】"骑上飞行载具就进入悬停"：开关开着时，直升机**常驻悬停档**。
-            // 引擎在悬停档做两件她正需要的事（反编译 helicopterEngine:590-599 实证）：
-            // ① 把俯仰输入系数压到 0.2、滚转 0.05、偏航 0.5 → 姿态稳，不再"点头/画龙"；
-            // ② 每拍 deltaMovement.multiply(0.95, 1, 0.95) → 水平速度自己衰减，不会冲过头。
-            // 这正是玩家说的"不会让直升机悬停"缺的那一件：旧版只在"到达目标点"的那一拍才开悬停，
-            // 而她的目标点在敌人上方 15 格、永远到不了 → 悬停从头到尾没开过。
+            // 【实测七百二十七·点1 + 七百二十八】"骑上飞行载具就进入悬停"：开关开着时，直升机
+            // **常驻悬停档**（跟随与接敌都一样）。引擎在悬停档做两件她正需要的事
+            // （反编译 helicopterEngine:590-599 实证）：
+            // ① 把滚转/俯仰的残留量每拍衰减（0.97）并把水平速度自己衰减
+            //    （`deltaMovement.multiply(0.95, 1, 0.95)`）→ 姿态稳、不会"点头/画龙"；
+            // ② 松手（没按任何总距位）时按**竖直速度**反调总距（系数 0.01，比非悬停档的 0.002
+            //    大 5 倍）→ 这就是"高度保持"，把机身钉在目标高度上。
+            // 高度分两档由 RideBindManager/MaidAirCombat 决定目标点 Y（跟随便离地 3、接敌敌上 15），
+            // 本档只负责把机身驱动到那个 Y。
             boolean hoverHold = heli && MaidAirCombat.enabled();
             double dead = hoverHold ? FLIGHT_HOVER_DEADZONE : FLIGHT_ALT_DEADZONE;
+            // 【实测七百二十八】只用于日志区分两档（高度本身已由目标点 Y 表达）。
+            boolean fighting = hoverHold && maid instanceof EntityMaid em && MaidAirCombat.inCombat(em);
 
             // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
             float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
@@ -1249,8 +1254,19 @@ public final class MaidMountCompat {
                     bits |= 0x004;                     // 抬总距（爬升）
                 } else if (altErr < -dead) {
                     bits |= 0x008;                     // 压总距（下降）
-                } else if (horiz > FLIGHT_ARRIVE) {
-                    bits |= 0x004;                     // 高度已对齐 → 前位用于平飞推力
+                } else if (!hoverHold && horiz > FLIGHT_ARRIVE) {
+                    // 【实测七百二十八·关键返修】这条**只留给"没开悬停档"的旧口径**（配置关掉时）。
+                    //
+                    // 【为什么悬停档下绝不能走这条】反编译实证：直升机的 0x004 = forwardInputDown
+                    // → `if (up && engineStartOver) setPower(min(power + 7e-4*powerAdd*min(holdPowerTick,10), 0.12f))`
+                    // ——**它就是"抬总距"**，跟高度绑死（{@code VehicleEngineUtils:628-641}）。旧版
+                    // 在"高度已对齐但水平还远"时也送 0x004，等于一边说"高度够了"一边继续加总距 →
+                    // 她会**一路爬过头**（正是 727 版"绕圈高度不稳"的隐藏原因）。所以悬停档下这条
+                    // 不再命中：横向移动**只靠俯仰**——升力沿机体上方向量
+                    // （{@code add(getUpVec().scale(propellerRot*lift*0.66))}，:686），机头一低，
+                    // 升力就分出水平分量把她推出去，姿态由上面 ② 的 pitchCmd 给；松开 0x004 后
+                    // 引擎在悬停档按**竖直速度**反调总距（系数 0.01，:657-660）→ 高度自己稳住。
+                    bits |= 0x004;
                 }
                 if (mSetHoverMode != null) {
                     try {
@@ -1274,6 +1290,8 @@ public final class MaidMountCompat {
             mProcessInput.invoke(mount, bits);
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
             logDrive(mount, "飞行档 引擎=" + eng + (hoverHold ? " 悬停档" : "")
+                    + (hoverHold ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                            : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                     + " 鼠标X=" + Math.round(yawCmd)
                     + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
                     + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);

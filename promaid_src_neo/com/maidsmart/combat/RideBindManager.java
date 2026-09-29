@@ -1267,15 +1267,17 @@ public final class RideBindManager {
                 feedAmmoThrottled(mount, maid);
             }
             double mod = MaidRideKit.speedModifierFor(mount, maid);
-            // 【实测七百二十七·点1 = 七百二十六·点3 的返修】飞行载具（卓越前线的直升机 /
-            // 固定翼）**一律先走悬停档**：
-            //   ① **有敌人** → 绕着敌人转圈打，但高度锁定在"她脚下地面 + airAlt"（默认 3 格），
-            //      不再随敌人上下浮动、也不再"爬到敌上 15 格"（那正是上一版又大又低的原因）；
-            //   ② **没有敌人** → **低空跟随主人**：主人离得够远就把目标点放在主人正上方、
-            //      高度仍锁在离地 3 格（比旧版"追主人的跟随点"贴地乱窜强，也比"原地悬停不动"
-            //      更符合她一直跟着主人的行为）；主人就在旁边则原地悬停。
-            // 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方；高度锁死也由它
-            // 那个 FLIGHT_HOVER_DEADZONE 完成。飞艇/地面车不在这一档里。
+            // 【实测七百二十七·点1 + 七百二十八·玩家补正】飞行载具（卓越前线的直升机 /
+            // 固定翼）分**两档高度**：
+            //   ① **有敌人** → 升到**敌人上方 fightAlt 格**（默认 15）、绕着敌人盘旋射击；
+            //      高度进的是目标点 Y（由总距升降），不是俯仰 —— 所以敌人比她在下很多也不会
+            //      把机头压向地面（726 栽的那个坑）。玩家原话：「遇到敌人还是要升高到比敌人
+            //      高 15 格的位置的呀，同时缩小绕圈的半径」。
+            //   ② **没有敌人** → **低空跟随**：主人离得够远就把目标点放在主人正上方、
+            //      高度锁在**离地 airAlt 格**（默认 3，玩家原话「跟随的时候保持离地三格」）；
+            //      主人就在旁边则原地悬停。
+            // 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方。飞艇/地面车不在
+            // 这一档里。
             if (MaidAirCombat.enabled() && MaidMountCompat.isFlyingVehicle(mount)) {
                 LivingEntity foe = targetOf(maid);
                 Vec3 air;
@@ -1287,7 +1289,7 @@ public final class RideBindManager {
                     if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
                         air = MaidAirCombat.hoverAt(maid, owner.getX(), owner.getZ());
                     } else {
-                        air = MaidAirCombat.hoverTarget(maid);
+                        air = MaidAirCombat.followTarget(maid);
                     }
                 }
                 if (air != null) {

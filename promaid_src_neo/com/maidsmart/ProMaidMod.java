@@ -337,6 +337,25 @@ public class ProMaidMod {
                             "骑飞行载具悬停高度不需要迁移（现值 " + airAltBefore + "）");
                 }
             }
+            // 【实测七百二十八】盘旋半径默认 6 → 4。727 那份 jar 已经部署过，玩家档里可能落下
+            // 727 的默认 6——不迁的话"缩小绕圈半径"对老档不生效。判据同款：只搬**还停在 6** 的档。
+            if (!com.maidsmart.config.MaidSmartConfig.ORBIT_RADIUS_MIGRATED.get()) {
+                double orbitBefore = -1.0;
+                try {
+                    orbitBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.ORBIT_RADIUS_MIGRATED.set(true);
+                changed = true;
+                if (orbitBefore == 6.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.set(4.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具盘旋半径迁移：6 → 4（旧档里留下的上一版默认值，玩家要求缩小绕圈）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具盘旋半径不需要迁移（现值 " + orbitBefore + "）");
+                }
+            }
             changed |= migrateOreTable();
         } catch (Exception ignored) {
         }
