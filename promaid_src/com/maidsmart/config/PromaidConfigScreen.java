@@ -3374,6 +3374,15 @@ public class PromaidConfigScreen extends Screen {
                 "**默认开**。骑卓越前线载具或冰火传说龙时，把她 brain 里的攻击目标交给坐骑去打——"
                         + "载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路，龙走吐息。"
                         + "关闭 = 她照常驾驶但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效"));
+        // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】
+        this.rows.add(new BoolRow("骑乘指挥棒·独占右击", MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.set(v),
+                "**默认开**。手持骑乘指挥棒时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果"
+                        + "——最直接的一条就是「拿棍子骑不上龙/车子」。"
+                        + "为什么要专门开这一档：冰火传说的龙是**多部件实体**，准星常常打中的是它的"
+                        + "翅膀/尾巴/头（那些是独立小实体，会把这一下右击**转发给龙本体**）→ 旧版放行就骑上去了。"
+                        + "也管 interactAt（客户端先发它、没被消费才发 interact），两个入口都拦掉才算"
+                        + "「不触发原本的右击效果」。关掉 = 只有我们认得出的目标才由棍子接管（与上一版一字不差）"));
         // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
         this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
                 v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),

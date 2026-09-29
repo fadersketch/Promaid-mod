@@ -231,5 +231,6 @@
   "config.promaid.combat.wingRender": "Wing appearance",
   "config.promaid.combat.wingYsmYield": "Wing appearance - yield to YSM",
   "config.promaid.ride.modMounts": "Mod mount support (Superb Warfare vehicles / Ice and Fire dragons)",
-  "config.promaid.ride.modMountFire": "Mod mount: fire for her"
+  "config.promaid.ride.modMountFire": "Mod mount: fire for her",
+  "config.promaid.ride.batonExclusive": "Ride Baton - exclusive right-click"
 }

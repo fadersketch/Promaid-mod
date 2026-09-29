@@ -108,11 +108,32 @@ public final class RideBindManager {
         return MaidRideKit.enabled();
     }
 
+    /**
+     * 【实测七百二十·点2】骑乘指挥棒是否**独占右击**（配置 {@code ride.batonExclusive}，默认开）。
+     *
+     * <p>玩家原话：「骑乘指挥棒在使用的时候不会触发原本的右击效果。只会触发骑乘棒自己的右击
+     * 效果，也就是说你拿骑乘棒是骑不上龙或者车子的。」开着时，手持棍子的**任何**实体右击
+     * 一律被棍子吃掉（含 {@code interactAt}）——登龙/上车都长在 {@code m_6096_}/{@code m_6071_}
+     * 那条路上，吞掉就不会触发。关掉 = 只有"我们认得出的目标"才接管（与今天一字不差）。
+     */
+    private static boolean batonExclusive() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
     /* ==================== 事件入口 ==================== */
 
     /**
      * 手持骑乘指挥棒右击实体（女仆 / 坐骑）——骨架同 {@code GunnerTetherManager.onInteract}：
      * EntityInteract 比 TLM 的 mobInteract 先到，cancel 掉就不会误开女仆 GUI。
+     *
+     * <p>【实测七百二十·点2】目标先过一道 {@link MaidMountCompat#resolveMount}：冰火传说的龙是
+     * **多部件实体**，准星常常打中的是它的**翅膀/尾巴/头**那些部位实体，而部位会把右击**转发给
+     * 本体**（{@code EntityMultipartPart.m_6096_} → {@code getParent().m_6096_}，反编译实证）。
+     * 不解析的话我们看到的只是一块"部位"（既不是女仆也不是 Mob）→ 放行 → 转发到龙 → 玩家就骑上去了。
      */
     @SubscribeEvent
     public static void onInteract(PlayerInteractEvent.EntityInteract event) {
@@ -127,10 +148,11 @@ public final class RideBindManager {
         if (!(stack.m_41720_() instanceof RideBatonItem)) {
             return;
         }
-        Entity target = event.getTarget();
-        if (target == null) {
+        Entity raw = event.getTarget();
+        if (raw == null) {
             return;
         }
+        Entity target = MaidMountCompat.resolveMount(raw);
         boolean maid = target instanceof EntityMaid;
         boolean mount = !maid && MaidRideKit.isRideableMount(target, null);
         // v1.3.0(beta) 实测七百一十八·点4：家具（椅子/坐垫）与扫帚**不是 Mob**，若不单独
@@ -138,12 +160,50 @@ public final class RideBindManager {
         // 提示。这里把它们收进来，让它们在 denyReason 里给出明确拒绝（"这是家具，不是坐骑～"
         // / "扫帚有它自己的飞法"）。
         boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
-        if (!maid && !mount && !rejected && !(target instanceof Mob)) {
+        /** 这一下棍子认得出是什么（女仆 / 能骑的 / 家具扫帚 / 任何 Mob）——认得出才回话 */
+        boolean recognized = maid || mount || rejected || (target instanceof Mob);
+        // 【实测七百二十·点2 独占档】玩家原话："加一个新设定，骑乘指挥棒在使用的时候不会触发
+        // 原本的右击效果。只会触发骑乘棒自己的右击效果，也就是说你拿骑乘棒是骑不上龙或者车子的。"
+        // 所以独占档开着时，只要手里拿的是骑乘棒，这一下实体右击**一律由棍子吃掉**——不管目标是
+        // 什么，绝不再往下走 {@code m_6096_}/{@code m_6071_}（登龙/上车都在那里）。
+        // 关掉独占 = 与今天一字不差（只有认得出的目标才接管）。
+        if (!recognized && !batonExclusive()) {
             return; // 既不是女仆也不是生物：不接（对着别的实体挥棍子没有任何效果）
         }
         event.setCanceled(true);
-        player.m_6674_(hand);
-        handle(player, target);
+        if (recognized) {
+            player.m_6674_(hand);
+            handle(player, target);
+        }
+        // recognized=false 且独占开着 → 只吞不做事：玩家对着无关实体挥棍子什么都不该发生
+    }
+
+    /**
+     * 【实测七百二十·点2】独占档的第二道闸：{@code EntityInteractSpecific}（= 原版
+     * {@code interactAt}，Forge 在 {@code onInteractEntityAt} 里发）。
+     *
+     * <p>为什么必须另听这一个：客户端对实体右击的流程是**先 {@code interactAt}、未被消费才
+     * {@code interact}**（{@code Minecraft.startUseItem} 的 ENTITY 分支，反编译实证）。登龙/上车
+     * 都长在 {@code interact} 那条路上，所以上面那个入口就够挡住它们；但玩家要的是"这一下只归
+     * 棍子"，把 {@code interactAt} 也拦掉才算真的"不触发原本的右击效果"。
+     *
+     * <p><b>这里只 cancel、不调 {@code handle}</b>：{@code interactAt} 与 {@code interact} 会被
+     * 先后各发一次（客户端先发 InteractAt 包，未被消费再发 Interact 包），两个入口都做事就会
+     * **重复执行一遍绑定/解除**——所以真正的逻辑只留上面 {@link #onInteract} 一处，这里纯当闸门。
+     */
+    @SubscribeEvent
+    public static void onInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (!isEnabled() || !batonExclusive()) {
+            return; // 关掉独占 = 与今天一字不差（今天不碰 interactAt）
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        ItemStack stack = player.m_21120_(event.getHand());
+        if (!(stack.m_41720_() instanceof RideBatonItem)) {
+            return;
+        }
+        event.setCanceled(true);
     }
 
     /* ==================== 选中 / 配对 / 解除 ==================== */

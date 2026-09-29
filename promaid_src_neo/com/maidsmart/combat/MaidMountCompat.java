@@ -126,6 +126,8 @@ public final class MaidMountCompat {
     private static Method mStrike;            // EntityDragonBase.strike(boolean)
     private static Method mRiderShootFire;    // EntityDragonBase.riderShootFire(Entity)
     private static Method mGetDragonStage;    // EntityDragonBase.getDragonStage()
+    /** 【实测七百二十】{@code getRiderPosition()}——龙给**玩家**算的那个背上鞍位（公开方法）。 */
+    private static Method mGetRiderPosition;  // EntityDragonBase.getRiderPosition()
 
     /* ==================== 初始化（各一次，失败即"没有这个模组"） ==================== */
 
@@ -202,6 +204,8 @@ public final class MaidMountCompat {
                 Method strike = d.getMethod("strike", boolean.class);
                 Method shoot = d.getMethod("riderShootFire", Entity.class);
                 Method stage = d.getMethod("getDragonStage");
+                // 【实测七百二十】"玩家鞍位"也是公开方法，四份 jar 签名一致（返回 Vec3）
+                Method riderPos = d.getMethod("getRiderPosition");
                 cDragon = d;
                 fFlightManager = fm;
                 mSetFlightTarget = setTarget;
@@ -213,6 +217,7 @@ public final class MaidMountCompat {
                 mStrike = strike;
                 mRiderShootFire = shoot;
                 mGetDragonStage = stage;
+                mGetRiderPosition = riderPos;
                 iafOk = true;
                 return;
             } catch (Throwable ignored) {
@@ -362,6 +367,109 @@ public final class MaidMountCompat {
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    /* ==================== 实测七百二十：女仆坐在龙背上（不是"含在嘴里"） ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十【冰火传说的龙：女仆按玩家同款鞍位落座】（1.21.1 版）。
+     *
+     * <p>完整根因与"为什么判据等价于棍子绑的"整套口径，见 1.20.1 树同名方法的说明。这里只记
+     * 本树的两处差异：① 1.21.1 社区版的龙是 {@code DragonBaseEntity}（类名候选已含）；
+     * ② 漏斗（一参 positionRider）在 mixin 里换名字——本方法本身与 1.20.1 逐字同源。
+     */
+    public static boolean shouldSeatMaidOnDragon(Entity vehicle, Entity passenger) {
+        try {
+            if (vehicle == null || passenger == null) {
+                return false;
+            }
+            if (!(passenger instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+                return false; // 玩家 / 别的生物：原版一字不动
+            }
+            if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+                return false; // 无主女仆：整合包规则不受本模组影响（与 MaidScope 同一条边界）
+            }
+            return isDragon(vehicle);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 龙背上的**玩家鞍位**（{@code getRiderPosition()}，四份 jar 成员名逐字一致）；拿不到 → null。 */
+    public static Vec3 riderSeat(Entity dragon) {
+        try {
+            initIaf();
+            if (!iafOk || mGetRiderPosition == null) {
+                return null;
+            }
+            Object v = mGetRiderPosition.invoke(dragon);
+            return v instanceof Vec3 vec ? vec : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /* ==================== 多部件实体的"本体"解析（实测七百二十·点2） ==================== */
+
+    /**
+     * 【实测七百二十·点2】把冰火传说龙的**部位实体**还原成**龙本体**（翅膀/尾巴/头各是一个实体，
+     * 准星常打中它们，而它们会把右击转发给本体）。完整口径见 1.20.1 树同名方法。
+     */
+    public static Entity resolveMount(Entity target) {
+        try {
+            if (target == null || !isMultipartPart(target)) {
+                return target;
+            }
+            initPart();
+            if (mPartGetParent == null) {
+                return target;
+            }
+            Object p = mPartGetParent.invoke(target);
+            return p instanceof Entity parent ? parent : target;
+        } catch (Throwable ignored) {
+            return target;
+        }
+    }
+
+    /** 它是不是"多部件实体的一块部位"（冰火传说的龙部件）。判据走父类链上的类名。 */
+    public static boolean isMultipartPart(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            for (Class<?> c = e.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                String n = c.getName();
+                if (n.endsWith("EntityMultipartPart") || n.endsWith("MultipartPartEntity")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean partInited;
+    private static Method mPartGetParent;   // MultipartPartEntity.getParent() / EntityMultipartPart.getParent()
+
+    private static synchronized void initPart() {
+        if (partInited) {
+            return;
+        }
+        partInited = true;
+        String[] candidates = {
+                "com.iafenvoy.iceandfire.entity.MultipartPartEntity",        // 社区版 1.21.1
+                "com.iafenvoy.iceandfire.entity.EntityMultipartPart",        // 社区版 1.20.1
+                "com.github.alexthe666.iceandfire.entity.EntityMultipartPart", // 普通版
+        };
+        for (String cn : candidates) {
+            try {
+                mPartGetParent = Class.forName(cn).getMethod("getParent");
+                return;
+            } catch (Throwable ignored) {
+                // 换下一个类名
+            }
+        }
+        mPartGetParent = null;
     }
 
     /* ==================== 引擎/载具细分 ==================== */

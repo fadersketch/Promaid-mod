@@ -77,8 +77,24 @@ public final class RideBindManager {
         return MaidRideKit.enabled();
     }
 
+    /**
+     * 【实测七百二十·点2】骑乘指挥棒是否**独占右击**（配置 {@code ride.batonExclusive}，默认开）。
+     * 完整口径见 1.20.1 树同名类。
+     */
+    private static boolean batonExclusive() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
     /* ==================== 事件入口 ==================== */
 
+    /**
+     * 【实测七百二十·点2】目标先过一道 {@link MaidMountCompat#resolveMount}——冰火传说的龙是多部件
+     * 实体，准星常常打中的是翅膀/尾巴/头那些部位实体，而部位会把右击转发给本体（反编译实证）。
+     */
     @SubscribeEvent
     public static void onInteract(PlayerInteractEvent.EntityInteract event) {
         if (!isEnabled()) {
@@ -92,22 +108,47 @@ public final class RideBindManager {
         if (!(stack.getItem() instanceof RideBatonItem)) {
             return;
         }
-        Entity target = event.getTarget();
-        if (target == null) {
+        Entity raw = event.getTarget();
+        if (raw == null) {
             return;
         }
+        Entity target = MaidMountCompat.resolveMount(raw);
         boolean maid = target instanceof EntityMaid;
         boolean mount = !maid && MaidRideKit.isRideableMount(target, null);
         // v1.3.0(beta) 实测七百一十八·点4：家具（椅子/坐垫）与扫帚若不是 Mob，会在下面那句
         // "对着别的实体挥棍子没效果"里直接 return —— 玩家看不到任何提示。这里把它们收进来，
         // 让它们在 denyReason 里给出明确拒绝。
         boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
-        if (!maid && !mount && !rejected && !(target instanceof Mob)) {
+        boolean recognized = maid || mount || rejected || (target instanceof Mob);
+        // 【实测七百二十·点2 独占档】手持骑乘棒时，这一下实体右击一律由棍子吃掉（认不出也吞）。
+        if (!recognized && !batonExclusive()) {
             return;
         }
         event.setCanceled(true);
-        player.swing(hand);
-        handle(player, target);
+        if (recognized) {
+            player.swing(hand);
+            handle(player, target);
+        }
+    }
+
+    /**
+     * 【实测七百二十·点2】独占档的第二道闸：{@code EntityInteractSpecific}（= 原版 {@code interactAt}）。
+     * 客户端先发 interactAt、未被消费才发 interact（反编译实证），所以两个入口都拦掉才算"不触发
+     * 原本的右击效果"。这里**只 cancel、不调 handle**——两个入口都做事会重复执行一遍绑定/解除。
+     */
+    @SubscribeEvent
+    public static void onInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (!isEnabled() || !batonExclusive()) {
+            return;
+        }
+        if (!(event.getEntity() instanceof ServerPlayer player)) {
+            return;
+        }
+        ItemStack stack = player.getItemInHand(event.getHand());
+        if (!(stack.getItem() instanceof RideBatonItem)) {
+            return;
+        }
+        event.setCanceled(true);
     }
 
     /* ==================== 选中 / 配对 / 解除 ==================== */

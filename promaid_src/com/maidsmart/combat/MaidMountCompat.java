@@ -126,6 +126,8 @@ public final class MaidMountCompat {
     private static Method mStrike;            // EntityDragonBase.strike(boolean)
     private static Method mRiderShootFire;    // EntityDragonBase.riderShootFire(Entity)
     private static Method mGetDragonStage;    // EntityDragonBase.getDragonStage()
+    /** 【实测七百二十】{@code getRiderPosition()}——龙给**玩家**算的那个背上鞍位（公开方法）。 */
+    private static Method mGetRiderPosition;  // EntityDragonBase.getRiderPosition()
 
     /* ==================== 初始化（各一次，失败即"没有这个模组"） ==================== */
 
@@ -202,6 +204,8 @@ public final class MaidMountCompat {
                 Method strike = d.getMethod("strike", boolean.class);
                 Method shoot = d.getMethod("riderShootFire", Entity.class);
                 Method stage = d.getMethod("getDragonStage");
+                // 【实测七百二十】"玩家鞍位"也是公开方法，四份 jar 签名一致（返回 Vec3）
+                Method riderPos = d.getMethod("getRiderPosition");
                 cDragon = d;
                 fFlightManager = fm;
                 mSetFlightTarget = setTarget;
@@ -213,6 +217,7 @@ public final class MaidMountCompat {
                 mStrike = strike;
                 mRiderShootFire = shoot;
                 mGetDragonStage = stage;
+                mGetRiderPosition = riderPos;
                 iafOk = true;
                 return;
             } catch (Throwable ignored) {
@@ -362,6 +367,175 @@ public final class MaidMountCompat {
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    /* ==================== 实测七百二十：女仆坐在龙背上（不是"含在嘴里"） ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十【冰火传说的龙：女仆按玩家同款鞍位落座】。
+     *
+     * <h2>为什么需要这一档（玩家原话）</h2>
+     * 「女仆坐在龙身上的位置跟玩家不一样。而且龙会直接把女仆从背上甩下来。」两条是同一个根因的两半。
+     *
+     * <h2>根因（反编译实证）</h2>
+     * 龙的乘客分两类，判据是 {@code getControllingPassenger()}——它在 1.20.1 上**只认 Player**
+     * （{@code EntityDragonBase.m_6688_()}: {@code passenger instanceof Player}），1.21.1 上
+     * 只认"主人"（{@code DragonBaseEntity.getControllingPassenger()}）。女仆两边都不满足 →
+     * 恒为 null → 龙的 {@code positionRider} 走**另一个分支**：
+     * <pre>
+     *   EntityDragonBase.m_19956_(passenger, fn):
+     *       if (m_20363_(passenger)) {                       // 她是乘客
+     *           if (m_6688_() == null || 不是这一位) {
+     *               this.updatePreyInMouth(passenger);        // ← 女仆走这里：摆到嘴边
+     *           } else { ... 玩家鞍位 ... }                   // ← 玩家走这里
+     *       }
+     *   updatePreyInMouth: 置 ANIMATION_SHAKEPREY；animationTick &gt; 55 时
+     *       prey.m_6469_(…, 伤害×2) + prey.m_8127_()          // ← 咬她 + 把她甩下来
+     * </pre>
+     * 所以要修的就是**定位这一处**：把她按玩家同款鞍位落座，那条猎物分支自然不再被走到
+     * （也就不再有 55 tick 后的那一咬一甩）。
+     *
+     * <h2>注入点：原版 {@code Entity} 的同名漏斗，而不是龙自己的覆写</h2>
+     * 位置每 tick 由原版算一遍（1.20.1 {@code Entity.m_6083_ → m_7332_ → m_19956_}；
+     * 1.21.1 {@code rideTick → positionRider(Entity) → positionRider(Entity, MoveFunction)}，
+     * javap 实证）。其中 {@code m_7332_} / 一参的 {@code positionRider(Entity)} 是
+     * **{@code public final}**——龙**不可能覆写**它（它只覆写了两参的那个）。
+     * 所以在原版 {@code Entity} 的这个漏斗上 HEAD 拦下并 cancel，就能**整段跳过**龙的覆写
+     * （含那条猎物分支），而我们自己按鞍位把乘客摆好。
+     *
+     * <p>**为什么不像别的驱动那样 {@code @Mixin} 龙自己**：冰火传说**是可选模组**——
+     * 目标类不存在时 Mixin 只记一条 WARN 并跳过（反编译 {@code MixinInfo.getTargetClass} 实证：
+     * 仅 {@code strict}（{@code -Dmixin.debug.verify}）才抛），不崩。但本项目的只读审计
+     * {@code _mixchk.py} 会把"解析不到的目标类"记 UNRES 而拦打包，而这两家模组的 jar 不在
+     * 编译 classpath 上。注入原版 {@code Entity} 既没有"目标类可能不存在"的问题，
+     * 也让审计能逐字证明注入点存在——所以选它。
+     *
+     * <h2>"是不是我们绑的"这一条在客户端怎么判（两树同口径）</h2>
+     * 服务端有链路表（{@code RideBindManager}），但**乘客位置不随包同步**：客户端每 tick
+     * 自己用载具的权威位置算一遍乘客位置（{@code ClientLevel.tickPassenger → rideTick}，
+     * 反编译实证），所以这一档**必须客户端也生效**，否则她在你屏幕里仍是"含在嘴里"。
+     * 客户端拿不到 persistentData（那不过网），但**主人 UUID 是同步实体数据**
+     * （{@code TamableAnimal.DATA_OWNERUUID_ID} 注册在 {@code defineSynchedData} 里，
+     * javap 实证）——所以两树统一用判据
+     * **"乘客是【有主】的女仆 + 载具是冰火传说的龙"**。
+     *
+     * <p>这条放宽是**安全的、且事实上等价于"棍子绑的"**：龙的 {@code canAddPassenger} 只认
+     * "乘客数 &lt; 2" 而**登龙那条路只对玩家开放**（{@code m_6071_} 里
+     * {@code player.startRiding(this, true)}，且要求已驯服 + 阶段 &gt; 2，反编译实证）——
+     * 女仆**没有任何别的办法**爬上冰火传说的龙（她能自己上的只有原版 Saddleable 兽，而龙不是）。
+     * 所以"有主女仆 + 龙"这个组合只会由骑乘指挥棒产生。玩家本人、别的模组的生物、无主女仆
+     * 一律**一个字节都不碰**。
+     */
+    public static boolean shouldSeatMaidOnDragon(Entity vehicle, Entity passenger) {
+        try {
+            if (vehicle == null || passenger == null) {
+                return false;
+            }
+            if (!(passenger instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+                return false; // 玩家 / 别的生物：原版一字不动
+            }
+            if (!com.maidsmart.tool.MaidScope.owned(maid)) {
+                return false; // 无主女仆：整合包规则不受本模组影响（与 MaidScope 同一条边界）
+            }
+            return isDragon(vehicle);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 龙背上的**玩家鞍位**（{@code getRiderPosition()}，四份 jar 成员名逐字一致）；拿不到 → null。
+     *
+     * <p>这是龙自己给玩家算的那个点（{@code getRiderPosition} 里含俯仰补偿、飞行/行走抬高），
+     * 我们原样借用——所以女仆坐上去的位置与玩家**逐字相同**（玩家那条路也是这个点 +
+     * {@code getBbHeight()} 的竖直补偿，见 {@code EntityDragonBase.m_19956_} 的鞍位分支）。
+     */
+    public static Vec3 riderSeat(Entity dragon) {
+        try {
+            initIaf();
+            if (!iafOk || mGetRiderPosition == null) {
+                return null;
+            }
+            Object v = mGetRiderPosition.invoke(dragon);
+            return v instanceof Vec3 vec ? vec : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /* ==================== 多部件实体的"本体"解析（实测七百二十·点2） ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十·点2【骑乘指挥棒吞掉原版右击：先把"部位"还原成"本体"】。
+     *
+     * <p>玩家原话：「加一个新设定，骑乘指挥棒在使用的时候不会触发原本的右击效果。只会触发
+     * 骑士棒自己的右击效果，也就是说你拿骑乘棒是骑不上龙或者车子的。」
+     *
+     * <p>为什么必须解析：冰火传说的龙是**多部件实体**——准星打中的不是龙本体，而是它身上
+     * 若干个 {@code EntityMultipartPart}/{@code MultipartPartEntity}（翅膀/尾巴/头各一个实体），
+     * 而那些部位会把这一下右击**转发给本体**（{@code EntityMultipartPart.m_6096_} 里
+     * {@code getParent().m_6096_(player, hand)}，反编译实证）。所以指挥棒的处理器若只认"目标
+     * 本身是不是坐骑"，看到的是**部位**（既不是女仆、也不是 Mob）→ 直接放行 → 转发到龙 →
+     * 玩家就骑上去了。这正是"拿着棍子还是能骑上龙"的来源。
+     *
+     * <p>判据用**类名**（{@code MultipartPart} 前缀，两家包名与两个版本共四种写法都在列），
+     * 找不到就原样返回——**绝不猜**：只有确认它是"部位"才去问它的本体。
+     */
+    public static Entity resolveMount(Entity target) {
+        try {
+            if (target == null || !isMultipartPart(target)) {
+                return target;
+            }
+            initPart();
+            if (mPartGetParent == null) {
+                return target;
+            }
+            Object p = mPartGetParent.invoke(target);
+            return p instanceof Entity parent ? parent : target;
+        } catch (Throwable ignored) {
+            return target;
+        }
+    }
+
+    /** 它是不是"多部件实体的一块部位"（冰火传说的龙部件；别的模组同构类名同样认得）。 */
+    public static boolean isMultipartPart(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            for (Class<?> c = e.getClass(); c != null && c != Object.class; c = c.getSuperclass()) {
+                String n = c.getName();
+                if (n.endsWith("EntityMultipartPart") || n.endsWith("MultipartPartEntity")) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    private static boolean partInited;
+    private static Method mPartGetParent;   // EntityMultipartPart.getParent() / MultipartPartEntity.getParent()
+
+    private static synchronized void initPart() {
+        if (partInited) {
+            return;
+        }
+        partInited = true;
+        String[] candidates = {
+                "com.iafenvoy.iceandfire.entity.EntityMultipartPart",        // 社区版 1.20.1
+                "com.iafenvoy.iceandfire.entity.MultipartPartEntity",        // 社区版 1.21.1
+                "com.github.alexthe666.iceandfire.entity.EntityMultipartPart", // 普通版
+        };
+        for (String cn : candidates) {
+            try {
+                mPartGetParent = Class.forName(cn).getMethod("getParent");
+                return;
+            } catch (Throwable ignored) {
+                // 换下一个类名
+            }
+        }
+        mPartGetParent = null;
     }
 
     /* ==================== 引擎/载具细分 ==================== */
