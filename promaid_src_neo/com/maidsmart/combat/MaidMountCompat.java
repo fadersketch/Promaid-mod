@@ -168,6 +168,7 @@ public final class MaidMountCompat {
     private static Method mSetTurretYRotLock;  // setTurretYRotLock(float)
     private static Method mSetGunYRot;         // setGunYRot(float)  —— 武器位（直升机机炮多在驾驶位）
     private static Method mSetGunXRot;         // setGunXRot(float)
+    private static Method mSetServerYaw;       // setServerYaw(float) —— 直写机头时要一起写（否则被 lerp 拽回）
     private static Method mVehicleShootAt;     // vehicleShoot(LivingEntity, UUID, Vec3)
     private static Method mGetGunDataSeat;     // getGunData(int seatIndex) -> GunData
     private static Method mGunReloadAmmo;      // GunData.reloadAmmo(Entity, boolean)
@@ -321,6 +322,13 @@ public final class MaidMountCompat {
                 // 武器位（直升机机炮常在驾驶位，走 gunYRot/gunXRot，与炮塔那对分开）。
                 mSetGunYRot = cVehicle.getMethod("setGunYRot", float.class);
                 mSetGunXRot = cVehicle.getMethod("setGunXRot", float.class);
+                // 【实测七百三十三】直写机头要连 serverYaw 一起写（handleClientSync 会用
+                // serverYaw 把 yRot 往回 lerp）。单独 try——缺了它只是"直写会被慢慢拽回"。
+                try {
+                    mSetServerYaw = cVehicle.getMethod("setServerYaw", float.class);
+                } catch (Throwable ignored) {
+                    mSetServerYaw = null;
+                }
             } catch (Throwable ignored) {
                 mGetTurretYRot = null;
                 mSetTurretYRot = null;
@@ -1347,7 +1355,9 @@ public final class MaidMountCompat {
 
             double hspeed = horizontalSpeed(mount);
 
-            // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
+            // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）。
+            // 【实测七百三十三】**只有近距/小误差时才走这条**——远距离改走下面的"直写机头"
+            // 后门。原因见 forceHeadingOnto 的注释：这条通道的权限还不到玩家的一成。
             float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
             mSetMouseX(mount, yawCmd);
 
@@ -1374,9 +1384,13 @@ public final class MaidMountCompat {
                 //   再换算成**目标前倾角**；内环把"当前俯仰角 vs 目标角"的误差写进鼠标 Y 通道，
                 //   量级提到玩家档（±8）。**与扫帚同一套速度包络、同一处口径。**
                 double desired = clamp(horiz * FLIGHT_SPEED_PER_BLOCK, 0.0, FLIGHT_HMAX);
-                if (Math.abs(err) >= 60.0f) {
-                    desired = 0.0;            // 转向优先：机头没对准目标方向就不给速度
-                }
+                // 【实测七百三十三·根因】旧版这里有一句 `if (|err| >= 60) desired = 0`（"转向优先，
+                // 没对准就不给速度"）。实机日志揭穿了它：`鼠标X=-6 期望=0.00 水平速度=0.00` 反复出现
+                // —— 偏航通道权限太小、机头总是转不过来，于是**长期卡在"不给速度"分支里原地打转、
+                // 一点不前进**，这正是玩家说的「长距离很容易飞偏 / 中途失速」。
+                // 本版**删掉这个分支**：航向改由 forceHeadingOnto 直接写机头（见下），转得动，
+                // 也就不需要靠"停住等转向"。给速度与转向从此解耦。
+                //
                 // 【实测七百三十一·后门】到位就**不再给任何前倾**——期望速度归零，让内环把机头
                 // 摆平（顺带把发动机那点残余水平推力卸掉），再由下面的硬刹车抹掉动量。两者配合
                 // 才能真正停住；只刹不摆平的话，机头还压着，下一拍水平速度又长回来。
@@ -1437,21 +1451,28 @@ public final class MaidMountCompat {
                 if (hardBrake) {
                     killHorizontal(mount, HARD_BRAKE_RETAIN);
                 }
-                // 【实测七百三十二·周期急停脉冲】玩家原话「像这个女仆操纵的时候，总是容易用力
-                // 过猛，所以这边最好是每 0.5 秒就急停下来一次。这样子可以显著增加飞机的稳定性。」
-                // 做法：在"操纵带"内（离目标点 24 格以内，含盘旋圈）每 10 拍（=0.5 秒）把水平分量
-                // 打掉一截——跟随/接近档打 0.25，接敌盘旋档打 0.55（温和，保住绕圈）。
-                // 效果是把速度**封顶**：发动机攒的动量冲不出大过冲，也就不必再慢慢荡回来。
+                // 【实测七百三十二·周期急停脉冲 / 七百三十三·去掉距离门槛】玩家原话
+                // 「最好是每 10 tick 就触发一次这样的停止，否则真的太不稳定了。」——所以这里
+                // **不再设 24 格的操纵带**：无论离目标多远，一律每 10 拍（0.5 秒）收一次。
+                // 跟随/接近档保留 0.25，接敌盘旋档保留 0.55（温和，保住绕圈）。
                 // 竖直分量一律不动（空中不能失去升力）。
-                boolean pulse = !hardBrake && horiz <= BRAKE_PULSE_RANGE && brakePulseDue(mount);
+                boolean pulse = !hardBrake && brakePulseDue(mount);
                 if (pulse) {
                     killHorizontal(mount, fighting ? BRAKE_PULSE_RETAIN_FIGHT : BRAKE_PULSE_RETAIN);
+                }
+                // 【实测七百三十三·直写机头】长距离不飞偏的正解：把机身航向直接写过去，
+                // 只留一点点 mouseX 微调（见 forceHeadingOnto 的注释——那条通道权限不足两成，
+                // 且与滚转耦合）。拿不到反射就退回纯鼠标通道（yawCmd 已在上面写过）。
+                boolean headLock = forceHeadingOnto(mount, err);
+                if (headLock) {
+                    mSetMouseX(mount, clamp(err, -FLIGHT_YAW_TRIM, FLIGHT_YAW_TRIM));
                 }
                 logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
                         + (hardBrake ? " 硬刹(水平清零)" : "")
                         + (pulse ? " 周期急停(0.5s)" : "")
+                        + (headLock ? " 直写机头" : "")
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
-                                : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                                : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 鼠标X=" + Math.round(yawCmd)
                         + " 鼠标Y=" + fmt2(pitchCmd)
                         + " 水平速度=" + fmt2(hspeed) + " 期望=" + fmt2(desired)
@@ -1697,7 +1718,66 @@ public final class MaidMountCompat {
     /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
     private static final double HARD_BRAKE_RETAIN = 0.25;
 
-    /* ==================== 实测七百三十二：周期急停脉冲（稳定器） ==================== */
+    /* ==================== 实测七百三十三：直写机头朝向（长距离不飞偏） ==================== */
+
+    /**
+     * 【实测七百三十三】把机身航向**直接写过去**，不再靠那条只有约一成权限的鼠标偏航通道。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆控制不好方向感的方向，短距离还行，但是长距离如果要往主人的方向飞很容易飞偏。」
+     *
+     * <h2>根因（反编译实证）</h2>
+     * 引擎 {@code helicopterEngine:613} 的偏航：
+     * <pre>
+     * setYRot(yRot + yawSpeed * clamp(2.0 * mouseX * propeller, -10, 10))
+     * </pre>
+     * 而 {@code propeller} 稳态 ≈ {@code power} ≈ 0.09（悬停所需值）——也就是说这个通道的
+     * 实际权限只有 {@code 2.0 × 0.09 = 0.18} 倍，**不到玩家推鼠标的两成**。更糟的是同一条
+     * {@code mouseX} 在 :612 还**驱动滚转**：她为了纠航向持续压 mouseX（实机日志 {@code 鼠标X=-6}
+     * 长期打满），机体一路滚转，升力矢量（{@code getUpVec}）随之歪向侧方——水平推力被掰成
+     * 横向分量，既飞偏、又抵消前推（这正是「中途失速」）。
+     *
+     * <h2>本方法</h2>
+     * 直接把 {@code setYRot} 写到目标方位（并按每拍上限平滑，免得瞬转画龙），同时把
+     * {@code serverYaw} 一起写上——反编译 {@code VehicleEntity.handleClientSync:5443-5445}
+     * 服务端每拍会用 {@code serverYaw} 把 {@code yRot} 往回 lerp，不写它就会被拽回去。
+     * 通道里只留**很小一点** mouseX（{@link #FLIGHT_YAW_TRIM}）做微调，滚转耦合随之可忽略。
+     *
+     * @param yawErr 目标方位 - 当前机头（已 wrap 到 [-180,180)）
+     * @return true = 真的写了（反射拿不到 → false，调用方退回鼠标通道）
+     */
+    static boolean forceHeadingOnto(Entity mount, float yawErr) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            float step = clamp(yawErr, -FLIGHT_HEAD_MAX_DEG, FLIGHT_HEAD_MAX_DEG);
+            float yaw = wrapDegrees(mount.getYRot() + step);
+            mount.setYRot(yaw);
+            if (mSetServerYaw != null) {
+                try {
+                    mSetServerYaw.invoke(mount, yaw);
+                } catch (Throwable ignored) {
+                }
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 直写机头的每拍最大转角（度）。10 ≈ 200°/秒——比引擎那条通道（约 1.6°/拍 上限，
+     * 且被 propeller 缩到不足两成）**快十倍以上**，又远低于瞬转，长距离能一路咬住方位。
+     */
+    private static final float FLIGHT_HEAD_MAX_DEG = 10.0f;
+
+    /**
+     * 直写航向时留在鼠标 X 通道里的**微调量**：只补一点转角，顺带把滚转耦合压到可忽略
+     * （那条通道同时驱动滚转，见 {@link #forceHeadingOnto}）。
+     */
+    private static final float FLIGHT_YAW_TRIM = 1.5f;
+
 
     /**
      * 【实测七百三十二】急停脉冲的间隔（拍）：玩家原话「最好是每 0.5 秒就急停下来一次。
@@ -1722,13 +1802,6 @@ public final class MaidMountCompat {
      * 一步一停；0.55 只压速度峰值、圈照绕。
      */
     private static final double BRAKE_PULSE_RETAIN_FIGHT = 0.55;
-
-    /**
-     * 脉冲生效的"操纵带"（格）：只有离目标点进到这个距离内才打脉冲。远距离纯巡航不打——
-     * 否则一趟 70 格的长途会被周期性地砍到半速（那是玩家没要求的副作用）。玩家说的过冲
-     * 场景（"接近玩家的时候"）与盘旋都在这个带内。
-     */
-    private static final double BRAKE_PULSE_RANGE = 24.0;
 
     /** 每只车的脉冲计数（每拍 +1，到 {@link #BRAKE_PULSE_TICKS} 归零并触发一次）。 */
     private static final java.util.Map<java.util.UUID, Integer> BRAKE_PULSE =
