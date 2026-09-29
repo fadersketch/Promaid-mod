@@ -123,6 +123,15 @@ public final class MaidMountCompat {
     private static Method mGetTurretCtrlIdx;  // getTurretControllerIndex()
     private static Method mGetWeaponCtrlIdx;  // getPassengerWeaponStationControllerIndex()
     private static Method mGetNthEntity;      // getNthEntity(int) —— 取某个座位上的乘客
+    /* 【实测七百二十五】直升机的转向/俯仰走的是**鼠标通道**（javap/反编译实证：
+     * helicopterEngine 的 yaw/pitch/roll 三项都读 getMouseMoveSpeedX/Y，而不是左右位）。
+     * 所以驱动层必须能写这两个量 + 悬停开关。 */
+    private static Method mGetMouseSpeedX;    // getMouseMoveSpeedX()
+    private static Method mGetMouseSpeedY;    // getMouseMoveSpeedY()
+    private static Method mSetMouseSpeedX;    // setMouseMoveSpeedX(float)
+    private static Method mSetMouseSpeedY;    // setMouseMoveSpeedY(float)
+    private static Method mSetHoverMode;      // setHoverMode(boolean)
+    private static Method mGetHoverMode;      // getHoverMode()
 
     /* ==================== 反射缓存：冰火传说 ==================== */
 
@@ -209,6 +218,22 @@ public final class MaidMountCompat {
                 mGetTurretCtrlIdx = null;
                 mGetWeaponCtrlIdx = null;
                 mGetNthEntity = null;
+            }
+            // 【实测七百二十五】直升机的鼠标通道 + 悬停开关：各自单独 try，缺一个也不该让其余失效。
+            try {
+                mGetMouseSpeedX = cVehicle.getMethod("getMouseMoveSpeedX");
+                mGetMouseSpeedY = cVehicle.getMethod("getMouseMoveSpeedY");
+                mSetMouseSpeedX = cVehicle.getMethod("setMouseMoveSpeedX", float.class);
+                mSetMouseSpeedY = cVehicle.getMethod("setMouseMoveSpeedY", float.class);
+                mSetHoverMode = cVehicle.getMethod("setHoverMode", boolean.class);
+                mGetHoverMode = cVehicle.getMethod("getHoverMode");
+            } catch (Throwable ignored) {
+                mGetMouseSpeedX = null;
+                mGetMouseSpeedY = null;
+                mSetMouseSpeedX = null;
+                mSetMouseSpeedY = null;
+                mSetHoverMode = null;
+                mGetHoverMode = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -582,11 +607,18 @@ public final class MaidMountCompat {
      * 于是鞍位上"时不时抖一下、位置错"。723 只每 2 tick {@code setPos} 一次纠正，跟不上。
      * 724 起每 tick 摆位 + 这一档停导航（{@code getNavigation().stop()}）+ 清速度 +
      * 清 {@code WALK_TARGET}，她就老老实实待在鞍位上，位置与玩家骑龙时一致。
+     *
+     * <p>【实测七百二十五·点1 补一条】顺手**每拍复述坐姿**：TLM 的坐姿标志会被别的任务/
+     * 日程清掉（她不是真乘客时尤其容易），一旦掉了就变回站姿模型、看起来又"跟龙分离"。
+     * 这里由 {@link #setSitting} 每拍压一次，与摆位同频。
      */
     public static void freezeOnSeat(Entity maid) {
         try {
             if (maid == null) {
                 return;
+            }
+            if (maid instanceof EntityMaid em) {
+                setSitting(em, true);
             }
             if (maid instanceof net.minecraft.world.entity.Mob mob) {
                 try {
@@ -599,6 +631,63 @@ public final class MaidMountCompat {
                 le.getBrain().eraseMemory(net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /* ==================== 坐姿（实测七百二十五：骑乘时她应当是坐姿） ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百二十五【骑乘时她应该是坐姿】——把 TLM 的"坐姿"标志开/关。
+     *
+     * <h2>玩家原话</h2>
+     * ①「女仆骑乘的时候应该是坐姿。」
+     * ②「现在女仆跟龙之间还是有较大的分离关系。看着很不自然。为什么玩家坐在龙上面就不会出现
+     * 这种情况呢？」
+     *
+     * <h2>为什么她一直站着（反编译实证）</h2>
+     * TLM 的**可见坐姿**只有一个来源——实体自己的坐姿标志
+     * {@code EntityMaid.isMaidInSittingPose()}（= {@code TamableAnimal.isInSittingPose()}，
+     * 读 {@code DATA_FLAGS_ID} 第 0 位）。两条渲染路径都问它：
+     * <ul>
+     *   <li>Gecko 模型：{@code TLMBinding} 把 molang 变量 {@code tlm.is_sitting} 绑到
+     *       {@code ((EntityMaid)ctx.entity()).isMaidInSittingPose()}（反编译实证）。</li>
+     *   <li>Bedrock(JS) 模型：{@code EntityMaidWrapper.isSitting()} 返回同一个
+     *       {@code isMaidInSittingPose()}（反编译实证）。</li>
+     * </ul>
+     * 而**骑乘**这条路上她**从来不是坐姿**：原版只有 {@code AbstractHorse} 那一系
+     * （马/骆驼/驴）在玩家骑上去时置坐姿；卓越前线的载具与冰火传说的龙**都不是**
+     * {@code TamableAnimal} 的坐骑语义，压根没人替她置这个位。所以她骑在车上/龙上时
+     * 一直用**站立模型**——玩家看到的"站着骑"与"跟龙分离"（她站在鞍位上方一整格 = 身高）
+     * 都是这一个原因：站姿模型 + 按身高抬起的落点，看起来就是"悬空站着、没贴着鞍"。
+     *
+     * <h2>这一档做什么</h2>
+     * 绑上（载具/龙/原版兽皆可）→ {@code setInSittingPose(true)}；解绑 → 还原成绑前的值
+     * （原版"坐下"指令、玩家手动让她坐下等，一个字节不丢）。判据全走 TLM 自己的公开方法
+     * {@code isMaidInSittingPose()/setInSittingPose(boolean)}——TLM 改名会编译期报错，
+     * 不会静默失效。
+     *
+     * <p><b>为什么这条同时治了"跟龙分离"（玩家原话②）</b>：龙的鞍位公式
+     * {@code positionRider} 摆的是「{@code getRiderPosition()} + {@code 乘客身高}」——**玩家**
+     * 坐在那个点上用的是**坐姿模型**，所以贴鞍；而女仆旧版用**站姿模型**落同一个点，
+     * 看起来就是"站在鞍位上方一整格、跟龙有段空档"。摆位公式与玩家逐字相同、只把模型换成
+     * 坐姿，观感即与玩家一致——所以本档**只动坐姿标志，不动落点公式**。
+     */
+    public static void setSitting(EntityMaid maid, boolean sitting) {
+        try {
+            if (maid == null) {
+                return;
+            }
+            maid.setInSittingPose(sitting);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 她此刻是不是坐姿（= TLM 渲染坐姿模型的那个标志）；拿不到 → false。 */
+    public static boolean isSitting(EntityMaid maid) {
+        try {
+            return maid != null && maid.isMaidInSittingPose();
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -839,6 +928,12 @@ public final class MaidMountCompat {
         float desiredYaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
         float err = wrapDegrees(desiredYaw - mount.getYRot());
 
+        // 【实测七百二十五】飞行载具（直升机/固定翼/飞艇）**换一整套**：它们的航向/俯仰在
+        // 鼠标通道里，地面那套左右位表达不了。见 driveFlight 的注释。
+        if (isFlyingEngine(eng)) {
+            return driveFlight(mount, modifier, eng, dy, horiz, err);
+        }
+
         // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
         boolean headSteer = "WHEELCHAIR".equals(eng);
         if (headSteer) {
@@ -960,11 +1055,188 @@ public final class MaidMountCompat {
 
     private static void stopVehicle(Entity mount) {
         try {
+            // 【实测七百二十五】飞行载具（直升机/固定翼）**没有"刹车"**：空中把 power 归零就是
+            // 掉高度（引擎里直升机 power 靠总距维持升力，反编译实证）。所以飞行档只清输入位、
+            // **不**调 brakeVehicle，并把鼠标通道也松手（偏航/俯仰回中，让它自己稳住姿态）。
+            String eng = engineType(mount);
+            if (isFlyingEngine(eng)) {
+                if (mProcessInput != null) {
+                    mProcessInput.invoke(mount, (short) 0);
+                }
+                mSetMouseX(mount, 0.0f);
+                mSetMouseY(mount, 0.0f);
+                if (mSetHoverMode != null) {
+                    try {
+                        mSetHoverMode.invoke(mount, true); // 站着不动 → 悬停
+                    } catch (Throwable ignored) {
+                    }
+                }
+                return;
+            }
             if (mProcessInput != null) {
                 mProcessInput.invoke(mount, (short) 0);
             }
-            // 【实测七百二十四】停车 = 真刹车（旧版只清输入，车会继续滑）。
+            // 【实测七百二十四】地面停车 = 真刹车（旧版只清输入，车会继续滑）。
             brakeVehicle(mount);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ---------- 实测七百二十五：飞行载具（直升机/固定翼/飞艇）的驾驶 ---------- */
+
+    /**
+     * 这个引擎是不是"航向/俯仰走鼠标通道"的飞行载具。
+     *
+     * <p><b>只含直升机与固定翼</b>：反编译比对三个引擎（{@code helicopterEngine} /
+     * {@code aircraftEngine} / {@code airShipEngine}）——只有前两者的偏航/俯仰写在
+     * {@code getMouseMoveSpeedX/Y} 上；<b>飞艇的偏航走左右位、升降走上下位</b>（它自己有
+     * {@code setLiftSpeed} 竖直轴），走地面那套位掩码就够，所以**不进本档**。
+     */
+    private static boolean isFlyingEngine(String eng) {
+        return "HELICOPTER".equals(eng) || "AIRCRAFT".equals(eng);
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百二十五【女仆驾驶直升机：左右与升降都不动】。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆驾驶直升机的时候堪称灾难，完全不会左右移动和直上直下。」
+     *
+     * <h2>根因（反编译 {@code VehicleEngineUtils.helicopterEngine} 实证）</h2>
+     * 直升机的**航向/俯仰/滚转**三项全都写在**鼠标通道**上，位掩码里根本没有对应位：
+     * <pre>
+     *   setXRot(xRot + (onGround ? 0 : 1.5) * pitchSpeed * getMouseMoveSpeedY() * propeller)   // 俯仰
+     *   setYRot(yRot + yawSpeed * clamp(… * getMouseMoveSpeedX() * propeller, -10, 10))        // 偏航
+     *   setZRot(roll - rollSpeed * (deltaRot + (onGround ? 0 : 0.25) * getMouseMoveSpeedX()…)) // 滚转
+     * </pre>
+     * 左右位（0x001/0x002）在直升机里**只**影响 {@code deltaRot}（滚转），**不改偏航**——
+     * 所以旧版"送左右位"= 机头不转 = 原地打转/不动。升降同理：引擎没有竖直轴，高度全靠
+     * <b>总距</b>（前位 0x004 加、后位/下位减，反编译 {@code up && EngineStartOver → power += …}）。
+     * 旧版只在 {@code horiz > 停车带} 时踩前进位、近了就 {@code brakeVehicle} 把 power 归零 →
+     * 空中直接掉高度、反复"飞出去再被拉回来"。实机日志正是这一串：
+     * {@code 位掩码=5 引擎=HELICOPTER 距目标=11格 → 38格 → 42格}，然后每几秒一条
+     * "距离超 48 格，已连人带坐骑传送回主人身边"。
+     *
+     * <h2>玩家骑直升机时是怎么飞的</h2>
+     * ① 鼠标左右 → X 通道 → 偏航+滚转（转向）；② 鼠标上下 → Y 通道 → 俯仰（负值抬头 = 爬升，
+     * 正值低头 = 前飞）；③ 前进键 → 总距上升、后/下键 → 总距下降；④ 上键 → 切悬停。
+     * <b>飞行载具没有"刹车"</b>——松手是缓慢衰减，我们绝不能在空中把总距归零。所以本档：
+     * <ul>
+     *   <li><b>偏航/俯仰走鼠标通道</b>：直接写 X/Y（引擎唯一读的输入），与玩家推鼠标逐字同路径。</li>
+     *   <li><b>升降走总距</b>：目标在头顶 → 前进位抬总距 + 抬头；在脚下 → 后位压总距 + 低头；
+     *       高度差进死区就松手（保持当前总距），<b>绝不调 brakeVehicle</b>。</li>
+     *   <li><b>平飞</b>：够远就低头前倾＋抬总距，让它朝目标压过去。</li>
+     *   <li><b>悬停</b>：贴到目标且高度对齐 → 开悬停（引擎自己摆平姿态、衰减速度）。</li>
+     * </ul>
+     * 固定翼同款（{@code aircraftEngine} 的偏航/俯仰也在鼠标通道；它的前/后位是推力、
+     * 高度靠俯仰+速度，所以这里只按高度差给俯仰、按远近给推力，不给竖直位）。
+     *
+     * <p>写不出鼠标通道（反射失败）→ 退回地面那套位掩码（一个字节不变）。
+     */
+    private static boolean driveFlight(Entity mount, double modifier, String eng,
+                                       double dy, double horiz, float err) {
+        if (mSetMouseSpeedX == null && mMouseInput == null) {
+            return false; // 探测失败 → 交回地面档
+        }
+        try {
+            boolean heli = "HELICOPTER".equals(eng);
+            // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
+            float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
+            mSetMouseX(mount, yawCmd);
+
+            // ② 俯仰：写 Y 通道。约定（反编译）：mouseY 正值 → xRot += → 低头 → 前飞；
+            //    负值 → 抬头 → 爬升（直升机）/ 拉起来（固定翼）。
+            double altErr = dy;                        // >0 = 目标更高
+            double flatDist = Math.max(horiz - FLIGHT_ARRIVE, 0.0);
+            float pitchCmd = 0.0f;
+            boolean turning = Math.abs(err) >= 60.0f;
+            if (!turning) {
+                if (Math.abs(altErr) > FLIGHT_ALT_DEADZONE) {
+                    // 先对齐高度：目标更高 → 抬头（负），更低 → 低头（正）
+                    pitchCmd = (float) clamp(-altErr * FLIGHT_PITCH_PER_BLOCK,
+                            -FLIGHT_PITCH_MAX, FLIGHT_PITCH_MAX);
+                } else if (flatDist > 0.0) {
+                    // 高度已对齐 → 低头前飞
+                    pitchCmd = (float) clamp(flatDist * FLIGHT_PITCH_PER_BLOCK,
+                            0.05, FLIGHT_PITCH_MAX);
+                }
+            }
+            mSetMouseY(mount, pitchCmd);
+
+            // ③ 总距/推力 + 悬停
+            short bits = 0;
+            boolean arrived = horiz <= FLIGHT_ARRIVE && Math.abs(altErr) <= FLIGHT_ALT_DEADZONE;
+            if (heli) {
+                if (altErr > FLIGHT_ALT_DEADZONE) {
+                    bits |= 0x004;                     // 抬总距（爬升）
+                } else if (altErr < -FLIGHT_ALT_DEADZONE) {
+                    bits |= 0x008;                     // 压总距（下降）
+                } else if (horiz > FLIGHT_ARRIVE) {
+                    bits |= 0x004;                     // 高度已对齐 → 前位用于平飞推力
+                }
+                if (mSetHoverMode != null) {           // 到达 → 悬停；要走动就退出
+                    try {
+                        mSetHoverMode.invoke(mount, arrived);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            } else {
+                // 固定翼：前/后位是推力；高度只由俯仰决定
+                if (horiz > FLIGHT_ARRIVE) {
+                    bits |= 0x004;
+                } else if (horiz < FLIGHT_ARRIVE * 0.5) {
+                    bits |= 0x008;                     // 太近 → 减速
+                }
+            }
+            if (modifier > 1.05) {
+                bits |= 0x100;                         // 冲刺位（引擎里抬高速度上限）
+            }
+            mProcessInput.invoke(mount, bits);
+            // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
+            logDrive(mount, "飞行档 引擎=" + eng + " 鼠标X=" + Math.round(yawCmd)
+                    + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
+                    + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 飞行档的偏航上限（写进鼠标 X 通道的值）。引擎里那一项被 {@code clamp(…, -10, 10)}
+     * 卡住，所以这里的量级与玩家推鼠标同一档：取 6 ≈ 中速转向，不至于瞬转画龙。
+     * 俯仰同理见 {@link #FLIGHT_PITCH_MAX}。
+     */
+    private static final float FLIGHT_YAW_MAX = 6.0f;
+    /** 飞行档前倾/抬头角上限（相对引擎那一项的钳制区间，取保守值）。 */
+    private static final float FLIGHT_PITCH_MAX = 0.6f;
+    /** 每 1 格高度差给多少俯仰输入（收敛用）。 */
+    private static final float FLIGHT_PITCH_PER_BLOCK = 0.04f;
+    /** 到达判据（格）：水平距离进这个带就不再前倾，改去对齐高度/悬停。 */
+    private static final double FLIGHT_ARRIVE = 6.0;
+    /** 高度死区（格）：竖直差进这个带就不动总距（悬停时的自然浮动区间）。 */
+    private static final double FLIGHT_ALT_DEADZONE = 2.0;
+
+    /** 写鼠标 X 通道（引擎的偏航/滚转输入）；拿不到方法 → 不动。 */
+    private static void mSetMouseX(Entity mount, float v) {
+        try {
+            if (mSetMouseSpeedX != null) {
+                mSetMouseSpeedX.invoke(mount, v);
+            } else if (mMouseInput != null) {
+                mMouseInput.invoke(mount, (double) v, 0.0d);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 写鼠标 Y 通道（引擎的俯仰输入）；拿不到方法 → 不动。 */
+    private static void mSetMouseY(Entity mount, float v) {
+        try {
+            if (mSetMouseSpeedY != null) {
+                mSetMouseSpeedY.invoke(mount, v);
+            } else if (mMouseInput != null) {
+                mMouseInput.invoke(mount, 0.0d, (double) v);
+            }
         } catch (Throwable ignored) {
         }
     }

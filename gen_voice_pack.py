@@ -69,12 +69,13 @@ STYLE_OF = {
              # 「好，我自己走～」= 解除时的日常应答，归关心档
              'ride_release'],
     # 骑乘指挥棒——俏皮档（配对/出发这类轻快应答）
-    'cheer_ride': ['ride_pick', 'ride_ready'],
+    'cheer_ride': ['ride_pick', 'ride_ready', 'ride_dragon_ok', 'ride_dragon_here'],
     # 骑乘指挥棒——为难档（各种「现在还不行」的提醒）
     'plead_ride': ['ride_not_owner', 'ride_broom_mode', 'ride_fail',
                    'ride_bad_mount', 'ride_furniture', 'ride_broom_rule',
                    'ride_mount_gone', 'ride_not_saddleable',
-                   'ride_need_saddle', 'ride_mount_busy'],
+                   'ride_need_saddle', 'ride_mount_busy',
+                   'ride_seat_fail', 'ride_occupied', 'ride_occupied_mine', 'ride_dragon_busy', 'ride_wreck', 'ride_no_seat', 'ride_too_small'],
     'plead': ['build_missing_material', 'bridge_no_block', 'brew_missing',
               'mine_no_block_high', 'wood_no_block_high', 'wood_no_axe', 'no_food_left',
               'work_no_pickaxe', 'work_ridden',
@@ -114,6 +115,15 @@ JP = {
     'ride_not_saddleable.ogg': '鞍を付けられる乗り物じゃないよ～',
     'ride_need_saddle.ogg': '先に鞍を付けてから、私に繋いでね～',
     'ride_mount_busy.ogg': 'その背中にはもう誰かが乗ってるよ～',
+    'ride_seat_fail.ogg': '鞍に乗れなかった……もう一回いい？',
+    'ride_dragon_ok.ogg': 'この子の背中に乗ったよ、ついてくるって～',
+    'ride_dragon_here.ogg': 'もうこの竜の背中にいるよ～（スニーク右クリックで降ろしてね）',
+    'ride_occupied.ogg': 'この子にはもう別の女僕が乗ってるよ～',
+    'ride_occupied_mine.ogg': 'この子にはもう私の妹が乗ってるよ～',
+    'ride_dragon_busy.ogg': 'この竜の背中にはもう女僕がいるよ～',
+    'ride_wreck.ogg': 'この乗り物、もうボロボロで動かないよ……',
+    'ride_no_seat.ogg': 'この乗り物には座れる席がないよ～',
+    'ride_too_small.ogg': 'まだ小さすぎるから、大きくなってから乗ろうね～',
     # -------- 武装拴绳（实测六百六十九：玩家要求把这些新文本也训练语音）--------
     'leash_on.ogg': 'さあ来て！ロープをしっかり掴んで、一緒に飛ぼう～',
     'leash_off.ogg': '着いたよ、足元に気をつけて降りてね～',

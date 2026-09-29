@@ -1,6 +1,51 @@
 {
   "entries": [
     {
+      "text": "没能坐上它的鞍位……再试一次？",
+      "file": "ride_seat_fail.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我坐它背上啦，它跟着你走～",
+      "file": "ride_dragon_ok.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我已经在这条龙背上啦～（潜行右击可以让我下来）",
+      "file": "ride_dragon_here.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这只坐骑已经有女仆了～",
+      "file": "ride_occupied.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这只坐骑已经有我的女仆了～",
+      "file": "ride_occupied_mine.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这条龙的背上已经有女仆了～",
+      "file": "ride_dragon_busy.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这辆载具已经报废了……",
+      "file": "ride_wreck.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这辆载具没有能坐的位子～",
+      "file": "ride_no_seat.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "它还太小，等它长大些再骑吧～",
+      "file": "ride_too_small.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "我已经准备好了",
       "file": "ready_dual.ogg",
       "mode": "contains"
