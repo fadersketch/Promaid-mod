@@ -132,6 +132,25 @@ public final class MaidMountCompat {
     private static Method mSetMouseSpeedY;    // setMouseMoveSpeedY(float)
     private static Method mSetHoverMode;      // setHoverMode(boolean)
     private static Method mGetHoverMode;      // getHoverMode()
+    /* 【实测七百二十六·点6】女仆自己往载具里装弹：车的枪弹从**车自己的容器**取（反编译
+     * ModCapabilities 实证：Capabilities.ItemHandler.ENTITY → getInventory()），她背包里的
+     * 子弹车看不见。这三组反射用来"读出这车要哪种子弹 + 把子弹从她背包搬进车容器"。 */
+    private static Method mGetInventory;       // getInventory() -> VehicleContainerHandler(IItemHandler)
+    private static Method mGetGunDataMap;      // getGunDataMap() -> Map<String, GunData>
+    private static Method mGunUseBackpackAmmo; // GunData.useBackpackAmmo()
+    private static Method mGunSelectedAmmo;    // GunData.selectedAmmoConsumer() -> AmmoConsumer
+    /* 【实测七百二十七·点3】七百二十六 那一版装弹一条都没搬（实机日志零行「模组坐骑·装弹」）。
+     * 根因（反编译 ItemAmmoStrategy / PlayerAmmoStrategy 实证）：车的武器分两种吃弹方式——
+     *   ① `AmmoType: "superbwarfare:small_shell_he"`（普通物品 id）→ **ItemAmmoStrategy**，
+     *      它的 `getPlayerAmmoType()` **恒为 null**，子弹就是那个**物品**本身；
+     *   ② `AmmoType: "@rifle"` 之类 → PlayerAmmoStrategy，才走 `Ammo` 枚举。
+     * 旧版只读 ①的 null → 直接 return 0；而且旧版还用 `AmmoSupplierItem` 判 ②的物品，对 ①
+     * （普通 `Item`，见 ModItems.registerAmmo）**永远不匹配**。两道都错，所以一颗都搬不动。
+     * 正解：用 SWB 自己的判据 `AmmoConsumer.isAmmoItem(stack)`（= MinecraftUtil.isSameItemStack
+     * 比 `consumer.stack()`）——它对 ① ② **两种都成立**（PlayerAmmoStrategy.init 也会
+     * `setStack(ammoType.getItemStack())`，反编译实证）。 */
+    private static Method mConsumerIsAmmoItem; // AmmoConsumer.isAmmoItem(ItemStack) -> boolean
+    private static Method mConsumerStack;      // AmmoConsumer.stack() -> ItemStack（取代表物品）
 
     /* ==================== 反射缓存：冰火传说 ==================== */
 
@@ -234,6 +253,40 @@ public final class MaidMountCompat {
                 mSetMouseSpeedY = null;
                 mSetHoverMode = null;
                 mGetHoverMode = null;
+            }
+            // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
+            // 每一环各自 try（缺一环只是"装弹"这一档不生效，不影响驾驶/开火）。
+            try {
+                mGetInventory = cVehicle.getMethod("getInventory");
+                mGetGunDataMap = cVehicle.getMethod("getGunDataMap");
+            } catch (Throwable ignored) {
+                mGetInventory = null;
+                mGetGunDataMap = null;
+            }
+            try {
+                Class<?> gdCls = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                mGunUseBackpackAmmo = gdCls.getMethod("useBackpackAmmo");
+                mGunSelectedAmmo = gdCls.getMethod("selectedAmmoConsumer");
+            } catch (Throwable ignored) {
+                mGunUseBackpackAmmo = null;
+                mGunSelectedAmmo = null;
+            }
+            try {
+                Class<?> acCls = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
+                // 【实测七百二十七·点3】SWB 自己的"这一格是不是这门枪要的弹"判据——对
+                // 物品型（ItemAmmoStrategy）与枚举型（PlayerAmmoStrategy）**两种都成立**，是正解。
+                mConsumerIsAmmoItem = acCls.getMethod("isAmmoItem",
+                        net.minecraft.world.item.ItemStack.class);
+            } catch (Throwable ignored) {
+                mConsumerIsAmmoItem = null;
+            }
+            // 取代表物品的方法（{@code stack()}）：与上面分开 try——它缺了只是"没实体弹的武器判不出来"，
+            // 不该把整条装弹链路一起关掉（各自独立是这一节所有反射的既定口径）。
+            try {
+                Class<?> acCls2 = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
+                mConsumerStack = acCls2.getMethod("stack");
+            } catch (Throwable ignored) {
+                mConsumerStack = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -559,15 +612,47 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 把她摆到龙的"玩家鞍位"上【降级方案的内核】。
+     * 把她摆到龙的"玩家鞍位"上【降级方案的内核】，**并锁定她的渲染插值**。
      *
      * <p>位置与玩家骑龙时逐字相同：{@code getRiderPosition()} + {@code getBbHeight()}，再过
      * {@link #freeSeatY}。她**不是乘客**（{@code startRiding} 那一步已取消），所以位置不由
-     * 原版 {@code positionRider} 那条链条管——由我们每 tick 写一次。她是**普通实体**，
-     * 位置照常由原版位置包同步给客户端（这正是降级方案比"当乘客"省事的地方：乘客位置要靠
-     * 乘客自己每拍算，普通实体由服务端说了算）。
+     * 原版 {@code positionRider} 那条链条管——由我们每 tick 写一次。
      *
-     * <p>速度一并清零：不让她把上一拍的惯性带进"椅子"，也不让重力在座位下方累积。
+     * <h2>【实测七百二十九·点3】为什么"每拍 setPos"仍然会漂——原版渲染插值走的是另一个字段</h2>
+     * 玩家原话：「女仆的位置还是在发生漂移。能不能强行绑定女仆坐在龙上龙的某块建模，然后每 tick
+     * 锁定那个位置呢？这样子也比在空中乱飘强得多。」
+     *
+     * <p>反编译实证（javap {@code ClientLevel.tickEntities} / {@code EntityRenderer.render}）：
+     * 实体的**渲染位置不是 {@code getX()}**，而是 {@code getPosition(partialTick)}
+     * = {@code Mth.lerp(partialTick, xo, getX())}——其中 {@code xo/yo/zo} 是"上一拍的位置"，
+     * 在**每只实体自己 tick 的开头**由 {@code setOldPosAndRot()} 从"当时的当前位置"拍下来
+     * （bytecode：{@code getX → putfield xo}）。
+     *
+     * <p>于是两条曲线不同源：
+     * <ul>
+     *   <li><b>龙</b>：{@code xo}=龙上一拍位置，{@code getX}=龙这一拍位置 → 龙模型平滑滑动。</li>
+     *   <li><b>她</b>：{@code xo} 是"上一拍 <b>{@code setOldPosAndRot} 那一刻</b>她在哪"——
+     *       服务端上这恰好等于上一拍的鞍位（没问题），可<b>客户端</b>上她在那一拍之前刚被
+     *       {@code lerpTo} 的位置包**限流平滑**（原版位置包每 2 tick 才发一次，客户端再 lerp
+     *       三拍），所以 {@code xo} 拿到的是"平滑到一半"的位置，而 {@code getX} 又被我们
+     *       硬写成这一拍的鞍位 → <b>两个端点一个来自插值中间态、一个来自最终态</b>，
+     *       她的曲线于是每拍都在"往回缩一下"，观感就是**相对龙体持续漂移**。</li>
+     * </ul>
+     *
+     * <p>修法（就是玩家说的"每 tick 锁定那个位置"）：**她的两个插值端点直接由龙的这两个端点
+     * 推出来**——鞍位相对龙体的偏移量（{@code 鞍位 - 龙位置}）在一拍之内几乎不变，所以
+     * <pre>
+     *   她的这一拍端点 = 龙的这一拍位置 + 偏移
+     *   她的上一拍端点 = 龙的上一拍位置 + 偏移
+     * </pre>
+     * 两条曲线的**两端点逐拍同源**，插值中间态自然重合成同一条线，漂移消失。这个算法是
+     * **无状态的**（偏移当场算、不缓存任何"上一拍"），因此它与本方法在一拍里被调几次无关——
+     * 她自己的 tick 之后调一次、龙 tick 之后又调一次（谁后 tick 谁说了算，见
+     * {@code RideBindManager.onEntityTickPost}），两次结果完全一样，不会"越推越远"。
+     *
+     * <p>同时把她的**朝向**也镜像成龙这一拍的朝向（含 {@code yRotO}/{@code yBodyRot}）：
+     * 龙转身时她的模型跟着转，且转的插值曲线与龙同源（旧版压根不设她的朝向，龙一转
+     * 她就是"坐在原地不动"，看起来又像错位）。
      *
      * @return true = 摆好了
      */
@@ -580,10 +665,42 @@ public final class MaidMountCompat {
             if (seat == null) {
                 return false;
             }
-            double y = freeSeatY(maid, seat.x,
-                    seat.y + (double) maid.getBbHeight(), seat.z);
-            maid.setPos(seat.x, y, seat.z);
+            double bb = maid.getBbHeight();
+            double y = freeSeatY(maid, seat.x, seat.y + bb, seat.z);
+            Vec3 now = new Vec3(seat.x, y, seat.z);
+            // 【只在客户端写插值字段】{@code xo/yo/zo} 唯一的消费者是**渲染**
+            // （{@code getPosition(partialTick)} → 客户端渲染线程），服务端写它没有任何收益；
+            // 而 {@code xOld/yOld/zOld} 还兼作服务端碰撞扫掠的"上一拍位置"，在服务端乱写反而
+            // 有风险。所以这一档严格限定在客户端那一侧（{@link RideBindManager} 的客户端分支调到这里）。
+            if (maid.level() != null && maid.level().isClientSide()) {
+                Vec3 origin = dragon.position();
+                // 鞍位相对龙体的偏移（含俯仰/飞行补偿与"抬出方块"的 y 修正）
+                double offX = now.x - origin.x;
+                double offY = now.y - origin.y;
+                double offZ = now.z - origin.z;
+                // 龙的"上一拍端点"（原版每只实体 tick 开头由 setOldPosAndRot 拍下，客户端亦然）
+                maid.xo = dragon.xo + offX;
+                maid.yo = dragon.yo + offY;
+                maid.zo = dragon.zo + offZ;
+                maid.xOld = maid.xo;
+                maid.yOld = maid.yo;
+                maid.zOld = maid.zo;
+            }
+            maid.setPos(now.x, now.y, now.z);
             maid.setDeltaMovement(Vec3.ZERO);
+            // 朝向镜像（含"上一拍朝向"，让她的转身插值与龙同源）。朝向字段两侧都写：
+            // 服务端写是为了下一次同步包里带的朝向就是龙这一拍朝向（客户端 lerpTo 也读它）。
+            float dyaw = dragon.getYRot();
+            float dyawO = dragon.yRotO;
+            maid.yRotO = dyawO;
+            maid.setYRot(dyaw);
+            // yBodyRot/yBodyRotO 声明在 LivingEntity 上（javap 实证）——必须转成 LivingEntity
+            // 才访问得到；她本来就是 EntityMaid（LivingEntity 的子类），这个 instanceof 恒真。
+            if (maid instanceof LivingEntity le) {
+                le.yBodyRotO = dyawO;
+                le.yBodyRot = dyaw;
+            }
+            maid.setYHeadRot(dyaw);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -931,7 +1048,7 @@ public final class MaidMountCompat {
         // 【实测七百二十五】飞行载具（直升机/固定翼/飞艇）**换一整套**：它们的航向/俯仰在
         // 鼠标通道里，地面那套左右位表达不了。见 driveFlight 的注释。
         if (isFlyingEngine(eng)) {
-            return driveFlight(mount, modifier, eng, dy, horiz, err);
+            return driveFlight(mount, modifier, eng, dy, horiz, err, maid);
         }
 
         // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
@@ -1097,6 +1214,22 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测七百二十六·点3】这只坐骑是不是"飞行载具"（卓越前线的直升机 / 固定翼）——
+     * 空战那一档（{@link MaidAirCombat}）据此决定要不要接管"去哪"。
+     *
+     * <p>判据与 {@link #isFlyingEngine} 同源（同一个引擎名集合），只是这一条对外公开、
+     * 供 {@code RideBindManager} 问。飞艇**不算**：它的偏航/升降走位掩码，接敌盘旋那套
+     * "爬升 + 绕圈"的坐标语义对它没有意义（而且它本来也不快）。
+     */
+    public static boolean isFlyingVehicle(Entity e) {
+        try {
+            return isVehicle(e) && isFlyingEngine(engineType(e));
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
      * v1.3.0(beta) 实测七百二十五【女仆驾驶直升机：左右与升降都不动】。
      *
      * <h2>玩家原话</h2>
@@ -1134,49 +1267,95 @@ public final class MaidMountCompat {
      * <p>写不出鼠标通道（反射失败）→ 退回地面那套位掩码（一个字节不变）。
      */
     private static boolean driveFlight(Entity mount, double modifier, String eng,
-                                       double dy, double horiz, float err) {
+                                       double dy, double horiz, float err, Entity maid) {
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false; // 探测失败 → 交回地面档
         }
         try {
             boolean heli = "HELICOPTER".equals(eng);
+            boolean airCombat = MaidAirCombat.enabled();
+            double dead = airCombat ? FLIGHT_HOVER_DEADZONE : FLIGHT_ALT_DEADZONE;
+            // 【实测七百二十八】只用于日志区分两档（高度本身已由目标点 Y 表达）。
+            boolean fighting = airCombat && maid instanceof EntityMaid em && MaidAirCombat.inCombat(em);
+
+            // 【实测七百二十九·点1·关键返修——"悬停"与"能飞"是互斥的，旧版把它们焊死了】
+            //
+            // 727 那一版把悬停档设成 `heli && 开关开着` = **常驻**，于是引擎每拍都在做这三件
+            // （反编译 {@code helicopterEngine:590-599} 实证）：
+            //   ① pitchSpeed *= 0.2（俯仰权限只剩两成）；
+            //   ② setXRot(xRot * 0.97) 且 xRot -= 0.5*Δ·viewVec（**主动把机头压回水平**）；
+            //   ③ setDeltaMovement(Δ.multiply(0.95, 1, 0.95))（水平速度每拍打 0.95 折）。
+            // 而直升机**唯一**的水平推进就是"低头 → 升力分出水平分量"
+            // （{@code add(getUpVec().scale(propeller*lift*0.66))}，:686）——① 让它几乎压不下去、
+            // ② 每拍又把它拉回来、③ 把刚推出来的速度按指数衰减（半衰期 ~13 拍）。
+            // 三条合起来 = 水平方向被彻底锁死 → 正是玩家说的「彻底失去了前后左右移动能力，
+            // 只会上下飞行」。
+            //
+            // 所以悬停档改成**只在"水平已经停在目标点上"时开**：那时不需要侧移，悬停档给的两件
+            // 东西（姿态自稳 + 竖直速度反调总距、系数 0.01 比非悬停档的 0.002 大 5 倍）正是
+            // "稳稳悬停"要的；一旦要挪窝（盘旋/接敌/跟随主人）立刻退出，把俯仰权限和水平速度
+            // 还给引擎。这才是引擎设计悬停档的用法。
+            //
+            // 判据用「够近 **且** 水平速度真的停了」而不是只看距离：盘旋时她的目标点是一直在动的
+            // 「追逐胡萝卜」，距离会在死区边缘反复穿越；只看距离会让悬停档每几拍开关一次（抖）。
+            // 加上"速度已停"这一条，跟随站定的主人 → 悬停；绕圈/赶路 → 退出，全程没有抖动。
+            double hspeed = horizontalSpeed(mount);
+            boolean parked = heli && airCombat && horiz <= FLIGHT_ARRIVE && hspeed < FLIGHT_PARK_SPEED;
+
             // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
             float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
             mSetMouseX(mount, yawCmd);
 
-            // ② 俯仰：写 Y 通道。约定（反编译）：mouseY 正值 → xRot += → 低头 → 前飞；
+            // ② 俯仰：写 Y 通道。约定（反编译实证）：mouseY 正值 → xRot += → 低头 → 前飞；
             //    负值 → 抬头 → 爬升（直升机）/ 拉起来（固定翼）。
             double altErr = dy;                        // >0 = 目标更高
             double flatDist = Math.max(horiz - FLIGHT_ARRIVE, 0.0);
             float pitchCmd = 0.0f;
             boolean turning = Math.abs(err) >= 60.0f;
             if (!turning) {
-                if (Math.abs(altErr) > FLIGHT_ALT_DEADZONE) {
+                if (Math.abs(altErr) > dead) {
                     // 先对齐高度：目标更高 → 抬头（负），更低 → 低头（正）
                     pitchCmd = (float) clamp(-altErr * FLIGHT_PITCH_PER_BLOCK,
                             -FLIGHT_PITCH_MAX, FLIGHT_PITCH_MAX);
                 } else if (flatDist > 0.0) {
-                    // 高度已对齐 → 低头前飞
+                    // 高度已对齐 → 低头前飞。**这是直升机唯一的水平推进手段**（见上面那段：
+                    // 升力沿机体上方向量，机头一低就分出水平分量）；悬停档此时已退出，
+                    // 俯仰权限是满的，所以这一条真的推得动她。
                     pitchCmd = (float) clamp(flatDist * FLIGHT_PITCH_PER_BLOCK,
-                            0.05, FLIGHT_PITCH_MAX);
+                            0.08, FLIGHT_PITCH_MAX);
                 }
             }
             mSetMouseY(mount, pitchCmd);
 
-            // ③ 总距/推力 + 悬停
+            // ③ 总距：**PD 控制**（按预测落点决定升降），不再是"差多少就顶多少"的 bang-bang。
+            //
+            // 【实测七百二十九·点1·为什么旧版会"先往上飞三格，然后再慢慢掉下来"】
+            // 旧版是纯死区开关：`altErr > 0.75 → 一直按抬总距`、`altErr < -0.75 → 一直按压总距`，
+            // 中间没有阻尼。总距一按就一路加到 0.12 上限（{@code :638-641}），升力随之过剩 → 冲过头
+            // → 反过来一路压下去 → 又冲过头，形成**极限环**。实机日志正是这一串：
+            // {@code 高差=3 → -4 → -1 → 2 → 0 → -4 → -3 → 0}（每 5 秒一条，永远在 ±4 格之间荡）。
+            // 玩家看到的就是"先往上飞三格、然后慢慢掉下来"，且**永远稳不住**（=做不到悬停）。
+            //
+            // 修法：用**实测竖直速度**把目标点提前。`预测落点 = 高差 - 竖直速度 × 提前量`——
+            // 已经在上升就把"还差多少"算少（提前松油、不会冲过），已经在掉就把"还差多少"算多
+            // （提前加油、接住下坠）。这就是 PD 里的 D 项，专门治极限环。
             short bits = 0;
-            boolean arrived = horiz <= FLIGHT_ARRIVE && Math.abs(altErr) <= FLIGHT_ALT_DEADZONE;
             if (heli) {
-                if (altErr > FLIGHT_ALT_DEADZONE) {
+                double vy = verticalSpeed(mount);
+                double lead = altErr - vy * FLIGHT_VY_LEAD;
+                if (lead > dead) {
                     bits |= 0x004;                     // 抬总距（爬升）
-                } else if (altErr < -FLIGHT_ALT_DEADZONE) {
+                } else if (lead < -dead) {
                     bits |= 0x008;                     // 压总距（下降）
-                } else if (horiz > FLIGHT_ARRIVE) {
-                    bits |= 0x004;                     // 高度已对齐 → 前位用于平飞推力
                 }
-                if (mSetHoverMode != null) {           // 到达 → 悬停；要走动就退出
+                // 【为什么"两个位都不按"才是对的】反编译实证：没按任何总距位时，引擎会按**竖直
+                // 速度**反调总距（{@code :657-660}，悬停档系数 0.01）——它自己就是一台高度保持
+                // 控制器。旧版只要"水平还远"就补一个 0x004 当"前进推力"，可 0x004 就是
+                // forwardInputDown = **抬总距**（{@code :628-641}）→ 一边说高度够了、一边继续爬。
+                // 所以**这条分支整个删掉**：水平移动只走上面 ② 的俯仰，高度只走这里的总距。
+                if (mSetHoverMode != null) {
                     try {
-                        mSetHoverMode.invoke(mount, arrived);
+                        mSetHoverMode.invoke(mount, parked);
                     } catch (Throwable ignored) {
                     }
                 }
@@ -1193,14 +1372,76 @@ public final class MaidMountCompat {
             }
             mProcessInput.invoke(mount, bits);
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
-            logDrive(mount, "飞行档 引擎=" + eng + " 鼠标X=" + Math.round(yawCmd)
+            logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+                    + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                            : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                    + " 鼠标X=" + Math.round(yawCmd)
                     + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
                     + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
             return true;
         } catch (Throwable ignored) {
             return false;
         }
     }
+
+    /**
+     * 【实测七百二十九·点1】实测竖直速度（格/拍）——PD 高度控制的 D 项。
+     *
+     * <p>直升机的竖直速度**是**引擎每拍用升力积分出来的 {@code deltaMovement.y}（反编译
+     * {@code helicopterEngine:686}：{@code deltaMovement.add(getUpVec().scale(propeller*lift*0.66))}），
+     * 所以读它就是把"当前正在往上还是往下、多快"拿到手——这正是旧版死区开关缺的那一项。
+     * 拿不到 → 0（退化成纯 P，仍比旧版好）。
+     */
+    private static double verticalSpeed(Entity mount) {
+        try {
+            if (mount == null) {
+                return 0.0;
+            }
+            return mount.getDeltaMovement().y;
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * 【实测七百二十九·点1】实测水平速度（格/拍）——用来判断"她是不是真的停住了"，
+     * 见 {@code parked} 那一段。只取 xz 分量（竖直速度归 {@link #verticalSpeed}）。
+     */
+    private static double horizontalSpeed(Entity mount) {
+        try {
+            if (mount == null) {
+                return 0.0;
+            }
+            Vec3 dm = mount.getDeltaMovement();
+            return Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * 【实测七百二十九·点1】"停住了"的水平速度阈值（格/拍）——低于它才允许进悬停档。
+     * 取 0.05 ≈ 每秒 1 格（直升机巡航速度是每秒 10 格上下的量级），所以这一条只拦住"真在原地"，
+     * 不会误判缓慢修正。
+     */
+    private static final double FLIGHT_PARK_SPEED = 0.05;
+
+    /** 小工具：保留两位（日志用）。 */
+    private static String fmt2(double v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
+    }
+
+    /**
+     * 【实测七百二十九·点1】PD 高度控制的"提前量"（拍）：把目标点按**当前竖直速度**折算成
+     * "再飞这么多拍会到哪"，用那个预测落点决定此刻该不该给总距。
+     *
+     * <p>取值依据：引擎的总距从按下到升力见效要经过
+     * {@code power → propellerRot}（{@code lerp(0.18f, …, power)}，{@code :680}）这一层一阶滞后，
+     * 时间常数约 1/0.18 ≈ 5.5 拍；再叠加 {@code deltaMovement} 自己一拍的积分——所以提前量取
+     * {@code 10} 拍（约半秒）刚好覆盖"给油 → 见效"这条链，既压得住冲过头、又不至于抖。
+     */
+    private static final double FLIGHT_VY_LEAD = 10.0;
 
     /**
      * 飞行档的偏航上限（写进鼠标 X 通道的值）。引擎里那一项被 {@code clamp(…, -10, 10)}
@@ -1212,10 +1453,24 @@ public final class MaidMountCompat {
     private static final float FLIGHT_PITCH_MAX = 0.6f;
     /** 每 1 格高度差给多少俯仰输入（收敛用）。 */
     private static final float FLIGHT_PITCH_PER_BLOCK = 0.04f;
-    /** 到达判据（格）：水平距离进这个带就不再前倾，改去对齐高度/悬停。 */
-    private static final double FLIGHT_ARRIVE = 6.0;
-    /** 高度死区（格）：竖直差进这个带就不动总距（悬停时的自然浮动区间）。 */
+    /**
+     * 到达判据（格）：水平距离进这个带就不再前倾，改去对齐高度/悬停。
+     * 【实测七百二十七·点1】从 6.0 收到 3.0——盘旋半径本身就可能是 3~6 格，旧值等于
+     * "还没到盘旋圈就判定到达、不再给前飞输入"，圈会松。
+     */
+    private static final double FLIGHT_ARRIVE = 3.0;
+    /** 高度死区（格，非悬停档）：竖直差进这个带就不动总距。 */
     private static final double FLIGHT_ALT_DEADZONE = 2.0;
+    /**
+     * 【实测七百二十七·点1 / 七百二十九·点1】高度死区（格）：{@code 0.75}。
+     *
+     * <p>0.75 是**目标值**——玩家要"稳稳悬停/同高度盘旋"，死区大了就会在带里晃。
+     * <p>【七百二十九 的关键区别】旧版把它当**死区开关**用（差超过 0.75 就一路顶总距到上限），
+     * 于是形成极限环（实机日志 {@code 高差=3 → -4 → -1 → 2 → 0 → -4}，永远荡）。本版起这个数
+     * 只当**PD 控制器的容差**——`lead = 高差 - 竖直速度 × 提前量` 进这个带才松手，靠 D 项
+     * 提前量把过冲吃掉。见 {@code driveFlight} 里那一段。
+     */
+    private static final double FLIGHT_HOVER_DEADZONE = 0.75;
 
     /** 写鼠标 X 通道（引擎的偏航/滚转输入）；拿不到方法 → 不动。 */
     private static void mSetMouseX(Entity mount, float v) {
@@ -1299,6 +1554,253 @@ public final class MaidMountCompat {
      */
     private static final double HEAD_STEER_MAX_DEG_PER_TICK = 12.0;
 
+    /* ==================== 实测七百二十六·点6：女仆自己把子弹搬进载具弹药容器 ==================== */
+
+    /** 装弹开关（配置 combat.ride.ammoFeed，默认开）。 */
+    public static boolean ammoFeedEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具装弹】。
+     *
+     * <h2>玩家原话</h2>
+     * 「卓越前线，如果女仆身上有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？」
+     *
+     * <h2>根因（反编译实证）</h2>
+     * 车的枪弹从 {@code GunData.countBackupAmmo(getAmmoSupplier())} / {@code withdrawAmmo} 取，
+     * 而 {@code VehicleEntity.getAmmoSupplier()} 返回的是**车自己**；车又注册了
+     * {@code Capabilities.ItemHandler.ENTITY} → {@code getInventory()}（{@code VehicleContainerHandler}，
+     * 反编译 {@code ModCapabilities$registerCapabilities$9} 实证）——也就是说车的"备用弹药"
+     * 只在**车自己的容器**里找。她背包里的子弹在**她**身上，车根本看不见（
+     * {@code InventoryTool.countAmmoItem(VehicleEntity)} 走的是车那个 capability）。
+     * 所以旧版她身上带再多对得上的子弹，也一枪都打不出来。
+     *
+     * <h2>本方法做什么</h2>
+     * 找出**这辆车当前武器实际吃的那种子弹类型**（从车里那门枪的 {@code selectedAmmoConsumer()} 的
+     * {@code getPlayerAmmoType()} 读出来，读不到就用 {@code getAmmo()} 名字反查），
+     * 然后把她背包里**属于这一种**的弹药搬进车的容器（{@code insertItem}）。
+     * 对不上的子弹一件都不动。
+     *
+     * <p>节流：调用方（{@code RideBindManager}）每 0.5 秒调一次就够——弹药消耗远慢于此。
+     *
+     * @return 这一次搬进去的**件数**（0 = 没搬 / 没有对得上的 / 车装满了）
+     */
+    /**
+     * v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具装弹】＋ 实测七百二十七·点3【返修：一条都没搬】。
+     *
+     * <h2>玩家原话</h2>
+     * 「卓越前线，如果女仆身上有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？」
+     * （七百二十七 复报：「扫描女仆的背包换弹机制似乎没能实现。」）
+     *
+     * <h2>为什么"备用弹药"必须搬进车容器（七百二十六 已定位）</h2>
+     * 车的枪弹从 {@code GunData.countBackupAmmo(getAmmoSupplier())} / {@code withdrawAmmo} 取，
+     * 而 {@code VehicleEntity.getAmmoSupplier()} 返回的是**车自己**；车又注册了
+     * {@code Capabilities.ItemHandler.ENTITY} → {@code getInventory()}（{@code VehicleContainerHandler}，
+     * 反编译实证）——车的"备用弹药"只在**车自己的容器**里找。她背包里的子弹在**她**身上，
+     * 车根本看不见。所以必须把子弹搬进车的容器。
+     *
+     * <h2>为什么七百二十六 一颗都没搬（这一版修的根因，反编译双实证）</h2>
+     * 七百二十六 是**按 {@code Ammo} 枚举**去匹配她的子弹的，而 SWB 的车武器分两条完全不同的路
+     * （{@code AmmoConsumeStrategy} 实证）：
+     * <ol>
+     *   <li><b>物品型</b>（{@code ItemAmmoStrategy}）——配置写 {@code "AmmoType": "superbwarfare:small_shell_he"}
+     *       这种**普通物品 id**（AH-6 的机炮/火箭弹都是这一类）。它的
+     *       {@code getPlayerAmmoType()} <b>恒为 null</b>，弹就是那个物品本身。旧版读 null → 直接
+     *       {@code return 0}，一颗都不搬。</li>
+     *   <li><b>枚举型</b>（{@code PlayerAmmoStrategy}）——配置写 {@code "@rifle"} 这种。它才有
+     *       {@code getPlayerAmmoType()}。而旧版判物品用的是 {@code AmmoSupplierItem}
+     *       （只有步枪弹那种"弹药补给物品"才是这个类）——对物品型的武器**永远不匹配**。</li>
+     * </ol>
+     * 两道都错，所以实机日志里一条「模组坐骑·装弹」都没有。
+     *
+     * <h2>正解（本版）</h2>
+     * 不问"这是什么类型"，直接问 SWB 自己：{@code AmmoConsumer.isAmmoItem(stack)}
+     * （= {@code MinecraftUtil.isSameItemStack(stack, consumer.stack())}，反编译实证）。
+     * 它对物品型（stack 就是那个物品）与枚举型（{@code PlayerAmmoStrategy.init} 也会
+     * {@code setStack(ammoType.getItemStack())}）**两种都成立**，而且顺带把 NBT/组件差异也判掉——
+     * 这是"这门枪吃不吃这一格"的唯一权威判据。把车上**每一门吃背包弹的武器**的 consumer 都收进来，
+     * 她背包里**命中任意一门**的子弹就搬进去。
+     *
+     * <p>节流：调用方（{@code RideBindManager}）每 0.5 秒调一次就够——弹药消耗远慢于此。
+     *
+     * @return 这一次搬进去的**件数**（0 = 没搬 / 没有对得上的 / 车装满了）
+     */
+    public static int feedVehicleAmmo(Entity mount, EntityMaid maid) {
+        try {
+            if (!ammoFeedEnabled() || mount == null || maid == null) {
+                return 0;
+            }
+            if (!isVehicle(mount) || mGetInventory == null || mGetGunDataMap == null) {
+                return 0;
+            }
+            java.util.List<Object> consumers = wantedConsumers(mount);
+            if (consumers.isEmpty()) {
+                return 0; // 这车没有任何"吃背包弹"的武器 → 无事可做
+            }
+            Object container = mGetInventory.invoke(mount);
+            if (!(container instanceof net.neoforged.neoforge.items.IItemHandler inv)) {
+                return 0;
+            }
+            // 从她身上取对得上的子弹：主手 → 副手 → 背包（含精妙背包/旅行者背包，走 TLM 的
+            // getAvailableBackpackInv）。抽出来立刻塞进车容器；塞不下的原样还回她背包。
+            int moved = 0;
+            moved += moveFrom(maid.getHandsInvWrapper(), consumers, inv);
+            moved += moveFrom(availableInv(maid), consumers, inv);
+            if (moved > 0) {
+                logVehicleAmmo(mount, moved);
+            }
+            return moved;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /**
+     * 收起这辆车上**每一门吃背包弹的武器**的弹药判据（{@code AmmoConsumer} 实例）。
+     *
+     * <p>过滤条件与 SWB 自己一致：{@code GunData.useBackpackAmmo()} 为 true（{@code MAGAZINE <= 0}，
+     * 即"不带自带弹匣、吃外部弹药"的那一类），且它的 {@code selectedAmmoConsumer()} 拿得到、
+     * 且 {@code stack()} 非空（EMPTY/INVALID 型没有可搬运的实体弹，跳过）。
+     */
+    private static java.util.List<Object> wantedConsumers(Entity mount) {
+        java.util.List<Object> out = new java.util.ArrayList<>(2);
+        try {
+            Object mapObj = mGetGunDataMap.invoke(mount);
+            if (!(mapObj instanceof java.util.Map<?, ?> map) || map.isEmpty()) {
+                return out;
+            }
+            for (Object gd : map.values()) {
+                if (gd == null || mGunUseBackpackAmmo == null || mGunSelectedAmmo == null) {
+                    continue;
+                }
+                Object useBackpack = mGunUseBackpackAmmo.invoke(gd);
+                if (!Boolean.TRUE.equals(useBackpack)) {
+                    continue; // 这把枪自带弹匣 → 不吃外部弹
+                }
+                Object consumer = mGunSelectedAmmo.invoke(gd);
+                if (consumer == null || mConsumerIsAmmoItem == null) {
+                    continue;
+                }
+                // 没实体弹的判据（EMPTY/INVALID/ENERGY）直接跳过——它们的 stack() 是空的，
+                // 搬进去也没意义。（isAmmoItem 对空 stack 的语义各家实现不一，这里显式挡一道。）
+                Object st = consumerStack(consumer);
+                if (st instanceof net.minecraft.world.item.ItemStack iss && !iss.isEmpty()) {
+                    out.add(consumer);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 取某个 {@code AmmoConsumer} 的代表物品（{@code stack()}）；拿不到 → null。 */
+    private static Object consumerStack(Object consumer) {
+        try {
+            if (mConsumerStack == null) {
+                return null;
+            }
+            return mConsumerStack.invoke(consumer);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 她可用于装弹的背包（含额外容器拉取）；拿不到 → null。 */
+    private static net.neoforged.neoforge.items.IItemHandler availableInv(EntityMaid maid) {
+        try {
+            return maid.getAvailableBackpackInv();
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 从一个物品栏里把"这车上任意一门武器吃得下的子弹"搬进车容器。命中一件就抽 1 件、立刻塞；
+     * 塞不下（返回的剩余非空）就把它原样还回同一个格子。
+     *
+     * <p>为什么抽 1 件而不是整摞：{@code ItemHandlerHelper.insertItem} 会自己按上限合并，
+     * 抽 1 件最省事、也最难出错（一次调用只动一格）。循环上限 = 该栏格数，绝不死锁。
+     */
+    private static int moveFrom(net.neoforged.neoforge.items.IItemHandler from,
+                                java.util.List<Object> consumers,
+                                net.neoforged.neoforge.items.IItemHandler into) {
+        if (from == null || into == null || consumers.isEmpty()) {
+            return 0;
+        }
+        int moved = 0;
+        try {
+            int slots = from.getSlots();
+            for (int i = 0; i < slots; i++) {
+                net.minecraft.world.item.ItemStack stack = from.getStackInSlot(i);
+                if (!stackIsWantedAmmo(stack, consumers)) {
+                    continue;
+                }
+                net.minecraft.world.item.ItemStack one = from.extractItem(i, 1, false);
+                if (one.isEmpty()) {
+                    continue;
+                }
+                // ItemHandlerHelper.insertItem 会自己找空位/合并；返回的剩余非空 = 塞不下
+                net.minecraft.world.item.ItemStack rest =
+                        net.neoforged.neoforge.items.ItemHandlerHelper.insertItem(into, one, false);
+                if (!rest.isEmpty()) {
+                    from.insertItem(i, rest, false); // 车装满了 → 原样退回，别吞她的东西
+                    break;
+                }
+                moved++;
+            }
+        } catch (Throwable ignored) {
+        }
+        return moved;
+    }
+
+    /**
+     * 这一格物品是不是"这车上某门武器吃得下的弹"——判据走 SWB 自己的
+     * {@code AmmoConsumer.isAmmoItem(stack)}（对物品型与枚举型**两种都成立**，见
+     * {@link #feedVehicleAmmo} 的说明）。
+     */
+    private static boolean stackIsWantedAmmo(net.minecraft.world.item.ItemStack stack,
+                                             java.util.List<Object> consumers) {
+        try {
+            if (stack == null || stack.isEmpty() || consumers.isEmpty() || mConsumerIsAmmoItem == null) {
+                return false;
+            }
+            for (Object consumer : consumers) {
+                Object ok = mConsumerIsAmmoItem.invoke(consumer, stack);
+                if (Boolean.TRUE.equals(ok)) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
+    private static void logVehicleAmmo(Entity mount, int moved) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = AFEED_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            AFEED_AT.put(mount.getUUID(), now);
+            if (AFEED_AT.size() > 512) {
+                AFEED_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·装弹", describeKind(mount)
+                    + " 女仆把对得上的子弹搬进载具弹药容器：+" + moved + " 发");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 装弹日志的独立频限表（与其它几条日志互不顶掉）。 */
+    private static final java.util.Map<java.util.UUID, Long> AFEED_AT = new java.util.concurrent.ConcurrentHashMap<>();
+
     /* ==================== 攻击：让载具/龙去打她的目标 ==================== */
 
     /**
@@ -1321,17 +1823,21 @@ public final class MaidMountCompat {
                 return;
             }
             Kind k = kindOf(mount);
+            // 【实测七百二十七·点5】"什么时候她才会让载具开火"——玩家的口径是
+            // 「只要女仆进入了 I attack 状态下，那么就会让他的载具一起攻击了」。
+            // 所以这里把判据收敛成**一条**：她此刻有没有活的攻击目标（= 她在攻击状态）。
+            // 有 → 把目标同时写到①她自己的 getTarget（SWB 内置的"Mob 乘客自动开火"读的就是它，
+            // 见反编译 VehicleEntity:4014）与②车上的炮塔/武器位 AI 目标 UUID（坦克那种走它）；
+            // **没有 → 两处都显式清空**（旧版只在有目标时才写，于是她脱战后车还在对着
+            // 上一个目标开火——"到底什么时候才会让载具攻击"就不确定了）。
             LivingEntity target = targetOf(maid);
             if (k == Kind.VEHICLE) {
-                // 把目标交给"她"（载具内置的 Mob-乘客开火链路读的是乘客自己的 getTarget）
-                if (target != null) {
-                    try {
-                        maid.setTarget(target);
-                    } catch (Throwable ignored) {
-                    }
+                try {
+                    maid.setTarget(target); // 有则写、无则清（null 也要写，否则她脱战了车还开火）
+                } catch (Throwable ignored) {
                 }
                 // 【实测七百二十四】再把目标写进炮塔/武器位的 **AI 目标 UUID**——车自己那套
-                // 弹道求解+开火读的是它，不是乘客的 getTarget。旧版没写 → 坦克从不开炮。
+                // 弹道求解+开火读的是它（座位制武器如直升机机炮则读上面那个 getTarget）。
                 applyVehicleAiTargets(mount, target);
                 logVehicleFire(mount, target);
                 return;

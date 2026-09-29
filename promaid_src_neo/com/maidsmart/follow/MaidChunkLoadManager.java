@@ -837,18 +837,17 @@ public final class MaidChunkLoadManager {
             // 【实测七百一十六·点4】先于"骑乘中豁免"：她骑的是**本模组棍子绑上的坐骑**
             //  → 连人带坐骑一起处理（她同样是乘客，但玩家明确要她能跟过来；与扫帚同口径）。
             //  跨维度与同维度分别走各自那条既有链路（都不与"乘客不单独拉"冲突）。
-            // 【实测七百二十三】冰火传说龙（悬空鞍位）先认：她**不是乘客**，跨维/同维都**只传她**，
-            // 龙留在原地自己去跟（玩家原话「仅仅是传送女仆不传送龙」）。
-            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
-                LivingEntity rideOwner = maid.getOwner();
-                if (rideOwner == null || !rideOwner.isAlive()) {
-                    return;
-                }
-                if (maid.level() != rideOwner.level()) {
-                    // 跨维度：龙过不去，先干净解除（还原她的重力 / 龙的行动档），再传她一个人
-                    com.maidsmart.combat.RideBindManager.releaseDragonChairForTravel(maid);
-                }
-                teleportCore(maid, rideOwner, false);
+            //
+            // 【实测七百二十六·点1：特殊载具（卓越前线载具 / 冰火传说龙）**一切自动传送都不生效**】
+            //  玩家原话：「对于卓越前线以及龙这两个特殊的载具……不会触发大部分传送，只有玩家
+            //  手动使用排班表进行的传送，可以将她们传送过来……相比于原版的坐骑女仆并不会去主动
+            //  产生传送。所有的传送方面的行为必须由玩家来。」所以这一档排在"连人带坐骑"之前：
+            //  特殊载具上的她既不跨维跟随、也不连载具搬——自动链路一个字节都不碰，交还原地。
+            //  （玩家手动排班表传送仍可用，走 summonOne/summonMaidTo：只传人 + 解除绑定。）
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+                throttledSkipLog(maid, "special-mount-cross", com.maidsmart.tool.PromaidLog.nameOf(maid)
+                        + " 在特殊载具（卓越前线载具 / 冰火传说龙）上，自动跨维度跟随不生效"
+                        + "（只有玩家手动排班表传送会传她，且只传人不传载具）");
                 return;
             }
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
@@ -1014,8 +1013,12 @@ BlockPos stand = findStand(newLevel,
                 boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
                 // 【实测七百一十六·点4】骑坐骑的女仆同理：走"连人带坐骑"那条路（她也是乘客）
                 boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
-                if (!broomRider && !rideRider && (md.isMaidInSittingPose() || md.isPassenger()
-                        || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
+                // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：**一键集合是玩家手动
+                //  操作**，要能把人传来（只传人 + 解除绑定），所以它不算"停放豁免"那一档——
+                //  单独一个 flag 放行，落到下面 summonMaidTo 的 special 分支。
+                boolean specialRider = com.maidsmart.combat.RideBindManager.isSpecialMountRider(md);
+                if (!broomRider && !rideRider && !specialRider && (md.isMaidInSittingPose()
+                        || md.isPassenger() || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
                     kept++;
                     continue;
                 }
@@ -1131,7 +1134,11 @@ BlockPos stand = findStand(newLevel,
                     // v1.3.6：骑扫帚的照传（连人带扫帚，见 recallBroomRider）——不能因为「她是乘客」就把她的强载票收掉
                     boolean broomRider = com.maidsmart.combat.MaidBroomKit.isBroomAirborne(md);
                     boolean rideRider = com.maidsmart.combat.RideBindManager.isRideRider(md);
-                    if (!broomRider && !rideRider && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.isPassenger())) {
+                    // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）也算"玩家手动要能召回"
+                    //  那一档——与 summonAll 同口径放行，落到 summonMaidTo 的 special 分支。
+                    boolean specialRider = com.maidsmart.combat.RideBindManager.isSpecialMountRider(md);
+                    if (!broomRider && !rideRider && !specialRider
+                            && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.isPassenger())) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
                         // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
@@ -1392,8 +1399,11 @@ BlockPos stand = findStand(newLevel,
             if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
                 return recallBroomRider(maid, player) ? 1 : 2;
             }
-            // 【实测七百二十三】龙（悬空鞍位）只传她一个人（龙留在原地）
-            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
+            // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：**只传人、不传载具**，
+            //  且传送前先**解除绑定 + 清除标记**（玩家原话「不会连着载具一起传送。只会把人传送
+            //  过来。并且一旦进行传送了，那么就会立刻进行一次清除标记和解绑」）。
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+                com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
                 return teleportCore(maid, player, true) ? 1 : 2;
             }
             // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬（"她们也可以被传送过来"）
@@ -1430,9 +1440,13 @@ BlockPos stand = findStand(newLevel,
         if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
             return owner.isAlive() && recallBroomRider(maid, owner);
         }
-        // 【实测七百二十三】龙（悬空鞍位）只传她一个人（龙留在原地自己去跟）
-        if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
-            return owner.isAlive() && teleportCore(maid, owner, true);
+        // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）：只传人 + 先解除绑定/清标记
+        if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+            if (!owner.isAlive()) {
+                return false;
+            }
+            com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
+            return teleportCore(maid, owner, true);
         }
         // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬
         if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
@@ -1986,20 +2000,13 @@ BlockPos stand = findStand(newLevel,
             // 反馈"坐垫+跟随模式至少会在大世界传到我身边"正是这条路径：坐垫女仆在
             // 基岩层（同维度）距主人远 → 被拉回主人身边。坐垫/骑乘 = 玩家明确停放，
             // 不拉（与救援/一键集合同口径）。
-            // 【实测七百二十三】龙（悬空鞍位）先认：距离超线时**只传她不传龙**
-            // （龙留在原地自己去跟；玩家原话「仅仅是传送女仆不传送龙」）。
-            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(maid)) {
-                if (!shouldPull) {
-                    return; // 没到该拉的距离：正常跟着
-                }
-                if (teleportCore(maid, owner, true)) {
-                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", name
-                            + " 同维度距离 " + blocks + " 格（> " + dist
-                            + " 格），已传送回主人身边（悬空鞍位：只传她不传龙）");
-                } else {
-                    throttledSkipLog(maid, "ride-dragon-nostand", name
-                            + " 同维度距离 " + blocks + " 格需拉回，但主人身边 16 格内无安全落点——不传");
-                }
+            // 【实测七百二十六·点1】特殊载具（卓越前线载具 / 冰火传说龙）上的她**一切自动传送
+            //  都不生效**：同维远距拉回照旧让位（玩家原话「并不会去主动产生传送。所有的传送
+            //  方面的行为必须由玩家来」）。玩家手动排班表传送仍可用（走 summonOne/summonMaidTo）。
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+                throttledSkipLog(maid, "special-mount-samedim", name
+                        + " 在特殊载具（卓越前线载具 / 冰火传说龙）上，自动拉回不生效"
+                        + "（只有玩家手动排班表传送会传她，且只传人不传载具）");
                 return;
             }
             // 【实测七百一十六·点4】骑坐骑的女仆：距离超线时连人带坐骑拉回（她同样是乘客，
