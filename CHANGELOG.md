@@ -1,4 +1,172 @@
-﻿## 实测七百一十八【#30 窒息播报推翻重做 + 骑乘链路四收紧 + 坐姿免自保传送 + 收编社区 PR #26 的 Goety 半截】
+﻿## 实测七百一十九【骑乘指挥棒·模组坐骑通解通法 + 通用攻击档（任何 Mob 坐骑无条件服从她的目标）+ 指挥棒气泡改口 + 13 条新语音】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同一份 jar 覆盖发布；**未发平台**。
+
+### 〇、玩家三条原话
+
+1. 「用骑乘指挥棒指挥处于扫帚状态下的女仆显示的文本仍然是她现在在骑扫帚，应该改为：我处于扫帚模式」
+2. 「用桌面上的"C:\Users\Sketch\Desktop\API.bat (2).lnk"训练新的语音。」
+3. 「骑乘开始考虑兼容卓越前线的和冰火传说的龙，这两类载具都具有攻击能力以及飞行能力，
+   不能用通用的兼容。看看能不能给出一个通用解。还有一件事，冰火传说有普通版和社区版。
+   看看关于骑乘方面能不能给一个通用的兼容。」
+
+---
+
+### 一、【点1：指挥棒气泡改口】
+
+- 旧文案 `她正在骑扫帚，先让她收好扫帚～`（硬编码在 `RideBindManager.handle` 的扫帚分支里，
+  不是 lang key）→ 改为 **`我处于扫帚模式`**（玩家原话指定）。两树镜像各一处。
+- 判据一字未动（仍是 `isRidingBroom || isBroomTask`），只改文本。
+
+### 二、【点2：13 条骑乘指挥棒气泡补语音】
+
+- 骑乘指挥棒是实测七百一十四 新增的功能，它的 13 条女仆气泡**从来没有进过语音包**
+  （manifest 里一条都没有）——本批补齐。走的是既有流程：`gen_voice_pack.py`（写日语台词 +
+  情绪档）→ GPT-SoVITS API（`API.bat`，127.0.0.1:9880）→ `norm_voice_pack.py`
+  （峰值归一 -1.5 dB + libvorbis q4）→ `install_voice_pack.py`（两树各装一份）。
+- 情绪分档：配对/出发 2 条走**俏皮**档（新 `cheer_ride`），解除 1 条走**关心**档，
+  其余 10 条"现在还不行"的提醒走**为难**档（新 `plead_ride`）。
+- manifest 139 → **152 条**（两树逐字节一致，13 个 ogg 两树都在）。逐条命中模拟零遮蔽：
+  13 条各命中自己，且旧 139 条（含 `broom_not_ready` / `flight_not_ready` / `ready_dual`
+  等 contains 前缀）一个都没被抢走。
+
+### 三、【点3：模组坐骑通解通法——为什么"通用"要给得出，以及它长什么样】
+
+**先说"为什么不能用一条通用判据"（玩家说得对）**：现有 `MaidRideKit` 的通用档是
+**一个**判据——原版 `Saddleable && isSaddled`，然后把目的地喂给载具自己的 `PathNavigation`。
+它对马/猪/骆驼成立，是因为原版把它们做成"玩家骑就走玩家驾驶、女仆骑就走普通 travel + 寻路"。
+这两类模组载具**根本不走原版那一套**（javap / 反编译实证）：
+
+| | 卓越前线（superbwarfare） | 冰火传说（iceandfire）的龙 |
+|---|---|---|
+| 是 `Saddleable` 吗 | **不是** | **不是**（连鞍都没有） |
+| 有 `PathNavigation` 吗 | **没有**（不是 `Mob`） | 有，但飞行不走它 |
+| 怎么定义"能骑" | 座位数 > 0 且没报废 | 驯服 + 主人 + 阶段 > 2 |
+| 怎么驱动 | `processInput(short)` 位掩码分引擎（Wheel/Track/Ship/Helicopter/Aircraft/AirShip） | `IafDragonFlightManager.setFlightTarget` |
+| 女仆能拿操纵权吗 | **能**（引擎闸是 `getFirstPassenger()` = 座位 0，不认 Player） | **不能**（`getControllingPassenger()` 只认 Player） |
+
+**通解 = 可插拔驱动（driver）**。新增 `com.maidsmart.combat.MaidMountCompat`：把"怎么开"
+抽象成一张派发表——探测到是哪一类载具 → 派给对应驱动；每个驱动只负责把**同一个意图**
+（去某点 / 停下 / 攻击某目标）翻译成那个模组自己的 API。新增的接入点只有三处（都在既有闸门之后）：
+`MaidRideKit.isRideableMount` / `denyReason` / `isRideRider`（认不认它）、
+`feedNavigation` / `stopNavigation`（喂目标/收手）、`RideBindManager.drive`（每拍让坐骑打她打的目标）。
+
+**① 卓越前线载具（反射，`instanceof VehicleEntity`）**
+
+- **关键支点（反编译实证）**：引擎的驾驶闸是 `getFirstPassenger()`（**座位 0**），
+  **不是** `getControllingPassenger()`（SWB 压根没覆写它、对谁都返回 null）。
+  所以女仆只要坐进座位 0 就能开——这正是"能通用"的地方。
+  `VehicleEngineUtils.wheelEngine/airShipEngine/...` 开头都是
+  `if (getFirstPassenger() == null) { 全清输入; setPower(0); }`。
+- **驱动方式逐字照抄玩家**：只调它自己的 `processInput(short)` 位掩码
+  （0x001 左 / 0x002 右 / 0x004 前 / 0x008 后 / 0x010 上 / 0x020 下 / 0x100 冲刺）。
+  **绝不自己写 yaw**——引擎每 tick 用 `setDeltaRot` 改偏航，我们直接 `setYRot` 就是两股力打架
+  （画龙、抖）；朝向也走它自己的左右位，与玩家按键完全同一条路径。
+- **位语义按引擎分流**（实证）：地面/船 前=油门、左右=转向；直升机 前=加总距（爬升）、
+  左右=偏航、上=悬停开关；固定翼 前=推力、上=起落架；飞艇 上/下=升降（`setLiftSpeed`）。
+  所以只有**飞艇**用上下位表达"想更高/更低"，其余引擎把高度交给它自己的物理。
+- **座位保险**：绑定时若她被排到座位 0 以外（驾驶位被玩家占了），
+  `MaidMountCompat.ensureDriverSeat` 把她挪回座位 0（她能开火但开不动是很坑的状态）。
+- **开火**：载具基类**本来就内置**「Mob 乘客 + `canShoot` + 自己有 `getTarget()` → 自动瞄准 +
+  按时击发 `vehicleShoot`」那条链路（`baseTick` 反编译实证）。所以女仆坐进武器位、
+  把目标交给她自己（`maid.setTarget(...)`）即可，载具替她打。
+
+**② 冰火传说的龙（反射，类名探测）**
+
+- **关键支点（反编译实证）**：`tick()` 里 `if (useFlyingPathFinder()) flightManager.update();`，
+  而 `useFlyingPathFinder() = isFlying() && getControllingPassenger() == null`。
+  女仆当乘客时 `getControllingPassenger()` 恒 null（`updateRider()` 整段都写着
+  `controllingPassenger instanceof Player`）⇒ **龙自己每 tick 跟着飞行目标跑**。
+  所以驱动 = 写 `flightManager.setFlightTarget(点)` + **把 `flying` 置真**
+  （否则 `flightManager.update()` 根本不跑，龙会站在地上）。
+- **升降不单独表达**：`up/down` 那两个控制位只在 `updateRider()` 的 **Player 分支**里被读，
+  女仆这一档读了白读——高度全部走"目标点自己的 Y"，由 `flightManager` 的俯仰逻辑实现
+  （与玩家骑乘时同一套飞行物理）。
+- **开火**：龙没有"自动开火"，得显式触发——`strike(true)` + `riderShootFire(女仆)`。
+  `riderShootFire` 的形参是 `Entity`（javap 实证），**不要求 Player**，女仆可以直接当控制者。
+
+**③ 普通版 vs 社区版：一条代码路径通吃**
+
+反编译四个 jar 对照（`iceandfire-2.1.13`、`IceAndFireCE-1.2.7`、`IceAndFireCE-1.2.6`、
+`iceandfire-2.1-beta.1`）：**结构相同、只有包名/类名不同**——
+
+| jar | 龙基类 | 飞行管理器 |
+|---|---|---|
+| 普通版 1.20.1 | `com.github.alexthe666.iceandfire.entity.EntityDragonBase` | `...entity.IafDragonFlightManager` |
+| 社区版 1.20.1 | `com.iafenvoy.iceandfire.entity.EntityDragonBase` | `...entity.util.dragon.IafDragonFlightManager` |
+| 社区版 1.21.1 | `com.iafenvoy.iceandfire.entity.DragonBaseEntity` | `...entity.util.dragon.IafDragonFlightManager` |
+
+而承载骑乘/飞行/攻击的成员名（`flightManager` 字段、`isFlying`/`setFlying`/`up`/`down`/
+`strike`/`riderShootFire`/`getDragonStage`，以及飞行管理器的 `setFlightTarget`/`getFlightTarget`）
+**四份 jar 逐字相同**（javap 全量核对）。所以按**类名探测**（三个候选依次试）、
+按**同一套方法名驱动**——普通版与社区版共用一条代码路径，无需分叉。
+
+**④ 铁律**：全程反射，没装 / 换版本 / 改包名 → `available()==false`，整条链路不激活，
+一个字节都不碰原版（与 `GunCompat`/`MaidGoetyCompat` 同范式）；只有 `isRideRider`
+（= 她身上带骑乘棒痕迹）为真时才会被调到，原版/别的模组让她坐上去的场合一次都不碰。
+
+**⑤ 新增配置**（面板「移动与行为 → 骑乘指挥棒」，2 项，默认都开）：
+`ride.modMounts`（模组坐骑兼容总开关）、`ride.modMountFire`（骑乘时替她开火）。
+四份 lang 各 +2 键。日志搜「模组坐骑」看有没有真的在驾驶（节流 5 秒/只）。
+
+**⑥ 通用攻击档：任何“用正常优先级判定”的可骑乘生物无条件服从她的目标**（实测七百一十九·点4）
+
+玩家原话：「理论上如果乘坐的生物是用正常的优先级来进行判定的话，应该是无条件服从女仆的 target 的。攻击方面应该是可以采用坐骑自己的攻击方式的……尽量做一个通用兼容，实在兼容不了再专门做适配。」
+
+上一段的驱动是“逐模组适配”（卓越前线、冰火传说）。这一档把它补成“通用兜底”：
+
+- **判据只有一条**：坐骑是不是 `net.minecraft.world.entity.Mob`。是，就把她脑里的攻击目标**原样无条件**写到它的 `setTarget(...)` 上——不管它是哪个模组的、也不问它认不认这套。
+- **攻击方式全用它自己的**：我们只给目标，瞄准 / 接近 / 开火全由它自己那套（原版）目标 AI 完成——就像她自己在地上打一样。
+- **null 也照写**（她没目标 = 坐骑也没目标），所以“服从”是双向且即时的。
+- **对无攻击能力的原版兽无副作用**：马 / 猪 / 骆驼没有攻击目标 AI——写了也没人读，不会因此乱跑。
+- **兼容不了的才专门适配**：卓越前线载具（不是 `Mob`）与冰火传说龙（驾驶 / 飞行 / 攻击都不走原版）依然走各自的专用驱动。
+- **开关**：同 `ride.modMountFire`（默认开）。日志搜「模组坐骑·目标」看兜底有没有真的把她的 target 传下去（节流 5 秒 / 只）。
+
+### 四、改动清单（两树镜像）
+
+| 文件 | 改了什么 |
+|---|---|
+| `combat/MaidMountCompat.java`（新，两树各一份） | 通解驱动派发表：SWB 载具（processInput）+ IAF 龙（flightManager）+ 座位保险 + 代她开火 + 节流日志 |
+| `config/MaidSmartConfig.java` | `COMBAT_RIDE_MOD_MOUNTS` / `COMBAT_RIDE_MOD_MOUNT_FIRE` |
+| `config/PromaidConfigScreen.java` | 骑乘板块新增两行 |
+| `combat/MaidRideKit.java` | 4 处接入：`isRideableMount` / `denyReason` / `isRideRider` 认模组坐骑；`feedNavigation`/`stopNavigation` 派给驱动；`describe` 用细分名 |
+| `combat/RideBindManager.java` | 绑定时 `ensureDriverSeat`；`drive` 每拍 `tickAttack`；点1 气泡改口 |
+| `assets/maid_smart/lang/*.json`（4 份） | 各 +2 键 |
+| `assets/promaid/voice/`（两树） | manifest 139 → 152；+13 个 ride_*.ogg |
+| `gen_voice_pack.py` | +13 条日语台词 + 两个情绪档（`cheer_ride` / `plead_ride`） |
+
+### 五、验证与交付
+
+- 两树 `javac` **0 错误**（只剩既有的过时 API 警告）。
+- `_mixchk.py` mixin 注入点审计：**PASS=178 FAIL=0**（本批没有新增 mixin）。
+- 打包闸门全过：Forge **897 条目**（611 class / 82 mixin）、Neo **909 条目**（623 class / 83 mixin），
+  `verify_jar_classes` 全过、`lang json: OK`、`MISSING: none`。
+- **反射目标逐个实证**（javap 两版/四 jar 核对）：SWB `VehicleEntity` 的 14 个目标方法在
+  1.20.1 与 1.21.1 两个 jar 里**全部存在**（`computed()` 返回 `DefaultVehicleData`、
+  `getEngineType` 也在）；IAF 的龙在**四个 jar**（普通版 + 社区版×3）里
+  `flightManager` 字段与 7 个方法全部存在、飞行管理器 2 个方法全部存在。
+- **引擎闸实证**：`VehicleEngineUtils` 里 `getFirstPassenger() == null → 清输入 + power=0`
+  出现于 wheel/track/ship/helicopter/airShip 各引擎；`baseTick` 里"`Mob` 乘客有目标就自动开火"
+  那条链路也在（这是"代她开火"能白拿的依据）。
+- **语音**：13 个 ogg 峰值归一 -1.5 dB / libvorbis q4；两树 manifest 与 13 个 ogg
+  **逐字节一致**；jar 内 manifest 复验含 13 条 ride 条目、两 jar 内 manifest 字节一致；
+  命中模拟零遮蔽（13 条各命中自己 + 旧 139 条无回归）。
+- 部署三处（1.20.1 客户端 / 1.21.1 客户端 / pack1201 服务端）**match=True**。
+- **本批尚未进游戏实测**——静态核对 + 编译 + 打包门禁 + 反射目标实证都过了，等你实测。
+
+**上游戏怎么验（三条）**
+- **气泡**：切到扫帚模式的女仆，手持骑乘指挥棒右击她 → 头顶应说「我处于扫帚模式」，而且**有声音**。
+- **卓越前线载具**：把一辆载具（坦克/直升机都行）和女仆用指挥棒配对 → 她坐进**驾驶位**（座位上只有她），
+  她就该带着载具跟你走（日志「模组坐骑 卓越前线载具(...) 位掩码=...」）；遇敌时载具应自己瞄准开火。
+  **注意**：你自己别占驾驶位——占了她在别的座位，只能开火不能开（有座位保险会把她挪回 0 号）。
+- **冰火传说的龙**：驯服一条阶段 ≥ 2 的龙、用指挥棒把它和女仆配对 → 她骑上去后龙应该**起飞并跟着你飞**
+  （日志「模组坐骑 冰火传说龙(阶段N) 飞行目标已写」）；遇敌时龙应吐息。
+  普通版与社区版各测一次最好。
+
+**本条尚未发版**——等实测。
+
+## 实测七百一十八【#30 窒息播报推翻重做 + 骑乘链路四收紧 + 坐姿免自保传送 + 收编社区 PR #26 的 Goety 半截】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同一份 jar 覆盖发布；**未发平台**。

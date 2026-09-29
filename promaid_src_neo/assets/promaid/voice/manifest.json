@@ -76,6 +76,71 @@
       "mode": "contains"
     },
     {
+      "text": "好呀，再指一只上了鞍的坐骑给我～",
+      "file": "ride_pick.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "坐稳啦，我们出发～",
+      "file": "ride_ready.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "好，我自己走～",
+      "file": "ride_release.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "她不是我的女仆～",
+      "file": "ride_not_owner.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "我处于扫帚模式",
+      "file": "ride_broom_mode.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "没能坐上去……再试一次？",
+      "file": "ride_fail.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这个不能当坐骑～",
+      "file": "ride_bad_mount.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "这是家具，不是坐骑～",
+      "file": "ride_furniture.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "扫帚有它自己的飞法，不用棍子管～",
+      "file": "ride_broom_rule.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "它已经不在了……",
+      "file": "ride_mount_gone.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "它不是能上鞍的坐骑～",
+      "file": "ride_not_saddleable.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "先给它装上鞍再绑给我吧～",
+      "file": "ride_need_saddle.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "它背上已经有人了～",
+      "file": "ride_mount_busy.ogg",
+      "mode": "contains"
+    },
+    {
       "text": "空战装备不齐",
       "file": "flight_not_ready.ogg",
       "mode": "contains"

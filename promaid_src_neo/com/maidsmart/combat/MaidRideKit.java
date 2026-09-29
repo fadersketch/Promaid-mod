@@ -203,7 +203,7 @@ public final class MaidRideKit {
 
     public static boolean isRideableMount(Entity e, EntityMaid maid) {
         try {
-            if (!(e instanceof Mob) || e == maid || !e.isAlive()) {
+            if (e == null || e == maid || !e.isAlive()) {
                 return false;
             }
             if (e instanceof EntityMaid) {
@@ -214,6 +214,15 @@ public final class MaidRideKit {
             }
             if (isBroom(e)) {
                 return false; // 实测七百一十八：扫帚有自己那条飞行链路，不算坐骑
+            }
+            // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：卓越前线载具 / 冰火传说龙
+            // **不是 Mob、不是 Saddleable**，走不了下面那条通用档——单独认出来（反射，编译期
+            // 不依赖两家模组）。它们能不能驾由 MaidMountCompat.denyReason 回答。
+            if (MaidMountCompat.kindOf(e) != null) {
+                return MaidMountCompat.denyReason(e) == null;
+            }
+            if (!(e instanceof Mob)) {
+                return false;
             }
             if (!(e instanceof Saddleable saddle) || !saddle.isSaddled()) {
                 return false;
@@ -237,6 +246,10 @@ public final class MaidRideKit {
             }
             if (isBroom(e)) {
                 return "扫帚有它自己的飞法，不用棍子管～"; // 实测七百一十八：指挥棒不许选中扫帚
+            }
+            // v1.3.0(beta) 实测七百一十九【模组坐骑】——卓越前线载具 / 冰火传说龙（反射探测）
+            if (MaidMountCompat.kindOf(e) != null) {
+                return MaidMountCompat.denyReason(e);
             }
             if (!(e instanceof Mob) || e == maid || e instanceof EntityMaid) {
                 return "这个不能当坐骑～";
@@ -333,7 +346,14 @@ public final class MaidRideKit {
                 return false; // 不是骑乘棒绑的 → 与本链路无关
             }
             Entity v = ridingMount(maid);
-            if (v == null || !(v instanceof Mob)) {
+            if (v == null) {
+                return false;
+            }
+            // v1.3.0(beta) 实测七百一十九：模组坐骑（卓越前线载具 / 冰火传说龙）
+            if (MaidMountCompat.kindOf(v) != null) {
+                return MaidMountCompat.denyReason(v) == null;
+            }
+            if (!(v instanceof Mob)) {
                 return false;
             }
             if (!(v instanceof Saddleable saddle) || !saddle.isSaddled()) {
@@ -440,6 +460,12 @@ public final class MaidRideKit {
      */
     public static void feedNavigation(Entity mount, Vec3 target, double modifier) {
         try {
+            // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：先问两家模组驱动
+            // （卓越前线 processInput / 冰火传说 flightManager）——它们不是 Mob、没有
+            // PathNavigation，下面两个渠道都表达不了，必须由各自的驱动接管。
+            if (MaidMountCompat.drive(mount, target, modifier)) {
+                return;
+            }
             if (!(mount instanceof Mob mob)) {
                 return;
             }
@@ -457,6 +483,8 @@ public final class MaidRideKit {
     /** 停下载具（她下鞍 / 找不到主人时用）——两个渠道都要收手 */
     public static void stopNavigation(Entity mount) {
         try {
+            // 模组坐骑：各自的驱动收手（载具清位掩码 / 龙把飞行目标设成脚下）
+            MaidMountCompat.stop(mount);
             if (!(mount instanceof Mob mob)) {
                 return;
             }
@@ -472,6 +500,10 @@ public final class MaidRideKit {
                 return com.maidsmart.tool.PromaidLog.nameOf(m);
             }
             if (e != null) {
+                String mod = MaidMountCompat.describeKind(e);
+                if (!mod.isEmpty()) {
+                    return mod;
+                }
                 return String.valueOf(e.getType()).replace("entity.minecraft.", "");
             }
         } catch (Throwable ignored) {

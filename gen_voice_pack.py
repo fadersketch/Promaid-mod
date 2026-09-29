@@ -39,7 +39,11 @@ STYLES = {
     # 干活·汇报：干脆利落
     'work':   dict(ref=REF_A, prompt=TEXT_A, speed=1.03, temp=1.0, top_k=15, top_p=1.0),
     # 请求·为难：俏皮里带点撒娇
-    'plead':  dict(ref=REF_B, prompt=TEXT_B, speed=1.02, temp=1.0, top_k=15, top_p=1.0),
+    'plead': dict(ref=REF_B, prompt=TEXT_B, speed=1.02, temp=1.0, top_k=15, top_p=1.0),
+    # 骑乘指挥棒·俏皮：轻快应答（配对成功 / 出发）——用俏皮参考、稍快
+    'cheer_ride': dict(ref=REF_B, prompt=TEXT_B, speed=1.05, temp=1.0, top_k=15, top_p=1.0),
+    # 骑乘指挥棒·为难：各种「现在还不行」——俏皮参考、原速偏慢
+    'plead_ride': dict(ref=REF_B, prompt=TEXT_B, speed=1.0, temp=1.0, top_k=15, top_p=1.0),
 }
 
 STYLE_OF = {
@@ -60,7 +64,17 @@ STYLE_OF = {
              # v1.3.0 实测六百六十九：武装拴绳·解除（「到站啦」——放下人时温柔叮嘱）
              # v1.3.0 实测六百七十四：武装拴绳·新加气泡（care 档）
              'leash_landed',
-             'leash_off'],
+             'leash_off',
+             # 骑乘指挥棒（实测七百一十四 / 七百一十六 / 七百一十八 新增，本批补语音）
+             # 「好，我自己走～」= 解除时的日常应答，归关心档
+             'ride_release'],
+    # 骑乘指挥棒——俏皮档（配对/出发这类轻快应答）
+    'cheer_ride': ['ride_pick', 'ride_ready'],
+    # 骑乘指挥棒——为难档（各种「现在还不行」的提醒）
+    'plead_ride': ['ride_not_owner', 'ride_broom_mode', 'ride_fail',
+                   'ride_bad_mount', 'ride_furniture', 'ride_broom_rule',
+                   'ride_mount_gone', 'ride_not_saddleable',
+                   'ride_need_saddle', 'ride_mount_busy'],
     'plead': ['build_missing_material', 'bridge_no_block', 'brew_missing',
               'mine_no_block_high', 'wood_no_block_high', 'wood_no_axe', 'no_food_left',
               'work_no_pickaxe', 'work_ridden',
@@ -86,6 +100,20 @@ STYLE_OF = {
 
 # 日语台词（按中文 key 的情境重写；sched_* 是排班闲聊，走俏皮档）
 JP = {
+    # -------- 骑乘指挥棒（实测七百一十四 / 七百一十六 / 七百一十八 新增，本批补语音）--------
+    'ride_pick.ogg': 'うん、鞍を付けた乗り物をもう一匹指してね～',
+    'ride_ready.ogg': 'しっかり掴まって、出発するよ～',
+    'ride_release.ogg': 'うん、自分で歩くね～',
+    'ride_not_owner.ogg': 'あなたは私のご主人様じゃないよ～',
+    'ride_broom_mode.ogg': 'わたしは箒モードなの',
+    'ride_fail.ogg': 'うまく乗れなかった……もう一回やってみる？',
+    'ride_bad_mount.ogg': 'これは乗り物にならないよ～',
+    'ride_furniture.ogg': 'これは家具で、乗り物じゃないよ～',
+    'ride_broom_rule.ogg': '箒には自分の飛び方があるから、棒では扱わないよ～',
+    'ride_mount_gone.ogg': 'もういなくなっちゃった……',
+    'ride_not_saddleable.ogg': '鞍を付けられる乗り物じゃないよ～',
+    'ride_need_saddle.ogg': '先に鞍を付けてから、私に繋いでね～',
+    'ride_mount_busy.ogg': 'その背中にはもう誰かが乗ってるよ～',
     # -------- 武装拴绳（实测六百六十九：玩家要求把这些新文本也训练语音）--------
     'leash_on.ogg': 'さあ来て！ロープをしっかり掴んで、一緒に飛ぼう～',
     'leash_off.ogg': '着いたよ、足元に気をつけて降りてね～',

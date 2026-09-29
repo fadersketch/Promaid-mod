@@ -229,5 +229,7 @@
   "config.promaid.airSeparationRadius": "Air Raid: Radius Spread (blocks)",
   "config.promaid.combat.heatEscape": "Heat escape",
   "config.promaid.combat.wingRender": "Wing appearance",
-  "config.promaid.combat.wingYsmYield": "Wing appearance - yield to YSM"
+  "config.promaid.combat.wingYsmYield": "Wing appearance - yield to YSM",
+  "config.promaid.ride.modMounts": "Mod mount support (Superb Warfare vehicles / Ice and Fire dragons)",
+  "config.promaid.ride.modMountFire": "Mod mount: fire for her"
 }
