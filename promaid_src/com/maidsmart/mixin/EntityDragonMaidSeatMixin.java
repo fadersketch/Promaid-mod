@@ -102,4 +102,35 @@ public abstract class EntityDragonMaidSeatMixin {
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百二十二】坐骑自己把我摆错了 —— 每一拍在她自己 tick 的**末尾**再抢回鞍位。
+     *
+     * <p>为什么前两针还不够（完整实证见 1.21.1 树同名方法的注释）：龙**覆写了**两参
+     * {@code m_19956_}，覆写体是「先 {@code super}（= 前两个注入点）、**返回之后**再判一次
+     * 乘客身份」——女仆不是它的"控制乘客" → 走 {@code updatePreyInMouth(她)}：按到**嘴边**、
+     * 把动画切成 SHAKEPREY（甩动）→ 每拍甩（玩家看到的"反复横跳"）、落在方块里（窒息）、
+     * 55 刻后被咬一口并甩下鞍（实机日志：13:12:20 上鞍+窒息、13:12:31 死亡+自动复活）。
+     * SHAKEPREY 那套骨骼动画还让整个模型姿态跑偏 = 玩家报的"建模只剩一块"。
+     *
+     * <p>{@code ci.cancel()} 只能取消**基类那一份**；覆写体在 {@code super} 返回之后照样写。
+     * 所以这一针挂在原版每 tick 入口 {@code m_6083_}（{@code rideTick}）的 **TAIL**：
+     * 原版顺序是「她 tick 完 → 载具给她摆位」，末尾这一刻载具所有写位置的动作都已做完，
+     * 我们最后落笔就谁也挪不走她；顺带把甩动动画复位（{@code enforceDragonSeat} 内做）。
+     */
+    @Inject(method = "m_6083_()V", at = @At("TAIL"))
+    private void maidsmart$reSeatAfterVehicleMovedMe(CallbackInfo ci) {
+        try {
+            Entity self = (Entity) (Object) this;
+            if (!(self instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid maid)) {
+                return;
+            }
+            Entity vehicle = maid.m_20202_();
+            if (!com.maidsmart.combat.MaidMountCompat.shouldSeatMaidOnDragon(vehicle, maid)) {
+                return;
+            }
+            com.maidsmart.combat.MaidMountCompat.enforceDragonSeat(vehicle, maid);
+        } catch (Throwable ignored) {
+        }
+    }
 }

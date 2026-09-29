@@ -193,6 +193,35 @@ public final class RideBindManager {
         }
     }
 
+    /**
+     * 【实测七百二十二】独占档的**唯一收口**：{@code Entity.startRiding} 的最前面。
+     *
+     * <p>完整口径（为什么 720 的右击事件、721 的 {@code EntityMountEvent} 两层都不够——
+     * 后者是"先同意上车再撤销"，那一刻玩家眼前已经坐上去过了；实机日志 16:07:10.572/573
+     * 两行同时出现即证据）见 1.21.1 树 {@code EntityBatonMountGateMixin} 的类注释。
+     *
+     * <p>由 mixin 调用：返回 true = 这一下不许上车。
+     */
+    public static boolean denyMountForBatonHolder(Player player, Entity vehicle) {
+        try {
+            if (player == null || !isEnabled() || !batonExclusive()) {
+                return false;
+            }
+            if (!holdsBaton(player)) {
+                return false;
+            }
+            // 【边界】武装拴绳那条链路是"玩家挂到女仆/扫帚上"，主副手同时拿着指挥棒与拴绳时
+            // 不该被这一档误伤 —— 指挥棒独占的语义是"骑不上龙/车子"，不是"挂不上自己的女仆"。
+            if (vehicle instanceof EntityMaid || MaidRideKit.isBroom(vehicle)) {
+                return false;
+            }
+            PlayerMountLog.throttled(player);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     /** 独占档拦住登乘的留痕（只记服务端；节流 3 秒一位玩家，免得刷屏）。 */
     private static final class PlayerMountLog {
         private static final Map<UUID, Long> AT = new HashMap<>();
