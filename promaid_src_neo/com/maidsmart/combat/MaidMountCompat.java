@@ -612,15 +612,47 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 把她摆到龙的"玩家鞍位"上【降级方案的内核】。
+     * 把她摆到龙的"玩家鞍位"上【降级方案的内核】，**并锁定她的渲染插值**。
      *
      * <p>位置与玩家骑龙时逐字相同：{@code getRiderPosition()} + {@code getBbHeight()}，再过
      * {@link #freeSeatY}。她**不是乘客**（{@code startRiding} 那一步已取消），所以位置不由
-     * 原版 {@code positionRider} 那条链条管——由我们每 tick 写一次。她是**普通实体**，
-     * 位置照常由原版位置包同步给客户端（这正是降级方案比"当乘客"省事的地方：乘客位置要靠
-     * 乘客自己每拍算，普通实体由服务端说了算）。
+     * 原版 {@code positionRider} 那条链条管——由我们每 tick 写一次。
      *
-     * <p>速度一并清零：不让她把上一拍的惯性带进"椅子"，也不让重力在座位下方累积。
+     * <h2>【实测七百二十九·点3】为什么"每拍 setPos"仍然会漂——原版渲染插值走的是另一个字段</h2>
+     * 玩家原话：「女仆的位置还是在发生漂移。能不能强行绑定女仆坐在龙上龙的某块建模，然后每 tick
+     * 锁定那个位置呢？这样子也比在空中乱飘强得多。」
+     *
+     * <p>反编译实证（javap {@code ClientLevel.tickEntities} / {@code EntityRenderer.render}）：
+     * 实体的**渲染位置不是 {@code getX()}**，而是 {@code getPosition(partialTick)}
+     * = {@code Mth.lerp(partialTick, xo, getX())}——其中 {@code xo/yo/zo} 是"上一拍的位置"，
+     * 在**每只实体自己 tick 的开头**由 {@code setOldPosAndRot()} 从"当时的当前位置"拍下来
+     * （bytecode：{@code getX → putfield xo}）。
+     *
+     * <p>于是两条曲线不同源：
+     * <ul>
+     *   <li><b>龙</b>：{@code xo}=龙上一拍位置，{@code getX}=龙这一拍位置 → 龙模型平滑滑动。</li>
+     *   <li><b>她</b>：{@code xo} 是"上一拍 <b>{@code setOldPosAndRot} 那一刻</b>她在哪"——
+     *       服务端上这恰好等于上一拍的鞍位（没问题），可<b>客户端</b>上她在那一拍之前刚被
+     *       {@code lerpTo} 的位置包**限流平滑**（原版位置包每 2 tick 才发一次，客户端再 lerp
+     *       三拍），所以 {@code xo} 拿到的是"平滑到一半"的位置，而 {@code getX} 又被我们
+     *       硬写成这一拍的鞍位 → <b>两个端点一个来自插值中间态、一个来自最终态</b>，
+     *       她的曲线于是每拍都在"往回缩一下"，观感就是**相对龙体持续漂移**。</li>
+     * </ul>
+     *
+     * <p>修法（就是玩家说的"每 tick 锁定那个位置"）：**她的两个插值端点直接由龙的这两个端点
+     * 推出来**——鞍位相对龙体的偏移量（{@code 鞍位 - 龙位置}）在一拍之内几乎不变，所以
+     * <pre>
+     *   她的这一拍端点 = 龙的这一拍位置 + 偏移
+     *   她的上一拍端点 = 龙的上一拍位置 + 偏移
+     * </pre>
+     * 两条曲线的**两端点逐拍同源**，插值中间态自然重合成同一条线，漂移消失。这个算法是
+     * **无状态的**（偏移当场算、不缓存任何"上一拍"），因此它与本方法在一拍里被调几次无关——
+     * 她自己的 tick 之后调一次、龙 tick 之后又调一次（谁后 tick 谁说了算，见
+     * {@code RideBindManager.onEntityTickPost}），两次结果完全一样，不会"越推越远"。
+     *
+     * <p>同时把她的**朝向**也镜像成龙这一拍的朝向（含 {@code yRotO}/{@code yBodyRot}）：
+     * 龙转身时她的模型跟着转，且转的插值曲线与龙同源（旧版压根不设她的朝向，龙一转
+     * 她就是"坐在原地不动"，看起来又像错位）。
      *
      * @return true = 摆好了
      */
@@ -633,10 +665,42 @@ public final class MaidMountCompat {
             if (seat == null) {
                 return false;
             }
-            double y = freeSeatY(maid, seat.x,
-                    seat.y + (double) maid.getBbHeight(), seat.z);
-            maid.setPos(seat.x, y, seat.z);
+            double bb = maid.getBbHeight();
+            double y = freeSeatY(maid, seat.x, seat.y + bb, seat.z);
+            Vec3 now = new Vec3(seat.x, y, seat.z);
+            // 【只在客户端写插值字段】{@code xo/yo/zo} 唯一的消费者是**渲染**
+            // （{@code getPosition(partialTick)} → 客户端渲染线程），服务端写它没有任何收益；
+            // 而 {@code xOld/yOld/zOld} 还兼作服务端碰撞扫掠的"上一拍位置"，在服务端乱写反而
+            // 有风险。所以这一档严格限定在客户端那一侧（{@link RideBindManager} 的客户端分支调到这里）。
+            if (maid.level() != null && maid.level().isClientSide()) {
+                Vec3 origin = dragon.position();
+                // 鞍位相对龙体的偏移（含俯仰/飞行补偿与"抬出方块"的 y 修正）
+                double offX = now.x - origin.x;
+                double offY = now.y - origin.y;
+                double offZ = now.z - origin.z;
+                // 龙的"上一拍端点"（原版每只实体 tick 开头由 setOldPosAndRot 拍下，客户端亦然）
+                maid.xo = dragon.xo + offX;
+                maid.yo = dragon.yo + offY;
+                maid.zo = dragon.zo + offZ;
+                maid.xOld = maid.xo;
+                maid.yOld = maid.yo;
+                maid.zOld = maid.zo;
+            }
+            maid.setPos(now.x, now.y, now.z);
             maid.setDeltaMovement(Vec3.ZERO);
+            // 朝向镜像（含"上一拍朝向"，让她的转身插值与龙同源）。朝向字段两侧都写：
+            // 服务端写是为了下一次同步包里带的朝向就是龙这一拍朝向（客户端 lerpTo 也读它）。
+            float dyaw = dragon.getYRot();
+            float dyawO = dragon.yRotO;
+            maid.yRotO = dyawO;
+            maid.setYRot(dyaw);
+            // yBodyRot/yBodyRotO 声明在 LivingEntity 上（javap 实证）——必须转成 LivingEntity
+            // 才访问得到；她本来就是 EntityMaid（LivingEntity 的子类），这个 instanceof 恒真。
+            if (maid instanceof LivingEntity le) {
+                le.yBodyRotO = dyawO;
+                le.yBodyRot = dyaw;
+            }
+            maid.setYHeadRot(dyaw);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -1209,19 +1273,34 @@ public final class MaidMountCompat {
         }
         try {
             boolean heli = "HELICOPTER".equals(eng);
-            // 【实测七百二十七·点1 + 七百二十八】"骑上飞行载具就进入悬停"：开关开着时，直升机
-            // **常驻悬停档**（跟随与接敌都一样）。引擎在悬停档做两件她正需要的事
-            // （反编译 helicopterEngine:590-599 实证）：
-            // ① 把滚转/俯仰的残留量每拍衰减（0.97）并把水平速度自己衰减
-            //    （`deltaMovement.multiply(0.95, 1, 0.95)`）→ 姿态稳、不会"点头/画龙"；
-            // ② 松手（没按任何总距位）时按**竖直速度**反调总距（系数 0.01，比非悬停档的 0.002
-            //    大 5 倍）→ 这就是"高度保持"，把机身钉在目标高度上。
-            // 高度分两档由 RideBindManager/MaidAirCombat 决定目标点 Y（跟随便离地 3、接敌敌上 15），
-            // 本档只负责把机身驱动到那个 Y。
-            boolean hoverHold = heli && MaidAirCombat.enabled();
-            double dead = hoverHold ? FLIGHT_HOVER_DEADZONE : FLIGHT_ALT_DEADZONE;
+            boolean airCombat = MaidAirCombat.enabled();
+            double dead = airCombat ? FLIGHT_HOVER_DEADZONE : FLIGHT_ALT_DEADZONE;
             // 【实测七百二十八】只用于日志区分两档（高度本身已由目标点 Y 表达）。
-            boolean fighting = hoverHold && maid instanceof EntityMaid em && MaidAirCombat.inCombat(em);
+            boolean fighting = airCombat && maid instanceof EntityMaid em && MaidAirCombat.inCombat(em);
+
+            // 【实测七百二十九·点1·关键返修——"悬停"与"能飞"是互斥的，旧版把它们焊死了】
+            //
+            // 727 那一版把悬停档设成 `heli && 开关开着` = **常驻**，于是引擎每拍都在做这三件
+            // （反编译 {@code helicopterEngine:590-599} 实证）：
+            //   ① pitchSpeed *= 0.2（俯仰权限只剩两成）；
+            //   ② setXRot(xRot * 0.97) 且 xRot -= 0.5*Δ·viewVec（**主动把机头压回水平**）；
+            //   ③ setDeltaMovement(Δ.multiply(0.95, 1, 0.95))（水平速度每拍打 0.95 折）。
+            // 而直升机**唯一**的水平推进就是"低头 → 升力分出水平分量"
+            // （{@code add(getUpVec().scale(propeller*lift*0.66))}，:686）——① 让它几乎压不下去、
+            // ② 每拍又把它拉回来、③ 把刚推出来的速度按指数衰减（半衰期 ~13 拍）。
+            // 三条合起来 = 水平方向被彻底锁死 → 正是玩家说的「彻底失去了前后左右移动能力，
+            // 只会上下飞行」。
+            //
+            // 所以悬停档改成**只在"水平已经停在目标点上"时开**：那时不需要侧移，悬停档给的两件
+            // 东西（姿态自稳 + 竖直速度反调总距、系数 0.01 比非悬停档的 0.002 大 5 倍）正是
+            // "稳稳悬停"要的；一旦要挪窝（盘旋/接敌/跟随主人）立刻退出，把俯仰权限和水平速度
+            // 还给引擎。这才是引擎设计悬停档的用法。
+            //
+            // 判据用「够近 **且** 水平速度真的停了」而不是只看距离：盘旋时她的目标点是一直在动的
+            // 「追逐胡萝卜」，距离会在死区边缘反复穿越；只看距离会让悬停档每几拍开关一次（抖）。
+            // 加上"速度已停"这一条，跟随站定的主人 → 悬停；绕圈/赶路 → 退出，全程没有抖动。
+            double hspeed = horizontalSpeed(mount);
+            boolean parked = heli && airCombat && horiz <= FLIGHT_ARRIVE && hspeed < FLIGHT_PARK_SPEED;
 
             // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
             float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
@@ -1239,40 +1318,44 @@ public final class MaidMountCompat {
                     pitchCmd = (float) clamp(-altErr * FLIGHT_PITCH_PER_BLOCK,
                             -FLIGHT_PITCH_MAX, FLIGHT_PITCH_MAX);
                 } else if (flatDist > 0.0) {
-                    // 高度已对齐 → 低头前飞（悬停档下这就是"倾转机身侧移"，正是盘旋要的）
+                    // 高度已对齐 → 低头前飞。**这是直升机唯一的水平推进手段**（见上面那段：
+                    // 升力沿机体上方向量，机头一低就分出水平分量）；悬停档此时已退出，
+                    // 俯仰权限是满的，所以这一条真的推得动她。
                     pitchCmd = (float) clamp(flatDist * FLIGHT_PITCH_PER_BLOCK,
-                            0.05, FLIGHT_PITCH_MAX);
+                            0.08, FLIGHT_PITCH_MAX);
                 }
             }
             mSetMouseY(mount, pitchCmd);
 
-            // ③ 总距/推力 + 悬停
+            // ③ 总距：**PD 控制**（按预测落点决定升降），不再是"差多少就顶多少"的 bang-bang。
+            //
+            // 【实测七百二十九·点1·为什么旧版会"先往上飞三格，然后再慢慢掉下来"】
+            // 旧版是纯死区开关：`altErr > 0.75 → 一直按抬总距`、`altErr < -0.75 → 一直按压总距`，
+            // 中间没有阻尼。总距一按就一路加到 0.12 上限（{@code :638-641}），升力随之过剩 → 冲过头
+            // → 反过来一路压下去 → 又冲过头，形成**极限环**。实机日志正是这一串：
+            // {@code 高差=3 → -4 → -1 → 2 → 0 → -4 → -3 → 0}（每 5 秒一条，永远在 ±4 格之间荡）。
+            // 玩家看到的就是"先往上飞三格、然后慢慢掉下来"，且**永远稳不住**（=做不到悬停）。
+            //
+            // 修法：用**实测竖直速度**把目标点提前。`预测落点 = 高差 - 竖直速度 × 提前量`——
+            // 已经在上升就把"还差多少"算少（提前松油、不会冲过），已经在掉就把"还差多少"算多
+            // （提前加油、接住下坠）。这就是 PD 里的 D 项，专门治极限环。
             short bits = 0;
-            boolean arrived = horiz <= FLIGHT_ARRIVE && Math.abs(altErr) <= dead;
             if (heli) {
-                if (altErr > dead) {
+                double vy = verticalSpeed(mount);
+                double lead = altErr - vy * FLIGHT_VY_LEAD;
+                if (lead > dead) {
                     bits |= 0x004;                     // 抬总距（爬升）
-                } else if (altErr < -dead) {
+                } else if (lead < -dead) {
                     bits |= 0x008;                     // 压总距（下降）
-                } else if (!hoverHold && horiz > FLIGHT_ARRIVE) {
-                    // 【实测七百二十八·关键返修】这条**只留给"没开悬停档"的旧口径**（配置关掉时）。
-                    //
-                    // 【为什么悬停档下绝不能走这条】反编译实证：直升机的 0x004 = forwardInputDown
-                    // → `if (up && engineStartOver) setPower(min(power + 7e-4*powerAdd*min(holdPowerTick,10), 0.12f))`
-                    // ——**它就是"抬总距"**，跟高度绑死（{@code VehicleEngineUtils:628-641}）。旧版
-                    // 在"高度已对齐但水平还远"时也送 0x004，等于一边说"高度够了"一边继续加总距 →
-                    // 她会**一路爬过头**（正是 727 版"绕圈高度不稳"的隐藏原因）。所以悬停档下这条
-                    // 不再命中：横向移动**只靠俯仰**——升力沿机体上方向量
-                    // （{@code add(getUpVec().scale(propellerRot*lift*0.66))}，:686），机头一低，
-                    // 升力就分出水平分量把她推出去，姿态由上面 ② 的 pitchCmd 给；松开 0x004 后
-                    // 引擎在悬停档按**竖直速度**反调总距（系数 0.01，:657-660）→ 高度自己稳住。
-                    bits |= 0x004;
                 }
+                // 【为什么"两个位都不按"才是对的】反编译实证：没按任何总距位时，引擎会按**竖直
+                // 速度**反调总距（{@code :657-660}，悬停档系数 0.01）——它自己就是一台高度保持
+                // 控制器。旧版只要"水平还远"就补一个 0x004 当"前进推力"，可 0x004 就是
+                // forwardInputDown = **抬总距**（{@code :628-641}）→ 一边说高度够了、一边继续爬。
+                // 所以**这条分支整个删掉**：水平移动只走上面 ② 的俯仰，高度只走这里的总距。
                 if (mSetHoverMode != null) {
                     try {
-                        // 【实测七百二十七·点1】悬停档**常驻**（见上面 hoverHold 的说明）；
-                        // 没开这一档时退回旧口径（到达才悬停）。
-                        mSetHoverMode.invoke(mount, hoverHold || arrived);
+                        mSetHoverMode.invoke(mount, parked);
                     } catch (Throwable ignored) {
                     }
                 }
@@ -1289,17 +1372,76 @@ public final class MaidMountCompat {
             }
             mProcessInput.invoke(mount, bits);
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
-            logDrive(mount, "飞行档 引擎=" + eng + (hoverHold ? " 悬停档" : "")
-                    + (hoverHold ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+            logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+                    + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                             : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                     + " 鼠标X=" + Math.round(yawCmd)
                     + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
+                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
                     + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
             return true;
         } catch (Throwable ignored) {
             return false;
         }
     }
+
+    /**
+     * 【实测七百二十九·点1】实测竖直速度（格/拍）——PD 高度控制的 D 项。
+     *
+     * <p>直升机的竖直速度**是**引擎每拍用升力积分出来的 {@code deltaMovement.y}（反编译
+     * {@code helicopterEngine:686}：{@code deltaMovement.add(getUpVec().scale(propeller*lift*0.66))}），
+     * 所以读它就是把"当前正在往上还是往下、多快"拿到手——这正是旧版死区开关缺的那一项。
+     * 拿不到 → 0（退化成纯 P，仍比旧版好）。
+     */
+    private static double verticalSpeed(Entity mount) {
+        try {
+            if (mount == null) {
+                return 0.0;
+            }
+            return mount.getDeltaMovement().y;
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * 【实测七百二十九·点1】实测水平速度（格/拍）——用来判断"她是不是真的停住了"，
+     * 见 {@code parked} 那一段。只取 xz 分量（竖直速度归 {@link #verticalSpeed}）。
+     */
+    private static double horizontalSpeed(Entity mount) {
+        try {
+            if (mount == null) {
+                return 0.0;
+            }
+            Vec3 dm = mount.getDeltaMovement();
+            return Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * 【实测七百二十九·点1】"停住了"的水平速度阈值（格/拍）——低于它才允许进悬停档。
+     * 取 0.05 ≈ 每秒 1 格（直升机巡航速度是每秒 10 格上下的量级），所以这一条只拦住"真在原地"，
+     * 不会误判缓慢修正。
+     */
+    private static final double FLIGHT_PARK_SPEED = 0.05;
+
+    /** 小工具：保留两位（日志用）。 */
+    private static String fmt2(double v) {
+        return String.format(java.util.Locale.ROOT, "%.2f", v);
+    }
+
+    /**
+     * 【实测七百二十九·点1】PD 高度控制的"提前量"（拍）：把目标点按**当前竖直速度**折算成
+     * "再飞这么多拍会到哪"，用那个预测落点决定此刻该不该给总距。
+     *
+     * <p>取值依据：引擎的总距从按下到升力见效要经过
+     * {@code power → propellerRot}（{@code lerp(0.18f, …, power)}，{@code :680}）这一层一阶滞后，
+     * 时间常数约 1/0.18 ≈ 5.5 拍；再叠加 {@code deltaMovement} 自己一拍的积分——所以提前量取
+     * {@code 10} 拍（约半秒）刚好覆盖"给油 → 见效"这条链，既压得住冲过头、又不至于抖。
+     */
+    private static final double FLIGHT_VY_LEAD = 10.0;
 
     /**
      * 飞行档的偏航上限（写进鼠标 X 通道的值）。引擎里那一项被 {@code clamp(…, -10, 10)}
@@ -1320,9 +1462,13 @@ public final class MaidMountCompat {
     /** 高度死区（格，非悬停档）：竖直差进这个带就不动总距。 */
     private static final double FLIGHT_ALT_DEADZONE = 2.0;
     /**
-     * 【实测七百二十七·点1】悬停档的高度死区（格）：收到 {@code 0.75}——玩家要的是
-     * "盘旋也是悬停在同一高度盘旋"，2 格的死区等于允许她在 ±2 格里晃（那正是旧版
-     * 看着"高度忽高忽低"的一半原因）。收到 0.75 后总距会持续微调，把机身钉在那一格上。
+     * 【实测七百二十七·点1 / 七百二十九·点1】高度死区（格）：{@code 0.75}。
+     *
+     * <p>0.75 是**目标值**——玩家要"稳稳悬停/同高度盘旋"，死区大了就会在带里晃。
+     * <p>【七百二十九 的关键区别】旧版把它当**死区开关**用（差超过 0.75 就一路顶总距到上限），
+     * 于是形成极限环（实机日志 {@code 高差=3 → -4 → -1 → 2 → 0 → -4}，永远荡）。本版起这个数
+     * 只当**PD 控制器的容差**——`lead = 高差 - 竖直速度 × 提前量` 进这个带才松手，靠 D 项
+     * 提前量把过冲吃掉。见 {@code driveFlight} 里那一段。
      */
     private static final double FLIGHT_HOVER_DEADZONE = 0.75;
 

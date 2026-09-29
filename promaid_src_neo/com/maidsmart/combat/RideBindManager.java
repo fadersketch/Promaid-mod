@@ -60,6 +60,16 @@ public final class RideBindManager {
 
     private static final Map<UUID, Link> LINKS = new HashMap<>();
     private static final Map<UUID, java.lang.ref.WeakReference<Entity>> PENDING = new HashMap<>();
+    /**
+     * 【实测七百二十九·点2】"待选光标"的**开始时刻**（{@code playerUUID → 毫秒}）。
+     *
+     * <p>为什么必须有它：{@link #markPending} 给目标打的是**原版发光标记**（写进 NBT，跨存档还在），
+     * 而旧版 {@link #PENDING} 只有"再点一个/实体没了/玩家下线"三条清理路径——**没有超时**。
+     * 于是"用棍子点了一下龙、然后走开"这种最常见的操作，会让那条龙**永久发光**，而且
+     * 重启存档也还在（玩家原话：「如果一只龙被绑定了以后并且上了光标，那就再也没有办法解除他身上的
+     * 光标了」）。这里记下时刻，{@link #tick} 每 2 tick 扫一遍超时的，到点就熄。
+     */
+    private static final Map<UUID, Long> PENDING_AT = new HashMap<>();
     private static final Map<UUID, Long> DENY_LOG = new HashMap<>();
 
     /**
@@ -654,6 +664,18 @@ public final class RideBindManager {
                     + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + mount.getUUID());
         } catch (Throwable ignored) {
         }
+        // 【实测七百二十九·点2·必补】坐骑侧也要留痕——**旧版从来没有写过它**（全树只有 remove、
+        // 没有 put）。后果不只是"留痕白写"：重启后 {@link #restore} 只认"她还在马/车上"这一条
+        // （{@code maid.getVehicle() != null}），而**龙那条她不是乘客，getVehicle() 恒为 null**
+        // → 那条龙**重建不出链路，也就永远没人去撤它的发光标记**（玩家原话：「如果一只龙被绑定了
+        // 以后并且上了光标，那就再也没有办法解除他身上的光标了」——这是根因）。写上去之后，
+        // {@link #sweepStaleMarks} 才有"这只坐骑曾经被我们标记过"这个凭据，才能在链路丢失时
+        // 兜底熄灯；{@link #restore} 也能靠它把龙的链路一起重建出来（见那里）。
+        try {
+            mount.getPersistentData().putString(TAG_RIDE_MAID, mount.getUUID() + "|"
+                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + "|" + maid.getUUID());
+        } catch (Throwable ignored) {
+        }
         mark(maid);
         mark(mount);
         // 【实测七百二十七·点4】悬空鞍位（龙）那条：把"她挂在哪条龙上"同步给客户端，
@@ -742,13 +764,20 @@ public final class RideBindManager {
             clearPendingMark(old.get());
         }
         PENDING.put(player.getUUID(), new java.lang.ref.WeakReference<>(e));
+        // 【实测七百二十九·点2】记下开始时刻——超时清理要用（见 PENDING_AT 的说明）。
+        PENDING_AT.put(player.getUUID(), System.currentTimeMillis());
         markPending(e);
     }
 
     private static Entity takePending(ServerPlayer player, boolean wantMaid) {
         java.lang.ref.WeakReference<Entity> ref = PENDING.remove(player.getUUID());
+        PENDING_AT.remove(player.getUUID());
         Entity e = ref == null ? null : ref.get();
         if (e == null || !e.isAlive() || e.level() != player.level()) {
+            // 【实测七百二十九·点2】目标已经没了/换了维度：这一下右击等于白点，**必须把光标撤掉**。
+            // 旧版这里直接 return null，那条实体身上的"待选发光"就永远留在它身上了（玩家原话：
+            // 「再也没有办法解除他身上的光标了」——这是其中一条泄漏路径）。
+            clearPendingMark(e);
             return null;
         }
         if (wantMaid != (e instanceof EntityMaid)) {
@@ -789,6 +818,7 @@ public final class RideBindManager {
 
     public static void forgetPlayer(UUID playerId) {
         java.lang.ref.WeakReference<Entity> ref = PENDING.remove(playerId);
+        PENDING_AT.remove(playerId); // 实测七百二十九·点2：时刻表一并清，免得残留旧时间戳
         if (ref != null) {
             clearPendingMark(ref.get()); // 点3：下线时撤掉"待选光标"
         }
@@ -798,8 +828,21 @@ public final class RideBindManager {
     public static void forgetMaid(UUID maidId) {
         Link link = LINKS.remove(maidId);
         if (link != null) {
+            // 【实测七百二十九·点2】解绑必须连**坐骑侧的光标**一起撤（玩家原话：「在解除女仆
+            // 乘坐在坐骑上的情况以后就顺便解除龙身上的光标」）。旧版这里只 unmark 了，
+            // 看着对——但 unmark 走的是 {@code setGlowingTag(false)}，而那条龙如果**同时**还挂着
+            // "待选光标"（先点龙、再点女仆配对成功时，takePending 已清待选，所以正常不重叠），
+            // 或者存档里残留过一条别的链路留下的留痕，就会熄不干净。这里顺手把坐骑侧留痕也清掉，
+            // 与 releaseMaidImpl 完全同口径；真正兜底的是 sweepStaleMarks。
             unmark(link.maid.get());
             unmark(link.mount.get());
+            Entity mount = link.mount.get();
+            if (mount != null) {
+                try {
+                    mount.getPersistentData().remove(TAG_RIDE_MAID);
+                } catch (Throwable ignored) {
+                }
+            }
         }
     }
 
@@ -1169,6 +1212,10 @@ public final class RideBindManager {
         }
         tickTimer = 0;
         capTables();
+        // 【实测七百二十九·点2】光标（发光标记）的两条清理：待选超时 + 死标记兜底扫描。
+        // 放在最前——它们与链路驱动无关，且越早熄灯玩家越早看得见。
+        sweepPendingTimeout();
+        sweepStaleMarks(server);
         try {
             Iterator<Map.Entry<UUID, Link>> it = LINKS.entrySet().iterator();
             java.util.List<EntityMaid> deferred = new java.util.ArrayList<>();
@@ -1586,10 +1633,179 @@ public final class RideBindManager {
         try {
             com.maidsmart.tool.StateTables.cap("骑乘.LINKS", LINKS);
             com.maidsmart.tool.StateTables.cap("骑乘.PENDING", PENDING);
+            com.maidsmart.tool.StateTables.cap("骑乘.PENDING_AT", PENDING_AT); // 实测七百二十九·点2
             com.maidsmart.tool.StateTables.cap("骑乘.DENY_LOG", DENY_LOG);
             com.maidsmart.tool.StateTables.cap("骑乘.ENGAGE_AT", ENGAGE_AT); // 实测七百二十六·点6
             com.maidsmart.tool.StateTables.cap("骑乘.AMMO_FEED_AT", AMMO_FEED_AT); // 实测七百二十六·点6
         } catch (Throwable ignored) {
         }
     }
+
+    /* ==================== 实测七百二十九·点2：光标（发光标记）不再泄漏 ==================== */
+
+    /**
+     * 【实测七百二十九·点2】"点了坐骑却没配对"的**待选光标**超时（毫秒）——到点自动熄。
+     *
+     * <p>取 {@code 30000}（30 秒）：正常玩法里"点坐骑 → 再点女仆"是紧接着的两下（实测日志里
+     * 相隔 1~2 秒），30 秒足够宽容；而它挡住的是"点了一下就走开"这类残留，那种情况下光标
+     * 在 30 秒后消失，跟玩家"这根棍子这一下已经不算数了"的直觉一致。
+     *
+     * <p>【为什么必须加这一条】原版发光标记是**写进 NBT 的**（{@code TAG_PENDING_MARK} 也在
+     * persistentData 里），跨存档、跨重启都在——没有超时就等于"点错一次、那条龙永远发光"。
+     * 玩家原话：「如果一只龙被绑定了以后并且上了光标，那就再也没有办法解除他身上的光标了。
+     * 这边建议在解除女仆乘坐在坐骑上的情况以后就顺便解除龙身上的光标。」
+     */
+    private static final long PENDING_TTL_MS = 30000L;
+
+    /**
+     * 【实测七百二十九·点2】扫掉过期的"待选光标"。
+     *
+     * <p>每个 2 tick 由 {@link #tick} 调一次。它治的是三件事里的"点了一下就走开"；
+     * 另外两条泄漏路径（目标消失/换维度、解绑后坐骑侧没撤干净）分别在
+     * {@link #takePending} 与 {@link #sweepStaleMarks} 里堵。
+     */
+    private static void sweepPendingTimeout() {
+        try {
+            if (PENDING.isEmpty()) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            Iterator<Map.Entry<UUID, Long>> it = PENDING_AT.entrySet().iterator();
+            java.util.List<UUID> expired = new java.util.ArrayList<>();
+            while (it.hasNext()) {
+                Map.Entry<UUID, Long> en = it.next();
+                if (now - en.getValue() >= PENDING_TTL_MS) {
+                    expired.add(en.getKey());
+                }
+            }
+            for (UUID id : expired) {
+                PENDING_AT.remove(id);
+                java.lang.ref.WeakReference<Entity> ref = PENDING.remove(id);
+                Entity e = ref == null ? null : ref.get();
+                if (e != null) {
+                    clearPendingMark(e);
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "待选光标超时（"
+                            + (PENDING_TTL_MS / 1000) + " 秒没有配对）→ 已熄灯："
+                            + MaidRideKit.describe(e));
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百二十九·点2】兜底扫描：清掉"身上带着我们的标记痕迹、但已经没有归属"的光标。
+     *
+     * <p>为什么必须有这一道——原版发光标记会**写进 NBT 持久化**
+     * （javap 实证：{@code Entity.saveWithoutId} 把 {@code hasGlowingTag} 写进 {@code "Glowing"}
+     * 键、{@code Entity.load} 再读回来调 {@code setGlowingTag}），所以它**跨存档、跨重启都在**。
+     * 而我们的清理只挂在"链路表里那条 Link"上：任何一次"进程被杀 / 区块卸载 / 重启后没能重建
+     * 链路"都会留下一个**永久发光、且没有任何入口能解除**的实体——玩家原话：
+     * 「如果一只龙被绑定了以后并且上了光标，那就再也没有办法解除他身上的光标了。这边建议在
+     * 解除女仆乘坐在坐骑上的情况以后就顺便解除龙身上的光标。」
+     *
+     * <p>这一道不依赖链路表，只看我们**自己的两个留痕标记**（都是写在实体 persistentData 里的
+     * 私有键，原版/别的模组绝不会写）：
+     * <ol>
+     *   <li>{@code TAG_PENDING_MARK}（"待选光标"，716 起就在写）：带它就说明"这是棍子点出来的光标"。
+     *       只要此刻没有玩家把它当作待配对目标 → 它就是残留，熄灯。</li>
+     *   <li>{@code TAG_RIDE_MAID}（"这只坐骑驮着谁"，729 起开始写）：带它但链路表里查无此车
+     *       → 死标记，熄灯 + 清留痕。</li>
+     * </ol>
+     *
+     * <p><b>绝不误伤</b>：判据是"带我们的私有键"，不是"在发光"——她自己中了光灵箭、别的模组
+     * 让她发光，都不会带这两个键，一次都不会被碰。
+     *
+     * <p>节流 {@code MARK_SWEEP_MS} 一次（5 秒）；只在表里/待选里有东西时才扫，空转代价为零。
+     */
+    private static void sweepStaleMarks(MinecraftServer server) {
+        try {
+            if (LINKS.isEmpty() && PENDING.isEmpty()) {
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if (now - lastMarkSweepMs < MARK_SWEEP_MS) {
+                return;
+            }
+            lastMarkSweepMs = now;
+            for (ServerLevel level : server.getAllLevels()) {
+                for (Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
+                    if (e instanceof EntityMaid) {
+                        continue; // 女仆那条由链路表自己的生命周期管（她不是"坐骑侧留痕"）
+                    }
+                    boolean ourTag = false;
+                    boolean pendingTag = false;
+                    try {
+                        pendingTag = e.getPersistentData().getBoolean(TAG_PENDING_MARK);
+                        ourTag = pendingTag
+                                || !e.getPersistentData().getString(TAG_RIDE_MAID).isEmpty();
+                    } catch (Throwable ignored) {
+                        continue;
+                    }
+                    if (!ourTag) {
+                        continue;
+                    }
+                    // ① 待选光标：还挂在某位玩家的待配对里吗？
+                    if (pendingTag && !isPendingSomewhere(e)) {
+                        clearPendingMark(e);
+                        if (e.isCurrentlyGlowing()) {
+                            unmark(e);
+                            com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "残留「待选光标」→ 已熄灯："
+                                    + MaidRideKit.describe(e) + "（没有玩家把它当作待配对目标了）");
+                        }
+                        continue;
+                    }
+                    // ② 坐骑侧留痕：链路表里还有归属吗？
+                    if (mountHasLink(e)) {
+                        continue;
+                    }
+                    try {
+                        e.getPersistentData().remove(TAG_RIDE_MAID);
+                    } catch (Throwable ignored) {
+                    }
+                    if (e.isCurrentlyGlowing()) {
+                        unmark(e);
+                        com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "坐骑侧残留光标 → 已熄灯："
+                                + MaidRideKit.describe(e) + "（链路已不存在，属于存档里留下的死标记）");
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 还有没有哪位玩家把这只实体当作"待选坐骑"（供 {@link #sweepStaleMarks} 用）。 */
+    private static boolean isPendingSomewhere(Entity e) {
+        try {
+            for (java.lang.ref.WeakReference<Entity> ref : PENDING.values()) {
+                Entity p = ref == null ? null : ref.get();
+                if (p != null && p.getUUID().equals(e.getUUID())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 链路表里还有没有一条 Link 指向这只坐骑（供 {@link #sweepStaleMarks} 用）。 */
+    private static boolean mountHasLink(Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            for (Map.Entry<UUID, Link> en : LINKS.entrySet()) {
+                Entity m = en.getValue().mount.get();
+                if (m != null && m.getUUID().equals(mount.getUUID())) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 死标记扫描的节流（毫秒）。 */
+    private static final long MARK_SWEEP_MS = 5000L;
+    private static long lastMarkSweepMs = 0L;
 }
