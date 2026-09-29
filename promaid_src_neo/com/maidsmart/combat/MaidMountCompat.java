@@ -1278,39 +1278,98 @@ public final class MaidMountCompat {
             // 【实测七百二十八】只用于日志区分两档（高度本身已由目标点 Y 表达）。
             boolean fighting = airCombat && maid instanceof EntityMaid em && MaidAirCombat.inCombat(em);
 
-            // 【实测七百二十九·点1·关键返修——"悬停"与"能飞"是互斥的，旧版把它们焊死了】
-            //
-            // 727 那一版把悬停档设成 `heli && 开关开着` = **常驻**，于是引擎每拍都在做这三件
-            // （反编译 {@code helicopterEngine:590-599} 实证）：
-            //   ① pitchSpeed *= 0.2（俯仰权限只剩两成）；
-            //   ② setXRot(xRot * 0.97) 且 xRot -= 0.5*Δ·viewVec（**主动把机头压回水平**）；
-            //   ③ setDeltaMovement(Δ.multiply(0.95, 1, 0.95))（水平速度每拍打 0.95 折）。
-            // 而直升机**唯一**的水平推进就是"低头 → 升力分出水平分量"
-            // （{@code add(getUpVec().scale(propeller*lift*0.66))}，:686）——① 让它几乎压不下去、
-            // ② 每拍又把它拉回来、③ 把刚推出来的速度按指数衰减（半衰期 ~13 拍）。
-            // 三条合起来 = 水平方向被彻底锁死 → 正是玩家说的「彻底失去了前后左右移动能力，
-            // 只会上下飞行」。
-            //
-            // 所以悬停档改成**只在"水平已经停在目标点上"时开**：那时不需要侧移，悬停档给的两件
-            // 东西（姿态自稳 + 竖直速度反调总距、系数 0.01 比非悬停档的 0.002 大 5 倍）正是
-            // "稳稳悬停"要的；一旦要挪窝（盘旋/接敌/跟随主人）立刻退出，把俯仰权限和水平速度
-            // 还给引擎。这才是引擎设计悬停档的用法。
-            //
-            // 判据用「够近 **且** 水平速度真的停了」而不是只看距离：盘旋时她的目标点是一直在动的
-            // 「追逐胡萝卜」，距离会在死区边缘反复穿越；只看距离会让悬停档每几拍开关一次（抖）。
-            // 加上"速度已停"这一条，跟随站定的主人 → 悬停；绕圈/赶路 → 退出，全程没有抖动。
             double hspeed = horizontalSpeed(mount);
-            boolean parked = heli && airCombat && horiz <= FLIGHT_ARRIVE && hspeed < FLIGHT_PARK_SPEED;
 
             // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）
             float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
             mSetMouseX(mount, yawCmd);
 
-            // ② 俯仰：写 Y 通道。约定（反编译实证）：mouseY 正值 → xRot += → 低头 → 前飞；
-            //    负值 → 抬头 → 爬升（直升机）/ 拉起来（固定翼）。
+            short bits = 0;
+            float pitchCmd;
+
+            if (heli) {
+                // 【先把输入位清干净】本档**不再用位掩码**（俯仰走鼠标通道、总距走 power）。
+                // 不清的话上一次残留的"抬总距位"会让引擎在 :638-641 又往 power 上加一笔、
+                // 与我们下面的 PD 写值打架。清掉之后引擎走 :657-660 那条"按竖直速度自稳"的
+                // 弱控制器（悬停档系数 0.01），正好当我们的慢速外环。
+                try {
+                    mProcessInput.invoke(mount, (short) 0);
+                } catch (Throwable ignored) {
+                }
+                // 【实测七百三十·点1·根因】直升机的**俯仰输入要乘一个很小的 propeller**：
+                //   反编译 helicopterEngine:611 → xRot += 1.5 * pitchSpeed(0.75) * mouseY * propeller，
+                //   而 propeller 由 power 决定、悬停时 power≈0.1（:638-641 上限也只有 0.12）→
+                //   **即使 mouseY 拉满，每拍也只转 0.1° 出头**。727/729 两版都在这个通道里写 0.6~0.75
+                //   的小量，等于没写，机头永远压不下去 → 水平推进（唯一来源是"低头 → 升力分出水平分量"）
+                //   恒为零 → 玩家看到的「彻底失去前后左右移动能力，只会上下飞行」。
+                //
+                //   本版改成**串级速度环**：外环按剩余距离给期望速度（上限照搬扫帚的 0.75 格/拍），
+                //   再换算成**目标前倾角**；内环把"当前俯仰角 vs 目标角"的误差写进鼠标 Y 通道，
+                //   量级提到玩家档（±8）。**与扫帚同一套速度包络、同一处口径。**
+                double desired = clamp(horiz * FLIGHT_SPEED_PER_BLOCK, 0.0, FLIGHT_HMAX);
+                if (Math.abs(err) >= 60.0f) {
+                    desired = 0.0;            // 转向优先：机头没对准目标方向就不给速度
+                }
+                // 外环：速度误差 → 目标俯仰角（度）。机头**下压为正**（引擎里 mouseY>0 → xRot+ → 低头）。
+                float targetTilt = clamp((float) ((desired - hspeed) * FLIGHT_TILT_PER_SPEED),
+                        -FLIGHT_TILT_MAX, FLIGHT_TILT_MAX);
+                // 内环：姿态误差 → 鼠标 Y 通道。写满上限也只 8，与玩家推鼠标同档。
+                float pitchCmdNow = clamp((targetTilt - mount.getXRot()) * FLIGHT_TILT_GAIN,
+                        -FLIGHT_HELI_PITCH_MAX, FLIGHT_HELI_PITCH_MAX);
+                pitchCmd = pitchCmdNow;
+                mSetMouseY(mount, pitchCmdNow);
+
+                // ② 总距：**直接用 power 定高**（PD 控制器），不再按位掩码。
+                //
+                // 【为什么不能再用位掩码】反编译实证：抬总距那条路是
+                //   {@code power += 7e-4 * powerAdd * min(holdPowerTick,10)}（:638-641），
+                //   而 power 每次松手都按竖直速度反调（:657-660）。它是一台**很慢的**积分器
+                //   （从 0 到悬停所需 power≈0.058 要约 54 拍 ≈ 2.7 秒），逐拍开关只会形成极限环
+                //   ——实机日志 {@code 高差=3 → -4 → -1 → 2 → 0 → -4} 永远荡。本版直接把 power
+                //   写成"按**当前竖直速度**预测落点算出来的值"，D 项把过冲吃掉。
+                double vy = verticalSpeed(mount);
+                double lead = dy - vy * FLIGHT_VY_LEAD;      // 预测落点（拍 × 格/拍）
+                float powerCmd = -1.0f;                      // <0 = 反射拿不到，没写成功
+                if (mSetPower != null) {
+                    // 【基准怎么算出来的】反编译三处联立（mi_28：lift=1、gravity=0.06）：
+                    //   ① 引擎每拍 {@code deltaMovement.y *= 0.95} 再 {@code += propeller*lift*0.66}（:558/:686）；
+                    //   ② baseTick 末尾 {@code deltaMovement.y -= 0.06}（:4068）；
+                    //   ③ {@code propeller} 稳态 ≈ {@code power}（:680 lerp）。
+                    //   悬停（竖直速度=0）⇒ {@code 0.05·vy = 0.66·power − 0.06} ⇒ **power ≈ 0.091**。
+                    // 所以基准取 0.091；按预测落点线性给量，钳制在[0.045, 0.12]——**下限不能低于
+                    // 0.04**：引擎里 {@code power < 0.04} 会把发动机关掉（:687-693），那就变成"熄火坠机"。
+                    float base = 0.091f;
+                    double k = lead > 0.0 ? 0.010 : 0.014;   // 上升慢一点、接住下坠快一点
+                    powerCmd = (float) clamp(base + lead * k, 0.045, 0.12);
+                    try {
+                        mSetPower.invoke(mount, powerCmd);
+                    } catch (Throwable ignored) {
+                        powerCmd = -1.0f;
+                    }
+                }
+                // 悬停档：只在"真的停在目标点上"时开（727 的常开把它焊死了，见 CHANGELOG 729）。
+                boolean parked = airCombat && horiz <= FLIGHT_ARRIVE && hspeed < FLIGHT_PARK_SPEED;
+                if (mSetHoverMode != null) {
+                    try {
+                        mSetHoverMode.invoke(mount, parked);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+                        + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                                : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + " 鼠标X=" + Math.round(yawCmd)
+                        + " 鼠标Y=" + fmt2(pitchCmd)
+                        + " 水平速度=" + fmt2(hspeed) + " 期望=" + fmt2(desired)
+                        + " 竖直速度=" + fmt2(vy) + " power=" + fmt2(powerCmd)
+                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                return true;
+            }
+
+            // ---------- 固定翼：保持旧口径（前/后位是推力；高度只由俯仰决定） ----------
             double altErr = dy;                        // >0 = 目标更高
             double flatDist = Math.max(horiz - FLIGHT_ARRIVE, 0.0);
-            float pitchCmd = 0.0f;
+            pitchCmd = 0.0f;
             boolean turning = Math.abs(err) >= 60.0f;
             if (!turning) {
                 if (Math.abs(altErr) > dead) {
@@ -1318,61 +1377,22 @@ public final class MaidMountCompat {
                     pitchCmd = (float) clamp(-altErr * FLIGHT_PITCH_PER_BLOCK,
                             -FLIGHT_PITCH_MAX, FLIGHT_PITCH_MAX);
                 } else if (flatDist > 0.0) {
-                    // 高度已对齐 → 低头前飞。**这是直升机唯一的水平推进手段**（见上面那段：
-                    // 升力沿机体上方向量，机头一低就分出水平分量）；悬停档此时已退出，
-                    // 俯仰权限是满的，所以这一条真的推得动她。
                     pitchCmd = (float) clamp(flatDist * FLIGHT_PITCH_PER_BLOCK,
                             0.08, FLIGHT_PITCH_MAX);
                 }
             }
             mSetMouseY(mount, pitchCmd);
-
-            // ③ 总距：**PD 控制**（按预测落点决定升降），不再是"差多少就顶多少"的 bang-bang。
-            //
-            // 【实测七百二十九·点1·为什么旧版会"先往上飞三格，然后再慢慢掉下来"】
-            // 旧版是纯死区开关：`altErr > 0.75 → 一直按抬总距`、`altErr < -0.75 → 一直按压总距`，
-            // 中间没有阻尼。总距一按就一路加到 0.12 上限（{@code :638-641}），升力随之过剩 → 冲过头
-            // → 反过来一路压下去 → 又冲过头，形成**极限环**。实机日志正是这一串：
-            // {@code 高差=3 → -4 → -1 → 2 → 0 → -4 → -3 → 0}（每 5 秒一条，永远在 ±4 格之间荡）。
-            // 玩家看到的就是"先往上飞三格、然后慢慢掉下来"，且**永远稳不住**（=做不到悬停）。
-            //
-            // 修法：用**实测竖直速度**把目标点提前。`预测落点 = 高差 - 竖直速度 × 提前量`——
-            // 已经在上升就把"还差多少"算少（提前松油、不会冲过），已经在掉就把"还差多少"算多
-            // （提前加油、接住下坠）。这就是 PD 里的 D 项，专门治极限环。
-            short bits = 0;
-            if (heli) {
-                double vy = verticalSpeed(mount);
-                double lead = altErr - vy * FLIGHT_VY_LEAD;
-                if (lead > dead) {
-                    bits |= 0x004;                     // 抬总距（爬升）
-                } else if (lead < -dead) {
-                    bits |= 0x008;                     // 压总距（下降）
-                }
-                // 【为什么"两个位都不按"才是对的】反编译实证：没按任何总距位时，引擎会按**竖直
-                // 速度**反调总距（{@code :657-660}，悬停档系数 0.01）——它自己就是一台高度保持
-                // 控制器。旧版只要"水平还远"就补一个 0x004 当"前进推力"，可 0x004 就是
-                // forwardInputDown = **抬总距**（{@code :628-641}）→ 一边说高度够了、一边继续爬。
-                // 所以**这条分支整个删掉**：水平移动只走上面 ② 的俯仰，高度只走这里的总距。
-                if (mSetHoverMode != null) {
-                    try {
-                        mSetHoverMode.invoke(mount, parked);
-                    } catch (Throwable ignored) {
-                    }
-                }
-            } else {
-                // 固定翼：前/后位是推力；高度只由俯仰决定
-                if (horiz > FLIGHT_ARRIVE) {
-                    bits |= 0x004;
-                } else if (horiz < FLIGHT_ARRIVE * 0.5) {
-                    bits |= 0x008;                     // 太近 → 减速
-                }
+            if (horiz > FLIGHT_ARRIVE) {
+                bits |= 0x004;
+            } else if (horiz < FLIGHT_ARRIVE * 0.5) {
+                bits |= 0x008;                         // 太近 → 减速
             }
             if (modifier > 1.05) {
                 bits |= 0x100;                         // 冲刺位（引擎里抬高速度上限）
             }
             mProcessInput.invoke(mount, bits);
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
-            logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+            logDrive(mount, "飞行档 引擎=" + eng
                     + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                             : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                     + " 鼠标X=" + Math.round(yawCmd)
@@ -1449,10 +1469,51 @@ public final class MaidMountCompat {
      * 俯仰同理见 {@link #FLIGHT_PITCH_MAX}。
      */
     private static final float FLIGHT_YAW_MAX = 6.0f;
-    /** 飞行档前倾/抬头角上限（相对引擎那一项的钳制区间，取保守值）。 */
+    /** **固定翼**的前倾/抬头角上限（相对引擎那一项的钳制区间，取保守值）。 */
     private static final float FLIGHT_PITCH_MAX = 0.6f;
-    /** 每 1 格高度差给多少俯仰输入（收敛用）。 */
+    /** 每 1 格高度差给多少俯仰输入（固定翼收敛用）。 */
     private static final float FLIGHT_PITCH_PER_BLOCK = 0.04f;
+
+    /* ---------- 【实测七百三十】直升机：速度环 + 玩家量级俯仰 ---------- */
+
+    /**
+     * 【实测七百三十·点1】直升机俯仰命令上限（写进鼠标 Y 通道的值）。
+     *
+     * <p>反编译 {@code helicopterEngine:611}：{@code xRot += (onGround?0:1.5) * pitchSpeed *
+     * getMouseMoveSpeedY() * propeller}。mi_28 的 {@code pitchSpeed=0.75}、{@code propeller≈power}
+     * 悬停时只有 {@code ≈0.1} → 每拍俯仰变化 = {@code 1.125 × mouseY × 0.1}。旧版上限 0.6
+     * 只做出 {@code 0.067°/拍 ≈ 1.3°/秒}——**机头根本压不下去**。
+     *
+     * <p>而玩家推鼠标时这个通道是**个位数**量级（客户端 {@code ClientMouseHandler}：{@code speedY =
+     * mouseSensitivity(0.35) × 鼠标位移}，再 lerp 进 {@code lerpSpeedY}），所以取 8 与玩家同档。
+     */
+    private static final float FLIGHT_HELI_PITCH_MAX = 8.0f;
+    /**
+     * 【实测七百三十·点1】期望水平速度上限（格/拍）——**照搬扫帚那套包络 {@code 0.75}**
+     * （{@code MaidBroomDrive.MAX_H_SPEED}，来源是 TLM 给玩家驾驶写的 {@code PlayerBroomControl}），
+     * 一分不加。玩家点名"扫帚的移动速度只能照搬原版"。
+     */
+    private static final double FLIGHT_HMAX = 0.75;
+    /** 每 1 格剩余水平距离给多少期望速度（格/拍）：7.5 格差就吃满 {@link #FLIGHT_HMAX}。 */
+    private static final double FLIGHT_SPEED_PER_BLOCK = 0.10;
+    /**
+     * 【实测七百三十·点1】**串级**控制的外环→内环换算：速度误差（格/拍）→ 目标俯仰角（度）。
+     *
+     * <p>为什么必须串级（数值仿真实证）：先前那版把俯仰写成 {@code k*(期望速度−实际速度) − xRot*回中}，
+     * 稳态时 {@code mouseY→0} 意味着 {@code xRot = k*(误差)/回中系数}——**机头角度被误差项与回中项
+     * 卡死在 ~13°**，水平速度只能到 0.21 格/拍（不到扫帚的三分之一）。改成"先算目标姿态角、
+     * 再用内环把姿态打过去"就没有这个稳态下垂：角度由外环直接指定、内环只负责追上它。
+     */
+    private static final float FLIGHT_TILT_PER_SPEED = 50.0f;
+    /**
+     * 巡航最大前倾角（度）。反编译实证水平推力 = {@code 升力 × sin(俯仰角)}
+     * （{@code helicopterEngine:686} 的 {@code getUpVec().scale(prop*lift*0.66)}，机头一低就分出
+     * 水平分量），而竖直阻尼 {@code f≈0.935} → 稳态 {@code 0.065·v ≈ 0.060·sinθ} → 35° 约对应
+     * {@code 0.5 格/拍}（10 格/秒，与扫帚同量级）。
+     */
+    private static final float FLIGHT_TILT_MAX = 35.0f;
+    /** 内环：姿态角误差（度）→ 写进鼠标 Y 通道的量。1° 误差给 0.5，钳到 {@link #FLIGHT_HELI_PITCH_MAX}。 */
+    private static final float FLIGHT_TILT_GAIN = 0.5f;
     /**
      * 到达判据（格）：水平距离进这个带就不再前倾，改去对齐高度/悬停。
      * 【实测七百二十七·点1】从 6.0 收到 3.0——盘旋半径本身就可能是 3~6 格，旧值等于
