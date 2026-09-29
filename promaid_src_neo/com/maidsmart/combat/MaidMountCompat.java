@@ -1437,8 +1437,19 @@ public final class MaidMountCompat {
                 if (hardBrake) {
                     killHorizontal(mount, HARD_BRAKE_RETAIN);
                 }
+                // 【实测七百三十二·周期急停脉冲】玩家原话「像这个女仆操纵的时候，总是容易用力
+                // 过猛，所以这边最好是每 0.5 秒就急停下来一次。这样子可以显著增加飞机的稳定性。」
+                // 做法：在"操纵带"内（离目标点 24 格以内，含盘旋圈）每 10 拍（=0.5 秒）把水平分量
+                // 打掉一截——跟随/接近档打 0.25，接敌盘旋档打 0.55（温和，保住绕圈）。
+                // 效果是把速度**封顶**：发动机攒的动量冲不出大过冲，也就不必再慢慢荡回来。
+                // 竖直分量一律不动（空中不能失去升力）。
+                boolean pulse = !hardBrake && horiz <= BRAKE_PULSE_RANGE && brakePulseDue(mount);
+                if (pulse) {
+                    killHorizontal(mount, fighting ? BRAKE_PULSE_RETAIN_FIGHT : BRAKE_PULSE_RETAIN);
+                }
                 logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
                         + (hardBrake ? " 硬刹(水平清零)" : "")
+                        + (pulse ? " 周期急停(0.5s)" : "")
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(离地" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 鼠标X=" + Math.round(yawCmd)
@@ -1676,7 +1687,7 @@ public final class MaidMountCompat {
      * 到点时 {@code 水平速度} 常在 0.7~1.8（发动机惯性），于是**闸门根本不打开**、她冲过目标点
      * 再慢慢荡回来。玩家要的是"强制刹车"，所以这里**只看距离**：进到点就刹，多快都刹。
      *
-     * @param fighting 她此刻在接敌盘旋——**盘旋中绝不刹**，否则每绕到胡萝卜附近就顿一下，
+     * @param fighting 她此刻在接敌盘旋——**盘旋中绝不刹死**，否则每绕到胡萝卜附近就顿一下，
      *                 圈直接顿成碎步。盘旋结束（丢目标/回到跟随）后自然会刹。
      */
     static boolean shouldHardBrake(double horiz, double hspeed, boolean fighting) {
@@ -1685,6 +1696,69 @@ public final class MaidMountCompat {
 
     /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
     private static final double HARD_BRAKE_RETAIN = 0.25;
+
+    /* ==================== 实测七百三十二：周期急停脉冲（稳定器） ==================== */
+
+    /**
+     * 【实测七百三十二】急停脉冲的间隔（拍）：玩家原话「最好是每 0.5 秒就急停下来一次。
+     * 这样子可以显著增加飞机的稳定性」——20 拍 = 1 秒，所以 **10 拍 = 0.5 秒**。
+     */
+    private static final int BRAKE_PULSE_TICKS = 10;
+
+    /**
+     * 脉冲急停的**保留系数**（跟随/接近档）：每 {@link #BRAKE_PULSE_TICKS} 拍把水平分量打到
+     * 这个比例。玩家原话就是「每 0.5 秒就急停下来一次」——所以这里照做，把到位时那记"急停"
+     * 变成周期性的。
+     *
+     * <p>【为什么不是"封顶"】先试过只在超速时砍回上限（更平滑），但那不叫"急停"、对
+     * "用力过猛"的削峰也不够狠。按实机数据估算：她 1 秒能从 0 冲到 1.83，所以每 0.5 秒
+     * 砍到 0.25 会形成 **0.3~1.1** 的有界锯齿、均值 ≈ 0.7（正好在速度环 0.75 的包络内）——
+     * 既压住了过冲，又没把她拖慢。竖直分量不动（空中不能失去升力）。
+     */
+    private static final double BRAKE_PULSE_RETAIN = 0.25;
+
+    /**
+     * 接敌盘旋档的保留系数——**比跟随档温和**。绕圈要靠水平速度维持，用 0.25 会把圈顿成
+     * 一步一停；0.55 只压速度峰值、圈照绕。
+     */
+    private static final double BRAKE_PULSE_RETAIN_FIGHT = 0.55;
+
+    /**
+     * 脉冲生效的"操纵带"（格）：只有离目标点进到这个距离内才打脉冲。远距离纯巡航不打——
+     * 否则一趟 70 格的长途会被周期性地砍到半速（那是玩家没要求的副作用）。玩家说的过冲
+     * 场景（"接近玩家的时候"）与盘旋都在这个带内。
+     */
+    private static final double BRAKE_PULSE_RANGE = 24.0;
+
+    /** 每只车的脉冲计数（每拍 +1，到 {@link #BRAKE_PULSE_TICKS} 归零并触发一次）。 */
+    private static final java.util.Map<java.util.UUID, Integer> BRAKE_PULSE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 这一拍该不该打一次"急停脉冲"（每 {@link #BRAKE_PULSE_TICKS} 拍一次）。
+     *
+     * @return true = 本拍触发脉冲（调用方据此调 {@link #killHorizontal}）
+     */
+    static boolean brakePulseDue(Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            Integer n = BRAKE_PULSE.get(mount.getUUID());
+            int v = (n == null ? 0 : n) + 1;
+            if (BRAKE_PULSE.size() > 512) {
+                BRAKE_PULSE.clear(); // 兜底：表不会无限涨（与其它几张频限表同口径）
+            }
+            if (v >= BRAKE_PULSE_TICKS) {
+                BRAKE_PULSE.put(mount.getUUID(), 0);
+                return true;
+            }
+            BRAKE_PULSE.put(mount.getUUID(), v);
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     /**
      * 【实测七百三十一】把炮塔**写死到目标方向**，并保证弹匣里有弹。
