@@ -1273,6 +1273,9 @@ public final class RideBindManager {
     private static void releaseMaidQuiet(EntityMaid maid) {
         Link link = LINKS.remove(maid.getUUID());
         MaidAirCombat.clear(maid); // 实测七百二十六·点3：自动解除同样作废这一场遭遇
+        // 【实测七百三十】飞行坐骑的索敌器锁定也要跟着撤（与扫帚 stop() 里那一句同口径）
+        com.maidsmart.combat.FlightTargeting.forget(maid.getUUID());
+        LEASH_LOGGED.remove(maid.getUUID());
         Entity mount = link == null ? null : link.mount.get();
         // 【实测七百二十五·点1】自动解除同样要还原坐姿（与 releaseMaidImpl 同口径）。
         MaidMountCompat.setSitting(maid, link != null && link.prevSitting);
@@ -1326,7 +1329,28 @@ public final class RideBindManager {
             // 两条都把结果交给 driveFlight——它是唯一能写总距/悬停开关的地方。飞艇/地面车不在
             // 这一档里。
             if (MaidAirCombat.enabled() && MaidMountCompat.isFlyingVehicle(mount)) {
-                LivingEntity foe = targetOf(maid);
+                // 【实测七百三十】锁敌改用**本模组自己的索敌器**（与扫帚/空袭同一套：
+                // 发现 50 格 / 维持 128 格、无视排班盒子）——玩家原话「骑上飞行载具后它的
+                // 锁敌范围应该跟扫帚模式是一样的」。旧版读 brain 的 ATTACK_TARGET，
+                // 而 TLM 那条链按 16/8 格援护半径丢目标，boss 一飞高/一掉下去就没了。
+                LivingEntity foe = FlightTargeting.resolve(maid);
+                if (foe == null) {
+                    foe = targetOf(maid); // 索敌器这一拍没结果 → 退回 brain（不丢已有目标）
+                }
+                // 【实测七百三十·点2】"发现攻击范围内没有主人"→ 放弃当前敌人、转去追主人。
+                // 玩家原话：「打完了，或者发现攻击范围内没有主人，则放弃攻击敌人，转而去追主人。」
+                // 参照半径直接复用索敌器的**发现半径**（{@link FlightTargeting#RANGE} = 50）：
+                // 主人离得比"她还愿意接敌的距离"还远，就说明这一场不在主人身边打——收手回去。
+                if (foe != null && maid.distanceTo(owner) > FlightTargeting.RANGE) {
+                    if (LEASH_LOGGED.add(maid.getUUID())) {
+                        MaidMountCompat.logDrive(mount, "主人超出接敌半径（"
+                                + (long) maid.distanceTo(owner) + "格 > " + (long) FlightTargeting.RANGE
+                                + "格）→ 放弃敌人、转去追主人");
+                    }
+                    foe = null;
+                } else if (foe != null) {
+                    LEASH_LOGGED.remove(maid.getUUID());
+                }
                 Vec3 air;
                 if (foe != null && foe.isAlive() && foe.level() == maid.level()) {
                     air = MaidAirCombat.combatTarget(maid, foe);
@@ -1405,6 +1429,9 @@ public final class RideBindManager {
         }
         return STOP_SLACK;
     }
+
+    /** 【实测七百三十】"主人超出接敌半径 → 收手追主人"这条日志的每只女仆一次闩（回来了就拔）。 */
+    private static final java.util.Set<UUID> LEASH_LOGGED = new java.util.HashSet<>();
 
     /** 【实测七百二十四·点5】节流地给"骑载具的女仆"补一次主动索敌（避免每 2 tick 都扫）。 */
     private static final Map<UUID, Long> ENGAGE_AT = new HashMap<>();
