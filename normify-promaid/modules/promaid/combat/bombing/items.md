@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/BombItems.java, line: 1, end_line: 336}
   - {path: promaid_src_neo/com/maidsmart/combat/BombConfig.java, line: 1, end_line: 151}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 296304d0d53bb2f34253eb38519799f2454fb73c4d0616871ec25ad4d477f9f1
 state: active

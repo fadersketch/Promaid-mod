@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/build/IndexStoneService.java, line: 1, end_line: 726}
   - {path: promaid_src_neo/com/maidsmart/build/IndexStoneBuildBehavior.java, line: 1, end_line: 388}
   - {path: promaid_src_neo/com/maidsmart/build/IndexStonePreviewClient.java, line: 1, end_line: 409}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 0d31bb8811e60336717d0e4a38d4e585356d5730326bd581909b6a5c05bb1f5c
 state: active

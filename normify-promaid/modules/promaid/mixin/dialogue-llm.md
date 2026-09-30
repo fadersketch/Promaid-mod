@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidChatLanguageMixin.java, line: 1, end_line: 162}
   - {path: promaid_src_neo/com/maidsmart/mixin/ChatBubbleLimitMixin.java, line: 1, end_line: 134}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidChatLlmGateMixin.java, line: 1, end_line: 43}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: eaabbd2b5b2905321b299ecea49df7998e515962515b44280e04b7b572c927bf
 state: active

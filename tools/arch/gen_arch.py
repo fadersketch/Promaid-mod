@@ -49,8 +49,21 @@ MODULES_FORGE = [_norm(r) for r in MODULES_FORGE]
 TREES = {"promaid": MODULES, "promaid-forge": MODULES_FORGE}
 REVISION = None
 def git_rev():
+    """The revision being documented = last commit that touched the SOURCE trees.
+
+    Deliberately NOT HEAD: using HEAD would make every rebuild produce different
+    fingerprints just because documentation/arch commits landed, so `receipt.json`
+    would never verify. Deriving it from the source means the arch data only changes
+    when the code it describes changes.
+    """
     import subprocess
-    return subprocess.run(["git","rev-parse","HEAD"],capture_output=True,text=True).stdout.strip()
+    for paths in (["promaid_src_neo", "promaid_src"], ["promaid_src_neo"], []):
+        args = ["git", "log", "-1", "--format=%H"] + (["--"] + paths if paths else [])
+        out = subprocess.run(args, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace").stdout.strip()
+        if out:
+            return out
+    return "0" * 40
 
 REVISION = git_rev()
 NOW = "2026-10-01T00:00:00Z"
