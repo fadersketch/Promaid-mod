@@ -1,6 +1,66 @@
 {
   "entries": [
     {
+      "text": "先用骑乘棒右击坐骑，再来右击我～",
+      "file": "ride_baton_first.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这辆车没有能坐的副驾～",
+      "file": "ride_no_copilot.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "起飞！",
+      "file": "tool_takeoff.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "我去空中待命",
+      "file": "tool_air_wait.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "好，我落下来",
+      "file": "tool_land.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "明白，交给我！",
+      "file": "tool_roger.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "好，我这就去",
+      "file": "tool_go.ogg",
+      "mode": "contains"
+    },
+    {
+      "text": "好，我跟着你",
+      "file": "tool_follow.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "这儿交给我",
+      "file": "tool_here.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "主人口渴了吧，给你带了喝的～",
+      "file": "aid_drink.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "我的活动范围里没有能坐下的水边～主人可以潜行+中键水边方块，把我的工作区域标到那里",
+      "file": "fish_no_water_area.ogg",
+      "mode": "exact"
+    },
+    {
+      "text": "没有可以搭建的方块了…再找不到材料我就先停啦",
+      "file": "build_no_blocks.ogg",
+      "mode": "exact"
+    },
+    {
       "text": "没能坐上它的鞍位……再试一次？",
       "file": "ride_seat_fail.ogg",
       "mode": "contains"

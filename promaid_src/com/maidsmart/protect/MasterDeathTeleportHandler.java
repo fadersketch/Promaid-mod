@@ -320,7 +320,13 @@ public class MasterDeathTeleportHandler {
      * 建造女仆仍照旧可拽（建造强制 home，但它属"可召回"那一类）。
      */
     private static boolean shouldStayPut(EntityMaid maid) {
-        if (maid.isMaidInSittingPose() || maid.m_20159_()) {
+        // 【实测七百二十四】悬空鞍位（龙）：她**不是乘客**、isPassenger 认不出她——
+        // 单独判一次，免得主人死亡传送/归位把她从龙背鞍位上拽下来。
+        // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
+        //  主人死亡归位是**自动传送**，特殊载具上一律不生效（玩家原话「所有的传送方面的行为
+        //  必须由玩家来」）。
+        if (maid.isMaidInSittingPose() || maid.m_20159_()
+                || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
             return true;
         }
         // v1.3.0(beta) 实测七百一十七：home（非建造）与其它传送链路同口径豁免

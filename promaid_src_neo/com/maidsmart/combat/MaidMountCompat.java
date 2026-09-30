@@ -123,6 +123,9 @@ public final class MaidMountCompat {
     private static Method mGetTurretCtrlIdx;  // getTurretControllerIndex()
     private static Method mGetWeaponCtrlIdx;  // getPassengerWeaponStationControllerIndex()
     private static Method mGetNthEntity;      // getNthEntity(int) —— 取某个座位上的乘客
+    /* 【实测七百三十七·双人座】把**主人**放进副驾驶要用 SWB 自己的逐座 API（反编译实证：
+     * changeSeat(Entity,int) 公开；要求"目标座为空 + 该实体已是乘客"→ 先 startRiding 再 changeSeat）。 */
+    private static Method mChangeSeat;        // changeSeat(Entity,int)
     /* 【实测七百二十五】直升机的转向/俯仰走的是**鼠标通道**（javap/反编译实证：
      * helicopterEngine 的 yaw/pitch/roll 三项都读 getMouseMoveSpeedX/Y，而不是左右位）。
      * 所以驱动层必须能写这两个量 + 悬停开关。 */
@@ -261,6 +264,13 @@ public final class MaidMountCompat {
                 mGetTurretCtrlIdx = null;
                 mGetWeaponCtrlIdx = null;
                 mGetNthEntity = null;
+            }
+            // 【实测七百三十七·双人座】逐座移动：单独 try——缺了它只是"主人坐不进副驾"，
+            // 不该把上面那组炮塔/武器位反射一起关掉。
+            try {
+                mChangeSeat = cVehicle.getMethod("changeSeat", Entity.class, int.class);
+            } catch (Throwable ignored) {
+                mChangeSeat = null;
             }
             // 【实测七百二十五】直升机的鼠标通道 + 悬停开关：各自单独 try，缺一个也不该让其余失效。
             try {
@@ -1128,6 +1138,8 @@ public final class MaidMountCompat {
 
         // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
         boolean headSteer = "WHEELCHAIR".equals(eng);
+        // 【实测七百三十七·转向】车/坦克（轮式/履带）另有"直写机头"的兜底档（见 forceCarHeading）。
+        boolean carSteer = "WHEEL".equals(eng) || "TRACK".equals(eng);
         if (headSteer) {
             if (maid != null) {
                 try {
@@ -1170,6 +1182,15 @@ public final class MaidMountCompat {
         }
         try {
             mProcessInput.invoke(mount, bits);
+            // 【实测七百三十七·转向】地面机头兜底：引擎自己那条链（holdTick→deltaRot→rudderRot）
+            // 慢速转不动、快速追不上（见 forceCarHeading 注释）。**在 processInput 之后**写，
+            // 让引擎这一拍自己的 yaw 积分先落地，我们只纠残余；只写 yaw、不碰 deltaRot，
+            // 输入位照旧发（两股力同向叠加，不打架）。判据与诊断一致：只接**轮式/履带**这两台
+            // 引擎（引擎名拿不到/别的引擎一字不变）——轮椅有自己的头朝向档、飞艇有独立升降轴、
+            // TOM6 的转向整段写在"乘客是玩家"分支里，都不该被这条兜底影响。
+            if (carSteer) {
+                forceCarHeading(mount, err);
+            }
             // 【实测七百二十四】进了停车带就**真刹车**（旧版只清前进位，车靠摩擦慢慢滑）。
             if (horiz <= stopBand(mount)) {
                 brakeVehicle(mount);
@@ -1771,6 +1792,76 @@ public final class MaidMountCompat {
      * 且被 propeller 缩到不足两成）**快十倍以上**，又远低于瞬转，长距离能一路咬住方位。
      */
     private static final float FLIGHT_HEAD_MAX_DEG = 10.0f;
+
+    /**
+     * 【实测七百三十七·转向】地面载具（车/坦克，引擎 {@code WHEEL}/{@code TRACK}）的机头兜底。
+     *
+     * <p>玩家原话：「女仆在开车的时候，那个车头的转向方面没有那么智能，能不能也加上像直升机
+     * 这样子的转向兜底呢？」——地面那一档此前**只写左右输入位**（0x001/0x002），把转向整个交给
+     * SWB 引擎自己的 {@code holdTick → deltaRot → rudderRot} 那条链。反编译实证那条链有两个
+     * 死结：① 转向量按 {@code holdTick} 慢慢累积（每拍 {@code steeringSpeed*0.12*min(holdTick,10)}），
+     * ② 转率正比于**车速**（{@code 12*horizSpeed}）且 {@code rudderRot} 被夹在 ±0.8。于是"起步/慢速
+     * 时几乎转不动、快起来又追不上"，就是玩家说的"没那么智能"。
+     *
+     * <p>本方法与直升机那条 {@link #forceHeadingOnto} 同源（直写 {@code setYRot} + 一起写
+     * {@code setServerYaw}，否则客户端 {@code handleClientSync} 的 10%/拍 lerp 会把机头拽回去），
+     * 但**有三处地面专属的收敛**，都是"两股力别打架"的必然取舍：
+     * <ul>
+     *   <li><b>死区更大</b>（{@link #CAR_HEAD_DEADBAND} = 25°）：引擎每拍自己也在改 yaw，
+     *       小误差时让引擎自己收（避免画龙）；只有"确实偏了"才插手；</li>
+     *   <li><b>每拍上限随车速缩放</b>（{@code clamp(err, ±k*|速度|, ±floor)}）：引擎自己的 yaw 积分
+     *       正比于车速，固定步长在慢速时会过冲、快速时又杯水车薪。缩放后快慢都咬得住；</li>
+     *   <li><b>只写 yaw，绝不碰 deltaRot</b>：{@code rudderRot} 是从 {@code deltaRot} 积分出来的，
+     *       在这里清它等于把引擎自己的转向冻死（轮子永远不转）。输入位照旧发，本方法只当**偏置**。</li>
+     * </ul>
+     *
+     * @param mount   地面载具
+     * @param yawErr  目标方位 - 当前机头（已 wrap 到 [-180,180)）
+     * @return true = 真的写了（反射/类型不满足 → false，调用方退回纯输入位）
+     */
+    static boolean forceCarHeading(Entity mount, float yawErr) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            float abs = Math.abs(yawErr);
+            if (abs <= CAR_HEAD_DEADBAND) {
+                return false; // 死区内：交给引擎自己的转向链，别跟它抢
+            }
+            // 每拍上限随车速缩放：慢速给一个下限（不然永远转不动），快速按速度放开（不然追不上）。
+            double speed = 0.0;
+            try {
+                Vec3 dm = mount.getDeltaMovement();
+                speed = Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+            } catch (Throwable ignored) {
+            }
+            float cap = (float) Math.max(CAR_HEAD_MIN_STEP, CAR_HEAD_SPEED_GAIN * speed);
+            cap = Math.min(cap, CAR_HEAD_MAX_STEP);
+            // 去掉死区再夹（死区内不动，出死区按"超出部分"给步长，靠近时自然收敛不抖）
+            float eff = Math.copySign(abs - CAR_HEAD_DEADBAND, yawErr);
+            float step = clamp(eff, -cap, cap);
+            float yaw = wrapDegrees(mount.getYRot() + step);
+            mount.setYRot(yaw);
+            if (mSetServerYaw != null) {
+                try {
+                    mSetServerYaw.invoke(mount, yaw);
+                } catch (Throwable ignored) {
+                }
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 地面机头兜底的死区（度）：偏得比这少就不插手（见 {@link #forceCarHeading}）。 */
+    private static final float CAR_HEAD_DEADBAND = 25.0f;
+    /** 地面机头兜底每拍步长随车速的增益（度/格每拍）：引擎自身转率也是正比车速，同源缩放。 */
+    private static final double CAR_HEAD_SPEED_GAIN = 6.0;
+    /** 地面机头兜底每拍步长下限（度）：停车/起步时引擎几乎转不动，给个地板保证能转起来。 */
+    private static final float CAR_HEAD_MIN_STEP = 4.0f;
+    /** 地面机头兜底每拍步长上限（度）：仍远低于瞬转，留出客户端 lerp 的跟随余量。 */
+    private static final float CAR_HEAD_MAX_STEP = 10.0f;
 
     /**
      * 直写航向时留在鼠标 X 通道里的**微调量**：只补一点转角，顺带把滚转耦合压到可忽略
@@ -2596,5 +2687,85 @@ public final class MaidMountCompat {
     @SuppressWarnings("unused")
     private static List<Entity> unused() {
         return null;
+    }
+
+    /* ==================== 实测七百三十七·双人座：主人坐副驾 ==================== */
+
+    /**
+     * 这辆载具**除了某位乘客之外**的第一个空座（座位号；没有则 -1）。
+     *
+     * <p>口径：座位数组是"有序 + 可为 null"的（SWB 的 {@code orderedPassengers}，反编译实证
+     * {@code getSeatIndex(Entity) = indexOf}、{@code getNthEntity(int)} 取某座乘客）。
+     * 这里从 0 号座起逐个问"这座有人吗"，跳过 {@code exclude}（女仆自己）所占的那座，
+     * 返回第一个空座——正是主人该坐的副驾。
+     */
+    public static int firstFreeSeatExcept(Entity mount, Entity exclude) {
+        try {
+            if (!isVehicle(mount) || mGetNthEntity == null) {
+                return -1;
+            }
+            int excludeSeat = seatIndexOf(mount, exclude);
+            int n = maxPassengers(mount);
+            if (n <= 0) {
+                return -1;
+            }
+            for (int i = 0; i < n; i++) {
+                if (i == excludeSeat) {
+                    continue; // 女仆自己那座，跳过
+                }
+                Object nth = mGetNthEntity.invoke(mount, i);
+                if (nth == null) {
+                    return i; // 空座
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    /**
+     * 【实测七百三十七·双人座】把主人放进这辆载具的**副驾驶座**（女仆留在驾驶位，0 号座）。
+     *
+     * <p>玩家原话：「我考虑到卓越前线有一些载具是分为双人座的，能否考虑在女仆乘坐后主人右击的
+     * 时候登上副驾驶座呢？」——SWB 自己的 {@code VehicleEntity.interact} 只有"座位 0 是第一乘客"
+     * 那一支；当第一乘客**不是玩家**（我们的女仆）时它走"把第一乘客踢下来、主人自己坐座位 0"
+     * 的那一支（反编译实证），正是"女仆被顶下车"的根因。所以我们不走它那条路，改成：
+     * <ol>
+     *   <li>先 {@code player.startRiding(mount, true)}（原版规则：落进第一个空座——女仆在 0 号，
+     *       所以主人落 1 号）；</li>
+     *   <li>再用 SWB 自己的 {@code changeSeat(player, 目标座)} 把主人**钉到副驾**——这样即使
+     *       原版把它排在别处也能挪过来（{@code changeSeat} 要求"目标座为空 + 该实体已是乘客"，
+     *       上面那一步正好满足）。</li>
+     * </ol>
+     * 全程不碰女仆的座位（她稳在 0 号 = 引擎唯一认的驾驶位），于是"她开、主人坐副驾"。
+     *
+     * @return true = 主人已在这辆载具上（坐上副驾，或本来就在车上）
+     */
+    public static boolean boardOwnerAsPassenger(Entity mount, net.minecraft.world.entity.player.Player player,
+                                                Entity maid) {
+        try {
+            if (mount == null || player == null) {
+                return false;
+            }
+            if (player.getVehicle() == mount) {
+                return true; // 已经在车上（可能正被我们挪座），不重复动
+            }
+            int seat = firstFreeSeatExcept(mount, maid);
+            if (seat < 0) {
+                return false; // 没有空座（单座车 / 已满）——调用方据此拒绝
+            }
+            if (!player.startRiding(mount, true)) {
+                return false;
+            }
+            if (mChangeSeat != null) {
+                try {
+                    mChangeSeat.invoke(mount, player, seat);
+                } catch (Throwable ignored) {
+                }
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 }

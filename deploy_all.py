@@ -6,6 +6,24 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百三十七（v1.3.0 beta，同名覆盖，未发版）：**两树同步的四期内容** ——
+① 守家不再吃绳子的力（空袭牵引绳 home 模式下整条不生效：`GunnerTetherManager.onMaidTick` 与
+   `MaidFlightRecall.tick` 各加一道 `isHomeModeEnable()` 闸；玩家原话「如果给 home 模式的女仆
+   设置空袭模式的话女仆就会一直被牵引绳往玩家那拉」）；
+② 车/坦克的机头兜底（`MaidMountCompat.forceCarHeading`：WHEEL/TRACK 引擎直写 setYRot +
+   setServerYaw，25° 死区 + 步长随车速缩放；玩家原话「女仆在开车的时候，那个车头的转向方面
+   没有那么智能，能不能也加上像直升机这样子的转向兜底呢？」）；
+③ 双人座副驾（`MaidMountCompat.firstFreeSeatExcept/boardOwnerAsPassenger` + `RideBindManager`
+   空手右击接管 + 两道登乘闸放行 `allowsOwnerPassengerSeat`；主人右击自己女仆开的车 → 坐进副驾，
+   女仆仍在 0 号驾驶位；玩家原话「能不能考虑在女仆乘坐后主人右击的时候登上副驾驶座呢？」）；
+④ 语音补漏 12 条（审计"女仆会说但没有语音"的台词，含玩家点名的「先用骑乘棒右击坐骑，再来右击我～」，
+   内置语音包 161 → 173 条）。
+两树差异（故意）：1.20.1 的 `displayClientMessage` 是 `m_213846_(Component)`（1.21.1 带 boolean）。
+
+实测七百三十六（v1.3.0 beta，同名覆盖，未发版）：**把 724～734 那十一个「仅 1.21.1」版本的改动全部同步到 1.20.1（Forge 47.x）侧**。
+玩家原话：「是时候了，目前更新的内容已经算稳定的了。将这些更新内容同步到1.20.1 forge的版本。」同步内容：真刹车与车体尺寸停车距（坦克不撞主人）、绑定语义修正（一位玩家名下多条链路不再互相取消）、右击载具不再转玩家视角、坦克炮塔真开炮（AI 目标 UUID + 自装弹）、直升机悬停与盘旋（高度基准只认主人 Y，不再每拍 +3 棘轮）、每 0.5 秒周期急停、骑龙悬空鞍位每拍摆位与不再因距离断开、特殊载具传送豄免与传送前解绑、新增 9 条骑乘语音。
+两树差异（故意）：1.20.1 没有 EntityTickEvent，龙每拍摆位改用 EntityTickPostMixin（挂 Entity.tick RETURN）；网络包用 SimpleChannel；客户端 tick 用 TickEvent.ClientTickEvent。
+
 实测七百三十四（v1.3.0 beta，同名覆盖，未发版）：跟随/悬停高度的「棘轮」修正 —— 高度基准只认主人的 Y
 **本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 733，同名 jar 覆盖——玩家原话
 「悬停在玩家上方的这个高度似乎仍然有问题，很多次都是比玩家高出了十几二十格。」

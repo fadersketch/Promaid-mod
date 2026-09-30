@@ -71,6 +71,8 @@ public class ProMaidMod {
         com.maidsmart.combat.BombMarkNetworking.register();
         // v1.3.7 实测六百六十七：武装拴绳网络层（S2C：谁是她的二号位枪手）
         com.maidsmart.combat.GunnerTetherNetworking.register();
+        // v1.3.0(beta) 实测七百二十七·点4：悬空鞍位（龙）配对的 S2C 同步（客户端按同一算式同行摆位）
+        com.maidsmart.combat.MaidSeatNetworking.register();
         // v1.3.0(beta) 实测七百〇二：仿创造飞行（1.20.1 精简版）——per-maid 开关的 C2S/S2C 两个包
         com.maidsmart.flight.MaidFreeFlightNetworking.register();
         // v1.3.0(beta) 实测七百〇二：仿创造飞行控制器挂在 MaidTickEvent 上（两侧都发，控制器自己挡客户端）
@@ -121,6 +123,10 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerHudHooks();
             // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
             com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
+            // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
+            com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
+            // 【实测七百二十七·点4】退出世界清掉"悬空鞍位（龙）"的客户端镜像表
+            com.maidsmart.client.PromaidClientSetup.registerSeatSyncClear();
         }
     }
 
@@ -317,6 +323,46 @@ public class ProMaidMod {
                 } else {
                     com.maidsmart.tool.PromaidLog.log("配置迁移",
                             "扫帚接敌爬升高度不需要第二次迁移（现值 " + broomClimb12Before + "）");
+                }
+            }
+            // 【实测七百二十七·点1】骑飞行载具的 airAlt **语义**变了：726 是「爬到敌人**上方**
+            // 多少格」（默认 15），727 起是「**离地**多少格」（默认 3）。老档 toml 里存着 15，
+            // 不迁的话她会离地 15 格悬停（玩家要的是 3）。判据与扫帚那两次同款：只搬**还停在
+            // 旧默认 15** 的档，玩家自己调过的别的值一律不碰（用独立标记钉死只迁一次）。
+            if (!com.maidsmart.config.MaidSmartConfig.AIR_ALT_MIGRATED.get()) {
+                double airAltBefore = -1.0;
+                try {
+                    airAltBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.AIR_ALT_MIGRATED.set(true);
+                changed = true;
+                if (airAltBefore == 15.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_AIR_ALT.set(3.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具悬停高度迁移：15 → 3（语义由「离敌」改为「离地」，旧档里留下的老默认值）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具悬停高度不需要迁移（现值 " + airAltBefore + "）");
+                }
+            }
+            // 【实测七百二十八】盘旋半径默认 6 → 4。727 那份 jar 已经部署过，玩家档里可能落下
+            // 727 的默认 6——不迁的话"缩小绕圈半径"对老档不生效。判据同款：只搬**还停在 6** 的档。
+            if (!com.maidsmart.config.MaidSmartConfig.ORBIT_RADIUS_MIGRATED.get()) {
+                double orbitBefore = -1.0;
+                try {
+                    orbitBefore = com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.config.MaidSmartConfig.ORBIT_RADIUS_MIGRATED.set(true);
+                changed = true;
+                if (orbitBefore == 6.0) {
+                    com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.set(4.0);
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具盘旋半径迁移：6 → 4（旧档里留下的上一版默认值，玩家要求缩小绕圈）");
+                } else {
+                    com.maidsmart.tool.PromaidLog.log("配置迁移",
+                            "骑飞行载具盘旋半径不需要迁移（现值 " + orbitBefore + "）");
                 }
             }
             changed |= migrateOreTable();

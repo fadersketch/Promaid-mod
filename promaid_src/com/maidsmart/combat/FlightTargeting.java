@@ -208,10 +208,11 @@ public final class FlightTargeting {
         }
         try {
             java.util.UUID id = maid.m_20148_();
-            if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)) {
-                // 只有两个空袭任务与扫帚任务走本索敌器（扫帚见类注释 实测六百八十五），
-                // 其它任务不受影响；顺手清掉残留（切走任务时不该继续抱着旧目标，否则她切回
-                // 地面任务后我们还会往 brain 里写空战目标）
+            if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)
+                    && !isFlightMountRider(maid)) {
+                // 只有两个空袭任务、扫帚任务，以及【实测七百三十】被指挥棒绑在**飞行坐骑**
+                // （直升机/固定翼）上的女仆走本索敌器，其它任务不受影响；顺手清掉残留
+                // （切走任务时不该继续抱着旧目标，否则她切回地面任务后我们还会往 brain 里写空战目标）
                 LOCKED.remove(id);
                 NEXT_SCAN.remove(id);
                 RESOLVED_TICK.remove(id);
@@ -275,6 +276,25 @@ public final class FlightTargeting {
     }
 
     /* ---------------- 内部 ---------------- */
+
+    /**
+     * 【实测七百三十】她是不是"被骑乘指挥棒绑在一只**飞行坐骑**上"的女仆。
+     *
+     * <p>玩家原话：「骑上飞行载具后它的锁敌范围应该跟扫帚模式是一样的。」
+     * 所以这一档并入本索敌器：**发现 50 格 / 维持 128 格**，与扫帚/空袭同一套数字、同一套判据
+     * （红线"口径只有一处"）。判据走载具自己的引擎名（反射拿不到 → false，一个字节都不碰）。
+     */
+    private static boolean isFlightMountRider(EntityMaid maid) {
+        try {
+            if (maid == null || !MaidRideKit.isBatonBound(maid)) {
+                return false;
+            }
+            net.minecraft.world.entity.Entity v = maid.m_20202_();
+            return v != null && MaidMountCompat.isFlyingVehicle(v);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     private static LivingEntity lockedOf(java.util.UUID id) {
         java.lang.ref.WeakReference<LivingEntity> ref = LOCKED.get(id);
