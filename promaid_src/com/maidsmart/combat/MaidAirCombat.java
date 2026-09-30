@@ -311,7 +311,9 @@ public final class MaidAirCombat {
         }
         try {
             UUID id = maid.m_20148_();
-            double r = Math.max(GROUND_ORBIT_MIN, orbitRadiusCfg());
+            // 【实测七百三十九·点3】半径改成**按车速/车体自适应**（见 groundOrbitRadius 的注释：
+            // 固定半径给小车是"拐不过来 → 直接撞进敌人怀里"，给大车是"原地蹭"）。
+            double r = MaidMountCompat.groundOrbitRadius(mount, orbitRadiusCfg());
             // 旋向 = 基准（UUID）× 每 8 秒随机掉头 × **撞墙反向**（最后一项目的是玩家点名要的）
             double dir = CombatOrbit.direction(id) * CombatOrbit.flipSign(id)
                     * MaidMountCompat.groundReverse(mount);
@@ -322,7 +324,7 @@ public final class MaidAirCombat {
             double ang = angCur + dir * (lead / r);
             double y = target.m_20186_(); // 地面档：贴着敌人的高度绕，不进"敌上 N 格"
             if (firstOrbit(id)) {
-                log(maid, "接敌 → 开着地面载具贴着敌人绕圈（半径 " + fmt(r) + " 格，旋向 "
+                log(maid, "接敌 → 开着地面载具绕着敌人转圈（半径 " + fmt(r) + " 格，旋向 "
                         + (dir > 0 ? "逆时针" : "顺时针") + "）");
             }
             return new Vec3(target.m_20185_() + Math.cos(ang) * r, y,
@@ -333,10 +335,10 @@ public final class MaidAirCombat {
     }
 
     /**
-     * 地面载具绕圈的最小半径（格）：比飞行档的默认 4 收一点——车/坦克车身大、转弯半径也大，
-     * 但太远就打不着了。取 2.5 让"贴着敌人"仍然成立。
+     * 地面载具绕圈的绝对半径下限（格）——由 {@code MaidMountCompat.groundOrbitRadius} 统一裁决
+     * （那里还叠车速与车体尺寸）。这里只保留一个"配置值兜底"。
      */
-    private static final double GROUND_ORBIT_MIN = 2.5;
+    private static final double GROUND_ORBIT_MIN = 6.0;
 
     /**
      * v1.3.0(beta) 实测七百三十八【玩家坐上副驾后直升机一直往上飞】。

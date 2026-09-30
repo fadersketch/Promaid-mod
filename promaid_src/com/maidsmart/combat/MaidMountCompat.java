@@ -180,6 +180,17 @@ public final class MaidMountCompat {
     private static Method mGunCurrentAmmo;     // GunData.currentAvailableAmmo(Entity) -> int
     private static Method mGunCanShoot;        // GunData.canShoot(Entity) -> boolean
 
+    /* 【实测七百四十】弹道瞄准：把 731 那套"自己算角度"换成**引擎自己的弹道解算器**。
+     * 反编译实证（VehicleWeaponUtils.turretAutoAimFromUuid / RangeTool.calculateFiringSolution）：
+     * 炮塔角是**相对车身**的、且要解重力下坠与目标提前量，自己画直线必然打偏。 */
+    private static Method mTurretAutoAimFromVector;          // turretAutoAimFromVector(Vec3)
+    private static Method mPassengerWeaponAutoAimFromVector; // passengerWeaponAutoAimFormVector(Vec3)
+    private static Method mGetShootVecEntity;   // getShootVec(Entity, float) —— 炮管当前朝向
+    private static Method mGetShootPosEntity;   // getShootPos(Entity, float) —— 炮口位置
+    private static Method mGetProjectileVelocity; // getProjectileVelocity(Entity) -> float
+    private static Method mGetProjectileGravity;  // getProjectileGravity(Entity) -> float
+    private static Method mRangeFiringSolution;   // RangeTool.calculateFiringSolution(Vec3,Vec3,Vec3,double,double)
+
     /* ==================== 反射缓存：冰火传说 ==================== */
 
     private static boolean iafInited;
@@ -376,6 +387,31 @@ public final class MaidMountCompat {
                 mGunReloading = null;
                 mGunCurrentAmmo = null;
                 mGunCanShoot = null;
+            }
+            // 【实测七百四十】弹道瞄准所需的反射：自动瞄准入口 + 炮口/炮向 + 弹道参数 + 解算器。
+            // 各自单独 try（缺某一个只是"瞄准这一档不生效"，不该拖垮驾驶/开火/装弹）。
+            try {
+                mTurretAutoAimFromVector = cVehicle.getMethod("turretAutoAimFromVector", Vec3.class);
+                mPassengerWeaponAutoAimFromVector =
+                        cVehicle.getMethod("passengerWeaponAutoAimFormVector", Vec3.class);
+                mGetShootVecEntity = cVehicle.getMethod("getShootVec", Entity.class, float.class);
+                mGetShootPosEntity = cVehicle.getMethod("getShootPos", Entity.class, float.class);
+                mGetProjectileVelocity = cVehicle.getMethod("getProjectileVelocity", Entity.class);
+                mGetProjectileGravity = cVehicle.getMethod("getProjectileGravity", Entity.class);
+            } catch (Throwable ignored) {
+                mTurretAutoAimFromVector = null;
+                mPassengerWeaponAutoAimFromVector = null;
+                mGetShootVecEntity = null;
+                mGetShootPosEntity = null;
+                mGetProjectileVelocity = null;
+                mGetProjectileGravity = null;
+            }
+            try {
+                Class<?> rt = Class.forName("com.atsuishio.superbwarfare.tools.RangeTool");
+                mRangeFiringSolution = rt.getMethod("calculateFiringSolution",
+                        Vec3.class, Vec3.class, Vec3.class, double.class, double.class);
+            } catch (Throwable ignored) {
+                mRangeFiringSolution = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -1051,7 +1087,7 @@ public final class MaidMountCompat {
         try {
             Kind k = kindOf(mount);
             if (k == Kind.VEHICLE) {
-                return driveVehicle(mount, target, modifier, maid);
+                return driveVehicle(mount, target, modifier, maid, false);
             }
             // 【实测七百二十三】DRAGON 不再由本类驱动：降级方案里女仆只是"挂在龙的骑乘位
             // 上"（不是乘客），龙自己那套飞行物理照常跑。我们**不碰**它的 flightManager。
@@ -1059,6 +1095,67 @@ public final class MaidMountCompat {
         }
         return false;
     }
+
+    /**
+     * 【实测七百三十九·点3】接敌绕圈的驱动档：与 {@link #drive} **同一套输入**，只关掉两处
+     * "把它当成到达点"的收敛——停车带刹车、以及"没对准就不给油"。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆骑车对敌人的绕圈堪称灾难。基本上就是往敌人身上一撞就完事了，根本绕不起来。
+     * 也发挥不出车辆的速度」
+     *
+     * <h2>根因（就是"到达点收敛"用错了地方）</h2>
+     * {@link #driveVehicle} 里 {@code horiz <= stopBand(mount)} 就 {@code brakeVehicle}，而
+     * {@code stopBand} 含**车速前瞻**（{@code 车体半宽+1 + |Δ|×10}）：车速 1 格/拍时停车带高达
+     * **13 格**，而绕圈用的"胡萝卜"只挂在前方 4~6 格 → **每拍都判"到了"、每拍都真刹车**。
+     * 车于是"冲一下、刹一下"，永远起不来速，最后就是玩家看到的"一撞就完事"。
+     * 同理那句 {@code |err| < 40} 才给油也会在转弯时把油门掐掉。
+     *
+     * <p>绕圈时目标点**本来就不是一个要停下来的点**，所以这一档：不刹车、只要没偏得太离谱就一直
+     * 给油（转弯靠转向位与机头兜底，不靠松油门）。停车/跟随那条路一个字节不变。
+     */
+    public static boolean driveOrbit(Entity mount, Vec3 target, double modifier, Entity maid) {
+        try {
+            if (kindOf(mount) == Kind.VEHICLE) {
+                return driveVehicle(mount, target, modifier, maid, true);
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 【实测七百三十九·点3】地面接敌绕圈的半径（格）——**按车速自适应**。
+     *
+     * <p>为什么不能用固定半径：车的转弯能力是有限的。机头兜底每拍最多转
+     * {@code CAR_HEAD_MAX_STEP} 度，所以"能绕住的半径"下限 = {@code 车速 / 该角速度}：
+     * 车速 1 格/拍时至少要 {@code 1 / 0.1745 ≈ 5.7} 格，再留一倍余量就是 ~11 格。半径给小了，
+     * 车根本拐不过来 → 直直撞进敌人怀里（正是玩家说的"一撞就完事"）；半径给足，它才能
+     * **真的把速度跑起来**沿着圆走（"发挥不出车辆的速度"也随之解决）。
+     *
+     * <p>下限还叠**车体尺寸**：坦克半宽 2 格，绕 5 格等于原地蹭。
+     *
+     * @param configRadius 配置里的基础半径（{@code combat.ride.orbitRadius}）
+     */
+    public static double groundOrbitRadius(Entity mount, double configRadius) {
+        double r = Math.max(GROUND_ORBIT_FLOOR, configRadius);
+        try {
+            double v = horizontalSpeed(mount);
+            r = Math.max(r, v * GROUND_ORBIT_SPEED_GAIN);          // 开得越快，圈越大
+            r = Math.max(r, mount.m_20205_() * GROUND_ORBIT_WIDTH_GAIN); // 车越大，圈越大
+        } catch (Throwable ignored) {
+        }
+        return clamp(r, GROUND_ORBIT_FLOOR, GROUND_ORBIT_MAX);
+    }
+
+    /** 绕圈半径下限（格）：任何地面载具都不该绕得比这更紧（转弯能力所限）。 */
+    private static final double GROUND_ORBIT_FLOOR = 6.0;
+    /** 绕圈半径上限（格）：再大就打不着了（武器射程/视野内）。 */
+    private static final double GROUND_ORBIT_MAX = 28.0;
+    /** 车速 → 半径系数：{@code 1 格/拍} 至少要 {@code 5.7} 格才能绕住，这里取 2 倍余量。 */
+    private static final double GROUND_ORBIT_SPEED_GAIN = 11.0;
+    /** 车体半宽 → 半径系数：坦克（半宽 2）自动拉到 6 格以上。 */
+    private static final double GROUND_ORBIT_WIDTH_GAIN = 3.0;
 
     /** 停下（{@link MaidRideKit#stopNavigation} 的模组分叉）。 */
     public static void stop(Entity mount) {
@@ -1140,7 +1237,8 @@ public final class MaidMountCompat {
      * 分支里（反编译实证），Mob 乘客压根进不去，写什么都不会动。引擎名拿不到（反射失败）
      * → 照旧左右位，一个字节不变。
      */
-    private static boolean driveVehicle(Entity mount, Vec3 target, double modifier, Entity maid) {
+    private static boolean driveVehicle(Entity mount, Vec3 target, double modifier, Entity maid,
+                                        boolean orbit) {
         if (mProcessInput == null) {
             return false;
         }
@@ -1187,8 +1285,12 @@ public final class MaidMountCompat {
             bits |= (err > 0) ? 0x002 : 0x001;
         }
         // 前进：够远就踩油门。头朝向档**不等转向**（引擎每拍都在把车头拉过来，
-        // 站着不冲就是玩家看到的"走几步就停"）
-        if (horiz > stopBand(mount) && (headSteer || !turning || Math.abs(err) < 40.0f)) {
+        // 站着不冲就是玩家看到的"走几步就停"）。
+        // 【实测七百三十九·点3】绕圈档**永远给油**（只有偏得太离谱、快掉头时才收）：
+        // 目标点是"前方的胡萝卜"不是"要停下的点"，松油就等于绕不起来。
+        boolean gasGate = orbit ? Math.abs(err) < 100.0f
+                                : (headSteer || !turning || Math.abs(err) < 40.0f);
+        if ((orbit || horiz > stopBand(mount)) && gasGate) {
             bits |= 0x004;
         }
         // 升降：只有飞艇有真正的竖直轴；其余引擎的高度归它自己的物理
@@ -1215,10 +1317,12 @@ public final class MaidMountCompat {
                 forceCarHeading(mount, err);
             }
             // 【实测七百二十四】进了停车带就**真刹车**（旧版只清前进位，车靠摩擦慢慢滑）。
-            if (horiz <= stopBand(mount)) {
+            // 【实测七百三十九·点3】绕圈档**不刹车**：目标点是前方的胡萝卜，停车带（含车速前瞻
+            // 可达十几格）每拍都会命中它 → 每拍刹车 = 车永远起不来速、撞上去就完事。
+            if (!orbit && horiz <= stopBand(mount)) {
                 brakeVehicle(mount);
             }
-            logDrive(mount, "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
+            logDrive(mount, (orbit ? "绕圈档 " : "") + "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
                     + (headSteer ? " 头朝向=" + Math.round(desiredYaw) : "")
                     + " 距目标=" + (long) horiz + "格");
         } catch (Throwable ignored) {
@@ -1399,10 +1503,34 @@ public final class MaidMountCompat {
 
             double hspeed = horizontalSpeed(mount);
 
+            // 【实测七百三十九·点1】悬停档：**机头锁住不动**（玩家原话「在空中悬停的时候，总是在
+            // 原地进行不停的旋转……能不能让它的头在悬停期间朝向不要发生变化呢？」）。
+            // 根因：悬停时跟随目标点就压在她自己脚下（水平误差≈0），算出来的 `err` 是一个**退化方位**
+            // （atan2(0,0) 或她的座位与目标点的微小抖动）——每拍都不同，机头就被这个抖动的方位
+            // 一直拽着转。悬停本来就该是"停住"，航向自然也该停住。所以这一档**记下进档那一刻的
+            // 机头并每拍写回**（连 serverYaw 一起写，否则 handleClientSync 会慢慢拽走），
+            // 鼠标 X 通道也归零（它是引擎唯一能让机头自己转的输入）。退出悬停档立刻解冻。
+            boolean holdYaw = heli && airCombat && horiz <= FLIGHT_ARRIVE && hspeed < FLIGHT_PARK_SPEED;
+            if (holdYaw) {
+                float held = hoverYawHold(mount);
+                try {
+                    mount.m_146922_(held);
+                } catch (Throwable ignored) {
+                }
+                if (mSetServerYaw != null) {
+                    try {
+                        mSetServerYaw.invoke(mount, held);
+                    } catch (Throwable ignored) {
+                    }
+                }
+            } else {
+                releaseHoverYaw(mount); // 不再悬停 → 解冻（下次进档重新采样）
+            }
+
             // ① 偏航：写 X 通道（引擎里那一项被 clamp(…, -10, 10) 卡住，取值与玩家推鼠标同档）。
             // 【实测七百三十三】**只有近距/小误差时才走这条**——远距离改走下面的"直写机头"
             // 后门。原因见 forceHeadingOnto 的注释：这条通道的权限还不到玩家的一成。
-            float yawCmd = clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
+            float yawCmd = holdYaw ? 0.0f : clamp(err, -FLIGHT_YAW_MAX, FLIGHT_YAW_MAX);
             mSetMouseX(mount, yawCmd);
 
             short bits = 0;
@@ -1511,7 +1639,25 @@ public final class MaidMountCompat {
                 if (headLock) {
                     mSetMouseX(mount, clamp(err, -FLIGHT_YAW_TRIM, FLIGHT_YAW_TRIM));
                 }
+                // 【实测七百三十九·点1】悬停档里**机头锁死**：上面那两处（鼠标通道 + 直写机头）
+                // 都会按抖动的 err 改朝向，正好是玩家看到的"原地不停旋转"。这里放在最后、
+                // 把它们全部覆盖回进档那一刻的机头（顺序即优先级：最后写的赢）。
+                if (holdYaw) {
+                    float held = hoverYawHold(mount);
+                    try {
+                        mount.m_146922_(held);
+                    } catch (Throwable ignored) {
+                    }
+                    if (mSetServerYaw != null) {
+                        try {
+                            mSetServerYaw.invoke(mount, held);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    mSetMouseX(mount, 0.0f);
+                }
                 logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
+                        + (holdYaw ? " 机头锁死" : "")
                         + (hardBrake ? " 硬刹(水平清零)" : "")
                         + (pulse ? " 周期急停(0.5s)" : "")
                         + (headLock ? " 直写机头" : "")
@@ -1816,6 +1962,64 @@ public final class MaidMountCompat {
      */
     private static final float FLIGHT_HEAD_MAX_DEG = 10.0f;
 
+    /* ==================== 实测七百三十九·点1：悬停机头锁死（不原地打转） ==================== */
+
+    /**
+     * 【实测七百三十九·点1】悬停期间机头保持不动的"锚定角"。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆驾驶直升机在空中悬停的时候，总是在原地进行不停的旋转。没有什么实际影响，就是观感不好。
+     * 能不能让它的头在悬停期间朝向不要发生变化呢？」
+     *
+     * <h2>根因</h2>
+     * 悬停档（跟随、且已贴到目标点）时，跟随目标点就压在她**自己脚下**——水平分量≈0。于是
+     * {@code driveVehicle} 算出来的 {@code err} 是一个**退化方位**：{@code atan2(Δx, Δz)} 的两个
+     * 参数都是座位与目标点之间的浮点抖动，每拍符号/量级都在变 → 鼠标 X 通道与直写机头都跟着它
+     * 改朝向 → 机头原地慢慢转。这不是"故障"，是"把噪声当指令"。
+     *
+     * <h2>修法</h2>
+     * 进入悬停档的那一刻**采样一次机头**存起来，此后每拍写回这个值（{@code setYRot} +
+     * {@code setServerYaw}，后者不写会被 {@code handleClientSync} 的 lerp 慢慢拽走），
+     * 并把鼠标 X 通道归零。退出悬停档（有目标要绕圈 / 要移动 / 下鞍）立刻解冻，
+     * 下一次进档重新采样——**接敌盘旋完全不受影响**（那一档永远不满足悬停判据）。
+     *
+     * @return 要锁定的机头角（度）；首次调用采样当前机头
+     */
+    static float hoverYawHold(Entity mount) {
+        try {
+            if (mount == null) {
+                return 0.0f;
+            }
+            java.util.UUID id = mount.m_20148_();
+            Double held = HOVER_YAW.get(id);
+            if (held == null) {
+                float cur = mount.m_146908_();
+                if (HOVER_YAW.size() > 512) {
+                    HOVER_YAW.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
+                }
+                HOVER_YAW.put(id, (double) cur);
+                return cur;
+            }
+            return held.floatValue();
+        } catch (Throwable ignored) {
+            return 0.0f;
+        }
+    }
+
+    /** 退出悬停档 → 丢掉锚定角（下次进档重新采样当前机头）。 */
+    static void releaseHoverYaw(Entity mount) {
+        try {
+            if (mount != null) {
+                HOVER_YAW.remove(mount.m_20148_());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 载具 UUID → 悬停期间锁定的机头角（度）。见 {@link #hoverYawHold}。 */
+    private static final java.util.Map<java.util.UUID, Double> HOVER_YAW =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 【实测七百三十七·转向】地面载具（车/坦克，引擎 {@code WHEEL}/{@code TRACK}）的机头兜底。
      *
@@ -1948,64 +2152,22 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 【实测七百三十一】把炮塔**写死到目标方向**，并保证弹匣里有弹。
+     * 【实测七百三十一】弹匣保底：弹匣空 + 车容器里有对得上的弹 → 自己装。
      *
-     * <h2>为什么炮塔不转</h2>
-     * SWB 的 Mob 乘客自动瞄准（{@code VehicleEntity:3994 turretAutoAimFromUuid}）最终写的就是
-     * {@code turretYRot}/{@code turretXRot} 这两个字段；而它外面那道**开火闸**
-     * （{@code VehicleEntity:4013-4024}）还要求"炮口方向与目标夹角 &lt; 4°"才允许开火。
-     * 女仆在绕圈，机身一直在转，靠引擎自己那套永远追不进 4° → **一枪不放**。
-     * 这里直接算好方位角/俯仰角写进去，跳过引擎的转向速度限制。
-     *
-     * <h2>为什么还要补弹</h2>
-     * 反编译 {@code GunData}：弹匣 {@code ammo} 为空且 {@code useBackpackAmmo()} 为假时，
+     * <p>反编译 {@code GunData}：弹匣 {@code ammo} 为空且 {@code useBackpackAmmo()} 为假时，
      * {@code canShoot} 直接返回 false——而"从容器补弹"（{@code shouldStartReloading}→
-     * {@code reloadAmmo}）是**玩家开火键**那条链在调，女仆没有开火键。所以这里每拍检查一次：
-     * 弹匣空且车容器里有对得上的弹，就自己 {@code reloadAmmo}。
+     * {@code reloadAmmo}）是**玩家开火键**那条链在调，女仆没有开火键。所以每拍检查一次。
      *
-     * @return true = 这一拍炮塔/弹匣都就绪（可以开火）
+     * <p>【实测七百四十】原来这个方法还顺带"自己算角度写炮塔"，那条已删（角度写法根本是错的，
+     * 见 {@link #aimBallistic}）；这里只留"保证有弹"这一件事。
      */
-    static boolean forceTurretOntoTarget(Entity mount, EntityMaid maid, LivingEntity target) {
+    static void ensureAmmo(Entity mount, EntityMaid maid) {
         try {
             int seat = seatIndexOf(mount, maid);
-            if (seat < 0) {
-                return false;
+            if (seat >= 0) {
+                ensureMagazineLoaded(mount, seat);
             }
-            ensureMagazineLoaded(mount, seat);
-            if (target == null) {
-                return false;
-            }
-            // 炮塔方位/俯仰：从炮口位置指向目标实体中心。写死（引擎下一拍才会自己动，我们先占位）。
-            Vec3 from = shootPosOf(mount, seat);
-            Vec3 to = new Vec3(target.m_20185_(), target.m_20186_() + target.m_20206_() * 0.5, target.m_20189_());
-            if (from == null) {
-                from = mount.m_20299_(1.0f);
-            }
-            double dx = to.f_82479_ - from.f_82479_;
-            double dz = to.f_82481_ - from.f_82481_;
-            double dy = to.f_82480_ - from.f_82480_;
-            double flat = Math.sqrt(dx * dx + dz * dz);
-            float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx)) - 90.0);
-            float pitch = (float) (-Math.toDegrees(Math.atan2(dy, flat)));
-            if (mSetTurretYRot != null) {
-                mSetTurretYRot.invoke(mount, yaw);
-            }
-            if (mSetTurretXRot != null) {
-                mSetTurretXRot.invoke(mount, pitch);
-            }
-            if (mSetTurretYRotLock != null) {
-                mSetTurretYRotLock.invoke(mount, 0.0f);
-            }
-            // 武器位（直升机机炮在驾驶位时走这一对）——两对都写，谁的位就谁用。
-            if (mSetGunYRot != null) {
-                mSetGunYRot.invoke(mount, yaw);
-            }
-            if (mSetGunXRot != null) {
-                mSetGunXRot.invoke(mount, pitch);
-            }
-            return true;
         } catch (Throwable ignored) {
-            return false;
         }
     }
 
@@ -2068,17 +2230,201 @@ public final class MaidMountCompat {
     private static Method mAmmoSupplier;
 
     /**
-     * 【实测七百三十一·后门】直接开火，**绕开引擎那道 4° 闸**。
+     * 【实测七百四十】弹道瞄准：用 SWB **自己的**弹道解算器算出炮口该朝哪，喂给它的自动瞄准。
      *
-     * <p>反编译 {@code VehicleEntity:4013-4024}：内置的 Mob 乘客自动开火要求
-     * "炮口方向与目标夹角 &lt; 4°"，女仆绕圈时永远进不去 → 一枪不放。这里直接调
-     * {@code vehicleShoot(LivingEntity, UUID, Vec3)}——它**不做角度判定**，只在内部查
-     * {@code GunData.canShoot}（弹匣/弹种），并把 {@code targetPos} 交给弹道计算
-     * （反编译 {@code GunItem.shootBullet} 实证读到 {@code ShootParameters.targetPos}）。
+     * <h2>玩家原话</h2>
+     * 「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。因为前几个版本打的还挺准的，
+     * 能不能走后门让那个炮弹强制射向敌方？」
+     *
+     * <h2>根因（反编译实证，见 {@code VehicleEntity} 与 {@code VehicleWeaponUtils}）</h2>
+     * 七百三十一 那一版是**自己动手算角度**写进 {@code setTurretYRot/setTurretXRot}：
+     * {@code yaw = atan2(dz,dx)-90}、{@code pitch = -atan2(dy,flat)}。两处根本错误：
+     * <ol>
+     *   <li><b>炮塔角是"相对车身"的</b>——引擎的 {@code getBarrelVector} 是
+     *       {@code 车身变换 × turretYRot/turretXRot}（{@code VehicleVecUtils.getTurretTransform}）。
+     *       我们写进去的却是**世界绝对方位**，等于把相对角当绝对角用 → 车一转，炮口就乱指。</li>
+     *   <li><b>完全没算弹道</b>——引擎那条链（{@code VehicleWeaponUtils.turretAutoAimFromUuid}）
+     *       用 {@code RangeTool.calculateFiringSolution} 解**重力下坠 + 目标提前量**，
+     *       我们只对着目标画直线。炮弹是纯抛物线的（{@code CannonShellEntity}，无制导、
+     *       无追踪），画直线就是打偏。</li>
+     * </ol>
+     * <p>而且 {@code vehicleShoot} 的 {@code targetPos} 参数对炮弹**毫无作用**——反编译
+     * {@code GunItem.shoot} 实证：只有 {@code MissileProjectile}（制导导弹）读它，
+     * 炮弹只按 {@code getShootVec()}（炮管当前朝向）飞。所以"强行让炮弹射向敌方"这件事
+     * **只能靠发射前把炮管摆对**，没有第二条路。
+     *
+     * <h2>本方法</h2>
+     * 逐字照搬引擎自己那条链（口径只有一处）：① 按引擎公式取炮位；②
+     * {@code calculateFiringSolution}（重力 + 提前量）；③ 交给引擎的
+     * {@code turretAutoAimFromVector} / {@code passengerWeaponAutoAimFormVector} 转炮塔——
+     * 它们负责"相对角换算 + 转速限幅 + 俯仰/偏航限位"这些我们不该自己重写的东西。
+     * 炮塔是**逐拍转过**去的（M1A2 3.3°/拍、Mi-28 15°/拍），所以返回"这一拍是否已经对准"，
+     * 调用方**只在对准时才开火**。
+     *
+     * @return true = 炮口已经对准解算方向（可以开火）
+     */
+    static boolean aimBallistic(Entity mount, EntityMaid maid, LivingEntity target) {
+        try {
+            if (mount == null || maid == null || target == null || !target.m_6084_()) {
+                return false;
+            }
+            if (mRangeFiringSolution == null) {
+                return false;
+            }
+            ensureAmmo(mount, maid); // 弹匣空就自己上弹（不然 canShoot 为假、永远打不响）
+            Vec3 desired = firingSolution(mount, maid, target);
+            if (desired == null) {
+                return false;
+            }
+            // 交给引擎自己的自动瞄准（它会换算相对角、限速、限位；拿不到就退回"直接判对准"）。
+            boolean aimed = false;
+            if (mTurretAutoAimFromVector != null && mHasTurret != null && mGetTurretCtrlIdx != null
+                    && isControllerMob(mount, mHasTurret, mGetTurretCtrlIdx)) {
+                try {
+                    mTurretAutoAimFromVector.invoke(mount, desired);
+                    aimed = true;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (mPassengerWeaponAutoAimFromVector != null && mHasWeaponStation != null
+                    && mGetWeaponCtrlIdx != null
+                    && isControllerMob(mount, mHasWeaponStation, mGetWeaponCtrlIdx)) {
+                try {
+                    mPassengerWeaponAutoAimFromVector.invoke(mount, desired);
+                    aimed = true;
+                } catch (Throwable ignored) {
+                }
+            }
+            if (!aimed) {
+                return false; // 两个位都不是 Mob 控制 → 没有"炮塔"可瞄，交回旧行为
+            }
+            return alignedWith(mount, maid, desired);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 炮口方向与解算方向的夹角小于这个值就算"对准了"（度）。引擎自己那道闸是 4°。 */
+    private static final double AIM_ALIGN_DEG = 3.0;
+
+    /** 当前炮口方向与期望方向是否已对准（{@link #AIM_ALIGN_DEG}）。 */
+    private static boolean alignedWith(Entity mount, EntityMaid maid, Vec3 desired) {
+        try {
+            Vec3 cur = shootVecOf(mount, maid);
+            if (cur == null || cur.m_82556_() < 1.0E-8) {
+                return false;
+            }
+            Vec3 a = cur.m_82541_();
+            Vec3 b = desired.m_82541_();
+            double dot = clamp(a.m_82554_(b), -1.0, 1.0);
+            double deg = Math.toDegrees(Math.acos(dot));
+            return deg <= AIM_ALIGN_DEG;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 解算"炮口要朝哪打"——**逐字照搬** {@code VehicleWeaponUtils.turretAutoAimFromUuid}：
+     * <pre>
+     *   vec3 = getShootPos(她) − getShootVec(她) × |getShootPos(她) − 她的位置|
+     *   targetVel = 目标速度 + (0, 目标重力, 0)          // 提前量；玩家再 ×(2,1,2)
+     *   return calculateFiringSolution(vec3, 目标包围盒中心, targetVel, 初速, 重力)
+     * </pre>
+     * 那个 {@code vec3} 不是笔误：引擎把炮口沿炮管**反投影回车身**当作发射点（消除"炮口已经
+     * 领先目标一点"的偏差）。我们照抄，才能和引擎自己开火时算得一模一样的解。
+     */
+    private static Vec3 firingSolution(Entity mount, EntityMaid maid, LivingEntity target) {
+        try {
+            Vec3 muzzle = shootPosOf(mount, maid);
+            Vec3 dir = shootVecOf(mount, maid);
+            if (muzzle == null || dir == null) {
+                return null;
+            }
+            Vec3 launch = muzzle.m_82549_(dir.m_82490_(muzzle.m_82557_(maid.m_20182_())));
+            Vec3 targetPos = target.m_20191_().m_82399_();
+            Vec3 targetVel = target.m_20184_();
+            try {
+                double g = target.m_21051_(
+                        net.minecraft.world.entity.ai.attributes.Attributes.f_22276_).m_22135_();
+                targetVel = targetVel.m_82492_(0.0, g, 0.0);
+            } catch (Throwable ignored) {
+            }
+            if (target instanceof net.minecraft.world.entity.player.Player) {
+                targetVel = targetVel.m_82520_(2.0, 1.0, 2.0);
+            }
+            double velocity = projectileVelocityOf(mount, maid);
+            double gravity = projectileGravityOf(mount, maid);
+            Object sol = mRangeFiringSolution.invoke(null, launch, targetPos, targetVel, velocity, gravity);
+            return sol instanceof Vec3 v ? v : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** {@code getShootPos(Entity, float)}（引擎自己的取炮位重载）。 */
+    private static Vec3 shootPosOf(Entity mount, Entity rider) {
+        try {
+            if (mGetShootPosEntity == null) {
+                return null;
+            }
+            Object v = mGetShootPosEntity.invoke(mount, rider, 1.0f);
+            return v instanceof Vec3 vec ? vec : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** {@code getShootVec(Entity, float)}——炮管当前朝向（partialTicks=1.0 即当前值，见 740 侦察）。 */
+    private static Vec3 shootVecOf(Entity mount, Entity rider) {
+        try {
+            if (mGetShootVecEntity == null) {
+                return null;
+            }
+            Object v = mGetShootVecEntity.invoke(mount, rider, 1.0f);
+            return v instanceof Vec3 vec ? vec : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** {@code getProjectileVelocity(Entity)}（这门武器的初速；拿不到退回引擎默认 20）。 */
+    private static double projectileVelocityOf(Entity mount, Entity rider) {
+        try {
+            Object v = mGetProjectileVelocity.invoke(mount, rider);
+            if (v instanceof Number n && n.doubleValue() > 0.0) {
+                return n.doubleValue();
+            }
+        } catch (Throwable ignored) {
+        }
+        return 20.0;
+    }
+
+    /** {@code getProjectileGravity(Entity)}（这门武器的重力；拿不到退回引擎默认 0.05）。 */
+    private static double projectileGravityOf(Entity mount, Entity rider) {
+        try {
+            Object v = mGetProjectileGravity.invoke(mount, rider);
+            if (v instanceof Number n && n.doubleValue() > 0.0) {
+                return n.doubleValue();
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0.05;
+    }
+
+    /**
+     * 【实测七百四十】开火：{@code vehicleShoot(LivingEntity, UUID, Vec3)}。
+     *
+     * <p>【为什么 targetPos 传 null】反编译实证：{@code GunItem.shoot} 里那个位置参数**只有
+     * {@code MissileProjectile}（制导导弹）读**——它被翻成 {@code setTargetVec} 当航路点；
+     * 炮/炮弹一律不读，只按 {@code getShootVec()}（炮管朝向）飞。所以"打中"这件事完全由
+     * {@link #aimBallistic} 把炮管摆对来负责，这里不需要再传位置（传了也是白传）。
+     *
+     * <p>UUID 仍传目标：导弹会因此进入制导，炮弹忽略它。
      *
      * @return true = 这一拍真的把开火调用发出去了
      */
-    static boolean forceFireAt(Entity mount, EntityMaid maid, LivingEntity target) {
+    static boolean fireAt(Entity mount, EntityMaid maid, LivingEntity target) {
         try {
             if (mount == null || maid == null || target == null || !target.m_6084_()) {
                 return false;
@@ -2086,8 +2432,7 @@ public final class MaidMountCompat {
             if (mVehicleShootAt == null) {
                 return false;
             }
-            Vec3 aim = new Vec3(target.m_20185_(), target.m_20186_() + target.m_20206_() * 0.5, target.m_20189_());
-            mVehicleShootAt.invoke(mount, maid, target.m_20148_(), aim);
+            mVehicleShootAt.invoke(mount, maid, target.m_20148_(), null);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -2438,16 +2783,22 @@ public final class MaidMountCompat {
                 // 弹道求解+开火读的是它（座位制武器如直升机机炮则读上面那个 getTarget）。
                 applyVehicleAiTargets(mount, target);
                 logVehicleFire(mount, target);
-                // 【实测七百三十一·暴力后门】炮弹：玩家原话「女仆也不会使用直升机上的炮弹」。
-                // 引擎内置那条"Mob 乘客自动开火"要炮口进目标 4° 才放行（反编译
-                // VehicleEntity:4013-4024），女仆绕圈时永远进不去 → 一枪不放。这里两道后门：
-                //   ① forceTurretOntoTarget：把炮塔方位/俯仰**写死**到目标，并保证弹匣有弹；
-                //   ② forceFireAt：直接调 vehicleShoot(LivingEntity,UUID,Vec3)，**不做角度判定**。
-                // 开火按 RPM 节流（反编译 vehicleWeaponRpm 的那条 20/rpm 换算，这里简化成 5 拍一次）。
+                // 【实测七百三十一·暴力后门 → 七百四十·改成真弹道】炮弹：玩家原话
+                // 「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。……能不能走后门让那个
+                // 炮弹强制射向敌方？」
+                //
+                // 731 那条后门是"自己算方位角写死炮塔 + 不看角度直接开火"——反编译实证它有两处
+                // 根本错误：① 炮塔角是**相对车身**的，我们写的却是世界绝对方位；② 完全没解
+                // 重力下坠与提前量（炮弹是纯抛物线，无制导，`targetPos` 参数对它毫无作用）。
+                // 现在换成**引擎自己的弹道解算器**：先解出炮口该朝哪（`RangeTool.calculateFiringSolution`），
+                // 再交给引擎的自动瞄准转炮塔，**等它转到位再开火**（炮塔是逐拍转的：
+                // M1A2 3.3°/拍、Mi-28 15°/拍）。这样炮弹落在它该落的地方。
                 if (target != null && isFlyingVehicle(mount)) {
-                    forceTurretOntoTarget(mount, maid, target);
-                    if (fireTickDue(mount)) {
-                        if (forceFireAt(mount, maid, target)) {
+                    boolean aimed = aimBallistic(mount, maid, target);
+                    if (aimed && fireTickDue(mount)) {
+                        // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
+                        // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。
+                        if (fireAt(mount, maid, target)) {
                             logForceFire(mount, target);
                         }
                     }

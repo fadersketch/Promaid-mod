@@ -1,4 +1,73 @@
-﻿## 实测七百三十八【开陆地载具接敌绕圈 + 玩家上机就悬停 + 指挥棒绝不登乘】
+﻿## 实测七百三十九【悬停机头锁死 + 载具弹道瞄准（炮弹打得准了）+ 地面接敌绕圈根治】
+
+> 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
+> 同名 jar 覆盖；**未发平台**。
+
+### 一、玩家原话（三条）
+
+1. 「女仆驾驶直升机在空中悬停的时候，总是在原地进行不停的旋转。没有什么实际影响，就是观感不好。
+   能不能让它的头在悬停期间朝向不要发生变化呢？」
+2. 「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。因为前几个版本打的还挺准的，
+   能不能走后门让那个炮弹强制射向敌方？」
+3. 「女仆骑车对敌人的绕圈堪称灾难。基本上就是往敌人身上一撞就完事了，根本绕不起来。
+   也发挥不出车辆的速度」
+
+### 二、根因与改法（三条）
+
+**① 悬停时机头原地打转 → 进档锁死机头。**
+悬停档（跟随、且已贴到目标点）时，跟随目标点就压在她**自己脚下**，水平分量≈0。于是
+`driveVehicle` 算出来的 `err` 是一个**退化方位**——`atan2(Δx, Δz)` 的两个参数都是座位与目标点
+之间的浮点抖动，每拍符号/量级都在变；鼠标 X 通道与「直写机头」两条路都跟着它改朝向 → 机头
+慢慢转。「把噪声当指令」。
+- 新增 `MaidMountCompat.hoverYawHold/releaseHoverYaw`：进悬停档那一刻**采样一次机头**存起来，
+  此后每拍写回（`setYRot` + `setServerYaw`，后者不写会被 `handleClientSync` 的 lerp 拽走），
+  鼠标 X 通道归零；`driveFlight` 里在**所有会改朝向的写法之后**再覆盖一次（顺序即优先级）。
+- 退出悬停档（接敌绕圈 / 要移动 / 下鞍）立刻解冻、下次进档重新采样——**接敌盘旋完全不受影响**。
+
+**② 空中炮弹准度≈0 → 换成游戏自己的弹道解算器。**
+七百三十一 那一版是**自己算角度**写进 `setTurretYRot/setTurretXRot`（`yaw=atan2(dz,dx)-90`、
+`pitch=-atan2(dy,flat)`）。反编译（`VehicleEntity` / `VehicleWeaponUtils` / `RangeTool`）实证两处
+根本错误：
+- **炮塔角是「相对车身」的**：引擎的 `getBarrelVector` 是 `车身变换 × turretYRot/turretXRot`。
+  我们写进去的却是**世界绝对方位**——等于把相对角当绝对角用，车一转炮口就乱指。
+- **完全没算弹道**：引擎那条链走 `RangeTool.calculateFiringSolution`（解**重力下坠 + 目标提前量**，
+  牛顿迭代），我们只对目标画直线。炮弹是纯抛物线的（`CannonShellEntity`，无制导、无追踪）。
+- 另外实证：`vehicleShoot` 的 `targetPos` 参数**只有制导导弹（`MissileProjectile`）读**，
+  炮弹一律不读、只按 `getShootVec()`（炮管朝向）飞——所以「让炮弹射向敌方」**只能靠发射前把炮管摆对**。
+
+改法（**逐字照搬引擎自己的链**，口径只有一处）：新增 `MaidMountCompat.aimBallistic` ——
+① 按引擎公式取发射点（`getShootPos − getShootVec × |getShootPos − 她的位置|`，那个"反投影"是引擎
+原文，不是笔误）；② `RangeTool.calculateFiringSolution`（目标速度 + 目标重力作提前量，玩家 ×(2,1,2)）；
+③ 交给引擎的 `turretAutoAimFromVector` / `passengerWeaponAutoAimFormVector` 转炮塔（它们负责相对角
+换算、转速限幅、俯仰/偏航限位）；④ **等炮口与解算方向夹角 ≤3° 才开火**（炮塔是逐拍转的：
+M1A2 3.3°/拍、Mi-28 15°/拍）。`vehicleShoot` 的 `targetPos` 改传 `null`（对炮弹无意义，
+UUID 仍传，制导导弹会因此进入制导）。旧的 `forceTurretOntoTarget`/`forceFireAt` 已删；
+`ensureAmmo` 保留"弹匣空了自己上弹"。
+
+**③ 地面接敌「一撞就完事」→ 半径自适应 + 绕圈不刹车。**
+七百三十八 补了地面绕圈，但两处没跟上：
+- **半径给小了**（固定 2.5 格）：车的转弯能力有限（机头兜底每拍上限 10°），车速 1 格/拍时
+  "能绕住"的半径下限就有 ~5.7 格，给 2.5 格 → **拐不过来 → 直直撞进敌人怀里**。
+- **每拍都被停车带刹一下**：`stopBand` 含**车速前瞻**（`车体半宽+1 + |Δ|×10`），车速 1 格/拍时
+  高达 **13 格**，而绕圈的"胡萝卜"只挂在前方 4~6 格 → **每拍判"到了"、每拍真刹车** → 车永远起不来速。
+
+改法：新增 `MaidMountCompat.groundOrbitRadius`（半径 = `max(6, 配置, 车速×11, 车体半宽×3)`，
+上限 28）与 `driveOrbit`（绕圈专用驱动档：**不刹车**、只要没偏得太离谱就**一直给油**）。
+`RideBindManager` 地面接敌分支改调 `driveOrbit`（反射拿不到就退回通用档）。
+撞墙/卡住自动反向（`groundReverse`，738 已有）保持不变。
+
+### 三、验证与交付
+
+- 两树 `javac` **0 错误**；`_mixchk.py` **PASS=181 SKIP=10 UNRES=0 FAIL=0**。
+- 只读核对 `_f740_vt.py`：三条改动逐项静态核对（两树各 20 项）全过。
+- SWB 反射面**两版本逐一核对**（javap）：`turretAutoAimFromVector` / `passengerWeaponAutoAimFormVector`
+  / `getShootVec(Entity,float)` / `getShootPos(Entity,float)` / `getProjectileVelocity/Gravity` /
+  `RangeTool.calculateFiringSolution` 在 1.20.1 与 1.21.1 上**同名同描述符**。
+- 打包闸门全过（jar 内 class 与源一一对应、mixin 包登记、lang json 合法）；部署三处哈希一致。
+
+---
+
+## 实测七百三十八【开陆地载具接敌绕圈 + 玩家上机就悬停 + 指挥棒绝不登乘】
 
 > 版本号不变，仍是 v1.3.0(beta)。**两条链路都有**（1.20.1 Forge + 1.21.1 NeoForge，两树镜像），
 > 同名 jar 覆盖；**未发平台**。

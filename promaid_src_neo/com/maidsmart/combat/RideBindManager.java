@@ -1516,7 +1516,13 @@ public final class RideBindManager {
                 if (gfoe != null && gfoe.isAlive() && gfoe.level() == maid.level()) {
                     Vec3 gair = MaidAirCombat.groundOrbitTarget(maid, mount, gfoe);
                     if (gair != null) {
-                        MaidRideKit.feedNavigation(mount, gair, mod, maid);
+                        // 【实测七百三十九·点3】绕圈走**专用驱动档**：不刹车、不因转向收油
+                        // （见 MaidMountCompat.driveOrbit 的注释——停车带的车速前瞻会每拍命中
+                        // "前方的胡萝卜"，用普通档就是"冲一下刹一下、最后撞上去"）。
+                        // 反射拿不到（返回 false）就退回通用档，行为与 738 一致。
+                        if (!MaidMountCompat.driveOrbit(mount, gair, mod, maid)) {
+                            MaidRideKit.feedNavigation(mount, gair, mod, maid);
+                        }
                         return;
                     }
                 } else {

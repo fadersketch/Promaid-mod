@@ -6,6 +6,15 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百三十九（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三条** ——
+① 直升机悬停时机头锁死（`MaidMountCompat.hoverYawHold/releaseHoverYaw`：进悬停档采样机头、
+   每拍写回 + 清鼠标 X 通道；根因是悬停时目标点压在她自己脚下、`err` 退化成浮点抖动，机头被拽着转）；
+② 载具炮弹改用游戏自己的弹道解算器（`MaidMountCompat.aimBallistic`：`RangeTool.calculateFiringSolution`
+   解重力+提前量 → `turretAutoAimFromVector`/`passengerWeaponAutoAimFormVector` 转炮塔 → 对准 ≤3° 才开火；
+   旧版自己算的绝对方位角写进"相对车身"的炮塔 = 打偏；`targetPos` 对炮弹无意义故传 null）；
+③ 地面载具接敌绕圈根治（`MaidMountCompat.groundOrbitRadius` 半径按车速/车体自适应 +
+   `driveOrbit` 绕圈档不刹车、一直给油；旧版半径 2.5 格拐不过来 + 每拍被 13 格的停车带刹停 → 撞上去）。
+
 实测七百三十八（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三条** ——
 ① 开陆地载具接敌会绕圈了（`MaidAirCombat.groundOrbitTarget` 复用战斗环绕状态机、高度贴敌人；
    `MaidMountCompat.groundReverse` 连续 10 拍位移 < 0.02 格即判定撞墙/卡住并调头换向；
