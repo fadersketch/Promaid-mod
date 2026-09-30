@@ -1,4 +1,55 @@
-﻿## 实测七百四十五【1.21.1 + 1.20.1 两树镜像：飞行载具急停四类通用 + 空中炮艇真会起飞 + 载具没弹自动换模式 + 飞行聚晶补非 OP 入口】
+﻿## 实测七百四十六【1.20.1 侧：飞行聚晶（Goety 位移聚晶）非 OP 入口 —— 与 1.21.1 对齐】
+
+> 承接 七百四十五：那一版只把「飞行聚晶不用 OP 也能开」做在了 **1.21.1（NeoForge）**。本版把同一套补到 **1.20.1（Forge）**，两树口径逐字对齐。
+
+### 一、为什么这一版只动 1.20.1
+
+- 需求方原话：「我去 1.21.1 里面测试，你帮我搞一下 1.20.1 的飞行聚晶非 OP 入口和 Goety 部分。」
+- 七百一十八 在 1.21.1 做了 Goety 位移聚晶，但**1.20.1 那一棵树整个 `com/maidsmart/goety` 包从来就不存在**——所以 1.20.1 的玩家不但没有非 OP 入口，连这一档功能都没有。本版把**整个 Goety 档 + 非 OP 入口**一起补进 1.20.1。
+
+### 二、1.20.1 的 Goety 是同一套 API（javap 实证）
+
+对 `[诡厄巫法] goety-2.5.58.4.jar`（部署目录里的实际版本）逐项核过，与 1.21.1 的 3.1.5.1 **类名/方法名完全同名**，所以软兼容层的反射一个字节都不用改：
+
+- 包根仍是 `com.Polarice3.Goety`（`api.items.magic.IWand` / `common.magic.Spell` / `common.magic.spells.wind.FlyingSpell` / `...LaunchSpell` / `utils.WandUtil` / `common.magic.SpellStat`）；
+- `IWand.getFocus(ItemStack)`、`Spell.mobSpellResult(LivingEntity, ItemStack)`、`Spell.rightStaff(ItemStack)`、`WandUtil.getStats(LivingEntity, ISpell)`、`SpellStat.getPotency()` —— 签名逐字相同；
+- 物品注册名同样是 `goety:flying_focus`（Flight Focus）/ `goety:launch_focus`（Launching Focus）/ `goety:wind_staff`（Wind Staff）/ `goety:focus_bag`（Focus Bag），lang 实证。
+
+**只有三处加载器差异**（已按 1.20.1 改写）：
+1. 物品注册名：`ForgeRegistries.ITEMS.getKey(...)`（1.21.1 是 `BuiltInRegistries.ITEM`）；
+2. 物品栏 capability：`ItemStack.getCapability(ForgeCapabilities.ITEM_HANDLER, null)` 返回 `LazyOptional`，要 `.orElse(null)` 拆壳（1.21.1 是一参直接返回 `IItemHandler`）；
+3. `maid.getMaidBauble()` 在 Forge 上**直接就是 `IItemHandler`**（1.21.1 要 `instanceof` 一次）。
+
+### 三、新增到 1.20.1 的内容
+
+- **核心三件**（与 1.21.1 逐字对应，只换 SRG 名）：`MaidGoetyCompat`（软兼容层）、`MaidGoetyFlight`（推进器：ARRIVE/FOLLOW/COMBAT 三档）、`MaidGoetyAuto`（自动档：跟主人跨地形，16 格起飞 / 6 格落地，默认关）。
+- **非 OP 入口两条**（与仿创造飞行同口径）：
+  - 右键女仆 → 配置界面第三行 **「飞行聚晶：开/关」**（`MaidConfigGoetyMixin`，y=36；本树「创造飞行」在 y=26，按钮 164×13，都在 TLM 原生开关列 y=52 之上）；
+  - 快捷键 **「切换女仆的飞行聚晶自动档（准星对准女仆）」**（`MaidGoetyKeysClient`，默认未绑定，玩家自绑）。
+- **网络层** `MaidGoetyNetworking`：Forge `SimpleChannel`（频道 `maid_smart:goety`，int 判别号 0/1），服务端校验**主人本人或 OP + 距离 ≤ 8 格**，并保留**保真门禁**（她身上没有飞行聚晶就不给开，如实告知缺哪一样）。
+- **命令入口** `/maid_smart goety_*`（OP，测试/服主用）：`goety_fly` / `goety_follow` / `goety_combat` / `goety_boost` / `goety_auto` / `goety_stop` / `goety_status`。
+- **`MaidGoetyMoveSuppressMixin`**：推进期间取消 `MoveToTargetSink`（1.20.1 的 SRG 名 `m_6725_`），从源头掐掉走路目标——否则飞行聚晶取 `getLookAngle()` 时会被 TLM 的跟随目标掰走 yaw、绕着主人画圈。
+- **接线**：`ProMaidMod` 注册网络层 + 挂两个 handler；`ProMaidExtension.onRegisterCommands` 注册命令；`mixins.promaid.json` 的 mixins/client 各加一项；lang 中英各加 `key.promaid.goety_toggle`。
+
+### 四、SRG 名怎么定的（不靠猜）
+
+本树手工编译、生产环境跑 SRG 类，所以每个原生方法名都必须是自己解析出来的。做法是**用本地映射链**算：
+
+- `client-1.20.1-*-mappings.txt`（Mojang 官方，mojmap ↔ obf）+ `joined_1201.tsrg`（obf ↔ srg，工程内既有产物）；
+- 写出 `_f746_srg5.py`：把 mojmap 方法声明的**参数/返回类型编码成 JVM 描述符**并翻译类名，再按 `(obf类, obf名, obf描述符)` 精确join（早先只按名字 join 会撞上一堆同名重载，全是错的）；
+- 再拿 `_f746_rev.py` 反向核对（SRG 令牌 → 类/描述符/mojmap 名），并与**本树既有写法**逐一对齐（`m_20184_`=getDeltaMovement、`m_20256_`=setDeltaMovement、`m_146922_`=setYRot、`m_20096_`=onGround、`f_19789_`=fallDistance、`f_19812_`=hasImpulse……）。
+
+一处**踩过的坑**：`EntityArgument.getEntities(ctx, name)` 与 `getEntity(ctx, name)` 在 1.20.1 是两个不同 SRG（`m_91461_` / `m_91452_`），一开始写成了后者，编译报「Entity 没有 iterator()」——已改正。
+
+### 五、验证
+
+- 1.20.1 树 `javac` **EXITCODE=0**（0 错误）；
+- `_mixchk.py`：`PASS=186 SKIP=10 UNRES=0 FAIL=0`（比上一版多 3 项 = 新增的三个注入点都被目标类自己声明）；
+- `build_promaid.py`：jar **944 entries / 637 class**，`verify_jar_classes: OK`（mixin 注册表 86/86 全登记、jar 无多余 class）、`lang json: OK`、`MISSING: none`；
+- `_f746_jarchk.py`（jar 内容闸，36 项）：**FAIL=0**——Goety 五个类 + 两个嵌套包类 + 两个 mixin + 命令都在包里；命令七个字面量齐全；GUI 行文案「飞行聚晶」与反射 SRG 名 `m_142416_` 都在；**并断言编译产物里没有 mojmap 残留**（`setDeltaMovement` 这类字面量一个都不能有，防止 SRG 漏改）。
+- 1.21.1 树**本次未改动**（它的 Goety 与 745 已就位）。
+
+## 实测七百四十五【1.21.1 + 1.20.1 两树镜像：飞行载具急停四类通用 + 空中炮艇真会起飞 + 载具没弹自动换模式 + 飞行聚晶补非 OP 入口】
 
 ### 一、玩家四条原话
 

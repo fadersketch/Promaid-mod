@@ -372,6 +372,10 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.command.MaidResyncCommand.register(event.getDispatcher());
         // v1.3.0(beta) 实测七百〇二：仿创造飞行手动触发（/maid_smart freeflight_goto / freeflight_follow / freeflight_enemy）
         com.maidsmart.command.MaidFreeFlightGotoCommand.register(event.getDispatcher());
+        // v1.3.0(beta) 实测七百四十五·点1【1.20.1 补】：飞行聚晶（Goety 位移聚晶）
+        // 命令入口 /maid_smart goety_*（OP 专属，测试/服主用；普通玩家的入口是
+        // 女仆配置界面那一行「飞行聚晶」开关 + 快捷键）
+        com.maidsmart.command.MaidGoetyFlyCommand.register(event.getDispatcher());
     }
 
     /**

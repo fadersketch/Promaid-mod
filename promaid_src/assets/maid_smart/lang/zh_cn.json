@@ -361,6 +361,7 @@
   "config.promaid.compat.puppetBlacklist": "傀儡模式黑名单（傀儡装配）",
   "config.promaid.combat.tetherLeashSteer": "二号位·悬挂时用武装拴绳操控方向（仅空袭）",
   "key.promaid.free_flight_toggle": "切换女仆的仿创造飞行（准星对准女仆，默认未绑定）",
+  "key.promaid.goety_toggle": "切换女仆的飞行聚晶自动档（准星对准女仆，默认未绑定）",
   "config.promaid.misc.freeFlight": "仿创造飞行",
   "config.promaid.misc.freeFlightItems": "仿创造飞行·资格物品表",
   "config.promaid.misc.freeFlightEffects": "仿创造飞行·资格效果表",
