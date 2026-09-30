@@ -201,13 +201,12 @@ MODULES = [
  [("call", "promaid.combat.auto-switch", "参战开关", "Combat switch")]),
 
 ("promaid.combat.targeting", "飞行索敌与诊断", "Flight Targeting & Diagnostics",
- "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供一次性诊断探针与 "
+ "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 "
  "/maid_smart combat check 自助判据检查。",
- "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus a one-shot "
- "diagnostic probe and the /maid_smart combat check self-test.",
+ "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus the "
+ "/maid_smart combat check self-test.",
  [("promaid_src_neo/com/maidsmart/combat/FlightTargeting.java", 1, 462),
-  ("promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java", 1, 329),
-  ("promaid_src_neo/com/maidsmart/combat/FlightTargetProbe.java", 1, 194)], ["combat", "diagnostics"], [],
+  ("promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java", 1, 329)], ["combat", "diagnostics"], [],
  [("call", "promaid.system.work-area", "工作范围", "Work range"),
   ("call", "promaid.core.command", "combat check", "combat check")]),
 
@@ -944,7 +943,7 @@ MODULES = [
  "静态状态表护栏、日志、物品归还、额外容器、手持光源、临时探针。",
  "The unified safety filter for every block a maid places: ownerless downgrade, no-building-while-airborne, "
  "dangerous-block tables, natural-block allow/deny lists, entity-snapshot iteration, static-state-table guards, "
- "logging, item give-back, extra containers, held light source and a temporary probe.",
+ "logging, item give-back, extra containers, and a held light source.",
  [("promaid_src_neo/com/maidsmart/tool/MaidBuildBlockFilter.java", 1, 452),
   ("promaid_src_neo/com/maidsmart/tool/MaidPlaceGuard.java", 1, 268),
   ("promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java", 1, 352)], ["core", "shared"], [], []),

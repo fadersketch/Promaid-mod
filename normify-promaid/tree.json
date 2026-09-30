@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "generated_at": "2026-10-01T00:00:00Z",
-  "revision": "43cc86d020b9ba3a495013478435099a3c06df4f",
+  "revision": "491ba927ffa91889b679f800817dd48763aabd62",
   "trees": [
     {
       "name": "promaid",
@@ -404,7 +404,7 @@
         "combat",
         "diagnostics"
       ],
-      "fingerprint": "de580df6860b01f0acd58aab56aa6e932cde2047a366661c1b19be91d5788206",
+      "fingerprint": "0102c0ae0d170158005c3b3c0ff258db7107623923957aa320d973585ed08339",
       "apis": 0,
       "deps": 2
     },

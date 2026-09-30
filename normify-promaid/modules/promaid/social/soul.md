@@ -12,7 +12,7 @@ description:
       removed in v1.5.251e — only the routing shim remains.
 source:
   - {path: promaid_src_neo/com/maidsmart/soul/SoulBindingService.java, line: 1, end_line: 68}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 15b5f989c2d7f71049afdae1cb86516dc9260ffaf469fd017924a96052a2431f
 state: active

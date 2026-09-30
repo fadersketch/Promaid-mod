@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidMountCompat.java, line: 1, end_line: 4746}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidShellHoming.java, line: 1, end_line: 357}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e98ef013224e6c6915d8008d197fedb86d6d6d23834d535f713e799d50ee46db
 state: active

@@ -10,13 +10,12 @@ description:
       The unified safety filter for every block a maid places: ownerless
       downgrade, no-building-while-airborne, dangerous-block tables, natural-block
       allow/deny lists, entity-snapshot iteration, static-state-table guards,
-      logging, item give-back, extra containers, held light source and a temporary
-      probe.
+      logging, item give-back, extra containers, and a held light source.
 source:
   - {path: promaid_src_neo/com/maidsmart/tool/MaidBuildBlockFilter.java, line: 1, end_line: 452}
   - {path: promaid_src_neo/com/maidsmart/tool/MaidPlaceGuard.java, line: 1, end_line: 268}
   - {path: promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java, line: 1, end_line: 352}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 19f3a282f600f9c245fe5f568354416493fb51a88b4d70fddf3f69c8c59cf1bf
 state: active

@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/voice/SystemTTSManager.java, line: 1, end_line: 324}
   - {path: promaid_src_neo/com/maidsmart/voice/SystemVoicePack.java, line: 1, end_line: 201}
   - {path: promaid_src_neo/com/maidsmart/voice/JarVoicePack.java, line: 1, end_line: 142}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3a9a0debb2b2ea4e34e090c2ed128024d8520eac344da04457cf84875cdae451
 state: active

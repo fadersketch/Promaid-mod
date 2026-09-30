@@ -20,7 +20,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightController.java, line: 1, end_line: 1402}
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightKit.java, line: 1, end_line: 273}
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightFlags.java, line: 1, end_line: 167}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: f39b6805e809811eac9bdcca5feb03d3f32ec06f0e4428ea9e6a954a0df8e6b2
 state: active

@@ -69,12 +69,12 @@
 
 | 文件 | 证据 | 判定 |
 |---|---|---|
-| `tool/MaidProbe.java` | 自述「临时探针…查清问题后整类删掉即可」 | **可直接删** |
-| `combat/FlightTargetProbe.java` | 自述「一次性排查工具，验证完可删」 | **可直接删** |
+| `tool/MaidProbe.java` | 自述「临时探针…查清问题后整类删掉即可」 | **已删**（零风险一档）|
+| `combat/FlightTargetProbe.java` | 自述「一次性排查工具，验证完可删」 | **已删**（零风险一档）|
 | `soul/SoulBindingService.java` | 自述灵魂核心功能已移除，只剩路由兼容 | 待确认是否还有旧存档用户 |
-| `guide/GuideScreen.java` | `VIEW_SETTINGS`/`VIEW_VOICE` 标注 `@Deprecated`「已不可达，保留仅为回滚方便」 | 可删 |
+| `guide/GuideScreen.java` | `VIEW_SETTINGS`/`VIEW_VOICE` 标注 `@Deprecated`「已不可达，保留仅为回滚方便」 | **已删**（零风险一档）|
 | `build/BuiltinHouses.java`（1385 行） | `BlueprintCatalog.BUILT_IN_NAMES` 空块 + 注释「内置预设已全部移除」 | **休眠代码**，只可硬编码 id 触达 |
-| `schedule/ScheduleNetworking.java` | 拆包后留下空方法体与「已整条删除」注释 | 可清 |
+| `schedule/ScheduleNetworking.java` | 拆包后留下 10 条空段注释 | **已清**（零风险一档；类本身仍在用，只删注释）|
 | `fishing/PlayerWaterLog.java` | 纯诊断日志助手，住在主源码里 | 可移入 tools |
 | `box/CompressionBoxCheck.java`（702 行） | FakePlayer 自测住在主源码里 | 可移到测试源集 |
 | `task/MaidStrollCheck.java`（337 行） | 仅为一条速度投诉的调试命令服务 | 可移到 tools |
@@ -155,7 +155,7 @@
 
 | 阶段 | 动作 | 风险 | 收益 |
 |---|---|---|---|
-| **① 零风险** | 删自述「可删」的 `MaidProbe`、`FlightTargetProbe`；`GuideScreen` 死视图；`ScheduleNetworking` 空方法 | 极低（有编译校验） | 清理噪音 |
+| **① 零风险** ✅已完成 | 删自述「可删」的 `MaidProbe`、`FlightTargetProbe`；`GuideScreen` 死视图；`ScheduleNetworking` 空段注释 | 极低（有编译校验） | GuideScreen 541→532 / 531→522 行；两树 javac 0 error；两 jar mixin 自检 186 PASS |
 | **② 低风险** | 把注释里的「历史/为什么」搬进 changelog，代码只留「现在做什么」 | 低（纯注释） | 大幅降低阅读成本 |
 | **③ 中风险** | `*_MIGRATED` 移出用户配置；诊断类（`PlayerWaterLog`、`CompressionBoxCheck`、`MaidStrollCheck`）移出主源码 | 中 | 配置表干净、主源码只留产品代码 |
 | **④ 中风险** | 抽 `MaidWorkBehavior` 基类，让挖矿/伐木共用扫描-接近-连锁-回收 | 中（有编译+回环测试） | 砍掉约 2500 行重复 |

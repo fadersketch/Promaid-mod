@@ -12,7 +12,7 @@ description:
       third-party mode compat, prompt appending).
 source:
   - {path: promaid_src_neo/com/maidsmart/config, line: 1}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: cbfeb01803779f01788463d521e3347952df428bb28ac09c86564ecb78b14a18
 state: active

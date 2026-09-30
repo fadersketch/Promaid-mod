@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidBombing.java, line: 1, end_line: 1205}
   - {path: promaid_src_neo/com/maidsmart/combat/BombPlacement.java, line: 1, end_line: 454}
   - {path: promaid_src_neo/com/maidsmart/combat/BombThrow.java, line: 1, end_line: 409}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: a64448f7b10a1df7ea537cc4658f52f2ca434badf43fde5e52cba893b74fd299
 state: active
