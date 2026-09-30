@@ -73,13 +73,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
             () -> MaidSmartConfig.BRIDGE_PLACED_LIFETIME.get() * 20L, 4.0, 6.0, true);
 
     private static void track(ServerLevel level, BlockPos pos, Block block, EntityMaid maid) {
-        com.maidsmart.tool.MaidProbe.place("maid." + maid.getUUID(), "bridge",
-                pos.getX() + "," + pos.getY() + "," + pos.getZ()
-                        + " dim=" + level.dimension(),
-                com.maidsmart.tool.MaidBuildBlockFilter.probeBlock(block),
-                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(
-                        maid.getAvailableBackpackInv(), maid.getHandsInvWrapper()),
-                com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, pos));
         PLACED_TRACKER.track(level, pos, block, maid);
     }
 
@@ -1056,14 +1049,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
                 + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]";
         Item __took = com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(__inv, __hands, null, null,
                 com.maidsmart.combat.BombPose.offhandBorrowed(maid));
-        com.maidsmart.tool.MaidProbe.take("maid." + maid.getUUID(), "bridge",
-                com.maidsmart.tool.MaidBuildBlockFilter.probeItem(__took),
-                com.maidsmart.combat.BombPose.isShowing(maid),
-                com.maidsmart.tool.MaidBuildBlockFilter.probeStack(
-                        com.maidsmart.combat.BombPose.savedOffhand(maid)),
-                __c0,
-                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
-                        + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]");
         return __took;
     }
 
@@ -1119,8 +1104,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         }
         double top = mid.getY() + 1.0;
         if (top > box.minY + 0.01) {
-            com.maidsmart.tool.MaidProbe.crush("maid." + maid.getUUID(), "suffocate",
-                    "-", "mid=" + mid);
             maid.setPos(maid.getX(), top + 0.02, maid.getZ());
         }
     }
@@ -1141,8 +1124,6 @@ public class BridgeUpBehavior extends Behavior<EntityMaid> {
         double nx = Math.max(cx - limit, Math.min(cx + limit, x));
         double nz = Math.max(cz - limit, Math.min(cz + limit, z));
         if (nx != x || nz != z) {
-            com.maidsmart.tool.MaidProbe.crush("maid." + maid.getUUID(), "pillarGuard",
-                    "-", "feet=" + feet);
             maid.setPos(nx, maid.getY(), nz);
         }
     }

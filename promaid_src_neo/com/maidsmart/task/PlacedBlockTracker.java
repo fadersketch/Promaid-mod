@@ -200,13 +200,6 @@ public final class PlacedBlockTracker {
                 try {
                     net.minecraft.world.entity.LivingEntity __m = owner == null ? null : owner.getOwner();
                     if (__m != null) {
-                        com.maidsmart.tool.MaidProbe.expireUnderMaster(
-                                "maid." + owner.getUUID(), pos.getX() + "," + pos.getY() + "," + pos.getZ(), mark.blockId(),
-                                __m.getX() - (pos.getX() + 0.5),
-                                __m.getY() - (pos.getY() + 0.5),
-                                __m.getZ() - (pos.getZ() + 0.5),
-                                this.masterOnBlock(owner, level, pos), this.refreshOnOwnerStand,
-                                String.valueOf(__m.getUUID()));
                     }
                 } catch (Throwable ignored) {
                 }
@@ -369,9 +362,6 @@ public final class PlacedBlockTracker {
                 Block.popResource(level, pos, stack);
             }
         }
-        com.maidsmart.tool.MaidProbe.reclaim(__probeKey, pos.getX() + "," + pos.getY() + "," + pos.getZ(),
-                mark.blockId(), handed, drops.size(), __probeC0,
-                owner == null ? "-" : com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(owner.getAvailableBackpackInv(), owner.getHandsInvWrapper()));
         level.setBlock(pos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
     }
 

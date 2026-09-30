@@ -69,10 +69,6 @@ public final class ScheduleNetworking {
         r.playToServer(SchedulePacketsMaid.OpenMaidConfigPacket.TYPE, StreamCodec.ofMember(SchedulePacketsMaid.OpenMaidConfigPacket::encode, SchedulePacketsMaid.OpenMaidConfigPacket::decode), SchedulePacketsMaid.OpenMaidConfigPacket::handle);
     }
 
-    /* ==================== 实测五百六十二：潜行+中键 工位标记 ==================== */
-
-    /* ==================== 排班生效 → GUI 状态同步 ==================== */
-
     /** 服务端：把女仆当前真实状态（任务/模式/排班开关）推给其主人——排班段应用
      *  成功后调用，打开着排班书的玩家 GUI 立即更新为排班状态（快捷设置页同步+锁定） */
     public static void sendMaidStateSync(net.minecraft.server.level.ServerPlayer player, EntityMaid maid) {
@@ -86,10 +82,6 @@ public final class ScheduleNetworking {
         }
     }
 
-    /* ==================== 排班表内单独调整在家模式（实测三百四十二） ==================== */
-
-    /* ==================== 排班守卫拒绝 → 客户端重同步 ==================== */
-
     /** 服务端：守卫拒绝后把女仆当前真实任务/作息同步给其的主人（客户端实体扳回） */
     public static void sendResync(net.minecraft.server.level.ServerPlayer player, EntityMaid maid) {
         try {
@@ -101,7 +93,6 @@ public final class ScheduleNetworking {
         }
     }
 
-    /* ==================== 打开 UI ==================== */
 
     /** 服务端：收集女仆列表 + 任务清单，给玩家发打开包（排班表物品右键调用）
      *  v1.1.0 实测六十：扫描【全部维度】（旧版只扫玩家所在维度——下界/末地的
@@ -213,14 +204,6 @@ public final class ScheduleNetworking {
         PacketDistributor.sendToPlayer(player, new SchedulePacketsPlan.OpenSchedulePacket(maids, taskUids));
     }
 
-    /* ==================== 快捷设置 ==================== */
-
-    /* ==================== 日程加载/保存 ==================== */
-
-    /* ==================== 批量应用 / 一键集合 / 改名（实测六十，借鉴 Maid_Roster） ==================== */
-
-    /* ==================== 坐标显示 / 去她身边（v1.2.0） ==================== */
-
     /** 维度显示名（主世界/下界/末地，其余用注册路径） */
     static String dimName(net.minecraft.world.level.Level level) {
         try {
@@ -235,7 +218,6 @@ public final class ScheduleNetworking {
         }
     }
 
-    /* ==================== 工具 ==================== */
 
     /** 按 UUID 找女仆（当前维度；找不到返回 null）。
      *  v1.1.0 实测二百六十一：排班书列表是全维度扫描的（openFor 跨维度收集），但
