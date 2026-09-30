@@ -2457,6 +2457,117 @@ public final class MaidMountCompat {
     /** 炮口方向与解算方向的夹角小于这个值就算"对准了"（度）。引擎自己那道闸是 4°。 */
     private static final double AIM_ALIGN_DEG = 3.0;
 
+    /**
+     * 【实测七百四十二·点2】"对不准也必须打"的宽限拍数。
+     *
+     * <p>为什么需要它：{@link #aimBallistic} 只在炮口真的掰到 {@link #AIM_ALIGN_DEG} 以内时
+     * 才返回 true，而"炮管方向写在车体坐标里、不能独立转"的车（AC-130H 三门炮、AH-6 机炮、
+     * 飞艇炸弹）**只有机头正对敌人**才能达标——机头是被飞行档逐拍控制的，未必掰得到。
+     * 玩家要的是"弹药能发射"（原话「大部分载具上的弹药没有办法发射」），不是"必须完美对正"。
+     * 所以：连续这么多拍没对准就直接开火（打出去的那发由 {@link MaidShellHoming} 纠向目标，
+     * 所以"歪着打"也不会白打）。数值取 40 拍 = 2 秒——够机头/炮塔转一个来回。
+     */
+    private static final int AIM_FORCE_TICKS = 40;
+
+    /** 连续"没对准"的拍数（按车记；一对准立刻清零）。见 {@link #AIM_FORCE_TICKS}。 */
+    private static final java.util.Map<UUID, Integer> AIM_STALL =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百四十二·点2】这辆车的炮**能不能自己转**（有炮塔或武器站）。
+     *
+     * <p>为什么要问它：{@link #AIM_FORCE_TICKS} 那条"对不准也硬打"的保底**只该给不能自己转的炮**
+     * ——AC-130H / AH-6 / 飞艇这些炮管方向写死在车体坐标里的固定炮，不硬打就一辈子不开火。
+     * 而能转的炮（M1A2/Mi-28 的炮塔、有武器站的车）只是**转得慢**，多等几拍就能对正；
+     * 它们**不该**被硬打（硬打就是把炮弹打进地里，玩家反馈"光棱坦克倒是可以"的那一档
+     * 就是"等它转到位再打"的结果）。所以判据是：**没有可转的炮架**才允许硬打。
+     */
+    private static boolean hasSlewableMount(Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            return Boolean.TRUE.equals(mHasTurret == null ? null : mHasTurret.invoke(mount))
+                    || Boolean.TRUE.equals(mHasWeaponStation == null ? null
+                            : mHasWeaponStation.invoke(mount));
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 瞄准诊断日志的独立频限表（与其它几条日志互不顶掉）。 */
+    private static final java.util.Map<UUID, Long> AIMLOG_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 当前炮口方向与期望方向的夹角（度）；拿不到 → -1。 */
+    private static double aimErrorDeg(Entity mount, String gun, Vec3 desired) {
+        try {
+            Vec3 cur = shootVecOfGun(mount, gun);
+            if (cur == null || desired == null
+                    || cur.lengthSqr() < 1.0E-8 || desired.lengthSqr() < 1.0E-8) {
+                return -1.0;
+            }
+            double dot = clamp(cur.normalize().dot(desired.normalize()), -1.0, 1.0);
+            return Math.toDegrees(Math.acos(dot));
+        } catch (Throwable ignored) {
+            return -1.0;
+        }
+    }
+
+    /**
+     * 记/取"连续没对准"的拍数。
+     *
+     * @param reset true = 这一拍对准了 → 清零；false = 没对准 → +1
+     * @return 累加后的拍数（{@code reset=true} 时为 0）
+     */
+    private static int aimStalledTicks(Entity mount, boolean reset) {
+        try {
+            if (mount == null) {
+                return 0;
+            }
+            UUID id = mount.getUUID();
+            if (reset) {
+                AIM_STALL.remove(id);
+                return 0;
+            }
+            Integer n = AIM_STALL.get(id);
+            int v = (n == null ? 0 : n) + 1;
+            if (AIM_STALL.size() > 512) {
+                AIM_STALL.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
+            }
+            AIM_STALL.put(id, v);
+            return v;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
+    /**
+     * 瞄准诊断留痕（节流 5 秒/车）：日志搜「模组坐骑·瞄准」看"到底有没有在瞄、差多少度"。
+     *
+     * <p>只读——不动 {@link #AIM_STALL}（那个计数只由 {@code tickAttack} 推进，见
+     * {@link #aimStalledTicks}），免得诊断日志把"连续没对准"的拍数刷成假的。
+     */
+    private static void logAim(Entity mount, String gun, boolean aimed, double deg) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = AIMLOG_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            AIMLOG_AT.put(mount.getUUID(), now);
+            if (AIMLOG_AT.size() > 512) {
+                AIMLOG_AT.clear();
+            }
+            Integer stall = AIM_STALL.get(mount.getUUID());
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·瞄准", describeKind(mount)
+                    + " 炮=" + gun + (aimed ? " 已对准" : " 未对准")
+                    + " 夹角=" + (long) deg + "°"
+                    + " 累计未对准=" + (stall == null ? 0 : stall) + "拍");
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 当前炮口方向与期望方向是否已对准（{@link #AIM_ALIGN_DEG}）。 */
     private static boolean alignedWith(Entity mount, String gun, Vec3 desired) {
         try {
@@ -2515,7 +2626,29 @@ public final class MaidMountCompat {
             double velocity = projectileVelocityOfGun(mount, gun);
             double gravity = projectileGravityOfGun(mount, gun);
             Object sol = mRangeFiringSolution.invoke(null, launch, targetPos, targetVel, velocity, gravity);
-            return sol instanceof Vec3 v ? v : null;
+            Vec3 out = sol instanceof Vec3 v ? v : null;
+            if (out != null) {
+                // 【实测七百四十二】把"这一拍算出来该朝哪"留在按车的表里——诊断日志要用它报
+                // "炮口离期望方向还差几度"（{@link #lastDesired}）。纯记录，不影响任何决策。
+                LAST_DESIRED.put(mount.getUUID(), out);
+                if (LAST_DESIRED.size() > 512) {
+                    LAST_DESIRED.clear();
+                }
+            }
+            return out;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 载具 UUID → 最近一次 {@link #firingSolution} 算出的期望炮口方向。只给诊断日志用。 */
+    private static final java.util.Map<UUID, Vec3> LAST_DESIRED =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 最近一次算出的期望炮口方向；没有 → null。 */
+    private static Vec3 lastDesired(Entity mount) {
+        try {
+            return mount == null ? null : LAST_DESIRED.get(mount.getUUID());
         } catch (Throwable ignored) {
             return null;
         }
@@ -3159,36 +3292,68 @@ public final class MaidMountCompat {
                 //     （AC-130H：座 0 没 gun → 引擎那条循环直接跳过）。这一档由我们接管：
                 //     先把她的 `getTarget` **清掉**（那是引擎自动开火的唯一开关，不清就是两门炮
                 //     各打各的），再按炮名统一"瞄 + 打"。
+                // 【实测七百四十二·点2】不再"按炮在谁座上分两档"——**一律由我们接管**。
+                //
+                // 741 那一版把"开火权"按"这门炮是不是就在她坐的那一座"劈成两半：是 → 交给引擎
+                // 内置的"Mob 乘客自动开火"；不是 → 我们接管。实机日志证明这一劈是错的：
+                // **741 那份 jar（2026-09-30 17:2x 那一局）里「模组坐骑·开火」一行都没有**，
+                // 而同一辆车在 740 那份 jar 下（同一天 06:18~13:08）每 5 秒都在打。
+                //
+                // 根因在引擎那条链自己的一道闸：反编译 {@code VehicleEntity.baseTick:3765-3775}，
+                // 它要求 {@code angleTo(炮管当前朝向, 炮口→目标) < 4.0} 才开火；而**机炮挂车体、
+                // 没有炮塔**的车（AH-6 的 Cannon、飞艇的 Bomb、AC-130H 的三门炮）炮管方向是
+                // 写死的车体坐标（{@code Directions} 不是 {@code "Barrel"} 而是具体向量/字符串），
+                // 它**不能独立转**——除非机头恰好正对敌人，那道 4° 闸永远不过。
+                // 也就是说"炮正好在她座上"这一档其实**一枪不发**（玩家原话「大部分载具上的
+                // 弹药没有办法发射」正是它）。而 740 那版不分档、一律接管，所以它能打。
+                //
+                // 现在恢复并固化 740 的口径：**不分档**。一律把她的 {@code getTarget} 清掉
+                // （那是引擎自动开火的唯一开关，反编译同处实证；不清就是"引擎打一门、我们打一门"），
+                // 瞄准与开火都走我们这条路——每一门炮我们都能给出发射解：有塔的转塔、没塔的转机头
+                // （见 {@link #aimBallistic} → {@link #pointBarrelAt}）。
                 String gun = gunNameFor(mount, maid);
-                boolean own = gun != null
-                        && !gun.equals(gunNameAt(mount, seatIndexOf(mount, maid)));
                 try {
-                    // 由我们接管时写 null（关掉引擎那条自动开火）；否则照旧写她的目标。
-                    maid.setTarget(own ? null : target);
+                    maid.setTarget(null);
                 } catch (Throwable ignored) {
                 }
                 // 【实测七百二十四】再把目标写进炮塔/武器位的 **AI 目标 UUID**——车自己那套
                 // **瞄准**读的是它（它只瞄、不开火，与我们算的是同一个解，互补不冲突）。
                 applyVehicleAiTargets(mount, target);
                 logVehicleFire(mount, target);
-                // 【实测七百三十一·暴力后门 → 七百四十·改成真弹道 → 七百四十一·按炮名统一】
+                // 【实测七百三十一·暴力后门 → 七百四十·真弹道 → 七百四十一·按炮名统一
+                //  → 七百四十二·不再分档 + 末制导兜底】
                 // 玩家原话：「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。……能不能走后门
                 // 让那个炮弹强制射向敌方？」
                 //
                 // 731 那条后门是"自己算方位角写死炮塔 + 不看角度直接开火"——反编译实证它有两处
                 // 根本错误：① 炮塔角是**相对车身**的，我们写的却是世界绝对方位；② 完全没解
                 // 重力下坠与提前量（炮弹是纯抛物线，无制导，`targetPos` 参数对它毫无作用）。
-                // 740 换成**引擎自己的弹道解算器**，却仍在"按她座位取炮"上栽了跟头（见 gunNameFor）。
-                // 本版把"瞄"与"打"统一到**同一个炮名**上：解算 → 交给引擎自动瞄准转炮塔
-                // （M1A2 3.3°/拍、Mi-28 15°/拍）→ 等它转到位再按同一门炮开火。
-                if (target != null && own) {
+                // 740 换成**引擎自己的弹道解算器**。本版沿用"瞄与打统一到同一个炮名"，
+                // 并加两条保证"一定能打出去、且一定能命中"：
+                //   ① **对不准也打**——机头/炮塔迟迟掰不到 3° 以内（炮艇、AH-6 那类）时，
+                //      连续 {@link #AIM_FORCE_TICKS} 拍没对准就直接开火，不再"等到对准为止"；
+                //   ② 打出去的每一发都由 {@code MaidShellHoming} 记下目标并逐拍纠向
+                //      （玩家点名要的那条"强力后门"：炮弹直接指向敌人）。
+                if (target != null && gun != null) {
                     boolean aimed = aimBallistic(mount, maid, target);
-                    if (aimed && fireTickDue(mount)) {
-                        // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
-                        // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。按炮名开火（见 fireAt），
-                        // 保证"瞄的那门"和"打的那门"是同一门。
-                        if (fireAt(mount, maid, target)) {
-                            logForceFire(mount, target);
+                    Vec3 want = lastDesired(mount);
+                    logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want));
+                    if (aimed) {
+                        aimStalledTicks(mount, true);
+                    }
+                    boolean force = !aimed && !hasSlewableMount(mount)
+                            && aimStalledTicks(mount, false) >= AIM_FORCE_TICKS;
+                    if (aimed || force) {
+                        if (fireTickDue(mount)) {
+                            // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
+                            // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。按炮名开火（见 fireAt），
+                            // 保证"瞄的那门"和"打的那门"是同一门。
+                            if (fireAt(mount, maid, target)) {
+                                logForceFire(mount, target);
+                                // 【实测七百四十二·点3】记下"这一发该打谁"，由 MaidShellHoming
+                                // 逐拍把她的炮弹纠向目标（末制导后门）。
+                                com.maidsmart.combat.MaidShellHoming.note(maid, mount, target);
+                            }
                         }
                     }
                 }
@@ -3516,10 +3681,23 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
             }
             boolean maidMoved = seatIndexOf(mount, maid) == maidWants;
-            // ③ 主人重新上车并钉到目标座。注意：原版 {@code startRiding} 会把他放进**第一个空座**，
-            //    而那里往往就是他想要的那座（她刚挪走）——此时 {@code changeSeat} 会因"目标座已被
-            //    自己占着"返回 false，但那不是失败。所以**判成功一律看最终座号**，不看返回值。
-            if (!player.startRiding(mount, true)) {
+            // ③ 主人重新上车。**这里必须先开一张"重上车放行条"**——
+            //    玩家手里正拿着指挥棒（左击是靠它触发的），而我们自己那两道登乘闸
+            //    （{@code EntityBatonMountGateMixin} 拦 startRiding + {@code onMount} 拦
+            //    EntityMountEvent）会把"拿指挥棒的人"一律拦下。741 那一版没开这张条，
+            //    于是 {@code startRiding} 恒返回 false → 每次都走"换座失败：坐不回去了"。
+            //    这正是玩家原话「从副驾驶换到主驾驶座这个操作一直没能实现。老是提示失败」的根因。
+            RideBindManager.grantRemount(player, mount);
+            boolean remounted;
+            try {
+                remounted = player.startRiding(mount, true);
+            } finally {
+                RideBindManager.revokeRemount(player);
+            }
+            // 原版 {@code startRiding} 会把他放进**第一个空座**，而那里往往就是他想要的那座
+            // （她刚挪走）——此时 {@code changeSeat} 会因"目标座已被自己占着"返回 false，
+            // 但那不是失败。所以**判成功一律看最终座号**，不看返回值。
+            if (!remounted || seatIndexOf(mount, player) < 0) {
                 return "\u00a7c换座失败：坐不回去了……";
             }
             if (seatIndexOf(mount, player) != ownerWants) {
@@ -3533,6 +3711,9 @@ public final class MaidMountCompat {
                 return ownerWants == 0
                         ? "\u00a7a换到驾驶位了\u00a7f（她现在坐副驾）"
                         : "\u00a7a换回副驾了\u00a7f（她回去开车）";
+            }
+            if (ownerMoved) {
+                return "\u00a7a你换过来了\u00a7f（她那座没动，再按一次左击试试）";
             }
             return "\u00a7e换座只成功了一半\u00a7f（再按一次左击试试）";
         } catch (Throwable ignored) {

@@ -208,6 +208,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
         // 实测六百九十九：登记表会话复位（内存清空、落盘保留——下次启动再灌回来）
         com.maidsmart.follow.MaidChunkLoadManager.resetSeenSession();
+        // 实测七百四十二·点3：末制导后门的两张表（在飞的炮弹 / 待认领）跨会话不能留
+        com.maidsmart.combat.MaidShellHoming.clearAll();
     }
 
     /**
@@ -271,6 +273,9 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         }
         // v1.1.0 实测七十：一键集合"未加载区块召回"队列推进（空队列零开销）
         com.maidsmart.follow.MaidChunkLoadManager.tickPending(server);
+        // 实测七百四十二·点3：末制导后门——把女仆从载具打出去的炮弹逐拍纠向她的目标。
+        // 内部两张表都空时零开销（绝大多数世界从没有过载具开火）。
+        com.maidsmart.combat.MaidShellHoming.tick(server);
         // 实测六百九十八：持票"即时跟人"——她飞着换区块/被复活落到别的区块后，票当场
         // 跟过去（旧版要等下面那条 5 秒扫描，中间那段她就是"没票区块里的女仆"：
         // 服务端不 tick（客户端看她在空中定住）+ 区块一卸载原版就发删包（幽灵建模）。

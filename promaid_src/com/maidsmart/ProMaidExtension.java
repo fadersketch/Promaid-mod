@@ -204,6 +204,8 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
         // 实测六百九十九：登记表会话复位（内存清空、落盘保留——下次启动再灌回来）
         com.maidsmart.follow.MaidChunkLoadManager.resetSeenSession();
+        // 实测七百四十二·点3：末制导后门的两张表（在飞的炮弹 / 待认领）跨会话不能留
+        com.maidsmart.combat.MaidShellHoming.clearAll();
     }
 
     /**
@@ -323,6 +325,9 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.combat.RideBindManager.tick(server);
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
+        // 实测七百四十二·点3：末制导后门——把女仆从载具打出去的炮弹逐拍纠向她的目标。
+        // 内部两张表都空时零开销（绝大多数世界从没有过载具开火）。
+        com.maidsmart.combat.MaidShellHoming.tick(server);
     }
 
     /**
