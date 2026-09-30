@@ -239,6 +239,7 @@
   "config.promaid.ride.fightAlt": "Combat altitude above enemy (blocks)",
   "config.promaid.ride.orbitRadius": "Orbit radius (blocks)",
   "config.promaid.ride.ammoFeed": "Vehicle: she loads ammo for you (Superb Warfare)",
+  "config.promaid.ride.bombStandoff": "Bomb standoff altitude (blocks above target)",
   "config.promaid.ride.airAltMigrated": "Internal - hover altitude migration flag",
   "config.promaid.ride.orbitRadiusMigrated": "Internal - orbit radius migration flag"
 }

@@ -168,6 +168,13 @@ public final class BombTntTick {
             if (!BombThrow.legalThrowTarget(maid, target)) {
                 return; // 没目标（或目标不合法）：挂着等下一记
             }
+            // v1.3.0(beta) 实测七百四十七【投弹安全高度】：骑飞行载具（基洛夫等）时，先把机身
+            // 升到"比目标高 N 格"（默认 20）再撒手——见 MaidAirCombat.holdDropForStandoff。
+            // 按住时直接挂着（不耗料、不占冷却、不写 TNT_NEXT），下一拍她爬到位自然就投出去了。
+            // 非飞行载具 / 关掉这道闸 / 安全高度填 0 → 本句恒 false，行为与旧版一字不差。
+            if (com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
+                return;
+            }
             if (gameTime < MaidBombing.TNT_NEXT.getOrDefault(id, 0L)) {
                 return; // 最短间隔没到
             }

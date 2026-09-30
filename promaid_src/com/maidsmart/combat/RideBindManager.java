@@ -224,8 +224,13 @@ public final class RideBindManager {
         // 提示。这里把它们收进来，让它们在 denyReason 里给出明确拒绝（"这是家具，不是坐骑～"
         // / "扫帚有它自己的飞法"）。
         boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
-        /** 这一下棍子认得出是什么（女仆 / 能骑的 / 家具扫帚 / 任何 Mob）——认得出才回话 */
-        boolean recognized = maid || mount || rejected || (target instanceof Mob);
+        // 【实测七百四十七】不可驾名单里的载具（Ju-87/A-10/AC-130H/KV-16/汤姆6/迷你快艇）：
+        // 它们**不是 Mob**、`isRideableMount` 又因为 denyReason 非空而返回 false，于是若不单独
+        // 认出来，`recognized` 就是 false → 独占档下这一下右击被静默吞掉，玩家等不到任何解释
+        // （正是"认人"这件事最需要说清楚的地方）。收进来走 denyReason 那条路给气泡。
+        boolean banned = MaidMountCompat.isUnridable(target);
+        /** 这一下棍子认得出是什么（女仆 / 能骑的 / 家具扫帚 / 不可驾载具 / 任何 Mob）——认得出才回话 */
+        boolean recognized = maid || mount || rejected || banned || (target instanceof Mob);
         // 【实测七百二十·点2 独占档】玩家原话："加一个新设定，骑乘指挥棒在使用的时候不会触发
         // 原本的右击效果。只会触发骑乘棒自己的右击效果，也就是说你拿骑乘棒是骑不上龙或者车子的。"
         // 所以独占档开着时，只要手里拿的是骑乘棒，这一下实体右击**一律由棍子吃掉**——不管目标是
@@ -276,7 +281,8 @@ public final class RideBindManager {
             }
             boolean recognized = target instanceof EntityMaid || target instanceof Mob
                     || MaidRideKit.isRideableMount(target, null)
-                    || MaidMountCompat.kindOf(target) != null;
+                    || MaidMountCompat.kindOf(target) != null
+                    || MaidMountCompat.isUnridable(target); // 实测七百四十七：不可驾载具也要吞这一下
             if (recognized) {
                 // 【实测七百二十四】客户端本地预测那一拍：SWB 的 VehicleEntity.interact 在**客户端**
                 // 也跑，setDriverAngle 会当场把玩家转向车头。快照 + 钉住几拍把这一下抹掉。
@@ -1690,6 +1696,12 @@ public final class RideBindManager {
                     continue;
                 }
                 if (maid.m_9236_() != mount.m_9236_()) {
+                    deferred.add(maid);
+                    continue;
+                }
+                // 【实测七百四十七】名单是在 747 才加的：升级前绑在不可驾载具上的链路要能自愈——
+                // 每拍扫到时按"该解绑"处理（走 releaseMaidQuiet，重力/坐姿/龙的行动档都还原）。
+                if (MaidMountCompat.isUnridable(mount)) {
                     deferred.add(maid);
                     continue;
                 }
