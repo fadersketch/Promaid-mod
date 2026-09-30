@@ -6,6 +6,7 @@
 - **修订**：`05103ae`（生成时 HEAD）
 - **规模**：112 模块 / 41 API / 61 依赖箭头 / 最大深度 3
 - **校验**：L1（写时）+ L2（全项目）+ L3（构建冻结）全部 **0 error**
+- **一键重建**：`python tools/arch/build_arch.py`（等价于下面三条依次跑）
 - **校验入口**：`python tools/arch/gen_arch.py` → `python tools/arch/render_arch.py` → `python tools/arch/finalize_arch.py`
 
 ---
@@ -136,10 +137,17 @@ PersonaPackage            人格种子（只读）┘
 ### 重新生成
 
 ```
+python tools/arch/build_arch.py        # 一键三步（推荐）
+
+# 或分步（便于单独排错）：
 python tools/arch/gen_arch.py        # 写结构数据（L1+L2 门禁，0 error 才落盘）
 python tools/arch/render_arch.py     # 渲染单文件 HTML
 python tools/arch/finalize_arch.py   # 覆盖 receipt.json（HTML 之后重算，避免哈希过期）
 ```
+
+> `revision` 取的是**最后一次改动 `promaid_src*` 的提交**，不是 HEAD ——
+> 只改文档/架构数据时重跑，产物一个字节都不会变（可重复、可校验）。
+
 
 改代码后同步结构数据：改 `tools/arch/arch_modules.py` 里对应模块的 `source` / `description`，
 重跑三步即可；`receipt.json` 会告诉你哪些文件变了。
