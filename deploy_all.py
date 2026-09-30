@@ -6,6 +6,23 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百四十一（v1.3.0 beta，同名覆盖，未发版）：**两树同步的五条** ——
+① 手持骑乘指挥棒**左击** = 主驾 ↔ 副驾换座（`RideBatonViewClamp.onInteractionKey` 客户端只认这一下并上报、
+   服务端 `RideBindManager.handleSwapSeatRequest` 只信车辆 id 自算座位、`MaidMountCompat.swapOwnerSeat`
+   与女仆互换；走 SWB `changeSeat`，判成功只看最终座号；玩家原话「在副座……左击……交换到主座位，再左击一下再换回去」）；
+② 同乘直升机不再缓慢上升（`MaidAirCombat.holdHere(maid, mount)` 基准从"她自己"改成**载具**——
+   她是乘客、座位比机身高约 1.5 格，旧基准让 `dy` 恒为 +1.4 → 永久缓慢爬升）；
+③ 直升机用上炮塔炮弹、瞄哪门打哪门（`MaidMountCompat.gunNameFor` 全车唯一选炮：炮塔 → 她自己那座 →
+   武器站 → 第一门有武器的座；`fireAt` 改走按**炮名**的 `vehicleShoot(LivingEntity,String,UUID,Vec3)`；
+   旧版按她座位取炮，Mi-28 上瞄座 1 的机炮却打座 0 的火箭弹；地面炮塔坦克也一并走弹道瞄准；
+   引擎自己已经能用的那档不抢、不重复开火）；
+④ 空中炮艇（AC-130H）会装弹、会开火了（座 0 无武器 → 选炮落到座 1 的 M61；装弹范围放宽到
+   **弹匣型**火炮——反编译 `reloadAmmo` 从同一个车容器扣弹；它没有炮塔且炮弹**沿机头飞**，
+   故新增 `pointBarrelAt`/`applyNoseAim` 由飞行档最后写机头，时效 3 拍）；
+⑤ 她自己坐上车后"绑不上、卡在车上"已修（`RideBindManager.bind` 采纳"已在车上"现状——原版
+   `startRiding` 对"已在这辆车上"恒返回 false；新增 `isSelfBoardedModMount`/`dismountSelfBoarded`，
+   排班表手动传送与一键集合放行：先请她下车、再单独传人）。
+
 实测七百三十九（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三条** ——
 ① 直升机悬停时机头锁死（`MaidMountCompat.hoverYawHold/releaseHoverYaw`：进悬停档采样机头、
    每拍写回 + 清鼠标 X 通道；根因是悬停时目标点压在她自己脚下、`err` 退化成浮点抖动，机头被拽着转）；
