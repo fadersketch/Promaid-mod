@@ -193,6 +193,26 @@ public final class MaidMountCompat {
     private static Method mGunReloading;       // GunData.reloading() -> boolean
     private static Method mGunCurrentAmmo;     // GunData.currentAvailableAmmo(Entity) -> int
     private static Method mGunCanShoot;        // GunData.canShoot(Entity) -> boolean
+    /* 【实测七百四十五·点4】"当前模式没弹 → 换一个有弹的模式"。玩家原话（原话即规格）：
+     * 「女仆在操纵载具进行攻击的时候，它只会检查当前模式下是否存在对应的弹药……应该在没有发现
+     * 链路之后，再检查一下其他模式有没有对应的弹药，然后考虑切换到那个模式。」
+     *
+     * 反编译实证（SWB 的两级"模式"）：
+     *   ① **逐座武器表**：一个座可以有**多门炮**，{@code getSelectedWeapon()} 是"每座选中的是哪门"。
+     *      {@code getWeaponIndex(int)} 读、{@code setWeaponIndex(int,int)} 写、
+     *      {@code getGunName(int,int)} 取第 int 门（反编译 VehicleEntity:2795/2820/939）。
+     *      ——这正是玩家说的"模式 A 发 A 弹、模式 B 发 B 弹"。
+     *   ② **同一门炮内的弹药类型**：{@code GunData.selectedAmmoType} 指向
+     *      {@code GunProp.AMMO_CONSUMER} 那张表里的第几项；{@code changeAmmoConsumer(int,Entity)}
+     *      切它（反编译 GunData:607）。有些车的"模式"是这一级。
+     * 我们两级都试：先在同一门炮里换弹种，不行再换到另一门炮。 */
+    private static Method mGetWeaponIndex;         // getWeaponIndex(int seat) -> int
+    private static Method mSetWeaponIndex;         // setWeaponIndex(int seat, int weaponIndex)
+    private static Method mGetGunNameAtSeatWeapon; // getGunName(int seat, int weaponIndex) -> String
+    private static java.lang.reflect.Field fGunPropAmmoConsumer; // GunProp.AMMO_CONSUMER
+    private static Method mGunGetProp;             // GunData.get(GunProp) -> T（通用取值）
+    private static Method mChangeAmmoConsumer;     // GunData.changeAmmoConsumer(int index, Entity supplier)
+    private static Method mConsumerCount;          // AmmoConsumer.count(GunData, Entity) -> int
 
     /* 【实测七百四十】弹道瞄准：把 731 那套"自己算角度"换成**引擎自己的弹道解算器**。
      * 反编译实证（VehicleWeaponUtils.turretAutoAimFromUuid / RangeTool.calculateFiringSolution）：
@@ -484,6 +504,31 @@ public final class MaidMountCompat {
                 mGunReloading = null;
                 mGunCurrentAmmo = null;
                 mGunCanShoot = null;
+            }
+            // 【实测七百四十五·点4】"这个模式没弹就换一个有弹的模式"所需的反射：逐座武器表 + 切换 +
+            // 同一门炮内换弹药类型。各自单独 try（缺了只是"换模式"这一档不生效，不影响"有弹就打"）。
+            try {
+                mGetWeaponIndex = cVehicle.getMethod("getWeaponIndex", int.class);
+                mSetWeaponIndex = cVehicle.getMethod("setWeaponIndex", int.class, int.class);
+                mGetGunNameAtSeatWeapon = cVehicle.getMethod("getGunName", int.class, int.class);
+            } catch (Throwable ignored) {
+                mGetWeaponIndex = null;
+                mSetWeaponIndex = null;
+                mGetGunNameAtSeatWeapon = null;
+            }
+            try {
+                Class<?> gdCls3 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                Class<?> gpCls = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
+                Class<?> acCls3 = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
+                fGunPropAmmoConsumer = gpCls.getField("AMMO_CONSUMER");
+                mGunGetProp = gdCls3.getMethod("get", gpCls);
+                mChangeAmmoConsumer = gdCls3.getMethod("changeAmmoConsumer", int.class, Entity.class);
+                mConsumerCount = acCls3.getMethod("count", gdCls3, Entity.class);
+            } catch (Throwable ignored) {
+                fGunPropAmmoConsumer = null;
+                mGunGetProp = null;
+                mChangeAmmoConsumer = null;
+                mConsumerCount = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -1483,6 +1528,9 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
+                // 【实测七百四十五·点2】收手时也要抹掉残余**水平**速度（竖直分量保留，空中不能失去升力）：
+                // 旧版只清输入，飞艇/固定翼松油后按 0.9~0.96 衰减、还会滑出去很远（"漂移严重"）。
+                killHorizontal(mount, FLIGHT_STOP_RETAIN);
                 return;
             }
             if (mProcessInput != null) {
@@ -1732,30 +1780,12 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
-                // 【实测七百三十一·暴力后门】到位就**强制把水平速度抹平**——玩家原话
-                // 「现在女仆完全就停不下来了。1 点刹车的能力都没有……悬停完之后就强制给它水平
-                // 方向的速度停下来」。实机日志实证：到点后 期望=0.00 而 水平速度 仍 0.83→1.82，
-                // 光靠俯仰权限收不住。这里不看引擎脸色，每拍把水平分量乘 HARD_BRAKE_RETAIN，
-                // 竖直分量保留（空中不能失去升力）。见 killHorizontal 的注释（减速直通是安全的）。
-                if (hardBrake) {
-                    killHorizontal(mount, HARD_BRAKE_RETAIN);
-                }
-                // 【实测七百三十二·周期急停脉冲 / 七百三十三·去掉距离门槛】玩家原话
-                // 「最好是每 10 tick 就触发一次这样的停止，否则真的太不稳定了。」——所以这里
-                // **不再设 24 格的操纵带**：无论离目标多远，一律每 10 拍（0.5 秒）收一次。
-                // 跟随/接近档保留 0.25，接敌盘旋档保留 0.55（温和，保住绕圈）。
-                // 竖直分量一律不动（空中不能失去升力）。
-                boolean pulse = !hardBrake && brakePulseDue(mount);
-                if (pulse) {
-                    killHorizontal(mount, fighting ? BRAKE_PULSE_RETAIN_FIGHT : BRAKE_PULSE_RETAIN);
-                }
-                // 【实测七百四十三·点1】速度硬上限（玩家原话「不能滑出太远，或者获得太大的速度」）。
-                // 上面那条串级速度环只是**给期望**，而发动机的惯性会让她冲过包络（741 的机头瞄准
-                // 又把这个环打断了）。这里不看引擎脸色，直接对**水平分量**做上限钳制：超了就把
-                // 整体缩回上限（减速是直通的，见 killHorizontal 注释），竖直分量一律不动。
-                // 上限就是速度环自己的包络 FLIGHT_HMAX（0.75 格/拍 ≈ 15 格/秒）——所以这一条
-                // 只拦"超过设计包络的冲量"，不影响正常巡航/绕圈。
-                capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
+                // 【实测七百四十五·抽公共】"急停三件套"（硬刹 + 每 0.5 秒周期脉冲 + 水平速度硬上限）
+                // 原本只写在直升机这一档里，现在提成 {@link #flightBrake} 由三种飞行档共用
+                // （玩家原话：「极乐恶魂以及其他的飞行载具都没有像直升机那样的同款急停。导致漂移
+                // 非常严重。」）。逻辑与七百三十一/七百三十二/七百四十三 一字未改，只是搬了位置。
+                int brake = flightBrake(mount, hardBrake, fighting);
+                boolean pulse = (brake & BRAKE_FLAG_PULSE) != 0;
                 // 【实测七百三十三·直写机头】长距离不飞偏的正解：把机身航向直接写过去，
                 // 只留一点点 mouseX 微调（见 forceHeadingOnto 的注释——那条通道权限不足两成，
                 // 且与滚转耦合）。拿不到反射就退回纯鼠标通道（yawCmd 已在上面写过）。
@@ -1817,13 +1847,18 @@ public final class MaidMountCompat {
             if (isAirshipEngine(eng)) {
                 mSetMouseX(mount, 0.0f);   // 飞艇不读鼠标通道；清了免得残留
                 mSetMouseY(mount, 0.0f);
+                // 【实测七百四十五·点2】飞艇也要同款急停（玩家原话「极乐恶魂……没有像直升机那样的
+                // 同款急停，导致漂移非常严重」）。旧版这里只按 horiz>FLIGHT_ARRIVE 决定给不给前进位，
+                // 到点后引擎按 power*0.96 衰减（airShipEngine:1178）→ 还在滑。现在与直升机同一套：
+                // 到位停推力 + 抹水平速度，未到位也每 0.5 秒收一次，并把水平速度钳进包络。
+                boolean aHard = shouldHardBrake(horiz, horizontalSpeed(mount), fighting);
                 short abits = 0;
                 // 偏航：左右位（引擎自己积分 deltaRot → rudderRot）
                 if (Math.abs(err) > 8.0f) {
                     abits |= (err > 0) ? 0x002 : 0x001;
                 }
-                // 推力：到点就松油（飞艇有真实刹车——power 按 0.96 衰减，且它本来就是慢速载具）
-                if (horiz > FLIGHT_ARRIVE) {
+                // 推力：到点就松油（硬刹那一下由下面的 flightBrake 抹掉残余水平速度）
+                if (!aHard && horiz > FLIGHT_ARRIVE) {
                     abits |= 0x004;
                 }
                 // 倍率 → 冲刺位（airShip 里是 sprintMultiply 抬高速度上限）
@@ -1845,11 +1880,15 @@ public final class MaidMountCompat {
                         liftCmd = Float.NaN;
                     }
                 }
+                int aBrake = flightBrake(mount, aHard, fighting);
                 logDrive(mount, "飞艇档 引擎=" + eng + " 位掩码=" + abits
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + ((aBrake & BRAKE_FLAG_HARD) != 0 ? " 硬刹(水平清零)" : "")
+                        + ((aBrake & BRAKE_FLAG_PULSE) != 0 ? " 周期急停(0.5s)" : "")
                         + " 竖直速度=" + fmt2(avy)
                         + " liftSpeed=" + (Float.isNaN(liftCmd) ? "n/a" : fmt2(liftCmd))
+                        + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
             }
@@ -1916,15 +1955,19 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
+                // 【实测七百四十五·点2】汤姆6 也给同款急停（它与飞艇/固定翼一样原先没有）。
+                int tBrake = flightBrake(mount, shouldHardBrake(horiz, horizontalSpeed(mount), fighting), fighting);
                 logDrive(mount, "汤姆6档 引擎=" + eng + " 推力=" + fmt2(tomPower)
                         + " 俯仰=" + Math.round(tomPitch)
+                        + ((tBrake & BRAKE_FLAG_HARD) != 0 ? " 硬刹(水平清零)" : "")
+                        + ((tBrake & BRAKE_FLAG_PULSE) != 0 ? " 周期急停(0.5s)" : "")
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
             }
 
-            // ---------- 固定翼（AC-130H / A-10 / J-16 等）：用引擎自己的 loiter 停住并盘旋 ----------
+            // ---------- 固定翼（AC-130H / A-10 / J-16 等）：先用"起飞助跑"离地，再用引擎自带 loiter 盘旋 ----------
             //
             // 【实测七百四十三·点2·玩家原话】「ACH13空中炮艇，我发现女仆根本就不会骑这个东西。
             // 全程乱窜并且没有停止和飞行能力。」
@@ -1941,10 +1984,81 @@ public final class MaidMountCompat {
             //
             // 高度同理走 loiter 的 {@code altitude}（aircraftLoiter 里 {@code setXRot} 对着它收敛）。
             // 写不出 loiter（反射失败）→ 退回旧口径，一个字节不变。
+            //
+            // ---------------------------------------------------------------
+            // 【实测七百四十五·点3·玩家原话】「空中炮艇现在可以大致跟随主人的轨迹了，
+            // 但它仍然飞不起来。」——**根因（反编译 aircraftEngine 实证，三条叠加）**：
+            //   ① 俯仰只在**空中**才写：{@code :801 if (!onGround) setXRot(xRot + pitchSpeed*addX)}
+            //      ⇒ 地面上写 mouseY 是空操作；
+            //   ② 升力 ∝ **当前速度**：{@code :877 upVec * ... * speed * (0.008+liftOffset) * lift}
+            //      ⇒ 静止时 speed=0 → 升力恒为 0；
+            //   ③ 地面推力 ∝ {@code dotViewVector}（当前速度在视线上的投影）：{@code :702}
+            //      静止时也恒为 0；且地面摩擦 {@code f = 0.497 + 0.45*|dotView|}（:701）远大于
+            //      推力的 {@code 0.047*power*speedRate}（:879）。
+            //   三条合起来 = **它是一架需要"跑道助跑"的真飞机**：没有初速就永远起不来，
+            //   而 loiter（唯一能让她停住盘旋的东西）又要求 {@code !onGround}（baseTick:3845）——
+            //   死锁。所以"写 loiter 参数"这条我们一直做对了，但它**读不到**。
+            //
+            //   正解：把这架飞机**从地面抬起来**这一步由我们在外部硬做出来（与本档其它
+            //   "暴力后门"同源——直升机的直写 power、TOM6 的起飞抬头角都是同一个道理）：
+            //   贴地时每拍写一个抬头角 + 直接补一点竖直速度，把 {@code onGround} 顶掉；
+            //   一旦离地就交回引擎自己的俯仰/loiter。这也解释了为什么"能大致跟随轨迹"——
+            //   引擎的地面推力虽小，但目标点仍在逐拍喂，她在地面滑行时方向是对的。
+            {
+                boolean grounded;
+                try {
+                    grounded = mount.onGround();
+                } catch (Throwable ignored) {
+                    grounded = false;
+                }
+                // 只有"确实要去某处"才起飞助跑：目标就在脚下同高度时不该硬把炮艇从地面拔起来。
+                boolean wantAir = horiz > FLIGHT_ARRIVE || Math.abs(dy) > FLIGHT_ALT_DEADZONE;
+                boolean lifting = grounded && wantAir;
+                if (lifting) {
+                    // ① 抬头（负 = 机头朝上）：让引擎的 viewVector 带上竖直分量
+                    //    （地面推力 :879 是 viewVector × force，抬头才有爬升分量）。
+                    try {
+                        mount.setXRot(-AIRCRAFT_TAKEOFF_PITCH);
+                    } catch (Throwable ignored) {
+                    }
+                    // ② 直接补竖直速度，顶掉这条"必须助跑"的物理死锁。
+                    //    量为什么取 0.25：地面每拍把 deltaMovement 三轴都乘 f（:707，f≈0.497），
+                    //    再在 baseTick 末尾扣掉重力 0.06（DefaultVehicleData 默认 gravity=0.06）——
+                    //    稳态 v = (0.497*add − 0.06)/0.503，add=0.25 ⇒ v≈0.128 格/拍（≈2.5 格/秒），
+                    //    足以离地且不至于一飞冲天。竖直分量写的是"取当前与 0 的较大者再加"，
+                    //    所以不会把已有的下坠叠成上冲。
+                    try {
+                        Vec3 tdm = mount.getDeltaMovement();
+                        mount.setDeltaMovement(tdm.x, Math.max(tdm.y, 0.0) + AIRCRAFT_TAKEOFF_LIFT, tdm.z);
+                    } catch (Throwable ignored) {
+                    }
+                    // ③ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
+                    //    那是 loiter 的另一个前置条件 baseTick:3845）。
+                    if (mSetPower != null) {
+                        try {
+                            mSetPower.invoke(mount, 1.0f);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    // ④ 顺手把 loiter 参数写好：离地那一拍 baseTick 就会立刻调 aircraftLoiter，
+                    //    中间不留"起来了但没人接管"的空档。
+                    tryAircraftLoiter(mount, target, horiz);
+                    logDrive(mount, "固定翼起飞助跑 引擎=" + eng
+                            + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
+                            + " 补竖直=" + fmt2(AIRCRAFT_TAKEOFF_LIFT)
+                            + " 竖直速度=" + fmt2(verticalSpeed(mount))
+                            + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                    return true;
+                }
+            }
             if (tryAircraftLoiter(mount, target, horiz)) {
+                int aBrake = flightBrake(mount, shouldHardBrake(horiz, horizontalSpeed(mount), fighting), fighting);
                 logDrive(mount, "固定翼盘旋档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + ((aBrake & BRAKE_FLAG_HARD) != 0 ? " 硬刹(水平清零)" : "")
+                        + ((aBrake & BRAKE_FLAG_PULSE) != 0 ? " 周期急停(0.5s)" : "")
+                        + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
             }
@@ -2059,6 +2173,26 @@ public final class MaidMountCompat {
 
     /** 固定翼"点火"推力：引擎里 {@code power > 0.2} 才置 engineStartOver（loiter 的前置条件）。 */
     private static final double AIRCRAFT_ENGINE_KICK_POWER = 0.35;
+
+    /**
+     * 【实测七百四十五·点3】固定翼起飞助跑的抬头角（度，负 = 机头朝上）。
+     *
+     * <p>为什么需要：地面推力是 {@code viewVector × 0.047 × power × speedRate}（反编译
+     * {@code aircraftEngine:879}），不抬头就没有爬升分量；而引擎自己的俯仰只在空中才写
+     * （{@code :801}），地面上写 mouseY 是空操作。所以贴地这一段由我们直接写 {@code XRot}。
+     * 取 20°：足够让升力/推力分出一个明显的竖直分量，又不会像 TOM6 的 15° 那样"抬头太多、
+     * 水平推进被吃掉"（AC-130H 的 {@code ClampPitch} 是 40°，20° 在它自己域内）。
+     */
+    private static final float AIRCRAFT_TAKEOFF_PITCH = 20.0f;
+
+    /**
+     * 【实测七百四十五·点3】固定翼起飞助跑每拍补的竖直速度（格/拍）。
+     *
+     * <p>稳态推算（见调用处注释）：地面摩擦 f≈0.497、重力 0.06 ⇒ {@code v ≈ 0.128 格/拍}
+     * （≈2.5 格/秒），足够顶掉 {@code onGround()}、又不至于一飞冲天。它只在**贴地**时补，
+     * 一旦离地就走引擎自己的 loiter，不参与巡航。
+     */
+    private static final double AIRCRAFT_TAKEOFF_LIFT = 0.25;
 
     /** 固定翼 loiter 的最小半径（格）：必须非 0（aircraftLoiter 里拿它做分母）。 */
     private static final double AIRCRAFT_LOITER_MIN_R = 8.0;
@@ -2286,6 +2420,61 @@ public final class MaidMountCompat {
      */
     static boolean shouldHardBrake(double horiz, double hspeed, boolean fighting) {
         return !fighting && horiz <= FLIGHT_ARRIVE;
+    }
+
+    /* ---------- 实测七百四十五：三种飞行档共用的"急停三件套" ---------- */
+
+    /** {@link #flightBrake} 返回值的位：本拍打了"到位硬刹"。 */
+    static final int BRAKE_FLAG_HARD = 1;
+    /** {@link #flightBrake} 返回值的位：本拍打了"周期急停脉冲"。 */
+    static final int BRAKE_FLAG_PULSE = 2;
+    /** {@link #flightBrake} 返回值的位：本拍把水平速度钳到了上限。 */
+    static final int BRAKE_FLAG_CAP = 4;
+
+    /**
+     * 【实测七百四十五·点2】收手（{@link #stopVehicle}）时抹水平速度的保留系数：0.15 = 一拍掉八成半。
+     * 比到位硬刹的 0.25 更狠一点——"收手"是彻底不管了，让她当场止住，别滑出视线。
+     */
+    private static final double FLIGHT_STOP_RETAIN = 0.15;
+
+    /**
+     * 【实测七百四十五·抽公共】飞行档的"急停三件套"：**硬刹（到位）+ 每 0.5 秒周期脉冲 + 水平速度硬上限**。
+     *
+     * <h2>为什么抽出来</h2>
+     * 玩家原话：「直升机好了。但是极乐恶魂以及其他的飞行载具都没有像直升机那样的同款急停。
+     * 导致漂移非常严重。」——七百三十一/七百三十二/七百四十三 那三记刹车**只写在直升机分支里**
+     * （{@code driveFlight} 的 {@code if (heli)} 块），于是飞艇（极乐恶魂/基洛夫）与固定翼/汤姆6
+     * 全程没有急停：它们松油后引擎每拍按 0.9~0.96 衰减（airShipEngine:1117、:1178），
+     * 到点后还会滑出很远，正是玩家看到的"漂移严重"。
+     *
+     * <h2>为什么对所有飞行档都安全</h2>
+     * 三件套只动**水平分量** {@code deltaMovement.x/z}，竖直分量一个字不碰（空中失去升力 = 掉高度）；
+     * 且减速方向对 SWB 的 {@code setDeltaMovement} 覆写体是**直通**的（只有加速且加速度 &gt; 8 才限幅，
+     * 反编译 {@code VehicleEntity:5474-5487}）——所以写小值安全（见 {@link #killHorizontal}）。
+     *
+     * @param hardBrake 这一拍是不是"到位了该刹死"（{@link #shouldHardBrake}）。飞艇档没有"到位"概念时可传
+     *                  {@code horiz <= FLIGHT_ARRIVE}
+     * @param fighting  她此刻在接敌盘旋——盘旋中绝不用 0.25 那种狠的（会把圈顿成碎步）
+     * @return 三个 {@code BRAKE_FLAG_*} 的位或（调用方据此打日志）
+     */
+    static int flightBrake(Entity mount, boolean hardBrake, boolean fighting) {
+        int flags = 0;
+        try {
+            if (hardBrake) {
+                killHorizontal(mount, HARD_BRAKE_RETAIN);
+                flags |= BRAKE_FLAG_HARD;
+            }
+            // 周期急停脉冲：与"到没到点"无关，一律每 10 拍（0.5 秒）收一次（七百三十三 去掉距离门槛）。
+            if (!hardBrake && brakePulseDue(mount)) {
+                killHorizontal(mount, fighting ? BRAKE_PULSE_RETAIN_FIGHT : BRAKE_PULSE_RETAIN);
+                flags |= BRAKE_FLAG_PULSE;
+            }
+            // 水平速度硬上限：只拦"超过设计包络的冲量"，正常巡航/绕圈不受影响。
+            capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
+            flags |= BRAKE_FLAG_CAP;
+        } catch (Throwable ignored) {
+        }
+        return flags;
     }
 
     /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
@@ -2572,6 +2761,195 @@ public final class MaidMountCompat {
         }
     }
 
+    /**
+     * 【实测七百四十五·点4】"当前模式没弹 → 换一个有弹的模式"。
+     *
+     * <h2>玩家原话（即规格）</h2>
+     * 「假设模式 A 可以发射 A 弹药，模式 B 可以发射 B 弹药，玩家初始给直升机的状态为模式 A，
+     * 但是只有 B 的子弹。那么女仆就不会操纵直升机发射弹药，必须要玩家手动调整到模式 B……应该
+     * 在没有发现链路之后，再检查一下其他模式有没有对应的弹药，然后考虑切换到那个模式。」
+     *
+     * <h2>SWB 的"模式"是两级（反编译实证）</h2>
+     * <ol>
+     *   <li><b>逐座武器</b>：一个座可挂多门炮，{@code getSelectedWeapon()} 记录每座选中的是哪门
+     *       （{@code getWeaponIndex/setWeaponIndex/getGunName(int,int)}，VehicleEntity:2795/2820/939）；</li>
+     *   <li><b>同一门炮的弹种</b>：{@code selectedAmmoType} 指向 {@code GunProp.AMMO_CONSUMER} 表里
+     *       第几项（{@code changeAmmoConsumer}，GunData:607）。</li>
+     * </ol>
+     * 两级都试：先换弹种（同一门炮）、再换炮。判据用 {@code AmmoConsumer.count(gunData, supplier)}
+     * 与 {@code currentAvailableAmmo}——它们与引擎 {@code canShoot} 内部用的是同一套账
+     * （{@code selectedAmmoConsumer().count()}），所以"我们说有弹"必然等于"引擎愿意开火"。
+     *
+     * @return true = 真的切了（调用方据此写日志）；false = 当前模式就有弹 / 切不动
+     */
+    static boolean ensureUsableAmmoMode(Entity mount, EntityMaid maid) {
+        try {
+            if (mount == null || mChangeAmmoConsumer == null || mGunGetProp == null
+                    || fGunPropAmmoConsumer == null) {
+                return false;
+            }
+            Entity supplier = mount;
+            if (mAmmoSupplier != null) {
+                try {
+                    Object s = mAmmoSupplier.invoke(mount);
+                    if (s instanceof Entity e) {
+                        supplier = e;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            final Entity sup = supplier;
+            // ---- ① 当前这一门炮：先看它自己有没有弹，没有就在它的弹种表里找一个有弹的 ----
+            String cur = gunNameFor(mount, maid);
+            if (cur == null) {
+                return false;
+            }
+            Object gd = gunDataOf(mount, cur);
+            if (gd == null) {
+                return false;
+            }
+            if (ammoAvailable(gd, sup)) {
+                return false; // 当前模式就有弹 → 一个字不改
+            }
+            Object consumers = mGunGetProp.invoke(gd, fGunPropAmmoConsumer.get(null));
+            int n = sizeOf(consumers);
+            for (int i = 0; i < n; i++) {
+                try {
+                    mChangeAmmoConsumer.invoke(gd, i, sup);
+                } catch (Throwable ignored) {
+                    continue;
+                }
+                if (ammoAvailable(gd, sup)) {
+                    ensureAmmo(mount, maid); // 换完顺手把弹匣装满
+                    com.maidsmart.tool.PromaidLog.log("模组坐骑·弹种", "「" + cur + "」当前弹种无弹 → 切到弹种 #" + i);                    return true;
+                }
+            }
+            // ---- ② 同一座里换一门炮（玩家说的"模式 A/B"多半是这一级）----
+            int seat = -1;
+            if (maid != null) {
+                seat = seatIndexOf(mount, maid);
+            }
+            if (seat < 0) {
+                seat = seatOfGun(mount, cur);
+            }
+            if (seat < 0 || mGetWeaponIndex == null || mSetWeaponIndex == null
+                    || mGetGunNameAtSeatWeapon == null) {
+                return false;
+            }
+            int curIdx = asInt(mGetWeaponIndex.invoke(mount, seat), -1);
+            int count = seatWeaponCount(mount, seat);
+            for (int w = 0; w < count; w++) {
+                if (w == curIdx) {
+                    continue;
+                }
+                String other = asString(mGetGunNameAtSeatWeapon.invoke(mount, seat, w));
+                if (other == null) {
+                    continue;
+                }
+                Object ogd = gunDataOf(mount, other);
+                if (ogd == null || !ammoAvailable(ogd, sup)) {
+                    continue;
+                }
+                mSetWeaponIndex.invoke(mount, seat, w);
+                ensureAmmo(mount, maid);
+                com.maidsmart.tool.PromaidLog.log("模组坐骑·换炮", "座 " + seat + " 当前武器「" + cur
+                        + "」无弹 → 切到「" + other + "」（第 " + w + " 门）");
+                return true;
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 这门炮**当前模式**下有没有可用弹药（与引擎 canShoot 同一套账）。
+     *
+     * <p>【为什么必须用 {@code selectedAmmoConsumer().count()} 而不是 {@code currentAvailableAmmo}】
+     * 反编译 {@code GunData:809} 实证：{@code currentAvailableAmmo} 在"不背包取弹"时返回的是
+     * **弹匣里现有几发**（{@code ammo.get()}），不是"这个模式配得上的弹药有多少"。而我们要判的是
+     * **"这个模式有没有对得上的弹药来源"**——弹匣空了但容器里有对得上的弹，那是"该装填"、
+     * 不是"该换模式"（装填由 {@link #ensureMagazineLoaded} 负责）。所以这里读
+     * {@code selectedAmmoConsumer()} 这个**当模式所用的 consumer** 再问它 {@code count()}——
+     * 与引擎 {@code hasEnoughAmmoToShoot → countBackupAmmo → countBackupAmmoItem} 完全同源。
+     * 弹匣现成有弹也算（{@code currentAvailableAmmo > 0}），两者取或。
+     */
+    private static boolean ammoAvailable(Object gd, Entity supplier) {
+        try {
+            if (gd == null) {
+                return false;
+            }
+            if (mGunCurrentAmmo != null) {
+                Object cur = mGunCurrentAmmo.invoke(gd, supplier);
+                if (cur instanceof Integer i && i > 0) {
+                    return true; // 弹匣/背包里现成有
+                }
+            }
+            if (mGunSelectedAmmo != null && mConsumerCount != null) {
+                Object consumer = mGunSelectedAmmo.invoke(gd);
+                if (consumer != null) {
+                    Object c = mConsumerCount.invoke(consumer, gd, supplier);
+                    if (c instanceof Integer i && i > 0) {
+                        return true; // 这个模式配得上的弹药存在（可装填）
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 某一座上挂了几门炮（{@code computed().seats().get(seat).weapons().size()}）。 */
+    private static int seatWeaponCount(Entity mount, int seat) {
+        try {
+            if (mComputed == null || seat < 0) {
+                return 0;
+            }
+            Object seats = seatsOf(mComputed.invoke(mount));
+            if (seats instanceof java.util.List<?> list && seat < list.size()) {
+                Object weapons = weaponsOf(list.get(seat));
+                if (weapons instanceof java.util.List<?> wl) {
+                    return wl.size();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0;
+    }
+
+    private static Object seatsOf(Object computed) {
+        try {
+            java.lang.reflect.Method m = computed.getClass().getMethod("seats");
+            return m.invoke(computed);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static Object weaponsOf(Object seatInfo) {
+        try {
+            if (seatInfo == null) {
+                return null;
+            }
+            java.lang.reflect.Method m = seatInfo.getClass().getMethod("weapons");
+            return m.invoke(seatInfo);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    private static int sizeOf(Object list) {
+        return list instanceof java.util.Collection<?> c ? c.size() : 0;
+    }
+
+    private static int asInt(Object v, int dflt) {
+        return v instanceof Integer i ? i : dflt;
+    }
+
+    private static String asString(Object v) {
+        return v instanceof String s && !s.isEmpty() ? s : null;
+    }
+
     /** 这门炮挂在哪个座上（反查）；找不到 → -1。 */
     private static int seatOfGun(Entity mount, String gunName) {
         try {
@@ -2771,6 +3149,10 @@ public final class MaidMountCompat {
                 return false;
             }
             ensureAmmo(mount, maid); // 弹匣空就自己上弹（不然 canShoot 为假、永远打不响）
+            // 【实测七百四十五·点4】当前模式（炮/弹种）没弹时，自动换到**有弹的那个模式**——
+            // 玩家原话「应该在没有发现链路之后，再检查一下其他模式有没有对应的弹药，然后考虑切换
+            // 到那个模式」。换完之后 gunNameFor 会取到新的那一门，所以下面的"瞄"与"打"自动跟上。
+            ensureUsableAmmoMode(mount, maid);
             // 【实测七百四十一·点2b/点3】全车只在这里选一次炮，后面"瞄"与"打"共用同一个名字。
             String gun = gunNameFor(mount, maid);
             if (gun == null) {

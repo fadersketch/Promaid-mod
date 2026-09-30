@@ -1,4 +1,58 @@
-﻿## 实测七百四十四【1.21.1 + 1.20.1 两树镜像：手册补章（仿创造飞行 1.20.1 侧 + 诡厄巫法位移聚晶 1.21.1 侧）+ 战斗章交叉引用去残】
+﻿## 实测七百四十五【1.21.1 + 1.20.1 两树镜像：飞行载具急停四类通用 + 空中炮艇真会起飞 + 载具没弹自动换模式 + 飞行聚晶补非 OP 入口】
+
+### 一、玩家四条原话
+
+1. 「你的意思是聚晶必须要使用指令这些 OP 权限才可以使用吗？常规生存不能使用？」
+2. 「直升机好了。但是极乐恶魂以及其他的飞行载具都没有像直升机那样的同款急停。导致漂移非常严重。」
+3. 「空中炮艇现在可以大致跟随主人的轨迹了，但它仍然飞不起来。」
+4. 「我发现女仆在操纵载具进行攻击的时候，它只会检查当前模式下是否存在对应的弹药，举个简单的例子，假设模式 A 可以发射 A 弹药，模式 B 可以发射 B 弹药，玩家初始给直升机的状态为模式 A，但是只有 B 的子弹。那么女仆就不会操纵直升机发射弹药，必须要玩家手动调整到模式 B，这就很烦。应该在没有发现链路之后，再检查一下其他模式有没有对应的弹药，然后考虑切换到那个模式。」
+
+### 二、飞行聚晶补非 OP 入口（1.21.1 侧）
+
+- **根因**：七百一十八 那一版把 Goety 位移聚晶**只**挂在了 `/maid_smart goety_*` 命令上，而那一批全部 `requires(hasPermission(2))`（OP 专属）。普通生存玩家即使身上真有飞行聚晶、也把女仆驯服了，**开不了这个功能**——只有服主能开。而"仿创造飞行"（同类飞行功能）一直有主人可用的路径。
+- **新增两条主人自己就能用的入口**（与"仿创造飞行"同口径）：
+  - 右键女仆 → 配置界面 → 第三行 **「飞行聚晶：开/关」**（`MaidConfigGoetyMixin`；布局：AI 记忆 y=8、创造飞行 y=22、飞行聚晶 y=36，三个按钮 164×13，都在 TLM 原生开关列 y=52 之上，互不遮挡）；
+  - 快捷键 **「切换女仆飞行聚晶自动档（准星对准她）」**（`MaidGoetyKeysClient`；默认未绑定，玩家自绑）。
+- **两条路开的是同一个东西**：她的**自动档**（`MaidGoetyAuto` 那个默认关的开关）。权限与仿创造飞行完全同口径：**主人本人或 OP**，且她在加载范围内、距离 8 格以内。**保真门禁照旧**——她身上没有飞行聚晶时直接告诉你缺哪一样、不给开。
+- 「立刻飞往某坐标/某目标」那种带参数的仍然只有 OP 命令。
+- 新增：`MaidGoetyNetworking`（C2S 切换 + S2C 状态）、`MaidGoetyKeysClient`、`MaidConfigGoetyMixin`（已进 `mixins.promaid.json` client 列表）、`MaidGoetyAuto` 加客户端缓存；lang 新增 `key.promaid.goety_toggle`（中英）。
+
+### 三、飞行载具急停四类通用 + 空中炮艇真会起飞（两树）
+
+- **急停不再专属直升机**（点2）：
+  - 根因：七百三十一/七百三十二/七百四十三 那三记刹车（**到位硬刹 + 每 0.5 秒周期脉冲 + 水平速度硬上限**）**只写在 `driveFlight` 的 `if (heli)` 块里**。飞艇（极乐恶魂/基洛夫）、固定翼、汤姆6 全程没有急停；它们松油后引擎每拍只按 0.9~0.96 衰减（反编译 `airShipEngine:1117`、`:1178`），到点还会滑出很远。
+  - 改法：抽成 `flightBrake(mount, hardBrake, fighting)`，**四种飞行档共用**（直升机/飞艇/固定翼/汤姆6）；`stopVehicle` 收手时也抹水平速度（`FLIGHT_STOP_RETAIN=0.15`）。**只动水平分量，竖直分量一个字不碰**（空中失去升力=掉高度）；减速方向对 SWB `setDeltaMovement` 是直通的，安全。
+- **空中炮艇（AC-130H）起飞**（点3）：
+  - 根因（反编译 `aircraftEngine` 实证，三条叠加）：① 俯仰**只在空中才写**（`:801 if(!onGround)`）⇒ 地面写 mouseY 是空操作；② 升力**正比当前速度**（`:877 upVec*…*speed*…`）⇒ 静止时 speed=0 → 升力恒 0；③ 地面推力也**正比当前速度**（`:702`），且地面摩擦 `f=0.497+0.45|dotView|`（`:701`）远大于推力。三条合起来=**它是一架要"跑道助跑"的真飞机，没有初速就永远起不来**；而唯一能让她停住盘旋的 loiter 又要求 `!onGround`（`baseTick:3845`）——**死锁**。
+  - 改法：贴地且确实要去某处时，**每拍写抬头角 20° + 直接补竖直速度 0.25/拍 + power 拉满 1.0 + 顺手写好 loiter 参数**，把 `onGround` 顶掉；一旦离地立刻交回引擎自己的俯仰/loiter。稳态推算：地面摩擦 f≈0.497、重力 0.06 ⇒ `v≈0.128 格/拍`（≈2.5 格/秒），足以离地、不冲天。日志新增「固定翼起飞助跑」。
+- 常量新增：`AIRCRAFT_TAKEOFF_PITCH=20°`、`AIRCRAFT_TAKEOFF_LIFT=0.25`、`FLIGHT_STOP_RETAIN=0.15`、`BRAKE_FLAG_*`。
+
+### 四、载具"当前模式没弹就自动换模式"（两树）
+
+- **玩家原话即规格**：模式 A 能发 A 弹、模式 B 能发 B 弹，玩家初始给的是 A 但只有 B 的子弹 → 女仆不开火。要求：**没发现链路之后，再检查其他模式有没有对应的弹药，然后切换到那个模式**。
+- **SWB 的"模式"是两级**（反编译实证）：
+  1. **逐座武器**：一个座可挂多门炮，`getSelectedWeapon()` 记录每座选中的是哪门（`getWeaponIndex(int)` / `setWeaponIndex(int,int)` / `getGunName(int,int)`，`VehicleEntity:2795/2820/939`）——玩家说的"模式 A/B"多半是这一级；
+  2. **同一门炮的弹种**：`selectedAmmoType` 指向 `GunProp.AMMO_CONSUMER` 表第几项（`changeAmmoConsumer(int,Entity)`，`GunData:607`）。
+- **实现**：`aimBallistic` 在 `ensureAmmo` 之后调 `ensureUsableAmmoMode(mount, maid)`：当前武器/弹种**真没弹**时 → 先在同一门炮里**换弹种** → 不行再**换到同一座上另一门有弹的炮**；换完立刻用新模式瞄+打。判据用 `AmmoConsumer.count(gunData, supplier)` 与 `currentAvailableAmmo`——与引擎 `canShoot` 内部同一套账（`hasEnoughAmmoToShoot → countBackupAmmo → countBackupAmmoItem`）。
+  - **关键修正**：`currentAvailableAmmo` 在"不背包取弹"时返回的是**弹匣里现有几发**（`GunData:809`），不是"这个模式配得上的弹药有多少"——所以判据必须读 `selectedAmmoConsumer().count()`（弹匣空了但容器里有对得上的弹=该装填，不是该换模式）。两者取或。
+- 新增反射：`getWeaponIndex(int)` / `setWeaponIndex(int,int)` / `getGunName(int,int)` / `GunProp.AMMO_CONSUMER` / `GunData.get(GunProp)` / `changeAmmoConsumer(int,Entity)` / `AmmoConsumer.count(GunData,Entity)`；新增日志「模组坐骑·弹种」「模组坐骑·换炮」。
+
+### 五、本批不动的东西
+
+- 不改物品/合成、不加新物品、不加开关键（沿用现有 `modMounts`/`modMountFire`/`airCombat`）。
+- 不动扫帚/空袭链路、不动原版兽那条 `GroundPathNavigation` 通路。
+- 飞行聚晶的**1.20.1 树适配**仍不在本批（七百一十八 已明确"需要时另起一批"）；本批 1.20.1 树只镜像了第二/三/四节那三项（急停/炮艇起飞/换模式）。
+- 版本仍是 v1.3.0(beta)（同名覆盖），**不发平台**。
+
+### 六、验证与交付
+
+- 两树 `javac` **0 错误**；`_mixchk.py` **PASS=183 SKIP=10 UNRES=0 FAIL=0**。
+- 两树 jar 重新构建（含 `verify_jar_classes.py` + lang json 校验）。
+- jar 内容核对：新文案（「急停四类通用」「固定翼起飞助跑」「模组坐骑·弹种」「飞行聚晶」非 OP 入口）进包、旧口径不在。
+- 三处部署目标（1.20.1 实例 / 1.20.1 服务端包 / 1.21.1 实例）SHA-256 全 MATCH。
+- 四份 changelog 镜像（根 `CHANGELOG.md` + 两棵树 `changelog.txt` + `store/version_changelog.md`）均加本段，保持各自 BOM+LF。
+
+## 实测七百四十四【1.21.1 + 1.20.1 两树镜像：手册补章（仿创造飞行 1.20.1 侧 + 诡厄巫法位移聚晶 1.21.1 侧）+ 战斗章交叉引用去残】
 
 > 版本号不变，仍是 v1.3.0(beta)。两树手册各补一段、同名 jar 覆盖；**不发平台**。
 > 本批**只动手册文本**（`GuideChaptersFlight` / `GuideChaptersCombat` 的章节字符串），

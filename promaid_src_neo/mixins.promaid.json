@@ -89,6 +89,7 @@
     "MaidFreeFlightAnimMixin",
     "MaidConfigFreeFlightMixin",
     "MaidFreeFlightAnimInvoker",
+    "MaidConfigGoetyMixin",
     "MaidModelPackSortMixin"
   ],
   "injectors": {

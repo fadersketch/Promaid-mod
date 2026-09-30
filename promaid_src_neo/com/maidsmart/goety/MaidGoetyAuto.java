@@ -50,6 +50,8 @@ public final class MaidGoetyAuto {
     private static final int CHECK_EVERY = 10;
 
     private static final Map<UUID, Integer> COUNTER = new HashMap<>();
+    /** 【实测七百四十五·点1】客户端缓存（服务端 S2C 广播写入）——界面/快捷键显示用（persistentData 不过网）。 */
+    private static final Map<String, Boolean> CLIENT_STATE = new HashMap<>();
     private static boolean hooked;
 
     private MaidGoetyAuto() {
@@ -82,6 +84,20 @@ public final class MaidGoetyAuto {
         if (!on) {
             MaidGoetyFlight.stop(maid, "自动已关");
         }
+    }
+
+    /* ---------------- 【实测七百四十五·点1】非 OP 路径：客户端缓存 ---------------- */
+
+    /** 客户端收到 S2C 状态包时写入（仅客户端）。 */
+    public static void pushClientState(String maidUuid, boolean value) {
+        if (maidUuid != null) {
+            CLIENT_STATE.put(maidUuid, value);
+        }
+    }
+
+    /** 客户端缓存的自动档状态（null = 未知）。 */
+    public static Boolean cachedClient(String maidUuid) {
+        return CLIENT_STATE.get(maidUuid);
     }
 
     /** 让位原因；null = 可以接管。 */

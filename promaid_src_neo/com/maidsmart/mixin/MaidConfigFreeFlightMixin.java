@@ -52,7 +52,7 @@ public abstract class MaidConfigFreeFlightMixin {
             // 界面打开时先问一次真实状态（persistentData 只在服务端，客户端缓存可能是空的）
             net.neoforged.neoforge.network.PacketDistributor.sendToServer(
                     new MaidFreeFlightNetworking.TogglePacket(uid, (byte) 0, false));
-            MaidConfigButton btn = new MaidConfigButton(w - 174, 26,
+            MaidConfigButton btn = new MaidConfigButton(w - 174, 22,
                     Component.literal("创造飞行"),
                     Component.literal(promaid$label(uid)),
                     b -> {
