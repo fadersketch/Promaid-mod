@@ -1,6 +1,7 @@
 package com.maidsmart.combat;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
@@ -279,6 +280,94 @@ public final class MaidAirCombat {
 
     /** 胡萝卜领先的下限弧长（格）——见 {@link #orbitPoint}。必须大于 {@code FLIGHT_ARRIVE}。 */
     private static final double MIN_LEAD = 4.0;
+
+    /* ==================== 实测七百三十八：地面载具接敌（贴着地绕敌人转） ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百三十八【女仆开陆地载具时接敌一动不动】。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆在骑乘陆地载具的时候，走位的方向仍然是朝着主人方向。如果主人坐上了车，那么女仆的
+     * 车子就会一点都不动了。……主要是在面对敌人的时候，主人坐上车以后，车还是一动不动，就很难绷了。
+     * 能不能在接敌后也采用直升机/扫帚那种绕圈的方式呢？撞墙以后自动反方向。」
+     *
+     * <h2>根因</h2>
+     * 接敌机动那一整套（{@link #combatTarget}）**只挂在"飞行载具"这一档**上：地面载具（车/坦克）
+     * 在 {@code RideBindManager.drive} 里根本不进那一支，永远只走"跟着主人走"的兜底——所以主人
+     * 一上车，她与主人的水平距离≈0，{@code stopBand} 立刻判"到了"→ 停车。敌人再近她也不动。
+     *
+     * <h2>本方法</h2>
+     * 与 {@link #orbitPoint} **同一套机制**（{@link CombatOrbit} 的旋向/快慢/半径、同一个"追逐式
+     * 胡萝卜"抗滞后），只把高度从「敌上 {@code fightAlt} 格」换成**敌人脚下的地面高度**——
+     * 地面载具本来就不该飞。旋向再乘一个 {@code MaidMountCompat.groundReverse}：撞墙/被卡住连拍
+     * 没位移时它会翻号（玩家原话「撞墙以后自动反方向」）。
+     *
+     * @param mount  她正开的载具（算方位用；她的位置≈载具座位）
+     * @return 目标点；{@code null} = 本档不管
+     */
+    public static Vec3 groundOrbitTarget(EntityMaid maid, Entity mount, LivingEntity target) {
+        if (maid == null || mount == null || target == null || !target.m_6084_()) {
+            return null;
+        }
+        try {
+            UUID id = maid.m_20148_();
+            double r = Math.max(GROUND_ORBIT_MIN, orbitRadiusCfg());
+            // 旋向 = 基准（UUID）× 每 8 秒随机掉头 × **撞墙反向**（最后一项目的是玩家点名要的）
+            double dir = CombatOrbit.direction(id) * CombatOrbit.flipSign(id)
+                    * MaidMountCompat.groundReverse(mount);
+            double spd = CombatOrbit.speedScale(id);
+            double lead = Math.max(MIN_LEAD, r * 0.85 * Math.max(0.5, spd));
+            double angCur = Math.atan2(mount.m_20189_() - target.m_20189_(),
+                    mount.m_20185_() - target.m_20185_());
+            double ang = angCur + dir * (lead / r);
+            double y = target.m_20186_(); // 地面档：贴着敌人的高度绕，不进"敌上 N 格"
+            if (firstOrbit(id)) {
+                log(maid, "接敌 → 开着地面载具贴着敌人绕圈（半径 " + fmt(r) + " 格，旋向 "
+                        + (dir > 0 ? "逆时针" : "顺时针") + "）");
+            }
+            return new Vec3(target.m_20185_() + Math.cos(ang) * r, y,
+                    target.m_20189_() + Math.sin(ang) * r);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /**
+     * 地面载具绕圈的最小半径（格）：比飞行档的默认 4 收一点——车/坦克车身大、转弯半径也大，
+     * 但太远就打不着了。取 2.5 让"贴着敌人"仍然成立。
+     */
+    private static final double GROUND_ORBIT_MIN = 2.5;
+
+    /**
+     * v1.3.0(beta) 实测七百三十八【玩家坐上副驾后直升机一直往上飞】。
+     *
+     * <h2>玩家原话</h2>
+     * 「如果女仆乘坐的是直升机且玩家坐副驾驶，那结果就更糟糕了，因为会跟之前的代码冲突
+     * （女仆开的直升机必须要在玩家的上面），导致女仆必须要一直往上飞。建议改为玩家乘坐以后就
+     * 悬停。锁敌的时候正常。」
+     *
+     * <h2>根因</h2>
+     * 跟随档的高度基准是**主人的 Y**（{@code hoverAt(…, owner.getY())}，七百三十三 定的口径）。
+     * 玩家一旦坐上这架直升机，{@code owner.getY()} 就等于**机身自己的 Y**——于是目标高度 =
+     * 她自己的高度 + {@code followAlt}，她每贴一次就被抬高，形成**每拍 +N 的棘轮**，永远往上飞
+     * （七百三十四 修的是"拿她自己的 Y 当基准"，没覆盖"主人与她在同一台机器上"这一档）。
+     *
+     * <h2>修法</h2>
+     * 玩家在机上时**不追任何高度基准**，直接悬停在**她现在的位置**（水平 + 竖直都保持）。
+     * 接敌那一档完全不受影响（照旧爬升到敌上、绕圈）——正是玩家要的"锁敌的时候正常"。
+     *
+     * @return 她自己当前的位置（悬停点）
+     */
+    public static Vec3 holdHere(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            return new Vec3(maid.m_20185_(), maid.m_20186_(), maid.m_20189_());
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
 
     /** 这一场遭遇里"她是不是第一次绕到这个圈上"（用于每场只写一行「接敌」）。 */
     private static boolean firstOrbit(UUID id) {

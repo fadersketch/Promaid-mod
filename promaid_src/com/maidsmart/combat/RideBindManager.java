@@ -500,11 +500,8 @@ public final class RideBindManager {
             if (!holdsBaton(player)) {
                 return; // 手里不是骑乘指挥棒 → 原版一字不动
             }
-            // 【实测七百三十七·双人座】放行"主人坐自己女仆开的车的副驾"：女仆在 0 号座，
-            // 玩家进的是空着的副驾，不构成"抢驾驶位"。
-            if (allowsOwnerPassengerSeat(player, event.getEntityBeingMounted())) {
-                return;
-            }
+            // 【实测七百三十八·指挥棒绝不登乘】手里拿着指挥棒 = 一律拦下（含副驾）。
+            // 空手坐副驾那条路不受影响（handlePassengerSeat 里不查手里拿什么）。
             event.setCanceled(true);
             PlayerMountLog.throttled(player);
         } catch (Throwable ignored) {
@@ -572,11 +569,10 @@ public final class RideBindManager {
                     || MaidRideKit.isBroom(vehicle)) {
                 return false;
             }
-            // 【实测七百三十七·双人座】放行"主人坐自己女仆开的车的副驾"：女仆在 0 号座，
-            // 玩家进的是空着的副驾，不构成"抢驾驶位"，正是这条独占档要防的反面。
-            if (allowsOwnerPassengerSeat(player, vehicle)) {
-                return false;
-            }
+            // 【实测七百三十八·指挥棒绝不登乘】玩家原话：「我们的骑乘指挥棒有最高的优先级，
+            // 如果拿骑乘指挥棒进行右击，那么就不会坐上副驾驶，只会有他的解绑功能，绝对不会乘坐。」
+            // 所以这里**删掉了 737 那道"放行主人坐副驾"的豁口**——手里拿着指挥棒的玩家，一律
+            // 拦下登乘（包括副驾）。想坐副驾请**空手**右击（那条路仍然通，见 handlePassengerSeat）。
             PlayerMountLog.throttled(player);
             return true;
         } catch (Throwable ignored) {
@@ -720,19 +716,10 @@ public final class RideBindManager {
             // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
             EntityMaid rider = MaidRideKit.riderOf(target);
             if (rider != null && ownable(player, rider) && MaidRideKit.isRideRider(rider)) {
-                // 【实测七百三十七·双人座】先试"主人坐上副驾"（玩家原话：「我考虑到卓越前线有一些
-                //  载具是分为双人座的，能否考虑在女仆乘坐后主人右击的时候登上副驾驶座呢？」）。
-                //  只有车**还有空座**时才走这条；坐满了（或单座车）仍旧退回下面那句"再选一次 = 解除"。
-                if (MaidMountCompat.kindOf(target) == MaidMountCompat.Kind.VEHICLE
-                        && MaidMountCompat.firstFreeSeatExcept(target, rider) >= 0
-                        && MaidMountCompat.boardOwnerAsPassenger(target, player, rider)) {
-                    player.m_213846_(Component.m_237113_("\u00a7a已坐上副驾驶～\u00a7f（"
-                            + MaidRideKit.describe(target) + "\u00a7f 由她开）"));
-                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "主人上副驾："
-                            + MaidRideKit.describe(target) + "（玩家=" + name(player)
-                            + "，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(rider) + " 仍在驾驶位）");
-                    return;
-                }
+                // 【实测七百三十八·指挥棒绝不登乘】玩家原话：「我们的骑乘指挥棒有最高的优先级，
+                // 如果拿骑乘指挥棒进行右击，那么就不会坐上副驾驶，只会有他的解绑功能，绝对不会乘坐。」
+                // 所以这里**删掉了 737 那个"先试坐上副驾"的分支**——拿着指挥棒右击自己女仆开的车，
+                // 只有一种结果：解绑（下面那句 releaseMaid）。想坐副驾请空手右击（那条路没变）。
                 releaseMaid(rider, false, "再选一次");
                 return;
             }
@@ -1608,6 +1595,19 @@ public final class RideBindManager {
                     air = MaidAirCombat.combatTarget(maid, foe);
                 } else {
                     MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
+                    // 【实测七百三十八·玩家坐副驾】玩家原话：「如果女仆乘坐的是直升机且玩家坐
+                    // 副驾驶……导致女仆必须要一直往上飞。建议改为玩家乘坐以后就悬停。」
+                    // 根因：跟随档的高度基准是**主人的 Y**，玩家一上机，owner.getY() == 机身自己的
+                    // Y → 目标高度 = 她自己的高度 + followAlt，每拍 +N 的棘轮，永远往上飞。
+                    // 所以"机上有玩家"这一档不追任何基准，直接悬停在她现在的位置（水平+竖直都保持）；
+                    // 接敌那一支在上面，完全不受影响（玩家要的"锁敌的时候正常"）。
+                    if (MaidMountCompat.hasPlayerAboard(mount)) {
+                        air = MaidAirCombat.holdHere(maid);
+                        if (air != null) {
+                            MaidRideKit.feedNavigation(mount, air, mod, maid);
+                            return;
+                        }
+                    }
                     // 跟随：**高度基准永远是主人**（比主人高三格，七百三十三 玩家纠正口径）。
                     // 【实测七百三十四·棘轮修正】七百三十三 这一档"够近就原地悬停"错误地把基准
                     // 传成了**她自己的 Y**，于是目标 = 她现在的高度 + 3 ——她每贴到一次就被抬高
@@ -1624,6 +1624,33 @@ public final class RideBindManager {
                     MaidRideKit.feedNavigation(mount, air, mod, maid);
                     // 朝向交给驾驶层：飞行档按"目标方位 vs 机头"写鼠标 X 通道（driveFlight 里）
                     return;
+                }
+            }
+            // 【实测七百三十八·地面载具接敌】玩家原话：「女仆在骑乘陆地载具的时候，走位的方向
+            // 仍然是朝着主人方向。……主要是在面对敌人的时候，主人坐上车以后，车还是一动不动，
+            // 就很难绷了。能不能在接敌后也采用直升机/扫帚那种绕圈的方式呢？撞墙以后自动反方向。」
+            // 根因：接敌机动那一整套此前**只挂在飞行载具那一支**上，地面载具永远走"跟着主人走"
+            // 的兜底——主人一上车，距离≈0 → 立刻判"到了" → 停车，敌人再近也不动。
+            // 这里给地面载具补同一套绕圈（同一段 CombatOrbit 状态机、同一个"追逐式胡萝卜"），
+            // 高度贴着敌人、撞墙/卡住自动反向（见 MaidAirCombat.groundOrbitTarget 与
+            // MaidMountCompat.groundReverse）。
+            if (MaidAirCombat.enabled() && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
+                    && !MaidMountCompat.isFlyingVehicle(mount)) {
+                LivingEntity gfoe = FlightTargeting.resolve(maid);
+                if (gfoe == null) {
+                    gfoe = targetOf(maid);
+                }
+                if (gfoe != null && maid.m_20280_(owner) > FlightTargeting.RANGE) {
+                    gfoe = null; // 与飞行档同一道"主人不在场就收手"的闸（口径只有一处）
+                }
+                if (gfoe != null && gfoe.m_6084_() && gfoe.m_9236_() == maid.m_9236_()) {
+                    Vec3 gair = MaidAirCombat.groundOrbitTarget(maid, mount, gfoe);
+                    if (gair != null) {
+                        MaidRideKit.feedNavigation(mount, gair, mod, maid);
+                        return;
+                    }
+                } else {
+                    MaidAirCombat.clear(maid);
                 }
             }
             // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源

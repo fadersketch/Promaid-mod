@@ -2768,4 +2768,95 @@ public final class MaidMountCompat {
             return false;
         }
     }
+
+    /* ==================== 实测七百三十八：地面载具接敌 + 玩家在机上 ==================== */
+
+    /**
+     * 【实测七百三十八】这台载具上**除了女仆之外**是不是坐着玩家（主人坐进副驾了）。
+     *
+     * <p>玩家原话：「如果女仆乘坐的是直升机且玩家坐副驾驶……导致女仆必须要一直往上飞。
+     * 建议改为玩家乘坐以后就悬停。」——判据只看"有没有玩家乘客"，不问是哪位玩家：
+     * 直升机是这台机器，机上有玩家就该稳在原地（见 {@code MaidAirCombat.holdHere}）。
+     *
+     * <p>为什么用 {@code instanceof Player} 而不是比 UUID：这一档的语义是"这架飞机上有人"，
+     * 与"是不是主人"无关（别人坐进来也一样该悬停，否则同样会顶着玩家往上飞）。
+     */
+    public static boolean hasPlayerAboard(Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            for (Entity p : mount.getPassengers()) {
+                if (p instanceof net.minecraft.world.entity.player.Player) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /**
+     * 【实测七百三十八】地面载具接敌绕圈的**撞墙反向**符号（{@code ±1}）。
+     *
+     * <p>玩家原话：「撞墙以后自动反方向。」——引擎自己不会掉头：它只会照着我们的输入位死顶，
+     * 于是车卡在墙边原地磨。这里按"位置几乎没动"来判卡住：连续 {@link #GROUND_STALL_TICKS} 拍
+     * 位移小于 {@link #GROUND_STALL_EPS} 格就翻一次号，绕圈方向随之调头，她就从墙边绕出去。
+     *
+     * <p>为什么用"位移"而不是引擎的碰撞标志：SWB 载具的 {@code horizontalCollision} 在它自己的
+     * {@code travel} 里被改写、且被我们每拍的 {@code setDeltaMovement} 干扰，判不稳；位移是最终
+     * 事实，且对"顶墙 / 顶在别的实体上 / 被地形卡住"三种情形一视同仁。
+     *
+     * <p>表按 UUID 记，与其它频限表同口径（超限整表清）。
+     */
+    public static double groundReverse(Entity mount) {
+        try {
+            if (mount == null) {
+                return 1.0;
+            }
+            java.util.UUID id = mount.getUUID();
+            double x = mount.getX();
+            double z = mount.getZ();
+            double[] prev = GROUND_LAST.get(id);
+            int stall = GROUND_STALL.getOrDefault(id, 0);
+            double sign = GROUND_SIGN.getOrDefault(id, 1.0);
+            if (prev != null) {
+                double mv = Math.sqrt((x - prev[0]) * (x - prev[0]) + (z - prev[1]) * (z - prev[1]));
+                if (mv < GROUND_STALL_EPS) {
+                    stall++;
+                } else {
+                    stall = 0;
+                }
+                if (stall >= GROUND_STALL_TICKS) {
+                    stall = 0;
+                    sign = -sign;
+                    logDrive(mount, "地面接敌：连续 " + GROUND_STALL_TICKS
+                            + " 拍几乎没动（撞墙/卡住）→ 绕圈方向调头 " + (sign > 0 ? "逆时针" : "顺时针"));
+                }
+            }
+            if (GROUND_LAST.size() > 512) {
+                GROUND_LAST.clear();
+                GROUND_STALL.clear();
+                GROUND_SIGN.clear();
+            }
+            GROUND_LAST.put(id, new double[]{x, z});
+            GROUND_STALL.put(id, stall);
+            GROUND_SIGN.put(id, sign);
+            return sign;
+        } catch (Throwable ignored) {
+            return 1.0;
+        }
+    }
+
+    /** 撞墙判据：连续这么多拍位移小于 {@link #GROUND_STALL_EPS} 格 → 调头。0.5 秒。 */
+    private static final int GROUND_STALL_TICKS = 10;
+    /** "几乎没动"的每拍位移阈值（格）：0.02 ≈ 每秒 0.4 格，只有真卡住才会低于它。 */
+    private static final double GROUND_STALL_EPS = 0.02;
+
+    private static final java.util.Map<java.util.UUID, double[]> GROUND_LAST =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<java.util.UUID, Integer> GROUND_STALL =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final java.util.Map<java.util.UUID, Double> GROUND_SIGN =
+            new java.util.concurrent.ConcurrentHashMap<>();
 }
