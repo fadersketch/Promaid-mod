@@ -2068,14 +2068,6 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
                 + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]";
         Item __took = com.maidsmart.tool.MaidBuildBlockFilter.takeBuildBlock(__inv, __hands, null, null,
                 com.maidsmart.combat.BombPose.offhandBorrowed(maid));
-        com.maidsmart.tool.MaidProbe.take("maid." + maid.getUUID(), "mine",
-                com.maidsmart.tool.MaidBuildBlockFilter.probeItem(__took),
-                com.maidsmart.combat.BombPose.isShowing(maid),
-                com.maidsmart.tool.MaidBuildBlockFilter.probeStack(
-                        com.maidsmart.combat.BombPose.savedOffhand(maid)),
-                __c0,
-                com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(__inv, __hands)
-                        + " hands[" + com.maidsmart.tool.MaidBuildBlockFilter.probeHands(__hands) + "]");
         return __took;
     }
 

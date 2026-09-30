@@ -90,7 +90,6 @@ public class MaidToolAutoEquipBehavior extends Behavior<EntityMaid> {
             // 活动范围内/有视线）并落盘，用来定位"到底哪一环把目标滤掉了"。
             // 挂在本 core 行为上（任何 activity 都跑、每 tick 一次）是为了拿到
             // 真实的排班活动字段——搜索盒子正是按它分流的。有目标时静默。
-            com.maidsmart.combat.FlightTargetProbe.tick(maid);
             // v1.2.0 实测五百四十七【空袭牵引绳】：空袭期间以她为圆心、半径 N 格（默认 100，
             // 配置 combat.flightRecallDistance，0=关闭）的球内找不到主人 → 立刻传送回主人身边
             // （与排班表的人工传送同一条强制链路）。

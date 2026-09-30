@@ -26,15 +26,6 @@ import java.util.List;
 public class GuideScreen extends Screen {
     private static final int VIEW_CHAPTERS = 0;
     private static final int VIEW_READ = 1;
-    // 实测四百二十三【已停用】：手册内的两个开关页入口已移除——要求
-    // 「所有开关统一扔进模组详细配置界面，不得出现在其它地方」。下面两个常量与
-    // 对应的 settingsButtons/voiceButtons/commit* 方法已不可达（保留仅为回滚方便）。
-    //   自动复活/回魂符 → 模组详细配置 · 生存与复活 · 死亡与复活
-    //   内置日语语音包   → 模组详细配置 · 语音与显示 · 语音与 TTS
-    @Deprecated
-    private static final int VIEW_SETTINGS = 2;
-    @Deprecated
-    private static final int VIEW_VOICE = 3;
 
     private static final int CONTENT_TOP = 52;
     /** 行高（正文逐行渲染） */
@@ -84,14 +75,7 @@ public class GuideScreen extends Screen {
     /** 更新日志章节下标（chapters() 里动态构造，防静态顺序漂移） */
     private static int changelogIndex = -1;
 
-    /**
-     * 设置页输入状态（延迟提交，照 PromaidConfigScreen 的做法：输入时只记文本、
-     * 不写配置）；离开设置页/关闭界面时统一写入 + SPEC.save()。
-     * key: "delay"=复活延迟秒, "ratio"=复活血量比
-     */
-    private final java.util.Map<String, String> settingsPending = new java.util.HashMap<>();
     /** 自跟踪焦点（同配置面板：键盘输入直接转发给点击过的输入框） */
-    private EditBox activeBox = null;
 
     public GuideScreen(Screen parent) {
         super(Component.literal("Promaid 详细介绍"));
@@ -108,15 +92,10 @@ public class GuideScreen extends Screen {
     @Override
     protected void init() {
         this.clearWidgets(); // clearWidgets
-        this.activeBox = null; // 控件重建后旧焦点作废（同配置面板）
         int w = this.width;
         int h = this.height;
         int cx = w / 2;
-        if (this.view == VIEW_SETTINGS) {
-            this.settingsButtons(w, h, cx);
-        } else if (this.view == VIEW_VOICE) {
-            this.voiceButtons(w, h, cx);
-        } else if (this.view == VIEW_READ) {
+        if (this.view == VIEW_READ) {
             this.readButtons(w, h, cx);
         } else {
             this.chaptersButtons(w, h, cx);
@@ -177,190 +156,6 @@ public class GuideScreen extends Screen {
         //   内置日语语音包     → 语音与显示 · 语音与 TTS
     }
 
-    // ================= 自动复活设置 =================
-
-    /**
-     * 设置页布局（控件与渲染共用同一套坐标，防两处算法漂移）：
-     * 返回 {开关y, 延迟y, 血量y, 保存按钮y, 说明文字y}。
-     * 行高按窗口高自适应压缩，任意常见窗口不越界（照配置面板目录页模式）。
-     */
-    private int[] settingsLayout() {
-        int h = this.height;
-        int rowH = h < 200 ? 26 : 32;
-        int top = Math.max(56, Math.min(88, h - rowH * 3 - 70));
-        int switchY = top;
-        int delayY = top + rowH;
-        int ratioY = top + rowH * 2;
-        int saveY = top + rowH * 3 + 8;
-        int noteY = saveY + 30;
-        return new int[]{switchY, delayY, ratioY, saveY, noteY};
-    }
-
-    /**
-     * 自动复活设置页（反馈："自动复活功能应该在手册里面也能够调整 CD 和开关"）。
-     * 手册里直接改，不用跳到配置面板：总开关即时写入（同配置面板 BoolRow），
-     * 两个数字框延迟到离开本页时统一写（照配置面板：输入路径零配置写入），
-     * 写完 SPEC.save() 落盘。
-     */
-    private void settingsButtons(int w, int h, int cx) {
-        int labelW = 130;
-        int fieldW = 120;
-        int left = cx - (labelW + 8 + fieldW) / 2;
-        int fieldX = left + labelW + 8;
-        int[] lay = this.settingsLayout();
-
-        // ① 总开关（标签画在左侧，按钮本身只显示"开/关"）
-        final boolean enabled = com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.get();
-        this.addRenderableWidget(Button.builder(Component.literal(enabled ? "\u00a7a开" : "\u00a77关"),
-                        b -> {
-                            com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_ENABLE.set(!enabled);
-                            this.init(); // 重建以刷新按钮文字
-                        })
-                .bounds(fieldX, lay[0], fieldW, 20).build());
-
-        // ② 复活延迟（秒）
-        this.addRenderableWidget(this.settingsBox("delay", fieldX, lay[1], fieldW,
-                String.valueOf(com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.get())));
-
-        // ③ 复活血量比
-        this.addRenderableWidget(this.settingsBox("ratio", fieldX, lay[2], fieldW,
-                String.valueOf(com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.get())));
-
-        this.addRenderableWidget(Button.builder(Component.literal("\u00a7a保存并返回目录"),
-                        b -> {
-                            this.commitSettings();
-                            this.view = VIEW_CHAPTERS;
-                            this.init();
-                        })
-                .bounds(cx - 70, lay[3], 140, 20).build());
-        // 左上角返回（同样提交）
-        this.addRenderableWidget(Button.builder(Component.literal("← 返回"),
-                        b -> {
-                            this.commitSettings();
-                            this.view = VIEW_CHAPTERS;
-                            this.init();
-                        })
-                .bounds(8, 8, 70, 16).build());
-    }
-
-    private EditBox settingsBox(String key, int x, int y, int w, String initial) {
-        EditBox box = new EditBox(this.font, x, y, w, 20, Component.literal(key));
-        box.setMaxLength(16);
-        String pending = this.settingsPending.get(key);
-        box.setValue(pending != null ? pending : initial);
-        box.setResponder(s -> {
-            this.settingsPending.put(key, s);
-            box.setTextColor(isNumberText(s) ? 0xFFFFFF : 0xFFFF5555);
-        });
-        return box;
-    }
-
-    // ================= 内置日语语音包设置 =================
-
-    /**
-     * v1.1.0 实测四百二十：内置日语语音包设置页（反馈："可以在手册里调整开关和音量大小
-     * 以及最小间隔"）。开关即时写；音量/最小间隔延迟到离开本页统一写（同复活设置页）。
-     */
-    private void voiceButtons(int w, int h, int cx) {
-        int labelW = 150;
-        int fieldW = 120;
-        int left = cx - (labelW + 8 + fieldW) / 2;
-        int fieldX = left + labelW + 8;
-        int[] lay = this.settingsLayout();
-
-        final boolean enabled = com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_ENABLED.get();
-        this.addRenderableWidget(Button.builder(Component.literal(enabled ? "\u00a7a开" : "\u00a77关"),
-                        b -> {
-                            com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_ENABLED.set(!enabled);
-                            this.init();
-                        })
-                .bounds(fieldX, lay[0], fieldW, 20).build());
-
-        this.addRenderableWidget(this.settingsBox("voiceVol", fieldX, lay[1], fieldW,
-                String.valueOf(com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_VOLUME.get())));
-
-        this.addRenderableWidget(this.settingsBox("voiceGap", fieldX, lay[2], fieldW,
-                String.valueOf(com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_MIN_INTERVAL_S.get())));
-
-        this.addRenderableWidget(Button.builder(Component.literal("\u00a7a保存并返回目录"),
-                        b -> {
-                            this.commitVoiceSettings();
-                            this.view = VIEW_CHAPTERS;
-                            this.init();
-                        })
-                .bounds(cx - 70, lay[3], 140, 20).build());
-        this.addRenderableWidget(Button.builder(Component.literal("← 返回"),
-                        b -> {
-                            this.commitVoiceSettings();
-                            this.view = VIEW_CHAPTERS;
-                            this.init();
-                        })
-                .bounds(8, 8, 70, 16).build());
-    }
-
-    /** 语音设置页的待提交文本写入配置并落盘（越界钳制；非法/空跳过） */
-    private void commitVoiceSettings() {
-        String v = this.settingsPending.get("voiceVol");
-        if (isNumberText(v)) {
-            try {
-                double d = Double.parseDouble(v.trim());
-                d = Math.max(0.1, Math.min(5.0, d));
-                com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_VOLUME.set(d);
-            } catch (Exception ignored) {
-            }
-        }
-        String g = this.settingsPending.get("voiceGap");
-        if (isNumberText(g)) {
-            try {
-                long n = Math.round(Double.parseDouble(g.trim()));
-                n = Math.max(0, Math.min(60, n));
-                com.maidsmart.config.MaidSmartConfig.TTS_JAR_PACK_MIN_INTERVAL_S.set((int) n);
-            } catch (Exception ignored) {
-            }
-        }
-        try {
-            com.maidsmart.config.MaidSmartConfig.SPEC.save();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static boolean isNumberText(String s) {
-        if (s == null || s.trim().isEmpty()) {
-            return false;
-        }
-        try {
-            Double.parseDouble(s.trim());
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    /** 待提交文本写入配置并落盘（非法/空文本跳过保留原值；越界钳制到声明范围） */
-    private void commitSettings() {
-        String d = this.settingsPending.get("delay");
-        if (isNumberText(d)) {
-            try {
-                long v = Math.round(Double.parseDouble(d.trim()));
-                v = Math.max(1, Math.min(86400, v));
-                com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_DELAY_SECONDS.set((int) v);
-            } catch (Exception ignored) {
-            }
-        }
-        String r = this.settingsPending.get("ratio");
-        if (isNumberText(r)) {
-            try {
-                double v = Double.parseDouble(r.trim());
-                v = Math.max(0.05, Math.min(1.0, v));
-                com.maidsmart.config.MaidSmartConfig.AUTO_RESURRECT_HEALTH_RATIO.set(v);
-            } catch (Exception ignored) {
-            }
-        }
-        try {
-            com.maidsmart.config.MaidSmartConfig.SPEC.save();
-        } catch (Exception ignored) {
-        }
-    }
 
     // ================= 章节阅读 =================
 
@@ -629,62 +424,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         graphics.fill(bandL, 4, bandR, 14, 0xFF2C5F9E);      // 顶部饰条：靛蓝
         graphics.fill(bandL, 4 + 10, bandR, 14 + 1, 0x80D4A017); // 金线
         int h2 = this.height;
-        if (this.view == VIEW_SETTINGS) {
-            this.drawCentered(graphics, "\u00a7e女仆自动复活 · 设置", 36, 0xFFFFFF);
-            int labelW = 130;
-            int fieldW = 120;
-            int left = this.width / 2 - (labelW + 8 + fieldW) / 2;
-            int[] lay = this.settingsLayout();
-            this.drawLabel(graphics, "\u00a7e女仆自动复活", left, lay[0] + 6);
-            this.drawLabel(graphics, "\u00a7e复活延迟（秒）", left, lay[1] + 6);
-            this.drawLabel(graphics, "\u00a7e复活血量比", left, lay[2] + 6);
-            // 说明文字：窗口太矮时按可用高度逐行取舍（防压出屏/压住保存按钮）
-            int ny = lay[4];
-            String[] notes = {
-                    "死后墓碑到期自动消失，女仆在主人重生点复活（关掉 = TLM 原版死亡流程）",
-                    "复活延迟：墓碑存在多久才自动消失并复活，默认 60（范围 1~86400）",
-                    "复活血量比：复活时恢复的血量比例，1.0 = 满血，0.35 = 35%（范围 0.05~1.0）",
-                    "\u00a77填完按「保存并返回目录」；非法/空文本跳过并保留原值。",
-                    "\u00a77同一组参数也在「模组详细配置 → 战斗自保 → 女仆自动复活」。",
-            };
-            int room = (this.height - 6 - ny) / 12;
-            for (int i = 0; i < notes.length; i++) {
-                if (i >= room) {
-                    break;
-                }
-                if (i >= 3 && room < 5) {
-                    break;
-                }
-                this.drawNote(graphics, notes[i], ny + i * 12);
-            }
-        } else if (this.view == VIEW_VOICE) {
-            this.drawCentered(graphics, "\u00a7e内置日语语音包 · 设置", 36, 0xFFFFFF);
-            int labelW = 150;
-            int fieldW = 120;
-            int left = this.width / 2 - (labelW + 8 + fieldW) / 2;
-            int[] lay = this.settingsLayout();
-            this.drawLabel(graphics, "\u00a7e启用内置语音包", left, lay[0] + 6);
-            this.drawLabel(graphics, "\u00a7e音量倍率", left, lay[1] + 6);
-            this.drawLabel(graphics, "\u00a7e最小间隔（秒）", left, lay[2] + 6);
-            int ny = lay[4];
-            String[] notes = {
-                    "触发系统消息时自动播放日语语音（122 条）；优先级高于 TLM 原生语音包",
-                    "音量倍率：1.0 = 原始音量（范围 0.1~5.0），与 TTS 音量倍率相乘",
-                    "最小间隔：同一女仆两次播放的最小间隔（秒，范围 0~60，默认 8）",
-                    "\u00a77填完按「保存并返回目录」；非法/空文本跳过并保留原值。",
-                    "\u00a77播放期间会暂压 TLM 原生语音包，播放完自动解除（可在配置面板关）。",
-            };
-            int room = (this.height - 6 - ny) / 12;
-            for (int i = 0; i < notes.length; i++) {
-                if (i >= room) {
-                    break;
-                }
-                if (i >= 3 && room < 5) {
-                    break;
-                }
-                this.drawNote(graphics, notes[i], ny + i * 12);
-            }
-        } else if (this.view == VIEW_READ) {
+        if (this.view == VIEW_READ) {
             com.maidsmart.guide.GuideContent.Chapter[] chs = com.maidsmart.guide.GuideContent.chapters();
             if (this.reading >= 0 && this.reading < chs.length) {
                 this.drawCentered(graphics, "\u00a7e" + chs[this.reading].title, 36, 0xFFFFFF);
@@ -697,7 +437,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         // 页码（v1.1.0 实测二十五：画在两箭头中间 h-26 行——箭头 20px 在两侧，
         // 页码居中，任意文本长度不与按钮重叠）；设置页无分页，不画
         int totalPages = this.currentPages();
-        if (totalPages > 1 && this.view != VIEW_SETTINGS && this.view != VIEW_VOICE) {
+        if (totalPages > 1) {
             int page = this.view == VIEW_READ ? this.readPage : this.chapterPage;
             this.drawCentered(graphics, "\u00a77第 " + (page + 1) + "/" + totalPages + " 页",
                     h - 26, 0xAAAAAA);
@@ -708,9 +448,6 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
     /** 当前视图总页数 */
     private int currentPages() {
         int h = this.height;
-        if (this.view == VIEW_SETTINGS || this.view == VIEW_VOICE) {
-            return 1; // 设置页无分页
-        }
         if (this.view == VIEW_READ) {
             int perPage = Math.max(5, (h - 56 - CONTENT_TOP) / LINE_H);
             return Math.max(1, (this.lines.size() + perPage - 1) / perPage);
@@ -771,12 +508,7 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
         }
     }
 
-    /**
-     * 点击输入框立即聚焦（照 PromaidConfigScreen：容器事件顺序/命中区域差异会
-     * 导致"点不进输入框"，这里显式 setFocused + 记录 activeBox，键盘输入再直接
-     * 转发给它）。
-     */
-    @Override
+        @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         // 实测四百二十四：先判链接命中（最近一次渲染记下的框）
         if (button == 0 && this.view == VIEW_READ) {
@@ -788,38 +520,11 @@ public void render(net.minecraft.client.gui.GuiGraphics graphics, int mouseX, in
                 }
             }
         }
-        if (button == 0 && (this.view == VIEW_SETTINGS || this.view == VIEW_VOICE)) {
-            for (net.minecraft.client.gui.components.events.GuiEventListener c : this.children()) {
-                if (c instanceof EditBox eb && eb.isMouseOver(mouseX, mouseY)) {
-                    eb.setFocused(true);
-                    this.activeBox = eb;
-                }
-            }
-        }
         return super.mouseClicked(mouseX, mouseY, button);
     }
 
     @Override
-    public boolean charTyped(char codePoint, int modifiers) {
-        if (this.activeBox != null && this.activeBox.charTyped(codePoint, modifiers)) {
-            return true;
-        }
-        return super.charTyped(codePoint, modifiers);
-    }
-
-    @Override
-    public boolean keyPressed(int key, int scanCode, int modifiers) {
-        if (this.activeBox != null && this.activeBox.keyPressed(key, scanCode, modifiers)) {
-            return true;
-        }
-        return super.keyPressed(key, scanCode, modifiers);
-    }
-
-    @Override
     public void onClose() {
-        // 关闭界面（含 ESC / 返回）时提交未保存的设置，避免编辑丢失
-        this.commitSettings();
-        this.commitVoiceSettings();
         super.onClose();
         Minecraft.getInstance().setScreen(this.parent);
     }

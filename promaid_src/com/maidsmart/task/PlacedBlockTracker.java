@@ -201,13 +201,6 @@ public final class PlacedBlockTracker {
                 try {
                     net.minecraft.world.entity.LivingEntity __m = owner == null ? null : owner.m_269323_();
                     if (__m != null) {
-                        com.maidsmart.tool.MaidProbe.expireUnderMaster(
-                                "maid." + owner.m_20148_(), pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_(), mark.blockId(),
-                                __m.m_20185_() - (pos.m_123341_() + 0.5),
-                                __m.m_20186_() - (pos.m_123342_() + 0.5),
-                                __m.m_20189_() - (pos.m_123343_() + 0.5),
-                                this.masterOnBlock(owner, level, pos), this.refreshOnOwnerStand,
-                                String.valueOf(__m.m_20148_()));
                     }
                 } catch (Throwable ignored) {
                 }
@@ -372,9 +365,6 @@ public final class PlacedBlockTracker {
                 Block.m_49840_(level, pos, stack);
             }
         }
-        com.maidsmart.tool.MaidProbe.reclaim(__probeKey, pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_(),
-                mark.blockId(), handed, drops.size(), __probeC0,
-                owner == null ? "-" : com.maidsmart.tool.MaidBuildBlockFilter.probeCounts(owner.getAvailableBackpackInv(), owner.getHandsInvWrapper()));
         level.m_7731_(pos, net.minecraft.world.level.block.Blocks.f_50016_.m_49966_(), 3);
     }
 
