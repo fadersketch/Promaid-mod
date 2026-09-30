@@ -11,7 +11,7 @@ description:
       by the blueprint book.
 source:
   - {path: promaid_src_neo/com/maidsmart/gui/FilePickScreen.java, line: 1, end_line: 247}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: c569ed4fb5f040f0997d4cac1e76a9539484e8d098de10ab504c472847c29ba7
 state: active

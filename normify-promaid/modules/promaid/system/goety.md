@@ -16,7 +16,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/goety/MaidGoetyCompat.java, line: 1, end_line: 418}
   - {path: promaid_src_neo/com/maidsmart/goety/MaidGoetyFlight.java, line: 1, end_line: 561}
   - {path: promaid_src_neo/com/maidsmart/goety/MaidGoetyAuto.java, line: 1, end_line: 220}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e8b0e5f435a1e8f58b6b885002acf3fa013b29a033f9896fb7e992fb14b03c56
 state: active

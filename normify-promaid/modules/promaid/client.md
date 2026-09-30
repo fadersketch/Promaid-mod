@@ -12,7 +12,7 @@ description:
       modules.
 source:
   - {path: promaid_src_neo/com/maidsmart/client/CompressionBoxScreen.java, line: 1}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 3d77ac5ada3e13af2a1feecff5d93206a5f342e5bc38320ec925be2b416b06da
 state: active

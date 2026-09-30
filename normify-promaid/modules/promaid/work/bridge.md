@@ -13,7 +13,7 @@ description:
       step and vertical pillar.
 source:
   - {path: promaid_src_neo/com/maidsmart/task/BridgeUpBehavior.java, line: 1, end_line: 1300}
-revision: 05103ae2da3af21d7a2d344d33296407d6f26ab2
+revision: 43cc86d020b9ba3a495013478435099a3c06df4f
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: fedab718b854c8bc6ba216f1ea1e3b22bd302dc12da02e636a42dae3788527e8
 state: active
