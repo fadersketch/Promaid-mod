@@ -213,6 +213,7 @@
   "config.promaid.compat.puppetBlacklist": "Puppet Mode Blacklist (Modular Golems)",
   "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)",
   "key.promaid.free_flight_toggle": "Toggle Maid Free Flight (aim at maid, unbound by default)",
+  "key.promaid.goety_toggle": "Toggle Maid Flying-Focus Auto Mode (aim at maid, unbound by default)",
   "config.promaid.misc.freeFlight": "Free Flight (Creative-style)",
   "config.promaid.misc.freeFlightItems": "Free Flight: Qualifying Items",
   "config.promaid.misc.freeFlightEffects": "Free Flight: Qualifying Effects",

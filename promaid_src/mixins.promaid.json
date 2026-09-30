@@ -71,7 +71,8 @@
     "MaidGlowGoldMixin",
     "MaidContainerRemoteOpenMixin",
     "ChunkMapTrackRemoteMixin",
-    "ChunkMapRemotePumpMixin"
+    "ChunkMapRemotePumpMixin",
+    "MaidGoetyMoveSuppressMixin"
   ],
   "client": [
     "MaidTtsVolumeMixin",
@@ -88,6 +89,7 @@
     "ElytraModelAccessor",
     "MaidModelPackSortMixin",
     "MaidConfigFreeFlightMixin",
+    "MaidConfigGoetyMixin",
     "MaidFreeFlightAnimInvoker",
     "MaidFreeFlightAnimMixin"
   ],

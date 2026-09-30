@@ -78,6 +78,12 @@ public class ProMaidMod {
         // v1.3.0(beta) 实测七百〇二：仿创造飞行控制器挂在 MaidTickEvent 上（两侧都发，控制器自己挡客户端）
         net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
                 new com.maidsmart.flight.MaidFreeFlightHandler());
+        // v1.3.0(beta) 实测七百四十五·点1【1.20.1 补】：飞行聚晶（Goety 位移聚晶）非 OP 入口——
+        // per-maid 自动档的 C2S/S2C 两个包（主人或 OP 即可开，与仿创造飞行同口径）
+        com.maidsmart.goety.MaidGoetyNetworking.register();
+        // 推进器与自动档挂在 TLM 的 MaidTickEvent 上（推进/自动各一个 handler，客户端自己挡）
+        com.maidsmart.goety.MaidGoetyFlight.ensureHooked();
+        com.maidsmart.goety.MaidGoetyAuto.ensureHooked();
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
