@@ -136,6 +136,18 @@ public final class MaidMountCompat {
     private static Method mSetMouseSpeedY;    // setMouseMoveSpeedY(float)
     private static Method mSetHoverMode;      // setHoverMode(boolean)
     private static Method mGetHoverMode;      // getHoverMode()
+    /* 【实测七百四十三】补三组：
+     *   · setLoiterParams/setLoiterActive——固定翼（AC-130H）**唯一**的"停住并绕圈"通路。
+     *     反编译 VehicleEntity.baseTick 实证：只有 EngineType.AIRCRAFT && getLoiterActive()
+     *     才会调 VehicleEngineUtils.aircraftLoiter，而那个方法自己写 mouseX/mouseY/power 绕一个
+     *     圆心+半径的圈——正是玩家要的"会盘旋、能停下"。
+     *   · setLiftSpeed——飞艇（极恶乐魂）的竖直轴。反编译 airShipEngine 实证：有乘客时升力
+     *     只来自上下位与 liftSpeed，且每拍 *0.8 衰减，所以想稳高度必须直接写它（PD）。
+     *   · getPower——固定翼"点火"要看当前推力（loiter 的前置条件是 engineStartOver）。 */
+    private static Method mSetLoiterParams;   // setLoiterParams(org.joml.Quaternionf)
+    private static Method mSetLoiterActive;   // setLoiterActive(boolean)
+    private static Method mSetLiftSpeed;      // setLiftSpeed(float)
+    private static Method mGetPower;          // getPower()
     /* 【实测七百二十六·点6】女仆自己往载具里装弹：车的枪弹从**车自己的容器**取（反编译
      * ModCapabilities 实证：Capabilities.ItemHandler.ENTITY → getInventory()），她背包里的
      * 子弹车看不见。这三组反射用来"读出这车要哪种子弹 + 把子弹从她背包搬进车容器"。 */
@@ -321,6 +333,26 @@ public final class MaidMountCompat {
                 mSetMouseSpeedY = null;
                 mSetHoverMode = null;
                 mGetHoverMode = null;
+            }
+            // 【实测七百四十三】固定翼盘旋（loiter）/ 飞艇竖直轴（liftSpeed）/ 固定翼点火（power）。
+            // 各自单独 try——某一版本缺一个只影响对应那一档，不该拖垮驾驶/开火/装弹。
+            try {
+                Class<?> quat = Class.forName("org.joml.Quaternionf");
+                mSetLoiterParams = cVehicle.getMethod("setLoiterParams", quat);
+                mSetLoiterActive = cVehicle.getMethod("setLoiterActive", boolean.class);
+            } catch (Throwable ignored) {
+                mSetLoiterParams = null;
+                mSetLoiterActive = null;
+            }
+            try {
+                mSetLiftSpeed = cVehicle.getMethod("setLiftSpeed", float.class);
+            } catch (Throwable ignored) {
+                mSetLiftSpeed = null;
+            }
+            try {
+                mGetPower = cVehicle.getMethod("getPower");
+            } catch (Throwable ignored) {
+                mGetPower = null;
             }
             // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
             // 每一环各自 try（缺一环只是"装弹"这一档不生效，不影响驾驶/开火）。
@@ -1295,7 +1327,7 @@ public final class MaidMountCompat {
         // 【实测七百二十五】飞行载具（直升机/固定翼/飞艇）**换一整套**：它们的航向/俯仰在
         // 鼠标通道里，地面那套左右位表达不了。见 driveFlight 的注释。
         if (isFlyingEngine(eng)) {
-            return driveFlight(mount, modifier, eng, dy, horiz, err, maid);
+            return driveFlight(mount, target, modifier, eng, dy, horiz, err, maid);
         }
 
         // 【实测七百二十三】轮椅：引擎只认乘客头朝向，左右位不被读。
@@ -1450,9 +1482,24 @@ public final class MaidMountCompat {
                 }
                 mSetMouseX(mount, 0.0f);
                 mSetMouseY(mount, 0.0f);
-                if (mSetHoverMode != null) {
+                // 【实测七百四十三·点2】固定翼收手时必须**关掉 loiter**，否则她会一直在原地绕圈
+                // （loiter 是引擎自己跑的，与我们给不给目标点无关）。
+                if (isAircraftEngine(eng) && mSetLoiterActive != null) {
                     try {
-                        mSetHoverMode.invoke(mount, true); // 站着不动 → 悬停
+                        mSetLoiterActive.invoke(mount, false);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                // 【实测七百四十三·点3】飞艇收手：liftSpeed 归零（引擎会自己按重力收敛回浮高）。
+                if (isAirshipEngine(eng) && mSetLiftSpeed != null) {
+                    try {
+                        mSetLiftSpeed.invoke(mount, 0.0f);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                if (mSetHoverMode != null && !isAirshipEngine(eng) && !isTomEngine(eng)) {
+                    try {
+                        mSetHoverMode.invoke(mount, true); // 站着不动 → 悬停（飞艇/汤姆6 没这个开关）
                     } catch (Throwable ignored) {
                     }
                 }
@@ -1478,7 +1525,29 @@ public final class MaidMountCompat {
      * {@code setLiftSpeed} 竖直轴），走地面那套位掩码就够，所以**不进本档**。
      */
     private static boolean isFlyingEngine(String eng) {
-        return "HELICOPTER".equals(eng) || "AIRCRAFT".equals(eng);
+        // 【实测七百四十三·点3/点4】AIRSHIP（飞艇：极恶乐魂/基洛夫/空中绵羊）与 TOM6（汤姆6）
+        // 一并进本档，各走自己的专属分支：
+        //   · AIRSHIP 的竖直轴是 setLiftSpeed（反编译实证：位掩码上下位只是它的积分器，
+        //     且每拍 *0.8 衰减），用位掩码"冲一下掉一下"——必须直接写 liftSpeed 做 PD。
+        //   · TOM6 的油门/姿态**整段**写在"乘客是 Player"分支里（反编译 tomEngine 实证），
+        //     位掩码与鼠标通道对 Mob 乘客**一个都不生效**，只能直写 power/XRot/YRot。
+        return "HELICOPTER".equals(eng) || "AIRCRAFT".equals(eng)
+                || "AIRSHIP".equals(eng) || "TOM6".equals(eng);
+    }
+
+    /** 【实测七百四十三·点3】这只是不是"飞艇"（AIRSHIP：极恶乐魂 / 基洛夫 / 空中绵羊）。 */
+    private static boolean isAirshipEngine(String eng) {
+        return "AIRSHIP".equals(eng);
+    }
+
+    /** 【实测七百四十三·点2】这只是不是"固定翼"（AIRCRAFT：AC-130H / A-10 / J-16 / Ju-87）。 */
+    private static boolean isAircraftEngine(String eng) {
+        return "AIRCRAFT".equals(eng);
+    }
+
+    /** 【实测七百四十三·点4】这只是不是汤姆6（TOM6——油门/姿态整段写在"乘客是玩家"分支里）。 */
+    private static boolean isTomEngine(String eng) {
+        return "TOM6".equals(eng);
     }
 
     /**
@@ -1534,7 +1603,7 @@ public final class MaidMountCompat {
      *
      * <p>写不出鼠标通道（反射失败）→ 退回地面那套位掩码（一个字节不变）。
      */
-    private static boolean driveFlight(Entity mount, double modifier, String eng,
+    private static boolean driveFlight(Entity mount, Vec3 target, double modifier, String eng,
                                        double dy, double horiz, float err, Entity maid) {
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false; // 探测失败 → 交回地面档
@@ -1701,6 +1770,12 @@ public final class MaidMountCompat {
                     }
                     mSetMouseX(mount, 0.0f);
                 }
+                // 【实测七百四十三·点1】速度硬上限（玩家原话「不能滑出太远，或者获得太大的速度」）。
+                // 上面那条串级速度环只是**给期望**，而发动机的惯性会让她冲过包络（741 的机头瞄准
+                // 又把这个环打断了）。这里不看引擎脸色，直接对水平分量做上限钳制：超了就把整体缩回
+                // 上限（减速是直通的，见 killHorizontal 注释），竖直分量一律不动。上限就是速度环自己
+                // 的包络 FLIGHT_HMAX 的 1.25 倍——只拦"超过设计包络的冲量"，不影响正常巡航/绕圈。
+                capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
                 logDrive(mount, "飞行档 引擎=" + eng + (parked ? " 悬停档(停住)" : "")
                         + (holdYaw ? " 机头锁死" : "")
                         + (hardBrake ? " 硬刹(水平清零)" : "")
@@ -1716,7 +1791,135 @@ public final class MaidMountCompat {
                 return true;
             }
 
-            // ---------- 固定翼：保持旧口径（前/后位是推力；高度只由俯仰决定） ----------
+            // ---------- 飞艇（AIRSHIP：极恶乐魂 / 基洛夫 / 空中绵羊）：走"直升机那一套电路" ----------
+            //
+            // 【实测七百四十三·点3·玩家原话】「女仆在乘坐极恶乐魂这个飞行载具的时候应该直接套用
+            // 直升机的那一套电路，现在女仆乘坐它不会在遇到敌人之后自己升高。」
+            //
+            // 根因：飞艇此前**不进本档**（isFlyingVehicle 只含直升机/固定翼），所以它走的是
+            // driveVehicle 那条地面通路——接敌机动整个不生效，高度永远贴着敌人的 Y（玩家看到的
+            // "不会自己升高"）。而它其实**有**一个真正的竖直轴：反编译 airShipEngine 实证
+            // deltaMovement.y += maxUpSpeedRate * 0.06 * liftSpeed——所以本档直接写 liftSpeed
+            // 做高度 PD（同直升机的 power PD 一个道理），比位掩码准。
+            if (isAirshipEngine(eng)) {
+                mSetMouseX(mount, 0.0f);   // 飞艇不读鼠标通道；清了免得残留
+                mSetMouseY(mount, 0.0f);
+                short abits = 0;
+                if (Math.abs(err) > 8.0f) {
+                    abits |= (err > 0) ? 0x002 : 0x001;   // 左右位 → deltaRot → rudderRot
+                }
+                if (horiz > FLIGHT_ARRIVE) {
+                    abits |= 0x004;                       // 前位 → power（到点松油）
+                }
+                if (modifier > 1.05) {
+                    abits |= 0x100;                       // sprintMultiply
+                }
+                mProcessInput.invoke(mount, abits);
+                double avy = verticalSpeed(mount);
+                double alead = dy - avy * FLIGHT_VY_LEAD;
+                float liftCmd = Float.NaN;
+                if (mSetLiftSpeed != null) {
+                    liftCmd = (float) clamp(alead * AIRSHIP_LIFT_PER_BLOCK, -0.25, 0.25);
+                    try {
+                        mSetLiftSpeed.invoke(mount, liftCmd);
+                    } catch (Throwable ignored) {
+                        liftCmd = Float.NaN;
+                    }
+                }
+                logDrive(mount, "飞艇档 引擎=" + eng + " 位掩码=" + abits
+                        + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                                : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + " 竖直速度=" + fmt2(avy)
+                        + " liftSpeed=" + (Float.isNaN(liftCmd) ? "n/a" : fmt2(liftCmd))
+                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                return true;
+            }
+
+            // ---------- 汤姆6（TOM6）：直写 power/姿态（位掩码与鼠标通道对它全不生效） ----------
+            //
+            // 【实测七百四十三·点4·玩家原话】「骑乘汤姆6F6的时候女仆不会移动。」
+            //
+            // 根因（反编译 tomEngine 实证）：它的油门/俯仰/偏航/滚转**整段**写在
+            // "else if (passenger instanceof Player)" 分支里——女仆是 Mob，压根进不去那条分支，
+            // 于是 power 恒为 0（另一条 passenger == null 分支还会 setPower(0)、清所有输入位），
+            // **一动不动**。它的水平推力在 viewVector 上（tomEngine：deltaMovement +=
+            // viewVector * 0.061 * speedRate * power），升力在 upVec 上。
+            if (isTomEngine(eng)) {
+                mSetMouseX(mount, 0.0f);
+                mSetMouseY(mount, 0.0f);
+                try {
+                    mProcessInput.invoke(mount, (short) 0); // 清输入位（引擎那两条 setPower(0) 分支别打架）
+                } catch (Throwable ignored) {
+                }
+                forceHeadingOnto(mount, err);            // 机头对准目标（与直升机同源）
+                // 俯仰：按高度差给目标角（负 = 抬头爬升 / 正 = 低头前飞），再直写 XRot。
+                // 【为什么不是 "dy * k" 的纯 P】她多半是**从地面起飞**：起飞时 dy 只有几格，纯 P
+                // 给的抬头角很小 → 升力不足 → 永远起不来。所以**起飞段**（贴地）给固定抬头角，
+                // 离地后才交回 P。反编译 tomEngine 实证升力项是
+                // upVec × (dm·viewVector) × 0.022 × lift，机头不抬就没有升力分量；
+                // 而 MC 约定 xRot 为负 = 机头朝上（viewVector 抬头）。
+                //
+                // 【判据必须是 onGround，不能用 dy】用 dy（"高差小就抬头"）会在巡航段形成
+                // 每拍 +15° 的棘轮（高度差一小就抬头 → 升高 → 差又变小 → 再抬头），
+                // 与七百三十四 修掉的那个悬停棘轮是同一类错误。贴地才是"还没起来"的充要条件。
+                boolean grounded;
+                try {
+                    grounded = mount.m_20096_(); // onGround
+                } catch (Throwable ignored) {
+                    grounded = false;
+                }
+                float tomPitch;
+                if (grounded) {
+                    tomPitch = -TOM_TAKEOFF_PITCH; // 还没离地 → 强制抬头，保证能起来
+                } else {
+                    tomPitch = (float) clamp(-dy * TOM_PITCH_PER_BLOCK,
+                            -TOM_PITCH_MAX, TOM_PITCH_MAX);
+                }
+                try {
+                    mount.m_146926_(tomPitch);
+                } catch (Throwable ignored) {
+                }
+                float tomPower = 0.0f;
+                if (horiz > FLIGHT_ARRIVE) {
+                    tomPower = (float) clamp(horiz * TOM_POWER_PER_BLOCK, 0.0, TOM_POWER_MAX);
+                    if (modifier > 1.05) {
+                        tomPower = TOM_POWER_MAX;
+                    }
+                }
+                if (mSetPower != null) {
+                    try {
+                        mSetPower.invoke(mount, tomPower);
+                    } catch (Throwable ignored) {
+                    }
+                }
+                logDrive(mount, "汤姆6档 引擎=" + eng + " 推力=" + fmt2(tomPower)
+                        + " 俯仰=" + Math.round(tomPitch)
+                        + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                                : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                return true;
+            }
+
+            // ---------- 固定翼（AC-130H / A-10 / J-16 等）：用引擎自己的 loiter 停住并盘旋 ----------
+            //
+            // 【实测七百四十三·点2·玩家原话】「ACH13空中炮艇，我发现女仆根本就不会骑这个东西。
+            // 全程乱窜并且没有停止和飞行能力。」
+            //
+            // 根因（反编译实证，两条）：① 固定翼**没有竖直输入轴**——aircraftEngine 的高度只由
+            // 俯仰+速度决定，所以"到点悬停"它做不到，旧版给目标点它只会**一直朝前飞**（实机日志：
+            // 距目标 58 → 170 → 214 格，一路飞走）；② 它的"停住并绕圈"是**引擎自带**的一档——
+            // VehicleEntity.baseTick 实证：EngineType.AIRCRAFT && getLoiterActive() 时每拍调
+            // VehicleEngineUtils.aircraftLoiter(this)，而那个方法自己写 mouseX/mouseY/power 绕
+            // getLoiterParams() 给的圆心+半径转圈（还带地形回避）。正解不是我们继续喂目标点，
+            // 而是把圆心/半径写进 loiter 参数并打开它，剩下的全交给引擎（它比我们的鼠标通道权限大）。
+            // 写不出 loiter（反射失败）→ 退回旧口径，一个字节不变。
+            if (tryAircraftLoiter(mount, target, horiz)) {
+                logDrive(mount, "固定翼盘旋档 引擎=" + eng
+                        + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
+                                : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
+                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                return true;
+            }
             double altErr = dy;                        // >0 = 目标更高
             double flatDist = Math.max(horiz - FLIGHT_ARRIVE, 0.0);
             pitchCmd = 0.0f;
@@ -1741,9 +1944,9 @@ public final class MaidMountCompat {
                 bits |= 0x100;                         // 冲刺位（引擎里抬高速度上限）
             }
             mProcessInput.invoke(mount, bits);
-            // 【实测七百四十一·点3】固定翼同样支持"炮随车体"那档的机头瞄准（最后写的赢）。
-            applyNoseAim(mount);
-            // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
+            // 【实测七百四十三·点1】固定翼同样**不再写机头**：它的推力也在 viewVector 上
+            // （反编译 aircraftEngine 实证：viewVector × force），741 那一记瞄准会把它掰成
+            // "追着敌人飞"，正是玩家看到的"乱窜"。只有 loiter 写不出去（反射失败）才会落到这里。
             logDrive(mount, "飞行档 引擎=" + eng
                     + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                             : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
@@ -1789,6 +1992,79 @@ public final class MaidMountCompat {
             return Math.sqrt(dm.f_82479_ * dm.f_82479_ + dm.f_82481_ * dm.f_82481_);
         } catch (Throwable ignored) {
             return 0.0;
+        }
+    }
+
+    /* ---------- 实测七百四十三：固定翼的"引擎自带盘旋" ---------- */
+
+    /** 飞艇高度 PD：每 1 格预测落点给多少 liftSpeed（引擎 clamp 域 ±0.25）。 */
+    private static final double AIRSHIP_LIFT_PER_BLOCK = 0.04;
+    /** 汤姆6 推力：每 1 格距离给多少 power（引擎里 power 上限 1，sprint 时 2.2）。 */
+    private static final float TOM_POWER_PER_BLOCK = 0.10f;
+    /** 汤姆6 推力上限（引擎里非冲刺档 maxPower=1）。 */
+    private static final float TOM_POWER_MAX = 1.0f;
+    /** 汤姆6 俯仰：每 1 格高差给多少度（引擎 clamp 是 ±120 空中）。 */
+    private static final float TOM_PITCH_PER_BLOCK = 3.0f;
+    /** 汤姆6 俯仰上限（度）：别一上来就垂直扎。 */
+    private static final float TOM_PITCH_MAX = 30.0f;
+    /** 汤姆6 起飞抬头角（度，负 = 抬头）。贴地时强制给这个角，保证能起来。 */
+    private static final float TOM_TAKEOFF_PITCH = 15.0f;
+
+    /** 固定翼 loiter 的最小半径（格）：必须非 0（aircraftLoiter 里拿它做分母）。 */
+    private static final double AIRCRAFT_LOITER_MIN_R = 8.0;
+    /** 固定翼 loiter 的最大半径（格）：转太大圈就等于没在压制。 */
+    private static final double AIRCRAFT_LOITER_MAX_R = 60.0;
+    /** 固定翼"点火"推力：引擎里 power > 0.2 才置 engineStartOver（loiter 的前置条件）。 */
+    private static final double AIRCRAFT_ENGINE_KICK_POWER = 0.35;
+
+    /**
+     * 【实测七百四十三·点2】固定翼：把"去某个点"翻译成**引擎自己的 loiter**（圆心 + 半径 + 高度）。
+     *
+     * <p>反编译实证（VehicleEntity.baseTick）：只有在
+     * {@code !onGround && getEngineStartOver() && getEnergy() > 1024 && !isWreck()}
+     * 且**有乘客**且 {@code EngineType.AIRCRAFT} 且 {@code getLoiterActive()} 时，才会每拍调
+     * {@code VehicleEngineUtils.aircraftLoiter(this)}。那一段自己写 mouseMoveSpeedX/Y 与 power，
+     * 围绕 {@code getLoiterParams()}（{@code Quaternionf(x, y, z, r)} = 圆心 x/y/z + 半径 r）
+     * 转圈，且**自带地形回避**。
+     *
+     * <p>我们给的 target 就是"该飞去哪"（空战档已把它算成敌上/主人上方），所以：
+     * 圆心 = 目标的水平坐标、高度 = 目标的 Y、半径 = 配置的盘旋半径（下限 {@link #AIRCRAFT_LOITER_MIN_R}
+     * 保证非 0）。进停车带时半径取小值——loiter 的圈必须非 0（aircraftLoiter 拿它做分母），
+     * 小半径 = 近乎原地绕小圈，对"炮艇定点压制"正是要的。
+     *
+     * @return true = 真的写了 loiter 参数（调用方据此跳过旧的"喂目标点"口径）
+     */
+    private static boolean tryAircraftLoiter(Entity mount, Vec3 target, double horiz) {
+        if (mSetLoiterParams == null || mSetLoiterActive == null || target == null) {
+            return false;
+        }
+        try {
+            // 【为什么这里要先"点一把火"】反编译 AircraftEngine 的启动闸：engineStart 置位靠
+            // forwardInputDown() && power > 0.01；engineStartOver 靠 power > 0.2。而 baseTick 那条
+            // loiter 调用要求 getEngineStartOver() 为真——也就是说**不先把推力推过 0.2，我们写的
+            // loiter 参数根本不会被读**。所以每拍（在写 loiter 之前）给它一个 0.35 的推力脉冲让引擎
+            // 起来；起来之后 power 由 aircraftLoiter 自己用 PD 接管，我们那一下不影响它的稳态。
+            if (mSetPower != null) {
+                try {
+                    double p = mGetPower == null ? 0.0
+                            : ((Number) mGetPower.invoke(mount)).doubleValue();
+                    if (p < AIRCRAFT_ENGINE_KICK_POWER) {
+                        mSetPower.invoke(mount, (float) AIRCRAFT_ENGINE_KICK_POWER);
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            double r = Math.max(AIRCRAFT_LOITER_MIN_R, MaidAirCombat.orbitRadiusCfg());
+            if (horiz > FLIGHT_ARRIVE) {
+                r = Math.max(r, Math.min(horiz, AIRCRAFT_LOITER_MAX_R));
+            }
+            Object q = new org.joml.Quaternionf((float) target.f_82479_, (float) target.f_82480_,
+                    (float) target.f_82481_, (float) r);
+            mSetLoiterParams.invoke(mount, q);
+            mSetLoiterActive.invoke(mount, true);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -1939,6 +2215,30 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测七百四十三·点1】把**水平速度**钳到上限（格/拍）：超了就整体缩回上限，竖直分量不动。
+     * 与 killHorizontal 同源（都是直写 deltaMovement 的"减速"方向，SWB 的 setDeltaMovement 覆写体
+     * 对减速是直通的），区别只在于这里是"封顶"：没超上限就一个字都不改，所以巡航/绕圈不受影响。
+     *
+     * <p>玩家原话（七百四十三·点1）：「现在它容易离敌人范围太远……明显就出现了刹不住车的情况。
+     * 要求就是女仆在驾驶直升机的时候要进行停顿，不能滑出太远，或者获得太大的速度。」
+     */
+    static void capHorizontal(Entity mount, double max) {
+        try {
+            if (mount == null || max <= 0.0) {
+                return;
+            }
+            Vec3 dm = mount.m_20184_();
+            double hs = Math.sqrt(dm.f_82479_ * dm.f_82479_ + dm.f_82481_ * dm.f_82481_);
+            if (hs <= max || hs < 1.0E-6) {
+                return;
+            }
+            double k = max / hs;
+            mount.m_20256_(new net.minecraft.world.phys.Vec3(dm.f_82479_ * k, dm.f_82480_, dm.f_82481_ * k));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * 这一拍她是不是"该停住"（已到目标点）——停住档的判据。
      *
      * <p>【实测七百三十一·为什么不再看速度】旧判据还要求 {@code hspeed < 0.6}，可实机日志里
@@ -1954,6 +2254,13 @@ public final class MaidMountCompat {
 
     /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
     private static final double HARD_BRAKE_RETAIN = 0.25;
+
+    /**
+     * 【实测七百四十三·点1】速度硬上限相对速度环包络的余量：1.25 倍。
+     * 巡航/绕圈都在包络内，一点不受影响；只有发动机惯性把她冲过包络两成半以上才动手
+     * ——那正是玩家说的"获得太大的速度"。
+     */
+    private static final double FLIGHT_SPEED_CAP_SLACK = 1.25;
 
     /* ==================== 实测七百三十三：直写机头朝向（长距离不飞偏） ==================== */
 
