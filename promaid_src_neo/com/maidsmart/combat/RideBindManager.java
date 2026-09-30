@@ -183,7 +183,8 @@ public final class RideBindManager {
         // "对着别的实体挥棍子没效果"里直接 return —— 玩家看不到任何提示。这里把它们收进来，
         // 让它们在 denyReason 里给出明确拒绝。
         boolean rejected = !maid && (MaidRideKit.isFurniture(target) || MaidRideKit.isBroom(target));
-        boolean recognized = maid || mount || rejected || (target instanceof Mob);
+        boolean recognized = maid || mount || rejected || (target instanceof Mob)
+                || MaidMountCompat.isUnridable(target); // 实测七百四十七：不可驾载具也要回话
         // 【实测七百二十·点2 独占档】手持骑乘棒时，这一下实体右击一律由棍子吃掉（认不出也吞）。
         if (!recognized && !batonExclusive()) {
             return;
@@ -230,7 +231,8 @@ public final class RideBindManager {
             }
             boolean recognized = target instanceof EntityMaid || target instanceof Mob
                     || MaidRideKit.isRideableMount(target, null)
-                    || MaidMountCompat.kindOf(target) != null;
+                    || MaidMountCompat.kindOf(target) != null
+                    || MaidMountCompat.isUnridable(target); // 实测七百四十七：不可驾载具也要吞这一下
             if (recognized) {
                 // 【实测七百二十四】客户端本地预测那一拍：SWB 的 VehicleEntity.interact 在**客户端**
                 // 也跑，setDriverAngle 会当场把玩家转向车头。快照 + 钉住几拍把这一下抹掉。
@@ -1598,6 +1600,12 @@ public final class RideBindManager {
                     continue;
                 }
                 if (maid.level() != mount.level()) {
+                    deferred.add(maid);
+                    continue;
+                }
+                // 【实测七百四十七】名单是在 747 才加的：升级前绑在不可驾载具上的链路要能自愈——
+                // 每拍扫到时按"该解绑"处理（走 releaseMaidQuiet，重力/坐姿/龙的行动档都还原）。
+                if (MaidMountCompat.isUnridable(mount)) {
                     deferred.add(maid);
                     continue;
                 }

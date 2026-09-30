@@ -649,13 +649,110 @@ public final class MaidMountCompat {
         }
     }
 
+    /* ==================== v1.3.0(beta) 实测七百四十七：不可驾名单 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百四十七【骑乘指挥棒·不可驾名单】。
+     *
+     * <h2>玩家原话</h2>
+     * 「骑乘棒没有办法绑定 Ju-87 斯图卡轰炸机、A-10 雷电二攻击机、AC-130H 空中炮艇、
+     *  汤姆 F6F、KV-16 幽灵战斗机、迷你快艇。在手册里面就写这些载具要么对于操作的要求太高，
+     *  要么在代码上直接认准的人。让女仆来指会搞得一团糟，所以没有办法骑。」
+     *
+     * <h2>为什么这六台单独点名，而不是"凡是飞机都不许"</h2>
+     * 它们分两类，两类都**不是"女仆开得不好"，而是"这车根本不接受非玩家驾驶"**：
+     * <ol>
+     *   <li><b>操作要求高</b>（Ju-87 / A-10 / AC-130H / KV-16）：全是固定翼。固定翼没有
+     *       竖直输入轴，高度只由"速度 + 俯仰"积分出来（`aircraftEngine` 反编译实证），
+     *       起飞要助跑、盘旋要维持速度——把它交给"去某个点"这一层意图，结果必然是
+     *       要么一头栽地、要么一路飞走。玩家自己飞都得练，女仆没有"练"这件事。</li>
+     *   <li><b>代码上直接认准的人</b>（汤姆 F6F / 迷你快艇）：引擎里油门与姿态整段写在
+     *       {@code passenger instanceof Player} 那一支里（`tomEngine` 反编译实证），
+     *       女仆是 Mob、压根进不去那条分支 —— 我们前面为了 TOM6 硬写过一套"直写推力+俯仰"
+     *       的补丁，但它的**武器**（西瓜炸弹）与**座位**也都只按玩家语义设计；
+     *       迷你快艇则连座位都只有一个、且 {@code Type=Boat} 走的是水面物理。
+     *       与其继续打补丁，不如照玩家的话——**认人**，不给她开。</li>
+     * </ol>
+     * 名单判据 = **实体类型注册名**（{@code modid:entity}），与家具黑名单同一套写法：
+     * 不写死类引用，1.20.1 / 1.21.1 两树共用（两树的 SWB 实体 id 逐字相同，jar 实证）。
+     * 其余载具（坦克 / 装甲车 / 直升机 / 飞艇等）**一律不受影响**，照旧能骑能打。
+     */
+    private static final java.util.List<String> UNRIDABLE = java.util.List.of(
+            MOD_SWB + ":ju_87",            // Ju-87 斯图卡轰炸机（固定翼）
+            MOD_SWB + ":a_10a",            // A-10 雷电二攻击机（固定翼）
+            MOD_SWB + ":ac_130h",          // AC-130H 空中炮艇（固定翼）
+            MOD_SWB + ":kv_16",            // KV-16 幽灵战斗机（固定翼）
+            MOD_SWB + ":tom_6",            // 汤姆 F6F（油门/姿态只写给玩家）
+            MOD_SWB + ":tiny_speedboat");  // 迷你快艇（单座、只按玩家语义）
+
+    /**
+     * 不可驾名单里那六台的**中文名**（给玩家看的气泡用）。
+     *
+     * <p>为什么不从游戏里取本地化名：SWB 这六台的名字散在 {@code entity.superbwarfare.*} 与
+     * {@code superbwarfare.entry.vehicle.*} 两套键里，还要先判当前语言——而这份名单是**固定六台**，
+     * 名字就是玩家自己说出来的那六个，直接写死最稳，也不受 SWB 换翻译影响。
+     */
+    private static final java.util.Map<String, String> UNRIDABLE_NAME = java.util.Map.of(
+            MOD_SWB + ":ju_87", "Ju-87 斯图卡轰炸机",
+            MOD_SWB + ":a_10a", "A-10 雷电二攻击机",
+            MOD_SWB + ":ac_130h", "AC-130H 空中炮艇",
+            MOD_SWB + ":kv_16", "KV-16 幽灵战斗机",
+            MOD_SWB + ":tom_6", "汤姆 F6F",
+            MOD_SWB + ":tiny_speedboat", "迷你快艇");
+
+    /**
+     * 这只实体是不是在**不可驾名单**里（{@link #UNRIDABLE}）。
+     *
+     * <p>拿不到注册名（别的模组换了 id / 探测失败）→ {@code false}，即**照旧可驾**：
+     * 这份名单是"已知要排除的少数"，不是白名单，探测失败不该把玩家正常的车也一起禁掉。
+     */
+    public static boolean isUnridable(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
+            if (key == null) {
+                return false;
+            }
+            return UNRIDABLE.contains(key.toString());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 不可驾名单里那台的中文名（拿不到 → 注册名）。 */
+    private static String unridableName(Entity e) {
+        try {
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.getKey(e.getType());
+            if (key != null) {
+                String n = UNRIDABLE_NAME.get(key.toString());
+                if (n != null) {
+                    return n;
+                }
+                return key.toString();
+            }
+        } catch (Throwable ignored) {
+        }
+        return "载具";
+    }
+
     /**
      * 这只模组坐骑此刻能不能被女仆绑：载具要看是不是报废的（{@code isWreck}），
      * 龙要看阶段（{@code getDragonStage() &gt;= 2}——原版里 1 阶段的小龙是"被玩家抱着"，
      * 不能骑）。能驾 → {@code null}；否则给一句给玩家看的理由。
+     *
+     * <p>【实测七百四十七】最前面加一道**不可驾名单**闸（见 {@link #isUnridable}）——
+     * 它必须在"报废/没座位"这些技术判据之前：玩家要看到的理由是"这架认人，不给她开"，
+     * 而不是"这辆载具没有能坐的位子"。
      */
     public static String denyReason(Entity e) {
         try {
+            if (isUnridable(e)) {
+                return "这架" + unridableName(e) + "操作门槛太高（或只认玩家来开），我驾驭不了～";
+            }
             if (isVehicle(e)) {
                 if (mIsWreck != null && Boolean.TRUE.equals(mIsWreck.invoke(e))) {
                     return "这辆载具已经报废了……";
@@ -4080,6 +4177,16 @@ public final class MaidMountCompat {
                 //   ② 打出去的每一发都由 {@code MaidShellHoming} 记下目标并逐拍纠向
                 //      （玩家点名要的那条"强力后门"：炮弹直接指向敌人）。
                 if (target != null && gun != null) {
+                    // 【实测七百四十七·投弹安全高度：基洛夫先爬升再投】玩家原话：「女仆在乘坐基洛夫
+                    // 空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。」
+                    // 载具这一门就是"往下丢的航空炸弹"（gun 名里含 Bomb，基洛夫的唯一武器就是它）
+                    // 且**还没爬到位**时：按住这一发不投（不耗弹、不占冷却）。高度那一边由
+                    // MaidAirCombat.requiredAbove 把她往"目标上 20 格"抬，两边配合 = 先拉高再丢。
+                    // 非炸弹武器（机炮/导弹）与地面载具**一个字都不受影响**。
+                    boolean isBombGun = gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
+                    if (isBombGun && com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
+                        return; // 先爬升，这一发按住
+                    }
                     boolean aimed = aimBallistic(mount, maid, target);
                     Vec3 want = lastDesired(mount);
                     logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want));

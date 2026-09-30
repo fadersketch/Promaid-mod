@@ -937,6 +937,20 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_ORBIT_RADIUS;
     /** 【实测七百二十六·点6】骑载具时女仆自己把对得上的子弹搬进载具弹药容器（默认开） */
     public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_AMMO_FEED;
+    /**
+     * v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】。
+     *
+     * <p>玩家原话：「女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，
+     * 防止被炸到。」
+     *
+     * <p>基洛夫的武器就是往下丢的航空炸弹（SWB 里那颗 42 格半径的大家伙）——贴地投弹等于
+     * 把自己也圈进爆心。所以本项定一个"比目标高多少格才允许投弹"的安全高度：她先把机身上升
+     * 到这个高度、再松弹。默认 20 格（玩家给的数），0 = 关掉这道闸（照旧想投就投）。
+     *
+     * <p>只在**飞行载具**上生效，且这一档属于"骑飞行载具·悬停与盘旋"（{@link #COMBAT_RIDE_AIR_COMBAT}
+     * 关掉时整条悬停/盘旋链路不激活，本闸也不生效——否则她既不会爬升、又永远不许投弹）。
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_BOMB_STANDOFF;
 
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
@@ -2477,6 +2491,13 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_RIDE_AMMO_FEED = BUILDER.comment("骑载具时替她装弹（默认开）：女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。\n\n搬的是什么：只搬**这辆车当前武器实际吃的那种子弹**（从车里那门枪的弹药配置读出来），对不上的子弹一件不动。每 0.5 秒检查一次、按需搬，绝不一次全倒进去。\n\n关闭 = 不搬（你想手动装弹就关掉它）。只在她被骑乘指挥棒绑定时生效。")
                 .translation("config.promaid.ride.ammoFeed")
                 .define("ammoFeed", true);
+        // v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】——玩家原话：
+        // "女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。"
+        // 基洛夫的武器是往下丢的航空炸弹（SWB 里那颗 42 格半径的大家伙），贴地投弹等于把自己
+        // 也圈进爆心。本项 = "比目标高多少格才允许投弹"，默认 20（玩家给的数），0 = 关掉这道闸。
+        COMBAT_RIDE_BOMB_STANDOFF = BUILDER.comment("投弹安全高度（格，默认 20，0~64）：女仆驾驶**飞行载具**（尤其基洛夫空艇）准备对地投弹时，先把机身升到**比目标高这么多格**、再松弹——玩家原话「女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到」。\n\n【为什么需要】基洛夫的武器是往下丢的航空炸弹，爆炸半径极大（SWB 里那颗 Bor-57 是 42 格）；贴地投弹等于把她自己也圈进爆心。本项就是那道「先拉高再丢」的闸：\n\n【怎么生效】她骑飞行载具、有攻击目标时，机身高度会被抬到「目标 + 本项格数」（与「接敌升到敌上」同一条总距/liftSpeed 通道，不用新的一档控制）；**没到位就不投弹**，到位了才照常投。\n\n【0 = 关掉】填 0 = 不做这道闸，想投就投（贴地俯冲投弹也照投，后果自负）。\n\n【只作用于飞行载具】地面载具（坦克/装甲车）不受影响。且这一档属于「骑飞行载具·悬停与盘旋」，那一项关掉时本闸也不生效。")
+                .translation("config.promaid.ride.bombStandoff")
+                .defineInRange("bombStandoff", 20.0, 0.0, 64.0);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的

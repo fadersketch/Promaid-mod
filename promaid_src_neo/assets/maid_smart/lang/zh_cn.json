@@ -393,6 +393,7 @@
   "config.promaid.ride.fightAlt": "接敌高度（比敌人高几格）",
   "config.promaid.ride.orbitRadius": "盘旋半径（格）",
   "config.promaid.ride.ammoFeed": "骑载具·替她装弹（卓越前线）",
+  "config.promaid.ride.bombStandoff": "投弹安全高度（比目标高几格）",
   "config.promaid.ride.airAltMigrated": "内部·悬停高度迁移标记",
   "config.promaid.ride.orbitRadiusMigrated": "内部·盘旋半径迁移标记"
 }

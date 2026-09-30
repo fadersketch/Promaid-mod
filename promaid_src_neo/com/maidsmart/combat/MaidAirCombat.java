@@ -85,6 +85,180 @@ public final class MaidAirCombat {
         }
     }
 
+    /**
+     * v1.3.0(beta) 实测七百四十七【投弹安全高度】——她骑着飞行载具**要往下投弹**时，
+     * 必须先把机身升到**比目标高这么多格**（默认 20）。
+     *
+     * <h2>玩家原话</h2>
+     * 「女仆在乘坐基洛夫空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。」
+     *
+     * <h2>为什么单独一个旋钮、而不是直接调「接敌高度」</h2>
+     * 接敌高度（默认 15）管的是**所有**接敌站位——抬到 20 会让坦克/直升机这些不投弹的载具
+     * 也一起飞得更高，没必要。只有"这一下有投弹意图"（见 {@link #hasBombIntent}）时才把
+     * 基准抬到本项。所以两档的关系是 {@code 实际高度 = max(接敌高度, 本项)}，
+     * 而本项默认更大 → 投弹时以本项为准。见 {@link #requiredAbove}。
+     *
+     * <p>0 = 关掉这道闸（照旧想投就投）。
+     */
+    public static double bombStandoffCfg() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_BOMB_STANDOFF.get();
+        } catch (Throwable ignored) {
+            return 20.0;
+        }
+    }
+
+    /**
+     * 这一拍她**是不是要往下投弹**（决定要不要按 {@link #bombStandoffCfg} 抬高度）。
+     *
+     * <p>两条路任一成立即算：
+     * <ol>
+     *   <li><b>车上那一门是炸弹</b>：基洛夫空艇的唯一武器就叫 {@code Bomb}（SWB 数据实证），
+     *       它往下丢的那颗航空炸弹爆炸半径极大——贴地丢等于把自己也圈进爆心。</li>
+     *   <li><b>她自己的轰炸链路有料</b>：她背包里带着 TNT / 末地水晶 / 重生锚 / 床
+     *       （{@code BombItems} 那几条判据），也就是"接下来几拍她可能就地放一发"。</li>
+     * </ol>
+     *
+     * <p>【为什么不是"永远按 20 飞"】不投弹的时候（比如她只是开直升机护航、用车上的机炮打）
+     * 抬到 20 会白白丢掉命中率——所以这一档只在**真有投弹意图**时生效。
+     *
+     * <p>【节流】第二条要扫她的背包（4 次全槽扫描），而本方法被高度那几处**每拍**问到，
+     * 所以结果按女仆缓存 {@link #BOMB_INTENT_TICKS} 拍。材料几拍内不会凭空出现/消失，
+     * 这个粒度足够，代价从"每拍 4 次扫包"降到"半秒 4 次"。
+     */
+    private static boolean hasBombIntent(EntityMaid maid) {
+        try {
+            UUID id = maid.getUUID();
+            long now = maid.level().getGameTime();
+            long[] c = BOMB_INTENT_CACHE.get(id);
+            if (c != null && now - c[1] < BOMB_INTENT_TICKS) {
+                return c[0] != 0L;
+            }
+            boolean hit = vehicleGunIsBomb(maid) || carriesBombPayload(maid);
+            if (BOMB_INTENT_CACHE.size() > 512) {
+                BOMB_INTENT_CACHE.clear();
+            }
+            BOMB_INTENT_CACHE.put(id, new long[]{hit ? 1L : 0L, now});
+            return hit;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** "要不要投弹"的缓存（女仆 UUID → {0/1, 上次算的 gameTime}）。 */
+    private static final Map<UUID, long[]> BOMB_INTENT_CACHE = new HashMap<>();
+
+    /** 上面那个缓存的存活拍数（10 拍 = 0.5 秒）。 */
+    private static final long BOMB_INTENT_TICKS = 10L;
+
+    /** 车上**当前选中的那门炮**是不是炸弹（基洛夫唯一武器 = Bomb）。 */
+    private static boolean vehicleGunIsBomb(EntityMaid maid) {
+        try {
+            Entity mount = maid.getVehicle();
+            if (mount == null || !MaidMountCompat.isVehicle(mount)) {
+                return false;
+            }
+            String gun = MaidMountCompat.gunNameFor(mount, maid);
+            return gun != null && gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 她背包里是不是带着能放的炸料（TNT / 末地水晶 / 重生锚 / 床）。 */
+    private static boolean carriesBombPayload(EntityMaid maid) {
+        try {
+            return BombItems.hasTnt(maid)
+                    || BombItems.has(maid, BombItems.ID_END_CRYSTAL)
+                    || BombItems.has(maid, BombItems.ID_RESPAWN_ANCHOR)
+                    || BombItems.hasBed(maid);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 这一拍"该比目标高多少格" = {@code max(接敌高度, 投弹安全高度)}，
+     * 其中投弹安全高度只在 {@link #hasBombIntent} 成立时并进来。
+     *
+     * <p>没有投弹意图时它**恒等于** {@link #fightAltCfg}——所以七百二十八 那套接敌口径
+     * 一个字节都没变，这一项只是给它加了一个"投弹时更高的下限"。
+     */
+    private static double requiredAbove(EntityMaid maid) {
+        double base = fightAltCfg();
+        double stand = bombStandoffCfg();
+        if (stand > base && hasBombIntent(maid)) {
+            return stand;
+        }
+        return base;
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百四十七【投弹安全高度闸：没爬到位就不许投】。
+     *
+     * <p>给"投弹的那几路"（车上的炸弹武器 {@code MaidMountCompat.tickAttack}、她自己的
+     * 轰炸链路 {@code BombTntTick} / {@code MaidBombing.tryStartMelee}）共用的一问：
+     * 这一拍该不该**按住这一发**。
+     *
+     * <p>为 true 时调用方直接跳过本次投弹（不消耗材料、不占冷却），而高度那一边由
+     * {@link #requiredAbove} 把她往 {@code 目标Y + bombStandoffCfg} 抬——两边配合起来
+     * 就是玩家要的"先自己向上飞 20 格，再投"。
+     *
+     * <p>不受本闸管的四种情形（任一成立即返回 false = 照常投）：
+     * <ul>
+     *   <li>没骑飞行载具 / 没装卓越前线（闸只对能飞的载具生效）；</li>
+     *   <li>「骑飞行载具·悬停与盘旋」总开关关着（那就没人负责把她抬上去，按住投弹等于
+     *       永久不投——宁可照旧投，也不能让她僵住）；</li>
+     *   <li>安全高度填 0（玩家自己关掉了这道闸）；</li>
+     *   <li>没有可投的目标，或她已经爬到位。</li>
+     * </ul>
+     */
+    public static boolean holdDropForStandoff(EntityMaid maid, LivingEntity target) {
+        try {
+            if (maid == null || !enabled()) {
+                return false;
+            }
+            double stand = bombStandoffCfg();
+            if (stand <= 0.0) {
+                return false; // 玩家关了这道闸
+            }
+            Entity mount = maid.getVehicle();
+            if (mount == null || !MaidMountCompat.isFlyingVehicle(mount)) {
+                return false; // 只对飞行载具生效（地面车没有"爬升"这回事）
+            }
+            if (target == null || !target.isAlive()) {
+                return false; // 没目标：交给调用方自己的"没目标就跳过"
+            }
+            double want = target.getY() + stand;
+            double have = maid.getY();
+            if (have >= want - STANDOFF_TOL) {
+                return false; // 已到位
+            }
+            if (firstHold(maid.getUUID())) {
+                log(maid, "投弹安全高度未到（现在 " + fmt(have) + "，目标上 " + fmt(stand)
+                        + " 格 = " + fmt(want) + "）→ 先爬升、这一发按住");
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 到位容差（格）：离"目标上 N 格"进这个带就算到位、可以投了。 */
+    private static final double STANDOFF_TOL = 1.5;
+
+    /** 这一场遭遇里"她是不是第一次因为安全高度被按住"（每场只写一行，免得刷屏）。 */
+    private static boolean firstHold(UUID id) {
+        try {
+            return HOLD_FIRST.add(id);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 本场遭遇是否已经写过"安全高度未到"那一行（{@link #clear} 时清）。 */
+    private static final java.util.Set<UUID> HOLD_FIRST = new java.util.HashSet<>();
+
     /** 盘旋半径（格，默认 4）——玩家两次都在说圈太大 / 要缩小。 */
     public static double orbitRadiusCfg() {
         try {
@@ -194,7 +368,7 @@ public final class MaidAirCombat {
     /** 她此刻是否已经爬到"敌上 {@link #fightAltCfg} 格"附近（可以开始盘旋了）。 */
     private static boolean altitudeReady(EntityMaid maid, LivingEntity target) {
         try {
-            double want = target.getY() + fightAltCfg();
+            double want = target.getY() + requiredAbove(maid);
             return Math.abs(maid.getY() - want) <= CLIMB_TOL;
         } catch (Throwable ignored) {
             return true; // 拿不到就当作已就位，退回旧行为
@@ -204,11 +378,14 @@ public final class MaidAirCombat {
     /**
      * 【实测七百三十一·点2】爬升点：水平**原地**、竖直指向"敌上 {@link #fightAltCfg} 格"。
      * 每场遭遇只写一行「先爬升」留痕（搜「空战」），与盘旋那一行区分。
+     *
+     * <p>【实测七百四十七】高度改用 {@link #requiredAbove}——她在**要投弹**时（基洛夫等）
+     * 基准抬到"投弹安全高度"（默认 20），所以这里写出来的目标高度会更高，她会先爬到位再盘旋。
      */
     private static Vec3 climbPoint(EntityMaid maid, LivingEntity target) {
-        double y = target.getY() + fightAltCfg();
+        double y = target.getY() + requiredAbove(maid);
         if (firstClimb(maid.getUUID())) {
-            log(maid, "接敌 → 先爬到敌上 " + fmt(fightAltCfg()) + " 格（到位后再开始盘旋）");
+            log(maid, "接敌 → 先爬到敌上 " + fmt(requiredAbove(maid)) + " 格（到位后再开始盘旋）");
         }
         return new Vec3(maid.getX(), y, maid.getZ());
     }
@@ -268,11 +445,13 @@ public final class MaidAirCombat {
         double ang = angCur + dir * (lead / r);     // 沿她当前的切线方向再往前 lead 格
         // 高度：**敌人所在位置之上** fightAlt 格（玩家 728 补正原话），不再用离地高度。
         // 用敌人"脚底"而不是"眼睛"：她比敌人高 N 格时是整体高出，俯射角自然成立。
-        double y = target.getY() + fightAltCfg();
+        // 【实测七百四十七】要投弹时（基洛夫等）基准抬到"投弹安全高度"（见 requiredAbove）。
+        double above = requiredAbove(maid);
+        double y = target.getY() + above;
         // 这一场遭遇起手留一行（与扫帚的「接敌机动」同款：每场一行、不走节流）；
         // 排查时搜「空战」看的就是它。
         if (firstOrbit(id)) {
-            log(maid, "接敌 → 爬到敌上 " + fmt(fightAltCfg()) + " 格、绕着敌人盘旋（半径 " + fmt(r)
+            log(maid, "接敌 → 爬到敌上 " + fmt(above) + " 格、绕着敌人盘旋（半径 " + fmt(r)
                     + " 格，旋向 " + (dir > 0 ? "逆时针" : "顺时针") + "）");
         }
         return new Vec3(target.getX() + Math.cos(ang) * r, y, target.getZ() + Math.sin(ang) * r);
@@ -398,6 +577,8 @@ public final class MaidAirCombat {
         UUID id = maid.getUUID();
         ORBIT_FIRST.remove(id);
         CLIMB_FIRST.remove(id);
+        HOLD_FIRST.remove(id);
+        BOMB_INTENT_CACHE.remove(id);
         // 与扫帚同口径：这一场遭遇结束 = 随机环绕的抽签也重掷（下一场看得见换旋向/换快慢）
         CombatOrbit.forget(id);
         CombatManeuver.forget(id);

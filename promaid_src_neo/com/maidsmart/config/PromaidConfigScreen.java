@@ -3434,6 +3434,15 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "子弹（判据走 SWB 自己的 AmmoConsumer.isAmmoItem，物品型与枚举型两种都认），"
                         + "对不上的不动；每 0.5 秒检查一次、按需搬，绝不一次全倒进去。"
                         + "关掉 = 不搬（想手动装弹就关掉它）"));
+        // v1.3.0(beta) 实测七百四十七【投弹安全高度：基洛夫先爬升再投弹】
+        this.rows.add(new NumRow("投弹安全高度（比目标高几格）",
+                String.valueOf(MaidSmartConfig.COMBAT_RIDE_BOMB_STANDOFF.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIDE_BOMB_STANDOFF, s),
+                "**默认 20**（0~64）。女仆驾驶**飞行载具**（尤其基洛夫空艇）准备对地投弹时，"
+                        + "先把机身升到**比目标高这么多格**、再松弹——玩家原话「女仆在乘坐基洛夫空艇时，"
+                        + "如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到」。基洛夫的武器是"
+                        + "往下丢的航空炸弹，爆炸半径极大，贴地投弹等于把她自己也圈进爆心。"
+                        + "**0 = 关掉这道闸**（想投就投）。只作用于飞行载具，地面载具不受影响"));
         // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
         this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
                 v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),

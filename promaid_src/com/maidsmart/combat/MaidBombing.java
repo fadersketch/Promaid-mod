@@ -675,6 +675,14 @@ public final class MaidBombing {
             if (com.maidsmart.combat.MaidBroomKit.forbidsBombing(maid)) {
                 return false;
             }
+            // v1.3.0(beta) 实测七百四十七【投弹安全高度】：骑飞行载具（基洛夫等）时，先爬到
+            // "比目标高 N 格"（默认 20）再起手放置链路（末地水晶 / 重生锚 / 床都是就地放的，
+            // 贴地放等于把自己圈进爆心）。按住时直接返回 false —— 与"材料不齐"同一条出口，
+            // 所以不写 BOMB_NEXT、不占冷却，下一拍她爬到位自然起手。
+            // 非飞行载具 / 关掉这道闸 / 安全高度填 0 → 恒 false，行为与旧版一字不差。
+            if (com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
+                return false;
+            }
             UUID id = maid.m_20148_();
             long now = level.m_46467_();
             EnumMap<Kind, Phase> running = PHASE.get(id);
