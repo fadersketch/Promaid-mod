@@ -1,0 +1,30 @@
+# Promaid 架构规则（normify 格式）
+rules:
+  - id: core-acyclic
+    type: acyclic
+    severity: error
+    includeCrossTree: true
+  - id: layer-direction
+    type: dependency-direction
+    severity: error
+    allowSameLayer: true
+    layers:
+      - {name: entry,   match: ["promaid.entry", "promaid.entry.**"]}
+      - {name: mixin,   match: ["promaid.mixin", "promaid.mixin.**"]}
+      - {name: feature, match: ["promaid.combat", "promaid.combat.**",
+                                "promaid.work", "promaid.work.**",
+                                "promaid.flight", "promaid.flight.**",
+                                "promaid.social", "promaid.social.**"]}
+      - {name: system,  match: ["promaid.system", "promaid.system.**"]}
+      - {name: core,    match: ["promaid.core", "promaid.core.**"]}
+  - id: no-feature-to-entry
+    type: forbid-dependency
+    severity: error
+    from: ["promaid.combat.**", "promaid.work.**", "promaid.flight.**", "promaid.social.**",
+           "promaid.system.**", "promaid.core.**"]
+    to:   ["promaid.entry.mod"]
+  - id: naming-kebab
+    type: naming
+    severity: error
+    pattern: "^[a-z][a-z0-9-]*$"
+    scope: ["promaid.**", "promaid-forge.**"]

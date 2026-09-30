@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "promaid.core",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 9 个子模块。",
+    "en": "9 submodules at this layer."
+  },
+  "order": [
+    "promaid.core.config",
+    "promaid.core.config-panel",
+    "promaid.core.command",
+    "promaid.core.tools-ai",
+    "promaid.core.safety",
+    "promaid.core.gui",
+    "promaid.core.compat",
+    "promaid.core.marker",
+    "promaid.core.prompt"
+  ],
+  "groups": [
+    {
+      "id": "g6",
+      "title": {
+        "zh": "核心与文档",
+        "en": "Core & Docs"
+      },
+      "children": [
+        "promaid.core.config",
+        "promaid.core.config-panel",
+        "promaid.core.command",
+        "promaid.core.tools-ai",
+        "promaid.core.safety",
+        "promaid.core.gui",
+        "promaid.core.compat",
+        "promaid.core.marker",
+        "promaid.core.prompt"
+      ]
+    }
+  ]
+}

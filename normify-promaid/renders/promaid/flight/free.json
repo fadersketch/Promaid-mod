@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "id": "promaid.flight.free",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 1 个子模块。",
+    "en": "1 submodules at this layer."
+  },
+  "order": [
+    "promaid.flight.free.handlers"
+  ],
+  "groups": [
+    {
+      "id": "g3",
+      "title": {
+        "zh": "飞行",
+        "en": "Flight"
+      },
+      "children": [
+        "promaid.flight.free.handlers"
+      ]
+    }
+  ]
+}

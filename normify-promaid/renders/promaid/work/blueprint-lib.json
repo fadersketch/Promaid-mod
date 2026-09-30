@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "id": "promaid.work.blueprint-lib",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 5 个子模块。",
+    "en": "5 submodules at this layer."
+  },
+  "order": [
+    "promaid.work.blueprint-lib.math",
+    "promaid.work.blueprint-lib.materials",
+    "promaid.work.blueprint-lib.placement",
+    "promaid.work.blueprint-lib.tables",
+    "promaid.work.blueprint-lib.io"
+  ],
+  "groups": [
+    {
+      "id": "g2",
+      "title": {
+        "zh": "生产任务与建造",
+        "en": "Work & Building"
+      },
+      "children": [
+        "promaid.work.blueprint-lib.math",
+        "promaid.work.blueprint-lib.materials",
+        "promaid.work.blueprint-lib.placement",
+        "promaid.work.blueprint-lib.tables",
+        "promaid.work.blueprint-lib.io"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "id": "promaid.mixin",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 9 个子模块。",
+    "en": "9 submodules at this layer."
+  },
+  "order": [
+    "promaid.mixin.core-tlm-maid",
+    "promaid.mixin.tlm-tasks",
+    "promaid.mixin.vanilla-ai",
+    "promaid.mixin.entity-physics",
+    "promaid.mixin.render-client",
+    "promaid.mixin.tlm-config-gui",
+    "promaid.mixin.network-chunk",
+    "promaid.mixin.dialogue-llm",
+    "promaid.mixin.compat"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "title": {
+        "zh": "入口与注入",
+        "en": "Entry & Mixins"
+      },
+      "children": [
+        "promaid.mixin.core-tlm-maid",
+        "promaid.mixin.tlm-tasks",
+        "promaid.mixin.vanilla-ai",
+        "promaid.mixin.entity-physics",
+        "promaid.mixin.render-client",
+        "promaid.mixin.tlm-config-gui",
+        "promaid.mixin.network-chunk",
+        "promaid.mixin.dialogue-llm",
+        "promaid.mixin.compat"
+      ]
+    }
+  ]
+}

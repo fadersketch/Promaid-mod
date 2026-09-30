@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "id": "promaid.combat.bombing",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 3 个子模块。",
+    "en": "3 submodules at this layer."
+  },
+  "order": [
+    "promaid.combat.bombing.items",
+    "promaid.combat.bombing.blast",
+    "promaid.combat.bombing.pose"
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "title": {
+        "zh": "战斗与载具",
+        "en": "Combat & Vehicles"
+      },
+      "children": [
+        "promaid.combat.bombing.items",
+        "promaid.combat.bombing.blast",
+        "promaid.combat.bombing.pose"
+      ]
+    }
+  ]
+}

@@ -299,7 +299,7 @@ A Touhou Little Maid addon: flying air-raid combat, blueprint building, mining, 
 ## 6. 上线之后
 
 1. 把两个平台的项目链接加回仓库：`README.md` 顶部已留了"仓库"一行，可再加 CurseForge / Modrinth 徽章；
-2. 之后每次发版：**先**在本地重新构建两个 jar（`build_promaid.py` / `build_promaid_neo.py`）→ 部署本地 → 传两个平台的新版本 → 再在 GitHub 发 Release（顺序反了会出现"平台上的包和仓库里的不一致"）；
+2. 之后每次发版：**先**在本地重新构建两个 jar（`tools/build/build_promaid.py` / `tools/build/build_promaid_neo.py`）→ 部署本地 → 传两个平台的新版本 → 再在 GitHub 发 Release（顺序反了会出现"平台上的包和仓库里的不一致"）；
 3. 平台上的版本号与 `mods.toml` 里的 `version` 保持一致（当前两边都是 `1.2.4`）。
 
 ---
@@ -359,7 +359,7 @@ body = `{"set":[…],"remove":[]}`，我们声明了两条：
 
 ### A.6 以后发新版要做的三步
 
-1. 本地构建两个 jar（`build_promaid.py` / `build_promaid_neo.py`）；
+1. 本地构建两个 jar（`tools/build/build_promaid.py` / `tools/build/build_promaid_neo.py`）；
 2. 改 `store/version_changelog.md`（新版本的更新说明）、必要时改 `store/description_*.md` 与 `summary_en.txt`，跑 `publish_modrinth.py assemble`；
 3. `python publish_modrinth.py versions` 传两个新版本 → `python publish_modrinth.py text` 更新文案 → `python publish_modrinth.py validate` 自查（必须返回"没有未满足的校验项"）。
    新版本可直接发（不必再走审核），只有**新项目**或改动了被平台管的字段才需要提交审核。
