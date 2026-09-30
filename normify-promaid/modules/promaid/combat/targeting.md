@@ -5,19 +5,16 @@ parent: promaid.combat
 name: {zh: 飞行索敌与诊断, en: "Flight Targeting & Diagnostics"}
 description:
   zh: >
-      空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供一次性诊断探针与 /maid_smart combat check
-      自助判据检查。
+      空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 /maid_smart combat check 自助判据检查。
   en: >
       Forces self-centred 50-block targeting while airborne (bypassing TLM's
-      target dropping), plus a one-shot diagnostic probe and the /maid_smart
-      combat check self-test.
+      target dropping), plus the /maid_smart combat check self-test.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat/FlightTargeting.java, line: 1, end_line: 462}
   - {path: promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java, line: 1, end_line: 329}
-  - {path: promaid_src_neo/com/maidsmart/combat/FlightTargetProbe.java, line: 1, end_line: 194}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
-fingerprint: de580df6860b01f0acd58aab56aa6e932cde2047a366661c1b19be91d5788206
+fingerprint: 0102c0ae0d170158005c3b3c0ff258db7107623923957aa320d973585ed08339
 state: active
 tags: [combat, diagnostics]
 deps:
@@ -27,10 +24,9 @@ deps:
 
 ## 飞行索敌与诊断 · Flight Targeting & Diagnostics
 
-空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供一次性诊断探针与 /maid_smart combat check 自助判据检查。
+空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 /maid_smart combat check 自助判据检查。
 
 **代码证据**
 
 - `promaid_src_neo/com/maidsmart/combat/FlightTargeting.java`:1
 - `promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java`:1
-- `promaid_src_neo/com/maidsmart/combat/FlightTargetProbe.java`:1

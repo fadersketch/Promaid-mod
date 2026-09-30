@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/EmotionPoseMixin.java, line: 1, end_line: 282}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidModelPackSortMixin.java, line: 1, end_line: 91}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidGhostTetherMixin.java, line: 1, end_line: 60}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: e510d7821d03488309df1ad3f90fd1b01598542db520883050078b448ee93bbf
 state: active

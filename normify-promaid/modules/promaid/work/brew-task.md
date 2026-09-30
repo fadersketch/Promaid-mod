@@ -13,7 +13,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidBrewBehavior.java, line: 1, end_line: 1189}
   - {path: promaid_src_neo/com/maidsmart/task/MaidBrewTask.java, line: 1, end_line: 63}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: bfe343705cf514846b778235628a705f62b78409a7b13f7ba9dd2c2db9f59736
 state: active

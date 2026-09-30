@@ -515,8 +515,8 @@
     "apis": []
   },
   "promaid.combat.targeting": {
-    "zh": "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供一次性诊断探针与 /maid_smart combat check 自助判据检查。",
-    "en": "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus a one-shot diagnostic probe and the /maid_smart combat check self-test.",
+    "zh": "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供 /maid_smart combat check 自助判据检查。",
+    "en": "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus the /maid_smart combat check self-test.",
     "name": {
       "zh": "飞行索敌与诊断",
       "en": "Flight Targeting & Diagnostics"
@@ -531,11 +531,6 @@
         "promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java",
         1,
         329
-      ],
-      [
-        "promaid_src_neo/com/maidsmart/combat/FlightTargetProbe.java",
-        1,
-        194
       ]
     ],
     "apis": []
@@ -2536,7 +2531,7 @@
   },
   "promaid.core.safety": {
     "zh": "女仆一切垫脚与搭桥选材的统一安全过滤、无主降级、悬空禁搭、危险方块表、天然方块黑白名单、实体快照遍历、静态状态表护栏、日志、物品归还、额外容器、手持光源、临时探针。",
-    "en": "The unified safety filter for every block a maid places: ownerless downgrade, no-building-while-airborne, dangerous-block tables, natural-block allow/deny lists, entity-snapshot iteration, static-state-table guards, logging, item give-back, extra containers, held light source and a temporary probe.",
+    "en": "The unified safety filter for every block a maid places: ownerless downgrade, no-building-while-airborne, dangerous-block tables, natural-block allow/deny lists, entity-snapshot iteration, static-state-table guards, logging, item give-back, extra containers, and a held light source.",
     "name": {
       "zh": "建构安全与共享工具",
       "en": "Build Safety & Shared Utilities"

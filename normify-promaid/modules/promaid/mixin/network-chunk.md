@@ -15,7 +15,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/mixin/ChunkMapTrackRemoteMixin.java, line: 1, end_line: 168}
   - {path: promaid_src_neo/com/maidsmart/mixin/MaidContainerRemoteOpenMixin.java, line: 1, end_line: 84}
   - {path: promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java, line: 1, end_line: 70}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 55fa9cfb5e2be0b5b69f8de8935e7759bca34940a76e8746cb9c7bedfed50b85
 state: active

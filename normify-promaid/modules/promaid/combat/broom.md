@@ -14,7 +14,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/combat/MaidBroomDrive.java, line: 1, end_line: 2571}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidBroomBehavior.java, line: 1, end_line: 788}
   - {path: promaid_src_neo/com/maidsmart/combat/MaidBroomKit.java, line: 1, end_line: 370}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 966856eb0c1be532bb13b6b24a253ac3a407def6b60357a6e4f1b53c27a3bb09
 state: active

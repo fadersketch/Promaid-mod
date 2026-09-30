@@ -12,7 +12,7 @@ description:
       the tech debt concentrates.
 source:
   - {path: promaid_src_neo/com/maidsmart/combat, line: 1}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: eef9178be0f530615ce456b6915a8209cc62c0838dca78488d4c8c4f0e5ce52c
 state: active

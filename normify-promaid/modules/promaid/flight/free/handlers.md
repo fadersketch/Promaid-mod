@@ -13,7 +13,7 @@ source:
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightHandler.java, line: 1, end_line: 25}
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightNetworking.java, line: 1, end_line: 153}
   - {path: promaid_src_neo/com/maidsmart/flight/MaidFreeFlightAnimState.java, line: 1, end_line: 59}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: d91f75d95620f91a274ce86e3b8ca5d9a216848176520a7a3309f1240239b56f
 state: active

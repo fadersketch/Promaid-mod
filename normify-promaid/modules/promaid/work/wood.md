@@ -14,7 +14,7 @@ description:
 source:
   - {path: promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java, line: 1, end_line: 2951}
   - {path: promaid_src_neo/com/maidsmart/task/MaidWoodTask.java, line: 1, end_line: 66}
-revision: 43cc86d020b9ba3a495013478435099a3c06df4f
+revision: 491ba927ffa91889b679f800817dd48763aabd62
 updated_at: "2026-10-01T00:00:00Z"
 fingerprint: 16b2a4f2b9d6921d1030cf7c2105f01ba88cdd39c788c9ecf21aeeed494910d3
 state: active
