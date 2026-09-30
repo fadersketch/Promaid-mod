@@ -1,67 +1,91 @@
-# 把清理后的历史推到远端（等一句话再执行）
+# 历史清理：已完成 / History cleanup: DONE
 
-**当前状态**：本地已经把 59 个历史垃圾路径清掉了，远端还是旧的。
-本地 `main` 与 `origin/main` 已经分叉，所以**普通 `git push` 会被拒绝**（non-fast-forward）
-—— 这是安全的失败模式，不会误伤什么。
+**状态：远端 `origin` 已清理完毕，21 个 tag 全部推上去了。**
+只有一个远端做不了，原因见第三节。
 
-## 为什么先没推
+---
 
-远端 `fadersketch/Promaid-mod` 上有一个**别人开着的 PR**：
+## 一、已经做完的（origin: `fadersketch/Promaid-mod`）
 
-| 项 | 值 |
-|---|---|
-| PR | [#26](https://github.com/fadersketch/Promaid-mod/pull/26) |
-| 作者 | `rodericksthescriptkid`（**不是你**） |
-| 分支 | `feat/goety-propulsion`，9 个提交 |
-| 基点 | 旧 main（`53de77a1`） |
-
-历史被重写后，这个 PR 的基点就不再是 main 的祖先，GitHub 会显示需要 rebase。
-**他的提交在 fork 上，不会丢**，但对他来说是一次打断。
-
-所以这一步值得你自己点头。要推的话，跑：
-
-```bat
-:: 1) 再确认一次备份还在、可用
-git bundle verify _cleanup_backup\promaid-ALL-refs-20261001.bundle
-
-:: 2) 强推 main（历史重写必须强推）
-git push --force-with-lease origin main
-
-:: 3) 推全部 21 个 tag（tag 也都被重写了，必须强推）
-git push --force origin --tags
-
-:: 4) 让远端把旧对象也回收掉（可选，需要仓库设置权限）
-::    在 GitHub 仓库 Settings 里没有直接的 gc，一般等 ~90 天自动回收，
-::    或联系 GitHub Support；本地这边已经是干净的 18.17 MiB。
+```
++ 05103ae2...b8a48285  main -> main                       (forced update)
++ 0964efca...4f6a89db  experimental/memory-port           (forced update)
++ 21 个 tag 全部强制更新（v1.0.2 … v1.3.0-beta）
 ```
 
-## 如果你想先跟 PR 作者打个招呼
+结果核对（都是实跑）：
 
-顺序建议：
+| 项 | 清理前 | 清理后 |
+|---|---|---|
+| `origin/main` | `05103ae` | `b8a48285` |
+| 远端 tag 数 | 18 | **21**（补上 v1.0.0 / v1.0.1 / v1.2.1-ace-warlock-exp1）|
+| `origin/main` 里的诊断残留 | 有 | **0**（`_tlm_jar` / `_modtlm_jar` / `_cdx` / `fix69.py` / `compile_out.txt` … 全为 0）|
+| 真实源码历史 | — | **保留 206 个提交**动过 `promaid_src_neo/com/maidsmart` |
 
-1. 先在 PR #26 里留个话，说明 main 的历史要清理、请他 rebase；
-2. 等他确认，或者先把 PR 合掉/关掉；
-3. 再执行上面的强推。
+清理只动目录结构，**不动任何源码内容**：清理前后工作树逐文件比对，
+1599 个文件 0 差异；21 个 tag 全部仍能解析到提交。
 
-## 回滚（万一后悔）
+## 二、PR #26 已通知
 
-备份里有清理 **之前** 的全部 48 个 ref：
+历史重写会让这个 PR 的 base 失效，所以先在你的 PR 上留了说明与 rebase 步骤：
+
+https://github.com/fadersketch/Promaid-mod/pull/26#issuecomment-5918742262
+
+（他的提交在 fork 上，不会丢；内容没变，rebase 应当无冲突。）
+
+## 三、做不了的：`rod` 远端
+
+`rod` 指向 **`rodericksthescriptkid/Promaid-mod-Ace-Warlock`** ——
+这是**别人的 fork**，GitHub 明确拒绝写入：
+
+```json
+"permissions": {"admin": false, "maintain": false, "push": false, "triage": false, "pull": true}
+```
+
+而且它确实是 fork（`"fork": true`，parent 就是你的仓库）：
+
+```
+remote: ! [remote rejected]  main -> main  (permission denied)
+```
+
+**这不是"要不要做"的问题，是权限上做不到。** 只有两种途径能清它：
+
+1. **让 fork 主人自己清**（推荐）：让他同步你清理后的 `main` ——
+   ```bat
+   git fetch upstream
+   git reset --hard upstream/main
+   git push --force-with-lease
+   ```
+   或者干脆删掉重建 fork（fork 没有独立价值时最省事）。
+2. **申请该仓库的协作者权限或转移**，再清。
+
+好消息是：**fork 是"衍生副本"，不是"污染源"。** 上游（权威版本）已经干净，
+新 clone 的人都从 `fadersketch/Promaid-mod` 拿干净历史；那个 fork 里的旧对象只影响它自己。
+
+## 四、回滚（万一）
+
+两份东西都留在本地：
+
+- `_cleanup_backup/promaid-ALL-refs-20261001.bundle`
+  清理**之前**的全部 48 个 ref（含所有旧 tag 与分支）。
+- `_cleanup_backup/remote-state-before-force-push.json`
+  强推**之前**两个远端每个分支/tag 的确切 SHA。
+
+从备份恢复一份旧仓库：
 
 ```bat
-:: 另找一个目录，从备份重建一份完整旧仓库
-git clone _cleanup_backup\promaid-ALL-refs-20261001.bundle restore-old
+git clone _cleanup_backup\promaid-all-refs-20261001.bundle restore-old
 cd restore-old
-:: 这时 HEAD 是旧的；把它的 main 推回去就能复原远端
-git push --force origin refs/remotes/origin/main:refs/heads/main
+git push --force origin <旧SHA>:refs/heads/main
 ```
 
-## 只想要"以后不再堆垃圾"、不想重写历史？
+## 五、顺带修掉的根因
 
-那就**别推**，本地保持现状即可 —— 单独看这次提交
-（`架构：归一化分形结构树 + 仓库根大扫除 + tools/ 归位`）已经做到：
+清理只是治标，**治本的是 `.gitignore`**：
 
-- `.gitignore` 从"只按后缀排除文件"改成 `/_*/` 前缀规则，目录形态的草稿不再漏网；
-- 14037 条未跟踪垃圾 → 0；
-- 仓库根 46 个脚本归位到 `tools/`。
+原来只按「文件后缀」逐条排除（`/_*.py`、`/_*.txt`…），
+所以**目录形态**的草稿（`_693tree/`、`_swb/`、`_f743/`…）全部漏网 ——
+一次 `git add -A` 就会把上万个反编译/解包文件推上远端。
 
-也就是说：**旧历史不清，垃圾也不会再长**。要不要连旧历史一起清，是你的取舍。
+现在改成锚定仓库根的前缀规则 `/_*/` 与 `/_*`，未跟踪条目从 **14037 降到 0**。
+以后不会再长出来。
