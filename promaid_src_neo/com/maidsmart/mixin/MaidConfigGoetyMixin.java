@@ -4,8 +4,8 @@ import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.AbstractM
 import com.github.tartaricacid.touhoulittlemaid.client.gui.entity.maid.config.MaidConfigContainerGui;
 import com.github.tartaricacid.touhoulittlemaid.client.gui.widget.button.MaidConfigButton;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
-import com.maidsmart.flight.MaidFreeFlightFlags;
-import com.maidsmart.flight.MaidFreeFlightNetworking;
+import com.maidsmart.goety.MaidGoetyAuto;
+import com.maidsmart.goety.MaidGoetyNetworking;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
@@ -15,32 +15,27 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * 实测六百七十八【仿创造飞行 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
- * 「创造飞行：开/关」，与 TLM 自己的「显示背包 / 能否开门」同一格式、同一列。
+ * 实测七百四十五·点1【飞行聚晶 · 女仆配置界面里的一行开关】——右键女仆 → 配置界面 →
+ * 「飞行聚晶：开/关」，与仿创造飞行那一行同一格式、同一列。
  *
- * 【为什么能这么做（关键调研结论）】TLM 的女仆配置界面确实是**硬编码**的（8 行
- * `MaidConfigButton`，没有注册表可插），但 `AbstractMaidContainerGui.initAdditionWidgets()`
- * 是 protected 的扩展点、`MaidConfigButton` 是公开控件——所以第三方可以**追加自己的一行**，
- * 不需要改 TLM 本体。我们仓库里「AI 记忆」开关用的就是这套（见 MaidConfigMemoryMixin），
- * 这里照搬：按钮位置右对齐、放在原生开关列（y=52 起）之上，不遮挡任何 TLM 控件。
+ * <p>玩家原话：「聚晶必须要使用指令这些 OP 权限才可以使用吗？常规生存不能使用？」——
+ * 七百一十八 那一版只有 OP 命令，普通玩家开不了。这一行就是"主人自己就能开"的入口
+ * （与 {@link MaidConfigFreeFlightMixin} 完全同构，只是把开关换成 Goety 自动档）。
  *
- * 【为什么不用 TLM 的 TaskData 存这个开关】TLM 的 `TaskDataRegister.writeSyncData` 会把编码结果
- * 强转 CompoundTag，一点开关就 ClassCastException 崩服（AiMemoryManager 的实测教训）——
- * 我们存 per-maid persistentData + 磁盘备份，客户端靠 S2C 缓存显示。
- *
- * 【无 refmap 注意】`addRenderableWidget` 是继承自 Screen 的 protected 方法——无 refmap 时
- * `@Shadow` 定位不到（会崩），照记忆开关的做法改反射调用。
+ * <p>【布局】MaidConfigButton 实测 **164×13**（javap：ctor 里 {@code sipush 164 / bipush 13}），
+ * 而 TLM 原生开关列从 **y=52** 起。所以我们的三行必须排在 y=52 之上：本行取 **y=36**
+ * （与"AI 记忆"y=8、"创造飞行"y=22 形成 14 的行距，13 高 ⇒ 36+13=49 &lt; 52，互不遮挡）。
  */
 @Mixin(MaidConfigContainerGui.class)
-public abstract class MaidConfigFreeFlightMixin {
+public abstract class MaidConfigGoetyMixin {
 
     /** 我们这一行按钮（renderAddition 每帧同步文本用） */
-    private MaidConfigButton promaid$freeFlightBtn = null;
+    private MaidConfigButton promaid$goetyBtn = null;
     /** 防连点：600ms 内重复点击忽略（双击会把"关"变回"开"） */
-    private static long PROMAID$LAST_CLICK = 0;
+    private static long PROMAID$GOETY_LAST_CLICK = 0;
 
     @Inject(method = "initAdditionWidgets", at = @At("TAIL"))
-    private void promaid$addFreeFlightToggle(CallbackInfo ci) {
+    private void promaid$addGoetyToggle(CallbackInfo ci) {
         try {
             AbstractMaidContainerGui<?> gui = (AbstractMaidContainerGui<?>) (Object) this;
             EntityMaid maid = gui.getMaid();
@@ -51,23 +46,23 @@ public abstract class MaidConfigFreeFlightMixin {
             String uid = maid.getUUID().toString();
             // 界面打开时先问一次真实状态（persistentData 只在服务端，客户端缓存可能是空的）
             net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                    new MaidFreeFlightNetworking.TogglePacket(uid, (byte) 0, false));
-            MaidConfigButton btn = new MaidConfigButton(w - 174, 22,
-                    Component.literal("创造飞行"),
-                    Component.literal(promaid$label(uid)),
+                    new MaidGoetyNetworking.TogglePacket(uid, (byte) 0, false));
+            MaidConfigButton btn = new MaidConfigButton(w - 174, 36,
+                    Component.literal("飞行聚晶"),
+                    Component.literal(promaid$goetyLabel(uid)),
                     b -> {
                         long now = System.currentTimeMillis();
-                        if (now - PROMAID$LAST_CLICK < 600) {
+                        if (now - PROMAID$GOETY_LAST_CLICK < 600) {
                             return;
                         }
-                        PROMAID$LAST_CLICK = now;
-                        Boolean cur = MaidFreeFlightFlags.cachedClient(uid);
-                        boolean next = !(cur != null ? cur : MaidFreeFlightFlags.globalOn());
+                        PROMAID$GOETY_LAST_CLICK = now;
+                        Boolean cur = MaidGoetyAuto.cachedClient(uid);
+                        boolean next = !(cur != null && cur);
                         b.setValue(Component.literal(next ? "\u00a7a开" : "\u00a77关"));
                         net.neoforged.neoforge.network.PacketDistributor.sendToServer(
-                                new MaidFreeFlightNetworking.TogglePacket(uid, (byte) 1, next));
+                                new MaidGoetyNetworking.TogglePacket(uid, (byte) 1, next));
                     });
-            this.promaid$freeFlightBtn = btn;
+            this.promaid$goetyBtn = btn;
             promaid$addRenderable((Screen) (Object) this, btn);
         } catch (Throwable ignored) {
         }
@@ -75,10 +70,10 @@ public abstract class MaidConfigFreeFlightMixin {
 
     /** renderAddition 每帧同步文本：服务端 S2C 回来后按钮要立刻反映真实值 */
     @Inject(method = "renderAddition", at = @At("HEAD"))
-    private void promaid$syncFreeFlightLabel(GuiGraphics graphics, int mouseX, int mouseY,
-                                             float partialTick, CallbackInfo ci) {
+    private void promaid$syncGoetyLabel(GuiGraphics graphics, int mouseX, int mouseY,
+                                        float partialTick, CallbackInfo ci) {
         try {
-            MaidConfigButton btn = this.promaid$freeFlightBtn;
+            MaidConfigButton btn = this.promaid$goetyBtn;
             if (btn == null) {
                 return;
             }
@@ -86,18 +81,15 @@ public abstract class MaidConfigFreeFlightMixin {
             if (maid == null) {
                 return;
             }
-            btn.setValue(Component.literal(promaid$label(maid.getUUID().toString())));
+            btn.setValue(Component.literal(promaid$goetyLabel(maid.getUUID().toString())));
         } catch (Throwable ignored) {
         }
     }
 
-    /** 按钮文本：未设置 = 跟随全局（全局关就是关）；显式值优先 */
-    private static String promaid$label(String uid) {
-        Boolean cur = MaidFreeFlightFlags.cachedClient(uid);
-        if (cur == null) {
-            return MaidFreeFlightFlags.globalOn() ? "\u00a7a开\u00a77(跟随全局)" : "\u00a77关\u00a78(跟随全局)";
-        }
-        return cur ? "\u00a7a开" : "\u00a77关";
+    /** 按钮文本：客户端缓存优先；未知 = 关（服务端 S2C 到了会纠正） */
+    private static String promaid$goetyLabel(String uid) {
+        Boolean cur = MaidGoetyAuto.cachedClient(uid);
+        return (cur != null && cur) ? "\u00a7a开" : "\u00a77关";
     }
 
     /** 反射调用 Screen.addRenderableWidget（继承方法，无 refmap 时 @Shadow 定位不到） */

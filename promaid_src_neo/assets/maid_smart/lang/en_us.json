@@ -232,6 +232,7 @@
   "config.promaid.misc.freeFlightTravel": "Free Flight: Fly Instead of Walking to Work",
   "config.promaid.misc.freeFlightTravelDist": "Free Flight: Fly If Farther Than (blocks)",
   "key.promaid.free_flight_toggle": "Toggle Maid Free Flight (aim at her)",
+  "key.promaid.goety_toggle": "Toggle Maid Flying-Focus Auto Mode (aim at her)",
   "config.promaid.combat.tetherLeashSteer": "Gunner Seat: Steer by Leash While Hanging (air raid only)",
   "config.promaid.maneuver": "Combat Maneuvers",
   "config.promaid.maneuver.enable": "Combat Maneuvers (master switch)",
