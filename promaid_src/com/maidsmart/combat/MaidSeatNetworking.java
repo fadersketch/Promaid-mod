@@ -57,6 +57,48 @@ public final class MaidSeatNetworking {
     public static void register() {
         CHANNEL.registerMessage(0, SyncPacket.class,
                 SyncPacket::encode, SyncPacket::decode, SyncPacket::handle);
+        CHANNEL.registerMessage(1, SwapSeatPacket.class,
+                SwapSeatPacket::encode, SwapSeatPacket::decode, SwapSeatPacket::handle);
+    }
+
+    /**
+     * 【实测七百四十一·点1】请求"把我换到另一个座位"（主驾 ↔ 副驾来回换）。C2S。
+     *
+     * <p>玩家原话：「如果玩家处于副座，可以通过手持骑乘指挥棒进行左击，从而把自己交换到主座位。
+     * 再左击一下再换回去。」——只带"要换到哪辆车"，不信任客户端算出的座位号：服务端自己按
+     * SWB 的座位表算（客户端那半只负责发这一下）。
+     */
+    public static void requestSwapSeat(int vehicleId) {
+        try {
+            CHANNEL.sendToServer(new SwapSeatPacket(vehicleId));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static class SwapSeatPacket {
+        public final int vehicleId;
+
+        public SwapSeatPacket(int vehicleId) {
+            this.vehicleId = vehicleId;
+        }
+
+        public static void encode(SwapSeatPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.vehicleId);
+        }
+
+        public static SwapSeatPacket decode(FriendlyByteBuf buf) {
+            return new SwapSeatPacket(buf.readInt());
+        }
+
+        public static void handle(SwapSeatPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> {
+                net.minecraft.server.level.ServerPlayer sp = ctx.get().getSender();
+                if (sp != null) {
+                    com.maidsmart.combat.RideBindManager.handleSwapSeatRequest(sp, pkt.vehicleId);
+                }
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /** 向"追踪这只女仆的玩家 + 她自己"广播配对（{@code mountId < 0} = 解除）。 */

@@ -1001,7 +1001,13 @@ BlockPos stand = findStand(newLevel,
                 //  操作**，要能把人传来（只传人 + 解除绑定），所以它不算"停放豁免"那一档——
                 //  单独一个 flag 放行，落到下面 summonMaidTo 的 special 分支。
                 boolean specialRider = com.maidsmart.combat.RideBindManager.isSpecialMountRider(md);
-                if (!broomRider && !rideRider && !specialRider && (md.isMaidInSittingPose()
+                // 【实测七百四十一·点4】她自己坐上模组载具（不是我们绑的）也**不算停放豁免**：
+                // 玩家原话「有的时候，女仆会自己坐到某个载具上，这个时候……女仆就会一直卡在车上
+                // 不动。……在排班表里面的召她过来最好可以规避掉骑乘模式。直接把女仆自己召唤过来。」
+                // ——她是乘客、旧判据会把她当"玩家明确停放"留下来；这一档单独放行，
+                // 落到下面 summonMaidTo 的"先请她下车再传人"那支。
+                boolean selfBoarded = com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(md);
+                if (!broomRider && !rideRider && !specialRider && !selfBoarded && (md.isMaidInSittingPose()
                         || md.m_20159_() || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
                     kept++;
                     continue;
@@ -1390,6 +1396,14 @@ BlockPos stand = findStand(newLevel,
                 com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
                 return teleportCore(maid, player, true) ? 1 : 2;
             }
+            // 【实测七百四十一·点4】她**自己**坐上模组载具（不是我们绑的）：玩家原话「有的时候，
+            // 女仆会自己坐到某个载具上，这个时候……女仆就会一直卡在车上不动。……在排班表里面的
+            // 召她过来最好可以规避掉骑乘模式。直接把女仆自己召唤过来。」——这里就在传送前先请她
+            // 下来（只下鞍、不碰任何我们自己的标记），再走下面那条普通"传人"的链路。
+            if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
+                com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
+                return teleportCore(maid, player, true) ? 1 : 2;
+            }
             // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬（"她们也可以被传送过来"）
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 return recallRideRider(maid, player) ? 1 : 2;
@@ -1430,6 +1444,15 @@ BlockPos stand = findStand(newLevel,
                 return false;
             }
             com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
+            return teleportCore(maid, owner, true);
+        }
+        // 【实测七百四十一·点4】她自己坐上模组载具（非指挥棒绑定）：先请她下来，再单独传人。
+        // 与上一档同款"只传人不传载具"，只是不需要解绑任何东西（她身上本就没有我们的标记）。
+        if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
+            if (!owner.m_6084_()) {
+                return false;
+            }
+            com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
             return teleportCore(maid, owner, true);
         }
         // 【实测七百一十六·点4】骑坐骑的女仆同理：连人带坐骑一起搬

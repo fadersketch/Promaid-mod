@@ -355,17 +355,26 @@ public final class MaidAirCombat {
      * （七百三十四 修的是"拿她自己的 Y 当基准"，没覆盖"主人与她在同一台机器上"这一档）。
      *
      * <h2>修法</h2>
-     * 玩家在机上时**不追任何高度基准**，直接悬停在**她现在的位置**（水平 + 竖直都保持）。
+     * 玩家在机上时**不追任何高度基准**，直接悬停在**载具现在的位置**（水平 + 竖直都保持）。
      * 接敌那一档完全不受影响（照旧爬升到敌上、绕圈）——正是玩家要的"锁敌的时候正常"。
      *
-     * @return 她自己当前的位置（悬停点）
+     * <h2>【实测七百四十一·点2a】为什么基准必须是**载具**的位置</h2>
+     * 玩家原话：「目前和女仆同时乘坐直升机的时候，悬浮状态下还是会有缓慢的上升。」
+     * 根因：738 这一档返回的是**她自己**的位置，而她是**乘客**——她的 Y 是座位在载具内的
+     * 局部偏移（Mi-28 驾驶座 {@code y ≈ 机身 + 1.47}）。{@code driveFlight} 收到
+     * {@code dy = 目标Y − mount.getY()} 恒为 **+1.4 格左右**，于是总距（升力）那条 PD 每拍都在
+     * "还没到目标高度"上补一点 → **永久缓慢爬升**。飞行档唯一能控制的是**载具**，所以基准必须是
+     * 载具自己的位置：{@code dy = 0}、{@code horiz = 0}，才是真正的"原地悬停"。
+     *
+     * @param mount 她正开的载具（唯一的高度/水平基准）
+     * @return 载具当前的位置（悬停点）
      */
-    public static Vec3 holdHere(EntityMaid maid) {
+    public static Vec3 holdHere(EntityMaid maid, Entity mount) {
         try {
-            if (maid == null) {
+            if (mount == null) {
                 return null;
             }
-            return new Vec3(maid.m_20185_(), maid.m_20186_(), maid.m_20189_());
+            return new Vec3(mount.m_20185_(), mount.m_20186_(), mount.m_20189_());
         } catch (Throwable ignored) {
             return null;
         }

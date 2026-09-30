@@ -191,6 +191,25 @@ public final class MaidMountCompat {
     private static Method mGetProjectileGravity;  // getProjectileGravity(Entity) -> float
     private static Method mRangeFiringSolution;   // RangeTool.calculateFiringSolution(Vec3,Vec3,Vec3,double,double)
 
+    /* 【实测七百四十一·点2/点3】按**炮名**取的四个重载（与上面按 Entity 那组一一对应）。
+     *
+     * 为什么必须补这一组（反编译实证，是本批"直升机打不出炮弹 / 炮艇不装弹"的根因之一）：
+     * 上面那组 {@code getShootPos(Entity,float)} / {@code getShootVec(Entity,float)} 内部走的是
+     * {@code getGunData(getSeatIndex(entity))}——**按"她坐哪个座"解析武器**。而卓越前线的多座载具
+     * 里，主炮常常**不在她坐的那一座**：
+     *   · Mi-28：炮塔控制器 = 座 1（30mm 机炮），驾驶座 0 的武器是火箭弹 → 瞄准算的是机炮、
+     *     扣扳机打的却是座 0 的火箭弹（"炮弹准度约等于 0"）。
+     *   · AC-130H：驾驶座 0 **一个武器都没有**，三门炮在座 1/2/3。
+     * 所以"瞄哪门炮"与"打哪门炮"必须用**同一个炮名**统一解析——这一组就是那个入口。 */
+    private static Method mGetShootPosName;         // getShootPos(String, float)
+    private static Method mGetShootVecName;         // getShootVec(String, float)
+    private static Method mGetProjectileVelocityName; // getProjectileVelocity(String) -> float
+    private static Method mGetProjectileGravityName;  // getProjectileGravity(String) -> float
+    private static Method mVehicleShootByName;      // vehicleShoot(LivingEntity, String, UUID, Vec3)
+    private static Method mGetGunNameAtSeat;        // getGunName(int) -> String（该座**当前选中**那门炮名）
+    private static Method mHasWeaponSeat;           // hasWeapon(int) -> boolean（该座有没有武器）
+    private static Method mGetGunDataName;          // getGunData(String) -> GunData（按炮名取枪）
+
     /* ==================== 反射缓存：冰火传说 ==================== */
 
     private static boolean iafInited;
@@ -412,6 +431,28 @@ public final class MaidMountCompat {
                         Vec3.class, Vec3.class, Vec3.class, double.class, double.class);
             } catch (Throwable ignored) {
                 mRangeFiringSolution = null;
+            }
+            // 【实测七百四十一·点2/点3】按**炮名**取的那一组（与上面按 Entity 那组一一对应）。
+            // 各自单独 try——缺了它只是"多座载具的炮打不准/炮艇不装弹"，不该拖垮驾驶/开火。
+            try {
+                mGetShootPosName = cVehicle.getMethod("getShootPos", String.class, float.class);
+                mGetShootVecName = cVehicle.getMethod("getShootVec", String.class, float.class);
+                mGetProjectileVelocityName = cVehicle.getMethod("getProjectileVelocity", String.class);
+                mGetProjectileGravityName = cVehicle.getMethod("getProjectileGravity", String.class);
+                mVehicleShootByName = cVehicle.getMethod("vehicleShoot", LivingEntity.class,
+                        String.class, java.util.UUID.class, Vec3.class);
+                mGetGunNameAtSeat = cVehicle.getMethod("getGunName", int.class);
+                mHasWeaponSeat = cVehicle.getMethod("hasWeapon", int.class);
+                mGetGunDataName = cVehicle.getMethod("getGunData", String.class);
+            } catch (Throwable ignored) {
+                mGetShootPosName = null;
+                mGetShootVecName = null;
+                mGetProjectileVelocityName = null;
+                mGetProjectileGravityName = null;
+                mVehicleShootByName = null;
+                mGetGunNameAtSeat = null;
+                mHasWeaponSeat = null;
+                mGetGunDataName = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -1322,6 +1363,10 @@ public final class MaidMountCompat {
             if (!orbit && horiz <= stopBand(mount)) {
                 brakeVehicle(mount);
             }
+            // 【实测七百四十一·点3】地面载具同样支持"炮随车体"那档的机头瞄准（最后写的赢）。
+            // 判据天然最窄：只有 aimBallistic 登记了请求（这车有炮、有敌人、且没走炮塔/武器站）
+            // 才会生效；其余一切情况 NOSE_AIM 里没有这一辆 → 本句是空操作。
+            applyNoseAim(mount);
             logDrive(mount, (orbit ? "绕圈档 " : "") + "位掩码=" + bits + " 引擎=" + (eng.isEmpty() ? "?" : eng)
                     + (headSteer ? " 头朝向=" + Math.round(desiredYaw) : "")
                     + " 距目标=" + (long) horiz + "格");
@@ -1696,6 +1741,8 @@ public final class MaidMountCompat {
                 bits |= 0x100;                         // 冲刺位（引擎里抬高速度上限）
             }
             mProcessInput.invoke(mount, bits);
+            // 【实测七百四十一·点3】固定翼同样支持"炮随车体"那档的机头瞄准（最后写的赢）。
+            applyNoseAim(mount);
             // 【关键】飞行档**绝不 brakeVehicle**：空中把 power 归零就是"掉高度 + 被反复拉回"。
             logDrive(mount, "飞行档 引擎=" + eng
                     + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
@@ -2167,12 +2214,152 @@ public final class MaidMountCompat {
             if (seat >= 0) {
                 ensureMagazineLoaded(mount, seat);
             }
+            // 【实测七百四十一·点2b/点3】她自己那一座没武器（AC-130H 的座 0）时，上面那句
+            // 什么也问不出来——补一发"把**这一场要用的那门炮**的弹匣装满"。这就是炮艇
+            // "会填充炮弹"的那一半（另一半是 feedVehicleAmmo 把弹搬进车容器）。
+            String gun = gunNameFor(mount, maid);
+            if (gun != null) {
+                int gs = seatOfGun(mount, gun);
+                if (gs >= 0 && gs != seat) {
+                    ensureMagazineLoaded(mount, gs);
+                }
+            }
         } catch (Throwable ignored) {
         }
     }
 
-    /** 炮口位置（{@code getShootPos(int,float)}）；拿不到就返回 null（调用方退回眼睛位置）。 */
+    /** 这门炮挂在哪个座上（反查）；找不到 → -1。 */
+    private static int seatOfGun(Entity mount, String gunName) {
+        try {
+            if (gunName == null) {
+                return -1;
+            }
+            int n = maxPassengers(mount);
+            for (int i = 0; i < n; i++) {
+                if (gunName.equals(gunNameAt(mount, i))) {
+                    return i;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return -1;
+    }
+
+    /**
+     * 【实测七百四十一·点2b/点3】她该操作**哪一门炮**——全车唯一的那次"选炮"。
+     *
+     * <h2>为什么必须有这个方法（本批"直升机打不出炮弹 / 炮艇完全不装弹"的共同根因）</h2>
+     * 反编译实证：{@code getShootPos/getShootVec/getProjectileVelocity/getProjectileGravity}
+     * 的 **{@code Entity} 重载**内部一律走 {@code getGunData(getSeatIndex(entity))}——**按"她坐哪座"
+     * 解析武器**。可卓越前线的多座载具里主炮常常**不在她坐的那一座**：
+     * <ul>
+     *   <li><b>Mi-28</b>：{@code TurretControllerIndex = 1}，30mm 机炮在**座 1**；她（驾驶员）
+     *       在座 0，座 0 的武器是火箭弹。于是 740 那一版"瞄准算的是机炮、扣扳机打的却是火箭弹"
+     *       → 玩家原话「发射的炮弹准度约等于 0」。</li>
+     *   <li><b>AC-130H</b>：座 0（驾驶位）**一门武器都没有**，三门炮在座 1/2/3。
+     *       {@code getGunData(0)} 恒为 null → 连"该搬什么弹"都问不出来 → 一颗都不装、
+     *       引擎那条"Mob 乘客自动开火"也因 {@code getGunData(mob) == null} 直接跳过
+     *       → 玩家原话「女仆不会填充和发射炮弹」。</li>
+     * </ul>
+     * 所以"瞄哪门炮"和"打哪门炮"必须由**同一个炮名**统一解析。优先级：
+     * <ol>
+     *   <li><b>车上的炮塔</b>（{@code hasTurret}，且炮塔位上没有玩家在手动瞄）→ 用炮塔那门炮。
+     *       <b>这一条排最前</b>，因为它才是"能被瞄准的炮"：Mi-28 的 30mm 机炮（座 1）是玩家说的
+     *       "那个炮弹"，炮塔能逐拍转到位（740 那一版瞄的就是它，却把扳机扣在了座 0 的火箭弹上）。</li>
+     *   <li>否则<b>她自己座位上的武器</b>（Mi-28 座 0 的火箭弹、prism_tank 座 0 的激光——单座/
+     *       炮塔归驾驶位的车全部走这一条，与旧行为完全一致）；</li>
+     *   <li>否则<b>武器站</b>（{@code hasPassengerWeaponStation}，且该位没有玩家）；</li>
+     *   <li>否则<b>车上第一门有武器的座</b>（AC-130H：座 0 空 → 落到座 1 的 M61）——炮艇靠这一条。</li>
+     * </ol>
+     * 全都没有 → {@code null}（这车确实没炮，调用方照旧不做任何事）。
+     *
+     * @return 炮名（{@code getGunName(int)} 的返回值，可直接喂给按名取的各个重载）；没有 → null
+     */
+    static String gunNameFor(Entity mount, EntityMaid maid) {
+        try {
+            if (mount == null || !isVehicle(mount) || mGetGunNameAtSeat == null) {
+                return null;
+            }
+            // ① 炮塔（真正的"可瞄准的炮"）——玩家没占着这个位才归我们
+            int turretSeat = controllerIndex(mount, mHasTurret, mGetTurretCtrlIdx);
+            if (turretSeat >= 0 && !seatHasPlayer(mount, turretSeat)) {
+                String g = gunNameAt(mount, turretSeat);
+                if (g != null) {
+                    return g;
+                }
+            }
+            // ② 她自己那一座（旧行为，保住已经能用的单座车）
+            if (maid != null) {
+                String own = gunNameAt(mount, seatIndexOf(mount, maid));
+                if (own != null) {
+                    return own;
+                }
+            }
+            // ③ 武器站
+            int stationSeat = controllerIndex(mount, mHasWeaponStation, mGetWeaponCtrlIdx);
+            if (stationSeat >= 0 && !seatHasPlayer(mount, stationSeat)) {
+                String g = gunNameAt(mount, stationSeat);
+                if (g != null) {
+                    return g;
+                }
+            }
+            // ④ 兜底：从 0 号座起找第一门有武器的座（AC-130H：座 0 空 → 落到座 1 的 M61）
+            int n = maxPassengers(mount);
+            for (int i = 0; i < n; i++) {
+                String g = gunNameAt(mount, i);
+                if (g != null) {
+                    return g;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /** 这个位上坐的是不是玩家（玩家在瞄 → 我们让开）。 */
+    private static boolean seatHasPlayer(Entity mount, int seat) {
+        try {
+            if (seat < 0 || mGetNthEntity == null) {
+                return false;
+            }
+            return mGetNthEntity.invoke(mount, seat) instanceof net.minecraft.world.entity.player.Player;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 某一座上**当前选中**那门炮的名字；该座没武器 / 问不出来 → null。 */
+    private static String gunNameAt(Entity mount, int seat) {
+        try {
+            if (seat < 0 || mGetGunNameAtSeat == null) {
+                return null;
+            }
+            Object v = mGetGunNameAtSeat.invoke(mount, seat);
+            return v instanceof String s && !s.isEmpty() ? s : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 某个"控制位"（炮塔/武器站）的座号；这车没这个位 → -1。 */
+    private static int controllerIndex(Entity mount, Method hasSlot, Method ctrlIdx) {
+        try {
+            if (hasSlot == null || ctrlIdx == null) {
+                return -1;
+            }
+            if (!Boolean.TRUE.equals(hasSlot.invoke(mount))) {
+                return -1;
+            }
+            Object idx = ctrlIdx.invoke(mount);
+            return idx instanceof Integer i ? i : -1;
+        } catch (Throwable ignored) {
+            return -1;
+        }
+    }
+
+    /** 【实测七百四十一起未使用】按座位的炮口位置入口——已被按炮名的 {@link #shootPosOfGun} 取代。 */
     private static Method mGetShootPosSeat;
+    @SuppressWarnings("unused")
     private static Vec3 shootPosOf(Entity mount, int seat) {
         try {
             if (mGetShootPosSeat == null) {
@@ -2272,23 +2459,30 @@ public final class MaidMountCompat {
                 return false;
             }
             ensureAmmo(mount, maid); // 弹匣空就自己上弹（不然 canShoot 为假、永远打不响）
-            Vec3 desired = firingSolution(mount, maid, target);
+            // 【实测七百四十一·点2b/点3】全车只在这里选一次炮，后面"瞄"与"打"共用同一个名字。
+            String gun = gunNameFor(mount, maid);
+            if (gun == null) {
+                return false; // 这车真的没有炮（或反射拿不到）→ 交回旧行为
+            }
+            Vec3 desired = firingSolution(mount, gun, maid, target);
             if (desired == null) {
                 return false;
             }
-            // 交给引擎自己的自动瞄准（它会换算相对角、限速、限位；拿不到就退回"直接判对准"）。
             boolean aimed = false;
-            if (mTurretAutoAimFromVector != null && mHasTurret != null && mGetTurretCtrlIdx != null
-                    && isControllerMob(mount, mHasTurret, mGetTurretCtrlIdx)) {
+            // 【谁在瞄】炮塔 / 武器站两条链各自只在该位"不由玩家手动瞄"时才动手。
+            // 【实测七百四十一】引擎自己那道闸是"控制位坐着 Mob"；多座载具上炮塔位常常空着
+            // （Mi-28 炮塔在座 1、她在座 0），照那道闸炮塔永远没人瞄 —— 所以放宽到
+            // {@link #isControllerEntity}（位存在、索引有效、且没有玩家占着手动瞄）。
+            boolean turretMob = isControllerEntity(mount, mHasTurret, mGetTurretCtrlIdx);
+            boolean stationMob = isControllerEntity(mount, mHasWeaponStation, mGetWeaponCtrlIdx);
+            if (mTurretAutoAimFromVector != null && turretMob) {
                 try {
                     mTurretAutoAimFromVector.invoke(mount, desired);
                     aimed = true;
                 } catch (Throwable ignored) {
                 }
             }
-            if (mPassengerWeaponAutoAimFromVector != null && mHasWeaponStation != null
-                    && mGetWeaponCtrlIdx != null
-                    && isControllerMob(mount, mHasWeaponStation, mGetWeaponCtrlIdx)) {
+            if (mPassengerWeaponAutoAimFromVector != null && stationMob) {
                 try {
                     mPassengerWeaponAutoAimFromVector.invoke(mount, desired);
                     aimed = true;
@@ -2296,9 +2490,15 @@ public final class MaidMountCompat {
                 }
             }
             if (!aimed) {
-                return false; // 两个位都不是 Mob 控制 → 没有"炮塔"可瞄，交回旧行为
+                // 没有可用的自动瞄准链（炮艇：AC-130H 既无炮塔也无武器站）→ 自己把机头摆过去。
+                // 这条不是"绕过引擎"，而是**引擎自己也没有别的路**：它的自动瞄准入口只有
+                // turret/passengerWeapon 两个，而 AC-130H 那两个位都不存在。见 pointBarrelAt。
+                aimed = pointBarrelAt(mount, gun, desired);
             }
-            return alignedWith(mount, maid, desired);
+            if (!aimed) {
+                return false; // 确实没有可瞄的炮 → 交回旧行为
+            }
+            return alignedWith(mount, gun, desired);
         } catch (Throwable ignored) {
             return false;
         }
@@ -2308,9 +2508,9 @@ public final class MaidMountCompat {
     private static final double AIM_ALIGN_DEG = 3.0;
 
     /** 当前炮口方向与期望方向是否已对准（{@link #AIM_ALIGN_DEG}）。 */
-    private static boolean alignedWith(Entity mount, EntityMaid maid, Vec3 desired) {
+    private static boolean alignedWith(Entity mount, String gun, Vec3 desired) {
         try {
-            Vec3 cur = shootVecOf(mount, maid);
+            Vec3 cur = shootVecOfGun(mount, gun);
             if (cur == null || cur.m_82556_() < 1.0E-8) {
                 return false;
             }
@@ -2333,15 +2533,25 @@ public final class MaidMountCompat {
      * </pre>
      * 那个 {@code vec3} 不是笔误：引擎把炮口沿炮管**反投影回车身**当作发射点（消除"炮口已经
      * 领先目标一点"的偏差）。我们照抄，才能和引擎自己开火时算得一模一样的解。
+     *
+     * <p>【实测七百四十一·点2b/点3】四个量全部改走**按炮名**的重载（{@code getShootPos(String,float)}
+     * 等）——740 那一版走的是 {@code Entity} 重载，内部按"她坐哪座"解析武器，于是多座载具
+     * （Mi-28 炮在座 1、AC-130H 炮在座 1/2/3）里"瞄的炮"与"打的炮"不是同一门。
+     * 反投影的距离基准改用**炮口到载具原点**（引擎用的是"炮口到她"；她是乘客时两者只差座位偏移，
+     * 但用载具原点更稳——她若是乘客，{@code position()} 就是座位，与载具原点差那一截座位偏移）。
      */
-    private static Vec3 firingSolution(Entity mount, EntityMaid maid, LivingEntity target) {
+    private static Vec3 firingSolution(Entity mount, String gun, EntityMaid maid, LivingEntity target) {
         try {
-            Vec3 muzzle = shootPosOf(mount, maid);
-            Vec3 dir = shootVecOf(mount, maid);
+            if (gun == null) {
+                return null;
+            }
+            Vec3 muzzle = shootPosOfGun(mount, gun);
+            Vec3 dir = shootVecOfGun(mount, gun);
             if (muzzle == null || dir == null) {
                 return null;
             }
-            Vec3 launch = muzzle.m_82549_(dir.m_82490_(muzzle.m_82557_(maid.m_20182_())));
+            double back = muzzle.m_82557_(mount.m_20182_());
+            Vec3 launch = muzzle.m_82549_(dir.m_82490_(back));
             Vec3 targetPos = target.m_20191_().m_82399_();
             Vec3 targetVel = target.m_20184_();
             try {
@@ -2353,8 +2563,8 @@ public final class MaidMountCompat {
             if (target instanceof net.minecraft.world.entity.player.Player) {
                 targetVel = targetVel.m_82520_(2.0, 1.0, 2.0);
             }
-            double velocity = projectileVelocityOf(mount, maid);
-            double gravity = projectileGravityOf(mount, maid);
+            double velocity = projectileVelocityOfGun(mount, gun);
+            double gravity = projectileGravityOfGun(mount, gun);
             Object sol = mRangeFiringSolution.invoke(null, launch, targetPos, targetVel, velocity, gravity);
             return sol instanceof Vec3 v ? v : null;
         } catch (Throwable ignored) {
@@ -2362,36 +2572,38 @@ public final class MaidMountCompat {
         }
     }
 
-    /** {@code getShootPos(Entity, float)}（引擎自己的取炮位重载）。 */
-    private static Vec3 shootPosOf(Entity mount, Entity rider) {
+    /* ---------- 按**炮名**取炮位/炮向/弹道参数（多座载具正解；见 gunNameFor 的注释） ---------- */
+
+    /** {@code getShootPos(String, float)}——**这门炮**的炮口世界位置。 */
+    private static Vec3 shootPosOfGun(Entity mount, String gun) {
         try {
-            if (mGetShootPosEntity == null) {
+            if (mGetShootPosName == null) {
                 return null;
             }
-            Object v = mGetShootPosEntity.invoke(mount, rider, 1.0f);
+            Object v = mGetShootPosName.invoke(mount, gun, 1.0f);
             return v instanceof Vec3 vec ? vec : null;
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    /** {@code getShootVec(Entity, float)}——炮管当前朝向（partialTicks=1.0 即当前值，见 740 侦察）。 */
-    private static Vec3 shootVecOf(Entity mount, Entity rider) {
+    /** {@code getShootVec(String, float)}——**这门炮**炮管的当前朝向。 */
+    private static Vec3 shootVecOfGun(Entity mount, String gun) {
         try {
-            if (mGetShootVecEntity == null) {
+            if (mGetShootVecName == null) {
                 return null;
             }
-            Object v = mGetShootVecEntity.invoke(mount, rider, 1.0f);
+            Object v = mGetShootVecName.invoke(mount, gun, 1.0f);
             return v instanceof Vec3 vec ? vec : null;
         } catch (Throwable ignored) {
             return null;
         }
     }
 
-    /** {@code getProjectileVelocity(Entity)}（这门武器的初速；拿不到退回引擎默认 20）。 */
-    private static double projectileVelocityOf(Entity mount, Entity rider) {
+    /** {@code getProjectileVelocity(String)}（这门炮的初速；拿不到退回引擎默认 20）。 */
+    private static double projectileVelocityOfGun(Entity mount, String gun) {
         try {
-            Object v = mGetProjectileVelocity.invoke(mount, rider);
+            Object v = mGetProjectileVelocityName.invoke(mount, gun);
             if (v instanceof Number n && n.doubleValue() > 0.0) {
                 return n.doubleValue();
             }
@@ -2400,10 +2612,10 @@ public final class MaidMountCompat {
         return 20.0;
     }
 
-    /** {@code getProjectileGravity(Entity)}（这门武器的重力；拿不到退回引擎默认 0.05）。 */
-    private static double projectileGravityOf(Entity mount, Entity rider) {
+    /** {@code getProjectileGravity(String)}（这门炮的重力；拿不到退回引擎默认 0.05）。 */
+    private static double projectileGravityOfGun(Entity mount, String gun) {
         try {
-            Object v = mGetProjectileGravity.invoke(mount, rider);
+            Object v = mGetProjectileGravityName.invoke(mount, gun);
             if (v instanceof Number n && n.doubleValue() > 0.0) {
                 return n.doubleValue();
             }
@@ -2411,6 +2623,8 @@ public final class MaidMountCompat {
         }
         return 0.05;
     }
+
+    /* ---------- 按炮名那一组是唯一路径；下面这些"按乘客/按座位"的旧入口已在 741 删除 ---------- */
 
     /**
      * 【实测七百四十】开火：{@code vehicleShoot(LivingEntity, UUID, Vec3)}。
@@ -2429,10 +2643,22 @@ public final class MaidMountCompat {
             if (mount == null || maid == null || target == null || !target.m_6084_()) {
                 return false;
             }
-            if (mVehicleShootAt == null) {
+            // 【实测七百四十一·点2b/点3】按**炮名**开火（{@code vehicleShoot(LivingEntity,String,UUID,Vec3)}）。
+            //
+            // 为什么不能用按乘客的那个重载：它走 {@code getSeatIndex(maid)} → {@code getGunData(座号)}
+            // → 打的是**她那座**的武器。Mi-28 上她在座 0、炮在座 1，于是"瞄炮塔、打火箭弹"；
+            // AC-130H 上座 0 压根没武器，那个重载会在 Kotlin 的 {@code checkNotNull(gunData)} 上
+            // **抛 IllegalStateException**（反编译实证）。按炮名则两头都对齐，且它对没有炮塔的车
+            // 同样有效（AC-130H 的三门炮就是靠这一条打出去的）。
+            //
+            // 【为什么 targetPos 仍传 null】反编译 {@code GunItem.shoot} 实证：那个位置参数**只有
+            // {@code MissileProjectile}（制导导弹）读**，炮弹一律按炮管当前朝向飞。UUID 照传
+            // （导弹因此制导；炮弹忽略）。
+            String gun = gunNameFor(mount, maid);
+            if (gun == null || mVehicleShootByName == null) {
                 return false;
             }
-            mVehicleShootAt.invoke(mount, maid, target.m_20148_(), null);
+            mVehicleShootByName.invoke(mount, maid, gun, target.m_20148_(), null);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -2490,6 +2716,147 @@ public final class MaidMountCompat {
             return false;
         }
     }
+
+    /**
+     * 【实测七百四十一·点2b/点3】这个位能不能由**我们**接管瞄准——比 {@link #isControllerMob}
+     * 宽一档：位存在、索引有效、且**没有玩家坐在那里手动瞄**。
+     *
+     * <p>为什么要放宽：引擎自己只在"控制位坐着 Mob"时才自动瞄准（{@code VehicleEntity.baseTick}
+     * 那条 {@code instanceof Mob}）。可卓越前线的多座载具里，炮塔控制位常常**空着**——
+     * Mi-28 的炮塔控制器是座 1 而她（驾驶员）在座 0，座 1 没人。照引擎那道闸，炮塔永远没人瞄，
+     * 正是"炮弹准度约等于 0"的另一半。我们算得出弹道解，所以这一档由我们接管；唯一必须让开的是
+     * **玩家正坐在那个位上手动瞄**（那种情况我们插手就是跟玩家抢炮塔）。
+     */
+    private static boolean isControllerEntity(Entity mount, Method hasSlot, Method ctrlIdx) {
+        try {
+            if (hasSlot == null || ctrlIdx == null) {
+                return false;
+            }
+            if (!Boolean.TRUE.equals(hasSlot.invoke(mount))) {
+                return false;
+            }
+            Object idxObj = ctrlIdx.invoke(mount);
+            int idx = idxObj instanceof Integer i ? i : -1;
+            if (idx < 0) {
+                return false;
+            }
+            Object nth = mGetNthEntity == null ? null : mGetNthEntity.invoke(mount, idx);
+            if (nth instanceof net.minecraft.world.entity.player.Player) {
+                return false; // 玩家在这个位上手动瞄 → 让开
+            }
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百四十一·点3】没有炮塔/武器站时的"机头瞄准"。
+     *
+     * <h2>为什么炮艇只能这样瞄（反编译实证）</h2>
+     * AC-130H 既没有 {@code TurretPos} 也没有 {@code PassengerWeaponStationPos}，所以引擎那两条
+     * 自动瞄准链**都不存在**。更要紧的是它的三门炮（M61/Bofors/M102）的
+     * {@code ShootPos.Directions = ["Passenger"]}，而按炮名取的 {@code getShootVec(String,float)}
+     * 走的是 **2 参** {@code getVectorFromString(String,float)}——查的是 {@code vectorTransform}
+     * 那张表，表里**没有 "Passenger"**，于是落到 {@code "Default"} = {@code getViewVector()} =
+     * **载具自己的机头方向**（反编译 {@code registerTransforms} 与 {@code getVectorFromString} 实证）。
+     * 也就是说：**炮艇的炮弹沿机头飞**——想打中，只能把机头对准敌人。同一条判据也覆盖 AH-6 /
+     * A-10 这类"机炮挂在车体、方向是 {@code Vehicle} 变换"的固定炮。
+     *
+     * <h2>【为什么只"登记"、不在本方法里写】</h2>
+     * 调用顺序是 {@code RideBindManager.drive()}：先 {@code tickAttack}（本方法在这里被调），
+     * **之后**才 {@code feedNavigation → driveVehicle/driveFlight}——后者每拍都会自己写
+     * {@code setYRot}（直升机那档的直写机头、固定翼那档的鼠标通道）。在这里直接写会被下一句
+     * 覆盖掉。所以这里只把"该朝哪"登记下来（带几拍时效），由飞行档在**它自己写完之后的最后**
+     * 调 {@link #applyNoseAim} 落地（顺序即优先级：最后写的赢）。
+     *
+     * @return true = 已经登记了瞄准请求
+     */
+    static boolean pointBarrelAt(Entity mount, String gun, Vec3 desired) {
+        try {
+            if (mount == null || desired == null || desired.m_82556_() < 1.0E-8) {
+                return false;
+            }
+            Vec3 n = desired.m_82541_();
+            // 方向向量 -> MC 的 yaw/pitch：yaw = atan2(-x, z)、pitch = -asin(y)
+            // 【SRG 提醒】Vec3 的 x/y/z 在 1.20.1 是 f_82479_/f_82480_/f_82481_（1.21 才是 x/y/z）。
+            float wantYaw = (float) Math.toDegrees(Math.atan2(-n.f_82479_, n.f_82481_));
+            float wantPitch = (float) Math.toDegrees(-Math.asin(clamp(n.f_82480_, -1.0, 1.0)));
+            if (NOSE_AIM.size() > 512) {
+                NOSE_AIM.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
+            }
+            NOSE_AIM.put(mount.m_20148_(), new double[]{wantYaw, wantPitch,
+                    (double) (NOW_TICK + NOSE_AIM_TTL_TICKS)});
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 飞行/驾驶档在**自己写完机头之后**调：若这一拍有活的瞄准请求，就把机头按限速摆过去
+     * （并连 {@code serverYaw} 一起写，否则被 {@code handleClientSync} 的 lerp 拽回），
+     * 同时把鼠标 X/Y 通道归零——否则引擎那一拍还会按旧通道值再转一点，与我们对冲。
+     *
+     * <p>时效很短（{@link #NOSE_AIM_TTL_TICKS} 拍）：目标一没，{@code aimBallistic} 不再登记，
+     * 请求自动过期，飞行档**立刻回到原来的行为**（跟随/盘旋一个字节都不变）。
+     */
+    static void applyNoseAim(Entity mount) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            double[] req = NOSE_AIM.get(mount.m_20148_());
+            if (req == null) {
+                return;
+            }
+            if ((double) NOW_TICK > req[2]) {
+                NOSE_AIM.remove(mount.m_20148_()); // 过期 → 交回飞行档自己控
+                return;
+            }
+            float wantYaw = (float) req[0];
+            float wantPitch = (float) req[1];
+            float yaw = wrapDegrees(mount.m_146908_()
+                    + clamp(wrapDegrees(wantYaw - mount.m_146908_()), -NOSE_AIM_MAX_DEG, NOSE_AIM_MAX_DEG));
+            float pitch = clamp(mount.m_146909_()
+                    + clamp(wantPitch - mount.m_146909_(), -NOSE_AIM_MAX_DEG, NOSE_AIM_MAX_DEG),
+                    -NOSE_AIM_PITCH_LIMIT, NOSE_AIM_PITCH_LIMIT);
+            mount.m_146922_(yaw);
+            mount.m_146926_(pitch);
+            if (mSetServerYaw != null) {
+                try {
+                    mSetServerYaw.invoke(mount, yaw);
+                } catch (Throwable ignored) {
+                }
+            }
+            mSetMouseX(mount, 0.0f); // 清掉飞行档刚写的鼠标通道，免得它这一拍再转一点与我们对冲
+            mSetMouseY(mount, 0.0f);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 载具 UUID → [期望 yaw, 期望 pitch, 过期 tick]。见 {@link #pointBarrelAt}。 */
+    private static final java.util.Map<java.util.UUID, double[]> NOSE_AIM =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 机头瞄准请求的时效（拍）：够盖住"登记→飞行档落地"这一拍，又不足以在脱战后继续抢机头。 */
+    private static final int NOSE_AIM_TTL_TICKS = 3;
+
+    /**
+     * "当前刻"——由 {@code RideBindManager.drive} 每拍刷新（见 {@link #markTick}）。用它而不是各自
+     * 读世界时间，是为了在"客户端/服务端都加载本类"的前提下不依赖任何一侧的 level 状态。
+     */
+    private static volatile long NOW_TICK = 0L;
+
+    /** 刷新"当前刻"（{@code RideBindManager.drive} 每拍调一次）。 */
+    public static void markTick(long tick) {
+        NOW_TICK = tick;
+    }
+
+    /** 机头瞄准每拍最大转角（度）：8 ≈ 160°/秒，够追上目标又不瞬转。 */
+    private static final float NOSE_AIM_MAX_DEG = 8.0f;
+    /** 机头瞄准的俯仰限幅（度）：别让"追一个脚下的目标"把飞机压成俯冲。 */
+    private static final float NOSE_AIM_PITCH_LIMIT = 45.0f;
 
     /**
      * 头朝向档每拍最多把车头转多少度（{@link #driveVehicle}）。12 ≈ 240°/秒，
@@ -2604,26 +2971,34 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 收起这辆车上**每一门吃背包弹的武器**的弹药判据（{@code AmmoConsumer} 实例）。
+     * 收起这辆车上**每一门武器的弹药判据**（{@code AmmoConsumer} 实例）。
      *
-     * <p>过滤条件与 SWB 自己一致：{@code GunData.useBackpackAmmo()} 为 true（{@code MAGAZINE <= 0}，
-     * 即"不带自带弹匣、吃外部弹药"的那一类），且它的 {@code selectedAmmoConsumer()} 拿得到、
-     * 且 {@code stack()} 非空（EMPTY/INVALID 型没有可搬运的实体弹，跳过）。
+     * <p>【实测七百四十一·点3】过滤条件从"只看 {@code useBackpackAmmo()} 的枪"放宽到**所有枪**。
+     *
+     * <h2>为什么（玩家原话：「还有个空中炮艇，但是女仆不会填充和发射炮弹」）</h2>
+     * 反编译 {@code GunData.countBackupAmmo(Entity)} / {@code reloadAmmo(Entity,boolean)} 实证：
+     * **两类枪的弹都来自"车的容器"**——
+     * <ul>
+     *   <li><b>背包弹型</b>（{@code MAGAZINE <= 0}，{@code useBackpackAmmo() == true}）：
+     *       每发都直接 {@code countBackupAmmo} 从容器数（AC-130H 的 M61、Mi-28 的 Cannon）；</li>
+     *   <li><b>弹匣型</b>（{@code MAGAZINE > 0}）：打完由 {@code reloadAmmo} 从
+     *       {@code countBackupAmmo}（**同一个容器**）扣物品填进 {@code ammo}——
+     *       AC-130H 的 Bofors（弹匣 12）、M102（弹匣 1）都是这一类。</li>
+     * </ul>
+     * 旧版把弹匣型整个跳过，于是她的 {@code medium_shell_he} / {@code large_shell_he} 永远进不了车，
+     * 那两门炮**永远装不进弹**。现在两类都收：只要 {@code selectedAmmoConsumer().stack()} 是
+     * 一件**真实的物品**（能量/空判据自然是空 stack，会被挡掉）就收进来。
      */
     private static java.util.List<Object> wantedConsumers(Entity mount) {
-        java.util.List<Object> out = new java.util.ArrayList<>(2);
+        java.util.List<Object> out = new java.util.ArrayList<>(4);
         try {
             Object mapObj = mGetGunDataMap.invoke(mount);
             if (!(mapObj instanceof java.util.Map<?, ?> map) || map.isEmpty()) {
                 return out;
             }
             for (Object gd : map.values()) {
-                if (gd == null || mGunUseBackpackAmmo == null || mGunSelectedAmmo == null) {
+                if (gd == null || mGunSelectedAmmo == null) {
                     continue;
-                }
-                Object useBackpack = mGunUseBackpackAmmo.invoke(gd);
-                if (!Boolean.TRUE.equals(useBackpack)) {
-                    continue; // 这把枪自带弹匣 → 不吃外部弹
                 }
                 Object consumer = mGunSelectedAmmo.invoke(gd);
                 if (consumer == null || mConsumerIsAmmoItem == null) {
@@ -2775,29 +3150,46 @@ public final class MaidMountCompat {
             // 上一个目标开火——"到底什么时候才会让载具攻击"就不确定了）。
             LivingEntity target = targetOf(maid);
             if (k == Kind.VEHICLE) {
+                // 【实测七百四十一·点2b/点3】这一拍由谁开火——**判据只有一条**：
+                // 该用的那门炮（gunNameFor）是不是**就在她坐的那一座**上。
+                //
+                //   · 是（prism_tank 座 0 的激光、M1A2 座 0 的 120mm、AH-6 座 0 的机炮）→
+                //     SWB 内置那条"Mob 乘客自动开火"打的正是这门炮，**它与我们瞄的是同一门**，
+                //     一个字都不用改（玩家反馈"地上的光棱坦克倒是可以"就是这一档），
+                //     所以我们**不抢**、也不重复开火。
+                //   · 不是（Mi-28 的炮塔在座 1、她在座 0；AC-130H 三门炮在座 1/2/3、座 0 没武器）
+                //     → 引擎要么打**别的一门**（Mi-28：瞄机炮打火箭弹）、要么**压根打不出**
+                //     （AC-130H：座 0 没 gun → 引擎那条循环直接跳过）。这一档由我们接管：
+                //     先把她的 `getTarget` **清掉**（那是引擎自动开火的唯一开关，不清就是两门炮
+                //     各打各的），再按炮名统一"瞄 + 打"。
+                String gun = gunNameFor(mount, maid);
+                boolean own = gun != null
+                        && !gun.equals(gunNameAt(mount, seatIndexOf(mount, maid)));
                 try {
-                    maid.m_6710_(target); // 有则写、无则清（null 也要写，否则她脱战了车还开火）
+                    // 由我们接管时写 null（关掉引擎那条自动开火）；否则照旧写她的目标。
+                    maid.m_6710_(own ? null : target);
                 } catch (Throwable ignored) {
                 }
                 // 【实测七百二十四】再把目标写进炮塔/武器位的 **AI 目标 UUID**——车自己那套
-                // 弹道求解+开火读的是它（座位制武器如直升机机炮则读上面那个 getTarget）。
+                // **瞄准**读的是它（它只瞄、不开火，与我们算的是同一个解，互补不冲突）。
                 applyVehicleAiTargets(mount, target);
                 logVehicleFire(mount, target);
-                // 【实测七百三十一·暴力后门 → 七百四十·改成真弹道】炮弹：玩家原话
-                // 「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。……能不能走后门让那个
-                // 炮弹强制射向敌方？」
+                // 【实测七百三十一·暴力后门 → 七百四十·改成真弹道 → 七百四十一·按炮名统一】
+                // 玩家原话：「女仆驾驶直升机在空中的时候，发射的炮弹准度约等于 0。……能不能走后门
+                // 让那个炮弹强制射向敌方？」
                 //
                 // 731 那条后门是"自己算方位角写死炮塔 + 不看角度直接开火"——反编译实证它有两处
                 // 根本错误：① 炮塔角是**相对车身**的，我们写的却是世界绝对方位；② 完全没解
                 // 重力下坠与提前量（炮弹是纯抛物线，无制导，`targetPos` 参数对它毫无作用）。
-                // 现在换成**引擎自己的弹道解算器**：先解出炮口该朝哪（`RangeTool.calculateFiringSolution`），
-                // 再交给引擎的自动瞄准转炮塔，**等它转到位再开火**（炮塔是逐拍转的：
-                // M1A2 3.3°/拍、Mi-28 15°/拍）。这样炮弹落在它该落的地方。
-                if (target != null && isFlyingVehicle(mount)) {
+                // 740 换成**引擎自己的弹道解算器**，却仍在"按她座位取炮"上栽了跟头（见 gunNameFor）。
+                // 本版把"瞄"与"打"统一到**同一个炮名**上：解算 → 交给引擎自动瞄准转炮塔
+                // （M1A2 3.3°/拍、Mi-28 15°/拍）→ 等它转到位再按同一门炮开火。
+                if (target != null && own) {
                     boolean aimed = aimBallistic(mount, maid, target);
                     if (aimed && fireTickDue(mount)) {
                         // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
-                        // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。
+                        // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。按炮名开火（见 fireAt），
+                        // 保证"瞄的那门"和"打的那门"是同一门。
                         if (fireAt(mount, maid, target)) {
                             logForceFire(mount, target);
                         }
@@ -3064,6 +3456,77 @@ public final class MaidMountCompat {
     @SuppressWarnings("unused")
     private static List<Entity> unused() {
         return null;
+    }
+
+    /* ==================== 实测七百四十一·点1：指挥棒左击换座（主驾 ↔ 副驾） ==================== */
+
+    /**
+     * 【实测七百四十一·点1】把**主人**在"驾驶位（座位 0）"与"副驾"之间来回换。
+     *
+     * <h2>玩家原话</h2>
+     * 「如果玩家处于副座，可以通过手持骑乘指挥棒进行左击，从而把自己交换到主座位。
+     *  再左击一下再换回去。」
+     *
+     * <h2>为什么是"主人与女仆互换"而不是"主人随便挪个空座"</h2>
+     * 719 那条口径（反编译实证）是：**卓越前线的引擎只认座位 0**（{@code getFirstPassenger()}）——
+     * 座位 0 是谁，谁在开这辆车。所以"主人坐主驾"这件事，本质就是"把女仆从 0 号座换下来、
+     * 把主人放上去"；再按一次就反过来。
+     *
+     * <h2>为什么走"主人先下 → 女仆挪 → 主人上"</h2>
+     * {@code changeSeat(Entity,int)} 要求"目标座为空 + 该实体已是乘客"（反编译实证）——
+     * 两人互换座位时，任何一方想去对方那一座都会撞到"目标座有人"。多座载具有第三方空座可周转，
+     * 两座车（Mi-28）没有；所以统一走"主人先下车让位"这条路，两座/多座**同一条路**，
+     * 且不存在"两人抢同一座"的中间态。
+     *
+     * @return 给玩家看的一行提示（动作栏）；不满足条件 → null（调用方不提示）
+     */
+    public static String swapOwnerSeat(Entity mount, net.minecraft.world.entity.player.Player player,
+                                       Entity maid) {
+        try {
+            if (mount == null || player == null || maid == null || mChangeSeat == null) {
+                return null;
+            }
+            int ownerSeat = seatIndexOf(mount, player);
+            int maidSeat = seatIndexOf(mount, maid);
+            if (ownerSeat < 0 || maidSeat < 0) {
+                return null; // 两人必须都在这辆车上
+            }
+            if (ownerSeat == maidSeat) {
+                return null;
+            }
+            // 目标：主人去女仆那一座，女仆来主人这一座（**就是互换**——不管谁在 0 号座）
+            int ownerWants = maidSeat;
+            int maidWants = ownerSeat;
+            // ① 主人先下车（把他的座位让出来）
+            player.m_8127_();
+            // ② 女仆挪进主人刚才那一座（changeSeat 要求"目标座为空 + 她已是乘客"）
+            try {
+                mChangeSeat.invoke(mount, maid, maidWants);
+            } catch (Throwable ignored) {
+            }
+            boolean maidMoved = seatIndexOf(mount, maid) == maidWants;
+            // ③ 主人重新上车并钉到目标座。注意：原版 {@code startRiding} 会把他放进**第一个空座**，
+            //    而那里往往就是他想要的那座（她刚挪走）——此时 {@code changeSeat} 会因"目标座已被
+            //    自己占着"返回 false，但那不是失败。所以**判成功一律看最终座号**，不看返回值。
+            if (!player.m_7998_(mount, true)) {
+                return "\u00a7c换座失败：坐不回去了……";
+            }
+            if (seatIndexOf(mount, player) != ownerWants) {
+                try {
+                    mChangeSeat.invoke(mount, player, ownerWants);
+                } catch (Throwable ignored) {
+                }
+            }
+            boolean ownerMoved = seatIndexOf(mount, player) == ownerWants;
+            if (ownerMoved && maidMoved) {
+                return ownerWants == 0
+                        ? "\u00a7a换到驾驶位了\u00a7f（她现在坐副驾）"
+                        : "\u00a7a换回副驾了\u00a7f（她回去开车）";
+            }
+            return "\u00a7e换座只成功了一半\u00a7f（再按一次左击试试）";
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /* ==================== 实测七百三十七·双人座：主人坐副驾 ==================== */

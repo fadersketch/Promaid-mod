@@ -54,6 +54,58 @@ public final class MaidSeatNetworking {
         r.playToClient(SyncPacket.TYPE,
                 StreamCodec.ofMember(SyncPacket::encode, SyncPacket::decode),
                 SyncPacket::handle);
+        // 【实测七百四十一·点1】指挥棒左击换座（C2S，单包、无回执）。
+        r.playToServer(SwapSeatPacket.TYPE,
+                StreamCodec.ofMember(SwapSeatPacket::encode, SwapSeatPacket::decode),
+                SwapSeatPacket::handle);
+    }
+
+    /**
+     * 【实测七百四十一·点1】请求"把我换到另一个座位"（主驾 ↔ 副驾来回换）。
+     *
+     * <p>玩家原话：「如果玩家处于副座，可以通过手持骑乘指挥棒进行左击，从而把自己交换到主座位。
+     * 再左击一下再换回去。」——只带"要换到哪辆车"，不信任客户端算出的座位号：服务端自己按
+     * SWB 的座位表算（客户端那半只负责发这一下）。
+     */
+    public static class SwapSeatPacket implements CustomPacketPayload {
+        public static final CustomPacketPayload.Type<SwapSeatPacket> TYPE =
+                new CustomPacketPayload.Type<>(
+                        ResourceLocation.fromNamespaceAndPath("maid_smart", "swap_seat"));
+
+        public final int vehicleId;
+
+        public SwapSeatPacket(int vehicleId) {
+            this.vehicleId = vehicleId;
+        }
+
+        public static void encode(SwapSeatPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.vehicleId);
+        }
+
+        public static SwapSeatPacket decode(FriendlyByteBuf buf) {
+            return new SwapSeatPacket(buf.readInt());
+        }
+
+        public static void handle(SwapSeatPacket pkt, IPayloadContext ctx) {
+            ctx.enqueueWork(() -> {
+                if (ctx.player() instanceof ServerPlayer sp) {
+                    com.maidsmart.combat.RideBindManager.handleSwapSeatRequest(sp, pkt.vehicleId);
+                }
+            });
+        }
+
+        @Override
+        public CustomPacketPayload.Type<? extends CustomPacketPayload> type() {
+            return TYPE;
+        }
+    }
+
+    /** 客户端：向服务端请求"把我换到另一个座位"。 */
+    public static void requestSwapSeat(int vehicleId) {
+        try {
+            PacketDistributor.sendToServer(new SwapSeatPacket(vehicleId));
+        } catch (Throwable ignored) {
+        }
     }
 
     /** 向"追踪这只女仆的玩家 + 她自己"广播配对（{@code mountId < 0} = 解除）。 */

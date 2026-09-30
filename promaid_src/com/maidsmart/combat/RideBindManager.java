@@ -519,6 +519,69 @@ public final class RideBindManager {
     }
 
     /**
+     * 【实测七百四十一·点1】给客户端专用类问的"手里拿着指挥棒吗"——**两边都能安全调**
+     * （{@link #holdsBaton} 是 private，且客户端那一支需要它但拿不到）。
+     */
+    public static boolean holdsBatonClient(Player player) {
+        return holdsBaton(player);
+    }
+
+    /**
+     * 【实测七百四十一·点1】给客户端专用类问的"这是不是卓越前线的载具"——只走反射探测
+     * （{@link MaidMountCompat#kindOf} 在两侧都安全，不碰客户端专属类型）。
+     */
+    public static boolean isModVehicleClient(Entity e) {
+        try {
+            return MaidMountCompat.kindOf(e) == MaidMountCompat.Kind.VEHICLE;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百四十一·点1】左击换座的服务端那一半。玩家原话：「如果玩家处于副座，可以通过手持
+     * 骑乘指挥棒进行左击，从而把自己交换到主座位。再左击一下再换回去。」
+     *
+     * <p>规则（服务端权威，客户端只发"我要换"）：
+     * <ol>
+     *   <li>手里得拿着骑乘指挥棒（左击这一下由客户端闸放进来的；服务端再核一遍，防伪造包）；</li>
+     *   <li>目标载具得是**卓越前线载具**（{@link MaidMountCompat.Kind#VEHICLE}）——原版马/猪那种
+     *       只有一个座位，没有"主副驾"可言；</li>
+     *   <li>她（我们绑的那位女仆）得**还在这辆车上**，且是棍子绑的（{@link MaidRideKit#isRideRider}）。</li>
+     * </ol>
+     * 换座走 SWB 自己的 {@code changeSeat(Entity,int)}——见 {@link MaidMountCompat#swapOwnerSeat}。
+     */
+    public static void handleSwapSeatRequest(ServerPlayer player, int vehicleId) {
+        try {
+            if (player == null || !isEnabled() || !batonExclusive()) {
+                return;
+            }
+            if (!holdsBaton(player)) {
+                return; // 手里没拿指挥棒 → 不是这一档（也防伪造包）
+            }
+            Entity mount = player.m_9236_().m_6815_(vehicleId);
+            if (mount == null || MaidMountCompat.kindOf(mount) != MaidMountCompat.Kind.VEHICLE) {
+                return;
+            }
+            if (player.m_20202_() != mount) {
+                return; // 他自己不在车上 → 无从换
+            }
+            EntityMaid maid = MaidRideKit.riderOf(mount);
+            if (maid == null || !ownable(player, maid) || !MaidRideKit.isRideRider(maid)) {
+                return; // 车上不是我们绑的女仆 → 不插手（纯玩家自己开的车，座位由他自己管）
+            }
+            String msg = MaidMountCompat.swapOwnerSeat(mount, player, maid);
+            if (msg != null) {
+                player.m_5661_(Component.m_237113_(msg), true); // 动作栏一行，不刷聊天
+            }
+            com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "左击换座：主人=" + name(player)
+                    + " 车=" + MaidRideKit.describe(mount) + "（女仆="
+                    + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * 【实测七百二十二】独占档的**唯一收口**：{@code Entity.m_7998_}（{@code startRiding}）的最前面。
      *
      * <h2>玩家原话（721 之后仍在）</h2>
@@ -840,7 +903,29 @@ public final class RideBindManager {
             // force = true：跳过原版 canRide / canAddPassenger（javap 实证 m_7998_ 的 iload_2 ifne 直接跳门）
             boolean ok = false;
             try {
-                ok = maid.m_7998_(mount, true);
+                // 【实测七百四十一·点4】她已经在这辆车上了？——玩家原话：「有的时候，女仆会自己
+                // 坐到某个载具上，这个时候就会导致骑乘棒没有办法绑定女仆，女仆就会一直卡在车上不动。」
+                //
+                // 根因（javap 反编译原版 {@code Entity.startRiding(Entity,boolean)} 实证）：
+                // 它**第一句**就是 {@code if (this.vehicle == vehicle) return false;}——她已经在这辆车上
+                // 时恒返回 false。于是这里走"没能坐上去……再试一次？"分支、**不写链路表**；
+                // 而她不写链路 = 我们的驱动不生效（"卡在车上不动"），并且 {@code isOurRider} 认不出她，
+                // 连"右击让她下来"都做不到。她**自己坐上去**（SWB 的 VehicleEntity.interact 允许
+                // Mob 上车；或原版别的路径）是很常见的场景。
+                //
+                // 修法：她已在这辆车上 → **直接采纳现状**当作绑定成功（不重坐），继续走下面那套
+                // "坐姿 + 挪到驾驶位 + 写表 + 打标记"。若她坐在**别的**车上，则先把她请下来。
+                if (maid.m_20202_() == mount) {
+                    ok = true; // 已在车上 → 采纳
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "她本来就在这辆车上 → 直接采纳绑定："
+                            + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                            + " @ " + MaidRideKit.describe(mount));
+                } else {
+                    if (maid.m_20202_() != null) {
+                        maid.m_8127_(); // 她坐在**别的**车上 → 先请下来
+                    }
+                    ok = maid.m_7998_(mount, true);
+                }
             } catch (Throwable ignored) {
             }
             if (!ok) {
@@ -1142,6 +1227,67 @@ public final class RideBindManager {
      */
     public static void detachForSpecialTeleport(EntityMaid maid) {
         releaseMaidImpl(maid, true, "手动传送（只传人，解除绑定）");
+    }
+
+    /**
+     * 【实测七百四十一·点4】她是不是"自己坐上了模组载具"——**不是**我们用指挥棒绑的，
+     * 但她确实是卓越前线载具的乘客（{@code kindOf == VEHICLE}）。
+     *
+     * <h2>玩家原话</h2>
+     * 「有的时候，女仆会自己坐到某个载具上，这个时候就会导致骑乘棒没有办法绑定女仆，
+     *  女仆就会一直卡在车上不动。……我想的是在排班表里面的召她过来最好可以规避掉骑乘模式。
+     *  直接把女仆自己召唤过来。」
+     *
+     * <h2>为什么这一档会"卡住"（两条链路都不认她）</h2>
+     * <ul>
+     *   <li>{@link #isSpecialMountRider} 要求 {@code link != null || isBatonBound}——她**没绑过**，
+     *       所以 false；</li>
+     *   <li>{@link MaidRideKit#isRideRider} 同样要求 {@code isBatonBound}——也是 false。</li>
+     * </ul>
+     * 于是排班表召唤落到 {@code summonOne} 最后那句 {@code maid.isPassenger()} 上 → 返回 3
+     * （"状态豁免，保持原位"），玩家点了「传送到我身边」她却纹丝不动。这正是"一直卡在车上"。
+     *
+     * <h2>本档的口径</h2>
+     * 与"特殊载具"（726）**故意不同**：那一档是她被棍子绑上去的（解绑要还原坐姿/标记），
+     * 这一档她只是**恰好坐在上面**——所以召唤时**只需要让她下来 + 传人**，
+     * 不去碰任何我们自己的标记（根本没有）。
+     */
+    public static boolean isSelfBoardedModMount(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return false;
+            }
+            if (MaidRideKit.isBatonBound(maid) || LINKS.containsKey(maid.m_20148_())) {
+                return false; // 是我们绑的 → 归 726 那一档管（要先干净解绑）
+            }
+            Entity v = maid.m_20202_();
+            return v != null && MaidMountCompat.kindOf(v) == MaidMountCompat.Kind.VEHICLE;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百四十一·点4】把她从"自己坐上去的模组载具"上请下来（只下鞍，不碰任何我们的标记）。
+     * 供排班表的手动召唤在传送前调用。
+     *
+     * @return true = 现在她确实不在那辆车上了（本来就不在 / 已下来）
+     */
+    public static boolean dismountSelfBoarded(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return true;
+            }
+            if (!isSelfBoardedModMount(maid)) {
+                return true;
+            }
+            com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "排班表召唤：她本来自己坐在载具上（并非指挥棒绑定）"
+                    + " → 先请她下来再单独传人（" + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）");
+            maid.m_8127_();
+            return maid.m_20202_() == null;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
 
@@ -1543,6 +1689,9 @@ public final class RideBindManager {
      */
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
+            // 【实测七百四十一·点3】刷新"当前刻"：机头瞄准请求带几拍时效（见 MaidMountCompat.NOSE_AIM），
+            // 由这里统一喂，免得本类去依赖任何一侧的 level 状态。
+            MaidMountCompat.markTick(maid.m_9236_().m_46467_());
             // v1.3.0(beta) 实测七百一十九【模组坐骑通解通法】：每拍把她的攻击目标交给坐骑——
             // 卓越前线载具走内置 Mob-乘客自动开火、冰火传说龙走吐息、**其余任何 Mob 坐骑**
             // 走通用兜底（无条件把她的 target 写下去，让它自己那套目标 AI 用它自己的攻击方式打）。
@@ -1602,7 +1751,9 @@ public final class RideBindManager {
                     // 所以"机上有玩家"这一档不追任何基准，直接悬停在她现在的位置（水平+竖直都保持）；
                     // 接敌那一支在上面，完全不受影响（玩家要的"锁敌的时候正常"）。
                     if (MaidMountCompat.hasPlayerAboard(mount)) {
-                        air = MaidAirCombat.holdHere(maid);
+                        // 【实测七百四十一·点2a】基准是**载具**（她自己是乘客，座位 Y 比机身
+                        // 高约 1.5 格 → 用它当基准就是"永久缓慢爬升"，见 holdHere 的注释）。
+                        air = MaidAirCombat.holdHere(maid, mount);
                         if (air != null) {
                             MaidRideKit.feedNavigation(mount, air, mod, maid);
                             return;
