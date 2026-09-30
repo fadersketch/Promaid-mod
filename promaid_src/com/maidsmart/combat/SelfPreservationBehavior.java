@@ -3945,10 +3945,13 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             // 【实测七百二十一】被骑乘指挥棒绑上的骑乘女仆同理：她此刻是**乘客**，位置由坐骑
             // 每 tick 覆写（rideTick → positionRider），而自保的 teleport 内部会先 unRide()
             // 把她从坐骑上踹下来——实机日志实证：绑上龙之后她吃到 inWall 伤害 → 自保启动
-            // （hp=99% 也启动）→ exit teleport → 她离开龙背，正是玩家看到的"被甩下来"。
-            // 与 718 #31（坐/蹲=玩家明确停放）同一条口径、与 656（骑扫帚时自保让位）
-            // 同一个理由：她在坐骑上的去向由骑乘链路负责，不归自保。
-            return com.maidsmart.combat.RideBindManager.isRideRider(maid);
+            // （hp=99% 也启动）→ exit teleport → 她离开龙背。完整口径见 1.20.1 树同名方法。
+            //
+            // 【实测七百二十六·点1】统一到 isSpecialMountRider（= 棒绑的任何坐骑 + 卓越前线载具 +
+            //  冰火传说龙）：特殊载具上"一切自动传送都不生效"，而自保的逃生 teleport 正是自动传送的
+            //  一种。判据只有一处，将来漏判也只会漏在这一格。
+            return com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)
+                    || com.maidsmart.combat.RideBindManager.isRideRider(maid);
         } catch (Throwable ignored) {
             return false;
         }

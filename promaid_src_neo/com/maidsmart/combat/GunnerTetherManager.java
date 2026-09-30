@@ -1653,6 +1653,14 @@ public final class GunnerTetherManager {
             if (player.getVehicle() == maid) {
                 return; // 悬挂档：他吊在她身下、由骑乘定位刚性控制（见上面那段）
             }
+            // 【实测七百三十七】守家的女仆不吃绳子的力：玩家原话「如果给 home 模式的女仆设置
+            //  空袭模式的话女仆就会一直被牵引绳往玩家那拉」。home 模式（TLM 的 isHomeModeEnable）
+            //  语义就是"玩家把她停在岗位上"，此时再把她往主人那边拽是两股力打架——她自己那条
+            //  守家回圈（SchedulePos.tick）在拉她回家，绳子在拉她去主人，实机观感就是"一直被拉"。
+            //  所以这一档只停"受力"：挂载状态/金色标记/悬挂渲染全部保留，只是不再写 deltaMovement。
+            if (maid.isHomeModeEnable()) {
+                return;
+            }
             pullTick(maid, player);
         } catch (Throwable ignored) {
         }

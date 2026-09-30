@@ -3383,6 +3383,48 @@ public class PromaidConfigScreen extends Screen {
                         + "翅膀/尾巴/头（那些是独立小实体，会把这一下右击**转发给龙本体**）→ 旧版放行就骑上去了。"
                         + "也管 interactAt（客户端先发它、没被消费才发 interact），两个入口都拦掉才算"
                         + "「不触发原本的右击效果」。关掉 = 只有我们认得出的目标才由棍子接管（与上一版一字不差）"));
+        // v1.3.0(beta) 实测七百二十七·点1 + 七百二十八【骑飞行载具：跟随离地悬停、接敌升到敌上】
+        this.rows.add(new BoolRow("骑飞行载具·悬停与盘旋（卓越前线直升机/固定翼）",
+                MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_AIR_COMBAT.set(v),
+                "**默认开**。女仆驾驶**飞行载具**（卓越前线的武装直升机/固定翼）时——"
+                        + "① **没有敌人**（跟随/巡逻）时进入**悬停**状态，把机身稳在「她脚下地面 + 下一项那个格数」（默认离地 3 格）；"
+                        + "② **遇到敌人**时升到**敌人上方「接敌高度」那一项**（默认 15 格）高位俯射，同时绕着敌人盘旋，"
+                        + "盘旋半径见「盘旋半径」那一项。两档高度互不影响。"
+                        + "为什么旧版会又大又低：飞行载具的航向/俯仰走**鼠标通道**、高度只靠**总距 + 悬停开关**（反编译实证）；"
+                        + "上一版写的是「先爬到敌人**上方** 15 格」并把它翻成俯仰——敌人一旦在她脚下，机头就被压向地面、越飞越低。"
+                        + "本版把高度写进**目标点**、由总距升降，姿态不再决定高度。"
+                        + "关掉 = 回到旧行为。地面载具（坦克/装甲车）不受影响"));
+        this.rows.add(new NumRow("悬停高度（跟随·离地格数）",
+                String.valueOf(MaidSmartConfig.COMBAT_RIDE_AIR_ALT.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIDE_AIR_ALT, s),
+                "**默认 3**（1~20）。**只作用于跟随**（没有敌人时）：机身稳定在「她脚下的地面 + 这么多格」"
+                        + "——玩家原话「跟随的时候保持离地三格」。有敌人时改看「接敌高度」那一项。"
+                        + "头顶被方块/天花板顶住时按实际能到的高度悬停，绝不硬顶"));
+        this.rows.add(new NumRow("接敌高度（比敌人高几格）",
+                String.valueOf(MaidSmartConfig.COMBAT_RIDE_FIGHT_ALT.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIDE_FIGHT_ALT, s),
+                "**默认 15**（3~40）。**只作用于接敌**（有敌人时）：机身升到敌人**上方**这么多格再盘旋俯射"
+                        + "——玩家原话「遇到敌人还是要升高到比敌人高 15 格的位置的呀」。"
+                        + "与旧版的区别：数值同样是 15，但旧版是把它写进**俯仰**（敌人比她低很多时机会头被压向地面）；"
+                        + "本版写进**目标点高度**、用总距升到位，所以她能真正稳在敌上方"));
+        this.rows.add(new NumRow("盘旋半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS.get()),
+                s -> setDouble(MaidSmartConfig.COMBAT_RIDE_ORBIT_RADIUS, s),
+                "**默认 4**（2~24）。骑飞行载具接敌时，绕着敌人转的圈有多大。"
+                        + "扫帚那套半径是 combat.broom.range / orbitMax（默认 8~10，还会被接敌机动放大），"
+                        + "玩家反馈直升机用那套「范围绕的特别大」、并要求「同时缩小绕圈的半径」——所以默认从 6 再收到 4，"
+                        + "而且本项独立、不被任何机动倍率放大。越小 = 贴得越近、绕得越紧（命中率高但更容易挨打）"));
+        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具装弹】
+        this.rows.add(new BoolRow("骑载具·替她装弹（卓越前线）",
+                MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_AMMO_FEED.set(v),
+                "**默认开**。女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，"
+                        + "她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），"
+                        + "她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。只搬**这辆车任意一门武器吃得下的**"
+                        + "子弹（判据走 SWB 自己的 AmmoConsumer.isAmmoItem，物品型与枚举型两种都认），"
+                        + "对不上的不动；每 0.5 秒检查一次、按需搬，绝不一次全倒进去。"
+                        + "关掉 = 不搬（想手动装弹就关掉它）"));
         // v1.3.0(beta) 实测七百一十八【issue #31：坐下/蹲下的女仆不被自保传送拉走】
         this.rows.add(new BoolRow("坐下的女仆不被自保传送拉走", MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get(),
                 v -> MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.set(v),

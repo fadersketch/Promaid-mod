@@ -86,9 +86,13 @@ public class DangerEscapeHandler {
                         || maid.m_269323_() == null) {
                     continue; // 无主不处理
                 }
-                // 自保中让位（自保有珍珠/放水/垫高专属链路）；坐姿/骑乘跳过（见类注释）
-                if (maid.getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)
-                        || maid.isMaidInSittingPose() || maid.m_20159_()) {
+                // 自保中让位（自保有珍珠/放水/垫高专属链路）；坐姿/骑乘跳过（见类注释）；
+                // 【实测七百二十四】悬空鞍位（龙）那条她**不是乘客**、isPassenger 认不出她，
+                // 单独判一次——否则危险方块撤离会把她从龙背鞍位上拽下来。
+                // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）。
+                if (((net.minecraftforge.common.extensions.IForgeEntity) maid).getPersistentData().m_128471_(SelfPreservationBehavior.PRESERVE_TAG)
+                        || maid.isMaidInSittingPose() || maid.m_20159_()
+                        || com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
                     continue;
                 }
                 BlockPos feet = maid.m_20183_();

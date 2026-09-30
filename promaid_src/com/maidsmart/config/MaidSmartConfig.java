@@ -27,6 +27,21 @@ public static final ForgeConfigSpec.BooleanValue STROLL_SPEED_MIGRATED;
 public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_MIGRATED;
     /** 【实测六百八十六】接敌爬升高度默认 15 → 12 的一次性迁移标记 */
     public static final ForgeConfigSpec.BooleanValue BROOM_CLIMB_12_MIGRATED;
+    /**
+     * 【实测七百二十七·点1】骑飞行载具的 airAlt 语义变更迁移标记（"爬到敌上 15 格" → "离地 3 格"）。
+     *
+     * <p>语义变了，而老档 toml 里存着的是旧默认 15——不迁的话她会离地 15 格悬停（玩家要的是 3）。
+     * 判据与扫帚那两次同款：**只有还停在旧默认 15 的档**才搬到 3，玩家自己调过的别的值一律不碰。
+     */
+    public static final ForgeConfigSpec.BooleanValue AIR_ALT_MIGRATED;
+    /**
+     * 【实测七百二十八】盘旋半径默认 6 → 4 的一次性迁移标记。
+     *
+     * <p>727 那份 jar 已经部署到过 1.21.1 实例，玩家档里可能落下 `orbitRadius = 6`（727 的默认）。
+     * 728 收到 4——不迁的话"缩小绕圈半径"对老档不生效。判据与前几次同款：**只有还停在
+     * 旧默认 6 的档**才搬到 4，玩家自己调过的值一律不碰。
+     */
+    public static final ForgeConfigSpec.BooleanValue ORBIT_RADIUS_MIGRATED;
 /** v1.3.0(beta) 实测六百八十一：默认值修复迁移标记（把 679 误当默认的 12 项搬回真默认；内部，一次性） */
 public static final ForgeConfigSpec.BooleanValue DEFAULT_REPAIR_MIGRATED;
     public static final ForgeConfigSpec.IntValue BUILD_GLOBAL_QUOTA;
@@ -886,6 +901,42 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 认得出的目标才接管（与 719 一字不差）。
      */
     public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_BATON_EXCLUSIVE;
+    /**
+     * 【实测七百二十七·点1】骑飞行载具时**悬停 + 同高空盘旋**（默认开）。见
+     * {@code MaidMountCompat.driveFlight} 与 {@code MaidAirCombat}。
+     */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_AIR_COMBAT;
+    /**
+     * 【实测七百二十七·点1 + 七百二十八】**跟随**时的悬停高度（**离地**格数，默认 3）。
+     * 骑上飞行载具就进入悬停，**没有敌人**时高度按"她脚下的地面 + 这个数"保持。
+     * 玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。
+     *
+     * <p>【只作用于跟随】玩家 728 补正原话：「我是说跟随的时候保持离地三格的……但是遇到敌人
+     * 还是要升高到比敌人高 15 格的位置的呀」——所以这一项只管**跟随档**；接敌（有敌人）时
+     * 高度改由 {@link #COMBAT_RIDE_FIGHT_ALT} 管（比敌人高多少格）。
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_AIR_ALT;
+    /**
+     * 【实测七百二十八】**接敌**时的爬升高度（比敌人高多少格，默认 15）。
+     *
+     * <p>玩家 728 补正原话：「遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小绕圈的半径」
+     * ——七百二十七 误把"离地三格"也套到了接敌上（把 726 那套"爬到敌上 15 格"整段删了），
+     * 这里拆出独立旋钮还原：**跟随 = 离地 N 格（低空）**、**接敌 = 敌上 M 格（高位俯射）**。
+     *
+     * <p>【与 726 的区别】数值都是"敌上 15"，但 726 是把它写进**俯仰**（机头压向目标方向），
+     * 敌人一旦比她低很多就把机头压向地面 → 越飞越低；本版把它写进**目标点高度**、由总距
+     * 升到位（见 {@code MaidAirCombat.orbitPoint}），姿态不再决定高度。
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_FIGHT_ALT;
+    /**
+     * 【实测七百二十七·点1 + 七百二十八】盘旋半径（格，默认 4）。骑飞行载具接敌时绕着敌人
+     * 转的圈有多大；比扫帚那套（`combat.broom.range`/`orbitMax`，默认 8~10 还会被机动放大）
+     * 单独一个旋钮。玩家两条原话：「范围绕的特别大」+「同时缩小绕圈的半径」——所以默认比
+     * 七百二十七 的 6 再收紧到 4。
+     */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_RIDE_ORBIT_RADIUS;
+    /** 【实测七百二十六·点6】骑载具时女仆自己把对得上的子弹搬进载具弹药容器（默认开） */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_RIDE_AMMO_FEED;
 
     /**
      * v1.3.0(beta) 实测七百一十八【issue #31：坐下的女仆不被自保传送拉走】。
@@ -2311,6 +2362,12 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 玩家自己调过的值一律不碰。
         BROOM_CLIMB_12_MIGRATED = BUILDER.comment("内部标记：扫帚接敌爬升高度默认迁移（15→12）是否已执行；一次性，请勿手动修改")
                 .translation("config.promaid.broom.climb12Migrated").define("climb12Migrated", false);
+        // 【实测七百二十七·点1】airAlt 语义变更（"爬到敌上 15 格" → "离地 3 格"）的一次性迁移标记。
+        // 见字段声明处；判据同扫帚那两次：只有还停在旧默认 15 的档才搬。
+        AIR_ALT_MIGRATED = BUILDER.comment("内部标记：骑飞行载具的悬停高度语义变更迁移（离敌 15→离地 3）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.ride.airAltMigrated").define("airAltMigrated", false);
+        ORBIT_RADIUS_MIGRATED = BUILDER.comment("内部标记：骑飞行载具盘旋半径默认迁移（6→4）是否已执行；一次性，请勿手动修改")
+                .translation("config.promaid.ride.orbitRadiusMigrated").define("orbitRadiusMigrated", false);
         BUILDER.pop();
 
         // ---- v1.3.0(beta) 实测七百〇三「接敌机动」（配置面板：战斗与自保 → 接敌机动）----
@@ -2392,6 +2449,34 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 右击一律由棍子吃掉（含 interactAt，客户端先发它、未被消费才发 interact）。
         COMBAT_RIDE_BATON_EXCLUSIVE = BUILDER.comment("骑乘指挥棒·独占右击（默认开）：手持**骑乘指挥棒**时，右击任何实体都由棍子吃掉，不再触发那个实体原本的右击效果——最直接的一条就是「拿棍子骑不上龙/车子」。\n\n【为什么要专门开这一档】冰火传说的龙是**多部件实体**：准星常常打中的是它的翅膀/尾巴/头，那些是独立的小实体，会把这一下右击**转发给龙本体**，龙本体收到就让你骑上去。旧版只认「目标本身是不是能骑的坐骑」，看到一块“部位”就放行 → 转发 → 你就骑上去了。本档把整条路堵死：只要手里是骑乘指挥棒，这一下右击一律归棍子。\n\n【也管 interactAt】客户端对实体右击是「先 interactAt、没被消费才 interact」，两个入口都拦掉才叫“不触发原本的右击效果”。\n\n【关掉 = 与上一版一字不差】只有我们认得出的目标（女仆 / 已上鞍坐骑 / 模组载具·龙 / 家具扫帚）才由棍子接管，对着别的实体挥棍子仍然放行。")
                 .translation("config.promaid.ride.batonExclusive").define("batonExclusive", true);
+        // v1.3.0(beta) 实测七百二十七·点1【骑飞行载具：上机即悬停、盘旋同高空】——玩家原话：
+        // "女仆似乎不会让直升机悬停。而且在打精英敌人进行绕圈的时候，总是范围绕的特别大，而且
+        //  高度很低。导致实际的命中率非常堪忧。最好是采用跟扫帚一样的机制，骑上直升机之后就进入
+        //  悬停状态，离地三格左右。随后的盘旋也是悬停在同一高度盘旋。"
+        // 根因（反编译 helicopterEngine 实证）：直升机高度只有两条路——总距（前进/后退位）与悬停开关。
+        // 七百二十六 只把"爬到敌上 15 格"写进总距，一旦敌人比她低（实机日志 高差=-24），俯仰把机头
+        // 压向地面 → 贴地飞；而且半径直接借扫帚那套（8~10 格 + 机动倍率放大）→ 圈特别大。
+        // 本档改成：绑上就置**悬停**并用总距把高度锁在"脚下地面 + N 格"，盘旋半径单独一个旋钮，
+        // 全程保持这个高度（高度差进死区就不动总距），不再有"爬到敌上"那一段。
+        COMBAT_RIDE_AIR_COMBAT = BUILDER.comment("骑飞行载具时的悬停与低空盘旋（默认开）：女仆驾驶**飞行载具**（卓越前线的武装直升机 / 固定翼）时——① 一绑上就进入**悬停**状态，用总距把机身稳在「她脚下的地面 + 下一项那个格数」；② 接敌时绕着敌人盘旋射击，**全程保持这同一个高度**（不会再爬高、也不会再贴地），盘旋半径见「盘旋半径」那一项。\n\n【为什么旧版会又大又低】飞行载具的航向/俯仰走**鼠标通道**、高度只靠**总距 + 悬停开关**（反编译 helicopterEngine 实证）。七百二十六 那一版写的是「先爬到敌人**上方** 15 格」——敌人一旦在她脚下（实机日志出现高差 -24），机头就会被压向地面、越飞越低；而盘旋半径又是直接借扫帚那套（8~10 格还会被机动放大），所以圈大、命中率差。本版把「爬到敌上」这一段整个去掉，改成**离地固定高度悬停 + 独立的小半径盘旋**。\n\n关闭 = 回到旧行为（飞行载具只当成会飞的跟随载具，不做悬停/高度锁定，接敌仍按七百二十六 那套爬到敌上）。地面载具（坦克/装甲车）不受本档影响，它们照旧贴地跟着主人、用车上的炮塔打。")
+                .translation("config.promaid.ride.airCombat").define("airCombat", true);
+        COMBAT_RIDE_AIR_ALT = BUILDER.comment("**跟随**时的悬停高度（**离地**格数，默认 3，1~20）：骑上飞行载具后、**没有敌人**时，机身稳定在「她脚下的地面 + 这么多格」——玩家原话「骑上直升机之后就进入悬停状态，离地三格左右」。\n\n【只作用于跟随】玩家后来的补正：「我是说跟随的时候保持离地三格的……但是遇到敌人还是要升高到比敌人高 15 格的位置的呀」——所以**接敌（有敌人）时**这一项不生效，那时改由「接敌高度」那一项管（比敌人高多少格）。头顶被方块/天花板顶住时按实际能到的高度悬停，绝不硬顶。")
+                .translation("config.promaid.ride.airAlt")
+                .defineInRange("airAlt", 3.0, 1.0, 20.0);
+        COMBAT_RIDE_FIGHT_ALT = BUILDER.comment("**接敌**时的爬升高度（比敌人高多少格，默认 15，3~40）：骑飞行载具**有敌人**时，机身升到敌人**上方**这么多格再开始盘旋俯射——玩家原话「遇到敌人还是要升高到比敌人高 15 格的位置的呀，同时缩小绕圈的半径」。\n\n【与跟随高度的分工】「悬停高度」只管没敌人时的低空跟随（离地 3 格）；这一项只管接敌时的站位（敌上 15 格）。两者互不影响。\n\n【与旧版的区别】数值同样是 15，但旧版是把它写进**俯仰**（机头压向目标方向）——敌人一旦在她脚下很多，机头就被压向地面、越飞越低；本版把它写进**目标点高度**、用总距升到位，姿态不再决定高度，所以她能真正稳在敌上方。")
+                .translation("config.promaid.ride.fightAlt")
+                .defineInRange("fightAlt", 15.0, 3.0, 40.0);
+        COMBAT_RIDE_ORBIT_RADIUS = BUILDER.comment("盘旋半径（格，默认 4，2~24）：骑飞行载具接敌时，绕着敌人转的圈有多大。\n\n【为什么单独一个旋钮】扫帚那套半径是 `combat.broom.range` / `orbitMax`（默认 8~10，还会被接敌机动放大到更远），玩家反馈直升机用那套「范围绕的特别大」，随后又补了一句「同时缩小绕圈的半径」——所以默认从 6 再收到 4，且本项独立、不被任何机动倍率放大。\n\n越小 = 贴得越近、绕得越紧（命中率高但更容易挨打）；越大 = 越安全但绕得松散。")
+                .translation("config.promaid.ride.orbitRadius")
+                .defineInRange("orbitRadius", 4.0, 2.0, 24.0);
+        // v1.3.0(beta) 实测七百二十六·点6【女仆自己往载具里装弹】——玩家原话："卓越前线，如果女仆身上
+        // 有这个载具对应的子弹。能不能让女仆自己把弹扔进装弹区里面呢？"
+        // 根因：车的枪弹从 getAmmoSupplier() = 车自己的**容器**里取（Capabilities.ItemHandler.ENTITY
+        // → VehicleContainerHandler，反编译 ModCapabilities 实证）；她背包里的子弹在**她**身上，
+        // 车根本看不见。本档把她背包里"这车这把枪对得上的子弹"搬进车的容器。
+        COMBAT_RIDE_AMMO_FEED = BUILDER.comment("骑载具时替她装弹（默认开）：女仆驾驶卓越前线的载具时，如果**她背包里有这辆车需要的子弹**，她会把子弹搬进**载具自己的弹药容器**里——车的枪弹是从车容器取的（反编译实证），她背包里的子弹车看不见，所以旧版她身上带再多弹也打不响。\n\n搬的是什么：只搬**这辆车当前武器实际吃的那种子弹**（从车里那门枪的弹药配置读出来），对不上的子弹一件不动。每 0.5 秒检查一次、按需搬，绝不一次全倒进去。\n\n关闭 = 不搬（你想手动装弹就关掉它）。只在她被骑乘指挥棒绑定时生效。")
+                .translation("config.promaid.ride.ammoFeed")
+                .define("ammoFeed", true);
         BUILDER.pop();
         // v1.3.0(beta) 实测七百一十八【issue #31】：坐/蹲着的女仆不被自保归位传送拉走。
         // 与 MaidTeleportPreserveMixin 那道"原版传送豁免坐/蹲"同口径——那条管 TLM 原版的

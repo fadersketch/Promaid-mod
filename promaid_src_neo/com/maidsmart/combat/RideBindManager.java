@@ -163,6 +163,13 @@ public final class RideBindManager {
         InteractionHand hand = event.getHand();
         ItemStack stack = player.getItemInHand(hand);
         if (!(stack.getItem() instanceof RideBatonItem)) {
+            // 【实测七百三十七·双人座·空手右击】玩家原话：「我考虑到卓越前线有一些载具是分为
+            //  双人座的，能否考虑在女仆乘坐后主人右击的时候登上副驾驶座呢？」——空手右击自己
+            //  女仆开的车时，卓越前线自己的 VehicleEntity.interact 走的是"第一乘客不是玩家 →
+            //  把她踢下来、主人坐座位 0"那一支（反编译实证），正是"女仆被顶下车"的根因。
+            //  所以这一档由我们接管：两侧都吞掉这一下（客户端那一份不吞，本地预测仍会把她踢下去），
+            //  服务端把主人放进**副驾**（{@link #handlePassengerSeat}），女仆留在驾驶位。
+            handlePassengerSeat(player, event);
             return;
         }
         Entity raw = event.getTarget();
@@ -204,6 +211,12 @@ public final class RideBindManager {
      */
     private static void cancelClientBatonInteract(Player player, PlayerInteractEvent.EntityInteract event) {
         try {
+            // 【实测七百三十七·双人座】空手右击"自己女仆开的车"同样要在客户端吞掉这一下：
+            // 本地预测里 SWB 的 VehicleEntity.interact 会当场把女仆 stopRiding 踢下去
+            // （服务端随后纠正也救不回玩家眼前这一下）。这一档与"拿不拿棍子"无关，放最前。
+            if (cancelClientPassengerSeatInteract(player, event)) {
+                return;
+            }
             if (!batonExclusive()) {
                 return;
             }
@@ -225,6 +238,59 @@ public final class RideBindManager {
                 event.setCanceled(true);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百三十七·双人座】空手右击的入口：对着"自己女仆开的卓越前线载具"右击 → 主人上副驾。
+     *
+     * <p>玩家原话：「我考虑到卓越前线有一些载具是分为双人座的，能否考虑在女仆乘坐后主人右击的
+     * 时候登上副驾驶座呢？」——空手右击那条路原本走的是卓越前线自己的 {@code VehicleEntity.interact}，
+     * 而它见"第一乘客不是玩家"就把女仆 {@code stopRiding} 踢下来、自己坐驾驶位（反编译实证）。
+     * 这里把这一档接过来：认得出来（自己女仆开的车 + 有空副驾）就两侧都 cancel，服务端再把主人
+     * 放进副驾；认不出就**一个字节都不动**（原版行为照旧）。
+     */
+    private static void handlePassengerSeat(Player player, PlayerInteractEvent.EntityInteract event) {
+        try {
+            if (!isEnabled()) {
+                return;
+            }
+            Entity target = MaidMountCompat.resolveMount(event.getTarget());
+            if (target == null || !allowsOwnerPassengerSeat(player, target)) {
+                return; // 不是"自己女仆开的车"→ 不插手
+            }
+            event.setCanceled(true); // 两侧都吞：挡住 SWB 本地预测把她踢下车
+            if (!(player instanceof ServerPlayer sp)) {
+                return; // 客户端只 cancel，不执行业务
+            }
+            EntityMaid maid = MaidRideKit.riderOf(target);
+            if (MaidMountCompat.boardOwnerAsPassenger(target, sp, maid)) {
+                sp.displayClientMessage(Component.literal("\u00a7a已坐上副驾驶～\u00a7f（"
+                        + MaidRideKit.describe(target) + "\u00a7f 由她开）"), false);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "主人上副驾(空手右击)："
+                        + MaidRideKit.describe(target) + "（玩家=" + name(sp)
+                        + (maid != null ? "，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid)
+                                          + " 仍在驾驶位" : "") + "）");
+            } else {
+                deny(sp, maid, "这辆车没有能坐的副驾～"); // maid 允许为 null（deny 会发系统消息）
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 客户端的空手副驾闸：只 cancel（认得出"自己女仆开的车 + 有空副驾"时）。 */
+    private static boolean cancelClientPassengerSeatInteract(Player player,
+                                                             PlayerInteractEvent.EntityInteract event) {
+        try {
+            Entity target = MaidMountCompat.resolveMount(event.getTarget());
+            if (target == null || !allowsOwnerPassengerSeat(player, target)) {
+                return false;
+            }
+            ViewSnapshot.pin(player, ViewSnapshot.capture(player)); // 顺带抹掉 SWB 本地那一拍转视角
+            event.setCanceled(true);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 
@@ -370,6 +436,11 @@ public final class RideBindManager {
             if (!holdsBaton(player)) {
                 return;
             }
+            // 【实测七百三十七·双人座】与 denyMountForBatonHolder 同款放行：主人坐自己女仆
+            // 开的车的副驾，不被"指挥棒独占登乘"这道闸拦下。
+            if (allowsOwnerPassengerSeat(player, event.getEntityBeingMounted())) {
+                return;
+            }
             event.setCanceled(true);
             PlayerMountLog.throttled(player);
         } catch (Throwable ignored) {
@@ -418,8 +489,46 @@ public final class RideBindManager {
             if (vehicle instanceof EntityMaid || MaidRideKit.isBroom(vehicle)) {
                 return false;
             }
+            // 【实测七百三十七·双人座】放行"主人坐自己女仆开的车的副驾"：女仆在 0 号座，
+            // 玩家进的是空着的副驾，不构成"抢驾驶位"，正是这条独占档要防的反面。
+            if (allowsOwnerPassengerSeat(player, vehicle)) {
+                return false;
+            }
             PlayerMountLog.throttled(player);
             return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百三十七·双人座】这位玩家现在能不能"作为副驾"登上这辆车——**唯一**的放行口径，
+     * 供两道登乘闸（{@code denyMountForBatonHolder} 与 {@code onMount}）共用。
+     *
+     * <p>判据取最窄的三条：① 这是卓越前线的载具（其余坐骑一字不动）；② 车上驮着**这位玩家
+     * 自己的、我们用指挥棒绑的**女仆（{@link MaidRideKit#riderOf} + {@link #ownable} +
+     * {@link MaidRideKit#isRideRider}）；③ 还有**除她之外的**空座。三条都满足 = 玩家是来坐副驾的，
+     * 不是来抢驾驶位的——女仆稳在 0 号座（引擎唯一认的驾驶位），这条放行不会让她被顶下车。
+     */
+    static boolean allowsOwnerPassengerSeat(Player player, Entity vehicle) {
+        try {
+            if (player == null || vehicle == null) {
+                return false;
+            }
+            if (MaidMountCompat.kindOf(vehicle) != MaidMountCompat.Kind.VEHICLE) {
+                return false; // 只管卓越前线载具：原版兽/龙/扫帚不在此列
+            }
+            EntityMaid rider = MaidRideKit.riderOf(vehicle);
+            if (rider == null || !MaidRideKit.isRideRider(rider)) {
+                return false; // 车上不是我绑的女仆 → 照旧按独占档拦
+            }
+            // 归属：直接比 UUID（**客户端也要能用**——本方法两侧都调，不能强转 ServerPlayer）。
+            // 客户端可能拿不到女仆的 owner，那就按"拦"处理（退回原独占档语义，不会误放行）。
+            LivingEntity owner = rider.getOwner();
+            if (owner == null || !owner.getUUID().equals(player.getUUID())) {
+                return false;
+            }
+            return MaidMountCompat.firstFreeSeatExcept(vehicle, rider) >= 0; // 还有副驾空座
         } catch (Throwable ignored) {
             return false;
         }
@@ -522,6 +631,19 @@ public final class RideBindManager {
             // 这只坐骑上是不是已经驮着**我的**女仆、且是我们绑的 → 再选一次 = 解除
             EntityMaid rider = MaidRideKit.riderOf(target);
             if (rider != null && ownable(player, rider) && MaidRideKit.isRideRider(rider)) {
+                // 【实测七百三十七·双人座】先试"主人坐上副驾"（玩家原话：「我考虑到卓越前线有一些
+                //  载具是分为双人座的，能否考虑在女仆乘坐后主人右击的时候登上副驾驶座呢？」）。
+                //  只有车**还有空座**时才走这条；坐满了（或单座车）仍旧退回下面那句"再选一次 = 解除"。
+                if (MaidMountCompat.kindOf(target) == MaidMountCompat.Kind.VEHICLE
+                        && MaidMountCompat.firstFreeSeatExcept(target, rider) >= 0
+                        && MaidMountCompat.boardOwnerAsPassenger(target, player, rider)) {
+                    player.displayClientMessage(Component.literal("\u00a7a已坐上副驾驶～\u00a7f（"
+                            + MaidRideKit.describe(target) + "\u00a7f 由她开）"), false);
+                    com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "主人上副驾："
+                            + MaidRideKit.describe(target) + "（玩家=" + name(player)
+                            + "，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(rider) + " 仍在驾驶位）");
+                    return;
+                }
                 releaseMaid(rider, false, "再选一次");
                 return;
             }

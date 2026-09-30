@@ -69,9 +69,25 @@ public abstract class MaidTeleportPreserveMixin {
                 return;
             }
             // 【v1.3.0(beta) 实测七百一十六·点4】骑坐骑的女仆不必在这里再补一道：她一定是乘客
-            //  （isRideRider 要求 getVehicle() 非空），上面的 {@code m_20159_} 那道闸已经拦住原版
-            //  teleportToOwner。玩家要的"她们也可以被传送过来"走的是本模组自己那条"连人带坐骑一起
-            //  搬"（MaidChunkLoadManager.recallRideRider，内部先 unRide 再落座），不经过原版这一支。
+            //  （isRideRider 要求 getVehicle() 非空），上面 isPassenger() 那道闸已经拦住原版
+            //  teleportToOwner。玩家要的"她们也可以被传送过来"走本模组自己那条"连人带坐骑一起搬"
+            //  （MaidChunkLoadManager.recallRideRider，内部先 stopRiding 再落座），不经过这一支。
+            //
+            // 【实测七百二十四】但"悬空鞍位"（冰火传说的龙）那条**必须补一道**：她**不是乘客**
+            //  （降级方案里我们不 startRiding），上面 isPassenger() 拦不住她——于是 TLM 原版
+            //  teleportToOwner 会把她从龙背鞍位上拽走，下一拍距离超线就被判定"断开链路"
+            //  （玩家原话「动不动就传送和断开乘坐」）。这里与坐垫/骑乘/蹲下同口径：停放，不拉。
+            //  玩家要的"她能被传送过来"走本模组自己那条"悬空鞍位：只传她不传龙"。
+            //
+            // 【实测七百二十六·点1】判据放宽到 isSpecialMountRider（龙 + 卓越前线载具）：
+            //  玩家原话「对于卓越前线以及龙这两个特殊的载具……并不会去主动产生传送。所有的
+            //  传送方面的行为必须由玩家来。」卓越前线的载具那条她一定是乘客（上面 isPassenger
+            //  已拦），这里把判据统一成 isSpecialMountRider，语义只有一处、将来漏判也只会漏在
+            //  这一格。TLM 原生 teleportToOwner 是"自动传送"的一种，特殊载具上一律不生效。
+            if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+                cir.setReturnValue(false);
+                return;
+            }
         } catch (Exception ignored) {
         }
         // v1.5.92：原"防窒息 20 秒传送冷却"抑制分支已移除——建仆不被瞬移回施工区

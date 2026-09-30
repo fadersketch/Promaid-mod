@@ -1,4 +1,98 @@
-﻿## 实测七百三十四【仅 1.21.1】跟随/悬停高度的「棘轮」修正——基准只能有一个来源
+﻿## 实测七百三十七：守家不吃绳子的力 + 车/坦克机头兜底 + 双人座副驾 + 语音补漏 12 条
+
+> 版本号不变，仍是 v1.3.0(beta)，同名 jar 覆盖；**未发平台**。**两树同步**（1.21.1 与 1.20.1 行为一致）。
+
+### 〇、玩家原话
+
+1. 「home 模式下空袭牵引绳不再生效。」（同一条bug 的原话：「如果给 home 模式的女仆设置空袭模式的话女仆就会一直被牵引绳往玩家那拉」）
+2. 「女仆在开车的时候，那个车头的转向方面没有那么智能，能不能也加上像直升机这样子的转向兜底呢？」
+3. 「我考虑到卓越前线有一些载具是分为双人座的，能否考虑在女仆乘坐后主人右击的时候登上副驾驶座呢？」
+4. 「缺少的是那一句拿骑乘指挥棒右击女仆（而先前没有右击载具的语音）……可能还有其他遗漏，反正一并补上吧。」
+
+### 一、守家不再吃绳子的力（`GunnerTetherManager` + `MaidFlightRecall`）
+
+两条"往主人那边拉"的链路原来都**不看 home**：
+- `GunnerTetherManager.onMaidTick` → `pullTick` 每 tick 给她的位移加一份朝主人的冲量（原版拴绳力学）；
+- `MaidFlightRecall.tick`（空袭牵引绳）在她离参照点 100 格外时把她传回参照点。
+
+守家（TLM `isHomeModeEnable`）的语义是"玩家把她停在岗位上"，她自己那条守家回圈（`SchedulePos.tick`，
+每 2 秒一次、对空袭任务不被豁免）才是"拉她回家"的正解——绳子再插一脚就是两股力打架，实机观感
+就是玩家说的"一直被拉"。所以两处各加一道 `isHomeModeEnable()` 早退：**home 模式下这两条绳整条不生效**
+（挂载状态/金色标记/悬挂渲染照旧保留，只是不再写位移、不再传送；不再报系统消息）。非 home 的女仆
+一个字不变。旧版（实测六百九十二）曾把守家的参照点/落点换成工作区圈心，本版随这道闸一起退场。
+
+### 二、车/坦克的机头兜底（`MaidMountCompat.forceCarHeading`）
+
+地面那一档此前**只写左右输入位**（0x001/0x002），把转向整个交给 SWB 引擎自己的
+`holdTick → deltaRot → rudderRot` 链。反编译实证那条链有两个死结：① 转向量按 `holdTick` 慢慢累积
+（每拍 `steeringSpeed*0.12*min(holdTick,10)`）；② 转率正比于**车速**（`12*horizSpeed`）且 `rudderRot`
+被夹在 ±0.8。于是"起步/慢速几乎转不动、快起来又追不上"。
+
+新增 `forceCarHeading`：与直升机那条 `forceHeadingOnto` 同源（直写 `setYRot` + 一起写 `setServerYaw`，
+否则客户端 `handleClientSync` 的 10%/拍 lerp 会把机头拽回去），但加三处地面专属收敛——
+**25° 死区**（小误差让引擎自己收，避免画龙）、**每拍上限随车速缩放**（慢速有地板、快速放开）、
+**只写 yaw 绝不碰 deltaRot**（rudderRot 是从 deltaRot 积分出来的，清它等于把轮子冻死）。
+只接 `WHEEL`/`TRACK` 两台引擎（引擎名拿不到/其它引擎一字不变）。
+
+### 三、双人座副驾（主人坐自己女仆开的车）
+
+SWB 自己的 `VehicleEntity.interact` 见"第一乘客不是玩家"就把女仆 `stopRiding` 踢下来、主人自己坐
+座位 0——这正是"女仆被顶下车"的根因。我们接管这一档：
+
+- `MaidMountCompat.firstFreeSeatExcept` 找"除她之外的第一个空座"；`boardOwnerAsPassenger` 先
+  `startRiding(force)` 再 `changeSeat(player, 目标座)` 把主人钉到副驾；
+- `RideBindManager` 空手右击（`handlePassengerSeat`）与指挥棒右击（`handle` 的坐骑分支）都接；
+  两侧都 cancel 挡掉 SWB 本地预测的那一踢；
+- 两道登乘闸（`denyMountForBatonHolder` 与 `onMount`）加 `allowsOwnerPassengerSeat` 放行——
+  判据最窄：卓越前线载具 + 车上是**这位玩家的、我们绑的**女仆 + 还有空副驾；
+- 女仆稳在 0 号座（引擎唯一认的驾驶位），所以"她开、主人坐副驾"。
+
+### 四、语音补漏 12 条（内置包 161 → 173）
+
+按"女仆会说但没有语音"的标准审计全树（`bubble` / `ToolKit.bubble` / `deny` / `addTextChatBubble`
+四条会说出口的路径，按运行时 `JarVoicePack.matchKey` 的 exact/contains 语义逐条判定），补 12 条：
+
+| 台词 | 文件 |
+|---|---|
+| 先用骑乘棒右击坐骑，再来右击我～（玩家点名） | `ride_baton_first.ogg` |
+| 这辆车没有能坐的副驾～ | `ride_no_copilot.ogg` |
+| 起飞！ / 我去空中待命 / 好，我落下来 | `tool_takeoff/air_wait/land.ogg` |
+| 明白，交给我！ / 好，我这就去 / 好，我跟着你 / 这儿交给我 | `tool_roger/go/follow/here.ogg` |
+| 主人口渴了吧，给你带了喝的～ | `aid_drink.ogg` |
+| 我的活动范围里没有能坐下的水边～…… | `fish_no_water_area.ogg` |
+| 没有可以搭建的方块了…再找不到材料我就先停啦 | `build_no_blocks.ogg` |
+
+登记（manifest 两树 + `gen_voice_pack.py` 日语台词与情绪档）→ GPT-SoVITS 合成 → 峰值归一化
+（-1.5 dB → ogg q4）→ 安装进两树 assets。复跑审计：**gap = 0**。
+
+### 五、两树差异（故意保留）
+
+- 1.20.1 的 `displayClientMessage` 是 `m_213846_(Component)`（1.21.1 那份带 boolean 第二参）；
+- 其余（`isHomeModeEnable`、`setYRot`/`setServerYaw`、`changeSeat`、`getNthEntity`）两树同名，SRG 侧照抄既有反射口径。
+
+## 实测七百三十六【同步到 1.20.1】二十四期至三十四期全部同步到 Forge 1.20.1
+
+> 版本号不变，仍是 v1.3.0(beta)，同名 jar 覆盖；**未发平台**。本次把 724～734 那十一个「仅 1.21.1」版本的全部改动补齐到 1.20.1（Forge 47.x）侧，两树行为一致。
+
+### 一、同步内容（玩家可见部分）
+
+- **骑乘指挥棒·不再抢死链**：旧版「一位玩家名下只留一条骑乘链路」会让甲+载具A 在给乙+载具B 配对时被静默放掉；现在两组互不干扰。
+- **右击载具不再转玩家视角**：SWB 会在登乘前把玩家转向车头；现在右击后 4 拍内把重叠方向复述回快照。
+- **真刹车 / 不撞主人**：停车改为「总跑前松油 + 轮死刹车」，停车距离按车体半宽放大（坦克不再把主人撞倒）。
+- **坦克真开炮**：把她的目标 UUID 写进炮塔/武器位的 AI 目标，并在弹匣空时自己装弹；她还会主动搭载具搭上的炮口开火。
+- **直升机真悬停与直行**：骑上飞行载具就进入悬停，高度基准只认主人的 Y（不再每拍 +3 棘轮），接敌升到敌上 N 格盘旋；长距离直写机头、不飞偏。
+- **每 0.5 秒定期急停**：把「用力过猛」封顶，水平速度呈有界锯齿。
+- **骑龙（悬空鞍位）**：每拍摆位 + 冻结她自己的导航 + 不再因距离断开；配对 S2C 同步到客户端，龙一飞不再错位。
+- **龙骑位传送豁免**：守家、危险逃离、主人死亡传送、过热逃离、自保策略、区块加载 六处均把「骑龙鞍位」视为停放豁免对象。
+- **新声音**：骑乘/骑龙相关 9 条语音（占位、无座、骑龙就绪等）。
+
+### 二、两树差异（故意保留）
+
+- 1.20.1 没有 {@code EntityTickEvent}（它到 1.20.2 才进原版），所以龙每拍摆位改用本工程同款的混入点（{@code EntityTickPostMixin} 挂 {@code Entity.tick} RETURN）；
+- 网络包改用 Forge 的 {@code SimpleChannel}（与既有各包逐字同款）；
+- 客户端 tick 改用 {@code TickEvent.ClientTickEvent}（{@code Phase.END} 同口径）。
+
+## 实测七百三十四【仅 1.21.1】跟随/悬停高度的「棘轮」修正——基准只能有一个来源
 
 > 版本号不变，仍是 v1.3.0(beta)。**本版只动 1.21.1（NeoForge）这一侧**；1.20.1（Forge）维持 733，同名 jar 覆盖；**未发平台**。
 

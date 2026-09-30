@@ -69,4 +69,22 @@ public final class PromaidClientSetup {
     public static void registerWorkPosMarker() {
         com.maidsmart.marker.WorkPosMarkerClient.register();
     }
+
+    /** 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（仅客户端注册）。 */
+    public static void registerRideViewClamp() {
+        com.maidsmart.client.RideBatonViewClamp.ensureRegistered();
+    }
+
+    /**
+     * 【实测七百二十七·点4】退出世界时清掉"悬空鞍位（龙）"的客户端镜像表。
+     *
+     * <p>为什么放在客户端专属类：事件类型 {@code ClientPlayerNetworkEvent.LoggingOut} 是
+     * 客户端类型，写在 {@code RideBindManager}（两侧都会加载）里会让专用服务器加载到客户端类。
+     */
+    public static void registerSeatSyncClear() {
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.addListener(
+                (net.minecraftforge.client.event.ClientPlayerNetworkEvent.LoggingOut e) ->
+                        com.maidsmart.combat.RideBindManager.clearSyncedSeats());
+    }
+
 }
