@@ -6,6 +6,21 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百四十二（v1.3.0 beta，同名覆盖，未发版）：**两树同步的两条** ——
+① 左击换座终于换得过去（`RideBindManager.grantRemount/revokeRemount/remountPermitted` + S2C
+   `MaidSeatNetworking.ArmRemountPacket`；根因是 722/738 那两道"拿指挥棒不许登乘"的闸把换座自己的
+   "先下车 → 女仆挪座 → 主人重新上车"最后一步也拦了，`startRiding` 恒 false → 每次都提示
+   "换座失败：坐不回去了"；现在换座期间只对"这一次 / 这辆车 / 这个人"临时放行，拿指挥棒右击载具
+   仍然绝对不会自己坐上去；玩家原话「从副驾驶换到主驾驶座这个操作一直没能实现。老是提示失败」）；
+② 载具炮弹打不出来 / 打不准：741 按"炮在谁座上"分档分错了——反编译实证引擎自己的自动开火有一道
+   4° 硬闸（`VehicleEntity.baseTick:3765-3775`），而机炮挂在车体、**没有炮塔**的车（AC-130H/AH-6/飞艇）
+   炮管根本不能独立转 → 那道闸永远不过 → 一枪不发（日志实证：741 那份 jar 下「模组坐骑·开火」
+   一行都没有，而 740 那份同一天 06:18~13:08 每 5 秒一条）。现在**一律由我们接管开火**，
+   不能自己转的炮"最多等 2 秒就照样打出去"（`AIM_FORCE_TICKS`/`hasSlewableMount`），能转的炮
+   仍然"等它转到位再打"（护住 `prism_tank` 那类已经好用的一档）；并新增**末制导后门**
+   `MaidShellHoming`——她打出去的每一发炮弹在飞行途中被逐拍掰向她的目标（只掰方向、不改速度；
+   制导弹跳过；玩家的炮弹不碰），就是玩家点名要的「让女仆发射出来的炮弹直接指向敌人」。
+
 实测七百四十一（v1.3.0 beta，同名覆盖，未发版）：**两树同步的五条** ——
 ① 手持骑乘指挥棒**左击** = 主驾 ↔ 副驾换座（`RideBatonViewClamp.onInteractionKey` 客户端只认这一下并上报、
    服务端 `RideBindManager.handleSwapSeatRequest` 只信车辆 id 自算座位、`MaidMountCompat.swapOwnerSeat`

@@ -436,6 +436,11 @@ public final class RideBindManager {
             if (!holdsBaton(player)) {
                 return;
             }
+            // 【实测七百四十二·点1】换座自己那一下必须放行（否则"拿指挥棒"的人永远回不到车上）。
+            // 放行条只在这一个动作期间存在，见 grantRemount/remountPermitted。
+            if (remountPermitted(player, event.getEntityBeingMounted())) {
+                return;
+            }
             // 【实测七百三十八·指挥棒绝不登乘】手里拿着指挥棒 = 一律拦下（含副驾）。
             // 空手坐副驾那条路不受影响（handlePassengerSeat 里不查手里拿什么）。
             event.setCanceled(true);
@@ -452,6 +457,103 @@ public final class RideBindManager {
         } catch (Throwable ignored) {
             return false;
         }
+    }
+
+    /* ==================== 实测七百四十二·点1：换座期间的"重新登乘放行条" ==================== */
+
+    /**
+     * 【实测七百四十二·点1】"左击换座"这一步要重上车，但玩家**手里正拿着指挥棒**——
+     * 而我们自己那两道登乘闸（{@link #denyMountForBatonHolder} 拦 {@code startRiding} 本体 +
+     * {@link #onMount} 拦 {@code EntityMountEvent}）就是**专门拦"拿指挥棒的人"**的。
+     * 于是 741 那一版的 {@code player.startRiding(mount, true)} 恒返回 false，
+     * 每次都落在"换座失败：坐不回去了"。这正是玩家原话
+     * 「从副驾驶换到主驾驶座这个操作一直没能实现。老是提示失败」的根因。
+     *
+     * <h2>放行条的口径（尽量窄）</h2>
+     * 只在"这一次换座"这一个动作期间有效，且**必须同时匹配玩家与载具**：
+     * <ul>
+     *   <li>{@link #grantRemount} 紧贴 {@code startRiding} 之前开，
+     *       {@link #revokeRemount} 用 {@code finally} 在同一拍关掉——不是"一段时间内拿棍子都能上"；</li>
+     *   <li>键是**玩家 UUID → 载具 UUID**，换成别的车、或别的玩家长棍子都无效；</li>
+     *   <li>只在服务端这张表里生效（客户端那份由 {@link #armClientRemount} 单独喂，
+     *       见下面"为什么客户端也要一张"）。</li>
+     * </ul>
+     */
+    private static final Map<UUID, UUID> REMOUNT_PERMIT = new HashMap<>();
+
+    /** 服务端：开一张"这一下允许他重上车"的放行条（紧贴 startRiding 之前调）。 */
+    public static void grantRemount(Player player, Entity vehicle) {
+        try {
+            if (player == null || vehicle == null) {
+                return;
+            }
+            synchronized (REMOUNT_PERMIT) {
+                if (REMOUNT_PERMIT.size() > 64) {
+                    REMOUNT_PERMIT.clear();
+                }
+                REMOUNT_PERMIT.put(player.getUUID(), vehicle.getUUID());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 服务端：关掉放行条（{@code finally} 里调，确保任何异常都不留条）。 */
+    public static void revokeRemount(Player player) {
+        try {
+            if (player == null) {
+                return;
+            }
+            synchronized (REMOUNT_PERMIT) {
+                REMOUNT_PERMIT.remove(player.getUUID());
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 客户端那一份：由服务端在换座前 S2C 下发（{@link MaidSeatNetworking#armRemount}）。
+     *
+     * <h2>为什么客户端也要一张</h2>
+     * 服务端 {@code startRiding} 成功后会发 {@code ClientboundSetPassengersPacket}，客户端那条链
+     * 会**本地**再调一次 {@code passenger.startRiding(entity, true)}（反编译
+     * {@code ClientPacketListener.handleSetEntityPassengersPacket} 实证；卓越前线自己也覆写了它）。
+     * 客户端同样装着那道"拿指挥棒不许上车"的 mixin，于是本地那一份会被拦掉 →
+     * 玩家眼前还是"没坐上去"（服务端已上车）= 抖/看不见人。
+     * 所以服务端在换座前先发一个"这一辆车，这一小会儿放行"的包；客户端读它、只放行这一辆。
+     */
+    private static volatile int CLIENT_REMOUNT_VEHICLE = Integer.MIN_VALUE;
+    private static volatile long CLIENT_REMOUNT_UNTIL_MS = 0L;
+
+    /** 客户端：这一小会儿允许"拿指挥棒的玩家"登上这辆车（由 S2C 包调）。 */
+    public static void armClientRemount(int vehicleId) {
+        CLIENT_REMOUNT_VEHICLE = vehicleId;
+        CLIENT_REMOUNT_UNTIL_MS = System.currentTimeMillis() + CLIENT_REMOUNT_WINDOW_MS;
+    }
+
+    /** 客户端放行窗口（毫秒）。同 tick 就会用到，1 秒足够富余、又不至于留下"拿棍也能上"的漏洞。 */
+    private static final long CLIENT_REMOUNT_WINDOW_MS = 1000L;
+
+    /** 这一次"上车"是不是我们换座自己触发的那一下（服务端表 / 客户端窗口，任一命中即放行）。 */
+    private static boolean remountPermitted(Player player, Entity vehicle) {
+        try {
+            if (player == null || vehicle == null) {
+                return false;
+            }
+            UUID want;
+            synchronized (REMOUNT_PERMIT) {
+                want = REMOUNT_PERMIT.get(player.getUUID());
+            }
+            if (want != null && want.equals(vehicle.getUUID())) {
+                return true; // 服务端：我们刚开的条
+            }
+            // 客户端：服务端刚发过"这一辆车放行"
+            if (CLIENT_REMOUNT_VEHICLE == vehicle.getId()
+                    && System.currentTimeMillis() < CLIENT_REMOUNT_UNTIL_MS) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     /**
@@ -510,6 +612,10 @@ public final class RideBindManager {
             // 如果拿骑乘指挥棒进行右击，那么就不会坐上副驾驶，只会有他的解绑功能，绝对不会乘坐。」
             // 所以这里**删掉了 737 那道"放行主人坐副驾"的豁口**——手里拿着指挥棒的玩家，一律
             // 拦下登乘（包括副驾）。想坐副驾请**空手**右击（那条路仍然通，见 handlePassengerSeat）。
+            // 【实测七百四十二·点1】唯一例外：**换座自己那一下**（grantRemount 开的放行条）。
+            if (remountPermitted(player, vehicle)) {
+                return false;
+            }
             PlayerMountLog.throttled(player);
             return true;
         } catch (Throwable ignored) {
@@ -1158,6 +1264,10 @@ public final class RideBindManager {
             if (maid == null || !ownable(player, maid) || !MaidRideKit.isRideRider(maid)) {
                 return; // 车上不是我们绑的女仆 → 不插手（纯玩家自己开的车，座位由他自己管）
             }
+            // 【实测七百四十二·点1】先给**客户端**发一个"这一辆车，这一小会儿放行登乘"的包——
+            // 服务端 startRiding 成功后客户端会跟着本地再上一次车，而客户端也装着那道
+            // "拿指挥棒不许上车"的 mixin（见 armClientRemount 的注释）。
+            MaidSeatNetworking.armRemount(player, mount.getId());
             String msg = MaidMountCompat.swapOwnerSeat(mount, player, maid);
             if (msg != null) {
                 player.displayClientMessage(Component.literal(msg), true); // 动作栏一行，不刷聊天

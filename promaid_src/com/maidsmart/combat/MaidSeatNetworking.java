@@ -59,6 +59,49 @@ public final class MaidSeatNetworking {
                 SyncPacket::encode, SyncPacket::decode, SyncPacket::handle);
         CHANNEL.registerMessage(1, SwapSeatPacket.class,
                 SwapSeatPacket::encode, SwapSeatPacket::decode, SwapSeatPacket::handle);
+        // 【实测七百四十二·点1】换座前发的"这一辆车这一小会儿放行登乘"（S2C，单包、单 int）。
+        CHANNEL.registerMessage(2, ArmRemountPacket.class,
+                ArmRemountPacket::encode, ArmRemountPacket::decode, ArmRemountPacket::handle);
+    }
+
+    /**
+     * 【实测七百四十二·点1】服务端在换座前告诉**这位玩家自己的客户端**："接下来这一下登乘
+     * 别拦"（只带一个载具实体 id）。
+     *
+     * <p>为什么必须单独一个包：换座是"先下车、再上车"，而玩家手里拿着指挥棒，客户端那条
+     * {@code handleSetEntityPassengersPacket} 链会**本地**再上一次车（反编译实证），也会被
+     * 客户端装着的那道 mixin 拦掉 → 服务端上车成功、玩家眼前却没动静。见
+     * {@code RideBindManager.armClientRemount}。
+     */
+    public static void armRemount(ServerPlayer player, int vehicleId) {
+        if (player == null) {
+            return;
+        }
+        try {
+            CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new ArmRemountPacket(vehicleId));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    public static class ArmRemountPacket {
+        public final int vehicleId;
+
+        public ArmRemountPacket(int vehicleId) {
+            this.vehicleId = vehicleId;
+        }
+
+        public static void encode(ArmRemountPacket pkt, FriendlyByteBuf buf) {
+            buf.writeInt(pkt.vehicleId);
+        }
+
+        public static ArmRemountPacket decode(FriendlyByteBuf buf) {
+            return new ArmRemountPacket(buf.readInt());
+        }
+
+        public static void handle(ArmRemountPacket pkt, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> RideBindManager.armClientRemount(pkt.vehicleId));
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     /**
