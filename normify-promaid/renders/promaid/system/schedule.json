@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "id": "promaid.system.schedule",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 2 个子模块。",
+    "en": "2 submodules at this layer."
+  },
+  "order": [
+    "promaid.system.schedule.switch",
+    "promaid.system.schedule.net"
+  ],
+  "groups": [
+    {
+      "id": "g5",
+      "title": {
+        "zh": "系统服务",
+        "en": "System Services"
+      },
+      "children": [
+        "promaid.system.schedule.switch",
+        "promaid.system.schedule.net"
+      ]
+    }
+  ]
+}

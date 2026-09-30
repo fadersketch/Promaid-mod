@@ -1,0 +1,2698 @@
+{
+  "promaid": {
+    "zh": "车万女仆（Touhou Little Maid）的增强附属模组，把女仆从「会干活」推进到「会驾驶、会飞、会记、会说话」。本树描述 1.21.1 NeoForge 主线（promaid_src_neo，Mojang 映射）；1.20.1 Forge 侧另见 promaid-forge 树。",
+    "en": "An enhancement addon for Touhou Little Maid that pushes maids from 'does chores' to 'drives, flies, remembers and talks'. This tree documents the 1.21.1 NeoForge mainline (promaid_src_neo, Mojang mappings); the 1.20.1 Forge side lives in the promaid-forge tree.",
+    "name": {
+      "zh": "Promaid 模组总览",
+      "en": "Promaid Mod Overview"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/ProMaidMod.java",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.entry": {
+    "zh": "模组启动入口、功能注册枢纽、首次加入礼物与创造栏注入。所有子系统都从这里被接上 TLM 的扩展点。",
+    "en": "Mod bootstrap, the registration hub, first-join gift and creative-tab injection. Every subsystem is wired into TLM's extension points from here.",
+    "name": {
+      "zh": "入口与装配",
+      "en": "Entry & Assembly"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/ProMaidExtension.java",
+        1,
+        null
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/ProMaidMod.java",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.entry.mod": {
+    "zh": "注解 @Mod 的入口：注册物品、物品/网络/TaskData 引导、配置 SPEC 装配，以及一段约 320 行的历史默认值迁移链（含 22 个 *_MIGRATED 一次性标记）。",
+    "en": "The @Mod entry: registers items, bootstraps item/network/task-data, assembles the config SPEC, and runs a ~320-line chain of historical default-value migrations (including 22 one-shot *_MIGRATED flags).",
+    "name": {
+      "zh": "模组主类与初始化",
+      "en": "Mod Main & Bootstrap"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/ProMaidMod.java",
+        1,
+        452
+      ]
+    ],
+    "apis": [
+      [
+        "event",
+        "ProMaidMod()",
+        "模组构造：注册物品与配置。",
+        "Mod constructor: registers items and config."
+      ],
+      [
+        "event",
+        "runConfigMigration()",
+        "历史默认值迁移链（幂等，靠 *_MIGRATED 标记）。",
+        "Historical default migration chain (idempotent via *_MIGRATED flags)."
+      ]
+    ]
+  },
+  "promaid.entry.extension": {
+    "zh": "实现 TLM 的 @LittleMaidExtension：注册 AI 工具、任务、TaskData、AI 上下文、core/rest 大脑行为，并驱动所有服务端每 tick 模块。是全模组唯一的装配中枢，也是最大的耦合点。",
+    "en": "Implements TLM's @LittleMaidExtension: registers AI tools, tasks, TaskData, AI contexts and core/rest brain behaviors, and drives every server-tick module. The single assembly hub of the whole mod, and its largest coupling point.",
+    "name": {
+      "zh": "功能注册枢纽",
+      "en": "Feature Registration Hub"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/ProMaidExtension.java",
+        593,
+        779
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "addMaidTask(TaskManager)",
+        "向 TLM 登记本模组的全部任务。",
+        "Registers all of this mod's tasks with TLM."
+      ],
+      [
+        "rpc",
+        "addExtraMaidBrain()",
+        "登记 core/rest 大脑行为与优先级。",
+        "Registers core/rest brain behaviors and priorities."
+      ],
+      [
+        "rpc",
+        "registerAITool(...)",
+        "登记供 LLM 调用的工具。",
+        "Registers LLM-callable tools."
+      ],
+      [
+        "event",
+        "onServerTick(...)",
+        "驱动全部服务端每-tick 模块。",
+        "Drives every server tick module."
+      ]
+    ]
+  },
+  "promaid.entry.gift": {
+    "zh": "用原版进度（advancement）而非 NBT 标记判定首次进入，发一次见面礼。",
+    "en": "Awards a one-time gift on first join, keyed off a vanilla advancement rather than an NBT flag.",
+    "name": {
+      "zh": "首次加入礼物",
+      "en": "First-Join Gift"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/FirstJoinGift.java",
+        1,
+        113
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.entry.creative-tab": {
+    "zh": "把本模组物品插进原版创造模式物品栏的分类里，而不是另开一栏。",
+    "en": "Injects this mod's items into the vanilla creative-tab categories instead of adding its own tab.",
+    "name": {
+      "zh": "创造栏注入",
+      "en": "Creative Tab Injection"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/CreativeTabHandler.java",
+        1,
+        48
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin": {
+    "zh": "85 个 Mixin（mixins.promaid.json 里 68 个 common 加 17 个 client），逐一核对无孤儿。这是本模组唯一能与 TLM/原版深耦合的合法通道，也是「不 fork TLM 也能改行为」的根基。",
+    "en": "85 mixins (68 common plus 17 client in mixins.promaid.json), verified 1:1 with no orphans. This layer is the mod's only legitimate channel for deep coupling into TLM/vanilla, and the reason it can change behavior without forking TLM.",
+    "name": {
+      "zh": "注入层（Mixin）",
+      "en": "Mixin Layer"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/mixins.promaid.json",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.core-tlm-maid": {
+    "zh": "直接给 EntityMaid 打补丁：站桩锁位、传送豁免、扫击伤害、游泳姿态、任务/日程守卫、玩家伤害策略、压缩盒背包延伸、床铺互通。",
+    "en": "Patches EntityMaid directly: stand-still locking, teleport exemption, sweep damage, swim pose, task/schedule guards, player-damage policy, compression-box inventory extension and bed interop.",
+    "name": {
+      "zh": "TLM 女仆本体注入",
+      "en": "TLM EntityMaid Core Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidStationaryMixin.java",
+        1,
+        44
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidTeleportPreserveMixin.java",
+        1,
+        110
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidCompressionBoxMixin.java",
+        1,
+        161
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "EntityMaid.travel(...)",
+        "注入：站桩期接管移动。",
+        "Injection: takes over movement while standing."
+      ],
+      [
+        "rpc",
+        "EntityMaid.teleportToOwner()",
+        "注入：停放/空袭期豁免传送。",
+        "Injection: exempts teleport while parked/airborne."
+      ]
+    ]
+  },
+  "promaid.mixin.tlm-tasks": {
+    "zh": "对 TLM 内置任务类做闸门/限频/奖励修正：吃饭、偷吃、恐慌、跟随、挤奶、剪毛、采蜜、钓鱼落座、盾牌、近战/激流、拾取优先级、收割/耕地、大脑节流。",
+    "en": "Gates, rate-limits and reward-tunes TLM's built-in task classes: meal, steal-edible, panic, follow, milking, shearing, honey, fishing-seat, shield, melee/riptide, pickup priority, harvest/till and brain throttling.",
+    "name": {
+      "zh": "TLM 任务行为注入",
+      "en": "TLM Task Behavior Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidFollowOwnerTickMixin.java",
+        1,
+        88
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/FarmSweepMixin.java",
+        1,
+        285
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/NativeTaskSmoothMixin.java",
+        1,
+        132
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.vanilla-ai": {
+    "zh": "无主女仆总闸、走路抢方向盘抑制、原版呆滞刹车时长、空袭导航守卫、骑乘散步。",
+    "en": "Ownerless-maid gate, walk-steering suppression, native idle-brake durations, air-raid nav guards and riding stroll.",
+    "name": {
+      "zh": "原版 AI 注入",
+      "en": "Vanilla AI Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/BehaviorOwnerlessGateMixin.java",
+        1,
+        74
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidMoveSuppressMixin.java",
+        1,
+        89
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MoveToTargetSinkDurationMixin.java",
+        1,
+        29
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.entity-physics": {
+    "zh": "外力归因（风弹/法术推人）、速度矢量拦截、骑乘门禁、重力冻结、爆炸/火焰/树叶/区块冻结等原版世界行为修补。",
+    "en": "Force attribution (wind charge / spell knockback), delta-movement interception, mount gating, gravity freeze, plus explosion/fire/leaf/chunk-freeze world-behavior patches.",
+    "name": {
+      "zh": "实体与物理注入",
+      "en": "Entity & Physics Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/EntitySetDeltaMovementMixin.java",
+        1,
+        41
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidBaubleTotemMixin.java",
+        1,
+        266
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/ExplosionWindGuardMixin.java",
+        1,
+        89
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.render-client": {
+    "zh": "鞘翅层、旋转/俯冲倾角、幽灵渲染、扫帚/拴绳虚影、Gecko 动画去重、模型包排序、金色描边、自由飞行动画注册、情绪姿势覆盖。",
+    "en": "Elytra layer, spin/dive tilt, ghost rendering, broom/tether ghosting, Gecko animation dedup, model-pack sorting, gold outline, free-flight animation registration and emotion pose override.",
+    "name": {
+      "zh": "客户端渲染注入",
+      "en": "Client Render & Gecko Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/EmotionPoseMixin.java",
+        1,
+        282
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidModelPackSortMixin.java",
+        1,
+        91
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidGhostTetherMixin.java",
+        1,
+        60
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.tlm-config-gui": {
+    "zh": "在 TLM 右键配置界面注入「长期记忆」「自由飞行」「Goety」三个面板。",
+    "en": "Injects three panels — long-term memory, free flight and Goety — into TLM's right-click config GUI.",
+    "name": {
+      "zh": "TLM 配置界面扩展",
+      "en": "TLM Config GUI Extensions"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidConfigMemoryMixin.java",
+        1,
+        323
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidConfigFreeFlightMixin.java",
+        1,
+        114
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidConfigGoetyMixin.java",
+        1,
+        106
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.network-chunk": {
+    "zh": "远程开界面绕过 4 格距离、强制实体同步（治「客户端没有她」）、远程界面同步泵。靠改写 vanilla ChunkMap 的 pairing/seenBy 实现，脆弱且深度反射。",
+    "en": "Lets the GUI open remotely past the 4-block limit, forces entity resync (fixes 'she is not on my client') and pumps remote GUI sync — by rewriting vanilla ChunkMap pairing/seenBy. Fragile and deeply reflective.",
+    "name": {
+      "zh": "网络与区块追踪注入",
+      "en": "Network & Chunk-Tracking Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/ChunkMapTrackRemoteMixin.java",
+        1,
+        168
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidContainerRemoteOpenMixin.java",
+        1,
+        84
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/ChunkMapRemotePumpMixin.java",
+        1,
+        70
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.dialogue-llm": {
+    "zh": "语言/回调修复、LLM 调用闸门、system prompt 追加、傀儡模式让位、TTS 音量、气泡限流。",
+    "en": "Language/callback fixes, LLM call gating, system-prompt appending, puppet-mode concession, TTS volume and chat-bubble rate limiting.",
+    "name": {
+      "zh": "对话与 LLM 注入",
+      "en": "Chat & LLM Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidChatLanguageMixin.java",
+        1,
+        162
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/ChatBubbleLimitMixin.java",
+        1,
+        134
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/MaidChatLlmGateMixin.java",
+        1,
+        43
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.mixin.compat": {
+    "zh": "Goety 位移聚晶推进期屏蔽走路抢方向盘；骑乘/武装拴绳相关注入（玩家下方挂点、金色标记、重锤骑乘落地缓冲、扫帚实体 travel）。",
+    "en": "Suppresses walk-steering during Goety displacement-crystal thrust, plus ride/tether injections (hang point below the player, gold marker, mace-ride landing buffer, broom entity travel).",
+    "name": {
+      "zh": "兼容类注入",
+      "en": "Compat Patches"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/mixin/EntityGunnerHangMixin.java",
+        1,
+        94
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/EntityBroomMaidTravelMixin.java",
+        1,
+        168
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/mixin/PlayerMaceRideFallMixin.java",
+        1,
+        124
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat": {
+    "zh": "模组体量最大的一层（76 文件约 2.77 MB）：从主动参战、空袭、扫帚、轰炸，到骑乘指挥棒与第三方载具兼容。也是技术债最集中的区域。",
+    "en": "The largest layer (76 files, about 2.77 MB): proactive engagement, air raid, broom, bombing, the ride baton and third-party vehicle compat. Also where the tech debt concentrates.",
+    "name": {
+      "zh": "战斗与载具",
+      "en": "Combat & Vehicles"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.auto-switch": {
+    "zh": "主人被攻击或主人攻击敌对生物时，女仆自动从当前任务切到攻击任务参战，战后还原原任务；含威胁判定、任务池抽签、模组/原生任务让位、战术态重调。",
+    "en": "When the owner is hit — or hits a hostile — maids auto-switch from their current task to a combat task and restore it afterwards. Includes threat scoring, a task-pool lottery, mod/native task concession and tactics re-tuning.",
+    "name": {
+      "zh": "主动参战",
+      "en": "Proactive Engagement"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/AutoCombatSwitch.java",
+        1,
+        799
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/AutoCombatPools.java",
+        1,
+        676
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/AutoCombatTargeting.java",
+        1,
+        488
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.auto-switch.pools": {
+    "zh": "可被抽中的攻击任务集合与权重，决定她切过去用哪种打法。",
+    "en": "The set of combat tasks eligible for the lottery, with weights deciding which fighting style she switches into.",
+    "name": {
+      "zh": "战斗任务池",
+      "en": "Combat Task Pools"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/AutoCombatPools.java",
+        1,
+        676
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatModeTable.java",
+        1,
+        280
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.auto-switch.targeting": {
+    "zh": "威胁评分与目标筛选：谁算威胁、值不值得切任务、打完多久撤。",
+    "en": "Threat scoring and target filtering: who counts as a threat, whether it is worth switching, and when to disengage.",
+    "name": {
+      "zh": "参战威胁判定",
+      "en": "Engagement Threat Targeting"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/AutoCombatTargeting.java",
+        1,
+        488
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatWorkRange.java",
+        1,
+        184
+      ]
+    ],
+    "apis": [
+      [
+        "event",
+        "onLivingHurt(LivingIncomingDamageEvent)",
+        "主人/女仆受击 → 威胁评分。",
+        "Owner/maid hurt -> threat scoring."
+      ],
+      [
+        "event",
+        "onLivingDamage(...)",
+        "主人出手 → 记敌对目标。",
+        "Owner attacks -> record hostile."
+      ]
+    ]
+  },
+  "promaid.combat.auto-switch.neutral": {
+    "zh": "把发狂的狼、被模组魔改成中立生物的目标也纳入「威胁」。",
+    "en": "Also counts enraged wolves and mod-mutated neutral mobs as threats.",
+    "name": {
+      "zh": "中立威胁驱动",
+      "en": "Neutral Threat Driver"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/NeutralThreatDriver.java",
+        1,
+        590
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.targeting": {
+    "zh": "空袭状态下强制以自身为圆心半径 50 格索敌（绕过 TLM 原版丢目标），并提供一次性诊断探针与 /maid_smart combat check 自助判据检查。",
+    "en": "Forces self-centred 50-block targeting while airborne (bypassing TLM's target dropping), plus a one-shot diagnostic probe and the /maid_smart combat check self-test.",
+    "name": {
+      "zh": "飞行索敌与诊断",
+      "en": "Flight Targeting & Diagnostics"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/FlightTargeting.java",
+        1,
+        462
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatSenseCheck.java",
+        1,
+        329
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/FlightTargetProbe.java",
+        1,
+        194
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.flight-raid": {
+    "zh": "鞘翅加武器加飞行道具的模式：遇敌起跳滑翔、放烟花推进、爬升/环绕/收翅俯冲、近战一记或远程持续开火，循环。",
+    "en": "Elytra plus weapon plus flight item: on spotting an enemy she launches, boosts with fireworks, climbs/orbits/folds her wings to dive, lands one melee hit or keeps firing at range, then loops.",
+    "name": {
+      "zh": "空袭（近战/远程）",
+      "en": "Air Raid (Melee / Ranged)"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFlightCombatBehavior.java",
+        1,
+        3493
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFlightKit.java",
+        1,
+        1748
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFlightRangedTask.java",
+        1,
+        707
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.flight-raid.follow": {
+    "zh": "主人自己飞走时，女仆背上鞘翅追上来跟随，而不是在地面垫方块。",
+    "en": "When the owner flies off, she puts on elytra and follows through the air instead of pillaring up on the ground.",
+    "name": {
+      "zh": "飞行跟随",
+      "en": "Elytra Follow-Owner"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFlightFollowBehavior.java",
+        1,
+        1680
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.flight-raid.recall": {
+    "zh": "半径 N 格（默认 100）内找不到主人就立刻把她传送回你身边，空中也能传——防「飞太高把目标打死后自己回不来」。",
+    "en": "If she cannot find the owner within N blocks (100 by default) she is teleported straight back, mid-air if needed, so she never strands herself after a kill.",
+    "name": {
+      "zh": "空袭牵引绳",
+      "en": "Air-Raid Leash"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFlightRecall.java",
+        1,
+        158
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.flight-raid.air-combat": {
+    "zh": "载具/空中状态下的悬停、机头朝向与环绕接敌的统一姿态层。",
+    "en": "The shared posture layer for hovering, nose heading and orbiting engagement while mounted or airborne.",
+    "name": {
+      "zh": "空中交战姿态",
+      "en": "Air Combat Posture"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidAirCombat.java",
+        1,
+        611
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatOrbit.java",
+        1,
+        null
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatManeuver.java",
+        1,
+        null
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidFlightCombatBehavior.tick(...)",
+        "空袭主循环。",
+        "The air-raid main loop."
+      ],
+      [
+        "rpc",
+        "MaidFlightKit.canFly(maid)",
+        "三件套校验。",
+        "Validates the three-piece kit."
+      ]
+    ]
+  },
+  "promaid.combat.broom": {
+    "zh": "取出 TLM 扫帚实体骑上去飞行、悬停、接敌爬升盘旋，开火链路与远程空袭完全同款；含牵引绳回传与套件校验。只有玩家手动指派才会进。",
+    "en": "She mounts a TLM broom entity, flies, hovers and orbits to engage — the firing chain is identical to ranged air raid. Includes leash recall and kit validation. Only entered when the player assigns it.",
+    "name": {
+      "zh": "扫帚模式",
+      "en": "Broom Mode"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidBroomDrive.java",
+        1,
+        2571
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidBroomBehavior.java",
+        1,
+        788
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidBroomKit.java",
+        1,
+        370
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidBroomDrive.takeThrust(...)",
+        "每拍推进量（被扫帚实体 travel 注入读取）。",
+        "Per-tick thrust, read by the broom entity travel injection."
+      ],
+      [
+        "rpc",
+        "MaidBroomKit.isBroomTask(...)",
+        "任务判定契约（多处方引用）。",
+        "Task predicate contract (referenced from several mixins)."
+      ]
+    ]
+  },
+  "promaid.combat.bombing": {
+    "zh": "打完那一记或远程开火之后，顺手放一枚炸弹：末地水晶（黑曜石底座）、重生锚（1 萤石）、床（仅在原版会炸的维度）、投掷 TNT。材料齐的几段在同一次攻击里一起放。",
+    "en": "After landing a hit — or after firing at range — she drops a bomb as a follow-up: end crystal (obsidian base), respawn anchor (1 glowstone), bed (only where vanilla beds explode) and thrown TNT. Every variant she has materials for fires in the same attack.",
+    "name": {
+      "zh": "空袭轰炸",
+      "en": "Air-Raid Bombing"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidBombing.java",
+        1,
+        1205
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombPlacement.java",
+        1,
+        454
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombThrow.java",
+        1,
+        409
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.bombing.items": {
+    "zh": "按背包材料决定放哪一段：注册名里带 tnt 的、方块继承原版 TntBlock 的模组 TNT 都认；认出来的是哪一件就放它自己那一枚。",
+    "en": "Picks which bomb to place from her inventory: any modded TNT whose registry name contains 'tnt', or whose block extends vanilla TntBlock, is accepted; whichever item is recognised is the one placed.",
+    "name": {
+      "zh": "炸弹选材与判据",
+      "en": "Bomb Material Selection"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombItems.java",
+        1,
+        336
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombConfig.java",
+        1,
+        151
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.bombing.blast": {
+    "zh": "「破坏方块」与「伤到主人/友军」默认都关；她自己不会被自己的炸弹炸到或推飞；黑曜石底座默认保留 10 秒再收进背包。",
+    "en": "'Break blocks' and 'hurt owner/allies' both default off; she cannot be caught or launched by her own bomb; the obsidian base is kept 10 seconds before being returned to her inventory.",
+    "name": {
+      "zh": "爆炸与安全口径",
+      "en": "Blast & Safety Semantics"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombExplosion.java",
+        1,
+        190
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombTntTick.java",
+        1,
+        193
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidTntBlastGuard.java",
+        1,
+        299
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidBombing.onAttackLanded(...)",
+        "打完一记 → 顺带投弹。",
+        "After a landed hit -> drop a bomb."
+      ]
+    ]
+  },
+  "promaid.combat.bombing.pose": {
+    "zh": "放置/充能/投掷/放烟花的瞬间，副手亮一下对应物品模型。被 11 个互不相关的子系统引用，是隐藏的全局耦合点。",
+    "en": "Flashes the matching item model in the offhand at the instant of placing/charging/throwing/boosting. Referenced by 11 unrelated subsystems — a hidden global coupling point.",
+    "name": {
+      "zh": "副手动作姿势（共用）",
+      "en": "Held-Pose Prop (shared)"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/BombPose.java",
+        1,
+        366
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/FlightFireworkPose.java",
+        1,
+        193
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.pink-fire": {
+    "zh": "把床/重生锚/末地水晶爆炸产生的火渲染成粉色，并附带一层伤害豁免；保证粉色火会熄灭（不蔓延、自己灭、不点燃任何人）。",
+    "en": "Renders the fire left by bed/anchor/crystal blasts pink, with a damage-exemption layer, and guarantees it goes out — no spread, self-extinguishing, ignites nobody.",
+    "name": {
+      "zh": "粉色火焰",
+      "en": "Pink Fire"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/PinkFireBlock.java",
+        1,
+        436
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/PinkFireSweep.java",
+        1,
+        231
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.tether": {
+    "zh": "把玩家挂在飞行女仆下方（武装直升机二号位），玩家可自由开火并随女仆飞行。粉丝点单道具。",
+    "en": "Hangs the player below a flying maid — the gunship door-gunner seat — so the player can fire freely while being flown around. A fan-requested item.",
+    "name": {
+      "zh": "武装拴绳（二号位）",
+      "en": "Armed Leash (Gunner Seat)"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/GunnerTetherManager.java",
+        1,
+        1946
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/GunnerTetherNetworking.java",
+        1,
+        113
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CombatLeashItem.java",
+        1,
+        36
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.ride": {
+    "zh": "把「已上鞍的坐骑」（原版生物 / 卓越前线载具 / 冰火传说飞龙）与女仆绑定，让她骑着它跟主人走、可攻击可飞行。顺序固定：先右击坐骑、再右击女仆；左键换座。",
+    "en": "Binds an already-saddled mount (vanilla mob / Superb Warfare vehicle / Ice and Fire dragon) to a maid so she rides it following the owner, and can fight and fly. Order is fixed: right-click the mount first, then the maid; left-click swaps seats.",
+    "name": {
+      "zh": "骑乘指挥棒",
+      "en": "Ride Baton"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/RideBindManager.java",
+        1,
+        2270
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidRideKit.java",
+        1,
+        534
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/RideBatonItem.java",
+        1,
+        36
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "RideBindManager.bind(...)",
+        "绑定语义：一车一仆；甲的车不受乙影响。",
+        "Bind semantics: one mount one maid; maid A's mount is unaffected by B."
+      ],
+      [
+        "rpc",
+        "RideBindManager.handleSwapSeatRequest(...)",
+        "左键换座的服务端落点。",
+        "Server side of the left-click seat swap."
+      ]
+    ]
+  },
+  "promaid.combat.mount-compat": {
+    "zh": "3657 行的兼容模块，实际吞掉了一整个功能：原版坐骑驾驶、卓越前线载具（刹车/炮塔/弹道瞄准）、冰火传说龙的鞍位挂载。全反射，零硬依赖。",
+    "en": "A 3657-line compat module that has swallowed a whole feature: vanilla mount driving, Superb Warfare vehicles (braking/turret/ballistic aim) and Ice-and-Fire dragon seat mounting. Fully reflective, zero hard dependencies.",
+    "name": {
+      "zh": "载具兼容层",
+      "en": "Mount Compatibility Layer"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidMountCompat.java",
+        1,
+        4746
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidShellHoming.java",
+        1,
+        357
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidMountCompat.stopVehicle/followDist(...)",
+        "停车判据按车体尺寸。",
+        "Stop criteria derived from vehicle size."
+      ],
+      [
+        "rpc",
+        "MaidMountCompat.applyVehicleAiTargets(...)",
+        "把她的目标写进炮塔/武器位 AI 目标 UUID。",
+        "Writes her target into the turret/weapon-station AI target UUID."
+      ]
+    ]
+  },
+  "promaid.combat.tactics": {
+    "zh": "核心行为优先级 230 的 PVP 式近战战术接管：举盾时机、位移压制等，替代旧战斗协同。",
+    "en": "A PVP-style melee tactics takeover at core-behavior priority 230: shield timing, positional pressure and so on, replacing the old combat coordination.",
+    "name": {
+      "zh": "单兵作战战术",
+      "en": "Solo Combat Tactics"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidCombatTacticsBehavior.java",
+        1,
+        952
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.self-preservation": {
+    "zh": "任何状态下低血且有威胁时，停止手头行为转入自保：喝药/搭高/珍珠/逃跑/记录放置方块。3789 行，全模组最大的单文件。",
+    "en": "At any time, when low on health with a threat present she abandons her current behavior and enters self-preservation: drink, pillar up, pearl, flee, log placed blocks. 3789 lines — the mod's largest single file.",
+    "name": {
+      "zh": "自保",
+      "en": "Self-Preservation"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/SelfPreservationBehavior.java",
+        1,
+        4696
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.maneuvers": {
+    "zh": "重锤猛击（仿 vanilla_mob_remake 僵尸）、激流三叉戟旋转突进（推进剂改成拟真烟花）、落地水/落地雪被动生存技能。",
+    "en": "Mace smash (modelled on vanilla_mob_remake zombies), riptide-trident spin charge (propellant switched to realistic fireworks) and water/powder-snow landing clutch passives.",
+    "name": {
+      "zh": "特殊攻击链路",
+      "en": "Special Attack Chains"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidTridentSpinBehavior.java",
+        1,
+        743
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidRiptideBoost.java",
+        1,
+        558
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidMaceSmashBehavior.java",
+        1,
+        482
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.resurrect": {
+    "zh": "女仆死亡 60 秒后墓碑自消并在主人出生点复活（60 秒冷却）；致死伤害且无保命物品时自动收魂符。含冷却 HUD 广播。",
+    "en": "60 seconds after death her tombstone vanishes and she revives at the owner's spawn (60s cooldown); a lethal hit with no life-saving item auto-consumes a soul charm. Includes cooldown HUD broadcast.",
+    "name": {
+      "zh": "死亡复活与回魂符",
+      "en": "Auto-Resurrect & Soul Spell"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidAutoResurrect.java",
+        1,
+        591
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidSoulSpellGuard.java",
+        1,
+        361
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CooldownHudTracker.java",
+        1,
+        157
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.guards": {
+    "zh": "主人与同主女仆免伤、宠物免疫（含 AOE）、友军风免、建造护盾、女仆着火不传主人、模组 TNT 不破坏方块、不踩坏农田。多为单点守卫，各自 @EventBusSubscriber 自注册。",
+    "en": "Owner and same-owner maids take no damage; pet immunity (including AOE); ally wind immunity; build shield; maid fire does not spread to the owner; modded TNT does not break blocks; farmland is never trampled. Mostly single-point guards, each self-registering via @EventBusSubscriber.",
+    "name": {
+      "zh": "友军与环境防护总闸",
+      "en": "Friendly-Fire & Environment Guards"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/FriendlyFireGuard.java",
+        1,
+        172
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/FriendlyWindGuard.java",
+        1,
+        270
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/PetImmunityGuard.java",
+        1,
+        207
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidFireGuard.java",
+        1,
+        105
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.owner-support": {
+    "zh": "按优先级链喂药/治疗/喂食主人；共享盾牌；主人周围黑暗格被动插火把；发现刷怪笼优先插火把。",
+    "en": "A priority chain that medicates, heals and feeds the owner; shares her shield; passively lights dark spots around the owner; and prioritises torching spawners.",
+    "name": {
+      "zh": "主人贴身辅助",
+      "en": "Owner-Support Passives"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidAidOwnerBehavior.java",
+        1,
+        1859
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidSpawnerTorchBehavior.java",
+        1,
+        650
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidShieldShareBehavior.java",
+        1,
+        146
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.combat.compat": {
+    "zh": "全反射、零硬依赖地适配枪械（TACZ / 卓越前线）、万法皆通法术附属、拔刀剑、暮色森林孔雀羽扇、Curios 鞘翅、自推鞘翅。各自重写一遍「反射失败到宽松兜底」模板。",
+    "en": "Adapts guns (TACZ / Superb Warfare), the spell addon, SlashBlade, the Twilight Forest peacock fan, Curios elytra and self-propelled wings — all by reflection with zero hard deps. Each re-implements the same 'reflection failed, degrade gracefully' template.",
+    "name": {
+      "zh": "第三方战斗兼容",
+      "en": "Third-Party Combat Compat"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/combat/GunCompat.java",
+        1,
+        716
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/MaidSpellCastCompat.java",
+        1,
+        727
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/combat/CuriosElytraCompat.java",
+        1,
+        288
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work": {
+    "zh": "女仆的「职业」：挖矿、伐木、烧制、酿造、宰杀、搭路，以及一整套蓝图建造系统。全部通过 TLM 的 IMaidTask 注册，不自行挂钩。",
+    "en": "A maid's professions: mining, woodcutting, smelting, brewing, slaughter, bridging, plus a full blueprint-building system. All registered through TLM's IMaidTask rather than self-hooking.",
+    "name": {
+      "zh": "生产类任务",
+      "en": "Work Tasks"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.mine": {
+    "zh": "按距离平方加深度惩罚减价值 扫最高价值矿，寻路过去逐块挖（原版破坏公式加工具等级门槛加女仆 1.2 倍加成），连锁挖整条矿脉；临时垫脚方块事后回收。2338 行。",
+    "en": "Scans for the highest-value ore by distance squared plus a depth penalty minus value, paths there and mines block by block (vanilla break formula, tool-tier gated, 1.2x maid bonus), chain-mining the vein; temporary scaffold is reclaimed later. 2338 lines.",
+    "name": {
+      "zh": "挖矿",
+      "en": "Mining"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidMineBehavior.java",
+        1,
+        2845
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidMineTask.java",
+        1,
+        74
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.wood": {
+    "zh": "与挖矿同构，表换成原木/竹子（logs 标签自动），树叶不挡视线，连锁砍整棵树。注释自述是「完整克隆挖矿」——2379 行乘 2 的重复。",
+    "en": "Isomorphic to mining with the table swapped to logs/bamboo (auto logs tag); leaves do not block line of sight and the whole tree is felled in a chain. Its own comments admit it is a 'complete clone of mining' — 2379 lines of duplication.",
+    "name": {
+      "zh": "伐木",
+      "en": "Woodcutting"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidWoodBehavior.java",
+        1,
+        2951
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidWoodTask.java",
+        1,
+        66
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.cook": {
+    "zh": "按背包内容选炉型（食物选烟熏炉、矿石选高炉），把燃料与可烧物填进附近炉子并收产物；女仆在绑定期间坐着。",
+    "en": "Picks the furnace type from inventory contents (food to smoker, ore to blast furnace), fills nearby furnaces with fuel and smeltables, and collects output; she sits while bound.",
+    "name": {
+      "zh": "烧制",
+      "en": "Smelting & Cooking"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidCookBehavior.java",
+        1,
+        1311
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidCookTask.java",
+        1,
+        64
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.brew-task": {
+    "zh": "给酿造台补烈焰粉与材料、收成品药水，100 tick 节奏。配方解析见 system.brew。",
+    "en": "Refills brewing stands with blaze powder and ingredients and collects finished potions, on a 100-tick cadence. Recipe resolution lives in system.brew.",
+    "name": {
+      "zh": "酿造任务",
+      "en": "Brewing Task"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidBrewBehavior.java",
+        1,
+        1189
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidBrewTask.java",
+        1,
+        63
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.slaughter": {
+    "zh": "按 EntityType 统计附近动物，超过阈值就追上去每 3 秒杀一只（SEEK/CHASE/STRIKE 状态机）。",
+    "en": "Counts nearby animals by EntityType; once a group exceeds the threshold she chases and kills one every 3 seconds (SEEK/CHASE/STRIKE state machine).",
+    "name": {
+      "zh": "宰杀",
+      "en": "Livestock Slaughter"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidSlaughterBehavior.java",
+        1,
+        278
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidSlaughterTask.java",
+        1,
+        71
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.bridge": {
+    "zh": "核心行为优先级 245：从背包拿真方块朝主人方向跨沟/爬墙铺路，含危险方块与威胁排除、以及放置方块回收。三种模式：空中搭桥、斜向跨步、垂直垫柱。",
+    "en": "Core behavior at priority 245: places real blocks from her inventory to path toward the owner across gaps and up walls, excluding deadly blocks and threats, and reclaiming what she places. Three modes: air bridge, diagonal step and vertical pillar.",
+    "name": {
+      "zh": "搭路与垫高",
+      "en": "Bridge & Pillar"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/BridgeUpBehavior.java",
+        1,
+        1300
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.tool-equip": {
+    "zh": "核心行为优先级 200：按当前任务把背包里对口的工具/武器换到真正的主手；不占行为槽。同时也是副手姿势道具的还原入口。",
+    "en": "Core behavior at priority 200: swaps the right tool/weapon for the current task from her backpack into the real main hand without occupying a behavior slot. Also the restore entry point for held-pose props.",
+    "name": {
+      "zh": "任务工具自动装备",
+      "en": "Auto Tool Equip"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidToolAutoEquip.java",
+        1,
+        934
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidToolAutoEquipBehavior.java",
+        1,
+        122
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.stroll": {
+    "zh": "核心行为优先级 50：给空闲女仆一个散步目标（TLM 原生散步概率约 8e-6/tick，基本不动）；遵守工作/战斗/禁足边界。MaidStrollCheck 仅为一条速度投诉的调试命令而存在。",
+    "en": "Core behavior at priority 50: gives idle maids a stroll target, since TLM's native stroll chance is about 8e-6/tick (i.e. she never moves). Respects work/combat/restriction bounds. MaidStrollCheck exists purely to back a debug command for a speed complaint.",
+    "name": {
+      "zh": "空闲散步",
+      "en": "Idle Stroll"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidStrollBehavior.java",
+        1,
+        240
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidStrollCheck.java",
+        1,
+        413
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.planting": {
+    "zh": "独立 ServerTick 模块（不是大脑行为）：女仆在伐木任务时每 20 tick 捡附近树苗，在合法泥土上按树干净空判定种一棵。",
+    "en": "A standalone ServerTick module rather than a brain behavior: on the woodcut task she picks up nearby saplings every 20 ticks and plants one on valid dirt after a trunk-clearance check.",
+    "name": {
+      "zh": "随手种树",
+      "en": "Opportunistic Replanting"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidPlanting.java",
+        1,
+        755
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.placed-block": {
+    "zh": "把每个放置的脚手架方块与其放置者 UUID 绑定；含寿命到期、回魂暂停、跨维度归还背包、崩溃后安全清理。四个主人共用：挖矿/伐木/搭路/自保。",
+    "en": "Binds every scaffold block to its placing maid's UUID with lifetime expiry, soul-spell pause, cross-dimension return to backpack and crash-safe startup cleanup. Four owners share it: mining, woodcutting, bridging and self-preservation.",
+    "name": {
+      "zh": "搭方块统一回收",
+      "en": "Placed-Block Reclaim"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/PlacedBlockTracker.java",
+        1,
+        437
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "PlacedBlockTracker.place(...)",
+        "登记放置方块与主人 UUID。",
+        "Registers a placed block and its owner UUID."
+      ],
+      [
+        "rpc",
+        "PlacedBlockTracker.expirePlaced(...)",
+        "到期回收。",
+        "Reclaims on expiry."
+      ]
+    ]
+  },
+  "promaid.work.tags": {
+    "zh": "persistentData 标记（WORK_STILL_TAG 与 BUILD_SIT_TAG）告诉 mixin 抑制移动目标下沉；被 17 处 mixin 引用。是本包最重要的集成契约。",
+    "en": "persistentData flags (WORK_STILL_TAG and BUILD_SIT_TAG) tell mixins to suppress MoveToTargetSink; referenced by 17 mixin sites. The single most important integration contract in the package.",
+    "name": {
+      "zh": "站桩标记（跨切面）",
+      "en": "Work-Still Tagging (cross-cutting)"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/task/MaidWorkTags.java",
+        1,
+        195
+      ]
+    ],
+    "apis": [
+      [
+        "dataflow",
+        "MaidWorkTags.WORK_STILL_TAG",
+        "站桩契约标记。",
+        "The work-still contract tag."
+      ],
+      [
+        "dataflow",
+        "MaidWorkTags.BUILD_SIT_TAG",
+        "建造期就座契约标记。",
+        "The build-sit contract tag."
+      ]
+    ]
+  },
+  "promaid.work.build-plan": {
+    "zh": "计划格式是字符串表：首元素记录原点与蓝图名/id，其余记录相对坐标与方块。多区域 planId 到 PlanState，含原点/维度/朝向 quarter/光标/延迟重试表/已放置集；按维度持久化到 BuildArchive。BuildPlan 暴露约 40 个 public static，是典型上帝对象。",
+    "en": "The plan format is a string list: the first element records the origin plus blueprint name/id, the rest record relative coordinates and blocks. Multi-region planId to PlanState holds origin, dimension, rotation quarters, cursor, deferred-retry map and placed sets; persisted per dimension via BuildArchive. BuildPlan exposes about 40 public statics — a textbook god object.",
+    "name": {
+      "zh": "建造计划数据层",
+      "en": "Build Plan Data Model"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BuildPlan.java",
+        1,
+        1045
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BuildArchive.java",
+        1,
+        176
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.build-exec": {
+    "zh": "运行时核心：解析、重叠拒绝、障碍告警、已建扫描、材料预检、建或续计划（原点取玩家脚下、不需要女仆），以及女仆按光标每 N tick 放一块（四档速度）。含传送到位、缺料向主人取、TNT 点火守卫、区块重发、缝隙扫描、替代方块、TPS 自适应节奏。",
+    "en": "The runtime core: parse, reject overlaps, warn obstacles, scan prebuilt, precheck materials, create or resume the plan (origin at the player's feet, no maid required), plus a maid placing one block per N ticks (four speed tiers). Includes teleport-to-site, fetching missing material from the owner, TNT ignition guarding, chunk resend, gap scanning, alternative blocks and TPS-adaptive pacing.",
+    "name": {
+      "zh": "建造执行",
+      "en": "Build Execution"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/MaidBuildBehavior.java",
+        1,
+        1951
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBuildExecutor.java",
+        1,
+        254
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/MaidBuildTask.java",
+        1,
+        70
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "BlueprintBuildExecutor.execute(...)",
+        "解析并建立/续接建造计划。",
+        "Parses and creates or resumes a build plan."
+      ],
+      [
+        "rpc",
+        "MaidBuildBehavior.doPlace(...)",
+        "放下一块并扣真实材料。",
+        "Places one block and consumes real material."
+      ]
+    ]
+  },
+  "promaid.work.blueprint-lib": {
+    "zh": "570 行门面：静态访问器加 73 个一行转发到 14 个拆分实现类（v1.2.4 拆分）。拆分只做了一半——门面里仍混着真实逻辑，且 14 个类都带着同一段用不上的 import。",
+    "en": "A 570-line facade: static accessors plus 73 one-line delegations to 14 split implementation classes (split in v1.2.4). The split is half-done — real logic still sits in the facade, and all 14 classes carry the same unused import block.",
+    "name": {
+      "zh": "蓝图库门面",
+      "en": "Blueprint Facade"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintLib.java",
+        1,
+        570
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-lib.math": {
+    "zh": "解析/旋转/居中/去重/裁剪/尺寸缓存；步骤是唯一权威内存形态，litematic 与 snbt 都先转成它。",
+    "en": "Parse/rotate/center/dedupe/trim/size caching. The step list is the single authoritative in-memory form — both litematic and SNBT are converted into it first.",
+    "name": {
+      "zh": "蓝图几何与步骤",
+      "en": "Blueprint Geometry & Steps"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintStepMath.java",
+        1,
+        557
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintProjectionSampler.java",
+        1,
+        131
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "BlueprintStepMath.rotateSteps(...)",
+        "按 quarter 旋转步骤。",
+        "Rotates steps by quarter turns."
+      ],
+      [
+        "rpc",
+        "BlueprintStepMath.centerSteps(...)",
+        "把步骤居中到原点。",
+        "Centres steps on the origin."
+      ]
+    ]
+  },
+  "promaid.work.blueprint-lib.materials": {
+    "zh": "需求计数、缺口、玩家/女仆/合并持有、材料到物品的映射与转移（缺口计算、玩家缺口、合并持有等 5 个以上近同构变体）。",
+    "en": "Needs counting, shortfall, player/maid/combined holdings, material-to-item mapping and transfer — with five or more near-isomorphic variants.",
+    "name": {
+      "zh": "材料核算",
+      "en": "Material Accounting"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintMaterials.java",
+        1,
+        584
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-lib.placement": {
+    "zh": "支撑方向、虚空重力、红石重算、已建判定、门缝补齐、障碍预检。门面之外零外部调用者。",
+    "en": "Support direction, void gravity, redstone recalculation, built-equivalence checks, door-gap filling and obstacle prechecks. Zero callers outside the facade.",
+    "name": {
+      "zh": "放置规则",
+      "en": "Placement Rules"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintPlacement.java",
+        1,
+        681
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-lib.tables": {
+    "zh": "禁用/不可破坏/地形/合法地面/白名单/等价组等硬编码表，1.12 数字 id 映射，约 180 条硬编码中文名表。",
+    "en": "Hardcoded tables for forbidden/unbreakable/terrain/valid-ground/whitelist/equivalent groups, the 1.12 numeric-id mapping, and a ~180-entry hardcoded Chinese name table.",
+    "name": {
+      "zh": "方块与命名表",
+      "en": "Block & Name Tables"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBlockData.java",
+        1,
+        284
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintLegacyIds.java",
+        1,
+        947
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintNames.java",
+        1,
+        303
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-lib.io": {
+    "zh": "扫描 config/maid_smart/blueprints 与 schematics 外部目录，7 种扩展名，zip 导入，内置蓝图解包与预热。内置程序化生成器自 v1.5.387 起已不再被目录枚举，只可硬编码 id 触达（休眠代码）。",
+    "en": "Scans the external config/maid_smart/blueprints and schematics directories, 7 extensions, zip import and bundled-blueprint unpacking with warmup. The procedural built-in generator has not been enumerated by the catalog since v1.5.387 and is reachable only by hardcoded id (dormant code).",
+    "name": {
+      "zh": "蓝图文件 IO",
+      "en": "Blueprint File I/O"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintFileIo.java",
+        1,
+        725
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintCatalog.java",
+        1,
+        427
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BuiltinHouses.java",
+        1,
+        1385
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-formats": {
+    "zh": "litematic：遍历 Regions，解包位压缩 BlockStates（bits 取调色板大小的对数，最少 2），合并分区调色板，TileEntities 转方块实体 SNBT。schem（Sponge）与 schematic（MCEdit varint）同口径归一化。",
+    "en": "litematic: walks Regions, unpacks bit-packed BlockStates (bits = log2 palette, min 2), merges per-region palettes and maps TileEntities to block-entity SNBT. schem (Sponge) and schematic (MCEdit varint) normalise to the same shape.",
+    "name": {
+      "zh": "蓝图格式解析",
+      "en": "Blueprint Format Parsing"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintStructureCodec.java",
+        1,
+        300
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintWorldExtract.java",
+        1,
+        397
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-ui": {
+    "zh": "客户端 Screen（无 Menu 容器），6 个视图：主页/建造目录/材料明细/女仆管理/女仆详情/区域女仆；暂停恢复与工头控制，每 2 秒轮询进度。2068 行单类。",
+    "en": "A client Screen with no Menu container and 6 views: home, build catalog, material detail, maid management, maid detail and region maids; pause/resume and foreman control, polling progress every 2 seconds. 2068 lines in a single class.",
+    "name": {
+      "zh": "蓝图手册界面",
+      "en": "Blueprint Book UI"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBookScreen.java",
+        1,
+        2139
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBookItem.java",
+        1,
+        93
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-net": {
+    "zh": "目录 S2C、选蓝图 C2S、建造控制、进度、记忆/调试/语音/世界导入等约 25 个自定义包，塞在两个 god-file（919 加 735 行）里，各带一份重复的 type 样板。",
+    "en": "About 25 custom payloads — catalog S2C, blueprint select C2S, build control, progress, memory/debug/voice/world-import — crammed into two god files (919 plus 735 lines), each with duplicated type() boilerplate.",
+    "name": {
+      "zh": "蓝图网络包",
+      "en": "Blueprint Networking"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBookBuildPackets.java",
+        1,
+        984
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBookEntityPackets.java",
+        1,
+        818
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintBookNetworking.java",
+        1,
+        770
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.blueprint-ghost": {
+    "zh": "客户端只读渲染：每个计划一个红色固定区域框（名字加创建坐标）、计划原点的橙色幽灵方块、确认流程里跟随玩家的金色预览与青色幽灵。点云由服务端采样、壳过滤、缓存。",
+    "en": "Client-only rendering: a red fixed region box per plan (name plus creation coords), orange ghost blocks at the plan origin, and a gold player-following preview with cyan ghosts during the confirmation flow. The point cloud is sampled, shell-filtered and cached server-side.",
+    "name": {
+      "zh": "建造投影与区域框",
+      "en": "Ghost Projection & Region Boxes"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/BlueprintAreaPreview.java",
+        1,
+        596
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/BuildHudRenderer.java",
+        1,
+        228
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.index-stone": {
+    "zh": "物品加 512 格长射线锁块加女仆绑定；两者齐备时，女仆起点与锁定块之间的所有空气变成一次性临时桥，她靠传送逐格填。客户端与服务端共用同一套 IndexStonePlan 几何。",
+    "en": "An item plus a 512-block raycast block lock plus a maid binding: when both are set, every air block between her start point and the locked block becomes a one-shot temporary bridge she fills by teleporting. Client and server share the same IndexStonePlan geometry.",
+    "name": {
+      "zh": "指标石",
+      "en": "Index Stone"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/IndexStoneService.java",
+        1,
+        726
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/IndexStoneBuildBehavior.java",
+        1,
+        388
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/IndexStonePreviewClient.java",
+        1,
+        409
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.farm": {
+    "zh": "ServerTick 模块：若「曾是耕地」的标记存在且该方块已不再是耕地，女仆在 5 乘 5 内把它锄回来。标记持久化在 SavedData；耕作本体已回退原版 TLM。",
+    "en": "A ServerTick module: if a 'was farmland' mark exists and the block is no longer farmland, she tills it back within 5x5. Marks persist in SavedData; the farming action itself was reverted to vanilla TLM.",
+    "name": {
+      "zh": "锄地驱动",
+      "en": "Farmland Till Driver"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/FarmTillDriver.java",
+        1,
+        399
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/FarmSweepCache.java",
+        1,
+        198
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/FarmlandMarkStore.java",
+        1,
+        88
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.ai-tools": {
+    "zh": "给 LLM 用的三件：smart_build（LLM 生成 JSON 蓝图，含白名单与上限，整建或部分）、smart_build_list（目录查询）、smart_design（子代理建筑师，存蓝图后走常规建造流）。",
+    "en": "Three tools for the LLM: smart_build (LLM-generated JSON blueprint with whitelist and limits, full or partial), smart_build_list (catalog query) and smart_design (sub-agent architect, saved blueprint, then the normal build flow).",
+    "name": {
+      "zh": "建造 AI 工具",
+      "en": "AI Build Tools"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/build/SmartBuildTool.java",
+        1,
+        407
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/SmartDesignTool.java",
+        1,
+        333
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/build/SmartBuildListTool.java",
+        1,
+        78
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.work.fishing": {
+    "zh": "钓鱼任务找不到椅子/船时，扫 8 格内的空垫或水域岸边生成带标记的 TLM 坐垫并强制骑乘；每秒清理失效坐垫；被摧毁无掉落。",
+    "en": "When the fishing task finds no chair or boat, she scans 8 blocks for a free cushion or a shoreline spot and spawns a marked TLM cushion she is forced onto; stale cushions are swept each second and drop nothing when destroyed.",
+    "name": {
+      "zh": "钓鱼自动坐垫",
+      "en": "Fishing Auto-Chair"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/fishing/FishingChairService.java",
+        1,
+        501
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/fishing/PlayerWaterLog.java",
+        1,
+        73
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.flight": {
+    "zh": "独立于空袭战斗的飞行能力层：仿创造模式自由飞行。空袭/扫帚的战斗飞行见 combat 层。",
+    "en": "The flight-capability layer independent of air-raid combat: creative-like free flight. Combat flight lives in the combat layer.",
+    "name": {
+      "zh": "飞行",
+      "en": "Flight"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/flight",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.flight.free": {
+    "zh": "女仆携带特定物品/效果/零重力资格时获得悬停与平滑 3D 移动：关重力加每 tick 一阶速度（按距离算、永不累积），松开时软着陆，平滑偏航与后撤朝向，逐女仆开关（磁盘持久加 S2C 缓存）。刻意做成事件驱动而非大脑行为——注释记载 core behavior 实例化后其起始判据从不被调用。",
+    "en": "When she carries the right item/effect/zero-gravity qualification she gains hover and smooth 3D movement: gravity off plus a per-tick first-order velocity computed from distance and never accumulated, soft landing on release, smoothed yaw and retreat facing, and a per-maid toggle (disk-backed plus S2C cached). Deliberately event-driven rather than a brain behavior — the comments record that a core behavior instance never got its start-condition check called.",
+    "name": {
+      "zh": "仿创造飞行",
+      "en": "Creative-Like Free Flight"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightController.java",
+        1,
+        1402
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightKit.java",
+        1,
+        273
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightFlags.java",
+        1,
+        167
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.flight.free.handlers": {
+    "zh": "女仆 tick 事件桥接、逐女仆开关包、客户端按键与动画状态。",
+    "en": "The maid-tick event bridge, per-maid toggle packets, client keybinds and animation state.",
+    "name": {
+      "zh": "飞行事件桥与网络",
+      "en": "Flight Event Bridge & Networking"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightHandler.java",
+        1,
+        25
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightNetworking.java",
+        1,
+        153
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/flight/MaidFreeFlightAnimState.java",
+        1,
+        59
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social": {
+    "zh": "记忆、人格、情绪、对话、语音五层构成的「她像个人」的那部分。移植自 maidsoulcore 与 Sphantosis。",
+    "en": "The 'she feels like a person' half: memory, persona, affect, dialogue and voice, ported from maidsoulcore and Sphantosis.",
+    "name": {
+      "zh": "社交与心智",
+      "en": "Social & Mind"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/memory",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.memory": {
+    "zh": "每女仆的长期记忆库：事件源注入加后台 LLM 提取加五表 jsonl 落盘（段落/实体/关系/片段/画像）加多级日记式索引加睡醒或登出自动归档；对话时只注入短投影。",
+    "en": "A per-maid long-term memory store: event-source injection, background LLM extraction, five jsonl tables (paragraphs/entities/relations/episodes/profiles), multi-level diary-style indexing and auto-archival on wake or logout — with only a short projection injected into chat.",
+    "name": {
+      "zh": "长期记忆",
+      "en": "Long-term Memory"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemoryStore.java",
+        1,
+        998
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemoryExtractor.java",
+        1,
+        636
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemoryArchiver.java",
+        1,
+        597
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.memory.index": {
+    "zh": "日记式索引、混合召回与 RRF 融合、跳过表（移植自 Sphantosis 的 cognitive/composite/skiplist_index.py）。",
+    "en": "Diary-style index, hybrid recall with RRF fusion, and a skip list (ported from Sphantosis's cognitive/composite/skiplist_index.py).",
+    "name": {
+      "zh": "记忆索引与检索",
+      "en": "Memory Index & Recall"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemoryIndexStore.java",
+        1,
+        171
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemorySearch.java",
+        1,
+        221
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/AiMemorySkipList.java",
+        1,
+        126
+      ]
+    ],
+    "apis": [
+      [
+        "file",
+        "<world>/promaid_memory/<uuid>/paragraphs.jsonl",
+        "段落记忆表。",
+        "Paragraph memory table."
+      ],
+      [
+        "file",
+        "<world>/promaid_memory/<uuid>/relations.jsonl",
+        "关系表。",
+        "Relations table."
+      ],
+      [
+        "rpc",
+        "AiMemoryStore.append(...)",
+        "写入一条记忆。",
+        "Appends one memory entry."
+      ]
+    ]
+  },
+  "promaid.social.memory.tools": {
+    "zh": "让 LLM 自己读写记忆的四件工具：查询记忆、查询索引、记住、工作笔记。",
+    "en": "Four tools letting the LLM read and write memory itself: query memory, query index, remember and working note.",
+    "name": {
+      "zh": "记忆 LLM 工具",
+      "en": "Memory LLM Tools"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/memory/RememberTool.java",
+        1,
+        145
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/QueryMemoryIndexTool.java",
+        1,
+        140
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/memory/WorkingNoteTool.java",
+        1,
+        131
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.persona": {
+    "zh": "每女仆的稳定人格种子（角色/特质/核心记忆三份文件），只读投影进提示词；聊天记忆永不改写人格；首启从 jar 资源生成模板。",
+    "en": "A per-maid stable persona seed (persona/traits/core-memories files), projected read-only into the prompt. Chat memory never rewrites persona; templates are generated from jar resources on first launch.",
+    "name": {
+      "zh": "角色包",
+      "en": "Persona Package"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/persona/PersonaPackage.java",
+        1,
+        344
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.affect": {
+    "zh": "独立第四套数值（愉悦/唤醒/支配 加 亲密度/冲突/思念 加 受伤债/修复债），事件驱动回落，作为情感上下文注入对话影响语气；落盘 affect.json。",
+    "en": "A fourth independent numeric layer (pleasure/arousal/dominance plus intimacy/conflict/longing and hurt-debt/repair-debt) that decays in response to events and is injected as the affect context to tint conversation; persisted to affect.json.",
+    "name": {
+      "zh": "PAD 情绪层",
+      "en": "PAD Affect Layer"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/affect/AffectManager.java",
+        1,
+        246
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/affect/AffectEventHooks.java",
+        1,
+        89
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.emotion": {
+    "zh": "按键 G 摸头 / H 抱抱，给好感加成、心形粒子与姿势动画；服务端校验视线/距离/主人，冷却 8 秒与 30 秒。姿势靠 mixin 覆盖 TLM 最终骨骼层。",
+    "en": "Keys G (headpat) and H (hug) grant favour, heart particles and a pose animation; the server checks line of sight, distance and ownership, with 8s and 30s cooldowns. Poses are applied by overriding TLM's final bone layer via mixin.",
+    "name": {
+      "zh": "亲昵互动与姿势",
+      "en": "Affection Interactions & Poses"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/emotion/EmotionNetworking.java",
+        1,
+        231
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/emotion/EmotionPoseState.java",
+        1,
+        53
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.dialogue": {
+    "zh": "LLM 对话周边层：主动对话 7 阶段状态机、回复反馈学习、世界感知气泡、自主切换任务、跨轮工作清单、工作播报、世界探查工具。",
+    "en": "The layer around LLM chat: a 7-stage proactive dialogue state machine, reply-feedback learning, perception bubbles, autonomous task switching, a cross-turn work list, work reporting and world-probe tools.",
+    "name": {
+      "zh": "对话与自主决策",
+      "en": "Dialogue & Autonomy"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/ProactiveDialogueManager.java",
+        1,
+        605
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/ProactiveStage.java",
+        1,
+        53
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/AutonomousTaskManager.java",
+        1,
+        119
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.dialogue.perception": {
+    "zh": "每秒快照 diff 出规则气泡；ASCII 空间网格/地形/建造点/方块/实体扫描（由 PatchouliAI 移植）。",
+    "en": "A per-second snapshot diff driving rule-based bubbles, plus ASCII spatial-grid/terrain/build-site/block/entity scanning (ported from PatchouliAI).",
+    "name": {
+      "zh": "世界感知与探查",
+      "en": "Perception & World Probe"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/PerceptionManager.java",
+        1,
+        369
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/WorldProbe.java",
+        1,
+        597
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/PerceptionQueryTool.java",
+        1,
+        161
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.dialogue.worklist": {
+    "zh": "跨轮次的工作清单与工作状态播报工具，让 LLM 记得自己交代过什么。",
+    "en": "A cross-turn work list and a work-status reporting tool, so the LLM remembers what it asked for.",
+    "name": {
+      "zh": "工作清单与播报",
+      "en": "Work List & Reporting"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/WorkListTool.java",
+        1,
+        288
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/WorkStatusReporter.java",
+        1,
+        175
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/dialogue/MaidWorkList.java",
+        1,
+        122
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.action": {
+    "zh": "主动对话触发时的游戏内动作（走到或看向主人、心形粒子、递食）；喂水软兼容 Thirst；按「剩余次数」区分的物品用途键。",
+    "en": "In-world actions triggered by proactive dialogue (walk to or look at the owner, heart particles, offer food); soft Thirst compat for water; and per-remaining-use item-purpose keys.",
+    "name": {
+      "zh": "情绪动作与物品交互",
+      "en": "Emotional Actions & Item Use"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/action/EmotionalActionExecutor.java",
+        1,
+        300
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/action/ThirstCompat.java",
+        1,
+        248
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/action/ItemUses.java",
+        1,
+        186
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.social.voice": {
+    "zh": "所有系统气泡的朗读。四级来源优先级：jar 内置日语包、磁盘系统语音包、语音缓存、TLM TTS 合成落盘。173 个音频文件约 5.7 MB。",
+    "en": "Reads out every system bubble. Four-level source priority: the jar-bundled Japanese pack, the on-disk system voice pack, the voice cache, then TLM TTS synthesis written to disk. 173 audio files, about 5.7 MB.",
+    "name": {
+      "zh": "语音与 TTS",
+      "en": "Voice & TTS"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/voice/SystemTTSManager.java",
+        1,
+        324
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/voice/SystemVoicePack.java",
+        1,
+        201
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/voice/JarVoicePack.java",
+        1,
+        142
+      ]
+    ],
+    "apis": [
+      [
+        "file",
+        "voice_cache/<sha256>.ogg",
+        "合成语音缓存键。",
+        "Synthesised-voice cache key."
+      ]
+    ]
+  },
+  "promaid.social.soul": {
+    "zh": "旧版绑定过灵魂核心的女仆，记忆继续读写全局 souls 目录；新女仆走世界目录。灵魂核心本体已在 v1.5.251e 移除，此处只剩路由兼容。",
+    "en": "Maids bound to the old soul core keep reading and writing the global souls directory; new maids use the world directory. The soul core itself was removed in v1.5.251e — only the routing shim remains.",
+    "name": {
+      "zh": "灵魂记忆路由（兼容残留）",
+      "en": "Soul Memory Routing (legacy residue)"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/soul/SoulBindingService.java",
+        1,
+        68
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system": {
+    "zh": "维持世界与女仆之间那层「别丢、别卡、别漏」的底层服务：区块加载、跨维跟随、排班、保护、压缩盒、酿造、Goety。",
+    "en": "The plumbing that keeps maids from getting lost, stuck or leaked: chunk loading, cross-dimension follow, scheduling, protection, the compression box, brewing and Goety.",
+    "name": {
+      "zh": "系统服务",
+      "en": "System Services"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/follow",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.follow": {
+    "zh": "每 5 秒给每个在职女仆所在区块挂实体 tick 级别的票，按区块共享引用计数与票龄守卫；跨维度用原版传送跟随；推进未加载女仆的召唤/召回队列；为排班女仆持久化票据；并自愈「服务端活着、客户端幽灵」的可见性。1666 行，仍把票据/跟随/队列/可见性混在一起。",
+    "en": "Every 5 seconds keeps an entity-ticking ticket on each active maid's chunk, with per-chunk refcounted sharing and a ticket-age guard; follows across dimensions via vanilla teleport; advances the summon/recall queue for unloaded maids; persists tickets for scheduled maids; and self-heals the 'alive server-side, ghost client-side' state. 1666 lines, still mixing tickets, follow, queue and visibility in one class.",
+    "name": {
+      "zh": "区块加载与跨维跟随",
+      "en": "Chunk Loading & Cross-Dimension Follow"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/follow/MaidChunkLoadManager.java",
+        1,
+        2090
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidChunkLoadManager.tick(...)",
+        "每 5 秒续票。",
+        "Refreshes tickets every 5s."
+      ],
+      [
+        "rpc",
+        "MaidChunkLoadManager.followIfCrossDimension(...)",
+        "跨维跟随。",
+        "Cross-dimension follow."
+      ]
+    ]
+  },
+  "promaid.system.work-area": {
+    "zh": "把 TLM 的工作圆判定统一给所有自定义行为的目标选择用，免得女仆在自定义任务里乱走。被 37 处调用。",
+    "en": "Unifies TLM's work-circle predicate for every custom behavior's target selection, so she does not wander during custom tasks. Called from 37 sites.",
+    "name": {
+      "zh": "工作圈钳制",
+      "en": "Work-Area Clamp"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/follow/WorkAreaClamp.java",
+        1,
+        162
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "WorkAreaClamp.clamp(...)",
+        "把目标钳进工作圆。",
+        "Clamps a target into the work circle."
+      ]
+    ]
+  },
+  "promaid.system.visibility": {
+    "zh": "每 tick 检查服务端活着的女仆是否真的被追踪与可见，出现客户端幽灵状态就重发实体生成包（根因是区块卸载时 ChunkMap 移除实体）。",
+    "en": "Per-tick check that a live server-side maid is actually tracked and visible, re-sending spawn packets whenever the client-side ghost state appears (root cause: ChunkMap removing the entity on chunk unload).",
+    "name": {
+      "zh": "可见性自愈",
+      "en": "Visibility Self-Heal"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/follow/MaidVisibilityGuard.java",
+        1,
+        119
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.home": {
+    "zh": "每 4 秒给非工作的 home 模式女仆一个家锚点附近的随机走动目标，让她不再呆立；另有每 5 tick 的直连导航驱动，只服务 home 模式与宰杀任务（农耕在 v1.2.4 明确移除），完全绕过 TLM 大脑活动。",
+    "en": "Every 4 seconds gives a non-working home-mode maid a random walk target near her home anchor so she stops standing still; a separate 5-tick direct-navigation driver serves only home mode and the slaughter task (farming was explicitly removed in v1.2.4), bypassing the TLM brain entirely.",
+    "name": {
+      "zh": "Home 巡逻与工作驱动",
+      "en": "Home Patrol & Work Movement"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/follow/HomePatrolHandler.java",
+        1,
+        116
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/follow/HomeWorkMovementDriver.java",
+        1,
+        147
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.schedule": {
+    "zh": "排班表物品右键打开界面：选女仆、选班次（早班/晚班/全天）、6 个任务槽排一天；底层存时段段表，按游戏挂钟每分钟扫描自动切任务。启用排班时会强制开 home 模式并自动锚定家位置（治「呆立」）。",
+    "en": "The schedule book item opens a UI: pick maids, pick a shift (day/night/all), fill 6 task slots across a day. Underneath it stores segments and scans the world clock every minute to switch tasks. Enabling a schedule forces home mode on and auto-anchors the home position (fixes the 'stands frozen' bug).",
+    "name": {
+      "zh": "排班表",
+      "en": "Schedule System"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleManager.java",
+        1,
+        387
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleData.java",
+        1,
+        275
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleBookScreen.java",
+        1,
+        1167
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.schedule.switch": {
+    "zh": "唯一的任务/日程写入出口，带分层闸门与守卫；任务可用性判定做硬性开关检查。",
+    "en": "The single exit for writing task/schedule changes, with layered gates and guards; task availability applies the hard enable check.",
+    "name": {
+      "zh": "任务切换引擎",
+      "en": "Task Switch Engine"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleSwitchEngine.java",
+        1,
+        176
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleTaskAvailability.java",
+        1,
+        296
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleSwitchGuard.java",
+        1,
+        73
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.schedule.net": {
+    "zh": "三条包文件：登记、计划数据、女仆操作。v1.2.4 从原网络类拆出，编解码逐字未动，三个文件共享同一段 21 行 import 头——典型的复制粘贴拆分。",
+    "en": "Three packet files: registration, plan data and maid operations. Split out of the original networking class in v1.2.4 with encode/decode copied verbatim — all three share the same 21-line import header, a textbook copy-paste split.",
+    "name": {
+      "zh": "排班网络包",
+      "en": "Schedule Networking"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/schedule/SchedulePacketsPlan.java",
+        1,
+        640
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/SchedulePacketsMaid.java",
+        1,
+        616
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/ScheduleNetworking.java",
+        1,
+        274
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.remote-gui": {
+    "zh": "靠改写原版区块追踪的配对与可见集合实现真远程开界面，深度反射、多版本重写，是本仓库最脆弱的一处。",
+    "en": "Implements genuinely remote GUI opening by rewriting vanilla chunk-tracking pairing and visibility sets — deeply reflective, rewritten across several versions, and the most fragile spot in the repo.",
+    "name": {
+      "zh": "远程女仆界面",
+      "en": "Remote Maid GUI"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/schedule/RemoteMaidGui.java",
+        1,
+        252
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/schedule/RemoteTrackBridge.java",
+        1,
+        54
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.system.protect": {
+    "zh": "主人死亡瞬间无条件立即传送所有女仆到其重生点（跨维度、强载未加载区块）；危险方块寻路避让；站在岩浆或火上的女仆每 0.5 秒巡检挪到安全格并灭火。",
+    "en": "The instant the owner dies, teleport every maid to their respawn point unconditionally (across dimensions, force-loading chunks); pathfinding avoidance for dangerous blocks; and a 0.5s sweep that moves maids standing in lava or fire to a safe cell and extinguishes them.",
+    "name": {
+      "zh": "保护与险境",
+      "en": "Protection & Hazard"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/protect/MasterDeathTeleportHandler.java",
+        1,
+        619
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/protect/DangerEscapeHandler.java",
+        1,
+        195
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/protect/MaidDangerMalusHandler.java",
+        1,
+        146
+      ]
+    ],
+    "apis": [
+      [
+        "event",
+        "onLivingDeath(...)",
+        "主人死亡 → 全员立即传送。",
+        "Owner death -> teleport everyone immediately."
+      ]
+    ]
+  },
+  "promaid.system.box": {
+    "zh": "5 格、每格最多 11 万多的收纳道具；右键箱子式界面鼠标取放；放进女仆背包即其背包延伸；禁入压缩盒与附魔类（不可堆叠带组件）防消失。压缩盒自测是住在主源码里的 702 行假玩家校验。",
+    "en": "A 5-slot container holding over a hundred thousand items per slot, with a chest-like click UI; placing it in a maid's backpack extends her inventory. Compression boxes and enchanted items are barred (unstackable with components) to prevent loss. The box self-test is a 702-line fake-player check living in main source.",
+    "name": {
+      "zh": "压缩盒",
+      "en": "Compression Box"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/box/CompressionBoxService.java",
+        1,
+        544
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/box/CompressionBoxData.java",
+        1,
+        339
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/box/CompressionBoxMaidInv.java",
+        1,
+        315
+      ]
+    ],
+    "apis": [
+      [
+        "dataflow",
+        "CompressionBoxData NBT",
+        "自定义压缩盒 NBT。",
+        "Custom compression-box NBT."
+      ]
+    ]
+  },
+  "promaid.system.brew": {
+    "zh": "女仆药剂手册物品右键女仆打开配置界面；两种模式——批量（有什么酿什么）与定向（按目标药水配方链精确下料，缺料等待）。配方解析靠反射读原版酿造表。",
+    "en": "The brew manual item opens a config GUI on right-click: batch mode (brew whatever materials allow) and directed mode (follow the exact recipe chain for a target potion, waiting on missing ingredients). Recipe resolution reads vanilla brewing mixes by reflection.",
+    "name": {
+      "zh": "酿造配置与配方",
+      "en": "Brewing Config & Recipes"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/brew/BrewRecipeResolver.java",
+        1,
+        291
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/brew/BrewManualScreen.java",
+        1,
+        607
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/brew/BrewConfig.java",
+        1,
+        97
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "BrewRecipeResolver.resolve(...)",
+        "按目标药水回溯配方链。",
+        "Walks the recipe chain back from a target potion."
+      ]
+    ]
+  },
+  "promaid.system.goety": {
+    "zh": "全程反射软兼容。把 Goety 的风系聚晶当第三种飞行（「喷气式」）：到达/跟随/战斗三种任务；自动模式默认关（主人拉开 16 格起飞、6 格落地带回 TLM 跟随）。两个包根都探。",
+    "en": "Fully reflective soft compat. Treats Goety's wind crystal as a third kind of flight ('jet'): arrive/follow/combat modes; auto mode is off by default (launches when the owner separates 16 blocks, lands at 6 and hands back to TLM follow). Probes two possible package roots.",
+    "name": {
+      "zh": "诡厄巫法兼容",
+      "en": "Goety Soft Compat"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/goety/MaidGoetyCompat.java",
+        1,
+        418
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/goety/MaidGoetyFlight.java",
+        1,
+        561
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/goety/MaidGoetyAuto.java",
+        1,
+        220
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "MaidGoetyCompat.ensureHooked()",
+        "探测并挂接 Goety（两包根）。",
+        "Probes and hooks Goety (two package roots)."
+      ]
+    ]
+  },
+  "promaid.core": {
+    "zh": "配置定义与面板、管理指令、LLM 指挥工具、建构安全过滤器，以及若干薄壳（文件浏览器、工位标记、第三方模式兼容、提示词追加）。",
+    "en": "Config definition and panel, admin commands, LLM command tools, build-safety filters, plus a few thin shells (file picker, work-position marker, third-party mode compat, prompt appending).",
+    "name": {
+      "zh": "核心与配置",
+      "en": "Core & Config"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/config",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.config": {
+    "zh": "524 个设置项、22 个分类；字段声明块后跟一个约 1850 行的巨型 static 初始化块逐项重复声明。另有 22 个一次性迁移标记被当成用户可见设置留在配置里。",
+    "en": "524 settings in 22 categories. A field-declaration block is followed by a ~1850-line static initializer that re-declares every value. Another 22 one-shot migration flags live in user-visible config.",
+    "name": {
+      "zh": "全模组配置定义",
+      "en": "Mod Config Definition"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/config/MaidSmartConfig.java",
+        1,
+        3172
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.config-panel": {
+    "zh": "不是控件对象树，而是手写的立即模式界面：约 12 个嵌套类型（含 7 个分组枚举与 35 个 Section）、约 180 个方法、59 处控件注册、32 个输入框。render 单方法 543 行，烹饪网格点击 468 行；5 组几乎一样的列表加条目对。全模组最大文件。",
+    "en": "Not a widget object graph but a hand-rolled immediate-mode screen: about 12 nested types (7 group enums, 35 sections), ~180 methods, 59 widget registrations and 32 text inputs. A single 543-line render and a 468-line cooking-grid click handler; five near-identical list-plus-entry pairs. The mod's largest file.",
+    "name": {
+      "zh": "配置面板 GUI",
+      "en": "Config Panel GUI"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/config/PromaidConfigScreen.java",
+        1,
+        6424
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "PromaidConfigScreen.openAt(...)",
+        "从手册章节跳转到指定配置行。",
+        "Jumps from a guide chapter to a config row."
+      ]
+    ]
+  },
+  "promaid.core.command": {
+    "zh": "命令树：批量召唤、记忆开关、投喂测试、飞行跟随验收、客户端重同步、Goety 飞行。五个类各自独立注册同一个字面量，没有中央命令注册表。",
+    "en": "The command tree: batch summon, memory toggle, feeding test, flight-follow acceptance, client resync and Goety flight. Five classes each independently register the same literal — there is no central command registry.",
+    "name": {
+      "zh": "管理指令",
+      "en": "Admin Commands"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/command/MaidArmyCommand.java",
+        1,
+        663
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/command/MaidResyncCommand.java",
+        1,
+        616
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/command/MaidGoetyFlyCommand.java",
+        1,
+        232
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.tools-ai": {
+    "zh": "供 LLM 调用的工具：移动、拾取、汇报、攻击、切任务、空袭、工位、合成、放置、给物、主人背包、自检。经注册枢纽统一登记。",
+    "en": "The tools the LLM can call: move, pickup, report, attack, switch task, air raid, work post, craft, place, give item, owner inventory and readiness. All registered through the extension hub.",
+    "name": {
+      "zh": "LLM 指挥工具集",
+      "en": "LLM Command Tool Suite"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/tool/SwitchTaskTool.java",
+        1,
+        355
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/tool/SmartCraftTool.java",
+        1,
+        224
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/tool/AirRaidTool.java",
+        1,
+        214
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.safety": {
+    "zh": "女仆一切垫脚与搭桥选材的统一安全过滤、无主降级、悬空禁搭、危险方块表、天然方块黑白名单、实体快照遍历、静态状态表护栏、日志、物品归还、额外容器、手持光源、临时探针。",
+    "en": "The unified safety filter for every block a maid places: ownerless downgrade, no-building-while-airborne, dangerous-block tables, natural-block allow/deny lists, entity-snapshot iteration, static-state-table guards, logging, item give-back, extra containers, held light source and a temporary probe.",
+    "name": {
+      "zh": "建构安全与共享工具",
+      "en": "Build Safety & Shared Utilities"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/tool/MaidBuildBlockFilter.java",
+        1,
+        452
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/tool/MaidPlaceGuard.java",
+        1,
+        268
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/tool/MaidExtraContainer.java",
+        1,
+        352
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.gui": {
+    "zh": "无头安全的文件选择界面，替代 AWT 文件对话框，供蓝图手册使用。",
+    "en": "A headless-safe file-picker screen that replaces the AWT file dialog, used by the blueprint book.",
+    "name": {
+      "zh": "游戏内文件浏览器",
+      "en": "In-Game File Picker"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/gui/FilePickScreen.java",
+        1,
+        247
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.compat": {
+    "zh": "把 Modular Golems 的傀儡师任务拉黑，并在傀儡模式下停用战术。目前黑名单里只有一条硬编码标识，其余是推测性通用性。",
+    "en": "Blacklists Modular Golems' puppet-master task and suspends tactics in puppet mode. The blacklist currently holds a single hardcoded id; the rest is speculative generality.",
+    "name": {
+      "zh": "第三方模式兼容",
+      "en": "Third-Party Mode Compat"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/compat/MaidModeCompat.java",
+        1,
+        112
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.marker": {
+    "zh": "潜行加中键标记女仆的工作锚点；会礼让 TLM 的罗盘。",
+    "en": "Sneak plus middle-click marks a maid's work anchor; yields to TLM's compass.",
+    "name": {
+      "zh": "工位标记",
+      "en": "Work-Position Marker"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/marker/WorkPosMarkerClient.java",
+        1,
+        102
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.core.prompt": {
+    "zh": "向系统提示词追加「工作姿态」一节，由注入类挂上。",
+    "en": "Appends a 'work posture' section to the system prompt, injected by a mixin.",
+    "name": {
+      "zh": "提示词追加",
+      "en": "Prompt Appender"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/prompt/PromaidPromptAppender.java",
+        1,
+        26
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.client": {
+    "zh": "各功能自带的客户端界面集合（压缩盒等）。蓝图手册与配置面板的界面分别归各自模块。",
+    "en": "The client screens that ship with individual features (compression box and others). The blueprint book and config panel screens belong to their own modules.",
+    "name": {
+      "zh": "客户端界面",
+      "en": "Client Screens"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/client/CompressionBoxScreen.java",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  },
+  "promaid.guide": {
+    "zh": "手册物品的「详细介绍」子界面：36 章（35 正文加更新日志），章节目录到正文按像素换行分页阅读；每章末尾自动附可点击「配置入口」跳转到配置面板对应行。手册只讲当前行为，更新日志另存。",
+    "en": "The guide item's 'in detail' sub-screen: 36 chapters (35 content plus the changelog), a chapter list into pixel-wrapped paged text. Each chapter ends with a clickable 'config entry' link jumping to the matching row of the config panel. The guide documents only current behavior; the changelog is kept separate.",
+    "name": {
+      "zh": "详细介绍手册",
+      "en": "In-Game Guide"
+    },
+    "sources": [
+      [
+        "promaid_src_neo/com/maidsmart/guide/GuideContent.java",
+        1,
+        207
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/guide/GuideScreen.java",
+        1,
+        826
+      ],
+      [
+        "promaid_src_neo/com/maidsmart/guide/GuideChaptersFlight.java",
+        1,
+        1282
+      ]
+    ],
+    "apis": [
+      [
+        "rpc",
+        "GuideContent.chapters()",
+        "36 章注册表。",
+        "The 36-chapter registry."
+      ],
+      [
+        "rpc",
+        "GuideScreen.buildLines(...)",
+        "按像素宽度换行分页。",
+        "Pixel-width wrapping and paging."
+      ]
+    ]
+  },
+  "promaid-forge": {
+    "zh": "promaid_src 是与 1.21.1 主线逐行手工镜像的 1.20.1 Forge 源码树（SRG 名，如 m_20148_）。两树不共享任何构建产物，也不由同一份源码生成——每个功能都要改两遍。这是本仓库最大的结构性技术债。",
+    "en": "promaid_src is a line-by-line hand mirror of the 1.21.1 mainline for 1.20.1 Forge (SRG names such as m_20148_). The two trees share no build artifact and are not generated from one source — every feature must be written twice. This is the repository's largest structural debt.",
+    "name": {
+      "zh": "Forge 1.20.1 镜像树",
+      "en": "Forge 1.20.1 Mirror Tree"
+    },
+    "sources": [
+      [
+        "promaid_src/com/maidsmart",
+        1,
+        null
+      ]
+    ],
+    "apis": []
+  }
+}

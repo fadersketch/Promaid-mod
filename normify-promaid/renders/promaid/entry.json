@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "id": "promaid.entry",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 4 个子模块。",
+    "en": "4 submodules at this layer."
+  },
+  "order": [
+    "promaid.entry.mod",
+    "promaid.entry.extension",
+    "promaid.entry.gift",
+    "promaid.entry.creative-tab"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "title": {
+        "zh": "入口与注入",
+        "en": "Entry & Mixins"
+      },
+      "children": [
+        "promaid.entry.mod",
+        "promaid.entry.extension",
+        "promaid.entry.gift",
+        "promaid.entry.creative-tab"
+      ]
+    }
+  ]
+}

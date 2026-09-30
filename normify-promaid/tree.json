@@ -1,0 +1,3194 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-10-01T00:00:00Z",
+  "revision": "05103ae2da3af21d7a2d344d33296407d6f26ab2",
+  "trees": [
+    {
+      "name": "promaid",
+      "root": "promaid",
+      "modules": 111
+    },
+    {
+      "name": "promaid-forge",
+      "root": "promaid-forge",
+      "modules": 1
+    }
+  ],
+  "modules": {
+    "promaid": {
+      "uid": "5db7b611",
+      "id": "promaid",
+      "parent": null,
+      "tree": "promaid",
+      "name": {
+        "zh": "Promaid 模组总览",
+        "en": "Promaid Mod Overview"
+      },
+      "path": "modules/promaid/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "15fdf0a6f075685e1558cb87a803c22c95d0a05c2137603eb647811956c5c986",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.entry": {
+      "uid": "a27329ac",
+      "id": "promaid.entry",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "入口与装配",
+        "en": "Entry & Assembly"
+      },
+      "path": "modules/promaid/entry/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "e3015c44fdec666299a845f3e0b2352794e40718941ab973837066450844e065",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.entry.mod": {
+      "uid": "322fa5b9",
+      "id": "promaid.entry.mod",
+      "parent": "promaid.entry",
+      "tree": "promaid",
+      "name": {
+        "zh": "模组主类与初始化",
+        "en": "Mod Main & Bootstrap"
+      },
+      "path": "modules/promaid/entry/mod.md",
+      "leaf": true,
+      "tags": [
+        "entry"
+      ],
+      "fingerprint": "15fdf0a6f075685e1558cb87a803c22c95d0a05c2137603eb647811956c5c986",
+      "apis": 2,
+      "deps": 0
+    },
+    "promaid.entry.extension": {
+      "uid": "a8e5d811",
+      "id": "promaid.entry.extension",
+      "parent": "promaid.entry",
+      "tree": "promaid",
+      "name": {
+        "zh": "功能注册枢纽",
+        "en": "Feature Registration Hub"
+      },
+      "path": "modules/promaid/entry/extension.md",
+      "leaf": true,
+      "tags": [
+        "entry",
+        "hub"
+      ],
+      "fingerprint": "328415dd1df24e2cfa1edd46113be2eb2979c2862aecf35a79ad5b6772f20c10",
+      "apis": 4,
+      "deps": 0
+    },
+    "promaid.entry.gift": {
+      "uid": "25fbad9d",
+      "id": "promaid.entry.gift",
+      "parent": "promaid.entry",
+      "tree": "promaid",
+      "name": {
+        "zh": "首次加入礼物",
+        "en": "First-Join Gift"
+      },
+      "path": "modules/promaid/entry/gift.md",
+      "leaf": true,
+      "tags": [
+        "entry"
+      ],
+      "fingerprint": "9c5ca6d77b7de09510efc7fbde9c82a2c70c86638abdc1cb362f9b2cc1c50b47",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.entry.creative-tab": {
+      "uid": "d174ddab",
+      "id": "promaid.entry.creative-tab",
+      "parent": "promaid.entry",
+      "tree": "promaid",
+      "name": {
+        "zh": "创造栏注入",
+        "en": "Creative Tab Injection"
+      },
+      "path": "modules/promaid/entry/creative-tab.md",
+      "leaf": true,
+      "tags": [
+        "entry"
+      ],
+      "fingerprint": "057b442f0bbab4ca1d1b086f74267c74f2a5c2a4fdec118a6b67573eb431ccdc",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.mixin": {
+      "uid": "6df93577",
+      "id": "promaid.mixin",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "注入层（Mixin）",
+        "en": "Mixin Layer"
+      },
+      "path": "modules/promaid/mixin/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "d9462eb923e4e0b97baed99d14c9780890512e9113f1d574f04f08bdd7372522",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.mixin.core-tlm-maid": {
+      "uid": "00ec5164",
+      "id": "promaid.mixin.core-tlm-maid",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "TLM 女仆本体注入",
+        "en": "TLM EntityMaid Core Patches"
+      },
+      "path": "modules/promaid/mixin/core-tlm-maid.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "c89862942f6a265c7bf663921388d1786eb3ec1b56bba930b06657e7bd2b0aa3",
+      "apis": 2,
+      "deps": 2
+    },
+    "promaid.mixin.tlm-tasks": {
+      "uid": "cc60d726",
+      "id": "promaid.mixin.tlm-tasks",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "TLM 任务行为注入",
+        "en": "TLM Task Behavior Patches"
+      },
+      "path": "modules/promaid/mixin/tlm-tasks.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "d59f6d2c64375e83365e60498cf7e27910bf2c58d6661e5435fb2e367783d30a",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.vanilla-ai": {
+      "uid": "55a0677a",
+      "id": "promaid.mixin.vanilla-ai",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "原版 AI 注入",
+        "en": "Vanilla AI Patches"
+      },
+      "path": "modules/promaid/mixin/vanilla-ai.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "5420f47e0d63e2f58e505987296a4f3949ea694e77117520101f4f551be69986",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.entity-physics": {
+      "uid": "82aa4039",
+      "id": "promaid.mixin.entity-physics",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "实体与物理注入",
+        "en": "Entity & Physics Patches"
+      },
+      "path": "modules/promaid/mixin/entity-physics.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "1cd1f31566c3c2cb2901aa91bafb8e395a63fd1cd29a337894ea9f7a1cb4f5d9",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.render-client": {
+      "uid": "e864f351",
+      "id": "promaid.mixin.render-client",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "客户端渲染注入",
+        "en": "Client Render & Gecko Patches"
+      },
+      "path": "modules/promaid/mixin/render-client.md",
+      "leaf": true,
+      "tags": [
+        "mixin",
+        "client"
+      ],
+      "fingerprint": "e510d7821d03488309df1ad3f90fd1b01598542db520883050078b448ee93bbf",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.tlm-config-gui": {
+      "uid": "688845e3",
+      "id": "promaid.mixin.tlm-config-gui",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "TLM 配置界面扩展",
+        "en": "TLM Config GUI Extensions"
+      },
+      "path": "modules/promaid/mixin/tlm-config-gui.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "0b6b55d513f72afe9a86ca06e4319f5eb5e93b61d3307286e31547101794be3f",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.network-chunk": {
+      "uid": "2d1823ba",
+      "id": "promaid.mixin.network-chunk",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "网络与区块追踪注入",
+        "en": "Network & Chunk-Tracking Patches"
+      },
+      "path": "modules/promaid/mixin/network-chunk.md",
+      "leaf": true,
+      "tags": [
+        "mixin",
+        "net"
+      ],
+      "fingerprint": "55fa9cfb5e2be0b5b69f8de8935e7759bca34940a76e8746cb9c7bedfed50b85",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.dialogue-llm": {
+      "uid": "026b8c87",
+      "id": "promaid.mixin.dialogue-llm",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "对话与 LLM 注入",
+        "en": "Chat & LLM Patches"
+      },
+      "path": "modules/promaid/mixin/dialogue-llm.md",
+      "leaf": true,
+      "tags": [
+        "mixin"
+      ],
+      "fingerprint": "eaabbd2b5b2905321b299ecea49df7998e515962515b44280e04b7b572c927bf",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.mixin.compat": {
+      "uid": "500cd4d1",
+      "id": "promaid.mixin.compat",
+      "parent": "promaid.mixin",
+      "tree": "promaid",
+      "name": {
+        "zh": "兼容类注入",
+        "en": "Compat Patches"
+      },
+      "path": "modules/promaid/mixin/compat.md",
+      "leaf": true,
+      "tags": [
+        "mixin",
+        "compat"
+      ],
+      "fingerprint": "824f340254531c9cb5e1eb0852816c8d41338c141cce00618eeefc4f03e8bb86",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.combat": {
+      "uid": "cb97884c",
+      "id": "promaid.combat",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "战斗与载具",
+        "en": "Combat & Vehicles"
+      },
+      "path": "modules/promaid/combat/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "eef9178be0f530615ce456b6915a8209cc62c0838dca78488d4c8c4f0e5ce52c",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.auto-switch": {
+      "uid": "12c8f19c",
+      "id": "promaid.combat.auto-switch",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "主动参战",
+        "en": "Proactive Engagement"
+      },
+      "path": "modules/promaid/combat/auto-switch/index.md",
+      "leaf": false,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "57db4901ed0cef6c0c26d0376895c3aeaa83620c1f58a84fe8a19c802626d651",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.auto-switch.pools": {
+      "uid": "4b4f06ef",
+      "id": "promaid.combat.auto-switch.pools",
+      "parent": "promaid.combat.auto-switch",
+      "tree": "promaid",
+      "name": {
+        "zh": "战斗任务池",
+        "en": "Combat Task Pools"
+      },
+      "path": "modules/promaid/combat/auto-switch/pools.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "4ff023c682e8974f0debdc387c707ceaf4a50fff52b8eadc4cda98b15d5d085d",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.combat.auto-switch.targeting": {
+      "uid": "203e9e6d",
+      "id": "promaid.combat.auto-switch.targeting",
+      "parent": "promaid.combat.auto-switch",
+      "tree": "promaid",
+      "name": {
+        "zh": "参战威胁判定",
+        "en": "Engagement Threat Targeting"
+      },
+      "path": "modules/promaid/combat/auto-switch/targeting.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "9a1d903c1f9bda8a4178ed3266e8efeee51e5b913be19e4c4067fae8d2497d38",
+      "apis": 2,
+      "deps": 2
+    },
+    "promaid.combat.auto-switch.neutral": {
+      "uid": "99a235b5",
+      "id": "promaid.combat.auto-switch.neutral",
+      "parent": "promaid.combat.auto-switch",
+      "tree": "promaid",
+      "name": {
+        "zh": "中立威胁驱动",
+        "en": "Neutral Threat Driver"
+      },
+      "path": "modules/promaid/combat/auto-switch/neutral.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "a2cbc9bcbf988f5758a81b5d3f7a9c23bd200a19a211fced654dfd5dc8225d33",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.combat.targeting": {
+      "uid": "3c708425",
+      "id": "promaid.combat.targeting",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "飞行索敌与诊断",
+        "en": "Flight Targeting & Diagnostics"
+      },
+      "path": "modules/promaid/combat/targeting.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "diagnostics"
+      ],
+      "fingerprint": "de580df6860b01f0acd58aab56aa6e932cde2047a366661c1b19be91d5788206",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.combat.flight-raid": {
+      "uid": "bc08a9f6",
+      "id": "promaid.combat.flight-raid",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "空袭（近战/远程）",
+        "en": "Air Raid (Melee / Ranged)"
+      },
+      "path": "modules/promaid/combat/flight-raid/index.md",
+      "leaf": false,
+      "tags": [
+        "combat",
+        "flight"
+      ],
+      "fingerprint": "424dce7a0820ee4d447eecfff2779aa540e1fd1ca637c5f02d41164b600b0b29",
+      "apis": 0,
+      "deps": 3
+    },
+    "promaid.combat.flight-raid.follow": {
+      "uid": "ae739c26",
+      "id": "promaid.combat.flight-raid.follow",
+      "parent": "promaid.combat.flight-raid",
+      "tree": "promaid",
+      "name": {
+        "zh": "飞行跟随",
+        "en": "Elytra Follow-Owner"
+      },
+      "path": "modules/promaid/combat/flight-raid/follow.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "flight"
+      ],
+      "fingerprint": "e2a5c1f49163281a6696234e1cf5b8d209fe2421d76d04e34dd48c5923172c18",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.combat.flight-raid.recall": {
+      "uid": "f945975d",
+      "id": "promaid.combat.flight-raid.recall",
+      "parent": "promaid.combat.flight-raid",
+      "tree": "promaid",
+      "name": {
+        "zh": "空袭牵引绳",
+        "en": "Air-Raid Leash"
+      },
+      "path": "modules/promaid/combat/flight-raid/recall.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "3615311e2568550a40c7632dd40158972810a761384c7aceaf65cfcfa4251ac8",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.combat.flight-raid.air-combat": {
+      "uid": "88d46cc9",
+      "id": "promaid.combat.flight-raid.air-combat",
+      "parent": "promaid.combat.flight-raid",
+      "tree": "promaid",
+      "name": {
+        "zh": "空中交战姿态",
+        "en": "Air Combat Posture"
+      },
+      "path": "modules/promaid/combat/flight-raid/air-combat.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "cd8d392bc373fa6643e12bef41d4362582db02e88e40c24bdbc6259c2565cfa4",
+      "apis": 2,
+      "deps": 0
+    },
+    "promaid.combat.broom": {
+      "uid": "747afe21",
+      "id": "promaid.combat.broom",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "扫帚模式",
+        "en": "Broom Mode"
+      },
+      "path": "modules/promaid/combat/broom.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "flight"
+      ],
+      "fingerprint": "966856eb0c1be532bb13b6b24a253ac3a407def6b60357a6e4f1b53c27a3bb09",
+      "apis": 2,
+      "deps": 2
+    },
+    "promaid.combat.bombing": {
+      "uid": "0345258a",
+      "id": "promaid.combat.bombing",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "空袭轰炸",
+        "en": "Air-Raid Bombing"
+      },
+      "path": "modules/promaid/combat/bombing/index.md",
+      "leaf": false,
+      "tags": [
+        "combat",
+        "bomb"
+      ],
+      "fingerprint": "a64448f7b10a1df7ea537cc4658f52f2ca434badf43fde5e52cba893b74fd299",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.bombing.items": {
+      "uid": "5045f91d",
+      "id": "promaid.combat.bombing.items",
+      "parent": "promaid.combat.bombing",
+      "tree": "promaid",
+      "name": {
+        "zh": "炸弹选材与判据",
+        "en": "Bomb Material Selection"
+      },
+      "path": "modules/promaid/combat/bombing/items.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "296304d0d53bb2f34253eb38519799f2454fb73c4d0616871ec25ad4d477f9f1",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.combat.bombing.blast": {
+      "uid": "46f0c41f",
+      "id": "promaid.combat.bombing.blast",
+      "parent": "promaid.combat.bombing",
+      "tree": "promaid",
+      "name": {
+        "zh": "爆炸与安全口径",
+        "en": "Blast & Safety Semantics"
+      },
+      "path": "modules/promaid/combat/bombing/blast.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "safety"
+      ],
+      "fingerprint": "80906e7587adae2e6ec29e99e9f77c70c2ae6f089c6c55feefa98327cb070553",
+      "apis": 1,
+      "deps": 1
+    },
+    "promaid.combat.bombing.pose": {
+      "uid": "12d688e5",
+      "id": "promaid.combat.bombing.pose",
+      "parent": "promaid.combat.bombing",
+      "tree": "promaid",
+      "name": {
+        "zh": "副手动作姿势（共用）",
+        "en": "Held-Pose Prop (shared)"
+      },
+      "path": "modules/promaid/combat/bombing/pose.md",
+      "leaf": true,
+      "tags": [
+        "presentation",
+        "shared"
+      ],
+      "fingerprint": "fa6f7534dd7645cfbfd56518c5e0c55569caff012ba948eb9a304d6b710db8e7",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.pink-fire": {
+      "uid": "ec13f427",
+      "id": "promaid.combat.pink-fire",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "粉色火焰",
+        "en": "Pink Fire"
+      },
+      "path": "modules/promaid/combat/pink-fire.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "render"
+      ],
+      "fingerprint": "a775e25341ced9fc6613051d29db936506a9401dee5e2c86ec9fc2cfd0b27c41",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.tether": {
+      "uid": "f271257b",
+      "id": "promaid.combat.tether",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "武装拴绳（二号位）",
+        "en": "Armed Leash (Gunner Seat)"
+      },
+      "path": "modules/promaid/combat/tether.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "item"
+      ],
+      "fingerprint": "39055d2ce14f76a3b88c6d6d687f29722decd7b4c064fe8c207f3c1d03a267fc",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.ride": {
+      "uid": "a95b6376",
+      "id": "promaid.combat.ride",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "骑乘指挥棒",
+        "en": "Ride Baton"
+      },
+      "path": "modules/promaid/combat/ride.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "item",
+        "mount"
+      ],
+      "fingerprint": "401f8a2164997269eb8e7548316cf0215ee855d3727224de0d7e646a9d014fd9",
+      "apis": 2,
+      "deps": 1
+    },
+    "promaid.combat.mount-compat": {
+      "uid": "ae994106",
+      "id": "promaid.combat.mount-compat",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "载具兼容层",
+        "en": "Mount Compatibility Layer"
+      },
+      "path": "modules/promaid/combat/mount-compat.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "compat"
+      ],
+      "fingerprint": "e98ef013224e6c6915d8008d197fedb86d6d6d23834d535f713e799d50ee46db",
+      "apis": 2,
+      "deps": 1
+    },
+    "promaid.combat.tactics": {
+      "uid": "1201c2d6",
+      "id": "promaid.combat.tactics",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "单兵作战战术",
+        "en": "Solo Combat Tactics"
+      },
+      "path": "modules/promaid/combat/tactics.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "f3376bca39cff972c2b101a18f510a2441e57b57d1923dde439c348a285c141a",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.combat.self-preservation": {
+      "uid": "80c9e81d",
+      "id": "promaid.combat.self-preservation",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "自保",
+        "en": "Self-Preservation"
+      },
+      "path": "modules/promaid/combat/self-preservation.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "1f132530e82ee2991e3eae66aaca6d7e9ed933416f12109f99d679827e61c37f",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.combat.maneuvers": {
+      "uid": "d09763ca",
+      "id": "promaid.combat.maneuvers",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "特殊攻击链路",
+        "en": "Special Attack Chains"
+      },
+      "path": "modules/promaid/combat/maneuvers.md",
+      "leaf": true,
+      "tags": [
+        "combat"
+      ],
+      "fingerprint": "80dad4ad834714fc002e93a735542b267d5e02d1e59bd50736cc659057ae8314",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.resurrect": {
+      "uid": "6990a80b",
+      "id": "promaid.combat.resurrect",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "死亡复活与回魂符",
+        "en": "Auto-Resurrect & Soul Spell"
+      },
+      "path": "modules/promaid/combat/resurrect.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "lifecycle"
+      ],
+      "fingerprint": "2e010eb6cde0196fd16885e710cb87eff10ab7f41918f4843f2d4bea9051d466",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.guards": {
+      "uid": "15f98257",
+      "id": "promaid.combat.guards",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "友军与环境防护总闸",
+        "en": "Friendly-Fire & Environment Guards"
+      },
+      "path": "modules/promaid/combat/guards.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "safety"
+      ],
+      "fingerprint": "515a8a406c20395e200792bdf5d3d754a934b720b17e59aca50a678d21a2f0ba",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.owner-support": {
+      "uid": "54d2b467",
+      "id": "promaid.combat.owner-support",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "主人贴身辅助",
+        "en": "Owner-Support Passives"
+      },
+      "path": "modules/promaid/combat/owner-support.md",
+      "leaf": true,
+      "tags": [
+        "combat",
+        "support"
+      ],
+      "fingerprint": "b950a179257c83c9217c79b89e11195ed21dba8d44a48d780bc869282b697476",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.combat.compat": {
+      "uid": "abbd7782",
+      "id": "promaid.combat.compat",
+      "parent": "promaid.combat",
+      "tree": "promaid",
+      "name": {
+        "zh": "第三方战斗兼容",
+        "en": "Third-Party Combat Compat"
+      },
+      "path": "modules/promaid/combat/compat.md",
+      "leaf": true,
+      "tags": [
+        "compat"
+      ],
+      "fingerprint": "b08c6d492543e0a665e4d4c7aac5fce790946a9c69b8291ae1835e9d2098ac78",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work": {
+      "uid": "9eed2831",
+      "id": "promaid.work",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "生产类任务",
+        "en": "Work Tasks"
+      },
+      "path": "modules/promaid/work/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "de1a1515ba8dc22e0e7098cf4da92891c3d71e7b71e4d44e6497a223764166d8",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.mine": {
+      "uid": "52594359",
+      "id": "promaid.work.mine",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "挖矿",
+        "en": "Mining"
+      },
+      "path": "modules/promaid/work/mine.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "24c7621ec70dcea4955b19e92d258b90250123b87aaf8a0022f3d9bc51498d7b",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.work.wood": {
+      "uid": "6c83dc7e",
+      "id": "promaid.work.wood",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "伐木",
+        "en": "Woodcutting"
+      },
+      "path": "modules/promaid/work/wood.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "16b2a4f2b9d6921d1030cf7c2105f01ba88cdd39c788c9ecf21aeeed494910d3",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.work.cook": {
+      "uid": "fac33f31",
+      "id": "promaid.work.cook",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "烧制",
+        "en": "Smelting & Cooking"
+      },
+      "path": "modules/promaid/work/cook.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "7edd70e61559ef95927bcdd27e46b260421b3ca20c6df1fb7cb1574b635f4f8b",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.brew-task": {
+      "uid": "20a018e8",
+      "id": "promaid.work.brew-task",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "酿造任务",
+        "en": "Brewing Task"
+      },
+      "path": "modules/promaid/work/brew-task.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "bfe343705cf514846b778235628a705f62b78409a7b13f7ba9dd2c2db9f59736",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.work.slaughter": {
+      "uid": "ff44f0e1",
+      "id": "promaid.work.slaughter",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "宰杀",
+        "en": "Livestock Slaughter"
+      },
+      "path": "modules/promaid/work/slaughter.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "9626b03f63308117e0904e6a0cb61edf5ebb15f9a5ca573f028460e152380984",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.bridge": {
+      "uid": "4016e075",
+      "id": "promaid.work.bridge",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "搭路与垫高",
+        "en": "Bridge & Pillar"
+      },
+      "path": "modules/promaid/work/bridge.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "fedab718b854c8bc6ba216f1ea1e3b22bd302dc12da02e636a42dae3788527e8",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.work.tool-equip": {
+      "uid": "8e481204",
+      "id": "promaid.work.tool-equip",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "任务工具自动装备",
+        "en": "Auto Tool Equip"
+      },
+      "path": "modules/promaid/work/tool-equip.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "shared"
+      ],
+      "fingerprint": "ba2835c006af8c128d7d3af8caa4edd98afcafa256d7fa45b51accd8ab8e0f7a",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.stroll": {
+      "uid": "ffff2120",
+      "id": "promaid.work.stroll",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "空闲散步",
+        "en": "Idle Stroll"
+      },
+      "path": "modules/promaid/work/stroll.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "idle"
+      ],
+      "fingerprint": "63e4166bb8ad36f31373e29b22770ccf7ccbca3a2217fc224c776c2cf484be5e",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.planting": {
+      "uid": "dc619538",
+      "id": "promaid.work.planting",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "随手种树",
+        "en": "Opportunistic Replanting"
+      },
+      "path": "modules/promaid/work/planting.md",
+      "leaf": true,
+      "tags": [
+        "work"
+      ],
+      "fingerprint": "5aa74debb39d4bd41fc3713815c9659b7b7674c3259d78c4ac5db0772b8c6595",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.placed-block": {
+      "uid": "fc406675",
+      "id": "promaid.work.placed-block",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "搭方块统一回收",
+        "en": "Placed-Block Reclaim"
+      },
+      "path": "modules/promaid/work/placed-block.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "shared"
+      ],
+      "fingerprint": "9afa3e6e315e2c910f71406982f2a3c4ea1bbb1ff6eb22e78e415fadc27d161e",
+      "apis": 2,
+      "deps": 0
+    },
+    "promaid.work.tags": {
+      "uid": "bfef0d9e",
+      "id": "promaid.work.tags",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "站桩标记（跨切面）",
+        "en": "Work-Still Tagging (cross-cutting)"
+      },
+      "path": "modules/promaid/work/tags.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "contract"
+      ],
+      "fingerprint": "6b6780f176b28acc9049a941e617e49767d87142327cf1d54d075129544bdde5",
+      "apis": 2,
+      "deps": 0
+    },
+    "promaid.work.build-plan": {
+      "uid": "5737fa87",
+      "id": "promaid.work.build-plan",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "建造计划数据层",
+        "en": "Build Plan Data Model"
+      },
+      "path": "modules/promaid/work/build-plan.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "d28afba3bece0d7936d47f126efa2753a8eb9785795eccf8ce78a3e40e38fa3d",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.build-exec": {
+      "uid": "b2c42685",
+      "id": "promaid.work.build-exec",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "建造执行",
+        "en": "Build Execution"
+      },
+      "path": "modules/promaid/work/build-exec.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "0b62c10ca254e182fd78ab78ed622002c231825a8a588d9a60ed3bd3fee29f6c",
+      "apis": 2,
+      "deps": 2
+    },
+    "promaid.work.blueprint-lib": {
+      "uid": "85a57dac",
+      "id": "promaid.work.blueprint-lib",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图库门面",
+        "en": "Blueprint Facade"
+      },
+      "path": "modules/promaid/work/blueprint-lib/index.md",
+      "leaf": false,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "2f2e71a477c3862d9d9a1864f57020bcd1826a277df280d88d0d750ce1170916",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-lib.math": {
+      "uid": "e71bb5bf",
+      "id": "promaid.work.blueprint-lib.math",
+      "parent": "promaid.work.blueprint-lib",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图几何与步骤",
+        "en": "Blueprint Geometry & Steps"
+      },
+      "path": "modules/promaid/work/blueprint-lib/math.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "d347b25b5d97962f02635b126d545df8f794a0597d3aff4876c3042ea7199e80",
+      "apis": 2,
+      "deps": 0
+    },
+    "promaid.work.blueprint-lib.materials": {
+      "uid": "56fbb244",
+      "id": "promaid.work.blueprint-lib.materials",
+      "parent": "promaid.work.blueprint-lib",
+      "tree": "promaid",
+      "name": {
+        "zh": "材料核算",
+        "en": "Material Accounting"
+      },
+      "path": "modules/promaid/work/blueprint-lib/materials.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "3758354e6301f513afeaeee61c7205d868ac3530fcbb743f2aa10709938746cd",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-lib.placement": {
+      "uid": "d0e8d6b3",
+      "id": "promaid.work.blueprint-lib.placement",
+      "parent": "promaid.work.blueprint-lib",
+      "tree": "promaid",
+      "name": {
+        "zh": "放置规则",
+        "en": "Placement Rules"
+      },
+      "path": "modules/promaid/work/blueprint-lib/placement.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "4f180ac42c0f3a8c5e82fbb903baf7af16bb39b8034b0627421fcc8b35fc8a2b",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-lib.tables": {
+      "uid": "7a1e40d0",
+      "id": "promaid.work.blueprint-lib.tables",
+      "parent": "promaid.work.blueprint-lib",
+      "tree": "promaid",
+      "name": {
+        "zh": "方块与命名表",
+        "en": "Block & Name Tables"
+      },
+      "path": "modules/promaid/work/blueprint-lib/tables.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "data"
+      ],
+      "fingerprint": "f44b2dc15420d9a7b0787e2ceb8f53a3fca86ddf793708c72f344112560fabe1",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-lib.io": {
+      "uid": "6485bf0b",
+      "id": "promaid.work.blueprint-lib.io",
+      "parent": "promaid.work.blueprint-lib",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图文件 IO",
+        "en": "Blueprint File I/O"
+      },
+      "path": "modules/promaid/work/blueprint-lib/io.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "io"
+      ],
+      "fingerprint": "ad093c0b1ffbcbd6a50fce4293a5191b1a0d17b30541b9208b314abab88ee8ad",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-formats": {
+      "uid": "0357923f",
+      "id": "promaid.work.blueprint-formats",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图格式解析",
+        "en": "Blueprint Format Parsing"
+      },
+      "path": "modules/promaid/work/blueprint-formats.md",
+      "leaf": true,
+      "tags": [
+        "build"
+      ],
+      "fingerprint": "918d2e3c907d2da8ad0f0c6820a9a0c0374995742ff873bb842dbab06e3f7694",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-ui": {
+      "uid": "a9446028",
+      "id": "promaid.work.blueprint-ui",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图手册界面",
+        "en": "Blueprint Book UI"
+      },
+      "path": "modules/promaid/work/blueprint-ui.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "ui",
+        "client"
+      ],
+      "fingerprint": "78e22ab5a63b30aefea7c48cd2412c0fb23175954c5ac7b296b16b1494e6f7e5",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.work.blueprint-net": {
+      "uid": "48598f8f",
+      "id": "promaid.work.blueprint-net",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "蓝图网络包",
+        "en": "Blueprint Networking"
+      },
+      "path": "modules/promaid/work/blueprint-net.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "net"
+      ],
+      "fingerprint": "b621c1a1042a7919c975bf81cd1626ea02856601873b97f56bfd29f115b2df83",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.blueprint-ghost": {
+      "uid": "e95837d5",
+      "id": "promaid.work.blueprint-ghost",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "建造投影与区域框",
+        "en": "Ghost Projection & Region Boxes"
+      },
+      "path": "modules/promaid/work/blueprint-ghost.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "render",
+        "client"
+      ],
+      "fingerprint": "e8aceea817236a1e9de823941d5355fb64b3e50ebac0dd162f1b325d96eb07d7",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.index-stone": {
+      "uid": "232c7aed",
+      "id": "promaid.work.index-stone",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "指标石",
+        "en": "Index Stone"
+      },
+      "path": "modules/promaid/work/index-stone.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "item"
+      ],
+      "fingerprint": "0d31bb8811e60336717d0e4a38d4e585356d5730326bd581909b6a5c05bb1f5c",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.work.farm": {
+      "uid": "213aa1d2",
+      "id": "promaid.work.farm",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "锄地驱动",
+        "en": "Farmland Till Driver"
+      },
+      "path": "modules/promaid/work/farm.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "farm"
+      ],
+      "fingerprint": "f99fea9e37996942bdc4b3a8751af69efe01cb84ca55aa1b2cfcc4104b8b0d53",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.work.ai-tools": {
+      "uid": "4ae598c7",
+      "id": "promaid.work.ai-tools",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "建造 AI 工具",
+        "en": "AI Build Tools"
+      },
+      "path": "modules/promaid/work/ai-tools.md",
+      "leaf": true,
+      "tags": [
+        "build",
+        "ai"
+      ],
+      "fingerprint": "59c1b015cbcda73af07e765e87f1022d92d785f2cba7a71f70d9ef7d00ca7374",
+      "apis": 0,
+      "deps": 1
+    },
+    "promaid.work.fishing": {
+      "uid": "a69818c6",
+      "id": "promaid.work.fishing",
+      "parent": "promaid.work",
+      "tree": "promaid",
+      "name": {
+        "zh": "钓鱼自动坐垫",
+        "en": "Fishing Auto-Chair"
+      },
+      "path": "modules/promaid/work/fishing.md",
+      "leaf": true,
+      "tags": [
+        "work",
+        "compat"
+      ],
+      "fingerprint": "13620f5a142289b6692fe0defc39b2c20ed28799c261ea208f9801230c8bf9c7",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.flight": {
+      "uid": "3b0ebffe",
+      "id": "promaid.flight",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "飞行",
+        "en": "Flight"
+      },
+      "path": "modules/promaid/flight/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "5747b7493049cf264e10d753a3867094f14341e03c3a6d4bd2be9e5e89fb9a16",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.flight.free": {
+      "uid": "fd42b488",
+      "id": "promaid.flight.free",
+      "parent": "promaid.flight",
+      "tree": "promaid",
+      "name": {
+        "zh": "仿创造飞行",
+        "en": "Creative-Like Free Flight"
+      },
+      "path": "modules/promaid/flight/free/index.md",
+      "leaf": false,
+      "tags": [
+        "flight"
+      ],
+      "fingerprint": "f39b6805e809811eac9bdcca5feb03d3f32ec06f0e4428ea9e6a954a0df8e6b2",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.flight.free.handlers": {
+      "uid": "25b748ae",
+      "id": "promaid.flight.free.handlers",
+      "parent": "promaid.flight.free",
+      "tree": "promaid",
+      "name": {
+        "zh": "飞行事件桥与网络",
+        "en": "Flight Event Bridge & Networking"
+      },
+      "path": "modules/promaid/flight/free/handlers.md",
+      "leaf": true,
+      "tags": [
+        "flight",
+        "net"
+      ],
+      "fingerprint": "d91f75d95620f91a274ce86e3b8ca5d9a216848176520a7a3309f1240239b56f",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social": {
+      "uid": "e3bb0356",
+      "id": "promaid.social",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "社交与心智",
+        "en": "Social & Mind"
+      },
+      "path": "modules/promaid/social/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "db3c38748350220c26256d1e19698e7dd1c47652e7c7c39aaed5cc9cda423aa6",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.memory": {
+      "uid": "35f6c36d",
+      "id": "promaid.social.memory",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "长期记忆",
+        "en": "Long-term Memory"
+      },
+      "path": "modules/promaid/social/memory/index.md",
+      "leaf": false,
+      "tags": [
+        "memory",
+        "ai"
+      ],
+      "fingerprint": "1ec5be28ac93e34b369e8f55a2f85aa3ec2606e8d8815ab4385e132e198dea64",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.memory.index": {
+      "uid": "97523d32",
+      "id": "promaid.social.memory.index",
+      "parent": "promaid.social.memory",
+      "tree": "promaid",
+      "name": {
+        "zh": "记忆索引与检索",
+        "en": "Memory Index & Recall"
+      },
+      "path": "modules/promaid/social/memory/index.md",
+      "leaf": true,
+      "tags": [
+        "memory"
+      ],
+      "fingerprint": "f1277caaed79a573c75b19405f430a5dfd1fe7eb06d9fabf169c1e348d98ad20",
+      "apis": 3,
+      "deps": 0
+    },
+    "promaid.social.memory.tools": {
+      "uid": "e0b9b9fe",
+      "id": "promaid.social.memory.tools",
+      "parent": "promaid.social.memory",
+      "tree": "promaid",
+      "name": {
+        "zh": "记忆 LLM 工具",
+        "en": "Memory LLM Tools"
+      },
+      "path": "modules/promaid/social/memory/tools.md",
+      "leaf": true,
+      "tags": [
+        "memory",
+        "ai"
+      ],
+      "fingerprint": "5263d37925f430c6547399f0def44027e838f8cfea7e19408f2018dfab756970",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.persona": {
+      "uid": "f2ff33fd",
+      "id": "promaid.social.persona",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "角色包",
+        "en": "Persona Package"
+      },
+      "path": "modules/promaid/social/persona.md",
+      "leaf": true,
+      "tags": [
+        "memory",
+        "ai"
+      ],
+      "fingerprint": "4e2d6a98443c14882b645c018167999ebbcbc4ee8d887314c1bcbc85a06a8369",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.affect": {
+      "uid": "e347a4e5",
+      "id": "promaid.social.affect",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "PAD 情绪层",
+        "en": "PAD Affect Layer"
+      },
+      "path": "modules/promaid/social/affect.md",
+      "leaf": true,
+      "tags": [
+        "affect",
+        "ai"
+      ],
+      "fingerprint": "2f34d9d94ee62440354057095198e3319be72643743e0539ac3c6ad663878cec",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.emotion": {
+      "uid": "92a08149",
+      "id": "promaid.social.emotion",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "亲昵互动与姿势",
+        "en": "Affection Interactions & Poses"
+      },
+      "path": "modules/promaid/social/emotion.md",
+      "leaf": true,
+      "tags": [
+        "social",
+        "client"
+      ],
+      "fingerprint": "9565fd16bcaa51506dccbcf952216ec46b70adf1764ab8eef982cd0e5c1843cf",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.dialogue": {
+      "uid": "0fc89045",
+      "id": "promaid.social.dialogue",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "对话与自主决策",
+        "en": "Dialogue & Autonomy"
+      },
+      "path": "modules/promaid/social/dialogue/index.md",
+      "leaf": false,
+      "tags": [
+        "dialogue",
+        "ai"
+      ],
+      "fingerprint": "43a89e09822085dc4582af0902ec8e6876e14d9c23c898dec6bb8268a4b6fdfd",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.social.dialogue.perception": {
+      "uid": "3d8d9d75",
+      "id": "promaid.social.dialogue.perception",
+      "parent": "promaid.social.dialogue",
+      "tree": "promaid",
+      "name": {
+        "zh": "世界感知与探查",
+        "en": "Perception & World Probe"
+      },
+      "path": "modules/promaid/social/dialogue/perception.md",
+      "leaf": true,
+      "tags": [
+        "dialogue",
+        "ai"
+      ],
+      "fingerprint": "fd535062561c33ee67c475c1da9abd016b689702be70d1881021e10deaa36f1c",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.dialogue.worklist": {
+      "uid": "78c6af4f",
+      "id": "promaid.social.dialogue.worklist",
+      "parent": "promaid.social.dialogue",
+      "tree": "promaid",
+      "name": {
+        "zh": "工作清单与播报",
+        "en": "Work List & Reporting"
+      },
+      "path": "modules/promaid/social/dialogue/worklist.md",
+      "leaf": true,
+      "tags": [
+        "dialogue",
+        "ai"
+      ],
+      "fingerprint": "1200fe36b9e0124e770874f70325266f966ce4feedfade4a7607181b7787c852",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.action": {
+      "uid": "0a493786",
+      "id": "promaid.social.action",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "情绪动作与物品交互",
+        "en": "Emotional Actions & Item Use"
+      },
+      "path": "modules/promaid/social/action.md",
+      "leaf": true,
+      "tags": [
+        "social",
+        "compat"
+      ],
+      "fingerprint": "ac162abe8c73d3980624ae053488bc44096e9acfd62a211082d71f1635cea03a",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.social.voice": {
+      "uid": "045d635e",
+      "id": "promaid.social.voice",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "语音与 TTS",
+        "en": "Voice & TTS"
+      },
+      "path": "modules/promaid/social/voice.md",
+      "leaf": true,
+      "tags": [
+        "voice",
+        "audio"
+      ],
+      "fingerprint": "3a9a0debb2b2ea4e34e090c2ed128024d8520eac344da04457cf84875cdae451",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.social.soul": {
+      "uid": "3087112e",
+      "id": "promaid.social.soul",
+      "parent": "promaid.social",
+      "tree": "promaid",
+      "name": {
+        "zh": "灵魂记忆路由（兼容残留）",
+        "en": "Soul Memory Routing (legacy residue)"
+      },
+      "path": "modules/promaid/social/soul.md",
+      "leaf": true,
+      "tags": [
+        "memory",
+        "legacy"
+      ],
+      "fingerprint": "15b5f989c2d7f71049afdae1cb86516dc9260ffaf469fd017924a96052a2431f",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system": {
+      "uid": "6fc8b653",
+      "id": "promaid.system",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "系统服务",
+        "en": "System Services"
+      },
+      "path": "modules/promaid/system/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "9234df80e491bd13fd7e75f64f1677513c792338249aa648a37300693dbb4316",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.follow": {
+      "uid": "60bc1c47",
+      "id": "promaid.system.follow",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "区块加载与跨维跟随",
+        "en": "Chunk Loading & Cross-Dimension Follow"
+      },
+      "path": "modules/promaid/system/follow.md",
+      "leaf": true,
+      "tags": [
+        "system"
+      ],
+      "fingerprint": "148e8c3588c01496253b3738a7942834097e32b0b10e655d26fff7ab4b2c7b3b",
+      "apis": 2,
+      "deps": 1
+    },
+    "promaid.system.work-area": {
+      "uid": "3eefe0a3",
+      "id": "promaid.system.work-area",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "工作圈钳制",
+        "en": "Work-Area Clamp"
+      },
+      "path": "modules/promaid/system/work-area.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "contract"
+      ],
+      "fingerprint": "cc2d5a67968718bfffe59fbcafbffd52bc2c4e4895bf96e215db7265d89c7acb",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.system.visibility": {
+      "uid": "091f0d3e",
+      "id": "promaid.system.visibility",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "可见性自愈",
+        "en": "Visibility Self-Heal"
+      },
+      "path": "modules/promaid/system/visibility.md",
+      "leaf": true,
+      "tags": [
+        "system"
+      ],
+      "fingerprint": "dae096c7d21896a0a095015cd8f82d02563eb46966dc7c30e68af6848fb73c2c",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.home": {
+      "uid": "ff709a12",
+      "id": "promaid.system.home",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "Home 巡逻与工作驱动",
+        "en": "Home Patrol & Work Movement"
+      },
+      "path": "modules/promaid/system/home.md",
+      "leaf": true,
+      "tags": [
+        "system"
+      ],
+      "fingerprint": "dd62f62644b4a821d86b8763e2bab1770f84a44bbad5c0ec5f3ae67fe47397b9",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.schedule": {
+      "uid": "10eb05e7",
+      "id": "promaid.system.schedule",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "排班表",
+        "en": "Schedule System"
+      },
+      "path": "modules/promaid/system/schedule/index.md",
+      "leaf": false,
+      "tags": [
+        "system",
+        "ui"
+      ],
+      "fingerprint": "d7935fff2efcbf71a43015f4e635ba0c02e6e4de87fe56675389c39ddfc1fc70",
+      "apis": 0,
+      "deps": 2
+    },
+    "promaid.system.schedule.switch": {
+      "uid": "432261b7",
+      "id": "promaid.system.schedule.switch",
+      "parent": "promaid.system.schedule",
+      "tree": "promaid",
+      "name": {
+        "zh": "任务切换引擎",
+        "en": "Task Switch Engine"
+      },
+      "path": "modules/promaid/system/schedule/switch.md",
+      "leaf": true,
+      "tags": [
+        "system"
+      ],
+      "fingerprint": "29e61822d60dd1bf10b4c389685360f22ab3e3471cc8c9c3b35bf3ee10b27d2f",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.schedule.net": {
+      "uid": "707c75cc",
+      "id": "promaid.system.schedule.net",
+      "parent": "promaid.system.schedule",
+      "tree": "promaid",
+      "name": {
+        "zh": "排班网络包",
+        "en": "Schedule Networking"
+      },
+      "path": "modules/promaid/system/schedule/net.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "net"
+      ],
+      "fingerprint": "026657fd04ca0e89505ea12a697e41749996de627d1ebaedc4e2ebf407742fda",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.remote-gui": {
+      "uid": "4cf94a03",
+      "id": "promaid.system.remote-gui",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "远程女仆界面",
+        "en": "Remote Maid GUI"
+      },
+      "path": "modules/promaid/system/remote-gui.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "net"
+      ],
+      "fingerprint": "f06157ed8d03259d0996cd2863d5c01f1ee6e97daf8f3f17520311e5f0604f25",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.system.protect": {
+      "uid": "8bb5a030",
+      "id": "promaid.system.protect",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "保护与险境",
+        "en": "Protection & Hazard"
+      },
+      "path": "modules/promaid/system/protect.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "safety"
+      ],
+      "fingerprint": "50ccd932365c497515a62c770716ccfc8a31028ad0cc276d7d283cfcb59e40a2",
+      "apis": 1,
+      "deps": 1
+    },
+    "promaid.system.box": {
+      "uid": "282186c4",
+      "id": "promaid.system.box",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "压缩盒",
+        "en": "Compression Box"
+      },
+      "path": "modules/promaid/system/box.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "item"
+      ],
+      "fingerprint": "3e545f6bb86aa9b331e1db81bd03d5310bceded46c9a2498fa94dda6663b0e7f",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.system.brew": {
+      "uid": "b60d6008",
+      "id": "promaid.system.brew",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "酿造配置与配方",
+        "en": "Brewing Config & Recipes"
+      },
+      "path": "modules/promaid/system/brew.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "ui"
+      ],
+      "fingerprint": "242f3685315d96345a95430d0a54ec90c9b8386a51da39b801b77336a45667ec",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.system.goety": {
+      "uid": "957b4330",
+      "id": "promaid.system.goety",
+      "parent": "promaid.system",
+      "tree": "promaid",
+      "name": {
+        "zh": "诡厄巫法兼容",
+        "en": "Goety Soft Compat"
+      },
+      "path": "modules/promaid/system/goety.md",
+      "leaf": true,
+      "tags": [
+        "system",
+        "compat"
+      ],
+      "fingerprint": "e8b0e5f435a1e8f58b6b885002acf3fa013b29a033f9896fb7e992fb14b03c56",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.core": {
+      "uid": "76b5005a",
+      "id": "promaid.core",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "核心与配置",
+        "en": "Core & Config"
+      },
+      "path": "modules/promaid/core/index.md",
+      "leaf": false,
+      "tags": [],
+      "fingerprint": "cbfeb01803779f01788463d521e3347952df428bb28ac09c86564ecb78b14a18",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.config": {
+      "uid": "27872fd4",
+      "id": "promaid.core.config",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "全模组配置定义",
+        "en": "Mod Config Definition"
+      },
+      "path": "modules/promaid/core/config.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "config"
+      ],
+      "fingerprint": "f50a6468b16c6f70ecb42f22c13459427077910754c1e746b11f636dcffc3876",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.config-panel": {
+      "uid": "beda6346",
+      "id": "promaid.core.config-panel",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "配置面板 GUI",
+        "en": "Config Panel GUI"
+      },
+      "path": "modules/promaid/core/config-panel.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "ui",
+        "client"
+      ],
+      "fingerprint": "f158bfda38550176563f7f96a5fcb560b92d26534861a1d229118b65809ec3ff",
+      "apis": 1,
+      "deps": 0
+    },
+    "promaid.core.command": {
+      "uid": "7cc145c6",
+      "id": "promaid.core.command",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "管理指令",
+        "en": "Admin Commands"
+      },
+      "path": "modules/promaid/core/command.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "command"
+      ],
+      "fingerprint": "70e778433134adaef8bf63cb046a7b2a1d9ead37c1bc62a0ef9c0f27853dbebb",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.tools-ai": {
+      "uid": "dc7e1e3b",
+      "id": "promaid.core.tools-ai",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "LLM 指挥工具集",
+        "en": "LLM Command Tool Suite"
+      },
+      "path": "modules/promaid/core/tools-ai.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "ai"
+      ],
+      "fingerprint": "2a0dc1c6a2da5f09333716aeda6ea9f10fff2a9f4d4ef194f7e240d253c68cd6",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.safety": {
+      "uid": "fd57d393",
+      "id": "promaid.core.safety",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "建构安全与共享工具",
+        "en": "Build Safety & Shared Utilities"
+      },
+      "path": "modules/promaid/core/safety.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "shared"
+      ],
+      "fingerprint": "19f3a282f600f9c245fe5f568354416493fb51a88b4d70fddf3f69c8c59cf1bf",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.gui": {
+      "uid": "bf44ce17",
+      "id": "promaid.core.gui",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "游戏内文件浏览器",
+        "en": "In-Game File Picker"
+      },
+      "path": "modules/promaid/core/gui.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "ui",
+        "client"
+      ],
+      "fingerprint": "c569ed4fb5f040f0997d4cac1e76a9539484e8d098de10ab504c472847c29ba7",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.compat": {
+      "uid": "a6e4797e",
+      "id": "promaid.core.compat",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "第三方模式兼容",
+        "en": "Third-Party Mode Compat"
+      },
+      "path": "modules/promaid/core/compat.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "compat"
+      ],
+      "fingerprint": "4f572c77fc6ca92184a8526b4fbf523c823d0fd56b284f70bb5baae02d3f49e6",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.marker": {
+      "uid": "13495dcc",
+      "id": "promaid.core.marker",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "工位标记",
+        "en": "Work-Position Marker"
+      },
+      "path": "modules/promaid/core/marker.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "client"
+      ],
+      "fingerprint": "3e0cadeeb44ec48d98131da1e81969a3cb092fce8b28607118bbb96028cc6067",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.core.prompt": {
+      "uid": "5d7d787c",
+      "id": "promaid.core.prompt",
+      "parent": "promaid.core",
+      "tree": "promaid",
+      "name": {
+        "zh": "提示词追加",
+        "en": "Prompt Appender"
+      },
+      "path": "modules/promaid/core/prompt.md",
+      "leaf": true,
+      "tags": [
+        "core",
+        "ai"
+      ],
+      "fingerprint": "68e0db572fb603d2a50808faf8b7d992aa2db9ab98da4260ca7995511c60e875",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.client": {
+      "uid": "36fe8ebc",
+      "id": "promaid.client",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "客户端界面",
+        "en": "Client Screens"
+      },
+      "path": "modules/promaid/client.md",
+      "leaf": true,
+      "tags": [
+        "client",
+        "ui"
+      ],
+      "fingerprint": "3d77ac5ada3e13af2a1feecff5d93206a5f342e5bc38320ec925be2b416b06da",
+      "apis": 0,
+      "deps": 0
+    },
+    "promaid.guide": {
+      "uid": "0b391fb8",
+      "id": "promaid.guide",
+      "parent": "promaid",
+      "tree": "promaid",
+      "name": {
+        "zh": "详细介绍手册",
+        "en": "In-Game Guide"
+      },
+      "path": "modules/promaid/guide.md",
+      "leaf": true,
+      "tags": [
+        "guide",
+        "ui"
+      ],
+      "fingerprint": "3594e84072cc777d39d922a192cfc556148d85166b68057c3690e59e3f1332ac",
+      "apis": 2,
+      "deps": 1
+    },
+    "promaid-forge": {
+      "uid": "426a7133",
+      "id": "promaid-forge",
+      "parent": null,
+      "tree": "promaid-forge",
+      "name": {
+        "zh": "Forge 1.20.1 镜像树",
+        "en": "Forge 1.20.1 Mirror Tree"
+      },
+      "path": "modules/promaid-forge/index.md",
+      "leaf": true,
+      "tags": [],
+      "fingerprint": "5fa8df85a5e39dbb2d2cdd1c231e9cad8798bed6663c18685e19239b554c3935",
+      "apis": 0,
+      "deps": 0
+    }
+  },
+  "apis": {
+    "event:ProMaidMod": "promaid.entry.mod",
+    "event:runConfigMigration": "promaid.entry.mod",
+    "rpc:addMaidTask": "promaid.entry.extension",
+    "rpc:addExtraMaidBrain": "promaid.entry.extension",
+    "rpc:registerAITool": "promaid.entry.extension",
+    "event:onServerTick": "promaid.entry.extension",
+    "rpc:EntityMaid.travel": "promaid.mixin.core-tlm-maid",
+    "rpc:EntityMaid.teleportToOwner": "promaid.mixin.core-tlm-maid",
+    "event:onLivingHurt": "promaid.combat.auto-switch.targeting",
+    "event:onLivingDamage": "promaid.combat.auto-switch.targeting",
+    "rpc:MaidFlightCombatBehavior.tick": "promaid.combat.flight-raid.air-combat",
+    "rpc:MaidFlightKit.canFly": "promaid.combat.flight-raid.air-combat",
+    "rpc:MaidBroomDrive.takeThrust": "promaid.combat.broom",
+    "rpc:MaidBroomKit.isBroomTask": "promaid.combat.broom",
+    "rpc:MaidBombing.onAttackLanded": "promaid.combat.bombing.blast",
+    "rpc:RideBindManager.bind": "promaid.combat.ride",
+    "rpc:RideBindManager.handleSwapSeatRequest": "promaid.combat.ride",
+    "rpc:MaidMountCompat.stopVehicle/followDist": "promaid.combat.mount-compat",
+    "rpc:MaidMountCompat.applyVehicleAiTargets": "promaid.combat.mount-compat",
+    "rpc:PlacedBlockTracker.place": "promaid.work.placed-block",
+    "rpc:PlacedBlockTracker.expirePlaced": "promaid.work.placed-block",
+    "dataflow:MaidWorkTags.WORK_STILL_TAG": "promaid.work.tags",
+    "dataflow:MaidWorkTags.BUILD_SIT_TAG": "promaid.work.tags",
+    "rpc:BlueprintBuildExecutor.execute": "promaid.work.build-exec",
+    "rpc:MaidBuildBehavior.doPlace": "promaid.work.build-exec",
+    "rpc:BlueprintStepMath.rotateSteps": "promaid.work.blueprint-lib.math",
+    "rpc:BlueprintStepMath.centerSteps": "promaid.work.blueprint-lib.math",
+    "file:<world>/promaid_memory/<uuid>/paragraphs.jsonl": "promaid.social.memory.index",
+    "file:<world>/promaid_memory/<uuid>/relations.jsonl": "promaid.social.memory.index",
+    "rpc:AiMemoryStore.append": "promaid.social.memory.index",
+    "file:voice_cache/<sha256>.ogg": "promaid.social.voice",
+    "rpc:MaidChunkLoadManager.tick": "promaid.system.follow",
+    "rpc:MaidChunkLoadManager.followIfCrossDimension": "promaid.system.follow",
+    "rpc:WorkAreaClamp.clamp": "promaid.system.work-area",
+    "event:onLivingDeath": "promaid.system.protect",
+    "dataflow:CompressionBoxData NBT": "promaid.system.box",
+    "rpc:BrewRecipeResolver.resolve": "promaid.system.brew",
+    "rpc:MaidGoetyCompat.ensureHooked": "promaid.system.goety",
+    "rpc:PromaidConfigScreen.openAt": "promaid.core.config-panel",
+    "rpc:GuideContent.chapters": "promaid.guide",
+    "rpc:GuideScreen.buildLines": "promaid.guide"
+  },
+  "edges": [
+    {
+      "from": "promaid.mixin.core-tlm-maid",
+      "to": "promaid.work.tags",
+      "kind": "call",
+      "label": {
+        "zh": "站桩标记",
+        "en": "Work-still tags"
+      }
+    },
+    {
+      "from": "promaid.mixin.core-tlm-maid",
+      "to": "promaid.core.safety",
+      "kind": "call",
+      "label": {
+        "zh": "无主降级",
+        "en": "Ownerless downgrade"
+      }
+    },
+    {
+      "from": "promaid.mixin.tlm-tasks",
+      "to": "promaid.system.schedule",
+      "kind": "call",
+      "label": {
+        "zh": "日程守卫",
+        "en": "Schedule guard"
+      }
+    },
+    {
+      "from": "promaid.mixin.tlm-tasks",
+      "to": "promaid.work.tags",
+      "kind": "call",
+      "label": {
+        "zh": "站桩标记",
+        "en": "Work-still tags"
+      }
+    },
+    {
+      "from": "promaid.mixin.vanilla-ai",
+      "to": "promaid.flight.free",
+      "kind": "call",
+      "label": {
+        "zh": "自由飞行接管",
+        "en": "Free-flight takeover"
+      }
+    },
+    {
+      "from": "promaid.mixin.vanilla-ai",
+      "to": "promaid.system.goety",
+      "kind": "call",
+      "label": {
+        "zh": "Goety 推进期让位",
+        "en": "Goety thrust concession"
+      }
+    },
+    {
+      "from": "promaid.mixin.entity-physics",
+      "to": "promaid.combat.guards",
+      "kind": "call",
+      "label": {
+        "zh": "友军风免",
+        "en": "Friendly wind guard"
+      }
+    },
+    {
+      "from": "promaid.mixin.entity-physics",
+      "to": "promaid.work.build-exec",
+      "kind": "call",
+      "label": {
+        "zh": "区块冻结",
+        "en": "Chunk freeze"
+      }
+    },
+    {
+      "from": "promaid.mixin.render-client",
+      "to": "promaid.social.emotion",
+      "kind": "call",
+      "label": {
+        "zh": "情绪姿势",
+        "en": "Emotion pose"
+      }
+    },
+    {
+      "from": "promaid.mixin.render-client",
+      "to": "promaid.combat.tether",
+      "kind": "call",
+      "label": {
+        "zh": "拴绳虚影",
+        "en": "Tether ghost"
+      }
+    },
+    {
+      "from": "promaid.mixin.tlm-config-gui",
+      "to": "promaid.social.memory",
+      "kind": "call",
+      "label": {
+        "zh": "记忆面板",
+        "en": "Memory panel"
+      }
+    },
+    {
+      "from": "promaid.mixin.tlm-config-gui",
+      "to": "promaid.flight.free",
+      "kind": "call",
+      "label": {
+        "zh": "飞行开关",
+        "en": "Flight toggle"
+      }
+    },
+    {
+      "from": "promaid.mixin.network-chunk",
+      "to": "promaid.system.remote-gui",
+      "kind": "call",
+      "label": {
+        "zh": "远程界面",
+        "en": "Remote GUI"
+      }
+    },
+    {
+      "from": "promaid.mixin.network-chunk",
+      "to": "promaid.system.visibility",
+      "kind": "call",
+      "label": {
+        "zh": "可见性自愈",
+        "en": "Visibility self-heal"
+      }
+    },
+    {
+      "from": "promaid.mixin.dialogue-llm",
+      "to": "promaid.social.dialogue",
+      "kind": "call",
+      "label": {
+        "zh": "对话层",
+        "en": "Dialogue layer"
+      }
+    },
+    {
+      "from": "promaid.mixin.dialogue-llm",
+      "to": "promaid.core.prompt",
+      "kind": "call",
+      "label": {
+        "zh": "提示词追加",
+        "en": "Prompt appender"
+      }
+    },
+    {
+      "from": "promaid.mixin.compat",
+      "to": "promaid.system.goety",
+      "kind": "call",
+      "label": {
+        "zh": "Goety",
+        "en": "Goety"
+      }
+    },
+    {
+      "from": "promaid.mixin.compat",
+      "to": "promaid.combat.ride",
+      "kind": "call",
+      "label": {
+        "zh": "骑乘",
+        "en": "Ride"
+      }
+    },
+    {
+      "from": "promaid.combat.auto-switch.pools",
+      "to": "promaid.entry.extension",
+      "kind": "call",
+      "label": {
+        "zh": "任务表",
+        "en": "Task table"
+      }
+    },
+    {
+      "from": "promaid.combat.auto-switch.targeting",
+      "to": "promaid.system.work-area",
+      "kind": "call",
+      "label": {
+        "zh": "工作范围",
+        "en": "Work range"
+      }
+    },
+    {
+      "from": "promaid.combat.auto-switch.targeting",
+      "to": "promaid.combat.guards",
+      "kind": "call",
+      "label": {
+        "zh": "友军判定",
+        "en": "Friendly check"
+      }
+    },
+    {
+      "from": "promaid.combat.auto-switch.neutral",
+      "to": "promaid.combat.auto-switch",
+      "kind": "call",
+      "label": {
+        "zh": "参战开关",
+        "en": "Combat switch"
+      }
+    },
+    {
+      "from": "promaid.combat.targeting",
+      "to": "promaid.system.work-area",
+      "kind": "call",
+      "label": {
+        "zh": "工作范围",
+        "en": "Work range"
+      }
+    },
+    {
+      "from": "promaid.combat.targeting",
+      "to": "promaid.core.command",
+      "kind": "call",
+      "label": {
+        "zh": "combat check",
+        "en": "combat check"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid",
+      "to": "promaid.combat.targeting",
+      "kind": "call",
+      "label": {
+        "zh": "索敌",
+        "en": "Targeting"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid",
+      "to": "promaid.combat.bombing",
+      "kind": "call",
+      "label": {
+        "zh": "轰炸",
+        "en": "Bombing"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid",
+      "to": "promaid.combat.maneuvers",
+      "kind": "call",
+      "label": {
+        "zh": "战术机动",
+        "en": "Maneuvers"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid.follow",
+      "to": "promaid.combat.flight-raid",
+      "kind": "call",
+      "label": {
+        "zh": "飞行套件",
+        "en": "Flight kit"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid.follow",
+      "to": "promaid.combat.tether",
+      "kind": "call",
+      "label": {
+        "zh": "拴绳",
+        "en": "Tether"
+      }
+    },
+    {
+      "from": "promaid.combat.flight-raid.recall",
+      "to": "promaid.system.follow",
+      "kind": "call",
+      "label": {
+        "zh": "传送",
+        "en": "Teleport"
+      }
+    },
+    {
+      "from": "promaid.combat.broom",
+      "to": "promaid.combat.flight-raid",
+      "kind": "call",
+      "label": {
+        "zh": "开火链路",
+        "en": "Firing chain"
+      }
+    },
+    {
+      "from": "promaid.combat.broom",
+      "to": "promaid.combat.ride",
+      "kind": "call",
+      "label": {
+        "zh": "骑乘工具",
+        "en": "Ride kit"
+      }
+    },
+    {
+      "from": "promaid.combat.bombing.items",
+      "to": "promaid.core.config",
+      "kind": "call",
+      "label": {
+        "zh": "配置",
+        "en": "Config"
+      }
+    },
+    {
+      "from": "promaid.combat.bombing.blast",
+      "to": "promaid.combat.guards",
+      "kind": "call",
+      "label": {
+        "zh": "友军防护",
+        "en": "Friendly guard"
+      }
+    },
+    {
+      "from": "promaid.combat.ride",
+      "to": "promaid.combat.mount-compat",
+      "kind": "call",
+      "label": {
+        "zh": "载具兼容",
+        "en": "Mount compat"
+      }
+    },
+    {
+      "from": "promaid.combat.mount-compat",
+      "to": "promaid.combat.flight-raid.air-combat",
+      "kind": "call",
+      "label": {
+        "zh": "空中姿态",
+        "en": "Air posture"
+      }
+    },
+    {
+      "from": "promaid.combat.tactics",
+      "to": "promaid.combat.self-preservation",
+      "kind": "call",
+      "label": {
+        "zh": "自保",
+        "en": "Self-preservation"
+      }
+    },
+    {
+      "from": "promaid.combat.tactics",
+      "to": "promaid.combat.guards",
+      "kind": "call",
+      "label": {
+        "zh": "友军",
+        "en": "Friendly"
+      }
+    },
+    {
+      "from": "promaid.combat.self-preservation",
+      "to": "promaid.work.placed-block",
+      "kind": "call",
+      "label": {
+        "zh": "方块回收",
+        "en": "Block reclaim"
+      }
+    },
+    {
+      "from": "promaid.combat.self-preservation",
+      "to": "promaid.combat.ride",
+      "kind": "call",
+      "label": {
+        "zh": "骑乘",
+        "en": "Ride"
+      }
+    },
+    {
+      "from": "promaid.work.mine",
+      "to": "promaid.work.placed-block",
+      "kind": "call",
+      "label": {
+        "zh": "方块回收",
+        "en": "Block reclaim"
+      }
+    },
+    {
+      "from": "promaid.work.mine",
+      "to": "promaid.work.tool-equip",
+      "kind": "call",
+      "label": {
+        "zh": "自动换工具",
+        "en": "Auto tool"
+      }
+    },
+    {
+      "from": "promaid.work.wood",
+      "to": "promaid.work.mine",
+      "kind": "call",
+      "label": {
+        "zh": "同构来源",
+        "en": "Isomorphic origin"
+      }
+    },
+    {
+      "from": "promaid.work.wood",
+      "to": "promaid.work.placed-block",
+      "kind": "call",
+      "label": {
+        "zh": "方块回收",
+        "en": "Block reclaim"
+      }
+    },
+    {
+      "from": "promaid.work.brew-task",
+      "to": "promaid.system.brew",
+      "kind": "call",
+      "label": {
+        "zh": "配方",
+        "en": "Recipes"
+      }
+    },
+    {
+      "from": "promaid.work.bridge",
+      "to": "promaid.work.placed-block",
+      "kind": "call",
+      "label": {
+        "zh": "方块回收",
+        "en": "Block reclaim"
+      }
+    },
+    {
+      "from": "promaid.work.bridge",
+      "to": "promaid.core.safety",
+      "kind": "call",
+      "label": {
+        "zh": "选块过滤",
+        "en": "Block filter"
+      }
+    },
+    {
+      "from": "promaid.work.build-exec",
+      "to": "promaid.work.build-plan",
+      "kind": "call",
+      "label": {
+        "zh": "计划",
+        "en": "Plan"
+      }
+    },
+    {
+      "from": "promaid.work.build-exec",
+      "to": "promaid.work.blueprint-lib",
+      "kind": "call",
+      "label": {
+        "zh": "蓝图库",
+        "en": "Blueprint lib"
+      }
+    },
+    {
+      "from": "promaid.work.blueprint-ui",
+      "to": "promaid.guide",
+      "kind": "call",
+      "label": {
+        "zh": "手册",
+        "en": "Guide"
+      }
+    },
+    {
+      "from": "promaid.work.blueprint-ui",
+      "to": "promaid.core.config-panel",
+      "kind": "call",
+      "label": {
+        "zh": "配置跳转",
+        "en": "Config jump"
+      }
+    },
+    {
+      "from": "promaid.work.index-stone",
+      "to": "promaid.work.build-exec",
+      "kind": "call",
+      "label": {
+        "zh": "放置逻辑",
+        "en": "Placement"
+      }
+    },
+    {
+      "from": "promaid.work.index-stone",
+      "to": "promaid.work.placed-block",
+      "kind": "call",
+      "label": {
+        "zh": "回收",
+        "en": "Reclaim"
+      }
+    },
+    {
+      "from": "promaid.work.ai-tools",
+      "to": "promaid.work.blueprint-lib",
+      "kind": "call",
+      "label": {
+        "zh": "蓝图库",
+        "en": "Blueprint lib"
+      }
+    },
+    {
+      "from": "promaid.social.dialogue",
+      "to": "promaid.social.memory",
+      "kind": "call",
+      "label": {
+        "zh": "记忆",
+        "en": "Memory"
+      }
+    },
+    {
+      "from": "promaid.social.dialogue",
+      "to": "promaid.social.affect",
+      "kind": "call",
+      "label": {
+        "zh": "情绪",
+        "en": "Affect"
+      }
+    },
+    {
+      "from": "promaid.system.follow",
+      "to": "promaid.system.visibility",
+      "kind": "call",
+      "label": {
+        "zh": "可见性",
+        "en": "Visibility"
+      }
+    },
+    {
+      "from": "promaid.system.schedule",
+      "to": "promaid.combat.auto-switch",
+      "kind": "call",
+      "label": {
+        "zh": "优先级让位",
+        "en": "Priority concession"
+      }
+    },
+    {
+      "from": "promaid.system.schedule",
+      "to": "promaid.combat.self-preservation",
+      "kind": "call",
+      "label": {
+        "zh": "优先级让位",
+        "en": "Priority concession"
+      }
+    },
+    {
+      "from": "promaid.system.protect",
+      "to": "promaid.system.follow",
+      "kind": "call",
+      "label": {
+        "zh": "强载区块",
+        "en": "Force-load"
+      }
+    },
+    {
+      "from": "promaid.guide",
+      "to": "promaid.core.config-panel",
+      "kind": "call",
+      "label": {
+        "zh": "配置跳转",
+        "en": "Config jump"
+      }
+    }
+  ],
+  "stats": {
+    "modules": 112,
+    "leaves": 95,
+    "containers": 17,
+    "apis": 41,
+    "edges": 61,
+    "depth": 3
+  },
+  "diagnostics": {
+    "errors": 0,
+    "warnings": 72,
+    "warning_list": [
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.entry.gift",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.entry.creative-tab",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.tlm-tasks",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.vanilla-ai",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.entity-physics",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.render-client",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.tlm-config-gui",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.network-chunk",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.dialogue-llm",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.mixin.compat",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.auto-switch.pools",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.auto-switch.neutral",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.targeting",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.flight-raid.follow",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.flight-raid.recall",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.bombing.items",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.bombing.pose",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.pink-fire",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.tether",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.tactics",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.self-preservation",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.maneuvers",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.resurrect",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.guards",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.owner-support",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.combat.compat",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.mine",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.wood",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.cook",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.brew-task",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.slaughter",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.bridge",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.tool-equip",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.stroll",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.planting",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.build-plan",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-lib.materials",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-lib.placement",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-lib.tables",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-lib.io",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-formats",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-ui",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-net",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.blueprint-ghost",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.index-stone",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.farm",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.ai-tools",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.work.fishing",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.flight.free.handlers",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.memory.tools",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.persona",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.affect",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.emotion",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.dialogue.perception",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.dialogue.worklist",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.action",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.social.soul",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.visibility",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.home",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.schedule.switch",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.schedule.net",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.system.remote-gui",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.config",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.command",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.tools-ai",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.safety",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.gui",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.compat",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.marker",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.core.prompt",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid.client",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      },
+      {
+        "severity": "warning",
+        "code": "structure/leaf-too-coarse",
+        "subject": "promaid-forge",
+        "message": "叶子未声明 API（建议 3–5 条）",
+        "evidence": ""
+      }
+    ]
+  }
+}

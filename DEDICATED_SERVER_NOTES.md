@@ -41,8 +41,8 @@ java.lang.RuntimeException: Attempted to load class net/minecraft/client/gui/scr
 ## 三、专用服务器回归测试
 
 ```bash
-python test_server.py 1201            # Forge 1.20.1 专用服（Java 17）
-python test_server.py neoforge1211    # NeoForge 1.21.1 专用服（Java 21）
+python tools/test/test_server.py 1201            # Forge 1.20.1 专用服（Java 17）
+python tools/test/test_server.py neoforge1211    # NeoForge 1.21.1 专用服（Java 21）
 ```
 
 - 测试服目录：`C:/Users/Sketch/mc_server_test/{1201,neoforge1211}`（安装脚本用官方 installer）
@@ -167,7 +167,7 @@ handle 只在客户端执行，服务端只做编码；dist 审计（audit_dist.
 
 ### 回归口径
 
-专用服务器实测是本节的最终判据（`python test_server.py 1201`：日志出现 `Done (` = PASS）。
+专用服务器实测是本节的最终判据（`python tools/test/test_server.py 1201`：日志出现 `Done (` = PASS）。
 本轮已跑，结果写在实测六百八十七 的 changelog 里。
 
 ## 九、实测六百八十八：本批的服务端视角（新注入点落在全服热路径上）

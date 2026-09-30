@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "id": "promaid.combat",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 16 个子模块。",
+    "en": "16 submodules at this layer."
+  },
+  "order": [
+    "promaid.combat.auto-switch",
+    "promaid.combat.targeting",
+    "promaid.combat.flight-raid",
+    "promaid.combat.broom",
+    "promaid.combat.bombing",
+    "promaid.combat.pink-fire",
+    "promaid.combat.tether",
+    "promaid.combat.ride",
+    "promaid.combat.mount-compat",
+    "promaid.combat.tactics",
+    "promaid.combat.self-preservation",
+    "promaid.combat.maneuvers",
+    "promaid.combat.resurrect",
+    "promaid.combat.guards",
+    "promaid.combat.owner-support",
+    "promaid.combat.compat"
+  ],
+  "groups": [
+    {
+      "id": "g1",
+      "title": {
+        "zh": "战斗与载具",
+        "en": "Combat & Vehicles"
+      },
+      "children": [
+        "promaid.combat.auto-switch",
+        "promaid.combat.targeting",
+        "promaid.combat.flight-raid",
+        "promaid.combat.broom",
+        "promaid.combat.bombing",
+        "promaid.combat.pink-fire",
+        "promaid.combat.tether",
+        "promaid.combat.ride",
+        "promaid.combat.mount-compat",
+        "promaid.combat.tactics",
+        "promaid.combat.self-preservation",
+        "promaid.combat.maneuvers",
+        "promaid.combat.resurrect",
+        "promaid.combat.guards",
+        "promaid.combat.owner-support",
+        "promaid.combat.compat"
+      ]
+    }
+  ]
+}

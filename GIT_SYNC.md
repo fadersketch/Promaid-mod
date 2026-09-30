@@ -61,8 +61,8 @@ robocopy "promaid-mod\promaid_src_neo" "maidmods\promaid_src_neo" /MIR /L /NFL /
 ```bat
 robocopy "promaid-mod\promaid_src"     "maidmods\promaid_src"     /MIR /NFL /NDL /NJH /NP
 robocopy "promaid-mod\promaid_src_neo" "maidmods\promaid_src_neo" /MIR /NFL /NDL /NJH /NP
-:: 构建脚本与文档：build_promaid*.py compile_promaid.bat gen_compile*.py run_javac_neo.py
-::                  deploy*.py test_server.py verify_jar_classes.py CHANGELOG.md README.md 等
+:: 构建脚本与文档：build_promaid*.py tools/build/compile_promaid.bat gen_compile*.py run_javac_neo.py
+::                  deploy*.py tools/test/test_server.py tools/verify/verify_jar_classes.py CHANGELOG.md README.md 等
 ```
 
 > `sync_to_git.bat` 目前**只覆盖 `promaid_src` 与四个构建脚本，不含 `promaid_src_neo`**，
@@ -77,10 +77,10 @@ robocopy "promaid-mod\promaid_src_neo" "maidmods\promaid_src_neo" /MIR /NFL /NDL
 
 ```bat
 cd /d C:\Users\Sketch\.zcode\workspace\default\maidmods
-python gen_compile.py
-call compile_promaid.bat          rem 期望 EXITCODE=0 / 0 个错误
-python gen_compile_neo.py
-call compile_neo.bat              rem 期望 EXITCODE=0 / 只有 note（与 forge 侧同款封装脚本）
+python tools/build/gen_compile.py
+call tools/build/compile_promaid.bat          rem 期望 EXITCODE=0 / 0 个错误
+python tools/build/gen_compile_neo.py
+call tools/build/compile_neo.bat              rem 期望 EXITCODE=0 / 只有 note（与 forge 侧同款封装脚本）
 ```
 
 ## 行尾规范
@@ -106,7 +106,7 @@ call compile_neo.bat              rem 期望 EXITCODE=0 / 只有 note（与 forg
 
 - `maidmods/build_all.bat` 版本号停在 `promaid-1.0.3` / `heartfelt_connection-1.0.0`，
   且只走单树（不含 neo）。它是历史文件，**不要**用它做发布构建；用
-  `promaid-mod` 的 `build_promaid.py` / `build_promaid_neo.py`。
+  `promaid-mod` 的 `tools/build/build_promaid.py` / `tools/build/build_promaid_neo.py`。
 - `maidmods/repo-sync/` 是同一个 GitHub 仓库的**嵌套旧克隆**（停在 2026-08-13 的 v1.0.1），
   不是同步机制，别把它当第二个远端。
 - `maidmods/promaid_src` 修正前那 7 个文件（`MaidDimensionFollow`、

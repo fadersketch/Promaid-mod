@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "id": "promaid",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 10 个子模块。",
+    "en": "10 submodules at this layer."
+  },
+  "order": [
+    "promaid.entry",
+    "promaid.mixin",
+    "promaid.combat",
+    "promaid.work",
+    "promaid.flight",
+    "promaid.social",
+    "promaid.system",
+    "promaid.core",
+    "promaid.client",
+    "promaid.guide"
+  ],
+  "groups": [
+    {
+      "id": "g0",
+      "title": {
+        "zh": "入口与注入",
+        "en": "Entry & Mixins"
+      },
+      "children": [
+        "promaid.entry",
+        "promaid.mixin"
+      ]
+    },
+    {
+      "id": "g1",
+      "title": {
+        "zh": "战斗与载具",
+        "en": "Combat & Vehicles"
+      },
+      "children": [
+        "promaid.combat"
+      ]
+    },
+    {
+      "id": "g2",
+      "title": {
+        "zh": "生产任务与建造",
+        "en": "Work & Building"
+      },
+      "children": [
+        "promaid.work"
+      ]
+    },
+    {
+      "id": "g3",
+      "title": {
+        "zh": "飞行",
+        "en": "Flight"
+      },
+      "children": [
+        "promaid.flight"
+      ]
+    },
+    {
+      "id": "g4",
+      "title": {
+        "zh": "社交与心智",
+        "en": "Social & Mind"
+      },
+      "children": [
+        "promaid.social"
+      ]
+    },
+    {
+      "id": "g5",
+      "title": {
+        "zh": "系统服务",
+        "en": "System Services"
+      },
+      "children": [
+        "promaid.system"
+      ]
+    },
+    {
+      "id": "g6",
+      "title": {
+        "zh": "核心与文档",
+        "en": "Core & Docs"
+      },
+      "children": [
+        "promaid.core",
+        "promaid.client",
+        "promaid.guide"
+      ]
+    }
+  ]
+}

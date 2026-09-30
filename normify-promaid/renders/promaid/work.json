@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "id": "promaid.work",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 22 个子模块。",
+    "en": "22 submodules at this layer."
+  },
+  "order": [
+    "promaid.work.mine",
+    "promaid.work.wood",
+    "promaid.work.cook",
+    "promaid.work.brew-task",
+    "promaid.work.slaughter",
+    "promaid.work.bridge",
+    "promaid.work.tool-equip",
+    "promaid.work.stroll",
+    "promaid.work.planting",
+    "promaid.work.placed-block",
+    "promaid.work.tags",
+    "promaid.work.build-plan",
+    "promaid.work.build-exec",
+    "promaid.work.blueprint-lib",
+    "promaid.work.blueprint-formats",
+    "promaid.work.blueprint-ui",
+    "promaid.work.blueprint-net",
+    "promaid.work.blueprint-ghost",
+    "promaid.work.index-stone",
+    "promaid.work.farm",
+    "promaid.work.ai-tools",
+    "promaid.work.fishing"
+  ],
+  "groups": [
+    {
+      "id": "g2",
+      "title": {
+        "zh": "生产任务与建造",
+        "en": "Work & Building"
+      },
+      "children": [
+        "promaid.work.mine",
+        "promaid.work.wood",
+        "promaid.work.cook",
+        "promaid.work.brew-task",
+        "promaid.work.slaughter",
+        "promaid.work.bridge",
+        "promaid.work.tool-equip",
+        "promaid.work.stroll",
+        "promaid.work.planting",
+        "promaid.work.placed-block",
+        "promaid.work.tags",
+        "promaid.work.build-plan",
+        "promaid.work.build-exec",
+        "promaid.work.blueprint-lib",
+        "promaid.work.blueprint-formats",
+        "promaid.work.blueprint-ui",
+        "promaid.work.blueprint-net",
+        "promaid.work.blueprint-ghost",
+        "promaid.work.index-stone",
+        "promaid.work.farm",
+        "promaid.work.ai-tools",
+        "promaid.work.fishing"
+      ]
+    }
+  ]
+}

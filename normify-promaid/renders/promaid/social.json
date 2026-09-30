@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "id": "promaid.social",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "mode": "groups",
+  "max_columns": 3,
+  "max_api_rows": 0,
+  "reading": {
+    "zh": "本层 8 个子模块。",
+    "en": "8 submodules at this layer."
+  },
+  "order": [
+    "promaid.social.memory",
+    "promaid.social.persona",
+    "promaid.social.affect",
+    "promaid.social.emotion",
+    "promaid.social.dialogue",
+    "promaid.social.action",
+    "promaid.social.voice",
+    "promaid.social.soul"
+  ],
+  "groups": [
+    {
+      "id": "g4",
+      "title": {
+        "zh": "社交与心智",
+        "en": "Social & Mind"
+      },
+      "children": [
+        "promaid.social.memory",
+        "promaid.social.persona",
+        "promaid.social.affect",
+        "promaid.social.emotion",
+        "promaid.social.dialogue",
+        "promaid.social.action",
+        "promaid.social.voice",
+        "promaid.social.soul"
+      ]
+    }
+  ]
+}

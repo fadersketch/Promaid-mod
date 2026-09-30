@@ -1,0 +1,157 @@
+# Promaid 架构大纲 / Architecture Outline
+
+修订 05103ae2da3af21d7a2d344d33296407d6f26ab2 · 112 模块 / 41 API / 61 箭头 / 最大深度 3
+
+- **Promaid 模组总览** `promaid`
+  - **入口与装配** `promaid.entry`
+    - **模组主类与初始化** `promaid.entry.mod` *(leaf)*
+      - `event:ProMaidMod()` — 模组构造：注册物品与配置。
+      - `event:runConfigMigration()` — 历史默认值迁移链（幂等，靠 *_MIGRATED 标记）。
+    - **功能注册枢纽** `promaid.entry.extension` *(leaf)*
+      - `rpc:addMaidTask(TaskManager)` — 向 TLM 登记本模组的全部任务。
+      - `rpc:addExtraMaidBrain()` — 登记 core/rest 大脑行为与优先级。
+      - `rpc:registerAITool(...)` — 登记供 LLM 调用的工具。
+      - `event:onServerTick(...)` — 驱动全部服务端每-tick 模块。
+    - **首次加入礼物** `promaid.entry.gift` *(leaf)*
+    - **创造栏注入** `promaid.entry.creative-tab` *(leaf)*
+  - **注入层（Mixin）** `promaid.mixin`
+    - **TLM 女仆本体注入** `promaid.mixin.core-tlm-maid` *(leaf)*
+      - `rpc:EntityMaid.travel(...)` — 注入：站桩期接管移动。
+      - `rpc:EntityMaid.teleportToOwner()` — 注入：停放/空袭期豁免传送。
+    - **TLM 任务行为注入** `promaid.mixin.tlm-tasks` *(leaf)*
+    - **原版 AI 注入** `promaid.mixin.vanilla-ai` *(leaf)*
+    - **实体与物理注入** `promaid.mixin.entity-physics` *(leaf)*
+    - **客户端渲染注入** `promaid.mixin.render-client` *(leaf)*
+    - **TLM 配置界面扩展** `promaid.mixin.tlm-config-gui` *(leaf)*
+    - **网络与区块追踪注入** `promaid.mixin.network-chunk` *(leaf)*
+    - **对话与 LLM 注入** `promaid.mixin.dialogue-llm` *(leaf)*
+    - **兼容类注入** `promaid.mixin.compat` *(leaf)*
+  - **战斗与载具** `promaid.combat`
+    - **主动参战** `promaid.combat.auto-switch`
+      - **战斗任务池** `promaid.combat.auto-switch.pools` *(leaf)*
+      - **参战威胁判定** `promaid.combat.auto-switch.targeting` *(leaf)*
+        - `event:onLivingHurt(LivingIncomingDamageEvent)` — 主人/女仆受击 → 威胁评分。
+        - `event:onLivingDamage(...)` — 主人出手 → 记敌对目标。
+      - **中立威胁驱动** `promaid.combat.auto-switch.neutral` *(leaf)*
+    - **飞行索敌与诊断** `promaid.combat.targeting` *(leaf)*
+    - **空袭（近战/远程）** `promaid.combat.flight-raid`
+      - **飞行跟随** `promaid.combat.flight-raid.follow` *(leaf)*
+      - **空袭牵引绳** `promaid.combat.flight-raid.recall` *(leaf)*
+      - **空中交战姿态** `promaid.combat.flight-raid.air-combat` *(leaf)*
+        - `rpc:MaidFlightCombatBehavior.tick(...)` — 空袭主循环。
+        - `rpc:MaidFlightKit.canFly(maid)` — 三件套校验。
+    - **扫帚模式** `promaid.combat.broom` *(leaf)*
+      - `rpc:MaidBroomDrive.takeThrust(...)` — 每拍推进量（被扫帚实体 travel 注入读取）。
+      - `rpc:MaidBroomKit.isBroomTask(...)` — 任务判定契约（多处方引用）。
+    - **空袭轰炸** `promaid.combat.bombing`
+      - **炸弹选材与判据** `promaid.combat.bombing.items` *(leaf)*
+      - **爆炸与安全口径** `promaid.combat.bombing.blast` *(leaf)*
+        - `rpc:MaidBombing.onAttackLanded(...)` — 打完一记 → 顺带投弹。
+      - **副手动作姿势（共用）** `promaid.combat.bombing.pose` *(leaf)*
+    - **粉色火焰** `promaid.combat.pink-fire` *(leaf)*
+    - **武装拴绳（二号位）** `promaid.combat.tether` *(leaf)*
+    - **骑乘指挥棒** `promaid.combat.ride` *(leaf)*
+      - `rpc:RideBindManager.bind(...)` — 绑定语义：一车一仆；甲的车不受乙影响。
+      - `rpc:RideBindManager.handleSwapSeatRequest(...)` — 左键换座的服务端落点。
+    - **载具兼容层** `promaid.combat.mount-compat` *(leaf)*
+      - `rpc:MaidMountCompat.stopVehicle/followDist(...)` — 停车判据按车体尺寸。
+      - `rpc:MaidMountCompat.applyVehicleAiTargets(...)` — 把她的目标写进炮塔/武器位 AI 目标 UUID。
+    - **单兵作战战术** `promaid.combat.tactics` *(leaf)*
+    - **自保** `promaid.combat.self-preservation` *(leaf)*
+    - **特殊攻击链路** `promaid.combat.maneuvers` *(leaf)*
+    - **死亡复活与回魂符** `promaid.combat.resurrect` *(leaf)*
+    - **友军与环境防护总闸** `promaid.combat.guards` *(leaf)*
+    - **主人贴身辅助** `promaid.combat.owner-support` *(leaf)*
+    - **第三方战斗兼容** `promaid.combat.compat` *(leaf)*
+  - **生产类任务** `promaid.work`
+    - **挖矿** `promaid.work.mine` *(leaf)*
+    - **伐木** `promaid.work.wood` *(leaf)*
+    - **烧制** `promaid.work.cook` *(leaf)*
+    - **酿造任务** `promaid.work.brew-task` *(leaf)*
+    - **宰杀** `promaid.work.slaughter` *(leaf)*
+    - **搭路与垫高** `promaid.work.bridge` *(leaf)*
+    - **任务工具自动装备** `promaid.work.tool-equip` *(leaf)*
+    - **空闲散步** `promaid.work.stroll` *(leaf)*
+    - **随手种树** `promaid.work.planting` *(leaf)*
+    - **搭方块统一回收** `promaid.work.placed-block` *(leaf)*
+      - `rpc:PlacedBlockTracker.place(...)` — 登记放置方块与主人 UUID。
+      - `rpc:PlacedBlockTracker.expirePlaced(...)` — 到期回收。
+    - **站桩标记（跨切面）** `promaid.work.tags` *(leaf)*
+      - `dataflow:MaidWorkTags.WORK_STILL_TAG` — 站桩契约标记。
+      - `dataflow:MaidWorkTags.BUILD_SIT_TAG` — 建造期就座契约标记。
+    - **建造计划数据层** `promaid.work.build-plan` *(leaf)*
+    - **建造执行** `promaid.work.build-exec` *(leaf)*
+      - `rpc:BlueprintBuildExecutor.execute(...)` — 解析并建立/续接建造计划。
+      - `rpc:MaidBuildBehavior.doPlace(...)` — 放下一块并扣真实材料。
+    - **蓝图库门面** `promaid.work.blueprint-lib`
+      - **蓝图几何与步骤** `promaid.work.blueprint-lib.math` *(leaf)*
+        - `rpc:BlueprintStepMath.rotateSteps(...)` — 按 quarter 旋转步骤。
+        - `rpc:BlueprintStepMath.centerSteps(...)` — 把步骤居中到原点。
+      - **材料核算** `promaid.work.blueprint-lib.materials` *(leaf)*
+      - **放置规则** `promaid.work.blueprint-lib.placement` *(leaf)*
+      - **方块与命名表** `promaid.work.blueprint-lib.tables` *(leaf)*
+      - **蓝图文件 IO** `promaid.work.blueprint-lib.io` *(leaf)*
+    - **蓝图格式解析** `promaid.work.blueprint-formats` *(leaf)*
+    - **蓝图手册界面** `promaid.work.blueprint-ui` *(leaf)*
+    - **蓝图网络包** `promaid.work.blueprint-net` *(leaf)*
+    - **建造投影与区域框** `promaid.work.blueprint-ghost` *(leaf)*
+    - **指标石** `promaid.work.index-stone` *(leaf)*
+    - **锄地驱动** `promaid.work.farm` *(leaf)*
+    - **建造 AI 工具** `promaid.work.ai-tools` *(leaf)*
+    - **钓鱼自动坐垫** `promaid.work.fishing` *(leaf)*
+  - **飞行** `promaid.flight`
+    - **仿创造飞行** `promaid.flight.free`
+      - **飞行事件桥与网络** `promaid.flight.free.handlers` *(leaf)*
+  - **社交与心智** `promaid.social`
+    - **长期记忆** `promaid.social.memory`
+      - **记忆索引与检索** `promaid.social.memory.index` *(leaf)*
+        - `file:<world>/promaid_memory/<uuid>/paragraphs.jsonl` — 段落记忆表。
+        - `file:<world>/promaid_memory/<uuid>/relations.jsonl` — 关系表。
+        - `rpc:AiMemoryStore.append(...)` — 写入一条记忆。
+      - **记忆 LLM 工具** `promaid.social.memory.tools` *(leaf)*
+    - **角色包** `promaid.social.persona` *(leaf)*
+    - **PAD 情绪层** `promaid.social.affect` *(leaf)*
+    - **亲昵互动与姿势** `promaid.social.emotion` *(leaf)*
+    - **对话与自主决策** `promaid.social.dialogue`
+      - **世界感知与探查** `promaid.social.dialogue.perception` *(leaf)*
+      - **工作清单与播报** `promaid.social.dialogue.worklist` *(leaf)*
+    - **情绪动作与物品交互** `promaid.social.action` *(leaf)*
+    - **语音与 TTS** `promaid.social.voice` *(leaf)*
+      - `file:voice_cache/<sha256>.ogg` — 合成语音缓存键。
+    - **灵魂记忆路由（兼容残留）** `promaid.social.soul` *(leaf)*
+  - **系统服务** `promaid.system`
+    - **区块加载与跨维跟随** `promaid.system.follow` *(leaf)*
+      - `rpc:MaidChunkLoadManager.tick(...)` — 每 5 秒续票。
+      - `rpc:MaidChunkLoadManager.followIfCrossDimension(...)` — 跨维跟随。
+    - **工作圈钳制** `promaid.system.work-area` *(leaf)*
+      - `rpc:WorkAreaClamp.clamp(...)` — 把目标钳进工作圆。
+    - **可见性自愈** `promaid.system.visibility` *(leaf)*
+    - **Home 巡逻与工作驱动** `promaid.system.home` *(leaf)*
+    - **排班表** `promaid.system.schedule`
+      - **任务切换引擎** `promaid.system.schedule.switch` *(leaf)*
+      - **排班网络包** `promaid.system.schedule.net` *(leaf)*
+    - **远程女仆界面** `promaid.system.remote-gui` *(leaf)*
+    - **保护与险境** `promaid.system.protect` *(leaf)*
+      - `event:onLivingDeath(...)` — 主人死亡 → 全员立即传送。
+    - **压缩盒** `promaid.system.box` *(leaf)*
+      - `dataflow:CompressionBoxData NBT` — 自定义压缩盒 NBT。
+    - **酿造配置与配方** `promaid.system.brew` *(leaf)*
+      - `rpc:BrewRecipeResolver.resolve(...)` — 按目标药水回溯配方链。
+    - **诡厄巫法兼容** `promaid.system.goety` *(leaf)*
+      - `rpc:MaidGoetyCompat.ensureHooked()` — 探测并挂接 Goety（两包根）。
+  - **核心与配置** `promaid.core`
+    - **全模组配置定义** `promaid.core.config` *(leaf)*
+    - **配置面板 GUI** `promaid.core.config-panel` *(leaf)*
+      - `rpc:PromaidConfigScreen.openAt(...)` — 从手册章节跳转到指定配置行。
+    - **管理指令** `promaid.core.command` *(leaf)*
+    - **LLM 指挥工具集** `promaid.core.tools-ai` *(leaf)*
+    - **建构安全与共享工具** `promaid.core.safety` *(leaf)*
+    - **游戏内文件浏览器** `promaid.core.gui` *(leaf)*
+    - **第三方模式兼容** `promaid.core.compat` *(leaf)*
+    - **工位标记** `promaid.core.marker` *(leaf)*
+    - **提示词追加** `promaid.core.prompt` *(leaf)*
+  - **客户端界面** `promaid.client` *(leaf)*
+  - **详细介绍手册** `promaid.guide` *(leaf)*
+    - `rpc:GuideContent.chapters()` — 36 章注册表。
+    - `rpc:GuideScreen.buildLines(...)` — 按像素宽度换行分页。
+- **Forge 1.20.1 镜像树** `promaid-forge` *(leaf)*
