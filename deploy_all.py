@@ -6,6 +6,18 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百三十八（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三条** ——
+① 开陆地载具接敌会绕圈了（`MaidAirCombat.groundOrbitTarget` 复用战斗环绕状态机、高度贴敌人；
+   `MaidMountCompat.groundReverse` 连续 10 拍位移 < 0.02 格即判定撞墙/卡住并调头换向；
+   `RideBindManager.drive` 新增地面载具接敌分支，`FlightTargeting.isVehicleMountRider` 让地面车
+   也并入 50 格索敌；玩家原话「能不能在接敌后也采用直升机/扫帚那种绕圈的方式呢？撞墙以后自动反方向」）；
+② 玩家坐上女仆开的直升机后原地悬停、不再往上飞（`MaidMountCompat.hasPlayerAboard` +
+   `MaidAirCombat.holdHere`；根因是跟随高度基准为主人 Y，玩家上机后 owner.getY() == 机身 Y →
+   每拍 +N 棘轮；接敌档照旧爬升绕圈；玩家原话「建议改为玩家乘坐以后就悬停。锁敌的时候正常」）；
+③ 骑乘指挥棒绝不登乘（拆掉 737 加的三处「放行主人坐副驾」豁口：`handle()` 的副驾分支、
+   `denyMountForBatonHolder` 与 `onMount` 的 `allowsOwnerPassengerSeat` 放行；空手右击坐副驾不变；
+   玩家原话「骑乘指挥棒有最高的优先级……绝对不会乘坐」）。
+
 实测七百三十七（v1.3.0 beta，同名覆盖，未发版）：**两树同步的四期内容** ——
 ① 守家不再吃绳子的力（空袭牵引绳 home 模式下整条不生效：`GunnerTetherManager.onMaidTick` 与
    `MaidFlightRecall.tick` 各加一道 `isHomeModeEnable()` 闸；玩家原话「如果给 home 模式的女仆

@@ -201,9 +201,10 @@ public final class FlightTargeting {
         try {
             java.util.UUID id = maid.getUUID();
             if (!MaidFlightKit.isFlightTask(maid) && !MaidBroomKit.isBroomTask(maid)
-                    && !isFlightMountRider(maid)) {
+                    && !isFlightMountRider(maid) && !isVehicleMountRider(maid)) {
                 // 只有两个空袭任务、扫帚任务，以及【实测七百三十】被指挥棒绑在**飞行坐骑**
-                // （直升机/固定翼）上的女仆走本索敌器，其它任务不受影响；顺手清掉残留
+                // （直升机/固定翼）上、【实测七百三十八】绑在任何**卓越前线载具**（含地面车/坦克）
+                // 上的女仆走本索敌器，其它任务不受影响；顺手清掉残留
                 // （切走任务时不该继续抱着旧目标，否则她切回地面任务后我们还会往 brain 里写空战目标）
                 LOCKED.remove(id);
                 NEXT_SCAN.remove(id);
@@ -282,6 +283,31 @@ public final class FlightTargeting {
             }
             net.minecraft.world.entity.Entity v = maid.getVehicle();
             return v != null && MaidMountCompat.isFlyingVehicle(v);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百三十八】她是不是"被骑乘指挥棒绑在一只**卓越前线载具**上"的女仆——飞行与地面
+     * 都算。
+     *
+     * <p>玩家原话：「女仆在骑乘陆地载具的时候……面对敌人的时候，主人坐上车以后，车还是一动不动，
+     * 就很难绷了。能不能在接敌后也采用直升机/扫帚那种绕圈的方式呢？」——地面载具接敌那一档
+     * （{@code RideBindManager} 里新加的）同样需要"发现 50 格"这套索敌，否则她只能看见 TLM
+     * 那条 16/8 格援护半径里的敌人，绕圈半径才 2.5 格却"发现不了"几格外的目标。
+     *
+     * <p>判据：指挥棒绑着 + 骑的是卓越前线载具（{@code Kind.VEHICLE}）。原版兽不在此列（它们走
+     * TLM 自己那条链，历来如此）；冰火传说的龙是"悬空鞍位"、她不是乘客，{@code getVehicle()} 为
+     * null，天然落不进来。
+     */
+    private static boolean isVehicleMountRider(EntityMaid maid) {
+        try {
+            if (maid == null || !MaidRideKit.isBatonBound(maid)) {
+                return false;
+            }
+            net.minecraft.world.entity.Entity v = maid.getVehicle();
+            return v != null && MaidMountCompat.kindOf(v) == MaidMountCompat.Kind.VEHICLE;
         } catch (Throwable ignored) {
             return false;
         }
