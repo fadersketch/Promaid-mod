@@ -385,53 +385,6 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
-    /**
-     * 【实测七百五十二·点2】好感度升阶 → **按比例补血**，别让"升阶"变成"掉血比率"。
-     *
-     * <p>玩家原话：「明明女仆还剩下一大半的血，但还是很容易触发：情况不妙，我小心周旋。……
-     * 可能是因为女仆好感度上升加了血导致的。」——根因就是这条：TLM 的
-     * {@code FavorabilityManager.add()} 在升阶时只 {@code health.setBaseValue(新上限)}，
-     * **不补当前血**（只做"当前血 > 新上限"时的向下钳制）。于是满血 40/40 升到 3 阶的瞬间
-     * 变成 40/80 = 50%——她一滴血没掉，服务端血量比率却真的腰斩了。本模组的自保按
-     * {@code getHealth()/getMaxHealth() < enterRatio(0.3)} 进场，再挨两下就跌破 30%，
-     * 而玩家看着血条"还剩一大半"。
-     *
-     * <p>修法：监听 TLM 升阶事件，按**新旧上限的比例**把当前血等比抬上去（保留血量比率），
-     * 让升阶是纯增益、不再把血线悄悄推向自保门槛。降阶（{@code reduceWithoutLevel}）不动——
-     * 那本来就该掉上限，钳制逻辑交给 TLM。无主女仆不干预（与本模组一致的边界）。
-     */
-    @net.neoforged.bus.api.SubscribeEvent
-    public static void onFavorabilityLevelUpHeal(
-            com.github.tartaricacid.touhoulittlemaid.api.event.MaidFavorabilityLevelChangeEvent event) {
-        try {
-            EntityMaid maid = event.getMaid();
-            if (!com.maidsmart.tool.MaidScope.owned(maid) || maid.level().isClientSide()) {
-                return;
-            }
-            if (event.getNewLevel() <= event.getOldLevel()) {
-                return; // 只补"升阶"；降阶由 TLM 自己钳制
-            }
-            var fav = maid.getFavorabilityManager();
-            if (fav == null) {
-                return;
-            }
-            int oldHp = fav.getHealthByLevel(event.getOldLevel());
-            int newHp = fav.getHealthByLevel(event.getNewLevel());
-            // 雷击 +20 的加成对新旧上限是**同一个常量**，约分时抵消——不读它也不影响比例
-            if (oldHp <= 0 || newHp <= oldHp) {
-                return;
-            }
-            float cur = maid.getHealth();
-            float max = maid.getMaxHealth();
-            // 只在"确实升了上限"时补；按比率等比抬血，封顶到新上限
-            float healed = Math.min(max, cur * ((float) newHp / (float) oldHp));
-            if (healed > cur) {
-                maid.setHealth(healed);
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
     /** v1.5.136：公开查询 5 秒内最近攻击过女仆的存活生物（smart_attack 工具用） */
     public static LivingEntity recentAttacker(EntityMaid maid) {
         AttackerRecord rec = LAST_ATTACKERS.get(maid.getUUID());
@@ -1208,7 +1161,17 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         // 危险 → 清导航/寻路目标/速度，任何来源都动不了她（危险时例外：岩浆/着火
         // 必须站起来逃命，不锁；v1.5.213：坐下受伤会立刻站起来，站起来后自然
         // 不再走这个判定——锁只作用于"安然坐着"的状态）
-        boolean sitting = maid.isMaidInSittingPose();
+        //
+        // 【实测七百五十五：骑乘女仆**不吃这把锁**】这把锁的本意是"玩家按她坐下 =
+        // 让她待着别动"。可她**骑在坐骑上**时的坐姿**不是玩家下的指令**，是**我们自己
+        // 每拍替她压上去的**（实测七百二十五 setSitting，为了让她用坐姿模型贴鞍）。
+        // 于是这把锁会**每拍把她的导航 stop() 掉**（{@code PathNavigation.stop()} 只
+        // 清 {@code path} → {@code isDone()} 为真 → 读不到目标点），她的战斗走位再也
+        // 活不过一拍——正是「骑上马之后不会用迂回走位」，也是 749~754 那几层补丁怎么
+        // 补都不对的总根源（它们读的就是这条导航）。这里把骑乘女仆排除在锁外：
+        // 她的坐姿由骑乘链路负责，移动由她自己的导航负责，两者互不干扰。
+        boolean sitting = maid.isMaidInSittingPose()
+                && !com.maidsmart.combat.RideBindManager.isRideRider(maid);
         if (sitting && !danger) {
             maid.getBrain().eraseMemory(MemoryModuleType.WALK_TARGET); // 清 WALK_TARGET
             maid.getNavigation().stop();                          // navigation.stop()

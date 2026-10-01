@@ -1919,6 +1919,38 @@ public final class RideBindManager {
                     MaidAirCombat.clear(maid);
                 }
             }
+            // 【实测七百五十五】陆地坐骑（原版马/驴/骡/骆驼，以及任何**别的模组**的可骑乘
+            // Mob）**不再由我们写第二套移动逻辑**——直接换成**她自己的移动逻辑**。
+            //
+            // 玩家原话：「如果女仆骑上了陆地坐骑，那么我们不需要再额外写一套移动逻辑，
+            // 直接换成女仆自己的移动逻辑就行了。这样子跟随和作战等各方面就会自然同步。
+            // 当然，卓越前线和冰火传说的就不要动了。那两个算特殊位置。」
+            //
+            // 【为什么"她自己的移动逻辑"能用】她**是乘客**，但她自己的大脑与寻路**照常每拍跑**
+            // （反编译实证：{@code EntityMaid.serverAiStep} 不因乘客身份停 brain；乘客的
+            // {@code GroundPathNavigation.canUpdatePath()} 反而因为 {@code isPassenger()} 返回 true
+            // 而**照样建路**；{@code LivingEntity.aiStep} 也无条件走 {@code travel()}）。所以她的
+            // 战斗走位（单兵战术 core 230 直连导航）本来就一直在产出位移——只是位移被
+            // rideTick 的 positionRider 抹掉、只剩"意图"。我们这里做的就是**把她的位移意图
+            // 原样转给坐骑**，而不是自己去算目标点。
+            //
+            // 【为什么 749~754 那几层要在这里让开】那几层（模式分流 / 按坐标猜"这条是不是跟随" /
+            // 停车带 / 转向主人）全是为了"替她决定去哪"而写的——正是玩家说的"额外写的一套
+            // 移动逻辑"。749~753 反复在它们之间打补丁、每补一次就换一个地方出错。这一档直接
+            // 不经过它们：**她往哪走，坐骑就往哪走**，跟随与作战走的是同一条通道，天然同步。
+            //
+            // 【跟随时"她往哪走"从哪来】TLM 自己的跟随（{@code MaidFollowOwnerTask}）对**乘客**
+            // 是关的（{@code EntityMaid.canBrainMoving()} 里那条 {@code !isPassenger()}，反编译
+            // 实证），平时没人往她的导航写目标。所以这一档在**没有攻击目标**时，按**与 TLM 跟随
+            // 相同的语义**把"主人"写进**她自己的导航**（不是写进坐骑）——之后就跟战斗走位一样，
+            // 由她的导航 → 她的 MoveControl → 她的位移 → 坐骑，全程只有她这一条逻辑。
+            //
+            // 卓越前线载具（{@code Kind.VEHICLE}）与冰火传说龙（{@code Kind.DRAGON}）在
+            // {@code kindOf} 里不是 {@code null}，一个字节都不进这一档，走上面的原路。
+            if (MaidMountCompat.kindOf(mount) == null) {
+                driveLandMount(maid, mount, owner);
+                return;
+            }
             // 【实测七百四十九·点1：默认档 = 跟着主人走，够近就停】
             // 玩家原话：「我发现最新版本女仆在骑乘马匹的时候，对于主人的寻路有问题。总是喜欢乱窜，
             // 明明这是一个旧版本解决的问题，但为什么在新版本复发了呢？要求是平时马头朝着主人移动
@@ -2044,6 +2076,89 @@ public final class RideBindManager {
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百五十五】陆地坐骑：**不再自己算移动，直接转达她自己的移动逻辑**。
+     *
+     * <h2>玩家原话</h2>
+     * 「如果女仆骑上了陆地坐骑，那么我们不需要再额外写一套移动逻辑，直接换成女仆自己的移动
+     *  逻辑就行了。这样子跟随和作战等各方面就会自然同步。当然，卓越前线和冰火传说的就不要
+     *  动了。那两个算特殊位置。」
+     *
+     * <h2>这条链为什么成立（全部反编译实证）</h2>
+     * 她**是乘客**，但她自己的大脑与寻路**照常每拍跑**：
+     * <ul>
+     *   <li>{@code EntityMaid.serverAiStep} 不因乘客身份停 brain；</li>
+     *   <li>乘客的 {@code GroundPathNavigation.canUpdatePath()} 因为 {@code isPassenger()}
+     *       返回 true 而照样建路（{@code onGround() || canFloat() || isPassenger()}）；</li>
+     *   <li>{@code LivingEntity.aiStep} 无条件走 {@code travel()}。</li>
+     * </ul>
+     * 也就是说**她的位移意图一直在产出**，只是被 {@code Entity.rideTick} 里的
+     * {@code positionRider} 抹掉（她人被按在鞍位上）。所以"换成她自己的移动逻辑"= 把她的
+     * 位移意图**原样转给坐骑**，而不是我们另算一个目标点。
+     *
+     * <h2>跟随时她往哪走</h2>
+     * TLM 的跟随（{@code MaidFollowOwnerTask}）对**乘客**是关的（{@code canBrainMoving()}
+     * 里 {@code !isPassenger()} 那条，反编译实证），平时没人往她的导航写目标。所以这里在没有
+     * 攻击目标时，按**与 TLM 跟随相同的语义**把"主人"写进**她自己的导航**——之后就和接敌走位
+     * 完全同路：她的导航 → 她的 MoveControl → 她的位移 → 坐骑。全程只有她这一条逻辑。
+     *
+     * <h2>与 749~754 的关系</h2>
+     * 那几层（模式分流 / 按坐标猜"这条是不是跟随" / 停车带 / 停下转向主人）都是"替她决定去哪"
+     * 的补丁，反复打补丁反复出新问题。这一档**完全不经过它们**——她往哪走坐骑就往哪走。
+     *
+     * <p>卓越前线载具与冰火传说龙由调用方挡在门外（{@code kindOf != null}），不进本方法。
+     */
+    private static void driveLandMount(EntityMaid maid, Entity mount, ServerPlayer owner) {
+        try {
+            if (!(maid instanceof net.minecraft.world.entity.Mob)) {
+                return; // 两条腿的坐骑都该是 Mob；不是就交还原版
+            }
+            net.minecraft.world.entity.Mob mob = (net.minecraft.world.entity.Mob) maid;
+            boolean fighting = targetOf(maid) != null;
+            if (!fighting) {
+                // 没在接敌：TLM 的跟随对**乘客**是关的（见方法注释），所以按**同一条语义**
+                // 把"回到主人身边"写进**她自己的导航**——不是写给坐骑。够近就停，
+                // 停车距离用 TLM 跟随自己的 stopDistance（2 格），不再有我们自造的 followDist。
+                if (owner != null && horizontalDist(mount, owner) > LANDFOLLOW_STOP) {
+                    mob.m_21573_().m_26519_(owner.m_20185_(), owner.m_20186_(), owner.m_20189_(), 1.0);
+                } else {
+                    mob.m_21573_().m_26573_();
+                }
+            }
+            // 接敌时**什么都不写**：她的战斗走位（单兵战术 core 230 的直连导航）每拍自己往
+            // 她的导航里写目标，我们插手只会盖掉它——753/754 反复栽的就是这一处。
+            //
+            // ── 把**她自己这一拍算出来的移动输出**原样转给坐骑 ──
+            // 她自己的移动栈是「寻路（{@code PathNavigation.tick}）→ 写操纵层
+            // {@code MoveControl.setWantedPosition}（下一个路径节点）→ {@code MoveControl.tick}
+            // 落成朝向+前进量」。我们**不重算任何路径**，只把这条链的**输出**
+            // （她的操纵层里那个"要去的位置"）转给坐骑——坐骑再照自己的寻路走过去。
+            // 这样她绕障碍走的路、她的速度、她接敌的迂回，全都是**她原来那套**。
+            //
+            // 为什么不用 {@code m_24995_()}（hasWanted）当开关：{@code MoveControl.tick()} 每拍会把
+            // Operation 消费成 WAIT（坐标仍留着），所以它在我们的时序里恒为 false——用它当
+            // 开关会让坐骑**每拍都停一下**。真正的"她这一拍有没有想去的地方"只有一处权威：
+            // 她的寻路**完了没有**（{@code m_26571_} / isDone）；未完成 = 有目的地，坐标就是她刚算的。
+            if (mob.m_21573_().m_26571_()) {
+                MaidRideKit.stopNavigation(mount); // 她到了/停住 → 坐骑也停
+                return;
+            }
+            double wx = mob.m_21566_().m_25000_();
+            double wy = mob.m_21566_().m_25001_();
+            double wz = mob.m_21566_().m_25002_();
+            if (!Double.isFinite(wx) || !Double.isFinite(wy) || !Double.isFinite(wz)) {
+                MaidRideKit.stopNavigation(mount);
+                return;
+            }
+            MaidRideKit.feedNavigation(mount, new Vec3(wx, wy, wz),
+                    MaidRideKit.speedModifierFor(mount, maid), maid);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百五十五】陆地坐骑跟随的停车距离（格）：与 TLM 跟随自己的 stopDistance（2）同口径。 */
+    private static final double LANDFOLLOW_STOP = 2.0;
 
     /**
      * 【实测七百二十四·点2】停车距离（格）：普通坐骑沿用 {@code STOP_SLACK=1.5}；
