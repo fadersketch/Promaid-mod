@@ -390,15 +390,31 @@ public final class MaidRideKit {
      * @return 修正后的目标点；不需要修正 / 出任何异常一律原样返回 {@code aim}
      */
     public static Vec3 separateAim(Vec3 aim, double phase, java.util.List<Vec3> peers, boolean combat) {
+        return separateAim(aim, phase, peers,
+                combat ? SEP_R_COMBAT : SEP_R,
+                combat ? SEP_MAX_COMBAT : SEP_MAX);
+    }
+
+    /**
+     * 【实测七百五十八】同一个算式的**可调间距档**——给**卓越前线载具**（坦克/装甲车这类大车）用。
+     *
+     * <p>为什么必须能调：{@link #SEP_R}（2 格）/ {@link #SEP_R_COMBAT}（4 格）是 749 按**扫帚与
+     * 人形**定的间距；对一辆车体 4 格宽的坦克，2 格间距等于"让位让了个寂寞"——车与车照样叠在
+     * 一起（玩家实测：「多个女仆乘坐多个坦克，仍然会出现严重的叠罗汉情况」）。载具那边把间距
+     * 放大到"车体全宽 + 1.5 格缝"、封顶按比例抬起来，再走本档；**算式仍然只有这一处**。
+     *
+     * @param sepR   要求的水平间距（格）；&le;0 视为"不修正"
+     * @param sepMax 一次让位的位移封顶（格）
+     */
+    public static Vec3 separateAim(Vec3 aim, double phase, java.util.List<Vec3> peers,
+                                   double sepR, double sepMax) {
         if (aim == null) {
             return null;
         }
         try {
-            if (peers == null || peers.isEmpty()) {
+            if (peers == null || peers.isEmpty() || sepR <= 0.0) {
                 return aim;
             }
-            final double sepR = combat ? SEP_R_COMBAT : SEP_R;
-            final double sepMax = combat ? SEP_MAX_COMBAT : SEP_MAX;
             double ox = 0.0;
             double oz = 0.0;
             for (Vec3 p : peers) {
