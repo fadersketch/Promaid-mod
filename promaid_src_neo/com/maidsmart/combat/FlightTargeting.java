@@ -342,7 +342,10 @@ public final class FlightTargeting {
             if (FriendlyFireGuard.isFriendly(maid, e)) {
                 return false;
             }
-            if (!maid.canAttack(e)) {
+            // 【实测七百五十七】改用 LiveThreat（带时效）：TLM 的 canAttack 对中立生物是**永久记仇**
+            // ——主人很久以前打过一下的马，永远过 canAttack，50 格索敌就会永远把它当猎物
+            // （玩家实测：车上的女仆对着自家的马开炮）。详见 {@link LiveThreat}。
+            if (!LiveThreat.live(maid, e)) {
                 return false;
             }
             if (!maid.isWithinRestriction(e.blockPosition())) {
@@ -386,8 +389,9 @@ public final class FlightTargeting {
                 if (FriendlyFireGuard.isFriendly(maid, e)) {
                     continue; // 主人 / 同主女仆 / 友军
                 }
-                if (!maid.canAttack(e)) {
-                    continue; // 类型 / 记仇口径（与 TLM IAttackTask.canAttack 一致）
+                // 【实测七百五十七】类型/记仇口径改走 LiveThreat（带 5 秒窗口）——见类内注释。
+                if (!LiveThreat.live(maid, e)) {
+                    continue;
                 }
                 if (!maid.isWithinRestriction(e.blockPosition())) {
                     continue; // 活动范围

@@ -4136,6 +4136,13 @@ public final class MaidMountCompat {
             // **没有 → 两处都显式清空**（旧版只在有目标时才写，于是她脱战后车还在对着
             // 上一个目标开火——"到底什么时候才会让载具攻击"就不确定了）。
             LivingEntity target = targetOf(maid);
+            // 【实测七百五十七】开火闸：只打"活敌人"（见 {@link LiveThreat}）——TLM 的 canAttack
+            // 对中立生物是**永久记仇**（原版"最近打过谁"的字段一旦写上就不清空），于是主人很久
+            // 以前打过一下的马永远合法。玩家实测：车上的女仆对着场上的马开炮
+            // （日志 `模组坐骑·炮位 炮塔目标=horse` / `模组坐骑·开火 → horse`）。
+            if (target != null && !LiveThreat.live(maid, target)) {
+                target = null;
+            }
             if (k == Kind.VEHICLE) {
                 // 【实测七百四十一·点2b/点3】这一拍由谁开火——**判据只有一条**：
                 // 该用的那门炮（gunNameFor）是不是**就在她坐的那一座**上。
