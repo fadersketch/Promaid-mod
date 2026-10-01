@@ -58,11 +58,14 @@ public final class MaidShellHoming {
     private static final class Track {
         final UUID target;
         final UUID maid;
+        /** 这一发最多纠向多少拍（普通弹 {@link #MAX_TICKS_PER_SHELL}；制导弹 {@link #MISSILE_LOCK_TICKS}）。 */
+        final int maxTicks;
         int ticks;
 
-        Track(UUID target, UUID maid) {
+        Track(UUID target, UUID maid, int maxTicks) {
             this.target = target;
             this.maid = maid;
+            this.maxTicks = maxTicks;
         }
     }
 
@@ -74,6 +77,24 @@ public final class MaidShellHoming {
 
     /** 每发最多纠向的拍数（≈3 秒）。超了就放手（它可能是绕圈的火箭弹）。 */
     private static final int MAX_TICKS_PER_SHELL = 60;
+
+    /**
+     * 【实测七百五十三·点2】制导弹（类名含 {@code Missile}）的纠向窗口：**4 拍 = 0.2 秒**。
+     *
+     * <h2>玩家原话</h2>
+     * 「1.20.1 女仆在使用飞机上导弹武器的时候，导弹会出现乱飞的情况，我觉得最好还是跟投掷 TNT
+     * 一个链路，只会盯着敌人飞 0.2 秒（TNT 是 0.5 秒，但是考虑到导弹的飞行速度很快，所以照搬时
+     * 削成 0.2），不会一直盯着敌人飞行。」（1.21.1 侧同一处同口径，两树镜像。）
+     *
+     * <h2>为什么"不碰制导弹"那条旧边界要改</h2>
+     * 旧版这一档**跳过**类名含 {@code Missile} 的弹体（理由：它自己带寻的，插手会打架）。但那种
+     * 寻的是**它自己的目标来源**（发射时的锁定/朝向前方），与我们"朝她此刻的敌人"并不是同一个
+     * 目标——于是导弹一离架就按自己那套锁一个别的方向，玩家看到的就是"乱飞"。
+     * 现在改成与投掷 TNT **同一条链路**：接管后**只在前 {@code MISSILE_LOCK_TICKS} 拍**
+     * （0.2 秒）把它掰向敌人，之后立刻撒手、完全交还它自己的制导——既不"一直盯着敌人飞"
+     * （那会让它对着一动不动的点直线冲、失去末端机动），也治了开头那一下乱飞。
+     */
+    private static final int MISSILE_LOCK_TICKS = 4;
 
     /** 每拍最多转多少度（限速转向：转弯半径像样、不会瞬间掉头）。 */
     private static final double TURN_DEG_PER_TICK = 25.0;
@@ -151,9 +172,10 @@ public final class MaidShellHoming {
                     if (!cn.startsWith(SWB_PKG)) {
                         continue; // 只管卓越前线的弹体
                     }
-                    if (cn.contains("Missile")) {
-                        continue; // 制导弹有自己的寻的，别插手
-                    }
+                    // 【实测七百五十三·点2】制导弹**不再跳过**：与投掷 TNT 同一链路，接管后只纠
+                    // {@link #MISSILE_LOCK_TICKS} 拍（0.2 秒）就撒手，交还它自己的末端制导。
+                    // 旧版整条跳过，于是它按自己那套锁定乱飞（见 MISSILE_LOCK_TICKS 注释）。
+                    boolean missile = cn.contains("Missile");
                     UUID key = en.m_20148_();
                     if (TRACKED.containsKey(key)) {
                         continue; // 已经认领过
@@ -166,8 +188,10 @@ public final class MaidShellHoming {
                     if (target == null) {
                         continue; // 不是"我们刚开火的那只女仆"打的
                     }
-                    TRACKED.put(key, new Track(target, owner.m_20148_()));
-                    log(owner.m_20148_(), "接管一发炮弹 → " + describe(lvl, target));
+                    TRACKED.put(key, new Track(target, owner.m_20148_(),
+                            missile ? MISSILE_LOCK_TICKS : MAX_TICKS_PER_SHELL));
+                    log(owner.m_20148_(), (missile ? "接管一枚导弹（锁定 0.2 秒）→ " : "接管一发炮弹 → ")
+                            + describe(lvl, target));
                 }
             }
         } catch (Throwable ignored) {
@@ -184,8 +208,8 @@ public final class MaidShellHoming {
             if (t == null) {
                 return false;
             }
-            if (++t.ticks > MAX_TICKS_PER_SHELL) {
-                return false; // 超时放手（它可能在绕圈，别永久接管）
+            if (++t.ticks > t.maxTicks) {
+                return false; // 超时放手（普通弹可能是绕圈的火箭弹；制导弹交还它自己的末端制导）
             }
             Entity shell = findEntity(server, shellId);
             if (shell == null || !shell.m_6084_() || shell.m_213877_()) {

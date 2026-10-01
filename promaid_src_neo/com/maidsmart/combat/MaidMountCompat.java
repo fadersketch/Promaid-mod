@@ -1465,10 +1465,25 @@ public final class MaidMountCompat {
                 }
             }
             // 车头自己按有限速率朝目标转（补上引擎那一项被 steeringSpeed 卡住的速率）
+            //
+            // 【实测七百五十三·点1】这一档原来**漏写 setServerYaw**——而本类别处（{@link #forceCarHeading} /
+            // {@link #forceHeadingOnto} / 飞行档）直写机头 yaw 时都成对写它，因为 SWB 的客户端同步
+            // （{@code handleClientSync}）会按 {@code serverYaw} 把车身 yaw 往回 lerp：只写
+            // {@code setYRot} 的那一下下一拍就被拽回去，而轮椅引擎又**只认**"乘客头朝向 − 车身 yaw"
+            // 这个差值——车身 yaw 被拽回 = 差值归零 = 引擎不再转向，车就走两步顶住、看着就是
+            // 玩家说的"坐上就动弹不得"（1.20.1 实机复现）。补上之后与上面三处逐字同口径；
+            // 同时按 {@link #forceCarHeading} 的写法过一遍 {@code wrapDegrees}，免得 yaw 一直无界累加。
             try {
                 float step = (float) Math.max(-HEAD_STEER_MAX_DEG_PER_TICK,
                         Math.min(HEAD_STEER_MAX_DEG_PER_TICK, err));
-                mount.setYRot(mount.getYRot() + step);
+                float yaw = wrapDegrees(mount.getYRot() + step);
+                mount.setYRot(yaw);
+                if (mSetServerYaw != null) {
+                    try {
+                        mSetServerYaw.invoke(mount, yaw);
+                    } catch (Throwable ignored) {
+                    }
+                }
             } catch (Throwable ignored) {
             }
         }

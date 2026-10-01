@@ -1833,6 +1833,21 @@ public final class RideBindManager {
             }
             // ① 模式下的走位意图（1:1 还原）——只在"确实有模式在指挥"时才认
             Vec3 target = modeMove ? MaidRideKit.ownNavigationTarget(maid) : null;
+            // 【实测七百五十三·点3】① 也要过**同一道**"这是跟随、不是任务走位"的筛子。
+            //
+            // 玩家原话：「女仆在骑乘陆地载具的时候战斗会进行移动，但是平时不会跟随主人。」
+            // ——战斗时 `fighting=true`，① 拿到的是接敌走位（照常工作）；**平时**她多半处在一个
+            // 非空闲任务里（战斗任务的待机段 / 农田 / 挖矿），`modeMove` 于是为真，而 751 只在
+            // **②**（brain 的 WALK_TARGET）上做了"指着主人那条不算任务"的剔除，**① 没做**。
+            // 她**是乘客**、位移被 rideTick 吃掉，TLM 的跟随与 MoveToTargetSink 仍然每拍在她自己的
+            // `PathNavigation` 上留着一条**永远走不完**的路（乘客走不动 → `isDone()` 恒 false →
+            // `getTargetPos()` 恒非空），于是 ① 永远返回一个"其实是在跟主人/早已过时"的点，
+            // 座骑就朝着它蹭过去、然后站住——**永远走不到下面 ④ 的"跟着主人"那一档**。
+            // 判据与 ② 那条完全同源（同一句玩家要求、同一个"跟随 ≠ 任务"的口径），只是 ① 拿到的
+            // 是**坐标**不是 tracker，所以按"是不是就落在主人身上"来认（见 navTargetIsOwner）。
+            if (target != null && navTargetIsOwner(owner, target)) {
+                target = null; // 那不是"这个模式要去的地方"，是跟随 → 落到 ④
+            }
             // ② 她的走位记忆（任务/跟随写在这里）——同上，只属于"模式"那一档
             if (target == null && modeMove) {
                 try {
@@ -2169,6 +2184,37 @@ public final class RideBindManager {
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百五十三·点3】① 那条走位点是不是"其实落在主人身上"——与
+     * {@link #walkTargetIsOwner} **同一条口径**（跟随 ≠ 任务走位），只是那一头拿到的是
+     * {@code WalkTarget}／{@code EntityTracker}（能直接问实体），
+     * 这一头是 {@link MaidRideKit#ownNavigationTarget} 给的**坐标**，所以按"是不是就落在
+     * 主人身上"来认：水平距离在 {@link #NAV_OWNER_EPS} 格以内即视为"跟随着主人"。
+     *
+     * <p>为什么①也必须过这道筛子：她**是乘客**、位移被 {@code rideTick} 吃掉，TLM 的跟随
+     * （{@code MaidFollowOwnerTask}）与 {@code MoveToTargetSink} 会**每拍**在她自己的
+     * {@code PathNavigation} 上留一条走不完的路（乘客走不动 → {@code isDone()} 恒 false →
+     * {@code getTargetPos()} 恒非空）。751 只在②上剔了"指着主人那条"，① 就成了没堵上的后门：
+     * 非空闲任务里（战斗任务的待机段等）座骑永远朝那个点蹭、走不到 ④ 的"跟着主人"。
+     */
+    private static boolean navTargetIsOwner(LivingEntity owner, Vec3 navTarget) {
+        try {
+            if (owner == null || navTarget == null) {
+                return false;
+            }
+            double dx = navTarget.x - owner.getX();
+            double dz = navTarget.z - owner.getZ();
+            return Math.sqrt(dx * dx + dz * dz) <= NAV_OWNER_EPS;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** "① 的走位点落在主人身上"的判定容差（格）：她自己那条导航的走位点本来就是**方块中心**
+     *  （{@code ownNavigationTarget} 取 {@code +0.5}），主人站的那一格与它最多差半格多，
+     *  所以给 1.5 格——够容下取整误差，又远小于任何真实任务点（农田/矿点都在数格开外）。 */
+    private static final double NAV_OWNER_EPS = 1.5;
 
     /**
      * 【实测七百五十一】这条走位记忆是不是"指着主人"——TLM 跟随（{@code MaidFollowOwnerTask}）
