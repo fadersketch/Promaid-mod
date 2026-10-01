@@ -56,14 +56,46 @@ public abstract class MaidSweepMixin {
      * 跳劈不横扫——空中攻击（跳跃/下落中）保持单体暴击（要求，玩家移动攻击
      * 也不触发横扫）。v1.5.174：落地后的"禁横扫平A"窗口已删除（反馈：平A没意义
      * ——跳劈空档由 TLM 正常攻击穿插横扫补伤害，不再有单独的平A状态）。
+     *
+     * <p>【v1.3.0(beta) 实测七百五十九·点1：骑乘时也不取消（玩家反馈"骑在坐骑上
+     * 没办法触发横扫之刃"）】。
+     *
+     * <p><b>根因</b>：这一档原来是"只看 {@code !onGround()} 就取消"，而**坐在任何坐骑上
+     * 她都被抬离地面**（坐骑每拍在动、她的 Y 跟着坐骑漂），于是 {@code onGround()} 长期为
+     * false —— 她骑上坐骑之后**每一次平A的横扫都被这一句掐掉**，看起来就是"骑乘时永远
+     * 不触发横扫之刃"。玩家自己骑着坐骑挥剑是照常横扫的（原版对骑乘没有任何这一档），
+     * 所以这条判据本身就是错的。
+     *
+     * <p><b>修法（判据收窄到"真的只有跳劈那一种空中"）</b>：仍在空中时，若她在
+     * ① 是真乘客（{@code isPassenger()}：原版坐骑 / 卓越前线载具 / 扫帚 / 船 / 矿车），或
+     * ② 挂在冰火传说龙的**悬空鞍位**上（{@link com.maidsmart.combat.RideBindManager#isDragonChairRider}
+     * ——龙那条她**不是乘客**，见 723 降级方案），一律**不取消**，照常横扫。
+     * 只有"她自己跳起来（跳劈）/从坎上掉下来"这种真·空中才保持取消，与 v1.5.174 的口径一字不差。
+     *
+     * <p>安全性：TLM 的 {@code doSweepHurt} 伤害循环里对**每个**受害者都还要过
+     * {@code canAttack} 与 {@code canAttackType}，所以放松这一档不可能打到友军/坐骑本身
+     * （坐骑是 {@code isAlliedTo} 与 canAttack 双重挡住的）。
      */
     @Inject(method = "doSweepHurt", at = @At("HEAD"), cancellable = true)
     private void maidsmart$noSweepInAir(Entity target, CallbackInfo ci) {
-        if (!com.maidsmart.tool.MaidScope.owned((EntityMaid) (Object) this)) {
+        EntityMaid self = (EntityMaid) (Object) this;
+        if (!com.maidsmart.tool.MaidScope.owned(self)) {
             return; // v1.2.2 实测六百：无主女仆不干预
         }
-        if (!((EntityMaid) (Object) this).onGround()) {
-            ci.cancel();
+        if (self.onGround()) {
+            return; // 在地面 → 照常横扫
         }
+        // ① 骑乘中（真乘客）——她不"跳劈"，只是被坐骑抬离了地面
+        if (self.isPassenger()) {
+            return;
+        }
+        // ② 冰火传说龙的悬空鞍位（她不是乘客，走的是 723 的降级方案）
+        try {
+            if (com.maidsmart.combat.RideBindManager.isDragonChairRider(self)) {
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+        ci.cancel(); // 真·空中（跳劈/坠落）→ 保持原口径
     }
 }

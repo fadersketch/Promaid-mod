@@ -1039,6 +1039,18 @@ public final class MaidMountCompat {
                 le.f_20883_ = dyaw;
             }
             maid.m_5616_(dyaw);
+            // 【实测七百五十九·点3】俯仰也镜像——这是"真骑手"有、我们原来漏掉的一半。
+            //
+            // 依据（javap 实证）：冰火传说给**控制乘客**摆位时，除偏航外连 xRot 一起同步
+            // （1.20.1 {@code EntityDragonBase.m_19956_} 里 {@code setXRot(passenger.getXRot())}；
+            // 1.21.1 {@code positionRider} 同款），也就是说"骑在龙上的那个人"的**俯仰是跟着龙走的**。
+            // 我们只镜像了 yaw / yBodyRot / yHeadRot，于是龙一俯冲、一抬头，她**直挺挺地杵着**——
+            // 位置对、姿态却是脱开的，"人在龙背上飘"的观感有很大一部分来自这里（玩家原话
+            // 「一旦龙开始飞行和跟随主人的时候，女仆的位置就会发生严重的改变和错乱」）。
+            //
+            // xRotO（上一拍）一起写，是为了让她的**抬头插值**也与龙同源，与上面 yaw 的处理逐字同口径。
+            maid.f_19860_ = dragon.f_19860_;
+            maid.m_146926_(dragon.m_146909_());
             return true;
         } catch (Throwable ignored) {
             return false;
