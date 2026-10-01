@@ -150,6 +150,14 @@ public final class MaidMountCompat {
     private static Method mSetLoiterActive;   // setLoiterActive(boolean)
     private static Method mSetLiftSpeed;      // setLiftSpeed(float)
     private static Method mGetPower;          // getPower()
+    /* 【实测七百六十】电量闸：反编译 VehicleEngineUtils.helicopterEngine:1005-1058 实证——
+     * 载具引擎**自己**有一条"没电就熄火"的闸（{@code energy <= energyCostRate*|power|}
+     * → setPower(power*0.995) + setForwardInputDown(false) + setEngineStart(false)
+     * + setEngineStartOver(false) + 直接返回）。但我们的飞行驱动每拍**直接写 power**
+     * （直升机高度 PD 的 setPower(0.045~0.12)、固定翼点火/loiter），下一拍就把它救活——
+     * 这条闸被绕过了，于是"没电也能一直飞"。这两个反射用来把同一条闸在**写入之前**问一遍。 */
+    private static Method mGetEnergy;         // getEnergy() -> int
+    private static Method mGetMaxEnergy;      // getMaxEnergy() -> int
     /* 【实测七百二十六·点6】女仆自己往载具里装弹：车的枪弹从**车自己的容器**取（反编译
      * ModCapabilities 实证：Capabilities.ItemHandler.ENTITY → getInventory()），她背包里的
      * 子弹车看不见。这三组反射用来"读出这车要哪种子弹 + 把子弹从她背包搬进车容器"。 */
@@ -372,6 +380,15 @@ public final class MaidMountCompat {
                 mGetPower = cVehicle.getMethod("getPower");
             } catch (Throwable ignored) {
                 mGetPower = null;
+            }
+            // 【实测七百六十】电量闸的两个读数（javap 实证 VehicleEntity 上都有；
+            // 各自单独 try——拿不到 = 不启用这道闸，绝不让它影响驾驶本身）。
+            try {
+                mGetEnergy = cVehicle.getMethod("getEnergy");
+                mGetMaxEnergy = cVehicle.getMethod("getMaxEnergy");
+            } catch (Throwable ignored) {
+                mGetEnergy = null;
+                mGetMaxEnergy = null;
             }
             // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
             // 每一环各自 try（缺一环只是"装弹"这一档不生效，不影响驾驶/开火）。
@@ -1779,10 +1796,109 @@ public final class MaidMountCompat {
      *
      * <p>写不出鼠标通道（反射失败）→ 退回地面那套位掩码（一个字节不变）。
      */
+    /**
+     * 【实测七百六十·电量闸】这架载具是不是"没电了"——判据**逐字照抄引擎自己那一条**
+     * （反编译 {@code VehicleEngineUtils.helicopterEngine:1005-1058} 实证）：
+     *
+     * <pre>
+     *   if (getEnergy() &lt;= energyCostRate * |getPower()|) {
+     *       setPower(getPower() * 0.995f);
+     *       setForwardInputDown(false); setBackInputDown(false);
+     *       setEngineStart(false); setEngineStartOver(false);   // 熄火
+     *   }
+     * </pre>
+     *
+     * <p><b>为什么需要我们这一道</b>：引擎那条闸是"每拍自己检查"，可我们的飞行驱动
+     * （{@link #driveFlight} 的直升机高度 PD {@code setPower(0.045~0.12)}、固定翼点火
+     * {@code setPower(0.35)} 与 loiter）**每拍直接写 power**——引擎刚把它熄掉，下一拍我们就
+     * 又写回去，等于把这条闸整个绕过。玩家看到的就是「哪怕没有电，女仆仍然可以启动直升机」。
+     *
+     * <p><b>判据</b>：{@code getEnergy() <= 0} = 电量见底，不驱动。引擎那一条还乘了每辆车的
+     * {@code energyCostRate}（在 {@code EngineInfo} 数据里、实体上拿不到），这里取**最保守的
+     * 等价形式**「电量到底才拦」——绝不误伤还有电的车，也绝不会出现"满电被当成没电"。
+     *
+     * <p>{@code hasEnergyStorage} 那条（{@code getMaxEnergy() <= 0} = 这车根本没有能量仓）
+     * 也照抄：没有能量仓的车（船/马车之类）**永不**被这道闸拦，与引擎的
+     * {@code consumeEnergy} 里那句"hasEnergyStorage 为假就只打日志、照常跑"同口径。
+     *
+     * @return true = 没电（不该驱动飞行）；拿不到读数 / 无能量仓 → false（不拦）
+     */
+    private static boolean outOfFuel(Entity mount) {
+        if (mGetEnergy == null || mGetMaxEnergy == null || mount == null) {
+            return false; // 反射拿不到 → 不启用这道闸（绝不能因为探测失败就锁死驾驶）
+        }
+        try {
+            int energy = ((Number) mGetEnergy.invoke(mount)).intValue();
+            int max = ((Number) mGetMaxEnergy.invoke(mount)).intValue();
+            if (max <= 0) {
+                return false; // hasEnergyStorage() == false：这车没有能量仓 → 引擎那套闸本来也不生效
+            }
+            return energy <= 0; // 电量到底 → 与引擎"没电熄火"同口径
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 没电时这一拍的安全动作：清输入位 + 把总距/推力收到底（引擎自己还会按 0.995 继续衰减）。 */
+    private static void brakeVehicleSafely(Entity mount) {
+        try {
+            if (mProcessInput != null) {
+                mProcessInput.invoke(mount, (short) 0); // 清输入位
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (mSetPower != null) {
+                mSetPower.invoke(mount, 0.0f); // 不写 power 引擎就一直"点火中"，写 0 才是松手
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (mSetMouseSpeedX != null) {
+                mSetMouseSpeedX.invoke(mount, 0.0f);
+            }
+            if (mSetMouseSpeedY != null) {
+                mSetMouseSpeedY.invoke(mount, 0.0f);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 电量闸拦下时的留痕（5 秒/车节流），日志搜「载具电量」。 */
+    private static void logFuelBlocked(Entity mount, String eng) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID().toString();
+            Long last = FUEL_LOG_AT.get(key);
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            if (FUEL_LOG_AT.size() > 256) {
+                FUEL_LOG_AT.clear();
+            }
+            FUEL_LOG_AT.put(key, now);
+            com.maidsmart.tool.PromaidLog.log("载具电量", describeKind(mount) + " 引擎=" + eng
+                    + " 电量不足 → 拒绝驱动飞行（与引擎自身那条\u201c没电熄火\u201d闸同口径；"
+                    + "日志搜「载具电量」）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 电量闸留痕节流表（每车 5 秒一条）。 */
+    private static final java.util.Map<String, Long> FUEL_LOG_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     private static boolean driveFlight(Entity mount, Vec3 target, double modifier, String eng,
                                        double dy, double horiz, float err, Entity maid) {
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false; // 探测失败 → 交回地面档
+        }
+        // 【实测七百六十·电量闸】没电就别驱动飞行——见 {@link #outOfFuel} 的说明（同一条引擎闸）。
+        // 放在最前：写 mouse/power 之前先问，否则我们那一写就把引擎自己那条"没电熄火"救活了。
+        if (outOfFuel(mount)) {
+            brakeVehicleSafely(mount);
+            logFuelBlocked(mount, eng);
+            return true; // 这一拍由我们接管（拒绝驱动），地面档也不要再来抢
         }
         try {
             boolean heli = "HELICOPTER".equals(eng);
