@@ -386,6 +386,53 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
         }
     }
 
+    /**
+     * 【实测七百五十二·点2】好感度升阶 → **按比例补血**，别让"升阶"变成"掉血比率"。
+     *
+     * <p>玩家原话：「明明女仆还剩下一大半的血，但还是很容易触发：情况不妙，我小心周旋。……
+     * 可能是因为女仆好感度上升加了血导致的。」——根因就是这条：TLM 的
+     * {@code FavorabilityManager.add()} 在升阶时只 {@code health.m_22100_(新上限)}，
+     * **不补当前血**（只做"当前血 > 新上限"时的向下钳制）。于是满血 40/40 升到 3 阶的瞬间
+     * 变成 40/80 = 50%——她一滴血没掉，服务端血量比率却真的腰斩了。本模组的自保按
+     * {@code m_21223_()/m_21233_() < enterRatio(0.3)} 进场，再挨两下就跌破 30%，
+     * 而玩家看着血条"还剩一大半"。
+     *
+     * <p>修法：监听 TLM 升阶事件，按**新旧上限的比例**把当前血等比抬上去（保留血量比率），
+     * 让升阶是纯增益、不再把血线悄悄推向自保门槛。降阶（{@code reduceWithoutLevel}）不动——
+     * 那本来就该掉上限，钳制逻辑交给 TLM。无主女仆不干预（与本模组一致的边界）。
+     */
+    @net.minecraftforge.eventbus.api.SubscribeEvent
+    public static void onFavorabilityLevelUpHeal(
+            com.github.tartaricacid.touhoulittlemaid.api.event.MaidFavorabilityLevelChangeEvent event) {
+        try {
+            EntityMaid maid = event.getMaid();
+            if (!com.maidsmart.tool.MaidScope.owned(maid) || maid.m_9236_().m_5776_()) {
+                return;
+            }
+            if (event.getNewLevel() <= event.getOldLevel()) {
+                return; // 只补"升阶"；降阶由 TLM 自己钳制
+            }
+            var fav = maid.getFavorabilityManager();
+            if (fav == null) {
+                return;
+            }
+            int oldHp = fav.getHealthByLevel(event.getOldLevel());
+            int newHp = fav.getHealthByLevel(event.getNewLevel());
+            // 雷击 +20 的加成对新旧上限是**同一个常量**，约分时抵消——不读它也不影响比例
+            if (oldHp <= 0 || newHp <= oldHp) {
+                return;
+            }
+            float cur = maid.m_21223_();
+            float max = maid.m_21233_();
+            // 只在"确实升了上限"时补；按比率等比抬血，封顶到新上限
+            float healed = Math.min(max, cur * ((float) newHp / (float) oldHp));
+            if (healed > cur) {
+                maid.m_21153_(healed);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** v1.5.136：公开查询 5 秒内最近攻击过女仆的存活生物（smart_attack 工具用） */
     public static LivingEntity recentAttacker(EntityMaid maid) {
         AttackerRecord rec = LAST_ATTACKERS.get(maid.m_20148_());
