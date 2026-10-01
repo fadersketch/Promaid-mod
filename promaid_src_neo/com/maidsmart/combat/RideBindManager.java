@@ -1801,10 +1801,40 @@ public final class RideBindManager {
                     MaidAirCombat.clear(maid);
                 }
             }
-            // ① 她自己的走路意图（1:1 还原走位）——最优先，与"两条腿"时同源
-            Vec3 target = MaidRideKit.ownNavigationTarget(maid);
-            // ② 她的走位记忆（任务/跟随写在这里）
-            if (target == null) {
+            // 【实测七百四十九·点1：默认档 = 跟着主人走，够近就停】
+            // 玩家原话：「我发现最新版本女仆在骑乘马匹的时候，对于主人的寻路有问题。总是喜欢乱窜，
+            // 明明这是一个旧版本解决的问题，但为什么在新版本复发了呢？要求是平时马头朝着主人移动
+            // 靠近了就停止。其他时候就动用该模式下的运动逻辑。（因为骑的马仍然是陆地载具，跟女仆
+            // 自己在地上走区别不大，所以直接采用女仆的运动逻辑。）」
+            //
+            // 根因：716 立的规矩是「① 她自己的导航目标最优先」，而**她自己的导航目标在"没有模式
+            // 在指挥"时并不为空**——TLM 的跟随（MaidFollowOwnerTask）与她大脑里的 WALK_TARGET
+            // 一直在写，于是坐骑永远在追一个"她自己的走位点"，而不是"主人"。她成了乘客、位移被
+            // rideTick 吃掉，那些走位点又每拍变，坐骑就表现为**乱窜**。
+            //
+            // 新口径（就是玩家这句话的字面）：
+            //   · **她在某个"模式"里**（任务不是 idle：挖矿/伐木/建造/战斗…）→ 那个模式有自己的
+            //     运动逻辑，照旧把它转达给坐骑（下面 ①② 两条，716 的"1:1 还原走位"只在这一档生效）。
+            //   · **没有模式**（idle / 纯跟随）→ 不读她的走位点，直接**朝主人去、够近就停**，
+            //     停下时把马头转向主人（玩家要的"马头朝着主人…靠近了就停止"）。
+            //
+            // 【接敌也算"模式"】她此刻**有攻击目标**时同样走模式档——"骑马远程"的走位（绕圈/拉开）
+            // 本来就在她自己的导航上（724 点5 的口径），归到"跟随主人"会把接敌走位整条抹掉。
+            boolean fighting = targetOf(maid) != null;
+            boolean modeMove = MaidRideKit.hasModeMovement(maid) || fighting;
+            // 【实测七百二十四·点5 保留·实测七百四十九 前移】骑载具时更主动接敌：她此刻没目标就补一次
+            // 索敌评估（像骑马远程一样主动找目标）。**必须在"默认档提前 return"之前跑**——
+            // 旧位置在方法末尾，而 749 给默认档加了"够近就直接 return"，那之后这里就永远到不了，
+            // 749 的"够近就停"会把 724 点5 的主动索敌整个吃掉（坦克停在你身边、再也不去找敌人）。
+            if (mount instanceof net.minecraft.world.entity.Entity
+                    && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
+                    && !fighting) {
+                tryEngageRider(maid);
+            }
+            // ① 模式下的走位意图（1:1 还原）——只在"确实有模式在指挥"时才认
+            Vec3 target = modeMove ? MaidRideKit.ownNavigationTarget(maid) : null;
+            // ② 她的走位记忆（任务/跟随写在这里）——同上，只属于"模式"那一档
+            if (target == null && modeMove) {
                 try {
                     var wt = maid.getBrain().getMemory(
                             net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET);
@@ -1817,32 +1847,36 @@ public final class RideBindManager {
                 } catch (Throwable ignored) {
                 }
             }
-            // ③ 都没有 → 跟主人走（够远才喂）
+            // ③ 都没有 / 本来就没模式 → **默认档：跟着主人**（够远才喂，够近就停 + 转向主人）
             if (target == null) {
                 if (horizontalDist(mount, owner) > MaidRideKit.followDist()) {
                     target = owner.position();
+                } else {
+                    MaidRideKit.stopNavigation(mount);
+                    faceOwner(mount, owner);
+                    return;
                 }
             }
             if (target == null) {
                 MaidRideKit.stopNavigation(mount);
                 return;
             }
+            // 【实测七百四十九·点3】"别叠罗汉"：与扫帚**同一套标准**（MaidRideKit.separateAim）。
+            // 目标点附近有别的"女仆正骑着的坐骑"时，把它朝远离同伴的方向推出去一点。
+            target = separateFromPeers(maid, mount, target, modeMove, fighting);
             // 【实测七百二十四·点2】停车距离按**车体尺寸**：坦克这种大车若还用旧的固定 1.5 格，
             // 等于"顶到主人身上才停"——玩家原话「会直接把主人撞倒。应与主人拉开距离才对」。
             // 模组载具用 stopSlackFor(车体半宽)；并与"跟随距离"取大（别比主人自己设的还近）。
             double slack = stopSlackFor(mount);
             if (horizontalDist(mount, target) <= slack) {
                 MaidRideKit.stopNavigation(mount);
+                // 【实测七百四十九·点1】停下来的那一拍把马头转向主人——玩家要的"马头朝着主人"。
+                faceOwner(mount, owner);
                 return;
             }
             MaidRideKit.feedNavigation(mount, target, mod, maid);
-            // 【实测七百二十四·点5】骑载具时更主动接敌：她此刻没目标就补一次索敌评估
-            // （像骑马远程一样主动找目标），目标一有，下一秒 tickAttack 就会把炮塔 AI 目标写下去。
-            if (mount instanceof net.minecraft.world.entity.Entity
-                    && MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE
-                    && targetOf(maid) == null) {
-                tryEngageRider(maid);
-            }
+            // 【实测七百二十四·点5】主动索敌已前移到本方法开头（见那里"749 前移"的说明）——
+            // 749 给默认档加了"够近就 return"，留在这里会被那条提前返回吃掉。
         } catch (Throwable ignored) {
         }
     }
@@ -1860,6 +1894,195 @@ public final class RideBindManager {
         } catch (Throwable ignored) {
         }
         return STOP_SLACK;
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百四十九【点2：收进魂符的**那一刻**就撤掉骑乘光标】。
+     *
+     * <h2>玩家原话</h2>
+     * 「目前去除女仆和坐骑身上的光标必须是女仆骑乘到坐骑上，然后解绑一次才能去除光标，这样子
+     *  明显太麻烦了，能不能把女仆收进魂符以后就立刻解除一次光标呢？」
+     *
+     * <h2>为什么"收符"这一下必须接</h2>
+     * 光标的真身是**原版发光标记**（{@code setGlowingTag}）——它会**跟着 NBT 一起进魂符**
+     * （javap 实证：{@code Entity.saveWithoutId}/{@code load} 读写 {@code "Glowing"} 键）。
+     * 于是"收进符里 → 再放出来"这套最常见的操作，会让**她和那只坐骑**带着上一轮的光标回来，
+     * 而链路表在收符那一刻就断了 → 没有任何入口再去熄灯，玩家只能"重新骑上去再解绑一次"。
+     *
+     * <h2>为什么挂在 ToItem（收进去）而不是"放出来"那一头</h2>
+     * 放出来那头 729 已经有兜底（{@link #sweepStaleMarks} 每 5 秒扫一遍死标记）。但玩家要的是
+     * **收符时立刻**干净——魂符收进去的东西会被存档/交易/搬运，等 5 秒甚至等一个存档周期都不合适；
+     * 而且"符里的女仆"根本不在世界里，扫描扫不到她。所以在**收进去那一刻**就把该清的清掉。
+     *
+     * <h2>清什么、绝不动什么</h2>
+     * <ul>
+     *   <li><b>先解绑</b>（{@code releaseMaidQuiet}）：坐姿 / 重力 / 龙的行动档 / 链路表 / 留痕键
+     *       全部按正常解绑口径还原——这是玩家说的"立刻解除一次"。</li>
+     *   <li><b>再熄灯**双方**</b>：她和坐骑各自 {@code setGlowingTag(false)}。坐骑侧在解绑时
+     *       已经 unmark 过，这里再补一次是幂等的兜底（龙那条链路表可能已经先断了）。</li>
+     *   <li><b>只碰带我们留痕的那两个</b>：走的是 {@link #sweepStaleMarks} 同一套判据——
+     *       {@code TAG_RIDE_MOUNT} / {@code TAG_RIDE_MAID} / {@code TAG_PENDING_MARK}。
+     *       她自己中了光灵箭（GLOWING 效果）时 {@code setGlowingTag(false)} 内部会重新求值
+     *       {@code isCurrentlyGlowing()}，**不会**把与光灵箭无关的那一份清掉（javap 实证）。</li>
+     * </ul>
+     */
+    @SubscribeEvent
+    public static void onSoulCharmStore(
+            com.github.tartaricacid.touhoulittlemaid.api.event.MaidAndItemTransformEvent.ToItem event) {
+        try {
+            if (!isEnabled()) {
+                return;
+            }
+            EntityMaid maid = event.getMaid();
+            if (maid == null || maid.level().isClientSide()) {
+                return;
+            }
+            // 【先抓住坐骑】解绑会把链路表里那条删掉、也会把她从车上请下来，之后再找就晚了。
+            // 两条来源都试：① 链路表（正常绑定）② 她此刻骑着的（存档残留 / 重启后没重建）。
+            Entity mount = null;
+            Link link = LINKS.get(maid.getUUID());
+            if (link != null) {
+                mount = link.mount.get();
+            }
+            if (mount == null) {
+                Entity v = maid.getVehicle();
+                if (v != null && !(v instanceof EntityMaid)) {
+                    mount = v;
+                }
+            }
+            // ① 她身上有我们的链路 → 立刻解除一次（还原坐姿/重力/行动档 + 撤她自己的标记）。
+            //    玩家原话要的就是这一下：「能不能把女仆收进魂符以后就立刻解除一次光标呢？」
+            if (link != null) {
+                releaseMaidQuiet(maid);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "收进魂符：立刻解除一次骑乘链路（"
+                        + com.maidsmart.tool.PromaidLog.nameOf(maid) + "）→ 双方光标已撤");
+            }
+            // ② 兜底：链路表里没有她、但她身上还带着留痕（存档残留 / 重启后没重建）→ 同样熄灯
+            try {
+                if (!maid.getPersistentData().getString(TAG_RIDE_MOUNT).isEmpty()) {
+                    maid.getPersistentData().remove(TAG_RIDE_MOUNT);
+                    unmark(maid);
+                }
+            } catch (Throwable ignored) {
+            }
+            // ③ "待选光标"（只点了她 / 只点了坐骑、还没配对就收符）也要撤
+            clearPendingMark(maid);
+            unmark(maid);
+            // ④ **坐骑侧**的光标一起撤——玩家点名的就是"女仆**和坐骑**身上的光标"。
+            //    只动我们标记过的那只（TAG_RIDE_MAID 是我们的私有键），别的模组/原版不会写它，
+            //    所以"恰好路过的另一只发光坐骑"绝不会被误伤。
+            if (mount != null) {
+                try {
+                    mount.getPersistentData().remove(TAG_RIDE_MAID);
+                } catch (Throwable ignored) {
+                }
+                unmark(mount);
+                com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "收进魂符：坐骑侧光标已撤："
+                        + MaidRideKit.describe(mount));
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百四十九·点1】停下时把**马头转向主人**——玩家原话：「平时马头朝着主人移动靠近了就停止」。
+     *
+     * <p>为什么需要单独这一步：坐骑走的是它自己的 {@code PathNavigation} / {@code MoveControl}，
+     * 「停」只是不再喂新目标点；速度归零之后它的朝向**停在最后一段位移的方向**上（侧对甚至背对主人）。
+     * 这里在"已经停住"的那一拍补一次朝向设定，让它对着主人。
+     *
+     * <p>【只动朝向、不动位移】{@code setYRot}/{@code setYHeadRot} 写在停住之后——不产生位移，
+     * 也不进 {@code MoveControl}，所以既不会把停住的车再推出去，也不会和寻路抢方向。
+     * 【不打扰玩家自己开的车】只有"没有玩家在驾"时才转（玩家握着方向盘时他的朝向说了算）。
+     */
+    private static void faceOwner(Entity mount, ServerPlayer owner) {
+        try {
+            if (mount == null || owner == null) {
+                return;
+            }
+            // 玩家在驾这台车 → 朝向由玩家决定，我们一个字不碰
+            try {
+                if (mount.getControllingPassenger() != null) {
+                    return;
+                }
+            } catch (Throwable ignored) {
+            }
+            double dx = owner.getX() - mount.getX();
+            double dz = owner.getZ() - mount.getZ();
+            if (dx * dx + dz * dz < 1.0E-4) {
+                return; // 已经重合：没有可靠的"朝向主人"方向，保持原样
+            }
+            float yaw = (float) (Math.toDegrees(Math.atan2(dz, dx))) - 90.0f; // 与 feedNavigation 同一套 yaw 口径
+            mount.setYRot(yaw);
+            mount.setYHeadRot(yaw);
+            // 同步给她的身体（她是乘客，模型朝向跟着她自己的 yRot 走）——不转的话会"车头对着主人、
+            // 人还侧着坐"。
+            try {
+                if (mount.getFirstPassenger() != null) {
+                    mount.getFirstPassenger().setYRot(yaw);
+                    mount.getFirstPassenger().setYHeadRot(yaw);
+                }
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百四十九·点3】坐骑侧的"别叠罗汉"：与扫帚**同一个标准**
+     * （{@link MaidRideKit#separateAim}，连四个间距常量都是同一份）。
+     *
+     * <p>同伴 = **别的女仆正骑着的坐骑**。按玩家的口径（「不管是扫帚还是坐骑，都需要防叠罗汉」），
+     * 空着的坐骑是"她正要去骑的目标"、玩家自己骑的那匹也不是她要叠的东西——与扫帚那边
+     * {@code carriesMaid} 同一套取舍。
+     *
+     * <p>【只在"没有模式"时生效】有模式在指挥时（挖矿/建造/战斗走位），她的目标点是那个模式
+     * 真正要去的地方，被互斥推偏等于让工作走位失真——所以那一档不推，交回模式自己。
+     *
+     * @param combat 这一拍是不是"接敌"：她此刻有攻击目标 → 用更大的一档间距（与扫帚同口径）。
+     */
+    private static Vec3 separateFromPeers(EntityMaid maid, Entity mount, Vec3 aim, boolean modeMove, boolean combat) {
+        try {
+            if (aim == null || mount == null || modeMove) {
+                return aim;
+            }
+            if (!(mount.level() instanceof ServerLevel level)) {
+                return aim;
+            }
+            double sepR = MaidRideKit.SEP_R_COMBAT;
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    aim.x - sepR, aim.y - sepR, aim.z - sepR,
+                    aim.x + sepR, aim.y + sepR, aim.z + sepR);
+            java.util.List<Vec3> peers = new java.util.ArrayList<>();
+            for (Entity other : level.getEntitiesOfClass(Entity.class, box,
+                    e -> e != mount && e.isAlive() && isMaidMount(e))) {
+                peers.add(other.position());
+            }
+            return MaidRideKit.separateAim(aim, MaidRideKit.ridePhase(maid.getUUID()), peers, combat);
+        } catch (Throwable ignored) {
+            return aim;
+        }
+    }
+
+    /**
+     * 【实测七百四十九·点3】"这只坐骑是女仆在骑着的"——{@link #separateFromPeers} 的障碍判据。
+     * 与扫帚那边 {@code carriesMaid} 逐字同口径：普通坐骑看乘客，悬空鞍位（龙）看我们的链路表。
+     */
+    private static boolean isMaidMount(Entity e) {
+        try {
+            if (e instanceof EntityMaid) {
+                return false; // 女仆自己不是坐骑
+            }
+            if (MaidRideKit.riderOf(e) != null) {
+                return true; // 普通坐骑：背上有女仆
+            }
+            if (chairRiderOf(e) != null) {
+                return true; // 悬空鞍位（龙）：链路表说这条龙驮着谁
+            }
+            return false;
+        } catch (Throwable ignored) {
+            return false;
+        }
     }
 
     /** 【实测七百三十】"主人超出接敌半径 → 收手追主人"这条日志的每只女仆一次闩（回来了就拔）。 */

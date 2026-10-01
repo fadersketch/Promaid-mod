@@ -1128,14 +1128,16 @@ public final class MaidBroomDrive {
      */
     private static double phaseOf(EntityMaid maid) {
         try {
-            return ((maid.m_20148_().hashCode() & 0xFFFF) / 65536.0) * (Math.PI * 2.0);
+            // 【实测七百四十九·点3】算式搬到 MaidRideKit.ridePhase（坐骑那边用同一个）——
+            // 这里只是把"她"包一层。1.20.1 的 getUUID 是 m_20148_。
+            return MaidRideKit.ridePhase(maid.m_20148_());
         } catch (Throwable ignored) {
             return 0.0;
         }
     }
 
     /** 两只"载着女仆的扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位 */
-    private static final double SEP_R = 2.0;
+    private static final double SEP_R = MaidRideKit.SEP_R;
     /**
      * 【实测七百零一】**接敌期间**的最小水平间距（格）——比平时的 {@link #SEP_R} 大一档。
      *
@@ -1146,16 +1148,21 @@ public final class MaidBroomDrive {
      * + 这条间距，三层一起保证"她与同伴不在同一条射线上"。
      *
      * <p>【只推水平、只在接敌】与 {@link #SEP_R} 同一套做法（见 {@link #separate}）。
+     *
+     * <p>【实测七百四十九·点3】取值改为直接引用 {@link MaidRideKit} 的公共常量——坐骑那边
+     * 用的是**同一个** {@link MaidRideKit#SEP_R_COMBAT}，这才叫"统一的标准"。
      */
-    private static final double SEP_R_COMBAT = 4.0;
+    private static final double SEP_R_COMBAT = MaidRideKit.SEP_R_COMBAT;
     /** 一次让位最多挪出去多少格（封顶：互斥只做修正，绝不把"去哪"整条盖掉） */
-    private static final double SEP_MAX = 1.5;
+    private static final double SEP_MAX = MaidRideKit.SEP_MAX;
     /**
      * 【实测七百零一】接敌让位的**更大封顶**（格）：间距要求放宽到 {@link #SEP_R_COMBAT} 之后，
      * 原来 1.5 格的封顶会让"推出去"永远追不上要求（差值 4−d 经常大于 1.5），互斥等于白设。
      * 放大到 2.5 格——仍只是修正（真正"去哪"由 {@link #combatPoint} 决定），但够把两只分开。
+     *
+     * <p>【实测七百四十九·点3】同上，改为引用 {@link MaidRideKit#SEP_MAX_COMBAT}。
      */
-    private static final double SEP_MAX_COMBAT = 2.5;
+    private static final double SEP_MAX_COMBAT = MaidRideKit.SEP_MAX_COMBAT;
 
     /**
      * **邻近互斥**：目标点附近有别的"载着女仆的扫帚"时，把目标点朝远离她的方向推出去一点。
@@ -1181,8 +1188,12 @@ public final class MaidBroomDrive {
         if (aim == null || broom == null) {
             return aim;
         }
+        // 【实测七百四十九·点3：口径只有一处】算式与四个参数（SEP_R / SEP_R_COMBAT /
+        // SEP_MAX / SEP_MAX_COMBAT）已整体搬到 {@link MaidRideKit#separateAim}——坐骑那边
+        // （RideBindManager.drive）用的是**同一个方法、同一组数字**，这样"扫帚与坐骑是一个
+        // 统一的标准"是结构上的事实，而不是两份抄来抄去的常量。本方法只剩"凑齐同伴位置"
+        // 这一步（扫帚的同伴 = 别的**女仆正骑着的扫帚**）。
         final double sepR = combat ? SEP_R_COMBAT : SEP_R;
-        final double sepMax = combat ? SEP_MAX_COMBAT : SEP_MAX;
         try {
             if (!(broom.m_9236_() instanceof net.minecraft.server.level.ServerLevel level)) {
                 return aim;
@@ -1190,34 +1201,12 @@ public final class MaidBroomDrive {
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                     aim.f_82479_ - sepR, aim.f_82480_ - sepR, aim.f_82481_ - sepR,
                     aim.f_82479_ + sepR, aim.f_82480_ + sepR, aim.f_82481_ + sepR);
-            double ox = 0.0;
-            double oz = 0.0;
+            java.util.List<Vec3> peers = new java.util.ArrayList<>();
             for (EntityBroom other : level.m_6443_(EntityBroom.class, box,
                     b -> b != broom && b.m_6084_() && carriesMaid(b))) {
-                double dx = aim.f_82479_ - other.m_20185_();
-                double dz = aim.f_82481_ - other.m_20189_();
-                double d = Math.sqrt(dx * dx + dz * dz);
-                if (d >= sepR) {
-                    continue;
-                }
-                if (d < 0.05) {
-                    // 水平方向完全叠在一起（"叠罗汉"最难看的那一档）：用她自己的相位当
-                    // "往哪边让"的方向——必须是确定的，不能每次算出来不一样（否则她会原地抖）。
-                    double a = phaseOf(maid);
-                    ox += Math.cos(a) * sepR * 0.5;
-                    oz += Math.sin(a) * sepR * 0.5;
-                    continue;
-                }
-                double push = (sepR - d) / d;
-                ox += dx * push;
-                oz += dz * push;
+                peers.add(other.m_20182_());
             }
-            double len = Math.sqrt(ox * ox + oz * oz);
-            if (len < 1.0E-4) {
-                return aim;
-            }
-            double k = Math.min(1.0, sepMax / len);
-            return new Vec3(aim.f_82479_ + ox * k, aim.f_82480_, aim.f_82481_ + oz * k);
+            return MaidRideKit.separateAim(aim, phaseOf(maid), peers, combat);
         } catch (Throwable ignored) {
             return aim;
         }

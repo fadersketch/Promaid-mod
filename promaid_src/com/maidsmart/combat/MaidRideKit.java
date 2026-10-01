@@ -329,6 +329,142 @@ public final class MaidRideKit {
         }
     }
 
+    /* ==================== 【实测七百四十九·点1】「有没有模式在指挥她走位」 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百四十九【点1：默认档"跟着主人走"、有模式才走模式逻辑】。
+     *
+     * <p>玩家原话：「要求是平时马头朝着主人移动靠近了就停止。其他时候就动用该模式下的运动逻辑。
+     * （因为骑的马仍然是陆地载具，跟女仆自己在地上走区别不大，所以直接采用女仆的运动逻辑。）」
+     *
+     * <p>判据就是「她此刻的**任务**是不是"没有任务"」——TLM 的空闲任务 uid 固定为
+     * {@code touhou_little_maid:idle}（其它所有任务：矿/木/农/建造/战斗/钓鱼/耕地…都有自己的
+     * 运动逻辑）。空任务 / 任务还没就绪 → 返回 {@code false} = "没有模式在指挥"。
+     *
+     * <p>为什么用任务而不是"她的导航有没有目标"：她**是乘客**时，TLM 的跟随
+     * （{@code MaidFollowOwnerTask}）与我们自己的若干 core 行为照样在她自己的
+     * {@code PathNavigation} 上写走位点——那正是 716 之后坐骑"乱窜"的来源。要区分"这是模式
+     * 在指挥"还是"这只是跟随/闲逛在写"，只能看任务。
+     *
+     * <p>【1.20.1 的 SRG 名】{@code m_135827_ = getNamespace}、{@code m_135815_ = getPath}。
+     */
+    public static boolean hasModeMovement(EntityMaid maid) {
+        try {
+            if (maid == null || maid.getTask() == null) {
+                return false; // 任务还没就绪 → 当"没有模式"，走默认跟随档（最保守）
+            }
+            net.minecraft.resources.ResourceLocation uid = maid.getTask().getUid();
+            if (uid == null) {
+                return false;
+            }
+            return !("touhou_little_maid".equals(uid.m_135827_()) && "idle".equals(uid.m_135815_()));
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /* ==================== 【实测七百四十九·点3】「别叠罗汉」的公共标准 ==================== */
+
+    /**
+     * v1.3.0(beta) 实测七百四十九【点3：坐骑也要防叠罗汉，与扫帚**同一套标准**】。
+     *
+     * <p>玩家原话：「扫帚模式下已经拥有了防叠罗汉的机制，但是坐骑方面还没有。这个应该是一个
+     * 统一的标准，不管是扫帚还是坐骑，应该都需要防叠罗汉。」
+     *
+     * <p>扫帚那套（实测六百九十一）由两部分组成：**相位错开**（每只女仆的盘旋起点按 UUID 错开
+     * 一整圈）+ **邻近互斥**（目标点被别的"女仆骑着的扫帚"顶开）。坐骑这边没有"盘旋"这回事，
+     * 所以只需要后半截——把"去这里"的目标点推离同伴。为了真的是"统一的标准"而不是"抄一份
+     * 数字过去"，四个参数与那段算式**都放在本类**，扫帚与坐骑各自只负责"凑齐同伴位置"这一步。
+     */
+
+    /** 两只"载着女仆的坐骑/扫帚"之间的最小水平间距（格）：近到这个数以内就互相让位。 */
+    public static final double SEP_R = 2.0;
+
+    /**
+     * 接敌期间的最小水平间距（格）——比平时的 {@link #SEP_R} 大一档。
+     *
+     * <p>理由与扫帚那边逐字相同：平时靠得近只是观感问题，**接敌**时两只靠得近就是活靶子
+     * （敌人一箭穿过前面那只还会打到后面那只）。
+     */
+    public static final double SEP_R_COMBAT = 4.0;
+
+    /** 一次让位最多挪出去多少格（封顶：互斥只做修正，绝不把"去哪"整条盖掉）。 */
+    public static final double SEP_MAX = 1.5;
+
+    /** 接敌档的更大封顶（格）：间距要求放宽到 {@link #SEP_R_COMBAT} 之后，1.5 格追不上要求。 */
+    public static final double SEP_MAX_COMBAT = 2.5;
+
+    /**
+     * 每只女仆一个**稳定的相位**（弧度，0~2π）：只跟她的 UUID 有关，同一只女仆永远同一个值。
+     *
+     * <p>用途与扫帚那边的 {@code MaidBroomDrive.phaseOf} 完全一致——当两个目标点**水平方向完全
+     * 叠在一起**（推不开的退化情形）时，需要一个**确定**的"往哪边让"的方向；随机的话她会原地抖。
+     */
+    public static double ridePhase(java.util.UUID id) {
+        try {
+            return id == null ? 0.0 : ((id.hashCode() & 0xFFFF) / 65536.0) * (Math.PI * 2.0);
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /**
+     * 「别叠罗汉」的公共算式：把"去这里"（{@code aim}）推离一批同伴位置（{@code peers}）。
+     *
+     * <p>【只推水平】要的是水平方向错开；竖直那一份交给各自的起飞/爬升相位，互斥插一脚只会抖动。
+     * <p>【有封顶】互斥只做修正，绝不把"去哪"整条盖掉（真正"去哪"由调用方决定）。
+     * <p>【退化情形】同伴与目标点几乎重合（d&lt;0.05）时，用 {@link #ridePhase} 当"往哪边让"的
+     * 方向——必须是确定的，不能每次算出来不一样。
+     *
+     * @param aim    原始目标点
+     * @param phase  "往哪边让"的兜底方向（弧度，{@link #ridePhase}）
+     * @param peers  同伴（"别的女仆正骑着的坐骑/扫帚"）的位置
+     * @param combat 这一拍是不是在接敌（决定用哪一档间距与封顶）
+     * @return 修正后的目标点；不需要修正 / 出任何异常一律原样返回 {@code aim}
+     */
+    public static Vec3 separateAim(Vec3 aim, double phase, java.util.List<Vec3> peers, boolean combat) {
+        if (aim == null) {
+            return null;
+        }
+        try {
+            if (peers == null || peers.isEmpty()) {
+                return aim;
+            }
+            final double sepR = combat ? SEP_R_COMBAT : SEP_R;
+            final double sepMax = combat ? SEP_MAX_COMBAT : SEP_MAX;
+            double ox = 0.0;
+            double oz = 0.0;
+            for (Vec3 p : peers) {
+                if (p == null) {
+                    continue;
+                }
+                // 1.20.1 的 Vec3 字段是 SRG 名：f_82479_ = x、f_82480_ = y、f_82481_ = z
+                double dx = aim.f_82479_ - p.f_82479_;
+                double dz = aim.f_82481_ - p.f_82481_;
+                double d = Math.sqrt(dx * dx + dz * dz);
+                if (d >= sepR) {
+                    continue;
+                }
+                if (d < 0.05) {
+                    ox += Math.cos(phase) * sepR * 0.5;
+                    oz += Math.sin(phase) * sepR * 0.5;
+                    continue;
+                }
+                double push = (sepR - d) / d;
+                ox += dx * push;
+                oz += dz * push;
+            }
+            double len = Math.sqrt(ox * ox + oz * oz);
+            if (len < 1.0E-4) {
+                return aim;
+            }
+            double k = Math.min(1.0, sepMax / len);
+            return new Vec3(aim.f_82479_ + ox * k, aim.f_82480_, aim.f_82481_ + oz * k);
+        } catch (Throwable ignored) {
+            return aim;
+        }
+    }
+
     /* ==================== 骑乘关系 ==================== */
 
     /** 她此刻骑着的那只坐骑（没骑返回 null；坐在黑名单家具上也算"没骑坐骑"） */
