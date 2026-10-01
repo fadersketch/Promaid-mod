@@ -1822,10 +1822,28 @@ public final class RideBindManager {
             // 她自己在地上时"不跟随"= 站着不动；她骑在坐骑上时，"站着不动"当然就该是**坐骑停住**，
             // 而不是我们的骑乘链路还把她（和车）往主人/敌人那边带。
             //
-            // 【飞行载具除外】切断动力对直升机/固定翼不是"停"，是"掉"——那一档有自己的悬停逻辑
-            // （实测七百二十九/七百三十八），守家时继续用它，不能在这里收手。
+            // 【实测七百六十一·飞行载具：守家 = 就地悬停，不再追人】
+            // 756 为了不让直升机"守家时掉下来"把飞行载具整个排除在这条闸之外——代价是**飞行载具
+            // 在守家时仍然追着主人/敌人飞**（玩家要的是"她坐的坐骑立刻停止"）。其实这一档早就有
+            // 现成的"停"：把目标点设成它**此刻的位置**（水平+竖直都保持）就是定高悬停——正是
+            // 七百二十九/七百三十八 玩家坐副驾那一档用的同一套驱动（{@link MaidAirCombat#holdHere}）。
+            // 所以飞行载具改成走 holdHere：不再产生任何往主人/敌人去的驱动。
             // 冰火传说龙走悬空鞍位（{@code link.chair}），在 tick() 里就 continue 了，天然不经过这里。
-            if (maid.isHomeModeEnable() && !MaidMountCompat.isFlyingVehicle(mount)) {
+            if (maid.isHomeModeEnable()) {
+                if (MaidMountCompat.isFlyingVehicle(mount)) {
+                    if (MaidAirCombat.enabled()) {
+                        Vec3 hold = MaidAirCombat.holdHere(maid, mount);
+                        if (hold != null) {
+                            MaidRideKit.feedNavigation(mount, hold,
+                                    MaidRideKit.speedModifierFor(mount, maid), maid);
+                            return;
+                        }
+                    }
+                    // 空战总开关关着（没有悬停那一套驱动可用）→ 退回旧口径：什么都不驱动，
+                    // 让引擎自己稳姿态（切断动力对飞行载具是掉高度，所以这里也不能"刹车"）。
+                    MaidRideKit.stopNavigation(mount);
+                    return;
+                }
                 MaidRideKit.stopNavigation(mount);
                 faceOwner(mount, owner);
                 return;
