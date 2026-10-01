@@ -1955,7 +1955,13 @@ public final class RideBindManager {
             if (target == null && modeMove) {
                 try {
                     var wt = maid.m_6274_().m_21952_(net.minecraft.world.entity.ai.memory.MemoryModuleType.f_26370_);
-                    if (wt.isPresent()) {
+                    // 【实测七百五十一】模式档里**不认**"指着主人那一条"：TLM 的跟随
+                    // （MaidFollowOwnerTask，core 3，任何活动都在跑）在她离主人 62~66 格时会
+                    // setWalkAndLookTargetMemories(主人)；那一格是"跟随"，不是"这个模式要去的
+                    // 地方"。认了它 = 农田/挖矿/站桩任务中的坐骑照样朝主人走（玩家原话：
+                    // 「行动轨迹应该是女仆在此模式下原有的轨迹，而现在仍然是朝着主人」）。
+                    // 当它是"模式这一拍没有走位点"处理——与下面 ③ 的口径一致。
+                    if (wt.isPresent() && !walkTargetIsOwner(owner, wt.get())) {
                         Vec3 t = wt.get().m_26420_().m_7024_();
                         if (t != null) {
                             target = t;
@@ -1964,7 +1970,15 @@ public final class RideBindManager {
                 } catch (Throwable ignored) {
                 }
             }
-            // ③ 都没有 / 本来就没模式 → **默认档：跟着主人**（够远才喂，够近就停 + 转向主人）
+            // ③ 模式这一拍没给出走位点（站桩活贴方块 / 农田没活 / 接敌走位的间隙）——
+            // **原地待命**，不越权退化成"朝主人走"。玩家原话：「行动轨迹应该是女仆在此模式下
+            // 原有的轨迹」；"朝主人走"是**没有模式**时的默认档，有模式时不该抢走位。
+            // 模式自己下一拍会重新写下目标（农田找到作物 / 战术写下绕圈点），届时照常转达。
+            if (target == null && modeMove) {
+                MaidRideKit.stopNavigation(mount);
+                return;
+            }
+            // ④ 本来就没模式 → **默认档：跟着主人**（够远才喂，够近就停 + 转向主人）
             if (target == null) {
                 double d = horizontalDist(mount, owner);
                 if (d > MaidRideKit.followDist()) {
@@ -2100,6 +2114,32 @@ public final class RideBindManager {
                 unmark(mount);
                 com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "收进魂符：坐骑侧光标已撤："
                         + MaidRideKit.describe(mount));
+            }
+            // ⑤ **收进去的那份 NBT 也要熄灯**——这一条是 749 漏掉的地方，也是玩家报的
+            //    「收回魂符只清了坐骑的光标，女仆自己没有」的真正原因。
+            //    TLM 的 {@code ItemSmartSlab.storeMaidData} 先
+            //    {@code maid.saveWithoutId(tag)} **再** 发 ToItem 事件，而符里的女仆 NBT
+            //    就是这个 event.getData()（反编译实证）。所以只对**世界里的活实体**
+            //    setGlowingTag(false)，对"将来从符里放出来的那只"一个字节都不起作用——
+            //    她自己中了光灵箭那份不在此列（只改 {@code "Glowing"} 这一个键，
+            //    放出来时 load 会重新求值，见 {@code Entity.isCurrentlyGlowing}）。
+            clearGlowInStoredData(event.getData());
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百五十一】把"收进符里那一份女仆 NBT"的发光标记清掉。
+     *
+     * <p>键名来自反编译实证：{@code Entity.saveWithoutId} 把 {@code hasGlowingTag} 写进
+     * {@code "Glowing"}，{@code Entity.load} 再读回来调 {@code setGlowingTag}
+     * （javap 两版一致）。只动这一个键、且只在它确实是 {@code true} 时改，
+     * 其余 NBT 一个字节不碰。
+     */
+    private static void clearGlowInStoredData(net.minecraft.nbt.CompoundTag data) {
+        try {
+            if (data != null && data.m_128441_("Glowing")) {
+                data.m_128379_("Glowing", false);
             }
         } catch (Throwable ignored) {
         }
@@ -2251,6 +2291,32 @@ public final class RideBindManager {
             com.maidsmart.combat.AutoCombatSwitch.tryEngagePublic(maid);
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 【实测七百五十一】这条走位记忆是不是"指着主人"——TLM 跟随（{@code MaidFollowOwnerTask}）
+     * 在她离主人过远时把主人本身写成 {@code WALK_TARGET}（{@code EntityTracker}，与
+     * {@code BehaviorUtils.setWalkAndLookTargetMemories(maid, owner, …)} 同源，反编译实证）。
+     *
+     * <p>为什么要单独认这一条：那个目标是**跟随**写下的，不是"她这个模式要去的地方"。
+     * 坐骑的模式档把它当任务走位转达出去，就变成"农田/挖矿/站桩任务中的坐骑照样朝主人走"
+     * （玩家原话：「行动轨迹应该是女仆在此模式下原有的轨迹，而现在仍然是朝着主人」）。
+     * 判据只认 {@code EntityTracker} 且实体 UUID == 主人——**方块型的走位点
+     * （{@code BlockPosTracker}，TLM 农田/挖矿/我们的行为都用它）一律不算**，绝不误伤真正的任务走位。
+     */
+    private static boolean walkTargetIsOwner(LivingEntity owner,
+                                             net.minecraft.world.entity.ai.memory.WalkTarget wt) {
+        try {
+            if (owner == null || wt == null) {
+                return false;
+            }
+            net.minecraft.world.entity.ai.behavior.PositionTracker tracker = wt.m_26420_();
+            if (tracker instanceof net.minecraft.world.entity.ai.behavior.EntityTracker et) {
+                return et.m_147481_() != null && et.m_147481_().m_20148_().equals(owner.m_20148_());
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     /** 女仆当前的攻击目标（brain 的 ATTACK_TARGET 优先，退回实体层 target）。 */
