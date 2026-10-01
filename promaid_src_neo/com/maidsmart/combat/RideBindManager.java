@@ -50,7 +50,19 @@ public final class RideBindManager {
     /** 【实测七百一十六·点3】persistentData：这只实体正被棍子"待配对"选中（金色"光标"） */
     public static final String TAG_PENDING_MARK = "maid_smart_ride_pending";
 
-    private static final int TICK_DIV = 2;
+    /**
+     * 【实测七百五十六·点1】驱动节奏：每 2 tick → **每 tick**。
+     *
+     * <p>玩家原话：「遇到敌人之后，虽然有所动作，但是相比于正常情况下女仆移动的反应和速度等
+     * 各方面都差了一大截」。根因之一就是这里：她自己在地上跑是**每 tick** 一条新走位（她的寻路
+     * 20 Hz），而坐骑只能 10 Hz 收到新目标——每次起步、每次转向都要等 100ms，观感正是"反应慢
+     * 半拍、速度上不去"。房子活（{@link #restore} 那种全实体扫描）改由 {@link #HOUSEKEEP_DIV}
+     * 单独节流，所以每 tick 多跑的只是"喂目标"这点轻活（目标块没变时
+     * {@code PathNavigation.createPath} 直接返回缓存路径，不重新 A*）。
+     */
+    private static final int TICK_DIV = 1;
+    /** 【实测七百五十六·点1】房子活（重建链路的全实体扫描）节流：每 N 次驱动跑一遍。 */
+    private static final int HOUSEKEEP_DIV = 10;
     private static final long DENY_INTERVAL_MS = 3000L;
     private static final double STOP_SLACK = 1.5;
 
@@ -81,6 +93,8 @@ public final class RideBindManager {
     public static final Map<Integer, Integer> SYNCED_CHAIRS = new HashMap<>();
 
     private static int tickTimer = 0;
+    /** 【实测七百五十六·点1】房子活（{@link #restore}）的节流计数——见 {@link #HOUSEKEEP_DIV}。 */
+    private static int housekeepTimer = 0;
 
     private static final class Link {
         final java.lang.ref.WeakReference<EntityMaid> maid;
@@ -1641,7 +1655,12 @@ public final class RideBindManager {
                     releaseMaidQuiet(m);
                 }
             }
-            restore(server);
+            // 【实测七百五十六·点1】驱动改每 tick 之后，这条"全实体扫描重建链路"的房子活
+            // 单独节流（每 HOUSEKEEP_DIV 次驱动跑一遍）——它是重载后的自愈兜底，不需要 20 Hz。
+            if (++housekeepTimer >= HOUSEKEEP_DIV) {
+                housekeepTimer = 0;
+                restore(server);
+            }
         } catch (Throwable ignored) {
         }
     }
@@ -1680,6 +1699,21 @@ public final class RideBindManager {
 
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
+            // 【实测七百五十六·点3：守家（home 模式）→ 坐骑立刻停】
+            // 玩家原话：「如果女仆处于 home 模式，那么她坐的坐骑就会立刻停止。这样子也方便玩家调控。」
+            // 口径与 TLM 自己的跟随完全同源——{@code MaidFollowOwnerTask.maidStateConditions} 就是
+            // {@code !maid.isHomeModeEnable() && maid.canBrainMoving()}：守家的女仆**不跟随**。
+            // 她自己在地上时"不跟随"= 站着不动；她骑在坐骑上时，"站着不动"当然就该是**坐骑停住**，
+            // 而不是我们的骑乘链路还把她（和车）往主人/敌人那边带。
+            //
+            // 【飞行载具除外】切断动力对直升机/固定翼不是"停"，是"掉"——那一档有自己的悬停逻辑
+            // （实测七百二十九/七百三十八），守家时继续用它，不能在这里收手。
+            // 冰火传说龙走悬空鞍位（{@code link.chair}），在 tick() 里就 continue 了，天然不经过这里。
+            if (maid.isHomeModeEnable() && !MaidMountCompat.isFlyingVehicle(mount)) {
+                MaidRideKit.stopNavigation(mount);
+                faceOwner(mount, owner);
+                return;
+            }
             // 【实测七百四十一·点3】刷新"当前刻"：机头瞄准请求带几拍时效（见 MaidMountCompat.NOSE_AIM），
             // 由这里统一喂，免得本类去依赖任何一侧的 level 状态。
             MaidMountCompat.markTick(maid.level().getGameTime());
@@ -1689,6 +1723,9 @@ public final class RideBindManager {
             // 实测七百一十九·点4 起这一档不再只对"模组坐骑"开——原版兽同样走一遍（它们没有
             // 目标 AI 时写了也无副作用），这样"别的模组的可骑乘战斗生物"零适配即可服从。
             MaidMountCompat.tickAttack(mount, maid);
+            // 【实测七百五十六·点2】载具之间"挤成一团"的互斥：5 格以内的**别的女仆骑着的载具**
+            // 朝远离方向弹开（每 tick 一点点，见 repelPeerVehicles）。
+            repelPeerVehicles(mount);
             // 【实测七百二十六·点6】女仆自己往载具装弹：她背包里若有**这车当前武器对得上的**
             // 子弹，搬进车自己的弹药容器（车的枪弹是从车容器取的，见 MaidMountCompat.feedVehicleAmmo）。
             // 节流 0.5 秒一次——弹药消耗远慢于此，每 2 拍扫一遍背包是浪费。
@@ -1988,8 +2025,15 @@ public final class RideBindManager {
      * <h2>跟随时她往哪走</h2>
      * TLM 的跟随（{@code MaidFollowOwnerTask}）对**乘客**是关的（{@code canBrainMoving()}
      * 里 {@code !isPassenger()} 那条，反编译实证），平时没人往她的导航写目标。所以这里在没有
-     * 攻击目标时，按**与 TLM 跟随相同的语义**把"主人"写进**她自己的导航**——之后就和接敌走位
-     * 完全同路：她的导航 → 她的 MoveControl → 她的位移 → 坐骑。全程只有她这一条逻辑。
+     * 攻击目标、她自己也没有任务走位时，直接把**主人**交给坐骑（走到 2 格内停下）——
+     * 补的正是"她原本会跟随"这一条意图，只是执行者换成了坐骑。
+     *
+     * <h2>【七百五十六】755 的"读操纵层坐标"已废弃</h2>
+     * 755 读的是她 {@code MoveControl} 里的 wanted 坐标（= 她的**下一个路径节点**）。那是
+     * 一两格外的点，每 tick 喂给坐骑就是每 tick 重新规划一小步、步步收油——玩家实测
+     * 「遇到敌人之后虽然有所动作，但相比正常情况下女仆移动的反应和速度都差了一大截」。
+     * 756 改回 716 的通道：喂的是她寻路的**终点**（远点），坐骑一次规划、全程全速；
+     * 平时她寻路上没有终点时，才补上主人。
      *
      * <h2>与 749~754 的关系</h2>
      * 那几层（模式分流 / 按坐标猜"这条是不是跟随" / 停车带 / 停下转向主人）都是"替她决定去哪"
@@ -1999,52 +2043,58 @@ public final class RideBindManager {
      */
     private static void driveLandMount(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
-            if (!(maid instanceof Mob mob)) {
-                return; // 两条腿的坐骑都该是 Mob；不是就交还原版
-            }
             boolean fighting = targetOf(maid) != null;
-            if (!fighting) {
-                // 没在接敌：TLM 的跟随对**乘客**是关的（见方法注释），所以按**同一条语义**
-                // 把"回到主人身边"写进**她自己的导航**——不是写给坐骑。够近就停，
-                // 停车距离用 TLM 跟随自己的 stopDistance（2 格），不再有我们自造的 followDist。
-                if (owner != null && horizontalDist(mount, owner) > LANDFOLLOW_STOP) {
-                    mob.getNavigation().moveTo(owner.getX(), owner.getY(), owner.getZ(), 1.0);
-                } else {
-                    mob.getNavigation().stop();
+            // ── 唯一的事：把**她自己的走路意图**转给坐骑 ──
+            //
+            // 【为什么是"她自己导航的终点"而不是别的】她自己的移动栈是
+            // 「大脑/任务 → 往她的 {@code PathNavigation} 写 {@code moveTo(去哪)} → 每 tick 沿路径走」。
+            // {@link MaidRideKit#ownNavigationTarget} 读的就是这条链上的**目的地**——她这一趟要去
+            // 的地方。它非空 ⇔ 她的寻路上有一条没走完的路（{@code isDone()} 为假），也就是
+            // "她此刻确实在往某处走"。把这个点原样交给坐骑的寻路，坐骑走的就是她的走位；
+            // 绕障/上下坡交给坐骑自己的寻路（它比她的两条腿更会挑路）。
+            //
+            // 【为什么不再读 MoveControl 的 wanted 坐标（755 的做法，已废弃）】那是**下一个路径
+            // 节点**（离她一两格）。每 tick 换一个新节点喂给坐骑 ⇒ 坐骑每 tick 重新规划一次一两格的
+            // 短程路、且每次都快到点就收油（{@code MoveControl} 到点即 {@code setZza(0)}）——
+            // 观感正是玩家说的「反应和速度都差了一大截」：起步起不来、速度上不去、转向慢半拍。
+            // 终点是**远点**，坐骑一次规划就能全程全速，中途只在目标块变化时才重新 A*
+            // （{@code PathNavigation.createPath} 的缓存分支）。
+            Vec3 target = MaidRideKit.ownNavigationTarget(maid);
+            // 走位意图只认"确实有模式在指挥"的那一档（749 起的口径）：她**空闲**时导航上若还挂着
+            // 一条路（闲逛/上一段任务/跟随残留），那不算"她要去的地方"，不能拿来驱动坐骑。
+            // 接敌时不做这道筛选——那是她的迂回走位，1:1 转达。
+            if (!fighting && !MaidRideKit.hasModeMovement(maid)) {
+                target = null;
+            }
+            // 【平时没有走位意图 → 跟着主人】TLM 的跟随（{@code MaidFollowOwnerTask}）对**乘客**
+            // 是关的（{@code canBrainMoving()} 里那条 {@code !isPassenger()}，反编译实证），所以这一档
+            // 只能由我们补：把**主人**交给坐骑。补的是主人本人，不是我们自造的走位点；停车距离
+            // 与 TLM 跟随自己的 stopDistance 同口径（2 格），不再有我们自造的 followDist。
+            if (target == null && !fighting && owner != null
+                    && horizontalDist(mount, owner) > LANDFOLLOW_STOP) {
+                target = owner.position();
+            }
+            if (target == null) {
+                // 接敌、但她的寻路这一拍恰好是空的（两段走位之间的间隙）：**什么都不做**，
+                // 让坐骑顺着上一拍的目标再走几步——这一拍直接掐停会把迂回变成"一顿一顿"。
+                if (fighting) {
+                    return;
                 }
-            }
-            // 接敌时**什么都不写**：她的战斗走位（单兵战术 core 230 的直连导航）每拍自己往
-            // 她的导航里写目标，我们插手只会盖掉它——753/754 反复栽的就是这一处。
-            //
-            // ── 把**她自己这一拍算出来的移动输出**原样转给坐骑 ──
-            // 她自己的移动栈是「寻路（{@code PathNavigation.tick}）→ 写操纵层
-            // {@code MoveControl.setWantedPosition}（下一个路径节点）→ {@code MoveControl.tick}
-            // 落成朝向+前进量」。我们**不重算任何路径**，只把这条链的**输出**
-            // （她的操纵层里那个"要去的位置"）转给坐骑——坐骑再照自己的寻路走过去。
-            // 这样她绕障碍走的路、她的速度、她接敌的迂回，全都是**她原来那套**。
-            //
-            // 为什么不用 {@code hasWanted()} 当开关：{@code MoveControl.tick()} 每拍会把
-            // Operation 消费成 WAIT（坐标仍留着），所以它在我们的时序里恒为 false——用它当
-            // 开关会让坐骑**每拍都停一下**。真正的"她这一拍有没有想去的地方"只有一处权威：
-            // 她的寻路**完了没有**（{@code isDone()}）；未完成 = 有目的地，坐标就是她刚算的。
-            if (mob.getNavigation().isDone()) {
-                MaidRideKit.stopNavigation(mount); // 她到了/停住 → 坐骑也停
-                return;
-            }
-            double wx = mob.getMoveControl().getWantedX();
-            double wy = mob.getMoveControl().getWantedY();
-            double wz = mob.getMoveControl().getWantedZ();
-            if (!Double.isFinite(wx) || !Double.isFinite(wy) || !Double.isFinite(wz)) {
                 MaidRideKit.stopNavigation(mount);
+                faceOwner(mount, owner);
                 return;
             }
-            MaidRideKit.feedNavigation(mount, new Vec3(wx, wy, wz),
-                    MaidRideKit.speedModifierFor(mount, maid), maid);
+            if (horizontalDist(mount, target) <= STOP_SLACK) {
+                MaidRideKit.stopNavigation(mount);
+                faceOwner(mount, owner);
+                return;
+            }
+            MaidRideKit.feedNavigation(mount, target, MaidRideKit.speedModifierFor(mount, maid), maid);
         } catch (Throwable ignored) {
         }
     }
 
-    /** 【实测七百五十五】陆地坐骑跟随的停车距离（格）：与 TLM 跟随自己的 stopDistance（2）同口径。 */
+    /** 【实测七百五十五/七百五十六】陆地坐骑跟随的停车距离（格）：与 TLM 跟随自己的 stopDistance（2）同口径。 */
     private static final double LANDFOLLOW_STOP = 2.0;
 
     /**
@@ -2274,6 +2324,78 @@ public final class RideBindManager {
             return false;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /* ==================== 【实测七百五十六·点2】载具之间"5 格内互相弹开" ==================== */
+
+    /** 【实测七百五十六·点2】载具互斥半径（格）：玩家原话「5 格以内的其他载具会被弹开」。 */
+    private static final double VEHICLE_SEP_R = 5.0;
+    /** 每 tick 的弹开推力（格/tick，基准值）：越近推得越狠，但封顶 3 倍。 */
+    private static final double VEHICLE_SEP_PUSH = 0.06;
+    /** 被推的车水平速度已超过这个数（格/tick）就不再叠推力——"弹开"不是"弹飞"。 */
+    private static final double VEHICLE_SEP_MAX_SPEED = 0.6;
+
+    /**
+     * 【实测七百五十六·点2】载具互斥：把 5 格以内**别的女仆骑着的载具**朝远离方向弹开。
+     *
+     * <h2>玩家原话</h2>
+     * 「多个女仆在乘坐卓越前线的坐骑的时候还是很容易挤在一块儿，这边最好加一个 5 格以内的其他
+     *  载具会被弹开的效果」
+     *
+     * <h2>为什么是"推速度"而不是"推目标点"</h2>
+     * 749 那套"别叠罗汉"（{@link #separateFromPeers}）推的是**她要去的地方**——对**车**不管用：
+     * 车与车挤在一起时，两边的目标点各偏一点点，车的动力环（油门/瞄准/总距）照样把车开回彼此
+     * 身上。玩家要的是**物理弹开**，所以这里直接往 {@code deltaMovement} 上叠一个向外的速度。
+     * 卓越前线的载具把 {@code deltaMovement} 当自己的速度状态读（724 的刹车就是写它），所以这一下
+     * 会真的把车推开；车的摩擦与动力环随后把这份速度消化掉。
+     *
+     * <h2>为什么只推"别的车"、且只推"我们驱动的车"</h2>
+     * 对称：每辆被驱动的车每 tick 都跑这一遍、都去推**它看到的**别的车 ⇒ 两两互推 = 真的分开。
+     * 判据用 {@link MaidRideKit#isDriven}（骑乘指挥棒绑的、我们正在驱动的那些）；玩家自己开着车、
+     * 带只女仆当乘客那种**不推**（推玩家的车只会挨骂）。
+     */
+    private static void repelPeerVehicles(Entity mount) {
+        try {
+            if (MaidMountCompat.kindOf(mount) != MaidMountCompat.Kind.VEHICLE) {
+                return; // 只对卓越前线的载具生效（玩家原话点名的那一类）
+            }
+            if (!(mount.level() instanceof ServerLevel level)) {
+                return;
+            }
+            net.minecraft.world.phys.AABB box = mount.getBoundingBox().inflate(VEHICLE_SEP_R);
+            for (Entity other : level.getEntitiesOfClass(Entity.class, box,
+                    e -> e != mount && e.isAlive()
+                            && MaidMountCompat.kindOf(e) == MaidMountCompat.Kind.VEHICLE
+                            && MaidRideKit.isDriven(e))) {
+                double dx = other.getX() - mount.getX();
+                double dz = other.getZ() - mount.getZ();
+                double d2 = dx * dx + dz * dz;
+                if (d2 > VEHICLE_SEP_R * VEHICLE_SEP_R) {
+                    continue;
+                }
+                Vec3 dm = other.getDeltaMovement();
+                double h2 = dm.x * dm.x + dm.z * dm.z; // 只算水平（竖直那一份交给动力环）
+                if (h2 > VEHICLE_SEP_MAX_SPEED * VEHICLE_SEP_MAX_SPEED) {
+                    continue; // 它自己已经在跑开了，别再叠
+                }
+                double d = Math.sqrt(d2);
+                double nx;
+                double nz;
+                if (d < 1.0E-3) {
+                    // 完全重合：用与"别叠罗汉"同一个**确定**相位当分开方向（随机会让两车原地抖）
+                    double ph = MaidRideKit.ridePhase(other.getUUID());
+                    nx = Math.cos(ph);
+                    nz = Math.sin(ph);
+                } else {
+                    nx = dx / d;
+                    nz = dz / d;
+                }
+                // 越近推得越狠（贴脸 3 倍），上限不变——"弹开"而不是"弹飞"
+                double k = VEHICLE_SEP_PUSH * (1.0 + 2.0 * (1.0 - Math.min(1.0, d / VEHICLE_SEP_R)));
+                other.setDeltaMovement(dm.x + nx * k, dm.y, dm.z + nz * k);
+            }
+        } catch (Throwable ignored) {
         }
     }
 
