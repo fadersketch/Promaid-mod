@@ -229,6 +229,22 @@ public final class MaidAutoResurrect {
         }
     }
 
+    /**
+     * 实测七百五十【墓碑"躲过一次清除"的根因修复】——玩家原话：
+     * 「墓碑所在区块没有加载所以躲掉了一次清除吧」。
+     *
+     * <p>旧版只在**已加载的实体表**里找墓碑（{@code lvl.getEntity(uuid)}）。而
+     * {@code PersistentEntitySectionManager} 反编译实证：区块没加载时实体根本不在
+     * 实体表里，{@code getEntity} 恒返回 null —— 于是「她在别的世界死亡 → 玩家也
+     * 离开/死在别处 → 墓碑那块区块没加载 → 自动复活照常触发」这一串走下来，
+     * <b>墓碑一次都没被删掉</b>：它连同【全套背包物品 + 胶片】留在原地（玩家看到的
+     * 症状），而且本类复活时又从死亡快照恢复了**同一套背包** ⇒ 一份物品两处存在。
+     *
+     * <p>【修法】找不到墓碑时，去 TLM 自己的墓碑登记表（{@code MaidWorldData}，TLM 在
+     * {@code addTombstones} 里连【维度 + 坐标】一起记着）查它的位置，把那格区块
+     * **同步加载**出来再删——与复活侧"先把重生点区块载到 FULL 再放人"同一个口径。
+     * 删除走实体自己的 {@code discard}，TLM 的 remove 钩子会顺手清登记表，不留脏记录。
+     */
     private static void removeTombstone(MinecraftServer server, Pending p) {
         if (p.tombstoneId == null) {
             return;
@@ -237,8 +253,73 @@ public final class MaidAutoResurrect {
             net.minecraft.world.entity.Entity e = lvl.getEntity(p.tombstoneId);
             if (e instanceof EntityTombstone ts) {
                 ts.discard(); // → TLM remove 钩子清 MaidWorldData
+                return;
             }
         }
+        // 全维度实体表都没有 → 大概率是"墓碑所在区块没加载"。按 TLM 登记表定位并加载。
+        if (discardTombstoneViaRegistry(server, p)) {
+            return;
+        }
+        com.maidsmart.tool.PromaidLog.log("自动复活",
+                "墓碑既不在实体表、也不在 TLM 登记表里（可能已被玩家取走/世界损坏）——本次跳过删除");
+    }
+
+    /**
+     * 按 TLM 的墓碑登记表（{@code MaidWorldData.getTombstones(ownerId)}）找到这块墓碑的
+     * 【维度 + 坐标】，同步加载那格区块后把它删掉。
+     *
+     * @return 真的删掉了（或确认它已不存在）返回 true；连位置都查不到返回 false
+     */
+    private static boolean discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
+        try {
+            ServerLevel any = server.overworld();
+            com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData data =
+                    com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData.get(any);
+            java.util.List<com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo> list =
+                    data == null ? null : data.getTombstones(p.ownerId);
+            if (list == null || list.isEmpty()) {
+                return false;
+            }
+            com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo hit = null;
+            for (com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo info : list) {
+                if (p.tombstoneId.equals(info.getEntityId())) {
+                    hit = info;
+                    break;
+                }
+            }
+            if (hit == null) {
+                return false;
+            }
+            net.minecraft.core.BlockPos pos = hit.getChunkPos();
+            for (ServerLevel lvl : server.getAllLevels()) {
+                if (!lvl.dimension().location().toString().equals(hit.getDimension())) {
+                    continue;
+                }
+                // 同步加载它那一格区块（required 语义）——她死亡后区块早卸载了，
+                // 不加载出来 getEntity 永远找不到它。
+                lvl.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+                net.minecraft.world.entity.Entity e = lvl.getEntity(p.tombstoneId);
+                if (e instanceof EntityTombstone ts) {
+                    ts.discard(); // → TLM remove 钩子清 MaidWorldData
+                    com.maidsmart.tool.PromaidLog.log("自动复活",
+                            "墓碑所在区块原未加载，已按登记表（" + hit.getDimension() + " "
+                                    + pos.getX() + "," + pos.getY() + "," + pos.getZ()
+                                    + "）同步载入后删除");
+                    return true;
+                }
+                // 区块载进来了，但她确实不在了 → 清掉这条脏登记，免得排班表里留一个幽灵墓碑
+                try {
+                    list.removeIf(i -> p.tombstoneId.equals(i.getEntityId()));
+                    data.setDirty();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.tool.PromaidLog.log("自动复活",
+                        "墓碑登记表有记录但实体已不存在 → 已清掉这条登记（" + hit.getDimension() + "）");
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     private static boolean resurrect(MinecraftServer server, ServerPlayer owner, Pending p, UUID maidId) {
