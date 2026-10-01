@@ -1825,6 +1825,15 @@ public final class RideBindManager {
                 if (gfoe != null && gfoe.isAlive() && gfoe.level() == maid.level()) {
                     Vec3 gair = MaidAirCombat.groundOrbitTarget(maid, mount, gfoe);
                     if (gair != null) {
+                        // 【实测七百五十八】绕圈的"胡萝卜"点同样过一道"别叠罗汉"：两辆车同半径同旋向
+                        // 时（日志实证：两辆车同为 13.9 格），旧版会在圈上追尾/穿模——玩家报的
+                        // "坦克和坦克堆在一起"。combat=true 走大档间距，载具再按车体尺寸放大
+                        // （见 separateFromPeers 的 758 注释）；modeMove 传 false 是这里的本意——
+                        // 绕圈不是"某个工作模式要去的点"，被互斥推偏正是我们要的。
+                        Vec3 gsep = separateFromPeers(maid, mount, gair, false, true);
+                        if (gsep != null) {
+                            gair = gsep;
+                        }
                         // 【实测七百三十九·点3】绕圈走**专用驱动档**：不刹车、不因转向收油
                         // （见 MaidMountCompat.driveOrbit 的注释——停车带的车速前瞻会每拍命中
                         // "前方的胡萝卜"，用普通档就是"冲一下刹一下、最后撞上去"）。
@@ -2297,6 +2306,18 @@ public final class RideBindManager {
                 return aim;
             }
             double sepR = MaidRideKit.SEP_R_COMBAT;
+            // 【实测七百五十八】间距/封顶按"是不是载具"分档（搜索盒仍用大档，扫宽一点无妨）。
+            double want = combat ? MaidRideKit.SEP_R_COMBAT : MaidRideKit.SEP_R;
+            double cap = combat ? MaidRideKit.SEP_MAX_COMBAT : MaidRideKit.SEP_MAX;
+            // 载具按**车体尺寸**放大：卓越前线的坦克/装甲车车体 4 格上下，而 749 那套
+            // "平时 2 格 / 接敌 4 格"是按扫帚与人形定的——对坦克等于没让位，几辆车照样叠在一起
+            // （玩家实测：「多个女仆乘坐多个坦克，仍然会出现严重的叠罗汉情况」）。
+            // 取"车体全宽 + 1.5 格缝"，与 MaidMountCompat.stopSlackFor（车体全宽 + 1）同一套尺寸口径。
+            if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
+                want = Math.max(want, mount.getBbWidth() + 1.5);
+                cap = Math.max(cap, want * 0.6);
+                sepR = Math.max(sepR, want);
+            }
             net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
                     aim.x - sepR, aim.y - sepR, aim.z - sepR,
                     aim.x + sepR, aim.y + sepR, aim.z + sepR);
@@ -2305,7 +2326,7 @@ public final class RideBindManager {
                     e -> e != mount && e.isAlive() && isMaidMount(e))) {
                 peers.add(other.position());
             }
-            return MaidRideKit.separateAim(aim, MaidRideKit.ridePhase(maid.getUUID()), peers, combat);
+            return MaidRideKit.separateAim(aim, MaidRideKit.ridePhase(maid.getUUID()), peers, want, cap);
         } catch (Throwable ignored) {
             return aim;
         }
@@ -2332,28 +2353,37 @@ public final class RideBindManager {
         }
     }
 
-    /* ==================== 【实测七百五十六·点2】载具之间"5 格内互相弹开" ==================== */
+    /* ==================== 【实测七百五十六·点2 / 七百五十八】载具之间"5 格内互相弹开" ==================== */
 
-    /** 【实测七百五十六·点2】载具互斥半径（格）：玩家原话「5 格以内的其他载具会被弹开」。 */
+    /** 【实测七百五十六·点2】载具互斥半径下限（格）：玩家原话「5 格以内的其他载具会被弹开」。 */
     private static final double VEHICLE_SEP_R = 5.0;
-    /** 每 tick 的弹开推力（格/tick，基准值）：越近推得越狠，但封顶 3 倍。 */
-    private static final double VEHICLE_SEP_PUSH = 0.06;
-    /** 被推的车水平速度已超过这个数（格/tick）就不再叠推力——"弹开"不是"弹飞"。 */
-    private static final double VEHICLE_SEP_MAX_SPEED = 0.6;
+    /** 【实测七百五十八】两车之间要留的缝（格）：实际间距 = max(5, 两车全宽之和 ÷ 2 + 这个缝)。 */
+    private static final double VEHICLE_SEP_GAP = 1.0;
+    /** 每 tick 的弹开位移基准（格/tick）：越近越狠（最多 4 倍），封顶约 0.28 格/tick。 */
+    private static final double VEHICLE_SEP_PUSH = 0.07;
+    /** 对方已沿分离方向"往外走"超过这个速度（格/tick）就不再推——"弹开"不是"追着推"。 */
+    private static final double VEHICLE_SEP_AWAY = 0.15;
 
     /**
-     * 【实测七百五十六·点2】载具互斥：把 5 格以内**别的女仆骑着的载具**朝远离方向弹开。
+     * 【实测七百五十六·点2 / 七百五十八】载具互斥：把 5 格以内**别的女仆骑着的载具**朝远离方向弹开。
      *
      * <h2>玩家原话</h2>
      * 「多个女仆在乘坐卓越前线的坐骑的时候还是很容易挤在一块儿，这边最好加一个 5 格以内的其他
-     *  载具会被弹开的效果」
+     *  载具会被弹开的效果」→ 756 实装后仍报「多个女仆乘坐多个坦克，仍然会出现严重的叠罗汉情况」。
      *
-     * <h2>为什么是"推速度"而不是"推目标点"</h2>
-     * 749 那套"别叠罗汉"（{@link #separateFromPeers}）推的是**她要去的地方**——对**车**不管用：
-     * 车与车挤在一起时，两边的目标点各偏一点点，车的动力环（油门/瞄准/总距）照样把车开回彼此
-     * 身上。玩家要的是**物理弹开**，所以这里直接往 {@code deltaMovement} 上叠一个向外的速度。
-     * 卓越前线的载具把 {@code deltaMovement} 当自己的速度状态读（724 的刹车就是写它），所以这一下
-     * 会真的把车推开；车的摩擦与动力环随后把这份速度消化掉。
+     * <h2>【七百五十八】756 的两个失因（都已修）</h2>
+     * <ol>
+     *   <li><b>通道错</b>：756 往 {@code deltaMovement} 叠速度。可卓越前线的载具**每拍都用自己的
+     *       引擎结果重写 deltaMovement**（724 的刹车就是靠写它起效，反编译实证），别的实体在它
+     *       tick 之前/之后写进去的那一点速度，要么被覆盖、要么只影响一帧位移——实测就是
+     *       "推了等于没推"。现在改成**直接挪位置**（{@code setPos}，水平方向、每拍 ≤0.28 格、
+     *       不碰 Y）：位移不会被引擎重算，是唯一保证"真的分开"的通道。</li>
+     *   <li><b>半径没跟车体走</b>：固定 5 格是按"小车"定的；坦克车体就 4 格上下，两辆 5 格间距
+     *       仍然几乎贴脸。现在间距 = {@code max(5, (两车全宽之和) ÷ 2 + 1 格缝)}
+     *       ——两辆 4 格宽的车 = 5 格；再大就跟着涨。</li>
+     * </ol>
+     * 另外把"已经在跑就不推"换成"**沿分离方向已经在往外走**才不推"（756 按速度大小一刀切，
+     * 把"并排高速同向"也一起跳过了——而并排同向正是最容易叠罗汉的情形）。
      *
      * <h2>为什么只推"别的车"、且只推"我们驱动的车"</h2>
      * 对称：每辆被驱动的车每 tick 都跑这一遍、都去推**它看到的**别的车 ⇒ 两两互推 = 真的分开。
@@ -2368,7 +2398,12 @@ public final class RideBindManager {
             if (!(mount.level() instanceof ServerLevel level)) {
                 return;
             }
-            net.minecraft.world.phys.AABB box = mount.getBoundingBox().inflate(VEHICLE_SEP_R);
+            double wA = mount.getBbWidth();
+            // 搜索盒留足余量（对方可能比本车更大），精确间距在循环里按两车尺寸算
+            double reach = Math.max(VEHICLE_SEP_R, wA + 3.0);
+            net.minecraft.world.phys.AABB box = new net.minecraft.world.phys.AABB(
+                    mount.getX() - reach, mount.getY() - 2.0, mount.getZ() - reach,
+                    mount.getX() + reach, mount.getY() + 2.0, mount.getZ() + reach);
             for (Entity other : level.getEntitiesOfClass(Entity.class, box,
                     e -> e != mount && e.isAlive()
                             && MaidMountCompat.kindOf(e) == MaidMountCompat.Kind.VEHICLE
@@ -2376,13 +2411,9 @@ public final class RideBindManager {
                 double dx = other.getX() - mount.getX();
                 double dz = other.getZ() - mount.getZ();
                 double d2 = dx * dx + dz * dz;
-                if (d2 > VEHICLE_SEP_R * VEHICLE_SEP_R) {
+                double r = Math.max(VEHICLE_SEP_R, (wA + other.getBbWidth()) * 0.5 + VEHICLE_SEP_GAP);
+                if (d2 > r * r) {
                     continue;
-                }
-                Vec3 dm = other.getDeltaMovement();
-                double h2 = dm.x * dm.x + dm.z * dm.z; // 只算水平（竖直那一份交给动力环）
-                if (h2 > VEHICLE_SEP_MAX_SPEED * VEHICLE_SEP_MAX_SPEED) {
-                    continue; // 它自己已经在跑开了，别再叠
                 }
                 double d = Math.sqrt(d2);
                 double nx;
@@ -2396,10 +2427,40 @@ public final class RideBindManager {
                     nx = dx / d;
                     nz = dz / d;
                 }
-                // 越近推得越狠（贴脸 3 倍），上限不变——"弹开"而不是"弹飞"
-                double k = VEHICLE_SEP_PUSH * (1.0 + 2.0 * (1.0 - Math.min(1.0, d / VEHICLE_SEP_R)));
-                other.setDeltaMovement(dm.x + nx * k, dm.y, dm.z + nz * k);
+                Vec3 dm = other.getDeltaMovement();
+                // 它已经沿"离开我"的方向在走（且不慢）→ 不用推；并排同向（法向分量为 0）仍然要推
+                if (dm.x * nx + dm.z * nz > VEHICLE_SEP_AWAY) {
+                    continue;
+                }
+                // 越近推得越狠（贴脸 4 倍）——"弹开"而不是"弹飞"
+                double k = VEHICLE_SEP_PUSH * (1.0 + 3.0 * (1.0 - Math.min(1.0, d / r)));
+                other.setPos(other.getX() + nx * k, other.getY(), other.getZ() + nz * k);
+                logRepel(mount, other, d, r, k);
             }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 【实测七百五十八】载具互斥的留痕节流表（独立一张，免得与其它几条日志互相顶掉对方）。 */
+    private static final Map<UUID, Long> SEP_LOG_AT = new HashMap<>();
+
+    /** 一行留痕（节流 5 秒/车）：日志搜「载具互斥」就能看到"哪两辆车、多近、推开多少"。 */
+    private static void logRepel(Entity mount, Entity other, double d, double r, double k) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = SEP_LOG_AT.get(mount.getUUID());
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            if (SEP_LOG_AT.size() > 256) {
+                SEP_LOG_AT.clear();
+            }
+            SEP_LOG_AT.put(mount.getUUID(), now);
+            com.maidsmart.tool.PromaidLog.log("载具互斥", MaidRideKit.describe(mount) + " ↔ "
+                    + MaidRideKit.describe(other)
+                    + " 距离 " + String.format(java.util.Locale.ROOT, "%.1f", d)
+                    + " 格 < 要求 " + String.format(java.util.Locale.ROOT, "%.1f", r)
+                    + " 格 → 弹开 " + String.format(java.util.Locale.ROOT, "%.2f", k) + " 格/拍");
         } catch (Throwable ignored) {
         }
     }

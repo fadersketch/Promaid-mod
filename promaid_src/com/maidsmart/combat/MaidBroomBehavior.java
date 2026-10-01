@@ -500,7 +500,12 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         if (locked != null && locked.m_6084_()) {
             return locked;
         }
-        return currentTarget(maid);
+        // 【实测七百五十八】兜底同样要过"活敌人"闸（与主索敌器同一把尺，见 LiveThreat）：
+        // brain 里的目标由 TLM 的 StartAttacking 写入，而它的判据是 maid.canAttack——对中立生物
+        // 是**永久记仇**（主人很久以前打过一下的星之魔女 NPC 也算合法目标）。主索敌器（resolve，
+        // 已带 5 秒时效）刚判它不合格，这里又原样捡回来，等于白闸。
+        LivingEntity fallback = currentTarget(maid);
+        return (fallback != null && LiveThreat.live(maid, fallback)) ? fallback : null;
     }
 
     /**
