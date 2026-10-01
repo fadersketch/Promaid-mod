@@ -426,13 +426,23 @@ public final class MaidResyncCommand {
     private static final java.util.Map<UUID, Integer> PENDING_ATTR =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** 传送链路调用：下 1 tick 给她补一次属性表包 */
+    /**
+     * v1.3.0(beta) 实测七百五十【issue #27 二修：补包从"一枪"改成"连补几拍"】。
+     *
+     * <p>717 那一版只补**一枪**（下 1 tick），玩家实测「远距传送 1 次，血上限仍显示为 20」
+     * ——单发在真实时序里太脆：客户端那只实体的"建出来"与"服务器把包发出去"不是同一拍，
+     * 谁先谁后都说不准。补几拍是把这层竞态抹平：只要客户端在这几拍内把实体建出来，
+     * 总有一发落到它身上（客户端对未知实体 id 的属性包是**静默丢弃**，多发无害）。
+     */
+    private static final int ATTR_RESEND_TICKS = 5;
+
+    /** 传送链路调用：接下来 {@link #ATTR_RESEND_TICKS} 拍里每拍给她补一次属性表包 */
     public static void scheduleAttributeResend(EntityMaid maid) {
         if (maid == null) {
             return;
         }
         try {
-            PENDING_ATTR.put(maid.m_20148_(), 1);
+            PENDING_ATTR.put(maid.m_20148_(), ATTR_RESEND_TICKS);
         } catch (Throwable ignored) {
         }
     }
@@ -445,11 +455,12 @@ public final class MaidResyncCommand {
         while (it.hasNext()) {
             java.util.Map.Entry<UUID, Integer> e = it.next();
             int left = e.getValue() - 1;
-            if (left > 0) {
+            if (left <= 0) {
+                it.remove();
+            } else {
                 e.setValue(left);
-                continue;
             }
-            it.remove();
+            // 本拍就发（不是等倒计时归零才发）——见 ATTR_RESEND_TICKS 的说明
             try {
                 for (ServerLevel lvl : server.m_129785_()) {
                     net.minecraft.world.entity.Entity ent = lvl.m_8791_(e.getKey());

@@ -98,4 +98,26 @@ public abstract class MaidTeleportPreserveMixin {
             cir.setReturnValue(false);
         }
     }
+
+    /**
+     * v1.3.0(beta) 实测七百五十【issue #27 补最后一条缝：TLM 自己的瞬移】。
+     *
+     * <p>717 把"补属性表"接进了本模组的每一条传送链路，但玩家实测 1.3.0beta「远距传送 1 次，
+     * 血上限仍显示为 20」——**漏的正是这里**：TLM 原版 {@code MaidFollowOwnerTask} 在离主人
+     * 超过 {@code followRange-2+4}（女仆 64 → 66 格）时直接调 {@code maid.teleportToOwner}，
+     * 比本模组的 48 格同维拉回**更早触发**（她大脑每 tick 跑、我们的扫描 5 秒一次）；它内部走
+     * {@code maybeTeleportTo → moveTo}（同维纯位移，**不重追踪、一包属性都不发**），客户端那只
+     * 实体的血上限就一直停在 TLM 默认的 20。
+     *
+     * <p>修法与 717 同口径：**只补属性表那一包**（不重建实体），在她真的瞬移成功之后登记。
+     */
+    @Inject(method = "teleportToOwner", at = @At("RETURN"))
+    private void maidSmartResendAttributesAfterTeleport(LivingEntity owner, CallbackInfoReturnable<Boolean> cir) {
+        try {
+            if (Boolean.TRUE.equals(cir.getReturnValue())) {
+                com.maidsmart.command.MaidResyncCommand.scheduleAttributeResend((EntityMaid) (Object) this);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
 }

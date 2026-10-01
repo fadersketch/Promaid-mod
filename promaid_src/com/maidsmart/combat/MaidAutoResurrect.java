@@ -257,8 +257,72 @@ public final class MaidAutoResurrect {
             net.minecraft.world.entity.Entity e = lvl.m_8791_(p.tombstoneId);
             if (e instanceof EntityTombstone ts) {
                 ts.m_146870_(); // discard → TLM remove 钩子清 MaidWorldData
+                return;
             }
         }
+        // ★ 实测七百五十【墓碑所在区块没加载 → getEntity 永远找不到它】——
+        //   旧版只扫已加载实体表，于是「她在别的世界死亡、玩家也走了、墓碑那块区块没加载」
+        //   这一串走下来墓碑从没被删（连同全套物品+胶片留着，且复活又恢复了同一套背包）。
+        //   这里退回 TLM 自己的登记表（记着维度+坐标）定位、同步载入后删。
+        if (discardTombstoneViaRegistry(server, p)) {
+            return;
+        }
+        com.maidsmart.tool.PromaidLog.log("自动复活",
+                "墓碑既不在实体表、也不在 TLM 登记表里（可能已被玩家取走/世界损坏）——本次跳过删除");
+    }
+
+    /**
+     * 按 TLM 墓碑登记表定位并删除（同 1.21.1 版口径；两树同一条 实测七百五十）。
+     * 玩家原话：「墓碑所在区块没有加载所以躲掉了一次清除吧」。
+     */
+    private static boolean discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
+        try {
+            ServerLevel any = server.m_129880_(Level.f_46428_);
+            com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData data =
+                    com.github.tartaricacid.touhoulittlemaid.world.data.MaidWorldData.get(any);
+            java.util.List<com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo> list =
+                    data == null ? null : data.getTombstones(p.ownerId);
+            if (list == null || list.isEmpty()) {
+                return false;
+            }
+            com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo hit = null;
+            for (com.github.tartaricacid.touhoulittlemaid.world.data.MaidInfo info : list) {
+                if (p.tombstoneId.equals(info.getEntityId())) {
+                    hit = info;
+                    break;
+                }
+            }
+            if (hit == null) {
+                return false;
+            }
+            net.minecraft.core.BlockPos pos = hit.getChunkPos();
+            for (ServerLevel lvl : server.m_129785_()) {
+                if (!lvl.m_46472_().m_135782_().toString().equals(hit.getDimension())) {
+                    continue;
+                }
+                lvl.m_6325_(pos.m_123341_() >> 4, pos.m_123343_() >> 4); // 同步载入那格区块
+                net.minecraft.world.entity.Entity e = lvl.m_8791_(p.tombstoneId);
+                if (e instanceof EntityTombstone ts) {
+                    ts.m_146870_();
+                    com.maidsmart.tool.PromaidLog.log("自动复活",
+                            "墓碑所在区块原未加载，已按登记表（" + hit.getDimension() + " "
+                                    + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_()
+                                    + "）同步载入后删除");
+                    return true;
+                }
+                // 区块载进来了、她确实不在了 → 清掉脏登记
+                try {
+                    list.removeIf(i -> p.tombstoneId.equals(i.getEntityId()));
+                    data.m_77762_();
+                } catch (Throwable ignored) {
+                }
+                com.maidsmart.tool.PromaidLog.log("自动复活",
+                        "墓碑登记表有记录但实体已不存在 → 已清掉这条登记（" + hit.getDimension() + "）");
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 
     /** 在主人重生点复活女仆（与 TLM 魂符释放同构：new + load + 落点 + addFreshEntity） */
