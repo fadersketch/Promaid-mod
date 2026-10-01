@@ -1,4 +1,13 @@
-﻿## 实测七百五十六【陆地坐骑改「她寻路的终点」+ 每 tick 驱动 + 载具 5 格互斥 + 守家即停】（两树镜像）
+﻿## 实测七百五十七【车上索敌不再把「什么东西」都当敌人：自动索敌/载具开火改走带时效的 LiveThreat】（两树镜像）
+
+- 玩家原话：「我发现女仆在车上索敌似乎出现了问题。可以看一下刚刚运行的游戏，似乎什么都被他们当成了敌人。」
+- **实证（2026-10-02 那一局的 promaid.log）**：`[模组坐骑·炮位] 卓越前线载具(WHEEL) 炮塔目标=horse` 与 `[模组坐骑·开火] 卓越前线载具(WHEEL) 直连开火 → horse` 反复出现——车上的女仆把**场上的马**当成敌人、对着它开炮（同一局里 TRACK / HELICOPTER 也都出现过 `炮塔目标=horse`）。同一局的陆地坐骑（`[模组坐骑·目标] horse`）只打过 husk，从没打过马 ⇒ 问题只出在**载具侧那套 50 格自动索敌**上。
+- **根因**：合法目标的类型闸走 TLM 的 `DefaultMonsterType.canAttack` —— `Enemy` 能打、`TamableAnimal`/`Npc` 不打、**其余一律"中立"**，而中立能不能打只看「它是不是 `getLastHurtByMob()` / `getLastHurtMob()` 里的那一个」。**马不是 `TamableAnimal`**（`AbstractHorse` 继承 `Animal`），落在中立；而原版那两个"最近打过谁"的字段**一旦写上就不再清空** ⇒ 主人很久以前随手打过一下的马，**永远**过 `canAttack`。平时看不出来（TLM 自己的索敌半径小），但本模组的 `FlightTargeting`（扫帚 / 飞行载具 / 地面载具绕圈）把它当**唯一**类型闸，于是"很久以前被打过一次的马"成了永远合法的猎物。
+- **修法**：新增公共件 `com.maidsmart.combat.LiveThreat`（带 5 秒窗口的"活敌人"判据，与 `NeutralThreatDriver.OWNER_COMBAT_TICKS` / `CombatWorkRange` 同口径）：`真敌对(Enemy)` 或 `5 秒内真的交过手`（她打过它 / 它打过她 / 主人打过它 / 它打过主人，四个方向都查、时间戳各取实体自己的）或 `它此刻正锁着她/主人` —— 三条都不满足就不当敌人；类型闸（玩家/盔甲架/宠物/村民）与友军闸一个都没放宽。
+- **接线**：`FlightTargeting.keepable` / `FlightTargeting.scan`（自动索敌）、`MaidMountCompat.tickAttack`（载具开火闸）、`RideBindManager.liveTargetOf`（载具接敌/绕圈的 brain 目标回退）。
+- **不受影响**：正在打的仗（含不实现 `Enemy` 的模组 boss——只要还在互相打或正锁着我们这边就一直算数）、原版敌对怪、玩家主动指定/正在交手的对象。
+
+## 实测七百五十六【陆地坐骑改「她寻路的终点」+ 每 tick 驱动 + 载具 5 格互斥 + 守家即停】（两树镜像）
 
 玩家三条指令，一条返修 + 两条新增。
 

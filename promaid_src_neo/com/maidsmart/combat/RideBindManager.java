@@ -1751,7 +1751,7 @@ public final class RideBindManager {
                 // 而 TLM 那条链按 16/8 格援护半径丢目标，boss 一飞高/一掉下去就没了。
                 LivingEntity foe = FlightTargeting.resolve(maid);
                 if (foe == null) {
-                    foe = targetOf(maid); // 索敌器这一拍没结果 → 退回 brain（不丢已有目标）
+                    foe = liveTargetOf(maid); // 索敌器这一拍没结果 → 退回 brain（只认"活敌人"，见 LiveThreat）
                 }
                 // 【实测七百三十·点2】"发现攻击范围内没有主人"→ 放弃当前敌人、转去追主人。
                 // 玩家原话：「打完了，或者发现攻击范围内没有主人，则放弃攻击敌人，转而去追主人。」
@@ -1817,7 +1817,7 @@ public final class RideBindManager {
                     && !MaidMountCompat.isFlyingVehicle(mount)) {
                 LivingEntity gfoe = FlightTargeting.resolve(maid);
                 if (gfoe == null) {
-                    gfoe = targetOf(maid);
+                    gfoe = liveTargetOf(maid); // 【七百五十七】只认"活敌人"（见 LiveThreat）
                 }
                 if (gfoe != null && maid.distanceTo(owner) > FlightTargeting.RANGE) {
                     gfoe = null; // 与飞行档同一道"主人不在场就收手"的闸（口径只有一处）
@@ -2502,6 +2502,20 @@ public final class RideBindManager {
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /**
+     * 【实测七百五十七】brain 里的目标，**只有还算是"活敌人"才认**——见 {@link com.maidsmart.combat.LiveThreat}。
+     * 载具的接敌 / 绕圈 / 开火判定必须走这一条：TLM 的 canAttack 对中立生物**没有时间窗**，
+     * "主人很久以前打过一下的马"会永远合法（玩家实测：车上的女仆对着自家的马开炮）。
+     */
+    private static LivingEntity liveTargetOf(EntityMaid maid) {
+        try {
+            LivingEntity t = targetOf(maid);
+            return (t != null && com.maidsmart.combat.LiveThreat.live(maid, t)) ? t : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /** 女仆当前的攻击目标（brain 的 ATTACK_TARGET 优先，退回实体层 target）。 */
