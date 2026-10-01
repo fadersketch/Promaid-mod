@@ -2180,9 +2180,11 @@ public final class RideBindManager {
             // 是关的（{@code canBrainMoving()} 里那条 {@code !isPassenger()}，反编译实证），所以这一档
             // 只能由我们补：把**主人**交给坐骑。补的是主人本人，不是我们自造的走位点；停车距离
             // 与 TLM 跟随自己的 stopDistance 同口径（2 格），不再有我们自造的 followDist。
+            boolean following = false;
             if (target == null && !fighting && owner != null
                     && horizontalDist(mount, owner) > LANDFOLLOW_STOP) {
                 target = owner.m_20182_();
+                following = true;
             }
             if (target == null) {
                 // 接敌、但她的寻路这一拍恰好是空的（两段走位之间的间隙）：**什么都不做**，
@@ -2194,7 +2196,10 @@ public final class RideBindManager {
                 faceOwner(mount, owner);
                 return;
             }
-            if (horizontalDist(mount, target) <= STOP_SLACK) {
+            // 【停车带只属于"跟着主人"那一档】接敌走位点 / 任务走位点到没到，**由她自己的寻路
+            // 说了算**（走完就 `isDone` → 上面那一拍转成"停"），绝不能按"坐骑离这个点 1.5 格"
+            // 就掐停：迂回点本来就在敌人旁边一两格，那样会每拍掐停、还把车头转向主人。
+            if (following && horizontalDist(mount, target) <= STOP_SLACK) {
                 MaidRideKit.stopNavigation(mount);
                 faceOwner(mount, owner);
                 return;
