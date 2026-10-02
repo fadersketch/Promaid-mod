@@ -2050,10 +2050,18 @@ public final class RideBindManager {
                 // 玩家原话：「打完了，或者发现攻击范围内没有主人，则放弃攻击敌人，转而去追主人。」
                 // 参照半径直接复用索敌器的**发现半径**（{@link FlightTargeting#RANGE} = 50）：
                 // 主人离得比"她还愿意接敌的距离"还远，就说明这一场不在主人身边打——收手回去。
-                if (foe != null && maid.m_20270_(owner) > FlightTargeting.RANGE) {
+                //
+                // 【实测七百七十九·点2】固定翼用**它自己的航程**当这道闸（{@link
+                // MaidMountCompat#AIRCRAFT_ENGAGE_LEASH} = 200 格）：它一次通场 + 掉头就要飞出
+                // 100~200 格，按 50 判等于每一趟都在半路把敌人丢掉——玩家看到的"飞机不支援战斗"
+                // 有一半是这条闸造成的。直升机/扫帚/飞艇照旧 50 格。
+                boolean fixedWing = MaidMountCompat.isAircraft(mount);
+                double engageLeash = fixedWing
+                        ? MaidMountCompat.AIRCRAFT_ENGAGE_LEASH : FlightTargeting.RANGE;
+                if (foe != null && maid.m_20270_(owner) > engageLeash) {
                     if (LEASH_LOGGED.add(maid.m_20148_())) {
                         MaidMountCompat.logDrive(mount, "主人超出接敌半径（"
-                                + (long) maid.m_20270_(owner) + "格 > " + (long) FlightTargeting.RANGE
+                                + (long) maid.m_20270_(owner) + "格 > " + (long) engageLeash
                                 + "格）→ 放弃敌人、转去追主人");
                     }
                     foe = null;
@@ -2062,7 +2070,11 @@ public final class RideBindManager {
                 }
                 Vec3 air;
                 if (foe != null && foe.m_6084_() && foe.m_9236_() == maid.m_9236_()) {
-                    air = MaidAirCombat.combatTarget(maid, foe);
+                    // 【实测七百七十九·点2】固定翼 = **轰炸机航线**：胡萝卜取"敌正上方"，
+                    // 让她一趟趟从敌人头顶冲过去（炸弹由 tickAttack 的投弹链路照常丢）；
+                    // 直升机/飞艇/扫帚仍取"圈上一点"（它们悬停/盘旋那一套本来就是对的）。
+                    air = fixedWing ? MaidAirCombat.bomberRunTarget(maid, foe)
+                            : MaidAirCombat.combatTarget(maid, foe);
                 } else {
                     MaidAirCombat.clear(maid); // 没目标 → 这一场遭遇作废，下一场重新起手
                     // 【实测七百三十八·玩家坐副驾】玩家原话：「如果女仆乘坐的是直升机且玩家坐

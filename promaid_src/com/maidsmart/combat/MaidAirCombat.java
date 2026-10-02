@@ -399,6 +399,34 @@ public final class MaidAirCombat {
         }
     }
 
+    /**
+     * 【实测七百七十九·点2】固定翼接敌用的胡萝卜：**敌人正上方** {@link #requiredAbove} 格。
+     *
+     * <p>玩家原话（即规格）：「飞机在发现敌人之后，考虑到这是轰炸机类型的。那应该就是在敌人的
+     * 头顶上进行反复飞行和轰炸。」
+     *
+     * <p>为什么不复用 {@link #combatTarget}：那一档给的是**圈上的一点**（{@link #orbitPoint}），
+     * 而固定翼气动上转不过小圈（最小转弯半径 ≈55~65 格，推导见
+     * {@code MaidMountCompat.driveFlight} 的"固定翼巡航"注释）——让它去"绕圈"就必然越飞越远。
+     * 给**正上方**这一个点，它就变成了"冲过头 → 方位角翻 180° → 拐大弯掉头 → 再冲一次"的
+     * 往返航线，正是玩家要的"反复飞行和轰炸"，而且不需要任何状态机。
+     *
+     * <p>高度那一项直接复用 {@link #requiredAbove}（接敌高度、投弹安全高度取大）——口径只有一处。
+     *
+     * @return 目标点；{@code null} = 本档不管（调用方照旧按"跟随主人"处理）
+     */
+    public static Vec3 bomberRunTarget(EntityMaid maid, LivingEntity target) {
+        if (maid == null || target == null || !target.m_6084_()) {
+            return null;
+        }
+        try {
+            return new Vec3(target.m_20185_(), target.m_20186_() + requiredAbove(maid),
+                    target.m_20189_());
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     /** 进入盘旋前必须爬到的高度容差（格）：离"敌上 N 格"进这个带就认为高度到位、开始绕圈。 */
     private static final double CLIMB_TOL = 2.5;
 
