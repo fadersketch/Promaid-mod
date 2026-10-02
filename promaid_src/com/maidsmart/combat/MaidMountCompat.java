@@ -2734,10 +2734,11 @@ public final class MaidMountCompat {
         }
     }
 
-    /** 某一列的地面高度（从 {@code fromY+4} 往下找第一格非空气）；找不到（悬空/虚空）→ {@code Integer.MIN_VALUE}。 */
+    /** 某一列的地面高度（从 {@code fromY+4} 往下最多 40 格找第一格非空气）；找不到（悬空/太高）→ {@code Integer.MIN_VALUE}。 */
     private static int surfaceY(net.minecraft.server.level.ServerLevel sl, int x, int fromY, int z) {
         try {
-            for (int y = fromY + 4; y > sl.m_141937_() + 1; y--) {
+            int floor = Math.max(sl.m_141937_() + 1, fromY + 4 - 40); // 有界向下扫，别把整列世界翻一遍
+            for (int y = fromY + 4; y > floor; y--) {
                 if (!sl.m_8055_(new net.minecraft.core.BlockPos(x, y, z)).m_60795_()) {
                     return y;
                 }

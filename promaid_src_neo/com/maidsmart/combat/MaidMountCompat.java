@@ -2698,11 +2698,12 @@ public final class MaidMountCompat {
         }
     }
 
-    /** 某一列的地面高度（从 {@code fromY+4} 往下找第一格非空气）；找不到（悬空/虚空）→ {@code Integer.MIN_VALUE}。 */
+    /** 某一列的地面高度（从 {@code fromY+4} 往下最多 40 格找第一格非空气）；找不到（悬空/太高）→ {@code Integer.MIN_VALUE}。 */
     private static int surfaceY(net.minecraft.server.level.ServerLevel sl, int x, int fromY, int z) {
         try {
             net.minecraft.core.BlockPos.MutableBlockPos p = new net.minecraft.core.BlockPos.MutableBlockPos();
-            for (int y = fromY + 4; y > sl.getMinBuildHeight() + 1; y--) {
+            int floor = Math.max(sl.getMinBuildHeight() + 1, fromY + 4 - 40); // 有界向下扫，别把整列世界翻一遍
+            for (int y = fromY + 4; y > floor; y--) {
                 if (!sl.getBlockState(p.set(x, y, z)).isAir()) {
                     return y;
                 }
