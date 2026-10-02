@@ -4315,8 +4315,19 @@ public final class MaidMountCompat {
             // 的攻击/目标 AI 会接着完成"瞄准、接近、开火、用坐骑自己的攻击方式"。null 也照写
             // （她没目标 = 坐骑也没目标），这样"服从"是双向且即时的。
             // 原版马/猪/骆驼这些没有攻击目标 AI → 写了也没有任何副作用。
+            //
+            // 【实测七百七十】模组仆从坐骑（无鞍可骑仆从）**排除在本档之外**：那一类走"单独一个
+            // 区间"——行动逻辑全归它自己的 AI（含它自己的锁敌 SummonTargetGoal），本模组只赋速度，
+            // **不再替它写目标**（写了反而会覆盖它自己选的敌人）。见 MaidRideKit.servantAutoEnabled。
             if (mount instanceof net.minecraft.world.entity.Mob mob) {
                 try {
+                    if (MaidRideKit.servantAutoEnabled() && MaidRideKit.isNoSaddleRideable(mob)) {
+                        return;
+                    }
+                    // 【实测七百六十六·后门】先把诡厄仆从的"目标优先闸"打开（只在诡厄仆从上有：
+                    // 见 MaidGoetyCompat.openPriorityGate 的完整口径）——不开的话，守区仆从的
+                    // setTarget 会把区域外的目标**静默吞掉**，它自己的战斗 AI 从此一片死寂。
+                    com.maidsmart.goety.MaidGoetyCompat.openPriorityGate(mob);
                     mob.m_6710_(target);
                     logAttackGeneric(mount, target);
                 } catch (Throwable ignored) {
@@ -4469,6 +4480,11 @@ public final class MaidMountCompat {
     /**
      * 通用档写目标时的一行留痕（节流 5 秒/只，且只在"目标变了"时更值得看）。
      * 日志搜「模组坐骑·目标」就能确认通用兜底有没有真的把她的 target 传下去。
+     *
+     * <p>【实测七百六十六】补上"**它自己**的目标"：这一行原先打的只是**女仆的目标**，
+     * 于是"目标=husk"看着一切正常、而它一招不出。反编译实证诡厄 {@code Summoned.setTarget}
+     * 对守区仆从会静默丢弃区域外目标 → 它的 {@code getTarget()} 其实是 null。
+     * 两栏并排（女仆的 / 它自己的）以后，这类"写丢了"一眼可见。
      */
     private static void logAttackGeneric(Entity mount, LivingEntity target) {
         try {
@@ -4485,9 +4501,15 @@ public final class MaidMountCompat {
             if (who.isEmpty()) {
                 who = String.valueOf(mount.m_6095_()).replace("entity.minecraft.", "");
             }
-            com.maidsmart.tool.PromaidLog.log("模组坐骑·目标", who + " 目标="
+            String mine = "-";
+            if (mount instanceof net.minecraft.world.entity.Mob m2) {
+                LivingEntity own = m2.m_5448_();
+                mine = own == null ? "无" : String.valueOf(own.m_6095_()).replace("entity.minecraft.", "");
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·目标", who + " 女仆目标="
                     + (target == null ? "无" : String.valueOf(target.m_6095_())
-                            .replace("entity.minecraft.", "")));
+                            .replace("entity.minecraft.", ""))
+                    + " 它自己=" + mine);
         } catch (Throwable ignored) {
         }
     }

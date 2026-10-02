@@ -2,6 +2,7 @@ package com.maidsmart.goety;
 
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.items.IItemHandler;
@@ -389,6 +390,104 @@ public final class MaidGoetyCompat {
         } catch (Throwable t) {
             return 0.5;
         }
+    }
+
+    /**
+     * 【实测七百六十五·点2】一只诡厄仆从的"真正主人"（{@code IOwned.getTrueOwner()}）。
+     *
+     * <p>反编译实证：{@code RedstoneMonstrosity.mobInteract} 只在
+     * {@code getTrueOwner() != null && pPlayer == getTrueOwner()} 时才允许骑乘。所以"主人直接
+     * 接管"这条判据必须问**它自己的**主人是谁——否则一个骑不上它的人右击一下，我们白白把女仆
+     * 请下来、而 Goety 又不会让他上。拿不到（非诡厄仆从）→ 返回 null。
+     */
+    public static LivingEntity trueOwner(Entity e) {
+        try {
+            if (e == null) {
+                return null;
+            }
+            Class<?> c = e.getClass();
+            while (c != null) {
+                try {
+                    java.lang.reflect.Method m = c.getDeclaredMethod("getTrueOwner");
+                    m.setAccessible(true);
+                    Object r = m.invoke(e);
+                    return r instanceof LivingEntity le ? le : null;
+                } catch (NoSuchMethodException ignored) {
+                    // 往上找
+                }
+                c = c.getSuperclass();
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
+    }
+
+    /**
+     * 【实测七百六十六·后门】把诡厄仆从的"目标优先闸"打开（{@code IServant.setPriorityTime(100)}）。
+     *
+     * <h2>现场（玩家 2026-10-02 19:42/19:43 那两局的日志 + 反编译实证）</h2>
+     * 女仆骑上下界合金巨兽仆从、目标也写进去了（日志 {@code [模组坐骑·目标] ... 目标=husk}），
+     * 但它**一招不出、只会自己游荡**。根因在 {@code Summoned.setTarget(LivingEntity)}：
+     * <pre>
+     *   if (isGuardingArea() &amp;&amp; !isPrioritizing()) {
+     *       if (target != null) {
+     *           if (target.distanceToSqr(vec3BoundPos()) &lt;= Mth.square(guardingRange()))
+     *               overrideSetTarget(target);   // 区内才收
+     *           // 区外：**静默丢掉**，连日志都没有
+     *       } else overrideSetTarget(null);
+     *   } else overrideSetTarget(target);
+     * </pre>
+     * 而 {@code IServant.servantTick()} 对守区仆从还有第二道：目标离守区中心超过
+     * {@code guardingRange()*2} 就 {@code owned.setTarget(null)} 直接清掉。两条叠加的结果是
+     * **它的 getTarget() 恒为 null** ⇒ {@code InternalSummonMoveGoal} / 五个
+     * {@code InternalSummonAttackGoal}（砸地/岩浆弹/火焰弹/冲锋/震地）全部 {@code canUse()=false}
+     * ——只剩 {@code Summoned.WanderGoal}（priority 5，不看目标）在走 ⇒ 玩家原话「只会移动，
+     * 但仍然不会进行攻击」。它自己的技能冷却、装填、视线判据全是好的，**只是没人给它目标**。
+     *
+     * <h2>这道闸为什么能开</h2>
+     * 上面两条的判据里都有 {@code !isPrioritizing()} / {@code isPrioritizing()}——
+     * 而 {@code isPrioritizing() == getPriorityTime() > 0}，{@code setPriorityTime(int)} 是
+     * {@code IServant} 的 public 接口方法、{@code Summoned} 原样实现。把闸打开之后再走
+     * {@code setTarget(...)}，它自己就会落到 {@code else} 分支直接收下，且 {@code servantTick}
+     * 的"清目标"那一段整块被跳过。**没有新数值、没有绕过它自己的任何判据**——用的是模组
+     * 自己给"优先目标"留的那条正门。
+     *
+     * <p>本方法只对**诡厄仆从**生效（{@code setPriorityTime} 在别的实体上根本不存在 → 返回 false，
+     * 调用方照旧 {@code setTarget}，一个字节都不变）。110 拍后自动衰减，不留痕。
+     */
+    public static boolean openPriorityGate(Entity e) {
+        try {
+            if (e == null) {
+                return false;
+            }
+            Object cached = GATE_METHODS.computeIfAbsent(e.getClass(), MaidGoetyCompat::findPriorityTime);
+            if (cached instanceof java.lang.reflect.Method m) {
+                m.invoke(e, 100);
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** {@code setPriorityTime} 的按类缓存（哨兵 {@link #GATE_NONE} = 这类没有这道闸）。 */
+    private static final java.util.concurrent.ConcurrentHashMap<Class<?>, Object> GATE_METHODS =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Object GATE_NONE = new Object();
+
+    private static Object findPriorityTime(Class<?> c) {
+        for (Class<?> k = c; k != null && k != Object.class; k = k.getSuperclass()) {
+            try {
+                java.lang.reflect.Method m = k.getDeclaredMethod("setPriorityTime", int.class);
+                m.setAccessible(true);
+                return m;
+            } catch (NoSuchMethodException ignored) {
+                // 往上找（Summoned / IServant 默认实现都可能有）
+            } catch (Throwable ignored) {
+                return GATE_NONE;
+            }
+        }
+        return GATE_NONE;
     }
 
     /**

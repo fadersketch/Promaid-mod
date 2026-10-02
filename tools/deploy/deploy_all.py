@@ -6,6 +6,71 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十一（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条（支援范围扩大）** ——
+① 玩家定档：「不要只支援女仆，还可以支援其他的友方单位」；友军判据 = 「原版宠物以及仆从的
+   共同特点」；支援内容 = 「他们没有饥饿值，所以只能吃药水这些治疗效果……支援药水以及一些
+   效用性食物（金苹果这种），比女仆间支援少了普通食物和不死图腾」。
+② 友军判据 = 归属同一位主人：原版宠物 TamableAnimal/AbstractHorse 与模组仆从（诡厄 Owned）
+   都实现 OwnableEntity（javap 实证），故判据 = OwnableEntity 且 getOwnerUUID 与本女仆主人
+   UUID 相同；再叠 isAlliedTo（同队/同盟）。不写死实体 id。刻意不用 getOwner()（在线实体）。
+③ 支援内容：药水（抗火/治疗/再生/饮用型直接喂）+ 金苹果/附魔金苹果 + 牛奶蜂蜜；**不做**
+   普通食物、**不做**不死图腾（友军没有饥饿值、不吃那套）。
+④ 实现：MaidAidOwnerBehavior.aidFriendlyUnits + sameFriendlySide + hasFriendlyAidItem +
+   isFriendlyAidItem + feedAllyMilkOrHoney + goldenAppleOnAlly + feedDrinkablePotionToAlly；
+   16 格扫 LivingEntity，排除女仆自身，与女仆互助链共用 3 秒 CD，每轮最多救一个。
+⑤ 开关 combat.aid.friendlyUnits（默认开）；面板「贴身辅助」+ 手册第五节 ⑧。
+
+实测七百七十（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条（范围重构）** ——
+① 玩家定档：「只对 mod 类仆从类生效，就跟卓越前线一样单独开了个区间……女仆坐上去只会赋予仆从
+   相应的速度，其余行动逻辑全换成仆从自己的（home 模式坐骑仍然停）……她受到伤害就转移给身下
+   坐着的仆从。」区间判据 = MaidRideKit.isNoSaddleRideable（诡厄无鞍可骑仆从），原版马/骆驼、
+   卓越前线载具、冰火传说龙、通用骑乘逻辑一律不动。
+② 只赋速度：applyRiddenSpeed（每拍把坐骑 MOVEMENT_SPEED 的"我们的修改器"更新成「她×speedScale」，
+   ADD_VALUE 同 id 覆盖）；解绑 clearRiddenSpeed 摘掉。
+③ 其余全换它自己的 AI：drive 的该档**一个字都不写**；靠 reopenRiddenCombatGoals（MobRiddenControl
+   FlagsMixin 在 updateControlFlags 之后）把 MOVE/LOOK/JUMP/**TARGET** 开回来（含 TARGET，因为诡厄
+   把它也关了；重开 TARGET 不会打背上的女仆——MobUtil.isOwnedTargetable 实证）。home 模式不接管 =
+   坐骑停住。RandomStrollGoalRiddenMixin 排除该类（它的闲逛归它自己）。
+④ 清理旧口径：删 MaidMountForceAttack / PathNavigationRiddenGuardMixin / skillNavBlocked /
+   navFeedAuthorize·Release / chaseBeyondOwnReach / tickAttack 替它写目标 / tick 的 sweep 调用。
+⑤ 伤害转移：ServantMountDamageTransfer（1.21.1 LivingIncomingDamageEvent，1.20.1 LivingAttackEvent）；
+   环境自伤（虚空/卡墙/挤压/撞墙）不转移。开关 combat.ride.servantAuto / servantTransfer。
+
+实测七百六十九（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条** ——
+① 玩家原话「还是不行，能不能强制调用技能？每隔一段时间。不管能不能命中，就仅仅是往女仆那个方向施展
+   一次攻击技能。」根因：卡死它的是技能 goal 的 `canUse()` 射程判据（岩浆弹 40 格 / 火焰弹 26 格 /
+   冲锋 16 格），768 的强制循环里还留了"射程够不着就 continue"——女仆远程一拉开距离，五个技能全部
+   进不来。反编译实证：**弹体是在 goal 的 tick() 里生成的，判据只有 `target != null && attackTicks ==
+   attackshot`，与射程、视线无关**（岩浆弹第 19 拍 3 发 / 火焰弹第 35 拍 5 发）。修法：MaidMountForceAttack
+   新增"超距强制档"（tryForceOne/begin/ownCooldown/hasShotMarker），自然掷骰全落空或目标超出全部射程时，
+   挑射程最远的投掷型技能（有 `attackshot` 字段那族）**绕开 canUse() 直接 start()**，由我们替它 tick；
+   节拍按**它自己的冷却**（起手前先读全部 `*cooldown*` 字段，非零就等）——"最小攻击间隔与坐骑一致"；
+   日志加 `[模组坐骑·强启] … 超距强启：<技能>`。② 顺带：RideBindManager.drive 让位判据从"它自己有
+   `getTarget()`"改成"女仆有活目标"（它自己的 `stop()` 会清 `getTarget()`，旧判据在收招那拍会与我们抢一拍）。
+
+实测七百六十八（v1.3.0 beta，同名覆盖，未发版）：**两树同步的两条** ——
+① 远程女仆带不动坐骑（拉开距离后它呆若木鸡）的真根因：原版 `Mob.tick()`/`m_8119_()` 每 5 拍调
+   `updateControlFlags()`/`m_8022_()`，它把 `goalSelector` 的 MOVE/JUMP/LOOK 三个控制位设成
+   `!(getControllingPassenger() instanceof Mob)`——**女仆就是个 Mob**（是"控制乘客"），于是诡厄
+   仆从自己的接近（`InternalSummonMoveGoal`）与全部技能（`InternalSummonAttackGoal` 家族，都带
+   这三个控制位）被 `GoalSelector.tick()` 整个 stop 掉：一步走不了、一招放不出。修法：新增混合
+   `MobRiddenControlFlagsMixin`（注入点在 `Mob.tick` 里 `updateControlFlags()` 调用之后，避开
+   诡厄对那个方法的重写），战斗中把这三个控制位开回来——它用自己的 `FOLLOW_RANGE`（=50）追、
+   用自己的技能判定出招，767 的后门退居兜底；平时一个控制位都不动；
+② `RideBindManager.chaseBeyondOwnReach`：javap 实证 `PathNavigation.createPath` 把寻路长度硬限在
+   它自己的 `FOLLOW_RANGE`——目标超出就等于永远 `createPath=null` 地干等。仅当目标远过它自己的
+   上限时喂一个 24 格以内的路点替它带路，进范围立刻撒手（走位仍归它自己的 AI）。
+
+实测七百六十七（v1.3.0 beta，同名覆盖，未发版）：**两树同步的两条** ——
+① 诡厄「守区」仆从的目标会被它的 `Summoned.setTarget` 静默吞掉（区外一律不收，`servantTick` 还会把
+   超过 2×守区半径的目标清成 null）→ 下界合金巨兽仆从的 `getTarget()` 恒为 null、五个
+   `InternalSummonAttackGoal`（砸地/岩浆弹/火焰弹/冲锋/震地）与 `InternalSummonMoveGoal` 全部
+   `canUse()=false`，只剩 `WanderGoal` 游荡 = 玩家看到的「只会移动、不会攻击」。修法：
+   `MaidGoetyCompat.openPriorityGate`（写目标前先 `setPriorityTime(100)` 开它自己的「优先目标」闸）；
+② 后门 `MaidMountForceAttack`：女仆一开火就替它自己的技能 goal 重掷 `canUse()` 并强启，
+   随后由我们替它 tick（弹体在 goal 的 tick 里生成），冷却全走它自己的 `stop()`；
+   停手 / 下鞍 / 坐骑没了 → `sweep()` 干净收招。
+
 实测七百四十二（v1.3.0 beta，同名覆盖，未发版）：**两树同步的两条** ——
 ① 左击换座终于换得过去（`RideBindManager.grantRemount/revokeRemount/remountPermitted` + S2C
    `MaidSeatNetworking.ArmRemountPacket`；根因是 722/738 那两道"拿指挥棒不许登乘"的闸把换座自己的
