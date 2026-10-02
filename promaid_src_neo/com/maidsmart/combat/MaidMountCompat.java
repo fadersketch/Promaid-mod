@@ -237,6 +237,37 @@ public final class MaidMountCompat {
     private static Method mIntValueSet;
     private static java.lang.reflect.Field fGunPropMagazine;
 
+    /* 【实测七百七十八·点1】"检测到创造盒就强制允许开炮"这条后门所需的反射。
+     *
+     * 根因（反编译实证）：载具武器的 {@code canShoot} 走的是 **VehicleGunItem 的覆写**，
+     * 它最后一关不是 {@code hasEnoughAmmoToShoot}，而是
+     * {@code VehicleEntity.getAmmo(data) = useBackpackAmmo ? backupAmmoCount.get() : ammo.get()}
+     * （VehicleEntity:5707）——无弹匣武器（机枪）读的是 **backupAmmoCount 这个"显示值"**，
+     * 有弹匣的（主炮）读 ammo。另外它前面还有五道闸：{@code PROJECTILE_AMOUNT>0}、
+     * {@code !overHeat}、{@code heat<=100}、{@code !reloading()}、{@code !charging()}、
+     * {@code !bolt.needed}——**任意一道不过就是"一点动静都没有"**。
+     * 所以这条后门要把"弹"和"状态"一起按到可开火：
+     *   ① ammo := MAGAZINE（与 SWB 对创造玩家同一手，GunData:631）
+     *   ② backupAmmoCount := 大值（无弹匣武器 getAmmo 读它）
+     *   ③ GunData.resetStatus()（清装填/拉栓/蓄力，GunData:641）
+     *   ④ overHeat := false、heat := 0.0（机枪连射过热那道闸）
+     */
+    private static java.lang.reflect.Field fGunBackupAmmoCount; // GunData.backupAmmoCount (IntValue)
+    private static Method mGunResetStatus;                       // GunData.resetStatus()
+    private static java.lang.reflect.Field fGunOverHeat;         // GunData.overHeat (BooleanValue)
+    private static java.lang.reflect.Field fGunHeat;             // GunData.heat (DoubleValue)
+    private static Method mBoolValueGet;                         // BooleanValue.get()
+    private static Method mBoolValueSet;                         // BooleanValue.set(boolean)
+    private static Method mDoubleValueGet;                       // DoubleValue.get()
+    private static Method mDoubleValueSet;                       // DoubleValue.set(double)
+    private static java.lang.reflect.Field fGunBoltSub;          // GunData.bolt (subdata)
+    private static java.lang.reflect.Field fBoltNeeded;          // Bolt.needed (BooleanValue)
+    private static Method mGunCharging;                          // GunData.charging() -> boolean
+    private static Method mVehicleGetAmmo;                       // VehicleEntity.getAmmo(GunData) -> int
+    /* 后门写入 backupAmmoCount 的目标值：与 countBackupAmmo 的"无限"同一个量级（MAX_VALUE 会在
+     * 界面上显示成天文数字，这里取一个"够大又不会溢出/显示异常"的值）。 */
+    private static final int FORCE_BACKUP_AMMO = 9999;
+
     /* 【实测七百四十】弹道瞄准：把 731 那套"自己算角度"换成**引擎自己的弹道解算器**。
      * 反编译实证（VehicleWeaponUtils.turretAutoAimFromUuid / RangeTool.calculateFiringSolution）：
      * 炮塔角是**相对车身**的、且要解重力下坠与目标提前量，自己画直线必然打偏。 */
@@ -696,6 +727,43 @@ public final class MaidMountCompat {
                 mIntValueGet = null;
                 mIntValueSet = null;
                 fGunPropMagazine = null;
+            }
+            // 【实测七百七十八·点1】"强制允许开炮"那条后门所需的反射（见 forceAllowShoot）。
+            try {
+                Class<?> gdCls778 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                Class<?> bvCls778 = Class.forName("com.atsuishio.superbwarfare.data.gun.value.BooleanValue");
+                Class<?> dvCls778 = Class.forName("com.atsuishio.superbwarfare.data.gun.value.DoubleValue");
+                Class<?> boltCls778 = Class.forName("com.atsuishio.superbwarfare.data.gun.subdata.Bolt");
+                fGunBackupAmmoCount = gdCls778.getField("backupAmmoCount");
+                mGunResetStatus = gdCls778.getMethod("resetStatus");
+                mGunCharging = gdCls778.getMethod("charging");
+                fGunOverHeat = gdCls778.getField("overHeat");
+                fGunHeat = gdCls778.getField("heat");
+                fGunBoltSub = gdCls778.getField("bolt");
+                fBoltNeeded = boltCls778.getField("needed");
+                mBoolValueGet = bvCls778.getMethod("get");
+                mBoolValueSet = bvCls778.getMethod("set", boolean.class);
+                mDoubleValueGet = dvCls778.getMethod("get");
+                mDoubleValueSet = dvCls778.getMethod("set", double.class);
+            } catch (Throwable ignored) {
+                fGunBackupAmmoCount = null;
+                mGunResetStatus = null;
+                mGunCharging = null;
+                fGunOverHeat = null;
+                fGunHeat = null;
+                fGunBoltSub = null;
+                fBoltNeeded = null;
+                mBoolValueGet = null;
+                mBoolValueSet = null;
+                mDoubleValueGet = null;
+                mDoubleValueSet = null;
+            }
+            // VehicleEntity.getAmmo(GunData)（VehicleGunItem.canShoot 的最后一关；只用于诊断留痕）。
+            try {
+                mVehicleGetAmmo = cVehicle.getMethod("getAmmo",
+                        Class.forName("com.atsuishio.superbwarfare.data.gun.GunData"));
+            } catch (Throwable ignored) {
+                mVehicleGetAmmo = null;
             }
             // 【实测七百七十五·点2】投弹安全高度 = 这门炸弹自己的爆炸半径（GunProp.EXPLOSION_RADIUS）。
             try {
@@ -2468,11 +2536,13 @@ public final class MaidMountCompat {
                     }
                     forceHeadingOnto(mount, wrapDegrees((float) rw[0] - mount.getYRot()));
                     mSetMouseY(mount, 0.0f);
-                    short rbits = 0x004;                  // 满推力
-                    if (modifier > 1.05) {
-                        rbits |= 0x100;
-                    }
+                    // 【实测七百七十八·点2】助跑全程挂着冲刺位（引擎里 sprintInputDown 会把
+                    // powerAdd×1.6、maxPower 放宽到 3），并**直接把推力顶到地面最大 3.0**——
+                    // 旧版让引擎自己从 0 慢慢爬到 3（+0.006×powerAdd/拍）要等十几二十秒，
+                    // 而且没等爬到就抬了机头（0.30 就起飞），升力根本不够。
+                    short rbits = (short) (0x004 | 0x100);   // 满推力 + 冲刺
                     mProcessInput.invoke(mount, rbits);
+                    aircraftPowerAtLeast(mount, AIRCRAFT_GROUND_MAX_POWER);
                     double rollSpeed = horizontalSpeed(mount);
                     if (rollSpeed < AIRCRAFT_TAKEOFF_SPEED) {
                         logDrive(mount, "固定翼滑跑 引擎=" + eng
@@ -2535,16 +2605,10 @@ public final class MaidMountCompat {
                         mount.setXRot(-AIRCRAFT_TAKEOFF_PITCH);
                     } catch (Throwable ignored) {
                     }
-                    if (mSetPower != null) {
-                        try {
-                            double p = mGetPower == null ? 0.0
-                                    : ((Number) mGetPower.invoke(mount)).doubleValue();
-                            if (p < 1.0) {
-                                mSetPower.invoke(mount, 1.0f);
-                            }
-                        } catch (Throwable ignored) {
-                        }
-                    }
+                    // 【实测七百七十八·点2】爬升要的是"升力 ≥ 重力"，而升力 ∝ 速度 → 推力拉满
+                    // （旧版只顶到 1.0：AC-130H 在 power=1 的空中稳态速度只有 ~0.7，
+                    // 升力 ≈0.02/拍 < 重力 0.06/拍，所以"爬升窗口"里也爬不动）。
+                    aircraftPowerAtLeast(mount, AIRCRAFT_GROUND_MAX_POWER);
                     try {
                         mProcessInput.invoke(mount, (short) (0x004 | 0x100));
                     } catch (Throwable ignored) {
@@ -2566,11 +2630,23 @@ public final class MaidMountCompat {
                 // 每 0.5 秒把水平速度乘 0.55（接敌）/0.25（跟随）等于每半秒抹一次升力——
                 // 实机日志「固定翼盘旋档 周期急停(0.5s) 水平速度=0.21」正是它，飞机永远爬不到位。
                 // 所以这一档**只留速度上限**（防超速冲量），周期急停与到位硬刹一律不打。
+                //
+                // 【实测七百七十八·点2】还差"最后一块"：引擎自己的盘旋会把 power 收敛到 0.5~0.9
+                // （{@code aircraftLoiter:1337}）→ 速度掉到 ~0.6 → 升力 ≈0.02/拍 < 重力 0.06/拍
+                // **引擎自己的盘旋就是"慢慢往下沉"的**。玩家原话：「是不是速度上缺少了，导致飞不起来？」
+                // ——正是。所以盘旋档每拍给一个推力下限（{@link #AIRCRAFT_MIN_CRUISE_POWER}），
+                // 让它一直待在"升力 ≥ 重力"的速度区间；上限同步换成固定翼自己的 2.60。
+                try {
+                    mProcessInput.invoke(mount, (short) (0x004 | 0x100));
+                } catch (Throwable ignored) {
+                }
+                aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
                 int aBrake = aircraftCapOnly(mount);
                 logDrive(mount, "固定翼盘旋档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 急停=放开(固定翼升力∝速度)"
+                        + " 推力=" + powerText(mount)
                         + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
@@ -2749,6 +2825,20 @@ public final class MaidMountCompat {
     /** 固定翼"点火"推力：引擎里 {@code power > 0.2} 才置 engineStartOver（loiter 的前置条件）。 */
     private static final double AIRCRAFT_ENGINE_KICK_POWER = 0.35;
 
+    /** 固定翼日志用的推力读数（拿不到 → "?"）。 */
+    private static String powerText(Entity mount) {
+        try {
+            if (mGetPower != null) {
+                Object p = mGetPower.invoke(mount);
+                if (p instanceof Number n) {
+                    return fmt2(n.doubleValue());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return "?";
+    }
+
     /**
      * 【实测七百四十五·点3】固定翼起飞助跑的抬头角（度，负 = 机头朝上）。
      *
@@ -2801,8 +2891,52 @@ public final class MaidMountCompat {
     private static final int AIRCRAFT_RUNWAY_HALF = 4;
     /** 助跑带允许的最大落差（格）——玩家原话「允许接受凹凸，但是落差不能太大」。 */
     private static final double AIRCRAFT_RUNWAY_MAX_RELIEF = 6.0;
-    /** 起飞离地所需的最小水平速度（格/拍 ≈ 6 格/秒）——"加速到一定程度"的"一定程度"。 */
-    private static final double AIRCRAFT_TAKEOFF_SPEED = 0.30;
+    /**
+     * 起飞离地所需的最小水平速度（格/拍）——"加速到一定程度"的"一定程度"。
+     *
+     * <p>【实测七百七十八·点2】原值 0.30 是**远远不够**的（玩家原话：「我怀疑它起飞不了，
+     * 还有一个原因就是它的速度不够」）。反编译实证（{@code aircraftEngine:877}）升力项为
+     * {@code upVec × (1-|n·up|) × speed × (0.008+liftOffset) × LiftSpeed × 襟翼项(≈4)}，
+     * 即**升力 ∝ 当前速度**；而每拍重力约 0.06（{@code baseTick} 末尾）。取 AC-130H
+     * （LiftSpeed=1.0）代入：速度 0.30 时升力只有 ≈0.01/拍、0.70 时 ≈0.02/拍，
+     * **都远小于 0.06**——所以旧版"一到 0.30 就抬机头"等于刚离地就往下掉，
+     * 实机日志「固定翼滑跑 水平速度=0.00/0.30」之后立刻「盘旋档 高差=1」正是这个形状。
+     * 要升力 ≈ 重力需要 speed ≈ 0.06/(0.032×LiftSpeed) ≈ 1.9（LiftSpeed=1.0）；
+     * 这里取 1.20 作为"可以抬机头"的门槛，剩下的差额由
+     * {@link #AIRCRAFT_GROUND_MAX_POWER}（地面满推力 3.0）+ 爬升窗口的竖直自驾一起顶住。
+     */
+    private static final double AIRCRAFT_TAKEOFF_SPEED = 1.20;
+
+    /**
+     * 【实测七百七十八·点2】固定翼的水平速度上限（格/拍）。
+     *
+     * <p>旧版这一档用的是 {@code FLIGHT_HMAX × FLIGHT_SPEED_CAP_SLACK} = 0.75×1.25 = 0.9375
+     * ——那是**扫帚/直升机**那套包络。对固定翼是致命的：升力 ∝ 速度，
+     * 0.9375 的升力（≈0.03/拍）仍然 < 重力 0.06/拍，等于**上限本身就把飞机锁在"飞不起来"的区间**。
+     * 引擎自己的空气阻力（{@code f = 0.96 - 0.0017×R×v²}）会把速度自然收敛，
+     * 这里只留一个"防超速"的粗上限（2.6 格/拍 ≈ 52 格/秒）。
+     */
+    private static final double AIRCRAFT_HMAX = 2.60;
+
+    /**
+     * 【实测七百七十八·点2】固定翼在地面的最大推力。
+     *
+     * <p>反编译实证 {@code aircraftEngine:753}：{@code sprintInputDown() || onGround()} 时
+     * {@code maxPower = 3}（空中不按冲刺则封顶 1）。助跑阶段直接给它顶到 3，
+     * 省掉引擎那条 {@code +0.006×powerAdd}/拍 的缓慢爬升（原地等 15~22 秒才到 3）。
+     */
+    private static final float AIRCRAFT_GROUND_MAX_POWER = 3.0f;
+
+    /**
+     * 【实测七百七十八·点2】固定翼巡航时的最小推力。
+     *
+     * <p>反编译实证 {@code aircraftLoiter:1337}：引擎自己的盘旋会把
+     * {@code power} 收敛到 {@code 0.5~0.9}（{@code altError ≤ 0} 的那一支），
+     * 对应的速度只有 ~0.6 格/拍 → 升力 ≈0.02/拍 < 重力 0.06/拍——**引擎自己的盘旋是"慢慢往下沉"的**。
+     * 所以只要在盘旋档里每拍给一个推力下限（引擎空中每拍只衰减 0.012，压不过我们），
+     * 飞机就能一直保持在"升力 ≥ 重力"的速度区间。
+     */
+    private static final float AIRCRAFT_MIN_CRUISE_POWER = 1.80f;
     /** 助跑带扫描的缓存拍数（2 秒；地面不会两秒一变，且扫描本身是几十次方块查询）。 */
     private static final long AIRCRAFT_RUNWAY_CACHE_TICKS = 40L;
 
@@ -3306,13 +3440,45 @@ public final class MaidMountCompat {
      * <p>为什么要单独抽一个：{@link #flightBrake} 的三件套是给**悬停型**飞行器（直升机/飞艇）
      * 定的——它们悬停时靠"急停"防漂移；而固定翼的升力 ∝ 速度，任何减速都是掉高度。
      * 玩家的原话已经把结论给死了（「对飞机而言这是致命的，需要放开」）。
+     *
+     * <p>【实测七百七十八·点2】上限也从扫帚那套 0.9375 换成固定翼自己的
+     * {@link #AIRCRAFT_HMAX}（2.60）——0.9375 的升力仍小于重力，等于上限本身就不让飞机飞起来。
      */
     static int aircraftCapOnly(Entity mount) {
         try {
-            capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
+            capHorizontal(mount, AIRCRAFT_HMAX);
             return BRAKE_FLAG_CAP;
         } catch (Throwable ignored) {
             return 0;
+        }
+    }
+
+    /**
+     * 【实测七百七十八·点2】把这一架的推力**抬到至少 floor**（不动更高的值）。
+     *
+     * <p>固定翼这一整条链上，有两处会主动把 {@code power} 往下拉：
+     * 引擎自己的盘旋（{@code aircraftLoiter:1337}，收敛到 0.5~0.9）与空中每拍 0.012 的衰减
+     * （{@code aircraftEngine:753}）。而 {@code power} 直接决定推力
+     * （{@code :878 force = 0.047×power×speedRate}），进而决定速度、进而决定升力
+     * （{@code :877}）。所以"保住速度"这件事落到代码上就是**每拍给一个推力下限**。
+     * 取"至少"的写法：引擎/规避逻辑想推更高时我们不压它。
+     */
+    private static void aircraftPowerAtLeast(Entity mount, float floor) {
+        if (mSetPower == null) {
+            return;
+        }
+        try {
+            double now = 0.0;
+            if (mGetPower != null) {
+                Object p = mGetPower.invoke(mount);
+                if (p instanceof Number n) {
+                    now = n.doubleValue();
+                }
+            }
+            if (now < floor) {
+                mSetPower.invoke(mount, floor);
+            }
+        } catch (Throwable ignored) {
         }
     }
 
@@ -4502,7 +4668,7 @@ public final class MaidMountCompat {
             }
             int mag = magNum.intValue();
             if (mag <= 0) {
-                return; // 无弹匣武器（背包弹型）：它的无限弹由 countBackupAmmo 负责，不用我们写
+                return; // 无弹匣武器（背包弹型）：它的无限弹由 forceBackupAmmoFull / countBackupAmmo 负责
             }
             Object ammoVal = fGunAmmo.get(gd);
             if (ammoVal == null) {
@@ -4514,6 +4680,173 @@ public final class MaidMountCompat {
                 mIntValueSet.invoke(ammoVal, mag);
             }
         } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十八·点1】把 {@code backupAmmoCount}（无弹匣武器的"可用弹"显示值）写足。
+     *
+     * <p>为什么必须写它：{@code VehicleGunItem.canShoot} 的最后一关是
+     * {@code VehicleEntity.getAmmo(data) >= AMMO_COST_PER_SHOOT}，而
+     * {@code getAmmo = useBackpackAmmo() ? backupAmmoCount.get() : ammo.get()}
+     * （{@code VehicleEntity:5707}，反编译实证）——**机枪/乘客机枪这类无弹匣武器，判的是
+     * backupAmmoCount 这个值**，不是 {@code ammo}、也不是实时的 {@code countBackupAmmo}。
+     */
+    private static void forceBackupAmmoFull(Object gd) {
+        try {
+            if (gd == null || fGunBackupAmmoCount == null || mIntValueGet == null || mIntValueSet == null) {
+                return;
+            }
+            Object bv = fGunBackupAmmoCount.get(gd);
+            if (bv == null) {
+                return;
+            }
+            Object curObj = mIntValueGet.invoke(bv);
+            int cur = curObj instanceof Number n ? n.intValue() : 0;
+            if (cur < FORCE_BACKUP_AMMO) {
+                mIntValueSet.invoke(bv, FORCE_BACKUP_AMMO);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十八·点1】把"不许开火"的那几个状态位清干净。
+     *
+     * <p>反编译实证：{@code VehicleGunItem.canShoot} 除弹量外还有五道闸——
+     * {@code !overHeat}、{@code heat <= 100}、{@code !reloading()}、{@code !charging()}、
+     * {@code !bolt.needed}。任意一道为真，主炮就是"一点动静都没有"。
+     * <ul>
+     *   <li>①② 装填中 / 拉栓中 / 蓄力中：直接调 SWB 自己的 {@code GunData.resetStatus()}
+     *       （{@code GunData:641}，它一手清掉 reload / bolt / charge / fireIndex）；</li>
+     *   <li>③ 过热 / 热度：把 {@code overHeat} 置 false、{@code heat} 归零（机枪连射的闸）。</li>
+     * </ul>
+     * 只在"车容器里有创造盒"（{@link #vehicleHasInfiniteAmmo}）时调用——也就是玩家要的
+     * "检测到创造弹药盒就强制允许开炮"，不碰正常实弹玩法。
+     */
+    private static void forceReadyState(Object gd) {
+        try {
+            if (gd == null) {
+                return;
+            }
+            if (mGunResetStatus != null) {
+                mGunResetStatus.invoke(gd);
+            }
+            if (fGunOverHeat != null && mBoolValueGet != null && mBoolValueSet != null) {
+                Object ov = fGunOverHeat.get(gd);
+                if (ov != null && Boolean.TRUE.equals(mBoolValueGet.invoke(ov))) {
+                    mBoolValueSet.invoke(ov, false);
+                }
+            }
+            if (fGunHeat != null && mDoubleValueGet != null && mDoubleValueSet != null) {
+                Object hv = fGunHeat.get(gd);
+                if (hv != null) {
+                    Object h = mDoubleValueGet.invoke(hv);
+                    if (h instanceof Number n && n.doubleValue() > 0.0) {
+                        mDoubleValueSet.invoke(hv, 0.0);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十八·点1】这条后门的唯一入口：检测到创造盒 → 把这一门炮按到"可以开火"。
+     *
+     * <p>玩家定的口径：「只需要直接走个后门，一检测到创造弹药盒让他强制允许开炮就可以了，
+     * 完全不需要做任何的审查」。所以这里不做任何"弹种/换炮"判断，只把
+     * {@code VehicleGunItem.canShoot} 那六道闸逐一按到通过：弹匣值、后备弹显示值、状态位、过热度。
+     */
+    private static void forceAllowShoot(Object gd) {
+        forceMagazineFull(gd);
+        forceBackupAmmoFull(gd);
+        forceReadyState(gd);
+    }
+
+    /** 这门炮此刻过不了 {@code canShoot} 时，把每一道闸的值打出来（只给"无限弹"那条后门用）。 */
+    private static String shootGateText(Entity mount, Object gd, Entity supplier) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            if (mVehicleGetAmmo != null) {
+                sb.append("车侧弹量=").append(mVehicleGetAmmo.invoke(mount, gd)).append(' ');
+            }
+        } catch (Throwable ignored) {
+        }
+        sb.append("ammo=").append(intValueText(fGunAmmo, gd, mIntValueGet));
+        sb.append(" 后备=").append(intValueText(fGunBackupAmmoCount, gd, mIntValueGet));
+        try {
+            if (mGunReloading != null) {
+                sb.append(" 装填中=").append(Boolean.TRUE.equals(mGunReloading.invoke(gd)));
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (mGunCharging != null) {
+                sb.append(" 蓄力中=").append(Boolean.TRUE.equals(mGunCharging.invoke(gd)));
+            }
+        } catch (Throwable ignored) {
+        }
+        sb.append(" 拉栓=").append(boolValueText(fGunBoltSub, fBoltNeeded, gd, mBoolValueGet));
+        sb.append(" 过热=").append(boolValueText(fGunOverHeat, null, gd, mBoolValueGet));
+        sb.append(" 热度=").append(doubleValueText(fGunHeat, gd, mDoubleValueGet));
+        try {
+            if (mGunCanShoot != null) {
+                sb.append(" canShoot=").append(Boolean.TRUE.equals(mGunCanShoot.invoke(gd, supplier)));
+            }
+        } catch (Throwable ignored) {
+        }
+        return sb.toString();
+    }
+
+    private static String intValueText(java.lang.reflect.Field holder, Object gd, Method get) {
+        try {
+            if (holder == null || get == null) {
+                return "?";
+            }
+            Object v = holder.get(gd);
+            if (v == null) {
+                return "?";
+            }
+            Object n = get.invoke(v);
+            return n instanceof Number num ? String.valueOf(num.intValue()) : "?";
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    private static String boolValueText(java.lang.reflect.Field holder, java.lang.reflect.Field inner,
+                                        Object gd, Method get) {
+        try {
+            if (holder == null || get == null) {
+                return "?";
+            }
+            Object v = holder.get(gd);
+            if (inner != null) {
+                v = v == null ? null : inner.get(v);
+            }
+            if (v == null) {
+                return "?";
+            }
+            return String.valueOf(get.invoke(v));
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
+    private static String doubleValueText(java.lang.reflect.Field holder, Object gd, Method get) {
+        try {
+            if (holder == null || get == null) {
+                return "?";
+            }
+            Object v = holder.get(gd);
+            if (v == null) {
+                return "?";
+            }
+            Object n = get.invoke(v);
+            return n instanceof Number num ? fmt2(num.doubleValue()) : "?";
+        } catch (Throwable ignored) {
+            return "?";
         }
     }
 
@@ -4553,12 +4886,22 @@ public final class MaidMountCompat {
             if (mount == null || gun == null) {
                 return;
             }
-            boolean infinite = vehicleHasInfiniteAmmo(mount);
-            if (infinite) {
+            if (vehicleHasInfiniteAmmo(mount)) {
+                // 【实测七百七十八·点1】后门（玩家口径：「一检测到创造弹药盒让他强制允许开炮就可以了，
+                // 完全不需要做任何的审查」）：这里**不再**走 ensureGunLoaded / 换弹种 / 换炮 / 缺弹留痕，
+                // 只把这一门炮按到可开火就返回。玩家原话：「除了创造弹药盒以外其他的弹药盒都是可以
+                // 正常使用的……除了主炮以外的所有功能都可以正常使用」——所以后门只补"主炮打不响"这一处。
                 Object infGd = gunDataOf(mount, gun);
                 if (infGd != null) {
-                    forceMagazineFull(infGd);
-                    logInfiniteReload(mount);
+                    forceAllowShoot(infGd);
+                    Entity sup = ammoSupplierOf(mount);
+                    if (mGunCanShoot == null || Boolean.TRUE.equals(mGunCanShoot.invoke(infGd, sup))) {
+                        logInfiniteReload(mount);
+                    } else {
+                        // 走到这里说明还有一道我们没料到的闸（把每一道的值打出来，便于下次一眼定位）。
+                        logInfiniteBlocked(mount, gun, infGd, sup);
+                    }
+                    return;
                 }
             }
             ensureGunLoaded(mount, gun);
@@ -4795,6 +5138,11 @@ public final class MaidMountCompat {
             Object gd = gunDataOf(mount, use);
             if (gd == null) {
                 return false;
+            }
+            // 【实测七百七十八·点1】创造盒在车里 → 先把这门炮按到可开火（不依赖 prepareGun 先跑）：
+            // 弹匣/后备弹写足 + 清装填·拉栓·蓄力 + 过热度归零，见 forceAllowShoot。
+            if (vehicleHasInfiniteAmmo(mount)) {
+                forceAllowShoot(gd);
             }
             Entity supplier = mount;
             if (mAmmoSupplier != null) {
@@ -5488,11 +5836,17 @@ public final class MaidMountCompat {
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
-     * 【实测七百七十七·点1】"用创造盒把弹匣填上了"的留痕（节流 5 秒/车）：日志搜「无限弹装填」。
+     * 【实测七百七十七·点1 / 七百七十八·点1】"用创造盒把炮按响"的留痕（节流 5 秒/车）。
      *
      * <p>它专门回答这一局里最费解的那个现象：盒在车里、炮却一直不响——如果下次日志里
-     * **看不到**这一行，就说明 {@code reloadAmmo} 反射/取 GunData 那一段出了问题，
+     * **看不到**这一行、却看到「模组坐骑·缺弹」，就说明后门那一段反射没拿到口子，
      * 而不是"引擎没认盒子"。
+     */
+    /**
+     * 【实测七百七十八·点1】后门生效留痕（节流 5 秒/车）：日志搜「无限弹开炮」。
+     *
+     * <p>它回答"后门到底有没有把炮按响"：看到它 + 主炮有火光/音效 = 修好；
+     * 若只看到「无限弹受阻」，那一行会把每道闸的值都带出来（见 {@link #shootGateText}）。
      */
     private static void logInfiniteReload(Entity mount) {
         try {
@@ -5505,15 +5859,43 @@ public final class MaidMountCompat {
             if (AINF_AT.size() > 256) {
                 AINF_AT.clear();
             }
-            com.maidsmart.tool.PromaidLog.log("无限弹装填", describeKind(mount)
-                    + " 创造模式弹药盒在车里 → 直接按引擎的无限后备弹装填弹匣"
-                    + "（countBackupAmmo=MAX_VALUE、不消耗；弹匣炮由此才打得响）");
+            com.maidsmart.tool.PromaidLog.log("无限弹开炮", describeKind(mount)
+                    + " 检测到创造模式弹药盒 → 强制允许开炮"
+                    + "（弹匣/后备弹写足 + 清装填·拉栓·蓄力 + 过热度归零，不走任何缺弹审查）");
         } catch (Throwable ignored) {
         }
     }
 
-    /** 「无限弹装填」日志的独立频限表。 */
+    /** 「无限弹开炮」日志的独立频限表。 */
     private static final java.util.Map<UUID, Long> AINF_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百七十八·点1】后门按不动时的留痕（节流 5 秒/车+炮）：日志搜「无限弹受阻」。
+     *
+     * <p>它只在"我们已经把弹量和状态位都按平了、{@code canShoot} 仍然是 false"时出现，
+     * 并把 {@link #shootGateText} 的逐闸读数贴在后面——下次日志里一眼就能看出还剩哪一道闸。
+     */
+    private static void logInfiniteBlocked(Entity mount, String gun, Object gd, Entity supplier) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID() + "|" + gun;
+            Long last = ABLK_AT.get(key);
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            ABLK_AT.put(key, now);
+            if (ABLK_AT.size() > 256) {
+                ABLK_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("无限弹受阻", describeKind(mount)
+                    + " 炮「" + gun + "」已按平弹量/状态位，canShoot 仍为假：" + shootGateText(mount, gd, supplier));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「无限弹受阻」日志的独立频限表（车+炮）。 */
+    private static final java.util.Map<String, Long> ABLK_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
