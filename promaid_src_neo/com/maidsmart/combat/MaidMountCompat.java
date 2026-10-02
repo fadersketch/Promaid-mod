@@ -227,6 +227,15 @@ public final class MaidMountCompat {
     private static Method mGunGetProp;             // GunData.get(GunProp) -> T（通用取值）
     private static Method mChangeAmmoConsumer;     // GunData.changeAmmoConsumer(int index, Entity supplier)
     private static Method mConsumerCount;          // AmmoConsumer.count(GunData, Entity) -> int
+    /* 【实测七百七十七·点1】引擎自己的"无限弹"判据（见 vehicleHasInfiniteAmmo 的说明）：
+     * InventoryTool.hasCreativeAmmoBox(Entity) -> boolean（反编译 InventoryTool:296）。 */
+    private static Method mHasCreativeAmmoBoxEntity;
+    /* 【实测七百七十七·点1】"直接把弹匣写满"所需的反射（见 forceMagazineFull 的说明）：
+     * GunData.ammo（public IntValue）+ IntValue.get()/set(int) + GunProp.MAGAZINE。 */
+    private static java.lang.reflect.Field fGunAmmo;
+    private static Method mIntValueGet;
+    private static Method mIntValueSet;
+    private static java.lang.reflect.Field fGunPropMagazine;
 
     /* 【实测七百四十】弹道瞄准：把 731 那套"自己算角度"换成**引擎自己的弹道解算器**。
      * 反编译实证（VehicleWeaponUtils.turretAutoAimFromUuid / RangeTool.calculateFiringSolution）：
@@ -665,6 +674,28 @@ public final class MaidMountCompat {
                 mVehicleWeaponRpmName = cVehicle.getMethod("vehicleWeaponRpm", String.class);
             } catch (Throwable ignored) {
                 mVehicleWeaponRpmName = null;
+            }
+            // 【实测七百七十七·点1】引擎自己的"无限弹"判据（静态方法，见 vehicleHasInfiniteAmmo）。
+            try {
+                Class<?> itCls777 = Class.forName("com.atsuishio.superbwarfare.tools.InventoryTool");
+                mHasCreativeAmmoBoxEntity = itCls777.getMethod("hasCreativeAmmoBox", Entity.class);
+            } catch (Throwable ignored) {
+                mHasCreativeAmmoBoxEntity = null;
+            }
+            // 【实测七百七十七·点1】"直接把弹匣写满"的反射（见 forceMagazineFull）。
+            try {
+                Class<?> gdCls777 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                Class<?> ivCls777 = Class.forName("com.atsuishio.superbwarfare.data.gun.value.IntValue");
+                Class<?> gpCls777 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
+                fGunAmmo = gdCls777.getField("ammo");
+                mIntValueGet = ivCls777.getMethod("get");
+                mIntValueSet = ivCls777.getMethod("set", int.class);
+                fGunPropMagazine = gpCls777.getField("MAGAZINE");
+            } catch (Throwable ignored) {
+                fGunAmmo = null;
+                mIntValueGet = null;
+                mIntValueSet = null;
+                fGunPropMagazine = null;
             }
             // 【实测七百七十五·点2】投弹安全高度 = 这门炸弹自己的爆炸半径（GunProp.EXPLOSION_RADIUS）。
             try {
@@ -2529,12 +2560,17 @@ public final class MaidMountCompat {
                 }
             }
             if (tryAircraftLoiter(mount, target, horiz)) {
-                int aBrake = flightBrake(mount, shouldHardBrake(horiz, horizontalSpeed(mount), fighting), fighting);
+                // 【实测七百七十七·点2】固定翼**放开急停**（玩家原话：「之前为了让直升机悬停稳定，
+                // 导致这个飞机每过0.5秒左右就会卡一下速度，但是对于这个飞机而言这是致命的，需要放开」）。
+                // 反编译实证：固定翼的升力 ∝ **当前速度**（aircraftEngine:877 upVec * speed * ...），
+                // 每 0.5 秒把水平速度乘 0.55（接敌）/0.25（跟随）等于每半秒抹一次升力——
+                // 实机日志「固定翼盘旋档 周期急停(0.5s) 水平速度=0.21」正是它，飞机永远爬不到位。
+                // 所以这一档**只留速度上限**（防超速冲量），周期急停与到位硬刹一律不打。
+                int aBrake = aircraftCapOnly(mount);
                 logDrive(mount, "固定翼盘旋档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
-                        + ((aBrake & BRAKE_FLAG_HARD) != 0 ? " 硬刹(水平清零)" : "")
-                        + ((aBrake & BRAKE_FLAG_PULSE) != 0 ? " 周期急停(0.5s)" : "")
+                        + " 急停=放开(固定翼升力∝速度)"
                         + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
@@ -3264,6 +3300,22 @@ public final class MaidMountCompat {
         return flags;
     }
 
+    /**
+     * 【实测七百七十七·点2】固定翼专用：**只保速度上限，不保急停**（见盘旋档调用点的说明）。
+     *
+     * <p>为什么要单独抽一个：{@link #flightBrake} 的三件套是给**悬停型**飞行器（直升机/飞艇）
+     * 定的——它们悬停时靠"急停"防漂移；而固定翼的升力 ∝ 速度，任何减速都是掉高度。
+     * 玩家的原话已经把结论给死了（「对飞机而言这是致命的，需要放开」）。
+     */
+    static int aircraftCapOnly(Entity mount) {
+        try {
+            capHorizontal(mount, FLIGHT_HMAX * FLIGHT_SPEED_CAP_SLACK);
+            return BRAKE_FLAG_CAP;
+        } catch (Throwable ignored) {
+            return 0;
+        }
+    }
+
     /** 悬停/停住档每拍把水平速度乘掉的系数（0 = 一次停死）。0.25 → 两拍内基本停住。 */
     private static final double HARD_BRAKE_RETAIN = 0.25;
 
@@ -3665,6 +3717,15 @@ public final class MaidMountCompat {
         try {
             if (gd == null) {
                 return false;
+            }
+            // 【实测七百七十七·点1】车容器里有创造盒 → SWB 自己按无限后备弹算（countBackupAmmo
+            // 返回 MAX_VALUE、consume 不扣，反编译实证）。这里必须**提前认它**，否则：
+            //   · 有弹匣的炮（Cannon/MachineGun）弹匣一空，currentAvailableAmmo(=ammo.get())=0、
+            //     而 selectedAmmoConsumer().count() 只数实弹（创造盒不是 AmmoSupplierItem）→
+            //     我们判"没弹" → 换弹种/换炮白折腾 + 打「缺弹」日志，玩家看到的正是
+            //     「塞进去了但主炮一点动静都没有」。
+            if (vehicleHasInfiniteAmmo(supplier)) {
+                return true;
             }
             if (mGunCurrentAmmo != null) {
                 Object cur = mGunCurrentAmmo.invoke(gd, supplier);
@@ -4408,6 +4469,55 @@ public final class MaidMountCompat {
     }
 
     /**
+     * 【实测七百七十七·点1】把这一门炮的弹匣**直接写满**（绕开引擎的装填账）。
+     *
+     * <h2>为什么需要"直接写"</h2>
+     * 实机日志（777 那一局）实证：创造盒在 TRACK 车容器里，
+     * {@code PassengerMachineGun}（无弹匣型）每 5 秒稳定开火——说明引擎的
+     * {@code countBackupAmmo} **认**这个盒（返回 MAX_VALUE）；而 {@code Cannon}/{@code MachineGun}
+     * （Magazine&gt;0 的弹匣型）全程「弹匣空、全部弹种都换不出余弹」——因为它们的
+     * {@code hasEnoughAmmoToShoot} 只读 {@code ammo.get()}，**弹匣得有人装**：
+     *   · 引擎自己的 autoReload 依赖 {@code GunProp.AUTO_RELOAD}（载具武器 json 没写，
+     *     默认为假/空 ⇒ {@code autoReload} 直接 return，车上没有任何人按键装填）；
+     *   · 我们调 {@code reloadAmmo} 时，它内部先查 {@code useBackpackAmmo()}（弹匣型为假，
+     *     可继续）再取 {@code countBackupAmmo}——理论上能装，但实机表现为没装上
+     *     （装填状态/时序与节点判断纠缠，见 775/776 两轮的反复）。
+     * 所以这里用最直白、与「创造盒=无限弹」语义完全一致的做法：**直接把弹匣值写成满**
+     * （{@code GunData.ammo} 是 public 的 {@code IntValue}，SWB 自己在创造模式玩家身上
+     * 也是这么干的——反编译 {@code GunData.changeAmmoConsumer:630-632}：
+     * {@code if (ammoSupplier instanceof Player && isCreative) ammo.set(MAGAZINE)}）。
+     *
+     * <p>弹药消耗照旧走引擎（弹匣型在 {@code afterShoot} 里 {@code ammo -= cost}）——我们只在
+     * 每次开火前把它补回满值，**不产生任何物品**，也不碰背包/容器。
+     */
+    private static void forceMagazineFull(Object gd) {
+        try {
+            if (gd == null || fGunAmmo == null || mIntValueGet == null || mIntValueSet == null
+                    || mGunGetProp == null || fGunPropMagazine == null) {
+                return;
+            }
+            Object magObj = mGunGetProp.invoke(gd, fGunPropMagazine.get(null));
+            if (!(magObj instanceof Number magNum)) {
+                return;
+            }
+            int mag = magNum.intValue();
+            if (mag <= 0) {
+                return; // 无弹匣武器（背包弹型）：它的无限弹由 countBackupAmmo 负责，不用我们写
+            }
+            Object ammoVal = fGunAmmo.get(gd);
+            if (ammoVal == null) {
+                return;
+            }
+            Object curObj = mIntValueGet.invoke(ammoVal);
+            int cur = curObj instanceof Number n ? n.intValue() : 0;
+            if (cur < mag) {
+                mIntValueSet.invoke(ammoVal, mag);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
      * 【实测七百七十五·点1】开火前"这门炮的备弹三步"——治「坦克主炮始终不使用」。
      *
      * <h2>实机日志（774 那一版，01:51:52 / 01:51:57）</h2>
@@ -4429,11 +4539,27 @@ public final class MaidMountCompat {
      * ③ 换完再补一次弹匣。
      * 三步之后仍不能射 → 记一条「模组坐骑·缺弹」（5 秒/车/炮）：下次日志里直接能看出"是没弹
      * 还是别的原因"，不用再猜。
+     *
+     * <p>【实测七百七十七·点1】在最前面加"创造盒 = 无限弹"一条：车容器里有创造盒时
+     * （{@link #vehicleHasInfiniteAmmo}），**每轮开火前直接 {@link #forceMagazineFull 把弹匣写满}**
+     * ——实机日志（777 那一局）里 {@code PassengerMachineGun}（无弹匣型）能一直响、
+     * {@code Cannon}/{@code MachineGun}（弹匣型）永远「弹匣空」的病根就在这里：弹匣型武器的
+     * {@code hasEnoughAmmoToShoot} 只读 {@code ammo.get()}，而车上没有任何人会替它装填
+     * （引擎 autoReload 依赖的 {@code AUTO_RELOAD} 载具 json 没开）。写满之后照旧走引擎开火
+     * （消耗由 {@code afterShoot} 正常扣），所以这是"引擎原账上的无限弹"，不是虚拟弹药。
      */
     private static void prepareGun(Entity mount, String gun) {
         try {
             if (mount == null || gun == null) {
                 return;
+            }
+            boolean infinite = vehicleHasInfiniteAmmo(mount);
+            if (infinite) {
+                Object infGd = gunDataOf(mount, gun);
+                if (infGd != null) {
+                    forceMagazineFull(infGd);
+                    logInfiniteReload(mount);
+                }
             }
             ensureGunLoaded(mount, gun);
             Object gd = gunDataOf(mount, gun);
@@ -5267,6 +5393,61 @@ public final class MaidMountCompat {
         }
     }
 
+    /**
+     * 【实测七百七十七·点1】这辆车此刻是不是"无限弹"（车容器里有创造模式弹药盒）。
+     *
+     * <h2>玩家原话</h2>
+     * 「我给女仆的是创造模式弹药盒。但是他还是不会使用主炮。」
+     *
+     * <h2>为什么 776 那版"把盒子搬进车容器"还不够（反编译实证）</h2>
+     * SWB 的 {@code GunData} 里有**两套弹量账**，创造盒只挂在其中一套上：
+     * <ul>
+     *   <li>{@code countBackupAmmo(entity)}：认创造盒（{@code InventoryTool.hasCreativeAmmoBox
+     *       → hasItem(车, 创造盒)} ⇒ {@code Integer.MAX_VALUE}），{@code consumeBackupAmmo} 直接
+     *       return 不扣——但**只有 {@code countBackupAmmo} 这一族**认它；</li>
+     *   <li>{@code hasEnoughAmmoToShoot(entity)}（= {@code GunItem.canShoot} 的最后一关）：
+     *       对有弹匣的武器（{@code useBackpackAmmo()=MAGAZINE<=0} 为假）**只看 {@code ammo.get()}**
+     *       ——弹匣里现在有几发。创造盒一枪都不会替它把弹匣填上。</li>
+     * </ul>
+     * 也就是说：盒在车里 ⇒ **装填（reloadAmmo）时能拿到无限后备弹**（它走的是
+     * {@code countBackupAmmo}），而**装填这件事得有人做**。实机日志（777 那一局）正是这个形状：
+     * 创造盒搬进 TRACK 车容器后 {@code PassengerMachineGun}（无弹匣型，直接走 countBackupAmmo）
+     * 一直能响，而 {@code Cannon} / {@code MachineGun}（有弹匣型）永远「弹匣空、全部弹种都换不出
+     * 余弹」——装填判据 {@code ammoAvailable} 只数实弹、看不见盒子。
+     *
+     * <h2>本方法</h2>
+     * 判据直接用**引擎自己的** {@code InventoryTool.hasCreativeAmmoBox(车)}（反编译
+     * {@code InventoryTool:296}，它内部走 {@code hasCreativeAmmoBoxForVehicle}，会读乘客手持 +
+     * 车容器）；反射拿不到就退回扫车容器（{@link #containerHasCreativeAmmoBox}）。为真时：
+     * {@link #ensureGunLoaded} 直接补满弹匣、{@link #ammoAvailable} 恒真——两者都走引擎的原账，
+     * 没有我们自己造的"虚拟弹药"。
+     */
+    private static boolean vehicleHasInfiniteAmmo(Entity mount) {
+        try {
+            if (mount == null) {
+                return false;
+            }
+            if (mHasCreativeAmmoBoxEntity != null) {
+                Object ok = mHasCreativeAmmoBoxEntity.invoke(null, mount);
+                if (Boolean.TRUE.equals(ok)) {
+                    return true;
+                }
+                return false; // 引擎的判据就是权威（含"乘客手持盒 + 车型开关"那一支）
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            if (mGetInventory != null) {
+                Object inv = mGetInventory.invoke(mount);
+                if (inv instanceof net.neoforged.neoforge.items.IItemHandler handler) {
+                    return containerHasCreativeAmmoBox(handler);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
     /** 车容器里有没有创造模式弹药盒（有 = SWB 按"无限弹"算，见 {@link #stackIsWantedAmmo}）。 */
     private static boolean containerHasCreativeAmmoBox(net.neoforged.neoforge.items.IItemHandler inv) {
         try {
@@ -5304,6 +5485,35 @@ public final class MaidMountCompat {
 
     /** 创造弹药盒日志的独立频限表（与其它几条日志互不顶掉）。 */
     private static final java.util.Map<UUID, Long> ACRE_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百七十七·点1】"用创造盒把弹匣填上了"的留痕（节流 5 秒/车）：日志搜「无限弹装填」。
+     *
+     * <p>它专门回答这一局里最费解的那个现象：盒在车里、炮却一直不响——如果下次日志里
+     * **看不到**这一行，就说明 {@code reloadAmmo} 反射/取 GunData 那一段出了问题，
+     * 而不是"引擎没认盒子"。
+     */
+    private static void logInfiniteReload(Entity mount) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = AINF_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            AINF_AT.put(mount.getUUID(), now);
+            if (AINF_AT.size() > 256) {
+                AINF_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("无限弹装填", describeKind(mount)
+                    + " 创造模式弹药盒在车里 → 直接按引擎的无限后备弹装填弹匣"
+                    + "（countBackupAmmo=MAX_VALUE、不消耗；弹匣炮由此才打得响）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「无限弹装填」日志的独立频限表。 */
+    private static final java.util.Map<UUID, Long> AINF_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
