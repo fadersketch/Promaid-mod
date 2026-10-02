@@ -99,6 +99,10 @@ public final class MaidAirCombat {
      * 而本项默认更大 → 投弹时以本项为准。见 {@link #requiredAbove}。
      *
      * <p>0 = 关掉这道闸（照旧想投就投）。
+     *
+     * <p>【实测七百七十五·点2】自本批起它是**下限**而不是准值：实际安全高度
+     * = {@code max(本项, 炸弹爆炸半径 + 6)}（见 {@link #requiredStandoff}）——玩家原话
+     * 「应该把上升高度调整为那个炸弹所能波及的半径的大小。保证全身而退。」
      */
     public static double bombStandoffCfg() {
         try {
@@ -186,12 +190,45 @@ public final class MaidAirCombat {
      */
     private static double requiredAbove(EntityMaid maid) {
         double base = fightAltCfg();
-        double stand = bombStandoffCfg();
+        double stand = requiredStandoff(maid);
         if (stand > base && hasBombIntent(maid)) {
             return stand;
         }
         return base;
     }
+
+    /**
+     * 【实测七百七十五·点2】投弹安全高度 = {@code max(配置下限, 炸弹爆炸半径 + 余量)}。
+     *
+     * <h2>玩家原话（即规格）</h2>
+     * 「我发现向上20格似乎不行。还是很容易被炸到。应该把上升高度调整为那个炸弹所能波及的
+     *  半径的大小。保证全身而退。」
+     *
+     * <h2>为什么用半径（+ 一点余量）而不是固定的 20</h2>
+     * 基洛夫那颗航空炸弹的 {@code ExplosionRadius} 是 **42**（vehicle json 实证），
+     * 而旧版固定 20 格、且从**目标**算起：炸弹落在目标脚下、机身正在爆心正上方 20 格处，
+     * 距离 20 &lt; 42 —— 等于站在爆心顶部（飞船还吃 3 倍航空炸弹伤害）。所以基准必须是
+     * **这门炸弹自己的威力半径**；{@link #BOMB_BLAST_MARGIN} 那 6 格是给机身半长/爆心
+     * 落点抖动留的余量（"保证全身而退"）。读不到半径 → 只用配置值（一个字节不变）。
+     */
+    private static double requiredStandoff(EntityMaid maid) {
+        double cfg = bombStandoffCfg();
+        try {
+            Entity mount = maid == null ? null : maid.m_20202_();
+            if (mount == null) {
+                return cfg;
+            }
+            double radius = MaidMountCompat.bombBlastRadius(mount, maid);
+            if (radius > 0.0) {
+                return Math.max(cfg, radius + BOMB_BLAST_MARGIN);
+            }
+        } catch (Throwable ignored) {
+        }
+        return cfg;
+    }
+
+    /** 爆炸半径之外再留的余量（格）：机身半长 + 爆心落点抖动（775·点2）。 */
+    private static final double BOMB_BLAST_MARGIN = 6.0;
 
     /**
      * v1.3.0(beta) 实测七百四十七【投弹安全高度闸：没爬到位就不许投】。
@@ -218,7 +255,7 @@ public final class MaidAirCombat {
             if (maid == null || !enabled()) {
                 return false;
             }
-            double stand = bombStandoffCfg();
+            double stand = requiredStandoff(maid);
             if (stand <= 0.0) {
                 return false; // 玩家关了这道闸
             }
@@ -236,7 +273,7 @@ public final class MaidAirCombat {
             }
             if (firstHold(maid.m_20148_())) {
                 log(maid, "投弹安全高度未到（现在 " + fmt(have) + "，目标上 " + fmt(stand)
-                        + " 格 = " + fmt(want) + "）→ 先爬升、这一发按住");
+                        + " 格 = " + fmt(want) + "；该高度 = 炸弹爆炸半径 + 余量）→ 先爬升、这一发按住");
             }
             return true;
         } catch (Throwable ignored) {
