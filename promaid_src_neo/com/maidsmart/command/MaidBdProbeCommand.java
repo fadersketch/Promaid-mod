@@ -183,6 +183,9 @@ public final class MaidBdProbeCommand {
             src.sendFailure(Component.literal("没找到女仆"));
             return 0;
         }
+        if (!gateOpen(src)) {
+            return 0;
+        }
         if (!MaidBdCompat.available()) {
             src.sendFailure(Component.literal("超越维度反射没解析到"));
             return 0;
@@ -218,6 +221,9 @@ public final class MaidBdProbeCommand {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
             src.sendFailure(Component.literal("没找到女仆"));
+            return 0;
+        }
+        if (!gateOpen(src)) {
             return 0;
         }
         if (!MaidBdCompat.available()) {
@@ -277,11 +283,32 @@ public final class MaidBdProbeCommand {
         return 1;
     }
 
+    /**
+     * 实测七百七十二【两级门禁一致化】：「立刻执行」类命令（{@code bd_deposit_now} /
+     * {@code bd_restock_now} / {@code bd_flush_now}）也会真实搬动物品，所以必须和自动链路
+     * 走同一道闸——全局 {@code misc.bdStorage} 关着时不准动，并**明说为什么**（原先这三条
+     * 命令绕过了总开关，与"默认关"的承诺自相矛盾）。
+     *
+     * @return true = 可以继续；false = 已向命令源说明原因并应中止
+     */
+    private static boolean gateOpen(CommandSourceStack src) {
+        if (MaidBdCompat.enabled()) {
+            return true;
+        }
+        src.sendFailure(Component.literal("超越维度联动总开关关着（misc.bdStorage，默认关）——"
+                + "命令也会真实搬动物品，所以同样受它管。请先在 config/promaid-common.toml "
+                + "或游戏内配置面板打开「超越维度存储联动」再试。"));
+        return false;
+    }
+
     /** 立刻搬一次（用于验收，不用等自动扫描）。 */
     private static int depositNow(CommandSourceStack src, net.minecraft.world.entity.Entity picked) {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
             src.sendFailure(Component.literal("没找到女仆"));
+            return 0;
+        }
+        if (!gateOpen(src)) {
             return 0;
         }
         if (!MaidBdCompat.available()) {

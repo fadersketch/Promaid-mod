@@ -163,20 +163,22 @@ public final class MaidBdRestock {
             }
             long placed = insertIntoMaid(inv, taken);
             long back = amount - placed;
+            String tail = back > 0 ? "（" + back + " 个塞不下，已还回）" : "";
             if (back > 0) {
-                // 塞不下的还回网络；连还都失败就掉她脚下（不丢件，但要留痕）
+                // 塞不下的还回网络。insert 返回的是**剩余量**（未吃下的）：0 = 全还回去了；
+                // -1 = 调用失败。所以"还要处理的那一份" = leftover（成功）或 back（失败）。
                 long leftover = MaidBdCompat.insert(net, taken, back);
-                if (leftover != back) {
+                long toDrop = leftover < 0 ? back : leftover;
+                if (toDrop > 0) {
                     ItemStack drop = taken.copy();
-                    drop.setCount((int) (back - Math.max(0, leftover)));
-                    if (!drop.isEmpty()) {
-                        maid.spawnAtLocation(drop);
-                        PromaidLog.log("超越维度补货", "还回网络失败，已掉在她脚下："
-                                + MaidBdCompat.itemId(drop) + " × " + drop.getCount());
-                    }
+                    drop.setCount((int) Math.min(Integer.MAX_VALUE, toDrop));
+                    maid.spawnAtLocation(drop);
+                    PromaidLog.log("超越维度补货", "还回网络失败，已掉在她脚下："
+                            + MaidBdCompat.itemId(drop) + " × " + drop.getCount());
+                    tail = "（" + placed + " 个入包，" + toDrop + " 个还库失败已落地）";
                 }
             }
-            out.add(r.match() + "：补了 " + placed + " 个" + (back > 0 ? "（" + back + " 个塞不下，已还回）" : ""));
+            out.add(r.match() + "：补了 " + placed + " 个" + tail);
             movedTotal += placed;
         }
         if (!dryRun && !out.isEmpty()) {

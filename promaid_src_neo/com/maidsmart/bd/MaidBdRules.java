@@ -236,6 +236,34 @@ public final class MaidBdRules {
         return new ArrayList<>(atLeastList);
     }
 
+    /* ==================== 实测七百七十二：面板子页用的只读导出 ==================== */
+
+    /** 面板子页：一类规则的原始写法列表。{@code which} 1=一定搬 2=一定不搬。 */
+    public static synchronized List<String> describeMatches(byte which) {
+        ensureLoaded();
+        return new ArrayList<>(which == 2 ? keepList : moveList);
+    }
+
+    /** 面板子页：保留 N 个，导出成 {@code match=keep} 便于一个字符串传。 */
+    public static synchronized List<String> describeKeepN() {
+        ensureLoaded();
+        List<String> out = new ArrayList<>();
+        for (KeepRule r : keepNList) {
+            out.add(r.match() + "=" + r.keep());
+        }
+        return out;
+    }
+
+    /** 面板子页：至少留 N 个，导出成 {@code match=count}。 */
+    public static synchronized List<String> describeAtLeast() {
+        ensureLoaded();
+        List<String> out = new ArrayList<>();
+        for (AtLeastRule r : atLeastList) {
+            out.add(r.match() + "=" + r.count());
+        }
+        return out;
+    }
+
     public static synchronized String remove(String entry) {
         ensureLoaded();
         boolean a = moveList.removeIf(entry::equals);

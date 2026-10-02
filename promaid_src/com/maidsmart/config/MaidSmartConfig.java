@@ -1278,6 +1278,8 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
      *  （饰品栏里的精妙背包 / 旅行者背包，TLM 的 compat.extracontainer 体系，见
      *  {@code com.maidsmart.tool.MaidExtraContainer}）——默认开 */
     public static final ForgeConfigSpec.BooleanValue MISC_BACKPACK_OVERFLOW;
+    /** 超越维度（BeyondDimensions）存储联动总开关——**默认关**（会真实搬动物品，且依赖第三方存储模组） */
+    public static final ForgeConfigSpec.BooleanValue MISC_BD_STORAGE;
     // v1.5.163：农场连锁收获数量上限
     public static final ForgeConfigSpec.IntValue MISC_CHAIN_HARVEST_LIMIT;
     /** v1.1.0 实测二百三十四：女仆手持光源发实光（隐藏光块跟随）总开关 */
@@ -3074,6 +3076,17 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
     // 不自己去反射精妙背包（它给的是 CapabilityBackpackWrapper，不是 ITEM_HANDLER）
     MISC_BACKPACK_OVERFLOW = BUILDER.comment("背包满时装进精妙背包（默认开，v1.2.4 实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的\"额外容器\"——饰品栏里的精妙背包 / 旅行者背包（TLM 本体的 compat.extracontainer 体系，精妙背包坐 curios 的 back 槽）。\n\n【生效条件】需要 Curios 在场 + TLM 的「女仆饰品」功能开启 + 背包真的戴在她饰品栏里（拿在手上/放在别处不算，TLM 也不认）；一件都不满足时行为与旧版一字不差。\n\n【绝不吞物品】额外容器再塞不下才落地——最坏情况仍是「掉在地上」")
             .translation("config.promaid.misc.backpackOverflow").define("backpackOverflow", true);
+    // 超越维度（BeyondDimensions）存储联动（默认关）：配套命令 /maid_smart bd_*。
+    // 默认关的理由：它**会真实搬动物品**（从她背包/掉落物里扣除、插进维度网络），且依赖第三方存储模组。
+    MISC_BD_STORAGE = BUILDER.comment("超越维度存储联动（默认关）：把女仆采矿/伐木/收成的产物自动存进"
+            + "【她主人的主网络】，并在规则要求时从主网络取货；规则写在 config/promaid_bd_rules.json。"
+            + "\n\n【为什么默认关】它会真实搬动物品（从她背包或掉落物里扣除、插进网络），且只在装了"
+            + "超越维度（beyonddimensions）时才有意义——没装时整条链路自动不生效（全反射软兼容）。"
+            + "\n\n【两级门禁】本开关（全局）+ 该女仆自己的开关（/maid_smart bd_deposit true，存 persistentData）。"
+            + "\n\n【网络是按玩家的】女仆用的是**她主人的主网络**——她自己不是玩家、取不到网络。"
+            + "\n\n【命令】bd_probe / bd_query / bd_deposit[_dry|_now] / bd_restock_[dry|now] / "
+            + "bd_flush_[dry|now] / bd_rule（move·keep·keepN·keepAtLeast·remove·list·tags·builtin）")
+            .translation("config.promaid.misc.bdStorage").define("bdStorage", false);
     // v1.5.163：农场连锁收获数量上限可自定义
     MISC_CHAIN_HARVEST_LIMIT = BUILDER.comment("农场连锁收获上限（格）：一次连锁收割的最大格数（默认 24，大农田多轮清完）")
             .translation("config.promaid.misc.chainHarvestLimit").defineInRange("chainHarvestLimit", 24, 4, 96);

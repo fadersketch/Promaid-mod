@@ -89,6 +89,45 @@ public final class MaidExtraContainer {
         return extraContainers(maid) != null;
     }
 
+    /**
+     * 实测七百七十二【只读容量判据】：额外容器能不能收下 {@code stack} 的**至少一部分**——
+     * 全程 {@code insert(...,true)} 模拟，**一个物品都不动**。
+     *
+     * <p>与 {@link #overflow} 的区别至关重要：{@code overflow} 是**真搬**（源码
+     * {@code MaidExtraContainer.java:283,300} 走 {@code insert(...,false)}），只适合
+     * "确实要把东西塞进容器"的调用方。<b>只探测、由我们自己接手后续搬运</b>的调用方
+     * 必须用本方法——否则"容器已经先收下、调用方又扣一次"就是复制
+     * （超越维度溢出入库 {@code MaidBdOverflow} 原先正是踩了这个坑）。
+     *
+     * @return true = 至少有一个额外容器能收下 1 件以上
+     */
+    public static boolean canAccept(EntityMaid maid, ItemStack stack) {
+        if (maid == null || stack == null || stack.m_41619_()) {
+            return false;
+        }
+        if (!enabled()) {
+            return false;
+        }
+        List<ContainerRef> refs = extraContainers(maid);
+        if (refs == null) {
+            return false;
+        }
+        for (ContainerRef ref : refs) {
+            if (ref == null) {
+                continue;
+            }
+            try {
+                ItemStack left = ref.insert(maid, stack, true); // 模拟：不改任何东西
+                int leftN = left == null ? stack.m_41613_() : left.m_41613_();
+                if (leftN < stack.m_41613_()) {
+                    return true; // 这个容器能收下一部分（TLM 自己的拾取会真正收下）
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return false;
+    }
+
     /* ==================== v1.2.4 实测六百三十九【取物的那半边】 ==================== */
 
     /**
