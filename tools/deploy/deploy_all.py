@@ -6,6 +6,19 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十四（v1.3.0 beta，同名覆盖，未发版）：**两树同步的载具武器四处整改** ——
+① 装填认得「弹药盒」：stackIsWantedAmmo 在旧判据（散装弹）之上补盒装弹（AmmoSupplierItem 子类，
+   按 getType() == consumer.getPlayerAmmoType()）与通用弹药盒（AmmoBoxItem，按 Ammo.get(stack) > 0），
+   搬进车容器后由 SWB 自己计数/消耗。
+② 多根炮管一起开火：新增 gunsFor（逐座逐位枚举全车武器、玩家占座跳过），tickAttack 逐炮一条扳机
+   （fireAt/directFireAt 新增按炮名重载），投弹安全高度闸只按住炸弹那一门。
+③ 射速改按各炮自己的 RPM：删掉固定 5 拍（4 发/秒）节流，fireIntervalTicks 照搬引擎公式
+   ceil(1200 / vehicleWeaponRpm(炮名)) 拍，逐门记账（机枪 600 RPM=10/s、M61 1200 RPM=20/s）。
+④ 投弹最小间隔 2 秒（BOMB_MIN_INTERVAL_TICKS=40 拍）：治基洛夫「连续投弹把自己炸死」
+   （炸弹爆炸半径 42 格、飞船挨航空炸弹 3 倍伤害）。
+⑤ 顺带更正：javap 实证 TLM 的 EntityMaid.getTarget() 读 brain 记忆，setTarget(null) 清不掉
+   卓越前线的「Mob 乘客自动开火」链（一直并行在跑），注释按实证更正。
+
 实测七百七十三（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三处整改（骑乘指挥棒）** ——
 ① 骑乘中右击指挥棒 = 什么都不发生（RideBindManager.onInteract/onInteractSpecific 第一道闸，
    两侧都 cancel；不依赖独占档位）——治「副驾上用指挥棒右键 → 被挤下车 + 不能再上车/放方块」。
