@@ -6,6 +6,16 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十三（v1.3.0 beta，同名覆盖，未发版）：**两树同步的三处整改（骑乘指挥棒）** ——
+① 骑乘中右击指挥棒 = 什么都不发生（RideBindManager.onInteract/onInteractSpecific 第一道闸，
+   两侧都 cancel；不依赖独占档位）——治「副驾上用指挥棒右键 → 被挤下车 + 不能再上车/放方块」。
+② 玩家坐进驾驶位（卓越前线只认座位 0）→ 模组交还方向盘：drive() 最前面加交接闸，交接那一拍
+   stop() 清残留输入，此后不碰任何驾驶面（武器/装弹照旧）——治「换座到主驾却不能控制载具」。
+③ 载具武器改「直瞄开火」（女仆枪械模式式瞄准）：新增 MaidMountCompat.directFireAt，用
+   getShootPos(炮名) + RangeTool.calculateFiringSolution 构造 SWB 自己的 ShootParameters 直接
+   调 GunData.shoot（弹药/冷却/音效/后坐仍走枪自己那条链），并补发枪口火光包；tickAttack 的
+   开火闸改为反射可用时不再等炮塔转到位（投弹保持原路；反射不可用整条退回原路）。
+
 实测七百七十二（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条（超越维度存储联动 · PR #34 合并+整改）** ——
 ① 并入社区 PR #34（BeyondDimensions 存储联动：产物回收 / 溢出入库 / 自动补货 / 缓存冲刷，全反射软兼容）。
 ② 修三处：restock 还库反向解读 insert 语义导致复制（改成 leftover 语义）；overflow 用会改物品的
