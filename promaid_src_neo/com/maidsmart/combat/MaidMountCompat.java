@@ -151,6 +151,13 @@ public final class MaidMountCompat {
     private static Method mSetLoiterActive;   // setLoiterActive(boolean)
     private static Method mSetLiftSpeed;      // setLiftSpeed(float)
     private static Method mGetPower;          // getPower()
+    /* 【实测七百八十】固定翼"强制滚转"的两个口（见 aircraftBank 的说明）：
+     * {@code getRoll()} 读当前滚转角，{@code setZRot(float)} 写它——反编译实证这两个方法在
+     * VehicleEntity 上都有，且 {@code setZRot(rot)} 的实体就是 {@code setRoll(rot)}（1.20.1 / 1.21.1
+     * 两个版本的 SWB 都一样）。滚转角直接进引擎的舵量上限
+     * {@code rotSpeed = 0.3 + 3.2*|roll|/90}，所以"转弯半径"这件事只有它能定。 */
+    private static Method mGetRoll;           // getRoll() -> float
+    private static Method mSetRoll;           // setZRot(float)（= setRoll 的别名）
     /* 【实测七百六十】电量闸：反编译 VehicleEngineUtils.helicopterEngine:1005-1058 实证——
      * 载具引擎**自己**有一条"没电就熄火"的闸（{@code energy <= energyCostRate*|power|}
      * → setPower(power*0.995) + setForwardInputDown(false) + setEngineStart(false)
@@ -477,6 +484,15 @@ public final class MaidMountCompat {
                 mGetPower = cVehicle.getMethod("getPower");
             } catch (Throwable ignored) {
                 mGetPower = null;
+            }
+            // 【实测七百八十】固定翼强制滚转：单独 try——拿不到就退回"借左右位"那套慢滚转
+            // （只是转弯半径大些），绝不能连累上面任何一档。
+            try {
+                mGetRoll = cVehicle.getMethod("getRoll");
+                mSetRoll = cVehicle.getMethod("setZRot", float.class);
+            } catch (Throwable ignored) {
+                mGetRoll = null;
+                mSetRoll = null;
             }
             // 【实测七百六十】电量闸的两个读数（javap 实证 VehicleEntity 上都有；
             // 各自单独 try——拿不到 = 不启用这道闸，绝不让它影响驾驶本身）。
@@ -2645,6 +2661,10 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                     aircraftLoiterOff(mount);
+                    // 【实测七百八十】爬升档也留一道硬上限（{@link #AIRCRAFT_HMAX}）：这一段推力是
+                    // 满的 3.0，放开了她能冲到 ~3.7 格/拍（74 格/秒）——万一半路擦到山，
+                    // 撞地伤害 {@code 18×(v−0.2)²} 就是 220 点。巡航速度环负责 0.80，这里只兜住上限。
+                    aircraftCapOnly(mount);
                     logDrive(mount, "固定翼爬升 引擎=" + eng + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
                             + " 竖直速度=" + fmt2(verticalSpeed(mount)) + " 高差=" + (long) dy
                             + " 距目标=" + (long) horiz + "格 电量=" + energyText(mount));
@@ -2662,14 +2682,15 @@ public final class MaidMountCompat {
             // <h2>为什么不再交给引擎自己的 aircraftLoiter（反编译 + 实机日志双实证）</h2>
             // <ul>
             //   <li>它的舵量上限（{@code aircraftEngine:793-800}）：
-            //       {@code rotSpeed = 0.3 + 3.2*|calculateY(roll)|}（{@code ClampRoll=45} ⇒ ≤2.56），
+            //       {@code rotSpeed = 0.3 + 3.2*|calculateY(roll)|}，而 {@code calculateY(x) = x/90}
+            //       （VectorTool 实证，**不是** cos），{@code ClampRoll=45} ⇒ 满舵 1.9；
             //       {@code addY = clamp(0.24*speed*mouseX, ±rotSpeed)}，{@code yaw += yawSpeed*addY}。
-            //       AC-130H 的 {@code YawSpeed=0.9} ⇒ **最大角速度 ≈ 2.3°/拍**，而巡航速度必须是
-            //       2.2~2.6 格/拍（这是它"升力 ≥ 重力 0.06"的下限，见 778 那条升力公式）——
-            //       于是它的**最小转弯半径 ≈ 55~65 格**，这是气动上改不了的。</li>
-            //   <li>而 loiter 的半径被我们钳在 8~60 格（{@code AIRCRAFT_LOITER_MAX_R}），
-            //       **小于它物理上转得过来的半径** ⇒ 它的径向误差项每拍都把她往外推，
-            //       永远收不拢、只会越飞越远。实机日志正是这个形状：跟随档
+            //       AC-130H 的 {@code YawSpeed=0.9} ⇒ 最大角速度 1.71°/拍 = 0.0298 弧度/拍，
+            //       即**转弯半径 r ≈ v/0.0298**（778/779 那两版按速度 2.2~2.6 飞 ⇒ 74~87 格）。
+            //       此处旧注释写的 "≤2.56 / 2.3°/拍 / 55~65 格" 是按 cos 反推的，780 已按
+            //       {@code x/90} 更正为 1.9 / 1.71°/拍 / r ≈ v/0.0298。</li>
+            //   <li>而 loiter 的半径被我们钳在 8~60 格，**小于它实际转得过来的半径** ⇒ 它的径向
+            //       误差项每拍都把她往外推，永远收不拢、只会越飞越远。实机日志正是这个形状：跟随档
             //       {@code 距目标 54→93→140→188→288 格、高差 -39→-141} ——
             //       玩家说的"只会在天上飞"。</li>
             // </ul>
@@ -2682,14 +2703,18 @@ public final class MaidMountCompat {
             // **不需要任何状态机**，"来回穿梭轰炸"是几何的自然结果（炸弹由 {@code tickAttack} 的
             // 投弹链路在每次通场时照常丢）。
             //
-            // <h2>三层各管一件事（与直升机/飞艇/汤姆6 三档同一套"分工"口径）</h2>
-            //   · 航向 —— 鼠标 X 通道（引擎用它算滚转+偏航，权限与玩家推鼠标同档；写满 8 即饱和）；
-            //     偏航误差大时**叠加左右位**，让引擎累积 {@code deltaRot} → 滚转 → rotSpeed 变大。
-            //   · 速度 —— 推力下限 + 冲刺位（空中 {@code power>1} 必须靠冲刺位，否则引擎的
-            //     {@code maxPower} 会把多余推力按 0.012/拍 衰减回 1.0）。
+            // <h2>四层各管一件事（与直升机/飞艇/汤姆6 三档同一套"分工"口径）</h2>
+            //   · 航向 —— 鼠标 X 通道（引擎用它算偏航，权限与玩家推鼠标同档；写满
+            //     {@link #AIRCRAFT_YAW_CMD}=12 才拿得到满舵量）；偏航误差大时**叠加左右位**。
+            //   · 滚转 —— 【实测七百八十】直接写滚转角（{@link #aircraftBank}）：舵量上限
+            //     {@code rotSpeed = 0.3 + 3.2*|roll|/90} 只由它决定，靠左右位让引擎自己滚
+            //     要几十拍，而转弯半径 {@code r ≈ v/0.0298} 是每拍都在算的。
+            //   · 速度 —— 推力下限 + 冲刺位（保速）+ **巡航速度环**（{@link #aircraftGovernSpeed}，
+            //     压速）：`r ≈ v/0.0298`，779 的 2.60 给了 87 格半径、撞地伤害还有 103 点/次。
             //   · 高度 —— **直接写 {@code deltaMovement.y}**（776 那条爬升自驾的对称版）：
             //     固定翼的高度是"速度 × 俯仰"积分出来的，用俯仰环去追一个高度点必然过冲
-            //     （778 实机：{@code 高差 -39→-141} 来回荡），直接拉竖直速度才收敛。
+            //     （778 实机：{@code 高差 -39→-141} 来回荡），直接拉竖直速度才收敛；而且目标高度
+            //     先过一道**地形净空线**（{@link #aircraftSafeTargetY}），不然山一抬头就撞。
             {
                 boolean grounded;
                 try {
@@ -2713,16 +2738,24 @@ public final class MaidMountCompat {
                     logDrive(mount, "固定翼待命（贴地、目标就在脚下，不强行起飞）");
                     return true;
                 }
-                aircraftCruise(mount, eng, dy, err);
+                // 【实测七百八十】目标高度先过"地形净空线"（脚下 + 前瞻路径上最高的地 + 14 格）
+                // 与胡萝卜高度取大者——三次「坠机了」都是"胡萝卜在山谷、机身在山头"撞出来的。
+                double safeY = aircraftSafeTargetY(mount, target.y, err);
+                double dySafe = safeY - mount.getY();
+                boolean terrain = safeY > target.y + 0.5;
+                aircraftCruise(mount, eng, dySafe, err, terrain);
                 logDrive(mount, "固定翼巡航档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
-                        + " 急停=放开(固定翼升力∝速度)"
+                        + (terrain ? " 地形净空(抬到地面上" + (long) AIRCRAFT_TERRAIN_CLEAR + "格)"
+                                : "")
                         + " 鼠标X=" + Math.round(clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD))
+                        + " 滚转=" + rollText(mount)
                         + " 推力=" + powerText(mount)
                         + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 竖直速度=" + fmt2(verticalSpeed(mount))
-                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                        + " 距目标=" + (long) horiz + "格 高差=" + (long) dy
+                        + (terrain ? "→" + (long) dySafe : ""));
                 return true;
             }
         } catch (Throwable ignored) {
@@ -2748,14 +2781,70 @@ public final class MaidMountCompat {
     /* ---------- 【实测七百七十九·点2】固定翼巡航：我们自己的航向 / 速度 / 高度环 ----------
      *
      * 旧版（743~778）这里是一个 {@code tryAircraftLoiter}——把"去某点"翻译成引擎自己的
-     * {@code aircraftLoiter}（圆心 + 半径 + 高度）。779 起**整段删掉**：反编译实证它要的半径
-     * （我们钳在 8~60 格）小于这架飞机气动上转得过来的最小半径（≈55~65 格，推导见
-     * {@code driveFlight} 里"固定翼巡航"那段的注释），于是它的径向误差项每拍把她往外推、
-     * 永远收不拢——实机日志就是"越飞越远、只会在天上飞"。改由下面三个方法自己管。 */
+     * {@code aircraftLoiter}（圆心 + 半径 + 高度）。779 起**整段删掉**：它要的半径只有 8~60 格，
+     * 比这架飞机气动上转得过来的半径还小，于是它的径向误差项每拍把她往外推、永远收不拢——
+     * 实机日志就是"越飞越远、只会在天上飞"。改由下面这几个方法自己管。 */
 
-    /** 固定翼航向通道写多少：引擎里 {@code addY = clamp(0.24*speed*mouseX, ±rotSpeed)}，
-     *  巡航速度下给 8 已经顶满舵量；低速时仍留出比例控制。 */
-    private static final float AIRCRAFT_YAW_CMD = 8.0f;
+    /* ---------- 【实测七百八十】转弯半径 / 巡航速度 / 地形净空（三个数字定死一架固定翼） ----------
+     *
+     * 玩家原话（即规格）：「目前问题就是女仆飞行的半径太大，然后高度又太低。导致经常坠机。」
+     *
+     * <h2>半径：r = v / ω，两个量都在引擎手里，所以必须一起动手</h2>
+     * 反编译 {@code aircraftEngine:793-800} 是**唯一**的转向公式：
+     * <pre>
+     *   rotSpeed = 0.3 + 3.2 * |calculateY(roll)|       // calculateY(x) = x/90（VectorTool 实证）
+     *   addY     = clamp(0.24 * speed * mouseX, ±rotSpeed)
+     *   yRot    += yawSpeed * addY
+     * </pre>
+     * AC-130H 的 {@code ClampRoll=45}、{@code YawSpeed=0.9} ⇒ 满滚转时
+     * {@code rotSpeed = 0.3+3.2*0.5 = 1.9}，即角速度 1.71°/拍 = 0.0298 弧度/拍。
+     * 于是**巡航半径 r ≈ v / 0.0298**：
+     * <ul>
+     *   <li>779 那版巡航速度 2.60 ⇒ r ≈ 87 格（实机日志 {@code 距目标 50→288} 一次通场就是它）；</li>
+     *   <li>本版 0.80 ⇒ r ≈ 27 格。</li>
+     * </ul>
+     * 注意"r 与速度成正比"只在舵量被 rotSpeed 卡住时才成立；速度再往下掉时
+     * {@code addY ∝ speed} 会一起变小，半径反而收不动——所以**必须同时**把滚转顶到 45°
+     * （{@link #aircraftBank}）并把速度压到 {@link #AIRCRAFT_CRUISE_SPEED}
+     * （{@link #aircraftGovernSpeed}），缺一个都白搭。
+     *
+     * <h2>高度：抬目标点解决不了，得"不许低于地形"</h2>
+     * 实机日志（05:12~05:15）里三次「坠机了」的共同形状是：{@code 竖直速度=-0.18~-0.27}、
+     * {@code 高差=1~-16}——她跟的胡萝卜是**主人/敌人高度 + 3~15 格**，与脚下的山丘毫无关系，
+     * 山一抬头她就一头撞进去。撞地伤害（反编译 {@code VehicleEntity.move:6121}）是
+     * {@code 18×(speed−0.2)²}：2.60 时 103 点/次、0.80 时 6.5 点/次——**"经常坠机"就是它**。
+     * 本版给固定翼加一条**地形净空线**（脚下的地 + 前瞻路径上最高的地，各加
+     * {@link #AIRCRAFT_TERRAIN_CLEAR} 格）与胡萝卜高度取大者；速度降下来后再擦一下也只剩零头伤害。
+     */
+
+    /** 固定翼航向通道写多少：引擎里 {@code addY = clamp(0.24*speed*mouseX, ±rotSpeed)}——
+     *  要拿满舵量就得 {@code 0.24*v*mouseX ≥ rotSpeed}；0.80 巡航 + 满滚转时
+     *  {@code 0.24*0.8*12 = 2.30 > 1.9} 还有余量，所以取 12（779 的 8 只有 1.54，拿不满）。 */
+    private static final float AIRCRAFT_YAW_CMD = 12.0f;
+
+    /** 转弯时"强制滚转"的目标角（度）——舵量上限只由它决定，45° 即满舵 1.9。 */
+    private static final double AIRCRAFT_BANK_MAX = 45.0;
+
+    /** 强制滚转的每拍变化上限（度）——别一拍横过来；从 0 滚到 45 约 1.2 秒。 */
+    private static final double AIRCRAFT_BANK_RATE = 2.0;
+
+    /** 巡航水平速度（格/拍 ≈ 16 格/秒）——转弯半径 r ≈ v/0.0298 ⇒ 0.80 → 27 格。 */
+    private static final double AIRCRAFT_CRUISE_SPEED = 0.80;
+
+    /** 巡航减速的每拍上限（格/拍）：从爬升/起飞档的 2.6 拉回 0.8 要 ~45 拍，别一脚急刹
+     *  （急刹那一拍升力跟着掉，高度环还得额外补）。 */
+    private static final double AIRCRAFT_SPEED_DECEL = 0.04;
+
+    /** 固定翼最小离地净空（格）——机身底面到地面至少留这么多。 */
+    private static final double AIRCRAFT_TERRAIN_CLEAR = 14.0;
+
+    /** 前瞻多少拍的路（按当前水平速度换算成格）：0.80 格/拍 × 100 拍 = 80 格。 */
+    private static final int AIRCRAFT_LOOKAHEAD_TICKS = 100;
+    /** 前瞻距离的上下限（格）——太快/太慢时都不至于扫得太离谱。 */
+    private static final double AIRCRAFT_LOOKAHEAD_MIN = 24.0;
+    private static final double AIRCRAFT_LOOKAHEAD_MAX = 84.0;
+    /** 前瞻扫描时"往上多扫"的格数：用来发现**比机身还高**的山坡（见 {@link #columnFloor}）。 */
+    private static final int AIRCRAFT_SCAN_UP = 20;
 
     /**
      * 【实测七百七十九·点2】把引擎自己的固定翼 loiter 关掉。
@@ -2775,8 +2864,8 @@ public final class MaidMountCompat {
         }
     }
 
-    /** 偏航误差超过这个角才"借左右位"（{@code aircraftEngine} 里那两个位会累积 {@code deltaRot}
-     *  → 滚转 → {@code rotSpeed = 0.3 + 3.2*|calculateY(roll)|} 变大 → 转得更快）。 */
+    /** 偏航误差超过这个角才滚转（{@code aircraftEngine} 里左右位会累积 {@code deltaRot} → 滚转
+     *  → {@code rotSpeed = 0.3 + 3.2*|roll|/90} 变大 → 转得更快）。 */
     private static final float AIRCRAFT_BANK_ERR = 25.0f;
 
     /** 高度环：每 1 格高差给多少目标竖直速度（格/拍）。 */
@@ -2785,24 +2874,32 @@ public final class MaidMountCompat {
     /** 高度环的目标竖直速度上限（格/拍）——巡航不要大起大落。 */
     private static final double AIRCRAFT_VY_CRUISE_MAX = 0.18;
 
-    /** 高度环死区（格）：进了这个带就把竖直通道完全交还引擎（升力/重力自然平衡）。 */
-    private static final double AIRCRAFT_ALT_DEADZONE = 1.5;
+    /** 地形避险时的爬升率上限（格/拍）：比巡航大一截，山抬头时来得及抬。
+     *  0.30 格/拍 @ 0.80 前进 ⇒ 约 20° 爬升角。 */
+    private static final double AIRCRAFT_VY_AVOID_MAX = 0.30;
+
+    /** 高度环死区（格）：巡航速度下升力只有重力的四成左右（{@code 0.8×0.008×3.8 ≈ 0.024 < 0.06}），
+     *  所以竖直通道**每拍都得轻轻托着**——死区从 779 的 1.5 收到 0.4，不然她会在死区里慢慢沉。 */
+    private static final double AIRCRAFT_ALT_DEADZONE = 0.4;
 
     /**
-     * 【实测七百七十九·点2】固定翼巡航：三层各管一件事（详见调用点 {@code driveFlight} 的注释）。
+     * 【实测七百七十九·点2 / 七百八十】固定翼巡航：四层各管一件事（详见调用点
+     * {@code driveFlight} 的注释）。
      *
-     * @param dy  高差（carrot.y − 机身 y，正 = 目标更高）
-     * @param err 到 carrot 的偏航误差（{@code wrapDegrees(目标方位 − 机头)}，正 = 该右转）
+     * @param dy      高差（目标高度 − 机身 y，正 = 目标更高）。780 起这里传的是
+     *                {@link #aircraftSafeTargetY} 之后的**安全高度**——地形净空线与胡萝卜高度取大者。
+     * @param err     到 carrot 的偏航误差（{@code wrapDegrees(目标方位 − 机头)}，正 = 该右转）
+     * @param terrain 这一拍的高度是不是**被地形净空线顶起来的**（是 → 允许更陡的爬升率）
      */
-    private static void aircraftCruise(Entity mount, String eng, double dy, float err) {
-        // 引擎自己的 loiter 每拍会写 mouse/power，与下面三层打架（而且它要的半径它转不过来）
+    private static void aircraftCruise(Entity mount, String eng, double dy, float err, boolean terrain) {
+        // 引擎自己的 loiter 每拍会写 mouse/power，与下面四层打架（而且它要的半径它转不过来）
         aircraftLoiterOff(mount);
-        // ① 航向：鼠标 X 通道
+        // ① 航向：鼠标 X 通道 + 左右位（左右位仍留着：它累积 deltaRot，是引擎自己的滚转来源，
+        //    也是 aircraftBank 拿不到反射时的退路）
         mSetMouseX(mount, clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD));
         // 俯仰通道归零 → 交给引擎自己的"机头自动整平"（{@code aircraftEngine:818}：
         // {@code |xRot|<20 && |mouseY|<0.001} 时按竖直速度把机头慢慢摆平）。高度不靠俯仰环，见③。
         mSetMouseY(mount, 0.0f);
-        // ② 推力 + 输入位
         short bits = (short) (0x004 | 0x100);   // 前进 + 冲刺（空中 power>1 必须靠冲刺位）
         if (Math.abs(err) > AIRCRAFT_BANK_ERR) {
             bits |= (err > 0) ? (short) 0x002 : (short) 0x001;   // 借左右位滚转
@@ -2812,31 +2909,161 @@ public final class MaidMountCompat {
         } catch (Throwable ignored) {
         }
         aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
-        // ③ 高度：竖直自驾（直接写 deltaMovement.y）
-        aircraftHoldAltitude(mount, dy);
-        // ④ 水平速度上限（防超速冲量；**不打**周期急停——固定翼升力∝速度，777 定的口径）
-        aircraftCapOnly(mount);
+        // ② 滚转：直接写滚转角（舵量上限的唯一来源，见 780 那段的推导）
+        aircraftBank(mount, err);
+        // ③ 高度：竖直自驾（直接写 deltaMovement.y）——地形顶起来时允许更陡
+        aircraftHoldAltitude(mount, dy, terrain ? AIRCRAFT_VY_AVOID_MAX : AIRCRAFT_VY_CRUISE_MAX);
+        // ④ 水平速度：巡航速度环（转弯半径 r ≈ v/0.0298 里的那个 v）
+        aircraftGovernSpeed(mount, AIRCRAFT_CRUISE_SPEED);
     }
 
     /**
-     * 【实测七百七十九·点2】固定翼竖直自驾：把竖直速度拉向"按高差算的目标值"。
+     * 【实测七百八十】固定翼"强制滚转"：把滚转角按 {@link #AIRCRAFT_BANK_MAX} 顶住。
+     *
+     * <h2>为什么非做不可</h2>
+     * 转向能力**完全**由滚转角决定（反编译 {@code aircraftEngine:793}）：
+     * {@code rotSpeed = 0.3 + 3.2*|roll|/90}。不滚的时候 {@code rotSpeed} 只有 0.3 —— 角速度
+     * 0.27°/拍，半径是**几百格**（实机日志里"越飞越远"就是这个形状）；滚满 45° 才有 1.9。
+     * 光靠左右位让引擎自己滚要几十拍才到位（实机日志反推滚转角长期只在 20~30°），
+     * 而转弯半径按 {@code r = v/(0.9×rotSpeed×π/180)} 算，25° 时是 48 格、45° 时 27 格。
+     *
+     * <h2>方向怎么定（不猜）</h2>
+     * 引擎自己的约定是"右位 → {@code deltaRot} 变负 → 滚转角变正"，与它自己的偏航同源。
+     * 所以这里**保留引擎当前滚转角的正负号**（{@code |roll|>5} 时），只在它已经选定的方向上
+     * 把幅度补到 45°；只有在引擎还没滚起来（≈0）时才用偏航误差的符号开局。
+     * 这样即使我们的符号约定与引擎相反，也不会把升力的水平分量推到圈外。
+     *
+     * <p>反射拿不到 → 什么都不做（退路就是上面那条"借左右位"，只是半径大些）。
+     */
+    private static void aircraftBank(Entity mount, float err) {
+        if (mSetRoll == null || mGetRoll == null) {
+            return;
+        }
+        try {
+            float cur = ((Number) mGetRoll.invoke(mount)).floatValue();
+            float want;
+            if (Math.abs(err) > AIRCRAFT_BANK_ERR) {
+                float sign = Math.abs(cur) > 5.0f ? Math.signum(cur)
+                        : (err > 0.0f ? 1.0f : -1.0f);
+                want = sign * (float) AIRCRAFT_BANK_MAX;
+            } else {
+                want = 0.0f;   // 不用转弯了 → 回正（引擎自己也在回正，同向不打架）
+            }
+            float step = (float) clamp(want - cur, -AIRCRAFT_BANK_RATE, AIRCRAFT_BANK_RATE);
+            if (Math.abs(step) > 1.0E-4f) {
+                mSetRoll.invoke(mount, cur + step);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十九·点2 / 七百八十】固定翼竖直自驾：把竖直速度拉向"按高差算的目标值"。
      *
      * <p>与 {@link #aircraftClimbAssist}（776 起飞爬升窗口用）同一套手法，两处差别只有两条：
      * 这里是**双向**的（下降也要接管，{@code want} 允许为负），且带一个
-     * {@link #AIRCRAFT_ALT_DEADZONE} 死区（到位后就撒手，不跟引擎的升力/重力拔河）。
+     * {@link #AIRCRAFT_ALT_DEADZONE} 死区。
+     *
+     * <p>【780】死区为什么从 1.5 收到 0.4、上限为什么变成参数：巡航速度降到 0.80 之后，
+     * 升力（≈0.024/拍）只有重力（0.06/拍）的四成——**她一直在缓慢下沉**，全靠这个竖直环每拍托着。
+     * 死区留在 1.5 的话，她会在死区里以 0.036 格/拍下沉、反复进出，看着就是"忽忽悠悠往下掉"；
+     * 收到 0.4 才能把稳态误差压到 0.4 格以内。{@code maxVy} 由调用方给：巡航 0.18、
+     * 被地形净空线顶起来时 0.30（见 {@link #AIRCRAFT_VY_AVOID_MAX}）。
      */
-    private static void aircraftHoldAltitude(Entity mount, double dy) {
+    private static void aircraftHoldAltitude(Entity mount, double dy, double maxVy) {
         try {
             if (Math.abs(dy) <= AIRCRAFT_ALT_DEADZONE) {
                 return;
             }
-            double want = clamp(dy * AIRCRAFT_VY_PER_BLOCK,
-                    -AIRCRAFT_VY_CRUISE_MAX, AIRCRAFT_VY_CRUISE_MAX);
+            double want = clamp(dy * AIRCRAFT_VY_PER_BLOCK, -maxVy, maxVy);
             Vec3 dm = mount.getDeltaMovement();
             double step = clamp(want - dm.y, -AIRCRAFT_VY_STEP, AIRCRAFT_VY_STEP);
             mount.setDeltaMovement(dm.x, clamp(dm.y + step, -0.30, 0.30), dm.z);
         } catch (Throwable ignored) {
         }
+    }
+
+    /**
+     * 【实测七百八十】固定翼"安全目标高度" = {@code max(胡萝卜高度, 地形净空线)}。
+     *
+     * <h2>为什么必须这么做（三次「坠机了」的根因）</h2>
+     * 胡萝卜的高度来自**实体**（跟随 = 主人 Y + {@code followAlt}、接敌 = 敌人 Y +
+     * {@code requiredAbove}），与地形毫无关系。她巡航在 80 格外的山头上方时，胡萝卜可能
+     * 指着一个山谷底（高差 -16），竖直环就会一路把她往山里压——实机日志
+     * {@code 竖直速度=-0.18~-0.27 高差=-16 → 坠机了} 正是这个形状。
+     * 所以目标高度必须先跟"脚下的地 + 前瞻路径上最高的地"取大者。
+     *
+     * <p>净空 {@link #AIRCRAFT_TERRAIN_CLEAR} 只作用在**高度目标**上（姿态/推力照旧），
+     * 所以这是一条与四种引擎共用的"避险抬升"同源、但专门给固定翼的**前瞻版**：
+     * {@code vehicleAvoidLift} 只看正前方 8 格（那是给每秒几格的直升机用的），
+     * 对 0.80 格/拍（16 格/秒）的固定翼不够，这里按**速度换算的前瞻距离**扫。
+     *
+     * @param carrotY 胡萝卜（主人/敌人 + 各自高度）的高度
+     * @param err     这一拍朝目标的偏航误差（度）——前瞻时"目标那一侧"也要扫，原因见下
+     * @return 安全高度（格）；这一带地面远在下方时原样返回 {@code carrotY}
+     */
+    private static double aircraftSafeTargetY(Entity mount, double carrotY, float err) {
+        try {
+            double floor = aircraftTerrainFloor(mount, err);
+            return floor == Double.NEGATIVE_INFINITY ? carrotY : Math.max(carrotY, floor);
+        } catch (Throwable ignored) {
+            return carrotY;
+        }
+    }
+
+    /** 地形净空线（格）：脚下 + 前瞻路径上所有采样列里"最高的地 + CLEAR"；无约束 → 负无穷。 */
+    private static double aircraftTerrainFloor(Entity mount, float err) {
+        if (!(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+            return Double.NEGATIVE_INFINITY;
+        }
+        int from = net.minecraft.util.Mth.floor(mount.getY()) + AIRCRAFT_SCAN_UP;
+        // ① 脚下那一列（她现在就在这上面）
+        double best = columnFloor(sl, mount.getX(), mount.getZ(), from);
+        // ② 前瞻：沿"当前行进方向"与"目标方位"各扫 3 列（0.33L / 0.67L / L）
+        double len = clamp(horizontalSpeed(mount) * AIRCRAFT_LOOKAHEAD_TICKS,
+                AIRCRAFT_LOOKAHEAD_MIN, AIRCRAFT_LOOKAHEAD_MAX);
+        double vx = 0.0;
+        double vz = 0.0;
+        Vec3 dm = mount.getDeltaMovement();
+        double h = Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+        if (h > 1.0E-3) {
+            vx = dm.x / h;
+            vz = dm.z / h;
+        } else {
+            float yaw = mount.getYRot();
+            vx = -Math.sin(Math.toRadians(yaw));
+            vz = Math.cos(Math.toRadians(yaw));
+        }
+        for (int i = 1; i <= 3; i++) {
+            double d = len * i / 3.0;
+            best = Math.max(best, columnFloor(sl, mount.getX() + vx * d, mount.getZ() + vz * d, from));
+            // 目标那一侧也要扫：她正在转弯时，去路是"速度方向"与"目标方向"之间那一片，
+            // 只扫速度方向的话，转弯内侧的山头会漏掉。方位 = 行进方向再转 err
+            // （MC 约定 yaw 0 = +Z、yaw 增大朝 -X，与这里用的 2D 旋转矩阵同式）。
+            double rad = Math.toRadians(err);
+            double tx = vx * Math.cos(rad) - vz * Math.sin(rad);
+            double tz = vx * Math.sin(rad) + vz * Math.cos(rad);
+            best = Math.max(best, columnFloor(sl, mount.getX() + tx * d, mount.getZ() + tz * d, from));
+        }
+        return best;
+    }
+
+    /**
+     * 某一列的地面净空线：{@code surfaceY} 找到这一列在扫描窗口内的最高非空气方块，返回它 + 1 + CLEAR。
+     *
+     * <p>扫描窗口是 {@code [from-40+4, from+4]} = {@code [机身+SCAN_UP-36, 机身+SCAN_UP+4]}
+     * （见 {@link #surfaceY}）——{@code SCAN_UP}=20 时即 {@code [-16, +24]}：
+     * <ul>
+     *   <li>窗口内有方块 → 返回它 + 净空（这就是"要抬到多高"）；</li>
+     *   <li>窗口内全空气 → 说明这一带的地在 16 格以下，对她没有约束 → 负无穷（不参与 max）。</li>
+     * </ul>
+     * 比机身高出 20 格以上的山坡会被截断成窗口顶（少报几格）——但那一列**一定是实体**，
+     * 于是她仍会拿到一个很大的抬升量、继续爬；等她爬上去窗口也跟着上移，读数自然补齐。
+     */
+    private static double columnFloor(net.minecraft.server.level.ServerLevel sl,
+                                     double x, double z, int from) {
+        int g = surfaceY(sl, net.minecraft.util.Mth.floor(x), from, net.minecraft.util.Mth.floor(z));
+        return g == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY : g + 1.0 + AIRCRAFT_TERRAIN_CLEAR;
     }
 
     /**
@@ -2908,6 +3135,20 @@ public final class MaidMountCompat {
                 Object p = mGetPower.invoke(mount);
                 if (p instanceof Number n) {
                     return fmt2(n.doubleValue());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return "?";
+    }
+
+    /** 【实测七百八十】固定翼日志用的滚转读数（度；拿不到 → "?"）——转弯半径就看它。 */
+    private static String rollText(Entity mount) {
+        try {
+            if (mGetRoll != null) {
+                Object r = mGetRoll.invoke(mount);
+                if (r instanceof Number n) {
+                    return String.valueOf(Math.round(n.doubleValue()));
                 }
             }
         } catch (Throwable ignored) {
@@ -3000,25 +3241,24 @@ public final class MaidMountCompat {
     private static final float AIRCRAFT_GROUND_MAX_POWER = 3.0f;
 
     /**
-     * 【实测七百七十八·点2 / 七百七十九·点2】固定翼巡航时的最小推力。
+     * 【实测七百七十八·点2 / 七百七十九·点2 / 七百八十】固定翼巡航时的最小推力。
      *
      * <p>为什么必须有下限（778 实证）：引擎自己的盘旋会把 {@code power} 收敛到 {@code 0.5~0.9}
      * （反编译 {@code aircraftLoiter:1337}），对应的速度只有 ~0.6 格/拍 → 升力 ≈0.02/拍
      * < 重力 0.06/拍——**盘旋就等于"慢慢往下沉"**。所以每拍给一个推力下限
      * （引擎空中每拍只把多余推力衰减 0.012，压不过我们）。
      *
-     * <p>值从 1.80 提到 2.40（779）：2.40 把稳态速度顶到 {@link #AIRCRAFT_HMAX}（2.60）附近，
-     * 而按 778 那条升力公式（{@code 升力 = speed × 0.008 × (4 − 0.25×speed)}，LiftSpeed=1.0）
-     * 反解——**平飞所需的最低速度约 2.2 格/拍**（2.2 时升力 ≈0.061 ≈ 重力 0.06）。
-     * 2.40 让"一层平流"这件事本身成立，高度就只剩小幅微调（由
-     * {@link #aircraftHoldAltitude} 的竖直环负责），不会再出现 778 那种
-     * {@code 高差 -39→-141} 的荡秋千。
+     * <p>【780】值从 2.40 收回 1.20：779 的 2.40 是按"用推力把速度顶到 2.60"设计的，
+     * 而 780 已经把巡航速度**改由速度环直接压到 0.80**（{@link #aircraftGovernSpeed}），
+     * 推力再顶到 2.60 只会被速度环每拍削掉——那是白烧油，也让"急刹感"来自两处对抗。
+     * 1.20 的稳态速度在各家阻力系数下都仍是 1.2 格/拍以上（{@code v³ ≈ 16.6×P/R}），
+     * 依然足够让速度环"只压不拉"，同时把多余推力的量级降到 1/4。
      *
      * <p>空中要让 {@code power} 停在 1 以上，必须**带冲刺位**（引擎
      * {@code maxPower = sprint||onGround ? 3 : (power>1 ? power−0.012 : 1)}，反编译实证），
      * 所以巡航档的输入位里始终带着 {@code 0x100}。
      */
-    private static final float AIRCRAFT_MIN_CRUISE_POWER = 2.40f;
+    private static final float AIRCRAFT_MIN_CRUISE_POWER = 1.20f;
     /** 助跑带扫描的缓存拍数（2 秒；地面不会两秒一变，且扫描本身是几十次方块查询）。 */
     private static final long AIRCRAFT_RUNWAY_CACHE_TICKS = 40L;
 
@@ -3533,6 +3773,41 @@ public final class MaidMountCompat {
         } catch (Throwable ignored) {
             return 0;
         }
+    }
+
+    /**
+     * 【实测七百八十】固定翼**巡航速度环**：把水平速度平缓地压到 {@code target}（格/拍）。
+     *
+     * <h2>为什么不是"把推力调小"</h2>
+     * 推力→速度的稳态关系要除以引擎的阻力系数 {@code R}（{@code f = 0.96 − 0.0017×R×v²}），
+     * 而 {@code R} 没写在车辆 json 里（AC-130H 的 EngineInfo 只有 Increment/SpeedRate 那几项，
+     * 反编译实证），所以"给多少推力能落在 0.80"这件事**算不准**。直接写 {@code deltaMovement}
+     * 则与 {@code R} 无关：超了就按比例缩回来（SWB 的 {@code setDeltaMovement} 覆写体对**减速**
+     * 是直通的——见 {@link #killHorizontal} 的注释），每拍都是我们要的那个数。
+     *
+     * <h2>为什么带 {@link #AIRCRAFT_SPEED_DECEL} 的缓降</h2>
+     * 起飞/爬升档为了升力把速度顶到 {@link #AIRCRAFT_HMAX}（2.60）。切进巡航那一拍如果直接
+     * 缩到 0.80，等于一瞬间损失 70% 的速度、升力跟着掉（虽然竖直环会补，但看着像急刹）。
+     * 每拍最多掉 0.04 ⇒ 2.60→0.80 约 45 拍（2.3 秒）的平缓减速。
+     *
+     * <p>注意这里**只压不拉**：低于目标时一个字不改（推力下限才是保速的那一端）。
+     */
+    static int aircraftGovernSpeed(Entity mount, double target) {
+        try {
+            Vec3 dm = mount.getDeltaMovement();
+            double hs = Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+            if (hs < 1.0E-6) {
+                return BRAKE_FLAG_CAP;
+            }
+            double cap = Math.max(target, hs - AIRCRAFT_SPEED_DECEL);
+            if (hs <= cap) {
+                return BRAKE_FLAG_CAP;
+            }
+            double k = cap / hs;
+            mount.setDeltaMovement(dm.x * k, dm.y, dm.z * k);
+        } catch (Throwable ignored) {
+        }
+        return BRAKE_FLAG_CAP;
     }
 
     /**
