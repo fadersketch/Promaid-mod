@@ -1840,6 +1840,9 @@ public final class RideBindManager {
                 return;
             }
             PLAYER_DRIVING.remove(mount.getUUID());
+            // 【实测七百八十三】离开 home 档（= 回到正常跟随/接敌）→ 丢掉降落落点缓存，
+            // 下次再切 home 时重新选址（否则她会朝一个早已飞过的旧落点扎）。
+            MaidMountCompat.resetAircraftLanding(mount);
             // 【实测七百五十六·点3：守家（home 模式）→ 坐骑立刻停】
             // 玩家原话：「如果女仆处于 home 模式，那么她坐的坐骑就会立刻停止。这样子也方便玩家调控。」
             // 口径与 TLM 自己的跟随完全同源——{@code MaidFollowOwnerTask.maidStateConditions} 就是
@@ -1872,6 +1875,18 @@ public final class RideBindManager {
                 return;
             }
             if (maid.isHomeModeEnable()) {
+                // 【实测七百八十三】固定翼（AC-130H 这类）单独开一档"安全降落"：
+                //   地面 → 与别的坐骑一样**停住不动**；
+                //   空中 → **立刻执行一次降落进近**（选一块够平的地、照下滑道轻轻接地）。
+                // 玩家原话：「目前没有办法让女仆安全降落。……如果选择到 home 模式，如果就在地面上呢，
+                // 就是跟其他的一样，停止不动。如果在空中那么女仆会立刻执行一次尝试安全降落。」
+                // 它排在"飞行载具悬停"之前：固定翼停不住旋翼那种悬停（没有竖直轴），
+                // home 档对它就只能是"降落"。返回 false（拿不到驱动口/找不到平地）→ 落回原口径。
+                if (MaidMountCompat.isAircraft(mount)) {
+                    if (MaidMountCompat.aircraftHomeLanding(mount, maid)) {
+                        return;
+                    }
+                }
                 if (MaidMountCompat.isFlyingVehicle(mount)) {
                     if (MaidAirCombat.enabled()) {
                         Vec3 hold = MaidAirCombat.holdHere(maid, mount);
