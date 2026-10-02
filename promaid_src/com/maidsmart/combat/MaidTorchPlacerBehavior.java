@@ -140,21 +140,36 @@ public class MaidTorchPlacerBehavior extends Behavior<EntityMaid> {
         if (placedBlock == null) {
             return; // 保险：取不到方块（理论上 findTorch 已过滤）
         }
-        level.m_7731_(target, placedBlock.m_49966_(), 3);
+        if (!level.m_7731_(target, placedBlock.m_49966_(), 3)) {
+            return; // 放不下（被占 / 已经是同一种方块）→ 一根都不扣，下轮再看
+        }
         // v1.2.2 实测五百九十七【副手举一下这根火把】：快照必须在扣料之前取——
         // 下面 extractItem 之后就地把这一格缩了，再读就是空的。
         // 只有"从背包掏出来的"才举：本来拿在手上的（fromHands）再举一次 = 两只手同一件，反而怪。
         ItemStack torchShow = torch.m_41777_();
         // v1.1.0 实测十六（审查 P2）：消耗改 extractItem——旧版直缩 getStackInSlot
-        // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一
+        // 返回栈，handler 返回副本时扣不掉（无限插火把刷方块）；与工程其他消耗点统一。
+        //
+        // 【实测七百六十二·issue #19 三修】上面那条注释说的坑其实只堵了一半：extractItem 在
+        // **坏包装层**下会"返回副本却不真扣"，于是火把照插、材料一件没少——与搭路/战斗放置
+        // 完全同一形状。现在改成"扣完核对槽位总数真的减了 1"（extractOneHonest）；扣不到就把
+        // 刚放下的那根**拆掉回滚**——宁可这次不插，也绝不放一根不扣一根。顺序仍是"先放后扣"，
+        // 保留原语义：放置失败时不该扣她的料。
+        boolean paid;
         try {
             if (fromHands) {
-                ((net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
-                        .extractItem(isTorchItem(maid.m_21205_()) ? 0 : 1, 1, false);
+                paid = com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(
+                        (net.minecraftforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper(),
+                        isTorchItem(maid.m_21205_()) ? 0 : 1);
             } else {
-                inv.extractItem(slot, 1, false);
+                paid = com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(inv, slot);
             }
         } catch (Exception ignored) {
+            paid = false;
+        }
+        if (!paid) {
+            level.m_7471_(target, false); // 回滚：没付账就不留这一根（removeBlock 不掉落）
+            return;
         }
         maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
         if (slot >= 0) {

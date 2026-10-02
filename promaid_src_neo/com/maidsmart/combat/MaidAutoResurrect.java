@@ -245,6 +245,7 @@ public final class MaidAutoResurrect {
      * **同步加载**出来再删——与复活侧"先把重生点区块载到 FULL 再放人"同一个口径。
      * 删除走实体自己的 {@code discard}，TLM 的 remove 钩子会顺手清登记表，不留脏记录。
      */
+    /** 删除墓碑实体（所有维度找同名 UUID）。 */
     private static void removeTombstone(MinecraftServer server, Pending p) {
         if (p.tombstoneId == null) {
             return;
@@ -267,6 +268,24 @@ public final class MaidAutoResurrect {
     /**
      * 按 TLM 的墓碑登记表（{@code MaidWorldData.getTombstones(ownerId)}）找到这块墓碑的
      * 【维度 + 坐标】，同步加载那格区块后把它删掉。
+     *
+     * <p>【实测七百六十三·点1：为什么"强制加载之后同 tick 就查得到"，不需要任何顺延】
+     * 把两版的这条链读透了：{@code ServerChunkCache#getChunkFutureMainThread} 在
+     * {@code load=true} 时按 {@code ChunkLevel.byStatus(status)} 取等级 → 对
+     * {@code ChunkStatus.FULL} 就是 <b>33</b> → {@code distanceManager.addTicket(UNKNOWN, pos, 33)}
+     * → 阻塞到 FULL 完成；而 {@code ChunkLevel.fullStatus(33) = FullChunkStatus.FULL}
+     * → {@code Visibility.fromFullChunkStatus(FULL) = TRACKED} → {@code isAccessible() = true}
+     * → {@code PersistentEntitySectionManager.addEntityWithoutEvent} 当场 {@code startTracking}
+     * 把它放进**可见**实体表。所以：
+     * <ul>
+     *   <li>{@code level.getEntity(uuid)} 读的是可见（被追踪）表，而 33 级 ticket 恰好让它
+     *       TRACKED —— <b>不需要任何玩家在附近</b>，我们自己这一句 {@code getChunk} 就够了；</li>
+     *   <li>因此"载完还取不到"只可能是<b>它真的不在了</b>，晚几秒再试不会变 —— 顺延没有意义
+     *       （本轮修复中一度写过 6×5 秒顺延，查清这条链后当场撤掉，没有进过任何构建）。</li>
+     * </ul>
+     *
+     * <p>唯一能让它"存在却够不到"的是<b>维度串对不上</b>（下面那条显式日志）——那不是时序
+     * 问题，重试也救不了，所以只把话说清楚，不再假装能靠等待解决。
      *
      * @return 真的删掉了（或确认它已不存在）返回 true；连位置都查不到返回 false
      */
@@ -291,12 +310,15 @@ public final class MaidAutoResurrect {
                 return false;
             }
             net.minecraft.core.BlockPos pos = hit.getChunkPos();
+            boolean matchedLevel = false;
             for (ServerLevel lvl : server.getAllLevels()) {
                 if (!lvl.dimension().location().toString().equals(hit.getDimension())) {
                     continue;
                 }
+                matchedLevel = true;
                 // 同步加载它那一格区块（required 语义）——她死亡后区块早卸载了，
-                // 不加载出来 getEntity 永远找不到它。
+                // 不加载出来 getEntity 永远找不到它。这 33 级 ticket 会把该格实体置成
+                // TRACKED（见上面那段），所以**同 tick 就能取到**，不需要等。
                 lvl.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
                 net.minecraft.world.entity.Entity e = lvl.getEntity(p.tombstoneId);
                 if (e instanceof EntityTombstone ts) {
@@ -307,7 +329,7 @@ public final class MaidAutoResurrect {
                                     + "）同步载入后删除");
                     return true;
                 }
-                // 区块载进来了，但她确实不在了 → 清掉这条脏登记，免得排班表里留一个幽灵墓碑
+                // 区块载进来了、她确实不在了 → 清掉这条脏登记，免得排班表里留一个幽灵墓碑
                 try {
                     list.removeIf(i -> p.tombstoneId.equals(i.getEntityId()));
                     data.setDirty();
@@ -317,7 +339,21 @@ public final class MaidAutoResurrect {
                         "墓碑登记表有记录但实体已不存在 → 已清掉这条登记（" + hit.getDimension() + "）");
                 return true;
             }
-        } catch (Throwable ignored) {
+            if (!matchedLevel) {
+                // 【实测七百六十三·点1】登记表那条记的维度在本服务器上没有对应维度 —— 这时
+                // 我们连区块都不会去加载，墓碑自然永远删不掉。旧版会把它并进"既不在实体表、
+                // 也不在登记表里"那句日志，指向错误的方向；这里单独点名，便于一眼定位
+                // （TLM 换过维度 id / 世界被删过 / 存档来自另一套模组配置）。
+                com.maidsmart.tool.PromaidLog.log("自动复活",
+                        "墓碑登记表记的维度（" + hit.getDimension() + "）在本服务器上没有对应维度"
+                                + "→ 无法定位那格区块，这块墓碑不会被删除；坐标 "
+                                + pos.getX() + "," + pos.getY() + "," + pos.getZ());
+            }
+        } catch (Throwable t) {
+            // 【实测七百六十三·点1】把这条也点出来：加载/读取过程中真的抛了异常（区块读不出来、
+            // 维度正在卸载等）时旧版是彻底静默的 —— 与"维度串对不上"同属"存在却够不到"的少数
+            // 情形，值得留一行。本方法每次复活只走一次，不会刷屏。
+            com.maidsmart.tool.PromaidLog.log("自动复活", "按登记表删除墓碑时出错：" + t);
         }
         return false;
     }

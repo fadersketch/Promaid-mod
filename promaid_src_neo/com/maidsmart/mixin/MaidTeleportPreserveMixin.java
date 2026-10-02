@@ -55,8 +55,14 @@ public abstract class MaidTeleportPreserveMixin {
             // 自保/建造/搭路拦截，坐垫/骑乘/蹲下的女仆仍会被拉走。反馈"蹲下、坐垫全都
             // 固定会这样"正是这条路径（我们 mod 的救援/拉回已豁免，TLM 原版没拦）。
             // 坐垫/骑乘/蹲下 = 玩家明确停放，TLM 原版传送同样不拉。
-            if (maid.isMaidInSittingPose() || maid.isPassenger()
-                    || maid.canBreatheUnderwater()) { // canBreatheUnderwater = isShiftKeyDown（蹲下）
+            //
+            // 【实测七百六十二·修正 1.21.1 侧映射写错】这里原写 {@code canBreatheUnderwater()}，
+            // 注释还标着"= isShiftKeyDown（蹲下）"——但在 1.21.1 里
+            // {@code LivingEntity.canBreatheUnderwater()} 是 {@code getType().is(CAN_BREATHE_UNDER_WATER)}
+            // （生物类型标签，1.20.1 的 SRG {@code m_6040_} 才是 isShiftKeyDown，两树因此长期不一致）：
+            // 女仆不在那个标签里 ⇒ 恒 false ⇒ **1.21.1 上"蹲着的女仆免于 TLM 原版传送"这条从来没生效**。
+            // 改用 isShiftKeyDown()，与 1.20.1 树对齐。
+            if (maid.isMaidInSittingPose() || maid.isPassenger() || maid.isShiftKeyDown()) {
                 cir.setReturnValue(false);
                 return;
             }

@@ -349,8 +349,26 @@ public final class MaidBuildBlockFilter {
      * <p>核对口径刻意只用"槽位总数变化"这一个绝对事实（不猜实现）：
      * 真扣 → after == before-1（正常包装全部通过）；返回副本没扣 → after == before → 判定为
      * 没取到，试下一槽；全都不真扣 → 返回 null，「取材失败」——**宁可这次不搭，也不凭空造料**。
+     *
+     * <p>【实测七百六十二·issue #19 三修：把这个口径开放给同族链路】原来是 private，只服务
+     * 搭路/挖矿/伐木/自保/索引石主材；而**战斗放置**（{@code BombItems.takeFirstMatch}）与
+     * **索引石补下方支撑**（{@code IndexStoneBuildBehavior.takeOneFor}）仍在用裸 {@code extractItem}
+     * → 坏包装层下同样"放置照放、到期按方块 id 逐格还真物"，净 +1。改成 public 让它们共用
+     * 这一个收口，避免下次又漏一条。
      */
-    private static boolean extractOneHonest(IItemHandler handler, int slot) {
+    public static boolean extractOneHonest(IItemHandler handler, int slot) {
+        return extractHonest(handler, slot, 1);
+    }
+
+    /**
+     * {@link #extractOneHonest} 的通用版（一次取 {@code count} 件）。
+     *
+     * <p>核对口径与单件版完全一致，只把"减 1"换成"减 {@code extractItem} 实际报出来的件数"
+     * （{@code moved}）——这样"请求 3 件、包装层只肯给 2 件"这种正常情形不会被误判成失败，
+     * 而"返回副本、一件没扣"（{@code moved>0} 但 {@code after==before}）照样被抓出来。
+     * 蓝图建造的 {@code BlueprintMaterials.extractExact} 用这一支（实测七百六十二）。
+     */
+    public static boolean extractHonest(IItemHandler handler, int slot, int count) {
         int before;
         try {
             before = handler.getStackInSlot(slot).m_41613_();
@@ -360,11 +378,13 @@ public final class MaidBuildBlockFilter {
         if (before <= 0) {
             return false;
         }
+        int moved;
         try {
-            ItemStack taken = handler.extractItem(slot, 1, false);
+            ItemStack taken = handler.extractItem(slot, count, false);
             if (taken.m_41619_()) {
                 return false;
             }
+            moved = taken.m_41613_();
         } catch (Throwable ignored) {
             return false;
         }
@@ -374,7 +394,7 @@ public final class MaidBuildBlockFilter {
         } catch (Throwable ignored) {
             return true; // 查不到复核值时按原口径放行（不做更坏的假设）
         }
-        return after == before - 1;
+        return after == before - moved;
     }
 
     /* ==================== v1.2.3-dbg 探针取值助手（查完删掉整段） ==================== */

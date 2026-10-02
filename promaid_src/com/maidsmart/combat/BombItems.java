@@ -216,15 +216,37 @@ public final class BombItems {
                     continue;
                 }
                 ItemStack s = hands.getStackInSlot(i);
-                if (match.test(s)) {
-                    return dryRun ? s : hands.extractItem(i, 1, false);
+                if (!match.test(s)) {
+                    continue;
+                }
+                if (dryRun) {
+                    return s;
+                }
+                // 【实测七百六十二·issue #19 三修：战斗放置也要"诚实取材"】
+                // 第二轮的核对口径只接在 MaidBuildBlockFilter 一个收口上，这条链漏了：
+                // 裸 extractItem 在某些包装层下"返回副本却不真扣"，而回收侧
+                // BombPlacement.returnBlockItem 是按方块 id 造一件**真物品**还她 → 净 +1，
+                // 且只在恰好选中那个坏槽位时发生（就是报告者那句"长期使用缓慢增加"）。
+                // 没真扣 → 判为没取到，试下一个槽位（与搭路完全同一口径）。
+                ItemStack taken = s.m_41777_();
+                taken.m_41764_(1);
+                if (com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(hands, i)) {
+                    return taken;
                 }
             }
             IItemHandler inv = maid.getAvailableBackpackInv();
             for (int i = 0; i < inv.getSlots(); i++) {
                 ItemStack s = inv.getStackInSlot(i);
-                if (match.test(s)) {
-                    return dryRun ? s : inv.extractItem(i, 1, false);
+                if (!match.test(s)) {
+                    continue;
+                }
+                if (dryRun) {
+                    return s;
+                }
+                ItemStack taken = s.m_41777_();
+                taken.m_41764_(1);
+                if (com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(inv, i)) {
+                    return taken;
                 }
             }
         } catch (Throwable ignored) {
