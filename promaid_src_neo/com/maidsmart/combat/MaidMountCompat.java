@@ -2738,16 +2738,19 @@ public final class MaidMountCompat {
                     logDrive(mount, "固定翼待命（贴地、目标就在脚下，不强行起飞）");
                     return true;
                 }
-                // 【实测七百八十】目标高度先过"地形净空线"（脚下 + 前瞻路径上最高的地 + 14 格）
-                // 与胡萝卜高度取大者——三次「坠机了」都是"胡萝卜在山谷、机身在山头"撞出来的。
-                double safeY = aircraftSafeTargetY(mount, target.y, err);
+                // 【实测七百八十一】目标高度再抬一档固定翼专属的 {@link #AIRCRAFT_ALT_BONUS}（15 格）：
+                // 玩家原话「把盘旋高度和接敌再往上提 15 格左右」。胡萝卜（主人+3 / 敌+15）与地形净空线
+                // **两个约束一起抬**——只抬胡萝卜的话，超平坦地面上实际管着她的仍是净空线（见常量注释）。
+                double carrotY = target.y + AIRCRAFT_ALT_BONUS;
+                double safeY = aircraftSafeTargetY(mount, carrotY, err);
                 double dySafe = safeY - mount.getY();
-                boolean terrain = safeY > target.y + 0.5;
+                boolean terrain = safeY > carrotY + 0.5;
                 aircraftCruise(mount, eng, dySafe, err, terrain);
                 logDrive(mount, "固定翼巡航档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
-                        + (terrain ? " 地形净空(抬到地面上" + (long) AIRCRAFT_TERRAIN_CLEAR + "格)"
+                        + " 固定翼加高" + (long) AIRCRAFT_ALT_BONUS + "格"
+                        + (terrain ? " 地形净空(抬到地面上" + (long) (AIRCRAFT_TERRAIN_CLEAR + AIRCRAFT_ALT_BONUS) + "格)"
                                 : "")
                         + " 鼠标X=" + Math.round(clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD))
                         + " 滚转=" + rollText(mount)
@@ -2837,6 +2840,23 @@ public final class MaidMountCompat {
 
     /** 固定翼最小离地净空（格）——机身底面到地面至少留这么多。 */
     private static final double AIRCRAFT_TERRAIN_CLEAR = 14.0;
+
+    /**
+     * 【实测七百八十一】固定翼专属的**额外高度**（格）——玩家原话「把盘旋高度和接敌再往上提 15 格左右」。
+     *
+     * <p>只作用在固定翼（{@code AIRCRAFT}）这一档，且**同时**抬两个约束（见巡航调用点）：
+     * <ul>
+     *   <li><b>胡萝卜高度</b>：跟随 = 主人 Y + {@code followAlt}(3) + 本项；接敌 = 敌人 Y +
+     *       {@code fightAlt}(15) + 本项。于是盘旋/接敌站位整体上移 15 格。</li>
+     *   <li><b>地形净空线</b>：{@link #columnFloor} 用 {@code AIRCRAFT_TERRAIN_CLEAR + 本项}。
+     *       这条是**超平坦地形上的真正决定项**——地上主人的胡萝卜（主人+3）比净空线低，
+     *       她实际巡航在"地面上 {@code 14+15=29} 格"，正是玩家要抬的那 15 格。</li>
+     * </ul>
+     *
+     * <p>780 的教训：只把胡萝卜抬够没用，山/地面那条线仍会把她按在低空（实机日志
+     * {@code 高差=-10→0}＝她正卡在净空线上、竖直通道无事可做），所以两个约束必须一起抬。
+     */
+    private static final double AIRCRAFT_ALT_BONUS = 15.0;
 
     /** 前瞻多少拍的路（按当前水平速度换算成格）：0.80 格/拍 × 100 拍 = 80 格。 */
     private static final int AIRCRAFT_LOOKAHEAD_TICKS = 100;
@@ -3049,21 +3069,26 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 某一列的地面净空线：{@code surfaceY} 找到这一列在扫描窗口内的最高非空气方块，返回它 + 1 + CLEAR。
+     * 某一列的地面净空线：这一列的地表高度 + 1 + CLEAR + 固定翼 ALT_BONUS。
      *
-     * <p>扫描窗口是 {@code [from-40+4, from+4]} = {@code [机身+SCAN_UP-36, 机身+SCAN_UP+4]}
-     * （见 {@link #surfaceY}）——{@code SCAN_UP}=20 时即 {@code [-16, +24]}：
-     * <ul>
-     *   <li>窗口内有方块 → 返回它 + 净空（这就是"要抬到多高"）；</li>
-     *   <li>窗口内全空气 → 说明这一带的地在 16 格以下，对她没有约束 → 负无穷（不参与 max）。</li>
-     * </ul>
-     * 比机身高出 20 格以上的山坡会被截断成窗口顶（少报几格）——但那一列**一定是实体**，
-     * 于是她仍会拿到一个很大的抬升量、继续爬；等她爬上去窗口也跟着上移，读数自然补齐。
+     * <p>【实测七百八十一】地表高度改用**世界的高度图**（{@code Heightmap.Types.MOTION_BLOCKING}）——
+     * 旧版走 {@link #surfaceY}（有界向下扫 ≤40 格），机身爬高了以后窗口就够不到地面、净空线会
+     * **悄悄消失**，于是她停在"胡萝卜高度"（地面 + 18）而非我们要的"地面上 29 格"。高度图是 O(1)
+     * 且**没有深度限制**，正是 SWB 自己 {@code VehicleMotionUtils.getHeightAboveGround} 用的那一个。
+     * 拿不到高度图（未加载的区块等）→ 退回 {@link #surfaceY} 的老口径（行为不变）。
      */
     private static double columnFloor(net.minecraft.server.level.ServerLevel sl,
                                      double x, double z, int from) {
-        int g = surfaceY(sl, net.minecraft.util.Mth.floor(x), from, net.minecraft.util.Mth.floor(z));
-        return g == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY : g + 1.0 + AIRCRAFT_TERRAIN_CLEAR;
+        int bx = net.minecraft.util.Mth.floor(x);
+        int bz = net.minecraft.util.Mth.floor(z);
+        int g = surfaceY(sl, bx, from, bz);
+        try {
+            g = sl.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, bx, bz);
+        } catch (Throwable ignored) {
+        }
+        // 【实测七百八十一】净空 = CLEAR + 固定翼专属 ALT_BONUS（只这条路用，别处不碰）。
+        return g == Integer.MIN_VALUE ? Double.NEGATIVE_INFINITY
+                : g + 1.0 + AIRCRAFT_TERRAIN_CLEAR + AIRCRAFT_ALT_BONUS;
     }
 
     /**
