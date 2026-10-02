@@ -2842,21 +2842,24 @@ public final class MaidMountCompat {
     private static final double AIRCRAFT_TERRAIN_CLEAR = 14.0;
 
     /**
-     * 【实测七百八十一】固定翼专属的**额外高度**（格）——玩家原话「把盘旋高度和接敌再往上提 15 格左右」。
+     * 【实测七百八十一 / 七百八十二】固定翼专属的**额外高度**（格）。
+     *
+     * <p>玩家七百八十一：「把盘旋高度和接敌再往上提 15 格左右」→ 本项 = 15；
+     * 玩家七百八十二（实机复查后）：「高度还是低，可能至少得在此基础上再高 15 格」→ 本项 = 30。
      *
      * <p>只作用在固定翼（{@code AIRCRAFT}）这一档，且**同时**抬两个约束（见巡航调用点）：
      * <ul>
      *   <li><b>胡萝卜高度</b>：跟随 = 主人 Y + {@code followAlt}(3) + 本项；接敌 = 敌人 Y +
-     *       {@code fightAlt}(15) + 本项。于是盘旋/接敌站位整体上移 15 格。</li>
+     *       {@code fightAlt}(15) + 本项。本项 30 ⇒ 跟随 = 主人 + 33、接敌 = 敌人 + 45。</li>
      *   <li><b>地形净空线</b>：{@link #columnFloor} 用 {@code AIRCRAFT_TERRAIN_CLEAR + 本项}。
-     *       这条是**超平坦地形上的真正决定项**——地上主人的胡萝卜（主人+3）比净空线低，
-     *       她实际巡航在"地面上 {@code 14+15=29} 格"，正是玩家要抬的那 15 格。</li>
+     *       超平坦上主人的胡萝卜比净空线低，真正管她的是这一条 ⇒ 她巡航在
+     *       "地面上 {@code 14+30=44} 格"。</li>
      * </ul>
      *
-     * <p>780 的教训：只把胡萝卜抬够没用，山/地面那条线仍会把她按在低空（实机日志
+     * <p>780 的教训：只把胡萝卜抬够没用，地面那条线仍会把她按在低空（实机日志
      * {@code 高差=-10→0}＝她正卡在净空线上、竖直通道无事可做），所以两个约束必须一起抬。
      */
-    private static final double AIRCRAFT_ALT_BONUS = 15.0;
+    private static final double AIRCRAFT_ALT_BONUS = 30.0;
 
     /** 前瞻多少拍的路（按当前水平速度换算成格）：0.80 格/拍 × 100 拍 = 80 格。 */
     private static final int AIRCRAFT_LOOKAHEAD_TICKS = 100;
@@ -3216,8 +3219,13 @@ public final class MaidMountCompat {
     private static final double AIRCRAFT_CLIMB_STOP = 2.0;
     /** 爬升窗口内每拍的最大爬升率（格/拍 ≈ 4.4 格/秒）。 */
     private static final double AIRCRAFT_VY_MAX = 0.22;
-    /** 竖直速度每拍最多拉多少（格/拍）：必须 ≥ 重力量级（0.06），否则顶不住。 */
-    private static final double AIRCRAFT_VY_STEP = 0.06;
+    /** 竖直速度每拍最多拉多少（格/拍），必须**显著大于**重力量级（0.06），否则顶不住。
+     *  【实测七百八十二】原值 0.06 恰好等于重力（SWB 每拍末尾统一扣 0.06 再整体乘阻尼），
+     *  于是竖直通道存在一个**死点**：低速/停滞时升力≈0，写进去的 0.06 被重力整拍抹平 ⇒
+     *  她卡在 {@code 竖直速度=0.00}、怎么都不往上升（实机日志 06:10 的
+     *  {@code 高差=1→27 竖直速度=0.00 水平速度=0.08} 就是这个形状）。抬到 0.12 后每拍净增
+     *  ≈0.06 > 0，能真正爬向目标高度（配合本次把目标抬到地面上 44 格）。 */
+    private static final double AIRCRAFT_VY_STEP = 0.12;
     /** 补能阈值：SWB 固定翼 loiter 闸 {@code getEnergy() > 1024}（baseTick 实证）里的那个 1024。 */
     private static final int AIRCRAFT_ENERGY_FLOOR = 1024;
 
