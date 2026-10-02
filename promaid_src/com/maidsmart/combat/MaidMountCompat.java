@@ -233,6 +233,11 @@ public final class MaidMountCompat {
     private static Method mIntValueSet;
     private static java.lang.reflect.Field fGunPropMagazine;
 
+    /* 【实测七百七十九·点1】"这门炮自己设计的射速"所需的反射：
+     * GunProp.EMPTY_RELOAD_TIME（打完一匣要多少拍）。配合上面那个 MAGAZINE 一起算
+     * "一匣打完 + 装满一匣"的**固有循环**——见 fireIntervalTicks 的说明。 */
+    private static java.lang.reflect.Field fGunPropEmptyReload;
+
     /* 【实测七百七十八·点1】"检测到创造盒就强制允许开炮"这条后门所需的反射。
      *
      * 根因（反编译实证）：载具武器的 {@code canShoot} 走的是 **VehicleGunItem 的覆写**，
@@ -728,11 +733,13 @@ public final class MaidMountCompat {
                 mIntValueGet = ivCls777.getMethod("get");
                 mIntValueSet = ivCls777.getMethod("set", int.class);
                 fGunPropMagazine = gpCls777.getField("MAGAZINE");
+                fGunPropEmptyReload = gpCls777.getField("EMPTY_RELOAD_TIME");
             } catch (Throwable ignored) {
                 fGunAmmo = null;
                 mIntValueGet = null;
                 mIntValueSet = null;
                 fGunPropMagazine = null;
+                fGunPropEmptyReload = null;
             }
             // 【实测七百七十八·点1】"强制允许开炮"那条后门所需的反射（见 forceAllowShoot）。
             try {
@@ -1965,6 +1972,29 @@ public final class MaidMountCompat {
         return "AIRCRAFT".equals(eng);
     }
 
+    /**
+     * 【实测七百七十九·点2】这只是不是固定翼（对外公开的口径，给 {@code RideBindManager} 用）。
+     *
+     * <p>固定翼有两处与直升机/飞艇**必须分开**：① 接敌时的胡萝卜是"敌正上方"而不是"绕圈的圈上点"；
+     * ② 它气动上转不过来小圈（最小转弯半径 ≈55~65 格，推导见 {@code driveFlight} 里
+     * "固定翼巡航"那段注释），所以"主人离太远就收手"那道闸对它要放宽。
+     */
+    public static boolean isAircraft(Entity e) {
+        return isAircraftEngine(engineType(e));
+    }
+
+    /**
+     * 【实测七百七十九·点2】固定翼接敌时"主人可以离多远"（格）。
+     *
+     * <p>{@code RideBindManager} 有一条"主人超出接敌半径就放弃敌人、转去追主人"的闸，旧值复用
+     * 索敌器的**发现半径** 50 格。那对直升机/扫帚合适，对固定翼**必然误伤**：它一次通场
+     * （冲过去 + 拐大弯掉头）就要飞出 100~200 格，于是每一趟都在半路被判"主人不在场"、
+     * 敌人被丢掉 —— 玩家看到的"飞机不支援战斗"有一半是这条闸造成的。
+     * 这里给它一个与航程相称的上限：{@code 200} 格（≈ 一次通场 + 掉头的跨度），
+     * 直升机/扫帚/飞艇一个字节不变。
+     */
+    public static final double AIRCRAFT_ENGAGE_LEASH = 200.0;
+
     /** 【实测七百四十三·点4】这只是不是汤姆6（TOM6——油门/姿态整段写在"乘客是玩家"分支里）。 */
     private static boolean isTomEngine(String eng) {
         return "TOM6".equals(eng);
@@ -2542,8 +2572,10 @@ public final class MaidMountCompat {
                         } catch (Throwable ignored) {
                         }
                     }
-                    // ④ 顺手把 loiter 参数写好：离地那一拍 baseTick 就会立刻调 aircraftLoiter。
-                    tryAircraftLoiter(mount, target, horiz);
+                    // ④ 【实测七百七十九·点2】把引擎自己的 loiter 明确关掉：779 起固定翼的航向/
+                    //    高度全由我们自己的巡航环接管（见下面"固定翼巡航"那段的推导），留着 loiter
+                    //    会变成两套控制器打架。
+                    aircraftLoiterOff(mount);
                     // 【实测七百七十六·点2】开"爬升窗口"：离地之后由我们继续接管竖直速度，直到真的
                     // 爬到目标高度（2 格以内）或 15 秒超时。旧版只在贴地这一拍补一下竖直速度就撒手，
                     // 实机日志里她的炮艇随后一直贴地 0.5 格/拍地滑行盘旋、高差十几格不降
@@ -2575,7 +2607,7 @@ public final class MaidMountCompat {
                         mProcessInput.invoke(mount, (short) (0x004 | 0x100));
                     } catch (Throwable ignored) {
                     }
-                    tryAircraftLoiter(mount, target, horiz);
+                    aircraftLoiterOff(mount);
                     logDrive(mount, "固定翼爬升 引擎=" + eng + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
                             + " 竖直速度=" + fmt2(verticalSpeed(mount)) + " 高差=" + (long) dy
                             + " 距目标=" + (long) horiz + "格 电量=" + energyText(mount));
@@ -2585,69 +2617,77 @@ public final class MaidMountCompat {
                     AIRCRAFT_CLIMB.remove(mount.m_20148_());   // 到位了 → 收窗，交还引擎自己的 PD
                 }
             }
-            if (tryAircraftLoiter(mount, target, horiz)) {
-                // 【实测七百七十七·点2】固定翼**放开急停**（玩家原话：「之前为了让直升机悬停稳定，
-                // 导致这个飞机每过0.5秒左右就会卡一下速度，但是对于这个飞机而言这是致命的，需要放开」）。
-                // 反编译实证：固定翼的升力 ∝ **当前速度**（aircraftEngine:877 upVec * speed * ...），
-                // 每 0.5 秒把水平速度乘 0.55（接敌）/0.25（跟随）等于每半秒抹一次升力——
-                // 实机日志「固定翼盘旋档 周期急停(0.5s) 水平速度=0.21」正是它，飞机永远爬不到位。
-                // 所以这一档**只留速度上限**（防超速冲量），周期急停与到位硬刹一律不打。
-                //
-                // 【实测七百七十八·点2】还差"最后一块"：引擎自己的盘旋会把 power 收敛到 0.5~0.9
-                // （{@code aircraftLoiter:1337}）→ 速度掉到 ~0.6 → 升力 ≈0.02/拍 < 重力 0.06/拍
-                // **引擎自己的盘旋就是"慢慢往下沉"的**。玩家原话：「是不是速度上缺少了，导致飞不起来？」
-                // ——正是。所以盘旋档每拍给一个推力下限（{@link #AIRCRAFT_MIN_CRUISE_POWER}），
-                // 让它一直待在"升力 ≥ 重力"的速度区间；上限同步换成固定翼自己的 2.60。
+            // ---------- 【实测七百七十九·点2】固定翼巡航：**我们自己的航向 / 速度 / 高度环** ----------
+            //
+            // 玩家原话（即规格）：「平时没有发现敌人就正常绕着主人在空中盘旋，发现了敌人之后就开始
+            // 在敌人头上进行来回穿梭轰炸。」
+            //
+            // <h2>为什么不再交给引擎自己的 aircraftLoiter（反编译 + 实机日志双实证）</h2>
+            // <ul>
+            //   <li>它的舵量上限（{@code aircraftEngine:793-800}）：
+            //       {@code rotSpeed = 0.3 + 3.2*|calculateY(roll)|}（{@code ClampRoll=45} ⇒ ≤2.56），
+            //       {@code addY = clamp(0.24*speed*mouseX, ±rotSpeed)}，{@code yaw += yawSpeed*addY}。
+            //       AC-130H 的 {@code YawSpeed=0.9} ⇒ **最大角速度 ≈ 2.3°/拍**，而巡航速度必须是
+            //       2.2~2.6 格/拍（这是它"升力 ≥ 重力 0.06"的下限，见 778 那条升力公式）——
+            //       于是它的**最小转弯半径 ≈ 55~65 格**，这是气动上改不了的。</li>
+            //   <li>而 loiter 的半径被我们钳在 8~60 格（旧的 {@code AIRCRAFT_LOITER_MAX_R}），
+            //       **小于它物理上转得过来的半径** ⇒ 它的径向误差项每拍都把她往外推，
+            //       永远收不拢、只会越飞越远。实机日志正是这个形状：跟随档
+            //       {@code 距目标 54→93→140→188→288 格、高差 -39→-141} ——
+            //       玩家说的"只会在天上飞"。</li>
+            // </ul>
+            //
+            // <h2>换成什么</h2>
+            // 玩家那句话的后半段本身就是正解：固定翼的本行不是画小圈，而是"一遍遍从目标头顶冲过去、
+            // 转个大弯再冲回来"。所以这里换成**盯住胡萝卜的纯航向环**：
+            // 接敌时胡萝卜在**敌正上方**（{@code RideBindManager} 给的），跟随在**主人上方**；
+            // 机头对着它飞，冲过头以后方位角自然翻到 ~180°，她就拐大弯掉头再来——
+            // **不需要任何状态机**，"来回穿梭轰炸"是几何的自然结果（炸弹由 {@code tickAttack} 的
+            // 投弹链路在每次通场时照常丢）。
+            //
+            // <h2>三层各管一件事（与直升机/飞艇/汤姆6 三档同一套"分工"口径）</h2>
+            //   · 航向 —— 鼠标 X 通道（引擎用它算滚转+偏航，权限与玩家推鼠标同档；写满 8 即饱和）；
+            //     偏航误差大时**叠加左右位**，让引擎累积 {@code deltaRot} → 滚转 → rotSpeed 变大。
+            //   · 速度 —— 推力下限 + 冲刺位（空中 {@code power>1} 必须靠冲刺位，否则引擎的
+            //     {@code maxPower} 会把多余推力按 0.012/拍 衰减回 1.0）。
+            //   · 高度 —— **直接写 {@code deltaMovement.y}**（776 那条爬升自驾的对称版）：
+            //     固定翼的高度是"速度 × 俯仰"积分出来的，用俯仰环去追一个高度点必然过冲
+            //     （778 实机：{@code 高差 -39→-141} 来回荡），直接拉竖直速度才收敛。
+            {
+                boolean grounded;
                 try {
-                    mProcessInput.invoke(mount, (short) (0x004 | 0x100));
+                    grounded = mount.m_20096_();
                 } catch (Throwable ignored) {
+                    grounded = false;
                 }
-                aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
-                int aBrake = aircraftCapOnly(mount);
-                logDrive(mount, "固定翼盘旋档 引擎=" + eng
+                if (grounded) {
+                    // 贴地又不需要去某处（目标就在脚下同高度）→ 别把飞机从地上拔起来
+                    // （起飞助跑那一档只对"确实要去某处"开，见上面 wantAir）。
+                    try {
+                        mProcessInput.invoke(mount, (short) 0);
+                    } catch (Throwable ignored) {
+                    }
+                    if (mSetPower != null) {
+                        try {
+                            mSetPower.invoke(mount, 0.0f);
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    logDrive(mount, "固定翼待命（贴地、目标就在脚下，不强行起飞）");
+                    return true;
+                }
+                aircraftCruise(mount, eng, dy, err);
+                logDrive(mount, "固定翼巡航档 引擎=" + eng
                         + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
                                 : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
                         + " 急停=放开(固定翼升力∝速度)"
+                        + " 鼠标X=" + Math.round(clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD))
                         + " 推力=" + powerText(mount)
                         + " 水平速度=" + fmt2(horizontalSpeed(mount))
+                        + " 竖直速度=" + fmt2(verticalSpeed(mount))
                         + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
                 return true;
             }
-            double altErr = dy;                        // >0 = 目标更高
-            double flatDist = Math.max(horiz - FLIGHT_ARRIVE, 0.0);
-            pitchCmd = 0.0f;
-            boolean turning = Math.abs(err) >= 60.0f;
-            if (!turning) {
-                if (Math.abs(altErr) > dead) {
-                    // 先对齐高度：目标更高 → 抬头（负），更低 → 低头（正）
-                    pitchCmd = (float) clamp(-altErr * FLIGHT_PITCH_PER_BLOCK,
-                            -FLIGHT_PITCH_MAX, FLIGHT_PITCH_MAX);
-                } else if (flatDist > 0.0) {
-                    pitchCmd = (float) clamp(flatDist * FLIGHT_PITCH_PER_BLOCK,
-                            0.08, FLIGHT_PITCH_MAX);
-                }
-            }
-            mSetMouseY(mount, pitchCmd);
-            if (horiz > FLIGHT_ARRIVE) {
-                bits |= 0x004;
-            } else if (horiz < FLIGHT_ARRIVE * 0.5) {
-                bits |= 0x008;                         // 太近 → 减速
-            }
-            if (modifier > 1.05) {
-                bits |= 0x100;                         // 冲刺位（引擎里抬高速度上限）
-            }
-            mProcessInput.invoke(mount, bits);
-            // 【实测七百四十三·点1】固定翼同样**不再写机头**：它的推力也在 viewVector 上
-            // （反编译 aircraftEngine 实证：viewVector × force），741 那一记瞄准会把它掰成
-            // "追着敌人飞"，正是玩家看到的"乱窜"。只有 loiter 写不出去（反射失败）才会落到这里。
-            logDrive(mount, "飞行档 引擎=" + eng
-                    + (airCombat ? (fighting ? " 接敌档(敌上" + (long) MaidAirCombat.fightAltCfg() + "格)"
-                            : " 跟随档(比主人高" + (long) MaidAirCombat.followAltCfg() + "格)") : "")
-                    + " 鼠标X=" + Math.round(yawCmd)
-                    + " 鼠标Y=" + Math.round(pitchCmd * 100) + "% 位掩码=" + bits
-                    + " 竖直速度=" + fmt2(verticalSpeed(mount))
-                    + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
-            return true;
         } catch (Throwable ignored) {
             return false;
         }
@@ -2785,7 +2825,7 @@ public final class MaidMountCompat {
     private static final java.util.Map<java.util.UUID, Long> AVOID_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /* ---------- 实测七百四十三：固定翼的"引擎自带盘旋" ---------- */
+    /* ---------- 实测七百四十三：飞艇（AIRSHIP）/ 汤姆6（TOM6）的驱动常量 ---------- */
 
     /** 飞艇高度 PD：每 1 格预测落点给多少 liftSpeed（引擎 clamp 域 ±0.25）。 */
     private static final double AIRSHIP_LIFT_PER_BLOCK = 0.04;
@@ -2799,13 +2839,6 @@ public final class MaidMountCompat {
     private static final float TOM_PITCH_MAX = 30.0f;
     /** 汤姆6 起飞抬头角（度，负 = 抬头）。贴地时强制给这个角，保证能起来。 */
     private static final float TOM_TAKEOFF_PITCH = 15.0f;
-
-    /** 固定翼 loiter 的最小半径（格）：必须非 0（aircraftLoiter 里拿它做分母）。 */
-    private static final double AIRCRAFT_LOITER_MIN_R = 8.0;
-    /** 固定翼 loiter 的最大半径（格）：转太大圈就等于没在压制。 */
-    private static final double AIRCRAFT_LOITER_MAX_R = 60.0;
-    /** 固定翼"点火"推力：引擎里 power > 0.2 才置 engineStartOver（loiter 的前置条件）。 */
-    private static final double AIRCRAFT_ENGINE_KICK_POWER = 0.35;
 
     /** 固定翼日志用的推力读数（拿不到 → "?"）。 */
     private static String powerText(Entity mount) {
@@ -2839,7 +2872,8 @@ public final class MaidMountCompat {
      * 【实测七百四十五·点3】固定翼起飞助跑每拍补的竖直速度（格/拍）。
      *
      * <p>地面摩擦 f≈0.497、重力 0.06 ⇒ 稳态 {@code v ≈ 0.128 格/拍}（≈2.5 格/秒），足以顶掉
-     * {@code onGround()}、又不至于一飞冲天。它只在**贴地**时补，一旦离地就走引擎自己的 loiter。
+     * {@code onGround()}、又不至于一飞冲天。它只在**贴地**时补，离地后由
+     * {@link #aircraftClimbAssist}（起飞那一口气）与 {@link #aircraftHoldAltitude}（巡航高度）接力。
      */
     private static final double AIRCRAFT_TAKEOFF_LIFT = 0.25;
 
@@ -2904,15 +2938,25 @@ public final class MaidMountCompat {
     private static final float AIRCRAFT_GROUND_MAX_POWER = 3.0f;
 
     /**
-     * 【实测七百七十八·点2】固定翼巡航时的最小推力。
+     * 【实测七百七十八·点2 / 七百七十九·点2】固定翼巡航时的最小推力。
      *
-     * <p>反编译实证 {@code aircraftLoiter:1337}：引擎自己的盘旋会把
-     * {@code power} 收敛到 {@code 0.5~0.9}（{@code altError ≤ 0} 的那一支），
-     * 对应的速度只有 ~0.6 格/拍 → 升力 ≈0.02/拍 < 重力 0.06/拍——**引擎自己的盘旋是"慢慢往下沉"的**。
-     * 所以只要在盘旋档里每拍给一个推力下限（引擎空中每拍只衰减 0.012，压不过我们），
-     * 飞机就能一直保持在"升力 ≥ 重力"的速度区间。
+     * <p>为什么必须有下限（778 实证）：引擎自己的盘旋会把 {@code power} 收敛到 {@code 0.5~0.9}
+     * （反编译 {@code aircraftLoiter:1337}），对应的速度只有 ~0.6 格/拍 → 升力 ≈0.02/拍
+     * < 重力 0.06/拍——**盘旋就等于"慢慢往下沉"**。所以每拍给一个推力下限
+     * （引擎空中每拍只把多余推力衰减 0.012，压不过我们）。
+     *
+     * <p>值从 1.80 提到 2.40（779）：2.40 把稳态速度顶到 {@link #AIRCRAFT_HMAX}（2.60）附近，
+     * 而按 778 那条升力公式（{@code 升力 = speed × 0.008 × (4 − 0.25×speed)}，LiftSpeed=1.0）
+     * 反解——**平飞所需的最低速度约 2.2 格/拍**（2.2 时升力 ≈0.061 ≈ 重力 0.06）。
+     * 2.40 让"一层平流"这件事本身成立，高度就只剩小幅微调（由
+     * {@link #aircraftHoldAltitude} 的竖直环负责），不会再出现 778 那种
+     * {@code 高差 -39→-141} 的荡秋千。
+     *
+     * <p>空中要让 {@code power} 停在 1 以上，必须**带冲刺位**（引擎
+     * {@code maxPower = sprint||onGround ? 3 : (power>1 ? power−0.012 : 1)}，反编译实证），
+     * 所以巡航档的输入位里始终带着 {@code 0x100}。
      */
-    private static final float AIRCRAFT_MIN_CRUISE_POWER = 1.80f;
+    private static final float AIRCRAFT_MIN_CRUISE_POWER = 2.40f;
     /** 助跑带扫描的缓存拍数（2 秒；地面不会两秒一变，且扫描本身是几十次方块查询）。 */
     private static final long AIRCRAFT_RUNWAY_CACHE_TICKS = 40L;
 
@@ -3034,54 +3078,98 @@ public final class MaidMountCompat {
     private static final java.util.Map<String, Long> RUNWAY_REFUSE_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
+    /* ---------- 【实测七百七十九·点2】固定翼巡航：我们自己的航向 / 速度 / 高度环 ----------
+     *
+     * 旧版（743~778）这里是一个 {@code tryAircraftLoiter}——把"去某点"翻译成引擎自己的
+     * {@code aircraftLoiter}（圆心 + 半径 + 高度）。779 起**整段删掉**：反编译实证它要的半径
+     * （我们钳在 8~60 格）小于这架飞机气动上转得过来的最小半径（≈55~65 格，推导见
+     * {@code driveFlight} 里"固定翼巡航"那段的注释），于是它的径向误差项每拍把她往外推、
+     * 永远收不拢——实机日志就是"越飞越远、只会在天上飞"。改由下面三个方法自己管。 */
+
+    /** 固定翼航向通道写多少：引擎里 {@code addY = clamp(0.24*speed*mouseX, ±rotSpeed)}，
+     *  巡航速度下给 8 已经顶满舵量；低速时仍留出比例控制。 */
+    private static final float AIRCRAFT_YAW_CMD = 8.0f;
+
+    /** 偏航误差超过这个角才"借左右位"（{@code aircraftEngine} 里那两个位会累积 {@code deltaRot}
+     *  → 滚转 → {@code rotSpeed = 0.3 + 3.2*|calculateY(roll)|} 变大 → 转得更快）。 */
+    private static final float AIRCRAFT_BANK_ERR = 25.0f;
+
+    /** 高度环：每 1 格高差给多少目标竖直速度（格/拍）。 */
+    private static final double AIRCRAFT_VY_PER_BLOCK = 0.08;
+
+    /** 高度环的目标竖直速度上限（格/拍）——巡航不要大起大落。 */
+    private static final double AIRCRAFT_VY_CRUISE_MAX = 0.18;
+
+    /** 高度环死区（格）：进了这个带就把竖直通道完全交还引擎（升力/重力自然平衡）。 */
+    private static final double AIRCRAFT_ALT_DEADZONE = 1.5;
+
     /**
-     * 【实测七百四十三·点2】固定翼：把"去某个点"翻译成**引擎自己的 loiter**（圆心 + 半径 + 高度）。
+     * 【实测七百七十九·点2】把引擎自己的固定翼 loiter 关掉。
      *
-     * <p>反编译实证（VehicleEntity.baseTick）：只有在
-     * {@code !onGround && getEngineStartOver() && getEnergy() > 1024 && !isWreck()}
-     * 且**有乘客**且 {@code EngineType.AIRCRAFT} 且 {@code getLoiterActive()} 时，才会每拍调
-     * {@code VehicleEngineUtils.aircraftLoiter(this)}。那一段自己写 mouseMoveSpeedX/Y 与 power，
-     * 围绕 {@code getLoiterParams()}（{@code Quaternionf(x, y, z, r)} = 圆心 x/y/z + 半径 r）
-     * 转圈，且**自带地形回避**。
-     *
-     * <p>我们给的 target 就是"该飞去哪"（空战档已把它算成敌上/主人上方），所以：
-     * 圆心 = 目标的水平坐标、高度 = 目标的 Y、半径 = 配置的盘旋半径（下限 {@link #AIRCRAFT_LOITER_MIN_R}
-     * 保证非 0）。进停车带时半径取小值——loiter 的圈必须非 0（aircraftLoiter 拿它做分母），
-     * 小半径 = 近乎原地绕小圈，对"炮艇定点压制"正是要的。
-     *
-     * @return true = 真的写了 loiter 参数（调用方据此跳过旧的"喂目标点"口径）
+     * <p>779 起固定翼的航向/速度/高度由 {@link #aircraftCruise} 自己管；loiter 若还开着，
+     * 它每拍会往 {@code mouseMoveSpeedX/Y} 与 {@code power} 上写它自己那一套，变成两套控制器
+     * 打架（而且它要的盘旋半径这架飞机气动上转不过来）。反射拿不到 → 什么都不做
+     * （那种情况下 loiter 本来也不会自己开，一个字节不变）。
      */
-    private static boolean tryAircraftLoiter(Entity mount, Vec3 target, double horiz) {
-        if (mSetLoiterParams == null || mSetLoiterActive == null || target == null) {
-            return false;
+    private static void aircraftLoiterOff(Entity mount) {
+        if (mSetLoiterActive == null) {
+            return;
         }
         try {
-            // 【为什么这里要先"点一把火"】反编译 AircraftEngine 的启动闸：engineStart 置位靠
-            // forwardInputDown() && power > 0.01；engineStartOver 靠 power > 0.2。而 baseTick 那条
-            // loiter 调用要求 getEngineStartOver() 为真——也就是说**不先把推力推过 0.2，我们写的
-            // loiter 参数根本不会被读**。所以每拍（在写 loiter 之前）给它一个 0.35 的推力脉冲让引擎
-            // 起来；起来之后 power 由 aircraftLoiter 自己用 PD 接管，我们那一下不影响它的稳态。
-            if (mSetPower != null) {
-                try {
-                    double p = mGetPower == null ? 0.0
-                            : ((Number) mGetPower.invoke(mount)).doubleValue();
-                    if (p < AIRCRAFT_ENGINE_KICK_POWER) {
-                        mSetPower.invoke(mount, (float) AIRCRAFT_ENGINE_KICK_POWER);
-                    }
-                } catch (Throwable ignored) {
-                }
-            }
-            double r = Math.max(AIRCRAFT_LOITER_MIN_R, MaidAirCombat.orbitRadiusCfg());
-            if (horiz > FLIGHT_ARRIVE) {
-                r = Math.max(r, Math.min(horiz, AIRCRAFT_LOITER_MAX_R));
-            }
-            Object q = new org.joml.Quaternionf((float) target.f_82479_, (float) target.f_82480_,
-                    (float) target.f_82481_, (float) r);
-            mSetLoiterParams.invoke(mount, q);
-            mSetLoiterActive.invoke(mount, true);
-            return true;
+            mSetLoiterActive.invoke(mount, false);
         } catch (Throwable ignored) {
-            return false;
+        }
+    }
+
+    /**
+     * 【实测七百七十九·点2】固定翼巡航：三层各管一件事（详见调用点 {@code driveFlight} 的注释）。
+     *
+     * @param dy  高差（carrot.y − 机身 y，正 = 目标更高）
+     * @param err 到 carrot 的偏航误差（{@code wrapDegrees(目标方位 − 机头)}，正 = 该右转）
+     */
+    private static void aircraftCruise(Entity mount, String eng, double dy, float err) {
+        // 引擎自己的 loiter 每拍会写 mouse/power，与下面三层打架（而且它要的半径它转不过来）
+        aircraftLoiterOff(mount);
+        // ① 航向：鼠标 X 通道
+        mSetMouseX(mount, clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD));
+        // 俯仰通道归零 → 交给引擎自己的"机头自动整平"（{@code aircraftEngine:818}：
+        // {@code |xRot|<20 && |mouseY|<0.001} 时按竖直速度把机头慢慢摆平）。高度不靠俯仰环，见③。
+        mSetMouseY(mount, 0.0f);
+        // ② 推力 + 输入位
+        short bits = (short) (0x004 | 0x100);   // 前进 + 冲刺（空中 power>1 必须靠冲刺位）
+        if (Math.abs(err) > AIRCRAFT_BANK_ERR) {
+            bits |= (err > 0) ? (short) 0x002 : (short) 0x001;   // 借左右位滚转
+        }
+        try {
+            mProcessInput.invoke(mount, bits);
+        } catch (Throwable ignored) {
+        }
+        aircraftPowerAtLeast(mount, AIRCRAFT_MIN_CRUISE_POWER);
+        // ③ 高度：竖直自驾（直接写 deltaMovement.y）
+        aircraftHoldAltitude(mount, dy);
+        // ④ 水平速度上限（防超速冲量；**不打**周期急停——固定翼升力∝速度，777 定的口径）
+        aircraftCapOnly(mount);
+    }
+
+    /**
+     * 【实测七百七十九·点2】固定翼竖直自驾：把竖直速度拉向"按高差算的目标值"。
+     *
+     * <p>与 {@link #aircraftClimbAssist}（776 起飞爬升窗口用）同一套手法，两处差别只有两条：
+     * 这里是**双向**的（下降也要接管，{@code want} 允许为负），且带一个
+     * {@link #AIRCRAFT_ALT_DEADZONE} 死区（到位后就撒手，不跟引擎的升力/重力拔河）。
+     */
+    private static void aircraftHoldAltitude(Entity mount, double dy) {
+        try {
+            if (Math.abs(dy) <= AIRCRAFT_ALT_DEADZONE) {
+                return;
+            }
+            double want = clamp(dy * AIRCRAFT_VY_PER_BLOCK,
+                    -AIRCRAFT_VY_CRUISE_MAX, AIRCRAFT_VY_CRUISE_MAX);
+            net.minecraft.world.phys.Vec3 dm = mount.m_20184_();
+            double step = clamp(want - dm.f_82480_, -AIRCRAFT_VY_STEP, AIRCRAFT_VY_STEP);
+            mount.m_20256_(new net.minecraft.world.phys.Vec3(dm.f_82479_,
+                    clamp(dm.f_82480_ + step, -0.30, 0.30), dm.f_82481_));
+        } catch (Throwable ignored) {
         }
     }
 
@@ -6143,7 +6231,25 @@ public final class MaidMountCompat {
      * 的落点），弹匣打空后照旧走引擎自己的 5 秒装填。 */
     private static final int BOMB_MIN_INTERVAL_TICKS = 40;
 
-    /** 这门炮两发之间至少要等几拍（RPM → 拍；投弹再加最小间隔）。 */
+    /** 这门炮两发之间至少要等几拍（RPM → 拍；投弹再加最小间隔）。
+     *
+     * <p>【实测七百七十九·点1】再加一道**这门炮自己设计的循环**：玩家原话「我们给的后门似乎有点
+     * 太过了，导致坦克发射一点间隔都没有。需要有一个内定的间隔的。根据坦克自身的属性来定。」
+     * ——完全正确。创造盒那条后门每拍都会 {@code resetStatus()}（清装填）把弹匣写满，于是
+     * 「打一发 → 装填 100 拍」这段**引擎自己的战车炮循环被抹掉了**，只剩 RPM 那一道：
+     * 而 M1A2 / T-90A / ZTZ-99A 的 {@code Cannon} **vehicle json 里压根没有 RPM 字段**
+     * （只有 {@code "Magazine": 1, "EmptyReloadTime": 100}，m_1a_2.json 实证），缺 RPM 时
+     * 退到引擎自己的 60 ⇒ 20 拍 = **1 秒一发**——主炮看起来就是"一点间隔都没有"。
+     *
+     * <p>所以这里把**炮自己的属性**并进来：一匣 {@code Magazine} 发、打完要
+     * {@code EmptyReloadTime} 拍 ⇒ 它自己设计的持续射速上限是
+     * {@code EmptyReloadTime / Magazine} 拍一发（主炮 = 100/1 = 100 拍 = 5 秒，与它
+     * "打一发装 5 秒"的设计完全一致）。与 RPM 那道**取大**：Bofors（Magazine 12 /
+     * EmptyReloadTime 40 / RPM 180）仍由 RPM 的 7 拍说了算，MachineGun（无 Magazine）
+     * 仍是 RPM 600 → 2 拍。两值都拿不到（默认 0）→ 一个字节不变。
+     *
+     * <p>注意：玩家给的**实弹**玩法里引擎自己的装填闸还在，本项只会是"更慢的那一个"，
+     * 不会凭空加速——它补的是后门把装填抹掉之后**丢掉的那半条循环**。 */
     private static int fireIntervalTicks(Entity mount, String gun) {
         int rpm = FIRE_RPM_FALLBACK;
         try {
@@ -6157,11 +6263,60 @@ public final class MaidMountCompat {
         }
         int t = (int) Math.ceil(1200.0 / Math.max(1, rpm));
         t = Math.max(1, Math.min(t, 1200));
+        // 【实测七百七十九·点1】这门炮自己的"一匣 + 装填"循环（见上）。
+        int cycle = gunMagazineCycleTicks(mount, gun);
+        if (cycle > t) {
+            t = cycle;
+        }
         if (isBombGun(gun)) {
             t = Math.max(t, BOMB_MIN_INTERVAL_TICKS);
         }
         return t;
     }
+
+    /**
+     * 【实测七百七十九·点1】这门炮"一匣打完 + 装满一匣"的固有拍数
+     * （{@code ceil(EmptyReloadTime / Magazine)}）；这门炮没有弹匣/装填属性 → 0。
+     *
+     * <p>读的是 {@code GunData.get(GunProp.MAGAZINE / EMPTY_RELOAD_TIME)}——与
+     * {@link #forceMagazineFull} 读 MAGAZINE 是同一个口径（那两处必须一致：后门写满的是
+     * 同一个 Magazine 值）。结果按 {@code uuid|炮名} 缓存：这两个值由 vehicle json 决定、
+     * 开车过程中不会变，而 fireIntervalTicks 是**每拍每炮**都要问一次的。
+     */
+    private static int gunMagazineCycleTicks(Entity mount, String gun) {
+        if (mount == null || gun == null) {
+            return 0;
+        }
+        String key = mount.m_20148_() + "|" + gun;
+        Integer cached = GFIRE_CYCLE.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        int cycle = 0;
+        try {
+            Object gd = gunDataOf(mount, gun);
+            if (gd != null && mGunGetProp != null && fGunPropMagazine != null
+                    && fGunPropEmptyReload != null) {
+                Object magObj = mGunGetProp.invoke(gd, fGunPropMagazine.get(null));
+                Object loadObj = mGunGetProp.invoke(gd, fGunPropEmptyReload.get(null));
+                int mag = magObj instanceof Number m ? m.intValue() : 0;
+                int load = loadObj instanceof Number l ? l.intValue() : 0;
+                if (mag > 0 && load > 0) {
+                    cycle = (int) Math.ceil(load / (double) mag);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        if (GFIRE_CYCLE.size() > 512) {
+            GFIRE_CYCLE.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
+        }
+        GFIRE_CYCLE.put(key, cycle);
+        return cycle;
+    }
+
+    /** 【实测七百七十九·点1】"炮自己的循环拍数"缓存（uuid|炮名 → 拍）。 */
+    private static final java.util.Map<String, Integer> GFIRE_CYCLE =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     private static boolean fireTickDue(Entity mount, String gun) {
         try {
