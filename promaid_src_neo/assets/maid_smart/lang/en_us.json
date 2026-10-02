@@ -269,5 +269,6 @@
   "config.promaid.mine.softNoDurability": "Soft blocks cost no durability",
   "config.promaid.mine.speedFactor": "Mining speed factor",
   "config.promaid.mine.upRange": "Vertical range (up)",
-  "config.promaid.mine.valueWeight": "Value weight"
+  "config.promaid.mine.valueWeight": "Value weight",
+  "config.promaid.misc.bdStorage": "BeyondDimensions storage integration"
 }
