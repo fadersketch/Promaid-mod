@@ -965,6 +965,12 @@ public static final ForgeConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 坐/蹲着的女仆不被自保归位传送拉走——她自己站起来（或受伤起身）后自然恢复。
      *
      * <p>关掉 = 回到旧行为（坐着的残血女仆也会被自保传送回主人身边）。
+     *
+     * <p>【实测七百六十二·补"乘客"这一态】除坐姿/蹲下外，**坐在 TLM 椅子/坐垫上（乘客）**也算
+     * 玩家明确停放——TLM 的 {@code EntityChair}/{@code EntitySit} 让女仆变成的是乘客而不是坐姿，
+     * 原来这一档漏判，于是"坐在玩家给的坐垫上干活"的女仆残血时仍会被拽走（issue #31 那句
+     * "坐垫/骑乘/蹲下 = 玩家明确停放"里唯一没兑现的一档）。现在判据与
+     * {@code MaidTeleportPreserveMixin} 完全同口径：坐姿 / 蹲下 / 乘客。
      */
     public static final ForgeConfigSpec.BooleanValue COMBAT_TELEPORT_EXEMPT_SITTING;
 

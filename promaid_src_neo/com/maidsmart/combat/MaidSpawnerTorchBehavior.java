@@ -367,8 +367,15 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
             if (!place.canSurvive(level, c)) {
                 continue; // 站不住（原版放置规则：火把要支撑面、方块要能替换…）
             }
-            level.setBlock(c, place, 3);
-            consumeOne(maid, src, slot);
+            if (!level.setBlock(c, place, 3)) {
+                continue; // 放不下（被占 / 已经是同一种）→ 换下一个候选位，一根都不扣
+            }
+            if (!consumeOne(maid, src, slot)) {
+                // 【实测七百六十二·issue #19 三修】扣不到就把刚放下的那盏**拆回去**——
+                // 绝不留"放了却没扣"的那一盏（坏包装层下就是净产出）。
+                level.removeBlock(c, false);
+                return false;
+            }
             maid.swing(net.minecraft.world.InteractionHand.MAIN_HAND);
             if (slot >= 0) {
                 com.maidsmart.combat.BombPose.showGated(maid, show);
@@ -610,18 +617,24 @@ public class MaidSpawnerTorchBehavior extends Behavior<EntityMaid> {
     }
 
     /**
-     * 消耗一件。slots >= 0 走背包（extractItem，与工程其它消耗点同款：直接缩 getStackInSlot
-     * 返回的栈在 handler 返回副本时扣不掉），否则走主/副手。
+     * 消耗一件。slots >= 0 走背包，否则走主/副手。**返回 true = 确认真的扣掉了**。
+     *
+     * <p>【实测七百六十二·issue #19 三修】原来只调 {@code extractItem}、完全不看结果——
+     * 坏包装层"返回副本却不真扣"时灯照插、材料一件没少（与搭路/战斗放置同一形状）。
+     * 现在改走 {@code MaidBuildBlockFilter.extractOneHonest}（扣完核对槽位总数真的减 1），
+     * 调用方按返回值决定要不要把刚放下的那盏拆回来。
      */
-    private static void consumeOne(EntityMaid maid, ItemStack src, int slot) {
+    private static boolean consumeOne(EntityMaid maid, ItemStack src, int slot) {
         try {
             if (slot >= 0) {
-                maid.getAvailableBackpackInv().extractItem(slot, 1, false);
-                return;
+                return com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(
+                        maid.getAvailableBackpackInv(), slot);
             }
-            ((net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper())
-                    .extractItem(isLightItem(maid.getMainHandItem()) ? 0 : 1, 1, false);
+            return com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(
+                    (net.neoforged.neoforge.items.IItemHandlerModifiable) maid.getHandsInvWrapper(),
+                    isLightItem(maid.getMainHandItem()) ? 0 : 1);
         } catch (Throwable ignored) {
+            return false;
         }
     }
 

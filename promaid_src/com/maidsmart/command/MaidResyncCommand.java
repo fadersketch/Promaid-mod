@@ -443,6 +443,15 @@ public final class MaidResyncCommand {
         }
         try {
             PENDING_ATTR.put(maid.m_20148_(), ATTR_RESEND_TICKS);
+            // 【实测七百六十二·issue #27 三修：把"到底补没补到"变成可查】
+            // 见 1.21.1 树同名方法的完整说明：广播只发给"追踪表里正追踪她的玩家"，而本 bug 的
+            // 故障态恰恰是"客户端已有她、seenBy 里却没有主人"，此时补包静默落空。
+            net.minecraft.world.entity.LivingEntity owner = maid.m_269323_();
+            boolean online = owner instanceof ServerPlayer;
+            boolean sameDim = online && owner.m_9236_() == maid.m_9236_();
+            PromaidLog.log("属性补包", PromaidLog.nameOf(maid) + " 传送后补属性表（"
+                    + ATTR_RESEND_TICKS + " 拍）：直连主人兜底="
+                    + (online ? (sameDim ? "用（主人同维）" : "不用（主人异维）") : "不用（主人离线）"));
         } catch (Throwable ignored) {
         }
     }
@@ -474,10 +483,19 @@ public final class MaidResyncCommand {
         }
     }
 
-    /** 给所有追踪着她的玩家各补一包属性表（口径与 {@link #resyncTo} 里的那一处完全一致） */
+    /**
+     * 给追踪着她的玩家各补一包属性表，**并对主人直连再补一枪**。
+     *
+     * <p>【实测七百六十二·issue #27 三修：广播之外再直连主人】{@code m_8445_}（broadcastAndSend）
+     * 只发给"服务端追踪表 {@code seenBy} 里此刻正追踪她的玩家"。而 #27 的故障态恰恰是
+     * **客户端那只实体已经在（血条显示 20）、服务端却没把主人配回它的 seenBy**——此时广播
+     * 一发都到不了主人手里，就出现"补包跑了、界面没变、日志什么都没有"。{@link #resyncTo}
+     * 走的是 {@code viewer.f_8906_.m_9829_(...)}（直连，不依赖追踪表），这里补上同一条。
+     * 重复一包无害（客户端把同一张属性表重新应用一次，幂等）。完整说明见 1.21.1 树同名方法。
+     */
     public static void resendAttributes(EntityMaid maid) {
         try {
-            if (!(maid.m_9236_() instanceof ServerLevel sl)) {
+            if (maid == null || !(maid.m_9236_() instanceof ServerLevel sl)) {
                 return;
             }
             java.util.Collection<net.minecraft.world.entity.ai.attributes.AttributeInstance> attrs =
@@ -485,10 +503,15 @@ public final class MaidResyncCommand {
             if (attrs.isEmpty()) {
                 return;
             }
-            sl.m_7726_().m_8445_(maid,
+            net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket pkt =
                     new net.minecraft.network.protocol.game.ClientboundUpdateAttributesPacket(
-                            maid.m_19879_(), attrs));
-        } catch (Throwable ignored) {
+                            maid.m_19879_(), attrs);
+            sl.m_7726_().m_8445_(maid, pkt);
+            if (maid.m_269323_() instanceof ServerPlayer owner && owner.m_9236_() == sl) {
+                owner.f_8906_.m_9829_(pkt);
+            }
+        } catch (Throwable t) {
+            PromaidLog.log("属性补包", "补属性表失败：" + t);
         }
     }
 

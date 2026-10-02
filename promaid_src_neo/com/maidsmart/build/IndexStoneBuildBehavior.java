@@ -309,17 +309,18 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
             level.setBlock(target, st, 3);
             if (level.getBlockState(target).isAir()) {
                 BlockPos below = target.below();
-                // 先扣料（takeOneFor），再放支撑 —— 顺序 = 搭一个扣一个
+                // 先判"这一格放不放得下"，再扣料 —— 顺序 = 判一个、搭一个、扣一个。
+                //
+                // v1.2.4【补支撑那一格也要过压人闸门】——调用方只判了 target，而 below 是
+                // **另一格**：主人（或别的女仆）站在 below 的下一格时，他的头部格正好是 below
+                // → 补支撑等于往他脑袋里塞方块。其余三家（挖矿/伐木/搭路的 fill/support）与
+                // 蓝图建造（supPos/below）都是逐格判的，只有这条漏了，补上同一口径。
+                // 【实测七百六十二·把闸门提到取材之前】原来先 takeOneFor 再判闸，被挡住时
+                // 材料已经扣掉、方块却没放 = 白丢一件（闸门本意是"别往人身上放"，
+                // 不该附带走失）。两句一交换即可，语义与其它三家一致。
                 if (level.isLoaded(below) && level.getBlockState(below).isAir()
+                        && !com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, below)
                         && takeOneFor(maid, below, block)) {
-                    // v1.2.4【补支撑那一格也要过压人闸门】——调用方只判了 target，
-                    // 而 below 是**另一格**：主人（或别的女仆）站在 below 的下一格时，
-                    // 他的头部格正好是 below → 补支撑等于往他脑袋里塞方块。
-                    // 其余三家（挖矿/伐木/搭路的 fill/support）与蓝图建造（supPos/below）
-                    // 都是逐格判的，只有这条漏了，补上同一口径。
-                    if (com.maidsmart.tool.MaidPlaceGuard.blockedAtOwner(maid, below)) {
-                        return false;
-                    }
                     level.setBlock(below, st, 3);
                     level.setBlock(target, st, 3);
                 }
@@ -339,13 +340,14 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
     private static boolean takeOneFor(EntityMaid maid, BlockPos pos, Block block) {
         Item item = block.asItem();
         net.neoforged.neoforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+        // 【实测七百六十二·issue #19 三修】三处取材全部改走 MaidBuildBlockFilter.extractOneHonest：
+        // 原来只看 extractItem 返回值非空，坏包装层"返回副本却不真扣"时等于白放一块
+        // （本链虽不回收，但放出来的方块是真的）。没真扣 → 继续试下一槽。
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack st = inv.getStackInSlot(i);
-            if (!st.isEmpty() && st.getItem() == item) {
-                ItemStack taken = inv.extractItem(i, 1, false);
-                if (!taken.isEmpty()) {
-                    return true;
-                }
+            if (!st.isEmpty() && st.getItem() == item
+                    && MaidBuildBlockFilter.extractOneHonest(inv, i)) {
+                return true;
             }
         }
         net.neoforged.neoforge.items.IItemHandler hands = maid.getHandsInvWrapper();
@@ -357,11 +359,9 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
                 continue;
             }
             ItemStack st = hands.getStackInSlot(i);
-            if (!st.isEmpty() && st.getItem() == item) {
-                ItemStack taken = hands.extractItem(i, 1, false);
-                if (!taken.isEmpty()) {
-                    return true;
-                }
+            if (!st.isEmpty() && st.getItem() == item
+                    && MaidBuildBlockFilter.extractOneHonest(hands, i)) {
+                return true;
             }
         }
         Player owner = maid.getOwner() instanceof Player p ? p : null;
@@ -374,11 +374,9 @@ public class IndexStoneBuildBehavior extends Behavior<EntityMaid> {
                 BlueprintLib.deliverToMaid(owner, maid, Map.of(id.toString(), 1));
                 for (int i = 0; i < inv.getSlots(); i++) {
                     ItemStack st = inv.getStackInSlot(i);
-                    if (!st.isEmpty() && st.getItem() == item) {
-                        ItemStack taken = inv.extractItem(i, 1, false);
-                        if (!taken.isEmpty()) {
-                            return true;
-                        }
+                    if (!st.isEmpty() && st.getItem() == item
+                            && MaidBuildBlockFilter.extractOneHonest(inv, i)) {
+                        return true;
                     }
                 }
             }

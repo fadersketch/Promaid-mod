@@ -274,6 +274,18 @@ public final class MaidAutoResurrect {
     /**
      * 按 TLM 墓碑登记表定位并删除（同 1.21.1 版口径；两树同一条 实测七百五十）。
      * 玩家原话：「墓碑所在区块没有加载所以躲掉了一次清除吧」。
+     *
+     * <p>【实测七百六十三·点1：为什么"强制加载之后同 tick 就查得到"，不需要任何顺延】
+     * 两版这条链读透了：{@code ServerChunkCache#getChunkFutureMainThread} 在 {@code load=true}
+     * 时按 {@code ChunkLevel.byStatus(status)} 取等级 → 对 {@code ChunkStatus.FULL} 就是 <b>33</b>
+     * → {@code addTicket(UNKNOWN, pos, 33)} → 阻塞到 FULL 完成；而
+     * {@code ChunkLevel.fullStatus(33)=FULL} → {@code Visibility.fromFullChunkStatus(FULL)=TRACKED}
+     * → {@code isAccessible()=true} → {@code addEntityWithoutEvent} 当场 {@code startTracking}
+     * 把它放进**可见**实体表。所以 {@code m_8791_(uuid)}（读可见表）在我们这一句 {@code m_6325_}
+     * 之后**同 tick** 就能取到，<b>不需要任何玩家在附近</b>；"载完还取不到"只可能是它真的不在了
+     * ——晚几秒再试不会变，顺延没有意义（本轮修复中一度写过 6×5 秒顺延，查清这条链后当场撤掉，没有进过任何构建）。
+     *
+     * @return 真的删掉了（或确认它已不存在）返回 true；连位置都查不到返回 false
      */
     private static boolean discardTombstoneViaRegistry(MinecraftServer server, Pending p) {
         try {
@@ -296,10 +308,12 @@ public final class MaidAutoResurrect {
                 return false;
             }
             net.minecraft.core.BlockPos pos = hit.getChunkPos();
+            boolean matchedLevel = false;
             for (ServerLevel lvl : server.m_129785_()) {
                 if (!lvl.m_46472_().m_135782_().toString().equals(hit.getDimension())) {
                     continue;
                 }
+                matchedLevel = true;
                 lvl.m_6325_(pos.m_123341_() >> 4, pos.m_123343_() >> 4); // 同步载入那格区块
                 net.minecraft.world.entity.Entity e = lvl.m_8791_(p.tombstoneId);
                 if (e instanceof EntityTombstone ts) {
@@ -320,7 +334,20 @@ public final class MaidAutoResurrect {
                         "墓碑登记表有记录但实体已不存在 → 已清掉这条登记（" + hit.getDimension() + "）");
                 return true;
             }
-        } catch (Throwable ignored) {
+            if (!matchedLevel) {
+                // 【实测七百六十三·点1】登记表那条记的维度在本服务器上没有对应维度 —— 这时连
+                // 区块都不会去加载，墓碑自然永远删不掉。旧版会把它并进"既不在实体表、也不在
+                // 登记表里"那句日志，指向错误的方向；这里单独点名，便于一眼定位。
+                com.maidsmart.tool.PromaidLog.log("自动复活",
+                        "墓碑登记表记的维度（" + hit.getDimension() + "）在本服务器上没有对应维度"
+                                + "→ 无法定位那格区块，这块墓碑不会被删除；坐标 "
+                                + pos.m_123341_() + "," + pos.m_123342_() + "," + pos.m_123343_());
+            }
+        } catch (Throwable t) {
+            // 【实测七百六十三·点1】把这条也点出来：加载/读取过程中真的抛了异常（区块读不出来、
+            // 维度正在卸载等）时旧版是彻底静默的 —— 与"维度串对不上"同属"存在却够不到"的少数
+            // 情形，值得留一行。本方法每次复活只走一次，不会刷屏。
+            com.maidsmart.tool.PromaidLog.log("自动复活", "按登记表删除墓碑时出错：" + t);
         }
         return false;
     }

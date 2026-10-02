@@ -241,5 +241,22 @@
   "config.promaid.ride.ammoFeed": "Vehicle: she loads ammo for you (Superb Warfare)",
   "config.promaid.ride.bombStandoff": "Bomb standoff altitude (blocks above target)",
   "config.promaid.ride.airAltMigrated": "Internal - hover altitude migration flag",
-  "config.promaid.ride.orbitRadiusMigrated": "Internal - orbit radius migration flag"
+  "config.promaid.ride.orbitRadiusMigrated": "Internal - orbit radius migration flag",
+  "config.promaid.mine.breakBudget": "Break-through budget",
+  "config.promaid.mine.chainFullDurability": "Chain mining: cost durability per block",
+  "config.promaid.mine.chainMining": "Chain mining",
+  "config.promaid.mine.chainLimit": "Chain mining limit (blocks)",
+  "config.promaid.mine.depthPenalty": "Depth penalty",
+  "config.promaid.mine.downRange": "Vertical range (down)",
+  "config.promaid.mine.hardBlockReport": "Discard report on hard-blocked target",
+  "config.promaid.mine.junkKeep": "Junk stone kept",
+  "config.promaid.mine.moveSpeed": "Approach speed",
+  "config.promaid.mine.oreValues": "Diggable block table",
+  "config.promaid.mine.pillarGuard": "Pillar guard (anti-fall)",
+  "config.promaid.mine.placedLifetime": "Placed block lifetime (seconds)",
+  "config.promaid.mine.searchRadius": "Ore search radius",
+  "config.promaid.mine.softNoDurability": "Soft blocks cost no durability",
+  "config.promaid.mine.speedFactor": "Mining speed factor",
+  "config.promaid.mine.upRange": "Vertical range (up)",
+  "config.promaid.mine.valueWeight": "Value weight"
 }

@@ -1,4 +1,59 @@
-﻿【实测七百六十一·点1】守家（home 模式）对飞行载具也生效了——立刻就地悬停
+﻿【实测七百六十三】把七百六十二 那次 issue 复核里"还剩的账"一并收掉（#19 同族链路收口、#33 墓碑=物品两份、#30 收尾、#29 英文 lang、#28 home 圈外死锁）
+  承接 762：那一批修了 #27 / #31 / 1.21.1 映射写错 / #19 的部分链路；这一批把同族剩下的四条缝与两处小账清完。
+  【#19 第二次收口：同族链路全部接上诚实取材】762 只补了战斗放置与索引石补支撑，这批再补
+  ① 蓝图建造（BlueprintMaterials.extractExact 与"等价族"那条循环）；
+  ② 插火把（MaidTorchPlacerBehavior）与自动点灯（MaidSpawnerTorchBehavior）。
+  后两条是"先放后扣"的语义，所以改成"扣完核对槽位总数真的减了 1"；扣不到就把刚放下的方块
+  **拆掉回滚**——宁可这次不放，也绝不留"放了却没扣"的那一格。MaidBuildBlockFilter 里把核对抽成
+  通用版 extractHonest(handler, slot, count)（单件版委托给它），蓝图那边按"extractItem 实际报出来的
+  件数"核对。至此搭路 / 挖矿垫脚 / 伐木垫脚 / 自保搭高 / 索引石（主材+补支撑）/ 战斗放置 / 蓝图建造 /
+  插火把 / 自动点灯 全走同一个收口。
+  【#33 墓碑遗留：查清机制、并撤掉一版错误补丁】报告者那句"一模一样的装备"就是**物品双份**——墓碑里
+  装着她死前那整套背包（TLM 放进去的），而 resurrect 用的是同一份死亡快照，墓碑删不掉就一复活两份。
+  但"删不掉"的真正原因**不是时序**：把两版这条链读透了——ServerChunkCache#getChunkFutureMainThread 在
+  load=true 时按 ChunkLevel.byStatus(FULL)=**33** 加 ticket 并阻塞到 FULL 完成；ChunkLevel.fullStatus(33)
+  =FULL → Visibility.fromFullChunkStatus(FULL)=TRACKED → isAccessible()=true →
+  PersistentEntitySectionManager.addEntityWithoutEvent 当场 startTracking 把它放进**可见**实体表。
+  也就是说我们自己那一句 getChunk 就够了、**不需要任何玩家在附近**，之后同 tick 的 getEntity(UUID) 必然
+  取得到；"载完还取不到"只可能是它真的不在了 —— 晚几秒再试不会变。所以“墓碑没清掉就先不复活 + 顺延重试”这类补丁是对着错误假设打的——本轮修复中一度写过，查清这条链后当场撤掉，**没有进过任何构建**（复活不会被无谓推迟）。
+  真正能让它"存在却够不到"的只有**登记表的维度串对不上**：旧版会把它并进"既不在实体表、也不在登记表里"
+  那句日志、指向错方向；现在单独点名并写明坐标。其余路径（找到就删 / 确实不在就清脏登记）与七百五十 一致。
+  【#30 收尾】窒息播报原来排在"飞行 / 骑扫帚"那个早退之后，于是她飞着被闷住一个字都不说；现在一并常驻。
+  【#29 收尾】补了 mine 段 17 条英文 lang（en_us.json 原来整个 mine 段都缺，内置配置界面在英文环境下
+  显示的是原始键名）。
+  【#28 的另一半：home 圈外的死锁】"干活不打断"的豁免会把 TLM 的 SchedulePos.tick 整段取消，于是她一旦
+  已经在 home 圈外（被推出去 / 被命令挪过），就既没有原版的"出圈传送回工位"、也没有我们的巡逻
+  （跳过非战斗工作）→ 真的卡死在原地。现在只在"她还在 活动半径+4 以内"时才免这一拍；飘到圈外就交还
+  原版把她送回来（判据逐字照抄原版那一句）。扫帚模式不吃这一档——她要飞来飞去，被拽回圈心一次就得
+  重新起飞（实测六百六十四）。
+
+【实测七百六十二】按 issue 复核结果修四处：#27 传送后血上限掉回 20 的投递兜底、#31 坐垫上的女仆被自保传送拉走、1.21.1 侧「蹲下免传送」判据写错、#19 刷物品第二条缝（战斗放置 / 索引石补支撑）
+  起因：把仓库 32 条 issue（6 open / 26 closed）逐条对着代码复审计一遍。报告者说的「复发」里有两处确有其事，
+  另有两条是「报告者测的包早于修复」，不是修了没用。
+  【#27 远距传送血上限掉回 20】补包原来只用 broadcastAndSend（只发给服务端追踪表 seenBy 里正追踪她的玩家），
+  而本 bug 的故障态恰恰是「客户端已经有她（所以血条显示 20）、seenBy 里却没有主人」——此时那 5 拍广播一发都到不了，
+  且全程静默、一行日志都没有。现在在广播之外**对主人直连再补一枪**（与 resyncTo 同一写法
+  viewer.connection.send，不依赖追踪表），并在每次传送（低频事件）往 promaid.log 记一行
+  「直连主人兜底=用（主人同维）/不用（主人异维/离线）」，发送失败也落日志。位置：两树
+  MaidResyncCommand.resendAttributes / scheduleAttributeResend。
+  【#31 坐在 TLM 坐垫/椅子上的女仆残血仍被自保归位拉走】原来的豁免闸只判坐姿（isMaidInSittingPose）与
+  蹲下（isShiftKeyDown），漏了 isPassenger()——而 TLM 的 EntityChair/EntitySit 让女仆变成的是「乘客」、
+  不是坐姿（本仓库 MaidPlaceGuard / MaidRideKit 的注释早就写明了这一点）。现在判据与
+  MaidTeleportPreserveMixin 完全同口径：坐姿 / 蹲下 / 乘客。位置：两树
+  SelfPreservationBehavior.shouldSkipTeleportForParked。
+  【1.21.1 侧「蹲下免传送」判据写错】MaidTeleportPreserveMixin 里原写 canBreatheUnderwater()（注释还标着
+  「= isShiftKeyDown」），但 1.21.1 的 canBreatheUnderwater() 是生物类型标签
+  （getType().is(CAN_BREATHE_UNDER_WATER)，女仆恒 false）→ **1.21.1 上「蹲着的女仆免于 TLM 原版传送」
+  这条从来没生效**；1.20.1 侧用的是 m_6040_（= isShiftKeyDown），两树长期不一致。已改成 isShiftKeyDown()。
+  【#19 刷物品的第二条缝只堵了一半】第二轮的「取材后核对槽位总数真减 1」只接在 MaidBuildBlockFilter 一个收口上，
+  而**战斗放置**（BombItems.takeFirstMatch）与**索引石补下方支撑**（IndexStoneBuildBehavior.takeOneFor）
+  仍在用裸 extractItem、只判返回值非空——坏包装层「返回副本却不真扣」时，放置照放、回收侧
+  （BombPlacement.returnBlockItem 按方块 id 造一件**真物品**还她）照还 → 净 +1，正是报告者那句
+  「长期使用缓慢增加」。现在这两条链共用 MaidBuildBlockFilter.extractOneHonest（改成 public），
+  没真扣就试下一槽、全失败则本次不放。顺带把索引石补支撑的「压人闸门」提到取材之前
+  （原来被挡住时材料已经扣掉、方块却没放 = 白丢一件）。
+
+【实测七百六十一·点1】守家（home 模式）对飞行载具也生效了——立刻就地悬停
   玩家原话：「Home模式停止移动应该也对卓越前线的载具生效，检查一下能不能做到。」
   七百五十六 为了不让直升机「守家时掉下来」，把飞行载具整个排除在「守家即停」这条闸之外
   ——代价是守家时飞行载具仍然追着主人/敌人飞。其实这一档早有现成的「停」：把目标点设成它

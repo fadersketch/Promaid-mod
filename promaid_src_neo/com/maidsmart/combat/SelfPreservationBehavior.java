@@ -1130,6 +1130,10 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             }
             // 会话外的常驻轻量逻辑照常保留：负面效果自清（喝蜂蜜/牛奶解毒）
             this.tickCureNegativeEffects(maid);
+            // 【实测七百六十二·issue #30 收尾】这条早退原来排在 checkSuffocateAnnounce 之前，
+            // 于是"飞行/骑扫帚中"她即使真被闷住也一个字不说。窒息播报与自保会话本来就无关
+            // （判据只有"近 5 秒累计吃到的 in_wall 伤害过没过 4 点"），这里一并常驻。
+            this.checkSuffocateAnnounce(maid);
             return;
         }
         // v1.5.204：附近岩浆感知（bug 3）——半径 3 内任何岩浆（含流动）即视为
@@ -3955,8 +3959,15 @@ public class SelfPreservationBehavior extends Behavior<EntityMaid> {
             if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TELEPORT_EXEMPT_SITTING.get()) {
                 return false; // 开关关掉 → 旧行为
             }
-            if (maid.isMaidInSittingPose() || maid.isShiftKeyDown()) {
-                return true; // 坐姿 / 蹲下（Shift）
+            // 【实测七百六十二·补"乘客"这一态】原来只判坐姿/蹲下，漏了 **isPassenger()**——
+            // 而 TLM 的椅子（EntityChair）/坐垫（EntitySit）让女仆变成的是"乘客"，不是坐姿、
+            // 也不是蹲下（本仓库 MaidPlaceGuard / MaidRideKit 的注释都写明了这一点）。于是
+            // "坐在玩家给的坐垫上干活"的女仆残血时仍会被自保归位拽走——正是 issue #31 那句
+            // "坐垫/骑乘/蹲下 = 玩家明确停放"里唯一没兑现的一档。
+            // 本模块对 TLM 原版传送的豁免（MaidTeleportPreserveMixin）本来就有 isPassenger()，
+            // 这里补齐即与它同口径；她若真想起身，受伤时 onMaidHurt 会清坐姿、判据自然为假。
+            if (maid.isMaidInSittingPose() || maid.isShiftKeyDown() || maid.isPassenger()) {
+                return true; // 坐姿 / 蹲下（Shift）/ 乘客（TLM 坐垫·椅子、原版船车、坐骑…）
             }
             // 【实测七百二十一】被骑乘指挥棒绑上的骑乘女仆同理：她此刻是**乘客**，位置由坐骑
             // 每 tick 覆写（rideTick → positionRider），而自保的 teleport 内部会先 stopRiding()

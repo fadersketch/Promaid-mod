@@ -572,6 +572,12 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
      * 停放**在那儿的动作——本模组的原版传送拦截（{@code MaidTeleportPreserveMixin}）已经豁免
      * 这两种姿势，但我们**自己**的自保归位传送（{@code teleportHome} / {@code teleportHomeOnExit}）
      * 没查，于是她会带着坐姿瞬移到主人身边。这个开关补上同一道闸。
+     *
+     * <p>【实测七百六十二·补"乘客"这一态】除坐姿/蹲下外，**坐在 TLM 椅子/坐垫上（乘客）**也算
+     * 玩家明确停放——TLM 的 {@code EntityChair}/{@code EntitySit} 让女仆变成的是乘客而不是坐姿，
+     * 原来这一档漏判，于是"坐在玩家给的坐垫上干活"的女仆残血时仍会被拽走（issue #31 那句
+     * "坐垫/骑乘/蹲下 = 玩家明确停放"里唯一没兑现的一档）。现在判据与
+     * {@code MaidTeleportPreserveMixin} 完全同口径：坐姿 / 蹲下 / 乘客。
      */
     public static final ModConfigSpec.BooleanValue COMBAT_TELEPORT_EXEMPT_SITTING;
 

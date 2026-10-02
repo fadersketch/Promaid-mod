@@ -379,9 +379,11 @@ public final class BlueprintMaterials {
                 }
                 ResourceLocation stackId = ForgeRegistries.ITEMS.getKey(stack.m_41720_());
                 if (stackId != null && group.contains(stackId.toString())) {
-                    ItemStack taken = inv.extractItem(i, 1, false);
-                    if (!taken.m_41619_()) {
-                        return taken.m_41720_();
+                    // 【实测七百六十二·issue #19 三修】同 extractExact：只认"真扣到了"。
+                    // 先留一份 item 引用（extractItem 归零后槽里那件会被换成 EMPTY）。
+                    Item picked = stack.m_41720_();
+                    if (com.maidsmart.tool.MaidBuildBlockFilter.extractOneHonest(inv, i)) {
+                        return picked;
                     }
                 }
             }
@@ -510,10 +512,22 @@ public final class BlueprintMaterials {
     }
 
     static ItemStack extractExact(IItemHandler inv, Item item, int count) {
+        // 【实测七百六十二·issue #19 三修】原来只看 extractItem 返回值非空就当作取到了。
+        // 蓝图建造这条链虽然"只吃背包不扫手"（所以第一轮那个"副手展示件"的口子它没有），
+        // 但**坏包装层返回副本却不真扣**这一条同样会中：方块照放、蓝图进度照记，而材料
+        // 一件没少 —— 净产出同样成立。统一走 MaidBuildBlockFilter.extractHonest（核对
+        // 槽位总数真的减少了"实际报出来的件数"）。没真扣 → 试下一个槽位；
+        // 全失败 → 返回空，调用方（itemForBlock / BlueprintMachineFinish）会当作"缺料"
+        // 延后或放弃，不会凭空造料。
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack stack = inv.getStackInSlot(i);
-            if (!stack.m_41619_() && stack.m_41720_() == item) {
-                return inv.extractItem(i, count, false);
+            if (stack.m_41619_() || stack.m_41720_() != item) {
+                continue;
+            }
+            ItemStack snapshot = stack.m_41777_();
+            snapshot.m_41764_(Math.min(count, stack.m_41613_()));
+            if (com.maidsmart.tool.MaidBuildBlockFilter.extractHonest(inv, i, count)) {
+                return snapshot;
             }
         }
         return ItemStack.f_41583_;
