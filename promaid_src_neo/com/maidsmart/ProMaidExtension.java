@@ -380,6 +380,10 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         //  BeyondDimensions 半截；命令入口 /maid_smart goety_* 与只读探针 goety_probe）
         com.maidsmart.command.MaidGoetyFlyCommand.register(event.getDispatcher());
         com.maidsmart.command.MaidGoetyProbeCommand.register(event.getDispatcher());
+        // 实测 G-16：超越维度（BeyondDimensions）存储联动——产物回收 / 溢出入库 / 自动补货 / 缓存冲刷
+        // （默认关：见 misc.bdStorage；命令入口 /maid_smart bd_*）
+        com.maidsmart.command.MaidBdProbeCommand.register(event.getDispatcher());
+        com.maidsmart.command.MaidBdRuleCommand.register(event.getDispatcher());
     }
 
     /**

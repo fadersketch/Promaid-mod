@@ -3796,6 +3796,13 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("背包满时装进精妙背包", MaidSmartConfig.MISC_BACKPACK_OVERFLOW.get(),
                 v -> MaidSmartConfig.MISC_BACKPACK_OVERFLOW.set(v),
                 "背包满时装进精妙背包（默认开，实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的「额外容器」——饰品栏里的精妙背包 / 旅行者背包。需要 Curios 在场 + TLM「女仆饰品」开启 + 背包真的戴在她饰品栏里；额外容器再塞不下才落地（绝不吞物品）"));
+        this.rows.add(new BoolRow("超越维度存储联动", MaidSmartConfig.MISC_BD_STORAGE.get(),
+                v -> MaidSmartConfig.MISC_BD_STORAGE.set(v),
+                "超越维度存储联动（默认关）：把女仆采矿/伐木/收成的产物自动存进她主人的主网络，并按规则从网络取货"
+                        + "（规则文件 config/promaid_bd_rules.json）。【为什么默认关】它会真实搬动物品，且只在装了"
+                        + "超越维度模组时才有意义。【两级门禁】这一项是总开关，另外每只女仆还要单独开"
+                        + "（/maid_smart bd_deposit true）。命令：bd_probe / bd_query / bd_deposit / bd_restock / "
+                        + "bd_flush / bd_rule"));
         // v1.5.163：农场连锁收获上限可自定义
         this.rows.add(new NumRow("连锁收获上限（格）", String.valueOf(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT, s), "农场连锁收获上限（格）：一次连锁收割的最大格数（4~96，默认 24）"));
