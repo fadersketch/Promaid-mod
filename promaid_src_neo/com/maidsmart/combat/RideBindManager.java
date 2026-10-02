@@ -184,6 +184,11 @@ public final class RideBindManager {
             //  所以这一档由我们接管：两侧都吞掉这一下（客户端那一份不吞，本地预测仍会把她踢下去），
             //  服务端把主人放进**副驾**（{@link #handlePassengerSeat}），女仆留在驾驶位。
             handlePassengerSeat(player, event);
+            // 【实测七百六十五·点2】无鞍可骑仆从（红石巨兽等）：主人空手右击 = **主人直接接管**。
+            // 与上面"载具让主人坐副驾、女仆继续开"不同——这类仆从只有一个驾驶位，玩家要骑就是
+            // 自己开，所以我们先把女仆**干净请下来**（撤标记/断链路），再放行 Goety 自己的
+            // mobInteract 把主人骑上去。见 tryOwnerTakeover 的完整口径。
+            tryOwnerTakeover(player, event);
             return;
         }
         Entity raw = event.getTarget();
@@ -304,6 +309,76 @@ public final class RideBindManager {
             }
             ViewSnapshot.pin(player, ViewSnapshot.capture(player)); // 顺带抹掉 SWB 本地那一拍转视角
             event.setCanceled(true);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /**
+     * 【实测七百六十五·点2】"主人直接接管"：主人空手右击一只**自己女仆正骑着的无鞍可骑仆从**时，
+     * 把女仆干净请下来，再把这一下右击**放行**给 Goety 自己的 {@code mobInteract}（它会
+     * {@code doPlayerRide(player)} 把主人骑上去）。
+     *
+     * <h2>玩家原话与定档</h2>
+     * 「主人也不太能移动他们」；追问后定档 = **主人直接接管**（主人骑上去就按 Goety 原版由主人操控，
+     * 女仆不占驾驶位）。
+     *
+     * <h2>根因（反编译 goety-3.1.5.1 实证）</h2>
+     * {@code RedstoneMonstrosity.getControllingPassenger()} 对**非玩家**乘客直接返回那只 Mob
+     * （即我们的女仆），而 {@code travel()} 只在 {@code rider instanceof Player} 时才应用输入速度
+     * ——所以女仆当乘客时，Goety 侧**压根没有给她任何转向能力**；它自己的技能 goal 又每拍抢导航
+     * （点1 已治）。玩家要"自己开"这条路，唯一正门就是 Goety 的 {@code mobInteract → doPlayerRide}
+     * ——而它只在**没有别的乘客**时才会把主人放上去（{@code getFirstPassenger() != null} 那一支会
+     * 直接把现有乘客踢下来）。所以我们必须**先**把女仆请下来，否则女仆会被 Goety 用
+     * {@code stopRiding} 粗暴踢掉、我们这边的链路/标记/坐姿全成脏状态。
+     *
+     * <h2>判据（尽量窄，避免误伤原版兽与载具）</h2>
+     * <ol>
+     *   <li>这一下是**空手**右击（拿指挥棒走的是原来的选中/解绑，不进本档）；</li>
+     *   <li>目标是一只 **{@link MaidRideKit#isNoSaddleRideable} 的无鞍可骑仆从**（只治这一类：
+     *       原版马/骆驼/载具/龙一个字节不动）；</li>
+     *   <li>它身上驮着**这位玩家自己的、我们用棍子绑的**女仆（{@link MaidRideKit#isRideRider}）；</li>
+     *   <li>玩家是它的**真正主人**（诡厄 {@code IOwned.getTrueOwner()}，反射；拿不到就不接管
+     *       ——因为 Goety 自己也不会让非主人骑上去）。</li>
+     * </ol>
+     * 四条全过：请下女仆 + **不 cancel**（让这一下继续走到 Goety 的 {@code mobInteract}）。
+     *
+     * <p>【为什么"不 cancel"就能让主人骑上去】Goety 的骑乘入口在 {@code Mob.mobInteract} 里
+     * （反编译实证），而 {@code PlayerInteractEvent.EntityInteract} 在它**之前**发——我们不吞这一下，
+     * 原版链路就会照常调用它。女仆已在上一行被我们请下来，于是它那条
+     * {@code getFirstPassenger() != null} 的踢人分支不会触发，主人直接进 {@code doPlayerRide}。
+     */
+    private static boolean tryOwnerTakeover(Player player, PlayerInteractEvent.EntityInteract event) {
+        try {
+            if (!(player instanceof ServerPlayer sp)) {
+                return false; // 客户端不执行业务（这一档不吞事件，客户端本来就照常走原版）
+            }
+            if (!sp.getMainHandItem().isEmpty() || !sp.getOffhandItem().isEmpty()) {
+                return false; // 只要空手：拿东西（含指挥棒）时保持各自动作
+            }
+            Entity target = MaidMountCompat.resolveMount(event.getTarget());
+            if (target == null || !MaidRideKit.isNoSaddleRideable(target)) {
+                return false;
+            }
+            EntityMaid maid = MaidRideKit.riderOf(target);
+            if (maid == null || !MaidRideKit.isRideRider(maid)) {
+                return false; // 驮的不是"我们棍子绑的女仆" → 与本档无关
+            }
+            if (!ownable(sp, maid)) {
+                return false; // 驮的是别人的女仆 → 不插手
+            }
+            LivingEntity trueOwner = com.maidsmart.goety.MaidGoetyCompat.trueOwner(target);
+            if (trueOwner == null || !trueOwner.getUUID().equals(sp.getUUID())) {
+                return false; // 不是它的真正主人：Goety 不会让他上，我们别白请女仆下来
+            }
+            // 干净请她下来：撤标记 + 断链路 + 还原坐姿（releaseMaidImpl 全套），并回一句话。
+            releaseMaid(maid, true, "主人接管");
+            bubble(maid, "主人要自己开，我先下来～");
+            com.maidsmart.tool.PromaidLog.log("骑乘指挥棒", "主人接管无鞍仆从：坐骑="
+                    + MaidRideKit.describe(target) + "（玩家=" + name(sp)
+                    + "，女仆=" + com.maidsmart.tool.PromaidLog.nameOf(maid) + " 已下鞍，本档不吞右击）");
+            // 【关键】不 event.setCanceled：这一下继续走到 Goety 的 mobInteract → doPlayerRide。
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -1009,6 +1084,8 @@ public final class RideBindManager {
                 mount.getPersistentData().remove(TAG_RIDE_MAID);
             } catch (Throwable ignored) {
             }
+            // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
+            MaidRideKit.clearRiddenSpeed(mount);
             MaidRideKit.stopNavigation(mount);
         }
         try {
@@ -1693,6 +1770,8 @@ public final class RideBindManager {
                 mount.getPersistentData().remove(TAG_RIDE_MAID);
             } catch (Throwable ignored) {
             }
+            // 【实测七百七十】模组仆从坐骑：把"她的速度"修改器摘掉，还它原本的移速。
+            MaidRideKit.clearRiddenSpeed(mount);
             MaidRideKit.stopNavigation(mount);
         }
     }
@@ -1713,6 +1792,23 @@ public final class RideBindManager {
             // 七百二十九/七百三十八 玩家坐副驾那一档用的同一套驱动（{@link MaidAirCombat#holdHere}）。
             // 所以飞行载具改成走 holdHere：不再产生任何往主人/敌人去的驱动。
             // 冰火传说龙走悬空鞍位（{@code link.chair}），在 tick() 里就 continue 了，天然不经过这里。
+            //
+            // 【实测七百七十·模组仆从坐骑：单独一个区间】玩家定档原话：「女仆坐上去只会赋予仆从
+            // 相应的速度，其余的行动逻辑全都换成仆从自己的。（如果开启 home 模式，那么坐骑还是会
+            // 停下来，这一点是通用的）」「只对 mod 类仆从类生效，就跟卓越前线一样是单独开了个
+            // 区间。不影响其他区间以及原版生物或者通用的骑乘逻辑。」
+            //
+            // 于是这一类（诡厄无鞍可骑仆从）在本档里**我们什么都不做，只赋速度**：不喂走位、
+            // 不写目标、不替它出招、不拦它的寻路——它自己的 targetSelector（SummonTargetGoal /
+            // ServantHurtByTargetGoal）自主锁敌，goalSelector 里的巡逻/接近/全部技能自己跑。
+            // 它自己的 goal 之所以能跑，靠的是 MobRiddenControlFlagsMixin 每 5 拍（在
+            // updateControlFlags 之后）把控制位开回来；home 模式那一档不接管 = 控制位保持关闭 =
+            // 它自己的 goal 全停 = 坐骑停住（玩家要求保留的通用例外）。这些判据全在
+            // {@link MaidRideKit#reopenRiddenCombatGoals} 里，本处不重复。
+            if (MaidRideKit.servantAutoEnabled() && MaidRideKit.isNoSaddleRideable(mount)) {
+                MaidRideKit.applyRiddenSpeed(mount, maid);
+                return;
+            }
             if (maid.isHomeModeEnable()) {
                 if (MaidMountCompat.isFlyingVehicle(mount)) {
                     if (MaidAirCombat.enabled()) {

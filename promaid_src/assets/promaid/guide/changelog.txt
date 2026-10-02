@@ -1,4 +1,71 @@
-﻿【实测七百六十三】把七百六十二 那次 issue 复核里"还剩的账"一并收掉（#19 同族链路收口、#33 墓碑=物品两份、#30 收尾、#29 英文 lang、#28 home 圈外死锁）
+﻿【实测七百七十一】支援范围扩大：从"只支援女仆"到"支援其他友方单位"（主人的其他宠物 / 同主人的模组仆从）
+  ①【定档】玩家原话：「女仆支援方面，能不能不要只支援女仆，还可以支援其他的友方单位呢？简单来说就是扩大支援的范围。」并界定了两件事：友军判据——「原版的那些宠物以及仆从这些有什么共同特点？他们都是算作友军的」；支援内容——「因为他们没有饥饿值，所以他们只能吃药水这些治疗效果……支援药水以及一些效用性食物（金苹果这种），也就是说相比于女仆间支援，等于少了普通的食物和不死图腾支援。」
+  ②【友军判据 = 归属同一位主人（字节码实证）】原版宠物与模组仆从的唯一共同特点是"都归属于一位主人"，这正是原版 net.minecraft.world.entity.OwnableEntity（唯一抽象方法 getOwnerUUID）：原版 TamableAnimal（狼/猫/鹦鹉/狐狸…）与 AbstractHorse（马/驴/骆驼…）都实现它；诡厄巫法 Owned extends PathfinderMob implements IOwned, OwnableEntity——红石巨兽/下界合金巨兽全在这条链上。所以判据 = 目标是 OwnableEntity 且其 getOwnerUUID 与本女仆的主人 UUID 相同；再叠一道 isAlliedTo（同队/同盟，与 FriendlyFireGuard.isFriendly 同口径）。不写死任何实体 id、不挑"哪几种宠物/仆从"，凡主人名下的可拥有单位一律算友军。刻意不用 getOwner()（在线实体，主人下线会变 null）——认领关系跟着 UUID 走（同 MaidScope 口径）。
+  ③【支援内容：比女仆间支援少两样】友军没有饥饿值（兽靠 Animal.isFood 的繁殖/驯服语义、仆从更没有 FoodData），普通食物喂了没有意义；不死图腾这类"塞背包/替他挡死"的机制也只对女仆自己成立。所以本链只做：药水（抗火 / 治疗 / 再生 / 饮用型直接喂）+ 效用性食物（金苹果 / 附魔金苹果）+ 负面效果解除（牛奶全解 / 蜂蜜解中毒）——不做普通食物投喂、不做不死图腾。金苹果走即时增益路径（吸收/再生，附魔额外抗性/抗火），饮用型药水 finishUsingItem 强制饮用、空瓶返还。
+  ④【实现】MaidAidOwnerBehavior 新增 aidFriendlyUnits + sameFriendlySide + hasFriendlyAidItem + isFriendlyAidItem + feedAllyMilkOrHoney + goldenAppleOnAlly + feedDrinkablePotionToAlly（两树同名同口径）：16 格内扫 LivingEntity，排除女仆自身（女仆走专门的互助链，含普通食物/图腾，不重复处理），按 isFriendly 判据过滤；顺序同女仆链——着火抗火 → 负面效果牛奶蜂蜜 → 低血（治疗药水 → 金苹果 → 再生 → 饮用型直接喂）；与女仆互助链共用同一个 3 秒 CD 记账（aidCds），每轮最多救一个，成功播报「[maid_smart] X 支援了友军 Y：<动作>」。主人不在身边（>16 格）时也运行（与女仆互助同款）。
+  ⑤【开关】combat.aid.friendlyUnits（默认开）——关掉 = 只支援主人与女仆。配置面板「战斗与自保 → 贴身辅助」新增一行「支援其他友方单位」。手册第五节 ⑧ 同步说明。范围：只在"同主人 / 同队"的友方单位上生效；敌人、别人的宠物、无主单位一个字节不动。
+
+【实测七百七十】模组仆从坐骑 = 单独一个区间：只赋予它速度、其余全换它自己的 AI（+ 女仆受伤转给坐骑）
+  ①【定档】玩家原话：「接下来我说的话只对 mod 类仆从类生效，就跟卓越前线一样是单独开了个区间。不影响其他区间以及原版生物或者通用的骑乘逻辑。女仆坐上去只会赋予仆从相应的速度，其余的行动逻辑全都换成仆从自己的。（如果开启 home 模式，那么坐骑还是会停下来，这一点是通用的）如果女仆受到了伤害，会将伤害转移给身下坐着的仆从。」区间判据只在 MaidRideKit.isNoSaddleRideable（诡厄巫法 / 诡厄灾变的无鞍可骑仆从：红石巨兽、下界合金巨兽仆从这一族）——原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑一律不受影响。
+  ②【只赋速度】MaidRideKit.applyRiddenSpeed：每拍把坐骑 MOVEMENT_SPEED 上的"我们的修改器"更新成「她的速度 × speedScale − 它原本的速度」（ADD_VALUE，同一 id 覆盖 = 幂等，transient 不落存档），于是它的有效速度恰好等于她、且随她的属性（好感度/装备/药水）实时变；解绑/链路失效（releaseMaidImpl / releaseMaidQuiet）由 clearRiddenSpeed 摘掉，不留痕。
+  ③【其余全换它自己的 AI】RideBindManager.drive 的"无鞍可骑仆从"档改成**我们一个字都不写**（不喂走位、不写目标、不替它出招）。它自己的 targetSelector（SummonTargetGoal / ServantHurtByTargetGoal）自主锁敌、goalSelector 里的巡逻/接近/全部技能自己跑——但前提是它自己的 goal 得是"活着的"：原版 Mob.updateControlFlags()（每 5 拍）因"第一乘客是个 Mob（= 女仆）"把它 goalSelector 的 MOVE/JUMP/LOOK 全关、诡厄 Summoned 还多关一个 TARGET，于是它一步走不了、一招放不出。修法：MaidRideKit.reopenRiddenCombatGoals 由 MobRiddenControlFlagsMixin 在 updateControlFlags 调用之后把 MOVE/LOOK/JUMP/**TARGET 一起开回来**（含 TARGET，因为诡厄连它都关了；反编译 MobUtil.isOwnedTargetable 实证重开 TARGET **不会**让它攻击背上的女仆——对非敌对/未记仇目标返回 false，且 SummonTargetGoal.canUse 显式排除 getTrueOwner）。home 模式例外：不接管 = 控制位保持关闭 = 它自己的 goal 全停 = 坐骑停住。RandomStrollGoalRiddenMixin 同步排除这一类（它的闲逛 Summoned.WanderGoal 继承自 RandomStrollGoal，归它自己、不再被我们掐）。
+  ④【清理旧口径】删除 MaidMountForceAttack（767/769 的"强启技能 / 超距强启"后门）、PathNavigationRiddenGuardMixin + MaidRideKit.skillNavBlocked/navFeedAuthorize/navFeedRelease（765 的"技能不许抢走位"）、RideBindManager.chaseBeyondOwnReach（768 的"替它带路"），以及 tickAttack 对这类仆从的"替它写目标"（MaidMountCompat.tickAttack 见 noSaddlePets 直接 return）、RideBindManager.tick 里的 sweep 调用——它们全被"整段让给它自己的 AI"取代。mixins.promaid.json 两树的 PathNavigationRiddenGuardMixin 条目一并删除。
+  ⑤【伤害转移】新增 ServantMountDamageTransfer（两树同名）：女仆此刻正骑着"我们棍子绑的、无鞍可骑模组仆从"时，她在最上游受击事件里的伤害被取消，等量同源打到身下的坐骑上（仇恨也顺势落到它身上）。环境自伤（虚空 outOfWorld / 卡墙 inWall / 挤压 cramming / 撞墙 flyIntoWall）不转移——每拍重复、且两者通常在同一处，转了只会一起被挤死。1.21.1 走 LivingIncomingDamageEvent，1.20.1 走 LivingAttackEvent。日志 `[模组坐骑·转伤] …` 节流 2 秒。开关：combat.ride.servantAuto / combat.ride.servantTransfer（都默认开）。
+  范围：以上四条只在「我们棍子绑的女仆正骑着的无鞍可骑模组仆从」上生效；原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑、无主女仆骑的怪——一个字节不动。
+
+【实测七百六十九】够不着也强制出招：不管能不能命中，按它自己的冷却往女仆的目标方向扔一发
+  ①【根因：卡死它的是 canUse() 的射程判据，不是弹体本身】玩家原话：「还是不行，能不能强制调用技能？每隔一段时间。不管能不能命中，就仅仅是往女仆那个方向施展一次攻击技能。」反编译 goety_cataclysm-1.21.1-1.8.2 的 NetheriteMonstrosityServant 实证：五个技能里真正"扔东西"的两发是岩浆弹 MagmaShoot（canUse 要求 distanceTo(target) >= 14 且 < 40 格、视线、随机 16%、弹匣未满、shoot_cooldown<=0）与火焰弹 FlareShoot（>= 10 且 < 26 格、视线、随机 18%、flare_shoot_cooldown<=0），近战三发（砸地 SMASH、震地 EARTHQUAKE、肩撞 ShoulderCheck）射程更短（16 / 16 / 5.75 格）。反编译更关键的一条：**弹体是在 goal 的 tick() 里生成的，判据只有 `target != null && attackTicks == attackshot`（岩浆弹第 19 拍、火焰弹第 35 拍、各 3~5 发），与射程、视线全都无关**。也就是说"够不着"根本不是弹体发射不了的物理原因，纯粹是 canUse() 那一串前置把 goal 挡在门外；768 的强制循环里还留了一句"射程够不着就 continue"，双重锁死 ⇒ 女仆远程一拉开距离，它连一发都不扔。
+  ②【修法：超距强制档（不看射程与视线，只认它自己的冷却）】MaidMountForceAttack 新增 tryForceOne + begin + ownCooldown + hasShotMarker（两树同名同口径）。触发时机：自然掷骰（每拍对每个技能重掷 4 次它自己的 canUse()）全部落空、或目标远过它所有技能射程时，挑**它射程最远的投掷型技能**（有 `attackshot` 字段那一族 = 岩浆弹 40 格 / 火焰弹 26 格；找不到投掷型就退回射程最远的一招），**绕开 canUse() 直接 start()**，随后由我们替它 tick（弹体就在 tick 里飞出去），方向 = 它自己的 tick 用 `target` 的坐标算的抛物线 ⇒ 弹体朝女仆指定的目标方向飞，命中不命中不论。节拍由**它自己的冷却**决定：起手前先读它自己的全部 `*cooldown*` 字段（shoot_cooldown / flare_shoot_cooldown / check_cooldown / overpower_cooldown），任一非零就等——"最小攻击间隔与坐骑保持一致"（岩浆弹约 12 秒、火焰弹约 6 秒）；另加 40 拍地板防同一拍反复起手。它自己在放招（attackState 非 IDLE）时我们一个字都不写；她停手 / 下鞍 / 坐骑没了 → sweep 干净收招（走它自己的 stop()，冷却照写）。日志新增 `[模组坐骑·强启] … 超距强启：<技能名>` 一行，与自然强启区分。范围仍严格限定在「我们棍子绑的女仆正骑着的无鞍可骑仆从」，且全程反射（没装诡厄灾变 → 一个字段都扫不到 → 空转）；原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物，一个字节不动。
+  ③【顺带收紧一处抖动】RideBindManager.drive 的让位判据从"它此刻自己有 getTarget()"改成"**女仆此刻有活目标**"：它自己的技能 stop() 会把它的 getTarget() 清成 null（InternalSummonAttackGoal.stop 实证），按旧判据出招收尾那一拍会瞬间掉回我们的驱动档、与它自己的 getNavigation().stop() 抢一拍；改按女仆目标分档 = 整场战斗都让位，收招那拍也归它自己。
+
+【实测七百六十八】远程女仆带不动它（拉开距离后呆若木鸡）的真根因：骑手是生物 → 它自己的 AI 被原版驾驶规则整个掐停 +「超出它自己寻路上限才由我们带路」的兜底
+  ①【真根因：它自己的 goal 被原版驾驶规则整个掐停】玩家原话：「如果女仆采用的是远程攻击的方式，下界合金巨兽的锁敌范围明显跟不上女仆的锁敌。导致拉开了很长一段距离之后下界合金巨兽直接不会攻击了。而玩家实际游玩肯定更偏向给女仆配远程武器。」javap 两版实证：原版 Mob.tick()（1.21.1）/ Mob.m_8119_()（1.20.1 SRG）每 5 拍调一次 updateControlFlags()/m_8022_()（字节码：tickCount % 5 == 0 且服务端），而它第一句就是 `flag = !(getControllingPassenger() instanceof Mob)`，随后把 goalSelector 的 MOVE / JUMP / LOOK 三个控制位设成这个值——「**驾驶者是个生物 → 坐骑自己的 goal 全部停摆**」；Mob.getControllingPassenger() 认的正是"第一乘客是 Mob"，而**女仆就是个 Mob**（诡厄 Summoned 在 1.21.1 还把 TARGET 一并关掉）。GoalSelector.tick() 会把所有带这些控制位的 goal **直接 stop()**。反编译诡厄灾变 NetheriteMonstrosityServant 实证：它靠近敌人靠 InternalSummonMoveGoal（MOVE|LOOK），全部技能（砸地 SMASH / 震地 EARTHQUAKE / 岩浆弹 MagmaShoot / 火焰弹 FlareShoot / 肩撞 ShoulderCheck / 吸岩浆 DrainLava，都是 MOVE|LOOK|JUMP）——**全带被打掉的这三个控制位** ⇒ 它自己一步走不了、一招放不出。767 的后门之所以让近战"能打"，是因为它绕过 goalSelector 直接调 goal（不看控制位），但只在目标已经落进某个技能射程时才够得着（40 格内只剩岩浆/烈焰两招，再远彻底哑火），且**不会自己靠近** ⇒ 远程一拉开距离就是玩家看到的「完全不会攻击」。
+  ②【修法一：战斗中把它自己的控制位开回来】新增 mixin MobRiddenControlFlagsMixin（两树同名，已登记进 mixins.promaid.json），注入点选在 Mob.tick / m_8119_ 里 updateControlFlags()/m_8022_() 的**调用之后**（不用 updateControlFlags 的 TAIL——诡厄 Summoned 重写了那个方法，TAIL 注入会被虚分派跳过；已用补丁版 neoforge-21.1.250-client.jar / forge-1.20.1-47.4.23-client.jar javap 实证注入点存在），回调 MaidRideKit.reopenRiddenCombatGoals：只对「我们棍子绑的女仆正骑着的无鞍可骑仆从 + 它此刻有攻击目标（= 战斗中）」把 MOVE/LOOK/JUMP 开回来。开回来之后它自己的 AI 复活：用它自己的 FOLLOW_RANGE（下界合金巨兽仆从 = 50，反编译实证）接近敌人、用它自己的随机率/冷却/视线判定出招——"它自己接近、自己出招"，767 的后门退居兜底（它出招时后门只看 attackState，天然不抢）。**平时（它没有攻击目标）一个控制位都不动**，闲逛/跟随照旧被 skillNavBlocked 挡着；TARGET 保持诡厄原样（目标仍由女仆指定）。判据四条全命中才开，不命中 → 原版/诡厄行为逐字节不变。
+  ③【修法二：只有超出它自己的寻路上限才由我们带路】RideBindManager 的让位分支新增 chaseBeyondOwnReach：javap 实证 PathNavigation.createPath(Set,int,boolean,int) 第一件事就是取 Attributes.FOLLOW_RANGE 当 maxRange——**寻路长度被硬性限制在它自己的锁敌范围内**；目标一旦超出，它自己的 MoveGoal 每拍 createPath 都是 null、原地干等（正是"女仆站着输出、它在很远的地方罚站"）。现在只有目标超过它自己的 FOLLOW_RANGE 时，我们才喂一个 **24 格以内的路点**（一定在它自己的寻路上限内）把它一段一段带过去；**一进它自己的上限立刻撒手**，接近与出招照旧全归它自己的 AI。目标必须是活敌人（与 757 同一道 LiveThreat 闸）。范围仍严格限定在「我们棍子绑的女仆正骑着的无鞍可骑仆从」——原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、无主女仆骑的怪，一个字节不动。
+
+【实测七百六十七】下界合金巨兽仆从「只会走、不出招」的真根因（目标被诡厄「守区」闸静默吞掉）+ 女仆开火时强制逼它出招的后门
+  ①【根因：目标根本没写进去】玩家原话：「下界合金巨兽现在只是会移动，但仍然不会进行攻击。」日志 `[模组坐骑·目标] … 目标=husk` 看着一切正常——但那一行打的是**女仆的目标**。反编译 goety-3.1.5.1 的 Summoned.setTarget(LivingEntity) 实证：仆从一旦设过守区（isGuardingArea()），在没有优先目标（!isPrioritizing()）时**只有落进守护半径内的目标才会被收下，区外的一律静默丢弃**；IServant.servantTick() 还有第二道——目标离守区中心超过 guardingRange()*2 直接把 getTarget() 清成 null。两条叠加 ⇒ 它的 getTarget() 恒为 null ⇒ InternalSummonMoveGoal 与五个 InternalSummonAttackGoal（砸地 / 岩浆弹 / 火焰弹 / 冲锋 / 震地）的 canUse() 全都要 getTarget() != null ⇒ 全灭；只剩不看目标的 Summoned.WanderGoal 在游荡，正是「只会移动、不会攻击」。修法：写目标前先调它自己的 IServant.setPriorityTime(100)（「优先目标」闸），之后再 setTarget 就落到 else 分支直接收下、servantTick 的清目标那段整块被跳过——没有新数值、没有绕过它自己的判据，用的是模组自己给「优先目标」留的那条正门；只在诡厄仆从上生效（别的实体没有 setPriorityTime → 照旧 setTarget，一个字节不变）。另：日志「模组坐骑·目标」补上「它自己=」一栏（原先只打女仆目标），这类「写丢了」以后一眼可见。
+  ②【后门：她开火 → 逼它出自己的招】玩家原话：「那我们能不能走一些小小的后门儿？例如女仆在触发攻击之后，会强制启动一次坐骑的攻击，并且指向目标。最小攻击间隔与坐骑保持一致。」新增 MaidMountForceAttack（两树同名）：她此刻有活目标、它自己的攻击状态还在 IDLE 时，遍历**它自己的技能 goal**（结构签名识别 = goal 类或其父类同时有 float attackrange 与 int attackstate —— InternalSummonAttackGoal 这一族），每拍对每个技能重掷 4 次它自己的 canUse()（它自己的随机数每调一次重掷一次），掷中就地 start()，随后**由我们替它 tick**（岩浆弹 / 火焰弹的弹体是 goal 的 tick 里某一拍生成的，没人 tick 就打不出去），直到它自己的 canContinueToUse() 说不、再走它自己的 stop()。技能、动画、弹体、伤害、音效、冷却全是它自己的，最小攻击间隔 = 它自己的 shoot_cooldown 240 / flare_shoot_cooldown 120 / check_cooldown 80 / overpower_cooldown 160（它自己的 stop() 写的），另加 10 拍地板防同一拍反复起手。它自己在放招（状态非 IDLE）时我们一个字都不写；她停手 / 下鞍 / 坐骑没了 → 干净收招（RideBindManager.tick 每拍 sweep 兜底——必须收，否则它会永远卡在出招状态，连主人都开不走）。范围严格限定在「我们棍子绑的女仆正骑着的无鞍可骑仆从」，且全程反射（没装诡厄 / 诡厄灾变 → 一个字段都扫不到 → 空转）；原版马 / 骆驼、卓越前线载具、冰火传说龙、别的模组生物，一个字节不动。
+
+【实测七百六十六】两处修正：在家模式「一键集合/一键召回」的骑乘例外穿透 + 无鞍可骑仆从要自主战斗
+  ①【在家模式优先于一切骑乘例外】玩家原话：「在家模式的女仆不应该响应一键传送，但是实际上扫帚模式、在家模式，一起开的，女仆在家中巡逻，仍然可以被主人一键召回。」根因：四条召回入口（summonAll「一键集合」/ tickPending「未加载区块待召回队列」/ summonOne 排班表「召她过来」/ summonMaidTo 通用咽喉点）原先都把 home 判据塞在「!broomRider && !rideRider && !specialRider && !selfBoarded」这条**骑乘例外**的后面——实测六百六十一为「骑着扫帚的女仆不然永远召不回」加的 broomRider 放行，正好把「在家守家、同时又骑着扫帚」的那只也一起放行了：扫帚模式 + 在家模式同开时，正在家中巡逻/盘旋的她照样被一键召回拽走。修法：四条入口一律把 isHomeModeEnable() && !isBuildingMaid() 提到**所有骑乘例外之前**（守家钉死，想召回先关她的排班/在家模式）；建造女仆的老口径不变（建造强制 home 但可被召回）。
+  ②【无鞍可骑仆从：一进战斗，整只交给它自己的 AI】玩家原话：「下界合金巨兽仆从还是不会在战斗的时候自主战斗。甚至比上一版更糟糕会直接站在原地不动只有女仆会坐在上面输出。」根因（反编译 goety_cataclysm-1.21.1-1.8.2 的 NetheriteMonstrosityServant 实证）：765 当初那条「技能不依赖导航、拦导航只挡走位不挡出招」对红石巨兽那类「就近 AoE / 原地召唤」成立，对这一只不成立——它靠近敌人靠 InternalSummonMoveGoal.tick() → getNavigation().moveTo(目标)，出招靠 InternalSummonAttackGoal（判据 distanceTo(target) < attackrange）。765 的 PathNavigationRiddenGuardMixin 把 moveTo 一并拦掉，等于连它「靠近目标」这一步也拦了：它够不到敌人 → 一个技能都放不出来，现场就是「站在原地不动、只剩背上的女仆在打」。修法：**按它有没有攻击目标分档**——(a) MaidRideKit.skillNavBlocked 新增一条「它此刻自己有 getTarget() → 放行」；(b) RideBindManager.drive 开头新增一档：isNoSaddleRideable(mount) 且 mob.getTarget() != null 时，只把她的目标继续写进它（tickAttack），走位与停车**一个字都不写**，整条让位给它自己的战斗 AI。平时（它没有目标）行为一字不变：走位归女仆，我们继续挡住它自己的闲逛。范围仍严格限定在「我们棍子绑的女仆正骑着的无鞍可骑仆从」——原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、无主女仆骑的怪，一个字节不动。
+
+【实测七百六十五】无鞍可骑仆从后门二期：骑乘时「拀位归她、技能照放」+ 主人空手右击直接接管
+  承接 764（无鞍可骑仆从后门）。玩家原话：「这些仆从都是会在骑乘的时候攻击的，哪怕主人骑乘的时候，他们也会攻击，并且主人也不太能移动他们。所以我希望这些仆从也不要只听女仆操纵，技能还是要放的。」定档：**女仆开、技能照放**；技能目标沿用「女仆指定的目标」；主人想骑 = **主人直接接管**。
+  【根因（反编译 goety-3.1.5.1 实证）】诡厄巫法的 RedstoneMonstrosity 一类可骑仆从，技能全在**它自己的 goalSelector** 里，而且会直接动**它自己的寻路**：MeleeGoal.tick() 与 BelchGoal.tick() 每拍 getNavigation().stop()，AttackGoal（MeleeAttackGoal）每 10 拍 moveTo(目标)。而我们的驱动（RideBindManager.driveLandMount）走的是「把女仆的走位意图喂给坐骑自己的 PathNavigation」——**同一只导航**。两边轮流写：技能一放招就把导航停掉/改向，我们下一拍再喂回来 → 反复拉锯，现场就是「技能一放它就僵在原地」。
+  【修法一：技能不许抠走位】新增 mixin PathNavigationRiddenGuardMixin（两树同名，已登记进 mixins.promaid.json），挂在 PathNavigation 上拦两个出口：moveTo(Path,double)（**所有**寻路喂入的唯一漏斗，moveTo(Entity,)/moveTo(x,y,z,) 都转调它）与 stop()（清路的唯一出口）。判据 = MaidRideKit.skillNavBlocked：只拦「我们棍子绑的女仆正在骑 + 无鞍可骑仆从」那一类（四道判据：授权牌 / 没人骑 / 不是我们绑的 / 不是无鞍可骑 → 一律放行）；**我们自己的喂入/停车**由 navFeedAuthorize/navFeedRelease 开一条放行。关键：技能的攻击判定本身**不依赖导航**（MeleeGoal/BelchGoal 是就近 AoE、SummonGoal 原地召唤，目标由 RideBindManager 每拍写进它的 getTarget()）——所以「拦导航」只挡走位、**不挡出招**，正是玩家要的「技能照放、走位别抢」。
+  【修法二：主人直接接管】新增 RideBindManager.tryOwnerTakeover（两树同步）：主人**空手**右击一只**自己女仆正骑着的无鞍可骑仆从**时，先把女仆干净请下来（releaseMaid 全套：撑标记/断链路/还原坐姿），再把这一下右击**不 cancel**、继续交给诡厄自己的 mobInteract → doPlayerRide 把主人骑上去。判据四条：空手 + 是无鞍可骑仆从 + 驼的是这位玩家自己的、我们绑的女仆（isRideRider）+ 玩家是它的**真正主人**（反射诡厄 IOwned.getTrueOwner，拿不到就不接管——因为 Goety 自己也不会让非主人骑上去）。为什么必须先请女仆下来：Goety 的 mobInteract 在 getFirstPassenger() != null 时会**直接把现有乘客踢下来**，不先请就会被它粗暴踢掉、我们这边链路/标记/坐姿全成脏状态。
+  范围：只动这一类「无鞍可骑仆从」（MaidRideKit.isNoSaddleRideable，与 764 同口径）。原版马/骆驼/卓越前线载具/冰火传说龙、别的模组生物、无主女仆骑的怪 —— 一个字节不动。
+
+【实测七百六十四】无鞍可骑仆从后门：让女仆能骑诡厄巫法的红石巨兽这类"没鞍可装"的模组仆从
+  起因（玩家原话）：「像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的套用代码的仆从
+  （下界合金巨兽），这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个后门让女仆可以骑乘那些？」
+  【根因】这一类仆从实现的是原版 PlayerRideable——**一个方法都没有的空标记接口**——或者诡厄自己的
+  IAutoRideable，**都不是 Saddleable**。原版骑它们的入口是 mobInteract 里那一记 doPlayerRide(player)
+  （反编译实证）：主人空手右击一下就直接 startRiding，**全程没有鞍这一环**。而我们原来的 isRideableMount
+  只认「Saddleable && isSaddled」，于是整类被挡在门外，还会回一句"它不是能上鞍的坐骑～"。
+  【修法】新增判据 MaidRideKit.isNoSaddleRideable = **是 Mob + 声明了 PlayerRideable（编译期判据）
+  或诡厄 IAutoRideable（反射探测其接口表，兼容官方 com.Polarice3.Goety 与万法皆通 za.co.infernos.goety
+  两套包根）+ 不能装鞍**。isRideableMount / denyReason / isRideRider 三处同步放宽——isRideRider 那处是
+  必须的，否则她骑上去之后 isOurRider 认不出她、就下不来了。开关：combat.ride.noSaddlePets（默认开）。
+  【为什么判据里"不能装鞍"那条必须留着】否则没上鞍的原版马 / 骆驼也会落进本档，把 denyReason 里
+  「先给它装上鞍再绑给我吧」那道闸整个绕过，变成一个"凭空可骑"的 bug。所以本档只放行"从来没有鞍这一环"
+  的仆从，原版兽的装鞍语义一字不改。
+  【覆盖面（本地 jar 逐类解析实证，不写死任何 id）】官方 goety-3.1.5.1 / goety-2.5.58.4 各 17 个：
+  红石巨兽 · 熊 · 啃噬者(Gnasher) · 疣猪兽仆从 · 劫掠兽(ModRavager) · AllyTrampler · 僵尸劫掠兽 ·
+  蜘蛛仆从及其骷髅/洞穴/冰霜/蛛网变体 · 育母蜘蛛 · Wartling · BoneSpider 等；诡厄灾变(goety_cataclysm)
+  的下界合金巨兽仆从(NetheriteMonstrosityServant) · AncientRemnantServant · LeviathanServant。
+  这些 jar 里**全部 SADDLE=False**（反编译接口表实证），正是"不能装鞍"。
+  【驱动】骑上去之后走的是已有的"直接换成她自己的移动逻辑"那一档（RideBindManager.driveLandMount，
+  与原版马 / 骆驼同一条路）——它是 Mob、有 PathNavigation，跟随 / 作战与其他陆地坐骑一致，零新增驱动代码。
+  【明确不做】诡厄灾变**本体**那个"宠物版下界合金巨兽"（Netherite_Ministrosity_Entity，会背箱子）逐项查过
+  **完全没有任何骑乘挂钩**（无 PlayerRideable / Saddleable / doPlayerRide），硬上只能靠"悬空挂位"，
+  这一版不做。
+  【两树同改】1.21.1 与 1.20.1 同一套判据（PlayerRideable 两版都在，1.20.1 侧成员名走 SRG）；面板新增
+  「无鞍可骑仆从（诡厄巫法等）」一行，手册第一节 / 第九节补上说明，两语言文件补键。
+
+【实测七百六十三】把七百六十二 那次 issue 复核里"还剩的账"一并收掉（#19 同族链路收口、#33 墓碑=物品两份、#30 收尾、#29 英文 lang、#28 home 圈外死锁）
   承接 762：那一批修了 #27 / #31 / 1.21.1 映射写错 / #19 的部分链路；这一批把同族剩下的四条缝与两处小账清完。
   【#19 第二次收口：同族链路全部接上诚实取材】762 只补了战斗放置与索引石补支撑，这批再补
   ① 蓝图建造（BlueprintMaterials.extractExact 与"等价族"那条循环）；

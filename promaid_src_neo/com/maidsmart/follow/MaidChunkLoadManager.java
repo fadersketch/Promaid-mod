@@ -1023,8 +1023,17 @@ BlockPos stand = findStand(newLevel,
                 // ——她是乘客、旧判据会把她当"玩家明确停放"留下来；这一档单独放行，
                 // 落到下面 summonMaidTo 的"先请她下车再传人"那支。
                 boolean selfBoarded = com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(md);
-                if (!broomRider && !rideRider && !specialRider && !selfBoarded && (md.isMaidInSittingPose()
-                        || md.isPassenger() || (md.isHomeModeEnable() && !isBuildingMaid(md)))) {
+                // 【实测七百六十六】在家模式（守家）优先于上面全部"骑乘例外"：扫帚 / 坐骑 /
+                // 特殊载具 / 她自己坐上去的模组载具，哪一条都不该把守家中的她拽走。旧口径把
+                // home 判据塞在 "!broomRider && ..." 的**后面**，于是"扫帚模式 + 在家模式"
+                // 一起开时 broomRider 抢先放行 → 正在家中巡逻/盘旋的她照样被一键集合召回
+                // （玩家实测）。建造女仆的老口径不变（建造强制 home，但可被召回）。
+                if (md.isHomeModeEnable() && !isBuildingMaid(md)) {
+                    kept++;
+                    continue;
+                }
+                if (!broomRider && !rideRider && !specialRider && !selfBoarded
+                        && (md.isMaidInSittingPose() || md.isPassenger())) {
                     kept++;
                     continue;
                 }
@@ -1145,8 +1154,12 @@ BlockPos stand = findStand(newLevel,
                     boolean specialRider = com.maidsmart.combat.RideBindManager.isSpecialMountRider(md);
                     // 【实测七百四十一·点4】"她自己坐上去的模组载具"同理放行（见 summonAll 那段注释）。
                     boolean selfBoarded = com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(md);
-                    if (!broomRider && !rideRider && !specialRider && !selfBoarded
-                            && (md.isHomeModeEnable() || md.isMaidInSittingPose() || md.isPassenger())) {
+                    // 【实测七百六十六】在家模式（守家）优先于全部"骑乘例外"（与 summonAll 同口径）：
+                    // 扫帚/坐骑/特殊载具/自坐模组载具都不该把守家中的她拽走。建造女仆的老口径不变
+                    // （强制 home 但可召回——她不再进这个"保持原位"分支，直接落到下面的召回）。
+                    boolean homeKept = md.isHomeModeEnable() && !isBuildingMaid(md);
+                    if (homeKept || (!broomRider && !rideRider && !specialRider && !selfBoarded
+                            && (md.isMaidInSittingPose() || md.isPassenger()))) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
                         // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
@@ -1401,6 +1414,12 @@ BlockPos stand = findStand(newLevel,
             if (maid.isRemoved() || maid.isDeadOrDying()) {
                 return 3; // 死亡/已移除——与一键集合同口径
             }
+            // 【实测七百六十六】在家模式（守家）→ 状态豁免，优于下面全部"骑乘例外"（扫帚 / 坐骑 /
+            // 特殊载具 / 自坐模组载具）。旧口径把 home 判据放在那些例外**之后**，于是"扫帚模式 +
+            // 在家模式"一起开时，正在家中巡逻/盘旋的她照样被"召她过来"拽走（玩家实测）。
+            if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
+                return 3;
+            }
             // v1.3.6 实测六百六十一：骑扫帚的女仆**不再被"骑乘中"顶回去**——她本来就是乘客，
             // 旧口径会让她永远召不回（玩家原话：「否则隔的太远女仆就找不回来了」）。
             // 走连人带扫帚那条路：能一起搬就一起搬，搬不动就"就地收工 → 传她 → 她自己骑上"。
@@ -1452,6 +1471,11 @@ BlockPos stand = findStand(newLevel,
         if (maid.isRemoved() || maid.isDeadOrDying()) {
             return false; // 已移除 / 死亡
         }
+        // 【实测七百六十六】守家钉死：home（在家）模式优于下面全部"骑乘例外"——旧口径把
+        // home 判据放在那些例外**之后**，"扫帚模式 + 在家模式"一起开时她照样被传走。
+        if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
+            return false;
+        }
         // v1.3.6 实测六百六十一：骑扫帚的走"连人带扫帚"那条（她永远是乘客，旧口径 = 永久豁免）
         if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
             return owner.isAlive() && recallBroomRider(maid, owner);
@@ -1481,7 +1505,8 @@ BlockPos stand = findStand(newLevel,
             return false; // 骑乘中（别的载具：船/矿车/椅子——玩家明确停放，不拉）
         }
         // v1.1.0 实测二百七十五：建造女仆可召回（建造强制 home 但召回豁免）
-        if ((maid.isHomeModeEnable() && !isBuildingMaid(maid)) || !owner.isAlive()) {
+        // 【实测七百六十六】home 那一半已提到本方法最前面（守家优于骑乘例外），这里只剩主人存活。
+        if (!owner.isAlive()) {
             return false;
         }
         return teleportCore(maid, owner, true);

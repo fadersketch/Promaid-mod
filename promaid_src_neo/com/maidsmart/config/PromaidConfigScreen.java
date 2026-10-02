@@ -3383,6 +3383,37 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                 "**默认开**。骑卓越前线载具或冰火传说龙时，把她 brain 里的攻击目标交给坐骑去打——"
                         + "载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路，龙走吐息。"
                         + "关闭 = 她照常驾驶但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效"));
+        // 【无鞍可骑仆从后门】玩家原话："像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的
+        // 套用代码的仆从（下界合金巨兽），这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个
+        // 后门让女仆可以骑乘那些？"
+        this.rows.add(new BoolRow("无鞍可骑仆从（诡厄巫法等）", MaidSmartConfig.COMBAT_RIDE_NO_SADDLE_PETS.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_NO_SADDLE_PETS.set(v),
+                "**默认开**。让女仆能骑那些**不需要鞍**、原版靠「主人空手右击一下就骑上去」的模组仆从"
+                        + "——比如诡厄巫法的红石巨兽/熊/劫掠兽/蜘蛛系，以及套用同一套代码的整合包仆从"
+                        + "（如诡厄灾变的下界合金巨兽仆从）。"
+                        + "判据（不写死任何实体 id）：是 Mob + 声明了原版 PlayerRideable 或诡厄 "
+                        + "IAutoRideable + **不能装鞍**。最后一条是关键——没上鞍的原版马/骆驼仍然走"
+                        + "「先给它装上鞍」那道闸，不会被这条规则绕过。"
+                        + "怎么骑同原版兽：拿骑乘指挥棒先右击那只仆从、再右击女仆。"
+                        + "关闭 = 只认已上鞍的坐骑，这些仆从一律照原版（女仆骑不上去）"));
+        // v1.3.0(beta) 实测七百七十【模组仆从坐骑：单独一个区间】
+        this.rows.add(new BoolRow("模组仆从坐骑·单独区间（只赋速度）", MaidSmartConfig.COMBAT_RIDE_SERVANT_AUTO.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_SERVANT_AUTO.set(v),
+                "**默认开**。对**无鞍可骑的模组仆从**（诡厄巫法/诡厄灾变的红石巨兽、下界合金巨兽仆从这一族）："
+                        + "女仆坐上去**只赋予它自己的速度**，其余行动逻辑**全部换成仆从自己的 AI**"
+                        + "——它自带的锁敌（SummonTargetGoal/ServantHurtByTargetGoal）自主选敌、"
+                        + "自带的巡逻/接近/技能 goal 自己跑；本模组不再喂走位、不再写目标、不再替它出招。"
+                        + "**home 模式例外**：那时坐骑会停下来（所有坐骑通用的例外）。"
+                        + "范围：判据只在「无鞍可骑模组仆从」上；原版马/骆驼、卓越前线载具、冰火传说龙、"
+                        + "别的模组生物、通用骑乘逻辑一律不受影响。关闭 = 回到「我们替它开火」的旧口径"));
+        this.rows.add(new BoolRow("模组仆从坐骑·伤害转移给坐骑", MaidSmartConfig.COMBAT_RIDE_SERVANT_TRANSFER.get(),
+                v -> MaidSmartConfig.COMBAT_RIDE_SERVANT_TRANSFER.set(v),
+                "**默认开**。女仆骑着**无鞍可骑模组仆从**时，她受到的伤害**转给身下的仆从**"
+                        + "（同源打到它身上，仇恨也顺势落到它身上）。"
+                        + "**不转移**：环境自伤（虚空 outOfWorld / 卡墙 inWall / 挤压 cramming / 撞墙 "
+                        + "flyIntoWall）——它们是每拍重复的伤害、且她与坐骑通常在同一处，转了只会一起被挤死。"
+                        + "其余（近战/弹射物/爆炸/火/岩浆/毒…）一律转移。"
+                        + "范围：只在「我们棍子绑的女仆正骑着的无鞍可骑模组仆从」上；其余任何实体受伤一律不受影响"));
         // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】
         this.rows.add(new BoolRow("骑乘指挥棒·独占右击", MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.get(),
                 v -> MaidSmartConfig.COMBAT_RIDE_BATON_EXCLUSIVE.set(v),
@@ -3519,6 +3550,9 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         // v1.1.0：女仆互助开关（只影响女仆↔女仆，主人链不受影响）
         this.rows.add(new BoolRow("女仆之间互相支援", MaidSmartConfig.AID_MAID_MUTUAL.get(),
                 v -> MaidSmartConfig.AID_MAID_MUTUAL.set(v), "女仆之间互相支援（默认开）：同主人、16 格内的其他女仆低血/着火/中毒时，自动投药水/金苹果/喂食支援她（与支援主人同一套方案，主人优先）；关闭 = 女仆只照顾主人、不互相支援"));
+        // v1.3.0(beta) 实测七百七十一：支援范围扩大到其他友方单位（主人的其他宠物 / 同主人的模组仆从）
+        this.rows.add(new BoolRow("支援其他友方单位", MaidSmartConfig.AID_FRIENDLY_UNITS.get(),
+                v -> MaidSmartConfig.AID_FRIENDLY_UNITS.set(v), "支援其他友方单位（默认开）：主人的其他宠物（原版狼/猫/马等）与同主人的模组仆从（如诡厄巫法红石巨兽）低血/着火/中毒时，自动投药水、金苹果、牛奶蜂蜜支援它们。判据 = 归属同一主人（原版宠物与模组仆从的共同特点就是\"都归属于一位主人\"）；它们没有饥饿值，所以只给药水/金苹果/牛奶蜂蜜，不喂普通食物、不给不死图腾；关闭 = 只支援主人与女仆"));
         this.rows.add(new NumRow("投喂触发饱食度", String.valueOf(MaidSmartConfig.AID_FOOD_THRESHOLD.get()),
                 s -> setInt(MaidSmartConfig.AID_FOOD_THRESHOLD, s), "投喂触发饱食度（4-20，20=只要不满就喂）：主人饱食度低于此值自动喂食（默认 12）——v1.5.301 起填 20 真实生效（旧版范围上限 18，填 20 被静默钳回 18）"));
         this.rows.add(new BtnRow("投喂食物勾选",

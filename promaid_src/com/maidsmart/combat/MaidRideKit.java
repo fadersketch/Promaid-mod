@@ -241,12 +241,251 @@ public final class MaidRideKit {
             if (!(e instanceof Mob)) {
                 return false;
             }
+            // 【无鞍可骑仆从后门】诡厄巫法的红石巨兽一类：实现 PlayerRideable/IAutoRideable
+            // 但**没有鞍**这一环（原版靠"空手右击即上车"）。必须在下面那条 Saddleable 闸之前认。
+            if (isNoSaddleRideable(e)) {
+                return true;
+            }
             if (!(e instanceof Saddleable saddle) || !saddle.m_6254_()) {
                 return false; // 没上鞍：原版语义不许骑（我们不替她装鞍）
             }
             return e.m_20197_().isEmpty() || e.m_20197_().get(0) == maid;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /* ==================== 【无鞍可骑仆从后门】 ==================== */
+
+    /** 无鞍可骑的总开关（配置 combat.ride.noSaddlePets，默认开）。 */
+    public static boolean noSaddlePetsEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_NO_SADDLE_PETS.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /**
+     * 这只仆从是不是"声明了可骑、但压根没有鞍"的那一类——本模组的**后门**判据。
+     *
+     * <h2>玩家原话</h2>
+     * 「像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的套用代码的仆从（下界合金巨兽），
+     *  这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个后门让女仆可以骑乘那些？」
+     *
+     * <h2>根因（反编译实证，本地 goety-3.1.5.1 / goety-2.5.58.4 / goety_cataclysm 三个 jar）</h2>
+     * 这些仆从实现的是原版 {@code net.minecraft.world.entity.PlayerRideable}——一个
+     * **一个方法都没有的空标记接口**——或者诡厄自己的
+     * {@code com.Polarice3.Goety.api.entities.IAutoRideable}；**都不是** {@link Saddleable}。
+     * 原版红石巨兽的骑乘入口是 {@code mobInteract} 里那一记 {@code doPlayerRide(player)}
+     * （反编译实证）：主人空手右击一下就直接 {@code startRiding}，全程没有鞍。而本模组原来的
+     * 判据只认"已上鞍的 Saddleable"，于是整类被挡在门外，回一句"它不是能上鞍的坐骑～"。
+     *
+     * <h2>判据（不写死任何实体 id，两树共用）</h2>
+     * <ol>
+     *   <li>是 {@link Mob}（要能喂它自己的 {@code PathNavigation}，与通用档同口径）；</li>
+     *   <li>声明了 {@code PlayerRideable}（编译期判据）或诡厄的 {@code IAutoRideable}
+     *       （反射探测，编译期不依赖诡厄）；</li>
+     *   <li><b>不能装鞍</b>—— {@code !(e instanceof Saddleable)}。</li>
+     * </ol>
+     * 第 ③ 条是**必须留着**的：否则"没上鞍的原版马/骆驼"也会落进本档，把
+     * {@code denyReason} 里"先给它装上鞍再绑给我吧～"那道闸整个绕过（变成一个凭空可骑的 bug）。
+     * 所以本档只放行"从来没有鞍这一环"的仆从，原版兽的装鞍语义一字不改。
+     *
+     * <p>【为什么不是"凡是 PlayerRideable 全放行"】扫描本地全部模组 jar 后发现：光看接口会把
+     * 突变生物的蜘蛛猪、ALEX 洞穴的独角兽这类**别的模组自己的可骑生物**也一起放行；它们与我们的
+     * 驱动链路没有适配过。玩家要的是诡厄这一类（同一套 {@code IAutoRideable} 代码被整合包仆从
+     * 沿用），所以窄判据 = {@code PlayerRideable} **或** {@code IAutoRideable}，二者取并集正好
+     * 覆盖红石巨兽与下界合金巨兽仆从，又不会把无关模组的坐骑卷进来。
+     */
+    public static boolean isNoSaddleRideable(Entity e) {
+        try {
+            if (!noSaddlePetsEnabled()) {
+                return false;
+            }
+            if (!(e instanceof Mob)) {
+                return false;
+            }
+            if (e instanceof Saddleable) {
+                return false; // 有鞍这一环的（原版兽）走原来的装鞍语义，本条不碰
+            }
+            if (e instanceof net.minecraft.world.entity.PlayerRideable) {
+                return true; // 原版标记接口（编译期判据；红石巨兽、下界合金巨兽仆从都实现了它）
+            }
+            // 诡厄自己的接口：整条链路上它不一定被声明，只声明在类上，所以按类名反射探测其接口表，
+            // 编译期不依赖诡厄（没装 / 换版本 → false，一个字节都不碰）。两套包根与
+            // {@code MaidGoetyCompat.ROOTS} 同口径（官方版在前，万法皆通 1.21 分支那套在后）。
+            Class<?> c = e.getClass();
+            while (c != null) {
+                for (Class<?> itf : c.getInterfaces()) {
+                    String n = itf.getName();
+                    if (n.endsWith(".api.entities.IAutoRideable")
+                            && (n.startsWith("com.Polarice3.Goety") || n.startsWith("za.co.infernos.goety"))) {
+                        return true;
+                    }
+                }
+                c = c.getSuperclass();
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /* ==================== 【实测七百七十·模组仆从坐骑：单独一个区间】 ==================== */
+
+    /**
+     * 【实测七百七十】"模组仆从坐骑"单独一个区间——与卓越前线载具同级的通解档。
+     *
+     * <h2>玩家定档（原话）</h2>
+     * 「女仆坐上去只会赋予仆从相应的速度，其余的行动逻辑全都换成仆从自己的。（如果开启 home 模式，
+     * 那么坐骑还是会停下来，这一点是通用的）」「如果女仆受到了伤害，会将伤害转移给身下坐着的仆从。」
+     * 并明确要求：「只对 mod 类仆从类生效，就跟卓越前线一样是单独开了个区间。不影响其他区间以及
+     * 原版生物或者通用的骑乘逻辑。」
+     *
+     * <h2>区间判据 = {@link #isNoSaddleRideable}</h2>
+     * 诡厄巫法 / 诡厄灾变的"无鞍可骑仆从"（红石巨兽、下界合金巨兽仆从这一族）。它们**自带一整套
+     * 战斗 AI**：{@code targetSelector} 里有 {@code SummonTargetGoal}/{@code ServantHurtByTargetGoal}
+     * 自主锁敌，{@code goalSelector} 里有巡逻 / 接近 / 全部技能（反编译 goety-3.1.5.1 与
+     * goety_cataclysm 实证）。女仆骑上它之后，本模组**只做两件事**：
+     * <ol>
+     *   <li>{@link #applyRiddenSpeed}：把她的移动速度赋给坐骑（"只会赋予仆从相应的速度"）；</li>
+     *   <li>{@link #reopenRiddenCombatGoals}：把它自己的 goal 控制位开回来，让它的 AI 在"被骑"
+     *       状态下照常运转（否则它的 goal 会被原版驾驶规则整个掐停，见那个方法）。</li>
+     * </ol>
+     * 除此之外**一个字都不写**——不再喂走位、不再写目标、不再拦它的寻路、不再强制它出招。
+     * 唯一例外是 home 模式：那时**不**给它开控制位 = 它的 goal 全停 = 坐骑停住（玩家要求保留的
+     * 通用例外）。**原版马 / 骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑一律不受
+     * 本区间影响**（判据只在 {@link #isNoSaddleRideable} 上）。1.20.1 与 1.21.1 两树逐字同源。
+     */
+    public static boolean servantAutoEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_SERVANT_AUTO.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /** 【实测七百七十】女仆受伤转给坐骑的总开关（配置 {@code combat.ride.servantTransfer}，默认开）。 */
+    public static boolean servantTransferEnabled() {
+        try {
+            return com.maidsmart.config.MaidSmartConfig.COMBAT_RIDE_SERVANT_TRANSFER.get();
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    /* ==================== 【实测七百七十·只给速度】 ==================== */
+
+    /** 我们给坐骑挂的"女仆速度"修改器的名称（1.20.1 用名称派生 UUID；1.21.1 用同一名称派生的注册名）。 */
+    private static final String SERVANT_SPEED_NAME = "maid_smart:ride_servant_speed";
+
+    /**
+     * 【实测七百七十】把她的移动速度赋给这只模组仆从坐骑——本区间我们唯一做的"行动"。
+     *
+     * <p>做法：每拍把坐骑 {@code MOVEMENT_SPEED} 上的"我们的修改器"更新成
+     * {@code 她的速度 × speedScale() − 它不带我们修改器时的速度}（ADDITION）——于是它的**有效速度
+     * 恰好等于她**，且随时跟着她的属性变（好感度 / 装备 / 药水都会变）。同一 id 覆盖 = 幂等；
+     * 解绑时由 {@link #clearRiddenSpeed} 摘掉，不留痕、不写存档（transient 修改器不落 NBT）。
+     */
+    public static void applyRiddenSpeed(Entity mount, EntityMaid maid) {
+        try {
+            if (!(mount instanceof LivingEntity le) || maid == null) {
+                return;
+            }
+            net.minecraft.world.entity.ai.attributes.AttributeInstance inst =
+                    le.m_21051_(Attributes.f_22279_); // f_22279_ = MOVEMENT_SPEED
+            if (inst == null) {
+                return;
+            }
+            double hers = maid.m_21133_(Attributes.f_22279_) * speedScale();
+            if (!(hers > 0.0)) {
+                return;
+            }
+            UUID id = java.util.UUID.nameUUIDFromBytes(SERVANT_SPEED_NAME.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            if (inst.m_22111_(id) != null) { // m_22111_ = getModifier(UUID)
+                inst.m_22120_(id);           // m_22120_ = removeModifier(UUID)
+            }
+            double base = inst.m_22135_();   // m_22135_ = getValue
+            inst.m_22118_(new net.minecraft.world.entity.ai.attributes.AttributeModifier(
+                    id, SERVANT_SPEED_NAME, hers - base,
+                    net.minecraft.world.entity.ai.attributes.AttributeModifier.Operation.ADDITION));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 摘掉 {@link #applyRiddenSpeed} 挂的修改器（解绑 / 链路失效时）。 */
+    public static void clearRiddenSpeed(Entity mount) {
+        try {
+            if (mount instanceof LivingEntity le) {
+                net.minecraft.world.entity.ai.attributes.AttributeInstance inst =
+                        le.m_21051_(Attributes.f_22279_);
+                if (inst != null) {
+                    UUID id = java.util.UUID.nameUUIDFromBytes(SERVANT_SPEED_NAME.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+                    inst.m_22120_(id);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /* ==================== 【实测七百七十·把它自己的 AI 开回来】 ==================== */
+
+    /**
+     * 【实测七百七十】把"被女仆骑着"误关掉的 goal 控制位开回来，让模组仆从坐骑用它自己的 AI。
+     *
+     * <h2>根因（javap 两版逐字实证）</h2>
+     * 原版 {@code Mob.m_8022_()}（= updateControlFlags，{@code f_19797_ % 5 == 0} 时由
+     * {@code Mob.m_8119_()} 调用）第一句就是
+     * {@code flag = !(this.getControllingPassenger() instanceof Mob);}，随后把 {@code goalSelector}
+     * 的 {@code MOVE}/{@code JUMP}/{@code LOOK} 设成 {@code flag}——「**驾驶者是个生物** → 坐骑
+     * 自己的 goal 全部停摆」。而 {@code getControllingPassenger()} 认的正是"第一乘客是 {@code Mob}"
+     * ——**女仆就是个 Mob**。诡厄 {@code Summoned.m_8022_()} 又在这之上把 {@code TARGET} 一并关掉。
+     * {@code GoalSelector} 于是把所有带这些控制位的 goal 直接 {@code stop()}：诡厄灾变的下界合金
+     * 巨兽仆从（反编译实证）的接近（{@code InternalSummonMoveGoal}）与全部技能
+     * （{@code SMASH}/{@code EARTHQUAKE}/{@code MagmaShoot}/{@code FlareShoot}/{@code ShoulderCheck}）
+     * 恰好全带这些位 ⇒ 它一步走不了、一招放不出。
+     *
+     * <h2>本区间口径（与 768 的差别）</h2>
+     * 768 只在"它此刻有目标"时开、且我们还要替它写目标、替它带路；770 起**整段让给它自己的 AI**：
+     * 由 {@code MobRiddenControlFlagsMixin} 在 {@code Mob.m_8119_()} 里 {@code m_8022_()} 的
+     * **调用之后立刻**回调本方法（调用点注入，天然兼容诡厄的重写版本），判据全部命中就把
+     * MOVE / LOOK / JUMP / TARGET 一起开回来（含 TARGET，因为诡厄把它也关了）：
+     * <ol>
+     *   <li>总开关开着（{@link #servantAutoEnabled}）；</li>
+     *   <li>是 {@link #isNoSaddleRideable} 的模组仆从（只治这一类）；</li>
+     *   <li>第一乘客是女仆、且是我们棍子绑上去的（{@link #isDriven}）；</li>
+     *   <li>她**不在 home 模式**——home 模式不接管，控制位保持关闭 = 它自己的 goal 全停 = 坐骑停住
+     *       （玩家明确要求保留的通用例外）。</li>
+     * </ol>
+     * 开回来之后它用自己的 {@code SummonTargetGoal} 自主锁敌、用自己的接近 goal 追、用自己的技能
+     * 出招——完全"换成仆从自己的"。**重开 TARGET 不会让它攻击背上的女仆**：反编译
+     * {@code MobUtil.isOwnedTargetable(仆从, 女仆)} 对"非敌对、未被记仇"的目标返回 false，且
+     * {@code SummonTargetGoal.canUse()} 显式排除 {@code getTrueOwner()}。
+     *
+     * <p>不满足判据 → 一个控制位都不动，原版（含诡厄）行为逐字节不变。1.20.1 与 1.21.1 两树同源。
+     */
+    public static void reopenRiddenCombatGoals(Mob mount) {
+        try {
+            if (!servantAutoEnabled()) {
+                return;
+            }
+            if (mount == null || !isNoSaddleRideable(mount)) {
+                return;
+            }
+            if (!(mount.m_146895_() instanceof EntityMaid maid)) { // m_146895_ = getFirstPassenger
+                return;
+            }
+            if (!isDriven(mount)) {
+                return;
+            }
+            if (maid.isHomeModeEnable()) {
+                return; // home 模式：不接管 = 它自己的 goal 保持关闭 = 坐骑停住（通用例外）
+            }
+            mount.f_21345_.m_25360_(net.minecraft.world.entity.ai.goal.Goal.Flag.MOVE, true); // f_21345_ = goalSelector
+            mount.f_21345_.m_25360_(net.minecraft.world.entity.ai.goal.Goal.Flag.LOOK, true);
+            mount.f_21345_.m_25360_(net.minecraft.world.entity.ai.goal.Goal.Flag.JUMP, true);
+            mount.f_21345_.m_25360_(net.minecraft.world.entity.ai.goal.Goal.Flag.TARGET, true);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -276,6 +515,11 @@ public final class MaidRideKit {
             }
             if (!e.m_6084_()) {
                 return "它已经不在了……";
+            }
+            // 【无鞍可骑仆从后门】放在装鞍闸之前：红石巨兽这类本来就没有鞍这一环，不能回
+            // "它不是能上鞍的坐骑～"。
+            if (isNoSaddleRideable(e)) {
+                return null;
             }
             if (!(e instanceof Saddleable)) {
                 return "它不是能上鞍的坐骑～";
@@ -547,6 +791,11 @@ public final class MaidRideKit {
             if (!(v instanceof Mob)) {
                 return false;
             }
+            // 【无鞍可骑仆从后门】她现在骑的这只若是红石巨兽一类（声明可骑但没鞍），一样算
+            // "我们棍子绑上去的"——否则她骑上去之后 isOurRider 认不出她，就下不来了。
+            if (isNoSaddleRideable(v)) {
+                return true;
+            }
             if (!(v instanceof Saddleable saddle) || !saddle.m_6254_()) {
                 return false; // 现在骑的不是"已上鞍的坐骑"（船/矿车/别人的椅子一律不算）
             }
@@ -692,6 +941,9 @@ public final class MaidRideKit {
             if (!(mount instanceof Mob mob)) {
                 return;
             }
+            // 【实测七百七十】旧版的"喂导航授权令牌"（navFeedAuthorize/Release）与它配套的
+            // PathNavigationRiddenGuardMixin 已随本区间的重构一起删除：模组仆从坐骑不再由我们
+            // 喂走位，也就没有"我们自己在写导航"需要放行这回事了。
             if (mob.m_21573_() instanceof net.minecraft.world.entity.ai.navigation.GroundPathNavigation) {
                 // 渠道一：只会跑的坐骑 —— 1:1 走位（喂它自己的地面寻路）
                 mob.m_21573_().m_26519_(target.f_82479_, target.f_82480_, target.f_82481_, modifier);

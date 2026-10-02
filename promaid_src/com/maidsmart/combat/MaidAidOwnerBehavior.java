@@ -199,6 +199,7 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         boolean ownerNear = !(maid.m_20238_(owner.m_20182_()) > 16.0);
         if (!ownerNear) {
             this.aidMaidSisters(level, maid, gameTime);
+            this.aidFriendlyUnits(level, maid, gameTime); // 实测七百七十一：主人不在也支援友军
             return;
         }
         boolean aided = false;
@@ -312,6 +313,342 @@ public class MaidAidOwnerBehavior extends Behavior<EntityMaid> {
         // 旧版互助链在 tick 里被调用两次（主人不在分支 + 主链尾部）且无任何节流，
         // N 只女仆互邻时每 tick O(N²) 全量扫描 + 金苹果/喂食同样每 tick 连发。
         this.aidMaidSisters(level, maid, gameTime);
+        // v1.3.0(beta) 实测七百七十一：友军单位支援（主人的其他宠物 / 同主人的诡厄仆从等）
+        this.aidFriendlyUnits(level, maid, gameTime);
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百七十一【支援范围扩大：从"只支援女仆"到"支援其他友方单位"】。
+     *
+     * <h2>玩家原话</h2>
+     * 「能不能不要只支援女仆，还可以支援其他的友方单位呢？简单来说就是扩大支援的范围。」
+     * 并补充界定：「原版的那些宠物以及仆从这些有什么共同特点？他们都是算作友军的。」
+     * 「因为他们没有饥饿值，所以他们只能吃药水这些治疗效果……支援药水以及一些效用性食物
+     * （金苹果这种），也就是说相比于女仆间支援，等于少了普通的食物和不死图腾支援。」
+     *
+     * <h2>"友军"判据（唯一共同点 = 有主人，字节码实证）</h2>
+     * 原版宠物与模组仆从的共同特点就是<b>归属于同一位主人</b>——这正是原版
+     * {@code net.minecraft.world.entity.OwnableEntity}（唯一抽象方法 {@code getOwnerUUID()}）：
+     * <ul>
+     *   <li>原版宠物：{@code TamableAnimal}（狼/猫/鹦鹉/狐狸…）、{@code AbstractHorse}
+     *       （马/驴/骆驼…）**都实现 {@code OwnableEntity}**（javap 实证）；</li>
+     *   <li>模组仆从：诡厄巫法 {@code Owned} extends {@code PathfinderMob} implements
+     *       {@code IOwned, OwnableEntity}（javap 实证）——红石巨兽/下界合金巨兽全在这条链上。</li>
+     * </ul>
+     * 所以判据 = <b>目标是 {@code OwnableEntity} 且其 {@code getOwnerUUID()} 与本女仆的主人
+     * UUID 相同</b>。不写死任何实体 id、不挑"哪几种宠物/仆从"——凡是主人名下的可拥有单位一律算友军。
+     * 再叠一道 {@code isAlliedTo}（同队/同盟，与 {@link FriendlyFireGuard#isFriendly} 同口径），
+     * 让组队/整合包自定义的友方也享受支援。
+     *
+     * <h2>支援内容（比女仆间支援少两样）</h2>
+     * 友方单位<b>没有饥饿值</b>（宠物吃食靠 {@code Animal.isFood} 的繁殖/驯服语义，仆从更是
+     * 没有 FoodData）——普通食物喂了没有意义，不死图腾这类"塞背包/替他挡死"的机制也只对女仆
+     * 自己成立。所以本链只做：<b>药水（抗火 / 治疗 / 再生 / 饮用型直接喂）+ 效用性食物
+     * （金苹果 / 附魔金苹果）+ 负面效果解除（牛奶 / 蜂蜜）</b>；<b>不做</b>普通食物投喂与不死图腾。
+     *
+     * <h2>与女仆互助的关系</h2>
+     * 女仆（{@code EntityMaid}）本身也是 {@code OwnableEntity}，会被本链扫到——但**先跑的女仆互助
+     * 链已把同主女仆优先处理**（每轮最多救一个、成功即记 3 秒 CD），本链在同 tick 让位；
+     * 女仆互助链没救成（没道具/CD 内）时本链也不再重复处理同主女仆，避免"女仆吃两遍"。
+     * 开关见 {@link com.maidsmart.config.MaidSmartConfig#AID_FRIENDLY_UNITS}；关掉 = 只支援主人与女仆。
+     */
+    private void aidFriendlyUnits(ServerLevel level, EntityMaid maid, long gameTime) {
+        if (!com.maidsmart.config.MaidSmartConfig.AID_FRIENDLY_UNITS.get()) {
+            return;
+        }
+        try {
+            java.util.UUID maidId = maid.m_20148_();
+            Integer c = this.aidCds.get(maidId);
+            if (c != null && c > 0) {
+                return; // 与女仆互助链共用同一个 3 秒间隔：主人链/姐妹链刚动过手就整轮让位
+            }
+            if (!this.hasFriendlyAidItem(maid)) {
+                return; // 没有可用支援道具 = 不扫描、不播报、不消耗
+            }
+            for (net.minecraft.world.entity.LivingEntity ally : level.m_45976_(
+                    net.minecraft.world.entity.LivingEntity.class,
+                    maid.m_20191_().m_82400_(16.0))) {
+                if (ally == maid || !ally.m_6084_() || ally.m_9236_() != level) {
+                    continue;
+                }
+                if (ally instanceof EntityMaid) {
+                    continue; // 女仆走专门的互助链（含普通食物/图腾），不在这里重复处理
+                }
+                if (ally.m_20148_().equals(maid.m_21805_())) {
+                    continue; // 主人走前面那条更完整的专属链（含喂食/图腾/塞背包），不在这里重复
+                }
+                if (!this.sameFriendlySide(maid, ally)) {
+                    continue; // 不是"我们这一边"的（非同主 / 非同队）→ 不碰
+                }
+                double hpRatio = ally.m_21223_() / Math.max(1.0f, ally.m_21233_());
+                String action = null;
+                // 1. 着火 → 抗火药水（同女仆链顺序：情境保命最先）
+                if (ally.m_6060_() && !hasEffectOn(ally, "minecraft:fire_resistance")) {
+                    if (this.throwPotionTo(level, maid, ally, FIRE_RESIST_POTIONS, "抗火", false) >= 0) {
+                        action = "扔了抗火药水";
+                    }
+                }
+                // 2. 负面效果 → 牛奶/蜂蜜（全解 / 解中毒；兽类没有"不想被清增益"的心智，同女仆链规则）
+                if (action == null && hasNegativeEffectOn(ally)) {
+                    action = this.feedAllyMilkOrHoney(maid, ally);
+                }
+                // 3. 低血 → 治疗链（喷溅/滞留治疗 → 金苹果 → 再生 → 饮用型直接喂）
+                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    if (this.throwPotionTo(level, maid, ally, HEAL_POTIONS, "治疗", true) >= 0) {
+                        action = "扔了治疗药水";
+                    }
+                }
+                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.goldenAppleOnAlly(maid, ally);
+                }
+                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    if (this.throwPotionTo(level, maid, ally, REGEN_POTIONS, "再生", true) >= 0) {
+                        action = "扔了再生药水";
+                    }
+                }
+                if (action == null && hpRatio < com.maidsmart.config.MaidSmartConfig.AID_HEALTH_THRESHOLD.get()) {
+                    action = this.feedDrinkablePotionToAlly(maid, ally, HEAL_POTIONS, "治疗", true);
+                }
+                // 注意：这里**没有**普通食物投喂、**没有**不死图腾——友军没有饥饿值，
+                // 这两样对它们无意义（见方法注释"支援内容"）。
+                if (action != null) {
+                    maid.getChatBubbleManager().addTextChatBubble("我来帮你！");
+                    String allyName = ally.m_5446_() != null
+                            ? ally.m_5446_().getString() : "友军";
+                    String maidName = maid.m_5446_() != null
+                            ? maid.m_5446_().getString() : "女仆";
+                    if (!com.maidsmart.combat.BuildShieldGuard.shouldMute(maid)) {
+                        for (net.minecraft.server.level.ServerPlayer viewer : level.m_6907_()) {
+                            viewer.m_213846_(net.minecraft.network.chat.Component.m_237113_(
+                                    "\u00a7a[maid_smart] " + maidName + " 支援了友军 " + allyName
+                                            + "：" + action));
+                        }
+                    }
+                    this.setAidCooldown(maidId, 60); // 与其它链共用 3 秒间隔
+                    return; // 每轮最多救一个
+                }
+            }
+        } catch (Exception ignored) {
+        }
+    }
+
+    /**
+     * v1.3.0(beta) 实测七百七十一：目标是不是"我们这一边"的友方单位。
+     *
+     * <p>判据两条（任一成立即友军）：<br>
+     * ① <b>同主</b>：目标实现 {@code OwnableEntity}（原版宠物 TamableAnimal/AbstractHorse、
+     *    模组仆从如诡厄 Owned 都在这条接口上——javap 实证），且其 {@code getOwnerUUID()} 与
+     *    本女仆主人的 UUID 相同。这是"原版宠物与仆从的共同特点 = 都归属于主人"的落地。<br>
+     * ② <b>同盟</b>：{@code isAlliedTo}（同队/同盟，与 {@link FriendlyFireGuard#isFriendly} 同口径）。
+     *
+     * <p>刻意<b>不</b>用 {@code getOwner()}（在线实体）：主人下线时它会变 null，
+     * 认领关系应跟着 UUID 走（与 {@link com.maidsmart.tool.MaidScope} 同一口径）。
+     * 全程只读 + 异常兜底 false。
+     */
+    private boolean sameFriendlySide(EntityMaid maid, net.minecraft.world.entity.Entity target) {
+        try {
+            java.util.UUID myOwner = maid.m_21805_();
+            if (target instanceof net.minecraft.world.entity.OwnableEntity owned) {
+                java.util.UUID theirOwner = owned.m_21805_();
+                if (myOwner != null && theirOwner != null && myOwner.equals(theirOwner)) {
+                    return true;
+                }
+            }
+            return maid.m_7307_(target); // isAlliedTo：同队 / 同盟
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** v1.3.0(beta) 实测七百七十一：友军链的可用道具预检——只看"药水 + 金苹果 + 牛奶/蜂蜜"
+     *  （友军不吃普通食物、不接图腾，见 aidFriendlyUnits 注释）。 */
+    private static boolean hasFriendlyAidItem(EntityMaid maid) {
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (isFriendlyAidItem(inv.getStackInSlot(i))) {
+                    return true;
+                }
+            }
+            return isFriendlyAidItem(maid.m_21205_()) || isFriendlyAidItem(maid.m_21206_())
+                    || com.maidsmart.tool.MaidExtraContainer.contains(maid,
+                            MaidAidOwnerBehavior::isFriendlyAidItem);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    /** 友军链认的支援道具：药水（饮用/喷溅/滞留）、金苹果/附魔金苹果、牛奶桶、蜂蜜瓶。
+     *  刻意<b>不含</b>普通食物——友军没有饥饿值（见 aidFriendlyUnits）。 */
+    private static boolean isFriendlyAidItem(ItemStack s) {
+        if (s == null || s.m_41619_()) {
+            return false;
+        }
+        net.minecraft.world.item.Item it = s.m_41720_();
+        if (it instanceof net.minecraft.world.item.PotionItem
+                || it instanceof net.minecraft.world.item.SplashPotionItem
+                || it instanceof net.minecraft.world.item.LingeringPotionItem) {
+            return true;
+        }
+        if (it == net.minecraft.world.item.Items.f_42437_
+                || it == net.minecraft.world.item.Items.f_42436_) {
+            return true;
+        }
+        net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
+        if (milk != null && it == milk) {
+            return true;
+        }
+        return it == net.minecraft.world.item.Items.f_42787_;
+    }
+
+    /** v1.3.0(beta) 实测七百七十一：给友军单位喂牛奶/蜂蜜（与姐妹链同款，只是目标泛化成 LivingEntity）。
+     *  牛奶直接 m_21219_()（全解）；蜂蜜走物品自己的进食逻辑解中毒并回饱食（对兽类无害）。 */
+    private String feedAllyMilkOrHoney(EntityMaid maid, net.minecraft.world.entity.LivingEntity ally) {
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42787_
+                        || "minecraft:milk_bucket".equals(String.valueOf(
+                                net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(s.m_41720_()))), -1);
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            net.minecraft.world.item.Item milk = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                    net.minecraft.resources.ResourceLocation.parse("minecraft:milk_bucket"));
+            if (milk != null) {
+                for (int i = 0; i < inv.getSlots(); i++) {
+                    ItemStack stack = inv.getStackInSlot(i);
+                    if (stack.m_41619_() || stack.m_41720_() != milk) {
+                        continue;
+                    }
+                    inv.extractItem(i, 1, false);
+                    ally.m_21219_(); // removeAllEffects（全解）
+                    net.minecraft.world.item.Item bucket = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                            .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:bucket"));
+                    if (bucket != null) {
+                        net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                                inv, new ItemStack(bucket), false);
+                    }
+                    maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                    playSoundAt(ally, "minecraft:entity.generic.drink");
+                    return "喂了牛奶（负面全解）";
+                }
+            }
+            net.minecraft.world.item.Item honey = net.minecraft.world.item.Items.f_42787_;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || stack.m_41720_() != honey) {
+                    continue;
+                }
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (taken.m_41619_()) {
+                    continue;
+                }
+                int eaten = com.maidsmart.combat.MaidMealBridge.eatByItemLogic(ally, taken);
+                if (eaten == 0) {
+                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, taken, false);
+                    continue;
+                }
+                // 不调 MaidMealBridge.applySelfEatingEffect——那是 TLM 女仆餐食系统专属
+                //（形参就是 EntityMaid）；友军是兽/仆从，走它自己的 finishUsingItem 回饱食即可。
+                ally.m_21195_(net.minecraft.world.effect.MobEffects.f_19614_);
+                playSoundAt(ally, "minecraft:entity.generic.drink");
+                net.minecraft.world.item.Item bottle = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                        .getValue(net.minecraft.resources.ResourceLocation.parse("minecraft:glass_bottle"));
+                if (bottle != null) {
+                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(
+                            inv, new ItemStack(bottle), false);
+                }
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                return "喂了蜂蜜瓶（解中毒+回饱食）";
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    /** v1.3.0(beta) 实测七百七十一：金苹果/附魔金苹果给友军（附魔优先，效果同姐妹链，
+     *  目标泛化成 LivingEntity——友军不食用普通食物，金苹果走即时增益路径）。 */
+    private String goldenAppleOnAlly(EntityMaid maid, net.minecraft.world.entity.LivingEntity ally) {
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() == net.minecraft.world.item.Items.f_42436_
+                        || s.m_41720_() == net.minecraft.world.item.Items.f_42437_, -1);
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            int bestSlot = -1;
+            boolean enchanted = false;
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_()) {
+                    continue;
+                }
+                net.minecraft.world.item.Item item = stack.m_41720_();
+                if (item == net.minecraft.world.item.Items.f_42437_) {
+                    bestSlot = i;
+                    enchanted = true;
+                    break;
+                }
+                if (item == net.minecraft.world.item.Items.f_42436_ && bestSlot < 0) {
+                    bestSlot = i;
+                }
+            }
+            if (bestSlot < 0) {
+                return null;
+            }
+            inv.extractItem(bestSlot, 1, false);
+            applyEffect(ally, "minecraft:absorption", 2400, enchanted ? 3 : 0);
+            applyEffect(ally, "minecraft:regeneration", enchanted ? 600 : 100, enchanted ? 4 : 1);
+            if (enchanted) {
+                applyEffect(ally, "minecraft:damage_resistance", 6000, 0);
+                applyEffect(ally, "minecraft:fire_resistance", 6000, 0);
+            }
+            maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+            playSoundAt(ally, "minecraft:entity.generic.eat");
+            return enchanted ? "喂了附魔金苹果" : "喂了金苹果";
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    /** v1.3.0(beta) 实测七百七十一：饮用型药水直接喂友军（finishUsingItem 强制饮用，空瓶返还；
+     *  目标泛化成 LivingEntity，与姐妹链 feedDrinkablePotionTo 同口径）。 */
+    private String feedDrinkablePotionToAlly(EntityMaid maid, net.minecraft.world.entity.LivingEntity ally,
+                                             java.util.Set<String> potionNames, String label, boolean useCd) {
+        com.maidsmart.tool.MaidExtraContainer.pull(maid, s -> s.m_41720_() instanceof net.minecraft.world.item.PotionItem, -1);
+        try {
+            net.minecraftforge.items.IItemHandler inv = maid.getAvailableBackpackInv();
+            for (int i = 0; i < inv.getSlots(); i++) {
+                ItemStack stack = inv.getStackInSlot(i);
+                if (stack.m_41619_() || !(stack.m_41720_() instanceof net.minecraft.world.item.PotionItem)) {
+                    continue;
+                }
+                if (!isPotionOf(stack, potionNames)) {
+                    continue;
+                }
+                if (useCd && !this.potionReady(
+                        potionCdKey(maid.m_20148_(), potionKey(stack)), maid.m_9236_().m_46467_())) {
+                    continue;
+                }
+                ItemStack taken = inv.extractItem(i, 1, false);
+                if (taken.m_41619_()) {
+                    continue;
+                }
+                ItemStack result = taken.m_41720_().m_5922_(taken, ally.m_9236_(), ally);
+                if (!result.m_41619_()) {
+                    net.minecraftforge.items.ItemHandlerHelper.insertItemStacked(inv, result, false);
+                }
+                if (useCd) {
+                    int maxDur = 0;
+                    for (net.minecraft.world.effect.MobEffectInstance e : potionEffectsOf(taken)) {
+                        maxDur = Math.max(maxDur, e.m_19557_());
+                    }
+                    this.markPotionUsed(
+                            potionCdKey(maid.m_20148_(), potionKey(taken)),
+                            maid.m_9236_().m_46467_(), maxDur > 0 ? maxDur : 60);
+                }
+                maid.m_6674_(net.minecraft.world.InteractionHand.MAIN_HAND);
+                playSoundAt(ally, "minecraft:entity.generic.drink");
+                return "喂了" + label + "药水";
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /** v1.1.0 实测六：给附近受伤/着火的姐妹女仆丢药水（治疗/再生；着火先抗火）

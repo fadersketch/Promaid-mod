@@ -507,6 +507,27 @@ public static final ModConfigSpec.IntValue BUILD_CHEST_FETCH_COOLDOWN;
     /** 骑模组载具/龙时要不要顺手替她开火（默认开）。 */
     public static final ModConfigSpec.BooleanValue COMBAT_RIDE_MOD_MOUNT_FIRE;
     /**
+     * v1.3.0(beta)【骑乘指挥棒·无鞍可骑仆从后门】。让女仆能骑那些**不需要鞍、原版靠"交互即上鞍"
+     * 才能骑**的模组仆从——诡厄巫法的红石巨兽/熊/劫掠兽/蜘蛛系，以及同一接口的整合包仆从
+     * （如诡厄灾变的下界合金巨兽仆从）。判据 = **是 Mob + 原版 {@code PlayerRideable} 标记
+     * 或诡厄 {@code IAutoRideable} + 不能装鞍**；默认开。见 {@code MaidRideKit.isNoSaddleRideable}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_NO_SADDLE_PETS;
+    /**
+     * v1.3.0(beta) 实测七百七十【模组仆从坐骑：单独一个区间】。对"无鞍可骑模组仆从"这一类
+     * （诡厄巫法/诡厄灾变的红石巨兽、下界合金巨兽仆从这一族）：女仆坐上去**只赋速度**，其余行动
+     * 逻辑全归它自己的 AI（它自带 targetSelector 锁敌 + goalSelector 巡逻/接近/全部技能）。
+     * 默认开。home 模式例外（不接管 = 它自己的 goal 全停 = 坐骑停住）。见
+     * {@code MaidRideKit.servantAutoEnabled} / {@code reopenRiddenCombatGoals}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_SERVANT_AUTO;
+    /**
+     * v1.3.0(beta) 实测七百七十【模组仆从坐骑·伤害转移】。女仆骑着"无鞍可骑模组仆从"时，
+     * 她受到的伤害转给身下的仆从（同源打到它身上）。默认开。环境自伤（虚空/卡墙/挤压/撞墙）
+     * 不转移。见 {@code ServantMountDamageTransfer}。
+     */
+    public static final ModConfigSpec.BooleanValue COMBAT_RIDE_SERVANT_TRANSFER;
+    /**
      * v1.3.0(beta) 实测七百二十【骑乘指挥棒·独占右击】。手持骑乘指挥棒时是否吞掉原本的实体右击
      * （含 interactAt）。默认开 = 拿棍子骑不上龙/车。完整口径见 1.20.1 树同名字段。
      */
@@ -1130,6 +1151,9 @@ public static final ModConfigSpec.IntValue COMBAT_PLACED_LIFETIME;
     public static final ModConfigSpec.BooleanValue AID_OWNER_ENABLE;
     // v1.1.0：女仆之间互相支援（同主人、16 格内的姐妹低血/着火时投药水/喂食）
     public static final ModConfigSpec.BooleanValue AID_MAID_MUTUAL;
+    // v1.3.0(beta) 实测七百七十一：支援范围扩大到其他友方单位（主人的其他宠物 / 同主人的
+    // 诡厄仆从等——判据 = OwnableEntity 且主人 UUID 相同；只给药水/金苹果/牛奶蜂蜜）
+    public static final ModConfigSpec.BooleanValue AID_FRIENDLY_UNITS;
     public static final ModConfigSpec.IntValue AID_FOOD_THRESHOLD;
     // v1.2.0 实测五百一十九：投喂食物黑名单（通用判定 + 黑名单）
     public static final ModConfigSpec.ConfigValue<List<? extends String>> AID_FOOD_BLACKLIST;
@@ -2194,6 +2218,12 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         // 从自己背包取药水/食物支援她（默认开；只影响女仆↔女仆，主人链不受影响）
         AID_MAID_MUTUAL = BUILDER.comment("女仆之间互相支援（默认开）：同主人、16 格内的其他女仆低血/着火/中毒时，自动投药水/金苹果/喂食支援她（与支援主人同一套方案）；关闭 = 女仆只管主人、不互相支援")
                 .translation("config.promaid.combat.aidMaidMutual").define("aidMaidMutual", true);
+        // v1.3.0(beta) 实测七百七十一：支援范围扩大到其他友方单位——主人的其他宠物
+        //（原版 TamableAnimal/AbstractHorse）、同主人的模组仆从（如诡厄 IOwned/Owned）
+        // 等凡归属同一主人的可拥有单位。它们没有饥饿值，只给药水/金苹果/牛奶蜂蜜，
+        // 不喂普通食物、不给不死图腾。判据见 MaidAidOwnerBehavior.aidFriendlyUnits。
+        AID_FRIENDLY_UNITS = BUILDER.comment("支援其他友方单位（默认开）：主人的其他宠物（狼/猫/马等）与同主人的模组仆从（诡厄巫法红石巨兽等）低血/着火/中毒时，自动投药水、金苹果、牛奶蜂蜜支援它们（判据 = 归属同一主人）。它们没有饥饿值，所以不喂普通食物、不给不死图腾；关闭 = 只支援主人与女仆")
+                .translation("config.promaid.combat.aidFriendlyUnits").define("aidFriendlyUnits", true);
         // v1.5.301：范围上限 18 → 20——旧版注释写"0-20"但 defineInRange 上限 18：
         // 面板填 20 被 Forge 静默钳制回 18（输入框显示 20、实际生效 18），
         // 饱食度 18~19 时永远不喂（反馈："那个修改按键要真实有效"——测试调 20
@@ -2488,6 +2518,19 @@ public static final ModConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
                 .translation("config.promaid.ride.modMounts").define("modMounts", true);
         COMBAT_RIDE_MOD_MOUNT_FIRE = BUILDER.comment("模组坐骑·代她开火（默认开）：把她 brain 里的攻击目标交给坐骑去打——① 卓越前线载具走它自己内置的「Mob 乘客有目标就自动瞄准开火」链路；② 冰火传说龙走吐息（strike + riderShootFire，以她为控制者）；③ **其余任何 Mob 坐骑**走通用兜底：无条件把她的目标写到它的 target 上，让它自己那套目标 AI 用它自己的攻击方式打（无攻击 AI 的坐骑写了也无副作用）。关闭 = 她照常驾驶，但坐骑不开火（你自己开）。只在她被骑乘指挥棒绑定时生效，原版/别的模组让她坐上去的场合一次都不会碰")
                 .translation("config.promaid.ride.modMountFire").define("modMountFire", true);
+        // 【无鞍可骑仆从后门】玩家原话："像诡厄巫法的可骑仆从（红石巨兽），以及某些整合包魔改的
+        // 套用代码的仆从（下界合金巨兽），这些都是没有办法让女仆骑乘的（不能装鞍），能不能走个
+        // 后门让女仆可以骑乘那些？" 根因：这些仆从实现的是原版 PlayerRideable（一个空标记接口）
+        // 或诡厄自己的 IAutoRideable，**不是** Saddleable——原版是"主人空手右击一下就骑上去"，
+        // 全程没有鞍这一环。而我们的 isRideableMount 只认 Saddleable && isSaddled → 整类被挡。
+        // 判据（默认自动、不写死 id）：是 Mob + 声明了 PlayerRideable 或 IAutoRideable + **不能装鞍**。
+        // 最后一条必须留着——否则没上鞍的原版马/骆驼会被这条规则"绕过"上鞍闸，变成凭空可骑。
+        COMBAT_RIDE_NO_SADDLE_PETS = BUILDER.comment("无鞍可骑仆从（默认开）：让女仆能骑那些**不需要鞍**、原版靠「主人空手右击一下就骑上去」的模组仆从——比如诡厄巫法的红石巨兽/熊/劫掠兽/蜘蛛系，以及套用同一套代码的整合包仆从（如诡厄灾变的下界合金巨兽仆从）。\n\n【根因】这些仆从实现的是原版 PlayerRideable（**一个没有任何方法的空标记接口**）或诡厄自己的 IAutoRideable，**不是** Saddleable，也从来没有鞍这一环；而本模组原来只认「已上鞍的 Saddleable」，于是它们整类骑不了、还会回一句「它不是能上鞍的坐骑～」。\n\n【判据，不写死任何实体 id】是 Mob + 声明了 PlayerRideable 或 IAutoRideable + **不能装鞍**。最后一条是关键：没上鞍的原版马/骆驼仍然走「先给它装上鞍」那道闸，不会被这条规则绕过。\n\n【怎么骑】与原版兽完全相同：拿骑乘指挥棒先右击那只仆从、再右击女仆（先坐骑后女仆）。骑上之后走的是「她自己的移动逻辑」那一档，跟随/作战与其他陆地坐骑一致。\n\n关闭 = 只认已上鞍的 Saddleable 坐骑，这些仆从一律照原版（女仆骑不上去）")
+                .translation("config.promaid.ride.noSaddlePets").define("noSaddlePets", true);
+        COMBAT_RIDE_SERVANT_AUTO = BUILDER.comment("模组仆从坐骑·单独区间（默认开）：对**无鞍可骑的模组仆从**（诡厄巫法/诡厄灾变的红石巨兽、下界合金巨兽仆从这一族），女仆坐上去**只赋予它自己的速度**，其余行动逻辑**全部换成仆从自己的 AI**——它自带的 lock-on（SummonTargetGoal/ServantHurtByTargetGoal）自主锁敌、自带的巡逻/接近/技能 goal 自己跑；本模组不再喂走位、不再写目标、不再替它出招。\n\n【为什么】这类仆从自带一整套战斗 AI，原先我们替它写目标/替它带路/替它出招，反而与它自己的 AI 打架（技能一放招就僵在原地、远程拉开距离就彻底哑火）。玩家定档：只赋速度、其余归它自己。\n\n【home 模式例外】女仆开 home 模式时不接管（它自己的 goal 全停 = 坐骑停住）——这是所有坐骑通用的例外。\n\n【范围】判据只在「无鞍可骑模组仆从」上；原版马/骆驼、卓越前线载具、冰火传说龙、别的模组生物、通用骑乘逻辑一律不受影响。")
+                .translation("config.promaid.ride.servantAuto").define("servantAuto", true);
+        COMBAT_RIDE_SERVANT_TRANSFER = BUILDER.comment("模组仆从坐骑·伤害转移（默认开）：女仆骑着**无鞍可骑模组仆从**时，她受到的伤害**转给身下的仆从**（同源打到它身上，仇恨也顺势落到它身上）。\n\n【不转移】环境自伤（虚空 outOfWorld / 卡墙 inWall / 挤压 cramming / 撞墙 flyIntoWall）不转移——它们是每拍重复的伤害、且她与坐骑通常在同一处，转了只会一起被挤死。其余（近战/弹射物/爆炸/火/岩浆/毒…）一律转移。\n\n【范围】判据只在「我们棍子绑的女仆正骑着的无鞍可骑模组仆从」上；其余任何实体受伤一律不受影响。")
+                .translation("config.promaid.ride.servantTransfer").define("servantTransfer", true);
         // v1.3.0(beta) 实测七百二十【点2：骑乘指挥棒独占右击】——玩家原话："加一个新设定，骑乘指挥棒
         // 在使用的时候不会触发原本的右击效果。只会触发骑乘棒自己的右击效果，也就是说你拿骑乘棒是
         // 骑不上龙或者车子的。" 为什么旧版能骑上龙：龙是多部件实体，准星常打中的是翅膀/尾巴/头那些
