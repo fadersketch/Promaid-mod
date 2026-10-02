@@ -166,11 +166,6 @@ public final class MaidMountCompat {
      * 这条闸被绕过了，于是"没电也能一直飞"。这两个反射用来把同一条闸在**写入之前**问一遍。 */
     private static Method mGetEnergy;         // getEnergy() -> int
     private static Method mGetMaxEnergy;      // getMaxEnergy() -> int
-    /* 【实测七百七十六·点2】固定翼"补能"的 setter（javap 实证 VehicleEntity 上有 setEnergy(int)）。
-     * SWB 固定翼的 loiter 闸里有一条 {@code getEnergy() > 1024}（baseTick 实证），而车的能量只能
-     * 靠往车里塞能量物品充（baseTick:4097 每 20 拍从车里物品抽）。女仆不会充电——她要飞而电量见底时
-     * 我们直接把能量仓填满（见 {@link #topUpAircraftEnergy}；只补这一档、只在见底时补）。 */
-    private static Method mSetEnergy;         // setEnergy(int)
     /* 【实测七百八十三】固定翼"安全降落"接地后清 crash 标记（javap/反编译实证 VehicleEntity 上有
      * {@code setCrash(boolean)}）。载具一旦带 crash 标记又被摧毁，SWB 会把乘客一次 114514 伤害打死
      * （{@code VehicleDestroyUtils.crashPassengers}）；而擦地会置 crash（{@code bounceVertical:596}）。
@@ -507,12 +502,6 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
                 mGetEnergy = null;
                 mGetMaxEnergy = null;
-            }
-            // 【实测七百七十六·点2】固定翼补能的写口（缺了只是"不补能"，不影响其余）。
-            try {
-                mSetEnergy = cVehicle.getMethod("setEnergy", int.class);
-            } catch (Throwable ignored) {
-                mSetEnergy = null;
             }
             // 【实测七百八十三】固定翼降落接地后清 crash 标记的写口（缺了只是"不清标记"）。
             try {
@@ -2190,7 +2179,15 @@ public final class MaidMountCompat {
         }
         // 【实测七百六十·电量闸】没电就别驱动飞行——见 {@link #outOfFuel} 的说明（同一条引擎闸）。
         // 放在最前：写 mouse/power 之前先问，否则我们那一写就把引擎自己那条"没电熄火"救活了。
+        //
+        // 【实测七百八十四·新效果】玩家原话：「如果骑乘的飞机没电了，那就等于开了 home 模式。
+        // 也就是说会执行缓慢降落。」⇒ 固定翼没电时不再只是"刹住不管"，而是**立刻走那套 home
+        // 模式的安全降落**（选平地 → 怠速 → 受控下沉 → 轻接地 → 停住）；直升机 / 飞艇 / 汤姆6
+        // 仍是原来的"清输入位 + 收油门 + 留痕"（一个字节不变）。
         if (outOfFuel(mount)) {
+            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid)) {
+                return true;   // 降落链路自己会（按 5 秒节流）写「固定翼降落·下降 / 接地段 / 完成」
+            }
             brakeVehicleSafely(mount);
             logFuelBlocked(mount, eng);
             return true; // 这一拍由我们接管（拒绝驱动），地面档也不要再来抢
@@ -2632,9 +2629,10 @@ public final class MaidMountCompat {
                     }
                     // ④ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
                     //    那是 loiter 的另一个前置条件 baseTick:3845）。
-                    //    【实测七百七十六·点2】先补能——loiter 闸里还有一条 getEnergy() > 1024，
-                    //    而车的能量只能靠往车里塞能量物品充（baseTick:4097）；女仆不会充电。
-                    topUpAircraftEnergy(mount);
+                    //    【实测七百八十四】这里原本会自动"补能"（把能量仓填满）——本批**取消**：
+                    //    玩家点名的新效果是"没电 = home 模式 → 立刻安全降落"，自动补能会把这个
+                    //    效果整个抹掉。引擎那条"没电熄火"闸改由 {@link #outOfFuel} 在写入前问，
+                    //    见 driveFlight 最前那一段（固定翼没电 → 走降落链路）。
                     if (mSetPower != null) {
                         try {
                             mSetPower.invoke(mount, 1.0f);
@@ -2662,7 +2660,6 @@ public final class MaidMountCompat {
                 // （见 aircraftClimbAssist 的说明）。爬到 2 格以内/窗口超时就撒手，交还引擎 loiter。
                 if (!grounded && wantAir && dy > AIRCRAFT_CLIMB_STOP && climbing) {
                     AIRCRAFT_CLIMB.put(mount.getUUID(), vnow + AIRCRAFT_CLIMB_WINDOW_TICKS);
-                    topUpAircraftEnergy(mount);
                     aircraftClimbAssist(mount, dy);
                     try {
                         mount.setXRot(-AIRCRAFT_TAKEOFF_PITCH);
@@ -2770,6 +2767,7 @@ public final class MaidMountCompat {
                                 : "")
                         + " 鼠标X=" + Math.round(clamp(err, -AIRCRAFT_YAW_CMD, AIRCRAFT_YAW_CMD))
                         + " 滚转=" + rollText(mount)
+                        + " 俯仰=" + Math.round(mount.getXRot())
                         + " 推力=" + powerText(mount)
                         + " 水平速度=" + fmt2(horizontalSpeed(mount))
                         + " 竖直速度=" + fmt2(verticalSpeed(mount))
@@ -2910,8 +2908,10 @@ public final class MaidMountCompat {
     /** 高度环：每 1 格高差给多少目标竖直速度（格/拍）。 */
     private static final double AIRCRAFT_VY_PER_BLOCK = 0.08;
 
-    /** 高度环的目标竖直速度上限（格/拍）——巡航不要大起大落。 */
-    private static final double AIRCRAFT_VY_CRUISE_MAX = 0.18;
+    /** 高度环的目标竖直速度上限（格/拍）。【实测七百八十四】0.18 → 0.30（与地形避险同一档）：
+     *  0.18 那一档实机里对应的就是"高差挂着、竖直速度 0.00"的爬不上去，因为内环俯仰权限
+     *  被这个上限锁死（见 {@link #AIRCRAFT_PITCH_PER_VY}）。固定翼要的是"能持续爬"的权限。 */
+    private static final double AIRCRAFT_VY_CRUISE_MAX = 0.30;
 
     /** 地形避险时的爬升率上限（格/拍）：比巡航大一截，山抬头时来得及抬。
      *  0.30 格/拍 @ 0.80 前进 ⇒ 约 20° 爬升角。 */
@@ -2997,17 +2997,23 @@ public final class MaidMountCompat {
     }
 
     /**
-     * 【实测七百七十九·点2 / 七百八十 / 七百八十三】固定翼高度保持：把高度拉向 {@code dy=0}。
+     * 【实测七百七十九·点2 / 七百八十 / 七百八十三 / 七百八十四】固定翼高度保持：
+     * 把高度拉向 {@code dy=0}（dy = 目标高度 − 机身 y，**正 = 目标在头顶**）。
      *
-     * <p>【783 改法】执行器从"直接写 {@code deltaMovement.y}"换成"**写俯仰角**"——前者被引擎
-     * 每拍的阻尼乘掉、只能抵消下沉，后者（沿视线的推力）才是引擎每拍真正重新给的竖直力。
-     * 完整推导见方法体里那段注释。控制律是**串级**：
+     * <p>执行器是"**写俯仰角**"（不是直接写 {@code deltaMovement.y}）：后者被引擎每拍的阻尼乘掉、
+     * 只能抵消下沉；前者（沿视线的推力竖直分量）才是引擎每拍真正重新给的竖直力。完整推导见方法体。
+     *
+     * <p>控制律是**串级**，**负 XRot = 抬头**：
      * <pre>
      *   高差 dy →（外环，{@link #AIRCRAFT_VY_PER_BLOCK}，限幅 maxVy）→ 期望竖直速度
-     *          →（内环，{@link #AIRCRAFT_PITCH_PER_VY}，限幅 ±{@link #AIRCRAFT_PITCH_MAX_UP}/DOWN）→ 目标俯仰角
+     *          →（内环，{@link #AIRCRAFT_PITCH_PER_VY}，限幅 -{@link #AIRCRAFT_PITCH_MAX_UP}
+     *             ~ +{@link #AIRCRAFT_PITCH_MAX_DOWN}）→ 目标俯仰角
      * </pre>
-     * {@code maxVy} 由调用方给：巡航 0.18、被地形净空线顶起来时 0.30、
-     * 降落下降段 0.20、接地段 0.10（见 {@link #AIRCRAFT_VY_AVOID_MAX} 与降落那几个常量）。
+     * 高差越大 ⇒ 期望竖直速度越大 ⇒ 抬头角越大，所以她**真的会为了追主人/敌人的高度而抬头**；
+     * 竖直速度一跟上，内环误差归零、自动回正（恒速逼近、不过冲）。
+     *
+     * <p>{@code maxVy} 由调用方给：巡航与地形避险 0.30、降落下降段 0.20、接地段 0.10
+     * （见 {@link #AIRCRAFT_VY_CRUISE_MAX} / {@link #AIRCRAFT_VY_AVOID_MAX} 与降落那几个常量）。
      */
     private static void aircraftHoldAltitude(Entity mount, double dy, double maxVy) {
         try {
@@ -3033,22 +3039,30 @@ public final class MaidMountCompat {
             //  控制律 = **串级**（位置 → 速度 → 俯仰），负 XRot = 抬头（起飞档同一约定）：
             //    外环：高差 dy → 期望竖直速度（复用巡航的 VY_PER_BLOCK，限幅 maxVy）；
             //    内环：竖直速度误差 → 目标俯仰角。先限速再控角 ⇒ 恒速逼近、不冲过头。
+            //
+            //  【实测七百八十四】上面这套的 783 实现有两处错（符号反 + 权限小到约等于没有），
+            //  实机表现就是"高差一直挂着、竖直速度恒 0.00、越飞越低"。本拍的两条修正都在
+            //  下面几行里：① 内环输出改写成"目标 XRot"（**负 = 抬头**），不再是"正 = 抬头"
+            //  的自定义角；② 增益 12 → 80、限幅 12/8 → 30/12、步进 0.30 → 1.0。
+            //  详见 {@link #AIRCRAFT_PITCH_PER_VY} 的说明。
             Vec3 dm = mount.getDeltaMovement();
             double vy = dm.y;
             double desiredVy = clamp(dy * AIRCRAFT_VY_PER_BLOCK, -maxVy, maxVy);
             double errV = desiredVy - vy;
-            double wantPitch = clamp(errV * AIRCRAFT_PITCH_PER_VY,
+            // 想爬（errV>0）⇒ 目标俯仰角为**负**（负 XRot = 抬头，与起飞档 / 引擎 loiter 同约定）。
+            // 【实测七百八十四】783 这里写的是 +errV*K（= 想爬却压低头），把整个回路变成正反馈。
+            double wantXrot = clamp(-errV * AIRCRAFT_PITCH_PER_VY,
                     -AIRCRAFT_PITCH_MAX_UP, AIRCRAFT_PITCH_MAX_DOWN);
             float cur = mount.getXRot();
-            float stepPitch = (float) clamp(wantPitch - cur, -AIRCRAFT_PITCH_STEP, AIRCRAFT_PITCH_STEP);
+            float stepPitch = (float) clamp(wantXrot - cur, -AIRCRAFT_PITCH_STEP, AIRCRAFT_PITCH_STEP);
             if (Math.abs(stepPitch) > 1.0E-4f) {
                 mount.setXRot(cur + stepPitch);
             }
-            // ② 俯仰的鼠标 Y 通道同向叠加（负 = 抬头）。它同时**关掉引擎的自动整平**
+            // ② 俯仰的鼠标 Y 通道**同号**叠加（负 = 抬头）。它同时**关掉引擎的自动整平**
             //    （那一条只在 {@code |mouseY|<0.001} 时才跑），否则它会把我们写的角往回压。
-            double mY = clamp(errV * AIRCRAFT_MOUSE_PER_VY, -1.0, 1.0);
-            if (Math.abs(mY) < 0.01 && Math.abs(wantPitch) > 0.5) {
-                mY = Math.signum(wantPitch) * 0.01;   // 必须大于自动整平那道 0.001 门限
+            double mY = clamp(-errV * AIRCRAFT_MOUSE_PER_VY, -1.0, 1.0);
+            if (Math.abs(mY) < 0.02 && Math.abs(wantXrot) > 0.5) {
+                mY = Math.signum(wantXrot) * 0.02;   // 必须大于自动整平那道 0.001 门限
             }
             mSetMouseY(mount, (float) mY);
             // ③ 竖直速度**微调**（低速/接地段阻尼接近 0.96，这一项有效；高速时被阻尼抹掉，无害）。
@@ -3134,10 +3148,14 @@ public final class MaidMountCompat {
                 logDrive(mount, "固定翼降落完成：已接地 → 停住不动（home 模式）");
                 return true;
             }
-            if (outOfFuel(mount)) {
-                brakeVehicleSafely(mount);
-                logFuelBlocked(mount, engineType(mount));
-                return true;
+            // 【实测七百八十四】电量见底不再是"刹住不管"，而是照常走完这套安全降落（玩家原话：
+            // 「如果骑乘的飞机没电了，那就等于开了 home 模式。也就是说会执行缓慢降落。」）。
+            // 怠速推力仍每拍写下去（引擎那条"没电熄火"每拍把它乘 0.995，我们每拍写回）——目的是
+            // "受控滑降 + 轻接地"，不是继续巡航。直升机/飞艇那一档仍走 driveFlight 里的
+            // brakeVehicleSafely（本方法只服务固定翼，见开头的 isAircraftEngine 闸）。
+            boolean fuelDead = outOfFuel(mount);
+            if (fuelDead) {
+                logDrive(mount, "固定翼电量见底 → 安全降落（home 模式同款链路）");
             }
             Vec3 spot = landingSpot(mount);
             if (spot == null) {
@@ -3181,7 +3199,8 @@ public final class MaidMountCompat {
                 aircraftBank(mount, 0.0f);
                 aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_TOUCH_ALT) - mount.getY(),
                         AIRCRAFT_LAND_VY_MAX);
-                logDrive(mount, "固定翼降落·接地段 距落点=" + (long) dist + "格"
+                logDrive(mount, "固定翼降落·接地段" + (fuelDead ? "（电量见底）" : "")
+                        + " 距落点=" + (long) dist + "格"
                         + " 离地=" + fmt2(aboveGround) + "格"
                         + " 竖直速度=" + fmt2(verticalSpeed(mount))
                         + " 水平速度=" + fmt2(horizontalSpeed(mount)));
@@ -3190,7 +3209,8 @@ public final class MaidMountCompat {
             // ②a 下降段：保持航向、怠速、按受控下沉率往地面压
             aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_MIN_ALT) - mount.getY(),
                     AIRCRAFT_LAND_DESCENT_VY_MAX);
-            logDrive(mount, "固定翼降落·下降 距落点=" + (long) dist + "格"
+            logDrive(mount, "固定翼降落·下降" + (fuelDead ? "（电量见底）" : "")
+                    + " 距落点=" + (long) dist + "格"
                     + " 离地=" + fmt2(aboveGround) + "格"
                     + " 竖直速度=" + fmt2(verticalSpeed(mount))
                     + " 水平速度=" + fmt2(horizontalSpeed(mount)));
@@ -3417,30 +3437,6 @@ public final class MaidMountCompat {
         }
     }
 
-    /**
-     * 【实测七百七十六·点2】固定翼"补能"：见 {@link #mSetEnergy} 的说明。
-     *
-     * <p>只在电量 ≤ {@link #AIRCRAFT_ENERGY_FLOOR}（= 引擎 loiter 闸那个 1024）且拿得到读写口时
-     * 把能量仓填满；其余情况一个字节都不动（有电的车不受影响，没能量仓的车自然跳过）。
-     */
-    private static void topUpAircraftEnergy(Entity mount) {
-        try {
-            if (mGetEnergy == null || mSetEnergy == null || mGetMaxEnergy == null) {
-                return;
-            }
-            int e = ((Number) mGetEnergy.invoke(mount)).intValue();
-            int max = ((Number) mGetMaxEnergy.invoke(mount)).intValue();
-            if (max <= 0 || e > AIRCRAFT_ENERGY_FLOOR) {
-                return;
-            }
-            mSetEnergy.invoke(mount, max);
-            logDrive(mount, "固定翼补能：电量 " + e + " → " + max
-                    + "（反编译实证：loiter 闸要求 getEnergy() > " + AIRCRAFT_ENERGY_FLOOR
-                    + "，而车的能量只能靠车里塞能量物品充、女仆不会充电）");
-        } catch (Throwable ignored) {
-        }
-    }
-
     /** 固定翼日志用的电量读数（拿不到 → "?"）。 */
     private static String energyText(Entity mount) {
         try {
@@ -3488,12 +3484,14 @@ public final class MaidMountCompat {
      * {@code aircraftEngine:879}），不抬头就没有爬升分量；而引擎自己的俯仰只在空中才写
      * （{@code :801}），地面上写 mouseY 是空操作。所以贴地这一段由我们直接写 {@code XRot}。
      *
-     * <p>【实测七百七十六·点2】20° → 25°（玩家原话：「是不是往上抬的角度太低了呢？」）。
-     * 实机日志复核：光有角度不够——旧版只在贴地那一拍写一次角度/补一次竖直速度，离地就撒手，
-     * 于是她"跳一下又贴回去"。这一版配套加了爬升窗口（见 {@link #aircraftClimbAssist}），
-     * 角度仍留在引擎自己的 {@code ClampPitch}（AC-130H 为 40°）以内，25° 不会触发它的限位。
+     * <p>【实测七百七十六·点2】20° → 25°（玩家原话：「是不是往上抬的角度太低了呢？」）；
+     * 【实测七百八十四】25° → 35°（玩家原话：「起飞的时候飞机抬的头不够高。导致它飞行的高度
+     * 不足」）。实机日志（10-03 06:20~06:47）里她起飞后竖直速度只在 0.00~0.30 之间、高度长期
+     * 低于净空线十几到四十格——正是"抬头角不够 ⇒ 推力的竖直分量不够 ⇒ 爬不上去"。
+     * 35° 仍在引擎自己的 {@code ClampPitch}（AC-130H 为 40°）以内；别的机型若限得更小，
+     * 引擎自己会限位，不会翻车。
      */
-    private static final float AIRCRAFT_TAKEOFF_PITCH = 25.0f;
+    private static final float AIRCRAFT_TAKEOFF_PITCH = 35.0f;
 
     /**
      * 【实测七百四十五·点3】固定翼起飞助跑每拍补的竖直速度（格/拍）。
@@ -3505,7 +3503,7 @@ public final class MaidMountCompat {
      */
     private static final double AIRCRAFT_TAKEOFF_LIFT = 0.25;
 
-    /* ---------- 【实测七百七十六·点2】固定翼"真的飞起来"：爬升窗口 + 垂直自驾 + 补能 ---------- */
+    /* ---------- 【实测七百七十六·点2 / 七百八十四】固定翼"真的飞起来"：爬升窗口 + 垂直自驾 ---------- */
 
     /** 爬升窗口（UUID → 到期 gameTime）：窗口内我们接管竖直速度，爬到/超时交还引擎。 */
     private static final java.util.Map<UUID, Long> AIRCRAFT_CLIMB =
@@ -3523,32 +3521,52 @@ public final class MaidMountCompat {
      *  {@code 高差=1→27 竖直速度=0.00 水平速度=0.08} 就是这个形状）。抬到 0.12 后每拍净增
      *  ≈0.06 > 0，能真正爬向目标高度（配合本次把目标抬到地面上 44 格）。 */
     private static final double AIRCRAFT_VY_STEP = 0.12;
-    /** 补能阈值：SWB 固定翼 loiter 闸 {@code getEnergy() > 1024}（baseTick 实证）里的那个 1024。 */
-    private static final int AIRCRAFT_ENERGY_FLOOR = 1024;
 
-    /* ---------- 【实测七百八十三】固定翼高度环改成"引擎原生俯仰通道"（P + I） ---------- */
+    /* ---------- 【实测七百八十三 / 七百八十四】固定翼高度环：引擎原生俯仰通道（串级） ---------- */
 
     /**
      * 高度环内环增益（度 / (格/拍)）：竖直速度差每 0.1 格/拍改多少度俯仰。
      *
-     * <p>为什么用**串级**（位置→速度→俯仰）而不是"高差直接→俯仰"：固定翼的竖直加速度来自
-     * 抬头角（{@code aircraftEngine:879} 的推力竖直分量），直接按高差给角的话，41 格的大高差
-     * 会一路满抬头、攒出极大的爬升率再冲过头（778 实机 {@code 高差 -39→-141} 来回荡正是这个
-     * 形状）。先限速（外环）再控角（内环），她就"恒速逼近、临到跟前自然收角"，没有过冲。
+     * <p>控制律是**串级**（位置 → 速度 → 俯仰），**负 XRot = 抬头**：
+     * <pre>
+     *   高差 dy →（外环，{@link #AIRCRAFT_VY_PER_BLOCK}，限幅 maxVy）→ 期望竖直速度
+     *          →（内环，本项）→ 目标俯仰角
+     * </pre>
      *
-     * <p>取值 12 是"回路增益 &lt; 1"的保守选法：俯仰→竖直速度的增益约
-     * {@code 推力(≈水平速度≈2.8) / 57.3 ≈ 0.049 格/拍/度}，乘 12 ≈ 0.59。
+     * <p>【实测七百八十四·两处修正】783 这一档有两处错，实机日志（10-03 06:20~06:47）里合起来
+     * 就是玩家看到的现象——「盘旋飞行的时候没有检测距离主人高度的差值，高度低了以后也不会自己
+     * 慢慢抬头把高度抬上去，盘旋圈数多了以后还是会坠机」：
+     * <ol>
+     *   <li><b>符号反了</b>：783 往 {@code XRot} 写的是 {@code +errV*K}、往 {@code mouseY} 写的是
+     *       {@code +errV}，而引擎的约定是**负 = 抬头**（引擎自己的 loiter 用
+     *       {@code clamp(altError*-0.15)} 写 {@code XRot}、{@code clamp(altError*-0.02)} 写
+     *       {@code mouseY}，反编译 {@code aircraftLoiter:1333-1338} 实证）。于是"想爬"时它反而
+     *       压低头 —— 一个**正反馈**：越低越低头 ⇒ 越飞越低、最后坠机。</li>
+     *   <li><b>权限太小</b>：外环限幅后 {@code |errV| ≤ maxVy=0.18}，乘 12 只有 2.2°；再被
+     *       {@link #AIRCRAFT_PITCH_MAX_UP} 一夹，实际给的抬头角常年 2~4°。实机日志里
+     *       「高差 +2~+40 而 竖直速度 0.00」正是这个形状（对比：起飞档那 25° 一给，竖直速度
+     *       立刻到 0.30）。现在增益 12 → 80：{@code errV=0.30} 时给满 24° 抬头。</li>
+     * </ol>
+     *
+     * <p>回路增益复核：竖直速度对俯仰的静态增益约 {@code 0.012 格/拍/度}（实机反推：25°≈0.30），
+     * 位置支路 = {@code 0.08(外环) × 80(内环) × 0.012 ≈ 0.077}，速度支路（{@code -80×vy}）就是
+     * 阻尼项 —— 位置支路远小于 1、阻尼又远大于它，所以"能爬但不振荡"。
      */
-    private static final double AIRCRAFT_PITCH_PER_VY = 12.0;
-    /** 抬头（爬升）角上限（度）。**负 XRot = 抬头**（起飞档 {@code setXRot(-25)} 同一约定）。 */
-    private static final double AIRCRAFT_PITCH_MAX_UP = 12.0;
-    /** 低头（下降）角上限（度）——下降不必太陡，8° 够用。 */
-    private static final double AIRCRAFT_PITCH_MAX_DOWN = 8.0;
-    /** 俯仰角每拍最多改多少度（防姿态抖）。 */
-    private static final double AIRCRAFT_PITCH_STEP = 0.30;
-    /** 俯仰走 mouseY 通道的系数（负 = 抬头）。量小是有意的：那条通道是个**积分器**
-     *  （引擎每拍把 mouseY 累加进 XRot），给大了等于给回路再加一个积分环节。 */
-    private static final double AIRCRAFT_MOUSE_PER_VY = 1.0;
+    private static final double AIRCRAFT_PITCH_PER_VY = 80.0;
+    /** 抬头（爬升）角上限（度）。**负 XRot = 抬头**（起飞档 {@code setXRot(-35)} 同一约定）。
+     *  【实测七百八十四】12° → 30°：12° 在实机里连"抵消下沉"都不够；30° 与起飞档同量级，
+     *  仍在 AC-130H 的 {@code ClampPitch=40°} 以内（别的机型更小的话引擎自己会限位）。 */
+    private static final double AIRCRAFT_PITCH_MAX_UP = 30.0;
+    /** 低头（下降）角上限（度）。【实测七百八十四】8° → 12°：要压得住"爬过头"那一下。 */
+    private static final double AIRCRAFT_PITCH_MAX_DOWN = 12.0;
+    /** 俯仰角每拍最多改多少度（防姿态抖）。【实测七百八十四】0.30 → 1.0：0.30°/拍 从 -25° 走回
+     *  0° 要 80 多拍（4 秒），大高差时"来不及抬头"。1.0°/拍 ≈ 20°/秒，一个满抬头约 0.6 秒到位。 */
+    private static final double AIRCRAFT_PITCH_STEP = 1.0;
+    /** 俯仰走 mouseY 通道的系数（**负 = 抬头**，与 XRot 同号约定）。量小是有意的：那条通道是个
+     *  **积分器**（引擎每拍把 mouseY 累加进 XRot），给大了等于给回路再加一个积分环节；它的主职
+     *  是把引擎"机头自动整平"那道 {@code |mouseY|<0.001} 门限顶开，姿态主体仍由 setXRot 给。
+     *  【实测七百八十四】符号改回与 XRot 一致（783 是反的，等于在替引擎踩低头）。 */
+    private static final double AIRCRAFT_MOUSE_PER_VY = 0.5;
 
     /* ---------- 【实测七百七十五·点3】固定翼定制起飞：验平地 → 加速 → 抬机头 ---------- */
 
