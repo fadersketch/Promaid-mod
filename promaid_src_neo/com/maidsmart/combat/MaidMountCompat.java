@@ -5,6 +5,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.List;
@@ -251,6 +252,20 @@ public final class MaidMountCompat {
     private static Method mGetGunNameAtSeat;        // getGunName(int) -> String（该座**当前选中**那门炮名）
     private static Method mHasWeaponSeat;           // hasWeapon(int) -> boolean（该座有没有武器）
     private static Method mGetGunDataName;          // getGunData(String) -> GunData（按炮名取枪）
+
+    /* 【实测七百七十三·点3】"直瞄开火"（= 女仆枪械模式式瞄准）所需的反射：
+     * 不再让炮弹等"炮塔/机头转到位"，而是**开火那一刻**把解算方向直接交给枪自己的 shoot——
+     * 反编译 {@code GunItem.shootBullet} 实证：弹体逐字按传入的 {@code shootDirection} 生成，
+     * 中间没有任何机械环节。玩家原话：「子弹好像从车底打出来的……都集中在脚下……能不能改成
+     * 跟女仆枪械模式一样的瞄准机制呢？」
+     *   · {@code ShootParameters(ammoSupplier, shooter, level, shootPos, shootDir, data, spread, zoom, uuid, targetPos)}
+     *   · {@code GunData.shoot(ShootParameters)}——弹药/冷却/音效/过热/后坐全由枪自己那条链处理。
+     * 各自单独 try：缺一个就整条退回引擎原路（{@code vehicleShoot}），绝不让它拖垮开火。 */
+    private static Constructor<?> ctorShootParams;   // ShootParameters(...) 10 参构造
+    private static Method mGunDataShootParams;       // GunData.shoot(ShootParameters)
+    private static java.lang.reflect.Field fGunPropSpread; // GunProp.SPREAD（这门炮自己的散布）
+    private static Constructor<?> ctorVehicleShootMsg; // VehicleShootClientMessage(UUID,UUID,int,String)
+    private static Method mSendPacketToAll;          // MinecraftUtil.sendPacketToAll(payload)
 
     /* ==================== 反射缓存：冰火传说 ==================== */
 
@@ -521,6 +536,43 @@ public final class MaidMountCompat {
                 mGunReloading = null;
                 mGunCurrentAmmo = null;
                 mGunCanShoot = null;
+            }
+            // 【实测七百七十三·点3】直瞄开火反射（见字段注释）。三段各自单独 try。
+            try {
+                Class<?> spCls = Class.forName("com.atsuishio.superbwarfare.data.gun.ShootParameters");
+                Class<?> gdCls4 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunData");
+                ctorShootParams = spCls.getConstructor(Entity.class, Entity.class,
+                        net.minecraft.server.level.ServerLevel.class, Vec3.class, Vec3.class,
+                        gdCls4, double.class, boolean.class, java.util.UUID.class, Vec3.class);
+                mGunDataShootParams = gdCls4.getMethod("shoot", spCls);
+            } catch (Throwable ignored) {
+                ctorShootParams = null;
+                mGunDataShootParams = null;
+            }
+            try {
+                Class<?> gpCls2 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
+                fGunPropSpread = gpCls2.getField("SPREAD");
+            } catch (Throwable ignored) {
+                fGunPropSpread = null;
+            }
+            // 枪口火光/音效的客户端同步包（引擎那条 vehicleShoot 里会发；我们直瞄绕过了它，
+            // 这里自己补一发，免得"开炮没火光"）。**按名字+1 参找**：1.20.1 的形参是 Object、
+            // 1.21.1 是 CustomPacketPayload，写死类型会在另一版上找不到。拿不到就不发——不影响命中。
+            try {
+                Class<?> msgCls = Class.forName(
+                        "com.atsuishio.superbwarfare.network.message.receive.VehicleShootClientMessage");
+                ctorVehicleShootMsg = msgCls.getConstructor(java.util.UUID.class, java.util.UUID.class,
+                        int.class, String.class);
+                Class<?> muCls = Class.forName("com.atsuishio.superbwarfare.tools.MinecraftUtil");
+                for (Method m : muCls.getMethods()) {
+                    if ("sendPacketToAll".equals(m.getName()) && m.getParameterCount() == 1) {
+                        mSendPacketToAll = m;
+                        break;
+                    }
+                }
+            } catch (Throwable ignored) {
+                ctorVehicleShootMsg = null;
+                mSendPacketToAll = null;
             }
             // 【实测七百四十五·点4】"这个模式没弹就换一个有弹的模式"所需的反射：逐座武器表 + 切换 +
             // 同一门炮内换弹药类型。各自单独 try（缺了只是"换模式"这一档不生效，不影响"有弹就打"）。
@@ -3756,6 +3808,11 @@ public final class MaidMountCompat {
             if (mount == null || maid == null || target == null || !target.isAlive()) {
                 return false;
             }
+            // 【实测七百七十三·点3】优先走**直瞄**（女仆枪械模式式瞄准）——见 {@link #directFireAt}。
+            // 反射不可用 / 这门炮取不到时返回 false，下面原样走引擎那条路。
+            if (directFireAt(mount, maid, target)) {
+                return true;
+            }
             // 【实测七百四十一·点2b/点3】按**炮名**开火（{@code vehicleShoot(LivingEntity,String,UUID,Vec3)}）。
             //
             // 为什么不能用按乘客的那个重载：它走 {@code getSeatIndex(maid)} → {@code getGunData(座号)}
@@ -3775,6 +3832,128 @@ public final class MaidMountCompat {
             return true;
         } catch (Throwable ignored) {
             return false;
+        }
+    }
+
+    /* ==================== 实测七百七十三·点3：直瞄开火（女仆枪械模式式瞄准） ==================== */
+
+    /**
+     * 【实测七百七十三·点3】"直瞄开火"这条后门此刻可用吗（反射齐）。
+     *
+     * <p>供 {@code tickAttack} 的开火闸用：可用时**不再等炮塔转到 {@code AIM_ALIGN_DEG} 以内**——
+     * 方向由 {@link #directFireAt} 自己给，打出去的弹不依赖炮塔转到哪。
+     */
+    static boolean directFireReady() {
+        return ctorShootParams != null && mGunDataShootParams != null;
+    }
+
+    /**
+     * 【实测七百七十三·点3】直瞄开火：**开火那一刻**按我们算出的方向，直接调枪自己的 shoot。
+     *
+     * <h2>玩家原话（即规格）</h2>
+     * 「让酒狐单独开载具，子弹好像从车底打出来的。然后子弹让方块吃了。空中载具好像也一样，
+     *  子弹散布很乱，并且都集中在脚下。……女仆使用载具上的武器进行攻击时命中率堪忧。
+     *  哪怕走强制的后门也都没有用。能不能改成跟女仆枪械模式一样的瞄准机制呢？」
+     *
+     * <h2>女仆枪械模式为什么准（反编译实证）</h2>
+     * {@code GunItem.shoot(ShootParameters)} → {@code shootBullet}：弹体用传入的
+     * {@code shootPosition} 生成、逐字沿传入的 {@code shootDirection} 飞——"往哪打"就是开火
+     * 那一刻算出来的方向，中间**没有**"炮塔要慢慢转过去 / 机头要掰过来"的机械环节。
+     * 载具那条 {@code vehicleShoot} 用的却是 {@code getShootVec(炮名)} 的**当前**朝向，
+     * 于是"没转到位就打 / 转到位了车却又动了"都会让炮弹飞偏——这就是玩家看到的
+     * "从车底打出来、打在脚下"。
+     *
+     * <h2>本方法</h2>
+     * 逐字照做：炮口取 {@code getShootPos(炮名)}（与引擎开火同一处），方向取
+     * {@link #firingSolution}（引擎自己的 {@code calculateFiringSolution}：重力下坠 + 提前量），
+     * 用 SWB 自己的 {@code ShootParameters} 构造后调 {@code GunData.shoot(...)}——弹药扣除、
+     * 冷却、过热、音效、后坐全部仍由枪自己那条链处理（与 {@code vehicleShoot} 后半段同源）。
+     * 打出去的这一发**一定**沿解算方向飞；炮塔照旧由 {@link #aimBallistic} 慢慢转（纯观感）。
+     *
+     * <p>投弹（炮名含 Bomb）不走这条：它的物理是"往下丢"，引擎那条 {@code Directions=["Bomb"]}
+     * 的口径 + 投弹安全高度那一套更合适，保持原路。
+     *
+     * @return true = 已按直瞄路径把开火调用发出去了；false = 反射不可用/这门炮取不到/没弹
+     *         → 交回引擎原路（{@link #vehicleShootByName}）
+     */
+    static boolean directFireAt(Entity mount, EntityMaid maid, LivingEntity target) {
+        try {
+            if (mount == null || maid == null || target == null || !target.isAlive()
+                    || !directFireReady()) {
+                return false;
+            }
+            String gun = gunNameFor(mount, maid);
+            if (gun == null) {
+                return false;
+            }
+            if (gun.toLowerCase(java.util.Locale.ROOT).contains("bomb")) {
+                return false; // 投弹保持引擎原路（见方法注释）
+            }
+            Object gd = gunDataOf(mount, gun);
+            if (gd == null) {
+                return false;
+            }
+            Entity supplier = mount;
+            if (mAmmoSupplier != null) {
+                try {
+                    Object s = mAmmoSupplier.invoke(mount);
+                    if (s instanceof Entity e) {
+                        supplier = e;
+                    }
+                } catch (Throwable ignored) {
+                }
+            }
+            // 没弹/没拉栓 → 交回原路：它会去装弹 / 换一个"有弹的模式"（ensureAmmo/ensureUsableAmmoMode）。
+            if (mGunCanShoot != null) {
+                Object ok = mGunCanShoot.invoke(gd, supplier);
+                if (!Boolean.TRUE.equals(ok)) {
+                    return false;
+                }
+            }
+            Vec3 muzzle = shootPosOfGun(mount, gun);
+            Vec3 dir = firingSolution(mount, gun, maid, target);
+            if (muzzle == null || dir == null || dir.lengthSqr() < 1.0E-8
+                    || !(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+                return false;
+            }
+            Object params = ctorShootParams.newInstance(supplier, maid, sl, muzzle, dir.normalize(),
+                    gd, gunSpreadOf(gd), true, target.getUUID(), null);
+            mGunDataShootParams.invoke(gd, params);
+            sendVehicleShootFx(mount, maid, gun);
+            return true;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 读这门炮自己的 {@code GunProp.SPREAD}（保持武器手感）；拿不到 → 0（只影响散布，不影响方向）。 */
+    private static double gunSpreadOf(Object gd) {
+        try {
+            if (fGunPropSpread != null && mGunGetProp != null) {
+                Object v = mGunGetProp.invoke(gd, fGunPropSpread.get(null));
+                if (v instanceof Number n) {
+                    return n.doubleValue();
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0.0;
+    }
+
+    /**
+     * 补一发"某座开火了"的客户端同步包（枪口火光/动画用的那一条）——引擎的
+     * {@code vehicleShoot} 里会发，我们直瞄绕过了它。**尽力而为**：反射拿不到就不发（不影响命中）。
+     *
+     * <p>炮位索引固定传 0（多炮管武器只是火光位置不轮流；命中与弹药账走的是枪自己那条链）。
+     */
+    private static void sendVehicleShootFx(Entity mount, EntityMaid maid, String gun) {
+        try {
+            if (ctorVehicleShootMsg == null || mSendPacketToAll == null) {
+                return;
+            }
+            Object msg = ctorVehicleShootMsg.newInstance(maid.getUUID(), mount.getUUID(), 0, gun);
+            mSendPacketToAll.invoke(null, msg);
+        } catch (Throwable ignored) {
         }
     }
 
@@ -4346,7 +4525,11 @@ public final class MaidMountCompat {
                     }
                     boolean force = !aimed && !hasSlewableMount(mount)
                             && aimStalledTicks(mount, false) >= AIM_FORCE_TICKS;
-                    if (aimed || force) {
+                    // 【实测七百七十三·点3】直瞄可用时**不再等"炮塔转到 3° 以内"**：方向由
+                    // directFireAt 自己给（女仆枪械模式式瞄准）。投弹（isBombGun）不走直瞄、
+                    // 照旧等对准；aimed/force 那两条闸只服务"引擎原路"（反射不可用时的退回档）。
+                    boolean direct = directFireReady() && !isBombGun;
+                    if (direct || aimed || force) {
                         if (fireTickDue(mount)) {
                             // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
                             // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。按炮名开火（见 fireAt），
@@ -4827,6 +5010,41 @@ public final class MaidMountCompat {
     }
 
     /* ==================== 实测七百三十八：地面载具接敌 + 玩家在机上 ==================== */
+
+    /**
+     * 【实测七百七十三·点2】这台**卓越前线载具**的**驾驶位**上坐的是不是玩家。
+     *
+     * <h2>玩家原话</h2>
+     * 「玩家坐副驾驶时如果换到其它位置（如3、4号位），再左键与女仆换位，玩家虽坐在主驾驶
+     *  却不能控制载具。」
+     *
+     * <h2>根因（反编译实证）</h2>
+     * 卓越前线的引擎只认**座位 0** 是驾驶位：{@code wheelEngine} 那一路第一句就是
+     * {@code getFirstPassenger() == null → 全清输入 + power = 0}——"谁在开"看的是
+     * {@code getFirstPassenger()}（0 号座），**不是** {@code getControllingPassenger()}
+     * （SWB 压根没覆写它、对谁都返回 null）。左击换座把主人换进 0 号座之后，**玩家与我们的
+     * 驱动每拍都在写同一组输入状态**（{@code processInput} 位掩码 / 鼠标通道 / 机头 yaw），
+     * 玩家按什么都没用——这就是"坐在主驾却不能控制载具"。
+     *
+     * <h2>与 {@link #hasPlayerAboard} 的区别（别合并）</h2>
+     * {@code hasPlayerAboard} = "机上有人"（副驾也算）——那一档我们**照旧要开**（女仆开、
+     * 主人坐副驾，738 起的高度档就是这么设计的）。本判据只认**驾驶位**：副驾坐着玩家时它
+     * 返回 false，方向盘还在女仆手里。两者用途不同，不能互相替换。
+     *
+     * <p>只对卓越前线载具成立（{@code isVehicle}）：原版马/猪只有一个鞍位，玩家骑上去时
+     * 本来就该由玩家开，那种情况下我们根本没在驱动。
+     */
+    public static boolean playerHoldsDriverSeat(Entity mount) {
+        try {
+            if (mount == null || !isVehicle(mount)) {
+                return false;
+            }
+            Entity first = mount.getFirstPassenger();
+            return first instanceof net.minecraft.world.entity.player.Player;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
 
     /**
      * 【实测七百三十八】这台载具上**除了女仆之外**是不是坐着玩家（主人坐进副驾了）。

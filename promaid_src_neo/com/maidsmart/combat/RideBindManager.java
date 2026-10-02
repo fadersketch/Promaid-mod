@@ -168,6 +168,21 @@ public final class RideBindManager {
             return;
         }
         Player player = event.getEntity();
+        // 【实测七百七十三·点1】骑乘状态下，指挥棒的右击效果**一律取消**。
+        //
+        // 玩家原话：「如果玩家坐在车内使用武装拴绳坐副驾驶时再用指挥棒右键，玩家会强制下车并且
+        // 不能放方块也不能上车，用指令传送一下才会恢复正常。我不想对这个 bug 进行过多费脑子的
+        // 修复，直接把在骑乘状态下玩家使用骑乘指挥棒的右击效果去掉就可以了，也就是说是玩家在
+        // 骑乘状态下没有办法使用这个物品的右击。右击效果会被直接取消。」
+        //
+        // 所以这里不查目标、不问能不能绑：**只要他正骑着任何东西、手里拿的又是指挥棒，
+        // 这一下就整个吃掉**（两侧都吃——客户端那一份不吃还会走本地预测）。绑定/解绑/换座
+        // 都需要人站在地上瞄目标，骑乘中的右击没有任何正当用途，反倒会碰到载具自己的
+        // interact 分支（强制下车 + 那段"拿指挥棒不许登乘"的闸把人锁在车外）。
+        if (player.isPassenger() && player.getItemInHand(event.getHand()).getItem() instanceof RideBatonItem) {
+            event.setCanceled(true);
+            return;
+        }
         if (!(player instanceof ServerPlayer)) {
             // 客户端：只做"吞掉这一下"，**不执行业务逻辑**（绑定/解除只由服务端做一次，
             // 否则同一个右击会在两侧各绑一次）。认得出是棍子 + 认得的目标就取消事件。
@@ -487,7 +502,18 @@ public final class RideBindManager {
      */
     @SubscribeEvent
     public static void onInteractSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
-        if (!isEnabled() || !batonExclusive()) {
+        if (!isEnabled()) {
+            return;
+        }
+        // 【实测七百七十三·点1】骑乘 + 手持指挥棒 → 这一下整个取消（与 onInteract 同一口径；
+        // 不依赖 batonExclusive 档位——玩家的要求是"骑乘时右击一律无效"）。
+        if (event.getEntity() instanceof Player riding
+                && riding.isPassenger()
+                && riding.getItemInHand(event.getHand()).getItem() instanceof RideBatonItem) {
+            event.setCanceled(true);
+            return;
+        }
+        if (!batonExclusive()) {
             return;
         }
         // 【实测七百二十三】与 onInteract 同款放宽到 Player：客户端那份不拦就还会走
@@ -1776,8 +1802,44 @@ public final class RideBindManager {
         }
     }
 
+    /**
+     * 【实测七百七十三·点2】"驾驶已交给玩家"的载具集合（按 UUID 记）。
+     *
+     * <p>只用来打**一次**交接日志 + 只跑一次 {@link MaidMountCompat#stop}（清掉我们残留的
+     * 输入位）；玩家离开驾驶位后从表里摘掉，我们再接手。表的大小天然有界（同时被玩家开着的
+     * 已绑定载具数量）。
+     */
+    private static final java.util.Set<UUID> PLAYER_DRIVING = new java.util.HashSet<>();
+
     private static void drive(EntityMaid maid, Entity mount, ServerPlayer owner) {
         try {
+            // 【实测七百七十三·点2】第一道闸（放最前，连守家档都不许越过它）：**驾驶位上坐着
+            // 玩家 ⇒ 方向盘归玩家，我们一个字都不许写**。
+            //
+            // 玩家原话：「玩家坐副驾驶时如果换到其它位置（如3、4号位），再左键与女仆换位，
+            // 玩家虽坐在主驾驶却不能控制载具。」——左击换座（{@code swapOwnerSeat}）本身是对的
+            // （数学上主人确实坐进了 0 号座），坏在**我们还在开**：卓越前线的引擎只认座位 0
+            // （{@code getFirstPassenger()}，反编译实证），而本类每拍都在往 {@code processInput}
+            // 写位掩码、往机头写 yaw、甚至硬刹；守家档还会 stopNavigation 去清输入——玩家那一侧
+            // 的按键输入与我们的写入**每拍对撞**，结果就是"坐在主驾却没反应"。
+            //
+            // 交接的那一拍先 {@link MaidMountCompat#stop} 一次，把我们上一拍留下的输入位/油门
+            // 清干净（不然玩家会看到车自己还在往前走）；此后一劳永逸地不再写。
+            // 武器（tickAttack）与装弹不受影响——那两件事不碰驾驶输入。
+            // 玩家换回副驾（或她换回驾驶位）→ 这一档自动失效，我们接着开。
+            if (MaidMountCompat.playerHoldsDriverSeat(mount)) {
+                MaidMountCompat.markTick(maid.level().getGameTime());
+                MaidMountCompat.tickAttack(mount, maid);
+                if (PLAYER_DRIVING.add(mount.getUUID())) {
+                    MaidMountCompat.stop(mount);
+                    MaidMountCompat.logDrive(mount, "玩家坐进驾驶位（座位 0）→ 驾驶让给玩家（武器与装弹照旧）");
+                }
+                if (MaidMountCompat.kindOf(mount) == MaidMountCompat.Kind.VEHICLE) {
+                    feedAmmoThrottled(mount, maid);
+                }
+                return;
+            }
+            PLAYER_DRIVING.remove(mount.getUUID());
             // 【实测七百五十六·点3：守家（home 模式）→ 坐骑立刻停】
             // 玩家原话：「如果女仆处于 home 模式，那么她坐的坐骑就会立刻停止。这样子也方便玩家调控。」
             // 口径与 TLM 自己的跟随完全同源——{@code MaidFollowOwnerTask.maidStateConditions} 就是
