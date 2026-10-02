@@ -291,6 +291,14 @@ public final class MaidMountCompat {
      * {@code vehicleWeaponRpm(String)}——引擎自己算射速用的就是它（RPM / 60 = 每秒发数）。 */
     private static Method mVehicleWeaponRpmName;     // vehicleWeaponRpm(String) -> int
 
+    /* 【实测七百七十五·点1/点2】多弹种装填 + 投弹安全高度=炸弹威力半径。
+     *   · {@code GunProp.AMMO_CONSUMER}（745 已取到）——本批用它把每门炮的**全部弹种**都收进
+     *     识弹判据：旧版只看"当前选中那一种"，于是 M1A2 主炮选着 AP、她带着 HE 时，那摞 HE
+     *     永远搬不进车（实机日志：主炮打两发就再无 Cannon）。
+     *   · {@code GunProp.EXPLOSION_RADIUS}——投弹安全高度按它算（玩家原话：「应该把上升高度
+     *     调整为那个炸弹所能波及的半径的大小。保证全身而退。」）。 */
+    private static java.lang.reflect.Field fGunPropExplosionRadius; // GunProp.EXPLOSION_RADIUS
+
     /* ==================== 反射缓存：冰火传说 ==================== */
 
     private static boolean iafInited;
@@ -647,6 +655,13 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
                 mVehicleWeaponRpmName = null;
             }
+            // 【实测七百七十五·点2】投弹安全高度 = 这门炸弹自己的爆炸半径（GunProp.EXPLOSION_RADIUS）。
+            try {
+                Class<?> gpCls775 = Class.forName("com.atsuishio.superbwarfare.data.gun.GunProp");
+                fGunPropExplosionRadius = gpCls775.getField("EXPLOSION_RADIUS");
+            } catch (Throwable ignored) {
+                fGunPropExplosionRadius = null;
+            }
             swbOk = true;
         } catch (Throwable ignored) {
             swbOk = false;
@@ -793,27 +808,35 @@ public final class MaidMountCompat {
      * 名单判据 = **实体类型注册名**（{@code modid:entity}），与家具黑名单同一套写法：
      * 不写死类引用，1.20.1 / 1.21.1 两树共用（两树的 SWB 实体 id 逐字相同，jar 实证）。
      * 其余载具（坦克 / 装甲车 / 直升机 / 飞艇等）**一律不受影响**，照旧能骑能打。
+     *
+     * <p>【实测七百七十五·点3】原名单六台，其中**四架固定翼已解禁**（Ju-87 / A-10 / AC-130H /
+     * KV-16）：玩家原话「我觉得那些原本不能绑定的那些坐骑可以尝试给他们解禁了。比如AC 130H，
+     * 但它的飞行轨迹必须要专门定制。」它们的"门槛"不再是黑名单，而是
+     * {@code driveFlight} 里那条**固定翼定制起飞链路**——先验平地（落差不能太大，不行就报
+     * "环境不允许起飞"）、向平地加速、够速抬机头、之后交给引擎 loiter（以主人/敌人为圆心
+     * 盘旋）并照常开火。剩下两台（汤姆 F6F / 迷你快艇）**代码上只认玩家**（引擎里油门与姿态
+     * 整段写在 {@code passenger instanceof Player} 分支里，反编译实证），女仆连输入通道都进不去，
+     * 继续拦。
      */
     private static final java.util.List<String> UNRIDABLE = java.util.List.of(
-            MOD_SWB + ":ju_87",            // Ju-87 斯图卡轰炸机（固定翼）
-            MOD_SWB + ":a_10a",            // A-10 雷电二攻击机（固定翼）
-            MOD_SWB + ":ac_130h",          // AC-130H 空中炮艇（固定翼）
-            MOD_SWB + ":kv_16",            // KV-16 幽灵战斗机（固定翼）
             MOD_SWB + ":tom_6",            // 汤姆 F6F（油门/姿态只写给玩家）
             MOD_SWB + ":tiny_speedboat");  // 迷你快艇（单座、只按玩家语义）
 
     /**
-     * 不可驾名单里那六台的**中文名**（给玩家看的气泡用）。
+     * 不可驾名单里那几台的**中文名**（给玩家看的气泡用）。
      *
-     * <p>为什么不从游戏里取本地化名：SWB 这六台的名字散在 {@code entity.superbwarfare.*} 与
-     * {@code superbwarfare.entry.vehicle.*} 两套键里，还要先判当前语言——而这份名单是**固定六台**，
-     * 名字就是玩家自己说出来的那六个，直接写死最稳，也不受 SWB 换翻译影响。
+     * <p>为什么不从游戏里取本地化名：SWB 这几台的名字散在 {@code entity.superbwarfare.*} 与
+     * {@code superbwarfare.entry.vehicle.*} 两套键里，还要先判当前语言——而这份名单是固定几台，
+     * 名字就是玩家自己说出来的那几个，直接写死最稳，也不受 SWB 换翻译影响。
+     *
+     * <p>【实测七百七十五·点3】四架固定翼（Ju-87 / A-10 / AC-130H / KV-16）已从名单移除——
+     * 玩家原话「我觉得那些原本不能绑定的那些坐骑可以尝试给他们解禁了。比如AC 130H，但它的
+     * 飞行轨迹必须要专门定制。」它们的"操作门槛"由本类的**固定翼定制起飞链路**接管
+     * （平地判据 → 向平地加速 → 抬机头 → 引擎 loiter 以主人/敌人为圆心盘旋 + 武器照打）；
+     * 真正的"只认玩家"两台（汤姆 F6F / 迷你快艇，引擎里油门姿态整段写在
+     * {@code passenger instanceof Player} 分支里）继续拦。
      */
     private static final java.util.Map<String, String> UNRIDABLE_NAME = java.util.Map.of(
-            MOD_SWB + ":ju_87", "Ju-87 斯图卡轰炸机",
-            MOD_SWB + ":a_10a", "A-10 雷电二攻击机",
-            MOD_SWB + ":ac_130h", "AC-130H 空中炮艇",
-            MOD_SWB + ":kv_16", "KV-16 幽灵战斗机",
             MOD_SWB + ":tom_6", "汤姆 F6F",
             MOD_SWB + ":tiny_speedboat", "迷你快艇");
 
@@ -2009,6 +2032,19 @@ public final class MaidMountCompat {
 
             double hspeed = horizontalSpeed(mount);
 
+            // 【实测七百七十五·点4】载具环境避险——照搬"移动电路"里已经做过的那三条
+            // （不贴地 / 不撞墙 / 不钻一格）。玩家原话：「目前这些载具没有对于环境的相关避险机制。
+            // 这个是我们原来移动电路里面已经做了的，看看能不能照搬上来。」
+            // 做法：目标高度先过一道"避险抬升"——脚下离地太近就抬到净空线；前方 8 格内
+            // （机身三层都算）有方块就再抬一截越过它。抬升只加在**期望高度**上，姿态/推力
+            // 仍由下面各档自己的控制器写，所以对四种引擎是同一套、零副作用。
+            double avoidLift = vehicleAvoidLift(mount, hspeed);
+            if (avoidLift > 0.0) {
+                dy += avoidLift;
+                target = target.add(0.0, avoidLift, 0.0);
+                logAvoid(mount, avoidLift);
+            }
+
             // 【实测七百三十九·点1】悬停档：**机头锁住不动**（玩家原话「在空中悬停的时候，总是在
             // 原地进行不停的旋转……能不能让它的头在悬停期间朝向不要发生变化呢？」）。
             // 根因：悬停时跟随目标点就压在她自己脚下（水平误差≈0），算出来的 `err` 是一个**退化方位**
@@ -2354,15 +2390,53 @@ public final class MaidMountCompat {
                 }
                 // 只有"确实要去某处"才起飞助跑：目标就在脚下同高度时不该硬把炮艇从地面拔起来。
                 boolean wantAir = horiz > FLIGHT_ARRIVE || Math.abs(dy) > FLIGHT_ALT_DEADZONE;
-                boolean lifting = grounded && wantAir;
-                if (lifting) {
-                    // ① 抬头（负 = 机头朝上）：让引擎的 viewVector 带上竖直分量
+                if (grounded && wantAir) {
+                    // 【实测七百七十五·点3】固定翼定制起飞三步（玩家原话：「先确保周围相当一部分
+                    // 是平地（允许接受凹凸，但是落差不能太大），不是的话就报环境不允许起飞。有允许的
+                    // 环境之后，就向那个平地的方向先进行加速，加速到一定程度之后，开始将机头往上抬，
+                    // 执行飞行链路，随后以主人为圆心，进行环绕盘旋。」）：
+                    //   ① 验平地：八向扫"助跑带"（28 格长 × 9 格宽）的地面落差，取最平的一条；
+                    //      一条都不合格 → 报"环境不允许起飞"并钉在原地（不硬拔、不滑跑）；
+                    //   ② 滑跑：机头锁在助跑方向、满推力，直到水平速度够；
+                    //   ③ 抬头+补竖直（原来的物理后门），随后交给引擎 loiter 盘旋 + 照常开火。
+                    double[] rw = aircraftRunway(mount);
+                    if (rw == null) {
+                        try {
+                            mProcessInput.invoke(mount, (short) 0); // 清输入位（不滑跑）
+                        } catch (Throwable ignored) {
+                        }
+                        if (mSetPower != null) {
+                            try {
+                                mSetPower.invoke(mount, 0.0f);
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        refuseTakeoff(mount, maid);
+                        logDrive(mount, "固定翼起飞被拦：周围没有落差足够小的助跑地（环境不允许起飞）");
+                        return true;
+                    }
+                    forceHeadingOnto(mount, wrapDegrees((float) rw[0] - mount.getYRot()));
+                    mSetMouseY(mount, 0.0f);
+                    short rbits = 0x004;                  // 满推力
+                    if (modifier > 1.05) {
+                        rbits |= 0x100;
+                    }
+                    mProcessInput.invoke(mount, rbits);
+                    double rollSpeed = horizontalSpeed(mount);
+                    if (rollSpeed < AIRCRAFT_TAKEOFF_SPEED) {
+                        logDrive(mount, "固定翼滑跑 引擎=" + eng
+                                + " 助跑方向=" + Math.round(rw[0]) + "° 助跑带落差=" + fmt2(rw[1]) + "格"
+                                + " 水平速度=" + fmt2(rollSpeed) + "/" + fmt2(AIRCRAFT_TAKEOFF_SPEED)
+                                + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                        return true;
+                    }
+                    // ② 抬头（负 = 机头朝上）：让引擎的 viewVector 带上竖直分量
                     //    （地面推力 :879 是 viewVector × force，抬头才有爬升分量）。
                     try {
                         mount.setXRot(-AIRCRAFT_TAKEOFF_PITCH);
                     } catch (Throwable ignored) {
                     }
-                    // ② 直接补竖直速度，顶掉这条"必须助跑"的物理死锁。
+                    // ③ 直接补竖直速度，顶掉这条"必须助跑"的物理死锁。
                     //    量为什么取 0.25：地面每拍把 deltaMovement 三轴都乘 f（:707，f≈0.497），
                     //    再在 baseTick 末尾扣掉重力 0.06（DefaultVehicleData 默认 gravity=0.06）——
                     //    稳态 v = (0.497*add − 0.06)/0.503，add=0.25 ⇒ v≈0.128 格/拍（≈2.5 格/秒），
@@ -2373,7 +2447,7 @@ public final class MaidMountCompat {
                         mount.setDeltaMovement(tdm.x, Math.max(tdm.y, 0.0) + AIRCRAFT_TAKEOFF_LIFT, tdm.z);
                     } catch (Throwable ignored) {
                     }
-                    // ③ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
+                    // ④ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
                     //    那是 loiter 的另一个前置条件 baseTick:3845）。
                     if (mSetPower != null) {
                         try {
@@ -2381,10 +2455,10 @@ public final class MaidMountCompat {
                         } catch (Throwable ignored) {
                         }
                     }
-                    // ④ 顺手把 loiter 参数写好：离地那一拍 baseTick 就会立刻调 aircraftLoiter，
+                    // ⑤ 顺手把 loiter 参数写好：离地那一拍 baseTick 就会立刻调 aircraftLoiter，
                     //    中间不留"起来了但没人接管"的空档。
                     tryAircraftLoiter(mount, target, horiz);
-                    logDrive(mount, "固定翼起飞助跑 引擎=" + eng
+                    logDrive(mount, "固定翼起飞 引擎=" + eng
                             + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
                             + " 补竖直=" + fmt2(AIRCRAFT_TAKEOFF_LIFT)
                             + " 竖直速度=" + fmt2(verticalSpeed(mount))
@@ -2540,6 +2614,137 @@ public final class MaidMountCompat {
     /** 固定翼 loiter 的最大半径（格）：转太大圈就等于没在压制。 */
     private static final double AIRCRAFT_LOITER_MAX_R = 60.0;
 
+    /* ---------- 【实测七百七十五·点3】固定翼定制起飞：验平地 → 加速 → 抬机头 ---------- */
+
+    /** 助跑带长度（格，从机头正前方扫出去）。 */
+    private static final int AIRCRAFT_RUNWAY_LEN = 28;
+    /** 助跑带半宽（格，左右各扫这么多列）。 */
+    private static final int AIRCRAFT_RUNWAY_HALF = 4;
+    /** 助跑带允许的最大落差（格）——玩家原话「允许接受凹凸，但是落差不能太大」。 */
+    private static final double AIRCRAFT_RUNWAY_MAX_RELIEF = 6.0;
+    /** 起飞离地所需的最小水平速度（格/拍 ≈ 6 格/秒）——"加速到一定程度"的"一定程度"。 */
+    private static final double AIRCRAFT_TAKEOFF_SPEED = 0.30;
+    /** 助跑带扫描的缓存拍数（2 秒；地面不会两秒一变，且扫描本身是几十次方块查询）。 */
+    private static final long AIRCRAFT_RUNWAY_CACHE_TICKS = 40L;
+
+    /** 每台固定翼的助跑带缓存：UUID → {方向yaw, 落差, 到期gameTime, 合格1/不合格0}。 */
+    private static final java.util.Map<UUID, double[]> RUNWAY_CACHE =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百七十五·点3】给这台固定翼找一条"落差足够小"的助跑带。
+     *
+     * <p>八向各扫一条 {@link #AIRCRAFT_RUNWAY_LEN} 格长 × {@link #AIRCRAFT_RUNWAY_HALF}
+     * 格半宽的带子，取每条带内地面高度的 max−min 作为落差；取落差最小的一条。
+     * 最小落差超过 {@link #AIRCRAFT_RUNWAY_MAX_RELIEF}（或有整列悬空）→ 返回 {@code null}
+     * （调用方报"环境不允许起飞"）。
+     *
+     * @return {@code {方向yaw, 落差}}；一条都不合格 → null
+     */
+    private static double[] aircraftRunway(Entity mount) {
+        try {
+            if (mount == null || !(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+                return null;
+            }
+            UUID id = mount.getUUID();
+            long now = sl.getGameTime();
+            double[] c = RUNWAY_CACHE.get(id);
+            if (c != null && now <= c[2]) {
+                return c[3] > 0.5 ? new double[]{c[0], c[1]} : null;
+            }
+            if (RUNWAY_CACHE.size() > 256) {
+                RUNWAY_CACHE.clear();
+            }
+            int my = net.minecraft.util.Mth.floor(mount.getY());
+            double bestRelief = Double.MAX_VALUE;
+            double bestYaw = 0.0;
+            for (int i = 0; i < 8; i++) {
+                double yaw = i * 45.0;
+                double hx = -Math.sin(Math.toRadians(yaw));
+                double hz = Math.cos(Math.toRadians(yaw));
+                double min = Double.MAX_VALUE, max = -Double.MAX_VALUE;
+                int voids = 0;
+                for (int d = 2; d <= AIRCRAFT_RUNWAY_LEN; d += 2) {
+                    for (int w = -AIRCRAFT_RUNWAY_HALF; w <= AIRCRAFT_RUNWAY_HALF; w++) {
+                        int bx = net.minecraft.util.Mth.floor(mount.getX() + hx * d - hz * w);
+                        int bz = net.minecraft.util.Mth.floor(mount.getZ() + hz * d + hx * w);
+                        int gy = surfaceY(sl, bx, my, bz);
+                        if (gy == Integer.MIN_VALUE) {
+                            voids++;
+                            continue;
+                        }
+                        min = Math.min(min, gy);
+                        max = Math.max(max, gy);
+                    }
+                }
+                if (min == Double.MAX_VALUE) {
+                    continue; // 这条带子全悬空
+                }
+                double relief = (max - min) + voids * 0.5; // 少量悬空列折算成落差惩罚
+                if (relief < bestRelief) {
+                    bestRelief = relief;
+                    bestYaw = yaw;
+                }
+            }
+            boolean ok = bestRelief != Double.MAX_VALUE && bestRelief <= AIRCRAFT_RUNWAY_MAX_RELIEF;
+            if (!ok) {
+                bestRelief = bestRelief == Double.MAX_VALUE ? 99.0 : bestRelief;
+            }
+            RUNWAY_CACHE.put(id, new double[]{bestYaw, bestRelief, now + AIRCRAFT_RUNWAY_CACHE_TICKS,
+                    ok ? 1.0 : 0.0});
+            return ok ? new double[]{bestYaw, bestRelief} : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 某一列的地面高度（从 {@code fromY+4} 往下找第一格非空气）；找不到（悬空/虚空）→ {@code Integer.MIN_VALUE}。 */
+    private static int surfaceY(net.minecraft.server.level.ServerLevel sl, int x, int fromY, int z) {
+        try {
+            net.minecraft.core.BlockPos.MutableBlockPos p = new net.minecraft.core.BlockPos.MutableBlockPos();
+            for (int y = fromY + 4; y > sl.getMinBuildHeight() + 1; y--) {
+                if (!sl.getBlockState(p.set(x, y, z)).isAir()) {
+                    return y;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return Integer.MIN_VALUE;
+    }
+
+    /** 起飞被环境拦下时的留痕 + 给主人的一句话（5 秒/车，日志搜「环境不允许起飞」）。 */
+    private static void refuseTakeoff(Entity mount, Entity maid) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID().toString();
+            Long last = RUNWAY_REFUSE_AT.get(key);
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            if (RUNWAY_REFUSE_AT.size() > 256) {
+                RUNWAY_REFUSE_AT.clear();
+            }
+            RUNWAY_REFUSE_AT.put(key, now);
+            com.maidsmart.tool.PromaidLog.log("环境不允许起飞", describeKind(mount)
+                    + " 周围没有落差足够小的助跑地（需要一条 28×9 格、落差 ≤ "
+                    + (long) AIRCRAFT_RUNWAY_MAX_RELIEF + " 格的平地）→ 拒绝起飞");
+            try {
+                if (maid instanceof EntityMaid em
+                        && em.getOwner() instanceof net.minecraft.world.entity.player.Player p) {
+                    p.displayClientMessage(net.minecraft.network.chat.Component.literal(
+                            "[女仆助手] 环境不允许起飞：周围没有足够平整的助跑道（落差要 ≤ "
+                                    + (long) AIRCRAFT_RUNWAY_MAX_RELIEF + " 格）"), true);
+                }
+            } catch (Throwable ignored) {
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「环境不允许起飞」留痕节流表（车 → 上次毫秒）。 */
+    private static final java.util.Map<String, Long> RUNWAY_REFUSE_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
     /**
      * 【实测七百二十九·点1】实测竖直速度（格/拍）——PD 高度控制的 D 项。
      *
@@ -2574,6 +2779,103 @@ public final class MaidMountCompat {
             return 0.0;
         }
     }
+
+    /* ---------- 【实测七百七十五·点4】载具环境避险（照搬"移动电路"：不贴地/不撞墙/不钻一格） ---------- */
+
+    /** 载具的最小离地净空（格）——"不贴地"。低于它就把期望高度抬上来。 */
+    private static final double VEH_MIN_CLEAR = 3.0;
+    /** 前方有方块时一次抬升的格数——"不撞墙 / 不钻一格"（机身三层任一被挡就抬）。 */
+    private static final double VEH_AVOID_LIFT = 6.0;
+    /** 前方探测距离（格）：机身高度起连续三层都算。 */
+    private static final int VEH_PROBE_LEN = 8;
+
+    /**
+     * 这一拍该给期望高度加多少"避险抬升"（格）；不需要 → 0。
+     *
+     * <p>两条判据（与扫帚/滑翔那一套"移动电路"同口径）：
+     * <ol>
+     *   <li><b>不贴地</b>：从机身往下找地面，净空 &lt; {@link #VEH_MIN_CLEAR} 就抬到净空线
+     *       （避免擦地/蹭树冠，也给"投弹安全高度/接敌高度"之外再加一道最低保险）；</li>
+     *   <li><b>不撞墙 / 不钻一格</b>：沿**当前水平行进方向**（慢到看不出方向时用机头）探
+     *       {@link #VEH_PROBE_LEN} 格，机身高度起三层只要有一格非空气 → 抬 {@link #VEH_AVOID_LIFT}
+     *       格从顶上过（不横向绕——载具不像扫帚那样灵活，往上让开是唯一稳的走法）。</li>
+     * </ol>
+     * 只有"真的在动"（水平速度 &gt; 0.03）才算前方障碍：原地悬停在墙边不该被永久抬升。
+     */
+    private static double vehicleAvoidLift(Entity mount, double hspeed) {
+        try {
+            if (mount == null || !(mount.level() instanceof net.minecraft.server.level.ServerLevel sl)) {
+                return 0.0;
+            }
+            double lift = 0.0;
+            // ① 不贴地
+            int gy = surfaceY(sl, net.minecraft.util.Mth.floor(mount.getX()),
+                    net.minecraft.util.Mth.floor(mount.getY()) - 1,
+                    net.minecraft.util.Mth.floor(mount.getZ()));
+            if (gy != Integer.MIN_VALUE) {
+                double clear = mount.getY() - (gy + 1.0);
+                if (clear < VEH_MIN_CLEAR) {
+                    lift = Math.max(lift, Math.min(VEH_MIN_CLEAR - clear, VEH_AVOID_LIFT));
+                }
+            }
+            // ② 不撞墙 / 不钻一格（只在真在动时判）
+            if (hspeed > 0.03) {
+                Vec3 dm = mount.getDeltaMovement();
+                double len = Math.sqrt(dm.x * dm.x + dm.z * dm.z);
+                double hx, hz;
+                if (len > 1.0E-4) {
+                    hx = dm.x / len;
+                    hz = dm.z / len;
+                } else {
+                    float yaw = mount.getYRot();
+                    hx = -Math.sin(Math.toRadians(yaw));
+                    hz = Math.cos(Math.toRadians(yaw));
+                }
+                int by = net.minecraft.util.Mth.floor(mount.getY());
+                for (int d = 1; d <= VEH_PROBE_LEN; d++) {
+                    int bx = net.minecraft.util.Mth.floor(mount.getX() + hx * d);
+                    int bz = net.minecraft.util.Mth.floor(mount.getZ() + hz * d);
+                    boolean blocked = false;
+                    for (int up = 0; up <= 2; up++) {
+                        if (!sl.getBlockState(new net.minecraft.core.BlockPos(bx, by + up, bz)).isAir()) {
+                            blocked = true;
+                            break;
+                        }
+                    }
+                    if (blocked) {
+                        lift = Math.max(lift, VEH_AVOID_LIFT);
+                        break;
+                    }
+                }
+            }
+            return lift;
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /** 避险抬升的留痕（5 秒/车，日志搜「载具避险」）。 */
+    private static void logAvoid(Entity mount, double lift) {
+        try {
+            long now = System.currentTimeMillis();
+            UUID id = mount.getUUID();
+            Long last = AVOID_AT.get(id);
+            if (last != null && now - last < 5000L) {
+                return;
+            }
+            if (AVOID_AT.size() > 256) {
+                AVOID_AT.clear();
+            }
+            AVOID_AT.put(id, now);
+            com.maidsmart.tool.PromaidLog.log("载具避险", describeKind(mount)
+                    + " 贴地/前方有方块 → 期望高度抬升 " + fmt2(lift) + " 格越过");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 载具避险留痕节流表（车 → 上次毫秒）。 */
+    private static final java.util.Map<UUID, Long> AVOID_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * 【实测七百二十九·点1】"停住了"的水平速度阈值（格/拍）——低于它才允许进悬停档。
@@ -3283,6 +3585,15 @@ public final class MaidMountCompat {
         return list instanceof java.util.Collection<?> c ? c.size() : 0;
     }
 
+    /** 取列表第 i 项（{@code List} 专用；拿不到 → null）。逐弹种枚举用（775·点1）。 */
+    private static Object listGet(Object list, int i) {
+        try {
+            return list instanceof java.util.List<?> l && i >= 0 && i < l.size() ? l.get(i) : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private static int asInt(Object v, int dflt) {
         return v instanceof Integer i ? i : dflt;
     }
@@ -3427,6 +3738,53 @@ public final class MaidMountCompat {
     /** 炮名里带 Bomb 的 = 往下丢的航空炸弹（基洛夫/斯图卡那几门），走引擎投弹链路与最小间隔。 */
     private static boolean isBombGun(String gun) {
         return gun != null && gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
+    }
+
+    /**
+     * 【实测七百七十五·点2】车上所有炸弹武器的**最大爆炸半径**（格）——投弹安全高度的基准。
+     *
+     * <h2>玩家原话（即规格）</h2>
+     * 「我发现向上20格似乎不行。还是很容易被炸到。应该把上升高度调整为那个炸弹所能波及的
+     *  半径的大小。保证全身而退。」
+     *
+     * <h2>为什么 20 格不够（算术）</h2>
+     * 基洛夫那颗航空炸弹 {@code ExplosionRadius=42}（vehicle json 实证），而旧版安全高度是
+     * 配置里的固定 20 格、还是从**目标**算起的：炸弹落点就在目标脚下，机身却在爆心正上方
+     * 20 格 → 距离 20 < 42，等于**自己站在爆心顶部**（飞船还吃
+     * {@code "@#superbwarfare:aerial_bomb * 3"} 三倍航空炸弹伤害）。
+     *
+     * <p>读法：逐门炸弹读 {@code GunProp.EXPLOSION_RADIUS}，取最大；读不到 → 0
+     * （调用方退回配置值，一个字节不变）。
+     */
+    static double bombBlastRadius(Entity mount, EntityMaid maid) {
+        double best = 0.0;
+        try {
+            if (mount == null || fGunPropExplosionRadius == null || mGunGetProp == null) {
+                return 0.0;
+            }
+            java.util.List<String> guns = gunsFor(mount, maid);
+            if (guns.isEmpty()) {
+                String one = gunNameFor(mount, maid);
+                if (one != null) {
+                    guns = java.util.Collections.singletonList(one);
+                }
+            }
+            for (String g : guns) {
+                if (!isBombGun(g)) {
+                    continue;
+                }
+                Object gd = gunDataOf(mount, g);
+                if (gd == null) {
+                    continue;
+                }
+                Object v = mGunGetProp.invoke(gd, fGunPropExplosionRadius.get(null));
+                if (v instanceof Number n) {
+                    best = Math.max(best, n.doubleValue());
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return best;
     }
 
     /** 这个位上坐的是不是玩家（玩家在瞄 → 我们让开）。 */
@@ -3874,8 +4232,7 @@ public final class MaidMountCompat {
     }
 
     /** 补弹匣的共用实现（GunData 已取到）：空匣 + 车容器里有对得上的弹 → reloadAmmo。 */
-    private static void ensureGunLoaded(Entity mount, Object gd) {
-        try {
+    private static void ensureGunLoaded(Entity mount, Object gd) {        try {
             if (gd == null || mGunReloadAmmo == null) {
                 return;
             }
@@ -3905,6 +4262,143 @@ public final class MaidMountCompat {
         } catch (Throwable ignored) {
         }
     }
+
+    /**
+     * 【实测七百七十五·点1】开火前"这门炮的备弹三步"——治「坦克主炮始终不使用」。
+     *
+     * <h2>实机日志（774 那一版，01:51:52 / 01:51:57）</h2>
+     * 坦克主炮 {@code Cannon} 只打了两发（弹匣 1 + 装填 100 拍 = 5 秒，正好两发），此后
+     * 78 秒里每一轮都只有 {@code MachineGun} / {@code PassengerMachineGun}——
+     * 主炮"打空车里那两发就再也没响过"。
+     *
+     * <h2>为什么（与点1的"弹药盒"是同一个病根的另一半）</h2>
+     * M1A2 主炮的 {@code AmmoType} 是**一张表**（{@code large_shell_ap} / {@code large_shell_he}
+     * / {@code large_shell_gs}，vehicle json 实证），而 {@code GunData} 同时只有**一个**
+     * {@code selectedAmmoConsumer}。旧版装填判据只看当前选中那一种、也从不换弹种：
+     * 她带着 HE、炮上选着 AP → HE 搬不进车（识弹失败）、炮也没人会去切到 HE →
+     * 这门炮就永远"没有对得上的弹"。
+     *
+     * <h2>本方法</h2>
+     * ① {@link #ensureGunLoaded(Entity, String)}——弹匣空了先从车容器补；
+     * ② 仍不能射（{@code canShoot=false}）→ 在这门炮**自己的弹种表**里换一个真有余弹的弹种
+     *    （与 745 的 {@code ensureUsableAmmoMode} 同一套账：{@code count(gd, supplier) > 0}）；
+     * ③ 换完再补一次弹匣。
+     * 三步之后仍不能射 → 记一条「模组坐骑·缺弹」（5 秒/车/炮）：下次日志里直接能看出"是没弹
+     * 还是别的原因"，不用再猜。
+     */
+    private static void prepareGun(Entity mount, String gun) {
+        try {
+            if (mount == null || gun == null) {
+                return;
+            }
+            ensureGunLoaded(mount, gun);
+            Object gd = gunDataOf(mount, gun);
+            if (gd == null || mGunCanShoot == null) {
+                return;
+            }
+            Entity supplier = ammoSupplierOf(mount);
+            if (Boolean.TRUE.equals(mGunCanShoot.invoke(gd, supplier))) {
+                return;
+            }
+            if (switchGunAmmoType(gd, supplier, gun)) {
+                ensureGunLoaded(mount, gd);
+                if (Boolean.TRUE.equals(mGunCanShoot.invoke(gd, supplier))) {
+                    return;
+                }
+            }
+            logGunDry(mount, gun);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 补弹/开火共用的弹药来源实体：{@code mount.getAmmoSupplier()}（反编译返回车自己）。 */
+    private static Entity ammoSupplierOf(Entity mount) {
+        try {
+            if (mAmmoSupplier != null) {
+                Object s = mAmmoSupplier.invoke(mount);
+                if (s instanceof Entity e) {
+                    return e;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return mount;
+    }
+
+    /**
+     * 在这门炮自己的弹种表里换一个"真有余弹"的弹种（775·点1）。
+     *
+     * <p>判据与引擎 {@code canShoot} 同源：{@link #ammoAvailable}（现成弹匣或
+     * {@code selectedAmmoConsumer().count(gd, supplier) > 0}）。一个都换不出来 → 把弹种
+     * **还原成原来那个**（不替玩家改选择）并返回 false。
+     */
+    private static boolean switchGunAmmoType(Object gd, Entity supplier, String gun) {
+        try {
+            if (gd == null || mChangeAmmoConsumer == null || mGunGetProp == null
+                    || fGunPropAmmoConsumer == null) {
+                return false;
+            }
+            Object list = mGunGetProp.invoke(gd, fGunPropAmmoConsumer.get(null));
+            int n = sizeOf(list);
+            if (n <= 0) {
+                return false;
+            }
+            // 当前选中的是第几项（用于"换不出来就还原"）
+            int orig = -1;
+            if (mGunSelectedAmmo != null) {
+                Object sel = mGunSelectedAmmo.invoke(gd);
+                for (int i = 0; i < n; i++) {
+                    if (listGet(list, i) == sel) {
+                        orig = i;
+                        break;
+                    }
+                }
+            }
+            for (int i = 0; i < n; i++) {
+                try {
+                    mChangeAmmoConsumer.invoke(gd, i, supplier);
+                } catch (Throwable ignored) {
+                    continue;
+                }
+                if (ammoAvailable(gd, supplier)) {
+                    com.maidsmart.tool.PromaidLog.log("模组坐骑·弹种",
+                            "「" + gun + "」当前弹种无弹 → 切到弹种 #" + i);
+                    return true;
+                }
+            }
+            if (orig >= 0) {
+                try {
+                    mChangeAmmoConsumer.invoke(gd, orig, supplier); // 还原：不替玩家改选中的弹种
+                } catch (Throwable ignored) {
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 这一门炮"彻底没弹"时的留痕（5 秒/车/炮，日志搜「模组坐骑·缺弹」）。 */
+    private static void logGunDry(Entity mount, String gun) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.getUUID() + "|" + gun;
+            Long last = ADRY_AT.get(key);
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            if (ADRY_AT.size() > 512) {
+                ADRY_AT.clear();
+            }
+            ADRY_AT.put(key, now);
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·缺弹", describeKind(mount)
+                    + " 炮「" + gun + "」弹匣空、全部弹种都换不出余弹（车容器与她背包都没有对得上的弹）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 「缺弹」留痕节流表（车+炮 → 上次毫秒）。 */
+    private static final java.util.Map<String, Long> ADRY_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** {@code getAmmoSupplier()}（反编译：返回车自己）——补弹时作为弹药来源实体。 */
     private static Method mAmmoSupplier;
@@ -4444,6 +4938,23 @@ public final class MaidMountCompat {
                 if (st instanceof net.minecraft.world.item.ItemStack iss && !iss.isEmpty()) {
                     out.add(consumer);
                 }
+                // 【实测七百七十五·点1】把这一门炮的**全部弹种**也收进来（不只是当前选中的那个）。
+                // 旧版只收 selectedAmmoConsumer：M1A2 主炮选着 AP、她带着 HE 时，那摞 HE 永远
+                // 搬不进车（实机日志：主炮打两发就再无 Cannon——车里原有的打光了，她的 HE 进不来）。
+                if (mGunGetProp != null && fGunPropAmmoConsumer != null) {
+                    Object list = mGunGetProp.invoke(gd, fGunPropAmmoConsumer.get(null));
+                    int n = sizeOf(list);
+                    for (int i = 0; i < n; i++) {
+                        Object c = listGet(list, i);
+                        if (c == null || out.contains(c)) {
+                            continue;
+                        }
+                        Object st2 = consumerStack(c);
+                        if (st2 instanceof net.minecraft.world.item.ItemStack is2 && !is2.isEmpty()) {
+                            out.add(c);
+                        }
+                    }
+                }
             }
         } catch (Throwable ignored) {
         }
@@ -4735,14 +5246,14 @@ public final class MaidMountCompat {
                         boolean ok;
                         if (!bomb && directFireReady()) {
                             // 直瞄：不等炮塔转到位，方向由 directFireAt 自己给（773 那条）。
-                            ensureGunLoaded(mount, g); // 弹匣空就自己上弹（不然这门永远打不响）
+                            prepareGun(mount, g); // 弹匣空/弹种错就自己上弹（不然这门永远打不响）
                             ok = directFireAt(mount, maid, target, g);
                         } else {
                             // 引擎原路：投弹 / 直瞄反射不可用。照旧等"对准或保底硬打"。
                             if (!aimed && !force) {
                                 continue;
                             }
-                            ensureGunLoaded(mount, g);
+                            prepareGun(mount, g);
                             ok = fireAt(mount, maid, target, g);
                         }
                         if (ok) {

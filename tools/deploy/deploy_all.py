@@ -6,6 +6,18 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十五（v1.3.0 beta，同名覆盖，未发版）：**两树同步的载具四处整改** ——
+① 坦克主炮「只打两发就哑」：装填判据从"只看当前选中的弹种"放宽到**每门炮的全部弹种**
+   （GunProp.AMMO_CONSUMER 整表），并在开火前加 prepareGun 三步（补弹匣 → 换有弹的弹种 →
+   再补弹匣）；彻底没弹写「模组坐骑·缺弹」。
+② 投弹安全高度 = max(配置值, 该炸弹 ExplosionRadius + 6)（基洛夫 42+6=48）——治
+   「向上20格还是被炸到」。
+③ Ju-87 / A-10 / AC-130H / KV-16 解禁（汤姆 F6F / 迷你快艇继续拦）+ 定制起飞链路：
+   八向扫 28×9 助跑道（落差 ≤ 6 格，否则报「环境不允许起飞」并钉在原地）→ 朝最平方向
+   满推力滑跑 → 速度 ≥ 0.30 格/拍才抬机头离地 → 引擎 loiter 以主人/敌人为圆心盘旋 + 开火。
+④ 载具环境避险（照搬移动电路）：不贴地（净空 < 3 格抬升）+ 不撞墙 / 不钻一格
+   （前方 8 格机身三层被挡就抬 6 格）。
+
 实测七百七十四（v1.3.0 beta，同名覆盖，未发版）：**两树同步的载具武器四处整改** ——
 ① 装填认得「弹药盒」：stackIsWantedAmmo 在旧判据（散装弹）之上补盒装弹（AmmoSupplierItem 子类，
    按 getType() == consumer.getPlayerAmmoType()）与通用弹药盒（AmmoBoxItem，按 Ammo.get(stack) > 0），
