@@ -7,14 +7,12 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.maidsmart.tool.PromaidLog;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.TagKey;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraftforge.registries.ForgeRegistries;
 
-import java.io.Reader;
-import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -56,11 +54,18 @@ import java.util.function.Predicate;
  * </pre>
  * {@code keepN} 不是判定，而是**上限**：只对已被判为"搬"的物品生效——一次回收里，某物品在她背包里
  * 最多留 N 个，超出部分才搬走（所以胡萝卜：留 16 个用于补种，其余进库）。
+ *
+ * <p>【1.20.1 差异】规则文件路径走 {@code FMLPaths.CONFIGDIR}（本树的房屋范式），读写用
+ * {@code Files.readString / writeString}；Gson 用法与 neo 逐字相同。
  */
 public final class MaidBdRules {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final Path FILE = Path.of("config", "promaid_bd_rules.json");
+
+    /** 规则文件（config/promaid_bd_rules.json）。用方法解析，避免类初始化早于 FML 路径就绪。 */
+    private static Path file() {
+        return net.minecraftforge.fml.loading.FMLPaths.CONFIGDIR.get().resolve("promaid_bd_rules.json");
+    }
 
     /** 一条保留规则（背包里最多留 N 个，多的搬走）。 */
     public record KeepRule(String match, long keep) {
@@ -87,14 +92,13 @@ public final class MaidBdRules {
         }
         loaded = true;
         try {
-            if (Files.exists(FILE)) {
-                try (Reader r = Files.newBufferedReader(FILE, StandardCharsets.UTF_8)) {
-                    JsonObject o = JsonParser.parseReader(r).getAsJsonObject();
-                    moveList = readStrings(o, "move");
-                    keepList = readStrings(o, "keep");
-                    keepNList = readKeepN(o, "keepN");
-                    atLeastList = readAtLeast(o);
-                }
+            Path f = file();
+            if (Files.exists(f)) {
+                JsonObject o = JsonParser.parseString(Files.readString(f, StandardCharsets.UTF_8)).getAsJsonObject();
+                moveList = readStrings(o, "move");
+                keepList = readStrings(o, "keep");
+                keepNList = readKeepN(o, "keepN");
+                atLeastList = readAtLeast(o);
             } else {
                 // 首次生成默认规则：胡萝卜/土豆/甜菜根各留 16（够补种），其余照内置名单走
                 keepNList = new ArrayList<>(List.of(
@@ -161,7 +165,8 @@ public final class MaidBdRules {
 
     private static synchronized void save() {
         try {
-            Files.createDirectories(FILE.getParent());
+            Path f = file();
+            Files.createDirectories(f.getParent());
             JsonObject o = new JsonObject();
             JsonArray m = new JsonArray();
             moveList.forEach(m::add);
@@ -185,9 +190,7 @@ public final class MaidBdRules {
             o.add("keep", k);
             o.add("keepN", kn);
             o.add("keepAtLeast", al);
-            try (Writer w = Files.newBufferedWriter(FILE, StandardCharsets.UTF_8)) {
-                GSON.toJson(o, w);
-            }
+            Files.writeString(f, GSON.toJson(o), StandardCharsets.UTF_8);
         } catch (Throwable t) {
             PromaidLog.log("超越维度规则", "写入 config/promaid_bd_rules.json 失败：" + t);
         }
@@ -333,18 +336,18 @@ public final class MaidBdRules {
 
     /** 匹配一条规则写法：裸 id / {@code item:} / {@code tag:namespace:path}。 */
     public static boolean matches(ItemStack s, String entry) {
-        if (s == null || s.isEmpty() || entry == null || entry.isEmpty()) {
+        if (s == null || s.m_41619_() || entry == null || entry.isEmpty()) {
             return false;
         }
         try {
             String e = entry.trim();
             if (e.startsWith("tag:")) {
-                return s.is(tagOf(e.substring(4)));
+                return s.m_204117_(tagOf(e.substring(4)));
             }
             if (e.startsWith("item:")) {
                 e = e.substring(5);
             }
-            ResourceLocation id = BuiltInRegistries.ITEM.getKey(s.getItem());
+            ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.m_41720_());
             return id != null && id.toString().equals(e);
         } catch (Throwable t) {
             return false;
@@ -354,37 +357,37 @@ public final class MaidBdRules {
     public static TagKey<Item> tagOf(String raw) {
         String[] p = raw.split(":", 2);
         return p.length == 2
-                ? net.minecraft.tags.ItemTags.create(ResourceLocation.fromNamespaceAndPath(p[0], p[1]))
-                : net.minecraft.tags.ItemTags.create(ResourceLocation.fromNamespaceAndPath("c", raw));
+                ? net.minecraft.tags.ItemTags.create(new ResourceLocation(p[0], p[1]))
+                : net.minecraft.tags.ItemTags.create(new ResourceLocation("c", raw));
     }
 
     /** 供 bd_deposit_dry 用：某物品在这一轮里"最多能搬几个"的预算计算器。 */
     public static Predicate<ItemStack> isSameItem(ItemStack ref) {
-        return s -> s != null && !s.isEmpty() && s.getItem() == ref.getItem();
+        return s -> s != null && !s.m_41619_() && s.m_41720_() == ref.m_41720_();
     }
 
     /** 统计她背包里某个物品的总数（用于 keepN 预算）。 */
-    public static long countIn(net.neoforged.neoforge.items.IItemHandler inv, ItemStack ref) {
+    public static long countIn(net.minecraftforge.items.IItemHandler inv, ItemStack ref) {
         long n = 0;
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
-            if (s != null && !s.isEmpty() && s.getItem() == ref.getItem()) {
-                n += s.getCount();
+            if (s != null && !s.m_41619_() && s.m_41720_() == ref.m_41720_()) {
+                n += s.m_41613_();
             }
         }
         return n;
     }
 
     /** 她背包里符合这条写法的物品总数（裸 id / item: / tag: 都支持）。 */
-    public static long countMatching(net.neoforged.neoforge.items.IItemHandler inv, String entry) {
+    public static long countMatching(net.minecraftforge.items.IItemHandler inv, String entry) {
         if (inv == null || entry == null || entry.isEmpty()) {
             return 0;
         }
         long n = 0;
         for (int i = 0; i < inv.getSlots(); i++) {
             ItemStack s = inv.getStackInSlot(i);
-            if (s != null && !s.isEmpty() && matches(s, entry)) {
-                n += s.getCount();
+            if (s != null && !s.m_41619_() && matches(s, entry)) {
+                n += s.m_41613_();
             }
         }
         return n;

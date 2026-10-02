@@ -5,14 +5,14 @@ import com.github.tartaricacid.touhoulittlemaid.compat.extracontainer.ContainerR
 import com.github.tartaricacid.touhoulittlemaid.compat.extracontainer.MaidContainerCache;
 import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.tool.PromaidLog;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.items.IItemHandler;
+import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.List;
 
@@ -51,6 +51,11 @@ import java.util.List;
  *   <li><b>不取消拾取</b>：我们只从掉落物里拿走我们能收下的那部分，剩下的照旧由 TLM 走它自己的
  *       流程（含额外容器）。少拿一点无所谓，多拿或复制是绝对不行的。</li>
  * </ol>
+ *
+ * <p>【1.20.1 差异】事件总线 {@code MinecraftForge.EVENT_BUS}；拾取事件是
+ * {@code MaidPickupEvent.ItemResultPre}（{@code getMaid()} / {@code isSimulate()} /
+ * {@code getEntityItem()} 均在 Forge 编译 jar 实证存在）；掉落物取物 {@code m_32055_}（getItem）、
+ * 丢弃 {@code m_142687_(RemovalReason.DISCARDED)}、缩小 {@code m_41774_(int)}。
  */
 public final class MaidBdOverflow {
 
@@ -64,7 +69,7 @@ public final class MaidBdOverflow {
             return;
         }
         hooked = true;
-        NeoForge.EVENT_BUS.register(new MaidBdOverflow());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new MaidBdOverflow());
     }
 
     @SubscribeEvent
@@ -80,15 +85,15 @@ public final class MaidBdOverflow {
             return;   // 模拟那一遍什么都不动（TLM 自己会用它做判定）
         }
         EntityMaid maid = event.getMaid();
-        if (maid == null || maid.level().isClientSide() || !MaidBdDeposit.isOn(maid) || !MaidBdCompat.enabled()) {
+        if (maid == null || maid.m_9236_().m_5776_() || !MaidBdDeposit.isOn(maid) || !MaidBdCompat.enabled()) {
             return;
         }
         ItemEntity itemEntity = event.getEntityItem();
-        if (itemEntity == null || !itemEntity.isAlive()) {
+        if (itemEntity == null || !itemEntity.m_6084_()) {
             return;
         }
-        ItemStack stack = itemEntity.getItem();
-        if (stack.isEmpty() || !MaidBdDeposit.isProduct(stack)) {
+        ItemStack stack = itemEntity.m_32055_();
+        if (stack.m_41619_() || !MaidBdDeposit.isProduct(stack)) {
             return;   // 只搬产物
         }
         Player owner = MaidBdCompat.ownerOf(maid);
@@ -97,7 +102,7 @@ public final class MaidBdOverflow {
         }
         // ① 她自己的背包放得下吗？
         ItemStack afterSelf = simulateIntoMaidInv(maid, stack);
-        if (afterSelf.isEmpty()) {
+        if (afterSelf.m_41619_()) {
             return;
         }
         // ② 她饰品栏里的额外容器（精妙背包＝缓存）放得下吗？
@@ -118,24 +123,24 @@ public final class MaidBdOverflow {
             return;   // 缓存收得下 → 交给 TLM 的拾取链，我们不动它
         }
         // ③ 两层都满了：这一份进数据库
-        Object net = MaidBdCompat.primaryNet(owner);
-        long remainder = MaidBdCompat.insert(net, afterSelf, afterSelf.getCount());
+        Object netObj = MaidBdCompat.primaryNet(owner);
+        long remainder = MaidBdCompat.insert(netObj, afterSelf, afterSelf.m_41613_());
         if (remainder < 0) {
             return;   // 调用失败 → 什么都不改，照旧落地
         }
-        int accepted = afterSelf.getCount() - (int) Math.max(0, remainder);
+        int accepted = afterSelf.m_41613_() - (int) Math.max(0, remainder);
         if (accepted <= 0) {
             return;   // 数据库也拒收 → 照旧落地
         }
-        ItemStack inEntity = itemEntity.getItem();
-        if (inEntity.getCount() < accepted) {
-            accepted = inEntity.getCount();   // 防御：实体这一拍变了就只拿它有的
+        ItemStack inEntity = itemEntity.m_32055_();
+        if (inEntity.m_41613_() < accepted) {
+            accepted = inEntity.m_41613_();   // 防御：实体这一拍变了就只拿它有的
         }
-        inEntity.shrink(accepted);
-        if (inEntity.isEmpty()) {
-            itemEntity.discard();
+        inEntity.m_41774_(accepted);
+        if (inEntity.m_41619_()) {
+            itemEntity.m_142687_(Entity.RemovalReason.DISCARDED);
         }
-        PromaidLog.log("超越维度存入", maid.getName().getString() + " 溢出入库 "
+        PromaidLog.log("超越维度存入", maid.m_7755_().getString() + " 溢出入库 "
                 + MaidBdCompat.itemId(stack) + " × " + accepted
                 + "（她背包与额外容器都满了）");
     }
@@ -147,8 +152,8 @@ public final class MaidBdOverflow {
             if (inv == null) {
                 return stack;
             }
-            ItemStack rest = stack.copy();
-            for (int i = 0; i < inv.getSlots() && !rest.isEmpty(); i++) {
+            ItemStack rest = stack.m_41777_();
+            for (int i = 0; i < inv.getSlots() && !rest.m_41619_(); i++) {
                 rest = inv.insertItem(i, rest, true);
             }
             return rest;
@@ -176,7 +181,7 @@ public final class MaidBdOverflow {
 
     /** 物品 id（诊断用）。 */
     public static String idOf(ItemStack s) {
-        ResourceLocation id = BuiltInRegistries.ITEM.getKey(s.getItem());
+        ResourceLocation id = ForgeRegistries.ITEMS.getKey(s.m_41720_());
         return id == null ? "?" : id.toString();
     }
 }

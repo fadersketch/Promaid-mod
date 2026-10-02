@@ -172,6 +172,17 @@ public class PromaidConfigScreen extends Screen {
     /** v1.3.0(beta) 实测六百八十：搭方块禁用名单子页（搭路板块）——点一下切换"禁止/允许" */
     private boolean buildBlackTable = false;
     private BuildBlackList buildBlackList;
+    /**
+     * v1.5.392 实测七百七十二：超越维度（BeyondDimensions）规则名单子页。
+     * <p>{@code bdRuleMode}：0=一定搬 1=一定不搬 2=保留N个 3=至少留N个。
+     * 本子页改的是**服务端** config/promaid_bd_rules.json，全程经
+     * {@link com.maidsmart.bd.MaidBdNetworking} 发 C2S 包，面板只读客户端缓存渲染。
+     */
+    private boolean bdRules = false;
+    private int bdRuleMode = 0;
+    private EditBox bdInput;
+    private EditBox bdNInput;
+    private BdRuleList bdRuleList;
     /** v1.5.100b：创造物品面板（矿表子页）——搜索框 + 物品网格，点击方块图标添加 */
     private EditBox creativeInput;
     private String creativeQuery = "";
@@ -589,6 +600,10 @@ public class PromaidConfigScreen extends Screen {
             this.buildBlackTableButtons(w, h, cx);
             return;
         }
+        if (this.bdRules) {
+            this.bdRulesButtons(w, h, cx);
+            return;
+        }
         this.sectionButtons(w, h, cx);
     }
 
@@ -646,6 +661,7 @@ public class PromaidConfigScreen extends Screen {
                 this.waterTable = false;
                 this.inGroup = false;
                 this.buildBlackTable = false;
+                this.bdRules = false;
                 this.m_7856_();
             };
         }
@@ -1529,6 +1545,451 @@ public class PromaidConfigScreen extends Screen {
                         })
                 .m_252987_(12, h - 34, 100, 20).m_253136_());
         this.bottomButtons(w, h, cx);
+    }
+
+    /* ==================== 实测七百七十二：超越维度规则名单子页 ==================== */
+
+    /**
+     * 超越维度（BeyondDimensions）规则名单子页。
+     *
+     * <p>布局与交互照搬替代品/喂水子页（同一套 creativeInput 搜索框 + creativeItems 网格 + 翻页）：
+     * 顶部四个模式按钮（一定搬 / 一定不搬 / 保留N个 / 至少留N个），中间点物品图标 = 在当前模式下
+     * 加入/移出，下方一个 EditBox 填 N（并可直接手输 {@code tag:c:ores} 这类标签写法，网格选不到标签），
+     * 底部列表列出**当前模式**的规则（每行「移除」）。
+     *
+     * <p>【为什么全程走网络】本子页改的是**服务端**的 {@code config/promaid_bd_rules.json}；面板是
+     * 纯客户端 Screen，直接写只会写到客户端自己的目录。所以每次改动都发 C2S 包
+     * （{@link com.maidsmart.bd.MaidBdNetworking}），服务端 {@code hasPermission(2)} 落盘后回推状态，
+     * 本子页只渲染客户端缓存。命令 {@code /maid_smart bd_rule *} 与本子页共用同一套落盘。
+     */
+    private void bdRulesButtons(int w, int h, int cx) {
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int tgY = 24;
+        String[] modeNames = {"一定搬", "一定不搬", "保留N个", "至少留N个"};
+        for (int i = 0; i < modeNames.length; i++) {
+            final int mi = i;
+            this.m_142416_(Button.m_253074_(
+                            Component.m_237113_((this.bdRuleMode == mi ? "\u00a7e\u25cf " : "\u00a77") + modeNames[i]),
+                            b -> {
+                                this.bdRuleMode = mi;
+                                this.creativePage = 0;
+                                com.maidsmart.bd.MaidBdNetworking.requestRuleState();
+                                this.m_7856_();
+                            })
+                    .m_252987_(left + i * 104, tgY, 100, 18).m_253136_());
+        }
+        // 注意：这里**不**发 requestRuleState——否则"回推状态→重建→再请求"会变成包循环。
+        // 请求只在进入子页与切换模式两处发（见调用点）。
+        // 搜索框（复用创造物品面板过滤）
+        this.creativeInput = new EditBox(this.f_96547_, left, 46, panelWidth - 20, 18,
+                Component.m_237113_("搜索物品（中英文皆可）"));
+        this.creativeInput.m_94199_(64);
+        this.creativeInput.m_94144_(this.creativeQuery == null ? "" : this.creativeQuery);
+        this.creativeInput.m_94151_(s -> {
+            this.creativeQuery = s;
+            this.rebuildCreative();
+        });
+        this.m_142416_(this.creativeInput);
+        int gridTop = GRID_TOP;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        this.gridRows = gridRowsNow;
+        this.rebuildCreative();
+        int py = gridBottom + 2;
+        if (this.creativePage > 0) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25c0"),
+                            b -> {
+                                this.creativePage--;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx - 40, py, 20, 16).m_253136_());
+        }
+        if (this.creativePage < this.creativePages() - 1) {
+            this.m_142416_(Button.m_253074_(Component.m_237113_("\u00a77\u25b6"),
+                            b -> {
+                                this.creativePage++;
+                                this.m_7856_();
+                            })
+                    .m_252987_(cx + 20, py, 20, 16).m_253136_());
+        }
+        // 手输添加（支持裸 id / item: / tag:）；"保留N个 / 至少留N个"模式下旁边多一个 N 输入框
+        boolean hasN = this.bdRuleMode >= 2;
+        int inputY = gridBottom + 24;
+        int nBoxW = hasN ? 46 : 0;
+        this.bdInput = new EditBox(this.f_96547_, left, inputY, panelWidth - 116 - nBoxW, 18,
+                Component.m_237113_("条目"));
+        this.bdInput.m_94199_(96);
+        this.bdInput.m_257771_(Component.m_237113_("minecraft:coal 或 tag:c:ores"));
+        this.m_142416_(this.bdInput);
+        if (hasN) {
+            this.bdNInput = new EditBox(this.f_96547_, left + panelWidth - 116 - nBoxW + 2, inputY, nBoxW - 2, 18,
+                    Component.m_237113_("N"));
+            this.bdNInput.m_94199_(7);
+            this.bdNInput.m_94144_("16");
+            this.bdNInput.m_257771_(Component.m_237113_("16"));
+            this.m_142416_(this.bdNInput);
+        } else {
+            this.bdNInput = null;
+        }
+        this.m_142416_(Button.m_253074_(
+                        Component.m_237113_(hasN ? "加进规则" : "加入"),
+                        b -> this.addBdRuleFromInput())
+                .m_252987_(left + panelWidth - 106, inputY, 90, 18).m_253136_());
+        int listTop = inputY + 24;
+        int listH = Math.max(24, Math.min((h - 78) - listTop - 4, h - listTop - 36));
+        this.bdRuleList = new BdRuleList(this.f_96547_, left, listTop, panelWidth - 20, listH);
+        this.bdRuleList.m_93507_(left);
+        this.m_142416_(this.bdRuleList);
+        this.m_142416_(Button.m_253074_(Component.m_237113_("\u2190 返回参数"),
+                        b -> {
+                            this.bdRules = false;
+                            this.m_7856_();
+                        })
+                .m_252987_(12, h - 34, 100, 20).m_253136_());
+        this.bottomButtons(w, h, cx);
+    }
+
+    /**
+     * 当前模式下，某物品是否已在名单里（图标高亮用）。
+     *
+     * <p>【只读客户端缓存，绝不碰 MaidBdRules】面板是客户端；{@code MaidBdRules} 读的是
+     * **客户端自己目录**里的 json（与服务端那份可能不同）。高亮必须反映"服务端真会用的那份"，
+     * 所以一律查 {@link com.maidsmart.bd.MaidBdNetworking} 下推的缓存。
+     * 标签条目（{@code tag:...}）看不出单个物品是否被覆盖，这类就按"不在此名单"画（可接受）。
+     */
+    private boolean isInBdRule(String id) {
+        if (id == null || id.isEmpty()) {
+            return false;
+        }
+        switch (this.bdRuleMode) {
+            case 1:
+                return com.maidsmart.bd.MaidBdNetworking.KEEP.contains(id);
+            case 2:
+                return bdCacheHasMatch(com.maidsmart.bd.MaidBdNetworking.KEEP_N, id);
+            case 3:
+                return bdCacheHasMatch(com.maidsmart.bd.MaidBdNetworking.AT_LEAST, id);
+            default:
+                return com.maidsmart.bd.MaidBdNetworking.MOVE.contains(id);
+        }
+    }
+
+    /** 缓存里 "match=count" 形式的条目是否命中该 id。 */
+    private static boolean bdCacheHasMatch(List<String> cache, String id) {
+        for (String e : cache) {
+            int eq = e.indexOf('=');
+            String match = eq > 0 ? e.substring(0, eq) : e;
+            if (match.equals(id)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** 渲染超越维度规则网格（与替代品子页同款：加入=绿框+勾，点击切换）。 */
+    private void renderBdRulesGrid(net.minecraft.client.gui.GuiGraphics g, int mouseX, int mouseY,
+                                   int w, int h, int cx) {
+        String[] modeNames = {"一定搬（永远搬走）", "一定不搬（永远留着）",
+                "保留 N 个（多了搬走）", "至少留 N 个（少了从网络取）"};
+        String title = "\u00a7e超越维度规则——" + modeNames[Math.min(this.bdRuleMode, 3)]
+                + "——点击物品图标加入/移出（再点取消）";
+        g.m_280653_(this.f_96547_, Component.m_237113_(title), cx, 10, 0xFFFFFF);
+        int panelLeft = Math.max(8, cx - 280);
+        int panelWidth = Math.min(560, w - 16);
+        int left = panelLeft + 10;
+        int gridTop = GRID_TOP;
+        int gridRowsNow = h < 215 ? 2 : GRID_ROWS;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        g.m_280509_(panelLeft + 8, gridTop - 4, panelLeft + panelWidth - 8, gridBottom, 0x80101010);
+        int perPage = GRID_COLS * this.gridRows;
+        int start = this.creativePage * perPage;
+        int end = Math.min(this.creativeItems.size(), start + perPage);
+        int hoverIdx = -1;
+        for (int i = start; i < end; i++) {
+            int col = (i - start) % GRID_COLS;
+            int row = (i - start) / GRID_COLS;
+            int x = left + col * GRID_CELL;
+            int y = gridTop + row * GRID_CELL;
+            net.minecraft.world.item.ItemStack stack = this.creativeItems.get(i);
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            String id = key == null ? "" : key.toString();
+            if (!id.isEmpty() && this.isInBdRule(id)) {
+                g.m_280509_(x - 1, y - 1, x + 17, y + 17, 0x8022CC22); // 绿框 = 已在当前名单
+                g.m_280653_(this.f_96547_, Component.m_237113_("\u2714"),
+                        x + 12, y + 12, 0xFFFFFF);
+            }
+            g.m_280480_(stack, x, y); // 物品图标
+            if (mouseX >= x && mouseX < x + GRID_CELL && mouseY >= y && mouseY < y + GRID_CELL) {
+                hoverIdx = i;
+            }
+        }
+        int infoX = left + GRID_COLS * GRID_CELL + 12;
+        int infoY = gridTop + 2;
+        if (hoverIdx >= 0 && hoverIdx < this.creativeItems.size()) {
+            net.minecraft.world.item.ItemStack stack = this.creativeItems.get(hoverIdx);
+            net.minecraft.resources.ResourceLocation key =
+                    net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(stack.m_41720_());
+            String hover = key == null ? "?" : key.toString();
+            String hc = com.maidsmart.build.BlueprintLib.cnName(hover);
+            g.m_280614_(this.f_96547_,
+                    Component.m_237113_("\u00a7f" + (hc.equals(hover) ? hover : hc)),
+                    infoX, infoY, 0xFFFFFF, false);
+            g.m_280614_(this.f_96547_, Component.m_237113_("\u00a77" + hover),
+                    infoX, infoY + 10, 0xAAAAAA, false);
+        } else {
+            int pages = this.creativePages();
+            if (pages > 1) {
+                String pg = "第 " + (this.creativePage + 1) + "/" + pages + " 页";
+                g.m_280614_(this.f_96547_, Component.m_237113_(pg), infoX, infoY, 0x888888, false);
+            }
+        }
+        int move = com.maidsmart.bd.MaidBdNetworking.MOVE.size();
+        int keep = com.maidsmart.bd.MaidBdNetworking.KEEP.size();
+        int keepN = com.maidsmart.bd.MaidBdNetworking.KEEP_N.size();
+        int atLeast = com.maidsmart.bd.MaidBdNetworking.AT_LEAST.size();
+        String hint = "\u00a77当前：一定搬 " + move + " · 一定不搬 " + keep + " · 保留N " + keepN
+                + " · 至少留N " + atLeast + "（改的是服务端 config/promaid_bd_rules.json，需 OP）";
+        g.m_280653_(this.f_96547_, Component.m_237113_(hint),
+                this.clampCenterX(hint, cx), this.f_96544_ - 50, 0x888888);
+    }
+
+    /** 网格点击：在当前模式下切换该物品的规则。返回 true = 已消费。 */
+    private boolean clickBdRuleGrid(double mouseX, double mouseY) {
+        int cx = this.f_96543_ / 2;
+        int panelLeft = Math.max(8, cx - 280);
+        int left = panelLeft + 10;
+        int gridTop = GRID_TOP;
+        int gridRowsNow = this.f_96544_ < 215 ? 2 : GRID_ROWS;
+        int gridBottom = gridTop + gridRowsNow * GRID_CELL;
+        if (mouseX < left || mouseX >= left + GRID_COLS * GRID_CELL
+                || mouseY < gridTop || mouseY >= gridBottom) {
+            return false;
+        }
+        int perPage = GRID_COLS * this.gridRows;
+        int start = this.creativePage * perPage;
+        int col = (int) ((mouseX - left) / GRID_CELL);
+        int row = (int) ((mouseY - gridTop) / GRID_CELL);
+        int idx = start + row * GRID_COLS + col;
+        if (idx < 0 || idx >= this.creativeItems.size()) {
+            return false;
+        }
+        net.minecraft.resources.ResourceLocation key = net.minecraftforge.registries.ForgeRegistries.ITEMS
+                .getKey(this.creativeItems.get(idx).m_41720_());
+        if (key == null) {
+            return false;
+        }
+        this.toggleBdRule(itemEntry(key.toString()));
+        return true;
+    }
+
+    /** 把物品 id 包成规则写法（裸 id）。 */
+    private static String itemEntry(String id) {
+        return id;
+    }
+
+    /**
+     * 在当前模式下切换某条目的规则：已在 → 移除；不在 → 加入（保留N个/至少留N个用输入框的 N，默认 16）。
+     * 经网络由服务端落盘。
+     */
+    private void toggleBdRule(String entry) {
+        if (entry == null || entry.isEmpty()) {
+            return;
+        }
+        if (this.isInBdRule(entry)) {
+            com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 5, entry, 0);
+        } else {
+            switch (this.bdRuleMode) {
+                case 1 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 2, entry, 0); // keep
+                case 2 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 3, entry, this.bdNValue()); // keepN
+                case 3 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 4, entry, this.bdNValue()); // keepAtLeast
+                default -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 1, entry, 0); // move
+            }
+        }
+    }
+
+    private int bdNValue() {
+        try {
+            if (this.bdNInput != null && !this.bdNInput.m_94155_().trim().isEmpty()) {
+                return Math.max(0, Integer.parseInt(this.bdNInput.m_94155_().trim()));
+            }
+        } catch (Throwable ignored) {
+        }
+        return 16;
+    }
+
+    /** 手输框「加入」：条目走原样（支持 tag:），保留N/至少留N 用旁边的 N。 */
+    private void addBdRuleFromInput() {
+        if (this.bdInput == null) {
+            return;
+        }
+        String text = this.bdInput.m_94155_().trim();
+        if (text.isEmpty()) {
+            return;
+        }
+        // 裸 id 且不是 tag:/item: 前缀 → 补 minecraft: 命名空间（与喂水白名单同款便利）
+        if (!text.contains(":") || (text.startsWith("item:") && !text.substring(5).contains(":"))) {
+            String bare = text.startsWith("item:") ? text.substring(5) : text;
+            text = (text.startsWith("item:") ? "item:" : "") + "minecraft:" + bare;
+        }
+        switch (this.bdRuleMode) {
+            case 1 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 2, text, 0);
+            case 2 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 3, text, this.bdNValue());
+            case 3 -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 4, text, this.bdNValue());
+            default -> com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 1, text, 0);
+        }
+        this.bdInput.m_94144_("");
+    }
+
+    /** 从名单移除（底部列表「移除」按钮） → 发 remove。 */
+    private void removeBdRule(String entry) {
+        com.maidsmart.bd.MaidBdNetworking.sendRule((byte) 5, entry, 0);
+    }
+
+    /**
+     * 服务端回推了最新规则状态 → 就地刷新（子页列表/高亮、入口行摘要）。
+     * 由 {@link com.maidsmart.bd.MaidBdNetworking.BdRulesStatePacket#handle} 在客户端主线程调用。
+     * 【只刷新不重发请求】否则"回推→重建→再请求"会变成包循环。
+     */
+    public void onBdRulesState() {
+        try {
+            if (this.bdRules && this.bdRuleList != null) {
+                this.bdRuleList.rebuild();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 服务端回推了"最近女仆·产出回收"状态 → 重建入口行，让按钮文案立刻变。 */
+    public void onBdPerMaidState() {
+        try {
+            if (!this.inHome && !this.inGroup && !this.mineTable && !this.woodTable
+                    && !this.altTable && !this.foodTable && !this.waterTable
+                    && !this.cookTable && !this.buildBlackTable && !this.bdRules) {
+                this.m_7856_();
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 当前模式下要显示的规则（来自客户端缓存）。 */
+    private List<String> bdCurrentRules() {
+        return switch (this.bdRuleMode) {
+            case 1 -> new ArrayList<>(com.maidsmart.bd.MaidBdNetworking.KEEP);
+            case 2 -> new ArrayList<>(com.maidsmart.bd.MaidBdNetworking.KEEP_N);
+            case 3 -> new ArrayList<>(com.maidsmart.bd.MaidBdNetworking.AT_LEAST);
+            default -> new ArrayList<>(com.maidsmart.bd.MaidBdNetworking.MOVE);
+        };
+    }
+
+    /** 超越维度规则列表（底部）：每行规则写法 + 「移除」。 */
+    private class BdRuleList extends ObjectSelectionList<BdRuleList.BdRuleEntry> {
+        private final List<String> entries = new ArrayList<>();
+
+        BdRuleList(net.minecraft.client.gui.Font font, int x, int top, int width, int height) {
+            super(Minecraft.m_91087_(), width, height, top, top + height, 22);
+            this.m_93507_(x);
+            this.m_93488_(false);
+            this.m_93496_(false);
+            this.f_93390_ = width;
+            this.rebuild();
+        }
+
+        void rebuild() {
+            this.m_93516_();
+            this.entries.clear();
+            try {
+                this.entries.addAll(bdCurrentRules());
+            } catch (Throwable ignored) {
+            }
+            for (String e : this.entries) {
+                this.m_7085_(new BdRuleEntry(e));
+            }
+        }
+
+        @Override
+        public int m_5759_() {
+            return Math.max(this.f_93390_, 120);
+        }
+
+        @Override
+        protected void m_238964_(net.minecraft.client.gui.GuiGraphics g, int mx, int my, float pt,
+                                 int a, int b, int c, int d, int e) {
+            super.m_238964_(g, mx, my, pt, a, b, c, d, e);
+            int sx = this.f_93389_ + this.m_5759_() - 6;
+            g.m_280509_(sx, this.f_93392_, sx + 6, this.f_93393_, 0xFF101010);
+            int maxScroll = this.m_93518_();
+            if (maxScroll > 0) {
+                int area = this.f_93393_ - this.f_93392_;
+                int sh = Math.max(32, area * area / maxScroll);
+                sh = Math.min(sh, area - 8);
+                int sy = (int) (this.m_93517_() * (double) (area - sh)) + this.f_93392_;
+                g.m_280509_(sx, sy, sx + 4, sy + sh, 0x40FFFFFF);
+            }
+        }
+
+        private class BdRuleEntry extends ObjectSelectionList.Entry<BdRuleList.BdRuleEntry> {
+            private final String entry;
+            private final net.minecraft.client.gui.components.Button delButton;
+
+            BdRuleEntry(String entry) {
+                this.entry = entry;
+                this.delButton = Button.m_253074_(Component.m_237113_("移除"),
+                                b -> PromaidConfigScreen.this.removeBdRule(this.entry))
+                        .m_252987_(0, 0, 56, 18).m_253136_();
+            }
+
+            @Override
+            public void m_6311_(net.minecraft.client.gui.GuiGraphics g, int index, int top,
+                               int left, int width, int height, int mouseX, int mouseY,
+                               boolean hovered, float partialTick) {
+                int x = left + 4;
+                int y = top + 4;
+                // 保留N / 至少留N 的写法是 "match=count"，把 match 拆出来画图标与名称
+                String match = this.entry;
+                String suffix = "";
+                int eq = this.entry.indexOf('=');
+                if (eq > 0) {
+                    match = this.entry.substring(0, eq);
+                    suffix = " \u00a7b× " + this.entry.substring(eq + 1);
+                }
+                if (!match.startsWith("tag:")) {
+                    net.minecraft.world.item.Item item = null;
+                    try {
+                        item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(
+                                net.minecraft.resources.ResourceLocation.parse(match));
+                    } catch (Throwable ignored) {
+                    }
+                    if (item != null) {
+                        g.m_280480_(new net.minecraft.world.item.ItemStack(item), x, y - 2);
+                        x += 20;
+                    }
+                }
+                g.m_280614_(PromaidConfigScreen.this.f_96547_,
+                        Component.m_237113_("\u00a7a\u2714 \u00a7f"
+                                + (match.startsWith("tag:") ? match : com.maidsmart.build.BlueprintLib.cnName(match))
+                                + suffix),
+                        x, y, 0xFFAAAAAA, false);
+                this.delButton.m_252865_(left + BdRuleList.this.m_5759_() - 62);
+                this.delButton.m_253211_(top + 1);
+                this.delButton.m_88315_(g, mouseX, mouseY, partialTick);
+            }
+
+            @Override
+            public boolean m_6375_(double mx, double my, int button) {
+                if (button == 0 && this.delButton.m_5953_(mx, my)) {
+                    this.delButton.m_6375_(mx, my, 0);
+                    return true;
+                }
+                return false;
+            }
+
+            @Override
+            public Component m_142172_() {
+                return Component.m_237113_(this.entry);
+            }
+        }
     }
 
     /** 该方块（物品栈）此刻是否被玩家名单禁止——渲染与点击**共用这一处**，口径 = 女仆取材那一处。 */
@@ -3812,6 +4273,40 @@ public class PromaidConfigScreen extends Screen {
         this.rows.add(new BoolRow("背包满时装进精妙背包", MaidSmartConfig.MISC_BACKPACK_OVERFLOW.get(),
                 v -> MaidSmartConfig.MISC_BACKPACK_OVERFLOW.set(v),
                 "背包满时装进精妙背包（默认开，实测六百三十六）：女仆自己的背包塞不下时，把溢出的那一份再试一次她身上的「额外容器」——饰品栏里的精妙背包 / 旅行者背包。需要 Curios 在场 + TLM「女仆饰品」开启 + 背包真的戴在她饰品栏里；额外容器再塞不下才落地（绝不吞物品）"));
+        // 实测七百七十二：超越维度存储联动总开关（默认关）——两树面板对齐
+        this.rows.add(new BoolRow("超越维度存储联动", MaidSmartConfig.MISC_BD_STORAGE.get(),
+                v -> MaidSmartConfig.MISC_BD_STORAGE.set(v),
+                "超越维度存储联动（默认关）：把女仆采矿/伐木/收成的产物自动存进她主人的主网络，并按规则从网络取货"
+                        + "（规则文件 config/promaid_bd_rules.json）。【为什么默认关】它会真实搬动物品，且只在装了"
+                        + "超越维度模组时才有意义。【两级门禁】这一项是总开关，另外每只女仆还要单独开"
+                        + "（下面那行 / /maid_smart bd_deposit true）。命令：bd_probe / bd_query / bd_deposit / "
+                        + "bd_restock / bd_flush / bd_rule"));
+        // 实测七百七十二：规则名单进面板子页（点物品图标加/减，不加新贴图）
+        this.rows.add(new BtnRow("超越维度规则名单",
+                "管理 →（搬 " + com.maidsmart.bd.MaidBdNetworking.MOVE.size()
+                        + " · 禁 " + com.maidsmart.bd.MaidBdNetworking.KEEP.size()
+                        + " · 保留N " + com.maidsmart.bd.MaidBdNetworking.KEEP_N.size()
+                        + " · 至少留N " + com.maidsmart.bd.MaidBdNetworking.AT_LEAST.size() + "）",
+                () -> {
+                    this.bdRules = true;
+                    this.bdRuleMode = 0;
+                    this.creativePage = 0;
+                    com.maidsmart.bd.MaidBdNetworking.requestRuleState();
+                    this.m_7856_();
+                },
+                "管理超越维度的自定义规则名单（一定搬 / 一定不搬 / 保留N个 / 至少留N个）：点物品图标加入、"
+                        + "再点取消；保留N/至少留N 用旁边的数字框填 N；标签用搜索框下方输入框手输 tag:c:ores 这种写法。"
+                        + "改的是服务端 config/promaid_bd_rules.json（需要 OP），与命令 /maid_smart bd_rule 共用一套"));
+        // 实测七百七十二：每女仆"产出回收"开关——面板一行，发 C2S 由服务端取 64 格内最近一只自己的女仆
+        this.rows.add(new BtnRow("产出回收（最近女仆）",
+                com.maidsmart.bd.MaidBdNetworking.PER_MAID_ON ? "\u00a7a已开" : "\u00a78已关",
+                () -> {
+                    com.maidsmart.bd.MaidBdNetworking.togglePerMaid(
+                            "", !com.maidsmart.bd.MaidBdNetworking.PER_MAID_ON);
+                },
+                "开/关「产出回收」——作用于你 64 格内最近的一只**你自己的**女仆（每只女仆各有一份开关，"
+                        + "随魂符/存档走）。开了以后她的采矿/伐木/收成产物才会自动进她主人的主网络"
+                        + "（还要总开关「超越维度存储联动」是开的）。等价于命令 /maid_smart bd_deposit true"));
         // v1.5.163：农场连锁收获上限可自定义
         this.rows.add(new NumRow("连锁收获上限（格）", String.valueOf(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT.get()),
                 s -> setInt(MaidSmartConfig.MISC_CHAIN_HARVEST_LIMIT, s), "农场连锁收获上限（格）：一次连锁收割的最大格数（4~96，默认 24）"));
@@ -5563,7 +6058,7 @@ public class PromaidConfigScreen extends Screen {
                 h - 8, PANEL_BG);
         // v1.5.102d：矿表子页顶部已被当前名单标题占用（目标矿物/障碍物/珍稀矿物），
         // 主标题"Promaid 模组详细配置"隐去，否则两行文本重叠（v1.5.254：替代品子页同）
-        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable && !this.cookTable && !this.buildBlackTable) {
+        if (!this.mineTable && !this.woodTable && !this.altTable && !this.foodTable && !this.cookTable && !this.buildBlackTable && !this.bdRules) {
             g.m_280653_(this.f_96547_, Component.m_237113_("Promaid 模组详细配置"), cx, 10, 0xFFFFD700);
         }
         if (this.inHome) {
@@ -6004,6 +6499,8 @@ public class PromaidConfigScreen extends Screen {
                     this.clampCenterX(chkHint, cx), this.f_96544_ - 50, 0x888888);
         } else if (this.cookTable) {
             this.renderCookGrid(g, mouseX, mouseY, w, h, cx);
+        } else if (this.bdRules) {
+            this.renderBdRulesGrid(g, mouseX, mouseY, w, h, cx);
         } else {
             // v1.1.0 实测二十四修复：标签 x 从硬编码 20 改为 panelLeft+10——
             // 旧版标签固定 x=20，面板和控件居中（panelLeft=Math.max(8,cx-280)），
@@ -6251,6 +6748,10 @@ public class PromaidConfigScreen extends Screen {
         // 对照同机制能用的几个子页（挖矿/伐木、投喂、喂水、替代品）：它们都是
         // "命中网格就 return true，否则**落到** super.m_6375_" —— 这里改成同构写法。
         if (this.cookTable && this.clickCookGrid(mouseX, mouseY, button)) {
+            return true;
+        }
+        // 实测七百七十二：超越维度规则名单子页网格点击 → 在当前模式下加入/移出该物品
+        if (this.bdRules && button == 0 && this.clickBdRuleGrid(mouseX, mouseY)) {
             return true;
         }
         return super.m_6375_(mouseX, mouseY, button);

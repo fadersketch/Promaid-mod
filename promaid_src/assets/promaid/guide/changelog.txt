@@ -1,4 +1,16 @@
-﻿【实测七百七十一】支援范围扩大：从"只支援女仆"到"支援其他友方单位"（主人的其他宠物 / 同主人的模组仆从）
+﻿【实测七百七十二】超越维度（BeyondDimensions）存储联动上线（并入 PR #34）+ 修复三处物品复制 bug + 规则名单进配置面板（两树镜像）
+  ①【合并】并入社区 PR #34（作者 rodericksthescriptkid）「超越维度存储联动」——产物回收 / 溢出入库 / 自动补货 / 缓存冲刷（反射软兼容 beyonddimensions，没装即整条链路不生效）。合并后按复核整改再交付。
+  ②【修复·复制 bug】MaidBdRestock 还库时反向解读了 insert 语义。javap 实证（反编译 0.7.30 jar 的 UnifiedStorage.insert → AbstractUnorderedStackHandler.insert 字节码）：insert(key,n,simulate) 返回的是**剩余量**（没吃下的那一份），不是"吃下的量"。旧代码用 `leftover != back` 判"网络没全吃下"，命中即掉落，把"已经进网络的那部分"又在地上刷了一份 = 复制。改为 `toDrop = leftover < 0 ? back : leftover`，只在真的还剩（或调用失败）时落地。
+  ③【修复·复制 bug】MaidBdOverflow 的"额外容器放得下吗"用了一个**会改物品**的探测。它原调 com.maidsmart.tool.MaidExtraContainer.overflow——那是真插入（源码 insert(...,false)），探测时就把物品塞进了精妙背包；而本类只按网络收下的量去缩减地面掉落物实体 ⇒ 同一份物品在容器与实体里各留一次 = 复制。改用只读容量判据 MaidExtraContainer.canAccept（insert(...,true) 模拟，不改任何东西）；容器能收下就把整份交给 TLM 自己的拾取链，我们不动它。
+  ④【修复·两级门禁一致化】bd_deposit_now / bd_restock_now / bd_flush_now 三条"立刻执行"命令原先绕过了总开关 misc.bdStorage（与"默认关"的承诺自相矛盾）。现统一加 gateOpen 闸：总开关关着时直接拒绝并说明原因。审计确认 MaidBdDeposit.sweep 的 simulate→真插→真扣次序守恒，无复制无丢件，保留。
+  ⑤【面板化·规则名单】新增配置面板子页「超越维度规则名单」（系统与杂项），照替代品/喂水子页结构：四个模式按钮（一定搬 / 一定不搬 / 保留N个 / 至少留N个）+ 搜索框 + 创造物品网格 + 底部规则列表——**点物品图标加入、再点取消**（复用现有图标网格，不加任何新贴图/物品）；保留N/至少留N 用旁边的数字框填 N；标签写法（tag:c:ores 这类）用输入框手输。全局总开关「超越维度存储联动」保留为面板 BoolRow。
+  ⑥【面板化·每女仆开关】新增面板行「产出回收（最近女仆）」：点一下开/关，由服务端取你 64 格内最近的一只你自己的女仆来切（与 /maid_smart bd_deposit 同口径、同校验：主人/OP + 8 格内）。每只女仆的开关存 persistentData（随魂符/存档走）。
+  ⑦【网络层】配置面板是纯客户端 Screen，改不了服务端的规则 json 与 persistentData，所以新增 MaidBdNetworking（两树同名）：BdRulePacket（C2S，改规则，服务端 hasPermission(2) 校验后落盘并回推）、BdRulesStatePacket（S2C，把四类规则下发，面板子页据此刷新）、BdPerMaidPacket / BdPerMaidStatePacket（C2S/S2C，切换并回显"最近女仆"产出回收）。命令 /maid_smart bd_* 全部保留（面板给玩家，命令给 OP/排查/无头测试），两者共用同一套 MaidBdRules 落盘。
+  ⑧【两树镜像】Forge 1.20.1 树新增 com/maidsmart/bd/*（7 类）+ 两条命令 + MaidBdNetworking，按 SRG 改写（m_128471_ = CompoundTag.getBoolean、ForgeRegistries.ITEMS、maid.getPersistentData() 直取、SimpleChannel.registerMessage、FMLPaths.CONFIGDIR、ForgeConfigSpec.BooleanValue、greedyString 代替 ResourceLocationArgument），并给 Forge 的 MaidExtraContainer 补上 canAccept。两树 javac EXITCODE=0。
+  ⑨【实证】javap 两版本 beyonddimensions 0.7.30 jar：insert 返回剩余量、extract 返回取出量、KeyAmount.isEmpty()=amount<=0；两版本 API 路径与签名一致。TLM 1.20.1 的 touhoulittlemaid-1.5.3-forge 确认带 MaidPickupEvent$ItemResultPre（getMaid/getEntityItem/isSimulate），故溢出链路可镜像。
+  范围：仅在装了超越维度模组时才有意义；没装时全程反射空转，一个字节不影响其它行为。
+
+【实测七百七十一】支援范围扩大：从"只支援女仆"到"支援其他友方单位"（主人的其他宠物 / 同主人的模组仆从）
   ①【定档】玩家原话：「女仆支援方面，能不能不要只支援女仆，还可以支援其他的友方单位呢？简单来说就是扩大支援的范围。」并界定了两件事：友军判据——「原版的那些宠物以及仆从这些有什么共同特点？他们都是算作友军的」；支援内容——「因为他们没有饥饿值，所以他们只能吃药水这些治疗效果……支援药水以及一些效用性食物（金苹果这种），也就是说相比于女仆间支援，等于少了普通的食物和不死图腾支援。」
   ②【友军判据 = 归属同一位主人（字节码实证）】原版宠物与模组仆从的唯一共同特点是"都归属于一位主人"，这正是原版 net.minecraft.world.entity.OwnableEntity（唯一抽象方法 getOwnerUUID）：原版 TamableAnimal（狼/猫/鹦鹉/狐狸…）与 AbstractHorse（马/驴/骆驼…）都实现它；诡厄巫法 Owned extends PathfinderMob implements IOwned, OwnableEntity——红石巨兽/下界合金巨兽全在这条链上。所以判据 = 目标是 OwnableEntity 且其 getOwnerUUID 与本女仆的主人 UUID 相同；再叠一道 isAlliedTo（同队/同盟，与 FriendlyFireGuard.isFriendly 同口径）。不写死任何实体 id、不挑"哪几种宠物/仆从"，凡主人名下的可拥有单位一律算友军。刻意不用 getOwner()（在线实体，主人下线会变 null）——认领关系跟着 UUID 走（同 MaidScope 口径）。
   ③【支援内容：比女仆间支援少两样】友军没有饥饿值（兽靠 Animal.isFood 的繁殖/驯服语义、仆从更没有 FoodData），普通食物喂了没有意义；不死图腾这类"塞背包/替他挡死"的机制也只对女仆自己成立。所以本链只做：药水（抗火 / 治疗 / 再生 / 饮用型直接喂）+ 效用性食物（金苹果 / 附魔金苹果）+ 负面效果解除（牛奶全解 / 蜂蜜解中毒）——不做普通食物投喂、不做不死图腾。金苹果走即时增益路径（吸收/再生，附魔额外抗性/抗火），饮用型药水 finishUsingItem 强制饮用、空瓶返还。

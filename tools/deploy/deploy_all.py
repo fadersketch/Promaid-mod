@@ -6,6 +6,15 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十二（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条（超越维度存储联动 · PR #34 合并+整改）** ——
+① 并入社区 PR #34（BeyondDimensions 存储联动：产物回收 / 溢出入库 / 自动补货 / 缓存冲刷，全反射软兼容）。
+② 修三处：restock 还库反向解读 insert 语义导致复制（改成 leftover 语义）；overflow 用会改物品的
+   MaidExtraContainer.overflow 探测导致复制（改用只读 canAccept）；三条 *_now 命令绕过总开关
+   （统一加 gateOpen）。
+③ 选项全部进配置面板：规则名单子页（点物品图标加/减，不加新贴图）+ 每女仆「产出回收（最近女仆）」
+   一行 + 总开关 BoolRow；配套新增 MaidBdNetworking（C2S/S2C）让纯客户端面板能改服务端规则。
+④ 两树镜像：Forge 侧按 SRG 改写（m_128471_=getBoolean、ForgeRegistries.ITEMS、SimpleChannel 等）。
+
 实测七百七十一（v1.3.0 beta，同名覆盖，未发版）：**两树同步的一条（支援范围扩大）** ——
 ① 玩家定档：「不要只支援女仆，还可以支援其他的友方单位」；友军判据 = 「原版宠物以及仆从的
    共同特点」；支援内容 = 「他们没有饥饿值，所以只能吃药水这些治疗效果……支援药水以及一些

@@ -5,9 +5,8 @@ import com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid;
 import com.maidsmart.tool.PromaidLog;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.bus.api.SubscribeEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.items.IItemHandler;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
+import net.minecraftforge.items.IItemHandler;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -39,6 +38,8 @@ import java.util.UUID;
  *   <li><b>差额驱动</b>：只补到目标数为止（她背包里"总数"跨槽位合计），不会越补越多。</li>
  *   <li><b>有限速</b>：每轮最多补 4 组 / 1024 个，避免一次卡顿。</li>
  * </ol>
+ *
+ * <p>【1.20.1 差异】事件总线 {@code MinecraftForge.EVENT_BUS}；{@code ItemStack} 全套走 SRG。
  */
 public final class MaidBdRestock {
 
@@ -60,7 +61,7 @@ public final class MaidBdRestock {
             return;
         }
         hooked = true;
-        NeoForge.EVENT_BUS.register(new MaidBdRestock());
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(new MaidBdRestock());
     }
 
     @SubscribeEvent
@@ -72,15 +73,15 @@ public final class MaidBdRestock {
     }
 
     private static void tick(EntityMaid maid) {
-        if (maid == null || maid.level().isClientSide() || !MaidBdDeposit.isOn(maid)
+        if (maid == null || maid.m_9236_().m_5776_() || !MaidBdDeposit.isOn(maid)
                 || !MaidBdCompat.enabled()) {
             return;   // 两级门禁：总开关 + 该女仆自己的开关
         }
         if (MaidBdRules.atLeastRules().isEmpty()) {
             return;   // 默认空：玩家没写规则就一次都不动
         }
-                com.maidsmart.tool.StateTables.cap("bdMaidBdRestockCOUNTER", COUNTER);
-        int n = COUNTER.merge(maid.getUUID(), 1, Integer::sum);
+        com.maidsmart.tool.StateTables.cap("bdMaidBdRestockCOUNTER", COUNTER);
+        int n = COUNTER.merge(maid.m_20148_(), 1, Integer::sum);
         if (n % CHECK_EVERY != 0) {
             return;
         }
@@ -148,11 +149,11 @@ public final class MaidBdRestock {
                 }
             } else {
                 ItemStack proto = MaidBdCompat.stackOf(r.match());
-                if (!proto.isEmpty()) {
+                if (!proto.m_41619_()) {
                     long got = MaidBdCompat.extract(net, proto, want);
                     if (got > 0) {
-                        taken = proto.copy();
-                        taken.setCount((int) Math.min(Integer.MAX_VALUE, got));
+                        taken = proto.m_41777_();
+                        taken.m_41721_((int) Math.min(Integer.MAX_VALUE, got));
                         amount = got;
                     }
                 }
@@ -170,11 +171,11 @@ public final class MaidBdRestock {
                 long leftover = MaidBdCompat.insert(net, taken, back);
                 long toDrop = leftover < 0 ? back : leftover;
                 if (toDrop > 0) {
-                    ItemStack drop = taken.copy();
-                    drop.setCount((int) Math.min(Integer.MAX_VALUE, toDrop));
-                    maid.spawnAtLocation(drop);
+                    ItemStack drop = taken.m_41777_();
+                    drop.m_41721_((int) Math.min(Integer.MAX_VALUE, toDrop));
+                    maid.m_19983_(drop);
                     PromaidLog.log("超越维度补货", "还回网络失败，已掉在她脚下："
-                            + MaidBdCompat.itemId(drop) + " × " + drop.getCount());
+                            + MaidBdCompat.itemId(drop) + " × " + drop.m_41613_());
                     tail = "（" + placed + " 个入包，" + toDrop + " 个还库失败已落地）";
                 }
             }
@@ -182,7 +183,7 @@ public final class MaidBdRestock {
             movedTotal += placed;
         }
         if (!dryRun && !out.isEmpty()) {
-            PromaidLog.log("超越维度补货", maid.getName().getString() + " 本轮："
+            PromaidLog.log("超越维度补货", maid.m_7755_().getString() + " 本轮："
                     + String.join("；", out));
         }
         return out;
@@ -190,11 +191,11 @@ public final class MaidBdRestock {
 
     /** 往她可用背包里塞，返回实际塞进去的数量（跨槽位）。 */
     private static long insertIntoMaid(IItemHandler inv, ItemStack stack) {
-        ItemStack rest = stack.copy();
-        for (int i = 0; i < inv.getSlots() && !rest.isEmpty(); i++) {
+        ItemStack rest = stack.m_41777_();
+        for (int i = 0; i < inv.getSlots() && !rest.m_41619_(); i++) {
             rest = inv.insertItem(i, rest, false);
         }
-        return stack.getCount() - rest.getCount();
+        return stack.m_41613_() - rest.m_41613_();
     }
 
     private static IItemHandler backpack(EntityMaid maid) {
