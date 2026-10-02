@@ -159,6 +159,11 @@ public final class MaidMountCompat {
      * 这条闸被绕过了，于是"没电也能一直飞"。这两个反射用来把同一条闸在**写入之前**问一遍。 */
     private static Method mGetEnergy;         // getEnergy() -> int
     private static Method mGetMaxEnergy;      // getMaxEnergy() -> int
+    /* 【实测七百七十六·点2】固定翼"补能"的 setter（javap 实证 VehicleEntity 上有 setEnergy(int)）。
+     * SWB 固定翼的 loiter 闸里有一条 {@code getEnergy() > 1024}（baseTick 实证），而车的能量只能
+     * 靠往车里塞能量物品充（baseTick:4097 每 20 拍从车里物品抽）。女仆不会充电——她要飞而电量见底时
+     * 我们直接把能量仓填满（见 {@link #topUpAircraftEnergy}；只补这一档、只在见底时补）。 */
+    private static Method mSetEnergy;         // setEnergy(int)
     /* 【实测七百二十六·点6】女仆自己往载具里装弹：车的枪弹从**车自己的容器**取（反编译
      * ModCapabilities 实证：Capabilities.ItemHandler.ENTITY → getInventory()），她背包里的
      * 子弹车看不见。这三组反射用来"读出这车要哪种子弹 + 把子弹从她背包搬进车容器"。 */
@@ -436,6 +441,12 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
                 mGetEnergy = null;
                 mGetMaxEnergy = null;
+            }
+            // 【实测七百七十六·点2】固定翼补能的写口（缺了只是"不补能"，不影响其余）。
+            try {
+                mSetEnergy = cVehicle.getMethod("setEnergy", int.class);
+            } catch (Throwable ignored) {
+                mSetEnergy = null;
             }
             // 【实测七百二十六·点6】装弹反射链：车的容器 + 这车这门枪要哪种子弹 + 子弹物品的类型。
             // 每一环各自 try（缺一环只是"装弹"这一档不生效，不影响驾驶/开火）。
@@ -2390,6 +2401,15 @@ public final class MaidMountCompat {
                 }
                 // 只有"确实要去某处"才起飞助跑：目标就在脚下同高度时不该硬把炮艇从地面拔起来。
                 boolean wantAir = horiz > FLIGHT_ARRIVE || Math.abs(dy) > FLIGHT_ALT_DEADZONE;
+                // 【实测七百七十六·点2】爬升窗口：起飞那一拍开、之后每拍续，爬到 2 格以内或 15 秒
+                // 超时为止。窗口内由我们接管竖直速度（见 aircraftClimbAssist 的说明）。
+                long vnow = 0L;
+                try {
+                    vnow = mount.level().getGameTime();
+                } catch (Throwable ignored) {
+                }
+                Long climbUntil = AIRCRAFT_CLIMB.get(mount.getUUID());
+                boolean climbing = climbUntil != null && vnow < climbUntil;
                 if (grounded && wantAir) {
                     // 【实测七百七十五·点3】固定翼定制起飞三步（玩家原话：「先确保周围相当一部分
                     // 是平地（允许接受凹凸，但是落差不能太大），不是的话就报环境不允许起飞。有允许的
@@ -2449,6 +2469,9 @@ public final class MaidMountCompat {
                     }
                     // ④ 推力拉满：先把 engineStart 点着（power > 0.2 → engineStartOver，:884，
                     //    那是 loiter 的另一个前置条件 baseTick:3845）。
+                    //    【实测七百七十六·点2】先补能——loiter 闸里还有一条 getEnergy() > 1024，
+                    //    而车的能量只能靠往车里塞能量物品充（baseTick:4097）；女仆不会充电。
+                    topUpAircraftEnergy(mount);
                     if (mSetPower != null) {
                         try {
                             mSetPower.invoke(mount, 1.0f);
@@ -2458,12 +2481,51 @@ public final class MaidMountCompat {
                     // ⑤ 顺手把 loiter 参数写好：离地那一拍 baseTick 就会立刻调 aircraftLoiter，
                     //    中间不留"起来了但没人接管"的空档。
                     tryAircraftLoiter(mount, target, horiz);
+                    // 【实测七百七十六·点2】开"爬升窗口"：离地之后由我们继续接管竖直速度，直到真的
+                    // 爬到目标高度（2 格以内）或 15 秒超时。旧版只在贴地这一拍补一下竖直速度就撒手，
+                    // 实机日志里她的炮艇随后一直贴地 0.5 格/拍地滑行盘旋、高差十几格不降
+                    //（loiter 被它自己的闸挡着没跑，见 aircraftClimbAssist 的反编译说明）。
+                    AIRCRAFT_CLIMB.put(mount.getUUID(), vnow + AIRCRAFT_CLIMB_WINDOW_TICKS);
                     logDrive(mount, "固定翼起飞 引擎=" + eng
                             + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
                             + " 补竖直=" + fmt2(AIRCRAFT_TAKEOFF_LIFT)
                             + " 竖直速度=" + fmt2(verticalSpeed(mount))
-                            + " 距目标=" + (long) horiz + "格 高差=" + (long) dy);
+                            + " 距目标=" + (long) horiz + "格 高差=" + (long) dy
+                            + " 电量=" + energyText(mount));
                     return true;
+                }
+                // 【实测七百七十六·点2】离地后的"爬升窗口"：目标还在上方 → 每拍抬机头 + 垂直自驾
+                // （见 aircraftClimbAssist 的说明）。爬到 2 格以内/窗口超时就撒手，交还引擎 loiter。
+                if (!grounded && wantAir && dy > AIRCRAFT_CLIMB_STOP && climbing) {
+                    AIRCRAFT_CLIMB.put(mount.getUUID(), vnow + AIRCRAFT_CLIMB_WINDOW_TICKS);
+                    topUpAircraftEnergy(mount);
+                    aircraftClimbAssist(mount, dy);
+                    try {
+                        mount.setXRot(-AIRCRAFT_TAKEOFF_PITCH);
+                    } catch (Throwable ignored) {
+                    }
+                    if (mSetPower != null) {
+                        try {
+                            double p = mGetPower == null ? 0.0
+                                    : ((Number) mGetPower.invoke(mount)).doubleValue();
+                            if (p < 1.0) {
+                                mSetPower.invoke(mount, 1.0f);
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    try {
+                        mProcessInput.invoke(mount, (short) (0x004 | 0x100));
+                    } catch (Throwable ignored) {
+                    }
+                    tryAircraftLoiter(mount, target, horiz);
+                    logDrive(mount, "固定翼爬升 引擎=" + eng + " 抬头=" + AIRCRAFT_TAKEOFF_PITCH + "°"
+                            + " 竖直速度=" + fmt2(verticalSpeed(mount)) + " 高差=" + (long) dy
+                            + " 距目标=" + (long) horiz + "格 电量=" + energyText(mount));
+                    return true;
+                }
+                if (!grounded && wantAir && dy <= AIRCRAFT_CLIMB_STOP) {
+                    AIRCRAFT_CLIMB.remove(mount.getUUID());   // 到位了 → 收窗，交还引擎自己的 PD
                 }
             }
             if (tryAircraftLoiter(mount, target, horiz)) {
@@ -2586,6 +2648,68 @@ public final class MaidMountCompat {
         }
     }
 
+    /**
+     * 【实测七百七十六·点2】固定翼"垂直自驾"：把竖直速度往「按高差算的目标爬升率」上拉。
+     *
+     * <p><b>为什么需要</b>（反编译 + 实机日志双实证）：引擎自己的 loiter 要**同时**满足
+     * {@code !onGround && getEngineStartOver() && getEnergy() > 1024 && !isWreck()}
+     * 且车上有乘客、车型是 AIRCRAFT、{@code getLoiterActive()}（baseTick 实证），任何一道没过
+     * 它就完全不写俯仰/推力。玩家日志（实测七百七十六）里她的 AC-130H 能"跳"起来（起飞那一拍
+     * 补的竖直速度），但随后一直贴地 0.5 格/拍地滑行盘旋、目标高差十几格从不下降——就是 loiter
+     * 没跑，而旧版只在贴地那一拍给过一次补偿。这里每拍直接拉 {@code deltaMovement.y}：
+     * 目标爬升率 = {@code clamp(高差 × 0.06, 0.06, 0.22)}，每拍最多拉 0.06（≥ 重力量级，才顶得住）。
+     *
+     * <p><b>为什么不是"把角度抬更高"</b>（玩家原话：「是不是往上抬的角度太低了呢？」）：
+     * 抬头角只决定推力/升力分出多少竖直分量，而玩家看到的"飞不起来"的直接量是**爬升率**——
+     * 25° 的抬头角 + 每拍 0.2 格的竖直速度才是真的在爬。窗口一到（爬到位/15 秒超时）就撒手，
+     * 交还引擎自己的 loiter（它接管后会写俯仰与推力，与我们同向，不打架）。
+     */
+    private static void aircraftClimbAssist(Entity mount, double dy) {
+        try {
+            double want = clamp(dy * 0.06, 0.06, AIRCRAFT_VY_MAX);
+            Vec3 dm = mount.getDeltaMovement();
+            double step = clamp(want - dm.y, -AIRCRAFT_VY_STEP, AIRCRAFT_VY_STEP);
+            mount.setDeltaMovement(dm.x, clamp(dm.y + step, -0.30, 0.30), dm.z);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十六·点2】固定翼"补能"：见 {@link #mSetEnergy} 的说明。
+     *
+     * <p>只在电量 ≤ {@link #AIRCRAFT_ENERGY_FLOOR}（= 引擎 loiter 闸那个 1024）且拿得到读写口时
+     * 把能量仓填满；其余情况一个字节都不动（有电的车不受影响，没能量仓的车自然跳过）。
+     */
+    private static void topUpAircraftEnergy(Entity mount) {
+        try {
+            if (mGetEnergy == null || mSetEnergy == null || mGetMaxEnergy == null) {
+                return;
+            }
+            int e = ((Number) mGetEnergy.invoke(mount)).intValue();
+            int max = ((Number) mGetMaxEnergy.invoke(mount)).intValue();
+            if (max <= 0 || e > AIRCRAFT_ENERGY_FLOOR) {
+                return;
+            }
+            mSetEnergy.invoke(mount, max);
+            logDrive(mount, "固定翼补能：电量 " + e + " → " + max
+                    + "（反编译实证：loiter 闸要求 getEnergy() > " + AIRCRAFT_ENERGY_FLOOR
+                    + "，而车的能量只能靠车里塞能量物品充、女仆不会充电）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 固定翼日志用的电量读数（拿不到 → "?"）。 */
+    private static String energyText(Entity mount) {
+        try {
+            if (mGetEnergy == null) {
+                return "?";
+            }
+            return String.valueOf(((Number) mGetEnergy.invoke(mount)).intValue());
+        } catch (Throwable ignored) {
+            return "?";
+        }
+    }
+
     /** 固定翼"点火"推力：引擎里 {@code power > 0.2} 才置 engineStartOver（loiter 的前置条件）。 */
     private static final double AIRCRAFT_ENGINE_KICK_POWER = 0.35;
 
@@ -2595,10 +2719,13 @@ public final class MaidMountCompat {
      * <p>为什么需要：地面推力是 {@code viewVector × 0.047 × power × speedRate}（反编译
      * {@code aircraftEngine:879}），不抬头就没有爬升分量；而引擎自己的俯仰只在空中才写
      * （{@code :801}），地面上写 mouseY 是空操作。所以贴地这一段由我们直接写 {@code XRot}。
-     * 取 20°：足够让升力/推力分出一个明显的竖直分量，又不会像 TOM6 的 15° 那样"抬头太多、
-     * 水平推进被吃掉"（AC-130H 的 {@code ClampPitch} 是 40°，20° 在它自己域内）。
+     *
+     * <p>【实测七百七十六·点2】20° → 25°（玩家原话：「是不是往上抬的角度太低了呢？」）。
+     * 实机日志复核：光有角度不够——旧版只在贴地那一拍写一次角度/补一次竖直速度，离地就撒手，
+     * 于是她"跳一下又贴回去"。这一版配套加了爬升窗口（见 {@link #aircraftClimbAssist}），
+     * 角度仍留在引擎自己的 {@code ClampPitch}（AC-130H 为 40°）以内，25° 不会触发它的限位。
      */
-    private static final float AIRCRAFT_TAKEOFF_PITCH = 20.0f;
+    private static final float AIRCRAFT_TAKEOFF_PITCH = 25.0f;
 
     /**
      * 【实测七百四十五·点3】固定翼起飞助跑每拍补的竖直速度（格/拍）。
@@ -2613,6 +2740,22 @@ public final class MaidMountCompat {
     private static final double AIRCRAFT_LOITER_MIN_R = 8.0;
     /** 固定翼 loiter 的最大半径（格）：转太大圈就等于没在压制。 */
     private static final double AIRCRAFT_LOITER_MAX_R = 60.0;
+
+    /* ---------- 【实测七百七十六·点2】固定翼"真的飞起来"：爬升窗口 + 垂直自驾 + 补能 ---------- */
+
+    /** 爬升窗口（UUID → 到期 gameTime）：窗口内我们接管竖直速度，爬到/超时交还引擎。 */
+    private static final java.util.Map<UUID, Long> AIRCRAFT_CLIMB =
+            new java.util.concurrent.ConcurrentHashMap<>();
+    /** 爬升窗口的滑动超时（拍）：15 秒还爬不到位就不再硬接管（避免与引擎无限对拉）。 */
+    private static final long AIRCRAFT_CLIMB_WINDOW_TICKS = 300L;
+    /** 目标高差缩到这么多格以内就算"爬到了" → 收窗，交还引擎自己的 loiter/PD。 */
+    private static final double AIRCRAFT_CLIMB_STOP = 2.0;
+    /** 爬升窗口内每拍的最大爬升率（格/拍 ≈ 4.4 格/秒）。 */
+    private static final double AIRCRAFT_VY_MAX = 0.22;
+    /** 竖直速度每拍最多拉多少（格/拍）：必须 ≥ 重力量级（0.06），否则顶不住。 */
+    private static final double AIRCRAFT_VY_STEP = 0.06;
+    /** 补能阈值：SWB 固定翼 loiter 闸 {@code getEnergy() > 1024}（baseTick 实证）里的那个 1024。 */
+    private static final int AIRCRAFT_ENERGY_FLOOR = 1024;
 
     /* ---------- 【实测七百七十五·点3】固定翼定制起飞：验平地 → 加速 → 抬机头 ---------- */
 
@@ -4893,6 +5036,11 @@ public final class MaidMountCompat {
             if (moved > 0) {
                 logVehicleAmmo(mount, moved);
             }
+            // 【实测七百七十六·点1】创造模式弹药盒留痕：它一进车容器，SWB 自己就把这辆车当
+            // "有无限弹"（见 stackIsWantedAmmo 的说明），不需要我们再搬任何实弹。
+            if (containerHasCreativeAmmoBox(inv)) {
+                logCreativeAmmo(mount);
+            }
             return moved;
         } catch (Throwable ignored) {
             return 0;
@@ -5037,12 +5185,23 @@ public final class MaidMountCompat {
      * </ul>
      * 两类搬进车容器后都由 SWB 自己的 {@code InventoryTool.countAmmoItem/consumeAmmoItem}
      * 计数与消耗（反编译实证），所以"搬进去"这一步就够了，不需要我们替它拆盒。
+     *
+     * <p>【实测七百七十六·点1】再加一类：**创造模式弹药盒**（玩家原话：「我给女仆的是创造模式
+     * 弹药盒。但是他还是不会使用主炮。」）。它不需要型号——SWB 自己就是这么判的（反编译
+     * {@code InventoryTool.hasCreativeAmmoBox}：{@code hasItem(车, 创造弹药盒)} 为真时，
+     * {@code GunData.countBackupAmmo} 直接返回 {@code Integer.MAX_VALUE}、
+     * {@code consumeBackupAmmo} 直接不扣）。所以"正解"与实弹完全一样：**把它搬进车容器**
+     * ——搬进去那一刻起，这辆车所有武器就是无限弹。
      */
     private static boolean stackIsWantedAmmo(net.minecraft.world.item.ItemStack stack,
                                              java.util.List<Object> consumers) {
         try {
             if (stack == null || stack.isEmpty() || consumers.isEmpty()) {
                 return false;
+            }
+            // ⓪ 创造模式弹药盒（不受型号限制，见方法注释）
+            if (isCreativeAmmoBox(stack)) {
+                return true;
             }
             // ① 散装弹 / 枚举型武器的代表弹（旧判据，原样保留）
             if (mConsumerIsAmmoItem != null) {
@@ -5091,6 +5250,61 @@ public final class MaidMountCompat {
             return null;
         }
     }
+
+    /**
+     * 【实测七百七十六·点1】是不是卓越前线的「创造模式弹药盒」。
+     *
+     * <p>判据用**物品类名**而不是 id/注册表：{@code CreativeAmmoBoxItem} 是 SWB 自己的类名，
+     * 两个版本（1.21.1 / 1.20.1）的 SWB 0.8.9.1 都是这个名字，跨加载器也稳
+     * （id 反而可能被整合包改命名空间）。
+     */
+    private static boolean isCreativeAmmoBox(net.minecraft.world.item.ItemStack stack) {
+        try {
+            return stack != null && !stack.isEmpty()
+                    && stack.getItem().getClass().getName().contains("CreativeAmmoBoxItem");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 车容器里有没有创造模式弹药盒（有 = SWB 按"无限弹"算，见 {@link #stackIsWantedAmmo}）。 */
+    private static boolean containerHasCreativeAmmoBox(net.neoforged.neoforge.items.IItemHandler inv) {
+        try {
+            if (inv == null) {
+                return false;
+            }
+            for (int i = 0; i < inv.getSlots(); i++) {
+                if (isCreativeAmmoBox(inv.getStackInSlot(i))) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    /** 创造弹药盒进车留痕（节流 5 秒/车）：日志搜「创造弹药盒」。 */
+    private static void logCreativeAmmo(Entity mount) {
+        try {
+            long now = System.currentTimeMillis();
+            Long last = ACRE_AT.get(mount.getUUID());
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            ACRE_AT.put(mount.getUUID(), now);
+            if (ACRE_AT.size() > 256) {
+                ACRE_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("创造弹药盒", describeKind(mount)
+                    + " 车容器里有创造模式弹药盒 → 全车武器按\u201c无限弹\u201d算"
+                    + "（SWB 自己的判据 InventoryTool.hasCreativeAmmoBox：不消耗、也不用再搬实弹）");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 创造弹药盒日志的独立频限表（与其它几条日志互不顶掉）。 */
+    private static final java.util.Map<UUID, Long> ACRE_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
     private static void logVehicleAmmo(Entity mount, int moved) {

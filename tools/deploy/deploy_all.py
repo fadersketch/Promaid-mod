@@ -6,6 +6,20 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百七十六（v1.3.0 beta，同名覆盖，未发版）：**两树同步的两条** ——
+① 创造模式弹药盒也当弹搬进车容器（玩家原话：「我给女仆的是创造模式弹药盒。但是他还是不会使用主炮。」）：
+   实机日志每一轮都是「模组坐骑·缺弹 炮「Cannon」弹匣空、全部弹种都换不出余弹」——旧判据只认散装弹 /
+   盒装弹 / 通用弹药盒，创造盒（CreativeAmmoBoxItem）压根不搬。反编译实证正解：SWB 自己的
+   InventoryTool.hasCreativeAmmoBox(车) = hasItem(车, 创造盒) 为真时，GunData.countBackupAmmo 直接返回
+   Integer.MAX_VALUE、consumeBackupAmmo 直接不扣 —— 所以把创造盒搬进车容器 = 全车无限弹（日志「创造弹药盒」）。
+② 固定翼真的飞起来（玩家原话：「是不是往上抬的角度太低了呢？女仆在开飞机的时候是根本飞不起来的。」）：
+   实机日志（neo 02:36–02:37）实证她"跳一下就一直贴地 0.5 格/拍地滑行盘旋、高差十几格从不下降"。
+   根因（反编译 aircraftEngine + baseTick）：引擎自己的 loiter 要同时满足 !onGround && engineStartOver &&
+   getEnergy() > 1024 && loiterActive 才接管，旧版只在贴地那一拍补一次竖直速度就撒手。修法：抬头角 20°→25°
+   + 离地后进入"爬升窗口"（每拍直接拉 deltaMovement.y，目标爬升率 = clamp(高差×0.06, 0.06, 0.22)，爬到目标
+   高度 2 格以内才撒手）+ 电量见底自动补满（车只能靠车里塞能量物品充电，女仆不会充电）。日志「固定翼爬升」/
+   「固定翼补能」，起飞/爬升日志带「电量=」。
+
 实测七百七十五（v1.3.0 beta，同名覆盖，未发版）：**两树同步的载具四处整改** ——
 ① 坦克主炮「只打两发就哑」：装填判据从"只看当前选中的弹种"放宽到**每门炮的全部弹种**
    （GunProp.AMMO_CONSUMER 整表），并在开火前加 prepareGun 三步（补弹匣 → 换有弹的弹种 →
