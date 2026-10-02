@@ -263,6 +263,30 @@ public final class MaidMountCompat {
     private static Constructor<?> ctorVehicleShootMsg; // VehicleShootClientMessage(UUID,UUID,int,String)
     private static Method mSendPacketToAll;          // MinecraftUtil.sendPacketToAll(payload)
 
+    /* 【实测七百七十四·点1】"她只认现成的弹药、不认弹药盒"所需的反射（见 {@link #stackIsWantedAmmo}）。
+     *
+     * 玩家原话：「我发现现在女仆给载具装填没有办法识别弹药盒，她只认现成的弹药。」
+     * 反编译 {@code InventoryTool.countAmmoItem/consumeAmmoItem} 实证：车的枪在容器里认**三种**形态——
+     *   ① 散装弹（{@code AmmoSupplierItem}，如 {@code rifle_ammo}）→ 旧判据 isAmmoItem 已覆盖；
+     *   ② 盒装弹（{@code RifleAmmoBoxItem} 等，**继承 AmmoSupplierItem**、{@code type} 相同、
+     *      每件 {@code ammoToAdd=30/12} 发）→ 物品 id 与散装弹**不同**，旧判据匹配不到；
+     *   ③ 通用「弹药盒」（{@code AmmoBoxItem}，弹药存在物品自身的数据组件里，
+     *      用 {@code Ammo.get(stack)} 读、{@code Ammo.set(stack,n)} 写）→ 旧判据也匹配不到。
+     * 所以判据要按 SWB 自己的"这盒弹是不是这门枪吃的型号"来问：
+     *   · {@code AmmoConsumer.getPlayerAmmoType()}（枚举型武器才有，物品型恒 null）；
+     *   · {@code AmmoSupplierItem.getType()}（盒装/散装弹自带型号）；
+     *   · {@code Ammo.get(ItemStack)}（弹药盒里存了多少发）。
+     * 三者缺一就退回旧判据（至少散装弹照旧能搬）。 */
+    private static Class<?> cAmmoBoxItem;            // ...item.ammo.AmmoBoxItem（通用「弹药盒」）
+    private static Class<?> cAmmoSupplier;           // ...item.ammo.AmmoSupplierItem（散装弹/盒装弹）
+    private static Method mConsumerPlayerAmmoType;   // AmmoConsumer.getPlayerAmmoType() -> Ammo
+    private static Method mSupplierGetType;          // AmmoSupplierItem.getType() -> Ammo
+    private static Method mAmmoGetStack;             // Ammo.get(ItemStack) -> int
+
+    /* 【实测七百七十四·点2/点3】"全车炮管一起开火 + 按各自 RPM 的射速"所需的反射：
+     * {@code vehicleWeaponRpm(String)}——引擎自己算射速用的就是它（RPM / 60 = 每秒发数）。 */
+    private static Method mVehicleWeaponRpmName;     // vehicleWeaponRpm(String) -> int
+
     /* ==================== 反射缓存：冰火传说 ==================== */
 
     private static boolean iafInited;
@@ -597,6 +621,30 @@ public final class MaidMountCompat {
             } catch (Throwable ignored) {
                 ctorVehicleShootMsg = null;
                 mSendPacketToAll = null;
+            }
+            // 【实测七百七十四·点1/点2/点3】弹药盒识别 + 全车炮管枚举 + 逐炮 RPM 射速所需的反射。
+            // 一整段 try：缺任何一个都只是"那一档退回旧行为"（散装弹照搬、只打主炮、固定 5 拍节奏）。
+            try {
+                Class<?> ac774 = Class.forName("com.atsuishio.superbwarfare.data.gun.AmmoConsumer");
+                mConsumerPlayerAmmoType = ac774.getMethod("getPlayerAmmoType");
+                Class<?> ammoCls774 = Class.forName("com.atsuishio.superbwarfare.data.gun.Ammo");
+                mAmmoGetStack = ammoCls774.getMethod("get", net.minecraft.world.item.ItemStack.class);
+                cAmmoBoxItem = Class.forName("com.atsuishio.superbwarfare.item.ammo.AmmoBoxItem");
+                Class<?> supCls774 = Class.forName(
+                        "com.atsuishio.superbwarfare.item.ammo.AmmoSupplierItem");
+                mSupplierGetType = supCls774.getMethod("getType");
+                cAmmoSupplier = supCls774;
+            } catch (Throwable ignored) {
+                cAmmoBoxItem = null;
+                cAmmoSupplier = null;
+                mConsumerPlayerAmmoType = null;
+                mSupplierGetType = null;
+                mAmmoGetStack = null;
+            }
+            try {
+                mVehicleWeaponRpmName = cVehicle.getMethod("vehicleWeaponRpm", String.class);
+            } catch (Throwable ignored) {
+                mVehicleWeaponRpmName = null;
             }
             swbOk = true;
         } catch (Throwable ignored) {
@@ -3289,6 +3337,56 @@ public final class MaidMountCompat {
         return null;
     }
 
+    /**
+     * 【实测七百七十四·点2】车上**每一门能用的炮**（逐座逐位枚举，去重）。
+     *
+     * <h2>玩家原话（即规格）</h2>
+     * 「像坦克这种，它拥有多种攻击方式，而这个时候又有多种炮管。如果多种炮管都满足，
+     * 应该一起开火，而不是单选择一种。」
+     *
+     * <h2>旧口径为什么只打一门</h2>
+     * {@link #gunNameFor} 取的是**每座当前选中那门**（{@code getGunName(座)}），于是 M1A2 的
+     * 座 0 挂着 {@code Cannon + MachineGun} 两门炮、永远只打选中的那一门（实机日志里
+     * {@code 炮=Cannon} 与 {@code 炮=MachineGun} 交替出现，正是"玩家手动切换模式"的结果）。
+     *
+     * <h2>本方法</h2>
+     * 按 {@code getGunName(座, 位)} 把**每个座位的每一门炮**都收进来（反编译实证：
+     * {@code SeatInfo.weapons()} 就是逐座武器表）。玩家坐着的那一座**整座跳过**——那一座的
+     * 武器归玩家手动操作，我们不抢。
+     *
+     * @return 炮名列表（顺序稳定：座 0 的炮在前）；这车没炮 → 空表
+     */
+    static java.util.List<String> gunsFor(Entity mount, EntityMaid maid) {
+        java.util.List<String> out = new java.util.ArrayList<>(4);
+        try {
+            if (mount == null || !isVehicle(mount) || mGetGunNameAtSeatWeapon == null) {
+                return out;
+            }
+            int n = maxPassengers(mount);
+            for (int seat = 0; seat < n; seat++) {
+                if (seatHasPlayer(mount, seat)) {
+                    continue; // 玩家占着这一座 → 他的武器归他
+                }
+                for (int w = 0; w < 8; w++) {
+                    String g = asString(mGetGunNameAtSeatWeapon.invoke(mount, seat, w));
+                    if (g == null) {
+                        break; // 这个位没炮了（武器表已到尾）
+                    }
+                    if (!out.contains(g)) {
+                        out.add(g);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return out;
+    }
+
+    /** 炮名里带 Bomb 的 = 往下丢的航空炸弹（基洛夫/斯图卡那几门），走引擎投弹链路与最小间隔。 */
+    private static boolean isBombGun(String gun) {
+        return gun != null && gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
+    }
+
     /** 这个位上坐的是不是玩家（玩家在瞄 → 我们让开）。 */
     private static boolean seatHasPlayer(Entity mount, int seat) {
         try {
@@ -3352,11 +3450,32 @@ public final class MaidMountCompat {
      */
     private static void ensureMagazineLoaded(Entity mount, int seat) {
         try {
-            if (mGetGunDataSeat == null || mGunReloadAmmo == null) {
+            if (mGetGunDataSeat == null) {
                 return;
             }
-            Object gd = mGetGunDataSeat.invoke(mount, seat);
-            if (gd == null) {
+            ensureGunLoaded(mount, mGetGunDataSeat.invoke(mount, seat));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百七十四·点2】按**炮名**补弹匣——全车炮管一起开火时，每一门都要能自己装填
+     * （旧版只补"她坐那一座 + 主炮"两门，别的炮打空弹匣后永远哑火）。
+     */
+    private static void ensureGunLoaded(Entity mount, String gun) {
+        try {
+            if (gun == null) {
+                return;
+            }
+            ensureGunLoaded(mount, gunDataOf(mount, gun));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** 补弹匣的共用实现（GunData 已取到）：空匣 + 车容器里有对得上的弹 → reloadAmmo。 */
+    private static void ensureGunLoaded(Entity mount, Object gd) {
+        try {
+            if (gd == null || mGunReloadAmmo == null) {
                 return;
             }
             if (mGunReloading != null) {
@@ -3750,13 +3869,23 @@ public final class MaidMountCompat {
      * @return true = 这一拍真的把开火调用发出去了
      */
     static boolean fireAt(Entity mount, EntityMaid maid, LivingEntity target) {
+        return fireAt(mount, maid, target, null);
+    }
+
+    /**
+     * 【实测七百七十四·点2】按**指定炮名**开火（{@code gun==null} 时退回"本车主炮"）。
+     *
+     * <p>全车炮管一起开火时，每一门都走这个入口：先直瞄（{@link #directFireAt}），直瞄不可用
+     * 或这门炮是投弹时退回引擎那条 {@code vehicleShoot}。
+     */
+    static boolean fireAt(Entity mount, EntityMaid maid, LivingEntity target, String gun) {
         try {
             if (mount == null || maid == null || target == null || !target.m_6084_()) {
                 return false;
             }
             // 【实测七百七十三·点3】优先走**直瞄**（女仆枪械模式式瞄准）——见 {@link #directFireAt}。
             // 反射不可用 / 这门炮取不到时返回 false，下面原样走引擎那条路。
-            if (directFireAt(mount, maid, target)) {
+            if (directFireAt(mount, maid, target, gun)) {
                 return true;
             }
             // 【实测七百四十一·点2b/点3】按**炮名**开火（{@code vehicleShoot(LivingEntity,String,UUID,Vec3)}）。
@@ -3770,11 +3899,11 @@ public final class MaidMountCompat {
             // 【为什么 targetPos 仍传 null】反编译 {@code GunItem.shoot} 实证：那个位置参数**只有
             // {@code MissileProjectile}（制导导弹）读**，炮弹一律按炮管当前朝向飞。UUID 照传
             // （导弹因此制导；炮弹忽略）。
-            String gun = gunNameFor(mount, maid);
-            if (gun == null || mVehicleShootByName == null) {
+            String use = gun != null ? gun : gunNameFor(mount, maid);
+            if (use == null || mVehicleShootByName == null) {
                 return false;
             }
-            mVehicleShootByName.invoke(mount, maid, gun, target.m_20148_(), null);
+            mVehicleShootByName.invoke(mount, maid, use, target.m_20148_(), null);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -3823,19 +3952,29 @@ public final class MaidMountCompat {
      *         → 交回引擎原路（{@link #mVehicleShootByName}）
      */
     static boolean directFireAt(Entity mount, EntityMaid maid, LivingEntity target) {
+        return directFireAt(mount, maid, target, null);
+    }
+
+    /**
+     * 【实测七百七十四·点2】按**指定炮名**直瞄开火（{@code gun==null} → 退回"本车主炮"）。
+     *
+     * <p>多炮齐射时每一门都单独走一遍：炮口/弹道参数/散布全按这一门自己的数据取，
+     * 所以"哪一门打哪一门的"不会串。
+     */
+    static boolean directFireAt(Entity mount, EntityMaid maid, LivingEntity target, String gun) {
         try {
             if (mount == null || maid == null || target == null || !target.m_6084_()
                     || !directFireReady()) {
                 return false;
             }
-            String gun = gunNameFor(mount, maid);
-            if (gun == null) {
+            String use = gun != null ? gun : gunNameFor(mount, maid);
+            if (use == null) {
                 return false;
             }
-            if (gun.toLowerCase(java.util.Locale.ROOT).contains("bomb")) {
+            if (isBombGun(use)) {
                 return false; // 投弹保持引擎原路（见方法注释）
             }
-            Object gd = gunDataOf(mount, gun);
+            Object gd = gunDataOf(mount, use);
             if (gd == null) {
                 return false;
             }
@@ -3856,8 +3995,8 @@ public final class MaidMountCompat {
                     return false;
                 }
             }
-            Vec3 muzzle = shootPosOfGun(mount, gun);
-            Vec3 dir = firingSolution(mount, gun, maid, target);
+            Vec3 muzzle = shootPosOfGun(mount, use);
+            Vec3 dir = firingSolution(mount, use, maid, target);
             if (muzzle == null || dir == null || dir.m_82556_() < 1.0E-8
                     || !(mount.m_9236_() instanceof net.minecraft.server.level.ServerLevel sl)) {
                 return false;
@@ -3865,7 +4004,7 @@ public final class MaidMountCompat {
             Object params = ctorShootParams.newInstance(supplier, maid, sl, muzzle, dir.m_82541_(),
                     gd, gunSpreadOf(gd), true, target.m_20148_(), null);
             mGunDataShootParams.invoke(gd, params);
-            sendVehicleShootFx(mount, maid, gun);
+            sendVehicleShootFx(mount, maid, use);
             return true;
         } catch (Throwable ignored) {
             return false;
@@ -4318,22 +4457,70 @@ public final class MaidMountCompat {
      * 这一格物品是不是"这车上某门武器吃得下的弹"——判据走 SWB 自己的
      * {@code AmmoConsumer.isAmmoItem(stack)}（对物品型与枚举型**两种都成立**，见
      * {@link #feedVehicleAmmo} 的说明）。
+     *
+     * <p>【实测七百七十四·点1】在旧判据之上补**盒装弹**与**弹药盒**（玩家原话：「女仆给载具装填
+     * 没有办法识别弹药盒，她只认现成的弹药」）：
+     * <ul>
+     *   <li><b>盒装弹</b>（{@code RifleAmmoBoxItem} 等，继承 {@code AmmoSupplierItem}、自带型号）：
+     *       问 {@code getType()} 是不是某个 consumer 的 {@code getPlayerAmmoType()}；</li>
+     *   <li><b>通用弹药盒</b>（{@code AmmoBoxItem}，弹药存在物品自身数据里）：问
+     *       {@code Ammo.get(stack) > 0} 且型号对得上。</li>
+     * </ul>
+     * 两类搬进车容器后都由 SWB 自己的 {@code InventoryTool.countAmmoItem/consumeAmmoItem}
+     * 计数与消耗（反编译实证），所以"搬进去"这一步就够了，不需要我们替它拆盒。
      */
     private static boolean stackIsWantedAmmo(net.minecraft.world.item.ItemStack stack,
                                              java.util.List<Object> consumers) {
         try {
-            if (stack == null || stack.m_41619_() || consumers.isEmpty() || mConsumerIsAmmoItem == null) {
+            if (stack == null || stack.m_41619_() || consumers.isEmpty()) {
+                return false;
+            }
+            // ① 散装弹 / 枚举型武器的代表弹（旧判据，原样保留）
+            if (mConsumerIsAmmoItem != null) {
+                for (Object consumer : consumers) {
+                    Object ok = mConsumerIsAmmoItem.invoke(consumer, stack);
+                    if (Boolean.TRUE.equals(ok)) {
+                        return true;
+                    }
+                }
+            }
+            // ② 盒装弹 / ③ 弹药盒：按"型号 + 里面有没有弹"判（见方法注释）
+            net.minecraft.world.item.Item item = stack.m_41720_();
+            boolean boxed = cAmmoSupplier != null && cAmmoSupplier.isInstance(item);
+            boolean box = cAmmoBoxItem != null && cAmmoBoxItem.isInstance(item);
+            if (!boxed && !box) {
                 return false;
             }
             for (Object consumer : consumers) {
-                Object ok = mConsumerIsAmmoItem.invoke(consumer, stack);
-                if (Boolean.TRUE.equals(ok)) {
-                    return true;
+                Object want = playerAmmoTypeOf(consumer);
+                if (want == null) {
+                    continue; // 物品型武器（炮弹类）：没有 Ammo 型号，盒装弹对它无意义
+                }
+                if (boxed && mSupplierGetType != null) {
+                    Object type = mSupplierGetType.invoke(item);
+                    if (want.equals(type)) {
+                        return true;
+                    }
+                }
+                if (box && mAmmoGetStack != null) {
+                    Object n = mAmmoGetStack.invoke(want, stack);
+                    if (n instanceof Number num && num.intValue() > 0) {
+                        return true;
+                    }
                 }
             }
         } catch (Throwable ignored) {
         }
         return false;
+    }
+
+    /** {@code AmmoConsumer.getPlayerAmmoType()}（枚举型武器才有；物品型恒 null）→ Ammo 或 null。 */
+    private static Object playerAmmoTypeOf(Object consumer) {
+        try {
+            return mConsumerPlayerAmmoType == null ? null : mConsumerPlayerAmmoType.invoke(consumer);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /** 装弹留痕（节流 5 秒/车）：日志搜「模组坐骑·装弹」。 */
@@ -4423,9 +4610,16 @@ public final class MaidMountCompat {
                 // 弹药没有办法发射」正是它）。而 740 那版不分档、一律接管，所以它能打。
                 //
                 // 现在恢复并固化 740 的口径：**不分档**。一律把她的 {@code getTarget} 清掉
-                // （那是引擎自动开火的唯一开关，反编译同处实证；不清就是"引擎打一门、我们打一门"），
+                // （原意是掐掉引擎自动开火的开关；【实测七百七十四·更正】这招对 TLM 其实无效，
+                // 见下面 setTarget 那几行——引擎那条链一直开着，这里只是"能清就清"），
                 // 瞄准与开火都走我们这条路。
                 String gun = gunNameFor(mount, maid);
+                // 【实测七百七十四·更正】这行 setTarget(null) 对 TLM **不起作用**：javap 实证
+                // {@code EntityMaid.getTarget()} 被覆写成"读 brain 的 ATTACK_TARGET 记忆"，
+                // 不读实体自身那个 target 字段——所以引擎那条"Mob 乘客自动开火"其实一直开着
+                // （它按 RPM 打她那一座**当前选中**的炮，且要求炮口与目标夹角 < 4°）。
+                // 保留这行只为兼容"别的实现读实体 target"的场合，清不掉引擎那条链；
+                // 多炮齐射（本类）与它是并行关系，主炮偶尔会两侧各打一发（RPM 节流后不失控）。
                 try {
                     maid.m_6710_(null);
                 } catch (Throwable ignored) {
@@ -4449,40 +4643,62 @@ public final class MaidMountCompat {
                 //   ② 打出去的每一发都由 {@code MaidShellHoming} 记下目标并逐拍纠向
                 //      （玩家点名要的那条"强力后门"：炮弹直接指向敌人）。
                 if (target != null && gun != null) {
-                    // 【实测七百四十七·投弹安全高度：基洛夫先爬升再投】玩家原话：「女仆在乘坐基洛夫
-                    // 空艇时，如果要进行投放炸药，那么要先自己向上飞 20 格，防止被炸到。」
-                    // 载具这一门就是"往下丢的航空炸弹"（gun 名里含 Bomb，基洛夫的唯一武器就是它）
-                    // 且**还没爬到位**时：按住这一发不投（不耗弹、不占冷却）。高度那一边由
-                    // MaidAirCombat.requiredAbove 把她往"目标上 20 格"抬，两边配合 = 先拉高再丢。
-                    // 非炸弹武器（机炮/导弹）与地面载具**一个字都不受影响**。
-                    boolean isBombGun = gun.toLowerCase(java.util.Locale.ROOT).contains("bomb");
-                    if (isBombGun && com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
-                        return; // 先爬升，这一发按住
+                    // 【实测七百七十四·点2】"多种炮管都满足就一起开火"：把全车每一门炮都列出来，
+                    // 一门一条扳机（玩家占着的座整座跳过）。取不到（反射缺）就退回只有主炮那一门。
+                    java.util.List<String> guns = gunsFor(mount, maid);
+                    if (guns.isEmpty()) {
+                        guns = java.util.Collections.singletonList(gun);
                     }
+                    // 瞄准（观感 + 引擎原路的对准闸）只对**主炮**做一次：直瞄那一档每一门炮
+                    // 都有自己的解算方向（directFireAt 内部按炮名算），不需要等炮塔转到位。
                     boolean aimed = aimBallistic(mount, maid, target);
                     Vec3 want = lastDesired(mount);
                     logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want));
                     if (aimed) {
                         aimStalledTicks(mount, true);
                     }
+                    // 【实测七百四十二·点2】"对不准也必须打"的保底：只服务**引擎原路**
+                    //（投弹 / 直瞄反射不可用）。有可转炮架的车继续等它对正。
                     boolean force = !aimed && !hasSlewableMount(mount)
                             && aimStalledTicks(mount, false) >= AIM_FORCE_TICKS;
-                    // 【实测七百七十三·点3】直瞄可用时**不再等"炮塔转到 3° 以内"**：方向由
-                    // directFireAt 自己给（女仆枪械模式式瞄准）。投弹（isBombGun）不走直瞄、
-                    // 照旧等对准；aimed/force 那两条闸只服务"引擎原路"（反射不可用时的退回档）。
-                    boolean direct = directFireReady() && !isBombGun;
-                    if (direct || aimed || force) {
-                        if (fireTickDue(mount)) {
-                            // targetPos 传 null：反编译 GunItem 实证炮弹不读它（只有制导导弹读），
-                            // 炮弹只按炮管当前朝向飞——所以"对准"就是全部。按炮名开火（见 fireAt），
-                            // 保证"瞄的那门"和"打的那门"是同一门。
-                            if (fireAt(mount, maid, target)) {
-                                logForceFire(mount, target);
-                                // 【实测七百四十二·点3】记下"这一发该打谁"，由 MaidShellHoming
-                                // 逐拍把她的炮弹纠向目标（末制导后门）。
-                                com.maidsmart.combat.MaidShellHoming.note(maid, mount, target);
-                            }
+                    StringBuilder fired = new StringBuilder();
+                    for (String g : guns) {
+                        boolean bomb = isBombGun(g);
+                        // 【实测七百四十七】投弹安全高度闸：没爬到位就**只按住炸弹这一门**，
+                        // 车上别的炮（机炮/机枪）照打；非飞行载具这门闸恒不拦。
+                        if (bomb && com.maidsmart.combat.MaidAirCombat.holdDropForStandoff(maid, target)) {
+                            continue;
                         }
+                        // 【实测七百七十四·点3】逐炮按自己的 RPM 定节奏（fireTickDue 内部算间隔）；
+                        // 投弹那一门在 RPM 之上还加 2 秒最小间隔（见 BOMB_MIN_INTERVAL_TICKS）。
+                        if (!fireTickDue(mount, g)) {
+                            continue;
+                        }
+                        boolean ok;
+                        if (!bomb && directFireReady()) {
+                            // 直瞄：不等炮塔转到位，方向由 directFireAt 自己给（773 那条）。
+                            ensureGunLoaded(mount, g); // 弹匣空就自己上弹（不然这门永远打不响）
+                            ok = directFireAt(mount, maid, target, g);
+                        } else {
+                            // 引擎原路：投弹 / 直瞄反射不可用。照旧等"对准或保底硬打"。
+                            if (!aimed && !force) {
+                                continue;
+                            }
+                            ensureGunLoaded(mount, g);
+                            ok = fireAt(mount, maid, target, g);
+                        }
+                        if (ok) {
+                            if (fired.length() > 0) {
+                                fired.append('+');
+                            }
+                            fired.append(g);
+                        }
+                    }
+                    if (fired.length() > 0) {
+                        logForceFire(mount, fired.toString(), target);
+                        // 【实测七百四十二·点3】记下"这一发该打谁"，由 MaidShellHoming
+                        // 逐拍把她的炮弹纠向目标（末制导后门）。
+                        com.maidsmart.combat.MaidShellHoming.note(maid, mount, target);
                     }
                 }
                 return;
@@ -4617,22 +4833,67 @@ public final class MaidMountCompat {
         }
     }
 
-    /* 【实测七百三十一·后门】直接开火的节流：按拍计数（每只车一份）。反编译那条内置链用的是
-     * {@code tickCount % ceil(20 / (rpm/60))}，这里简化成固定间隔——玩家要的是"能打出去"，
-     * 不是复刻射速。5 拍 ≈ 4 发/秒，机炮够密、又不会一帧把弹匣清空。 */
-    private static final java.util.Map<java.util.UUID, Integer> FFIRE_TICK =
+    /* 【实测七百七十四·点3】开火节流：**按每一门炮自己的 RPM** 算间隔（不再是固定 5 拍）。
+     *
+     * 玩家原话：「只有女仆在枪械模式下发射炮弹的频率是最高的，如果选择正常的攻击模式以及其他的
+     * 模式，那频率远远不如枪械高，我不知道这是为什么。」——根因就是旧版这行固定节流：
+     * 5 拍 = 4 发/秒，与武器无关；而引擎自己那条（Mob 乘客自动开火）用的是
+     * {@code tickCount % ceil(20 / (rpm/60))}（反编译 {@code VehicleEntity:3903}）。于是
+     * RPM=600 的车载机枪被压到 4/s（M1A2 的 MachineGun 真实 10/s、AC-130H 的 M61 真实 20/s），
+     * 而"枪械模式"下她自己的手持枪不受这条节流 → 看起来"只有枪械模式最快"。
+     *
+     * <p>现在逐字照搬引擎公式：{@code interval = ceil(20 / (rpm / 60)) = ceil(1200 / rpm)} 拍，
+     * rpm 取 {@code vehicleWeaponRpm(炮名)}（缺 RPM 的炮按引擎 Entity 重载同口径退 60）。
+     * 投弹（炮名含 Bomb）另加一道最小间隔（见 {@link #BOMB_MIN_INTERVAL_TICKS}）。 */
+    private static final java.util.Map<String, Integer> GFIRE_TICK =
             new java.util.concurrent.ConcurrentHashMap<>();
-    private static final int FORCE_FIRE_EVERY = 5;
 
-    private static boolean fireTickDue(Entity mount) {
+    /** 缺 RPM 时的退路：与反编译 {@code vehicleWeaponRpm(Entity)} 的 {@code return 60} 同口径。 */
+    private static final int FIRE_RPM_FALLBACK = 60;
+
+    /** 【实测七百七十四·点4】投弹最小间隔（拍）= 40 拍 = 2 秒。
+     *
+     * <p>玩家原话：「女仆在使用洛基夫空艇的时候应该要有一个最小投弹间隔的，现在不停的连续投
+     * 直接把飞船自己给炸了。」基洛夫的 {@code Bomb}：RPM 60、弹匣 7、爆炸半径 42，而飞船自己的
+     * {@code DamageModifiers} 里对航空炸弹是 {@code *3}（反编译数据实证）——旧版 5 拍一发，
+     * 1.75 秒把 7 发全丢光，飞船还在原地就被自己炸死。现在两发之间至少隔 2 秒（飞机会飞离上一发
+     * 的落点），弹匣打空后照旧走引擎自己的 5 秒装填。 */
+    private static final int BOMB_MIN_INTERVAL_TICKS = 40;
+
+    /** 这门炮两发之间至少要等几拍（RPM → 拍；投弹再加最小间隔）。 */
+    private static int fireIntervalTicks(Entity mount, String gun) {
+        int rpm = FIRE_RPM_FALLBACK;
         try {
-            Integer n = FFIRE_TICK.get(mount.m_20148_());
+            if (mVehicleWeaponRpmName != null && gun != null) {
+                Object v = mVehicleWeaponRpmName.invoke(mount, gun);
+                if (v instanceof Integer i && i > 0) {
+                    rpm = i;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        int t = (int) Math.ceil(1200.0 / Math.max(1, rpm));
+        t = Math.max(1, Math.min(t, 1200));
+        if (isBombGun(gun)) {
+            t = Math.max(t, BOMB_MIN_INTERVAL_TICKS);
+        }
+        return t;
+    }
+
+    private static boolean fireTickDue(Entity mount, String gun) {
+        try {
+            String key = mount.m_20148_() + "|" + gun;
+            Integer n = GFIRE_TICK.get(key);
+            int interval = fireIntervalTicks(mount, gun);
             int v = (n == null ? 0 : n) + 1;
-            if (v >= FORCE_FIRE_EVERY) {
-                FFIRE_TICK.put(mount.m_20148_(), 0);
+            if (v >= interval) {
+                GFIRE_TICK.put(key, 0);
                 return true;
             }
-            FFIRE_TICK.put(mount.m_20148_(), v);
+            if (GFIRE_TICK.size() > 512) {
+                GFIRE_TICK.clear(); // 兜底：表不会无限涨（与其它几张表同口径）
+            }
+            GFIRE_TICK.put(key, v);
             return false;
         } catch (Throwable ignored) {
             return false;
@@ -4643,7 +4904,7 @@ public final class MaidMountCompat {
     private static final java.util.Map<java.util.UUID, Long> FLOG_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    private static void logForceFire(Entity mount, LivingEntity target) {
+    private static void logForceFire(Entity mount, String guns, LivingEntity target) {
         try {
             long now = System.currentTimeMillis();
             Long last = FLOG_AT.get(mount.m_20148_());
@@ -4655,7 +4916,8 @@ public final class MaidMountCompat {
                 FLOG_AT.clear();
             }
             com.maidsmart.tool.PromaidLog.log("模组坐骑·开火", describeKind(mount)
-                    + " 直连开火 → " + String.valueOf(target.m_6095_()).replace("entity.minecraft.", ""));
+                    + " 开火[" + guns + "] → "
+                    + String.valueOf(target.m_6095_()).replace("entity.minecraft.", ""));
         } catch (Throwable ignored) {
         }
     }
