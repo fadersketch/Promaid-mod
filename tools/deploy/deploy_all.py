@@ -6,6 +6,16 @@
 1.20.1 server pack1201    : patched/promaid-1.3.0-forge-1.20.1.jar
 Old jars are backed up under patched/backup_old/ first.
 
+实测七百八十六（v1.3.0 beta，同名覆盖，未发版）：**只动"vehicle json 没写射速数据"的炮** ——
+① 玩家原话：「坦克在安装了创造弹药盒之后，一部分坦克主炮的射速和攻击间隔仍然是异常的。」
+② 根因：没有弹匣的炮（MAGAZINE ≤ 0）直接从车里取弹（useBackpackAmmo，GunData:569 实证），创造盒让弹取不完
+   → 既不消耗也不装填，只剩 RPM 一道闸；而 779 把「json 没写 RPM」的兜底当成 60（1 秒），实际
+   GunProp.RPM 默认是 600（DefaultGunData:300）、vehicleWeaponRpm(炮名) 没有 60 兜底（VEntity:2560）
+   ⇒ 2 拍 = 0.1 秒一发（本意的 10 倍）。实例：type_63.Main / mortar.Main / sodayo_pick_up_rocket.Main。
+③ 改法：新增判据 gunDeclaresNoRateData（弹匣/装填/每发装填/每发积热全 0，读运行期数据 → Template 继承的
+   挂点不算）且 RPM == 600 → 兜底 20 拍（1 秒）。日志搜「模组骑乘·射速」。
+④ 不会误伤：SWB 44 个 vehicle json 里写了 RPM 的 13 门炮全都带 HeatPerShoot，判据命中不了；
+   M1A2 / T-90A / ZTZ-99A 等主炮与所有写了 RPM 的机枪/机炮的间隔一个数都没变。
 实测七百八十五（v1.3.0 beta，同名覆盖，未发版）：**在 784 基础上只动固定翼的索敌** ——
 ① 发现改成「以主人为圆心、水平 50 格」：784 起她巡航在地面上 44 格、接敌在敌上 45 格，而索敌是
    「以自身为圆心的 50 格球」（3D），44 格高度差把水平窗口压到 sqrt(50²−44²)≈24 格 —— 玩家原话

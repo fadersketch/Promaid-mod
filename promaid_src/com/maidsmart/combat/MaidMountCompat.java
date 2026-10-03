@@ -245,6 +245,13 @@ public final class MaidMountCompat {
      * "一匣打完 + 装满一匣"的**固有循环**——见 fireIntervalTicks 的说明。 */
     private static java.lang.reflect.Field fGunPropEmptyReload;
 
+    /* 【实测七百八十六】"这炮的 json 到底写没写射速"所需的两个属性（见 fireIntervalTicks）：
+     * GunProp.NORMAL_RELOAD_TIME（每发装填）与 GunProp.HEAT_PER_SHOOT（每发积热）。
+     * 引擎的 GunProp.RPM **默认就是 600**（反编译 DefaultGunData:300），所以
+     * "读不到 RPM" 这件事本身看不出来——得靠"连弹匣/装填/热度都没有"来推定"这炮什么都没写"。 */
+    private static java.lang.reflect.Field fGunPropNormalReload;
+    private static java.lang.reflect.Field fGunPropHeatPerShoot;
+
     /* 【实测七百七十八·点1】"检测到创造盒就强制允许开炮"这条后门所需的反射。
      *
      * 根因（反编译实证）：载具武器的 {@code canShoot} 走的是 **VehicleGunItem 的覆写**，
@@ -750,12 +757,17 @@ public final class MaidMountCompat {
                 mIntValueSet = ivCls777.getMethod("set", int.class);
                 fGunPropMagazine = gpCls777.getField("MAGAZINE");
                 fGunPropEmptyReload = gpCls777.getField("EMPTY_RELOAD_TIME");
+                // 【实测七百八十六】"这炮什么都没写"的判据要用它俩（见 gunDeclaresNoRateData）。
+                fGunPropNormalReload = gpCls777.getField("NORMAL_RELOAD_TIME");
+                fGunPropHeatPerShoot = gpCls777.getField("HEAT_PER_SHOOT");
             } catch (Throwable ignored) {
                 fGunAmmo = null;
                 mIntValueGet = null;
                 mIntValueSet = null;
                 fGunPropMagazine = null;
                 fGunPropEmptyReload = null;
+                fGunPropNormalReload = null;
+                fGunPropHeatPerShoot = null;
             }
             // 【实测七百七十八·点1】"强制允许开炮"那条后门所需的反射（见 forceAllowShoot）。
             try {
@@ -6865,7 +6877,16 @@ public final class MaidMountCompat {
     private static final java.util.Map<String, Integer> GFIRE_TICK =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** 缺 RPM 时的退路：与反编译 {@code vehicleWeaponRpm(Entity)} 的 {@code return 60} 同口径。 */
+    /**
+     * 连 {@code vehicleWeaponRpm(炮名)} 都调不到时的退路（反射缺失）。
+     *
+     * <p>【实测七百八十六·更正 779 的一句错话】779 在这里写的是"与反编译
+     * {@code vehicleWeaponRpm(Entity)} 的 {@code return 60} 同口径"——**这句话是错的、
+     * 也从来没生效过**：{@code vehicleWeaponRpm(Entity)}({@code VEntity:2544}) 那条 60 兜底只在
+     * {@code RPM <= 0} 时触发，而 {@code GunProp.RPM} 的默认值就是 600（{@code DefaultGunData:300}），
+     * 于是"json 没写 RPM"的炮读到的**是 600**、永远走不到 60。按 600 算 ⇒ 2 拍 = 每 0.1 秒一发
+     * （779 的本意是 1 秒）。真正的兜底见 {@link #ENGINE_DEFAULT_RPM} 与
+     * {@link #gunDeclaresNoRateData}。本常量只在反射整体拿不到时用（那时 RPM 也读不到）。 */
     private static final int FIRE_RPM_FALLBACK = 60;
 
     /** 【实测七百七十四·点4】投弹最小间隔（拍）= 40 拍 = 2 秒。
@@ -6896,6 +6917,111 @@ public final class MaidMountCompat {
      *
      * <p>注意：玩家给的**实弹**玩法里引擎自己的装填闸还在，本项只会是"更慢的那一个"，
      * 不会凭空加速——它补的是后门把装填抹掉之后**丢掉的那半条循环**。 */
+    /** 【实测七百八十六】引擎 {@code GunData} 里 {@code RPM} 的**默认值**（反编译
+     *  {@code DefaultGunData:300 = 600}）。vehicle json 没写 {@code "RPM"} 时，
+     *  {@code vehicleWeaponRpm(炮名)} 返回的**就是它**（{@code VEntity:2560} 只做
+     *  {@code coerceAtLeast(RPM, 1)}、没有别的兜底）——所以它**不能**当成"这炮每分 600 发"。
+     *
+     *  <p>779 的注释里写的"缺 RPM 退到引擎自己的 60"是**错的**：引擎只在
+     *  {@code vehicleWeaponRpm(Entity)}（按座位取炮，自瞄链路用）里写了 60 兜底，而那条
+     *  只在 {@code RPM <= 0} 时才触发——默认 600 让它永远不触发。按 600 算 ⇒
+     *  {@code ceil(1200/600) = 2 拍 = 每 0.1 秒一发}，比 779 的本意（1 秒）**快 10 倍**。 */
+    private static final int ENGINE_DEFAULT_RPM = 600;
+
+    /** 【实测七百八十六】"json 一点射速数据都没写"的炮，两发之间兜底多少拍 = 20 拍 = 1 秒。 */
+    private static final int NO_RATE_INTERVAL_TICKS = 20;
+
+    /** "这炮的 json 有没有射速数据"的缓存（uuid|炮名 → 有没有；开车过程中不变）。 */
+    private static final java.util.Map<String, Boolean> GFIRE_NODATA =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * 【实测七百八十六】这门炮是不是"vehicle json 里一点射速数据都没写"。
+     *
+     * <p>玩家原话：「坦克在安装了创造弹药盒之后，一部分坦克主炮的射速和攻击间隔仍然是异常的。」
+     * 实机可查的证据链：创造盒让炮不再掉弹（{@code useBackpackAmmo()} 由
+     * {@code MAGAZINE <= 0} 决定——{@code GunData:569} 实证），于是**无弹匣**的炮
+     * （{@code MAGAZINE} 为 0）连引擎自己的"打完一匣装填"循环都没有：既不掉弹、也不装填，
+     * 只剩 {@code RPM} 一道；而 {@code RPM} 缺省 = {@link #ENGINE_DEFAULT_RPM}（600）⇒ 2 拍一发。
+     * 例子（SWB 0.8.9.1 的 vehicle json 实证）：{@code type_63.Main} / {@code mortar.Main} /
+     * {@code sodayo_pick_up_rocket.Main} 的条目里**只有** {@code Velocity/Gravity/Spread}，
+     * 既没有 {@code RPM}、也没有 {@code Magazine}/{@code EmptyReloadTime}/{@code HeatPerShoot}。
+     *
+     * <p>判据（四条全 0 才算"什么都没写"）：{@code MAGAZINE <= 0 && EMPTY_RELOAD_TIME <= 0
+     * && NORMAL_RELOAD_TIME <= 0 && HEAT_PER_SHOOT <= 0}。两条保护：
+     * <ul>
+     *   <li>只要写了 {@code HeatPerShoot}（真实机枪/机炮都有，例如 {@code bmp_2.MachineGun}
+     *       RPM 600 + HeatPerShoot 4）就**不算**无数据 → 它们的 RPM 照旧生效（10 发/秒是本意）；</li>
+     *   <li>只要写了 {@code Magazine}（含 {@code SwarmDrone} 这类"600 RPM + 弹匣 14"）也不算
+     *       （弹匣循环那道 max 会盖住 RPM）。</li>
+     * </ul>
+     * 任一反射缺失 → 返回 false（一个字节都不改，回到 779 的行为）。
+     */
+    private static boolean gunDeclaresNoRateData(Entity mount, String gun) {
+        if (mount == null || gun == null) {
+            return false;
+        }
+        String key = mount.m_20148_() + "|" + gun;
+        Boolean cached = GFIRE_NODATA.get(key);
+        if (cached != null) {
+            return cached;
+        }
+        boolean no = false;
+        try {
+            if (mGunGetProp != null && fGunPropMagazine != null && fGunPropEmptyReload != null
+                    && fGunPropNormalReload != null && fGunPropHeatPerShoot != null) {
+                Object gd = gunDataOf(mount, gun);
+                no = gd != null
+                        && propNumber(gd, fGunPropMagazine) <= 0.0
+                        && propNumber(gd, fGunPropEmptyReload) <= 0.0
+                        && propNumber(gd, fGunPropNormalReload) <= 0.0
+                        && propNumber(gd, fGunPropHeatPerShoot) <= 0.0;
+            }
+        } catch (Throwable ignored) {
+            return false;
+        }
+        if (GFIRE_NODATA.size() > 512) {
+            GFIRE_NODATA.clear();
+        }
+        GFIRE_NODATA.put(key, no);
+        return no;
+    }
+
+    /** 读一个 {@code GunProp} 的数值（拿不到 → 0，与 {@link #gunDeclaresNoRateData} 的"全 0"同口径）。 */
+    private static double propNumber(Object gd, java.lang.reflect.Field prop) {
+        try {
+            Object v = mGunGetProp.invoke(gd, prop.get(null));
+            return v instanceof Number n ? n.doubleValue() : 0.0;
+        } catch (Throwable ignored) {
+            return 0.0;
+        }
+    }
+
+    /** 「模组坐骑·射速」日志的频限表（车+炮 → 上次打印毫秒）；节流 5 秒。 */
+    private static final java.util.Map<String, Long> RATEFLOOR_AT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 【实测七百八十六】兜底生效时留一行，搜「模组坐骑·射速」就能看出是哪门炮、兜到了多少拍。 */
+    private static void logRateFloor(Entity mount, String gun, int ticks) {
+        try {
+            long now = System.currentTimeMillis();
+            String key = mount.m_20148_() + "|" + gun;
+            Long last = RATEFLOOR_AT.get(key);
+            if (last != null && now - last < LOG_INTERVAL_MS) {
+                return;
+            }
+            RATEFLOOR_AT.put(key, now);
+            if (RATEFLOOR_AT.size() > 512) {
+                RATEFLOOR_AT.clear();
+            }
+            com.maidsmart.tool.PromaidLog.log("模组坐骑·射速", describeKind(mount)
+                    + " 炮「" + gun + "」的 vehicle json 没写射速数据（RPM/弹匣/装填/热度全缺，"
+                    + "引擎 RPM 默认 " + ENGINE_DEFAULT_RPM + " 会让它 0.1 秒一发）→ 兜底 "
+                    + ticks + " 拍/发（" + fmt2(ticks / 20.0) + " 秒）");
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static int fireIntervalTicks(Entity mount, String gun) {
         int rpm = FIRE_RPM_FALLBACK;
         try {
@@ -6913,6 +7039,14 @@ public final class MaidMountCompat {
         int cycle = gunMagazineCycleTicks(mount, gun);
         if (cycle > t) {
             t = cycle;
+        }
+        // 【实测七百八十六】没有任何"这炮自己设计的射速"可依据的炮（连弹匣循环都没有、
+        // 读到的 RPM 又正好是引擎默认值）→ 兜底 1 秒一发。见 {@link #gunDeclaresNoRateData}。
+        if (cycle <= 0 && rpm == ENGINE_DEFAULT_RPM && gunDeclaresNoRateData(mount, gun)) {
+            if (t < NO_RATE_INTERVAL_TICKS) {
+                t = NO_RATE_INTERVAL_TICKS;
+                logRateFloor(mount, gun, t);
+            }
         }
         if (isBombGun(gun)) {
             t = Math.max(t, BOMB_MIN_INTERVAL_TICKS);
