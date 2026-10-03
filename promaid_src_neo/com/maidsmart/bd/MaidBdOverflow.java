@@ -93,19 +93,18 @@ public final class MaidBdOverflow {
             return;
         }
         // ② 她饰品栏里的额外容器（精妙背包＝缓存）放得下吗？
-        // 【照作者要求】复用上游既有的 MaidExtraContainer.overflow——它自己也尊重
-        // misc.backpackOverflow 那道闸、并且走的是 TLM 的额外容器体系（精妙背包/旅行者背包），
-        // 我们不再自己去调 TLM 的 ContainerRef，避免两套判据各说各话。
-        ItemStack afterContainers = afterSelf;
-        try {
-            ItemStack rest = com.maidsmart.tool.MaidExtraContainer.overflow(maid, afterSelf);
-            if (rest != null) {
-                afterContainers = rest;
-            }
-        } catch (Throwable ignored) {
-        }
+        //
+        // 【实测 G-17 修：这里原本会复制物品】上一版照"复用既有判据"改成了
+        // `MaidExtraContainer.overflow(maid, stack)`，但那是**真插入**（源码里走
+        // `insert(..., false)`），不是探测：探测这一下就已经把物品放进精妙背包了，
+        // 而本类随后只按**网络**收下的量去缩减地面掉落物实体 ⇒ 同一份物品在容器与实体里
+        // 各留一次 = 复制。（fadersketch 的处理是同名只读判据 `canAccept`，走
+        // `insert(..., true)` 模拟、不动任何东西。）
+        //
+        // 这里用 TLM 容器 API 的**模拟**插入做只读探测：改完东西一件不动。
+        ItemStack afterContainers = simulateIntoContainers(maid, afterSelf);
         if (afterContainers.isEmpty()) {
-            return;   // 缓存收下了
+            return;   // 缓存收得下 → 整份交给 TLM 自己的拾取链（它会把物品放进额外容器）
         }
         // ③ 两层都满了：这一份进数据库
         Object net = MaidBdCompat.primaryNet(owner);
@@ -144,6 +143,35 @@ public final class MaidBdOverflow {
             return rest;
         } catch (Throwable t) {
             return stack;   // 判定不了就当"她放不下"，让上一层去处理（保守）
+        }
+    }
+
+    /**
+     * 只读探测：额外容器（精妙背包等）能吃下多少，返回**没吃下的那一份**（全吃下 = 空栈）。
+     * 走 TLM 容器 API 的 {@code insert(maid, stack, true)} 模拟——**不动任何物品**。
+     */
+    private static ItemStack simulateIntoContainers(EntityMaid maid, ItemStack stack) {
+        try {
+            java.util.List<com.github.tartaricacid.touhoulittlemaid.compat.extracontainer.ContainerRef> refs =
+                    com.github.tartaricacid.touhoulittlemaid.compat.extracontainer.MaidContainerCache
+                            .getContainers(maid);
+            if (refs == null || refs.size() <= 1) {
+                return stack;   // 第 0 项是她自己
+            }
+            ItemStack rest = stack.copy();
+            for (int i = 1; i < refs.size() && !rest.isEmpty(); i++) {
+                com.github.tartaricacid.touhoulittlemaid.compat.extracontainer.ContainerRef ref = refs.get(i);
+                if (ref == null) {
+                    continue;
+                }
+                ItemStack out = ref.insert(maid, rest, true);
+                if (out != null) {
+                    rest = out;
+                }
+            }
+            return rest;
+        } catch (Throwable t) {
+            return stack;   // 判定不了就当"放不下"，交给网络那一层（宁可入网，不复制）
         }
     }
 

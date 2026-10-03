@@ -183,6 +183,11 @@ public final class MaidBdProbeCommand {
             src.sendFailure(Component.literal("没找到女仆"));
             return 0;
         }
+        if (!MaidBdCompat.enabled()) {
+            src.sendFailure(Component.literal("总开关关着（config/promaid-common.toml 的 misc.bdStorage），"
+                    + "自动与手动动作一律不执行——这是「默认关」的承诺。要临时验一次就先把它打开"));
+            return 0;
+        }
         if (!MaidBdCompat.available()) {
             src.sendFailure(Component.literal("超越维度反射没解析到"));
             return 0;
@@ -218,6 +223,11 @@ public final class MaidBdProbeCommand {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
             src.sendFailure(Component.literal("没找到女仆"));
+            return 0;
+        }
+        if (!MaidBdCompat.enabled()) {
+            src.sendFailure(Component.literal("总开关关着（config/promaid-common.toml 的 misc.bdStorage），"
+                    + "自动与手动动作一律不执行——这是「默认关」的承诺。要临时验一次就先把它打开"));
             return 0;
         }
         if (!MaidBdCompat.available()) {
@@ -282,6 +292,11 @@ public final class MaidBdProbeCommand {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
             src.sendFailure(Component.literal("没找到女仆"));
+            return 0;
+        }
+        if (!MaidBdCompat.enabled()) {
+            src.sendFailure(Component.literal("总开关关着（config/promaid-common.toml 的 misc.bdStorage），"
+                    + "自动与手动动作一律不执行——这是「默认关」的承诺。要临时验一次就先把它打开"));
             return 0;
         }
         if (!MaidBdCompat.available()) {

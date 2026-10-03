@@ -164,16 +164,22 @@ public final class MaidBdRestock {
             long placed = insertIntoMaid(inv, taken);
             long back = amount - placed;
             if (back > 0) {
-                // 塞不下的还回网络；连还都失败就掉她脚下（不丢件，但要留痕）
+                // 塞不下的还回网络；连还都失败（或还剩）才落地。
+                //
+                // 【实测 G-17 修：这里原本会复制物品】`insert(key, n, simulate)` 返回的是
+                // **剩余量（没吃下的那一份）**，不是"吃下的量"（fadersketch 反编译 0.7.30 的
+                // `AbstractUnorderedStackHandler.insert` 字节码实证）。原写法 `if (leftover != back)`
+                // 在**网络全吃下**（leftover == 0）时也成立 ⇒ 把 back 这一份又掉在地上，
+                // 而网络里已经有一份 = 复制。正确判据：只剩真的还剩（leftover > 0）或调用失败
+                // （leftover < 0）时才落地，且只落"真的没被吃下"的那部分。
                 long leftover = MaidBdCompat.insert(net, taken, back);
-                if (leftover != back) {
+                long toDrop = leftover < 0 ? back : leftover;
+                if (toDrop > 0) {
                     ItemStack drop = taken.copy();
-                    drop.setCount((int) (back - Math.max(0, leftover)));
-                    if (!drop.isEmpty()) {
-                        maid.spawnAtLocation(drop);
-                        PromaidLog.log("超越维度补货", "还回网络失败，已掉在她脚下："
-                                + MaidBdCompat.itemId(drop) + " × " + drop.getCount());
-                    }
+                    drop.setCount((int) Math.min(toDrop, Integer.MAX_VALUE));
+                    maid.spawnAtLocation(drop);
+                    PromaidLog.log("超越维度补货", "还回网络没全收下，剩下的掉在她脚下："
+                            + MaidBdCompat.itemId(drop) + " × " + drop.getCount());
                 }
             }
             out.add(r.match() + "：补了 " + placed + " 个" + (back > 0 ? "（" + back + " 个塞不下，已还回）" : ""));
