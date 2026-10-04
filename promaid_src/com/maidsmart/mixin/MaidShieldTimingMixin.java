@@ -10,8 +10,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * v1.5.134：时机举盾——把 TLM 原版 MaidUseShieldTask 的"8 格内有目标就一直举盾"
- * 改成 PVP 式攻防交替：攻击冷却中 + 目标贴身才举盾格挡，冷却满放盾攻击。
+ * v1.5.134：时机举盾——拦截 TLM 原版 MaidUseShieldTask，改由 MaidCombatTacticsBehavior
+ * 的判定接管。</p>
+ *
+ * <p>【实测七百九十一 / 七百九十二】口径已两次修正：
+ * <ul>
+ *   <li>七百九十一：删掉 v1.5.134 多加的 2.6 格"贴身"闸——它与近战走位（贴进 2 格退到
+ *       3 格、攻击完成后撤 14 tick 退到 3.5 格）冲突，把冷却期整段挤到窗口外，
+ *       盾几乎举不起来（玩家反馈"智能举盾反而削弱了举盾频率"）。</li>
+ *   <li>七百九十二：近战**回到原版口径**——8 格内就举盾，连"攻击冷却中"也不再要求
+ *       （玩家原话「近战方面需要套用原版的机制」，且举盾不影响移速）；远程敌人放宽到
+ *       15 格 + 视线；**枪械任务重新允许举盾**（原版 gun_attack 本就注册了举盾，是早期误挡）。
+ *       唯一例外是弓 / 弩 / 三叉戟 / 御币蓄力中：它们与盾抢同一个"使用物品"槽位
+ *       （原版 startUsingItem 互斥），物理上不能同时成立。</li>
+ * </ul>
  *
  * 原版行为的问题（反编译实证）：checkExtraStartConditions = canUseShield &&
  * 目标 8 格内 → start 举盾（m_6672_ OFF_HAND），canStillUse 同样判定 →

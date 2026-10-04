@@ -10,6 +10,8 @@ package com.maidsmart.marker;
  *   并取消事件让原版取方块不同时生效。
  *
  * 指针指向的方块用与指标石同款的服务端无关射线（Entity.pick）获取。
+ *
+ * <p>【v1.3.8】手持巡逻航图时本类整体让位（中键那一下归 {@code PatrolMarkerClient} 打巡逻标记）。
  */
 public final class WorkPosMarkerClient {
     /** 标记射程（格）——比原版取方块略宽，够得着的都能标；服务端还有 ≤64 校验 */
@@ -50,6 +52,12 @@ public final class WorkPosMarkerClient {
                     "\u00a77手持河童的罗盘：中键工位标记已让位（罗盘优先）；想用中键标记先收好罗盘"), true);
             return;
         }
+        // 【v1.3.8 巡逻航图：同一个手势要让位】手持巡逻航图时，中键的语义是**打一个巡逻标记**
+        // （见 PatrolMarkerClient；v1.3.9 起不再需要潜行，但两个监听器挂在同一个事件上、谁先谁后
+        // 没有保证，所以这里主动让位——一次手势只有一个意思）。
+        if (holdingPatrolChart(mc)) {
+            return;
+        }
         net.minecraft.core.BlockPos pos = pickBlock(mc);
         if (pos == null) {
             return; // 指着空气/实体 → 原版行为
@@ -81,9 +89,21 @@ public final class WorkPosMarkerClient {
         }
     }
 
-    /** 与指标石同款的客户端射线：命中非空气方块返回坐标，否则 null */
-    private static net.minecraft.core.BlockPos pickBlock(net.minecraft.client.Minecraft mc) {
+    /**
+     * v1.3.8：玩家主手/副手是不是拿着巡逻航图——见 {@code PatrolMarkerClient}
+     * （同一个中键手势，拿着航图时归它，这里让位）。取不到恒 false。
+     */
+    private static boolean holdingPatrolChart(net.minecraft.client.Minecraft mc) {
         try {
+            return com.maidsmart.patrol.PatrolChartKit.isChart(mc.player.getMainHandItem())
+                    || com.maidsmart.patrol.PatrolChartKit.isChart(mc.player.getOffhandItem());
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    /** 与指标石同款的客户端射线：命中非空气方块返回坐标，否则 null */
+    private static net.minecraft.core.BlockPos pickBlock(net.minecraft.client.Minecraft mc) {        try {
             net.minecraft.world.entity.Entity cam = mc.getCameraEntity() != null
                     ? mc.getCameraEntity() : mc.player;
             net.minecraft.world.phys.HitResult hit = cam.pick(MARK_REACH,

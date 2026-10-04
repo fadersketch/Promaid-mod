@@ -212,6 +212,27 @@ public final class BuildPlan {
         return new java.util.ArrayList<>(PLANS.values());
     }
 
+    /**
+     * 绑定到这个区块的女仆 UUID 集合（{@code MAID_PLAN} 反查）。
+     *
+     * <p>只反映**本次会话已绑定**的女仆（重启后首次绑定前为空——重启恢复走
+     * {@link #getBoundPlanId} 的 persistentData 路径，那是逐只查的方向，反查不到）。
+     * 供建造 HUD 的"按人广播"判定"这区块里有没有他的女仆"用；拿不到就只是少发一条 HUD，
+     * 不影响建造本身。
+     */
+    public static java.util.List<java.util.UUID> boundMaidUuids(String planId) {
+        java.util.List<java.util.UUID> out = new java.util.ArrayList<>();
+        if (planId == null) {
+            return out;
+        }
+        for (java.util.Map.Entry<java.util.UUID, String> e : MAID_PLAN.entrySet()) {
+            if (planId.equals(e.getValue())) {
+                out.add(e.getKey());
+            }
+        }
+        return out;
+    }
+
     /** v1.5.180：女仆绑定的区块 id（无绑定/计划已删 → null） */
     public static String getBoundPlanId(EntityMaid maid) {
         String pid = MAID_PLAN.get(maid.getUUID());

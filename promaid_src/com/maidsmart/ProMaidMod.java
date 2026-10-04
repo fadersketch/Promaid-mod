@@ -54,6 +54,11 @@ public class ProMaidMod {
     public static final RegistryObject<Item> RIDE_BATON = ITEMS.register("ride_baton",
             () -> new com.maidsmart.combat.RideBatonItem(new Item.Properties()));
 
+    /** 巡逻航图（v1.3.9）：扫帚模式 + home 模式下沿玩家画的轨道巡逻——右键开界面，轨道管理页里
+     *  绑定女仆 / 点「开始标记」后用鼠标中键打点 / 点「连接」首尾成环 */
+    public static final RegistryObject<Item> PATROL_CHART = ITEMS.register("patrol_chart",
+            () -> new com.maidsmart.patrol.PatrolChartItem(new Item.Properties()));
+
     /** v1.2.2 实测五百六十一：官方注册的那个 ModConfig（配置事件里记下来；只读引用，事件里不写盘） */
     public static net.minecraftforge.fml.config.ModConfig COMMON_CONFIG;
 
@@ -86,6 +91,11 @@ public class ProMaidMod {
         // 推进器与自动档挂在 TLM 的 MaidTickEvent 上（推进/自动各一个 handler，客户端自己挡）
         com.maidsmart.goety.MaidGoetyFlight.ensureHooked();
         com.maidsmart.goety.MaidGoetyAuto.ensureHooked();
+        // v1.3.9 巡逻航图：网络层（SimpleChannel）+ 物品判定工具（下线清标记态）。
+        // **不再**拦右键女仆——绑定/解绑都搬到航图的轨道管理页里点（玩家定的设计）。
+        com.maidsmart.patrol.PatrolNetworking.register();
+        net.minecraftforge.common.MinecraftForge.EVENT_BUS.register(
+                new com.maidsmart.patrol.PatrolChartKit());
         // v1.1.0：排班表网络层 + 调度器（按游戏内时间自动切工作模式/任务）
         com.maidsmart.schedule.ScheduleNetworking.register();
         com.maidsmart.schedule.ScheduleManager.register();
@@ -131,6 +141,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerHudHooks();
             // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
             com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
+            // v1.3.9：鼠标中键（标记态下）巡逻打点 + 轨道/标记预览渲染（客户端专属）
+            com.maidsmart.client.PromaidClientSetup.registerPatrolHooks();
             // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
             com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
             // 【实测七百二十七·点4】退出世界清掉"悬空鞍位（龙）"的客户端镜像表

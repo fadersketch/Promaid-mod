@@ -39,8 +39,12 @@ import java.util.Set;
  *    - 距离管理：保持在理想射程（最大射程 × 配置倍率 0.6）——原版
  *      MaidRangedWalkToTarget 会走到贴脸 0 格才射，弓贴脸 = 废物
  *    - 横移绕圈：理想距离内圆周侧移放风筝（大半径）
- * 3. 时机举盾：MaidShieldTimingMixin 拦截 MaidUseShieldTask（原版"8 格内一直举盾"
- *    = 站桩挨打），改为"攻击冷却中 + 目标贴身"才举盾、冷却满放盾攻击——攻防交替。
+ * 3. 时机举盾：MaidShieldTimingMixin 拦截 MaidUseShieldTask——【实测七百九十二起
+ *    近战套用**原版口径**】"8 格内就举盾"（不再要求攻击冷却中）；远程敌人放宽到 15 格
+ *    且有视线（盾挡箭矢、推进到贴身再放盾砍）；**枪械任务也举盾**（原版本来就在
+ *    gun_attack 里注册了举盾，是我们早期误挡）。唯一不举的是**弓/弩/三叉戟/御币蓄力中**
+ *    ——它们和盾抢同一个"使用物品"槽位，物理上互斥（见 chargesUseSlot）。
+ *    举盾不影响移速（原版"举盾降速"只作用于玩家）。
  *
  * 总开关：combat.tactics（面板"战斗自保"段，另含近战/远程/举盾子开关 + 两个数值）。
  */
@@ -59,6 +63,24 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
     /** v1.5.280：后退目标距离（格）——退到 3 格即停：女仆手长（攻击距离 3.1）
      *  完全打得到（反馈："女仆的手很长,完全打得到"），同时脱离敌人近战范围 */
     private static final double KITE_BACK_DIST = 3.0;
+    /**
+     * 【实测七百九十一】近战举盾的距离闸（格）＝ 原版 {@code MaidUseShieldTask} 的
+     * {@code CHECK_RANGE=8}，也正好是本类的接战范围（超出就不该举盾）。
+     *
+     * <p>为什么必须放宽回 8：旧口径是「冷却中 **且** 贴身 ≤2.6 格」，而近战走位把
+     * 冷却期整段推到 2.6 格以外——贴进 2.0 格就后退到 3.0（{@link #KITE_MELEE_RANGE}）、
+     * 攻击完成后撤 14 tick 退到 3.5 格（{@link #RETREAT_TICKS}）、平时只接近到
+     * {@link #MELEE_MELEE_RANGE}=2.6 就停。于是**该举盾的那段时间她恰好站在窗口外**，
+     * 盾几乎举不起来——玩家反馈的"智能举盾反而削弱了举盾频率"就是这一条。
+     */
+    private static final double SHIELD_MELEE_RANGE = 8.0;
+
+    /**
+     * 【实测七百九十二】对**远程敌人**举盾的距离闸（格）。比原版的 8 格宽——骷髅/烈焰人
+     * 站在 9~15 格射她时盾也该挡起来（原版口径下这个距离既不举盾也不进接战范围），
+     * 这正是"盾挡箭矢、推进到贴身再放盾砍"的 PVP 打法。
+     */
+    private static final double SHIELD_RANGED_RANGE = 15.0;
     /** v1.1.0 实测一百六十六（反馈："远程战术似乎失效了——三叉戟/弓弩还是会近身"）：
      *  最小风筝距离（格）。三叉戟（TLM TRIDENT_RANGE≈8~10）与弩（原版
      *  getDefaultProjectileRange=8）的 maxRange 小 → ideal=maxRange×0.6 只有 4.8~6
@@ -195,11 +217,12 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
 
     /**
      * 时机举盾判定（MaidShieldTimingMixin 用）：
-     * - 近战敌人：攻击冷却中 + 目标贴身 → 举盾格挡；冷却满 → 放盾攻击（攻防交替）；
-     * - 远程敌人（v1.5.135 骷髅对策）：15 格内有视线就举盾——盾挡箭矢推进，
-     *   贴身再放盾砍（PVP 打骷髅的标准操作；原版"一直举盾"是站桩挨打，
-     *   v1.5.134 只贴身举盾又导致骷髅射程内不挡，这次两者都修）；
-     * - 弓/弩任务（主手投射武器）：放风筝优先，不举盾。
+     * - 近战敌人：8 格内就举盾（【实测七百九十二】套用原版口径，不再要求冷却中）；
+     * - 远程敌人：15 格内有视线就举盾——盾挡箭矢推进，贴身再放盾砍；
+     * - 枪械（TaCZ / 卓越前线）任务：照举（原版 gun_attack 本就注册了举盾）；
+     * - 弓 / 弩 / 三叉戟 / 御币：**蓄力中不举盾**——与盾抢同一个"使用物品"槽位，
+     *   原版 startUsingItem 互斥，同时用会互相顶掉（见 chargesUseSlot）；
+     * - 战术关闭 / 傀儡模式 / 骑扫帚：整体让位（见 isTacticsEnabled）。
      */
     public static boolean shouldUseShield(EntityMaid maid) {
         if (!com.maidsmart.config.MaidSmartConfig.COMBAT_TACTICS_SHIELD.get()) {
@@ -208,12 +231,13 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         if (!maid.canUseShield()) {
             return false;
         }
-        // 弓/弩任务：主手投射武器 → 自己放风筝，不举盾
-        // v1.1.0：枪械任务同理——双手持枪射击，不举盾
-        // v1.1.0 实测一百二十②：远程分类任务（法术书等）同理——自己拉距离风筝，不举盾
-        if (maid.m_21205_().m_41720_() instanceof ProjectileWeaponItem
-                || GunCompat.isGun(maid.m_21205_())
-                || isRangedTaskActive(maid)) {
+        // 【实测七百九十二】弓/弩/三叉戟/御币在**主手蓄力**时抢的是同一个「使用物品」
+        // 槽位——原版 LivingEntity.startUsingItem 里 `!this.isUsingItem()` 才生效，
+        // 所以"一手盾、一手弓"物理上不可能同时成立（谁先占谁赢，另一个整段被顶掉）。
+        // 这一档必须挡。其余远程**不再一律挡掉**：枪械（TaCZ / 卓越前线）走模组自己的
+        // 射击 API，压根不占这个槽位——原版 TLM 本来就在 gun_attack 任务里注册了
+        // MaidUseShieldTask，是我们早期把枪械一并排除了。
+        if (chargesUseSlot(maid)) {
             return false;
         }
         Optional<LivingEntity> target = maid.m_6274_().m_21952_(MemoryModuleType.f_26372_);
@@ -224,13 +248,38 @@ public class MaidCombatTacticsBehavior extends Behavior<EntityMaid> {
         double d = maid.m_20270_(t);
         // 远程敌人：举盾格挡推进（盾挡箭矢，接近到贴身再放盾砍）
         if (isRangedAttacker(t)) {
-            return d < 15.0 && SelfPreservationBehavior.hasSight(maid, t);
+            return d < SHIELD_RANGED_RANGE && SelfPreservationBehavior.hasSight(maid, t);
         }
-        // 近战敌人：攻防交替（冷却中 + 贴身才举盾，保持机动）
-        if (d > 2.6) {
+        // 近战敌人：【实测七百九十二】套用**原版口径**——8 格内就举盾，不再要求
+        // "攻击冷却中"。玩家原话：「近战方面需要套用原版的机制」。原版
+        // MaidUseShieldTask.checkExtraStartConditions = canUseShield && 目标 8 格内，
+        // 没有冷却这一问；旧版多加的冷却条件 + 2.6 格闸让近战举盾几乎不触发。
+        // 举盾不影响移速（原版"举盾降速"只作用于 Player.getSpeed，女仆是 TamableAnimal），
+        // 所以"常举"不会拖慢她的走位。
+        return d < SHIELD_MELEE_RANGE;
+    }
+
+    /**
+     * 【实测七百九十二】主手是不是"用同一个使用物品槽位蓄力"的武器——弓 / 弩 / 三叉戟 /
+     * 御币（弹幕）。与举盾物理互斥，见 {@link #shouldUseShield} 里的说明。
+     *
+     * <p>判据只认"物品类型 + 原版弹幕任务"，不碰 {@code isRangedTaskActive}：后者含
+     * 枪械/法术等**不占槽位**的远程任务，用它会误伤（那正是我们早期把枪械举盾一起挡掉的错）。
+     */
+    private static boolean chargesUseSlot(EntityMaid maid) {
+        try {
+            ItemStack main = maid.m_21205_();
+            if (main.m_41720_() instanceof ProjectileWeaponItem
+                    || main.m_41720_() instanceof TridentItem) {
+                return true;
+            }
+            // 原版弹幕（御币）走 MaidShootTargetTask：它对主手物品 startUsingItem 蓄力，
+            // 与弓同一条路（该任务里 `if (owner.isUsingItem())` 会把盾当成"正在蓄力"）。
+            return maid.getTask() != null
+                    && "touhou_little_maid:danmaku_attack".equals(maid.getTask().getUid().toString());
+        } catch (Throwable ignored) {
             return false;
         }
-        return maid.m_6274_().m_21952_(MemoryModuleType.f_26373_).isPresent();
     }
 
     /** v1.5.135：是否远程攻击者——RangedAttackMob（骷髅/烈焰人等）或手持弓/弩/三叉戟/投掷物 */

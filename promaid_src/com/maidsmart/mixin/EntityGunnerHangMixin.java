@@ -79,9 +79,17 @@ public abstract class EntityGunnerHangMixin {
             // 两档的规则、粘滞、每一档为什么这么定，全在 GunnerTetherManager.seatOffset 的说明里。
             // 【实测六百七十五】hang 改由 hangFor(她) 给：扫帚档会自动再加 0.3 格
             //（扫帚模型比她的脚底低，只按悬挂距离吊着还会重叠）。
+            // 【v1.3.9.4】锚点可以是**她骑的那台载具**：seatOffset 算出来的偏移是"相对锚点"的，
+            // 所以这里加也加到锚点上（口径只有一处：anchorOf）。
+            net.minecraft.world.entity.Entity anchor =
+                    com.maidsmart.combat.GunnerTetherManager.anchorOf(self);
+            if (anchor == null) {
+                anchor = self;
+            }
             net.minecraft.world.phys.Vec3 off =
                     com.maidsmart.combat.GunnerTetherManager.seatOffset(self, passenger, hang);
-            fn.m_20372_(passenger, self.m_20185_() + off.f_82479_, self.m_20186_() + off.f_82480_, self.m_20189_() + off.f_82481_);
+            fn.m_20372_(passenger, anchor.m_20185_() + off.f_82479_,
+                    anchor.m_20186_() + off.f_82480_, anchor.m_20189_() + off.f_82481_);
             ci.cancel();
         } catch (Throwable ignored) {
         }

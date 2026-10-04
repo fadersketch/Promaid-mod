@@ -117,7 +117,9 @@ public final class SchedulePacketsMaid {
                     // 旧拒绝路径不再存在；走到这里只剩状态异常（维度不可达/实体异常）。
                     msg = "§7女仆没有传送：她当前状态异常，稍后再试一次";
                 } else if (r == 3) {
-                    msg = "§7她坐着/骑乘/在家模式（排班中）保持原位——想强制召回先关闭排班/解除坐姿";
+                    // 【实测七百九十·点2】坐姿/骑乘不再是豁免（点名要她就拽人，只拽人不拽载具），
+                    // 走到这里的只剩守家（home）这一条。
+                    msg = "§7她在守家模式（排班中的 home）保持原位——想召回先解除她的排班/在家模式";
                 } else if (r == 4) {
                     // 实测六百九十九：死亡窗口——照实说"她什么时候回来"，不再说"没找到"
                     int sec = com.maidsmart.combat.MaidAutoResurrect.pendingRemainSeconds(

@@ -216,7 +216,7 @@ public final class MaidChunkLoadManager {
      * 名字也一并记下（列表行要用，不能等她加载出来再取）。
      */
     public record MaidSeen(ResourceKey<net.minecraft.world.level.Level> dim, BlockPos pos,
-                           UUID ownerId, long seenAt, boolean stayPut, String name) {
+                           UUID ownerId, long seenAt, boolean stayPut, boolean homeOnly, String name) {
     }
 
     private static final Map<UUID, MaidSeen> LAST_SEEN = new ConcurrentHashMap<>();
@@ -311,8 +311,8 @@ public final class MaidChunkLoadManager {
         if (ls == null || !ls.ownerId().equals(player.getUUID())) {
             return 0;
         }
-        if (ls.stayPut()) {
-            return 2;
+        if (ls.homeOnly()) {
+            return 2; // 只有守家才顶回去；坐/骑的登记照样入队（登记里读不到载具，等她加载出来再决定）
         }
         if (PENDING_SUMMON.containsKey(maidId)) {
             return 3;
@@ -327,7 +327,7 @@ public final class MaidChunkLoadManager {
         acquireTicket(level.getServer(), new TicketKey(ls.dim(), cp.toLong()),
                 ownerKey(OWNER_SUMMON, maidId));
         PENDING_SUMMON.put(maidId, new PendingSummon(ls.dim(), cp, player,
-                lvl.getGameTime() + 300L));
+                lvl.getGameTime() + 300L, true)); // 【七百九十·点2】点名单召：solo=true
         com.maidsmart.tool.PromaidLog.log("集合", "单独召回：登记表按最后出现位置强载区块 @"
                 + cp.x + "," + cp.z + " dim=" + ls.dim().location().getPath());
         return 1;
@@ -357,9 +357,13 @@ public final class MaidChunkLoadManager {
                     UUID ownerId = c.getUUID("owner");
                     long at = c.getLong("at");
                     boolean stay = c.getBoolean("stay");
+                    // 【实测七百九十·点2】homeOnly 是后加的字段：旧存档里没有它——
+                    // 读不到就按 stay 兜底（旧档案里 stay 为真的只可能是 home/坐/骑，
+                    // 当作 home 处理最多让"召她过来"多拽她一次，不会丢她）。
+                    boolean homeOnly = c.contains("homeOnly") ? c.getBoolean("homeOnly") : stay;
                     String name = c.getString("name");
                     if (maidId != null && ownerId != null) {
-                        seen.put(maidId, new MaidSeen(dim, pos, ownerId, at, stay, name));
+                        seen.put(maidId, new MaidSeen(dim, pos, ownerId, at, stay, homeOnly, name));
                     }
                 } catch (Throwable ignored) {
                 }
@@ -404,6 +408,7 @@ public final class MaidChunkLoadManager {
                 c.putUUID("owner", s.ownerId());
                 c.putLong("at", s.seenAt());
                 c.putBoolean("stay", s.stayPut());
+                c.putBoolean("homeOnly", s.homeOnly());
                 c.putString("name", s.name() == null ? "" : s.name());
                 list.add(c);
             }
@@ -412,10 +417,13 @@ public final class MaidChunkLoadManager {
         }
     }
 
-    /** v1.1.0 实测七十：待召回队列（uuid → 状态）——持有强载票直到实体出现/超时 */
+    /** v1.1.0 实测七十：待召回队列（uuid → 状态）——持有强载票直到实体出现/超时
+     *  【实测七百九十·点2】solo = 这条是玩家**指名道姓**点「召她过来」建的队（不是「一键集合」）。
+     *  它决定她加载出来以后，坐姿/骑乘还算不算豁免：点名的那条不算（照拽），集合那条还按老口径。 */
     private record PendingSummon(ResourceKey<net.minecraft.world.level.Level> dim,
                                  net.minecraft.world.level.ChunkPos chunk,
-                                 net.minecraft.server.level.ServerPlayer owner, long expireGameTime) {
+                                 net.minecraft.server.level.ServerPlayer owner,
+                                 long expireGameTime, boolean solo) {
     }
 
     private static final Map<UUID, PendingSummon> PENDING_SUMMON = new ConcurrentHashMap<>();
@@ -449,12 +457,17 @@ public final class MaidChunkLoadManager {
                 if (ow != null) {
                     // v1.1.0 实测八十七c：同步快照三态豁免（home/坐姿/骑乘）
                     // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
-                    boolean stayPut = (maid.isHomeModeEnable() && !isBuildingMaid(maid))
+                    // 【实测七百九十·点2】拆成两个标志：homeOnly = 只有"守家"才真的钉死
+                    // （「召她过来」也不动她）；stayPut = 旧口径的"一键集合别拽"（含坐/骑）。
+                    // 「召她过来」从此只认 homeOnly —— 坐着的、被我们/自己骑上载具的，
+                    // 都要能被点名叫过来（详见 summonOne 里的口径说明）。
+                    boolean homeOnly = maid.isHomeModeEnable() && !isBuildingMaid(maid);
+                    boolean stayPut = homeOnly
                             || maid.isMaidInSittingPose() || maid.isPassenger();
                     // 实测六百九十九：写穿落盘 + 记下名字（排班表「⚑ 未加载」行要用）
                     seenPut(maid.getUUID(), new MaidSeen(lvl.dimension(),
                             maid.blockPosition().immutable(), ow.getUUID(), lvl.getGameTime(),
-                            stayPut, com.maidsmart.tool.PromaidLog.nameOf(maid)), server);
+                            stayPut, homeOnly, com.maidsmart.tool.PromaidLog.nameOf(maid)), server);
                     // v1.1.0 实测七十九：受困救援——下界基岩顶层/虚空中的女仆自动传回
                     // 存活主人身边（跨维度通用；已在主人 8 格内不触发，防屋顶住户循环）
                     // v1.1.0 实测三百零七（反馈："地狱基岩层猪人塔女仆传送不受控制，
@@ -1037,7 +1050,10 @@ BlockPos stand = findStand(newLevel,
                     kept++;
                     continue;
                 }
-                if (lvl == player.level() && md.position().distanceTo(player.position()) < 25.0) {
+                // 【实测七百九十·点1】跳过半径 25 → 5（玩家原话：「一键集合就按照注释里的来
+                // 25 个这个范围太大了，改为5」）。旧代码 25.0 与注释「已在身边 5 格内」本就不符，
+                // 注释才是规格；改回 5 后站在自家女仆堆里点集合才真的会干活。
+                if (lvl == player.level() && md.position().distanceTo(player.position()) < 5.0) {
                     continue; // 已在身边 5 格内
                 }
                 boolean ok = broomRider ? recallBroomRider(md, player)
@@ -1087,7 +1103,7 @@ BlockPos stand = findStand(newLevel,
             acquireTicket(server, new TicketKey(ls.dim(), cp.toLong()),
                     ownerKey(OWNER_SUMMON, en.getKey()));
             PENDING_SUMMON.put(en.getKey(),
-                    new PendingSummon(ls.dim(), cp, player, now + 300L));
+                    new PendingSummon(ls.dim(), cp, player, now + 300L, false)); // 一键集合：solo=false
             pending++;
         }
         // 实测六百九十九：已阵亡、正在等自动复活的女仆——照实报数（一键集合的
@@ -1158,8 +1174,12 @@ BlockPos stand = findStand(newLevel,
                     // 扫帚/坐骑/特殊载具/自坐模组载具都不该把守家中的她拽走。建造女仆的老口径不变
                     // （强制 home 但可召回——她不再进这个"保持原位"分支，直接落到下面的召回）。
                     boolean homeKept = md.isHomeModeEnable() && !isBuildingMaid(md);
-                    if (homeKept || (!broomRider && !rideRider && !specialRider && !selfBoarded
-                            && (md.isMaidInSittingPose() || md.isPassenger()))) {
+                    // 【实测七百九十·点2】solo（点名单召）只认 home 豁免：坐姿/骑乘/特殊载具/
+                    // 自坐载具在这一档全部放行——玩家原话「召她过来应该要少几个豁免（指名道姓地
+                    // 要她过来），比如可以把骑乘/坐下来女仆直接拽过来（但是只拽人不拽载具），
+                    // 只有 home 模式不会」。一键集合那条（solo=false）口径一个字不改。
+                    if (homeKept || (!p.solo() && !broomRider && !rideRider && !specialRider
+                            && !selfBoarded && (md.isMaidInSittingPose() || md.isPassenger()))) {
                         // v1.1.0 实测七十八：强载出来才发现是 home/坐着/骑乘 → 不拽，
                         // 撤票收队（强载票只为找到她，去留按同一套豁免判定）
                         // v1.1.0 实测二百七十五：建造女仆豁免——建造强制 home 但可召回
@@ -1189,6 +1209,7 @@ BlockPos stand = findStand(newLevel,
                     }
                     boolean ok = broomRider ? recallBroomRider(md, owner)
                             : rideRider ? recallRideRider(md, owner)
+                            : p.solo() ? summonNamed(md, owner) // 【七百九十·点2】点名单召：只拽人不拽载具
                             : summonMaidTo(md, owner);
                     String name = md.getDisplayName() != null ? md.getDisplayName().getString() : "女仆";
                     try {
@@ -1445,14 +1466,69 @@ BlockPos stand = findStand(newLevel,
             if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
                 return recallRideRider(maid, player) ? 1 : 2;
             }
-            if (maid.isPassenger() || maid.isMaidInSittingPose()
-                    || (maid.isHomeModeEnable() && !isBuildingMaid(maid))) {
-                return 3; // 状态豁免（坐/骑/家——与一键集合同口径；建造女仆可召回）
-            }
-            return teleportCore(maid, player, true) ? 1 : 2;
+            // 【实测七百九十·点2】「召她过来」从此**不再**按坐姿/普通骑乘顶回去：玩家原话
+            // 「召她过来应该要少几个豁免（指名道姓地要她过来），比如可以把骑乘/坐下来女仆
+            // 直接拽过来（但是只拽人不拽载具），只有 home 模式不会」。
+            // 上一行的 716 档（指挥棒绑的坐骑）仍然连人带坐骑搬——那是玩家自己绑的配对，
+            // 与"她随手坐上去的船/矿车"不是一回事；这里兜的是**没有我们标记的普通载体 +
+            // 坐姿**：请她下车（或直接起身）后只传她一个人。home（守家）已在最前面挡掉。
+            return summonNamed(maid, player) ? 1 : 2;
         } catch (Exception e) {
             return 0;
         }
+    }
+
+    /**
+     * 【实测七百九十·点2】点名单召（「召她过来」）的完整阶梯：**只拽人、绝不搬走别人绑好的载具**。
+     *
+     * <p>玩家原话：「召她过来应该要少几个豁免（指名道姓地要她过来），比如可以把骑乘/坐下来
+     * 女仆直接拽过来（但是只拽人不拽载具），只有 home 模式不会。」
+     *
+     * <p>与 {@link #summonMaidTo}（一键集合同口径）的差别只有一处：**坐姿与普通载具乘客
+     * 不再豁免**。优先级顺序与 {@code summonMaidTo} 逐条对齐，只有最后那一关换掉：
+     * <ol>
+     *   <li>home（守家）→ 不传（唯一保留的豁免）；</li>
+     *   <li>骑扫帚 → 连人带扫帚（她永远是乘客，走 661 那一档）；</li>
+     *   <li>特殊载具（卓越前线载具 / 冰火传说龙）→ 先干净解绑、只传人（726）；</li>
+     *   <li>她自己坐上去的模组载具 → 先请她下来、只传人（741）；</li>
+     *   <li>指挥棒绑的坐骑 → 连人带坐骑（716，玩家自己绑的配对，不算"随手坐上去"）；</li>
+     *   <li><b>坐姿 / 普通载具乘客（船、矿车、椅子这类没有我们标记的载体）→ 请她下来
+     *       后只传她一个人</b>，载体留在原地——这一关就是本批新增的"只拽人不拽载具"。</li>
+     * </ol>
+     *
+     * @return true = 她已落在主人身边
+     */
+    private static boolean summonNamed(EntityMaid maid, LivingEntity owner) {
+        if (maid == null || owner == null || !owner.isAlive()) {
+            return false;
+        }
+        if (maid.isRemoved() || maid.isDeadOrDying()) {
+            return false;
+        }
+        if (maid.isHomeModeEnable() && !isBuildingMaid(maid)) {
+            return false; // 守家：唯一保留的豁免
+        }
+        if (com.maidsmart.combat.MaidBroomKit.isBroomAirborne(maid)) {
+            return recallBroomRider(maid, owner);
+        }
+        if (com.maidsmart.combat.RideBindManager.isSpecialMountRider(maid)) {
+            com.maidsmart.combat.RideBindManager.detachForSpecialTeleport(maid);
+            return teleportCore(maid, owner, true);
+        }
+        if (com.maidsmart.combat.RideBindManager.isSelfBoardedModMount(maid)) {
+            com.maidsmart.combat.RideBindManager.dismountSelfBoarded(maid);
+            return teleportCore(maid, owner, true);
+        }
+        if (com.maidsmart.combat.RideBindManager.isRideRider(maid)) {
+            return recallRideRider(maid, owner);
+        }
+        if (maid.isPassenger()) {
+            try {
+                maid.stopRiding(); // 只拽人：载体（船/矿车/椅子）留在原地
+            } catch (Throwable ignored) {
+            }
+        }
+        return teleportCore(maid, owner, true);
     }
 
     /**

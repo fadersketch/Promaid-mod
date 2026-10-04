@@ -51,6 +51,50 @@ public final class PromaidClientSetup {
         com.maidsmart.marker.WorkPosMarkerClient.register();
     }
 
+    /**
+     * v1.3.9：巡逻航图的两件客户端东西——中键打点手势 + 航迹/标记预览渲染。
+     * 与服务端铁律一致（{@code Screen} 一律在本客户端专类里开）。
+     */
+    public static void registerPatrolHooks() {
+        com.maidsmart.patrol.PatrolMarkerClient.register();
+        com.maidsmart.patrol.PatrolPreviewClient.ensureRegistered();
+    }
+
+    /**
+     * v1.3.8：S2C 到达 → 打开/刷新巡逻航迹编辑界面。
+     *
+     * <p>【为什么必须有这个入口】网络包的 {@code handle} 在通用代码里，直接 {@code new
+     * PatrolChartScreen(...)} 会让专用服务器加载到客户端类（{@code Screen}）——
+     * 与主类注释里那条 {@code RuntimeDistCleaner} 事故同源。所以开屏这一步统一收敛到这里，
+     * 由包只调这一个方法。
+     */
+    public static void openPatrolScreen(
+            com.maidsmart.patrol.PatrolNetworking.OpenPatrolPacket pkt) {
+        try {
+            com.maidsmart.patrol.PatrolChartScreen.accept(pkt.offHand, pkt.book,
+                    pkt.problems, pkt.notes, pkt.length, pkt.seconds, pkt.open);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** v1.3.9：女仆名单（S2C）→ 交给航图界面 */
+    public static void updatePatrolMaids(
+            com.maidsmart.patrol.PatrolNetworking.MaidListPacket pkt) {
+        try {
+            com.maidsmart.patrol.PatrolChartScreen.acceptMaids(pkt.offHand, pkt.rows);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** v1.3.9：标记态（S2C）→ 预览高亮 + 界面按钮文字 */
+    public static void updatePatrolMarking(
+            com.maidsmart.patrol.PatrolNetworking.MarkingStatePacket pkt) {
+        try {
+            com.maidsmart.patrol.PatrolChartScreen.acceptMarking(pkt.marking, pkt.routeId);
+        } catch (Throwable ignored) {
+        }
+    }
+
     /** 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（仅客户端注册）。 */
     public static void registerRideViewClamp() {
         com.maidsmart.client.RideBatonViewClamp.ensureRegistered();

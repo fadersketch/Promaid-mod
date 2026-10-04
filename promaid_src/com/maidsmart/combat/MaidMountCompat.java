@@ -2191,7 +2191,7 @@ public final class MaidMountCompat {
         // 模式的安全降落**（选平地 → 怠速 → 受控下沉 → 轻接地 → 停住）；直升机 / 飞艇 / 汤姆6
         // 仍是原来的"清输入位 + 收油门 + 留痕"（一个字节不变）。
         if (outOfFuel(mount)) {
-            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid)) {
+            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid, "电量见底")) {
                 return true;   // 降落链路自己会（按 5 秒节流）写「固定翼降落·下降 / 接地段 / 完成」
             }
             brakeVehicleSafely(mount);
@@ -3530,18 +3530,90 @@ public final class MaidMountCompat {
     private static final java.util.Map<java.util.UUID, Long> AIRCRAFT_LAND_SPOT_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
     /**
-     * home 模式下固定翼的"降落一拍"。返回 {@code true} = 本拍已接管（调用方不要再驱动）。
+     * 【实测七百九十四】"这一拍还在走降落链路吗"的心跳表（载具 UUID → 最后接管的 gameTime）。
+     *
+     * <h2>为什么需要它（原代码是"注释说 A、代码做 B"）</h2>
+     * {@code RideBindManager.drive} 里原本**每拍无条件**调 {@link #resetAircraftLanding}
+     * （注释写的是"离开 home 档 → 丢掉缓存"，代码却没有任何条件）。于是**降落期间**落点缓存
+     * 每拍被清：{@link #landingSpot} 每拍重扫 48 格方框（25×25=625 列 × 每列 9 次高度图
+     * ≈ 5600 次查询/拍），而且落点会随她移动逐拍改选。
+     *
+     * <p>心跳让"清缓存"只发生在**从降到不降**的过渡那一次：{@link #aircraftHomeLanding} 每拍
+     * 接管时都记一笔，调用方改用 {@link #endAircraftLanding}——它只在"上一拍没接过"时才真清。
+     * 时间基准而不是顺序基准，所以与调用方是在清之前还是之后接管无关。
+     */
+    private static final java.util.Map<java.util.UUID, Long> AIRCRAFT_LAND_BEAT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 这只载具所在世界的 gameTime（拿不到 → 0，此时心跳判据恒"仍在降"，缓存留着最坏只是不刷新）。 */
+    private static long gameTimeOf(Entity e) {
+        try {
+            return e.m_9236_().m_46467_();
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    /** 记一次"本拍仍由降落链路接管"（{@link #aircraftHomeLanding} 的每个接管出口前面的那一笔）。 */
+    private static void beatAircraftLanding(Entity mount) {
+        try {
+            AIRCRAFT_LAND_BEAT.put(mount.m_20148_(), gameTimeOf(mount));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百九十四】上一拍她**没**走降落链路 → 丢掉落点缓存（只在过渡那一次真清）。
+     *
+     * <p>语义与 {@link #resetAircraftLanding} 不同：那个是"无条件清"，这个是"确认不再降了才清"。
+     * {@code RideBindManager.drive} 每拍的开头调它，取代原来那句无条件清。
+     */
+    public static void endAircraftLanding(Entity mount) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            java.util.UUID id = mount.m_20148_();
+            Long last = AIRCRAFT_LAND_BEAT.get(id);
+            if (last != null && gameTimeOf(mount) - last <= 2L) {
+                return; // 两拍内还接管过 → 这一档还在降，缓存留着（免得每拍重扫 625 列）
+            }
+            AIRCRAFT_LAND_BEAT.remove(id);
+            AIRCRAFT_LAND_SPOT.remove(id);
+            AIRCRAFT_LAND_SPOT_AT.remove(id);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 固定翼的"降落一拍"。返回 {@code true} = 本拍已接管（调用方不要再驱动）。
      *
      * <p>只认固定翼（{@link #isAircraftEngine}）；拿不到驱动口 / 找不到平地 → 返回 {@code false}，
-     * 交回 home 档原本的悬停口径（一个字节不变）。
+     * 交回调用方原本的口径（一个字节不变）。
+     *
+     * <p>两处入口共用同一条链路（红线"口径只有一处"）：
+     * <ul>
+     *   <li><b>home 模式</b>（实测七百八十三）——落地就停住不动；</li>
+     *   <li><b>机上有人且周围没敌人</b>（实测七百九十四，{@code RideBindManager} 那一支）——
+     *       玩家坐副驾时不再平飞漂走，而是自己慢慢降落，敌人一出现就照常起飞接敌。</li>
+     * </ul>
      */
     public static boolean aircraftHomeLanding(Entity mount, Entity maid) {
+        return aircraftHomeLanding(mount, maid, "home 模式");
+    }
+
+    /**
+     * {@link #aircraftHomeLanding(Entity, Entity)} 的三参版：{@code why} 只进日志，说明这一档
+     * 是**谁**触发的（"home 模式" / "机上有人且周围无敌人" / "电量见底"），排查时一眼能分辨。
+     */
+    public static boolean aircraftHomeLanding(Entity mount, Entity maid, String why) {
         if (mount == null || !isAircraftEngine(engineType(mount))) {
             return false;
         }
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false;
         }
+        beatAircraftLanding(mount);
         try {
             if (mount.m_20096_()) {
                 // ① 已接地 → 与别的坐骑一样停住不动（顺带清 crash 标记，见本区注释）
@@ -3554,7 +3626,7 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
-                logDrive(mount, "固定翼降落完成：已接地 → 停住不动（home 模式）");
+                logDrive(mount, "固定翼降落完成：已接地 → 停住不动（" + why + "）");
                 return true;
             }
             // 【实测七百八十四】电量见底不再是"刹住不管"，而是照常走完这套安全降落（玩家原话：
@@ -3564,7 +3636,7 @@ public final class MaidMountCompat {
             // brakeVehicleSafely（本方法只服务固定翼，见开头的 isAircraftEngine 闸）。
             boolean fuelDead = outOfFuel(mount);
             if (fuelDead) {
-                logDrive(mount, "固定翼电量见底 → 安全降落（home 模式同款链路）");
+                logDrive(mount, "固定翼电量见底 → 安全降落（" + why + "）");
             }
             Vec3 spot = landingSpot(mount);
             if (spot == null) {
@@ -3608,7 +3680,8 @@ public final class MaidMountCompat {
                 aircraftBank(mount, 0.0f);
                 aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_TOUCH_ALT) - mount.m_20186_(),
                         AIRCRAFT_LAND_VY_MAX);
-                logDrive(mount, "固定翼降落·接地段" + (fuelDead ? "（电量见底）" : "")
+                logDrive(mount, "固定翼降落·接地段（" + why + "）"
+                        + (fuelDead ? " 电量见底" : "")
                         + " 距落点=" + (long) dist + "格"
                         + " 离地=" + fmt2(aboveGround) + "格"
                         + " 竖直速度=" + fmt2(verticalSpeed(mount))
@@ -3618,7 +3691,8 @@ public final class MaidMountCompat {
             // ②a 下降段：保持航向、怠速、按受控下沉率往地面压
             aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_MIN_ALT) - mount.m_20186_(),
                     AIRCRAFT_LAND_DESCENT_VY_MAX);
-            logDrive(mount, "固定翼降落·下降" + (fuelDead ? "（电量见底）" : "")
+            logDrive(mount, "固定翼降落·下降（" + why + "）"
+                    + (fuelDead ? " 电量见底" : "")
                     + " 距落点=" + (long) dist + "格"
                     + " 离地=" + fmt2(aboveGround) + "格"
                     + " 竖直速度=" + fmt2(verticalSpeed(mount))
@@ -5456,8 +5530,9 @@ public final class MaidMountCompat {
      * 才返回 true，而"炮管方向写在车体坐标里、不能独立转"的车（AC-130H 三门炮、AH-6 机炮、
      * 飞艇炸弹）**只有机头正对敌人**才能达标——机头是被飞行档逐拍控制的，未必掰得到。
      * 玩家要的是"弹药能发射"（原话「大部分载具上的弹药没有办法发射」），不是"必须完美对正"。
-     * 所以：连续这么多拍没对准就直接开火（打出去的那发由 {@code MaidShellHoming} 纠向目标，
-     * 所以"歪着打"也不会白打）。数值取 40 拍 = 2 秒——够机头/炮塔转一个来回。
+     * 所以：连续这么多拍没对准就直接开火。数值取 40 拍 = 2 秒——够机头/炮塔转一个来回。
+     * （【1.20.1】旧版这里还靠 {@code MaidShellHoming} 把"歪着打"的那发纠向目标；那条后门已删，
+     * 见 {@code tickAttack} 里那段注释。）
      */
     private static final int AIM_FORCE_TICKS = 40;
 
@@ -5537,10 +5612,19 @@ public final class MaidMountCompat {
     /**
      * 瞄准诊断留痕（节流 5 秒/车）：日志搜「模组坐骑·瞄准」看"到底有没有在瞄、差多少度"。
      *
+     * <p>【实测七百七十九·诊断·逐炮】主炮那一栏仍是「炮=X 已对准/未对准 夹角=N°」；其余每一门
+     * （机枪/副炮）追加在尾部「逐炮=」栏里，**各自取它自己的弹道解算方向**算夹角。为什么加这一栏：
+     * 玩家原话「坦克上的机枪瞄准的方向好像不是敌人……翻一下日志……如果日志上写的是瞄准敌人，
+     * 那就不需要整改」——而旧版这一行只报主炮（日志里 203 行全是 {@code 炮=Cannon}/{@code Rocket}），
+     * 机枪一门都没留痕，日志根本回答不了这句话。现在一眼可判每门炮的炮口是否指着敌人。
+     * （各炮的解算走 {@link #firingSolution} 的 {@code record=false} 重载——别把主炮那条
+     * {@link #LAST_DESIRED} 记录顶掉。）
+     *
      * <p>只读——不动 {@link #AIM_STALL}（那个计数只由 {@code tickAttack} 推进，见
      * {@link #aimStalledTicks}），免得诊断日志把"连续没对准"的拍数刷成假的。
      */
-    private static void logAim(Entity mount, String gun, boolean aimed, double deg) {
+    private static void logAim(Entity mount, String gun, boolean aimed, double deg,
+                               java.util.List<String> guns, EntityMaid maid, LivingEntity target) {
         try {
             long now = System.currentTimeMillis();
             Long last = AIMLOG_AT.get(mount.m_20148_());
@@ -5552,10 +5636,23 @@ public final class MaidMountCompat {
                 AIMLOG_AT.clear();
             }
             Integer stall = AIM_STALL.get(mount.m_20148_());
+            StringBuilder perGun = new StringBuilder();
+            if (guns != null) {
+                for (String g : guns) {
+                    if (g == null || g.equals(gun)) {
+                        continue;
+                    }
+                    Vec3 sol = firingSolution(mount, g, maid, target, false);
+                    double d = aimErrorDeg(mount, g, sol);
+                    perGun.append(perGun.length() == 0 ? "" : " ").append(g).append('=')
+                            .append(d < 0.0 ? "?" : ((long) d) + "°");
+                }
+            }
             com.maidsmart.tool.PromaidLog.log("模组坐骑·瞄准", describeKind(mount)
                     + " 炮=" + gun + (aimed ? " 已对准" : " 未对准")
                     + " 夹角=" + (long) deg + "°"
-                    + " 累计未对准=" + (stall == null ? 0 : stall) + "拍");
+                    + " 累计未对准=" + (stall == null ? 0 : stall) + "拍"
+                    + (perGun.length() == 0 ? "" : " 逐炮=" + perGun));
         } catch (Throwable ignored) {
         }
     }
@@ -5594,6 +5691,19 @@ public final class MaidMountCompat {
      * 但用载具原点更稳——她若是乘客，{@code position()} 就是座位，与载具原点差那一截座位偏移）。
      */
     private static Vec3 firingSolution(Entity mount, String gun, EntityMaid maid, LivingEntity target) {
+        return firingSolution(mount, gun, maid, target, true);
+    }
+
+    /**
+     * 【实测七百七十九·诊断】{@code record=false} = 只算、不写 {@link #LAST_DESIRED}。
+     *
+     * <p>{@code LAST_DESIRED} 是"本车主炮这一拍该朝哪"的那一条记录（{@code logAim} 报主炮
+     * 夹角用的）。瞄准诊断要**逐炮**取解算方向（主炮 + 每门机枪各一条），若把这些机枪的解算
+     * 也写进去，主炮那条记录就被机枪顶掉了——所以诊断路径一律走 {@code record=false}。
+     * 除了"不写这条记录"，其余算法与非诊断路径逐字相同。
+     */
+    private static Vec3 firingSolution(Entity mount, String gun, EntityMaid maid, LivingEntity target,
+                                       boolean record) {
         try {
             if (gun == null) {
                 return null;
@@ -5620,7 +5730,7 @@ public final class MaidMountCompat {
             double gravity = projectileGravityOfGun(mount, gun);
             Object sol = mRangeFiringSolution.invoke(null, launch, targetPos, targetVel, velocity, gravity);
             Vec3 out = sol instanceof Vec3 v ? v : null;
-            if (out != null) {
+            if (out != null && record) {
                 // 【实测七百四十二】把"这一拍算出来该朝哪"留在按车的表里——诊断日志要用它报
                 // "炮口离期望方向还差几度"（{@link #lastDesired}）。纯记录，不影响任何决策。
                 LAST_DESIRED.put(mount.m_20148_(), out);
@@ -6669,8 +6779,9 @@ public final class MaidMountCompat {
                 // 并加两条保证"一定能打出去、且一定能命中"：
                 //   ① **对不准也打**——机头/炮塔迟迟掰不到 3° 以内（炮艇、AH-6 那类）时，
                 //      连续 {@link #AIM_FORCE_TICKS} 拍没对准就直接开火，不再"等到对准为止"；
-                //   ② 打出去的每一发都由 {@code MaidShellHoming} 记下目标并逐拍纠向
-                //      （玩家点名要的那条"强力后门"：炮弹直接指向敌人）。
+                //   ② 【1.20.1 已删】旧版还有一条"打出去后由 MaidShellHoming 逐拍纠向目标"的
+                //      末制导后门。现已是直瞄开火（方向在开火那一刻解算好），这条后门与它冲突、
+                //      会让弹体漂移，故整条删除（详见下面 fired 之后那段注释）。
                 if (target != null && gun != null) {
                     // 【实测七百七十四·点2】"多种炮管都满足就一起开火"：把全车每一门炮都列出来，
                     // 一门一条扳机（玩家占着的座整座跳过）。取不到（反射缺）就退回只有主炮那一门。
@@ -6682,7 +6793,8 @@ public final class MaidMountCompat {
                     // 都有自己的解算方向（directFireAt 内部按炮名算），不需要等炮塔转到位。
                     boolean aimed = aimBallistic(mount, maid, target);
                     Vec3 want = lastDesired(mount);
-                    logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want));
+                    // 【实测七百七十九·诊断】逐炮留痕：主炮夹角 + 每门机枪/副炮各自的夹角（见 logAim）。
+                    logAim(mount, gun, aimed, aimErrorDeg(mount, gun, want), guns, maid, target);
                     if (aimed) {
                         aimStalledTicks(mount, true);
                     }
@@ -6725,9 +6837,13 @@ public final class MaidMountCompat {
                     }
                     if (fired.length() > 0) {
                         logForceFire(mount, fired.toString(), target);
-                        // 【实测七百四十二·点3】记下"这一发该打谁"，由 MaidShellHoming
-                        // 逐拍把她的炮弹纠向目标（末制导后门）。
-                        com.maidsmart.combat.MaidShellHoming.note(maid, mount, target);
+                        // 【1.20.1 已撤掉末制导后门】旧版这里会调 MaidShellHoming.note(...)，让它
+                        // 逐拍把刚打出去的炮弹"掰"向目标。但 773 起开火已经走"直瞄"（directFireAt
+                        // 用引擎的 calculateFiringSolution 把方向在开火那一刻就交给炮），再逐拍掰
+                        // 弹道只会和它互相打架——弹体看着就是"飞着飞着往一边漂"。玩家原话：「现在
+                        // 已经采用了枪械的瞄准逻辑，原先那个 0.2 秒朝向敌人射击的操作就不需要了，
+                        // 反而会跟现有的冲突」。所以这一整条链路（含 MaidShellHoming 本类）在
+                        // 1.20.1 侧删除；1.21.1 侧未动。
                     }
                 }
                 return;

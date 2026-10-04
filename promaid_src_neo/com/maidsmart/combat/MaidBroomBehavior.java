@@ -338,6 +338,27 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //  目标点 = 扫帚自己现在的位置 → 她原地悬停，高度一个字不改（steerTo 到点那一支会把速度
         //  乘 IDLE_DECAY 收干，绝不会掉下去）。"去哪"仍然由她自己的链路决定——接敌那一档（⑤）
         //  在这些之前，一个字没动，所以"接敌不变"照旧是字面意思。
+        //
+        //  【v1.3.9.3：巡逻优先于"拴绳悬停"】玩家原话：「我发现玩家如果用武装拴绳把自己挂在
+        //  女仆身下之后女仆会立刻停止巡逻。」根因就是顺序：这一档在 ⑥.1 巡逻**之前**直接
+        //  return，巡逻分支永远轮不到。⇒ 现在把 ⑥.1 提到前面：**绑了闭环航迹 + 开着 home 时
+        //  照旧沿航迹飞**——主人吊在下面正好"跟着巡逻转一圈"，这不正是拴绳的用法？
+        //  没绑航迹（⑥.1 拿不到目标）才落回原来那一档原地悬停。
+        //
+        //  【为什么这样也安全】悬挂档玩家的位置由 EntityGunnerHangMixin 的 positionRider
+        //  刚性决定，她飞、他跟着，不会脱开；而拴绳的"拉扯"本来就在悬挂档不生效
+        //  （GunnerTetherManager：player.getVehicle() == maid 时 return）。
+        //  接敌（⑤）仍在更前面：有敌人时仍然先打，巡逻不抢它的相位。
+        //
+        // 位置：⑥.1 巡逻放在"原 home 绕圈"之前——因为航迹就是来替代那一档的；
+        // 一次性外部目标（/maid_smart broom_goto）优先级更高，见 MaidBroomDrive.patrolPoint。
+        net.minecraft.world.phys.Vec3 patrolAim = MaidBroomDrive.patrolPoint(maid);
+        if (patrolAim != null) {
+            MaidBroomDrive.steerTo(maid, patrolAim);
+            // 朝向交给 steerTo 写的"速度方向"（= 航迹切线）——沿航迹飞本来就该朝着前进方向，
+            // 与下面 home 绕圈同一个处理（刻意不调 faceYawTo，否则她会横着飘）。
+            return;
+        }
         if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
             MaidBroomDrive.hoverInPlace(maid);
             return;

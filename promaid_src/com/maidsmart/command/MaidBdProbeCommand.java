@@ -34,8 +34,11 @@ import java.util.List;
  *
  * <p>【1.20.1 差异】命令树走 SRG（{@code m_82127_}=literal、{@code m_82129_}=argument、
  * {@code m_6761_}=hasPermission、{@code m_288197_}=sendSuccess、{@code m_81352_}=sendFailure、
- * {@code m_91460_}=entities、{@code m_91461_}=getEntities）；物品参数不用
- * {@code ResourceLocationArgument}（本树不用它），改 greedyString + try/catch 解析。
+ * {@code m_91460_}=entities、{@code m_91461_}=getEntities）；{@code bd_query} 的物品参数与
+ * neo 同口径用原版 {@code ResourceLocationArgument}（{@code m_106984_}=id、
+ * {@code m_107011_}=getId）——**绝不能自造未注册的 ArgumentType**：原版登录时会把整棵命令树
+ * 序列化下发，自定义类型没登记 serializer 会抛 {@code Unrecognized argument type}，玩家直接
+ * "进不了世界"（实测：{@code Couldn't place player in world}）。
  * 四条 {@code ensureHooked()} 挂在这里（与 neo 同一落点，最小化改动）。
  */
 public final class MaidBdProbeCommand {
@@ -94,49 +97,16 @@ public final class MaidBdProbeCommand {
                                 .executes(ctx -> flushNow(ctx.getSource(),
                                         EntityArgument.m_91461_(ctx, "maid").iterator().next()))))
                 .then(Commands.m_82127_("bd_query")
-                        .then(Commands.m_82129_("item", ItemIdArgument.item())
+                        .then(Commands.m_82129_("item",
+                                        net.minecraft.commands.arguments.ResourceLocationArgument.m_106984_())
                                 .executes(ctx -> query(ctx.getSource(), null,
-                                        ItemIdArgument.get(ctx, "item")))
+                                        net.minecraft.commands.arguments.ResourceLocationArgument
+                                                .m_107011_(ctx, "item")))
                                 .then(Commands.m_82129_("maid", EntityArgument.m_91460_())
                                         .executes(ctx -> query(ctx.getSource(),
                                                 EntityArgument.m_91461_(ctx, "maid").iterator().next(),
-                                                ItemIdArgument.get(ctx, "item")))))));
-    }
-
-    /**
-     * 物品 id 参数：读一个**不含空格**的 token（允许 {@code :}、{@code _} 等），
-     * 这样 {@code minecraft:coal} 能整体吃进来，又不会像 greedyString 那样把后面的
-     * 可选 {@code maid} 参数一并吞掉。本树不用 {@code ResourceLocationArgument}。
-     */
-    private static final class ItemIdArgument
-            implements com.mojang.brigadier.arguments.ArgumentType<String> {
-        private static final ItemIdArgument INSTANCE = new ItemIdArgument();
-
-        private ItemIdArgument() {
-        }
-
-        static ItemIdArgument item() {
-            return INSTANCE;
-        }
-
-        static String get(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, String name) {
-            return ctx.getArgument(name, String.class);
-        }
-
-        @Override
-        public String parse(com.mojang.brigadier.StringReader reader)
-                throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-            int start = reader.getCursor();
-            while (reader.canRead() && reader.peek() != ' ') {
-                reader.skip();
-            }
-            return reader.getString().substring(start, reader.getCursor());
-        }
-
-        @Override
-        public java.util.Collection<String> getExamples() {
-            return java.util.List.of("minecraft:coal", "tag:c:ores");
-        }
+                                                net.minecraft.commands.arguments.ResourceLocationArgument
+                                                        .m_107011_(ctx, "item")))))));
     }
 
     private static int probe(CommandSourceStack src, net.minecraft.world.entity.Entity picked) {
@@ -174,15 +144,10 @@ public final class MaidBdProbeCommand {
         return 1;
     }
 
-    private static int query(CommandSourceStack src, net.minecraft.world.entity.Entity picked, String itemArg) {
+    private static int query(CommandSourceStack src, net.minecraft.world.entity.Entity picked, ResourceLocation rl) {
         EntityMaid maid = asMaid(src, picked);
         if (maid == null) {
             src.m_81352_(Component.m_237113_("没找到女仆"));
-            return 0;
-        }
-        ResourceLocation rl = MaidBdCompat.tryParseRl(itemArg);
-        if (rl == null) {
-            src.m_81352_(Component.m_237113_("物品 id 写法不对：" + itemArg));
             return 0;
         }
         String itemId = rl.toString();

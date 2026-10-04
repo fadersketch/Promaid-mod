@@ -218,7 +218,7 @@ public final class RideBindManager {
         // 这一下就整个吃掉**（两侧都吃——客户端那一份不吃还会走本地预测）。绑定/解绑/换座
         // 都需要人站在地上瞄目标，骑乘中的右击没有任何正当用途，反倒会碰到载具自己的
         // interact 分支（强制下车 + 那段"拿指挥棒不许登乘"的闸把人锁在车外）。
-        if (player.m_20152_() && player.m_21120_(event.getHand()).m_41720_() instanceof RideBatonItem) {
+        if (player.m_20159_() && player.m_21120_(event.getHand()).m_41720_() instanceof RideBatonItem) {
             event.setCanceled(true);
             return;
         }
@@ -557,7 +557,7 @@ public final class RideBindManager {
         // 不依赖 batonExclusive 档位——玩家的要求是"骑乘时右击一律无效"）。
         // （这里的 getEntity() 已经是 Player，不用 instanceof 模式变量——1.17 的 -source 不接受"无条件模式"。）
         Player riding = event.getEntity();
-        if (riding.m_20152_()
+        if (riding.m_20159_()
                 && riding.m_21120_(event.getHand()).m_41720_() instanceof RideBatonItem) {
             event.setCanceled(true);
             return;
@@ -1957,9 +1957,14 @@ public final class RideBindManager {
                 return;
             }
             PLAYER_DRIVING.remove(mount.m_20148_());
-            // 【实测七百八十三】离开 home 档（= 回到正常跟随/接敌）→ 丢掉降落落点缓存，
-            // 下次再切 home 时重新选址（否则她会朝一个早已飞过的旧落点扎）。
-            MaidMountCompat.resetAircraftLanding(mount);
+            // 【实测七百八十三 / 七百九十四】丢掉降落落点缓存——但**只在"从降到不降"的过渡那一拍**。
+            //
+            // 【七百九十四·修正】783 写的是这行注释（"离开 home 档 → 丢掉缓存"），代码却是
+            // **每拍无条件清**：于是**降落进行中**落点缓存每拍被清，`landingSpot` 每拍重扫
+            // 48 格方框（625 列 × 每列 9 次高度图 ≈ 5600 次/拍）且落点逐拍改选。现在换成
+            // {@link MaidMountCompat#endAircraftLanding}——它按心跳（载具 UUID → 最后接管时刻）
+            // 判"上一拍还在降吗"，只有真的不再降了才清。
+            MaidMountCompat.endAircraftLanding(mount);
             // 【实测七百五十六·点3：守家（home 模式）→ 坐骑立刻停】
             // 玩家原话：「如果女仆处于 home 模式，那么她坐的坐骑就会立刻停止。这样子也方便玩家调控。」
             // 口径与 TLM 自己的跟随完全同源——{@code MaidFollowOwnerTask.maidStateConditions} 就是
@@ -2099,6 +2104,28 @@ public final class RideBindManager {
                     // 所以"机上有玩家"这一档不追任何基准，直接悬停在她现在的位置（水平+竖直都保持）；
                     // 接敌那一支在上面，完全不受影响（玩家要的"锁敌的时候正常"）。
                     if (MaidMountCompat.hasPlayerAboard(mount)) {
+                        // 【实测七百九十四·玩家报的"飞行立刻丢失目标"】固定翼（AIRCRAFT）**不能悬停**
+                        // ——它没有竖直轴（反编译 aircraftEngine 实证：高度只由"速度 × 俯仰"积分），
+                        // 738/741 给它的 holdHere 等于"目标点=它此刻的位置"→ 距离死区 FLIGHT_ARRIVE
+                        // 立刻判"到了"→ 不给油，可它**没有制动**，于是带着残余速度一路平飞漂出战场；
+                        // 下一拍锁敌器的圆心是**主人**、又只在主人水平 50 格内找，飞机早已飞出那个圈
+                        // →「女仆的飞行就会立刻丢失掉目标」就是这么来的。
+                        //
+                        // 玩家原话（即规格）：「如果是在这种情况下，而周围又没有敌人，那么女仆的飞机
+                        // 就会自己慢慢降落。如果发现敌人，那就是绕着敌人进行转圈并进行攻击。」
+                        //
+                        // 所以这一档改走**同一条降落链路**（实测七百八十三那套 home 安全降落，
+                        // 红线"口径只有一处"）：选一块够平的地 → 怠速 → 受控下沉 → 轻接地 → 停住。
+                        // 返回 false（拿不到驱动口 / 找不到平地）→ 落回下面的 holdHere 悬停，一个字节不变。
+                        //
+                        // 为什么"降落"能救回锁敌：落点是在**她当前位置周围 48 格**里选平地，且下降段
+                        // 每拍水平阻尼 0.94（约 2 秒降到亚音速以下）——她**留在主人附近**，于是下一拍
+                        // 锁敌器（圆心=主人、水平 50 格）照样能发现敌人。敌人一出现，上面 `foe != null`
+                        // 那一支立刻接管：爬升 → 敌正上方轰炸航线（= 玩家要的"绕着敌人转圈并攻击"）。
+                        // 若敌人在**接地后**才出现，下一拍 driveFlight 的接敌档会照常把她从地面拔起来。
+                        if (fixedWing && MaidMountCompat.aircraftHomeLanding(mount, maid, "机上有人且周围无敌人")) {
+                            return;
+                        }
                         // 【实测七百四十一·点2a】基准是**载具**（她自己是乘客，座位 Y 比机身
                         // 高约 1.5 格 → 用它当基准就是"永久缓慢爬升"，见 holdHere 的注释）。
                         air = MaidAirCombat.holdHere(maid, mount);

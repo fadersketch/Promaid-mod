@@ -274,6 +274,11 @@ public final class GunnerTetherManager {
             if (com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
                 return "flight";
             }
+            // 【v1.3.9.4：骑乘的载具】放在 flight 之后：她既能空袭、又恰好坐在载具上时，
+            // 仍按"她自己的飞行链路"那一档算（空袭的那套翻档规则更保守）。
+            if (ridesMount(maid)) {
+                return "mount";
+            }
         } catch (Throwable ignored) {
         }
         return "none";
@@ -482,11 +487,11 @@ public final class GunnerTetherManager {
     }
 
     /** 这一拍最合适的偏移：有空间就用满 hang；没空间就沿她身体往上收（永不超过 0 = 她脚底那一层） */
-    public static double hangTarget(EntityMaid maid, Entity passenger, double hang) {
+    public static double hangTarget(Entity anchor, Entity passenger, double hang) {
         try {
             double h = Math.max(0.0, hang);
             for (double o = h; o > 0.0; o -= 0.5) {
-                if (roomFor(passenger, maid.m_20185_(), maid.m_20186_() - o, maid.m_20189_())) {
+                if (roomFor(passenger, anchor.m_20185_(), anchor.m_20186_() - o, anchor.m_20189_())) {
                     return o; // 从最远往近处找：第一个有空的就是"这一拍能吊多远"
                 }
             }
@@ -509,15 +514,20 @@ public final class GunnerTetherManager {
         try {
             UUID id = passenger.m_20148_();
             double h = Math.max(0.0, hang);
+            // 【v1.3.9.4】锚点 = 她骑的那台载具（没骑就是她自己）
+            Entity anchor = anchorOf(maid);
+            if (anchor == null) {
+                anchor = maid;
+            }
             boolean side = Boolean.TRUE.equals(SEAT_SIDE.get(id));
-            double below = hangTarget(maid, passenger, h); // 这一拍下方能吊多远（0 = 一点空间都没有）
+            double below = hangTarget(anchor, passenger, h); // 这一拍下方能吊多远（0 = 一点空间都没有）
             if (!side && below <= 0.05) {
                 side = true;                              // 进"并肩"：下方真的一点空间都没有
             } else if (side && below >= Math.min(h, 0.5)) {
                 side = false;                             // 回"悬挂"：要有余量才回（迟滞的另一半）
             }
             SEAT_SIDE.put(id, Boolean.valueOf(side));
-            Vec3 target = side ? sideTarget(maid, passenger, h) : new Vec3(0.0, -below, 0.0);
+            Vec3 target = side ? sideTarget(anchor, passenger, h) : new Vec3(0.0, -below, 0.0);
             Vec3 prev = SEAT_NOW.get(id);
             Vec3 cur = prev == null ? target : stepTo(prev, target);
             if (prev == null && SEAT_NOW.size() > 256) {
@@ -542,13 +552,13 @@ public final class GunnerTetherManager {
      * 收到 0.6 / 0.35 倍（窄过道里仍然并排站着，而不是把玩家塞进墙里）。连贴身位都没空间
      * （1×1 竖井）才退回 0——那种地方本来也没法"拉开"。
      */
-    private static Vec3 sideTarget(EntityMaid maid, Entity passenger, double hang) {
+    private static Vec3 sideTarget(Entity anchor, Entity passenger, double hang) {
         double d = Math.max(SIDE_MIN, Math.min(hang, SIDE_MAX));
-        double dx = passenger.m_20185_() - maid.m_20185_();
-        double dz = passenger.m_20189_() - maid.m_20189_();
+        double dx = passenger.m_20185_() - anchor.m_20185_();
+        double dz = passenger.m_20189_() - anchor.m_20189_();
         double len = Math.sqrt(dx * dx + dz * dz);
         if (len < 0.05) {
-            double r = Math.toRadians(maid.m_146908_());
+            double r = Math.toRadians(anchor.m_146908_());
             dx = Math.sin(r);
             dz = -Math.cos(r);
         } else {
@@ -557,7 +567,7 @@ public final class GunnerTetherManager {
         }
         for (double k : new double[] { 1.0, 0.6, 0.35 }) {
             double o = d * k;
-            if (roomFor(passenger, maid.m_20185_() + dx * o, maid.m_20186_(), maid.m_20189_() + dz * o)) {
+            if (roomFor(passenger, anchor.m_20185_() + dx * o, anchor.m_20186_(), anchor.m_20189_() + dz * o)) {
                 return new Vec3(dx * o, 0.0, dz * o);
             }
         }
@@ -776,10 +786,16 @@ public final class GunnerTetherManager {
         //  翻档（起飞→挂人、落地→放人）在 tick() 里做，两个方向各有去抖门槛。
         boolean broomMode = com.maidsmart.combat.MaidBroomKit.isBroomTask(maid);
         boolean ridingBroom = com.maidsmart.combat.MaidBroomKit.isRidingBroom(maid);
-        boolean leash = !broomMode && !ridingBroom
+        // 【v1.3.9.4】她骑着载具时**不**进牵绳档：那一档是"她还没起飞、你牵着走"，
+        //   而骑着一台载具的她已经在动了——直接挂到二号位才对（与扫帚档同一个待遇）。
+        boolean leash = !broomMode && !ridingBroom && mountOf(maid) == null
                 && com.maidsmart.combat.MaidFlightKit.isFlightTask(maid) && !flyingNow(maid);
         // 牵绳档不挂人，所以"玩家自己骑着别的坐骑"这道门对它不适用（"不影响自己的活动"）
-        if (!leash && player.m_20152_() && !onHerBroom) {
+        // 【v1.3.9.4】玩家**自己也骑着那台载具**时放行：她骑直升机、你坐在机舱里右击她 →
+        //  等价于"换到二号位"（先从载具下来，再吊到她下面）。这正是"拴到骑乘的载具上"的用法。
+        Entity herMount = mountOf(maid);
+        boolean onHerMount = herMount != null && player.m_20202_() == herMount;
+        if (!leash && player.m_20159_() && !onHerBroom && !onHerMount) {
             deny(maid, "主人先从坐骑上下来再抓绳子～");
             return;
         }
@@ -798,12 +814,21 @@ public final class GunnerTetherManager {
             deny(maid, "等我飞起来再右击我，你先抓好绳子～");
             return;
         }
-        if (!broomMode && !ridingBroom && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
-            deny(maid, "扫帚或空袭模式时再抓绳子吧～");
+        // 【v1.3.9.4：骑乘的载具也算一档】玩家原话：「武装拴绳可以拓展一下。也可以拴到骑乘的
+        //  载具上。」她此刻骑着直升机 / 龙 / 陆行坐骑时，吊在她下面 = 吊在那台载具下面：
+        //  二号位开火这件事照样成立，而且**不占载具的座位**。所以这一档直接放行。
+        boolean onMount = ridesMount(maid);
+        if (!onMount && !broomMode && !ridingBroom
+                && !com.maidsmart.combat.MaidFlightKit.isFlightTask(maid)) {
+            deny(maid, "扫帚、空袭或骑着载具时再抓绳子吧～");
             return;
         }
         if (!leash && onHerBroom) {
             // 从扫帚驾驶位下来（扫帚留给她）→ 下面 startRiding(女仆) 才挂得上（实测六百七十二）
+            player.m_8127_();
+        }
+        // 【v1.3.9.4】她骑着载具、你也在那台载具上 → 同样先下载具（载具留给她），再吊到她下面
+        if (!leash && onHerMount) {
             player.m_8127_();
         }
         // force = true（实测六百五十七同款）：原版不带 force 的 startRiding 要求
@@ -1083,6 +1108,49 @@ public final class GunnerTetherManager {
         }
     }
 
+    /**
+     * 【v1.3.9.4】她此刻正骑着一台坐骑/载具吗（直升机 / 龙 / 陆行载具 / 原版坐骑…）。
+     *
+     * <p>判据直接复用骑乘链路那份口径（{@link com.maidsmart.combat.MaidRideKit#ridingMount}）：
+     * 它已经排除掉"载具是女仆"（那是拴绳自己这一档）与家具（椅子/坐垫）。
+     */
+    public static boolean ridesMount(EntityMaid maid) {
+        try {
+            return maid != null && com.maidsmart.combat.MaidRideKit.ridingMount(maid) != null;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /** 她此刻骑的那台载具（没骑 / 载具是女仆 / 是家具 → null） */
+    public static Entity mountOf(EntityMaid maid) {
+        try {
+            return maid == null ? null : com.maidsmart.combat.MaidRideKit.ridingMount(maid);
+        } catch (Throwable t) {
+            return null;
+        }
+    }
+
+    /**
+     * 【v1.3.9.4】吊挂的**锚点实体**：她骑着载具（直升机 / 龙 / 陆行坐骑…）时锚点是**那台载具**，
+     * 否则锚点就是她本人。
+     *
+     * <p>玩家原话：「武装拴绳可以拓展一下。也可以拴到骑乘的载具上。」锚点换掉之后，悬挂/并肩
+     * 两档几何全部照旧，只是"以谁为参照"变了（同一个算式、同一套粘滞，口径仍然只有一处）。
+     * 服务端与客户端都能自己算出来（{@code getVehicle()} 是原版同步的），不必走包。
+     */
+    public static Entity anchorOf(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            Entity mount = mountOf(maid);
+            return mount != null ? mount : maid;
+        } catch (Throwable t) {
+            return maid;
+        }
+    }
+
     /** 【实测六百七十三】牵绳档的她起飞了 → 把玩家挂到她下方（二号位）。挂不上就下一拍再试。 */
     private static void mountHang(ServerPlayer player, EntityMaid maid, Link link) {
         MODE_TICKS.remove(maid.m_20148_());
@@ -1235,7 +1303,7 @@ public final class GunnerTetherManager {
                 // ④【实测六百七十三】她落地够久（2 秒）→ 放玩家下来、恢复"牵着她走"。
                 //    只有空袭档会走到这儿（扫帚档 isBroomRelated 为真，永远保持悬挂）。
                 //    两个方向各有一道去抖门槛，所以"擦一下地""跳一下"都不会翻档。
-                if (!isBroomRelated(maid) && maid.m_20096_()) {
+                if (!isBroomRelated(maid) && mountOf(maid) == null && maid.m_20096_()) {
                     int grounded = MODE_TICKS.merge(maid.m_20148_(), 2, Integer::sum);
                     if (grounded >= LAND_DETECT_TICKS) {
                         switchToLeash(player, maid, link);
@@ -1417,6 +1485,16 @@ public final class GunnerTetherManager {
             // 载具（扫帚实体），而"第一个乘客"未必就是她（玩家同乘 / 别的模组往车里塞了乘客时）。
             if (target instanceof EntityBroom broom) {
                 for (Entity p : broom.m_20197_()) {
+                    if (p instanceof EntityMaid m2) {
+                        return m2;
+                    }
+                }
+                return null;
+            }
+            // 【v1.3.9.4】右键**她骑的载具**（直升机 / 龙 / 陆行坐骑…）也算数——射线打到的是载具
+            // 实体，而她要绑的正是"这台载具上的那位"。只往**一格深**扫，不做递归。
+            if (target != null && !target.m_9236_().m_5776_()) {
+                for (Entity p : target.m_20197_()) {
                     if (p instanceof EntityMaid m2) {
                         return m2;
                     }

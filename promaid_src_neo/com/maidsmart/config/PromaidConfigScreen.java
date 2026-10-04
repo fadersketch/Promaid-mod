@@ -3690,6 +3690,45 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
                         + "已经贴地时也照旧悬停（不再上下抖）。**接敌与跟随一个字不受影响**"
                         + "（那两档在它前面）；主人自己飞在天上时也不落地。"
                         + "关掉 = 旧行为（原地悬停，可能一直挂在半空）。日志搜「待命 → 降回地面」"));
+        // ---- v1.3.8 巡逻航迹（玩家原话：「既然是巡逻，那它相当于替代了原来 home 模式下。
+        //      所以这个功能也只对 home 模式下的扫帚模式下女仆进行操作。」）----
+        this.rows.add(new SectionRow("—— 巡逻航迹（道具：巡逻航图）——", false));
+        this.rows.add(new BoolRow("巡逻航迹·总开关", MaidSmartConfig.COMBAT_PATROL_ENABLE.get(),
+                v -> MaidSmartConfig.COMBAT_PATROL_ENABLE.set(v),
+                "扫帚模式 **+ 在家模式** 下，若她绑了一条**已连接（闭环）**的轨道，"
+                        + "就沿那条轨道飞，**替代**原本「沿工作范围那个圈盘旋」的守家行为；"
+                        + "巡逻期间她**不受扫帚牵引绳影响**。"
+                        + "用法：右键巡逻航图开界面 → 点「＋ 创建一个轨道」→ 进它的管理页 → "
+                        + "「开始标记」后拿鼠标中键（不用潜行；空中地面都行）记标记 → "
+                        + "再右键回界面点「连接」（挡路方块只提示、不拦）→ 在管理页把女仆绑到这条轨道。"
+                        + "轨道上的标记可在「标记管理」页里逐条查看/删除。"
+                        + "有敌人时仍然先接敌，敌人消失后自己回到轨道（相位顺序白捡的，不用配置）。"
+                        + "关掉 = 绑了也不生效，扫帚模式回到原本的守家盘旋。日志搜「扫帚巡逻」"));
+        this.rows.add(new NumRow("巡逻·默认净空半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_CLEARANCE.get()),
+                this.setDoubleInRange(MaidSmartConfig.COMBAT_PATROL_CLEARANCE, "巡逻·默认净空半径", 0.5, 6.0),
+                "新建航迹时每个采样点周围要留出的空隙（格）。「连接」时沿曲线密采样逐点查方块，"
+                        + "有阻挡或危险方块（岩浆/火/仙人掌…）只给一句**黄色提示**——v1.3.9.2 起"
+                        + "**不再**导致连接失败（玩家反馈：「不要把它做一个门槛了，交给女仆自己的寻路」），"
+                        + "飞的时候航线会让一让（抬升）/她自己脱困。查的是**曲线上**的密采样点，"
+                        + "不是只看标记（两个标记之间完全可能穿进山体）。"
+                        + "它同时是「两段航线贴太近」提醒的阈值来源（比 2× 本值还近就提醒）。"
+                        + "每条航迹自己存一份，改这项只影响**之后新建**的航迹"));
+        this.rows.add(new NumRow("巡逻·最大水平半径（格）",
+                String.valueOf(MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS.get()),
+                s -> setInt(MaidSmartConfig.COMBAT_PATROL_MAX_RADIUS, s),
+                "连接/绑定时航迹的水平包围盒半径超过它**只给一句提醒**（v1.3.9.3 起不再拒绝——"
+                        + "玩家原话「连接方面就不要再加入门禁了，强制连接，后果由玩家自己负责」）。"
+                        + "原用途是防一条横跨几百格的航线让她飞出你找得着的范围（每只女仆自带 2 区块、"
+                        + "随她移动的区块票，不预载整条航迹）——超限的后果现在由玩家自己承担（0 = 不提醒）"));
+        this.rows.add(new InfoRow("巡逻·飞到指定坐标",
+                "/maid_smart broom_goto <x> <y> <z> [女仆]",
+                "「让女仆飞到某个地方」这一条留给指令（玩家原话：「如果说要让女仆飞到哪个地方，"
+                        + "那可以参考一下房创造飞行里面的指令操作，我们将这个留给指令就行了。」）。"
+                        + "照仿创造飞行的 freeflight_goto 口径：仅 OP、坐标参数 + 可选实体选择器，"
+                        + "她飞过去后到点或 60 秒自动回到航迹，有敌人时仍是先接敌。"
+                        + "所以编辑器里没有单点飞行按钮——巡逻本身是沿闭环航迹一圈圈飞。"
+                        + "查看状态：/maid_smart broom_patrol status；解除：/maid_smart broom_patrol off"));
     }
 
     /**
@@ -3732,7 +3771,12 @@ public void render(GuiGraphics g, int index, int top, int left, int width, int h
         this.rows.add(new BoolRow("武装拴绳·总开关", MaidSmartConfig.COMBAT_TETHER_ENABLE.get(),
                 v -> MaidSmartConfig.COMBAT_TETHER_ENABLE.set(v),
                 "总的开关（默认开）。关掉 = 手持拴绳右击女仆不再挂载、绳子也不画（合成表还在，"
-                        + "只是不生效）；已经挂着的会在下一次校验时松开。"));
+                        + "只是不生效）；已经挂着的会在下一次校验时松开。"
+                        + "【v1.3.9.4】除了扫帚 / 空袭，**她骑着载具时也能拴**（玩家原话「武装拴绳可以"
+                        + "拓展一下。也可以拴到骑乘的载具上」）：此时吊挂的锚点是**那台载具**——"
+                        + "你吊在直升机下面就是二号位，而且不占载具的驾驶位（载具怎么飞一个字不改）。"
+                        + "右键她**骑的那台载具**同样认；你本来也坐在那台载具上时，抓一下绳子就换到"
+                        + "吊挂位（先从载具上下来，再吊到她下面）。"));
         this.rows.add(new NumRow("武装拴绳·悬挂距离（格）", String.valueOf(MaidSmartConfig.COMBAT_TETHER_HANG.get()),
                 this.setDoubleInRange(MaidSmartConfig.COMBAT_TETHER_HANG, "武装拴绳·悬挂距离", 0.5, 6.0),
                 "玩家脚底到她脚底的垂直距离，也就是那根「不会断」的绳子的长度（默认 2.6，0.5~6.0）。"

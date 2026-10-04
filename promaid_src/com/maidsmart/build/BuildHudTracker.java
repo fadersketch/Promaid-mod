@@ -47,9 +47,7 @@ public final class BuildHudTracker {
                 // 客户端左上角 HUD 才会消失（旧版这里直接 return，HUD 永久挂着最后一帧）
                 if (lastHadEntries) {
                     lastHadEntries = false;
-                    BlueprintBookNetworking.CHANNEL.send(
-                            net.minecraftforge.network.PacketDistributor.ALL.noArg(),
-                            new BlueprintBookBuildPackets.BuildHudPacket(new java.util.ArrayList<>()));
+                    sendToInvolved(server, new java.util.ArrayList<>(), null);
                 }
                 return;
             }
@@ -100,12 +98,106 @@ public final class BuildHudTracker {
             TOTAL.keySet().removeIf(k -> !alive.contains(k));
             if (!entries.isEmpty()) {
                 lastHadEntries = true;
-                BlueprintBookNetworking.CHANNEL.send(
-                        net.minecraftforge.network.PacketDistributor.ALL.noArg(),
-                        new BlueprintBookBuildPackets.BuildHudPacket(entries));
+                sendToInvolved(server, entries, java.util.Set.copyOf(alive));
             }
         } catch (Exception ignored) {
             // HUD 广播失败不影响建造
+        }
+    }
+
+    /**
+     * 【联机·服务端】只把建造 HUD 发给**与该区块有关的人**：站在区块范围内、
+     * 或区块里绑着ta（已加载）的女仆的玩家。
+     *
+     * <p>旧版是 {@code PacketDistributor.ALL}——多人在线时**每个玩家**每秒都会收到
+     * **全服务器所有人**的建造进度（区块名/进度/速度/ETA）。既把别人的工地进度泄露给无关玩家，
+     * 又让无关玩家屏幕上无条件挂出别人的建造 HUD。这里改成"谁的事发给谁"。
+     *
+     * <p>{@code planIds == null} = 计划结束那次补发的空快照 / 兜底路径（发给所有人）。
+     */
+    private static void sendToInvolved(net.minecraft.server.MinecraftServer server,
+                                       java.util.List<String[]> allEntries,
+                                       java.util.Set<String> planIds) {
+        // 先把"每份快照"的判定材料算一次（区块范围 + 绑定女仆主人），别对每个玩家重算一遍
+        java.util.List<Object[]> infos = new java.util.ArrayList<>();
+        if (planIds != null) {
+            for (String[] e : allEntries) {
+                if (!planIds.contains(e[0])) {
+                    continue;
+                }
+                Object[] info = planInfo(server, e[0]);
+                if (info != null) {
+                    infos.add(new Object[]{e, info[1], info[2], info[3]});
+                }
+            }
+        }
+        for (net.minecraft.server.level.ServerPlayer p : server.m_6846_().m_11314_()) {
+            try {
+                java.util.List<String[]> out;
+                if (planIds == null) {
+                    out = allEntries; // 兜底 / 清屏：发给所有人
+                } else {
+                    out = new java.util.ArrayList<>();
+                    for (Object[] info : infos) {
+                        if (playerInvolved(p, info)) {
+                            out.add((String[]) info[0]);
+                        }
+                    }
+                }
+                // 每人一份自己相关的快照（含空表——空表用于清屏，见 lastHadEntries）
+                BlueprintBookNetworking.CHANNEL.send(
+                        net.minecraftforge.network.PacketDistributor.PLAYER.with(() -> p),
+                        new BlueprintBookBuildPackets.BuildHudPacket(
+                                out == null ? new java.util.ArrayList<>() : out));
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /** 一份快照的判定材料：{planId, ServerLevel, int[] region, Set<UUID> boundOwners}；取不到 → null。 */
+    private static Object[] planInfo(net.minecraft.server.MinecraftServer server, String planId) {
+        try {
+            BuildPlan.PlanState ps = BuildPlan.getPlanById(planId);
+            if (ps == null) {
+                return null;
+            }
+            net.minecraft.server.level.ServerLevel lvl = server.m_129880_(ps.dim);
+            if (lvl == null) {
+                return null;
+            }
+            java.util.Set<java.util.UUID> owners = new java.util.HashSet<>();
+            for (java.util.UUID id : BuildPlan.boundMaidUuids(planId)) {
+                if (lvl.m_8791_(id)
+                        instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        && m.m_269323_() != null) {
+                    owners.add(m.m_269323_().m_20148_());
+                }
+            }
+            return new Object[]{planId, lvl, BuildPlan.planRegion(ps), owners};
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /** 这名玩家与这份快照有关吗：① 站在区块范围内；② 区块里绑着一只归他的女仆。 */
+    private static boolean playerInvolved(net.minecraft.server.level.ServerPlayer p, Object[] info) {
+        try {
+            net.minecraft.server.level.ServerLevel lvl =
+                    (net.minecraft.server.level.ServerLevel) info[1];
+            int[] r = (int[]) info[2];
+            if (lvl == p.m_9236_() && r != null) {
+                net.minecraft.core.BlockPos pp = p.m_20183_();
+                if (pp.m_123341_() >= r[0] && pp.m_123341_() < r[3]
+                        && pp.m_123342_() >= r[1] && pp.m_123342_() < r[4]
+                        && pp.m_123343_() >= r[2] && pp.m_123343_() < r[5]) {
+                    return true;
+                }
+            }
+            @SuppressWarnings("unchecked")
+            java.util.Set<java.util.UUID> owners = (java.util.Set<java.util.UUID>) info[3];
+            return owners.contains(p.m_20148_());
+        } catch (Throwable ignored) {
+            return false;
         }
     }
 

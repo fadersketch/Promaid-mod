@@ -338,6 +338,15 @@ public class MaidBroomBehavior extends Behavior<EntityMaid> {
         //  目标点 = 扫帚自己现在的位置 → 她原地悬停，高度一个字不改（steerTo 到点那一支会把速度
         //  乘 IDLE_DECAY 收干，绝不会掉下去）。"去哪"仍然由她自己的链路决定——接敌那一档（⑤）
         //  在这些之前，一个字没动，所以"接敌不变"照旧是字面意思。
+        //  【v1.3.9.3：巡逻优先于"拴绳悬停"】玩家原话：「我发现玩家如果用武装拴绳把自己挂在
+        //  女仆身下之后女仆会立刻停止巡逻。」根因就是顺序：这一档在巡逻**之前**直接 return。
+        //  ⇒ 现在把巡逻提到前面：**绑了闭环航迹 + 开着 home 时照旧沿航迹飞**——主人吊在下面
+        //  正好"跟着巡逻转一圈"。没绑航迹才落回原来那一档原地悬停。
+        net.minecraft.world.phys.Vec3 patrolAim = MaidBroomDrive.patrolPoint(maid);
+        if (patrolAim != null) {
+            MaidBroomDrive.steerTo(maid, patrolAim);
+            return;
+        }
         if (com.maidsmart.combat.GunnerTetherManager.isTethered(maid)) {
             MaidBroomDrive.hoverInPlace(maid);
             return;

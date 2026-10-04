@@ -307,21 +307,10 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // 清 WALK_TARGET → 一步一停；3 tick 内补回 → 连续走）
         if (++this.seatWalkTimer >= 3) {
             this.seatWalkTimer = 0;
-            try {
-                // v1.2.0（2026-09-18）【Sable 兼容】：全世界 AABB 扫描改为 getAllEntities()
-                //（超大 AABB 被 Sable 拒绝查询，见 FarmTillDriver 同款说明）
-                for (net.minecraft.server.level.ServerLevel level : server.getAllLevels()) {
-                    // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-                    // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                        if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
-                                && m.isAlive()) {
-                            com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
+            // 【联机·服务端】旧版在这里对每个维度取 EntitySnapshot（全量活视图）再 instanceof
+            // 过滤女仆 = 15 次/秒 × 全部维度 × 全部实体。改为只遍历"正在走向钓鱼坐垫"的那几只
+            // （候选集 = FishingChairService.SEAT_TARGET 本身），没人走坐垫时零开销。
+            com.maidsmart.fishing.FishingChairService.tickKeepSeatWalkAll(server);
         }
         // v1.3.7 实测六百六十七：武装拴绳——挂载状态校验/自动解除/存档恢复（2 tick 一次）
         if (++this.tetherTimer >= 2) {
@@ -384,6 +373,9 @@ net.minecraft.server.MinecraftServer server = event.getServer();
         // （默认关：见 misc.bdStorage；命令入口 /maid_smart bd_*）
         com.maidsmart.command.MaidBdProbeCommand.register(event.getDispatcher());
         com.maidsmart.command.MaidBdRuleCommand.register(event.getDispatcher());
+        // v1.3.8 巡逻航迹：/maid_smart broom_goto <x y z> [女仆]（照 freeflight_goto 口径）
+        //   + broom_patrol status|off [女仆]（排查/解除）
+        com.maidsmart.patrol.PatrolCommand.register(event.getDispatcher());
     }
 
     /**

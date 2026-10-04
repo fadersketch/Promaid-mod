@@ -204,8 +204,9 @@ public class ProMaidExtension implements ILittleMaid {
         com.maidsmart.follow.MaidChunkLoadManager.releaseAll(event.getServer());
         // 实测六百九十九：登记表会话复位（内存清空、落盘保留——下次启动再灌回来）
         com.maidsmart.follow.MaidChunkLoadManager.resetSeenSession();
-        // 实测七百四十二·点3：末制导后门的两张表（在飞的炮弹 / 待认领）跨会话不能留
-        com.maidsmart.combat.MaidShellHoming.clearAll();
+        // 【1.20.1 已撤掉末制导后门】MaidShellHoming 整条链路删除（原因见
+        // MaidMountCompat.tickAttack 里那段注释：与直瞄开火冲突、导致弹体漂移），
+        // 所以这里不再需要清它的两张表。
     }
 
     /**
@@ -303,19 +304,10 @@ public class ProMaidExtension implements ILittleMaid {
         // 清 WALK_TARGET → 一步一停；3 tick 内补回 → 连续走）
         if (++this.seatWalkTimer >= 3) {
             this.seatWalkTimer = 0;
-            try {
-                for (net.minecraft.server.level.ServerLevel level : server.m_129785_()) {
-                    // v1.1.0 实测三百三十：EntityMaid.class 全图扫描改用 Entity.class 全量 +
-                    // instanceof 过滤——ClassInstanceMultiMap 桶 bug（同 FarmTillDriver）
-                    for (net.minecraft.world.entity.Entity e : com.maidsmart.tool.EntitySnapshot.of(level)) {
-                        if (e instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
-                                && m.m_6084_()) {
-                            com.maidsmart.fishing.FishingChairService.tickKeepSeatWalk(m);
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
+            // 【联机·服务端】旧版在这里对每个维度取 EntitySnapshot（全量活视图）再 instanceof
+            // 过滤女仆 = 15 次/秒 × 全部维度 × 全部实体。改为只遍历"正在走向钓鱼坐垫"的那几只
+            // （候选集 = FishingChairService.SEAT_TARGET 本身），没人走坐垫时零开销。
+            com.maidsmart.fishing.FishingChairService.tickKeepSeatWalkAll(server);
         }
         // v1.3.7 实测六百六十七：武装拴绳——挂载状态校验/自动解除/存档恢复（2 tick 一次）
         if (++this.tetherTimer >= 2) {
@@ -325,9 +317,9 @@ public class ProMaidExtension implements ILittleMaid {
             com.maidsmart.combat.RideBindManager.tick(server);
         }
         // v1.5.140：建造传送机制已整体删除（suffocateCheck 救援传送同删）
-        // 实测七百四十二·点3：末制导后门——把女仆从载具打出去的炮弹逐拍纠向她的目标。
-        // 内部两张表都空时零开销（绝大多数世界从没有过载具开火）。
-        com.maidsmart.combat.MaidShellHoming.tick(server);
+        // 【1.20.1 已撤掉末制导后门】原来这里每 tick 调 MaidShellHoming.tick(server)（把刚打出去
+        // 的炮弹逐拍纠向目标）。现在开火走直瞄、方向在开火那一刻就解算好了，这条后门与它冲突
+        // （弹体漂移），故整条删除——原因同上。
     }
 
     /**
@@ -380,6 +372,8 @@ public class ProMaidExtension implements ILittleMaid {
         // （默认关：见 misc.bdStorage；命令入口 /maid_smart bd_*）
         com.maidsmart.command.MaidBdProbeCommand.register(event.getDispatcher());
         com.maidsmart.command.MaidBdRuleCommand.register(event.getDispatcher());
+        // v1.3.8【巡逻航迹】/maid_smart broom_goto / broom_patrol（OP，测试用）
+        com.maidsmart.patrol.PatrolCommand.register(event.getDispatcher());
     }
 
     /**

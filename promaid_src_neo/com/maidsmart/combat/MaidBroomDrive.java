@@ -1725,8 +1725,45 @@ public final class MaidBroomDrive {
         setThrust(broom, nv, yaw);
     }
 
-    /* ==================== 卡墙脱困（v1.3.0(beta) 实测六百六十四） ==================== */
+    /* ==================== 巡逻航迹（v1.3.8） ==================== */
 
+    /**
+     * 【v1.3.8 巡逻航迹 / broom_goto】这一个 tick 她该往哪儿飞（给巡逻档用）。
+     *
+     * <p>两件事，按优先级：
+     * <ol>
+     *   <li><b>一次性外部目标</b>（{@code /maid_smart broom_goto <x y z>}）：玩家点名"去那儿"时
+     *       先飞过去——到点或超时自动摘掉（见 {@code PatrolCommand.poll}），下一拍回航迹。
+     *       与 {@code elytra_goto} 的"一次性"口径完全一致。</li>
+     *   <li><b>沿航迹巡逻</b>（{@link com.maidsmart.patrol.PatrolFlight#nextPoint}）：纯追踪——
+     *       把她投影到航迹折线上，瞄"投影点往前若干格"的那个点。被吹偏/被打退后下一拍自动回正。</li>
+     * </ol>
+     *
+     * <p>返回 null = 这两件都没有（没绑航迹、没开 home、没闭环、没 goto）→ 调用方走旧链路
+     * （home 沿工作圈盘旋 / 跟随 / 悬停），一个字节都不改。
+     */
+    public static Vec3 patrolPoint(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            Vec3 broom = broomPos(maid);
+            if (broom == null) {
+                return null;
+            }
+            // ① 一次性外部目标优先
+            Vec3 goto_ = com.maidsmart.patrol.PatrolCommand.poll(maid, broom);
+            if (goto_ != null) {
+                return new Vec3(goto_.x, goto_.y, goto_.z);
+            }
+            // ② 沿航迹
+            return com.maidsmart.patrol.PatrolFlight.nextPoint(maid, broom);
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
+    /* ==================== 卡墙脱困（v1.3.0(beta) 实测六百六十四） ==================== */
     /** 女仆 UUID → 卡墙检测状态（只读她自己，逐 tick 更新，异常一律吞掉） */
     private static final Map<UUID, Stuck> STUCK = new HashMap<>();
     /** 连续这么多 tick 位移 < {@link #STILL_EPS} 且还没到点 → 判"被方块顶住了"（12 tick = 0.6 秒） */

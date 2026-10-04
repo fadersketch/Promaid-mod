@@ -27,8 +27,11 @@ import java.util.List;
  *
  * <p>【1.20.1 差异】命令树走 SRG（{@code m_82127_}=literal、{@code m_82129_}=argument、
  * {@code m_6761_}=hasPermission、{@code m_288197_}=sendSuccess、{@code m_81352_}=sendFailure）；
- * {@code test} / {@code tags} 的物品参数不用 {@code ResourceLocationArgument}，改 greedyString +
- * try/catch 解析（与 {@code bd_query} 同口径）。
+ * 物品参数与 neo 同口径用原版 {@code ResourceLocationArgument}
+ * （{@code m_106984_}=id、{@code m_107011_}=getId）——**绝不能自造未注册的 ArgumentType**：
+ * 原版登录时会把整棵命令树序列化下发，自定义类型没登记 serializer 会抛
+ * {@code Unrecognized argument type}，玩家直接"进不了世界"
+ * （实测：{@code Couldn't place player in world}）。
  */
 public final class MaidBdRuleCommand {
 
@@ -63,17 +66,21 @@ public final class MaidBdRuleCommand {
                                                                 StringArgumentType.getString(ctx, "entry"),
                                                                 IntegerArgumentType.getInteger(ctx, "count")))))))
                         .then(Commands.m_82127_("test")
-                                .then(Commands.m_82129_("item", ItemIdArgument.item())
+                                .then(Commands.m_82129_("item",
+                                                net.minecraft.commands.arguments.ResourceLocationArgument.m_106984_())
                                         .then(Commands.m_82129_("entry", StringArgumentType.greedyString())
                                                 .executes(ctx -> test(ctx.getSource(),
                                                         StringArgumentType.getString(ctx, "entry"),
-                                                        ItemIdArgument.get(ctx, "item"))))))
+                                                        net.minecraft.commands.arguments.ResourceLocationArgument
+                                                                .m_107011_(ctx, "item").toString())))))
                         .then(Commands.m_82127_("builtin")
                                 .executes(ctx -> builtin(ctx.getSource())))
                         .then(Commands.m_82127_("tags")
-                                .then(Commands.m_82129_("item", StringArgumentType.greedyString())
+                                .then(Commands.m_82129_("item",
+                                                net.minecraft.commands.arguments.ResourceLocationArgument.m_106984_())
                                         .executes(ctx -> tags(ctx.getSource(),
-                                                StringArgumentType.getString(ctx, "item")))))
+                                                net.minecraft.commands.arguments.ResourceLocationArgument
+                                                        .m_107011_(ctx, "item").toString()))))
                         .then(Commands.m_82127_("remove")
                                 .then(Commands.m_82129_("entry", StringArgumentType.greedyString())
                                         .executes(ctx -> say(ctx.getSource(),
@@ -84,8 +91,9 @@ public final class MaidBdRuleCommand {
      * 规则写法自测：{@code /maid_smart bd_rule test <物品> <规则写法>}，例如
      * {@code /maid_smart bd_rule test minecraft:oak_log tag:minecraft:logs} ——回一句"匹配/不匹配"。
      *
-     * <p>【1.20.1 改写】物品在前、规则在后；物品与规则都用字符串 token，物品做 try/catch 解析，
-     * 规则原样传给 {@link MaidBdRules#matches}（标签最容易写错，有这条就不用靠猜）。
+     * <p>【1.20.1 改写】物品在前、规则在后；物品用原版 {@code ResourceLocationArgument}
+     * （与 neo 同口径，也是命令树能正常下发的**唯一**选择——见类注释），规则原样传给
+     * {@link MaidBdRules#matches}（标签最容易写错，有这条就不用靠猜）。
      */
     private static int test(CommandSourceStack src, String entry, String itemId) {
         net.minecraft.world.item.ItemStack st = com.maidsmart.bd.MaidBdCompat.stackOf(itemId);
@@ -153,41 +161,5 @@ public final class MaidBdRuleCommand {
         src.m_288197_(() -> Component.m_237113_(msg), true);
         PromaidLog.log("超越维度规则", msg);
         return 1;
-    }
-
-    /**
-     * 物品 id 参数：读一个不含空格的 token（{@code :}、{@code _} 都允许），
-     * 这样 {@code minecraft:oak_log} 能整体吃进来。本树不用 {@code ResourceLocationArgument}，
-     * 也不方便用 greedyString（那会吞掉后面的规则写法），所以自带一个小参数类型。
-     */
-    private static final class ItemIdArgument
-            implements com.mojang.brigadier.arguments.ArgumentType<String> {
-        private static final ItemIdArgument INSTANCE = new ItemIdArgument();
-
-        private ItemIdArgument() {
-        }
-
-        static ItemIdArgument item() {
-            return INSTANCE;
-        }
-
-        static String get(com.mojang.brigadier.context.CommandContext<CommandSourceStack> ctx, String name) {
-            return ctx.getArgument(name, String.class);
-        }
-
-        @Override
-        public String parse(com.mojang.brigadier.StringReader reader)
-                throws com.mojang.brigadier.exceptions.CommandSyntaxException {
-            int start = reader.getCursor();
-            while (reader.canRead() && reader.peek() != ' ') {
-                reader.skip();
-            }
-            return reader.getString().substring(start, reader.getCursor());
-        }
-
-        @Override
-        public java.util.Collection<String> getExamples() {
-            return java.util.List.of("minecraft:oak_log", "minecraft:coal");
-        }
     }
 }

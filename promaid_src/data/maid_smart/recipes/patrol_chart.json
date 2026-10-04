@@ -1,0 +1,18 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    {
+      "item": "minecraft:paper"
+    },
+    {
+      "item": "minecraft:compass"
+    },
+    {
+      "tag": "maid_smart:ink_sacs"
+    }
+  ],
+  "result": {
+    "item": "maid_smart:patrol_chart",
+    "count": 1
+  }
+}
