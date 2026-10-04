@@ -43,6 +43,8 @@ public class CreativeTabHandler {
             event.accept(ProMaidMod.COMBAT_LEASH);
             // v1.3.0(beta)：骑乘指挥棒（管理道具，只进工具页）
             event.accept(ProMaidMod.RIDE_BATON);
+            // v1.3.8：巡逻航图（管理道具，只进工具页）
+            event.accept(ProMaidMod.PATROL_CHART);
         }
     }
 }

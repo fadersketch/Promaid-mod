@@ -1028,6 +1028,14 @@ public static final ForgeConfigSpec.BooleanValue BRIDGE_RECLAIM_TO_MAID;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BRIDGE_BUILD_FORBIDDEN;
     /** v1.3.0(beta) 实测六百八十：放宽名单（完整注册名）——面板上被玩家取消勾选的例外（含模组方块）。 */
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> BRIDGE_BUILD_ALLOWED;
+
+    // ---- v1.3.8「巡逻航迹」 ----
+    /** 巡逻航迹总开关（默认开）——见 {@link com.maidsmart.patrol.PatrolFlight}。 */
+    public static final ForgeConfigSpec.BooleanValue COMBAT_PATROL_ENABLE;
+    /** 新建航迹的默认净空半径（格，0.5~6.0）。 */
+    public static final ForgeConfigSpec.DoubleValue COMBAT_PATROL_CLEARANCE;
+    /** 巡逻航迹最大水平半径（格，0=不限制）。 */
+    public static final ForgeConfigSpec.IntValue COMBAT_PATROL_MAX_RADIUS;
 /**
  * v1.2.2 实测六百〇八【飞行跟随】：主人自己飞走了，她也能背上鞘翅追过来（默认关，观赏玩法）。
  *
@@ -2401,8 +2409,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         COMBAT_BROOM_IDLE_LAND = BUILDER.comment("扫帚待命落地（默认开）：扫帚模式里\"没有敌人、也没在跟主人这一趟\"那一档（起飞抬 1 格之后、打完一仗之后、主人在别的维度/跟随关着时）**降回地面待命**，而不是原地挂在半空——玩家原话：「还会出现女仆骑上扫帚，结果在空中悬空的状态」。做法：顺着她脚下探地（最多 24 格），找到就降到\"地面之上 1.6 格\"；**探不到地就照旧原地悬停，绝不往下扎**（虚空 / 她比地形高出 24 格以上）；已经贴地时也照旧悬停（不再上下抖）。**接敌与跟随一个字都不受影响**（那两档在它前面）；主人自己飞在天上时也不落地（那时贴着他悬停才是对的）。关掉 = 旧行为（原地悬停，可能一直挂在半空）。日志搜「待命 → 降回地面」")
                 .translation("config.promaid.broom.idleLand").define("idleLand", true);
 
-        COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（实测六百九十二：守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）")
+        COMBAT_BROOM_RECALL_DISTANCE = BUILDER.comment("扫帚牵引绳（格，默认 100，0=关闭）：她骑在扫帚上离【参照点】超过这么多格（3D 距离算，所以「飞太高」本身也会触发）就立刻把**她和扫帚一起**传送回参照点，免得飞太远回不来。0 = 关闭。参照点是【非守家=你；守家(home)=她的工作区圈心】（实测六百九十二：守家时你走多远都不再把她拽走，拉回来的是家/岗位）。与「空袭牵引绳」同一套口径，只是这条会把扫帚一起搬过来（落地后她仍骑在原扫帚上）；她已经落地时不管（那种近距离交给「同维度远距拉回」那套更保守的规则）\n\n【v1.3.9 巡逻航迹】她正沿巡逻轨道飞时，这条牵引绳**整体不生效**——玩家原话「也不会受到牵引绳之类的东西的影响」，所以巡逻期间不做任何距离判据；口径与「巡逻跳过工作圈夹取」同源（都问 PatrolFlight.effective）。")
                 .translation("config.promaid.broom.recallDistance").defineInRange("recallDistance", 100, 0, 10000);
+        // ---- v1.3.8「巡逻航迹」（配置面板：移动与行为 → 扫帚模式 板块末尾）----
+        COMBAT_PATROL_ENABLE = BUILDER.comment("巡逻航迹总开关（默认开）：扫帚模式 **+ 在家模式** 下，若她身上绑了一条**已连接（闭环）**的航迹，她就沿那条航迹飞，**替代**原本「沿工作范围那个圈盘旋」的守家行为。\n\n【怎么用】拿「巡逻航图」（纸 + 指南针 + 墨囊）：**右键**开界面 → 点「＋ 创建一个轨道」→ 进它的管理页把女仆绑上、点「开始标记」→ 退出界面后**鼠标中键**（不用潜行；空中地面都行）在你站/飞的位置记一个标记 → 再**右键**回界面点「连接」把首尾接成闭环。**连接没有任何门槛**（v1.3.9.3 起：原来的点数/坡度/自交/半径/挡路方块判据全部只作为 ⚠ 提醒，触犯了也照样连上，后果由玩家自己负责）。然后她的任务切成「扫帚模式」、开着在家模式即可；巡逻期间她**不受扫帚牵引绳影响**。\n\n【敌人怎么办】有敌人时**仍然先接敌**（爬升 → 绕圈/轰炸），敌人消失后自己回到航迹。\n\n【排查】日志搜「扫帚巡逻」；命令 /maid_smart broom_patrol status 看生效与否。")
+                .translation("config.promaid.patrol.enable").define("enable", true);
+        COMBAT_PATROL_CLEARANCE = BUILDER.comment("新建航迹的默认净空半径（格，默认 1.5，0.5~6.0）。「连接」时沿曲线密采样逐点查方块，有阻挡或危险方块只给一句**黄色提示**（v1.3.9.2 起**不再**导致连接失败）。每条航迹自己存一份（打点当时的值），改这一项只影响**之后新建**的航迹。")
+                .translation("config.promaid.patrol.clearance").defineInRange("clearance", 1.5, 0.5, 6.0);
+        COMBAT_PATROL_MAX_RADIUS = BUILDER.comment("巡逻航迹最大水平半径（格，默认 128，16~512，0=不限制）：连接/绑定时航迹的水平包围盒半径超过它**只给一句提醒**（v1.3.9.3 起不再拒绝，后果由玩家自己承担）。")
+                .translation("config.promaid.patrol.maxRadius").defineInRange("maxRadius", 128, 0, 512);
         // v1.3.0(beta) 实测六百八十二：上面「接敌爬升高度」默认 10 → 15 的一次性迁移标记。
         // 【为什么用标记，而不是"值 == 10 就迁"】老档 toml 里都写着 10，只凭值分不出
         // "旧默认留下的"和"玩家自己就要 10"——用标记钉死只迁一次，之后玩家想写回 10 随便写。
@@ -2818,15 +2833,15 @@ public static final ForgeConfigSpec.BooleanValue MISC_DIMENSION_FOLLOW;
         BRIDGE_AIR_MAX_DIST = BUILDER.comment("空中搭桥触发距离（格，默认 50）：主人【高于女仆】需爬高/或女仆已在空中时，主人再远也直接铺桥走过去——空中没有'走路过去'的选项；设为 0 关闭远距铺桥（只保留近距逻辑）。v1.1.0 实测一百六十五：平路/低高差追逐（主人不低于女仆）已不受任何距离上限约束")
                 .translation("config.promaid.bridge.airMaxDist").defineInRange("airMaxDist", 50, 0, 128);
         BRIDGE_MIN_DY = BUILDER.comment("搭路最小高差（格，默认 3）：主人至少高于女仆这么多格才走垂直搭高（平路/低处走路或铺桥处理）——3 格 = 玩家手长：她搭到与你只差 3 格内你就能近身收回/互动；隔得更远你伸手够不到她")
-                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 3, 1, 8);
+                .translation("config.promaid.bridge.minDy").defineInRange("minDy", 5, 4, 8);
         BRIDGE_MIN_RADIUS = BUILDER.comment("搭路最小球面半径（格，默认 3）：以女仆为圆心的 3D 欧氏距离（竖直+水平一起算）——主人在此球面内（只近不高）不启桥靠跟随走路；球面外才启桥：高度差够→垂直搭高，竖直差不多+水平远+前方脚下悬空（低头没路）→平铺搭桥；实心地面平路纯走导航不启桥（防反复启停抖动）")
-                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 3, 1, 8);
+                .translation("config.promaid.bridge.minRadius").defineInRange("minRadius", 4, 4, 8);
         // v1.1.0 实测一百八十七（反馈："水平距离搭建方块有没有启动要求呢？结合实际情况，加个启动要求"）
         // v1.1.0 实测一百九十九（反馈："给搭路再加一个配置项。水平距离小于 5 的时候不会触发水平搭建方块。
         // 此项目仍然可以在面板内自己进行配置"）：默认值 6 → 5（该配置已存在，语义=水平距离小于此值不触发
         // 水平搭桥；仅按玩家指定调整默认值，面板可调范围不变）
         BRIDGE_START_H_DIST = BUILDER.comment("平桥启动水平距离（格，默认 6）：女仆与主人【水平距离】达到此值、且朝主人方向前方脚下悬空才启动水平搭桥（垫块踩过去）——小于此值只走路跟随；范围 3~64（3 = 最灵敏，接近一百七十九旧行为）。竖直搭高（主人更高、原地垫柱）不受影响")
-                .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 6.0, 3.0, 64.0);
+                .translation("config.promaid.bridge.startHDist").defineInRange("startHDist", 8.0, 8.0, 64.0);
         BRIDGE_THREAT_DIST = BUILDER.comment("搭路威胁半径（格，默认 8）：周围此范围内有敌对生物时不搭路（塔会被拆/搭一半挨打）；刷怪频繁的整合包里可再调小，过大会导致搭路几乎永不触发")
                 .translation("config.promaid.bridge.threatDist").defineInRange("threatDist", 8, 4, 32);
         // v1.1.0 实测一百二十二（反馈："女仆搭方块速度不要跟玩家有过大出入，可以

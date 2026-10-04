@@ -62,6 +62,11 @@ public class ProMaidMod {
     public static final DeferredItem<Item> RIDE_BATON = ITEMS.register("ride_baton",
             () -> new com.maidsmart.combat.RideBatonItem(new Item.Properties()));
 
+    /** 巡逻航图（v1.3.9）：扫帚模式 + home 模式下沿玩家画的轨道巡逻——右键开界面，轨道管理页里
+     *  绑定女仆 / 点「开始标记」后用鼠标中键打点 / 点「连接」首尾成环（并查障碍物） */
+    public static final DeferredItem<Item> PATROL_CHART = ITEMS.register("patrol_chart",
+            () -> new com.maidsmart.patrol.PatrolChartItem(new Item.Properties()));
+
     public ProMaidMod(ModContainer container) {
         IEventBus modBus = container.getEventBus();
         ITEMS.register(modBus);
@@ -85,6 +90,10 @@ public class ProMaidMod {
         // v1.2.0：指标石右键女仆 = 绑定/解绑（网络层经 @EventBusSubscriber 自注册）
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 new com.maidsmart.build.IndexStoneInteractHandler());
+        // v1.3.9 巡逻航图：物品判定工具 + 下线清标记态。**不再**拦右键女仆——绑定/解绑都搬到
+        // 航图的轨道管理页里点（玩家定的设计："跟建造模式的女仆管理同款"）。
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
+                new com.maidsmart.patrol.PatrolChartKit());
         // v1.2.0：指标石中断清理（女仆被收回/死亡 → 结束临时搭建）
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.register(
                 new com.maidsmart.build.IndexStoneInterruptHandler());
@@ -112,6 +121,8 @@ public class ProMaidMod {
             com.maidsmart.client.PromaidClientSetup.registerIndexStoneHooks();
             // 实测五百六十二：潜行+中键 工位标记（客户端手势识别 + C2S 包）
             com.maidsmart.client.PromaidClientSetup.registerWorkPosMarker();
+            // v1.3.9：鼠标中键（标记态下）巡逻打点 + 轨道/标记预览渲染（客户端专属）
+            com.maidsmart.client.PromaidClientSetup.registerPatrolHooks();
             // 【实测七百二十四】右击载具后把被 SWB 转掉的视角复述回来（客户端 tick 复述）
             com.maidsmart.client.PromaidClientSetup.registerRideViewClamp();
             // 【实测七百二十七·点4】退出世界清掉"悬空鞍位（龙）"的客户端镜像表

@@ -286,6 +286,11 @@ public final class MaidBroomKit {
             return null;
         }
         try {
+            // 【v1.3.8 巡逻航迹】巡逻生效期间**跳过夹取**：航迹就是来替代"绕工作圈"的。
+            // 口径只有一处：这里问的就是 PatrolFlight.effective 那三件。
+            if (com.maidsmart.patrol.PatrolFlight.effective(maid) != null) {
+                return desired;
+            }
             if (!com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get()) {
                 return desired;
             }

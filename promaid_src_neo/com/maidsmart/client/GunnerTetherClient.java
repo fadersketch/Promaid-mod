@@ -221,14 +221,28 @@ public final class GunnerTetherClient {
                 if (!leash && !maid.hasPassenger(rider)) {
                     continue;
                 }
-                if (maid.distanceToSqr(rider.position()) > STALE_STATE_SQR) {
+                // 【v1.3.9.4】过期判据量到**锚点**（她骑着载具时锚点是那台载具）——与绳子实际两端一致
+                Entity anchor = com.maidsmart.combat.GunnerTetherManager.anchorOf((EntityMaid) maid);
+                if (anchor == null) {
+                    anchor = maid;
+                }
+                if (anchor.distanceToSqr(rider.position()) > STALE_STATE_SQR) {
                     continue;
                 }
                 drawRope(pose, buffers, camera, (EntityMaid) maid, rider, pt, leash);
             }
-            // 已经不在挂载表里的拖曳状态一并清掉（别按实体 id 一直囤）
-            if (DRAG.size() > com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.size()) {
-                DRAG.keySet().removeIf(id -> !com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.containsKey(id));
+            // 已经不在挂载表里的拖曳状态一并清掉（别按实体 id 一直囤）。
+            // 【v1.3.9.4】DRAG 现在按**锚点 id** 记账（见 dragFor），所以这里两个 id 都留着：
+            //  锚点可能是女仆本人、也可能是她骑的载具。
+            if (DRAG.size() > com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.size() * 2) {
+                DRAG.keySet().removeIf(id -> {
+                    if (com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.containsKey(id)) {
+                        return false; // 她自己就是锚点
+                    }
+                    Entity e2 = mc.level == null ? null : mc.level.getEntity(id);
+                    return !(e2 instanceof EntityMaid m2)
+                            || !com.maidsmart.combat.GunnerTetherManager.SYNCED_PAIRS.containsKey(m2.getId());
+                });
             }
         } catch (Throwable ignored) {
         }
@@ -252,8 +266,18 @@ public final class GunnerTetherClient {
      */
     private static void drawRope(PoseStack pose, MultiBufferSource buffers, Vec3 camera,
                                 EntityMaid maid, Entity rider, float pt, boolean leash) {
-        Vec3 a = new Vec3(lerp(maid.xo, maid.getX(), pt), lerp(maid.yo, maid.getY(), pt) + 0.75,
-                lerp(maid.zo, maid.getZ(), pt));
+        // 【v1.3.9.4】绳子的"她那一端"挂在**锚点**上：她骑着载具（直升机/龙/坐骑）时锚点是那台
+        //   载具——与 mixin 的定位锚点同一个入口（anchorOf），口径只有一处。
+        Entity anchor = com.maidsmart.combat.GunnerTetherManager.anchorOf(maid);
+        if (anchor == null) {
+            anchor = maid;
+        }
+        double ax = lerp(anchor.xo, anchor.getX(), pt);
+        double ay = lerp(anchor.yo, anchor.getY(), pt);
+        double az = lerp(anchor.zo, anchor.getZ(), pt);
+        // 锚点是载具时，绳子系在**载具身上**（它的中心就够；她自己被机壳挡着，系在她身上反而看不见）
+        double top = anchor == maid ? 0.75 : anchor.getBbHeight() * 0.5;
+        Vec3 a = new Vec3(ax, ay + top, az);
         Vec3 b = new Vec3(lerp(rider.xo, rider.getX(), pt),
                 lerp(rider.yo, rider.getY(), pt) + rider.getBbHeight() * 0.85,
                 lerp(rider.zo, rider.getZ(), pt));
@@ -262,15 +286,15 @@ public final class GunnerTetherClient {
         float dz = (float) (b.z - a.z);
         // 两端锚点的实际距离（格）：直接由三个差值算，不依赖任何版本的 Vec3.distanceTo 名字
         float dist = (float) Math.sqrt((double) dx * dx + (double) dy * dy + (double) dz * dz);
-        float[] drag = dragFor(maid, rider, leash, dist);
+        float[] drag = dragFor(anchor, rider, leash, dist, maid);
         pose.pushPose();
         try {
             pose.translate(a.x - camera.x, a.y - camera.y, a.z - camera.z);
             VertexConsumer vc = buffers.getBuffer(RenderType.leash());
             Matrix4f mat = pose.last().pose();
-            int blockA = brightness(maid, a, true);
+            int blockA = brightness(anchor, a, true);
             int blockB = brightness(rider, b, true);
-            int skyA = brightness(maid, a, false);
+            int skyA = brightness(anchor, a, false);
             int skyB = brightness(rider, b, false);
             // 宽度方向：水平投影够长 → 原版口径（其垂线，单位向量）；近 vertical → 三片围绳轴一圈
             double hl = Math.sqrt((double) dx * dx + (double) dz * dz);
@@ -344,20 +368,21 @@ public final class GunnerTetherClient {
      * </ol>
      *
      * @param dist 两端锚点的实际距离（格，已按帧插值的两个点）
+     * @param maid 女仆本人（绳长按她的档位取：{@code hangFor} 只认扫帚档；锚点是载具时也仍按她算）
      */
-    private static float[] dragFor(Entity maid, Entity rider, boolean leash, float dist) {
-        int id = maid.getId();
+    private static float[] dragFor(Entity anchor, Entity rider, boolean leash, float dist, EntityMaid maid) {
+        int id = anchor.getId();
         float[] cur = DRAG.get(id);
         if (cur == null) {
             cur = new float[] {0.0f, 0.0f};
             DRAG.put(id, cur);
         }
         double rest = leash ? ROPE_LEASH_REST
-                : Math.max(0.1, com.maidsmart.combat.GunnerTetherManager.hangFor((EntityMaid) maid));
+                : Math.max(0.1, com.maidsmart.combat.GunnerTetherManager.hangFor(maid));
         float slack = (float) clamp((rest - dist) / rest, 0.0, 1.0); // 1 = 完全松弛、0 = 绷紧
         float k = ROPE_DRAG_K * slack;
-        float vx = (float) ((maid.xo - maid.getX()) - (rider.xo - rider.getX()));
-        float vz = (float) ((maid.zo - maid.getZ()) - (rider.zo - rider.getZ()));
+        float vx = (float) ((anchor.xo - anchor.getX()) - (rider.xo - rider.getX()));
+        float vz = (float) ((anchor.zo - anchor.getZ()) - (rider.zo - rider.getZ()));
         float tx = clamp(vx * k, ROPE_DRAG_MAX);
         float tz = clamp(vz * k, ROPE_DRAG_MAX);
         cur[0] += (tx - cur[0]) * ROPE_DRAG_SMOOTH;

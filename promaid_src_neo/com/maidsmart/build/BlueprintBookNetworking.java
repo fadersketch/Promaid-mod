@@ -751,20 +751,73 @@ public final class BlueprintBookNetworking {
     // ==================== v1.1.0 实测八十二：蓝图投影 ====================
 
     /**
-     * v1.1.0 实测九十五：向全体玩家广播当前建造区块行（ProMaidExtension 每秒
-     * HUD 广播块内调用）。计划数量通常个位数、每行 14 个短串，全量广播开销可忽略；
-     * 无计划时发空列表让客户端清掉残留的框与投影。
+     * v1.1.0 实测九十五：向玩家同步当前建造区块行（ProMaidExtension 每秒 HUD 广播块内调用）。
+     *
+     * <p>【联机·服务端】旧版把**全服务器所有人**的建造区块（名字 + 坐标 + 尺寸）每秒发给**每个玩家**
+     * ——多人在线时既泄露别人的工地位置，又让无关玩家地图上无条件画出别人的红框。现改为只发给
+     * "与该区块有关的人"（站在区块内 / 区块里绑着他的女仆），判定口径与
+     * {@code BuildHudTracker.sendToInvolved} 一致。无计划时仍给所有人发一次空表清残留。
      */
     public static void broadcastRegionSync(net.minecraft.server.MinecraftServer server) {
         if (server == null) {
             return;
         }
-        BlueprintBookBuildPackets.RegionSyncPacket pkt = new BlueprintBookBuildPackets.RegionSyncPacket(collectBuildRegions(server));
+        java.util.List<String[]> all = collectBuildRegions(server);
+        boolean empty = all.isEmpty();
         for (net.minecraft.server.level.ServerPlayer p : server.getPlayerList().getPlayers()) {
             try {
-                PacketDistributor.sendToPlayer(p, pkt);
+                java.util.List<String[]> mine = empty
+                        ? all
+                        : new java.util.ArrayList<>();
+                if (!empty) {
+                    for (String[] row : all) {
+                        if (row.length > 0 && regionInvolves(server, p, row[0])) {
+                            mine.add(row);
+                        }
+                    }
+                }
+                PacketDistributor.sendToPlayer(p,
+                        new BlueprintBookBuildPackets.RegionSyncPacket(mine));
             } catch (Exception ignored) {
             }
         }
+    }
+
+    /**
+     * 这名玩家与该建造区块有关吗——站在区块范围内，或区块里绑着一只归他的（已加载的）女仆。
+     * 判定口径与 {@code BuildHudTracker.involved} 一致（那边按 planId，这边按区块原点行的标识）。
+     */
+    private static boolean regionInvolves(net.minecraft.server.MinecraftServer server,
+                                          net.minecraft.server.level.ServerPlayer player,
+                                          String planId) {
+        try {
+            BuildPlan.PlanState ps = BuildPlan.getPlanById(planId);
+            if (ps == null) {
+                return false;
+            }
+            net.minecraft.server.level.ServerLevel lvl = server.getLevel(ps.dim);
+            if (lvl == null) {
+                return false;
+            }
+            if (lvl == player.level()) {
+                int[] r = BuildPlan.planRegion(ps);
+                if (r != null) {
+                    net.minecraft.core.BlockPos pp = player.blockPosition();
+                    if (pp.getX() >= r[0] && pp.getX() < r[3]
+                            && pp.getY() >= r[1] && pp.getY() < r[4]
+                            && pp.getZ() >= r[2] && pp.getZ() < r[5]) {
+                        return true;
+                    }
+                }
+            }
+            for (java.util.UUID id : BuildPlan.boundMaidUuids(planId)) {
+                if (lvl.getEntity(id) instanceof com.github.tartaricacid.touhoulittlemaid.entity.passive.EntityMaid m
+                        && m.getOwner() == player) {
+                    return true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return false;
     }
 }

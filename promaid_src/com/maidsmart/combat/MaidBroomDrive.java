@@ -388,7 +388,7 @@ public final class MaidBroomDrive {
                 // 连 force 都骑不上：把扫帚收掉、物品还她，不留孤儿实体（并且一定要留痕）
                 com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                         + " 骑不上扫帚：startRiding(force) 返回 false（当前载具=" + entityName(maid) + "）→ 扫帚收回背包");
-                broom.m_6075_();
+                broom.m_6074_();
                 giveBack(maid, taken);
                 return null;
             }
@@ -399,7 +399,7 @@ public final class MaidBroomDrive {
         } catch (Throwable t) {
             if (broom != null) {
                 try {
-                    broom.m_6075_();
+                    broom.m_6074_();
                 } catch (Throwable ignored) {
                 }
             }
@@ -804,7 +804,7 @@ public final class MaidBroomDrive {
         try {
             if (broom.m_6084_()) {
                 // kill() 只移除实体、**不**按原版掉落（原版掉落走 killEntity），物品由我们精确归还
-                broom.m_6075_();
+                broom.m_6074_();
             }
         } catch (Throwable ignored) {
         }
@@ -1641,7 +1641,7 @@ public final class MaidBroomDrive {
             if (!rest.m_41619_()) {
                 return false; // 背包满：留在地上
             }
-            drop.m_6075_();
+            drop.m_6074_();
             com.maidsmart.tool.PromaidLog.log("扫帚模式", com.maidsmart.tool.PromaidLog.nameOf(maid)
                     + " 把地上的扫帚捡进背包了（" + stack.m_41613_() + "x "
                     + stack.m_41786_().getString() + "）");
@@ -1725,6 +1725,39 @@ public final class MaidBroomDrive {
         // 朝向 = 速度方向（纯垂直位移时不改朝向）
         float yaw = horiz > 0.15 ? (float) (-Math.atan2(dx, dz) * DEG) : yaw(broom);
         setThrust(broom, nv, yaw);
+    }
+
+    /* ==================== 巡逻航迹（v1.3.8） ==================== */
+
+    /**
+     * 【v1.3.8 巡逻航迹 / broom_goto】这一个 tick 她该往哪儿飞（给巡逻档用）。
+     *
+     * <ol>
+     *   <li><b>一次性外部目标</b>（{@code /maid_smart broom_goto <x y z>}）：到点或超时自动摘掉。</li>
+     *   <li><b>沿航迹巡逻</b>（{@link com.maidsmart.patrol.PatrolFlight#nextPoint}）：纯追踪。</li>
+     * </ol>
+     *
+     * <p>返回 null = 这两件都没有 → 调用方走旧链路，一个字节都不改。
+     */
+    public static Vec3 patrolPoint(EntityMaid maid) {
+        try {
+            if (maid == null) {
+                return null;
+            }
+            Vec3 broom = broomPos(maid);
+            if (broom == null) {
+                return null;
+            }
+            // ① 一次性外部目标优先
+            Vec3 goto_ = com.maidsmart.patrol.PatrolCommand.poll(maid, broom);
+            if (goto_ != null) {
+                return new Vec3(goto_.f_82479_, goto_.f_82480_, goto_.f_82481_);
+            }
+            // ② 沿航迹
+            return com.maidsmart.patrol.PatrolFlight.nextPoint(maid, broom);
+        } catch (Throwable ignored) {
+            return null;
+        }
     }
 
     /* ==================== 卡墙脱困（v1.3.0(beta) 实测六百六十四） ==================== */

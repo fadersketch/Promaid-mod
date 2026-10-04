@@ -2550,7 +2550,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             st.found.add(p.immutable());
             double score = dx * dx + dz * dz + dy * dy
                     + depthPenalty * Math.max(0, feetY - p.getY())
-                    - value * valueWeight;
+                    - value * valueWeight
+                    - reachBonus(maid, p); // 【v1.3.9.5】伸手可及的矿优先（见 reachBonus）
             if (score < st.bestScore) {
                 st.bestScore = score;
                 st.best = p.immutable();
@@ -2624,7 +2625,8 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
             }
             double score = dx * dx + dz * dz + dy * dy
                     + depthPenalty * Math.max(0, feetY - p.getY())
-                    - value * valueWeight;
+                    - value * valueWeight
+                    - reachBonus(maid, p); // 【v1.3.9.5】与全量扫描同口径：伸手可及的矿优先
             if (score < bestScore) {
                 bestScore = score;
                 best = p;
@@ -2636,6 +2638,23 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
     /** 女仆眼睛高度（脚下偏移，格）。原版公式 0.85×身高：默认女仆身高 1.5 → 约 1.27；
      *  玩家使用的大正酒狐女仆模型实测头中心约 1.5 格，v1.0.5 起按模型取 1.5。 */
     private static final double EYE_HEIGHT = 1.5;
+
+    /**
+     * 【v1.3.9.5 眼前的先挖】伸手可及（&lt;= mine.reach）的矿给固定减分——她原地就能挖掉，
+     * 比"跑过去挖一块高价矿"更划算。玩家原话：「经常找不到矿（我说的是我在前面开路矿石暴露在外时）
+     * 只有在我把她抓到矿面前她才挖。」以前选矿只按"距离² + 深度惩罚 - 价值加成"打总分，眼前这块
+     * 便宜的煤矿会被十几格外的钻石压掉 → 她眼里没有"就在手边"这个概念。现在伸手可及的矿
+     * 一定排在候选最前（400 的量级压得住煤到钻石的差价），眼前的清完再谈远处的高价矿。
+     */
+    private static double reachBonus(EntityMaid maid, BlockPos p) {
+        try {
+            if (maid.distanceToSqr(p.getX() + 0.5, p.getY() + 0.5, p.getZ() + 0.5) <= reachSq()) {
+                return 400.0;
+            }
+        } catch (Throwable ignored) {
+        }
+        return 0.0;
+    }
 
     /**
      * v1.0.4：视线感知（透视感知开关默认关时启用）——女仆像玩家一样只能发现视线无阻的矿物。
@@ -2658,9 +2677,29 @@ public class MaidMineBehavior extends Behavior<EntityMaid> {
         double sz = maid.getZ();
         double cx = target.getX() + 0.5;
         double cz = target.getZ() + 0.5;
-        return hasClearRay(level, sx, sy, sz, cx, target.getY() + 0.5, cz, target)
+        if (hasClearRay(level, sx, sy, sz, cx, target.getY() + 0.5, cz, target)
                 || hasClearRay(level, sx, sy, sz, cx, target.getY() + 1.0, cz, target)
-                || hasClearRay(level, sx, sy, sz, cx, target.getY(), cz, target);
+                || hasClearRay(level, sx, sy, sz, cx, target.getY(), cz, target)) {
+            return true;
+        }
+        // 【v1.3.9.5 露头的矿也要看得见】玩家原话：「经常找不到矿（我在前面开路矿石暴露在外时）
+        // ……只有在我把她抓到矿面前她才挖。」旧口径只有三条射线（矿格中心/顶面/底面），
+        // 玩家在下挖的坑道里走得靠前一点，射线擦着坑壁/台阶边缘就整条被否掉——可那块矿的
+        // **某个面明明就露在空气里**。补一条"看暴露面"的判据：六个面里哪一面贴着空气/流体
+        // （= 露头），就把射线打到那一面**外侧格的中心**；打得到就说明这一面看得见 → 矿可见。
+        // 六个面全被实心方块裹着的埋矿，六条外侧射线同样被岩壁挡住 → 仍然不可见（不产生透视）。
+        for (net.minecraft.core.Direction d : net.minecraft.core.Direction.values()) {
+            BlockPos out = target.relative(d);
+            BlockState os = level.getBlockState(out);
+            if (!os.isAir() && os.getFluidState().isEmpty()) {
+                continue; // 这一面没露头（贴着实心方块）
+            }
+            if (hasClearRay(level, sx, sy, sz,
+                    out.getX() + 0.5, out.getY() + 0.5, out.getZ() + 0.5, target)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** 从眼睛位置到目标点每 0.5 格采样：到矿本身即停，路径上任何非空气/非流体方块都挡 */

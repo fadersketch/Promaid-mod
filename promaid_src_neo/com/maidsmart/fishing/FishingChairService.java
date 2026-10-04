@@ -69,6 +69,9 @@ public final class FishingChairService {
     /** mixin 调用：记录原版 FindSit 找到的椅子目标 */
     public static void recordSeatTarget(EntityMaid maid, BlockPos pos) {
         SEAT_TARGET.put(maid.getUUID().toString(), pos.immutable());
+        // 【联机·服务端】这张表现在是 tickKeepSeatWalkAll 的候选集——上一条护栏，
+        // 防"只增不减"（异常路径下没被摘掉的条目）。
+        com.maidsmart.tool.StateTables.cap("FishingChairService.SEAT_TARGET", SEAT_TARGET);
     }
 
     /** 每 3 tick 调用（ProMaidExtension）：钓鱼任务 + 未骑乘 + 有椅子目标 + 无 walk
@@ -90,6 +93,45 @@ public final class FishingChairService {
         if (maid.getBrain().getMemory(
                 net.minecraft.world.entity.ai.memory.MemoryModuleType.WALK_TARGET).isEmpty()) {
             net.minecraft.world.entity.ai.behavior.BehaviorUtils.setWalkAndLookTargetMemories(maid, target, 0.6f, 0);
+        }
+    }
+
+    /**
+     * 【联机·服务端】每 3 tick（15 次/秒）的驱动入口——**只遍历"正在走向钓鱼坐垫"的那几只女仆**。
+     *
+     * <p>旧写法在 {@code ProMaidExtension} 里自己写了两层循环：对**每个维度**取
+     * {@link com.maidsmart.tool.EntitySnapshot}（= {@code ServerLevel.getAllEntities()} 的**全量活视图**）
+     * 再 instanceof 过滤。也就是**15 次/秒 × 全部维度 × 全部实体**——在一个实体很多（动物/怪物/掉落物/箭）
+     * 的多人服务器上，这条链的绝大部分时间花在"筛掉不是女仆的实体"上，而真正要做事的（有
+     * {@link #SEAT_TARGET} 的）通常只有 0~2 只。
+     *
+     * <p>候选集就是 {@link #SEAT_TARGET} 这张表本身（{@code recordSeatTarget} 由 mixin 写、
+     * {@link #tickKeepSeatWalk} 在"已骑上/任务解除"时自己摘）。这里按 UUID 直接从维度实体表取
+     * （{@code getEntity(uuid)} = O(1) 哈希查），取不到（她卸载了/不在这个维度）就顺手摘掉。
+     * 行为与旧版逐字一致：旧版也是"对每只活着的女仆调 tickKeepSeatWalk"，只是它**遍历了所有实体**。
+     */
+    public static void tickKeepSeatWalkAll(net.minecraft.server.MinecraftServer server) {
+        if (server == null || SEAT_TARGET.isEmpty()) {
+            return; // 没有人在走向坐垫 → 零开销（旧版照样扫全图）
+        }
+        java.util.List<String> keys = new java.util.ArrayList<>(SEAT_TARGET.keySet());
+        for (String k : keys) {
+            try {
+                java.util.UUID id = java.util.UUID.fromString(k);
+                EntityMaid found = null;
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    if (lvl.getEntity(id) instanceof EntityMaid m) {
+                        found = m;
+                        break;
+                    }
+                }
+                if (found == null || !found.isAlive()) {
+                    SEAT_TARGET.remove(k); // 她不在场了 → 摘掉，免得这张表只增不减
+                    continue;
+                }
+                tickKeepSeatWalk(found);
+            } catch (Throwable ignored) {
+            }
         }
     }
 

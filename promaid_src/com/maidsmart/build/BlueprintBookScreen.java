@@ -1627,12 +1627,24 @@ public class BlueprintBookScreen extends Screen {
                 this.graphicsHint("没有可调试的记忆对象（多对话积累后出现）");
             }
         } else {
-            int maxRows = Math.max(3, (h - 30 - CONTENT_TOP - 150) / 15);
+            // 【实测七百九十·点2】行区起点/容量按**实际显示的状态行数**算，且必须给底部
+            // 动作按钮行（y=h-48、高 18）留出空间。旧公式有两处错：
+            // ① 起点用 maxStatus（**容量**，如 13）而不是实际显示行数（如 7）→ 行区整体
+            //    被压到 y≈230 起步；
+            // ② maxRows 里预留的 150px 没覆盖 maxStatus*12 的状态区高度 → 在小窗口
+            //    （GUI 缩放后 height≈360）算出 8 行，行区一路铺到 y≈335，而动作按钮在
+            //    y=312 → **按钮直接压在记忆行上**（玩家截图：按钮行卡在列表中间，按钮
+            //    下面还露出两行）。把 GUI 缩放调小没用——两项都随 height 一起缩。
+            int statusShown = this.debugStatusLines == null
+                    ? 0 : Math.min(maxStatus, this.debugStatusLines.size());
+            int rowsTop = CONTENT_TOP + 12 + statusShown * 12 + 10;
+            int rowsBottom = h - 50; // 动作按钮行(h-48) 上方留 2px
+            int maxRows = Math.max(1, (rowsBottom - rowsTop) / 15);
             int pages = (this.debugRows.size() + maxRows - 1) / maxRows;
             this.debugPage = Math.min(this.debugPage, pages - 1);
             int start = this.debugPage * maxRows;
             int end = Math.min(this.debugRows.size(), start + maxRows);
-            int y = CONTENT_TOP + 12 + maxStatus * 12 + 10;
+            int y = rowsTop;
             int btnW = Math.max(120, w - 40);
             for (int i = start; i < end; i++) {
                 final int idx = i;
@@ -1744,7 +1756,12 @@ public class BlueprintBookScreen extends Screen {
         }
         // 对象行（分页，选中高亮由按钮文本承载；这里画行下标提示）
         if (this.debugRows != null && !this.debugRows.isEmpty()) {
-            int maxRows = Math.max(3, (this.f_96544_ - 30 - CONTENT_TOP - 150) / 15);
+            // 【实测七百九十·点2】与 debugViewButtons 同一口径（实际状态行数 + 给动作按钮
+            // 行留位），否则页码会按"虚高的行数"算，翻页数与实际可见行对不上。
+            int statusShown = this.debugStatusLines == null
+                    ? 0 : Math.min(maxStatus, this.debugStatusLines.size());
+            int rowsTop = CONTENT_TOP + 12 + statusShown * 12 + 10;
+            int maxRows = Math.max(1, (this.f_96544_ - 50 - rowsTop) / 15);
             int pages = (this.debugRows.size() + maxRows - 1) / maxRows;
             int start = this.debugPage * maxRows;
             int end = Math.min(this.debugRows.size(), start + maxRows);

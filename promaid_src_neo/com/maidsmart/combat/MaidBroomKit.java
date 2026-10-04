@@ -286,6 +286,13 @@ public final class MaidBroomKit {
             return null;
         }
         try {
+            // 【v1.3.8 巡逻航迹】巡逻生效期间**跳过夹取**：航迹就是来替代"绕工作圈"的，
+            // 再把她夹回工作圈等于两条链路互相打架（她就永远贴不出圈、沿不了航迹）。
+            // 口径只有一处：这里问的就是 PatrolFlight.effective 那三件（任务=扫帚 + home + 闭环航迹）。
+            // 其余 home 语义一个字不动——没绑航迹时这一句恒 false，夹取照旧。
+            if (com.maidsmart.patrol.PatrolFlight.effective(maid) != null) {
+                return desired;
+            }
             if (!com.maidsmart.config.MaidSmartConfig.COMBAT_BROOM_CLAMP_HOME.get()) {
                 return desired;
             }

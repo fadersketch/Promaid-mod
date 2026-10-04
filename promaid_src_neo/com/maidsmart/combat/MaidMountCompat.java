@@ -2197,7 +2197,7 @@ public final class MaidMountCompat {
         // 模式的安全降落**（选平地 → 怠速 → 受控下沉 → 轻接地 → 停住）；直升机 / 飞艇 / 汤姆6
         // 仍是原来的"清输入位 + 收油门 + 留痕"（一个字节不变）。
         if (outOfFuel(mount)) {
-            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid)) {
+            if (isAircraftEngine(eng) && aircraftHomeLanding(mount, maid, "电量见底")) {
                 return true;   // 降落链路自己会（按 5 秒节流）写「固定翼降落·下降 / 接地段 / 完成」
             }
             brakeVehicleSafely(mount);
@@ -3133,18 +3133,90 @@ public final class MaidMountCompat {
     private static final java.util.Map<UUID, Long> AIRCRAFT_LAND_SPOT_AT =
             new java.util.concurrent.ConcurrentHashMap<>();
     /**
-     * home 模式下固定翼的"降落一拍"。返回 {@code true} = 本拍已接管（调用方不要再驱动）。
+     * 【实测七百九十四】"这一拍还在走降落链路吗"的心跳表（载具 UUID → 最后接管的 gameTime）。
+     *
+     * <h2>为什么需要它（原代码是"注释说 A、代码做 B"）</h2>
+     * {@code RideBindManager.drive} 里原本**每拍无条件**调 {@link #resetAircraftLanding}
+     * （注释写的是"离开 home 档 → 丢掉缓存"，代码却没有任何条件）。于是**降落期间**落点缓存
+     * 每拍被清：{@link #landingSpot} 每拍重扫 48 格方框（25×25=625 列 × 每列 9 次高度图
+     * ≈ 5600 次查询/拍），而且落点会随她移动逐拍改选。
+     *
+     * <p>心跳让"清缓存"只发生在**从降到不降**的过渡那一次：{@link #aircraftHomeLanding} 每拍
+     * 接管时都记一笔，调用方改用 {@link #endAircraftLanding}——它只在"上一拍没接过"时才真清。
+     * 时间基准而不是顺序基准，所以与调用方是在清之前还是之后接管无关。
+     */
+    private static final java.util.Map<UUID, Long> AIRCRAFT_LAND_BEAT =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** 这只载具所在世界的 gameTime（拿不到 → 0，此时心跳判据恒"仍在降"，缓存留着最坏只是不刷新）。 */
+    private static long gameTimeOf(Entity e) {
+        try {
+            return e.level().getGameTime();
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    /** 记一次"本拍仍由降落链路接管"（{@link #aircraftHomeLanding} 的每个接管出口前面的那一笔）。 */
+    private static void beatAircraftLanding(Entity mount) {
+        try {
+            AIRCRAFT_LAND_BEAT.put(mount.getUUID(), gameTimeOf(mount));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 【实测七百九十四】上一拍她**没**走降落链路 → 丢掉落点缓存（只在过渡那一次真清）。
+     *
+     * <p>语义与 {@link #resetAircraftLanding} 不同：那个是"无条件清"，这个是"确认不再降了才清"。
+     * {@code RideBindManager.drive} 每拍的开头调它，取代原来那句无条件清。
+     */
+    public static void endAircraftLanding(Entity mount) {
+        try {
+            if (mount == null) {
+                return;
+            }
+            UUID id = mount.getUUID();
+            Long last = AIRCRAFT_LAND_BEAT.get(id);
+            if (last != null && gameTimeOf(mount) - last <= 2L) {
+                return; // 两拍内还接管过 → 这一档还在降，缓存留着（免得每拍重扫 625 列）
+            }
+            AIRCRAFT_LAND_BEAT.remove(id);
+            AIRCRAFT_LAND_SPOT.remove(id);
+            AIRCRAFT_LAND_SPOT_AT.remove(id);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * 固定翼的"降落一拍"。返回 {@code true} = 本拍已接管（调用方不要再驱动）。
      *
      * <p>只认固定翼（{@link #isAircraftEngine}）；拿不到驱动口 / 找不到平地 → 返回 {@code false}，
-     * 交回 home 档原本的悬停口径（一个字节不变）。
+     * 交回调用方原本的口径（一个字节不变）。
+     *
+     * <p>两处入口共用同一条链路（红线"口径只有一处"）：
+     * <ul>
+     *   <li><b>home 模式</b>（实测七百八十三）——落地就停住不动；</li>
+     *   <li><b>机上有人且周围没敌人</b>（实测七百九十四，{@code RideBindManager} 那一支）——
+     *       玩家坐副驾时不再平飞漂走，而是自己慢慢降落，敌人一出现就照常起飞接敌。</li>
+     * </ul>
      */
     public static boolean aircraftHomeLanding(Entity mount, Entity maid) {
+        return aircraftHomeLanding(mount, maid, "home 模式");
+    }
+
+    /**
+     * {@link #aircraftHomeLanding(Entity, Entity)} 的三参版：{@code why} 只进日志，说明这一档
+     * 是**谁**触发的（"home 模式" / "机上有人且周围无敌人" / "电量见底"），排查时一眼能分辨。
+     */
+    public static boolean aircraftHomeLanding(Entity mount, Entity maid, String why) {
         if (mount == null || !isAircraftEngine(engineType(mount))) {
             return false;
         }
         if (mSetMouseSpeedX == null && mMouseInput == null) {
             return false;
         }
+        beatAircraftLanding(mount);
         try {
             if (mount.onGround()) {
                 // ① 已接地 → 与别的坐骑一样停住不动（顺带清 crash 标记，见本区注释）
@@ -3157,7 +3229,7 @@ public final class MaidMountCompat {
                     } catch (Throwable ignored) {
                     }
                 }
-                logDrive(mount, "固定翼降落完成：已接地 → 停住不动（home 模式）");
+                logDrive(mount, "固定翼降落完成：已接地 → 停住不动（" + why + "）");
                 return true;
             }
             // 【实测七百八十四】电量见底不再是"刹住不管"，而是照常走完这套安全降落（玩家原话：
@@ -3167,7 +3239,7 @@ public final class MaidMountCompat {
             // brakeVehicleSafely（本方法只服务固定翼，见开头的 isAircraftEngine 闸）。
             boolean fuelDead = outOfFuel(mount);
             if (fuelDead) {
-                logDrive(mount, "固定翼电量见底 → 安全降落（home 模式同款链路）");
+                logDrive(mount, "固定翼电量见底 → 安全降落（" + why + "）");
             }
             Vec3 spot = landingSpot(mount);
             if (spot == null) {
@@ -3211,7 +3283,8 @@ public final class MaidMountCompat {
                 aircraftBank(mount, 0.0f);
                 aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_TOUCH_ALT) - mount.getY(),
                         AIRCRAFT_LAND_VY_MAX);
-                logDrive(mount, "固定翼降落·接地段" + (fuelDead ? "（电量见底）" : "")
+                logDrive(mount, "固定翼降落·接地段（" + why + "）"
+                        + (fuelDead ? " 电量见底" : "")
                         + " 距落点=" + (long) dist + "格"
                         + " 离地=" + fmt2(aboveGround) + "格"
                         + " 竖直速度=" + fmt2(verticalSpeed(mount))
@@ -3221,7 +3294,8 @@ public final class MaidMountCompat {
             // ②a 下降段：保持航向、怠速、按受控下沉率往地面压
             aircraftHoldAltitude(mount, (groundY + AIRCRAFT_LAND_MIN_ALT) - mount.getY(),
                     AIRCRAFT_LAND_DESCENT_VY_MAX);
-            logDrive(mount, "固定翼降落·下降" + (fuelDead ? "（电量见底）" : "")
+            logDrive(mount, "固定翼降落·下降（" + why + "）"
+                    + (fuelDead ? " 电量见底" : "")
                     + " 距落点=" + (long) dist + "格"
                     + " 离地=" + fmt2(aboveGround) + "格"
                     + " 竖直速度=" + fmt2(verticalSpeed(mount))
