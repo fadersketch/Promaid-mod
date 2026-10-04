@@ -66,6 +66,9 @@ public final class GuideContent {
                 GuideChaptersFlight.autoResurrectGuide(),
                 GuideChaptersFlight.bedInteropGuide(),
                 GuideChaptersFlight.broomGuide(),
+                // v1.3.9【巡逻航图】新道具——与扫帚模式相邻（它就是给扫帚模式 + 在家模式的
+                //  女仆画闭环轨道用的；配置入口也落在「移动与行为 → 扫帚模式」那一页里）。
+                GuideChaptersFlight.patrolGuide(),
                 // 【实测六百七十五】武装拴绳：从六百六十七 起一直只有更新日志提过它，
                 //  手册正文没有章节——玩家反馈"最近新添加的这些功能…都没有详细介绍的相关面板"。
                 //  位置紧跟扫帚模式（与配置面板里「扫帚模式 → 武装拴绳（二号位）」的相邻顺序一致）。
@@ -183,6 +186,10 @@ public final class GuideContent {
             {"AI 工具", "AI:AITOOLS"},
             {"语音系统", "UI:VOICE"},
             {"压缩盒", "SYSTEM:COMPRESSION_BOX"},
+            // v1.3.9【巡逻航图】：它的配置行落在「移动与行为 → 扫帚模式」页内的「巡逻航迹」那一段，
+            //  所以直接跳到那一行（带行标签）。**必须排在「扫帚」那条前面**——本章标题里含
+            //  「扫帚女仆」，否则会被扫帚那条先命中、只跳到扫帚页顶。
+            {"巡逻航图", "MOVE:BROOM:巡逻航迹·总开关"},
             // v1.3.6 实测六百六十一：扫帚模式（配置板块此时在「移动与行为」下）
             {"扫帚", "MOVE:BROOM"},
             // 【实测六百七十五】武装拴绳（自己的板块；带行标签 = 打开就落在那一行上）。
